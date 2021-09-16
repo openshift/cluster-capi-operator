@@ -1,0 +1,9 @@
+approvers:
+  - JoelSpeed
+  - Fedosin
+  - elmiko
+  - lobziik
+  - alexander-demichev
+
+component: "Cloud Compute"
+subcomponent: "Cluster API"
