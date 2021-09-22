@@ -3,13 +3,16 @@ all: build
 verify: fmt vet 
 
 # Run tests
-test: verify
+test: verify unit
 
 # Build operator binaries
 build: operator
 
 operator:
 	go build -o bin/meta-cluster-api-operator cmd/meta-cluster-api-operator/main.go
+
+unit:
+	hack/unit-tests.sh
 
 # Run against the configured Kubernetes cluster in ~/.kube/config
 run: verify
