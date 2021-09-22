@@ -2,7 +2,9 @@ IMG ?= controller:latest
 
 all: build
 
-verify: fmt vet 
+verify-%:
+	make $*
+	./hack/verify-diff.sh
 
 # Run tests
 test: verify unit
