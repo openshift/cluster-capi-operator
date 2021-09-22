@@ -1,3 +1,5 @@
+IMG ?= controller:latest
+
 all: build
 
 verify: fmt vet 
@@ -34,3 +36,13 @@ vendor:
 	go mod tidy
 	go mod vendor
 	go mod verify
+
+# Build the docker image
+.PHONY: image
+image:
+	docker build -t ${IMG} .
+
+# Push the docker image
+.PHONY: push
+push:
+	docker push ${IMG}
