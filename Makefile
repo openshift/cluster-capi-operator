@@ -1,15 +1,22 @@
+IMG ?= controller:latest
+
 all: build
 
-verify: fmt vet 
+verify-%:
+	make $*
+	./hack/verify-diff.sh
 
 # Run tests
-test: verify
+test: verify unit
 
 # Build operator binaries
 build: operator
 
 operator:
 	go build -o bin/meta-cluster-api-operator cmd/meta-cluster-api-operator/main.go
+
+unit:
+	hack/unit-tests.sh
 
 # Run against the configured Kubernetes cluster in ~/.kube/config
 run: verify
@@ -31,3 +38,13 @@ vendor:
 	go mod tidy
 	go mod vendor
 	go mod verify
+
+# Build the docker image
+.PHONY: image
+image:
+	docker build -t ${IMG} .
+
+# Push the docker image
+.PHONY: push
+push:
+	docker push ${IMG}
