@@ -1,4 +1,4 @@
-module github.com/openshift/meta-cluster-api-operator
+module github.com/openshift/cluster-capi-operator
 
 go 1.16
 
