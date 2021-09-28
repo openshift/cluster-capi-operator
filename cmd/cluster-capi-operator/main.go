@@ -5,9 +5,6 @@ import (
 	"os"
 	"time"
 
-	configv1 "github.com/openshift/api/config/v1"
-	"github.com/openshift/cluster-capi-operator/pkg/controllers"
-	"github.com/openshift/cluster-capi-operator/pkg/util"
 	"github.com/spf13/pflag"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -17,6 +14,10 @@ import (
 	"k8s.io/klog/klogr"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
+
+	configv1 "github.com/openshift/api/config/v1"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers"
+	"github.com/openshift/cluster-capi-operator/pkg/util"
 )
 
 var (
