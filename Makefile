@@ -13,14 +13,14 @@ test: verify unit
 build: operator
 
 operator:
-	go build -o bin/meta-cluster-api-operator cmd/meta-cluster-api-operator/main.go
+	go build -o bin/cluster-capi-operator cmd/cluster-capi-operator/main.go
 
 unit:
 	hack/unit-tests.sh
 
 # Run against the configured Kubernetes cluster in ~/.kube/config
 run: verify
-	go run cmd/meta-cluster-api-operator/main.go
+	go run cmd/cluster-capi-operator/main.go
 
 # Run go fmt against code
 .PHONY: fmt

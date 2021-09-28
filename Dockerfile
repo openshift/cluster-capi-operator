@@ -4,6 +4,6 @@ COPY . .
 RUN make build
 
 FROM registry.ci.openshift.org/openshift/origin-v4.8:base
-COPY --from=builder /go/src/github.com/openshift/cluster-capi-operator/bin/meta-cluster-api-operator .
+COPY --from=builder /go/src/github.com/openshift/cluster-capi-operator/bin/cluster-capi-operator .
 
 LABEL io.openshift.release.operator true

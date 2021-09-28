@@ -34,7 +34,7 @@ func (r *ClusterOperatorReconciler) setStatusAvailable(ctx context.Context) erro
 
 	conds := []configv1.ClusterOperatorStatusCondition{
 		newClusterOperatorStatusCondition(configv1.OperatorAvailable, configv1.ConditionTrue, ReasonAsExpected,
-			fmt.Sprintf("Meta Cluster API Operator is available at %s", r.ReleaseVersion)),
+			fmt.Sprintf("Cluster CAPI Operator is available at %s", r.ReleaseVersion)),
 		newClusterOperatorStatusCondition(configv1.OperatorProgressing, configv1.ConditionFalse, ReasonAsExpected, ""),
 		newClusterOperatorStatusCondition(configv1.OperatorDegraded, configv1.ConditionFalse, ReasonAsExpected, ""),
 		newClusterOperatorStatusCondition(configv1.OperatorUpgradeable, configv1.ConditionTrue, ReasonAsExpected, ""),
