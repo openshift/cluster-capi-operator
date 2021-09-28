@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cluster-capi-operator-images
+  namespace: openshift-cluster-api
+  annotations:
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+data:
+  images.json: >
+    {
+      "clusterCAPIOperator": "quay.io/openshift/origin-cluster-capi-operator"
+    }

@@ -36,6 +36,9 @@ spec:
           requests:
             cpu: 10m
             memory: 50Mi
+        volumeMounts:
+        - name: images
+          mountPath: /etc/cluster-api-config/
       nodeSelector:
         node-role.kubernetes.io/master: ""
       restartPolicy: Always
@@ -46,3 +49,8 @@ spec:
       - key: "node-role.kubernetes.io/master"
         operator: "Exists"
         effect: "NoSchedule"
+      volumes:
+      - name: images
+        configMap:
+          defaultMode: 420
+          name: cluster-capi-operator-images
