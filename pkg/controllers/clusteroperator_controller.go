@@ -43,7 +43,7 @@ func (r *ClusterOperatorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-// +kubebuilder:rbac:groups=config.openshift.io,resources=clusteroperators,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=config.openshift.io,resources=clusteroperators,verbs=get;list;watch;create;update;patch
 // +kubebuilder:rbac:groups=config.openshift.io,resources=clusteroperators/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=config.openshift.io,resources=clusteroperators/finalizers,verbs=update
 // +kubebuilder:rbac:groups=config.openshift.io,resources=featuregates;infrastructures,verbs=get;list;watch

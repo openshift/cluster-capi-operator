@@ -22,7 +22,6 @@ spec:
       labels:
         k8s-app: cluster-capi-operator
     spec:
-      priorityClassName: system-node-critical
       serviceAccountName: cluster-capi-operator
       containers:
       - name: cluster-capi-operator
@@ -43,9 +42,6 @@ spec:
         node-role.kubernetes.io/master: ""
       restartPolicy: Always
       tolerations:
-      - key: node.cloudprovider.kubernetes.io/uninitialized
-        effect: NoSchedule
-        value: "true"
       - key: "node-role.kubernetes.io/master"
         operator: "Exists"
         effect: "NoSchedule"

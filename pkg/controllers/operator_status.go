@@ -120,6 +120,9 @@ func (r *ClusterOperatorReconciler) relatedObjects() []configv1.ObjectReference 
 		{Resource: "namespaces", Name: DefaultManagedNamespace},
 		{Group: configv1.GroupName, Resource: "clusteroperators", Name: clusterOperatorName},
 		{Resource: "namespaces", Name: r.ManagedNamespace},
+		{Group: "", Resource: "serviceaccounts", Name: "cluster-capi-operator"},
+		{Group: "", Resource: "configmaps", Name: "cluster-capi-operator-images"},
+		{Group: "apps", Resource: "deployments", Name: "cluster-capi-operator"},
 	}
 }
 

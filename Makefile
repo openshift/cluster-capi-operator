@@ -30,7 +30,7 @@ run: verify
 # Generate manifests e.g. CRD, RBAC etc.
 .PHONY: manifests
 manifests: $(CONTROLLER_GEN)
-	$(CONTROLLER_GEN) rbac:roleName=\"cluster-capi-operator\" paths="./pkg/..." output:stdout > manifests/0000_26_capi-operator_02_roles_operator.yaml
+	$(CONTROLLER_GEN) rbac:roleName=\"cluster-capi-operator\" paths="./pkg/..." output:stdout > manifests/0000_30_capi-operator_02_roles_operator.yaml
 
 # Run go fmt against code
 .PHONY: fmt
@@ -47,11 +47,11 @@ lint: $(GOLANGCI_LINT)
 
 # Download golangci-lint locally if necessary
 $(GOLANGCI_LINT):
-	$(PROJECT_DIR)/hack/go-get-tool.sh go-get-tool $(GOLANGCI_LINT) github.com/golangci/golangci-lint/cmd/golangci-lint
+	$(PROJECT_DIR)/hack/go-get-tool.sh go-get-tool $(GOLANGCI_LINT) github.com/golangci/golangci-lint/cmd/golangci-lint@v1.41.1
 
 # Download controller-gen locally if necessary
 $(CONTROLLER_GEN):
-	$(PROJECT_DIR)/hack/go-get-tool.sh go-get-tool $(CONTROLLER_GEN) sigs.k8s.io/controller-tools/cmd/controller-gen@v0.4.1
+	$(PROJECT_DIR)/hack/go-get-tool.sh go-get-tool $(CONTROLLER_GEN) sigs.k8s.io/controller-tools/cmd/controller-gen@v0.6.2
 
 # Run go mod
 .PHONY: vendor
