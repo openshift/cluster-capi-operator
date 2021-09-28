@@ -43,10 +43,6 @@ func (r *ClusterOperatorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-// +kubebuilder:rbac:groups=config.openshift.io,resources=clusteroperators,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=config.openshift.io,resources=clusteroperators/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=config.openshift.io,resources=clusteroperators/finalizers,verbs=update
-
 // Reconcile will process the cluster-api clusterOperator
 func (r *ClusterOperatorReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (ctrl.Result, error) {
 	featureGate := &configv1.FeatureGate{}

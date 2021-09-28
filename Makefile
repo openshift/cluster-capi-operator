@@ -41,7 +41,7 @@ lint: $(GOLANGCI_LINT)
 
 # Download golangci-lint locally if necessary
 $(GOLANGCI_LINT):
-	$(PROJECT_DIR)/hack/go-get-tool.sh go-get-tool $(GOLANGCI_LINT) github.com/golangci/golangci-lint/cmd/golangci-lint
+	$(PROJECT_DIR)/hack/go-get-tool.sh go-get-tool $(GOLANGCI_LINT) github.com/golangci/golangci-lint/cmd/golangci-lint@v1.41.1
 
 # Run go mod
 .PHONY: vendor
