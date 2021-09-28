@@ -28,7 +28,7 @@ var (
 		LeaseDuration: util.LeaseDuration,
 		RenewDeadline: util.RenewDeadline,
 		RetryPeriod:   util.RetryPeriod,
-		ResourceName:  "meta-cluster-api-operator-leader",
+		ResourceName:  "cluster-capi-operator-leader",
 	}
 )
 
@@ -103,7 +103,7 @@ func main() {
 	if err = (&controllers.ClusterOperatorReconciler{
 		Client:           mgr.GetClient(),
 		Scheme:           mgr.GetScheme(),
-		Recorder:         mgr.GetEventRecorderFor("meta-cluster-api-operator"),
+		Recorder:         mgr.GetEventRecorderFor("cluster-capi-operator"),
 		ReleaseVersion:   getReleaseVersion(),
 		ManagedNamespace: *managedNamespace,
 		ImagesFile:       *imagesFile,
