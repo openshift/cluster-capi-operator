@@ -46,6 +46,11 @@ func (r *ClusterOperatorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 // +kubebuilder:rbac:groups=config.openshift.io,resources=clusteroperators,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=config.openshift.io,resources=clusteroperators/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=config.openshift.io,resources=clusteroperators/finalizers,verbs=update
+// +kubebuilder:rbac:groups=config.openshift.io,resources=featuregates;infrastructures,verbs=get;list;watch
+
+// for leaderelections
+// +kubebuilder:rbac:namespace=openshift-cluster-api,groups="",resources=configmaps;events,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:namespace=openshift-cluster-api,groups=coordination.k8s.io,resources=leases,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile will process the cluster-api clusterOperator
 func (r *ClusterOperatorReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (ctrl.Result, error) {

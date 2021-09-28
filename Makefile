@@ -1,6 +1,7 @@
 IMG ?= controller:latest
 PROJECT_DIR := $(shell dirname $(abspath $(lastword $(MAKEFILE_LIST))))
 GOLANGCI_LINT = $(PROJECT_DIR)/bin/golangci-lint
+CONTROLLER_GEN = $(PROJECT_DIR)/bin/controller-gen
 
 all: build
 
@@ -26,6 +27,11 @@ unit:
 run: verify
 	go run cmd/cluster-capi-operator/main.go
 
+# Generate manifests e.g. CRD, RBAC etc.
+.PHONY: manifests
+manifests: $(CONTROLLER_GEN)
+	$(CONTROLLER_GEN) rbac:roleName=\"cluster-capi-operator\" paths="./pkg/..." output:stdout > manifests/0000_26_capi-operator_02_roles_operator.yaml
+
 # Run go fmt against code
 .PHONY: fmt
 fmt:
@@ -42,6 +48,10 @@ lint: $(GOLANGCI_LINT)
 # Download golangci-lint locally if necessary
 $(GOLANGCI_LINT):
 	$(PROJECT_DIR)/hack/go-get-tool.sh go-get-tool $(GOLANGCI_LINT) github.com/golangci/golangci-lint/cmd/golangci-lint
+
+# Download controller-gen locally if necessary
+$(CONTROLLER_GEN):
+	$(PROJECT_DIR)/hack/go-get-tool.sh go-get-tool $(CONTROLLER_GEN) sigs.k8s.io/controller-tools/cmd/controller-gen@v0.4.1
 
 # Run go mod
 .PHONY: vendor
