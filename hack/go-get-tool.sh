@@ -20,3 +20,5 @@ function go-get-tool() {
     popd
     rm -rf "$TMP_DIR"
 }
+
+"$@"
