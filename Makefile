@@ -1,10 +1,14 @@
 IMG ?= controller:latest
+PROJECT_DIR := $(shell dirname $(abspath $(lastword $(MAKEFILE_LIST))))
+GOLANGCI_LINT = $(PROJECT_DIR)/bin/golangci-lint
 
 all: build
 
 verify-%:
 	make $*
 	./hack/verify-diff.sh
+
+verify: fmt lint
 
 # Run tests
 test: verify unit
@@ -25,12 +29,19 @@ run: verify
 # Run go fmt against code
 .PHONY: fmt
 fmt:
-	go fmt ./...
+	( GOLANGCI_LINT_CACHE=$(PROJECT_DIR)/.cache $(GOLANGCI_LINT) run --fix )
 
 # Run go vet against code
 .PHONY: vet
-vet:
-	go vet ./...
+vet: lint
+
+.PHONY: lint
+lint: $(GOLANGCI_LINT)
+	( GOLANGCI_LINT_CACHE=$(PROJECT_DIR)/.cache $(GOLANGCI_LINT) run )
+
+# Download golangci-lint locally if necessary
+$(GOLANGCI_LINT):
+	$(PROJECT_DIR)/hack/go-get-tool.sh go-get-tool $(GOLANGCI_LINT) github.com/golangci/golangci-lint/cmd/golangci-lint
 
 # Run go mod
 .PHONY: vendor
