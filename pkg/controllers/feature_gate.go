@@ -21,7 +21,7 @@ func isCAPIFeatureGateEnabled(featureGate *configv1.FeatureGate) (bool, error) {
 
 	enabledFeatureGates := sets.NewString(featureSet.Enabled...)
 	disabledFeatureGates := sets.NewString(featureSet.Disabled...)
-	// CustomNoUpgrade will override the deafult enabled feature gates.
+	// CustomNoUpgrade will override the default enabled feature gates.
 	if featureGate.Spec.FeatureSet == configv1.CustomNoUpgrade && featureGate.Spec.CustomNoUpgrade != nil {
 		enabledFeatureGates = sets.NewString(featureGate.Spec.CustomNoUpgrade.Enabled...)
 		disabledFeatureGates = sets.NewString(featureGate.Spec.CustomNoUpgrade.Disabled...)

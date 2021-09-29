@@ -16,6 +16,20 @@ func toClusterOperator(client.Object) []reconcile.Request {
 	}}
 }
 
+func clusterOperatorPredicates() predicate.Funcs {
+	isClusterOperatorCluster := func(obj runtime.Object) bool {
+		co, ok := obj.(*configv1.ClusterOperator)
+		return ok && co.GetName() == clusterOperatorName
+	}
+
+	return predicate.Funcs{
+		CreateFunc:  func(e event.CreateEvent) bool { return isClusterOperatorCluster(e.Object) },
+		UpdateFunc:  func(e event.UpdateEvent) bool { return isClusterOperatorCluster(e.ObjectNew) },
+		GenericFunc: func(e event.GenericEvent) bool { return isClusterOperatorCluster(e.Object) },
+		DeleteFunc:  func(e event.DeleteEvent) bool { return isClusterOperatorCluster(e.Object) },
+	}
+}
+
 func infrastructurePredicates() predicate.Funcs {
 	isInfrastructureCluster := func(obj runtime.Object) bool {
 		infra, ok := obj.(*configv1.Infrastructure)

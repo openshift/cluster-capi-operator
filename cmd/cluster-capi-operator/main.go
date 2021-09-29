@@ -1,11 +1,15 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
+	"io/ioutil"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/spf13/pflag"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -43,6 +47,7 @@ const (
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(configv1.AddToScheme(scheme))
+	utilruntime.Must(apiextensionsv1.AddToScheme(scheme))
 
 	// +kubebuilder:scaffold:scheme
 }
@@ -102,13 +107,24 @@ func main() {
 		os.Exit(1)
 	}
 
+	jsonData, err := ioutil.ReadFile(filepath.Clean(*imagesFile))
+	if err != nil {
+		setupLog.Error(err, "unable to read file", "name", *imagesFile)
+		os.Exit(1)
+	}
+	containerImages := map[string]string{}
+	if err := json.Unmarshal(jsonData, &containerImages); err != nil {
+		setupLog.Error(err, "unable to unmarshal image names from file", "name", *imagesFile)
+		os.Exit(1)
+	}
+
 	if err = (&controllers.ClusterOperatorReconciler{
 		Client:           mgr.GetClient(),
 		Scheme:           mgr.GetScheme(),
 		Recorder:         mgr.GetEventRecorderFor("cluster-capi-operator"),
 		ReleaseVersion:   getReleaseVersion(),
 		ManagedNamespace: *managedNamespace,
-		ImagesFile:       *imagesFile,
+		Images:           containerImages,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ClusterOperator")
 		os.Exit(1)

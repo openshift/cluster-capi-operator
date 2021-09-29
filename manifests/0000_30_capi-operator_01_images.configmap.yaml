@@ -10,5 +10,7 @@ metadata:
 data:
   images.json: >
     {
-      "clusterCAPIOperator": "registry.ci.openshift.org/openshift:cluster-capi-operator"
+      "clusterCAPIOperator": "registry.ci.openshift.org/openshift:cluster-capi-operator",
+      "upstreamCAPIOperator": "quay.io/asalkeld/openshift-cluster-api-operator-amd64:dev",
+      "kube-rbac-proxy": "gcr.io/kubebuilder/kube-rbac-proxy:v0.5.0"
     }
