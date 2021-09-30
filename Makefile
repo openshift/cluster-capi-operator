@@ -50,6 +50,7 @@ $(KUSTOMIZE):
 import-assets: $(KUSTOMIZE)
 	$(KUSTOMIZE) build hack/import-assets/capi-operator -o assets/capi-operator/
 	cd hack/import-assets; go run . move-rbac-manifests
+	cd hack/import-assets; go run . import-providers
 
 # Run go mod
 .PHONY: vendor
