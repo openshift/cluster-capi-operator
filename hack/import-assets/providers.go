@@ -93,12 +93,17 @@ func (p *provider) writeProvider(objs []unstructured.Unstructured) error {
 	fNameBase := providerTypeName + "-" + p.name
 
 	cm := &corev1.ConfigMap{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "ConfigMap",
+			APIVersion: "v1",
+		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      p.version,
+			Name:      p.name + "-" + p.version,
 			Namespace: "openshift-cluster-api",
 			Labels: map[string]string{
-				"provider-name": p.name,
-				"provider-type": providerTypeName,
+				"provider.cluster.x-k8s.io/name":    p.name,
+				"provider.cluster.x-k8s.io/type":    providerTypeName,
+				"provider.cluster.x-k8s.io/version": p.version,
 			},
 		},
 		Data: map[string]string{

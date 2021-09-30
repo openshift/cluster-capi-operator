@@ -1,3 +1,4 @@
+apiVersion: v1
 data:
   components: |-
     apiVersion: apiextensions.k8s.io/v1
@@ -6634,10 +6635,12 @@ data:
       - major: 0
         minor: 3
         contract: v1alpha3
+kind: ConfigMap
 metadata:
   creationTimestamp: null
   labels:
-    provider-name: cluster-api
-    provider-type: core
-  name: v0.4.3
+    provider.cluster.x-k8s.io/name: cluster-api
+    provider.cluster.x-k8s.io/type: core
+    provider.cluster.x-k8s.io/version: v0.4.3
+  name: cluster-api-v0.4.3
   namespace: openshift-cluster-api

@@ -105,7 +105,16 @@ func (r *ClusterOperatorReconciler) reconcile(ctx context.Context) (ctrl.Result,
 		return ctrl.Result{}, err
 	}
 
-	return ctrl.Result{}, updater.CreateOrUpdate(ctx, r.Client, r.Recorder)
+	err = updater.CreateOrUpdate(ctx, r.Client, r.Recorder)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	objs, err = assets.FromDir("providers", r.Scheme)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	return ctrl.Result{}, NewUpdater(objs).CreateOrUpdate(ctx, r.Client, r.Recorder)
 }
 
 func (r *ClusterOperatorReconciler) customizeDeployment(dep *appsv1.Deployment) error {
