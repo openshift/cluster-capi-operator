@@ -12,13 +12,15 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/yaml"
 
 	clusterctlv1 "sigs.k8s.io/cluster-api/cmd/clusterctl/api/v1alpha3"
 	configclient "sigs.k8s.io/cluster-api/cmd/clusterctl/client/config"
 	"sigs.k8s.io/cluster-api/cmd/clusterctl/client/repository"
 	"sigs.k8s.io/cluster-api/cmd/clusterctl/client/yamlprocessor"
+	operatorv1 "sigs.k8s.io/cluster-api/exp/operator/api/v1alpha1"
 	utilyaml "sigs.k8s.io/cluster-api/util/yaml"
-	"sigs.k8s.io/yaml"
 )
 
 type provider struct {
@@ -84,13 +86,15 @@ func (p *provider) loadComponents() error {
 	return err
 }
 
-func (p *provider) writeProvider(objs []unstructured.Unstructured) error {
+func (p *provider) providerTypeName() string {
+	return strings.ReplaceAll(strings.ToLower(string(p.ptype)), "provider", "")
+}
+
+func (p *provider) writeProviderComponents(objs []unstructured.Unstructured) error {
 	combined, err := utilyaml.FromUnstructured(objs)
 	if err != nil {
 		return err
 	}
-	providerTypeName := strings.ReplaceAll(strings.ToLower(string(p.ptype)), "provider", "")
-	fNameBase := providerTypeName + "-" + p.name
 
 	cm := &corev1.ConfigMap{
 		TypeMeta: metav1.TypeMeta{
@@ -102,7 +106,7 @@ func (p *provider) writeProvider(objs []unstructured.Unstructured) error {
 			Namespace: "openshift-cluster-api",
 			Labels: map[string]string{
 				"provider.cluster.x-k8s.io/name":    p.name,
-				"provider.cluster.x-k8s.io/type":    providerTypeName,
+				"provider.cluster.x-k8s.io/type":    p.providerTypeName(),
 				"provider.cluster.x-k8s.io/version": p.version,
 			},
 		},
@@ -117,8 +121,58 @@ func (p *provider) writeProvider(objs []unstructured.Unstructured) error {
 		return err
 	}
 
-	fName := strings.ToLower(fNameBase + ".yaml")
+	fName := strings.ToLower(p.providerTypeName() + "-" + p.name + ".yaml")
 	return os.WriteFile(path.Join(providersPath, fName), cmYaml, 0600)
+}
+
+func (p *provider) writeProviders() error {
+	var obj client.Object
+	switch p.providerTypeName() {
+	case "core":
+		obj = &operatorv1.CoreProvider{
+			TypeMeta: metav1.TypeMeta{Kind: "CoreProvider", APIVersion: "operator.cluster.x-k8s.io/v1alpha1"},
+			Spec:     operatorv1.CoreProviderSpec{ProviderSpec: p.providerSpec()},
+		}
+	case "controlplane":
+		obj = &operatorv1.ControlPlaneProvider{
+			TypeMeta: metav1.TypeMeta{Kind: "ControlPlaneProvider", APIVersion: "operator.cluster.x-k8s.io/v1alpha1"},
+			Spec:     operatorv1.ControlPlaneProviderSpec{ProviderSpec: p.providerSpec()},
+		}
+	case "bootstrap":
+		obj = &operatorv1.BootstrapProvider{
+			TypeMeta: metav1.TypeMeta{Kind: "BootstrapProvider", APIVersion: "operator.cluster.x-k8s.io/v1alpha1"},
+			Spec:     operatorv1.BootstrapProviderSpec{ProviderSpec: p.providerSpec()},
+		}
+	case "infrastructure":
+		obj = &operatorv1.InfrastructureProvider{
+			TypeMeta: metav1.TypeMeta{Kind: "InfrastructureProvider", APIVersion: "operator.cluster.x-k8s.io/v1alpha1"},
+			Spec:     operatorv1.InfrastructureProviderSpec{ProviderSpec: p.providerSpec()},
+		}
+	}
+	obj.SetName(p.name)
+	obj.SetNamespace("openshift-cluster-api")
+
+	cmYaml, err := yaml.Marshal(obj)
+	if err != nil {
+		return err
+	}
+
+	fName := strings.ToLower(p.providerTypeName() + "-" + p.name + "-provider.yaml")
+	return os.WriteFile(path.Join(providersPath, fName), cmYaml, 0600)
+}
+
+func (p *provider) providerSpec() operatorv1.ProviderSpec {
+	return operatorv1.ProviderSpec{
+		Version: &p.version,
+		FetchConfig: &operatorv1.FetchConfiguration{
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"provider.cluster.x-k8s.io/name": p.name,
+					"provider.cluster.x-k8s.io/type": p.providerTypeName(),
+				},
+			},
+		},
+	}
 }
 
 func (p *provider) findWebhookCertSecretName() map[string]string {
@@ -199,7 +253,12 @@ func importProviders() error {
 			}
 		}
 
-		err = p.writeProvider(finalObjs)
+		err = p.writeProviderComponents(finalObjs)
+		if err != nil {
+			return err
+		}
+
+		err = p.writeProviders()
 		if err != nil {
 			return err
 		}

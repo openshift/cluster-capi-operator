@@ -1,0 +1,14 @@
+apiVersion: operator.cluster.x-k8s.io/v1alpha1
+kind: InfrastructureProvider
+metadata:
+  creationTimestamp: null
+  name: metal3
+  namespace: openshift-cluster-api
+spec:
+  fetchConfig:
+    selector:
+      matchLabels:
+        provider.cluster.x-k8s.io/name: metal3
+        provider.cluster.x-k8s.io/type: infrastructure
+  version: v0.5.0
+status: {}

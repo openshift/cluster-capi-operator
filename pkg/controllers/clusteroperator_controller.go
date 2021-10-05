@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -85,6 +86,7 @@ func (r *ClusterOperatorReconciler) reconcile(ctx context.Context) (ctrl.Result,
 	if err != nil {
 		return ctrl.Result{}, err
 	}
+
 	updater := NewUpdater(objs).WithFilter(func(obj client.Object) bool {
 		appliedByManifest := []string{"Namespace", "ClusterRole", "Role", "ClusterRoleBinding", "RoleBinding", "ServiceAccount"}
 		// these are already applied by the manifest
@@ -98,13 +100,11 @@ func (r *ClusterOperatorReconciler) reconcile(ctx context.Context) (ctrl.Result,
 				return obj, err
 			}
 		}
-
 		return obj, nil
 	})
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-
 	err = updater.CreateOrUpdate(ctx, r.Client, r.Recorder)
 	if err != nil {
 		return ctrl.Result{}, err
@@ -114,7 +114,31 @@ func (r *ClusterOperatorReconciler) reconcile(ctx context.Context) (ctrl.Result,
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	return ctrl.Result{}, NewUpdater(objs).CreateOrUpdate(ctx, r.Client, r.Recorder)
+
+	// TODO get cluster infra to get this correctly
+	platform := "azure"
+	updater = NewUpdater(objs).WithFilter(func(obj client.Object) bool {
+		if obj.GetObjectKind().GroupVersionKind().Kind == "InfrastructureProvider" {
+			return strings.HasPrefix(obj.GetName(), platform)
+		}
+		return true
+	})
+
+	/* TODO when we have openshift images for providers
+	err = updater.Mutate(func(obj client.Object) (client.Object, error) {
+		infra, infraOK := obj.(*operatorv1.InfrastructureProvider)
+		if infraOK {
+			infra.Spec.ProviderSpec.Deployment = &operatorv1.DeploymentSpec{
+			Containers: []operatorv1.ContainerSpec{
+				{
+					Name:  "manager",
+					Image: &operatorv1.ImageMeta{},
+				},
+			},
+		}
+	}
+	*/
+	return ctrl.Result{}, updater.CreateOrUpdate(ctx, r.Client, r.Recorder)
 }
 
 func (r *ClusterOperatorReconciler) customizeDeployment(dep *appsv1.Deployment) error {

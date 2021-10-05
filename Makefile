@@ -48,6 +48,8 @@ $(KUSTOMIZE):
 	$(PROJECT_DIR)/hack/go-get-tool.sh go-get-tool $(KUSTOMIZE) sigs.k8s.io/kustomize/kustomize/v3@v3.9.4
 
 import-assets: $(KUSTOMIZE)
+	mkdir -p assets/capi-operator
+	mkdir -p assets/providers
 	$(KUSTOMIZE) build hack/import-assets/capi-operator -o assets/capi-operator/
 	cd hack/import-assets; go run . move-rbac-manifests
 	cd hack/import-assets; go run . import-providers
