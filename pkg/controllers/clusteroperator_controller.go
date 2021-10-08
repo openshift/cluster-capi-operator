@@ -3,7 +3,6 @@ package controllers
 import (
 	"context"
 
-	configv1 "github.com/openshift/api/config/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
@@ -13,6 +12,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+
+	configv1 "github.com/openshift/api/config/v1"
 )
 
 // ClusterOperatorReconciler reconciles a ClusterOperator object
@@ -42,9 +43,14 @@ func (r *ClusterOperatorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-// +kubebuilder:rbac:groups=config.openshift.io,resources=clusteroperators,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=config.openshift.io,resources=clusteroperators,verbs=get;list;watch;create;update;patch
 // +kubebuilder:rbac:groups=config.openshift.io,resources=clusteroperators/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=config.openshift.io,resources=clusteroperators/finalizers,verbs=update
+// +kubebuilder:rbac:groups=config.openshift.io,resources=featuregates;infrastructures,verbs=get;list;watch
+
+// for leaderelections
+// +kubebuilder:rbac:namespace=openshift-cluster-api,groups="",resources=configmaps;events,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:namespace=openshift-cluster-api,groups=coordination.k8s.io,resources=leases,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile will process the cluster-api clusterOperator
 func (r *ClusterOperatorReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (ctrl.Result, error) {
