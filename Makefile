@@ -25,7 +25,7 @@ unit:
 
 # Run against the configured Kubernetes cluster in ~/.kube/config
 run: verify
-	go run cmd/cluster-capi-operator/main.go
+	go run cmd/cluster-capi-operator/main.go --leader-elect=false --images-json=./hack/sample-images.json
 
 # Run go fmt against code
 .PHONY: fmt

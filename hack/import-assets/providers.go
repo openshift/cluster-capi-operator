@@ -1,13 +1,17 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 
 	"github.com/pkg/errors"
 	admissionregistration "k8s.io/api/admissionregistration/v1"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -30,6 +34,10 @@ type provider struct {
 	components repository.Components
 	metadata   []byte
 }
+
+const (
+	sampleImageFileName = "../sample-images.json"
+)
 
 var (
 	providers = []provider{
@@ -211,6 +219,53 @@ func (p *provider) findWebhookCertSecretName() map[string]string {
 	return certSecretNames
 }
 
+func (p *provider) updateImages(objs []unstructured.Unstructured) error {
+	jsonData, err := ioutil.ReadFile(filepath.Clean(sampleImageFileName))
+	if err != nil {
+		return err
+	}
+	containerImages := map[string]string{}
+	if err := json.Unmarshal(jsonData, &containerImages); err != nil {
+		return err
+	}
+
+	for i, obj := range objs {
+		switch obj.GetKind() {
+		case "Deployment":
+			dep := &appsv1.Deployment{}
+			if err := scheme.Convert(&objs[i], dep, nil); err != nil {
+				return err
+			}
+			for _, c := range dep.Spec.Template.Spec.Containers {
+				containerImages[p.imageToKey(c.Image)] = c.Image
+			}
+		}
+	}
+
+	jsonData, err = json.MarshalIndent(&containerImages, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return ioutil.WriteFile(sampleImageFileName, jsonData, 0600)
+}
+
+func (p *provider) imageToKey(fullImage string) string {
+	//k8s.gcr.io/cluster-api/kubeadm-bootstrap-controller:v0.4.3
+	frag := strings.Split(fullImage, "/")
+	nameVer := frag[len(frag)-1]
+	name := strings.Split(nameVer, ":")[0]
+
+	switch name {
+	case "kube-rbac-proxy":
+		return "kube-rbac-proxy"
+	case "ip-address-manager": //special case
+		return p.providerTypeName() + "-" + p.name + ":" + name
+	default:
+		return p.providerTypeName() + "-" + p.name + ":manager"
+	}
+}
+
 func importProviders() error {
 	for _, p := range providers {
 		err := p.loadComponents()
@@ -245,12 +300,14 @@ func importProviders() error {
 				}
 				finalObjs = append(finalObjs, obj)
 			case "Certificate", "Issuer", "Namespace": // skip
-			case "Deployment":
-				// TODO replace the images with openshift built ones..
-				finalObjs = append(finalObjs, obj)
 			default:
 				finalObjs = append(finalObjs, obj)
 			}
+		}
+
+		err = p.updateImages(finalObjs)
+		if err != nil {
+			return err
 		}
 
 		err = p.writeProviderComponents(finalObjs)
@@ -262,6 +319,7 @@ func importProviders() error {
 		if err != nil {
 			return err
 		}
+
 	}
 	return nil
 }

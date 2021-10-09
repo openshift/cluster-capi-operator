@@ -1,0 +1,2 @@
+[allowlist]
+  files = [ '''assets/bindata.go''']
