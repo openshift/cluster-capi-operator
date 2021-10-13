@@ -3,6 +3,7 @@ module github.com/openshift/cluster-capi-operator/hack/import-assets
 go 1.16
 
 require (
+	github.com/jetstack/cert-manager v1.5.4
 	github.com/pkg/errors v0.9.1
 	k8s.io/api v0.22.2
 	k8s.io/apiextensions-apiserver v0.22.2

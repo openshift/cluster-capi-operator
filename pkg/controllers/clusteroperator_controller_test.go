@@ -81,7 +81,7 @@ func TestContainerCustomizationFromProvider(t *testing.T) {
 					Image: &operatorv1.ImageMeta{
 						Name:       pointer.StringPtr("cluster-api-controller"),
 						Repository: pointer.StringPtr("k8s.gcr.io/cluster-api"),
-						Tag:        pointer.StringPtr("v0.4.3"),
+						Tag:        pointer.StringPtr("v1.0.0"),
 					},
 				},
 			},

@@ -41,7 +41,7 @@ const (
 
 var (
 	providers = []provider{
-		{name: "cluster-api", version: "v0.4.3", ptype: clusterctlv1.CoreProviderType},
+		{name: "cluster-api", version: "v1.0.0", ptype: clusterctlv1.CoreProviderType},
 		{name: "aws", version: "v0.7.0", ptype: clusterctlv1.InfrastructureProviderType},
 		{name: "azure", version: "v0.5.2", ptype: clusterctlv1.InfrastructureProviderType},
 		{name: "metal3", version: "v0.5.0", ptype: clusterctlv1.InfrastructureProviderType},

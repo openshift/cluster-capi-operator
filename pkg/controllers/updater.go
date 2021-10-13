@@ -3,6 +3,8 @@ package controllers
 import (
 	"context"
 
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -50,9 +52,20 @@ func (u *updater) Mutate(objectMutateFn ObjectMutateFn) error {
 
 func (u *updater) CreateOrUpdate(ctx context.Context, c client.Client, r record.EventRecorder) error {
 	for i := range u.objs {
-		existing := u.objs[i].DeepCopyObject().(client.Object)
+		required, err := toUnstructured(u.objs[i])
+		if err != nil {
+			return err
+		}
+		existing, err := toUnstructured(u.objs[i].DeepCopyObject())
+		if err != nil {
+			return err
+		}
+
 		opRes, err := ctrl.CreateOrUpdate(ctx, c, existing, func() error {
-			existing = u.objs[i].(client.Object)
+			rv := existing.GetResourceVersion()
+			required.DeepCopyInto(existing)
+			existing.SetResourceVersion(rv)
+
 			return nil
 		})
 		if err != nil {
@@ -67,4 +80,18 @@ func (u *updater) CreateOrUpdate(ctx context.Context, c client.Client, r record.
 	}
 
 	return nil
+}
+
+func toUnstructured(obj runtime.Object) (*unstructured.Unstructured, error) {
+	// If the incoming object is already unstructured, perform a deep copy first
+	// otherwise DefaultUnstructuredConverter ends up returning the inner map without
+	// making a copy.
+	if _, ok := obj.(runtime.Unstructured); ok {
+		obj = obj.DeepCopyObject()
+	}
+	rawMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
+	if err != nil {
+		return nil, err
+	}
+	return &unstructured.Unstructured{Object: rawMap}, nil
 }
