@@ -3,6 +3,8 @@
 set -o errexit
 set -o pipefail
 
+source ./hack/go-get-tool.sh
+
 REPO_ROOT=$(realpath "$(dirname "${BASH_SOURCE[0]}")/..")
 
 ENVTEST_VERSION=v0.7.0
@@ -38,7 +40,7 @@ runTestCI() {
     if [ -n "$ARTIFACT_DIR" ] && [ -d "$ARTIFACT_DIR" ]; then
         local JUNIT_LOCATION="$ARTIFACT_DIR"/junit_cluster_cloud_controller_manager_operator.xml
         echo "jUnit location: $JUNIT_LOCATION"
-        ./hack/go-get-tool.sh go-get-tool "$GO_JUNIT_REPORT_PATH" github.com/jstemmer/go-junit-report
+        go-get-tool "$GO_JUNIT_REPORT_PATH" github.com/jstemmer/go-junit-report
         go_test -v | tee >($GO_JUNIT_REPORT_PATH > "$JUNIT_LOCATION")
     else
         echo "\$ARTIFACT_DIR not set or does not exists, no jUnit will be published"
