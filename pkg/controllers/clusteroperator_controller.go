@@ -63,6 +63,9 @@ func (r *ClusterOperatorReconciler) Reconcile(ctx context.Context, _ ctrl.Reques
 		klog.Infof("FeatureGate cluster does not include cluster api. Skipping...")
 		return ctrl.Result{}, r.setStatusAvailable(ctx)
 	}
+	klog.Infof("FeatureGate cluster does include cluster api. Installing...")
 
-	return ctrl.Result{}, nil
+	// TODO install
+
+	return ctrl.Result{}, r.setStatusAvailable(ctx)
 }
