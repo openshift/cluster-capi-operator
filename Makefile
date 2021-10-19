@@ -52,8 +52,9 @@ $(GOBINDATA):
 	$(PROJECT_DIR)/hack/go-get-tool.sh go-get-tool $(GOBINDATA) github.com/go-bindata/go-bindata/go-bindata@v3.1.2
 
 import-assets: $(KUSTOMIZE) $(GOBINDATA)
-	echo $(KUSTOMIZE) build hack/import-assets/capi-operator -o assets/capi-operator/
+	$(KUSTOMIZE) build hack/import-assets/capi-operator -o assets/capi-operator/
 	cd assets; $(GOBINDATA) -nometadata -pkg assets -ignore bindata.go capi-operator/
+	cd hack/import-assets; go run . move-rbac-manifests
 
 # Run go mod
 .PHONY: vendor

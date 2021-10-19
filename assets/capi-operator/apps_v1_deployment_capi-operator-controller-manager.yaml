@@ -20,20 +20,6 @@ spec:
     spec:
       containers:
       - args:
-        - --metrics-bind-addr=127.0.0.1:8080
-        - --leader-elect
-        command:
-        - /manager
-        image: quay.io/asalkeld/openshift-cluster-api-operator-amd64:dev
-        name: manager
-        resources:
-          limits:
-            cpu: 100m
-            memory: 150Mi
-          requests:
-            cpu: 100m
-            memory: 100Mi
-      - args:
         - --secure-listen-address=0.0.0.0:8443
         - --upstream=http://127.0.0.1:8080/
         - --logtostderr=true
@@ -43,6 +29,20 @@ spec:
         ports:
         - containerPort: 8443
           name: https
+      - args:
+        - --metrics-bind-addr=127.0.0.1:8080
+        - --leader-elect
+        command:
+        - /manager
+        image: controller:latest
+        name: manager
+        resources:
+          limits:
+            cpu: 100m
+            memory: 150Mi
+          requests:
+            cpu: 100m
+            memory: 100Mi
       terminationGracePeriodSeconds: 10
       tolerations:
       - effect: NoSchedule

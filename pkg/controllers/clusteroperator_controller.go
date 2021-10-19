@@ -22,6 +22,7 @@ import (
 
 	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/cluster-capi-operator/assets"
+	"github.com/openshift/cluster-capi-operator/pkg/util"
 )
 
 // ClusterOperatorReconciler reconciles a ClusterOperator object
@@ -98,7 +99,9 @@ func (r *ClusterOperatorReconciler) reconcile(ctx context.Context) (ctrl.Result,
 			return ctrl.Result{}, err
 		}
 
-		if obj.GetObjectKind().GroupVersionKind().Kind == "Namespace" {
+		appliedByManifest := []string{"Namespace", "ClusterRole", "Role", "ClusterRoleBinding", "RoleBinding", "ServiceAccount"}
+		if util.ContainsString(appliedByManifest, obj.GetObjectKind().GroupVersionKind().Kind) {
+			// these are already applied by the manifest
 			continue
 		}
 
