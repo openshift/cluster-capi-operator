@@ -3,8 +3,9 @@ package controllers
 import (
 	"fmt"
 
-	configv1 "github.com/openshift/api/config/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
+
+	configv1 "github.com/openshift/api/config/v1"
 )
 
 // isCAPIFeatureGateEnabled determines whether the ClusterAPIEnabled feature gate is present in the current

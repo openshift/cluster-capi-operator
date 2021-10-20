@@ -1,0 +1,8 @@
+kind: ImageStream
+apiVersion: image.openshift.io/v1
+spec:
+  tags:
+  - name: cluster-capi-operator
+    from:
+      kind: DockerImage
+      name: registry.ci.openshift.org/openshift:cluster-capi-operator

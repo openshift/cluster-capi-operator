@@ -6,14 +6,15 @@ import (
 	"reflect"
 	"strings"
 
-	configv1 "github.com/openshift/api/config/v1"
-	"github.com/openshift/library-go/pkg/config/clusteroperator/v1helpers"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	configv1 "github.com/openshift/api/config/v1"
+	"github.com/openshift/library-go/pkg/config/clusteroperator/v1helpers"
 )
 
 const (
@@ -34,7 +35,7 @@ func (r *ClusterOperatorReconciler) setStatusAvailable(ctx context.Context) erro
 
 	conds := []configv1.ClusterOperatorStatusCondition{
 		newClusterOperatorStatusCondition(configv1.OperatorAvailable, configv1.ConditionTrue, ReasonAsExpected,
-			fmt.Sprintf("Meta Cluster API Operator is available at %s", r.ReleaseVersion)),
+			fmt.Sprintf("Cluster CAPI Operator is available at %s", r.ReleaseVersion)),
 		newClusterOperatorStatusCondition(configv1.OperatorProgressing, configv1.ConditionFalse, ReasonAsExpected, ""),
 		newClusterOperatorStatusCondition(configv1.OperatorDegraded, configv1.ConditionFalse, ReasonAsExpected, ""),
 		newClusterOperatorStatusCondition(configv1.OperatorUpgradeable, configv1.ConditionTrue, ReasonAsExpected, ""),
@@ -119,6 +120,9 @@ func (r *ClusterOperatorReconciler) relatedObjects() []configv1.ObjectReference 
 		{Resource: "namespaces", Name: DefaultManagedNamespace},
 		{Group: configv1.GroupName, Resource: "clusteroperators", Name: clusterOperatorName},
 		{Resource: "namespaces", Name: r.ManagedNamespace},
+		{Group: "", Resource: "serviceaccounts", Name: "cluster-capi-operator"},
+		{Group: "", Resource: "configmaps", Name: "cluster-capi-operator-images"},
+		{Group: "apps", Resource: "deployments", Name: "cluster-capi-operator"},
 	}
 }
 
