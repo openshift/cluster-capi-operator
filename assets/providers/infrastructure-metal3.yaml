@@ -5,7 +5,7 @@ data:
     kind: CustomResourceDefinition
     metadata:
       annotations:
-        controller-gen.kubebuilder.io/version: v0.6.0
+        controller-gen.kubebuilder.io/version: v0.7.0
         service.beta.openshift.io/inject-cabundle: "true"
       creationTimestamp: null
       labels:
@@ -21,7 +21,7 @@ data:
           clientConfig:
             caBundle: Cg==
             service:
-              name: capm3-ipam-webhook-service
+              name: ipam-webhook-service
               namespace: openshift-cluster-api
               path: /convert
           conversionReviewVersions:
@@ -46,7 +46,12 @@ data:
         singular: ipaddress
       scope: Namespaced
       versions:
-      - name: v1alpha1
+      - additionalPrinterColumns:
+        - description: Time duration since creation of Metal3IPAddress
+          jsonPath: .metadata.creationTimestamp
+          name: Age
+          type: date
+        name: v1alpha1
         schema:
           openAPIV3Schema:
             description: IPAddress is the Schema for the ipaddresses API
@@ -165,6 +170,7 @@ data:
             type: object
         served: true
         storage: true
+        subresources: {}
     status:
       acceptedNames:
         kind: ""
@@ -176,7 +182,7 @@ data:
     kind: CustomResourceDefinition
     metadata:
       annotations:
-        controller-gen.kubebuilder.io/version: v0.6.0
+        controller-gen.kubebuilder.io/version: v0.7.0
         service.beta.openshift.io/inject-cabundle: "true"
       creationTimestamp: null
       labels:
@@ -192,7 +198,7 @@ data:
           clientConfig:
             caBundle: Cg==
             service:
-              name: capm3-ipam-webhook-service
+              name: ipam-webhook-service
               namespace: openshift-cluster-api
               path: /convert
           conversionReviewVersions:
@@ -217,7 +223,12 @@ data:
         singular: ipclaim
       scope: Namespaced
       versions:
-      - name: v1alpha1
+      - additionalPrinterColumns:
+        - description: Time duration since creation of Metal3IPClaim
+          jsonPath: .metadata.creationTimestamp
+          name: Age
+          type: date
+        name: v1alpha1
         schema:
           openAPIV3Schema:
             description: IPClaim is the Schema for the ipclaims API
@@ -336,7 +347,7 @@ data:
     kind: CustomResourceDefinition
     metadata:
       annotations:
-        controller-gen.kubebuilder.io/version: v0.6.0
+        controller-gen.kubebuilder.io/version: v0.7.0
         service.beta.openshift.io/inject-cabundle: "true"
       creationTimestamp: null
       labels:
@@ -352,7 +363,7 @@ data:
           clientConfig:
             caBundle: Cg==
             service:
-              name: capm3-ipam-webhook-service
+              name: ipam-webhook-service
               namespace: openshift-cluster-api
               path: /convert
           conversionReviewVersions:
@@ -382,6 +393,10 @@ data:
           jsonPath: .metadata.labels.cluster\.x-k8s\.io/cluster-name
           name: Cluster
           type: string
+        - description: Time duration since creation of Metal3IPPool
+          jsonPath: .metadata.creationTimestamp
+          name: Age
+          type: date
         name: v1alpha1
         schema:
           openAPIV3Schema:
@@ -508,7 +523,7 @@ data:
     kind: CustomResourceDefinition
     metadata:
       annotations:
-        controller-gen.kubebuilder.io/version: v0.6.0
+        controller-gen.kubebuilder.io/version: v0.7.0
         service.beta.openshift.io/inject-cabundle: "true"
       creationTimestamp: null
       labels:
@@ -633,6 +648,10 @@ data:
         subresources:
           status: {}
       - additionalPrinterColumns:
+        - description: Time duration since creation of Metal3Cluster
+          jsonPath: .metadata.creationTimestamp
+          name: Age
+          type: date
         - description: metal3Cluster is Ready
           jsonPath: .status.ready
           name: Ready
@@ -729,7 +748,7 @@ data:
     kind: CustomResourceDefinition
     metadata:
       annotations:
-        controller-gen.kubebuilder.io/version: v0.6.0
+        controller-gen.kubebuilder.io/version: v0.7.0
         service.beta.openshift.io/inject-cabundle: "true"
       creationTimestamp: null
       labels:
@@ -875,7 +894,12 @@ data:
         storage: false
         subresources:
           status: {}
-      - name: v1alpha5
+      - additionalPrinterColumns:
+        - description: Time duration since creation of Metal3DataClaim
+          jsonPath: .metadata.creationTimestamp
+          name: Age
+          type: date
+        name: v1alpha5
         schema:
           openAPIV3Schema:
             description: Metal3DataClaim is the Schema for the metal3datas API
@@ -994,7 +1018,7 @@ data:
     kind: CustomResourceDefinition
     metadata:
       annotations:
-        controller-gen.kubebuilder.io/version: v0.6.0
+        controller-gen.kubebuilder.io/version: v0.7.0
         service.beta.openshift.io/inject-cabundle: "true"
       creationTimestamp: null
       labels:
@@ -1179,7 +1203,12 @@ data:
         storage: false
         subresources:
           status: {}
-      - name: v1alpha5
+      - additionalPrinterColumns:
+        - description: Time duration since creation of Metal3Data
+          jsonPath: .metadata.creationTimestamp
+          name: Age
+          type: date
+        name: v1alpha5
         schema:
           openAPIV3Schema:
             description: Metal3Data is the Schema for the metal3datas API
@@ -1337,7 +1366,7 @@ data:
     kind: CustomResourceDefinition
     metadata:
       annotations:
-        controller-gen.kubebuilder.io/version: v0.6.0
+        controller-gen.kubebuilder.io/version: v0.7.0
         service.beta.openshift.io/inject-cabundle: "true"
       creationTimestamp: null
       labels:
@@ -2206,6 +2235,10 @@ data:
           jsonPath: .metadata.labels.cluster\.x-k8s\.io/cluster-name
           name: Cluster
           type: string
+        - description: Time duration since creation of Metal3DataTemplate
+          jsonPath: .metadata.creationTimestamp
+          name: Age
+          type: date
         name: v1alpha5
         schema:
           openAPIV3Schema:
@@ -3038,7 +3071,7 @@ data:
     kind: CustomResourceDefinition
     metadata:
       annotations:
-        controller-gen.kubebuilder.io/version: v0.6.0
+        controller-gen.kubebuilder.io/version: v0.7.0
         service.beta.openshift.io/inject-cabundle: "true"
       creationTimestamp: null
       labels:
@@ -3423,6 +3456,10 @@ data:
         subresources:
           status: {}
       - additionalPrinterColumns:
+        - description: Time duration since creation of Metal3Machine
+          jsonPath: .metadata.creationTimestamp
+          name: Age
+          type: date
         - description: Provider ID
           jsonPath: .spec.providerID
           name: ProviderID
@@ -3778,7 +3815,7 @@ data:
     kind: CustomResourceDefinition
     metadata:
       annotations:
-        controller-gen.kubebuilder.io/version: v0.6.0
+        controller-gen.kubebuilder.io/version: v0.7.0
         service.beta.openshift.io/inject-cabundle: "true"
       creationTimestamp: null
       labels:
@@ -4019,7 +4056,12 @@ data:
             type: object
         served: true
         storage: false
-      - name: v1alpha5
+      - additionalPrinterColumns:
+        - description: Time duration since creation of Metal3MachineTemplate
+          jsonPath: .metadata.creationTimestamp
+          name: Age
+          type: date
+        name: v1alpha5
         schema:
           openAPIV3Schema:
             description: Metal3MachineTemplate is the Schema for the metal3machinetemplates
@@ -4222,6 +4264,7 @@ data:
             type: object
         served: true
         storage: true
+        subresources: {}
     status:
       acceptedNames:
         kind: ""
@@ -4235,7 +4278,7 @@ data:
       labels:
         cluster.x-k8s.io/provider: infrastructure-metal3
         clusterctl.cluster.x-k8s.io: ""
-      name: capm3-ipam-manager
+      name: capm3-manager
       namespace: openshift-cluster-api
     ---
     apiVersion: v1
@@ -4244,44 +4287,8 @@ data:
       labels:
         cluster.x-k8s.io/provider: infrastructure-metal3
         clusterctl.cluster.x-k8s.io: ""
-      name: capm3-manager
+      name: ipam-manager
       namespace: openshift-cluster-api
-    ---
-    apiVersion: rbac.authorization.k8s.io/v1
-    kind: Role
-    metadata:
-      labels:
-        cluster.x-k8s.io/provider: infrastructure-metal3
-        clusterctl.cluster.x-k8s.io: ""
-      name: capm3-ipam-leader-election-role
-      namespace: openshift-cluster-api
-    rules:
-    - apiGroups:
-      - ""
-      resources:
-      - configmaps
-      verbs:
-      - get
-      - list
-      - watch
-      - create
-      - update
-      - patch
-      - delete
-    - apiGroups:
-      - ""
-      resources:
-      - configmaps/status
-      verbs:
-      - get
-      - update
-      - patch
-    - apiGroups:
-      - ""
-      resources:
-      - events
-      verbs:
-      - create
     ---
     apiVersion: rbac.authorization.k8s.io/v1
     kind: Role
@@ -4332,111 +4339,40 @@ data:
       - delete
     ---
     apiVersion: rbac.authorization.k8s.io/v1
-    kind: ClusterRole
+    kind: Role
     metadata:
-      creationTimestamp: null
       labels:
         cluster.x-k8s.io/provider: infrastructure-metal3
         clusterctl.cluster.x-k8s.io: ""
-      name: openshift-cluster-api-capm3-ipam-manager-role
+      name: ipam-leader-election-role
+      namespace: openshift-cluster-api
     rules:
+    - apiGroups:
+      - ""
+      resources:
+      - configmaps
+      verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
+      - delete
+    - apiGroups:
+      - ""
+      resources:
+      - configmaps/status
+      verbs:
+      - get
+      - update
+      - patch
     - apiGroups:
       - ""
       resources:
       - events
       verbs:
       - create
-      - get
-      - list
-      - patch
-      - update
-      - watch
-    - apiGroups:
-      - ""
-      resources:
-      - secrets
-      verbs:
-      - create
-      - delete
-      - get
-      - list
-      - patch
-      - update
-      - watch
-    - apiGroups:
-      - cluster.x-k8s.io
-      resources:
-      - clusters
-      verbs:
-      - get
-      - list
-      - watch
-    - apiGroups:
-      - cluster.x-k8s.io
-      resources:
-      - clusters/status
-      verbs:
-      - get
-    - apiGroups:
-      - ipam.metal3.io
-      resources:
-      - ipaddresses
-      verbs:
-      - create
-      - delete
-      - get
-      - list
-      - patch
-      - update
-      - watch
-    - apiGroups:
-      - ipam.metal3.io
-      resources:
-      - ipaddresses/status
-      verbs:
-      - get
-      - patch
-      - update
-    - apiGroups:
-      - ipam.metal3.io
-      resources:
-      - ipclaims
-      verbs:
-      - create
-      - delete
-      - get
-      - list
-      - patch
-      - update
-      - watch
-    - apiGroups:
-      - ipam.metal3.io
-      resources:
-      - ipclaims/status
-      verbs:
-      - get
-      - patch
-      - update
-    - apiGroups:
-      - ipam.metal3.io
-      resources:
-      - ippools
-      verbs:
-      - create
-      - delete
-      - get
-      - list
-      - patch
-      - update
-      - watch
-    - apiGroups:
-      - ipam.metal3.io
-      resources:
-      - ippools/status
-      verbs:
-      - get
-      - patch
-      - update
     ---
     apiVersion: rbac.authorization.k8s.io/v1
     kind: ClusterRole
@@ -4701,22 +4637,111 @@ data:
       - update
     ---
     apiVersion: rbac.authorization.k8s.io/v1
-    kind: RoleBinding
+    kind: ClusterRole
     metadata:
       creationTimestamp: null
       labels:
         cluster.x-k8s.io/provider: infrastructure-metal3
         clusterctl.cluster.x-k8s.io: ""
-      name: capm3-ipam-leader-election-rolebinding
-      namespace: openshift-cluster-api
-    roleRef:
-      apiGroup: rbac.authorization.k8s.io
-      kind: Role
-      name: capm3-ipam-leader-election-role
-    subjects:
-    - kind: ServiceAccount
-      name: capm3-ipam-manager
-      namespace: openshift-cluster-api
+      name: openshift-cluster-api-ipam-manager-role
+    rules:
+    - apiGroups:
+      - ""
+      resources:
+      - events
+      verbs:
+      - create
+      - get
+      - list
+      - patch
+      - update
+      - watch
+    - apiGroups:
+      - ""
+      resources:
+      - secrets
+      verbs:
+      - create
+      - delete
+      - get
+      - list
+      - patch
+      - update
+      - watch
+    - apiGroups:
+      - cluster.x-k8s.io
+      resources:
+      - clusters
+      verbs:
+      - get
+      - list
+      - watch
+    - apiGroups:
+      - cluster.x-k8s.io
+      resources:
+      - clusters/status
+      verbs:
+      - get
+    - apiGroups:
+      - ipam.metal3.io
+      resources:
+      - ipaddresses
+      verbs:
+      - create
+      - delete
+      - get
+      - list
+      - patch
+      - update
+      - watch
+    - apiGroups:
+      - ipam.metal3.io
+      resources:
+      - ipaddresses/status
+      verbs:
+      - get
+      - patch
+      - update
+    - apiGroups:
+      - ipam.metal3.io
+      resources:
+      - ipclaims
+      verbs:
+      - create
+      - delete
+      - get
+      - list
+      - patch
+      - update
+      - watch
+    - apiGroups:
+      - ipam.metal3.io
+      resources:
+      - ipclaims/status
+      verbs:
+      - get
+      - patch
+      - update
+    - apiGroups:
+      - ipam.metal3.io
+      resources:
+      - ippools
+      verbs:
+      - create
+      - delete
+      - get
+      - list
+      - patch
+      - update
+      - watch
+    - apiGroups:
+      - ipam.metal3.io
+      resources:
+      - ippools/status
+      verbs:
+      - get
+      - patch
+      - update
     ---
     apiVersion: rbac.authorization.k8s.io/v1
     kind: RoleBinding
@@ -4737,20 +4762,21 @@ data:
       namespace: openshift-cluster-api
     ---
     apiVersion: rbac.authorization.k8s.io/v1
-    kind: ClusterRoleBinding
+    kind: RoleBinding
     metadata:
       creationTimestamp: null
       labels:
         cluster.x-k8s.io/provider: infrastructure-metal3
         clusterctl.cluster.x-k8s.io: ""
-      name: openshift-cluster-api-capm3-ipam-manager-rolebinding
+      name: ipam-leader-election-rolebinding
+      namespace: openshift-cluster-api
     roleRef:
       apiGroup: rbac.authorization.k8s.io
-      kind: ClusterRole
-      name: openshift-cluster-api-capm3-ipam-manager-role
+      kind: Role
+      name: ipam-leader-election-role
     subjects:
     - kind: ServiceAccount
-      name: capm3-ipam-manager
+      name: ipam-manager
       namespace: openshift-cluster-api
     ---
     apiVersion: rbac.authorization.k8s.io/v1
@@ -4770,28 +4796,28 @@ data:
       name: capm3-manager
       namespace: openshift-cluster-api
     ---
-    apiVersion: v1
-    kind: Service
+    apiVersion: rbac.authorization.k8s.io/v1
+    kind: ClusterRoleBinding
     metadata:
-      annotations:
-        service.beta.openshift.io/serving-cert-secret-name: ipam-serving-cert
+      creationTimestamp: null
       labels:
         cluster.x-k8s.io/provider: infrastructure-metal3
         clusterctl.cluster.x-k8s.io: ""
-      name: capm3-ipam-webhook-service
+      name: openshift-cluster-api-ipam-manager-rolebinding
+    roleRef:
+      apiGroup: rbac.authorization.k8s.io
+      kind: ClusterRole
+      name: openshift-cluster-api-ipam-manager-role
+    subjects:
+    - kind: ServiceAccount
+      name: ipam-manager
       namespace: openshift-cluster-api
-    spec:
-      ports:
-      - port: 443
-        targetPort: ipam-webhook
-      selector:
-        cluster.x-k8s.io/provider: infrastructure-metal3
     ---
     apiVersion: v1
     kind: Service
     metadata:
       annotations:
-        service.beta.openshift.io/serving-cert-secret-name: capm3-serving-cert
+        service.beta.openshift.io/serving-cert-secret-name: capm3-webhook-service-cert
       labels:
         cluster.x-k8s.io/provider: infrastructure-metal3
         clusterctl.cluster.x-k8s.io: ""
@@ -4801,6 +4827,23 @@ data:
       ports:
       - port: 443
         targetPort: webhook-server
+      selector:
+        cluster.x-k8s.io/provider: infrastructure-metal3
+    ---
+    apiVersion: v1
+    kind: Service
+    metadata:
+      annotations:
+        service.beta.openshift.io/serving-cert-secret-name: ipam-webhook-service-cert
+      labels:
+        cluster.x-k8s.io/provider: infrastructure-metal3
+        clusterctl.cluster.x-k8s.io: ""
+      name: ipam-webhook-service
+      namespace: openshift-cluster-api
+    spec:
+      ports:
+      - port: 443
+        targetPort: ipam-webhook
       selector:
         cluster.x-k8s.io/provider: infrastructure-metal3
     ---
@@ -4840,7 +4883,7 @@ data:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
-            image: quay.io/metal3-io/cluster-api-provider-metal3:v0.5.0
+            image: quay.io/metal3-io/cluster-api-provider-metal3:master
             imagePullPolicy: IfNotPresent
             livenessProbe:
               httpGet:
@@ -4884,7 +4927,7 @@ data:
         clusterctl.cluster.x-k8s.io: ""
         control-plane: controller-manager
         controller-tools.k8s.io: "1.0"
-      name: capm3-ipam-controller-manager
+      name: ipam-controller-manager
       namespace: openshift-cluster-api
     spec:
       selector:
@@ -4911,7 +4954,7 @@ data:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
-            image: quay.io/metal3-io/ip-address-manager:v0.1.0
+            image: quay.io/metal3-io/ip-address-manager:v0.1.1
             imagePullPolicy: IfNotPresent
             livenessProbe:
               httpGet:
@@ -4934,7 +4977,7 @@ data:
             - mountPath: /tmp/k8s-webhook-server/serving-certs
               name: cert
               readOnly: true
-          serviceAccountName: capm3-ipam-manager
+          serviceAccountName: ipam-manager
           terminationGracePeriodSeconds: 10
           tolerations:
           - effect: NoSchedule
@@ -4955,84 +4998,10 @@ data:
       labels:
         cluster.x-k8s.io/provider: infrastructure-metal3
         clusterctl.cluster.x-k8s.io: ""
-      name: capm3-ipam-mutating-webhook-configuration
-    webhooks:
-    - admissionReviewVersions:
-      - v1beta1
-      clientConfig:
-        service:
-          name: capm3-ipam-webhook-service
-          namespace: openshift-cluster-api
-          path: /mutate-ipam-metal3-io-v1alpha4-ipaddress
-      failurePolicy: Fail
-      matchPolicy: Equivalent
-      name: default.ipaddress.ipam.metal3.io
-      rules:
-      - apiGroups:
-        - ipam.metal3.io
-        apiVersions:
-        - v1alpha4
-        operations:
-        - CREATE
-        - UPDATE
-        resources:
-        - ipaddresses
-      sideEffects: None
-    - admissionReviewVersions:
-      - v1beta1
-      clientConfig:
-        service:
-          name: capm3-ipam-webhook-service
-          namespace: openshift-cluster-api
-          path: /mutate-ipam-metal3-io-v1alpha4-ipclaim
-      failurePolicy: Fail
-      matchPolicy: Equivalent
-      name: default.ipclaim.ipam.metal3.io
-      rules:
-      - apiGroups:
-        - ipam.metal3.io
-        apiVersions:
-        - v1alpha4
-        operations:
-        - CREATE
-        - UPDATE
-        resources:
-        - ipclaims
-      sideEffects: None
-    - admissionReviewVersions:
-      - v1beta1
-      clientConfig:
-        service:
-          name: capm3-ipam-webhook-service
-          namespace: openshift-cluster-api
-          path: /mutate-ipam-metal3-io-v1alpha4-ippool
-      failurePolicy: Fail
-      matchPolicy: Equivalent
-      name: default.ippool.ipam.metal3.io
-      rules:
-      - apiGroups:
-        - ipam.metal3.io
-        apiVersions:
-        - v1alpha4
-        operations:
-        - CREATE
-        - UPDATE
-        resources:
-        - ippools
-      sideEffects: None
-    ---
-    apiVersion: admissionregistration.k8s.io/v1
-    kind: MutatingWebhookConfiguration
-    metadata:
-      annotations:
-        service.beta.openshift.io/inject-cabundle: "true"
-      creationTimestamp: null
-      labels:
-        cluster.x-k8s.io/provider: infrastructure-metal3
-        clusterctl.cluster.x-k8s.io: ""
       name: capm3-mutating-webhook-configuration
     webhooks:
     - admissionReviewVersions:
+      - v1
       - v1beta1
       clientConfig:
         service:
@@ -5054,6 +5023,7 @@ data:
         - metal3clusters
       sideEffects: None
     - admissionReviewVersions:
+      - v1
       - v1beta1
       clientConfig:
         service:
@@ -5075,6 +5045,7 @@ data:
         - metal3datas
       sideEffects: None
     - admissionReviewVersions:
+      - v1
       - v1beta1
       clientConfig:
         service:
@@ -5096,6 +5067,7 @@ data:
         - metal3dataclaims
       sideEffects: None
     - admissionReviewVersions:
+      - v1
       - v1beta1
       clientConfig:
         service:
@@ -5117,6 +5089,7 @@ data:
         - metal3datatemplates
       sideEffects: None
     - admissionReviewVersions:
+      - v1
       - v1beta1
       clientConfig:
         service:
@@ -5138,6 +5111,7 @@ data:
         - metal3machines
       sideEffects: None
     - admissionReviewVersions:
+      - v1
       - v1beta1
       clientConfig:
         service:
@@ -5160,7 +5134,7 @@ data:
       sideEffects: None
     ---
     apiVersion: admissionregistration.k8s.io/v1
-    kind: ValidatingWebhookConfiguration
+    kind: MutatingWebhookConfiguration
     metadata:
       annotations:
         service.beta.openshift.io/inject-cabundle: "true"
@@ -5168,23 +5142,24 @@ data:
       labels:
         cluster.x-k8s.io/provider: infrastructure-metal3
         clusterctl.cluster.x-k8s.io: ""
-      name: capm3-ipam-validating-webhook-configuration
+      name: ipam-mutating-webhook-configuration
     webhooks:
     - admissionReviewVersions:
+      - v1
       - v1beta1
       clientConfig:
         service:
-          name: capm3-ipam-webhook-service
+          name: ipam-webhook-service
           namespace: openshift-cluster-api
-          path: /validate-ipam-metal3-io-v1alpha4-ipaddress
+          path: /mutate-ipam-metal3-io-v1alpha1-ipaddress
       failurePolicy: Fail
       matchPolicy: Equivalent
-      name: validation.ipaddress.ipam.metal3.io
+      name: default.ipaddress.ipam.metal3.io
       rules:
       - apiGroups:
         - ipam.metal3.io
         apiVersions:
-        - v1alpha4
+        - v1alpha1
         operations:
         - CREATE
         - UPDATE
@@ -5192,20 +5167,21 @@ data:
         - ipaddresses
       sideEffects: None
     - admissionReviewVersions:
+      - v1
       - v1beta1
       clientConfig:
         service:
-          name: capm3-ipam-webhook-service
+          name: ipam-webhook-service
           namespace: openshift-cluster-api
-          path: /validate-ipam-metal3-io-v1alpha4-ipclaim
+          path: /mutate-ipam-metal3-io-v1alpha1-ipclaim
       failurePolicy: Fail
       matchPolicy: Equivalent
-      name: validation.ipclaim.ipam.metal3.io
+      name: default.ipclaim.ipam.metal3.io
       rules:
       - apiGroups:
         - ipam.metal3.io
         apiVersions:
-        - v1alpha4
+        - v1alpha1
         operations:
         - CREATE
         - UPDATE
@@ -5213,20 +5189,21 @@ data:
         - ipclaims
       sideEffects: None
     - admissionReviewVersions:
+      - v1
       - v1beta1
       clientConfig:
         service:
-          name: capm3-ipam-webhook-service
+          name: ipam-webhook-service
           namespace: openshift-cluster-api
-          path: /validate-ipam-metal3-io-v1alpha4-ippool
+          path: /mutate-ipam-metal3-io-v1alpha1-ippool
       failurePolicy: Fail
       matchPolicy: Equivalent
-      name: validation.ippool.ipam.metal3.io
+      name: default.ippool.ipam.metal3.io
       rules:
       - apiGroups:
         - ipam.metal3.io
         apiVersions:
-        - v1alpha4
+        - v1alpha1
         operations:
         - CREATE
         - UPDATE
@@ -5246,6 +5223,7 @@ data:
       name: capm3-validating-webhook-configuration
     webhooks:
     - admissionReviewVersions:
+      - v1
       - v1beta1
       clientConfig:
         service:
@@ -5267,6 +5245,7 @@ data:
         - metal3clusters
       sideEffects: None
     - admissionReviewVersions:
+      - v1
       - v1beta1
       clientConfig:
         service:
@@ -5288,6 +5267,7 @@ data:
         - metal3datas
       sideEffects: None
     - admissionReviewVersions:
+      - v1
       - v1beta1
       clientConfig:
         service:
@@ -5309,6 +5289,7 @@ data:
         - metal3dataclaims
       sideEffects: None
     - admissionReviewVersions:
+      - v1
       - v1beta1
       clientConfig:
         service:
@@ -5330,6 +5311,7 @@ data:
         - metal3datatemplates
       sideEffects: None
     - admissionReviewVersions:
+      - v1
       - v1beta1
       clientConfig:
         service:
@@ -5351,6 +5333,7 @@ data:
         - metal3machines
       sideEffects: None
     - admissionReviewVersions:
+      - v1
       - v1beta1
       clientConfig:
         service:
@@ -5371,6 +5354,84 @@ data:
         resources:
         - metal3machinetemplates
       sideEffects: None
+    ---
+    apiVersion: admissionregistration.k8s.io/v1
+    kind: ValidatingWebhookConfiguration
+    metadata:
+      annotations:
+        service.beta.openshift.io/inject-cabundle: "true"
+      creationTimestamp: null
+      labels:
+        cluster.x-k8s.io/provider: infrastructure-metal3
+        clusterctl.cluster.x-k8s.io: ""
+      name: ipam-validating-webhook-configuration
+    webhooks:
+    - admissionReviewVersions:
+      - v1
+      - v1beta1
+      clientConfig:
+        service:
+          name: ipam-webhook-service
+          namespace: openshift-cluster-api
+          path: /validate-ipam-metal3-io-v1alpha1-ipaddress
+      failurePolicy: Fail
+      matchPolicy: Equivalent
+      name: validation.ipaddress.ipam.metal3.io
+      rules:
+      - apiGroups:
+        - ipam.metal3.io
+        apiVersions:
+        - v1alpha1
+        operations:
+        - CREATE
+        - UPDATE
+        resources:
+        - ipaddresses
+      sideEffects: None
+    - admissionReviewVersions:
+      - v1
+      - v1beta1
+      clientConfig:
+        service:
+          name: ipam-webhook-service
+          namespace: openshift-cluster-api
+          path: /validate-ipam-metal3-io-v1alpha1-ipclaim
+      failurePolicy: Fail
+      matchPolicy: Equivalent
+      name: validation.ipclaim.ipam.metal3.io
+      rules:
+      - apiGroups:
+        - ipam.metal3.io
+        apiVersions:
+        - v1alpha1
+        operations:
+        - CREATE
+        - UPDATE
+        resources:
+        - ipclaims
+      sideEffects: None
+    - admissionReviewVersions:
+      - v1
+      - v1beta1
+      clientConfig:
+        service:
+          name: ipam-webhook-service
+          namespace: openshift-cluster-api
+          path: /validate-ipam-metal3-io-v1alpha1-ippool
+      failurePolicy: Fail
+      matchPolicy: Equivalent
+      name: validation.ippool.ipam.metal3.io
+      rules:
+      - apiGroups:
+        - ipam.metal3.io
+        apiVersions:
+        - v1alpha1
+        operations:
+        - CREATE
+        - UPDATE
+        resources:
+        - ippools
+      sideEffects: None
   metadata: "apiVersion: clusterctl.cluster.x-k8s.io/v1alpha3\nkind: Metadata\nreleaseSeries:\n-
     major: 0\n  minor: 5\n  contract: v1alpha4\n- major: 0\n  minor: 4\n  contract:
     v1alpha3  "
@@ -5380,6 +5441,6 @@ metadata:
   labels:
     provider.cluster.x-k8s.io/name: metal3
     provider.cluster.x-k8s.io/type: infrastructure
-    provider.cluster.x-k8s.io/version: v0.5.0
-  name: metal3-v0.5.0
+    provider.cluster.x-k8s.io/version: v0.5.1
+  name: metal3-v0.5.1
   namespace: openshift-cluster-api

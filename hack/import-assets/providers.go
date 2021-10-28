@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	certmangerv1 "github.com/jetstack/cert-manager/pkg/apis/certmanager/v1"
 	"github.com/pkg/errors"
 	admissionregistration "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
@@ -44,7 +45,7 @@ var (
 		{name: "cluster-api", version: "v1.0.0", ptype: clusterctlv1.CoreProviderType},
 		{name: "aws", version: "v0.7.0", ptype: clusterctlv1.InfrastructureProviderType},
 		{name: "azure", version: "v0.5.2", ptype: clusterctlv1.InfrastructureProviderType},
-		{name: "metal3", version: "v0.5.0", ptype: clusterctlv1.InfrastructureProviderType},
+		{name: "metal3", version: "v0.5.1", ptype: clusterctlv1.InfrastructureProviderType},
 		{name: "gcp", version: "v0.4.0", ptype: clusterctlv1.InfrastructureProviderType},
 		{name: "openstack", version: "v0.4.0", ptype: clusterctlv1.InfrastructureProviderType},
 	}
@@ -183,9 +184,30 @@ func (p *provider) providerSpec() operatorv1.ProviderSpec {
 	}
 }
 
-func (p *provider) findWebhookCertSecretName() map[string]string {
+func (p *provider) findWebhookServiceSecretName() map[string]string {
+	serviceSecretNames := map[string]string{}
 	certSecretNames := map[string]string{}
 
+	secretFromCertNN := func(certNN string) (string, bool) {
+		certName := strings.Split(certNN, "/")[1]
+		secretName, ok := certSecretNames[certName]
+		if !ok || secretName == "" {
+			return "", false
+		}
+		return secretName, true
+	}
+	// find service, then cert, then secret
+	// return map[certName] = secretName
+	for i, obj := range p.components.Objs() {
+		switch obj.GetKind() {
+		case "Certificate":
+			cert := &certmangerv1.Certificate{}
+			if err := scheme.Convert(&p.components.Objs()[i], cert, nil); err != nil {
+				panic(err)
+			}
+			certSecretNames[cert.Name] = cert.Spec.SecretName
+		}
+	}
 	for _, obj := range p.components.Objs() {
 		switch obj.GetKind() {
 		case "CustomResourceDefinition":
@@ -193,8 +215,12 @@ func (p *provider) findWebhookCertSecretName() map[string]string {
 			if err := scheme.Convert(&obj, crd, nil); err != nil {
 				panic(err)
 			}
-			if sec, ok := crd.Annotations["cert-manager.io/inject-ca-from"]; ok {
-				certSecretNames[crd.Spec.Conversion.Webhook.ClientConfig.Service.Name] = strings.Split(sec, "/")[1]
+			if certNN, ok := crd.Annotations["cert-manager.io/inject-ca-from"]; ok {
+				secretName, ok := secretFromCertNN(certNN)
+				if !ok {
+					panic("can't find secret from cert " + certNN)
+				}
+				serviceSecretNames[crd.Spec.Conversion.Webhook.ClientConfig.Service.Name] = secretName
 			}
 
 		case "MutatingWebhookConfiguration":
@@ -202,8 +228,12 @@ func (p *provider) findWebhookCertSecretName() map[string]string {
 			if err := scheme.Convert(&obj, mwc, nil); err != nil {
 				panic(err)
 			}
-			if sec, ok := mwc.Annotations["cert-manager.io/inject-ca-from"]; ok {
-				certSecretNames[mwc.Webhooks[0].ClientConfig.Service.Name] = strings.Split(sec, "/")[1]
+			if certNN, ok := mwc.Annotations["cert-manager.io/inject-ca-from"]; ok {
+				secretName, ok := secretFromCertNN(certNN)
+				if !ok {
+					panic("can't find secret from cert " + certNN)
+				}
+				serviceSecretNames[mwc.Webhooks[0].ClientConfig.Service.Name] = secretName
 			}
 
 		case "ValidatingWebhookConfiguration":
@@ -211,12 +241,16 @@ func (p *provider) findWebhookCertSecretName() map[string]string {
 			if err := scheme.Convert(&obj, vwc, nil); err != nil {
 				panic(err)
 			}
-			if sec, ok := vwc.Annotations["cert-manager.io/inject-ca-from"]; ok {
-				certSecretNames[vwc.Webhooks[0].ClientConfig.Service.Name] = strings.Split(sec, "/")[1]
+			if certNN, ok := vwc.Annotations["cert-manager.io/inject-ca-from"]; ok {
+				secretName, ok := secretFromCertNN(certNN)
+				if !ok {
+					panic("can't find secret from cert " + certNN)
+				}
+				serviceSecretNames[vwc.Webhooks[0].ClientConfig.Service.Name] = secretName
 			}
 		}
 	}
-	return certSecretNames
+	return serviceSecretNames
 }
 
 func (p *provider) updateImages(objs []unstructured.Unstructured) error {
@@ -273,7 +307,7 @@ func importProviders() error {
 			return err
 		}
 		fmt.Println(p.ptype, p.name)
-		certSecretNames := p.findWebhookCertSecretName()
+		serviceSecretNames := p.findWebhookServiceSecretName()
 
 		finalObjs := []unstructured.Unstructured{}
 		for _, obj := range p.components.Objs() {
@@ -294,7 +328,8 @@ func importProviders() error {
 				if anns == nil {
 					anns = map[string]string{}
 				}
-				if name, ok := certSecretNames[obj.GetName()]; ok {
+				if name, ok := serviceSecretNames[obj.GetName()]; ok {
+					fmt.Println(obj.GetKind(), obj.GetName(), name)
 					anns["service.beta.openshift.io/serving-cert-secret-name"] = name
 					obj.SetAnnotations(anns)
 				}

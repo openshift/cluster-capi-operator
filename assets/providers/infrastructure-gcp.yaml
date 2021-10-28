@@ -1753,7 +1753,7 @@ data:
     kind: Service
     metadata:
       annotations:
-        service.beta.openshift.io/serving-cert-secret-name: capg-serving-cert
+        service.beta.openshift.io/serving-cert-secret-name: capg-webhook-service-cert
       labels:
         cluster.x-k8s.io/provider: infrastructure-gcp
         clusterctl.cluster.x-k8s.io: ""

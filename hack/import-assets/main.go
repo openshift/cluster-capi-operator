@@ -7,6 +7,7 @@ import (
 	"path"
 	"strings"
 
+	certmangerv1 "github.com/jetstack/cert-manager/pkg/apis/certmanager/v1"
 	admissionregistration "k8s.io/api/admissionregistration/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -25,6 +26,7 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(admissionregistration.AddToScheme(scheme))
 	utilruntime.Must(apiextensionsv1.AddToScheme(scheme))
+	utilruntime.Must(certmangerv1.AddToScheme(scheme))
 }
 
 func usage() {
