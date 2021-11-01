@@ -2,7 +2,6 @@ IMG ?= controller:latest
 PROJECT_DIR := $(shell dirname $(abspath $(lastword $(MAKEFILE_LIST))))
 GOLANGCI_LINT = $(PROJECT_DIR)/bin/golangci-lint
 KUSTOMIZE = $(PROJECT_DIR)/bin/kustomize
-GOBINDATA = $(PROJECT_DIR)/bin/go-bindata
 
 all: build
 
@@ -48,12 +47,8 @@ $(GOLANGCI_LINT):
 $(KUSTOMIZE):
 	$(PROJECT_DIR)/hack/go-get-tool.sh go-get-tool $(KUSTOMIZE) sigs.k8s.io/kustomize/kustomize/v3@v3.9.4
 
-$(GOBINDATA):
-	$(PROJECT_DIR)/hack/go-get-tool.sh go-get-tool $(GOBINDATA) github.com/go-bindata/go-bindata/go-bindata@v3.1.2
-
-import-assets: $(KUSTOMIZE) $(GOBINDATA)
+import-assets: $(KUSTOMIZE)
 	$(KUSTOMIZE) build hack/import-assets/capi-operator -o assets/capi-operator/
-	cd assets; $(GOBINDATA) -nometadata -pkg assets -ignore bindata.go capi-operator/
 	cd hack/import-assets; go run . move-rbac-manifests
 
 # Run go mod

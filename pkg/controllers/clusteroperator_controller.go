@@ -83,13 +83,13 @@ func (r *ClusterOperatorReconciler) Reconcile(ctx context.Context, _ ctrl.Reques
 }
 
 func (r *ClusterOperatorReconciler) reconcile(ctx context.Context) (ctrl.Result, error) {
-	assetNames, err := assets.AssetDir("capi-operator")
+	assetNames, err := assets.FS.ReadDir("capi-operator")
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 
 	for _, assetName := range assetNames {
-		b, err := assets.Asset(path.Join("capi-operator", assetName))
+		b, err := assets.FS.ReadFile(path.Join("capi-operator", assetName.Name()))
 		if err != nil {
 			return ctrl.Result{}, err
 		}
