@@ -75,7 +75,7 @@ func (r *ClusterOperatorReconciler) Reconcile(ctx context.Context, _ ctrl.Reques
 		klog.Infof("FeatureGate cluster does include cluster api. Installing...")
 		result, err = r.reconcile(ctx)
 		if err != nil {
-			return result, err
+			return result, r.setStatusDegraded(ctx, err)
 		}
 	}
 
