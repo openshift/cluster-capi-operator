@@ -66,5 +66,6 @@ func moveRBACToManifests() error {
 	if err != nil {
 		return err
 	}
+	b = []byte(string(b) + "\n") // add a new line for git
 	return os.WriteFile(outFile, b, 0600)
 }
