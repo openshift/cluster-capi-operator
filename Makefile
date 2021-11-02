@@ -1,6 +1,7 @@
 IMG ?= controller:latest
 PROJECT_DIR := $(shell dirname $(abspath $(lastword $(MAKEFILE_LIST))))
 GOLANGCI_LINT = $(PROJECT_DIR)/bin/golangci-lint
+KUSTOMIZE = $(PROJECT_DIR)/bin/kustomize
 
 all: build
 
@@ -42,6 +43,13 @@ lint: $(GOLANGCI_LINT)
 # Download golangci-lint locally if necessary
 $(GOLANGCI_LINT):
 	$(PROJECT_DIR)/hack/go-get-tool.sh go-get-tool $(GOLANGCI_LINT) github.com/golangci/golangci-lint/cmd/golangci-lint@v1.41.1
+
+$(KUSTOMIZE):
+	$(PROJECT_DIR)/hack/go-get-tool.sh go-get-tool $(KUSTOMIZE) sigs.k8s.io/kustomize/kustomize/v3@v3.9.4
+
+import-assets: $(KUSTOMIZE)
+	$(KUSTOMIZE) build hack/import-assets/capi-operator -o assets/capi-operator/
+	cd hack/import-assets; go run . move-rbac-manifests
 
 # Run go mod
 .PHONY: vendor

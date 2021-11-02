@@ -1,0 +1,5 @@
+{
+    "clusterCAPIOperator": "quay.io/asalkeld/cluster-capi-operator:latest",
+    "upstreamCAPIOperator": "quay.io/asalkeld/openshift-cluster-api-operator-amd64:dev",
+    "kube-rbac-proxy": "gcr.io/kubebuilder/kube-rbac-proxy:v0.5.0"
+}

@@ -1,0 +1,15 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    clusterctl.cluster.x-k8s.io/core: capi-operator
+  name: capi-operator-leader-election-rolebinding
+  namespace: openshift-cluster-api
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: capi-operator-leader-election-role
+subjects:
+- kind: ServiceAccount
+  name: default
+  namespace: openshift-cluster-api
