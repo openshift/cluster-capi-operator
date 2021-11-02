@@ -5,13 +5,11 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	"path"
 
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/klog"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -83,53 +81,31 @@ func (r *ClusterOperatorReconciler) Reconcile(ctx context.Context, _ ctrl.Reques
 }
 
 func (r *ClusterOperatorReconciler) reconcile(ctx context.Context) (ctrl.Result, error) {
-	assetNames, err := assets.FS.ReadDir("capi-operator")
+	objs, err := assets.FromDir("capi-operator", r.Scheme)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	updater := NewUpdater(objs).WithFilter(func(obj client.Object) bool {
+		appliedByManifest := []string{"Namespace", "ClusterRole", "Role", "ClusterRoleBinding", "RoleBinding", "ServiceAccount"}
+		// these are already applied by the manifest
+		return !util.ContainsString(appliedByManifest, obj.GetObjectKind().GroupVersionKind().Kind)
+	})
+
+	err = updater.Mutate(func(obj client.Object) (client.Object, error) {
+		dep, depOK := obj.(*appsv1.Deployment)
+		if depOK {
+			if err := r.customizeDeployment(dep); err != nil {
+				return obj, err
+			}
+		}
+
+		return obj, nil
+	})
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 
-	for _, assetName := range assetNames {
-		b, err := assets.FS.ReadFile(path.Join("capi-operator", assetName.Name()))
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-		codecs := serializer.NewCodecFactory(r.Scheme)
-		obj, _, err := codecs.UniversalDeserializer().Decode(b, nil, nil)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-
-		appliedByManifest := []string{"Namespace", "ClusterRole", "Role", "ClusterRoleBinding", "RoleBinding", "ServiceAccount"}
-		if util.ContainsString(appliedByManifest, obj.GetObjectKind().GroupVersionKind().Kind) {
-			// these are already applied by the manifest
-			continue
-		}
-
-		dep, depOK := obj.(*appsv1.Deployment)
-		if depOK {
-			if err := r.customizeDeployment(dep); err != nil {
-				return ctrl.Result{}, err
-			}
-		}
-
-		existing := obj.DeepCopyObject().(client.Object)
-		_, err = ctrl.CreateOrUpdate(ctx, r.Client, existing, func() error {
-			existing = obj.(client.Object)
-			return nil
-		})
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-	}
-
-	// TODO wait for the deployment to be Available?
-
-	// TODO should we install
-	// - supported provider configmaps?
-	// - infrastructure secret?
-	// - provider CRs?
-
-	return ctrl.Result{}, nil
+	return ctrl.Result{}, updater.CreateOrUpdate(ctx, r.Client, r.Recorder)
 }
 
 func (r *ClusterOperatorReconciler) customizeDeployment(dep *appsv1.Deployment) error {
