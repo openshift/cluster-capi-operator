@@ -50,6 +50,7 @@ var (
 		{name: "openstack", version: "v0.4.0", ptype: clusterctlv1.InfrastructureProviderType},
 	}
 	providersPath = path.Join(projDir, "assets", "providers")
+	manifestsPath = path.Join(projDir, "manifests")
 )
 
 func (p *provider) loadComponents() error {
@@ -132,6 +133,16 @@ func (p *provider) writeProviderComponents(objs []unstructured.Unstructured) err
 
 	fName := strings.ToLower(p.providerTypeName() + "-" + p.name + ".yaml")
 	return os.WriteFile(path.Join(providersPath, fName), cmYaml, 0600)
+}
+
+func (p *provider) writeRBACComponentsToManifests(objs []unstructured.Unstructured) error {
+	combined, err := utilyaml.FromUnstructured(objs)
+	if err != nil {
+		return err
+	}
+
+	fName := strings.ToLower("0000_30_cluster-api-" + p.providerTypeName() + "-" + p.name + "_03_rbac.yaml")
+	return os.WriteFile(path.Join(manifestsPath, fName), combined, 0600)
 }
 
 func (p *provider) writeProviders() error {
@@ -310,6 +321,7 @@ func importProviders() error {
 		serviceSecretNames := p.findWebhookServiceSecretName()
 
 		finalObjs := []unstructured.Unstructured{}
+		rbacObjs := []unstructured.Unstructured{}
 		for _, obj := range p.components.Objs() {
 			switch obj.GetKind() {
 			case "CustomResourceDefinition", "MutatingWebhookConfiguration", "ValidatingWebhookConfiguration":
@@ -335,9 +347,17 @@ func importProviders() error {
 				}
 				finalObjs = append(finalObjs, obj)
 			case "Certificate", "Issuer", "Namespace": // skip
+			case "ClusterRole", "Role", "ClusterRoleBinding", "RoleBinding", "ServiceAccount":
+				setOpenShiftAnnotations(obj)
+				rbacObjs = append(rbacObjs, obj)
 			default:
 				finalObjs = append(finalObjs, obj)
 			}
+		}
+
+		err = p.writeRBACComponentsToManifests(rbacObjs)
+		if err != nil {
+			return err
 		}
 
 		err = p.updateImages(finalObjs)
@@ -354,7 +374,6 @@ func importProviders() error {
 		if err != nil {
 			return err
 		}
-
 	}
 	return nil
 }
