@@ -348,7 +348,7 @@ func importProviders() error {
 				finalObjs = append(finalObjs, obj)
 			case "Certificate", "Issuer", "Namespace": // skip
 			case "ClusterRole", "Role", "ClusterRoleBinding", "RoleBinding", "ServiceAccount":
-				setOpenShiftAnnotations(obj)
+				setOpenShiftAnnotations(obj, false)
 				rbacObjs = append(rbacObjs, obj)
 			default:
 				finalObjs = append(finalObjs, obj)

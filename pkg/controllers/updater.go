@@ -6,6 +6,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/klog"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -31,11 +32,13 @@ func NewUpdater(objs []client.Object) Updater {
 }
 
 func (u *updater) WithFilter(objectFilterFn ObjectFilterFn) Updater {
-	for i := range u.objs {
-		if !objectFilterFn(u.objs[i]) {
-			u.objs = append(u.objs[:i], u.objs[i+1:]...)
+	filteredObjs := []client.Object{}
+	for _, obj := range u.objs {
+		if objectFilterFn(obj) {
+			filteredObjs = append(filteredObjs, obj)
 		}
 	}
+	u.objs = filteredObjs
 	return u
 }
 
@@ -61,6 +64,7 @@ func (u *updater) CreateOrUpdate(ctx context.Context, c client.Client, r record.
 			return err
 		}
 
+		klog.Infof("createOrUpdating %s %s", existing.GetKind(), existing.GetName())
 		opRes, err := ctrl.CreateOrUpdate(ctx, c, existing, func() error {
 			rv := existing.GetResourceVersion()
 			required.DeepCopyInto(existing)

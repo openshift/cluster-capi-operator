@@ -139,24 +139,17 @@ func (r *ClusterOperatorReconciler) reconcile(ctx context.Context) (ctrl.Result,
 
 	updater = NewUpdater(objs).WithFilter(func(obj client.Object) bool {
 		if obj.GetObjectKind().GroupVersionKind().Kind == "InfrastructureProvider" {
-			return strings.HasPrefix(obj.GetName(), string(r.PlatformType))
+			if !strings.HasPrefix(obj.GetName(), r.currentProviderName()) {
+				klog.Infof("skipping infra %s!=%s", obj.GetName(), r.currentProviderName())
+				return false
+			}
 		}
-		if obj.GetName() != r.currentProviderName() {
-			klog.Infof("ignoring infra %s!=%s", obj.GetName(), r.currentProviderName())
-			return false
-		}
-
 		return true
 	})
 
 	err = updater.Mutate(func(obj client.Object) (client.Object, error) {
 		infra, ok := obj.(*operatorv1.InfrastructureProvider)
 		if ok {
-			if infra.Name != r.currentProviderName() {
-				klog.Infof("ignoring infra %s!=%s", infra.Name, r.currentProviderName())
-				return nil, nil
-			}
-			klog.Infof("installing infra %s", infra.Name)
 			infra.Spec.ProviderSpec.Deployment = &operatorv1.DeploymentSpec{
 				Containers: r.containerCustomizationFromProvider(infra.Kind, infra.Name),
 			}
@@ -167,25 +160,12 @@ func (r *ClusterOperatorReconciler) reconcile(ctx context.Context) (ctrl.Result,
 				Containers: r.containerCustomizationFromProvider(core.Kind, core.Name),
 			}
 		}
-		bs, ok := obj.(*operatorv1.BootstrapProvider)
-		if ok {
-			bs.Spec.ProviderSpec.Deployment = &operatorv1.DeploymentSpec{
-				Containers: r.containerCustomizationFromProvider(bs.Kind, bs.Name),
-			}
-		}
-		cp, ok := obj.(*operatorv1.ControlPlaneProvider)
-		if ok {
-			cp.Spec.ProviderSpec.Deployment = &operatorv1.DeploymentSpec{
-				Containers: r.containerCustomizationFromProvider(cp.Kind, cp.Name),
-			}
-		}
 
 		return obj, nil
 	})
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-
 	return ctrl.Result{}, updater.CreateOrUpdate(ctx, r.Client, r.Recorder)
 }
 
