@@ -9,7 +9,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-//go:embed capi-operator/*.yaml
+//go:embed capi-operator/*.yaml providers/*.yaml
 var fs embed.FS
 
 func FromDir(dir string, scheme *runtime.Scheme) ([]client.Object, error) {
