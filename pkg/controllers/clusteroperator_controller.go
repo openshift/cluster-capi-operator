@@ -216,6 +216,12 @@ func (r *ClusterOperatorReconciler) customizeDeployment(dep *appsv1.Deployment) 
 		"kube-rbac-proxy": "kube-rbac-proxy",
 	}
 	for ci, cont := range dep.Spec.Template.Spec.Containers {
+		if cont.Name == "manager" {
+			// since our RBAC is installed via /manifests we don't want the upstream operator
+			// to delete them as it normally would on upgrade.
+			dep.Spec.Template.Spec.Containers[ci].Args = append(cont.Args, "--delete-rbac-on-upgrade=false")
+		}
+
 		if imageRef, ok := containerToImageRef[cont.Name]; ok {
 			if cont.Image == r.Images[imageRef] {
 				klog.Infof("container %s image %s", cont.Name, cont.Image)
