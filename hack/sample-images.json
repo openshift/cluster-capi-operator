@@ -8,7 +8,7 @@
   "infrastructure-azure:manager": "us.gcr.io/k8s-artifacts-prod/cluster-api-azure/cluster-api-azure-controller:v0.5.2",
   "infrastructure-gcp:manager": "us.gcr.io/k8s-artifacts-prod/cluster-api-gcp/cluster-api-gcp-controller:v0.4.0",
   "infrastructure-metal3:ip-address-manager": "quay.io/metal3-io/ip-address-manager:v0.1.1",
-  "infrastructure-metal3:manager": "quay.io/metal3-io/cluster-api-provider-metal3:master",
+  "infrastructure-metal3:manager": "quay.io/metal3-io/cluster-api-provider-metal3:main",
   "infrastructure-openstack:manager": "k8s.gcr.io/capi-openstack/capi-openstack-controller:v0.4.0",
   "kube-rbac-proxy": "gcr.io/kubebuilder/kube-rbac-proxy:v0.8.0"
 }

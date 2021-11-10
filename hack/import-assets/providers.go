@@ -45,7 +45,7 @@ var (
 		{name: "cluster-api", version: "v1.0.0", ptype: clusterctlv1.CoreProviderType},
 		{name: "aws", version: "v0.7.0", ptype: clusterctlv1.InfrastructureProviderType},
 		{name: "azure", version: "v0.5.2", ptype: clusterctlv1.InfrastructureProviderType},
-		{name: "metal3", version: "v0.5.1", ptype: clusterctlv1.InfrastructureProviderType},
+		{name: "metal3", version: "v0.5.2", ptype: clusterctlv1.InfrastructureProviderType},
 		{name: "gcp", version: "v0.4.0", ptype: clusterctlv1.InfrastructureProviderType},
 		{name: "openstack", version: "v0.4.0", ptype: clusterctlv1.InfrastructureProviderType},
 	}

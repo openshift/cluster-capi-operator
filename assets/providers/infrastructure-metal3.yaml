@@ -1702,7 +1702,7 @@ data:
                                 bondMode:
                                   description: BondMode is the mode of bond used. It can
                                     be one of balance-rr, active-backup, balance-xor,
-                                    broadcast, balance-tlb, balance-alb, 802.1ad
+                                    broadcast, balance-tlb, balance-alb, 802.3ad
                                   enum:
                                   - balance-rr
                                   - active-backup
@@ -1710,7 +1710,7 @@ data:
                                   - broadcast
                                   - balance-tlb
                                   - balance-alb
-                                  - 802.1ad
+                                  - 802.3ad
                                   type: string
                                 id:
                                   description: Id is the ID of the interface (used for
@@ -2532,7 +2532,7 @@ data:
                                 bondMode:
                                   description: BondMode is the mode of bond used. It can
                                     be one of balance-rr, active-backup, balance-xor,
-                                    broadcast, balance-tlb, balance-alb, 802.1ad
+                                    broadcast, balance-tlb, balance-alb, 802.3ad
                                   enum:
                                   - balance-rr
                                   - active-backup
@@ -2540,7 +2540,7 @@ data:
                                   - broadcast
                                   - balance-tlb
                                   - balance-alb
-                                  - 802.1ad
+                                  - 802.3ad
                                   type: string
                                 id:
                                   description: Id is the ID of the interface (used for
@@ -4272,6 +4272,417 @@ data:
       conditions: []
       storedVersions: []
     ---
+    apiVersion: apiextensions.k8s.io/v1
+    kind: CustomResourceDefinition
+    metadata:
+      annotations:
+        controller-gen.kubebuilder.io/version: v0.7.0
+        service.beta.openshift.io/inject-cabundle: "true"
+      creationTimestamp: null
+      labels:
+        cluster.x-k8s.io/provider: infrastructure-metal3
+        cluster.x-k8s.io/v1alpha3: v1alpha4
+        cluster.x-k8s.io/v1alpha4: v1alpha5
+        clusterctl.cluster.x-k8s.io: ""
+      name: metal3remediations.infrastructure.cluster.x-k8s.io
+    spec:
+      conversion:
+        strategy: Webhook
+        webhook:
+          clientConfig:
+            caBundle: Cg==
+            service:
+              name: capm3-webhook-service
+              namespace: openshift-cluster-api
+              path: /convert
+          conversionReviewVersions:
+          - v1
+          - v1beta1
+      group: infrastructure.cluster.x-k8s.io
+      names:
+        categories:
+        - cluster-api
+        kind: Metal3Remediation
+        listKind: Metal3RemediationList
+        plural: metal3remediations
+        shortNames:
+        - m3r
+        - m3remediation
+        singular: metal3remediation
+      scope: Namespaced
+      versions:
+      - additionalPrinterColumns:
+        - description: How many times remediation controller should attempt to remediate
+            the host
+          jsonPath: .spec.strategy.retryLimit
+          name: Retry limit
+          type: string
+        - description: How many times remediation controller has tried to remediate the
+            node
+          jsonPath: .status.retryCount
+          name: Retry count
+          type: string
+        - description: Timestamp of the last remediation attempt
+          jsonPath: .status.lastRemediated
+          name: Last Remediated
+          type: string
+        - description: Type of the remediation strategy
+          jsonPath: .spec.strategy.type
+          name: Strategy
+          type: string
+        - description: Phase of the remediation
+          jsonPath: .status.phase
+          name: Phase
+          type: string
+        name: v1alpha4
+        schema:
+          openAPIV3Schema:
+            description: Metal3Remediation is the Schema for the metal3remediations API
+            properties:
+              apiVersion:
+                description: 'APIVersion defines the versioned schema of this representation
+                  of an object. Servers should convert recognized schemas to the latest
+                  internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+                type: string
+              kind:
+                description: 'Kind is a string value representing the REST resource this
+                  object represents. Servers may infer this from the endpoint the client
+                  submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                type: string
+              metadata:
+                type: object
+              spec:
+                description: Metal3RemediationSpec defines the desired state of Metal3Remediation.
+                properties:
+                  strategy:
+                    description: Strategy field defines remediation strategy.
+                    properties:
+                      retryLimit:
+                        description: Sets maximum number of remediation retries.
+                        type: integer
+                      timeout:
+                        description: Sets the timeout between remediation retries.
+                        type: string
+                      type:
+                        description: Type of remediation.
+                        type: string
+                    type: object
+                type: object
+              status:
+                description: Metal3RemediationStatus defines the observed state of Metal3Remediation
+                properties:
+                  lastRemediated:
+                    description: LastRemediated identifies when the host was last remediated
+                    format: date-time
+                    type: string
+                  phase:
+                    description: Phase represents the current phase of machine remediation.
+                      E.g. Pending, Running, Done etc.
+                    type: string
+                  retryCount:
+                    description: RetryCount can be used as a counter during the remediation.
+                      Field can hold number of reboots etc.
+                    type: integer
+                type: object
+            type: object
+        served: true
+        storage: false
+        subresources:
+          status: {}
+      - additionalPrinterColumns:
+        - description: How many times remediation controller should attempt to remediate
+            the host
+          jsonPath: .spec.strategy.retryLimit
+          name: Retry limit
+          type: string
+        - description: How many times remediation controller has tried to remediate the
+            node
+          jsonPath: .status.retryCount
+          name: Retry count
+          type: string
+        - description: Timestamp of the last remediation attempt
+          jsonPath: .status.lastRemediated
+          name: Last Remediated
+          type: string
+        - description: Type of the remediation strategy
+          jsonPath: .spec.strategy.type
+          name: Strategy
+          type: string
+        - description: Phase of the remediation
+          jsonPath: .status.phase
+          name: Phase
+          type: string
+        name: v1alpha5
+        schema:
+          openAPIV3Schema:
+            description: Metal3Remediation is the Schema for the metal3remediations API
+            properties:
+              apiVersion:
+                description: 'APIVersion defines the versioned schema of this representation
+                  of an object. Servers should convert recognized schemas to the latest
+                  internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+                type: string
+              kind:
+                description: 'Kind is a string value representing the REST resource this
+                  object represents. Servers may infer this from the endpoint the client
+                  submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                type: string
+              metadata:
+                type: object
+              spec:
+                description: Metal3RemediationSpec defines the desired state of Metal3Remediation.
+                properties:
+                  strategy:
+                    description: Strategy field defines remediation strategy.
+                    properties:
+                      retryLimit:
+                        description: Sets maximum number of remediation retries.
+                        type: integer
+                      timeout:
+                        description: Sets the timeout between remediation retries.
+                        type: string
+                      type:
+                        description: Type of remediation.
+                        type: string
+                    type: object
+                type: object
+              status:
+                description: Metal3RemediationStatus defines the observed state of Metal3Remediation
+                properties:
+                  lastRemediated:
+                    description: LastRemediated identifies when the host was last remediated
+                    format: date-time
+                    type: string
+                  phase:
+                    description: Phase represents the current phase of machine remediation.
+                      E.g. Pending, Running, Done etc.
+                    type: string
+                  retryCount:
+                    description: RetryCount can be used as a counter during the remediation.
+                      Field can hold number of reboots etc.
+                    type: integer
+                type: object
+            type: object
+        served: true
+        storage: true
+        subresources:
+          status: {}
+    status:
+      acceptedNames:
+        kind: ""
+        plural: ""
+      conditions: []
+      storedVersions: []
+    ---
+    apiVersion: apiextensions.k8s.io/v1
+    kind: CustomResourceDefinition
+    metadata:
+      annotations:
+        controller-gen.kubebuilder.io/version: v0.7.0
+        service.beta.openshift.io/inject-cabundle: "true"
+      creationTimestamp: null
+      labels:
+        cluster.x-k8s.io/provider: infrastructure-metal3
+        cluster.x-k8s.io/v1alpha3: v1alpha4
+        cluster.x-k8s.io/v1alpha4: v1alpha5
+        clusterctl.cluster.x-k8s.io: ""
+      name: metal3remediationtemplates.infrastructure.cluster.x-k8s.io
+    spec:
+      conversion:
+        strategy: Webhook
+        webhook:
+          clientConfig:
+            caBundle: Cg==
+            service:
+              name: capm3-webhook-service
+              namespace: openshift-cluster-api
+              path: /convert
+          conversionReviewVersions:
+          - v1
+          - v1beta1
+      group: infrastructure.cluster.x-k8s.io
+      names:
+        categories:
+        - cluster-api
+        kind: Metal3RemediationTemplate
+        listKind: Metal3RemediationTemplateList
+        plural: metal3remediationtemplates
+        shortNames:
+        - m3rt
+        - m3remediationtemplate
+        - m3remediationtemplates
+        - metal3rt
+        - metal3remediationtemplate
+        singular: metal3remediationtemplate
+      scope: Namespaced
+      versions:
+      - name: v1alpha4
+        schema:
+          openAPIV3Schema:
+            description: Metal3RemediationTemplate is the Schema for the metal3remediationtemplates
+              API
+            properties:
+              apiVersion:
+                description: 'APIVersion defines the versioned schema of this representation
+                  of an object. Servers should convert recognized schemas to the latest
+                  internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+                type: string
+              kind:
+                description: 'Kind is a string value representing the REST resource this
+                  object represents. Servers may infer this from the endpoint the client
+                  submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                type: string
+              metadata:
+                type: object
+              spec:
+                description: Metal3RemediationTemplateSpec defines the desired state of
+                  Metal3RemediationTemplate
+                properties:
+                  template:
+                    description: Metal3RemediationTemplateResource describes the data
+                      needed to create a Metal3Remediation from a template
+                    properties:
+                      spec:
+                        description: Spec is the specification of the desired behavior
+                          of the Metal3Remediation.
+                        properties:
+                          strategy:
+                            description: Strategy field defines remediation strategy.
+                            properties:
+                              retryLimit:
+                                description: Sets maximum number of remediation retries.
+                                type: integer
+                              timeout:
+                                description: Sets the timeout between remediation retries.
+                                type: string
+                              type:
+                                description: Type of remediation.
+                                type: string
+                            type: object
+                        type: object
+                    required:
+                    - spec
+                    type: object
+                required:
+                - template
+                type: object
+              status:
+                description: Metal3RemediationTemplateStatus defines the observed state
+                  of Metal3RemediationTemplate
+                properties:
+                  status:
+                    description: Metal3RemediationStatus defines the observed state of
+                      Metal3Remediation
+                    properties:
+                      lastRemediated:
+                        description: LastRemediated identifies when the host was last
+                          remediated
+                        format: date-time
+                        type: string
+                      phase:
+                        description: Phase represents the current phase of machine remediation.
+                          E.g. Pending, Running, Done etc.
+                        type: string
+                      retryCount:
+                        description: RetryCount can be used as a counter during the remediation.
+                          Field can hold number of reboots etc.
+                        type: integer
+                    type: object
+                required:
+                - status
+                type: object
+            type: object
+        served: true
+        storage: false
+        subresources:
+          status: {}
+      - name: v1alpha5
+        schema:
+          openAPIV3Schema:
+            description: Metal3RemediationTemplate is the Schema for the metal3remediationtemplates
+              API
+            properties:
+              apiVersion:
+                description: 'APIVersion defines the versioned schema of this representation
+                  of an object. Servers should convert recognized schemas to the latest
+                  internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+                type: string
+              kind:
+                description: 'Kind is a string value representing the REST resource this
+                  object represents. Servers may infer this from the endpoint the client
+                  submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                type: string
+              metadata:
+                type: object
+              spec:
+                description: Metal3RemediationTemplateSpec defines the desired state of
+                  Metal3RemediationTemplate
+                properties:
+                  template:
+                    description: Metal3RemediationTemplateResource describes the data
+                      needed to create a Metal3Remediation from a template
+                    properties:
+                      spec:
+                        description: Spec is the specification of the desired behavior
+                          of the Metal3Remediation.
+                        properties:
+                          strategy:
+                            description: Strategy field defines remediation strategy.
+                            properties:
+                              retryLimit:
+                                description: Sets maximum number of remediation retries.
+                                type: integer
+                              timeout:
+                                description: Sets the timeout between remediation retries.
+                                type: string
+                              type:
+                                description: Type of remediation.
+                                type: string
+                            type: object
+                        type: object
+                    required:
+                    - spec
+                    type: object
+                required:
+                - template
+                type: object
+              status:
+                description: Metal3RemediationTemplateStatus defines the observed state
+                  of Metal3RemediationTemplate
+                properties:
+                  status:
+                    description: Metal3RemediationStatus defines the observed state of
+                      Metal3Remediation
+                    properties:
+                      lastRemediated:
+                        description: LastRemediated identifies when the host was last
+                          remediated
+                        format: date-time
+                        type: string
+                      phase:
+                        description: Phase represents the current phase of machine remediation.
+                          E.g. Pending, Running, Done etc.
+                        type: string
+                      retryCount:
+                        description: RetryCount can be used as a counter during the remediation.
+                          Field can hold number of reboots etc.
+                        type: integer
+                    type: object
+                required:
+                - status
+                type: object
+            type: object
+        served: true
+        storage: true
+        subresources:
+          status: {}
+    status:
+      acceptedNames:
+        kind: ""
+        plural: ""
+      conditions: []
+      storedVersions: []
+    ---
     apiVersion: v1
     kind: Service
     metadata:
@@ -4342,7 +4753,7 @@ data:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
-            image: quay.io/metal3-io/cluster-api-provider-metal3:master
+            image: quay.io/metal3-io/cluster-api-provider-metal3:main
             imagePullPolicy: IfNotPresent
             livenessProbe:
               httpGet:
@@ -4591,6 +5002,50 @@ data:
         resources:
         - metal3machinetemplates
       sideEffects: None
+    - admissionReviewVersions:
+      - v1
+      - v1beta1
+      clientConfig:
+        service:
+          name: capm3-webhook-service
+          namespace: openshift-cluster-api
+          path: /mutate-infrastructure-cluster-x-k8s-io-v1alpha5-metal3remediation
+      failurePolicy: Fail
+      matchPolicy: Equivalent
+      name: default.metal3remediation.infrastructure.cluster.x-k8s.io
+      rules:
+      - apiGroups:
+        - infrastructure.cluster.x-k8s.io
+        apiVersions:
+        - v1alpha5
+        operations:
+        - CREATE
+        - UPDATE
+        resources:
+        - metal3remediations
+      sideEffects: None
+    - admissionReviewVersions:
+      - v1
+      - v1beta1
+      clientConfig:
+        service:
+          name: capm3-webhook-service
+          namespace: openshift-cluster-api
+          path: /mutate-infrastructure-cluster-x-k8s-io-v1alpha5-metal3remediationtemplate
+      failurePolicy: Fail
+      matchPolicy: Equivalent
+      name: default.metal3remediationtemplate.infrastructure.cluster.x-k8s.io
+      rules:
+      - apiGroups:
+        - infrastructure.cluster.x-k8s.io
+        apiVersions:
+        - v1alpha5
+        operations:
+        - CREATE
+        - UPDATE
+        resources:
+        - metal3remediationtemplates
+      sideEffects: None
     ---
     apiVersion: admissionregistration.k8s.io/v1
     kind: MutatingWebhookConfiguration
@@ -4813,6 +5268,50 @@ data:
         resources:
         - metal3machinetemplates
       sideEffects: None
+    - admissionReviewVersions:
+      - v1
+      - v1beta1
+      clientConfig:
+        service:
+          name: capm3-webhook-service
+          namespace: openshift-cluster-api
+          path: /validate-infrastructure-cluster-x-k8s-io-v1alpha5-metal3remediation
+      failurePolicy: Fail
+      matchPolicy: Equivalent
+      name: validation.metal3remediation.infrastructure.cluster.x-k8s.io
+      rules:
+      - apiGroups:
+        - infrastructure.cluster.x-k8s.io
+        apiVersions:
+        - v1alpha5
+        operations:
+        - CREATE
+        - UPDATE
+        resources:
+        - metal3remediations
+      sideEffects: None
+    - admissionReviewVersions:
+      - v1
+      - v1beta1
+      clientConfig:
+        service:
+          name: capm3-webhook-service
+          namespace: openshift-cluster-api
+          path: /validate-infrastructure-cluster-x-k8s-io-v1alpha5-metal3remediationtemplate
+      failurePolicy: Fail
+      matchPolicy: Equivalent
+      name: validation.metal3remediationtemplate.infrastructure.cluster.x-k8s.io
+      rules:
+      - apiGroups:
+        - infrastructure.cluster.x-k8s.io
+        apiVersions:
+        - v1alpha5
+        operations:
+        - CREATE
+        - UPDATE
+        resources:
+        - metal3remediationtemplates
+      sideEffects: None
     ---
     apiVersion: admissionregistration.k8s.io/v1
     kind: ValidatingWebhookConfiguration
@@ -4900,6 +5399,6 @@ metadata:
   labels:
     provider.cluster.x-k8s.io/name: metal3
     provider.cluster.x-k8s.io/type: infrastructure
-    provider.cluster.x-k8s.io/version: v0.5.1
-  name: metal3-v0.5.1
+    provider.cluster.x-k8s.io/version: v0.5.2
+  name: metal3-v0.5.2
   namespace: openshift-cluster-api
