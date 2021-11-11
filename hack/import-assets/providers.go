@@ -311,6 +311,16 @@ func (p *provider) imageToKey(fullImage string) string {
 	}
 }
 
+func filterOutIPAM(objs []unstructured.Unstructured) []unstructured.Unstructured {
+	finalObjs := []unstructured.Unstructured{}
+	for _, obj := range objs {
+		if obj.GetKind() == "CustomResourceDefinition" || !strings.Contains(strings.ToLower(obj.GetName()), "ipam") {
+			finalObjs = append(finalObjs, obj)
+		}
+	}
+	return finalObjs
+}
+
 func importProviders() error {
 	for _, p := range providers {
 		err := p.loadComponents()
@@ -353,6 +363,9 @@ func importProviders() error {
 			default:
 				finalObjs = append(finalObjs, obj)
 			}
+		}
+		if p.name == "metal3" {
+			finalObjs = filterOutIPAM(finalObjs)
 		}
 
 		err = p.writeRBACComponentsToManifests(rbacObjs)

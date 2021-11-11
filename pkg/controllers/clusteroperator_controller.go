@@ -184,7 +184,6 @@ func (r *ClusterOperatorReconciler) containerCustomizationFromProvider(kind, nam
 		Image: newImageMeta(image),
 	})
 	if kind == "InfrastructureProvider" {
-		//TODO what about metal3 ip-address-manager
 		image, ok := r.Images["kube-rbac-proxy"]
 		if !ok {
 			return cSpecs
