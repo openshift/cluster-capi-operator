@@ -195,7 +195,7 @@ func (p *provider) providerSpec() operatorv1.ProviderSpec {
 	}
 }
 
-func (p *provider) findWebhookServiceSecretName() map[string]string {
+func findWebhookServiceSecretName(objs []unstructured.Unstructured) map[string]string {
 	serviceSecretNames := map[string]string{}
 	certSecretNames := map[string]string{}
 
@@ -209,17 +209,17 @@ func (p *provider) findWebhookServiceSecretName() map[string]string {
 	}
 	// find service, then cert, then secret
 	// return map[certName] = secretName
-	for i, obj := range p.components.Objs() {
+	for i, obj := range objs {
 		switch obj.GetKind() {
 		case "Certificate":
 			cert := &certmangerv1.Certificate{}
-			if err := scheme.Convert(&p.components.Objs()[i], cert, nil); err != nil {
+			if err := scheme.Convert(&objs[i], cert, nil); err != nil {
 				panic(err)
 			}
 			certSecretNames[cert.Name] = cert.Spec.SecretName
 		}
 	}
-	for _, obj := range p.components.Objs() {
+	for _, obj := range objs {
 		switch obj.GetKind() {
 		case "CustomResourceDefinition":
 			crd := &apiextensionsv1.CustomResourceDefinition{}
@@ -311,6 +311,57 @@ func (p *provider) imageToKey(fullImage string) string {
 	}
 }
 
+func certManagerToServiceCA(objs []unstructured.Unstructured) []unstructured.Unstructured {
+	serviceSecretNames := findWebhookServiceSecretName(objs)
+
+	finalObjs := []unstructured.Unstructured{}
+	for _, obj := range objs {
+		switch obj.GetKind() {
+		case "CustomResourceDefinition", "MutatingWebhookConfiguration", "ValidatingWebhookConfiguration":
+			anns := obj.GetAnnotations()
+			if anns == nil {
+				anns = map[string]string{}
+			}
+			if _, ok := anns["cert-manager.io/inject-ca-from"]; ok {
+				anns["service.beta.openshift.io/inject-cabundle"] = "true"
+				delete(anns, "cert-manager.io/inject-ca-from")
+				obj.SetAnnotations(anns)
+			}
+			finalObjs = append(finalObjs, obj)
+		case "Service":
+			anns := obj.GetAnnotations()
+			if anns == nil {
+				anns = map[string]string{}
+			}
+			if name, ok := serviceSecretNames[obj.GetName()]; ok {
+				fmt.Println(obj.GetKind(), obj.GetName(), name)
+				anns["service.beta.openshift.io/serving-cert-secret-name"] = name
+				obj.SetAnnotations(anns)
+			}
+			finalObjs = append(finalObjs, obj)
+		case "Certificate", "Issuer", "Namespace": // skip
+		default:
+			finalObjs = append(finalObjs, obj)
+		}
+	}
+	return finalObjs
+}
+
+func splitRBACOut(objs []unstructured.Unstructured) ([]unstructured.Unstructured, []unstructured.Unstructured) {
+	finalObjs := []unstructured.Unstructured{}
+	rbacObjs := []unstructured.Unstructured{}
+	for _, obj := range objs {
+		switch obj.GetKind() {
+		case "ClusterRole", "Role", "ClusterRoleBinding", "RoleBinding", "ServiceAccount":
+			setOpenShiftAnnotations(obj, false)
+			rbacObjs = append(rbacObjs, obj)
+		default:
+			finalObjs = append(finalObjs, obj)
+		}
+	}
+	return finalObjs, rbacObjs
+}
+
 func filterOutIPAM(objs []unstructured.Unstructured) []unstructured.Unstructured {
 	finalObjs := []unstructured.Unstructured{}
 	for _, obj := range objs {
@@ -321,49 +372,16 @@ func filterOutIPAM(objs []unstructured.Unstructured) []unstructured.Unstructured
 	return finalObjs
 }
 
-func importProviders() error {
+func importProviders(providerFilter string) error {
 	for _, p := range providers {
 		err := p.loadComponents()
 		if err != nil {
 			return err
 		}
 		fmt.Println(p.ptype, p.name)
-		serviceSecretNames := p.findWebhookServiceSecretName()
 
-		finalObjs := []unstructured.Unstructured{}
-		rbacObjs := []unstructured.Unstructured{}
-		for _, obj := range p.components.Objs() {
-			switch obj.GetKind() {
-			case "CustomResourceDefinition", "MutatingWebhookConfiguration", "ValidatingWebhookConfiguration":
-				anns := obj.GetAnnotations()
-				if anns == nil {
-					anns = map[string]string{}
-				}
-				if _, ok := anns["cert-manager.io/inject-ca-from"]; ok {
-					anns["service.beta.openshift.io/inject-cabundle"] = "true"
-					delete(anns, "cert-manager.io/inject-ca-from")
-					obj.SetAnnotations(anns)
-				}
-				finalObjs = append(finalObjs, obj)
-			case "Service":
-				anns := obj.GetAnnotations()
-				if anns == nil {
-					anns = map[string]string{}
-				}
-				if name, ok := serviceSecretNames[obj.GetName()]; ok {
-					fmt.Println(obj.GetKind(), obj.GetName(), name)
-					anns["service.beta.openshift.io/serving-cert-secret-name"] = name
-					obj.SetAnnotations(anns)
-				}
-				finalObjs = append(finalObjs, obj)
-			case "Certificate", "Issuer", "Namespace": // skip
-			case "ClusterRole", "Role", "ClusterRoleBinding", "RoleBinding", "ServiceAccount":
-				setOpenShiftAnnotations(obj, false)
-				rbacObjs = append(rbacObjs, obj)
-			default:
-				finalObjs = append(finalObjs, obj)
-			}
-		}
+		finalObjs, rbacObjs := splitRBACOut(certManagerToServiceCA(p.components.Objs()))
+
 		if p.name == "metal3" {
 			finalObjs = filterOutIPAM(finalObjs)
 		}

@@ -37,7 +37,7 @@ func usage() {
 }
 
 func checkArgs(required int) {
-	if len(flag.Args()) != required {
+	if len(flag.Args()) < required {
 		usage()
 		os.Exit(2)
 	}
@@ -54,7 +54,11 @@ func main() {
 		err = moveRBACToManifests()
 	case cmdImportProviders:
 		checkArgs(1)
-		err = importProviders()
+		providerFilter := ""
+		if len(flag.Args()) > 1 {
+			providerFilter = flag.Arg(1)
+		}
+		err = importProviders(providerFilter)
 	}
 	if err != nil {
 		fmt.Println(err)
