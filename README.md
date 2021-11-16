@@ -12,7 +12,7 @@ When the featuregate is DevPreviewNoUpgrade
 2. Install all the supported provider configmaps
 3. Install the CoreProvider and InfractureProvider CRs (with image overrides)
 
-## Dev
+## Updating manifests and assets
 
 - Import capi-operator and provider manifests:
 
@@ -31,27 +31,3 @@ This command does 2 main things:
 
 To update the version of a provider, edit hack/import-assets/providers.go and bump
 the versions as required.
-
-- Build:
-
-  ```sh
-  $ make build
-  ```
-
-- Run:
-
-  ```sh
-  $ make run
-  ```
-
-- Image:
-
-  ```
-  $ make image
-  ```
-
-- Run unit tests:
-
-  ```
-  $ make test
-  ```
