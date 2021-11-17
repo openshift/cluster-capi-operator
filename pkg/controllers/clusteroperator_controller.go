@@ -34,7 +34,7 @@ type ClusterOperatorReconciler struct {
 	ReleaseVersion   string
 	ManagedNamespace string
 	Images           map[string]string
-	PlatformType     configv1.PlatformType
+	infra            *configv1.Infrastructure
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -56,12 +56,12 @@ func (r *ClusterOperatorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 // Reconcile will process the cluster-api clusterOperator
 func (r *ClusterOperatorReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (ctrl.Result, error) {
-	if r.PlatformType == "" {
+	if r.infra == nil {
 		infra := &configv1.Infrastructure{}
 		if err := r.Client.Get(ctx, client.ObjectKey{Name: "cluster"}, infra); err != nil {
 			return ctrl.Result{}, err
 		}
-		r.PlatformType = infra.Status.PlatformStatus.Type
+		r.infra = infra
 	}
 	featureGate := &configv1.FeatureGate{}
 	if err := r.Client.Get(ctx, client.ObjectKey{Name: externalFeatureGateName}, featureGate); errors.IsNotFound(err) {
@@ -89,18 +89,6 @@ func (r *ClusterOperatorReconciler) Reconcile(ctx context.Context, _ ctrl.Reques
 	}
 
 	return result, r.setStatusAvailable(ctx)
-}
-
-// https://github.com/kubernetes-sigs/cluster-api/blob/main/cmd/clusterctl/client/config/providers_client.go#L36-L47
-func (r *ClusterOperatorReconciler) currentProviderName() string {
-	switch r.PlatformType {
-	case configv1.LibvirtPlatformType, configv1.NonePlatformType, configv1.OvirtPlatformType, configv1.EquinixMetalPlatformType:
-		return "" // no equivilent in capi
-	case configv1.BareMetalPlatformType:
-		return "metal3"
-	default:
-		return strings.ToLower(string(r.PlatformType))
-	}
 }
 
 func (r *ClusterOperatorReconciler) reconcile(ctx context.Context) (ctrl.Result, error) {
@@ -139,7 +127,7 @@ func (r *ClusterOperatorReconciler) reconcile(ctx context.Context) (ctrl.Result,
 
 	updater = NewUpdater(objs).WithFilter(func(obj client.Object) bool {
 		if obj.GetObjectKind().GroupVersionKind().Kind == "InfrastructureProvider" {
-			if !strings.HasPrefix(obj.GetName(), r.currentProviderName()) {
+			if !r.currentProviderSupportedByCAPI() || !strings.HasPrefix(obj.GetName(), r.currentProviderName()) {
 				klog.Infof("skipping infra %s!=%s", obj.GetName(), r.currentProviderName())
 				return false
 			}
@@ -166,7 +154,12 @@ func (r *ClusterOperatorReconciler) reconcile(ctx context.Context) (ctrl.Result,
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	return ctrl.Result{}, updater.CreateOrUpdate(ctx, r.Client, r.Recorder)
+	err = updater.CreateOrUpdate(ctx, r.Client, r.Recorder)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	return ctrl.Result{}, NewUpdater(r.clusterObjects()).CreateOrUpdate(ctx, r.Client, r.Recorder)
 }
 
 func providerKindToTypeName(kind string) string {
