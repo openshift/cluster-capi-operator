@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -12,6 +13,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/klog"
+	"k8s.io/utils/pointer"
+	operatorv1 "sigs.k8s.io/cluster-api/exp/operator/api/v1alpha1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -31,6 +34,7 @@ type ClusterOperatorReconciler struct {
 	ReleaseVersion   string
 	ManagedNamespace string
 	Images           map[string]string
+	PlatformType     configv1.PlatformType
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -52,8 +56,15 @@ func (r *ClusterOperatorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 // Reconcile will process the cluster-api clusterOperator
 func (r *ClusterOperatorReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (ctrl.Result, error) {
+	if r.PlatformType == "" {
+		infra := &configv1.Infrastructure{}
+		if err := r.Client.Get(ctx, client.ObjectKey{Name: "cluster"}, infra); err != nil {
+			return ctrl.Result{}, err
+		}
+		r.PlatformType = infra.Status.PlatformStatus.Type
+	}
 	featureGate := &configv1.FeatureGate{}
-	if err := r.Get(ctx, client.ObjectKey{Name: externalFeatureGateName}, featureGate); errors.IsNotFound(err) {
+	if err := r.Client.Get(ctx, client.ObjectKey{Name: externalFeatureGateName}, featureGate); errors.IsNotFound(err) {
 		klog.Infof("FeatureGate cluster does not exist. Skipping...")
 		return ctrl.Result{}, r.setStatusAvailable(ctx)
 	} else if err != nil {
@@ -80,11 +91,24 @@ func (r *ClusterOperatorReconciler) Reconcile(ctx context.Context, _ ctrl.Reques
 	return result, r.setStatusAvailable(ctx)
 }
 
+// https://github.com/kubernetes-sigs/cluster-api/blob/main/cmd/clusterctl/client/config/providers_client.go#L36-L47
+func (r *ClusterOperatorReconciler) currentProviderName() string {
+	switch r.PlatformType {
+	case configv1.LibvirtPlatformType, configv1.NonePlatformType, configv1.OvirtPlatformType, configv1.EquinixMetalPlatformType:
+		return "" // no equivilent in capi
+	case configv1.BareMetalPlatformType:
+		return "metal3"
+	default:
+		return strings.ToLower(string(r.PlatformType))
+	}
+}
+
 func (r *ClusterOperatorReconciler) reconcile(ctx context.Context) (ctrl.Result, error) {
 	objs, err := assets.FromDir("capi-operator", r.Scheme)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
+
 	updater := NewUpdater(objs).WithFilter(func(obj client.Object) bool {
 		appliedByManifest := []string{"Namespace", "ClusterRole", "Role", "ClusterRoleBinding", "RoleBinding", "ServiceAccount"}
 		// these are already applied by the manifest
@@ -98,22 +122,105 @@ func (r *ClusterOperatorReconciler) reconcile(ctx context.Context) (ctrl.Result,
 				return obj, err
 			}
 		}
+		return obj, nil
+	})
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	err = updater.CreateOrUpdate(ctx, r.Client, r.Recorder)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	objs, err = assets.FromDir("providers", r.Scheme)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	updater = NewUpdater(objs).WithFilter(func(obj client.Object) bool {
+		if obj.GetObjectKind().GroupVersionKind().Kind == "InfrastructureProvider" {
+			if !strings.HasPrefix(obj.GetName(), r.currentProviderName()) {
+				klog.Infof("skipping infra %s!=%s", obj.GetName(), r.currentProviderName())
+				return false
+			}
+		}
+		return true
+	})
+
+	err = updater.Mutate(func(obj client.Object) (client.Object, error) {
+		infra, ok := obj.(*operatorv1.InfrastructureProvider)
+		if ok {
+			infra.Spec.ProviderSpec.Deployment = &operatorv1.DeploymentSpec{
+				Containers: r.containerCustomizationFromProvider(infra.Kind, infra.Name),
+			}
+		}
+		core, ok := obj.(*operatorv1.CoreProvider)
+		if ok {
+			core.Spec.ProviderSpec.Deployment = &operatorv1.DeploymentSpec{
+				Containers: r.containerCustomizationFromProvider(core.Kind, core.Name),
+			}
+		}
 
 		return obj, nil
 	})
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-
 	return ctrl.Result{}, updater.CreateOrUpdate(ctx, r.Client, r.Recorder)
+}
+
+func providerKindToTypeName(kind string) string {
+	return strings.ReplaceAll(strings.ToLower(kind), "provider", "")
+}
+
+func (r *ClusterOperatorReconciler) containerCustomizationFromProvider(kind, name string) []operatorv1.ContainerSpec {
+	image, ok := r.Images[providerKindToTypeName(kind)+"-"+name+":manager"]
+	cSpecs := []operatorv1.ContainerSpec{}
+	if !ok {
+		return cSpecs
+	}
+	cSpecs = append(cSpecs, operatorv1.ContainerSpec{
+		Name:  "manager",
+		Image: newImageMeta(image),
+	})
+	if kind == "InfrastructureProvider" {
+		image, ok := r.Images["kube-rbac-proxy"]
+		if !ok {
+			return cSpecs
+		}
+		cSpecs = append(cSpecs, operatorv1.ContainerSpec{
+			Name:  "kube-rbac-proxy",
+			Image: newImageMeta(image),
+		})
+	}
+
+	return cSpecs
+}
+
+func newImageMeta(imageURL string) *operatorv1.ImageMeta {
+	im := &operatorv1.ImageMeta{}
+	urlSplit := strings.Split(imageURL, ":")
+	if len(urlSplit) == 2 {
+		im.Tag = &urlSplit[1]
+	}
+	urlSplit = strings.Split(urlSplit[0], "/")
+	im.Name = &urlSplit[len(urlSplit)-1]
+	im.Repository = pointer.StringPtr(strings.Join(urlSplit[0:len(urlSplit)-1], "/"))
+	return im
 }
 
 func (r *ClusterOperatorReconciler) customizeDeployment(dep *appsv1.Deployment) error {
 	containerToImageRef := map[string]string{
-		"manager":         "upstreamCAPIOperator",
+		"manager":         "cluster-api:operator",
 		"kube-rbac-proxy": "kube-rbac-proxy",
 	}
 	for ci, cont := range dep.Spec.Template.Spec.Containers {
+		if cont.Name == "manager" {
+			// since our RBAC is installed via /manifests we don't want the upstream operator
+			// to delete them as it normally would on upgrade.
+			dep.Spec.Template.Spec.Containers[ci].Args = append(cont.Args, "--delete-rbac-on-upgrade=false")
+		}
+
 		if imageRef, ok := containerToImageRef[cont.Name]; ok {
 			if cont.Image == r.Images[imageRef] {
 				klog.Infof("container %s image %s", cont.Name, cont.Image)

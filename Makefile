@@ -25,7 +25,7 @@ unit:
 
 # Run against the configured Kubernetes cluster in ~/.kube/config
 run: verify
-	go run cmd/cluster-capi-operator/main.go
+	go run cmd/cluster-capi-operator/main.go --leader-elect=false --images-json=./hack/sample-images.json
 
 # Run go fmt against code
 .PHONY: fmt
@@ -48,8 +48,11 @@ $(KUSTOMIZE):
 	$(PROJECT_DIR)/hack/go-get-tool.sh go-get-tool $(KUSTOMIZE) sigs.k8s.io/kustomize/kustomize/v3@v3.9.4
 
 import-assets: $(KUSTOMIZE)
+	mkdir -p assets/capi-operator
+	mkdir -p assets/providers
 	$(KUSTOMIZE) build hack/import-assets/capi-operator -o assets/capi-operator/
 	cd hack/import-assets; go run . move-rbac-manifests
+	cd hack/import-assets; go run . import-providers
 
 # Run go mod
 .PHONY: vendor

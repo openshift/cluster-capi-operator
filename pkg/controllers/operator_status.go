@@ -84,11 +84,11 @@ func (r *ClusterOperatorReconciler) getOrCreateClusterOperator(ctx context.Conte
 		},
 		Status: configv1.ClusterOperatorStatus{},
 	}
-	err := r.Get(ctx, client.ObjectKey{Name: clusterOperatorName}, co)
+	err := r.Client.Get(ctx, client.ObjectKey{Name: clusterOperatorName}, co)
 	if errors.IsNotFound(err) {
 		klog.Infof("ClusterOperator does not exist, creating a new one.")
 
-		err = r.Create(ctx, co)
+		err = r.Client.Create(ctx, co)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create cluster operator: %v", err)
 		}
@@ -111,7 +111,7 @@ func (r *ClusterOperatorReconciler) syncStatus(ctx context.Context, co *configv1
 		co.Status.RelatedObjects = r.relatedObjects()
 	}
 
-	return r.Status().Update(ctx, co)
+	return r.Client.Status().Update(ctx, co)
 }
 
 func (r *ClusterOperatorReconciler) relatedObjects() []configv1.ObjectReference {

@@ -1,0 +1,14 @@
+apiVersion: operator.cluster.x-k8s.io/v1alpha1
+kind: InfrastructureProvider
+metadata:
+  creationTimestamp: null
+  name: azure
+  namespace: openshift-cluster-api
+spec:
+  fetchConfig:
+    selector:
+      matchLabels:
+        provider.cluster.x-k8s.io/name: azure
+        provider.cluster.x-k8s.io/type: infrastructure
+  version: v0.5.2
+status: {}
