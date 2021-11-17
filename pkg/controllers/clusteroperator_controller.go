@@ -61,7 +61,7 @@ func (r *ClusterOperatorReconciler) Reconcile(ctx context.Context, _ ctrl.Reques
 		if err := r.Client.Get(ctx, client.ObjectKey{Name: "cluster"}, infra); err != nil {
 			return ctrl.Result{}, err
 		}
-		r.PlatformType = infra.Spec.PlatformSpec.Type
+		r.PlatformType = infra.Status.PlatformStatus.Type
 	}
 	featureGate := &configv1.FeatureGate{}
 	if err := r.Client.Get(ctx, client.ObjectKey{Name: externalFeatureGateName}, featureGate); errors.IsNotFound(err) {

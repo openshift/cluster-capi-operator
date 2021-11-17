@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -132,7 +133,12 @@ func (p *provider) writeProviderComponents(objs []unstructured.Unstructured) err
 	}
 
 	fName := strings.ToLower(p.providerTypeName() + "-" + p.name + ".yaml")
-	return os.WriteFile(path.Join(providersPath, fName), cmYaml, 0600)
+	return os.WriteFile(path.Join(providersPath, fName), ensureNewLine(cmYaml), 0600)
+}
+
+// ensureNewLine makes sure that there is one new line at the end of the file for git
+func ensureNewLine(b []byte) []byte {
+	return append(bytes.TrimRight(b, "\n"), []byte("\n")...)
 }
 
 func (p *provider) writeRBACComponentsToManifests(objs []unstructured.Unstructured) error {
@@ -142,7 +148,7 @@ func (p *provider) writeRBACComponentsToManifests(objs []unstructured.Unstructur
 	}
 
 	fName := strings.ToLower("0000_30_cluster-api-" + p.providerTypeName() + "-" + p.name + "_03_rbac.yaml")
-	return os.WriteFile(path.Join(manifestsPath, fName), combined, 0600)
+	return os.WriteFile(path.Join(manifestsPath, fName), ensureNewLine(combined), 0600)
 }
 
 func (p *provider) writeProviders() error {
@@ -178,7 +184,7 @@ func (p *provider) writeProviders() error {
 	}
 
 	fName := strings.ToLower(p.providerTypeName() + "-" + p.name + "-provider.yaml")
-	return os.WriteFile(path.Join(providersPath, fName), cmYaml, 0600)
+	return os.WriteFile(path.Join(providersPath, fName), ensureNewLine(cmYaml), 0600)
 }
 
 func (p *provider) providerSpec() operatorv1.ProviderSpec {
@@ -292,7 +298,7 @@ func (p *provider) updateImages(objs []unstructured.Unstructured) error {
 		return err
 	}
 
-	return ioutil.WriteFile(sampleImageFileName, jsonData, 0600)
+	return ioutil.WriteFile(sampleImageFileName, ensureNewLine(jsonData), 0600)
 }
 
 func (p *provider) imageToKey(fullImage string) string {
