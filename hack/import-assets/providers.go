@@ -38,17 +38,18 @@ type provider struct {
 }
 
 const (
-	sampleImageFileName = "../sample-images.json"
+	sampleImageFileName      = "../sample-images.json"
+	providerVersionsFileName = "provider-versions.json"
 )
 
 var (
 	providers = []provider{
-		{name: "cluster-api", version: "v1.0.0", ptype: clusterctlv1.CoreProviderType},
-		{name: "aws", version: "v0.7.0", ptype: clusterctlv1.InfrastructureProviderType},
-		{name: "azure", version: "v0.5.2", ptype: clusterctlv1.InfrastructureProviderType},
-		{name: "metal3", version: "v0.5.2", ptype: clusterctlv1.InfrastructureProviderType},
-		{name: "gcp", version: "v0.4.0", ptype: clusterctlv1.InfrastructureProviderType},
-		{name: "openstack", version: "v0.4.0", ptype: clusterctlv1.InfrastructureProviderType},
+		{name: "cluster-api", ptype: clusterctlv1.CoreProviderType},
+		{name: "aws", ptype: clusterctlv1.InfrastructureProviderType},
+		{name: "azure", ptype: clusterctlv1.InfrastructureProviderType},
+		{name: "metal3", ptype: clusterctlv1.InfrastructureProviderType},
+		{name: "gcp", ptype: clusterctlv1.InfrastructureProviderType},
+		{name: "openstack", ptype: clusterctlv1.InfrastructureProviderType},
 	}
 	providersPath = path.Join(projDir, "assets", "providers")
 	manifestsPath = path.Join(projDir, "manifests")
@@ -66,6 +67,11 @@ func (p *provider) loadComponents() error {
 	}
 
 	repo, err := repository.NewGitHubRepository(providerConfig, configClient.Variables())
+	if err != nil {
+		return err
+	}
+
+	err = p.loadVersion()
 	if err != nil {
 		return err
 	}
@@ -301,6 +307,20 @@ func (p *provider) updateImages(objs []unstructured.Unstructured) error {
 	return ioutil.WriteFile(sampleImageFileName, ensureNewLine(jsonData), 0600)
 }
 
+func (p *provider) loadVersion() error {
+	jsonData, err := ioutil.ReadFile(providerVersionsFileName)
+	if err != nil {
+		return err
+	}
+	providerVersions := map[string]string{}
+	if err := json.Unmarshal(jsonData, &providerVersions); err != nil {
+		return err
+	}
+
+	p.version = providerVersions[p.name]
+	return nil
+}
+
 func (p *provider) imageToKey(fullImage string) string {
 	//k8s.gcr.io/cluster-api/kubeadm-bootstrap-controller:v0.4.3
 	frag := strings.Split(fullImage, "/")
@@ -380,6 +400,10 @@ func filterOutIPAM(objs []unstructured.Unstructured) []unstructured.Unstructured
 
 func importProviders(providerFilter string) error {
 	for _, p := range providers {
+		if providerFilter != "" && p.name != providerFilter {
+			continue
+		}
+
 		err := p.loadComponents()
 		if err != nil {
 			return err

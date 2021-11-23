@@ -1,0 +1,8 @@
+{
+  "cluster-api": "v1.0.0",
+  "aws": "v0.7.0",
+  "azure": "v0.5.2",
+  "metal3": "v0.5.2",
+  "gcp": "v0.4.0",
+  "openstack": "v0.4.0"
+}
