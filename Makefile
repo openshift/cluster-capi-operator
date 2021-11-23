@@ -1,7 +1,10 @@
 IMG ?= controller:latest
 PROJECT_DIR := $(shell dirname $(abspath $(lastword $(MAKEFILE_LIST))))
-GOLANGCI_LINT = $(PROJECT_DIR)/bin/golangci-lint
-KUSTOMIZE = $(PROJECT_DIR)/bin/kustomize
+TOOLS_DIR := hack/tools
+TOOLS_BIN_DIR := $(TOOLS_DIR)/bin
+BIN_DIR := bin
+GOLANGCI_LINT = $(PROJECT_DIR)/$(TOOLS_BIN_DIR)/golangci-lint
+KUSTOMIZE = $(PROJECT_DIR)/$(TOOLS_BIN_DIR)/kustomize
 
 all: build
 
@@ -41,11 +44,11 @@ lint: $(GOLANGCI_LINT)
 	( GOLANGCI_LINT_CACHE=$(PROJECT_DIR)/.cache $(GOLANGCI_LINT) run )
 
 # Download golangci-lint locally if necessary
-$(GOLANGCI_LINT):
-	$(PROJECT_DIR)/hack/go-get-tool.sh go-get-tool $(GOLANGCI_LINT) github.com/golangci/golangci-lint/cmd/golangci-lint@v1.41.1
+$(GOLANGCI_LINT): $(TOOLS_DIR)/go.mod # Build golangci-lint from tools folder.
+	cd $(TOOLS_DIR); go build -tags=tools -mod=readonly -o $(BIN_DIR)/golangci-lint github.com/golangci/golangci-lint/cmd/golangci-lint
 
-$(KUSTOMIZE):
-	$(PROJECT_DIR)/hack/go-get-tool.sh go-get-tool $(KUSTOMIZE) sigs.k8s.io/kustomize/kustomize/v3@v3.9.4
+$(KUSTOMIZE): $(TOOLS_DIR)/go.mod
+	cd $(TOOLS_DIR); go build -tags=tools -mod=readonly -o $(BIN_DIR)/kustomize sigs.k8s.io/kustomize/kustomize/v3
 
 import-assets: $(KUSTOMIZE)
 	mkdir -p assets/capi-operator
