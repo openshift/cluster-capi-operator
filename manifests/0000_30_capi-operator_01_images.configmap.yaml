@@ -7,6 +7,7 @@ metadata:
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
     exclude.release.openshift.io/internal-openshift-hosted: "true"
+    release.openshift.io/feature-gate: "TechPreviewNoUpgrade"
 data:
   images.json: >
     {
@@ -14,7 +15,7 @@ data:
       "cluster-api:operator": "quay.io/asalkeld/cluster-api-operator-amd64:dev",
       "bootstrap-kubeadm:manager": "k8s.gcr.io/cluster-api/kubeadm-bootstrap-controller:v0.4.3",
       "controlplane-kubeadm:manager": "k8s.gcr.io/cluster-api/kubeadm-control-plane-controller:v0.4.3",
-      "core-cluster-api:manager": "registry.ci.openshift.org/openshift:cluster-capi-controllers",
+      "core-cluster-api:manager": "k8s.gcr.io/cluster-api/cluster-api-controller:v0.4.3",
       "infrastructure-aws:manager": "k8s.gcr.io/cluster-api-aws/cluster-api-aws-controller:v0.7.0",
       "infrastructure-azure:manager": "us.gcr.io/k8s-artifacts-prod/cluster-api-azure/cluster-api-azure-controller:v0.5.2",
       "infrastructure-metal3:ip-address-manager": "quay.io/metal3-io/ip-address-manager:v0.1.0",

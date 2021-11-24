@@ -6,12 +6,7 @@ spec:
     from:
       kind: DockerImage
       name: registry.ci.openshift.org/openshift:cluster-capi-operator
-  - name: cluster-api
-    from:
-      kind: DockerImage
-      name: registry.ci.openshift.org/openshift:cluster-api
   - name: kube-rbac-proxy
     from:
       kind: DockerImage
       name: registry.ci.openshift.org/openshift:kube-rbac-proxy
-
