@@ -1,0 +1,106 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: prometheus-k8s
+  namespace: openshift-cluster-api
+  annotations:
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+    release.openshift.io/feature-gate: "TechPreviewNoUpgrade"
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - namespace/metrics
+  verbs:
+  - get
+- apiGroups:
+  - ""
+  resources:
+  - services
+  - endpoints
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: prometheus-k8s
+  namespace: openshift-cluster-api
+  annotations:
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+    release.openshift.io/feature-gate: "TechPreviewNoUpgrade"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: prometheus-k8s
+subjects:
+- kind: ServiceAccount
+  name: prometheus-k8s
+  namespace: openshift-monitoring
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  labels:
+    app: capi-machine-approver
+  name: cluster-machine-approver
+  namespace: openshift-cluster-api
+  annotations:
+    include.release.openshift.io/ibm-cloud-managed: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/feature-gate: "TechPreviewNoUpgrade"
+spec:
+  endpoints:
+    - bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+      interval: 30s
+      port: https
+      scheme: https
+      tlsConfig:
+        caFile: /etc/prometheus/configmaps/serving-certs-ca-bundle/service-ca.crt
+        serverName: capi-machine-approver.openshift-cluster-api.svc
+  namespaceSelector:
+    matchNames:
+      - openshift-cluster-api
+  selector:
+    matchLabels:
+      app: capi-machine-approver
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  labels:
+    prometheus: k8s
+    role: alert-rules
+  name: machineapprover-rules
+  namespace: openshift-cluster-api
+  annotations:
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+    release.openshift.io/feature-gate: "TechPreviewNoUpgrade"
+spec:
+  groups:
+    - name: cluster-capi-machine-approver.rules
+      rules:
+        - alert: MachineApproverMaxPendingCSRsReached
+          expr: |
+             mapi_current_pending_csr > mapi_max_pending_csr
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "max pending CSRs threshold reached."
+            description: |
+              The number of pending CertificateSigningRequests has exceeded the
+              maximum threshold (current number of machine + 100). Check the
+              pending CSRs to determine which machines need approval, also check
+              that the nodelink controller is running in the openshift-machine-api
+              namespace.

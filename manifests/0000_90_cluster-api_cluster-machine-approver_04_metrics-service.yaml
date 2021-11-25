@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: capi-machine-approver
+  namespace: openshift-cluster-api
+  annotations:
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+    release.openshift.io/feature-gate: "TechPreviewNoUpgrade"
+    service.alpha.openshift.io/serving-cert-secret-name: capi-machine-approver-tls
+  labels:
+    app: capi-machine-approver
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+  - name: https
+    port: 9192
+    targetPort: https
+  selector:
+    app: capi-machine-approver
+  sessionAffinity: None

@@ -10,3 +10,7 @@ spec:
     from:
       kind: DockerImage
       name: registry.ci.openshift.org/openshift:kube-rbac-proxy
+  - name: cluster-machine-approver
+    from:
+      kind: DockerImage
+      name: registry.ci.openshift.org/openshift:cluster-machine-approver
