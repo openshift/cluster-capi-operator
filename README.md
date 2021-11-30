@@ -29,5 +29,5 @@ This command does 2 main things:
    b. place provider rbac resources in /manifests
    c. place all other resources in /assets/providers as configmaps (to be consumed by capi-operator)
 
-To update the version of a provider, edit hack/import-assets/providers.go and bump
+To update the version of a provider, edit hack/import-assets/provider-versions.json and bump
 the versions as required.
