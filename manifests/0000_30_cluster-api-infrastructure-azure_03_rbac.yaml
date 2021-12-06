@@ -19,6 +19,7 @@ metadata:
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/feature-gate: "TechPreviewNoUpgrade"
   labels:
     cluster.x-k8s.io/provider: infrastructure-azure
     clusterctl.cluster.x-k8s.io: ""
@@ -71,6 +72,7 @@ metadata:
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/feature-gate: "TechPreviewNoUpgrade"
   labels:
     cluster.x-k8s.io/provider: infrastructure-azure
     clusterctl.cluster.x-k8s.io: ""
@@ -113,6 +115,7 @@ metadata:
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/feature-gate: "TechPreviewNoUpgrade"
   creationTimestamp: null
   labels:
     cluster.x-k8s.io/provider: infrastructure-azure
@@ -366,6 +369,7 @@ metadata:
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/feature-gate: "TechPreviewNoUpgrade"
   labels:
     cluster.x-k8s.io/provider: infrastructure-azure
     clusterctl.cluster.x-k8s.io: ""
@@ -383,6 +387,7 @@ metadata:
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/feature-gate: "TechPreviewNoUpgrade"
   labels:
     cluster.x-k8s.io/provider: infrastructure-azure
     clusterctl.cluster.x-k8s.io: ""
@@ -408,6 +413,7 @@ metadata:
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/feature-gate: "TechPreviewNoUpgrade"
   creationTimestamp: null
   labels:
     cluster.x-k8s.io/provider: infrastructure-azure
@@ -430,6 +436,7 @@ metadata:
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/feature-gate: "TechPreviewNoUpgrade"
   creationTimestamp: null
   labels:
     cluster.x-k8s.io/provider: infrastructure-azure
@@ -452,6 +459,7 @@ metadata:
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/feature-gate: "TechPreviewNoUpgrade"
   creationTimestamp: null
   labels:
     cluster.x-k8s.io/provider: infrastructure-azure
@@ -473,6 +481,7 @@ metadata:
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/feature-gate: "TechPreviewNoUpgrade"
   creationTimestamp: null
   labels:
     cluster.x-k8s.io/provider: infrastructure-azure
