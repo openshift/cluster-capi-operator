@@ -86,7 +86,7 @@ func (r *ClusterOperatorReconciler) Reconcile(ctx context.Context, _ ctrl.Reques
 }
 
 // https://github.com/kubernetes-sigs/cluster-api/blob/main/cmd/clusterctl/client/config/providers_client.go#L36-L47
-func (r *ClusterOperatorReconciler) currentProviderName() string {
+func (r *ClusterOperatorReconciler) currentProviderName() string { //nolint TODO:remove during refatoring
 	switch r.PlatformType {
 	case configv1.LibvirtPlatformType, configv1.NonePlatformType, configv1.OvirtPlatformType, configv1.EquinixMetalPlatformType:
 		return "" // no equivilent in capi
@@ -97,7 +97,7 @@ func (r *ClusterOperatorReconciler) currentProviderName() string {
 	}
 }
 
-func (r *ClusterOperatorReconciler) reconcile(ctx context.Context) (ctrl.Result, error) {
+func (r *ClusterOperatorReconciler) reconcile(ctx context.Context) (ctrl.Result, error) { //nolint TODO:remove during refatoring
 	objs, err := assets.FromDir("capi-operator", r.Scheme)
 	if err != nil {
 		return ctrl.Result{}, err
@@ -203,7 +203,7 @@ func newImageMeta(imageURL string) *operatorv1.ImageMeta {
 	return im
 }
 
-func (r *ClusterOperatorReconciler) customizeDeployment(dep *appsv1.Deployment) error {
+func (r *ClusterOperatorReconciler) customizeDeployment(dep *appsv1.Deployment) error { //nolint TODO:remove during refatoring
 	containerToImageRef := map[string]string{
 		"manager":         "cluster-api:operator",
 		"kube-rbac-proxy": "kube-rbac-proxy",
@@ -229,7 +229,7 @@ func (r *ClusterOperatorReconciler) customizeDeployment(dep *appsv1.Deployment) 
 	return setSpecHashAnnotation(&dep.ObjectMeta, dep.Spec)
 }
 
-func setSpecHashAnnotation(objMeta *metav1.ObjectMeta, spec interface{}) error {
+func setSpecHashAnnotation(objMeta *metav1.ObjectMeta, spec interface{}) error { //nolint TODO:remove during refatoring
 	jsonBytes, err := json.Marshal(spec)
 	if err != nil {
 		return err
