@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	appsv1 "k8s.io/api/apps/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
@@ -56,39 +55,34 @@ func (r *ClusterOperatorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 // Reconcile will process the cluster-api clusterOperator
 func (r *ClusterOperatorReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (ctrl.Result, error) {
-	if r.PlatformType == "" {
-		infra := &configv1.Infrastructure{}
-		if err := r.Client.Get(ctx, client.ObjectKey{Name: "cluster"}, infra); err != nil {
-			return ctrl.Result{}, err
-		}
-		r.PlatformType = infra.Status.PlatformStatus.Type
-	}
-	featureGate := &configv1.FeatureGate{}
-	if err := r.Client.Get(ctx, client.ObjectKey{Name: externalFeatureGateName}, featureGate); errors.IsNotFound(err) {
-		klog.Infof("FeatureGate cluster does not exist. Skipping...")
-		return ctrl.Result{}, r.setStatusAvailable(ctx)
-	} else if err != nil {
-		klog.Errorf("Unable to retrive FeatureGate object: %v", err)
-		return ctrl.Result{}, r.setStatusDegraded(ctx, err)
-	}
+	// NOTE: Temporarily disable the controller until set up CRD management using CVO
 
-	// Verify FeatureGate ClusterAPIEnabled is present for operator to work in TP phase
-	capiEnabled, err := isCAPIFeatureGateEnabled(featureGate)
-	if err != nil {
-		klog.Errorf("Could not determine cluster api feature gate state: %v", err)
-		return ctrl.Result{}, r.setStatusDegraded(ctx, err)
-	}
+	// featureGate := &configv1.FeatureGate{}
+	// if err := r.Client.Get(ctx, client.ObjectKey{Name: externalFeatureGateName}, featureGate); errors.IsNotFound(err) {
+	// 	klog.Infof("FeatureGate cluster does not exist. Skipping...")
+	// 	return ctrl.Result{}, r.setStatusAvailable(ctx)
+	// } else if err != nil {
+	// 	klog.Errorf("Unable to retrive FeatureGate object: %v", err)
+	// 	return ctrl.Result{}, r.setStatusDegraded(ctx, err)
+	// }
 
-	var result ctrl.Result
-	if capiEnabled {
-		klog.Infof("FeatureGate cluster does include cluster api. Installing...")
-		result, err = r.reconcile(ctx)
-		if err != nil {
-			return result, r.setStatusDegraded(ctx, err)
-		}
-	}
+	// // Verify FeatureGate ClusterAPIEnabled is present for operator to work in TP phase
+	// capiEnabled, err := isCAPIFeatureGateEnabled(featureGate)
+	// if err != nil {
+	// 	klog.Errorf("Could not determine cluster api feature gate state: %v", err)
+	// 	return ctrl.Result{}, r.setStatusDegraded(ctx, err)
+	// }
 
-	return result, r.setStatusAvailable(ctx)
+	// var result ctrl.Result
+	// if capiEnabled {
+	// 	klog.Infof("FeatureGate cluster does include cluster api. Installing...")
+	// 	result, err = r.reconcile(ctx)
+	// 	if err != nil {
+	// 		return result, r.setStatusDegraded(ctx, err)
+	// 	}
+	// }
+
+	return ctrl.Result{}, r.setStatusAvailable(ctx)
 }
 
 // https://github.com/kubernetes-sigs/cluster-api/blob/main/cmd/clusterctl/client/config/providers_client.go#L36-L47
