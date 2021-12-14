@@ -5,6 +5,7 @@ metadata:
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/feature-gate: "TechPreviewNoUpgrade"
   labels:
     clusterctl.cluster.x-k8s.io/core: capi-operator
   name: capi-operator-metrics-reader
@@ -21,6 +22,7 @@ metadata:
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/feature-gate: "TechPreviewNoUpgrade"
   labels:
     clusterctl.cluster.x-k8s.io/core: capi-operator
   name: capi-operator-proxy-role
@@ -45,6 +47,7 @@ metadata:
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/feature-gate: "TechPreviewNoUpgrade"
   labels:
     clusterctl.cluster.x-k8s.io/core: capi-operator
   name: capi-operator-manager-rolebinding
@@ -64,6 +67,7 @@ metadata:
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/feature-gate: "TechPreviewNoUpgrade"
   labels:
     clusterctl.cluster.x-k8s.io/core: capi-operator
   name: capi-operator-proxy-rolebinding
@@ -83,6 +87,7 @@ metadata:
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/feature-gate: "TechPreviewNoUpgrade"
   labels:
     clusterctl.cluster.x-k8s.io/core: capi-operator
   name: capi-operator-leader-election-role
@@ -134,6 +139,7 @@ metadata:
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/feature-gate: "TechPreviewNoUpgrade"
   labels:
     clusterctl.cluster.x-k8s.io/core: capi-operator
   name: capi-operator-leader-election-rolebinding
@@ -154,6 +160,7 @@ metadata:
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/feature-gate: "TechPreviewNoUpgrade"
   creationTimestamp: null
   labels:
     clusterctl.cluster.x-k8s.io/core: capi-operator

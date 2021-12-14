@@ -153,7 +153,7 @@ func (p *provider) writeRBACComponentsToManifests(objs []unstructured.Unstructur
 		return err
 	}
 
-	fName := strings.ToLower("0000_30_cluster-api-" + p.providerTypeName() + "-" + p.name + "_03_rbac.yaml")
+	fName := strings.ToLower("0000_30_cluster-api_" + p.providerTypeName() + "-" + p.name + "_03_rbac.yaml")
 	return os.WriteFile(path.Join(manifestsPath, fName), ensureNewLine(combined), 0600)
 }
 

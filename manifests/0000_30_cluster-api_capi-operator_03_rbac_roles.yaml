@@ -1,35 +1,35 @@
 ---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
+kind: ClusterRole
 metadata:
-  name: cluster-capi-operator
   annotations:
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
-roleRef:
-  kind: ClusterRole
+    release.openshift.io/feature-gate: "TechPreviewNoUpgrade"
   name: cluster-capi-operator
-  apiGroup: rbac.authorization.k8s.io
-subjects:
-- kind: ServiceAccount
-  namespace: openshift-cluster-api
-  name: cluster-capi-operator
+rules:
+- apiGroups:
+  - '*'
+  resources:
+  - '*'
+  verbs:
+  - '*'
 ---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
+kind: Role
 metadata:
-  name: cluster-capi-operator
-  namespace: openshift-cluster-api
   annotations:
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
-roleRef:
-  kind: Role
+    release.openshift.io/feature-gate: "TechPreviewNoUpgrade"
   name: cluster-capi-operator
-  apiGroup: rbac.authorization.k8s.io
-subjects:
-- kind: ServiceAccount
   namespace: openshift-cluster-api
-  name: cluster-capi-operator
+rules:
+- apiGroups:
+  - '*'
+  resources:
+  - '*'
+  verbs:
+  - '*'
