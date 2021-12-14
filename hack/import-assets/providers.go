@@ -1,113 +1,145 @@
 package main
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"path"
-	"path/filepath"
 	"strings"
 
-	certmangerv1 "github.com/jetstack/cert-manager/pkg/apis/certmanager/v1"
-	"github.com/pkg/errors"
-	admissionregistration "k8s.io/api/admissionregistration/v1"
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/yaml"
-
 	clusterctlv1 "sigs.k8s.io/cluster-api/cmd/clusterctl/api/v1alpha3"
 	configclient "sigs.k8s.io/cluster-api/cmd/clusterctl/client/config"
 	"sigs.k8s.io/cluster-api/cmd/clusterctl/client/repository"
 	"sigs.k8s.io/cluster-api/cmd/clusterctl/client/yamlprocessor"
 	operatorv1 "sigs.k8s.io/cluster-api/exp/operator/api/v1alpha1"
 	utilyaml "sigs.k8s.io/cluster-api/util/yaml"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/yaml"
 )
 
 type provider struct {
-	name       string
-	version    string
-	ptype      clusterctlv1.ProviderType
+	Name       string                    `json:"name"`
+	PType      clusterctlv1.ProviderType `json:"type"`
+	Branch     string                    `json:"branch"`
 	components repository.Components
 	metadata   []byte
 }
 
-const (
-	sampleImageFileName      = "../sample-images.json"
-	providerVersionsFileName = "provider-versions.json"
-)
-
-var (
-	providers = []provider{
-		{name: "cluster-api", ptype: clusterctlv1.CoreProviderType},
-		{name: "aws", ptype: clusterctlv1.InfrastructureProviderType},
-		{name: "azure", ptype: clusterctlv1.InfrastructureProviderType},
-		{name: "metal3", ptype: clusterctlv1.InfrastructureProviderType},
-		{name: "gcp", ptype: clusterctlv1.InfrastructureProviderType},
-		{name: "openstack", ptype: clusterctlv1.InfrastructureProviderType},
+// loadProviders load provider list from provider_config.yaml
+func loadProviders() ([]provider, error) {
+	yamlConfig, err := ioutil.ReadFile(providerListPath)
+	if err != nil {
+		return nil, err
 	}
-	providersPath = path.Join(projDir, "assets", "providers")
-	manifestsPath = path.Join(projDir, "manifests")
-)
 
+	providers := []provider{}
+	if err := yaml.Unmarshal(yamlConfig, &providers); err != nil {
+		return nil, err
+	}
+
+	return providers, nil
+}
+
+func (p *provider) getComponentsUrl() string {
+	providerPath := ""
+	componentsName := "core"
+	if p.PType == clusterctlv1.InfrastructureProviderType {
+		providerPath = fmt.Sprintf("-provider-%s", p.Name)
+		componentsName = "infrastructure"
+	}
+
+	return fmt.Sprintf("https://raw.githubusercontent.com/openshift/cluster-api%s/%s/openshift/%s-components.yaml",
+		providerPath,
+		p.Branch,
+		componentsName,
+	)
+}
+
+func (p *provider) getMetadataUrl() string {
+	providerPath := ""
+	if p.PType == clusterctlv1.InfrastructureProviderType {
+		providerPath = fmt.Sprintf("-provider-%s", p.Name)
+	}
+
+	return fmt.Sprintf("https://raw.githubusercontent.com/openshift/cluster-api%s/%s/metadata.yaml",
+		providerPath,
+		p.Branch,
+	)
+}
+
+// loadComponents loads components from the given provider.
 func (p *provider) loadComponents() error {
+	if p.Branch == "" {
+		return fmt.Errorf("provider %s has no branch", p.Name)
+	}
+
+	// Create new clusterctl config client
 	configClient, err := configclient.New("")
 	if err != nil {
 		return err
 	}
 
-	providerConfig, err := configClient.Providers().Get(p.name, p.ptype)
+	// Create new clusterctl provider client
+	providerConfig, err := configClient.Providers().Get(p.Name, p.PType)
 	if err != nil {
 		return err
 	}
 
-	repo, err := repository.NewGitHubRepository(providerConfig, configClient.Variables())
-	if err != nil {
-		return err
-	}
-
-	err = p.loadVersion()
-	if err != nil {
-		return err
-	}
-
-	p.metadata, err = repo.GetFile(p.version, "metadata.yaml")
-	if err != nil {
-		return err
-	}
-
+	// Set options for yaml processor
 	options := repository.ComponentsOptions{
-		TargetNamespace:     "openshift-cluster-api",
-		SkipTemplateProcess: true,
-		Version:             p.version,
+		TargetNamespace:     targetNamespace,
+		SkipTemplateProcess: false,
 	}
 
-	componentsFile, err := repo.GetFile(options.Version, repo.ComponentsPath())
+	// Download provider components from github as raw yaml
+	componentsResponse, err := http.Get(p.getComponentsUrl())
 	if err != nil {
-		return errors.Wrapf(err, "failed to read %q from provider's repository %q", repo.ComponentsPath(), providerConfig.ManifestLabel())
+		return err
+	}
+	defer componentsResponse.Body.Close()
+	rawComponentsResponse, err := io.ReadAll(componentsResponse.Body)
+	if err != nil {
+		return err
 	}
 
-	ci := repository.ComponentsInput{
+	// Ininitialize new clusterctl repository components, this should some yaml processing
+	p.components, err = repository.NewComponents(repository.ComponentsInput{
 		Provider:     providerConfig,
 		ConfigClient: configClient,
 		Processor:    yamlprocessor.NewSimpleProcessor(),
-		RawYaml:      componentsFile,
-		Options:      options}
+		RawYaml:      rawComponentsResponse,
+		Options:      options,
+	})
+	if err != nil {
+		return err
+	}
 
-	p.components, err = repository.NewComponents(ci)
+	metadataResponse, err := http.Get(p.getMetadataUrl())
+	if err != nil {
+		return err
+	}
+	defer metadataResponse.Body.Close()
+
+	// Download metadata from github as raw yaml
+	rawMetadataResponse, err := io.ReadAll(metadataResponse.Body)
+	if err != nil {
+		return err
+	}
+	p.metadata = rawMetadataResponse
+
 	return err
 }
 
 func (p *provider) providerTypeName() string {
-	return strings.ReplaceAll(strings.ToLower(string(p.ptype)), "provider", "")
+	return strings.ReplaceAll(strings.ToLower(string(p.PType)), "provider", "")
 }
 
-func (p *provider) writeProviderComponents(objs []unstructured.Unstructured) error {
+func (p *provider) writeAllOtherProviderComponents(objs []unstructured.Unstructured) error {
 	combined, err := utilyaml.FromUnstructured(objs)
 	if err != nil {
 		return err
@@ -119,12 +151,11 @@ func (p *provider) writeProviderComponents(objs []unstructured.Unstructured) err
 			APIVersion: "v1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      p.name + "-" + p.version,
-			Namespace: "openshift-cluster-api",
+			Name:      p.Name,
+			Namespace: targetNamespace,
 			Labels: map[string]string{
-				"provider.cluster.x-k8s.io/name":    p.name,
-				"provider.cluster.x-k8s.io/type":    p.providerTypeName(),
-				"provider.cluster.x-k8s.io/version": p.version,
+				"provider.cluster.x-k8s.io/name": p.Name,
+				"provider.cluster.x-k8s.io/type": p.providerTypeName(),
 			},
 		},
 		Data: map[string]string{
@@ -138,23 +169,8 @@ func (p *provider) writeProviderComponents(objs []unstructured.Unstructured) err
 		return err
 	}
 
-	fName := strings.ToLower(p.providerTypeName() + "-" + p.name + ".yaml")
-	return os.WriteFile(path.Join(providersPath, fName), ensureNewLine(cmYaml), 0600)
-}
-
-// ensureNewLine makes sure that there is one new line at the end of the file for git
-func ensureNewLine(b []byte) []byte {
-	return append(bytes.TrimRight(b, "\n"), []byte("\n")...)
-}
-
-func (p *provider) writeRBACComponentsToManifests(objs []unstructured.Unstructured) error {
-	combined, err := utilyaml.FromUnstructured(objs)
-	if err != nil {
-		return err
-	}
-
-	fName := strings.ToLower("0000_30_cluster-api_" + p.providerTypeName() + "-" + p.name + "_03_rbac.yaml")
-	return os.WriteFile(path.Join(manifestsPath, fName), ensureNewLine(combined), 0600)
+	fName := strings.ToLower(p.providerTypeName() + "-" + p.Name + ".yaml")
+	return os.WriteFile(path.Join(providersAssetsPath, fName), ensureNewLine(cmYaml), 0600)
 }
 
 func (p *provider) writeProviders() error {
@@ -181,211 +197,29 @@ func (p *provider) writeProviders() error {
 			Spec:     operatorv1.InfrastructureProviderSpec{ProviderSpec: p.providerSpec()},
 		}
 	}
-	obj.SetName(p.name)
-	obj.SetNamespace("openshift-cluster-api")
+	obj.SetName(p.Name)
+	obj.SetNamespace(targetNamespace)
 
 	cmYaml, err := yaml.Marshal(obj)
 	if err != nil {
 		return err
 	}
 
-	fName := strings.ToLower(p.providerTypeName() + "-" + p.name + "-provider.yaml")
-	return os.WriteFile(path.Join(providersPath, fName), ensureNewLine(cmYaml), 0600)
+	fName := strings.ToLower(p.providerTypeName() + "-" + p.Name + "-provider.yaml")
+	return os.WriteFile(path.Join(providersAssetsPath, fName), ensureNewLine(cmYaml), 0600)
 }
 
 func (p *provider) providerSpec() operatorv1.ProviderSpec {
 	return operatorv1.ProviderSpec{
-		Version: &p.version,
 		FetchConfig: &operatorv1.FetchConfiguration{
 			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{
-					"provider.cluster.x-k8s.io/name": p.name,
+					"provider.cluster.x-k8s.io/name": p.Name,
 					"provider.cluster.x-k8s.io/type": p.providerTypeName(),
 				},
 			},
 		},
 	}
-}
-
-func findWebhookServiceSecretName(objs []unstructured.Unstructured) map[string]string {
-	serviceSecretNames := map[string]string{}
-	certSecretNames := map[string]string{}
-
-	secretFromCertNN := func(certNN string) (string, bool) {
-		certName := strings.Split(certNN, "/")[1]
-		secretName, ok := certSecretNames[certName]
-		if !ok || secretName == "" {
-			return "", false
-		}
-		return secretName, true
-	}
-	// find service, then cert, then secret
-	// return map[certName] = secretName
-	for i, obj := range objs {
-		switch obj.GetKind() {
-		case "Certificate":
-			cert := &certmangerv1.Certificate{}
-			if err := scheme.Convert(&objs[i], cert, nil); err != nil {
-				panic(err)
-			}
-			certSecretNames[cert.Name] = cert.Spec.SecretName
-		}
-	}
-	for _, obj := range objs {
-		switch obj.GetKind() {
-		case "CustomResourceDefinition":
-			crd := &apiextensionsv1.CustomResourceDefinition{}
-			if err := scheme.Convert(&obj, crd, nil); err != nil {
-				panic(err)
-			}
-			if certNN, ok := crd.Annotations["cert-manager.io/inject-ca-from"]; ok {
-				secretName, ok := secretFromCertNN(certNN)
-				if !ok {
-					panic("can't find secret from cert " + certNN)
-				}
-				serviceSecretNames[crd.Spec.Conversion.Webhook.ClientConfig.Service.Name] = secretName
-			}
-
-		case "MutatingWebhookConfiguration":
-			mwc := &admissionregistration.MutatingWebhookConfiguration{}
-			if err := scheme.Convert(&obj, mwc, nil); err != nil {
-				panic(err)
-			}
-			if certNN, ok := mwc.Annotations["cert-manager.io/inject-ca-from"]; ok {
-				secretName, ok := secretFromCertNN(certNN)
-				if !ok {
-					panic("can't find secret from cert " + certNN)
-				}
-				serviceSecretNames[mwc.Webhooks[0].ClientConfig.Service.Name] = secretName
-			}
-
-		case "ValidatingWebhookConfiguration":
-			vwc := &admissionregistration.ValidatingWebhookConfiguration{}
-			if err := scheme.Convert(&obj, vwc, nil); err != nil {
-				panic(err)
-			}
-			if certNN, ok := vwc.Annotations["cert-manager.io/inject-ca-from"]; ok {
-				secretName, ok := secretFromCertNN(certNN)
-				if !ok {
-					panic("can't find secret from cert " + certNN)
-				}
-				serviceSecretNames[vwc.Webhooks[0].ClientConfig.Service.Name] = secretName
-			}
-		}
-	}
-	return serviceSecretNames
-}
-
-func (p *provider) updateImages(objs []unstructured.Unstructured) error {
-	jsonData, err := ioutil.ReadFile(filepath.Clean(sampleImageFileName))
-	if err != nil {
-		return err
-	}
-	containerImages := map[string]string{}
-	if err := json.Unmarshal(jsonData, &containerImages); err != nil {
-		return err
-	}
-
-	for i, obj := range objs {
-		switch obj.GetKind() {
-		case "Deployment":
-			dep := &appsv1.Deployment{}
-			if err := scheme.Convert(&objs[i], dep, nil); err != nil {
-				return err
-			}
-			for _, c := range dep.Spec.Template.Spec.Containers {
-				containerImages[p.imageToKey(c.Image)] = c.Image
-			}
-		}
-	}
-
-	jsonData, err = json.MarshalIndent(&containerImages, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	return ioutil.WriteFile(sampleImageFileName, ensureNewLine(jsonData), 0600)
-}
-
-func (p *provider) loadVersion() error {
-	jsonData, err := ioutil.ReadFile(providerVersionsFileName)
-	if err != nil {
-		return err
-	}
-	providerVersions := map[string]string{}
-	if err := json.Unmarshal(jsonData, &providerVersions); err != nil {
-		return err
-	}
-
-	p.version = providerVersions[p.name]
-	return nil
-}
-
-func (p *provider) imageToKey(fullImage string) string {
-	//k8s.gcr.io/cluster-api/kubeadm-bootstrap-controller:v0.4.3
-	frag := strings.Split(fullImage, "/")
-	nameVer := frag[len(frag)-1]
-	name := strings.Split(nameVer, ":")[0]
-
-	switch name {
-	case "kube-rbac-proxy":
-		return "kube-rbac-proxy"
-	case "ip-address-manager": //special case
-		return p.providerTypeName() + "-" + p.name + ":" + name
-	default:
-		return p.providerTypeName() + "-" + p.name + ":manager"
-	}
-}
-
-func certManagerToServiceCA(objs []unstructured.Unstructured) []unstructured.Unstructured {
-	serviceSecretNames := findWebhookServiceSecretName(objs)
-
-	finalObjs := []unstructured.Unstructured{}
-	for _, obj := range objs {
-		switch obj.GetKind() {
-		case "CustomResourceDefinition", "MutatingWebhookConfiguration", "ValidatingWebhookConfiguration":
-			anns := obj.GetAnnotations()
-			if anns == nil {
-				anns = map[string]string{}
-			}
-			if _, ok := anns["cert-manager.io/inject-ca-from"]; ok {
-				anns["service.beta.openshift.io/inject-cabundle"] = "true"
-				delete(anns, "cert-manager.io/inject-ca-from")
-				obj.SetAnnotations(anns)
-			}
-			finalObjs = append(finalObjs, obj)
-		case "Service":
-			anns := obj.GetAnnotations()
-			if anns == nil {
-				anns = map[string]string{}
-			}
-			if name, ok := serviceSecretNames[obj.GetName()]; ok {
-				fmt.Println(obj.GetKind(), obj.GetName(), name)
-				anns["service.beta.openshift.io/serving-cert-secret-name"] = name
-				obj.SetAnnotations(anns)
-			}
-			finalObjs = append(finalObjs, obj)
-		case "Certificate", "Issuer", "Namespace": // skip
-		default:
-			finalObjs = append(finalObjs, obj)
-		}
-	}
-	return finalObjs
-}
-
-func splitRBACOut(objs []unstructured.Unstructured) ([]unstructured.Unstructured, []unstructured.Unstructured) {
-	finalObjs := []unstructured.Unstructured{}
-	rbacObjs := []unstructured.Unstructured{}
-	for _, obj := range objs {
-		switch obj.GetKind() {
-		case "ClusterRole", "Role", "ClusterRoleBinding", "RoleBinding", "ServiceAccount":
-			setOpenShiftAnnotations(obj, false)
-			rbacObjs = append(rbacObjs, obj)
-		default:
-			finalObjs = append(finalObjs, obj)
-		}
-	}
-	return finalObjs, rbacObjs
 }
 
 func filterOutIPAM(objs []unstructured.Unstructured) []unstructured.Unstructured {
@@ -398,39 +232,62 @@ func filterOutIPAM(objs []unstructured.Unstructured) []unstructured.Unstructured
 	return finalObjs
 }
 
-func importProviders(providerFilter string) error {
-	for _, p := range providers {
-		if providerFilter != "" && p.name != providerFilter {
-			continue
-		}
+func filterOutUnwantedResources(providerName string, objs []unstructured.Unstructured) []unstructured.Unstructured {
+	// Filter out IPAM
+	if providerName == "metal3" {
+		objs = filterOutIPAM(objs)
+	}
 
+	return objs
+}
+
+func importProviders() error {
+	// Load provider list from conifg file
+	providers, err := loadProviders()
+	if err != nil {
+		return err
+	}
+
+	for _, p := range providers {
+		fmt.Printf("Processing provider %s: %s\n", p.PType, p.Name)
+
+		// Load manifests from github for specific provider
 		err := p.loadComponents()
 		if err != nil {
 			return err
 		}
-		fmt.Println(p.ptype, p.name)
 
-		finalObjs, rbacObjs := splitRBACOut(certManagerToServiceCA(p.components.Objs()))
+		// Change cert-manager annotations to service-ca, because openshift doesn't support cert-manager
+		objs := certManagerToServiceCA(p.components.Objs())
 
-		if p.name == "metal3" {
-			finalObjs = filterOutIPAM(finalObjs)
-		}
+		// Filter out unwanted resources like IPAM
+		objs = filterOutUnwantedResources(p.Name, objs)
 
-		err = p.writeRBACComponentsToManifests(rbacObjs)
+		// Split out RBAC objects
+		rbacObjs, crdObjs, allOtherObjs := splitRBACAndCRDsOut(objs)
+
+		// Write RBAC components to manifests, they will be managed by CVO
+		rbacFileName := fmt.Sprintf("%s%s-%s_03_rbac.yaml", manifestPrefix, p.providerTypeName(), p.Name)
+		err = writeRBACComponentsToManifests(rbacFileName, rbacObjs)
 		if err != nil {
 			return err
 		}
 
-		err = p.updateImages(finalObjs)
+		// Write CRD components to manifests, they will be managed by CVO
+		crdFileName := fmt.Sprintf("%s%s-%s_02_crd.yaml", manifestPrefix, p.providerTypeName(), p.Name)
+		err = writeCRDComponentsToManifests(crdFileName, crdObjs)
 		if err != nil {
 			return err
 		}
 
-		err = p.writeProviderComponents(finalObjs)
+		// Write all other components(deployments, services, secret, etc) to a config map,
+		// they will be managed by CAPI operator
+		err = p.writeAllOtherProviderComponents(allOtherObjs)
 		if err != nil {
 			return err
 		}
 
+		// Write Cluster API Operator objects that represent providers
 		err = p.writeProviders()
 		if err != nil {
 			return err
