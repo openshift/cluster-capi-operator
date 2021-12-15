@@ -14,7 +14,7 @@ import (
 
 var (
 	assetsDir   = path.Join(projDir, "assets", "capi-operator")
-	outFile     = path.Join(projDir, "manifests", "0000_30_cluster-api_operator_03_rbac_roles.yaml")
+	outFile     = path.Join(projDir, "manifests", "0000_30_cluster-api-operator_03_rbac_roles.yaml")
 	annotations = map[string]string{
 		"exclude.release.openshift.io/internal-openshift-hosted":      "true",
 		"include.release.openshift.io/self-managed-high-availability": "true",

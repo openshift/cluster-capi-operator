@@ -10,3 +10,4 @@ spec:
     from:
       kind: DockerImage
       name: registry.ci.openshift.org/openshift:kube-rbac-proxy
+
