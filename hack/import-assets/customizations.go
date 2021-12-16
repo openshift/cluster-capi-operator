@@ -29,6 +29,10 @@ func setOpenShiftAnnotations(obj unstructured.Unstructured, merge bool) {
 	}
 
 	anno := obj.GetAnnotations()
+	if anno == nil {
+		anno = map[string]string{}
+	}
+
 	for k, v := range annotations {
 		anno[k] = v
 	}
@@ -37,6 +41,10 @@ func setOpenShiftAnnotations(obj unstructured.Unstructured, merge bool) {
 
 func setTechPreviewAnnotation(obj unstructured.Unstructured) {
 	anno := obj.GetAnnotations()
+	if anno == nil {
+		anno = map[string]string{}
+	}
+
 	anno[techPreviewAnnotation] = techPreviewAnnotationValue
 	obj.SetAnnotations(anno)
 }
@@ -81,6 +89,9 @@ func findWebhookServiceSecretName(objs []unstructured.Unstructured) map[string]s
 	certSecretNames := map[string]string{}
 
 	secretFromCertNN := func(certNN string) (string, bool) {
+		if len(certNN) == 0 {
+			return "", false
+		}
 		certName := strings.Split(certNN, "/")[1]
 		secretName, ok := certSecretNames[certName]
 		if !ok || secretName == "" {
@@ -110,7 +121,7 @@ func findWebhookServiceSecretName(objs []unstructured.Unstructured) map[string]s
 			if certNN, ok := crd.Annotations["cert-manager.io/inject-ca-from"]; ok {
 				secretName, ok := secretFromCertNN(certNN)
 				if !ok {
-					panic("can't find secret from cert " + certNN)
+					panic("can't find secret from cert: " + certNN)
 				}
 				serviceSecretNames[crd.Spec.Conversion.Webhook.ClientConfig.Service.Name] = secretName
 			}
@@ -123,7 +134,7 @@ func findWebhookServiceSecretName(objs []unstructured.Unstructured) map[string]s
 			if certNN, ok := mwc.Annotations["cert-manager.io/inject-ca-from"]; ok {
 				secretName, ok := secretFromCertNN(certNN)
 				if !ok {
-					panic("can't find secret from cert " + certNN)
+					panic("can't find secret from cert: " + certNN)
 				}
 				serviceSecretNames[mwc.Webhooks[0].ClientConfig.Service.Name] = secretName
 			}
@@ -136,7 +147,7 @@ func findWebhookServiceSecretName(objs []unstructured.Unstructured) map[string]s
 			if certNN, ok := vwc.Annotations["cert-manager.io/inject-ca-from"]; ok {
 				secretName, ok := secretFromCertNN(certNN)
 				if !ok {
-					panic("can't find secret from cert " + certNN)
+					panic("can't find secret from cert:CustomResourceDefinition " + certNN)
 				}
 				serviceSecretNames[vwc.Webhooks[0].ClientConfig.Service.Name] = secretName
 			}
@@ -156,6 +167,7 @@ func splitRBACAndCRDsOut(objs []unstructured.Unstructured) ([]unstructured.Unstr
 			setTechPreviewAnnotation(obj)
 			rbacObjs = append(rbacObjs, obj)
 		case "CustomResourceDefinition":
+			setOpenShiftAnnotations(obj, false)
 			setTechPreviewAnnotation(obj)
 			crdObjs = append(crdObjs, obj)
 		default:
@@ -168,14 +180,6 @@ func splitRBACAndCRDsOut(objs []unstructured.Unstructured) ([]unstructured.Unstr
 // ensureNewLine makes sure that there is one new line at the end of the file for git
 func ensureNewLine(b []byte) []byte {
 	return append(bytes.TrimRight(b, "\n"), []byte("\n")...)
-}
-
-func writeRBACComponentsToManifests(fileName string, objs []unstructured.Unstructured) error {
-	return writeComponentsToManifests(fileName, objs)
-}
-
-func writeCRDComponentsToManifests(fileName string, objs []unstructured.Unstructured) error {
-	return writeComponentsToManifests(fileName, objs)
 }
 
 func writeComponentsToManifests(fileName string, objs []unstructured.Unstructured) error {

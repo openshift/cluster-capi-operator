@@ -268,14 +268,14 @@ func importProviders() error {
 
 		// Write RBAC components to manifests, they will be managed by CVO
 		rbacFileName := fmt.Sprintf("%s%s-%s_03_rbac.yaml", manifestPrefix, p.providerTypeName(), p.Name)
-		err = writeRBACComponentsToManifests(rbacFileName, rbacObjs)
+		err = writeComponentsToManifests(rbacFileName, rbacObjs)
 		if err != nil {
 			return err
 		}
 
 		// Write CRD components to manifests, they will be managed by CVO
 		crdFileName := fmt.Sprintf("%s%s-%s_02_crd.yaml", manifestPrefix, p.providerTypeName(), p.Name)
-		err = writeCRDComponentsToManifests(crdFileName, crdObjs)
+		err = writeComponentsToManifests(crdFileName, crdObjs)
 		if err != nil {
 			return err
 		}
