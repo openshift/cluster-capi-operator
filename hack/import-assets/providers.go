@@ -170,10 +170,16 @@ func (p *provider) writeAllOtherProviderComponents(objs []unstructured.Unstructu
 	}
 
 	fName := strings.ToLower(p.providerTypeName() + "-" + p.Name + ".yaml")
-	return os.WriteFile(path.Join(providersAssetsPath, fName), ensureNewLine(cmYaml), 0600)
+	assetsPath := providersAssetsPath
+	if p.Name == "cluster-api" {
+		assetsPath = coreCAPIAssetsPath
+	}
+
+	return os.WriteFile(path.Join(assetsPath, fName), ensureNewLine(cmYaml), 0600)
 }
 
 func (p *provider) writeProviders() error {
+	assetsPath := providersAssetsPath
 	var obj client.Object
 	switch p.providerTypeName() {
 	case "core":
@@ -181,6 +187,7 @@ func (p *provider) writeProviders() error {
 			TypeMeta: metav1.TypeMeta{Kind: "CoreProvider", APIVersion: "operator.cluster.x-k8s.io/v1alpha1"},
 			Spec:     operatorv1.CoreProviderSpec{ProviderSpec: p.providerSpec()},
 		}
+		assetsPath = coreCAPIAssetsPath
 	case "controlplane":
 		obj = &operatorv1.ControlPlaneProvider{
 			TypeMeta: metav1.TypeMeta{Kind: "ControlPlaneProvider", APIVersion: "operator.cluster.x-k8s.io/v1alpha1"},
@@ -206,7 +213,7 @@ func (p *provider) writeProviders() error {
 	}
 
 	fName := strings.ToLower(p.providerTypeName() + "-" + p.Name + "-provider.yaml")
-	return os.WriteFile(path.Join(providersAssetsPath, fName), ensureNewLine(cmYaml), 0600)
+	return os.WriteFile(path.Join(assetsPath, fName), ensureNewLine(cmYaml), 0600)
 }
 
 func (p *provider) providerSpec() operatorv1.ProviderSpec {

@@ -15,4 +15,3 @@
 #   branch: "master"
 # - name: "openstack"
 #   type: "InfrastructureProvider"
-
