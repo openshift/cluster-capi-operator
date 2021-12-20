@@ -32,25 +32,25 @@ func importCAPIOperator() error {
 	// Change cert-manager annotations to service-ca, because openshift doesn't support cert-manager
 	objs = certManagerToServiceCA(objs)
 
-	// Split out RBAC objects
-	rbacObjs, crdObjs, allOtherObjs := splitRBACAndCRDsOut(objs)
+	// Split out RBAC, CRDs and Service objects
+	resourceMap := splitResources(objs)
 
 	// Write RBAC components to manifests, they will be managed by CVO
 	rbacFileName := fmt.Sprintf("%s%s_03_rbac.yaml", manifestPrefix, "upstream-operator")
-	err = writeComponentsToManifests(rbacFileName, rbacObjs)
+	err = writeComponentsToManifests(rbacFileName, resourceMap[rbacKey])
 	if err != nil {
 		return err
 	}
 
 	// Write CRD components to manifests, they will be managed by CVO
 	crdFileName := fmt.Sprintf("%s%s_02_crd.yaml", manifestPrefix, "upstream-operator")
-	err = writeComponentsToManifests(crdFileName, crdObjs)
+	err = writeComponentsToManifests(crdFileName, resourceMap[crdKey])
 	if err != nil {
 		return err
 	}
 
 	// Write all other components(deployments, services, secret, etc)
-	return writeAllOtherOperatorComponents(allOtherObjs)
+	return writeAllOtherOperatorComponents(resourceMap[otherKey])
 }
 
 func readCAPIOperatorManifests() ([]unstructured.Unstructured, error) {

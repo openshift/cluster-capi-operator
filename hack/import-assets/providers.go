@@ -301,29 +301,31 @@ func importProviders() error {
 		// Change cert-manager annotations to service-ca, because openshift doesn't support cert-manager
 		objs := certManagerToServiceCA(p.components.Objs())
 
+		objs = removeConversionWebhook(p.components.Objs())
+
 		// Filter out unwanted resources like IPAM
 		objs = filterOutUnwantedResources(p.Name, objs)
 
-		// Split out RBAC objects
-		rbacObjs, crdObjs, allOtherObjs := splitRBACAndCRDsOut(objs)
+		// Split out RBAC, CRDs and Service objects
+		resourceMap := splitResources(objs)
 
 		// Write RBAC components to manifests, they will be managed by CVO
 		rbacFileName := fmt.Sprintf("%s%s-%s_03_rbac.yaml", manifestPrefix, p.providerTypeName(), p.Name)
-		err = writeComponentsToManifests(rbacFileName, rbacObjs)
+		err = writeComponentsToManifests(rbacFileName, resourceMap[rbacKey])
 		if err != nil {
 			return err
 		}
 
 		// Write CRD components to manifests, they will be managed by CVO
 		crdFileName := fmt.Sprintf("%s%s-%s_02_crd.yaml", manifestPrefix, p.providerTypeName(), p.Name)
-		err = writeComponentsToManifests(crdFileName, crdObjs)
+		err = writeComponentsToManifests(crdFileName, resourceMap[crdKey])
 		if err != nil {
 			return err
 		}
 
 		// Write all other components(deployments, services, secret, etc) to a config map,
 		// they will be managed by CAPI operator
-		err = p.writeAllOtherProviderComponents(allOtherObjs)
+		err = p.writeAllOtherProviderComponents(resourceMap[otherKey])
 		if err != nil {
 			return err
 		}

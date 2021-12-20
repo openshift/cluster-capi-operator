@@ -13,6 +13,14 @@ import (
 	utilyaml "sigs.k8s.io/cluster-api/util/yaml"
 )
 
+type resourceKey string
+
+const (
+	crdKey   resourceKey = "crds"
+	otherKey resourceKey = "other"
+	rbacKey  resourceKey = "rbac"
+)
+
 var (
 	openshifAnnotations = map[string]string{
 		"exclude.release.openshift.io/internal-openshift-hosted":      "true",
@@ -156,7 +164,8 @@ func findWebhookServiceSecretName(objs []unstructured.Unstructured) map[string]s
 	return serviceSecretNames
 }
 
-func splitRBACAndCRDsOut(objs []unstructured.Unstructured) ([]unstructured.Unstructured, []unstructured.Unstructured, []unstructured.Unstructured) {
+func splitResources(objs []unstructured.Unstructured) map[resourceKey][]unstructured.Unstructured {
+	resourceMap := map[resourceKey][]unstructured.Unstructured{}
 	finalObjs := []unstructured.Unstructured{}
 	rbacObjs := []unstructured.Unstructured{}
 	crdObjs := []unstructured.Unstructured{}
@@ -174,7 +183,33 @@ func splitRBACAndCRDsOut(objs []unstructured.Unstructured) ([]unstructured.Unstr
 			finalObjs = append(finalObjs, obj)
 		}
 	}
-	return rbacObjs, crdObjs, finalObjs
+
+	resourceMap[rbacKey] = rbacObjs
+	resourceMap[crdKey] = crdObjs
+	resourceMap[otherKey] = finalObjs
+
+	return resourceMap
+}
+
+func removeConversionWebhook(objs []unstructured.Unstructured) []unstructured.Unstructured {
+	finalObjs := []unstructured.Unstructured{}
+	for _, obj := range objs {
+		switch obj.GetKind() {
+		case "CustomResourceDefinition":
+			crd := &apiextensionsv1.CustomResourceDefinition{}
+			if err := scheme.Convert(&obj, crd, nil); err != nil {
+				panic(err)
+			}
+			crd.Spec.Conversion = nil
+			if err := scheme.Convert(crd, &obj, nil); err != nil {
+				panic(err)
+			}
+			finalObjs = append(finalObjs, obj)
+		default:
+			finalObjs = append(finalObjs, obj)
+		}
+	}
+	return finalObjs
 }
 
 // ensureNewLine makes sure that there is one new line at the end of the file for git
@@ -183,6 +218,10 @@ func ensureNewLine(b []byte) []byte {
 }
 
 func writeComponentsToManifests(fileName string, objs []unstructured.Unstructured) error {
+	if len(objs) == 0 {
+		return nil
+	}
+
 	combined, err := utilyaml.FromUnstructured(objs)
 	if err != nil {
 		return err
