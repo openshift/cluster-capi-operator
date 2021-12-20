@@ -30,15 +30,38 @@ type provider struct {
 	metadata   []byte
 }
 
-// loadProviders load provider list from provider_config.yaml
-func loadProviders() ([]provider, error) {
-	yamlConfig, err := ioutil.ReadFile(providerListPath)
-	if err != nil {
-		return nil, err
+// writeProvidersCM validates and writes the provider configmap
+func writeProvidersCM(providerList []byte) error {
+	cm := &corev1.ConfigMap{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "ConfigMap",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        "cluster-capi-operator-providers",
+			Namespace:   targetNamespace,
+			Annotations: openshifAnnotations,
+		},
+		Data: map[string]string{
+			"providers-list.yaml": string(providerList),
+		},
 	}
 
+	cm.Annotations[techPreviewAnnotation] = techPreviewAnnotationValue
+
+	cmYaml, err := yaml.Marshal(cm)
+	if err != nil {
+		return err
+	}
+
+	fName := fmt.Sprintf("%scapi-operator_02_providers.configmap.yaml", manifestPrefix)
+	return os.WriteFile(path.Join(manifestsPath, fName), ensureNewLine(cmYaml), 0600)
+}
+
+// loadProviders load provider list from provider_config.yaml
+func loadProviders(providerList []byte) ([]provider, error) {
 	providers := []provider{}
-	if err := yaml.Unmarshal(yamlConfig, &providers); err != nil {
+	if err := yaml.Unmarshal(providerList, &providers); err != nil {
 		return nil, err
 	}
 
@@ -249,8 +272,19 @@ func filterOutUnwantedResources(providerName string, objs []unstructured.Unstruc
 }
 
 func importProviders() error {
+	// Read provider list yaml
+	providerList, err := ioutil.ReadFile(providerListPath)
+	if err != nil {
+		return fmt.Errorf("failed to read provider list: %v", err)
+	}
+
+	// Write provider list config map to manifests
+	if err := writeProvidersCM(providerList); err != nil {
+		return fmt.Errorf("failed to write providers configmap: %v", err)
+	}
+
 	// Load provider list from conifg file
-	providers, err := loadProviders()
+	providers, err := loadProviders(providerList)
 	if err != nil {
 		return err
 	}

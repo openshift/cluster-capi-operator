@@ -14,7 +14,7 @@ import (
 )
 
 var (
-	annotations = map[string]string{
+	openshifAnnotations = map[string]string{
 		"exclude.release.openshift.io/internal-openshift-hosted":      "true",
 		"include.release.openshift.io/self-managed-high-availability": "true",
 		"include.release.openshift.io/single-node-developer":          "true",
@@ -25,7 +25,7 @@ var (
 
 func setOpenShiftAnnotations(obj unstructured.Unstructured, merge bool) {
 	if !merge || len(obj.GetAnnotations()) == 0 {
-		obj.SetAnnotations(annotations)
+		obj.SetAnnotations(openshifAnnotations)
 	}
 
 	anno := obj.GetAnnotations()
@@ -33,7 +33,7 @@ func setOpenShiftAnnotations(obj unstructured.Unstructured, merge bool) {
 		anno = map[string]string{}
 	}
 
-	for k, v := range annotations {
+	for k, v := range openshifAnnotations {
 		anno[k] = v
 	}
 	obj.SetAnnotations(anno)

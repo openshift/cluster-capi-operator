@@ -17,6 +17,7 @@ var (
 	scheme              = runtime.NewScheme()
 	projDir             = path.Join("..", "..")
 	providersAssetsPath = path.Join(projDir, "assets", "providers")
+	coreCAPIAssetsPath  = path.Join(projDir, "assets", "core-capi")
 	operatorAssetsPath  = path.Join(projDir, "assets", "capi-operator")
 	manifestsPath       = path.Join(projDir, "manifests")
 	providerListPath    = path.Join(projDir, "providers-list.yaml")
