@@ -1,14 +1,13 @@
 apiVersion: operator.cluster.x-k8s.io/v1alpha1
-kind: InfrastructureProvider
+kind: CoreProvider
 metadata:
   creationTimestamp: null
-  name: openstack
+  name: cluster-api
   namespace: openshift-cluster-api
 spec:
   fetchConfig:
     selector:
       matchLabels:
-        provider.cluster.x-k8s.io/name: openstack
-        provider.cluster.x-k8s.io/type: infrastructure
-  version: v0.4.0
+        provider.cluster.x-k8s.io/name: cluster-api
+        provider.cluster.x-k8s.io/type: core
 status: {}

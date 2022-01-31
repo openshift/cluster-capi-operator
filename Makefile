@@ -47,15 +47,8 @@ lint: $(GOLANGCI_LINT)
 $(GOLANGCI_LINT): $(TOOLS_DIR)/go.mod # Build golangci-lint from tools folder.
 	cd $(TOOLS_DIR); go build -tags=tools -mod=readonly -o $(BIN_DIR)/golangci-lint github.com/golangci/golangci-lint/cmd/golangci-lint
 
-$(KUSTOMIZE): $(TOOLS_DIR)/go.mod
-	cd $(TOOLS_DIR); go build -tags=tools -mod=readonly -o $(BIN_DIR)/kustomize sigs.k8s.io/kustomize/kustomize/v3
-
-import-assets: $(KUSTOMIZE)
-	mkdir -p assets/capi-operator
-	mkdir -p assets/providers
-	$(KUSTOMIZE) build hack/import-assets/capi-operator -o assets/capi-operator/
-	cd hack/import-assets; go run . move-rbac-manifests
-	cd hack/import-assets; go run . import-providers
+import-assets:
+	hack/import-assets.sh
 
 # Run go mod
 .PHONY: vendor

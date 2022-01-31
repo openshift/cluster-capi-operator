@@ -1,11 +1,9 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"os"
 	"path"
-	"strings"
 
 	certmangerv1 "github.com/jetstack/cert-manager/pkg/apis/certmanager/v1"
 	admissionregistration "k8s.io/api/admissionregistration/v1"
@@ -16,10 +14,15 @@ import (
 )
 
 var (
-	scheme             = runtime.NewScheme()
-	projDir            = path.Join("..", "..")
-	cmdMoveRBAC        = "move-rbac-manifests"
-	cmdImportProviders = "import-providers"
+	scheme              = runtime.NewScheme()
+	projDir             = path.Join("..", "..")
+	providersAssetsPath = path.Join(projDir, "assets", "providers")
+	coreCAPIAssetsPath  = path.Join(projDir, "assets", "core-capi")
+	operatorAssetsPath  = path.Join(projDir, "assets", "capi-operator")
+	manifestsPath       = path.Join(projDir, "manifests")
+	providerListPath    = path.Join(projDir, "providers-list.yaml")
+	manifestPrefix      = "0000_30_cluster-api_"
+	targetNamespace     = "openshift-cluster-api"
 )
 
 func init() {
@@ -29,40 +32,13 @@ func init() {
 	utilruntime.Must(certmangerv1.AddToScheme(scheme))
 }
 
-func usage() {
-	fmt.Fprint(flag.CommandLine.Output(), "usage:\n")
-	fmt.Fprintf(flag.CommandLine.Output(), "  %s %s\n", os.Args[0], cmdMoveRBAC)
-	fmt.Fprintf(flag.CommandLine.Output(), "  %s %s\n", os.Args[0], cmdImportProviders)
-	flag.PrintDefaults()
-}
-
-func checkArgs(required int) {
-	if len(flag.Args()) < required {
-		usage()
-		os.Exit(2)
-	}
-}
-
 func main() {
-	flag.Usage = usage
-	flag.Parse()
-
-	var err error
-	switch strings.ToLower(flag.Arg(0)) {
-	case cmdMoveRBAC:
-		checkArgs(1)
-		err = moveRBACToManifests()
-	case cmdImportProviders:
-		checkArgs(1)
-		providerFilter := ""
-		if len(flag.Args()) > 1 {
-			providerFilter = flag.Arg(1)
-		}
-		err = importProviders(providerFilter)
-	}
-	if err != nil {
+	if err := importCAPIOperator(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
-
+	}
+	if err := importProviders(); err != nil {
+		fmt.Println(err)
+		os.Exit(1)
 	}
 }

@@ -5,11 +5,12 @@ metadata:
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
-    release.openshift.io/feature-gate: "TechPreviewNoUpgrade"
+    release.openshift.io/feature-gate: TechPreviewNoUpgrade
   labels:
-    cluster.x-k8s.io/provider: infrastructure-gcp
+    cluster.x-k8s.io/provider: cluster-api
     clusterctl.cluster.x-k8s.io: ""
-  name: capg-leader-election-role
+    clusterctl.cluster.x-k8s.io/core: capi-operator
+  name: capi-operator-leader-election-role
   namespace: openshift-cluster-api
 rules:
 - apiGroups:
@@ -58,90 +59,20 @@ metadata:
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
-    release.openshift.io/feature-gate: "TechPreviewNoUpgrade"
+    release.openshift.io/feature-gate: TechPreviewNoUpgrade
   creationTimestamp: null
   labels:
-    cluster.x-k8s.io/provider: infrastructure-gcp
+    cluster.x-k8s.io/provider: cluster-api
     clusterctl.cluster.x-k8s.io: ""
-  name: openshift-cluster-api-capg-manager-role
+    clusterctl.cluster.x-k8s.io/core: capi-operator
+  name: openshift-cluster-api-capi-operator-manager-role
 rules:
 - apiGroups:
-  - ""
+  - '*'
   resources:
-  - events
+  - '*'
   verbs:
-  - create
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - ""
-  resources:
-  - secrets
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - cluster.x-k8s.io
-  resources:
-  - clusters
-  - clusters/status
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - cluster.x-k8s.io
-  resources:
-  - machines
-  - machines/status
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - infrastructure.cluster.x-k8s.io
-  resources:
-  - gcpclusters
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - infrastructure.cluster.x-k8s.io
-  resources:
-  - gcpclusters/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - infrastructure.cluster.x-k8s.io
-  resources:
-  - gcpmachines
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - infrastructure.cluster.x-k8s.io
-  resources:
-  - gcpmachines/status
-  verbs:
-  - get
-  - patch
-  - update
+  - '*'
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -150,11 +81,31 @@ metadata:
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
-    release.openshift.io/feature-gate: "TechPreviewNoUpgrade"
+    release.openshift.io/feature-gate: TechPreviewNoUpgrade
   labels:
-    cluster.x-k8s.io/provider: infrastructure-gcp
+    cluster.x-k8s.io/provider: cluster-api
     clusterctl.cluster.x-k8s.io: ""
-  name: openshift-cluster-api-capg-proxy-role
+    clusterctl.cluster.x-k8s.io/core: capi-operator
+  name: openshift-cluster-api-capi-operator-metrics-reader
+rules:
+- nonResourceURLs:
+  - /metrics
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  annotations:
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/feature-gate: TechPreviewNoUpgrade
+  labels:
+    cluster.x-k8s.io/provider: cluster-api
+    clusterctl.cluster.x-k8s.io: ""
+    clusterctl.cluster.x-k8s.io/core: capi-operator
+  name: openshift-cluster-api-capi-operator-proxy-role
 rules:
 - apiGroups:
   - authentication.k8s.io
@@ -176,17 +127,18 @@ metadata:
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
-    release.openshift.io/feature-gate: "TechPreviewNoUpgrade"
+    release.openshift.io/feature-gate: TechPreviewNoUpgrade
   creationTimestamp: null
   labels:
-    cluster.x-k8s.io/provider: infrastructure-gcp
+    cluster.x-k8s.io/provider: cluster-api
     clusterctl.cluster.x-k8s.io: ""
-  name: capg-leader-election-rolebinding
+    clusterctl.cluster.x-k8s.io/core: capi-operator
+  name: capi-operator-leader-election-rolebinding
   namespace: openshift-cluster-api
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: capg-leader-election-role
+  name: capi-operator-leader-election-role
 subjects:
 - kind: ServiceAccount
   name: default
@@ -199,16 +151,17 @@ metadata:
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
-    release.openshift.io/feature-gate: "TechPreviewNoUpgrade"
+    release.openshift.io/feature-gate: TechPreviewNoUpgrade
   creationTimestamp: null
   labels:
-    cluster.x-k8s.io/provider: infrastructure-gcp
+    cluster.x-k8s.io/provider: cluster-api
     clusterctl.cluster.x-k8s.io: ""
-  name: openshift-cluster-api-capg-manager-rolebinding
+    clusterctl.cluster.x-k8s.io/core: capi-operator
+  name: openshift-cluster-api-capi-operator-manager-rolebinding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: openshift-cluster-api-capg-manager-role
+  name: openshift-cluster-api-capi-operator-manager-role
 subjects:
 - kind: ServiceAccount
   name: default
@@ -221,16 +174,17 @@ metadata:
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
-    release.openshift.io/feature-gate: "TechPreviewNoUpgrade"
+    release.openshift.io/feature-gate: TechPreviewNoUpgrade
   creationTimestamp: null
   labels:
-    cluster.x-k8s.io/provider: infrastructure-gcp
+    cluster.x-k8s.io/provider: cluster-api
     clusterctl.cluster.x-k8s.io: ""
-  name: openshift-cluster-api-capg-proxy-rolebinding
+    clusterctl.cluster.x-k8s.io/core: capi-operator
+  name: openshift-cluster-api-capi-operator-proxy-rolebinding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: openshift-cluster-api-capg-proxy-role
+  name: openshift-cluster-api-capi-operator-proxy-role
 subjects:
 - kind: ServiceAccount
   name: default

@@ -1,0 +1,30 @@
+apiVersion: v1
+data:
+  providers-list.yaml: |
+    - name: "cluster-api"
+      type: "CoreProvider"
+      branch: "master"
+    # - name: "aws"
+    #   type: "InfrastructureProvider"
+    #   branch: "master"
+    # - name: "azure"
+    #   type: "InfrastructureProvider"
+    #   branch: "master"
+    # - name: "metal3"
+    #   type: "InfrastructureProvider"
+    #   branch: "master"
+    # - name: "gcp"
+    #   type: "InfrastructureProvider"
+    #   branch: "master"
+    # - name: "openstack"
+    #   type: "InfrastructureProvider"
+kind: ConfigMap
+metadata:
+  annotations:
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/feature-gate: TechPreviewNoUpgrade
+  creationTimestamp: null
+  name: cluster-capi-operator-providers
+  namespace: openshift-cluster-api

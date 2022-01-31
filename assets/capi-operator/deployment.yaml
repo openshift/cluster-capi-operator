@@ -1,7 +1,10 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
+  creationTimestamp: null
   labels:
+    cluster.x-k8s.io/provider: cluster-api
+    clusterctl.cluster.x-k8s.io: ""
     clusterctl.cluster.x-k8s.io/core: capi-operator
     control-plane: controller-manager
   name: capi-operator-controller-manager
@@ -12,8 +15,10 @@ spec:
     matchLabels:
       clusterctl.cluster.x-k8s.io/core: capi-operator
       control-plane: controller-manager
+  strategy: {}
   template:
     metadata:
+      creationTimestamp: null
       labels:
         clusterctl.cluster.x-k8s.io/core: capi-operator
         control-plane: controller-manager
@@ -29,12 +34,14 @@ spec:
         ports:
         - containerPort: 8443
           name: https
+        resources: {}
       - args:
         - --metrics-bind-addr=127.0.0.1:8080
         - --leader-elect
         command:
         - /manager
-        image: controller:latest
+        image: gcr.io/k8s-staging-cluster-api/operator-controller-amd64:dev
+        imagePullPolicy: Always
         name: manager
         resources:
           limits:
@@ -47,3 +54,4 @@ spec:
       tolerations:
       - effect: NoSchedule
         key: node-role.kubernetes.io/master
+status: {}
