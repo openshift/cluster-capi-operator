@@ -18,10 +18,13 @@ verify: fmt lint
 test: verify unit
 
 # Build operator binaries
-build: operator
+build: operator user-data-secret-controller
 
 operator:
 	go build -o bin/cluster-capi-operator cmd/cluster-capi-operator/main.go
+
+user-data-secret-controller:
+	go build -o bin/user-data-secret-controller cmd/user-data-secret-controller/main.go
 
 unit:
 	hack/unit-tests.sh
