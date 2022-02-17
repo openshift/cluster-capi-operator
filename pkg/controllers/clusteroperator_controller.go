@@ -2,13 +2,11 @@ package controllers
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/json"
 	"fmt"
 	"strings"
 
 	appsv1 "k8s.io/api/apps/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/klog"
@@ -17,23 +15,24 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/cluster-capi-operator/assets"
-	"github.com/openshift/cluster-capi-operator/pkg/util"
 )
 
 // ClusterOperatorReconciler reconciles a ClusterOperator object
 type ClusterOperatorReconciler struct {
 	client.Client
-	Scheme           *runtime.Scheme
-	Recorder         record.EventRecorder
-	ReleaseVersion   string
-	ManagedNamespace string
-	Images           map[string]string
-	PlatformType     configv1.PlatformType
+	Scheme             *runtime.Scheme
+	Recorder           record.EventRecorder
+	ReleaseVersion     string
+	ManagedNamespace   string
+	Images             map[string]string
+	PlatformType       string
+	SupportedPlatforms map[string]bool
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -55,120 +54,186 @@ func (r *ClusterOperatorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 // Reconcile will process the cluster-api clusterOperator
 func (r *ClusterOperatorReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (ctrl.Result, error) {
-	// NOTE: Temporarily disable the controller until set up CRD management using CVO
+	klog.Infof("Intalling Cluster API components for technical preview cluster")
+	// Get infrastructure object
+	infra := &configv1.Infrastructure{}
+	if err := r.Get(ctx, client.ObjectKey{Name: infrastructureResourceName}, infra); errors.IsNotFound(err) {
+		klog.Infof("Infrastructure cluster does not exist. Skipping...")
+		if err := r.setStatusAvailable(ctx); err != nil {
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{}, nil
+	} else if err != nil {
+		klog.Errorf("Unable to retrive Infrastructure object: %v", err)
+		if err := r.setStatusDegraded(ctx, err); err != nil {
+			return ctrl.Result{}, fmt.Errorf("error syncing ClusterOperatorStatus: %v", err)
+		}
+		return ctrl.Result{}, err
+	}
 
-	// featureGate := &configv1.FeatureGate{}
-	// if err := r.Client.Get(ctx, client.ObjectKey{Name: externalFeatureGateName}, featureGate); errors.IsNotFound(err) {
-	// 	klog.Infof("FeatureGate cluster does not exist. Skipping...")
-	// 	return ctrl.Result{}, r.setStatusAvailable(ctx)
-	// } else if err != nil {
-	// 	klog.Errorf("Unable to retrive FeatureGate object: %v", err)
-	// 	return ctrl.Result{}, r.setStatusDegraded(ctx, err)
-	// }
+	// Install upstream CAPI Operator
+	if err := r.installCAPIOperator(ctx); err != nil {
+		klog.Errorf("Unable to install CAPI operator: %v", err)
+		if err := r.setStatusDegraded(ctx, err); err != nil {
+			return ctrl.Result{}, fmt.Errorf("error syncing ClusterOperatorStatus: %v", err)
+		}
+		return ctrl.Result{}, err
+	}
 
-	// // Verify FeatureGate ClusterAPIEnabled is present for operator to work in TP phase
-	// capiEnabled, err := isCAPIFeatureGateEnabled(featureGate)
-	// if err != nil {
-	// 	klog.Errorf("Could not determine cluster api feature gate state: %v", err)
-	// 	return ctrl.Result{}, r.setStatusDegraded(ctx, err)
-	// }
+	// Install core CAPI components
+	if err := r.installCoreCAPIComponents(ctx); err != nil {
+		klog.Errorf("Unable to install core CAPI components: %v", err)
+		if err := r.setStatusDegraded(ctx, err); err != nil {
+			return ctrl.Result{}, fmt.Errorf("error syncing ClusterOperatorStatus: %v", err)
+		}
+		return ctrl.Result{}, err
+	}
 
-	// var result ctrl.Result
-	// if capiEnabled {
-	// 	klog.Infof("FeatureGate cluster does include cluster api. Installing...")
-	// 	result, err = r.reconcile(ctx)
-	// 	if err != nil {
-	// 		return result, r.setStatusDegraded(ctx, err)
-	// 	}
-	// }
+	// Set platform type
+	if infra.Status.PlatformStatus == nil {
+		klog.Infof("No platform status exists in infrastructure object. Skipping...")
+		if err := r.setStatusAvailable(ctx); err != nil {
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{}, nil
+	}
+	r.PlatformType = strings.ToLower(string(infra.Status.PlatformStatus.Type))
+
+	// Check if platform type is supported
+	if _, ok := r.SupportedPlatforms[r.PlatformType]; !ok {
+		klog.Infof("Platform type %s is not supported. Skipping...", r.PlatformType)
+		if err := r.setStatusAvailable(ctx); err != nil {
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{}, nil
+	}
+
+	// Install infrastructure CAPI components
+	if err := r.installInfrastructureCAPIComponents(ctx); err != nil {
+		klog.Errorf("Unable to infrastructure core CAPI components: %v", err)
+		if err := r.setStatusDegraded(ctx, err); err != nil {
+			return ctrl.Result{}, fmt.Errorf("error syncing ClusterOperatorStatus: %v", err)
+		}
+		return ctrl.Result{}, err
+	}
 
 	return ctrl.Result{}, r.setStatusAvailable(ctx)
 }
 
-// https://github.com/kubernetes-sigs/cluster-api/blob/main/cmd/clusterctl/client/config/providers_client.go#L36-L47
-func (r *ClusterOperatorReconciler) currentProviderName() string { //nolint TODO:remove during refatoring
-	switch r.PlatformType {
-	case configv1.LibvirtPlatformType, configv1.NonePlatformType, configv1.OvirtPlatformType, configv1.EquinixMetalPlatformType:
-		return "" // no equivilent in capi
-	case configv1.BareMetalPlatformType:
-		return "metal3"
-	default:
-		return strings.ToLower(string(r.PlatformType))
-	}
-}
-
-func (r *ClusterOperatorReconciler) reconcile(ctx context.Context) (ctrl.Result, error) { //nolint TODO:remove during refatoring
+// installCAPIOperator reads assets from assets/capi-operator, customizes Deployment and Service objects, and applies them
+func (r *ClusterOperatorReconciler) installCAPIOperator(ctx context.Context) error {
+	klog.Infof("Installing CAPI Operator")
 	objs, err := assets.FromDir("capi-operator", r.Scheme)
 	if err != nil {
-		return ctrl.Result{}, err
+		return fmt.Errorf("unable to read capi-operator assets: %v", err)
 	}
 
-	updater := NewUpdater(objs).WithFilter(func(obj client.Object) bool {
-		appliedByManifest := []string{"Namespace", "ClusterRole", "Role", "ClusterRoleBinding", "RoleBinding", "ServiceAccount"}
-		// these are already applied by the manifest
-		return !util.ContainsString(appliedByManifest, obj.GetObjectKind().GroupVersionKind().Kind)
-	})
-
-	err = updater.Mutate(func(obj client.Object) (client.Object, error) {
-		dep, depOK := obj.(*appsv1.Deployment)
-		if depOK {
-			if err := r.customizeDeployment(dep); err != nil {
-				return obj, err
+	for _, obj := range objs {
+		switch obj.GetObjectKind().GroupVersionKind().Kind {
+		case "Deployment":
+			deployment := obj.(*appsv1.Deployment)
+			if _, err := controllerutil.CreateOrUpdate(ctx, r.Client, deployment, func() error {
+				containerToImageRef := map[string]string{
+					"manager":         "cluster-api:operator",
+					"kube-rbac-proxy": "kube-rbac-proxy",
+				}
+				for ci, cont := range deployment.Spec.Template.Spec.Containers {
+					if imageRef, ok := containerToImageRef[cont.Name]; ok {
+						if cont.Image == r.Images[imageRef] {
+							klog.Infof("container %s image %s", cont.Name, cont.Image)
+							continue
+						}
+						klog.Infof("container %s changing image from %s to %s", cont.Name, cont.Image, r.Images[imageRef])
+						deployment.Spec.Template.Spec.Containers[ci].Image = r.Images[imageRef]
+					} else {
+						klog.Warningf("container %s no image replacement found for %s", cont.Name, cont.Image)
+					}
+				}
+				return nil
+			}); err != nil {
+				return fmt.Errorf("unable to create or update upstream CAPI operator Deployment: %v", err)
+			}
+		default:
+			if _, err := controllerutil.CreateOrUpdate(ctx, r.Client, obj, func() error {
+				return nil
+			}); err != nil {
+				return fmt.Errorf("unable to create or update upstream CAPI operator %s: %v", obj.GetObjectKind().GroupVersionKind().Kind, err)
 			}
 		}
-		return obj, nil
-	})
-	if err != nil {
-		return ctrl.Result{}, err
 	}
-	err = updater.CreateOrUpdate(ctx, r.Client, r.Recorder)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
-
-	objs, err = assets.FromDir("providers", r.Scheme)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
-
-	updater = NewUpdater(objs).WithFilter(func(obj client.Object) bool {
-		if obj.GetObjectKind().GroupVersionKind().Kind == "InfrastructureProvider" {
-			if !strings.HasPrefix(obj.GetName(), r.currentProviderName()) {
-				klog.Infof("skipping infra %s!=%s", obj.GetName(), r.currentProviderName())
-				return false
-			}
-		}
-		return true
-	})
-
-	err = updater.Mutate(func(obj client.Object) (client.Object, error) {
-		infra, ok := obj.(*operatorv1.InfrastructureProvider)
-		if ok {
-			infra.Spec.ProviderSpec.Deployment = &operatorv1.DeploymentSpec{
-				Containers: r.containerCustomizationFromProvider(infra.Kind, infra.Name),
-			}
-		}
-		core, ok := obj.(*operatorv1.CoreProvider)
-		if ok {
-			core.Spec.ProviderSpec.Deployment = &operatorv1.DeploymentSpec{
-				Containers: r.containerCustomizationFromProvider(core.Kind, core.Name),
-			}
-		}
-
-		return obj, nil
-	})
-	if err != nil {
-		return ctrl.Result{}, err
-	}
-	return ctrl.Result{}, updater.CreateOrUpdate(ctx, r.Client, r.Recorder)
+	return nil
 }
 
-func providerKindToTypeName(kind string) string {
-	return strings.ReplaceAll(strings.ToLower(kind), "provider", "")
+// installCoreCAPIComponents reads assets from assets/core-capi, create CRs that are consumed by upstream CAPI Operator
+func (r *ClusterOperatorReconciler) installCoreCAPIComponents(ctx context.Context) error {
+	klog.Infof("Installing Core CAPI components")
+	objs, err := assets.FromDir("core-capi", r.Scheme)
+	if err != nil {
+		return fmt.Errorf("unable to read core-capi: %v", err)
+	}
+
+	for _, obj := range objs {
+		switch obj.GetObjectKind().GroupVersionKind().Kind {
+		case "CoreProvider":
+			coreProvider := obj.(*operatorv1.CoreProvider)
+			if _, err := controllerutil.CreateOrUpdate(ctx, r.Client, coreProvider, func() error {
+				coreProvider.Spec.ProviderSpec.Deployment = &operatorv1.DeploymentSpec{
+					Containers: r.containerCustomizationFromProvider(coreProvider.Kind, coreProvider.Name),
+				}
+				return nil
+			}); err != nil {
+				return fmt.Errorf("unable to create or update CoreProvider: %v", err)
+			}
+		default:
+			if _, err := controllerutil.CreateOrUpdate(ctx, r.Client, obj, func() error {
+				return nil
+			}); err != nil {
+				return fmt.Errorf("unable to create or update core Cluster API Configmap: %v", err)
+			}
+		}
+	}
+	return nil
 }
 
+// installInfrastructureCAPIComponents reads assets from assets/providers, create CRs that are consumed by upstream CAPI Operator
+func (r *ClusterOperatorReconciler) installInfrastructureCAPIComponents(ctx context.Context) error {
+	klog.Infof("Installing Infrastructure CAPI components")
+	objs, err := assets.FromDir("infrastructure-providers", r.Scheme)
+	if err != nil {
+		return fmt.Errorf("unable to read providers: %v", err)
+	}
+
+	for _, obj := range objs {
+		// provider assets name always match with platform name, example: Name: aws
+		if !strings.HasPrefix(obj.GetName(), r.PlatformType) {
+			continue
+		}
+		switch obj.GetObjectKind().GroupVersionKind().Kind {
+		case "InfrastructureProvider":
+			infraProvider := obj.(*operatorv1.InfrastructureProvider)
+			if _, err := controllerutil.CreateOrUpdate(ctx, r.Client, infraProvider, func() error {
+				infraProvider.Spec.ProviderSpec.Deployment = &operatorv1.DeploymentSpec{
+					Containers: r.containerCustomizationFromProvider(infraProvider.Kind, infraProvider.Name),
+				}
+				return nil
+			}); err != nil {
+				return fmt.Errorf("unable to create or update InfrastructureProvider: %v", err)
+			}
+		default:
+			if _, err := controllerutil.CreateOrUpdate(ctx, r.Client, obj, func() error {
+				return nil
+			}); err != nil {
+				return fmt.Errorf("unable to create or update infastructure Cluster API Configmap: %v", err)
+			}
+		}
+	}
+
+	return nil
+}
+
+// containerCustomizationFromProvider returns a list of containers customized for the given provider
 func (r *ClusterOperatorReconciler) containerCustomizationFromProvider(kind, name string) []operatorv1.ContainerSpec {
-	image, ok := r.Images[providerKindToTypeName(kind)+"-"+name+":manager"]
+	image, ok := r.Images[providerKindToTypeName(kind)+"-"+name+":manager"] // example: infrastructure-aws:manager
 	cSpecs := []operatorv1.ContainerSpec{}
 	if !ok {
 		return cSpecs
@@ -191,6 +256,10 @@ func (r *ClusterOperatorReconciler) containerCustomizationFromProvider(kind, nam
 	return cSpecs
 }
 
+func providerKindToTypeName(kind string) string {
+	return strings.ReplaceAll(strings.ToLower(kind), "provider", "")
+}
+
 func newImageMeta(imageURL string) *operatorv1.ImageMeta {
 	im := &operatorv1.ImageMeta{}
 	urlSplit := strings.Split(imageURL, ":")
@@ -201,43 +270,4 @@ func newImageMeta(imageURL string) *operatorv1.ImageMeta {
 	im.Name = &urlSplit[len(urlSplit)-1]
 	im.Repository = pointer.StringPtr(strings.Join(urlSplit[0:len(urlSplit)-1], "/"))
 	return im
-}
-
-func (r *ClusterOperatorReconciler) customizeDeployment(dep *appsv1.Deployment) error { //nolint TODO:remove during refatoring
-	containerToImageRef := map[string]string{
-		"manager":         "cluster-api:operator",
-		"kube-rbac-proxy": "kube-rbac-proxy",
-	}
-	for ci, cont := range dep.Spec.Template.Spec.Containers {
-		if cont.Name == "manager" {
-			// since our RBAC is installed via /manifests we don't want the upstream operator
-			// to delete them as it normally would on upgrade.
-			dep.Spec.Template.Spec.Containers[ci].Args = append(cont.Args, "--delete-rbac-on-upgrade=false")
-		}
-
-		if imageRef, ok := containerToImageRef[cont.Name]; ok {
-			if cont.Image == r.Images[imageRef] {
-				klog.Infof("container %s image %s", cont.Name, cont.Image)
-				continue
-			}
-			klog.Infof("container %s changing image from %s to %s", cont.Name, cont.Image, r.Images[imageRef])
-			dep.Spec.Template.Spec.Containers[ci].Image = r.Images[imageRef]
-		} else {
-			klog.Warningf("container %s no image replacement found for %s", cont.Name, cont.Image)
-		}
-	}
-	return setSpecHashAnnotation(&dep.ObjectMeta, dep.Spec)
-}
-
-func setSpecHashAnnotation(objMeta *metav1.ObjectMeta, spec interface{}) error { //nolint TODO:remove during refatoring
-	jsonBytes, err := json.Marshal(spec)
-	if err != nil {
-		return err
-	}
-	specHash := fmt.Sprintf("%x", sha256.Sum256(jsonBytes))
-	if objMeta.Annotations == nil {
-		objMeta.Annotations = map[string]string{}
-	}
-	objMeta.Annotations[specHashAnnotation] = specHash
-	return nil
 }
