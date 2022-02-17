@@ -49,7 +49,7 @@ func (r *ClusterOperatorReconciler) setStatusAvailable(ctx context.Context) erro
 // setStatusDegraded sets the Degraded condition to True, with the given reason and
 // message, and sets the upgradeable condition.  It does not modify any existing
 // Available or Progressing conditions.
-func (r *ClusterOperatorReconciler) setStatusDegraded(ctx context.Context, reconcileErr error) error { //nolint TODO:remove during refatoring
+func (r *ClusterOperatorReconciler) setStatusDegraded(ctx context.Context, reconcileErr error) error {
 	co, err := r.getOrCreateClusterOperator(ctx)
 	if err != nil {
 		klog.Errorf("Unable to set cluster operator status degraded: %v", err)
@@ -138,7 +138,7 @@ func newClusterOperatorStatusCondition(conditionType configv1.ClusterStatusCondi
 	}
 }
 
-func printOperandVersions(versions []configv1.OperandVersion) string { //nolint TODO:remove during refatoring
+func printOperandVersions(versions []configv1.OperandVersion) string {
 	versionsOutput := []string{}
 	for _, operand := range versions {
 		versionsOutput = append(versionsOutput, fmt.Sprintf("%s: %s", operand.Name, operand.Version))
