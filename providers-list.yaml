@@ -1,6 +1,7 @@
 - name: "cluster-api"
   type: "CoreProvider"
   branch: "master"
+  version: v1.0.1
 # - name: "aws"
 #   type: "InfrastructureProvider"
 #   branch: "master"

@@ -12,6 +12,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/util/version"
 	clusterctlv1 "sigs.k8s.io/cluster-api/cmd/clusterctl/api/v1alpha3"
 	configclient "sigs.k8s.io/cluster-api/cmd/clusterctl/client/config"
 	"sigs.k8s.io/cluster-api/cmd/clusterctl/client/repository"
@@ -26,6 +27,7 @@ type provider struct {
 	Name       string                    `json:"name"`
 	PType      clusterctlv1.ProviderType `json:"type"`
 	Branch     string                    `json:"branch"`
+	Version    string                    `json:"version"`
 	components repository.Components
 	metadata   []byte
 }
@@ -163,6 +165,10 @@ func (p *provider) providerTypeName() string {
 }
 
 func (p *provider) writeAllOtherProviderComponents(objs []unstructured.Unstructured) error {
+	if _, err := version.ParseSemantic(p.Version); err != nil {
+		return fmt.Errorf("invalid version %s for provider %s, check provider-list.yaml", p.Version, p.Name)
+	}
+
 	combined, err := utilyaml.FromUnstructured(objs)
 	if err != nil {
 		return err
@@ -177,8 +183,9 @@ func (p *provider) writeAllOtherProviderComponents(objs []unstructured.Unstructu
 			Name:      p.Name,
 			Namespace: targetNamespace,
 			Labels: map[string]string{
-				"provider.cluster.x-k8s.io/name": p.Name,
-				"provider.cluster.x-k8s.io/type": p.providerTypeName(),
+				"provider.cluster.x-k8s.io/name":    p.Name,
+				"provider.cluster.x-k8s.io/type":    p.providerTypeName(),
+				"provider.cluster.x-k8s.io/version": p.Version,
 			},
 		},
 		Data: map[string]string{
@@ -301,7 +308,7 @@ func importProviders() error {
 		// Change cert-manager annotations to service-ca, because openshift doesn't support cert-manager
 		objs := certManagerToServiceCA(p.components.Objs())
 
-		objs = removeConversionWebhook(p.components.Objs())
+		objs = removeConversionWebhook(objs)
 
 		// Filter out unwanted resources like IPAM
 		objs = filterOutUnwantedResources(p.Name, objs)
