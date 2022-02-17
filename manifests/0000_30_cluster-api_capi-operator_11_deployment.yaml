@@ -36,9 +36,12 @@ spec:
           requests:
             cpu: 10m
             memory: 50Mi
+        args: ["--leader-elect=true"]
         volumeMounts:
         - name: images
-          mountPath: /etc/cluster-api-config/
+          mountPath: /etc/cluster-api-config-images/
+        - name: providers
+          mountPath: /etc/cluster-api-config-providers/
       nodeSelector:
         node-role.kubernetes.io/master: ""
       priorityClassName: system-node-critical
@@ -52,3 +55,7 @@ spec:
         configMap:
           defaultMode: 420
           name: cluster-capi-operator-images
+      - name: providers
+        configMap:
+          defaultMode: 420
+          name: cluster-capi-operator-providers
