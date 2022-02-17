@@ -8,6 +8,7 @@ require (
 	github.com/openshift/api v0.0.0-20210831091943-07e756545ac1
 	github.com/openshift/library-go v0.0.0-20210914071953-94a0fd1d5849
 	github.com/spf13/pflag v1.0.5
+	gopkg.in/yaml.v2 v2.4.0
 	k8s.io/api v0.22.2
 	k8s.io/apiextensions-apiserver v0.22.2
 	k8s.io/apimachinery v0.22.2
