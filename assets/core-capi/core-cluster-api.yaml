@@ -2,15 +2,6 @@ apiVersion: v1
 data:
   components: |-
     apiVersion: v1
-    kind: Namespace
-    metadata:
-      labels:
-        cluster.x-k8s.io/provider: cluster-api
-        clusterctl.cluster.x-k8s.io: ""
-        control-plane: controller-manager
-      name: openshift-cluster-api
-    ---
-    apiVersion: v1
     kind: Service
     metadata:
       annotations:
@@ -91,37 +82,6 @@ data:
             secret:
               secretName: capi-webhook-service-cert
     status: {}
-    ---
-    apiVersion: cert-manager.io/v1
-    kind: Certificate
-    metadata:
-      labels:
-        cluster.x-k8s.io/provider: cluster-api
-        clusterctl.cluster.x-k8s.io: ""
-      name: capi-serving-cert
-      namespace: openshift-cluster-api
-    spec:
-      dnsNames:
-      - capi-webhook-service.capi-system.svc
-      - capi-webhook-service.capi-system.svc.cluster.local
-      issuerRef:
-        kind: Issuer
-        name: capi-selfsigned-issuer
-      secretName: capi-webhook-service-cert
-      subject:
-        organizations:
-        - k8s-sig-cluster-lifecycle
-    ---
-    apiVersion: cert-manager.io/v1
-    kind: Issuer
-    metadata:
-      labels:
-        cluster.x-k8s.io/provider: cluster-api
-        clusterctl.cluster.x-k8s.io: ""
-      name: capi-selfsigned-issuer
-      namespace: openshift-cluster-api
-    spec:
-      selfSigned: {}
     ---
     apiVersion: admissionregistration.k8s.io/v1
     kind: MutatingWebhookConfiguration
@@ -521,5 +481,6 @@ metadata:
   labels:
     provider.cluster.x-k8s.io/name: cluster-api
     provider.cluster.x-k8s.io/type: core
+    provider.cluster.x-k8s.io/version: v1.0.1
   name: cluster-api
   namespace: openshift-cluster-api
