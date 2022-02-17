@@ -1,13 +1,13 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
-	"io/ioutil"
 	"os"
-	"path/filepath"
 	"time"
 
+	configv1 "github.com/openshift/api/config/v1"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers"
+	"github.com/openshift/cluster-capi-operator/pkg/util"
 	"github.com/spf13/pflag"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -20,10 +20,6 @@ import (
 	operatorv1 "sigs.k8s.io/cluster-api/exp/operator/api/v1alpha1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
-
-	configv1 "github.com/openshift/api/config/v1"
-	"github.com/openshift/cluster-capi-operator/pkg/controllers"
-	"github.com/openshift/cluster-capi-operator/pkg/util"
 )
 
 var (
@@ -31,16 +27,18 @@ var (
 	setupLog = ctrl.Log.WithName("setup")
 
 	leaderElectionConfig = config.LeaderElectionConfiguration{
-		LeaderElect:   true,
-		LeaseDuration: util.LeaseDuration,
-		RenewDeadline: util.RenewDeadline,
-		RetryPeriod:   util.RetryPeriod,
-		ResourceName:  "cluster-capi-operator-leader",
+		LeaderElect:       true,
+		LeaseDuration:     util.LeaseDuration,
+		RenewDeadline:     util.RenewDeadline,
+		RetryPeriod:       util.RetryPeriod,
+		ResourceName:      "cluster-capi-operator-leader",
+		ResourceNamespace: "openshift-cluster-api",
 	}
 )
 
 const (
-	defaultImagesLocation         = "/etc/cluster-api-config/images.json"
+	defaultImagesLocation         = "/etc/cluster-api-config-images/images.json"
+	defaultProvidersLocation      = "/etc/cluster-api-config-providers/providers-list.yaml"
 	releaseVersionEnvVariableName = "RELEASE_VERSION"
 	unknownVersionValue           = "unknown"
 )
@@ -55,7 +53,6 @@ func init() {
 }
 
 func main() {
-	flag.Set("logtostderr", "true") //nolint:errcheck
 	klog.InitFlags(nil)
 
 	metricsAddr := flag.String(
@@ -63,7 +60,6 @@ func main() {
 		":8080",
 		"Address for hosting metrics",
 	)
-
 	healthAddr := flag.String(
 		"health-addr",
 		":9440",
@@ -74,11 +70,15 @@ func main() {
 		controllers.DefaultManagedNamespace,
 		"The namespace where CAPI components will run.",
 	)
-
 	imagesFile := flag.String(
 		"images-json",
 		defaultImagesLocation,
 		"The location of images file to use by operator for managed CAPI binaries.",
+	)
+	providerFile := flag.String(
+		"providers-yaml",
+		defaultProvidersLocation,
+		"The location of supported providers for CAPI",
 	)
 
 	// Once all the flags are regitered, switch to pflag
@@ -109,24 +109,26 @@ func main() {
 		os.Exit(1)
 	}
 
-	jsonData, err := ioutil.ReadFile(filepath.Clean(*imagesFile))
+	containerImages, err := util.ReadImagesFile(*imagesFile)
 	if err != nil {
-		setupLog.Error(err, "unable to read file", "name", *imagesFile)
+		setupLog.Error(err, "unable to get images from file", "name", *imagesFile)
 		os.Exit(1)
 	}
-	containerImages := map[string]string{}
-	if err := json.Unmarshal(jsonData, &containerImages); err != nil {
-		setupLog.Error(err, "unable to unmarshal image names from file", "name", *imagesFile)
+
+	supportedProviders, err := util.ReadProvidersFile(*providerFile)
+	if err != nil {
+		setupLog.Error(err, "unable to get providers from file", "name", *providerFile)
 		os.Exit(1)
 	}
 
 	if err = (&controllers.ClusterOperatorReconciler{
-		Client:           mgr.GetClient(),
-		Scheme:           mgr.GetScheme(),
-		Recorder:         mgr.GetEventRecorderFor("cluster-capi-operator"),
-		ReleaseVersion:   getReleaseVersion(),
-		ManagedNamespace: *managedNamespace,
-		Images:           containerImages,
+		Client:             mgr.GetClient(),
+		Scheme:             mgr.GetScheme(),
+		Recorder:           mgr.GetEventRecorderFor("cluster-capi-operator"),
+		ReleaseVersion:     getReleaseVersion(),
+		ManagedNamespace:   *managedNamespace,
+		Images:             containerImages,
+		SupportedPlatforms: supportedProviders,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ClusterOperator")
 		os.Exit(1)
