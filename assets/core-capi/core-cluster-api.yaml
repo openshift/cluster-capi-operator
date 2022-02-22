@@ -72,6 +72,7 @@ data:
             - mountPath: /tmp/k8s-webhook-server/serving-certs
               name: cert
               readOnly: true
+          priorityClassName: system-cluster-critical
           serviceAccountName: capi-manager
           terminationGracePeriodSeconds: 10
           tolerations:
