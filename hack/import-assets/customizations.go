@@ -9,7 +9,9 @@ import (
 	certmangerv1 "github.com/jetstack/cert-manager/pkg/apis/certmanager/v1"
 	admissionregistration "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	utilyaml "sigs.k8s.io/cluster-api/util/yaml"
 )
@@ -181,7 +183,7 @@ func splitResources(objs []unstructured.Unstructured) map[resourceKey][]unstruct
 			setTechPreviewAnnotation(obj)
 			crdObjs = append(crdObjs, obj)
 		case "Deployment":
-			setPriorityClass(&obj)
+			customizeDeployments(&obj)
 			finalObjs = append(finalObjs, obj)
 		default:
 			finalObjs = append(finalObjs, obj)
@@ -195,12 +197,19 @@ func splitResources(objs []unstructured.Unstructured) map[resourceKey][]unstruct
 	return resourceMap
 }
 
-func setPriorityClass(obj *unstructured.Unstructured) {
+func customizeDeployments(obj *unstructured.Unstructured) {
 	deployment := &appsv1.Deployment{}
 	if err := scheme.Convert(obj, deployment, nil); err != nil {
 		panic(err)
 	}
 	deployment.Spec.Template.Spec.PriorityClassName = "system-cluster-critical"
+
+	for i := range deployment.Spec.Template.Spec.Containers {
+		deployment.Spec.Template.Spec.Containers[i].Resources.Requests = corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("10m"),
+			corev1.ResourceMemory: resource.MustParse("50Mi"),
+		}
+	}
 	if err := scheme.Convert(deployment, obj, nil); err != nil {
 		panic(err)
 	}
