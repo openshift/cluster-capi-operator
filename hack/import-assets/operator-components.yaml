@@ -6094,6 +6094,10 @@ spec:
         ports:
         - containerPort: 8443
           name: https
+        resources:
+          requests:
+            cpu: 10m
+            memory: 50Mi
       - args:
         - --metrics-bind-addr=127.0.0.1:8080
         - --leader-elect
@@ -6103,12 +6107,9 @@ spec:
         imagePullPolicy: Always
         name: manager
         resources:
-          limits:
-            cpu: 100m
-            memory: 150Mi
           requests:
-            cpu: 100m
-            memory: 100Mi
+            cpu: 10m
+            memory: 50Mi
       terminationGracePeriodSeconds: 10
       tolerations:
       - effect: NoSchedule

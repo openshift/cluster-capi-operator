@@ -36,14 +36,14 @@ func importCAPIOperator() error {
 	resourceMap := splitResources(objs)
 
 	// Write RBAC components to manifests, they will be managed by CVO
-	rbacFileName := fmt.Sprintf("%s%s_03_rbac.yaml", manifestPrefix, "upstream-operator")
+	rbacFileName := fmt.Sprintf("%s%s_03_rbac-roles.%s.yaml", manifestPrefix, "capi-operator", "upstream")
 	err = writeComponentsToManifests(rbacFileName, resourceMap[rbacKey])
 	if err != nil {
 		return err
 	}
 
 	// Write CRD components to manifests, they will be managed by CVO
-	crdFileName := fmt.Sprintf("%s%s_02_crd.yaml", manifestPrefix, "upstream-operator")
+	crdFileName := fmt.Sprintf("%s%s_02_crd.%s.yaml", manifestPrefix, "capi-operator", "upstream")
 	err = writeComponentsToManifests(crdFileName, resourceMap[crdKey])
 	if err != nil {
 		return err
