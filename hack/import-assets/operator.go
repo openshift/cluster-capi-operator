@@ -2,11 +2,13 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
+	"net/http"
 	"os"
 	"path"
 	"strings"
 
+	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	configclient "sigs.k8s.io/cluster-api/cmd/clusterctl/client/config"
 	"sigs.k8s.io/cluster-api/cmd/clusterctl/client/repository"
@@ -18,6 +20,7 @@ var (
 	// capiOperatorManifests is a list of CAPI Operator manifests
 	// TODO: remove when have upstream repo set up
 	capiOperatorManifests = path.Join(projDir, "hack", "import-assets", "operator-components.yaml")
+	operatorComponentsUrl = "https://raw.githubusercontent.com/openshift/cluster-api-operator/main/openshift/operator-components.yaml"
 )
 
 func importCAPIOperator() error {
@@ -31,6 +34,9 @@ func importCAPIOperator() error {
 
 	// Change cert-manager annotations to service-ca, because openshift doesn't support cert-manager
 	objs = certManagerToServiceCA(objs)
+
+	// Mutate resources
+	objs = mutateOperatorResources(objs)
 
 	// Split out RBAC, CRDs and Service objects
 	resourceMap := splitResources(objs)
@@ -67,7 +73,14 @@ func readCAPIOperatorManifests() ([]unstructured.Unstructured, error) {
 		return nil, err
 	}
 
-	rawOperatorManifests, err := ioutil.ReadFile(capiOperatorManifests)
+	// Download provider components from github as raw yaml
+	componentsResponse, err := http.Get(operatorComponentsUrl)
+	if err != nil {
+		return nil, err
+	}
+	defer componentsResponse.Body.Close()
+
+	rawComponentsResponse, err := io.ReadAll(componentsResponse.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +96,7 @@ func readCAPIOperatorManifests() ([]unstructured.Unstructured, error) {
 		Provider:     providerConfig,
 		ConfigClient: configClient,
 		Processor:    yamlprocessor.NewSimpleProcessor(),
-		RawYaml:      rawOperatorManifests,
+		RawYaml:      rawComponentsResponse,
 		Options:      options,
 	})
 	if err != nil {
@@ -91,6 +104,35 @@ func readCAPIOperatorManifests() ([]unstructured.Unstructured, error) {
 	}
 
 	return components.Objs(), nil
+}
+
+func mutateOperatorResources(objs []unstructured.Unstructured) []unstructured.Unstructured {
+	finalObjs := []unstructured.Unstructured{}
+	for _, obj := range objs {
+		switch obj.GetKind() {
+		case "Deployment":
+			deployment := &appsv1.Deployment{}
+			if err := scheme.Convert(&obj, deployment, nil); err != nil {
+				panic(err)
+			}
+			// Modify manager container command to match openshift Dockerfile
+			for i := range deployment.Spec.Template.Spec.Containers {
+				container := &deployment.Spec.Template.Spec.Containers[i]
+				if container.Name == "manager" {
+					container.Command = []string{"./bin/cluster-api-operator"}
+				}
+			}
+
+			if err := scheme.Convert(deployment, &obj, nil); err != nil {
+				panic(err)
+			}
+
+			finalObjs = append(finalObjs, obj)
+		default:
+			finalObjs = append(finalObjs, obj)
+		}
+	}
+	return finalObjs
 }
 
 func writeAllOtherOperatorComponents(objs []unstructured.Unstructured) error {

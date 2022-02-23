@@ -13,11 +13,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/util/version"
+	operatorv1 "sigs.k8s.io/cluster-api-operator/api/v1alpha1"
 	clusterctlv1 "sigs.k8s.io/cluster-api/cmd/clusterctl/api/v1alpha3"
 	configclient "sigs.k8s.io/cluster-api/cmd/clusterctl/client/config"
 	"sigs.k8s.io/cluster-api/cmd/clusterctl/client/repository"
 	"sigs.k8s.io/cluster-api/cmd/clusterctl/client/yamlprocessor"
-	operatorv1 "sigs.k8s.io/cluster-api/exp/operator/api/v1alpha1"
 	utilyaml "sigs.k8s.io/cluster-api/util/yaml"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
@@ -247,6 +247,13 @@ func (p *provider) writeProviders() error {
 }
 
 func (p *provider) providerSpec() operatorv1.ProviderSpec {
+	managerCommandPrefix := "cluster-api"
+
+	if p.Name != "cluster-api" {
+		managerCommandPrefix = fmt.Sprintf("cluster-api-provider-%s", p.Name)
+	}
+
+	managerCommand := fmt.Sprintf("./bin/%s-controller-manager", managerCommandPrefix)
 	return operatorv1.ProviderSpec{
 		FetchConfig: &operatorv1.FetchConfiguration{
 			Selector: &metav1.LabelSelector{
@@ -256,6 +263,15 @@ func (p *provider) providerSpec() operatorv1.ProviderSpec {
 				},
 			},
 		},
+		Deployment: &operatorv1.DeploymentSpec{
+			Containers: []operatorv1.ContainerSpec{
+				{
+					Name:    "manager",
+					Command: []string{managerCommand},
+				},
+			},
+		},
+		Version: p.Version,
 	}
 }
 
