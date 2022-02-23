@@ -98,16 +98,19 @@ type UnhealthyCondition struct {
 type MachineHealthCheckStatus struct {
 	// total number of machines counted by this machine health check
 	// +kubebuilder:validation:Minimum=0
-	ExpectedMachines int32 `json:"expectedMachines,omitempty"`
+	// +optional
+	ExpectedMachines int32 `json:"expectedMachines"`
 
 	// total number of healthy machines counted by this machine health check
 	// +kubebuilder:validation:Minimum=0
-	CurrentHealthy int32 `json:"currentHealthy,omitempty"`
+	// +optional
+	CurrentHealthy int32 `json:"currentHealthy"`
 
 	// RemediationsAllowed is the number of further remediations allowed by this machine health check before
 	// maxUnhealthy short circuiting will be applied
 	// +kubebuilder:validation:Minimum=0
-	RemediationsAllowed int32 `json:"remediationsAllowed,omitempty"`
+	// +optional
+	RemediationsAllowed int32 `json:"remediationsAllowed"`
 
 	// ObservedGeneration is the latest generation observed by the controller.
 	// +optional
@@ -129,10 +132,10 @@ type MachineHealthCheckStatus struct {
 // +kubebuilder:storageversion
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Cluster",type="string",JSONPath=".spec.clusterName",description="Cluster"
-// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp",description="Time duration since creation of MachineHealthCheck"
-// +kubebuilder:printcolumn:name="MaxUnhealthy",type="string",JSONPath=".spec.maxUnhealthy",description="Maximum number of unhealthy machines allowed"
 // +kubebuilder:printcolumn:name="ExpectedMachines",type="integer",JSONPath=".status.expectedMachines",description="Number of machines currently monitored"
+// +kubebuilder:printcolumn:name="MaxUnhealthy",type="string",JSONPath=".spec.maxUnhealthy",description="Maximum number of unhealthy machines allowed"
 // +kubebuilder:printcolumn:name="CurrentHealthy",type="integer",JSONPath=".status.currentHealthy",description="Current observed healthy machines"
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp",description="Time duration since creation of MachineHealthCheck"
 
 // MachineHealthCheck is the Schema for the machinehealthchecks API.
 type MachineHealthCheck struct {
