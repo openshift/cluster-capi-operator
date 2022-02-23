@@ -25,6 +25,21 @@ spec:
     spec:
       containers:
       - args:
+        - --metrics-bind-addr=127.0.0.1:8080
+        - --leader-elect
+        command:
+        - ./bin/cluster-api-operator
+        image: gcr.io/k8s-staging-cluster-api/cluster-api-operator-amd64:dev
+        imagePullPolicy: IfNotPresent
+        name: manager
+        resources:
+          limits:
+            cpu: 100m
+            memory: 150Mi
+          requests:
+            cpu: 10m
+            memory: 50Mi
+      - args:
         - --secure-listen-address=0.0.0.0:8443
         - --upstream=http://127.0.0.1:8080/
         - --logtostderr=true
@@ -34,18 +49,6 @@ spec:
         ports:
         - containerPort: 8443
           name: https
-        resources:
-          requests:
-            cpu: 10m
-            memory: 50Mi
-      - args:
-        - --metrics-bind-addr=127.0.0.1:8080
-        - --leader-elect
-        command:
-        - /manager
-        image: gcr.io/k8s-staging-cluster-api/operator-controller-amd64:dev
-        imagePullPolicy: Always
-        name: manager
         resources:
           requests:
             cpu: 10m
