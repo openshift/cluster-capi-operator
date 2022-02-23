@@ -12,9 +12,9 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/component-base/config"
 	"k8s.io/component-base/config/options"
-	"k8s.io/klog/klogr"
 	"k8s.io/klog/v2"
-	operatorv1 "sigs.k8s.io/cluster-api/exp/operator/api/v1alpha1"
+	"k8s.io/klog/v2/klogr"
+	operatorv1 "sigs.k8s.io/cluster-api-operator/api/v1alpha1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 
@@ -24,9 +24,7 @@ import (
 )
 
 var (
-	scheme   = runtime.NewScheme()
-	setupLog = ctrl.Log.WithName("setup")
-
+	scheme               = runtime.NewScheme()
 	leaderElectionConfig = config.LeaderElectionConfiguration{
 		LeaderElect:       true,
 		LeaseDuration:     util.LeaseDuration,
@@ -38,8 +36,8 @@ var (
 )
 
 const (
-	defaultImagesLocation         = "/etc/cluster-api-config-images/images.json"
-	defaultProvidersLocation      = "/etc/cluster-api-config-providers/providers-list.yaml"
+	defaultImagesLocation         = "./dev-images.json"
+	defaultProvidersLocation      = "./providers-list.yaml"
 	releaseVersionEnvVariableName = "RELEASE_VERSION"
 	unknownVersionValue           = "unknown"
 )
@@ -55,6 +53,8 @@ func init() {
 
 func main() {
 	klog.InitFlags(nil)
+
+	ctrl.SetLogger(klogr.New())
 
 	metricsAddr := flag.String(
 		"metrics-bind-address",
@@ -106,19 +106,19 @@ func main() {
 		RenewDeadline:           &leaderElectionConfig.RenewDeadline.Duration,
 	})
 	if err != nil {
-		setupLog.Error(err, "unable to start manager")
+		klog.Error(err, "unable to start manager")
 		os.Exit(1)
 	}
 
 	containerImages, err := util.ReadImagesFile(*imagesFile)
 	if err != nil {
-		setupLog.Error(err, "unable to get images from file", "name", *imagesFile)
+		klog.Error(err, "unable to get images from file", "name", *imagesFile)
 		os.Exit(1)
 	}
 
 	supportedProviders, err := util.ReadProvidersFile(*providerFile)
 	if err != nil {
-		setupLog.Error(err, "unable to get providers from file", "name", *providerFile)
+		klog.Error(err, "unable to get providers from file", "name", *providerFile)
 		os.Exit(1)
 	}
 
@@ -131,23 +131,23 @@ func main() {
 		Images:             containerImages,
 		SupportedPlatforms: supportedProviders,
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "ClusterOperator")
+		klog.Error(err, "unable to create controller", "controller", "ClusterOperator")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("health", healthz.Ping); err != nil {
-		setupLog.Error(err, "unable to set up health check")
+		klog.Error(err, "unable to set up health check")
 		os.Exit(1)
 	}
 	if err := mgr.AddReadyzCheck("check", healthz.Ping); err != nil {
-		setupLog.Error(err, "unable to set up ready check")
+		klog.Error(err, "unable to set up ready check")
 		os.Exit(1)
 	}
 
-	setupLog.Info("starting manager")
+	klog.Info("starting manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
-		setupLog.Error(err, "problem running manager")
+		klog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
 }
