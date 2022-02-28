@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"path"
@@ -17,10 +18,7 @@ import (
 )
 
 var (
-	// capiOperatorManifests is a list of CAPI Operator manifests
-	// TODO: remove when have upstream repo set up
-	capiOperatorManifests = path.Join(projDir, "hack", "import-assets", "operator-components.yaml")
-	operatorComponentsUrl = "https://raw.githubusercontent.com/openshift/cluster-api-operator/main/openshift/operator-components.yaml"
+	operatorComponentsFmt = "https://raw.githubusercontent.com/openshift/cluster-api-operator/%s/openshift/operator-components.yaml"
 )
 
 func importCAPIOperator() error {
@@ -72,6 +70,22 @@ func readCAPIOperatorManifests() ([]unstructured.Unstructured, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Read operator config yaml
+	operatorConfig, err := ioutil.ReadFile(operatorConfigPath)
+	if err != nil {
+		return nil, err
+	}
+
+	operatorConfigMap := map[string]string{}
+
+	// Parse operator config yaml
+	err = yaml.Unmarshal(operatorConfig, &operatorConfigMap)
+	if err != nil {
+		return nil, err
+	}
+
+	operatorComponentsUrl := fmt.Sprintf(operatorComponentsFmt, operatorConfigMap["branch"])
 
 	// Download provider components from github as raw yaml
 	componentsResponse, err := http.Get(operatorComponentsUrl)
