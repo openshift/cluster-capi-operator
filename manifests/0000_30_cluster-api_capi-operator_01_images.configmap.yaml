@@ -12,7 +12,7 @@ data:
   images.json: >
     {
       "cluster-capi-operator": "registry.ci.openshift.org/openshift:cluster-capi-operator",
-      "cluster-kube-cluster-api-operator": "quay.io/demicev/cluster-api-operator:latest",
+      "cluster-kube-cluster-api-operator": "quay.io/ademicev/cluster-api-operator:latest",
       "cluster-capi-controllers": "registry.ci.openshift.org/openshift:cluster-capi-controllers",
       "aws-cluster-api-controllers": "quay.io/ademicev/cluster-api-provider-aws:latest",
       "kube-rbac-proxy": "registry.ci.openshift.org/openshift:kube-rbac-proxy"
