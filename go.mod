@@ -4,7 +4,7 @@ go 1.17
 
 require (
 	github.com/google/go-cmp v0.5.6
-	github.com/openshift/api v0.0.0-20211209135129-c58d9f695577
+	github.com/openshift/api v0.0.0-20220222102030-354aa98a475c
 	github.com/openshift/library-go v0.0.0-20220221165938-535fc9bdb13b
 	github.com/spf13/pflag v1.0.5
 	gopkg.in/yaml.v2 v2.4.0
