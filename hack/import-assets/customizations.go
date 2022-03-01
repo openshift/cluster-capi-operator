@@ -209,6 +209,7 @@ func customizeDeployments(obj *unstructured.Unstructured) {
 			corev1.ResourceCPU:    resource.MustParse("10m"),
 			corev1.ResourceMemory: resource.MustParse("50Mi"),
 		}
+		deployment.Spec.Template.Spec.Containers[i].Resources.Limits = corev1.ResourceList{}
 	}
 	if err := scheme.Convert(deployment, obj, nil); err != nil {
 		panic(err)
