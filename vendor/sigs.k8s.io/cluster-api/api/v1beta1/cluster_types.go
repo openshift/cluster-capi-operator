@@ -23,6 +23,7 @@ import (
 
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
 
@@ -49,7 +50,7 @@ type ClusterSpec struct {
 
 	// ControlPlaneEndpoint represents the endpoint used to communicate with the control plane.
 	// +optional
-	ControlPlaneEndpoint APIEndpoint `json:"controlPlaneEndpoint"`
+	ControlPlaneEndpoint APIEndpoint `json:"controlPlaneEndpoint,omitempty"`
 
 	// ControlPlaneRef is an optional reference to a provider-specific resource that holds
 	// the details for provisioning the Control Plane for a Cluster.
@@ -84,12 +85,18 @@ type Topology struct {
 
 	// ControlPlane describes the cluster control plane.
 	// +optional
-	ControlPlane ControlPlaneTopology `json:"controlPlane"`
+	ControlPlane ControlPlaneTopology `json:"controlPlane,omitempty"`
 
 	// Workers encapsulates the different constructs that form the worker nodes
 	// for the cluster.
 	// +optional
 	Workers *WorkersTopology `json:"workers,omitempty"`
+
+	// Variables can be used to customize the Cluster through
+	// patches. They must comply to the corresponding
+	// VariableClasses defined in the ClusterClass.
+	// +optional
+	Variables []ClusterVariable `json:"variables,omitempty"`
 }
 
 // ControlPlaneTopology specifies the parameters for the control plane nodes in the cluster.
@@ -99,6 +106,7 @@ type ControlPlaneTopology struct {
 	//
 	// This field is supported if and only if the control plane provider template
 	// referenced in the ClusterClass is Machine based.
+	// +optional
 	Metadata ObjectMeta `json:"metadata,omitempty"`
 
 	// Replicas is the number of control plane nodes.
@@ -112,6 +120,7 @@ type ControlPlaneTopology struct {
 // WorkersTopology represents the different sets of worker nodes in the cluster.
 type WorkersTopology struct {
 	// MachineDeployments is a list of machine deployments in the cluster.
+	// +optional
 	MachineDeployments []MachineDeploymentTopology `json:"machineDeployments,omitempty"`
 }
 
@@ -120,6 +129,7 @@ type WorkersTopology struct {
 type MachineDeploymentTopology struct {
 	// Metadata is the metadata applied to the machines of the MachineDeployment.
 	// At runtime this metadata is merged with the corresponding metadata from the ClusterClass.
+	// +optional
 	Metadata ObjectMeta `json:"metadata,omitempty"`
 
 	// Class is the name of the MachineDeploymentClass used to create the set of worker nodes.
@@ -133,12 +143,45 @@ type MachineDeploymentTopology struct {
 	// the values are hashed together.
 	Name string `json:"name"`
 
+	// FailureDomain is the failure domain the machines will be created in.
+	// Must match a key in the FailureDomains map stored on the cluster object.
+	// +optional
+	FailureDomain *string `json:"failureDomain,omitempty"`
+
 	// Replicas is the number of worker nodes belonging to this set.
 	// If the value is nil, the MachineDeployment is created without the number of Replicas (defaulting to zero)
 	// and it's assumed that an external entity (like cluster autoscaler) is responsible for the management
 	// of this value.
 	// +optional
 	Replicas *int32 `json:"replicas,omitempty"`
+
+	// Variables can be used to customize the MachineDeployment through patches.
+	// +optional
+	Variables *MachineDeploymentVariables `json:"variables,omitempty"`
+}
+
+// ClusterVariable can be used to customize the Cluster through
+// patches. It must comply to the corresponding
+// ClusterClassVariable defined in the ClusterClass.
+type ClusterVariable struct {
+	// Name of the variable.
+	Name string `json:"name"`
+
+	// Value of the variable.
+	// Note: the value will be validated against the schema of the corresponding ClusterClassVariable
+	// from the ClusterClass.
+	// Note: We have to use apiextensionsv1.JSON instead of a custom JSON type, because controller-tools has a
+	// hard-coded schema for apiextensionsv1.JSON which cannot be produced by another type via controller-tools,
+	// i.e. it is not possible to have no type field.
+	// Ref: https://github.com/kubernetes-sigs/controller-tools/blob/d0e03a142d0ecdd5491593e941ee1d6b5d91dba6/pkg/crd/known_types.go#L106-L111
+	Value apiextensionsv1.JSON `json:"value"`
+}
+
+// MachineDeploymentVariables can be used to provide variables for a specific MachineDeployment.
+type MachineDeploymentVariables struct {
+	// Overrides can be used to override Cluster level variables.
+	// +optional
+	Overrides []ClusterVariable `json:"overrides,omitempty"`
 }
 
 // ANCHOR_END: ClusterSpec
@@ -189,6 +232,7 @@ func (n *NetworkRanges) String() string {
 // ClusterStatus defines the observed state of Cluster.
 type ClusterStatus struct {
 	// FailureDomains is a slice of failure domain objects synced from the infrastructure provider.
+	// +optional
 	FailureDomains FailureDomains `json:"failureDomains,omitempty"`
 
 	// FailureReason indicates that there is a fatal problem reconciling the
@@ -213,7 +257,7 @@ type ClusterStatus struct {
 
 	// ControlPlaneReady defines if the control plane is ready.
 	// +optional
-	ControlPlaneReady bool `json:"controlPlaneReady,omitempty"`
+	ControlPlaneReady bool `json:"controlPlaneReady"`
 
 	// Conditions defines current service state of the cluster.
 	// +optional
@@ -279,8 +323,9 @@ func (v APIEndpoint) String() string {
 // +kubebuilder:resource:path=clusters,shortName=cl,scope=Namespaced,categories=cluster-api
 // +kubebuilder:storageversion
 // +kubebuilder:subresource:status
-// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp",description="Time duration since creation of Cluster"
 // +kubebuilder:printcolumn:name="Phase",type="string",JSONPath=".status.phase",description="Cluster status such as Pending/Provisioning/Provisioned/Deleting/Failed"
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp",description="Time duration since creation of Cluster"
+// +kubebuilder:printcolumn:name="Version",type="string",JSONPath=".spec.topology.version",description="Kubernetes version associated with this Cluster"
 
 // Cluster is the Schema for the clusters API.
 type Cluster struct {
@@ -427,7 +472,7 @@ func (in FailureDomains) GetIDs() []*string {
 type FailureDomainSpec struct {
 	// ControlPlane determines if this failure domain is suitable for use by control plane machines.
 	// +optional
-	ControlPlane bool `json:"controlPlane"`
+	ControlPlane bool `json:"controlPlane,omitempty"`
 
 	// Attributes is a free form map of attributes an infrastructure provider might use or require.
 	// +optional

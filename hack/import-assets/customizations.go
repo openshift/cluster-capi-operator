@@ -205,10 +205,15 @@ func customizeDeployments(obj *unstructured.Unstructured) {
 	deployment.Spec.Template.Spec.PriorityClassName = "system-cluster-critical"
 
 	for i := range deployment.Spec.Template.Spec.Containers {
+		// Add resource requests
 		deployment.Spec.Template.Spec.Containers[i].Resources.Requests = corev1.ResourceList{
 			corev1.ResourceCPU:    resource.MustParse("10m"),
 			corev1.ResourceMemory: resource.MustParse("50Mi"),
 		}
+		// Remove any existing resource limits. See: https://github.com/openshift/enhancements/blob/master/CONVENTIONS.md#resources-and-limits
+		deployment.Spec.Template.Spec.Containers[i].Resources.Limits = corev1.ResourceList{}
+		// Remove all image references, they will be substituted operator later
+		deployment.Spec.Template.Spec.Containers[i].Image = "example.com/image:tag"
 	}
 	if err := scheme.Convert(deployment, obj, nil); err != nil {
 		panic(err)

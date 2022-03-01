@@ -12,13 +12,8 @@ data:
   images.json: >
     {
       "cluster-capi-operator": "registry.ci.openshift.org/openshift:cluster-capi-operator",
-      "cluster-api:operator": "quay.io/asalkeld/cluster-api-operator-amd64:dev",
-      "bootstrap-kubeadm:manager": "k8s.gcr.io/cluster-api/kubeadm-bootstrap-controller:v0.4.3",
-      "controlplane-kubeadm:manager": "k8s.gcr.io/cluster-api/kubeadm-control-plane-controller:v0.4.3",
-      "core-cluster-api:manager": "k8s.gcr.io/cluster-api/cluster-api-controller:v1.0.1",
-      "infrastructure-aws:manager": "k8s.gcr.io/cluster-api-aws/cluster-api-aws-controller:v0.7.0",
-      "infrastructure-azure:manager": "us.gcr.io/k8s-artifacts-prod/cluster-api-azure/cluster-api-azure-controller:v0.5.2",
-      "infrastructure-metal3:ip-address-manager": "quay.io/metal3-io/ip-address-manager:v0.1.0",
-      "infrastructure-metal3:manager": "quay.io/metal3-io/cluster-api-provider-metal3:v0.5.0",
+      "cluster-kube-cluster-api-operator": "quay.io/ademicev/cluster-api-operator:latest",
+      "cluster-capi-controllers": "registry.ci.openshift.org/openshift:cluster-capi-controllers",
+      "aws-cluster-api-controllers": "quay.io/ademicev/cluster-api-provider-aws:latest",
       "kube-rbac-proxy": "registry.ci.openshift.org/openshift:kube-rbac-proxy"
     }

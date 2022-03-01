@@ -5,22 +5,20 @@ import (
 	"fmt"
 	"strings"
 
+	configv1 "github.com/openshift/api/config/v1"
+	"github.com/openshift/cluster-capi-operator/assets"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/klog"
-	"k8s.io/utils/pointer"
-	operatorv1 "sigs.k8s.io/cluster-api/exp/operator/api/v1alpha1"
+	"k8s.io/klog/v2"
+	operatorv1 "sigs.k8s.io/cluster-api-operator/api/v1alpha1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/source"
-
-	configv1 "github.com/openshift/api/config/v1"
-	"github.com/openshift/cluster-capi-operator/assets"
 )
 
 // ClusterOperatorReconciler reconciles a ClusterOperator object
@@ -134,7 +132,7 @@ func (r *ClusterOperatorReconciler) installCAPIOperator(ctx context.Context) err
 			deployment := obj.(*appsv1.Deployment)
 			if _, err := controllerutil.CreateOrUpdate(ctx, r.Client, deployment, func() error {
 				containerToImageRef := map[string]string{
-					"manager":         "cluster-api:operator",
+					"manager":         "cluster-kube-cluster-api-operator",
 					"kube-rbac-proxy": "kube-rbac-proxy",
 				}
 				for ci, cont := range deployment.Spec.Template.Spec.Containers {
@@ -176,9 +174,10 @@ func (r *ClusterOperatorReconciler) installCoreCAPIComponents(ctx context.Contex
 		switch obj.GetObjectKind().GroupVersionKind().Kind {
 		case "CoreProvider":
 			coreProvider := obj.(*operatorv1.CoreProvider)
+			containers := coreProvider.Spec.Deployment.Containers
 			if _, err := controllerutil.CreateOrUpdate(ctx, r.Client, coreProvider, func() error {
 				coreProvider.Spec.ProviderSpec.Deployment = &operatorv1.DeploymentSpec{
-					Containers: r.containerCustomizationFromProvider(coreProvider.Kind, coreProvider.Name),
+					Containers: r.containerCustomizationFromProvider(coreProvider.Kind, coreProvider.Name, containers),
 				}
 				return nil
 			}); err != nil {
@@ -211,9 +210,10 @@ func (r *ClusterOperatorReconciler) installInfrastructureCAPIComponents(ctx cont
 		switch obj.GetObjectKind().GroupVersionKind().Kind {
 		case "InfrastructureProvider":
 			infraProvider := obj.(*operatorv1.InfrastructureProvider)
+			containers := infraProvider.Spec.Deployment.Containers
 			if _, err := controllerutil.CreateOrUpdate(ctx, r.Client, infraProvider, func() error {
 				infraProvider.Spec.ProviderSpec.Deployment = &operatorv1.DeploymentSpec{
-					Containers: r.containerCustomizationFromProvider(infraProvider.Kind, infraProvider.Name),
+					Containers: r.containerCustomizationFromProvider(infraProvider.Kind, infraProvider.Name, containers),
 				}
 				return nil
 			}); err != nil {
@@ -232,42 +232,43 @@ func (r *ClusterOperatorReconciler) installInfrastructureCAPIComponents(ctx cont
 }
 
 // containerCustomizationFromProvider returns a list of containers customized for the given provider
-func (r *ClusterOperatorReconciler) containerCustomizationFromProvider(kind, name string) []operatorv1.ContainerSpec {
-	image, ok := r.Images[providerKindToTypeName(kind)+"-"+name+":manager"] // example: infrastructure-aws:manager
-	cSpecs := []operatorv1.ContainerSpec{}
-	if !ok {
-		return cSpecs
-	}
-	cSpecs = append(cSpecs, operatorv1.ContainerSpec{
-		Name:  "manager",
-		Image: newImageMeta(image),
-	})
-	if kind == "InfrastructureProvider" {
-		image, ok := r.Images["kube-rbac-proxy"]
-		if !ok {
-			return cSpecs
+func (r *ClusterOperatorReconciler) containerCustomizationFromProvider(kind, name string, containers []operatorv1.ContainerSpec) []operatorv1.ContainerSpec {
+	for i := range containers {
+		switch containers[i].Name {
+		// We expect provider to always have a manager container
+		case "manager":
+			// TODO: we should return error when image was not found
+			image := getProviderImage(kind, name, r.Images)
+			containers[i].Image = newImageMeta(image)
+		case "kube-rbac-proxy":
+			image := r.Images["kube-rbac-proxy"]
+			containers[i].Image = newImageMeta(image)
 		}
-		cSpecs = append(cSpecs, operatorv1.ContainerSpec{
-			Name:  "kube-rbac-proxy",
-			Image: newImageMeta(image),
-		})
 	}
-
-	return cSpecs
-}
-
-func providerKindToTypeName(kind string) string {
-	return strings.ReplaceAll(strings.ToLower(kind), "provider", "")
+	return containers
 }
 
 func newImageMeta(imageURL string) *operatorv1.ImageMeta {
 	im := &operatorv1.ImageMeta{}
 	urlSplit := strings.Split(imageURL, ":")
 	if len(urlSplit) == 2 {
-		im.Tag = &urlSplit[1]
+		im.Tag = urlSplit[1]
 	}
 	urlSplit = strings.Split(urlSplit[0], "/")
-	im.Name = &urlSplit[len(urlSplit)-1]
-	im.Repository = pointer.StringPtr(strings.Join(urlSplit[0:len(urlSplit)-1], "/"))
+	im.Name = urlSplit[len(urlSplit)-1]
+	im.Repository = strings.Join(urlSplit[0:len(urlSplit)-1], "/")
 	return im
+}
+
+func getProviderImage(kind, name string, images map[string]string) string {
+	expectedImage := ""
+	switch kind {
+	case "CoreProvider":
+		// core provider image will always have this name
+		expectedImage = "cluster-capi-controllers"
+	case "InfrastructureProvider":
+		// infrastructure provider image name will be in this form - $providername-cluster-api-controllers
+		expectedImage = fmt.Sprintf("%s-cluster-api-controllers", name)
+	}
+	return images[expectedImage]
 }

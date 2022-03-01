@@ -21,6 +21,7 @@ var (
 	operatorAssetsPath  = path.Join(projDir, "assets", "capi-operator")
 	manifestsPath       = path.Join(projDir, "manifests")
 	providerListPath    = path.Join(projDir, "providers-list.yaml")
+	operatorConfigPath  = path.Join(projDir, "cluster-api-operator.yaml")
 	manifestPrefix      = "0000_30_cluster-api_"
 	targetNamespace     = "openshift-cluster-api"
 )

@@ -22,8 +22,8 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .spec.version
-      name: Version
+    - jsonPath: .status.installedVersion
+      name: InstalledVersion
       type: string
     - jsonPath: .status.conditions[?(@.type=='Ready')].status
       name: Ready
@@ -935,6 +935,12 @@ spec:
                             of the container arg `--sync-period` if both are defined.
                             The same holds for `ManagerSpec.FeatureGates` and `--feature-gates`.
                           type: object
+                        command:
+                          description: Command allows override container's entrypoint
+                            array.
+                          items:
+                            type: string
+                          type: array
                         env:
                           description: List of environment variables to set in the
                             container.
@@ -1162,10 +1168,12 @@ spec:
                   name `aws` will fetch artifacts from https://github.com/kubernetes-sigs/cluster-api-provider-aws/releases.
                 properties:
                   selector:
-                    description: Selector to be used for fetching provider’s components
+                    description: 'Selector to be used for fetching provider’s components
                       and metadata from ConfigMaps stored inside the cluster. Each
                       ConfigMap is expected to contain components and metadata for
-                      a specific version only.
+                      a specific version only. Note: the name of the ConfigMap should
+                      be set to the version or to override this add a label like the
+                      following: provider.cluster.x-k8s.io/version=v1.4.3'
                     properties:
                       matchExpressions:
                         description: matchExpressions is a list of label selector
@@ -1211,9 +1219,8 @@ spec:
                   url:
                     description: URL to be used for fetching the provider’s components
                       and metadata from a remote Github repository. For example, https://github.com/{owner}/{repository}/releases
-                      The version of the release will be `ProviderSpec.Version` if
-                      defined otherwise the `latest` version will be computed and
-                      used.
+                      You must set `providerSpec.Version` field for operator to pick
+                      up desired version of the release from GitHub.
                     type: string
                 type: object
               manager:
@@ -1253,11 +1260,6 @@ spec:
                           of version) would be `ReplicaSet.apps`."
                         type: object
                     type: object
-                  debug:
-                    default: false
-                    description: Debug, if set, will override a set of fields with
-                      opinionated values for a debugging session. (Verbosity=5, ProfilerAddress=localhost:6060)
-                    type: boolean
                   featureGates:
                     additionalProperties:
                       type: boolean
@@ -1340,9 +1342,8 @@ spec:
                     - retryPeriod
                     type: object
                   maxConcurrentReconciles:
-                    default: 10
                     description: MaxConcurrentReconciles is the maximum number of
-                      concurrent Reconciles which can be run. Defaults to 10.
+                      concurrent Reconciles which can be run.
                     minimum: 1
                     type: integer
                   metrics:
@@ -1407,6 +1408,8 @@ spec:
               version:
                 description: Version indicates the provider version.
                 type: string
+            required:
+            - version
             type: object
           status:
             description: BootstrapProviderStatus defines the observed state of BootstrapProvider.
@@ -1451,6 +1454,7 @@ spec:
                         important.
                       type: string
                   required:
+                  - lastTransitionTime
                   - status
                   - type
                   type: object
@@ -1458,6 +1462,10 @@ spec:
               contract:
                 description: Contract will contain the core provider contract that
                   the provider is abiding by, like e.g. v1alpha4.
+                type: string
+              installedVersion:
+                description: InstalledVersion is the version of the provider that
+                  is installed.
                 type: string
               observedGeneration:
                 description: ObservedGeneration is the latest generation observed
@@ -1501,8 +1509,8 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .spec.version
-      name: Version
+    - jsonPath: .status.installedVersion
+      name: InstalledVersion
       type: string
     - jsonPath: .status.conditions[?(@.type=='Ready')].status
       name: Ready
@@ -2415,6 +2423,12 @@ spec:
                             of the container arg `--sync-period` if both are defined.
                             The same holds for `ManagerSpec.FeatureGates` and `--feature-gates`.
                           type: object
+                        command:
+                          description: Command allows override container's entrypoint
+                            array.
+                          items:
+                            type: string
+                          type: array
                         env:
                           description: List of environment variables to set in the
                             container.
@@ -2642,10 +2656,12 @@ spec:
                   name `aws` will fetch artifacts from https://github.com/kubernetes-sigs/cluster-api-provider-aws/releases.
                 properties:
                   selector:
-                    description: Selector to be used for fetching provider’s components
+                    description: 'Selector to be used for fetching provider’s components
                       and metadata from ConfigMaps stored inside the cluster. Each
                       ConfigMap is expected to contain components and metadata for
-                      a specific version only.
+                      a specific version only. Note: the name of the ConfigMap should
+                      be set to the version or to override this add a label like the
+                      following: provider.cluster.x-k8s.io/version=v1.4.3'
                     properties:
                       matchExpressions:
                         description: matchExpressions is a list of label selector
@@ -2691,9 +2707,8 @@ spec:
                   url:
                     description: URL to be used for fetching the provider’s components
                       and metadata from a remote Github repository. For example, https://github.com/{owner}/{repository}/releases
-                      The version of the release will be `ProviderSpec.Version` if
-                      defined otherwise the `latest` version will be computed and
-                      used.
+                      You must set `providerSpec.Version` field for operator to pick
+                      up desired version of the release from GitHub.
                     type: string
                 type: object
               manager:
@@ -2733,11 +2748,6 @@ spec:
                           of version) would be `ReplicaSet.apps`."
                         type: object
                     type: object
-                  debug:
-                    default: false
-                    description: Debug, if set, will override a set of fields with
-                      opinionated values for a debugging session. (Verbosity=5, ProfilerAddress=localhost:6060)
-                    type: boolean
                   featureGates:
                     additionalProperties:
                       type: boolean
@@ -2820,9 +2830,8 @@ spec:
                     - retryPeriod
                     type: object
                   maxConcurrentReconciles:
-                    default: 10
                     description: MaxConcurrentReconciles is the maximum number of
-                      concurrent Reconciles which can be run. Defaults to 10.
+                      concurrent Reconciles which can be run.
                     minimum: 1
                     type: integer
                   metrics:
@@ -2887,6 +2896,8 @@ spec:
               version:
                 description: Version indicates the provider version.
                 type: string
+            required:
+            - version
             type: object
           status:
             description: ControlPlaneProviderStatus defines the observed state of
@@ -2932,6 +2943,7 @@ spec:
                         important.
                       type: string
                   required:
+                  - lastTransitionTime
                   - status
                   - type
                   type: object
@@ -2939,6 +2951,10 @@ spec:
               contract:
                 description: Contract will contain the core provider contract that
                   the provider is abiding by, like e.g. v1alpha4.
+                type: string
+              installedVersion:
+                description: InstalledVersion is the version of the provider that
+                  is installed.
                 type: string
               observedGeneration:
                 description: ObservedGeneration is the latest generation observed
@@ -2982,8 +2998,8 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .spec.version
-      name: Version
+    - jsonPath: .status.installedVersion
+      name: InstalledVersion
       type: string
     - jsonPath: .status.conditions[?(@.type=='Ready')].status
       name: Ready
@@ -3895,6 +3911,12 @@ spec:
                             of the container arg `--sync-period` if both are defined.
                             The same holds for `ManagerSpec.FeatureGates` and `--feature-gates`.
                           type: object
+                        command:
+                          description: Command allows override container's entrypoint
+                            array.
+                          items:
+                            type: string
+                          type: array
                         env:
                           description: List of environment variables to set in the
                             container.
@@ -4122,10 +4144,12 @@ spec:
                   name `aws` will fetch artifacts from https://github.com/kubernetes-sigs/cluster-api-provider-aws/releases.
                 properties:
                   selector:
-                    description: Selector to be used for fetching provider’s components
+                    description: 'Selector to be used for fetching provider’s components
                       and metadata from ConfigMaps stored inside the cluster. Each
                       ConfigMap is expected to contain components and metadata for
-                      a specific version only.
+                      a specific version only. Note: the name of the ConfigMap should
+                      be set to the version or to override this add a label like the
+                      following: provider.cluster.x-k8s.io/version=v1.4.3'
                     properties:
                       matchExpressions:
                         description: matchExpressions is a list of label selector
@@ -4171,9 +4195,8 @@ spec:
                   url:
                     description: URL to be used for fetching the provider’s components
                       and metadata from a remote Github repository. For example, https://github.com/{owner}/{repository}/releases
-                      The version of the release will be `ProviderSpec.Version` if
-                      defined otherwise the `latest` version will be computed and
-                      used.
+                      You must set `providerSpec.Version` field for operator to pick
+                      up desired version of the release from GitHub.
                     type: string
                 type: object
               manager:
@@ -4213,11 +4236,6 @@ spec:
                           of version) would be `ReplicaSet.apps`."
                         type: object
                     type: object
-                  debug:
-                    default: false
-                    description: Debug, if set, will override a set of fields with
-                      opinionated values for a debugging session. (Verbosity=5, ProfilerAddress=localhost:6060)
-                    type: boolean
                   featureGates:
                     additionalProperties:
                       type: boolean
@@ -4300,9 +4318,8 @@ spec:
                     - retryPeriod
                     type: object
                   maxConcurrentReconciles:
-                    default: 10
                     description: MaxConcurrentReconciles is the maximum number of
-                      concurrent Reconciles which can be run. Defaults to 10.
+                      concurrent Reconciles which can be run.
                     minimum: 1
                     type: integer
                   metrics:
@@ -4367,6 +4384,8 @@ spec:
               version:
                 description: Version indicates the provider version.
                 type: string
+            required:
+            - version
             type: object
           status:
             description: CoreProviderStatus defines the observed state of CoreProvider.
@@ -4411,6 +4430,7 @@ spec:
                         important.
                       type: string
                   required:
+                  - lastTransitionTime
                   - status
                   - type
                   type: object
@@ -4418,6 +4438,10 @@ spec:
               contract:
                 description: Contract will contain the core provider contract that
                   the provider is abiding by, like e.g. v1alpha4.
+                type: string
+              installedVersion:
+                description: InstalledVersion is the version of the provider that
+                  is installed.
                 type: string
               observedGeneration:
                 description: ObservedGeneration is the latest generation observed
@@ -4461,8 +4485,8 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .spec.version
-      name: Version
+    - jsonPath: .status.installedVersion
+      name: InstalledVersion
       type: string
     - jsonPath: .status.conditions[?(@.type=='Ready')].status
       name: Ready
@@ -5375,6 +5399,12 @@ spec:
                             of the container arg `--sync-period` if both are defined.
                             The same holds for `ManagerSpec.FeatureGates` and `--feature-gates`.
                           type: object
+                        command:
+                          description: Command allows override container's entrypoint
+                            array.
+                          items:
+                            type: string
+                          type: array
                         env:
                           description: List of environment variables to set in the
                             container.
@@ -5602,10 +5632,12 @@ spec:
                   name `aws` will fetch artifacts from https://github.com/kubernetes-sigs/cluster-api-provider-aws/releases.
                 properties:
                   selector:
-                    description: Selector to be used for fetching provider’s components
+                    description: 'Selector to be used for fetching provider’s components
                       and metadata from ConfigMaps stored inside the cluster. Each
                       ConfigMap is expected to contain components and metadata for
-                      a specific version only.
+                      a specific version only. Note: the name of the ConfigMap should
+                      be set to the version or to override this add a label like the
+                      following: provider.cluster.x-k8s.io/version=v1.4.3'
                     properties:
                       matchExpressions:
                         description: matchExpressions is a list of label selector
@@ -5651,9 +5683,8 @@ spec:
                   url:
                     description: URL to be used for fetching the provider’s components
                       and metadata from a remote Github repository. For example, https://github.com/{owner}/{repository}/releases
-                      The version of the release will be `ProviderSpec.Version` if
-                      defined otherwise the `latest` version will be computed and
-                      used.
+                      You must set `providerSpec.Version` field for operator to pick
+                      up desired version of the release from GitHub.
                     type: string
                 type: object
               manager:
@@ -5693,11 +5724,6 @@ spec:
                           of version) would be `ReplicaSet.apps`."
                         type: object
                     type: object
-                  debug:
-                    default: false
-                    description: Debug, if set, will override a set of fields with
-                      opinionated values for a debugging session. (Verbosity=5, ProfilerAddress=localhost:6060)
-                    type: boolean
                   featureGates:
                     additionalProperties:
                       type: boolean
@@ -5780,9 +5806,8 @@ spec:
                     - retryPeriod
                     type: object
                   maxConcurrentReconciles:
-                    default: 10
                     description: MaxConcurrentReconciles is the maximum number of
-                      concurrent Reconciles which can be run. Defaults to 10.
+                      concurrent Reconciles which can be run.
                     minimum: 1
                     type: integer
                   metrics:
@@ -5847,6 +5872,8 @@ spec:
               version:
                 description: Version indicates the provider version.
                 type: string
+            required:
+            - version
             type: object
           status:
             description: InfrastructureProviderStatus defines the observed state of
@@ -5892,6 +5919,7 @@ spec:
                         important.
                       type: string
                   required:
+                  - lastTransitionTime
                   - status
                   - type
                   type: object
@@ -5899,6 +5927,10 @@ spec:
               contract:
                 description: Contract will contain the core provider contract that
                   the provider is abiding by, like e.g. v1alpha4.
+                type: string
+              installedVersion:
+                description: InstalledVersion is the version of the provider that
+                  is installed.
                 type: string
               observedGeneration:
                 description: ObservedGeneration is the latest generation observed
