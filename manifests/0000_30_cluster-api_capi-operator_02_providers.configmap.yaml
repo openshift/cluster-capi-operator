@@ -5,9 +5,10 @@ data:
       type: CoreProvider
       branch: master
       version: v1.1.2
-    # - name: "aws"
-    #   type: "InfrastructureProvider"
-    #   branch: "master"
+    - name: aws
+      type: InfrastructureProvider
+      branch: master
+      version: v1.3.0
     # - name: "azure"
     #   type: "InfrastructureProvider"
     #   branch: "master"
