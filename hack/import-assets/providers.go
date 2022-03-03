@@ -275,23 +275,22 @@ func (p *provider) providerSpec() operatorv1.ProviderSpec {
 	}
 }
 
-func filterOutIPAM(objs []unstructured.Unstructured) []unstructured.Unstructured {
+func filterOutUnwantedResources(providerName string, objs []unstructured.Unstructured) []unstructured.Unstructured {
 	finalObjs := []unstructured.Unstructured{}
 	for _, obj := range objs {
-		if obj.GetKind() == "CustomResourceDefinition" || !strings.Contains(strings.ToLower(obj.GetName()), "ipam") {
+		switch obj.GetKind() {
+		case "CustomResourceDefinition":
+			// Filter out IPAM for metal3
+			if !strings.Contains(strings.ToLower(obj.GetName()), "ipam") {
+				finalObjs = append(finalObjs, obj)
+			}
+		// Filter out all secrets that come from upstream, we should replace them with our own credentials
+		case "Secret":
+		default:
 			finalObjs = append(finalObjs, obj)
 		}
 	}
 	return finalObjs
-}
-
-func filterOutUnwantedResources(providerName string, objs []unstructured.Unstructured) []unstructured.Unstructured {
-	// Filter out IPAM
-	if providerName == "metal3" {
-		objs = filterOutIPAM(objs)
-	}
-
-	return objs
 }
 
 func importProviders() error {
