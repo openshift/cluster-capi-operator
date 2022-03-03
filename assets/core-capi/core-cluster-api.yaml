@@ -81,6 +81,8 @@ data:
           tolerations:
           - effect: NoSchedule
             key: node-role.kubernetes.io/master
+          - effect: NoSchedule
+            key: node-role.kubernetes.io/control-plane
           volumes:
           - name: cert
             secret:
@@ -98,50 +100,6 @@ data:
         clusterctl.cluster.x-k8s.io: ""
       name: capi-mutating-webhook-configuration
     webhooks:
-    - admissionReviewVersions:
-      - v1
-      - v1beta1
-      clientConfig:
-        service:
-          name: capi-webhook-service
-          namespace: openshift-cluster-api
-          path: /mutate-cluster-x-k8s-io-v1beta1-cluster
-      failurePolicy: Fail
-      matchPolicy: Equivalent
-      name: default.cluster.cluster.x-k8s.io
-      rules:
-      - apiGroups:
-        - cluster.x-k8s.io
-        apiVersions:
-        - v1beta1
-        operations:
-        - CREATE
-        - UPDATE
-        resources:
-        - clusters
-      sideEffects: None
-    - admissionReviewVersions:
-      - v1
-      - v1beta1
-      clientConfig:
-        service:
-          name: capi-webhook-service
-          namespace: openshift-cluster-api
-          path: /mutate-cluster-x-k8s-io-v1beta1-clusterclass
-      failurePolicy: Fail
-      matchPolicy: Equivalent
-      name: default.clusterclass.cluster.x-k8s.io
-      rules:
-      - apiGroups:
-        - cluster.x-k8s.io
-        apiVersions:
-        - v1beta1
-        operations:
-        - CREATE
-        - UPDATE
-        resources:
-        - clusterclasses
-      sideEffects: None
     - admissionReviewVersions:
       - v1
       - v1beta1
@@ -259,6 +217,50 @@ data:
         service:
           name: capi-webhook-service
           namespace: openshift-cluster-api
+          path: /mutate-cluster-x-k8s-io-v1beta1-cluster
+      failurePolicy: Fail
+      matchPolicy: Equivalent
+      name: default.cluster.cluster.x-k8s.io
+      rules:
+      - apiGroups:
+        - cluster.x-k8s.io
+        apiVersions:
+        - v1beta1
+        operations:
+        - CREATE
+        - UPDATE
+        resources:
+        - clusters
+      sideEffects: None
+    - admissionReviewVersions:
+      - v1
+      - v1beta1
+      clientConfig:
+        service:
+          name: capi-webhook-service
+          namespace: openshift-cluster-api
+          path: /mutate-cluster-x-k8s-io-v1beta1-clusterclass
+      failurePolicy: Fail
+      matchPolicy: Equivalent
+      name: default.clusterclass.cluster.x-k8s.io
+      rules:
+      - apiGroups:
+        - cluster.x-k8s.io
+        apiVersions:
+        - v1beta1
+        operations:
+        - CREATE
+        - UPDATE
+        resources:
+        - clusterclasses
+      sideEffects: None
+    - admissionReviewVersions:
+      - v1
+      - v1beta1
+      clientConfig:
+        service:
+          name: capi-webhook-service
+          namespace: openshift-cluster-api
           path: /mutate-addons-cluster-x-k8s-io-v1beta1-clusterresourceset
       failurePolicy: Fail
       matchPolicy: Equivalent
@@ -286,50 +288,6 @@ data:
         clusterctl.cluster.x-k8s.io: ""
       name: capi-validating-webhook-configuration
     webhooks:
-    - admissionReviewVersions:
-      - v1
-      - v1beta1
-      clientConfig:
-        service:
-          name: capi-webhook-service
-          namespace: openshift-cluster-api
-          path: /validate-cluster-x-k8s-io-v1beta1-cluster
-      failurePolicy: Fail
-      matchPolicy: Equivalent
-      name: validation.cluster.cluster.x-k8s.io
-      rules:
-      - apiGroups:
-        - cluster.x-k8s.io
-        apiVersions:
-        - v1beta1
-        operations:
-        - CREATE
-        - UPDATE
-        resources:
-        - clusters
-      sideEffects: None
-    - admissionReviewVersions:
-      - v1
-      - v1beta1
-      clientConfig:
-        service:
-          name: capi-webhook-service
-          namespace: openshift-cluster-api
-          path: /validate-cluster-x-k8s-io-v1beta1-clusterclass
-      failurePolicy: Fail
-      matchPolicy: Equivalent
-      name: validation.clusterclass.cluster.x-k8s.io
-      rules:
-      - apiGroups:
-        - cluster.x-k8s.io
-        apiVersions:
-        - v1beta1
-        operations:
-        - CREATE
-        - UPDATE
-        resources:
-        - clusterclasses
-      sideEffects: None
     - admissionReviewVersions:
       - v1
       - v1beta1
@@ -447,6 +405,52 @@ data:
         service:
           name: capi-webhook-service
           namespace: openshift-cluster-api
+          path: /validate-cluster-x-k8s-io-v1beta1-cluster
+      failurePolicy: Fail
+      matchPolicy: Equivalent
+      name: validation.cluster.cluster.x-k8s.io
+      rules:
+      - apiGroups:
+        - cluster.x-k8s.io
+        apiVersions:
+        - v1beta1
+        operations:
+        - CREATE
+        - UPDATE
+        - DELETE
+        resources:
+        - clusters
+      sideEffects: None
+    - admissionReviewVersions:
+      - v1
+      - v1beta1
+      clientConfig:
+        service:
+          name: capi-webhook-service
+          namespace: openshift-cluster-api
+          path: /validate-cluster-x-k8s-io-v1beta1-clusterclass
+      failurePolicy: Fail
+      matchPolicy: Equivalent
+      name: validation.clusterclass.cluster.x-k8s.io
+      rules:
+      - apiGroups:
+        - cluster.x-k8s.io
+        apiVersions:
+        - v1beta1
+        operations:
+        - CREATE
+        - UPDATE
+        - DELETE
+        resources:
+        - clusterclasses
+      sideEffects: None
+    - admissionReviewVersions:
+      - v1
+      - v1beta1
+      clientConfig:
+        service:
+          name: capi-webhook-service
+          namespace: openshift-cluster-api
           path: /validate-addons-cluster-x-k8s-io-v1beta1-clusterresourceset
       failurePolicy: Fail
       matchPolicy: Equivalent
@@ -469,7 +473,11 @@ data:
     #
     # update this file only when a new major or minor version is released
     apiVersion: clusterctl.cluster.x-k8s.io/v1alpha3
+    kind: Metadata
     releaseSeries:
+      - major: 1
+        minor: 1
+        contract: v1beta1
       - major: 1
         minor: 0
         contract: v1beta1
@@ -485,6 +493,6 @@ metadata:
   labels:
     provider.cluster.x-k8s.io/name: cluster-api
     provider.cluster.x-k8s.io/type: core
-    provider.cluster.x-k8s.io/version: v1.0.1
+    provider.cluster.x-k8s.io/version: v1.1.2
   name: cluster-api
   namespace: openshift-cluster-api

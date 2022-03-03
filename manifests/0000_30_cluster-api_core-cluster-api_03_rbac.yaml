@@ -221,6 +221,18 @@ rules:
   - cluster.x-k8s.io
   resources:
   - machinehealthchecks
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - cluster.x-k8s.io
+  resources:
+  - machinehealthchecks
   - machinehealthchecks/finalizers
   - machinehealthchecks/status
   verbs:
@@ -337,6 +349,7 @@ rules:
   - secrets
   verbs:
   - create
+  - delete
   - get
   - list
   - patch
