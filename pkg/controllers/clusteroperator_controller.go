@@ -10,7 +10,6 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/tools/record"
 	"k8s.io/klog/v2"
 	operatorv1 "sigs.k8s.io/cluster-api-operator/api/v1alpha1"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -23,11 +22,8 @@ import (
 
 // ClusterOperatorReconciler reconciles a ClusterOperator object
 type ClusterOperatorReconciler struct {
-	client.Client
+	ClusterOperatorStatusClient
 	Scheme             *runtime.Scheme
-	Recorder           record.EventRecorder
-	ReleaseVersion     string
-	ManagedNamespace   string
 	Images             map[string]string
 	PlatformType       string
 	SupportedPlatforms map[string]bool

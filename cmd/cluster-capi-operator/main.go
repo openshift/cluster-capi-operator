@@ -123,11 +123,13 @@ func main() {
 	}
 
 	if err = (&controllers.ClusterOperatorReconciler{
-		Client:             mgr.GetClient(),
+		ClusterOperatorStatusClient: controllers.ClusterOperatorStatusClient{
+			Client:           mgr.GetClient(),
+			Recorder:         mgr.GetEventRecorderFor("cloud-controller-manager-operator"),
+			ReleaseVersion:   getReleaseVersion(),
+			ManagedNamespace: *managedNamespace,
+		},
 		Scheme:             mgr.GetScheme(),
-		Recorder:           mgr.GetEventRecorderFor("cluster-capi-operator"),
-		ReleaseVersion:     getReleaseVersion(),
-		ManagedNamespace:   *managedNamespace,
 		Images:             containerImages,
 		SupportedPlatforms: supportedProviders,
 	}).SetupWithManager(mgr); err != nil {

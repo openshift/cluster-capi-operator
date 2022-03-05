@@ -10,6 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/tools/record"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -24,9 +25,16 @@ const (
 	ReasonSyncFailed   = "SyncingFailed"
 )
 
+type ClusterOperatorStatusClient struct {
+	client.Client
+	Recorder         record.EventRecorder
+	ManagedNamespace string
+	ReleaseVersion   string
+}
+
 // setStatusAvailable sets the Available condition to True, with the given reason
 // and message, and sets both the Progressing and Degraded conditions to False.
-func (r *ClusterOperatorReconciler) setStatusAvailable(ctx context.Context) error {
+func (r *ClusterOperatorStatusClient) setStatusAvailable(ctx context.Context) error {
 	co, err := r.getOrCreateClusterOperator(ctx)
 	if err != nil {
 		klog.Errorf("Unable to set cluster operator status available: %v", err)
@@ -49,7 +57,7 @@ func (r *ClusterOperatorReconciler) setStatusAvailable(ctx context.Context) erro
 // setStatusDegraded sets the Degraded condition to True, with the given reason and
 // message, and sets the upgradeable condition.  It does not modify any existing
 // Available or Progressing conditions.
-func (r *ClusterOperatorReconciler) setStatusDegraded(ctx context.Context, reconcileErr error) error {
+func (r *ClusterOperatorStatusClient) setStatusDegraded(ctx context.Context, reconcileErr error) error {
 	co, err := r.getOrCreateClusterOperator(ctx)
 	if err != nil {
 		klog.Errorf("Unable to set cluster operator status degraded: %v", err)
@@ -77,7 +85,7 @@ func (r *ClusterOperatorReconciler) setStatusDegraded(ctx context.Context, recon
 	return r.syncStatus(ctx, co, conds)
 }
 
-func (r *ClusterOperatorReconciler) getOrCreateClusterOperator(ctx context.Context) (*configv1.ClusterOperator, error) {
+func (r *ClusterOperatorStatusClient) getOrCreateClusterOperator(ctx context.Context) (*configv1.ClusterOperator, error) {
 	co := &configv1.ClusterOperator{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: clusterOperatorName,
@@ -102,7 +110,7 @@ func (r *ClusterOperatorReconciler) getOrCreateClusterOperator(ctx context.Conte
 }
 
 //syncStatus applies the new condition to the ClusterOperator object.
-func (r *ClusterOperatorReconciler) syncStatus(ctx context.Context, co *configv1.ClusterOperator, conds []configv1.ClusterOperatorStatusCondition) error {
+func (r *ClusterOperatorStatusClient) syncStatus(ctx context.Context, co *configv1.ClusterOperator, conds []configv1.ClusterOperatorStatusCondition) error {
 	for _, c := range conds {
 		v1helpers.SetStatusCondition(&co.Status.Conditions, c)
 	}
@@ -114,7 +122,7 @@ func (r *ClusterOperatorReconciler) syncStatus(ctx context.Context, co *configv1
 	return r.Client.Status().Update(ctx, co)
 }
 
-func (r *ClusterOperatorReconciler) relatedObjects() []configv1.ObjectReference {
+func (r *ClusterOperatorStatusClient) relatedObjects() []configv1.ObjectReference {
 	// TBD: Add an actual set of object references from getResources method
 	return []configv1.ObjectReference{
 		{Resource: "namespaces", Name: DefaultManagedNamespace},
