@@ -19,6 +19,9 @@ github.com/fsnotify/fsnotify
 # github.com/go-logr/logr v1.2.0
 ## explicit; go 1.16
 github.com/go-logr/logr
+# github.com/gobuffalo/flect v0.2.4
+## explicit; go 1.13
+github.com/gobuffalo/flect
 # github.com/gogo/protobuf v1.3.2
 ## explicit; go 1.15
 github.com/gogo/protobuf/proto
