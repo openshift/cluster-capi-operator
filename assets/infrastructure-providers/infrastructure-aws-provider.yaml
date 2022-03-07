@@ -1,19 +1,19 @@
 apiVersion: operator.cluster.x-k8s.io/v1alpha1
-kind: CoreProvider
+kind: InfrastructureProvider
 metadata:
   creationTimestamp: null
-  name: cluster-api
+  name: aws
   namespace: openshift-cluster-api
 spec:
   deployment:
     containers:
     - command:
-      - ./bin/cluster-api-controller-manager
+      - ./bin/cluster-api-provider-aws-controller-manager
       name: manager
   fetchConfig:
     selector:
       matchLabels:
-        provider.cluster.x-k8s.io/name: cluster-api
-        provider.cluster.x-k8s.io/type: core
-  version: v1.1.2
+        provider.cluster.x-k8s.io/name: aws
+        provider.cluster.x-k8s.io/type: infrastructure
+  version: v1.3.0
 status: {}
