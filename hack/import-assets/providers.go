@@ -275,24 +275,6 @@ func (p *provider) providerSpec() operatorv1.ProviderSpec {
 	}
 }
 
-func filterOutUnwantedResources(providerName string, objs []unstructured.Unstructured) []unstructured.Unstructured {
-	finalObjs := []unstructured.Unstructured{}
-	for _, obj := range objs {
-		switch obj.GetKind() {
-		case "CustomResourceDefinition":
-			// Filter out IPAM for metal3
-			if !strings.Contains(strings.ToLower(obj.GetName()), "ipam") {
-				finalObjs = append(finalObjs, obj)
-			}
-		// Filter out all secrets that come from upstream, we should replace them with our own credentials
-		case "Secret":
-		default:
-			finalObjs = append(finalObjs, obj)
-		}
-	}
-	return finalObjs
-}
-
 func importProviders() error {
 	// Read provider list yaml
 	providerList, err := ioutil.ReadFile(providerListPath)
@@ -320,16 +302,8 @@ func importProviders() error {
 			return err
 		}
 
-		// Change cert-manager annotations to service-ca, because openshift doesn't support cert-manager
-		objs := certManagerToServiceCA(p.components.Objs())
-
-		objs = removeConversionWebhook(objs)
-
-		// Filter out unwanted resources like IPAM
-		objs = filterOutUnwantedResources(p.Name, objs)
-
-		// Split out RBAC, CRDs and Service objects
-		resourceMap := splitResources(objs)
+		// Perform all manifest transformations
+		resourceMap := processObjects(p.components.Objs(), false)
 
 		// Write RBAC components to manifests, they will be managed by CVO
 		rbacFileName := fmt.Sprintf("%s%s-%s_03_rbac.yaml", manifestPrefix, p.providerTypeName(), p.Name)

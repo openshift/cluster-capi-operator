@@ -9,7 +9,6 @@ import (
 	"path"
 	"strings"
 
-	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	configclient "sigs.k8s.io/cluster-api/cmd/clusterctl/client/config"
 	"sigs.k8s.io/cluster-api/cmd/clusterctl/client/repository"
@@ -30,14 +29,8 @@ func importCAPIOperator() error {
 		return fmt.Errorf("failed to read CAPI Operator manifests: %v", err)
 	}
 
-	// Change cert-manager annotations to service-ca, because openshift doesn't support cert-manager
-	objs = certManagerToServiceCA(objs)
-
-	// Mutate resources
-	objs = mutateOperatorResources(objs)
-
-	// Split out RBAC, CRDs and Service objects
-	resourceMap := splitResources(objs)
+	// Perform all manifest transformations
+	resourceMap := processObjects(objs, true)
 
 	// Write RBAC components to manifests, they will be managed by CVO
 	rbacFileName := fmt.Sprintf("%s%s_03_rbac-roles.%s.yaml", manifestPrefix, "capi-operator", "upstream")
@@ -118,35 +111,6 @@ func readCAPIOperatorManifests() ([]unstructured.Unstructured, error) {
 	}
 
 	return components.Objs(), nil
-}
-
-func mutateOperatorResources(objs []unstructured.Unstructured) []unstructured.Unstructured {
-	finalObjs := []unstructured.Unstructured{}
-	for _, obj := range objs {
-		switch obj.GetKind() {
-		case "Deployment":
-			deployment := &appsv1.Deployment{}
-			if err := scheme.Convert(&obj, deployment, nil); err != nil {
-				panic(err)
-			}
-			// Modify manager container command to match openshift Dockerfile
-			for i := range deployment.Spec.Template.Spec.Containers {
-				container := &deployment.Spec.Template.Spec.Containers[i]
-				if container.Name == "manager" {
-					container.Command = []string{"./bin/cluster-api-operator"}
-				}
-			}
-
-			if err := scheme.Convert(deployment, &obj, nil); err != nil {
-				panic(err)
-			}
-
-			finalObjs = append(finalObjs, obj)
-		default:
-			finalObjs = append(finalObjs, obj)
-		}
-	}
-	return finalObjs
 }
 
 func writeAllOtherOperatorComponents(objs []unstructured.Unstructured) error {
