@@ -12,18 +12,34 @@ import (
 )
 
 var (
-	// OperatorGroupVersion is group version used for infrastructure objects.
+	// operatorGroupVersion is group version used for operatora objects.
 	operatorGroupVersion = schema.GroupVersion{Group: "operator.cluster.x-k8s.io", Version: "v1alpha1"}
 
-	//fakeCoreProviderKind is the Kind for the CoreProvider.
+	// fakeCoreProviderKind is the Kind for the CoreProvider.
 	fakeCoreProviderKind = "CoreProvider"
 	// fakeCoreProviderCRD is a fake CoreProvider CRD.
 	fakeCoreProviderCRD = generateCRD(operatorGroupVersion.WithKind(fakeCoreProviderKind))
 
-	//fakeInfrastructureProviderKind is the Kind for the CoreProvider.
+	// fakeInfrastructureProviderKind is the Kind for the CoreProvider.
 	fakeInfrastructureProviderKind = "InfrastructureProvider"
 	// fakeInfrastructureProviderCRD is a fake CoreProvider CRD.
 	fakeInfrastructureProviderCRD = generateCRD(operatorGroupVersion.WithKind(fakeInfrastructureProviderKind))
+
+	// clusterGroupVersion is group version used for cluster objects.
+	clusterGroupVersion = schema.GroupVersion{Group: "cluster.x-k8s.io", Version: "v1beta1"}
+
+	// fakeClusterKind is the Kind for the Cluster.
+	fakeClusterKind = "Cluster"
+	// fakeClusterCRD is a fake Cluster CRD.
+	fakeClusterCRD = generateCRD(clusterGroupVersion.WithKind(fakeClusterKind))
+
+	// infrastructureGroupVersion is group version used for infrastructure objects.
+	infrastructureGroupVersion = schema.GroupVersion{Group: "infrastructure.cluster.x-k8s.io", Version: "v1beta1"}
+
+	// fakeAWSClusterKind is the Kind for the AWSCluster.
+	fakeAWSClusterKind = "AWSCluster"
+	// fakeAWSClusterCRD is a fake AWSCluster CRD.
+	fakeAWSClusterCRD = generateCRD(infrastructureGroupVersion.WithKind(fakeAWSClusterKind))
 )
 
 func generateCRD(gvk schema.GroupVersionKind) *apiextensionsv1.CustomResourceDefinition {
