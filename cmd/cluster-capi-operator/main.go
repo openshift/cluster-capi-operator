@@ -127,7 +127,7 @@ func main() {
 	if err = (&clusteroperator.ClusterOperatorReconciler{
 		ClusterOperatorStatusClient: operatorstatus.ClusterOperatorStatusClient{
 			Client:           mgr.GetClient(),
-			Recorder:         mgr.GetEventRecorderFor("cloud-controller-manager-operator"),
+			Recorder:         mgr.GetEventRecorderFor("cluster-capi-operator-cluster-operator-controller"),
 			ReleaseVersion:   getReleaseVersion(),
 			ManagedNamespace: *managedNamespace,
 		},
