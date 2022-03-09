@@ -1,4 +1,4 @@
-package controllers
+package secretsync
 
 import (
 	"context"
@@ -16,6 +16,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	configv1 "github.com/openshift/api/config/v1"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers"
+	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 )
 
 const (
@@ -28,7 +30,7 @@ const (
 )
 
 type UserDataSecretController struct {
-	ClusterOperatorStatusClient
+	operatorstatus.ClusterOperatorStatusClient
 	Scheme *runtime.Scheme
 }
 
@@ -127,37 +129,37 @@ func (r *UserDataSecretController) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 func (r *UserDataSecretController) setAvailableCondition(ctx context.Context) error {
-	co, err := r.getOrCreateClusterOperator(ctx)
+	co, err := r.GetOrCreateClusterOperator(ctx)
 	if err != nil {
 		return err
 	}
 
 	conds := []configv1.ClusterOperatorStatusCondition{
-		newClusterOperatorStatusCondition(secretSyncControllerAvailableCondition, configv1.ConditionTrue, ReasonAsExpected,
+		operatorstatus.NewClusterOperatorStatusCondition(secretSyncControllerAvailableCondition, configv1.ConditionTrue, operatorstatus.ReasonAsExpected,
 			"User Data Secret Controller works as expected"),
-		newClusterOperatorStatusCondition(secretSyncControllerDegradedCondition, configv1.ConditionFalse, ReasonAsExpected,
+		operatorstatus.NewClusterOperatorStatusCondition(secretSyncControllerDegradedCondition, configv1.ConditionFalse, operatorstatus.ReasonAsExpected,
 			"User Data Secret Controller works as expected"),
 	}
 
-	co.Status.Versions = []configv1.OperandVersion{{Name: operatorVersionKey, Version: r.ReleaseVersion}}
+	co.Status.Versions = []configv1.OperandVersion{{Name: controllers.OperatorVersionKey, Version: r.ReleaseVersion}}
 	klog.Info("User Data Secret Controller is available")
-	return r.syncStatus(ctx, co, conds)
+	return r.SyncStatus(ctx, co, conds)
 }
 
 func (r *UserDataSecretController) setDegradedCondition(ctx context.Context) error {
-	co, err := r.getOrCreateClusterOperator(ctx)
+	co, err := r.GetOrCreateClusterOperator(ctx)
 	if err != nil {
 		return err
 	}
 
 	conds := []configv1.ClusterOperatorStatusCondition{
-		newClusterOperatorStatusCondition(secretSyncControllerAvailableCondition, configv1.ConditionFalse, ReasonSyncFailed,
+		operatorstatus.NewClusterOperatorStatusCondition(secretSyncControllerAvailableCondition, configv1.ConditionFalse, operatorstatus.ReasonSyncFailed,
 			"User Data Secret Controller failed to sync secret"),
-		newClusterOperatorStatusCondition(secretSyncControllerDegradedCondition, configv1.ConditionTrue, ReasonSyncFailed,
+		operatorstatus.NewClusterOperatorStatusCondition(secretSyncControllerDegradedCondition, configv1.ConditionTrue, operatorstatus.ReasonSyncFailed,
 			"User Data Secret Controller failed to sync secret"),
 	}
 
-	co.Status.Versions = []configv1.OperandVersion{{Name: operatorVersionKey, Version: r.ReleaseVersion}}
+	co.Status.Versions = []configv1.OperandVersion{{Name: controllers.OperatorVersionKey, Version: r.ReleaseVersion}}
 	klog.Info("User Data Secret Controller is degraded")
-	return r.syncStatus(ctx, co, conds)
+	return r.SyncStatus(ctx, co, conds)
 }

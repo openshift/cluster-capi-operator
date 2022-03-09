@@ -1,4 +1,4 @@
-package controllers
+package operatorstatus
 
 import (
 	"context"
@@ -15,6 +15,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1 "github.com/openshift/api/config/v1"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/library-go/pkg/config/clusteroperator/v1helpers"
 )
 
@@ -34,37 +35,37 @@ type ClusterOperatorStatusClient struct {
 
 // setStatusAvailable sets the Available condition to True, with the given reason
 // and message, and sets both the Progressing and Degraded conditions to False.
-func (r *ClusterOperatorStatusClient) setStatusAvailable(ctx context.Context) error {
-	co, err := r.getOrCreateClusterOperator(ctx)
+func (r *ClusterOperatorStatusClient) SetStatusAvailable(ctx context.Context) error {
+	co, err := r.GetOrCreateClusterOperator(ctx)
 	if err != nil {
 		klog.Errorf("Unable to set cluster operator status available: %v", err)
 		return err
 	}
 
 	conds := []configv1.ClusterOperatorStatusCondition{
-		newClusterOperatorStatusCondition(configv1.OperatorAvailable, configv1.ConditionTrue, ReasonAsExpected,
+		NewClusterOperatorStatusCondition(configv1.OperatorAvailable, configv1.ConditionTrue, ReasonAsExpected,
 			fmt.Sprintf("Cluster CAPI Operator is available at %s", r.ReleaseVersion)),
-		newClusterOperatorStatusCondition(configv1.OperatorProgressing, configv1.ConditionFalse, ReasonAsExpected, ""),
-		newClusterOperatorStatusCondition(configv1.OperatorDegraded, configv1.ConditionFalse, ReasonAsExpected, ""),
-		newClusterOperatorStatusCondition(configv1.OperatorUpgradeable, configv1.ConditionTrue, ReasonAsExpected, ""),
+		NewClusterOperatorStatusCondition(configv1.OperatorProgressing, configv1.ConditionFalse, ReasonAsExpected, ""),
+		NewClusterOperatorStatusCondition(configv1.OperatorDegraded, configv1.ConditionFalse, ReasonAsExpected, ""),
+		NewClusterOperatorStatusCondition(configv1.OperatorUpgradeable, configv1.ConditionTrue, ReasonAsExpected, ""),
 	}
 
-	co.Status.Versions = []configv1.OperandVersion{{Name: operatorVersionKey, Version: r.ReleaseVersion}}
+	co.Status.Versions = []configv1.OperandVersion{{Name: controllers.OperatorVersionKey, Version: r.ReleaseVersion}}
 	klog.V(2).Info("Syncing status: available")
-	return r.syncStatus(ctx, co, conds)
+	return r.SyncStatus(ctx, co, conds)
 }
 
 // setStatusDegraded sets the Degraded condition to True, with the given reason and
 // message, and sets the upgradeable condition.  It does not modify any existing
 // Available or Progressing conditions.
-func (r *ClusterOperatorStatusClient) setStatusDegraded(ctx context.Context, reconcileErr error) error {
-	co, err := r.getOrCreateClusterOperator(ctx)
+func (r *ClusterOperatorStatusClient) SetStatusDegraded(ctx context.Context, reconcileErr error) error {
+	co, err := r.GetOrCreateClusterOperator(ctx)
 	if err != nil {
 		klog.Errorf("Unable to set cluster operator status degraded: %v", err)
 		return err
 	}
 
-	desiredVersions := []configv1.OperandVersion{{Name: operatorVersionKey, Version: r.ReleaseVersion}}
+	desiredVersions := []configv1.OperandVersion{{Name: controllers.OperatorVersionKey, Version: r.ReleaseVersion}}
 	currentVersions := co.Status.Versions
 
 	var message string
@@ -75,24 +76,24 @@ func (r *ClusterOperatorStatusClient) setStatusDegraded(ctx context.Context, rec
 	}
 
 	conds := []configv1.ClusterOperatorStatusCondition{
-		newClusterOperatorStatusCondition(configv1.OperatorDegraded, configv1.ConditionTrue,
+		NewClusterOperatorStatusCondition(configv1.OperatorDegraded, configv1.ConditionTrue,
 			ReasonSyncFailed, message),
-		newClusterOperatorStatusCondition(configv1.OperatorUpgradeable, configv1.ConditionFalse, ReasonAsExpected, ""),
+		NewClusterOperatorStatusCondition(configv1.OperatorUpgradeable, configv1.ConditionFalse, ReasonAsExpected, ""),
 	}
 
 	r.Recorder.Eventf(co, corev1.EventTypeWarning, "Status degraded", reconcileErr.Error())
 	klog.V(2).Infof("Syncing status: degraded: %s", message)
-	return r.syncStatus(ctx, co, conds)
+	return r.SyncStatus(ctx, co, conds)
 }
 
-func (r *ClusterOperatorStatusClient) getOrCreateClusterOperator(ctx context.Context) (*configv1.ClusterOperator, error) {
+func (r *ClusterOperatorStatusClient) GetOrCreateClusterOperator(ctx context.Context) (*configv1.ClusterOperator, error) {
 	co := &configv1.ClusterOperator{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: clusterOperatorName,
+			Name: controllers.ClusterOperatorName,
 		},
 		Status: configv1.ClusterOperatorStatus{},
 	}
-	err := r.Client.Get(ctx, client.ObjectKey{Name: clusterOperatorName}, co)
+	err := r.Client.Get(ctx, client.ObjectKey{Name: controllers.ClusterOperatorName}, co)
 	if errors.IsNotFound(err) {
 		klog.Infof("ClusterOperator does not exist, creating a new one.")
 
@@ -104,13 +105,13 @@ func (r *ClusterOperatorStatusClient) getOrCreateClusterOperator(ctx context.Con
 	}
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to get clusterOperator %q: %v", clusterOperatorName, err)
+		return nil, fmt.Errorf("failed to get clusterOperator %q: %v", controllers.ClusterOperatorName, err)
 	}
 	return co, nil
 }
 
 //syncStatus applies the new condition to the ClusterOperator object.
-func (r *ClusterOperatorStatusClient) syncStatus(ctx context.Context, co *configv1.ClusterOperator, conds []configv1.ClusterOperatorStatusCondition) error {
+func (r *ClusterOperatorStatusClient) SyncStatus(ctx context.Context, co *configv1.ClusterOperator, conds []configv1.ClusterOperatorStatusCondition) error {
 	for _, c := range conds {
 		v1helpers.SetStatusCondition(&co.Status.Conditions, c)
 	}
@@ -125,8 +126,8 @@ func (r *ClusterOperatorStatusClient) syncStatus(ctx context.Context, co *config
 func (r *ClusterOperatorStatusClient) relatedObjects() []configv1.ObjectReference {
 	// TBD: Add an actual set of object references from getResources method
 	return []configv1.ObjectReference{
-		{Resource: "namespaces", Name: DefaultManagedNamespace},
-		{Group: configv1.GroupName, Resource: "clusteroperators", Name: clusterOperatorName},
+		{Resource: "namespaces", Name: controllers.DefaultManagedNamespace},
+		{Group: configv1.GroupName, Resource: "clusteroperators", Name: controllers.ClusterOperatorName},
 		{Resource: "namespaces", Name: r.ManagedNamespace},
 		{Group: "", Resource: "serviceaccounts", Name: "cluster-capi-operator"},
 		{Group: "", Resource: "configmaps", Name: "cluster-capi-operator-images"},
@@ -134,7 +135,7 @@ func (r *ClusterOperatorStatusClient) relatedObjects() []configv1.ObjectReferenc
 	}
 }
 
-func newClusterOperatorStatusCondition(conditionType configv1.ClusterStatusConditionType,
+func NewClusterOperatorStatusCondition(conditionType configv1.ClusterStatusConditionType,
 	conditionStatus configv1.ConditionStatus, reason string,
 	message string) configv1.ClusterOperatorStatusCondition {
 	return configv1.ClusterOperatorStatusCondition{

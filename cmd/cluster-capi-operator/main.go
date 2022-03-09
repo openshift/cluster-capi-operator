@@ -20,6 +20,8 @@ import (
 
 	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/clusteroperator"
+	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 )
 
@@ -122,8 +124,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&controllers.ClusterOperatorReconciler{
-		ClusterOperatorStatusClient: controllers.ClusterOperatorStatusClient{
+	if err = (&clusteroperator.ClusterOperatorReconciler{
+		ClusterOperatorStatusClient: operatorstatus.ClusterOperatorStatusClient{
 			Client:           mgr.GetClient(),
 			Recorder:         mgr.GetEventRecorderFor("cloud-controller-manager-operator"),
 			ReleaseVersion:   getReleaseVersion(),

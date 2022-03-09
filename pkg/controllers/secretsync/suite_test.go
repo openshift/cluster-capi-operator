@@ -14,53 +14,31 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package controllers
+package secretsync
 
 import (
 	"context"
-	"path/filepath"
 	"testing"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-
-	configv1 "github.com/openshift/api/config/v1"
-	operatorv1 "github.com/openshift/api/operator/v1"
-
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2/klogr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	// +kubebuilder:scaffold:imports
+
+	"github.com/openshift/cluster-capi-operator/pkg/controllers"
+	"github.com/openshift/cluster-capi-operator/pkg/test"
 )
 
-// These tests use Ginkgo (BDD-style Go testing framework). Refer to
-// http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
-
-func init() {
-	if err := configv1.Install(scheme.Scheme); err != nil {
-		panic(err)
-	}
-	if err := operatorv1.Install(scheme.Scheme); err != nil {
-		panic(err)
-	}
-	if err := v1.AddToScheme(scheme.Scheme); err != nil {
-		panic(err)
-	}
-}
-
-const (
-	testManagedNamespace = "openshift-cluster-api"
+var (
+	testEnv *envtest.Environment
+	cfg     *rest.Config
+	cl      client.Client
 )
-
-var cfg *rest.Config
-var cl client.Client
-var testEnv *envtest.Environment
 
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -71,34 +49,19 @@ func TestAPIs(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
-	var err error
 	logf.SetLogger(klogr.New())
 
 	By("bootstrapping test environment")
-	testEnv = &envtest.Environment{
-		CRDDirectoryPaths: []string{
-			filepath.Join("../..", "vendor", "github.com", "openshift", "api", "config", "v1"),
-			filepath.Join("../..", "vendor", "github.com", "openshift", "api", "operator", "v1"),
-		},
-	}
-
-	Expect(configv1.Install(scheme.Scheme)).To(Succeed())
-	Expect(v1.AddToScheme(scheme.Scheme)).To(Succeed())
-
-	cfg, err = testEnv.Start()
+	var err error
+	testEnv = &envtest.Environment{}
+	cfg, cl, err = test.StartEnvTest(testEnv)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(cfg).NotTo(BeNil())
-
-	// +kubebuilder:scaffold:scheme
-
-	cl, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
-	Expect(err).NotTo(HaveOccurred())
 	Expect(cl).NotTo(BeNil())
 
 	managedNamespace := &corev1.Namespace{}
-	managedNamespace.SetName(testManagedNamespace)
+	managedNamespace.SetName(controllers.DefaultManagedNamespace)
 	Expect(cl.Create(context.Background(), managedNamespace)).To(Succeed())
-
 	ocpConfigNamespace := &corev1.Namespace{}
 	ocpConfigNamespace.SetName(SecretSourceNamespace)
 	Expect(cl.Create(context.Background(), ocpConfigNamespace)).To(Succeed())
@@ -106,6 +69,5 @@ var _ = BeforeSuite(func() {
 
 var _ = AfterSuite(func() {
 	By("tearing down the test environment")
-	err := testEnv.Stop()
-	Expect(err).NotTo(HaveOccurred())
+	Expect(test.StopEnvTest(testEnv)).To(Succeed())
 })

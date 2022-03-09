@@ -1,4 +1,4 @@
-package controllers
+package secretsync
 
 import (
 	"bytes"
@@ -17,6 +17,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	configv1 "github.com/openshift/api/config/v1"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers"
+	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 )
 
 const (
@@ -62,7 +64,7 @@ var _ = Describe("User Data Secret controller", func() {
 
 	var reconciler *UserDataSecretController
 
-	syncedSecretKey := client.ObjectKey{Namespace: testManagedNamespace, Name: managedUserDataSecretName}
+	syncedSecretKey := client.ObjectKey{Namespace: controllers.DefaultManagedNamespace, Name: managedUserDataSecretName}
 
 	BeforeEach(func() {
 		By("Setting up a new manager")
@@ -70,10 +72,10 @@ var _ = Describe("User Data Secret controller", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		reconciler = &UserDataSecretController{
-			ClusterOperatorStatusClient: ClusterOperatorStatusClient{
+			ClusterOperatorStatusClient: operatorstatus.ClusterOperatorStatusClient{
 				Client:           cl,
 				Recorder:         rec,
-				ManagedNamespace: testManagedNamespace,
+				ManagedNamespace: controllers.DefaultManagedNamespace,
 			},
 			Scheme: scheme.Scheme,
 		}
@@ -102,14 +104,14 @@ var _ = Describe("User Data Secret controller", func() {
 		Eventually(mgrStopped, timeout).Should(BeClosed())
 
 		co := &configv1.ClusterOperator{}
-		err := cl.Get(context.Background(), client.ObjectKey{Name: clusterOperatorName}, co)
+		err := cl.Get(context.Background(), client.ObjectKey{Name: controllers.ClusterOperatorName}, co)
 		if err == nil || !apierrors.IsNotFound(err) {
 			Eventually(func() bool {
 				err := cl.Delete(context.Background(), co)
 				return err == nil || apierrors.IsNotFound(err)
-			}).Should(BeTrue())
+			}, timeout).Should(BeTrue())
 		}
-		Eventually(apierrors.IsNotFound(cl.Get(context.Background(), client.ObjectKey{Name: clusterOperatorName}, co))).Should(BeTrue())
+		Eventually(apierrors.IsNotFound(cl.Get(context.Background(), client.ObjectKey{Name: controllers.ClusterOperatorName}, co)), timeout).Should(BeTrue())
 
 		By("Cleanup resources")
 		deleteOptions := &client.DeleteOptions{
@@ -122,6 +124,7 @@ var _ = Describe("User Data Secret controller", func() {
 			Expect(cl.Delete(ctx, cm.DeepCopy(), deleteOptions)).To(Succeed())
 			Eventually(
 				apierrors.IsNotFound(cl.Get(ctx, client.ObjectKeyFromObject(cm.DeepCopy()), &corev1.ConfigMap{})),
+				timeout,
 			).Should(BeTrue())
 		}
 
@@ -129,7 +132,7 @@ var _ = Describe("User Data Secret controller", func() {
 
 		// Creating the cluster api operator
 		co = &configv1.ClusterOperator{}
-		co.SetName(clusterOperatorName)
+		co.SetName(controllers.ClusterOperatorName)
 		Expect(cl.Create(context.Background(), co.DeepCopy())).To(Succeed())
 	})
 
@@ -141,7 +144,7 @@ var _ = Describe("User Data Secret controller", func() {
 				return false, err
 			}
 			return bytes.Equal(syncedUserDataSecret.Data[defaultSecretKey], []byte(defaultSecretValue)), nil
-		}).Should(BeTrue())
+		}, timeout).Should(BeTrue())
 	})
 
 	It("secret should be synced up if managed user data secret changed", func() {
@@ -156,7 +159,7 @@ var _ = Describe("User Data Secret controller", func() {
 				return false, err
 			}
 			return bytes.Equal(syncedUserDataSecret.Data[defaultSecretKey], []byte("managed one changed")), nil
-		}).Should(BeTrue())
+		}, timeout).Should(BeTrue())
 	})
 
 	It("secret should be synced up if owned user data secret is deleted or changed", func() {
@@ -173,7 +176,7 @@ var _ = Describe("User Data Secret controller", func() {
 				return false, err
 			}
 			return bytes.Equal(syncedUserDataSecret.Data[defaultSecretKey], []byte(defaultSecretValue)), nil
-		}).Should(BeTrue())
+		}, timeout).Should(BeTrue())
 
 		Expect(cl.Delete(ctx, syncedUserDataSecret)).To(Succeed())
 		Eventually(func() (bool, error) {
@@ -182,7 +185,7 @@ var _ = Describe("User Data Secret controller", func() {
 				return false, err
 			}
 			return bytes.Equal(syncedUserDataSecret.Data[defaultSecretKey], []byte(defaultSecretValue)), nil
-		}).Should(BeTrue())
+		}, timeout).Should(BeTrue())
 	})
 
 	It("secret not be updated if source and target secret contents are identical", func() {

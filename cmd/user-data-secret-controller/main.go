@@ -36,6 +36,8 @@ import (
 	configv1 "github.com/openshift/api/config/v1"
 
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/secretsync"
+	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 	// +kubebuilder:scaffold:scheme
 )
 
@@ -76,7 +78,7 @@ func main() {
 
 	syncPeriod := 10 * time.Minute
 	cacheBuilder := cache.MultiNamespacedCacheBuilder([]string{
-		*managedNamespace, controllers.SecretSourceNamespace,
+		*managedNamespace, secretsync.SecretSourceNamespace,
 	})
 	mgr, err := ctrl.NewManager(restConfig, ctrl.Options{
 		Namespace:               *managedNamespace,
@@ -96,8 +98,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&controllers.UserDataSecretController{
-		ClusterOperatorStatusClient: controllers.ClusterOperatorStatusClient{
+	if err = (&secretsync.UserDataSecretController{
+		ClusterOperatorStatusClient: operatorstatus.ClusterOperatorStatusClient{
 			Client:           mgr.GetClient(),
 			Recorder:         mgr.GetEventRecorderFor("cluster-capi-operator-user-data-secret-controller"),
 			ManagedNamespace: *managedNamespace,
