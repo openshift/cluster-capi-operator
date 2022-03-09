@@ -18,11 +18,8 @@ import (
 
 	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/cluster-capi-operator/assets"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
-)
-
-const (
-	infrastructureResourceName = "cluster"
 )
 
 // ClusterOperatorReconciler reconciles a ClusterOperator object
@@ -51,7 +48,7 @@ func (r *ClusterOperatorReconciler) Reconcile(ctx context.Context, _ ctrl.Reques
 	klog.Infof("Intalling Cluster API components for technical preview cluster")
 	// Get infrastructure object
 	infra := &configv1.Infrastructure{}
-	if err := r.Get(ctx, client.ObjectKey{Name: infrastructureResourceName}, infra); k8serrors.IsNotFound(err) {
+	if err := r.Get(ctx, client.ObjectKey{Name: controllers.InfrastructureResourceName}, infra); k8serrors.IsNotFound(err) {
 		klog.Infof("Infrastructure cluster does not exist. Skipping...")
 		if err := r.SetStatusAvailable(ctx); err != nil {
 			return ctrl.Result{}, err
