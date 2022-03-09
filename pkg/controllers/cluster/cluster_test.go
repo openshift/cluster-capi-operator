@@ -5,7 +5,6 @@ import (
 	. "github.com/onsi/gomega"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	awsv1 "sigs.k8s.io/cluster-api-provider-aws/api/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -47,10 +46,9 @@ var _ = Describe("Reconcile CAPI cluster", func() {
 		Expect(cluster.Spec.InfrastructureRef.Namespace).To(Equal(controllers.DefaultManagedNamespace))
 
 		Expect(cl.Delete(ctx, cluster)).To(Succeed())
-		Eventually(
-			apierrors.IsNotFound(cl.Get(ctx, client.ObjectKeyFromObject(cluster.DeepCopy()), &awsv1.AWSCluster{})),
-			timeout,
-		).Should(BeTrue())
+		Eventually(func() bool {
+			return apierrors.IsNotFound(cl.Get(ctx, client.ObjectKeyFromObject(cluster.DeepCopy()), &clusterv1.Cluster{}))
+		}, timeout).Should(BeTrue())
 	})
 
 	It("should create a cluster with expected spec and status", func() {

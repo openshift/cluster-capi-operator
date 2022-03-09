@@ -97,7 +97,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&cluster.ClusterReconciler{
+	if err := (&cluster.ClusterReconciler{
 		ClusterOperatorStatusClient: operatorstatus.ClusterOperatorStatusClient{
 			Client:         mgr.GetClient(),
 			Recorder:       mgr.GetEventRecorderFor("cluster-capi-operator-cluster-controller"),

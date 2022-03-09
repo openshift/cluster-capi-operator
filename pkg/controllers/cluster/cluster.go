@@ -73,7 +73,7 @@ func (r *ClusterReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (ctrl
 
 	klog.Infof("Reconciling %v infrastucture cluster", platformType)
 	// Reconcile infrastructure cluster based on platform type.
-	infraClusterKind := ""
+	var infraClusterKind string
 	var err error
 	switch platformType {
 	case configv1.AWSPlatformType:

@@ -52,10 +52,9 @@ var _ = Describe("Reconcile AWS cluster", func() {
 		Expect(awsCluster.Status.Ready).To(BeTrue())
 
 		Expect(cl.Delete(ctx, awsCluster)).To(Succeed())
-		Eventually(
-			apierrors.IsNotFound(cl.Get(ctx, client.ObjectKeyFromObject(awsCluster.DeepCopy()), &awsv1.AWSCluster{})),
-			timeout,
-		).Should(BeTrue())
+		Eventually(func() bool {
+			return apierrors.IsNotFound(cl.Get(ctx, client.ObjectKeyFromObject(awsCluster.DeepCopy()), &awsv1.AWSCluster{}))
+		}, timeout).Should(BeTrue())
 	})
 
 	It("should create a cluster with expected spec and status", func() {
