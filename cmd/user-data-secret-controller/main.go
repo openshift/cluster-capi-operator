@@ -85,6 +85,7 @@ func main() {
 		Scheme:                  scheme,
 		SyncPeriod:              &syncPeriod,
 		MetricsBindAddress:      "0", // we do not expose any metric at this point
+		Port:                    9441,
 		LeaderElectionNamespace: leaderElectionConfig.ResourceNamespace,
 		LeaderElection:          leaderElectionConfig.LeaderElect,
 		LeaderElectionID:        leaderElectionConfig.ResourceName,
