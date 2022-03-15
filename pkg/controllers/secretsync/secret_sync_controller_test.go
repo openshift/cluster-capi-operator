@@ -22,7 +22,6 @@ import (
 )
 
 const (
-	defaultSecretKey   = "foo"
 	defaultSecretValue = "bar"
 
 	timeout = time.Second * 10
@@ -32,24 +31,31 @@ func makeUserDataSecret() *corev1.Secret {
 	return &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
 		Name:      managedUserDataSecretName,
 		Namespace: SecretSourceNamespace,
-	}, Data: map[string][]byte{defaultSecretKey: []byte(defaultSecretValue)}}
+	}, Data: map[string][]byte{mapiUserDataKey: []byte(defaultSecretValue)}}
 }
 
 var _ = Describe("areSecretsEqual reconciler method", func() {
 	reconciler := &UserDataSecretController{}
 
+	var sourceUserDataSecret *corev1.Secret
+	var targetUserDataSecret *corev1.Secret
+
+	BeforeEach(func() {
+		sourceUserDataSecret = makeUserDataSecret()
+		targetUserDataSecret = makeUserDataSecret()
+		targetUserDataSecret.Data[capiUserDataKey] = sourceUserDataSecret.Data[mapiUserDataKey]
+	})
+
 	It("should return 'true' if Secrets content are equal", func() {
-		Expect(reconciler.areSecretsEqual(makeUserDataSecret(), makeUserDataSecret())).Should(BeTrue())
+		Expect(reconciler.areSecretsEqual(sourceUserDataSecret, targetUserDataSecret)).Should(BeTrue())
 	})
 
 	It("should return 'false' if Secrets content are not equal", func() {
-		changedManagedUserDataSecret := makeUserDataSecret()
-		changedManagedUserDataSecret.Immutable = pointer.Bool(true)
-		Expect(reconciler.areSecretsEqual(changedManagedUserDataSecret, makeUserDataSecret())).Should(BeFalse())
+		targetUserDataSecret.Immutable = pointer.Bool(true)
+		Expect(reconciler.areSecretsEqual(sourceUserDataSecret, targetUserDataSecret)).Should(BeFalse())
 
-		changedManagedUserDataSecret = makeUserDataSecret()
-		changedManagedUserDataSecret.Data = map[string][]byte{}
-		Expect(reconciler.areSecretsEqual(changedManagedUserDataSecret, makeUserDataSecret())).Should(BeFalse())
+		targetUserDataSecret.Data = map[string][]byte{}
+		Expect(reconciler.areSecretsEqual(sourceUserDataSecret, targetUserDataSecret)).Should(BeFalse())
 	})
 })
 
@@ -143,13 +149,13 @@ var _ = Describe("User Data Secret controller", func() {
 			if err != nil {
 				return false, err
 			}
-			return bytes.Equal(syncedUserDataSecret.Data[defaultSecretKey], []byte(defaultSecretValue)), nil
+			return bytes.Equal(syncedUserDataSecret.Data[capiUserDataKey], []byte(defaultSecretValue)), nil
 		}, timeout).Should(BeTrue())
 	})
 
 	It("secret should be synced up if managed user data secret changed", func() {
 		changedSourceSecret := sourceSecret.DeepCopy()
-		changedSourceSecret.Data = map[string][]byte{defaultSecretKey: []byte("managed one changed")}
+		changedSourceSecret.Data = map[string][]byte{mapiUserDataKey: []byte("managed one changed")}
 		Expect(cl.Update(ctx, changedSourceSecret)).To(Succeed())
 
 		Eventually(func() (bool, error) {
@@ -158,7 +164,7 @@ var _ = Describe("User Data Secret controller", func() {
 			if err != nil {
 				return false, err
 			}
-			return bytes.Equal(syncedUserDataSecret.Data[defaultSecretKey], []byte("managed one changed")), nil
+			return bytes.Equal(syncedUserDataSecret.Data[capiUserDataKey], []byte("managed one changed")), nil
 		}, timeout).Should(BeTrue())
 	})
 
@@ -168,14 +174,14 @@ var _ = Describe("User Data Secret controller", func() {
 			return cl.Get(ctx, syncedSecretKey, syncedUserDataSecret)
 		}, timeout).Should(Succeed())
 
-		syncedUserDataSecret.Data = map[string][]byte{defaultSecretKey: []byte("baz")}
+		syncedUserDataSecret.Data = map[string][]byte{capiUserDataKey: []byte("baz")}
 		Expect(cl.Update(ctx, syncedUserDataSecret)).To(Succeed())
 		Eventually(func() (bool, error) {
 			err := cl.Get(ctx, syncedSecretKey, syncedUserDataSecret)
 			if err != nil {
 				return false, err
 			}
-			return bytes.Equal(syncedUserDataSecret.Data[defaultSecretKey], []byte(defaultSecretValue)), nil
+			return bytes.Equal(syncedUserDataSecret.Data[capiUserDataKey], []byte(defaultSecretValue)), nil
 		}, timeout).Should(BeTrue())
 
 		Expect(cl.Delete(ctx, syncedUserDataSecret)).To(Succeed())
@@ -184,7 +190,7 @@ var _ = Describe("User Data Secret controller", func() {
 			if err != nil {
 				return false, err
 			}
-			return bytes.Equal(syncedUserDataSecret.Data[defaultSecretKey], []byte(defaultSecretValue)), nil
+			return bytes.Equal(syncedUserDataSecret.Data[capiUserDataKey], []byte(defaultSecretValue)), nil
 		}, timeout).Should(BeTrue())
 	})
 
