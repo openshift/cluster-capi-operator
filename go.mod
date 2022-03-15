@@ -20,7 +20,7 @@ require (
 	sigs.k8s.io/cluster-api v1.1.1
 	sigs.k8s.io/cluster-api-operator v0.0.0-20220221190000-3f8fd689a585
 	sigs.k8s.io/cluster-api-provider-aws v1.3.0
-	sigs.k8s.io/controller-runtime v0.11.0
+	sigs.k8s.io/controller-runtime v0.11.1
 )
 
 require (
@@ -67,4 +67,7 @@ require (
 	sigs.k8s.io/yaml v1.3.0 // indirect
 )
 
-replace sigs.k8s.io/cluster-api => sigs.k8s.io/cluster-api v1.1.1
+replace (
+	sigs.k8s.io/cluster-api => github.com/openshift/cluster-api v0.0.0-20220303094157-f9c215c4f298
+	sigs.k8s.io/cluster-api-provider-aws => github.com/openshift/cluster-api-provider-aws v0.2.1-0.20220303094158-3c2daa272191
+)
