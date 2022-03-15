@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -67,13 +66,17 @@ func (r *ClusterOperatorReconciler) Reconcile(ctx context.Context, _ ctrl.Reques
 	}
 
 	// Install upstream CAPI Operator
-	if err := r.installCAPIOperator(ctx); err != nil {
-		klog.Errorf("Unable to install CAPI operator: %v", err)
-		if err := r.SetStatusDegraded(ctx, err); err != nil {
-			return ctrl.Result{}, fmt.Errorf("error syncing ClusterOperatorStatus: %v", err)
+	// TODO re-enable deployment of operator once images are built for all architecture targets (eg x86_64, aarm64, etc)
+	// For extended information about this temporary disable, please see https://coreos.slack.com/archives/C01CQA76KMX/p1647367797409909?thread_ts=1647351322.648249&cid=C01CQA76KMX
+	/*
+		if err := r.installCAPIOperator(ctx); err != nil {
+			klog.Errorf("Unable to install CAPI operator: %v", err)
+			if err := r.SetStatusDegraded(ctx, err); err != nil {
+				return ctrl.Result{}, fmt.Errorf("error syncing ClusterOperatorStatus: %v", err)
+			}
+			return ctrl.Result{}, err
 		}
-		return ctrl.Result{}, err
-	}
+	*/
 
 	// Install core CAPI components
 	if err := r.installCoreCAPIComponents(ctx); err != nil {
@@ -116,6 +119,9 @@ func (r *ClusterOperatorReconciler) Reconcile(ctx context.Context, _ ctrl.Reques
 }
 
 // installCAPIOperator reads assets from assets/capi-operator, customizes Deployment and Service objects, and applies them
+// TODO re-enable deployment of operator once images are built for all architecture targets (eg x86_64, aarm64, etc)
+// For extended information about this temporary disable, please see https://coreos.slack.com/archives/C01CQA76KMX/p1647367797409909?thread_ts=1647351322.648249&cid=C01CQA76KMX
+/*
 func (r *ClusterOperatorReconciler) installCAPIOperator(ctx context.Context) error {
 	klog.Infof("Reconciling CAPI Operator components")
 	objs, err := assets.ReadOperatorAssets(r.Scheme)
@@ -135,6 +141,7 @@ func (r *ClusterOperatorReconciler) installCAPIOperator(ctx context.Context) err
 
 	return nil
 }
+*/
 
 // installCoreCAPIComponents reads assets from assets/core-capi, create CRs that are consumed by upstream CAPI Operator
 func (r *ClusterOperatorReconciler) installCoreCAPIComponents(ctx context.Context) error {
