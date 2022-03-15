@@ -9,7 +9,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/klog/v2"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -41,9 +40,11 @@ func (r *ClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 func (r *ClusterReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (ctrl.Result, error) {
+	log := ctrl.LoggerFrom(ctx).WithName("ClusterController")
+
 	infra := &configv1.Infrastructure{}
 	if err := r.Get(ctx, client.ObjectKey{Name: controllers.InfrastructureResourceName}, infra); err != nil {
-		klog.Errorf("Unable to retrive Infrastructure object: %v", err)
+		log.Error(err, "Unable to retrive Infrastructure object")
 		if err := r.SetStatusDegraded(ctx, err); err != nil {
 			return ctrl.Result{}, fmt.Errorf("error syncing ClusterOperatorStatus: %v", err)
 		}
@@ -51,7 +52,7 @@ func (r *ClusterReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (ctrl
 	}
 
 	if infra.Status.PlatformStatus == nil {
-		klog.Infof("No platform status exists in infrastructure object. Skipping cluster reconciliation...")
+		log.Info("No platform status exists in infrastructure object. Skipping cluster reconciliation...")
 		if err := r.SetStatusAvailable(ctx); err != nil {
 			return ctrl.Result{}, err
 		}
@@ -64,14 +65,14 @@ func (r *ClusterReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (ctrl
 
 	// If the platform type is not supported, we should skip cluster reconciliation.
 	if _, ok := r.SupportedPlatforms[strings.ToLower(string(platformType))]; !ok {
-		klog.Infof("Platform type %v is not supported. Skipping cluster reconciliation...", platformType)
+		log.Info("Platform type is not supported. Skipping cluster reconciliation...", "platformType", platformType)
 		if err := r.SetStatusAvailable(ctx); err != nil {
 			return ctrl.Result{}, err
 		}
 		return ctrl.Result{}, nil
 	}
 
-	klog.Infof("Reconciling %v infrastucture cluster", platformType)
+	log.Info("Reconciling infrastucture cluster", "platformType", platformType)
 	// Reconcile infrastructure cluster based on platform type.
 	var infraClusterKind string
 	var err error
@@ -88,7 +89,7 @@ func (r *ClusterReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (ctrl
 	}
 
 	// Reconcile generic cluster
-	klog.Infof("Reconciling core cluster")
+	log.Info("Reconciling core cluster")
 	if err := r.reconcileCluster(ctx, infraClusterKind); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to reconcile cluster: %v", err)
 	}

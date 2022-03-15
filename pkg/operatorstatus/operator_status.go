@@ -11,7 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/klog/v2"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1 "github.com/openshift/api/config/v1"
@@ -36,9 +36,11 @@ type ClusterOperatorStatusClient struct {
 // setStatusAvailable sets the Available condition to True, with the given reason
 // and message, and sets both the Progressing and Degraded conditions to False.
 func (r *ClusterOperatorStatusClient) SetStatusAvailable(ctx context.Context) error {
+	log := ctrl.LoggerFrom(ctx)
+
 	co, err := r.GetOrCreateClusterOperator(ctx)
 	if err != nil {
-		klog.Errorf("Unable to set cluster operator status available: %v", err)
+		log.Error(err, "unable to set cluster operator status available")
 		return err
 	}
 
@@ -51,7 +53,7 @@ func (r *ClusterOperatorStatusClient) SetStatusAvailable(ctx context.Context) er
 	}
 
 	co.Status.Versions = []configv1.OperandVersion{{Name: controllers.OperatorVersionKey, Version: r.ReleaseVersion}}
-	klog.V(2).Info("Syncing status: available")
+	log.V(2).Info("syncing status: available")
 	return r.SyncStatus(ctx, co, conds)
 }
 
@@ -59,9 +61,11 @@ func (r *ClusterOperatorStatusClient) SetStatusAvailable(ctx context.Context) er
 // message, and sets the upgradeable condition.  It does not modify any existing
 // Available or Progressing conditions.
 func (r *ClusterOperatorStatusClient) SetStatusDegraded(ctx context.Context, reconcileErr error) error {
+	log := ctrl.LoggerFrom(ctx)
+
 	co, err := r.GetOrCreateClusterOperator(ctx)
 	if err != nil {
-		klog.Errorf("Unable to set cluster operator status degraded: %v", err)
+		log.Error(err, "unable to set cluster operator status degraded")
 		return err
 	}
 
@@ -82,11 +86,13 @@ func (r *ClusterOperatorStatusClient) SetStatusDegraded(ctx context.Context, rec
 	}
 
 	r.Recorder.Eventf(co, corev1.EventTypeWarning, "Status degraded", reconcileErr.Error())
-	klog.V(2).Infof("Syncing status: degraded: %s", message)
+	log.V(2).Info("syncing status: degraded", "message", message)
 	return r.SyncStatus(ctx, co, conds)
 }
 
 func (r *ClusterOperatorStatusClient) GetOrCreateClusterOperator(ctx context.Context) (*configv1.ClusterOperator, error) {
+	log := ctrl.LoggerFrom(ctx)
+
 	co := &configv1.ClusterOperator{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: controllers.ClusterOperatorName,
@@ -95,7 +101,7 @@ func (r *ClusterOperatorStatusClient) GetOrCreateClusterOperator(ctx context.Con
 	}
 	err := r.Client.Get(ctx, client.ObjectKey{Name: controllers.ClusterOperatorName}, co)
 	if errors.IsNotFound(err) {
-		klog.Infof("ClusterOperator does not exist, creating a new one.")
+		log.Info("ClusterOperator does not exist, creating a new one.")
 
 		err = r.Client.Create(ctx, co)
 		if err != nil {

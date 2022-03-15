@@ -5,21 +5,19 @@ import (
 	"fmt"
 	"strings"
 
+	configv1 "github.com/openshift/api/config/v1"
+	"github.com/openshift/cluster-capi-operator/assets"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers"
+	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/klog/v2"
 	operatorv1 "sigs.k8s.io/cluster-api-operator/api/v1alpha1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/source"
-
-	configv1 "github.com/openshift/api/config/v1"
-	"github.com/openshift/cluster-capi-operator/assets"
-	"github.com/openshift/cluster-capi-operator/pkg/controllers"
-	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 )
 
 // ClusterOperatorReconciler reconciles a ClusterOperator object
@@ -45,17 +43,19 @@ func (r *ClusterOperatorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 // Reconcile will process the cluster-api clusterOperator
 func (r *ClusterOperatorReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (ctrl.Result, error) {
-	klog.Infof("Intalling Cluster API components for technical preview cluster")
+	log := ctrl.LoggerFrom(ctx).WithName("ClusterOperatorController")
+
+	log.Info("reconciling Cluster API components for technical preview cluster")
 	// Get infrastructure object
 	infra := &configv1.Infrastructure{}
 	if err := r.Get(ctx, client.ObjectKey{Name: controllers.InfrastructureResourceName}, infra); k8serrors.IsNotFound(err) {
-		klog.Infof("Infrastructure cluster does not exist. Skipping...")
+		log.Info("infrastructure cluster does not exist. Skipping...")
 		if err := r.SetStatusAvailable(ctx); err != nil {
 			return ctrl.Result{}, err
 		}
 		return ctrl.Result{}, nil
 	} else if err != nil {
-		klog.Errorf("Unable to retrive Infrastructure object: %v", err)
+		log.Error(err, "unable to retrive Infrastructure object")
 		if err := r.SetStatusDegraded(ctx, err); err != nil {
 			return ctrl.Result{}, fmt.Errorf("error syncing ClusterOperatorStatus: %v", err)
 		}
@@ -67,7 +67,7 @@ func (r *ClusterOperatorReconciler) Reconcile(ctx context.Context, _ ctrl.Reques
 	// For extended information about this temporary disable, please see https://coreos.slack.com/archives/C01CQA76KMX/p1647367797409909?thread_ts=1647351322.648249&cid=C01CQA76KMX
 	/*
 		if err := r.installCAPIOperator(ctx); err != nil {
-			klog.Errorf("Unable to install CAPI operator: %v", err)
+		  log.Error(err, "unable to install CAPI operator")
 			if err := r.SetStatusDegraded(ctx, err); err != nil {
 				return ctrl.Result{}, fmt.Errorf("error syncing ClusterOperatorStatus: %v", err)
 			}
@@ -77,7 +77,7 @@ func (r *ClusterOperatorReconciler) Reconcile(ctx context.Context, _ ctrl.Reques
 
 	// Install core CAPI components
 	if err := r.installCoreCAPIComponents(ctx); err != nil {
-		klog.Errorf("Unable to install core CAPI components: %v", err)
+		log.Error(err, "unable to install core CAPI components")
 		if err := r.SetStatusDegraded(ctx, err); err != nil {
 			return ctrl.Result{}, fmt.Errorf("error syncing ClusterOperatorStatus: %v", err)
 		}
@@ -86,7 +86,7 @@ func (r *ClusterOperatorReconciler) Reconcile(ctx context.Context, _ ctrl.Reques
 
 	// Set platform type
 	if infra.Status.PlatformStatus == nil {
-		klog.Infof("No platform status exists in infrastructure object. Skipping...")
+		log.Info("no platform status exists in infrastructure object. Skipping...")
 		if err := r.SetStatusAvailable(ctx); err != nil {
 			return ctrl.Result{}, err
 		}
@@ -96,7 +96,7 @@ func (r *ClusterOperatorReconciler) Reconcile(ctx context.Context, _ ctrl.Reques
 
 	// Check if platform type is supported
 	if _, ok := r.SupportedPlatforms[r.PlatformType]; !ok {
-		klog.Infof("Platform type %s is not supported. Skipping...", r.PlatformType)
+		log.Info("platform type is not supported. Skipping...", "platformType", r.PlatformType)
 		if err := r.SetStatusAvailable(ctx); err != nil {
 			return ctrl.Result{}, err
 		}
@@ -105,7 +105,7 @@ func (r *ClusterOperatorReconciler) Reconcile(ctx context.Context, _ ctrl.Reques
 
 	// Install infrastructure CAPI components
 	if err := r.installInfrastructureCAPIComponents(ctx); err != nil {
-		klog.Errorf("Unable to infrastructure core CAPI components: %v", err)
+		log.Error(err, "unable to infrastructure core CAPI components")
 		if err := r.SetStatusDegraded(ctx, err); err != nil {
 			return ctrl.Result{}, fmt.Errorf("error syncing ClusterOperatorStatus: %v", err)
 		}
@@ -120,7 +120,8 @@ func (r *ClusterOperatorReconciler) Reconcile(ctx context.Context, _ ctrl.Reques
 // For extended information about this temporary disable, please see https://coreos.slack.com/archives/C01CQA76KMX/p1647367797409909?thread_ts=1647351322.648249&cid=C01CQA76KMX
 /*
 func (r *ClusterOperatorReconciler) installCAPIOperator(ctx context.Context) error {
-	klog.Infof("Reconciling CAPI Operator components")
+	log := ctrl.LoggerFrom(ctx)
+	log.Info("reconciling CAPI Operator components")
 	objs, err := assets.ReadOperatorAssets(r.Scheme)
 	if err != nil {
 		return fmt.Errorf("unable to read operator assets: %v", err)
@@ -142,7 +143,8 @@ func (r *ClusterOperatorReconciler) installCAPIOperator(ctx context.Context) err
 
 // installCoreCAPIComponents reads assets from assets/core-capi, create CRs that are consumed by upstream CAPI Operator
 func (r *ClusterOperatorReconciler) installCoreCAPIComponents(ctx context.Context) error {
-	klog.Infof("Reconciling Core CAPI components")
+	log := ctrl.LoggerFrom(ctx)
+	log.Info("reconciling Core CAPI components")
 	objs, err := assets.ReadCoreProviderAssets(r.Scheme)
 	if err != nil {
 		return fmt.Errorf("unable to read core-capi: %v", err)
@@ -163,7 +165,8 @@ func (r *ClusterOperatorReconciler) installCoreCAPIComponents(ctx context.Contex
 
 // installInfrastructureCAPIComponents reads assets from assets/providers, create CRs that are consumed by upstream CAPI Operator
 func (r *ClusterOperatorReconciler) installInfrastructureCAPIComponents(ctx context.Context) error {
-	klog.Infof("Reconciling Infrastructure CAPI components")
+	log := ctrl.LoggerFrom(ctx)
+	log.Info("reconciling Infrastructure CAPI components")
 	objs, err := assets.ReadInfrastructureProviderAssets(r.Scheme, r.PlatformType)
 	if err != nil {
 		return fmt.Errorf("unable to read providers: %v", err)
