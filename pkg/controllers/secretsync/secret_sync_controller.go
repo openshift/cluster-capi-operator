@@ -27,6 +27,9 @@ const (
 	// Controller conditions for the Cluster Operator resource
 	secretSyncControllerAvailableCondition = "SecretSyncControllerAvailable"
 	secretSyncControllerDegradedCondition  = "SecretSyncControllerDegraded"
+
+	mapiUserDataKey = "userData"
+	capiUserDataKey = "value"
 )
 
 type UserDataSecretController struct {
@@ -89,14 +92,21 @@ func (r *UserDataSecretController) Reconcile(ctx context.Context, req ctrl.Reque
 
 func (r *UserDataSecretController) areSecretsEqual(source *corev1.Secret, target *corev1.Secret) bool {
 	return source.Immutable == target.Immutable &&
-		reflect.DeepEqual(source.Data, target.Data) && reflect.DeepEqual(source.StringData, target.StringData) &&
+		reflect.DeepEqual(source.Data[mapiUserDataKey], target.Data[capiUserDataKey]) && reflect.DeepEqual(source.StringData, target.StringData) &&
 		source.Type == target.Type
 }
 
 func (r *UserDataSecretController) syncSecretData(ctx context.Context, source *corev1.Secret, target *corev1.Secret) error {
+	userData := source.Data[mapiUserDataKey]
+	if userData == nil {
+		return fmt.Errorf("source secret does not have user data")
+	}
+
 	target.SetName(managedUserDataSecretName)
 	target.SetNamespace(r.ManagedNamespace)
-	target.Data = source.Data
+	target.Data = map[string][]byte{
+		"value": userData,
+	}
 	target.StringData = source.StringData
 	target.Immutable = source.Immutable
 	target.Type = source.Type
