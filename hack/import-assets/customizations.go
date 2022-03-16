@@ -34,6 +34,50 @@ var (
 	techPreviewAnnotationValue = "TechPreviewNoUpgrade"
 )
 
+func processObjects(objs []unstructured.Unstructured, isOperator bool) map[resourceKey][]unstructured.Unstructured {
+	resourceMap := map[resourceKey][]unstructured.Unstructured{}
+	finalObjs := []unstructured.Unstructured{}
+	rbacObjs := []unstructured.Unstructured{}
+	crdObjs := []unstructured.Unstructured{}
+
+	serviceSecretNames := findWebhookServiceSecretName(objs)
+
+	for _, obj := range objs {
+		switch obj.GetKind() {
+		case "ClusterRole", "Role", "ClusterRoleBinding", "RoleBinding", "ServiceAccount":
+			setOpenShiftAnnotations(obj, false)
+			setTechPreviewAnnotation(obj)
+			rbacObjs = append(rbacObjs, obj)
+		case "MutatingWebhookConfiguration", "ValidatingWebhookConfiguration":
+			replaceCertManagerAnnotations(&obj)
+			finalObjs = append(finalObjs, obj)
+		case "CustomResourceDefinition":
+			// Filter out IPAM for metal3
+			if strings.Contains(strings.ToLower(obj.GetName()), "ipam") {
+				break
+			}
+			replaceCertManagerAnnotations(&obj)
+			removeConversionWebhook(&obj)
+			setOpenShiftAnnotations(obj, false)
+			setTechPreviewAnnotation(obj)
+			crdObjs = append(crdObjs, obj)
+		case "Service":
+			replaceCertMangerServiceSecret(&obj, serviceSecretNames)
+			finalObjs = append(finalObjs, obj)
+		case "Deployment":
+			customizeDeployments(&obj, isOperator)
+			finalObjs = append(finalObjs, obj)
+		case "Certificate", "Issuer", "Namespace", "Secret": // skip
+		}
+	}
+
+	resourceMap[rbacKey] = rbacObjs
+	resourceMap[crdKey] = crdObjs
+	resourceMap[otherKey] = finalObjs
+
+	return resourceMap
+}
+
 func setOpenShiftAnnotations(obj unstructured.Unstructured, merge bool) {
 	if !merge || len(obj.GetAnnotations()) == 0 {
 		obj.SetAnnotations(openshifAnnotations)
@@ -58,41 +102,6 @@ func setTechPreviewAnnotation(obj unstructured.Unstructured) {
 
 	anno[techPreviewAnnotation] = techPreviewAnnotationValue
 	obj.SetAnnotations(anno)
-}
-
-func certManagerToServiceCA(objs []unstructured.Unstructured) []unstructured.Unstructured {
-	serviceSecretNames := findWebhookServiceSecretName(objs)
-
-	finalObjs := []unstructured.Unstructured{}
-	for _, obj := range objs {
-		switch obj.GetKind() {
-		case "CustomResourceDefinition", "MutatingWebhookConfiguration", "ValidatingWebhookConfiguration":
-			anns := obj.GetAnnotations()
-			if anns == nil {
-				anns = map[string]string{}
-			}
-			if _, ok := anns["cert-manager.io/inject-ca-from"]; ok {
-				anns["service.beta.openshift.io/inject-cabundle"] = "true"
-				delete(anns, "cert-manager.io/inject-ca-from")
-				obj.SetAnnotations(anns)
-			}
-			finalObjs = append(finalObjs, obj)
-		case "Service":
-			anns := obj.GetAnnotations()
-			if anns == nil {
-				anns = map[string]string{}
-			}
-			if name, ok := serviceSecretNames[obj.GetName()]; ok {
-				anns["service.beta.openshift.io/serving-cert-secret-name"] = name
-				obj.SetAnnotations(anns)
-			}
-			finalObjs = append(finalObjs, obj)
-		case "Certificate", "Issuer", "Namespace": // skip
-		default:
-			finalObjs = append(finalObjs, obj)
-		}
-	}
-	return finalObjs
 }
 
 func findWebhookServiceSecretName(objs []unstructured.Unstructured) map[string]string {
@@ -167,37 +176,7 @@ func findWebhookServiceSecretName(objs []unstructured.Unstructured) map[string]s
 	return serviceSecretNames
 }
 
-func splitResources(objs []unstructured.Unstructured) map[resourceKey][]unstructured.Unstructured {
-	resourceMap := map[resourceKey][]unstructured.Unstructured{}
-	finalObjs := []unstructured.Unstructured{}
-	rbacObjs := []unstructured.Unstructured{}
-	crdObjs := []unstructured.Unstructured{}
-	for _, obj := range objs {
-		switch obj.GetKind() {
-		case "ClusterRole", "Role", "ClusterRoleBinding", "RoleBinding", "ServiceAccount":
-			setOpenShiftAnnotations(obj, false)
-			setTechPreviewAnnotation(obj)
-			rbacObjs = append(rbacObjs, obj)
-		case "CustomResourceDefinition":
-			setOpenShiftAnnotations(obj, false)
-			setTechPreviewAnnotation(obj)
-			crdObjs = append(crdObjs, obj)
-		case "Deployment":
-			customizeDeployments(&obj)
-			finalObjs = append(finalObjs, obj)
-		default:
-			finalObjs = append(finalObjs, obj)
-		}
-	}
-
-	resourceMap[rbacKey] = rbacObjs
-	resourceMap[crdKey] = crdObjs
-	resourceMap[otherKey] = finalObjs
-
-	return resourceMap
-}
-
-func customizeDeployments(obj *unstructured.Unstructured) {
+func customizeDeployments(obj *unstructured.Unstructured, isOperator bool) {
 	deployment := &appsv1.Deployment{}
 	if err := scheme.Convert(obj, deployment, nil); err != nil {
 		panic(err)
@@ -215,30 +194,54 @@ func customizeDeployments(obj *unstructured.Unstructured) {
 		// Remove all image references, they will be substituted operator later
 		deployment.Spec.Template.Spec.Containers[i].Image = "example.com/image:tag"
 	}
+
+	if isOperator {
+		// Modify manager container command to match openshift Dockerfile
+		for i := range deployment.Spec.Template.Spec.Containers {
+			container := &deployment.Spec.Template.Spec.Containers[i]
+			if container.Name == "manager" {
+				container.Command = []string{"./bin/cluster-api-operator"}
+			}
+		}
+	}
+
 	if err := scheme.Convert(deployment, obj, nil); err != nil {
 		panic(err)
 	}
 }
 
-func removeConversionWebhook(objs []unstructured.Unstructured) []unstructured.Unstructured {
-	finalObjs := []unstructured.Unstructured{}
-	for _, obj := range objs {
-		switch obj.GetKind() {
-		case "CustomResourceDefinition":
-			crd := &apiextensionsv1.CustomResourceDefinition{}
-			if err := scheme.Convert(&obj, crd, nil); err != nil {
-				panic(err)
-			}
-			crd.Spec.Conversion = nil
-			if err := scheme.Convert(crd, &obj, nil); err != nil {
-				panic(err)
-			}
-			finalObjs = append(finalObjs, obj)
-		default:
-			finalObjs = append(finalObjs, obj)
-		}
+func replaceCertManagerAnnotations(obj *unstructured.Unstructured) {
+	anns := obj.GetAnnotations()
+	if anns == nil {
+		anns = map[string]string{}
 	}
-	return finalObjs
+	if _, ok := anns["cert-manager.io/inject-ca-from"]; ok {
+		anns["service.beta.openshift.io/inject-cabundle"] = "true"
+		delete(anns, "cert-manager.io/inject-ca-from")
+		obj.SetAnnotations(anns)
+	}
+}
+
+func replaceCertMangerServiceSecret(obj *unstructured.Unstructured, serviceSecretNames map[string]string) {
+	anns := obj.GetAnnotations()
+	if anns == nil {
+		anns = map[string]string{}
+	}
+	if name, ok := serviceSecretNames[obj.GetName()]; ok {
+		anns["service.beta.openshift.io/serving-cert-secret-name"] = name
+		obj.SetAnnotations(anns)
+	}
+}
+
+func removeConversionWebhook(obj *unstructured.Unstructured) {
+	crd := &apiextensionsv1.CustomResourceDefinition{}
+	if err := scheme.Convert(obj, crd, nil); err != nil {
+		panic(err)
+	}
+	crd.Spec.Conversion = nil
+	if err := scheme.Convert(crd, obj, nil); err != nil {
+		panic(err)
+	}
 }
 
 // ensureNewLine makes sure that there is one new line at the end of the file for git
