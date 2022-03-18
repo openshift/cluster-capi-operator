@@ -44,20 +44,6 @@ spec:
           mountPath: /etc/cluster-api-config-images/
         - name: providers
           mountPath: /etc/cluster-api-config-providers/
-      - name: user-data-secret-controller
-        image: registry.ci.openshift.org/openshift:cluster-capi-operator
-        command:
-          - ./user-data-secret-controller
-        args:
-          - --leader-elect=true
-          - --leader-elect-lease-duration=137s
-          - --leader-elect-renew-deadline=107s
-          - --leader-elect-retry-period=26s
-          - --leader-elect-resource-namespace=openshift-cluster-api
-        resources:
-          requests:
-            cpu: 10m
-            memory: 25Mi
       nodeSelector:
         node-role.kubernetes.io/master: ""
       priorityClassName: system-node-critical

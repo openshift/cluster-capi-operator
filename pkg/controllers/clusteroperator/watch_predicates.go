@@ -34,7 +34,7 @@ func clusterOperatorPredicates() predicate.Funcs {
 func infrastructurePredicates() predicate.Funcs {
 	isInfrastructureCluster := func(obj runtime.Object) bool {
 		infra, ok := obj.(*configv1.Infrastructure)
-		return ok && infra.GetName() == infrastructureResourceName
+		return ok && infra.GetName() == controllers.InfrastructureResourceName
 	}
 
 	return predicate.Funcs{

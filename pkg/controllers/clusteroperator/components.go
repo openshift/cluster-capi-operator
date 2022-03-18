@@ -7,12 +7,14 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/klog/v2"
 	operatorv1 "sigs.k8s.io/cluster-api-operator/api/v1alpha1"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
 func (r *ClusterOperatorReconciler) reconcileOperatorDeployment(ctx context.Context, deployment *appsv1.Deployment) error {
+	log := ctrl.LoggerFrom(ctx)
+
 	deploymentCopy := deployment.DeepCopy()
 	if _, err := controllerutil.CreateOrUpdate(ctx, r.Client, deployment, func() error {
 		deployment.Spec = deploymentCopy.Spec
@@ -24,13 +26,15 @@ func (r *ClusterOperatorReconciler) reconcileOperatorDeployment(ctx context.Cont
 		for i, cont := range deployment.Spec.Template.Spec.Containers {
 			if imageRef, ok := containerToImageRef[cont.Name]; ok {
 				if cont.Image == r.Images[imageRef] {
-					klog.V(5).Infof("container %s doesn't require mutation", cont.Name, cont.Image)
+					log.V(5).Info("container doesn't require mutation", "containerName", cont.Name, "containerName",
+						cont.Image)
 					continue
 				}
-				klog.Infof("container %s changing image to %s", cont.Name, r.Images[imageRef])
+				log.Info("container changing image", cont.Name, r.Images[imageRef])
 				deployment.Spec.Template.Spec.Containers[i].Image = r.Images[imageRef]
 			} else {
-				klog.Warningf("container %s no image replacement found for %s", cont.Name, cont.Image)
+				log.Info("container %s no image replacement found", "containerName", cont.Name, "containerName",
+					cont.Image)
 			}
 		}
 		return nil

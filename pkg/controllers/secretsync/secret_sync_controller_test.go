@@ -117,7 +117,9 @@ var _ = Describe("User Data Secret controller", func() {
 				return err == nil || apierrors.IsNotFound(err)
 			}, timeout).Should(BeTrue())
 		}
-		Eventually(apierrors.IsNotFound(cl.Get(context.Background(), client.ObjectKey{Name: controllers.ClusterOperatorName}, co)), timeout).Should(BeTrue())
+		Eventually(func() bool {
+			return apierrors.IsNotFound(cl.Get(context.Background(), client.ObjectKey{Name: controllers.ClusterOperatorName}, co))
+		}, timeout).Should(BeTrue())
 
 		By("Cleanup resources")
 		deleteOptions := &client.DeleteOptions{
@@ -128,10 +130,9 @@ var _ = Describe("User Data Secret controller", func() {
 		Expect(cl.List(ctx, allSecrets)).To(Succeed())
 		for _, cm := range allSecrets.Items {
 			Expect(cl.Delete(ctx, cm.DeepCopy(), deleteOptions)).To(Succeed())
-			Eventually(
-				apierrors.IsNotFound(cl.Get(ctx, client.ObjectKeyFromObject(cm.DeepCopy()), &corev1.ConfigMap{})),
-				timeout,
-			).Should(BeTrue())
+			Eventually(func() bool {
+				return apierrors.IsNotFound(cl.Get(ctx, client.ObjectKeyFromObject(cm.DeepCopy()), &corev1.ConfigMap{}))
+			}, timeout).Should(BeTrue())
 		}
 
 		sourceSecret = nil
