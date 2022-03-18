@@ -3,7 +3,6 @@ package cluster
 import (
 	"context"
 	"testing"
-	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -23,7 +22,6 @@ var (
 	testEnv *envtest.Environment
 	cfg     *rest.Config
 	cl      client.Client
-	timeout = time.Second * 10
 	ctx     = context.Background()
 )
 

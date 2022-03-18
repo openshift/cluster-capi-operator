@@ -2,23 +2,21 @@ package clusteroperator
 
 import (
 	"context"
-	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	operatorv1 "sigs.k8s.io/cluster-api-operator/api/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
+	"github.com/openshift/cluster-capi-operator/pkg/test"
 )
 
 var (
-	timeout                           = time.Second * 10
 	operatorImageName                 = "cluster-kube-cluster-api-operator"
 	operatorImageSource               = "test.com/operator:tag"
 	kubeRBACProxyImageName            = "kube-rbac-proxy"
@@ -102,33 +100,18 @@ var _ = Describe("Reconcile components", func() {
 				Name:      deployment.Name,
 				Namespace: deployment.Namespace,
 			}, deployment)).To(Succeed())
-
-			Expect(cl.Delete(ctx, deployment)).To(Succeed())
-			Eventually(
-				apierrors.IsNotFound(cl.Get(ctx, client.ObjectKeyFromObject(deployment.DeepCopy()), &appsv1.Deployment{})),
-				timeout,
-			).Should(BeTrue())
+			Expect(deployment.Spec.Template.Spec.Containers[0].Image).To(Equal(operatorImageSource))
+			Expect(deployment.Spec.Template.Spec.Containers[1].Image).To(Equal(kubeRBACProxySource))
+			Expect(test.CleanupAndWait(ctx, cl, deployment)).To(Succeed())
 		})
 
 		It("should create a deployment and modify images", func() {
 			Expect(r.reconcileOperatorDeployment(ctx, deployment)).To(Succeed())
-			Expect(cl.Get(ctx, client.ObjectKey{
-				Name:      deployment.Name,
-				Namespace: deployment.Namespace,
-			}, deployment)).To(Succeed())
-			Expect(deployment.Spec.Template.Spec.Containers[0].Image).To(Equal(operatorImageSource))
-			Expect(deployment.Spec.Template.Spec.Containers[1].Image).To(Equal(kubeRBACProxySource))
 		})
 
 		It("should update an existing deployment", func() {
 			Expect(cl.Create(ctx, deployment)).To(Succeed())
 			Expect(r.reconcileOperatorDeployment(ctx, deployment)).To(Succeed())
-			Expect(cl.Get(ctx, client.ObjectKey{
-				Name:      deployment.Name,
-				Namespace: deployment.Namespace,
-			}, deployment)).To(Succeed())
-			Expect(deployment.Spec.Template.Spec.Containers[0].Image).To(Equal(operatorImageSource))
-			Expect(deployment.Spec.Template.Spec.Containers[1].Image).To(Equal(kubeRBACProxySource))
 		})
 	})
 
@@ -154,16 +137,7 @@ var _ = Describe("Reconcile components", func() {
 		})
 
 		AfterEach(func() {
-			Expect(cl.Get(ctx, client.ObjectKey{
-				Name:      service.Name,
-				Namespace: service.Namespace,
-			}, service)).To(Succeed())
-
-			Expect(cl.Delete(ctx, service)).To(Succeed())
-			Eventually(
-				apierrors.IsNotFound(cl.Get(ctx, client.ObjectKeyFromObject(service.DeepCopy()), &appsv1.Deployment{})),
-				timeout,
-			).Should(BeTrue())
+			Expect(test.CleanupAndWait(ctx, cl, service)).To(Succeed())
 		})
 
 		It("should create a service", func() {
@@ -210,25 +184,17 @@ var _ = Describe("Reconcile components", func() {
 				Name:      coreProvider.Name,
 				Namespace: coreProvider.Namespace,
 			}, coreProvider)).To(Succeed())
+			imageMeta := newImageMeta(coreProviderImageSource)
+			Expect(coreProvider.Spec.ProviderSpec.Deployment.Containers).To(HaveLen(1))
+			Expect(coreProvider.Spec.ProviderSpec.Deployment.Containers[0].Image.Name).To(Equal(imageMeta.Name))
+			Expect(coreProvider.Spec.ProviderSpec.Deployment.Containers[0].Image.Repository).To(Equal(imageMeta.Repository))
+			Expect(coreProvider.Spec.ProviderSpec.Deployment.Containers[0].Image.Tag).To(Equal(imageMeta.Tag))
 
-			Expect(cl.Delete(ctx, coreProvider)).To(Succeed())
-			Eventually(
-				apierrors.IsNotFound(cl.Get(ctx, client.ObjectKeyFromObject(coreProvider.DeepCopy()), &appsv1.Deployment{})),
-				timeout,
-			).Should(BeTrue())
+			Expect(test.CleanupAndWait(ctx, cl, coreProvider)).To(Succeed())
 		})
 
 		It("should create core provider and modify container images", func() {
 			Expect(r.reconcileCoreProvider(ctx, coreProvider)).To(Succeed())
-			Expect(cl.Get(ctx, client.ObjectKey{
-				Name:      coreProvider.Name,
-				Namespace: coreProvider.Namespace,
-			}, coreProvider)).To(Succeed())
-			Expect(coreProvider.Spec.ProviderSpec.Deployment.Containers).To(HaveLen(1))
-			imageMeta := newImageMeta(coreProviderImageSource)
-			Expect(coreProvider.Spec.ProviderSpec.Deployment.Containers[0].Image.Name).To(Equal(imageMeta.Name))
-			Expect(coreProvider.Spec.ProviderSpec.Deployment.Containers[0].Image.Repository).To(Equal(imageMeta.Repository))
-			Expect(coreProvider.Spec.ProviderSpec.Deployment.Containers[0].Image.Tag).To(Equal(imageMeta.Tag))
 		})
 
 		It("should update an existing core provider", func() {
@@ -236,15 +202,6 @@ var _ = Describe("Reconcile components", func() {
 			coreProvider.TypeMeta.Kind = "CoreProvider" // kind gets erased after Create()
 			coreProvider.Spec.Version = "v2.0.0"
 			Expect(r.reconcileCoreProvider(ctx, coreProvider)).To(Succeed())
-			Expect(cl.Get(ctx, client.ObjectKey{
-				Name:      coreProvider.Name,
-				Namespace: coreProvider.Namespace,
-			}, coreProvider)).To(Succeed())
-			imageMeta := newImageMeta(coreProviderImageSource)
-			Expect(coreProvider.Spec.ProviderSpec.Deployment.Containers).To(HaveLen(1))
-			Expect(coreProvider.Spec.ProviderSpec.Deployment.Containers[0].Image.Name).To(Equal(imageMeta.Name))
-			Expect(coreProvider.Spec.ProviderSpec.Deployment.Containers[0].Image.Repository).To(Equal(imageMeta.Repository))
-			Expect(coreProvider.Spec.ProviderSpec.Deployment.Containers[0].Image.Tag).To(Equal(imageMeta.Tag))
 			Expect(coreProvider.Spec.Version).To(Equal("v2.0.0"))
 		})
 	})
@@ -272,25 +229,17 @@ var _ = Describe("Reconcile components", func() {
 				Name:      infraProvider.Name,
 				Namespace: infraProvider.Namespace,
 			}, infraProvider)).To(Succeed())
-
-			Expect(cl.Delete(ctx, infraProvider)).To(Succeed())
-			Eventually(
-				apierrors.IsNotFound(cl.Get(ctx, client.ObjectKeyFromObject(infraProvider.DeepCopy()), &appsv1.Deployment{})),
-				timeout,
-			).Should(BeTrue())
-		})
-
-		It("should create infra provider and modify container images", func() {
-			Expect(r.reconcileInfrastructureProvider(ctx, infraProvider)).To(Succeed())
-			Expect(cl.Get(ctx, client.ObjectKey{
-				Name:      infraProvider.Name,
-				Namespace: infraProvider.Namespace,
-			}, infraProvider)).To(Succeed())
 			Expect(infraProvider.Spec.ProviderSpec.Deployment.Containers).To(HaveLen(1))
 			imageMeta := newImageMeta(infrastructureProviderImageSource)
 			Expect(infraProvider.Spec.ProviderSpec.Deployment.Containers[0].Image.Name).To(Equal(imageMeta.Name))
 			Expect(infraProvider.Spec.ProviderSpec.Deployment.Containers[0].Image.Repository).To(Equal(imageMeta.Repository))
 			Expect(infraProvider.Spec.ProviderSpec.Deployment.Containers[0].Image.Tag).To(Equal(imageMeta.Tag))
+
+			Expect(test.CleanupAndWait(ctx, cl, infraProvider)).To(Succeed())
+		})
+
+		It("should create infra provider and modify container images", func() {
+			Expect(r.reconcileInfrastructureProvider(ctx, infraProvider)).To(Succeed())
 		})
 
 		It("should update an existing infra provider", func() {
@@ -298,15 +247,6 @@ var _ = Describe("Reconcile components", func() {
 			infraProvider.TypeMeta.Kind = "InfrastructureProvider" // kind gets erased after Create()
 			infraProvider.Spec.Version = "v2.0.0"
 			Expect(r.reconcileInfrastructureProvider(ctx, infraProvider)).To(Succeed())
-			Expect(cl.Get(ctx, client.ObjectKey{
-				Name:      infraProvider.Name,
-				Namespace: infraProvider.Namespace,
-			}, infraProvider)).To(Succeed())
-			imageMeta := newImageMeta(infrastructureProviderImageSource)
-			Expect(infraProvider.Spec.ProviderSpec.Deployment.Containers).To(HaveLen(1))
-			Expect(infraProvider.Spec.ProviderSpec.Deployment.Containers[0].Image.Name).To(Equal(imageMeta.Name))
-			Expect(infraProvider.Spec.ProviderSpec.Deployment.Containers[0].Image.Repository).To(Equal(imageMeta.Repository))
-			Expect(infraProvider.Spec.ProviderSpec.Deployment.Containers[0].Image.Tag).To(Equal(imageMeta.Tag))
 			Expect(infraProvider.Spec.Version).To(Equal("v2.0.0"))
 		})
 	})
@@ -326,16 +266,7 @@ var _ = Describe("Reconcile components", func() {
 		})
 
 		AfterEach(func() {
-			Expect(cl.Get(ctx, client.ObjectKey{
-				Name:      cm.Name,
-				Namespace: cm.Namespace,
-			}, cm)).To(Succeed())
-
-			Expect(cl.Delete(ctx, cm)).To(Succeed())
-			Eventually(
-				apierrors.IsNotFound(cl.Get(ctx, client.ObjectKeyFromObject(cm.DeepCopy()), &appsv1.Deployment{})),
-				timeout,
-			).Should(BeTrue())
+			Expect(test.CleanupAndWait(ctx, cl, cm)).To(Succeed())
 		})
 
 		It("should create a configmap", func() {
