@@ -5,13 +5,6 @@ import (
 	"os"
 	"time"
 
-	configv1 "github.com/openshift/api/config/v1"
-	"github.com/openshift/cluster-capi-operator/pkg/controllers"
-	"github.com/openshift/cluster-capi-operator/pkg/controllers/cluster"
-	"github.com/openshift/cluster-capi-operator/pkg/controllers/clusteroperator"
-	"github.com/openshift/cluster-capi-operator/pkg/controllers/secretsync"
-	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
-	"github.com/openshift/cluster-capi-operator/pkg/util"
 	"github.com/spf13/pflag"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -26,6 +19,15 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
+
+	configv1 "github.com/openshift/api/config/v1"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/cluster"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/clusteroperator"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/kubeconfig"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/secretsync"
+	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
+	"github.com/openshift/cluster-capi-operator/pkg/util"
 )
 
 var (
@@ -144,7 +146,7 @@ func main() {
 	if err := (&cluster.ClusterReconciler{
 		ClusterOperatorStatusClient: operatorstatus.ClusterOperatorStatusClient{
 			Client:         mgr.GetClient(),
-			Recorder:       mgr.GetEventRecorderFor("cluster-capi-operator-cluster-controller"),
+			Recorder:       mgr.GetEventRecorderFor("cluster-capi-operator-cluster-resource-controller"),
 			ReleaseVersion: getReleaseVersion(),
 		},
 		Scheme:             mgr.GetScheme(),
@@ -163,6 +165,20 @@ func main() {
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		klog.Error(err, "unable to create user-data-secret controller", "controller", "ClusterOperator")
+		os.Exit(1)
+	}
+
+	if err = (&kubeconfig.KubeconfigReconciler{
+		ClusterOperatorStatusClient: operatorstatus.ClusterOperatorStatusClient{
+			Client:         mgr.GetClient(),
+			Recorder:       mgr.GetEventRecorderFor("cluster-capi-operator-kubeconfig-controller"),
+			ReleaseVersion: getReleaseVersion(),
+		},
+		Scheme:             mgr.GetScheme(),
+		SupportedPlatforms: supportedProviders,
+		RestCfg:            mgr.GetConfig(),
+	}).SetupWithManager(mgr); err != nil {
+		klog.Error(err, "unable to create controller", "controller", "ClusterOperator")
 		os.Exit(1)
 	}
 
