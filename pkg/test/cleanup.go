@@ -57,7 +57,18 @@ func CleanupAndWait(ctx context.Context, cl client.Client, objs ...client.Object
 func cleanup(ctx context.Context, cl client.Client, objs ...client.Object) error {
 	errs := []error{}
 	for _, o := range objs {
-		err := cl.Delete(ctx, o)
+		// Remove finalizers from the object
+		if o.GetFinalizers() != nil {
+			o.SetFinalizers(nil)
+		}
+
+		err := cl.Update(ctx, o)
+		if apierrors.IsNotFound(err) {
+			continue
+		}
+		errs = append(errs, err)
+
+		err = cl.Delete(ctx, o)
 		if apierrors.IsNotFound(err) {
 			continue
 		}
