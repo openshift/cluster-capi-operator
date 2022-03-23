@@ -19,4 +19,5 @@ stateDiagram-v2
     NoOp --> [*]
 ```
 
-If the current platform is not supported, the controller will not create any secret and allow BYO scenarios. In case when the platform is supported, the controller will create the secret containing kubeconfig.
+If the current platform is not supported, the controller will not create any secret and allow "bring your own" scenarios. 
+In cases where the platform is supported, the controller will create the secret containing kubeconfig.

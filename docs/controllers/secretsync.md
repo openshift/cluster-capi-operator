@@ -2,8 +2,7 @@
 
 ## Overview
 
-Secret sync controller is responsible for syncing `worker-user-data` secret from `openshift-machine-api` namespace to `openshift-cluster-api` namespace, it is created by the installer so we have no other to create it for now. The secret
-is used to store ignition configuration data for worker nodes.
+Secret sync controller is responsible for syncing `worker-user-data` secret that is created by installer in `openshift-machine-api` namespace. The secret is used to store ignition configuration data for worker nodes.
 
 ## Behavior
 

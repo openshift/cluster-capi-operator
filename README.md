@@ -27,7 +27,7 @@ Controllers design can be found here:
 
 ## New infrastructure provider onboarding
 
-Steps for nfrastructure provider onboarding are documented [here](docs/provideronboarding.md).
+Steps for infrastructure provider onboarding are documented [here](docs/provideronboarding.md).
 
 ## Running operator locally
 

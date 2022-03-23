@@ -31,8 +31,8 @@ After provider fork is set up, you should onboard it to [Openshift CI](https://d
 - Run `make import-assets`
 - Include your provider image to `manifests/image-references` and `manifests/0000_30_cluster-api_capi-operator_01_images.configmap.yaml`
 
-At this point your provider will CRDs and RBAC resources will be automatically imported to the `manifests/` directory and
-managed by the CVO, all other resources will imported to the `assets` directory and managed by the upstream operator.
+At this point your provider will have CRDs and RBAC resources automatically imported to the `manifests/` directory and
+managed by the CVO, all other resources will be imported to the `assets` directory and managed by the upstream operator.
 
 If you wish to make development of your provider easier, you can include a public provider image to the `dev-images.json`.
 

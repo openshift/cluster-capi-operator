@@ -22,5 +22,5 @@ stateDiagram-v2
     NoOp --> [*]
 ```
 
-Operator will create CoreProvider even if current platform is not supported, this allows BYO scenarios. If the
-platform is supported, the operator will create the appropriate InfrastructureProvider.
+Operator will create CoreProvider even if the current platform is not supported, this allows "bring your own" 
+scenarios. If the platform is supported, the operator will create the appropriate InfrastructureProvider.
