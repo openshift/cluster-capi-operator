@@ -18,6 +18,7 @@ import (
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/api/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 
 	configv1 "github.com/openshift/api/config/v1"
@@ -97,6 +98,11 @@ func main() {
 	pflag.Parse()
 
 	syncPeriod := 10 * time.Minute
+
+	cacheBuilder := cache.MultiNamespacedCacheBuilder([]string{
+		*managedNamespace, secretsync.SecretSourceNamespace,
+	})
+
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Namespace:               *managedNamespace,
 		Scheme:                  scheme,
@@ -110,6 +116,7 @@ func main() {
 		LeaderElectionID:        leaderElectionConfig.ResourceName,
 		RetryPeriod:             &leaderElectionConfig.RetryPeriod.Duration,
 		RenewDeadline:           &leaderElectionConfig.RenewDeadline.Duration,
+		NewCache:                cacheBuilder,
 	})
 	if err != nil {
 		klog.Error(err, "unable to start manager")
