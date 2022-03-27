@@ -8,7 +8,6 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/record"
@@ -19,6 +18,7 @@ import (
 	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
+	"github.com/openshift/cluster-capi-operator/pkg/test"
 )
 
 const (
@@ -109,30 +109,18 @@ var _ = Describe("User Data Secret controller", func() {
 		mgrCtxCancel()
 		Eventually(mgrStopped, timeout).Should(BeClosed())
 
-		co := &configv1.ClusterOperator{}
-		err := cl.Get(context.Background(), client.ObjectKey{Name: controllers.ClusterOperatorName}, co)
-		if err == nil || !apierrors.IsNotFound(err) {
-			Eventually(func() bool {
-				err := cl.Delete(context.Background(), co)
-				return err == nil || apierrors.IsNotFound(err)
-			}, timeout).Should(BeTrue())
+		co := &configv1.ClusterOperator{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: controllers.ClusterOperatorName,
+			},
 		}
-		Eventually(func() bool {
-			return apierrors.IsNotFound(cl.Get(context.Background(), client.ObjectKey{Name: controllers.ClusterOperatorName}, co))
-		}, timeout).Should(BeTrue())
+		Expect(test.CleanupAndWait(ctx, cl, co))
 
 		By("Cleanup resources")
-		deleteOptions := &client.DeleteOptions{
-			GracePeriodSeconds: pointer.Int64(0),
-		}
-
 		allSecrets := &corev1.SecretList{}
 		Expect(cl.List(ctx, allSecrets)).To(Succeed())
 		for _, cm := range allSecrets.Items {
-			Expect(cl.Delete(ctx, cm.DeepCopy(), deleteOptions)).To(Succeed())
-			Eventually(func() bool {
-				return apierrors.IsNotFound(cl.Get(ctx, client.ObjectKeyFromObject(cm.DeepCopy()), &corev1.ConfigMap{}))
-			}, timeout).Should(BeTrue())
+			Expect(test.CleanupAndWait(ctx, cl, cm.DeepCopy())).To(Succeed())
 		}
 
 		sourceSecret = nil
@@ -185,14 +173,7 @@ var _ = Describe("User Data Secret controller", func() {
 			return bytes.Equal(syncedUserDataSecret.Data[capiUserDataKey], []byte(defaultSecretValue)), nil
 		}, timeout).Should(BeTrue())
 
-		Expect(cl.Delete(ctx, syncedUserDataSecret)).To(Succeed())
-		Eventually(func() (bool, error) {
-			err := cl.Get(ctx, syncedSecretKey, syncedUserDataSecret)
-			if err != nil {
-				return false, err
-			}
-			return bytes.Equal(syncedUserDataSecret.Data[capiUserDataKey], []byte(defaultSecretValue)), nil
-		}, timeout).Should(BeTrue())
+		Expect(test.CleanupAndWait(ctx, cl, sourceSecret)).To(Succeed())
 	})
 
 	It("secret not be updated if source and target secret contents are identical", func() {

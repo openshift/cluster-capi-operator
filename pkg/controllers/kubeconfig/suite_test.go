@@ -1,4 +1,4 @@
-package cluster
+package kubeconfig
 
 import (
 	"context"
@@ -29,7 +29,7 @@ func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
 
 	RunSpecsWithDefaultAndCustomReporters(t,
-		"Cluster Controller Suite",
+		"Kubeconfig Controller Suite",
 		[]Reporter{printer.NewlineReporter{}})
 }
 

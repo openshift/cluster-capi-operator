@@ -3,13 +3,13 @@ package cluster
 import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
+	"github.com/openshift/cluster-capi-operator/pkg/test"
 )
 
 var _ = Describe("Reconcile CAPI cluster", func() {
@@ -45,10 +45,7 @@ var _ = Describe("Reconcile CAPI cluster", func() {
 		Expect(cluster.Spec.InfrastructureRef.Name).To(Equal(r.clusterName))
 		Expect(cluster.Spec.InfrastructureRef.Namespace).To(Equal(controllers.DefaultManagedNamespace))
 
-		Expect(cl.Delete(ctx, cluster)).To(Succeed())
-		Eventually(func() bool {
-			return apierrors.IsNotFound(cl.Get(ctx, client.ObjectKeyFromObject(cluster.DeepCopy()), &clusterv1.Cluster{}))
-		}, timeout).Should(BeTrue())
+		Expect(test.CleanupAndWait(ctx, cl, cluster)).To(Succeed())
 	})
 
 	It("should create a cluster with expected spec and status", func() {

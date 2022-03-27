@@ -5,10 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	configv1 "github.com/openshift/api/config/v1"
-	"github.com/openshift/cluster-capi-operator/assets"
-	"github.com/openshift/cluster-capi-operator/pkg/controllers"
-	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -18,6 +14,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+
+	configv1 "github.com/openshift/api/config/v1"
+	"github.com/openshift/cluster-capi-operator/assets"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers"
+	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 )
 
 // ClusterOperatorReconciler reconciles a ClusterOperator object

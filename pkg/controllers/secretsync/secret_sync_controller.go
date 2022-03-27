@@ -39,14 +39,14 @@ type UserDataSecretController struct {
 func (r *UserDataSecretController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := ctrl.LoggerFrom(ctx).WithName("SecretSyncController")
 
-	log.Info("emitted event, syncing user data secret", "request", req)
+	log.Info("reconciling worker user data secret")
 
 	defaultSourceSecretObjectKey := client.ObjectKey{
 		Name: managedUserDataSecretName, Namespace: SecretSourceNamespace,
 	}
 	sourceSecret := &corev1.Secret{}
 	if err := r.Get(ctx, defaultSourceSecretObjectKey, sourceSecret); err != nil {
-		log.Error(err, "unable to get secret for sync")
+		log.Error(err, "unable to get source secret for sync")
 		if err := r.setDegradedCondition(ctx); err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to set conditions for secret sync controller: %v", err)
 		}
