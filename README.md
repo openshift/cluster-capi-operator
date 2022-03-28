@@ -1,33 +1,69 @@
 # Cluster CAPI Operator
 
-The Cluster CAPI Operator manages the installation of the CAPI Operator and the provider
-resources that it requires.
+The Cluster CAPI Operator manages the installation and lifecycle of the Cluster API Components on Openshift clusters.
+
+```
+Note: This operator only runs on TechPreview clusters.
+```
+
+# Managed resources
+
+- [CoreProvider](https://github.com/kubernetes-sigs/cluster-api-operator/blob/main/api/v1alpha1/coreprovider_types.go) - an object that represents core Cluster API and is later reconciled by the upstream operator.
+- [InfrastructureProvider](https://github.com/kubernetes-sigs/cluster-api-operator/blob/main/api/v1alpha1/infrastructureprovider_types.go) - an object that represents Cluster API infrastructure provider(AWS, GCP, Azure, etc.) 
+and is later reconciled by the upstream operator.
+- [Cluster](https://cluster-api.sigs.k8s.io/developer/architecture/controllers/cluster.html) - CAPI Cluster CR that
+represents current cluster, it is treated as management and workload cluster at the same time.
+- [InfrastructureCluster](https://cluster-api.sigs.k8s.io/developer/providers/cluster-infrastructure.html) - CAPI Infrastructure Cluster CR that represents the infrastructure cluster.
+- Worker userdata secret - a secret that ignition configuration to be used by the worker nodes.
+- Kubeconfig secret - a secret that contains kubeconfig for the cluster.
 
 ## Controllers
 
-- ClusterOperator Controller
+Controllers design can be found here:
+- [ClusterOperator Controller](docs/controllers/clusteroperator.md)
+- [Cluster Controller](docs/controllers/cluster.md)
+- [Secret sync Controller](docs/controllers/secretsync.md)
+- [Kubeconfig Controller](docs/controllers/kubeconfig.md)
 
-When the featuregate is DevPreviewNoUpgrade
-1. Install the CAPI Operator
-2. Install all the supported provider configmaps
-3. Install the CoreProvider and InfractureProvider CRs (with image overrides)
+## New infrastructure provider onboarding
 
-## Updating manifests and assets
+Steps for infrastructure provider onboarding are documented [here](docs/provideronboarding.md).
 
-- Import capi-operator and provider manifests:
+## Running operator locally
 
-  ```sh
-  $ make import-assets
-  ```
+Downscale cluster version operator deployment;
 
-This command does 2 main things:
-1. get capi-operator configuration and moves the rbac resources to /manifests/ whilst
-   placing the remainder in /assets/capi-operator/
-   It also replaces the default rbac with a smaller subset.
-2. use clusterctl to get the provider resources
-   a. convert from cert-manager to service-ca
-   b. place provider rbac resources in /manifests
-   c. place all other resources in /assets/providers as configmaps (to be consumed by capi-operator)
+```sh
+kubectl scale deployment cluster-version-operator -nopenshift-cluster-version --replicas=0
+```
 
-To update the version of a provider, edit hack/import-assets/provider-versions.json and bump
-the versions as required.
+Downscale cluster CAPI operator deployment:
+
+```sh
+kubectl scale deployment cluster-capi-operator -nopenshift-cluster-api --replicas=0
+```
+
+Compile and run operator:
+
+```sh
+make build && ./bin/cluster-capi-operator
+```
+
+## Unit tests
+
+```sh
+make test
+```
+
+### Enabling technical preview featureset
+
+```sh
+kubectl edit featuregate
+```
+
+Set the spec to the following
+
+```yaml
+spec:
+  featureSet: TechPreviewNoUpgrade
+```
