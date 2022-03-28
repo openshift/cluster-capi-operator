@@ -512,7 +512,9 @@ sigs.k8s.io/cluster-api/api/v1beta1
 sigs.k8s.io/cluster-api/cmd/clusterctl/api/v1alpha3
 sigs.k8s.io/cluster-api/errors
 sigs.k8s.io/cluster-api/feature
+sigs.k8s.io/cluster-api/util
 sigs.k8s.io/cluster-api/util/annotations
+sigs.k8s.io/cluster-api/util/conditions
 sigs.k8s.io/cluster-api/util/version
 # sigs.k8s.io/cluster-api-operator v0.0.0-20220221190000-3f8fd689a585
 ## explicit; go 1.17
