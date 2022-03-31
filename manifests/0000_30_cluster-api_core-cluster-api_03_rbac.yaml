@@ -1,67 +1,24 @@
-apiVersion: v1
-kind: ServiceAccount
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
 metadata:
   annotations:
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
     release.openshift.io/feature-gate: TechPreviewNoUpgrade
+  creationTimestamp: null
   labels:
     cluster.x-k8s.io/provider: cluster-api
     clusterctl.cluster.x-k8s.io: ""
+  name: openshift-cluster-api-capi-manager-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: openshift-cluster-api-capi-aggregated-manager-role
+subjects:
+- kind: ServiceAccount
   name: capi-manager
   namespace: openshift-cluster-api
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  annotations:
-    exclude.release.openshift.io/internal-openshift-hosted: "true"
-    include.release.openshift.io/self-managed-high-availability: "true"
-    include.release.openshift.io/single-node-developer: "true"
-    release.openshift.io/feature-gate: TechPreviewNoUpgrade
-  labels:
-    cluster.x-k8s.io/provider: cluster-api
-    clusterctl.cluster.x-k8s.io: ""
-  name: capi-leader-election-role
-  namespace: openshift-cluster-api
-rules:
-- apiGroups:
-  - ""
-  resources:
-  - events
-  verbs:
-  - create
-- apiGroups:
-  - coordination.k8s.io
-  resources:
-  - leases
-  verbs:
-  - get
-  - list
-  - watch
-  - create
-  - update
-  - patch
-  - delete
----
-aggregationRule:
-  clusterRoleSelectors:
-  - matchLabels:
-      cluster.x-k8s.io/aggregate-to-manager: "true"
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  annotations:
-    exclude.release.openshift.io/internal-openshift-hosted: "true"
-    include.release.openshift.io/self-managed-high-availability: "true"
-    include.release.openshift.io/single-node-developer: "true"
-    release.openshift.io/feature-gate: TechPreviewNoUpgrade
-  labels:
-    cluster.x-k8s.io/provider: cluster-api
-    clusterctl.cluster.x-k8s.io: ""
-  name: openshift-cluster-api-capi-aggregated-manager-role
-rules: []
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -355,6 +312,53 @@ rules:
   - patch
   - watch
 ---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  annotations:
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/feature-gate: TechPreviewNoUpgrade
+  labels:
+    cluster.x-k8s.io/provider: cluster-api
+    clusterctl.cluster.x-k8s.io: ""
+  name: capi-manager
+  namespace: openshift-cluster-api
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  annotations:
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/feature-gate: TechPreviewNoUpgrade
+  labels:
+    cluster.x-k8s.io/provider: cluster-api
+    clusterctl.cluster.x-k8s.io: ""
+  name: capi-leader-election-role
+  namespace: openshift-cluster-api
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
@@ -378,24 +382,20 @@ subjects:
   name: capi-manager
   namespace: openshift-cluster-api
 ---
+aggregationRule:
+  clusterRoleSelectors:
+  - matchLabels:
+      cluster.x-k8s.io/aggregate-to-manager: "true"
 apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
+kind: ClusterRole
 metadata:
   annotations:
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
     release.openshift.io/feature-gate: TechPreviewNoUpgrade
-  creationTimestamp: null
   labels:
     cluster.x-k8s.io/provider: cluster-api
     clusterctl.cluster.x-k8s.io: ""
-  name: openshift-cluster-api-capi-manager-rolebinding
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
   name: openshift-cluster-api-capi-aggregated-manager-role
-subjects:
-- kind: ServiceAccount
-  name: capi-manager
-  namespace: openshift-cluster-api
+rules: []
