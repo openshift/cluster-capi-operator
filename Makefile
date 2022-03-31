@@ -47,8 +47,9 @@ lint: $(GOLANGCI_LINT)
 $(GOLANGCI_LINT): $(TOOLS_DIR)/go.mod # Build golangci-lint from tools folder.
 	cd $(TOOLS_DIR); go build -tags=tools -mod=readonly -o $(BIN_DIR)/golangci-lint github.com/golangci/golangci-lint/cmd/golangci-lint
 
-import-assets:
-	hack/import-assets.sh
+.PHONY: assets
+assets:
+	./hack/assets.sh
 
 # Run go mod
 .PHONY: vendor
