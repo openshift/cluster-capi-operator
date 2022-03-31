@@ -14,6 +14,8 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	utilyaml "sigs.k8s.io/cluster-api/util/yaml"
+	"sigs.k8s.io/kustomize/api/krusty"
+	"sigs.k8s.io/kustomize/kyaml/filesys"
 )
 
 type resourceKey string
@@ -260,4 +262,17 @@ func writeComponentsToManifests(fileName string, objs []unstructured.Unstructure
 	}
 
 	return os.WriteFile(path.Join(manifestsPath, fileName), ensureNewLine(combined), 0600)
+}
+
+func fetchAndCompileComponents(url string) ([]byte, error) {
+	k := krusty.MakeKustomizer(krusty.MakeDefaultOptions())
+
+	fSys := filesys.MakeFsOnDisk()
+
+	m, err := k.Run(fSys, url)
+	if err != nil {
+		return nil, err
+	}
+
+	return m.AsYaml()
 }
