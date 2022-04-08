@@ -10,6 +10,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	"sigs.k8s.io/cluster-api/util/conditions"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -123,6 +124,11 @@ func (r *ClusterReconciler) reconcileCluster(ctx context.Context, clusterKind st
 		return nil
 	}); err != nil {
 		return fmt.Errorf("unable to create or patch core cluster: %v", err)
+	}
+
+	conditions.MarkTrue(cluster, clusterv1.ControlPlaneInitializedCondition)
+	if err := r.Status().Patch(ctx, cluster, client.MergeFrom(clusterCopy)); err != nil {
+		return fmt.Errorf("unable to update aws cluster status: %v", err)
 	}
 
 	return nil

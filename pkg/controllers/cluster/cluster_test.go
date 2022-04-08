@@ -44,6 +44,8 @@ var _ = Describe("Reconcile CAPI cluster", func() {
 		Expect(cluster.Spec.InfrastructureRef.Kind).To(Equal(infraClusterKind))
 		Expect(cluster.Spec.InfrastructureRef.Name).To(Equal(r.clusterName))
 		Expect(cluster.Spec.InfrastructureRef.Namespace).To(Equal(controllers.DefaultManagedNamespace))
+		Expect(cluster.Status.Conditions).ToNot(BeEmpty())
+		Expect(cluster.Status.Conditions[0].Type).To(Equal(clusterv1.ControlPlaneInitializedCondition))
 
 		Expect(test.CleanupAndWait(ctx, cl, cluster)).To(Succeed())
 	})
