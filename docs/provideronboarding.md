@@ -8,11 +8,6 @@ In order to onboard a new CAPI provider, the following steps are required.
 - Remove all upstream OWNERS and replace with downstream OWNERS.
 - Create vendor directory in provider repository.
 - Create an `openshift/` directory in the provider repository and make sure it includes:
-  - `Makefile` that contains manifest build task using kustomize 
-    ```
-    $(KUSTOMIZE) build ../config/default > infrastructure-components.yaml
-    ```
-  - `infrastructure-components.yaml` created by executing makefile task.
   - A [script]((https://github.com/openshift/cluster-api-provider-azure/blob/master/openshift/unit-tests.sh)) for running unit tests, it's required because of issue with $HOME in CI container.
   - `Dockerfile.openshift` this Dockerfile will be used for downstream builds. Provider controller binary must be called
   `cluster-api-provider-$providername-controller-manager` and be located in `/bin/` directory.
@@ -28,7 +23,7 @@ After provider fork is set up, you should onboard it to [Openshift CI](https://d
   branch: release-4.11 # Openshift release branch to be used
   version: v1.3.0 # Version of the provider in your fork
   ```
-- Run `make import-assets`
+- Run `make assets`
 - Include your provider image to `manifests/image-references` and `manifests/0000_30_cluster-api_capi-operator_01_images.configmap.yaml`
 
 At this point your provider will have CRDs and RBAC resources automatically imported to the `manifests/` directory and

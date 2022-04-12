@@ -2,9 +2,7 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"io/ioutil"
-	"net/http"
 	"os"
 	"path"
 	"strings"
@@ -17,7 +15,7 @@ import (
 )
 
 var (
-	operatorComponentsFmt = "https://raw.githubusercontent.com/openshift/cluster-api-operator/%s/openshift/operator-components.yaml"
+	operatorUrlFmt = "https://github.com/openshift/cluster-api-operator//config/default?ref=%s"
 )
 
 func importCAPIOperator() error {
@@ -78,16 +76,9 @@ func readCAPIOperatorManifests() ([]unstructured.Unstructured, error) {
 		return nil, err
 	}
 
-	operatorComponentsUrl := fmt.Sprintf(operatorComponentsFmt, operatorConfigMap["branch"])
+	operatorUrl := fmt.Sprintf(operatorUrlFmt, operatorConfigMap["branch"])
 
-	// Download provider components from github as raw yaml
-	componentsResponse, err := http.Get(operatorComponentsUrl)
-	if err != nil {
-		return nil, err
-	}
-	defer componentsResponse.Body.Close()
-
-	rawComponentsResponse, err := io.ReadAll(componentsResponse.Body)
+	rawComponents, err := fetchAndCompileComponents(operatorUrl)
 	if err != nil {
 		return nil, err
 	}
@@ -103,7 +94,7 @@ func readCAPIOperatorManifests() ([]unstructured.Unstructured, error) {
 		Provider:     providerConfig,
 		ConfigClient: configClient,
 		Processor:    yamlprocessor.NewSimpleProcessor(),
-		RawYaml:      rawComponentsResponse,
+		RawYaml:      rawComponents,
 		Options:      options,
 	})
 	if err != nil {

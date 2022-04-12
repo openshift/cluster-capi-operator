@@ -70,21 +70,6 @@ func loadProviders(providerList []byte) ([]provider, error) {
 	return providers, nil
 }
 
-func (p *provider) getComponentsUrl() string {
-	providerPath := ""
-	componentsName := "core"
-	if p.PType == clusterctlv1.InfrastructureProviderType {
-		providerPath = fmt.Sprintf("-provider-%s", p.Name)
-		componentsName = "infrastructure"
-	}
-
-	return fmt.Sprintf("https://raw.githubusercontent.com/openshift/cluster-api%s/%s/openshift/%s-components.yaml",
-		providerPath,
-		p.Branch,
-		componentsName,
-	)
-}
-
 func (p *provider) getMetadataUrl() string {
 	providerPath := ""
 	if p.PType == clusterctlv1.InfrastructureProviderType {
@@ -92,6 +77,17 @@ func (p *provider) getMetadataUrl() string {
 	}
 
 	return fmt.Sprintf("https://raw.githubusercontent.com/openshift/cluster-api%s/%s/metadata.yaml",
+		providerPath,
+		p.Branch,
+	)
+}
+
+func (p *provider) getProviderAssetUrl() string {
+	providerPath := ""
+	if p.PType == clusterctlv1.InfrastructureProviderType {
+		providerPath = fmt.Sprintf("-provider-%s", p.Name)
+	}
+	return fmt.Sprintf("https://github.com/openshift/cluster-api%s//config/default?ref=%s",
 		providerPath,
 		p.Branch,
 	)
@@ -121,13 +117,8 @@ func (p *provider) loadComponents() error {
 		SkipTemplateProcess: false,
 	}
 
-	// Download provider components from github as raw yaml
-	componentsResponse, err := http.Get(p.getComponentsUrl())
-	if err != nil {
-		return err
-	}
-	defer componentsResponse.Body.Close()
-	rawComponentsResponse, err := io.ReadAll(componentsResponse.Body)
+	// Download and compile assets using kustomize
+	rawComponents, err := fetchAndCompileComponents(p.getProviderAssetUrl())
 	if err != nil {
 		return err
 	}
@@ -137,7 +128,7 @@ func (p *provider) loadComponents() error {
 		Provider:     providerConfig,
 		ConfigClient: configClient,
 		Processor:    yamlprocessor.NewSimpleProcessor(),
-		RawYaml:      rawComponentsResponse,
+		RawYaml:      rawComponents,
 		Options:      options,
 	})
 	if err != nil {
