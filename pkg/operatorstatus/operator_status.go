@@ -52,9 +52,16 @@ func (r *ClusterOperatorStatusClient) SetStatusAvailable(ctx context.Context) er
 		NewClusterOperatorStatusCondition(configv1.OperatorUpgradeable, configv1.ConditionTrue, ReasonAsExpected, ""),
 	}
 
-	co.Status.Versions = []configv1.OperandVersion{{Name: controllers.OperatorVersionKey, Version: r.ReleaseVersion}}
-	log.V(2).Info("syncing status: available")
-	return r.SyncStatus(ctx, co, conds)
+	// Update cluster conditions only if they have been changed
+	for _, cond := range conds {
+		if !v1helpers.IsStatusConditionPresentAndEqual(co.Status.Conditions, cond.Type, cond.Status) {
+			co.Status.Versions = []configv1.OperandVersion{{Name: controllers.OperatorVersionKey, Version: r.ReleaseVersion}}
+			log.V(2).Info("syncing status: available")
+			return r.SyncStatus(ctx, co, conds)
+		}
+	}
+
+	return nil
 }
 
 // setStatusDegraded sets the Degraded condition to True, with the given reason and
@@ -85,9 +92,16 @@ func (r *ClusterOperatorStatusClient) SetStatusDegraded(ctx context.Context, rec
 		NewClusterOperatorStatusCondition(configv1.OperatorUpgradeable, configv1.ConditionFalse, ReasonAsExpected, ""),
 	}
 
-	r.Recorder.Eventf(co, corev1.EventTypeWarning, "Status degraded", reconcileErr.Error())
-	log.V(2).Info("syncing status: degraded", "message", message)
-	return r.SyncStatus(ctx, co, conds)
+	// Update cluster conditions only if they have been changed
+	for _, cond := range conds {
+		if !v1helpers.IsStatusConditionPresentAndEqual(co.Status.Conditions, cond.Type, cond.Status) {
+			r.Recorder.Eventf(co, corev1.EventTypeWarning, "Status degraded", reconcileErr.Error())
+			log.V(2).Info("syncing status: degraded", "message", message)
+			return r.SyncStatus(ctx, co, conds)
+		}
+	}
+
+	return nil
 }
 
 func (r *ClusterOperatorStatusClient) GetOrCreateClusterOperator(ctx context.Context) (*configv1.ClusterOperator, error) {
