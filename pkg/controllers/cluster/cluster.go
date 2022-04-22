@@ -81,6 +81,12 @@ func (r *ClusterReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (ctrl
 	case configv1.AWSPlatformType:
 		infraClusterKind = "AWSCluster"
 		err = r.reconcileAWSCluster(ctx, infra.Status.PlatformStatus.AWS)
+	case configv1.AzurePlatformType:
+		infraClusterKind = "AzureCluster"
+		err = r.reconcileAzureCluster(ctx, infra.Status.PlatformStatus.Azure)
+	case configv1.GCPPlatformType:
+		infraClusterKind = "GCPCluster"
+		err = r.reconcileGCPCluster(ctx, infra.Status.PlatformStatus.GCP)
 	default:
 		// skipping unsupported platform should be handled earlier
 		err = fmt.Errorf("unsupported platform type %v", platformType)

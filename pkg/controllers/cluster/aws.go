@@ -39,7 +39,7 @@ func (r *ClusterReconciler) reconcileAWSCluster(ctx context.Context, awsPlatform
 		awsCluster.Spec = awsClusterCopy.Spec
 		return nil
 	}); err != nil {
-		return fmt.Errorf("unable to create or patch core cluster: %v", err)
+		return fmt.Errorf("unable to create or patch aws cluster: %v", err)
 	}
 
 	awsCluster.Status.Ready = true

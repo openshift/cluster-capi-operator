@@ -63,19 +63,6 @@ func (r *ClusterOperatorReconciler) Reconcile(ctx context.Context, _ ctrl.Reques
 		return ctrl.Result{}, err
 	}
 
-	// Install upstream CAPI Operator
-	// TODO re-enable deployment of operator once images are built for all architecture targets (eg x86_64, aarm64, etc)
-	// For extended information about this temporary disable, please see https://coreos.slack.com/archives/C01CQA76KMX/p1647367797409909?thread_ts=1647351322.648249&cid=C01CQA76KMX
-	/*
-		if err := r.installCAPIOperator(ctx); err != nil {
-		  log.Error(err, "unable to install CAPI operator")
-			if err := r.SetStatusDegraded(ctx, err); err != nil {
-				return ctrl.Result{}, fmt.Errorf("error syncing ClusterOperatorStatus: %v", err)
-			}
-			return ctrl.Result{}, err
-		}
-	*/
-
 	// Install core CAPI components
 	if err := r.installCoreCAPIComponents(ctx); err != nil {
 		log.Error(err, "unable to install core CAPI components")
@@ -115,32 +102,6 @@ func (r *ClusterOperatorReconciler) Reconcile(ctx context.Context, _ ctrl.Reques
 
 	return ctrl.Result{}, r.SetStatusAvailable(ctx)
 }
-
-// installCAPIOperator reads assets from assets/capi-operator, customizes Deployment and Service objects, and applies them
-// TODO re-enable deployment of operator once images are built for all architecture targets (eg x86_64, aarm64, etc)
-// For extended information about this temporary disable, please see https://coreos.slack.com/archives/C01CQA76KMX/p1647367797409909?thread_ts=1647351322.648249&cid=C01CQA76KMX
-/*
-func (r *ClusterOperatorReconciler) installCAPIOperator(ctx context.Context) error {
-	log := ctrl.LoggerFrom(ctx)
-	log.Info("reconciling CAPI Operator components")
-	objs, err := assets.ReadOperatorAssets(r.Scheme)
-	if err != nil {
-		return fmt.Errorf("unable to read operator assets: %v", err)
-	}
-
-	deployment := objs[assets.OperatorDeploymentKey].(*appsv1.Deployment)
-	if err := r.reconcileOperatorDeployment(ctx, deployment); err != nil {
-		return fmt.Errorf("unable to reconcile operator deployment: %v", err)
-	}
-
-	service := objs[assets.OperatorServiceKey].(*corev1.Service)
-	if err := r.reconcileOperatorService(ctx, service); err != nil {
-		return fmt.Errorf("unable to reconcile operator service: %v", err)
-	}
-
-	return nil
-}
-*/
 
 // installCoreCAPIComponents reads assets from assets/core-capi, create CRs that are consumed by upstream CAPI Operator
 func (r *ClusterOperatorReconciler) installCoreCAPIComponents(ctx context.Context) error {
