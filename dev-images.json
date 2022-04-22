@@ -2,5 +2,7 @@
   "cluster-kube-cluster-api-operator": "quay.io/ademicev/cluster-api-operator:latest",
   "cluster-capi-controllers": "quay.io/ademicev/cluster-api:latest",
   "aws-cluster-api-controllers": "quay.io/ademicev/cluster-api-provider-aws:latest",
+  "azure-cluster-api-controllers": "quay.io/ademicev/cluster-api-provider-azure:latest",
+  "gcp-cluster-api-controllers": "quay.io/ademicev/cluster-api-provider-gcp:latest",
   "kube-rbac-proxy": "gcr.io/kubebuilder/kube-rbac-proxy:v0.5.0"
 }
