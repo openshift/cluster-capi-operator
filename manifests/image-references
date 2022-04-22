@@ -14,3 +14,19 @@ spec:
     from:
       kind: DockerImage
       name: registry.ci.openshift.org/openshift:cluster-capi-controllers
+  - name: cluster-kube-cluster-api-operator
+    from:
+      kind: DockerImage
+      name: registry.ci.openshift.org/openshift:cluster-kube-cluster-api-operator
+  - name: aws-cluster-api-controllers
+    from:
+      kind: DockerImage
+      name: registry.ci.openshift.org/openshift:aws-cluster-api-controllers
+  - name: azure-cluster-api-controllers
+    from:
+      kind: DockerImage
+      name: registry.ci.openshift.org/openshift:azure-cluster-api-controllers
+  - name: gcp-cluster-api-controllers
+    from:
+      kind: DockerImage
+      name: registry.ci.openshift.org/openshift:gcp-cluster-api-controllers
