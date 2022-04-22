@@ -114,7 +114,7 @@ func (p *provider) loadComponents() error {
 	// Set options for yaml processor
 	options := repository.ComponentsOptions{
 		TargetNamespace:     targetNamespace,
-		SkipTemplateProcess: false,
+		SkipTemplateProcess: true,
 	}
 
 	// Download and compile assets using kustomize
@@ -294,7 +294,7 @@ func importProviders() error {
 		}
 
 		// Perform all manifest transformations
-		resourceMap := processObjects(p.components.Objs(), false)
+		resourceMap := processObjects(p.components.Objs(), p.Name)
 
 		// Write RBAC components to manifests, they will be managed by CVO
 		rbacFileName := fmt.Sprintf("%s%s-%s_03_rbac.yaml", manifestPrefix, p.providerTypeName(), p.Name)
