@@ -20,6 +20,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
@@ -41,6 +42,31 @@ var (
 		ResourceName:      "cluster-capi-operator-leader",
 		ResourceNamespace: "openshift-cluster-api",
 	}
+	metricsAddr = flag.String(
+		"metrics-bind-address",
+		":8080",
+		"Address for hosting metrics",
+	)
+	healthAddr = flag.String(
+		"health-addr",
+		":9440",
+		"The address for health checking.",
+	)
+	managedNamespace = flag.String(
+		"namespace",
+		controllers.DefaultManagedNamespace,
+		"The namespace where CAPI components will run.",
+	)
+	imagesFile = flag.String(
+		"images-json",
+		defaultImagesLocation,
+		"The location of images file to use by operator for managed CAPI binaries.",
+	)
+	providerFile = flag.String(
+		"providers-yaml",
+		defaultProvidersLocation,
+		"The location of supported providers for CAPI",
+	)
 )
 
 const (
@@ -64,32 +90,6 @@ func main() {
 	klog.InitFlags(nil)
 
 	ctrl.SetLogger(klogr.New())
-
-	metricsAddr := flag.String(
-		"metrics-bind-address",
-		":8080",
-		"Address for hosting metrics",
-	)
-	healthAddr := flag.String(
-		"health-addr",
-		":9440",
-		"The address for health checking.",
-	)
-	managedNamespace := flag.String(
-		"namespace",
-		controllers.DefaultManagedNamespace,
-		"The namespace where CAPI components will run.",
-	)
-	imagesFile := flag.String(
-		"images-json",
-		defaultImagesLocation,
-		"The location of images file to use by operator for managed CAPI binaries.",
-	)
-	providerFile := flag.String(
-		"providers-yaml",
-		defaultProvidersLocation,
-		"The location of supported providers for CAPI",
-	)
 
 	// Once all the flags are regitered, switch to pflag
 	// to allow leader lection flags to be bound
@@ -136,54 +136,37 @@ func main() {
 	}
 
 	if err = (&clusteroperator.ClusterOperatorReconciler{
-		ClusterOperatorStatusClient: operatorstatus.ClusterOperatorStatusClient{
-			Client:           mgr.GetClient(),
-			Recorder:         mgr.GetEventRecorderFor("cluster-capi-operator-cluster-operator-controller"),
-			ReleaseVersion:   getReleaseVersion(),
-			ManagedNamespace: *managedNamespace,
-		},
-		Scheme:             mgr.GetScheme(),
-		Images:             containerImages,
-		SupportedPlatforms: supportedProviders,
+		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-cluster-operator-controller"),
+		Scheme:                      mgr.GetScheme(),
+		Images:                      containerImages,
+		SupportedPlatforms:          supportedProviders,
 	}).SetupWithManager(mgr); err != nil {
 		klog.Error(err, "unable to create controller", "controller", "ClusterOperator")
 		os.Exit(1)
 	}
 
 	if err := (&cluster.ClusterReconciler{
-		ClusterOperatorStatusClient: operatorstatus.ClusterOperatorStatusClient{
-			Client:         mgr.GetClient(),
-			Recorder:       mgr.GetEventRecorderFor("cluster-capi-operator-cluster-resource-controller"),
-			ReleaseVersion: getReleaseVersion(),
-		},
-		Scheme:             mgr.GetScheme(),
-		SupportedPlatforms: supportedProviders,
+		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-cluster-resource-controller"),
+		Scheme:                      mgr.GetScheme(),
+		SupportedPlatforms:          supportedProviders,
 	}).SetupWithManager(mgr); err != nil {
 		klog.Error(err, "unable to create controller", "controller", "ClusterOperator")
 		os.Exit(1)
 	}
 
 	if err = (&secretsync.UserDataSecretController{
-		ClusterOperatorStatusClient: operatorstatus.ClusterOperatorStatusClient{
-			Client:           mgr.GetClient(),
-			Recorder:         mgr.GetEventRecorderFor("cluster-capi-operator-user-data-secret-controller"),
-			ManagedNamespace: *managedNamespace,
-		},
-		Scheme: mgr.GetScheme(),
+		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-user-data-secret-controller"),
+		Scheme:                      mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		klog.Error(err, "unable to create user-data-secret controller", "controller", "ClusterOperator")
 		os.Exit(1)
 	}
 
 	if err = (&kubeconfig.KubeconfigReconciler{
-		ClusterOperatorStatusClient: operatorstatus.ClusterOperatorStatusClient{
-			Client:         mgr.GetClient(),
-			Recorder:       mgr.GetEventRecorderFor("cluster-capi-operator-kubeconfig-controller"),
-			ReleaseVersion: getReleaseVersion(),
-		},
-		Scheme:             mgr.GetScheme(),
-		SupportedPlatforms: supportedProviders,
-		RestCfg:            mgr.GetConfig(),
+		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-kubeconfig-controller"),
+		Scheme:                      mgr.GetScheme(),
+		SupportedPlatforms:          supportedProviders,
+		RestCfg:                     mgr.GetConfig(),
 	}).SetupWithManager(mgr); err != nil {
 		klog.Error(err, "unable to create controller", "controller", "ClusterOperator")
 		os.Exit(1)
@@ -214,4 +197,13 @@ func getReleaseVersion() string {
 		klog.Infof("%s environment variable is missing, defaulting to %q", releaseVersionEnvVariableName, unknownVersionValue)
 	}
 	return releaseVersion
+}
+
+func getClusterOperatorStatusClient(mgr manager.Manager, controller string) operatorstatus.ClusterOperatorStatusClient {
+	return operatorstatus.ClusterOperatorStatusClient{
+		Client:           mgr.GetClient(),
+		Recorder:         mgr.GetEventRecorderFor(controller),
+		ReleaseVersion:   getReleaseVersion(),
+		ManagedNamespace: *managedNamespace,
+	}
 }
