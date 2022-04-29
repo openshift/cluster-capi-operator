@@ -67,6 +67,9 @@ var _ = Describe("Reconcile GCP cluster", func() {
 			Name:      gcpCluster.Name,
 			Namespace: gcpCluster.Namespace,
 		}, gcpCluster)).To(Succeed())
+		gcpCluster.Spec.Project = "foo"
+		gcpCluster.Spec.Region = "foo"
+		Expect(cl.Update(ctx, gcpCluster)).To(Succeed())
 		Expect(r.reconcileGCPCluster(ctx, gcpPlatformStatus)).To(Succeed())
 	})
 })
