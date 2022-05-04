@@ -14,9 +14,6 @@ import (
 type assetKey string
 
 const (
-	OperatorDeploymentKey assetKey = "operator-deployment"
-	OperatorServiceKey    assetKey = "operator-service"
-
 	CoreProviderKey          assetKey = "core-provider"
 	CoreProviderConfigMapKey assetKey = "core-provider-configmap"
 
@@ -24,35 +21,8 @@ const (
 	InfrastructureProviderConfigMapKey assetKey = "infrastructure-provider-configmap"
 )
 
-//go:embed capi-operator/*.yaml core-capi/*.yaml infrastructure-providers/*.yaml
+//go:embed core-capi/*.yaml infrastructure-providers/*.yaml
 var fs embed.FS
-
-func ReadOperatorAssets(scheme *runtime.Scheme) (map[assetKey]client.Object, error) {
-	dir := "capi-operator"
-	assetNames, err := fs.ReadDir(dir)
-	if err != nil {
-		return nil, err
-	}
-
-	objs := map[assetKey]client.Object{}
-	for _, assetName := range assetNames {
-		obj, err := readObject(dir, assetName.Name(), scheme)
-		if err != nil {
-			return nil, err
-		}
-
-		switch obj.GetObjectKind().GroupVersionKind().Kind {
-		case "Deployment":
-			objs[OperatorDeploymentKey] = obj.(client.Object)
-		case "Service":
-			objs[OperatorServiceKey] = obj.(client.Object)
-		default:
-			return nil, fmt.Errorf("unsupported asset for operator: %s", obj.GetObjectKind().GroupVersionKind().Kind)
-		}
-	}
-
-	return objs, nil
-}
 
 func ReadCoreProviderAssets(scheme *runtime.Scheme) (map[assetKey]client.Object, error) {
 	dir := "core-capi"

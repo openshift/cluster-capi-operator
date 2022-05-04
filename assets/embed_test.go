@@ -13,23 +13,6 @@ func init() {
 	utilruntime.Must(operatorv1.AddToScheme(scheme.Scheme))
 }
 
-func TestReadOperatorAssets(t *testing.T) {
-	g := NewGomegaWithT(t)
-
-	objs, err := ReadOperatorAssets(scheme.Scheme)
-	g.Expect(err).NotTo(HaveOccurred())
-
-	g.Expect(objs).To(HaveLen(2))
-
-	g.Expect(objs).Should(HaveKey(OperatorDeploymentKey))
-	g.Expect(objs[OperatorDeploymentKey]).ToNot(BeNil())
-	g.Expect(objs[OperatorDeploymentKey].GetObjectKind().GroupVersionKind().Kind).To(Equal("Deployment"))
-
-	g.Expect(objs).Should(HaveKey(OperatorServiceKey))
-	g.Expect(objs[OperatorServiceKey]).ToNot(BeNil())
-	g.Expect(objs[OperatorServiceKey].GetObjectKind().GroupVersionKind().Kind).To(Equal("Service"))
-}
-
 func TestReadCoreProviderAssets(t *testing.T) {
 	g := NewGomegaWithT(t)
 

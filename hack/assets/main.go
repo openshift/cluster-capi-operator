@@ -18,7 +18,6 @@ var (
 	projDir             = path.Join("..", "..")
 	providersAssetsPath = path.Join(projDir, "assets", "infrastructure-providers")
 	coreCAPIAssetsPath  = path.Join(projDir, "assets", "core-capi")
-	operatorAssetsPath  = path.Join(projDir, "assets", "capi-operator")
 	manifestsPath       = path.Join(projDir, "manifests")
 	providerListPath    = path.Join(projDir, "providers-list.yaml")
 	operatorConfigPath  = path.Join(projDir, "cluster-api-operator.yaml")

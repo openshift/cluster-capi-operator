@@ -40,6 +40,16 @@ var (
 	fakeAWSClusterKind = "AWSCluster"
 	// fakeAWSClusterCRD is a fake AWSCluster CRD.
 	fakeAWSClusterCRD = generateCRD(infrastructureGroupVersion.WithKind(fakeAWSClusterKind))
+
+	// fakeAzureClusterKind is the Kind for the AWSCluster.
+	fakeAzureClusterKind = "AzureCluster"
+	// fakeAWSClusterCRD is a fake AzureCluster CRD.
+	fakeAzureClusterCRD = generateCRD(infrastructureGroupVersion.WithKind(fakeAzureClusterKind))
+
+	// fakeGCPClusterKind is the Kind for the GCPCluster.
+	fakeGCPClusterKind = "GCPCluster"
+	// fakeGCPClusterCRD is a fake GCPCluster CRD.
+	fakeGCPClusterCRD = generateCRD(infrastructureGroupVersion.WithKind(fakeGCPClusterKind))
 )
 
 func generateCRD(gvk schema.GroupVersionKind) *apiextensionsv1.CustomResourceDefinition {

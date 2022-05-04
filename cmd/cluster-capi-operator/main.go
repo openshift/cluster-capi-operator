@@ -16,6 +16,8 @@ import (
 	"k8s.io/klog/v2/klogr"
 	operatorv1 "sigs.k8s.io/cluster-api-operator/api/v1alpha1"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/api/v1beta1"
+	azurev1 "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
+	gcpv1 "sigs.k8s.io/cluster-api-provider-gcp/api/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
@@ -82,6 +84,8 @@ func init() {
 	utilruntime.Must(apiextensionsv1.AddToScheme(scheme))
 	utilruntime.Must(operatorv1.AddToScheme(scheme))
 	utilruntime.Must(awsv1.AddToScheme(scheme))
+	utilruntime.Must(azurev1.AddToScheme(scheme))
+	utilruntime.Must(gcpv1.AddToScheme(scheme))
 	utilruntime.Must(clusterv1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }

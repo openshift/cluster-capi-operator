@@ -21,9 +21,11 @@ import (
 type resourceKey string
 
 const (
-	crdKey   resourceKey = "crds"
-	otherKey resourceKey = "other"
-	rbacKey  resourceKey = "rbac"
+	crdKey        resourceKey = "crds"
+	otherKey      resourceKey = "other"
+	rbacKey       resourceKey = "rbac"
+	deploymentKey resourceKey = "deployment"
+	serviceKey    resourceKey = "service"
 )
 
 var (
@@ -36,15 +38,18 @@ var (
 	techPreviewAnnotationValue = "TechPreviewNoUpgrade"
 )
 
-func processObjects(objs []unstructured.Unstructured, isOperator bool) map[resourceKey][]unstructured.Unstructured {
+func processObjects(objs []unstructured.Unstructured, providerName string) map[resourceKey][]unstructured.Unstructured {
 	resourceMap := map[resourceKey][]unstructured.Unstructured{}
 	finalObjs := []unstructured.Unstructured{}
 	rbacObjs := []unstructured.Unstructured{}
 	crdObjs := []unstructured.Unstructured{}
+	deploymentObjs := []unstructured.Unstructured{}
+	serviceObjs := []unstructured.Unstructured{}
 
 	serviceSecretNames := findWebhookServiceSecretName(objs)
 
 	for _, obj := range objs {
+		providerCustomizations(&obj, providerName)
 		switch obj.GetKind() {
 		case "ClusterRole", "Role", "ClusterRoleBinding", "RoleBinding", "ServiceAccount":
 			setOpenShiftAnnotations(obj, false)
@@ -60,14 +65,16 @@ func processObjects(objs []unstructured.Unstructured, isOperator bool) map[resou
 			}
 			replaceCertManagerAnnotations(&obj)
 			removeConversionWebhook(&obj)
-			setOpenShiftAnnotations(obj, false)
+			setOpenShiftAnnotations(obj, true)
 			setTechPreviewAnnotation(obj)
 			crdObjs = append(crdObjs, obj)
 		case "Service":
 			replaceCertMangerServiceSecret(&obj, serviceSecretNames)
+			serviceObjs = append(serviceObjs, obj)
 			finalObjs = append(finalObjs, obj)
 		case "Deployment":
-			customizeDeployments(&obj, isOperator)
+			customizeDeployments(&obj)
+			deploymentObjs = append(deploymentObjs, obj)
 			finalObjs = append(finalObjs, obj)
 		case "Certificate", "Issuer", "Namespace", "Secret": // skip
 		}
@@ -75,6 +82,8 @@ func processObjects(objs []unstructured.Unstructured, isOperator bool) map[resou
 
 	resourceMap[rbacKey] = rbacObjs
 	resourceMap[crdKey] = crdObjs
+	resourceMap[deploymentKey] = deploymentObjs
+	resourceMap[serviceKey] = serviceObjs
 	resourceMap[otherKey] = finalObjs
 
 	return resourceMap
@@ -178,7 +187,7 @@ func findWebhookServiceSecretName(objs []unstructured.Unstructured) map[string]s
 	return serviceSecretNames
 }
 
-func customizeDeployments(obj *unstructured.Unstructured, isOperator bool) {
+func customizeDeployments(obj *unstructured.Unstructured) {
 	deployment := &appsv1.Deployment{}
 	if err := scheme.Convert(obj, deployment, nil); err != nil {
 		panic(err)
@@ -186,24 +195,29 @@ func customizeDeployments(obj *unstructured.Unstructured, isOperator bool) {
 	deployment.Spec.Template.Spec.PriorityClassName = "system-cluster-critical"
 
 	for i := range deployment.Spec.Template.Spec.Containers {
+		container := &deployment.Spec.Template.Spec.Containers[i]
 		// Add resource requests
-		deployment.Spec.Template.Spec.Containers[i].Resources.Requests = corev1.ResourceList{
+		container.Resources.Requests = corev1.ResourceList{
 			corev1.ResourceCPU:    resource.MustParse("10m"),
 			corev1.ResourceMemory: resource.MustParse("50Mi"),
 		}
 		// Remove any existing resource limits. See: https://github.com/openshift/enhancements/blob/master/CONVENTIONS.md#resources-and-limits
-		deployment.Spec.Template.Spec.Containers[i].Resources.Limits = corev1.ResourceList{}
-		// Remove all image references, they will be substituted operator later
-		deployment.Spec.Template.Spec.Containers[i].Image = "example.com/image:tag"
-	}
-
-	if isOperator {
-		// Modify manager container command to match openshift Dockerfile
-		for i := range deployment.Spec.Template.Spec.Containers {
-			container := &deployment.Spec.Template.Spec.Containers[i]
-			if container.Name == "manager" {
-				container.Command = []string{"./bin/cluster-api-operator"}
+		container.Resources.Limits = corev1.ResourceList{}
+		// Remove all image references if they are external, they will be substituted operator later
+		if !strings.HasPrefix(container.Image, "registry.ci.openshift.org") {
+			container.Image = "to.be/replaced:v99"
+		}
+		if container.Name == "kube-rbac-proxy" {
+			container.Image = "registry.ci.openshift.org/openshift:kube-rbac-proxy"
+		}
+		noFeatureGates := []string{}
+		for _, arg := range container.Args {
+			if !strings.HasPrefix(arg, "--feature-gates=") {
+				noFeatureGates = append(noFeatureGates, arg)
 			}
+		}
+		if len(noFeatureGates) > 0 {
+			container.Args = noFeatureGates
 		}
 	}
 

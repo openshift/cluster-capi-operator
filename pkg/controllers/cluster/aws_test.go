@@ -64,6 +64,8 @@ var _ = Describe("Reconcile AWS cluster", func() {
 			Name:      awsCluster.Name,
 			Namespace: awsCluster.Namespace,
 		}, awsCluster)).To(Succeed())
+		awsCluster.Spec.Region = "foo"
+		Expect(cl.Update(ctx, awsCluster)).To(Succeed())
 		Expect(r.reconcileAWSCluster(ctx, awsPlatformStatus)).To(Succeed())
 	})
 })

@@ -6,14 +6,12 @@
   type: InfrastructureProvider
   branch: release-4.11
   version: v1.3.0
-# - name: "azure"
-#   type: "InfrastructureProvider"
-#   branch: "master"
-# - name: "metal3"
-#   type: "InfrastructureProvider"
-#   branch: "master"
-# - name: "gcp"
-#   type: "InfrastructureProvider"
-#   branch: "master"
-# - name: "openstack"
-#   type: "InfrastructureProvider"
+- name: azure
+  type: InfrastructureProvider
+  branch: release-4.11
+  version: v1.1.1
+- name: gcp
+  type: InfrastructureProvider
+  branch: release-4.11
+  version: v1.0.0
+

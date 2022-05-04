@@ -29,10 +29,9 @@ data:
           - args:
             - --leader-elect
             - --metrics-bind-addr=localhost:8080
-            - --feature-gates=MachinePool=false,ClusterResourceSet=true,ClusterTopology=false
             command:
             - /manager
-            image: example.com/image:tag
+            image: to.be/replaced:v99
             imagePullPolicy: Always
             livenessProbe:
               httpGet:

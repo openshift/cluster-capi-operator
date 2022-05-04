@@ -28,7 +28,7 @@ func importCAPIOperator() error {
 	}
 
 	// Perform all manifest transformations
-	resourceMap := processObjects(objs, true)
+	resourceMap := processObjects(objs, "operator")
 
 	// Write RBAC components to manifests, they will be managed by CVO
 	rbacFileName := fmt.Sprintf("%s%s_03_rbac-roles.%s.yaml", manifestPrefix, "capi-operator", "upstream")
@@ -44,8 +44,19 @@ func importCAPIOperator() error {
 		return err
 	}
 
-	// Write all other components(deployments, services, secret, etc)
-	return writeAllOtherOperatorComponents(resourceMap[otherKey])
+	// Write deployment to manifests, it will be managed by CVO
+	deploymentFileName := fmt.Sprintf("%s%s_11_deployment.%s.yaml", manifestPrefix, "capi-operator", "upstream")
+	if err := writeComponentsToManifests(deploymentFileName, resourceMap[deploymentKey]); err != nil {
+		return err
+	}
+
+	// Write CRD components to manifests, they will be managed by CVO
+	serviceFileName := fmt.Sprintf("%s%s_02_service.%s.yaml", manifestPrefix, "capi-operator", "upstream")
+	if err := writeComponentsToManifests(serviceFileName, resourceMap[serviceKey]); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func readCAPIOperatorManifests() ([]unstructured.Unstructured, error) {
@@ -112,9 +123,9 @@ func writeAllOtherOperatorComponents(objs []unstructured.Unstructured) error {
 		}
 
 		fileName := fmt.Sprintf("%s.yaml", strings.ToLower(obj.GroupVersionKind().Kind))
-		err = os.WriteFile(path.Join(operatorAssetsPath, fileName), ensureNewLine(content), 0600)
+		err = os.WriteFile(path.Join(manifestsPath, fileName), ensureNewLine(content), 0600)
 		if err != nil {
-			return fmt.Errorf("failed to write %s: %w", operatorAssetsPath, err)
+			return fmt.Errorf("failed to write %s: %w", fileName, err)
 		}
 	}
 

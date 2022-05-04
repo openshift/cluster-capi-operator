@@ -5,7 +5,6 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	operatorv1 "sigs.k8s.io/cluster-api-operator/api/v1alpha1"
@@ -59,106 +58,6 @@ var _ = Describe("Reconcile components", func() {
 				infrastructureProviderImageName: infrastructureProviderImageSource,
 			},
 		}
-	})
-
-	Context("reconcile operator deployment", func() {
-		var deployment *appsv1.Deployment
-
-		BeforeEach(func() {
-			deployment = &appsv1.Deployment{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "cluster-api-operator",
-					Namespace: controllers.DefaultManagedNamespace,
-				},
-				Spec: appsv1.DeploymentSpec{
-					Selector: &metav1.LabelSelector{
-						MatchLabels: map[string]string{"test": "test"},
-					},
-					Template: corev1.PodTemplateSpec{
-						ObjectMeta: metav1.ObjectMeta{
-							Labels: map[string]string{"test": "test"},
-						},
-						Spec: corev1.PodSpec{
-							Containers: []corev1.Container{
-								{
-									Name:  "manager",
-									Image: "image.com/test:tag",
-								},
-								{
-									Name:  "kube-rbac-proxy",
-									Image: "image.com/test2:tag",
-								},
-							},
-						},
-					},
-				},
-			}
-		})
-
-		AfterEach(func() {
-			Expect(cl.Get(ctx, client.ObjectKey{
-				Name:      deployment.Name,
-				Namespace: deployment.Namespace,
-			}, deployment)).To(Succeed())
-			Expect(deployment.Spec.Template.Spec.Containers[0].Image).To(Equal(operatorImageSource))
-			Expect(deployment.Spec.Template.Spec.Containers[1].Image).To(Equal(kubeRBACProxySource))
-			Expect(test.CleanupAndWait(ctx, cl, deployment)).To(Succeed())
-		})
-
-		It("should create a deployment and modify images", func() {
-			Expect(r.reconcileOperatorDeployment(ctx, deployment)).To(Succeed())
-		})
-
-		It("should update an existing deployment", func() {
-			Expect(cl.Create(ctx, deployment)).To(Succeed())
-			Expect(r.reconcileOperatorDeployment(ctx, deployment)).To(Succeed())
-		})
-	})
-
-	Context("reconcile operator service", func() {
-		var service *corev1.Service
-
-		BeforeEach(func() {
-			service = &corev1.Service{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "cluster-api-operator",
-					Namespace: controllers.DefaultManagedNamespace,
-				},
-				Spec: corev1.ServiceSpec{
-					Selector: map[string]string{"test": "test"},
-					Ports: []corev1.ServicePort{
-						{
-							Name: "http",
-							Port: 80,
-						},
-					},
-				},
-			}
-		})
-
-		AfterEach(func() {
-			Expect(test.CleanupAndWait(ctx, cl, service)).To(Succeed())
-		})
-
-		It("should create a service", func() {
-			Expect(r.reconcileOperatorService(ctx, service)).To(Succeed())
-			Expect(cl.Get(ctx, client.ObjectKey{
-				Name:      service.Name,
-				Namespace: service.Namespace,
-			}, service)).To(Succeed())
-			Expect(service.Spec.Selector).To(Equal(map[string]string{"test": "test"}))
-		})
-
-		It("should update an existing service", func() {
-			Expect(cl.Create(ctx, service)).To(Succeed())
-			service.Spec.Selector = map[string]string{"test": "test2"}
-			Expect(r.reconcileOperatorService(ctx, service)).To(Succeed())
-			Expect(cl.Get(ctx, client.ObjectKey{
-				Name:      service.Name,
-				Namespace: service.Namespace,
-			}, service)).To(Succeed())
-			Expect(service.Spec.Selector).To(Equal(map[string]string{"test": "test2"}))
-		})
 	})
 
 	Context("reconcile core provider", func() { // nolint:dupl

@@ -21,7 +21,7 @@ data:
       template:
         metadata:
           annotations:
-            iam.amazonaws.com/role: ""
+            iam.amazonaws.com/role: ${AWS_CONTROLLER_IAM_ROLE:=""}
           creationTimestamp: null
           labels:
             cluster.x-k8s.io/provider: infrastructure-aws
@@ -32,7 +32,7 @@ data:
               preferredDuringSchedulingIgnoredDuringExecution:
               - preference:
                   matchExpressions:
-                  - key: node-role.kubernetes.io/control-plane
+                  - key: ${K8S_CP_LABEL:=node-role.kubernetes.io/control-plane}
                     operator: Exists
                 weight: 10
               - preference:
@@ -43,12 +43,11 @@ data:
           containers:
           - args:
             - --leader-elect
-            - --feature-gates=EKS=true,EKSEnableIAM=false,EKSAllowAddRoles=false,EKSFargate=false,MachinePool=false,EventBridgeInstanceState=false,AutoControllerIdentityCreator=true
-            - --v=0
+            - --v=${CAPA_LOGLEVEL:=0}
             env:
             - name: AWS_SHARED_CREDENTIALS_FILE
               value: /home/.aws/credentials
-            image: example.com/image:tag
+            image: to.be/replaced:v99
             imagePullPolicy: Always
             livenessProbe:
               failureThreshold: 3
