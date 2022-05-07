@@ -74,6 +74,10 @@ func processObjects(objs []unstructured.Unstructured, providerName string) map[r
 			finalObjs = append(finalObjs, obj)
 		case "Deployment":
 			customizeDeployments(&obj)
+			if providerName == "operator" {
+				setOpenShiftAnnotations(obj, false)
+				setTechPreviewAnnotation(obj)
+			}
 			deploymentObjs = append(deploymentObjs, obj)
 			finalObjs = append(finalObjs, obj)
 		case "Certificate", "Issuer", "Namespace", "Secret": // skip
