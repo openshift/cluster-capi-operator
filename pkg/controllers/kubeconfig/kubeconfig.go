@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	serviceAccountName = "cluster-capi-operator"
+	tokenSecretName = "cluster-capi-operator-secret" // nolint
 )
 
 // ClusterReconciler reconciles a ClusterOperator object
@@ -84,33 +84,10 @@ func (r *KubeconfigReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (c
 }
 
 func (r *KubeconfigReconciler) reconcileKubeconfig(ctx context.Context) error {
-	// Get service account for cluster-capi-operator
-	serviceAccount := &corev1.ServiceAccount{}
-	saKey := client.ObjectKey{
-		Name:      serviceAccountName,
-		Namespace: controllers.DefaultManagedNamespace,
-	}
-	if err := r.Get(ctx, saKey, serviceAccount); err != nil {
-		return fmt.Errorf("error retrieving ServiceAccount %s: %v", serviceAccountName, err)
-	}
-
-	// Get secret that contains token and ca data
-	var tokenSecretRef *corev1.ObjectReference
-	prefix := fmt.Sprintf("%s-token", serviceAccountName)
-	for i, secretRef := range serviceAccount.Secrets {
-		if strings.HasPrefix(secretRef.Name, prefix) {
-			tokenSecretRef = &serviceAccount.Secrets[i]
-		}
-	}
-
-	if tokenSecretRef == nil {
-		return fmt.Errorf("unable to find token secret for service account %s", serviceAccountName)
-	}
-
 	// Get the token secret
 	tokenSecret := &corev1.Secret{}
 	tokenSecretKey := client.ObjectKey{
-		Name:      tokenSecretRef.Name,
+		Name:      tokenSecretName,
 		Namespace: controllers.DefaultManagedNamespace,
 	}
 	if err := r.Get(ctx, tokenSecretKey, tokenSecret); err != nil {
