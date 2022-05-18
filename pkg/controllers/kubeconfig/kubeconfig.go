@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
@@ -72,7 +74,9 @@ func (r *KubeconfigReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (c
 	}
 
 	log.Info("Reconciling kubeconfig secret")
-	if err := r.reconcileKubeconfig(ctx); err != nil {
+
+	res, err := r.reconcileKubeconfig(ctx)
+	if err != nil {
 		log.Error(err, "Error reconciling kubeconfig")
 		if err := r.SetStatusDegraded(ctx, err); err != nil {
 			return ctrl.Result{}, fmt.Errorf("error syncing ClusterOperatorStatus: %v", err)
@@ -80,10 +84,12 @@ func (r *KubeconfigReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (c
 		return ctrl.Result{}, err
 	}
 
-	return ctrl.Result{}, r.SetStatusAvailable(ctx)
+	return res, r.SetStatusAvailable(ctx)
 }
 
-func (r *KubeconfigReconciler) reconcileKubeconfig(ctx context.Context) error {
+func (r *KubeconfigReconciler) reconcileKubeconfig(ctx context.Context) (ctrl.Result, error) {
+	log := ctrl.LoggerFrom(ctx)
+
 	// Get the token secret
 	tokenSecret := &corev1.Secret{}
 	tokenSecretKey := client.ObjectKey{
@@ -91,7 +97,20 @@ func (r *KubeconfigReconciler) reconcileKubeconfig(ctx context.Context) error {
 		Namespace: controllers.DefaultManagedNamespace,
 	}
 	if err := r.Get(ctx, tokenSecretKey, tokenSecret); err != nil {
-		return fmt.Errorf("unable to retrieve Secret object: %v", err)
+		if errors.IsNotFound(err) {
+			log.Info("Waiting for token secret to be created")
+			return ctrl.Result{RequeueAfter: 1 * time.Minute}, nil
+		}
+		return ctrl.Result{}, fmt.Errorf("unable to retrieve Secret object: %v", err)
+	}
+
+	if time.Since(tokenSecret.CreationTimestamp.Time) >= 30*time.Minute {
+		log.Info("Token secret is older than 30 minutes. Recreating it...")
+		// The token secret is managed by the CVO, it should be recreated shortly after deletion.
+		if err := r.Delete(ctx, tokenSecret); err != nil {
+			return ctrl.Result{}, fmt.Errorf("unable to delete Secret object: %v", err)
+		}
+		return ctrl.Result{RequeueAfter: 1 * time.Minute}, nil
 	}
 
 	// Generate kubeconfig
@@ -103,13 +122,13 @@ func (r *KubeconfigReconciler) reconcileKubeconfig(ctx context.Context) error {
 	})
 
 	if err != nil {
-		return fmt.Errorf("error generating kubeconfig: %v", err)
+		return ctrl.Result{}, fmt.Errorf("error generating kubeconfig: %v", err)
 	}
 
 	// Create a secret with generated kubeconfig
 	out, err := clientcmd.Write(*kubeconfig)
 	if err != nil {
-		return fmt.Errorf("error writing kubeconfig: %v", err)
+		return ctrl.Result{}, fmt.Errorf("error writing kubeconfig: %v", err)
 	}
 
 	kubeconfigSecret := &corev1.Secret{
@@ -133,8 +152,8 @@ func (r *KubeconfigReconciler) reconcileKubeconfig(ctx context.Context) error {
 		kubeconfigSecret.Type = kubeconfigSecretCopy.Type
 		return nil
 	}); err != nil {
-		return fmt.Errorf("error reconciling kubeconfig secret: %v", err)
+		return ctrl.Result{}, fmt.Errorf("error reconciling kubeconfig secret: %v", err)
 	}
 
-	return nil
+	return ctrl.Result{}, nil
 }

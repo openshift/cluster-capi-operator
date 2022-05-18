@@ -2,12 +2,14 @@ package kubeconfig
 
 import (
 	"fmt"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
@@ -18,6 +20,7 @@ var _ = Describe("Reconcile kubeconfig secret", func() {
 	Context("create or update kubeconfig secret", func() {
 		var r *KubeconfigReconciler
 		var tokenSecret *corev1.Secret
+		kubeconfigSecret := &corev1.Secret{}
 
 		BeforeEach(func() {
 			r = &KubeconfigReconciler{
@@ -43,41 +46,57 @@ var _ = Describe("Reconcile kubeconfig secret", func() {
 		})
 
 		AfterEach(func() {
-			kubeconfigSecret := &corev1.Secret{}
+			Expect(test.CleanupAndWait(ctx, cl, tokenSecret, kubeconfigSecret)).To(Succeed())
+		})
+
+		It("should create a kubeconfig secret when it doesn't exist", func() {
+			_, err := r.reconcileKubeconfig(ctx)
+			Expect(err).To(Succeed())
+
 			Expect(cl.Get(ctx, client.ObjectKey{
 				Name:      fmt.Sprintf("%s-kubeconfig", r.clusterName),
 				Namespace: controllers.DefaultManagedNamespace,
 			}, kubeconfigSecret)).To(Succeed())
 			Expect(kubeconfigSecret.Data).To(HaveKey("value")) // kubeconfig content is tested separately
-
-			Expect(test.CleanupAndWait(ctx, cl, tokenSecret, kubeconfigSecret)).To(Succeed())
-		})
-
-		It("should create a kubeconfig secret when it doesn't exist", func() {
-			Expect(r.reconcileKubeconfig(ctx)).To(Succeed())
 		})
 
 		It("should reconcile existing kubeconfig secret when it doesn't exist", func() {
-			Expect(r.reconcileKubeconfig(ctx)).To(Succeed())
-			Expect(r.reconcileKubeconfig(ctx)).To(Succeed())
-		})
-	})
+			_, err := r.reconcileKubeconfig(ctx)
+			Expect(err).To(Succeed())
+			_, err = r.reconcileKubeconfig(ctx)
+			Expect(err).To(Succeed())
 
-	Context("catch possible errors", func() {
-		var r *KubeconfigReconciler
-
-		BeforeEach(func() {
-			r = &KubeconfigReconciler{
-				ClusterOperatorStatusClient: operatorstatus.ClusterOperatorStatusClient{
-					Client: cl,
-				},
-				clusterName: "test-cluster",
-				RestCfg:     cfg,
-			}
+			Expect(cl.Get(ctx, client.ObjectKey{
+				Name:      fmt.Sprintf("%s-kubeconfig", r.clusterName),
+				Namespace: controllers.DefaultManagedNamespace,
+			}, kubeconfigSecret)).To(Succeed())
+			Expect(kubeconfigSecret.Data).To(HaveKey("value")) // kubeconfig content is tested separately
 		})
 
-		It("error when token secret is missing", func() {
-			Expect(r.reconcileKubeconfig(ctx)).To(MatchError(ContainSubstring("unable to retrieve Secret object")))
+		It("requeue when token secret doesn't exist", func() {
+			Expect(cl.Delete(ctx, tokenSecret)).To(Succeed())
+			Eventually(func() error {
+				return cl.Get(ctx, client.ObjectKeyFromObject(tokenSecret), tokenSecret)
+			}, timeout).Should(Not(Succeed()))
+
+			res, err := r.reconcileKubeconfig(ctx)
+			Expect(err).To(Succeed())
+			Expect(res.RequeueAfter).To(Equal(1 * time.Minute))
+		})
+
+		It("should delete token secret if its old and requeue", func() {
+			// Use fake client because it's not possible to update creation timestamp in envtest
+			fakeClient := fake.NewClientBuilder().WithScheme(testEnv.Scheme).WithRuntimeObjects(tokenSecret).Build()
+			r.Client = fakeClient
+			tokenSecret.SetCreationTimestamp(metav1.Time{Time: time.Now().Add(-1 * time.Hour)})
+			Expect(fakeClient.Update(ctx, tokenSecret)).To(Succeed())
+			res, err := r.reconcileKubeconfig(ctx)
+			Expect(err).To(Succeed())
+
+			Expect(res.RequeueAfter).To(Equal(1 * time.Minute))
+			Eventually(func() error {
+				return fakeClient.Get(ctx, client.ObjectKeyFromObject(tokenSecret), tokenSecret)
+			}, timeout).Should(Not(Succeed()))
 		})
 	})
 })

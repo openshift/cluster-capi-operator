@@ -3,6 +3,7 @@ package kubeconfig
 import (
 	"context"
 	"testing"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -23,6 +24,7 @@ var (
 	cfg     *rest.Config
 	cl      client.Client
 	ctx     = context.Background()
+	timeout = 10 * time.Second
 )
 
 func TestAPIs(t *testing.T) {
