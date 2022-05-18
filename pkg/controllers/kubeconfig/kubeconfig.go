@@ -12,8 +12,11 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
@@ -36,7 +39,15 @@ type KubeconfigReconciler struct {
 // SetupWithManager sets up the controller with the Manager.
 func (r *KubeconfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&clusterv1.Cluster{}).
+		For(
+			&corev1.Secret{},
+			builder.WithPredicates(tokenSecretPredicate()),
+		).
+		Watches(
+			&source.Kind{Type: &corev1.Secret{}},
+			handler.EnqueueRequestsFromMapFunc(toTokenSecret),
+			builder.WithPredicates(kubeconfigSecretPredicate()),
+		).
 		Complete(r)
 }
 
