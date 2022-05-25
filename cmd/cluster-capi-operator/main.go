@@ -149,12 +149,35 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := (&cluster.ClusterReconciler{
+	if err := (&cluster.CoreClusterReconciler{
 		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-cluster-resource-controller"),
-		Scheme:                      mgr.GetScheme(),
-		SupportedPlatforms:          supportedProviders,
+		Cluster:                     &clusterv1.Cluster{},
 	}).SetupWithManager(mgr); err != nil {
-		klog.Error(err, "unable to create controller", "controller", "ClusterOperator")
+		klog.Error(err, "unable to create controller", "controller", "CoreCluster")
+		os.Exit(1)
+	}
+
+	if err := (&cluster.GenericInfraClusterReconciler{
+		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-infra-cluster-resource-controller"),
+		InfraCluster:                &awsv1.AWSCluster{},
+	}).SetupWithManager(mgr); err != nil {
+		klog.Error(err, "unable to create controller", "controller", "AWSCluster")
+		os.Exit(1)
+	}
+
+	if err := (&cluster.GenericInfraClusterReconciler{
+		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-infra-cluster-resource-controller"),
+		InfraCluster:                &azurev1.AzureCluster{},
+	}).SetupWithManager(mgr); err != nil {
+		klog.Error(err, "unable to create controller", "controller", "AzureCluster")
+		os.Exit(1)
+	}
+
+	if err := (&cluster.GenericInfraClusterReconciler{
+		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-infra-cluster-resource-controller"),
+		InfraCluster:                &gcpv1.GCPCluster{},
+	}).SetupWithManager(mgr); err != nil {
+		klog.Error(err, "unable to create controller", "controller", "GCPCluster")
 		os.Exit(1)
 	}
 
