@@ -1,6 +1,6 @@
 module github.com/openshift/cluster-capi-operator
 
-go 1.17
+go 1.18
 
 require (
 	github.com/gobuffalo/flect v0.2.4
