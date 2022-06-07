@@ -113,12 +113,10 @@ github.com/bgentry/speakeasy v0.1.0/go.mod h1:+zsyZBPWlz7T6j88CTgSN5bM796AkVf0kB
 github.com/bketelsen/crypt v0.0.3-0.20200106085610-5cbc8cc4026c/go.mod h1:MKsuJmJgSg28kpZDP6UIiPt0e0Oz0kqKNGyRaWEPv84=
 github.com/bkielbasa/cyclop v1.2.0 h1:7Jmnh0yL2DjKfw28p86YTd/B4lRGcNuu12sKE35sM7A=
 github.com/bkielbasa/cyclop v1.2.0/go.mod h1:qOI0yy6A7dYC4Zgsa72Ppm9kONl0RoIlPbzot9mhmeI=
-github.com/bombsimon/wsl v1.2.5 h1:9gTOkIwVtoDZywvX802SDHokeX4kW1cKnV8ZTVAPkRs=
 github.com/bombsimon/wsl v1.2.5/go.mod h1:43lEF/i0kpXbLCeDXL9LMT8c92HyBywXb0AsgMHYngM=
 github.com/bombsimon/wsl/v3 v3.3.0 h1:Mka/+kRLoQJq7g2rggtgQsjuI/K5Efd87WX96EWFxjM=
 github.com/bombsimon/wsl/v3 v3.3.0/go.mod h1:st10JtZYLE4D5sC7b8xV4zTKZwAQjCH/Hy2Pm1FNZIc=
 github.com/census-instrumentation/opencensus-proto v0.2.1/go.mod h1:f6KPmirojxKA12rnyqOA5BBL4O983OfeGPqjHWSTneU=
-github.com/cespare/xxhash v1.1.0 h1:a6HrQnmkObjyL+Gs60czilIUGqrzKutQD6XZog3p+ko=
 github.com/cespare/xxhash v1.1.0/go.mod h1:XrSqR1VqqWfGrhpAt58auRo0WTKS1nRRg3ghfAqPWnc=
 github.com/cespare/xxhash/v2 v2.1.1 h1:6MnRN8NT7+YBpUIWxHtefFZOKTAPgGjpQSxqLNn0+qY=
 github.com/cespare/xxhash/v2 v2.1.1/go.mod h1:VGX0DQ3Q6kWi7AoAeZDth3/j3BFtOZR5XLFGgcrjCOs=
@@ -753,7 +751,6 @@ github.com/ryanuber/columnize v0.0.0-20160712163229-9b3edd62028f/go.mod h1:sm1tb
 github.com/sanposhiho/wastedassign/v2 v2.0.6 h1:+6/hQIHKNJAUixEj6EmOngGIisyeI+T3335lYTyxRoA=
 github.com/sanposhiho/wastedassign/v2 v2.0.6/go.mod h1:KyZ0MWTwxxBmfwn33zh3k1dmsbF2ud9pAAGfoLfjhtI=
 github.com/sean-/seed v0.0.0-20170313163322-e2103e2c3529/go.mod h1:DxrIzT+xaE7yg65j358z/aeFdxmN0P9QXhEzd20vsDc=
-github.com/securego/gosec v0.0.0-20191002120514-e680875ea14d h1:BzRvVq1EHuIjxpijCEKpAxzKUUMurOQ4sknehIATRh8=
 github.com/securego/gosec v0.0.0-20191002120514-e680875ea14d/go.mod h1:w5+eXa0mYznDkHaMCXA4XYffjlH+cy1oyKbfzJXa2Do=
 github.com/securego/gosec/v2 v2.8.0 h1:iHg9cVmHWf5n6/ijUJ4F10h5bKlNtvXmcWzRw0lxiKE=
 github.com/securego/gosec/v2 v2.8.0/go.mod h1:hJZ6NT5TqoY+jmOsaxAV4cXoEdrMRLVaNPnSpUCvCZs=
@@ -1376,7 +1373,6 @@ sigs.k8s.io/kustomize/kustomize/v3 v3.9.4 h1:01jlHurRtFei2s3yguRswQipMoWJOg8+3bK
 sigs.k8s.io/kustomize/kustomize/v3 v3.9.4/go.mod h1:WYtmBLKU5/hd/Xrrs04PoUC1A+Pp2NEQN262xKgNrn8=
 sigs.k8s.io/kustomize/kyaml v0.10.9 h1:n3WNdvPPReRNDxW+XXd2JlyZ8EII721I21D1DBpBVBE=
 sigs.k8s.io/kustomize/kyaml v0.10.9/go.mod h1:K9yg1k/HB/6xNOf5VH3LhTo1DK9/5ykSZO5uIv+Y/1k=
-sigs.k8s.io/structured-merge-diff v0.0.0-20190525122527-15d366b2352e h1:4Z09Hglb792X0kfOBBJUPFEyvVfQWrYT/l8h5EKA6JQ=
 sigs.k8s.io/structured-merge-diff v0.0.0-20190525122527-15d366b2352e/go.mod h1:wWxsB5ozmmv/SG7nM11ayaAW51xMvak/t1r0CSlcokI=
 sigs.k8s.io/structured-merge-diff/v3 v3.0.0-20200116222232-67a7b8c61874/go.mod h1:PlARxl6Hbt/+BC80dRLi1qAmnMqwqDg62YvvVkZjemw=
 sigs.k8s.io/structured-merge-diff/v3 v3.0.0 h1:dOmIZBMfhcHS09XZkMyUgkq5trg3/jRyJYFZUiaOp8E=

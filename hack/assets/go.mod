@@ -1,6 +1,6 @@
 module github.com/openshift/cluster-capi-operator/hack/import-assets
 
-go 1.17
+go 1.18
 
 require (
 	github.com/jetstack/cert-manager v1.5.4
