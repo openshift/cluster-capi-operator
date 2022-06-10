@@ -65,6 +65,7 @@ func processObjects(objs []unstructured.Unstructured, providerName string) map[r
 			replaceCertManagerAnnotations(&obj)
 			finalObjs = append(finalObjs, obj)
 		case "ValidatingWebhookConfiguration":
+			removeClusterValidatingWebhooks(&obj)
 			replaceCertManagerAnnotations(&obj)
 			finalObjs = append(finalObjs, obj)
 		case "CustomResourceDefinition":

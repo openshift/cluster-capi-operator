@@ -1,0 +1,16 @@
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: AzureCluster
+metadata:
+  name: ${CLUSTER_NAME}
+  namespace: openshift-cluster-api
+spec:
+  location: ${AZURE_REGION}
+  azureEnvironment: AzurePublicCloud
+  networkSpec:
+    nodeOutboundLB:
+      name: ${CLUSTER_NAME}
+    vnet:
+      name: ${CLUSTER_NAME}-vnet
+      resourceGroup: ${CLUSTER_NAME}-rg
+  resourceGroup: ${CLUSTER_NAME}-rg

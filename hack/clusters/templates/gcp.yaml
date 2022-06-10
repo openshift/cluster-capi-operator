@@ -1,0 +1,10 @@
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: GCPCluster
+metadata:
+  name: ${CLUSTER_NAME}
+spec:
+  network:
+    name: ${CLUSTER_NAME}-network
+  project: ${GCP_PROJECT}
+  region: ${GCP_REGION}

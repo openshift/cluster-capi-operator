@@ -83,3 +83,12 @@ image:
 .PHONY: push
 push:
 	docker push ${IMG}
+
+aws-cluster:
+	./hack/clusters/create-aws.sh
+
+azure-cluster:
+	./hack/clusters/create-azure.sh
+
+gcp-cluster:
+	./hack/clusters/create-gcp.sh

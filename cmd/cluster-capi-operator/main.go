@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"os"
 	"time"
@@ -139,42 +140,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&clusteroperator.ClusterOperatorReconciler{
-		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-cluster-operator-controller"),
-		Scheme:                      mgr.GetScheme(),
-		Images:                      containerImages,
-		SupportedPlatforms:          supportedProviders,
-	}).SetupWithManager(mgr); err != nil {
-		klog.Error(err, "unable to create controller", "controller", "ClusterOperator")
+	platform, err := util.GetPlatform(context.Background(), mgr.GetAPIReader())
+	if err != nil {
+		klog.Error(err, "unable to get platform from infrastructure object")
 		os.Exit(1)
 	}
 
-	if err := (&cluster.ClusterReconciler{
-		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-cluster-resource-controller"),
-		Scheme:                      mgr.GetScheme(),
-		SupportedPlatforms:          supportedProviders,
-	}).SetupWithManager(mgr); err != nil {
-		klog.Error(err, "unable to create controller", "controller", "ClusterOperator")
-		os.Exit(1)
-	}
-
-	if err = (&secretsync.UserDataSecretController{
-		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-user-data-secret-controller"),
-		Scheme:                      mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		klog.Error(err, "unable to create user-data-secret controller", "controller", "ClusterOperator")
-		os.Exit(1)
-	}
-
-	if err = (&kubeconfig.KubeconfigReconciler{
-		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-kubeconfig-controller"),
-		Scheme:                      mgr.GetScheme(),
-		SupportedPlatforms:          supportedProviders,
-		RestCfg:                     mgr.GetConfig(),
-	}).SetupWithManager(mgr); err != nil {
-		klog.Error(err, "unable to create controller", "controller", "ClusterOperator")
-		os.Exit(1)
-	}
+	setupReconcilers(mgr, platform, containerImages, supportedProviders)
 
 	// +kubebuilder:scaffold:builder
 
@@ -209,5 +181,76 @@ func getClusterOperatorStatusClient(mgr manager.Manager, controller string) oper
 		Recorder:         mgr.GetEventRecorderFor(controller),
 		ReleaseVersion:   getReleaseVersion(),
 		ManagedNamespace: *managedNamespace,
+	}
+}
+
+func setupReconcilers(mgr manager.Manager, platform configv1.PlatformType, containerImages map[string]string, supportedProviders map[string]bool) {
+	if err := (&clusteroperator.ClusterOperatorReconciler{
+		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-cluster-operator-controller"),
+		Scheme:                      mgr.GetScheme(),
+		Images:                      containerImages,
+		SupportedPlatforms:          supportedProviders,
+	}).SetupWithManager(mgr); err != nil {
+		klog.Error(err, "unable to create controller", "controller", "ClusterOperator")
+		os.Exit(1)
+	}
+
+	if err := (&cluster.CoreClusterReconciler{
+		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-cluster-resource-controller"),
+		Cluster:                     &clusterv1.Cluster{},
+	}).SetupWithManager(mgr); err != nil {
+		klog.Error(err, "unable to create controller", "controller", "CoreCluster")
+		os.Exit(1)
+	}
+
+	setupInfraClusterReconciler(mgr, platform)
+
+	if err := (&secretsync.UserDataSecretController{
+		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-user-data-secret-controller"),
+		Scheme:                      mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		klog.Error(err, "unable to create user-data-secret controller", "controller", "ClusterOperator")
+		os.Exit(1)
+	}
+
+	if err := (&kubeconfig.KubeconfigReconciler{
+		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-kubeconfig-controller"),
+		Scheme:                      mgr.GetScheme(),
+		SupportedPlatforms:          supportedProviders,
+		RestCfg:                     mgr.GetConfig(),
+	}).SetupWithManager(mgr); err != nil {
+		klog.Error(err, "unable to create controller", "controller", "ClusterOperator")
+		os.Exit(1)
+	}
+}
+
+func setupInfraClusterReconciler(mgr manager.Manager, platform configv1.PlatformType) {
+	switch platform {
+	case configv1.AWSPlatformType:
+		if err := (&cluster.GenericInfraClusterReconciler{
+			ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-infra-cluster-resource-controller"),
+			InfraCluster:                &awsv1.AWSCluster{},
+		}).SetupWithManager(mgr); err != nil {
+			klog.Error(err, "unable to create controller", "controller", "AWSCluster")
+			os.Exit(1)
+		}
+	case configv1.GCPPlatformType:
+		if err := (&cluster.GenericInfraClusterReconciler{
+			ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-infra-cluster-resource-controller"),
+			InfraCluster:                &azurev1.AzureCluster{},
+		}).SetupWithManager(mgr); err != nil {
+			klog.Error(err, "unable to create controller", "controller", "AzureCluster")
+			os.Exit(1)
+		}
+	case configv1.AzurePlatformType:
+		if err := (&cluster.GenericInfraClusterReconciler{
+			ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-infra-cluster-resource-controller"),
+			InfraCluster:                &gcpv1.GCPCluster{},
+		}).SetupWithManager(mgr); err != nil {
+			klog.Error(err, "unable to create controller", "controller", "GCPCluster")
+			os.Exit(1)
+		}
+	default:
+		klog.Info("Platform not supported, skipping infra cluster controller setup")
 	}
 }

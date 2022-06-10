@@ -164,48 +164,6 @@ data:
         service:
           name: capg-webhook-service
           namespace: openshift-cluster-api
-          path: /validate-infrastructure-cluster-x-k8s-io-v1beta1-gcpcluster
-      failurePolicy: Fail
-      matchPolicy: Equivalent
-      name: validation.gcpcluster.infrastructure.cluster.x-k8s.io
-      rules:
-      - apiGroups:
-        - infrastructure.cluster.x-k8s.io
-        apiVersions:
-        - v1beta1
-        operations:
-        - CREATE
-        - UPDATE
-        resources:
-        - gcpclusters
-      sideEffects: None
-    - admissionReviewVersions:
-      - v1beta1
-      clientConfig:
-        service:
-          name: capg-webhook-service
-          namespace: openshift-cluster-api
-          path: /validate-infrastructure-cluster-x-k8s-io-v1beta1-gcpclustertemplate
-      failurePolicy: Fail
-      matchPolicy: Equivalent
-      name: validation.gcpclustertemplate.infrastructure.cluster.x-k8s.io
-      rules:
-      - apiGroups:
-        - infrastructure.cluster.x-k8s.io
-        apiVersions:
-        - v1beta1
-        operations:
-        - CREATE
-        - UPDATE
-        resources:
-        - gcpclustertemplates
-      sideEffects: None
-    - admissionReviewVersions:
-      - v1beta1
-      clientConfig:
-        service:
-          name: capg-webhook-service
-          namespace: openshift-cluster-api
           path: /validate-infrastructure-cluster-x-k8s-io-v1beta1-gcpmachine
       failurePolicy: Fail
       matchPolicy: Equivalent
