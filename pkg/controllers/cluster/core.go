@@ -34,6 +34,10 @@ func (r *CoreClusterReconciler) Reconcile(ctx context.Context, req reconcile.Req
 		return ctrl.Result{}, err
 	}
 
+	if !cluster.DeletionTimestamp.IsZero() {
+		return ctrl.Result{}, r.SetStatusAvailable(ctx)
+	}
+
 	log.Info("Reconciling core cluster")
 
 	clusterCopy := cluster.DeepCopy()
