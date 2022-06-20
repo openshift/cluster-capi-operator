@@ -8,7 +8,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// GetMachines gets a list of machinesets from the default cluster API namespace.
+// GetMachines gets a list of machines from the default cluster API namespace.
 // Optionaly, labels may be used to constrain listed machinesets.
 func GetMachines(cl client.Client, selectors ...*metav1.LabelSelector) ([]*clusterv1.Machine, error) {
 	machineList := &clusterv1.MachineList{}
