@@ -79,10 +79,13 @@ data:
             - mountPath: /home/.gcp
               name: credentials
           priorityClassName: system-cluster-critical
+          serviceAccountName: capg-manager
           terminationGracePeriodSeconds: 10
           tolerations:
           - effect: NoSchedule
             key: node-role.kubernetes.io/master
+          - effect: NoSchedule
+            key: node-role.kubernetes.io/control-plane
           volumes:
           - name: cert
             secret:
@@ -233,6 +236,9 @@ data:
         contract: v1alpha4
       - major: 1
         minor: 0
+        contract: v1beta1
+      - major: 1
+        minor: 1
         contract: v1beta1
 kind: ConfigMap
 metadata:
