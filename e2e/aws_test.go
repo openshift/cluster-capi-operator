@@ -20,15 +20,14 @@ const (
 	awsMachineTemplateName = "aws-machine-template"
 )
 
-var _ = Describe("Cluster API AWS MachineSet", func() {
+var _ = Describe("Cluster API AWS MachineSet", Ordered, func() {
 	var awsMachineTemplate *awsv1.AWSMachineTemplate
 	var machineSet *clusterv1.MachineSet
 
-	BeforeEach(func() {
+	BeforeAll(func() {
 		if platform != configv1.AWSPlatformType {
 			Skip("Skipping AWS E2E tests")
 		}
-
 		framework.CreateCoreCluster(cl, clusterName, "AWSCluster")
 		createAWSCluster(cl, getAWSMAPIProviderSpec(cl))
 	})
@@ -169,7 +168,9 @@ func createAWSMachineTemplate(cl client.Client, mapiProviderSpec *mapiv1.AWSMach
 		},
 	}
 
-	Expect(cl.Create(ctx, awsMachineTemplate)).To(Succeed())
+	if err := cl.Create(ctx, awsMachineTemplate); err != nil && !apierrors.IsAlreadyExists(err) {
+		Expect(err).ToNot(HaveOccurred())
+	}
 
 	return awsMachineTemplate
 }

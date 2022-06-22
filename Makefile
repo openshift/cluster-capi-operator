@@ -37,7 +37,7 @@ unit: envtest
 
 .PHONY: e2e
 e2e: ginkgo
-	./hack/test.sh "./e2e/..."
+	./hack/test.sh "./e2e/..." 30m
 
 # Run against the configured Kubernetes cluster in ~/.kube/config
 run: verify

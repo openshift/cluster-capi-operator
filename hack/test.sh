@@ -5,11 +5,13 @@ set -o pipefail
 
 REPO_ROOT=$(dirname "${BASH_SOURCE}")/..
 
+TEST_DIRS=$1
+TIMEOUT=$2
+
 OPENSHIFT_CI=${OPENSHIFT_CI:-""}
 ARTIFACT_DIR=${ARTIFACT_DIR:-""}
 GINKGO=${GINKGO:-"${REPO_ROOT}/bin/ginkgo"}
-GINKGO_ARGS=${GINKGO_ARGS:-"-r -v --randomize-all --randomize-suites --keep-going --race --trace --timeout=2m"}
-TEST_DIRS=$1
+GINKGO_ARGS=${GINKGO_ARGS:-"-r -v --randomize-all --randomize-suites --keep-going --race --trace --timeout=${TIMEOUT}"}
 
 # Ensure that some home var is set and that it's not the root.
 # This is required for the kubebuilder cache.
