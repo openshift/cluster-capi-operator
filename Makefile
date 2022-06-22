@@ -32,8 +32,8 @@ build: operator
 operator:
 	go build -o bin/cluster-capi-operator cmd/cluster-capi-operator/main.go
 
-unit: envtest
-	KUBEBUILDER_ASSETS=$(shell $(ENVTEST) --bin-dir=$(shell pwd)/bin use $(ENVTEST_K8S_VERSION) -p path) go test ./pkg/... ./assets/... -coverprofile cover.out
+unit: ginkgo envtest
+	KUBEBUILDER_ASSETS=$(shell $(ENVTEST) --bin-dir=$(shell pwd)/bin use $(ENVTEST_K8S_VERSION) -p path) ./hack/test.sh "./pkg/... ./assets/..." 5m
 
 .PHONY: e2e
 e2e: ginkgo
