@@ -1,8 +1,7 @@
 package assets
 
 import (
-	"testing"
-
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -13,36 +12,35 @@ func init() {
 	utilruntime.Must(operatorv1.AddToScheme(scheme.Scheme))
 }
 
-func TestReadCoreProviderAssets(t *testing.T) {
-	g := NewGomegaWithT(t)
+var _ = Describe("Read assets suite", func() {
+	It("should read core provider assets", func() {
 
-	objs, err := ReadCoreProviderAssets(scheme.Scheme)
-	g.Expect(err).NotTo(HaveOccurred())
+		objs, err := ReadCoreProviderAssets(scheme.Scheme)
+		Expect(err).NotTo(HaveOccurred())
 
-	g.Expect(objs).To(HaveLen(2))
+		Expect(objs).To(HaveLen(2))
 
-	g.Expect(objs).Should(HaveKey(CoreProviderKey))
-	g.Expect(objs[CoreProviderKey]).ToNot(BeNil())
-	g.Expect(objs[CoreProviderKey].GetObjectKind().GroupVersionKind().Kind).To(Equal("CoreProvider"))
+		Expect(objs).Should(HaveKey(CoreProviderKey))
+		Expect(objs[CoreProviderKey]).ToNot(BeNil())
+		Expect(objs[CoreProviderKey].GetObjectKind().GroupVersionKind().Kind).To(Equal("CoreProvider"))
 
-	g.Expect(objs).Should(HaveKey(CoreProviderConfigMapKey))
-	g.Expect(objs[CoreProviderConfigMapKey]).ToNot(BeNil())
-	g.Expect(objs[CoreProviderConfigMapKey].GetObjectKind().GroupVersionKind().Kind).To(Equal("ConfigMap"))
-}
+		Expect(objs).Should(HaveKey(CoreProviderConfigMapKey))
+		Expect(objs[CoreProviderConfigMapKey]).ToNot(BeNil())
+		Expect(objs[CoreProviderConfigMapKey].GetObjectKind().GroupVersionKind().Kind).To(Equal("ConfigMap"))
+	})
 
-func TestReadInfrastructureProviderAssets(t *testing.T) {
-	g := NewGomegaWithT(t)
+	It("should read infra provider assets", func() {
+		objs, err := ReadInfrastructureProviderAssets(scheme.Scheme, "aws")
+		Expect(err).NotTo(HaveOccurred())
 
-	objs, err := ReadInfrastructureProviderAssets(scheme.Scheme, "aws")
-	g.Expect(err).NotTo(HaveOccurred())
+		Expect(objs).To(HaveLen(2))
 
-	g.Expect(objs).To(HaveLen(2))
+		Expect(objs).Should(HaveKey(InfrastructureProviderKey))
+		Expect(objs[InfrastructureProviderKey]).ToNot(BeNil())
+		Expect(objs[InfrastructureProviderKey].GetObjectKind().GroupVersionKind().Kind).To(Equal("InfrastructureProvider"))
 
-	g.Expect(objs).Should(HaveKey(InfrastructureProviderKey))
-	g.Expect(objs[InfrastructureProviderKey]).ToNot(BeNil())
-	g.Expect(objs[InfrastructureProviderKey].GetObjectKind().GroupVersionKind().Kind).To(Equal("InfrastructureProvider"))
-
-	g.Expect(objs).Should(HaveKey(InfrastructureProviderConfigMapKey))
-	g.Expect(objs[InfrastructureProviderConfigMapKey]).ToNot(BeNil())
-	g.Expect(objs[InfrastructureProviderConfigMapKey].GetObjectKind().GroupVersionKind().Kind).To(Equal("ConfigMap"))
-}
+		Expect(objs).Should(HaveKey(InfrastructureProviderConfigMapKey))
+		Expect(objs[InfrastructureProviderConfigMapKey]).ToNot(BeNil())
+		Expect(objs[InfrastructureProviderConfigMapKey].GetObjectKind().GroupVersionKind().Kind).To(Equal("ConfigMap"))
+	})
+})
