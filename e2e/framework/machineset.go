@@ -16,12 +16,13 @@ import (
 type machineSetParams struct {
 	msName            string
 	clusterName       string
+	failureDomain     string
 	replicas          int32
 	infrastructureRef corev1.ObjectReference
 }
 
 // NewMachineSetParams returns a new machineSetParams object.
-func NewMachineSetParams(msName, clusterName string, replicas int32, infrastructureRef corev1.ObjectReference) machineSetParams {
+func NewMachineSetParams(msName, clusterName, failureDomain string, replicas int32, infrastructureRef corev1.ObjectReference) machineSetParams {
 	Expect(msName).ToNot(BeEmpty())
 	Expect(clusterName).ToNot(BeEmpty())
 	Expect(infrastructureRef.APIVersion).ToNot(BeEmpty())
@@ -33,6 +34,7 @@ func NewMachineSetParams(msName, clusterName string, replicas int32, infrastruct
 		clusterName:       clusterName,
 		replicas:          replicas,
 		infrastructureRef: infrastructureRef,
+		failureDomain:     failureDomain,
 	}
 }
 
@@ -73,6 +75,10 @@ func CreateMachineSet(cl client.Client, params machineSetParams) *clusterv1.Mach
 				},
 			},
 		},
+	}
+
+	if params.failureDomain != "" {
+		ms.Spec.Template.Spec.FailureDomain = &params.failureDomain
 	}
 
 	Expect(cl.Create(ctx, ms)).To(Succeed())
