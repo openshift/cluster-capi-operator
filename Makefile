@@ -32,8 +32,12 @@ build: operator
 operator:
 	go build -o bin/cluster-capi-operator cmd/cluster-capi-operator/main.go
 
-unit: envtest
-	KUBEBUILDER_ASSETS=$(shell $(ENVTEST) --bin-dir=$(shell pwd)/bin use $(ENVTEST_K8S_VERSION) -p path) go test ./... -coverprofile cover.out
+unit: ginkgo envtest
+	KUBEBUILDER_ASSETS=$(shell $(ENVTEST) --bin-dir=$(shell pwd)/bin use $(ENVTEST_K8S_VERSION) -p path) ./hack/test.sh "./pkg/... ./assets/..." 5m
+
+.PHONY: e2e
+e2e: ginkgo
+	./hack/test.sh "./e2e/..." 30m
 
 # Run against the configured Kubernetes cluster in ~/.kube/config
 run: verify
@@ -62,6 +66,11 @@ golangci-lint: # Download golangci-lint locally if necessary
 ENVTEST = $(shell pwd)/bin/setup-envtest
 envtest: # Download envtest-setup locally if necessary.
 	GOBIN=$(PROJECT_DIR)/bin go install -mod=readonly sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
+
+.PHONY: ginkgo
+GINKGO = $(shell pwd)/bin/GINKGO
+ginkgo: # Download envtest-setup locally if necessary.
+	GOBIN=$(PROJECT_DIR)/bin go install -mod=readonly github.com/onsi/ginkgo/v2/ginkgo@latest
 
 .PHONY: assets
 assets:

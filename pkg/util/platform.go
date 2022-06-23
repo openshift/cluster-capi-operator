@@ -3,9 +3,10 @@ package util
 import (
 	"context"
 
-	configv1 "github.com/openshift/api/config/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	configv1 "github.com/openshift/api/config/v1"
 )
 
 const (

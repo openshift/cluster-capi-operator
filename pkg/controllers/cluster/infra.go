@@ -34,6 +34,10 @@ func (r *GenericInfraClusterReconciler) Reconcile(ctx context.Context, req recon
 		return ctrl.Result{}, err
 	}
 
+	if !infraClusterCopy.GetDeletionTimestamp().IsZero() {
+		return ctrl.Result{}, r.SetStatusAvailable(ctx)
+	}
+
 	log.Info("Reconciling infrastructure cluster")
 
 	infraClusterPatchCopy, ok := infraClusterCopy.DeepCopyObject().(client.Object)
@@ -44,7 +48,7 @@ func (r *GenericInfraClusterReconciler) Reconcile(ctx context.Context, req recon
 	// Set externally managed annotation
 	infraClusterCopy.SetAnnotations(setManagedByAnnotation(infraClusterCopy.GetAnnotations()))
 	if err := r.Client.Patch(ctx, infraClusterCopy, client.MergeFrom(infraClusterPatchCopy)); err != nil {
-		return ctrl.Result{}, fmt.Errorf("unable to patch azure cluster: %v", err)
+		return ctrl.Result{}, fmt.Errorf("unable to patch infra cluster: %v", err)
 	}
 
 	// Set status to ready
