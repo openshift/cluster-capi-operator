@@ -44,6 +44,7 @@ var _ = Describe("Cluster API AWS MachineSet", Ordered, func() {
 		machineSet = framework.CreateMachineSet(cl, framework.NewMachineSetParams(
 			"aws-machineset",
 			clusterName,
+			"",
 			1,
 			corev1.ObjectReference{
 				Kind:       "AWSMachineTemplate",

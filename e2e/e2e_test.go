@@ -9,6 +9,7 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/api/v1beta1"
+	gcpv1 "sigs.k8s.io/cluster-api-provider-gcp/api/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
@@ -32,6 +33,7 @@ var (
 func init() {
 	utilruntime.Must(configv1.Install(scheme.Scheme))
 	utilruntime.Must(awsv1.AddToScheme(scheme.Scheme))
+	utilruntime.Must(gcpv1.AddToScheme(scheme.Scheme))
 	utilruntime.Must(clusterv1.AddToScheme(scheme.Scheme))
 	utilruntime.Must(mapiv1.AddToScheme(scheme.Scheme))
 }
