@@ -56,15 +56,24 @@ func writeProvidersCM(providerList []byte) error {
 		return err
 	}
 
-	fName := fmt.Sprintf("%scapi-operator_02_providers.configmap.yaml", manifestPrefix)
+	fName := fmt.Sprintf("%s02_providers.configmap.yaml", manifestPrefix)
 	return os.WriteFile(path.Join(manifestsPath, fName), ensureNewLine(cmYaml), 0600)
 }
 
 // loadProviders load provider list from provider_config.yaml
-func loadProviders(providerList []byte) ([]provider, error) {
+func loadProviders(providerList []byte, providerName string) ([]provider, error) {
 	providers := []provider{}
 	if err := yaml.Unmarshal(providerList, &providers); err != nil {
 		return nil, err
+	}
+
+	if providerName != "" {
+		for _, p := range providers {
+			if p.Name == providerName {
+				return []provider{p}, nil
+			}
+		}
+		return nil, fmt.Errorf("provider %s not found", providerName)
 	}
 
 	return providers, nil
@@ -266,22 +275,22 @@ func (p *provider) providerSpec() operatorv1.ProviderSpec {
 	}
 }
 
-func importProviders() error {
+func importProviders(providerName string) error {
 	// Read provider list yaml
 	providerList, err := ioutil.ReadFile(providerListPath)
 	if err != nil {
 		return fmt.Errorf("failed to read provider list: %v", err)
 	}
 
+	// Load provider list from conifg file
+	providers, err := loadProviders(providerList, providerName)
+	if err != nil {
+		return err
+	}
+
 	// Write provider list config map to manifests
 	if err := writeProvidersCM(providerList); err != nil {
 		return fmt.Errorf("failed to write providers configmap: %v", err)
-	}
-
-	// Load provider list from conifg file
-	providers, err := loadProviders(providerList)
-	if err != nil {
-		return err
 	}
 
 	for _, p := range providers {
