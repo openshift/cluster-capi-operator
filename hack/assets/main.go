@@ -33,12 +33,25 @@ func init() {
 }
 
 func main() {
-	if err := importCAPIOperator(); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+	providerName := getProviderFromArgs()
+	if providerName == "" || providerName == "operator" {
+		if err := importCAPIOperator(); err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
 	}
-	if err := importProviders(); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+
+	if providerName != "operator" {
+		if err := importProviders(providerName); err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
 	}
+}
+
+func getProviderFromArgs() string {
+	if len(os.Args) == 2 {
+		return os.Args[1]
+	}
+	return ""
 }
