@@ -35,6 +35,10 @@ spec:
         env:
         - name: RELEASE_VERSION
           value: "0.0.1-snapshot"
+        ports:
+        - containerPort: 9443
+          name: webhook-server
+          protocol: TCP
         resources:
           requests:
             cpu: 10m
@@ -44,6 +48,9 @@ spec:
           mountPath: /etc/cluster-api-config-images/
         - name: providers
           mountPath: /etc/cluster-api-config-providers/
+        - name: cert
+          mountPath: /tmp/k8s-webhook-server/serving-certs
+          readOnly: true
       nodeSelector:
         node-role.kubernetes.io/master: ""
       priorityClassName: system-node-critical
@@ -61,3 +68,7 @@ spec:
         configMap:
           defaultMode: 420
           name: cluster-capi-operator-providers
+      - name: cert
+        secret:
+          defaultMode: 420
+          secretName: cluster-capi-operator-webhook-service-cert

@@ -1,0 +1,51 @@
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  annotations:
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/feature-gate: TechPreviewNoUpgrade
+  name: validating-webhook-configuration
+webhooks:
+  - admissionReviewVersions:
+      - v1
+      - v1alpha1
+    clientConfig:
+      service:
+        name: cluster-capi-operator-webhook-service
+        namespace: openshift-cluster-api
+        path: /validate-operator-cluster-x-k8s-io-v1alpha1-coreprovider
+    failurePolicy: Fail
+    name: vcoreprovider.operator.cluster.x-k8s.io
+    rules:
+      - apiGroups:
+          - operator.cluster.x-k8s.io
+        apiVersions:
+          - v1alpha1
+        operations:
+          - DELETE
+        resources:
+          - coreproviders
+    sideEffects: None
+  - admissionReviewVersions:
+      - v1
+      - v1alpha1
+    clientConfig:
+      service:
+        name: cluster-capi-operator-webhook-service
+        namespace: openshift-cluster-api
+        path: /validate-operator-cluster-x-k8s-io-v1alpha1-infrastructureprovider
+    failurePolicy: Fail
+    name: vinfrastructureprovider.operator.cluster.x-k8s.io
+    rules:
+      - apiGroups:
+          - operator.cluster.x-k8s.io
+        apiVersions:
+          - v1alpha1
+        operations:
+          - DELETE
+        resources:
+          - infrastructureproviders
+    sideEffects: None
