@@ -21,7 +21,8 @@ represents current cluster, it is treated as management and workload cluster at 
 
 Controllers design can be found here:
 - [ClusterOperator Controller](docs/controllers/clusteroperator.md)
-- [Cluster Controller](docs/controllers/cluster.md)
+- [Core cluster Controller](docs/controllers/core-cluster.md)
+- [Infra cluster Controller](docs/controllers/infra-cluster.md)
 - [Secret sync Controller](docs/controllers/secretsync.md)
 - [Kubeconfig Controller](docs/controllers/kubeconfig.md)
 
