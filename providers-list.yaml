@@ -6,12 +6,11 @@
   type: InfrastructureProvider
   branch: release-4.11
   version: v1.3.0
-- name: azure
-  type: InfrastructureProvider
-  branch: release-4.11
-  version: v1.1.1
+# - name: azure
+#   type: InfrastructureProvider
+#   branch: release-4.11
+#   version: v1.1.1
 - name: gcp
   type: InfrastructureProvider
   branch: release-4.11
   version: v1.0.0
-
