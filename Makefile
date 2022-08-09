@@ -74,7 +74,7 @@ ginkgo: # Download envtest-setup locally if necessary.
 
 .PHONY: assets
 assets:
-	./hack/assets.sh
+	./hack/assets.sh $(PROVIDER)
 
 # Run go mod
 .PHONY: vendor
