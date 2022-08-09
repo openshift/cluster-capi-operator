@@ -69,7 +69,7 @@ func (r *UserDataSecretController) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	if r.areSecretsEqual(sourceSecret, targetSecret) {
-		log.Info("source and target secrets are equal, no sync needed")
+		log.Info("user data in source and target secrets is the same, no sync needed")
 		if err := r.setAvailableCondition(ctx); err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to set conditions for user data secret controller: %v", err)
 		}
