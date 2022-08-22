@@ -57,13 +57,15 @@ func CreateMachineSet(cl client.Client, params machineSetParams) *clusterv1.Mach
 			ClusterName: params.clusterName,
 			Selector: metav1.LabelSelector{
 				MatchLabels: map[string]string{
-					"machine.openshift.io/cluster-api-cluster": params.clusterName,
+					"machine.openshift.io/cluster-api-cluster":    params.clusterName,
+					"machine.openshift.io/cluster-api-machineset": params.msName,
 				},
 			},
 			Template: clusterv1.MachineTemplateSpec{
 				ObjectMeta: clusterv1.ObjectMeta{
 					Labels: map[string]string{
-						"machine.openshift.io/cluster-api-cluster": params.clusterName,
+						"machine.openshift.io/cluster-api-cluster":    params.clusterName,
+						"machine.openshift.io/cluster-api-machineset": params.msName,
 					},
 				},
 				Spec: clusterv1.MachineSpec{
