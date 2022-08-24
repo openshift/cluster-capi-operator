@@ -2,7 +2,7 @@
 
 ## Overview
 
-Cluster operator controller is responsible for managing the CoreProvider and InfrastructureProvider CRs.
+[Cluster operator controller](../../pkg/controllers/clusteroperator/clusteroperator_controller.go) is responsible for managing the CoreProvider and InfrastructureProvider CRs.
 These CRs are later reconciled by the upstream [Cluster API Operator](https://github.com/kubernetes-sigs/cluster-api-operator).
 
 ## Behavior
