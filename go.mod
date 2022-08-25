@@ -5,7 +5,7 @@ go 1.18
 require (
 	github.com/gobuffalo/flect v0.2.4
 	github.com/onsi/ginkgo/v2 v2.1.3
-	github.com/onsi/gomega v1.18.1
+	github.com/onsi/gomega v1.19.0
 	github.com/openshift/api v0.0.0-20220222102030-354aa98a475c
 	github.com/openshift/library-go v0.0.0-20220221165938-535fc9bdb13b
 	github.com/pkg/errors v0.9.1
@@ -18,12 +18,12 @@ require (
 	k8s.io/component-base v0.24.0
 	k8s.io/klog/v2 v2.60.1
 	k8s.io/utils v0.0.0-20220210201930-3a6ce19ff2f9
-	sigs.k8s.io/cluster-api v1.1.1
+	sigs.k8s.io/cluster-api v1.1.4
 	sigs.k8s.io/cluster-api-operator v0.0.0-20220221190000-3f8fd689a585
 	sigs.k8s.io/cluster-api-provider-aws v1.3.0
 	sigs.k8s.io/cluster-api-provider-azure v1.2.1
-	sigs.k8s.io/cluster-api-provider-gcp v1.0.2
-	sigs.k8s.io/controller-runtime v0.11.1
+	sigs.k8s.io/cluster-api-provider-gcp v1.1.0
+	sigs.k8s.io/controller-runtime v0.11.2
 	sigs.k8s.io/yaml v1.3.0
 )
 
@@ -56,7 +56,7 @@ require (
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/gnostic v0.5.7-v3refs // indirect
-	github.com/google/go-cmp v0.5.7 // indirect
+	github.com/google/go-cmp v0.5.8 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/imdario/mergo v0.3.12 // indirect
@@ -72,15 +72,15 @@ require (
 	github.com/prometheus/common v0.32.1 // indirect
 	github.com/prometheus/procfs v0.7.3 // indirect
 	golang.org/x/crypto v0.0.0-20220214200702-86341886e292 // indirect
-	golang.org/x/net v0.0.0-20220127200216-cd36cc0744dd // indirect
-	golang.org/x/oauth2 v0.0.0-20211104180415-d3ed0bb246c8 // indirect
-	golang.org/x/sys v0.0.0-20220209214540-3681064d5158 // indirect
+	golang.org/x/net v0.0.0-20220607020251-c690dde0001d // indirect
+	golang.org/x/oauth2 v0.0.0-20220608161450-d0670ef3b1eb // indirect
+	golang.org/x/sys v0.0.0-20220610221304-9f5ed59c137d // indirect
 	golang.org/x/term v0.0.0-20210927222741-03fcf44c2211 // indirect
 	golang.org/x/text v0.3.7 // indirect
 	golang.org/x/time v0.0.0-20220210224613-90d013bbcef8 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.2.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
-	google.golang.org/protobuf v1.27.1 // indirect
+	google.golang.org/protobuf v1.28.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
 	k8s.io/kube-openapi v0.0.0-20220328201542-3ee0da9b0b42 // indirect

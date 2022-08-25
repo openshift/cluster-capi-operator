@@ -31,27 +31,27 @@ func importCAPIOperator() error {
 	resourceMap := processObjects(objs, "operator")
 
 	// Write RBAC components to manifests, they will be managed by CVO
-	rbacFileName := fmt.Sprintf("%s%s_03_rbac-roles.%s.yaml", manifestPrefix, "capi-operator", "upstream")
+	rbacFileName := fmt.Sprintf("%s03_rbac-roles.%s.yaml", manifestPrefix, "upstream")
 	err = writeComponentsToManifests(rbacFileName, resourceMap[rbacKey])
 	if err != nil {
 		return err
 	}
 
 	// Write CRD components to manifests, they will be managed by CVO
-	crdFileName := fmt.Sprintf("%s%s_02_crd.%s.yaml", manifestPrefix, "capi-operator", "upstream")
+	crdFileName := fmt.Sprintf("%s02_crd.%s.yaml", manifestPrefix, "upstream")
 	err = writeComponentsToManifests(crdFileName, resourceMap[crdKey])
 	if err != nil {
 		return err
 	}
 
 	// Write deployment to manifests, it will be managed by CVO
-	deploymentFileName := fmt.Sprintf("%s%s_11_deployment.%s.yaml", manifestPrefix, "capi-operator", "upstream")
+	deploymentFileName := fmt.Sprintf("%s11_deployment.%s.yaml", manifestPrefix, "upstream")
 	if err := writeComponentsToManifests(deploymentFileName, resourceMap[deploymentKey]); err != nil {
 		return err
 	}
 
 	// Write CRD components to manifests, they will be managed by CVO
-	serviceFileName := fmt.Sprintf("%s%s_02_service.%s.yaml", manifestPrefix, "capi-operator", "upstream")
+	serviceFileName := fmt.Sprintf("%s02_service.%s.yaml", manifestPrefix, "upstream")
 	if err := writeComponentsToManifests(serviceFileName, resourceMap[serviceKey]); err != nil {
 		return err
 	}

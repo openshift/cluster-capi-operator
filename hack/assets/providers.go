@@ -297,14 +297,14 @@ func importProviders() error {
 		resourceMap := processObjects(p.components.Objs(), p.Name)
 
 		// Write RBAC components to manifests, they will be managed by CVO
-		rbacFileName := fmt.Sprintf("%s%s-%s_03_rbac.yaml", manifestPrefix, p.providerTypeName(), p.Name)
+		rbacFileName := fmt.Sprintf("%s03_rbac-roles.%s-%s.yaml", manifestPrefix, p.providerTypeName(), p.Name)
 		err = writeComponentsToManifests(rbacFileName, resourceMap[rbacKey])
 		if err != nil {
 			return err
 		}
 
 		// Write CRD components to manifests, they will be managed by CVO
-		crdFileName := fmt.Sprintf("%s%s-%s_02_crd.yaml", manifestPrefix, p.providerTypeName(), p.Name)
+		crdFileName := fmt.Sprintf("%s02_crd.%s-%s.yaml", manifestPrefix, p.providerTypeName(), p.Name)
 		err = writeComponentsToManifests(crdFileName, resourceMap[crdKey])
 		if err != nil {
 			return err
