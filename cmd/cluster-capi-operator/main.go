@@ -33,6 +33,7 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/secretsync"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
+	"github.com/openshift/cluster-capi-operator/pkg/webhook"
 )
 
 var (
@@ -68,7 +69,17 @@ var (
 	providerFile = flag.String(
 		"providers-yaml",
 		defaultProvidersLocation,
-		"The location of supported providers for CAPI",
+		"The location of supported providers for CAPI.",
+	)
+	webhookPort = flag.Int(
+		"webhook-port",
+		9443,
+		"The port for the webhook server to listen on.",
+	)
+	webhookCertDir = flag.String(
+		"webhook-cert-dir",
+		"/tmp/k8s-webhook-server/serving-certs/",
+		"Webhook cert dir, only used when webhook-port is specified.",
 	)
 )
 
@@ -113,7 +124,6 @@ func main() {
 		Scheme:                  scheme,
 		SyncPeriod:              &syncPeriod,
 		MetricsBindAddress:      *metricsAddr,
-		Port:                    9443,
 		HealthProbeBindAddress:  *healthAddr,
 		LeaderElectionNamespace: leaderElectionConfig.ResourceNamespace,
 		LeaderElection:          leaderElectionConfig.LeaderElect,
@@ -122,6 +132,8 @@ func main() {
 		RetryPeriod:             &leaderElectionConfig.RetryPeriod.Duration,
 		RenewDeadline:           &leaderElectionConfig.RenewDeadline.Duration,
 		NewCache:                cacheBuilder,
+		Port:                    *webhookPort,
+		CertDir:                 *webhookCertDir,
 	})
 	if err != nil {
 		klog.Error(err, "unable to start manager")
@@ -147,6 +159,7 @@ func main() {
 	}
 
 	setupReconcilers(mgr, platform, containerImages, supportedProviders)
+	setupWebhooks(mgr)
 
 	// +kubebuilder:scaffold:builder
 
@@ -252,5 +265,17 @@ func setupInfraClusterReconciler(mgr manager.Manager, platform configv1.Platform
 		}
 	default:
 		klog.Info("Platform not supported, skipping infra cluster controller setup")
+	}
+}
+
+func setupWebhooks(mgr ctrl.Manager) {
+	if err := (&webhook.CoreProviderWebhook{}).SetupWebhookWithManager(mgr); err != nil {
+		klog.Error(err, "unable to create webhook", "webhook", "CoreProvider")
+		os.Exit(1)
+	}
+
+	if err := (&webhook.InfrastructureProviderWebhook{}).SetupWebhookWithManager(mgr); err != nil {
+		klog.Error(err, "unable to create webhook", "webhook", "InfrastructureProvider")
+		os.Exit(1)
 	}
 }

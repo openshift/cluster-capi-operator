@@ -80,6 +80,8 @@ func processObjects(objs []unstructured.Unstructured, providerName string) map[r
 			crdObjs = append(crdObjs, obj)
 		case "Service":
 			replaceCertMangerServiceSecret(&obj, serviceSecretNames)
+			setOpenShiftAnnotations(obj, true)
+			setTechPreviewAnnotation(obj)
 			serviceObjs = append(serviceObjs, obj)
 			finalObjs = append(finalObjs, obj)
 		case "Deployment":
