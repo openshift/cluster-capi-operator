@@ -34,7 +34,7 @@ var (
 		"include.release.openshift.io/self-managed-high-availability": "true",
 		"include.release.openshift.io/single-node-developer":          "true",
 	}
-	techPreviewAnnotation      = "release.openshift.io/feature-gate"
+	techPreviewAnnotation      = "release.openshift.io/feature-set"
 	techPreviewAnnotationValue = "TechPreviewNoUpgrade"
 )
 
