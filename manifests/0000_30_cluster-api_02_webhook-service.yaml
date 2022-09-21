@@ -11,9 +11,9 @@ metadata:
   namespace: openshift-cluster-api
 spec:
   ports:
-  - name: https
+  - name: capi-webhook-server
     port: 9443
-    targetPort: https
+    targetPort: webhook-server
   selector:
     k8s-app: cluster-capi-operator
   type: ClusterIP

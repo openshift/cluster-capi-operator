@@ -159,7 +159,7 @@ func main() {
 	}
 
 	setupReconcilers(mgr, platform, containerImages, supportedProviders)
-	setupWebhooks(mgr)
+	setupWebhooks(mgr, platform)
 
 	// +kubebuilder:scaffold:builder
 
@@ -260,14 +260,19 @@ func setupInfraClusterReconciler(mgr manager.Manager, platform configv1.Platform
 	}
 }
 
-func setupWebhooks(mgr ctrl.Manager) {
+func setupWebhooks(mgr ctrl.Manager, platform configv1.PlatformType) {
 	if err := (&webhook.CoreProviderWebhook{}).SetupWebhookWithManager(mgr); err != nil {
 		klog.Error(err, "unable to create webhook", "webhook", "CoreProvider")
 		os.Exit(1)
 	}
 
-	if err := (&webhook.InfrastructureProviderWebhook{}).SetupWebhookWithManager(mgr); err != nil {
+	if err := (&webhook.InfrastructureProviderWebhook{Platform: platform}).SetupWebhookWithManager(mgr); err != nil {
 		klog.Error(err, "unable to create webhook", "webhook", "InfrastructureProvider")
+		os.Exit(1)
+	}
+
+	if err := (&webhook.ClusterWebhook{}).SetupWebhookWithManager(mgr); err != nil {
+		klog.Error(err, "unable to create webhook", "webhook", "Cluster")
 		os.Exit(1)
 	}
 }
