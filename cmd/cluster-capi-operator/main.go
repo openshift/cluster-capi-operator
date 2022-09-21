@@ -247,14 +247,6 @@ func setupInfraClusterReconciler(mgr manager.Manager, platform configv1.Platform
 			klog.Error(err, "unable to create controller", "controller", "AWSCluster")
 			os.Exit(1)
 		}
-	case configv1.AzurePlatformType:
-		if err := (&cluster.GenericInfraClusterReconciler{
-			ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-infra-cluster-resource-controller"),
-			InfraCluster:                &azurev1.AzureCluster{},
-		}).SetupWithManager(mgr); err != nil {
-			klog.Error(err, "unable to create controller", "controller", "AzureCluster")
-			os.Exit(1)
-		}
 	case configv1.GCPPlatformType:
 		if err := (&cluster.GenericInfraClusterReconciler{
 			ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-infra-cluster-resource-controller"),
