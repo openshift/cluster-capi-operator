@@ -79,9 +79,7 @@ assets:
 # Run go mod
 .PHONY: vendor
 vendor:
-	go mod tidy
-	go mod vendor
-	go mod verify
+	./hack/vendor.sh
 
 # Build the docker image
 .PHONY: image

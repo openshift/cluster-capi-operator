@@ -24,7 +24,6 @@ require (
 	sigs.k8s.io/cluster-api-provider-azure v1.2.1
 	sigs.k8s.io/cluster-api-provider-gcp v1.1.0
 	sigs.k8s.io/controller-runtime v0.11.2
-	sigs.k8s.io/yaml v1.3.0
 )
 
 require (
@@ -86,6 +85,7 @@ require (
 	k8s.io/kube-openapi v0.0.0-20220328201542-3ee0da9b0b42 // indirect
 	sigs.k8s.io/json v0.0.0-20211208200746-9f7c6b3444d2 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.1 // indirect
+	sigs.k8s.io/yaml v1.3.0 // indirect
 )
 
 replace (
