@@ -19,6 +19,9 @@ const (
 
 	InfrastructureProviderKey          assetKey = "infrastructure-provider"
 	InfrastructureProviderConfigMapKey assetKey = "infrastructure-provider-configmap"
+
+	powerVSProvider  = "powervs"
+	ibmCloudProvider = "ibmcloud"
 )
 
 //go:embed core-capi/*.yaml infrastructure-providers/*.yaml
@@ -59,6 +62,12 @@ func ReadInfrastructureProviderAssets(scheme *runtime.Scheme, platformType strin
 	assetNames, err := fs.ReadDir(dir)
 	if err != nil {
 		return nil, err
+	}
+
+	// for Power VS the upstream cluster api provider name is ibmcloud
+	// https://github.com/kubernetes-sigs/cluster-api/blob/main/cmd/clusterctl/client/config/providers_client.go#L210-L214
+	if platformType == powerVSProvider {
+		platformType = ibmCloudProvider
 	}
 
 	objs := map[assetKey]client.Object{}
