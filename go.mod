@@ -3,10 +3,10 @@ module github.com/openshift/cluster-capi-operator
 go 1.18
 
 require (
-	github.com/gobuffalo/flect v0.2.4
+	github.com/gobuffalo/flect v0.2.5
 	github.com/golangci/golangci-lint v1.50.0
 	github.com/onsi/ginkgo/v2 v2.1.6
-	github.com/onsi/gomega v1.20.1
+	github.com/onsi/gomega v1.20.2
 	github.com/openshift/api v0.0.0-20220921125526-1866ef90edbf
 	github.com/openshift/library-go v0.0.0-20220221165938-535fc9bdb13b
 	github.com/pkg/errors v0.9.1
@@ -19,7 +19,7 @@ require (
 	k8s.io/component-base v0.25.1
 	k8s.io/klog/v2 v2.80.1
 	k8s.io/utils v0.0.0-20220728103510-ee6ede2d64ed
-	sigs.k8s.io/cluster-api v1.1.4
+	sigs.k8s.io/cluster-api v1.2.2
 	sigs.k8s.io/cluster-api-operator v0.0.0-20220221190000-3f8fd689a585
 	sigs.k8s.io/cluster-api-provider-aws v1.3.0
 	sigs.k8s.io/cluster-api-provider-azure v1.2.1
@@ -83,8 +83,8 @@ require (
 	github.com/go-logr/logr v1.2.3 // indirect
 	github.com/go-logr/zapr v1.2.3 // indirect
 	github.com/go-openapi/jsonpointer v0.19.5 // indirect
-	github.com/go-openapi/jsonreference v0.19.5 // indirect
-	github.com/go-openapi/swag v0.19.14 // indirect
+	github.com/go-openapi/jsonreference v0.19.6 // indirect
+	github.com/go-openapi/swag v0.21.1 // indirect
 	github.com/go-task/slim-sprig v0.0.0-20210107165309-348f09dbbbc0 // indirect
 	github.com/go-toolsmith/astcast v1.0.0 // indirect
 	github.com/go-toolsmith/astcopy v1.0.2 // indirect
@@ -143,7 +143,7 @@ require (
 	github.com/leonklingele/grouper v1.1.0 // indirect
 	github.com/lufeee/execinquery v1.2.1 // indirect
 	github.com/magiconair/properties v1.8.6 // indirect
-	github.com/mailru/easyjson v0.7.6 // indirect
+	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/maratori/testableexamples v1.0.0 // indirect
 	github.com/maratori/testpackage v1.1.0 // indirect
 	github.com/matoous/godox v0.0.0-20210227103229-6504466cf951 // indirect
@@ -248,4 +248,5 @@ require (
 replace (
 	sigs.k8s.io/cluster-api => github.com/openshift/cluster-api v0.0.0-20220303094157-f9c215c4f298
 	sigs.k8s.io/cluster-api-provider-aws => github.com/openshift/cluster-api-provider-aws v0.2.1-0.20220303094158-3c2daa272191
+	sigs.k8s.io/cluster-api-provider-ibmcloud => github.com/openshift/cluster-api-provider-ibmcloud v0.0.0-20221007162602-5e3a2bae34bd
 )
