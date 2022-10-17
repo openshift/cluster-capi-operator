@@ -19,6 +19,7 @@ import (
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/api/v1beta1"
 	azurev1 "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
 	gcpv1 "sigs.k8s.io/cluster-api-provider-gcp/api/v1beta1"
+	ibmpowervsv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
@@ -99,6 +100,7 @@ func init() {
 	utilruntime.Must(azurev1.AddToScheme(scheme))
 	utilruntime.Must(gcpv1.AddToScheme(scheme))
 	utilruntime.Must(clusterv1.AddToScheme(scheme))
+	utilruntime.Must(ibmpowervsv1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -253,6 +255,14 @@ func setupInfraClusterReconciler(mgr manager.Manager, platform configv1.Platform
 			InfraCluster:                &gcpv1.GCPCluster{},
 		}).SetupWithManager(mgr); err != nil {
 			klog.Error(err, "unable to create controller", "controller", "GCPCluster")
+			os.Exit(1)
+		}
+	case configv1.PowerVSPlatformType:
+		if err := (&cluster.GenericInfraClusterReconciler{
+			ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-infra-cluster-resource-controller"),
+			InfraCluster:                &ibmpowervsv1.IBMPowerVSCluster{},
+		}).SetupWithManager(mgr); err != nil {
+			klog.Error(err, "unable to create controller", "controller", "IBMPowerVSCluster")
 			os.Exit(1)
 		}
 	default:
