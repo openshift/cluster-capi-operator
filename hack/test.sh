@@ -10,7 +10,7 @@ TIMEOUT=$2
 
 OPENSHIFT_CI=${OPENSHIFT_CI:-""}
 ARTIFACT_DIR=${ARTIFACT_DIR:-""}
-GINKGO=${GINKGO:-"${REPO_ROOT}/bin/ginkgo"}
+GINKGO=${GINKGO:-"go run ${REPO_ROOT}/vendor/github.com/onsi/ginkgo/v2/ginkgo"}
 GINKGO_ARGS=${GINKGO_ARGS:-"-r -v --randomize-all --randomize-suites --keep-going --race --trace --timeout=${TIMEOUT}"}
 
 # Ensure that some home var is set and that it's not the root.
