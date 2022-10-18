@@ -494,6 +494,8 @@ github.com/openshift/cluster-api v0.0.0-20220303094157-f9c215c4f298 h1:WnIpF9ywp
 github.com/openshift/cluster-api v0.0.0-20220303094157-f9c215c4f298/go.mod h1:aq0b2tkMHZDTnuLEU7KOZOiQ5Pg82s3vh/KH/X6c/mM=
 github.com/openshift/cluster-api-provider-aws v0.2.1-0.20220303094158-3c2daa272191 h1:/N0h+M9EJEWKdoFL5U+U5h9XWGVgu1r2iUbyZJmZoWM=
 github.com/openshift/cluster-api-provider-aws v0.2.1-0.20220303094158-3c2daa272191/go.mod h1:cisrv8D1PuvhvlNaAwfwT2WJdcJhtkCl8Jk3BDc2CBk=
+github.com/openshift/cluster-api-provider-ibmcloud v0.0.0-20221007162602-5e3a2bae34bd h1:T/og6cR8EoU1SxVrk5VBXiYMnWeEWPd96uCP22D4sh0=
+github.com/openshift/cluster-api-provider-ibmcloud v0.0.0-20221007162602-5e3a2bae34bd/go.mod h1:qH7OZNW+83QEI2M931FoVrAkbs1f0KpF/Eh96WvlL+M=
 github.com/openshift/library-go v0.0.0-20220221165938-535fc9bdb13b h1:l8NFMvJN6In0XyyaoUu6FHgr35YKH5V0KRB8GlxC+cE=
 github.com/openshift/library-go v0.0.0-20220221165938-535fc9bdb13b/go.mod h1:6AmNM4N4nHftckybV/U7bQW+5AvK5TW81ndSI6KEidw=
 github.com/otiai10/copy v1.2.0 h1:HvG945u96iNadPoG2/Ja2+AUJeW5YuFQMixq9yirC+k=

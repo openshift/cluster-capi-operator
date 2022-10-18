@@ -24,6 +24,7 @@ require (
 	sigs.k8s.io/cluster-api-provider-aws v1.3.0
 	sigs.k8s.io/cluster-api-provider-azure v1.2.1
 	sigs.k8s.io/cluster-api-provider-gcp v1.1.0
+	sigs.k8s.io/cluster-api-provider-ibmcloud v0.3.0
 	sigs.k8s.io/controller-runtime v0.13.0
 	sigs.k8s.io/controller-runtime/tools/setup-envtest v0.0.0-20221007015352-8ad090e0663e
 )
