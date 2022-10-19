@@ -81,6 +81,9 @@ azure-cluster:
 gcp-cluster:
 	./hack/clusters/create-gcp.sh
 
+powervs-cluster:
+	./hack/clusters/create-powervs.sh
+
 define ensure-home
 	@ export HOME=$${HOME:=/tmp/kubebuilder-testing}; \
 	if [ $${HOME} == "/" ]; then \
