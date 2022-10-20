@@ -30,7 +30,7 @@ func (r *ClusterWebhook) ValidateCreate(ctx context.Context, obj runtime.Object)
 		panic("expected to get an of object of type v1beta1.Cluster")
 	}
 	switch cluster.Spec.InfrastructureRef.Kind {
-	case "AWSCluster", "AzureCluster", "GCPCluster":
+	case "AWSCluster", "AzureCluster", "GCPCluster", "IBMPowerVSCluster":
 	default:
 		return fmt.Errorf("unsupported cluster infra provider kind: %s", cluster.Spec.InfrastructureRef.Kind)
 	}
@@ -50,7 +50,7 @@ func (r *ClusterWebhook) ValidateUpdate(ctx context.Context, oldObj, newObj runt
 	}
 
 	switch newCluster.Spec.InfrastructureRef.Kind {
-	case "AWSCluster", "AzureCluster", "GCPCluster":
+	case "AWSCluster", "AzureCluster", "GCPCluster", "IBMPowerVSCluster":
 	default:
 		return fmt.Errorf("unsupported cluster infra provider kind: %s", newCluster.Spec.InfrastructureRef.Kind)
 	}
