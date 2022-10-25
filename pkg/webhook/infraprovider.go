@@ -46,6 +46,12 @@ func (r *InfrastructureProviderWebhook) ValidateCreate(ctx context.Context, obj 
 		if infraProvider.Name != "gcp" {
 			return fmt.Errorf("incorrect infra provider name for GCP platform: %s", infraProvider.Name)
 		}
+	case configv1.PowerVSPlatformType:
+		// for Power VS the upstream cluster api provider name is ibmcloud
+		// https://github.com/kubernetes-sigs/cluster-api/blob/main/cmd/clusterctl/client/config/providers_client.go#L218-L222
+		if infraProvider.Name != "ibmcloud" {
+			return fmt.Errorf("incorrect infra provider name for PowerVS platform: %s", infraProvider.Name)
+		}
 	default:
 		return errors.New("platform not supported, skipping infra cluster controller setup")
 	}
@@ -76,6 +82,12 @@ func (r *InfrastructureProviderWebhook) ValidateUpdate(ctx context.Context, oldO
 	case configv1.GCPPlatformType:
 		if newInfraProvider.Name != "gcp" {
 			return fmt.Errorf("incorrect infra provider name for GCP platform: %s", newInfraProvider.Name)
+		}
+	case configv1.PowerVSPlatformType:
+		// for Power VS the upstream cluster api provider name is ibmcloud
+		// https://github.com/kubernetes-sigs/cluster-api/blob/main/cmd/clusterctl/client/config/providers_client.go#L218-L222
+		if newInfraProvider.Name != "ibmcloud" {
+			return fmt.Errorf("incorrect infra provider name for PowerVS platform: %s", newInfraProvider.Name)
 		}
 	default:
 		return errors.New("platform not supported, skipping infra cluster controller setup")
