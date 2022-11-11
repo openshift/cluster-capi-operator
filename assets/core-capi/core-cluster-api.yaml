@@ -31,6 +31,19 @@ data:
             - --metrics-bind-addr=localhost:8080
             command:
             - /manager
+            env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_UID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.uid
             image: to.be/replaced:v99
             imagePullPolicy: Always
             livenessProbe:
@@ -177,6 +190,28 @@ data:
         service:
           name: capi-webhook-service
           namespace: openshift-cluster-api
+          path: /mutate-runtime-cluster-x-k8s-io-v1alpha1-extensionconfig
+      failurePolicy: Fail
+      matchPolicy: Equivalent
+      name: default.extensionconfig.runtime.addons.cluster.x-k8s.io
+      rules:
+      - apiGroups:
+        - runtime.cluster.x-k8s.io
+        apiVersions:
+        - v1alpha1
+        operations:
+        - CREATE
+        - UPDATE
+        resources:
+        - extensionconfigs
+      sideEffects: None
+    - admissionReviewVersions:
+      - v1
+      - v1beta1
+      clientConfig:
+        service:
+          name: capi-webhook-service
+          namespace: openshift-cluster-api
           path: /mutate-cluster-x-k8s-io-v1beta1-machinepool
       failurePolicy: Fail
       matchPolicy: Equivalent
@@ -299,6 +334,28 @@ data:
         service:
           name: capi-webhook-service
           namespace: openshift-cluster-api
+          path: /validate-runtime-cluster-x-k8s-io-v1alpha1-extensionconfig
+      failurePolicy: Fail
+      matchPolicy: Equivalent
+      name: validation.extensionconfig.runtime.cluster.x-k8s.io
+      rules:
+      - apiGroups:
+        - runtime.cluster.x-k8s.io
+        apiVersions:
+        - v1alpha1
+        operations:
+        - CREATE
+        - UPDATE
+        resources:
+        - extensionconfigs
+      sideEffects: None
+    - admissionReviewVersions:
+      - v1
+      - v1beta1
+      clientConfig:
+        service:
+          name: capi-webhook-service
+          namespace: openshift-cluster-api
           path: /validate-cluster-x-k8s-io-v1beta1-machinepool
       failurePolicy: Fail
       matchPolicy: Equivalent
@@ -336,6 +393,52 @@ data:
         resources:
         - clusterresourcesets
       sideEffects: None
+    - admissionReviewVersions:
+      - v1
+      - v1beta1
+      clientConfig:
+        service:
+          name: capi-webhook-service
+          namespace: openshift-cluster-api
+          path: /validate-ipam-cluster-x-k8s-io-v1alpha1-ipaddress
+      failurePolicy: Fail
+      matchPolicy: Equivalent
+      name: validation.ipaddress.ipam.cluster.x-k8s.io
+      rules:
+      - apiGroups:
+        - ipam.cluster.x-k8s.io
+        apiVersions:
+        - v1alpha1
+        operations:
+        - CREATE
+        - UPDATE
+        - DELETE
+        resources:
+        - ipaddresses
+      sideEffects: None
+    - admissionReviewVersions:
+      - v1
+      - v1beta1
+      clientConfig:
+        service:
+          name: capi-webhook-service
+          namespace: openshift-cluster-api
+          path: /validate-ipam-cluster-x-k8s-io-v1alpha1-ipaddressclaim
+      failurePolicy: Fail
+      matchPolicy: Equivalent
+      name: validation.ipaddressclaim.ipam.cluster.x-k8s.io
+      rules:
+      - apiGroups:
+        - ipam.cluster.x-k8s.io
+        apiVersions:
+        - v1alpha1
+        operations:
+        - CREATE
+        - UPDATE
+        - DELETE
+        resources:
+        - ipaddressclaims
+      sideEffects: None
     ---
     apiVersion: v1
     kind: Service
@@ -366,6 +469,12 @@ data:
     apiVersion: clusterctl.cluster.x-k8s.io/v1alpha3
     kind: Metadata
     releaseSeries:
+      - major: 1
+        minor: 3
+        contract: v1beta1
+      - major: 1
+        minor: 2
+        contract: v1beta1
       - major: 1
         minor: 1
         contract: v1beta1

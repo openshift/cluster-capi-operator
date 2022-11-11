@@ -3,23 +3,23 @@ data:
   providers-list.yaml: |+
     - name: cluster-api
       type: CoreProvider
-      branch: release-4.11
+      branch: release-4.13
       version: v1.1.2
     - name: aws
       type: InfrastructureProvider
-      branch: release-4.11
+      branch: release-4.13
       version: v1.3.0
     - name: azure
       type: InfrastructureProvider
-      branch: release-4.11
+      branch: release-4.13
       version: v1.1.1
     - name: gcp
       type: InfrastructureProvider
-      branch: release-4.11
+      branch: release-4.13
       version: v1.0.0
     - name: powervs
       type: InfrastructureProvider
-      branch: release-4.12
+      branch: release-4.13
       version: v0.3.0
 
 kind: ConfigMap

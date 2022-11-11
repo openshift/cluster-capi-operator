@@ -37,6 +37,14 @@ metadata:
   name: openshift-cluster-api-capi-manager-role
 rules:
 - apiGroups:
+  - ""
+  resources:
+  - namespaces
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - addons.cluster.x-k8s.io
   resources:
   - '*'
@@ -99,6 +107,17 @@ rules:
   verbs:
   - create
   - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - cluster.x-k8s.io
+  resources:
+  - clusterclasses
+  - clusterclasses/status
+  verbs:
   - get
   - list
   - patch
@@ -312,6 +331,25 @@ rules:
   - get
   - list
   - patch
+  - watch
+- apiGroups:
+  - ipam.cluster.x-k8s.io
+  resources:
+  - ipaddressclaims
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - runtime.cluster.x-k8s.io
+  resources:
+  - extensionconfigs
+  - extensionconfigs/status
+  verbs:
+  - get
+  - list
+  - patch
+  - update
   - watch
 ---
 apiVersion: v1
