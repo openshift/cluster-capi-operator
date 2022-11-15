@@ -130,7 +130,7 @@ func (r *ClusterOperatorStatusClient) GetOrCreateClusterOperator(ctx context.Con
 	return co, nil
 }
 
-//syncStatus applies the new condition to the ClusterOperator object.
+// syncStatus applies the new condition to the ClusterOperator object.
 func (r *ClusterOperatorStatusClient) SyncStatus(ctx context.Context, co *configv1.ClusterOperator, conds []configv1.ClusterOperatorStatusCondition) error {
 	for _, c := range conds {
 		v1helpers.SetStatusCondition(&co.Status.Conditions, c)
