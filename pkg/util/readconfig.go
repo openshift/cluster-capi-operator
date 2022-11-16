@@ -3,7 +3,7 @@ package util
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 
 	"gopkg.in/yaml.v2"
@@ -11,7 +11,7 @@ import (
 
 // ReadImagesFile reads the images file and returns the map of container images
 func ReadImagesFile(imagesFile string) (map[string]string, error) {
-	jsonData, err := ioutil.ReadFile(filepath.Clean(imagesFile))
+	jsonData, err := os.ReadFile(filepath.Clean(imagesFile))
 	if err != nil {
 		return nil, fmt.Errorf("unable to read file %s: %w", imagesFile, err)
 	}
@@ -30,7 +30,7 @@ type provider struct {
 
 // ReadProvidersFile reads the providers file and returns the map of supported providers
 func ReadProvidersFile(providersFile string) (map[string]bool, error) {
-	yamlData, err := ioutil.ReadFile(filepath.Clean(providersFile))
+	yamlData, err := os.ReadFile(filepath.Clean(providersFile))
 	if err != nil {
 		return nil, fmt.Errorf("unable to read file %s", providersFile)
 	}
