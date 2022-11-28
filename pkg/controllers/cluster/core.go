@@ -12,6 +12,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
+	"github.com/openshift/cluster-capi-operator/pkg/util"
 )
 
 type CoreClusterReconciler struct {
@@ -43,8 +44,17 @@ func (r *CoreClusterReconciler) Reconcile(ctx context.Context, req reconcile.Req
 	clusterCopy := cluster.DeepCopy()
 
 	conditions.MarkTrue(cluster, clusterv1.ControlPlaneInitializedCondition)
-	if err := r.Status().Patch(ctx, cluster, client.MergeFrom(clusterCopy)); err != nil {
-		return ctrl.Result{}, fmt.Errorf("unable to update core cluster status: %v", err)
+
+	patch := client.MergeFrom(clusterCopy)
+	isRequired, err := util.IsPatchRequired(cluster, patch)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to check if patch required: %w", err)
+	}
+
+	if isRequired {
+		if err := r.Status().Patch(ctx, cluster, patch); err != nil {
+			return ctrl.Result{}, fmt.Errorf("unable to update core cluster status: %v", err)
+		}
 	}
 
 	return ctrl.Result{}, r.SetStatusAvailable(ctx)
