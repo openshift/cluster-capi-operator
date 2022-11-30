@@ -13,6 +13,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
+	"github.com/openshift/cluster-capi-operator/pkg/util"
 )
 
 type GenericInfraClusterReconciler struct {
@@ -47,8 +48,17 @@ func (r *GenericInfraClusterReconciler) Reconcile(ctx context.Context, req recon
 
 	// Set externally managed annotation
 	infraClusterCopy.SetAnnotations(setManagedByAnnotation(infraClusterCopy.GetAnnotations()))
-	if err := r.Client.Patch(ctx, infraClusterCopy, client.MergeFrom(infraClusterPatchCopy)); err != nil {
-		return ctrl.Result{}, fmt.Errorf("unable to patch infra cluster: %v", err)
+
+	patch := client.MergeFrom(infraClusterPatchCopy)
+	isRequired, err := util.IsPatchRequired(r.InfraCluster, patch)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to check if patch required: %w", err)
+	}
+
+	if isRequired {
+		if err := r.Client.Patch(ctx, infraClusterCopy, client.MergeFrom(infraClusterPatchCopy)); err != nil {
+			return ctrl.Result{}, fmt.Errorf("unable to patch infra cluster: %v", err)
+		}
 	}
 
 	// Set status to ready
@@ -65,8 +75,16 @@ func (r *GenericInfraClusterReconciler) Reconcile(ctx context.Context, req recon
 		return ctrl.Result{}, fmt.Errorf("unable to convert from unstructured: %v", err)
 	}
 
-	if err := r.Status().Patch(ctx, infraClusterCopy, client.MergeFrom(infraClusterPatchCopy)); err != nil {
-		return ctrl.Result{}, fmt.Errorf("unable to patch cluster status: %w", err)
+	patch = client.MergeFrom(infraClusterPatchCopy)
+	isRequired, err = util.IsPatchRequired(infraClusterCopy, patch)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to check if patch required: %w", err)
+	}
+
+	if isRequired {
+		if err := r.Status().Patch(ctx, infraClusterCopy, client.MergeFrom(infraClusterPatchCopy)); err != nil {
+			return ctrl.Result{}, fmt.Errorf("unable to patch cluster status: %w", err)
+		}
 	}
 
 	return ctrl.Result{}, r.SetStatusAvailable(ctx)
