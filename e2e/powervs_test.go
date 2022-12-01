@@ -40,6 +40,11 @@ var _ = Describe("Cluster API IBMPowerVS MachineSet", Ordered, func() {
 	})
 
 	AfterEach(func() {
+		if platform != configv1.PowerVSPlatformType {
+			// Because AfterEach always runs, even when tests are skipped, we have to
+			// explicitly skip it here for other platforms.
+			Skip("Skipping PowerVS E2E tests")
+		}
 		framework.DeleteMachineSets(cl, machineSet)
 		framework.WaitForMachineSetsDeleted(cl, machineSet)
 		framework.DeleteObjects(cl, powerVSMachineTemplate)
