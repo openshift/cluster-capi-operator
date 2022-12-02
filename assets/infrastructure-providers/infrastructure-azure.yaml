@@ -22,7 +22,7 @@ data:
       template:
         metadata:
           annotations:
-            kubectl.kubernetes.io/default-logs-container: manager
+            kubectl.kubernetes.io/default-container: manager
           creationTimestamp: null
           labels:
             aadpodidbinding: capz-controller-aadpodidentity-selector
@@ -100,6 +100,11 @@ data:
           priorityClassName: system-cluster-critical
           serviceAccountName: capz-manager
           terminationGracePeriodSeconds: 10
+          tolerations:
+          - effect: NoSchedule
+            key: node-role.kubernetes.io/master
+          - effect: NoSchedule
+            key: node-role.kubernetes.io/control-plane
           volumes:
           - name: cert
             secret:

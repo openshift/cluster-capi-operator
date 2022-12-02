@@ -39,10 +39,18 @@ spec:
         image: registry.ci.openshift.org/openshift:cluster-kube-cluster-api-operator
         imagePullPolicy: IfNotPresent
         name: cluster-kube-cluster-api-operator
+        ports:
+        - containerPort: 9443
+          name: webhook-server
+          protocol: TCP
         resources:
           requests:
             cpu: 10m
             memory: 50Mi
+        volumeMounts:
+        - mountPath: /tmp/k8s-webhook-server/serving-certs
+          name: cert
+          readOnly: true
       - args:
         - --secure-listen-address=0.0.0.0:8443
         - --upstream=http://127.0.0.1:8080/
@@ -62,4 +70,9 @@ spec:
       tolerations:
       - effect: NoSchedule
         key: node-role.kubernetes.io/master
+      volumes:
+      - name: cert
+        secret:
+          defaultMode: 420
+          secretName: capi-operator-webhook-service-cert
 status: {}
