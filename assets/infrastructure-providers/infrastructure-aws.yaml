@@ -110,19 +110,20 @@ data:
       name: capa-mutating-webhook-configuration
     webhooks:
     - admissionReviewVersions:
+      - v1
       - v1beta1
       clientConfig:
         service:
           name: capa-webhook-service
           namespace: openshift-cluster-api
-          path: /mutate-infrastructure-cluster-x-k8s-io-v1beta1-awsmachine
+          path: /mutate-infrastructure-cluster-x-k8s-io-v1beta2-awsmachine
       failurePolicy: Fail
       name: mutation.awsmachine.infrastructure.cluster.x-k8s.io
       rules:
       - apiGroups:
         - infrastructure.cluster.x-k8s.io
         apiVersions:
-        - v1beta1
+        - v1beta2
         operations:
         - CREATE
         - UPDATE
@@ -130,12 +131,13 @@ data:
         - awsmachines
       sideEffects: None
     - admissionReviewVersions:
+      - v1
       - v1beta1
       clientConfig:
         service:
           name: capa-webhook-service
           namespace: openshift-cluster-api
-          path: /mutate-infrastructure-cluster-x-k8s-io-v1beta1-awsfargateprofile
+          path: /mutate-infrastructure-cluster-x-k8s-io-v1beta2-awsfargateprofile
       failurePolicy: Fail
       matchPolicy: Equivalent
       name: default.awsfargateprofile.infrastructure.cluster.x-k8s.io
@@ -143,7 +145,7 @@ data:
       - apiGroups:
         - infrastructure.cluster.x-k8s.io
         apiVersions:
-        - v1beta1
+        - v1beta2
         operations:
         - CREATE
         - UPDATE
@@ -151,12 +153,13 @@ data:
         - awsfargateprofiles
       sideEffects: None
     - admissionReviewVersions:
+      - v1
       - v1beta1
       clientConfig:
         service:
           name: capa-webhook-service
           namespace: openshift-cluster-api
-          path: /mutate-infrastructure-cluster-x-k8s-io-v1beta1-awsmachinepool
+          path: /mutate-infrastructure-cluster-x-k8s-io-v1beta2-awsmachinepool
       failurePolicy: Fail
       matchPolicy: Equivalent
       name: default.awsmachinepool.infrastructure.cluster.x-k8s.io
@@ -164,7 +167,7 @@ data:
       - apiGroups:
         - infrastructure.cluster.x-k8s.io
         apiVersions:
-        - v1beta1
+        - v1beta2
         operations:
         - CREATE
         - UPDATE
@@ -172,12 +175,13 @@ data:
         - awsmachinepools
       sideEffects: None
     - admissionReviewVersions:
+      - v1
       - v1beta1
       clientConfig:
         service:
           name: capa-webhook-service
           namespace: openshift-cluster-api
-          path: /mutate-infrastructure-cluster-x-k8s-io-v1beta1-awsmanagedmachinepool
+          path: /mutate-infrastructure-cluster-x-k8s-io-v1beta2-awsmanagedmachinepool
       failurePolicy: Fail
       matchPolicy: Equivalent
       name: default.awsmanagedmachinepool.infrastructure.cluster.x-k8s.io
@@ -185,7 +189,7 @@ data:
       - apiGroups:
         - infrastructure.cluster.x-k8s.io
         apiVersions:
-        - v1beta1
+        - v1beta2
         operations:
         - CREATE
         - UPDATE
@@ -193,12 +197,13 @@ data:
         - awsmanagedmachinepools
       sideEffects: None
     - admissionReviewVersions:
+      - v1
       - v1beta1
       clientConfig:
         service:
           name: capa-webhook-service
           namespace: openshift-cluster-api
-          path: /mutate-bootstrap-cluster-x-k8s-io-v1beta1-eksconfig
+          path: /mutate-bootstrap-cluster-x-k8s-io-v1beta2-eksconfig
       failurePolicy: Fail
       matchPolicy: Equivalent
       name: default.eksconfigs.bootstrap.cluster.x-k8s.io
@@ -206,7 +211,7 @@ data:
       - apiGroups:
         - bootstrap.cluster.x-k8s.io
         apiVersions:
-        - v1beta1
+        - v1beta2
         operations:
         - CREATE
         - UPDATE
@@ -214,12 +219,13 @@ data:
         - eksconfig
       sideEffects: None
     - admissionReviewVersions:
+      - v1
       - v1beta1
       clientConfig:
         service:
           name: capa-webhook-service
           namespace: openshift-cluster-api
-          path: /mutate-bootstrap-cluster-x-k8s-io-v1beta1-eksconfigtemplate
+          path: /mutate-bootstrap-cluster-x-k8s-io-v1beta2-eksconfigtemplate
       failurePolicy: Fail
       matchPolicy: Equivalent
       name: default.eksconfigtemplates.bootstrap.cluster.x-k8s.io
@@ -227,7 +233,7 @@ data:
       - apiGroups:
         - bootstrap.cluster.x-k8s.io
         apiVersions:
-        - v1beta1
+        - v1beta2
         operations:
         - CREATE
         - UPDATE
@@ -235,12 +241,13 @@ data:
         - eksconfigtemplate
       sideEffects: None
     - admissionReviewVersions:
+      - v1
       - v1beta1
       clientConfig:
         service:
           name: capa-webhook-service
           namespace: openshift-cluster-api
-          path: /mutate-controlplane-cluster-x-k8s-io-v1beta1-awsmanagedcontrolplane
+          path: /mutate-controlplane-cluster-x-k8s-io-v1beta2-awsmanagedcontrolplane
       failurePolicy: Fail
       matchPolicy: Equivalent
       name: default.awsmanagedcontrolplanes.controlplane.cluster.x-k8s.io
@@ -248,7 +255,7 @@ data:
       - apiGroups:
         - controlplane.cluster.x-k8s.io
         apiVersions:
-        - v1beta1
+        - v1beta2
         operations:
         - CREATE
         - UPDATE
@@ -268,12 +275,13 @@ data:
       name: capa-validating-webhook-configuration
     webhooks:
     - admissionReviewVersions:
+      - v1
       - v1beta1
       clientConfig:
         service:
           name: capa-webhook-service
           namespace: openshift-cluster-api
-          path: /validate-infrastructure-cluster-x-k8s-io-v1beta1-awsmachine
+          path: /validate-infrastructure-cluster-x-k8s-io-v1beta2-awsmachine
       failurePolicy: Fail
       matchPolicy: Equivalent
       name: validation.awsmachine.infrastructure.cluster.x-k8s.io
@@ -281,7 +289,7 @@ data:
       - apiGroups:
         - infrastructure.cluster.x-k8s.io
         apiVersions:
-        - v1beta1
+        - v1beta2
         operations:
         - CREATE
         - UPDATE
@@ -289,33 +297,13 @@ data:
         - awsmachines
       sideEffects: None
     - admissionReviewVersions:
+      - v1
       - v1beta1
       clientConfig:
         service:
           name: capa-webhook-service
           namespace: openshift-cluster-api
-          path: /validate-infrastructure-cluster-x-k8s-io-v1beta1-awsmachinetemplate
-      failurePolicy: Fail
-      matchPolicy: Equivalent
-      name: validation.awsmachinetemplate.infrastructure.x-k8s.io
-      rules:
-      - apiGroups:
-        - infrastructure.cluster.x-k8s.io
-        apiVersions:
-        - v1beta1
-        operations:
-        - CREATE
-        - UPDATE
-        resources:
-        - awsmachinetemplates
-      sideEffects: None
-    - admissionReviewVersions:
-      - v1beta1
-      clientConfig:
-        service:
-          name: capa-webhook-service
-          namespace: openshift-cluster-api
-          path: /validate-infrastructure-cluster-x-k8s-io-v1beta1-awsfargateprofile
+          path: /validate-infrastructure-cluster-x-k8s-io-v1beta2-awsfargateprofile
       failurePolicy: Fail
       matchPolicy: Equivalent
       name: validation.awsfargateprofile.infrastructure.cluster.x-k8s.io
@@ -323,7 +311,7 @@ data:
       - apiGroups:
         - infrastructure.cluster.x-k8s.io
         apiVersions:
-        - v1beta1
+        - v1beta2
         operations:
         - CREATE
         - UPDATE
@@ -331,12 +319,13 @@ data:
         - awsfargateprofiles
       sideEffects: None
     - admissionReviewVersions:
+      - v1
       - v1beta1
       clientConfig:
         service:
           name: capa-webhook-service
           namespace: openshift-cluster-api
-          path: /validate-infrastructure-cluster-x-k8s-io-v1beta1-awsmachinepool
+          path: /validate-infrastructure-cluster-x-k8s-io-v1beta2-awsmachinepool
       failurePolicy: Fail
       matchPolicy: Equivalent
       name: validation.awsmachinepool.infrastructure.cluster.x-k8s.io
@@ -344,7 +333,7 @@ data:
       - apiGroups:
         - infrastructure.cluster.x-k8s.io
         apiVersions:
-        - v1beta1
+        - v1beta2
         operations:
         - CREATE
         - UPDATE
@@ -352,12 +341,13 @@ data:
         - awsmachinepools
       sideEffects: None
     - admissionReviewVersions:
+      - v1
       - v1beta1
       clientConfig:
         service:
           name: capa-webhook-service
           namespace: openshift-cluster-api
-          path: /validate-infrastructure-cluster-x-k8s-io-v1beta1-awsmanagedmachinepool
+          path: /validate-infrastructure-cluster-x-k8s-io-v1beta2-awsmanagedmachinepool
       failurePolicy: Fail
       matchPolicy: Equivalent
       name: validation.awsmanagedmachinepool.infrastructure.cluster.x-k8s.io
@@ -365,7 +355,7 @@ data:
       - apiGroups:
         - infrastructure.cluster.x-k8s.io
         apiVersions:
-        - v1beta1
+        - v1beta2
         operations:
         - CREATE
         - UPDATE
@@ -373,12 +363,13 @@ data:
         - awsmanagedmachinepools
       sideEffects: None
     - admissionReviewVersions:
+      - v1
       - v1beta1
       clientConfig:
         service:
           name: capa-webhook-service
           namespace: openshift-cluster-api
-          path: /validate-bootstrap-cluster-x-k8s-io-v1beta1-eksconfig
+          path: /validate-bootstrap-cluster-x-k8s-io-v1beta2-eksconfig
       failurePolicy: Fail
       matchPolicy: Equivalent
       name: validation.eksconfigs.bootstrap.cluster.x-k8s.io
@@ -386,7 +377,7 @@ data:
       - apiGroups:
         - bootstrap.cluster.x-k8s.io
         apiVersions:
-        - v1beta1
+        - v1beta2
         operations:
         - CREATE
         - UPDATE
@@ -394,12 +385,13 @@ data:
         - eksconfig
       sideEffects: None
     - admissionReviewVersions:
+      - v1
       - v1beta1
       clientConfig:
         service:
           name: capa-webhook-service
           namespace: openshift-cluster-api
-          path: /validate-bootstrap-cluster-x-k8s-io-v1beta1-eksconfigtemplate
+          path: /validate-bootstrap-cluster-x-k8s-io-v1beta2-eksconfigtemplate
       failurePolicy: Fail
       matchPolicy: Equivalent
       name: validation.eksconfigtemplates.bootstrap.cluster.x-k8s.io
@@ -407,7 +399,7 @@ data:
       - apiGroups:
         - bootstrap.cluster.x-k8s.io
         apiVersions:
-        - v1beta1
+        - v1beta2
         operations:
         - CREATE
         - UPDATE
@@ -415,12 +407,13 @@ data:
         - eksconfigtemplate
       sideEffects: None
     - admissionReviewVersions:
+      - v1
       - v1beta1
       clientConfig:
         service:
           name: capa-webhook-service
           namespace: openshift-cluster-api
-          path: /validate-controlplane-cluster-x-k8s-io-v1beta1-awsmanagedcontrolplane
+          path: /validate-controlplane-cluster-x-k8s-io-v1beta2-awsmanagedcontrolplane
       failurePolicy: Fail
       matchPolicy: Equivalent
       name: validation.awsmanagedcontrolplanes.controlplane.cluster.x-k8s.io
@@ -428,7 +421,7 @@ data:
       - apiGroups:
         - controlplane.cluster.x-k8s.io
         apiVersions:
-        - v1beta1
+        - v1beta2
         operations:
         - CREATE
         - UPDATE
@@ -493,6 +486,9 @@ data:
         contract: v1beta1
       - major: 1
         minor: 5
+        contract: v1beta1
+      - major: 2
+        minor: 0
         contract: v1beta1
 kind: ConfigMap
 metadata:
