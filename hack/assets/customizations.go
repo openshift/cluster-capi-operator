@@ -172,7 +172,9 @@ func findWebhookServiceSecretName(objs []unstructured.Unstructured) map[string]s
 				if !ok {
 					panic("can't find secret from cert: " + certNN)
 				}
-				serviceSecretNames[crd.Spec.Conversion.Webhook.ClientConfig.Service.Name] = secretName
+				if crd.Spec.Conversion != nil {
+					serviceSecretNames[crd.Spec.Conversion.Webhook.ClientConfig.Service.Name] = secretName
+				}
 			}
 
 		case "MutatingWebhookConfiguration":
