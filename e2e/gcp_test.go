@@ -37,6 +37,11 @@ var _ = Describe("Cluster API GCP MachineSet", Ordered, func() {
 	})
 
 	AfterEach(func() {
+		if platform != configv1.GCPPlatformType {
+			// Because AfterEach always runs, even when tests are skipped, we have to
+			// explicitly skip it here for other platforms.
+			Skip("Skipping GCP E2E tests")
+		}
 		framework.DeleteMachineSets(cl, machineSet)
 		framework.WaitForMachineSetsDeleted(cl, machineSet)
 		framework.DeleteObjects(cl, gcpMachineTemplate)
