@@ -261,7 +261,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.8.0
+    controller-gen.kubebuilder.io/version: v0.9.2
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
@@ -1393,6 +1393,51 @@ spec:
                   - nameSuffix
                   type: object
                 type: array
+              diagnostics:
+                description: Diagnostics specifies the diagnostics settings for a
+                  virtual machine. If not specified then Boot diagnostics (Managed)
+                  will be enabled.
+                properties:
+                  boot:
+                    description: Boot configures the boot diagnostics settings for
+                      the virtual machine. This allows to configure capturing serial
+                      output from the virtual machine on boot. This is useful for
+                      debugging software based launch issues. If not specified then
+                      Boot diagnostics (Managed) will be enabled.
+                    properties:
+                      storageAccountType:
+                        description: StorageAccountType determines if the storage
+                          account for storing the diagnostics data should be disabled
+                          (Disabled), provisioned by Azure (Managed) or by the user
+                          (UserManaged).
+                        enum:
+                        - Managed
+                        - UserManaged
+                        - Disabled
+                        type: string
+                      userManaged:
+                        description: UserManaged provides a reference to the user-managed
+                          storage account.
+                        properties:
+                          storageAccountURI:
+                            description: 'StorageAccountURI is the URI of the user-managed
+                              storage account. The URI typically will be `https://<mystorageaccountname>.blob.core.windows.net/`
+                              but may differ if you are using Azure DNS zone endpoints.
+                              You can find the correct endpoint by looking for the
+                              Blob Primary Endpoint in the endpoints tab in the Azure
+                              console or with the CLI by issuing `az storage account
+                              list --query=''[].{name: name, "resource group": resourceGroup,
+                              "blob endpoint": primaryEndpoints.blob}''`.'
+                            maxLength: 1024
+                            pattern: ^https://
+                            type: string
+                        required:
+                        - storageAccountURI
+                        type: object
+                    required:
+                    - storageAccountType
+                    type: object
+                type: object
               dnsServers:
                 description: DNSServers adds a list of DNS Server IP addresses to
                   the VM NICs.
@@ -1670,6 +1715,13 @@ spec:
                 description: SpotVMOptions allows the ability to specify the Machine
                   should use a Spot VM
                 properties:
+                  evictionPolicy:
+                    description: EvictionPolicy defines the behavior of the virtual
+                      machine when it is evicted. It can be either Delete or Deallocate.
+                    enum:
+                    - Deallocate
+                    - Delete
+                    type: string
                   maxPrice:
                     anyOf:
                     - type: integer
@@ -1892,14 +1944,14 @@ status:
   acceptedNames:
     kind: ""
     plural: ""
-  conditions: []
-  storedVersions: []
+  conditions: null
+  storedVersions: null
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.8.0
+    controller-gen.kubebuilder.io/version: v0.9.2
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
@@ -2026,6 +2078,7 @@ spec:
                     description: 'UID of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids'
                     type: string
                 type: object
+                x-kubernetes-map-type: atomic
               location:
                 type: string
               networkSpec:
@@ -2299,7 +2352,7 @@ spec:
                   maps to Availability Zone with an Azure Region (if the region support
                   them). An Availability Zone is a separate data center within a region
                   and they can be used to ensure the cluster is more resilient to
-                  failure. See: https://docs.microsoft.com/en-us/azure/availability-zones/az-overview
+                  failure. See: https://learn.microsoft.com/azure/reliability/availability-zones-overview
                   This list will be used by Cluster API to try and spread the machines
                   across the failure domains.'
                 type: object
@@ -2683,6 +2736,7 @@ spec:
                     description: 'UID of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids'
                     type: string
                 type: object
+                x-kubernetes-map-type: atomic
               location:
                 type: string
               networkSpec:
@@ -3094,7 +3148,7 @@ spec:
                   maps to Availability Zone with an Azure Region (if the region support
                   them). An Availability Zone is a separate data center within a region
                   and they can be used to ensure the cluster is more resilient to
-                  failure. See: https://docs.microsoft.com/en-us/azure/availability-zones/az-overview
+                  failure. See: https://learn.microsoft.com/azure/reliability/availability-zones-overview
                   This list will be used by Cluster API to try and spread the machines
                   across the failure domains.'
                 type: object
@@ -3413,6 +3467,9 @@ spec:
                                   - protocol
                                   type: object
                                 type: array
+                                x-kubernetes-list-map-keys:
+                                - name
+                                x-kubernetes-list-type: map
                               tags:
                                 additionalProperties:
                                   type: string
@@ -3421,6 +3478,27 @@ spec:
                             required:
                             - name
                             type: object
+                          serviceEndpoints:
+                            description: ServiceEndpoints is a slice of Virtual Network
+                              service endpoints to enable for the subnets.
+                            items:
+                              description: ServiceEndpointSpec configures an Azure
+                                Service Endpoint.
+                              properties:
+                                locations:
+                                  items:
+                                    type: string
+                                  type: array
+                                service:
+                                  type: string
+                              required:
+                              - locations
+                              - service
+                              type: object
+                            type: array
+                            x-kubernetes-list-map-keys:
+                            - service
+                            x-kubernetes-list-type: map
                         required:
                         - name
                         - role
@@ -3572,6 +3650,7 @@ spec:
                     description: 'UID of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids'
                     type: string
                 type: object
+                x-kubernetes-map-type: atomic
               location:
                 type: string
               networkSpec:
@@ -3582,6 +3661,16 @@ spec:
                     description: APIServerLB is the configuration for the control-plane
                       load balancer.
                     properties:
+                      backendPool:
+                        description: BackendPool describes the backend pool of the
+                          load balancer.
+                        properties:
+                          name:
+                            description: Name specifies the name of backend pool for
+                              the load balancer. If not specified, the default name
+                              will be set, depending on the load balancer role.
+                            type: string
+                        type: object
                       frontendIPs:
                         items:
                           description: FrontendIP defines a load balancer frontend
@@ -3655,6 +3744,16 @@ spec:
                       APIServerLB, and is used only in private clusters (optionally)
                       for enabling outbound traffic.
                     properties:
+                      backendPool:
+                        description: BackendPool describes the backend pool of the
+                          load balancer.
+                        properties:
+                          name:
+                            description: Name specifies the name of backend pool for
+                              the load balancer. If not specified, the default name
+                              will be set, depending on the load balancer role.
+                            type: string
+                        type: object
                       frontendIPs:
                         items:
                           description: FrontendIP defines a load balancer frontend
@@ -3726,6 +3825,16 @@ spec:
                     description: NodeOutboundLB is the configuration for the node
                       outbound load balancer.
                     properties:
+                      backendPool:
+                        description: BackendPool describes the backend pool of the
+                          load balancer.
+                        properties:
+                          name:
+                            description: Name specifies the name of backend pool for
+                              the load balancer. If not specified, the default name
+                              will be set, depending on the load balancer role.
+                            type: string
+                        type: object
                       frontendIPs:
                         items:
                           description: FrontendIP defines a load balancer frontend
@@ -3962,6 +4071,9 @@ spec:
                                 - protocol
                                 type: object
                               type: array
+                              x-kubernetes-list-map-keys:
+                              - name
+                              x-kubernetes-list-type: map
                             tags:
                               additionalProperties:
                                 type: string
@@ -3970,11 +4082,35 @@ spec:
                           required:
                           - name
                           type: object
+                        serviceEndpoints:
+                          description: ServiceEndpoints is a slice of Virtual Network
+                            service endpoints to enable for the subnets.
+                          items:
+                            description: ServiceEndpointSpec configures an Azure Service
+                              Endpoint.
+                            properties:
+                              locations:
+                                items:
+                                  type: string
+                                type: array
+                              service:
+                                type: string
+                            required:
+                            - locations
+                            - service
+                            type: object
+                          type: array
+                          x-kubernetes-list-map-keys:
+                          - service
+                          x-kubernetes-list-type: map
                       required:
                       - name
                       - role
                       type: object
                     type: array
+                    x-kubernetes-list-map-keys:
+                    - name
+                    x-kubernetes-list-type: map
                   vnet:
                     description: Vnet is the configuration for the Azure virtual network.
                     properties:
@@ -4103,7 +4239,7 @@ spec:
                   maps to Availability Zone with an Azure Region (if the region support
                   them). An Availability Zone is a separate data center within a region
                   and they can be used to ensure the cluster is more resilient to
-                  failure. See: https://docs.microsoft.com/en-us/azure/availability-zones/az-overview
+                  failure. See: https://learn.microsoft.com/azure/reliability/availability-zones-overview
                   This list will be used by Cluster API to try and spread the machines
                   across the failure domains.'
                 type: object
@@ -4157,14 +4293,14 @@ status:
   acceptedNames:
     kind: ""
     plural: ""
-  conditions: []
-  storedVersions: []
+  conditions: null
+  storedVersions: null
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.8.0
+    controller-gen.kubebuilder.io/version: v0.9.2
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
@@ -4249,6 +4385,10 @@ spec:
                                     items:
                                       type: string
                                     type: array
+                                  name:
+                                    description: Name defines a name for the subnet
+                                      resource.
+                                    type: string
                                   natGateway:
                                     description: NatGateway associated with this subnet.
                                     properties:
@@ -4351,13 +4491,39 @@ spec:
                                           - protocol
                                           type: object
                                         type: array
+                                        x-kubernetes-list-map-keys:
+                                        - name
+                                        x-kubernetes-list-type: map
                                       tags:
                                         additionalProperties:
                                           type: string
                                         description: Tags defines a map of tags.
                                         type: object
                                     type: object
+                                  serviceEndpoints:
+                                    description: ServiceEndpoints is a slice of Virtual
+                                      Network service endpoints to enable for the
+                                      subnets.
+                                    items:
+                                      description: ServiceEndpointSpec configures
+                                        an Azure Service Endpoint.
+                                      properties:
+                                        locations:
+                                          items:
+                                            type: string
+                                          type: array
+                                        service:
+                                          type: string
+                                      required:
+                                      - locations
+                                      - service
+                                      type: object
+                                    type: array
+                                    x-kubernetes-list-map-keys:
+                                    - service
+                                    x-kubernetes-list-type: map
                                 required:
+                                - name
                                 - role
                                 type: object
                             type: object
@@ -4495,6 +4661,7 @@ spec:
                             description: 'UID of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids'
                             type: string
                         type: object
+                        x-kubernetes-map-type: atomic
                       location:
                         type: string
                       networkSpec:
@@ -4572,6 +4739,10 @@ spec:
                                   items:
                                     type: string
                                   type: array
+                                name:
+                                  description: Name defines a name for the subnet
+                                    resource.
+                                  type: string
                                 natGateway:
                                   description: NatGateway associated with this subnet.
                                   properties:
@@ -4672,16 +4843,44 @@ spec:
                                         - protocol
                                         type: object
                                       type: array
+                                      x-kubernetes-list-map-keys:
+                                      - name
+                                      x-kubernetes-list-type: map
                                     tags:
                                       additionalProperties:
                                         type: string
                                       description: Tags defines a map of tags.
                                       type: object
                                   type: object
+                                serviceEndpoints:
+                                  description: ServiceEndpoints is a slice of Virtual
+                                    Network service endpoints to enable for the subnets.
+                                  items:
+                                    description: ServiceEndpointSpec configures an
+                                      Azure Service Endpoint.
+                                    properties:
+                                      locations:
+                                        items:
+                                          type: string
+                                        type: array
+                                      service:
+                                        type: string
+                                    required:
+                                    - locations
+                                    - service
+                                    type: object
+                                  type: array
+                                  x-kubernetes-list-map-keys:
+                                  - service
+                                  x-kubernetes-list-type: map
                               required:
+                              - name
                               - role
                               type: object
                             type: array
+                            x-kubernetes-list-map-keys:
+                            - name
+                            x-kubernetes-list-type: map
                           vnet:
                             description: Vnet is the configuration for the Azure virtual
                               network.
@@ -4704,6 +4903,10 @@ spec:
                                     remoteVnetName:
                                       description: RemoteVnetName defines name of
                                         the remote virtual network.
+                                      type: string
+                                    resourceGroup:
+                                      description: ResourceGroup is the resource group
+                                        name of the remote virtual network.
                                       type: string
                                   required:
                                   - remoteVnetName
@@ -4735,14 +4938,14 @@ status:
   acceptedNames:
     kind: ""
     plural: ""
-  conditions: []
-  storedVersions: []
+  conditions: null
+  storedVersions: null
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.8.0
+    controller-gen.kubebuilder.io/version: v0.9.2
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
@@ -5643,6 +5846,54 @@ spec:
                           - nameSuffix
                           type: object
                         type: array
+                      diagnostics:
+                        description: Diagnostics specifies the diagnostics settings
+                          for a virtual machine. If not specified then Boot diagnostics
+                          (Managed) will be enabled.
+                        properties:
+                          boot:
+                            description: Boot configures the boot diagnostics settings
+                              for the virtual machine. This allows to configure capturing
+                              serial output from the virtual machine on boot. This
+                              is useful for debugging software based launch issues.
+                              If not specified then Boot diagnostics (Managed) will
+                              be enabled.
+                            properties:
+                              storageAccountType:
+                                description: StorageAccountType determines if the
+                                  storage account for storing the diagnostics data
+                                  should be disabled (Disabled), provisioned by Azure
+                                  (Managed) or by the user (UserManaged).
+                                enum:
+                                - Managed
+                                - UserManaged
+                                - Disabled
+                                type: string
+                              userManaged:
+                                description: UserManaged provides a reference to the
+                                  user-managed storage account.
+                                properties:
+                                  storageAccountURI:
+                                    description: 'StorageAccountURI is the URI of
+                                      the user-managed storage account. The URI typically
+                                      will be `https://<mystorageaccountname>.blob.core.windows.net/`
+                                      but may differ if you are using Azure DNS zone
+                                      endpoints. You can find the correct endpoint
+                                      by looking for the Blob Primary Endpoint in
+                                      the endpoints tab in the Azure console or with
+                                      the CLI by issuing `az storage account list
+                                      --query=''[].{name: name, "resource group":
+                                      resourceGroup, "blob endpoint": primaryEndpoints.blob}''`.'
+                                    maxLength: 1024
+                                    pattern: ^https://
+                                    type: string
+                                required:
+                                - storageAccountURI
+                                type: object
+                            required:
+                            - storageAccountType
+                            type: object
+                        type: object
                       dnsServers:
                         description: DNSServers adds a list of DNS Server IP addresses
                           to the VM NICs.
@@ -5933,6 +6184,14 @@ spec:
                         description: SpotVMOptions allows the ability to specify the
                           Machine should use a Spot VM
                         properties:
+                          evictionPolicy:
+                            description: EvictionPolicy defines the behavior of the
+                              virtual machine when it is evicted. It can be either
+                              Delete or Deallocate.
+                            enum:
+                            - Deallocate
+                            - Delete
+                            type: string
                           maxPrice:
                             anyOf:
                             - type: integer
@@ -6023,14 +6282,14 @@ status:
   acceptedNames:
     kind: ""
     plural: ""
-  conditions: []
-  storedVersions: []
+  conditions: null
+  storedVersions: null
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.8.0
+    controller-gen.kubebuilder.io/version: v0.9.2
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
@@ -6100,6 +6359,7 @@ spec:
                       name must be unique.
                     type: string
                 type: object
+                x-kubernetes-map-type: atomic
               resourceID:
                 description: User assigned MSI resource id.
                 type: string
@@ -6260,6 +6520,7 @@ spec:
                           "value". The requirements are ANDed.
                         type: object
                     type: object
+                    x-kubernetes-map-type: atomic
                 type: object
               clientID:
                 description: Both User Assigned MSI and SP can use this field.
@@ -6277,6 +6538,7 @@ spec:
                       name must be unique.
                     type: string
                 type: object
+                x-kubernetes-map-type: atomic
               resourceID:
                 description: User assigned MSI resource id.
                 type: string
@@ -6437,6 +6699,7 @@ spec:
                           "value". The requirements are ANDed.
                         type: object
                     type: object
+                    x-kubernetes-map-type: atomic
                 type: object
               clientID:
                 description: ClientID is the service principal client ID. Both User
@@ -6455,6 +6718,7 @@ spec:
                       name must be unique.
                     type: string
                 type: object
+                x-kubernetes-map-type: atomic
               resourceID:
                 description: ResourceID is the Azure resource ID for the User Assigned
                   MSI resource. Only applicable when type is UserAssignedMSI.
@@ -6467,7 +6731,6 @@ spec:
                   ServicePrincipalCertificate, UserAssignedMSI or ManualServicePrincipal.
                 enum:
                 - ServicePrincipal
-                - ManualServicePrincipal
                 - UserAssignedMSI
                 - ManualServicePrincipal
                 - ServicePrincipalCertificate
@@ -6536,14 +6799,14 @@ status:
   acceptedNames:
     kind: ""
     plural: ""
-  conditions: []
-  storedVersions: []
+  conditions: null
+  storedVersions: null
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.8.0
+    controller-gen.kubebuilder.io/version: v0.9.2
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
@@ -8075,6 +8338,52 @@ spec:
                       - nameSuffix
                       type: object
                     type: array
+                  diagnostics:
+                    description: Diagnostics specifies the diagnostics settings for
+                      a virtual machine. If not specified then Boot diagnostics (Managed)
+                      will be enabled.
+                    properties:
+                      boot:
+                        description: Boot configures the boot diagnostics settings
+                          for the virtual machine. This allows to configure capturing
+                          serial output from the virtual machine on boot. This is
+                          useful for debugging software based launch issues. If not
+                          specified then Boot diagnostics (Managed) will be enabled.
+                        properties:
+                          storageAccountType:
+                            description: StorageAccountType determines if the storage
+                              account for storing the diagnostics data should be disabled
+                              (Disabled), provisioned by Azure (Managed) or by the
+                              user (UserManaged).
+                            enum:
+                            - Managed
+                            - UserManaged
+                            - Disabled
+                            type: string
+                          userManaged:
+                            description: UserManaged provides a reference to the user-managed
+                              storage account.
+                            properties:
+                              storageAccountURI:
+                                description: 'StorageAccountURI is the URI of the
+                                  user-managed storage account. The URI typically
+                                  will be `https://<mystorageaccountname>.blob.core.windows.net/`
+                                  but may differ if you are using Azure DNS zone endpoints.
+                                  You can find the correct endpoint by looking for
+                                  the Blob Primary Endpoint in the endpoints tab in
+                                  the Azure console or with the CLI by issuing `az
+                                  storage account list --query=''[].{name: name, "resource
+                                  group": resourceGroup, "blob endpoint": primaryEndpoints.blob}''`.'
+                                maxLength: 1024
+                                pattern: ^https://
+                                type: string
+                            required:
+                            - storageAccountURI
+                            type: object
+                        required:
+                        - storageAccountType
+                        type: object
+                    type: object
                   image:
                     description: Image is used to provide details of an image to use
                       during VM creation. If image details are omitted the image will
@@ -8319,6 +8628,13 @@ spec:
                     description: SpotVMOptions allows the ability to specify the Machine
                       should use a Spot VM
                     properties:
+                      evictionPolicy:
+                        description: EvictionPolicy defines the behavior of the virtual
+                          machine when it is evicted. It can be either Delete or Deallocate.
+                        enum:
+                        - Deallocate
+                        - Delete
+                        type: string
                       maxPrice:
                         anyOf:
                         - type: integer
@@ -8761,14 +9077,14 @@ status:
   acceptedNames:
     kind: ""
     plural: ""
-  conditions: []
-  storedVersions: []
+  conditions: null
+  storedVersions: null
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.8.0
+    controller-gen.kubebuilder.io/version: v0.9.2
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
@@ -8972,6 +9288,13 @@ spec:
             description: AzureManagedMachinePoolSpec defines the desired state of
               AzureManagedMachinePool.
             properties:
+              additionalTags:
+                additionalProperties:
+                  type: string
+                description: AdditionalTags is an optional set of tags to add to Azure
+                  resources managed by the Azure provider, in addition to the ones
+                  added by default.
+                type: object
               availabilityZones:
                 description: AvailabilityZones - Availability zones for nodes. Must
                   use VirtualMachineScaleSets AgentPoolType.
@@ -8986,6 +9309,75 @@ spec:
                 description: EnableUltraSSD enables the storage type UltraSSD_LRS
                   for the agent pool.
                 type: boolean
+              kubeletConfig:
+                description: KubeletConfig specifies the kubelet configurations for
+                  nodes.
+                properties:
+                  allowedUnsafeSysctls:
+                    description: AllowedUnsafeSysctls - Allowlist of unsafe sysctls
+                      or unsafe sysctl patterns (ending in `*`).
+                    items:
+                      type: string
+                    type: array
+                  containerLogMaxFiles:
+                    description: ContainerLogMaxFiles - The maximum number of container
+                      log files that can be present for a container. The number must
+                      be ≥ 2.
+                    format: int32
+                    minimum: 2
+                    type: integer
+                  containerLogMaxSizeMB:
+                    description: ContainerLogMaxSizeMB - The maximum size (e.g. 10Mi)
+                      of container log file before it is rotated.
+                    format: int32
+                    type: integer
+                  cpuCfsQuota:
+                    description: CPUCfsQuota - Enable CPU CFS quota enforcement for
+                      containers that specify CPU limits.
+                    type: boolean
+                  cpuCfsQuotaPeriod:
+                    description: CPUCfsQuotaPeriod - Sets CPU CFS quota period value.
+                    type: string
+                  cpuManagerPolicy:
+                    description: CPUManagerPolicy - CPU Manager policy to use.
+                    enum:
+                    - none
+                    - static
+                    type: string
+                  failSwapOn:
+                    description: FailSwapOn - If set to true it will make the Kubelet
+                      fail to start if swap is enabled on the node.
+                    type: boolean
+                  imageGcHighThreshold:
+                    description: ImageGcHighThreshold - The percent of disk usage
+                      after which image garbage collection is always run.
+                    format: int32
+                    maximum: 100
+                    minimum: 0
+                    type: integer
+                  imageGcLowThreshold:
+                    description: ImageGcLowThreshold - The percent of disk usage before
+                      which image garbage collection is never run.
+                    format: int32
+                    maximum: 100
+                    minimum: 0
+                    type: integer
+                  podMaxPids:
+                    description: PodMaxPids - The maximum number of processes per
+                      pod.
+                    format: int32
+                    minimum: -1
+                    type: integer
+                  topologyManagerPolicy:
+                    description: TopologyManagerPolicy - Topology Manager policy to
+                      use.
+                    enum:
+                    - none
+                    - best-effort
+                    - restricted
+                    - single-numa-node
+                    type: string
+                type: object
               maxPods:
                 description: MaxPods specifies the kubelet --max-pods configuration
                   for the node pool.
@@ -9008,6 +9400,10 @@ spec:
                 description: Node labels - labels for all of the nodes present in
                   node pool
                 type: object
+              nodePublicIPPrefixID:
+                description: NodePublicIPPrefixID specifies the public IP prefix resource
+                  ID which VM nodes should use IPs from.
+                type: string
               osDiskSizeGB:
                 description: OSDiskSizeGB is the disk size for every machine in this
                   agent pool. If you specify 0, it will apply the default osDisk size
@@ -9035,6 +9431,13 @@ spec:
                 items:
                   type: string
                 type: array
+              scaleSetPriority:
+                description: 'ScaleSetPriority specifies the ScaleSetPriority value.
+                  Default to Regular. Possible values include: ''Regular'', ''Spot'''
+                enum:
+                - Regular
+                - Spot
+                type: string
               scaling:
                 description: Scaling specifies the autoscaling parameters for the
                   node pool.
@@ -9191,14 +9594,14 @@ status:
   acceptedNames:
     kind: ""
     plural: ""
-  conditions: []
-  storedVersions: []
+  conditions: null
+  storedVersions: null
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.8.0
+    controller-gen.kubebuilder.io/version: v0.9.2
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
@@ -9373,14 +9776,14 @@ status:
   acceptedNames:
     kind: ""
     plural: ""
-  conditions: []
-  storedVersions: []
+  conditions: null
+  storedVersions: null
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.8.0
+    controller-gen.kubebuilder.io/version: v0.9.2
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
@@ -10118,6 +10521,10 @@ spec:
                     type: string
                   name:
                     type: string
+                  resourceGroup:
+                    description: ResourceGroup is the name of the Azure resource group
+                      for the VNet and Subnet.
+                    type: string
                   subnet:
                     description: ManagedControlPlaneSubnet describes a subnet for
                       an AKS cluster.
@@ -10126,6 +10533,27 @@ spec:
                         type: string
                       name:
                         type: string
+                      serviceEndpoints:
+                        description: ServiceEndpoints is a slice of Virtual Network
+                          service endpoints to enable for the subnets.
+                        items:
+                          description: ServiceEndpointSpec configures an Azure Service
+                            Endpoint.
+                          properties:
+                            locations:
+                              items:
+                                type: string
+                              type: array
+                            service:
+                              type: string
+                          required:
+                          - locations
+                          - service
+                          type: object
+                        type: array
+                        x-kubernetes-list-map-keys:
+                        - service
+                        x-kubernetes-list-type: map
                     required:
                     - cidrBlock
                     - name
@@ -10245,14 +10673,14 @@ status:
   acceptedNames:
     kind: ""
     plural: ""
-  conditions: []
-  storedVersions: []
+  conditions: null
+  storedVersions: null
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.8.0
+    controller-gen.kubebuilder.io/version: v0.9.2
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
@@ -10727,5 +11155,5 @@ status:
   acceptedNames:
     kind: ""
     plural: ""
-  conditions: []
-  storedVersions: []
+  conditions: null
+  storedVersions: null
