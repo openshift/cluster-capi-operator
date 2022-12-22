@@ -68,16 +68,16 @@ webhooks:
     failurePolicy: Fail
     name: validation.cluster.cluster.x-k8s.io
     rules:
-    - apiGroups:
-      - cluster.x-k8s.io
-      apiVersions:
-      - v1beta1
-      operations:
-      - CREATE
-      - UPDATE
-      - DELETE
-      resources:
-      - clusters
+      - apiGroups:
+          - cluster.x-k8s.io
+        apiVersions:
+          - v1beta1
+        operations:
+          - CREATE
+          - UPDATE
+          - DELETE
+        resources:
+          - clusters
     sideEffects: None
   - admissionReviewVersions:
       - v1
