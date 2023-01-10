@@ -21,6 +21,7 @@ import (
 	gcpv1 "sigs.k8s.io/cluster-api-provider-gcp/api/v1beta1"
 	ibmpowervsv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterctlv1 "sigs.k8s.io/cluster-api/cmd/clusterctl/api/v1alpha3"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
@@ -100,6 +101,7 @@ func init() {
 	utilruntime.Must(azurev1.AddToScheme(scheme))
 	utilruntime.Must(gcpv1.AddToScheme(scheme))
 	utilruntime.Must(clusterv1.AddToScheme(scheme))
+	utilruntime.Must(clusterctlv1.AddToScheme(scheme))
 	utilruntime.Must(ibmpowervsv1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }
@@ -283,6 +285,11 @@ func setupWebhooks(mgr ctrl.Manager, platform configv1.PlatformType) {
 
 	if err := (&webhook.ClusterWebhook{}).SetupWebhookWithManager(mgr); err != nil {
 		klog.Error(err, "unable to create webhook", "webhook", "Cluster")
+		os.Exit(1)
+	}
+
+	if err := (&webhook.ProviderWebhook{}).SetupWebhookWithManager(mgr); err != nil {
+		klog.Error(err, "unable to create webhook", "webhook", "Provider")
 		os.Exit(1)
 	}
 }
