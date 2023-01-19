@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"path"
@@ -282,7 +281,7 @@ func (p *provider) providerSpec() operatorv1.ProviderSpec {
 
 func importProviders(providerName string) error {
 	// Read provider list yaml
-	providerList, err := ioutil.ReadFile(providerListPath)
+	providerList, err := os.ReadFile(providerListPath)
 	if err != nil {
 		return fmt.Errorf("failed to read provider list: %v", err)
 	}
