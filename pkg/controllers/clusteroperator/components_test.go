@@ -5,7 +5,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	operatorv1 "sigs.k8s.io/cluster-api-operator/api/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -147,48 +146,6 @@ var _ = Describe("Reconcile components", func() {
 			infraProvider.Spec.Version = "v2.0.0"
 			Expect(r.reconcileInfrastructureProvider(ctx, infraProvider)).To(Succeed())
 			Expect(infraProvider.Spec.Version).To(Equal("v2.0.0"))
-		})
-	})
-
-	Context("reconcile configmap", func() {
-		var cm *corev1.ConfigMap
-
-		BeforeEach(func() {
-			cm = &corev1.ConfigMap{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "cluster-api-operator",
-					Namespace: controllers.DefaultManagedNamespace,
-					Labels:    map[string]string{"foo": "bar"},
-				},
-				Data: map[string]string{"foo": "bar"},
-			}
-		})
-
-		AfterEach(func() {
-			Expect(test.CleanupAndWait(ctx, cl, cm)).To(Succeed())
-		})
-
-		It("should create a configmap", func() {
-			Expect(r.reconcileConfigMap(ctx, cm)).To(Succeed())
-			Expect(cl.Get(ctx, client.ObjectKey{
-				Name:      cm.Name,
-				Namespace: cm.Namespace,
-			}, cm)).To(Succeed())
-			Expect(cm.Labels).To(HaveKeyWithValue("foo", "bar"))
-			Expect(cm.Data).To(HaveKeyWithValue("foo", "bar"))
-		})
-
-		It("should update an existing deployment", func() {
-			Expect(cl.Create(ctx, cm)).To(Succeed())
-			cm.Labels = map[string]string{"foo": "baz"}
-			cm.Data = map[string]string{"foo": "baz"}
-			Expect(r.reconcileConfigMap(ctx, cm)).To(Succeed())
-			Expect(cl.Get(ctx, client.ObjectKey{
-				Name:      cm.Name,
-				Namespace: cm.Namespace,
-			}, cm)).To(Succeed())
-			Expect(cm.Labels).To(HaveKeyWithValue("foo", "baz"))
-			Expect(cm.Data).To(HaveKeyWithValue("foo", "baz"))
 		})
 	})
 })

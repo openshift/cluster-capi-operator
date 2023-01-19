@@ -14,11 +14,8 @@ import (
 type assetKey string
 
 const (
-	CoreProviderKey          assetKey = "core-provider"
-	CoreProviderConfigMapKey assetKey = "core-provider-configmap"
-
-	InfrastructureProviderKey          assetKey = "infrastructure-provider"
-	InfrastructureProviderConfigMapKey assetKey = "infrastructure-provider-configmap"
+	CoreProviderKey           assetKey = "core-provider"
+	InfrastructureProviderKey assetKey = "infrastructure-provider"
 
 	powerVSProvider  = "powervs"
 	ibmCloudProvider = "ibmcloud"
@@ -41,8 +38,6 @@ func ReadCoreProviderAssets(scheme *runtime.Scheme) (map[assetKey]client.Object,
 			return nil, err
 		}
 		switch obj.GetObjectKind().GroupVersionKind().Kind {
-		case "ConfigMap":
-			objs[CoreProviderConfigMapKey] = obj.(client.Object)
 		case "CoreProvider":
 			objs[CoreProviderKey] = obj.(client.Object)
 		default:
@@ -50,8 +45,8 @@ func ReadCoreProviderAssets(scheme *runtime.Scheme) (map[assetKey]client.Object,
 		}
 	}
 
-	if len(objs) != 2 {
-		return nil, fmt.Errorf("expected exactly 2 assets for core provider, got %d", len(assetNames))
+	if len(objs) != 1 {
+		return nil, fmt.Errorf("expected exactly 1 assets for core provider, got %d", len(assetNames))
 	}
 
 	return objs, nil
@@ -81,8 +76,6 @@ func ReadInfrastructureProviderAssets(scheme *runtime.Scheme, platformType strin
 			return nil, err
 		}
 		switch obj.GetObjectKind().GroupVersionKind().Kind {
-		case "ConfigMap":
-			objs[InfrastructureProviderConfigMapKey] = obj.(client.Object)
 		case "InfrastructureProvider":
 			objs[InfrastructureProviderKey] = obj.(client.Object)
 		default:
@@ -90,8 +83,8 @@ func ReadInfrastructureProviderAssets(scheme *runtime.Scheme, platformType strin
 		}
 	}
 
-	if len(objs) != 2 {
-		return nil, fmt.Errorf("expected exactly 2 assets for infrastructure provider, got %d", len(objs))
+	if len(objs) != 1 {
+		return nil, fmt.Errorf("expected exactly 1 assets for infrastructure provider, got %d", len(objs))
 	}
 
 	return objs, nil

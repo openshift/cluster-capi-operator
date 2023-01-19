@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	corev1 "k8s.io/api/core/v1"
 	operatorv1 "sigs.k8s.io/cluster-api-operator/api/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
@@ -39,18 +38,6 @@ func (r *ClusterOperatorReconciler) reconcileInfrastructureProvider(ctx context.
 		return nil
 	}); err != nil {
 		return fmt.Errorf("unable to create or update InfrastructureProvider: %v", err)
-	}
-	return nil
-}
-
-func (r *ClusterOperatorReconciler) reconcileConfigMap(ctx context.Context, configMap *corev1.ConfigMap) error {
-	cmCopy := configMap.DeepCopy()
-	if _, err := controllerutil.CreateOrUpdate(ctx, r.Client, configMap, func() error {
-		configMap.Labels = cmCopy.Labels
-		configMap.Data = cmCopy.Data
-		return nil
-	}); err != nil {
-		return fmt.Errorf("unable to create or update core Cluster API Configmap: %v", err)
 	}
 	return nil
 }
