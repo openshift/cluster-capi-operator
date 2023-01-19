@@ -198,18 +198,29 @@ func (p *provider) writeAllOtherProviderComponents(objs []unstructured.Unstructu
 		},
 	}
 
+	anno := cm.GetAnnotations()
+	if anno == nil {
+		anno = map[string]string{}
+	}
+
+	anno[techPreviewAnnotation] = techPreviewAnnotationValue
+
+	for name, value := range openshifAnnotations {
+		anno[name] = value
+	}
+
+	cm.SetAnnotations(anno)
+
 	cmYaml, err := yaml.Marshal(cm)
 	if err != nil {
 		return err
 	}
 
-	fName := strings.ToLower(p.providerTypeName() + "-" + p.Name + ".yaml")
-	assetsPath := providersAssetsPath
-	if p.Name == "cluster-api" {
-		assetsPath = coreCAPIAssetsPath
-	}
+	cmYaml = append([]byte(header), cmYaml...)
 
-	return os.WriteFile(path.Join(assetsPath, fName), ensureNewLine(cmYaml), 0600)
+	fName := strings.ToLower(manifestPrefix + "13_" + p.providerTypeName() + "-" + p.Name + ".yaml")
+
+	return os.WriteFile(path.Join(manifestsPath, fName), ensureNewLine(cmYaml), 0600)
 }
 
 func (p *provider) writeProviders() error {

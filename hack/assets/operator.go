@@ -3,8 +3,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"path"
-	"strings"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	configclient "sigs.k8s.io/cluster-api/cmd/clusterctl/client/config"
@@ -112,21 +110,4 @@ func readCAPIOperatorManifests() ([]unstructured.Unstructured, error) {
 	}
 
 	return components.Objs(), nil
-}
-
-func writeAllOtherOperatorComponents(objs []unstructured.Unstructured) error {
-	for _, obj := range objs {
-		content, err := yaml.Marshal(obj.UnstructuredContent())
-		if err != nil {
-			return fmt.Errorf("failed to marshal object: %w", err)
-		}
-
-		fileName := fmt.Sprintf("%s.yaml", strings.ToLower(obj.GroupVersionKind().Kind))
-		err = os.WriteFile(path.Join(manifestsPath, fileName), ensureNewLine(content), 0600)
-		if err != nil {
-			return fmt.Errorf("failed to write %s: %w", fileName, err)
-		}
-	}
-
-	return nil
 }
