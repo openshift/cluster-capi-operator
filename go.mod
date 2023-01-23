@@ -1,6 +1,6 @@
 module github.com/openshift/cluster-capi-operator
 
-go 1.18
+go 1.19
 
 require (
 	github.com/gobuffalo/flect v0.2.5
@@ -26,7 +26,7 @@ require (
 	sigs.k8s.io/cluster-api-provider-gcp v1.1.0
 	sigs.k8s.io/cluster-api-provider-ibmcloud v0.3.0
 	sigs.k8s.io/controller-runtime v0.13.0
-	sigs.k8s.io/controller-runtime/tools/setup-envtest v0.0.0-20221007015352-8ad090e0663e
+	sigs.k8s.io/controller-runtime/tools/setup-envtest v0.0.0-20220907012636-c83076e9f792
 )
 
 require (
