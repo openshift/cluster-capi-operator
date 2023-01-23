@@ -5,13 +5,11 @@ set -o pipefail
 
 REPO_ROOT=$(dirname "${BASH_SOURCE}")/..
 
-TEST_DIRS=$1
-TIMEOUT=$2
-
 OPENSHIFT_CI=${OPENSHIFT_CI:-""}
 ARTIFACT_DIR=${ARTIFACT_DIR:-""}
 GINKGO=${GINKGO:-"go run ${REPO_ROOT}/vendor/github.com/onsi/ginkgo/v2/ginkgo"}
-GINKGO_ARGS=${GINKGO_ARGS:-"-r -v --randomize-all --randomize-suites --keep-going --race --trace --timeout=${TIMEOUT}"}
+GINKGO_ARGS=${GINKGO_ARGS:-"-v --randomize-all --randomize-suites --keep-going --race --trace --timeout=10m"}
+GINKGO_EXTRA_ARGS=${GINKGO_EXTRA_ARGS:-""}
 
 # Ensure that some home var is set and that it's not the root.
 # This is required for the kubebuilder cache.
@@ -25,8 +23,8 @@ if [ "$OPENSHIFT_CI" == "true" ] && [ -n "$ARTIFACT_DIR" ] && [ -d "$ARTIFACT_DI
 fi
 
 # Print the command we are going to run as Make would.
-echo ${GINKGO} ${GINKGO_ARGS} ${TEST_DIRS}
-${GINKGO} ${GINKGO_ARGS} ${TEST_DIRS}
+echo ${GINKGO} ${GINKGO_ARGS} ${GINKGO_EXTRA_ARGS} "<omitted>"
+${GINKGO} ${GINKGO_ARGS} ${GINKGO_EXTRA_ARGS} ./pkg/... ./cmd/...
 # Capture the test result to exit on error after coverage.
 TEST_RESULT=$?
 
