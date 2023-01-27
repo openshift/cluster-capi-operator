@@ -14,7 +14,7 @@ and is later reconciled by the upstream operator.
 - [Cluster](https://cluster-api.sigs.k8s.io/developer/architecture/controllers/cluster.html) - CAPI Cluster CR that
 represents current cluster, it is treated as management and workload cluster at the same time.
 - [InfrastructureCluster](https://cluster-api.sigs.k8s.io/developer/providers/cluster-infrastructure.html) - CAPI Infrastructure Cluster CR that represents the infrastructure cluster.
-- Worker userdata secret - a secret that ignition configuration to be used by the worker nodes.
+- Worker userdata secret - a secret that contains ignition configuration to be used by the worker nodes.
 - Kubeconfig secret - a secret that contains kubeconfig for the cluster.
 
 ## Controllers
