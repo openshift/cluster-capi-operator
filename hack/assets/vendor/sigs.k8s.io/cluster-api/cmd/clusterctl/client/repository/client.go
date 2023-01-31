@@ -18,6 +18,7 @@ package repository
 
 import (
 	"net/url"
+	"strings"
 
 	"github.com/pkg/errors"
 
@@ -32,6 +33,11 @@ import (
 type Client interface {
 	config.Provider
 
+	// DefaultVersion returns the default provider version returned by a repository.
+	// In case the repository URL points to latest, this method returns the current latest version; in other cases
+	// it returns the version of the provider hosted in the repository.
+	DefaultVersion() string
+
 	// GetVersions return the list of versions that are available in a provider repository
 	GetVersions() ([]string, error)
 
@@ -42,7 +48,7 @@ type Client interface {
 	// Please note that templates are expected to exist for the infrastructure providers only.
 	Templates(version string) TemplateClient
 
-	// ClusterClasses provide access to YAML file for the cluster classes available
+	// ClusterClasses provide access to YAML file for the ClusterClasses available
 	// for the provider.
 	ClusterClasses(version string) ClusterClassClient
 
@@ -60,6 +66,10 @@ type repositoryClient struct {
 
 // ensure repositoryClient implements Client.
 var _ Client = &repositoryClient{}
+
+func (c *repositoryClient) DefaultVersion() string {
+	return c.repository.DefaultVersion()
+}
 
 func (c *repositoryClient) GetVersions() ([]string, error) {
 	return c.repository.GetVersions()
@@ -164,13 +174,26 @@ func repositoryFactory(providerConfig config.Provider, configVariablesClient con
 		return nil, errors.Errorf("failed to parse repository url %q", providerConfig.URL())
 	}
 
-	// if the url is a github repository
-	if rURL.Scheme == httpsScheme && rURL.Host == githubDomain {
-		repo, err := NewGitHubRepository(providerConfig, configVariablesClient)
-		if err != nil {
-			return nil, errors.Wrap(err, "error creating the GitHub repository client")
+	if rURL.Scheme == httpsScheme {
+		// if the url is a GitHub repository
+		if rURL.Host == githubDomain {
+			repo, err := NewGitHubRepository(providerConfig, configVariablesClient)
+			if err != nil {
+				return nil, errors.Wrap(err, "error creating the GitHub repository client")
+			}
+			return repo, err
 		}
-		return repo, err
+
+		// if the url is a GitLab repository
+		if strings.HasPrefix(rURL.Host, gitlabHostPrefix) && strings.HasPrefix(rURL.RawPath, gitlabPackagesAPIPrefix) {
+			repo, err := NewGitLabRepository(providerConfig, configVariablesClient)
+			if err != nil {
+				return nil, errors.Wrap(err, "error creating the GitLab repository client")
+			}
+			return repo, err
+		}
+
+		return nil, errors.Errorf("invalid provider url. Only GitHub and GitLab are supported for %q schema", rURL.Scheme)
 	}
 
 	// if the url is a local filesystem repository

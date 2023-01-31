@@ -23,11 +23,11 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"reflect"
 	"strings"
 	"time"
 
 	"github.com/blang/semver"
-	"github.com/gobuffalo/flect"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -47,6 +47,7 @@ import (
 
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util/annotations"
+	"sigs.k8s.io/cluster-api/util/contract"
 )
 
 const (
@@ -195,60 +196,45 @@ func ObjectKey(object metav1.Object) client.ObjectKey {
 
 // ClusterToInfrastructureMapFunc returns a handler.ToRequestsFunc that watches for
 // Cluster events and returns reconciliation requests for an infrastructure provider object.
-func ClusterToInfrastructureMapFunc(gvk schema.GroupVersionKind) handler.MapFunc {
+func ClusterToInfrastructureMapFunc(ctx context.Context, gvk schema.GroupVersionKind, c client.Client, providerCluster client.Object) handler.MapFunc {
+	log := ctrl.LoggerFrom(ctx)
 	return func(o client.Object) []reconcile.Request {
-		c, ok := o.(*clusterv1.Cluster)
+		cluster, ok := o.(*clusterv1.Cluster)
 		if !ok {
 			return nil
 		}
 
 		// Return early if the InfrastructureRef is nil.
-		if c.Spec.InfrastructureRef == nil {
+		if cluster.Spec.InfrastructureRef == nil {
 			return nil
 		}
 		gk := gvk.GroupKind()
 		// Return early if the GroupKind doesn't match what we expect.
-		infraGK := c.Spec.InfrastructureRef.GroupVersionKind().GroupKind()
+		infraGK := cluster.Spec.InfrastructureRef.GroupVersionKind().GroupKind()
 		if gk != infraGK {
+			return nil
+		}
+		providerCluster := providerCluster.DeepCopyObject().(client.Object)
+		key := types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Spec.InfrastructureRef.Name}
+
+		if err := c.Get(ctx, key, providerCluster); err != nil {
+			log.V(4).Error(err, fmt.Sprintf("Failed to get %T", providerCluster))
+			return nil
+		}
+
+		if annotations.IsExternallyManaged(providerCluster) {
+			log.V(4).Info(fmt.Sprintf("%T is externally managed, skipping mapping", providerCluster))
 			return nil
 		}
 
 		return []reconcile.Request{
 			{
 				NamespacedName: client.ObjectKey{
-					Namespace: c.Namespace,
-					Name:      c.Spec.InfrastructureRef.Name,
+					Namespace: cluster.Namespace,
+					Name:      cluster.Spec.InfrastructureRef.Name,
 				},
 			},
 		}
-	}
-}
-
-// ClusterToInfrastructureMapFuncWithExternallyManagedCheck is like ClusterToInfrastructureMapFunc but will exclude externally managed infrastructures from the mapping.
-// We will update  ClusterToInfrastructureMapFunc to include this check in an upcoming release but defer that for now as adjusting the signature is a breaking change.
-func ClusterToInfrastructureMapFuncWithExternallyManagedCheck(ctx context.Context, gvk schema.GroupVersionKind, c client.Client, providerCluster client.Object) handler.MapFunc {
-	baseMapper := ClusterToInfrastructureMapFunc(gvk)
-	log := ctrl.LoggerFrom(ctx)
-	return func(o client.Object) []reconcile.Request {
-		var result []reconcile.Request
-		for _, request := range baseMapper(o) {
-			providerCluster := providerCluster.DeepCopyObject().(client.Object)
-			key := types.NamespacedName{Namespace: request.Namespace, Name: request.Name}
-
-			if err := c.Get(ctx, key, providerCluster); err != nil {
-				log.V(4).Error(err, fmt.Sprintf("Failed to get %T", providerCluster))
-				continue
-			}
-
-			if annotations.IsExternallyManaged(providerCluster) {
-				log.V(4).Info(fmt.Sprintf("%T is externally managed, skipping mapping", providerCluster))
-				continue
-			}
-
-			result = append(result, request)
-		}
-
-		return result
 	}
 }
 
@@ -404,6 +390,10 @@ func refersTo(ref *metav1.OwnerReference, obj client.Object) bool {
 // UnstructuredUnmarshalField is a wrapper around json and unstructured objects to decode and copy a specific field
 // value into an object.
 func UnstructuredUnmarshalField(obj *unstructured.Unstructured, v interface{}, fields ...string) error {
+	if obj == nil || obj.Object == nil {
+		return errors.Errorf("failed to unmarshal unstructured object: object is nil")
+	}
+
 	value, found, err := unstructured.NestedFieldNoCopy(obj.Object, fields...)
 	if err != nil {
 		return errors.Wrapf(err, "failed to retrieve field %q from %q", strings.Join(fields, "."), obj.GroupVersionKind())
@@ -452,7 +442,7 @@ func HasOwner(refList []metav1.OwnerReference, apiVersion string, kinds []string
 // This function is greatly more efficient than GetCRDWithContract and should be preferred in most cases.
 func GetGVKMetadata(ctx context.Context, c client.Client, gvk schema.GroupVersionKind) (*metav1.PartialObjectMetadata, error) {
 	meta := &metav1.PartialObjectMetadata{}
-	meta.SetName(fmt.Sprintf("%s.%s", flect.Pluralize(strings.ToLower(gvk.Kind)), gvk.Group))
+	meta.SetName(contract.CalculateCRDName(gvk.Group, gvk.Kind))
 	meta.SetGroupVersionKind(apiextensionsv1.SchemeGroupVersion.WithKind("CustomResourceDefinition"))
 	if err := c.Get(ctx, client.ObjectKeyFromObject(meta), meta); err != nil {
 		return meta, errors.Wrap(err, "failed to retrieve metadata from GVK resource")
@@ -498,18 +488,6 @@ func (k KubeAwareAPIVersions) Len() int      { return len(k) }
 func (k KubeAwareAPIVersions) Swap(i, j int) { k[i], k[j] = k[j], k[i] }
 func (k KubeAwareAPIVersions) Less(i, j int) bool {
 	return k8sversion.CompareKubeAwareVersionStrings(k[i], k[j]) < 0
-}
-
-// MachinesByCreationTimestamp sorts a list of Machine by creation timestamp, using their names as a tie breaker.
-type MachinesByCreationTimestamp []*clusterv1.Machine
-
-func (o MachinesByCreationTimestamp) Len() int      { return len(o) }
-func (o MachinesByCreationTimestamp) Swap(i, j int) { o[i], o[j] = o[j], o[i] }
-func (o MachinesByCreationTimestamp) Less(i, j int) bool {
-	if o[i].CreationTimestamp.Equal(&o[j].CreationTimestamp) {
-		return o[i].Name < o[j].Name
-	}
-	return o[i].CreationTimestamp.Before(&o[j].CreationTimestamp)
 }
 
 // ClusterToObjectsMapper returns a mapper function that gets a cluster and lists all objects for the object passed in
@@ -613,4 +591,16 @@ func LowestNonZeroResult(i, j ctrl.Result) ctrl.Result {
 	default:
 		return j
 	}
+}
+
+// IsNil returns an error if the passed interface is equal to nil or if it has an interface value of nil.
+func IsNil(i interface{}) bool {
+	if i == nil {
+		return true
+	}
+	switch reflect.TypeOf(i).Kind() {
+	case reflect.Ptr, reflect.Map, reflect.Chan, reflect.Slice, reflect.Interface, reflect.UnsafePointer, reflect.Func:
+		return reflect.ValueOf(i).IsValid() && reflect.ValueOf(i).IsNil()
+	}
+	return false
 }

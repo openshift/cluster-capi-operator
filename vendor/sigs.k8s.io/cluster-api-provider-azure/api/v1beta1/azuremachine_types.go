@@ -86,6 +86,10 @@ type AzureMachineSpec struct {
 	// +optional
 	AdditionalTags Tags `json:"additionalTags,omitempty"`
 
+	// AdditionalCapabilities specifies additional capabilities enabled or disabled on the virtual machine.
+	// +optional
+	AdditionalCapabilities *AdditionalCapabilities `json:"additionalCapabilities,omitempty"`
+
 	// AllocatePublicIP allows the ability to create dynamic public ips for machines where this value is true.
 	// +optional
 	AllocatePublicIP bool `json:"allocatePublicIP,omitempty"`
@@ -96,12 +100,15 @@ type AzureMachineSpec struct {
 	// +optional
 	EnableIPForwarding bool `json:"enableIPForwarding,omitempty"`
 
-	// AcceleratedNetworking enables or disables Azure accelerated networking. If omitted, it will be set based on
-	// whether the requested VMSize supports accelerated networking.
-	// If AcceleratedNetworking is set to true with a VMSize that does not support it, Azure will return an error.
+	// Deprecated: AcceleratedNetworking should be set in the networkInterfaces field.
 	// +kubebuilder:validation:nullable
 	// +optional
 	AcceleratedNetworking *bool `json:"acceleratedNetworking,omitempty"`
+
+	// Diagnostics specifies the diagnostics settings for a virtual machine.
+	// If not specified then Boot diagnostics (Managed) will be enabled.
+	// +optional
+	Diagnostics *Diagnostics `json:"diagnostics,omitempty"`
 
 	// SpotVMOptions allows the ability to specify the Machine should use a Spot VM
 	// +optional
@@ -111,9 +118,24 @@ type AzureMachineSpec struct {
 	// +optional
 	SecurityProfile *SecurityProfile `json:"securityProfile,omitempty"`
 
-	// SubnetName selects the Subnet where the VM will be placed
+	// Deprecated: SubnetName should be set in the networkInterfaces field.
 	// +optional
 	SubnetName string `json:"subnetName,omitempty"`
+
+	// DNSServers adds a list of DNS Server IP addresses to the VM NICs.
+	// +optional
+	DNSServers []string `json:"dnsServers,omitempty"`
+
+	// VMExtensions specifies a list of extensions to be added to the virtual machine.
+	// +optional
+	VMExtensions []VMExtension `json:"vmExtensions,omitempty"`
+
+	// NetworkInterfaces specifies a list of network interface configurations.
+	// If left unspecified, the VM will get a single network interface with a
+	// single IPConfig in the subnet specified in the cluster's node subnet field.
+	// The primary interface will be the first networkInterface specified (index 0) in the list.
+	// +optional
+	NetworkInterfaces []NetworkInterface `json:"networkInterfaces,omitempty"`
 }
 
 // SpotVMOptions defines the options relevant to running the Machine on Spot VMs.
@@ -121,6 +143,10 @@ type SpotVMOptions struct {
 	// MaxPrice defines the maximum price the user is willing to pay for Spot VM instances
 	// +optional
 	MaxPrice *resource.Quantity `json:"maxPrice,omitempty"`
+
+	// EvictionPolicy defines the behavior of the virtual machine when it is evicted. It can be either Delete or Deallocate.
+	// +optional
+	EvictionPolicy *SpotEvictionPolicy `json:"evictionPolicy,omitempty"`
 }
 
 // AzureMachineStatus defines the observed state of AzureMachine.
@@ -185,6 +211,15 @@ type AzureMachineStatus struct {
 	LongRunningOperationStates Futures `json:"longRunningOperationStates,omitempty"`
 }
 
+// AdditionalCapabilities enables or disables a capability on the virtual machine.
+type AdditionalCapabilities struct {
+	// UltraSSDEnabled enables or disables Azure UltraSSD capability for the virtual machine.
+	// Defaults to true if Ultra SSD data disks are specified,
+	// otherwise it doesn't set the capability on the VM.
+	// +optional
+	UltraSSDEnabled *bool `json:"ultraSSDEnabled,omitempty"`
+}
+
 // +kubebuilder:object:root=true
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="Reason",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].reason"
@@ -194,6 +229,7 @@ type AzureMachineStatus struct {
 // +kubebuilder:printcolumn:name="Machine",type="string",priority=1,JSONPath=".metadata.ownerReferences[?(@.kind==\"Machine\")].name",description="Machine object to which this AzureMachine belongs"
 // +kubebuilder:printcolumn:name="VM ID",type="string",priority=1,JSONPath=".spec.providerID",description="Azure VM ID"
 // +kubebuilder:printcolumn:name="VM Size",type="string",priority=1,JSONPath=".spec.vmSize",description="Azure VM Size"
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp",description="Time duration since creation of this AzureMachine"
 // +kubebuilder:resource:path=azuremachines,scope=Namespaced,categories=cluster-api
 // +kubebuilder:storageversion
 // +kubebuilder:subresource:status

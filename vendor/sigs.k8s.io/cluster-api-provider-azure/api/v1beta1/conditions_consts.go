@@ -30,6 +30,8 @@ const (
 const (
 	// VMRunningCondition reports on current status of the Azure VM.
 	VMRunningCondition clusterv1.ConditionType = "VMRunning"
+	// VMIdentitiesReadyCondition reports on the readiness of the Azure VM identities.
+	VMIdentitiesReadyCondition clusterv1.ConditionType = "VMIdentitiesReady"
 	// VMCreatingReason used when the vm creation is in progress.
 	VMCreatingReason = "VMCreating"
 	// VMUpdatingReason used when the vm updating is in progress.
@@ -38,12 +40,14 @@ const (
 	VMDeletingReason = "VMDeleting"
 	// VMProvisionFailedReason used for failures during vm provisioning.
 	VMProvisionFailedReason = "VMProvisionFailed"
+	// UserAssignedIdentityMissingReason used for failures when a user-assigned identity is missing.
+	UserAssignedIdentityMissingReason = "UserAssignedIdentityMissing"
 	// WaitingForClusterInfrastructureReason used when machine is waiting for cluster infrastructure to be ready before proceeding.
 	WaitingForClusterInfrastructureReason = "WaitingForClusterInfrastructure"
 	// WaitingForBootstrapDataReason used when machine is waiting for bootstrap data to be ready before proceeding.
 	WaitingForBootstrapDataReason = "WaitingForBootstrapData"
-	// BootstrapSucceededCondition reports the result of the execution of the boostrap data on the machine.
-	BootstrapSucceededCondition = "BoostrapSucceeded"
+	// BootstrapSucceededCondition reports the result of the execution of the bootstrap data on the machine.
+	BootstrapSucceededCondition clusterv1.ConditionType = "BootstrapSucceeded"
 	// BootstrapInProgressReason is used to indicate the bootstrap data has not finished executing.
 	BootstrapInProgressReason = "BootstrapInProgress"
 	// BootstrapFailedReason is used to indicate the bootstrap process ran into an error.
@@ -82,6 +86,8 @@ const (
 	ManagedClusterRunningCondition clusterv1.ConditionType = "ManagedClusterRunning"
 	// AgentPoolsReadyCondition means the AKS agent pools exist and are ready to be used.
 	AgentPoolsReadyCondition clusterv1.ConditionType = "AgentPoolsReady"
+	// AzureResourceAvailableCondition means the AKS cluster is healthy according to Azure's Resource Health API.
+	AzureResourceAvailableCondition clusterv1.ConditionType = "AzureResourceAvailable"
 )
 
 // Azure Services Conditions and Reasons.
@@ -104,8 +110,12 @@ const (
 	SubnetsReadyCondition clusterv1.ConditionType = "SubnetsReady"
 	// LoadBalancersReadyCondition means the load balancers exist and are ready to be used.
 	LoadBalancersReadyCondition clusterv1.ConditionType = "LoadBalancersReady"
-	// PrivateDNSReadyCondition means the private DNS exists and is ready to be used.
-	PrivateDNSReadyCondition clusterv1.ConditionType = "PrivateDNSReady"
+	// PrivateDNSZoneReadyCondition means the private DNS zone exists and is ready to be used.
+	PrivateDNSZoneReadyCondition clusterv1.ConditionType = "PrivateDNSZoneReady"
+	// PrivateDNSLinkReadyCondition means the private DNS links exist and are ready to be used.
+	PrivateDNSLinkReadyCondition clusterv1.ConditionType = "PrivateDNSLinkReady"
+	// PrivateDNSRecordReadyCondition means the private DNS records exist and are ready to be used.
+	PrivateDNSRecordReadyCondition clusterv1.ConditionType = "PrivateDNSRecordReady"
 	// BastionHostReadyCondition means the bastion host exists and is ready to be used.
 	BastionHostReadyCondition clusterv1.ConditionType = "BastionHostReady"
 	// InboundNATRulesReadyCondition means the inbound NAT rules exist and are ready to be used.
