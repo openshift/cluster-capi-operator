@@ -253,6 +253,6 @@ metadata:
   labels:
     provider.cluster.x-k8s.io/name: gcp
     provider.cluster.x-k8s.io/type: infrastructure
-    provider.cluster.x-k8s.io/version: v1.0.0
+    provider.cluster.x-k8s.io/version: v1.2.1
   name: gcp
   namespace: openshift-cluster-api
