@@ -16,7 +16,7 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/klog/v2/klogr"
 	operatorv1 "sigs.k8s.io/cluster-api-operator/api/v1alpha1"
-	awsv1 "sigs.k8s.io/cluster-api-provider-aws/api/v1beta1"
+	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta1"
 	azurev1 "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
 	gcpv1 "sigs.k8s.io/cluster-api-provider-gcp/api/v1beta1"
 	ibmpowervsv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta1"

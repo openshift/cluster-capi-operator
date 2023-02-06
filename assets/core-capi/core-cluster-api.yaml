@@ -493,6 +493,6 @@ metadata:
   labels:
     provider.cluster.x-k8s.io/name: cluster-api
     provider.cluster.x-k8s.io/type: core
-    provider.cluster.x-k8s.io/version: v1.1.2
+    provider.cluster.x-k8s.io/version: v1.3.3
   name: cluster-api
   namespace: openshift-cluster-api

@@ -17,7 +17,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	awsv1 "sigs.k8s.io/cluster-api-provider-aws/api/v1beta1"
+	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	yaml "sigs.k8s.io/yaml"
