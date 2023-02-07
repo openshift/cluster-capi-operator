@@ -25,10 +25,11 @@ const (
 )
 
 var (
-	cl          runtimeclient.Client
-	ctx         = context.Background()
-	platform    configv1.PlatformType
-	clusterName string
+	cl                 runtimeclient.Client
+	ctx                = context.Background()
+	platform           configv1.PlatformType
+	clusterName        string
+	mapiInfrastructure *configv1.Infrastructure
 )
 
 func init() {
@@ -58,6 +59,7 @@ var _ = BeforeSuite(func() {
 	}
 	Expect(cl.Get(ctx, infraName, infra)).To(Succeed())
 	Expect(infra.Status.PlatformStatus).ToNot(BeNil())
+	mapiInfrastructure = infra
 	clusterName = infra.Status.InfrastructureName
 	platform = infra.Status.PlatformStatus.Type
 })
