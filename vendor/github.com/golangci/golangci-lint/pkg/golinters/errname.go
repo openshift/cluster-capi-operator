@@ -8,10 +8,14 @@ import (
 )
 
 func NewErrName() *goanalysis.Linter {
+	analyzers := []*analysis.Analyzer{
+		analyzer.New(),
+	}
+
 	return goanalysis.NewLinter(
 		"errname",
 		"Checks that sentinel errors are prefixed with the `Err` and error types are suffixed with the `Error`.",
-		[]*analysis.Analyzer{analyzer.New()},
+		analyzers,
 		nil,
 	).WithLoadMode(goanalysis.LoadModeTypesInfo)
 }

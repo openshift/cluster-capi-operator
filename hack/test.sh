@@ -24,7 +24,7 @@ fi
 
 # Print the command we are going to run as Make would.
 echo ${GINKGO} ${GINKGO_ARGS} ${GINKGO_EXTRA_ARGS} "<omitted>"
-${GINKGO} ${GINKGO_ARGS} ${GINKGO_EXTRA_ARGS} ./pkg/... ./cmd/...
+${GINKGO} ${GINKGO_ARGS} ${GINKGO_EXTRA_ARGS} ./...
 # Capture the test result to exit on error after coverage.
 TEST_RESULT=$?
 

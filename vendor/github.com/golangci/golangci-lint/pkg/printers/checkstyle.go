@@ -4,11 +4,10 @@ import (
 	"context"
 	"encoding/xml"
 	"fmt"
-	"io"
-	"sort"
 
 	"github.com/go-xmlfmt/xmlfmt"
 
+	"github.com/golangci/golangci-lint/pkg/logutils"
 	"github.com/golangci/golangci-lint/pkg/result"
 )
 
@@ -33,15 +32,13 @@ type checkstyleError struct {
 
 const defaultCheckstyleSeverity = "error"
 
-type Checkstyle struct {
-	w io.Writer
+type Checkstyle struct{}
+
+func NewCheckstyle() *Checkstyle {
+	return &Checkstyle{}
 }
 
-func NewCheckstyle(w io.Writer) *Checkstyle {
-	return &Checkstyle{w: w}
-}
-
-func (p Checkstyle) Print(ctx context.Context, issues []result.Issue) error {
+func (Checkstyle) Print(ctx context.Context, issues []result.Issue) error {
 	out := checkstyleOutput{
 		Version: "5.0",
 	}
@@ -80,19 +77,11 @@ func (p Checkstyle) Print(ctx context.Context, issues []result.Issue) error {
 		out.Files = append(out.Files, file)
 	}
 
-	sort.Slice(out.Files, func(i, j int) bool {
-		return out.Files[i].Name < out.Files[j].Name
-	})
-
 	data, err := xml.Marshal(&out)
 	if err != nil {
 		return err
 	}
 
-	_, err = fmt.Fprintf(p.w, "%s%s\n", xml.Header, xmlfmt.FormatXML(string(data), "", "  "))
-	if err != nil {
-		return err
-	}
-
+	fmt.Fprintf(logutils.StdOut, "%s%s\n", xml.Header, xmlfmt.FormatXML(string(data), "", "  "))
 	return nil
 }

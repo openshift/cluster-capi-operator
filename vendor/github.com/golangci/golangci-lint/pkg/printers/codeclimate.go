@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 
+	"github.com/golangci/golangci-lint/pkg/logutils"
 	"github.com/golangci/golangci-lint/pkg/result"
 )
 
@@ -24,15 +24,14 @@ type CodeClimateIssue struct {
 }
 
 type CodeClimate struct {
-	w io.Writer
 }
 
-func NewCodeClimate(w io.Writer) *CodeClimate {
-	return &CodeClimate{w: w}
+func NewCodeClimate() *CodeClimate {
+	return &CodeClimate{}
 }
 
 func (p CodeClimate) Print(ctx context.Context, issues []result.Issue) error {
-	codeClimateIssues := make([]CodeClimateIssue, 0, len(issues))
+	codeClimateIssues := []CodeClimateIssue{}
 	for i := range issues {
 		issue := &issues[i]
 		codeClimateIssue := CodeClimateIssue{}
@@ -53,9 +52,6 @@ func (p CodeClimate) Print(ctx context.Context, issues []result.Issue) error {
 		return err
 	}
 
-	_, err = fmt.Fprint(p.w, string(outputJSON))
-	if err != nil {
-		return err
-	}
+	fmt.Fprint(logutils.StdOut, string(outputJSON))
 	return nil
 }

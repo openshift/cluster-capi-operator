@@ -19,6 +19,7 @@ package v1beta1
 import (
 	"encoding/base64"
 
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-11-01/compute"
 	"golang.org/x/crypto/ssh"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	utilSSH "sigs.k8s.io/cluster-api-provider-azure/util/ssh"
@@ -67,7 +68,12 @@ func (s *AzureMachineSpec) SetDataDisksDefaults() {
 			}
 		}
 		if disk.CachingType == "" {
-			s.DataDisks[i].CachingType = "ReadWrite"
+			if s.DataDisks[i].ManagedDisk != nil &&
+				s.DataDisks[i].ManagedDisk.StorageAccountType == string(compute.StorageAccountTypesUltraSSDLRS) {
+				s.DataDisks[i].CachingType = string(compute.CachingTypesNone)
+			} else {
+				s.DataDisks[i].CachingType = string(compute.CachingTypesReadWrite)
+			}
 		}
 	}
 }
@@ -81,6 +87,62 @@ func (s *AzureMachineSpec) SetIdentityDefaults() {
 	}
 }
 
+// SetSpotEvictionPolicyDefaults sets the defaults for the spot VM eviction policy.
+func (s *AzureMachineSpec) SetSpotEvictionPolicyDefaults() {
+	if s.SpotVMOptions != nil && s.SpotVMOptions.EvictionPolicy == nil {
+		defaultPolicy := SpotEvictionPolicyDeallocate
+		if s.OSDisk.DiffDiskSettings != nil && s.OSDisk.DiffDiskSettings.Option == "Local" {
+			defaultPolicy = SpotEvictionPolicyDelete
+		}
+		s.SpotVMOptions.EvictionPolicy = &defaultPolicy
+	}
+}
+
+// SetDiagnosticsDefaults sets the defaults for Diagnostic settings for an AzureMachinePool.
+func (s *AzureMachineSpec) SetDiagnosticsDefaults() {
+	bootDiagnosticsDefault := &BootDiagnostics{
+		StorageAccountType: ManagedDiagnosticsStorage,
+	}
+
+	diagnosticsDefault := &Diagnostics{Boot: bootDiagnosticsDefault}
+
+	if s.Diagnostics == nil {
+		s.Diagnostics = diagnosticsDefault
+	}
+
+	if s.Diagnostics.Boot == nil {
+		s.Diagnostics.Boot = bootDiagnosticsDefault
+	}
+}
+
+// SetNetworkInterfacesDefaults sets the defaults for the network interfaces.
+func (s *AzureMachineSpec) SetNetworkInterfacesDefaults() {
+	// Ensure the deprecated fields and new fields are not populated simultaneously
+	if (s.SubnetName != "" || s.AcceleratedNetworking != nil) && len(s.NetworkInterfaces) > 0 {
+		// Both the deprecated and the new fields are both set, return without changes
+		// and reject the request in the validating webhook which runs later.
+		return
+	}
+
+	if len(s.NetworkInterfaces) == 0 {
+		s.NetworkInterfaces = []NetworkInterface{
+			{
+				SubnetName:            s.SubnetName,
+				AcceleratedNetworking: s.AcceleratedNetworking,
+			},
+		}
+		s.SubnetName = ""
+		s.AcceleratedNetworking = nil
+	}
+
+	// Ensure that PrivateIPConfigs defaults to 1 if not specified.
+	for i := 0; i < len(s.NetworkInterfaces); i++ {
+		if s.NetworkInterfaces[i].PrivateIPConfigs == 0 {
+			s.NetworkInterfaces[i].PrivateIPConfigs = 1
+		}
+	}
+}
+
 // SetDefaults sets to the defaults for the AzureMachineSpec.
 func (s *AzureMachineSpec) SetDefaults() {
 	if err := s.SetDefaultSSHPublicKey(); err != nil {
@@ -89,4 +151,7 @@ func (s *AzureMachineSpec) SetDefaults() {
 	s.SetDefaultCachingType()
 	s.SetDataDisksDefaults()
 	s.SetIdentityDefaults()
+	s.SetSpotEvictionPolicyDefaults()
+	s.SetDiagnosticsDefaults()
+	s.SetNetworkInterfacesDefaults()
 }
