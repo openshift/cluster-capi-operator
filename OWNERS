@@ -2,10 +2,9 @@
 # To update this file please contact an existing owner and request
 # to be added to the owners-gen input data.
 approvers:
-- Fedosin
 - JoelSpeed
+- damdo
 reviewers:
-- Fedosin
 - JoelSpeed
 - RadekManak
 - damdo
