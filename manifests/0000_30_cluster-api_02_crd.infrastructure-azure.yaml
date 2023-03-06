@@ -1290,6 +1290,10 @@ spec:
       name: VM Size
       priority: 1
       type: string
+    - description: Time duration since creation of this AzureMachine
+      jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
     name: v1beta1
     schema:
       openAPIV3Schema:
@@ -1311,11 +1315,8 @@ spec:
             description: AzureMachineSpec defines the desired state of AzureMachine.
             properties:
               acceleratedNetworking:
-                description: AcceleratedNetworking enables or disables Azure accelerated
-                  networking. If omitted, it will be set based on whether the requested
-                  VMSize supports accelerated networking. If AcceleratedNetworking
-                  is set to true with a VMSize that does not support it, Azure will
-                  return an error.
+                description: 'Deprecated: AcceleratedNetworking should be set in the
+                  networkInterfaces field.'
                 type: boolean
               additionalCapabilities:
                 description: AdditionalCapabilities specifies additional capabilities
@@ -1641,6 +1642,33 @@ spec:
                     - version
                     type: object
                 type: object
+              networkInterfaces:
+                description: NetworkInterfaces specifies a list of network interface
+                  configurations. If left unspecified, the VM will get a single network
+                  interface with a single IPConfig in the subnet specified in the
+                  cluster's node subnet field. The primary interface will be the first
+                  networkInterface specified (index 0) in the list.
+                items:
+                  description: NetworkInterface defines a network interface.
+                  properties:
+                    acceleratedNetworking:
+                      description: AcceleratedNetworking enables or disables Azure
+                        accelerated networking. If omitted, it will be set based on
+                        whether the requested VMSize supports accelerated networking.
+                        If AcceleratedNetworking is set to true with a VMSize that
+                        does not support it, Azure will return an error.
+                      type: boolean
+                    privateIPConfigs:
+                      description: PrivateIPConfigs specifies the number of private
+                        IP addresses to attach to the interface. Defaults to 1 if
+                        not specified.
+                      type: integer
+                    subnetName:
+                      description: SubnetName specifies the subnet in which the new
+                        network interface will be placed.
+                      type: string
+                  type: object
+                type: array
               osDisk:
                 description: OSDisk specifies the parameters for the operating system
                   disk of the machine
@@ -1734,7 +1762,8 @@ spec:
               sshPublicKey:
                 type: string
               subnetName:
-                description: SubnetName selects the Subnet where the VM will be placed
+                description: 'Deprecated: SubnetName should be set in the networkInterfaces
+                  field.'
                 type: string
               userAssignedIdentities:
                 description: UserAssignedIdentities is a list of standalone Azure
@@ -3229,6 +3258,10 @@ spec:
       name: Endpoint
       priority: 1
       type: string
+    - description: Time duration since creation of this AzureCluster
+      jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
     name: v1beta1
     schema:
       openAPIV3Schema:
@@ -5763,11 +5796,8 @@ spec:
                       of the machine.
                     properties:
                       acceleratedNetworking:
-                        description: AcceleratedNetworking enables or disables Azure
-                          accelerated networking. If omitted, it will be set based
-                          on whether the requested VMSize supports accelerated networking.
-                          If AcceleratedNetworking is set to true with a VMSize that
-                          does not support it, Azure will return an error.
+                        description: 'Deprecated: AcceleratedNetworking should be
+                          set in the networkInterfaces field.'
                         type: boolean
                       additionalCapabilities:
                         description: AdditionalCapabilities specifies additional capabilities
@@ -6110,6 +6140,35 @@ spec:
                             - version
                             type: object
                         type: object
+                      networkInterfaces:
+                        description: NetworkInterfaces specifies a list of network
+                          interface configurations. If left unspecified, the VM will
+                          get a single network interface with a single IPConfig in
+                          the subnet specified in the cluster's node subnet field.
+                          The primary interface will be the first networkInterface
+                          specified (index 0) in the list.
+                        items:
+                          description: NetworkInterface defines a network interface.
+                          properties:
+                            acceleratedNetworking:
+                              description: AcceleratedNetworking enables or disables
+                                Azure accelerated networking. If omitted, it will
+                                be set based on whether the requested VMSize supports
+                                accelerated networking. If AcceleratedNetworking is
+                                set to true with a VMSize that does not support it,
+                                Azure will return an error.
+                              type: boolean
+                            privateIPConfigs:
+                              description: PrivateIPConfigs specifies the number of
+                                private IP addresses to attach to the interface. Defaults
+                                to 1 if not specified.
+                              type: integer
+                            subnetName:
+                              description: SubnetName specifies the subnet in which
+                                the new network interface will be placed.
+                              type: string
+                          type: object
+                        type: array
                       osDisk:
                         description: OSDisk specifies the parameters for the operating
                           system disk of the machine
@@ -6204,8 +6263,8 @@ spec:
                       sshPublicKey:
                         type: string
                       subnetName:
-                        description: SubnetName selects the Subnet where the VM will
-                          be placed
+                        description: 'Deprecated: SubnetName should be set in the
+                          networkInterfaces field.'
                         type: string
                       userAssignedIdentities:
                         description: UserAssignedIdentities is a list of standalone
@@ -6610,7 +6669,16 @@ spec:
     storage: false
     subresources:
       status: {}
-  - name: v1beta1
+  - additionalPrinterColumns:
+    - description: Type of Azure Identity
+      jsonPath: .spec.type
+      name: Type
+      type: string
+    - description: Time duration since creation of this AzureClusterIdentity
+      jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1beta1
     schema:
       openAPIV3Schema:
         description: AzureClusterIdentity is the Schema for the azureclustersidentities
@@ -8138,6 +8206,10 @@ spec:
       name: VM Size
       priority: 1
       type: string
+    - description: Time duration since creation of this AzureMachinePool
+      jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
     name: v1beta1
     schema:
       openAPIV3Schema:
@@ -8187,6 +8259,14 @@ spec:
                   controller will spend on draining a node. The default value is 0,
                   meaning that the node can be drained without any time limitations.
                   NOTE: NodeDrainTimeout is different from `kubectl drain --timeout`'
+                type: string
+              orchestrationMode:
+                default: Uniform
+                description: OrchestrationMode specifies the orchestration mode for
+                  the Virtual Machine Scale Set
+                enum:
+                - Flexible
+                - Uniform
                 type: string
               providerID:
                 description: ProviderID is the identification ID of the Virtual Machine
@@ -8280,11 +8360,8 @@ spec:
                   virtual machine within the Machine Pool
                 properties:
                   acceleratedNetworking:
-                    description: AcceleratedNetworking enables or disables Azure accelerated
-                      networking. If omitted, it will be set based on whether the
-                      requested VMSize supports accelerated networking. If AcceleratedNetworking
-                      is set to true with a VMSize that does not support it, Azure
-                      will return an error.
+                    description: 'Deprecated: AcceleratedNetworking should be set
+                      in the networkInterfaces field.'
                     type: boolean
                   dataDisks:
                     description: DataDisks specifies the list of data disks to be
@@ -8563,6 +8640,33 @@ spec:
                         - version
                         type: object
                     type: object
+                  networkInterfaces:
+                    description: NetworkInterfaces specifies a list of network interface
+                      configurations. If left unspecified, the VM will get a single
+                      network interface with a single IPConfig in the subnet specified
+                      in the cluster's node subnet field. The primary interface will
+                      be the first networkInterface specified (index 0) in the list.
+                    items:
+                      description: NetworkInterface defines a network interface.
+                      properties:
+                        acceleratedNetworking:
+                          description: AcceleratedNetworking enables or disables Azure
+                            accelerated networking. If omitted, it will be set based
+                            on whether the requested VMSize supports accelerated networking.
+                            If AcceleratedNetworking is set to true with a VMSize
+                            that does not support it, Azure will return an error.
+                          type: boolean
+                        privateIPConfigs:
+                          description: PrivateIPConfigs specifies the number of private
+                            IP addresses to attach to the interface. Defaults to 1
+                            if not specified.
+                          type: integer
+                        subnetName:
+                          description: SubnetName specifies the subnet in which the
+                            new network interface will be placed.
+                          type: string
+                      type: object
+                    type: array
                   osDisk:
                     description: OSDisk contains the operating system disk information
                       for a Virtual Machine
@@ -8649,8 +8753,8 @@ spec:
                       encoded to add to a Virtual Machine
                     type: string
                   subnetName:
-                    description: SubnetName selects the Subnet where the VMSS will
-                      be placed
+                    description: 'Deprecated: SubnetName should be set in the networkInterfaces
+                      field.'
                     type: string
                   terminateNotificationTimeout:
                     description: TerminateNotificationTimeout enables or disables
@@ -9378,6 +9482,14 @@ spec:
                     - single-numa-node
                     type: string
                 type: object
+              kubeletDiskType:
+                description: 'KubeletDiskType specifies the kubelet disk type. Default
+                  to OS. Possible values include: ''OS'', ''Temporary''. Requires
+                  kubeletDisk preview feature to be set.'
+                enum:
+                - OS
+                - Temporary
+                type: string
               maxPods:
                 description: MaxPods specifies the kubelet --max-pods configuration
                   for the node pool.
@@ -10365,6 +10477,111 @@ spec:
                     - None
                     type: string
                 type: object
+              autoscalerProfile:
+                description: AutoscalerProfile is the parameters to be applied to
+                  the cluster-autoscaler when enabled
+                properties:
+                  balanceSimilarNodeGroups:
+                    description: BalanceSimilarNodeGroups - Valid values are 'true'
+                      and 'false'. The default is false.
+                    enum:
+                    - "true"
+                    - "false"
+                    type: string
+                  expander:
+                    description: Expander - If not specified, the default is 'random'.
+                      See [expanders](https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/FAQ.md#what-are-expanders)
+                      for more information.
+                    enum:
+                    - least-waste
+                    - most-pods
+                    - priority
+                    - random
+                    type: string
+                  maxEmptyBulkDelete:
+                    description: MaxEmptyBulkDelete - The default is 10.
+                    type: string
+                  maxGracefulTerminationSec:
+                    description: MaxGracefulTerminationSec - The default is 600.
+                    pattern: ^(\d+)$
+                    type: string
+                  maxNodeProvisionTime:
+                    description: MaxNodeProvisionTime - The default is '15m'. Values
+                      must be an integer followed by an 'm'. No unit of time other
+                      than minutes (m) is supported.
+                    pattern: ^(\d+)m$
+                    type: string
+                  maxTotalUnreadyPercentage:
+                    description: MaxTotalUnreadyPercentage - The default is 45. The
+                      maximum is 100 and the minimum is 0.
+                    maxLength: 3
+                    minLength: 1
+                    pattern: ^(\d+)$
+                    type: string
+                  newPodScaleUpDelay:
+                    description: NewPodScaleUpDelay - For scenarios like burst/batch
+                      scale where you don't want CA to act before the kubernetes scheduler
+                      could schedule all the pods, you can tell CA to ignore unscheduled
+                      pods before they're a certain age. The default is '0s'. Values
+                      must be an integer followed by a unit ('s' for seconds, 'm'
+                      for minutes, 'h' for hours, etc).
+                    type: string
+                  okTotalUnreadyCount:
+                    description: OkTotalUnreadyCount - This must be an integer. The
+                      default is 3.
+                    pattern: ^(\d+)$
+                    type: string
+                  scaleDownDelayAfterAdd:
+                    description: ScaleDownDelayAfterAdd - The default is '10m'. Values
+                      must be an integer followed by an 'm'. No unit of time other
+                      than minutes (m) is supported.
+                    pattern: ^(\d+)m$
+                    type: string
+                  scaleDownDelayAfterDelete:
+                    description: ScaleDownDelayAfterDelete - The default is the scan-interval.
+                      Values must be an integer followed by an 's'. No unit of time
+                      other than seconds (s) is supported.
+                    pattern: ^(\d+)s$
+                    type: string
+                  scaleDownDelayAfterFailure:
+                    description: ScaleDownDelayAfterFailure - The default is '3m'.
+                      Values must be an integer followed by an 'm'. No unit of time
+                      other than minutes (m) is supported.
+                    pattern: ^(\d+)m$
+                    type: string
+                  scaleDownUnneededTime:
+                    description: ScaleDownUnneededTime - The default is '10m'. Values
+                      must be an integer followed by an 'm'. No unit of time other
+                      than minutes (m) is supported.
+                    pattern: ^(\d+)m$
+                    type: string
+                  scaleDownUnreadyTime:
+                    description: ScaleDownUnreadyTime - The default is '20m'. Values
+                      must be an integer followed by an 'm'. No unit of time other
+                      than minutes (m) is supported.
+                    pattern: ^(\d+)m$
+                    type: string
+                  scaleDownUtilizationThreshold:
+                    description: ScaleDownUtilizationThreshold - The default is '0.5'.
+                    type: string
+                  scanInterval:
+                    description: ScanInterval - How often cluster is reevaluated for
+                      scale up or down. The default is '10s'.
+                    pattern: ^(\d+)s$
+                    type: string
+                  skipNodesWithLocalStorage:
+                    description: SkipNodesWithLocalStorage - The default is false.
+                    enum:
+                    - "true"
+                    - "false"
+                    type: string
+                  skipNodesWithSystemPods:
+                    description: SkipNodesWithSystemPods - The default is true.
+                    enum:
+                    - "true"
+                    - "false"
+                    type: string
+                type: object
               controlPlaneEndpoint:
                 description: ControlPlaneEndpoint represents the endpoint used to
                   communicate with the control plane.
@@ -10950,6 +11167,10 @@ spec:
       name: VMSS VM ID
       priority: 1
       type: string
+    - description: Time duration since creation of this AzureMachinePoolMachine
+      jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
     name: v1beta1
     schema:
       openAPIV3Schema:
@@ -10981,7 +11202,6 @@ spec:
                   Scale Set
                 type: string
             required:
-            - instanceID
             - providerID
             type: object
           status:
@@ -11143,8 +11363,6 @@ spec:
               version:
                 description: Version defines the Kubernetes version for the VM Instance
                 type: string
-            required:
-            - latestModelApplied
             type: object
         type: object
     served: true
