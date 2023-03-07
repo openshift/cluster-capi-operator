@@ -72,6 +72,9 @@ type VnetClassSpec struct {
 
 // SubnetClassSpec defines the SubnetSpec properties that may be shared across several Azure clusters.
 type SubnetClassSpec struct {
+	// Name defines a name for the subnet resource.
+	Name string `json:"name"`
+
 	// Role defines the subnet role (eg. Node, ControlPlane)
 	// +kubebuilder:validation:Enum=node;control-plane;bastion
 	Role SubnetRole `json:"role"`
@@ -79,6 +82,10 @@ type SubnetClassSpec struct {
 	// CIDRBlocks defines the subnet's address space, specified as one or more address prefixes in CIDR notation.
 	// +optional
 	CIDRBlocks []string `json:"cidrBlocks,omitempty"`
+
+	// ServiceEndpoints is a slice of Virtual Network service endpoints to enable for the subnets.
+	// +optional
+	ServiceEndpoints ServiceEndpoints `json:"serviceEndpoints,omitempty"`
 }
 
 // LoadBalancerClassSpec defines the LoadBalancerSpec properties that may be shared across several Azure clusters.
@@ -128,10 +135,10 @@ func (sc *SubnetClassSpec) setDefaults(cidr string) {
 }
 
 // setDefaults sets default values for SecurityGroupClass.
-func (sgc *SecurityGroupClass) setDefaults(dir SecurityRuleDirection) { //nolint:unparam
+func (sgc *SecurityGroupClass) setDefaults() {
 	for i := range sgc.SecurityRules {
 		if sgc.SecurityRules[i].Direction == "" {
-			sgc.SecurityRules[i].Direction = dir
+			sgc.SecurityRules[i].Direction = SecurityRuleDirectionInbound
 		}
 	}
 }

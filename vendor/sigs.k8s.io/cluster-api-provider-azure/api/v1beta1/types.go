@@ -113,14 +113,15 @@ type VnetSpec struct {
 
 // VnetPeeringSpec specifies an existing remote virtual network to peer with the AzureCluster's virtual network.
 type VnetPeeringSpec struct {
+	VnetPeeringClassSpec `json:",inline"`
+}
+
+// VnetPeeringClassSpec specifies a virtual network peering class.
+type VnetPeeringClassSpec struct {
 	// ResourceGroup is the resource group name of the remote virtual network.
 	// +optional
 	ResourceGroup string `json:"resourceGroup,omitempty"`
 
-	VnetPeeringClassSpec `json:",inline"`
-}
-
-type VnetPeeringClassSpec struct {
 	// RemoteVnetName defines name of the remote virtual network.
 	RemoteVnetName string `json:"remoteVnetName"`
 }
@@ -134,7 +135,14 @@ func (v *VnetSpec) IsManaged(clusterName string) bool {
 }
 
 // Subnets is a slice of Subnet.
+// +listType=map
+// +listMapKey=name
 type Subnets []SubnetSpec
+
+// ServiceEndpoints is a slice of string.
+// +listType=map
+// +listMapKey=service
+type ServiceEndpoints []ServiceEndpointSpec
 
 // SecurityGroup defines an Azure security group.
 type SecurityGroup struct {
@@ -169,6 +177,7 @@ type NatGateway struct {
 	NatGatewayClassSpec `json:",inline"`
 }
 
+// NatGatewayClassSpec defines a NAT gateway class specification.
 type NatGatewayClassSpec struct {
 	Name string `json:"name"`
 }
@@ -228,6 +237,8 @@ type SecurityRule struct {
 }
 
 // SecurityRules is a slice of Azure security rules for security groups.
+// +listType=map
+// +listMapKey=name
 type SecurityRules []SecurityRule
 
 // LoadBalancerSpec defines an Azure load balancer.
@@ -243,6 +254,9 @@ type LoadBalancerSpec struct {
 	// FrontendIPsCount specifies the number of frontend IP addresses for the load balancer.
 	// +optional
 	FrontendIPsCount *int32 `json:"frontendIPsCount,omitempty"`
+	// BackendPool describes the backend pool of the load balancer.
+	// +optional
+	BackendPool BackendPool `json:"backendPool,omitempty"`
 
 	LoadBalancerClassSpec `json:",inline"`
 }
@@ -280,6 +294,16 @@ type PublicIPSpec struct {
 	Name string `json:"name"`
 	// +optional
 	DNSName string `json:"dnsName,omitempty"`
+	// +optional
+	IPTags []IPTag `json:"ipTags,omitempty"`
+}
+
+// IPTag contains the IpTag associated with the object.
+type IPTag struct {
+	// Type specifies the IP tag type. Example: FirstPartyUsage.
+	Type string `json:"type"`
+	// Tag specifies the value of the IP tag associated with the public IP. Example: SQL.
+	Tag string `json:"tag"`
 }
 
 // VMState describes the state of an Azure virtual machine.
@@ -318,16 +342,47 @@ type Image struct {
 	ID *string `json:"id,omitempty"`
 
 	// SharedGallery specifies an image to use from an Azure Shared Image Gallery
+	// Deprecated: use ComputeGallery instead.
 	// +optional
 	SharedGallery *AzureSharedGalleryImage `json:"sharedGallery,omitempty"`
 
 	// Marketplace specifies an image to use from the Azure Marketplace
 	// +optional
 	Marketplace *AzureMarketplaceImage `json:"marketplace,omitempty"`
+
+	// ComputeGallery specifies an image to use from the Azure Compute Gallery
+	// +optional
+	ComputeGallery *AzureComputeGalleryImage `json:"computeGallery,omitempty"`
 }
 
-// AzureMarketplaceImage defines an image in the Azure Marketplace to use for VM creation.
-type AzureMarketplaceImage struct {
+// AzureComputeGalleryImage defines an image in the Azure Compute Gallery to use for VM creation.
+type AzureComputeGalleryImage struct {
+	// Gallery specifies the name of the compute image gallery that contains the image
+	// +kubebuilder:validation:MinLength=1
+	Gallery string `json:"gallery"`
+	// Name is the name of the image
+	// +kubebuilder:validation:MinLength=1
+	Name string `json:"name"`
+	// Version specifies the version of the marketplace image. The allowed formats
+	// are Major.Minor.Build or 'latest'. Major, Minor, and Build are decimal numbers.
+	// Specify 'latest' to use the latest version of an image available at deploy time.
+	// Even if you use 'latest', the VM image will not automatically update after deploy
+	// time even if a new version becomes available.
+	// +kubebuilder:validation:MinLength=1
+	Version string `json:"version"`
+	// SubscriptionID is the identifier of the subscription that contains the private compute gallery.
+	// +optional
+	SubscriptionID *string `json:"subscriptionID,omitempty"`
+	// ResourceGroup specifies the resource group containing the private compute gallery.
+	// +optional
+	ResourceGroup *string `json:"resourceGroup,omitempty"`
+	// Plan contains plan information.
+	// +optional
+	Plan *ImagePlan `json:"plan,omitempty"`
+}
+
+// ImagePlan contains plan information for marketplace images.
+type ImagePlan struct {
 	// Publisher is the name of the organization that created the image
 	// +kubebuilder:validation:MinLength=1
 	Publisher string `json:"publisher"`
@@ -339,6 +394,12 @@ type AzureMarketplaceImage struct {
 	// For example, 18.04-LTS, 2019-Datacenter
 	// +kubebuilder:validation:MinLength=1
 	SKU string `json:"sku"`
+}
+
+// AzureMarketplaceImage defines an image in the Azure Marketplace to use for VM creation.
+type AzureMarketplaceImage struct {
+	ImagePlan `json:",inline"`
+
 	// Version specifies the version of an image sku. The allowed formats
 	// are Major.Minor.Build or 'latest'. Major, Minor, and Build are decimal numbers.
 	// Specify 'latest' to use the latest version of an image available at deploy time.
@@ -406,6 +467,17 @@ const (
 	VMIdentityUserAssigned VMIdentity = "UserAssigned"
 )
 
+// SpotEvictionPolicy defines the eviction policy for spot VMs, if configured.
+// +kubebuilder:validation:Enum=Deallocate;Delete
+type SpotEvictionPolicy string
+
+const (
+	// SpotEvictionPolicyDeallocate is the default eviction policy and will deallocate the VM when the node is marked for eviction.
+	SpotEvictionPolicyDeallocate SpotEvictionPolicy = "Deallocate"
+	// SpotEvictionPolicyDelete will delete the VM when the node is marked for eviction.
+	SpotEvictionPolicyDelete SpotEvictionPolicy = "Delete"
+)
+
 // UserAssignedIdentity defines the user-assigned identities provided
 // by the user to be assigned to Azure resources.
 type UserAssignedIdentity struct {
@@ -422,18 +494,21 @@ const (
 )
 
 // IdentityType represents different types of identities.
-// +kubebuilder:validation:Enum=ServicePrincipal;ManualServicePrincipal;UserAssignedMSI
+// +kubebuilder:validation:Enum=ServicePrincipal;UserAssignedMSI;ManualServicePrincipal;ServicePrincipalCertificate
 type IdentityType string
 
 const (
-	// UserAssignedMSI represents a user-assigned identity.
+	// UserAssignedMSI represents a user-assigned managed identity.
 	UserAssignedMSI IdentityType = "UserAssignedMSI"
 
-	// ServicePrincipal represents a service principal.
+	// ServicePrincipal represents a service principal using a client password as secret.
 	ServicePrincipal IdentityType = "ServicePrincipal"
 
 	// ManualServicePrincipal represents a manual service principal.
 	ManualServicePrincipal IdentityType = "ManualServicePrincipal"
+
+	// ServicePrincipalCertificate represents a service principal using a certificate as secret.
+	ServicePrincipalCertificate IdentityType = "ServicePrincipalCertificate"
 )
 
 // OSDisk defines the operating system disk for a VM.
@@ -476,6 +551,22 @@ type DataDisk struct {
 	// +optional
 	// +kubebuilder:validation:Enum=None;ReadOnly;ReadWrite
 	CachingType string `json:"cachingType,omitempty"`
+}
+
+// VMExtension specifies the parameters for a custom VM extension.
+type VMExtension struct {
+	// Name is the name of the extension.
+	Name string `json:"name"`
+	// Publisher is the name of the extension handler publisher.
+	Publisher string `json:"publisher"`
+	// Version specifies the version of the script handler.
+	Version string `json:"version"`
+	// Settings is a JSON formatted public settings for the extension.
+	// +optional
+	Settings Tags `json:"settings,omitempty"`
+	// ProtectedSettings is a JSON formatted protected settings for the extension.
+	// +optional
+	ProtectedSettings Tags `json:"protectedSettings,omitempty"`
 }
 
 // ManagedDiskParameters defines the parameters of a managed disk.
@@ -522,9 +613,6 @@ type SubnetSpec struct {
 	// +optional
 	ID string `json:"id,omitempty"`
 
-	// Name defines a name for the subnet resource.
-	Name string `json:"name"`
-
 	// SecurityGroup defines the NSG (network security group) that should be attached to this subnet.
 	// +optional
 	SecurityGroup SecurityGroup `json:"securityGroup,omitempty"`
@@ -538,6 +626,31 @@ type SubnetSpec struct {
 	NatGateway NatGateway `json:"natGateway,omitempty"`
 
 	SubnetClassSpec `json:",inline"`
+}
+
+// ServiceEndpointSpec configures an Azure Service Endpoint.
+type ServiceEndpointSpec struct {
+	Service string `json:"service"`
+
+	Locations []string `json:"locations"`
+}
+
+// NetworkInterface defines a network interface.
+type NetworkInterface struct {
+	// SubnetName specifies the subnet in which the new network interface will be placed.
+	SubnetName string `json:"subnetName,omitempty"`
+
+	// PrivateIPConfigs specifies the number of private IP addresses to attach to the interface.
+	// Defaults to 1 if not specified.
+	// +optional
+	PrivateIPConfigs int `json:"privateIPConfigs,omitempty"`
+
+	// AcceleratedNetworking enables or disables Azure accelerated networking. If omitted, it will be set based on
+	// whether the requested VMSize supports accelerated networking.
+	// If AcceleratedNetworking is set to true with a VMSize that does not support it, Azure will return an error.
+	// +kubebuilder:validation:nullable
+	// +optional
+	AcceleratedNetworking *bool `json:"acceleratedNetworking,omitempty"`
 }
 
 // GetControlPlaneSubnet returns the cluster control plane subnet.
@@ -688,7 +801,86 @@ type AzureBastion struct {
 	PublicIP PublicIPSpec `json:"publicIP,omitempty"`
 }
 
+// BackendPool describes the backend pool of the load balancer.
+type BackendPool struct {
+	// Name specifies the name of backend pool for the load balancer. If not specified, the default name will
+	// be set, depending on the load balancer role.
+	// +optional
+	Name string `json:"name,omitempty"`
+}
+
 // IsTerminalProvisioningState returns true if the ProvisioningState is a terminal state for an Azure resource.
 func IsTerminalProvisioningState(state ProvisioningState) bool {
 	return state == Failed || state == Succeeded
 }
+
+// Diagnostics is used to configure the diagnostic settings of the virtual machine.
+type Diagnostics struct {
+	// Boot configures the boot diagnostics settings for the virtual machine.
+	// This allows to configure capturing serial output from the virtual machine on boot.
+	// This is useful for debugging software based launch issues.
+	// If not specified then Boot diagnostics (Managed) will be enabled.
+	// +optional
+	Boot *BootDiagnostics `json:"boot,omitempty"`
+}
+
+// BootDiagnostics configures the boot diagnostics settings for the virtual machine.
+// This allows you to configure capturing serial output from the virtual machine on boot.
+// This is useful for debugging software based launch issues.
+// +union
+type BootDiagnostics struct {
+	// StorageAccountType determines if the storage account for storing the diagnostics data
+	// should be disabled (Disabled), provisioned by Azure (Managed) or by the user (UserManaged).
+	// +kubebuilder:validation:Required
+	// +unionDiscriminator
+	StorageAccountType BootDiagnosticsStorageAccountType `json:"storageAccountType"`
+
+	// UserManaged provides a reference to the user-managed storage account.
+	// +optional
+	UserManaged *UserManagedBootDiagnostics `json:"userManaged,omitempty"`
+}
+
+// BootDiagnosticsStorageAccountType defines the list of valid storage account types
+// for the boot diagnostics.
+// +kubebuilder:validation:Enum:="Managed";"UserManaged";"Disabled"
+type BootDiagnosticsStorageAccountType string
+
+const (
+	// DisabledDiagnosticsStorage is used to determine that the diagnostics storage account
+	// should be disabled.
+	DisabledDiagnosticsStorage BootDiagnosticsStorageAccountType = "Disabled"
+
+	// ManagedDiagnosticsStorage is used to determine that the diagnostics storage account
+	// should be provisioned by Azure.
+	ManagedDiagnosticsStorage BootDiagnosticsStorageAccountType = "Managed"
+
+	// UserManagedDiagnosticsStorage is used to determine that the diagnostics storage account
+	// should be provisioned by the User.
+	UserManagedDiagnosticsStorage BootDiagnosticsStorageAccountType = "UserManaged"
+)
+
+// UserManagedBootDiagnostics provides a reference to a user-managed
+// storage account.
+type UserManagedBootDiagnostics struct {
+	// StorageAccountURI is the URI of the user-managed storage account.
+	// The URI typically will be `https://<mystorageaccountname>.blob.core.windows.net/`
+	// but may differ if you are using Azure DNS zone endpoints.
+	// You can find the correct endpoint by looking for the Blob Primary Endpoint in the
+	// endpoints tab in the Azure console or with the CLI by issuing
+	// `az storage account list --query='[].{name: name, "resource group": resourceGroup, "blob endpoint": primaryEndpoints.blob}'`.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Pattern=`^https://`
+	// +kubebuilder:validation:MaxLength=1024
+	StorageAccountURI string `json:"storageAccountURI"`
+}
+
+// OrchestrationModeType represents the orchestration mode for a Virtual Machine Scale Set backing an AzureMachinePool.
+// +kubebuilder:validation:Enum=Flexible;Uniform
+type OrchestrationModeType string
+
+const (
+	// FlexibleOrchestrationMode treats VMs as individual resources accessible by standard VM APIs.
+	FlexibleOrchestrationMode OrchestrationModeType = "Flexible"
+	// UniformOrchestrationMode treats VMs as identical instances accessible by the VMSS VM API.
+	UniformOrchestrationMode OrchestrationModeType = "Uniform"
+)

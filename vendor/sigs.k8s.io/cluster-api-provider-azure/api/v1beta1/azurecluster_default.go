@@ -99,37 +99,38 @@ func (c *AzureCluster) setSubnetDefaults() {
 	if cpSubnet.SecurityGroup.Name == "" {
 		cpSubnet.SecurityGroup.Name = generateControlPlaneSecurityGroupName(c.ObjectMeta.Name)
 	}
-	cpSubnet.SecurityGroup.SecurityGroupClass.setDefaults(SecurityRuleDirectionInbound)
+	cpSubnet.SecurityGroup.SecurityGroupClass.setDefaults()
 
 	c.Spec.NetworkSpec.UpdateControlPlaneSubnet(cpSubnet)
 
 	var nodeSubnetFound bool
 	var nodeSubnetCounter int
 	for i, subnet := range c.Spec.NetworkSpec.Subnets {
-		if subnet.Role == SubnetNode {
-			nodeSubnetCounter++
-			nodeSubnetFound = true
-			if subnet.Name == "" {
-				subnet.Name = withIndex(generateNodeSubnetName(c.ObjectMeta.Name), nodeSubnetCounter)
-			}
-			subnet.SubnetClassSpec.setDefaults(fmt.Sprintf(DefaultNodeSubnetCIDRPattern, nodeSubnetCounter))
-
-			if subnet.SecurityGroup.Name == "" {
-				subnet.SecurityGroup.Name = generateNodeSecurityGroupName(c.ObjectMeta.Name)
-			}
-			cpSubnet.SecurityGroup.SecurityGroupClass.setDefaults(SecurityRuleDirectionInbound)
-
-			if subnet.RouteTable.Name == "" {
-				subnet.RouteTable.Name = generateNodeRouteTableName(c.ObjectMeta.Name)
-			}
-			if subnet.IsNatGatewayEnabled() {
-				if subnet.NatGateway.NatGatewayIP.Name == "" {
-					subnet.NatGateway.NatGatewayIP.Name = generateNatGatewayIPName(c.ObjectMeta.Name, subnet.Name)
-				}
-			}
-
-			c.Spec.NetworkSpec.Subnets[i] = subnet
+		if subnet.Role != SubnetNode {
+			continue
 		}
+		nodeSubnetCounter++
+		nodeSubnetFound = true
+		if subnet.Name == "" {
+			subnet.Name = withIndex(generateNodeSubnetName(c.ObjectMeta.Name), nodeSubnetCounter)
+		}
+		subnet.SubnetClassSpec.setDefaults(fmt.Sprintf(DefaultNodeSubnetCIDRPattern, nodeSubnetCounter))
+
+		if subnet.SecurityGroup.Name == "" {
+			subnet.SecurityGroup.Name = generateNodeSecurityGroupName(c.ObjectMeta.Name)
+		}
+		cpSubnet.SecurityGroup.SecurityGroupClass.setDefaults()
+
+		if subnet.RouteTable.Name == "" {
+			subnet.RouteTable.Name = generateNodeRouteTableName(c.ObjectMeta.Name)
+		}
+		if subnet.IsNatGatewayEnabled() {
+			if subnet.NatGateway.NatGatewayIP.Name == "" {
+				subnet.NatGateway.NatGatewayIP.Name = generateNatGatewayIPName(c.ObjectMeta.Name, subnet.Name)
+			}
+		}
+
+		c.Spec.NetworkSpec.Subnets[i] = subnet
 	}
 
 	if !nodeSubnetFound {
@@ -137,8 +138,8 @@ func (c *AzureCluster) setSubnetDefaults() {
 			SubnetClassSpec: SubnetClassSpec{
 				Role:       SubnetNode,
 				CIDRBlocks: []string{DefaultNodeSubnetCIDR},
+				Name:       generateNodeSubnetName(c.ObjectMeta.Name),
 			},
-			Name: generateNodeSubnetName(c.ObjectMeta.Name),
 			SecurityGroup: SecurityGroup{
 				Name: generateNodeSecurityGroupName(c.ObjectMeta.Name),
 			},
@@ -192,8 +193,13 @@ func (c *AzureCluster) setAPIServerLBDefaults() {
 			}
 		}
 	}
+
+	if lb.BackendPool.Name == "" {
+		lb.BackendPool.Name = generateBackendAddressPoolName(lb.Name)
+	}
 }
 
+// SetNodeOutboundLBDefaults sets the default values for the NodeOutboundLB.
 func (c *AzureCluster) SetNodeOutboundLBDefaults() {
 	if c.Spec.NetworkSpec.NodeOutboundLB == nil {
 		if c.Spec.NetworkSpec.APIServerLB.Type == Internal {
@@ -221,15 +227,22 @@ func (c *AzureCluster) SetNodeOutboundLBDefaults() {
 	lb := c.Spec.NetworkSpec.NodeOutboundLB
 	lb.LoadBalancerClassSpec.setNodeOutboundLBDefaults()
 
-	lb.Name = c.ObjectMeta.Name
+	if lb.Name == "" {
+		lb.Name = c.ObjectMeta.Name
+	}
 
 	if lb.FrontendIPsCount == nil {
 		lb.FrontendIPsCount = pointer.Int32Ptr(1)
 	}
 
 	c.setOutboundLBFrontendIPs(lb, generateNodeOutboundIPName)
+
+	if lb.BackendPool.Name == "" {
+		lb.BackendPool.Name = generateOutboundBackendAddressPoolName(lb.Name)
+	}
 }
 
+// SetControlPlaneOutboundLBDefaults sets the default values for the control plane's outbound LB.
 func (c *AzureCluster) SetControlPlaneOutboundLBDefaults() {
 	lb := c.Spec.NetworkSpec.ControlPlaneOutboundLB
 
@@ -245,6 +258,10 @@ func (c *AzureCluster) SetControlPlaneOutboundLBDefaults() {
 		lb.FrontendIPsCount = pointer.Int32Ptr(1)
 	}
 	c.setOutboundLBFrontendIPs(lb, generateControlPlaneOutboundIPName)
+
+	if lb.BackendPool.Name == "" {
+		lb.BackendPool.Name = generateOutboundBackendAddressPoolName(generateControlPlaneOutboundLBName(c.ObjectMeta.Name))
+	}
 }
 
 // setOutboundLBFrontendIPs sets the frontend ips for the given load balancer.
@@ -427,4 +444,14 @@ func generateNatGatewayIPName(clusterName, subnetName string) string {
 // withIndex appends the index as suffix to a generated name.
 func withIndex(name string, n int) string {
 	return fmt.Sprintf("%s-%d", name, n)
+}
+
+// generateBackendAddressPoolName generates a load balancer backend address pool name.
+func generateBackendAddressPoolName(lbName string) string {
+	return fmt.Sprintf("%s-%s", lbName, "backendPool")
+}
+
+// generateOutboundBackendAddressPoolName generates a load balancer outbound backend address pool name.
+func generateOutboundBackendAddressPoolName(lbName string) string {
+	return fmt.Sprintf("%s-%s", lbName, "outboundBackendPool")
 }
