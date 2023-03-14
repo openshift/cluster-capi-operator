@@ -571,7 +571,7 @@ k8s.io/utils/net
 k8s.io/utils/pointer
 k8s.io/utils/strings/slices
 k8s.io/utils/trace
-# sigs.k8s.io/cluster-api v1.3.2
+# sigs.k8s.io/cluster-api v1.3.3
 ## explicit; go 1.19
 sigs.k8s.io/cluster-api/api/v1beta1
 sigs.k8s.io/cluster-api/cmd/clusterctl/api/v1alpha3
@@ -593,9 +593,10 @@ sigs.k8s.io/cluster-api-provider-aws/v2/feature
 # sigs.k8s.io/cluster-api-provider-gcp v1.2.1
 ## explicit; go 1.18
 sigs.k8s.io/cluster-api-provider-gcp/api/v1beta1
-# sigs.k8s.io/cluster-api-provider-ibmcloud v0.3.0 => github.com/openshift/cluster-api-provider-ibmcloud v0.0.0-20221007162602-5e3a2bae34bd
-## explicit; go 1.18
+# sigs.k8s.io/cluster-api-provider-ibmcloud v0.4.0
+## explicit; go 1.19
 sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta1
+sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2
 # sigs.k8s.io/controller-runtime v0.13.1
 ## explicit; go 1.17
 sigs.k8s.io/controller-runtime
@@ -652,4 +653,3 @@ sigs.k8s.io/structured-merge-diff/v4/value
 # sigs.k8s.io/yaml v1.3.0
 ## explicit; go 1.12
 sigs.k8s.io/yaml
-# sigs.k8s.io/cluster-api-provider-ibmcloud => github.com/openshift/cluster-api-provider-ibmcloud v0.0.0-20221007162602-5e3a2bae34bd

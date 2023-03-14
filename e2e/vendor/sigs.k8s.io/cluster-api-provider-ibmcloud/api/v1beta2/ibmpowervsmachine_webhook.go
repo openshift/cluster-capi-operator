@@ -1,5 +1,5 @@
 /*
-Copyright 2021 The Kubernetes Authors.
+Copyright 2022 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1beta1
+package v1beta2
 
 import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -36,7 +36,7 @@ func (r *IBMPowerVSMachine) SetupWebhookWithManager(mgr ctrl.Manager) error {
 		Complete()
 }
 
-//+kubebuilder:webhook:path=/mutate-infrastructure-cluster-x-k8s-io-v1beta1-ibmpowervsmachine,mutating=true,failurePolicy=fail,groups=infrastructure.cluster.x-k8s.io,resources=ibmpowervsmachines,verbs=create;update,versions=v1beta1,name=mibmpowervsmachine.kb.io,sideEffects=None,admissionReviewVersions=v1;v1beta1
+//+kubebuilder:webhook:path=/mutate-infrastructure-cluster-x-k8s-io-v1beta2-ibmpowervsmachine,mutating=true,failurePolicy=fail,groups=infrastructure.cluster.x-k8s.io,resources=ibmpowervsmachines,verbs=create;update,versions=v1beta2,name=mibmpowervsmachine.kb.io,sideEffects=None,admissionReviewVersions=v1;v1beta1
 
 var _ webhook.Defaulter = &IBMPowerVSMachine{}
 
@@ -46,7 +46,7 @@ func (r *IBMPowerVSMachine) Default() {
 	defaultIBMPowerVSMachineSpec(&r.Spec)
 }
 
-//+kubebuilder:webhook:verbs=create;update,path=/validate-infrastructure-cluster-x-k8s-io-v1beta1-ibmpowervsmachine,mutating=false,failurePolicy=fail,groups=infrastructure.cluster.x-k8s.io,resources=ibmpowervsmachines,versions=v1beta1,name=vibmpowervsmachine.kb.io,sideEffects=None,admissionReviewVersions=v1;v1beta1
+//+kubebuilder:webhook:verbs=create;update,path=/validate-infrastructure-cluster-x-k8s-io-v1beta2-ibmpowervsmachine,mutating=false,failurePolicy=fail,groups=infrastructure.cluster.x-k8s.io,resources=ibmpowervsmachines,versions=v1beta2,name=vibmpowervsmachine.kb.io,sideEffects=None,admissionReviewVersions=v1;v1beta1
 
 var _ webhook.Validator = &IBMPowerVSMachine{}
 
@@ -70,12 +70,6 @@ func (r *IBMPowerVSMachine) ValidateDelete() error {
 
 func (r *IBMPowerVSMachine) validateIBMPowerVSMachine() error {
 	var allErrs field.ErrorList
-	if err := r.validateIBMPowerVSMachineSysType(); err != nil {
-		allErrs = append(allErrs, err)
-	}
-	if err := r.validateIBMPowerVSMachineProcType(); err != nil {
-		allErrs = append(allErrs, err)
-	}
 	if err := r.validateIBMPowerVSMachineNetwork(); err != nil {
 		allErrs = append(allErrs, err)
 	}
@@ -95,20 +89,6 @@ func (r *IBMPowerVSMachine) validateIBMPowerVSMachine() error {
 	return apierrors.NewInvalid(
 		schema.GroupKind{Group: "infrastructure.cluster.x-k8s.io", Kind: "IBMPowerVSMachine"},
 		r.Name, allErrs)
-}
-
-func (r *IBMPowerVSMachine) validateIBMPowerVSMachineSysType() *field.Error {
-	if res, spec := validateIBMPowerVSSysType(r.Spec); !res {
-		return field.Invalid(field.NewPath("spec", "sysType"), spec.SysType, "Invalid System Type")
-	}
-	return nil
-}
-
-func (r *IBMPowerVSMachine) validateIBMPowerVSMachineProcType() *field.Error {
-	if res, spec := validateIBMPowerVSProcType(r.Spec); !res {
-		return field.Invalid(field.NewPath("spec", "procType"), spec.ProcType, "Invalid Processor Type")
-	}
-	return nil
 }
 
 func (r *IBMPowerVSMachine) validateIBMPowerVSMachineNetwork() *field.Error {
@@ -136,8 +116,8 @@ func (r *IBMPowerVSMachine) validateIBMPowerVSMachineImage() *field.Error {
 }
 
 func (r *IBMPowerVSMachine) validateIBMPowerVSMachineMemory() *field.Error {
-	if res := validateIBMPowerVSMemoryValues(r.Spec.Memory); !res {
-		return field.Invalid(field.NewPath("spec", "memory"), r.Spec.Memory, "Invalid Memory value - must be non-empty and a positive integer no lesser than 2")
+	if res := validateIBMPowerVSMemoryValues(r.Spec.MemoryGiB); !res {
+		return field.Invalid(field.NewPath("spec", "memoryGiB"), r.Spec.MemoryGiB, "Invalid Memory value - must a positive integer no lesser than 2")
 	}
 	return nil
 }

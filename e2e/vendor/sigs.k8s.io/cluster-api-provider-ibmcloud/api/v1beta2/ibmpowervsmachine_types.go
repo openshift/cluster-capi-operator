@@ -1,5 +1,5 @@
 /*
-Copyright 2021 The Kubernetes Authors.
+Copyright 2022 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,11 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1beta1
+package v1beta2
 
 import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 
 	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/errors"
@@ -26,10 +27,19 @@ import (
 
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
+// PowerVSProcessorType enum attribute to identify the PowerVS instance processor type.
+type PowerVSProcessorType string
+
 const (
 	// IBMPowerVSMachineFinalizer allows IBMPowerVSMachineReconciler to clean up resources associated with IBMPowerVSMachine before
 	// removing it from the apiserver.
 	IBMPowerVSMachineFinalizer = "ibmpowervsmachine.infrastructure.cluster.x-k8s.io"
+	// PowerVSProcessorTypeDedicated enum property to identify a Dedicated Power VS processor type.
+	PowerVSProcessorTypeDedicated PowerVSProcessorType = "Dedicated"
+	// PowerVSProcessorTypeShared enum property to identify a Shared Power VS processor type.
+	PowerVSProcessorTypeShared PowerVSProcessorType = "Shared"
+	// PowerVSProcessorTypeCapped enum property to identify a Capped Power VS processor type.
+	PowerVSProcessorTypeCapped PowerVSProcessorType = "Capped"
 )
 
 // IBMPowerVSMachineSpec defines the desired state of IBMPowerVSMachine.
@@ -44,7 +54,8 @@ type IBMPowerVSMachineSpec struct {
 	// SSHKey is the name of the SSH key pair provided to the vsi for authenticating users.
 	SSHKey string `json:"sshKey,omitempty"`
 
-	// Image is the reference to the Image from which to create the machine instance.
+	// Image the reference to the image which is used to create the instance.
+	// supported image identifier in IBMPowerVSResourceReference are Name and ID and that can be obtained from IBM Cloud UI or IBM Cloud cli.
 	// +optional
 	Image *IBMPowerVSResourceReference `json:"image,omitempty"`
 
@@ -53,24 +64,58 @@ type IBMPowerVSMachineSpec struct {
 	// +optional
 	ImageRef *corev1.LocalObjectReference `json:"imageRef,omitempty"`
 
-	// SysType is the System type used to host the vsi.
+	// systemType is the System type used to host the instance.
+	// systemType determines the number of cores and memory that is available.
+	// Few of the supported SystemTypes are s922,e880,e980.
+	// e880 systemType available only in Dallas Datacenters.
+	// e980 systemType available in Datacenters except Dallas and Washington.
+	// When omitted, this means that the user has no opinion and the platform is left to choose a
+	// reasonable default, which is subject to change over time. The current default is s922 which is generally available.
+	// + This is not an enum because we expect other values to be added later which should be supported implicitly.
+	// +kubebuilder:validation:Enum:="s922";"e880";"e980";""
 	// +optional
-	SysType string `json:"sysType,omitempty"`
+	SystemType string `json:"systemType,omitempty"`
 
-	// ProcType is the processor type, e.g: dedicated, shared, capped
+	// processorType is the VM instance processor type.
+	// It must be set to one of the following values: Dedicated, Capped or Shared.
+	// Dedicated: resources are allocated for a specific client, The hypervisor makes a 1:1 binding of a partition’s processor to a physical processor core.
+	// Shared: Shared among other clients.
+	// Capped: Shared, but resources do not expand beyond those that are requested, the amount of CPU time is Capped to the value specified for the entitlement.
+	// if the processorType is selected as Dedicated, then processors value cannot be fractional.
+	// When omitted, this means that the user has no opinion and the platform is left to choose a
+	// reasonable default, which is subject to change over time. The current default is Shared.
+	// +kubebuilder:validation:Enum:="Dedicated";"Shared";"Capped";""
 	// +optional
-	ProcType string `json:"procType,omitempty"`
+	ProcessorType PowerVSProcessorType `json:"processorType,omitempty"`
 
-	// Processors is Number of processors allocated.
+	// processors is the number of virtual processors in a virtual machine.
+	// when the processorType is selected as Dedicated the processors value cannot be fractional.
+	// maximum value for the Processors depends on the selected SystemType.
+	// when SystemType is set to e880 or e980 maximum Processors value is 143.
+	// when SystemType is set to s922 maximum Processors value is 15.
+	// minimum value for Processors depends on the selected ProcessorType.
+	// when ProcessorType is set as Shared or Capped, The minimum processors is 0.25.
+	// when ProcessorType is set as Dedicated, The minimum processors is 1.
+	// When omitted, this means that the user has no opinion and the platform is left to choose a
+	// reasonable default, which is subject to change over time. The default is set based on the selected ProcessorType.
+	// when ProcessorType selected as Dedicated, the default is set to 1.
+	// when ProcessorType selected as Shared or Capped, the default is set to 0.25.
 	// +optional
-	// +kubebuilder:validation:Pattern=^\d+(\.)?(\d)?(\d)?$
-	Processors string `json:"processors,omitempty"`
+	Processors intstr.IntOrString `json:"processors,omitempty"`
 
-	// Memory is Amount of memory allocated (in GB)
+	// memoryGiB is the size of a virtual machine's memory, in GiB.
+	// maximum value for the MemoryGiB depends on the selected SystemType.
+	// when SystemType is set to e880 maximum MemoryGiB value is 7463 GiB.
+	// when SystemType is set to e980 maximum MemoryGiB value is 15307 GiB.
+	// when SystemType is set to s922 maximum MemoryGiB value is 942 GiB.
+	// The minimum memory is 2 GiB.
+	// When omitted, this means the user has no opinion and the platform is left to choose a reasonable
+	// default, which is subject to change over time. The current default is 2.
 	// +optional
-	Memory string `json:"memory,omitempty"`
+	MemoryGiB int32 `json:"memoryGiB,omitempty"`
 
 	// Network is the reference to the Network to use for this instance.
+	// supported network identifier in IBMPowerVSResourceReference are Name, ID and RegEx and that can be obtained from IBM Cloud UI or IBM Cloud cli.
 	Network IBMPowerVSResourceReference `json:"network"`
 
 	// ProviderID is the unique identifier as specified by the cloud provider.
@@ -78,8 +123,8 @@ type IBMPowerVSMachineSpec struct {
 	ProviderID *string `json:"providerID,omitempty"`
 }
 
-// IBMPowerVSResourceReference is a reference to a specific PowerVS resource by ID or Name
-// Only one of ID or Name may be specified. Specifying more than one will result in
+// IBMPowerVSResourceReference is a reference to a specific PowerVS resource by ID, Name or RegEx
+// Only one of ID, Name or RegEx may be specified. Specifying more than one will result in
 // a validation error.
 type IBMPowerVSResourceReference struct {
 	// ID of resource
@@ -176,6 +221,7 @@ type IBMPowerVSMachineStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:storageversion
 // +kubebuilder:printcolumn:name="Cluster",type="string",JSONPath=".metadata.labels.cluster\\.x-k8s\\.io/cluster-name",description="Cluster to which this IBMPowerVSMachine belongs"
 // +kubebuilder:printcolumn:name="Machine",type="string",priority=1,JSONPath=".metadata.ownerReferences[?(@.kind==\"Machine\")].name",description="Machine object to which this IBMPowerVSMachine belongs"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp",description="Time duration since creation of IBMPowerVSMachine"

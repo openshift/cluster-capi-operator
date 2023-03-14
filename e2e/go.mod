@@ -12,15 +12,13 @@ require (
 	k8s.io/apimachinery v0.25.4
 	k8s.io/client-go v0.25.4
 	k8s.io/utils v0.0.0-20220823124924-e9cbc92d1a73
-	sigs.k8s.io/cluster-api v1.3.2
+	sigs.k8s.io/cluster-api v1.3.3
 	sigs.k8s.io/cluster-api-provider-aws/v2 v2.0.2
 	sigs.k8s.io/cluster-api-provider-gcp v1.2.1
-	sigs.k8s.io/cluster-api-provider-ibmcloud v0.3.0
+	sigs.k8s.io/cluster-api-provider-ibmcloud v0.4.0
 	sigs.k8s.io/controller-runtime v0.13.1
 	sigs.k8s.io/yaml v1.3.0
 )
-
-replace sigs.k8s.io/cluster-api-provider-ibmcloud => github.com/openshift/cluster-api-provider-ibmcloud v0.0.0-20221007162602-5e3a2bae34bd
 
 require (
 	github.com/beorn7/perks v1.0.1 // indirect
