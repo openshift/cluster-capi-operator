@@ -1,5 +1,5 @@
 /*
-Copyright 2021 The Kubernetes Authors.
+Copyright 2022 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1beta1
+package v1beta2
 
 import (
 	corev1 "k8s.io/api/core/v1"
@@ -36,14 +36,9 @@ type IBMVPCMachineSpec struct {
 	// Name of the instance.
 	Name string `json:"name,omitempty"`
 
-	// Image is the id of OS image which would be install on the instance.
-	// +optional
-	// Example: r134-ed3f775f-ad7e-4e37-ae62-7199b4988b00
-	Image string `json:"image,omitempty"`
-
-	// ImageName is the name of OS image which would be install on the instance.
-	// +optional
-	ImageName string `json:"imageName,omitempty"`
+	// Image is the OS image which would be install on the instance.
+	// ID will take higher precedence over Name if both specified.
+	Image *IBMVPCResourceReference `json:"image"`
 
 	// Zone is the place where the instance should be created. Example: us-south-3
 	// TODO: Actually zone is transparent to user. The field user can access is location. Example: Dallas 2
@@ -66,12 +61,23 @@ type IBMVPCMachineSpec struct {
 	PrimaryNetworkInterface NetworkInterface `json:"primaryNetworkInterface,omitempty"`
 
 	// SSHKeys is the SSH pub keys that will be used to access VM.
-	// +optional
-	SSHKeys []*string `json:"sshKeys,omitempty"`
+	// ID will take higher precedence over Name if both specified.
+	SSHKeys []*IBMVPCResourceReference `json:"sshKeys,omitempty"`
+}
 
-	// SSHKeysNames is the SSH pub key names that will be used to access VM.
+// IBMVPCResourceReference is a reference to a specific VPC resource by ID or Name
+// Only one of ID or Name may be specified. Specifying more than one will result in
+// a validation error.
+type IBMVPCResourceReference struct {
+	// ID of resource
+	// +kubebuilder:validation:MinLength=1
 	// +optional
-	SSHKeyNames []*string `json:"sshKeyNames,omitempty"`
+	ID *string `json:"id,omitempty"`
+
+	// Name of resource
+	// +kubebuilder:validation:MinLength=1
+	// +optional
+	Name *string `json:"name,omitempty"`
 }
 
 // VPCVolume defines the volume information for the instance.
@@ -136,6 +142,7 @@ type IBMVPCMachineStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:path=ibmvpcmachines,scope=Namespaced,categories=cluster-api
+// +kubebuilder:storageversion
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.ready",description="Cluster infrastructure is ready for IBM VPC instances"
 

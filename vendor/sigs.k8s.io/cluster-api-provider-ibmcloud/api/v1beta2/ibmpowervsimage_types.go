@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1beta1
+package v1beta2
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -87,6 +87,7 @@ type IBMPowerVSImageStatus struct {
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
+//+kubebuilder:storageversion
 // +kubebuilder:printcolumn:name="State",type="string",JSONPath=".status.imageState",description="PowerVS image state"
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.ready",description="Image is ready for IBM PowerVS instances"
 
