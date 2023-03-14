@@ -15,5 +15,5 @@ spec:
       matchLabels:
         provider.cluster.x-k8s.io/name: ibmcloud
         provider.cluster.x-k8s.io/type: infrastructure
-  version: v0.3.0
+  version: v0.4.0
 status: {}
