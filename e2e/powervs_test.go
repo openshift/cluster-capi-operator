@@ -20,7 +20,8 @@ import (
 )
 
 const (
-	powerVSMachineTemplateName = "powervs-machine-template"
+	powerVSMachineTemplateName    = "powervs-machine-template"
+	powerVSMachineTemplateVersion = "infrastructure.cluster.x-k8s.io/v1beta2"
 )
 
 var _ = Describe("Cluster API IBMPowerVS MachineSet", Ordered, func() {
@@ -58,7 +59,7 @@ var _ = Describe("Cluster API IBMPowerVS MachineSet", Ordered, func() {
 			1,
 			corev1.ObjectReference{
 				Kind:       "IBMPowerVSMachineTemplate",
-				APIVersion: infraAPIVersion,
+				APIVersion: powerVSMachineTemplateVersion,
 				Name:       powerVSMachineTemplateName,
 			},
 		))
