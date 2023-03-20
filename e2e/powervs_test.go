@@ -2,15 +2,13 @@ package e2e
 
 import (
 	"fmt"
-	"strings"
-
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	ibmpowervsv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta1"
+	ibmpowervsv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	yaml "sigs.k8s.io/yaml"
+	"sigs.k8s.io/yaml"
 
 	configv1 "github.com/openshift/api/config/v1"
 	mapiv1 "github.com/openshift/api/machine/v1"
@@ -22,7 +20,8 @@ import (
 )
 
 const (
-	powerVSMachineTemplateName = "powervs-machine-template"
+	powerVSMachineTemplateName    = "powervs-machine-template"
+	powerVSMachineTemplateVersion = "infrastructure.cluster.x-k8s.io/v1beta2"
 )
 
 var _ = Describe("Cluster API IBMPowerVS MachineSet", Ordered, func() {
@@ -60,7 +59,7 @@ var _ = Describe("Cluster API IBMPowerVS MachineSet", Ordered, func() {
 			1,
 			corev1.ObjectReference{
 				Kind:       "IBMPowerVSMachineTemplate",
-				APIVersion: infraAPIVersion,
+				APIVersion: powerVSMachineTemplateVersion,
 				Name:       powerVSMachineTemplateName,
 			},
 		))
@@ -138,11 +137,11 @@ func createIBMPowerVSMachineTemplate(cl client.Client, mapiProviderSpec *mapiv1.
 		Image: &ibmpowervsv1.IBMPowerVSResourceReference{
 			Name: mapiProviderSpec.Image.Name,
 		},
-		SysType:    mapiProviderSpec.SystemType,
-		ProcType:   strings.ToLower(string(mapiProviderSpec.ProcessorType)),
-		Processors: mapiProviderSpec.Processors.String(),
-		Memory:     fmt.Sprintf("%d", mapiProviderSpec.MemoryGiB),
-		Network:    getNetworkResourceReference(mapiProviderSpec.Network),
+		SystemType:    mapiProviderSpec.SystemType,
+		ProcessorType: ibmpowervsv1.PowerVSProcessorType(mapiProviderSpec.ProcessorType),
+		Processors:    mapiProviderSpec.Processors,
+		MemoryGiB:     mapiProviderSpec.MemoryGiB,
+		Network:       getNetworkResourceReference(mapiProviderSpec.Network),
 	}
 
 	ibmPowerVSMachineTemplate := &ibmpowervsv1.IBMPowerVSMachineTemplate{

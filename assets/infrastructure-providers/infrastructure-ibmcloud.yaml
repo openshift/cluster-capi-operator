@@ -56,6 +56,7 @@ data:
             - --leader-elect
             - --metrics-bind-addr=127.0.0.1:8080
             - --powervs-provider-id-fmt=v2
+            - --provider-id-fmt=${PROVIDER_ID_FORMAT:=v1}
             - --service-endpoint=${SERVICE_ENDPOINT:=none}
             - --v=${LOGLEVEL:=0}
             command:
@@ -136,14 +137,14 @@ data:
         service:
           name: capi-ibmcloud-webhook-service
           namespace: openshift-cluster-api
-          path: /mutate-infrastructure-cluster-x-k8s-io-v1beta1-ibmpowervscluster
+          path: /mutate-infrastructure-cluster-x-k8s-io-v1beta2-ibmpowervscluster
       failurePolicy: Fail
       name: mibmpowervscluster.kb.io
       rules:
       - apiGroups:
         - infrastructure.cluster.x-k8s.io
         apiVersions:
-        - v1beta1
+        - v1beta2
         operations:
         - CREATE
         - UPDATE
@@ -157,14 +158,14 @@ data:
         service:
           name: capi-ibmcloud-webhook-service
           namespace: openshift-cluster-api
-          path: /mutate-infrastructure-cluster-x-k8s-io-v1beta1-ibmpowervsimage
+          path: /mutate-infrastructure-cluster-x-k8s-io-v1beta2-ibmpowervsimage
       failurePolicy: Fail
       name: mibmpowervsimage.kb.io
       rules:
       - apiGroups:
         - infrastructure.cluster.x-k8s.io
         apiVersions:
-        - v1beta1
+        - v1beta2
         operations:
         - CREATE
         - UPDATE
@@ -178,14 +179,14 @@ data:
         service:
           name: capi-ibmcloud-webhook-service
           namespace: openshift-cluster-api
-          path: /mutate-infrastructure-cluster-x-k8s-io-v1beta1-ibmpowervsmachine
+          path: /mutate-infrastructure-cluster-x-k8s-io-v1beta2-ibmpowervsmachine
       failurePolicy: Fail
       name: mibmpowervsmachine.kb.io
       rules:
       - apiGroups:
         - infrastructure.cluster.x-k8s.io
         apiVersions:
-        - v1beta1
+        - v1beta2
         operations:
         - CREATE
         - UPDATE
@@ -199,14 +200,14 @@ data:
         service:
           name: capi-ibmcloud-webhook-service
           namespace: openshift-cluster-api
-          path: /mutate-infrastructure-cluster-x-k8s-io-v1beta1-ibmpowervsmachinetemplate
+          path: /mutate-infrastructure-cluster-x-k8s-io-v1beta2-ibmpowervsmachinetemplate
       failurePolicy: Fail
       name: mibmpowervsmachinetemplate.kb.io
       rules:
       - apiGroups:
         - infrastructure.cluster.x-k8s.io
         apiVersions:
-        - v1beta1
+        - v1beta2
         operations:
         - CREATE
         - UPDATE
@@ -220,14 +221,14 @@ data:
         service:
           name: capi-ibmcloud-webhook-service
           namespace: openshift-cluster-api
-          path: /mutate-infrastructure-cluster-x-k8s-io-v1beta1-ibmvpccluster
+          path: /mutate-infrastructure-cluster-x-k8s-io-v1beta2-ibmvpccluster
       failurePolicy: Fail
       name: mibmvpccluster.kb.io
       rules:
       - apiGroups:
         - infrastructure.cluster.x-k8s.io
         apiVersions:
-        - v1beta1
+        - v1beta2
         operations:
         - CREATE
         - UPDATE
@@ -241,14 +242,14 @@ data:
         service:
           name: capi-ibmcloud-webhook-service
           namespace: openshift-cluster-api
-          path: /mutate-infrastructure-cluster-x-k8s-io-v1beta1-ibmvpcmachine
+          path: /mutate-infrastructure-cluster-x-k8s-io-v1beta2-ibmvpcmachine
       failurePolicy: Fail
       name: mibmvpcmachine.kb.io
       rules:
       - apiGroups:
         - infrastructure.cluster.x-k8s.io
         apiVersions:
-        - v1beta1
+        - v1beta2
         operations:
         - CREATE
         - UPDATE
@@ -262,14 +263,14 @@ data:
         service:
           name: capi-ibmcloud-webhook-service
           namespace: openshift-cluster-api
-          path: /mutate-infrastructure-cluster-x-k8s-io-v1beta1-ibmvpcmachinetemplate
+          path: /mutate-infrastructure-cluster-x-k8s-io-v1beta2-ibmvpcmachinetemplate
       failurePolicy: Fail
       name: mibmvpcmachinetemplate.kb.io
       rules:
       - apiGroups:
         - infrastructure.cluster.x-k8s.io
         apiVersions:
-        - v1beta1
+        - v1beta2
         operations:
         - CREATE
         - UPDATE
@@ -295,14 +296,14 @@ data:
         service:
           name: capi-ibmcloud-webhook-service
           namespace: openshift-cluster-api
-          path: /validate-infrastructure-cluster-x-k8s-io-v1beta1-ibmpowervscluster
+          path: /validate-infrastructure-cluster-x-k8s-io-v1beta2-ibmpowervscluster
       failurePolicy: Fail
       name: vibmpowervscluster.kb.io
       rules:
       - apiGroups:
         - infrastructure.cluster.x-k8s.io
         apiVersions:
-        - v1beta1
+        - v1beta2
         operations:
         - CREATE
         - UPDATE
@@ -316,14 +317,14 @@ data:
         service:
           name: capi-ibmcloud-webhook-service
           namespace: openshift-cluster-api
-          path: /validate-infrastructure-cluster-x-k8s-io-v1beta1-ibmpowervsimage
+          path: /validate-infrastructure-cluster-x-k8s-io-v1beta2-ibmpowervsimage
       failurePolicy: Fail
       name: vibmpowervsimage.kb.io
       rules:
       - apiGroups:
         - infrastructure.cluster.x-k8s.io
         apiVersions:
-        - v1beta1
+        - v1beta2
         operations:
         - CREATE
         - UPDATE
@@ -337,14 +338,14 @@ data:
         service:
           name: capi-ibmcloud-webhook-service
           namespace: openshift-cluster-api
-          path: /validate-infrastructure-cluster-x-k8s-io-v1beta1-ibmpowervsmachine
+          path: /validate-infrastructure-cluster-x-k8s-io-v1beta2-ibmpowervsmachine
       failurePolicy: Fail
       name: vibmpowervsmachine.kb.io
       rules:
       - apiGroups:
         - infrastructure.cluster.x-k8s.io
         apiVersions:
-        - v1beta1
+        - v1beta2
         operations:
         - CREATE
         - UPDATE
@@ -358,14 +359,14 @@ data:
         service:
           name: capi-ibmcloud-webhook-service
           namespace: openshift-cluster-api
-          path: /validate-infrastructure-cluster-x-k8s-io-v1beta1-ibmpowervsmachinetemplate
+          path: /validate-infrastructure-cluster-x-k8s-io-v1beta2-ibmpowervsmachinetemplate
       failurePolicy: Fail
       name: vibmpowervsmachinetemplate.kb.io
       rules:
       - apiGroups:
         - infrastructure.cluster.x-k8s.io
         apiVersions:
-        - v1beta1
+        - v1beta2
         operations:
         - CREATE
         - UPDATE
@@ -379,14 +380,14 @@ data:
         service:
           name: capi-ibmcloud-webhook-service
           namespace: openshift-cluster-api
-          path: /validate-infrastructure-cluster-x-k8s-io-v1beta1-ibmvpccluster
+          path: /validate-infrastructure-cluster-x-k8s-io-v1beta2-ibmvpccluster
       failurePolicy: Fail
       name: vibmvpccluster.kb.io
       rules:
       - apiGroups:
         - infrastructure.cluster.x-k8s.io
         apiVersions:
-        - v1beta1
+        - v1beta2
         operations:
         - CREATE
         - UPDATE
@@ -400,14 +401,14 @@ data:
         service:
           name: capi-ibmcloud-webhook-service
           namespace: openshift-cluster-api
-          path: /validate-infrastructure-cluster-x-k8s-io-v1beta1-ibmvpcmachine
+          path: /validate-infrastructure-cluster-x-k8s-io-v1beta2-ibmvpcmachine
       failurePolicy: Fail
       name: vibmvpcmachine.kb.io
       rules:
       - apiGroups:
         - infrastructure.cluster.x-k8s.io
         apiVersions:
-        - v1beta1
+        - v1beta2
         operations:
         - CREATE
         - UPDATE
@@ -421,14 +422,14 @@ data:
         service:
           name: capi-ibmcloud-webhook-service
           namespace: openshift-cluster-api
-          path: /validate-infrastructure-cluster-x-k8s-io-v1beta1-ibmvpcmachinetemplate
+          path: /validate-infrastructure-cluster-x-k8s-io-v1beta2-ibmvpcmachinetemplate
       failurePolicy: Fail
       name: vibmvpcmachinetemplate.kb.io
       rules:
       - apiGroups:
         - infrastructure.cluster.x-k8s.io
         apiVersions:
-        - v1beta1
+        - v1beta2
         operations:
         - CREATE
         - UPDATE
@@ -466,13 +467,13 @@ data:
     apiVersion: clusterctl.cluster.x-k8s.io/v1alpha3
     releaseSeries:
       - major: 0
-        minor: 1
-        contract: v1alpha4
-      - major: 0
         minor: 2
         contract: v1beta1
       - major: 0
         minor: 3
+        contract: v1beta1
+      - major: 0
+        minor: 4
         contract: v1beta1
 kind: ConfigMap
 metadata:
@@ -480,6 +481,6 @@ metadata:
   labels:
     provider.cluster.x-k8s.io/name: ibmcloud
     provider.cluster.x-k8s.io/type: infrastructure
-    provider.cluster.x-k8s.io/version: v0.3.0
+    provider.cluster.x-k8s.io/version: v0.4.0
   name: ibmcloud
   namespace: openshift-cluster-api
