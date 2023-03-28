@@ -34,6 +34,15 @@ var (
 		"include.release.openshift.io/self-managed-high-availability": "true",
 		"include.release.openshift.io/single-node-developer":          "true",
 	}
+
+	// Workload annotations are used by the workload admission webhook to modify pod
+	// resources and correctly schedule them while also pinning them to specific CPUSets.
+	// See for more info:
+	// https://github.com/openshift/enhancements/blob/master/enhancements/workload-partitioning/wide-availability-workload-partitioning.md
+	openshiftWorkloadAnnotation = map[string]string{
+		"target.workload.openshift.io/management": `{"effect": "PreferredDuringScheduling"}`,
+	}
+
 	techPreviewAnnotation      = "release.openshift.io/feature-set"
 	techPreviewAnnotationValue = "TechPreviewNoUpgrade"
 
@@ -214,6 +223,8 @@ func customizeDeployments(obj *unstructured.Unstructured) {
 	}
 	deployment.Spec.Template.Spec.PriorityClassName = "system-cluster-critical"
 
+	deployment.Spec.Template.Annotations = mergeMaps(deployment.Spec.Template.Annotations, openshiftWorkloadAnnotation)
+
 	for i := range deployment.Spec.Template.Spec.Containers {
 		container := &deployment.Spec.Template.Spec.Containers[i]
 		// Add resource requests
@@ -311,4 +322,16 @@ func fetchAndCompileComponents(url string) ([]byte, error) {
 	}
 
 	return m.AsYaml()
+}
+
+// Variadic function to merge maps of like kind.
+// Note: keys of next map will override keys in previous map if previous map contains same key.
+func mergeMaps[K comparable, V any](maps ...map[K]V) map[K]V {
+	result := map[K]V{}
+	for _, m := range maps {
+		for k, v := range m {
+			result[k] = v
+		}
+	}
+	return result
 }

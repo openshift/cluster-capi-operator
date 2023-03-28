@@ -25,6 +25,8 @@ spec:
   strategy: {}
   template:
     metadata:
+      annotations:
+        target.workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
       creationTimestamp: null
       labels:
         clusterctl.cluster.x-k8s.io/core: capi-operator
