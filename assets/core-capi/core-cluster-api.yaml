@@ -20,6 +20,8 @@ data:
       strategy: {}
       template:
         metadata:
+          annotations:
+            target.workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
           creationTimestamp: null
           labels:
             cluster.x-k8s.io/provider: cluster-api
