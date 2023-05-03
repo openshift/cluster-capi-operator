@@ -1,0 +1,364 @@
+apiVersion: v1
+data:
+  components: |-
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      creationTimestamp: null
+      labels:
+        cluster.x-k8s.io/provider: infrastructure-vsphere
+        clusterctl.cluster.x-k8s.io: ""
+        control-plane: controller-manager
+      name: capv-controller-manager
+      namespace: openshift-cluster-api
+    spec:
+      replicas: 1
+      selector:
+        matchLabels:
+          cluster.x-k8s.io/provider: infrastructure-vsphere
+          control-plane: controller-manager
+      strategy: {}
+      template:
+        metadata:
+          annotations:
+            target.workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
+          creationTimestamp: null
+          labels:
+            cluster.x-k8s.io/provider: infrastructure-vsphere
+            control-plane: controller-manager
+        spec:
+          containers:
+          - args:
+            - --leader-elect
+            - --logtostderr
+            - --v=4
+            image: to.be/replaced:v99
+            imagePullPolicy: IfNotPresent
+            livenessProbe:
+              httpGet:
+                path: /healthz
+                port: healthz
+            name: manager
+            ports:
+            - containerPort: 9443
+              name: webhook-server
+              protocol: TCP
+            - containerPort: 9440
+              name: healthz
+              protocol: TCP
+            readinessProbe:
+              httpGet:
+                path: /readyz
+                port: healthz
+            resources:
+              requests:
+                cpu: 10m
+                memory: 50Mi
+            volumeMounts:
+            - mountPath: /tmp/k8s-webhook-server/serving-certs
+              name: cert
+              readOnly: true
+            - mountPath: /etc/capv
+              name: manager-bootstrap-credentials
+              readOnly: true
+          priorityClassName: system-cluster-critical
+          terminationGracePeriodSeconds: 10
+          tolerations:
+          - effect: NoSchedule
+            key: node-role.kubernetes.io/master
+          - effect: NoSchedule
+            key: node-role.kubernetes.io/control-plane
+          volumes:
+          - name: cert
+            secret:
+              defaultMode: 420
+              secretName: capv-webhook-service-cert
+          - name: manager-bootstrap-credentials
+            secret:
+              secretName: capv-manager-bootstrap-credentials
+    status: {}
+    ---
+    apiVersion: v1
+    kind: Service
+    metadata:
+      annotations:
+        exclude.release.openshift.io/internal-openshift-hosted: "true"
+        include.release.openshift.io/self-managed-high-availability: "true"
+        include.release.openshift.io/single-node-developer: "true"
+        release.openshift.io/feature-set: TechPreviewNoUpgrade
+        service.beta.openshift.io/serving-cert-secret-name: capv-webhook-service-cert
+      labels:
+        cluster.x-k8s.io/provider: infrastructure-vsphere
+        clusterctl.cluster.x-k8s.io: ""
+      name: capv-webhook-service
+      namespace: openshift-cluster-api
+    spec:
+      ports:
+      - port: 443
+        targetPort: webhook-server
+      selector:
+        cluster.x-k8s.io/provider: infrastructure-vsphere
+    ---
+    apiVersion: admissionregistration.k8s.io/v1
+    kind: MutatingWebhookConfiguration
+    metadata:
+      annotations:
+        service.beta.openshift.io/inject-cabundle: "true"
+      creationTimestamp: null
+      labels:
+        cluster.x-k8s.io/provider: infrastructure-vsphere
+        clusterctl.cluster.x-k8s.io: ""
+      name: capv-mutating-webhook-configuration
+    webhooks:
+    - admissionReviewVersions:
+      - v1beta1
+      clientConfig:
+        service:
+          name: capv-webhook-service
+          namespace: openshift-cluster-api
+          path: /mutate-infrastructure-cluster-x-k8s-io-v1beta1-vspheredeploymentzone
+      failurePolicy: Fail
+      matchPolicy: Equivalent
+      name: default.vspheredeploymentzone.infrastructure.cluster.x-k8s.io
+      rules:
+      - apiGroups:
+        - infrastructure.cluster.x-k8s.io
+        apiVersions:
+        - v1beta1
+        operations:
+        - CREATE
+        - UPDATE
+        resources:
+        - vspheredeploymentzones
+      sideEffects: None
+    - admissionReviewVersions:
+      - v1beta1
+      clientConfig:
+        service:
+          name: capv-webhook-service
+          namespace: openshift-cluster-api
+          path: /mutate-infrastructure-cluster-x-k8s-io-v1beta1-vspherefailuredomain
+      failurePolicy: Fail
+      matchPolicy: Equivalent
+      name: default.vspherefailuredomain.infrastructure.cluster.x-k8s.io
+      rules:
+      - apiGroups:
+        - infrastructure.cluster.x-k8s.io
+        apiVersions:
+        - v1beta1
+        operations:
+        - CREATE
+        - UPDATE
+        resources:
+        - vspherefailuredomains
+      sideEffects: None
+    - admissionReviewVersions:
+      - v1beta1
+      clientConfig:
+        service:
+          name: capv-webhook-service
+          namespace: openshift-cluster-api
+          path: /mutate-infrastructure-cluster-x-k8s-io-v1beta1-vspheremachine
+      failurePolicy: Fail
+      matchPolicy: Equivalent
+      name: default.vspheremachine.infrastructure.cluster.x-k8s.io
+      rules:
+      - apiGroups:
+        - infrastructure.cluster.x-k8s.io
+        apiVersions:
+        - v1beta1
+        operations:
+        - CREATE
+        - UPDATE
+        resources:
+        - vspheremachines
+      sideEffects: None
+    - admissionReviewVersions:
+      - v1beta1
+      clientConfig:
+        service:
+          name: capv-webhook-service
+          namespace: openshift-cluster-api
+          path: /mutate-infrastructure-cluster-x-k8s-io-v1beta1-vspherevm
+      failurePolicy: Fail
+      matchPolicy: Equivalent
+      name: default.vspherevm.infrastructure.x-k8s.io
+      rules:
+      - apiGroups:
+        - infrastructure.cluster.x-k8s.io
+        apiVersions:
+        - v1beta1
+        operations:
+        - CREATE
+        - UPDATE
+        resources:
+        - vspherevms
+      sideEffects: None
+    ---
+    apiVersion: admissionregistration.k8s.io/v1
+    kind: ValidatingWebhookConfiguration
+    metadata:
+      annotations:
+        service.beta.openshift.io/inject-cabundle: "true"
+      creationTimestamp: null
+      labels:
+        cluster.x-k8s.io/provider: infrastructure-vsphere
+        clusterctl.cluster.x-k8s.io: ""
+      name: capv-validating-webhook-configuration
+    webhooks:
+    - admissionReviewVersions:
+      - v1beta1
+      clientConfig:
+        service:
+          name: capv-webhook-service
+          namespace: openshift-cluster-api
+          path: /validate-infrastructure-cluster-x-k8s-io-v1beta1-vsphereclustertemplate
+      failurePolicy: Fail
+      matchPolicy: Equivalent
+      name: validation.vsphereclustertemplate.infrastructure.x-k8s.io
+      rules:
+      - apiGroups:
+        - infrastructure.cluster.x-k8s.io
+        apiVersions:
+        - v1beta1
+        operations:
+        - CREATE
+        - UPDATE
+        resources:
+        - vsphereclustertemplates
+      sideEffects: None
+    - admissionReviewVersions:
+      - v1beta1
+      clientConfig:
+        service:
+          name: capv-webhook-service
+          namespace: openshift-cluster-api
+          path: /validate-infrastructure-cluster-x-k8s-io-v1beta1-vspherefailuredomain
+      failurePolicy: Fail
+      matchPolicy: Equivalent
+      name: validation.vspherefailuredomain.infrastructure.cluster.x-k8s.io
+      rules:
+      - apiGroups:
+        - infrastructure.cluster.x-k8s.io
+        apiVersions:
+        - v1beta1
+        operations:
+        - CREATE
+        - UPDATE
+        resources:
+        - vspherefailuredomains
+      sideEffects: None
+    - admissionReviewVersions:
+      - v1beta1
+      clientConfig:
+        service:
+          name: capv-webhook-service
+          namespace: openshift-cluster-api
+          path: /validate-infrastructure-cluster-x-k8s-io-v1beta1-vspheremachine
+      failurePolicy: Fail
+      matchPolicy: Equivalent
+      name: validation.vspheremachine.infrastructure.x-k8s.io
+      rules:
+      - apiGroups:
+        - infrastructure.cluster.x-k8s.io
+        apiVersions:
+        - v1beta1
+        operations:
+        - CREATE
+        - UPDATE
+        resources:
+        - vspheremachines
+      sideEffects: None
+    - admissionReviewVersions:
+      - v1beta1
+      clientConfig:
+        service:
+          name: capv-webhook-service
+          namespace: openshift-cluster-api
+          path: /validate-infrastructure-cluster-x-k8s-io-v1beta1-vspheremachinetemplate
+      failurePolicy: Fail
+      matchPolicy: Equivalent
+      name: validation.vspheremachinetemplate.infrastructure.x-k8s.io
+      rules:
+      - apiGroups:
+        - infrastructure.cluster.x-k8s.io
+        apiVersions:
+        - v1beta1
+        operations:
+        - CREATE
+        - UPDATE
+        resources:
+        - vspheremachinetemplates
+      sideEffects: None
+    - admissionReviewVersions:
+      - v1beta1
+      clientConfig:
+        service:
+          name: capv-webhook-service
+          namespace: openshift-cluster-api
+          path: /validate-infrastructure-cluster-x-k8s-io-v1beta1-vspherevm
+      failurePolicy: Fail
+      matchPolicy: Equivalent
+      name: validation.vspherevm.infrastructure.x-k8s.io
+      rules:
+      - apiGroups:
+        - infrastructure.cluster.x-k8s.io
+        apiVersions:
+        - v1beta1
+        operations:
+        - CREATE
+        - UPDATE
+        resources:
+        - vspherevms
+      sideEffects: None
+  metadata: |
+    # maps release series of major.minor to cluster-api contract version
+    # the contract version may change between minor or major versions, but *not*
+    # between patch versions.
+    #
+    # update this file only when a new major or minor version is released
+    apiVersion: clusterctl.cluster.x-k8s.io/v1alpha3
+    kind: Metadata
+    releaseSeries:
+      - major: 0
+        minor: 4
+        contract: v1alpha2
+      - major: 0
+        minor: 5
+        contract: v1alpha2
+      - major: 0
+        minor: 6
+        contract: v1alpha3
+      - major: 0
+        minor: 7
+        contract: v1alpha3
+      - major: 0
+        minor: 8
+        contract: v1alpha4
+      - major: 1
+        minor: 0
+        contract: v1beta1
+      - major: 1
+        minor: 1
+        contract: v1beta1
+      - major: 1
+        minor: 2
+        contract: v1beta1
+      - major: 1
+        minor: 3
+        contract: v1beta1
+      - major: 1
+        minor: 4
+        contract: v1beta1
+      - major: 1
+        minor: 5
+        contract: v1beta1
+kind: ConfigMap
+metadata:
+  creationTimestamp: null
+  labels:
+    provider.cluster.x-k8s.io/name: vsphere
+    provider.cluster.x-k8s.io/type: infrastructure
+    provider.cluster.x-k8s.io/version: v1.6.1
+  name: vsphere
+  namespace: openshift-cluster-api

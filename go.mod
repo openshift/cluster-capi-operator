@@ -18,6 +18,7 @@ require (
 	k8s.io/client-go v0.27.6
 	k8s.io/component-base v0.27.6
 	k8s.io/klog/v2 v2.100.1
+<<<<<<< HEAD
 	k8s.io/utils v0.0.0-20230726121419-3b25d923346b
 	sigs.k8s.io/cluster-api v1.5.3
 	sigs.k8s.io/cluster-api-operator v0.6.0
@@ -26,6 +27,17 @@ require (
 	sigs.k8s.io/cluster-api-provider-gcp v1.5.0
 	sigs.k8s.io/cluster-api-provider-ibmcloud v0.6.0
 	sigs.k8s.io/controller-runtime v0.15.2
+=======
+	k8s.io/utils v0.0.0-20230220204549-a5ecb0141aa5
+	sigs.k8s.io/cluster-api v1.4.4
+	sigs.k8s.io/cluster-api-operator v0.2.0
+	sigs.k8s.io/cluster-api-provider-aws/v2 v2.2.0
+	sigs.k8s.io/cluster-api-provider-azure v1.9.2
+	sigs.k8s.io/cluster-api-provider-gcp v1.4.0
+	sigs.k8s.io/cluster-api-provider-ibmcloud v0.5.1
+	sigs.k8s.io/cluster-api-provider-vsphere v1.6.1
+	sigs.k8s.io/controller-runtime v0.14.6
+>>>>>>> 4b013a9d (Create VSphere manifests and schemes)
 	sigs.k8s.io/controller-runtime/tools/setup-envtest v0.0.0-20221007015352-8ad090e0663e
 )
 
@@ -232,6 +244,7 @@ require (
 	go.uber.org/atomic v1.10.0 // indirect
 	go.uber.org/multierr v1.8.0 // indirect
 	go.uber.org/zap v1.24.0 // indirect
+<<<<<<< HEAD
 	golang.org/x/crypto v0.14.0 // indirect
 	golang.org/x/exp v0.0.0-20230510235704-dd950f8aeaea // indirect
 	golang.org/x/exp/typeparams v0.0.0-20230307190834-24139beb5833 // indirect
@@ -242,6 +255,18 @@ require (
 	golang.org/x/sys v0.13.0 // indirect
 	golang.org/x/term v0.13.0 // indirect
 	golang.org/x/text v0.13.0 // indirect
+=======
+	golang.org/x/crypto v0.11.0 // indirect
+	golang.org/x/exp v0.0.0-20221002003631-540bb7301a08 // indirect
+	golang.org/x/exp/typeparams v0.0.0-20230224173230-c95f2b4c22f2 // indirect
+	golang.org/x/mod v0.12.0 // indirect
+	golang.org/x/net v0.12.0 // indirect
+	golang.org/x/oauth2 v0.9.0 // indirect
+	golang.org/x/sync v0.2.0 // indirect
+	golang.org/x/sys v0.10.0 // indirect
+	golang.org/x/term v0.10.0 // indirect
+	golang.org/x/text v0.11.0 // indirect
+>>>>>>> 4b013a9d (Create VSphere manifests and schemes)
 	golang.org/x/time v0.3.0 // indirect
 	golang.org/x/tools v0.13.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.3.0 // indirect
