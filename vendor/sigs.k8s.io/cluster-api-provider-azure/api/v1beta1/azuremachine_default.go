@@ -17,14 +17,23 @@ limitations under the License.
 package v1beta1
 
 import (
+	"context"
 	"encoding/base64"
+	"fmt"
+	"time"
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-11-01/compute"
+	"github.com/pkg/errors"
 	"golang.org/x/crypto/ssh"
+	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	utilSSH "sigs.k8s.io/cluster-api-provider-azure/util/ssh"
-	ctrl "sigs.k8s.io/controller-runtime"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+// ContributorRoleID is the ID of the built-in "Contributor" role.
+const ContributorRoleID = "b24988ac-6180-42a0-ab88-20f7382dd24c"
 
 // SetDefaultSSHPublicKey sets the default SSHPublicKey for an AzureMachine.
 func (s *AzureMachineSpec) SetDefaultSSHPublicKey() error {
@@ -79,10 +88,32 @@ func (s *AzureMachineSpec) SetDataDisksDefaults() {
 }
 
 // SetIdentityDefaults sets the defaults for VM Identity.
-func (s *AzureMachineSpec) SetIdentityDefaults() {
+func (s *AzureMachineSpec) SetIdentityDefaults(subscriptionID string) {
+	// Ensure the deprecated fields and new fields are not populated simultaneously
+	if s.RoleAssignmentName != "" && s.SystemAssignedIdentityRole != nil && s.SystemAssignedIdentityRole.Name != "" {
+		// Both the deprecated and the new fields are both set, return without changes
+		// and reject the request in the validating webhook which runs later.
+		return
+	}
 	if s.Identity == VMIdentitySystemAssigned {
-		if s.RoleAssignmentName == "" {
-			s.RoleAssignmentName = string(uuid.NewUUID())
+		if s.SystemAssignedIdentityRole == nil {
+			s.SystemAssignedIdentityRole = &SystemAssignedIdentityRole{}
+		}
+		if s.RoleAssignmentName != "" {
+			// Move the existing value from the deprecated RoleAssignmentName field.
+			s.SystemAssignedIdentityRole.Name = s.RoleAssignmentName
+			s.RoleAssignmentName = ""
+		} else if s.SystemAssignedIdentityRole.Name == "" {
+			// Default role name to a generated UUID.
+			s.SystemAssignedIdentityRole.Name = string(uuid.NewUUID())
+		}
+		if s.SystemAssignedIdentityRole.Scope == "" && subscriptionID != "" {
+			// Default scope to the subscription.
+			s.SystemAssignedIdentityRole.Scope = fmt.Sprintf("/subscriptions/%s/", subscriptionID)
+		}
+		if s.SystemAssignedIdentityRole.DefinitionID == "" && subscriptionID != "" {
+			// Default role definition ID to Contributor role.
+			s.SystemAssignedIdentityRole.DefinitionID = fmt.Sprintf("/subscriptions/%s/providers/Microsoft.Authorization/roleDefinitions/%s", subscriptionID, ContributorRoleID)
 		}
 	}
 }
@@ -143,15 +174,82 @@ func (s *AzureMachineSpec) SetNetworkInterfacesDefaults() {
 	}
 }
 
-// SetDefaults sets to the defaults for the AzureMachineSpec.
-func (s *AzureMachineSpec) SetDefaults() {
-	if err := s.SetDefaultSSHPublicKey(); err != nil {
-		ctrl.Log.WithName("SetDefault").Error(err, "SetDefaultSshPublicKey failed")
+// GetOwnerAzureClusterNameAndNamespace returns the owner azure cluster's name and namespace for the given cluster name and namespace.
+func GetOwnerAzureClusterNameAndNamespace(cli client.Client, clusterName string, namespace string, maxAttempts int) (azureClusterName string, azureClusterNamespace string, err error) {
+	ctx := context.Background()
+
+	ownerCluster := &clusterv1.Cluster{}
+	key := client.ObjectKey{
+		Namespace: namespace,
+		Name:      clusterName,
 	}
-	s.SetDefaultCachingType()
-	s.SetDataDisksDefaults()
-	s.SetIdentityDefaults()
-	s.SetSpotEvictionPolicyDefaults()
-	s.SetDiagnosticsDefaults()
-	s.SetNetworkInterfacesDefaults()
+
+	for i := 1; ; i++ {
+		if err := cli.Get(ctx, key, ownerCluster); err != nil {
+			if i > maxAttempts {
+				return "", "", errors.Wrapf(err, "failed to find owner cluster for %s/%s", namespace, clusterName)
+			}
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		break
+	}
+
+	return ownerCluster.Spec.InfrastructureRef.Name, ownerCluster.Spec.InfrastructureRef.Namespace, nil
+}
+
+// GetSubscriptionID returns the subscription ID for the AzureCluster given the cluster name and namespace.
+func GetSubscriptionID(cli client.Client, ownerAzureClusterName string, ownerAzureClusterNamespace string, maxAttempts int) (string, error) {
+	ctx := context.Background()
+
+	ownerAzureCluster := &AzureCluster{}
+	key := client.ObjectKey{
+		Namespace: ownerAzureClusterNamespace,
+		Name:      ownerAzureClusterName,
+	}
+	for i := 1; ; i++ {
+		if err := cli.Get(ctx, key, ownerAzureCluster); err != nil {
+			if i >= maxAttempts {
+				return "", errors.Wrapf(err, "failed to find AzureCluster for owner cluster %s/%s", ownerAzureClusterNamespace, ownerAzureClusterName)
+			}
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		break
+	}
+
+	return ownerAzureCluster.Spec.SubscriptionID, nil
+}
+
+// SetDefaults sets to the defaults for the AzureMachineSpec.
+func (m *AzureMachine) SetDefaults(client client.Client) error {
+	var errs []error
+	if err := m.Spec.SetDefaultSSHPublicKey(); err != nil {
+		errs = append(errs, errors.Wrap(err, "failed to set default SSH public key"))
+	}
+
+	// Fetch the Cluster.
+	clusterName, ok := m.Labels[clusterv1.ClusterNameLabel]
+	if !ok {
+		errs = append(errs, errors.Errorf("failed to fetch ClusterName for AzureMachine %s/%s", m.Namespace, m.Name))
+	}
+
+	ownerAzureClusterName, ownerAzureClusterNamespace, err := GetOwnerAzureClusterNameAndNamespace(client, clusterName, m.Namespace, 5)
+	if err != nil {
+		errs = append(errs, errors.Wrapf(err, "failed to fetch owner cluster for AzureMachine %s/%s", m.Namespace, m.Name))
+	}
+
+	subscriptionID, err := GetSubscriptionID(client, ownerAzureClusterName, ownerAzureClusterNamespace, 5)
+	if err != nil {
+		errs = append(errs, errors.Wrapf(err, "failed to fetch subscription ID for AzureMachine %s/%s", m.Namespace, m.Name))
+	}
+
+	m.Spec.SetDefaultCachingType()
+	m.Spec.SetDataDisksDefaults()
+	m.Spec.SetIdentityDefaults(subscriptionID)
+	m.Spec.SetSpotEvictionPolicyDefaults()
+	m.Spec.SetDiagnosticsDefaults()
+	m.Spec.SetNetworkInterfacesDefaults()
+
+	return kerrors.NewAggregate(errs)
 }

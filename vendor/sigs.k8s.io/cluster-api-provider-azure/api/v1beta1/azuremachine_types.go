@@ -66,8 +66,11 @@ type AzureMachineSpec struct {
 	// +optional
 	UserAssignedIdentities []UserAssignedIdentity `json:"userAssignedIdentities,omitempty"`
 
-	// RoleAssignmentName is the name of the role assignment to create for a system assigned identity. It can be any valid GUID.
-	// If not specified, a random GUID will be generated.
+	// SystemAssignedIdentityRole defines the role and scope to assign to the system-assigned identity.
+	// +optional
+	SystemAssignedIdentityRole *SystemAssignedIdentityRole `json:"systemAssignedIdentityRole,omitempty"`
+
+	// Deprecated: RoleAssignmentName should be set in the systemAssignedIdentityRole field.
 	// +optional
 	RoleAssignmentName string `json:"roleAssignmentName,omitempty"`
 
@@ -78,6 +81,9 @@ type AzureMachineSpec struct {
 	// +optional
 	DataDisks []DataDisk `json:"dataDisks,omitempty"`
 
+	// SSHPublicKey is the SSH public key string, base64-encoded to add to a Virtual Machine. Linux only.
+	// Refer to documentation on how to set up SSH access on Windows instances.
+	// +optional
 	SSHPublicKey string `json:"sshPublicKey"`
 
 	// AdditionalTags is an optional set of tags to add to an instance, in addition to the ones added by default by the
@@ -147,6 +153,24 @@ type SpotVMOptions struct {
 	// EvictionPolicy defines the behavior of the virtual machine when it is evicted. It can be either Delete or Deallocate.
 	// +optional
 	EvictionPolicy *SpotEvictionPolicy `json:"evictionPolicy,omitempty"`
+}
+
+// SystemAssignedIdentityRole defines the role and scope to assign to the system assigned identity.
+type SystemAssignedIdentityRole struct {
+	// Name is the name of the role assignment to create for a system assigned identity. It can be any valid UUID.
+	// If not specified, a random UUID will be generated.
+	// +optional
+	Name string `json:"name,omitempty"`
+
+	// DefinitionID is the ID of the role definition to create for a system assigned identity. It can be an Azure built-in role or a custom role.
+	// Refer to built-in roles: https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles
+	// +optional
+	DefinitionID string `json:"definitionID,omitempty"`
+
+	// Scope is the scope that the role assignment or definition applies to. The scope can be any REST resource instance.
+	// If not specified, the scope will be the subscription.
+	// +optional
+	Scope string `json:"scope,omitempty"`
 }
 
 // AzureMachineStatus defines the observed state of AzureMachine.

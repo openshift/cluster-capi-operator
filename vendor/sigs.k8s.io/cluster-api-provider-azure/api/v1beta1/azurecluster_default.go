@@ -124,9 +124,15 @@ func (c *AzureCluster) setSubnetDefaults() {
 		if subnet.RouteTable.Name == "" {
 			subnet.RouteTable.Name = generateNodeRouteTableName(c.ObjectMeta.Name)
 		}
-		if subnet.IsNatGatewayEnabled() {
+
+		if !subnet.IsIPv6Enabled() {
+			// NAT gateway supports the use of IPv4 public IP addresses for outbound connectivity.
+			// So default use the NAT gateway for outbound traffic in IPv4 cluster instead of loadbalancer.
+			if subnet.NatGateway.Name == "" {
+				subnet.NatGateway.Name = withIndex(generateNatGatewayName(c.ObjectMeta.Name), nodeSubnetCounter)
+			}
 			if subnet.NatGateway.NatGatewayIP.Name == "" {
-				subnet.NatGateway.NatGatewayIP.Name = generateNatGatewayIPName(c.ObjectMeta.Name, subnet.Name)
+				subnet.NatGateway.NatGatewayIP.Name = generateNatGatewayIPName(subnet.NatGateway.Name)
 			}
 		}
 
@@ -145,6 +151,11 @@ func (c *AzureCluster) setSubnetDefaults() {
 			},
 			RouteTable: RouteTable{
 				Name: generateNodeRouteTableName(c.ObjectMeta.Name),
+			},
+			NatGateway: NatGateway{
+				NatGatewayClassSpec: NatGatewayClassSpec{
+					Name: generateNatGatewayName(c.ObjectMeta.Name),
+				},
 			},
 		}
 		c.Spec.NetworkSpec.Subnets = append(c.Spec.NetworkSpec.Subnets, nodeSubnet)
@@ -193,10 +204,7 @@ func (c *AzureCluster) setAPIServerLBDefaults() {
 			}
 		}
 	}
-
-	if lb.BackendPool.Name == "" {
-		lb.BackendPool.Name = generateBackendAddressPoolName(lb.Name)
-	}
+	c.SetAPIServerLBBackendPoolNameDefault()
 }
 
 // SetNodeOutboundLBDefaults sets the default values for the NodeOutboundLB.
@@ -208,7 +216,7 @@ func (c *AzureCluster) SetNodeOutboundLBDefaults() {
 
 		var needsOutboundLB bool
 		for _, subnet := range c.Spec.NetworkSpec.Subnets {
-			if subnet.Role == SubnetNode && !subnet.IsNatGatewayEnabled() {
+			if subnet.Role == SubnetNode && subnet.IsIPv6Enabled() {
 				needsOutboundLB = true
 				break
 			}
@@ -232,14 +240,11 @@ func (c *AzureCluster) SetNodeOutboundLBDefaults() {
 	}
 
 	if lb.FrontendIPsCount == nil {
-		lb.FrontendIPsCount = pointer.Int32Ptr(1)
+		lb.FrontendIPsCount = pointer.Int32(1)
 	}
 
 	c.setOutboundLBFrontendIPs(lb, generateNodeOutboundIPName)
-
-	if lb.BackendPool.Name == "" {
-		lb.BackendPool.Name = generateOutboundBackendAddressPoolName(lb.Name)
-	}
+	c.SetNodeOutboundLBBackendPoolNameDefault()
 }
 
 // SetControlPlaneOutboundLBDefaults sets the default values for the control plane's outbound LB.
@@ -255,12 +260,40 @@ func (c *AzureCluster) SetControlPlaneOutboundLBDefaults() {
 		lb.Name = generateControlPlaneOutboundLBName(c.ObjectMeta.Name)
 	}
 	if lb.FrontendIPsCount == nil {
-		lb.FrontendIPsCount = pointer.Int32Ptr(1)
+		lb.FrontendIPsCount = pointer.Int32(1)
 	}
 	c.setOutboundLBFrontendIPs(lb, generateControlPlaneOutboundIPName)
+	c.SetControlPlaneOutboundLBBackendPoolNameDefault()
+}
 
-	if lb.BackendPool.Name == "" {
-		lb.BackendPool.Name = generateOutboundBackendAddressPoolName(generateControlPlaneOutboundLBName(c.ObjectMeta.Name))
+// SetBackendPoolNameDefault defaults the backend pool name of the LBs.
+func (c *AzureCluster) SetBackendPoolNameDefault() {
+	c.SetAPIServerLBBackendPoolNameDefault()
+	c.SetNodeOutboundLBBackendPoolNameDefault()
+	c.SetControlPlaneOutboundLBBackendPoolNameDefault()
+}
+
+// SetAPIServerLBBackendPoolNameDefault defaults the name of the backend pool for apiserver LB.
+func (c *AzureCluster) SetAPIServerLBBackendPoolNameDefault() {
+	apiServerLB := &c.Spec.NetworkSpec.APIServerLB
+	if apiServerLB.BackendPool.Name == "" {
+		apiServerLB.BackendPool.Name = generateBackendAddressPoolName(apiServerLB.Name)
+	}
+}
+
+// SetNodeOutboundLBBackendPoolNameDefault defaults the name of the backend pool for node outbound LB.
+func (c *AzureCluster) SetNodeOutboundLBBackendPoolNameDefault() {
+	nodeOutboundLB := c.Spec.NetworkSpec.NodeOutboundLB
+	if nodeOutboundLB != nil && nodeOutboundLB.BackendPool.Name == "" {
+		nodeOutboundLB.BackendPool.Name = generateOutboundBackendAddressPoolName(nodeOutboundLB.Name)
+	}
+}
+
+// SetControlPlaneOutboundLBBackendPoolNameDefault defaults the name of the backend pool for control plane outbound LB.
+func (c *AzureCluster) SetControlPlaneOutboundLBBackendPoolNameDefault() {
+	controlPlaneOutboundLB := c.Spec.NetworkSpec.ControlPlaneOutboundLB
+	if controlPlaneOutboundLB != nil && controlPlaneOutboundLB.BackendPool.Name == "" {
+		controlPlaneOutboundLB.BackendPool.Name = generateOutboundBackendAddressPoolName(generateControlPlaneOutboundLBName(c.ObjectMeta.Name))
 	}
 }
 
@@ -322,7 +355,7 @@ func (lb *LoadBalancerClassSpec) setAPIServerLBDefaults() {
 		lb.SKU = SKUStandard
 	}
 	if lb.IdleTimeoutInMinutes == nil {
-		lb.IdleTimeoutInMinutes = pointer.Int32Ptr(DefaultOutboundRuleIdleTimeoutInMinutes)
+		lb.IdleTimeoutInMinutes = pointer.Int32(DefaultOutboundRuleIdleTimeoutInMinutes)
 	}
 }
 
@@ -338,7 +371,7 @@ func (lb *LoadBalancerClassSpec) setOutboundLBDefaults() {
 	lb.Type = Public
 	lb.SKU = SKUStandard
 	if lb.IdleTimeoutInMinutes == nil {
-		lb.IdleTimeoutInMinutes = pointer.Int32Ptr(DefaultOutboundRuleIdleTimeoutInMinutes)
+		lb.IdleTimeoutInMinutes = pointer.Int32(DefaultOutboundRuleIdleTimeoutInMinutes)
 	}
 }
 
@@ -357,7 +390,7 @@ func setControlPlaneOutboundLBDefaults(lb *LoadBalancerClassSpec, apiserverLBTyp
 	lb.SKU = SKUStandard
 
 	if lb.IdleTimeoutInMinutes == nil {
-		lb.IdleTimeoutInMinutes = pointer.Int32Ptr(DefaultOutboundRuleIdleTimeoutInMinutes)
+		lb.IdleTimeoutInMinutes = pointer.Int32(DefaultOutboundRuleIdleTimeoutInMinutes)
 	}
 }
 
@@ -436,9 +469,14 @@ func generateControlPlaneOutboundIPName(clusterName string) string {
 	return fmt.Sprintf("pip-%s-controlplane-outbound", clusterName)
 }
 
+// generateNatGatewayName generates a NAT gateway name.
+func generateNatGatewayName(clusterName string) string {
+	return fmt.Sprintf("%s-%s", clusterName, "node-natgw")
+}
+
 // generateNatGatewayIPName generates a NAT gateway IP name.
-func generateNatGatewayIPName(clusterName, subnetName string) string {
-	return fmt.Sprintf("pip-%s-%s-natgw", clusterName, subnetName)
+func generateNatGatewayIPName(natGatewayName string) string {
+	return fmt.Sprintf("pip-%s", natGatewayName)
 }
 
 // withIndex appends the index as suffix to a generated name.
