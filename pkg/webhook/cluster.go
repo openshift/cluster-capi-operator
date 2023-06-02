@@ -75,13 +75,15 @@ func (r *ClusterWebhook) ValidateCreate(ctx context.Context, obj runtime.Object)
 
 	errs := []error{}
 	infrastructureRefPath := field.NewPath("spec", "infrastructureRef")
-	if cluster.Spec.InfrastructureRef != nil {
-		switch cluster.Spec.InfrastructureRef.Kind {
-		case "AWSCluster", "AzureCluster", "GCPCluster", "IBMPowerVSCluster":
-		default:
-			errs = append(errs, field.NotSupported(infrastructureRefPath.Child("kind"),
-				cluster.Spec.InfrastructureRef.Kind, []string{"AWSCluster", "AzureCluster", "GCPCluster", "IBMPowerVSCluster"}))
-		}
+	if cluster.Spec.InfrastructureRef == nil {
+		return field.Required(infrastructureRefPath, "infrastructureRef is required")
+	}
+
+	switch cluster.Spec.InfrastructureRef.Kind {
+	case "AWSCluster", "AzureCluster", "GCPCluster", "IBMPowerVSCluster":
+	default:
+		errs = append(errs, field.NotSupported(infrastructureRefPath.Child("kind"),
+			cluster.Spec.InfrastructureRef.Kind, []string{"AWSCluster", "AzureCluster", "GCPCluster", "IBMPowerVSCluster"}))
 	}
 
 	errs = append(errs, r.validateClusterName(ctx, cluster))
@@ -104,12 +106,15 @@ func (r *ClusterWebhook) ValidateUpdate(ctx context.Context, oldObj, newObj runt
 		panic("expected to get an of object of type v1beta1.Cluster")
 	}
 
-	if newCluster.Spec.InfrastructureRef != nil {
-		switch newCluster.Spec.InfrastructureRef.Kind {
-		case "AWSCluster", "AzureCluster", "GCPCluster", "IBMPowerVSCluster":
-		default:
-			return field.NotSupported(field.NewPath("spec", "infrastructureRef", "kind"), newCluster.Spec.InfrastructureRef.Kind, []string{"AWSCluster", "AzureCluster", "GCPCluster", "IBMPowerVSCluster"})
-		}
+	infrastructureRefPath := field.NewPath("spec", "infrastructureRef")
+	if newCluster.Spec.InfrastructureRef == nil {
+		return field.Required(infrastructureRefPath, "infrastructureRef is required")
+	}
+
+	switch newCluster.Spec.InfrastructureRef.Kind {
+	case "AWSCluster", "AzureCluster", "GCPCluster", "IBMPowerVSCluster":
+	default:
+		return field.NotSupported(field.NewPath("spec", "infrastructureRef", "kind"), newCluster.Spec.InfrastructureRef.Kind, []string{"AWSCluster", "AzureCluster", "GCPCluster", "IBMPowerVSCluster"})
 	}
 
 	return nil
