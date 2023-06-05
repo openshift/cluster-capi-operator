@@ -80,10 +80,6 @@ func processObjects(objs []unstructured.Unstructured, providerName string) map[r
 			replaceCertManagerAnnotations(&obj)
 			finalObjs = append(finalObjs, obj)
 		case "CustomResourceDefinition":
-			// Filter out IPAM for metal3
-			if strings.Contains(strings.ToLower(obj.GetName()), "ipam") {
-				break
-			}
 			replaceCertManagerAnnotations(&obj)
 			removeConversionWebhook(&obj)
 			setOpenShiftAnnotations(obj, true)
