@@ -25,6 +25,7 @@ func CompileSuite(suite TestSuite, goFlagsConfig types.GoFlagsConfig) TestSuite 
 		return suite
 	}
 
+<<<<<<< HEAD
 	ginkgoInvocationPath, _ := os.Getwd()
 	ginkgoInvocationPath, _ = filepath.Abs(ginkgoInvocationPath)
 	packagePath := suite.AbsPath()
@@ -35,6 +36,9 @@ func CompileSuite(suite TestSuite, goFlagsConfig types.GoFlagsConfig) TestSuite 
 		return suite
 	}
 	args, err := types.GenerateGoTestCompileArgs(goFlagsConfig, path, "./", pathToInvocationPath)
+=======
+	args, err := types.GenerateGoTestCompileArgs(goFlagsConfig, path, "./")
+>>>>>>> decf4d9d (Add vSphere infrastructureCluster template)
 	if err != nil {
 		suite.State = TestSuiteStateFailedToCompile
 		suite.CompilationError = fmt.Errorf("Failed to generate go test compile flags:\n%s", err.Error())

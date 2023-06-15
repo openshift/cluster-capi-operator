@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 ## 1.28.1
 
 ### Maintenance
@@ -7,6 +8,9 @@
 - #703 doc(matchers): HaveEach() doc comment updated [2705bdb]
 - Minor typos (#699) [375648c]
 
+=======
+<<<<<<< HEAD
+>>>>>>> 64b93821 (Add vSphere infrastructureCluster template)
 ## 1.28.0
 
 ### Features
@@ -41,6 +45,9 @@
 - docs: fix ContainSubstring references (#673) [fc9a89f]
 - Bump github.com/onsi/ginkgo/v2 from 2.9.7 to 2.10.0 (#671) [9076019]
 
+=======
+<<<<<<< HEAD
+>>>>>>> cb1c071c (Add vSphere infrastructureCluster template)
 ## 1.27.8
 
 ### Fixes
@@ -106,6 +113,8 @@
 - bump ginkgo
 - remove tools.go hack as Ginkgo 2.8.2 automatically pulls in the cli dependencies [81443b3]
 
+=======
+>>>>>>> decf4d9d (Add vSphere infrastructureCluster template)
 ## 1.27.1
 
 ### Maintenance

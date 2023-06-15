@@ -1,7 +1,11 @@
 package generators
 
+<<<<<<< HEAD
 var specText = `{{.BuildTags}}
 package {{.Package}}
+=======
+var specText = `package {{.Package}}
+>>>>>>> decf4d9d (Add vSphere infrastructureCluster template)
 
 import (
 	{{.GinkgoImport}}
@@ -15,8 +19,12 @@ var _ = {{.GinkgoPackage}}Describe("{{.Subject}}", func() {
 })
 `
 
+<<<<<<< HEAD
 var agoutiSpecText = `{{.BuildTags}}
 package {{.Package}}
+=======
+var agoutiSpecText = `package {{.Package}}
+>>>>>>> decf4d9d (Add vSphere infrastructureCluster template)
 
 import (
 	{{.GinkgoImport}}

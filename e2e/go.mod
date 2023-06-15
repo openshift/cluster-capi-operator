@@ -8,6 +8,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.13.0
 	github.com/onsi/gomega v1.28.1
 	github.com/openshift/api v0.0.0-20220921125526-1866ef90edbf
+<<<<<<< HEAD
 	k8s.io/api v0.27.6
 	k8s.io/apimachinery v0.27.6
 	k8s.io/client-go v0.27.6
@@ -17,6 +18,18 @@ require (
 	sigs.k8s.io/cluster-api-provider-gcp v1.5.0
 	sigs.k8s.io/cluster-api-provider-ibmcloud v0.6.0
 	sigs.k8s.io/controller-runtime v0.15.2
+=======
+	k8s.io/api v0.26.5
+	k8s.io/apimachinery v0.26.5
+	k8s.io/client-go v0.26.5
+	k8s.io/utils v0.0.0-20221128185143-99ec85e7a448
+	sigs.k8s.io/cluster-api v1.4.4
+	sigs.k8s.io/cluster-api-provider-aws/v2 v2.2.0
+	sigs.k8s.io/cluster-api-provider-gcp v1.4.0
+	sigs.k8s.io/cluster-api-provider-ibmcloud v0.5.1
+	sigs.k8s.io/cluster-api-provider-vsphere v1.6.1
+	sigs.k8s.io/controller-runtime v0.14.6
+>>>>>>> cb1c071c (Add vSphere infrastructureCluster template)
 	sigs.k8s.io/yaml v1.3.0
 )
 

@@ -88,6 +88,10 @@ func IsTypeParam(t types.Type) bool {
 func OriginMethod(fn *types.Func) *types.Func {
 	recv := fn.Type().(*types.Signature).Recv()
 	if recv == nil {
+<<<<<<< HEAD
+=======
+
+>>>>>>> decf4d9d (Add vSphere infrastructureCluster template)
 		return fn
 	}
 	base := recv.Type()

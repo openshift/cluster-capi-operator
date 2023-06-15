@@ -32,9 +32,12 @@ func BuildGenerateCommand() command.Command {
 			{Name: "template-data", KeyPath: "CustomTemplateData",
 				UsageArgument: "template-data-file",
 				Usage:         "If specified, generate will use the contents of the file passed as data to be rendered in the test file template"},
+<<<<<<< HEAD
 			{Name: "tags", KeyPath: "Tags",
 				UsageArgument: "build-tags",
 				Usage:         "If specified, generate will create a test file that uses the given build tags (i.e. `--tags e2e,!unit` will add `//go:build e2e,!unit`)"},
+=======
+>>>>>>> decf4d9d (Add vSphere infrastructureCluster template)
 		},
 		&conf,
 		types.GinkgoFlagSections{},
@@ -62,7 +65,10 @@ You can also pass a <filename> of the form "file.go" and generate will emit "fil
 }
 
 type specData struct {
+<<<<<<< HEAD
 	BuildTags         string
+=======
+>>>>>>> decf4d9d (Add vSphere infrastructureCluster template)
 	Package           string
 	Subject           string
 	PackageImportPath string
@@ -97,7 +103,10 @@ func generateTestFileForSubject(subject string, conf GeneratorsConfig) {
 	}
 
 	data := specData{
+<<<<<<< HEAD
 		BuildTags:         getBuildTags(conf.Tags),
+=======
+>>>>>>> decf4d9d (Add vSphere infrastructureCluster template)
 		Package:           determinePackageName(packageName, conf.Internal),
 		Subject:           formattedName,
 		PackageImportPath: getPackageImportPath(),

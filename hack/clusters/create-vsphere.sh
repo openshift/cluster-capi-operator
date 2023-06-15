@@ -8,7 +8,6 @@ function printcolor {
 
 printcolor "Getting required variables"
 export CLUSTER_NAME=$(kubectl get infrastructure cluster -o jsonpath="{.status.infrastructureName}")
-export AWS_REGION=$(kubectl get machineset.machine.openshift.io -n openshift-machine-api -o jsonpath="{.items[0].spec.template.spec.providerSpec.value.placement.region}")
 export INFRASTRUCTURE_KIND=VSphereCluster
 
 printcolor "Creating VSphere infrastructure cluster"

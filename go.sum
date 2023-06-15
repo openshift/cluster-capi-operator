@@ -734,13 +734,8 @@ golang.org/x/exp v0.0.0-20191227195350-da58074b4299/go.mod h1:2RIsYlXP63K8oxa1u0
 golang.org/x/exp v0.0.0-20200119233911-0405dc783f0a/go.mod h1:2RIsYlXP63K8oxa1u096TMicItID8zy7Y6sNkU49FU4=
 golang.org/x/exp v0.0.0-20200207192155-f17229e696bd/go.mod h1:J/WKrq2StrnmMY6+EHIKF9dgMWnmCNThgcyBT1FY9mM=
 golang.org/x/exp v0.0.0-20200224162631-6cc2880d07d6/go.mod h1:3jZMyOhIsHpP37uCMkUooju7aAi5cS1Q23tOzKc+0MU=
-<<<<<<< HEAD
 golang.org/x/exp v0.0.0-20230510235704-dd950f8aeaea h1:vLCWI/yYrdEHyN2JzIzPO3aaQJHQdp89IZBA/+azVC4=
 golang.org/x/exp v0.0.0-20230510235704-dd950f8aeaea/go.mod h1:V1LtkGg67GoY2N1AnLN78QLrzxkLyJw7RJb1gzOOz9w=
-=======
-golang.org/x/exp v0.0.0-20221002003631-540bb7301a08 h1:LtBIgSqNhkuC9gA3BFjGy5obHQT1lnmNsMDFSqWzQ5w=
-golang.org/x/exp v0.0.0-20221002003631-540bb7301a08/go.mod h1:cyybsKvd6eL0RnXn6p/Grxp8F5bW7iYuBgsNCOHpMYE=
->>>>>>> 4b013a9d (Create VSphere manifests and schemes)
 golang.org/x/exp/typeparams v0.0.0-20220428152302-39d4317da171/go.mod h1:AbB0pIl9nAr9wVwH+Z2ZpaocVmF5I4GyWCDIsVjR0bk=
 golang.org/x/exp/typeparams v0.0.0-20230203172020-98cc5a0785f9/go.mod h1:AbB0pIl9nAr9wVwH+Z2ZpaocVmF5I4GyWCDIsVjR0bk=
 golang.org/x/exp/typeparams v0.0.0-20230307190834-24139beb5833 h1:jWGQJV4niP+CCmFW9ekjA9Zx8vYORzOUH2/Nl5WPuLQ=
@@ -1188,26 +1183,10 @@ sigs.k8s.io/cluster-api-provider-gcp v1.5.0 h1:vVInLvSlBJo83sdlMbk1aYKg8n6GI8Nrh
 sigs.k8s.io/cluster-api-provider-gcp v1.5.0/go.mod h1:0voqKcKXrLKBh2SRkjhwGDoKrI+zScyjM2dkJW7G/No=
 sigs.k8s.io/cluster-api-provider-ibmcloud v0.6.0 h1:uRVgEyZn0cp4ou2tBGEzm9kA4XQBZRWrrX19jPSV07Y=
 sigs.k8s.io/cluster-api-provider-ibmcloud v0.6.0/go.mod h1:/YGABlED5qr9BWAR7TMq7xxa0gO09uxqPaiQvvu5JbQ=
+sigs.k8s.io/cluster-api-provider-vsphere v1.8.3 h1:JoE3uRHuNHIx2j/80T3vVk+T4SbNWuU/TcbN5tDHCZY=
+sigs.k8s.io/cluster-api-provider-vsphere v1.8.3/go.mod h1:rr8gLmOtYAIQb19YIsG4WbG84/i3VwD4OqA3nb7HAsI=
 sigs.k8s.io/controller-runtime v0.15.2 h1:9V7b7SDQSJ08IIsJ6CY1CE85Okhp87dyTMNDG0FS7f4=
 sigs.k8s.io/controller-runtime v0.15.2/go.mod h1:7ngYvp1MLT+9GeZ+6lH3LOlcHkp/+tzA/fmHa4iq9kk=
-=======
-sigs.k8s.io/cluster-api v1.4.4 h1:+V+mzDe+gsWYclosvWlH0wadC8vIUsBvZLcWOYnVWRA=
-sigs.k8s.io/cluster-api v1.4.4/go.mod h1:/SeFds4NXJ+Gp2etqHyoNuO6yoxTfVq6Zmd2OGxd/qM=
-sigs.k8s.io/cluster-api-operator v0.2.0 h1:huBrSA89cw3aLrKG0wZ6GTAPxUwwu9ky8VxlCwRLbdc=
-sigs.k8s.io/cluster-api-operator v0.2.0/go.mod h1:vcLYLBlLOJGjGKW8XI5mC022Adi/KdPpElEMb+/GujU=
-sigs.k8s.io/cluster-api-provider-aws/v2 v2.2.0 h1:SllzDVXpC4upKOBRZiy5bnLBB0CxIHotQLieyBHr5qs=
-sigs.k8s.io/cluster-api-provider-aws/v2 v2.2.0/go.mod h1:Us7ItHzHV/RiF/NlVQVDMbGEWwt67j/LDSXjeF5hu2g=
-sigs.k8s.io/cluster-api-provider-azure v1.9.2 h1:vC/SYLzjLVdsKJTNva3b62ZvgXH6EKCMNuDOfna3deA=
-sigs.k8s.io/cluster-api-provider-azure v1.9.2/go.mod h1:WD1aMoJNBd1L2GBIKeIlGwL6dxZpHhvgmQAGcyY60+Q=
-sigs.k8s.io/cluster-api-provider-gcp v1.4.0 h1:H14RnWhGKLmgaU1RjwR1d2gdDDQM7DMTDb2nkspab2E=
-sigs.k8s.io/cluster-api-provider-gcp v1.4.0/go.mod h1:AyztKcp2iTofL/uGQ+KEum3LREluIfX76BSVRsqxhoA=
-sigs.k8s.io/cluster-api-provider-ibmcloud v0.5.1 h1:RZMCh/81/quizETCIe1yJRIGDrOTlz6wdUWq9zdGYlQ=
-sigs.k8s.io/cluster-api-provider-ibmcloud v0.5.1/go.mod h1:H8IlJnVpQmVGMQ5w+UFOhQENyJ3vrlF0T0rWbN0OCrg=
-sigs.k8s.io/cluster-api-provider-vsphere v1.6.1 h1:4BSTJwBF3g4itJIh1nZd4pT5420ccfYs4eG+x2k2OGE=
-sigs.k8s.io/cluster-api-provider-vsphere v1.6.1/go.mod h1:abYnQNR3etNBGcnKazIJANzW4BsEDR7pcTmgwbcrbzY=
-sigs.k8s.io/controller-runtime v0.14.6 h1:oxstGVvXGNnMvY7TAESYk+lzr6S3V5VFxQ6d92KcwQA=
-sigs.k8s.io/controller-runtime v0.14.6/go.mod h1:WqIdsAY6JBsjfc/CqO0CORmNtoCtE4S6qbPc9s68h+0=
->>>>>>> 4b013a9d (Create VSphere manifests and schemes)
 sigs.k8s.io/controller-runtime/tools/setup-envtest v0.0.0-20221007015352-8ad090e0663e h1:3e/FEdLbOPc5S3D040XM9g7dBjlrA7YCIAXjjwkjCgk=
 sigs.k8s.io/controller-runtime/tools/setup-envtest v0.0.0-20221007015352-8ad090e0663e/go.mod h1:oiCXd8V7ZaS/wwvXKZ9pYkoU0BYM86CyEa0RvivM0nw=
 sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd h1:EDPBXCAspyGV4jQlpZSudPeMmr1bNJefnuqLsRAsHZo=

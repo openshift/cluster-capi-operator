@@ -1,7 +1,10 @@
 package generators
 
 import (
+<<<<<<< HEAD
 	"fmt"
+=======
+>>>>>>> decf4d9d (Add vSphere infrastructureCluster template)
 	"go/build"
 	"os"
 	"path/filepath"
@@ -15,7 +18,10 @@ type GeneratorsConfig struct {
 	Agouti, NoDot, Internal bool
 	CustomTemplate          string
 	CustomTemplateData      string
+<<<<<<< HEAD
 	Tags                    string
+=======
+>>>>>>> decf4d9d (Add vSphere infrastructureCluster template)
 }
 
 func getPackageAndFormattedName() (string, string, string) {
@@ -64,6 +70,7 @@ func determinePackageName(name string, internal bool) string {
 
 	return name + "_test"
 }
+<<<<<<< HEAD
 
 // getBuildTags returns the resultant string to be added.
 // If the input string is not empty, then returns a `//go:build {}` string,
@@ -74,3 +81,5 @@ func getBuildTags(tags string) string {
 	}
 	return ""
 }
+=======
+>>>>>>> decf4d9d (Add vSphere infrastructureCluster template)

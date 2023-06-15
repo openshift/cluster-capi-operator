@@ -84,6 +84,9 @@ gcp-cluster:
 powervs-cluster:
 	./hack/clusters/create-powervs.sh
 
+vsphere-cluster:
+	./hack/clusters/create-vsphere.sh
+
 define ensure-home
 	@ export HOME=$${HOME:=/tmp/kubebuilder-testing}; \
 	if [ $${HOME} == "/" ]; then \

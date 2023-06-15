@@ -19,8 +19,11 @@ type HaveExactElementsMatcher struct {
 }
 
 func (matcher *HaveExactElementsMatcher) Match(actual interface{}) (success bool, err error) {
+<<<<<<< HEAD
 	matcher.resetState()
 
+=======
+>>>>>>> decf4d9d (Add vSphere infrastructureCluster template)
 	if isMap(actual) {
 		return false, fmt.Errorf("error")
 	}
@@ -44,12 +47,16 @@ func (matcher *HaveExactElementsMatcher) Match(actual interface{}) (success bool
 
 		elemMatcher := matchers[i].(omegaMatcher)
 		match, err := elemMatcher.Match(values[i])
+<<<<<<< HEAD
 		if err != nil {
 			matcher.mismatchFailures = append(matcher.mismatchFailures, mismatchFailure{
 				index:   i,
 				failure: err.Error(),
 			})
 		} else if !match {
+=======
+		if err != nil || !match {
+>>>>>>> decf4d9d (Add vSphere infrastructureCluster template)
 			matcher.mismatchFailures = append(matcher.mismatchFailures, mismatchFailure{
 				index:   i,
 				failure: elemMatcher.FailureMessage(values[i]),
@@ -80,9 +87,12 @@ func (matcher *HaveExactElementsMatcher) FailureMessage(actual interface{}) (mes
 func (matcher *HaveExactElementsMatcher) NegatedFailureMessage(actual interface{}) (message string) {
 	return format.Message(actual, "not to contain elements", presentable(matcher.Elements))
 }
+<<<<<<< HEAD
 
 func (matcher *HaveExactElementsMatcher) resetState() {
 	matcher.mismatchFailures = nil
 	matcher.missingIndex = 0
 	matcher.extraIndex = 0
 }
+=======
+>>>>>>> decf4d9d (Add vSphere infrastructureCluster template)

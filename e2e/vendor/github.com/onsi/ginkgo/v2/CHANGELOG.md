@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 ## 2.13.0
 
 ### Features
@@ -27,6 +28,9 @@ Add PreviewSpect() to enable programmatic preview access to the suite report (fi
 
 Various chores/dependency bumps.
 
+=======
+<<<<<<< HEAD
+>>>>>>> cb1c071c (Add vSphere infrastructureCluster template)
 ## 2.11.0
 
 In prior versions of Ginkgo specs the CLI filter flags (e.g. `--focus`, `--label-filter`) would _override_ any programmatic focus.  This behavior has proved surprising and confusing in at least the following ways:
@@ -149,6 +153,8 @@ This release fixes a longstanding issue where `ginkgo -coverpkg=./...` would not
 - Bump golang.org/x/text (#1144) [41b2a8a]
 - Bump github.com/onsi/gomega from 1.27.0 to 1.27.1 (#1142) [7c4f583]
 
+=======
+>>>>>>> decf4d9d (Add vSphere infrastructureCluster template)
 ## 2.8.3
 
 Released to fix security issue in golang.org/x/net dependency
