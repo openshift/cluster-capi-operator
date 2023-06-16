@@ -9,6 +9,8 @@ function printcolor {
 printcolor "Getting required variables"
 export CLUSTER_NAME=$(kubectl get infrastructure cluster -o jsonpath="{.status.infrastructureName}")
 export INFRASTRUCTURE_KIND=VSphereCluster
+export CONTROL_PLANE_ENDPOINT_IP=$(kubectl get infrastructure cluster -o jsonpath="{.status.platformStatus.vsphere.apiServerInternalIP}")
+export VSPHERE_SERVER=$(kubectl get infrastructure cluster -o jsonpath="{.spec.platformSpec.vsphere.vcenters[0].server}")
 
 printcolor "Creating VSphere infrastructure cluster"
 envsubst <hack/clusters/templates/vsphere.yaml | kubectl apply -f -

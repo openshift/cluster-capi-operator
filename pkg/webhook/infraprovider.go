@@ -53,6 +53,10 @@ func (r *InfrastructureProviderWebhook) ValidateCreate(ctx context.Context, obj 
 		if infraProvider.Name != "ibmcloud" {
 			return nil, fmt.Errorf("incorrect infra provider name for PowerVS platform: %s", infraProvider.Name)
 		}
+	case configv1.VSpherePlatformType:
+		if infraProvider.Name != "vsphere" {
+			return nil, fmt.Errorf("incorrect infra provider name for VSphere platform: %s", infraProvider.Name)
+		}
 	default:
 		return nil, errors.New("platform not supported, skipping infra cluster controller setup")
 	}
@@ -89,6 +93,10 @@ func (r *InfrastructureProviderWebhook) ValidateUpdate(ctx context.Context, oldO
 		// https://github.com/kubernetes-sigs/cluster-api/blob/main/cmd/clusterctl/client/config/providers_client.go#L218-L222
 		if newInfraProvider.Name != "ibmcloud" {
 			return nil, fmt.Errorf("incorrect infra provider name for PowerVS platform: %s", newInfraProvider.Name)
+		}
+	case configv1.VSpherePlatformType:
+		if newInfraProvider.Name != "vsphere" {
+			return nil, fmt.Errorf("incorrect infra provider name for VSphere platform: %s", newInfraProvider.Name)
 		}
 	default:
 		return nil, errors.New("platform not supported, skipping infra cluster controller setup")
