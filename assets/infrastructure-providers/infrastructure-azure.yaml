@@ -94,11 +94,22 @@ data:
               requests:
                 cpu: 10m
                 memory: 50Mi
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop:
+                - ALL
+              runAsGroup: 65532
+              runAsUser: 65532
             volumeMounts:
             - mountPath: /tmp/k8s-webhook-server/serving-certs
               name: cert
               readOnly: true
           priorityClassName: system-cluster-critical
+          securityContext:
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
           serviceAccountName: capz-manager
           terminationGracePeriodSeconds: 10
           tolerations:
@@ -175,27 +186,6 @@ data:
         service:
           name: capz-webhook-service
           namespace: openshift-cluster-api
-          path: /mutate-infrastructure-cluster-x-k8s-io-v1beta1-azuremachinepool
-      failurePolicy: Fail
-      name: default.azuremachinepool.infrastructure.cluster.x-k8s.io
-      rules:
-      - apiGroups:
-        - infrastructure.cluster.x-k8s.io
-        apiVersions:
-        - v1beta1
-        operations:
-        - CREATE
-        - UPDATE
-        resources:
-        - azuremachinepools
-      sideEffects: None
-    - admissionReviewVersions:
-      - v1
-      - v1beta1
-      clientConfig:
-        service:
-          name: capz-webhook-service
-          namespace: openshift-cluster-api
           path: /mutate-infrastructure-cluster-x-k8s-io-v1beta1-azuremanagedcontrolplane
       failurePolicy: Fail
       name: default.azuremanagedcontrolplanes.infrastructure.cluster.x-k8s.io
@@ -231,6 +221,27 @@ data:
         - UPDATE
         resources:
         - azuremanagedmachinepools
+      sideEffects: None
+    - admissionReviewVersions:
+      - v1
+      - v1beta1
+      clientConfig:
+        service:
+          name: capz-webhook-service
+          namespace: openshift-cluster-api
+          path: /mutate-infrastructure-cluster-x-k8s-io-v1beta1-azuremachinepool
+      failurePolicy: Fail
+      name: default.azuremachinepool.infrastructure.cluster.x-k8s.io
+      rules:
+      - apiGroups:
+        - infrastructure.cluster.x-k8s.io
+        apiVersions:
+        - v1beta1
+        operations:
+        - CREATE
+        - UPDATE
+        resources:
+        - azuremachinepools
       sideEffects: None
     ---
     apiVersion: admissionregistration.k8s.io/v1
@@ -295,6 +306,50 @@ data:
         service:
           name: capz-webhook-service
           namespace: openshift-cluster-api
+          path: /validate-infrastructure-cluster-x-k8s-io-v1beta1-azuremanagedcontrolplane
+      failurePolicy: Fail
+      name: validation.azuremanagedcontrolplanes.infrastructure.cluster.x-k8s.io
+      rules:
+      - apiGroups:
+        - infrastructure.cluster.x-k8s.io
+        apiVersions:
+        - v1beta1
+        operations:
+        - CREATE
+        - UPDATE
+        resources:
+        - azuremanagedcontrolplanes
+      sideEffects: None
+    - admissionReviewVersions:
+      - v1
+      - v1beta1
+      clientConfig:
+        service:
+          name: capz-webhook-service
+          namespace: openshift-cluster-api
+          path: /validate-infrastructure-cluster-x-k8s-io-v1beta1-azuremanagedmachinepool
+      failurePolicy: Fail
+      matchPolicy: Equivalent
+      name: validation.azuremanagedmachinepools.infrastructure.cluster.x-k8s.io
+      rules:
+      - apiGroups:
+        - infrastructure.cluster.x-k8s.io
+        apiVersions:
+        - v1beta1
+        operations:
+        - CREATE
+        - UPDATE
+        - DELETE
+        resources:
+        - azuremanagedmachinepools
+      sideEffects: None
+    - admissionReviewVersions:
+      - v1
+      - v1beta1
+      clientConfig:
+        service:
+          name: capz-webhook-service
+          namespace: openshift-cluster-api
           path: /validate-infrastructure-cluster-x-k8s-io-v1beta1-azuremachinepool
       failurePolicy: Fail
       name: validation.azuremachinepool.infrastructure.cluster.x-k8s.io
@@ -329,49 +384,6 @@ data:
         - UPDATE
         resources:
         - azuremachinepoolmachines
-      sideEffects: None
-    - admissionReviewVersions:
-      - v1
-      - v1beta1
-      clientConfig:
-        service:
-          name: capz-webhook-service
-          namespace: openshift-cluster-api
-          path: /validate-infrastructure-cluster-x-k8s-io-v1beta1-azuremanagedcontrolplane
-      failurePolicy: Fail
-      name: validation.azuremanagedcontrolplanes.infrastructure.cluster.x-k8s.io
-      rules:
-      - apiGroups:
-        - infrastructure.cluster.x-k8s.io
-        apiVersions:
-        - v1beta1
-        operations:
-        - CREATE
-        - UPDATE
-        resources:
-        - azuremanagedcontrolplanes
-      sideEffects: None
-    - admissionReviewVersions:
-      - v1
-      - v1beta1
-      clientConfig:
-        service:
-          name: capz-webhook-service
-          namespace: openshift-cluster-api
-          path: /validate-infrastructure-cluster-x-k8s-io-v1beta1-azuremanagedmachinepool
-      failurePolicy: Fail
-      matchPolicy: Equivalent
-      name: validation.azuremanagedmachinepools.infrastructure.cluster.x-k8s.io
-      rules:
-      - apiGroups:
-        - infrastructure.cluster.x-k8s.io
-        apiVersions:
-        - v1beta1
-        operations:
-        - UPDATE
-        - DELETE
-        resources:
-        - azuremanagedmachinepools
       sideEffects: None
     ---
     apiVersion: v1
@@ -435,12 +447,18 @@ data:
       - major: 1
         minor: 7
         contract: v1beta1
+      - major: 1
+        minor: 8
+        contract: v1beta1
+      - major: 1
+        minor: 9
+        contract: v1beta1
 kind: ConfigMap
 metadata:
   creationTimestamp: null
   labels:
     provider.cluster.x-k8s.io/name: azure
     provider.cluster.x-k8s.io/type: infrastructure
-    provider.cluster.x-k8s.io/version: v1.7.1
+    provider.cluster.x-k8s.io/version: v1.9.2
   name: azure
   namespace: openshift-cluster-api

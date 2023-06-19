@@ -1,6 +1,28 @@
 apiVersion: v1
 data:
   components: |-
+    apiVersion: v1
+    kind: Service
+    metadata:
+      annotations:
+        exclude.release.openshift.io/internal-openshift-hosted: "true"
+        include.release.openshift.io/self-managed-high-availability: "true"
+        include.release.openshift.io/single-node-developer: "true"
+        release.openshift.io/feature-set: TechPreviewNoUpgrade
+      labels:
+        cluster.x-k8s.io/provider: infrastructure-aws
+        clusterctl.cluster.x-k8s.io: ""
+      name: capa-metrics-service
+      namespace: openshift-cluster-api
+    spec:
+      ports:
+      - port: 8080
+        protocol: TCP
+        targetPort: metrics
+      selector:
+        cluster.x-k8s.io/provider: infrastructure-aws
+      type: ClusterIP
+    ---
     apiVersion: apps/v1
     kind: Deployment
     metadata:
@@ -45,7 +67,7 @@ data:
           - args:
             - --leader-elect
             - --v=${CAPA_LOGLEVEL:=0}
-            - --metrics-bind-addr=127.0.0.1:8080
+            - --metrics-bind-addr=0.0.0.0:8080
             env:
             - name: AWS_SHARED_CREDENTIALS_FILE
               value: /home/.aws/credentials
@@ -73,6 +95,13 @@ data:
               requests:
                 cpu: 10m
                 memory: 50Mi
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop:
+                - ALL
+              runAsGroup: 65532
+              runAsUser: 65532
             volumeMounts:
             - mountPath: /tmp/k8s-webhook-server/serving-certs
               name: cert
@@ -82,6 +111,9 @@ data:
           priorityClassName: system-cluster-critical
           securityContext:
             fsGroup: 1000
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
           serviceAccountName: capa-controller-manager
           terminationGracePeriodSeconds: 10
           tolerations:
@@ -304,6 +336,28 @@ data:
         service:
           name: capa-webhook-service
           namespace: openshift-cluster-api
+          path: /validate-infrastructure-cluster-x-k8s-io-v1beta2-awsmachinetemplate
+      failurePolicy: Fail
+      matchPolicy: Equivalent
+      name: validation.awsmachinetemplate.infrastructure.cluster.x-k8s.io
+      rules:
+      - apiGroups:
+        - infrastructure.cluster.x-k8s.io
+        apiVersions:
+        - v1beta2
+        operations:
+        - CREATE
+        - UPDATE
+        resources:
+        - awsmachinetemplates
+      sideEffects: None
+    - admissionReviewVersions:
+      - v1
+      - v1beta1
+      clientConfig:
+        service:
+          name: capa-webhook-service
+          namespace: openshift-cluster-api
           path: /validate-infrastructure-cluster-x-k8s-io-v1beta2-awsfargateprofile
       failurePolicy: Fail
       matchPolicy: Equivalent
@@ -491,12 +545,15 @@ data:
       - major: 2
         minor: 0
         contract: v1beta1
+      - major: 2
+        minor: 1
+        contract: v1beta1
 kind: ConfigMap
 metadata:
   creationTimestamp: null
   labels:
     provider.cluster.x-k8s.io/name: aws
     provider.cluster.x-k8s.io/type: infrastructure
-    provider.cluster.x-k8s.io/version: v2.0.2
+    provider.cluster.x-k8s.io/version: v2.1.2
   name: aws
   namespace: openshift-cluster-api
