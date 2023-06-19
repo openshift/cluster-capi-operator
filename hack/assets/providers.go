@@ -194,8 +194,8 @@ func (p *provider) writeAllOtherProviderComponents(objs []unstructured.Unstructu
 			},
 		},
 		Data: map[string]string{
-			"metadata":   string(p.metadata),
-			"components": string(combined),
+			"metadata":   strings.TrimSpace(string(p.metadata)),
+			"components": strings.TrimSpace(string(combined)),
 		},
 	}
 
