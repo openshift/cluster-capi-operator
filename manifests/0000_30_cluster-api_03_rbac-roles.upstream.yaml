@@ -13,7 +13,7 @@ metadata:
     cluster.x-k8s.io/provider: cluster-api
     clusterctl.cluster.x-k8s.io: ""
     clusterctl.cluster.x-k8s.io/core: capi-operator
-  name: openshift-cluster-api-capi-operator-manager-role
+  name: capi-operator-manager-role
 rules:
 - apiGroups:
   - '*'
@@ -35,11 +35,11 @@ metadata:
     cluster.x-k8s.io/provider: cluster-api
     clusterctl.cluster.x-k8s.io: ""
     clusterctl.cluster.x-k8s.io/core: capi-operator
-  name: openshift-cluster-api-capi-operator-manager-rolebinding
+  name: capi-operator-manager-rolebinding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: openshift-cluster-api-capi-operator-manager-role
+  name: capi-operator-manager-role
 subjects:
 - kind: ServiceAccount
   name: default
@@ -135,7 +135,7 @@ metadata:
     cluster.x-k8s.io/provider: cluster-api
     clusterctl.cluster.x-k8s.io: ""
     clusterctl.cluster.x-k8s.io/core: capi-operator
-  name: openshift-cluster-api-capi-operator-proxy-role
+  name: capi-operator-proxy-role
 rules:
 - apiGroups:
   - authentication.k8s.io
@@ -163,11 +163,11 @@ metadata:
     cluster.x-k8s.io/provider: cluster-api
     clusterctl.cluster.x-k8s.io: ""
     clusterctl.cluster.x-k8s.io/core: capi-operator
-  name: openshift-cluster-api-capi-operator-proxy-rolebinding
+  name: capi-operator-proxy-rolebinding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: openshift-cluster-api-capi-operator-proxy-role
+  name: capi-operator-proxy-role
 subjects:
 - kind: ServiceAccount
   name: default
@@ -185,7 +185,7 @@ metadata:
     cluster.x-k8s.io/provider: cluster-api
     clusterctl.cluster.x-k8s.io: ""
     clusterctl.cluster.x-k8s.io/core: capi-operator
-  name: openshift-cluster-api-capi-operator-metrics-reader
+  name: capi-operator-metrics-reader
 rules:
 - nonResourceURLs:
   - /metrics
