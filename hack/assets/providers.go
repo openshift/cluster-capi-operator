@@ -31,6 +31,7 @@ const (
 type provider struct {
 	Name       string                    `json:"name"`
 	PType      clusterctlv1.ProviderType `json:"type"`
+	Org        string                    `json:"org"`
 	Branch     string                    `json:"branch"`
 	Version    string                    `json:"version"`
 	components repository.Components
@@ -90,7 +91,8 @@ func (p *provider) getMetadataUrl() string {
 		providerPath = fmt.Sprintf("-provider-%s", p.Name)
 	}
 
-	return fmt.Sprintf("https://raw.githubusercontent.com/openshift/cluster-api%s/%s/metadata.yaml",
+	return fmt.Sprintf("https://raw.githubusercontent.com/%s/cluster-api%s/%s/metadata.yaml",
+		p.Org,
 		providerPath,
 		p.Branch,
 	)
@@ -101,7 +103,9 @@ func (p *provider) getProviderAssetUrl() string {
 	if p.PType == clusterctlv1.InfrastructureProviderType {
 		providerPath = fmt.Sprintf("-provider-%s", p.Name)
 	}
-	return fmt.Sprintf("https://github.com/openshift/cluster-api%s//config/default?ref=%s",
+
+	return fmt.Sprintf("https://github.com/%s/cluster-api%s//config/default?ref=%s",
+		p.Org,
 		providerPath,
 		p.Branch,
 	)
@@ -111,6 +115,10 @@ func (p *provider) getProviderAssetUrl() string {
 func (p *provider) loadComponents() error {
 	if p.Branch == "" {
 		return fmt.Errorf("provider %s has no branch", p.Name)
+	}
+
+	if p.Org == "" {
+		p.Org = "openshift"
 	}
 
 	// Create new clusterctl config client
