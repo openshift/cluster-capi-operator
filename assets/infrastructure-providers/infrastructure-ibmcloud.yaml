@@ -460,7 +460,7 @@ data:
       selector:
         cluster.x-k8s.io/provider: infrastructure-ibmcloud
         control-plane: controller-manager
-  metadata: |
+  metadata: |-
     # maps release series of major.minor to cluster-api contract version
     # the contract version may change between minor or major versions, but *not*
     # between patch versions.
