@@ -10,6 +10,8 @@ spec:
   networkSpec:
     nodeOutboundLB:
       name: ${CLUSTER_NAME}
+      backendPool:
+        name: ${CLUSTER_NAME}
     vnet:
       name: ${CLUSTER_NAME}-vnet
       resourceGroup: ${CLUSTER_NAME}-rg
