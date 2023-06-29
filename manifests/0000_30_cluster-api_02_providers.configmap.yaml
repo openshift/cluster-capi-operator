@@ -17,6 +17,10 @@ data:
       type: InfrastructureProvider
       branch: release-4.15
       version: v0.6.0
+    - name: vsphere
+      type: InfrastructureProvider
+      branch: release-4.14
+      version: v1.5.0
 kind: ConfigMap
 metadata:
   annotations:
