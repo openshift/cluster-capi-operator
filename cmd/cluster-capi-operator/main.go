@@ -31,7 +31,6 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/capiinstaller"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/cluster"
-	"github.com/openshift/cluster-capi-operator/pkg/controllers/clusteroperator"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/kubeconfig"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/secretsync"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
@@ -203,16 +202,6 @@ func getClusterOperatorStatusClient(mgr manager.Manager, controller string) oper
 }
 
 func setupReconcilers(mgr manager.Manager, platform configv1.PlatformType, containerImages map[string]string, supportedProviders map[string]bool) {
-	if err := (&clusteroperator.ClusterOperatorReconciler{
-		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-cluster-operator-controller"),
-		Scheme:                      mgr.GetScheme(),
-		Images:                      containerImages,
-		SupportedPlatforms:          supportedProviders,
-	}).SetupWithManager(mgr); err != nil {
-		klog.Error(err, "unable to create controller", "controller", "ClusterOperator")
-		os.Exit(1)
-	}
-
 	if err := (&cluster.CoreClusterReconciler{
 		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-cluster-resource-controller"),
 		Cluster:                     &clusterv1.Cluster{},
