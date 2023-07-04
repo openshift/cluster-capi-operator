@@ -12,18 +12,9 @@
   version: v1.5.0
 - name: powervs
   type: InfrastructureProvider
-<<<<<<< HEAD
   branch: release-4.15
   version: v0.6.0
-=======
-  branch: release-4.14
-  version: v0.5.1
 - name: vsphere
   type: InfrastructureProvider
   branch: release-4.14
-<<<<<<< HEAD
-  version: v1.6.1
->>>>>>> 4b013a9d (Create VSphere manifests and schemes)
-=======
-  version: v1.5.0
->>>>>>> c949b0d2 (Change Vsphere operator version)
+  version: v1.7.0

@@ -30,8 +30,8 @@ data:
           containers:
           - args:
             - --leader-elect
-            - --logtostderr
             - --v=4
+            - --enable-keep-alive
             image: to.be/replaced:v99
             imagePullPolicy: IfNotPresent
             livenessProbe:
@@ -54,6 +54,13 @@ data:
               requests:
                 cpu: 10m
                 memory: 50Mi
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop:
+                - ALL
+              runAsGroup: 65532
+              runAsUser: 65532
             volumeMounts:
             - mountPath: /tmp/k8s-webhook-server/serving-certs
               name: cert
@@ -62,6 +69,10 @@ data:
               name: manager-bootstrap-credentials
               readOnly: true
           priorityClassName: system-cluster-critical
+          securityContext:
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
           terminationGracePeriodSeconds: 10
           tolerations:
           - effect: NoSchedule
@@ -311,7 +322,7 @@ data:
         resources:
         - vspherevms
       sideEffects: None
-  metadata: |
+  metadata: |-
     # maps release series of major.minor to cluster-api contract version
     # the contract version may change between minor or major versions, but *not*
     # between patch versions.
@@ -353,12 +364,18 @@ data:
       - major: 1
         minor: 5
         contract: v1beta1
+      - major: 1
+        minor: 6
+        contract: v1beta1
+      - major: 1
+        minor: 7
+        contract: v1beta1
 kind: ConfigMap
 metadata:
   creationTimestamp: null
   labels:
     provider.cluster.x-k8s.io/name: vsphere
     provider.cluster.x-k8s.io/type: infrastructure
-    provider.cluster.x-k8s.io/version: v1.5.0
+    provider.cluster.x-k8s.io/version: v1.7.0
   name: vsphere
   namespace: openshift-cluster-api

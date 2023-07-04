@@ -88,6 +88,10 @@ func createVSphereCluster(cl client.Client, mapiProviderSpec *mapiv1.VSphereMach
 		},
 		Spec: vspherev1.VSphereClusterSpec{
 			Server: mapiProviderSpec.Workspace.Server,
+			IdentityRef: &vspherev1.VSphereIdentityReference{
+				Kind: "Secret",
+				Name: clusterName,
+			},
 		},
 	}
 
@@ -127,18 +131,20 @@ func createVSphereMachineTemplate(cl client.Client, mapiProviderSpec *mapiv1.VSp
 
 	vSphereMachineSpec := vspherev1.VSphereMachineSpec{
 		VirtualMachineCloneSpec: vspherev1.VirtualMachineCloneSpec{
-			Template:     vSphereMachineTemplateName,
+			Template:     mapiProviderSpec.Template,
 			Server:       mapiProviderSpec.Workspace.Server,
 			DiskGiB:      mapiProviderSpec.DiskGiB,
-			CloneMode:    vspherev1.CloneMode(mapiProviderSpec.CloneMode),
-			Snapshot:     mapiProviderSpec.Snapshot,
+			CloneMode:    vspherev1.CloneMode("linkedClone"),
 			Datacenter:   mapiProviderSpec.Workspace.Datacenter,
 			Datastore:    mapiProviderSpec.Workspace.Datastore,
 			Folder:       mapiProviderSpec.Workspace.Folder,
 			ResourcePool: mapiProviderSpec.Workspace.ResourcePool,
+			NumCPUs:      mapiProviderSpec.NumCPUs,
+			MemoryMiB:    mapiProviderSpec.MemoryMiB,
 			Network: vspherev1.NetworkSpec{
 				Devices: []vspherev1.NetworkDeviceSpec{
 					{
+						DHCP4:       true,
 						NetworkName: mapiProviderSpec.Network.Devices[0].NetworkName,
 					},
 				},

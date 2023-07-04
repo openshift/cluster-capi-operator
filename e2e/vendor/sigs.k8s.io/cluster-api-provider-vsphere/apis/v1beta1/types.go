@@ -281,7 +281,6 @@ type NetworkDeviceSpec struct {
 	Gateway4 string `json:"gateway4,omitempty"`
 
 	// Gateway4 is the IPv4 gateway used by this device.
-	// Required when DHCP6 is false.
 	// +optional
 	Gateway6 string `json:"gateway6,omitempty"`
 
@@ -460,6 +459,9 @@ type VirtualMachine struct {
 
 	// Network is the status of the VM's network devices.
 	Network []NetworkStatus `json:"network"`
+
+	// VMRef is the the VM's Managed Object Reference on vSphere.
+	VMRef string `json:"vmRef"`
 }
 
 // SSHUser is granted remote access to a system.

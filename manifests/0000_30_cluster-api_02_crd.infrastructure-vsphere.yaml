@@ -4,7 +4,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.7.0
+    controller-gen.kubebuilder.io/version: v0.11.4
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
@@ -121,7 +121,7 @@ spec:
                   devices:
                     description: Devices is the list of network devices used by the
                       virtual machine. TODO(akutz) Make sure at least one network
-                      matches the             ClusterSpec.CloudProviderConfiguration.Network.Name
+                      matches the ClusterSpec.CloudProviderConfiguration.Network.Name
                     items:
                       description: NetworkDeviceSpec defines the network configuration
                         for a virtual machine's network device.
@@ -516,7 +516,7 @@ spec:
                   devices:
                     description: Devices is the list of network devices used by the
                       virtual machine. TODO(akutz) Make sure at least one network
-                      matches the             ClusterSpec.CloudProviderConfiguration.Network.Name
+                      matches the ClusterSpec.CloudProviderConfiguration.Network.Name
                     items:
                       description: NetworkDeviceSpec defines the network configuration
                         for a virtual machine's network device.
@@ -926,7 +926,7 @@ spec:
                   devices:
                     description: Devices is the list of network devices used by the
                       virtual machine. TODO(akutz) Make sure at least one network
-                      matches the             ClusterSpec.CloudProviderConfiguration.Network.Name
+                      matches the ClusterSpec.CloudProviderConfiguration.Network.Name
                     items:
                       description: NetworkDeviceSpec defines the network configuration
                         for a virtual machine's network device.
@@ -954,6 +954,7 @@ spec:
                                 description: Name is the name of resource being referenced
                                 type: string
                             required:
+                            - apiGroup
                             - kind
                             - name
                             type: object
@@ -1085,7 +1086,6 @@ spec:
                           type: string
                         gateway6:
                           description: Gateway4 is the IPv4 gateway used by this device.
-                            Required when DHCP6 is false.
                           type: string
                         ipAddrs:
                           description: IPAddrs is a list of one or more IPv4 and/or
@@ -1272,8 +1272,8 @@ spec:
                       description: The machine address.
                       type: string
                     type:
-                      description: Machine address type, one of Hostname, ExternalIP
-                        or InternalIP.
+                      description: Machine address type, one of Hostname, ExternalIP,
+                        InternalIP, ExternalDNS or InternalDNS.
                       type: string
                   required:
                   - address
@@ -1395,14 +1395,14 @@ status:
   acceptedNames:
     kind: ""
     plural: ""
-  conditions: []
-  storedVersions: []
+  conditions: null
+  storedVersions: null
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.7.0
+    controller-gen.kubebuilder.io/version: v0.11.4
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
@@ -1523,9 +1523,9 @@ spec:
                           may be found. This may used in the event that: 1. It is
                           not desirable to use the K8s API to watch changes to secrets
                           2. The cloud controller manager is not running in a K8s
-                          environment,    such as DC/OS. For example, the container
-                          storage interface (CSI) is    container orcehstrator (CO)
-                          agnostic, and should support non-K8s COs. Defaults to /etc/cloud/credentials.'
+                          environment, such as DC/OS. For example, the container storage
+                          interface (CSI) is container orcehstrator (CO) agnostic,
+                          and should support non-K8s COs. Defaults to /etc/cloud/credentials.'
                         type: string
                       serviceAccount:
                         description: ServiceAccount is the Kubernetes service account
@@ -1730,6 +1730,7 @@ spec:
                     description: 'UID of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids'
                     type: string
                 type: object
+                x-kubernetes-map-type: atomic
               server:
                 description: Server is the address of the vSphere endpoint.
                 type: string
@@ -2052,6 +2053,53 @@ spec:
                 - host
                 - port
                 type: object
+              failureDomainSelector:
+                description: FailureDomainSelector is the label selector to use for
+                  failure domain selection for the control plane nodes of the cluster.
+                  An empty value for the selector includes all the related failure
+                  domains.
+                properties:
+                  matchExpressions:
+                    description: matchExpressions is a list of label selector requirements.
+                      The requirements are ANDed.
+                    items:
+                      description: A label selector requirement is a selector that
+                        contains values, a key, and an operator that relates the key
+                        and values.
+                      properties:
+                        key:
+                          description: key is the label key that the selector applies
+                            to.
+                          type: string
+                        operator:
+                          description: operator represents a key's relationship to
+                            a set of values. Valid operators are In, NotIn, Exists
+                            and DoesNotExist.
+                          type: string
+                        values:
+                          description: values is an array of string values. If the
+                            operator is In or NotIn, the values array must be non-empty.
+                            If the operator is Exists or DoesNotExist, the values
+                            array must be empty. This array is replaced during a strategic
+                            merge patch.
+                          items:
+                            type: string
+                          type: array
+                      required:
+                      - key
+                      - operator
+                      type: object
+                    type: array
+                  matchLabels:
+                    additionalProperties:
+                      type: string
+                    description: matchLabels is a map of {key,value} pairs. A single
+                      {key,value} in the matchLabels map is equivalent to an element
+                      of matchExpressions, whose key field is "key", the operator
+                      is "In", and the values array contains only "value". The requirements
+                      are ANDed.
+                    type: object
+                type: object
               identityRef:
                 description: IdentityRef is a reference to either a Secret or VSphereClusterIdentity
                   that contains the identity to use when reconciling the cluster.
@@ -2163,14 +2211,14 @@ status:
   acceptedNames:
     kind: ""
     plural: ""
-  conditions: []
-  storedVersions: []
+  conditions: null
+  storedVersions: null
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.7.0
+    controller-gen.kubebuilder.io/version: v0.11.4
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
@@ -2325,6 +2373,7 @@ spec:
                           - name
                           - uid
                           type: object
+                          x-kubernetes-map-type: atomic
                         type: array
                     type: object
                   spec:
@@ -2384,7 +2433,7 @@ spec:
                           devices:
                             description: Devices is the list of network devices used
                               by the virtual machine. TODO(akutz) Make sure at least
-                              one network matches the             ClusterSpec.CloudProviderConfiguration.Network.Name
+                              one network matches the ClusterSpec.CloudProviderConfiguration.Network.Name
                             items:
                               description: NetworkDeviceSpec defines the network configuration
                                 for a virtual machine's network device.
@@ -2672,7 +2721,7 @@ spec:
                           devices:
                             description: Devices is the list of network devices used
                               by the virtual machine. TODO(akutz) Make sure at least
-                              one network matches the             ClusterSpec.CloudProviderConfiguration.Network.Name
+                              one network matches the ClusterSpec.CloudProviderConfiguration.Network.Name
                             items:
                               description: NetworkDeviceSpec defines the network configuration
                                 for a virtual machine's network device.
@@ -2977,7 +3026,7 @@ spec:
                           devices:
                             description: Devices is the list of network devices used
                               by the virtual machine. TODO(akutz) Make sure at least
-                              one network matches the             ClusterSpec.CloudProviderConfiguration.Network.Name
+                              one network matches the ClusterSpec.CloudProviderConfiguration.Network.Name
                             items:
                               description: NetworkDeviceSpec defines the network configuration
                                 for a virtual machine's network device.
@@ -3008,6 +3057,7 @@ spec:
                                           being referenced
                                         type: string
                                     required:
+                                    - apiGroup
                                     - kind
                                     - name
                                     type: object
@@ -3151,7 +3201,7 @@ spec:
                                   type: string
                                 gateway6:
                                   description: Gateway4 is the IPv4 gateway used by
-                                    this device. Required when DHCP6 is false.
+                                    this device.
                                   type: string
                                 ipAddrs:
                                   description: IPAddrs is a list of one or more IPv4
@@ -3346,14 +3396,14 @@ status:
   acceptedNames:
     kind: ""
     plural: ""
-  conditions: []
-  storedVersions: []
+  conditions: null
+  storedVersions: null
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.7.0
+    controller-gen.kubebuilder.io/version: v0.11.4
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
@@ -3368,6 +3418,8 @@ metadata:
 spec:
   group: infrastructure.cluster.x-k8s.io
   names:
+    categories:
+    - cluster-api
     kind: VSphereVM
     listKind: VSphereVMList
     plural: vspherevms
@@ -3438,6 +3490,7 @@ spec:
                     description: 'UID of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids'
                     type: string
                 type: object
+                x-kubernetes-map-type: atomic
               cloneMode:
                 description: CloneMode specifies the type of clone operation. The
                   LinkedClone mode is only support for templates that have at least
@@ -3484,7 +3537,7 @@ spec:
                   devices:
                     description: Devices is the list of network devices used by the
                       virtual machine. TODO(akutz) Make sure at least one network
-                      matches the             ClusterSpec.CloudProviderConfiguration.Network.Name
+                      matches the ClusterSpec.CloudProviderConfiguration.Network.Name
                     items:
                       description: NetworkDeviceSpec defines the network configuration
                         for a virtual machine's network device.
@@ -3894,7 +3947,7 @@ spec:
                   devices:
                     description: Devices is the list of network devices used by the
                       virtual machine. TODO(akutz) Make sure at least one network
-                      matches the             ClusterSpec.CloudProviderConfiguration.Network.Name
+                      matches the ClusterSpec.CloudProviderConfiguration.Network.Name
                     items:
                       description: NetworkDeviceSpec defines the network configuration
                         for a virtual machine's network device.
@@ -4319,7 +4372,7 @@ spec:
                   devices:
                     description: Devices is the list of network devices used by the
                       virtual machine. TODO(akutz) Make sure at least one network
-                      matches the             ClusterSpec.CloudProviderConfiguration.Network.Name
+                      matches the ClusterSpec.CloudProviderConfiguration.Network.Name
                     items:
                       description: NetworkDeviceSpec defines the network configuration
                         for a virtual machine's network device.
@@ -4347,6 +4400,7 @@ spec:
                                 description: Name is the name of resource being referenced
                                 type: string
                             required:
+                            - apiGroup
                             - kind
                             - name
                             type: object
@@ -4478,7 +4532,6 @@ spec:
                           type: string
                         gateway6:
                           description: Gateway4 is the IPv4 gateway used by this device.
-                            Required when DHCP6 is false.
                           type: string
                         ipAddrs:
                           description: IPAddrs is a list of one or more IPv4 and/or
@@ -4787,6 +4840,12 @@ spec:
                   to the machine. This value is set automatically at runtime and should
                   not be set or modified by users.
                 type: string
+              vmRef:
+                description: VMRef is the the VM's Managed Object Reference on vSphere.
+                  It can be used by consumers to programatically get this VM representation
+                  on vSphere in case of the need to retrieve informations. This field
+                  is set once the machine is created and should not be changed
+                type: string
             type: object
         type: object
     served: true
@@ -4797,14 +4856,14 @@ status:
   acceptedNames:
     kind: ""
     plural: ""
-  conditions: []
-  storedVersions: []
+  conditions: null
+  storedVersions: null
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.7.0
+    controller-gen.kubebuilder.io/version: v0.11.4
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
@@ -5193,14 +5252,14 @@ status:
   acceptedNames:
     kind: ""
     plural: ""
-  conditions: []
-  storedVersions: []
+  conditions: null
+  storedVersions: null
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.7.0
+    controller-gen.kubebuilder.io/version: v0.11.4
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
@@ -5540,14 +5599,14 @@ status:
   acceptedNames:
     kind: ""
     plural: ""
-  conditions: []
-  storedVersions: []
+  conditions: null
+  storedVersions: null
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.7.0
+    controller-gen.kubebuilder.io/version: v0.11.4
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
@@ -5639,6 +5698,7 @@ spec:
                           "value". The requirements are ANDed.
                         type: object
                     type: object
+                    x-kubernetes-map-type: atomic
                 type: object
               secretName:
                 description: SecretName references a Secret inside the controller
@@ -5967,14 +6027,14 @@ status:
   acceptedNames:
     kind: ""
     plural: ""
-  conditions: []
-  storedVersions: []
+  conditions: null
+  storedVersions: null
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.7.0
+    controller-gen.kubebuilder.io/version: v0.11.4
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
@@ -6148,6 +6208,54 @@ spec:
                         - host
                         - port
                         type: object
+                      failureDomainSelector:
+                        description: FailureDomainSelector is the label selector to
+                          use for failure domain selection for the control plane nodes
+                          of the cluster. An empty value for the selector includes
+                          all the related failure domains.
+                        properties:
+                          matchExpressions:
+                            description: matchExpressions is a list of label selector
+                              requirements. The requirements are ANDed.
+                            items:
+                              description: A label selector requirement is a selector
+                                that contains values, a key, and an operator that
+                                relates the key and values.
+                              properties:
+                                key:
+                                  description: key is the label key that the selector
+                                    applies to.
+                                  type: string
+                                operator:
+                                  description: operator represents a key's relationship
+                                    to a set of values. Valid operators are In, NotIn,
+                                    Exists and DoesNotExist.
+                                  type: string
+                                values:
+                                  description: values is an array of string values.
+                                    If the operator is In or NotIn, the values array
+                                    must be non-empty. If the operator is Exists or
+                                    DoesNotExist, the values array must be empty.
+                                    This array is replaced during a strategic merge
+                                    patch.
+                                  items:
+                                    type: string
+                                  type: array
+                              required:
+                              - key
+                              - operator
+                              type: object
+                            type: array
+                          matchLabels:
+                            additionalProperties:
+                              type: string
+                            description: matchLabels is a map of {key,value} pairs.
+                              A single {key,value} in the matchLabels map is equivalent
+                              to an element of matchExpressions, whose key field is
+                              "key", the operator is "In", and the values array contains
+                              only "value". The requirements are ANDed.
+                            type: object
+                        type: object
                       identityRef:
                         description: IdentityRef is a reference to either a Secret
                           or VSphereClusterIdentity that contains the identity to
@@ -6189,5 +6297,5 @@ status:
   acceptedNames:
     kind: ""
     plural: ""
-  conditions: []
-  storedVersions: []
+  conditions: null
+  storedVersions: null

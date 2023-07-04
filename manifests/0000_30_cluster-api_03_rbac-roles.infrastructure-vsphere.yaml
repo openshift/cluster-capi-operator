@@ -14,7 +14,7 @@ metadata:
     cluster.x-k8s.io/provider: infrastructure-vsphere
     clusterctl.cluster.x-k8s.io: ""
     kubeadm.controlplane.cluster.x-k8s.io/aggregate-to-manager: "true"
-  name: openshift-cluster-api-capv-manager-role
+  name: capv-manager-role
 rules:
 - apiGroups:
   - ""
@@ -120,15 +120,6 @@ rules:
 - apiGroups:
   - cluster.x-k8s.io
   resources:
-  - clusters
-  - machines
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - cluster.x-k8s.io
-  resources:
   - machinedeployments
   verbs:
   - get
@@ -184,9 +175,6 @@ rules:
   - delete
   - get
   - list
-  - patch
-  - update
-  - watch
 - apiGroups:
   - ""
   resources:
@@ -327,6 +315,7 @@ rules:
   - create
   - get
   - list
+  - patch
   - update
   - watch
 - apiGroups:
@@ -539,11 +528,11 @@ metadata:
   labels:
     cluster.x-k8s.io/provider: infrastructure-vsphere
     clusterctl.cluster.x-k8s.io: ""
-  name: openshift-cluster-api-capv-manager-rolebinding
+  name: capv-manager-rolebinding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: openshift-cluster-api-capv-aggregated-manager-role
+  name: capv-aggregated-manager-role
 subjects:
 - kind: ServiceAccount
   name: default
@@ -640,5 +629,5 @@ metadata:
   labels:
     cluster.x-k8s.io/provider: infrastructure-vsphere
     clusterctl.cluster.x-k8s.io: ""
-  name: openshift-cluster-api-capv-aggregated-manager-role
+  name: capv-aggregated-manager-role
 rules: []

@@ -1,4 +1,5 @@
 <<<<<<< HEAD
+<<<<<<< HEAD
 ## 1.28.1
 
 ### Maintenance
@@ -11,6 +12,9 @@
 =======
 <<<<<<< HEAD
 >>>>>>> 64b93821 (Add vSphere infrastructureCluster template)
+=======
+<<<<<<< HEAD
+>>>>>>> 84bf5125 (Rebase on top of main after bump to 1.26)
 ## 1.28.0
 
 ### Features
@@ -48,6 +52,8 @@
 =======
 <<<<<<< HEAD
 >>>>>>> cb1c071c (Add vSphere infrastructureCluster template)
+=======
+>>>>>>> 9c4eef51 (Rebase on top of main after bump to 1.26)
 ## 1.27.8
 
 ### Fixes
@@ -113,8 +119,6 @@
 - bump ginkgo
 - remove tools.go hack as Ginkgo 2.8.2 automatically pulls in the cli dependencies [81443b3]
 
-=======
->>>>>>> decf4d9d (Add vSphere infrastructureCluster template)
 ## 1.27.1
 
 ### Maintenance
