@@ -1,4 +1,4 @@
-module github.com/openshift/cluster-capi-operator/assets
+module github.com/openshift/cluster-capi-operator/manifests-gen
 
 go 1.18
 

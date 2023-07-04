@@ -163,7 +163,9 @@ github.com/monochromegane/go-gitignore
 # github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822
 ## explicit
 github.com/munnerz/goautoneg
-# github.com/onsi/ginkgo/v2 v2.7.0
+# github.com/onsi/ginkgo/v2 v2.8.0
+## explicit; go 1.18
+# github.com/onsi/gomega v1.26.0
 ## explicit; go 1.18
 # github.com/opencontainers/go-digest v1.0.0
 ## explicit; go 1.13
@@ -228,10 +230,14 @@ github.com/spf13/viper/internal/encoding/javaproperties
 github.com/spf13/viper/internal/encoding/json
 github.com/spf13/viper/internal/encoding/toml
 github.com/spf13/viper/internal/encoding/yaml
+<<<<<<< HEAD:assets/vendor/modules.txt
 <<<<<<< HEAD:hack/assets/vendor/modules.txt
 # github.com/subosito/gotenv v1.4.2
 =======
 # github.com/stretchr/testify v1.8.1
+=======
+# github.com/stretchr/testify v1.8.2
+>>>>>>> 93ece80d (rename assets to manifests-gen):manifests-gen/vendor/modules.txt
 ## explicit; go 1.13
 # github.com/subosito/gotenv v1.4.1
 >>>>>>> c8862839 (assets generation refactor):assets/vendor/modules.txt
@@ -252,9 +258,9 @@ go.starlark.net/syntax
 ## explicit; go 1.18
 # go.uber.org/multierr v1.8.0
 ## explicit; go 1.14
-# go.uber.org/zap v1.23.0
-## explicit; go 1.18
-# golang.org/x/crypto v0.3.0
+# go.uber.org/zap v1.24.0
+## explicit; go 1.19
+# golang.org/x/crypto v0.5.0
 ## explicit; go 1.17
 golang.org/x/crypto/cast5
 golang.org/x/crypto/openpgp
@@ -263,7 +269,11 @@ golang.org/x/crypto/openpgp/elgamal
 golang.org/x/crypto/openpgp/errors
 golang.org/x/crypto/openpgp/packet
 golang.org/x/crypto/openpgp/s2k
+<<<<<<< HEAD:assets/vendor/modules.txt
 # golang.org/x/net v0.8.0
+=======
+# golang.org/x/net v0.9.0
+>>>>>>> 93ece80d (rename assets to manifests-gen):manifests-gen/vendor/modules.txt
 ## explicit; go 1.17
 golang.org/x/net/context
 golang.org/x/net/http/httpguts

@@ -4,6 +4,6 @@ use .
 
 use ./e2e
 
-use ./assets
+use ./manifests-gen
 
 use ./hack/tools
