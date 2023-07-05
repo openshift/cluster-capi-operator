@@ -17,11 +17,11 @@ import (
 )
 
 var basePath = flag.String("base-path", "", "path to the root of the provider's repository")
+var manifestsPath = flag.String("manifests-path", "", "path to the desired directory where to output the generated manifests")
 var providerName = flag.String("provider-name", "", "name of the provider")
 var providerType = flag.String("provider-type", "", "type of the provider")
 var providerVersion = flag.String("provider-version", "", "version of the provider")
 var projDir string
-var manifestsPath string
 
 var (
 	scheme          = runtime.NewScheme()
@@ -45,7 +45,6 @@ func main() {
 	}
 
 	projDir = path.Join(*basePath)
-	manifestsPath = path.Join(projDir, "manifests")
 
 	p := provider{
 		Name: *providerName,
@@ -61,7 +60,7 @@ func main() {
 }
 
 func validateFlags() error {
-	if *providerName == "" || *providerType == "" || *providerVersion == "" || *basePath == "" {
+	if *providerName == "" || *providerType == "" || *providerVersion == "" || *basePath == "" || *manifestsPath == "" {
 		return fmt.Errorf("error mandatory flags must be specified")
 	}
 

@@ -304,7 +304,7 @@ func writeComponentsToManifests(fileName string, objs []unstructured.Unstructure
 
 	combined = append([]byte(header), combined...)
 
-	return os.WriteFile(path.Join(manifestsPath, fileName), ensureNewLine(combined), 0600)
+	return os.WriteFile(path.Join(*manifestsPath, fileName), ensureNewLine(combined), 0600)
 }
 
 func fetchAndCompileComponents(url string) ([]byte, error) {

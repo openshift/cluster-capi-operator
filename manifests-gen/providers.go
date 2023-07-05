@@ -119,7 +119,7 @@ func (p *provider) writeProviderComponentsConfigmap(fileName string, objs []unst
 		return err
 	}
 
-	return os.WriteFile(path.Join(manifestsPath, fileName), ensureNewLine(cmYaml), 0600)
+	return os.WriteFile(path.Join(*manifestsPath, fileName), ensureNewLine(cmYaml), 0600)
 }
 
 func importProvider(p provider) error {
