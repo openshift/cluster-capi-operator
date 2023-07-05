@@ -90,6 +90,9 @@ func (p *provider) writeProviderComponentsConfigmap(fileName string, objs []unst
 		return err
 	}
 
+	annotations := openshifAnnotations
+	annotations[techPreviewAnnotation] = techPreviewAnnotationValue
+
 	cm := &corev1.ConfigMap{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "ConfigMap",
@@ -103,6 +106,7 @@ func (p *provider) writeProviderComponentsConfigmap(fileName string, objs []unst
 				"provider.cluster.x-k8s.io/type":    p.providerTypeName(),
 				"provider.cluster.x-k8s.io/version": p.Version,
 			},
+			Annotations: annotations,
 		},
 		Data: map[string]string{
 			"metadata":   string(p.metadata),
