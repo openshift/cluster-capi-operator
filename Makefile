@@ -37,8 +37,8 @@ e2e:
 	./hack/test.sh "./e2e/..." 30m
 
 # Run against the configured Kubernetes cluster in ~/.kube/config
-run: verify
-	go run cmd/cluster-capi-operator/main.go --leader-elect=false --images-json=./hack/sample-images.json
+run:
+	go run cmd/cluster-capi-operator/main.go --leader-elect=false --images-json=./dev-images.json
 
 # Run go fmt against code
 .PHONY: fmt

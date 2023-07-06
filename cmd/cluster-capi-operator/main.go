@@ -29,6 +29,7 @@ import (
 
 	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/capiinstaller"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/cluster"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/clusteroperator"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/kubeconfig"
@@ -237,6 +238,16 @@ func setupReconcilers(mgr manager.Manager, platform configv1.PlatformType, conta
 		RestCfg:                     mgr.GetConfig(),
 	}).SetupWithManager(mgr); err != nil {
 		klog.Error(err, "unable to create controller", "controller", "ClusterOperator")
+		os.Exit(1)
+	}
+
+	if err := (&capiinstaller.CapiInstallerController{
+		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-capi-installer-controller"),
+		Scheme:                      mgr.GetScheme(),
+		Images:                      containerImages,
+		RestCfg:                     mgr.GetConfig(),
+	}).SetupWithManager(mgr); err != nil {
+		klog.Error(err, "unable to create capi installer controller", "controller", "ClusterOperator")
 		os.Exit(1)
 	}
 }
