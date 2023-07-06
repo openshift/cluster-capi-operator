@@ -72,7 +72,10 @@ type lazyMetric struct {
 	markDeprecationOnce sync.Once
 	createOnce          sync.Once
 	self                kubeCollector
+<<<<<<< HEAD
 	stabilityLevel      StabilityLevel
+=======
+>>>>>>> 7a0911d4 (remove cluster-api-operator manifests and CR deployments)
 }
 
 func (r *lazyMetric) IsCreated() bool {
@@ -150,7 +153,10 @@ func (r *lazyMetric) Create(version *semver.Version) bool {
 	if r.IsHidden() {
 		return false
 	}
+<<<<<<< HEAD
 
+=======
+>>>>>>> 7a0911d4 (remove cluster-api-operator manifests and CR deployments)
 	r.createOnce.Do(func() {
 		r.createLock.Lock()
 		defer r.createLock.Unlock()
@@ -161,6 +167,7 @@ func (r *lazyMetric) Create(version *semver.Version) bool {
 			r.self.initializeMetric()
 		}
 	})
+<<<<<<< HEAD
 	sl := r.stabilityLevel
 	deprecatedV := r.self.DeprecatedVersion()
 	dv := ""
@@ -168,6 +175,8 @@ func (r *lazyMetric) Create(version *semver.Version) bool {
 		dv = deprecatedV.String()
 	}
 	registeredMetrics.WithLabelValues(string(sl), dv).Inc()
+=======
+>>>>>>> 7a0911d4 (remove cluster-api-operator manifests and CR deployments)
 	return r.IsCreated()
 }
 
@@ -216,6 +225,10 @@ var noopCounterVec = &prometheus.CounterVec{}
 var noopHistogramVec = &prometheus.HistogramVec{}
 var noopTimingHistogramVec = &promext.TimingHistogramVec{}
 var noopGaugeVec = &prometheus.GaugeVec{}
+<<<<<<< HEAD
+=======
+var noopObserverVec = &noopObserverVector{}
+>>>>>>> 7a0911d4 (remove cluster-api-operator manifests and CR deployments)
 
 // just use a convenience struct for all the no-ops
 var noop = &noopMetric{}
@@ -234,3 +247,25 @@ func (noopMetric) Desc() *prometheus.Desc            { return nil }
 func (noopMetric) Write(*dto.Metric) error           { return nil }
 func (noopMetric) Describe(chan<- *prometheus.Desc)  {}
 func (noopMetric) Collect(chan<- prometheus.Metric)  {}
+<<<<<<< HEAD
+=======
+
+type noopObserverVector struct{}
+
+func (noopObserverVector) GetMetricWith(prometheus.Labels) (prometheus.Observer, error) {
+	return noop, nil
+}
+func (noopObserverVector) GetMetricWithLabelValues(...string) (prometheus.Observer, error) {
+	return noop, nil
+}
+func (noopObserverVector) With(prometheus.Labels) prometheus.Observer    { return noop }
+func (noopObserverVector) WithLabelValues(...string) prometheus.Observer { return noop }
+func (noopObserverVector) CurryWith(prometheus.Labels) (prometheus.ObserverVec, error) {
+	return noopObserverVec, nil
+}
+func (noopObserverVector) MustCurryWith(prometheus.Labels) prometheus.ObserverVec {
+	return noopObserverVec
+}
+func (noopObserverVector) Describe(chan<- *prometheus.Desc) {}
+func (noopObserverVector) Collect(chan<- prometheus.Metric) {}
+>>>>>>> 7a0911d4 (remove cluster-api-operator manifests and CR deployments)

@@ -46,7 +46,11 @@ func NewGauge(opts *GaugeOpts) *Gauge {
 
 	kc := &Gauge{
 		GaugeOpts:  opts,
+<<<<<<< HEAD
 		lazyMetric: lazyMetric{stabilityLevel: opts.StabilityLevel},
+=======
+		lazyMetric: lazyMetric{},
+>>>>>>> 7a0911d4 (remove cluster-api-operator manifests and CR deployments)
 	}
 	kc.setPrometheusGauge(noop)
 	kc.lazyInit(kc, BuildFQName(opts.Namespace, opts.Subsystem, opts.Name))
@@ -115,7 +119,11 @@ func NewGaugeVec(opts *GaugeOpts, labels []string) *GaugeVec {
 		GaugeVec:       noopGaugeVec,
 		GaugeOpts:      opts,
 		originalLabels: labels,
+<<<<<<< HEAD
 		lazyMetric:     lazyMetric{stabilityLevel: opts.StabilityLevel},
+=======
+		lazyMetric:     lazyMetric{},
+>>>>>>> 7a0911d4 (remove cluster-api-operator manifests and CR deployments)
 	}
 	cv.lazyInit(cv, fqName)
 	return cv

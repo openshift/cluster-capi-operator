@@ -57,7 +57,11 @@ func NewTestableTimingHistogram(nowFunc func() time.Time, opts *TimingHistogramO
 	h := &TimingHistogram{
 		TimingHistogramOpts: opts,
 		nowFunc:             nowFunc,
+<<<<<<< HEAD
 		lazyMetric:          lazyMetric{stabilityLevel: opts.StabilityLevel},
+=======
+		lazyMetric:          lazyMetric{},
+>>>>>>> 7a0911d4 (remove cluster-api-operator manifests and CR deployments)
 	}
 	h.setPrometheusHistogram(noopMetric{})
 	h.lazyInit(h, BuildFQName(opts.Namespace, opts.Subsystem, opts.Name))
@@ -136,7 +140,11 @@ func NewTestableTimingHistogramVec(nowFunc func() time.Time, opts *TimingHistogr
 		TimingHistogramOpts: opts,
 		nowFunc:             nowFunc,
 		originalLabels:      labels,
+<<<<<<< HEAD
 		lazyMetric:          lazyMetric{stabilityLevel: opts.StabilityLevel},
+=======
+		lazyMetric:          lazyMetric{},
+>>>>>>> 7a0911d4 (remove cluster-api-operator manifests and CR deployments)
 	}
 	v.lazyInit(v, fqName)
 	return v
@@ -177,9 +185,12 @@ func (v *TimingHistogramVec) WithLabelValuesChecked(lvs ...string) (GaugeMetric,
 		v.LabelValueAllowLists.ConstrainToAllowedList(v.originalLabels, lvs)
 	}
 	ops, err := v.TimingHistogramVec.GetMetricWithLabelValues(lvs...)
+<<<<<<< HEAD
 	if err != nil {
 		return noop, err
 	}
+=======
+>>>>>>> 7a0911d4 (remove cluster-api-operator manifests and CR deployments)
 	return ops.(GaugeMetric), err
 }
 

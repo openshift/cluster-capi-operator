@@ -49,7 +49,11 @@ func (m *MachinePool) Default() {
 	if m.Labels == nil {
 		m.Labels = make(map[string]string)
 	}
+<<<<<<< HEAD
 	m.Labels[clusterv1.ClusterNameLabel] = m.Spec.ClusterName
+=======
+	m.Labels[clusterv1.ClusterLabelName] = m.Spec.ClusterName
+>>>>>>> 7a0911d4 (remove cluster-api-operator manifests and CR deployments)
 
 	if m.Spec.Replicas == nil {
 		m.Spec.Replicas = pointer.Int32(1)

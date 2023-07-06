@@ -20,7 +20,10 @@ import (
 	"net/http"
 
 	"github.com/prometheus/client_golang/prometheus"
+<<<<<<< HEAD
 	"github.com/prometheus/client_golang/prometheus/collectors"
+=======
+>>>>>>> 7a0911d4 (remove cluster-api-operator manifests and CR deployments)
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"k8s.io/component-base/metrics"
@@ -42,6 +45,7 @@ var (
 
 	// Register registers a collectable metric but uses the global registry
 	Register = defaultRegistry.Register
+<<<<<<< HEAD
 
 	// Registerer exposes the global registerer
 	Registerer = defaultRegistry.Registerer
@@ -51,6 +55,15 @@ func init() {
 	RawMustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 	RawMustRegister(collectors.NewGoCollector(collectors.WithGoCollectorRuntimeMetrics(collectors.MetricsAll)))
 	defaultRegistry.RegisterMetaMetrics()
+=======
+)
+
+func init() {
+	//nolint:staticcheck // SA1019 - replacement function still calls prometheus.NewProcessCollector().
+	RawMustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
+	//nolint:staticcheck // SA1019 - replacement function still calls prometheus.NewGoCollector().
+	RawMustRegister(prometheus.NewGoCollector())
+>>>>>>> 7a0911d4 (remove cluster-api-operator manifests and CR deployments)
 }
 
 // Handler returns an HTTP handler for the DefaultGatherer. It is

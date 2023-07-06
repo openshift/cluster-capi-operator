@@ -16,8 +16,6 @@ import (
 )
 
 var (
-	operatorImageName                 = "cluster-kube-cluster-api-operator"
-	operatorImageSource               = "test.com/operator:tag"
 	kubeRBACProxyImageName            = "kube-rbac-proxy"
 	kubeRBACProxySource               = "test.com/kube-rbac-proxy:tag"
 	coreProviderImageName             = "cluster-capi-controllers"
@@ -52,7 +50,6 @@ var _ = Describe("Reconcile components", func() {
 				Client: cl,
 			},
 			Images: map[string]string{
-				operatorImageName:               operatorImageSource,
 				kubeRBACProxyImageName:          kubeRBACProxySource,
 				coreProviderImageName:           coreProviderImageSource,
 				infrastructureProviderImageName: infrastructureProviderImageSource,

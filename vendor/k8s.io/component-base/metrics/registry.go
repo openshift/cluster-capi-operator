@@ -32,6 +32,7 @@ import (
 var (
 	showHiddenOnce      sync.Once
 	disabledMetricsLock sync.RWMutex
+<<<<<<< HEAD
 	showHidden          atomic.Bool
 	registries          []*kubeRegistry // stores all registries created by NewKubeRegistry()
 	registriesLock      sync.RWMutex
@@ -61,6 +62,12 @@ var (
 			StabilityLevel: ALPHA,
 		},
 	)
+=======
+	showHidden          atomic.Value
+	registries          []*kubeRegistry // stores all registries created by NewKubeRegistry()
+	registriesLock      sync.RWMutex
+	disabledMetrics     = map[string]struct{}{}
+>>>>>>> 7a0911d4 (remove cluster-api-operator manifests and CR deployments)
 )
 
 // shouldHide be used to check if a specific metric with deprecated version should be hidden
@@ -92,7 +99,10 @@ func SetDisabledMetric(name string) {
 	disabledMetricsLock.Lock()
 	defer disabledMetricsLock.Unlock()
 	disabledMetrics[name] = struct{}{}
+<<<<<<< HEAD
 	disabledMetricsTotal.Inc()
+=======
+>>>>>>> 7a0911d4 (remove cluster-api-operator manifests and CR deployments)
 }
 
 // SetShowHidden will enable showing hidden metrics. This will no-opt
@@ -113,7 +123,11 @@ func SetShowHidden() {
 // is enabled. While the primary usecase for this is internal (to determine
 // registration behavior) this can also be used to introspect
 func ShouldShowHidden() bool {
+<<<<<<< HEAD
 	return showHidden.Load()
+=======
+	return showHidden.Load() != nil && showHidden.Load().(bool)
+>>>>>>> 7a0911d4 (remove cluster-api-operator manifests and CR deployments)
 }
 
 // Registerable is an interface for a collector metric which we
@@ -155,12 +169,15 @@ type KubeRegistry interface {
 	// Reset invokes the Reset() function on all items in the registry
 	// which are added as resettables.
 	Reset()
+<<<<<<< HEAD
 	// RegisterMetaMetrics registers metrics about the number of registered metrics.
 	RegisterMetaMetrics()
 	// Registerer exposes the underlying prometheus registerer
 	Registerer() prometheus.Registerer
 	// Gatherer exposes the underlying prometheus gatherer
 	Gatherer() prometheus.Gatherer
+=======
+>>>>>>> 7a0911d4 (remove cluster-api-operator manifests and CR deployments)
 }
 
 // kubeRegistry is a wrapper around a prometheus registry-type object. Upon initialization
@@ -192,6 +209,7 @@ func (kr *kubeRegistry) Register(c Registerable) error {
 	return nil
 }
 
+<<<<<<< HEAD
 // Registerer exposes the underlying prometheus.Registerer
 func (kr *kubeRegistry) Registerer() prometheus.Registerer {
 	return kr.PromRegistry
@@ -202,6 +220,8 @@ func (kr *kubeRegistry) Gatherer() prometheus.Gatherer {
 	return kr.PromRegistry
 }
 
+=======
+>>>>>>> 7a0911d4 (remove cluster-api-operator manifests and CR deployments)
 // MustRegister works like Register but registers any number of
 // Collectors and panics upon the first registration that causes an
 // error.
@@ -292,7 +312,10 @@ func (kr *kubeRegistry) trackHiddenCollector(c Registerable) {
 	defer kr.hiddenCollectorsLock.Unlock()
 
 	kr.hiddenCollectors[c.FQName()] = c
+<<<<<<< HEAD
 	hiddenMetricsTotal.Inc()
+=======
+>>>>>>> 7a0911d4 (remove cluster-api-operator manifests and CR deployments)
 }
 
 // trackStableCollectors stores all custom collectors.
@@ -372,14 +395,22 @@ func newKubeRegistry(v apimachineryversion.Info) *kubeRegistry {
 	return r
 }
 
+<<<<<<< HEAD
 // NewKubeRegistry creates a new vanilla Registry
+=======
+// NewKubeRegistry creates a new vanilla Registry without any Collectors
+// pre-registered.
+>>>>>>> 7a0911d4 (remove cluster-api-operator manifests and CR deployments)
 func NewKubeRegistry() KubeRegistry {
 	r := newKubeRegistry(BuildVersion())
 	return r
 }
+<<<<<<< HEAD
 
 func (r *kubeRegistry) RegisterMetaMetrics() {
 	r.MustRegister(registeredMetrics)
 	r.MustRegister(disabledMetricsTotal)
 	r.MustRegister(hiddenMetricsTotal)
 }
+=======
+>>>>>>> 7a0911d4 (remove cluster-api-operator manifests and CR deployments)

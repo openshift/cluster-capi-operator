@@ -18,11 +18,7 @@ var _ = Describe("Read assets suite", func() {
 		objs, err := ReadCoreProviderAssets(scheme.Scheme)
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(objs).To(HaveLen(2))
-
-		Expect(objs).Should(HaveKey(CoreProviderKey))
-		Expect(objs[CoreProviderKey]).ToNot(BeNil())
-		Expect(objs[CoreProviderKey].GetObjectKind().GroupVersionKind().Kind).To(Equal("CoreProvider"))
+		Expect(objs).To(HaveLen(1))
 
 		Expect(objs).Should(HaveKey(CoreProviderConfigMapKey))
 		Expect(objs[CoreProviderConfigMapKey]).ToNot(BeNil())
@@ -33,11 +29,7 @@ var _ = Describe("Read assets suite", func() {
 		objs, err := ReadInfrastructureProviderAssets(scheme.Scheme, "aws")
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(objs).To(HaveLen(2))
-
-		Expect(objs).Should(HaveKey(InfrastructureProviderKey))
-		Expect(objs[InfrastructureProviderKey]).ToNot(BeNil())
-		Expect(objs[InfrastructureProviderKey].GetObjectKind().GroupVersionKind().Kind).To(Equal("InfrastructureProvider"))
+		Expect(objs).To(HaveLen(1))
 
 		Expect(objs).Should(HaveKey(InfrastructureProviderConfigMapKey))
 		Expect(objs[InfrastructureProviderConfigMapKey]).ToNot(BeNil())

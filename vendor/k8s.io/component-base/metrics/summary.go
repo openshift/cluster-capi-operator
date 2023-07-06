@@ -49,7 +49,11 @@ func NewSummary(opts *SummaryOpts) *Summary {
 
 	s := &Summary{
 		SummaryOpts: opts,
+<<<<<<< HEAD
 		lazyMetric:  lazyMetric{stabilityLevel: opts.StabilityLevel},
+=======
+		lazyMetric:  lazyMetric{},
+>>>>>>> 7a0911d4 (remove cluster-api-operator manifests and CR deployments)
 	}
 	s.setPrometheusSummary(noopMetric{})
 	s.lazyInit(s, BuildFQName(opts.Namespace, opts.Subsystem, opts.Name))
@@ -118,7 +122,11 @@ func NewSummaryVec(opts *SummaryOpts, labels []string) *SummaryVec {
 	v := &SummaryVec{
 		SummaryOpts:    opts,
 		originalLabels: labels,
+<<<<<<< HEAD
 		lazyMetric:     lazyMetric{stabilityLevel: opts.StabilityLevel},
+=======
+		lazyMetric:     lazyMetric{},
+>>>>>>> 7a0911d4 (remove cluster-api-operator manifests and CR deployments)
 	}
 	v.lazyInit(v, fqName)
 	return v
