@@ -38,7 +38,8 @@ e2e:
 
 # Run against the configured Kubernetes cluster in ~/.kube/config
 run:
-	go run cmd/cluster-capi-operator/main.go --leader-elect=false --images-json=./dev-images.json
+	oc -n openshift-cluster-api patch lease cluster-capi-operator-leader -p '{"spec":{"acquireTime": null, "holderIdentity": null, "renewTime": null}}' --type=merge
+	go run cmd/cluster-capi-operator/main.go --images-json=./dev-images.json --leader-elect=true --leader-elect-lease-duration=120s --namespace="openshift-cluster-api" --leader-elect-resource-namespace="openshift-cluster-api"
 
 # Run go fmt against code
 .PHONY: fmt
