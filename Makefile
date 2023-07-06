@@ -37,8 +37,9 @@ e2e:
 	./hack/test.sh "./e2e/..." 30m
 
 # Run against the configured Kubernetes cluster in ~/.kube/config
-run: verify
-	go run cmd/cluster-capi-operator/main.go --leader-elect=false --images-json=./hack/sample-images.json
+run:
+	oc -n openshift-cluster-api patch lease cluster-capi-operator-leader -p '{"spec":{"acquireTime": null, "holderIdentity": null, "renewTime": null}}' --type=merge
+	go run cmd/cluster-capi-operator/main.go --images-json=./dev-images.json --leader-elect=true --leader-elect-lease-duration=120s --namespace="openshift-cluster-api" --leader-elect-resource-namespace="openshift-cluster-api"
 
 # Run go fmt against code
 .PHONY: fmt
@@ -52,10 +53,6 @@ vet: lint
 .PHONY: lint
 lint:
 	$(call ensure-home, ${GOLANGCI_LINT} run ./...)
-
-.PHONY: assets
-assets:
-	./hack/assets.sh $(PROVIDER)
 
 # Run go mod
 .PHONY: vendor

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/go-logr/logr"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -47,7 +49,7 @@ func (r *UserDataSecretController) Reconcile(ctx context.Context, req ctrl.Reque
 	sourceSecret := &corev1.Secret{}
 	if err := r.Get(ctx, defaultSourceSecretObjectKey, sourceSecret); err != nil {
 		log.Error(err, "unable to get source secret for sync")
-		if err := r.setDegradedCondition(ctx); err != nil {
+		if err := r.setDegradedCondition(ctx, log); err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to set conditions for secret sync controller: %v", err)
 		}
 		return ctrl.Result{}, err
@@ -62,7 +64,7 @@ func (r *UserDataSecretController) Reconcile(ctx context.Context, req ctrl.Reque
 	// If the secret does not exist, it will be created later, so we can ignore a Not Found error
 	if err := r.Get(ctx, targetSecretKey, targetSecret); err != nil && !errors.IsNotFound(err) {
 		log.Error(err, "unable to get target secret for sync")
-		if err := r.setDegradedCondition(ctx); err != nil {
+		if err := r.setDegradedCondition(ctx, log); err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to set conditions for secret controller: %v", err)
 		}
 		return ctrl.Result{}, err
@@ -70,7 +72,7 @@ func (r *UserDataSecretController) Reconcile(ctx context.Context, req ctrl.Reque
 
 	if r.areSecretsEqual(sourceSecret, targetSecret) {
 		log.Info("user data in source and target secrets is the same, no sync needed")
-		if err := r.setAvailableCondition(ctx); err != nil {
+		if err := r.setAvailableCondition(ctx, log); err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to set conditions for user data secret controller: %v", err)
 		}
 		return ctrl.Result{}, nil
@@ -78,13 +80,13 @@ func (r *UserDataSecretController) Reconcile(ctx context.Context, req ctrl.Reque
 
 	if err := r.syncSecretData(ctx, sourceSecret, targetSecret); err != nil {
 		log.Error(err, "unable to sync user data secret")
-		if err := r.setDegradedCondition(ctx); err != nil {
+		if err := r.setDegradedCondition(ctx, log); err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to set conditions for user data secret controller: %v", err)
 		}
 		return ctrl.Result{}, err
 	}
 
-	if err := r.setAvailableCondition(ctx); err != nil {
+	if err := r.setAvailableCondition(ctx, log); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to set conditions for user data secret controller: %v", err)
 	}
 
@@ -142,9 +144,7 @@ func (r *UserDataSecretController) SetupWithManager(mgr ctrl.Manager) error {
 	return build.Complete(r)
 }
 
-func (r *UserDataSecretController) setAvailableCondition(ctx context.Context) error {
-	log := ctrl.LoggerFrom(ctx)
-
+func (r *UserDataSecretController) setAvailableCondition(ctx context.Context, log logr.Logger) error {
 	co, err := r.GetOrCreateClusterOperator(ctx)
 	if err != nil {
 		return err
@@ -162,9 +162,7 @@ func (r *UserDataSecretController) setAvailableCondition(ctx context.Context) er
 	return r.SyncStatus(ctx, co, conds)
 }
 
-func (r *UserDataSecretController) setDegradedCondition(ctx context.Context) error {
-	log := ctrl.LoggerFrom(ctx)
-
+func (r *UserDataSecretController) setDegradedCondition(ctx context.Context, log logr.Logger) error {
 	co, err := r.GetOrCreateClusterOperator(ctx)
 	if err != nil {
 		return err

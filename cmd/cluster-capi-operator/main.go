@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
+	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -29,8 +30,8 @@ import (
 
 	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/capiinstaller"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/cluster"
-	"github.com/openshift/cluster-capi-operator/pkg/controllers/clusteroperator"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/kubeconfig"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/secretsync"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
@@ -68,11 +69,6 @@ var (
 		defaultImagesLocation,
 		"The location of images file to use by operator for managed CAPI binaries.",
 	)
-	providerFile = flag.String(
-		"providers-yaml",
-		defaultProvidersLocation,
-		"The location of supported providers for CAPI.",
-	)
 	webhookPort = flag.Int(
 		"webhook-port",
 		9443,
@@ -87,7 +83,6 @@ var (
 
 const (
 	defaultImagesLocation         = "./dev-images.json"
-	defaultProvidersLocation      = "./providers-list.yaml"
 	releaseVersionEnvVariableName = "RELEASE_VERSION"
 	unknownVersionValue           = "unknown"
 )
@@ -96,6 +91,7 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(configv1.AddToScheme(scheme))
 	utilruntime.Must(apiextensionsv1.AddToScheme(scheme))
+	utilruntime.Must(admissionregistrationv1.AddToScheme(scheme))
 	utilruntime.Must(operatorv1.AddToScheme(scheme))
 	utilruntime.Must(awsv1.AddToScheme(scheme))
 	utilruntime.Must(azurev1.AddToScheme(scheme))
@@ -150,19 +146,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	supportedProviders, err := util.ReadProvidersFile(*providerFile)
-	if err != nil {
-		klog.Error(err, "unable to get providers from file", "name", *providerFile)
-		os.Exit(1)
-	}
-
 	platform, err := util.GetPlatform(context.Background(), mgr.GetAPIReader())
 	if err != nil {
 		klog.Error(err, "unable to get platform from infrastructure object")
 		os.Exit(1)
 	}
 
-	setupReconcilers(mgr, platform, containerImages, supportedProviders)
+	setupReconcilers(mgr, platform, containerImages)
 	setupWebhooks(mgr, platform)
 
 	// +kubebuilder:scaffold:builder
@@ -201,17 +191,7 @@ func getClusterOperatorStatusClient(mgr manager.Manager, controller string) oper
 	}
 }
 
-func setupReconcilers(mgr manager.Manager, platform configv1.PlatformType, containerImages map[string]string, supportedProviders map[string]bool) {
-	if err := (&clusteroperator.ClusterOperatorReconciler{
-		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-cluster-operator-controller"),
-		Scheme:                      mgr.GetScheme(),
-		Images:                      containerImages,
-		SupportedPlatforms:          supportedProviders,
-	}).SetupWithManager(mgr); err != nil {
-		klog.Error(err, "unable to create controller", "controller", "ClusterOperator")
-		os.Exit(1)
-	}
-
+func setupReconcilers(mgr manager.Manager, platform configv1.PlatformType, containerImages map[string]string) {
 	if err := (&cluster.CoreClusterReconciler{
 		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-cluster-resource-controller"),
 		Cluster:                     &clusterv1.Cluster{},
@@ -226,17 +206,27 @@ func setupReconcilers(mgr manager.Manager, platform configv1.PlatformType, conta
 		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-user-data-secret-controller"),
 		Scheme:                      mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
-		klog.Error(err, "unable to create user-data-secret controller", "controller", "ClusterOperator")
+		klog.Error(err, "unable to create user-data-secret controller", "controller", "UserDataSecret")
 		os.Exit(1)
 	}
 
 	if err := (&kubeconfig.KubeconfigReconciler{
 		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-kubeconfig-controller"),
 		Scheme:                      mgr.GetScheme(),
-		SupportedPlatforms:          supportedProviders,
 		RestCfg:                     mgr.GetConfig(),
 	}).SetupWithManager(mgr); err != nil {
-		klog.Error(err, "unable to create controller", "controller", "ClusterOperator")
+		klog.Error(err, "unable to create controller", "controller", "Kubeconfig")
+		os.Exit(1)
+	}
+
+	if err := (&capiinstaller.CapiInstallerController{
+		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-capi-installer-controller"),
+		Scheme:                      mgr.GetScheme(),
+		Images:                      containerImages,
+		RestCfg:                     mgr.GetConfig(),
+		Platform:                    platform,
+	}).SetupWithManager(mgr); err != nil {
+		klog.Error(err, "unable to create capi installer controller", "controller", "CAPIInstaller")
 		os.Exit(1)
 	}
 }
