@@ -3,7 +3,6 @@ package kubeconfig
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -74,15 +73,6 @@ func (r *KubeconfigReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (c
 	}
 
 	r.clusterName = infra.Status.InfrastructureName
-
-	// If the platform type is not supported, we should skip cluster reconciliation.
-	if _, ok := r.SupportedPlatforms[strings.ToLower(string(infra.Status.PlatformStatus.Type))]; !ok {
-		log.Info("Platform type is not supported. Skipping kubeconfig reconciliation...", "platformType", infra.Status.PlatformStatus.Type)
-		if err := r.SetStatusAvailable(ctx); err != nil {
-			return ctrl.Result{}, err
-		}
-		return ctrl.Result{}, nil
-	}
 
 	log.Info("Reconciling kubeconfig secret")
 

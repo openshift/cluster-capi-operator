@@ -4,6 +4,6 @@ use .
 
 use ./e2e
 
-use ./hack/assets
+use ./assets
 
 use ./hack/tools

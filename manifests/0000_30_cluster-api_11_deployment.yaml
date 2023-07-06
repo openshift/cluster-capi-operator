@@ -31,7 +31,6 @@ spec:
         - ./cluster-capi-operator
         args:
           - --images-json=/etc/cluster-api-config-images/images.json
-          - --providers-yaml=/etc/cluster-api-config-providers/providers-list.yaml
         env:
         - name: RELEASE_VERSION
           value: "0.0.1-snapshot"

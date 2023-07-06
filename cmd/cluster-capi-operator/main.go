@@ -68,11 +68,6 @@ var (
 		defaultImagesLocation,
 		"The location of images file to use by operator for managed CAPI binaries.",
 	)
-	providerFile = flag.String(
-		"providers-yaml",
-		defaultProvidersLocation,
-		"The location of supported providers for CAPI.",
-	)
 	webhookPort = flag.Int(
 		"webhook-port",
 		9443,
@@ -87,7 +82,6 @@ var (
 
 const (
 	defaultImagesLocation         = "./dev-images.json"
-	defaultProvidersLocation      = "./providers-list.yaml"
 	releaseVersionEnvVariableName = "RELEASE_VERSION"
 	unknownVersionValue           = "unknown"
 )
@@ -150,19 +144,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	supportedProviders, err := util.ReadProvidersFile(*providerFile)
-	if err != nil {
-		klog.Error(err, "unable to get providers from file", "name", *providerFile)
-		os.Exit(1)
-	}
-
 	platform, err := util.GetPlatform(context.Background(), mgr.GetAPIReader())
 	if err != nil {
 		klog.Error(err, "unable to get platform from infrastructure object")
 		os.Exit(1)
 	}
 
-	setupReconcilers(mgr, platform, containerImages, supportedProviders)
+	setupReconcilers(mgr, platform, containerImages)
 	setupWebhooks(mgr, platform)
 
 	// +kubebuilder:scaffold:builder
@@ -201,7 +189,7 @@ func getClusterOperatorStatusClient(mgr manager.Manager, controller string) oper
 	}
 }
 
-func setupReconcilers(mgr manager.Manager, platform configv1.PlatformType, containerImages map[string]string, supportedProviders map[string]bool) {
+func setupReconcilers(mgr manager.Manager, platform configv1.PlatformType, containerImages map[string]string) {
 	if err := (&cluster.CoreClusterReconciler{
 		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-cluster-resource-controller"),
 		Cluster:                     &clusterv1.Cluster{},
@@ -223,7 +211,6 @@ func setupReconcilers(mgr manager.Manager, platform configv1.PlatformType, conta
 	if err := (&kubeconfig.KubeconfigReconciler{
 		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-kubeconfig-controller"),
 		Scheme:                      mgr.GetScheme(),
-		SupportedPlatforms:          supportedProviders,
 		RestCfg:                     mgr.GetConfig(),
 	}).SetupWithManager(mgr); err != nil {
 		klog.Error(err, "unable to create controller", "controller", "ClusterOperator")

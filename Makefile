@@ -54,10 +54,6 @@ vet: lint
 lint:
 	$(call ensure-home, ${GOLANGCI_LINT} run ./...)
 
-.PHONY: assets
-assets:
-	./hack/assets.sh $(PROVIDER)
-
 # Run go mod
 .PHONY: vendor
 vendor:
