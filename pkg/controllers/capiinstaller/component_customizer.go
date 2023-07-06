@@ -16,73 +16,6 @@ limitations under the License.
 
 package capiinstaller
 
-import (
-	appsv1 "k8s.io/api/apps/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/client-go/kubernetes/scheme"
-)
-
-const (
-	deploymentKind       = "Deployment"
-	namespaceKind        = "Namespace"
-	managerContainerName = "manager"
-	defaultVerbosity     = 1
-)
-
-var (
-	bool2Str = map[bool]string{true: "true", false: "false"}
-)
-
-// customizeObjectsFn apply provider specific customization to a list of manifests.
-func customizeObjectsFn(provider provider, images map[string]string) func(objs []unstructured.Unstructured) ([]unstructured.Unstructured, error) {
-	return func(objs []unstructured.Unstructured) ([]unstructured.Unstructured, error) {
-		results := []unstructured.Unstructured{}
-		for i := range objs {
-			o := objs[i]
-
-			if o.GetKind() == namespaceKind {
-				// filter out namespaces as the targetNamespace already exists as the provider object is in it.
-				continue
-			}
-
-			// if o.GetNamespace() != "" {
-			// 	// only set the ownership on namespaced objects.
-			// 	o.SetOwnerReferences(util.EnsureOwnerRef(provider.GetOwnerReferences(),
-			// 		metav1.OwnerReference{
-			// 			APIVersion: operatorv1.GroupVersion.String(),
-			// 			Kind:       provider.GetObjectKind().GroupVersionKind().Kind,
-			// 			Name:       provider.GetName(),
-			// 			UID:        provider.GetUID(),
-			// 		}))
-			// }
-
-			if o.GetKind() == deploymentKind {
-				d := &appsv1.Deployment{}
-				if err := scheme.Scheme.Convert(&o, d, nil); err != nil {
-					return nil, err
-				}
-				customizeContainers(provider, d, images)
-				if err := scheme.Scheme.Convert(d, &o, nil); err != nil {
-					return nil, err
-				}
-			}
-			results = append(results, o)
-		}
-		return results, nil
-	}
-}
-
-// customizeContainer customize provider container base on provider spec input.
-func customizeContainers(provider provider, d *appsv1.Deployment, images map[string]string) {
-	for j, c := range d.Spec.Template.Spec.Containers {
-		if c.Name == "manager" {
-			c.Image = images[providerNameToImageKey(provider.Name)]
-			c.Command = []string{providerNameToCommand(provider.Name)}
-			d.Spec.Template.Spec.Containers[j] = c
-		}
-	}
-}
-
 func providerNameToImageKey(name string) string {
 	switch name {
 	case "aws":
@@ -111,6 +44,6 @@ func providerNameToCommand(name string) string {
 	case "cluster-api":
 		return "./bin/cluster-api-controller-manager"
 	default:
-		return "./manager"
+		return "/manager"
 	}
 }
