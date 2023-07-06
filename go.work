@@ -1,0 +1,9 @@
+go 1.18
+
+use .
+
+use ./e2e
+
+use ./hack/assets
+
+use ./hack/tools
