@@ -1269,6 +1269,7 @@ k8s.io/apimachinery/third_party/forked/golang/json
 k8s.io/apimachinery/third_party/forked/golang/reflect
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 # k8s.io/client-go v0.26.5
 =======
 =======
@@ -1278,6 +1279,8 @@ k8s.io/apimachinery/third_party/forked/golang/reflect
 k8s.io/apiserver/pkg/storage/names
 =======
 >>>>>>> 40e706bc (rework: direct apply)
+=======
+>>>>>>> 5a056949 (go work sync)
 # k8s.io/client-go v0.25.4
 >>>>>>> 7a0911d4 (remove cluster-api-operator manifests and CR deployments)
 ## explicit; go 1.19
@@ -1417,6 +1420,7 @@ k8s.io/client-go/util/retry
 k8s.io/client-go/util/workqueue
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 # k8s.io/component-base v0.26.5
 =======
 =======
@@ -1433,6 +1437,9 @@ k8s.io/cluster-bootstrap/token/util
 # k8s.io/component-base v0.25.3
 >>>>>>> 40e706bc (rework: direct apply)
 >>>>>>> 546b24bc (rework: direct apply)
+=======
+# k8s.io/component-base v0.25.4
+>>>>>>> 5a056949 (go work sync)
 ## explicit; go 1.19
 k8s.io/component-base/config
 k8s.io/component-base/config/options
