@@ -214,6 +214,11 @@ github.com/denis-tingaikin/go-header
 # github.com/dimchansky/utfbom v1.1.1
 ## explicit
 github.com/dimchansky/utfbom
+# github.com/drone/envsubst/v2 v2.0.0-20210730161058-179042472c46
+## explicit; go 1.13
+github.com/drone/envsubst/v2
+github.com/drone/envsubst/v2/parse
+github.com/drone/envsubst/v2/path
 # github.com/emicklei/go-restful/v3 v3.10.2
 ## explicit; go 1.13
 github.com/emicklei/go-restful/v3
