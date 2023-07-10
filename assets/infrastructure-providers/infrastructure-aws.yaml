@@ -545,15 +545,12 @@ data:
       - major: 2
         minor: 0
         contract: v1beta1
-      - major: 2
-        minor: 1
-        contract: v1beta1
 kind: ConfigMap
 metadata:
   creationTimestamp: null
   labels:
     provider.cluster.x-k8s.io/name: aws
     provider.cluster.x-k8s.io/type: infrastructure
-    provider.cluster.x-k8s.io/version: v2.1.2
+    provider.cluster.x-k8s.io/version: v2.2.0
   name: aws
   namespace: openshift-cluster-api

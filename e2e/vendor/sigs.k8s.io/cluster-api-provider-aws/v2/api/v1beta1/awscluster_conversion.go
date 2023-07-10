@@ -46,8 +46,13 @@ func (src *AWSCluster) ConvertTo(dstRaw conversion.Hub) error {
 	dst.Spec.S3Bucket = restored.Spec.S3Bucket
 	if restored.Status.Bastion != nil {
 		dst.Status.Bastion.InstanceMetadataOptions = restored.Status.Bastion.InstanceMetadataOptions
+		dst.Status.Bastion.PlacementGroupName = restored.Status.Bastion.PlacementGroupName
 	}
 	dst.Spec.Partition = restored.Spec.Partition
+
+	for role, sg := range restored.Status.Network.SecurityGroups {
+		dst.Status.Network.SecurityGroups[role] = sg
+	}
 
 	return nil
 }
@@ -69,6 +74,7 @@ func restoreControlPlaneLoadBalancer(restored, dst *infrav2.AWSLoadBalancerSpec)
 	dst.LoadBalancerType = restored.LoadBalancerType
 	dst.DisableHostsRewrite = restored.DisableHostsRewrite
 	dst.PreserveClientIP = restored.PreserveClientIP
+	dst.IngressRules = restored.IngressRules
 }
 
 // ConvertFrom converts the v1beta1 AWSCluster receiver to a v1beta1 AWSCluster.

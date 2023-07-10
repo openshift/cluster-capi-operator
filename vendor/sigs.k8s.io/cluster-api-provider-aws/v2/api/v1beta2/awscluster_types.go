@@ -208,6 +208,10 @@ type AWSLoadBalancerSpec struct {
 	// +optional
 	AdditionalSecurityGroups []string `json:"additionalSecurityGroups,omitempty"`
 
+	// IngressRules sets the ingress rules for the control plane load balancer.
+	// +optional
+	IngressRules []IngressRule `json:"ingressRules,omitempty"`
+
 	// LoadBalancerType sets the type for a load balancer. The default type is classic.
 	// +kubebuilder:default=classic
 	// +kubebuilder:validation:Enum:=classic;elb;alb;nlb
