@@ -32,6 +32,7 @@ data:
           - args:
             - --leader-elect
             - --metrics-bind-addr=localhost:8080
+            - --v=${CAPG_LOGLEVEL:=0}
             env:
             - name: GOOGLE_APPLICATION_CREDENTIALS
               value: /home/.gcp/service_account.json
@@ -150,6 +151,66 @@ data:
         resources:
         - gcpmachinetemplates
       sideEffects: None
+    - admissionReviewVersions:
+      - v1
+      clientConfig:
+        service:
+          name: capg-webhook-service
+          namespace: openshift-cluster-api
+          path: /mutate-infrastructure-cluster-x-k8s-io-v1beta1-gcpmanagedcluster
+      failurePolicy: Fail
+      name: mgcpmanagedcluster.kb.io
+      rules:
+      - apiGroups:
+        - infrastructure.cluster.x-k8s.io
+        apiVersions:
+        - v1beta1
+        operations:
+        - CREATE
+        - UPDATE
+        resources:
+        - gcpmanagedclusters
+      sideEffects: None
+    - admissionReviewVersions:
+      - v1
+      clientConfig:
+        service:
+          name: capg-webhook-service
+          namespace: openshift-cluster-api
+          path: /mutate-infrastructure-cluster-x-k8s-io-v1beta1-gcpmanagedcontrolplane
+      failurePolicy: Fail
+      name: mgcpmanagedcontrolplane.kb.io
+      rules:
+      - apiGroups:
+        - infrastructure.cluster.x-k8s.io
+        apiVersions:
+        - v1beta1
+        operations:
+        - CREATE
+        - UPDATE
+        resources:
+        - gcpmanagedcontrolplanes
+      sideEffects: None
+    - admissionReviewVersions:
+      - v1
+      clientConfig:
+        service:
+          name: capg-webhook-service
+          namespace: openshift-cluster-api
+          path: /mutate-infrastructure-cluster-x-k8s-io-v1beta1-gcpmanagedmachinepool
+      failurePolicy: Fail
+      name: mgcpmanagedmachinepool.kb.io
+      rules:
+      - apiGroups:
+        - infrastructure.cluster.x-k8s.io
+        apiVersions:
+        - v1beta1
+        operations:
+        - CREATE
+        - UPDATE
+        resources:
+        - gcpmanagedmachinepools
+      sideEffects: None
     ---
     apiVersion: admissionregistration.k8s.io/v1
     kind: ValidatingWebhookConfiguration
@@ -204,6 +265,66 @@ data:
         resources:
         - gcpmachinetemplates
       sideEffects: None
+    - admissionReviewVersions:
+      - v1
+      clientConfig:
+        service:
+          name: capg-webhook-service
+          namespace: openshift-cluster-api
+          path: /validate-infrastructure-cluster-x-k8s-io-v1beta1-gcpmanagedcluster
+      failurePolicy: Fail
+      name: vgcpmanagedcluster.kb.io
+      rules:
+      - apiGroups:
+        - infrastructure.cluster.x-k8s.io
+        apiVersions:
+        - v1beta1
+        operations:
+        - CREATE
+        - UPDATE
+        resources:
+        - gcpmanagedclusters
+      sideEffects: None
+    - admissionReviewVersions:
+      - v1
+      clientConfig:
+        service:
+          name: capg-webhook-service
+          namespace: openshift-cluster-api
+          path: /validate-infrastructure-cluster-x-k8s-io-v1beta1-gcpmanagedcontrolplane
+      failurePolicy: Fail
+      name: vgcpmanagedcontrolplane.kb.io
+      rules:
+      - apiGroups:
+        - infrastructure.cluster.x-k8s.io
+        apiVersions:
+        - v1beta1
+        operations:
+        - CREATE
+        - UPDATE
+        resources:
+        - gcpmanagedcontrolplanes
+      sideEffects: None
+    - admissionReviewVersions:
+      - v1
+      clientConfig:
+        service:
+          name: capg-webhook-service
+          namespace: openshift-cluster-api
+          path: /validate-infrastructure-cluster-x-k8s-io-v1beta1-gcpmanagedmachinepool
+      failurePolicy: Fail
+      name: vgcpmanagedmachinepool.kb.io
+      rules:
+      - apiGroups:
+        - infrastructure.cluster.x-k8s.io
+        apiVersions:
+        - v1beta1
+        operations:
+        - CREATE
+        - UPDATE
+        resources:
+        - gcpmanagedmachinepools
+      sideEffects: None
     ---
     apiVersion: v1
     kind: Service
@@ -225,7 +346,7 @@ data:
         targetPort: webhook-server
       selector:
         cluster.x-k8s.io/provider: infrastructure-gcp
-  metadata: |
+  metadata: |-
     # maps release series of major.minor to cluster-api contract version
     # the contract version may change between minor or major versions, but *not*
     # between patch versions.
@@ -248,12 +369,15 @@ data:
       - major: 1
         minor: 2
         contract: v1beta1
+      - major: 1
+        minor: 3
+        contract: v1beta1
 kind: ConfigMap
 metadata:
   creationTimestamp: null
   labels:
     provider.cluster.x-k8s.io/name: gcp
     provider.cluster.x-k8s.io/type: infrastructure
-    provider.cluster.x-k8s.io/version: v1.2.1
+    provider.cluster.x-k8s.io/version: v1.3.0
   name: gcp
   namespace: openshift-cluster-api

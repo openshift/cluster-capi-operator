@@ -4,23 +4,23 @@ data:
     - name: cluster-api
       type: CoreProvider
       branch: release-4.14
-      version: v1.3.3
+      version: v1.4.2
     - name: aws
       type: InfrastructureProvider
       branch: release-4.14
-      version: v2.0.2
+      version: v2.2.0
     - name: azure
       type: InfrastructureProvider
       branch: release-4.14
-      version: v1.7.1
+      version: v1.9.2
     - name: gcp
       type: InfrastructureProvider
       branch: release-4.14
-      version: v1.2.1
+      version: v1.3.0
     - name: powervs
       type: InfrastructureProvider
       branch: release-4.14
-      version: v0.4.0
+      version: v0.5.1
 
 kind: ConfigMap
 metadata:

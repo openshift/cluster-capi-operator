@@ -15,5 +15,5 @@ spec:
       matchLabels:
         provider.cluster.x-k8s.io/name: aws
         provider.cluster.x-k8s.io/type: infrastructure
-  version: v2.0.2
+  version: v2.2.0
 status: {}

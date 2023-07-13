@@ -19,6 +19,7 @@ package v1beta1
 import (
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/utils/net"
 )
 
 const (
@@ -124,6 +125,41 @@ type VnetPeeringClassSpec struct {
 
 	// RemoteVnetName defines name of the remote virtual network.
 	RemoteVnetName string `json:"remoteVnetName"`
+
+	// ForwardPeeringProperties specifies VnetPeeringProperties for peering from the cluster's virtual network to the
+	// remote virtual network.
+	// +optional
+	ForwardPeeringProperties VnetPeeringProperties `json:"forwardPeeringProperties,omitempty"`
+
+	// ReversePeeringProperties specifies VnetPeeringProperties for peering from the remote virtual network to the
+	// cluster's virtual network.
+	// +optional
+	ReversePeeringProperties VnetPeeringProperties `json:"reversePeeringProperties,omitempty"`
+}
+
+// VnetPeeringProperties specifies virtual network peering properties.
+type VnetPeeringProperties struct {
+	// AllowForwardedTraffic specifies whether the forwarded traffic from the VMs in the local virtual network will be
+	// allowed/disallowed in remote virtual network.
+	// +optional
+	AllowForwardedTraffic *bool `json:"allowForwardedTraffic,omitempty"`
+
+	// AllowGatewayTransit specifies if gateway links can be used in remote virtual networking to link to this virtual
+	// network.
+	// +optional
+	AllowGatewayTransit *bool `json:"allowGatewayTransit,omitempty"`
+
+	// AllowVirtualNetworkAccess specifies whether the VMs in the local virtual network space would be able to access
+	// the VMs in remote virtual network space.
+	// +optional
+	AllowVirtualNetworkAccess *bool `json:"allowVirtualNetworkAccess,omitempty"`
+
+	// UseRemoteGateways specifies if remote gateways can be used on this virtual network.
+	// If the flag is set to true, and allowGatewayTransit on remote peering is also set to true, the virtual network
+	// will use the gateways of the remote virtual network for transit. Only one peering can have this flag set to true.
+	// This flag cannot be set if virtual network already has a gateway.
+	// +optional
+	UseRemoteGateways *bool `json:"useRemoteGateways,omitempty"`
 }
 
 // VnetPeerings is a slice of VnetPeering.
@@ -143,6 +179,11 @@ type Subnets []SubnetSpec
 // +listType=map
 // +listMapKey=service
 type ServiceEndpoints []ServiceEndpointSpec
+
+// PrivateEndpoints is a slice of PrivateEndpointSpec.
+// +listType=map
+// +listMapKey=name
+type PrivateEndpoints []PrivateEndpointSpec
 
 // SecurityGroup defines an Azure security group.
 type SecurityGroup struct {
@@ -635,6 +676,48 @@ type ServiceEndpointSpec struct {
 	Locations []string `json:"locations"`
 }
 
+// PrivateLinkServiceConnection defines the specification for a private link service connection associated with a private endpoint.
+type PrivateLinkServiceConnection struct {
+	// Name specifies the name of the private link service.
+	// +optional
+	Name string `json:"name,omitempty"`
+	// PrivateLinkServiceID specifies the resource ID of the private link service.
+	PrivateLinkServiceID string `json:"privateLinkServiceID,omitempty"`
+	// GroupIDs specifies the ID(s) of the group(s) obtained from the remote resource that this private endpoint should connect to.
+	// +optional
+	GroupIDs []string `json:"groupIDs,omitempty"`
+	// RequestMessage specifies a message passed to the owner of the remote resource with the private endpoint connection request.
+	// +kubebuilder:validation:MaxLength=140
+	// +optional
+	RequestMessage string `json:"requestMessage,omitempty"`
+}
+
+// PrivateEndpointSpec configures an Azure Private Endpoint.
+type PrivateEndpointSpec struct {
+	// Name specifies the name of the private endpoint.
+	Name string `json:"name"`
+	// Location specifies the region to create the private endpoint.
+	// +optional
+	Location string `json:"location,omitempty"`
+	// PrivateLinkServiceConnections specifies Private Link Service Connections of the private endpoint.
+	PrivateLinkServiceConnections []PrivateLinkServiceConnection `json:"privateLinkServiceConnections,omitempty"`
+	// CustomNetworkInterfaceName specifies the network interface name associated with the private endpoint.
+	// +optional
+	CustomNetworkInterfaceName string `json:"customNetworkInterfaceName,omitempty"`
+	// PrivateIPAddresses specifies the IP addresses for the network interface associated with the private endpoint.
+	// They have to be part of the subnet where the private endpoint is linked.
+	// +optional
+	PrivateIPAddresses []string `json:"privateIPAddresses,omitempty"`
+	// ApplicationSecurityGroups specifies the Application security group in which the private endpoint IP configuration is included.
+	// +optional
+	ApplicationSecurityGroups []string `json:"applicationSecurityGroups,omitempty"`
+	// ManualApproval specifies if the connection approval needs to be done manually or not.
+	// Set it true when the network admin does not have access to approve connections to the remote resource.
+	// Defaults to false.
+	// +optional
+	ManualApproval bool `json:"manualApproval,omitempty"`
+}
+
 // NetworkInterface defines a network interface.
 type NetworkInterface struct {
 	// SubnetName specifies the subnet in which the new network interface will be placed.
@@ -684,6 +767,16 @@ func (n *NetworkSpec) UpdateNodeSubnet(subnet SubnetSpec) {
 // IsNatGatewayEnabled returns whether or not a NAT gateway is enabled on the subnet.
 func (s SubnetSpec) IsNatGatewayEnabled() bool {
 	return s.NatGateway.Name != ""
+}
+
+// IsIPv6Enabled returns whether or not IPv6 is enabled on the subnet.
+func (s SubnetSpec) IsIPv6Enabled() bool {
+	for _, cidr := range s.CIDRBlocks {
+		if net.IsIPv6CIDRString(cidr) {
+			return true
+		}
+	}
+	return false
 }
 
 // SecurityProfile specifies the Security profile settings for a
@@ -785,6 +878,16 @@ const (
 	AvailabilitySetRateLimit = "availabilitySetRateLimit"
 )
 
+// BastionHostSkuName is the name of the SKU used to specify the tier of Azure Bastion Host.
+type BastionHostSkuName string
+
+const (
+	// BasicBastionHostSku SKU for the Azure Bastion Host.
+	BasicBastionHostSku BastionHostSkuName = "Basic"
+	// StandardBastionHostSku SKU for the Azure Bastion Host.
+	StandardBastionHostSku BastionHostSkuName = "Standard"
+)
+
 // BastionSpec specifies how the Bastion feature should be set up for the cluster.
 type BastionSpec struct {
 	// +optional
@@ -799,6 +902,15 @@ type AzureBastion struct {
 	Subnet SubnetSpec `json:"subnet,omitempty"`
 	// +optional
 	PublicIP PublicIPSpec `json:"publicIP,omitempty"`
+	// BastionHostSkuName configures the tier of the Azure Bastion Host. Can be either Basic or Standard. Defaults to Basic.
+	// +kubebuilder:default=Basic
+	// +kubebuilder:validation:Enum=Basic;Standard
+	// +optional
+	Sku BastionHostSkuName `json:"sku,omitempty"`
+	// EnableTunneling enables the native client support feature for the Azure Bastion Host. Defaults to false.
+	// +kubebuilder:default=false
+	// +optional
+	EnableTunneling bool `json:"enableTunneling,omitempty"`
 }
 
 // BackendPool describes the backend pool of the load balancer.

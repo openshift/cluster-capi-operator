@@ -147,7 +147,7 @@ func (r *KubeconfigReconciler) reconcileKubeconfig(ctx context.Context) (ctrl.Re
 			Name:      fmt.Sprintf("%s-kubeconfig", r.clusterName),
 			Namespace: controllers.DefaultManagedNamespace,
 			Labels: map[string]string{
-				clusterv1.ClusterLabelName: r.clusterName,
+				clusterv1.ClusterNameLabel: r.clusterName,
 			},
 		},
 		Data: map[string][]byte{

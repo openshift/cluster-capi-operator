@@ -15,5 +15,5 @@ spec:
       matchLabels:
         provider.cluster.x-k8s.io/name: gcp
         provider.cluster.x-k8s.io/type: infrastructure
-  version: v1.2.1
+  version: v1.3.0
 status: {}

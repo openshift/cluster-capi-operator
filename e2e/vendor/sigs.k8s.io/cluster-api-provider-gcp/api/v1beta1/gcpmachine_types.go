@@ -66,6 +66,86 @@ const (
 	IPForwardingDisabled IPForwarding = "Disabled"
 )
 
+// SecureBootPolicy represents the secure boot configuration for the GCP machine.
+type SecureBootPolicy string
+
+const (
+	// SecureBootPolicyEnabled enables the secure boot configuration for the GCP machine.
+	SecureBootPolicyEnabled SecureBootPolicy = "Enabled"
+	// SecureBootPolicyDisabled disables the secure boot configuration for the GCP machine.
+	SecureBootPolicyDisabled SecureBootPolicy = "Disabled"
+)
+
+// VirtualizedTrustedPlatformModulePolicy represents the virtualized trusted platform module configuration for the GCP machine.
+type VirtualizedTrustedPlatformModulePolicy string
+
+const (
+	// VirtualizedTrustedPlatformModulePolicyEnabled enables the virtualized trusted platform module configuration for the GCP machine.
+	VirtualizedTrustedPlatformModulePolicyEnabled VirtualizedTrustedPlatformModulePolicy = "Enabled"
+	// VirtualizedTrustedPlatformModulePolicyDisabled disables the virtualized trusted platform module configuration for the GCP machine.
+	VirtualizedTrustedPlatformModulePolicyDisabled VirtualizedTrustedPlatformModulePolicy = "Disabled"
+)
+
+// IntegrityMonitoringPolicy represents the integrity monitoring configuration for the GCP machine.
+type IntegrityMonitoringPolicy string
+
+const (
+	// IntegrityMonitoringPolicyEnabled enables integrity monitoring for the GCP machine.
+	IntegrityMonitoringPolicyEnabled IntegrityMonitoringPolicy = "Enabled"
+	// IntegrityMonitoringPolicyDisabled disables integrity monitoring for the GCP machine.
+	IntegrityMonitoringPolicyDisabled IntegrityMonitoringPolicy = "Disabled"
+)
+
+// GCPShieldedInstanceConfig describes the shielded VM configuration of the instance on GCP.
+// Shielded VM configuration allow users to enable and disable Secure Boot, vTPM, and Integrity Monitoring.
+type GCPShieldedInstanceConfig struct {
+	// SecureBoot Defines whether the instance should have secure boot enabled.
+	// Secure Boot verify the digital signature of all boot components, and halting the boot process if signature verification fails.
+	// If omitted, the platform chooses a default, which is subject to change over time, currently that default is Disabled.
+	// +kubebuilder:validation:Enum=Enabled;Disabled
+	//+optional
+	SecureBoot SecureBootPolicy `json:"secureBoot,omitempty"`
+
+	// VirtualizedTrustedPlatformModule enable virtualized trusted platform module measurements to create a known good boot integrity policy baseline.
+	// The integrity policy baseline is used for comparison with measurements from subsequent VM boots to determine if anything has changed.
+	// If omitted, the platform chooses a default, which is subject to change over time, currently that default is Enabled.
+	// +kubebuilder:validation:Enum=Enabled;Disabled
+	// +optional
+	VirtualizedTrustedPlatformModule VirtualizedTrustedPlatformModulePolicy `json:"virtualizedTrustedPlatformModule,omitempty"`
+
+	// IntegrityMonitoring determines whether the instance should have integrity monitoring that verify the runtime boot integrity.
+	// Compares the most recent boot measurements to the integrity policy baseline and return
+	// a pair of pass/fail results depending on whether they match or not.
+	// If omitted, the platform chooses a default, which is subject to change over time, currently that default is Enabled.
+	// +kubebuilder:validation:Enum=Enabled;Disabled
+	// +optional
+	IntegrityMonitoring IntegrityMonitoringPolicy `json:"integrityMonitoring,omitempty"`
+}
+
+// ConfidentialComputePolicy represents the confidential compute configuration for the GCP machine.
+type ConfidentialComputePolicy string
+
+const (
+	// ConfidentialComputePolicyEnabled enables confidential compute for the GCP machine.
+	ConfidentialComputePolicyEnabled ConfidentialComputePolicy = "Enabled"
+	// ConfidentialComputePolicyDisabled disables confidential compute for the GCP machine.
+	ConfidentialComputePolicyDisabled ConfidentialComputePolicy = "Disabled"
+)
+
+// Confidential VM supports Compute Engine machine types in the following series:
+// reference: https://cloud.google.com/compute/confidential-vm/docs/os-and-machine-type#machine-type
+var confidentialComputeSupportedMachineSeries = []string{"n2d", "c2d"}
+
+// HostMaintenancePolicy represents the desired behavior ase of a host maintenance event.
+type HostMaintenancePolicy string
+
+const (
+	// HostMaintenancePolicyMigrate causes Compute Engine to live migrate an instance when there is a maintenance event.
+	HostMaintenancePolicyMigrate HostMaintenancePolicy = "Migrate"
+	// HostMaintenancePolicyTerminate - stops an instance instead of migrating it.
+	HostMaintenancePolicyTerminate HostMaintenancePolicy = "Terminate"
+)
+
 // GCPMachineSpec defines the desired state of GCPMachine.
 type GCPMachineSpec struct {
 	// InstanceType is the type of instance to create. Example: n1.standard-2
@@ -149,6 +229,23 @@ type GCPMachineSpec struct {
 	// +kubebuilder:default=Enabled
 	// +optional
 	IPForwarding *IPForwarding `json:"ipForwarding,omitempty"`
+
+	// ShieldedInstanceConfig is the Shielded VM configuration for this machine
+	// +optional
+	ShieldedInstanceConfig *GCPShieldedInstanceConfig `json:"shieldedInstanceConfig,omitempty"`
+
+	// OnHostMaintenance determines the behavior when a maintenance event occurs that might cause the instance to reboot.
+	// If omitted, the platform chooses a default, which is subject to change over time, currently that default is "Migrate".
+	// +kubebuilder:validation:Enum=Migrate;Terminate;
+	// +optional
+	OnHostMaintenance *HostMaintenancePolicy `json:"onHostMaintenance,omitempty"`
+
+	// ConfidentialCompute Defines whether the instance should have confidential compute enabled.
+	// If enabled OnHostMaintenance is required to be set to "Terminate".
+	// If omitted, the platform chooses a default, which is subject to change over time, currently that default is false.
+	// +kubebuilder:validation:Enum=Enabled;Disabled
+	// +optional
+	ConfidentialCompute *ConfidentialComputePolicy `json:"confidentialCompute,omitempty"`
 }
 
 // MetadataItem defines a single piece of metadata associated with an instance.

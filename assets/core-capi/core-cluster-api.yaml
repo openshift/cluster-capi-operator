@@ -68,11 +68,23 @@ data:
               requests:
                 cpu: 10m
                 memory: 50Mi
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop:
+                - ALL
+              privileged: false
+              runAsGroup: 65532
+              runAsUser: 65532
             volumeMounts:
             - mountPath: /tmp/k8s-webhook-server/serving-certs
               name: cert
               readOnly: true
           priorityClassName: system-cluster-critical
+          securityContext:
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
           serviceAccountName: capi-manager
           terminationGracePeriodSeconds: 10
           tolerations:
@@ -402,6 +414,28 @@ data:
         service:
           name: capi-webhook-service
           namespace: openshift-cluster-api
+          path: /validate-addons-cluster-x-k8s-io-v1beta1-clusterresourcesetbinding
+      failurePolicy: Fail
+      matchPolicy: Equivalent
+      name: validation.clusterresourcesetbinding.addons.cluster.x-k8s.io
+      rules:
+      - apiGroups:
+        - addons.cluster.x-k8s.io
+        apiVersions:
+        - v1beta1
+        operations:
+        - CREATE
+        - UPDATE
+        resources:
+        - clusterresourcesetbindings
+      sideEffects: None
+    - admissionReviewVersions:
+      - v1
+      - v1beta1
+      clientConfig:
+        service:
+          name: capi-webhook-service
+          namespace: openshift-cluster-api
           path: /validate-ipam-cluster-x-k8s-io-v1alpha1-ipaddress
       failurePolicy: Fail
       matchPolicy: Equivalent
@@ -462,7 +496,7 @@ data:
         targetPort: webhook-server
       selector:
         cluster.x-k8s.io/provider: cluster-api
-  metadata: |
+  metadata: |-
     # maps release series of major.minor to cluster-api contract version
     # the contract version may change between minor or major versions, but *not*
     # between patch versions.
@@ -471,6 +505,9 @@ data:
     apiVersion: clusterctl.cluster.x-k8s.io/v1alpha3
     kind: Metadata
     releaseSeries:
+      - major: 1
+        minor: 4
+        contract: v1beta1
       - major: 1
         minor: 3
         contract: v1beta1
@@ -495,6 +532,6 @@ metadata:
   labels:
     provider.cluster.x-k8s.io/name: cluster-api
     provider.cluster.x-k8s.io/type: core
-    provider.cluster.x-k8s.io/version: v1.3.3
+    provider.cluster.x-k8s.io/version: v1.4.2
   name: cluster-api
   namespace: openshift-cluster-api

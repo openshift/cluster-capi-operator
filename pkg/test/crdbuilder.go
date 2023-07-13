@@ -8,7 +8,6 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/utils/pointer"
 )
 
 var (
@@ -53,6 +52,7 @@ var (
 )
 
 func generateCRD(gvk schema.GroupVersionKind) *apiextensionsv1.CustomResourceDefinition {
+	shouldPreserveUnknownFields := true
 	return &apiextensionsv1.CustomResourceDefinition{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: apiextensionsv1.SchemeGroupVersion.String(),
@@ -82,11 +82,11 @@ func generateCRD(gvk schema.GroupVersionKind) *apiextensionsv1.CustomResourceDef
 							Properties: map[string]apiextensionsv1.JSONSchemaProps{
 								"spec": {
 									Type:                   "object",
-									XPreserveUnknownFields: pointer.BoolPtr(true),
+									XPreserveUnknownFields: &shouldPreserveUnknownFields,
 								},
 								"status": {
 									Type:                   "object",
-									XPreserveUnknownFields: pointer.BoolPtr(true),
+									XPreserveUnknownFields: &shouldPreserveUnknownFields,
 								},
 							},
 						},

@@ -8,11 +8,10 @@ metadata:
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
     release.openshift.io/feature-set: TechPreviewNoUpgrade
-  creationTimestamp: null
   labels:
     cluster.x-k8s.io/provider: infrastructure-ibmcloud
     clusterctl.cluster.x-k8s.io: ""
-  name: openshift-cluster-api-capi-ibmcloud-manager-role
+  name: capi-ibmcloud-manager-role
 rules:
 - apiGroups:
   - ""
@@ -180,11 +179,11 @@ metadata:
   labels:
     cluster.x-k8s.io/provider: infrastructure-ibmcloud
     clusterctl.cluster.x-k8s.io: ""
-  name: openshift-cluster-api-capi-ibmcloud-manager-rolebinding
+  name: capi-ibmcloud-manager-rolebinding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: openshift-cluster-api-capi-ibmcloud-manager-role
+  name: capi-ibmcloud-manager-role
 subjects:
 - kind: ServiceAccount
   name: capi-ibmcloud-manager
@@ -277,7 +276,7 @@ metadata:
   labels:
     cluster.x-k8s.io/provider: infrastructure-ibmcloud
     clusterctl.cluster.x-k8s.io: ""
-  name: openshift-cluster-api-capi-ibmcloud-proxy-role
+  name: capi-ibmcloud-proxy-role
 rules:
 - apiGroups:
   - authentication.k8s.io
@@ -304,11 +303,11 @@ metadata:
   labels:
     cluster.x-k8s.io/provider: infrastructure-ibmcloud
     clusterctl.cluster.x-k8s.io: ""
-  name: openshift-cluster-api-capi-ibmcloud-proxy-rolebinding
+  name: capi-ibmcloud-proxy-rolebinding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: openshift-cluster-api-capi-ibmcloud-proxy-role
+  name: capi-ibmcloud-proxy-role
 subjects:
 - kind: ServiceAccount
   name: default
@@ -325,7 +324,7 @@ metadata:
   labels:
     cluster.x-k8s.io/provider: infrastructure-ibmcloud
     clusterctl.cluster.x-k8s.io: ""
-  name: openshift-cluster-api-capi-ibmcloud-metrics-reader
+  name: capi-ibmcloud-metrics-reader
 rules:
 - nonResourceURLs:
   - /metrics

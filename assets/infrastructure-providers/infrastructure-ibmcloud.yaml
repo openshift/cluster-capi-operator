@@ -160,6 +160,27 @@ data:
         service:
           name: capi-ibmcloud-webhook-service
           namespace: openshift-cluster-api
+          path: /mutate-infrastructure-cluster-x-k8s-io-v1beta2-ibmpowervsclustertemplate
+      failurePolicy: Fail
+      name: mibmpowervsclustertemplate.kb.io
+      rules:
+      - apiGroups:
+        - infrastructure.cluster.x-k8s.io
+        apiVersions:
+        - v1beta2
+        operations:
+        - CREATE
+        - UPDATE
+        resources:
+        - ibmpowervsclustertemplates
+      sideEffects: None
+    - admissionReviewVersions:
+      - v1
+      - v1beta1
+      clientConfig:
+        service:
+          name: capi-ibmcloud-webhook-service
+          namespace: openshift-cluster-api
           path: /mutate-infrastructure-cluster-x-k8s-io-v1beta2-ibmpowervsimage
       failurePolicy: Fail
       name: mibmpowervsimage.kb.io
@@ -319,6 +340,27 @@ data:
         service:
           name: capi-ibmcloud-webhook-service
           namespace: openshift-cluster-api
+          path: /validate-infrastructure-cluster-x-k8s-io-v1beta2-ibmpowervsclustertemplate
+      failurePolicy: Fail
+      name: vibmpowervsclustertemplate.kb.io
+      rules:
+      - apiGroups:
+        - infrastructure.cluster.x-k8s.io
+        apiVersions:
+        - v1beta2
+        operations:
+        - CREATE
+        - UPDATE
+        resources:
+        - ibmpowervsclustertemplates
+      sideEffects: None
+    - admissionReviewVersions:
+      - v1
+      - v1beta1
+      clientConfig:
+        service:
+          name: capi-ibmcloud-webhook-service
+          namespace: openshift-cluster-api
           path: /validate-infrastructure-cluster-x-k8s-io-v1beta2-ibmpowervsimage
       failurePolicy: Fail
       name: vibmpowervsimage.kb.io
@@ -460,7 +502,7 @@ data:
       selector:
         cluster.x-k8s.io/provider: infrastructure-ibmcloud
         control-plane: controller-manager
-  metadata: |
+  metadata: |-
     # maps release series of major.minor to cluster-api contract version
     # the contract version may change between minor or major versions, but *not*
     # between patch versions.
@@ -477,12 +519,15 @@ data:
       - major: 0
         minor: 4
         contract: v1beta1
+      - major: 0
+        minor: 5
+        contract: v1beta1
 kind: ConfigMap
 metadata:
   creationTimestamp: null
   labels:
     provider.cluster.x-k8s.io/name: ibmcloud
     provider.cluster.x-k8s.io/type: infrastructure
-    provider.cluster.x-k8s.io/version: v0.4.0
+    provider.cluster.x-k8s.io/version: v0.5.1
   name: ibmcloud
   namespace: openshift-cluster-api

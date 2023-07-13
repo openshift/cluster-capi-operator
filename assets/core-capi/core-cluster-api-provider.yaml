@@ -15,5 +15,5 @@ spec:
       matchLabels:
         provider.cluster.x-k8s.io/name: cluster-api
         provider.cluster.x-k8s.io/type: core
-  version: v1.3.3
+  version: v1.4.2
 status: {}
