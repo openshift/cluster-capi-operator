@@ -12,7 +12,7 @@ data:
     - name: azure
       type: InfrastructureProvider
       branch: release-4.14
-      version: v1.9.2
+      version: v1.9.5
     - name: gcp
       type: InfrastructureProvider
       branch: release-4.14
