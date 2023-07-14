@@ -459,6 +459,6 @@ metadata:
   labels:
     provider.cluster.x-k8s.io/name: azure
     provider.cluster.x-k8s.io/type: infrastructure
-    provider.cluster.x-k8s.io/version: v1.9.2
+    provider.cluster.x-k8s.io/version: v1.9.5
   name: azure
   namespace: openshift-cluster-api
