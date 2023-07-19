@@ -30,6 +30,18 @@ func CreateCoreCluster(cl client.Client, clusterName, infraClusterKind string) *
 		},
 	}
 
+	if infraClusterKind == "VSphereCluster" {
+		host, port, err := GetControlPlaneHostAndPort(cl)
+		if err != nil {
+			Expect(err).ToNot(HaveOccurred())
+		}
+
+		cluster.Spec.ControlPlaneEndpoint = clusterv1.APIEndpoint{
+			Host: host,
+			Port: port,
+		}
+	}
+
 	if err := cl.Create(ctx, cluster); err != nil && !apierrors.IsAlreadyExists(err) {
 		Expect(err).ToNot(HaveOccurred())
 	}

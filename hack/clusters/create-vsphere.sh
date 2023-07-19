@@ -16,6 +16,6 @@ printcolor "Creating VSphere infrastructure cluster"
 envsubst <hack/clusters/templates/vsphere.yaml | kubectl apply -f -
 
 printcolor "Creating core cluster"
-envsubst <hack/clusters/templates/core.yaml | kubectl apply -f -
+envsubst <hack/clusters/templates/core_vsphere.yaml | kubectl apply -f -
 
 printcolor "Done"

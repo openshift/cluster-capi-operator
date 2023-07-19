@@ -81,6 +81,11 @@ func getVSphereMAPIProviderSpec(cl client.Client) *mapiv1.VSphereMachineProvider
 func createVSphereCluster(cl client.Client, mapiProviderSpec *mapiv1.VSphereMachineProviderSpec) *vspherev1.VSphereCluster {
 	By("Creating vSphere cluster")
 
+	host, port, err := framework.GetControlPlaneHostAndPort(cl)
+	if err != nil {
+		Expect(err).ToNot(HaveOccurred())
+	}
+
 	vSphereCluster := &vspherev1.VSphereCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      clusterName,
@@ -91,6 +96,10 @@ func createVSphereCluster(cl client.Client, mapiProviderSpec *mapiv1.VSphereMach
 			IdentityRef: &vspherev1.VSphereIdentityReference{
 				Kind: "Secret",
 				Name: clusterName,
+			},
+			ControlPlaneEndpoint: vspherev1.APIEndpoint{
+				Host: host,
+				Port: port,
 			},
 		},
 	}
