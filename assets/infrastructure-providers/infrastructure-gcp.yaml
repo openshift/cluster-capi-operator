@@ -74,6 +74,14 @@ data:
               requests:
                 cpu: 10m
                 memory: 50Mi
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop:
+                - ALL
+              privileged: false
+              runAsGroup: 65532
+              runAsUser: 65532
             volumeMounts:
             - mountPath: /tmp/k8s-webhook-server/serving-certs
               name: cert
@@ -372,12 +380,15 @@ data:
       - major: 1
         minor: 3
         contract: v1beta1
+      - major: 1
+        minor: 4
+        contract: v1beta1
 kind: ConfigMap
 metadata:
   creationTimestamp: null
   labels:
     provider.cluster.x-k8s.io/name: gcp
     provider.cluster.x-k8s.io/type: infrastructure
-    provider.cluster.x-k8s.io/version: v1.3.0
+    provider.cluster.x-k8s.io/version: v1.4.0
   name: gcp
   namespace: openshift-cluster-api
