@@ -26,6 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
 func (r *VSphereVM) SetupWebhookWithManager(mgr ctrl.Manager) error {
@@ -46,7 +47,7 @@ func (r *VSphereVM) Default() {
 }
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type.
-func (r *VSphereVM) ValidateCreate() error {
+func (r *VSphereVM) ValidateCreate() (admission.Warnings, error) {
 	var allErrs field.ErrorList
 	spec := r.Spec
 
@@ -65,32 +66,57 @@ func (r *VSphereVM) ValidateCreate() error {
 	if r.Spec.OS == Windows && len(r.Name) > 15 {
 		allErrs = append(allErrs, field.Invalid(field.NewPath("name"), r.Name, "name has to be less than 16 characters for Windows VM"))
 	}
-	return aggregateObjErrors(r.GroupVersionKind().GroupKind(), r.Name, allErrs)
+	if spec.GuestSoftPowerOffTimeout != nil {
+		if spec.PowerOffMode != VirtualMachinePowerOpModeTrySoft {
+			allErrs = append(allErrs, field.Invalid(field.NewPath("spec", "guestSoftPowerOffTimeout"), spec.GuestSoftPowerOffTimeout, "should not be set in templates unless the powerOffMode is trySoft"))
+		}
+		if spec.GuestSoftPowerOffTimeout.Duration <= 0 {
+			allErrs = append(allErrs, field.Invalid(field.NewPath("spec", "guestSoftPowerOffTimeout"), spec.GuestSoftPowerOffTimeout, "should be greater than 0"))
+		}
+	}
+	return nil, aggregateObjErrors(r.GroupVersionKind().GroupKind(), r.Name, allErrs)
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type.
 //
 //nolint:forcetypeassert
-func (r *VSphereVM) ValidateUpdate(old runtime.Object) error {
+func (r *VSphereVM) ValidateUpdate(old runtime.Object) (admission.Warnings, error) {
+	var allErrs field.ErrorList
+	if r.Spec.GuestSoftPowerOffTimeout != nil {
+		if r.Spec.PowerOffMode != VirtualMachinePowerOpModeTrySoft {
+			allErrs = append(allErrs, field.Invalid(field.NewPath("spec", "guestSoftPowerOffTimeout"), r.Spec.GuestSoftPowerOffTimeout, "should not be set in templates unless the powerOffMode is trySoft"))
+		}
+		if r.Spec.GuestSoftPowerOffTimeout.Duration <= 0 {
+			allErrs = append(allErrs, field.Invalid(field.NewPath("spec", "guestSoftPowerOffTimeout"), r.Spec.GuestSoftPowerOffTimeout, "should be greater than 0"))
+		}
+	}
+
 	newVSphereVM, err := runtime.DefaultUnstructuredConverter.ToUnstructured(r)
 	if err != nil {
-		return apierrors.NewInternalError(errors.Wrap(err, "failed to convert new VSphereVM to unstructured object"))
+		return nil, apierrors.NewInternalError(errors.Wrap(err, "failed to convert new VSphereVM to unstructured object"))
 	}
 	oldVSphereVM, err := runtime.DefaultUnstructuredConverter.ToUnstructured(old)
 	if err != nil {
-		return apierrors.NewInternalError(errors.Wrap(err, "failed to convert old VSphereVM to unstructured object"))
+		return nil, apierrors.NewInternalError(errors.Wrap(err, "failed to convert old VSphereVM to unstructured object"))
 	}
 
-	var allErrs field.ErrorList
+	oldTyped, ok := old.(*VSphereVM)
+	if !ok {
+		return nil, apierrors.NewInternalError(fmt.Errorf("failed to typecast old runtime object to VSphereVM"))
+	}
 
 	newVSphereVMSpec := newVSphereVM["spec"].(map[string]interface{})
 	oldVSphereVMSpec := oldVSphereVM["spec"].(map[string]interface{})
 
-	// allow changes to biosUUID, bootstrapRef, thumbprint
-	keys := []string{"biosUUID", "bootstrapRef", "thumbprint"}
-	// allow changes to os only if the old spec has empty OS field
-	if _, ok := oldVSphereVMSpec["os"]; !ok {
+	// Allow changes to bootstrapRef, thumbprint, powerOffMode, guestSoftPowerOffTimeout.
+	keys := []string{"bootstrapRef", "thumbprint", "powerOffMode", "guestSoftPowerOffTimeout"}
+	// Allow changes to os only if the old spec has empty OS field.
+	if oldTyped.Spec.OS == "" {
 		keys = append(keys, "os")
+	}
+	// Allow changes to biosUUID only if it is not already set.
+	if oldTyped.Spec.BiosUUID == "" {
+		keys = append(keys, "biosUUID")
 	}
 	r.deleteSpecKeys(oldVSphereVMSpec, keys)
 	r.deleteSpecKeys(newVSphereVMSpec, keys)
@@ -107,12 +133,12 @@ func (r *VSphereVM) ValidateUpdate(old runtime.Object) error {
 		allErrs = append(allErrs, field.Forbidden(field.NewPath("spec"), "cannot be modified"))
 	}
 
-	return aggregateObjErrors(r.GroupVersionKind().GroupKind(), r.Name, allErrs)
+	return nil, aggregateObjErrors(r.GroupVersionKind().GroupKind(), r.Name, allErrs)
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type.
-func (r *VSphereVM) ValidateDelete() error {
-	return nil
+func (r *VSphereVM) ValidateDelete() (admission.Warnings, error) {
+	return nil, nil
 }
 
 func (r *VSphereVM) deleteSpecKeys(spec map[string]interface{}, keys []string) {

@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
 func (m *VSphereMachine) SetupWebhookWithManager(mgr ctrl.Manager) error {
@@ -49,7 +50,7 @@ func (m *VSphereMachine) Default() {
 }
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type.
-func (m *VSphereMachine) ValidateCreate() error {
+func (m *VSphereMachine) ValidateCreate() (admission.Warnings, error) {
 	var allErrs field.ErrorList
 	spec := m.Spec
 
@@ -65,36 +66,55 @@ func (m *VSphereMachine) ValidateCreate() error {
 		}
 	}
 
-	return aggregateObjErrors(m.GroupVersionKind().GroupKind(), m.Name, allErrs)
+	if spec.GuestSoftPowerOffTimeout != nil {
+		if spec.PowerOffMode != VirtualMachinePowerOpModeTrySoft {
+			allErrs = append(allErrs, field.Invalid(field.NewPath("spec", "guestSoftPowerOffTimeout"), spec.GuestSoftPowerOffTimeout, "should not be set in templates unless the powerOffMode is trySoft"))
+		}
+		if spec.GuestSoftPowerOffTimeout.Duration <= 0 {
+			allErrs = append(allErrs, field.Invalid(field.NewPath("spec", "guestSoftPowerOffTimeout"), spec.GuestSoftPowerOffTimeout, "should be greater than 0"))
+		}
+	}
+
+	return nil, aggregateObjErrors(m.GroupVersionKind().GroupKind(), m.Name, allErrs)
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type.
 //
 //nolint:forcetypeassert
-func (m *VSphereMachine) ValidateUpdate(old runtime.Object) error {
+func (m *VSphereMachine) ValidateUpdate(old runtime.Object) (admission.Warnings, error) {
+	var allErrs field.ErrorList
+	if m.Spec.GuestSoftPowerOffTimeout != nil {
+		if m.Spec.PowerOffMode != VirtualMachinePowerOpModeTrySoft {
+			allErrs = append(allErrs, field.Invalid(field.NewPath("spec", "guestSoftPowerOffTimeout"), m.Spec.GuestSoftPowerOffTimeout, "should not be set in templates unless the powerOffMode is trySoft"))
+		}
+		if m.Spec.GuestSoftPowerOffTimeout.Duration <= 0 {
+			allErrs = append(allErrs, field.Invalid(field.NewPath("spec", "guestSoftPowerOffTimeout"), m.Spec.GuestSoftPowerOffTimeout, "should be greater than 0"))
+		}
+	}
+
 	newVSphereMachine, err := runtime.DefaultUnstructuredConverter.ToUnstructured(m)
 	if err != nil {
-		return apierrors.NewInternalError(errors.Wrap(err, "failed to convert new VSphereMachine to unstructured object"))
+		return nil, apierrors.NewInternalError(errors.Wrap(err, "failed to convert new VSphereMachine to unstructured object"))
 	}
 
 	oldVSphereMachine, err := runtime.DefaultUnstructuredConverter.ToUnstructured(old)
 	if err != nil {
-		return apierrors.NewInternalError(errors.Wrap(err, "failed to convert old VSphereMachine to unstructured object"))
+		return nil, apierrors.NewInternalError(errors.Wrap(err, "failed to convert old VSphereMachine to unstructured object"))
 	}
-
-	var allErrs field.ErrorList
 
 	newVSphereMachineSpec := newVSphereMachine["spec"].(map[string]interface{})
 	oldVSphereMachineSpec := oldVSphereMachine["spec"].(map[string]interface{})
 
-	// allow changes to providerID
-	delete(oldVSphereMachineSpec, "providerID")
-	delete(newVSphereMachineSpec, "providerID")
+	allowChangeKeys := []string{"providerID", "powerOffMode", "guestSoftPowerOffTimeout"}
+	for _, key := range allowChangeKeys {
+		delete(oldVSphereMachineSpec, key)
+		delete(newVSphereMachineSpec, key)
+	}
 
 	newVSphereMachineNetwork := newVSphereMachineSpec["network"].(map[string]interface{})
 	oldVSphereMachineNetwork := oldVSphereMachineSpec["network"].(map[string]interface{})
 
-	// allow changes to the devices..
+	// allow changes to the devices.
 	delete(oldVSphereMachineNetwork, "devices")
 	delete(newVSphereMachineNetwork, "devices")
 
@@ -112,10 +132,10 @@ func (m *VSphereMachine) ValidateUpdate(old runtime.Object) error {
 		allErrs = append(allErrs, field.Forbidden(field.NewPath("spec"), "cannot be modified"))
 	}
 
-	return aggregateObjErrors(m.GroupVersionKind().GroupKind(), m.Name, allErrs)
+	return nil, aggregateObjErrors(m.GroupVersionKind().GroupKind(), m.Name, allErrs)
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type.
-func (m *VSphereMachine) ValidateDelete() error {
-	return nil
+func (m *VSphereMachine) ValidateDelete() (admission.Warnings, error) {
+	return nil, nil
 }

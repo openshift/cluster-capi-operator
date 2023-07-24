@@ -916,8 +916,17 @@ golang.org/x/net/http/httpguts
 golang.org/x/net/http2
 golang.org/x/net/http2/hpack
 golang.org/x/net/idna
+<<<<<<< HEAD
 # golang.org/x/oauth2 v0.13.0
+=======
+<<<<<<< HEAD
+# golang.org/x/oauth2 v0.12.0
+>>>>>>> a691d7f8 (Rebase on top of main branch)
 ## explicit; go 1.18
+=======
+# golang.org/x/oauth2 v0.9.0
+## explicit; go 1.17
+>>>>>>> 69b8c936 (Rebase on top of main branch)
 golang.org/x/oauth2
 golang.org/x/oauth2/internal
 # golang.org/x/sync v0.4.0

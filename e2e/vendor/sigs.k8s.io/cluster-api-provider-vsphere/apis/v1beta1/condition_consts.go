@@ -83,6 +83,11 @@ const (
 	// are automatically re-tried by the controller.
 	PoweringOnFailedReason = "PoweringOnFailed"
 
+	// NotFoundByBIOSUUIDReason (Severity=Warning) documents a VSphereVM which can't be found by BIOS UUID.
+	// Those kind of errors could be transient sometimes and failed VSphereVM are automatically
+	// reconciled by the controller.
+	NotFoundByBIOSUUIDReason = "NotFoundByBIOSUUID"
+
 	// TaskFailure (Severity=Warning) documents a VSphereMachine/VSphere task failure; the reconcile look will automatically
 	// retry the operation, but a user intervention might be required to fix the problem.
 	TaskFailure = "TaskFailure"
@@ -218,4 +223,18 @@ const (
 	// IPAddressClaimNotFoundReason (Severity=Error) documents that the IPAddressClaim
 	// cannot be found.
 	IPAddressClaimNotFoundReason = "IPAddressClaimNotFound"
+)
+
+const (
+	// GuestSoftPowerOffSucceededCondition documents the status of performing guest initiated
+	// graceful shutdown.
+	GuestSoftPowerOffSucceededCondition clusterv1.ConditionType = "GuestSoftPowerOffSucceeded"
+
+	// GuestSoftPowerOffInProgressReason (Severity=Info) documents that the guest receives
+	// a graceful shutdown request.
+	GuestSoftPowerOffInProgressReason = "GuestSoftPowerOffInProgress"
+
+	// GuestSoftPowerOffFailedReason (Severity=Warning) documents that the graceful
+	// shutdown request fails.
+	GuestSoftPowerOffFailedReason = "GuestSoftPowerOffFailed"
 )

@@ -4499,19 +4499,7 @@ const (
 	NL80211_ATTR_MAC_HINT                                   = 0xc8
 	NL80211_ATTR_MAC_MASK                                   = 0xd7
 	NL80211_ATTR_MAX_AP_ASSOC_STA                           = 0xca
-<<<<<<< HEAD
-<<<<<<< HEAD
 	NL80211_ATTR_MAX                                        = 0x146
-=======
-<<<<<<< HEAD
-	NL80211_ATTR_MAX                                        = 0x145
-=======
-	NL80211_ATTR_MAX                                        = 0x140
->>>>>>> decf4d9d (Add vSphere infrastructureCluster template)
->>>>>>> cb1c071c (Add vSphere infrastructureCluster template)
-=======
-	NL80211_ATTR_MAX                                        = 0x145
->>>>>>> 9c4eef51 (Rebase on top of main after bump to 1.26)
 	NL80211_ATTR_MAX_CRIT_PROT_DURATION                     = 0xb4
 	NL80211_ATTR_MAX_CSA_COUNTERS                           = 0xce
 	NL80211_ATTR_MAX_MATCH_SETS                             = 0x85
@@ -4881,19 +4869,7 @@ const (
 	NL80211_CMD_LEAVE_IBSS                                  = 0x2c
 	NL80211_CMD_LEAVE_MESH                                  = 0x45
 	NL80211_CMD_LEAVE_OCB                                   = 0x6d
-<<<<<<< HEAD
-<<<<<<< HEAD
 	NL80211_CMD_MAX                                         = 0x9a
-=======
-<<<<<<< HEAD
-	NL80211_CMD_MAX                                         = 0x99
-=======
-	NL80211_CMD_MAX                                         = 0x98
->>>>>>> decf4d9d (Add vSphere infrastructureCluster template)
->>>>>>> cb1c071c (Add vSphere infrastructureCluster template)
-=======
-	NL80211_CMD_MAX                                         = 0x99
->>>>>>> 9c4eef51 (Rebase on top of main after bump to 1.26)
 	NL80211_CMD_MICHAEL_MIC_FAILURE                         = 0x29
 	NL80211_CMD_MODIFY_LINK_STA                             = 0x97
 	NL80211_CMD_NAN_MATCH                                   = 0x78

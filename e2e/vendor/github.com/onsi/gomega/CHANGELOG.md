@@ -1,5 +1,6 @@
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 ## 1.28.1
 
 ### Maintenance
@@ -15,6 +16,8 @@
 =======
 <<<<<<< HEAD
 >>>>>>> 84bf5125 (Rebase on top of main after bump to 1.26)
+=======
+>>>>>>> a691d7f8 (Rebase on top of main branch)
 ## 1.28.0
 
 ### Features
@@ -49,11 +52,6 @@
 - docs: fix ContainSubstring references (#673) [fc9a89f]
 - Bump github.com/onsi/ginkgo/v2 from 2.9.7 to 2.10.0 (#671) [9076019]
 
-=======
-<<<<<<< HEAD
->>>>>>> cb1c071c (Add vSphere infrastructureCluster template)
-=======
->>>>>>> 9c4eef51 (Rebase on top of main after bump to 1.26)
 ## 1.27.8
 
 ### Fixes

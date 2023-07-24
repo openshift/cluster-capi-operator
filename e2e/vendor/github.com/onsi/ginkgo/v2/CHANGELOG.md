@@ -1,5 +1,3 @@
-<<<<<<< HEAD
-<<<<<<< HEAD
 ## 2.13.0
 
 ### Features
@@ -29,11 +27,6 @@ Add PreviewSpect() to enable programmatic preview access to the suite report (fi
 
 Various chores/dependency bumps.
 
-=======
-<<<<<<< HEAD
->>>>>>> cb1c071c (Add vSphere infrastructureCluster template)
-=======
->>>>>>> 9c4eef51 (Rebase on top of main after bump to 1.26)
 ## 2.11.0
 
 In prior versions of Ginkgo specs the CLI filter flags (e.g. `--focus`, `--label-filter`) would _override_ any programmatic focus.  This behavior has proved surprising and confusing in at least the following ways:
