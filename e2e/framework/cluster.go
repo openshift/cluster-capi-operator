@@ -54,7 +54,7 @@ func CreateCoreCluster(cl client.Client, clusterName, infraClusterKind string) *
 		}
 
 		return conditions.IsTrue(patchedCluster, clusterv1.ControlPlaneInitializedCondition), nil
-	}, WaitShort).Should(BeTrue())
+	}, WaitMedium).Should(BeTrue())
 
 	return cluster
 }
