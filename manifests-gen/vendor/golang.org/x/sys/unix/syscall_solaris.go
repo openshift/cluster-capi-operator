@@ -545,41 +545,24 @@ func Minor(dev uint64) uint32 {
  * Expose the ioctl function
  */
 
-<<<<<<< HEAD:hack/assets/vendor/golang.org/x/sys/unix/syscall_solaris.go
 //sys	ioctlRet(fd int, req uint, arg uintptr) (ret int, err error) = libc.ioctl
 //sys	ioctlPtrRet(fd int, req uint, arg unsafe.Pointer) (ret int, err error) = libc.ioctl
-=======
-//sys	ioctlRet(fd int, req int, arg uintptr) (ret int, err error) = libc.ioctl
-//sys	ioctlPtrRet(fd int, req int, arg unsafe.Pointer) (ret int, err error) = libc.ioctl
->>>>>>> c8862839 (assets generation refactor):assets/vendor/golang.org/x/sys/unix/syscall_solaris.go
 
-func ioctl(fd int, req int, arg uintptr) (err error) {
+func ioctl(fd int, req uint, arg uintptr) (err error) {
 	_, err = ioctlRet(fd, req, arg)
 	return err
 }
 
-<<<<<<< HEAD:hack/assets/vendor/golang.org/x/sys/unix/syscall_solaris.go
 func ioctlPtr(fd int, req uint, arg unsafe.Pointer) (err error) {
-=======
-func ioctlPtr(fd int, req int, arg unsafe.Pointer) (err error) {
->>>>>>> c8862839 (assets generation refactor):assets/vendor/golang.org/x/sys/unix/syscall_solaris.go
 	_, err = ioctlPtrRet(fd, req, arg)
 	return err
 }
 
-<<<<<<< HEAD:hack/assets/vendor/golang.org/x/sys/unix/syscall_solaris.go
 func IoctlSetTermio(fd int, req uint, value *Termio) error {
 	return ioctlPtr(fd, req, unsafe.Pointer(value))
 }
 
 func IoctlGetTermio(fd int, req uint) (*Termio, error) {
-=======
-func IoctlSetTermio(fd int, req int, value *Termio) error {
-	return ioctlPtr(fd, req, unsafe.Pointer(value))
-}
-
-func IoctlGetTermio(fd int, req int) (*Termio, error) {
->>>>>>> c8862839 (assets generation refactor):assets/vendor/golang.org/x/sys/unix/syscall_solaris.go
 	var value Termio
 	err := ioctlPtr(fd, req, unsafe.Pointer(&value))
 	return &value, err
@@ -682,6 +665,7 @@ func Sendfile(outfd int, infd int, offset *int64, count int) (written int, err e
 //sys	Setpriority(which int, who int, prio int) (err error)
 //sysnb	Setregid(rgid int, egid int) (err error)
 //sysnb	Setreuid(ruid int, euid int) (err error)
+//sysnb	Setrlimit(which int, lim *Rlimit) (err error)
 //sysnb	Setsid() (pid int, err error)
 //sysnb	Setuid(uid int) (err error)
 //sys	Shutdown(s int, how int) (err error) = libsocket.shutdown
@@ -1096,11 +1080,11 @@ func Getmsg(fd int, cl []byte, data []byte) (retCl []byte, retData []byte, flags
 	return retCl, retData, flags, nil
 }
 
-func IoctlSetIntRetInt(fd int, req int, arg int) (int, error) {
+func IoctlSetIntRetInt(fd int, req uint, arg int) (int, error) {
 	return ioctlRet(fd, req, uintptr(arg))
 }
 
-func IoctlSetString(fd int, req int, val string) error {
+func IoctlSetString(fd int, req uint, val string) error {
 	bs := make([]byte, len(val)+1)
 	copy(bs[:len(bs)-1], val)
 	err := ioctlPtr(fd, req, unsafe.Pointer(&bs[0]))
@@ -1136,11 +1120,7 @@ func (l *Lifreq) GetLifruUint() uint {
 	return *(*uint)(unsafe.Pointer(&l.Lifru[0]))
 }
 
-<<<<<<< HEAD:hack/assets/vendor/golang.org/x/sys/unix/syscall_solaris.go
 func IoctlLifreq(fd int, req uint, l *Lifreq) error {
-=======
-func IoctlLifreq(fd int, req int, l *Lifreq) error {
->>>>>>> c8862839 (assets generation refactor):assets/vendor/golang.org/x/sys/unix/syscall_solaris.go
 	return ioctlPtr(fd, req, unsafe.Pointer(l))
 }
 
@@ -1151,10 +1131,6 @@ func (s *Strioctl) SetInt(i int) {
 	s.Dp = (*int8)(unsafe.Pointer(&i))
 }
 
-<<<<<<< HEAD:hack/assets/vendor/golang.org/x/sys/unix/syscall_solaris.go
 func IoctlSetStrioctlRetInt(fd int, req uint, s *Strioctl) (int, error) {
-=======
-func IoctlSetStrioctlRetInt(fd int, req int, s *Strioctl) (int, error) {
->>>>>>> c8862839 (assets generation refactor):assets/vendor/golang.org/x/sys/unix/syscall_solaris.go
 	return ioctlPtrRet(fd, req, unsafe.Pointer(s))
 }
