@@ -651,6 +651,11 @@ spec:
                       used to generate bootstrap data.
                     enum:
                     - "2.3"
+                    - "3.0"
+                    - "3.1"
+                    - "3.2"
+                    - "3.3"
+                    - "3.4"
                     type: string
                 type: object
               imageLookupBaseOS:
@@ -2245,8 +2250,15 @@ spec:
                             the provider creates a managed VPC.
                           type: string
                         id:
-                          description: ID defines a unique identifier to reference
-                            this resource.
+                          description: "ID defines a unique identifier to reference
+                            this resource. If you're bringing your subnet, set the
+                            AWS subnet-id here, it must start with `subnet-`. \n When
+                            the VPC is managed by CAPA, and you'd like the provider
+                            to create a subnet for you, the id can be set to any placeholder
+                            value that does not start with `subnet-`; upon creation,
+                            the subnet AWS identifier will be populated in the `ResourceID`
+                            field and the `id` field is going to be used as the subnet
+                            name."
                           type: string
                         ipv6CidrBlock:
                           description: IPv6CidrBlock is the IPv6 CIDR block to be
@@ -2273,6 +2285,11 @@ spec:
                             subnet where the NAT gateway resides. It is then used
                             to determine routes for private subnets in the same AZ
                             as the public subnet.
+                          type: string
+                        resourceID:
+                          description: ResourceID is the subnet identifier from AWS,
+                            READ ONLY. This field is populated when the provider manages
+                            the subnet.
                           type: string
                         routeTableId:
                           description: RouteTableID is the routing table id associated
@@ -4014,6 +4031,11 @@ spec:
                               will be used to generate bootstrap data.
                             enum:
                             - "2.3"
+                            - "3.0"
+                            - "3.1"
+                            - "3.2"
+                            - "3.3"
+                            - "3.4"
                             type: string
                         type: object
                       imageLookupBaseOS:
@@ -7867,8 +7889,16 @@ spec:
                                     when the provider creates a managed VPC.
                                   type: string
                                 id:
-                                  description: ID defines a unique identifier to reference
-                                    this resource.
+                                  description: "ID defines a unique identifier to
+                                    reference this resource. If you're bringing your
+                                    subnet, set the AWS subnet-id here, it must start
+                                    with `subnet-`. \n When the VPC is managed by
+                                    CAPA, and you'd like the provider to create a
+                                    subnet for you, the id can be set to any placeholder
+                                    value that does not start with `subnet-`; upon
+                                    creation, the subnet AWS identifier will be populated
+                                    in the `ResourceID` field and the `id` field is
+                                    going to be used as the subnet name."
                                   type: string
                                 ipv6CidrBlock:
                                   description: IPv6CidrBlock is the IPv6 CIDR block
@@ -7898,6 +7928,11 @@ spec:
                                     gateway resides. It is then used to determine
                                     routes for private subnets in the same AZ as the
                                     public subnet.
+                                  type: string
+                                resourceID:
+                                  description: ResourceID is the subnet identifier
+                                    from AWS, READ ONLY. This field is populated when
+                                    the provider manages the subnet.
                                   type: string
                                 routeTableId:
                                   description: RouteTableID is the routing table id
@@ -8463,8 +8498,15 @@ spec:
                             the provider creates a managed VPC.
                           type: string
                         id:
-                          description: ID defines a unique identifier to reference
-                            this resource.
+                          description: "ID defines a unique identifier to reference
+                            this resource. If you're bringing your subnet, set the
+                            AWS subnet-id here, it must start with `subnet-`. \n When
+                            the VPC is managed by CAPA, and you'd like the provider
+                            to create a subnet for you, the id can be set to any placeholder
+                            value that does not start with `subnet-`; upon creation,
+                            the subnet AWS identifier will be populated in the `ResourceID`
+                            field and the `id` field is going to be used as the subnet
+                            name."
                           type: string
                         ipv6CidrBlock:
                           description: IPv6CidrBlock is the IPv6 CIDR block to be
@@ -8491,6 +8533,11 @@ spec:
                             subnet where the NAT gateway resides. It is then used
                             to determine routes for private subnets in the same AZ
                             as the public subnet.
+                          type: string
+                        resourceID:
+                          description: ResourceID is the subnet identifier from AWS,
+                            READ ONLY. This field is populated when the provider manages
+                            the subnet.
                           type: string
                         routeTableId:
                           description: RouteTableID is the routing table id associated
@@ -9911,8 +9958,15 @@ spec:
                             the provider creates a managed VPC.
                           type: string
                         id:
-                          description: ID defines a unique identifier to reference
-                            this resource.
+                          description: "ID defines a unique identifier to reference
+                            this resource. If you're bringing your subnet, set the
+                            AWS subnet-id here, it must start with `subnet-`. \n When
+                            the VPC is managed by CAPA, and you'd like the provider
+                            to create a subnet for you, the id can be set to any placeholder
+                            value that does not start with `subnet-`; upon creation,
+                            the subnet AWS identifier will be populated in the `ResourceID`
+                            field and the `id` field is going to be used as the subnet
+                            name."
                           type: string
                         ipv6CidrBlock:
                           description: IPv6CidrBlock is the IPv6 CIDR block to be
@@ -9939,6 +9993,11 @@ spec:
                             subnet where the NAT gateway resides. It is then used
                             to determine routes for private subnets in the same AZ
                             as the public subnet.
+                          type: string
+                        resourceID:
+                          description: ResourceID is the subnet identifier from AWS,
+                            READ ONLY. This field is populated when the provider manages
+                            the subnet.
                           type: string
                         routeTableId:
                           description: RouteTableID is the routing table id associated
