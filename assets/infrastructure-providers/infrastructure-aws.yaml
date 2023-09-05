@@ -71,6 +71,8 @@ data:
             env:
             - name: AWS_SHARED_CREDENTIALS_FILE
               value: /home/.aws/credentials
+            - name: EXP_BOOTSTRAP_FORMAT_IGNITION
+              value: "true"
             image: to.be/replaced:v99
             imagePullPolicy: Always
             livenessProbe:
