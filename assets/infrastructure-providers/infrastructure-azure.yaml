@@ -27,6 +27,7 @@ data:
           creationTimestamp: null
           labels:
             aadpodidbinding: capz-controller-aadpodidentity-selector
+            azure.workload.identity/use: "true"
             cluster.x-k8s.io/provider: infrastructure-azure
             control-plane: capz-controller-manager
         spec:
@@ -34,6 +35,7 @@ data:
           - args:
             - --leader-elect
             - --metrics-bind-addr=localhost:8080
+            - --feature-gates=MachinePool=${EXP_MACHINE_POOL:=false},AKSResourceHealth=${EXP_AKS_RESOURCE_HEALTH:=false},EdgeZone=${EXP_EDGEZONE:=false}
             - --v=0
             env:
             - name: AZURE_SUBSCRIPTION_ID
@@ -105,6 +107,9 @@ data:
             - mountPath: /tmp/k8s-webhook-server/serving-certs
               name: cert
               readOnly: true
+            - mountPath: /var/run/secrets/azure/tokens
+              name: azure-identity-token
+              readOnly: true
           priorityClassName: system-cluster-critical
           securityContext:
             runAsNonRoot: true
@@ -122,6 +127,14 @@ data:
             secret:
               defaultMode: 420
               secretName: capz-webhook-service-cert
+          - name: azure-identity-token
+            projected:
+              defaultMode: 420
+              sources:
+              - serviceAccountToken:
+                  audience: api://AzureADTokenExchange
+                  expirationSeconds: 3600
+                  path: azure-identity-token
     status: {}
     ---
     apiVersion: admissionregistration.k8s.io/v1
