@@ -2,6 +2,8 @@ package e2e
 
 import (
 	"context"
+	"net/url"
+	"strconv"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -98,6 +100,12 @@ func getDefaultAWSMAPIProviderSpec(cl client.Client) (*mapiv1.MachineSet, *mapiv
 func createAWSCluster(cl client.Client, mapiProviderSpec *mapiv1.AWSMachineProviderConfig) *awsv1.AWSCluster {
 	By("Creating AWS cluster")
 
+	apiUrl, err := url.Parse(mapiInfrastructure.Status.APIServerInternalURL)
+	Expect(err).ToNot(HaveOccurred())
+
+	port, err := strconv.ParseInt(apiUrl.Port(), 10, 32)
+	Expect(err).NotTo(HaveOccurred())
+
 	awsCluster := &awsv1.AWSCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      clusterName,
@@ -105,6 +113,10 @@ func createAWSCluster(cl client.Client, mapiProviderSpec *mapiv1.AWSMachineProvi
 		},
 		Spec: awsv1.AWSClusterSpec{
 			Region: mapiProviderSpec.Placement.Region,
+			ControlPlaneEndpoint: clusterv1.APIEndpoint{
+				Host: apiUrl.Hostname(),
+				Port: int32(port),
+			},
 		},
 	}
 
