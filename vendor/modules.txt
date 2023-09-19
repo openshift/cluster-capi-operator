@@ -714,6 +714,8 @@ github.com/quasilyte/stdinfo
 # github.com/rivo/uniseg v0.4.2
 ## explicit; go 1.18
 github.com/rivo/uniseg
+# github.com/rogpeppe/go-internal v1.10.0
+## explicit
 # github.com/ryancurrah/gomodguard v1.3.0
 ## explicit; go 1.19
 github.com/ryancurrah/gomodguard
@@ -854,6 +856,8 @@ gitlab.com/bosi/decorder
 # go.uber.org/atomic v1.10.0
 ## explicit; go 1.18
 go.uber.org/atomic
+# go.uber.org/goleak v1.2.1
+## explicit
 # go.uber.org/multierr v1.8.0
 ## explicit; go 1.14
 go.uber.org/multierr
@@ -906,8 +910,8 @@ golang.org/x/net/idna
 ## explicit; go 1.17
 golang.org/x/oauth2
 golang.org/x/oauth2/internal
-# golang.org/x/sync v0.2.0
-## explicit
+# golang.org/x/sync v0.3.0
+## explicit; go 1.17
 golang.org/x/sync/errgroup
 golang.org/x/sync/semaphore
 # golang.org/x/sys v0.10.0
