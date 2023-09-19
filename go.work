@@ -1,9 +1,0 @@
-go 1.18
-
-use .
-
-use ./e2e
-
-use ./manifests-gen
-
-use ./hack/tools
