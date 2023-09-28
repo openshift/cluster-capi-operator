@@ -122,5 +122,14 @@ func (r *ClusterWebhook) ValidateUpdate(ctx context.Context, oldObj, newObj runt
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
 func (r *ClusterWebhook) ValidateDelete(_ context.Context, obj runtime.Object) error {
+	cluster, ok := obj.(*v1beta1.Cluster)
+	if !ok {
+		panic("expected to get an of object of type v1beta1.Cluster")
+	}
+
+	if cluster.Namespace != openshiftCAPINamespace {
+		return nil
+	}
+
 	return errors.New("deletion of cluster is not allowed")
 }

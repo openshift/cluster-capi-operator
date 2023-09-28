@@ -35,6 +35,7 @@ data:
           - args:
             - --leader-elect
             - --metrics-bind-addr=localhost:8080
+            - --feature-gates=MachinePool=${EXP_MACHINE_POOL:=false},AKSResourceHealth=${EXP_AKS_RESOURCE_HEALTH:=false},EdgeZone=${EXP_EDGEZONE:=false}
             - --v=0
             env:
             - name: AZURE_SUBSCRIPTION_ID
