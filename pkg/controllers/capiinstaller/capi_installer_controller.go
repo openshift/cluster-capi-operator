@@ -187,7 +187,7 @@ func (r *CapiInstallerController) applyProviderComponents(ctx context.Context, l
 			r.ApplyClient.AppsV1(),
 			events.NewInMemoryRecorder("cluster-capi-operator-capi-installer-apply-client"),
 			deployment,
-			resourcemerge.ExpectedDeploymentGeneration(deployment),
+			resourcemerge.ExpectedDeploymentGeneration(deployment, cO),
 		)
 		if err != nil {
 			// TODO
