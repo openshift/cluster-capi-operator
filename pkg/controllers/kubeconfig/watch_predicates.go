@@ -1,6 +1,7 @@
 package kubeconfig
 
 import (
+	"context"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
@@ -13,7 +14,7 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 )
 
-func toTokenSecret(client.Object) []reconcile.Request {
+func toTokenSecret(ctx context.Context, o client.Object) []reconcile.Request {
 	return []reconcile.Request{{
 		NamespacedName: client.ObjectKey{Name: tokenSecretName, Namespace: controllers.DefaultManagedNamespace},
 	}}

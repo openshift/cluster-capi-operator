@@ -12,6 +12,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	configv1 "github.com/openshift/api/config/v1"
 )
@@ -67,7 +68,7 @@ func (r *ClusterWebhook) validateClusterName(ctx context.Context, cluster *v1bet
 }
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
-func (r *ClusterWebhook) ValidateCreate(ctx context.Context, obj runtime.Object) error {
+func (r *ClusterWebhook) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
 	cluster, ok := obj.(*v1beta1.Cluster)
 	if !ok {
 		panic("expected to get an of object of type v1beta1.Cluster")
@@ -76,7 +77,7 @@ func (r *ClusterWebhook) ValidateCreate(ctx context.Context, obj runtime.Object)
 	errs := []error{}
 	infrastructureRefPath := field.NewPath("spec", "infrastructureRef")
 	if cluster.Spec.InfrastructureRef == nil {
-		return field.Required(infrastructureRefPath, "infrastructureRef is required")
+		return nil, field.Required(infrastructureRefPath, "infrastructureRef is required")
 	}
 
 	switch cluster.Spec.InfrastructureRef.Kind {
@@ -89,14 +90,14 @@ func (r *ClusterWebhook) ValidateCreate(ctx context.Context, obj runtime.Object)
 	errs = append(errs, r.validateClusterName(ctx, cluster))
 
 	if len(errs) > 0 {
-		return utilerrors.NewAggregate(errs)
+		return nil, utilerrors.NewAggregate(errs)
 	}
 
-	return nil
+	return nil, nil
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
-func (r *ClusterWebhook) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) error {
+func (r *ClusterWebhook) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
 	_, ok := oldObj.(*v1beta1.Cluster)
 	if !ok {
 		panic("expected to get an of object of type v1beta1.Cluster")
@@ -108,19 +109,19 @@ func (r *ClusterWebhook) ValidateUpdate(ctx context.Context, oldObj, newObj runt
 
 	infrastructureRefPath := field.NewPath("spec", "infrastructureRef")
 	if newCluster.Spec.InfrastructureRef == nil {
-		return field.Required(infrastructureRefPath, "infrastructureRef is required")
+		return nil, field.Required(infrastructureRefPath, "infrastructureRef is required")
 	}
 
 	switch newCluster.Spec.InfrastructureRef.Kind {
 	case "AWSCluster", "AzureCluster", "GCPCluster", "IBMPowerVSCluster":
 	default:
-		return field.NotSupported(field.NewPath("spec", "infrastructureRef", "kind"), newCluster.Spec.InfrastructureRef.Kind, []string{"AWSCluster", "AzureCluster", "GCPCluster", "IBMPowerVSCluster"})
+		return nil, field.NotSupported(field.NewPath("spec", "infrastructureRef", "kind"), newCluster.Spec.InfrastructureRef.Kind, []string{"AWSCluster", "AzureCluster", "GCPCluster", "IBMPowerVSCluster"})
 	}
 
-	return nil
+	return nil, nil
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
-func (r *ClusterWebhook) ValidateDelete(_ context.Context, obj runtime.Object) error {
-	return errors.New("deletion of cluster is not allowed")
+func (r *ClusterWebhook) ValidateDelete(_ context.Context, obj runtime.Object) (admission.Warnings, error) {
+	return nil, errors.New("deletion of cluster is not allowed")
 }

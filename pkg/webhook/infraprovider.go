@@ -9,6 +9,7 @@ import (
 	"sigs.k8s.io/cluster-api-operator/api/v1alpha1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	configv1 "github.com/openshift/api/config/v1"
 )
@@ -27,7 +28,7 @@ func (r *InfrastructureProviderWebhook) SetupWebhookWithManager(mgr ctrl.Manager
 var _ webhook.CustomValidator = &InfrastructureProviderWebhook{}
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
-func (r *InfrastructureProviderWebhook) ValidateCreate(ctx context.Context, obj runtime.Object) error {
+func (r *InfrastructureProviderWebhook) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
 	infraProvider, ok := obj.(*v1alpha1.InfrastructureProvider)
 	if !ok {
 		panic("expected to get an of object of type v1alpha1.InfrastructureProvider")
@@ -36,31 +37,31 @@ func (r *InfrastructureProviderWebhook) ValidateCreate(ctx context.Context, obj 
 	switch r.Platform {
 	case configv1.AWSPlatformType:
 		if infraProvider.Name != "aws" {
-			return fmt.Errorf("incorrect infra provider name for AWS platform: %s", infraProvider.Name)
+			return nil, fmt.Errorf("incorrect infra provider name for AWS platform: %s", infraProvider.Name)
 		}
 	case configv1.AzurePlatformType:
 		if infraProvider.Name != "azure" {
-			return fmt.Errorf("incorrect infra provider name for Azure platform: %s", infraProvider.Name)
+			return nil, fmt.Errorf("incorrect infra provider name for Azure platform: %s", infraProvider.Name)
 		}
 	case configv1.GCPPlatformType:
 		if infraProvider.Name != "gcp" {
-			return fmt.Errorf("incorrect infra provider name for GCP platform: %s", infraProvider.Name)
+			return nil, fmt.Errorf("incorrect infra provider name for GCP platform: %s", infraProvider.Name)
 		}
 	case configv1.PowerVSPlatformType:
 		// for Power VS the upstream cluster api provider name is ibmcloud
 		// https://github.com/kubernetes-sigs/cluster-api/blob/main/cmd/clusterctl/client/config/providers_client.go#L218-L222
 		if infraProvider.Name != "ibmcloud" {
-			return fmt.Errorf("incorrect infra provider name for PowerVS platform: %s", infraProvider.Name)
+			return nil, fmt.Errorf("incorrect infra provider name for PowerVS platform: %s", infraProvider.Name)
 		}
 	default:
-		return errors.New("platform not supported, skipping infra cluster controller setup")
+		return nil, errors.New("platform not supported, skipping infra cluster controller setup")
 	}
 
-	return nil
+	return nil, nil
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
-func (r *InfrastructureProviderWebhook) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) error {
+func (r *InfrastructureProviderWebhook) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
 	_, ok := oldObj.(*v1alpha1.InfrastructureProvider)
 	if !ok {
 		panic("expected to get an of object of type v1alpha1.InfrastructureProvider")
@@ -73,30 +74,30 @@ func (r *InfrastructureProviderWebhook) ValidateUpdate(ctx context.Context, oldO
 	switch r.Platform {
 	case configv1.AWSPlatformType:
 		if newInfraProvider.Name != "aws" {
-			return fmt.Errorf("incorrect infra provider name for AWS platform: %s", newInfraProvider.Name)
+			return nil, fmt.Errorf("incorrect infra provider name for AWS platform: %s", newInfraProvider.Name)
 		}
 	case configv1.AzurePlatformType:
 		if newInfraProvider.Name != "azure" {
-			return fmt.Errorf("incorrect infra provider name for Azure platform: %s", newInfraProvider.Name)
+			return nil, fmt.Errorf("incorrect infra provider name for Azure platform: %s", newInfraProvider.Name)
 		}
 	case configv1.GCPPlatformType:
 		if newInfraProvider.Name != "gcp" {
-			return fmt.Errorf("incorrect infra provider name for GCP platform: %s", newInfraProvider.Name)
+			return nil, fmt.Errorf("incorrect infra provider name for GCP platform: %s", newInfraProvider.Name)
 		}
 	case configv1.PowerVSPlatformType:
 		// for Power VS the upstream cluster api provider name is ibmcloud
 		// https://github.com/kubernetes-sigs/cluster-api/blob/main/cmd/clusterctl/client/config/providers_client.go#L218-L222
 		if newInfraProvider.Name != "ibmcloud" {
-			return fmt.Errorf("incorrect infra provider name for PowerVS platform: %s", newInfraProvider.Name)
+			return nil, fmt.Errorf("incorrect infra provider name for PowerVS platform: %s", newInfraProvider.Name)
 		}
 	default:
-		return errors.New("platform not supported, skipping infra cluster controller setup")
+		return nil, errors.New("platform not supported, skipping infra cluster controller setup")
 	}
 
-	return nil
+	return nil, nil
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
-func (r *InfrastructureProviderWebhook) ValidateDelete(_ context.Context, obj runtime.Object) error {
-	return errors.New("deletion of infrastructure provider is not allowed")
+func (r *InfrastructureProviderWebhook) ValidateDelete(_ context.Context, obj runtime.Object) (admission.Warnings, error) {
+	return nil, errors.New("deletion of infrastructure provider is not allowed")
 }

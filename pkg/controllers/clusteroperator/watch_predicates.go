@@ -1,6 +1,8 @@
 package clusteroperator
 
 import (
+	"context"
+
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
@@ -11,7 +13,7 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 )
 
-func toClusterOperator(client.Object) []reconcile.Request {
+func toClusterOperator(ctx context.Context, o client.Object) []reconcile.Request {
 	return []reconcile.Request{{
 		NamespacedName: client.ObjectKey{Name: controllers.ClusterOperatorName},
 	}}

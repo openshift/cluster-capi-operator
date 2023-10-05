@@ -1,6 +1,8 @@
 package secretsync
 
 import (
+	"context"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -9,7 +11,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-func toUserDataSecret(client.Object) []reconcile.Request {
+func toUserDataSecret(ctx context.Context, obj client.Object) []reconcile.Request {
 	return []reconcile.Request{{
 		NamespacedName: client.ObjectKey{Name: managedUserDataSecretName, Namespace: SecretSourceNamespace},
 	}}

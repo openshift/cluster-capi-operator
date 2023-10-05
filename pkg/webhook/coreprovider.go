@@ -9,6 +9,7 @@ import (
 	"sigs.k8s.io/cluster-api-operator/api/v1alpha1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
 type CoreProviderWebhook struct {
@@ -24,21 +25,21 @@ func (r *CoreProviderWebhook) SetupWebhookWithManager(mgr ctrl.Manager) error {
 var _ webhook.CustomValidator = &CoreProviderWebhook{}
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
-func (r *CoreProviderWebhook) ValidateCreate(ctx context.Context, obj runtime.Object) error {
+func (r *CoreProviderWebhook) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
 	coreProvider, ok := obj.(*v1alpha1.CoreProvider)
 	if !ok {
 		panic("expected to get an of object of type v1alpha1.CoreProvider")
 	}
 
 	if coreProvider.Name != "cluster-api" {
-		return fmt.Errorf("incorrect core provider name: %s", coreProvider.Name)
+		return nil, fmt.Errorf("incorrect core provider name: %s", coreProvider.Name)
 	}
 
-	return nil
+	return nil, nil
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
-func (r *CoreProviderWebhook) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) error {
+func (r *CoreProviderWebhook) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
 	_, ok := oldObj.(*v1alpha1.CoreProvider)
 	if !ok {
 		panic("expected to get an of object of type v1alpha1.CoreProvider")
@@ -49,13 +50,13 @@ func (r *CoreProviderWebhook) ValidateUpdate(ctx context.Context, oldObj, newObj
 	}
 
 	if newCoreProvider.Name != "cluster-api" {
-		return fmt.Errorf("incorrect core provider name: %s", newCoreProvider.Name)
+		return nil, fmt.Errorf("incorrect core provider name: %s", newCoreProvider.Name)
 	}
 
-	return nil
+	return nil, nil
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
-func (r *CoreProviderWebhook) ValidateDelete(_ context.Context, obj runtime.Object) error {
-	return errors.New("deletion of core provider is not allowed")
+func (r *CoreProviderWebhook) ValidateDelete(_ context.Context, obj runtime.Object) (admission.Warnings, error) {
+	return nil, errors.New("deletion of core provider is not allowed")
 }

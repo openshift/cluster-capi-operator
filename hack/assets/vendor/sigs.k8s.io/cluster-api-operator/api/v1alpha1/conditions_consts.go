@@ -29,6 +29,9 @@ const (
 	// IncorrectVersionFormatReason documents that the provider version is in the incorrect format.
 	IncorrectVersionFormatReason = "IncorrectVersionFormat"
 
+	// IncorrectCoreProviderNameReason documents that the provider name is incorrect.
+	IncorrectCoreProviderNameReason = "IncorrectCoreProviderNameReason"
+
 	// EmptyVersionReason documents that the provider version is in the incorrect format.
 	EmptyVersionReason = "EmptyVersionReason"
 
@@ -49,6 +52,9 @@ const (
 
 	// WaitingForCoreProviderReadyReason documents that the provider is waiting for the core provider to be ready.
 	WaitingForCoreProviderReadyReason = "WaitingForCoreProviderReady"
+
+	// InvalidGithubTokenReason documents that the provided github token is invalid.
+	InvalidGithubTokenReason = "InvalidGithubTokenError"
 )
 
 const (

@@ -19,9 +19,8 @@ package v1alpha1
 import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	ctrlconfigv1 "sigs.k8s.io/controller-runtime/pkg/config/v1alpha1"
-
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	ctrlconfigv1 "sigs.k8s.io/controller-runtime/pkg/config/v1alpha1"
 )
 
 const (
@@ -32,7 +31,8 @@ const (
 // ProviderSpec is the desired state of the Provider.
 type ProviderSpec struct {
 	// Version indicates the provider version.
-	Version string `json:"version"`
+	// +optional
+	Version string `json:"version,omitempty"`
 
 	// Manager defines the properties that can be enabled on the controller manager for the provider.
 	// +optional
@@ -52,6 +52,10 @@ type ProviderSpec struct {
 	// +optional
 	SecretName string `json:"secretName,omitempty"`
 
+	// SecretNamespace is the namespace of the Secret providing the configuration variables. If not specified,
+	// the namespace of the provider will be used.
+	SecretNamespace string `json:"secretNamespace,omitempty"`
+
 	// FetchConfig determines how the operator will fetch the components and metadata for the provider.
 	// If nil, the operator will try to fetch components according to default
 	// embedded fetch configuration for the given kind and `ObjectMeta.Name`.
@@ -59,6 +63,23 @@ type ProviderSpec struct {
 	// https://github.com/kubernetes-sigs/cluster-api-provider-aws/releases.
 	// +optional
 	FetchConfig *FetchConfiguration `json:"fetchConfig,omitempty"`
+
+	// AdditionalManifests is reference to configmap that contains additional manifests that will be applied
+	// together with the provider components. The key for storing these manifests has to be `manifests`.
+	// The manifests are applied only once when a certain release is installed/upgraded. If namespace is not specified, the
+	// namespace of the provider will be used. There is no validation of the yaml content inside the configmap.
+	// +optional
+	AdditionalManifestsRef *ConfigmapReference `json:"additionalManifests,omitempty"`
+}
+
+// ConfigmapReference contains enough information to locate the configmap.
+type ConfigmapReference struct {
+	// Name defines the name of the configmap.
+	Name string `json:"name"`
+
+	// Namespace defines the namespace of the configmap.
+	// +optional
+	Namespace string `json:"namespace,omitempty"`
 }
 
 // ManagerSpec defines the properties that can be enabled on the controller manager for the provider.
@@ -115,6 +136,14 @@ type DeploymentSpec struct {
 	// List of containers specified in the Deployment
 	// +optional
 	Containers []ContainerSpec `json:"containers"`
+
+	// If specified, the pod's service account
+	// +optional
+	ServiceAccountName string `json:"serviceAccountName,omitempty"`
+
+	// List of image pull secrets specified in the Deployment
+	// +optional
+	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
 }
 
 // ContainerSpec defines the properties available to override for each
