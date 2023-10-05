@@ -9,8 +9,10 @@ import (
 	"github.com/spf13/pflag"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/component-base/config"
 	"k8s.io/component-base/config/options"
@@ -119,7 +121,8 @@ func main() {
 		Namespaces: []string{*managedNamespace, secretsync.SecretSourceNamespace},
 	}
 
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+	cfg := ctrl.GetConfigOrDie()
+	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
 		Namespace:               *managedNamespace,
 		Scheme:                  scheme,
 		SyncPeriod:              &syncPeriod,
@@ -140,6 +143,17 @@ func main() {
 		os.Exit(1)
 	}
 
+	applyClient, err := kubernetes.NewForConfig(cfg)
+	if err != nil {
+		klog.Error(err, "unable to set up apply client")
+		os.Exit(1)
+	}
+	apiextensionsClient, err := apiextensionsclient.NewForConfig(cfg)
+	if err != nil {
+		klog.Error(err, "unable to set up apply client")
+		os.Exit(1)
+	}
+
 	containerImages, err := util.ReadImagesFile(*imagesFile)
 	if err != nil {
 		klog.Error(err, "unable to get images from file", "name", *imagesFile)
@@ -152,7 +166,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	setupReconcilers(mgr, platform, containerImages)
+	setupReconcilers(mgr, platform, containerImages, applyClient, apiextensionsClient)
 	setupWebhooks(mgr, platform)
 
 	// +kubebuilder:scaffold:builder
@@ -191,7 +205,7 @@ func getClusterOperatorStatusClient(mgr manager.Manager, controller string) oper
 	}
 }
 
-func setupReconcilers(mgr manager.Manager, platform configv1.PlatformType, containerImages map[string]string) {
+func setupReconcilers(mgr manager.Manager, platform configv1.PlatformType, containerImages map[string]string, applyClient *kubernetes.Clientset, apiextensionsClient *apiextensionsclient.Clientset) {
 	if err := (&cluster.CoreClusterReconciler{
 		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-cluster-resource-controller"),
 		Cluster:                     &clusterv1.Cluster{},
@@ -225,6 +239,8 @@ func setupReconcilers(mgr manager.Manager, platform configv1.PlatformType, conta
 		Images:                      containerImages,
 		RestCfg:                     mgr.GetConfig(),
 		Platform:                    platform,
+		ApplyClient:                 applyClient,
+		APIExtensionsClient:         apiextensionsClient,
 	}).SetupWithManager(mgr); err != nil {
 		klog.Error(err, "unable to create capi installer controller", "controller", "CAPIInstaller")
 		os.Exit(1)
