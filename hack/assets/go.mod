@@ -2,6 +2,12 @@ module github.com/openshift/cluster-capi-operator/hack/import-assets
 
 go 1.18
 
+replace (
+	// pin kustomize to an older version due to https://github.com/kubernetes-sigs/kustomize/issues/5031
+	sigs.k8s.io/kustomize/api => sigs.k8s.io/kustomize/api v0.12.1
+	sigs.k8s.io/kustomize/kyaml => sigs.k8s.io/kustomize/kyaml v0.13.9
+)
+
 require (
 	github.com/jetstack/cert-manager v1.5.5
 	k8s.io/api v0.27.6
