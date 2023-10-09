@@ -506,6 +506,9 @@ data:
     kind: Metadata
     releaseSeries:
       - major: 1
+        minor: 5
+        contract: v1beta1
+      - major: 1
         minor: 4
         contract: v1beta1
       - major: 1
@@ -532,6 +535,6 @@ metadata:
   labels:
     provider.cluster.x-k8s.io/name: cluster-api
     provider.cluster.x-k8s.io/type: core
-    provider.cluster.x-k8s.io/version: v1.4.2
+    provider.cluster.x-k8s.io/version: v1.5.2
   name: cluster-api
   namespace: openshift-cluster-api

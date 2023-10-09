@@ -522,12 +522,15 @@ data:
       - major: 0
         minor: 5
         contract: v1beta1
+      - major: 0
+        minor: 6
+        contract: v1beta1
 kind: ConfigMap
 metadata:
   creationTimestamp: null
   labels:
     provider.cluster.x-k8s.io/name: ibmcloud
     provider.cluster.x-k8s.io/type: infrastructure
-    provider.cluster.x-k8s.io/version: v0.5.1
+    provider.cluster.x-k8s.io/version: v0.6.0
   name: ibmcloud
   namespace: openshift-cluster-api

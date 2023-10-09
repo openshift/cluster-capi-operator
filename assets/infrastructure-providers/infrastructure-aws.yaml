@@ -557,6 +557,6 @@ metadata:
   labels:
     provider.cluster.x-k8s.io/name: aws
     provider.cluster.x-k8s.io/type: infrastructure
-    provider.cluster.x-k8s.io/version: v2.2.0
+    provider.cluster.x-k8s.io/version: v2.2.4
   name: aws
   namespace: openshift-cluster-api

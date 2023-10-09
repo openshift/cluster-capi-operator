@@ -4,7 +4,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.11.3
+    controller-gen.kubebuilder.io/version: v0.12.1
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
@@ -1024,7 +1024,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.11.3
+    controller-gen.kubebuilder.io/version: v0.12.1
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
@@ -2192,6 +2192,78 @@ spec:
               network:
                 description: NetworkSpec encapsulates all things related to AWS network.
                 properties:
+                  additionalControlPlaneIngressRules:
+                    description: AdditionalControlPlaneIngressRules is an optional
+                      set of ingress rules to add to the control plane
+                    items:
+                      description: IngressRule defines an AWS ingress rule for security
+                        groups.
+                      properties:
+                        cidrBlocks:
+                          description: List of CIDR blocks to allow access from. Cannot
+                            be specified with SourceSecurityGroupID.
+                          items:
+                            type: string
+                          type: array
+                        description:
+                          description: Description provides extended information about
+                            the ingress rule.
+                          type: string
+                        fromPort:
+                          description: FromPort is the start of port range.
+                          format: int64
+                          type: integer
+                        ipv6CidrBlocks:
+                          description: List of IPv6 CIDR blocks to allow access from.
+                            Cannot be specified with SourceSecurityGroupID.
+                          items:
+                            type: string
+                          type: array
+                        protocol:
+                          description: Protocol is the protocol for the ingress rule.
+                            Accepted values are "-1" (all), "4" (IP in IP),"tcp",
+                            "udp", "icmp", and "58" (ICMPv6).
+                          enum:
+                          - "-1"
+                          - "4"
+                          - tcp
+                          - udp
+                          - icmp
+                          - "58"
+                          type: string
+                        sourceSecurityGroupIds:
+                          description: The security group id to allow access from.
+                            Cannot be specified with CidrBlocks.
+                          items:
+                            type: string
+                          type: array
+                        sourceSecurityGroupRoles:
+                          description: The security group role to allow access from.
+                            Cannot be specified with CidrBlocks. The field will be
+                            combined with source security group IDs if specified.
+                          items:
+                            description: SecurityGroupRole defines the unique role
+                              of a security group.
+                            enum:
+                            - bastion
+                            - node
+                            - controlplane
+                            - apiserver-lb
+                            - lb
+                            - node-eks-additional
+                            type: string
+                          type: array
+                        toPort:
+                          description: ToPort is the end of port range.
+                          format: int64
+                          type: integer
+                      required:
+                      - description
+                      - fromPort
+                      - protocol
+                      - toPort
+                      type: object
+                    type: array
                   cni:
                     description: CNI configuration
                     properties:
@@ -2919,6 +2991,12 @@ spec:
                           balancer.
                         type: object
                     type: object
+                  natGatewaysIPs:
+                    description: NatGatewaysIPs contains the public IPs of the NAT
+                      Gateways
+                    items:
+                      type: string
+                    type: array
                   securityGroups:
                     additionalProperties:
                       description: SecurityGroup defines an AWS security group.
@@ -3038,7 +3116,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.11.3
+    controller-gen.kubebuilder.io/version: v0.12.1
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
@@ -3421,7 +3499,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.11.3
+    controller-gen.kubebuilder.io/version: v0.12.1
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
@@ -4310,7 +4388,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.11.3
+    controller-gen.kubebuilder.io/version: v0.12.1
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
@@ -5317,7 +5395,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.11.3
+    controller-gen.kubebuilder.io/version: v0.12.1
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
@@ -6250,7 +6328,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.11.3
+    controller-gen.kubebuilder.io/version: v0.12.1
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
@@ -6587,7 +6665,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.11.3
+    controller-gen.kubebuilder.io/version: v0.12.1
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
@@ -6823,7 +6901,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.11.3
+    controller-gen.kubebuilder.io/version: v0.12.1
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
@@ -7044,7 +7122,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.11.3
+    controller-gen.kubebuilder.io/version: v0.12.1
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
@@ -7813,6 +7891,80 @@ spec:
                         description: NetworkSpec encapsulates all things related to
                           AWS network.
                         properties:
+                          additionalControlPlaneIngressRules:
+                            description: AdditionalControlPlaneIngressRules is an
+                              optional set of ingress rules to add to the control
+                              plane
+                            items:
+                              description: IngressRule defines an AWS ingress rule
+                                for security groups.
+                              properties:
+                                cidrBlocks:
+                                  description: List of CIDR blocks to allow access
+                                    from. Cannot be specified with SourceSecurityGroupID.
+                                  items:
+                                    type: string
+                                  type: array
+                                description:
+                                  description: Description provides extended information
+                                    about the ingress rule.
+                                  type: string
+                                fromPort:
+                                  description: FromPort is the start of port range.
+                                  format: int64
+                                  type: integer
+                                ipv6CidrBlocks:
+                                  description: List of IPv6 CIDR blocks to allow access
+                                    from. Cannot be specified with SourceSecurityGroupID.
+                                  items:
+                                    type: string
+                                  type: array
+                                protocol:
+                                  description: Protocol is the protocol for the ingress
+                                    rule. Accepted values are "-1" (all), "4" (IP
+                                    in IP),"tcp", "udp", "icmp", and "58" (ICMPv6).
+                                  enum:
+                                  - "-1"
+                                  - "4"
+                                  - tcp
+                                  - udp
+                                  - icmp
+                                  - "58"
+                                  type: string
+                                sourceSecurityGroupIds:
+                                  description: The security group id to allow access
+                                    from. Cannot be specified with CidrBlocks.
+                                  items:
+                                    type: string
+                                  type: array
+                                sourceSecurityGroupRoles:
+                                  description: The security group role to allow access
+                                    from. Cannot be specified with CidrBlocks. The
+                                    field will be combined with source security group
+                                    IDs if specified.
+                                  items:
+                                    description: SecurityGroupRole defines the unique
+                                      role of a security group.
+                                    enum:
+                                    - bastion
+                                    - node
+                                    - controlplane
+                                    - apiserver-lb
+                                    - lb
+                                    - node-eks-additional
+                                    type: string
+                                  type: array
+                                toPort:
+                                  description: ToPort is the end of port range.
+                                  format: int64
+                                  type: integer
+                              required:
+                              - description
+                              - fromPort
+                              - protocol
+                              - toPort
+                              type: object
+                            type: array
                           cni:
                             description: CNI configuration
                             properties:
@@ -8045,7 +8197,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.11.3
+    controller-gen.kubebuilder.io/version: v0.12.1
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
@@ -8410,6 +8562,78 @@ spec:
               network:
                 description: NetworkSpec encapsulates all things related to AWS network.
                 properties:
+                  additionalControlPlaneIngressRules:
+                    description: AdditionalControlPlaneIngressRules is an optional
+                      set of ingress rules to add to the control plane
+                    items:
+                      description: IngressRule defines an AWS ingress rule for security
+                        groups.
+                      properties:
+                        cidrBlocks:
+                          description: List of CIDR blocks to allow access from. Cannot
+                            be specified with SourceSecurityGroupID.
+                          items:
+                            type: string
+                          type: array
+                        description:
+                          description: Description provides extended information about
+                            the ingress rule.
+                          type: string
+                        fromPort:
+                          description: FromPort is the start of port range.
+                          format: int64
+                          type: integer
+                        ipv6CidrBlocks:
+                          description: List of IPv6 CIDR blocks to allow access from.
+                            Cannot be specified with SourceSecurityGroupID.
+                          items:
+                            type: string
+                          type: array
+                        protocol:
+                          description: Protocol is the protocol for the ingress rule.
+                            Accepted values are "-1" (all), "4" (IP in IP),"tcp",
+                            "udp", "icmp", and "58" (ICMPv6).
+                          enum:
+                          - "-1"
+                          - "4"
+                          - tcp
+                          - udp
+                          - icmp
+                          - "58"
+                          type: string
+                        sourceSecurityGroupIds:
+                          description: The security group id to allow access from.
+                            Cannot be specified with CidrBlocks.
+                          items:
+                            type: string
+                          type: array
+                        sourceSecurityGroupRoles:
+                          description: The security group role to allow access from.
+                            Cannot be specified with CidrBlocks. The field will be
+                            combined with source security group IDs if specified.
+                          items:
+                            description: SecurityGroupRole defines the unique role
+                              of a security group.
+                            enum:
+                            - bastion
+                            - node
+                            - controlplane
+                            - apiserver-lb
+                            - lb
+                            - node-eks-additional
+                            type: string
+                          type: array
+                        toPort:
+                          description: ToPort is the end of port range.
+                          format: int64
+                          type: integer
+                      required:
+                      - description
+                      - fromPort
+                      - protocol
+                      - toPort
+                      type: object
+                    type: array
                   cni:
                     description: CNI configuration
                     properties:
@@ -8727,6 +8951,7 @@ spec:
                               required:
                               - key
                               type: object
+                              x-kubernetes-map-type: atomic
                             fieldRef:
                               description: 'Selects a field of the pod: supports metadata.name,
                                 metadata.namespace, `metadata.labels[''<KEY>'']`,
@@ -8745,6 +8970,7 @@ spec:
                               required:
                               - fieldPath
                               type: object
+                              x-kubernetes-map-type: atomic
                             resourceFieldRef:
                               description: 'Selects a resource of the container: only
                                 resources limits and requests (limits.cpu, limits.memory,
@@ -8769,6 +8995,7 @@ spec:
                               required:
                               - resource
                               type: object
+                              x-kubernetes-map-type: atomic
                             secretKeyRef:
                               description: Selects a key of a secret in the pod's
                                 namespace
@@ -8789,6 +9016,7 @@ spec:
                               required:
                               - key
                               type: object
+                              x-kubernetes-map-type: atomic
                           type: object
                       required:
                       - name
@@ -9407,6 +9635,12 @@ spec:
                           balancer.
                         type: object
                     type: object
+                  natGatewaysIPs:
+                    description: NatGatewaysIPs contains the public IPs of the NAT
+                      Gateways
+                    items:
+                      type: string
+                    type: array
                   securityGroups:
                     additionalProperties:
                       description: SecurityGroup defines an AWS security group.
@@ -9858,6 +10092,78 @@ spec:
               network:
                 description: NetworkSpec encapsulates all things related to AWS network.
                 properties:
+                  additionalControlPlaneIngressRules:
+                    description: AdditionalControlPlaneIngressRules is an optional
+                      set of ingress rules to add to the control plane
+                    items:
+                      description: IngressRule defines an AWS ingress rule for security
+                        groups.
+                      properties:
+                        cidrBlocks:
+                          description: List of CIDR blocks to allow access from. Cannot
+                            be specified with SourceSecurityGroupID.
+                          items:
+                            type: string
+                          type: array
+                        description:
+                          description: Description provides extended information about
+                            the ingress rule.
+                          type: string
+                        fromPort:
+                          description: FromPort is the start of port range.
+                          format: int64
+                          type: integer
+                        ipv6CidrBlocks:
+                          description: List of IPv6 CIDR blocks to allow access from.
+                            Cannot be specified with SourceSecurityGroupID.
+                          items:
+                            type: string
+                          type: array
+                        protocol:
+                          description: Protocol is the protocol for the ingress rule.
+                            Accepted values are "-1" (all), "4" (IP in IP),"tcp",
+                            "udp", "icmp", and "58" (ICMPv6).
+                          enum:
+                          - "-1"
+                          - "4"
+                          - tcp
+                          - udp
+                          - icmp
+                          - "58"
+                          type: string
+                        sourceSecurityGroupIds:
+                          description: The security group id to allow access from.
+                            Cannot be specified with CidrBlocks.
+                          items:
+                            type: string
+                          type: array
+                        sourceSecurityGroupRoles:
+                          description: The security group role to allow access from.
+                            Cannot be specified with CidrBlocks. The field will be
+                            combined with source security group IDs if specified.
+                          items:
+                            description: SecurityGroupRole defines the unique role
+                              of a security group.
+                            enum:
+                            - bastion
+                            - node
+                            - controlplane
+                            - apiserver-lb
+                            - lb
+                            - node-eks-additional
+                            type: string
+                          type: array
+                        toPort:
+                          description: ToPort is the end of port range.
+                          format: int64
+                          type: integer
+                      required:
+                      - description
+                      - fromPort
+                      - protocol
+                      - toPort
+                      type: object
+                    type: array
                   cni:
                     description: CNI configuration
                     properties:
@@ -10188,6 +10494,7 @@ spec:
                               required:
                               - key
                               type: object
+                              x-kubernetes-map-type: atomic
                             fieldRef:
                               description: 'Selects a field of the pod: supports metadata.name,
                                 metadata.namespace, `metadata.labels[''<KEY>'']`,
@@ -10206,6 +10513,7 @@ spec:
                               required:
                               - fieldPath
                               type: object
+                              x-kubernetes-map-type: atomic
                             resourceFieldRef:
                               description: 'Selects a resource of the container: only
                                 resources limits and requests (limits.cpu, limits.memory,
@@ -10230,6 +10538,7 @@ spec:
                               required:
                               - resource
                               type: object
+                              x-kubernetes-map-type: atomic
                             secretKeyRef:
                               description: Selects a key of a secret in the pod's
                                 namespace
@@ -10250,6 +10559,7 @@ spec:
                               required:
                               - key
                               type: object
+                              x-kubernetes-map-type: atomic
                           type: object
                       required:
                       - name
@@ -10868,6 +11178,12 @@ spec:
                           balancer.
                         type: object
                     type: object
+                  natGatewaysIPs:
+                    description: NatGatewaysIPs contains the public IPs of the NAT
+                      Gateways
+                    items:
+                      type: string
+                    type: array
                   securityGroups:
                     additionalProperties:
                       description: SecurityGroup defines an AWS security group.
@@ -11001,7 +11317,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.11.3
+    controller-gen.kubebuilder.io/version: v0.12.1
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
@@ -11122,7 +11438,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.11.3
+    controller-gen.kubebuilder.io/version: v0.12.1
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
@@ -11705,7 +12021,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.11.3
+    controller-gen.kubebuilder.io/version: v0.12.1
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"

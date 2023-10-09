@@ -4,7 +4,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.11.4
+    controller-gen.kubebuilder.io/version: v0.12.0
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
@@ -33,6 +33,7 @@ spec:
       jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
+    deprecated: true
     name: v1alpha4
     schema:
       openAPIV3Schema:
@@ -595,6 +596,22 @@ spec:
                           match selectors of replication controllers and services.
                           More info: http://kubernetes.io/docs/user-guide/labels'
                         type: object
+                    type: object
+                  namingStrategy:
+                    description: NamingStrategy allows changing the naming pattern
+                      used when creating the control plane provider object.
+                    properties:
+                      template:
+                        description: 'Template defines the template to use for generating
+                          the name of the ControlPlane object. If not defined, it
+                          will fallback to `{{ .cluster.name }}-{{ .random }}`. If
+                          the templated string exceeds 63 characters, it will be trimmed
+                          to 58 characters and will get concatenated with a random
+                          suffix of length 5. The templating mechanism provides the
+                          following arguments: * `.cluster.name`: The name of the
+                          cluster object. * `.random`: A random alphanumeric string,
+                          without vowels, of length 5.'
+                        type: string
                     type: object
                   nodeDeletionTimeout:
                     description: 'NodeDeletionTimeout defines how long the controller
@@ -1165,6 +1182,25 @@ spec:
                             using this MachineDeploymentClass.'
                           format: int32
                           type: integer
+                        namingStrategy:
+                          description: NamingStrategy allows changing the naming pattern
+                            used when creating the MachineDeployment.
+                          properties:
+                            template:
+                              description: 'Template defines the template to use for
+                                generating the name of the MachineDeployment object.
+                                If not defined, it will fallback to `{{ .cluster.name
+                                }}-{{ .machineDeployment.topologyName }}-{{ .random
+                                }}`. If the templated string exceeds 63 characters,
+                                it will be trimmed to 58 characters and will get concatenated
+                                with a random suffix of length 5. The templating mechanism
+                                provides the following arguments: * `.cluster.name`:
+                                The name of the cluster object. * `.random`: A random
+                                alphanumeric string, without vowels, of length 5.
+                                * `.machineDeployment.topologyName`: The name of the
+                                MachineDeployment topology (Cluster.spec.topology.workers.machineDeployments[].name).'
+                              type: string
+                          type: object
                         nodeDeletionTimeout:
                           description: 'NodeDeletionTimeout defines how long the controller
                             will attempt to delete the Node that the Machine hosts
@@ -1665,7 +1701,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.11.4
+    controller-gen.kubebuilder.io/version: v0.12.0
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
@@ -1694,6 +1730,7 @@ spec:
       jsonPath: .status.phase
       name: Phase
       type: string
+    deprecated: true
     name: v1alpha3
     schema:
       openAPIV3Schema:
@@ -1942,7 +1979,7 @@ spec:
                 type: string
             type: object
         type: object
-    served: true
+    served: false
     storage: false
     subresources:
       status: {}
@@ -1955,6 +1992,7 @@ spec:
       jsonPath: .status.phase
       name: Phase
       type: string
+    deprecated: true
     name: v1alpha4
     schema:
       openAPIV3Schema:
@@ -2677,10 +2715,10 @@ spec:
                         type: integer
                     type: object
                   rolloutAfter:
-                    description: 'RolloutAfter performs a rollout of the entire cluster
+                    description: "RolloutAfter performs a rollout of the entire cluster
                       one component at a time, control plane first and then machine
-                      deployments. Deprecated: This field has no function and is going
-                      to be removed in the next apiVersion.'
+                      deployments. \n Deprecated: This field has no function and is
+                      going to be removed in the next apiVersion."
                     format: date-time
                     type: string
                   variables:
@@ -3172,7 +3210,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.11.4
+    controller-gen.kubebuilder.io/version: v0.12.0
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
@@ -3214,6 +3252,7 @@ spec:
       name: NodeName
       priority: 1
       type: string
+    deprecated: true
     name: v1alpha3
     schema:
       openAPIV3Schema:
@@ -3531,7 +3570,7 @@ spec:
                 type: string
             type: object
         type: object
-    served: true
+    served: false
     storage: false
     subresources:
       status: {}
@@ -3561,6 +3600,7 @@ spec:
       name: NodeName
       priority: 1
       type: string
+    deprecated: true
     name: v1alpha4
     schema:
       openAPIV3Schema:
@@ -4346,7 +4386,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.11.4
+    controller-gen.kubebuilder.io/version: v0.12.0
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
@@ -4383,6 +4423,7 @@ spec:
       jsonPath: .status.readyReplicas
       name: Ready
       type: integer
+    deprecated: true
     name: v1alpha3
     schema:
       openAPIV3Schema:
@@ -4579,10 +4620,10 @@ spec:
                               description: 'Kind of the referent. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
                               type: string
                             name:
-                              description: 'Name of the referent. More info: http://kubernetes.io/docs/user-guide/identifiers#names'
+                              description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names#names'
                               type: string
                             uid:
-                              description: 'UID of the referent. More info: http://kubernetes.io/docs/user-guide/identifiers#uids'
+                              description: 'UID of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names#uids'
                               type: string
                           required:
                           - apiVersion
@@ -4800,7 +4841,7 @@ spec:
                 type: string
             type: object
         type: object
-    served: true
+    served: false
     storage: false
     subresources:
       scale:
@@ -4829,6 +4870,7 @@ spec:
       jsonPath: .status.readyReplicas
       name: Ready
       type: integer
+    deprecated: true
     name: v1alpha4
     schema:
       openAPIV3Schema:
@@ -5270,8 +5312,9 @@ spec:
                 type: string
               minReadySeconds:
                 description: MinReadySeconds is the minimum number of seconds for
-                  which a newly created machine should be ready. Defaults to 0 (machine
-                  will be considered available as soon as it is ready)
+                  which a Node for a newly created machine should be ready before
+                  considering the replica available. Defaults to 0 (machine will be
+                  considered available as soon as the Node is ready)
                 format: int32
                 type: integer
               replicas:
@@ -5632,7 +5675,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.11.4
+    controller-gen.kubebuilder.io/version: v0.12.0
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
@@ -5678,6 +5721,7 @@ spec:
       jsonPath: .status.unavailableReplicas
       name: Unavailable
       type: integer
+    deprecated: true
     name: v1alpha3
     schema:
       openAPIV3Schema:
@@ -5927,10 +5971,10 @@ spec:
                               description: 'Kind of the referent. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
                               type: string
                             name:
-                              description: 'Name of the referent. More info: http://kubernetes.io/docs/user-guide/identifiers#names'
+                              description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names#names'
                               type: string
                             uid:
-                              description: 'UID of the referent. More info: http://kubernetes.io/docs/user-guide/identifiers#uids'
+                              description: 'UID of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names#uids'
                               type: string
                           required:
                           - apiVersion
@@ -6140,7 +6184,7 @@ spec:
                 type: integer
             type: object
         type: object
-    served: true
+    served: false
     storage: false
     subresources:
       scale:
@@ -6178,6 +6222,7 @@ spec:
       jsonPath: .status.unavailableReplicas
       name: Unavailable
       type: integer
+    deprecated: true
     name: v1alpha4
     schema:
       openAPIV3Schema:
@@ -6675,9 +6720,10 @@ spec:
                 minLength: 1
                 type: string
               minReadySeconds:
-                description: Minimum number of seconds for which a newly created machine
-                  should be ready. Defaults to 0 (machine will be considered available
-                  as soon as it is ready)
+                description: MinReadySeconds is the minimum number of seconds for
+                  which a Node for a newly created machine should be ready before
+                  considering the replica available. Defaults to 0 (machine will be
+                  considered available as soon as the Node is ready)
                 format: int32
                 type: integer
               paused:
@@ -7125,7 +7171,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.11.4
+    controller-gen.kubebuilder.io/version: v0.12.0
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
@@ -7163,6 +7209,7 @@ spec:
       jsonPath: .spec.template.spec.version
       name: Version
       type: string
+    deprecated: true
     name: v1alpha3
     schema:
       openAPIV3Schema:
@@ -7361,10 +7408,10 @@ spec:
                               description: 'Kind of the referent. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
                               type: string
                             name:
-                              description: 'Name of the referent. More info: http://kubernetes.io/docs/user-guide/identifiers#names'
+                              description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names#names'
                               type: string
                             uid:
-                              description: 'UID of the referent. More info: http://kubernetes.io/docs/user-guide/identifiers#uids'
+                              description: 'UID of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names#uids'
                               type: string
                           required:
                           - apiVersion
@@ -7689,7 +7736,7 @@ spec:
                 type: integer
             type: object
         type: object
-    served: true
+    served: false
     storage: false
     subresources:
       scale:
@@ -7714,6 +7761,7 @@ spec:
       jsonPath: .spec.template.spec.version
       name: Version
       type: string
+    deprecated: true
     name: v1alpha4
     schema:
       openAPIV3Schema:
@@ -8163,9 +8211,10 @@ spec:
                   type: string
                 type: array
               minReadySeconds:
-                description: Minimum number of seconds for which a newly created machine
-                  instances should be ready. Defaults to 0 (machine instance will
-                  be considered available as soon as it is ready)
+                description: 'Minimum number of seconds for which a newly created
+                  machine instances should be ready. Defaults to 0 (machine instance
+                  will be considered available as soon as it is ready) NOTE: No logic
+                  is implemented for this field and it currently has no behaviour.'
                 format: int32
                 type: integer
               providerIDList:
@@ -8544,7 +8593,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.11.4
+    controller-gen.kubebuilder.io/version: v0.12.0
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
@@ -8566,7 +8615,8 @@ spec:
     singular: clusterresourceset
   scope: Namespaced
   versions:
-  - name: v1alpha3
+  - deprecated: true
+    name: v1alpha3
     schema:
       openAPIV3Schema:
         description: "ClusterResourceSet is the Schema for the clusterresourcesets
@@ -8719,7 +8769,7 @@ spec:
                 type: integer
             type: object
         type: object
-    served: true
+    served: false
     storage: false
     subresources:
       status: {}
@@ -8728,6 +8778,7 @@ spec:
       jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
+    deprecated: true
     name: v1alpha4
     schema:
       openAPIV3Schema:
@@ -9062,7 +9113,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.11.4
+    controller-gen.kubebuilder.io/version: v0.12.0
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
@@ -9084,7 +9135,8 @@ spec:
     singular: clusterresourcesetbinding
   scope: Namespaced
   versions:
-  - name: v1alpha3
+  - deprecated: true
+    name: v1alpha3
     schema:
       openAPIV3Schema:
         description: "ClusterResourceSetBinding lists all matching ClusterResourceSets
@@ -9164,7 +9216,7 @@ spec:
                 type: array
             type: object
         type: object
-    served: true
+    served: false
     storage: false
     subresources:
       status: {}
@@ -9173,6 +9225,7 @@ spec:
       jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
+    deprecated: true
     name: v1alpha4
     schema:
       openAPIV3Schema:
@@ -9360,7 +9413,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.11.4
+    controller-gen.kubebuilder.io/version: v0.12.0
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
@@ -9398,6 +9451,7 @@ spec:
       jsonPath: .status.currentHealthy
       name: CurrentHealthy
       type: integer
+    deprecated: true
     name: v1alpha3
     schema:
       openAPIV3Schema:
@@ -9633,7 +9687,7 @@ spec:
                 type: array
             type: object
         type: object
-    served: true
+    served: false
     storage: false
     subresources:
       status: {}
@@ -9658,6 +9712,7 @@ spec:
       jsonPath: .status.currentHealthy
       name: CurrentHealthy
       type: integer
+    deprecated: true
     name: v1alpha4
     schema:
       openAPIV3Schema:
@@ -10191,7 +10246,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.11.4
+    controller-gen.kubebuilder.io/version: v0.12.0
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
@@ -10454,7 +10509,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.11.4
+    controller-gen.kubebuilder.io/version: v0.12.0
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
@@ -10569,7 +10624,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.11.4
+    controller-gen.kubebuilder.io/version: v0.12.0
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
