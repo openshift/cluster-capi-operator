@@ -1,8 +1,8 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -164,11 +164,18 @@ func (p *provider) loadComponents() error {
 	defer metadataResponse.Body.Close()
 
 	// Download metadata from github as raw yaml
-	rawMetadataResponse, err := io.ReadAll(metadataResponse.Body)
-	if err != nil {
-		return err
+	var resultingFile string
+	scanner := bufio.NewScanner(metadataResponse.Body)
+	for scanner.Scan() {
+		// Remove all trailing Unicode code points contained in cutset.
+		// The cutset contains spaces and newline so we can get rid
+		// of those of them that are trailing, through the TrimRight function.
+		// The \n is later restored as it is needed for a correct YAML formatting.
+        // This is needed because of: https://github.com/kubernetes-sigs/cluster-api-provider-ibmcloud/pull/1441
+		resultingFile += strings.TrimRight(scanner.Text(), " \n") + "\n"
 	}
-	p.metadata = rawMetadataResponse
+
+	p.metadata = []byte(resultingFile)
 
 	return err
 }
