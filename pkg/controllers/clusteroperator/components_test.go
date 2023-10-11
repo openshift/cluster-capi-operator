@@ -20,7 +20,7 @@ var (
 	operatorImageSource               = "test.com/operator:tag"
 	kubeRBACProxyImageName            = "kube-rbac-proxy"
 	kubeRBACProxySource               = "test.com/kube-rbac-proxy:tag"
-	coreProviderImageName             = "cluster-capi-controllers"
+	coreProviderImageName             = "cluster-capi-controllers" // nolint:gosec
 	coreProviderImageSource           = "test.com/cluster-api:tag"
 	infrastructureProviderImageName   = "aws-cluster-api-controllers"
 	infrastructureProviderImageSource = "test.com/cluster-api-provider-aws:tag"

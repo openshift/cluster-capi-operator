@@ -77,7 +77,7 @@ func getProviderImage(kind, name string, images map[string]string) string {
 	switch kind {
 	case "CoreProvider":
 		// core provider image will always have this name
-		expectedImage = "cluster-capi-controllers"
+		expectedImage = "cluster-capi-controllers" // nolint:gosec
 	case "InfrastructureProvider":
 		// infrastructure provider image name will be in this form - $providername-cluster-api-controllers
 		expectedImage = fmt.Sprintf("%s-cluster-api-controllers", name)

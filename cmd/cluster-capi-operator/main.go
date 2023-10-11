@@ -119,9 +119,9 @@ func main() {
 
 	syncPeriod := 10 * time.Minute
 
-	cacheBuilder := cache.MultiNamespacedCacheBuilder([]string{
-		*managedNamespace, secretsync.SecretSourceNamespace,
-	})
+	cacheOpts := cache.Options{
+		Namespaces: []string{*managedNamespace, secretsync.SecretSourceNamespace},
+	}
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Namespace:               *managedNamespace,
@@ -135,7 +135,7 @@ func main() {
 		LeaderElectionID:        leaderElectionConfig.ResourceName,
 		RetryPeriod:             &leaderElectionConfig.RetryPeriod.Duration,
 		RenewDeadline:           &leaderElectionConfig.RenewDeadline.Duration,
-		NewCache:                cacheBuilder,
+		Cache:                   cacheOpts,
 		Port:                    *webhookPort,
 		CertDir:                 *webhookCertDir,
 	})
