@@ -1,28 +1,21 @@
 - name: cluster-api
   type: CoreProvider
-  #branch: release-4.14
-  branch: rebase-atop-v1.5.2
+  branch: release-4.15
   version: v1.5.2
-  org: damdo
 - name: aws
   type: InfrastructureProvider
-  #branch: release-4.14
-  branch: rebase-atop-v2.2.4
+  branch: release-4.15
   version: v2.2.4
-  org: damdo
 - name: azure
   type: InfrastructureProvider
-  branch: release-4.14
-  #branch: rebase-atop-v1.11.2
+  branch: release-4.15
   version: v1.11.2
-  #org: damdo
 - name: gcp
   type: InfrastructureProvider
-  branch: release-4.14
+  branch: release-4.15
   version: v1.4.0
 - name: powervs
   type: InfrastructureProvider
-  #branch: release-4.14
-  branch: rebase-atop-v0.6.0
+  branch: release-4.15
   version: v0.6.0
   org: damdo
