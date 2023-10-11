@@ -15,7 +15,7 @@ import (
 )
 
 var (
-	operatorUrlFmt = "https://github.com/openshift/cluster-api-operator//config/default?ref=%s"
+	operatorUrlFmt = "https://github.com/%s/cluster-api-operator//config/default?ref=%s"
 )
 
 func importCAPIOperator() error {
@@ -87,7 +87,12 @@ func readCAPIOperatorManifests() ([]unstructured.Unstructured, error) {
 		return nil, err
 	}
 
-	operatorUrl := fmt.Sprintf(operatorUrlFmt, operatorConfigMap["branch"])
+	// Default to the openshift repo if an org is not specified.
+	if _, ok := operatorConfigMap["org"]; !ok {
+		operatorConfigMap["org"] = "openshift"
+	}
+
+	operatorUrl := fmt.Sprintf(operatorUrlFmt, operatorConfigMap["org"], operatorConfigMap["branch"])
 
 	rawComponents, err := fetchAndCompileComponents(operatorUrl)
 	if err != nil {
