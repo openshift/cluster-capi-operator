@@ -42,6 +42,7 @@ spec:
                 values:
                 - amd64
                 - arm64
+                - ppc64le
               - key: kubernetes.io/os
                 operator: In
                 values:

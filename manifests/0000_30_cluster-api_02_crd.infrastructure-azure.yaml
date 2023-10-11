@@ -402,12 +402,42 @@ spec:
                         for the data disk.
                       properties:
                         diskEncryptionSet:
-                          description: DiskEncryptionSetParameters defines disk encryption
-                            options.
+                          description: DiskEncryptionSet specifies the customer-managed
+                            disk encryption set resource id for the managed disk.
                           properties:
                             id:
                               description: ID defines resourceID for diskEncryptionSet
                                 resource. It must be in the same subscription
+                              type: string
+                          type: object
+                        securityProfile:
+                          description: SecurityProfile specifies the security profile
+                            for the managed disk.
+                          properties:
+                            diskEncryptionSet:
+                              description: DiskEncryptionSet specifies the customer-managed
+                                disk encryption set resource id for the managed disk
+                                that is used for Customer Managed Key encrypted ConfidentialVM
+                                OS Disk and VMGuest blob.
+                              properties:
+                                id:
+                                  description: ID defines resourceID for diskEncryptionSet
+                                    resource. It must be in the same subscription
+                                  type: string
+                              type: object
+                            securityEncryptionType:
+                              description: SecurityEncryptionType specifies the encryption
+                                type of the managed disk. It is set to DiskWithVMGuestState
+                                to encrypt the managed disk along with the VMGuestState
+                                blob, and to VMGuestStateOnly to encrypt the VMGuestState
+                                blob only. When set to VMGuestStateOnly, VirtualizedTrustedPlatformModule
+                                should be set to Enabled. When set to DiskWithVMGuestState,
+                                EncryptionAtHost should be disabled, SecureBoot and
+                                VirtualizedTrustedPlatformModule should be set to
+                                Enabled. It can be set only for Confidential VMs.
+                              enum:
+                              - VMGuestStateOnly
+                              - DiskWithVMGuestState
                               type: string
                           type: object
                         storageAccountType:
@@ -715,7 +745,7 @@ spec:
                     properties:
                       option:
                         description: Option enables ephemeral OS when set to "Local"
-                          See https://docs.microsoft.com/en-us/azure/virtual-machines/ephemeral-os-disks
+                          See https://learn.microsoft.com/azure/virtual-machines/ephemeral-os-disks
                           for full details
                         enum:
                         - Local
@@ -733,12 +763,42 @@ spec:
                       for the OS disk.
                     properties:
                       diskEncryptionSet:
-                        description: DiskEncryptionSetParameters defines disk encryption
-                          options.
+                        description: DiskEncryptionSet specifies the customer-managed
+                          disk encryption set resource id for the managed disk.
                         properties:
                           id:
                             description: ID defines resourceID for diskEncryptionSet
                               resource. It must be in the same subscription
+                            type: string
+                        type: object
+                      securityProfile:
+                        description: SecurityProfile specifies the security profile
+                          for the managed disk.
+                        properties:
+                          diskEncryptionSet:
+                            description: DiskEncryptionSet specifies the customer-managed
+                              disk encryption set resource id for the managed disk
+                              that is used for Customer Managed Key encrypted ConfidentialVM
+                              OS Disk and VMGuest blob.
+                            properties:
+                              id:
+                                description: ID defines resourceID for diskEncryptionSet
+                                  resource. It must be in the same subscription
+                                type: string
+                            type: object
+                          securityEncryptionType:
+                            description: SecurityEncryptionType specifies the encryption
+                              type of the managed disk. It is set to DiskWithVMGuestState
+                              to encrypt the managed disk along with the VMGuestState
+                              blob, and to VMGuestStateOnly to encrypt the VMGuestState
+                              blob only. When set to VMGuestStateOnly, VirtualizedTrustedPlatformModule
+                              should be set to Enabled. When set to DiskWithVMGuestState,
+                              EncryptionAtHost should be disabled, SecureBoot and
+                              VirtualizedTrustedPlatformModule should be set to Enabled.
+                              It can be set only for Confidential VMs.
+                            enum:
+                            - VMGuestStateOnly
+                            - DiskWithVMGuestState
                             type: string
                         type: object
                       storageAccountType:
@@ -764,8 +824,43 @@ spec:
                   encryptionAtHost:
                     description: This field indicates whether Host Encryption should
                       be enabled or disabled for a virtual machine or virtual machine
-                      scale set. Default is disabled.
+                      scale set. This should be disabled when SecurityEncryptionType
+                      is set to DiskWithVMGuestState. Default is disabled.
                     type: boolean
+                  securityType:
+                    description: 'SecurityType specifies the SecurityType of the virtual
+                      machine. It has to be set to any specified value to enable UefiSettings.
+                      The default behavior is: UefiSettings will not be enabled unless
+                      this property is set.'
+                    enum:
+                    - ConfidentialVM
+                    - TrustedLaunch
+                    type: string
+                  uefiSettings:
+                    description: UefiSettings specifies the security settings like
+                      secure boot and vTPM used while creating the virtual machine.
+                    properties:
+                      secureBootEnabled:
+                        description: SecureBootEnabled specifies whether secure boot
+                          should be enabled on the virtual machine. Secure Boot verifies
+                          the digital signature of all boot components and halts the
+                          boot process if signature verification fails. If omitted,
+                          the platform chooses a default, which is subject to change
+                          over time, currently that default is false.
+                        type: boolean
+                      vTpmEnabled:
+                        description: VTpmEnabled specifies whether vTPM should be
+                          enabled on the virtual machine. When true it enables the
+                          virtualized trusted platform module measurements to create
+                          a known good boot integrity policy baseline. The integrity
+                          policy baseline is used for comparison with measurements
+                          from subsequent VM boots to determine if anything has changed.
+                          This is required to be set to Enabled if SecurityEncryptionType
+                          is defined. If omitted, the platform chooses a default,
+                          which is subject to change over time, currently that default
+                          is false.
+                        type: boolean
+                    type: object
                 type: object
               spotVMOptions:
                 description: SpotVMOptions allows the ability to specify the Machine
@@ -820,7 +915,7 @@ spec:
                 description: UserAssignedIdentities is a list of standalone Azure
                   identities provided by the user The lifecycle of a user-assigned
                   identity is managed separately from the lifecycle of the AzureMachine.
-                  See https://docs.microsoft.com/en-us/azure/active-directory/managed-identities-azure-resources/how-to-manage-ua-identity-cli
+                  See https://learn.microsoft.com/azure/active-directory/managed-identities-azure-resources/how-to-manage-ua-identity-cli
                 items:
                   description: UserAssignedIdentity defines the user-assigned identities
                     provided by the user to be assigned to Azure resources.
@@ -1353,6 +1448,15 @@ spec:
                                   description: SecurityRule defines an Azure security
                                     rule for security groups.
                                   properties:
+                                    action:
+                                      default: Allow
+                                      description: Action specifies whether network
+                                        traffic is allowed or denied. Can either be
+                                        "Allow" or "Deny". Defaults to "Allow".
+                                      enum:
+                                      - Allow
+                                      - Deny
+                                      type: string
                                     description:
                                       description: A description for this rule. Restricted
                                         to 140 chars.
@@ -2058,6 +2162,15 @@ spec:
                                 description: SecurityRule defines an Azure security
                                   rule for security groups.
                                 properties:
+                                  action:
+                                    default: Allow
+                                    description: Action specifies whether network
+                                      traffic is allowed or denied. Can either be
+                                      "Allow" or "Deny". Defaults to "Allow".
+                                    enum:
+                                    - Allow
+                                    - Deny
+                                    type: string
                                   description:
                                     description: A description for this rule. Restricted
                                       to 140 chars.
@@ -2626,6 +2739,16 @@ spec:
                                           description: SecurityRule defines an Azure
                                             security rule for security groups.
                                           properties:
+                                            action:
+                                              default: Allow
+                                              description: Action specifies whether
+                                                network traffic is allowed or denied.
+                                                Can either be "Allow" or "Deny". Defaults
+                                                to "Allow".
+                                              enum:
+                                              - Allow
+                                              - Deny
+                                              type: string
                                             description:
                                               description: A description for this
                                                 rule. Restricted to 140 chars.
@@ -3084,6 +3207,16 @@ spec:
                                         description: SecurityRule defines an Azure
                                           security rule for security groups.
                                         properties:
+                                          action:
+                                            default: Allow
+                                            description: Action specifies whether
+                                              network traffic is allowed or denied.
+                                              Can either be "Allow" or "Deny". Defaults
+                                              to "Allow".
+                                            enum:
+                                            - Allow
+                                            - Deny
+                                            type: string
                                           description:
                                             description: A description for this rule.
                                               Restricted to 140 chars.
@@ -3488,12 +3621,47 @@ spec:
                                 parameters for the data disk.
                               properties:
                                 diskEncryptionSet:
-                                  description: DiskEncryptionSetParameters defines
-                                    disk encryption options.
+                                  description: DiskEncryptionSet specifies the customer-managed
+                                    disk encryption set resource id for the managed
+                                    disk.
                                   properties:
                                     id:
                                       description: ID defines resourceID for diskEncryptionSet
                                         resource. It must be in the same subscription
+                                      type: string
+                                  type: object
+                                securityProfile:
+                                  description: SecurityProfile specifies the security
+                                    profile for the managed disk.
+                                  properties:
+                                    diskEncryptionSet:
+                                      description: DiskEncryptionSet specifies the
+                                        customer-managed disk encryption set resource
+                                        id for the managed disk that is used for Customer
+                                        Managed Key encrypted ConfidentialVM OS Disk
+                                        and VMGuest blob.
+                                      properties:
+                                        id:
+                                          description: ID defines resourceID for diskEncryptionSet
+                                            resource. It must be in the same subscription
+                                          type: string
+                                      type: object
+                                    securityEncryptionType:
+                                      description: SecurityEncryptionType specifies
+                                        the encryption type of the managed disk. It
+                                        is set to DiskWithVMGuestState to encrypt
+                                        the managed disk along with the VMGuestState
+                                        blob, and to VMGuestStateOnly to encrypt the
+                                        VMGuestState blob only. When set to VMGuestStateOnly,
+                                        VirtualizedTrustedPlatformModule should be
+                                        set to Enabled. When set to DiskWithVMGuestState,
+                                        EncryptionAtHost should be disabled, SecureBoot
+                                        and VirtualizedTrustedPlatformModule should
+                                        be set to Enabled. It can be set only for
+                                        Confidential VMs.
+                                      enum:
+                                      - VMGuestStateOnly
+                                      - DiskWithVMGuestState
                                       type: string
                                   type: object
                                 storageAccountType:
@@ -3819,7 +3987,7 @@ spec:
                             properties:
                               option:
                                 description: Option enables ephemeral OS when set
-                                  to "Local" See https://docs.microsoft.com/en-us/azure/virtual-machines/ephemeral-os-disks
+                                  to "Local" See https://learn.microsoft.com/azure/virtual-machines/ephemeral-os-disks
                                   for full details
                                 enum:
                                 - Local
@@ -3837,12 +4005,45 @@ spec:
                               for the OS disk.
                             properties:
                               diskEncryptionSet:
-                                description: DiskEncryptionSetParameters defines disk
-                                  encryption options.
+                                description: DiskEncryptionSet specifies the customer-managed
+                                  disk encryption set resource id for the managed
+                                  disk.
                                 properties:
                                   id:
                                     description: ID defines resourceID for diskEncryptionSet
                                       resource. It must be in the same subscription
+                                    type: string
+                                type: object
+                              securityProfile:
+                                description: SecurityProfile specifies the security
+                                  profile for the managed disk.
+                                properties:
+                                  diskEncryptionSet:
+                                    description: DiskEncryptionSet specifies the customer-managed
+                                      disk encryption set resource id for the managed
+                                      disk that is used for Customer Managed Key encrypted
+                                      ConfidentialVM OS Disk and VMGuest blob.
+                                    properties:
+                                      id:
+                                        description: ID defines resourceID for diskEncryptionSet
+                                          resource. It must be in the same subscription
+                                        type: string
+                                    type: object
+                                  securityEncryptionType:
+                                    description: SecurityEncryptionType specifies
+                                      the encryption type of the managed disk. It
+                                      is set to DiskWithVMGuestState to encrypt the
+                                      managed disk along with the VMGuestState blob,
+                                      and to VMGuestStateOnly to encrypt the VMGuestState
+                                      blob only. When set to VMGuestStateOnly, VirtualizedTrustedPlatformModule
+                                      should be set to Enabled. When set to DiskWithVMGuestState,
+                                      EncryptionAtHost should be disabled, SecureBoot
+                                      and VirtualizedTrustedPlatformModule should
+                                      be set to Enabled. It can be set only for Confidential
+                                      VMs.
+                                    enum:
+                                    - VMGuestStateOnly
+                                    - DiskWithVMGuestState
                                     type: string
                                 type: object
                               storageAccountType:
@@ -3868,8 +4069,48 @@ spec:
                           encryptionAtHost:
                             description: This field indicates whether Host Encryption
                               should be enabled or disabled for a virtual machine
-                              or virtual machine scale set. Default is disabled.
+                              or virtual machine scale set. This should be disabled
+                              when SecurityEncryptionType is set to DiskWithVMGuestState.
+                              Default is disabled.
                             type: boolean
+                          securityType:
+                            description: 'SecurityType specifies the SecurityType
+                              of the virtual machine. It has to be set to any specified
+                              value to enable UefiSettings. The default behavior is:
+                              UefiSettings will not be enabled unless this property
+                              is set.'
+                            enum:
+                            - ConfidentialVM
+                            - TrustedLaunch
+                            type: string
+                          uefiSettings:
+                            description: UefiSettings specifies the security settings
+                              like secure boot and vTPM used while creating the virtual
+                              machine.
+                            properties:
+                              secureBootEnabled:
+                                description: SecureBootEnabled specifies whether secure
+                                  boot should be enabled on the virtual machine. Secure
+                                  Boot verifies the digital signature of all boot
+                                  components and halts the boot process if signature
+                                  verification fails. If omitted, the platform chooses
+                                  a default, which is subject to change over time,
+                                  currently that default is false.
+                                type: boolean
+                              vTpmEnabled:
+                                description: VTpmEnabled specifies whether vTPM should
+                                  be enabled on the virtual machine. When true it
+                                  enables the virtualized trusted platform module
+                                  measurements to create a known good boot integrity
+                                  policy baseline. The integrity policy baseline is
+                                  used for comparison with measurements from subsequent
+                                  VM boots to determine if anything has changed. This
+                                  is required to be set to Enabled if SecurityEncryptionType
+                                  is defined. If omitted, the platform chooses a default,
+                                  which is subject to change over time, currently
+                                  that default is false.
+                                type: boolean
+                            type: object
                         type: object
                       spotVMOptions:
                         description: SpotVMOptions allows the ability to specify the
@@ -3928,7 +4169,7 @@ spec:
                         description: UserAssignedIdentities is a list of standalone
                           Azure identities provided by the user The lifecycle of a
                           user-assigned identity is managed separately from the lifecycle
-                          of the AzureMachine. See https://docs.microsoft.com/en-us/azure/active-directory/managed-identities-azure-resources/how-to-manage-ua-identity-cli
+                          of the AzureMachine. See https://learn.microsoft.com/azure/active-directory/managed-identities-azure-resources/how-to-manage-ua-identity-cli
                         items:
                           description: UserAssignedIdentity defines the user-assigned
                             identities provided by the user to be assigned to Azure
@@ -4155,7 +4396,8 @@ spec:
                 type: string
               type:
                 description: Type is the type of Azure Identity used. ServicePrincipal,
-                  ServicePrincipalCertificate, UserAssignedMSI or ManualServicePrincipal.
+                  ServicePrincipalCertificate, UserAssignedMSI, ManualServicePrincipal
+                  or WorkloadIdentity.
                 enum:
                 - ServicePrincipal
                 - UserAssignedMSI
@@ -4499,12 +4741,44 @@ spec:
                             for the data disk.
                           properties:
                             diskEncryptionSet:
-                              description: DiskEncryptionSetParameters defines disk
-                                encryption options.
+                              description: DiskEncryptionSet specifies the customer-managed
+                                disk encryption set resource id for the managed disk.
                               properties:
                                 id:
                                   description: ID defines resourceID for diskEncryptionSet
                                     resource. It must be in the same subscription
+                                  type: string
+                              type: object
+                            securityProfile:
+                              description: SecurityProfile specifies the security
+                                profile for the managed disk.
+                              properties:
+                                diskEncryptionSet:
+                                  description: DiskEncryptionSet specifies the customer-managed
+                                    disk encryption set resource id for the managed
+                                    disk that is used for Customer Managed Key encrypted
+                                    ConfidentialVM OS Disk and VMGuest blob.
+                                  properties:
+                                    id:
+                                      description: ID defines resourceID for diskEncryptionSet
+                                        resource. It must be in the same subscription
+                                      type: string
+                                  type: object
+                                securityEncryptionType:
+                                  description: SecurityEncryptionType specifies the
+                                    encryption type of the managed disk. It is set
+                                    to DiskWithVMGuestState to encrypt the managed
+                                    disk along with the VMGuestState blob, and to
+                                    VMGuestStateOnly to encrypt the VMGuestState blob
+                                    only. When set to VMGuestStateOnly, VirtualizedTrustedPlatformModule
+                                    should be set to Enabled. When set to DiskWithVMGuestState,
+                                    EncryptionAtHost should be disabled, SecureBoot
+                                    and VirtualizedTrustedPlatformModule should be
+                                    set to Enabled. It can be set only for Confidential
+                                    VMs.
+                                  enum:
+                                  - VMGuestStateOnly
+                                  - DiskWithVMGuestState
                                   type: string
                               type: object
                             storageAccountType:
@@ -4789,7 +5063,7 @@ spec:
                         properties:
                           option:
                             description: Option enables ephemeral OS when set to "Local"
-                              See https://docs.microsoft.com/en-us/azure/virtual-machines/ephemeral-os-disks
+                              See https://learn.microsoft.com/azure/virtual-machines/ephemeral-os-disks
                               for full details
                             enum:
                             - Local
@@ -4807,12 +5081,44 @@ spec:
                           for the OS disk.
                         properties:
                           diskEncryptionSet:
-                            description: DiskEncryptionSetParameters defines disk
-                              encryption options.
+                            description: DiskEncryptionSet specifies the customer-managed
+                              disk encryption set resource id for the managed disk.
                             properties:
                               id:
                                 description: ID defines resourceID for diskEncryptionSet
                                   resource. It must be in the same subscription
+                                type: string
+                            type: object
+                          securityProfile:
+                            description: SecurityProfile specifies the security profile
+                              for the managed disk.
+                            properties:
+                              diskEncryptionSet:
+                                description: DiskEncryptionSet specifies the customer-managed
+                                  disk encryption set resource id for the managed
+                                  disk that is used for Customer Managed Key encrypted
+                                  ConfidentialVM OS Disk and VMGuest blob.
+                                properties:
+                                  id:
+                                    description: ID defines resourceID for diskEncryptionSet
+                                      resource. It must be in the same subscription
+                                    type: string
+                                type: object
+                              securityEncryptionType:
+                                description: SecurityEncryptionType specifies the
+                                  encryption type of the managed disk. It is set to
+                                  DiskWithVMGuestState to encrypt the managed disk
+                                  along with the VMGuestState blob, and to VMGuestStateOnly
+                                  to encrypt the VMGuestState blob only. When set
+                                  to VMGuestStateOnly, VirtualizedTrustedPlatformModule
+                                  should be set to Enabled. When set to DiskWithVMGuestState,
+                                  EncryptionAtHost should be disabled, SecureBoot
+                                  and VirtualizedTrustedPlatformModule should be set
+                                  to Enabled. It can be set only for Confidential
+                                  VMs.
+                                enum:
+                                - VMGuestStateOnly
+                                - DiskWithVMGuestState
                                 type: string
                             type: object
                           storageAccountType:
@@ -4830,8 +5136,45 @@ spec:
                       encryptionAtHost:
                         description: This field indicates whether Host Encryption
                           should be enabled or disabled for a virtual machine or virtual
-                          machine scale set. Default is disabled.
+                          machine scale set. This should be disabled when SecurityEncryptionType
+                          is set to DiskWithVMGuestState. Default is disabled.
                         type: boolean
+                      securityType:
+                        description: 'SecurityType specifies the SecurityType of the
+                          virtual machine. It has to be set to any specified value
+                          to enable UefiSettings. The default behavior is: UefiSettings
+                          will not be enabled unless this property is set.'
+                        enum:
+                        - ConfidentialVM
+                        - TrustedLaunch
+                        type: string
+                      uefiSettings:
+                        description: UefiSettings specifies the security settings
+                          like secure boot and vTPM used while creating the virtual
+                          machine.
+                        properties:
+                          secureBootEnabled:
+                            description: SecureBootEnabled specifies whether secure
+                              boot should be enabled on the virtual machine. Secure
+                              Boot verifies the digital signature of all boot components
+                              and halts the boot process if signature verification
+                              fails. If omitted, the platform chooses a default, which
+                              is subject to change over time, currently that default
+                              is false.
+                            type: boolean
+                          vTpmEnabled:
+                            description: VTpmEnabled specifies whether vTPM should
+                              be enabled on the virtual machine. When true it enables
+                              the virtualized trusted platform module measurements
+                              to create a known good boot integrity policy baseline.
+                              The integrity policy baseline is used for comparison
+                              with measurements from subsequent VM boots to determine
+                              if anything has changed. This is required to be set
+                              to Enabled if SecurityEncryptionType is defined. If
+                              omitted, the platform chooses a default, which is subject
+                              to change over time, currently that default is false.
+                            type: boolean
+                        type: object
                     type: object
                   spotVMOptions:
                     description: SpotVMOptions allows the ability to specify the Machine
@@ -4905,7 +5248,7 @@ spec:
                     type: array
                   vmSize:
                     description: VMSize is the size of the Virtual Machine to build.
-                      See https://docs.microsoft.com/en-us/rest/api/compute/virtualmachines/createorupdate#virtualmachinesizetypes
+                      See https://learn.microsoft.com/rest/api/compute/virtualmachines/createorupdate#virtualmachinesizetypes
                     type: string
                 required:
                 - osDisk
@@ -4915,7 +5258,7 @@ spec:
                 description: UserAssignedIdentities is a list of standalone Azure
                   identities provided by the user The lifecycle of a user-assigned
                   identity is managed separately from the lifecycle of the AzureMachinePool.
-                  See https://docs.microsoft.com/en-us/azure/active-directory/managed-identities-azure-resources/how-to-manage-ua-identity-cli
+                  See https://learn.microsoft.com/azure/active-directory/managed-identities-azure-resources/how-to-manage-ua-identity-cli
                 items:
                   description: UserAssignedIdentity defines the user-assigned identities
                     provided by the user to be assigned to Azure resources.
@@ -5352,25 +5695,31 @@ spec:
                 type: object
               availabilityZones:
                 description: AvailabilityZones - Availability zones for nodes. Must
-                  use VirtualMachineScaleSets AgentPoolType.
+                  use VirtualMachineScaleSets AgentPoolType. Immutable.
                 items:
                   type: string
                 type: array
+              enableFIPS:
+                description: EnableFIPS indicates whether FIPS is enabled on the node
+                  pool. Immutable.
+                type: boolean
               enableNodePublicIP:
                 description: EnableNodePublicIP controls whether or not nodes in the
-                  pool each have a public IP address.
+                  pool each have a public IP address. Immutable.
                 type: boolean
               enableUltraSSD:
                 description: EnableUltraSSD enables the storage type UltraSSD_LRS
-                  for the agent pool.
+                  for the agent pool. Immutable.
                 type: boolean
               kubeletConfig:
                 description: KubeletConfig specifies the kubelet configurations for
-                  nodes.
+                  nodes. Immutable.
                 properties:
                   allowedUnsafeSysctls:
                     description: AllowedUnsafeSysctls - Allowlist of unsafe sysctls
-                      or unsafe sysctl patterns (ending in `*`).
+                      or unsafe sysctl patterns (ending in `*`). Valid values match
+                      `kernel.shm*`, `kernel.msg*`, `kernel.sem`, `fs.mqueue.*`, or
+                      `net.*`.
                     items:
                       type: string
                     type: array
@@ -5382,8 +5731,8 @@ spec:
                     minimum: 2
                     type: integer
                   containerLogMaxSizeMB:
-                    description: ContainerLogMaxSizeMB - The maximum size (e.g. 10Mi)
-                      of container log file before it is rotated.
+                    description: ContainerLogMaxSizeMB - The maximum size in MB of
+                      a container log file before it is rotated.
                     format: int32
                     type: integer
                   cpuCfsQuota:
@@ -5392,6 +5741,7 @@ spec:
                     type: boolean
                   cpuCfsQuotaPeriod:
                     description: CPUCfsQuotaPeriod - Sets CPU CFS quota period value.
+                      Must end in "ms", e.g. "100ms"
                     type: string
                   cpuManagerPolicy:
                     description: CPUManagerPolicy - CPU Manager policy to use.
@@ -5405,21 +5755,23 @@ spec:
                     type: boolean
                   imageGcHighThreshold:
                     description: ImageGcHighThreshold - The percent of disk usage
-                      after which image garbage collection is always run.
+                      after which image garbage collection is always run. Valid values
+                      are 0-100 (inclusive).
                     format: int32
                     maximum: 100
                     minimum: 0
                     type: integer
                   imageGcLowThreshold:
                     description: ImageGcLowThreshold - The percent of disk usage before
-                      which image garbage collection is never run.
+                      which image garbage collection is never run. Valid values are
+                      0-100 (inclusive) and must be less than `imageGcHighThreshold`.
                     format: int32
                     maximum: 100
                     minimum: 0
                     type: integer
                   podMaxPids:
                     description: PodMaxPids - The maximum number of processes per
-                      pod.
+                      pod. Must not exceed kernel PID limit. -1 disables the limit.
                     format: int32
                     minimum: -1
                     type: integer
@@ -5434,22 +5786,23 @@ spec:
                     type: string
                 type: object
               kubeletDiskType:
-                description: 'KubeletDiskType specifies the kubelet disk type. Default
-                  to OS. Possible values include: ''OS'', ''Temporary''. Requires
-                  kubeletDisk preview feature to be set.'
+                description: "KubeletDiskType specifies the kubelet disk type. Default
+                  to OS. Possible values include: 'OS', 'Temporary'. Requires Microsoft.ContainerService/KubeletDisk
+                  preview feature to be set. Immutable. See also [AKS doc]. \n [AKS
+                  doc]: https://learn.microsoft.com/rest/api/aks/agent-pools/create-or-update?tabs=HTTP#kubeletdisktype"
                 enum:
                 - OS
                 - Temporary
                 type: string
               linuxOSConfig:
                 description: LinuxOSConfig specifies the custom Linux OS settings
-                  and configurations.
+                  and configurations. Immutable.
                 properties:
                   swapFileSizeMB:
-                    description: 'SwapFileSizeMB specifies size in MB of a swap file
+                    description: "SwapFileSizeMB specifies size in MB of a swap file
                       will be created on the agent nodes from this node pool. Max
                       value of SwapFileSizeMB should be the size of temporary disk(/dev/sdb).
-                      Refer: https://learn.microsoft.com/en-us/azure/virtual-machines/managed-disks-overview#temporary-disk'
+                      Must be at least 1. See also [AKS doc]. \n [AKS doc]: https://learn.microsoft.com/azure/virtual-machines/managed-disks-overview#temporary-disk"
                     format: int32
                     minimum: 1
                     type: integer
@@ -5458,7 +5811,8 @@ spec:
                     properties:
                       fsAioMaxNr:
                         description: FsAioMaxNr specifies the maximum number of system-wide
-                          asynchronous io requests. Maps to fs.aio-max-nr.
+                          asynchronous io requests. Valid values are 65536-6553500
+                          (inclusive). Maps to fs.aio-max-nr.
                         format: int32
                         maximum: 6553500
                         minimum: 65536
@@ -5466,7 +5820,8 @@ spec:
                       fsFileMax:
                         description: FsFileMax specifies the max number of file-handles
                           that the Linux kernel will allocate, by increasing increases
-                          the maximum number of open files permitted. Maps to fs.file-max.
+                          the maximum number of open files permitted. Valid values
+                          are 8192-12000500 (inclusive). Maps to fs.file-max.
                         format: int32
                         maximum: 12000500
                         minimum: 8192
@@ -5475,21 +5830,24 @@ spec:
                         description: FsInotifyMaxUserWatches specifies the number
                           of file watches allowed by the system. Each watch is roughly
                           90 bytes on a 32-bit kernel, and roughly 160 bytes on a
-                          64-bit kernel. Maps to fs.inotify.max_user_watches.
+                          64-bit kernel. Valid values are 781250-2097152 (inclusive).
+                          Maps to fs.inotify.max_user_watches.
                         format: int32
                         maximum: 2097152
                         minimum: 781250
                         type: integer
                       fsNrOpen:
                         description: FsNrOpen specifies the maximum number of file-handles
-                          a process can allocate. Maps to fs.nr_open.
+                          a process can allocate. Valid values are 8192-20000500 (inclusive).
+                          Maps to fs.nr_open.
                         format: int32
                         maximum: 20000500
                         minimum: 8192
                         type: integer
                       kernelThreadsMax:
                         description: KernelThreadsMax specifies the maximum number
-                          of all threads that can be created. Maps to kernel.threads-max.
+                          of all threads that can be created. Valid values are 20-513785
+                          (inclusive). Maps to kernel.threads-max.
                         format: int32
                         maximum: 513785
                         minimum: 20
@@ -5497,8 +5855,8 @@ spec:
                       netCoreNetdevMaxBacklog:
                         description: NetCoreNetdevMaxBacklog specifies maximum number
                           of packets, queued on the INPUT side, when the interface
-                          receives packets faster than kernel can process them. Maps
-                          to net.core.netdev_max_backlog.
+                          receives packets faster than kernel can process them. Valid
+                          values are 1000-3240000 (inclusive). Maps to net.core.netdev_max_backlog.
                         format: int32
                         maximum: 3240000
                         minimum: 1000
@@ -5507,21 +5865,24 @@ spec:
                         description: NetCoreOptmemMax specifies the maximum ancillary
                           buffer size (option memory buffer) allowed per socket. Socket
                           option memory is used in a few cases to store extra structures
-                          relating to usage of the socket. Maps to net.core.optmem_max.
+                          relating to usage of the socket. Valid values are 20480-4194304
+                          (inclusive). Maps to net.core.optmem_max.
                         format: int32
                         maximum: 4194304
                         minimum: 20480
                         type: integer
                       netCoreRmemDefault:
                         description: NetCoreRmemDefault specifies the default receive
-                          socket buffer size in bytes. Maps to net.core.rmem_default.
+                          socket buffer size in bytes. Valid values are 212992-134217728
+                          (inclusive). Maps to net.core.rmem_default.
                         format: int32
                         maximum: 134217728
                         minimum: 212992
                         type: integer
                       netCoreRmemMax:
                         description: NetCoreRmemMax specifies the maximum receive
-                          socket buffer size in bytes. Maps to net.core.rmem_max.
+                          socket buffer size in bytes. Valid values are 212992-134217728
+                          (inclusive). Maps to net.core.rmem_max.
                         format: int32
                         maximum: 134217728
                         minimum: 212992
@@ -5532,21 +5893,24 @@ spec:
                           socket. An upper limit for the value of the backlog parameter
                           passed to the listen(2)(https://man7.org/linux/man-pages/man2/listen.2.html)
                           function. If the backlog argument is greater than the somaxconn,
-                          then it's silently truncated to this limit. Maps to net.core.somaxconn.
+                          then it's silently truncated to this limit. Valid values
+                          are 4096-3240000 (inclusive). Maps to net.core.somaxconn.
                         format: int32
                         maximum: 3240000
                         minimum: 4096
                         type: integer
                       netCoreWmemDefault:
                         description: NetCoreWmemDefault specifies the default send
-                          socket buffer size in bytes. Maps to net.core.wmem_default.
+                          socket buffer size in bytes. Valid values are 212992-134217728
+                          (inclusive). Maps to net.core.wmem_default.
                         format: int32
                         maximum: 134217728
                         minimum: 212992
                         type: integer
                       netCoreWmemMax:
                         description: NetCoreWmemMax specifies the maximum send socket
-                          buffer size in bytes. Maps to net.core.wmem_max.
+                          buffer size in bytes. Valid values are 212992-134217728
+                          (inclusive). Maps to net.core.wmem_max.
                         format: int32
                         maximum: 134217728
                         minimum: 212992
@@ -5562,7 +5926,8 @@ spec:
                         description: NetIpv4NeighDefaultGcThresh1 specifies the minimum
                           number of entries that may be in the ARP cache. Garbage
                           collection won't be triggered if the number of entries is
-                          below this setting. Maps to net.ipv4.neigh.default.gc_thresh1.
+                          below this setting. Valid values are 128-80000 (inclusive).
+                          Maps to net.ipv4.neigh.default.gc_thresh1.
                         format: int32
                         maximum: 80000
                         minimum: 128
@@ -5571,14 +5936,16 @@ spec:
                         description: NetIpv4NeighDefaultGcThresh2 specifies soft maximum
                           number of entries that may be in the ARP cache. ARP garbage
                           collection will be triggered about 5 seconds after reaching
-                          this soft maximum. Maps to net.ipv4.neigh.default.gc_thresh2.
+                          this soft maximum. Valid values are 512-90000 (inclusive).
+                          Maps to net.ipv4.neigh.default.gc_thresh2.
                         format: int32
                         maximum: 90000
                         minimum: 512
                         type: integer
                       netIpv4NeighDefaultGcThresh3:
                         description: NetIpv4NeighDefaultGcThresh3 specified hard maximum
-                          number of entries in the ARP cache. Maps to net.ipv4.neigh.default.gc_thresh3.
+                          number of entries in the ARP cache. Valid values are 1024-100000
+                          (inclusive). Maps to net.ipv4.neigh.default.gc_thresh3.
                         format: int32
                         maximum: 100000
                         minimum: 1024
@@ -5586,7 +5953,8 @@ spec:
                       netIpv4TCPFinTimeout:
                         description: NetIpv4TCPFinTimeout specifies the length of
                           time an orphaned connection will remain in the FIN_WAIT_2
-                          state before it's aborted at the local end. Maps to net.ipv4.tcp_fin_timeout.
+                          state before it's aborted at the local end. Valid values
+                          are 5-120 (inclusive). Maps to net.ipv4.tcp_fin_timeout.
                         format: int32
                         maximum: 120
                         minimum: 5
@@ -5594,7 +5962,8 @@ spec:
                       netIpv4TCPKeepaliveProbes:
                         description: NetIpv4TCPKeepaliveProbes specifies the number
                           of keepalive probes TCP sends out, until it decides the
-                          connection is broken. Maps to net.ipv4.tcp_keepalive_probes.
+                          connection is broken. Valid values are 1-15 (inclusive).
+                          Maps to net.ipv4.tcp_keepalive_probes.
                         format: int32
                         maximum: 15
                         minimum: 1
@@ -5602,7 +5971,8 @@ spec:
                       netIpv4TCPKeepaliveTime:
                         description: NetIpv4TCPKeepaliveTime specifies the rate at
                           which TCP sends out a keepalive message when keepalive is
-                          enabled. Maps to net.ipv4.tcp_keepalive_time.
+                          enabled. Valid values are 30-432000 (inclusive). Maps to
+                          net.ipv4.tcp_keepalive_time.
                         format: int32
                         maximum: 432000
                         minimum: 30
@@ -5612,7 +5982,8 @@ spec:
                           number of queued connection requests that have still not
                           received an acknowledgment from the connecting client. If
                           this number is exceeded, the kernel will begin dropping
-                          requests. Maps to net.ipv4.tcp_max_syn_backlog.
+                          requests. Valid values are 128-3240000 (inclusive). Maps
+                          to net.ipv4.tcp_max_syn_backlog.
                         format: int32
                         maximum: 3240000
                         minimum: 128
@@ -5621,7 +5992,8 @@ spec:
                         description: NetIpv4TCPMaxTwBuckets specifies maximal number
                           of timewait sockets held by system simultaneously. If this
                           number is exceeded, time-wait socket is immediately destroyed
-                          and warning is printed. Maps to net.ipv4.tcp_max_tw_buckets.
+                          and warning is printed. Valid values are 8000-1440000 (inclusive).
+                          Maps to net.ipv4.tcp_max_tw_buckets.
                         format: int32
                         maximum: 1440000
                         minimum: 8000
@@ -5635,7 +6007,8 @@ spec:
                         description: NetIpv4TCPkeepaliveIntvl specifies the frequency
                           of the probes sent out. Multiplied by tcpKeepaliveprobes,
                           it makes up the time to kill a connection that isn't responding,
-                          after probes started. Maps to net.ipv4.tcp_keepalive_intvl.
+                          after probes started. Valid values are 1-75 (inclusive).
+                          Maps to net.ipv4.tcp_keepalive_intvl.
                         format: int32
                         maximum: 75
                         minimum: 1
@@ -5643,8 +6016,8 @@ spec:
                       netNetfilterNfConntrackBuckets:
                         description: NetNetfilterNfConntrackBuckets specifies the
                           size of hash table used by nf_conntrack module to record
-                          the established connection record of the TCP protocol. Maps
-                          to net.netfilter.nf_conntrack_buckets.
+                          the established connection record of the TCP protocol. Valid
+                          values are 65536-147456 (inclusive). Maps to net.netfilter.nf_conntrack_buckets.
                         format: int32
                         maximum: 147456
                         minimum: 65536
@@ -5652,7 +6025,8 @@ spec:
                       netNetfilterNfConntrackMax:
                         description: NetNetfilterNfConntrackMax specifies the maximum
                           number of connections supported by the nf_conntrack module
-                          or the size of connection tracking table. Maps to net.netfilter.nf_conntrack_max.
+                          or the size of connection tracking table. Valid values are
+                          131072-1048576 (inclusive). Maps to net.netfilter.nf_conntrack_max.
                         format: int32
                         maximum: 1048576
                         minimum: 131072
@@ -5660,6 +6034,7 @@ spec:
                       vmMaxMapCount:
                         description: VMMaxMapCount specifies the maximum number of
                           memory map areas a process may have. Maps to vm.max_map_count.
+                          Valid values are 65530-262144 (inclusive).
                         format: int32
                         maximum: 262144
                         minimum: 65530
@@ -5668,7 +6043,7 @@ spec:
                         description: VMSwappiness specifies aggressiveness of the
                           kernel in swapping memory pages. Higher values will increase
                           aggressiveness, lower values decrease the amount of swap.
-                          Maps to vm.swappiness.
+                          Valid values are 0-100 (inclusive). Maps to vm.swappiness.
                         format: int32
                         maximum: 100
                         minimum: 0
@@ -5677,17 +6052,18 @@ spec:
                         description: VMVfsCachePressure specifies the percentage value
                           that controls tendency of the kernel to reclaim the memory,
                           which is used for caching of directory and inode objects.
-                          Maps to vm.vfs_cache_pressure.
+                          Valid values are 1-500 (inclusive). Maps to vm.vfs_cache_pressure.
                         format: int32
                         maximum: 500
                         minimum: 1
                         type: integer
                     type: object
                   transparentHugePageDefrag:
-                    description: TransparentHugePageDefrag specifies whether the kernel
-                      should make aggressive use of memory compaction to make more
-                      hugepages available. Refer to https://www.kernel.org/doc/html/latest/admin-guide/mm/transhuge.html#admin-guide-transhuge
-                      for more details.
+                    description: "TransparentHugePageDefrag specifies whether the
+                      kernel should make aggressive use of memory compaction to make
+                      more hugepages available. See also [Linux doc]. \n [Linux doc]:
+                      https://www.kernel.org/doc/html/latest/admin-guide/mm/transhuge.html#admin-guide-transhuge
+                      for more details."
                     enum:
                     - always
                     - defer
@@ -5696,9 +6072,10 @@ spec:
                     - never
                     type: string
                   transparentHugePageEnabled:
-                    description: TransparentHugePageEnabled specifies various modes
-                      of Transparent Hugepages. Refer to https://www.kernel.org/doc/html/latest/admin-guide/mm/transhuge.html#admin-guide-transhuge
-                      for more details.
+                    description: "TransparentHugePageEnabled specifies various modes
+                      of Transparent Hugepages. See also [Linux doc]. \n [Linux doc]:
+                      https://www.kernel.org/doc/html/latest/admin-guide/mm/transhuge.html#admin-guide-transhuge
+                      for more details."
                     enum:
                     - always
                     - madvise
@@ -5706,8 +6083,10 @@ spec:
                     type: string
                 type: object
               maxPods:
-                description: MaxPods specifies the kubelet --max-pods configuration
-                  for the node pool.
+                description: "MaxPods specifies the kubelet `--max-pods` configuration
+                  for the node pool. Immutable. See also [AKS doc], [K8s doc]. \n
+                  [AKS doc]: https://learn.microsoft.com/azure/aks/configure-azure-cni#configure-maximum---new-clusters
+                  [K8s doc]: https://kubernetes.io/docs/reference/command-line-tools-reference/kubelet/"
                 format: int32
                 type: integer
               mode:
@@ -5719,35 +6098,38 @@ spec:
                 type: string
               name:
                 description: Name - name of the agent pool. If not specified, CAPZ
-                  uses the name of the CR as the agent pool name.
+                  uses the name of the CR as the agent pool name. Immutable.
                 type: string
               nodeLabels:
                 additionalProperties:
                   type: string
-                description: Node labels - labels for all of the nodes present in
-                  node pool
+                description: "Node labels - labels for all of the nodes present in
+                  node pool. See also [AKS doc]. \n [AKS doc]: https://learn.microsoft.com/azure/aks/use-labels"
                 type: object
               nodePublicIPPrefixID:
                 description: NodePublicIPPrefixID specifies the public IP prefix resource
-                  ID which VM nodes should use IPs from.
+                  ID which VM nodes should use IPs from. Immutable.
                 type: string
               osDiskSizeGB:
                 description: OSDiskSizeGB is the disk size for every machine in this
                   agent pool. If you specify 0, it will apply the default osDisk size
-                  according to the vmSize specified.
+                  according to the vmSize specified. Immutable.
                 format: int32
                 type: integer
               osDiskType:
                 default: Managed
-                description: OsDiskType specifies the OS disk type for each node in
-                  the pool. Allowed values are 'Ephemeral' and 'Managed'.
+                description: "OsDiskType specifies the OS disk type for each node
+                  in the pool. Allowed values are 'Ephemeral' and 'Managed' (default).
+                  Immutable. See also [AKS doc]. \n [AKS doc]: https://learn.microsoft.com/azure/aks/cluster-configuration#ephemeral-os"
                 enum:
                 - Ephemeral
                 - Managed
                 type: string
               osType:
-                description: 'OSType specifies the virtual machine operating system.
-                  Default to Linux. Possible values include: ''Linux'', ''Windows'''
+                description: "OSType specifies the virtual machine operating system.
+                  Default to Linux. Possible values include: 'Linux', 'Windows'. 'Windows'
+                  requires the AzureManagedControlPlane's `spec.networkPlugin` to
+                  be `azure`. Immutable. See also [AKS doc]. \n [AKS doc]: https://learn.microsoft.com/rest/api/aks/agent-pools/create-or-update?tabs=HTTP#ostype"
                 enum:
                 - Linux
                 - Windows
@@ -5758,9 +6140,18 @@ spec:
                 items:
                   type: string
                 type: array
+              scaleDownMode:
+                default: Delete
+                description: 'ScaleDownMode affects the cluster autoscaler behavior.
+                  Default to Delete. Possible values include: ''Deallocate'', ''Delete'''
+                enum:
+                - Deallocate
+                - Delete
+                type: string
               scaleSetPriority:
                 description: 'ScaleSetPriority specifies the ScaleSetPriority value.
-                  Default to Regular. Possible values include: ''Regular'', ''Spot'''
+                  Default to Regular. Possible values include: ''Regular'', ''Spot''
+                  Immutable.'
                 enum:
                 - Regular
                 - Spot
@@ -5770,22 +6161,36 @@ spec:
                   node pool.
                 properties:
                   maxSize:
+                    description: MaxSize is the maximum number of nodes for auto-scaling.
                     format: int32
                     type: integer
                   minSize:
+                    description: MinSize is the minimum number of nodes for auto-scaling.
                     format: int32
                     type: integer
                 type: object
               sku:
-                description: SKU is the size of the VMs in the node pool.
+                description: SKU is the size of the VMs in the node pool. Immutable.
                 type: string
+              spotMaxPrice:
+                anyOf:
+                - type: integer
+                - type: string
+                description: SpotMaxPrice defines max price to pay for spot instance.
+                  Possible values are any decimal value greater than zero or -1. If
+                  you set the max price to be -1, the VM won't be evicted based on
+                  price. The price for the VM will be the current price for spot or
+                  the price for a standard VM, which ever is less, as long as there's
+                  capacity and quota available.
+                pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                x-kubernetes-int-or-string: true
               subnetName:
                 description: SubnetName specifies the Subnet where the MachinePool
-                  will be placed
+                  will be placed Immutable.
                 type: string
               taints:
-                description: Taints specifies the taints for nodes present in this
-                  agent pool.
+                description: "Taints specifies the taints for nodes present in this
+                  agent pool. See also [AKS doc]. \n [AKS doc]: https://learn.microsoft.com/azure/aks/use-multiple-node-pools#setting-node-pool-taints"
                 items:
                   description: Taint represents a Kubernetes taint.
                   properties:
@@ -5979,7 +6384,8 @@ spec:
             properties:
               controlPlaneEndpoint:
                 description: ControlPlaneEndpoint represents the endpoint used to
-                  communicate with the control plane.
+                  communicate with the control plane. Immutable, populated by the
+                  AKS API at create.
                 properties:
                   host:
                     description: The hostname on which the API server is serving.
@@ -6109,7 +6515,7 @@ spec:
                 type: array
               apiServerAccessProfile:
                 description: APIServerAccessProfile is the access profile for AKS
-                  API server.
+                  API server. Immutable except for `authorizedIPRanges`.
                 properties:
                   authorizedIPRanges:
                     description: AuthorizedIPRanges - Authorized IP Ranges to kubernetes
@@ -6238,9 +6644,16 @@ spec:
                     - "false"
                     type: string
                 type: object
+              azureEnvironment:
+                description: 'AzureEnvironment is the name of the AzureCloud to be
+                  used. The default value that would be used by most users is "AzurePublicCloud",
+                  other values are: - ChinaCloud: "AzureChinaCloud" - PublicCloud:
+                  "AzurePublicCloud" - USGovernmentCloud: "AzureUSGovernmentCloud"'
+                type: string
               controlPlaneEndpoint:
                 description: ControlPlaneEndpoint represents the endpoint used to
-                  communicate with the control plane.
+                  communicate with the control plane. Immutable, populated by the
+                  AKS API at create.
                 properties:
                   host:
                     description: The hostname on which the API server is serving.
@@ -6256,8 +6669,44 @@ spec:
               dnsServiceIP:
                 description: DNSServiceIP is an IP address assigned to the Kubernetes
                   DNS service. It must be within the Kubernetes service address range
-                  specified in serviceCidr.
+                  specified in serviceCidr. Immutable.
                 type: string
+              httpProxyConfig:
+                description: HTTPProxyConfig is the HTTP proxy configuration for the
+                  cluster. Immutable.
+                properties:
+                  httpProxy:
+                    description: HTTPProxy is the HTTP proxy server endpoint to use.
+                    type: string
+                  httpsProxy:
+                    description: HTTPSProxy is the HTTPS proxy server endpoint to
+                      use.
+                    type: string
+                  noProxy:
+                    description: NoProxy indicates the endpoints that should not go
+                      through proxy.
+                    items:
+                      type: string
+                    type: array
+                  trustedCa:
+                    description: TrustedCA is the alternative CA cert to use for connecting
+                      to proxy servers.
+                    type: string
+                type: object
+              identity:
+                description: Identity configuration used by the AKS control plane.
+                properties:
+                  type:
+                    description: Type - The Identity type to use.
+                    enum:
+                    - SystemAssigned
+                    - UserAssigned
+                    type: string
+                  userAssignedIdentityResourceID:
+                    description: UserAssignedIdentityResourceID - Identity ARM resource
+                      ID when using user-assigned identity.
+                    type: string
+                type: object
               identityRef:
                 description: IdentityRef is a reference to a AzureClusterIdentity
                   to be used when reconciling this cluster
@@ -6296,6 +6745,10 @@ spec:
                     type: string
                 type: object
                 x-kubernetes-map-type: atomic
+              kubeletUserAssignedIdentity:
+                description: KubeletUserAssignedIdentity is the user-assigned identity
+                  for kubelet. For authentication with Azure Container Registry.
+                type: string
               loadBalancerProfile:
                 description: LoadBalancerProfile is the profile of the cluster load
                   balancer.
@@ -6333,23 +6786,31 @@ spec:
                 type: object
               loadBalancerSKU:
                 description: LoadBalancerSKU is the SKU of the loadBalancer to be
-                  provisioned.
+                  provisioned. Immutable.
                 enum:
                 - Basic
                 - Standard
                 type: string
               location:
                 description: 'Location is a string matching one of the canonical Azure
-                  region names. Examples: "westus2", "eastus".'
+                  region names. Examples: "westus2", "eastus". Immutable.'
                 type: string
               networkPlugin:
-                description: NetworkPlugin used for building Kubernetes network.
+                description: NetworkPlugin used for building Kubernetes network. Allowed
+                  values are "azure", "kubenet". Immutable.
                 enum:
                 - azure
                 - kubenet
                 type: string
+              networkPluginMode:
+                description: NetworkPluginMode is the mode the network plugin should
+                  use. Allowed value is "overlay".
+                enum:
+                - overlay
+                type: string
               networkPolicy:
-                description: NetworkPolicy used for building Kubernetes network.
+                description: NetworkPolicy used for building Kubernetes network. Allowed
+                  values are "azure", "calico". Immutable.
                 enum:
                 - azure
                 - calico
@@ -6357,10 +6818,18 @@ spec:
               nodeResourceGroupName:
                 description: NodeResourceGroupName is the name of the resource group
                   containing cluster IaaS resources. Will be populated to default
-                  in webhook.
+                  in webhook. Immutable.
                 type: string
+              oidcIssuerProfile:
+                description: OIDCIssuerProfile is the OIDC issuer profile of the Managed
+                  Cluster.
+                properties:
+                  enabled:
+                    description: Enabled is whether the OIDC issuer is enabled.
+                    type: boolean
+                type: object
               outboundType:
-                description: Outbound configuration used by Nodes.
+                description: Outbound configuration used by Nodes. Immutable.
                 enum:
                 - loadBalancer
                 - managedNATGateway
@@ -6369,7 +6838,7 @@ spec:
                 type: string
               resourceGroupName:
                 description: ResourceGroupName is the name of the Azure resource group
-                  for this AKS Cluster.
+                  for this AKS Cluster. Immutable.
                 type: string
               sku:
                 description: SKU is the SKU of the AKS to be provisioned.
@@ -6379,17 +6848,19 @@ spec:
                     enum:
                     - Free
                     - Paid
+                    - Standard
                     type: string
                 required:
                 - tier
                 type: object
               sshPublicKey:
                 description: SSHPublicKey is a string literal containing an ssh public
-                  key base64 encoded.
+                  key base64 encoded. Use empty string to autogenerate new key. Use
+                  null value to not set key. Immutable.
                 type: string
               subscriptionID:
                 description: SubscriptionID is the GUID of the Azure subscription
-                  to hold this cluster.
+                  to hold this cluster. Immutable.
                 type: string
               version:
                 description: Version defines the desired Kubernetes version.
@@ -6397,7 +6868,7 @@ spec:
                 type: string
               virtualNetwork:
                 description: VirtualNetwork describes the vnet for the AKS cluster.
-                  Will be created if it does not exist.
+                  Will be created if it does not exist. Immutable except for `subnet`.
                 properties:
                   cidrBlock:
                     type: string
@@ -6408,8 +6879,7 @@ spec:
                       for the VNet and Subnet.
                     type: string
                   subnet:
-                    description: ManagedControlPlaneSubnet describes a subnet for
-                      an AKS cluster.
+                    description: Immutable except for `serviceEndpoints`.
                     properties:
                       cidrBlock:
                         type: string
@@ -6527,7 +6997,6 @@ spec:
             required:
             - location
             - resourceGroupName
-            - sshPublicKey
             - version
             type: object
           status:
@@ -6622,6 +7091,14 @@ spec:
                   - type
                   type: object
                 type: array
+              oidcIssuerProfile:
+                description: OIDCIssuerProfile is the OIDC issuer profile of the Managed
+                  Cluster.
+                properties:
+                  issuerURL:
+                    description: IssuerURL is the OIDC issuer url of the Managed Cluster.
+                    type: string
+                type: object
               ready:
                 description: Ready is true when the provider resource is ready.
                 type: boolean
@@ -6890,6 +7367,630 @@ spec:
         type: object
     served: true
     storage: true
+    subresources:
+      status: {}
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: null
+  storedVersions: null
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.13.0
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/feature-set: TechPreviewNoUpgrade
+    service.beta.openshift.io/inject-cabundle: "true"
+  creationTimestamp: null
+  labels:
+    app.kubernetes.io/name: azure-service-operator
+    app.kubernetes.io/version: v2.3.0
+    cluster.x-k8s.io/provider: infrastructure-azure
+    clusterctl.cluster.x-k8s.io: ""
+  name: resourcegroups.resources.azure.com
+spec:
+  group: resources.azure.com
+  names:
+    kind: ResourceGroup
+    listKind: ResourceGroupList
+    plural: resourcegroups
+    singular: resourcegroup
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .status.conditions[?(@.type=='Ready')].status
+      name: Ready
+      type: string
+    - jsonPath: .status.conditions[?(@.type=='Ready')].severity
+      name: Severity
+      type: string
+    - jsonPath: .status.conditions[?(@.type=='Ready')].reason
+      name: Reason
+      type: string
+    - jsonPath: .status.conditions[?(@.type=='Ready')].message
+      name: Message
+      type: string
+    name: v1api20200601
+    schema:
+      openAPIV3Schema:
+        description: 'Generator information: - Generated from: /resources/resource-manager/Microsoft.Resources/stable/2020-06-01/resources.json
+          - ARM URI: /subscriptions/{subscriptionId}/resourcegroups/{resourceGroupName}'
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            properties:
+              azureName:
+                description: 'AzureName: The name of the resource in Azure. This is
+                  often the same as the name of the resource in Kubernetes but it
+                  doesn''t have to be.'
+                maxLength: 90
+                minLength: 1
+                type: string
+              location:
+                description: 'Location: The location of the resource group. It cannot
+                  be changed after the resource group has been created. It must be
+                  one of the supported Azure locations.'
+                type: string
+              managedBy:
+                description: 'ManagedBy: The ID of the resource that manages this
+                  resource group.'
+                type: string
+              tags:
+                additionalProperties:
+                  type: string
+                description: 'Tags: The tags attached to the resource group.'
+                type: object
+            required:
+            - location
+            type: object
+          status:
+            description: Resource group information.
+            properties:
+              conditions:
+                description: 'Conditions: The observed state of the resource'
+                items:
+                  description: Condition defines an extension to status (an observation)
+                    of a resource
+                  properties:
+                    lastTransitionTime:
+                      description: LastTransitionTime is the last time the condition
+                        transitioned from one status to another.
+                      format: date-time
+                      type: string
+                    message:
+                      description: Message is a human readable message indicating
+                        details about the transition. This field may be empty.
+                      type: string
+                    observedGeneration:
+                      description: ObservedGeneration is the .metadata.generation
+                        that the condition was set based upon. For instance, if .metadata.generation
+                        is currently 12, but the .status.condition[x].observedGeneration
+                        is 9, the condition is out of date with respect to the current
+                        state of the instance.
+                      format: int64
+                      type: integer
+                    reason:
+                      description: Reason for the condition's last transition. Reasons
+                        are upper CamelCase (PascalCase) with no spaces. A reason
+                        is always provided, this field will not be empty.
+                      type: string
+                    severity:
+                      description: Severity with which to treat failures of this type
+                        of condition. For conditions which have positive polarity
+                        (Status == True is their normal/healthy state), this will
+                        be omitted when Status == True For conditions which have negative
+                        polarity (Status == False is their normal/healthy state),
+                        this will be omitted when Status == False. This is omitted
+                        in all cases when Status == Unknown
+                      type: string
+                    status:
+                      description: Status of the condition, one of True, False, or
+                        Unknown.
+                      type: string
+                    type:
+                      description: Type of condition.
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+              id:
+                description: 'Id: The ID of the resource group.'
+                type: string
+              location:
+                description: 'Location: The location of the resource group. It cannot
+                  be changed after the resource group has been created. It must be
+                  one of the supported Azure locations.'
+                type: string
+              managedBy:
+                description: 'ManagedBy: The ID of the resource that manages this
+                  resource group.'
+                type: string
+              name:
+                description: 'Name: The name of the resource group.'
+                type: string
+              properties:
+                description: 'Properties: The resource group properties.'
+                properties:
+                  provisioningState:
+                    description: 'ProvisioningState: The provisioning state.'
+                    type: string
+                type: object
+              tags:
+                additionalProperties:
+                  type: string
+                description: 'Tags: The tags attached to the resource group.'
+                type: object
+              type:
+                description: 'Type: The type of the resource group.'
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: false
+    subresources:
+      status: {}
+  - additionalPrinterColumns:
+    - jsonPath: .status.conditions[?(@.type=='Ready')].status
+      name: Ready
+      type: string
+    - jsonPath: .status.conditions[?(@.type=='Ready')].severity
+      name: Severity
+      type: string
+    - jsonPath: .status.conditions[?(@.type=='Ready')].reason
+      name: Reason
+      type: string
+    - jsonPath: .status.conditions[?(@.type=='Ready')].message
+      name: Message
+      type: string
+    name: v1api20200601storage
+    schema:
+      openAPIV3Schema:
+        description: 'Storage version of v1api20200601.ResourceGroup Generator information:
+          - Generated from: /resources/resource-manager/Microsoft.Resources/stable/2020-06-01/resources.json
+          - ARM URI: /subscriptions/{subscriptionId}/resourcegroups/{resourceGroupName}'
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: Storage version of v1api20200601.ResourceGroup_Spec
+            properties:
+              $propertyBag:
+                additionalProperties:
+                  type: string
+                description: PropertyBag is an unordered set of stashed information
+                  that used for properties not directly supported by storage resources,
+                  allowing for full fidelity round trip conversions
+                type: object
+              azureName:
+                description: 'AzureName: The name of the resource in Azure. This is
+                  often the same as the name of the resource in Kubernetes but it
+                  doesn''t have to be.'
+                maxLength: 90
+                minLength: 1
+                type: string
+              location:
+                type: string
+              managedBy:
+                type: string
+              originalVersion:
+                type: string
+              tags:
+                additionalProperties:
+                  type: string
+                type: object
+            type: object
+          status:
+            description: Storage version of v1api20200601.ResourceGroup_STATUS Resource
+              group information.
+            properties:
+              $propertyBag:
+                additionalProperties:
+                  type: string
+                description: PropertyBag is an unordered set of stashed information
+                  that used for properties not directly supported by storage resources,
+                  allowing for full fidelity round trip conversions
+                type: object
+              conditions:
+                items:
+                  description: Condition defines an extension to status (an observation)
+                    of a resource
+                  properties:
+                    lastTransitionTime:
+                      description: LastTransitionTime is the last time the condition
+                        transitioned from one status to another.
+                      format: date-time
+                      type: string
+                    message:
+                      description: Message is a human readable message indicating
+                        details about the transition. This field may be empty.
+                      type: string
+                    observedGeneration:
+                      description: ObservedGeneration is the .metadata.generation
+                        that the condition was set based upon. For instance, if .metadata.generation
+                        is currently 12, but the .status.condition[x].observedGeneration
+                        is 9, the condition is out of date with respect to the current
+                        state of the instance.
+                      format: int64
+                      type: integer
+                    reason:
+                      description: Reason for the condition's last transition. Reasons
+                        are upper CamelCase (PascalCase) with no spaces. A reason
+                        is always provided, this field will not be empty.
+                      type: string
+                    severity:
+                      description: Severity with which to treat failures of this type
+                        of condition. For conditions which have positive polarity
+                        (Status == True is their normal/healthy state), this will
+                        be omitted when Status == True For conditions which have negative
+                        polarity (Status == False is their normal/healthy state),
+                        this will be omitted when Status == False. This is omitted
+                        in all cases when Status == Unknown
+                      type: string
+                    status:
+                      description: Status of the condition, one of True, False, or
+                        Unknown.
+                      type: string
+                    type:
+                      description: Type of condition.
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+              id:
+                type: string
+              location:
+                type: string
+              managedBy:
+                type: string
+              name:
+                type: string
+              properties:
+                description: Storage version of v1api20200601.ResourceGroupProperties_STATUS
+                  The resource group properties.
+                properties:
+                  $propertyBag:
+                    additionalProperties:
+                      type: string
+                    description: PropertyBag is an unordered set of stashed information
+                      that used for properties not directly supported by storage resources,
+                      allowing for full fidelity round trip conversions
+                    type: object
+                  provisioningState:
+                    type: string
+                type: object
+              tags:
+                additionalProperties:
+                  type: string
+                type: object
+              type:
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+  - additionalPrinterColumns:
+    - jsonPath: .status.conditions[?(@.type=='Ready')].status
+      name: Ready
+      type: string
+    - jsonPath: .status.conditions[?(@.type=='Ready')].severity
+      name: Severity
+      type: string
+    - jsonPath: .status.conditions[?(@.type=='Ready')].reason
+      name: Reason
+      type: string
+    - jsonPath: .status.conditions[?(@.type=='Ready')].message
+      name: Message
+      type: string
+    name: v1beta20200601
+    schema:
+      openAPIV3Schema:
+        description: Deprecated version of ResourceGroup. Use v1api20200601.ResourceGroup
+          instead
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            properties:
+              azureName:
+                description: 'AzureName: The name of the resource in Azure. This is
+                  often the same as the name of the resource in Kubernetes but it
+                  doesn''t have to be.'
+                maxLength: 90
+                minLength: 1
+                type: string
+              location:
+                type: string
+              managedBy:
+                type: string
+              tags:
+                additionalProperties:
+                  type: string
+                type: object
+            required:
+            - location
+            type: object
+          status:
+            description: Deprecated version of ResourceGroup_STATUS. Use v1api20200601.ResourceGroup_STATUS
+              instead
+            properties:
+              conditions:
+                description: 'Conditions: The observed state of the resource'
+                items:
+                  description: Condition defines an extension to status (an observation)
+                    of a resource
+                  properties:
+                    lastTransitionTime:
+                      description: LastTransitionTime is the last time the condition
+                        transitioned from one status to another.
+                      format: date-time
+                      type: string
+                    message:
+                      description: Message is a human readable message indicating
+                        details about the transition. This field may be empty.
+                      type: string
+                    observedGeneration:
+                      description: ObservedGeneration is the .metadata.generation
+                        that the condition was set based upon. For instance, if .metadata.generation
+                        is currently 12, but the .status.condition[x].observedGeneration
+                        is 9, the condition is out of date with respect to the current
+                        state of the instance.
+                      format: int64
+                      type: integer
+                    reason:
+                      description: Reason for the condition's last transition. Reasons
+                        are upper CamelCase (PascalCase) with no spaces. A reason
+                        is always provided, this field will not be empty.
+                      type: string
+                    severity:
+                      description: Severity with which to treat failures of this type
+                        of condition. For conditions which have positive polarity
+                        (Status == True is their normal/healthy state), this will
+                        be omitted when Status == True For conditions which have negative
+                        polarity (Status == False is their normal/healthy state),
+                        this will be omitted when Status == False. This is omitted
+                        in all cases when Status == Unknown
+                      type: string
+                    status:
+                      description: Status of the condition, one of True, False, or
+                        Unknown.
+                      type: string
+                    type:
+                      description: Type of condition.
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+              id:
+                type: string
+              location:
+                type: string
+              managedBy:
+                type: string
+              name:
+                type: string
+              properties:
+                description: Deprecated version of ResourceGroupProperties_STATUS.
+                  Use v1api20200601.ResourceGroupProperties_STATUS instead
+                properties:
+                  provisioningState:
+                    type: string
+                type: object
+              tags:
+                additionalProperties:
+                  type: string
+                type: object
+              type:
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: false
+    subresources:
+      status: {}
+  - additionalPrinterColumns:
+    - jsonPath: .status.conditions[?(@.type=='Ready')].status
+      name: Ready
+      type: string
+    - jsonPath: .status.conditions[?(@.type=='Ready')].severity
+      name: Severity
+      type: string
+    - jsonPath: .status.conditions[?(@.type=='Ready')].reason
+      name: Reason
+      type: string
+    - jsonPath: .status.conditions[?(@.type=='Ready')].message
+      name: Message
+      type: string
+    name: v1beta20200601storage
+    schema:
+      openAPIV3Schema:
+        description: Storage version of v1beta20200601.ResourceGroup Deprecated version
+          of ResourceGroup. Use v1api20200601.ResourceGroup instead
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: Storage version of v1beta20200601.ResourceGroup_Spec
+            properties:
+              $propertyBag:
+                additionalProperties:
+                  type: string
+                description: PropertyBag is an unordered set of stashed information
+                  that used for properties not directly supported by storage resources,
+                  allowing for full fidelity round trip conversions
+                type: object
+              azureName:
+                description: 'AzureName: The name of the resource in Azure. This is
+                  often the same as the name of the resource in Kubernetes but it
+                  doesn''t have to be.'
+                maxLength: 90
+                minLength: 1
+                type: string
+              location:
+                type: string
+              managedBy:
+                type: string
+              originalVersion:
+                type: string
+              tags:
+                additionalProperties:
+                  type: string
+                type: object
+            type: object
+          status:
+            description: Storage version of v1beta20200601.ResourceGroup_STATUS Deprecated
+              version of ResourceGroup_STATUS. Use v1api20200601.ResourceGroup_STATUS
+              instead
+            properties:
+              $propertyBag:
+                additionalProperties:
+                  type: string
+                description: PropertyBag is an unordered set of stashed information
+                  that used for properties not directly supported by storage resources,
+                  allowing for full fidelity round trip conversions
+                type: object
+              conditions:
+                items:
+                  description: Condition defines an extension to status (an observation)
+                    of a resource
+                  properties:
+                    lastTransitionTime:
+                      description: LastTransitionTime is the last time the condition
+                        transitioned from one status to another.
+                      format: date-time
+                      type: string
+                    message:
+                      description: Message is a human readable message indicating
+                        details about the transition. This field may be empty.
+                      type: string
+                    observedGeneration:
+                      description: ObservedGeneration is the .metadata.generation
+                        that the condition was set based upon. For instance, if .metadata.generation
+                        is currently 12, but the .status.condition[x].observedGeneration
+                        is 9, the condition is out of date with respect to the current
+                        state of the instance.
+                      format: int64
+                      type: integer
+                    reason:
+                      description: Reason for the condition's last transition. Reasons
+                        are upper CamelCase (PascalCase) with no spaces. A reason
+                        is always provided, this field will not be empty.
+                      type: string
+                    severity:
+                      description: Severity with which to treat failures of this type
+                        of condition. For conditions which have positive polarity
+                        (Status == True is their normal/healthy state), this will
+                        be omitted when Status == True For conditions which have negative
+                        polarity (Status == False is their normal/healthy state),
+                        this will be omitted when Status == False. This is omitted
+                        in all cases when Status == Unknown
+                      type: string
+                    status:
+                      description: Status of the condition, one of True, False, or
+                        Unknown.
+                      type: string
+                    type:
+                      description: Type of condition.
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+              id:
+                type: string
+              location:
+                type: string
+              managedBy:
+                type: string
+              name:
+                type: string
+              properties:
+                description: Storage version of v1beta20200601.ResourceGroupProperties_STATUS
+                  Deprecated version of ResourceGroupProperties_STATUS. Use v1api20200601.ResourceGroupProperties_STATUS
+                  instead
+                properties:
+                  $propertyBag:
+                    additionalProperties:
+                      type: string
+                    description: PropertyBag is an unordered set of stashed information
+                      that used for properties not directly supported by storage resources,
+                      allowing for full fidelity round trip conversions
+                    type: object
+                  provisioningState:
+                    type: string
+                type: object
+              tags:
+                additionalProperties:
+                  type: string
+                type: object
+              type:
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: false
     subresources:
       status: {}
 status:
