@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/runtime"
-	"sigs.k8s.io/cluster-api-operator/api/v1alpha1"
+	"sigs.k8s.io/cluster-api-operator/api/v1alpha2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -21,7 +21,7 @@ type InfrastructureProviderWebhook struct {
 func (r *InfrastructureProviderWebhook) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
 		WithValidator(r).
-		For(&v1alpha1.InfrastructureProvider{}).
+		For(&v1alpha2.InfrastructureProvider{}).
 		Complete()
 }
 
@@ -29,9 +29,9 @@ var _ webhook.CustomValidator = &InfrastructureProviderWebhook{}
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
 func (r *InfrastructureProviderWebhook) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	infraProvider, ok := obj.(*v1alpha1.InfrastructureProvider)
+	infraProvider, ok := obj.(*v1alpha2.InfrastructureProvider)
 	if !ok {
-		panic("expected to get an of object of type v1alpha1.InfrastructureProvider")
+		panic("expected to get an of object of type v1alpha2.InfrastructureProvider")
 	}
 
 	switch r.Platform {
@@ -62,13 +62,13 @@ func (r *InfrastructureProviderWebhook) ValidateCreate(ctx context.Context, obj 
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
 func (r *InfrastructureProviderWebhook) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
-	_, ok := oldObj.(*v1alpha1.InfrastructureProvider)
+	_, ok := oldObj.(*v1alpha2.InfrastructureProvider)
 	if !ok {
-		panic("expected to get an of object of type v1alpha1.InfrastructureProvider")
+		panic("expected to get an of object of type v1alpha2.InfrastructureProvider")
 	}
-	newInfraProvider, ok := newObj.(*v1alpha1.InfrastructureProvider)
+	newInfraProvider, ok := newObj.(*v1alpha2.InfrastructureProvider)
 	if !ok {
-		panic("expected to get an of object of type v1alpha1.InfrastructureProvider")
+		panic("expected to get an of object of type v1alpha2.InfrastructureProvider")
 	}
 
 	switch r.Platform {

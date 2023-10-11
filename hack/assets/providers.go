@@ -13,7 +13,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/util/version"
-	operatorv1 "sigs.k8s.io/cluster-api-operator/api/v1alpha1"
+	operatorv1 "sigs.k8s.io/cluster-api-operator/api/v1alpha2"
 	clusterctlv1 "sigs.k8s.io/cluster-api/cmd/clusterctl/api/v1alpha3"
 	configclient "sigs.k8s.io/cluster-api/cmd/clusterctl/client/config"
 	"sigs.k8s.io/cluster-api/cmd/clusterctl/client/repository"
@@ -171,7 +171,7 @@ func (p *provider) loadComponents() error {
 		// The cutset contains spaces and newline so we can get rid
 		// of those of them that are trailing, through the TrimRight function.
 		// The \n is later restored as it is needed for a correct YAML formatting.
-        // This is needed because of: https://github.com/kubernetes-sigs/cluster-api-provider-ibmcloud/pull/1441
+		// This is needed because of: https://github.com/kubernetes-sigs/cluster-api-provider-ibmcloud/pull/1441
 		resultingFile += strings.TrimRight(scanner.Text(), " \n") + "\n"
 	}
 
@@ -234,23 +234,23 @@ func (p *provider) writeProviders() error {
 	switch p.providerTypeName() {
 	case "core":
 		obj = &operatorv1.CoreProvider{
-			TypeMeta: metav1.TypeMeta{Kind: "CoreProvider", APIVersion: "operator.cluster.x-k8s.io/v1alpha1"},
+			TypeMeta: metav1.TypeMeta{Kind: "CoreProvider", APIVersion: "operator.cluster.x-k8s.io/v1alpha2"},
 			Spec:     operatorv1.CoreProviderSpec{ProviderSpec: p.providerSpec()},
 		}
 		assetsPath = coreCAPIAssetsPath
 	case "controlplane":
 		obj = &operatorv1.ControlPlaneProvider{
-			TypeMeta: metav1.TypeMeta{Kind: "ControlPlaneProvider", APIVersion: "operator.cluster.x-k8s.io/v1alpha1"},
+			TypeMeta: metav1.TypeMeta{Kind: "ControlPlaneProvider", APIVersion: "operator.cluster.x-k8s.io/v1alpha2"},
 			Spec:     operatorv1.ControlPlaneProviderSpec{ProviderSpec: p.providerSpec()},
 		}
 	case "bootstrap":
 		obj = &operatorv1.BootstrapProvider{
-			TypeMeta: metav1.TypeMeta{Kind: "BootstrapProvider", APIVersion: "operator.cluster.x-k8s.io/v1alpha1"},
+			TypeMeta: metav1.TypeMeta{Kind: "BootstrapProvider", APIVersion: "operator.cluster.x-k8s.io/v1alpha2"},
 			Spec:     operatorv1.BootstrapProviderSpec{ProviderSpec: p.providerSpec()},
 		}
 	case "infrastructure":
 		obj = &operatorv1.InfrastructureProvider{
-			TypeMeta: metav1.TypeMeta{Kind: "InfrastructureProvider", APIVersion: "operator.cluster.x-k8s.io/v1alpha1"},
+			TypeMeta: metav1.TypeMeta{Kind: "InfrastructureProvider", APIVersion: "operator.cluster.x-k8s.io/v1alpha2"},
 			Spec:     operatorv1.InfrastructureProviderSpec{ProviderSpec: p.providerSpec()},
 		}
 	}

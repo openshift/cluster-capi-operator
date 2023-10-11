@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"strings"
@@ -74,7 +73,7 @@ func readCAPIOperatorManifests() ([]unstructured.Unstructured, error) {
 	}
 
 	// Read operator config yaml
-	operatorConfig, err := ioutil.ReadFile(operatorConfigPath)
+	operatorConfig, err := os.ReadFile(operatorConfigPath)
 	if err != nil {
 		return nil, err
 	}
