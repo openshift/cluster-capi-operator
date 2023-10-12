@@ -8,7 +8,7 @@ metadata:
     include.release.openshift.io/single-node-developer: "true"
     release.openshift.io/feature-set: TechPreviewNoUpgrade
     service.beta.openshift.io/inject-cabundle: "true"
-  name: validating-webhook-configuration
+  name: cluster-capi-operator
 webhooks:
   - admissionReviewVersions:
       - v1
