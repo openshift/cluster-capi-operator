@@ -1463,7 +1463,6 @@ sigs.k8s.io/cluster-api/util/topology
 sigs.k8s.io/cluster-api/util/version
 # sigs.k8s.io/cluster-api-operator v0.6.0
 ## explicit; go 1.20
-sigs.k8s.io/cluster-api-operator/api/v1alpha1
 sigs.k8s.io/cluster-api-operator/api/v1alpha2
 # sigs.k8s.io/cluster-api-provider-aws/v2 v2.2.4
 ## explicit; go 1.20
