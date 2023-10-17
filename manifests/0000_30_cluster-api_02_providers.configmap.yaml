@@ -3,18 +3,15 @@ data:
   providers-list.yaml: |
     - name: cluster-api
       type: CoreProvider
-      branch: rebase-atop-v1.5.2
-      org: damdo
+      branch: release-4.15
       version: v1.5.2
     - name: aws
       type: InfrastructureProvider
-      branch: rebase-atop-v2.2.4
-      org: damdo
+      branch: release-4.15
       version: v2.2.4
     - name: azure
       type: InfrastructureProvider
-      branch: rebase-atop-v1.11.2
-      org: damdo
+      branch: release-4.15
       version: v1.11.2
     - name: gcp
       type: InfrastructureProvider
@@ -22,10 +19,8 @@ data:
       version: v1.4.0
     - name: powervs
       type: InfrastructureProvider
-      branch: rebase-atop-v0.6.0
-      org: damdo
+      branch: release-4.15
       version: v0.6.0
-      org: damdo
 kind: ConfigMap
 metadata:
   annotations:
