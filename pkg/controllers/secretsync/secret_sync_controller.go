@@ -12,7 +12,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
@@ -131,7 +130,7 @@ func (r *UserDataSecretController) SetupWithManager(mgr ctrl.Manager) error {
 			builder.WithPredicates(userDataSecretPredicate(r.ManagedNamespace)),
 		).
 		Watches(
-			&source.Kind{Type: &corev1.Secret{}},
+			&corev1.Secret{},
 			handler.EnqueueRequestsFromMapFunc(toUserDataSecret),
 			builder.WithPredicates(userDataSecretPredicate(SecretSourceNamespace)),
 		)

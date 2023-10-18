@@ -1,27 +1,26 @@
 apiVersion: v1
 data:
-  providers-list.yaml: |+
+  providers-list.yaml: |
     - name: cluster-api
       type: CoreProvider
-      branch: release-4.14
-      version: v1.4.2
+      branch: release-4.15
+      version: v1.5.2
     - name: aws
       type: InfrastructureProvider
-      branch: release-4.14
-      version: v2.2.0
+      branch: release-4.15
+      version: v2.2.4
     - name: azure
       type: InfrastructureProvider
-      branch: release-4.14
-      version: v1.9.5
+      branch: release-4.15
+      version: v1.11.2
     - name: gcp
       type: InfrastructureProvider
-      branch: master
+      branch: release-4.15
       version: v1.4.0
     - name: powervs
       type: InfrastructureProvider
-      branch: release-4.14
-      version: v0.5.1
-
+      branch: release-4.15
+      version: v0.6.0
 kind: ConfigMap
 metadata:
   annotations:

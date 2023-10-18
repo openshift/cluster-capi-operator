@@ -3,10 +3,10 @@ package clusteroperator
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	corev1 "k8s.io/api/core/v1"
-	operatorv1 "sigs.k8s.io/cluster-api-operator/api/v1alpha1"
+	"k8s.io/utils/ptr"
+	operatorv1 "sigs.k8s.io/cluster-api-operator/api/v1alpha2"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
@@ -63,10 +63,10 @@ func (r *ClusterOperatorReconciler) containerCustomizationFromProvider(kind, nam
 		case "manager":
 			// TODO: we should return error when image was not found
 			image := getProviderImage(kind, name, r.Images)
-			containers[i].Image = newImageMeta(image)
+			containers[i].ImageURL = ptr.To(image)
 		case "kube-rbac-proxy":
 			image := r.Images["kube-rbac-proxy"]
-			containers[i].Image = newImageMeta(image)
+			containers[i].ImageURL = ptr.To(image)
 		}
 	}
 	return containers
@@ -77,23 +77,10 @@ func getProviderImage(kind, name string, images map[string]string) string {
 	switch kind {
 	case "CoreProvider":
 		// core provider image will always have this name
-		expectedImage = "cluster-capi-controllers"
+		expectedImage = "cluster-capi-controllers" // nolint:gosec
 	case "InfrastructureProvider":
 		// infrastructure provider image name will be in this form - $providername-cluster-api-controllers
 		expectedImage = fmt.Sprintf("%s-cluster-api-controllers", name)
 	}
 	return images[expectedImage]
-}
-
-func newImageMeta(imageURL string) *operatorv1.ImageMeta {
-	im := &operatorv1.ImageMeta{}
-
-	urlSplit := strings.Split(imageURL, ":")
-	if len(urlSplit) == 2 {
-		im.Tag = urlSplit[1]
-	}
-	urlSplit = strings.Split(urlSplit[0], "/")
-	im.Name = urlSplit[len(urlSplit)-1]
-	im.Repository = strings.Join(urlSplit[0:len(urlSplit)-1], "/")
-	return im
 }

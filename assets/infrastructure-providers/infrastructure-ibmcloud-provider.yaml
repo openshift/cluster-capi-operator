@@ -1,4 +1,4 @@
-apiVersion: operator.cluster.x-k8s.io/v1alpha1
+apiVersion: operator.cluster.x-k8s.io/v1alpha2
 kind: InfrastructureProvider
 metadata:
   creationTimestamp: null
@@ -15,5 +15,5 @@ spec:
       matchLabels:
         provider.cluster.x-k8s.io/name: ibmcloud
         provider.cluster.x-k8s.io/type: infrastructure
-  version: v0.5.1
+  version: v0.6.0
 status: {}

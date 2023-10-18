@@ -12,7 +12,7 @@ import (
 
 var (
 	// operatorGroupVersion is group version used for operatora objects.
-	operatorGroupVersion = schema.GroupVersion{Group: "operator.cluster.x-k8s.io", Version: "v1alpha1"}
+	operatorGroupVersion = schema.GroupVersion{Group: "operator.cluster.x-k8s.io", Version: "v1alpha2"}
 
 	// fakeCoreProviderKind is the Kind for the CoreProvider.
 	fakeCoreProviderKind = "CoreProvider"

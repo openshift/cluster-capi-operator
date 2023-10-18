@@ -1,4 +1,4 @@
-apiVersion: operator.cluster.x-k8s.io/v1alpha1
+apiVersion: operator.cluster.x-k8s.io/v1alpha2
 kind: CoreProvider
 metadata:
   creationTimestamp: null
@@ -15,5 +15,5 @@ spec:
       matchLabels:
         provider.cluster.x-k8s.io/name: cluster-api
         provider.cluster.x-k8s.io/type: core
-  version: v1.4.2
+  version: v1.5.2
 status: {}

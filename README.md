@@ -8,8 +8,8 @@ Note: This operator only runs on TechPreview clusters.
 
 # Managed resources
 
-- [CoreProvider](https://github.com/kubernetes-sigs/cluster-api-operator/blob/main/api/v1alpha1/coreprovider_types.go) - an object that represents core Cluster API and is later reconciled by the upstream operator.
-- [InfrastructureProvider](https://github.com/kubernetes-sigs/cluster-api-operator/blob/main/api/v1alpha1/infrastructureprovider_types.go) - an object that represents Cluster API infrastructure provider(AWS, GCP, Azure, etc.) 
+- [CoreProvider](https://github.com/kubernetes-sigs/cluster-api-operator/blob/main/api/v1alpha2/coreprovider_types.go) - an object that represents core Cluster API and is later reconciled by the upstream operator.
+- [InfrastructureProvider](https://github.com/kubernetes-sigs/cluster-api-operator/blob/main/api/v1alpha2/infrastructureprovider_types.go) - an object that represents Cluster API infrastructure provider(AWS, GCP, Azure, etc.) 
 and is later reconciled by the upstream operator.
 - [Cluster](https://cluster-api.sigs.k8s.io/developer/architecture/controllers/cluster.html) - CAPI Cluster CR that
 represents current cluster, it is treated as management and workload cluster at the same time.

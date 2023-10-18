@@ -11,7 +11,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
@@ -51,7 +51,7 @@ var _ = Describe("areSecretsEqual reconciler method", func() {
 	})
 
 	It("should return 'false' if Secrets content are not equal", func() {
-		targetUserDataSecret.Immutable = pointer.Bool(true)
+		targetUserDataSecret.Immutable = ptr.To(true)
 		Expect(reconciler.areSecretsEqual(sourceUserDataSecret, targetUserDataSecret)).Should(BeFalse())
 
 		targetUserDataSecret.Data = map[string][]byte{}

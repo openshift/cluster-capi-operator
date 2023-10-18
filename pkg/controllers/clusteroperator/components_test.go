@@ -7,7 +7,8 @@ import (
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	operatorv1 "sigs.k8s.io/cluster-api-operator/api/v1alpha1"
+	"k8s.io/utils/ptr"
+	operatorv1 "sigs.k8s.io/cluster-api-operator/api/v1alpha2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
@@ -20,7 +21,7 @@ var (
 	operatorImageSource               = "test.com/operator:tag"
 	kubeRBACProxyImageName            = "kube-rbac-proxy"
 	kubeRBACProxySource               = "test.com/kube-rbac-proxy:tag"
-	coreProviderImageName             = "cluster-capi-controllers"
+	coreProviderImageName             = "cluster-capi-controllers" // nolint:gosec
 	coreProviderImageSource           = "test.com/cluster-api:tag"
 	infrastructureProviderImageName   = "aws-cluster-api-controllers"
 	infrastructureProviderImageSource = "test.com/cluster-api-provider-aws:tag"
@@ -35,12 +36,8 @@ var _ = Describe("Reconcile components", func() {
 		Deployment: &operatorv1.DeploymentSpec{
 			Containers: []operatorv1.ContainerSpec{
 				{
-					Name: "manager",
-					Image: &operatorv1.ImageMeta{
-						Name:       "test",
-						Repository: "image.com",
-						Tag:        "tag",
-					},
+					Name:     "manager",
+					ImageURL: ptr.To("image.com/test:tag"),
 				},
 			},
 		},
@@ -83,11 +80,8 @@ var _ = Describe("Reconcile components", func() {
 				Name:      coreProvider.Name,
 				Namespace: coreProvider.Namespace,
 			}, coreProvider)).To(Succeed())
-			imageMeta := newImageMeta(coreProviderImageSource)
 			Expect(coreProvider.Spec.ProviderSpec.Deployment.Containers).To(HaveLen(1))
-			Expect(coreProvider.Spec.ProviderSpec.Deployment.Containers[0].Image.Name).To(Equal(imageMeta.Name))
-			Expect(coreProvider.Spec.ProviderSpec.Deployment.Containers[0].Image.Repository).To(Equal(imageMeta.Repository))
-			Expect(coreProvider.Spec.ProviderSpec.Deployment.Containers[0].Image.Tag).To(Equal(imageMeta.Tag))
+			Expect(coreProvider.Spec.ProviderSpec.Deployment.Containers[0].ImageURL).To(HaveValue(Equal(coreProviderImageSource)))
 
 			Expect(test.CleanupAndWait(ctx, cl, coreProvider)).To(Succeed())
 		})
@@ -129,10 +123,7 @@ var _ = Describe("Reconcile components", func() {
 				Namespace: infraProvider.Namespace,
 			}, infraProvider)).To(Succeed())
 			Expect(infraProvider.Spec.ProviderSpec.Deployment.Containers).To(HaveLen(1))
-			imageMeta := newImageMeta(infrastructureProviderImageSource)
-			Expect(infraProvider.Spec.ProviderSpec.Deployment.Containers[0].Image.Name).To(Equal(imageMeta.Name))
-			Expect(infraProvider.Spec.ProviderSpec.Deployment.Containers[0].Image.Repository).To(Equal(imageMeta.Repository))
-			Expect(infraProvider.Spec.ProviderSpec.Deployment.Containers[0].Image.Tag).To(Equal(imageMeta.Tag))
+			Expect(infraProvider.Spec.ProviderSpec.Deployment.Containers[0].ImageURL).To(HaveValue(Equal(infrastructureProviderImageSource)))
 
 			Expect(test.CleanupAndWait(ctx, cl, infraProvider)).To(Succeed())
 		})
@@ -193,29 +184,6 @@ var _ = Describe("Reconcile components", func() {
 	})
 })
 
-var _ = Describe("New image meta", func() {
-	It("should parse a full image name", func() {
-		imageMeta := newImageMeta("quay.io/foo/bar:baz")
-		Expect(imageMeta.Repository).To(Equal("quay.io/foo"))
-		Expect(imageMeta.Name).To(Equal("bar"))
-		Expect(imageMeta.Tag).To(Equal("baz"))
-	})
-
-	It("should parse a full image name with a tag", func() {
-		imageMeta := newImageMeta("quay.io/foo/bar:latest")
-		Expect(imageMeta.Repository).To(Equal("quay.io/foo"))
-		Expect(imageMeta.Name).To(Equal("bar"))
-		Expect(imageMeta.Tag).To(Equal("latest"))
-	})
-
-	It("should parse a full image name with a digest", func() {
-		imageMeta := newImageMeta("quay.io/foo/bar@sha256:baz")
-		Expect(imageMeta.Repository).To(Equal("quay.io/foo"))
-		Expect(imageMeta.Name).To(Equal("bar@sha256"))
-		Expect(imageMeta.Tag).To(Equal("baz"))
-	})
-})
-
 var _ = Describe("Container customization for provider", func() {
 	reconciler := &ClusterOperatorReconciler{
 		Images: map[string]string{
@@ -236,9 +204,7 @@ var _ = Describe("Container customization for provider", func() {
 			})
 		Expect(containers).To(HaveLen(1))
 		Expect(containers[0].Name).To(Equal("manager"))
-		Expect(containers[0].Image.Name).To(Equal("cluster-api"))
-		Expect(containers[0].Image.Repository).To(Equal("test.com"))
-		Expect(containers[0].Image.Tag).To(Equal("tag"))
+		Expect(containers[0].ImageURL).To(HaveValue(Equal("test.com/cluster-api:tag")))
 	})
 	It("should customize the container for infra provider with proxy", func() {
 		containers := reconciler.containerCustomizationFromProvider(
@@ -255,13 +221,9 @@ var _ = Describe("Container customization for provider", func() {
 
 		Expect(containers).To(HaveLen(2))
 		Expect(containers[0].Name).To(Equal("manager"))
-		Expect(containers[0].Image.Name).To(Equal("cluster-api-provider-aws"))
-		Expect(containers[0].Image.Repository).To(Equal("test.com"))
-		Expect(containers[0].Image.Tag).To(Equal("tag"))
+		Expect(containers[0].ImageURL).To(HaveValue(Equal("test.com/cluster-api-provider-aws:tag")))
 
 		Expect(containers[1].Name).To(Equal("kube-rbac-proxy"))
-		Expect(containers[1].Image.Name).To(Equal("kube-rbac-proxy"))
-		Expect(containers[1].Image.Repository).To(Equal("test.com"))
-		Expect(containers[1].Image.Tag).To(Equal("tag"))
+		Expect(containers[1].ImageURL).To(HaveValue(Equal("test.com/kube-rbac-proxy:tag")))
 	})
 })

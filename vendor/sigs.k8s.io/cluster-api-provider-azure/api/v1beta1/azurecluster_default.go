@@ -19,7 +19,7 @@ package v1beta1
 import (
 	"fmt"
 
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 )
 
 const (
@@ -125,9 +125,10 @@ func (c *AzureCluster) setSubnetDefaults() {
 			subnet.RouteTable.Name = generateNodeRouteTableName(c.ObjectMeta.Name)
 		}
 
-		if !subnet.IsIPv6Enabled() {
-			// NAT gateway supports the use of IPv4 public IP addresses for outbound connectivity.
-			// So default use the NAT gateway for outbound traffic in IPv4 cluster instead of loadbalancer.
+		// NAT gateway only supports the use of IPv4 public IP addresses for outbound connectivity.
+		// So default use the NAT gateway for outbound traffic in IPv4 cluster instead of loadbalancer.
+		// We assume that if the ID is set, the subnet already exists so we shouldn't add a NAT gateway.
+		if !subnet.IsIPv6Enabled() && subnet.ID == "" {
 			if subnet.NatGateway.Name == "" {
 				subnet.NatGateway.Name = withIndex(generateNatGatewayName(c.ObjectMeta.Name), nodeSubnetCounter)
 			}
@@ -240,7 +241,7 @@ func (c *AzureCluster) SetNodeOutboundLBDefaults() {
 	}
 
 	if lb.FrontendIPsCount == nil {
-		lb.FrontendIPsCount = pointer.Int32(1)
+		lb.FrontendIPsCount = ptr.To[int32](1)
 	}
 
 	c.setOutboundLBFrontendIPs(lb, generateNodeOutboundIPName)
@@ -260,7 +261,7 @@ func (c *AzureCluster) SetControlPlaneOutboundLBDefaults() {
 		lb.Name = generateControlPlaneOutboundLBName(c.ObjectMeta.Name)
 	}
 	if lb.FrontendIPsCount == nil {
-		lb.FrontendIPsCount = pointer.Int32(1)
+		lb.FrontendIPsCount = ptr.To[int32](1)
 	}
 	c.setOutboundLBFrontendIPs(lb, generateControlPlaneOutboundIPName)
 	c.SetControlPlaneOutboundLBBackendPoolNameDefault()
@@ -355,7 +356,7 @@ func (lb *LoadBalancerClassSpec) setAPIServerLBDefaults() {
 		lb.SKU = SKUStandard
 	}
 	if lb.IdleTimeoutInMinutes == nil {
-		lb.IdleTimeoutInMinutes = pointer.Int32(DefaultOutboundRuleIdleTimeoutInMinutes)
+		lb.IdleTimeoutInMinutes = ptr.To[int32](DefaultOutboundRuleIdleTimeoutInMinutes)
 	}
 }
 
@@ -371,7 +372,7 @@ func (lb *LoadBalancerClassSpec) setOutboundLBDefaults() {
 	lb.Type = Public
 	lb.SKU = SKUStandard
 	if lb.IdleTimeoutInMinutes == nil {
-		lb.IdleTimeoutInMinutes = pointer.Int32(DefaultOutboundRuleIdleTimeoutInMinutes)
+		lb.IdleTimeoutInMinutes = ptr.To[int32](DefaultOutboundRuleIdleTimeoutInMinutes)
 	}
 }
 
@@ -390,7 +391,7 @@ func setControlPlaneOutboundLBDefaults(lb *LoadBalancerClassSpec, apiserverLBTyp
 	lb.SKU = SKUStandard
 
 	if lb.IdleTimeoutInMinutes == nil {
-		lb.IdleTimeoutInMinutes = pointer.Int32(DefaultOutboundRuleIdleTimeoutInMinutes)
+		lb.IdleTimeoutInMinutes = ptr.To[int32](DefaultOutboundRuleIdleTimeoutInMinutes)
 	}
 }
 
