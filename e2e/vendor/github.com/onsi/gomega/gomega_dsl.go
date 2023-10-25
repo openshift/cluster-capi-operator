@@ -22,32 +22,7 @@ import (
 	"github.com/onsi/gomega/types"
 )
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
 const GOMEGA_VERSION = "1.28.1"
-=======
-=======
->>>>>>> 84bf5125 (Rebase on top of main after bump to 1.26)
-<<<<<<< HEAD
-const GOMEGA_VERSION = "1.28.0"
-=======
-<<<<<<< HEAD
-const GOMEGA_VERSION = "1.27.8"
-=======
-const GOMEGA_VERSION = "1.27.1"
->>>>>>> decf4d9d (Add vSphere infrastructureCluster template)
->>>>>>> cb1c071c (Add vSphere infrastructureCluster template)
-<<<<<<< HEAD
->>>>>>> 64b93821 (Add vSphere infrastructureCluster template)
-=======
-=======
-const GOMEGA_VERSION = "1.27.8"
->>>>>>> 9c4eef51 (Rebase on top of main after bump to 1.26)
->>>>>>> 84bf5125 (Rebase on top of main after bump to 1.26)
-=======
-const GOMEGA_VERSION = "1.28.0"
->>>>>>> a691d7f8 (Rebase on top of main branch)
 
 const nilGomegaPanic = `You are trying to make an assertion, but haven't registered Gomega's fail handler.
 If you're using Ginkgo then you probably forgot to put your assertion in an It().

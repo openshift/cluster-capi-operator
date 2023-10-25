@@ -1,11 +1,14 @@
 package e2e
 
 import (
+	"fmt"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	vspherev1 "sigs.k8s.io/cluster-api-provider-vsphere/apis/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -18,6 +21,8 @@ import (
 
 const (
 	vSphereMachineTemplateName = "vsphere-machine-template"
+	kubeSystemnamespace        = "kube-system"
+	vSphereCredentialsName     = "vsphere-creds"
 )
 
 var _ = Describe("Cluster API vSphere MachineSet", Ordered, func() {
@@ -29,8 +34,9 @@ var _ = Describe("Cluster API vSphere MachineSet", Ordered, func() {
 		if platform != configv1.VSpherePlatformType {
 			Skip("Skipping vSphere E2E tests")
 		}
-		framework.CreateCoreCluster(cl, clusterName, "VSphereCluster")
 		mapiMachineSpec = getVSphereMAPIProviderSpec(cl)
+		createVSphereSecret(cl, mapiMachineSpec)
+		framework.CreateCoreCluster(cl, clusterName, "VSphereCluster")
 		createVSphereCluster(cl, mapiMachineSpec)
 	})
 
@@ -76,6 +82,44 @@ func getVSphereMAPIProviderSpec(cl client.Client) *mapiv1.VSphereMachineProvider
 	Expect(yaml.Unmarshal(machineSet.Spec.Template.Spec.ProviderSpec.Value.Raw, providerSpec)).To(Succeed())
 
 	return providerSpec
+}
+
+func createVSphereSecret(cl client.Client, mapiProviderSpec *mapiv1.VSphereMachineProviderSpec) {
+	By("Creating a vSphere credentials secret")
+
+	username, password := getVSphereCredentials(cl, mapiProviderSpec)
+
+	vSphereSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      clusterName,
+			Namespace: framework.CAPINamespace,
+		},
+		StringData: map[string]string{
+			"username": username,
+			"password": password,
+		},
+	}
+
+	if err := cl.Create(ctx, vSphereSecret); err != nil && !apierrors.IsAlreadyExists(err) {
+		Expect(err).ToNot(HaveOccurred())
+	}
+}
+
+func getVSphereCredentials(cl client.Client, mapiProviderSpec *mapiv1.VSphereMachineProviderSpec) (string, string) {
+	vSphereCredentialsSecret := &corev1.Secret{}
+	err := cl.Get(ctx, types.NamespacedName{
+		Namespace: kubeSystemnamespace,
+		Name:      vSphereCredentialsName,
+	}, vSphereCredentialsSecret)
+	Expect(err).ToNot(HaveOccurred())
+
+	username, ok := vSphereCredentialsSecret.Data[fmt.Sprintf("%s.username", mapiProviderSpec.Workspace.Server)]
+	Expect(ok).To(BeTrue())
+
+	password, ok := vSphereCredentialsSecret.Data[fmt.Sprintf("%s.password", mapiProviderSpec.Workspace.Server)]
+	Expect(ok).To(BeTrue())
+
+	return string(username), string(password)
 }
 
 func createVSphereCluster(cl client.Client, mapiProviderSpec *mapiv1.VSphereMachineProviderSpec) *vspherev1.VSphereCluster {

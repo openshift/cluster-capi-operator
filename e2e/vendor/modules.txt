@@ -177,32 +177,7 @@ github.com/onsi/ginkgo/v2/internal/parallel_support
 github.com/onsi/ginkgo/v2/internal/testingtproxy
 github.com/onsi/ginkgo/v2/reporters
 github.com/onsi/ginkgo/v2/types
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
 # github.com/onsi/gomega v1.28.1
-=======
-=======
->>>>>>> 84bf5125 (Rebase on top of main after bump to 1.26)
-<<<<<<< HEAD
-# github.com/onsi/gomega v1.28.0
-=======
-<<<<<<< HEAD
-# github.com/onsi/gomega v1.27.8
-=======
-# github.com/onsi/gomega v1.27.1
->>>>>>> decf4d9d (Add vSphere infrastructureCluster template)
->>>>>>> cb1c071c (Add vSphere infrastructureCluster template)
-<<<<<<< HEAD
->>>>>>> 64b93821 (Add vSphere infrastructureCluster template)
-=======
-=======
-# github.com/onsi/gomega v1.27.8
->>>>>>> 9c4eef51 (Rebase on top of main after bump to 1.26)
->>>>>>> 84bf5125 (Rebase on top of main after bump to 1.26)
-=======
-# github.com/onsi/gomega v1.28.0
->>>>>>> a691d7f8 (Rebase on top of main branch)
 ## explicit; go 1.18
 github.com/onsi/gomega
 github.com/onsi/gomega/format
@@ -214,8 +189,8 @@ github.com/onsi/gomega/matchers/support/goraph/edge
 github.com/onsi/gomega/matchers/support/goraph/node
 github.com/onsi/gomega/matchers/support/goraph/util
 github.com/onsi/gomega/types
-# github.com/openshift/api v0.0.0-20220921125526-1866ef90edbf
-## explicit; go 1.18
+# github.com/openshift/api v0.0.0-20230613151523-ba04973d3ed1
+## explicit; go 1.20
 github.com/openshift/api/config/v1
 github.com/openshift/api/machine/v1
 github.com/openshift/api/machine/v1beta1
@@ -254,15 +229,7 @@ golang.org/x/net/http/httpguts
 golang.org/x/net/http2
 golang.org/x/net/http2/hpack
 golang.org/x/net/idna
-<<<<<<< HEAD
-<<<<<<< HEAD
 # golang.org/x/oauth2 v0.13.0
-=======
-<<<<<<< HEAD
-=======
->>>>>>> a691d7f8 (Rebase on top of main branch)
-# golang.org/x/oauth2 v0.12.0
->>>>>>> 84bf5125 (Rebase on top of main after bump to 1.26)
 ## explicit; go 1.18
 golang.org/x/oauth2
 golang.org/x/oauth2/internal
@@ -639,7 +606,7 @@ k8s.io/kube-openapi/pkg/schemamutation
 k8s.io/kube-openapi/pkg/spec3
 k8s.io/kube-openapi/pkg/util/proto
 k8s.io/kube-openapi/pkg/validation/spec
-# k8s.io/utils v0.0.0-20230209194617-a36077c30491
+# k8s.io/utils v0.0.0-20230726121419-3b25d923346b
 ## explicit; go 1.18
 k8s.io/utils/buffer
 k8s.io/utils/clock
@@ -648,6 +615,7 @@ k8s.io/utils/integer
 k8s.io/utils/internal/third_party/forked/golang/net
 k8s.io/utils/net
 k8s.io/utils/pointer
+k8s.io/utils/ptr
 k8s.io/utils/strings/slices
 k8s.io/utils/trace
 # sigs.k8s.io/cluster-api v1.5.3

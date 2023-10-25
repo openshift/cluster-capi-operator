@@ -1,6 +1,3 @@
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
 ## 1.28.1
 
 ### Maintenance
@@ -10,14 +7,6 @@
 - #703 doc(matchers): HaveEach() doc comment updated [2705bdb]
 - Minor typos (#699) [375648c]
 
-=======
-<<<<<<< HEAD
->>>>>>> 64b93821 (Add vSphere infrastructureCluster template)
-=======
-<<<<<<< HEAD
->>>>>>> 84bf5125 (Rebase on top of main after bump to 1.26)
-=======
->>>>>>> a691d7f8 (Rebase on top of main branch)
 ## 1.28.0
 
 ### Features
