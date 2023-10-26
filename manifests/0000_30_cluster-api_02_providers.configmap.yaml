@@ -9,10 +9,6 @@ data:
       type: InfrastructureProvider
       branch: release-4.15
       version: v2.2.4
-    - name: azure
-      type: InfrastructureProvider
-      branch: release-4.15
-      version: v1.11.2
     - name: gcp
       type: InfrastructureProvider
       branch: release-4.15
