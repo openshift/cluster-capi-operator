@@ -6,7 +6,7 @@ require (
 	github.com/gobuffalo/flect v1.0.2
 	github.com/golangci/golangci-lint v1.54.2
 	github.com/onsi/ginkgo/v2 v2.13.0
-	github.com/onsi/gomega v1.28.0
+	github.com/onsi/gomega v1.28.1
 	github.com/openshift/api v0.0.0-20230613151523-ba04973d3ed1
 	github.com/openshift/library-go v0.0.0-20230706195801-561433066966
 	github.com/pkg/errors v0.9.1
@@ -19,14 +19,11 @@ require (
 	k8s.io/component-base v0.27.6
 	k8s.io/klog/v2 v2.100.1
 	k8s.io/utils v0.0.0-20230726121419-3b25d923346b
-	sigs.k8s.io/cluster-api v1.5.2
+	sigs.k8s.io/cluster-api v1.5.3
 	sigs.k8s.io/cluster-api-operator v0.6.0
 	sigs.k8s.io/cluster-api-provider-aws/v2 v2.2.4
 	sigs.k8s.io/cluster-api-provider-azure v1.11.2
-	// We need to use a commit hash rather than a point release because
-	// a new 1.5.0 release is not out yet, but 1.4.0 doesn't work with controller-runtime v0.15.z
-	// this will need to change to v1.5.0 once it is released.
-	sigs.k8s.io/cluster-api-provider-gcp v1.4.1-0.20231010102638-f1ea13261b0f
+	sigs.k8s.io/cluster-api-provider-gcp v1.5.0
 	sigs.k8s.io/cluster-api-provider-ibmcloud v0.6.0
 	sigs.k8s.io/controller-runtime v0.15.2
 	sigs.k8s.io/controller-runtime/tools/setup-envtest v0.0.0-20221007015352-8ad090e0663e
@@ -124,7 +121,7 @@ require (
 	github.com/golangci/revgrep v0.0.0-20220804021717-745bb2f7c2e6 // indirect
 	github.com/golangci/unconvert v0.0.0-20180507085042-28b1c447d1f4 // indirect
 	github.com/google/gnostic v0.6.9 // indirect
-	github.com/google/go-cmp v0.5.9 // indirect
+	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/pprof v0.0.0-20210720184732-4bb14d4b1be1 // indirect
 	github.com/google/uuid v1.3.1 // indirect
@@ -240,8 +237,8 @@ require (
 	golang.org/x/exp/typeparams v0.0.0-20230307190834-24139beb5833 // indirect
 	golang.org/x/mod v0.13.0 // indirect
 	golang.org/x/net v0.17.0 // indirect
-	golang.org/x/oauth2 v0.12.0 // indirect
-	golang.org/x/sync v0.3.0 // indirect
+	golang.org/x/oauth2 v0.13.0 // indirect
+	golang.org/x/sync v0.4.0 // indirect
 	golang.org/x/sys v0.13.0 // indirect
 	golang.org/x/term v0.13.0 // indirect
 	golang.org/x/text v0.13.0 // indirect

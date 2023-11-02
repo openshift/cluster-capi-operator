@@ -12,7 +12,7 @@ data:
     - name: gcp
       type: InfrastructureProvider
       branch: release-4.15
-      version: v1.4.0
+      version: v1.5.0
     - name: powervs
       type: InfrastructureProvider
       branch: release-4.15

@@ -4,17 +4,17 @@ go 1.18
 
 require (
 	github.com/aws/aws-sdk-go v1.44.213
-	github.com/google/go-cmp v0.5.9
+	github.com/google/go-cmp v0.6.0
 	github.com/onsi/ginkgo/v2 v2.13.0
-	github.com/onsi/gomega v1.28.0
+	github.com/onsi/gomega v1.28.1
 	github.com/openshift/api v0.0.0-20220921125526-1866ef90edbf
 	k8s.io/api v0.27.6
 	k8s.io/apimachinery v0.27.6
 	k8s.io/client-go v0.27.6
 	k8s.io/utils v0.0.0-20230209194617-a36077c30491
-	sigs.k8s.io/cluster-api v1.5.2
+	sigs.k8s.io/cluster-api v1.5.3
 	sigs.k8s.io/cluster-api-provider-aws/v2 v2.2.4
-	sigs.k8s.io/cluster-api-provider-gcp v1.4.1-0.20231010102638-f1ea13261b0f
+	sigs.k8s.io/cluster-api-provider-gcp v1.5.0
 	sigs.k8s.io/cluster-api-provider-ibmcloud v0.6.0
 	sigs.k8s.io/controller-runtime v0.15.2
 	sigs.k8s.io/yaml v1.3.0
@@ -58,7 +58,7 @@ require (
 	github.com/prometheus/procfs v0.10.1 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	golang.org/x/net v0.17.0 // indirect
-	golang.org/x/oauth2 v0.12.0 // indirect
+	golang.org/x/oauth2 v0.13.0 // indirect
 	golang.org/x/sys v0.13.0 // indirect
 	golang.org/x/term v0.13.0 // indirect
 	golang.org/x/text v0.13.0 // indirect

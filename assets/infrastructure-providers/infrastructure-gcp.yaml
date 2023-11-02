@@ -383,12 +383,15 @@ data:
       - major: 1
         minor: 4
         contract: v1beta1
+      - major: 1
+        minor: 5
+        contract: v1beta1
 kind: ConfigMap
 metadata:
   creationTimestamp: null
   labels:
     provider.cluster.x-k8s.io/name: gcp
     provider.cluster.x-k8s.io/type: infrastructure
-    provider.cluster.x-k8s.io/version: v1.4.0
+    provider.cluster.x-k8s.io/version: v1.5.0
   name: gcp
   namespace: openshift-cluster-api
