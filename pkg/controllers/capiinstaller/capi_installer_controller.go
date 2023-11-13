@@ -169,29 +169,25 @@ func (r *CapiInstallerController) applyProviderComponents(ctx context.Context, l
 	)
 
 	for _, d := range deploymentsFilenames {
-
 		deploymentManifest, ok := deploymentsAssets[d]
 		if !ok {
 			panic("error finding deployment manifest")
 		}
 		obj, err := yamlToRuntimeObject(r.Scheme, deploymentManifest)
 		if err != nil {
-			// TODO
-			return err
+			return fmt.Errorf("error parsing provider deployment manifets %q: %w", d, err)
 		}
 
 		deployment := obj.(*v1.Deployment)
 
-		resDeployment, _, err := resourceapply.ApplyDeployment(
+		if _, _, err := resourceapply.ApplyDeployment(
 			ctx,
 			r.ApplyClient.AppsV1(),
 			events.NewInMemoryRecorder("cluster-capi-operator-capi-installer-apply-client"),
 			deployment,
-			resourcemerge.ExpectedDeploymentGeneration(deployment, cO),
-		)
-		if err != nil {
-			// TODO
-			return err
+			resourcemerge.ExpectedDeploymentGeneration(deployment, nil),
+		); err != nil {
+			return fmt.Errorf("error applying provider deployment %q: %w", deployment.Name, err)
 		}
 	}
 
