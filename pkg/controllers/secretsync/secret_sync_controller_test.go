@@ -138,6 +138,12 @@ var _ = Describe("User Data Secret controller", func() {
 			if err != nil {
 				return false, err
 			}
+
+			_, ok := syncedUserDataSecret.Data["format"]
+			if !ok {
+				return false, nil
+			}
+
 			return bytes.Equal(syncedUserDataSecret.Data[capiUserDataKey], []byte(defaultSecretValue)), nil
 		}, timeout).Should(BeTrue())
 	})
@@ -153,6 +159,12 @@ var _ = Describe("User Data Secret controller", func() {
 			if err != nil {
 				return false, err
 			}
+
+			_, ok := syncedUserDataSecret.Data["format"]
+			if !ok {
+				return false, nil
+			}
+
 			return bytes.Equal(syncedUserDataSecret.Data[capiUserDataKey], []byte("managed one changed")), nil
 		}, timeout).Should(BeTrue())
 	})
@@ -170,6 +182,12 @@ var _ = Describe("User Data Secret controller", func() {
 			if err != nil {
 				return false, err
 			}
+
+			_, ok := syncedUserDataSecret.Data["format"]
+			if !ok {
+				return false, nil
+			}
+
 			return bytes.Equal(syncedUserDataSecret.Data[capiUserDataKey], []byte(defaultSecretValue)), nil
 		}, timeout).Should(BeTrue())
 
