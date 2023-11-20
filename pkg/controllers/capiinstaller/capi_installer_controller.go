@@ -2,7 +2,6 @@ package capiinstaller
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -194,12 +193,12 @@ func (r *CapiInstallerController) applyProviderComponents(ctx context.Context, l
 	log.Info("CAPI provider components apply result")
 
 	var errs error
-	for i, r := range res {
+	for _, r := range res {
 		fmt.Printf("name: %s, changed: %v, error: %v\n", r.File, r.Changed, r.Error)
 
-		if r.Error != nil {
-			errs = errors.Join(errs, fmt.Errorf("error applying provider component %q at position %d: %w", r.File, i, r.Error))
-		}
+		// if r.Error != nil {
+		// 	errs = errors.Join(errs, fmt.Errorf("error applying provider component %q at position %d: %w", r.File, i, r.Error))
+		// }
 	}
 
 	return errs
