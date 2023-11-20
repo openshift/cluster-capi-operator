@@ -48,7 +48,7 @@ const (
 	imagePlaceholder                          = "to.be/replaced:v99"
 	openshiftInfrastructureObjectName         = "cluster"
 	notNamespaced                             = ""
-	clusterOperatorName                       = "cluster-capi-operator"
+	clusterOperatorName                       = "cluster-api"
 	defaultCoreProviderComponentName          = "cluster-api"
 )
 
