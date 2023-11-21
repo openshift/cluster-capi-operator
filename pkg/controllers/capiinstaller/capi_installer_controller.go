@@ -149,11 +149,6 @@ func (r *CapiInstallerController) applyProviderComponents(ctx context.Context, l
 		name := u.GroupVersionKind().Group + "/" + u.GroupVersionKind().Version + "/" + u.GroupVersionKind().Kind +
 			" - " + getResourceName(u.GetNamespace(), u.GetName())
 
-		if u.GroupVersionKind().Kind == "ValidatingWebhookConfiguration" ||
-			u.GroupVersionKind().Kind == "ValidatingWebhookConfiguration" {
-			continue
-		}
-
 		if u.GroupVersionKind().Kind == "Deployment" {
 			deploymentsFilenames = append(deploymentsFilenames, name)
 			deploymentsAssets[name] = m
