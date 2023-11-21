@@ -719,7 +719,7 @@ github.com/openshift/api/template
 github.com/openshift/api/template/v1
 github.com/openshift/api/user
 github.com/openshift/api/user/v1
-# github.com/openshift/library-go v0.0.0-20230706195801-561433066966 => github.com/damdo/library-go v0.0.0-20231120160439-54e809585f1d
+# github.com/openshift/library-go v0.0.0-20230706195801-561433066966 => github.com/damdo/library-go v0.0.0-20231121143430-f3e0796220a0
 ## explicit; go 1.20
 github.com/openshift/library-go/pkg/config/clusteroperator/v1helpers
 github.com/openshift/library-go/pkg/operator/events
@@ -1763,4 +1763,4 @@ sigs.k8s.io/structured-merge-diff/v4/value
 # sigs.k8s.io/yaml v1.3.0
 ## explicit; go 1.12
 sigs.k8s.io/yaml
-# github.com/openshift/library-go => github.com/damdo/library-go v0.0.0-20231120160439-54e809585f1d
+# github.com/openshift/library-go => github.com/damdo/library-go v0.0.0-20231121143430-f3e0796220a0

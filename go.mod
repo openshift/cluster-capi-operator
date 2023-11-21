@@ -2,7 +2,7 @@ module github.com/openshift/cluster-capi-operator
 
 go 1.18
 
-replace github.com/openshift/library-go => github.com/damdo/library-go v0.0.0-20231120160439-54e809585f1d
+replace github.com/openshift/library-go => github.com/damdo/library-go v0.0.0-20231121143430-f3e0796220a0
 
 require (
 	github.com/drone/envsubst/v2 v2.0.0-20210730161058-179042472c46
