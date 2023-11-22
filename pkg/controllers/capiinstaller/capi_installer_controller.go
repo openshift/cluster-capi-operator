@@ -72,12 +72,7 @@ type provider struct {
 func (r *CapiInstallerController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := ctrl.LoggerFrom(ctx).WithName("CapiInstallerController")
 
-	cO := &configv1.ClusterOperator{}
-	if err := r.Get(ctx, req.NamespacedName, cO); err != nil {
-		return ctrl.Result{}, fmt.Errorf("error getting cluster operator: %w", err)
-	}
-
-	res, err := r.reconcile(ctx, log, cO)
+	res, err := r.reconcile(ctx, log)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("error during reconcile: %w", err)
 	}
@@ -89,7 +84,7 @@ func (r *CapiInstallerController) Reconcile(ctx context.Context, req ctrl.Reques
 	return res, nil
 }
 
-func (r *CapiInstallerController) reconcile(ctx context.Context, log logr.Logger, cO *configv1.ClusterOperator) (ctrl.Result, error) {
+func (r *CapiInstallerController) reconcile(ctx context.Context, log logr.Logger) (ctrl.Result, error) {
 	// Build desired providers list.
 	coreProviderConfigMapName := defaultCoreProviderComponentName
 	infrastructureProviderConfigMapName := platformToProviderConfigMapName(r.Platform)
@@ -125,6 +120,9 @@ func (r *CapiInstallerController) reconcile(ctx context.Context, log logr.Logger
 		}
 
 		if err := r.applyProviderComponents(ctx, log, components); err != nil {
+			if err := r.setDegradedCondition(ctx, log); err != nil {
+				return ctrl.Result{}, fmt.Errorf("failed to set conditions for CAPI Installer controller: %w", err)
+			}
 			return ctrl.Result{}, fmt.Errorf("error applying provider components: %w", err)
 		}
 
@@ -147,8 +145,12 @@ func (r *CapiInstallerController) applyProviderComponents(ctx context.Context, l
 			return fmt.Errorf("error parsing provider component at position %d to unstructured: %w", i, err)
 		}
 
-		name := u.GroupVersionKind().Group + "/" + u.GroupVersionKind().Version + "/" + u.GroupVersionKind().Kind +
-			" - " + getResourceName(u.GetNamespace(), u.GetName())
+		name := fmt.Sprintf("%s/%s/%s - %s",
+			u.GroupVersionKind().Group,
+			u.GroupVersionKind().Version,
+			u.GroupVersionKind().Kind,
+			getResourceName(u.GetNamespace(), u.GetName()),
+		)
 
 		if u.GroupVersionKind().Kind == "Deployment" {
 			deploymentsFilenames = append(deploymentsFilenames, name)
@@ -321,11 +323,6 @@ func (r *CapiInstallerController) extractProviderComponents(pr provider, cm *cor
 
 		replacedYamlManifests = append(replacedYamlManifests, newM)
 	}
-
-	// objs, err := parseK8sYaml(r.Scheme, replacedYamlManifests)
-	// if err != nil {
-	// 	return nil, fmt.Errorf("error parsing CAPI provider manifests: %w", err)
-	// }
 
 	return replacedYamlManifests, nil
 }
