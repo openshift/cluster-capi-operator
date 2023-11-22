@@ -40,16 +40,17 @@ const (
 	// Controller conditions for the Cluster Operator resource
 	capiInstallerControllerAvailableCondition = "CapiInstallerControllerAvailable"
 	capiInstallerControllerDegradedCondition  = "CapiInstallerControllerDegraded"
-	defaultCAPINamespace                      = "openshift-cluster-api"
-	providerConfigMapLabelVersionKey          = "provider.cluster.x-k8s.io/version"
-	providerConfigMapLabelTypeKey             = "provider.cluster.x-k8s.io/type"
-	providerConfigMapLabelNameKey             = "provider.cluster.x-k8s.io/name"
-	ownedProviderComponentName                = "cluster.x-k8s.io/provider"
-	imagePlaceholder                          = "to.be/replaced:v99"
-	openshiftInfrastructureObjectName         = "cluster"
-	notNamespaced                             = ""
-	clusterOperatorName                       = "cluster-api"
-	defaultCoreProviderComponentName          = "cluster-api"
+
+	defaultCAPINamespace              = "openshift-cluster-api"
+	providerConfigMapLabelVersionKey  = "provider.cluster.x-k8s.io/version"
+	providerConfigMapLabelTypeKey     = "provider.cluster.x-k8s.io/type"
+	providerConfigMapLabelNameKey     = "provider.cluster.x-k8s.io/name"
+	ownedProviderComponentName        = "cluster.x-k8s.io/provider"
+	imagePlaceholder                  = "to.be/replaced:v99"
+	openshiftInfrastructureObjectName = "cluster"
+	notNamespaced                     = ""
+	clusterOperatorName               = "cluster-api"
+	defaultCoreProviderComponentName  = "cluster-api"
 )
 
 type CapiInstallerController struct {
@@ -62,6 +63,7 @@ type CapiInstallerController struct {
 	APIExtensionsClient *apiextensionsclient.Clientset
 }
 
+// Reconcile reconciles the cluster-api ClusterOperator object.
 func (r *CapiInstallerController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := ctrl.LoggerFrom(ctx).WithName("CapiInstallerController")
 
@@ -77,29 +79,38 @@ func (r *CapiInstallerController) Reconcile(ctx context.Context, req ctrl.Reques
 	return res, nil
 }
 
+// reconcile performs the main business logic for installing Cluster API components in the cluster.
+// Notably it fetches CAPI providers "transport" ConfigMap(s) matching the required labels,
+// it extracts from those ConfigMaps the embedded CAPI providers manifests for the components
+// and it applies them to the cluster.
 func (r *CapiInstallerController) reconcile(ctx context.Context, log logr.Logger) (ctrl.Result, error) {
-	providerConfigMapLabelValues := map[string]string{
+	// Define the desired providers to be installed for this cluster.
+	// We always want to install the core provider, which in our case is the default cluster-api core provider.
+	// We also want to install the infrastructure provider that matches the currently detected platform the cluster is running on.
+	providerConfigMapLabels := map[string]string{
 		"core":           defaultCoreProviderComponentName,
-		"infrastructure": platformToProviderConfigMapName(r.Platform),
+		"infrastructure": platformToProviderConfigMapLabelNameValue(r.Platform),
 	}
 
-	for providerConfigMapLabelTypeVal, providerConfigMapLabelNameVal := range providerConfigMapLabelValues {
+	// Process each one of the desired providers.
+	for providerConfigMapLabelTypeVal, providerConfigMapLabelNameVal := range providerConfigMapLabels {
 		log.Info("reconciling CAPI provider", "name", providerConfigMapLabelNameVal)
 
+		// Get a List all the ConfigMaps matching the desired provider labels.
 		configMapList := &corev1.ConfigMapList{}
 		if err := r.List(ctx, configMapList, client.InNamespace(defaultCAPINamespace),
 			client.MatchingLabels{
-				providerConfigMapLabelNameKey:    providerConfigMapLabelNameVal,
-				providerConfigMapLabelTypeKey:    providerConfigMapLabelTypeVal,
-				providerConfigMapLabelVersionKey: "", // match any value
+				providerConfigMapLabelNameKey: providerConfigMapLabelNameVal,
+				providerConfigMapLabelTypeKey: providerConfigMapLabelTypeVal,
 			},
 		); err != nil {
 			if err := r.setDegradedCondition(ctx, log); err != nil {
 				return ctrl.Result{}, fmt.Errorf("failed to set conditions for CAPI Installer controller: %w", err)
 			}
-			return ctrl.Result{}, fmt.Errorf("unable to list CAPI Provider %q ConfigMaps: %w", providerConfigMapLabelNameVal, err)
+			return ctrl.Result{}, fmt.Errorf("unable to list CAPI provider %q ConfigMaps: %w", providerConfigMapLabelNameVal, err)
 		}
 
+		// Extract the provider manifests stored each of the matching ConfigMaps.
 		var providerComponents []string
 		for _, cm := range configMapList.Items {
 			log.Info("processing CAPI provider ConfigMap", "configmapName", cm.Name, "providerType", cm.Labels[providerConfigMapLabelTypeKey],
@@ -116,7 +127,8 @@ func (r *CapiInstallerController) reconcile(ctx context.Context, log logr.Logger
 			providerComponents = append(providerComponents, partialComponents...)
 		}
 
-		if err := r.applyProviderComponents(ctx, log, providerComponents); err != nil {
+		// Apply all the collected provider components manifests.
+		if err := r.applyProviderComponents(ctx, providerComponents); err != nil {
 			if err := r.setDegradedCondition(ctx, log); err != nil {
 				return ctrl.Result{}, fmt.Errorf("failed to set conditions for CAPI Installer controller: %w", err)
 			}
@@ -129,7 +141,9 @@ func (r *CapiInstallerController) reconcile(ctx context.Context, log logr.Logger
 	return ctrl.Result{}, nil
 }
 
-func (r *CapiInstallerController) applyProviderComponents(ctx context.Context, log logr.Logger, components []string) error {
+// applyProviderComponents applies the provider components to the cluster.
+// It does so by differentiating between static components and dynamic components (i.e. Deployments).
+func (r *CapiInstallerController) applyProviderComponents(ctx context.Context, components []string) error {
 	componentsFilenames := []string{}
 	componentsAssets := make(map[string]string, 0)
 
@@ -137,6 +151,7 @@ func (r *CapiInstallerController) applyProviderComponents(ctx context.Context, l
 	deploymentsAssets := make(map[string]string, 0)
 
 	for i, m := range components {
+		// Parse the YAML manifests into unstructure objects.
 		u, err := yamlToUnstructured(r.Scheme, m)
 		if err != nil {
 			return fmt.Errorf("error parsing provider component at position %d to unstructured: %w", i, err)
@@ -149,6 +164,7 @@ func (r *CapiInstallerController) applyProviderComponents(ctx context.Context, l
 			getResourceName(u.GetNamespace(), u.GetName()),
 		)
 
+		// Divide manifests into static vs deployment components.
 		if u.GroupVersionKind().Kind == "Deployment" {
 			deploymentsFilenames = append(deploymentsFilenames, name)
 			deploymentsAssets[name] = m
@@ -158,6 +174,7 @@ func (r *CapiInstallerController) applyProviderComponents(ctx context.Context, l
 		}
 	}
 
+	// Perform a Direct apply of the static components.
 	res := resourceapply.ApplyDirectly(
 		ctx,
 		resourceapply.NewKubeClientHolder(r.ApplyClient).WithAPIExtensionsClient(r.APIExtensionsClient),
@@ -167,6 +184,7 @@ func (r *CapiInstallerController) applyProviderComponents(ctx context.Context, l
 		componentsFilenames...,
 	)
 
+	// For each of the Deployment components perform a Deployment-specific apply.
 	for _, d := range deploymentsFilenames {
 		deploymentManifest, ok := deploymentsAssets[d]
 		if !ok {
@@ -174,11 +192,11 @@ func (r *CapiInstallerController) applyProviderComponents(ctx context.Context, l
 		}
 		obj, err := yamlToRuntimeObject(r.Scheme, deploymentManifest)
 		if err != nil {
-			return fmt.Errorf("error parsing provider deployment manifets %q: %w", d, err)
+			return fmt.Errorf("error parsing CAPI provider deployment manifets %q: %w", d, err)
 		}
 
+		// TODO: Deployments State/Conditions should influence the overall ClusterOperator Status.
 		deployment := obj.(*v1.Deployment)
-
 		if _, _, err := resourceapply.ApplyDeployment(
 			ctx,
 			r.ApplyClient.AppsV1(),
@@ -186,24 +204,21 @@ func (r *CapiInstallerController) applyProviderComponents(ctx context.Context, l
 			deployment,
 			resourcemerge.ExpectedDeploymentGeneration(deployment, nil),
 		); err != nil {
-			return fmt.Errorf("error applying provider deployment %q: %w", deployment.Name, err)
+			return fmt.Errorf("error applying CAPI provider deployment %q: %w", deployment.Name, err)
 		}
 	}
 
-	log.Info("CAPI provider components apply result")
-
 	var errs error
 	for i, r := range res {
-		fmt.Printf("name: %s, changed: %v, error: %v\n", r.File, r.Changed, r.Error)
-
 		if r.Error != nil {
-			errs = errors.Join(errs, fmt.Errorf("error applying provider component %q at position %d: %w", r.File, i, r.Error))
+			errs = errors.Join(errs, fmt.Errorf("error applying CAPI provider component %q at position %d: %w", r.File, i, r.Error))
 		}
 	}
 
 	return errs
 }
 
+// setAvailableCondition sets the ClusterOperator status condition to Available.
 func (r *CapiInstallerController) setAvailableCondition(ctx context.Context, log logr.Logger) error {
 	co, err := r.GetOrCreateClusterOperator(ctx)
 	if err != nil {
@@ -222,6 +237,7 @@ func (r *CapiInstallerController) setAvailableCondition(ctx context.Context, log
 	return r.SyncStatus(ctx, co, conds)
 }
 
+// setAvailableCondition sets the ClusterOperator status condition to Degraded.
 func (r *CapiInstallerController) setDegradedCondition(ctx context.Context, log logr.Logger) error {
 	co, err := r.GetOrCreateClusterOperator(ctx)
 	if err != nil {
@@ -303,7 +319,14 @@ func (r *CapiInstallerController) SetupWithManager(mgr ctrl.Manager) error {
 	return build.Complete(r)
 }
 
+// extractProviderComponents extracts CAPI components manifests from a transport ConfigMap.
+// The format of the ConfigMap is well known and follows the upstream CAPI's
+// clusterctl Provider Contract - Components YAML file contract defined at:
+// https://github.com/kubernetes-sigs/cluster-api/blob/a36712e28bf5d54e398ea84cb3e20102c0499426/docs/book/src/clusterctl/provider-contract.md?plain=1#L157-L162
 func (r *CapiInstallerController) extractProviderComponents(cm corev1.ConfigMap) ([]string, error) {
+	// Certain provider components have drone/envsubst environment variables interpolated within the manifest.
+	// Substitute them with the empty value, which in turn fallback to the default value defined in the template.
+	// TODO: provide mechanism to pass down these environment variables.
 	components, err := envsubst.EvalEnv(cm.Data["components"])
 	if err != nil {
 		return nil, fmt.Errorf("failed to substitute env vars in CAPI manifests: %w", err)
@@ -311,9 +334,10 @@ func (r *CapiInstallerController) extractProviderComponents(cm corev1.ConfigMap)
 
 	// Split multi-document YAML into single manifests.
 	yamlManifests := regexp.MustCompile("(?m)^---$").Split(components, -1)
-	replacedYamlManifests := []string{}
 
+	replacedYamlManifests := []string{}
 	providerName := cm.Labels[providerConfigMapLabelNameKey]
+
 	for _, m := range yamlManifests {
 		newM := strings.Replace(m, imagePlaceholder, r.Images[providerNameToImageKey(providerName)], 1)
 		// TODO: change this to manager in the forked providers openshift/Dockerfile.rhel.
@@ -325,14 +349,19 @@ func (r *CapiInstallerController) extractProviderComponents(cm corev1.ConfigMap)
 	return replacedYamlManifests, nil
 }
 
-func platformToProviderConfigMapName(platform configv1.PlatformType) string {
+// platformToProviderConfigMapLabelNameValue maps an OpenShift configv1.PlatformType
+// to a matching CAPI provider ConfigMap `name` Label value.
+func platformToProviderConfigMapLabelNameValue(platform configv1.PlatformType) string {
 	return strings.ToLower(fmt.Sprintf("%s", platform))
 }
 
+// platformToInfraProviderComponentName maps an OpenShift configv1.PlatformType
+// to a matching CAPI ownedProviderComponentName (see consts) Label value.
 func platformToInfraProviderComponentName(platform configv1.PlatformType) string {
 	return strings.ToLower(fmt.Sprintf("infrastructure-%s", platform))
 }
 
+// getResourceName returns a "namespace/name" string or a "name" string if namespace is empty.
 func getResourceName(namespace, name string) string {
 	resourceName := fmt.Sprintf("%s/%s", namespace, name)
 	if namespace == "" {
@@ -342,6 +371,7 @@ func getResourceName(namespace, name string) string {
 	return resourceName
 }
 
+// assetsFn is a resourceapply.AssetFunc.
 func assetFn(assetsMap map[string]string) resourceapply.AssetFunc {
 	return func(name string) ([]byte, error) {
 		o, ok := assetsMap[name]
@@ -353,6 +383,7 @@ func assetFn(assetsMap map[string]string) resourceapply.AssetFunc {
 	}
 }
 
+// yamlToRuntimeObject parses a YAML manifest into a runtime.Object.
 func yamlToRuntimeObject(sch *runtime.Scheme, m string) (runtime.Object, error) {
 	decode := serializer.NewCodecFactory(sch).UniversalDeserializer().Decode
 	obj, _, err := decode([]byte(m), nil, nil)
@@ -363,6 +394,7 @@ func yamlToRuntimeObject(sch *runtime.Scheme, m string) (runtime.Object, error) 
 	return obj, nil
 }
 
+// yamlToRuntimeObject parses a YAML manifest into an *unstructured.Unstructured object.
 func yamlToUnstructured(sch *runtime.Scheme, m string) (*unstructured.Unstructured, error) {
 	obj, err := yamlToRuntimeObject(sch, m)
 	if err != nil {

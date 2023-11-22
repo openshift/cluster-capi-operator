@@ -12,6 +12,7 @@ import (
 	configv1 "github.com/openshift/api/config/v1"
 )
 
+// clusterOperatorPredicates defines a predicate function for the cluster-api ClusterOperator.
 func clusterOperatorPredicates() predicate.Funcs {
 	isClusterOperator := func(obj runtime.Object) bool {
 		clusterOperator, ok := obj.(*configv1.ClusterOperator)
@@ -26,12 +27,14 @@ func clusterOperatorPredicates() predicate.Funcs {
 	}
 }
 
+// toClusterOperator maps a reconcile request to the cluster-api ClusterOperator.
 func toClusterOperator(ctx context.Context, cO client.Object) []reconcile.Request {
 	return []reconcile.Request{{
 		NamespacedName: client.ObjectKey{Name: clusterOperatorName},
 	}}
 }
 
+// configMapPredicate defines a predicate function for owned ConfigMaps.
 func configMapPredicate(namespace string, platform configv1.PlatformType) predicate.Funcs {
 	return predicate.Funcs{
 		CreateFunc:  func(e event.CreateEvent) bool { return isOwnedProviderComponent(e.Object, namespace, platform) },
@@ -41,6 +44,7 @@ func configMapPredicate(namespace string, platform configv1.PlatformType) predic
 	}
 }
 
+// ownedPlatformLabelPredicate defines a predicate function for owned objects.
 func ownedPlatformLabelPredicate(namespace string, platform configv1.PlatformType) predicate.Funcs {
 	return predicate.Funcs{
 		UpdateFunc: func(e event.UpdateEvent) bool { return isOwnedProviderComponent(e.ObjectNew, namespace, platform) },
@@ -48,6 +52,7 @@ func ownedPlatformLabelPredicate(namespace string, platform configv1.PlatformTyp
 	}
 }
 
+// isOwnedProviderComponent checks whether an object is an owned provider component.
 func isOwnedProviderComponent(obj runtime.Object, namespace string, platform configv1.PlatformType) bool {
 	cO := obj.(client.Object)
 
