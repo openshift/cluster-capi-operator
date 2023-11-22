@@ -2,7 +2,6 @@ package webhook
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -123,5 +122,14 @@ func (r *ClusterWebhook) ValidateUpdate(ctx context.Context, oldObj, newObj runt
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
 func (r *ClusterWebhook) ValidateDelete(_ context.Context, obj runtime.Object) (admission.Warnings, error) {
-	return nil, errors.New("deletion of cluster is not allowed")
+	cluster, ok := obj.(*v1beta1.Cluster)
+	if !ok {
+		panic("expected to get an of object of type v1beta1.Cluster")
+	}
+
+	if cluster.Namespace == openshiftCAPINamespace {
+		return nil, fmt.Errorf("deletion of cluster is not allowed in %v namespace", openshiftCAPINamespace)
+	}
+
+	return nil, nil
 }
