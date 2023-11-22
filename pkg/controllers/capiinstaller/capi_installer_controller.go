@@ -41,9 +41,9 @@ const (
 	capiInstallerControllerAvailableCondition = "CapiInstallerControllerAvailable"
 	capiInstallerControllerDegradedCondition  = "CapiInstallerControllerDegraded"
 	defaultCAPINamespace                      = "openshift-cluster-api"
-	configMapVersionLabelName                 = "provider.cluster.x-k8s.io/version"
-	configMapVersionTypeName                  = "provider.cluster.x-k8s.io/type"
-	configMapVersionNameName                  = "provider.cluster.x-k8s.io/name"
+	providerConfigMapLabelVersionKey          = "provider.cluster.x-k8s.io/version"
+	providerConfigMapLabelTypeKey             = "provider.cluster.x-k8s.io/type"
+	providerConfigMapLabelNameKey             = "provider.cluster.x-k8s.io/name"
 	ownedProviderComponentName                = "cluster.x-k8s.io/provider"
 	imagePlaceholder                          = "to.be/replaced:v99"
 	openshiftInfrastructureObjectName         = "cluster"
@@ -62,13 +62,6 @@ type CapiInstallerController struct {
 	APIExtensionsClient *apiextensionsclient.Clientset
 }
 
-type provider struct {
-	Name      string
-	Namespace string
-	Version   string
-	Type      string
-}
-
 func (r *CapiInstallerController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := ctrl.LoggerFrom(ctx).WithName("CapiInstallerController")
 
@@ -85,48 +78,52 @@ func (r *CapiInstallerController) Reconcile(ctx context.Context, req ctrl.Reques
 }
 
 func (r *CapiInstallerController) reconcile(ctx context.Context, log logr.Logger) (ctrl.Result, error) {
-	// Build desired providers list.
-	coreProviderConfigMapName := defaultCoreProviderComponentName
-	infrastructureProviderConfigMapName := platformToProviderConfigMapName(r.Platform)
-	providerConfigMapNames := []string{coreProviderConfigMapName, infrastructureProviderConfigMapName}
+	providerConfigMapLabelValues := map[string]string{
+		"core":           defaultCoreProviderComponentName,
+		"infrastructure": platformToProviderConfigMapName(r.Platform),
+	}
 
-	// Reconcile desired providers list.
-	// TODO: change this to a List to get labels, for future proofing with shards support?
-	for _, cmName := range providerConfigMapNames {
-		cm := &corev1.ConfigMap{}
-		if err := r.Get(ctx, client.ObjectKey{Name: cmName, Namespace: defaultCAPINamespace}, cm); err != nil {
+	for providerConfigMapLabelTypeVal, providerConfigMapLabelNameVal := range providerConfigMapLabelValues {
+		log.Info("reconciling CAPI provider", "name", providerConfigMapLabelNameVal)
+
+		configMapList := &corev1.ConfigMapList{}
+		if err := r.List(ctx, configMapList, client.InNamespace(defaultCAPINamespace),
+			client.MatchingLabels{
+				providerConfigMapLabelNameKey:    providerConfigMapLabelNameVal,
+				providerConfigMapLabelTypeKey:    providerConfigMapLabelTypeVal,
+				providerConfigMapLabelVersionKey: "", // match any value
+			},
+		); err != nil {
 			if err := r.setDegradedCondition(ctx, log); err != nil {
 				return ctrl.Result{}, fmt.Errorf("failed to set conditions for CAPI Installer controller: %w", err)
 			}
-			return ctrl.Result{}, fmt.Errorf("unable to get CAPI Provider ConfigMap %q: %w", getResourceName(defaultCAPINamespace, cm.Name), err)
+			return ctrl.Result{}, fmt.Errorf("unable to list CAPI Provider %q ConfigMaps: %w", providerConfigMapLabelNameVal, err)
 		}
 
-		pr, err := r.newProviderFromConfigMap(cm)
-		if err != nil {
+		var providerComponents []string
+		for _, cm := range configMapList.Items {
+			log.Info("processing CAPI provider ConfigMap", "configmapName", cm.Name, "providerType", cm.Labels[providerConfigMapLabelTypeKey],
+				"providerName", cm.Labels[providerConfigMapLabelNameKey], "providerVersion", cm.Labels[providerConfigMapLabelVersionKey])
+
+			partialComponents, err := r.extractProviderComponents(cm)
+			if err != nil {
+				if err := r.setDegradedCondition(ctx, log); err != nil {
+					return ctrl.Result{}, fmt.Errorf("failed to set conditions for CAPI Installer controller: %w", err)
+				}
+				return ctrl.Result{}, fmt.Errorf("error extracting CAPI provider components from ConfigMap %q: %w", cm.Name, err)
+			}
+
+			providerComponents = append(providerComponents, partialComponents...)
+		}
+
+		if err := r.applyProviderComponents(ctx, log, providerComponents); err != nil {
 			if err := r.setDegradedCondition(ctx, log); err != nil {
 				return ctrl.Result{}, fmt.Errorf("failed to set conditions for CAPI Installer controller: %w", err)
 			}
-			return ctrl.Result{}, fmt.Errorf("error creating provider from ConfigMap %q: %w", getResourceName(defaultCAPINamespace, cmName), err)
+			return ctrl.Result{}, fmt.Errorf("error applying CAPI provider %q components: %w", providerConfigMapLabelNameVal, err)
 		}
 
-		log.Info("reconciling CAPI provider", "type", pr.Type, "name", pr.Name, "version", pr.Version)
-
-		components, err := r.extractProviderComponents(pr, cm)
-		if err != nil {
-			if err := r.setDegradedCondition(ctx, log); err != nil {
-				return ctrl.Result{}, fmt.Errorf("failed to set conditions for CAPI Installer controller: %w", err)
-			}
-			return ctrl.Result{}, fmt.Errorf("error extracting provider components from ConfigMap %q: %w", getResourceName(defaultCAPINamespace, cmName), err)
-		}
-
-		if err := r.applyProviderComponents(ctx, log, components); err != nil {
-			if err := r.setDegradedCondition(ctx, log); err != nil {
-				return ctrl.Result{}, fmt.Errorf("failed to set conditions for CAPI Installer controller: %w", err)
-			}
-			return ctrl.Result{}, fmt.Errorf("error applying provider components: %w", err)
-		}
-
-		log.Info("finished reconciling CAPI provider", "type", pr.Type, "name", pr.Name, "version", pr.Version)
+		log.Info("finished reconciling CAPI provider", "name", providerConfigMapLabelNameVal)
 	}
 
 	return ctrl.Result{}, nil
@@ -306,7 +303,7 @@ func (r *CapiInstallerController) SetupWithManager(mgr ctrl.Manager) error {
 	return build.Complete(r)
 }
 
-func (r *CapiInstallerController) extractProviderComponents(pr provider, cm *corev1.ConfigMap) ([]string, error) {
+func (r *CapiInstallerController) extractProviderComponents(cm corev1.ConfigMap) ([]string, error) {
 	components, err := envsubst.EvalEnv(cm.Data["components"])
 	if err != nil {
 		return nil, fmt.Errorf("failed to substitute env vars in CAPI manifests: %w", err)
@@ -316,39 +313,16 @@ func (r *CapiInstallerController) extractProviderComponents(pr provider, cm *cor
 	yamlManifests := regexp.MustCompile("(?m)^---$").Split(components, -1)
 	replacedYamlManifests := []string{}
 
+	providerName := cm.Labels[providerConfigMapLabelNameKey]
 	for _, m := range yamlManifests {
-		newM := strings.Replace(m, imagePlaceholder, r.Images[providerNameToImageKey(pr.Name)], 1)
+		newM := strings.Replace(m, imagePlaceholder, r.Images[providerNameToImageKey(providerName)], 1)
 		// TODO: change this to manager in the forked providers openshift/Dockerfile.rhel.
-		newM = strings.Replace(newM, "/manager", providerNameToCommand(pr.Name), 1)
+		newM = strings.Replace(newM, "/manager", providerNameToCommand(providerName), 1)
 
 		replacedYamlManifests = append(replacedYamlManifests, newM)
 	}
 
 	return replacedYamlManifests, nil
-}
-
-func (r *CapiInstallerController) newProviderFromConfigMap(cm *corev1.ConfigMap) (provider, error) {
-	providerVersion, ok := cm.GetLabels()[configMapVersionLabelName]
-	if !ok {
-		return provider{}, fmt.Errorf("unable to read provider version from ConfigMap %q", cm.Name)
-	}
-
-	providerType, ok := cm.GetLabels()[configMapVersionTypeName]
-	if !ok {
-		return provider{}, fmt.Errorf("unable to read provider type from ConfigMap %q", cm.Name)
-	}
-
-	providerName, ok := cm.GetLabels()[configMapVersionNameName]
-	if !ok {
-		return provider{}, fmt.Errorf("unable to read provider name from ConfigMap %q", cm.Name)
-	}
-
-	return provider{
-		Name:      providerName,
-		Namespace: cm.Namespace,
-		Type:      providerType,
-		Version:   providerVersion,
-	}, nil
 }
 
 func platformToProviderConfigMapName(platform configv1.PlatformType) string {
