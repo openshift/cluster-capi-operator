@@ -167,11 +167,11 @@ func newAWSMachineTemplate(cl client.Client, mapiProviderSpec *mapiv1.AWSMachine
 		IAMInstanceProfile:   *mapiProviderSpec.IAMInstanceProfile.ID,
 		InstanceType:         mapiProviderSpec.InstanceType,
 		FailureDomain:        &mapiProviderSpec.Placement.AvailabilityZone,
-		CloudInit: awsv1.CloudInit{
-			InsecureSkipSecretsManager: true,
-		},
 		AMI: awsv1.AMIReference{
 			ID: mapiProviderSpec.AMI.ID,
+		},
+		Ignition: &awsv1.Ignition{
+			Version: "3.4",
 		},
 		Subnet: &awsv1.AWSResourceReference{
 			Filters: []awsv1.Filter{
