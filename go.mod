@@ -25,11 +25,10 @@ require (
 	sigs.k8s.io/cluster-api-provider-azure v1.11.2
 	sigs.k8s.io/cluster-api-provider-gcp v1.5.0
 	sigs.k8s.io/cluster-api-provider-ibmcloud v0.6.0
+	sigs.k8s.io/cluster-api-provider-vsphere v1.8.3
 	sigs.k8s.io/controller-runtime v0.15.2
 	sigs.k8s.io/controller-runtime/tools/setup-envtest v0.0.0-20221007015352-8ad090e0663e
 )
-
-require sigs.k8s.io/cluster-api-provider-vsphere v1.8.3
 
 require (
 	4d63.com/gocheckcompilerdirectives v1.2.1 // indirect

@@ -4,7 +4,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.11.4
+    controller-gen.kubebuilder.io/version: v0.12.1
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
@@ -49,10 +49,12 @@ spec:
       jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
+    deprecated: true
     name: v1alpha3
     schema:
       openAPIV3Schema:
-        description: VSphereMachine is the Schema for the vspheremachines API
+        description: "VSphereMachine is the Schema for the vspheremachines API \n
+          Deprecated: This type will be removed in one of the next releases."
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -151,8 +153,9 @@ spec:
                           type: string
                         ipAddrs:
                           description: IPAddrs is a list of one or more IPv4 and/or
-                            IPv6 addresses to assign to this device. Required when
-                            DHCP4 and DHCP6 are both false.
+                            IPv6 addresses to assign to this device. IP addresses
+                            must also specify the segment length in CIDR notation.
+                            Required when DHCP4 and DHCP6 are both false.
                           items:
                             type: string
                           type: array
@@ -444,10 +447,12 @@ spec:
       jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
+    deprecated: true
     name: v1alpha4
     schema:
       openAPIV3Schema:
-        description: VSphereMachine is the Schema for the vspheremachines API
+        description: "VSphereMachine is the Schema for the vspheremachines API \n
+          Deprecated: This type will be removed in one of the next releases."
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -546,8 +551,9 @@ spec:
                           type: string
                         ipAddrs:
                           description: IPAddrs is a list of one or more IPv4 and/or
-                            IPv6 addresses to assign to this device. Required when
-                            DHCP4 and DHCP6 are both false.
+                            IPv6 addresses to assign to this device. IP addresses
+                            must also specify the segment length in CIDR notation.
+                            Required when DHCP4 and DHCP6 are both false.
                           items:
                             type: string
                           type: array
@@ -907,6 +913,13 @@ spec:
                 description: Folder is the name or inventory path of the folder in
                   which the virtual machine is created/located.
                 type: string
+              guestSoftPowerOffTimeout:
+                description: "GuestSoftPowerOffTimeout sets the wait timeout for shutdown
+                  in the VM guest. The VM will be powered off forcibly after the timeout
+                  if the VM is still up and running when the PowerOffMode is set to
+                  trySoft. \n This parameter only applies when the PowerOffMode is
+                  set to trySoft. \n If omitted, the timeout defaults to 5 minutes."
+                type: string
               hardwareVersion:
                 description: HardwareVersion is the hardware version of the virtual
                   machine. Defaults to the eponymous property value in the template
@@ -954,10 +967,10 @@ spec:
                                 description: Name is the name of resource being referenced
                                 type: string
                             required:
-                            - apiGroup
                             - kind
                             - name
                             type: object
+                            x-kubernetes-map-type: atomic
                           type: array
                         deviceName:
                           description: DeviceName may be used to explicitly assign
@@ -1089,8 +1102,9 @@ spec:
                           type: string
                         ipAddrs:
                           description: IPAddrs is a list of one or more IPv4 and/or
-                            IPv6 addresses to assign to this device. Required when
-                            DHCP4 and DHCP6 are both false.
+                            IPv6 addresses to assign to this device.  IP addresses
+                            must also specify the segment length in CIDR notation.
+                            Required when DHCP4 and DHCP6 are both false.
                           items:
                             type: string
                           type: array
@@ -1216,6 +1230,22 @@ spec:
                       type: integer
                   type: object
                 type: array
+              powerOffMode:
+                default: hard
+                description: "PowerOffMode describes the desired behavior when powering
+                  off a VM. \n There are three, supported power off modes: hard, soft,
+                  and trySoft. The first mode, hard, is the equivalent of a physical
+                  system's power cord being ripped from the wall. The soft mode requires
+                  the VM's guest to have VM Tools installed and attempts to gracefully
+                  shut down the VM. Its variant, trySoft, first attempts a graceful
+                  shutdown, and if that fails or the VM is not in a powered off state
+                  after reaching the GuestSoftPowerOffTimeout, the VM is halted. \n
+                  If omitted, the mode defaults to hard."
+                enum:
+                - hard
+                - soft
+                - trySoft
+                type: string
               providerID:
                 description: ProviderID is the virtual machine's BIOS UUID formated
                   as vsphere://12345678-1234-1234-1234-123456789abc
@@ -1402,7 +1432,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.11.4
+    controller-gen.kubebuilder.io/version: v0.12.1
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
@@ -1443,10 +1473,12 @@ spec:
       jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
+    deprecated: true
     name: v1alpha3
     schema:
       openAPIV3Schema:
-        description: VSphereCluster is the Schema for the vsphereclusters API
+        description: "VSphereCluster is the Schema for the vsphereclusters API \n
+          Deprecated: This type will be removed in one of the next releases."
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -1833,10 +1865,12 @@ spec:
       jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
+    deprecated: true
     name: v1alpha4
     schema:
       openAPIV3Schema:
-        description: VSphereCluster is the Schema for the vsphereclusters API
+        description: "VSphereCluster is the Schema for the vsphereclusters API \n
+          Deprecated: This type will be removed in one of the next releases."
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -2056,8 +2090,9 @@ spec:
               failureDomainSelector:
                 description: FailureDomainSelector is the label selector to use for
                   failure domain selection for the control plane nodes of the cluster.
-                  An empty value for the selector includes all the related failure
-                  domains.
+                  If not set (`nil`), selecting failure domains will be disabled.
+                  An empty value (`{}`) selects all existing failure domains. A valid
+                  selector will select all failure domains which match the selector.
                 properties:
                   matchExpressions:
                     description: matchExpressions is a list of label selector requirements.
@@ -2100,6 +2135,7 @@ spec:
                       are ANDed.
                     type: object
                 type: object
+                x-kubernetes-map-type: atomic
               identityRef:
                 description: IdentityRef is a reference to either a Secret or VSphereClusterIdentity
                   that contains the identity to use when reconciling the cluster.
@@ -2218,7 +2254,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.11.4
+    controller-gen.kubebuilder.io/version: v0.12.1
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
@@ -2241,11 +2277,12 @@ spec:
     singular: vspheremachinetemplate
   scope: Namespaced
   versions:
-  - name: v1alpha3
+  - deprecated: true
+    name: v1alpha3
     schema:
       openAPIV3Schema:
-        description: VSphereMachineTemplate is the Schema for the vspheremachinetemplates
-          API
+        description: "VSphereMachineTemplate is the Schema for the vspheremachinetemplates
+          API \n Deprecated: This type will be removed in one of the next releases."
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -2362,10 +2399,10 @@ spec:
                               description: 'Kind of the referent. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
                               type: string
                             name:
-                              description: 'Name of the referent. More info: http://kubernetes.io/docs/user-guide/identifiers#names'
+                              description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names#names'
                               type: string
                             uid:
-                              description: 'UID of the referent. More info: http://kubernetes.io/docs/user-guide/identifiers#uids'
+                              description: 'UID of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names#uids'
                               type: string
                           required:
                           - apiVersion
@@ -2466,7 +2503,9 @@ spec:
                                 ipAddrs:
                                   description: IPAddrs is a list of one or more IPv4
                                     and/or IPv6 addresses to assign to this device.
-                                    Required when DHCP4 and DHCP6 are both false.
+                                    IP addresses must also specify the segment length
+                                    in CIDR notation. Required when DHCP4 and DHCP6
+                                    are both false.
                                   items:
                                     type: string
                                   type: array
@@ -2618,11 +2657,12 @@ spec:
         type: object
     served: true
     storage: false
-  - name: v1alpha4
+  - deprecated: true
+    name: v1alpha4
     schema:
       openAPIV3Schema:
-        description: VSphereMachineTemplate is the Schema for the vspheremachinetemplates
-          API
+        description: "VSphereMachineTemplate is the Schema for the vspheremachinetemplates
+          API \n Deprecated: This type will be removed in one of the next releases."
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -2754,7 +2794,9 @@ spec:
                                 ipAddrs:
                                   description: IPAddrs is a list of one or more IPv4
                                     and/or IPv6 addresses to assign to this device.
-                                    Required when DHCP4 and DHCP6 are both false.
+                                    IP addresses must also specify the segment length
+                                    in CIDR notation. Required when DHCP4 and DHCP6
+                                    are both false.
                                   items:
                                     type: string
                                   type: array
@@ -3006,6 +3048,14 @@ spec:
                         description: Folder is the name or inventory path of the folder
                           in which the virtual machine is created/located.
                         type: string
+                      guestSoftPowerOffTimeout:
+                        description: "GuestSoftPowerOffTimeout sets the wait timeout
+                          for shutdown in the VM guest. The VM will be powered off
+                          forcibly after the timeout if the VM is still up and running
+                          when the PowerOffMode is set to trySoft. \n This parameter
+                          only applies when the PowerOffMode is set to trySoft. \n
+                          If omitted, the timeout defaults to 5 minutes."
+                        type: string
                       hardwareVersion:
                         description: HardwareVersion is the hardware version of the
                           virtual machine. Defaults to the eponymous property value
@@ -3057,10 +3107,10 @@ spec:
                                           being referenced
                                         type: string
                                     required:
-                                    - apiGroup
                                     - kind
                                     - name
                                     type: object
+                                    x-kubernetes-map-type: atomic
                                   type: array
                                 deviceName:
                                   description: DeviceName may be used to explicitly
@@ -3205,8 +3255,10 @@ spec:
                                   type: string
                                 ipAddrs:
                                   description: IPAddrs is a list of one or more IPv4
-                                    and/or IPv6 addresses to assign to this device.
-                                    Required when DHCP4 and DHCP6 are both false.
+                                    and/or IPv6 addresses to assign to this device.  IP
+                                    addresses must also specify the segment length
+                                    in CIDR notation. Required when DHCP4 and DHCP6
+                                    are both false.
                                   items:
                                     type: string
                                   type: array
@@ -3339,6 +3391,23 @@ spec:
                               type: integer
                           type: object
                         type: array
+                      powerOffMode:
+                        default: hard
+                        description: "PowerOffMode describes the desired behavior
+                          when powering off a VM. \n There are three, supported power
+                          off modes: hard, soft, and trySoft. The first mode, hard,
+                          is the equivalent of a physical system's power cord being
+                          ripped from the wall. The soft mode requires the VM's guest
+                          to have VM Tools installed and attempts to gracefully shut
+                          down the VM. Its variant, trySoft, first attempts a graceful
+                          shutdown, and if that fails or the VM is not in a powered
+                          off state after reaching the GuestSoftPowerOffTimeout, the
+                          VM is halted. \n If omitted, the mode defaults to hard."
+                        enum:
+                        - hard
+                        - soft
+                        - trySoft
+                        type: string
                       providerID:
                         description: ProviderID is the virtual machine's BIOS UUID
                           formated as vsphere://12345678-1234-1234-1234-123456789abc
@@ -3403,7 +3472,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.11.4
+    controller-gen.kubebuilder.io/version: v0.12.1
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
@@ -3426,10 +3495,12 @@ spec:
     singular: vspherevm
   scope: Namespaced
   versions:
-  - name: v1alpha3
+  - deprecated: true
+    name: v1alpha3
     schema:
       openAPIV3Schema:
-        description: VSphereVM is the Schema for the vspherevms API
+        description: "VSphereVM is the Schema for the vspherevms API \n Deprecated:
+          This type will be removed in one of the next releases."
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -3567,8 +3638,9 @@ spec:
                           type: string
                         ipAddrs:
                           description: IPAddrs is a list of one or more IPv4 and/or
-                            IPv6 addresses to assign to this device. Required when
-                            DHCP4 and DHCP6 are both false.
+                            IPv6 addresses to assign to this device. IP addresses
+                            must also specify the segment length in CIDR notation.
+                            Required when DHCP4 and DHCP6 are both false.
                           items:
                             type: string
                           type: array
@@ -3837,10 +3909,12 @@ spec:
     storage: false
     subresources:
       status: {}
-  - name: v1alpha4
+  - deprecated: true
+    name: v1alpha4
     schema:
       openAPIV3Schema:
-        description: VSphereVM is the Schema for the vspherevms API
+        description: "VSphereVM is the Schema for the vspherevms API \n Deprecated:
+          This type will be removed in one of the next releases."
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -3901,6 +3975,7 @@ spec:
                     description: 'UID of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids'
                     type: string
                 type: object
+                x-kubernetes-map-type: atomic
               cloneMode:
                 description: CloneMode specifies the type of clone operation. The
                   LinkedClone mode is only support for templates that have at least
@@ -3977,8 +4052,9 @@ spec:
                           type: string
                         ipAddrs:
                           description: IPAddrs is a list of one or more IPv4 and/or
-                            IPv6 addresses to assign to this device. Required when
-                            DHCP4 and DHCP6 are both false.
+                            IPv6 addresses to assign to this device. IP addresses
+                            must also specify the segment length in CIDR notation.
+                            Required when DHCP4 and DHCP6 are both false.
                           items:
                             type: string
                           type: array
@@ -4319,6 +4395,7 @@ spec:
                     description: 'UID of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids'
                     type: string
                 type: object
+                x-kubernetes-map-type: atomic
               cloneMode:
                 description: CloneMode specifies the type of clone operation. The
                   LinkedClone mode is only support for templates that have at least
@@ -4352,6 +4429,13 @@ spec:
               folder:
                 description: Folder is the name or inventory path of the folder in
                   which the virtual machine is created/located.
+                type: string
+              guestSoftPowerOffTimeout:
+                description: "GuestSoftPowerOffTimeout sets the wait timeout for shutdown
+                  in the VM guest. The VM will be powered off forcibly after the timeout
+                  if the VM is still up and running when the PowerOffMode is set to
+                  trySoft. \n This parameter only applies when the PowerOffMode is
+                  set to trySoft. \n If omitted, the timeout defaults to 5 minutes."
                 type: string
               hardwareVersion:
                 description: HardwareVersion is the hardware version of the virtual
@@ -4400,10 +4484,10 @@ spec:
                                 description: Name is the name of resource being referenced
                                 type: string
                             required:
-                            - apiGroup
                             - kind
                             - name
                             type: object
+                            x-kubernetes-map-type: atomic
                           type: array
                         deviceName:
                           description: DeviceName may be used to explicitly assign
@@ -4535,8 +4619,9 @@ spec:
                           type: string
                         ipAddrs:
                           description: IPAddrs is a list of one or more IPv4 and/or
-                            IPv6 addresses to assign to this device. Required when
-                            DHCP4 and DHCP6 are both false.
+                            IPv6 addresses to assign to this device.  IP addresses
+                            must also specify the segment length in CIDR notation.
+                            Required when DHCP4 and DHCP6 are both false.
                           items:
                             type: string
                           type: array
@@ -4662,6 +4747,22 @@ spec:
                       type: integer
                   type: object
                 type: array
+              powerOffMode:
+                default: hard
+                description: "PowerOffMode describes the desired behavior when powering
+                  off a VM. \n There are three, supported power off modes: hard, soft,
+                  and trySoft. The first mode, hard, is the equivalent of a physical
+                  system's power cord being ripped from the wall. The soft mode requires
+                  the VM's guest to have VM Tools installed and attempts to gracefully
+                  shut down the VM. Its variant, trySoft, first attempts a graceful
+                  shutdown, and if that fails or the VM is not in a powered off state
+                  after reaching the GuestSoftPowerOffTimeout, the VM is halted. \n
+                  If omitted, the mode defaults to hard."
+                enum:
+                - hard
+                - soft
+                - trySoft
+                type: string
               resourcePool:
                 description: ResourcePool is the name or inventory path of the resource
                   pool in which the virtual machine is created/located.
@@ -4863,7 +4964,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.11.4
+    controller-gen.kubebuilder.io/version: v0.12.1
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
@@ -4886,11 +4987,12 @@ spec:
     singular: vspherefailuredomain
   scope: Cluster
   versions:
-  - name: v1alpha3
+  - deprecated: true
+    name: v1alpha3
     schema:
       openAPIV3Schema:
-        description: VSphereFailureDomain is the Schema for the vspherefailuredomains
-          API
+        description: "VSphereFailureDomain is the Schema for the vspherefailuredomains
+          API \n Deprecated: This type will be removed in one of the next releases."
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -5007,11 +5109,12 @@ spec:
         type: object
     served: true
     storage: false
-  - name: v1alpha4
+  - deprecated: true
+    name: v1alpha4
     schema:
       openAPIV3Schema:
-        description: VSphereFailureDomain is the Schema for the vspherefailuredomains
-          API
+        description: "VSphereFailureDomain is the Schema for the vspherefailuredomains
+          API \n Deprecated: This type will be removed in one of the next releases."
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -5153,8 +5256,9 @@ spec:
                 description: Region defines the name and type of a region
                 properties:
                   autoConfigure:
-                    description: AutoConfigure tags the Type which is specified in
-                      the Topology
+                    description: "AutoConfigure tags the Type which is specified in
+                      the Topology \n Deprecated: This field is going to be removed
+                      in a future release."
                     type: boolean
                   name:
                     description: Name is the name of the tag that represents this
@@ -5217,8 +5321,9 @@ spec:
                 description: Zone defines the name and type of a zone
                 properties:
                   autoConfigure:
-                    description: AutoConfigure tags the Type which is specified in
-                      the Topology
+                    description: "AutoConfigure tags the Type which is specified in
+                      the Topology \n Deprecated: This field is going to be removed
+                      in a future release."
                     type: boolean
                   name:
                     description: Name is the name of the tag that represents this
@@ -5259,7 +5364,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.11.4
+    controller-gen.kubebuilder.io/version: v0.12.1
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
@@ -5282,11 +5387,12 @@ spec:
     singular: vspheredeploymentzone
   scope: Cluster
   versions:
-  - name: v1alpha3
+  - deprecated: true
+    name: v1alpha3
     schema:
       openAPIV3Schema:
-        description: VSphereDeploymentZone is the Schema for the vspheredeploymentzones
-          API
+        description: "VSphereDeploymentZone is the Schema for the vspheredeploymentzones
+          API \n Deprecated: This type will be removed in one of the next releases."
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -5386,11 +5492,12 @@ spec:
     storage: false
     subresources:
       status: {}
-  - name: v1alpha4
+  - deprecated: true
+    name: v1alpha4
     schema:
       openAPIV3Schema:
-        description: VSphereDeploymentZone is the Schema for the vspheredeploymentzones
-          API
+        description: "VSphereDeploymentZone is the Schema for the vspheredeploymentzones
+          API \n Deprecated: This type will be removed in one of the next releases."
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -5606,7 +5713,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.11.4
+    controller-gen.kubebuilder.io/version: v0.12.1
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
@@ -5628,11 +5735,12 @@ spec:
     singular: vsphereclusteridentity
   scope: Cluster
   versions:
-  - name: v1alpha3
+  - deprecated: true
+    name: v1alpha3
     schema:
       openAPIV3Schema:
-        description: VSphereClusterIdentity defines the account to be used for reconciling
-          clusters
+        description: "VSphereClusterIdentity defines the account to be used for reconciling
+          clusters \n Deprecated: This type will be removed in one of the next releases."
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -5760,11 +5868,12 @@ spec:
     storage: false
     subresources:
       status: {}
-  - name: v1alpha4
+  - deprecated: true
+    name: v1alpha4
     schema:
       openAPIV3Schema:
-        description: VSphereClusterIdentity defines the account to be used for reconciling
-          clusters
+        description: "VSphereClusterIdentity defines the account to be used for reconciling
+          clusters \n Deprecated: This type will be removed in one of the next releases."
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -5830,6 +5939,7 @@ spec:
                           "value". The requirements are ANDed.
                         type: object
                     type: object
+                    x-kubernetes-map-type: atomic
                 type: object
               secretName:
                 description: SecretName references a Secret inside the controller
@@ -5961,6 +6071,7 @@ spec:
                           "value". The requirements are ANDed.
                         type: object
                     type: object
+                    x-kubernetes-map-type: atomic
                 type: object
               secretName:
                 description: SecretName references a Secret inside the controller
@@ -6034,7 +6145,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.11.4
+    controller-gen.kubebuilder.io/version: v0.12.1
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
@@ -6057,11 +6168,12 @@ spec:
     singular: vsphereclustertemplate
   scope: Namespaced
   versions:
-  - name: v1alpha4
+  - deprecated: true
+    name: v1alpha4
     schema:
       openAPIV3Schema:
-        description: VSphereClusterTemplate is the Schema for the vsphereclustertemplates
-          API
+        description: "VSphereClusterTemplate is the Schema for the vsphereclustertemplates
+          API \n Deprecated: This type will be removed in one of the next releases."
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -6211,8 +6323,10 @@ spec:
                       failureDomainSelector:
                         description: FailureDomainSelector is the label selector to
                           use for failure domain selection for the control plane nodes
-                          of the cluster. An empty value for the selector includes
-                          all the related failure domains.
+                          of the cluster. If not set (`nil`), selecting failure domains
+                          will be disabled. An empty value (`{}`) selects all existing
+                          failure domains. A valid selector will select all failure
+                          domains which match the selector.
                         properties:
                           matchExpressions:
                             description: matchExpressions is a list of label selector
@@ -6256,6 +6370,7 @@ spec:
                               only "value". The requirements are ANDed.
                             type: object
                         type: object
+                        x-kubernetes-map-type: atomic
                       identityRef:
                         description: IdentityRef is a reference to either a Secret
                           or VSphereClusterIdentity that contains the identity to

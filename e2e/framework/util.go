@@ -11,7 +11,7 @@ import (
 func GetControlPlaneHostAndPort(cl client.Client) (string, int32, error) {
 	var infraCluster configv1.Infrastructure
 	namespacedName := client.ObjectKey{
-		Namespace: "openshift-cluster-api",
+		Namespace: CAPINamespace,
 		Name:      "cluster",
 	}
 
