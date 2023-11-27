@@ -10,37 +10,12 @@ import (
 
 func providerCustomizations(obj *unstructured.Unstructured, providerName string) {
 	switch providerName {
-	case "operator":
-		operatorCustomizations(obj)
 	case "azure":
 		azureCustomizations(obj)
 	case "gcp":
 		gcpCustomizations(obj)
 	case powerVSProvider:
 		powerVSCustomizations(obj)
-	}
-}
-
-func operatorCustomizations(obj *unstructured.Unstructured) {
-	switch obj.GetKind() {
-	case "Deployment":
-		deployment := &appsv1.Deployment{}
-		if err := scheme.Convert(obj, deployment, nil); err != nil {
-			panic(err)
-		}
-		// Modify manager container command to match openshift Dockerfile
-		for i := range deployment.Spec.Template.Spec.Containers {
-			container := &deployment.Spec.Template.Spec.Containers[i]
-			if container.Name == "manager" {
-				container.Command = []string{"./bin/cluster-api-operator"}
-				container.Image = "registry.ci.openshift.org/openshift:cluster-kube-cluster-api-operator"
-				container.Name = "cluster-kube-cluster-api-operator"
-			}
-		}
-
-		if err := scheme.Convert(deployment, obj, nil); err != nil {
-			panic(err)
-		}
 	}
 }
 
