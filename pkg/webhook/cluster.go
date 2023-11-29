@@ -80,10 +80,10 @@ func (r *ClusterWebhook) ValidateCreate(ctx context.Context, obj runtime.Object)
 	}
 
 	switch cluster.Spec.InfrastructureRef.Kind {
-	case "AWSCluster", "AzureCluster", "GCPCluster", "IBMPowerVSCluster":
+	case "AWSCluster", "AzureCluster", "GCPCluster", "IBMPowerVSCluster", "OpenStackCluster":
 	default:
 		errs = append(errs, field.NotSupported(infrastructureRefPath.Child("kind"),
-			cluster.Spec.InfrastructureRef.Kind, []string{"AWSCluster", "AzureCluster", "GCPCluster", "IBMPowerVSCluster"}))
+			cluster.Spec.InfrastructureRef.Kind, []string{"AWSCluster", "AzureCluster", "GCPCluster", "IBMPowerVSCluster", "OpenStackCluster"}))
 	}
 
 	errs = append(errs, r.validateClusterName(ctx, cluster))
@@ -112,9 +112,9 @@ func (r *ClusterWebhook) ValidateUpdate(ctx context.Context, oldObj, newObj runt
 	}
 
 	switch newCluster.Spec.InfrastructureRef.Kind {
-	case "AWSCluster", "AzureCluster", "GCPCluster", "IBMPowerVSCluster":
+	case "AWSCluster", "AzureCluster", "GCPCluster", "IBMPowerVSCluster", "OpenStackCluster":
 	default:
-		return nil, field.NotSupported(field.NewPath("spec", "infrastructureRef", "kind"), newCluster.Spec.InfrastructureRef.Kind, []string{"AWSCluster", "AzureCluster", "GCPCluster", "IBMPowerVSCluster"})
+		return nil, field.NotSupported(field.NewPath("spec", "infrastructureRef", "kind"), newCluster.Spec.InfrastructureRef.Kind, []string{"AWSCluster", "AzureCluster", "GCPCluster", "IBMPowerVSCluster", "OpenStackCluster"})
 	}
 
 	return nil, nil

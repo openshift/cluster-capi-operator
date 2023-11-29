@@ -8,6 +8,7 @@ import (
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -21,6 +22,7 @@ var _ = Describe("Reconcile kubeconfig secret", func() {
 		var r *KubeconfigReconciler
 		var tokenSecret *corev1.Secret
 		kubeconfigSecret := &corev1.Secret{}
+		log := ctrl.LoggerFrom(ctx).WithName("KubeconfigController")
 
 		BeforeEach(func() {
 			r = &KubeconfigReconciler{
@@ -50,7 +52,7 @@ var _ = Describe("Reconcile kubeconfig secret", func() {
 		})
 
 		It("should create a kubeconfig secret when it doesn't exist", func() {
-			_, err := r.reconcileKubeconfig(ctx)
+			_, err := r.reconcileKubeconfig(ctx, log)
 			Expect(err).To(Succeed())
 
 			Expect(cl.Get(ctx, client.ObjectKey{
@@ -61,9 +63,9 @@ var _ = Describe("Reconcile kubeconfig secret", func() {
 		})
 
 		It("should reconcile existing kubeconfig secret when it doesn't exist", func() {
-			_, err := r.reconcileKubeconfig(ctx)
+			_, err := r.reconcileKubeconfig(ctx, log)
 			Expect(err).To(Succeed())
-			_, err = r.reconcileKubeconfig(ctx)
+			_, err = r.reconcileKubeconfig(ctx, log)
 			Expect(err).To(Succeed())
 
 			Expect(cl.Get(ctx, client.ObjectKey{
@@ -79,7 +81,7 @@ var _ = Describe("Reconcile kubeconfig secret", func() {
 				return cl.Get(ctx, client.ObjectKeyFromObject(tokenSecret), tokenSecret)
 			}, timeout).Should(Not(Succeed()))
 
-			res, err := r.reconcileKubeconfig(ctx)
+			res, err := r.reconcileKubeconfig(ctx, log)
 			Expect(err).To(Succeed())
 			Expect(res.RequeueAfter).To(Equal(1 * time.Minute))
 		})
@@ -90,7 +92,7 @@ var _ = Describe("Reconcile kubeconfig secret", func() {
 			r.Client = fakeClient
 			tokenSecret.SetCreationTimestamp(metav1.Time{Time: time.Now().Add(-1 * time.Hour)})
 			Expect(fakeClient.Update(ctx, tokenSecret)).To(Succeed())
-			res, err := r.reconcileKubeconfig(ctx)
+			res, err := r.reconcileKubeconfig(ctx, log)
 			Expect(err).To(Succeed())
 
 			Expect(res.RequeueAfter).To(Equal(1 * time.Minute))

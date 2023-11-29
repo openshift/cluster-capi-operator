@@ -3,8 +3,9 @@ package kubeconfig
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
+
+	"github.com/go-logr/logr"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -31,10 +32,9 @@ const (
 // ClusterReconciler reconciles a ClusterOperator object
 type KubeconfigReconciler struct {
 	operatorstatus.ClusterOperatorStatusClient
-	Scheme             *runtime.Scheme
-	RestCfg            *rest.Config
-	SupportedPlatforms map[string]bool
-	clusterName        string
+	Scheme      *runtime.Scheme
+	RestCfg     *rest.Config
+	clusterName string
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -74,18 +74,9 @@ func (r *KubeconfigReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (c
 
 	r.clusterName = infra.Status.InfrastructureName
 
-	// If the platform type is not supported, we should skip cluster reconciliation.
-	if _, ok := r.SupportedPlatforms[strings.ToLower(string(infra.Status.PlatformStatus.Type))]; !ok {
-		log.Info("Platform type is not supported. Skipping kubeconfig reconciliation...", "platformType", infra.Status.PlatformStatus.Type)
-		if err := r.SetStatusAvailable(ctx); err != nil {
-			return ctrl.Result{}, err
-		}
-		return ctrl.Result{}, nil
-	}
-
 	log.Info("Reconciling kubeconfig secret")
 
-	res, err := r.reconcileKubeconfig(ctx)
+	res, err := r.reconcileKubeconfig(ctx, log)
 	if err != nil {
 		log.Error(err, "Error reconciling kubeconfig")
 		if err := r.SetStatusDegraded(ctx, err); err != nil {
@@ -97,9 +88,7 @@ func (r *KubeconfigReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (c
 	return res, r.SetStatusAvailable(ctx)
 }
 
-func (r *KubeconfigReconciler) reconcileKubeconfig(ctx context.Context) (ctrl.Result, error) {
-	log := ctrl.LoggerFrom(ctx)
-
+func (r *KubeconfigReconciler) reconcileKubeconfig(ctx context.Context, log logr.Logger) (ctrl.Result, error) {
 	// Get the token secret
 	tokenSecret := &corev1.Secret{}
 	tokenSecretKey := client.ObjectKey{
