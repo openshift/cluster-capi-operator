@@ -65,7 +65,7 @@ type Comments struct {
 }
 
 // Comment returns the receiver. This isn't useful by itself, but
-// a Comments struct is embedded into all the expression
+// a [Comments] struct is embedded into all the expression
 // implementation types, and this gives each of those a Comment
 // method to satisfy the Expr interface.
 func (c *Comments) Comment() *Comments {
@@ -194,12 +194,15 @@ func (x *FileSyntax) updateLine(line *Line, tokens ...string) {
 	line.Token = tokens
 }
 
-func (x *FileSyntax) removeLine(line *Line) {
+// markRemoved modifies line so that it (and its end-of-line comment, if any)
+// will be dropped by (*FileSyntax).Cleanup.
+func (line *Line) markRemoved() {
 	line.Token = nil
+	line.Comments.Suffix = nil
 }
 
 // Cleanup cleans up the file syntax x after any edit operations.
-// To avoid quadratic behavior, removeLine marks the line as dead
+// To avoid quadratic behavior, (*Line).markRemoved marks the line as dead
 // by setting line.Token = nil but does not remove it from the slice
 // in which it appears. After edits have all been indicated,
 // calling Cleanup cleans out the dead lines.
@@ -282,7 +285,6 @@ func (x *Line) Span() (start, end Position) {
 //		"x"
 //		"y"
 //	)
-//
 type LineBlock struct {
 	Comments
 	Start  Position
@@ -492,7 +494,7 @@ func (in *input) endToken(kind tokenKind) {
 	in.token.endPos = in.pos
 }
 
-// peek returns the kind of the the next token returned by lex.
+// peek returns the kind of the next token returned by lex.
 func (in *input) peek() tokenKind {
 	return in.token.kind
 }
