@@ -24,5 +24,7 @@ import (
 	_ "github.com/golangci/golangci-lint/cmd/golangci-lint"
 	_ "github.com/jstemmer/go-junit-report"
 	_ "github.com/onsi/ginkgo/v2"
+	_ "github.com/onsi/ginkgo/v2/ginkgo"
 	_ "sigs.k8s.io/kustomize/kustomize/v3"
+	_ "sigs.k8s.io/controller-runtime/tools/setup-envtest"
 )
