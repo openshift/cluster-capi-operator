@@ -271,7 +271,7 @@ golang.org/x/text/unicode/norm
 # golang.org/x/time v0.5.0
 ## explicit; go 1.18
 golang.org/x/time/rate
-# golang.org/x/tools v0.16.1
+# golang.org/x/tools v0.17.0
 ## explicit; go 1.18
 golang.org/x/tools/go/ast/inspector
 # gomodules.xyz/jsonpatch/v2 v2.4.0
@@ -640,6 +640,9 @@ sigs.k8s.io/cluster-api-provider-gcp/api/v1beta1
 # sigs.k8s.io/cluster-api-provider-ibmcloud v0.7.0
 ## explicit; go 1.20
 sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2
+# sigs.k8s.io/cluster-api-provider-vsphere v1.9.2
+## explicit; go 1.20
+sigs.k8s.io/cluster-api-provider-vsphere/apis/v1beta1
 # sigs.k8s.io/controller-runtime v0.16.5
 ## explicit; go 1.20
 sigs.k8s.io/controller-runtime

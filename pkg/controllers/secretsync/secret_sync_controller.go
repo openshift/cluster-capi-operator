@@ -2,7 +2,6 @@ package secretsync
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 	"reflect"
 
@@ -105,13 +104,11 @@ func (r *UserDataSecretController) syncSecretData(ctx context.Context, source *c
 		return fmt.Errorf("source secret does not have user data")
 	}
 
-	formatEncoded := base64.StdEncoding.EncodeToString([]byte("ignition"))
-
 	target.SetName(managedUserDataSecretName)
 	target.SetNamespace(r.ManagedNamespace)
 	target.Data = map[string][]byte{
 		"value":  userData,
-		"format": []byte(formatEncoded),
+		"format": []byte("ignition"),
 	}
 	target.StringData = source.StringData
 	target.Immutable = source.Immutable
