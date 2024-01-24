@@ -36,7 +36,7 @@ func (r *CoreClusterReconciler) Reconcile(ctx context.Context, req reconcile.Req
 	}
 
 	if !cluster.DeletionTimestamp.IsZero() {
-		return ctrl.Result{}, r.SetStatusAvailable(ctx)
+		return ctrl.Result{}, r.SetStatusAvailable(ctx, "")
 	}
 
 	log.Info("Reconciling core cluster")
@@ -57,5 +57,5 @@ func (r *CoreClusterReconciler) Reconcile(ctx context.Context, req reconcile.Req
 		}
 	}
 
-	return ctrl.Result{}, r.SetStatusAvailable(ctx)
+	return ctrl.Result{}, r.SetStatusAvailable(ctx, "")
 }

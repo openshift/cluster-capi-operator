@@ -35,7 +35,7 @@ type ClusterOperatorStatusClient struct {
 
 // setStatusAvailable sets the Available condition to True, with the given reason
 // and message, and sets both the Progressing and Degraded conditions to False.
-func (r *ClusterOperatorStatusClient) SetStatusAvailable(ctx context.Context) error {
+func (r *ClusterOperatorStatusClient) SetStatusAvailable(ctx context.Context, availableConditionMsg string) error {
 	log := ctrl.LoggerFrom(ctx)
 
 	co, err := r.GetOrCreateClusterOperator(ctx)
@@ -44,9 +44,13 @@ func (r *ClusterOperatorStatusClient) SetStatusAvailable(ctx context.Context) er
 		return err
 	}
 
+	if availableConditionMsg == "" {
+		availableConditionMsg = fmt.Sprintf("Cluster CAPI Operator is available at %s", r.ReleaseVersion)
+	}
+
 	conds := []configv1.ClusterOperatorStatusCondition{
 		NewClusterOperatorStatusCondition(configv1.OperatorAvailable, configv1.ConditionTrue, ReasonAsExpected,
-			fmt.Sprintf("Cluster CAPI Operator is available at %s", r.ReleaseVersion)),
+			availableConditionMsg),
 		NewClusterOperatorStatusCondition(configv1.OperatorProgressing, configv1.ConditionFalse, ReasonAsExpected, ""),
 		NewClusterOperatorStatusCondition(configv1.OperatorDegraded, configv1.ConditionFalse, ReasonAsExpected, ""),
 		NewClusterOperatorStatusCondition(configv1.OperatorUpgradeable, configv1.ConditionTrue, ReasonAsExpected, ""),

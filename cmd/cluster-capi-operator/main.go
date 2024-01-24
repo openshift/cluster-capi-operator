@@ -36,6 +36,7 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/cluster"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/kubeconfig"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/secretsync"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/unsupported"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 	"github.com/openshift/cluster-capi-operator/pkg/webhook"
@@ -166,8 +167,27 @@ func main() {
 		os.Exit(1)
 	}
 
-	setupReconcilers(mgr, platform, containerImages, applyClient, apiextensionsClient)
-	setupWebhooks(mgr, platform)
+	// Only setup reconcile controllers and webhooks when the platform is supported.
+	// This avoids unnecessary CAPI providers discovery, installs and reconciles when the platform is not supported.
+	switch platform {
+	case configv1.AWSPlatformType,
+		configv1.GCPPlatformType,
+		configv1.PowerVSPlatformType,
+		configv1.OpenStackPlatformType:
+		setupReconcilers(mgr, platform, containerImages, applyClient, apiextensionsClient)
+		setupWebhooks(mgr, platform)
+	default:
+		klog.Infof("detected platform %q is not supported, skipping capi controllers setup", platform)
+
+		// UnsupportedController runs on unsupported platforms, it watches and keeps the cluster-api ClusterObject up to date.
+		if err := (&unsupported.UnsupportedController{
+			ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-unsupported-controller"),
+			Scheme:                      mgr.GetScheme(),
+		}).SetupWithManager(mgr); err != nil {
+			klog.Error(err, "unable to create unsupported controller", "controller", "Unsupported")
+			os.Exit(1)
+		}
+	}
 
 	// +kubebuilder:scaffold:builder
 
@@ -274,7 +294,7 @@ func setupInfraClusterReconciler(mgr manager.Manager, platform configv1.Platform
 			os.Exit(1)
 		}
 	default:
-		klog.Info("Platform not supported, skipping infra cluster controller setup")
+		klog.Infof("detected platform %q is not supported, skipping InfraCluster controller setup", platform)
 	}
 }
 
