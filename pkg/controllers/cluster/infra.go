@@ -36,7 +36,7 @@ func (r *GenericInfraClusterReconciler) Reconcile(ctx context.Context, req recon
 	}
 
 	if !infraClusterCopy.GetDeletionTimestamp().IsZero() {
-		return ctrl.Result{}, r.SetStatusAvailable(ctx)
+		return ctrl.Result{}, r.SetStatusAvailable(ctx, "")
 	}
 
 	log.Info("Reconciling infrastructure cluster")
@@ -87,7 +87,7 @@ func (r *GenericInfraClusterReconciler) Reconcile(ctx context.Context, req recon
 		}
 	}
 
-	return ctrl.Result{}, r.SetStatusAvailable(ctx)
+	return ctrl.Result{}, r.SetStatusAvailable(ctx, "")
 }
 
 func setManagedByAnnotation(annotations map[string]string) map[string]string {
