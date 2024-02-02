@@ -66,7 +66,7 @@ func (r *KubeconfigReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (c
 
 	if infra.Status.PlatformStatus == nil {
 		log.Info("No platform status exists in infrastructure object. Skipping kubeconfig reconciliation...")
-		if err := r.SetStatusAvailable(ctx); err != nil {
+		if err := r.SetStatusAvailable(ctx, ""); err != nil {
 			return ctrl.Result{}, err
 		}
 		return ctrl.Result{}, nil
@@ -85,7 +85,7 @@ func (r *KubeconfigReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (c
 		return ctrl.Result{}, err
 	}
 
-	return res, r.SetStatusAvailable(ctx)
+	return res, r.SetStatusAvailable(ctx, "")
 }
 
 func (r *KubeconfigReconciler) reconcileKubeconfig(ctx context.Context, log logr.Logger) (ctrl.Result, error) {
