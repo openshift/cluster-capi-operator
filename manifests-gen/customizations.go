@@ -8,6 +8,7 @@ import (
 	admissionregistration "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -73,7 +74,11 @@ func processObjects(objs []unstructured.Unstructured, providerName string) map[r
 			replaceCertManagerAnnotations(&obj)
 			removeConversionWebhook(&obj)
 			setOpenShiftAnnotations(obj, true)
-			setNoUpgradeAnnotations(obj)
+			// Apply NoUpgrade annotations unless IPAM CRDs,
+			// as those are in General Availability.
+			if !isCRDGroup(&obj, "ipam.cluster.x-k8s.io") {
+				setNoUpgradeAnnotations(obj)
+			}
 			// Store Core CAPI CRDs in their own manifest to get them applied by CVO directly.
 			// We want these to be installed independently from whether the cluster-capi-operator is enabled,
 			// as other Openshift components rely on them.
@@ -276,6 +281,25 @@ func removeConversionWebhook(obj *unstructured.Unstructured) {
 	crd.Spec.Conversion = nil
 	if err := scheme.Convert(crd, obj, nil); err != nil {
 		panic(err)
+	}
+}
+
+// isCRDGroup checks whether the object provided is a CRD for the specified API group.
+func isCRDGroup(obj *unstructured.Unstructured, group string) bool {
+	switch obj.GetKind() {
+	case "CustomResourceDefinition":
+		crd := &apiextensions.CustomResourceDefinition{}
+		if err := scheme.Convert(obj, crd, nil); err != nil {
+			panic(err)
+		}
+
+		if crd.Spec.Group == group {
+			return true
+		}
+
+		return false
+	default:
+		return false
 	}
 }
 
