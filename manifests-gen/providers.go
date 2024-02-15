@@ -20,6 +20,7 @@ import (
 const (
 	powerVSProvider         = "powervs"
 	ibmCloudProvider        = "ibmcloud"
+	coreCAPIProvider        = "cluster-api"
 	metadataFilePath        = "./metadata.yaml"
 	kustomizeComponentsPath = "./config/default"
 )
@@ -84,6 +85,23 @@ func (p *provider) providerTypeName() string {
 	return strings.ReplaceAll(strings.ToLower(string(p.Type)), "provider", "")
 }
 
+// writeProviderComponentsToManifest allows to write provider components directly to a manifest.
+// This differs from writeProviderComponentsConfigmap as it won't store the components in a ConfigMap
+// but directly on the YAML manifests as YAML representation of an unstructured objects.
+func (p *provider) writeProviderComponentsToManifest(fileName string, objs []unstructured.Unstructured) error {
+	if len(objs) == 0 {
+		return nil
+	}
+
+	combined, err := utilyaml.FromUnstructured(objs)
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(path.Join(*manifestsPath, fileName), ensureNewLine(combined), 0600)
+}
+
+// writeProviderComponentsConfigmap allows to write provider components to the provider (transport) ConfigMap.
 func (p *provider) writeProviderComponentsConfigmap(fileName string, objs []unstructured.Unstructured) error {
 	combined, err := utilyaml.FromUnstructured(objs)
 	if err != nil {
@@ -159,6 +177,17 @@ func importProvider(p provider) error {
 	cmFileName := fmt.Sprintf("%s04_cm.%s-%s.yaml", manifestPrefix, strings.ToLower(p.providerTypeName()), p.Name)
 	if err := p.writeProviderComponentsConfigmap(cmFileName, resourceMap[otherKey]); err != nil {
 		return fmt.Errorf("error writing provider ConfigMap: %w", err)
+	}
+
+	// Optionally write a separate CRD manifest file,
+	// to apply CRDs directly via CVO rather than through the cluster-capi-operator,
+	// useful in cases where the platform is not supported but some CRDs are needed
+	// by other OCP operators other than the cluster-capi-operator.
+	if len(resourceMap[crdKey]) > 0 {
+		cmFileName := fmt.Sprintf("%s04_crd.%s-%s.yaml", manifestPrefix, strings.ToLower(p.providerTypeName()), p.Name)
+		if err := p.writeProviderComponentsToManifest(cmFileName, resourceMap[crdKey]); err != nil {
+			return fmt.Errorf("error writing provider CRDs: %w", err)
+		}
 	}
 
 	return nil
