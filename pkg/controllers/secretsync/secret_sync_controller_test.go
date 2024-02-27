@@ -74,7 +74,7 @@ var _ = Describe("User Data Secret controller", func() {
 
 	BeforeEach(func() {
 		By("Setting up a new manager")
-		mgr, err := manager.New(cfg, manager.Options{MetricsBindAddress: "0"})
+		mgr, err := manager.New(cfg, manager.Options{})
 		Expect(err).NotTo(HaveOccurred())
 
 		reconciler = &UserDataSecretController{

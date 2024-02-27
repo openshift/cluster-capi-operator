@@ -16,19 +16,20 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/component-base/config"
 	"k8s.io/component-base/config/options"
-	"k8s.io/klog/v2"
-	"k8s.io/klog/v2/klogr"
-	operatorv1 "sigs.k8s.io/cluster-api-operator/api/v1alpha2"
+	klog "k8s.io/klog/v2"
+	"k8s.io/klog/v2/textlogger"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta1"
 	azurev1 "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
 	gcpv1 "sigs.k8s.io/cluster-api-provider-gcp/api/v1beta1"
 	ibmpowervsv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	clusterctlv1 "sigs.k8s.io/cluster-api/cmd/clusterctl/api/v1alpha3"
+	capiflags "sigs.k8s.io/cluster-api/util/flags"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	crwebhook "sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
@@ -52,11 +53,8 @@ var (
 		ResourceName:      "cluster-capi-operator-leader",
 		ResourceNamespace: "openshift-cluster-api",
 	}
-	metricsAddr = flag.String(
-		"metrics-bind-address",
-		":8080",
-		"Address for hosting metrics",
-	)
+	diagnosticsOptions = capiflags.DiagnosticsOptions{}
+
 	healthAddr = flag.String(
 		"health-addr",
 		":9440",
@@ -82,6 +80,12 @@ var (
 		"/tmp/k8s-webhook-server/serving-certs/",
 		"Webhook cert dir, only used when webhook-port is specified.",
 	)
+
+	logToStderr = flag.Bool(
+		"logtostderr",
+		true,
+		"log to standard error instead of files",
+	)
 )
 
 const (
@@ -95,7 +99,6 @@ func init() {
 	utilruntime.Must(configv1.AddToScheme(scheme))
 	utilruntime.Must(apiextensionsv1.AddToScheme(scheme))
 	utilruntime.Must(admissionregistrationv1.AddToScheme(scheme))
-	utilruntime.Must(operatorv1.AddToScheme(scheme))
 	utilruntime.Must(awsv1.AddToScheme(scheme))
 	utilruntime.Must(azurev1.AddToScheme(scheme))
 	utilruntime.Must(gcpv1.AddToScheme(scheme))
@@ -106,28 +109,35 @@ func init() {
 }
 
 func main() {
-	klog.InitFlags(nil)
-
-	ctrl.SetLogger(klogr.New())
+	textLoggerConfig := textlogger.NewConfig()
+	textLoggerConfig.AddFlags(flag.CommandLine)
+	ctrl.SetLogger(textlogger.NewLogger(textLoggerConfig))
 
 	// Once all the flags are regitered, switch to pflag
 	// to allow leader lection flags to be bound
 	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
 	options.BindLeaderElectionFlags(&leaderElectionConfig, pflag.CommandLine)
+	capiflags.AddDiagnosticsOptions(pflag.CommandLine, &diagnosticsOptions)
 	pflag.Parse()
 
+	if logToStderr != nil {
+		klog.LogToStderr(*logToStderr)
+	}
+	diagnosticsOpts := capiflags.GetDiagnosticsOptions(diagnosticsOptions)
 	syncPeriod := 10 * time.Minute
 
 	cacheOpts := cache.Options{
-		Namespaces: []string{*managedNamespace, secretsync.SecretSourceNamespace},
+		DefaultNamespaces: map[string]cache.Config{
+			*managedNamespace:                {},
+			secretsync.SecretSourceNamespace: {},
+		},
+		SyncPeriod: &syncPeriod,
 	}
 
 	cfg := ctrl.GetConfigOrDie()
 	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
-		Namespace:               *managedNamespace,
 		Scheme:                  scheme,
-		SyncPeriod:              &syncPeriod,
-		MetricsBindAddress:      *metricsAddr,
+		Metrics:                 diagnosticsOpts,
 		HealthProbeBindAddress:  *healthAddr,
 		LeaderElectionNamespace: leaderElectionConfig.ResourceNamespace,
 		LeaderElection:          leaderElectionConfig.LeaderElect,
@@ -136,8 +146,10 @@ func main() {
 		RetryPeriod:             &leaderElectionConfig.RetryPeriod.Duration,
 		RenewDeadline:           &leaderElectionConfig.RenewDeadline.Duration,
 		Cache:                   cacheOpts,
-		Port:                    *webhookPort,
-		CertDir:                 *webhookCertDir,
+		WebhookServer: crwebhook.NewServer(crwebhook.Options{
+			Port:    *webhookPort,
+			CertDir: *webhookCertDir,
+		}),
 	})
 	if err != nil {
 		klog.Error(err, "unable to start manager")
@@ -175,7 +187,7 @@ func main() {
 		configv1.PowerVSPlatformType,
 		configv1.OpenStackPlatformType:
 		setupReconcilers(mgr, platform, containerImages, applyClient, apiextensionsClient)
-		setupWebhooks(mgr, platform)
+		setupWebhooks(mgr)
 	default:
 		klog.Infof("detected platform %q is not supported, skipping capi controllers setup", platform)
 
@@ -298,24 +310,9 @@ func setupInfraClusterReconciler(mgr manager.Manager, platform configv1.Platform
 	}
 }
 
-func setupWebhooks(mgr ctrl.Manager, platform configv1.PlatformType) {
-	if err := (&webhook.CoreProviderWebhook{}).SetupWebhookWithManager(mgr); err != nil {
-		klog.Error(err, "unable to create webhook", "webhook", "CoreProvider")
-		os.Exit(1)
-	}
-
-	if err := (&webhook.InfrastructureProviderWebhook{Platform: platform}).SetupWebhookWithManager(mgr); err != nil {
-		klog.Error(err, "unable to create webhook", "webhook", "InfrastructureProvider")
-		os.Exit(1)
-	}
-
+func setupWebhooks(mgr ctrl.Manager) {
 	if err := (&webhook.ClusterWebhook{}).SetupWebhookWithManager(mgr); err != nil {
 		klog.Error(err, "unable to create webhook", "webhook", "Cluster")
-		os.Exit(1)
-	}
-
-	if err := (&webhook.ProviderWebhook{}).SetupWebhookWithManager(mgr); err != nil {
-		klog.Error(err, "unable to create webhook", "webhook", "Provider")
 		os.Exit(1)
 	}
 }
