@@ -1,7 +1,10 @@
 package golinters
 
 import (
+	"slices"
+
 	"golang.org/x/tools/go/analysis"
+	"golang.org/x/tools/go/analysis/passes/appends"
 	"golang.org/x/tools/go/analysis/passes/asmdecl"
 	"golang.org/x/tools/go/analysis/passes/assign"
 	"golang.org/x/tools/go/analysis/passes/atomic"
@@ -53,6 +56,7 @@ import (
 
 var (
 	allAnalyzers = []*analysis.Analyzer{
+		appends.Analyzer,
 		asmdecl.Analyzer,
 		assign.Analyzer,
 		atomic.Analyzer,
@@ -95,8 +99,9 @@ var (
 		unusedwrite.Analyzer,
 	}
 
-	// https://github.com/golang/go/blob/c19c4c566c63818dfd059b352e52c4710eecf14d/src/cmd/vet/main.go#L47-L78
+	// https://github.com/golang/go/blob/b56645a87b28840a180d64077877cb46570b4176/src/cmd/vet/main.go#L49-L81
 	defaultAnalyzers = []*analysis.Analyzer{
+		appends.Analyzer,
 		asmdecl.Analyzer,
 		assign.Analyzer,
 		atomic.Analyzer,
@@ -105,6 +110,7 @@ var (
 		cgocall.Analyzer,
 		composite.Analyzer,
 		copylock.Analyzer,
+		defers.Analyzer,
 		directive.Analyzer,
 		errorsas.Analyzer,
 		framepointer.Analyzer,
@@ -166,36 +172,25 @@ func analyzersFromConfig(settings *config.GovetSettings) []*analysis.Analyzer {
 }
 
 func isAnalyzerEnabled(name string, cfg *config.GovetSettings, defaultAnalyzers []*analysis.Analyzer) bool {
-	if cfg.EnableAll {
-		for _, n := range cfg.Disable {
-			if n == name {
-				return false
-			}
-		}
-		return true
-	}
-
-	// Raw for loops should be OK on small slice lengths.
-	for _, n := range cfg.Enable {
-		if n == name {
-			return true
-		}
-	}
-
-	for _, n := range cfg.Disable {
-		if n == name {
-			return false
-		}
-	}
-
-	if cfg.DisableAll {
+	// TODO(ldez) remove loopclosure when go1.23
+	if name == loopclosure.Analyzer.Name && config.IsGreaterThanOrEqualGo122(cfg.Go) {
 		return false
 	}
 
-	for _, a := range defaultAnalyzers {
-		if a.Name == name {
-			return true
-		}
+	switch {
+	case cfg.EnableAll:
+		return !slices.Contains(cfg.Disable, name)
+
+	case slices.Contains(cfg.Enable, name):
+		return true
+
+	case slices.Contains(cfg.Disable, name):
+		return false
+
+	case cfg.DisableAll:
+		return false
+
+	default:
+		return slices.ContainsFunc(defaultAnalyzers, func(a *analysis.Analyzer) bool { return a.Name == name })
 	}
-	return false
 }
