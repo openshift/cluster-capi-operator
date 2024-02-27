@@ -79,7 +79,7 @@ func (c *AzureCluster) validateCluster(old *AzureCluster) (admission.Warnings, e
 	}
 
 	return nil, apierrors.NewInvalid(
-		schema.GroupKind{Group: "infrastructure.cluster.x-k8s.io", Kind: "AzureCluster"},
+		schema.GroupKind{Group: "infrastructure.cluster.x-k8s.io", Kind: AzureClusterKind},
 		c.Name, allErrs)
 }
 
@@ -147,7 +147,7 @@ func validateIdentityRef(identityRef *corev1.ObjectReference, fldPath *field.Pat
 	if identityRef == nil {
 		return field.Required(fldPath, "identityRef is required")
 	}
-	if identityRef.Kind != "AzureClusterIdentity" {
+	if identityRef.Kind != AzureClusterIdentityKind {
 		return field.NotSupported(fldPath.Child("name"), identityRef.Name, []string{"AzureClusterIdentity"})
 	}
 	return nil
@@ -239,7 +239,7 @@ func validateSubnets(subnets Subnets, vnet VnetSpec, fldPath *field.Path) field.
 				rule,
 				fldPath.Index(i).Child("securityGroup").Child("securityRules").Index(i),
 			); err != nil {
-				allErrs = append(allErrs, err)
+				allErrs = append(allErrs, err...)
 			}
 		}
 		allErrs = append(allErrs, validateSubnetCIDR(subnet.CIDRBlocks, vnet.CIDRBlocks, fldPath.Index(i).Child("cidrBlocks"))...)
@@ -356,12 +356,16 @@ func validateInternalLBIPAddress(address string, cidrs []string, fldPath *field.
 }
 
 // validateSecurityRule validates a SecurityRule.
-func validateSecurityRule(rule SecurityRule, fldPath *field.Path) *field.Error {
+func validateSecurityRule(rule SecurityRule, fldPath *field.Path) (allErrs field.ErrorList) {
 	if rule.Priority < minRulePriority || rule.Priority > maxRulePriority {
-		return field.Invalid(fldPath, rule.Priority, fmt.Sprintf("security rule priorities should be between %d and %d", minRulePriority, maxRulePriority))
+		allErrs = append(allErrs, field.Invalid(fldPath, rule.Priority, fmt.Sprintf("security rule priorities should be between %d and %d", minRulePriority, maxRulePriority)))
 	}
 
-	return nil
+	if rule.Source != nil && rule.Sources != nil {
+		allErrs = append(allErrs, field.Invalid(fldPath, rule.Source, "security rule cannot have both source and sources"))
+	}
+
+	return allErrs
 }
 
 func validateAPIServerLB(lb LoadBalancerSpec, old LoadBalancerSpec, cidrs []string, fldPath *field.Path) field.ErrorList {

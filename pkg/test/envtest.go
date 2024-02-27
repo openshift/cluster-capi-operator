@@ -9,7 +9,6 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
-	operatorv1 "sigs.k8s.io/cluster-api-operator/api/v1alpha2"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta1"
 	azurev1 "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
 	gcpv1 "sigs.k8s.io/cluster-api-provider-gcp/api/v1beta1"
@@ -25,7 +24,6 @@ func init() {
 	utilruntime.Must(configv1.Install(scheme.Scheme))
 	utilruntime.Must(clusteroperatorv1.Install(scheme.Scheme))
 	utilruntime.Must(apiextensionsv1.AddToScheme(scheme.Scheme))
-	utilruntime.Must(operatorv1.AddToScheme(scheme.Scheme))
 	utilruntime.Must(awsv1.AddToScheme(scheme.Scheme))
 	utilruntime.Must(azurev1.AddToScheme(scheme.Scheme))
 	utilruntime.Must(gcpv1.AddToScheme(scheme.Scheme))
