@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"os"
 	"time"
 
@@ -119,6 +120,11 @@ func main() {
 	options.BindLeaderElectionFlags(&leaderElectionConfig, pflag.CommandLine)
 	capiflags.AddDiagnosticsOptions(pflag.CommandLine, &diagnosticsOptions)
 	pflag.Parse()
+
+	if err := setFeatureGatesEnvVars(); err != nil {
+		klog.Error(err, "unable to set feature gates environment variables")
+		os.Exit(1)
+	}
 
 	if logToStderr != nil {
 		klog.LogToStderr(*logToStderr)
@@ -315,4 +321,20 @@ func setupWebhooks(mgr ctrl.Manager) {
 		klog.Error(err, "unable to create webhook", "webhook", "Cluster")
 		os.Exit(1)
 	}
+}
+
+// setFeatureGatesEnvVars sets the explicit values for the listed feature gates in the environment.
+// These will then be loaded by envsubst and templated into the applied CAPI manifests.
+func setFeatureGatesEnvVars() error {
+	featureGates := map[string]string{
+		"EXP_BOOTSTRAP_FORMAT_IGNITION": "true",
+	}
+
+	for k, v := range featureGates {
+		if err := os.Setenv(k, v); err != nil {
+			return fmt.Errorf("error setting environment variable: %s: %w", k, err)
+		}
+	}
+
+	return nil
 }
