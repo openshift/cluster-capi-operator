@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path"
@@ -36,7 +37,7 @@ type provider struct {
 // loadComponents loads components from the given provider.
 func (p *provider) loadComponents() error {
 	// Create new clusterctl config client
-	configClient, err := configclient.New("")
+	configClient, err := configclient.New(context.Background(), "")
 	if err != nil {
 		return fmt.Errorf("error creating clusterctl config client: %w", err)
 	}

@@ -23,10 +23,16 @@ verify: fmt lint
 # Run tests
 test: verify unit
 
-# Build operator binaries
-build: operator
+# Build binaries
+build: operator manifests-gen
+
+.PHONY: manifests-gen
+manifests-gen:
+	# building manifests-gen
+	cd manifests-gen && go build -o ../bin/manifests-gen && cd ..
 
 operator:
+	# building cluster-capi-operator
 	go build -o bin/cluster-capi-operator cmd/cluster-capi-operator/main.go
 
 unit:
