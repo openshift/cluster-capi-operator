@@ -2,12 +2,6 @@ module github.com/openshift/cluster-capi-operator/manifests-gen
 
 go 1.18
 
-replace (
-	// pin kustomize to an older version due to https://github.com/kubernetes-sigs/kustomize/issues/5031
-	sigs.k8s.io/kustomize/api => sigs.k8s.io/kustomize/api v0.12.1
-	sigs.k8s.io/kustomize/kyaml => sigs.k8s.io/kustomize/kyaml v0.13.9
-)
-
 require (
 	github.com/jetstack/cert-manager v1.5.5
 	k8s.io/api v0.28.6
@@ -44,7 +38,6 @@ require (
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
-	github.com/google/gnostic v0.6.9 // indirect
 	github.com/google/gnostic-models v0.6.8 // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/google/go-github/v53 v53.2.0 // indirect
