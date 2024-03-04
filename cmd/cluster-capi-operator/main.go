@@ -18,7 +18,7 @@ import (
 	"k8s.io/component-base/config/options"
 	klog "k8s.io/klog/v2"
 	"k8s.io/klog/v2/textlogger"
-	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta1"
+	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	azurev1 "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
 	gcpv1 "sigs.k8s.io/cluster-api-provider-gcp/api/v1beta1"
 	ibmpowervsv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"

@@ -32,23 +32,23 @@ var (
 	// fakeClusterCRD is a fake Cluster CRD.
 	fakeClusterCRD = generateCRD(clusterGroupVersion.WithKind(fakeClusterKind))
 
-	// infrastructureGroupVersion is group version used for infrastructure objects.
-	infrastructureGroupVersion = schema.GroupVersion{Group: "infrastructure.cluster.x-k8s.io", Version: "v1beta1"}
+	// v1beta2InfrastructureGroupVersion is a v1beta2 group version used for infrastructure objects.
+	v1beta2InfrastructureGroupVersion = schema.GroupVersion{Group: "infrastructure.cluster.x-k8s.io", Version: "v1beta2"}
 
 	// fakeAWSClusterKind is the Kind for the AWSCluster.
 	fakeAWSClusterKind = "AWSCluster"
 	// fakeAWSClusterCRD is a fake AWSCluster CRD.
-	fakeAWSClusterCRD = generateCRD(infrastructureGroupVersion.WithKind(fakeAWSClusterKind))
+	fakeAWSClusterCRD = generateCRD(v1beta2InfrastructureGroupVersion.WithKind(fakeAWSClusterKind))
 
 	// fakeAzureClusterKind is the Kind for the AWSCluster.
 	fakeAzureClusterKind = "AzureCluster"
 	// fakeAWSClusterCRD is a fake AzureCluster CRD.
-	fakeAzureClusterCRD = generateCRD(infrastructureGroupVersion.WithKind(fakeAzureClusterKind))
+	fakeAzureClusterCRD = generateCRD(v1beta2InfrastructureGroupVersion.WithKind(fakeAzureClusterKind))
 
 	// fakeGCPClusterKind is the Kind for the GCPCluster.
 	fakeGCPClusterKind = "GCPCluster"
 	// fakeGCPClusterCRD is a fake GCPCluster CRD.
-	fakeGCPClusterCRD = generateCRD(infrastructureGroupVersion.WithKind(fakeGCPClusterKind))
+	fakeGCPClusterCRD = generateCRD(v1beta2InfrastructureGroupVersion.WithKind(fakeGCPClusterKind))
 )
 
 func generateCRD(gvk schema.GroupVersionKind) *apiextensionsv1.CustomResourceDefinition {
