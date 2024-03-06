@@ -8,7 +8,7 @@ import (
 	. "github.com/onsi/gomega"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
-	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta1"
+	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	gcpv1 "sigs.k8s.io/cluster-api-provider-gcp/api/v1beta1"
 	ibmpowervsv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"

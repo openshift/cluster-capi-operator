@@ -19,7 +19,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta1"
+	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	yaml "sigs.k8s.io/yaml"
@@ -166,12 +166,12 @@ func newAWSMachineTemplate(cl client.Client, mapiProviderSpec *mapiv1.AWSMachine
 		UncompressedUserData: &uncompressedUserData,
 		IAMInstanceProfile:   *mapiProviderSpec.IAMInstanceProfile.ID,
 		InstanceType:         mapiProviderSpec.InstanceType,
-		FailureDomain:        &mapiProviderSpec.Placement.AvailabilityZone,
-		CloudInit: awsv1.CloudInit{
-			InsecureSkipSecretsManager: true,
-		},
 		AMI: awsv1.AMIReference{
 			ID: mapiProviderSpec.AMI.ID,
+		},
+		Ignition: &awsv1.Ignition{
+			Version:     "3.4",
+			StorageType: awsv1.IgnitionStorageTypeOptionUnencryptedUserData,
 		},
 		Subnet: &awsv1.AWSResourceReference{
 			Filters: []awsv1.Filter{

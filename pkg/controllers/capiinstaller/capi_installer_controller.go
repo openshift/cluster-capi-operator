@@ -327,8 +327,8 @@ func (r *CapiInstallerController) SetupWithManager(mgr ctrl.Manager) error {
 // https://github.com/kubernetes-sigs/cluster-api/blob/a36712e28bf5d54e398ea84cb3e20102c0499426/docs/book/src/clusterctl/provider-contract.md?plain=1#L157-L162
 func (r *CapiInstallerController) extractProviderComponents(cm corev1.ConfigMap) ([]string, error) {
 	// Certain provider components have drone/envsubst environment variables interpolated within the manifest.
-	// Substitute them with the empty value, which in turn fallback to the default value defined in the template.
-	// TODO: provide mechanism to pass down these environment variables.
+	// Substitute them with the value defined in the environment variable (see setFeatureGatesEnvVars()).
+	// If that's not set, fallback to the default value defined in the template.
 	components, err := envsubst.EvalEnv(cm.Data["components"])
 	if err != nil {
 		return nil, fmt.Errorf("failed to substitute env vars in CAPI manifests: %w", err)
