@@ -3,6 +3,7 @@ package secretsync
 import (
 	"bytes"
 	"context"
+	"errors"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -25,6 +26,10 @@ const (
 	defaultSecretValue = "bar"
 
 	timeout = time.Second * 10
+)
+
+var (
+	errMissingFormatKey = errors.New("could not find a format key in the worker data secret")
 )
 
 func makeUserDataSecret() *corev1.Secret {
@@ -139,10 +144,11 @@ var _ = Describe("User Data Secret controller", func() {
 				return false, err
 			}
 
-			_, ok := syncedUserDataSecret.Data["format"]
+			formatValue, ok := syncedUserDataSecret.Data["format"]
 			if !ok {
-				return false, nil
+				return false, errMissingFormatKey
 			}
+			Expect(string(formatValue)).Should(Equal("ignition"))
 
 			return bytes.Equal(syncedUserDataSecret.Data[capiUserDataKey], []byte(defaultSecretValue)), nil
 		}, timeout).Should(BeTrue())
@@ -160,10 +166,11 @@ var _ = Describe("User Data Secret controller", func() {
 				return false, err
 			}
 
-			_, ok := syncedUserDataSecret.Data["format"]
+			formatValue, ok := syncedUserDataSecret.Data["format"]
 			if !ok {
-				return false, nil
+				return false, errMissingFormatKey
 			}
+			Expect(string(formatValue)).Should(Equal("ignition"))
 
 			return bytes.Equal(syncedUserDataSecret.Data[capiUserDataKey], []byte("managed one changed")), nil
 		}, timeout).Should(BeTrue())
@@ -183,10 +190,11 @@ var _ = Describe("User Data Secret controller", func() {
 				return false, err
 			}
 
-			_, ok := syncedUserDataSecret.Data["format"]
+			formatValue, ok := syncedUserDataSecret.Data["format"]
 			if !ok {
-				return false, nil
+				return false, errMissingFormatKey
 			}
+			Expect(string(formatValue)).Should(Equal("ignition"))
 
 			return bytes.Equal(syncedUserDataSecret.Data[capiUserDataKey], []byte(defaultSecretValue)), nil
 		}, timeout).Should(BeTrue())

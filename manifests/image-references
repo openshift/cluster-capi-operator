@@ -34,3 +34,7 @@ spec:
     from:
       kind: DockerImage
       name: registry.ci.openshift.org/openshift:ibmcloud-cluster-api-controllers
+  - name: vsphere-cluster-api-controllers
+    from:
+      kind: DockerImage
+      name: registry.ci.openshift.org/openshift:vsphere-cluster-api-controllers

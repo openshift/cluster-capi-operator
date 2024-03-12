@@ -1,0 +1,13 @@
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: ${INFRASTRUCTURE_KIND}
+metadata:
+  name: ${CLUSTER_NAME}
+  namespace: openshift-cluster-api
+spec:
+  controlPlaneEndpoint:
+    host: ${CONTROL_PLANE_ENDPOINT_IP}
+    port: 6443
+  identityRef:
+    kind: Secret
+    name: ${CLUSTER_NAME}
+  server: ${VSPHERE_SERVER}
