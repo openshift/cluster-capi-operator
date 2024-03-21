@@ -109,7 +109,7 @@ func (p *provider) writeProviderComponentsConfigmap(fileName string, objs []unst
 	}
 
 	annotations := openshiftAnnotations
-	annotations[techPreviewAnnotation] = techPreviewAnnotationValue
+	annotations[featureSetAnnotationKey] = featureSetAnnotationValue
 
 	cm := &corev1.ConfigMap{
 		TypeMeta: metav1.TypeMeta{

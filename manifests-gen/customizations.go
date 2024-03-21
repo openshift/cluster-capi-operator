@@ -37,8 +37,10 @@ var (
 		"target.workload.openshift.io/management": `{"effect": "PreferredDuringScheduling"}`,
 	}
 
-	techPreviewAnnotation      = "release.openshift.io/feature-set"
-	techPreviewAnnotationValue = "TechPreviewNoUpgrade"
+	// featureSetAnnotationValue is a multiple-feature-sets annotation value
+	// adhering to the: %s,%s,... notation defined in the openshift/library-go/pkg/manifest parser.
+	featureSetAnnotationValue = "CustomNoUpgrade,TechPreviewNoUpgrade"
+	featureSetAnnotationKey   = "release.openshift.io/feature-set"
 )
 
 func processObjects(objs []unstructured.Unstructured, providerName string) map[resourceKey][]unstructured.Unstructured {
@@ -53,7 +55,7 @@ func processObjects(objs []unstructured.Unstructured, providerName string) map[r
 		switch obj.GetKind() {
 		case "ClusterRole", "Role", "ClusterRoleBinding", "RoleBinding", "ServiceAccount":
 			setOpenShiftAnnotations(obj, false)
-			setTechPreviewAnnotation(obj)
+			setNoUpgradeAnnotations(obj)
 			providerConfigMapObjs = append(providerConfigMapObjs, obj)
 		case "MutatingWebhookConfiguration":
 			// Explicitly remove defaulting webhooks for the cluster-api provider.
@@ -71,7 +73,7 @@ func processObjects(objs []unstructured.Unstructured, providerName string) map[r
 			replaceCertManagerAnnotations(&obj)
 			removeConversionWebhook(&obj)
 			setOpenShiftAnnotations(obj, true)
-			setTechPreviewAnnotation(obj)
+			setNoUpgradeAnnotations(obj)
 			// Store Core CAPI CRDs in their own manifest to get them applied by CVO directly.
 			// We want these to be installed independently from whether the cluster-capi-operator is enabled,
 			// as other Openshift components rely on them.
@@ -83,13 +85,13 @@ func processObjects(objs []unstructured.Unstructured, providerName string) map[r
 		case "Service":
 			replaceCertMangerServiceSecret(&obj, serviceSecretNames)
 			setOpenShiftAnnotations(obj, true)
-			setTechPreviewAnnotation(obj)
+			setNoUpgradeAnnotations(obj)
 			providerConfigMapObjs = append(providerConfigMapObjs, obj)
 		case "Deployment":
 			customizeDeployments(&obj)
 			if providerName == "operator" {
 				setOpenShiftAnnotations(obj, false)
-				setTechPreviewAnnotation(obj)
+				setNoUpgradeAnnotations(obj)
 			}
 			providerConfigMapObjs = append(providerConfigMapObjs, obj)
 		case "Certificate", "Issuer", "Namespace", "Secret": // skip
@@ -118,13 +120,13 @@ func setOpenShiftAnnotations(obj unstructured.Unstructured, merge bool) {
 	obj.SetAnnotations(anno)
 }
 
-func setTechPreviewAnnotation(obj unstructured.Unstructured) {
+func setNoUpgradeAnnotations(obj unstructured.Unstructured) {
 	anno := obj.GetAnnotations()
 	if anno == nil {
 		anno = map[string]string{}
 	}
 
-	anno[techPreviewAnnotation] = techPreviewAnnotationValue
+	anno[featureSetAnnotationKey] = featureSetAnnotationValue
 	obj.SetAnnotations(anno)
 }
 
