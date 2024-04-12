@@ -37,6 +37,7 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/capiinstaller"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/cluster"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/infracluster"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/kubeconfig"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/secretsync"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/unsupported"
@@ -284,6 +285,17 @@ func setupReconcilers(mgr manager.Manager, platform configv1.PlatformType, conta
 		APIExtensionsClient:         apiextensionsClient,
 	}).SetupWithManager(mgr); err != nil {
 		klog.Error(err, "unable to create capi installer controller", "controller", "CAPIInstaller")
+		os.Exit(1)
+	}
+
+	if err := (&infracluster.InfraClusterController{
+		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-infracluster-controller"),
+		Scheme:                      mgr.GetScheme(),
+		Images:                      containerImages,
+		RestCfg:                     mgr.GetConfig(),
+		Platform:                    platform,
+	}).SetupWithManager(mgr); err != nil {
+		klog.Error(err, "unable to create infracluster controller", "controller", "InfraCluster")
 		os.Exit(1)
 	}
 }
