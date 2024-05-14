@@ -27,6 +27,16 @@ const (
 	DefaultAPIServerPort = 6443
 	// DefaultAPIServerPortString defines the API server port as a string for convenience.
 	DefaultAPIServerPortString = "6443"
+	// DefaultAPIServerHealthCheckPath the API server health check path.
+	DefaultAPIServerHealthCheckPath = "/readyz"
+	// DefaultAPIServerHealthCheckIntervalSec the API server health check interval in seconds.
+	DefaultAPIServerHealthCheckIntervalSec = 10
+	// DefaultAPIServerHealthCheckTimeoutSec the API server health check timeout in seconds.
+	DefaultAPIServerHealthCheckTimeoutSec = 5
+	// DefaultAPIServerHealthThresholdCount the API server health check threshold count.
+	DefaultAPIServerHealthThresholdCount = 5
+	// DefaultAPIServerUnhealthThresholdCount the API server unhealthy check threshold count.
+	DefaultAPIServerUnhealthThresholdCount = 3
 )
 
 // NetworkStatus encapsulates AWS networking resources.
@@ -36,6 +46,9 @@ type NetworkStatus struct {
 
 	// APIServerELB is the Kubernetes api server load balancer.
 	APIServerELB LoadBalancer `json:"apiServerElb,omitempty"`
+
+	// SecondaryAPIServerELB is the secondary Kubernetes api server load balancer.
+	SecondaryAPIServerELB LoadBalancer `json:"secondaryAPIServerELB,omitempty"`
 
 	// NatGatewaysIPs contains the public IPs of the NAT Gateways
 	NatGatewaysIPs []string `json:"natGatewaysIPs,omitempty"`
@@ -103,6 +116,7 @@ type TargetGroupHealthCheck struct {
 type TargetGroupAttribute string
 
 var (
+	// TargetGroupAttributeEnablePreserveClientIP defines the attribute key for enabling preserve client IP.
 	TargetGroupAttributeEnablePreserveClientIP = "preserve_client_ip.enabled"
 )
 
@@ -110,8 +124,11 @@ var (
 type LoadBalancerAttribute string
 
 var (
-	LoadBalancerAttributeEnableLoadBalancingCrossZone           = "load_balancing.cross_zone.enabled"
-	LoadBalancerAttributeIdleTimeTimeoutSeconds                 = "idle_timeout.timeout_seconds"
+	// LoadBalancerAttributeEnableLoadBalancingCrossZone defines the attribute key for enabling load balancing cross zone.
+	LoadBalancerAttributeEnableLoadBalancingCrossZone = "load_balancing.cross_zone.enabled"
+	// LoadBalancerAttributeIdleTimeTimeoutSeconds defines the attribute key for idle timeout.
+	LoadBalancerAttributeIdleTimeTimeoutSeconds = "idle_timeout.timeout_seconds"
+	// LoadBalancerAttributeIdleTimeDefaultTimeoutSecondsInSeconds defines the default idle timeout in seconds.
 	LoadBalancerAttributeIdleTimeDefaultTimeoutSecondsInSeconds = "60"
 )
 
@@ -323,6 +340,25 @@ type VPCSpec struct {
 	// +kubebuilder:default=Ordered
 	// +kubebuilder:validation:Enum=Ordered;Random
 	AvailabilityZoneSelection *AZSelectionScheme `json:"availabilityZoneSelection,omitempty"`
+
+	// EmptyRoutesDefaultVPCSecurityGroup specifies whether the default VPC security group ingress
+	// and egress rules should be removed.
+	//
+	// By default, when creating a VPC, AWS creates a security group called `default` with ingress and egress
+	// rules that allow traffic from anywhere. The group could be used as a potential surface attack and
+	// it's generally suggested that the group rules are removed or modified appropriately.
+	//
+	// NOTE: This only applies when the VPC is managed by the Cluster API AWS controller.
+	//
+	// +optional
+	EmptyRoutesDefaultVPCSecurityGroup bool `json:"emptyRoutesDefaultVPCSecurityGroup,omitempty"`
+
+	// PrivateDNSHostnameTypeOnLaunch is the type of hostname to assign to instances in the subnet at launch.
+	// For IPv4-only and dual-stack (IPv4 and IPv6) subnets, an instance DNS name can be based on the instance IPv4 address (ip-name)
+	// or the instance ID (resource-name). For IPv6 only subnets, an instance DNS name must be based on the instance ID (resource-name).
+	// +optional
+	// +kubebuilder:validation:Enum:=ip-name;resource-name
+	PrivateDNSHostnameTypeOnLaunch *string `json:"privateDnsHostnameTypeOnLaunch,omitempty"`
 }
 
 // String returns a string representation of the VPC.
@@ -435,10 +471,13 @@ func (s Subnets) IDs() []string {
 }
 
 // FindByID returns a single subnet matching the given id or nil.
+//
+// The returned pointer can be used to write back into the original slice.
 func (s Subnets) FindByID(id string) *SubnetSpec {
-	for _, x := range s {
+	for i := range s {
+		x := &(s[i]) // pointer to original structure
 		if x.GetResourceID() == id {
-			return &x
+			return x
 		}
 	}
 	return nil
@@ -447,12 +486,15 @@ func (s Subnets) FindByID(id string) *SubnetSpec {
 // FindEqual returns a subnet spec that is equal to the one passed in.
 // Two subnets are defined equal to each other if their id is equal
 // or if they are in the same vpc and the cidr block is the same.
+//
+// The returned pointer can be used to write back into the original slice.
 func (s Subnets) FindEqual(spec *SubnetSpec) *SubnetSpec {
-	for _, x := range s {
+	for i := range s {
+		x := &(s[i]) // pointer to original structure
 		if (spec.GetResourceID() != "" && x.GetResourceID() == spec.GetResourceID()) ||
 			(spec.CidrBlock == x.CidrBlock) ||
 			(spec.IPv6CidrBlock != "" && spec.IPv6CidrBlock == x.IPv6CidrBlock) {
-			return &x
+			return x
 		}
 	}
 	return nil
