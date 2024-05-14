@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"fmt"
+
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -89,6 +90,11 @@ func createIBMPowerVSCluster(cl client.Client, mapiProviderSpec *mapiv1.PowerVSM
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      clusterName,
 			Namespace: framework.CAPINamespace,
+			// The ManagedBy Annotation is set so CAPI infra providers ignore the InfraCluster object,
+			// as that's managed externally, in this case by the cluster-capi-operator's infracluster controller.
+			Annotations: map[string]string{
+				clusterv1.ManagedByAnnotation: managedByAnnotationValueClusterCAPIOperatorInfraClusterController,
+			},
 		},
 		Spec: ibmpowervsv1.IBMPowerVSClusterSpec{
 			ServiceInstanceID: *mapiProviderSpec.ServiceInstance.ID,

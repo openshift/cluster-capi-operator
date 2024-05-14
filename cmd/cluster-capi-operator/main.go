@@ -23,12 +23,14 @@ import (
 	azurev1 "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
 	gcpv1 "sigs.k8s.io/cluster-api-provider-gcp/api/v1beta1"
 	ibmpowervsv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
+	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha7"
 	vspherev1 "sigs.k8s.io/cluster-api-provider-vsphere/apis/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	clusterctlv1 "sigs.k8s.io/cluster-api/cmd/clusterctl/api/v1alpha3"
 	capiflags "sigs.k8s.io/cluster-api/util/flags"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	crwebhook "sigs.k8s.io/controller-runtime/pkg/webhook"
@@ -182,7 +184,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	platform, err := util.GetPlatform(context.Background(), mgr.GetAPIReader())
+	infra, err := util.GetInfra(context.Background(), mgr.GetAPIReader())
+	if err != nil {
+		klog.Error(err, "unable to get infrastructure object")
+		os.Exit(1)
+	}
+
+	platform, err := util.GetPlatform(context.Background(), infra)
 	if err != nil {
 		klog.Error(err, "unable to get platform from infrastructure object")
 		os.Exit(1)
@@ -191,12 +199,20 @@ func main() {
 	// Only setup reconcile controllers and webhooks when the platform is supported.
 	// This avoids unnecessary CAPI providers discovery, installs and reconciles when the platform is not supported.
 	switch platform {
-	case configv1.AWSPlatformType,
-		configv1.GCPPlatformType,
-		configv1.PowerVSPlatformType,
-		configv1.VSpherePlatformType,
-		configv1.OpenStackPlatformType:
-		setupReconcilers(mgr, platform, containerImages, applyClient, apiextensionsClient)
+	case configv1.AWSPlatformType:
+		setupReconcilers(mgr, infra, platform, &awsv1.AWSCluster{}, containerImages, applyClient, apiextensionsClient)
+		setupWebhooks(mgr)
+	case configv1.GCPPlatformType:
+		setupReconcilers(mgr, infra, platform, &gcpv1.GCPCluster{}, containerImages, applyClient, apiextensionsClient)
+		setupWebhooks(mgr)
+	case configv1.PowerVSPlatformType:
+		setupReconcilers(mgr, infra, platform, &ibmpowervsv1.IBMPowerVSCluster{}, containerImages, applyClient, apiextensionsClient)
+		setupWebhooks(mgr)
+	case configv1.VSpherePlatformType:
+		setupReconcilers(mgr, infra, platform, &vspherev1.VSphereCluster{}, containerImages, applyClient, apiextensionsClient)
+		setupWebhooks(mgr)
+	case configv1.OpenStackPlatformType:
+		setupReconcilers(mgr, infra, platform, &openstackv1.OpenStackCluster{}, containerImages, applyClient, apiextensionsClient)
 		setupWebhooks(mgr)
 	default:
 		klog.Infof("detected platform %q is not supported, skipping capi controllers setup", platform)
@@ -247,7 +263,7 @@ func getClusterOperatorStatusClient(mgr manager.Manager, controller string) oper
 	}
 }
 
-func setupReconcilers(mgr manager.Manager, platform configv1.PlatformType, containerImages map[string]string, applyClient *kubernetes.Clientset, apiextensionsClient *apiextensionsclient.Clientset) {
+func setupReconcilers(mgr manager.Manager, infra *configv1.Infrastructure, platform configv1.PlatformType, infraClusterObject client.Object, containerImages map[string]string, applyClient *kubernetes.Clientset, apiextensionsClient *apiextensionsclient.Clientset) {
 	if err := (&cluster.CoreClusterReconciler{
 		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-cluster-resource-controller"),
 		Cluster:                     &clusterv1.Cluster{},
@@ -294,7 +310,8 @@ func setupReconcilers(mgr manager.Manager, platform configv1.PlatformType, conta
 		Images:                      containerImages,
 		RestCfg:                     mgr.GetConfig(),
 		Platform:                    platform,
-	}).SetupWithManager(mgr); err != nil {
+		Infra:                       infra,
+	}).SetupWithManager(mgr, infraClusterObject); err != nil {
 		klog.Error(err, "unable to create infracluster controller", "controller", "InfraCluster")
 		os.Exit(1)
 	}
