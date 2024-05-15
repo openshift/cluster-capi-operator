@@ -17,3 +17,12 @@ func GetAnnotationValueFromSourceObject(src any) (string, error) {
 
 	return string(b), nil
 }
+
+func GetRestoreObjectFromAnnotationValue(val string) (unstructured.Unstructured, error) {
+	var r unstructured.Unstructured
+	if err := json.Unmarshal([]byte(val), &r.Object); err != nil {
+		return unstructured.Unstructured{}, fmt.Errorf("failed to json unmarshal object: %w", err)
+	}
+
+	return r, nil
+}
