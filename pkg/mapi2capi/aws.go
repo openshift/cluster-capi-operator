@@ -5,7 +5,6 @@ import (
 
 	mapiv1 "github.com/openshift/api/machine/v1beta1"
 	capav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
-
 	capiv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -72,14 +71,13 @@ func (m AWSMachine) ToMachineAndMachineTemplate() (*capiv1.Machine, *capav1.AWSM
 	warnings = append(warnings, warn...)
 
 	if len(errs) > 0 {
-		fmt.Println("errorz")
 		return nil, nil, warnings, utilerrors.NewAggregate(errs)
 	}
 
 	return capiMachine, capaMachineTemplate, warnings, nil
 }
 
-// (MAPIAWSMachine).ToMachineSetMachineTemplate() TODO.
+// (AWSMachineSet).ToMachineSetAndMachineTemplate() TODO.
 func (m AWSMachineSet) ToMachineSetAndMachineTemplate() (*capiv1.MachineSet, *capav1.AWSMachineTemplate, []string, error) {
 	var errs []error
 	var warnings []string
@@ -108,7 +106,6 @@ func (m AWSMachineSet) ToMachineSetAndMachineTemplate() (*capiv1.MachineSet, *ca
 	warnings = append(warnings, warn...)
 
 	if len(errs) > 0 {
-		fmt.Println("errorz")
 		return nil, nil, warnings, utilerrors.NewAggregate(errs)
 	}
 
@@ -118,7 +115,7 @@ func (m AWSMachineSet) ToMachineSetAndMachineTemplate() (*capiv1.MachineSet, *ca
 // (AWSProviderSpec).ToMachineTemplateSpec() implements the ProviderSpec conversion interface for the AWS provider.
 // It converts AWSProviderSpec to AWSMachineTemplateSpec.
 func (p AWSProviderSpec) ToMachineTemplateSpec() (*capav1.AWSMachineTemplateSpec, []string, error) {
-	var errs []error
+	var errors []error
 	var warnings []string
 
 	// TODO: what to do with providerID? in MAPI that's not in AWSMachineProviderConfig but outside of it.
@@ -159,8 +156,8 @@ func (p AWSProviderSpec) ToMachineTemplateSpec() (*capav1.AWSMachineTemplateSpec
 		},
 	}
 
-	if len(errs) > 0 {
-		return nil, warnings, utilerrors.NewAggregate(errs)
+	if len(errors) > 0 {
+		return nil, warnings, utilerrors.NewAggregate(errors)
 	}
 
 	return &spec, warnings, nil

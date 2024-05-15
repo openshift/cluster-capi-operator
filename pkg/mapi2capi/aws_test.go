@@ -1,7 +1,6 @@
 package mapi2capi
 
 import (
-	"github.com/davecgh/go-spew/spew"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	machinebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/machine/v1beta1"
@@ -32,7 +31,6 @@ var _ = Describe("mapi2capi AWS", Ordered, func() {
 		// Convert a MAPI Machine to a CAPI Core Machine + a CAPI InfraMachineTemplateSpec.
 		capiMachine, capiInfraMachineTemplate, warns, err :=
 			FromAWSMachine(awsMAPIMachine).ToMachineAndMachineTemplate()
-		spew.Dump(capiMachine, capiInfraMachineTemplate)
 		Expect(capiMachine).To(Not(BeNil()), "should not have a nil CAPI Machine")
 		Expect(capiInfraMachineTemplate).To(Not(BeNil()), "should not have a nil CAPI MachineTemplate")
 		Expect(err).ToNot(HaveOccurred(), "should have been able to convert providerSpec to MachineTemplateSpec")
