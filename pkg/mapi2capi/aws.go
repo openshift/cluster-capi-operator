@@ -33,7 +33,6 @@ func FromAWSProviderSpec(s *mapiv1.AWSMachineProviderConfig) AWSProviderSpec {
 	return AWSProviderSpec{Spec: s}
 }
 
-// FromAWSMachine TODO.
 func FromAWSMachine(m *mapiv1.Machine) AWSMachine {
 	return AWSMachine{Machine: m}
 }
@@ -42,7 +41,6 @@ func FromAWSMachineSet(m *mapiv1.MachineSet) AWSMachineSet {
 	return AWSMachineSet{MachineSet: m}
 }
 
-// (MAPIAWSMachine).ToMachineMachineTemplate() TODO.
 func (m AWSMachine) ToMachineAndMachineTemplate() (*capiv1.Machine, *capav1.AWSMachineTemplate, []string, error) {
 	var errs []error
 	var warnings []string
@@ -77,7 +75,6 @@ func (m AWSMachine) ToMachineAndMachineTemplate() (*capiv1.Machine, *capav1.AWSM
 	return capiMachine, capaMachineTemplate, warnings, nil
 }
 
-// (AWSMachineSet).ToMachineSetAndMachineTemplate() TODO.
 func (m AWSMachineSet) ToMachineSetAndMachineTemplate() (*capiv1.MachineSet, *capav1.AWSMachineTemplate, []string, error) {
 	var errs []error
 	var warnings []string
@@ -118,7 +115,6 @@ func (p AWSProviderSpec) ToMachineTemplateSpec() (*capav1.AWSMachineTemplateSpec
 	var errors []error
 	var warnings []string
 
-	// TODO: what to do with providerID? in MAPI that's not in AWSMachineProviderConfig but outside of it.
 	rootVolume, nonRootVolumes := convertAWSBlockDeviceMappingSpecToCAPI(p.Spec.BlockDevices)
 
 	spec := capav1.AWSMachineTemplateSpec{
@@ -126,6 +122,9 @@ func (p AWSProviderSpec) ToMachineTemplateSpec() (*capav1.AWSMachineTemplateSpec
 			Spec: capav1.AWSMachineSpec{
 				AMI: capav1.AMIReference{
 					ID: p.Spec.AMI.ID,
+					// The use of ARN and Filters to reference AMIs was present
+					// in CAPA but has been deprecated and then removed
+					// ref:https://github.com/kubernetes-sigs/cluster-api-provider-aws/pull/3257
 				},
 				AdditionalSecurityGroups: convertAWSSecurityGroupstoCAPI(p.Spec.SecurityGroups),
 				AdditionalTags:           convertAWSTagsToCAPI(p.Spec.Tags),
@@ -138,12 +137,16 @@ func (p AWSProviderSpec) ToMachineTemplateSpec() (*capav1.AWSMachineTemplateSpec
 				// ImageLookupBaseOS. Not used in OpenShift.
 				// ImageLookupFormat. Not used in OpenShift.
 				// ImageLookupOrg. Not used in OpenShift.
+				// TODO: what to do with instanceID? in MAPI that's not in AWSMachineProviderConfig but outside of it.
+				// Is this propagated down by the CAPA controller automatically from the CAPI Machine
 				// InstanceID. This is dynamically populated by the controller.
-				InstanceMetadataOptions: convertMetadataServiceOptionstoCAPI(p.Spec.MetadataServiceOptions), // TODO
+				InstanceMetadataOptions: convertMetadataServiceOptionstoCAPI(p.Spec.MetadataServiceOptions),
 				InstanceType:            p.Spec.InstanceType,
 				// NetworkInterfaces. Not used in OpenShift.
 				NonRootVolumes:     nonRootVolumes,
 				PlacementGroupName: p.Spec.PlacementGroupName,
+				// TODO: what to do with providerID? in MAPI that's not in AWSMachineProviderConfig but outside of it.
+				// Is this propagated down by the CAPA controller automatically from the CAPI Machine
 				// ProviderID. This is dynamically populated by the controller.
 				PublicIP:             p.Spec.PublicIP,
 				RootVolume:           rootVolume,
@@ -212,10 +215,27 @@ func convertAWSTagsToCAPI(mapiTags []mapiv1.TagSpecification) capav1.Tags {
 	return capiTags
 }
 
-// TODO
 func convertMetadataServiceOptionstoCAPI(metad mapiv1.MetadataServiceOptions) *capav1.InstanceMetadataOptions {
-	// TODO
-	return nil
+	var httpTokens capav1.HTTPTokensState
+
+	switch metad.Authentication {
+	case mapiv1.MetadataServiceAuthenticationOptional:
+		httpTokens = capav1.HTTPTokensStateOptional
+	case mapiv1.MetadataServiceAuthenticationRequired:
+		httpTokens = capav1.HTTPTokensStateRequired
+	default:
+		// TODO is this ok?
+		httpTokens = capav1.HTTPTokensStateOptional
+	}
+
+	capiMetadataOpts := capav1.InstanceMetadataOptions{
+		// HTTPEndpoint: not present in MAPI
+		// HTTPPutResponseHopLimit: not present in MAPI
+		// InstanceMetadataTags: not present in MAPI
+		HTTPTokens: httpTokens,
+	}
+
+	return &capiMetadataOpts
 }
 
 func convertIAMInstanceProfiletoCAPI(mapiIAM *string) string {

@@ -41,9 +41,9 @@ var _ = Describe("capi2mapi AWS", Ordered, func() {
 		},
 	}
 
-	It("should be able to convert an AWS MAPI providerSpec to a CAPI MachineTemplateSpec", func() {
+	It("should be able to convert a CAPI Machine and AWSMachineTemplate to a MAPI AWSProviderSpec", func() {
 		awsProviderSpecConfig, warns, err :=
-			FromAWSMachineTemplateSpec(ptr.To(awsMachineTemplate.Spec)).ToProviderSpec()
+			FromMachineAndAWSMachineTemplate(&awsMachine, &awsMachineTemplate).ToProviderSpec()
 		Expect(awsProviderSpecConfig).To(Not(BeNil()), "should not have a nil MAPI ProviderSpecConfig")
 		Expect(err).ToNot(HaveOccurred(), "should have been able to convert AWSMachineTemplateSpec to AWSProviderSpec")
 		Expect(warns).To(BeEmpty(), "should have not warned while converting AWSMachineTemplateSpec to AWSProviderSpec")

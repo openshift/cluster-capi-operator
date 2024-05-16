@@ -14,11 +14,6 @@ import (
 	"k8s.io/utils/ptr"
 )
 
-// AWSMachineTemplateSpec stores the details of a Cluster API AWSMachineTemplateSpec.
-type AWSMachineTemplateSpec struct {
-	Spec *capav1.AWSMachineTemplateSpec
-}
-
 // MachineAndAWSMachineTemplate stores the details of a Cluster API Machine and AWSMachineTemplate.
 type MachineAndAWSMachineTemplate struct {
 	Machine  *capiv1.Machine
@@ -31,10 +26,6 @@ type MachineSetAndAWSMachineTemplate struct {
 	Template   *capav1.AWSMachineTemplate
 }
 
-func FromAWSMachineTemplateSpec(mts *capav1.AWSMachineTemplateSpec) AWSMachineTemplateSpec {
-	return AWSMachineTemplateSpec{Spec: mts}
-}
-
 func FromMachineAndAWSMachineTemplate(m *capiv1.Machine, mts *capav1.AWSMachineTemplate) MachineAndAWSMachineTemplate {
 	return MachineAndAWSMachineTemplate{Machine: m, Template: mts}
 }
@@ -43,9 +34,9 @@ func FromMachineSetAndAWSMachineTemplate(ms *capiv1.MachineSet, mts *capav1.AWSM
 	return MachineSetAndAWSMachineTemplate{MachineSet: ms, Template: mts}
 }
 
-func (m AWSMachineTemplateSpec) ToProviderSpec() (*mapiv1.AWSMachineProviderConfig, []string, error) {
-	if m.Spec == nil {
-		return nil, nil, fmt.Errorf("provided AWSMachineTemplateSpec can not be nil")
+func (m MachineAndAWSMachineTemplate) ToProviderSpec() (*mapiv1.AWSMachineProviderConfig, []string, error) {
+	if m.Machine == nil || m.Template == nil {
+		return nil, nil, fmt.Errorf("provided Machine and AWSMachineTemplate can not be nil")
 	}
 
 	var warnings []string
@@ -53,23 +44,27 @@ func (m AWSMachineTemplateSpec) ToProviderSpec() (*mapiv1.AWSMachineProviderConf
 
 	mapaProviderConfig := mapiv1.AWSMachineProviderConfig{}
 
-	// mapiProviderConfig.AMI = convertAWSResourceReferenceToMAPI(m.Spec.Template.Spec.AMI)//  TODO
-	mapaProviderConfig.InstanceType = m.Spec.Template.Spec.InstanceType
-	mapaProviderConfig.Tags = convertAWSTagsToMAPI(m.Spec.Template.Spec.AdditionalTags)
+	// The use of ARN and Filters to reference AMIs was present
+	// in CAPA but has been deprecated and then removed
+	// ref: https://github.com/kubernetes-sigs/cluster-api-provider-aws/pull/3257
+	mapaProviderConfig.AMI.ID = m.Template.Spec.Template.Spec.AMI.ID
+
+	mapaProviderConfig.InstanceType = m.Template.Spec.Template.Spec.InstanceType
+	mapaProviderConfig.Tags = convertAWSTagsToMAPI(m.Template.Spec.Template.Spec.AdditionalTags)
 	mapaProviderConfig.IAMInstanceProfile = &mapiv1.AWSResourceReference{
-		ID: &m.Spec.Template.Spec.IAMInstanceProfile,
+		ID: &m.Template.Spec.Template.Spec.IAMInstanceProfile,
 	}
-	mapaProviderConfig.KeyName = m.Spec.Template.Spec.SSHKeyName
-	mapaProviderConfig.PublicIP = m.Spec.Template.Spec.PublicIP
+	mapaProviderConfig.KeyName = m.Template.Spec.Template.Spec.SSHKeyName
+	mapaProviderConfig.PublicIP = m.Template.Spec.Template.Spec.PublicIP
 	mapaProviderConfig.Placement = mapiv1.Placement{
-		// AvailabilityZone: ptr.Deref(m.Spec.Template.Spec.FailureDomain, ""), // TODO
-		Tenancy: convertAWSTenancyToMAPI(m.Spec.Template.Spec.Tenancy),
-		Region:  "", // TODO: fetch region from cluster object
+		AvailabilityZone: ptr.Deref(m.Machine.Spec.FailureDomain, ""),
+		Tenancy:          convertAWSTenancyToMAPI(m.Template.Spec.Template.Spec.Tenancy),
+		// Region:           "", // TODO: fetch region from cluster object
 	}
-	mapaProviderConfig.SecurityGroups = convertAWSSecurityGroupstoMAPI(m.Spec.Template.Spec.AdditionalSecurityGroups)
-	mapaProviderConfig.Subnet = convertAWSResourceReferenceToMAPI(ptr.Deref(m.Spec.Template.Spec.Subnet, capav1.AWSResourceReference{}))
-	mapaProviderConfig.SpotMarketOptions = convertAWSSpotMarketOptionsToMAPI(m.Spec.Template.Spec.SpotMarketOptions)
-	mapaProviderConfig.BlockDevices = convertAWSBlockDeviceMappingSpecToMAPI(m.Spec.Template.Spec.RootVolume, m.Spec.Template.Spec.NonRootVolumes)
+	mapaProviderConfig.SecurityGroups = convertAWSSecurityGroupstoMAPI(m.Template.Spec.Template.Spec.AdditionalSecurityGroups)
+	mapaProviderConfig.Subnet = convertAWSResourceReferenceToMAPI(ptr.Deref(m.Template.Spec.Template.Spec.Subnet, capav1.AWSResourceReference{}))
+	mapaProviderConfig.SpotMarketOptions = convertAWSSpotMarketOptionsToMAPI(m.Template.Spec.Template.Spec.SpotMarketOptions)
+	mapaProviderConfig.BlockDevices = convertAWSBlockDeviceMappingSpecToMAPI(m.Template.Spec.Template.Spec.RootVolume, m.Template.Spec.Template.Spec.NonRootVolumes)
 
 	if len(errors) > 0 {
 		return nil, warnings, utilerrors.NewAggregate(errors)
@@ -85,7 +80,7 @@ func (m MachineAndAWSMachineTemplate) ToMachine() (*mapiv1.Machine, []string, er
 	var errors []error
 	var warnings []string
 
-	mapaSpec, warn, err := FromAWSMachineTemplateSpec(&m.Template.Spec).ToProviderSpec()
+	mapaSpec, warn, err := FromMachineAndAWSMachineTemplate(m.Machine, m.Template).ToProviderSpec()
 	if err != nil {
 		errors = append(errors, err)
 	}
@@ -119,7 +114,7 @@ func (m MachineSetAndAWSMachineTemplate) ToMachineSet() (*mapiv1.MachineSet, []s
 	var errors []error
 	var warnings []string
 
-	mapaSpec, warn, err := FromAWSMachineTemplateSpec(&m.Template.Spec).ToProviderSpec()
+	mapaSpec, warn, err := FromMachineAndAWSMachineTemplate(&capiv1.Machine{Spec: m.MachineSet.Spec.Template.Spec}, m.Template).ToProviderSpec()
 	if err != nil {
 		errors = append(errors, err)
 	}
@@ -164,11 +159,10 @@ func RawExtensionFromProviderSpec(spec *mapiv1.AWSMachineProviderConfig) (*runti
 	}, nil
 }
 
-func convertAWSResourceReferenceToMAPI(mapiReference capav1.AWSResourceReference) mapiv1.AWSResourceReference {
+func convertAWSResourceReferenceToMAPI(capiReference capav1.AWSResourceReference) mapiv1.AWSResourceReference {
 	return mapiv1.AWSResourceReference{
-		ID: mapiReference.ID,
-		// ARN:     mapiReference.ARN, TODO
-		Filters: convertAWSFiltersToMAPI(mapiReference.Filters),
+		ID:      capiReference.ID,
+		Filters: convertAWSFiltersToMAPI(capiReference.Filters),
 	}
 }
 
@@ -230,11 +224,11 @@ func convertAWSBlockDeviceMappingSpecToMAPI(rootVolume *capav1.Volume, nonRootVo
 
 	blockDeviceMapping = append(blockDeviceMapping, mapiv1.BlockDeviceMappingSpec{
 		EBS: &mapiv1.EBSBlockDeviceSpec{
-			VolumeSize: &rootVolume.Size,
-			// VolumeType: &rootVolume.Type, TODO
-			Iops:      &rootVolume.IOPS,
-			Encrypted: rootVolume.Encrypted,
-			KMSKey:    convertKMSKeyToMAPI(rootVolume.EncryptionKey),
+			VolumeSize: ptr.To(rootVolume.Size),
+			VolumeType: ptr.To(string(rootVolume.Type)),
+			Iops:       ptr.To(rootVolume.IOPS),
+			Encrypted:  rootVolume.Encrypted,
+			KMSKey:     convertKMSKeyToMAPI(rootVolume.EncryptionKey),
 		},
 	})
 
@@ -242,11 +236,11 @@ func convertAWSBlockDeviceMappingSpecToMAPI(rootVolume *capav1.Volume, nonRootVo
 		blockDeviceMapping = append(blockDeviceMapping, mapiv1.BlockDeviceMappingSpec{
 			DeviceName: &volume.DeviceName,
 			EBS: &mapiv1.EBSBlockDeviceSpec{
-				VolumeSize: &volume.Size,
-				// VolumeType: &volume.Type, TODO
-				Iops: &volume.IOPS,
-				// Encrypted: &volume.Encrypted, // TODO
-				KMSKey: convertKMSKeyToMAPI(volume.EncryptionKey),
+				VolumeSize: ptr.To(volume.Size),
+				VolumeType: ptr.To(string(rootVolume.Type)),
+				Iops:       ptr.To(volume.IOPS),
+				Encrypted:  volume.Encrypted,
+				KMSKey:     convertKMSKeyToMAPI(volume.EncryptionKey),
 			},
 		})
 	}
