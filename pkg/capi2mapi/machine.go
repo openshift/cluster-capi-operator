@@ -13,9 +13,9 @@ const (
 	workerUserDataSecretName = "worker-user-data"
 )
 
-// FromMachineToMachine translates a MAPI Machine to its Core CAPI Machine correspondent.
-func FromMachineToMachine(m *capiv1.Machine) (*mapiv1.Machine, []string, error) {
-	mapiMachine := &mapiv1.Machine{}
+// fromMachineToMachine translates a MAPI Machine to its Core CAPI Machine correspondent.
+func fromMachineToMachine(m *capiv1.Machine) (mapiv1.Machine, []string, error) {
+	mapiMachine := mapiv1.Machine{}
 	mapiMachine.ObjectMeta = metav1.ObjectMeta{
 		Name:      m.Name,
 		Namespace: mapiNamespace,
@@ -26,7 +26,19 @@ func FromMachineToMachine(m *capiv1.Machine) (*mapiv1.Machine, []string, error) 
 	}
 
 	mapiMachine.Spec = mapiv1.MachineSpec{
-		// TODO: ProviderID: ,
+		ObjectMeta: mapiv1.ObjectMeta{
+			Name:            m.ObjectMeta.Name,
+			GenerateName:    m.ObjectMeta.GenerateName,
+			Namespace:       m.ObjectMeta.Namespace,
+			Labels:          m.ObjectMeta.Labels,
+			Annotations:     m.ObjectMeta.Annotations,
+			OwnerReferences: m.OwnerReferences,
+		},
+		ProviderID: m.Spec.ProviderID,
+
+		// LifecycleHooks: TODO: find alternative in CAPI for this
+		// Taints: , // TODO: Not Present on CAPI Machines, only on Bootstrap?
+		// ProviderSpec: this will get populated by higher level fuctions.
 	}
 
 	return mapiMachine, nil, nil

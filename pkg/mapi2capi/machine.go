@@ -19,9 +19,9 @@ const (
 	awsTemplateKind          = "AWSMachineTemplate"
 )
 
-// FromMachineToMachine translates a MAPI Machine to its Core CAPI Machine correspondent.
-func FromMachineToMachine(m *mapiv1.Machine) (*capiv1.Machine, []string, error) {
-	capiMachine := &capiv1.Machine{}
+// fromMachineToMachine translates a MAPI Machine to its Core CAPI Machine correspondent.
+func fromMachineToMachine(m *mapiv1.Machine) (capiv1.Machine, []string, error) {
+	capiMachine := capiv1.Machine{}
 	capiMachine.ObjectMeta = metav1.ObjectMeta{
 		Name:      m.Name,
 		Namespace: capiNamespace,
@@ -32,7 +32,6 @@ func FromMachineToMachine(m *mapiv1.Machine) (*capiv1.Machine, []string, error) 
 	}
 
 	capiMachine.Spec = capiv1.MachineSpec{
-		ClusterName: "TODO-TODO", //TODO
 		Bootstrap: capiv1.Bootstrap{
 			DataSecretName: ptr.To(workerUserDataSecretName),
 		},
@@ -40,10 +39,20 @@ func FromMachineToMachine(m *mapiv1.Machine) (*capiv1.Machine, []string, error) 
 			APIVersion: awsTemplateAPIVersion,
 			Kind:       awsTemplateKind,
 			Name:       m.Name,
-			//TODO: what to do with it? Is it ok to just populate it later?
-			//ProviderID:
-			//FailureDomain:
 		},
+		ProviderID: m.Spec.ProviderID,
+
+		// Version defines the desired Kubernetes version.
+		// This field is meant to be optionally used by bootstrap providers.
+		// Version: , not necessary for MAPI.
+
+		// FailureDomain: populated by higher level functions.
+		// ClusterName: populated by higher level functions, TODO: ensure this is done.
+
+		// TODO:
+		// NodeDrainTimeout: ,
+		// NodeVolumeDetachTimeout: ,
+		// NodeDeletionTimeout: ,
 	}
 
 	return capiMachine, nil, nil

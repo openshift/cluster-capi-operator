@@ -11,8 +11,8 @@ const (
 	mapiMachineSetKind       = "MachineSet"
 )
 
-func FromMachineSetToMachineSet(capiMachineSet *capiv1.MachineSet) (*mapiv1.MachineSet, []string, error) {
-	mapiMachineSet := &mapiv1.MachineSet{}
+func FromMachineSetToMachineSet(capiMachineSet *capiv1.MachineSet) (mapiv1.MachineSet, []string, error) {
+	mapiMachineSet := mapiv1.MachineSet{}
 	mapiMachineSet.ObjectMeta = metav1.ObjectMeta{
 		Name:      mapiMachineSet.Name,
 		Namespace: mapiMachineSet.Namespace,

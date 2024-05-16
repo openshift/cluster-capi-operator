@@ -41,7 +41,7 @@ func FromAWSMachineSet(m *mapiv1.MachineSet) AWSMachineSet {
 	return AWSMachineSet{MachineSet: m}
 }
 
-func (m AWSMachine) ToMachineAndMachineTemplate() (*capiv1.Machine, *capav1.AWSMachineTemplate, []string, error) {
+func (m AWSMachine) ToMachineAndMachineTemplate() (capiv1.Machine, capav1.AWSMachineTemplate, []string, error) {
 	var errs []error
 	var warnings []string
 
@@ -50,7 +50,7 @@ func (m AWSMachine) ToMachineAndMachineTemplate() (*capiv1.Machine, *capav1.AWSM
 		errs = append(errs, err)
 	}
 
-	capaSpec, warn, err := FromAWSProviderSpec(awsProviderConfig).ToMachineTemplateSpec()
+	capaSpec, warn, err := FromAWSProviderSpec(&awsProviderConfig).ToMachineTemplateSpec()
 	if err != nil {
 		errs = append(errs, err)
 	}
@@ -62,20 +62,25 @@ func (m AWSMachine) ToMachineAndMachineTemplate() (*capiv1.Machine, *capav1.AWSM
 	}
 	warnings = append(warnings, warn...)
 
-	capiMachine, warn, err := FromMachineToMachine(m.Machine)
+	capiMachine, warn, err := fromMachineToMachine(m.Machine)
 	if err != nil {
 		errs = append(errs, err)
 	}
 	warnings = append(warnings, warn...)
 
+	// Plug into Core CAPI Machine fields that come from the MAPI ProviderConfig.
+	if awsProviderConfig.Placement.AvailabilityZone != "" {
+		capiMachine.Spec.FailureDomain = ptr.To(awsProviderConfig.Placement.AvailabilityZone)
+	}
+
 	if len(errs) > 0 {
-		return nil, nil, warnings, utilerrors.NewAggregate(errs)
+		return capiv1.Machine{}, capav1.AWSMachineTemplate{}, warnings, utilerrors.NewAggregate(errs)
 	}
 
 	return capiMachine, capaMachineTemplate, warnings, nil
 }
 
-func (m AWSMachineSet) ToMachineSetAndMachineTemplate() (*capiv1.MachineSet, *capav1.AWSMachineTemplate, []string, error) {
+func (m AWSMachineSet) ToMachineSetAndMachineTemplate() (capiv1.MachineSet, capav1.AWSMachineTemplate, []string, error) {
 	var errs []error
 	var warnings []string
 
@@ -84,7 +89,7 @@ func (m AWSMachineSet) ToMachineSetAndMachineTemplate() (*capiv1.MachineSet, *ca
 		errs = append(errs, err)
 	}
 
-	capaSpec, warn, err := FromAWSProviderSpec(awsProviderConfig).ToMachineTemplateSpec()
+	capaSpec, warn, err := FromAWSProviderSpec(&awsProviderConfig).ToMachineTemplateSpec()
 	if err != nil {
 		errs = append(errs, err)
 	}
@@ -103,7 +108,7 @@ func (m AWSMachineSet) ToMachineSetAndMachineTemplate() (*capiv1.MachineSet, *ca
 	warnings = append(warnings, warn...)
 
 	if len(errs) > 0 {
-		return nil, nil, warnings, utilerrors.NewAggregate(errs)
+		return capiv1.MachineSet{}, capav1.AWSMachineTemplate{}, warnings, utilerrors.NewAggregate(errs)
 	}
 
 	return capiMachineSet, capaMachineTemplate, warnings, nil
@@ -111,7 +116,7 @@ func (m AWSMachineSet) ToMachineSetAndMachineTemplate() (*capiv1.MachineSet, *ca
 
 // (AWSProviderSpec).ToMachineTemplateSpec() implements the ProviderSpec conversion interface for the AWS provider.
 // It converts AWSProviderSpec to AWSMachineTemplateSpec.
-func (p AWSProviderSpec) ToMachineTemplateSpec() (*capav1.AWSMachineTemplateSpec, []string, error) {
+func (p AWSProviderSpec) ToMachineTemplateSpec() (capav1.AWSMachineTemplateSpec, []string, error) {
 	var errors []error
 	var warnings []string
 
@@ -160,30 +165,27 @@ func (p AWSProviderSpec) ToMachineTemplateSpec() (*capav1.AWSMachineTemplateSpec
 	}
 
 	if len(errors) > 0 {
-		return nil, warnings, utilerrors.NewAggregate(errors)
+		return capav1.AWSMachineTemplateSpec{}, warnings, utilerrors.NewAggregate(errors)
 	}
 
-	return &spec, warnings, nil
+	return spec, warnings, nil
 }
 
 // AWSProviderSpecFromRawExtension unmarshals a raw extension into an AWSMachineProviderSpec type
-func AWSProviderSpecFromRawExtension(rawExtension *runtime.RawExtension) (*mapiv1.AWSMachineProviderConfig, error) {
+func AWSProviderSpecFromRawExtension(rawExtension *runtime.RawExtension) (mapiv1.AWSMachineProviderConfig, error) {
 	if rawExtension == nil {
-		return &mapiv1.AWSMachineProviderConfig{}, nil
+		return mapiv1.AWSMachineProviderConfig{}, nil
 	}
 
-	spec := new(mapiv1.AWSMachineProviderConfig)
+	spec := mapiv1.AWSMachineProviderConfig{}
 	if err := yaml.Unmarshal(rawExtension.Raw, &spec); err != nil {
-		return nil, fmt.Errorf("error unmarshalling providerSpec: %v", err)
+		return mapiv1.AWSMachineProviderConfig{}, fmt.Errorf("error unmarshalling providerSpec: %v", err)
 	}
 
 	return spec, nil
 }
 
-func awsMachineTemplateSpecToAWSMachineTemplate(spec *capav1.AWSMachineTemplateSpec, status *capav1.AWSMachineTemplateStatus, name string, namespace string) (*capav1.AWSMachineTemplate, []string, error) {
-	if spec == nil {
-		return nil, nil, fmt.Errorf("AWSMachineTemplateSpec should not be nil")
-	}
+func awsMachineTemplateSpecToAWSMachineTemplate(spec capav1.AWSMachineTemplateSpec, status *capav1.AWSMachineTemplateStatus, name string, namespace string) (capav1.AWSMachineTemplate, []string, error) {
 	if status == nil {
 		status = &capav1.AWSMachineTemplateStatus{}
 	}
@@ -191,14 +193,14 @@ func awsMachineTemplateSpecToAWSMachineTemplate(spec *capav1.AWSMachineTemplateS
 	var warns []string
 	var errs []error
 
-	mt := &capav1.AWSMachineTemplate{}
+	mt := capav1.AWSMachineTemplate{}
 	mt.Name = name
 	mt.Namespace = namespace
 	mt.Status = *status
-	mt.Spec = *spec
+	mt.Spec = spec
 
 	if len(errs) > 0 {
-		return nil, warns, utilerrors.NewAggregate(errs)
+		return capav1.AWSMachineTemplate{}, warns, utilerrors.NewAggregate(errs)
 	}
 
 	return mt, warns, nil

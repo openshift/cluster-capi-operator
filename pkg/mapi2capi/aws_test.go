@@ -3,10 +3,70 @@ package mapi2capi
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	mapiv1 "github.com/openshift/api/machine/v1beta1"
 	machinebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/machine/v1beta1"
+	"k8s.io/utils/ptr"
 )
 
 var _ = Describe("mapi2capi AWS", Ordered, func() {
+
+	mapiProviderConfig := &mapiv1.AWSMachineProviderConfig{
+		AMI: mapiv1.AWSResourceReference{
+			ID: ptr.To("testID"),
+		},
+		InstanceType: "testInstanceType",
+		Tags: []mapiv1.TagSpecification{
+			{
+				Name:  "testName",
+				Value: "testValue",
+			},
+		},
+		IAMInstanceProfile: &mapiv1.AWSResourceReference{
+			ID: ptr.To("testID"),
+		},
+		KeyName: ptr.To("testKey"),
+		Placement: mapiv1.Placement{
+			AvailabilityZone: "zone",
+			Tenancy:          mapiv1.DefaultTenancy,
+		},
+		SecurityGroups: []mapiv1.AWSResourceReference{
+			{
+				ID: ptr.To("testID"),
+			},
+		},
+		Subnet: mapiv1.AWSResourceReference{
+			ID: ptr.To("testID"),
+		},
+		PublicIP: ptr.To(true),
+		SpotMarketOptions: &mapiv1.SpotMarketOptions{
+			MaxPrice: ptr.To("1"),
+		},
+		BlockDevices: []mapiv1.BlockDeviceMappingSpec{
+			{
+				EBS: &mapiv1.EBSBlockDeviceSpec{
+					VolumeSize: ptr.To(int64(1)),
+					VolumeType: ptr.To("type1"),
+					Iops:       ptr.To(int64(1)),
+					Encrypted:  ptr.To(false),
+					KMSKey: mapiv1.AWSResourceReference{
+						ID: ptr.To("test1"),
+					},
+				},
+			},
+			{
+				DeviceName: ptr.To("nonrootdevice"),
+				EBS: &mapiv1.EBSBlockDeviceSpec{
+					VolumeSize: ptr.To(int64(2)),
+					VolumeType: ptr.To("type2"),
+					Iops:       ptr.To(int64(2)),
+					Encrypted:  ptr.To(false),
+					KMSKey: mapiv1.AWSResourceReference{
+						ID: ptr.To("test2"),
+					},
+				},
+			},
+		},
+	}
 
 	awsProviderSpec := machinebuilder.AWSProviderSpec().Build()
 	awsMAPIMachine := machinebuilder.Machine().WithProviderSpecBuilder(machinebuilder.AWSProviderSpec()).Build()
@@ -22,6 +82,15 @@ var _ = Describe("mapi2capi AWS", Ordered, func() {
 		// Convert a MAPI ProviderSpec to a CAPI InfraMachineTemplateSpec.
 		awsTemplateSpec, warns, err :=
 			FromAWSProviderSpec(awsProviderSpec).ToMachineTemplateSpec()
+		Expect(awsTemplateSpec).To(Not(BeNil()), "should not have a nil CAPI MachineTemplateSpec")
+		Expect(err).ToNot(HaveOccurred(), "should have been able to convert providerSpec to MachineTemplateSpec")
+		Expect(warns).To(BeEmpty(), "should have not warned while converting providerSpec to MachineTemplateSpec")
+	})
+
+	It("should be able to convert another AWS MAPI providerSpec to a CAPI MachineTemplateSpec", func() {
+		// Convert a MAPI ProviderSpec to a CAPI InfraMachineTemplateSpec.
+		awsTemplateSpec, warns, err :=
+			FromAWSProviderSpec(mapiProviderConfig).ToMachineTemplateSpec()
 		Expect(awsTemplateSpec).To(Not(BeNil()), "should not have a nil CAPI MachineTemplateSpec")
 		Expect(err).ToNot(HaveOccurred(), "should have been able to convert providerSpec to MachineTemplateSpec")
 		Expect(warns).To(BeEmpty(), "should have not warned while converting providerSpec to MachineTemplateSpec")
@@ -46,4 +115,5 @@ var _ = Describe("mapi2capi AWS", Ordered, func() {
 		Expect(err).ToNot(HaveOccurred(), "should have been able to convert MAPI MachineSet to CAPI MachineSet")
 		Expect(warns).To(BeEmpty(), "should have not warned while converting MAPI MachineSet to CAPI MachineSet")
 	})
+
 })

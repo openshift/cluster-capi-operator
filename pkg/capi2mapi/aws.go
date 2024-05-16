@@ -66,6 +66,12 @@ func (m MachineAndAWSMachineTemplate) ToProviderSpec() (*mapiv1.AWSMachineProvid
 	mapaProviderConfig.SpotMarketOptions = convertAWSSpotMarketOptionsToMAPI(m.Template.Spec.Template.Spec.SpotMarketOptions)
 	mapaProviderConfig.BlockDevices = convertAWSBlockDeviceMappingSpecToMAPI(m.Template.Spec.Template.Spec.RootVolume, m.Template.Spec.Template.Spec.NonRootVolumes)
 
+	metadataServiceOpts, warnings, err := convertAWSMetadataOptionsToMAPI(m.Template.Spec.Template.Spec.InstanceMetadataOptions)
+	if err != nil {
+		errors = append(errors, err)
+	}
+	mapaProviderConfig.MetadataServiceOptions = metadataServiceOpts
+
 	if len(errors) > 0 {
 		return nil, warnings, utilerrors.NewAggregate(errors)
 	}
@@ -73,9 +79,9 @@ func (m MachineAndAWSMachineTemplate) ToProviderSpec() (*mapiv1.AWSMachineProvid
 	return &mapaProviderConfig, warnings, nil
 }
 
-func (m MachineAndAWSMachineTemplate) ToMachine() (*mapiv1.Machine, []string, error) {
+func (m MachineAndAWSMachineTemplate) ToMachine() (mapiv1.Machine, []string, error) {
 	if m.Machine == nil || m.Template == nil {
-		return nil, nil, fmt.Errorf("provided Machine and AWSMachineTemplate can not be nil")
+		return mapiv1.Machine{}, nil, fmt.Errorf("provided Machine and AWSMachineTemplate can not be nil")
 	}
 	var errors []error
 	var warnings []string
@@ -86,7 +92,7 @@ func (m MachineAndAWSMachineTemplate) ToMachine() (*mapiv1.Machine, []string, er
 	}
 	warnings = append(warnings, warn...)
 
-	mapiMachine, warn, err := FromMachineToMachine(m.Machine)
+	mapiMachine, warn, err := fromMachineToMachine(m.Machine)
 	if err != nil {
 		errors = append(errors, err)
 	}
@@ -100,15 +106,15 @@ func (m MachineAndAWSMachineTemplate) ToMachine() (*mapiv1.Machine, []string, er
 	mapiMachine.Spec.ProviderSpec.Value = awsRawExt
 
 	if len(errors) > 0 {
-		return nil, warnings, utilerrors.NewAggregate(errors)
+		return mapiv1.Machine{}, warnings, utilerrors.NewAggregate(errors)
 	}
 
 	return mapiMachine, warnings, nil
 }
 
-func (m MachineSetAndAWSMachineTemplate) ToMachineSet() (*mapiv1.MachineSet, []string, error) {
+func (m MachineSetAndAWSMachineTemplate) ToMachineSet() (mapiv1.MachineSet, []string, error) {
 	if m.MachineSet == nil || m.Template == nil {
-		return nil, nil, fmt.Errorf("Machine and AWSMachineTemplate can not be nil")
+		return mapiv1.MachineSet{}, nil, fmt.Errorf("Machine and AWSMachineTemplate can not be nil")
 	}
 
 	var errors []error
@@ -134,7 +140,7 @@ func (m MachineSetAndAWSMachineTemplate) ToMachineSet() (*mapiv1.MachineSet, []s
 	mapiMachineSet.Spec.Template.Spec.ProviderSpec.Value = awsRawExt
 
 	if len(errors) > 0 {
-		return nil, warnings, utilerrors.NewAggregate(errors)
+		return mapiv1.MachineSet{}, warnings, utilerrors.NewAggregate(errors)
 	}
 
 	return mapiMachineSet, warnings, nil
@@ -157,6 +163,42 @@ func RawExtensionFromProviderSpec(spec *mapiv1.AWSMachineProviderConfig) (*runti
 	return &runtime.RawExtension{
 		Raw: rawBytes,
 	}, nil
+}
+
+func convertAWSMetadataOptionsToMAPI(capiMetadataOpts *capav1.InstanceMetadataOptions) (mapiv1.MetadataServiceOptions, []string, error) {
+	if capiMetadataOpts == nil {
+		return mapiv1.MetadataServiceOptions{}, nil, nil
+	}
+	var errors []error
+	var warnings []string
+
+	var auth mapiv1.MetadataServiceAuthentication
+
+	switch capiMetadataOpts.HTTPTokens {
+	case "":
+		//
+	case capav1.HTTPTokensStateOptional:
+		auth = mapiv1.MetadataServiceAuthenticationOptional
+	case capav1.HTTPTokensStateRequired:
+		auth = mapiv1.MetadataServiceAuthenticationRequired
+	default:
+		errors = append(errors, fmt.Errorf("HTTPTokens State %q is not supported by MAPI", capiMetadataOpts.HTTPTokens))
+	}
+
+	// These fields are not present in MAPI, so they will be lost in CAPI -> MAPI conversion.
+	// opts.HTTPEndpoint
+	// opts.HTTPPutResponseHopLimit
+	// opts.InstanceMetadataTags
+
+	metadataOpts := mapiv1.MetadataServiceOptions{
+		Authentication: auth,
+	}
+
+	if len(errors) > 0 {
+		return mapiv1.MetadataServiceOptions{}, warnings, utilerrors.NewAggregate(errors)
+	}
+
+	return metadataOpts, warnings, nil
 }
 
 func convertAWSResourceReferenceToMAPI(capiReference capav1.AWSResourceReference) mapiv1.AWSResourceReference {
