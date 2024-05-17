@@ -7,6 +7,7 @@ import (
 	capav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	capiv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/utils/ptr"
@@ -134,7 +135,7 @@ func (p AWSProviderSpec) ToMachineTemplateSpec() (capav1.AWSMachineTemplateSpec,
 				AdditionalSecurityGroups: convertAWSSecurityGroupstoCAPI(p.Spec.SecurityGroups),
 				AdditionalTags:           convertAWSTagsToCAPI(p.Spec.Tags),
 				// CloudInit. Not defined as we use ignition in OpenShift.
-				IAMInstanceProfile: convertIAMInstanceProfiletoCAPI(p.Spec.IAMInstanceProfile.ID),
+				IAMInstanceProfile: convertIAMInstanceProfiletoCAPI(p.Spec.IAMInstanceProfile),
 				Ignition: &capav1.Ignition{
 					Version:     "3.4",                                               // Hardcoded for OpenShift.
 					StorageType: capav1.IgnitionStorageTypeOptionUnencryptedUserData, // Hardcoded for OpenShift.
@@ -194,6 +195,14 @@ func awsMachineTemplateSpecToAWSMachineTemplate(spec capav1.AWSMachineTemplateSp
 	var errs []error
 
 	mt := capav1.AWSMachineTemplate{}
+	mt.ObjectMeta = metav1.ObjectMeta{
+		Name:      name,
+		Namespace: namespace,
+	}
+	mt.TypeMeta = metav1.TypeMeta{
+		Kind:       awsTemplateKind,
+		APIVersion: awsTemplateAPIVersion,
+	}
 	mt.Name = name
 	mt.Namespace = namespace
 	mt.Status = *status
@@ -240,12 +249,12 @@ func convertMetadataServiceOptionstoCAPI(metad mapiv1.MetadataServiceOptions) *c
 	return &capiMetadataOpts
 }
 
-func convertIAMInstanceProfiletoCAPI(mapiIAM *string) string {
-	if mapiIAM != nil {
-		return *mapiIAM
+func convertIAMInstanceProfiletoCAPI(mapiIAM *mapiv1.AWSResourceReference) string {
+	if mapiIAM == nil || mapiIAM.ID == nil {
+		return ""
 	}
 
-	return ""
+	return *mapiIAM.ID
 }
 
 func convertAWSSpotMarketOptionsToCAPI(mapiSpotMarketOptions *mapiv1.SpotMarketOptions) *capav1.SpotMarketOptions {

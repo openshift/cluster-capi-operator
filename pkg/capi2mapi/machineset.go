@@ -7,15 +7,17 @@ import (
 )
 
 const (
-	mapiMachineSetAPIVersion = "machine.openshift.io"
+	mapiMachineSetAPIVersion = "machine.openshift.io/v1beta1"
 	mapiMachineSetKind       = "MachineSet"
 )
 
 func FromMachineSetToMachineSet(capiMachineSet *capiv1.MachineSet) (mapiv1.MachineSet, []string, error) {
 	mapiMachineSet := mapiv1.MachineSet{}
 	mapiMachineSet.ObjectMeta = metav1.ObjectMeta{
-		Name:      mapiMachineSet.Name,
-		Namespace: mapiMachineSet.Namespace,
+		Name:        capiMachineSet.Name,
+		Namespace:   capiMachineSet.Namespace,
+		Labels:      capiMachineSet.Labels,
+		Annotations: capiMachineSet.Annotations,
 	}
 	mapiMachineSet.TypeMeta = metav1.TypeMeta{
 		Kind:       mapiMachineSetKind,

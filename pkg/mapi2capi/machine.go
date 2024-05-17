@@ -12,10 +12,10 @@ import (
 
 const (
 	capiNamespace            = "openshift-cluster-api"
-	capiMachineAPIVersion    = "cluster.x-k8s.io"
+	capiMachineAPIVersion    = "cluster.x-k8s.io/v1beta1"
 	capiMachineKind          = "Machine"
 	workerUserDataSecretName = "worker-user-data"
-	awsTemplateAPIVersion    = "infrastructure.cluster.x-k8s.io/v1beta1"
+	awsTemplateAPIVersion    = "infrastructure.cluster.x-k8s.io/v1beta2"
 	awsTemplateKind          = "AWSMachineTemplate"
 )
 
@@ -23,8 +23,10 @@ const (
 func fromMachineToMachine(m *mapiv1.Machine) (capiv1.Machine, []string, error) {
 	capiMachine := capiv1.Machine{}
 	capiMachine.ObjectMeta = metav1.ObjectMeta{
-		Name:      m.Name,
-		Namespace: capiNamespace,
+		Name:        m.Name,
+		Namespace:   capiNamespace,
+		Labels:      m.Labels,
+		Annotations: m.Annotations,
 	}
 	capiMachine.TypeMeta = metav1.TypeMeta{
 		Kind:       capiMachineKind,

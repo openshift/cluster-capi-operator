@@ -11,15 +11,17 @@ import (
 )
 
 const (
-	capiMachineSetAPIVersion = "cluster.x-k8s.io"
+	capiMachineSetAPIVersion = "cluster.x-k8s.io/v1beta1"
 	capiMachineSetKind       = "MachineSet"
 )
 
 func FromMachineSetToMachineSet(mapiMachineSet *mapiv1.MachineSet) (capiv1.MachineSet, []string, error) {
 	capiMachineSet := capiv1.MachineSet{}
 	capiMachineSet.ObjectMeta = metav1.ObjectMeta{
-		Name:      mapiMachineSet.Name,
-		Namespace: mapiMachineSet.Namespace,
+		Name:        mapiMachineSet.Name,
+		Namespace:   mapiMachineSet.Namespace,
+		Labels:      mapiMachineSet.Labels,
+		Annotations: mapiMachineSet.Annotations,
 	}
 	capiMachineSet.TypeMeta = metav1.TypeMeta{
 		Kind:       capiMachineSetKind,
