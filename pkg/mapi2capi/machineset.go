@@ -6,8 +6,6 @@ import (
 	capiv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
 	corev1 "k8s.io/api/core/v1"
-
-	"k8s.io/utils/ptr"
 )
 
 const (
@@ -31,9 +29,6 @@ func FromMachineSetToMachineSet(mapiMachineSet *mapiv1.MachineSet) (capiv1.Machi
 	capiMachineSet.Spec.Template.Labels = mapiMachineSet.Spec.Template.Labels
 	capiMachineSet.Spec.ClusterName = "" // TODO: this should be fetched from infra object
 	capiMachineSet.Spec.Replicas = mapiMachineSet.Spec.Replicas
-	capiMachineSet.Spec.Template.Spec.Bootstrap = capiv1.Bootstrap{
-		DataSecretName: ptr.To(workerUserDataSecretName),
-	}
 	capiMachineSet.Spec.Template.Spec.ClusterName = "TODO-TODO" // TODO: this should be fetched from infra object
 	capiMachineSet.Spec.Template.Spec.InfrastructureRef = corev1.ObjectReference{
 		APIVersion: awsTemplateAPIVersion,

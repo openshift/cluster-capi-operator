@@ -6,8 +6,6 @@ import (
 	capiv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
 	corev1 "k8s.io/api/core/v1"
-
-	"k8s.io/utils/ptr"
 )
 
 const (
@@ -34,9 +32,6 @@ func fromMachineToMachine(m *mapiv1.Machine) (capiv1.Machine, []string, error) {
 	}
 
 	capiMachine.Spec = capiv1.MachineSpec{
-		Bootstrap: capiv1.Bootstrap{
-			DataSecretName: ptr.To(workerUserDataSecretName),
-		},
 		InfrastructureRef: corev1.ObjectReference{
 			APIVersion: awsTemplateAPIVersion,
 			Kind:       awsTemplateKind,

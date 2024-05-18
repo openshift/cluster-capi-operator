@@ -73,6 +73,11 @@ func (m AWSMachine) ToMachineAndMachineTemplate() (capiv1.Machine, capav1.AWSMac
 	if awsProviderConfig.Placement.AvailabilityZone != "" {
 		capiMachine.Spec.FailureDomain = ptr.To(awsProviderConfig.Placement.AvailabilityZone)
 	}
+	if awsProviderConfig.UserDataSecret != nil && awsProviderConfig.UserDataSecret.Name != "" {
+		capiMachine.Spec.Bootstrap = capiv1.Bootstrap{
+			DataSecretName: &awsProviderConfig.UserDataSecret.Name,
+		}
+	}
 
 	if len(errs) > 0 {
 		return capiv1.Machine{}, capav1.AWSMachineTemplate{}, warnings, utilerrors.NewAggregate(errs)
@@ -111,6 +116,12 @@ func (m AWSMachineSet) ToMachineSetAndMachineTemplate() (capiv1.MachineSet, capa
 	// Plug into Core CAPI MachineSet fields that come from the MAPI ProviderConfig which belong here instead of the CAPI AWSMachineTemplate.
 	if awsProviderConfig.Placement.AvailabilityZone != "" {
 		capiMachineSet.Spec.Template.Spec.FailureDomain = ptr.To(awsProviderConfig.Placement.AvailabilityZone)
+	}
+
+	if awsProviderConfig.UserDataSecret != nil && awsProviderConfig.UserDataSecret.Name != "" {
+		capiMachineSet.Spec.Template.Spec.Bootstrap = capiv1.Bootstrap{
+			DataSecretName: &awsProviderConfig.UserDataSecret.Name,
+		}
 	}
 
 	if len(errs) > 0 {

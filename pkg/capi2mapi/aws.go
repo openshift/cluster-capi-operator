@@ -9,7 +9,8 @@ import (
 	capav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	capiv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/utils/ptr"
@@ -54,8 +55,10 @@ func (m MachineAndAWSMachineTemplate) ToProviderSpec() (*mapiv1.AWSMachineProvid
 	// ref: https://github.com/kubernetes-sigs/cluster-api-provider-aws/pull/3257
 	mapaProviderConfig.AMI.ID = m.Template.Spec.Template.Spec.AMI.ID
 
-	mapaProviderConfig.TypeMeta = v1.TypeMeta{
-		Kind:       "AWSMachineProviderConfig",
+	mapaProviderConfig.TypeMeta = metav1.TypeMeta{
+		Kind: "AWSMachineProviderConfig",
+		// TODO: this in the original machineSets is sometimes ""awsproviderconfig.openshift.io/v1beta1" some other times "machine.openshift.io/v1beta1"
+		// is it fine to always set it to one?
 		APIVersion: mapiMachineAPIVersion,
 	}
 	mapaProviderConfig.InstanceType = m.Template.Spec.Template.Spec.InstanceType
@@ -68,7 +71,7 @@ func (m MachineAndAWSMachineTemplate) ToProviderSpec() (*mapiv1.AWSMachineProvid
 	mapaProviderConfig.Placement = mapiv1.Placement{
 		AvailabilityZone: ptr.Deref(m.Machine.Spec.FailureDomain, ""),
 		Tenancy:          mapaTenancy,
-		// Region:           "", // TODO: fetch region from cluster object
+		// Region:           "", // TODO: fetch region from cluster object, or restore from hash.
 	}
 	mapaProviderConfig.SecurityGroups = convertAWSSecurityGroupstoMAPI(m.Template.Spec.Template.Spec.AdditionalSecurityGroups)
 	mapaProviderConfig.Subnet = convertAWSResourceReferenceToMAPI(ptr.Deref(m.Template.Spec.Template.Spec.Subnet, capav1.AWSResourceReference{}))
@@ -80,6 +83,14 @@ func (m MachineAndAWSMachineTemplate) ToProviderSpec() (*mapiv1.AWSMachineProvid
 		errors = append(errors, err)
 	}
 	mapaProviderConfig.MetadataServiceOptions = metadataServiceOpts
+	mapaProviderConfig.UserDataSecret = &corev1.LocalObjectReference{
+		Name: ptr.Deref(m.Machine.Spec.Bootstrap.DataSecretName, "worker-user-data"),
+	}
+
+	// TODO: needs to be restored from hash.
+	// mapaProviderConfig.CredentialsSecret
+	// mapaProviderConfig.Placement.Region
+	// mapaProviderConfig.BlockDevices.EBS.KMSKey
 
 	if len(errors) > 0 {
 		return nil, warnings, utilerrors.NewAggregate(errors)
@@ -236,6 +247,7 @@ func convertAWSTagsToMAPI(capiTags capav1.Tags) []mapiv1.TagSpecification {
 			Value: value,
 		})
 	}
+
 	return mapiTags
 }
 
