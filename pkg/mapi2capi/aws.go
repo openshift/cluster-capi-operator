@@ -69,7 +69,7 @@ func (m AWSMachine) ToMachineAndMachineTemplate() (capiv1.Machine, capav1.AWSMac
 	}
 	warnings = append(warnings, warn...)
 
-	// Plug into Core CAPI Machine fields that come from the MAPI ProviderConfig.
+	// Plug into Core CAPI Machine fields that come from the MAPI ProviderConfig which belong here instead of the CAPI AWSMachineTemplate.
 	if awsProviderConfig.Placement.AvailabilityZone != "" {
 		capiMachine.Spec.FailureDomain = ptr.To(awsProviderConfig.Placement.AvailabilityZone)
 	}
@@ -107,6 +107,11 @@ func (m AWSMachineSet) ToMachineSetAndMachineTemplate() (capiv1.MachineSet, capa
 		errs = append(errs, err)
 	}
 	warnings = append(warnings, warn...)
+
+	// Plug into Core CAPI MachineSet fields that come from the MAPI ProviderConfig which belong here instead of the CAPI AWSMachineTemplate.
+	if awsProviderConfig.Placement.AvailabilityZone != "" {
+		capiMachineSet.Spec.Template.Spec.FailureDomain = ptr.To(awsProviderConfig.Placement.AvailabilityZone)
+	}
 
 	if len(errs) > 0 {
 		return capiv1.MachineSet{}, capav1.AWSMachineTemplate{}, warnings, utilerrors.NewAggregate(errs)
@@ -235,8 +240,7 @@ func convertMetadataServiceOptionstoCAPI(metad mapiv1.MetadataServiceOptions) *c
 	case mapiv1.MetadataServiceAuthenticationRequired:
 		httpTokens = capav1.HTTPTokensStateRequired
 	default:
-		// TODO is this ok?
-		httpTokens = capav1.HTTPTokensStateOptional
+		return &capav1.InstanceMetadataOptions{}
 	}
 
 	capiMetadataOpts := capav1.InstanceMetadataOptions{
@@ -299,11 +303,12 @@ func convertAWSBlockDeviceMappingSpecToCAPI(mapiBlockDeviceMapping []mapiv1.Bloc
 			mapping.EBS.VolumeType != nil &&
 			mapping.EBS.Encrypted != nil { // TODO: is this ok?
 			nonRootVolumes = append(nonRootVolumes, capav1.Volume{
-				DeviceName:    *mapping.DeviceName,
-				Size:          *mapping.EBS.VolumeSize,
-				Type:          capav1.VolumeType(*mapping.EBS.VolumeType),
-				IOPS:          *mapping.EBS.Iops,
-				Encrypted:     mapping.EBS.Encrypted,
+				DeviceName: *mapping.DeviceName,
+				Size:       *mapping.EBS.VolumeSize,
+				Type:       capav1.VolumeType(*mapping.EBS.VolumeType),
+				IOPS:       *mapping.EBS.Iops,
+				Encrypted:  mapping.EBS.Encrypted,
+				// TODO: this will result in a lossy conversion KMSKey(ID, ARN) -> EncryptionKey (string).
 				EncryptionKey: convertKMSKeyToCAPI(mapping.EBS.KMSKey),
 			})
 		}

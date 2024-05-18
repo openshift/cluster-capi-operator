@@ -9,6 +9,7 @@ import (
 	capav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	capiv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/utils/ptr"
@@ -44,11 +45,19 @@ func (m MachineAndAWSMachineTemplate) ToProviderSpec() (*mapiv1.AWSMachineProvid
 
 	mapaProviderConfig := mapiv1.AWSMachineProviderConfig{}
 
+	mapaTenancy, err := convertAWSTenancyToMAPI(m.Template.Spec.Template.Spec.Tenancy)
+	if err != nil {
+		errors = append(errors, err)
+	}
 	// The use of ARN and Filters to reference AMIs was present
 	// in CAPA but has been deprecated and then removed
 	// ref: https://github.com/kubernetes-sigs/cluster-api-provider-aws/pull/3257
 	mapaProviderConfig.AMI.ID = m.Template.Spec.Template.Spec.AMI.ID
 
+	mapaProviderConfig.TypeMeta = v1.TypeMeta{
+		Kind:       "AWSMachineProviderConfig",
+		APIVersion: mapiMachineAPIVersion,
+	}
 	mapaProviderConfig.InstanceType = m.Template.Spec.Template.Spec.InstanceType
 	mapaProviderConfig.Tags = convertAWSTagsToMAPI(m.Template.Spec.Template.Spec.AdditionalTags)
 	mapaProviderConfig.IAMInstanceProfile = &mapiv1.AWSResourceReference{
@@ -58,7 +67,7 @@ func (m MachineAndAWSMachineTemplate) ToProviderSpec() (*mapiv1.AWSMachineProvid
 	mapaProviderConfig.PublicIP = m.Template.Spec.Template.Spec.PublicIP
 	mapaProviderConfig.Placement = mapiv1.Placement{
 		AvailabilityZone: ptr.Deref(m.Machine.Spec.FailureDomain, ""),
-		Tenancy:          convertAWSTenancyToMAPI(m.Template.Spec.Template.Spec.Tenancy),
+		Tenancy:          mapaTenancy,
 		// Region:           "", // TODO: fetch region from cluster object
 	}
 	mapaProviderConfig.SecurityGroups = convertAWSSecurityGroupstoMAPI(m.Template.Spec.Template.Spec.AdditionalSecurityGroups)
@@ -247,14 +256,18 @@ func convertAWSSpotMarketOptionsToMAPI(capiSpotMarketOptions *capav1.SpotMarketO
 	}
 }
 
-func convertAWSTenancyToMAPI(capiTenancy string) mapiv1.InstanceTenancy {
+func convertAWSTenancyToMAPI(capiTenancy string) (mapiv1.InstanceTenancy, error) {
 	switch capiTenancy {
 	case "default":
-		return mapiv1.DefaultTenancy
+		return mapiv1.DefaultTenancy, nil
 	case "dedicated":
-		return mapiv1.DedicatedTenancy
+		return mapiv1.DedicatedTenancy, nil
+	case "host":
+		return mapiv1.HostTenancy, nil
+	case "":
+		return "", nil
 	default:
-		return mapiv1.HostTenancy
+		return "", fmt.Errorf("unable to convert unsupported CAPA Tenancy %q to MAPI", capiTenancy)
 	}
 }
 
