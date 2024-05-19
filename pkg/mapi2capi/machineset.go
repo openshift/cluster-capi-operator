@@ -36,5 +36,7 @@ func FromMachineSetToMachineSet(mapiMachineSet *mapiv1.MachineSet) (capiv1.Machi
 		Name:       mapiMachineSet.Name,
 	}
 
+	setMAPINodeLabelsToCAPIManagedNodeLabels(mapiMachineSet.Spec.Template.Spec.ObjectMeta.Labels, capiMachineSet.Spec.Template.ObjectMeta.Labels)
+
 	return capiMachineSet, nil, nil
 }

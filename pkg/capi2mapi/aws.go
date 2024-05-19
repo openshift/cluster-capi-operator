@@ -59,7 +59,7 @@ func (m MachineAndAWSMachineTemplate) ToProviderSpec() (*mapiv1.AWSMachineProvid
 		Kind: "AWSMachineProviderConfig",
 		// TODO: this in the original machineSets is sometimes ""awsproviderconfig.openshift.io/v1beta1" some other times "machine.openshift.io/v1beta1"
 		// is it fine to always set it to one?
-		APIVersion: mapiMachineAPIVersion,
+		APIVersion: "awsproviderconfig.openshift.io/v1beta1",
 	}
 	mapaProviderConfig.InstanceType = m.Template.Spec.Template.Spec.InstanceType
 	mapaProviderConfig.Tags = convertAWSTagsToMAPI(m.Template.Spec.Template.Spec.AdditionalTags)
@@ -71,7 +71,7 @@ func (m MachineAndAWSMachineTemplate) ToProviderSpec() (*mapiv1.AWSMachineProvid
 	mapaProviderConfig.Placement = mapiv1.Placement{
 		AvailabilityZone: ptr.Deref(m.Machine.Spec.FailureDomain, ""),
 		Tenancy:          mapaTenancy,
-		// Region:           "", // TODO: fetch region from cluster object, or restore from hash.
+		// Region:           "", // TODO: lossy: fetch region from cluster object, or restore from hash.
 	}
 	mapaProviderConfig.SecurityGroups = convertAWSSecurityGroupstoMAPI(m.Template.Spec.Template.Spec.AdditionalSecurityGroups)
 	mapaProviderConfig.Subnet = convertAWSResourceReferenceToMAPI(ptr.Deref(m.Template.Spec.Template.Spec.Subnet, capav1.AWSResourceReference{}))
@@ -87,7 +87,7 @@ func (m MachineAndAWSMachineTemplate) ToProviderSpec() (*mapiv1.AWSMachineProvid
 		Name: ptr.Deref(m.Machine.Spec.Bootstrap.DataSecretName, "worker-user-data"),
 	}
 
-	// TODO: needs to be restored from hash.
+	// TODO: lossy: needs to be restored from hash.
 	// mapaProviderConfig.CredentialsSecret
 	// mapaProviderConfig.Placement.Region
 	// mapaProviderConfig.BlockDevices.EBS.KMSKey
@@ -205,7 +205,7 @@ func convertAWSMetadataOptionsToMAPI(capiMetadataOpts *capav1.InstanceMetadataOp
 		errors = append(errors, fmt.Errorf("HTTPTokens State %q is not supported by MAPI", capiMetadataOpts.HTTPTokens))
 	}
 
-	// These fields are not present in MAPI, so they will be lost in CAPI -> MAPI conversion.
+	// TODO: lossy: These fields are not present in MAPI, so they will be lost in CAPI -> MAPI conversion.
 	// opts.HTTPEndpoint
 	// opts.HTTPPutResponseHopLimit
 	// opts.InstanceMetadataTags

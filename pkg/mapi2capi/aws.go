@@ -319,7 +319,7 @@ func convertAWSBlockDeviceMappingSpecToCAPI(mapiBlockDeviceMapping []mapiv1.Bloc
 				Type:       capav1.VolumeType(*mapping.EBS.VolumeType),
 				IOPS:       *mapping.EBS.Iops,
 				Encrypted:  mapping.EBS.Encrypted,
-				// TODO: this will result in a lossy conversion KMSKey(ID, ARN) -> EncryptionKey (string).
+				// TODO: lossy: this will result in a lossy conversion KMSKey(ID, ARN) -> EncryptionKey (string).
 				EncryptionKey: convertKMSKeyToCAPI(mapping.EBS.KMSKey),
 			})
 		}
