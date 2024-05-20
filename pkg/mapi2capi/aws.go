@@ -3,6 +3,7 @@ package mapi2capi
 import (
 	"fmt"
 
+	configv1 "github.com/openshift/api/config/v1"
 	mapiv1 "github.com/openshift/api/machine/v1beta1"
 	capav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	capiv1 "sigs.k8s.io/cluster-api/api/v1beta1"
@@ -14,35 +15,38 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-// AWSProviderSpec stores the details of a Machine API AWSProviderSpec.
-type AWSProviderSpec struct {
-	Spec *mapiv1.AWSMachineProviderConfig
+// AWSProviderSpecAndInfra stores the details of a Machine API AWSProviderSpec and Infra.
+type AWSProviderSpecAndInfra struct {
+	Spec           *mapiv1.AWSMachineProviderConfig
+	Infrastructure *configv1.Infrastructure
 }
 
-// AWSMachine stores the details of a Machine API AWSMachine.
-type AWSMachine struct {
-	Machine *mapiv1.Machine
+// AWSMachineAndInfra stores the details of a Machine API AWSMachine and Infra.
+type AWSMachineAndInfra struct {
+	Machine        *mapiv1.Machine
+	Infrastructure *configv1.Infrastructure
 }
 
-// MAPIAWSMachine stores the details of a Machine API MAPIAWSMachine.
-type AWSMachineSet struct {
-	MachineSet *mapiv1.MachineSet
+// AWSMachineSetAndInfra stores the details of a Machine API AWSMachine and Infra.
+type AWSMachineSetAndInfra struct {
+	MachineSet     *mapiv1.MachineSet
+	Infrastructure *configv1.Infrastructure
 }
 
-// FromAWSProviderSpec wraps a Machine API AWSMachineProviderConfig into a mapi2capi AWSProviderSpec.
-func FromAWSProviderSpec(s *mapiv1.AWSMachineProviderConfig) AWSProviderSpec {
-	return AWSProviderSpec{Spec: s}
+// FromAWSProviderSpecAndInfra wraps a Machine API AWSMachineProviderConfig into a mapi2capi AWSProviderSpec.
+func FromAWSProviderSpecAndInfra(s *mapiv1.AWSMachineProviderConfig, i *configv1.Infrastructure) AWSProviderSpecAndInfra {
+	return AWSProviderSpecAndInfra{Spec: s, Infrastructure: i}
 }
 
-func FromAWSMachine(m *mapiv1.Machine) AWSMachine {
-	return AWSMachine{Machine: m}
+func FromAWSMachineAndInfra(m *mapiv1.Machine, i *configv1.Infrastructure) AWSMachineAndInfra {
+	return AWSMachineAndInfra{Machine: m, Infrastructure: i}
 }
 
-func FromAWSMachineSet(m *mapiv1.MachineSet) AWSMachineSet {
-	return AWSMachineSet{MachineSet: m}
+func FromAWSMachineSetAndInfra(m *mapiv1.MachineSet, i *configv1.Infrastructure) AWSMachineSetAndInfra {
+	return AWSMachineSetAndInfra{MachineSet: m, Infrastructure: i}
 }
 
-func (m AWSMachine) ToMachineAndMachineTemplate() (capiv1.Machine, capav1.AWSMachineTemplate, []string, error) {
+func (m AWSMachineAndInfra) ToMachineAndMachineTemplate() (capiv1.Machine, capav1.AWSMachineTemplate, []string, error) {
 	var errs []error
 	var warnings []string
 
@@ -51,7 +55,7 @@ func (m AWSMachine) ToMachineAndMachineTemplate() (capiv1.Machine, capav1.AWSMac
 		errs = append(errs, err)
 	}
 
-	capaSpec, warn, err := FromAWSProviderSpec(&awsProviderConfig).ToMachineTemplateSpec()
+	capaSpec, warn, err := FromAWSProviderSpecAndInfra(&awsProviderConfig, m.Infrastructure).ToMachineTemplateSpec()
 	if err != nil {
 		errs = append(errs, err)
 	}
@@ -78,6 +82,12 @@ func (m AWSMachine) ToMachineAndMachineTemplate() (capiv1.Machine, capav1.AWSMac
 			DataSecretName: &awsProviderConfig.UserDataSecret.Name,
 		}
 	}
+	if m.Infrastructure == nil || m.Infrastructure.Status.InfrastructureName == "" {
+		// Throw error
+		errs = append(errs, fmt.Errorf("infrastructure cannot be nil and infrastructure.Status.InfrastructureName cannot be empty"))
+	} else {
+		capiMachine.Spec.ClusterName = m.Infrastructure.Status.InfrastructureName
+	}
 
 	if len(errs) > 0 {
 		return capiv1.Machine{}, capav1.AWSMachineTemplate{}, warnings, utilerrors.NewAggregate(errs)
@@ -86,7 +96,7 @@ func (m AWSMachine) ToMachineAndMachineTemplate() (capiv1.Machine, capav1.AWSMac
 	return capiMachine, capaMachineTemplate, warnings, nil
 }
 
-func (m AWSMachineSet) ToMachineSetAndMachineTemplate() (capiv1.MachineSet, capav1.AWSMachineTemplate, []string, error) {
+func (m AWSMachineSetAndInfra) ToMachineSetAndMachineTemplate() (capiv1.MachineSet, capav1.AWSMachineTemplate, []string, error) {
 	var errs []error
 	var warnings []string
 
@@ -95,7 +105,7 @@ func (m AWSMachineSet) ToMachineSetAndMachineTemplate() (capiv1.MachineSet, capa
 		errs = append(errs, err)
 	}
 
-	capaSpec, warn, err := FromAWSProviderSpec(&awsProviderConfig).ToMachineTemplateSpec()
+	capaSpec, warn, err := FromAWSProviderSpecAndInfra(&awsProviderConfig, m.Infrastructure).ToMachineTemplateSpec()
 	if err != nil {
 		errs = append(errs, err)
 	}
@@ -123,6 +133,12 @@ func (m AWSMachineSet) ToMachineSetAndMachineTemplate() (capiv1.MachineSet, capa
 			DataSecretName: &awsProviderConfig.UserDataSecret.Name,
 		}
 	}
+	if m.Infrastructure == nil || m.Infrastructure.Status.InfrastructureName == "" {
+		errs = append(errs, fmt.Errorf("infrastructure cannot be nil and infrastructure.Status.InfrastructureName cannot be empty"))
+	} else {
+		capiMachineSet.Spec.Template.Spec.ClusterName = m.Infrastructure.Status.InfrastructureName
+		capiMachineSet.Spec.ClusterName = m.Infrastructure.Status.InfrastructureName
+	}
 
 	if len(errs) > 0 {
 		return capiv1.MachineSet{}, capav1.AWSMachineTemplate{}, warnings, utilerrors.NewAggregate(errs)
@@ -133,7 +149,7 @@ func (m AWSMachineSet) ToMachineSetAndMachineTemplate() (capiv1.MachineSet, capa
 
 // (AWSProviderSpec).ToMachineTemplateSpec() implements the ProviderSpec conversion interface for the AWS provider.
 // It converts AWSProviderSpec to AWSMachineTemplateSpec.
-func (p AWSProviderSpec) ToMachineTemplateSpec() (capav1.AWSMachineTemplateSpec, []string, error) {
+func (p AWSProviderSpecAndInfra) ToMachineTemplateSpec() (capav1.AWSMachineTemplateSpec, []string, error) {
 	var errors []error
 	var warnings []string
 

@@ -44,7 +44,7 @@ func fromMachineToMachine(mapiMachine *mapiv1.Machine) (capiv1.Machine, []string
 		// Version: , not necessary for MAPI.
 
 		// FailureDomain: populated by higher level functions.
-		// ClusterName: populated by higher level functions, TODO: ensure this is done.
+		// ClusterName: populated by higher level functions.
 
 		// TODO:
 		// NodeDrainTimeout: ,

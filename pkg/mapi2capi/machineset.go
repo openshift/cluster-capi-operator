@@ -27,9 +27,9 @@ func FromMachineSetToMachineSet(mapiMachineSet *mapiv1.MachineSet) (capiv1.Machi
 	}
 	capiMachineSet.Spec.Selector = mapiMachineSet.Spec.Selector
 	capiMachineSet.Spec.Template.Labels = mapiMachineSet.Spec.Template.Labels
-	capiMachineSet.Spec.ClusterName = "" // TODO: this should be fetched from infra object
+	// capiMachineSet.Spec.ClusterName // populated by higher level functions
 	capiMachineSet.Spec.Replicas = mapiMachineSet.Spec.Replicas
-	capiMachineSet.Spec.Template.Spec.ClusterName = "TODO-TODO" // TODO: this should be fetched from infra object
+	// capiMachineSet.Spec.Template.Spec.ClusterName // populated by higher level functions
 	capiMachineSet.Spec.Template.Spec.InfrastructureRef = corev1.ObjectReference{
 		APIVersion: awsTemplateAPIVersion,
 		Kind:       awsTemplateKind,
