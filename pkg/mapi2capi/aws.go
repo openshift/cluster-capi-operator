@@ -13,6 +13,8 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/yaml"
+
+	"github.com/openshift/cluster-capi-operator/pkg/util"
 )
 
 // AWSProviderSpecAndInfra stores the details of a Machine API AWSProviderSpec and Infra.
@@ -82,12 +84,23 @@ func (m AWSMachineAndInfra) ToMachineAndMachineTemplate() (capiv1.Machine, capav
 			DataSecretName: &awsProviderConfig.UserDataSecret.Name,
 		}
 	}
+
+	// Popluate the CAPI Machine ClusterName from the OCP Infrastructure object.
 	if m.Infrastructure == nil || m.Infrastructure.Status.InfrastructureName == "" {
-		// Throw error
 		errs = append(errs, fmt.Errorf("infrastructure cannot be nil and infrastructure.Status.InfrastructureName cannot be empty"))
 	} else {
 		capiMachine.Spec.ClusterName = m.Infrastructure.Status.InfrastructureName
 	}
+
+	// Store source object.
+	conversionDataAnnotationValue, err := util.GetAnnotationValueFromSourceObject(m)
+	if err != nil {
+		errs = append(errs, err)
+	}
+	if capiMachine.ObjectMeta.Annotations == nil {
+		capiMachine.ObjectMeta.Annotations = map[string]string{}
+	}
+	capiMachine.ObjectMeta.Annotations[util.MAPIV1Beta1ConversionDataAnnotationKey] = conversionDataAnnotationValue
 
 	if len(errs) > 0 {
 		return capiv1.Machine{}, capav1.AWSMachineTemplate{}, warnings, utilerrors.NewAggregate(errs)
@@ -139,6 +152,17 @@ func (m AWSMachineSetAndInfra) ToMachineSetAndMachineTemplate() (capiv1.MachineS
 		capiMachineSet.Spec.Template.Spec.ClusterName = m.Infrastructure.Status.InfrastructureName
 		capiMachineSet.Spec.ClusterName = m.Infrastructure.Status.InfrastructureName
 	}
+
+	// Store source object.
+	conversionDataAnnotationValue, err := util.GetAnnotationValueFromSourceObject(m)
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	if capiMachineSet.ObjectMeta.Annotations == nil {
+		capiMachineSet.ObjectMeta.Annotations = map[string]string{}
+	}
+	capiMachineSet.ObjectMeta.Annotations[util.MAPIV1Beta1ConversionDataAnnotationKey] = conversionDataAnnotationValue
 
 	if len(errs) > 0 {
 		return capiv1.MachineSet{}, capav1.AWSMachineTemplate{}, warnings, utilerrors.NewAggregate(errs)

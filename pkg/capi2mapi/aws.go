@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	mapiv1 "github.com/openshift/api/machine/v1beta1"
+	"gopkg.in/yaml.v2"
 
 	capav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	capiv1 "sigs.k8s.io/cluster-api/api/v1beta1"
@@ -13,7 +14,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+
 	"k8s.io/utils/ptr"
+
+	"github.com/openshift/cluster-capi-operator/pkg/util"
 )
 
 // MachineAndAWSMachineTemplate stores the details of a Cluster API Machine and AWSMachineTemplate.
@@ -44,6 +48,25 @@ func (m MachineAndAWSMachineTemplate) ToProviderSpec() (*mapiv1.AWSMachineProvid
 	var warnings []string
 	var errors []error
 
+	// Restore logic
+	annotationVal, ok := m.Machine.ObjectMeta.Annotations[util.MAPIV1Beta1ConversionDataAnnotationKey]
+	if !ok {
+		return nil, nil, fmt.Errorf("unable to find %q annotation from the source Object", util.MAPIV1Beta1ConversionDataAnnotationKey)
+	}
+	uObj, err := util.GetRestoreObjectFromAnnotationValue(annotationVal)
+	if err != nil {
+		return nil, nil, fmt.Errorf("unable to get %q annotation from the source Object: %w", util.MAPIV1Beta1ConversionDataAnnotationKey, err)
+	}
+
+	restoredMAPIMachine := &mapiv1.Machine{}
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(uObj.Object, &restoredMAPIMachine); err != nil {
+		return nil, nil, fmt.Errorf("unable to decode %q annotation from the source Object: %w", util.MAPIV1Beta1ConversionDataAnnotationKey, err)
+	}
+	restoredAWSProviderSpec, err := AWSProviderSpecFromRawExtension(restoredMAPIMachine.Spec.ProviderSpec.Value)
+	if err != nil {
+		return nil, nil, fmt.Errorf("unable to decode providerSpec from restored Object: %w", err)
+	}
+
 	mapaProviderConfig := mapiv1.AWSMachineProviderConfig{}
 
 	mapaTenancy, err := convertAWSTenancyToMAPI(m.Template.Spec.Template.Spec.Tenancy)
@@ -59,7 +82,8 @@ func (m MachineAndAWSMachineTemplate) ToProviderSpec() (*mapiv1.AWSMachineProvid
 		Kind: "AWSMachineProviderConfig",
 		// TODO: this in the original machineSets is sometimes ""awsproviderconfig.openshift.io/v1beta1" some other times "machine.openshift.io/v1beta1"
 		// is it fine to always set it to one?
-		APIVersion: "awsproviderconfig.openshift.io/v1beta1",
+		// APIVersion: "awsproviderconfig.openshift.io/v1beta1",
+		APIVersion: restoredAWSProviderSpec.TypeMeta.APIVersion, // From restore Object.
 	}
 	mapaProviderConfig.InstanceType = m.Template.Spec.Template.Spec.InstanceType
 	mapaProviderConfig.Tags = convertAWSTagsToMAPI(m.Template.Spec.Template.Spec.AdditionalTags)
@@ -71,7 +95,7 @@ func (m MachineAndAWSMachineTemplate) ToProviderSpec() (*mapiv1.AWSMachineProvid
 	mapaProviderConfig.Placement = mapiv1.Placement{
 		AvailabilityZone: ptr.Deref(m.Machine.Spec.FailureDomain, ""),
 		Tenancy:          mapaTenancy,
-		// Region:           "", // TODO: lossy: fetch region from cluster object, or restore from hash.
+		Region:           restoredAWSProviderSpec.Placement.Region, // From restored Object.
 	}
 	mapaProviderConfig.SecurityGroups = convertAWSSecurityGroupstoMAPI(m.Template.Spec.Template.Spec.AdditionalSecurityGroups)
 	mapaProviderConfig.Subnet = convertAWSResourceReferenceToMAPI(ptr.Deref(m.Template.Spec.Template.Spec.Subnet, capav1.AWSResourceReference{}))
@@ -88,9 +112,8 @@ func (m MachineAndAWSMachineTemplate) ToProviderSpec() (*mapiv1.AWSMachineProvid
 	}
 
 	// TODO: lossy: needs to be restored from hash.
-	// mapaProviderConfig.CredentialsSecret
-	// mapaProviderConfig.Placement.Region
 	// mapaProviderConfig.BlockDevices.EBS.KMSKey
+	mapaProviderConfig.CredentialsSecret = restoredAWSProviderSpec.CredentialsSecret // From restored Object.
 
 	if len(errors) > 0 {
 		return nil, warnings, utilerrors.NewAggregate(errors)
@@ -140,7 +163,13 @@ func (m MachineSetAndAWSMachineTemplate) ToMachineSet() (mapiv1.MachineSet, []st
 	var errors []error
 	var warnings []string
 
-	mapaSpec, warn, err := FromMachineAndAWSMachineTemplate(&capiv1.Machine{Spec: m.MachineSet.Spec.Template.Spec}, m.Template).ToProviderSpec()
+	mapaSpec, warn, err := FromMachineAndAWSMachineTemplate(
+		&capiv1.Machine{
+			Spec: m.MachineSet.Spec.Template.Spec,
+			ObjectMeta: metav1.ObjectMeta{
+				Annotations: m.MachineSet.ObjectMeta.Annotations,
+			},
+		}, m.Template).ToProviderSpec()
 	if err != nil {
 		errors = append(errors, err)
 	}
@@ -183,6 +212,20 @@ func RawExtensionFromProviderSpec(spec *mapiv1.AWSMachineProviderConfig) (*runti
 	return &runtime.RawExtension{
 		Raw: rawBytes,
 	}, nil
+}
+
+// AWSProviderSpecFromRawExtension unmarshals a raw extension into an AWSMachineProviderSpec type
+func AWSProviderSpecFromRawExtension(rawExtension *runtime.RawExtension) (mapiv1.AWSMachineProviderConfig, error) {
+	if rawExtension == nil {
+		return mapiv1.AWSMachineProviderConfig{}, nil
+	}
+
+	spec := mapiv1.AWSMachineProviderConfig{}
+	if err := yaml.Unmarshal(rawExtension.Raw, &spec); err != nil {
+		return mapiv1.AWSMachineProviderConfig{}, fmt.Errorf("error unmarshalling providerSpec: %v", err)
+	}
+
+	return spec, nil
 }
 
 func convertAWSMetadataOptionsToMAPI(capiMetadataOpts *capav1.InstanceMetadataOptions) (mapiv1.MetadataServiceOptions, []string, error) {
