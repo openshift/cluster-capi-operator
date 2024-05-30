@@ -29,6 +29,8 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 
+	azurev1 "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
+
 	"k8s.io/client-go/rest"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
@@ -114,6 +116,13 @@ func (r *InfraClusterController) ensureInfraCluster(ctx context.Context, log log
 		}
 
 		infraCluster = gcpCluster
+	case configv1.AzurePlatformType:
+		azureCluster := &azurev1.AzureCluster{}
+		if err := r.Get(ctx, client.ObjectKey{Namespace: defaultCAPINamespace, Name: r.Infra.Status.InfrastructureName}, azureCluster); err != nil && !cerrors.IsNotFound(err) {
+			return nil, fmt.Errorf("error getting InfraCluster object: %w", err)
+		}
+
+		infraCluster = azureCluster
 	case configv1.PowerVSPlatformType:
 		powervsCluster := &ibmpowervsv1.IBMPowerVSCluster{}
 		if err := r.Get(ctx, client.ObjectKey{Namespace: defaultCAPINamespace, Name: r.Infra.Status.InfrastructureName}, powervsCluster); err != nil && !cerrors.IsNotFound(err) {
