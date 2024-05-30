@@ -192,6 +192,7 @@ func main() {
 	switch platform {
 	case configv1.AWSPlatformType,
 		configv1.GCPPlatformType,
+		configv1.AzurePlatformType,
 		configv1.PowerVSPlatformType,
 		configv1.VSpherePlatformType,
 		configv1.OpenStackPlatformType:
