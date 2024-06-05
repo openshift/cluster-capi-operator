@@ -34,27 +34,6 @@ If you wish to make development of your provider easier, you can include a publi
 ## Add infrastructure cluster to the cluster controller
 
 Cluster API requires an infrastructure cluster object to be present. We are using [externally managed infrastructure](https://github.com/kubernetes-sigs/cluster-api/blob/main/docs/proposals/20210203-externally-managed-cluster-infrastructure.md)
-feature to manage all the infrastructure clusters on Openshift. It means that 
+feature to manage all the infrastructure clusters on Openshift. It means that
 the cluster must have externally managed annotation `"cluster.x-k8s.io/managed-by"`(clusterv1.ManagedByAnnotation)
-and `Status.Ready=true` to indicate that cluster object is managed by this controller and not by the 
-CAPI infrastructure provider.
-
-In order to add a new infrastructure cluster to the cluster controller, you need setup the reconciler in `main.go`
-like this:
-
-```golang
-func setupInfraClusterReconciler(mgr manager.Manager, platform configv1.PlatformType) {
-	switch platform {
-  ...
-	case configv1.YourPlatformType:
-		if err := (&cluster.GenericInfraClusterReconciler{
-			ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-infra-cluster-resource-controller"),
-			InfraCluster:                &platformv1.YourPlatformCluster{},
-		}).SetupWithManager(mgr); err != nil {
-			klog.Error(err, "unable to create controller", "controller", "YourPlatformCluster")
-			os.Exit(1)
-		}
-  ...
-	}
-}
-```
+and `Status.Ready=true` to indicate that cluster object is managed by this controller and not by the CAPI infrastructure provider.

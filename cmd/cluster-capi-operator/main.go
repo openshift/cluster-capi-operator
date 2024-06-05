@@ -272,8 +272,6 @@ func setupReconcilers(mgr manager.Manager, infra *configv1.Infrastructure, platf
 		os.Exit(1)
 	}
 
-	setupInfraClusterReconciler(mgr, platform)
-
 	if err := (&secretsync.UserDataSecretController{
 		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-user-data-secret-controller"),
 		Scheme:                      mgr.GetScheme(),
@@ -314,45 +312,6 @@ func setupReconcilers(mgr manager.Manager, infra *configv1.Infrastructure, platf
 	}).SetupWithManager(mgr, infraClusterObject); err != nil {
 		klog.Error(err, "unable to create infracluster controller", "controller", "InfraCluster")
 		os.Exit(1)
-	}
-}
-
-func setupInfraClusterReconciler(mgr manager.Manager, platform configv1.PlatformType) {
-	switch platform {
-	case configv1.AWSPlatformType:
-		if err := (&cluster.GenericInfraClusterReconciler{
-			ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-infra-cluster-resource-controller"),
-			InfraCluster:                &awsv1.AWSCluster{},
-		}).SetupWithManager(mgr); err != nil {
-			klog.Error(err, "unable to create controller", "controller", "AWSCluster")
-			os.Exit(1)
-		}
-	case configv1.GCPPlatformType:
-		if err := (&cluster.GenericInfraClusterReconciler{
-			ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-infra-cluster-resource-controller"),
-			InfraCluster:                &gcpv1.GCPCluster{},
-		}).SetupWithManager(mgr); err != nil {
-			klog.Error(err, "unable to create controller", "controller", "GCPCluster")
-			os.Exit(1)
-		}
-	case configv1.PowerVSPlatformType:
-		if err := (&cluster.GenericInfraClusterReconciler{
-			ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-infra-cluster-resource-controller"),
-			InfraCluster:                &ibmpowervsv1.IBMPowerVSCluster{},
-		}).SetupWithManager(mgr); err != nil {
-			klog.Error(err, "unable to create controller", "controller", "IBMPowerVSCluster")
-			os.Exit(1)
-		}
-	case configv1.VSpherePlatformType:
-		if err := (&cluster.GenericInfraClusterReconciler{
-			ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-infra-cluster-resource-controller"),
-			InfraCluster:                &vspherev1.VSphereCluster{},
-		}).SetupWithManager(mgr); err != nil {
-			klog.Error(err, "unable to create controller", "controller", "VSphereCluster")
-			os.Exit(1)
-		}
-	default:
-		klog.Infof("detected platform %q is not supported, skipping InfraCluster controller setup", platform)
 	}
 }
 
