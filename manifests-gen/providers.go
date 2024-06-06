@@ -26,6 +26,9 @@ const (
 	coreCAPIProvider        = "cluster-api"
 	metadataFilePath        = "./metadata.yaml"
 	kustomizeComponentsPath = "./config/default"
+	// customizedComponentsFilename is a name for file containing customized infrastructure components.
+	// This file helps with code review as it is always uncompressed unlike the components configMap.
+	customizedComponentsFilename = "infrastructure-components-openshift.yaml"
 )
 
 type provider struct {
@@ -102,6 +105,23 @@ func (p *provider) writeProviderComponentsToManifest(fileName string, objs []uns
 	}
 
 	return os.WriteFile(path.Join(*manifestsPath, fileName), ensureNewLine(combined), 0600)
+}
+
+// writeProviderCustomizedComponents writes the customized infrastructure components to allow for code review
+func (p *provider) writeProviderCustomizedComponents(resourceMap map[resourceKey][]unstructured.Unstructured) error {
+	crds, err := utilyaml.FromUnstructured(resourceMap[crdKey])
+	if err != nil {
+		return fmt.Errorf("error converting unstructured object to YAML: %w", err)
+	}
+
+	other, err := utilyaml.FromUnstructured(resourceMap[otherKey])
+	if err != nil {
+		return fmt.Errorf("error converting unstructured object to YAML: %w", err)
+	}
+
+	combined := utilyaml.JoinYaml(crds, other)
+
+	return os.WriteFile(path.Join(*basePath, "openshift", customizedComponentsFilename), ensureNewLine(combined), 0600)
 }
 
 // writeProviderComponentsConfigmap allows to write provider components to the provider (transport) ConfigMap.
@@ -220,6 +240,11 @@ func importProvider(p provider) error {
 	// Write RBAC components to manifests, they will be managed by CVO
 	if p.Name == powerVSProvider {
 		p.Name = ibmCloudProvider
+	}
+
+	// Write modified infrastructure components to allow for code review.
+	if err := p.writeProviderCustomizedComponents(resourceMap); err != nil {
+		return fmt.Errorf("error writing %v file: %w", customizedComponentsFilename, err)
 	}
 
 	// Store provider components in the provider ConfigMap.
