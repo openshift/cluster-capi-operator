@@ -1,8 +1,8 @@
 module github.com/openshift/cluster-capi-operator
 
-go 1.21
+go 1.22
 
-toolchain go1.21.5
+toolchain go1.22.1
 
 replace (
 	github.com/google/cel-go => github.com/google/cel-go v0.16.1
