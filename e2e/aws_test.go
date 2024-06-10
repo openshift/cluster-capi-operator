@@ -2,8 +2,6 @@ package e2e
 
 import (
 	"context"
-	"net/url"
-	"strconv"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -45,7 +43,6 @@ var _ = Describe("Cluster API AWS MachineSet", Ordered, func() {
 		mapiDefaultMS, mapiDefaultProviderSpec = getDefaultAWSMAPIProviderSpec(cl)
 		awsClient = createAWSClient(mapiDefaultProviderSpec.Placement.Region)
 		framework.CreateCoreCluster(cl, clusterName, "AWSCluster")
-		createAWSCluster(cl, mapiDefaultProviderSpec)
 	})
 
 	AfterEach(func() {
