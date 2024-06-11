@@ -338,6 +338,7 @@ func (r *CapiInstallerController) extractProviderComponents(cm corev1.ConfigMap)
 
 	for _, m := range yamlManifests {
 		newM := strings.Replace(m, imagePlaceholder, r.Images[providerNameToImageKey(providerName)], 1)
+		newM = strings.Replace(newM, "registry.ci.openshift.org/openshift:kube-rbac-proxy", r.Images["kube-rbac-proxy"], 1)
 		// TODO: change this to manager in the forked providers openshift/Dockerfile.rhel.
 		newM = strings.Replace(newM, "/manager", providerNameToCommand(providerName), 1)
 
