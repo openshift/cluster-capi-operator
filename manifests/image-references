@@ -38,3 +38,7 @@ spec:
     from:
       kind: DockerImage
       name: registry.ci.openshift.org/openshift:vsphere-cluster-api-controllers
+  - name: baremetal-cluster-api-controllers
+    from:
+      kind: DockerImage
+      name: registry.ci.openshift.org/openshift:baremetal-cluster-api-controllers
