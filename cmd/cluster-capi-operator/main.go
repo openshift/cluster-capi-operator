@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	metal3v1 "github.com/metal3-io/cluster-api-provider-metal3/api/v1beta1"
 	"github.com/spf13/pflag"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -108,6 +109,7 @@ func init() {
 	utilruntime.Must(clusterctlv1.AddToScheme(scheme))
 	utilruntime.Must(ibmpowervsv1.AddToScheme(scheme))
 	utilruntime.Must(vspherev1.AddToScheme(scheme))
+	utilruntime.Must(metal3v1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -194,7 +196,8 @@ func main() {
 		configv1.GCPPlatformType,
 		configv1.PowerVSPlatformType,
 		configv1.VSpherePlatformType,
-		configv1.OpenStackPlatformType:
+		configv1.OpenStackPlatformType,
+		configv1.BareMetalPlatformType:
 		setupReconcilers(mgr, platform, containerImages, applyClient, apiextensionsClient)
 		setupWebhooks(mgr)
 	default:
@@ -320,6 +323,14 @@ func setupInfraClusterReconciler(mgr manager.Manager, platform configv1.Platform
 			InfraCluster:                &vspherev1.VSphereCluster{},
 		}).SetupWithManager(mgr); err != nil {
 			klog.Error(err, "unable to create controller", "controller", "VSphereCluster")
+			os.Exit(1)
+		}
+	case configv1.BareMetalPlatformType:
+		if err := (&cluster.GenericInfraClusterReconciler{
+			ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-infra-cluster-resource-controller"),
+			InfraCluster:                &metal3v1.Metal3Cluster{},
+		}).SetupWithManager(mgr); err != nil {
+			klog.Error(err, "unable to create controller", "controller", "Metal3Cluster")
 			os.Exit(1)
 		}
 	default:

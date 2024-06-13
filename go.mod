@@ -8,6 +8,7 @@ go 1.21
 //)
 
 replace (
+	github.com/metal3-io/cluster-api-provider-metal3 => github.com/openshift/cluster-api-provider-metal3 v0.0.0-20240529071518-ea1aa8a45bfa
 	// controller-runtime 0.17.5 is using prometheus/client_golang to v1.18.0, which is incompatible with prometheus/common >= v0.48.0
 	// hence pinning them both.
 	github.com/prometheus/client_golang => github.com/prometheus/client_golang v1.18.0
@@ -19,6 +20,7 @@ require (
 	github.com/go-logr/logr v1.4.2
 	github.com/gobuffalo/flect v1.0.2
 	github.com/golangci/golangci-lint v1.59.1
+	github.com/metal3-io/cluster-api-provider-metal3/api v1.7.0
 	github.com/onsi/ginkgo/v2 v2.19.0
 	github.com/onsi/gomega v1.33.1
 	github.com/openshift/api v0.0.0-20231129134630-a782d1c1541c
@@ -188,6 +190,7 @@ require (
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-runewidth v0.0.14 // indirect
+	github.com/metal3-io/ip-address-manager/api v1.7.0 // indirect
 	github.com/mgechev/revive v1.3.7 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
