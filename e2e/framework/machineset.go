@@ -19,6 +19,7 @@ type machineSetParams struct {
 	failureDomain     string
 	replicas          int32
 	infrastructureRef corev1.ObjectReference
+	UserDataSecret    string
 }
 
 // NewMachineSetParams returns a new machineSetParams object.
@@ -35,6 +36,7 @@ func NewMachineSetParams(msName, clusterName, failureDomain string, replicas int
 		replicas:          replicas,
 		infrastructureRef: infrastructureRef,
 		failureDomain:     failureDomain,
+		UserDataSecret:    "worker-user-data",
 	}
 }
 
@@ -42,7 +44,6 @@ func NewMachineSetParams(msName, clusterName, failureDomain string, replicas int
 func CreateMachineSet(cl client.Client, params machineSetParams) *clusterv1.MachineSet {
 	By(fmt.Sprintf("Creating MachineSet %q", params.msName))
 
-	userDataSecret := "worker-user-data"
 	ms := &clusterv1.MachineSet{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "MachineSet",
@@ -70,7 +71,7 @@ func CreateMachineSet(cl client.Client, params machineSetParams) *clusterv1.Mach
 				},
 				Spec: clusterv1.MachineSpec{
 					Bootstrap: clusterv1.Bootstrap{
-						DataSecretName: &userDataSecret,
+						DataSecretName: &params.UserDataSecret,
 					},
 					ClusterName:       params.clusterName,
 					InfrastructureRef: params.infrastructureRef,

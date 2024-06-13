@@ -33,6 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 
+	metal3v1 "github.com/metal3-io/cluster-api-provider-metal3/api/v1beta1"
 	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
 
 	configv1 "github.com/openshift/api/config/v1"
@@ -169,6 +170,8 @@ func (r *InfraClusterController) reconcileInfraCluster(ctx context.Context, log 
 }
 
 // ensureInfraCluster ensures an InfraCluster object exists in the cluster.
+//
+//nolint:funlen
 func (r *InfraClusterController) ensureInfraCluster(ctx context.Context, log logr.Logger) (client.Object, error) {
 	var infraCluster client.Object
 	// TODO: implement InfraCluster generation for missing platforms.
@@ -213,6 +216,13 @@ func (r *InfraClusterController) ensureInfraCluster(ctx context.Context, log log
 		if err != nil {
 			return nil, fmt.Errorf("error getting InfraCluster object: %w", err)
 		}
+	case configv1.BareMetalPlatformType:
+		baremetalCluster := &metal3v1.Metal3Cluster{}
+		if err := r.Get(ctx, client.ObjectKey{Namespace: defaultCAPINamespace, Name: r.Infra.Status.InfrastructureName}, baremetalCluster); err != nil && !kerrors.IsNotFound(err) {
+			return nil, fmt.Errorf("error getting InfraCluster object: %w", err)
+		}
+
+		infraCluster = baremetalCluster
 	case configv1.OpenStackPlatformType:
 		openstackCluster := &openstackv1.OpenStackCluster{}
 		if err := r.Get(ctx, client.ObjectKey{Namespace: defaultCAPINamespace, Name: r.Infra.Status.InfrastructureName}, openstackCluster); err != nil && !kerrors.IsNotFound(err) {
