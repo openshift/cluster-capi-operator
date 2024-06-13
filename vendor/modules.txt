@@ -751,6 +751,12 @@ github.com/mattn/go-isatty
 # github.com/mattn/go-runewidth v0.0.14
 ## explicit; go 1.9
 github.com/mattn/go-runewidth
+# github.com/metal3-io/cluster-api-provider-metal3/api v1.7.0
+## explicit; go 1.21
+github.com/metal3-io/cluster-api-provider-metal3/api/v1beta1
+# github.com/metal3-io/ip-address-manager/api v1.7.0
+## explicit; go 1.21
+github.com/metal3-io/ip-address-manager/api/v1alpha1
 # github.com/mgechev/revive v1.3.7
 ## explicit; go 1.20
 github.com/mgechev/revive/config
@@ -2216,5 +2222,6 @@ sigs.k8s.io/structured-merge-diff/v4/value
 ## explicit; go 1.12
 sigs.k8s.io/yaml
 sigs.k8s.io/yaml/goyaml.v2
+# github.com/metal3-io/cluster-api-provider-metal3 => github.com/openshift/cluster-api-provider-metal3 v0.0.0-20240529071518-ea1aa8a45bfa
 # github.com/prometheus/client_golang => github.com/prometheus/client_golang v1.18.0
 # github.com/prometheus/common => github.com/prometheus/common v0.47.0
