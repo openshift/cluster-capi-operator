@@ -34,6 +34,8 @@ import (
 	"github.com/openshift/library-go/pkg/operator/events"
 	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
 	"github.com/openshift/library-go/pkg/operator/resource/resourcemerge"
+
+	"github.com/klauspost/compress/zstd"
 )
 
 const (
@@ -123,7 +125,7 @@ func (r *CapiInstallerController) reconcile(ctx context.Context, log logr.Logger
 				if err := r.setDegradedCondition(ctx, log); err != nil {
 					return ctrl.Result{}, fmt.Errorf("failed to set conditions for CAPI Installer controller: %w", err)
 				}
-				return ctrl.Result{}, fmt.Errorf("error extracting CAPI provider components from ConfigMap %q: %w", cm.Name, err)
+				return ctrl.Result{}, fmt.Errorf("error extracting CAPI provider components from ConfigMap %q/%q: %w", cm.Namespace, cm.Name, err)
 			}
 
 			providerComponents = append(providerComponents, partialComponents...)
@@ -326,22 +328,17 @@ func (r *CapiInstallerController) SetupWithManager(mgr ctrl.Manager) error {
 // clusterctl Provider Contract - Components YAML file contract defined at:
 // https://github.com/kubernetes-sigs/cluster-api/blob/a36712e28bf5d54e398ea84cb3e20102c0499426/docs/book/src/clusterctl/provider-contract.md?plain=1#L157-L162
 func (r *CapiInstallerController) extractProviderComponents(cm corev1.ConfigMap) ([]string, error) {
-	// Certain provider components have drone/envsubst environment variables interpolated within the manifest.
-	// Substitute them with the value defined in the environment variable (see setFeatureGatesEnvVars()).
-	// If that's not set, fallback to the default value defined in the template.
-	components, err := envsubst.EvalEnv(cm.Data["components"])
+	yamlManifests, err := extractManifests(cm)
 	if err != nil {
-		return nil, fmt.Errorf("failed to substitute env vars in CAPI manifests: %w", err)
+		return nil, fmt.Errorf("failed to extract manifests from configMap: %w", err)
 	}
-
-	// Split multi-document YAML into single manifests.
-	yamlManifests := regexp.MustCompile("(?m)^---$").Split(components, -1)
 
 	replacedYamlManifests := []string{}
 	providerName := cm.Labels[providerConfigMapLabelNameKey]
 
 	for _, m := range yamlManifests {
 		newM := strings.Replace(m, imagePlaceholder, r.Images[providerNameToImageKey(providerName)], 1)
+		newM = strings.Replace(newM, "registry.ci.openshift.org/openshift:kube-rbac-proxy", r.Images["kube-rbac-proxy"], 1)
 		// TODO: change this to manager in the forked providers openshift/Dockerfile.rhel.
 		newM = strings.Replace(newM, "/manager", providerNameToCommand(providerName), 1)
 
@@ -349,6 +346,43 @@ func (r *CapiInstallerController) extractProviderComponents(cm corev1.ConfigMap)
 	}
 
 	return replacedYamlManifests, nil
+}
+
+// extractManifests extracts and processes component manifests from given ConfiMap.
+// If the data is in compressed binary form, it decompresses them.
+func extractManifests(cm corev1.ConfigMap) ([]string, error) {
+	data, hasData := cm.Data["components"]
+	binaryData, hasBinary := cm.BinaryData["components-zstd"]
+
+	if !(hasBinary || hasData) {
+		return nil, errors.New("provider configmap has no components data")
+	}
+
+	if hasBinary {
+		decoder, err := zstd.NewReader(nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create zstd reader: %w", err)
+		}
+
+		decoded, err := decoder.DecodeAll(binaryData, []byte{})
+		if err != nil {
+			return nil, fmt.Errorf("failed to decompress components: %w", err)
+		}
+		data = string(decoded)
+	}
+
+	// Certain provider components have drone/envsubst environment variables interpolated within the manifest.
+	// Substitute them with the value defined in the environment variable (see setFeatureGatesEnvVars()).
+	// If that's not set, fallback to the default value defined in the template.
+	components, err := envsubst.EvalEnv(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to substitute environment variables in component manifests: %w", err)
+	}
+
+	// Split multi-document YAML into single manifests.
+	yamlManifests := regexp.MustCompile("(?m)^---$").Split(components, -1)
+
+	return yamlManifests, nil
 }
 
 // platformToProviderConfigMapLabelNameValue maps an OpenShift configv1.PlatformType
