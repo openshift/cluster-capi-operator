@@ -3,17 +3,17 @@
 # to be added to the owners-gen input data.
 approvers:
 - JoelSpeed
+- RadekManak
 - damdo
 - nrb
-- odvarkadaniel
 reviewers:
 - JoelSpeed
 - RadekManak
 - damdo
 - elmiko
 - nrb
-- odvarkadaniel
 - racheljpg
-- vincepri
+- sub-mod
+- theobarberbany
 component: Cloud Compute
-subcomponent: Cluster API
+subcomponent: Other Provider
