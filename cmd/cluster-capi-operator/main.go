@@ -192,6 +192,7 @@ func main() {
 	switch platform {
 	case configv1.AWSPlatformType,
 		configv1.GCPPlatformType,
+		configv1.AzurePlatformType,
 		configv1.PowerVSPlatformType,
 		configv1.VSpherePlatformType,
 		configv1.OpenStackPlatformType:
@@ -304,6 +305,14 @@ func setupInfraClusterReconciler(mgr manager.Manager, platform configv1.Platform
 			InfraCluster:                &gcpv1.GCPCluster{},
 		}).SetupWithManager(mgr); err != nil {
 			klog.Error(err, "unable to create controller", "controller", "GCPCluster")
+			os.Exit(1)
+		}
+	case configv1.AzurePlatformType:
+		if err := (&cluster.GenericInfraClusterReconciler{
+			ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-infra-cluster-resource-controller"),
+			InfraCluster:                &azurev1.AzureCluster{},
+		}).SetupWithManager(mgr); err != nil {
+			klog.Error(err, "unable to create controller", "controller", "AzureCluster")
 			os.Exit(1)
 		}
 	case configv1.PowerVSPlatformType:
