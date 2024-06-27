@@ -911,11 +911,13 @@ github.com/openshift/api/template
 github.com/openshift/api/template/v1
 github.com/openshift/api/user
 github.com/openshift/api/user/v1
-# github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20240607201500-81075cf8e11a
+# github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20240626103413-ddea9c7c0aca
 ## explicit; go 1.21
 github.com/openshift/cluster-api-actuator-pkg/testutils
+github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder
 github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/config/v1
 github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/core/v1
+github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/machine/v1beta1
 # github.com/openshift/library-go v0.0.0-20231214171439-128164517bf7
 ## explicit; go 1.20
 github.com/openshift/library-go/pkg/config/clusteroperator/v1helpers
