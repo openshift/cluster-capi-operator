@@ -29,6 +29,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
+	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/test"
 )
 
@@ -54,6 +55,9 @@ var _ = BeforeSuite(func() {
 	Expect(cfg).NotTo(BeNil())
 	Expect(cl).NotTo(BeNil())
 
+	managedNamespace := &corev1.Namespace{}
+	managedNamespace.SetName(controllers.DefaultManagedNamespace)
+	Expect(cl.Create(context.Background(), managedNamespace)).To(Succeed())
 	ocpConfigNamespace := &corev1.Namespace{}
 	ocpConfigNamespace.SetName(defaultCAPINamespace)
 	Expect(cl.Create(context.Background(), ocpConfigNamespace)).To(Succeed())

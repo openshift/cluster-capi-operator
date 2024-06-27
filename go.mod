@@ -19,7 +19,6 @@ require (
 	github.com/go-logr/logr v1.4.2
 	github.com/gobuffalo/flect v1.0.2
 	github.com/golangci/golangci-lint v1.59.1
-	github.com/klauspost/compress v1.17.8
 	github.com/onsi/ginkgo/v2 v2.19.0
 	github.com/onsi/gomega v1.33.1
 	github.com/openshift/api v0.0.0-20231129134630-a782d1c1541c
