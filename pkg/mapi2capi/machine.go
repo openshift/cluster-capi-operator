@@ -10,12 +10,16 @@ import (
 )
 
 const (
-	capiNamespace            = "openshift-cluster-api"
-	capiMachineAPIVersion    = "cluster.x-k8s.io/v1beta1"
-	capiMachineKind          = "Machine"
+	capiNamespace         = "openshift-cluster-api"
+	capiMachineAPIVersion = "cluster.x-k8s.io/v1beta1"
+	capiMachineKind       = "Machine"
+
 	workerUserDataSecretName = "worker-user-data"
-	awsTemplateAPIVersion    = "infrastructure.cluster.x-k8s.io/v1beta2"
-	awsTemplateKind          = "AWSMachineTemplate"
+
+	awsTemplateAPIVersion       = "infrastructure.cluster.x-k8s.io/v1beta2"
+	awsTemplateKind             = "AWSMachineTemplate"
+	openstackTemplateAPIVersion = "infrastructure.cluster.x-k8s.io/v1beta1"
+	openstackTemplateKind       = "OpenStackMachineTemplate"
 )
 
 // fromMachineToMachine translates a MAPI Machine to its Core CAPI Machine correspondent.
