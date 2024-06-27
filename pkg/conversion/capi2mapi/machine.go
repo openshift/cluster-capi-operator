@@ -30,8 +30,7 @@ import (
 )
 
 const (
-	mapiNamespace            = "openshift-machine-api"
-	workerUserDataSecretName = "worker-user-data"
+	mapiNamespace = "openshift-machine-api"
 )
 
 // fromCAPIMachineToMAPIMachine translates a core CAPI Machine to its MAPI Machine correspondent.
