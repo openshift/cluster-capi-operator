@@ -92,6 +92,8 @@ linters-settings:
         alias: "awsv1"
       - pkg: "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
         alias: "ibmpowervsv1"
+      - pkg: "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
+        alias: "openstackv1"
     no-unaliased: true
   nlreturn:
     block-size: 2
