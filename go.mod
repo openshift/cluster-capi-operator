@@ -1,6 +1,8 @@
 module github.com/openshift/cluster-capi-operator
 
-go 1.21
+go 1.22
+
+toolchain go1.22.4
 
 //replace (
 //	github.com/google/cel-go => github.com/google/cel-go v0.16.1
@@ -41,7 +43,7 @@ require (
 	sigs.k8s.io/cluster-api-provider-azure v1.15.1
 	sigs.k8s.io/cluster-api-provider-gcp v1.6.1-0.20240611121101-5a947cf2bf02
 	sigs.k8s.io/cluster-api-provider-ibmcloud v0.8.0
-	sigs.k8s.io/cluster-api-provider-openstack v0.9.1
+	sigs.k8s.io/cluster-api-provider-openstack v0.10.3
 	sigs.k8s.io/cluster-api-provider-vsphere v1.10.0
 	sigs.k8s.io/controller-runtime v0.17.4
 	sigs.k8s.io/controller-runtime/tools/setup-envtest v0.0.0-20240531134648-6636df17d67b
@@ -149,7 +151,6 @@ require (
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/pprof v0.0.0-20240424215950-a892ee059fd6 // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/gophercloud/gophercloud v1.7.0 // indirect
 	github.com/gordonklaus/ineffassign v0.1.0 // indirect
 	github.com/gostaticanalysis/analysisutil v0.7.1 // indirect
 	github.com/gostaticanalysis/comment v1.4.2 // indirect
@@ -297,6 +298,7 @@ require (
 	k8s.io/apiserver v0.29.5 // indirect
 	k8s.io/kube-aggregator v0.28.2 // indirect
 	k8s.io/kube-openapi v0.0.0-20240117194847-208609032b15 // indirect
+	k8s.io/kubernetes v1.28.3 // indirect
 	mvdan.cc/gofumpt v0.6.0 // indirect
 	mvdan.cc/unparam v0.0.0-20240528143540-8a5130ca722f // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.28.0 // indirect
