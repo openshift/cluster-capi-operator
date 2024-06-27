@@ -4,6 +4,7 @@ The Cluster CAPI Operator manages the installation and lifecycle of the Cluster 
 
 ```
 Note: This operator only runs on TechPreview clusters.
+Noop
 ```
 
 # Managed resources
