@@ -43,8 +43,6 @@ import (
 	"go/token"
 	"math/big"
 	"os"
-
-	"golang.org/x/tools/internal/typeparams"
 )
 
 // If true, show diagnostic information at each step of lifting.
@@ -105,14 +103,9 @@ func buildDomFrontier(fn *Function) domFrontier {
 }
 
 func removeInstr(refs []Instruction, instr Instruction) []Instruction {
-	return removeInstrsIf(refs, func(i Instruction) bool { return i == instr })
-}
-
-func removeInstrsIf(refs []Instruction, p func(Instruction) bool) []Instruction {
-	// TODO(taking): replace with go1.22 slices.DeleteFunc.
 	i := 0
 	for _, ref := range refs {
-		if p(ref) {
+		if ref == instr {
 			continue
 		}
 		refs[i] = ref
@@ -467,7 +460,7 @@ func liftAlloc(df domFrontier, alloc *Alloc, newPhis newPhiMap, fresh *int) bool
 				*fresh++
 
 				phi.pos = alloc.Pos()
-				phi.setType(typeparams.MustDeref(alloc.Type()))
+				phi.setType(mustDeref(alloc.Type()))
 				phi.block = v
 				if debugLifting {
 					fmt.Fprintf(os.Stderr, "\tplace %s = %s at block %s\n", phi.Name(), phi, v)
@@ -512,7 +505,7 @@ func replaceAll(x, y Value) {
 func renamed(renaming []Value, alloc *Alloc) Value {
 	v := renaming[alloc.index]
 	if v == nil {
-		v = zeroConst(typeparams.MustDeref(alloc.Type()))
+		v = zeroConst(mustDeref(alloc.Type()))
 		renaming[alloc.index] = v
 	}
 	return v

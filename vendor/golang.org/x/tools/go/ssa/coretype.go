@@ -7,7 +7,6 @@ package ssa
 import (
 	"go/types"
 
-	"golang.org/x/tools/internal/aliases"
 	"golang.org/x/tools/internal/typeparams"
 )
 
@@ -41,20 +40,19 @@ func isBytestring(T types.Type) bool {
 }
 
 // termList is a list of types.
-type termList []*types.Term            // type terms of the type set
+type termList []*typeparams.Term       // type terms of the type set
 func (s termList) Len() int            { return len(s) }
 func (s termList) At(i int) types.Type { return s[i].Type() }
 
 // typeSetOf returns the type set of typ. Returns an empty typeset on an error.
 func typeSetOf(typ types.Type) termList {
 	// This is a adaptation of x/exp/typeparams.NormalTerms which x/tools cannot depend on.
-	var terms []*types.Term
+	var terms []*typeparams.Term
 	var err error
-	// typeSetOf(t) == typeSetOf(Unalias(t))
-	switch typ := aliases.Unalias(typ).(type) {
-	case *types.TypeParam:
+	switch typ := typ.(type) {
+	case *typeparams.TypeParam:
 		terms, err = typeparams.StructuralTerms(typ)
-	case *types.Union:
+	case *typeparams.Union:
 		terms, err = typeparams.UnionTermSet(typ)
 	case *types.Interface:
 		terms, err = typeparams.InterfaceTermSet(typ)
@@ -62,7 +60,7 @@ func typeSetOf(typ types.Type) termList {
 		// Common case.
 		// Specializing the len=1 case to avoid a slice
 		// had no measurable space/time benefit.
-		terms = []*types.Term{types.NewTerm(false, typ)}
+		terms = []*typeparams.Term{typeparams.NewTerm(false, typ)}
 	}
 
 	if err != nil {

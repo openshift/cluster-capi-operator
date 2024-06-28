@@ -14,14 +14,14 @@ import (
 	"golang.org/x/tools/go/loader"
 	"golang.org/x/tools/go/packages"
 	"golang.org/x/tools/go/ssa"
-	"golang.org/x/tools/internal/versions"
+	"golang.org/x/tools/internal/typeparams"
 )
 
 // Packages creates an SSA program for a set of packages.
 //
 // The packages must have been loaded from source syntax using the
-// [packages.Load] function in [packages.LoadSyntax] or
-// [packages.LoadAllSyntax] mode.
+// golang.org/x/tools/go/packages.Load function in LoadSyntax or
+// LoadAllSyntax mode.
 //
 // Packages creates an SSA package for each well-typed package in the
 // initial list, plus all their dependencies. The resulting list of
@@ -29,30 +29,12 @@ import (
 // a nil if SSA code could not be constructed for the corresponding initial
 // package due to type errors.
 //
-// Code for bodies of functions is not built until [Program.Build] is
-// called on the resulting Program. SSA code is constructed only for
-// the initial packages with well-typed syntax trees.
+// Code for bodies of functions is not built until Build is called on
+// the resulting Program. SSA code is constructed only for the initial
+// packages with well-typed syntax trees.
 //
 // The mode parameter controls diagnostics and checking during SSA construction.
 func Packages(initial []*packages.Package, mode ssa.BuilderMode) (*ssa.Program, []*ssa.Package) {
-	// TODO(adonovan): opt: this calls CreatePackage far more than
-	// necessary: for all dependencies, not just the (non-initial)
-	// direct dependencies of the initial packages.
-	//
-	// But can it reasonably be changed without breaking the
-	// spirit and/or letter of the law above? Clients may notice
-	// if we call CreatePackage less, as methods like
-	// Program.FuncValue will return nil. Or must we provide a new
-	// function (and perhaps deprecate this one)? Is it worth it?
-	//
-	// Tim King makes the interesting point that it would be
-	// possible to entirely alleviate the client from the burden
-	// of calling CreatePackage for non-syntax packages, if we
-	// were to treat vars and funcs lazily in the same way we now
-	// treat methods. (In essence, try to move away from the
-	// notion of ssa.Packages, and make the Program answer
-	// all reasonable questions about any types.Object.)
-
 	return doPackages(initial, mode, false)
 }
 
@@ -60,7 +42,7 @@ func Packages(initial []*packages.Package, mode ssa.BuilderMode) (*ssa.Program, 
 // their dependencies.
 //
 // The packages must have been loaded from source syntax using the
-// [packages.Load] function in [packages.LoadAllSyntax] mode.
+// golang.org/x/tools/go/packages.Load function in LoadAllSyntax mode.
 //
 // AllPackages creates an SSA package for each well-typed package in the
 // initial list, plus all their dependencies. The resulting list of
@@ -120,7 +102,7 @@ func doPackages(initial []*packages.Package, mode ssa.BuilderMode, deps bool) (*
 //
 // The mode parameter controls diagnostics and checking during SSA construction.
 //
-// Deprecated: Use [golang.org/x/tools/go/packages] and the [Packages]
+// Deprecated: Use golang.org/x/tools/go/packages and the Packages
 // function instead; see ssa.Example_loadPackages.
 func CreateProgram(lprog *loader.Program, mode ssa.BuilderMode) *ssa.Program {
 	prog := ssa.NewProgram(lprog.Fset, mode)
@@ -134,17 +116,16 @@ func CreateProgram(lprog *loader.Program, mode ssa.BuilderMode) *ssa.Program {
 	return prog
 }
 
-// BuildPackage builds an SSA program with SSA intermediate
-// representation (IR) for all functions of a single package.
+// BuildPackage builds an SSA program with IR for a single package.
 //
-// It populates pkg by type-checking the specified file syntax trees.  All
+// It populates pkg by type-checking the specified file ASTs.  All
 // dependencies are loaded using the importer specified by tc, which
 // typically loads compiler export data; SSA code cannot be built for
-// those packages.  BuildPackage then constructs an [ssa.Program] with all
+// those packages.  BuildPackage then constructs an ssa.Program with all
 // dependency packages created, and builds and returns the SSA package
 // corresponding to pkg.
 //
-// The caller must have set pkg.Path to the import path.
+// The caller must have set pkg.Path() to the import path.
 //
 // The operation fails if there were any type-checking or import errors.
 //
@@ -162,11 +143,10 @@ func BuildPackage(tc *types.Config, fset *token.FileSet, pkg *types.Package, fil
 		Defs:       make(map[*ast.Ident]types.Object),
 		Uses:       make(map[*ast.Ident]types.Object),
 		Implicits:  make(map[ast.Node]types.Object),
-		Instances:  make(map[*ast.Ident]types.Instance),
 		Scopes:     make(map[ast.Node]*types.Scope),
 		Selections: make(map[*ast.SelectorExpr]*types.Selection),
 	}
-	versions.InitFileVersions(info)
+	typeparams.InitInstanceInfo(info)
 	if err := types.NewChecker(tc, fset, pkg, info).Files(files); err != nil {
 		return nil, nil, err
 	}
@@ -187,25 +167,6 @@ func BuildPackage(tc *types.Config, fset *token.FileSet, pkg *types.Package, fil
 		}
 	}
 	createAll(pkg.Imports())
-
-	// TODO(adonovan): we could replace createAll with just:
-	//
-	// // Create SSA packages for all imports.
-	// for _, p := range pkg.Imports() {
-	// 	prog.CreatePackage(p, nil, nil, true)
-	// }
-	//
-	// (with minor changes to changes to ../builder_test.go as
-	// shown in CL 511715 PS 10.) But this would strictly violate
-	// the letter of the doc comment above, which says "all
-	// dependencies created".
-	//
-	// Tim makes the good point with some extra work we could
-	// remove the need for any CreatePackage calls except the
-	// ones with syntax (i.e. primary packages). Of course
-	// You wouldn't have ssa.Packages and Members for as
-	// many things but no-one really uses that anyway.
-	// I wish I had done this from the outset.
 
 	// Create and build the primary package.
 	ssapkg := prog.CreatePackage(pkg, files, info, false)

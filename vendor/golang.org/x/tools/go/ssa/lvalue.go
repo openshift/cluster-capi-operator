@@ -11,8 +11,6 @@ import (
 	"go/ast"
 	"go/token"
 	"go/types"
-
-	"golang.org/x/tools/internal/typeparams"
 )
 
 // An lvalue represents an assignable location that may appear on the
@@ -54,7 +52,7 @@ func (a *address) address(fn *Function) Value {
 }
 
 func (a *address) typ() types.Type {
-	return typeparams.MustDeref(a.addr.Type())
+	return mustDeref(a.addr.Type())
 }
 
 // An element is an lvalue represented by m[k], the location of an

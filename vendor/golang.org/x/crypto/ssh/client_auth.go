@@ -307,10 +307,7 @@ func (cb publicKeyCallback) auth(session []byte, user string, c packetConn, rand
 	}
 	var methods []string
 	var errSigAlgo error
-
-	origSignersLen := len(signers)
-	for idx := 0; idx < len(signers); idx++ {
-		signer := signers[idx]
+	for _, signer := range signers {
 		pub := signer.PublicKey()
 		as, algo, err := pickSignatureAlgorithm(signer, extensions)
 		if err != nil && errSigAlgo == nil {
@@ -323,21 +320,6 @@ func (cb publicKeyCallback) auth(session []byte, user string, c packetConn, rand
 		ok, err := validateKey(pub, algo, user, c)
 		if err != nil {
 			return authFailure, nil, err
-		}
-		// OpenSSH 7.2-7.7 advertises support for rsa-sha2-256 and rsa-sha2-512
-		// in the "server-sig-algs" extension but doesn't support these
-		// algorithms for certificate authentication, so if the server rejects
-		// the key try to use the obtained algorithm as if "server-sig-algs" had
-		// not been implemented if supported from the algorithm signer.
-		if !ok && idx < origSignersLen && isRSACert(algo) && algo != CertAlgoRSAv01 {
-			if contains(as.Algorithms(), KeyAlgoRSA) {
-				// We retry using the compat algorithm after all signers have
-				// been tried normally.
-				signers = append(signers, &multiAlgorithmSigner{
-					AlgorithmSigner:     as,
-					supportedAlgorithms: []string{KeyAlgoRSA},
-				})
-			}
 		}
 		if !ok {
 			continue
@@ -404,10 +386,10 @@ func validateKey(key PublicKey, algo string, user string, c packetConn) (bool, e
 		return false, err
 	}
 
-	return confirmKeyAck(key, c)
+	return confirmKeyAck(key, algo, c)
 }
 
-func confirmKeyAck(key PublicKey, c packetConn) (bool, error) {
+func confirmKeyAck(key PublicKey, algo string, c packetConn) (bool, error) {
 	pubKey := key.Marshal()
 
 	for {
@@ -425,15 +407,7 @@ func confirmKeyAck(key PublicKey, c packetConn) (bool, error) {
 			if err := Unmarshal(packet, &msg); err != nil {
 				return false, err
 			}
-			// According to RFC 4252 Section 7 the algorithm in
-			// SSH_MSG_USERAUTH_PK_OK should match that of the request but some
-			// servers send the key type instead. OpenSSH allows any algorithm
-			// that matches the public key, so we do the same.
-			// https://github.com/openssh/openssh-portable/blob/86bdd385/sshconnect2.c#L709
-			if !contains(algorithmsForKeyFormat(key.Type()), msg.Algo) {
-				return false, nil
-			}
-			if !bytes.Equal(msg.PubKey, pubKey) {
+			if msg.Algo != algo || !bytes.Equal(msg.PubKey, pubKey) {
 				return false, nil
 			}
 			return true, nil
