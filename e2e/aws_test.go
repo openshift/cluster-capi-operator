@@ -2,8 +2,6 @@ package e2e
 
 import (
 	"context"
-	"net/url"
-	"strconv"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -45,7 +43,6 @@ var _ = Describe("Cluster API AWS MachineSet", Ordered, func() {
 		mapiDefaultMS, mapiDefaultProviderSpec = getDefaultAWSMAPIProviderSpec(cl)
 		awsClient = createAWSClient(mapiDefaultProviderSpec.Placement.Region)
 		framework.CreateCoreCluster(cl, clusterName, "AWSCluster")
-		createAWSCluster(cl, mapiDefaultProviderSpec)
 	})
 
 	AfterEach(func() {
@@ -60,7 +57,7 @@ var _ = Describe("Cluster API AWS MachineSet", Ordered, func() {
 	})
 
 	It("should be able to run a machine with a default provider spec", func() {
-		awsMachineTemplate = newAWSMachineTemplate(cl, mapiDefaultProviderSpec)
+		awsMachineTemplate = newAWSMachineTemplate(mapiDefaultProviderSpec)
 		if err := cl.Create(ctx, awsMachineTemplate); err != nil && !apierrors.IsAlreadyExists(err) {
 			Expect(err).ToNot(HaveOccurred())
 		}
@@ -97,55 +94,7 @@ func getDefaultAWSMAPIProviderSpec(cl client.Client) (*mapiv1.MachineSet, *mapiv
 	return machineSet, providerSpec
 }
 
-func createAWSCluster(cl client.Client, mapiProviderSpec *mapiv1.AWSMachineProviderConfig) *awsv1.AWSCluster {
-	By("Creating AWS cluster")
-
-	apiUrl, err := url.Parse(mapiInfrastructure.Status.APIServerInternalURL)
-	Expect(err).ToNot(HaveOccurred())
-
-	port, err := strconv.ParseInt(apiUrl.Port(), 10, 32)
-	Expect(err).NotTo(HaveOccurred())
-
-	awsCluster := &awsv1.AWSCluster{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      clusterName,
-			Namespace: framework.CAPINamespace,
-		},
-		Spec: awsv1.AWSClusterSpec{
-			Region: mapiProviderSpec.Placement.Region,
-			ControlPlaneEndpoint: clusterv1.APIEndpoint{
-				Host: apiUrl.Hostname(),
-				Port: int32(port),
-			},
-		},
-	}
-
-	if err := cl.Create(ctx, awsCluster); err != nil && !apierrors.IsAlreadyExists(err) {
-		Expect(err).ToNot(HaveOccurred())
-	}
-
-	Eventually(func() (bool, error) {
-		patchedAWSCluster := &awsv1.AWSCluster{}
-		err := cl.Get(ctx, client.ObjectKeyFromObject(awsCluster), patchedAWSCluster)
-		if err != nil {
-			return false, err
-		}
-
-		if patchedAWSCluster.Annotations == nil {
-			return false, nil
-		}
-
-		if _, ok := patchedAWSCluster.Annotations[clusterv1.ManagedByAnnotation]; !ok {
-			return false, nil
-		}
-
-		return patchedAWSCluster.Status.Ready, nil
-	}, framework.WaitShort).Should(BeTrue())
-
-	return awsCluster
-}
-
-func newAWSMachineTemplate(cl client.Client, mapiProviderSpec *mapiv1.AWSMachineProviderConfig) *awsv1.AWSMachineTemplate {
+func newAWSMachineTemplate(mapiProviderSpec *mapiv1.AWSMachineProviderConfig) *awsv1.AWSMachineTemplate {
 	By("Creating AWS machine template")
 
 	Expect(mapiProviderSpec).ToNot(BeNil())
