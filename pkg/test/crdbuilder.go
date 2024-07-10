@@ -1,3 +1,18 @@
+/*
+Copyright 2024 Red Hat, Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+	http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 package test
 
 import (
@@ -21,6 +36,7 @@ var (
 
 	// fakeInfrastructureProviderKind is the Kind for the CoreProvider.
 	fakeInfrastructureProviderKind = "InfrastructureProvider"
+
 	// fakeInfrastructureProviderCRD is a fake CoreProvider CRD.
 	fakeInfrastructureProviderCRD = generateCRD(operatorGroupVersion.WithKind(fakeInfrastructureProviderKind))
 
@@ -29,6 +45,7 @@ var (
 
 	// fakeClusterKind is the Kind for the Cluster.
 	fakeClusterKind = "Cluster"
+
 	// fakeClusterCRD is a fake Cluster CRD.
 	fakeClusterCRD = generateCRD(clusterGroupVersion.WithKind(fakeClusterKind))
 
@@ -37,22 +54,26 @@ var (
 
 	// fakeAWSClusterKind is the Kind for the AWSCluster.
 	fakeAWSClusterKind = "AWSCluster"
+
 	// fakeAWSClusterCRD is a fake AWSCluster CRD.
 	fakeAWSClusterCRD = generateCRD(v1beta2InfrastructureGroupVersion.WithKind(fakeAWSClusterKind))
 
 	// fakeAzureClusterKind is the Kind for the AWSCluster.
 	fakeAzureClusterKind = "AzureCluster"
+
 	// fakeAWSClusterCRD is a fake AzureCluster CRD.
 	fakeAzureClusterCRD = generateCRD(v1beta2InfrastructureGroupVersion.WithKind(fakeAzureClusterKind))
 
 	// fakeGCPClusterKind is the Kind for the GCPCluster.
 	fakeGCPClusterKind = "GCPCluster"
+
 	// fakeGCPClusterCRD is a fake GCPCluster CRD.
 	fakeGCPClusterCRD = generateCRD(v1beta2InfrastructureGroupVersion.WithKind(fakeGCPClusterKind))
 )
 
 func generateCRD(gvk schema.GroupVersionKind) *apiextensionsv1.CustomResourceDefinition {
 	shouldPreserveUnknownFields := true
+
 	return &apiextensionsv1.CustomResourceDefinition{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: apiextensionsv1.SchemeGroupVersion.String(),

@@ -1,3 +1,18 @@
+/*
+Copyright 2024 Red Hat, Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+	http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 package kubeconfig
 
 import (
@@ -26,10 +41,10 @@ import (
 )
 
 const (
-	tokenSecretName = "cluster-capi-operator-secret" // nolint
+	tokenSecretName = "cluster-capi-operator-secret" //nolint
 )
 
-// ClusterReconciler reconciles a ClusterOperator object
+// KubeconfigReconciler reconciles a ClusterOperator object.
 type KubeconfigReconciler struct {
 	operatorstatus.ClusterOperatorStatusClient
 	Scheme      *runtime.Scheme
@@ -39,7 +54,7 @@ type KubeconfigReconciler struct {
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *KubeconfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
+	if err := ctrl.NewControllerManagedBy(mgr).
 		For(
 			&corev1.Secret{},
 			builder.WithPredicates(tokenSecretPredicate()),
@@ -49,26 +64,35 @@ func (r *KubeconfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			handler.EnqueueRequestsFromMapFunc(toTokenSecret),
 			builder.WithPredicates(kubeconfigSecretPredicate()),
 		).
-		Complete(r)
+		Complete(r); err != nil {
+		return fmt.Errorf("failed to create controller: %w", err)
+	}
+
+	return nil
 }
 
+// Reconcile reconciles the kubeconfig secret.
 func (r *KubeconfigReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (ctrl.Result, error) {
 	log := ctrl.LoggerFrom(ctx).WithName("KubeconfigController")
 
 	infra := &configv1.Infrastructure{}
 	if err := r.Get(ctx, client.ObjectKey{Name: controllers.InfrastructureResourceName}, infra); err != nil {
-		log.Error(err, "Unable to retrive Infrastructure object")
+		log.Error(err, "Unable to retrieve Infrastructure object")
+
 		if err := r.SetStatusDegraded(ctx, err); err != nil {
-			return ctrl.Result{}, fmt.Errorf("error syncing ClusterOperatorStatus: %v", err)
+			return ctrl.Result{}, fmt.Errorf("error syncing ClusterOperatorStatus: %w", err)
 		}
-		return ctrl.Result{}, err
+
+		return ctrl.Result{}, fmt.Errorf("unable to retrieve Infrastructure object: %w", err)
 	}
 
 	if infra.Status.PlatformStatus == nil {
 		log.Info("No platform status exists in infrastructure object. Skipping kubeconfig reconciliation...")
+
 		if err := r.SetStatusAvailable(ctx, ""); err != nil {
-			return ctrl.Result{}, err
+			return ctrl.Result{}, fmt.Errorf("error syncing ClusterOperatorStatus: %w", err)
 		}
+
 		return ctrl.Result{}, nil
 	}
 
@@ -79,13 +103,19 @@ func (r *KubeconfigReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (c
 	res, err := r.reconcileKubeconfig(ctx, log)
 	if err != nil {
 		log.Error(err, "Error reconciling kubeconfig")
+
 		if err := r.SetStatusDegraded(ctx, err); err != nil {
-			return ctrl.Result{}, fmt.Errorf("error syncing ClusterOperatorStatus: %v", err)
+			return ctrl.Result{}, fmt.Errorf("error syncing ClusterOperatorStatus: %w", err)
 		}
-		return ctrl.Result{}, err
+
+		return ctrl.Result{}, fmt.Errorf("error reconciling kubeconfig: %w", err)
 	}
 
-	return res, r.SetStatusAvailable(ctx, "")
+	if err := r.SetStatusAvailable(ctx, ""); err != nil {
+		return ctrl.Result{}, fmt.Errorf("error syncing ClusterOperatorStatus: %w", err)
+	}
+
+	return res, nil
 }
 
 func (r *KubeconfigReconciler) reconcileKubeconfig(ctx context.Context, log logr.Logger) (ctrl.Result, error) {
@@ -95,20 +125,25 @@ func (r *KubeconfigReconciler) reconcileKubeconfig(ctx context.Context, log logr
 		Name:      tokenSecretName,
 		Namespace: controllers.DefaultManagedNamespace,
 	}
+
 	if err := r.Get(ctx, tokenSecretKey, tokenSecret); err != nil {
 		if errors.IsNotFound(err) {
 			log.Info("Waiting for token secret to be created")
+
 			return ctrl.Result{RequeueAfter: 1 * time.Minute}, nil
 		}
-		return ctrl.Result{}, fmt.Errorf("unable to retrieve Secret object: %v", err)
+
+		return ctrl.Result{}, fmt.Errorf("unable to retrieve Secret object: %w", err)
 	}
 
 	if time.Since(tokenSecret.CreationTimestamp.Time) >= 30*time.Minute {
 		log.Info("Token secret is older than 30 minutes. Recreating it...")
+
 		// The token secret is managed by the CVO, it should be recreated shortly after deletion.
 		if err := r.Delete(ctx, tokenSecret); err != nil {
-			return ctrl.Result{}, fmt.Errorf("unable to delete Secret object: %v", err)
+			return ctrl.Result{}, fmt.Errorf("unable to delete Secret object: %w", err)
 		}
+
 		return ctrl.Result{RequeueAfter: 1 * time.Minute}, nil
 	}
 
@@ -121,38 +156,43 @@ func (r *KubeconfigReconciler) reconcileKubeconfig(ctx context.Context, log logr
 	})
 
 	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("error generating kubeconfig: %v", err)
+		return ctrl.Result{}, fmt.Errorf("error generating kubeconfig: %w", err)
 	}
 
 	// Create a secret with generated kubeconfig
 	out, err := clientcmd.Write(*kubeconfig)
 	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("error writing kubeconfig: %v", err)
+		return ctrl.Result{}, fmt.Errorf("error writing kubeconfig: %w", err)
 	}
 
-	kubeconfigSecret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf("%s-kubeconfig", r.clusterName),
-			Namespace: controllers.DefaultManagedNamespace,
-			Labels: map[string]string{
-				clusterv1.ClusterNameLabel: r.clusterName,
-			},
-		},
-		Data: map[string][]byte{
-			"value": out,
-		},
-		Type: clusterv1.ClusterSecretType,
-	}
-
+	kubeconfigSecret := newKubeConfigSecret(r.clusterName, out)
 	kubeconfigSecretCopy := kubeconfigSecret.DeepCopy()
+
 	if _, err := controllerutil.CreateOrPatch(ctx, r.Client, kubeconfigSecret, func() error {
 		kubeconfigSecret.ObjectMeta = kubeconfigSecretCopy.ObjectMeta
 		kubeconfigSecret.Data = kubeconfigSecretCopy.Data
 		kubeconfigSecret.Type = kubeconfigSecretCopy.Type
+
 		return nil
 	}); err != nil {
-		return ctrl.Result{}, fmt.Errorf("error reconciling kubeconfig secret: %v", err)
+		return ctrl.Result{}, fmt.Errorf("error reconciling kubeconfig secret: %w", err)
 	}
 
 	return ctrl.Result{}, nil
+}
+
+func newKubeConfigSecret(clusterName string, data []byte) *corev1.Secret {
+	return &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("%s-kubeconfig", clusterName),
+			Namespace: controllers.DefaultManagedNamespace,
+			Labels: map[string]string{
+				clusterv1.ClusterNameLabel: clusterName,
+			},
+		},
+		Data: map[string][]byte{
+			"value": data,
+		},
+		Type: clusterv1.ClusterSecretType,
+	}
 }

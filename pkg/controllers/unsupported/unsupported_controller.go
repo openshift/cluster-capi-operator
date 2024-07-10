@@ -1,11 +1,11 @@
 /*
-Copyright 2024.
+Copyright 2024 Red Hat, Inc.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -54,8 +54,11 @@ func (r *UnsupportedController) Reconcile(ctx context.Context, req ctrl.Request)
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *UnsupportedController) SetupWithManager(mgr ctrl.Manager) error {
-	build := ctrl.NewControllerManagedBy(mgr).
-		For(&configv1.ClusterOperator{}, builder.WithPredicates(clusterOperatorPredicates()))
+	if err := ctrl.NewControllerManagedBy(mgr).
+		For(&configv1.ClusterOperator{}, builder.WithPredicates(clusterOperatorPredicates())).
+		Complete(r); err != nil {
+		return fmt.Errorf("failed to create controller: %w", err)
+	}
 
-	return build.Complete(r)
+	return nil
 }

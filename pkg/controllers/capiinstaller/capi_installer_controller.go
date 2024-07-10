@@ -1,3 +1,18 @@
+/*
+Copyright 2024 Red Hat, Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+	http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 package capiinstaller
 
 import (
@@ -12,7 +27,6 @@ import (
 
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
-	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -39,7 +53,7 @@ import (
 )
 
 const (
-	// Controller conditions for the Cluster Operator resource
+	// Controller conditions for the Cluster Operator resource.
 	capiInstallerControllerAvailableCondition = "CapiInstallerControllerAvailable"
 	capiInstallerControllerDegradedCondition  = "CapiInstallerControllerDegraded"
 
@@ -53,8 +67,16 @@ const (
 	notNamespaced                     = ""
 	clusterOperatorName               = "cluster-api"
 	defaultCoreProviderComponentName  = "cluster-api"
+	powerVSIBMCloudProvider           = "ibmcloud"
 )
 
+var (
+	errEmptyProviderConfigMap = errors.New("provider configmap has no components data")
+	errResourceNotFound       = errors.New("resource not found")
+)
+
+// CapiInstallerController reconciles a ClusterOperator object.
+// It is resopnsible for installing the Cluster API components in the cluster.
 type CapiInstallerController struct {
 	operatorstatus.ClusterOperatorStatusClient
 	Scheme              *runtime.Scheme
@@ -111,11 +133,13 @@ func (r *CapiInstallerController) reconcile(ctx context.Context, log logr.Logger
 			if err := r.setDegradedCondition(ctx, log); err != nil {
 				return ctrl.Result{}, fmt.Errorf("failed to set conditions for CAPI Installer controller: %w", err)
 			}
+
 			return ctrl.Result{}, fmt.Errorf("unable to list CAPI provider %q ConfigMaps: %w", providerConfigMapLabelNameVal, err)
 		}
 
 		// Extract the provider manifests stored each of the matching ConfigMaps.
 		var providerComponents []string
+
 		for _, cm := range configMapList.Items {
 			log.Info("processing CAPI provider ConfigMap", "configmapName", cm.Name, "providerType", cm.Labels[providerConfigMapLabelTypeKey],
 				"providerName", cm.Labels[providerConfigMapLabelNameKey], "providerVersion", cm.Labels[providerConfigMapLabelVersionKey])
@@ -125,6 +149,7 @@ func (r *CapiInstallerController) reconcile(ctx context.Context, log logr.Logger
 				if err := r.setDegradedCondition(ctx, log); err != nil {
 					return ctrl.Result{}, fmt.Errorf("failed to set conditions for CAPI Installer controller: %w", err)
 				}
+
 				return ctrl.Result{}, fmt.Errorf("error extracting CAPI provider components from ConfigMap %q/%q: %w", cm.Namespace, cm.Name, err)
 			}
 
@@ -136,6 +161,7 @@ func (r *CapiInstallerController) reconcile(ctx context.Context, log logr.Logger
 			if err := r.setDegradedCondition(ctx, log); err != nil {
 				return ctrl.Result{}, fmt.Errorf("failed to set conditions for CAPI Installer controller: %w", err)
 			}
+
 			return ctrl.Result{}, fmt.Errorf("error applying CAPI provider %q components: %w", providerConfigMapLabelNameVal, err)
 		}
 
@@ -148,17 +174,75 @@ func (r *CapiInstallerController) reconcile(ctx context.Context, log logr.Logger
 // applyProviderComponents applies the provider components to the cluster.
 // It does so by differentiating between static components and dynamic components (i.e. Deployments).
 func (r *CapiInstallerController) applyProviderComponents(ctx context.Context, components []string) error {
+	componentsFilenames, componentsAssets, deploymentsFilenames, deploymentsAssets, err := getProviderComponents(r.Scheme, components)
+	if err != nil {
+		return fmt.Errorf("error getting provider components: %w", err)
+	}
+
+	// Perform a Direct apply of the static components.
+	res := resourceapply.ApplyDirectly(
+		ctx,
+		resourceapply.NewKubeClientHolder(r.ApplyClient).WithAPIExtensionsClient(r.APIExtensionsClient),
+		events.NewInMemoryRecorder("cluster-capi-operator-capi-installer-apply-client"),
+		resourceapply.NewResourceCache(),
+		assetFn(componentsAssets),
+		componentsFilenames...,
+	)
+
+	// For each of the Deployment components perform a Deployment-specific apply.
+	for _, d := range deploymentsFilenames {
+		deploymentManifest, ok := deploymentsAssets[d]
+		if !ok {
+			panic("error finding deployment manifest")
+		}
+
+		obj, err := yamlToRuntimeObject(r.Scheme, deploymentManifest)
+		if err != nil {
+			return fmt.Errorf("error parsing CAPI provider deployment manifets %q: %w", d, err)
+		}
+
+		// TODO: Deployments State/Conditions should influence the overall ClusterOperator Status.
+		deployment, ok := obj.(*appsv1.Deployment)
+		if !ok {
+			return fmt.Errorf("error casting object to Deployment: %w", err)
+		}
+
+		if _, _, err := resourceapply.ApplyDeployment(
+			ctx,
+			r.ApplyClient.AppsV1(),
+			events.NewInMemoryRecorder("cluster-capi-operator-capi-installer-apply-client"),
+			deployment,
+			resourcemerge.ExpectedDeploymentGeneration(deployment, nil),
+		); err != nil {
+			return fmt.Errorf("error applying CAPI provider deployment %q: %w", deployment.Name, err)
+		}
+	}
+
+	var errs error
+
+	for i, r := range res {
+		if r.Error != nil {
+			errs = errors.Join(errs, fmt.Errorf("error applying CAPI provider component %q at position %d: %w", r.File, i, r.Error))
+		}
+	}
+
+	return errs
+}
+
+// getProviderComponents parses the provided list of components into a map of filenames and assets.
+// Deployments are handled separately so are returned in a separate map.
+func getProviderComponents(scheme *runtime.Scheme, components []string) ([]string, map[string]string, []string, map[string]string, error) {
 	componentsFilenames := []string{}
-	componentsAssets := make(map[string]string, 0)
+	componentsAssets := make(map[string]string)
 
 	deploymentsFilenames := []string{}
-	deploymentsAssets := make(map[string]string, 0)
+	deploymentsAssets := make(map[string]string)
 
 	for i, m := range components {
 		// Parse the YAML manifests into unstructure objects.
-		u, err := yamlToUnstructured(r.Scheme, m)
+		u, err := yamlToUnstructured(scheme, m)
 		if err != nil {
-			return fmt.Errorf("error parsing provider component at position %d to unstructured: %w", i, err)
+			return nil, nil, nil, nil, fmt.Errorf("error parsing provider component at position %d to unstructured: %w", i, err)
 		}
 
 		name := fmt.Sprintf("%s/%s/%s - %s",
@@ -178,55 +262,14 @@ func (r *CapiInstallerController) applyProviderComponents(ctx context.Context, c
 		}
 	}
 
-	// Perform a Direct apply of the static components.
-	res := resourceapply.ApplyDirectly(
-		ctx,
-		resourceapply.NewKubeClientHolder(r.ApplyClient).WithAPIExtensionsClient(r.APIExtensionsClient),
-		events.NewInMemoryRecorder("cluster-capi-operator-capi-installer-apply-client"),
-		resourceapply.NewResourceCache(),
-		assetFn(componentsAssets),
-		componentsFilenames...,
-	)
-
-	// For each of the Deployment components perform a Deployment-specific apply.
-	for _, d := range deploymentsFilenames {
-		deploymentManifest, ok := deploymentsAssets[d]
-		if !ok {
-			panic("error finding deployment manifest")
-		}
-		obj, err := yamlToRuntimeObject(r.Scheme, deploymentManifest)
-		if err != nil {
-			return fmt.Errorf("error parsing CAPI provider deployment manifets %q: %w", d, err)
-		}
-
-		// TODO: Deployments State/Conditions should influence the overall ClusterOperator Status.
-		deployment := obj.(*v1.Deployment)
-		if _, _, err := resourceapply.ApplyDeployment(
-			ctx,
-			r.ApplyClient.AppsV1(),
-			events.NewInMemoryRecorder("cluster-capi-operator-capi-installer-apply-client"),
-			deployment,
-			resourcemerge.ExpectedDeploymentGeneration(deployment, nil),
-		); err != nil {
-			return fmt.Errorf("error applying CAPI provider deployment %q: %w", deployment.Name, err)
-		}
-	}
-
-	var errs error
-	for i, r := range res {
-		if r.Error != nil {
-			errs = errors.Join(errs, fmt.Errorf("error applying CAPI provider component %q at position %d: %w", r.File, i, r.Error))
-		}
-	}
-
-	return errs
+	return componentsFilenames, componentsAssets, deploymentsFilenames, deploymentsAssets, nil
 }
 
 // setAvailableCondition sets the ClusterOperator status condition to Available.
 func (r *CapiInstallerController) setAvailableCondition(ctx context.Context, log logr.Logger) error {
 	co, err := r.GetOrCreateClusterOperator(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("unable to get cluster operator: %w", err)
 	}
 
 	conds := []configv1.ClusterOperatorStatusCondition{
@@ -237,15 +280,21 @@ func (r *CapiInstallerController) setAvailableCondition(ctx context.Context, log
 	}
 
 	co.Status.Versions = []configv1.OperandVersion{{Name: controllers.OperatorVersionKey, Version: r.ReleaseVersion}}
+
 	log.V(2).Info("CAPI Installer Controller is Available")
-	return r.SyncStatus(ctx, co, conds)
+
+	if err := r.SyncStatus(ctx, co, conds); err != nil {
+		return fmt.Errorf("failed to sync status: %w", err)
+	}
+
+	return nil
 }
 
 // setAvailableCondition sets the ClusterOperator status condition to Degraded.
 func (r *CapiInstallerController) setDegradedCondition(ctx context.Context, log logr.Logger) error {
 	co, err := r.GetOrCreateClusterOperator(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("unable to get cluster operator: %w", err)
 	}
 
 	conds := []configv1.ClusterOperatorStatusCondition{
@@ -256,8 +305,14 @@ func (r *CapiInstallerController) setDegradedCondition(ctx context.Context, log 
 	}
 
 	co.Status.Versions = []configv1.OperandVersion{{Name: controllers.OperatorVersionKey, Version: r.ReleaseVersion}}
+
 	log.Info("CAPI Installer Controller is Degraded")
-	return r.SyncStatus(ctx, co, conds)
+
+	if err := r.SyncStatus(ctx, co, conds); err != nil {
+		return fmt.Errorf("failed to sync status: %w", err)
+	}
+
+	return nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -268,59 +323,38 @@ func (r *CapiInstallerController) SetupWithManager(mgr ctrl.Manager) error {
 			&corev1.ConfigMap{},
 			handler.EnqueueRequestsFromMapFunc(toClusterOperator),
 			builder.WithPredicates(configMapPredicate(r.ManagedNamespace, r.Platform)),
-		).
-		Watches(
-			&appsv1.Deployment{},
-			handler.EnqueueRequestsFromMapFunc(toClusterOperator),
-			builder.WithPredicates(ownedPlatformLabelPredicate(r.ManagedNamespace, r.Platform)),
-		).
-		Watches(
-			&admissionregistrationv1.ValidatingWebhookConfiguration{},
-			handler.EnqueueRequestsFromMapFunc(toClusterOperator),
-			builder.WithPredicates(ownedPlatformLabelPredicate(notNamespaced, r.Platform)),
-		).
-		Watches(
-			&admissionregistrationv1.MutatingWebhookConfiguration{},
-			handler.EnqueueRequestsFromMapFunc(toClusterOperator),
-			builder.WithPredicates(ownedPlatformLabelPredicate(notNamespaced, r.Platform)),
-		).
-		Watches(
-			&corev1.Service{},
-			handler.EnqueueRequestsFromMapFunc(toClusterOperator),
-			builder.WithPredicates(ownedPlatformLabelPredicate(r.ManagedNamespace, r.Platform)),
-		).
-		Watches(
-			&apiextensionsv1.CustomResourceDefinition{},
-			handler.EnqueueRequestsFromMapFunc(toClusterOperator),
-			builder.WithPredicates(ownedPlatformLabelPredicate(notNamespaced, r.Platform)),
-		).
-		Watches(
-			&corev1.ServiceAccount{},
-			handler.EnqueueRequestsFromMapFunc(toClusterOperator),
-			builder.WithPredicates(ownedPlatformLabelPredicate(r.ManagedNamespace, r.Platform)),
-		).
-		Watches(
-			&rbacv1.ClusterRoleBinding{},
-			handler.EnqueueRequestsFromMapFunc(toClusterOperator),
-			builder.WithPredicates(ownedPlatformLabelPredicate(notNamespaced, r.Platform)),
-		).
-		Watches(
-			&rbacv1.ClusterRole{},
-			handler.EnqueueRequestsFromMapFunc(toClusterOperator),
-			builder.WithPredicates(ownedPlatformLabelPredicate(notNamespaced, r.Platform)),
-		).
-		Watches(
-			&rbacv1.Role{},
-			handler.EnqueueRequestsFromMapFunc(toClusterOperator),
-			builder.WithPredicates(ownedPlatformLabelPredicate(r.ManagedNamespace, r.Platform)),
-		).
-		Watches(
-			&rbacv1.RoleBinding{},
-			handler.EnqueueRequestsFromMapFunc(toClusterOperator),
-			builder.WithPredicates(ownedPlatformLabelPredicate(r.ManagedNamespace, r.Platform)),
 		)
 
-	return build.Complete(r)
+	// All of the following watches share the ownedPlatformLabelPredicate.
+	watches := []struct {
+		obj       client.Object
+		namespace string
+	}{
+		{&appsv1.Deployment{}, r.ManagedNamespace},
+		{&admissionregistrationv1.ValidatingWebhookConfiguration{}, notNamespaced},
+		{&admissionregistrationv1.MutatingWebhookConfiguration{}, notNamespaced},
+		{&corev1.Service{}, r.ManagedNamespace},
+		{&apiextensionsv1.CustomResourceDefinition{}, notNamespaced},
+		{&corev1.ServiceAccount{}, r.ManagedNamespace},
+		{&rbacv1.ClusterRoleBinding{}, notNamespaced},
+		{&rbacv1.ClusterRole{}, notNamespaced},
+		{&rbacv1.Role{}, r.ManagedNamespace},
+		{&rbacv1.RoleBinding{}, r.ManagedNamespace},
+	}
+
+	for _, w := range watches {
+		build = build.Watches(
+			w.obj,
+			handler.EnqueueRequestsFromMapFunc(toClusterOperator),
+			builder.WithPredicates(ownedPlatformLabelPredicate(w.namespace, r.Platform)),
+		)
+	}
+
+	if err := build.Complete(r); err != nil {
+		return fmt.Errorf("failed to create controller: %w", err)
+	}
+
+	return nil
 }
 
 // extractProviderComponents extracts CAPI components manifests from a transport ConfigMap.
@@ -355,7 +389,7 @@ func extractManifests(cm corev1.ConfigMap) ([]string, error) {
 	binaryData, hasBinary := cm.BinaryData["components-zstd"]
 
 	if !(hasBinary || hasData) {
-		return nil, errors.New("provider configmap has no components data")
+		return nil, errEmptyProviderConfigMap
 	}
 
 	if hasBinary {
@@ -368,6 +402,7 @@ func extractManifests(cm corev1.ConfigMap) ([]string, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to decompress components: %w", err)
 		}
+
 		data = string(decoded)
 	}
 
@@ -389,17 +424,19 @@ func extractManifests(cm corev1.ConfigMap) ([]string, error) {
 // to a matching CAPI provider ConfigMap `name` Label value.
 func platformToProviderConfigMapLabelNameValue(platform configv1.PlatformType) string {
 	if platform == configv1.PowerVSPlatformType {
-		platform = "ibmcloud"
+		platform = powerVSIBMCloudProvider
 	}
-	return strings.ToLower(fmt.Sprintf("%s", platform))
+
+	return strings.ToLower(string(platform))
 }
 
 // platformToInfraProviderComponentName maps an OpenShift configv1.PlatformType
 // to a matching CAPI ownedProviderComponentName (see consts) Label value.
 func platformToInfraProviderComponentName(platform configv1.PlatformType) string {
 	if platform == configv1.PowerVSPlatformType {
-		platform = "ibmcloud"
+		platform = powerVSIBMCloudProvider
 	}
+
 	return strings.ToLower(fmt.Sprintf("infrastructure-%s", platform))
 }
 
@@ -418,7 +455,7 @@ func assetFn(assetsMap map[string]string) resourceapply.AssetFunc {
 	return func(name string) ([]byte, error) {
 		o, ok := assetsMap[name]
 		if !ok {
-			return nil, fmt.Errorf("error resource not found with name %s", name)
+			return nil, fmt.Errorf("error fetching resource %s: %w", name, errResourceNotFound)
 		}
 
 		return []byte(o), nil
@@ -428,6 +465,7 @@ func assetFn(assetsMap map[string]string) resourceapply.AssetFunc {
 // yamlToRuntimeObject parses a YAML manifest into a runtime.Object.
 func yamlToRuntimeObject(sch *runtime.Scheme, m string) (runtime.Object, error) {
 	decode := serializer.NewCodecFactory(sch).UniversalDeserializer().Decode
+
 	obj, _, err := decode([]byte(m), nil, nil)
 	if err != nil {
 		return nil, fmt.Errorf("error while decoding YAML object: %w", err)
