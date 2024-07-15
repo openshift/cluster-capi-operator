@@ -24,7 +24,6 @@ import (
 
 	"github.com/go-logr/logr"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
-	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
 	cerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -32,6 +31,7 @@ import (
 	vspherev1 "sigs.k8s.io/cluster-api-provider-vsphere/apis/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/yaml"
 )
 
 var (
