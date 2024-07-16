@@ -6,11 +6,10 @@ import (
 
 	capov1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
 	capiv1 "sigs.k8s.io/cluster-api/api/v1beta1"
-
 	configv1 "github.com/openshift/api/config/v1"
 	mapiv1alpha1 "github.com/openshift/api/machine/v1alpha1"
 	mapiv1 "github.com/openshift/api/machine/v1beta1"
-
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -186,14 +185,21 @@ func (p OpenStackProviderSpecAndInfra) ToMachineTemplateSpec() (capov1.OpenStack
 	var errors []error
 	var warnings []string
 
+	ports := convertMAPONetworksToCAPO(p.Spec.Networks)
+	ports = append(ports, convertMAPOPortsToCAPO(p.Spec.Ports)...)
+
 	spec := capov1.OpenStackMachineTemplateSpec{
 		Template: capov1.OpenStackMachineTemplateResource{
 			Spec: capov1.OpenStackMachineSpec{
 				AdditionalBlockDevices: convertMAPOAdditionalBlockDevicesToCAPO(p.Spec.AdditionalBlockDevices),
+				// LOSSY!! No translation for AZs possible
 				ConfigDrive:            p.Spec.ConfigDrive,
 				Flavor:                 p.Spec.Flavor,
+				// TODO(stephenfin): Do we need to populate FloatingIPPoolRef? Can we, given MAPO's FloatingIP is
+				// different (and deprecated)
+				IdentityRef:            convertMAPOCloudNameSecretToCAPO(p.Spec.CloudName, p.Spec.CloudsSecret),
 				Image:                  convertMAPOImageToCAPO(p.Spec.Image),
-				Ports:                  convertMAPOPortsToCAPO(p.Spec.Ports),
+				Ports:                  ports,
 				RootVolume:             convertMAPORootVolumeToCAPO(*p.Spec.RootVolume),
 				SecurityGroups:         convertMAPOSecurityGroupsToCAPO(p.Spec.SecurityGroups),
 				ServerGroup:            convertMAPOServerGroupToCAPO(p.Spec.ServerGroupID, p.Spec.ServerGroupName),
@@ -279,6 +285,16 @@ func convertMAPOAdditionalBlockDevicesToCAPO(mapoAdditionalBlockDevices []mapiv1
 	return capoAdditionalBlockDevices
 }
 
+func convertMAPOCloudNameSecretToCAPO(mapoCloudName string, mapoCloudSecret *corev1.SecretReference) (*capov1.OpenStackIdentityReference) {
+	// TODO(stephenfin): Is it okay to use the same secret? Do they have the same format? Perhaps we can skip this since the cluster will have this configured already.
+	// LOSSY!! This won't handle secrets in different namespaces.
+	capoCloudSecret := &capov1.OpenStackIdentityReference{
+		Name:      mapoCloudSecret.Name,
+		CloudName: mapoCloudName,
+	}
+	return capoCloudSecret
+}
+
 func convertMAPOImageToCAPO(mapoImage string) capov1.ImageParam {
 	// TODO(stephenfin): I'm pretty sure MAPO always uses a name, but should we check for UUIDs?
 	capoImage := capov1.ImageParam{
@@ -287,6 +303,178 @@ func convertMAPOImageToCAPO(mapoImage string) capov1.ImageParam {
 		},
 	}
 	return capoImage
+}
+
+func convertMAPONetworksToCAPO(mapoNetworks []mapiv1alpha1.NetworkParam) []capov1.PortOpts {
+	capoPorts := []capov1.PortOpts{}
+
+	splitTags := func(tags string) []capov1.NeutronTag {
+		if tags == "" {
+			return nil
+		}
+
+		var ret []capov1.NeutronTag
+
+		for _, tag := range strings.Split(tags, ",") {
+			if tag != "" {
+				ret = append(ret, capov1.NeutronTag(tag))
+			}
+		}
+		return ret
+	}
+
+	for _, mapoNetwork := range mapoNetworks {
+		capoNetworkPorts := []capov1.PortOpts{}
+
+		// we ignore .FixedIp since it's ignored by MAPO itself
+
+		network := capov1.NetworkParam{}
+		// convert .UUID
+		if mapoNetwork.UUID != "" {
+			network.ID = &mapoNetwork.UUID
+		// convert .Filter
+		} else {
+			network.Filter = &capov1.NetworkFilter{
+				Name:        mapoNetwork.Filter.Name,
+				Description: mapoNetwork.Filter.Description,
+				// TODO(stephenfin): Handle the deprecated TenantID field?
+				ProjectID:   mapoNetwork.Filter.ProjectID,
+				FilterByNeutronTags: capov1.FilterByNeutronTags{
+					NotTags:    splitTags(mapoNetwork.Filter.NotTags),
+					NotTagsAny: splitTags(mapoNetwork.Filter.NotTagsAny),
+					Tags:       splitTags(mapoNetwork.Filter.Tags),
+					TagsAny:    splitTags(mapoNetwork.Filter.TagsAny),
+				},
+			}
+		}
+
+		tags := mapoNetwork.PortTags
+
+		// convert .Subnets
+		if mapoNetwork.UUID == "" && (mapoNetwork.Filter == mapiv1alpha1.Filter{}) {
+			// Case: network is undefined and only has subnets
+			// Create a port for each subnet
+			for _, mapoSubnet := range mapoNetwork.Subnets {
+				portTags := append(tags, mapoSubnet.PortTags...)
+
+				capoPort := capov1.PortOpts{
+					Network:  &capov1.NetworkParam{ID: &mapoSubnet.UUID},
+					FixedIPs: []capov1.FixedIP{
+						{
+							Subnet: &capov1.SubnetParam{
+								ID: &mapoSubnet.Filter.ID,
+								Filter: &capov1.SubnetFilter{
+									CIDR:            mapoSubnet.Filter.CIDR,
+									Description:     mapoSubnet.Filter.Description,
+									GatewayIP:       mapoSubnet.Filter.GatewayIP,
+									IPVersion:       mapoSubnet.Filter.IPVersion,
+									IPv6AddressMode: mapoSubnet.Filter.IPv6AddressMode,
+									IPv6RAMode:      mapoSubnet.Filter.IPv6RAMode,
+									Name:            mapoSubnet.Filter.Name,
+									// We ignore NetworkID since it's silently ignored by MAPO itself
+									// TODO(stephenfin): Handle the deprecated TenantID field?
+									ProjectID: mapoSubnet.Filter.ProjectID,
+									FilterByNeutronTags: capov1.FilterByNeutronTags{
+										NotTags:    splitTags(mapoSubnet.Filter.NotTags),
+										NotTagsAny: splitTags(mapoSubnet.Filter.NotTagsAny),
+										Tags:       splitTags(mapoSubnet.Filter.Tags),
+										TagsAny:    splitTags(mapoSubnet.Filter.TagsAny),
+									},
+								},
+							},
+						},
+					},
+					Tags: portTags,
+				}
+
+				if mapoSubnet.PortSecurity != nil && *mapoSubnet.PortSecurity == false {
+					// negate
+					capoDisablePortSecurity := true
+					capoPort.DisablePortSecurity = &capoDisablePortSecurity
+				}
+
+				capoNetworkPorts = append(capoNetworkPorts, capoPort)
+			}
+		} else {
+			// Case: network and subnet are defined
+			// Create a single port with an interface for each subnet
+			fixedIPs := make([]capov1.FixedIP, len(mapoNetwork.Subnets))
+
+			for i, mapoSubnet := range mapoNetwork.Subnets {
+				fixedIPs[i] = capov1.FixedIP{
+					Subnet: &capov1.SubnetParam{
+						ID: &mapoSubnet.Filter.ID,
+						Filter: &capov1.SubnetFilter{
+							CIDR:            mapoSubnet.Filter.CIDR,
+							Description:     mapoSubnet.Filter.Description,
+							GatewayIP:       mapoSubnet.Filter.GatewayIP,
+							IPVersion:       mapoSubnet.Filter.IPVersion,
+							IPv6AddressMode: mapoSubnet.Filter.IPv6AddressMode,
+							IPv6RAMode:      mapoSubnet.Filter.IPv6RAMode,
+							Name:            mapoSubnet.Filter.Name,
+							// We ignore NetworkID since it's silently ignored by MAPO itself
+							// TODO(stephenfin): Handle the deprecated TenantID field?
+							ProjectID: mapoSubnet.Filter.ProjectID,
+							FilterByNeutronTags: capov1.FilterByNeutronTags{
+								NotTags:    splitTags(mapoSubnet.Filter.NotTags),
+								NotTagsAny: splitTags(mapoSubnet.Filter.NotTagsAny),
+								Tags:       splitTags(mapoSubnet.Filter.Tags),
+								TagsAny:    splitTags(mapoSubnet.Filter.TagsAny),
+							},
+						},
+					},
+				}
+				tags = append(tags, mapoSubnet.PortTags...)
+			}
+
+			capoPort := capov1.PortOpts{
+				FixedIPs: fixedIPs,
+				Network: &capov1.NetworkParam{ID: &mapoNetwork.UUID},
+				Tags: tags,
+			}
+
+			capoNetworkPorts = append(capoNetworkPorts, capoPort)
+		}
+
+		for _, capoPort := range capoNetworkPorts {
+			// convert .NoAllowedAddressPairs
+			if mapoNetwork.NoAllowedAddressPairs {
+				capoPort.AllowedAddressPairs = []capov1.AddressPair{}
+			}
+
+			// convert .PortSecurity
+			if mapoNetwork.PortSecurity != nil && *mapoNetwork.PortSecurity == false {
+				// negate
+				capoDisablePortSecurity := true
+				capoPort.DisablePortSecurity = &capoDisablePortSecurity
+			}
+
+			// convert .Profile
+			capoProfile := capov1.BindingProfile{}
+			for k, v := range mapoNetwork.Profile {
+				if k == "capabilities" {
+					if strings.Contains(mapoNetwork.Profile["capabilities"], "switchdev") {
+						capoOVSHWOffload := true
+						capoProfile.OVSHWOffload = &capoOVSHWOffload
+					}
+				} else if k == "trusted" && v == "true" {
+					capoTrustedVF := true
+					capoProfile.TrustedVF = &capoTrustedVF
+				}
+			}
+
+			// convert .VNICType
+			if mapoNetwork.VNICType != "" {
+				capoPort.ResolvedPortSpecFields = capov1.ResolvedPortSpecFields{
+					VNICType: &mapoNetwork.VNICType,
+				}
+			}
+		}
+
+		capoPorts = append(capoPorts, capoNetworkPorts...)
+	}
+
+	return capoPorts
 }
 
 func convertMAPOPortsToCAPO(mapoPorts []mapiv1alpha1.PortOpts) []capov1.PortOpts {
@@ -334,12 +522,11 @@ func convertMAPOPortsToCAPO(mapoPorts []mapiv1alpha1.PortOpts) []capov1.PortOpts
 		capoPort.FixedIPs = capoFixedIPs
 
 		// convert .PortSecurity
-		capoDisablePortSecurity := false
 		if mapoPort.PortSecurity != nil && *mapoPort.PortSecurity == false {
 			// negate
-			capoDisablePortSecurity = true
+			capoDisablePortSecurity := true
+			capoPort.DisablePortSecurity = &capoDisablePortSecurity
 		}
-		capoPort.DisablePortSecurity = &capoDisablePortSecurity
 
 		// convert .Profile
 		capoProfile := capov1.BindingProfile{}
