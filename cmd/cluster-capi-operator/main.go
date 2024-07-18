@@ -1,3 +1,16 @@
+// Copyright 2024 Red Hat, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 package main
 
 import (
@@ -48,58 +61,13 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/webhook"
 )
 
-var (
-	scheme               = runtime.NewScheme()
-	leaderElectionConfig = config.LeaderElectionConfiguration{
-		LeaderElect:       true,
-		LeaseDuration:     util.LeaseDuration,
-		RenewDeadline:     util.RenewDeadline,
-		RetryPeriod:       util.RetryPeriod,
-		ResourceName:      "cluster-capi-operator-leader",
-		ResourceNamespace: "openshift-cluster-api",
-	}
-	diagnosticsOptions = capiflags.DiagnosticsOptions{}
-
-	healthAddr = flag.String(
-		"health-addr",
-		":9440",
-		"The address for health checking.",
-	)
-	managedNamespace = flag.String(
-		"namespace",
-		controllers.DefaultManagedNamespace,
-		"The namespace where CAPI components will run.",
-	)
-	imagesFile = flag.String(
-		"images-json",
-		defaultImagesLocation,
-		"The location of images file to use by operator for managed CAPI binaries.",
-	)
-	webhookPort = flag.Int(
-		"webhook-port",
-		9443,
-		"The port for the webhook server to listen on.",
-	)
-	webhookCertDir = flag.String(
-		"webhook-cert-dir",
-		"/tmp/k8s-webhook-server/serving-certs/",
-		"Webhook cert dir, only used when webhook-port is specified.",
-	)
-
-	logToStderr = flag.Bool(
-		"logtostderr",
-		true,
-		"log to standard error instead of files",
-	)
-)
-
 const (
 	defaultImagesLocation         = "./dev-images.json"
 	releaseVersionEnvVariableName = "RELEASE_VERSION"
 	unknownVersionValue           = "unknown"
 )
 
-func init() {
+func initScheme(scheme *runtime.Scheme) {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(configv1.AddToScheme(scheme))
 	utilruntime.Must(apiextensionsv1.AddToScheme(scheme))
@@ -111,10 +79,55 @@ func init() {
 	utilruntime.Must(clusterctlv1.AddToScheme(scheme))
 	utilruntime.Must(ibmpowervsv1.AddToScheme(scheme))
 	utilruntime.Must(vspherev1.AddToScheme(scheme))
-	// +kubebuilder:scaffold:scheme
 }
 
+//nolint:funlen
 func main() {
+	scheme := runtime.NewScheme()
+	initScheme(scheme)
+
+	leaderElectionConfig := config.LeaderElectionConfiguration{
+		LeaderElect:       true,
+		LeaseDuration:     util.LeaseDuration,
+		RenewDeadline:     util.RenewDeadline,
+		RetryPeriod:       util.RetryPeriod,
+		ResourceName:      "cluster-capi-operator-leader",
+		ResourceNamespace: "openshift-cluster-api",
+	}
+	diagnosticsOptions := capiflags.DiagnosticsOptions{}
+
+	healthAddr := flag.String(
+		"health-addr",
+		":9440",
+		"The address for health checking.",
+	)
+	managedNamespace := flag.String(
+		"namespace",
+		controllers.DefaultManagedNamespace,
+		"The namespace where CAPI components will run.",
+	)
+	imagesFile := flag.String(
+		"images-json",
+		defaultImagesLocation,
+		"The location of images file to use by operator for managed CAPI binaries.",
+	)
+	webhookPort := flag.Int(
+		"webhook-port",
+		9443,
+		"The port for the webhook server to listen on.",
+	)
+	webhookCertDir := flag.String(
+		"webhook-cert-dir",
+		"/tmp/k8s-webhook-server/serving-certs/",
+		"Webhook cert dir, only used when webhook-port is specified.",
+	)
+
+	logToStderr := flag.Bool(
+		"logtostderr",
+		true,
+		"log to standard error instead of files",
+	)
+
 	textLoggerConfig := textlogger.NewConfig()
 	textLoggerConfig.AddFlags(flag.CommandLine)
 	ctrl.SetLogger(textlogger.NewLogger(textLoggerConfig))
@@ -134,6 +147,7 @@ func main() {
 	if logToStderr != nil {
 		klog.LogToStderr(*logToStderr)
 	}
+
 	diagnosticsOpts := capiflags.GetDiagnosticsOptions(diagnosticsOptions)
 	syncPeriod := 10 * time.Minute
 
@@ -146,6 +160,7 @@ func main() {
 	}
 
 	cfg := ctrl.GetConfigOrDie()
+
 	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
 		Scheme:                  scheme,
 		Metrics:                 diagnosticsOpts,
@@ -172,6 +187,7 @@ func main() {
 		klog.Error(err, "unable to set up apply client")
 		os.Exit(1)
 	}
+
 	apiextensionsClient, err := apiextensionsclient.NewForConfig(cfg)
 	if err != nil {
 		klog.Error(err, "unable to set up apply client")
@@ -200,26 +216,26 @@ func main() {
 	// This avoids unnecessary CAPI providers discovery, installs and reconciles when the platform is not supported.
 	switch platform {
 	case configv1.AWSPlatformType:
-		setupReconcilers(mgr, infra, platform, &awsv1.AWSCluster{}, containerImages, applyClient, apiextensionsClient)
+		setupReconcilers(mgr, infra, platform, &awsv1.AWSCluster{}, containerImages, applyClient, apiextensionsClient, *managedNamespace)
 		setupWebhooks(mgr)
 	case configv1.GCPPlatformType:
-		setupReconcilers(mgr, infra, platform, &gcpv1.GCPCluster{}, containerImages, applyClient, apiextensionsClient)
+		setupReconcilers(mgr, infra, platform, &gcpv1.GCPCluster{}, containerImages, applyClient, apiextensionsClient, *managedNamespace)
 		setupWebhooks(mgr)
 	case configv1.PowerVSPlatformType:
-		setupReconcilers(mgr, infra, platform, &ibmpowervsv1.IBMPowerVSCluster{}, containerImages, applyClient, apiextensionsClient)
+		setupReconcilers(mgr, infra, platform, &ibmpowervsv1.IBMPowerVSCluster{}, containerImages, applyClient, apiextensionsClient, *managedNamespace)
 		setupWebhooks(mgr)
 	case configv1.VSpherePlatformType:
-		setupReconcilers(mgr, infra, platform, &vspherev1.VSphereCluster{}, containerImages, applyClient, apiextensionsClient)
+		setupReconcilers(mgr, infra, platform, &vspherev1.VSphereCluster{}, containerImages, applyClient, apiextensionsClient, *managedNamespace)
 		setupWebhooks(mgr)
 	case configv1.OpenStackPlatformType:
-		setupReconcilers(mgr, infra, platform, &openstackv1.OpenStackCluster{}, containerImages, applyClient, apiextensionsClient)
+		setupReconcilers(mgr, infra, platform, &openstackv1.OpenStackCluster{}, containerImages, applyClient, apiextensionsClient, *managedNamespace)
 		setupWebhooks(mgr)
 	default:
 		klog.Infof("detected platform %q is not supported, skipping capi controllers setup", platform)
 
 		// UnsupportedController runs on unsupported platforms, it watches and keeps the cluster-api ClusterObject up to date.
 		if err := (&unsupported.UnsupportedController{
-			ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-unsupported-controller"),
+			ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-unsupported-controller", *managedNamespace),
 			Scheme:                      mgr.GetScheme(),
 		}).SetupWithManager(mgr); err != nil {
 			klog.Error(err, "unable to create unsupported controller", "controller", "Unsupported")
@@ -233,12 +249,14 @@ func main() {
 		klog.Error(err, "unable to set up health check")
 		os.Exit(1)
 	}
+
 	if err := mgr.AddReadyzCheck("check", healthz.Ping); err != nil {
 		klog.Error(err, "unable to set up ready check")
 		os.Exit(1)
 	}
 
 	klog.Info("starting manager")
+
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		klog.Error(err, "problem running manager")
 		os.Exit(1)
@@ -251,21 +269,22 @@ func getReleaseVersion() string {
 		releaseVersion = unknownVersionValue
 		klog.Infof("%s environment variable is missing, defaulting to %q", releaseVersionEnvVariableName, unknownVersionValue)
 	}
+
 	return releaseVersion
 }
 
-func getClusterOperatorStatusClient(mgr manager.Manager, controller string) operatorstatus.ClusterOperatorStatusClient {
+func getClusterOperatorStatusClient(mgr manager.Manager, controller string, managedNamespace string) operatorstatus.ClusterOperatorStatusClient {
 	return operatorstatus.ClusterOperatorStatusClient{
 		Client:           mgr.GetClient(),
 		Recorder:         mgr.GetEventRecorderFor(controller),
 		ReleaseVersion:   getReleaseVersion(),
-		ManagedNamespace: *managedNamespace,
+		ManagedNamespace: managedNamespace,
 	}
 }
 
-func setupReconcilers(mgr manager.Manager, infra *configv1.Infrastructure, platform configv1.PlatformType, infraClusterObject client.Object, containerImages map[string]string, applyClient *kubernetes.Clientset, apiextensionsClient *apiextensionsclient.Clientset) {
+func setupReconcilers(mgr manager.Manager, infra *configv1.Infrastructure, platform configv1.PlatformType, infraClusterObject client.Object, containerImages map[string]string, applyClient *kubernetes.Clientset, apiextensionsClient *apiextensionsclient.Clientset, managedNamespace string) {
 	if err := (&cluster.CoreClusterReconciler{
-		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-cluster-resource-controller"),
+		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-cluster-resource-controller", managedNamespace),
 		Cluster:                     &clusterv1.Cluster{},
 	}).SetupWithManager(mgr); err != nil {
 		klog.Error(err, "unable to create controller", "controller", "CoreCluster")
@@ -273,7 +292,7 @@ func setupReconcilers(mgr manager.Manager, infra *configv1.Infrastructure, platf
 	}
 
 	if err := (&secretsync.UserDataSecretController{
-		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-user-data-secret-controller"),
+		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-user-data-secret-controller", managedNamespace),
 		Scheme:                      mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		klog.Error(err, "unable to create user-data-secret controller", "controller", "UserDataSecret")
@@ -281,7 +300,7 @@ func setupReconcilers(mgr manager.Manager, infra *configv1.Infrastructure, platf
 	}
 
 	if err := (&kubeconfig.KubeconfigReconciler{
-		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-kubeconfig-controller"),
+		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-kubeconfig-controller", managedNamespace),
 		Scheme:                      mgr.GetScheme(),
 		RestCfg:                     mgr.GetConfig(),
 	}).SetupWithManager(mgr); err != nil {
@@ -290,7 +309,7 @@ func setupReconcilers(mgr manager.Manager, infra *configv1.Infrastructure, platf
 	}
 
 	if err := (&capiinstaller.CapiInstallerController{
-		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-capi-installer-controller"),
+		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-capi-installer-controller", managedNamespace),
 		Scheme:                      mgr.GetScheme(),
 		Images:                      containerImages,
 		RestCfg:                     mgr.GetConfig(),
@@ -303,7 +322,7 @@ func setupReconcilers(mgr manager.Manager, infra *configv1.Infrastructure, platf
 	}
 
 	if err := (&infracluster.InfraClusterController{
-		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-infracluster-controller"),
+		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-infracluster-controller", managedNamespace),
 		Scheme:                      mgr.GetScheme(),
 		Images:                      containerImages,
 		RestCfg:                     mgr.GetConfig(),

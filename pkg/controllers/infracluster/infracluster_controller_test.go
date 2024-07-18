@@ -1,3 +1,18 @@
+/*
+Copyright 2024 Red Hat, Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+	http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 package infracluster
 
 import (
@@ -193,6 +208,7 @@ func mustPatchAWSInfraClusterReadiness(awsInfraCluster *awsv1.AWSCluster, readin
 
 func startManager(mgrCtx context.Context, mgrDone chan struct{}, ocpInfra *configv1.Infrastructure) {
 	By("Setting up a manager and controller")
+
 	var mgr ctrl.Manager
 	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
 		Metrics: server.Options{
@@ -217,13 +233,14 @@ func startManager(mgrCtx context.Context, mgrDone chan struct{}, ocpInfra *confi
 	// TODO: set watch to the right Infra Cluster in setupwithmanager
 	Expect(r.SetupWithManager(mgr, &awsv1.AWSCluster{})).To(Succeed(), "Reconciler should be able to setup with manager")
 
-	By("Starting the manager")
-	go func() {
-		defer GinkgoRecover()
-		defer close(mgrDone)
+	By("Starting the manager", func() {
+		go func() {
+			defer GinkgoRecover()
+			defer close(mgrDone)
 
-		Expect(mgr.Start(mgrCtx)).To(Succeed())
-	}()
+			Expect(mgr.Start(mgrCtx)).To(Succeed())
+		}()
+	})
 }
 
 func stopManager(mgrCancel context.CancelFunc, mgrDone chan struct{}) {
