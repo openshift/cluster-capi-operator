@@ -3,6 +3,7 @@ package mapi2capi
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
 
 	configv1 "github.com/openshift/api/config/v1"
 	mapiv1alpha1 "github.com/openshift/api/machine/v1alpha1"
@@ -12,6 +13,10 @@ import (
 var _ = Describe("mapi2capi OpenStack", Ordered, func() {
 
 	mapiProviderConfig := &mapiv1alpha1.OpenstackProviderSpec{
+		CloudName: "openstack",
+		CloudsSecret: &corev1.SecretReference{
+			Name: "cloud-creds",
+		},
 		Flavor: "m1.tiny",
 	}
 

@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	capov1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
-	capiv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	configv1 "github.com/openshift/api/config/v1"
 	mapiv1alpha1 "github.com/openshift/api/machine/v1alpha1"
 	mapiv1 "github.com/openshift/api/machine/v1beta1"
@@ -14,6 +12,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/utils/ptr"
+	capov1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
+	capiv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/cluster-capi-operator/pkg/util"
@@ -193,20 +193,20 @@ func (p OpenStackProviderSpecAndInfra) ToMachineTemplateSpec() (capov1.OpenStack
 			Spec: capov1.OpenStackMachineSpec{
 				AdditionalBlockDevices: convertMAPOAdditionalBlockDevicesToCAPO(p.Spec.AdditionalBlockDevices),
 				// LOSSY!! No translation for AZs possible
-				ConfigDrive:            p.Spec.ConfigDrive,
-				Flavor:                 p.Spec.Flavor,
+				ConfigDrive: p.Spec.ConfigDrive,
+				Flavor:      p.Spec.Flavor,
 				// TODO(stephenfin): Do we need to populate FloatingIPPoolRef? Can we, given MAPO's FloatingIP is
 				// different (and deprecated)
-				IdentityRef:            convertMAPOCloudNameSecretToCAPO(p.Spec.CloudName, p.Spec.CloudsSecret),
-				Image:                  convertMAPOImageToCAPO(p.Spec.Image),
-				Ports:                  ports,
-				RootVolume:             convertMAPORootVolumeToCAPO(*p.Spec.RootVolume),
-				SecurityGroups:         convertMAPOSecurityGroupsToCAPO(p.Spec.SecurityGroups),
-				ServerGroup:            convertMAPOServerGroupToCAPO(p.Spec.ServerGroupID, p.Spec.ServerGroupName),
-				ServerMetadata:         convertMAPOServerMetadataToCAPO(p.Spec.ServerMetadata),
-				SSHKeyName:             p.Spec.KeyName,
-				Trunk:                  p.Spec.Trunk,
-				Tags:                   p.Spec.Tags,
+				IdentityRef:    convertMAPOCloudNameSecretToCAPO(p.Spec.CloudName, p.Spec.CloudsSecret),
+				Image:          convertMAPOImageToCAPO(p.Spec.Image),
+				Ports:          ports,
+				RootVolume:     convertMAPORootVolumeToCAPO(p.Spec.RootVolume),
+				SecurityGroups: convertMAPOSecurityGroupsToCAPO(p.Spec.SecurityGroups),
+				ServerGroup:    convertMAPOServerGroupToCAPO(p.Spec.ServerGroupID, p.Spec.ServerGroupName),
+				ServerMetadata: convertMAPOServerMetadataToCAPO(p.Spec.ServerMetadata),
+				SSHKeyName:     p.Spec.KeyName,
+				Trunk:          p.Spec.Trunk,
+				Tags:           p.Spec.Tags,
 			},
 		},
 	}
@@ -285,7 +285,7 @@ func convertMAPOAdditionalBlockDevicesToCAPO(mapoAdditionalBlockDevices []mapiv1
 	return capoAdditionalBlockDevices
 }
 
-func convertMAPOCloudNameSecretToCAPO(mapoCloudName string, mapoCloudSecret *corev1.SecretReference) (*capov1.OpenStackIdentityReference) {
+func convertMAPOCloudNameSecretToCAPO(mapoCloudName string, mapoCloudSecret *corev1.SecretReference) *capov1.OpenStackIdentityReference {
 	// TODO(stephenfin): Is it okay to use the same secret? Do they have the same format? Perhaps we can skip this since the cluster will have this configured already.
 	// LOSSY!! This won't handle secrets in different namespaces.
 	capoCloudSecret := &capov1.OpenStackIdentityReference{
@@ -332,13 +332,13 @@ func convertMAPONetworksToCAPO(mapoNetworks []mapiv1alpha1.NetworkParam) []capov
 		// convert .UUID
 		if mapoNetwork.UUID != "" {
 			network.ID = &mapoNetwork.UUID
-		// convert .Filter
+			// convert .Filter
 		} else {
 			network.Filter = &capov1.NetworkFilter{
 				Name:        mapoNetwork.Filter.Name,
 				Description: mapoNetwork.Filter.Description,
 				// TODO(stephenfin): Handle the deprecated TenantID field?
-				ProjectID:   mapoNetwork.Filter.ProjectID,
+				ProjectID: mapoNetwork.Filter.ProjectID,
 				FilterByNeutronTags: capov1.FilterByNeutronTags{
 					NotTags:    splitTags(mapoNetwork.Filter.NotTags),
 					NotTagsAny: splitTags(mapoNetwork.Filter.NotTagsAny),
@@ -358,7 +358,7 @@ func convertMAPONetworksToCAPO(mapoNetworks []mapiv1alpha1.NetworkParam) []capov
 				portTags := append(tags, mapoSubnet.PortTags...)
 
 				capoPort := capov1.PortOpts{
-					Network:  &capov1.NetworkParam{ID: &mapoSubnet.UUID},
+					Network: &capov1.NetworkParam{ID: &mapoSubnet.UUID},
 					FixedIPs: []capov1.FixedIP{
 						{
 							Subnet: &capov1.SubnetParam{
@@ -429,8 +429,8 @@ func convertMAPONetworksToCAPO(mapoNetworks []mapiv1alpha1.NetworkParam) []capov
 
 			capoPort := capov1.PortOpts{
 				FixedIPs: fixedIPs,
-				Network: &capov1.NetworkParam{ID: &mapoNetwork.UUID},
-				Tags: tags,
+				Network:  &capov1.NetworkParam{ID: &mapoNetwork.UUID},
+				Tags:     tags,
 			}
 
 			capoNetworkPorts = append(capoNetworkPorts, capoPort)
@@ -567,7 +567,11 @@ func convertMAPOPortsToCAPO(mapoPorts []mapiv1alpha1.PortOpts) []capov1.PortOpts
 	return capoPorts
 }
 
-func convertMAPORootVolumeToCAPO(mapoRootVolume mapiv1alpha1.RootVolume) *capov1.RootVolume {
+func convertMAPORootVolumeToCAPO(mapoRootVolume *mapiv1alpha1.RootVolume) *capov1.RootVolume {
+	if mapoRootVolume == nil {
+		return nil
+	}
+
 	capoRootVolume := &capov1.RootVolume{}
 	// TODO(stephenfin): CAPO uses GiB, MAPO allegedly uses GB. Are they actually different (and therefore need conversion)?
 	capoRootVolume.SizeGiB = mapoRootVolume.Size
