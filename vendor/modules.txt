@@ -916,6 +916,9 @@ github.com/openshift/api/user/v1
 github.com/openshift/cluster-api-actuator-pkg/testutils
 github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/config/v1
 github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/core/v1
+# github.com/openshift/cluster-capi-operator/e2e v0.0.0-20240722141936-df328e843eae
+## explicit; go 1.21
+github.com/openshift/cluster-capi-operator/e2e/framework
 # github.com/openshift/library-go v0.0.0-20231214171439-128164517bf7
 ## explicit; go 1.20
 github.com/openshift/library-go/pkg/config/clusteroperator/v1helpers
@@ -2132,7 +2135,7 @@ sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha7
 # sigs.k8s.io/cluster-api-provider-vsphere v1.10.0
 ## explicit; go 1.21
 sigs.k8s.io/cluster-api-provider-vsphere/apis/v1beta1
-# sigs.k8s.io/controller-runtime v0.17.4
+# sigs.k8s.io/controller-runtime v0.17.5
 ## explicit; go 1.21
 sigs.k8s.io/controller-runtime
 sigs.k8s.io/controller-runtime/pkg/builder

@@ -421,6 +421,8 @@ github.com/openshift/api v0.0.0-20240115183315-0793e918179d h1:gtwDqGPf5QmsV8jvO
 github.com/openshift/api v0.0.0-20240115183315-0793e918179d/go.mod h1:CxgbWAlvu2iQB0UmKTtRu1YfepRg1/vJ64n2DlIEVz4=
 github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20240607201500-81075cf8e11a h1:tLtCXAP3fRFk2b1Vo7t+bAOxkeNfC5tKHtF73Zbp3g0=
 github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20240607201500-81075cf8e11a/go.mod h1:osVq9/R6qKHBQxDP4cYTvkgXVBKOMs1SOfPLFfn0m7A=
+github.com/openshift/cluster-capi-operator/e2e v0.0.0-20240722141936-df328e843eae h1:T14e8ua8BDKLZ58xsg7fV4gvvq3vOehPR8Fh8djn7/M=
+github.com/openshift/cluster-capi-operator/e2e v0.0.0-20240722141936-df328e843eae/go.mod h1:qbqvumNyu2IG09BwqFHZ4VvuPoC3TADzuiafcAdCeRo=
 github.com/openshift/library-go v0.0.0-20231214171439-128164517bf7 h1:n8IAM02eWgY32s+XmHSpIg0UEe3QwBbNaXAxF9O8a7s=
 github.com/openshift/library-go v0.0.0-20231214171439-128164517bf7/go.mod h1:0q1UIvboZXfSlUaK+08wsXYw4N6OUo2b/z3a1EWNGyw=
 github.com/otiai10/copy v1.2.0/go.mod h1:rrF5dJ5F0t/EWSYODDu4j9/vEeYHMkc8jt0zJChqQWw=
@@ -835,8 +837,8 @@ sigs.k8s.io/cluster-api-provider-openstack v0.9.1 h1:rbRJa8G7x/f9/aGrvxxIsxfDPrS
 sigs.k8s.io/cluster-api-provider-openstack v0.9.1/go.mod h1:ecR9lx4XbOr3Gg2CGNgM3wguuV6l31Nd5rUccE+xjKs=
 sigs.k8s.io/cluster-api-provider-vsphere v1.10.0 h1:UMdJgcaKm+RBLEG6k2jotXh4yuhCJg2OYv4eqOji1tU=
 sigs.k8s.io/cluster-api-provider-vsphere v1.10.0/go.mod h1:CksGHK/wRUPa9I9tmjb4xwM+0f/u/6L8o8EjTggt3xI=
-sigs.k8s.io/controller-runtime v0.17.4 h1:AMf1E0+93/jLQ13fb76S6Atwqp24EQFCmNbG84GJxew=
-sigs.k8s.io/controller-runtime v0.17.4/go.mod h1:N0jpP5Lo7lMTF9aL56Z/B2oWBJjey6StQM0jRbKQXtY=
+sigs.k8s.io/controller-runtime v0.17.5 h1:1FI9Lm7NiOOmBsgTV36/s2XrEFXnO2C4sbg/Zme72Rw=
+sigs.k8s.io/controller-runtime v0.17.5/go.mod h1:N0jpP5Lo7lMTF9aL56Z/B2oWBJjey6StQM0jRbKQXtY=
 sigs.k8s.io/controller-runtime/tools/setup-envtest v0.0.0-20240531134648-6636df17d67b h1:E+2LwLidBVcAyCb9LEnKVqIZjZ9ktTv9JbBU8HCWkhY=
 sigs.k8s.io/controller-runtime/tools/setup-envtest v0.0.0-20240531134648-6636df17d67b/go.mod h1:RuyOlKuz3BnqAsDTf0Hgwzvm+Snno1Ko5hvz0nRHWnU=
 sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd h1:EDPBXCAspyGV4jQlpZSudPeMmr1bNJefnuqLsRAsHZo=
