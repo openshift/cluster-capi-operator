@@ -43,6 +43,8 @@ import (
 	vspherev1 "sigs.k8s.io/cluster-api-provider-vsphere/apis/v1beta1"
 
 	configv1 "github.com/openshift/api/config/v1"
+	mapiv1 "github.com/openshift/api/machine/v1"
+	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 )
@@ -57,10 +59,12 @@ const (
 	InfraClusterControllerDegradedCondition = "InfraClusterControllerDegraded"
 
 	defaultCAPINamespace = "openshift-cluster-api"
+	defaultMAPINamespace = "openshift-machine-api"
 	clusterOperatorName  = "cluster-api"
 	// This is the managedByAnnotation value that this controller sets by default when it creates an InfraCluster object.
 	// If the managedByAnnotation key is set, and it has this as the value, it means this controller is managing the InfraCluster.
 	managedByAnnotationValueClusterCAPIOperatorInfraClusterController = "cluster-capi-operator-infracluster-controller"
+	capzManagerBootstrapCredentials                                   = "capz-manager-bootstrap-credentials" //nolint:gosec
 )
 
 var (
@@ -114,6 +118,13 @@ func (r *InfraClusterController) ensureInfraCluster(ctx context.Context, log log
 		}
 
 		infraCluster = gcpCluster
+	case configv1.AzurePlatformType:
+		var err error
+
+		infraCluster, err = r.ensureAzureCluster(ctx, log)
+		if err != nil {
+			return nil, fmt.Errorf("error ensuring AzureCluster: %w", err)
+		}
 	case configv1.PowerVSPlatformType:
 		powervsCluster := &ibmpowervsv1.IBMPowerVSCluster{}
 		if err := r.Get(ctx, client.ObjectKey{Namespace: defaultCAPINamespace, Name: r.Infra.Status.InfrastructureName}, powervsCluster); err != nil && !cerrors.IsNotFound(err) {
@@ -355,4 +366,38 @@ func getReadiness(infraCluster client.Object) (bool, error) {
 	}
 
 	return val, nil
+}
+
+// getRawMAPIProviderSpec returns a raw Machine ProviderSpec from the the cluster.
+func getRawMAPIProviderSpec(ctx context.Context, cl client.Client) ([]byte, error) {
+	var rawProviderSpec []byte
+	if cpms, _ := getActiveCPMS(ctx, cl); cpms != nil {
+		// Devise providerSpec via CPMS.
+		rawProviderSpec = cpms.Spec.Template.OpenShiftMachineV1Beta1Machine.Spec.ProviderSpec.Value.Raw
+	} else {
+		// The CPMS is not present or inactive.
+		// Devise providerSpec via one of the machines in the cluster.
+		machineSetList := &mapiv1beta1.MachineSetList{}
+		if err := cl.List(ctx, machineSetList, client.InNamespace(defaultMAPINamespace)); err != nil {
+			return nil, fmt.Errorf("unable to list MachineSets: %w", err)
+		}
+
+		rawProviderSpec = machineSetList.Items[0].Spec.Template.Spec.ProviderSpec.Value.Raw
+	}
+
+	return rawProviderSpec, nil
+}
+
+// getActiveCPMS returns the CPMS if it exists and it is in Active state.
+func getActiveCPMS(ctx context.Context, cl client.Client) (*mapiv1.ControlPlaneMachineSet, error) {
+	cpms := &mapiv1.ControlPlaneMachineSet{}
+	if err := cl.Get(ctx, client.ObjectKey{Name: "cluster", Namespace: defaultMAPINamespace}, cpms); err != nil {
+		return nil, fmt.Errorf("error while getting CPMS: %w", err)
+	}
+
+	if cpms.Spec.State != mapiv1.ControlPlaneMachineSetStateActive {
+		return nil, nil //nolint:nilnil
+	}
+
+	return cpms, nil
 }
