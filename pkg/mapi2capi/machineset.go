@@ -1,0 +1,43 @@
+package mapi2capi
+
+import (
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	capiv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+
+	mapiv1 "github.com/openshift/api/machine/v1beta1"
+
+	corev1 "k8s.io/api/core/v1"
+)
+
+const (
+	capiMachineSetAPIVersion = "cluster.x-k8s.io/v1beta1"
+	capiMachineSetKind       = "MachineSet"
+)
+
+func FromMachineSetToMachineSet(mapiMachineSet *mapiv1.MachineSet) (capiv1.MachineSet, []string, error) {
+	capiMachineSet := capiv1.MachineSet{}
+	capiMachineSet.ObjectMeta = metav1.ObjectMeta{
+		Name:        mapiMachineSet.Name,
+		Namespace:   mapiMachineSet.Namespace,
+		Labels:      mapiMachineSet.Labels,
+		Annotations: mapiMachineSet.Annotations,
+	}
+	capiMachineSet.TypeMeta = metav1.TypeMeta{
+		Kind:       capiMachineSetKind,
+		APIVersion: capiMachineSetAPIVersion,
+	}
+	capiMachineSet.Spec.Selector = mapiMachineSet.Spec.Selector
+	capiMachineSet.Spec.Template.Labels = mapiMachineSet.Spec.Template.Labels
+	// capiMachineSet.Spec.ClusterName // populated by higher level functions
+	capiMachineSet.Spec.Replicas = mapiMachineSet.Spec.Replicas
+	// capiMachineSet.Spec.Template.Spec.ClusterName // populated by higher level functions
+	capiMachineSet.Spec.Template.Spec.InfrastructureRef = corev1.ObjectReference{
+		APIVersion: awsTemplateAPIVersion,
+		Kind:       awsTemplateKind,
+		Name:       mapiMachineSet.Name,
+	}
+
+	setMAPINodeLabelsToCAPIManagedNodeLabels(mapiMachineSet.Spec.Template.Spec.ObjectMeta.Labels, capiMachineSet.Spec.Template.ObjectMeta.Labels)
+
+	return capiMachineSet, nil, nil
+}
