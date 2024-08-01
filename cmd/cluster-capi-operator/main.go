@@ -20,6 +20,7 @@ import (
 	"os"
 	"time"
 
+	mapiv1 "github.com/openshift/api/machine/v1beta1"
 	"github.com/spf13/pflag"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -79,6 +80,7 @@ func initScheme(scheme *runtime.Scheme) {
 	utilruntime.Must(clusterctlv1.AddToScheme(scheme))
 	utilruntime.Must(ibmpowervsv1.AddToScheme(scheme))
 	utilruntime.Must(vspherev1.AddToScheme(scheme))
+	utilruntime.Must(mapiv1.AddToScheme(scheme))
 }
 
 //nolint:funlen
