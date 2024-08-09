@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	metal3v1 "github.com/metal3-io/cluster-api-provider-metal3/api/v1beta1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -42,6 +43,7 @@ func init() {
 	utilruntime.Must(mapiv1.AddToScheme(scheme.Scheme))
 	utilruntime.Must(ibmpowervsv1.AddToScheme(scheme.Scheme))
 	utilruntime.Must(vspherev1.AddToScheme(scheme.Scheme))
+	utilruntime.Must(metal3v1.AddToScheme(scheme.Scheme))
 }
 
 func TestAPIs(t *testing.T) {

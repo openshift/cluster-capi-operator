@@ -26,6 +26,8 @@ func providerNameToImageKey(name string) string {
 		return "gcp-cluster-api-controllers"
 	case "vsphere":
 		return "vsphere-cluster-api-controllers"
+	case "baremetal":
+		return "baremetal-cluster-api-controllers"
 	case "ibmcloud":
 		return "ibmcloud-cluster-api-controllers"
 	case "cluster-api":
