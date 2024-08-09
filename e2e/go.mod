@@ -10,7 +10,8 @@ require (
 	github.com/metal3-io/cluster-api-provider-metal3/api v1.7.0
 	github.com/onsi/ginkgo/v2 v2.19.0
 	github.com/onsi/gomega v1.33.1
-	github.com/openshift/api v0.0.0-20220921125526-1866ef90edbf
+	github.com/openshift/api v0.0.0-20240124164020-e2ce40831f2e
+	github.com/openshift/cluster-api-provider-baremetal v0.0.0-20240529144704-2549061c570a
 	k8s.io/api v0.30.2
 	k8s.io/apimachinery v0.30.2
 	k8s.io/client-go v0.30.2
