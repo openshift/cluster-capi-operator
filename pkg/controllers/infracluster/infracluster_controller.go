@@ -217,7 +217,7 @@ func (r *InfraClusterController) ensureInfraCluster(ctx context.Context, log log
 		}
 	case configv1.BareMetalPlatformType:
 		baremetalCluster := &metal3v1.Metal3Cluster{}
-		if err := r.Get(ctx, client.ObjectKey{Namespace: defaultCAPINamespace, Name: r.Infra.Status.InfrastructureName}, baremetalCluster); err != nil && !cerrors.IsNotFound(err) {
+		if err := r.Get(ctx, client.ObjectKey{Namespace: defaultCAPINamespace, Name: r.Infra.Status.InfrastructureName}, baremetalCluster); err != nil && !kerrors.IsNotFound(err) {
 			return nil, fmt.Errorf("error getting InfraCluster object: %w", err)
 		}
 

@@ -274,11 +274,14 @@ github.com/onsi/gomega/matchers/support/goraph/edge
 github.com/onsi/gomega/matchers/support/goraph/node
 github.com/onsi/gomega/matchers/support/goraph/util
 github.com/onsi/gomega/types
-# github.com/openshift/api v0.0.0-20220921125526-1866ef90edbf
-## explicit; go 1.18
+# github.com/openshift/api v0.0.0-20240124164020-e2ce40831f2e
+## explicit; go 1.21
 github.com/openshift/api/config/v1
 github.com/openshift/api/machine/v1
 github.com/openshift/api/machine/v1beta1
+# github.com/openshift/cluster-api-provider-baremetal v0.0.0-20240529144704-2549061c570a
+## explicit; go 1.22.0
+github.com/openshift/cluster-api-provider-baremetal/pkg/apis/baremetal/v1alpha1
 # github.com/pkg/errors v0.9.1
 ## explicit
 github.com/pkg/errors
