@@ -37,7 +37,6 @@ var _ = Describe("Cluster API vSphere MachineSet", Ordered, func() {
 		mapiMachineSpec = getVSphereMAPIProviderSpec(cl)
 		createVSphereSecret(cl, mapiMachineSpec)
 		framework.CreateCoreCluster(cl, clusterName, "VSphereCluster")
-		createVSphereCluster(cl, mapiMachineSpec)
 	})
 
 	AfterEach(func() {

@@ -49,6 +49,7 @@ import (
 	crwebhook "sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	configv1 "github.com/openshift/api/config/v1"
+	mapiv1 "github.com/openshift/api/machine/v1beta1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/capiinstaller"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/cluster"
@@ -79,6 +80,7 @@ func initScheme(scheme *runtime.Scheme) {
 	utilruntime.Must(clusterctlv1.AddToScheme(scheme))
 	utilruntime.Must(ibmpowervsv1.AddToScheme(scheme))
 	utilruntime.Must(vspherev1.AddToScheme(scheme))
+	utilruntime.Must(mapiv1.AddToScheme(scheme))
 }
 
 //nolint:funlen
@@ -155,6 +157,7 @@ func main() {
 		DefaultNamespaces: map[string]cache.Config{
 			*managedNamespace:                {},
 			secretsync.SecretSourceNamespace: {},
+			"kube-system":                    {}, // For fetching cloud credentials.
 		},
 		SyncPeriod: &syncPeriod,
 	}

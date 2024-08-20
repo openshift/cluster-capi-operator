@@ -19,18 +19,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/url"
-	"strconv"
 
 	"github.com/go-logr/logr"
 
-	cerrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 
 	"k8s.io/client-go/rest"
-	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -40,9 +36,10 @@ import (
 	gcpv1 "sigs.k8s.io/cluster-api-provider-gcp/api/v1beta1"
 	ibmpowervsv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
 	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha7"
-	vspherev1 "sigs.k8s.io/cluster-api-provider-vsphere/apis/v1beta1"
 
 	configv1 "github.com/openshift/api/config/v1"
+	mapiv1 "github.com/openshift/api/machine/v1"
+	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 )
@@ -57,15 +54,21 @@ const (
 	InfraClusterControllerDegradedCondition = "InfraClusterControllerDegraded"
 
 	defaultCAPINamespace = "openshift-cluster-api"
+	defaultMAPINamespace = "openshift-machine-api"
 	clusterOperatorName  = "cluster-api"
 	// This is the managedByAnnotation value that this controller sets by default when it creates an InfraCluster object.
 	// If the managedByAnnotation key is set, and it has this as the value, it means this controller is managing the InfraCluster.
 	managedByAnnotationValueClusterCAPIOperatorInfraClusterController = "cluster-capi-operator-infracluster-controller"
+
+	kubeSystemNamespace    = "kube-system"
+	vSphereCredentialsName = "vsphere-creds" //nolint:gosec
 )
 
 var (
 	errPlatformNotSupported        = errors.New("infrastructure platform is not supported")
 	errCouldNotDeepCopyInfraObject = errors.New("unable to create a deep copy of InfraCluster object")
+	errUnableToListMachineSets     = errors.New("unable to list MachineSets")
+	errUnableToFindMachineSets     = errors.New("unable to find any MachineSets to extract a MAPI ProviderSpec from")
 )
 
 // InfraClusterController is a controller that manages infrastructure cluster objects.
@@ -95,58 +98,6 @@ func (r *InfraClusterController) Reconcile(ctx context.Context, req ctrl.Request
 
 	return res, nil
 }
-
-func (r *InfraClusterController) ensureInfraCluster(ctx context.Context, log logr.Logger) (client.Object, error) {
-	var infraCluster client.Object
-	// TODO: implement InfraCluster generation for missing platforms.
-	switch r.Platform {
-	case configv1.AWSPlatformType:
-		var err error
-
-		infraCluster, err = r.ensureAWSCluster(ctx, log)
-		if err != nil {
-			return nil, fmt.Errorf("error ensuring AWSCluster: %w", err)
-		}
-	case configv1.GCPPlatformType:
-		gcpCluster := &gcpv1.GCPCluster{}
-		if err := r.Get(ctx, client.ObjectKey{Namespace: defaultCAPINamespace, Name: r.Infra.Status.InfrastructureName}, gcpCluster); err != nil && !cerrors.IsNotFound(err) {
-			return nil, fmt.Errorf("error getting InfraCluster object: %w", err)
-		}
-
-		infraCluster = gcpCluster
-	case configv1.PowerVSPlatformType:
-		powervsCluster := &ibmpowervsv1.IBMPowerVSCluster{}
-		if err := r.Get(ctx, client.ObjectKey{Namespace: defaultCAPINamespace, Name: r.Infra.Status.InfrastructureName}, powervsCluster); err != nil && !cerrors.IsNotFound(err) {
-			return nil, fmt.Errorf("error getting InfraCluster object: %w", err)
-		}
-
-		infraCluster = powervsCluster
-	case configv1.VSpherePlatformType:
-		vsphereCluster := &vspherev1.VSphereCluster{}
-		if err := r.Get(ctx, client.ObjectKey{Namespace: defaultCAPINamespace, Name: r.Infra.Status.InfrastructureName}, vsphereCluster); err != nil && !cerrors.IsNotFound(err) {
-			return nil, fmt.Errorf("error getting InfraCluster object: %w", err)
-		}
-
-		infraCluster = vsphereCluster
-	case configv1.OpenStackPlatformType:
-		openstackCluster := &openstackv1.OpenStackCluster{}
-		if err := r.Get(ctx, client.ObjectKey{Namespace: defaultCAPINamespace, Name: r.Infra.Status.InfrastructureName}, openstackCluster); err != nil && !cerrors.IsNotFound(err) {
-			return nil, fmt.Errorf("error getting InfraCluster object: %w", err)
-		}
-
-		infraCluster = openstackCluster
-	default:
-		return nil, fmt.Errorf("skipping capi controllers setup on platform %s: %w", r.Platform, errPlatformNotSupported)
-	}
-
-	return infraCluster, nil
-}
-
-// reconcile performs the main business logic for installing Cluster API components in the cluster.
-// Notably it fetches CAPI providers "transport" ConfigMap(s) matching the required labels,
-// it extracts from those ConfigMaps the embedded CAPI providers manifests for the components
-// and it applies them to the cluster.
-//
 
 func (r *InfraClusterController) reconcile(ctx context.Context, log logr.Logger) (ctrl.Result, error) {
 	infraCluster, err := r.ensureInfraCluster(ctx, log)
@@ -222,63 +173,51 @@ func (r *InfraClusterController) reconcileInfraCluster(ctx context.Context, log 
 	return ctrl.Result{}, nil
 }
 
-// ensureAWSCluster ensures the AWSCluster cluster object exists.
-func (r *InfraClusterController) ensureAWSCluster(ctx context.Context, log logr.Logger) (client.Object, error) {
-	target := &awsv1.AWSCluster{ObjectMeta: metav1.ObjectMeta{
-		Name:      r.Infra.Status.InfrastructureName,
-		Namespace: defaultCAPINamespace,
-	}}
+// ensureInfraCluster ensures an InfraCluster object exists in the cluster.
+func (r *InfraClusterController) ensureInfraCluster(ctx context.Context, log logr.Logger) (client.Object, error) {
+	var infraCluster client.Object
+	// TODO: implement InfraCluster generation for missing platforms.
+	switch r.Platform {
+	case configv1.AWSPlatformType:
+		var err error
 
-	// Checking whether InfraCluster object exists. If it doesn't, create it.
+		infraCluster, err = r.ensureAWSCluster(ctx, log)
+		if err != nil {
+			return nil, fmt.Errorf("error ensuring AWSCluster: %w", err)
+		}
+	case configv1.GCPPlatformType:
+		gcpCluster := &gcpv1.GCPCluster{}
+		if err := r.Get(ctx, client.ObjectKey{Namespace: defaultCAPINamespace, Name: r.Infra.Status.InfrastructureName}, gcpCluster); err != nil && !kerrors.IsNotFound(err) {
+			return nil, fmt.Errorf("error getting InfraCluster object: %w", err)
+		}
 
-	if err := r.Get(ctx, client.ObjectKeyFromObject(target), target); err != nil && !cerrors.IsNotFound(err) {
-		return nil, fmt.Errorf("failed to get InfraCluster: %w", err)
-	} else if err == nil {
-		return target, nil
+		infraCluster = gcpCluster
+	case configv1.PowerVSPlatformType:
+		powervsCluster := &ibmpowervsv1.IBMPowerVSCluster{}
+		if err := r.Get(ctx, client.ObjectKey{Namespace: defaultCAPINamespace, Name: r.Infra.Status.InfrastructureName}, powervsCluster); err != nil && !kerrors.IsNotFound(err) {
+			return nil, fmt.Errorf("error getting InfraCluster object: %w", err)
+		}
+
+		infraCluster = powervsCluster
+	case configv1.VSpherePlatformType:
+		var err error
+
+		infraCluster, err = r.ensureVSphereCluster(ctx, log)
+		if err != nil {
+			return nil, fmt.Errorf("error getting InfraCluster object: %w", err)
+		}
+	case configv1.OpenStackPlatformType:
+		openstackCluster := &openstackv1.OpenStackCluster{}
+		if err := r.Get(ctx, client.ObjectKey{Namespace: defaultCAPINamespace, Name: r.Infra.Status.InfrastructureName}, openstackCluster); err != nil && !kerrors.IsNotFound(err) {
+			return nil, fmt.Errorf("error getting InfraCluster object: %w", err)
+		}
+
+		infraCluster = openstackCluster
+	default:
+		return nil, fmt.Errorf("skipping capi controllers setup on platform %s: %w", r.Platform, errPlatformNotSupported)
 	}
 
-	log.Info(fmt.Sprintf("AWSCluster %s/%s does not exist, creating it", target.Namespace, target.Name))
-
-	apiURL, err := url.Parse(r.Infra.Status.APIServerInternalURL)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse apiURL: %w", err)
-	}
-
-	port, err := strconv.ParseInt(apiURL.Port(), 10, 32)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse apiURL port: %w", err)
-	}
-
-	if r.Infra.Status.PlatformStatus == nil {
-		return nil, fmt.Errorf("infrastructure PlatformStatus should not be nil: %w", err)
-	}
-
-	target = &awsv1.AWSCluster{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      r.Infra.Status.InfrastructureName,
-			Namespace: defaultCAPINamespace,
-			// The ManagedBy Annotation is set so CAPI infra providers ignore the InfraCluster object,
-			// as that's managed externally, in this case by this controller.
-			Annotations: map[string]string{
-				clusterv1.ManagedByAnnotation: managedByAnnotationValueClusterCAPIOperatorInfraClusterController,
-			},
-		},
-		Spec: awsv1.AWSClusterSpec{
-			Region: r.Infra.Status.PlatformStatus.AWS.Region,
-			ControlPlaneEndpoint: clusterv1.APIEndpoint{
-				Host: apiURL.Hostname(),
-				Port: int32(port),
-			},
-		},
-	}
-
-	if err := r.Create(ctx, target); err != nil {
-		return nil, fmt.Errorf("failed to create InfraCluster: %w", err)
-	}
-
-	log.Info(fmt.Sprintf("InfraCluster '%s/%s' successfully created", defaultCAPINamespace, r.Infra.Status.InfrastructureName))
-
-	return target, nil
+	return infraCluster, nil
 }
 
 // setAvailableCondition sets the ClusterOperator status condition to Available.
@@ -355,4 +294,48 @@ func getReadiness(infraCluster client.Object) (bool, error) {
 	}
 
 	return val, nil
+}
+
+// getRawMAPIProviderSpec returns a raw Machine ProviderSpec from the the cluster.
+func getRawMAPIProviderSpec(ctx context.Context, cl client.Client) ([]byte, error) {
+	cpms, err := getActiveCPMS(ctx, cl)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get control plane machine set: %w", err)
+	}
+
+	if cpms == nil {
+		// The CPMS is not present or inactive.
+		// Devise VSphere providerSpec via one of the machines in the cluster.
+		machineSetList := &mapiv1beta1.MachineSetList{}
+		if err := cl.List(ctx, machineSetList, client.InNamespace(defaultMAPINamespace)); err != nil {
+			return nil, fmt.Errorf("%w: %w", errUnableToListMachineSets, err)
+		}
+
+		if len(machineSetList.Items) == 0 {
+			return nil, errUnableToFindMachineSets
+		}
+
+		return machineSetList.Items[0].Spec.Template.Spec.ProviderSpec.Value.Raw, nil
+	}
+
+	// Devise VSphere providerSpec via CPMS.
+	return cpms.Spec.Template.OpenShiftMachineV1Beta1Machine.Spec.ProviderSpec.Value.Raw, nil
+}
+
+// getActiveCPMS returns the CPMS if it exists and it is in Active state, otherwise returns nil.
+func getActiveCPMS(ctx context.Context, cl client.Client) (*mapiv1.ControlPlaneMachineSet, error) {
+	cpms := &mapiv1.ControlPlaneMachineSet{}
+	if err := cl.Get(ctx, client.ObjectKey{Name: "cluster", Namespace: defaultMAPINamespace}, cpms); err != nil {
+		if kerrors.IsNotFound(err) {
+			return nil, nil //nolint:nilnil
+		}
+
+		return nil, fmt.Errorf("error while getting control plane machine set: %w", err)
+	}
+
+	if cpms.Spec.State != mapiv1.ControlPlaneMachineSetStateActive {
+		return nil, nil //nolint:nilnil
+	}
+
+	return cpms, nil
 }
