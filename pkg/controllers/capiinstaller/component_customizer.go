@@ -37,7 +37,7 @@ func providerNameToImageKey(name string) string {
 
 func providerNameToCommand(name string) string {
 	switch name {
-	case "aws", "azure", "gcp", "ibmcloud":
+	case "aws", "gcp", "ibmcloud":
 		return "./bin/cluster-api-provider-" + name + "-controller-manager"
 	case "cluster-api":
 		return "./bin/cluster-api-controller-manager"

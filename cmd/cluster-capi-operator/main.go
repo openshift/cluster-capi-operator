@@ -224,6 +224,9 @@ func main() {
 	case configv1.GCPPlatformType:
 		setupReconcilers(mgr, infra, platform, &gcpv1.GCPCluster{}, containerImages, applyClient, apiextensionsClient, *managedNamespace)
 		setupWebhooks(mgr)
+	case configv1.AzurePlatformType:
+		setupReconcilers(mgr, infra, platform, &azurev1.AzureCluster{}, containerImages, applyClient, apiextensionsClient, *managedNamespace)
+		setupWebhooks(mgr)
 	case configv1.PowerVSPlatformType:
 		setupReconcilers(mgr, infra, platform, &ibmpowervsv1.IBMPowerVSCluster{}, containerImages, applyClient, apiextensionsClient, *managedNamespace)
 		setupWebhooks(mgr)
