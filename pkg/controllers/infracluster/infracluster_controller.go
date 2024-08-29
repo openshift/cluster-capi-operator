@@ -26,8 +26,6 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 
-	azurev1 "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
-
 	"k8s.io/client-go/rest"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -102,15 +100,11 @@ func (r *InfraClusterController) Reconcile(ctx context.Context, req ctrl.Request
 
 func (r *InfraClusterController) reconcile(ctx context.Context, log logr.Logger) (ctrl.Result, error) {
 	infraCluster, err := r.ensureInfraCluster(ctx, log)
-	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("unable to ensure InfraCluster: %w", err)
-	}
-
-	if infraCluster == nil {
-		log.Info("Could not find or create an InfraCluster on this supported platform. Waiting for one to be manually created.")
-		// This normally means the InfraCluster generation hasn't been implemented for this supported platform yet.
-		// See the TODO above.
+	if err != nil && errors.Is(err, errPlatformNotSupported) {
+		log.Info("Could not find or create an InfraCluster on this platform as it is not yet supported.")
 		return ctrl.Result{}, nil
+	} else if err != nil {
+		return ctrl.Result{}, fmt.Errorf("unable to ensure InfraCluster: %w", err)
 	}
 
 	// At this point, the InfraCluster exists.
@@ -194,12 +188,17 @@ func (r *InfraClusterController) ensureInfraCluster(ctx context.Context, log log
 			return nil, fmt.Errorf("error ensuring GCPCluster: %w", err)
 		}
 	case configv1.AzurePlatformType:
-		azureCluster := &azurev1.AzureCluster{}
-		if err := r.Get(ctx, client.ObjectKey{Namespace: defaultCAPINamespace, Name: r.Infra.Status.InfrastructureName}, azureCluster); err != nil && !kerrors.IsNotFound(err) {
-			return nil, fmt.Errorf("error getting InfraCluster object: %w", err)
+		if r.Infra.Status.PlatformStatus.Azure.CloudName == configv1.AzureStackCloud {
+			log.Info("%s cloud environment for platform %s is not supported", "environment", configv1.AzureStackCloud, "platform", configv1.AzurePlatformType)
+			return nil, errPlatformNotSupported
 		}
 
-		infraCluster = azureCluster
+		var err error
+
+		infraCluster, err = r.ensureAzureCluster(ctx, log)
+		if err != nil {
+			return nil, fmt.Errorf("error getting InfraCluster object: %w", err)
+		}
 	case configv1.PowerVSPlatformType:
 		powervsCluster := &ibmpowervsv1.IBMPowerVSCluster{}
 		if err := r.Get(ctx, client.ObjectKey{Namespace: defaultCAPINamespace, Name: r.Infra.Status.InfrastructureName}, powervsCluster); err != nil && !kerrors.IsNotFound(err) {
@@ -222,7 +221,7 @@ func (r *InfraClusterController) ensureInfraCluster(ctx context.Context, log log
 
 		infraCluster = openstackCluster
 	default:
-		return nil, fmt.Errorf("skipping capi controllers setup on platform %s: %w", r.Platform, errPlatformNotSupported)
+		return nil, errPlatformNotSupported
 	}
 
 	return infraCluster, nil
