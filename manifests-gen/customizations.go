@@ -12,6 +12,7 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/kustomize/api/krusty"
 	"sigs.k8s.io/kustomize/kyaml/filesys"
 )
@@ -19,8 +20,9 @@ import (
 type resourceKey string
 
 const (
-	crdKey   resourceKey = "crds"
-	otherKey resourceKey = "other"
+	crdKey                                                            resourceKey = "crds"
+	otherKey                                                          resourceKey = "other"
+	managedByAnnotationValueClusterCAPIOperatorInfraClusterController             = "cluster-capi-operator-infracluster-controller"
 )
 
 var (
@@ -48,6 +50,8 @@ func processObjects(objs []unstructured.Unstructured, providerName string) map[r
 	resourceMap := map[resourceKey][]unstructured.Unstructured{}
 	providerConfigMapObjs := []unstructured.Unstructured{}
 	crdObjs := []unstructured.Unstructured{}
+
+	objs = addInfraClusterProtectionPolicy(objs, providerName)
 
 	serviceSecretNames := findWebhookServiceSecretName(objs)
 
@@ -98,6 +102,10 @@ func processObjects(objs []unstructured.Unstructured, providerName string) map[r
 				setOpenShiftAnnotations(obj, false)
 				setNoUpgradeAnnotations(obj)
 			}
+			providerConfigMapObjs = append(providerConfigMapObjs, obj)
+		case "ValidatingAdmissionPolicy":
+			providerConfigMapObjs = append(providerConfigMapObjs, obj)
+		case "ValidatingAdmissionPolicyBinding":
 			providerConfigMapObjs = append(providerConfigMapObjs, obj)
 		case "Certificate", "Issuer", "Namespace", "Secret": // skip
 		}
@@ -325,4 +333,67 @@ func mergeMaps[K comparable, V any](maps ...map[K]V) map[K]V {
 		}
 	}
 	return result
+}
+
+// addInfraClusterProtectionPolicy adds a Validating Admission Policy and Binding for protecting
+// InfraClusters created by the cluster-capi-operator from deletion and editing.
+func addInfraClusterProtectionPolicy(objs []unstructured.Unstructured, providerName string) []unstructured.Unstructured {
+	policy := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "admissionregistration.k8s.io/v1beta1",
+			"kind":       "ValidatingAdmissionPolicy",
+			"metadata": map[string]interface{}{
+				"name": "openshift-cluster-api-protect-" + providerName + "cluster",
+			},
+			"spec": map[string]interface{}{
+				"failurePolicy": "Fail",
+				"matchConstraints": map[string]interface{}{
+					"resourceRules": []interface{}{
+						map[string]interface{}{
+							"apiGroups":   []interface{}{"infrastructure.cluster.x-k8s.io"},
+							"apiVersions": []interface{}{"*"},
+							"operations":  []interface{}{"UPDATE", "DELETE"},
+							"resources":   []interface{}{providerName + "clusters"},
+						},
+					},
+				},
+				"validations": []interface{}{
+					map[string]interface{}{
+						"expression": "!(has(oldObject.metadata.annotations) && ('cluster.x-k8s.io/managed-by' in oldObject.metadata.annotations) && (oldObject.metadata.annotations['" + clusterv1.ManagedByAnnotation + "'] == '" + managedByAnnotationValueClusterCAPIOperatorInfraClusterController + "'))",
+						"message":    "InfraCluster resources with the '" + clusterv1.ManagedByAnnotation + " : " + managedByAnnotationValueClusterCAPIOperatorInfraClusterController + "' annotation cannot be edited or deleted.",
+					},
+				},
+			},
+		},
+	}
+
+	binding := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "admissionregistration.k8s.io/v1beta1",
+			"kind":       "ValidatingAdmissionPolicyBinding",
+			"metadata": map[string]interface{}{
+				"name": "openshift-cluster-api-protect-" + providerName + "cluster",
+			},
+			"spec": map[string]interface{}{
+<<<<<<< Updated upstream
+=======
+				"paramRef": map[string]interface{}{
+					"name":                    "cluster",
+					"parameterNotFoundAction": "Deny",
+				},
+>>>>>>> Stashed changes
+				"policyName":        "openshift-cluster-api-protect-" + providerName + "cluster",
+				"validationActions": []interface{}{"Deny"},
+				"matchResources": map[string]interface{}{
+					"namespaceSelector": map[string]interface{}{
+						"matchLabels": map[string]interface{}{
+							"kubernetes.io/metadata.name": "openshift-cluster-api",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	return append(objs, *policy, *binding)
 }
