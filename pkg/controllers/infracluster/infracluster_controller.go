@@ -35,7 +35,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 
-	gcpv1 "sigs.k8s.io/cluster-api-provider-gcp/api/v1beta1"
 	ibmpowervsv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
 	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha7"
 
@@ -188,12 +187,12 @@ func (r *InfraClusterController) ensureInfraCluster(ctx context.Context, log log
 			return nil, fmt.Errorf("error ensuring AWSCluster: %w", err)
 		}
 	case configv1.GCPPlatformType:
-		gcpCluster := &gcpv1.GCPCluster{}
-		if err := r.Get(ctx, client.ObjectKey{Namespace: defaultCAPINamespace, Name: r.Infra.Status.InfrastructureName}, gcpCluster); err != nil && !kerrors.IsNotFound(err) {
-			return nil, fmt.Errorf("error getting InfraCluster object: %w", err)
-		}
+		var err error
 
-		infraCluster = gcpCluster
+		infraCluster, err = r.ensureGCPCluster(ctx, log)
+		if err != nil {
+			return nil, fmt.Errorf("error ensuring GCPCluster: %w", err)
+		}
 	case configv1.AzurePlatformType:
 		azureCluster := &azurev1.AzureCluster{}
 		if err := r.Get(ctx, client.ObjectKey{Namespace: defaultCAPINamespace, Name: r.Infra.Status.InfrastructureName}, azureCluster); err != nil && !kerrors.IsNotFound(err) {

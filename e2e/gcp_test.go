@@ -33,7 +33,6 @@ var _ = Describe("Cluster API GCP MachineSet", Ordered, func() {
 		}
 		framework.CreateCoreCluster(cl, clusterName, "GCPCluster")
 		mapiMachineSpec = getGCPMAPIProviderSpec(cl)
-		createGCPCluster(cl, mapiMachineSpec)
 	})
 
 	AfterEach(func() {
@@ -78,53 +77,6 @@ func getGCPMAPIProviderSpec(cl client.Client) *mapiv1.GCPMachineProviderSpec {
 	Expect(yaml.Unmarshal(machineSet.Spec.Template.Spec.ProviderSpec.Value.Raw, providerSpec)).To(Succeed())
 
 	return providerSpec
-}
-
-func createGCPCluster(cl client.Client, mapiProviderSpec *mapiv1.GCPMachineProviderSpec) *gcpv1.GCPCluster {
-	By("Creating GCP cluster")
-
-	gcpCluster := &gcpv1.GCPCluster{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      clusterName,
-			Namespace: framework.CAPINamespace,
-			// The ManagedBy Annotation is set so CAPI infra providers ignore the InfraCluster object,
-			// as that's managed externally, in this case by the cluster-capi-operator's infracluster controller.
-			Annotations: map[string]string{
-				clusterv1.ManagedByAnnotation: managedByAnnotationValueClusterCAPIOperatorInfraClusterController,
-			},
-		},
-		Spec: gcpv1.GCPClusterSpec{
-			Network: gcpv1.NetworkSpec{
-				Name: &mapiProviderSpec.NetworkInterfaces[0].Network,
-			},
-			Region:  mapiProviderSpec.Region,
-			Project: mapiProviderSpec.ProjectID,
-		},
-	}
-
-	if err := cl.Create(ctx, gcpCluster); err != nil && !apierrors.IsAlreadyExists(err) {
-		Expect(err).ToNot(HaveOccurred())
-	}
-
-	Eventually(func() (bool, error) {
-		patchedGCPCluster := &gcpv1.GCPCluster{}
-		err := cl.Get(ctx, client.ObjectKeyFromObject(gcpCluster), patchedGCPCluster)
-		if err != nil {
-			return false, err
-		}
-
-		if patchedGCPCluster.Annotations == nil {
-			return false, nil
-		}
-
-		if _, ok := patchedGCPCluster.Annotations[clusterv1.ManagedByAnnotation]; !ok {
-			return false, nil
-		}
-
-		return patchedGCPCluster.Status.Ready, nil
-	}, framework.WaitShort).Should(BeTrue())
-
-	return gcpCluster
 }
 
 func createGCPMachineTemplate(cl client.Client, mapiProviderSpec *mapiv1.GCPMachineProviderSpec) *gcpv1.GCPMachineTemplate {
