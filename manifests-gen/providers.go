@@ -180,7 +180,7 @@ func addComponentsToConfigMap(cm corev1.ConfigMap, objs []unstructured.Unstructu
 			"components-zstd": compressed.Bytes(),
 		}
 	} else {
-		cm.Data = map[string]string{"components": string(combined)}
+		cm.Data["components"] = string(combined)
 	}
 
 	return cm, nil
