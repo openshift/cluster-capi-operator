@@ -139,6 +139,9 @@ func (r *InfraClusterController) ensureVSphereSecret(ctx context.Context, vspher
 
 	if err := r.Client.Get(ctx, client.ObjectKeyFromObject(vSphereSecret), vSphereSecret); err != nil && !cerrors.IsNotFound(err) {
 		return fmt.Errorf("failed to get CAPI VSphere credentials secret: %w", err)
+	} else if err == nil {
+		// The secret already exists.
+		return nil
 	}
 
 	username, password, err := r.getVSphereCredentials(ctx, vsphereServerAddr)
