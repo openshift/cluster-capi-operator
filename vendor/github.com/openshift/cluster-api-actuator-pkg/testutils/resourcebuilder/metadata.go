@@ -1,11 +1,11 @@
 /*
-Copyright 2023 The Kubernetes Authors.
+Copyright 2022 Red Hat, Inc.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-	http://www.apache.org/licenses/LICENSE-2.0
+    http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -14,8 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package v1alpha7 contains API Schema definitions for the infrastructure v1alpha7 API group.
-// +kubebuilder:object:generate=true
-// +groupName=infrastructure.cluster.x-k8s.io
-// +k8s:conversion-gen=sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1
-package v1alpha7
+package resourcebuilder
+
+// NewMachineRoleLabels creates a new map of standard Machine labels
+// for the given role.
+func NewMachineRoleLabels(role string) map[string]string {
+	return map[string]string{
+		MachineRoleLabelName: role,
+		MachineTypeLabelName: role,
+	}
+}

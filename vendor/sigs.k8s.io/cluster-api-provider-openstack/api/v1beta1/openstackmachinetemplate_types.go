@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1alpha7
+package v1beta1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -28,6 +28,7 @@ type OpenStackMachineTemplateSpec struct {
 // +genclient
 // +genclient:Namespaced
 // +kubebuilder:object:root=true
+// +kubebuilder:storageversion
 // +kubebuilder:resource:path=openstackmachinetemplates,scope=Namespaced,categories=cluster-api,shortName=osmt
 
 // OpenStackMachineTemplate is the Schema for the openstackmachinetemplates API.
@@ -48,5 +49,5 @@ type OpenStackMachineTemplateList struct {
 }
 
 func init() {
-	SchemeBuilder.Register(&OpenStackMachineTemplate{}, &OpenStackMachineTemplateList{})
+	objectTypes = append(objectTypes, &OpenStackMachineTemplate{}, &OpenStackMachineTemplateList{})
 }
