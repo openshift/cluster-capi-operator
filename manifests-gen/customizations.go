@@ -12,7 +12,6 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/kustomize/api/krusty"
 	"sigs.k8s.io/kustomize/kyaml/filesys"
 )
@@ -347,20 +346,24 @@ func addInfraClusterProtectionPolicy(objs []unstructured.Unstructured, providerN
 			},
 			"spec": map[string]interface{}{
 				"failurePolicy": "Fail",
+				"paramKind": map[string]interface{}{
+					"apiVersion": "config.openshift.io/v1",
+					"kind":       "Infrastructure",
+				},
 				"matchConstraints": map[string]interface{}{
 					"resourceRules": []interface{}{
 						map[string]interface{}{
 							"apiGroups":   []interface{}{"infrastructure.cluster.x-k8s.io"},
 							"apiVersions": []interface{}{"*"},
-							"operations":  []interface{}{"UPDATE", "DELETE"},
+							"operations":  []interface{}{"DELETE"},
 							"resources":   []interface{}{providerName + "clusters"},
 						},
 					},
 				},
 				"validations": []interface{}{
 					map[string]interface{}{
-						"expression": "!(has(oldObject.metadata.annotations) && ('cluster.x-k8s.io/managed-by' in oldObject.metadata.annotations) && (oldObject.metadata.annotations['" + clusterv1.ManagedByAnnotation + "'] == '" + managedByAnnotationValueClusterCAPIOperatorInfraClusterController + "'))",
-						"message":    "InfraCluster resources with the '" + clusterv1.ManagedByAnnotation + " : " + managedByAnnotationValueClusterCAPIOperatorInfraClusterController + "' annotation cannot be edited or deleted.",
+						"expression": "!(oldObject.metadata.name == params.status.infrastructureName)",
+						"message":    "InfraCluster resources with metadata.name corresponding to the cluster infrastructureName cannot be deleted.",
 					},
 				},
 			},
@@ -375,13 +378,10 @@ func addInfraClusterProtectionPolicy(objs []unstructured.Unstructured, providerN
 				"name": "openshift-cluster-api-protect-" + providerName + "cluster",
 			},
 			"spec": map[string]interface{}{
-<<<<<<< Updated upstream
-=======
 				"paramRef": map[string]interface{}{
 					"name":                    "cluster",
 					"parameterNotFoundAction": "Deny",
 				},
->>>>>>> Stashed changes
 				"policyName":        "openshift-cluster-api-protect-" + providerName + "cluster",
 				"validationActions": []interface{}{"Deny"},
 				"matchResources": map[string]interface{}{

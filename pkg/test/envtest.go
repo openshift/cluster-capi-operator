@@ -60,8 +60,8 @@ func StartEnvTest(testEnv *envtest.Environment) (*rest.Config, client.Client, er
 		fakeGCPClusterCRD,
 	}
 	testEnv.CRDDirectoryPaths = []string{
-		path.Join(root, "vendor", "github.com", "openshift", "api", "config", "v1"),
-		path.Join(root, "vendor", "github.com", "openshift", "api", "operator", "v1"),
+		path.Join(root, "vendor", "github.com", "openshift", "api", "config", "v1", "zz_generated.crd-manifests"),
+		path.Join(root, "vendor", "github.com", "openshift", "api", "operator", "v1", "zz_generated.crd-manifests"),
 	}
 	testEnv.ErrorIfCRDPathMissing = true
 
