@@ -64,9 +64,7 @@ import (
 )
 
 const (
-	defaultImagesLocation         = "./dev-images.json"
-	releaseVersionEnvVariableName = "RELEASE_VERSION"
-	unknownVersionValue           = "unknown"
+	defaultImagesLocation = "./dev-images.json"
 )
 
 func initScheme(scheme *runtime.Scheme) {
@@ -272,21 +270,11 @@ func main() {
 	}
 }
 
-func getReleaseVersion() string {
-	releaseVersion := os.Getenv(releaseVersionEnvVariableName)
-	if len(releaseVersion) == 0 {
-		releaseVersion = unknownVersionValue
-		klog.Infof("%s environment variable is missing, defaulting to %q", releaseVersionEnvVariableName, unknownVersionValue)
-	}
-
-	return releaseVersion
-}
-
 func getClusterOperatorStatusClient(mgr manager.Manager, controller string, managedNamespace string) operatorstatus.ClusterOperatorStatusClient {
 	return operatorstatus.ClusterOperatorStatusClient{
 		Client:           mgr.GetClient(),
 		Recorder:         mgr.GetEventRecorderFor(controller),
-		ReleaseVersion:   getReleaseVersion(),
+		ReleaseVersion:   util.GetReleaseVersion(),
 		ManagedNamespace: managedNamespace,
 	}
 }
