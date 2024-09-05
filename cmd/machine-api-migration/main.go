@@ -66,11 +66,13 @@ func main() {
 		ResourceName:      "machine-api-migration-leader",
 		ResourceNamespace: "openshift-cluster-api",
 	}
-	diagnosticsOptions := capiflags.DiagnosticsOptions{}
+	diagnosticsOptions := capiflags.DiagnosticsOptions{
+		MetricsBindAddr: ":8081",
+	}
 
 	healthAddr := flag.String(
 		"health-addr",
-		":9440",
+		":9441",
 		"The address for health checking.",
 	)
 	managedNamespace := flag.String(
