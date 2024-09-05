@@ -24,7 +24,7 @@ verify: fmt lint
 test: verify unit
 
 # Build binaries
-build: operator manifests-gen
+build: operator migration manifests-gen
 
 .PHONY: manifests-gen
 manifests-gen:
@@ -34,6 +34,10 @@ manifests-gen:
 operator:
 	# building cluster-capi-operator
 	go build -o bin/cluster-capi-operator cmd/cluster-capi-operator/main.go
+
+migration:
+	# building migration
+	go build -o bin/machine-api-migration cmd/machine-api-migration/main.go
 
 unit:
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path --bin-dir $(PROJECT_DIR)/bin --remote-bucket openshift-kubebuilder-tools --use-deprecated-gcs)" ./hack/test.sh "./pkg/... ./assets/..." 5m
