@@ -80,6 +80,7 @@ func initScheme(scheme *runtime.Scheme) {
 	utilruntime.Must(clusterv1.AddToScheme(scheme))
 	utilruntime.Must(clusterctlv1.AddToScheme(scheme))
 	utilruntime.Must(ibmpowervsv1.AddToScheme(scheme))
+	utilruntime.Must(openstackv1.AddToScheme(scheme))
 	utilruntime.Must(vspherev1.AddToScheme(scheme))
 	utilruntime.Must(mapiv1.AddToScheme(scheme))
 	utilruntime.Must(mapiv1beta1.AddToScheme(scheme))
