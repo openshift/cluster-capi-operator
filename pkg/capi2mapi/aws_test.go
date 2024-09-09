@@ -39,7 +39,15 @@ var _ = Describe("capi2mapi AWS", func() {
 		Status: capav1.AWSMachineTemplateStatus{},
 	}
 
-	awsMachine := &capiv1.Machine{
+	awsMachine := &capav1.AWSMachine{
+		Spec: capav1.AWSMachineSpec{
+			ProviderID: ptr.To("test-123"),
+			InstanceID: ptr.To("test-123"),
+			PublicIP:   ptr.To(false),
+		},
+	}
+
+	capiMachine := &capiv1.Machine{
 		Spec: capiv1.MachineSpec{
 			ClusterName: "test-123",
 		},
@@ -66,17 +74,9 @@ var _ = Describe("capi2mapi AWS", func() {
 		},
 	}
 
-	It("should be able to convert a CAPI Machine and AWSMachineTemplate to a MAPI AWSProviderSpec", func() {
-		awsProviderSpecConfig, warns, err :=
-			FromMachineAndAWSMachineTemplateAndAWSCluster(awsMachine, awsMachineTemplate, capiAWSCluster).ToProviderSpec()
-		Expect(awsProviderSpecConfig).To(Not(BeNil()), "should not have a nil MAPI ProviderSpecConfig")
-		Expect(err).ToNot(HaveOccurred(), "should have been able to convert AWSMachineTemplateSpec to AWSProviderSpec")
-		Expect(warns).To(BeEmpty(), "should have not warned while converting AWSMachineTemplateSpec to AWSProviderSpec")
-	})
-
 	It("should be able to convert a CAPI Machine to a MAPI Machine", func() {
 		mapiMachine, warns, err :=
-			FromMachineAndAWSMachineTemplateAndAWSCluster(awsMachine, awsMachineTemplate, capiAWSCluster).ToMachine()
+			FromMachineAndAWSMachineAndAWSCluster(capiMachine, awsMachine, capiAWSCluster).ToMachine()
 		Expect(mapiMachine).To(Not(BeNil()), "should not have a nil MAPI Machine")
 		Expect(err).ToNot(HaveOccurred(), "should have been able to convert CAPI Machine/AWSMachineTemplate to MAPI Machine")
 		Expect(warns).To(BeEmpty(), "should have not warned while converting CAPI Machine/AWSMachineTemplate to MAPI Machine")

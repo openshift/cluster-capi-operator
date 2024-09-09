@@ -16,9 +16,12 @@ limitations under the License.
 package capi2mapi
 
 import (
+	"strings"
+
 	mapiv1 "github.com/openshift/api/machine/v1beta1"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 	capiv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
@@ -27,34 +30,74 @@ const (
 	workerUserDataSecretName = "worker-user-data"
 )
 
-// fromMAPIMachineToCAPIMachine translates a MAPI Machine to its Core CAPI Machine correspondent.
-func fromMAPIMachineToCAPIMachine(capiMachine *capiv1.Machine) *mapiv1.Machine {
+// fromCAPIMachineToMAPIMachine translates a core CAPI Machine to its MAPI Machine correspondent.
+//
+//nolint:funlen
+func fromCAPIMachineToMAPIMachine(capiMachine *capiv1.Machine) (*mapiv1.Machine, error) {
+	errs := []*field.Error{}
+
 	mapiMachine := &mapiv1.Machine{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        capiMachine.Name,
 			Namespace:   mapiNamespace,
 			Labels:      capiMachine.Labels,
 			Annotations: capiMachine.Annotations,
+			// OwnerReferences: These need to be converted so that any MachineSet owning a Machine is represented with the correct owner reference between the two APIs.
 		},
 		Spec: mapiv1.MachineSpec{
 			ObjectMeta: mapiv1.ObjectMeta{
-				Name:            capiMachine.ObjectMeta.Name,
-				GenerateName:    capiMachine.ObjectMeta.GenerateName,
-				Namespace:       capiMachine.ObjectMeta.Namespace,
-				Annotations:     capiMachine.ObjectMeta.Annotations,
-				OwnerReferences: capiMachine.OwnerReferences,
+				// TODO(OCPCLOUD-2680): Fix CAPI metadata support to mirror MAPI.
+				// Labels: We only expect labels and annotations to be present, but, they have nowhere to go on a CAPI Machine at present.
+				// Annotations: We only expect labels and annotations to be present, but, they have nowhere to go on a CAPI Machine at present.
 			},
-			ProviderID: capiMachine.Spec.ProviderID,
-			// LifecycleHooks: // TODO: lossy: find alternative in CAPI for this.
+			ProviderID:     capiMachine.Spec.ProviderID,
+			LifecycleHooks: getMAPILifecycleHooks(capiMachine),
 			// Taints: // TODO: lossy: Not Present on CAPI Machines, only done via BootstrapProvider?
 
 			// ProviderSpec: this MUST NOT be populated here. It will get populated later by higher level fuctions.
 		},
 	}
 
+	if len(capiMachine.OwnerReferences) > 0 {
+		// TODO(OCPCLOUD-XXXX): We should support converting CAPI MachineSet ORs to MAPI MachineSet ORs. NB working out the UID will be hard.
+		errs = append(errs, field.Invalid(field.NewPath("metadata", "ownerReferences"), capiMachine.OwnerReferences, "ownerReferences are not supported"))
+	}
+
 	setCAPIManagedNodeLabelsToMAPINodeLabels(capiMachine.Labels, mapiMachine.Spec.ObjectMeta.Labels)
 
-	return mapiMachine
+	// Unusued fields - Below this line are fields not used from the CAPI Machine.
+
+	// capiMachine.Spec.ClusterName - Ignore this as it can be reconstructed from the infra object.
+	// capiMachine.Spec.Bootstrap.ConfigRef - Ignore as we use DataSecretName for the MAPI side.
+	// capiMachine.Spec.InfrastructureRef - Ignore as this is the split between 1 to 2 resources from MAPI to CAPI.
+	// capiMachine.Spec.FailureDomain - Ignore because we use this to populate the providerSpec.
+
+	if capiMachine.Spec.Version != nil {
+		// TODO(OCPCLOUD-XXXX): We should prevent this using a VAP until and unless we need to support the field.
+		errs = append(errs, field.Invalid(field.NewPath("spec", "version"), capiMachine.Spec.Version, "version is not supported"))
+	}
+
+	if capiMachine.Spec.NodeDrainTimeout != nil {
+		// TODO(OCPCLOUD-XXXX): We should implement this within MAPI to create feature parity.
+		errs = append(errs, field.Invalid(field.NewPath("spec", "nodeDrainTimeout"), capiMachine.Spec.NodeDrainTimeout, "nodeDrainTimeout is not supported"))
+	}
+
+	if capiMachine.Spec.NodeVolumeDetachTimeout != nil {
+		// TODO(OCPCLOUD-XXXX): We should implement this within MAPI to create feature parity.
+		errs = append(errs, field.Invalid(field.NewPath("spec", "nodeVolumeDetachTimeout"), capiMachine.Spec.NodeVolumeDetachTimeout, "nodeVolumeDetachTimeout is not supported"))
+	}
+
+	if capiMachine.Spec.NodeDeletionTimeout != nil {
+		// TODO(OCPCLOUD-XXXX): We should implement this within MAPI to create feature parity.
+		errs = append(errs, field.Invalid(field.NewPath("spec", "nodeDeletionTimeout"), capiMachine.Spec.NodeDeletionTimeout, "nodeDeletionTimeout is not supported"))
+	}
+
+	if len(errs) > 0 {
+		// Return the mapiMachine so that the logic continues and collects all possible conversion errors.
+		return mapiMachine, field.ErrorList(errs).ToAggregate()
+	}
+
+	return mapiMachine, nil
 }
 
 func setCAPIManagedNodeLabelsToMAPINodeLabels(capiNodeLabels map[string]string, mapiNodeLabels map[string]string) {
@@ -69,4 +112,32 @@ func setCAPIManagedNodeLabelsToMAPINodeLabels(capiNodeLabels map[string]string, 
 	for k, v := range capiNodeLabels {
 		mapiNodeLabels[k] = v
 	}
+}
+
+const (
+	// Note the trailing slash here is important when we are trimming the prefix.
+	capiPreDrainAnnotationPrefix     = "pre-drain.hook.machine.cluster-api.x-k8s.io/"
+	capiPreTerminateAnnotationPrefix = "pre-terminate.hook.machine.cluster-api.x-k8s.io/"
+)
+
+// getMAPILifecycleHooks extracts the lifecycle hooks from the CAPI Machine annotations.
+func getMAPILifecycleHooks(capiMachine *capiv1.Machine) mapiv1.LifecycleHooks {
+	hooks := mapiv1.LifecycleHooks{}
+
+	for k, v := range capiMachine.Annotations {
+		switch {
+		case strings.HasPrefix(k, capiPreDrainAnnotationPrefix):
+			hooks.PreDrain = append(hooks.PreDrain, mapiv1.LifecycleHook{
+				Name:  strings.TrimPrefix(k, capiPreDrainAnnotationPrefix),
+				Owner: v,
+			})
+		case strings.HasPrefix(k, capiPreTerminateAnnotationPrefix):
+			hooks.PreTerminate = append(hooks.PreTerminate, mapiv1.LifecycleHook{
+				Name:  strings.TrimPrefix(k, capiPreTerminateAnnotationPrefix),
+				Owner: v,
+			})
+		}
+	}
+
+	return hooks
 }

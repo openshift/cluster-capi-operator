@@ -15,13 +15,14 @@ limitations under the License.
 */
 package capi2mapi
 
-// MachineAndMachineTemplate represents a type holding CAPI Machine and MachineTemplate.
-type MachineAndMachineTemplate interface {
-	ToProviderSpec()
-	ToMachine()
+import mapiv1 "github.com/openshift/api/machine/v1beta1"
+
+// MachineAndInfrastructureMachine represents the conversion between a CAPI Machine and InfrastructureMachine to a MAPI Machine.
+type MachineAndInfrastructureMachine interface {
+	ToMachine() (*mapiv1.Machine, []string, error)
 }
 
-// MachineSetAndMachineTemplate represents a type holding CAPI MachineSet and MachineTemplate.
+// MachineSetAndMachineTemplate represents the conversion between a CAPI MachineSet and MachineTemplate to a MAPI MachineSet.
 type MachineSetAndMachineTemplate interface {
-	ToMachineSet()
+	ToMachineSet() (*mapiv1.MachineSet, []string, error)
 }

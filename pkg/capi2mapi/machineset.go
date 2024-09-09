@@ -21,6 +21,7 @@ import (
 	mapiv1 "github.com/openshift/api/machine/v1beta1"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 	capiv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
@@ -29,8 +30,10 @@ const (
 	mapiMachineSetKind       = "MachineSet"
 )
 
-// fromMachineSetToMachineSet takes a CAPI MachineSet and returns a converted MAPI MachineSet.
-func fromMachineSetToMachineSet(capiMachineSet *capiv1.MachineSet) *mapiv1.MachineSet {
+// fromCAPIMachineSetToMAPIMachineSet takes a CAPI MachineSet and returns a converted MAPI MachineSet.
+func fromCAPIMachineSetToMAPIMachineSet(capiMachineSet *capiv1.MachineSet) (*mapiv1.MachineSet, error) {
+	errs := field.ErrorList{}
+
 	mapiMachineSet := &mapiv1.MachineSet{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       mapiMachineSetKind,
@@ -41,12 +44,26 @@ func fromMachineSetToMachineSet(capiMachineSet *capiv1.MachineSet) *mapiv1.Machi
 			Namespace:   capiMachineSet.Namespace,
 			Labels:      capiMachineSet.Labels,
 			Annotations: capiMachineSet.Annotations,
+			// OwnerReferences: There shouldn't be any OwnerReferences on a MachineSet.
+		},
+		Spec: mapiv1.MachineSetSpec{
+			Selector:        capiMachineSet.Spec.Selector,
+			Replicas:        capiMachineSet.Spec.Replicas,
+			MinReadySeconds: capiMachineSet.Spec.MinReadySeconds,
+			DeletePolicy:    capiMachineSet.Spec.DeletePolicy,
+			Template: mapiv1.MachineTemplateSpec{
+				ObjectMeta: mapiv1.ObjectMeta{
+					Labels:      capiMachineSet.Spec.Template.Labels,
+					Annotations: capiMachineSet.Spec.Template.Annotations,
+				},
+			},
 		},
 	}
 
-	mapiMachineSet.Spec.Selector = capiMachineSet.Spec.Selector
-	mapiMachineSet.Spec.Template.Labels = capiMachineSet.Spec.Template.Labels
-	mapiMachineSet.Spec.Replicas = capiMachineSet.Spec.Replicas
+	if len(capiMachineSet.OwnerReferences) > 0 {
+		// TODO(OCPCLOUD-XXXX): We should prevent ownerreferences on MachineSets until such a time that we need to support them.
+		errs = append(errs, field.Invalid(field.NewPath("metadata", "ownerReferences"), capiMachineSet.OwnerReferences, "ownerReferences are not supported"))
+	}
 
 	for k, v := range capiMachineSet.Spec.Template.Labels {
 		// Only CAPI managed labels are propagated down to the kubernetes nodes.
@@ -64,5 +81,15 @@ func fromMachineSetToMachineSet(capiMachineSet *capiv1.MachineSet) *mapiv1.Machi
 
 	setCAPIManagedNodeLabelsToMAPINodeLabels(capiMachineSet.Spec.Template.Labels, mapiMachineSet.Spec.Template.Spec.ObjectMeta.Labels)
 
-	return mapiMachineSet
+	// Unusued fields - Below this line are fields not used from the CAPI Machine.
+
+	// capiMachineSet.Spec.ClusterName - Ignore this as it can be reconstructed from the infra object.
+	// capiMachineSet.Spec.Template.Spec - Ignore as we convert this at a higher level using the Machine conversion logic.
+
+	if len(errs) > 0 {
+		// Return the mapiMachine so that the logic continues and collects all possible conversion errors.
+		return mapiMachineSet, errs.ToAggregate()
+	}
+
+	return mapiMachineSet, nil
 }
