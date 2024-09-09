@@ -36,7 +36,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 
 	ibmpowervsv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
-	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha7"
+	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
 
 	configv1 "github.com/openshift/api/config/v1"
 	mapiv1 "github.com/openshift/api/machine/v1"
