@@ -15,17 +15,17 @@ limitations under the License.
 */
 package mapi2capi
 
-// ProviderSpec represents a type holding MAPI ProviderSpec.
-type ProviderSpec interface {
-	ToMachineTemplateSpec()
-}
+import (
+	capiv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+)
 
 // Machine represents a type holding MAPI Machine.
 type Machine interface {
-	ToMachineAndMachineTemplate()
+	ToMachineAndInfrastructureMachine() (*capiv1.Machine, client.Object, []string, error)
 }
 
 // MachineSet represents a type holding MAPI MachineSet.
 type MachineSet interface {
-	ToMachineSetAndMachineTemplate()
+	ToMachineSetAndMachineTemplate() (*capiv1.MachineSet, client.Object, []string, error)
 }

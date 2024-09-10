@@ -18,6 +18,7 @@ package mapi2capi
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"regexp"
 	"strings"
 
@@ -27,87 +28,90 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/utils/ptr"
 	capav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	capiv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 )
 
 var (
-	errInfrastructureInfrastructureNameCannotBeNil  = errors.New("infrastructure cannot be nil and infrastructure.Status.InfrastructureName cannot be empty")
-	errUnableToFindAMIReference                     = errors.New("unable to find a valid AMI resource reference")
-	errUnableToConvertUnsupportedAMIFilterReference = errors.New("unable to convert AMI Filters reference. Not supported in CAPI")
-	errUnableToConvertUnsupportedAMIARNReference    = errors.New("unable to convert AMI ARN reference. Not supported in CAPI")
-	errUnableToFindInstanceID                       = errors.New("unable to find InstanceID in ProviderID")
-	errUnableToConvertAWSBlockDeviceMapping         = errors.New("unable to convert AWSBlockDeviceMapping, unsupported NonEBS volume mapping")
+	errUnexpectedObjectTypeForMachine = errors.New("unexpected type for capaMachineObj")
 )
 
-// awsProviderSpecAndInfra stores the details of a Machine API AWSProviderSpec and Infra.
-type awsProviderSpecAndInfra struct {
-	Spec           *mapiv1.AWSMachineProviderConfig
-	Infrastructure *configv1.Infrastructure
-}
+const (
+	errInfrastructureInfrastructureNameCannotBeNil  = "infrastructure cannot be nil and infrastructure.Status.InfrastructureName cannot be empty"
+	errUnableToFindAMIReference                     = "unable to find a valid AMI resource reference"
+	errUnableToConvertUnsupportedAMIFilterReference = "unable to convert AMI Filters reference. Not supported in CAPI"
+	errUnableToConvertUnsupportedAMIARNReference    = "unable to convert AMI ARN reference. Not supported in CAPI"
+	errUnableToFindInstanceID                       = "unable to find InstanceID in ProviderID"
+)
 
 // awsMachineAndInfra stores the details of a Machine API AWSMachine and Infra.
 type awsMachineAndInfra struct {
-	Machine        *mapiv1.Machine
-	Infrastructure *configv1.Infrastructure
+	machine        *mapiv1.Machine
+	infrastructure *configv1.Infrastructure
 }
 
 // awsMachineSetAndInfra stores the details of a Machine API AWSMachine and Infra.
 type awsMachineSetAndInfra struct {
-	MachineSet     *mapiv1.MachineSet
-	Infrastructure *configv1.Infrastructure
-}
-
-// FromAWSProviderSpecAndInfra wraps a Machine API AWSMachineProviderConfig into a mapi2capi AWSProviderSpec.
-func FromAWSProviderSpecAndInfra(s *mapiv1.AWSMachineProviderConfig, i *configv1.Infrastructure) awsProviderSpecAndInfra {
-	return awsProviderSpecAndInfra{Spec: s, Infrastructure: i}
+	machineSet     *mapiv1.MachineSet
+	infrastructure *configv1.Infrastructure
+	*awsMachineAndInfra
 }
 
 // FromAWSMachineAndInfra wraps a Machine API Machine for AWS and the OCP Infrastructure object into a mapi2capi AWSProviderSpec.
-func FromAWSMachineAndInfra(m *mapiv1.Machine, i *configv1.Infrastructure) awsMachineAndInfra {
-	return awsMachineAndInfra{Machine: m, Infrastructure: i}
+func FromAWSMachineAndInfra(m *mapiv1.Machine, i *configv1.Infrastructure) Machine {
+	return &awsMachineAndInfra{machine: m, infrastructure: i}
 }
 
 // FromAWSMachineSetAndInfra wraps a Machine API MachineSet for AWS and the OCP Infrastructure object into a mapi2capi AWSProviderSpec.
-func FromAWSMachineSetAndInfra(m *mapiv1.MachineSet, i *configv1.Infrastructure) awsMachineSetAndInfra {
-	return awsMachineSetAndInfra{MachineSet: m, Infrastructure: i}
+func FromAWSMachineSetAndInfra(m *mapiv1.MachineSet, i *configv1.Infrastructure) MachineSet {
+	return &awsMachineSetAndInfra{
+		machineSet:     m,
+		infrastructure: i,
+		awsMachineAndInfra: &awsMachineAndInfra{
+			machine: &mapiv1.Machine{
+				Spec: m.Spec.Template.Spec,
+			},
+			infrastructure: i,
+		},
+	}
 }
 
-// ToMachineAndMachineTemplate converts a mapi2capi AWSMachineAndInfra into a CAPI Machine and CAPA AWSMachineTemplate.
-func (m awsMachineAndInfra) ToMachineAndMachineTemplate() (*capiv1.Machine, *capav1.AWSMachineTemplate, []string, error) {
+// ToMachineAndInfrastructureMachine is used to generate a CAPI Machine and the corresponding InfrastructureMachine
+// from the stored MAPI Machine and Infrastructure objects.
+func (m *awsMachineAndInfra) ToMachineAndInfrastructureMachine() (*capiv1.Machine, client.Object, []string, error) {
 	var (
-		errs     []error
+		errs     field.ErrorList
 		warnings []string
 	)
 
-	awsProviderConfig, err := AWSProviderSpecFromRawExtension(m.Machine.Spec.ProviderSpec.Value)
+	awsProviderConfig, err := awsProviderSpecFromRawExtension(m.machine.Spec.ProviderSpec.Value)
 	if err != nil {
-		errs = append(errs, err)
+		return nil, nil, nil, field.Invalid(field.NewPath("spec", "providerSpec", "value"), m.machine.Spec.ProviderSpec.Value, err.Error())
 	}
 
-	capaSpec, warn, err := FromAWSProviderSpecAndInfra(&awsProviderConfig, m.Infrastructure).ToMachineTemplateSpec()
-	if err != nil {
-		errs = append(errs, err)
+	capaMachine, warn, machineErrs := m.toAWSMachine(awsProviderConfig)
+	if machineErrs != nil {
+		errs = append(errs, machineErrs...)
 	}
 
 	warnings = append(warnings, warn...)
 
-	capaMachineTemplate := awsMachineTemplateSpecToAWSMachineTemplate(capaSpec, nil, m.Machine.Name, capiNamespace)
-
-	capiMachine, err := fromMAPIMachineToCAPIMachine(m.Machine)
-	if err != nil {
-		errs = append(errs, err)
+	capiMachine, machineErrs := fromMAPIMachineToCAPIMachine(m.machine)
+	if machineErrs != nil {
+		errs = append(errs, machineErrs...)
 	}
 
-	// Extract and plug InstanceID.
-	if capiMachine.Spec.ProviderID != nil { // TODO: question: do we want to error if the ProviderID is not present?
+	// Extract and plug InstanceID, if the providerID is present (instance has been provisioned).
+	if capiMachine.Spec.ProviderID != nil {
 		instanceID := instanceIDFromProviderID(*capiMachine.Spec.ProviderID)
 		if instanceID == "" {
-			errs = append(errs, errUnableToFindInstanceID)
+			errs = append(errs, field.Invalid(field.NewPath("spec", "providerID"), capiMachine.Spec.ProviderID, errUnableToFindInstanceID))
 		} else {
-			capaMachineTemplate.Spec.Template.Spec.InstanceID = ptr.To(instanceID)
+			capaMachine.Spec.InstanceID = ptr.To(instanceID)
 		}
 	}
 
@@ -123,68 +127,55 @@ func (m awsMachineAndInfra) ToMachineAndMachineTemplate() (*capiv1.Machine, *cap
 	}
 
 	// Popluate the CAPI Machine ClusterName from the OCP Infrastructure object.
-	if m.Infrastructure == nil || m.Infrastructure.Status.InfrastructureName == "" {
-		errs = append(errs, errInfrastructureInfrastructureNameCannotBeNil)
+	if m.infrastructure == nil || m.infrastructure.Status.InfrastructureName == "" {
+		errs = append(errs, field.Invalid(field.NewPath("infrastructure", "status", "infrastructureName"), m.infrastructure.Status.InfrastructureName, errInfrastructureInfrastructureNameCannotBeNil))
 	} else {
-		capiMachine.Spec.ClusterName = m.Infrastructure.Status.InfrastructureName
+		capiMachine.Spec.ClusterName = m.infrastructure.Status.InfrastructureName
 	}
 
 	if len(errs) > 0 {
-		return nil, nil, warnings, utilerrors.NewAggregate(errs)
+		return nil, nil, warnings, errs.ToAggregate()
 	}
 
-	return capiMachine, capaMachineTemplate, warnings, nil
+	return capiMachine, capaMachine, warnings, nil
 }
 
 // ToMachineSetAndMachineTemplate converts a mapi2capi AWSMachineSetAndInfra into a CAPI MachineSet and CAPA AWSMachineTemplate.
-func (m awsMachineSetAndInfra) ToMachineSetAndMachineTemplate() (*capiv1.MachineSet, *capav1.AWSMachineTemplate, []string, error) {
+func (m *awsMachineSetAndInfra) ToMachineSetAndMachineTemplate() (*capiv1.MachineSet, client.Object, []string, error) {
 	var (
 		errs     []error
 		warnings []string
 	)
 
-	awsProviderConfig, err := AWSProviderSpecFromRawExtension(m.MachineSet.Spec.Template.Spec.ProviderSpec.Value)
+	capiMachine, capaMachineObj, warn, err := m.ToMachineAndInfrastructureMachine()
 	if err != nil {
-		errs = append(errs, err)
-	}
+		var errAgg utilerrors.Aggregate
+		if !errors.As(err, &errAgg) {
+			panic("unexpected type for error")
+		}
 
-	capaSpec, warn, err := FromAWSProviderSpecAndInfra(&awsProviderConfig, m.Infrastructure).ToMachineTemplateSpec()
-	if err != nil {
-		errs = append(errs, err)
+		errs = append(errs, errAgg.Errors()...)
 	}
 
 	warnings = append(warnings, warn...)
 
-	capaMachineTemplate := awsMachineTemplateSpecToAWSMachineTemplate(capaSpec, nil, m.MachineSet.Name, capiNamespace)
-
-	capiMachineSet := fromMachineSetToMachineSet(m.MachineSet)
-
-	// Extract and plug InstanceID.
-	if capiMachineSet.Spec.Template.Spec.ProviderID != nil { // TODO: question: do we want to error if the ProviderID is not present?
-		instanceID := instanceIDFromProviderID(*capiMachineSet.Spec.Template.Spec.ProviderID)
-		if instanceID == "" {
-			errs = append(errs, errUnableToFindInstanceID)
-		} else {
-			capaMachineTemplate.Spec.Template.Spec.InstanceID = ptr.To(instanceID)
-		}
+	capaMachine, ok := capaMachineObj.(*capav1.AWSMachine)
+	if !ok {
+		panic(fmt.Errorf("%w: %T", errUnexpectedObjectTypeForMachine, capaMachineObj))
 	}
 
-	// Plug into Core CAPI MachineSet fields that come from the MAPI ProviderConfig which belong here instead of the CAPI AWSMachineTemplate.
-	if awsProviderConfig.Placement.AvailabilityZone != "" {
-		capiMachineSet.Spec.Template.Spec.FailureDomain = ptr.To(awsProviderConfig.Placement.AvailabilityZone)
-	}
+	capaMachineTemplate := awsMachineToAWSMachineTemplate(capaMachine, m.machineSet.Name, capiNamespace)
 
-	if awsProviderConfig.UserDataSecret != nil && awsProviderConfig.UserDataSecret.Name != "" {
-		capiMachineSet.Spec.Template.Spec.Bootstrap = capiv1.Bootstrap{
-			DataSecretName: &awsProviderConfig.UserDataSecret.Name,
-		}
-	}
+	capiMachineSet, machineSetErrs := fromMAPIMachineSetToCAPIMachineSet(m.machineSet)
+	errs = append(errs, machineSetErrs.Errors()...)
 
-	if m.Infrastructure == nil || m.Infrastructure.Status.InfrastructureName == "" {
-		errs = append(errs, errInfrastructureInfrastructureNameCannotBeNil)
+	capiMachineSet.Spec.Template.Spec = capiMachine.Spec
+
+	if m.infrastructure == nil || m.infrastructure.Status.InfrastructureName == "" {
+		errs = append(errs, field.Invalid(field.NewPath("infrastructure", "status", "infrastructureName"), m.infrastructure.Status.InfrastructureName, errInfrastructureInfrastructureNameCannotBeNil))
 	} else {
-		capiMachineSet.Spec.Template.Spec.ClusterName = m.Infrastructure.Status.InfrastructureName
-		capiMachineSet.Spec.ClusterName = m.Infrastructure.Status.InfrastructureName
+		capiMachineSet.Spec.Template.Spec.ClusterName = m.infrastructure.Status.InfrastructureName
+		capiMachineSet.Spec.ClusterName = m.infrastructure.Status.InfrastructureName
 	}
 
 	if len(errs) > 0 {
@@ -198,78 +189,107 @@ func (m awsMachineSetAndInfra) ToMachineSetAndMachineTemplate() (*capiv1.Machine
 // it converts AWSProviderSpec to AWSMachineTemplateSpec.
 //
 //nolint:funlen
-func (p awsProviderSpecAndInfra) ToMachineTemplateSpec() (capav1.AWSMachineTemplateSpec, []string, error) {
+func (m *awsMachineAndInfra) toAWSMachine(providerSpec mapiv1.AWSMachineProviderConfig) (*capav1.AWSMachine, []string, field.ErrorList) {
+	fldPath := field.NewPath("spec", "providerSpec", "value")
+
 	var (
-		errs     []error
+		errs     field.ErrorList
 		warnings []string
 	)
 
-	rootVolume, nonRootVolumes, err := convertAWSBlockDeviceMappingSpecToCAPI(p.Spec.BlockDevices)
+	rootVolume, nonRootVolumes, warn, blockErrs := convertAWSBlockDeviceMappingSpecToCAPI(fldPath.Child("blockDevices"), providerSpec.BlockDevices)
+	if blockErrs != nil {
+		errs = append(errs, blockErrs...)
+	}
+
+	warnings = append(warnings, warn...)
+
+	capiAWSAMIReference, err := convertAWSAMIResourceReferenceToCAPI(fldPath.Child("ami"), providerSpec.AMI)
 	if err != nil {
 		errs = append(errs, err)
 	}
 
-	capiAdditionalSecurityGroups := convertAWSSecurityGroupstoCAPI(p.Spec.SecurityGroups)
-
-	capiAdditionalAWSTags := convertAWSTagsToCAPI(p.Spec.Tags)
-
-	capiIAMInstanceProfile := convertIAMInstanceProfiletoCAPI(p.Spec.IAMInstanceProfile)
-
-	capiMetadataServiceOptions := convertMetadataServiceOptionstoCAPI(p.Spec.MetadataServiceOptions)
-
-	capiSpotMarketOptions := convertAWSSpotMarketOptionsToCAPI(p.Spec.SpotMarketOptions)
-
-	capiAWSResourceReference := convertAWSResourceReferenceToCAPI(p.Spec.Subnet)
-
-	capiAWSAMIReference, err := convertAWSAMIResourceReferenceToCAPI(p.Spec.AMI)
-	if err != nil {
-		errs = append(errs, err)
-	}
-
-	spec := capav1.AWSMachineTemplateSpec{
-		Template: capav1.AWSMachineTemplateResource{
-			Spec: capav1.AWSMachineSpec{
-				AMI:                      capiAWSAMIReference,
-				AdditionalSecurityGroups: capiAdditionalSecurityGroups,
-				AdditionalTags:           capiAdditionalAWSTags,
-				IAMInstanceProfile:       capiIAMInstanceProfile,
-				Ignition: &capav1.Ignition{
-					Version:     "3.4",                                               // Hardcoded for OpenShift.
-					StorageType: capav1.IgnitionStorageTypeOptionUnencryptedUserData, // Hardcoded for OpenShift.
-				},
-
-				// CloudInit. Not used in OpenShift (we only use Ignition).
-				// ImageLookupBaseOS. Not used in OpenShift.
-				// ImageLookupFormat. Not used in OpenShift.
-				// ImageLookupOrg. Not used in OpenShift.
-				// NetworkInterfaces. Not used in OpenShift.
-
-				InstanceMetadataOptions: capiMetadataServiceOptions,
-				InstanceType:            p.Spec.InstanceType,
-				NonRootVolumes:          nonRootVolumes,
-				PlacementGroupName:      p.Spec.PlacementGroupName,
-				// ProviderID. This is populated when this is called in higher level funcs (ToMachine(), ToMachineSet()).
-				// InstanceID. This is populated when this is called in higher level funcs (ToMachine(), ToMachineSet()).
-				PublicIP:             p.Spec.PublicIP,
-				RootVolume:           rootVolume,
-				SSHKeyName:           p.Spec.KeyName,
-				SpotMarketOptions:    capiSpotMarketOptions,
-				Subnet:               capiAWSResourceReference,
-				Tenancy:              string(p.Spec.Placement.Tenancy),
-				UncompressedUserData: ptr.To(true),
-			},
+	spec := capav1.AWSMachineSpec{
+		AMI:                      capiAWSAMIReference,
+		AdditionalSecurityGroups: convertAWSSecurityGroupstoCAPI(providerSpec.SecurityGroups),
+		AdditionalTags:           convertAWSTagsToCAPI(providerSpec.Tags),
+		IAMInstanceProfile:       convertIAMInstanceProfiletoCAPI(providerSpec.IAMInstanceProfile),
+		Ignition: &capav1.Ignition{
+			Version:     "3.4",                                               // TODO(OCPCLOUD-XXXX): Should this be extracted from the ignition in the user data secret?
+			StorageType: capav1.IgnitionStorageTypeOptionUnencryptedUserData, // Hardcoded for OpenShift.
 		},
+
+		// CloudInit. Not used in OpenShift (we only use Ignition).
+		// ImageLookupBaseOS. Not used in OpenShift.
+		// ImageLookupFormat. Not used in OpenShift.
+		// ImageLookupOrg. Not used in OpenShift.
+		// NetworkInterfaces. Not used in OpenShift.
+
+		InstanceMetadataOptions: convertMetadataServiceOptionstoCAPI(providerSpec.MetadataServiceOptions),
+		InstanceType:            providerSpec.InstanceType,
+		NonRootVolumes:          nonRootVolumes,
+		PlacementGroupName:      providerSpec.PlacementGroupName,
+		PlacementGroupPartition: int64(ptr.Deref(providerSpec.PlacementGroupPartition, 0)),
+		// ProviderID. This is populated when this is called in higher level funcs (ToMachine(), ToMachineSet()).
+		// InstanceID. This is populated when this is called in higher level funcs (ToMachine(), ToMachineSet()).
+		PublicIP:          providerSpec.PublicIP,
+		RootVolume:        rootVolume,
+		SSHKeyName:        providerSpec.KeyName,
+		SpotMarketOptions: convertAWSSpotMarketOptionsToCAPI(providerSpec.SpotMarketOptions),
+		Subnet:            convertAWSResourceReferenceToCAPI(providerSpec.Subnet),
+		Tenancy:           string(providerSpec.Placement.Tenancy),
+		// UncompressedUserData: Not used in OpenShift.
 	}
 
-	if len(errs) > 0 {
-		return capav1.AWSMachineTemplateSpec{}, warnings, utilerrors.NewAggregate(errs)
+	if providerSpec.CapacityReservationID != "" {
+		spec.CapacityReservationID = &providerSpec.CapacityReservationID
 	}
 
-	return spec, warnings, nil
+	// Unused fields - Below this line are fields not used from the MAPI AWSMachineProviderConfig.
+
+	// TypeMeta - Only for the purpose of the raw extension, not used for any functionality.
+	// CredentialsSecret - TODO(OCPCLOUD-XXXX): Work out what needs to happen regarding credentials secrets.
+
+	if m.infrastructure.Status.PlatformStatus != nil &&
+		m.infrastructure.Status.PlatformStatus.AWS != nil &&
+		m.infrastructure.Status.PlatformStatus.AWS.Region != "" &&
+		providerSpec.Placement.Region != m.infrastructure.Status.PlatformStatus.AWS.Region {
+		// Assuming that the platform status has a region, we expect all MachineSets to match that region, if they don't, this is an error on the users part.
+		errs = append(errs, field.Invalid(fldPath.Child("placement", "region"), providerSpec.Placement.Region, fmt.Sprintf("placement.region should match infrastructure status value %q", m.infrastructure.Status.PlatformStatus.AWS.Region)))
+	}
+
+	if !reflect.DeepEqual(providerSpec.ObjectMeta, metav1.ObjectMeta{}) {
+		// We don't support setting the object metadata in the provider spec.
+		// It's only present for the purpose of the raw extension and doesn't have any functionality.
+		errs = append(errs, field.Invalid(fldPath.Child("metadata"), providerSpec.ObjectMeta, "metadata is not supported"))
+	}
+
+	if providerSpec.DeviceIndex != 0 {
+		// TODO(OCPCLOUD-XXXX): We should implement support for multiple network interfaces or otherwise support a different device index in CAPA.
+		errs = append(errs, field.Invalid(fldPath.Child("deviceIndex"), providerSpec.DeviceIndex, "deviceIndex must be 0 or unset"))
+	}
+
+	if providerSpec.NetworkInterfaceType != "" && providerSpec.NetworkInterfaceType != mapiv1.AWSENANetworkInterfaceType {
+		// TODO(OCPCLOUD-XXXX): We need to upstream the network interface choice to allow the elastic fabric adapter.
+		errs = append(errs, field.Invalid(fldPath.Child("networkInterfaceType"), providerSpec.NetworkInterfaceType, "networkInterface type must be one of ENA or omitted, unsupported value"))
+	}
+
+	if len(providerSpec.LoadBalancers) > 0 {
+		// TODO(OCPCLOUD-XXXX): CAPA only applies load balancers to the control plane nodes. We should always reject LBs on non-control plane and work out how to connect the control plane LBs correctly otherwise.
+		errs = append(errs, field.Invalid(fldPath.Child("loadBalancers"), providerSpec.LoadBalancers, "loadBalancers are not supported"))
+	}
+
+	return &capav1.AWSMachine{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      m.machine.Name,
+			Namespace: m.machine.Namespace,
+		},
+		Spec: spec,
+	}, warnings, errs
 }
 
-// AWSProviderSpecFromRawExtension unmarshals a raw extension into an AWSMachineProviderSpec type.
-func AWSProviderSpecFromRawExtension(rawExtension *runtime.RawExtension) (mapiv1.AWSMachineProviderConfig, error) {
+// awsProviderSpecFromRawExtension unmarshals a raw extension into an AWSMachineProviderSpec type.
+func awsProviderSpecFromRawExtension(rawExtension *runtime.RawExtension) (mapiv1.AWSMachineProviderConfig, error) {
 	if rawExtension == nil {
 		return mapiv1.AWSMachineProviderConfig{}, nil
 	}
@@ -282,37 +302,36 @@ func AWSProviderSpecFromRawExtension(rawExtension *runtime.RawExtension) (mapiv1
 	return spec, nil
 }
 
-func awsMachineTemplateSpecToAWSMachineTemplate(spec capav1.AWSMachineTemplateSpec, status *capav1.AWSMachineTemplateStatus, name string, namespace string) *capav1.AWSMachineTemplate {
-	if status == nil {
-		status = &capav1.AWSMachineTemplateStatus{}
-	}
-
+func awsMachineToAWSMachineTemplate(awsMachine *capav1.AWSMachine, name string, namespace string) *capav1.AWSMachineTemplate {
 	return &capav1.AWSMachineTemplate{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
 		},
-		Spec:   spec,
-		Status: *status,
+		Spec: capav1.AWSMachineTemplateSpec{
+			Template: capav1.AWSMachineTemplateResource{
+				Spec: awsMachine.Spec,
+			},
+		},
 	}
 }
 
 //////// Conversion helpers
 
-func convertAWSAMIResourceReferenceToCAPI(amiRef mapiv1.AWSResourceReference) (capav1.AMIReference, error) {
+func convertAWSAMIResourceReferenceToCAPI(fldPath *field.Path, amiRef mapiv1.AWSResourceReference) (capav1.AMIReference, *field.Error) {
 	if amiRef.ARN != nil {
-		return capav1.AMIReference{}, errUnableToConvertUnsupportedAMIARNReference
+		return capav1.AMIReference{}, field.Invalid(fldPath.Child("arn"), amiRef.ARN, errUnableToConvertUnsupportedAMIARNReference)
 	}
 
 	if len(amiRef.Filters) > 0 {
-		return capav1.AMIReference{}, errUnableToConvertUnsupportedAMIFilterReference
+		return capav1.AMIReference{}, field.Invalid(fldPath.Child("filters"), amiRef.Filters, errUnableToConvertUnsupportedAMIFilterReference)
 	}
 
 	if amiRef.ID != nil {
 		return capav1.AMIReference{ID: amiRef.ID}, nil
 	}
 
-	return capav1.AMIReference{}, errUnableToFindAMIReference
+	return capav1.AMIReference{}, field.Invalid(fldPath, amiRef, errUnableToFindAMIReference)
 }
 
 func convertAWSTagsToCAPI(mapiTags []mapiv1.TagSpecification) capav1.Tags {
@@ -376,51 +395,75 @@ func convertAWSSecurityGroupstoCAPI(sgs []mapiv1.AWSResourceReference) []capav1.
 	return capiSGs
 }
 
-func convertAWSBlockDeviceMappingSpecToCAPI(mapiBlockDeviceMapping []mapiv1.BlockDeviceMappingSpec) (*capav1.Volume, []capav1.Volume, error) {
+func convertAWSBlockDeviceMappingSpecToCAPI(fldPath *field.Path, mapiBlockDeviceMapping []mapiv1.BlockDeviceMappingSpec) (*capav1.Volume, []capav1.Volume, []string, field.ErrorList) {
 	rootVolume := &capav1.Volume{}
 	nonRootVolumes := []capav1.Volume{}
+	errs := field.ErrorList{}
+	warnings := []string{}
 
-	for _, mapping := range mapiBlockDeviceMapping {
-		// TODO: support also non EBS mappings.
+	for i, mapping := range mapiBlockDeviceMapping {
 		if mapping.EBS == nil {
-			return nil, nil, errUnableToConvertAWSBlockDeviceMapping
+			// MAPA ignores any disk that is missing the EBS configuration.
+			// See https://github.com/openshift/machine-api-provider-aws/blob/a7b3d12db988bd2bebbabd6c2e80147511b949e7/pkg/actuators/machine/instances.go#L287-L289.
+			warnings = append(warnings, field.Invalid(fldPath.Index(i), mapping, "missing ebs configuration for block device").Error())
+			continue
 		}
 
-		capiKMSKey := convertKMSKeyToCAPI(mapping.EBS.KMSKey)
-
 		if mapping.DeviceName == nil {
-			if mapping.EBS != nil && mapping.EBS.Iops != nil &&
-				mapping.EBS.VolumeSize != nil &&
-				mapping.EBS.VolumeType != nil &&
-				mapping.EBS.Encrypted != nil {
-				rootVolume = &capav1.Volume{
-					Size:          *mapping.EBS.VolumeSize,
-					Type:          capav1.VolumeType(*mapping.EBS.VolumeType),
-					IOPS:          *mapping.EBS.Iops,
-					Encrypted:     mapping.EBS.Encrypted,
-					EncryptionKey: capiKMSKey,
-				}
-			}
+			volume, warn, err := blockDeviceMappingSpecToVolume(fldPath.Index(i), mapping, true)
+			errs = append(errs, err...)
+			warnings = append(warnings, warn...)
+
+			rootVolume = &volume
 
 			continue
 		}
 
-		if mapping.EBS != nil && mapping.EBS.Iops != nil &&
-			mapping.DeviceName != nil &&
-			mapping.EBS.VolumeSize != nil &&
-			mapping.EBS.VolumeType != nil &&
-			mapping.EBS.Encrypted != nil {
-			nonRootVolumes = append(nonRootVolumes, capav1.Volume{
-				Size:          *mapping.EBS.VolumeSize,
-				Type:          capav1.VolumeType(*mapping.EBS.VolumeType),
-				IOPS:          *mapping.EBS.Iops,
-				Encrypted:     mapping.EBS.Encrypted,
-				EncryptionKey: capiKMSKey,
-			})
-		}
+		volume, warn, err := blockDeviceMappingSpecToVolume(fldPath.Index(i), mapping, false)
+		errs = append(errs, err...)
+		warnings = append(warnings, warn...)
+
+		nonRootVolumes = append(nonRootVolumes, volume)
 	}
 
-	return rootVolume, nonRootVolumes, nil
+	return rootVolume, nonRootVolumes, warnings, errs
+}
+
+func blockDeviceMappingSpecToVolume(fldPath *field.Path, bdm mapiv1.BlockDeviceMappingSpec, rootVolume bool) (capav1.Volume, []string, field.ErrorList) {
+	errs := field.ErrorList{}
+	warnings := []string{}
+
+	if bdm.EBS == nil {
+		return capav1.Volume{}, warnings, field.ErrorList{field.Invalid(fldPath.Child("ebs"), bdm.EBS, "missing ebs configuration for block device")}
+	}
+
+	capiKMSKey := convertKMSKeyToCAPI(bdm.EBS.KMSKey)
+
+	if bdm.EBS.VolumeSize == nil {
+		// The volume size is required in CAPA, we will have to return an error, until we can come up with an appropriate way to handle this.
+		// TODO(OCPCLOUD-XXXX): Either find a way to handle the required value, or, force users to set the value.
+		errs = append(errs, field.Required(fldPath.Child("ebs", "volumeSize"), "volumeSize is required, but is missing"))
+	}
+
+	if rootVolume && !ptr.Deref(bdm.EBS.DeleteOnTermination, true) {
+		warnings = append(warnings, field.Invalid(fldPath.Child("ebs", "deleteOnTermination"), bdm.EBS.DeleteOnTermination, "root volume must be deleted on termination, ignoring invalid value false").Error())
+	} else if !rootVolume && !ptr.Deref(bdm.EBS.DeleteOnTermination, true) {
+		// TODO(OCPCLOUD-XXXX): We should support a non-true value for non-root volumes for feature parity.
+		errs = append(errs, field.Invalid(fldPath.Child("ebs", "deleteOnTermination"), bdm.EBS.DeleteOnTermination, "non-root volumes must be deleted on termination, unsupported value false"))
+	}
+
+	if len(errs) > 0 {
+		return capav1.Volume{}, warnings, errs
+	}
+
+	return capav1.Volume{
+		DeviceName:    ptr.Deref(bdm.DeviceName, ""),
+		Size:          *bdm.EBS.VolumeSize,
+		Type:          capav1.VolumeType(ptr.Deref(bdm.EBS.VolumeType, "")),
+		IOPS:          ptr.Deref(bdm.EBS.Iops, 0),
+		Encrypted:     bdm.EBS.Encrypted,
+		EncryptionKey: capiKMSKey,
+	}, warnings, nil
 }
 
 func convertKMSKeyToCAPI(kmsKey mapiv1.AWSResourceReference) string {

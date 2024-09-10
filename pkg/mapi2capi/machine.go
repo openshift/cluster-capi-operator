@@ -16,14 +16,13 @@ limitations under the License.
 package mapi2capi
 
 import (
-	"errors"
 	"fmt"
 
 	mapiv1 "github.com/openshift/api/machine/v1beta1"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 	capiv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
@@ -34,19 +33,9 @@ const (
 	awsTemplateKind          = "AWSMachineTemplate"
 )
 
-var (
-	errFieldUnsupportedByCAPI = errors.New("error field unsupported by Cluster API")
-)
-
 // fromMAPIMachineToCAPIMachine translates a MAPI Machine to its Core CAPI Machine correspondent.
-func fromMAPIMachineToCAPIMachine(mapiMachine *mapiv1.Machine) (*capiv1.Machine, error) {
-	var errs []error
-
-	// Taints are not supported by CAPI.
-	// TODO: add support for them via CAPI BootstrapConfig + minimal bootstrap controller?
-	if len(mapiMachine.Spec.Taints) > 0 {
-		errs = append(errs, fmt.Errorf("%w: %q", errFieldUnsupportedByCAPI, ".spec.taints"))
-	}
+func fromMAPIMachineToCAPIMachine(mapiMachine *mapiv1.Machine) (*capiv1.Machine, field.ErrorList) {
+	var errs field.ErrorList
 
 	capiMachine := &capiv1.Machine{
 		ObjectMeta: metav1.ObjectMeta{
@@ -67,21 +56,31 @@ func fromMAPIMachineToCAPIMachine(mapiMachine *mapiv1.Machine) (*capiv1.Machine,
 			// FailureDomain: populated by higher level functions.
 			// ClusterName: populated by higher level functions.
 
-			// TODO: These are not present on the MAPI API, figure out if we need to
-			// deal with this discrepancy:
+			// TODO(OCPCLOUD-XXXX): These are not present on the MAPI API, we should implement them for feature parity.
 			// NodeDrainTimeout: ,
 			// NodeVolumeDetachTimeout: ,
 			// NodeDeletionTimeout: ,
 		},
 	}
 
-	setMAPINodeLabelsToCAPIManagedNodeLabels(mapiMachine.Spec.ObjectMeta.Labels, capiMachine.Labels)
-
-	if len(errs) > 0 {
-		return nil, utilerrors.NewAggregate(errs)
+	// lifecycleHooks are handled via an annotation in Cluster API.
+	lifecycleAnnotations := getCAPILifecycleHookAnnotations(mapiMachine.Spec.LifecycleHooks)
+	for key, value := range lifecycleAnnotations {
+		capiMachine.Annotations[key] = value
 	}
 
-	return capiMachine, nil
+	setMAPINodeLabelsToCAPIManagedNodeLabels(mapiMachine.Spec.ObjectMeta.Labels, capiMachine.Labels)
+
+	// Unused fields - Below this line are fields not used from the MAPI Machine.
+
+	// mapiMachine.Spec.AuthoritativeAPI - Ignore as this is part of the conversion mechanism.
+
+	// metadata.labels - needs special handling
+	// metadata.annotations - needs special handling
+
+	errs = append(errs, handleUnsupportedMachineFields(mapiMachine.Spec)...)
+
+	return capiMachine, errs
 }
 
 func setMAPINodeLabelsToCAPIManagedNodeLabels(mapiNodeLabels map[string]string, capiNodeLabels map[string]string) {
@@ -97,4 +96,51 @@ func setMAPINodeLabelsToCAPIManagedNodeLabels(mapiNodeLabels map[string]string, 
 
 		capiNodeLabels[k] = v
 	}
+}
+
+// getCAPILifecycleHookAnnotations returns the annotations that should be added to a CAPI Machine to represent the lifecycle hooks.
+func getCAPILifecycleHookAnnotations(hooks mapiv1.LifecycleHooks) map[string]string {
+	annotations := make(map[string]string)
+
+	for _, hook := range hooks.PreDrain {
+		annotations[fmt.Sprintf("%s/%s", capiv1.PreDrainDeleteHookAnnotationPrefix, hook.Name)] = hook.Owner
+	}
+
+	for _, hook := range hooks.PreTerminate {
+		annotations[fmt.Sprintf("%s/%s", capiv1.PreTerminateDeleteHookAnnotationPrefix, hook.Name)] = hook.Owner
+	}
+
+	return annotations
+}
+
+// handleUnsupportedMachineFields checks for fields that are not supported by CAPI and returns a list of errors.
+func handleUnsupportedMachineFields(spec mapiv1.MachineSpec) field.ErrorList {
+	var errs field.ErrorList
+
+	fldPath := field.NewPath("spec")
+
+	// ObjectMeta related fields should never get converted (aside from labels and annotations).
+	// They are meaningless in MAPI and don't contribute to the logic of the product.
+	if spec.ObjectMeta.Name != "" {
+		errs = append(errs, field.Invalid(fldPath.Child("metadata", "name"), spec.ObjectMeta.Name, "name is not supported"))
+	}
+
+	if spec.ObjectMeta.GenerateName != "" {
+		errs = append(errs, field.Invalid(fldPath.Child("metadata", "generateName"), spec.ObjectMeta.GenerateName, "generateName is not supported"))
+	}
+
+	if spec.ObjectMeta.Namespace != "" {
+		errs = append(errs, field.Invalid(fldPath.Child("metadata", "namespace"), spec.ObjectMeta.Namespace, "namespace is not supported"))
+	}
+
+	if len(spec.ObjectMeta.OwnerReferences) > 0 {
+		errs = append(errs, field.Invalid(fldPath.Child("metadata", "ownerReferences"), spec.ObjectMeta.OwnerReferences, "ownerReferences are not supported"))
+	}
+
+	// TODO(OCPCLOUD-2680): Taints are not supported by CAPI. add support for them via CAPI BootstrapConfig + minimal bootstrap controller.
+	if len(spec.Taints) > 0 {
+		errs = append(errs, field.Invalid(fldPath.Child("taints"), spec.Taints, "taints are not currently supported"))
+	}
+
+	return errs
 }

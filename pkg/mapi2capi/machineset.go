@@ -18,35 +18,48 @@ package mapi2capi
 import (
 	mapiv1 "github.com/openshift/api/machine/v1beta1"
 
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 	capiv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
-// fromMachineSetToMachineSet takes a MAPI MachineSet and returns a converted CAPI MachineSet.
-func fromMachineSetToMachineSet(mapiMachineSet *mapiv1.MachineSet) *capiv1.MachineSet {
+// fromMAPIMachineSetToCAPIMachineSet takes a MAPI MachineSet and returns a converted CAPI MachineSet.
+func fromMAPIMachineSetToCAPIMachineSet(mapiMachineSet *mapiv1.MachineSet) (*capiv1.MachineSet, utilerrors.Aggregate) {
+	var errs field.ErrorList
+
 	capiMachineSet := &capiv1.MachineSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        mapiMachineSet.Name,
 			Namespace:   mapiMachineSet.Namespace,
 			Labels:      mapiMachineSet.Labels,
 			Annotations: mapiMachineSet.Annotations,
+			// OwnerReferences - There shouldn't be any ownerreferences on a MachineSet.
+		},
+		Spec: capiv1.MachineSetSpec{
+			Selector: mapiMachineSet.Spec.Selector,
+			Replicas: mapiMachineSet.Spec.Replicas,
+			// ClusterName // populated by higher level functions
+			MinReadySeconds: mapiMachineSet.Spec.MinReadySeconds,
+			DeletePolicy:    mapiMachineSet.Spec.DeletePolicy,
+			Template: capiv1.MachineTemplateSpec{
+				ObjectMeta: capiv1.ObjectMeta{
+					Labels:      mapiMachineSet.Spec.Template.Labels,
+					Annotations: mapiMachineSet.Spec.Template.Annotations,
+				},
+				// Spec // Populated by higher level functions.
+			},
 		},
 	}
 
-	capiMachineSet.Spec.Selector = mapiMachineSet.Spec.Selector
-	capiMachineSet.Spec.Template.Labels = mapiMachineSet.Spec.Template.Labels
-	capiMachineSet.Spec.Template.Spec.ProviderID = mapiMachineSet.Spec.Template.Spec.ProviderID
-	// capiMachineSet.Spec.ClusterName // populated by higher level functions
-	capiMachineSet.Spec.Replicas = mapiMachineSet.Spec.Replicas
-	// capiMachineSet.Spec.Template.Spec.ClusterName // populated by higher level functions
-	capiMachineSet.Spec.Template.Spec.InfrastructureRef = corev1.ObjectReference{
-		APIVersion: awsTemplateAPIVersion,
-		Kind:       awsTemplateKind,
-		Name:       mapiMachineSet.Name,
+	if len(mapiMachineSet.OwnerReferences) > 0 {
+		// TODO(OCPCLOUD-XXXX): Users may already have OwnerReferences on their MachineSets, where they do have them, we should work out how to translate them.
+		errs = append(errs, field.Invalid(field.NewPath("metadata", "ownerReferences"), mapiMachineSet.OwnerReferences, "ownerReferences are not supported"))
 	}
 
-	setMAPINodeLabelsToCAPIManagedNodeLabels(mapiMachineSet.Spec.Template.Spec.ObjectMeta.Labels, capiMachineSet.Spec.Template.ObjectMeta.Labels)
+	// Unused fields - Below this line are fields not used from the MAPI MachineSet.
 
-	return capiMachineSet
+	// AuthoritativeAPI - Ignore, this is part of the conversion mechanism.
+
+	return capiMachineSet, errs.ToAggregate()
 }
