@@ -19,6 +19,7 @@ import (
 	"strings"
 
 	mapiv1 "github.com/openshift/api/machine/v1beta1"
+	conversionutil "github.com/openshift/cluster-capi-operator/pkg/conversion/util"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation/field"
@@ -101,16 +102,19 @@ func fromCAPIMachineToMAPIMachine(capiMachine *capiv1.Machine) (*mapiv1.Machine,
 }
 
 func setCAPIManagedNodeLabelsToMAPINodeLabels(capiNodeLabels map[string]string, mapiNodeLabels map[string]string) {
-	// FYI: Not all the labels on the CAPI Machine are propagated down to the corresponding CAPI Node, only the "CAPI Managed ones" are.
+	// TODO(OCPCLOUD-XXXX): Not all the labels on the CAPI Machine are propagated down to the corresponding CAPI Node, only the "CAPI Managed ones" are.
+	// These are those prefix by "node-role.kubernetes.io" or in the domains of "node-restriction.kubernetes.io" and "node.cluster.x-k8s.io".
 	// See: https://github.com/kubernetes-sigs/cluster-api/pull/7173
 	// and: https://github.com/fabriziopandini/cluster-api/blob/main/docs/proposals/20220927-label-sync-between-machine-and-nodes.md
-	// In this case we are converting CAPI -> MAPI, so there are not going to be issues.
+	// We should only copy these into the labels to be propagated to the Node.
 	if mapiNodeLabels == nil {
 		mapiNodeLabels = map[string]string{}
 	}
 
 	for k, v := range capiNodeLabels {
-		mapiNodeLabels[k] = v
+		if conversionutil.IsCAPIManagedLabel(k) {
+			mapiNodeLabels[k] = v
+		}
 	}
 }
 

@@ -19,6 +19,7 @@ import (
 	"fmt"
 
 	mapiv1 "github.com/openshift/api/machine/v1beta1"
+	conversionutil "github.com/openshift/cluster-capi-operator/pkg/conversion/util"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -69,7 +70,7 @@ func fromMAPIMachineToCAPIMachine(mapiMachine *mapiv1.Machine) (*capiv1.Machine,
 		capiMachine.Annotations[key] = value
 	}
 
-	setMAPINodeLabelsToCAPIManagedNodeLabels(mapiMachine.Spec.ObjectMeta.Labels, capiMachine.Labels)
+	errs = append(errs, setMAPINodeLabelsToCAPIManagedNodeLabels(field.NewPath("spec", "metadata", "labels"), mapiMachine.Spec.ObjectMeta.Labels, capiMachine.Labels)...)
 
 	// Unused fields - Below this line are fields not used from the MAPI Machine.
 
@@ -83,19 +84,30 @@ func fromMAPIMachineToCAPIMachine(mapiMachine *mapiv1.Machine) (*capiv1.Machine,
 	return capiMachine, errs
 }
 
-func setMAPINodeLabelsToCAPIManagedNodeLabels(mapiNodeLabels map[string]string, capiNodeLabels map[string]string) {
-	// TODO: FYI: Not all the labels on the CAPI Machine are propagated down to the corresponding CAPI Node, only the "CAPI Managed ones" are.
+func setMAPINodeLabelsToCAPIManagedNodeLabels(fldPath *field.Path, mapiNodeLabels map[string]string, capiNodeLabels map[string]string) field.ErrorList {
+	if len(mapiNodeLabels) == 0 {
+		return field.ErrorList{}
+	}
+
+	if capiNodeLabels == nil {
+		capiNodeLabels = map[string]string{}
+	}
+
+	errs := field.ErrorList{}
+
+	// TODO(OCPCLOUD-XXXX): Not all the labels on the CAPI Machine are propagated down to the corresponding CAPI Node, only the "CAPI Managed ones" are.
+	// These are those prefix by "node-role.kubernetes.io" or in the domains of "node-restriction.kubernetes.io" and "node.cluster.x-k8s.io".
 	// See: https://github.com/kubernetes-sigs/cluster-api/pull/7173
 	// and: https://github.com/fabriziopandini/cluster-api/blob/main/docs/proposals/20220927-label-sync-between-machine-and-nodes.md
-	// Here we copy all the labels anyway, but these won't be propagated downwards to the Node.
-	// We will track this feature GAP to cover.
 	for k, v := range mapiNodeLabels {
-		if capiNodeLabels == nil {
-			capiNodeLabels = map[string]string{}
+		if !conversionutil.IsCAPIManagedLabel(k) {
+			errs = append(errs, field.Invalid(fldPath.Key(k), v, "label propogartion is not currently supported for this label"))
 		}
 
 		capiNodeLabels[k] = v
 	}
+
+	return errs
 }
 
 // getCAPILifecycleHookAnnotations returns the annotations that should be added to a CAPI Machine to represent the lifecycle hooks.
