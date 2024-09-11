@@ -1,6 +1,6 @@
 module github.com/openshift/cluster-capi-operator
 
-go 1.22
+go 1.22.0
 
 //replace (
 //	github.com/google/cel-go => github.com/google/cel-go v0.16.1
@@ -22,15 +22,15 @@ require (
 	github.com/klauspost/compress v1.17.8
 	github.com/onsi/ginkgo/v2 v2.19.0
 	github.com/onsi/gomega v1.33.1
-	github.com/openshift/api v0.0.0-20240830023148-b7d0481c9094
+	github.com/openshift/api v0.0.0-20240904155342-57b3160d2135
 	github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20240607201500-81075cf8e11a
 	github.com/openshift/library-go v0.0.0-20240711192904-190fec8c3f09
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/pflag v1.0.6-0.20210604193023-d5e0c0615ace
 	gopkg.in/yaml.v2 v2.4.0
-	k8s.io/api v0.29.5
+	k8s.io/api v0.30.1
 	k8s.io/apiextensions-apiserver v0.29.5
-	k8s.io/apimachinery v0.29.5
+	k8s.io/apimachinery v0.30.1
 	k8s.io/client-go v0.29.5
 	k8s.io/component-base v0.29.5
 	k8s.io/klog/v2 v2.120.1
@@ -46,7 +46,10 @@ require (
 	sigs.k8s.io/controller-runtime/tools/setup-envtest v0.0.0-20240531134648-6636df17d67b
 )
 
-require sigs.k8s.io/yaml v1.4.0
+require (
+	github.com/openshift/client-go v0.0.0-20240405120947-c67c8325cdd8
+	sigs.k8s.io/yaml v1.4.0
+)
 
 require (
 	4d63.com/gocheckcompilerdirectives v1.2.1 // indirect
@@ -216,6 +219,7 @@ require (
 	github.com/quasilyte/regex/syntax v0.0.0-20210819130434-b3f0c404a727 // indirect
 	github.com/quasilyte/stdinfo v0.0.0-20220114132959-f7386bf02567 // indirect
 	github.com/rivo/uniseg v0.4.2 // indirect
+	github.com/robfig/cron v1.2.0 // indirect
 	github.com/ryancurrah/gomodguard v1.3.2 // indirect
 	github.com/ryanrolds/sqlclosecheck v0.5.1 // indirect
 	github.com/sagikazarmark/locafero v0.4.0 // indirect
@@ -294,7 +298,7 @@ require (
 	honnef.co/go/tools v0.4.7 // indirect
 	k8s.io/apiserver v0.29.5 // indirect
 	k8s.io/kube-aggregator v0.29.0 // indirect
-	k8s.io/kube-openapi v0.0.0-20240117194847-208609032b15 // indirect
+	k8s.io/kube-openapi v0.0.0-20240228011516-70dd3763d340 // indirect
 	mvdan.cc/gofumpt v0.6.0 // indirect
 	mvdan.cc/unparam v0.0.0-20240528143540-8a5130ca722f // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.28.0 // indirect
