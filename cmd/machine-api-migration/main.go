@@ -21,6 +21,17 @@ import (
 	"os"
 	"time"
 
+	configv1 "github.com/openshift/api/config/v1"
+	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
+	configv1client "github.com/openshift/client-go/config/clientset/versioned"
+	configinformers "github.com/openshift/client-go/config/informers/externalversions"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/machinesync"
+	"github.com/openshift/cluster-capi-operator/pkg/util"
+
+	"github.com/openshift/api/features"
+	featuregates "github.com/openshift/library-go/pkg/operator/configobserver/featuregates"
+	"github.com/openshift/library-go/pkg/operator/events"
 	"github.com/spf13/pflag"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -31,26 +42,22 @@ import (
 	capiflags "sigs.k8s.io/cluster-api/util/flags"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
-
-	"github.com/openshift/api/features"
-	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
-	configv1client "github.com/openshift/client-go/config/clientset/versioned"
-	configinformers "github.com/openshift/client-go/config/informers/externalversions"
-	"github.com/openshift/cluster-capi-operator/pkg/controllers"
-	"github.com/openshift/cluster-capi-operator/pkg/util"
-	featuregates "github.com/openshift/library-go/pkg/operator/configobserver/featuregates"
-	"github.com/openshift/library-go/pkg/operator/events"
 )
 
 var (
 	// errTimedOutWaitingForFeatureGates is returned when the feature gates are not initialized within the timeout.
 	errTimedOutWaitingForFeatureGates = errors.New("timed out waiting for feature gates to be initialized")
+
+	// errPlatformNotFound is returned when there is no platform set on the infrastructure object.
+	errPlatformNotFound = errors.New("no platform provider found on install config")
 )
 
 func initScheme(scheme *runtime.Scheme) {
 	// TODO(joelspeed): Add additional schemes here once we work out exactly which will be needed.
 	utilruntime.Must(mapiv1beta1.AddToScheme(scheme))
+	utilruntime.Must(configv1.AddToScheme(scheme))
 }
 
 //nolint:funlen
@@ -75,10 +82,15 @@ func main() {
 		":9441",
 		"The address for health checking.",
 	)
-	managedNamespace := flag.String(
-		"namespace",
+	capiManagedNamespace := flag.String(
+		"capi-namespace",
 		controllers.DefaultManagedNamespace,
 		"The namespace where CAPI components will run.",
+	)
+	mapiManagedNamespace := flag.String(
+		"mapi-namespace",
+		controllers.DefaultMAPIManagedNamespace,
+		"The namespace to watch for MAPI resources.",
 	)
 
 	logToStderr := flag.Bool(
@@ -107,7 +119,8 @@ func main() {
 
 	cacheOpts := cache.Options{
 		DefaultNamespaces: map[string]cache.Config{
-			*managedNamespace: {},
+			*capiManagedNamespace: {},
+			*mapiManagedNamespace: {},
 		},
 		SyncPeriod: &syncPeriod,
 	}
@@ -153,6 +166,31 @@ func main() {
 		os.Exit(0)
 	}
 
+	k8sclient := mgr.GetClient()
+	infra := &configv1.Infrastructure{}
+
+	if err := k8sclient.Get(stop, client.ObjectKey{Name: controllers.InfrastructureResourceName}, infra); err != nil {
+		klog.Errorf("failed to fetch infrastructure: %s", err)
+		os.Exit(1)
+	}
+
+	provider, err := getProviderFromInfrastructure(infra)
+	if err != nil {
+		klog.Errorf("failed to fetch infrastructure: %s", err)
+		os.Exit(1)
+	}
+
+	// Currently we only plan to support AWS, so all others are a noop until they're implemented.
+	switch provider {
+	case configv1.AWSPlatformType:
+		klog.Info("MachineAPIMigration: starting AWS controllers")
+
+	default:
+		klog.Infof("MachineAPIMigration not implemented for platform %s, nothing to do. Waiting for termination signal.", provider)
+		<-stop.Done()
+		os.Exit(0)
+	}
+
 	// +kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("health", healthz.Ping); err != nil {
@@ -165,7 +203,19 @@ func main() {
 		os.Exit(1)
 	}
 
-	klog.Info("starting manager")
+	reconciler := machinesync.MachineSyncReconciler{
+		Platform: provider,
+
+		MAPINamespace: *mapiManagedNamespace,
+		CAPINamespace: *capiManagedNamespace,
+	}
+
+	if err := reconciler.SetupWithManager(mgr); err != nil {
+		klog.Error(err, "failed to set up reconciler with manager")
+		os.Exit(1)
+	}
+
+	klog.Info("Starting manager")
 
 	if err := mgr.Start(stop); err != nil {
 		klog.Error(err, "problem running manager")
@@ -205,4 +255,13 @@ func getFeatureGates(mgr ctrl.Manager) (featuregates.FeatureGateAccess, error) {
 	}
 
 	return featureGateAccessor, nil
+}
+
+// getProviderFromInfrastructure returns the PlatformType from the Infrastructure object.
+func getProviderFromInfrastructure(infra *configv1.Infrastructure) (configv1.PlatformType, error) {
+	if infra.Status.PlatformStatus != nil && infra.Status.PlatformStatus.Type != "" {
+		return infra.Status.PlatformStatus.Type, nil
+	}
+
+	return "", errPlatformNotFound
 }

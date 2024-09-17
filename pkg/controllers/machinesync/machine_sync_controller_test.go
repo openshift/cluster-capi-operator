@@ -21,6 +21,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	configv1 "github.com/openshift/api/config/v1"
 	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
 	corev1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/core/v1"
 	machinev1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/machine/v1beta1"
@@ -85,7 +86,8 @@ var _ = Describe("MachineSync Reconciler", func() {
 		Expect(err).ToNot(HaveOccurred(), "Manager should be able to be created")
 
 		reconciler = &MachineSyncReconciler{
-			Client: mgr.GetClient(),
+			Client:   mgr.GetClient(),
+			Platform: configv1.AWSPlatformType,
 		}
 		Expect(reconciler.SetupWithManager(mgr)).To(Succeed(), "Reconciler should be able to setup with manager")
 	})

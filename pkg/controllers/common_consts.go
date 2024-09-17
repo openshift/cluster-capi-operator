@@ -16,8 +16,13 @@ limitations under the License.
 package controllers
 
 const (
-	// DefaultManagedNamespace is the default namespace where the operator manages resources.
+	// DefaultManagedNamespace is the default namespace where the operator
+	// manages CAPI resources.
 	DefaultManagedNamespace = "openshift-cluster-api"
+
+	// DefaultMAPIManagedNamespace the default namespace where the operator
+	// manages MAPI resources.
+	DefaultMAPIManagedNamespace = "openshift-machine-api"
 
 	// OperatorVersionKey is the key used to store the operator version in the ClusterOperator status.
 	OperatorVersionKey = "operator"
