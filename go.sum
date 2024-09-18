@@ -220,6 +220,8 @@ github.com/golang-jwt/jwt/v5 v5.2.1 h1:OuVbFODueb089Lh128TAcimifWaLhJwVflnrgM17w
 github.com/golang-jwt/jwt/v5 v5.2.1/go.mod h1:pqrtFR0X4osieyHYxtmOUWsAWrfe1Q5UVIyoH402zdk=
 github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da h1:oI5xCqsCo564l8iNU+DwB5epxmsaqB+rhGL0m5jtYqE=
 github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da/go.mod h1:cIg4eruTrX1D+g88fzRXU5OdNfaM+9IcxsU14FzY7Hc=
+github.com/golang/mock v1.6.0 h1:ErTB+efbowRARo13NNdxyJji2egdxLGQhRaY+DUumQc=
+github.com/golang/mock v1.6.0/go.mod h1:p6yTPP+5HYm5mzsMV8JkE6ZKdX+/wYM6Hr+LicevLPs=
 github.com/golang/protobuf v1.5.4 h1:i7eJL8qZTpSEXOPTxNKhASYpMn+8e5Q6AdndVa1dWek=
 github.com/golang/protobuf v1.5.4/go.mod h1:lnTiLA8Wa4RWRcIUkrtSVa5nRhsEGBg48fD6rSs7xps=
 github.com/golangci/dupl v0.0.0-20180902072040-3e9179ac440a h1:w8hkcTqaFpzKqonE9uMCefW1WDie15eSP/4MssdenaM=
@@ -823,8 +825,8 @@ sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.29.0 h1:/U5vjBbQn3RCh
 sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.29.0/go.mod h1:z7+wmGM2dfIiLRfrC6jb5kV2Mq/sK1ZP303cxzkV5Y4=
 sigs.k8s.io/cluster-api v1.7.3 h1:DsSRxsA+18jxLqPAo29abZ9kOPK1/xwhSuQb/MROzSs=
 sigs.k8s.io/cluster-api v1.7.3/go.mod h1:V9ZhKLvQtsDODwjXOKgbitjyCmC71yMBwDcMyNNIov0=
-sigs.k8s.io/cluster-api-provider-aws/v2 v2.5.0 h1:DGEbh4NLUmKJpl9XlswhlXM7S1srtDx8fc5sn7rQsGM=
-sigs.k8s.io/cluster-api-provider-aws/v2 v2.5.0/go.mod h1:YgE7I5eLlMJuowyGlyPSIV1ISG8+5CJFhi3RuRESqe4=
+sigs.k8s.io/cluster-api-provider-aws/v2 v2.6.1 h1:vbZUYEB7OfPlfHk6wis+UrvRLTqv5F4Nrjl2WDJ1kiw=
+sigs.k8s.io/cluster-api-provider-aws/v2 v2.6.1/go.mod h1:1aq1EZbirRW6NC2gYUFCc7cVFwX9PM/vDvoU+2oGPuw=
 sigs.k8s.io/cluster-api-provider-azure v1.15.1 h1:+Z5MNMDbTgNxPr49tgAQItICI3yRLEN26LZ3cRIK5NU=
 sigs.k8s.io/cluster-api-provider-azure v1.15.1/go.mod h1:1VPXhTtzmFCyGnAHaeh+8ujIb8wYuzBwXPofdMlG3jU=
 sigs.k8s.io/cluster-api-provider-gcp v1.6.1-0.20240611121101-5a947cf2bf02 h1:QcvGvezMJTiCsYyXiXQDahQtEA3zf/HRHjNt9RD7Dm0=
