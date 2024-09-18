@@ -134,19 +134,19 @@ func (m machineAndAWSMachineAndAWSCluster) toProviderSpec() (*mapiv1.AWSMachineP
 		UserDataSecret: &corev1.LocalObjectReference{
 			Name: ptr.Deref(m.machine.Spec.Bootstrap.DataSecretName, "worker-user-data"),
 		},
-		// CredentialsSecret - TODO(OCPCLOUD-XXXX)
+		// CredentialsSecret - TODO(OCPCLOUD-2713)
 		KeyName: m.awsMachine.Spec.SSHKeyName,
-		// DeviceIndex - TODO(OCPCLOUD-XXXX) Not currently supported in CAPA.
+		// DeviceIndex - TODO(OCPCLOUD-2707) Not currently supported in CAPA.
 		PublicIP: m.awsMachine.Spec.PublicIP,
-		// NetworkInterfaceType - TODO(OCPCLOUD-XXXX) Not currently supported in CAPA.
-		SecurityGroups: convertAWSSecurityGroupstoMAPI(m.awsMachine.Spec.AdditionalSecurityGroups),
+		// NetworkInterfaceType - TODO(OCPCLOUD-2708) Not currently supported in CAPA.
+		SecurityGroups: convertAWSSecurityGroupstoMAPI(m.awsMachine.Spec.AdditionalSecurityGroups), // OCPCLOUD-2712: We need to ensure that this is the correct way to convert the security groups.
 		Subnet:         convertAWSResourceReferenceToMAPI(ptr.Deref(m.awsMachine.Spec.Subnet, capav1.AWSResourceReference{})),
 		Placement: mapiv1.Placement{
 			AvailabilityZone: ptr.Deref(m.machine.Spec.FailureDomain, ""),
 			Tenancy:          mapaTenancy,
 			Region:           m.awsCluster.Spec.Region,
 		},
-		// LoadBalancers - TODO(OCPCLOUD-XXXX) Not supported for workers.
+		// LoadBalancers - TODO(OCPCLOUD-2709) Not supported for workers.
 		BlockDevices:            convertAWSBlockDeviceMappingSpecToMAPI(m.awsMachine.Spec.RootVolume, m.awsMachine.Spec.NonRootVolumes),
 		SpotMarketOptions:       convertAWSSpotMarketOptionsToMAPI(m.awsMachine.Spec.SpotMarketOptions),
 		MetadataServiceOptions:  mapiAWSMetadataOptions,
@@ -154,9 +154,6 @@ func (m machineAndAWSMachineAndAWSCluster) toProviderSpec() (*mapiv1.AWSMachineP
 		PlacementGroupPartition: convertAWSPlacementGroupPartition(m.awsMachine.Spec.PlacementGroupPartition),
 		CapacityReservationID:   ptr.Deref(m.awsMachine.Spec.CapacityReservationID, ""),
 	}
-
-	// TODO: CredentialsSecret conversion.
-	// mapaProviderConfig.CredentialsSecret
 
 	// Below this line are fields not used from the CAPI AWSMachine.
 
@@ -288,19 +285,19 @@ func convertAWSMetadataOptionsToMAPI(fldPath *field.Path, capiMetadataOpts *capa
 
 	if capiMetadataOpts.HTTPEndpoint != "enabled" {
 		// This defaults to "enabled" in CAPI and on the AWS side, so if it's not "enabled", the user explicitly chose another option.
-		// TODO(OCPCLOUD-XXXX): We should implement this within MAPI to create feature parity.
+		// TODO(OCPCLOUD-2710): We should implement this within MAPI to create feature parity.
 		errors = append(errors, field.Invalid(fldPath.Child("httpEndpoint"), capiMetadataOpts.HTTPEndpoint, "httpEndpoint values other than \"enabled\" are not supported"))
 	}
 
 	if capiMetadataOpts.HTTPPutResponseHopLimit != 1 {
 		// This defaults to 1 in CAPI and on the AWS side, so if it's not 1, the user explicitly chose another option.
-		// TODO(OCPCLOUD-XXXX): We should implement this within MAPI to create feature parity.
+		// TODO(OCPCLOUD-2710): We should implement this within MAPI to create feature parity.
 		errors = append(errors, field.Invalid(fldPath.Child("httpPutResponseHopLimit"), capiMetadataOpts.HTTPPutResponseHopLimit, "httpPutResponseHopLimit values other than 1 are not supported"))
 	}
 
 	if capiMetadataOpts.InstanceMetadataTags != "disabled" {
 		// This defaults to "disabled" in CAPI and on the AWS side, so if it's not "disabled", the user explicitly chose another option.
-		// TODO(OCPCLOUD-XXXX): We should implement this within MAPI to create feature parity.
+		// TODO(OCPCLOUD-2710): We should implement this within MAPI to create feature parity.
 		errors = append(errors, field.Invalid(fldPath.Child("instanceMetadataTags"), capiMetadataOpts.InstanceMetadataTags, "instanceMetadataTags values other than \"disabled\" are not supported"))
 	}
 
@@ -444,47 +441,47 @@ func handleUnsupportedAWSMachineFields(fldPath *field.Path, spec capav1.AWSMachi
 	errs := field.ErrorList{}
 
 	if spec.AMI.EKSOptimizedLookupType != nil {
-		// TODO(OCPCLOUD-XXXX): Not required for our use case, add VAP to prevent usage.
+		// TODO(OCPCLOUD-2711): Not required for our use case, add VAP to prevent usage.
 		errs = append(errs, field.Invalid(fldPath.Child("ami", "eksOptimizedLookupType"), spec.AMI.EKSOptimizedLookupType, "eksOptimizedLookupType is not supported"))
 	}
 
 	if spec.ImageLookupFormat != "" {
-		// TODO(OCPCLOUD-XXXX): Not required for our use case, add VAP to prevent usage.
+		// TODO(OCPCLOUD-2711): Not required for our use case, add VAP to prevent usage.
 		errs = append(errs, field.Invalid(fldPath.Child("imageLookupFormat"), spec.ImageLookupFormat, "imageLookupFormat is not supported"))
 	}
 
 	if spec.ImageLookupOrg != "" {
-		// TODO(OCPCLOUD-XXXX): Not required for our use case, add VAP to prevent usage.
+		// TODO(OCPCLOUD-2711): Not required for our use case, add VAP to prevent usage.
 		errs = append(errs, field.Invalid(fldPath.Child("imageLookupOrg"), spec.ImageLookupOrg, "imageLookupOrg is not supported"))
 	}
 
 	if spec.ImageLookupBaseOS != "" {
-		// TODO(OCPCLOUD-XXXX): Not required for our use case, add VAP to prevent usage.
+		// TODO(OCPCLOUD-2711): Not required for our use case, add VAP to prevent usage.
 		errs = append(errs, field.Invalid(fldPath.Child("imageLookupBaseOS"), spec.ImageLookupBaseOS, "imageLookupBaseOS is not supported"))
 	}
 
 	if len(spec.SecurityGroupOverrides) > 0 {
-		// TODO(OCPCLOUD-XXXX): Needs more investigation, we are converting additional security groups to MAPI SGs, this overrides the built-ins, need to explore at the behavioural level.
+		// TODO(OCPCLOUD-2712): Needs more investigation, we are converting additional security groups to MAPI SGs, this overrides the built-ins, need to explore at the behavioural level.
 		errs = append(errs, field.Invalid(fldPath.Child("securityGroupOverrides"), spec.SecurityGroupOverrides, "securityGroupOverrides are not supported"))
 	}
 
 	if len(spec.NetworkInterfaces) > 0 {
-		// TODO(OCPCLOUD-XXXX): Not required for our use case, add VAP to prevent usage.
+		// TODO(OCPCLOUD-2711): Not required for our use case, add VAP to prevent usage.
 		errs = append(errs, field.Invalid(fldPath.Child("networkInterfaces"), spec.NetworkInterfaces, "networkInterfaces are not supported"))
 	}
 
 	if spec.UncompressedUserData != nil {
-		// TODO(OCPCLOUD-XXXX): Not required for our use case, add VAP to prevent usage.
+		// TODO(OCPCLOUD-2711): Not required for our use case, add VAP to prevent usage.
 		errs = append(errs, field.Invalid(fldPath.Child("uncompressedUserData"), spec.UncompressedUserData, "uncompressedUserData is not supported"))
 	}
 
 	if (spec.CloudInit != capav1.CloudInit{}) {
-		// TODO(OCPCLOUD-XXXX): Not required for our use case, add VAP to prevent usage.
+		// TODO(OCPCLOUD-2711): Not required for our use case, add VAP to prevent usage.
 		errs = append(errs, field.Invalid(fldPath.Child("cloudInit"), spec.CloudInit, "cloudInit is not supported"))
 	}
 
 	if spec.PrivateDNSName != nil {
-		// TODO(OCPCLOUD-XXXX): Not required for our use case, add VAP to prevent usage.
+		// TODO(OCPCLOUD-2711): Not required for our use case, add VAP to prevent usage.
 		errs = append(errs, field.Invalid(fldPath.Child("privateDNSName"), spec.PrivateDNSName, "privateDNSName is not supported"))
 	}
 

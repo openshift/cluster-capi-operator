@@ -44,6 +44,7 @@ func fromMAPIMachineToCAPIMachine(mapiMachine *mapiv1.Machine) (*capiv1.Machine,
 			Namespace:   capiNamespace,
 			Labels:      mapiMachine.Labels,
 			Annotations: mapiMachine.Annotations,
+			// OwnerReferences: TODO(OCPCLOUD-2716): These need to be converted so that any MachineSet owning a Machine is represented with the correct owner reference between the two APIs.
 		},
 		Spec: capiv1.MachineSpec{
 			InfrastructureRef: corev1.ObjectReference{
@@ -53,11 +54,11 @@ func fromMAPIMachineToCAPIMachine(mapiMachine *mapiv1.Machine) (*capiv1.Machine,
 			},
 			ProviderID: mapiMachine.Spec.ProviderID,
 
-			// Version: not necessary (optionally used by bootstrap providers).
+			// Version: TODO(OCPCLOUD-2714): To be prevented by VAP.
 			// FailureDomain: populated by higher level functions.
 			// ClusterName: populated by higher level functions.
 
-			// TODO(OCPCLOUD-XXXX): These are not present on the MAPI API, we should implement them for feature parity.
+			// TODO(OCPCLOUD-2715): These are not present on the MAPI API, we should implement them for feature parity.
 			// NodeDrainTimeout: ,
 			// NodeVolumeDetachTimeout: ,
 			// NodeDeletionTimeout: ,
@@ -73,6 +74,11 @@ func fromMAPIMachineToCAPIMachine(mapiMachine *mapiv1.Machine) (*capiv1.Machine,
 	errs = append(errs, setMAPINodeLabelsToCAPIManagedNodeLabels(field.NewPath("spec", "metadata", "labels"), mapiMachine.Spec.ObjectMeta.Labels, capiMachine.Labels)...)
 
 	// Unused fields - Below this line are fields not used from the MAPI Machine.
+
+	if len(mapiMachine.OwnerReferences) > 0 {
+		// TODO(OCPCLOUD-2716): We should support converting CAPI MachineSet ORs to MAPI MachineSet ORs. NB working out the UID will be hard.
+		errs = append(errs, field.Invalid(field.NewPath("metadata", "ownerReferences"), mapiMachine.OwnerReferences, "ownerReferences are not supported"))
+	}
 
 	// mapiMachine.Spec.AuthoritativeAPI - Ignore as this is part of the conversion mechanism.
 
@@ -95,7 +101,7 @@ func setMAPINodeLabelsToCAPIManagedNodeLabels(fldPath *field.Path, mapiNodeLabel
 
 	errs := field.ErrorList{}
 
-	// TODO(OCPCLOUD-XXXX): Not all the labels on the CAPI Machine are propagated down to the corresponding CAPI Node, only the "CAPI Managed ones" are.
+	// TODO(OCPCLOUD-2680): Not all the labels on the CAPI Machine are propagated down to the corresponding CAPI Node, only the "CAPI Managed ones" are.
 	// These are those prefix by "node-role.kubernetes.io" or in the domains of "node-restriction.kubernetes.io" and "node.cluster.x-k8s.io".
 	// See: https://github.com/kubernetes-sigs/cluster-api/pull/7173
 	// and: https://github.com/fabriziopandini/cluster-api/blob/main/docs/proposals/20220927-label-sync-between-machine-and-nodes.md

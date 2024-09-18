@@ -61,7 +61,7 @@ func fromCAPIMachineSetToMAPIMachineSet(capiMachineSet *capiv1.MachineSet) (*map
 	}
 
 	if len(capiMachineSet.OwnerReferences) > 0 {
-		// TODO(OCPCLOUD-XXXX): We should prevent ownerreferences on MachineSets until such a time that we need to support them.
+		// TODO(OCPCLOUD-2748): We should prevent ownerreferences on MachineSets until such a time that we need to support them.
 		errs = append(errs, field.Invalid(field.NewPath("metadata", "ownerReferences"), capiMachineSet.OwnerReferences, "ownerReferences are not supported"))
 	}
 

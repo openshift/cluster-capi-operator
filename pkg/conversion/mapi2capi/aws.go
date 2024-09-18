@@ -215,7 +215,7 @@ func (m *awsMachineAndInfra) toAWSMachine(providerSpec mapiv1.AWSMachineProvider
 		AdditionalTags:           convertAWSTagsToCAPI(providerSpec.Tags),
 		IAMInstanceProfile:       convertIAMInstanceProfiletoCAPI(providerSpec.IAMInstanceProfile),
 		Ignition: &capav1.Ignition{
-			Version:     "3.4",                                               // TODO(OCPCLOUD-XXXX): Should this be extracted from the ignition in the user data secret?
+			Version:     "3.4",                                               // TODO(OCPCLOUD-2719): Should this be extracted from the ignition in the user data secret?
 			StorageType: capav1.IgnitionStorageTypeOptionUnencryptedUserData, // Hardcoded for OpenShift.
 		},
 
@@ -248,7 +248,7 @@ func (m *awsMachineAndInfra) toAWSMachine(providerSpec mapiv1.AWSMachineProvider
 	// Unused fields - Below this line are fields not used from the MAPI AWSMachineProviderConfig.
 
 	// TypeMeta - Only for the purpose of the raw extension, not used for any functionality.
-	// CredentialsSecret - TODO(OCPCLOUD-XXXX): Work out what needs to happen regarding credentials secrets.
+	// CredentialsSecret - TODO(OCPCLOUD-2713): Work out what needs to happen regarding credentials secrets.
 
 	if m.infrastructure.Status.PlatformStatus != nil &&
 		m.infrastructure.Status.PlatformStatus.AWS != nil &&
@@ -265,17 +265,17 @@ func (m *awsMachineAndInfra) toAWSMachine(providerSpec mapiv1.AWSMachineProvider
 	}
 
 	if providerSpec.DeviceIndex != 0 {
-		// TODO(OCPCLOUD-XXXX): We should implement support for multiple network interfaces or otherwise support a different device index in CAPA.
+		// TODO(OCPCLOUD-2707): We should understand if this value works when non-zero, and determine from that if we should support it.
 		errs = append(errs, field.Invalid(fldPath.Child("deviceIndex"), providerSpec.DeviceIndex, "deviceIndex must be 0 or unset"))
 	}
 
 	if providerSpec.NetworkInterfaceType != "" && providerSpec.NetworkInterfaceType != mapiv1.AWSENANetworkInterfaceType {
-		// TODO(OCPCLOUD-XXXX): We need to upstream the network interface choice to allow the elastic fabric adapter.
+		// TODO(OCPCLOUD-2708): We need to upstream the network interface choice to allow the elastic fabric adapter.
 		errs = append(errs, field.Invalid(fldPath.Child("networkInterfaceType"), providerSpec.NetworkInterfaceType, "networkInterface type must be one of ENA or omitted, unsupported value"))
 	}
 
 	if len(providerSpec.LoadBalancers) > 0 {
-		// TODO(OCPCLOUD-XXXX): CAPA only applies load balancers to the control plane nodes. We should always reject LBs on non-control plane and work out how to connect the control plane LBs correctly otherwise.
+		// TODO(OCPCLOUD-2709): CAPA only applies load balancers to the control plane nodes. We should always reject LBs on non-control plane and work out how to connect the control plane LBs correctly otherwise.
 		errs = append(errs, field.Invalid(fldPath.Child("loadBalancers"), providerSpec.LoadBalancers, "loadBalancers are not supported"))
 	}
 
@@ -441,14 +441,14 @@ func blockDeviceMappingSpecToVolume(fldPath *field.Path, bdm mapiv1.BlockDeviceM
 
 	if bdm.EBS.VolumeSize == nil {
 		// The volume size is required in CAPA, we will have to return an error, until we can come up with an appropriate way to handle this.
-		// TODO(OCPCLOUD-XXXX): Either find a way to handle the required value, or, force users to set the value.
+		// TODO(OCPCLOUD-2718): Either find a way to handle the required value, or, force users to set the value.
 		errs = append(errs, field.Required(fldPath.Child("ebs", "volumeSize"), "volumeSize is required, but is missing"))
 	}
 
 	if rootVolume && !ptr.Deref(bdm.EBS.DeleteOnTermination, true) {
 		warnings = append(warnings, field.Invalid(fldPath.Child("ebs", "deleteOnTermination"), bdm.EBS.DeleteOnTermination, "root volume must be deleted on termination, ignoring invalid value false").Error())
 	} else if !rootVolume && !ptr.Deref(bdm.EBS.DeleteOnTermination, true) {
-		// TODO(OCPCLOUD-XXXX): We should support a non-true value for non-root volumes for feature parity.
+		// TODO(OCPCLOUD-2717): We should support a non-true value for non-root volumes for feature parity.
 		errs = append(errs, field.Invalid(fldPath.Child("ebs", "deleteOnTermination"), bdm.EBS.DeleteOnTermination, "non-root volumes must be deleted on termination, unsupported value false"))
 	}
 

@@ -43,7 +43,7 @@ func fromCAPIMachineToMAPIMachine(capiMachine *capiv1.Machine) (*mapiv1.Machine,
 			Namespace:   mapiNamespace,
 			Labels:      capiMachine.Labels,
 			Annotations: capiMachine.Annotations,
-			// OwnerReferences: These need to be converted so that any MachineSet owning a Machine is represented with the correct owner reference between the two APIs.
+			// OwnerReferences: TODO(OCPCLOUD-2716): These need to be converted so that any MachineSet owning a Machine is represented with the correct owner reference between the two APIs.
 		},
 		Spec: mapiv1.MachineSpec{
 			ObjectMeta: mapiv1.ObjectMeta{
@@ -60,7 +60,7 @@ func fromCAPIMachineToMAPIMachine(capiMachine *capiv1.Machine) (*mapiv1.Machine,
 	}
 
 	if len(capiMachine.OwnerReferences) > 0 {
-		// TODO(OCPCLOUD-XXXX): We should support converting CAPI MachineSet ORs to MAPI MachineSet ORs. NB working out the UID will be hard.
+		// TODO(OCPCLOUD-2716): We should support converting CAPI MachineSet ORs to MAPI MachineSet ORs. NB working out the UID will be hard.
 		errs = append(errs, field.Invalid(field.NewPath("metadata", "ownerReferences"), capiMachine.OwnerReferences, "ownerReferences are not supported"))
 	}
 
@@ -74,22 +74,22 @@ func fromCAPIMachineToMAPIMachine(capiMachine *capiv1.Machine) (*mapiv1.Machine,
 	// capiMachine.Spec.FailureDomain - Ignore because we use this to populate the providerSpec.
 
 	if capiMachine.Spec.Version != nil {
-		// TODO(OCPCLOUD-XXXX): We should prevent this using a VAP until and unless we need to support the field.
+		// TODO(OCPCLOUD-2714): We should prevent this using a VAP until and unless we need to support the field.
 		errs = append(errs, field.Invalid(field.NewPath("spec", "version"), capiMachine.Spec.Version, "version is not supported"))
 	}
 
 	if capiMachine.Spec.NodeDrainTimeout != nil {
-		// TODO(OCPCLOUD-XXXX): We should implement this within MAPI to create feature parity.
+		// TODO(OCPCLOUD-2715): We should implement this within MAPI to create feature parity.
 		errs = append(errs, field.Invalid(field.NewPath("spec", "nodeDrainTimeout"), capiMachine.Spec.NodeDrainTimeout, "nodeDrainTimeout is not supported"))
 	}
 
 	if capiMachine.Spec.NodeVolumeDetachTimeout != nil {
-		// TODO(OCPCLOUD-XXXX): We should implement this within MAPI to create feature parity.
+		// TODO(OCPCLOUD-2715): We should implement this within MAPI to create feature parity.
 		errs = append(errs, field.Invalid(field.NewPath("spec", "nodeVolumeDetachTimeout"), capiMachine.Spec.NodeVolumeDetachTimeout, "nodeVolumeDetachTimeout is not supported"))
 	}
 
 	if capiMachine.Spec.NodeDeletionTimeout != nil {
-		// TODO(OCPCLOUD-XXXX): We should implement this within MAPI to create feature parity.
+		// TODO(OCPCLOUD-2715): We should implement this within MAPI to create feature parity.
 		errs = append(errs, field.Invalid(field.NewPath("spec", "nodeDeletionTimeout"), capiMachine.Spec.NodeDeletionTimeout, "nodeDeletionTimeout is not supported"))
 	}
 
@@ -102,7 +102,7 @@ func fromCAPIMachineToMAPIMachine(capiMachine *capiv1.Machine) (*mapiv1.Machine,
 }
 
 func setCAPIManagedNodeLabelsToMAPINodeLabels(capiNodeLabels map[string]string, mapiNodeLabels map[string]string) {
-	// TODO(OCPCLOUD-XXXX): Not all the labels on the CAPI Machine are propagated down to the corresponding CAPI Node, only the "CAPI Managed ones" are.
+	// TODO(OCPCLOUD-2680): Not all the labels on the CAPI Machine are propagated down to the corresponding CAPI Node, only the "CAPI Managed ones" are.
 	// These are those prefix by "node-role.kubernetes.io" or in the domains of "node-restriction.kubernetes.io" and "node.cluster.x-k8s.io".
 	// See: https://github.com/kubernetes-sigs/cluster-api/pull/7173
 	// and: https://github.com/fabriziopandini/cluster-api/blob/main/docs/proposals/20220927-label-sync-between-machine-and-nodes.md

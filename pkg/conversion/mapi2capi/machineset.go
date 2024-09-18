@@ -53,7 +53,7 @@ func fromMAPIMachineSetToCAPIMachineSet(mapiMachineSet *mapiv1.MachineSet) (*cap
 	}
 
 	if len(mapiMachineSet.OwnerReferences) > 0 {
-		// TODO(OCPCLOUD-XXXX): Users may already have OwnerReferences on their MachineSets, where they do have them, we should work out how to translate them.
+		// TODO(OCPCLOUD-2748): Users may already have OwnerReferences on their MachineSets, where they do have them, we should work out how to translate them.
 		errs = append(errs, field.Invalid(field.NewPath("metadata", "ownerReferences"), mapiMachineSet.OwnerReferences, "ownerReferences are not supported"))
 	}
 
