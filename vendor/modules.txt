@@ -828,7 +828,7 @@ github.com/onsi/gomega/matchers/support/goraph/edge
 github.com/onsi/gomega/matchers/support/goraph/node
 github.com/onsi/gomega/matchers/support/goraph/util
 github.com/onsi/gomega/types
-# github.com/openshift/api v0.0.0-20240904155342-57b3160d2135
+# github.com/openshift/api v0.0.0-20240909041644-5852b58f4b10
 ## explicit; go 1.22.0
 github.com/openshift/api
 github.com/openshift/api/annotations
@@ -919,7 +919,7 @@ github.com/openshift/client-go/config/informers/externalversions/config/v1alpha1
 github.com/openshift/client-go/config/informers/externalversions/internalinterfaces
 github.com/openshift/client-go/config/listers/config/v1
 github.com/openshift/client-go/config/listers/config/v1alpha1
-# github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20240607201500-81075cf8e11a
+# github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20240906160452-4c3bebacbb5b
 ## explicit; go 1.21
 github.com/openshift/cluster-api-actuator-pkg/testutils
 github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder
@@ -2143,7 +2143,7 @@ sigs.k8s.io/cluster-api/util/contract
 sigs.k8s.io/cluster-api/util/flags
 sigs.k8s.io/cluster-api/util/labels/format
 sigs.k8s.io/cluster-api/util/topology
-# sigs.k8s.io/cluster-api-provider-aws/v2 v2.5.0
+# sigs.k8s.io/cluster-api-provider-aws/v2 v2.6.1
 ## explicit; go 1.21
 sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2
 sigs.k8s.io/cluster-api-provider-aws/v2/feature

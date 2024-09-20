@@ -22,8 +22,8 @@ require (
 	github.com/klauspost/compress v1.17.8
 	github.com/onsi/ginkgo/v2 v2.19.0
 	github.com/onsi/gomega v1.33.1
-	github.com/openshift/api v0.0.0-20240904155342-57b3160d2135
-	github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20240607201500-81075cf8e11a
+	github.com/openshift/api v0.0.0-20240909041644-5852b58f4b10
+	github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20240906160452-4c3bebacbb5b
 	github.com/openshift/library-go v0.0.0-20240711192904-190fec8c3f09
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/pflag v1.0.6-0.20210604193023-d5e0c0615ace
@@ -36,7 +36,7 @@ require (
 	k8s.io/klog/v2 v2.120.1
 	k8s.io/utils v0.0.0-20240102154912-e7106e64919e
 	sigs.k8s.io/cluster-api v1.7.3
-	sigs.k8s.io/cluster-api-provider-aws/v2 v2.5.0
+	sigs.k8s.io/cluster-api-provider-aws/v2 v2.6.1
 	sigs.k8s.io/cluster-api-provider-azure v1.15.1
 	sigs.k8s.io/cluster-api-provider-gcp v1.6.1-0.20240611121101-5a947cf2bf02
 	sigs.k8s.io/cluster-api-provider-ibmcloud v0.8.0
