@@ -67,8 +67,12 @@ func fromMAPIMachineToCAPIMachine(mapiMachine *mapiv1.Machine) (*capiv1.Machine,
 
 	// lifecycleHooks are handled via an annotation in Cluster API.
 	lifecycleAnnotations := getCAPILifecycleHookAnnotations(mapiMachine.Spec.LifecycleHooks)
-	for key, value := range lifecycleAnnotations {
-		capiMachine.Annotations[key] = value
+	if capiMachine.Annotations == nil {
+		capiMachine.Annotations = lifecycleAnnotations
+	} else {
+		for key, value := range lifecycleAnnotations {
+			capiMachine.Annotations[key] = value
+		}
 	}
 
 	errs = append(errs, setMAPINodeLabelsToCAPIManagedNodeLabels(field.NewPath("spec", "metadata", "labels"), mapiMachine.Spec.ObjectMeta.Labels, capiMachine.Labels)...)
