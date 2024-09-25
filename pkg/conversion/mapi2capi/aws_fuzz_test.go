@@ -53,26 +53,52 @@ var _ = Describe("AWS Fuzz (mapi2capi)", func() {
 		},
 	}
 
-	fromMachineAndAWSMachineAndAWSCluster := func(machine *capiv1.Machine, infraMachine client.Object, infraCluster client.Object) capi2mapi.MachineAndInfrastructureMachine {
-		awsMachine, ok := infraMachine.(*capav1.AWSMachine)
-		Expect(ok).To(BeTrue(), "input infra machine should be of type %T, got %T", &capav1.AWSMachine{}, infraMachine)
+	Context("AWSMachine Conversion", func() {
+		fromMachineAndAWSMachineAndAWSCluster := func(machine *capiv1.Machine, infraMachine client.Object, infraCluster client.Object) capi2mapi.MachineAndInfrastructureMachine {
+			awsMachine, ok := infraMachine.(*capav1.AWSMachine)
+			Expect(ok).To(BeTrue(), "input infra machine should be of type %T, got %T", &capav1.AWSMachine{}, infraMachine)
 
-		awsCluster, ok := infraCluster.(*capav1.AWSCluster)
-		Expect(ok).To(BeTrue(), "input infra cluster should be of type %T, got %T", &capav1.AWSCluster{}, infraCluster)
+			awsCluster, ok := infraCluster.(*capav1.AWSCluster)
+			Expect(ok).To(BeTrue(), "input infra cluster should be of type %T, got %T", &capav1.AWSCluster{}, infraCluster)
 
-		return capi2mapi.FromMachineAndAWSMachineAndAWSCluster(machine, awsMachine, awsCluster)
-	}
+			return capi2mapi.FromMachineAndAWSMachineAndAWSCluster(machine, awsMachine, awsCluster)
+		}
 
-	conversiontest.MAPI2CAPIRoundTripFuzzTest(
-		scheme,
-		infra,
-		infraCluster,
-		mapi2capi.FromAWSMachineAndInfra,
-		fromMachineAndAWSMachineAndAWSCluster,
-		conversiontest.ObjectMetaFuzzerFuncs("openshift-machine-api"),
-		conversiontest.MAPIMachineFuzzerFuncs(&mapiv1.AWSMachineProviderConfig{}, awsProviderIDFuzzer),
-		awsProviderSpecFuzzerFuncs,
-	)
+		conversiontest.MAPI2CAPIMachineRoundTripFuzzTest(
+			scheme,
+			infra,
+			infraCluster,
+			mapi2capi.FromAWSMachineAndInfra,
+			fromMachineAndAWSMachineAndAWSCluster,
+			conversiontest.ObjectMetaFuzzerFuncs("openshift-machine-api"),
+			conversiontest.MAPIMachineFuzzerFuncs(&mapiv1.AWSMachineProviderConfig{}, awsProviderIDFuzzer),
+			awsProviderSpecFuzzerFuncs,
+		)
+	})
+
+	Context("AWSMachineSet Conversion", func() {
+		fromMachineSetAndAWSMachineTemplateAndAWSCluster := func(machineSet *capiv1.MachineSet, infraMachineTemplate client.Object, infraCluster client.Object) capi2mapi.MachineSetAndMachineTemplate {
+			awsMachineTemplate, ok := infraMachineTemplate.(*capav1.AWSMachineTemplate)
+			Expect(ok).To(BeTrue(), "input infra machine template should be of type %T, got %T", &capav1.AWSMachineTemplate{}, infraMachineTemplate)
+
+			awsCluster, ok := infraCluster.(*capav1.AWSCluster)
+			Expect(ok).To(BeTrue(), "input infra cluster should be of type %T, got %T", &capav1.AWSCluster{}, infraCluster)
+
+			return capi2mapi.FromMachineSetAndAWSMachineTemplateAndAWSCluster(machineSet, awsMachineTemplate, awsCluster)
+		}
+
+		conversiontest.MAPI2CAPIMachineSetRoundTripFuzzTest(
+			scheme,
+			infra,
+			infraCluster,
+			mapi2capi.FromAWSMachineSetAndInfra,
+			fromMachineSetAndAWSMachineTemplateAndAWSCluster,
+			conversiontest.ObjectMetaFuzzerFuncs("openshift-machine-api"),
+			conversiontest.MAPIMachineFuzzerFuncs(&mapiv1.AWSMachineProviderConfig{}, awsProviderIDFuzzer),
+			conversiontest.MAPIMachineSetFuzzerFuncs(),
+			awsProviderSpecFuzzerFuncs,
+		)
+	})
 })
 
 func awsProviderIDFuzzer(c fuzz.Continue) string {

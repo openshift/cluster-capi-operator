@@ -43,31 +43,39 @@ import (
 	capiv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
-// CAPI2MAPIConverterConstructor is a function that constructs a CAPI to MAPI converter.
+// CAPI2MAPIMachineConverterConstructor is a function that constructs a CAPI to MAPI Machine converter.
 // Since the CAPI to MAPI conversion relies on different types, it is expected that the constructor is wrapped in a closure
 // that handles type assertions to fit the interface.
-type CAPI2MAPIConverterConstructor func(*capiv1.Machine, client.Object, client.Object) capi2mapi.MachineAndInfrastructureMachine
+type CAPI2MAPIMachineConverterConstructor func(*capiv1.Machine, client.Object, client.Object) capi2mapi.MachineAndInfrastructureMachine
 
-// MAPI2CAPIConverterConstructor is a function that constructs a MAPI to CAPI converter.
-type MAPI2CAPIConverterConstructor func(*mapiv1.Machine, *configv1.Infrastructure) mapi2capi.Machine
+// CAPI2MAPIMachineSetConverterConstructor is a function that constructs a CAPI to MAPI MachineSet converter.
+// Since the CAPI to MAPI conversion relies on different types, it is expected that the constructor is wrapped in a closure
+// that handles type assertions to fit the interface.
+type CAPI2MAPIMachineSetConverterConstructor func(*capiv1.MachineSet, client.Object, client.Object) capi2mapi.MachineSetAndMachineTemplate
+
+// MAPI2CAPIMachineConverterConstructor is a function that constructs a MAPI to CAPI Machine converter.
+type MAPI2CAPIMachineConverterConstructor func(*mapiv1.Machine, *configv1.Infrastructure) mapi2capi.Machine
+
+// MAPI2CAPIMachineSetConverterConstructor is a function that constructs a MAPI to CAPI MachineSet converter.
+type MAPI2CAPIMachineSetConverterConstructor func(*mapiv1.MachineSet, *configv1.Infrastructure) mapi2capi.MachineSet
 
 // StringFuzzer is a function that returns a random string.
 type StringFuzzer func(fuzz.Continue) string
 
-// mapiToCapiFuzzInput is a struct that holds the input for the MAPI to CAPI fuzz test.
-type mapiToCapiFuzzInput struct {
+// mapiToCapiMachineFuzzInput is a struct that holds the input for the MAPI to CAPI fuzz test.
+type mapiToCapiMachineFuzzInput struct {
 	machine                  *mapiv1.Machine
 	infra                    *configv1.Infrastructure
 	infraCluster             client.Object
-	mapiConverterConstructor MAPI2CAPIConverterConstructor
-	capiConverterConstructor CAPI2MAPIConverterConstructor
+	mapiConverterConstructor MAPI2CAPIMachineConverterConstructor
+	capiConverterConstructor CAPI2MAPIMachineConverterConstructor
 }
 
-// MAPI2CAPIRoundTripFuzzTest is a generic test that can be used to test roundtrip conversion between MAPI and CAPI objects.
+// MAPI2CAPIMachineRoundTripFuzzTest is a generic test that can be used to test roundtrip conversion between MAPI and CAPI Machine objects.
 // It leverages fuzz testing to generate random MAPI objects and then converts them to CAPI objects and back to MAPI objects.
 // The test then compares the original MAPI object with the final MAPI object to ensure that the conversion is lossless.
 // Any lossy conversions must be accounted for within the fuzz functions passed in.
-func MAPI2CAPIRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv1.Infrastructure, infraCluster client.Object, mapiConverter MAPI2CAPIConverterConstructor, capiConverter CAPI2MAPIConverterConstructor, fuzzerFuncs ...fuzzer.FuzzerFuncs) {
+func MAPI2CAPIMachineRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv1.Infrastructure, infraCluster client.Object, mapiConverter MAPI2CAPIMachineConverterConstructor, capiConverter CAPI2MAPIMachineConverterConstructor, fuzzerFuncs ...fuzzer.FuzzerFuncs) {
 	machineFuzzInputs := []TableEntry{}
 	fz := getFuzzer(scheme, fuzzerFuncs...)
 
@@ -75,7 +83,7 @@ func MAPI2CAPIRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv1.Infrastr
 		m := &mapiv1.Machine{}
 		fz.Fuzz(m)
 
-		in := mapiToCapiFuzzInput{
+		in := mapiToCapiMachineFuzzInput{
 			machine:                  m,
 			infra:                    infra,
 			infraCluster:             infraCluster,
@@ -86,7 +94,7 @@ func MAPI2CAPIRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv1.Infrastr
 		machineFuzzInputs = append(machineFuzzInputs, Entry(fmt.Sprintf("%d", i), in))
 	}
 
-	DescribeTable("should be able to roundtrip fuzzed Machines", func(in mapiToCapiFuzzInput) {
+	DescribeTable("should be able to roundtrip fuzzed Machines", func(in mapiToCapiMachineFuzzInput) {
 		mapiConverter := in.mapiConverterConstructor(in.machine, in.infra)
 
 		capiMachine, infraMachine, warnings, err := mapiConverter.ToMachineAndInfrastructureMachine()
@@ -106,8 +114,65 @@ func MAPI2CAPIRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv1.Infrastr
 
 		Expect(mapiMachine.TypeMeta).To(Equal(in.machine.TypeMeta))
 		Expect(mapiMachine.ObjectMeta).To(Equal(in.machine.ObjectMeta))
-		Expect(mapiMachine.Spec).To(WithTransform(ignoreProviderSpec, testutils.MatchViaJSON(ignoreProviderSpec(in.machine.Spec))))
+		Expect(mapiMachine.Spec).To(WithTransform(ignoreMachineProviderSpec, testutils.MatchViaJSON(ignoreMachineProviderSpec(in.machine.Spec))))
 		Expect(mapiMachine.Spec.ProviderSpec.Value.Raw).To(MatchJSON(in.machine.Spec.ProviderSpec.Value.Raw))
+	}, machineFuzzInputs)
+}
+
+// mapiToCapiMachineSetFuzzInput is a struct that holds the input for the MAPI to CAPI fuzz test.
+type mapiToCapiMachineSetFuzzInput struct {
+	machineSet               *mapiv1.MachineSet
+	infra                    *configv1.Infrastructure
+	infraCluster             client.Object
+	mapiConverterConstructor MAPI2CAPIMachineSetConverterConstructor
+	capiConverterConstructor CAPI2MAPIMachineSetConverterConstructor
+}
+
+// MAPI2CAPIMachineSetRoundTripFuzzTest is a generic test that can be used to test roundtrip conversion between MAPI and CAPI MachineSet objects.
+// It leverages fuzz testing to generate random MAPI objects and then converts them to CAPI objects and back to MAPI objects.
+// The test then compares the original MAPI object with the final MAPI object to ensure that the conversion is lossless.
+// Any lossy conversions must be accounted for within the fuzz functions passed in.
+func MAPI2CAPIMachineSetRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv1.Infrastructure, infraCluster client.Object, mapiConverter MAPI2CAPIMachineSetConverterConstructor, capiConverter CAPI2MAPIMachineSetConverterConstructor, fuzzerFuncs ...fuzzer.FuzzerFuncs) {
+	machineFuzzInputs := []TableEntry{}
+	fz := getFuzzer(scheme, fuzzerFuncs...)
+
+	for i := 0; i < 1000; i++ {
+		m := &mapiv1.MachineSet{}
+		fz.Fuzz(m)
+
+		in := mapiToCapiMachineSetFuzzInput{
+			machineSet:               m,
+			infra:                    infra,
+			infraCluster:             infraCluster,
+			mapiConverterConstructor: mapiConverter,
+			capiConverterConstructor: capiConverter,
+		}
+
+		machineFuzzInputs = append(machineFuzzInputs, Entry(fmt.Sprintf("%d", i), in))
+	}
+
+	DescribeTable("should be able to roundtrip fuzzed MachineSets", func(in mapiToCapiMachineSetFuzzInput) {
+		mapiConverter := in.mapiConverterConstructor(in.machineSet, in.infra)
+
+		capiMachineSet, machineTemplate, warnings, err := mapiConverter.ToMachineSetAndMachineTemplate()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(warnings).To(BeEmpty())
+
+		capiConverter := in.capiConverterConstructor(capiMachineSet, machineTemplate, in.infraCluster)
+
+		mapiMachineSet, warnings, err := capiConverter.ToMachineSet()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(warnings).To(BeEmpty())
+
+		// Break down the comparison to make it easier to debug sections that are failing conversion.
+
+		// Do not match on status yet, we do not support status conversion.
+		// Expect(mapiMachineSet.Status).To(Equal(in.machineSet.Status))
+
+		Expect(mapiMachineSet.TypeMeta).To(Equal(in.machineSet.TypeMeta))
+		Expect(mapiMachineSet.ObjectMeta).To(Equal(in.machineSet.ObjectMeta))
+		Expect(mapiMachineSet.Spec).To(WithTransform(ignoreMachineSetProviderSpec, testutils.MatchViaJSON(ignoreMachineSetProviderSpec(in.machineSet.Spec))))
+		Expect(mapiMachineSet.Spec.Template.Spec.ProviderSpec.Value.Raw).To(MatchJSON(in.machineSet.Spec.Template.Spec.ProviderSpec.Value.Raw))
 	}, machineFuzzInputs)
 }
 
@@ -124,11 +189,20 @@ func getFuzzer(scheme *runtime.Scheme, funcs ...fuzzer.FuzzerFuncs) *fuzz.Fuzzer
 	)
 }
 
-// ignoreProviderSpec returns a copy of the MachineSpec with the ProviderSpec field set to nil.
+// ignoreMachineProviderSpec returns a copy of the MachineSpec with the ProviderSpec field set to nil.
 // This is used so that we can separate the comparison of the ProviderSpec field.
-func ignoreProviderSpec(in mapiv1.MachineSpec) mapiv1.MachineSpec {
+func ignoreMachineProviderSpec(in mapiv1.MachineSpec) mapiv1.MachineSpec {
 	out := in.DeepCopy()
 	out.ProviderSpec.Value = nil
+
+	return *out
+}
+
+// ignoreMachineSetProviderSpec returns a copy of the MachineSpec with the ProviderSpec field set to nil.
+// This is used so that we can separate the comparison of the ProviderSpec field.
+func ignoreMachineSetProviderSpec(in mapiv1.MachineSetSpec) mapiv1.MachineSetSpec {
+	out := in.DeepCopy()
+	out.Template.Spec.ProviderSpec.Value = nil
 
 	return *out
 }
@@ -230,6 +304,28 @@ func MAPIMachineFuzzerFuncs(providerSpec runtime.Object, providerIDFuzz StringFu
 				if len(hooks.PreDrain) == 0 {
 					hooks.PreDrain = nil
 				}
+			},
+		}
+	}
+}
+
+// MAPIMachineSetFuzzerFuncs returns a set of fuzzer functions that can be used to fuzz MachineSetSpec objects.
+// This function relies on the MachineSpec fuzzer functions to fuzz the MachineTemplateSpec.
+func MAPIMachineSetFuzzerFuncs() fuzzer.FuzzerFuncs {
+	return func(codecs runtimeserializer.CodecFactory) []interface{} {
+		return []interface{}{
+			// MAPI to CAPI conversion functions.
+			func(m *mapiv1.MachineSetSpec, c fuzz.Continue) {
+				c.FuzzNoCustom(m)
+
+				// Clear fields that are not supported in the machine template objectmeta.
+				m.Template.ObjectMeta.Name = ""
+				m.Template.ObjectMeta.GenerateName = ""
+				m.Template.ObjectMeta.Namespace = ""
+				m.Template.ObjectMeta.OwnerReferences = nil
+
+				// Clear the authoritative API since that's not relevant for conversion.
+				m.AuthoritativeAPI = ""
 			},
 		}
 	}
