@@ -167,9 +167,16 @@ func (m *awsMachineSetAndInfra) ToMachineSetAndMachineTemplate() (*capiv1.Machin
 	capaMachineTemplate := awsMachineToAWSMachineTemplate(capaMachine, m.machineSet.Name, capiNamespace)
 
 	capiMachineSet, machineSetErrs := fromMAPIMachineSetToCAPIMachineSet(m.machineSet)
-	errs = append(errs, machineSetErrs.Errors()...)
+	if machineSetErrs != nil {
+		errs = append(errs, machineSetErrs.Errors()...)
+	}
 
 	capiMachineSet.Spec.Template.Spec = capiMachine.Spec
+
+	// We have to merge these two maps so that labels and annotations added to the template objectmeta are persisted
+	// along with the labels and annotations from the machine objectmeta.
+	capiMachineSet.Spec.Template.ObjectMeta.Labels = mergeMaps(capiMachineSet.Spec.Template.ObjectMeta.Labels, capiMachine.Labels)
+	capiMachineSet.Spec.Template.ObjectMeta.Annotations = mergeMaps(capiMachineSet.Spec.Template.ObjectMeta.Annotations, capiMachine.Annotations)
 
 	if m.infrastructure == nil || m.infrastructure.Status.InfrastructureName == "" {
 		errs = append(errs, field.Invalid(field.NewPath("infrastructure", "status", "infrastructureName"), m.infrastructure.Status.InfrastructureName, errInfrastructureInfrastructureNameCannotBeNil))
@@ -520,4 +527,17 @@ func instanceIDFromProviderID(s string) string {
 	lastPart := parts[len(parts)-1]
 
 	return regexp.MustCompile(`i-.*$`).FindString(lastPart)
+}
+
+// mergeMaps merges two maps together, if the first map is nil, it will be initialized.
+func mergeMaps(m1, m2 map[string]string) map[string]string {
+	if m1 == nil {
+		m1 = map[string]string{}
+	}
+
+	for k, v := range m2 {
+		m1[k] = v
+	}
+
+	return m1
 }

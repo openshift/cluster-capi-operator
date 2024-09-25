@@ -72,8 +72,8 @@ func FromMachineSetAndAWSMachineTemplateAndAWSCluster(ms *capiv1.MachineSet, mts
 		machineAndAWSMachineAndAWSCluster: &machineAndAWSMachineAndAWSCluster{
 			machine: &capiv1.Machine{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels:      ms.Spec.Template.Labels,
-					Annotations: ms.Spec.Template.Annotations,
+					Labels:      ms.Spec.Template.ObjectMeta.Labels,
+					Annotations: ms.Spec.Template.ObjectMeta.Annotations,
 				},
 				Spec: ms.Spec.Template.Spec,
 			},
@@ -238,7 +238,11 @@ func (m machineSetAndAWSMachineTemplateAndAWSCluster) ToMachineSet() (*mapiv1.Ma
 		errors = append(errors, err)
 	}
 
-	mapiMachineSet.Spec.Template.Spec.ProviderSpec.Value = mapaMachine.Spec.ProviderSpec.Value
+	mapiMachineSet.Spec.Template.Spec = mapaMachine.Spec
+
+	// Copy the labels and annotations from the Machine to the template.
+	mapiMachineSet.Spec.Template.ObjectMeta.Annotations = mapaMachine.ObjectMeta.Annotations
+	mapiMachineSet.Spec.Template.ObjectMeta.Labels = mapaMachine.ObjectMeta.Labels
 
 	if len(errors) > 0 {
 		return nil, warnings, utilerrors.NewAggregate(errors)

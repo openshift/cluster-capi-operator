@@ -116,6 +116,8 @@ func setCAPIManagedNodeLabelsToMAPINodeLabels(capiNodeLabels map[string]string, 
 	for k, v := range capiNodeLabels {
 		if conversionutil.IsCAPIManagedLabel(k) {
 			mapiNodeLabels[k] = v
+
+			delete(capiNodeLabels, k)
 		}
 	}
 }
