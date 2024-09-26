@@ -226,6 +226,12 @@ func main() {
 		setupReconcilers(mgr, infra, platform, &gcpv1.GCPCluster{}, containerImages, applyClient, apiextensionsClient, *managedNamespace)
 		setupWebhooks(mgr)
 	case configv1.AzurePlatformType:
+		azureCloudEnvironment := getAzureCloudEnvironment(infra.Status.PlatformStatus)
+		if azureCloudEnvironment == configv1.AzureStackCloud {
+			klog.Infof("Detected Azure Cloud Environment %q on platform %q is not supported, skipping capi controllers setup", azureCloudEnvironment, platform)
+			setupUnsupportedController(mgr, *managedNamespace)
+		}
+
 		setupReconcilers(mgr, infra, platform, &azurev1.AzureCluster{}, containerImages, applyClient, apiextensionsClient, *managedNamespace)
 		setupWebhooks(mgr)
 	case configv1.PowerVSPlatformType:
@@ -238,16 +244,8 @@ func main() {
 		setupReconcilers(mgr, infra, platform, &openstackv1.OpenStackCluster{}, containerImages, applyClient, apiextensionsClient, *managedNamespace)
 		setupWebhooks(mgr)
 	default:
-		klog.Infof("detected platform %q is not supported, skipping capi controllers setup", platform)
-
-		// UnsupportedController runs on unsupported platforms, it watches and keeps the cluster-api ClusterObject up to date.
-		if err := (&unsupported.UnsupportedController{
-			ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-unsupported-controller", *managedNamespace),
-			Scheme:                      mgr.GetScheme(),
-		}).SetupWithManager(mgr); err != nil {
-			klog.Error(err, "unable to create unsupported controller", "controller", "Unsupported")
-			os.Exit(1)
-		}
+		klog.Infof("Detected platform %q is not supported, skipping capi controllers setup", platform)
+		setupUnsupportedController(mgr, *managedNamespace)
 	}
 
 	// +kubebuilder:scaffold:builder
@@ -262,7 +260,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	klog.Info("starting manager")
+	klog.Info("Starting manager")
 
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		klog.Error(err, "problem running manager")
@@ -352,4 +350,24 @@ func setFeatureGatesEnvVars() error {
 	}
 
 	return nil
+}
+
+// getAzureCloudEnvironment returns the current AzureCloudEnvironment.
+func getAzureCloudEnvironment(ps *configv1.PlatformStatus) configv1.AzureCloudEnvironment {
+	if ps == nil || ps.Azure == nil {
+		return ""
+	}
+
+	return ps.Azure.CloudName
+}
+
+func setupUnsupportedController(mgr manager.Manager, ns string) {
+	// UnsupportedController runs on unsupported platforms, it watches and keeps the cluster-api ClusterObject up to date.
+	if err := (&unsupported.UnsupportedController{
+		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-unsupported-controller", ns),
+		Scheme:                      mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		klog.Error(err, "unable to create unsupported controller", "controller", "Unsupported")
+		os.Exit(1)
+	}
 }
