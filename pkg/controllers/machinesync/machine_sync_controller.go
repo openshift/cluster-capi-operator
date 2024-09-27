@@ -21,9 +21,11 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/go-logr/logr"
 	configv1 "github.com/openshift/api/config/v1"
 	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
 	awscapiv1beta1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta1"
@@ -32,18 +34,23 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 const (
-	capiNamespace string = "openshift-cluster-api"
-	mapiNamespace string = "openshift-machine-api"
+	capiNamespace  string = "openshift-cluster-api"
+	mapiNamespace  string = "openshift-machine-api"
+	machineSetKind string = "MachineSet"
 )
 
 var (
 	// errPlatformNotSupported is returned when the platform is not supported.
 	errPlatformNotSupported = errors.New("error determining InfraMachine" +
 		" type, platform not supported")
+
+	// errAuthoritativeAPIUnexpected is returned when we receive an unexpected AuthoritativeAPI.
+	errAuthoritativeAPIUnexpected = errors.New("AuthoritativeAPI unexpected value")
 )
 
 // MachineSyncReconciler reconciles CAPI and MAPI machines.
@@ -100,6 +107,75 @@ func (r *MachineSyncReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 // Reconcile reconciles CAPI and MAPI machines for their respective namespaces.
 func (r *MachineSyncReconciler) Reconcile(ctx context.Context, req reconcile.Request) (ctrl.Result, error) {
+	logger := log.FromContext(ctx, "namespace", req.Namespace, "name", req.Name)
+
+	logger.V(1).Info("Reconciling machine")
+	defer logger.V(1).Info("Finished reconciling machine")
+
+	var mapiMachineNotFound, capiMachineNotFound bool
+
+	// Get the MAPI Machine
+	mapiMachine := &machinev1beta1.Machine{}
+	if err := r.Get(ctx, req.NamespacedName, mapiMachine); apierrors.IsNotFound(err) {
+		logger.Info("MAPI Machine not found")
+
+		mapiMachineNotFound = true
+	} else if err != nil {
+		logger.Error(err, "Failed to get MAPI Machine")
+		return ctrl.Result{}, fmt.Errorf("failed to get MAPI machine: %w", err)
+	}
+
+	// Get the corresponding CAPI Machine
+	capiMachine := &capiv1beta1.Machine{}
+	capiNamespacedName := client.ObjectKey{
+		Namespace: r.CAPINamespace,
+		Name:      req.Name,
+	}
+
+	if err := r.Get(ctx, capiNamespacedName, capiMachine); apierrors.IsNotFound(err) {
+		logger.Info("CAPI Machine not found")
+
+		capiMachineNotFound = true
+	} else if err != nil {
+		logger.Error(err, "Failed to get CAPI Machine")
+		return ctrl.Result{}, fmt.Errorf("failed to get CAPI machine:: %w", err)
+	}
+
+	if mapiMachineNotFound && capiMachineNotFound {
+		logger.Info("CAPI and MAPI machines not found, nothing to do")
+		return ctrl.Result{}, nil
+	}
+
+	// We mirror if the CAPI machine is owned by a MachineSet which has a MAPI
+	// counterpart.
+	if mapiMachineNotFound {
+		if shouldReconcile, err := r.shouldMirrorCAPIMachineToMAPIMachine(ctx, logger, capiMachine); err != nil {
+			return ctrl.Result{}, err
+		} else if shouldReconcile {
+			return r.reconcileCAPItoMAPI(ctx, capiMachine, mapiMachine)
+		}
+	}
+
+	switch mapiMachine.Status.AuthoritativeAPI {
+	case machinev1beta1.MachineAuthorityMachineAPI:
+		return r.reconcileMAPIMachinetoCAPIMachine(ctx, mapiMachine, capiMachine)
+	case machinev1beta1.MachineAuthorityClusterAPI:
+		return r.reconcileCAPIMachinetoMAPIMachine(ctx, capiMachine, mapiMachine)
+	case machinev1beta1.MachineAuthorityMigrating:
+		logger.Info("machine currently migrating", "machine", mapiMachine.GetName())
+		return ctrl.Result{}, nil
+	default:
+		return ctrl.Result{}, fmt.Errorf("%w: %s", errAuthoritativeAPIUnexpected, mapiMachine.Spec.AuthoritativeAPI)
+	}
+}
+
+// reconcileCAPItoMAPI reconciles a CAPI Machine to a MAPI Machine.
+func (r *MachineSyncReconciler) reconcileCAPItoMAPI(ctx context.Context, capiMachine *capiv1beta1.Machine, mapiMachine *machinev1beta1.Machine) (ctrl.Result, error) {
+	return ctrl.Result{}, nil
+}
+
+// reconcileMAPItoCAPI reconciles a MAPI Machine to a CAPI Machine.
+func (r *MachineSyncReconciler) reconcileMAPItoCAPI(ctx context.Context, mapiMachine *machinev1beta1.Machine, capiMachine *capiv1beta1.Machine) (ctrl.Result, error) {
 	return ctrl.Result{}, nil
 }
 
@@ -114,4 +190,47 @@ func getInfraMachineFromProvider(platform configv1.PlatformType) (client.Object,
 	default:
 		return nil, fmt.Errorf("%w: %s", errPlatformNotSupported, platform)
 	}
+}
+
+// shouldMirrorCAPIMachine takes a CAPI machine and determines if there should
+// be a MAPI mirror, it returns true only if:
+//
+// 1. The CAPI Machine is owned by a CAPI MachineSet,
+// 2. That owning CAPI MachineSet has a MAPI MachineSet Mirror.
+func (r *MachineSyncReconciler) shouldMirrorCAPIMachineToMAPIMachine(ctx context.Context, logger logr.Logger, machine *capiv1beta1.Machine) (bool, error) {
+	logger.WithName("shouldMirrorCAPIMachineToMAPIMachine").
+		Info("checking if CAPI machine should be mirrored", "machine", machine.GetName())
+
+	// Check if owner refs point to CAPI MachineSet
+	for _, ref := range machine.ObjectMeta.OwnerReferences {
+		if ref.Kind != machineSetKind || ref.APIVersion != capiv1beta1.GroupVersion.String() {
+			continue
+		}
+
+		logger.Info("CAPI machine is owned by a machineset",
+			"machine", machine.GetName(), "machineset", ref.Name)
+		// Checks if the CAPI MS has a mirror in MAPI namespace
+		key := client.ObjectKey{
+			Namespace: r.MAPINamespace,
+			Name:      ref.Name,
+		}
+		mapiMachineSet := &machinev1beta1.MachineSet{}
+
+		if err := r.Get(ctx, key, mapiMachineSet); apierrors.IsNotFound(err) {
+			logger.Info("MAPI MachineSet mirror not found, nothing to do",
+				"machine", machine.GetName(), "machineset", ref.Name)
+
+			return false, nil
+		} else if err != nil {
+			logger.Error(err, "Failed to get MAPI MachineSet mirror")
+
+			return false, fmt.Errorf("failed to get MAPI MachineSet: %w", err)
+		}
+
+		return true, nil
+	}
+
+	logger.Info("CAPI machine is not owned by a machineset, nothing to do", "machine", machine.GetName())
+
+	return false, nil
 }
