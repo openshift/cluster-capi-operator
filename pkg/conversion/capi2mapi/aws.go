@@ -134,7 +134,7 @@ func (m machineAndAWSMachineAndAWSCluster) toProviderSpec() (*mapiv1.AWSMachineP
 		// UserDataSecret - Populated below.
 		// CredentialsSecret - TODO(OCPCLOUD-2713)
 		KeyName: m.awsMachine.Spec.SSHKeyName,
-		// DeviceIndex - TODO(OCPCLOUD-2707) Not currently supported in CAPA.
+		// DeviceIndex - OCPCLOUD-2707: Value must always be zero. No other values are valid in MAPA even though the value is configurable.
 		PublicIP:             m.awsMachine.Spec.PublicIP,
 		NetworkInterfaceType: mapiv1.AWSENANetworkInterfaceType,                                          // TODO(OCPCLOUD-2708) This is the default value for MAPA, but other values are not configurable in CAPA.
 		SecurityGroups:       convertAWSSecurityGroupstoMAPI(m.awsMachine.Spec.AdditionalSecurityGroups), // OCPCLOUD-2712: We need to ensure that this is the correct way to convert the security groups.
