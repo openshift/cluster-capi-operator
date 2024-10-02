@@ -37,8 +37,9 @@ import (
 )
 
 const (
-	awsTemplateAPIVersion = "infrastructure.cluster.x-k8s.io/v1beta2"
-	awsTemplateKind       = "AWSMachineTemplate"
+	awsMachineAPIVersion = "infrastructure.cluster.x-k8s.io/v1beta2"
+	awsMachineKind       = "AWSMachine"
+	awsTemplateKind      = "AWSMachineTemplate"
 )
 
 var _ = Describe("AWS Fuzz (mapi2capi)", func() {
@@ -74,8 +75,34 @@ var _ = Describe("AWS Fuzz (mapi2capi)", func() {
 			mapi2capi.FromAWSMachineAndInfra,
 			fromMachineAndAWSMachineAndAWSCluster,
 			conversiontest.ObjectMetaFuzzerFuncs("openshift-cluster-api"),
-			conversiontest.CAPIMachineFuzzerFuncs(awsProviderIDFuzzer, awsTemplateKind, awsTemplateAPIVersion, infra.Status.InfrastructureName),
+			conversiontest.CAPIMachineFuzzerFuncs(awsProviderIDFuzzer, awsMachineKind, awsMachineAPIVersion, infra.Status.InfrastructureName),
 			awsMachineFuzzerFuncs,
+		)
+	})
+
+	Context("AWSMachineSet Conversion", func() {
+		fromMachineSetAndAWSMachineTemplateAndAWSCluster := func(machineSet *capiv1.MachineSet, infraMachineTemplate client.Object, infraCluster client.Object) capi2mapi.MachineSetAndMachineTemplate {
+			awsMachineTemplate, ok := infraMachineTemplate.(*capav1.AWSMachineTemplate)
+			Expect(ok).To(BeTrue(), "input infra machine template should be of type %T, got %T", &capav1.AWSMachineTemplate{}, infraMachineTemplate)
+
+			awsCluster, ok := infraCluster.(*capav1.AWSCluster)
+			Expect(ok).To(BeTrue(), "input infra cluster should be of type %T, got %T", &capav1.AWSCluster{}, infraCluster)
+
+			return capi2mapi.FromMachineSetAndAWSMachineTemplateAndAWSCluster(machineSet, awsMachineTemplate, awsCluster)
+		}
+
+		conversiontest.CAPI2MAPIMachineSetRoundTripFuzzTest(
+			scheme,
+			infra,
+			infraCluster,
+			&capav1.AWSMachineTemplate{},
+			mapi2capi.FromAWSMachineSetAndInfra,
+			fromMachineSetAndAWSMachineTemplateAndAWSCluster,
+			conversiontest.ObjectMetaFuzzerFuncs("openshift-cluster-api"),
+			conversiontest.CAPIMachineFuzzerFuncs(awsProviderIDFuzzer, awsTemplateKind, awsMachineAPIVersion, infra.Status.InfrastructureName),
+			conversiontest.CAPIMachineSetFuzzerFuncs(awsTemplateKind, awsMachineAPIVersion, infra.Status.InfrastructureName),
+			awsMachineFuzzerFuncs,
+			awsMachineTemplateFuzzerFuncs,
 		)
 	})
 })
@@ -159,5 +186,17 @@ func fuzzAWSMachineSpecTenancy(tenancy *string, c fuzz.Continue) {
 		*tenancy = "host"
 	case 3:
 		*tenancy = ""
+	}
+}
+
+func awsMachineTemplateFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interface{} {
+	return []interface{}{
+		func(m *capav1.AWSMachineTemplate, c fuzz.Continue) {
+			c.FuzzNoCustom(m)
+
+			// Ensure the type meta is set correctly.
+			m.TypeMeta.APIVersion = capav1.GroupVersion.String()
+			m.TypeMeta.Kind = "AWSMachineTemplate"
+		},
 	}
 }
