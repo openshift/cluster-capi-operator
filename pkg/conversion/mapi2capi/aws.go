@@ -83,6 +83,16 @@ func FromAWSMachineSetAndInfra(m *mapiv1.MachineSet, i *configv1.Infrastructure)
 // ToMachineAndInfrastructureMachine is used to generate a CAPI Machine and the corresponding InfrastructureMachine
 // from the stored MAPI Machine and Infrastructure objects.
 func (m *awsMachineAndInfra) ToMachineAndInfrastructureMachine() (*capiv1.Machine, client.Object, []string, error) {
+	capiMachine, capaMachine, warnings, errs := m.toMachineAndInfrastructureMachine()
+
+	if len(errs) > 0 {
+		return nil, nil, warnings, errs.ToAggregate()
+	}
+
+	return capiMachine, capaMachine, warnings, nil
+}
+
+func (m *awsMachineAndInfra) toMachineAndInfrastructureMachine() (*capiv1.Machine, client.Object, []string, field.ErrorList) {
 	var (
 		errs     field.ErrorList
 		warnings []string
@@ -90,7 +100,7 @@ func (m *awsMachineAndInfra) ToMachineAndInfrastructureMachine() (*capiv1.Machin
 
 	awsProviderConfig, err := awsProviderSpecFromRawExtension(m.machine.Spec.ProviderSpec.Value)
 	if err != nil {
-		return nil, nil, nil, field.Invalid(field.NewPath("spec", "providerSpec", "value"), m.machine.Spec.ProviderSpec.Value, err.Error())
+		return nil, nil, nil, field.ErrorList{field.Invalid(field.NewPath("spec", "providerSpec", "value"), m.machine.Spec.ProviderSpec.Value, err.Error())}
 	}
 
 	capaMachine, warn, machineErrs := m.toAWSMachine(awsProviderConfig)
@@ -133,11 +143,12 @@ func (m *awsMachineAndInfra) ToMachineAndInfrastructureMachine() (*capiv1.Machin
 		capiMachine.Spec.ClusterName = m.infrastructure.Status.InfrastructureName
 	}
 
-	if len(errs) > 0 {
-		return nil, nil, warnings, errs.ToAggregate()
-	}
+	// The InfraMachine should always have the same labels and annotations as the Machine.
+	// See https://github.com/kubernetes-sigs/cluster-api/blob/f88d7ae5155700c2cc367b31ddcc151c9ad579e4/internal/controllers/machineset/machineset_controller.go#L578-L579
+	capaMachine.SetAnnotations(capiMachine.GetAnnotations())
+	capaMachine.SetLabels(capiMachine.GetLabels())
 
-	return capiMachine, capaMachine, warnings, nil
+	return capiMachine, capaMachine, warnings, errs
 }
 
 // ToMachineSetAndMachineTemplate converts a mapi2capi AWSMachineSetAndInfra into a CAPI MachineSet and CAPA AWSMachineTemplate.
@@ -147,14 +158,9 @@ func (m *awsMachineSetAndInfra) ToMachineSetAndMachineTemplate() (*capiv1.Machin
 		warnings []string
 	)
 
-	capiMachine, capaMachineObj, warn, err := m.ToMachineAndInfrastructureMachine()
+	capiMachine, capaMachineObj, warn, err := m.toMachineAndInfrastructureMachine()
 	if err != nil {
-		var errAgg utilerrors.Aggregate
-		if !errors.As(err, &errAgg) {
-			panic("unexpected type for error")
-		}
-
-		errs = append(errs, errAgg.Errors()...)
+		errs = append(errs, err.ToAggregate().Errors()...)
 	}
 
 	warnings = append(warnings, warn...)
@@ -177,6 +183,10 @@ func (m *awsMachineSetAndInfra) ToMachineSetAndMachineTemplate() (*capiv1.Machin
 	// along with the labels and annotations from the machine objectmeta.
 	capiMachineSet.Spec.Template.ObjectMeta.Labels = mergeMaps(capiMachineSet.Spec.Template.ObjectMeta.Labels, capiMachine.Labels)
 	capiMachineSet.Spec.Template.ObjectMeta.Annotations = mergeMaps(capiMachineSet.Spec.Template.ObjectMeta.Annotations, capiMachine.Annotations)
+
+	// Override the reference so that it matches the AWSMachineTemplate.
+	capiMachineSet.Spec.Template.Spec.InfrastructureRef.Kind = awsMachineTemplateKind
+	capiMachineSet.Spec.Template.Spec.InfrastructureRef.Name = capaMachineTemplate.Name
 
 	if m.infrastructure == nil || m.infrastructure.Status.InfrastructureName == "" {
 		errs = append(errs, field.Invalid(field.NewPath("infrastructure", "status", "infrastructureName"), m.infrastructure.Status.InfrastructureName, errInfrastructureInfrastructureNameCannotBeNil))
@@ -292,9 +302,13 @@ func (m *awsMachineAndInfra) toAWSMachine(providerSpec mapiv1.AWSMachineProvider
 	}
 
 	return &capav1.AWSMachine{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: capav1.GroupVersion.String(),
+			Kind:       "AWSMachine",
+		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      m.machine.Name,
-			Namespace: m.machine.Namespace,
+			Namespace: capiNamespace,
 		},
 		Spec: spec,
 	}, warnings, errs
@@ -316,6 +330,10 @@ func awsProviderSpecFromRawExtension(rawExtension *runtime.RawExtension) (mapiv1
 
 func awsMachineToAWSMachineTemplate(awsMachine *capav1.AWSMachine, name string, namespace string) *capav1.AWSMachineTemplate {
 	return &capav1.AWSMachineTemplate{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: capav1.GroupVersion.String(),
+			Kind:       "AWSMachineTemplate",
+		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
@@ -370,10 +388,10 @@ func convertMetadataServiceOptionstoCAPI(fldPath *field.Path, metad mapiv1.Metad
 	}
 
 	capiMetadataOpts := &capav1.InstanceMetadataOptions{
-		// HTTPEndpoint: not present in MAPI, fallback to CAPI default.
+		HTTPEndpoint: capav1.InstanceMetadataEndpointStateEnabled, // not present in MAPI, fallback to CAPI default.
 		// HTTPPutResponseHopLimit: not present in MAPI, fallback to CAPI default.
-		// InstanceMetadataTags: not present in MAPI, fallback to CAPI default.
-		HTTPTokens: httpTokens,
+		InstanceMetadataTags: capav1.InstanceMetadataEndpointStateDisabled, // not present in MAPI, fallback to CAPI default.
+		HTTPTokens:           httpTokens,
 	}
 
 	return capiMetadataOpts, nil

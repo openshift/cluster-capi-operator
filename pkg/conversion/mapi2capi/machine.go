@@ -24,14 +24,21 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation/field"
+	capav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	capiv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
 const (
 	capiNamespace            = "openshift-cluster-api"
 	workerUserDataSecretName = "worker-user-data"
-	awsTemplateAPIVersion    = "infrastructure.cluster.x-k8s.io/v1beta2"
-	awsTemplateKind          = "AWSMachineTemplate"
+	awsMachineKind           = "AWSMachine"
+	awsMachineTemplateKind   = "AWSMachineTemplate"
+)
+
+var (
+	// awsMachineAPIVersion is the API version for the AWSMachine API.
+	// Source it from the API group version so that it is always up to date.
+	awsMachineAPIVersion = capav1.GroupVersion.String() //nolint:gochecknoglobals
 )
 
 // fromMAPIMachineToCAPIMachine translates a MAPI Machine to its Core CAPI Machine correspondent.
@@ -48,12 +55,12 @@ func fromMAPIMachineToCAPIMachine(mapiMachine *mapiv1.Machine) (*capiv1.Machine,
 		},
 		Spec: capiv1.MachineSpec{
 			InfrastructureRef: corev1.ObjectReference{
-				APIVersion: awsTemplateAPIVersion,
-				Kind:       awsTemplateKind,
+				APIVersion: awsMachineAPIVersion,
+				Kind:       awsMachineKind,
 				Name:       mapiMachine.Name,
+				Namespace:  capiNamespace,
 			},
 			ProviderID: mapiMachine.Spec.ProviderID,
-
 			// Version: TODO(OCPCLOUD-2714): To be prevented by VAP.
 			// FailureDomain: populated by higher level functions.
 			// ClusterName: populated by higher level functions.
@@ -115,7 +122,7 @@ func setMAPINodeLabelsToCAPIManagedNodeLabels(fldPath *field.Path, mapiNodeLabel
 	// and: https://github.com/fabriziopandini/cluster-api/blob/main/docs/proposals/20220927-label-sync-between-machine-and-nodes.md
 	for k, v := range mapiNodeLabels {
 		if !conversionutil.IsCAPIManagedLabel(k) {
-			errs = append(errs, field.Invalid(fldPath.Key(k), v, "label propogartion is not currently supported for this label"))
+			errs = append(errs, field.Invalid(fldPath.Key(k), v, "label propagation is not currently supported for this label"))
 		}
 
 		capiNodeLabels[k] = v
