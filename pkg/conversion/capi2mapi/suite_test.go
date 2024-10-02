@@ -13,14 +13,36 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package capi2mapi
+package capi2mapi_test
 
 import (
+	"fmt"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
+	"k8s.io/apimachinery/pkg/runtime"
+	kubescheme "k8s.io/client-go/kubernetes/scheme"
+
+	capav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
+	capiv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
+
+var scheme *runtime.Scheme
+
+func init() {
+	// Register the scheme for the test.
+	// This must be done before the tests are run as the fuzzer is needed before the test tree is compiled.
+	scheme = kubescheme.Scheme
+	if err := capiv1.AddToScheme(scheme); err != nil {
+		panic(fmt.Sprintf("failed to add cluster API scheme: %v", err))
+	}
+
+	if err := capav1.AddToScheme(scheme); err != nil {
+		panic(fmt.Sprintf("failed to add aws scheme: %v", err))
+	}
+}
 
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
