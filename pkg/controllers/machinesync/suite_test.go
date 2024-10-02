@@ -18,21 +18,17 @@ package machinesync
 
 import (
 	"context"
-	"path/filepath"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	configv1 "github.com/openshift/api/config/v1"
-	machinev1 "github.com/openshift/api/machine/v1"
-	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
 	configv1builder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/config/v1"
+	"github.com/openshift/cluster-capi-operator/pkg/test"
 	"github.com/openshift/cluster-control-plane-machine-set-operator/pkg/util"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 	"k8s.io/klog/v2/textlogger"
@@ -64,29 +60,12 @@ var _ = BeforeSuite(func() {
 	logf.SetLogger(textlogger.NewLogger(textlogger.NewConfig()))
 
 	By("bootstrapping test environment")
-	testEnv = &envtest.Environment{
-		CRDInstallOptions: envtest.CRDInstallOptions{
-			Paths: []string{
-				filepath.Join("..", "..", "..", "vendor", "github.com", "openshift", "api", "machine", "v1beta1", "zz_generated.crd-manifests", "0000_10_machine-api_01_machines-CustomNoUpgrade.crd.yaml"),
-				filepath.Join("..", "..", "..", "vendor", "github.com", "openshift", "api", "config", "v1", "zz_generated.crd-manifests", "0000_10_config-operator_01_infrastructures-CustomNoUpgrade.crd.yaml"),
-			},
-		},
-	}
-
 	var err error
-	cfg, err = testEnv.Start()
+	testEnv = &envtest.Environment{}
+	cfg, k8sClient, err = test.StartEnvTest(testEnv)
+
 	Expect(err).NotTo(HaveOccurred())
 	Expect(cfg).NotTo(BeNil())
-
-	testScheme = scheme.Scheme
-	Expect(machinev1.Install(testScheme)).To(Succeed())
-	Expect(machinev1beta1.Install(testScheme)).To(Succeed())
-	Expect(configv1.Install(testScheme)).To(Succeed())
-
-	//+kubebuilder:scaffold:scheme
-
-	k8sClient, err = client.New(cfg, client.Options{Scheme: testScheme})
-	Expect(err).NotTo(HaveOccurred())
 	Expect(k8sClient).NotTo(BeNil())
 
 	infrastructure := configv1builder.Infrastructure().AsAWS("test", "eu-west-2").WithName(util.InfrastructureName).Build()

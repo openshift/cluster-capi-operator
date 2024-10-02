@@ -49,6 +49,12 @@ var (
 	// fakeClusterCRD is a fake Cluster CRD.
 	fakeClusterCRD = generateCRD(clusterGroupVersion.WithKind(fakeClusterKind))
 
+	// fakeClusterKind is the Kind for the Cluster.
+	fakeMachineKind = "Machine"
+
+	// fakeClusterCRD is a fake Cluster CRD.
+	fakeMachineCRD = generateCRD(clusterGroupVersion.WithKind(fakeMachineKind))
+
 	// v1beta2InfrastructureGroupVersion is a v1beta2 group version used for infrastructure objects.
 	v1beta2InfrastructureGroupVersion = schema.GroupVersion{Group: "infrastructure.cluster.x-k8s.io", Version: "v1beta2"}
 

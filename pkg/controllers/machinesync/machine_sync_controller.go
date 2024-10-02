@@ -106,6 +106,8 @@ func (r *MachineSyncReconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 // Reconcile reconciles CAPI and MAPI machines for their respective namespaces.
+//
+//nolint:funlen
 func (r *MachineSyncReconciler) Reconcile(ctx context.Context, req reconcile.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx, "namespace", req.Namespace, "name", req.Name)
 
@@ -114,9 +116,14 @@ func (r *MachineSyncReconciler) Reconcile(ctx context.Context, req reconcile.Req
 
 	var mapiMachineNotFound, capiMachineNotFound bool
 
-	// Get the MAPI Machine
+	// Get the MAPI Machine.
 	mapiMachine := &machinev1beta1.Machine{}
-	if err := r.Get(ctx, req.NamespacedName, mapiMachine); apierrors.IsNotFound(err) {
+	mapiNamespacedName := client.ObjectKey{
+		Namespace: r.MAPINamespace,
+		Name:      req.Name,
+	}
+
+	if err := r.Get(ctx, mapiNamespacedName, mapiMachine); apierrors.IsNotFound(err) {
 		logger.Info("MAPI Machine not found")
 
 		mapiMachineNotFound = true
@@ -125,7 +132,7 @@ func (r *MachineSyncReconciler) Reconcile(ctx context.Context, req reconcile.Req
 		return ctrl.Result{}, fmt.Errorf("failed to get MAPI machine: %w", err)
 	}
 
-	// Get the corresponding CAPI Machine
+	// Get the corresponding CAPI Machine.
 	capiMachine := &capiv1beta1.Machine{}
 	capiNamespacedName := client.ObjectKey{
 		Namespace: r.CAPINamespace,
@@ -147,12 +154,12 @@ func (r *MachineSyncReconciler) Reconcile(ctx context.Context, req reconcile.Req
 	}
 
 	// We mirror if the CAPI machine is owned by a MachineSet which has a MAPI
-	// counterpart.
+	// counterpart. This is because we want to be able to migrate in both directions.
 	if mapiMachineNotFound {
 		if shouldReconcile, err := r.shouldMirrorCAPIMachineToMAPIMachine(ctx, logger, capiMachine); err != nil {
 			return ctrl.Result{}, err
 		} else if shouldReconcile {
-			return r.reconcileCAPItoMAPI(ctx, capiMachine, mapiMachine)
+			return r.reconcileCAPIMachinetoMAPIMachine(ctx, capiMachine, mapiMachine)
 		}
 	}
 
@@ -169,13 +176,13 @@ func (r *MachineSyncReconciler) Reconcile(ctx context.Context, req reconcile.Req
 	}
 }
 
-// reconcileCAPItoMAPI reconciles a CAPI Machine to a MAPI Machine.
-func (r *MachineSyncReconciler) reconcileCAPItoMAPI(ctx context.Context, capiMachine *capiv1beta1.Machine, mapiMachine *machinev1beta1.Machine) (ctrl.Result, error) {
+// reconcileCAPIMachinetoMAPIMachine reconciles a CAPI Machine to a MAPI Machine.
+func (r *MachineSyncReconciler) reconcileCAPIMachinetoMAPIMachine(ctx context.Context, capiMachine *capiv1beta1.Machine, mapiMachine *machinev1beta1.Machine) (ctrl.Result, error) {
 	return ctrl.Result{}, nil
 }
 
-// reconcileMAPItoCAPI reconciles a MAPI Machine to a CAPI Machine.
-func (r *MachineSyncReconciler) reconcileMAPItoCAPI(ctx context.Context, mapiMachine *machinev1beta1.Machine, capiMachine *capiv1beta1.Machine) (ctrl.Result, error) {
+// reconcileMAPIMachinetoCAPIMachine a MAPI Machine to a CAPI Machine.
+func (r *MachineSyncReconciler) reconcileMAPIMachinetoCAPIMachine(ctx context.Context, mapiMachine *machinev1beta1.Machine, capiMachine *capiv1beta1.Machine) (ctrl.Result, error) {
 	return ctrl.Result{}, nil
 }
 
@@ -192,7 +199,7 @@ func getInfraMachineFromProvider(platform configv1.PlatformType) (client.Object,
 	}
 }
 
-// shouldMirrorCAPIMachine takes a CAPI machine and determines if there should
+// shouldMirrorCAPIMachineToMAPIMachine takes a CAPI machine and determines if there should
 // be a MAPI mirror, it returns true only if:
 //
 // 1. The CAPI Machine is owned by a CAPI MachineSet,
