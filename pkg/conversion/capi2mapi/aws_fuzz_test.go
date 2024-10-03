@@ -40,6 +40,7 @@ const (
 	awsMachineAPIVersion = "infrastructure.cluster.x-k8s.io/v1beta2"
 	awsMachineKind       = "AWSMachine"
 	awsTemplateKind      = "AWSMachineTemplate"
+	capiNamespace        = "openshift-cluster-api"
 )
 
 var _ = Describe("AWS Fuzz (mapi2capi)", func() {
@@ -74,7 +75,7 @@ var _ = Describe("AWS Fuzz (mapi2capi)", func() {
 			&capav1.AWSMachine{},
 			mapi2capi.FromAWSMachineAndInfra,
 			fromMachineAndAWSMachineAndAWSCluster,
-			conversiontest.ObjectMetaFuzzerFuncs("openshift-cluster-api"),
+			conversiontest.ObjectMetaFuzzerFuncs(capiNamespace),
 			conversiontest.CAPIMachineFuzzerFuncs(awsProviderIDFuzzer, awsMachineKind, awsMachineAPIVersion, infra.Status.InfrastructureName),
 			awsMachineFuzzerFuncs,
 		)
@@ -98,7 +99,7 @@ var _ = Describe("AWS Fuzz (mapi2capi)", func() {
 			&capav1.AWSMachineTemplate{},
 			mapi2capi.FromAWSMachineSetAndInfra,
 			fromMachineSetAndAWSMachineTemplateAndAWSCluster,
-			conversiontest.ObjectMetaFuzzerFuncs("openshift-cluster-api"),
+			conversiontest.ObjectMetaFuzzerFuncs(capiNamespace),
 			conversiontest.CAPIMachineFuzzerFuncs(awsProviderIDFuzzer, awsTemplateKind, awsMachineAPIVersion, infra.Status.InfrastructureName),
 			conversiontest.CAPIMachineSetFuzzerFuncs(awsTemplateKind, awsMachineAPIVersion, infra.Status.InfrastructureName),
 			awsMachineFuzzerFuncs,
