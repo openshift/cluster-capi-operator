@@ -106,7 +106,7 @@ func CAPI2MAPIMachineRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv1.I
 		machineFuzzInputs = append(machineFuzzInputs, Entry(fmt.Sprintf("%d", i), in))
 	}
 
-	DescribeTable("should be able to roundtrip fuzzed Machines", func(in capiToMapiMachineFuzzInput) {
+	DescribeTable("should be able to roundtrip fuzzed Machines", func(in capiToMapiMachineFuzzInput) { //nolint:dupl
 		capiConverter := in.capiConverterConstructor(in.machine, in.infraMachine, in.infraCluster)
 
 		mapiMachine, warnings, err := capiConverter.ToMachine()
@@ -176,7 +176,7 @@ func CAPI2MAPIMachineSetRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv
 		machineFuzzInputs = append(machineFuzzInputs, Entry(fmt.Sprintf("%d", i), in))
 	}
 
-	DescribeTable("should be able to roundtrip fuzzed Machines", func(in capiToMapiMachineSetFuzzInput) {
+	DescribeTable("should be able to roundtrip fuzzed MachineSets", func(in capiToMapiMachineSetFuzzInput) { //nolint:dupl
 		capiConverter := in.capiConverterConstructor(in.machineSet, in.infraMachineTemplate, in.infraCluster)
 
 		mapiMachineSet, warnings, err := capiConverter.ToMachineSet()
