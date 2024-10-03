@@ -277,7 +277,9 @@ func (m *awsMachineAndInfra) toAWSMachine(providerSpec mapiv1.AWSMachineProvider
 	}
 
 	if providerSpec.DeviceIndex != 0 {
-		// TODO(OCPCLOUD-2707): We should understand if this value works when non-zero, and determine from that if we should support it.
+		// In MAPA, valid machines only have a DeviceIndex value of 0 or unset. Since only a single network interface is supported, which must have a device index of 0.
+		// If a machine is created with a DeviceIndex value other than 0, it will be in a failed state.
+		// For more context, see OCPCLOUD-2707.
 		errs = append(errs, field.Invalid(fldPath.Child("deviceIndex"), providerSpec.DeviceIndex, "deviceIndex must be 0 or unset"))
 	}
 
