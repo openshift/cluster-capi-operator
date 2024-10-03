@@ -12,7 +12,7 @@ require (
 	github.com/onsi/gomega v1.33.1
 	github.com/openshift/api v0.0.0-20240909041644-5852b58f4b10
 	github.com/openshift/client-go v0.0.0-20240528061634-b054aa794d87
-	github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20240906160452-4c3bebacbb5b
+	github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20240923124618-33cbd9255614
 	github.com/openshift/cluster-control-plane-machine-set-operator v0.0.0-20240909043600-373ac49835bf
 	github.com/openshift/library-go v0.0.0-20240711192904-190fec8c3f09
 	github.com/pkg/errors v0.9.1
@@ -34,6 +34,10 @@ require (
 	sigs.k8s.io/cluster-api-provider-vsphere v1.10.0
 	sigs.k8s.io/controller-runtime v0.18.5
 	sigs.k8s.io/controller-runtime/tools/setup-envtest v0.0.0-20240531134648-6636df17d67b
+)
+
+require (
+	github.com/google/gofuzz v1.2.0
 	sigs.k8s.io/yaml v1.4.0
 )
 
@@ -134,7 +138,6 @@ require (
 	github.com/google/cel-go v0.17.8 // indirect
 	github.com/google/gnostic-models v0.6.8 // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
-	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/pprof v0.0.0-20240424215950-a892ee059fd6 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gordonklaus/ineffassign v0.1.0 // indirect

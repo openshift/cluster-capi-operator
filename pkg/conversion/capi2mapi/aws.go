@@ -72,8 +72,8 @@ func FromMachineSetAndAWSMachineTemplateAndAWSCluster(ms *capiv1.MachineSet, mts
 		machineAndAWSMachineAndAWSCluster: &machineAndAWSMachineAndAWSCluster{
 			machine: &capiv1.Machine{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels:      ms.Spec.Template.Labels,
-					Annotations: ms.Spec.Template.Annotations,
+					Labels:      ms.Spec.Template.ObjectMeta.Labels,
+					Annotations: ms.Spec.Template.ObjectMeta.Annotations,
 				},
 				Spec: ms.Spec.Template.Spec,
 			},
@@ -106,7 +106,7 @@ func (m machineAndAWSMachineAndAWSCluster) toProviderSpec() (*mapiv1.AWSMachineP
 	}
 
 	mapiAWSMetadataOptions, warn, errs := convertAWSMetadataOptionsToMAPI(fldPath.Child("instanceMetadataOptions"), m.awsMachine.Spec.InstanceMetadataOptions)
-	if err != nil {
+	if errs != nil {
 		errors = append(errors, errs...)
 	}
 
@@ -131,16 +131,14 @@ func (m machineAndAWSMachineAndAWSCluster) toProviderSpec() (*mapiv1.AWSMachineP
 		IAMInstanceProfile: &mapiv1.AWSResourceReference{
 			ID: &m.awsMachine.Spec.IAMInstanceProfile,
 		},
-		UserDataSecret: &corev1.LocalObjectReference{
-			Name: ptr.Deref(m.machine.Spec.Bootstrap.DataSecretName, "worker-user-data"),
-		},
+		// UserDataSecret - Populated below.
 		// CredentialsSecret - TODO(OCPCLOUD-2713)
 		KeyName: m.awsMachine.Spec.SSHKeyName,
 		// DeviceIndex - TODO(OCPCLOUD-2707) Not currently supported in CAPA.
-		PublicIP: m.awsMachine.Spec.PublicIP,
-		// NetworkInterfaceType - TODO(OCPCLOUD-2708) Not currently supported in CAPA.
-		SecurityGroups: convertAWSSecurityGroupstoMAPI(m.awsMachine.Spec.AdditionalSecurityGroups), // OCPCLOUD-2712: We need to ensure that this is the correct way to convert the security groups.
-		Subnet:         convertAWSResourceReferenceToMAPI(ptr.Deref(m.awsMachine.Spec.Subnet, capav1.AWSResourceReference{})),
+		PublicIP:             m.awsMachine.Spec.PublicIP,
+		NetworkInterfaceType: mapiv1.AWSENANetworkInterfaceType,                                          // TODO(OCPCLOUD-2708) This is the default value for MAPA, but other values are not configurable in CAPA.
+		SecurityGroups:       convertAWSSecurityGroupstoMAPI(m.awsMachine.Spec.AdditionalSecurityGroups), // OCPCLOUD-2712: We need to ensure that this is the correct way to convert the security groups.
+		Subnet:               convertAWSResourceReferenceToMAPI(ptr.Deref(m.awsMachine.Spec.Subnet, capav1.AWSResourceReference{})),
 		Placement: mapiv1.Placement{
 			AvailabilityZone: ptr.Deref(m.machine.Spec.FailureDomain, ""),
 			Tenancy:          mapaTenancy,
@@ -153,6 +151,13 @@ func (m machineAndAWSMachineAndAWSCluster) toProviderSpec() (*mapiv1.AWSMachineP
 		PlacementGroupName:      m.awsMachine.Spec.PlacementGroupName,
 		PlacementGroupPartition: convertAWSPlacementGroupPartition(m.awsMachine.Spec.PlacementGroupPartition),
 		CapacityReservationID:   ptr.Deref(m.awsMachine.Spec.CapacityReservationID, ""),
+	}
+
+	userDataSecretName := ptr.Deref(m.machine.Spec.Bootstrap.DataSecretName, "")
+	if userDataSecretName != "" {
+		mapaProviderConfig.UserDataSecret = &corev1.LocalObjectReference{
+			Name: userDataSecretName,
+		}
 	}
 
 	// Below this line are fields not used from the CAPI AWSMachine.
@@ -233,7 +238,11 @@ func (m machineSetAndAWSMachineTemplateAndAWSCluster) ToMachineSet() (*mapiv1.Ma
 		errors = append(errors, err)
 	}
 
-	mapiMachineSet.Spec.Template.Spec.ProviderSpec.Value = mapaMachine.Spec.ProviderSpec.Value
+	mapiMachineSet.Spec.Template.Spec = mapaMachine.Spec
+
+	// Copy the labels and annotations from the Machine to the template.
+	mapiMachineSet.Spec.Template.ObjectMeta.Annotations = mapaMachine.ObjectMeta.Annotations
+	mapiMachineSet.Spec.Template.ObjectMeta.Labels = mapaMachine.ObjectMeta.Labels
 
 	if len(errors) > 0 {
 		return nil, warnings, utilerrors.NewAggregate(errors)
@@ -283,19 +292,19 @@ func convertAWSMetadataOptionsToMAPI(fldPath *field.Path, capiMetadataOpts *capa
 		errors = append(errors, field.Invalid(fldPath.Child("httpTokens"), capiMetadataOpts.HTTPTokens, errUnsupportedHTTPTokensState))
 	}
 
-	if capiMetadataOpts.HTTPEndpoint != "enabled" {
+	if capiMetadataOpts.HTTPEndpoint != "" && capiMetadataOpts.HTTPEndpoint != "enabled" {
 		// This defaults to "enabled" in CAPI and on the AWS side, so if it's not "enabled", the user explicitly chose another option.
 		// TODO(OCPCLOUD-2710): We should implement this within MAPI to create feature parity.
 		errors = append(errors, field.Invalid(fldPath.Child("httpEndpoint"), capiMetadataOpts.HTTPEndpoint, "httpEndpoint values other than \"enabled\" are not supported"))
 	}
 
-	if capiMetadataOpts.HTTPPutResponseHopLimit != 1 {
+	if capiMetadataOpts.HTTPPutResponseHopLimit != 0 && capiMetadataOpts.HTTPPutResponseHopLimit != 1 {
 		// This defaults to 1 in CAPI and on the AWS side, so if it's not 1, the user explicitly chose another option.
 		// TODO(OCPCLOUD-2710): We should implement this within MAPI to create feature parity.
 		errors = append(errors, field.Invalid(fldPath.Child("httpPutResponseHopLimit"), capiMetadataOpts.HTTPPutResponseHopLimit, "httpPutResponseHopLimit values other than 1 are not supported"))
 	}
 
-	if capiMetadataOpts.InstanceMetadataTags != "disabled" {
+	if capiMetadataOpts.InstanceMetadataTags != "" && capiMetadataOpts.InstanceMetadataTags != "disabled" {
 		// This defaults to "disabled" in CAPI and on the AWS side, so if it's not "disabled", the user explicitly chose another option.
 		// TODO(OCPCLOUD-2710): We should implement this within MAPI to create feature parity.
 		errors = append(errors, field.Invalid(fldPath.Child("instanceMetadataTags"), capiMetadataOpts.InstanceMetadataTags, "instanceMetadataTags values other than \"disabled\" are not supported"))
@@ -384,34 +393,41 @@ func convertAWSTenancyToMAPI(fldPath *field.Path, capiTenancy string) (mapiv1.In
 
 func convertAWSBlockDeviceMappingSpecToMAPI(rootVolume *capav1.Volume, nonRootVolumes []capav1.Volume) []mapiv1.BlockDeviceMappingSpec {
 	blockDeviceMapping := []mapiv1.BlockDeviceMappingSpec{}
-	if rootVolume == nil {
-		return blockDeviceMapping
+
+	if rootVolume != nil && *rootVolume != (capav1.Volume{}) {
+		blockDeviceMapping = append(blockDeviceMapping, volumeToBlockDeviceMappingSpec(*rootVolume))
 	}
 
-	blockDeviceMapping = append(blockDeviceMapping, mapiv1.BlockDeviceMappingSpec{
-		EBS: &mapiv1.EBSBlockDeviceSpec{
-			VolumeSize: ptr.To(rootVolume.Size),
-			VolumeType: ptr.To(string(rootVolume.Type)),
-			Iops:       ptr.To(rootVolume.IOPS),
-			Encrypted:  rootVolume.Encrypted,
-			KMSKey:     convertKMSKeyToMAPI(rootVolume.EncryptionKey),
-		},
-	})
-
 	for _, volume := range nonRootVolumes {
-		blockDeviceMapping = append(blockDeviceMapping, mapiv1.BlockDeviceMappingSpec{
-			DeviceName: ptr.To(volume.DeviceName),
-			EBS: &mapiv1.EBSBlockDeviceSpec{
-				VolumeSize: ptr.To(volume.Size),
-				VolumeType: ptr.To(string(rootVolume.Type)),
-				Iops:       ptr.To(volume.IOPS),
-				Encrypted:  volume.Encrypted,
-				KMSKey:     convertKMSKeyToMAPI(volume.EncryptionKey),
-			},
-		})
+		blockDeviceMapping = append(blockDeviceMapping, volumeToBlockDeviceMappingSpec(volume))
 	}
 
 	return blockDeviceMapping
+}
+
+func volumeToBlockDeviceMappingSpec(volume capav1.Volume) mapiv1.BlockDeviceMappingSpec {
+	bdm := mapiv1.BlockDeviceMappingSpec{
+		EBS: &mapiv1.EBSBlockDeviceSpec{
+			DeleteOnTermination: ptr.To(true), // This is forced to true for now as CAPI doesn't support changing it.
+			VolumeSize:          ptr.To(volume.Size),
+			Encrypted:           volume.Encrypted,
+			KMSKey:              convertKMSKeyToMAPI(volume.EncryptionKey),
+		},
+	}
+
+	if volume.DeviceName != "" {
+		bdm.DeviceName = ptr.To(volume.DeviceName)
+	}
+
+	if volume.Type != "" {
+		bdm.EBS.VolumeType = ptr.To(string(volume.Type))
+	}
+
+	if volume.IOPS != 0 {
+		bdm.EBS.Iops = ptr.To(volume.IOPS)
+	}
+
+	return bdm
 }
 
 func convertKMSKeyToMAPI(kmsKey string) mapiv1.AWSResourceReference {

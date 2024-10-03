@@ -55,5 +55,4 @@ var _ = Describe("mapi2capi AWS", func() {
 		Expect(capiMachineSet).To(Not(BeNil()), "should not have a nil CAPI MachineSet")
 		Expect(capiInfraMachineTemplate).To(Not(BeNil()), "should not have a nil CAPI MachineTemplate")
 	})
-
 })

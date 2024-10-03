@@ -922,7 +922,7 @@ github.com/openshift/client-go/config/informers/externalversions/config/v1alpha1
 github.com/openshift/client-go/config/informers/externalversions/internalinterfaces
 github.com/openshift/client-go/config/listers/config/v1
 github.com/openshift/client-go/config/listers/config/v1alpha1
-# github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20240906160452-4c3bebacbb5b
+# github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20240923124618-33cbd9255614
 ## explicit; go 1.21
 github.com/openshift/cluster-api-actuator-pkg/testutils
 github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder

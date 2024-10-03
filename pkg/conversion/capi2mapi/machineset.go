@@ -25,20 +25,11 @@ import (
 	capiv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
-const (
-	mapiMachineSetAPIVersion = "machine.openshift.io/v1beta1"
-	mapiMachineSetKind       = "MachineSet"
-)
-
 // fromCAPIMachineSetToMAPIMachineSet takes a CAPI MachineSet and returns a converted MAPI MachineSet.
 func fromCAPIMachineSetToMAPIMachineSet(capiMachineSet *capiv1.MachineSet) (*mapiv1.MachineSet, error) {
 	errs := field.ErrorList{}
 
 	mapiMachineSet := &mapiv1.MachineSet{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       mapiMachineSetKind,
-			APIVersion: mapiMachineSetAPIVersion,
-		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        capiMachineSet.Name,
 			Namespace:   capiMachineSet.Namespace,

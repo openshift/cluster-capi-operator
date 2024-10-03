@@ -59,6 +59,8 @@ func fromMAPIMachineSetToCAPIMachineSet(mapiMachineSet *mapiv1.MachineSet) (*cap
 
 	// Unused fields - Below this line are fields not used from the MAPI MachineSet.
 
+	errs = append(errs, handleUnsupportedMAPIObjectMetaFields(field.NewPath("spec", "template", "metadata"), mapiMachineSet.Spec.Template.ObjectMeta)...)
+
 	// AuthoritativeAPI - Ignore, this is part of the conversion mechanism.
 
 	return capiMachineSet, errs.ToAggregate()

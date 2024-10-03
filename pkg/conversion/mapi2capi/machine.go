@@ -67,8 +67,16 @@ func fromMAPIMachineToCAPIMachine(mapiMachine *mapiv1.Machine) (*capiv1.Machine,
 
 	// lifecycleHooks are handled via an annotation in Cluster API.
 	lifecycleAnnotations := getCAPILifecycleHookAnnotations(mapiMachine.Spec.LifecycleHooks)
-	for key, value := range lifecycleAnnotations {
-		capiMachine.Annotations[key] = value
+	if capiMachine.Annotations == nil {
+		capiMachine.Annotations = lifecycleAnnotations
+	} else {
+		for key, value := range lifecycleAnnotations {
+			capiMachine.Annotations[key] = value
+		}
+	}
+
+	if capiMachine.Labels == nil {
+		capiMachine.Labels = map[string]string{}
 	}
 
 	errs = append(errs, setMAPINodeLabelsToCAPIManagedNodeLabels(field.NewPath("spec", "metadata", "labels"), mapiMachine.Spec.ObjectMeta.Labels, capiMachine.Labels)...)
@@ -137,27 +145,38 @@ func handleUnsupportedMachineFields(spec mapiv1.MachineSpec) field.ErrorList {
 
 	fldPath := field.NewPath("spec")
 
-	// ObjectMeta related fields should never get converted (aside from labels and annotations).
-	// They are meaningless in MAPI and don't contribute to the logic of the product.
-	if spec.ObjectMeta.Name != "" {
-		errs = append(errs, field.Invalid(fldPath.Child("metadata", "name"), spec.ObjectMeta.Name, "name is not supported"))
-	}
-
-	if spec.ObjectMeta.GenerateName != "" {
-		errs = append(errs, field.Invalid(fldPath.Child("metadata", "generateName"), spec.ObjectMeta.GenerateName, "generateName is not supported"))
-	}
-
-	if spec.ObjectMeta.Namespace != "" {
-		errs = append(errs, field.Invalid(fldPath.Child("metadata", "namespace"), spec.ObjectMeta.Namespace, "namespace is not supported"))
-	}
-
-	if len(spec.ObjectMeta.OwnerReferences) > 0 {
-		errs = append(errs, field.Invalid(fldPath.Child("metadata", "ownerReferences"), spec.ObjectMeta.OwnerReferences, "ownerReferences are not supported"))
-	}
+	errs = append(errs, handleUnsupportedMAPIObjectMetaFields(fldPath.Child("metadata"), spec.ObjectMeta)...)
 
 	// TODO(OCPCLOUD-2680): Taints are not supported by CAPI. add support for them via CAPI BootstrapConfig + minimal bootstrap controller.
 	if len(spec.Taints) > 0 {
 		errs = append(errs, field.Invalid(fldPath.Child("taints"), spec.Taints, "taints are not currently supported"))
+	}
+
+	return errs
+}
+
+// handleUnsupportedMAPIObjectMetaFields checks for unsupported MAPI metadta fields and returns a list of errors
+// if any of them are currently set.
+// This is used to prevent usage of these fields in both the Machine and MachineSet specs.
+func handleUnsupportedMAPIObjectMetaFields(fldPath *field.Path, objectMeta mapiv1.ObjectMeta) field.ErrorList {
+	var errs field.ErrorList
+
+	// ObjectMeta related fields should never get converted (aside from labels and annotations).
+	// They are meaningless in MAPI and don't contribute to the logic of the product.
+	if objectMeta.Name != "" {
+		errs = append(errs, field.Invalid(fldPath.Child("name"), objectMeta.Name, "name is not supported"))
+	}
+
+	if objectMeta.GenerateName != "" {
+		errs = append(errs, field.Invalid(fldPath.Child("generateName"), objectMeta.GenerateName, "generateName is not supported"))
+	}
+
+	if objectMeta.Namespace != "" {
+		errs = append(errs, field.Invalid(fldPath.Child("namespace"), objectMeta.Namespace, "namespace is not supported"))
+	}
+
+	if len(objectMeta.OwnerReferences) > 0 {
+		errs = append(errs, field.Invalid(fldPath.Child("ownerReferences"), objectMeta.OwnerReferences, "ownerReferences are not supported"))
 	}
 
 	return errs

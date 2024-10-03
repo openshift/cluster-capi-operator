@@ -167,9 +167,16 @@ func (m *awsMachineSetAndInfra) ToMachineSetAndMachineTemplate() (*capiv1.Machin
 	capaMachineTemplate := awsMachineToAWSMachineTemplate(capaMachine, m.machineSet.Name, capiNamespace)
 
 	capiMachineSet, machineSetErrs := fromMAPIMachineSetToCAPIMachineSet(m.machineSet)
-	errs = append(errs, machineSetErrs.Errors()...)
+	if machineSetErrs != nil {
+		errs = append(errs, machineSetErrs.Errors()...)
+	}
 
 	capiMachineSet.Spec.Template.Spec = capiMachine.Spec
+
+	// We have to merge these two maps so that labels and annotations added to the template objectmeta are persisted
+	// along with the labels and annotations from the machine objectmeta.
+	capiMachineSet.Spec.Template.ObjectMeta.Labels = mergeMaps(capiMachineSet.Spec.Template.ObjectMeta.Labels, capiMachine.Labels)
+	capiMachineSet.Spec.Template.ObjectMeta.Annotations = mergeMaps(capiMachineSet.Spec.Template.ObjectMeta.Annotations, capiMachine.Annotations)
 
 	if m.infrastructure == nil || m.infrastructure.Status.InfrastructureName == "" {
 		errs = append(errs, field.Invalid(field.NewPath("infrastructure", "status", "infrastructureName"), m.infrastructure.Status.InfrastructureName, errInfrastructureInfrastructureNameCannotBeNil))
@@ -209,6 +216,11 @@ func (m *awsMachineAndInfra) toAWSMachine(providerSpec mapiv1.AWSMachineProvider
 		errs = append(errs, err)
 	}
 
+	instanceMetadataOptions, err := convertMetadataServiceOptionstoCAPI(fldPath.Child("metadataServiceOptions"), providerSpec.MetadataServiceOptions)
+	if err != nil {
+		errs = append(errs, err)
+	}
+
 	spec := capav1.AWSMachineSpec{
 		AMI:                      capiAWSAMIReference,
 		AdditionalSecurityGroups: convertAWSSecurityGroupstoCAPI(providerSpec.SecurityGroups),
@@ -225,7 +237,7 @@ func (m *awsMachineAndInfra) toAWSMachine(providerSpec mapiv1.AWSMachineProvider
 		// ImageLookupOrg. Not used in OpenShift.
 		// NetworkInterfaces. Not used in OpenShift.
 
-		InstanceMetadataOptions: convertMetadataServiceOptionstoCAPI(providerSpec.MetadataServiceOptions),
+		InstanceMetadataOptions: instanceMetadataOptions,
 		InstanceType:            providerSpec.InstanceType,
 		NonRootVolumes:          nonRootVolumes,
 		PlacementGroupName:      providerSpec.PlacementGroupName,
@@ -343,7 +355,7 @@ func convertAWSTagsToCAPI(mapiTags []mapiv1.TagSpecification) capav1.Tags {
 	return capiTags
 }
 
-func convertMetadataServiceOptionstoCAPI(metad mapiv1.MetadataServiceOptions) *capav1.InstanceMetadataOptions {
+func convertMetadataServiceOptionstoCAPI(fldPath *field.Path, metad mapiv1.MetadataServiceOptions) (*capav1.InstanceMetadataOptions, *field.Error) {
 	var httpTokens capav1.HTTPTokensState
 
 	switch metad.Authentication {
@@ -351,8 +363,10 @@ func convertMetadataServiceOptionstoCAPI(metad mapiv1.MetadataServiceOptions) *c
 		httpTokens = capav1.HTTPTokensStateOptional
 	case mapiv1.MetadataServiceAuthenticationRequired:
 		httpTokens = capav1.HTTPTokensStateRequired
+	case "":
+		// This means it's optional on both sides, so no need to set anything.
 	default:
-		return &capav1.InstanceMetadataOptions{}
+		return &capav1.InstanceMetadataOptions{}, field.Invalid(fldPath.Child("authentication"), metad.Authentication, "unsupported value")
 	}
 
 	capiMetadataOpts := &capav1.InstanceMetadataOptions{
@@ -362,7 +376,7 @@ func convertMetadataServiceOptionstoCAPI(metad mapiv1.MetadataServiceOptions) *c
 		HTTPTokens: httpTokens,
 	}
 
-	return capiMetadataOpts
+	return capiMetadataOpts, nil
 }
 
 func convertIAMInstanceProfiletoCAPI(mapiIAM *mapiv1.AWSResourceReference) string {
@@ -417,6 +431,16 @@ func convertAWSBlockDeviceMappingSpecToCAPI(fldPath *field.Path, mapiBlockDevice
 			rootVolume = &volume
 
 			continue
+		}
+
+		if mapping.NoDevice != nil {
+			// Field exists in the API but is never used within the codebase.
+			errs = append(errs, field.Invalid(fldPath.Index(i).Child("noDevice"), mapping.NoDevice, "noDevice is not supported"))
+		}
+
+		if mapping.VirtualName != nil {
+			// Field exists in the API but is never used within the codebase.
+			errs = append(errs, field.Invalid(fldPath.Index(i).Child("virtualName"), mapping.VirtualName, "virtualName is not supported"))
 		}
 
 		volume, warn, err := blockDeviceMappingSpecToVolume(fldPath.Index(i), mapping, false)
@@ -503,4 +527,17 @@ func instanceIDFromProviderID(s string) string {
 	lastPart := parts[len(parts)-1]
 
 	return regexp.MustCompile(`i-.*$`).FindString(lastPart)
+}
+
+// mergeMaps merges two maps together, if the first map is nil, it will be initialized.
+func mergeMaps(m1, m2 map[string]string) map[string]string {
+	if m1 == nil {
+		m1 = map[string]string{}
+	}
+
+	for k, v := range m2 {
+		m1[k] = v
+	}
+
+	return m1
 }

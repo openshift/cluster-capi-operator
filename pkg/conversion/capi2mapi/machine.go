@@ -64,6 +64,8 @@ func fromCAPIMachineToMAPIMachine(capiMachine *capiv1.Machine) (*mapiv1.Machine,
 		errs = append(errs, field.Invalid(field.NewPath("metadata", "ownerReferences"), capiMachine.OwnerReferences, "ownerReferences are not supported"))
 	}
 
+	// Make sure the machine has a label map.
+	mapiMachine.Spec.ObjectMeta.Labels = map[string]string{}
 	setCAPIManagedNodeLabelsToMAPINodeLabels(capiMachine.Labels, mapiMachine.Spec.ObjectMeta.Labels)
 
 	// Unusued fields - Below this line are fields not used from the CAPI Machine.
@@ -114,14 +116,16 @@ func setCAPIManagedNodeLabelsToMAPINodeLabels(capiNodeLabels map[string]string, 
 	for k, v := range capiNodeLabels {
 		if conversionutil.IsCAPIManagedLabel(k) {
 			mapiNodeLabels[k] = v
+
+			delete(capiNodeLabels, k)
 		}
 	}
 }
 
 const (
 	// Note the trailing slash here is important when we are trimming the prefix.
-	capiPreDrainAnnotationPrefix     = "pre-drain.hook.machine.cluster-api.x-k8s.io/"
-	capiPreTerminateAnnotationPrefix = "pre-terminate.hook.machine.cluster-api.x-k8s.io/"
+	capiPreDrainAnnotationPrefix     = capiv1.PreDrainDeleteHookAnnotationPrefix + "/"
+	capiPreTerminateAnnotationPrefix = capiv1.PreTerminateDeleteHookAnnotationPrefix + "/"
 )
 
 // getMAPILifecycleHooks extracts the lifecycle hooks from the CAPI Machine annotations.
@@ -135,11 +139,15 @@ func getMAPILifecycleHooks(capiMachine *capiv1.Machine) mapiv1.LifecycleHooks {
 				Name:  strings.TrimPrefix(k, capiPreDrainAnnotationPrefix),
 				Owner: v,
 			})
+
+			delete(capiMachine.Annotations, k)
 		case strings.HasPrefix(k, capiPreTerminateAnnotationPrefix):
 			hooks.PreTerminate = append(hooks.PreTerminate, mapiv1.LifecycleHook{
 				Name:  strings.TrimPrefix(k, capiPreTerminateAnnotationPrefix),
 				Owner: v,
 			})
+
+			delete(capiMachine.Annotations, k)
 		}
 	}
 
