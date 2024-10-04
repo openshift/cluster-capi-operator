@@ -33,9 +33,11 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/mapi2capi"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/apitesting/fuzzer"
 	metafuzzer "k8s.io/apimachinery/pkg/apis/meta/fuzzer"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	runtimeserializer "k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/utils/ptr"
@@ -61,6 +63,153 @@ type MAPI2CAPIMachineSetConverterConstructor func(*mapiv1.MachineSet, *configv1.
 
 // StringFuzzer is a function that returns a random string.
 type StringFuzzer func(fuzz.Continue) string
+
+// capiToMapiMachineFuzzInput is a struct that holds the input for the CAPI to MAPI fuzz test.
+type capiToMapiMachineFuzzInput struct {
+	machine                  *capiv1.Machine
+	infra                    *configv1.Infrastructure
+	infraMachine             client.Object
+	infraCluster             client.Object
+	mapiConverterConstructor MAPI2CAPIMachineConverterConstructor
+	capiConverterConstructor CAPI2MAPIMachineConverterConstructor
+}
+
+// CAPI2MAPIMachineRoundTripFuzzTest is a generic test that can be used to test roundtrip conversion between CAPI and MAPI Machine objects.
+// It leverages fuzz testing to generate random CAPI objects and then converts them to MAPI objects and back to CAPI objects.
+// The test then compares the original CAPI object with the final CAPI object to ensure that the conversion is lossless.
+// Any lossy conversions must be accounted for within the fuzz functions passed in.
+func CAPI2MAPIMachineRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv1.Infrastructure, infraCluster, infraMachine client.Object, mapiConverter MAPI2CAPIMachineConverterConstructor, capiConverter CAPI2MAPIMachineConverterConstructor, fuzzerFuncs ...fuzzer.FuzzerFuncs) {
+	machineFuzzInputs := []TableEntry{}
+	fz := getFuzzer(scheme, fuzzerFuncs...)
+
+	for i := 0; i < 1000; i++ {
+		m := &capiv1.Machine{}
+		fz.Fuzz(m)
+		fz.Fuzz(infraMachine)
+
+		// The infraMachine should always have the same name, namespace labels and annotations as its parent machine.
+		// https://github.com/kubernetes-sigs/cluster-api/blob/f88d7ae5155700c2cc367b31ddcc151c9ad579e4/internal/controllers/machineset/machineset_controller.go#L575-L579
+		infraMachine.SetName(m.Name)
+		infraMachine.SetNamespace(m.Namespace)
+		infraMachine.SetLabels(m.GetLabels())
+		infraMachine.SetAnnotations(m.GetAnnotations())
+
+		in := capiToMapiMachineFuzzInput{
+			machine:                  m,
+			infra:                    infra,
+			infraMachine:             infraMachine,
+			infraCluster:             infraCluster,
+			mapiConverterConstructor: mapiConverter,
+			capiConverterConstructor: capiConverter,
+		}
+
+		machineFuzzInputs = append(machineFuzzInputs, Entry(fmt.Sprintf("%d", i), in))
+	}
+
+	DescribeTable("should be able to roundtrip fuzzed Machines", func(in capiToMapiMachineFuzzInput) { //nolint:dupl
+		capiConverter := in.capiConverterConstructor(in.machine, in.infraMachine, in.infraCluster)
+
+		mapiMachine, warnings, err := capiConverter.ToMachine()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(warnings).To(BeEmpty())
+
+		mapiConverter := in.mapiConverterConstructor(mapiMachine, in.infra)
+
+		capiMachine, infraMachine, warnings, err := mapiConverter.ToMachineAndInfrastructureMachine()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(warnings).To(BeEmpty())
+
+		// Break down the comparison to make it easier to debug sections that are failing conversion.
+
+		// Do not match on status yet, we do not support status conversion.
+		// Expect(capiMachine.Status).To(Equal(in.machine.Status))
+		// Expect(infraMachine.Status).To(Equal(in.infraMachine.Status))
+
+		Expect(capiMachine.TypeMeta).To(Equal(in.machine.TypeMeta))
+		Expect(capiMachine.ObjectMeta).To(Equal(in.machine.ObjectMeta))
+		Expect(capiMachine.Spec).To(Equal(in.machine.Spec))
+
+		infraMachineJSON, err := json.Marshal(infraMachine)
+		Expect(err).ToNot(HaveOccurred())
+
+		infraMachineUnstructured := &unstructured.Unstructured{}
+		Expect(json.Unmarshal(infraMachineJSON, infraMachineUnstructured)).To(Succeed())
+
+		Expect(infraMachine.GetObjectKind().GroupVersionKind()).To(Equal(in.infraMachine.GetObjectKind().GroupVersionKind()))
+		Expect(infraMachine).To(HaveField("ObjectMeta", testutils.MatchViaJSON(infraMachineUnstructured.Object["metadata"])))
+		Expect(infraMachine).To(HaveField("Spec", testutils.MatchViaJSON(infraMachineUnstructured.Object["spec"])))
+	}, machineFuzzInputs)
+}
+
+// capiToMapiMachineSetFuzzInput is a struct that holds the input for the CAPI to MAPI fuzz test.
+type capiToMapiMachineSetFuzzInput struct {
+	machineSet               *capiv1.MachineSet
+	infra                    *configv1.Infrastructure
+	infraMachineTemplate     client.Object
+	infraCluster             client.Object
+	mapiConverterConstructor MAPI2CAPIMachineSetConverterConstructor
+	capiConverterConstructor CAPI2MAPIMachineSetConverterConstructor
+}
+
+// CAPI2MAPIMachineSetRoundTripFuzzTest is a generic test that can be used to test roundtrip conversion between CAPI and MAPI MachineSet objects.
+// It leverages fuzz testing to generate random CAPI objects and then converts them to MAPI objects and back to CAPI objects.
+// The test then compares the original CAPI object with the final CAPI object to ensure that the conversion is lossless.
+// Any lossy conversions must be accounted for within the fuzz functions passed in.
+func CAPI2MAPIMachineSetRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv1.Infrastructure, infraCluster, infraMachineTemplate client.Object, mapiConverter MAPI2CAPIMachineSetConverterConstructor, capiConverter CAPI2MAPIMachineSetConverterConstructor, fuzzerFuncs ...fuzzer.FuzzerFuncs) {
+	machineFuzzInputs := []TableEntry{}
+	fz := getFuzzer(scheme, fuzzerFuncs...)
+
+	for i := 0; i < 1; i++ {
+		m := &capiv1.MachineSet{}
+		fz.Fuzz(m)
+		fz.Fuzz(infraMachineTemplate)
+
+		in := capiToMapiMachineSetFuzzInput{
+			machineSet:               m,
+			infra:                    infra,
+			infraMachineTemplate:     infraMachineTemplate,
+			infraCluster:             infraCluster,
+			mapiConverterConstructor: mapiConverter,
+			capiConverterConstructor: capiConverter,
+		}
+
+		machineFuzzInputs = append(machineFuzzInputs, Entry(fmt.Sprintf("%d", i), in))
+	}
+
+	DescribeTable("should be able to roundtrip fuzzed MachineSets", func(in capiToMapiMachineSetFuzzInput) { //nolint:dupl
+		capiConverter := in.capiConverterConstructor(in.machineSet, in.infraMachineTemplate, in.infraCluster)
+
+		mapiMachineSet, warnings, err := capiConverter.ToMachineSet()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(warnings).To(BeEmpty())
+
+		mapiConverter := in.mapiConverterConstructor(mapiMachineSet, in.infra)
+
+		capiMachineSet, infraMachineTemplate, warnings, err := mapiConverter.ToMachineSetAndMachineTemplate()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(warnings).To(BeEmpty())
+
+		// Break down the comparison to make it easier to debug sections that are failing conversion.
+
+		// Do not match on status yet, we do not support status conversion.
+		// Expect(capiMachineSet.Status).To(Equal(in.machineSet.Status))
+		// Expect(infraMachineTemplate.Status).To(Equal(in.infraMachineTemplate.Status))
+
+		Expect(capiMachineSet.TypeMeta).To(Equal(in.machineSet.TypeMeta))
+		Expect(capiMachineSet.ObjectMeta).To(Equal(in.machineSet.ObjectMeta))
+		Expect(capiMachineSet.Spec).To(Equal(in.machineSet.Spec))
+
+		infraMachineTemplateJSON, err := json.Marshal(infraMachineTemplate)
+		Expect(err).ToNot(HaveOccurred())
+
+		infraMachineTemplateUnstructured := &unstructured.Unstructured{}
+		Expect(json.Unmarshal(infraMachineTemplateJSON, infraMachineTemplateUnstructured)).To(Succeed())
+
+		Expect(infraMachineTemplate.GetObjectKind().GroupVersionKind()).To(Equal(in.infraMachineTemplate.GetObjectKind().GroupVersionKind()))
+		Expect(infraMachineTemplate).To(HaveField("ObjectMeta", testutils.MatchViaJSON(infraMachineTemplateUnstructured.Object["metadata"])))
+		Expect(infraMachineTemplate).To(HaveField("Spec", testutils.MatchViaJSON(infraMachineTemplateUnstructured.Object["spec"])))
+	}, machineFuzzInputs)
+}
 
 // mapiToCapiMachineFuzzInput is a struct that holds the input for the MAPI to CAPI fuzz test.
 type mapiToCapiMachineFuzzInput struct {
@@ -240,6 +389,99 @@ func ObjectMetaFuzzerFuncs(namespace string) fuzzer.FuzzerFuncs {
 				}
 				if o.Labels == nil {
 					o.Labels = map[string]string{}
+				}
+			},
+		}
+	}
+}
+
+// CAPIMachineFuzzerFuncs returns a set of fuzzer functions that can be used to fuzz MachineSpec objects.
+func CAPIMachineFuzzerFuncs(providerIDFuzz StringFuzzer, infraKind, infraAPIVersion, clusterName string) fuzzer.FuzzerFuncs {
+	return func(codecs runtimeserializer.CodecFactory) []interface{} {
+		return []interface{}{
+			func(b *capiv1.Bootstrap, c fuzz.Continue) {
+				c.FuzzNoCustom(b)
+
+				// Clear fields that are not supported in the bootstrap spec.
+				b.ConfigRef = nil
+
+				// If we fuzzed an empty string, nil it out to match the behaviour of the converter.
+				if b.DataSecretName != nil && *b.DataSecretName == "" {
+					b.DataSecretName = nil
+				}
+			},
+			func(m *capiv1.MachineSpec, c fuzz.Continue) {
+				c.FuzzNoCustom(m)
+
+				m.ClusterName = clusterName
+				m.ProviderID = ptr.To(providerIDFuzz(c))
+
+				// Clear fields that are not supported in the machine spec.
+				m.Version = nil
+
+				// Clear fields that are not yet supported in the conversion.
+				// TODO(OCPCLOUD-2715): Implement support for node draining options in MAPI.
+				m.NodeDrainTimeout = nil
+				m.NodeVolumeDetachTimeout = nil
+				m.NodeDeletionTimeout = nil
+
+				// Clear fields that are zero valued.
+				if m.FailureDomain != nil && *m.FailureDomain == "" {
+					m.FailureDomain = nil
+				}
+			},
+			func(m *capiv1.Machine, c fuzz.Continue) {
+				c.FuzzNoCustom(m)
+
+				// The reference from a Machine to the InfraMachine should
+				// always use the same name and namespace as the Machine itself.
+				// The kind and APIVersion should be set to the InfraMachine's kind and APIVersion.
+				// This is fixed in the conversion so we fix it here.
+				// Other fields are not required for conversion.
+				m.Spec.InfrastructureRef = corev1.ObjectReference{
+					APIVersion: infraAPIVersion,
+					Kind:       infraKind,
+					Name:       m.Name,
+					Namespace:  m.Namespace,
+				}
+			},
+		}
+	}
+}
+
+// CAPIMachineSetFuzzerFuncs returns a set of fuzzer functions that can be used to fuzz MachineSetSpec objects.
+func CAPIMachineSetFuzzerFuncs(infraTemplateKind, infraAPIVersion, clusterName string) fuzzer.FuzzerFuncs {
+	return func(codecs runtimeserializer.CodecFactory) []interface{} {
+		return []interface{}{
+			func(t *capiv1.MachineTemplateSpec, c fuzz.Continue) {
+				c.FuzzNoCustom(t)
+
+				// Annotations and labels maps should be non-nil (Since the conversion initialises them).
+				if t.Annotations == nil {
+					t.Annotations = map[string]string{}
+				}
+				if t.Labels == nil {
+					t.Labels = map[string]string{}
+				}
+			},
+			func(m *capiv1.MachineSetSpec, c fuzz.Continue) {
+				c.FuzzNoCustom(m)
+
+				m.ClusterName = clusterName
+			},
+			func(m *capiv1.MachineSet, c fuzz.Continue) {
+				c.FuzzNoCustom(m)
+
+				// The reference from a MachineSet to the InfraMachine should
+				// always use the same name and namespace as the Machine itself.
+				// The kind and APIVersion should be set to the InfraMachineTemplate's kind and APIVersion.
+				// This is fixed in the conversion so we fix it here.
+				// Other fields are not required for conversion.
+				m.Spec.Template.Spec.InfrastructureRef = corev1.ObjectReference{
+					APIVersion: infraAPIVersion,
+					Kind:       infraTemplateKind,
+					Name:       m.Name,
+					Namespace:  m.Namespace,
 				}
 			},
 		}

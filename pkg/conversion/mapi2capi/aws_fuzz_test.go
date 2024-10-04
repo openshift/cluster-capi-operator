@@ -39,6 +39,10 @@ import (
 	capiv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
+const (
+	mapiNamespace = "openshift-machine-api"
+)
+
 var _ = Describe("AWS Fuzz (mapi2capi)", func() {
 	infra := &configv1.Infrastructure{
 		Spec: configv1.InfrastructureSpec{},
@@ -70,7 +74,7 @@ var _ = Describe("AWS Fuzz (mapi2capi)", func() {
 			infraCluster,
 			mapi2capi.FromAWSMachineAndInfra,
 			fromMachineAndAWSMachineAndAWSCluster,
-			conversiontest.ObjectMetaFuzzerFuncs("openshift-machine-api"),
+			conversiontest.ObjectMetaFuzzerFuncs(mapiNamespace),
 			conversiontest.MAPIMachineFuzzerFuncs(&mapiv1.AWSMachineProviderConfig{}, awsProviderIDFuzzer),
 			awsProviderSpecFuzzerFuncs,
 		)
@@ -93,7 +97,7 @@ var _ = Describe("AWS Fuzz (mapi2capi)", func() {
 			infraCluster,
 			mapi2capi.FromAWSMachineSetAndInfra,
 			fromMachineSetAndAWSMachineTemplateAndAWSCluster,
-			conversiontest.ObjectMetaFuzzerFuncs("openshift-machine-api"),
+			conversiontest.ObjectMetaFuzzerFuncs(mapiNamespace),
 			conversiontest.MAPIMachineFuzzerFuncs(&mapiv1.AWSMachineProviderConfig{}, awsProviderIDFuzzer),
 			conversiontest.MAPIMachineSetFuzzerFuncs(),
 			awsProviderSpecFuzzerFuncs,

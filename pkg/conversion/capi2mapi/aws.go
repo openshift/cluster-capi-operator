@@ -292,10 +292,10 @@ func convertAWSMetadataOptionsToMAPI(fldPath *field.Path, capiMetadataOpts *capa
 		errors = append(errors, field.Invalid(fldPath.Child("httpTokens"), capiMetadataOpts.HTTPTokens, errUnsupportedHTTPTokensState))
 	}
 
-	if capiMetadataOpts.HTTPEndpoint != "" && capiMetadataOpts.HTTPEndpoint != "enabled" {
+	if capiMetadataOpts.HTTPEndpoint != "" && capiMetadataOpts.HTTPEndpoint != capav1.InstanceMetadataEndpointStateEnabled {
 		// This defaults to "enabled" in CAPI and on the AWS side, so if it's not "enabled", the user explicitly chose another option.
 		// TODO(OCPCLOUD-2710): We should implement this within MAPI to create feature parity.
-		errors = append(errors, field.Invalid(fldPath.Child("httpEndpoint"), capiMetadataOpts.HTTPEndpoint, "httpEndpoint values other than \"enabled\" are not supported"))
+		errors = append(errors, field.Invalid(fldPath.Child("httpEndpoint"), capiMetadataOpts.HTTPEndpoint, fmt.Sprintf("httpEndpoint values other than %q are not supported", capav1.InstanceMetadataEndpointStateEnabled)))
 	}
 
 	if capiMetadataOpts.HTTPPutResponseHopLimit != 0 && capiMetadataOpts.HTTPPutResponseHopLimit != 1 {
@@ -304,10 +304,10 @@ func convertAWSMetadataOptionsToMAPI(fldPath *field.Path, capiMetadataOpts *capa
 		errors = append(errors, field.Invalid(fldPath.Child("httpPutResponseHopLimit"), capiMetadataOpts.HTTPPutResponseHopLimit, "httpPutResponseHopLimit values other than 1 are not supported"))
 	}
 
-	if capiMetadataOpts.InstanceMetadataTags != "" && capiMetadataOpts.InstanceMetadataTags != "disabled" {
+	if capiMetadataOpts.InstanceMetadataTags != "" && capiMetadataOpts.InstanceMetadataTags != capav1.InstanceMetadataEndpointStateDisabled {
 		// This defaults to "disabled" in CAPI and on the AWS side, so if it's not "disabled", the user explicitly chose another option.
 		// TODO(OCPCLOUD-2710): We should implement this within MAPI to create feature parity.
-		errors = append(errors, field.Invalid(fldPath.Child("instanceMetadataTags"), capiMetadataOpts.InstanceMetadataTags, "instanceMetadataTags values other than \"disabled\" are not supported"))
+		errors = append(errors, field.Invalid(fldPath.Child("instanceMetadataTags"), capiMetadataOpts.InstanceMetadataTags, fmt.Sprintf("instanceMetadataTags values other than %q are not supported", capav1.InstanceMetadataEndpointStateDisabled)))
 	}
 
 	metadataOpts := mapiv1.MetadataServiceOptions{
@@ -499,6 +499,18 @@ func handleUnsupportedAWSMachineFields(fldPath *field.Path, spec capav1.AWSMachi
 	if spec.PrivateDNSName != nil {
 		// TODO(OCPCLOUD-2711): Not required for our use case, add VAP to prevent usage.
 		errs = append(errs, field.Invalid(fldPath.Child("privateDNSName"), spec.PrivateDNSName, "privateDNSName is not supported"))
+	}
+
+	if spec.Ignition != nil {
+		if spec.Ignition.Proxy != nil {
+			// TODO(OCPCLOUD-2711): Ignition proxy is not configurable in MAPI. Not required for our use case, add VAP to prevent usage.
+			errs = append(errs, field.Invalid(fldPath.Child("ignition", "proxy"), spec.Ignition.Proxy, "ignition proxy is not supported"))
+		}
+
+		if spec.Ignition.TLS != nil {
+			// TODO(OCPCLOUD-2711): Ignition TLS is not configurable in MAPI. Not required for our use case, add VAP to prevent usage.
+			errs = append(errs, field.Invalid(fldPath.Child("ignition", "tls"), spec.Ignition.TLS, "ignition tls is not supported"))
+		}
 	}
 
 	return errs
