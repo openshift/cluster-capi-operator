@@ -40,14 +40,6 @@ var (
 	errUnexpectedObjectTypeForMachine = errors.New("unexpected type for capaMachineObj")
 )
 
-const (
-	errInfrastructureInfrastructureNameCannotBeNil  = "infrastructure cannot be nil and infrastructure.Status.InfrastructureName cannot be empty"
-	errUnableToFindAMIReference                     = "unable to find a valid AMI resource reference"
-	errUnableToConvertUnsupportedAMIFilterReference = "unable to convert AMI Filters reference. Not supported in CAPI"
-	errUnableToConvertUnsupportedAMIARNReference    = "unable to convert AMI ARN reference. Not supported in CAPI"
-	errUnableToFindInstanceID                       = "unable to find InstanceID in ProviderID"
-)
-
 // awsMachineAndInfra stores the details of a Machine API AWSMachine and Infra.
 type awsMachineAndInfra struct {
 	machine        *mapiv1.Machine
@@ -119,7 +111,7 @@ func (m *awsMachineAndInfra) toMachineAndInfrastructureMachine() (*capiv1.Machin
 	if capiMachine.Spec.ProviderID != nil {
 		instanceID := instanceIDFromProviderID(*capiMachine.Spec.ProviderID)
 		if instanceID == "" {
-			errs = append(errs, field.Invalid(field.NewPath("spec", "providerID"), capiMachine.Spec.ProviderID, errUnableToFindInstanceID))
+			errs = append(errs, field.Invalid(field.NewPath("spec", "providerID"), capiMachine.Spec.ProviderID, "unable to find InstanceID in ProviderID"))
 		} else {
 			capaMachine.Spec.InstanceID = ptr.To(instanceID)
 		}
@@ -138,7 +130,7 @@ func (m *awsMachineAndInfra) toMachineAndInfrastructureMachine() (*capiv1.Machin
 
 	// Popluate the CAPI Machine ClusterName from the OCP Infrastructure object.
 	if m.infrastructure == nil || m.infrastructure.Status.InfrastructureName == "" {
-		errs = append(errs, field.Invalid(field.NewPath("infrastructure", "status", "infrastructureName"), m.infrastructure.Status.InfrastructureName, errInfrastructureInfrastructureNameCannotBeNil))
+		errs = append(errs, field.Invalid(field.NewPath("infrastructure", "status", "infrastructureName"), m.infrastructure.Status.InfrastructureName, "infrastructure cannot be nil and infrastructure.Status.InfrastructureName cannot be empty"))
 	} else {
 		capiMachine.Spec.ClusterName = m.infrastructure.Status.InfrastructureName
 	}
@@ -189,7 +181,7 @@ func (m *awsMachineSetAndInfra) ToMachineSetAndMachineTemplate() (*capiv1.Machin
 	capiMachineSet.Spec.Template.Spec.InfrastructureRef.Name = capaMachineTemplate.Name
 
 	if m.infrastructure == nil || m.infrastructure.Status.InfrastructureName == "" {
-		errs = append(errs, field.Invalid(field.NewPath("infrastructure", "status", "infrastructureName"), m.infrastructure.Status.InfrastructureName, errInfrastructureInfrastructureNameCannotBeNil))
+		errs = append(errs, field.Invalid(field.NewPath("infrastructure", "status", "infrastructureName"), m.infrastructure.Status.InfrastructureName, "infrastructure cannot be nil and infrastructure.Status.InfrastructureName cannot be empty"))
 	} else {
 		capiMachineSet.Spec.Template.Spec.ClusterName = m.infrastructure.Status.InfrastructureName
 		capiMachineSet.Spec.ClusterName = m.infrastructure.Status.InfrastructureName
@@ -352,18 +344,18 @@ func awsMachineToAWSMachineTemplate(awsMachine *capav1.AWSMachine, name string, 
 
 func convertAWSAMIResourceReferenceToCAPI(fldPath *field.Path, amiRef mapiv1.AWSResourceReference) (capav1.AMIReference, *field.Error) {
 	if amiRef.ARN != nil {
-		return capav1.AMIReference{}, field.Invalid(fldPath.Child("arn"), amiRef.ARN, errUnableToConvertUnsupportedAMIARNReference)
+		return capav1.AMIReference{}, field.Invalid(fldPath.Child("arn"), amiRef.ARN, "unable to convert AMI ARN reference. Not supported in CAPI")
 	}
 
 	if len(amiRef.Filters) > 0 {
-		return capav1.AMIReference{}, field.Invalid(fldPath.Child("filters"), amiRef.Filters, errUnableToConvertUnsupportedAMIFilterReference)
+		return capav1.AMIReference{}, field.Invalid(fldPath.Child("filters"), amiRef.Filters, "unable to convert AMI Filters reference. Not supported in CAPI")
 	}
 
 	if amiRef.ID != nil {
 		return capav1.AMIReference{ID: amiRef.ID}, nil
 	}
 
-	return capav1.AMIReference{}, field.Invalid(fldPath, amiRef, errUnableToFindAMIReference)
+	return capav1.AMIReference{}, field.Invalid(fldPath, amiRef, "unable to find a valid AMI resource reference")
 }
 
 func convertAWSTagsToCAPI(mapiTags []mapiv1.TagSpecification) capav1.Tags {
@@ -386,7 +378,7 @@ func convertMetadataServiceOptionstoCAPI(fldPath *field.Path, metad mapiv1.Metad
 	case "":
 		// This means it's optional on both sides, so no need to set anything.
 	default:
-		return &capav1.InstanceMetadataOptions{}, field.Invalid(fldPath.Child("authentication"), metad.Authentication, "unsupported value")
+		return &capav1.InstanceMetadataOptions{}, field.Invalid(fldPath.Child("authentication"), metad.Authentication, "unsupported authentication value")
 	}
 
 	capiMetadataOpts := &capav1.InstanceMetadataOptions{
@@ -436,10 +428,20 @@ func convertAWSBlockDeviceMappingSpecToCAPI(fldPath *field.Path, mapiBlockDevice
 	warnings := []string{}
 
 	for i, mapping := range mapiBlockDeviceMapping {
+		if mapping.NoDevice != nil {
+			// Field exists in the API but is never used within the codebase.
+			errs = append(errs, field.Invalid(fldPath.Index(i).Child("noDevice"), mapping.NoDevice, "noDevice is not supported"))
+		}
+
+		if mapping.VirtualName != nil {
+			// Field exists in the API but is never used within the codebase.
+			errs = append(errs, field.Invalid(fldPath.Index(i).Child("virtualName"), mapping.VirtualName, "virtualName is not supported"))
+		}
+
 		if mapping.EBS == nil {
 			// MAPA ignores any disk that is missing the EBS configuration.
 			// See https://github.com/openshift/machine-api-provider-aws/blob/a7b3d12db988bd2bebbabd6c2e80147511b949e7/pkg/actuators/machine/instances.go#L287-L289.
-			warnings = append(warnings, field.Invalid(fldPath.Index(i), mapping, "missing ebs configuration for block device").Error())
+			warnings = append(warnings, field.Invalid(fldPath.Index(i).Child("ebs"), mapping.EBS, "missing ebs configuration for block device").Error())
 			continue
 		}
 
@@ -451,16 +453,6 @@ func convertAWSBlockDeviceMappingSpecToCAPI(fldPath *field.Path, mapiBlockDevice
 			rootVolume = &volume
 
 			continue
-		}
-
-		if mapping.NoDevice != nil {
-			// Field exists in the API but is never used within the codebase.
-			errs = append(errs, field.Invalid(fldPath.Index(i).Child("noDevice"), mapping.NoDevice, "noDevice is not supported"))
-		}
-
-		if mapping.VirtualName != nil {
-			// Field exists in the API but is never used within the codebase.
-			errs = append(errs, field.Invalid(fldPath.Index(i).Child("virtualName"), mapping.VirtualName, "virtualName is not supported"))
 		}
 
 		volume, warn, err := blockDeviceMappingSpecToVolume(fldPath.Index(i), mapping, false)

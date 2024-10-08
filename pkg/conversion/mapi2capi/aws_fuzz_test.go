@@ -27,7 +27,7 @@ import (
 	mapiv1 "github.com/openshift/api/machine/v1beta1"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/capi2mapi"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/mapi2capi"
-	conversiontest "github.com/openshift/cluster-capi-operator/pkg/conversion/test"
+	conversiontest "github.com/openshift/cluster-capi-operator/pkg/conversion/test/fuzz"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtimeserializer "k8s.io/apimachinery/pkg/runtime/serializer"
