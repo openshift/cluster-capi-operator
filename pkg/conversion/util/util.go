@@ -18,6 +18,9 @@ package util
 import (
 	"strings"
 
+	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/types"
+
 	capiv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
@@ -29,4 +32,13 @@ func IsCAPIManagedLabel(key string) bool {
 	return dnsSubdomainOrName == capiv1.NodeRoleLabelPrefix ||
 		dnsSubdomainOrName == capiv1.NodeRestrictionLabelDomain || strings.HasSuffix(dnsSubdomainOrName, "."+capiv1.NodeRestrictionLabelDomain) ||
 		dnsSubdomainOrName == capiv1.ManagedNodeLabelDomain || strings.HasSuffix(dnsSubdomainOrName, "."+capiv1.ManagedNodeLabelDomain)
+}
+
+// MatchOptionalErrorDetail matches an actual error detail or a nil error detail.
+func MatchOptionalErrorDetail(errDetail string) types.GomegaMatcher {
+	if errDetail == "" {
+		return Not(HaveOccurred())
+	}
+
+	return MatchError(ContainSubstring(errDetail))
 }

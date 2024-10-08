@@ -41,11 +41,26 @@ var (
 )
 
 const (
-	errInfrastructureInfrastructureNameCannotBeNil  = "infrastructure cannot be nil and infrastructure.Status.InfrastructureName cannot be empty"
-	errUnableToFindAMIReference                     = "unable to find a valid AMI resource reference"
-	errUnableToConvertUnsupportedAMIFilterReference = "unable to convert AMI Filters reference. Not supported in CAPI"
-	errUnableToConvertUnsupportedAMIARNReference    = "unable to convert AMI ARN reference. Not supported in CAPI"
-	errUnableToFindInstanceID                       = "unable to find InstanceID in ProviderID"
+	// Errors.
+	errInfrastructureInfrastructureNameCannotBeNil                   = "infrastructure cannot be nil and infrastructure.Status.InfrastructureName cannot be empty"
+	errUnableToFindAMIReference                                      = "unable to find a valid AMI resource reference"
+	errUnableToConvertUnsupportedAMIFilterReference                  = "unable to convert AMI Filters reference. Not supported in CAPI"
+	errUnableToConvertUnsupportedAMIARNReference                     = "unable to convert AMI ARN reference. Not supported in CAPI"
+	errUnableToFindInstanceID                                        = "unable to find InstanceID in ProviderID"
+	errLoadbalancersNotSupported                                     = "loadBalancers are not supported"
+	errNetworkInterfaceUnsupportedValue                              = "networkInterface type must be one of ENA or omitted, unsupported value"
+	errDeviceIndexMustBeZero                                         = "deviceIndex must be 0 or unset"
+	errMetadataNotSupported                                          = "metadata is not supported"
+	errUnsupportedAuthenticationValue                                = "unsupported authentication value"
+	errNonRootVolumesMustBeDeletedOnTerminationUnsupportedValueFalse = "non-root volumes must be deleted on termination, unsupported value false"
+	errVolumeSizeRequiredButMissing                                  = "volumeSize is required, but is missing"
+	errPlacementRegionShouldMatchInfrastructureStatusValue           = "placement.region should match infrastructure status value"
+	errVirtualNameNotSupported                                       = "virtualName is not supported"
+	errNoDeviceIsNotSupported                                        = "noDevice is not supported"
+
+	// Warnings.
+	warnRootVolumeMustBeDeletedOnTerminationIgnoringValueFalse = "root volume must be deleted on termination, ignoring invalid value false"
+	warnMissingBlockDeviceConf                                 = "missing ebs configuration for block device"
 )
 
 // awsMachineAndInfra stores the details of a Machine API AWSMachine and Infra.
@@ -277,30 +292,30 @@ func (m *awsMachineAndInfra) toAWSMachine(providerSpec mapiv1.AWSMachineProvider
 		m.infrastructure.Status.PlatformStatus.AWS.Region != "" &&
 		providerSpec.Placement.Region != m.infrastructure.Status.PlatformStatus.AWS.Region {
 		// Assuming that the platform status has a region, we expect all MachineSets to match that region, if they don't, this is an error on the users part.
-		errs = append(errs, field.Invalid(fldPath.Child("placement", "region"), providerSpec.Placement.Region, fmt.Sprintf("placement.region should match infrastructure status value %q", m.infrastructure.Status.PlatformStatus.AWS.Region)))
+		errs = append(errs, field.Invalid(fldPath.Child("placement", "region"), providerSpec.Placement.Region, fmt.Sprintf("%s %q", errPlacementRegionShouldMatchInfrastructureStatusValue, m.infrastructure.Status.PlatformStatus.AWS.Region)))
 	}
 
 	if !reflect.DeepEqual(providerSpec.ObjectMeta, metav1.ObjectMeta{}) {
 		// We don't support setting the object metadata in the provider spec.
 		// It's only present for the purpose of the raw extension and doesn't have any functionality.
-		errs = append(errs, field.Invalid(fldPath.Child("metadata"), providerSpec.ObjectMeta, "metadata is not supported"))
+		errs = append(errs, field.Invalid(fldPath.Child("metadata"), providerSpec.ObjectMeta, errMetadataNotSupported))
 	}
 
 	if providerSpec.DeviceIndex != 0 {
 		// In MAPA, valid machines only have a DeviceIndex value of 0 or unset. Since only a single network interface is supported, which must have a device index of 0.
 		// If a machine is created with a DeviceIndex value other than 0, it will be in a failed state.
 		// For more context, see OCPCLOUD-2707.
-		errs = append(errs, field.Invalid(fldPath.Child("deviceIndex"), providerSpec.DeviceIndex, "deviceIndex must be 0 or unset"))
+		errs = append(errs, field.Invalid(fldPath.Child("deviceIndex"), providerSpec.DeviceIndex, errDeviceIndexMustBeZero))
 	}
 
 	if providerSpec.NetworkInterfaceType != "" && providerSpec.NetworkInterfaceType != mapiv1.AWSENANetworkInterfaceType {
 		// TODO(OCPCLOUD-2708): We need to upstream the network interface choice to allow the elastic fabric adapter.
-		errs = append(errs, field.Invalid(fldPath.Child("networkInterfaceType"), providerSpec.NetworkInterfaceType, "networkInterface type must be one of ENA or omitted, unsupported value"))
+		errs = append(errs, field.Invalid(fldPath.Child("networkInterfaceType"), providerSpec.NetworkInterfaceType, errNetworkInterfaceUnsupportedValue))
 	}
 
 	if len(providerSpec.LoadBalancers) > 0 {
 		// TODO(OCPCLOUD-2709): CAPA only applies load balancers to the control plane nodes. We should always reject LBs on non-control plane and work out how to connect the control plane LBs correctly otherwise.
-		errs = append(errs, field.Invalid(fldPath.Child("loadBalancers"), providerSpec.LoadBalancers, "loadBalancers are not supported"))
+		errs = append(errs, field.Invalid(fldPath.Child("loadBalancers"), providerSpec.LoadBalancers, errLoadbalancersNotSupported))
 	}
 
 	return &capav1.AWSMachine{
@@ -386,7 +401,7 @@ func convertMetadataServiceOptionstoCAPI(fldPath *field.Path, metad mapiv1.Metad
 	case "":
 		// This means it's optional on both sides, so no need to set anything.
 	default:
-		return &capav1.InstanceMetadataOptions{}, field.Invalid(fldPath.Child("authentication"), metad.Authentication, "unsupported value")
+		return &capav1.InstanceMetadataOptions{}, field.Invalid(fldPath.Child("authentication"), metad.Authentication, errUnsupportedAuthenticationValue)
 	}
 
 	capiMetadataOpts := &capav1.InstanceMetadataOptions{
@@ -436,10 +451,20 @@ func convertAWSBlockDeviceMappingSpecToCAPI(fldPath *field.Path, mapiBlockDevice
 	warnings := []string{}
 
 	for i, mapping := range mapiBlockDeviceMapping {
+		if mapping.NoDevice != nil {
+			// Field exists in the API but is never used within the codebase.
+			errs = append(errs, field.Invalid(fldPath.Index(i).Child("noDevice"), mapping.NoDevice, errNoDeviceIsNotSupported))
+		}
+
+		if mapping.VirtualName != nil {
+			// Field exists in the API but is never used within the codebase.
+			errs = append(errs, field.Invalid(fldPath.Index(i).Child("virtualName"), mapping.VirtualName, errVirtualNameNotSupported))
+		}
+
 		if mapping.EBS == nil {
 			// MAPA ignores any disk that is missing the EBS configuration.
 			// See https://github.com/openshift/machine-api-provider-aws/blob/a7b3d12db988bd2bebbabd6c2e80147511b949e7/pkg/actuators/machine/instances.go#L287-L289.
-			warnings = append(warnings, field.Invalid(fldPath.Index(i), mapping, "missing ebs configuration for block device").Error())
+			warnings = append(warnings, field.Invalid(fldPath.Index(i), mapping, warnMissingBlockDeviceConf).Error())
 			continue
 		}
 
@@ -451,16 +476,6 @@ func convertAWSBlockDeviceMappingSpecToCAPI(fldPath *field.Path, mapiBlockDevice
 			rootVolume = &volume
 
 			continue
-		}
-
-		if mapping.NoDevice != nil {
-			// Field exists in the API but is never used within the codebase.
-			errs = append(errs, field.Invalid(fldPath.Index(i).Child("noDevice"), mapping.NoDevice, "noDevice is not supported"))
-		}
-
-		if mapping.VirtualName != nil {
-			// Field exists in the API but is never used within the codebase.
-			errs = append(errs, field.Invalid(fldPath.Index(i).Child("virtualName"), mapping.VirtualName, "virtualName is not supported"))
 		}
 
 		volume, warn, err := blockDeviceMappingSpecToVolume(fldPath.Index(i), mapping, false)
@@ -478,7 +493,7 @@ func blockDeviceMappingSpecToVolume(fldPath *field.Path, bdm mapiv1.BlockDeviceM
 	warnings := []string{}
 
 	if bdm.EBS == nil {
-		return capav1.Volume{}, warnings, field.ErrorList{field.Invalid(fldPath.Child("ebs"), bdm.EBS, "missing ebs configuration for block device")}
+		return capav1.Volume{}, warnings, field.ErrorList{field.Invalid(fldPath.Child("ebs"), bdm.EBS, warnMissingBlockDeviceConf)}
 	}
 
 	capiKMSKey := convertKMSKeyToCAPI(bdm.EBS.KMSKey)
@@ -486,14 +501,14 @@ func blockDeviceMappingSpecToVolume(fldPath *field.Path, bdm mapiv1.BlockDeviceM
 	if bdm.EBS.VolumeSize == nil {
 		// The volume size is required in CAPA, we will have to return an error, until we can come up with an appropriate way to handle this.
 		// TODO(OCPCLOUD-2718): Either find a way to handle the required value, or, force users to set the value.
-		errs = append(errs, field.Required(fldPath.Child("ebs", "volumeSize"), "volumeSize is required, but is missing"))
+		errs = append(errs, field.Required(fldPath.Child("ebs", "volumeSize"), errVolumeSizeRequiredButMissing))
 	}
 
 	if rootVolume && !ptr.Deref(bdm.EBS.DeleteOnTermination, true) {
-		warnings = append(warnings, field.Invalid(fldPath.Child("ebs", "deleteOnTermination"), bdm.EBS.DeleteOnTermination, "root volume must be deleted on termination, ignoring invalid value false").Error())
+		warnings = append(warnings, field.Invalid(fldPath.Child("ebs", "deleteOnTermination"), bdm.EBS.DeleteOnTermination, warnRootVolumeMustBeDeletedOnTerminationIgnoringValueFalse).Error())
 	} else if !rootVolume && !ptr.Deref(bdm.EBS.DeleteOnTermination, true) {
 		// TODO(OCPCLOUD-2717): We should support a non-true value for non-root volumes for feature parity.
-		errs = append(errs, field.Invalid(fldPath.Child("ebs", "deleteOnTermination"), bdm.EBS.DeleteOnTermination, "non-root volumes must be deleted on termination, unsupported value false"))
+		errs = append(errs, field.Invalid(fldPath.Child("ebs", "deleteOnTermination"), bdm.EBS.DeleteOnTermination, errNonRootVolumesMustBeDeletedOnTerminationUnsupportedValueFalse))
 	}
 
 	if len(errs) > 0 {
