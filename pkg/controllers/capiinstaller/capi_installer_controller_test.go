@@ -92,7 +92,6 @@ var _ = Describe("extractManifests", func() {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		It(tc.name, func() {
 			manifests, err := extractManifests(tc.configMap)
 
