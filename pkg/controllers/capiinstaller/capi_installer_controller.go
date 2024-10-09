@@ -58,6 +58,7 @@ const (
 	capiInstallerControllerAvailableCondition = "CapiInstallerControllerAvailable"
 	capiInstallerControllerDegradedCondition  = "CapiInstallerControllerDegraded"
 
+	controllerName                    = "CapiInstallerController"
 	defaultCAPINamespace              = "openshift-cluster-api"
 	providerConfigMapLabelVersionKey  = "provider.cluster.x-k8s.io/version"
 	providerConfigMapLabelTypeKey     = "provider.cluster.x-k8s.io/type"
@@ -90,7 +91,7 @@ type CapiInstallerController struct {
 
 // Reconcile reconciles the cluster-api ClusterOperator object.
 func (r *CapiInstallerController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	log := ctrl.LoggerFrom(ctx).WithName("CapiInstallerController")
+	log := ctrl.LoggerFrom(ctx).WithName(controllerName)
 
 	res, err := r.reconcile(ctx, log)
 	if err != nil {
@@ -319,6 +320,7 @@ func (r *CapiInstallerController) setDegradedCondition(ctx context.Context, log 
 // SetupWithManager sets up the controller with the Manager.
 func (r *CapiInstallerController) SetupWithManager(mgr ctrl.Manager) error {
 	build := ctrl.NewControllerManagedBy(mgr).
+		Named(controllerName).
 		For(&configv1.ClusterOperator{}, builder.WithPredicates(clusterOperatorPredicates())).
 		Watches(
 			&corev1.ConfigMap{},

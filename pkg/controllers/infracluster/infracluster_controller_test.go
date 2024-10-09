@@ -29,9 +29,11 @@ import (
 	corev1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/core/v1"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/config"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
@@ -219,6 +221,9 @@ func startManager(mgrCtx context.Context, mgrDone chan struct{}, ocpInfra *confi
 			Host:    testEnv.WebhookInstallOptions.LocalServingHost,
 			CertDir: testEnv.WebhookInstallOptions.LocalServingCertDir,
 		}),
+		Controller: config.Controller{
+			SkipNameValidation: ptr.To(true),
+		},
 	})
 	Expect(err).ToNot(HaveOccurred(), "Manager should be able to be created")
 

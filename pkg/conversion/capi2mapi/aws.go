@@ -447,7 +447,7 @@ func convertAWSPlacementGroupPartition(in int64) *int32 {
 		return nil
 	}
 
-	return ptr.To(int32(in))
+	return ptr.To(int32(in)) //nolint:gosec
 }
 
 // handleUnsupportedAWSMachineFields returns an error for every present field in the AWSMachineSpec that
