@@ -36,8 +36,9 @@ import (
 )
 
 const (
-	capiNamespace string = "openshift-cluster-api"
-	mapiNamespace string = "openshift-machine-api"
+	capiNamespace  string = "openshift-cluster-api"
+	mapiNamespace  string = "openshift-machine-api"
+	controllerName string = "MachineSyncController"
 )
 
 var (
@@ -75,6 +76,7 @@ func (r *MachineSyncReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	}
 
 	if err := ctrl.NewControllerManagedBy(mgr).
+		Named(controllerName).
 		For(&machinev1beta1.Machine{}, builder.WithPredicates(util.FilterNamespace(r.MAPINamespace))).
 		Watches(
 			&capiv1beta1.Machine{},

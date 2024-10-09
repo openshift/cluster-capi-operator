@@ -41,6 +41,7 @@ import (
 )
 
 const (
+	controllerName  = "KubeconfigController"
 	tokenSecretName = "cluster-capi-operator-secret" //nolint
 )
 
@@ -55,6 +56,7 @@ type KubeconfigReconciler struct {
 // SetupWithManager sets up the controller with the Manager.
 func (r *KubeconfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if err := ctrl.NewControllerManagedBy(mgr).
+		Named(controllerName).
 		For(
 			&corev1.Secret{},
 			builder.WithPredicates(tokenSecretPredicate()),
@@ -73,7 +75,7 @@ func (r *KubeconfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 // Reconcile reconciles the kubeconfig secret.
 func (r *KubeconfigReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (ctrl.Result, error) {
-	log := ctrl.LoggerFrom(ctx).WithName("KubeconfigController")
+	log := ctrl.LoggerFrom(ctx).WithName(controllerName)
 
 	infra := &configv1.Infrastructure{}
 	if err := r.Get(ctx, client.ObjectKey{Name: controllers.InfrastructureResourceName}, infra); err != nil {

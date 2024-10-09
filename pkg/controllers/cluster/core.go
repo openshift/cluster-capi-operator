@@ -30,6 +30,8 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 )
 
+const controllerName = "CoreClusterController"
+
 // CoreClusterReconciler reconciles a Cluster object.
 type CoreClusterReconciler struct {
 	operatorstatus.ClusterOperatorStatusClient
@@ -39,6 +41,7 @@ type CoreClusterReconciler struct {
 // SetupWithManager sets the CoreClusterReconciler controller up with the given manager.
 func (r *CoreClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if err := ctrl.NewControllerManagedBy(mgr).
+		Named(controllerName).
 		For(r.Cluster).
 		Complete(r); err != nil {
 		return fmt.Errorf("failed to create controller: %w", err)
@@ -49,7 +52,7 @@ func (r *CoreClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 // Reconcile reconciles the core cluster object for the openshift-cluster-api namespace.
 func (r *CoreClusterReconciler) Reconcile(ctx context.Context, req reconcile.Request) (ctrl.Result, error) {
-	log := ctrl.LoggerFrom(ctx).WithName("CoreClusterController")
+	log := ctrl.LoggerFrom(ctx).WithName(controllerName)
 
 	cluster := &clusterv1.Cluster{}
 
