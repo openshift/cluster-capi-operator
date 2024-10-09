@@ -27,7 +27,7 @@ linters:
     - errorlint
     - err113
     - exhaustive
-    - exportloopref
+    - copyloopvar
     - forcetypeassert
     - funlen
     - gochecknoglobals
