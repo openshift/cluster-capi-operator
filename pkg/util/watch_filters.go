@@ -21,14 +21,20 @@ import (
 	"fmt"
 
 	"k8s.io/klog/v2"
+	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-// CAPIMachineToMAPIMachine maps a CAPI Machine to a MAPI machine in the
-// namespace provided.
-func CAPIMachineToMAPIMachine(namespace string) func(context.Context, client.Object) []reconcile.Request {
+const machineSetKind = "MachineSet"
+
+// RewriteNamespace takes a client.Object and returns a reconcile.Request for
+// it in the namespace provided.
+//
+// It is intended for use with CAPI Machines and MachineSet requests, where we expect
+// there to be a mirror object in the MAPI namespace.
+func RewriteNamespace(namespace string) func(context.Context, client.Object) []reconcile.Request {
 	return func(ctx context.Context, obj client.Object) []reconcile.Request {
 		klog.V(4).Info(
 			"reconcile triggered by object",
@@ -40,6 +46,40 @@ func CAPIMachineToMAPIMachine(namespace string) func(context.Context, client.Obj
 		return []reconcile.Request{{
 			NamespacedName: client.ObjectKey{Namespace: namespace, Name: obj.GetName()},
 		}}
+	}
+}
+
+// ResolveCAPIMachineSetFromObject should probably be renamed. It:
+// 1. takes a client.Object (expecting a CAPI InfrastructureMachineTemplate)
+// and checks to see if it's owned by a CAPI MachineSet
+// 2. If it is, returns a reconcile.Request for the MAPI namespace, so we
+// reconcile the mirror MAPI MachineSet.
+func ResolveCAPIMachineSetFromObject(namespace string) func(context.Context, client.Object) []reconcile.Request {
+	return func(ctx context.Context, obj client.Object) []reconcile.Request {
+		klog.V(4).Info(
+			"reconcile triggered by object",
+			"objectType", fmt.Sprintf("%T", obj),
+			"namespace", obj.GetNamespace(),
+			"name", obj.GetName(),
+		)
+
+		ownerReferences := obj.GetOwnerReferences()
+		requests := []reconcile.Request{}
+
+		for _, ref := range ownerReferences {
+			if ref.Kind != machineSetKind || ref.APIVersion != capiv1beta1.GroupVersion.String() {
+				continue
+			}
+
+			klog.V(4).Info("Object is owned by a CAPI machineset, enqueueing request",
+				"machine", obj.GetName(), "machineset", ref.Name)
+
+			requests = append(requests, reconcile.Request{
+				NamespacedName: client.ObjectKey{Namespace: namespace, Name: ref.Name},
+			})
+		}
+
+		return requests
 	}
 }
 

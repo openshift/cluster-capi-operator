@@ -46,10 +46,10 @@ const (
 
 var (
 	// errPlatformNotSupported is returned when the platform is not supported.
-	errPlatformNotSupported = errors.New("error determining InfraMachine" +
-		" type, platform not supported")
+	errPlatformNotSupported = errors.New("error determining InfraMachine type, platform not supported")
 
-	// errAuthoritativeAPIUnexpected is returned when we receive an unexpected AuthoritativeAPI.
+	// errAuthoritativeAPIUnexpected is returned when we receive an unexpected
+	// AuthoritativeAPI.
 	errAuthoritativeAPIUnexpected = errors.New("AuthoritativeAPI unexpected value")
 )
 
@@ -85,12 +85,12 @@ func (r *MachineSyncReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&machinev1beta1.Machine{}, builder.WithPredicates(util.FilterNamespace(r.MAPINamespace))).
 		Watches(
 			&capiv1beta1.Machine{},
-			handler.EnqueueRequestsFromMapFunc(util.CAPIMachineToMAPIMachine(r.MAPINamespace)),
+			handler.EnqueueRequestsFromMapFunc(util.RewriteNamespace(r.MAPINamespace)),
 			builder.WithPredicates(util.FilterNamespace(r.CAPINamespace)),
 		).
 		Watches(
 			infraMachine,
-			handler.EnqueueRequestsFromMapFunc(util.CAPIMachineToMAPIMachine(r.MAPINamespace)),
+			handler.EnqueueRequestsFromMapFunc(util.RewriteNamespace(r.MAPINamespace)),
 			builder.WithPredicates(util.FilterNamespace(r.CAPINamespace)),
 		).
 		Complete(r); err != nil {
