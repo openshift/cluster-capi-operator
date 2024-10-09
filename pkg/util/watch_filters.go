@@ -43,6 +43,26 @@ func CAPIMachineToMAPIMachine(namespace string) func(context.Context, client.Obj
 	}
 }
 
+// RewriteNamespace takes a client.Object and returns a reconcile.Request for
+// it in the namespace provided.
+//
+// It is intended for use with CAPI Machines and MachineSet requests, where we expect
+// there to be a mirror object in the MAPI namespace.
+func RewriteNamespace(namespace string) func(context.Context, client.Object) []reconcile.Request {
+	return func(ctx context.Context, obj client.Object) []reconcile.Request {
+		klog.V(4).Info(
+			"reconcile triggered by object",
+			"objectType", fmt.Sprintf("%T", obj),
+			"namespace", obj.GetNamespace(),
+			"name", obj.GetName(),
+		)
+
+		return []reconcile.Request{{
+			NamespacedName: client.ObjectKey{Namespace: namespace, Name: obj.GetName()},
+		}}
+	}
+}
+
 // FilterNamespace filters a client.Object request, ensuring they are in the
 // namespace provided.
 func FilterNamespace(namespace string) predicate.Predicate {
