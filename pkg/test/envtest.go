@@ -20,6 +20,8 @@ import (
 	"path"
 	goruntime "runtime"
 
+	machinev1 "github.com/openshift/api/machine/v1"
+	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -37,6 +39,8 @@ import (
 
 func init() {
 	utilruntime.Must(configv1.Install(scheme.Scheme))
+	utilruntime.Must(machinev1.Install(scheme.Scheme))
+	utilruntime.Must(machinev1beta1.Install(scheme.Scheme))
 	utilruntime.Must(clusteroperatorv1.Install(scheme.Scheme))
 	utilruntime.Must(apiextensionsv1.AddToScheme(scheme.Scheme))
 	utilruntime.Must(awsv1.AddToScheme(scheme.Scheme))
@@ -55,6 +59,7 @@ func StartEnvTest(testEnv *envtest.Environment) (*rest.Config, client.Client, er
 		fakeCoreProviderCRD,
 		fakeInfrastructureProviderCRD,
 		fakeClusterCRD,
+		fakeMachineCRD,
 		fakeAWSClusterCRD,
 		fakeAzureClusterCRD,
 		fakeGCPClusterCRD,
@@ -62,6 +67,7 @@ func StartEnvTest(testEnv *envtest.Environment) (*rest.Config, client.Client, er
 	testEnv.CRDDirectoryPaths = []string{
 		path.Join(root, "vendor", "github.com", "openshift", "api", "config", "v1", "zz_generated.crd-manifests"),
 		path.Join(root, "vendor", "github.com", "openshift", "api", "operator", "v1", "zz_generated.crd-manifests"),
+		path.Join(root, "vendor", "github.com", "openshift", "api", "machine", "v1beta1", "zz_generated.crd-manifests"),
 	}
 	testEnv.ErrorIfCRDPathMissing = true
 
