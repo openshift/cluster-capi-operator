@@ -32,6 +32,7 @@ import (
 
 const (
 	capiUnsupportedPlatformMsg = "Cluster API is not yet implemented on this platform"
+	controllerName             = "UnsupportedController"
 )
 
 // UnsupportedController on unsupported platforms watches and keeps the cluster-api ClusterObject up to date.
@@ -42,7 +43,7 @@ type UnsupportedController struct {
 
 // Reconcile reconciles the cluster-api ClusterOperator object.
 func (r *UnsupportedController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	log := ctrl.LoggerFrom(ctx).WithName("UnsupportedController")
+	log := ctrl.LoggerFrom(ctx).WithName(controllerName)
 	log.Info(fmt.Sprintf("Reconciling %q ClusterObject", controllers.ClusterOperatorName))
 
 	if err := r.ClusterOperatorStatusClient.SetStatusAvailable(ctx, capiUnsupportedPlatformMsg); err != nil {
@@ -55,6 +56,7 @@ func (r *UnsupportedController) Reconcile(ctx context.Context, req ctrl.Request)
 // SetupWithManager sets up the controller with the Manager.
 func (r *UnsupportedController) SetupWithManager(mgr ctrl.Manager) error {
 	if err := ctrl.NewControllerManagedBy(mgr).
+		Named(controllerName).
 		For(&configv1.ClusterOperator{}, builder.WithPredicates(clusterOperatorPredicates())).
 		Complete(r); err != nil {
 		return fmt.Errorf("failed to create controller: %w", err)

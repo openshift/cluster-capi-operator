@@ -48,6 +48,7 @@ const (
 
 	mapiUserDataKey = "userData"
 	capiUserDataKey = "value"
+	controllerName  = "SecretSyncController"
 )
 
 var (
@@ -62,7 +63,7 @@ type UserDataSecretController struct {
 
 // Reconcile reconciles the user data secret.
 func (r *UserDataSecretController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	log := ctrl.LoggerFrom(ctx).WithName("SecretSyncController")
+	log := ctrl.LoggerFrom(ctx).WithName(controllerName)
 	log.Info("reconciling worker user data secret")
 
 	defaultSourceSecretObjectKey := client.ObjectKey{
@@ -168,6 +169,7 @@ func (r *UserDataSecretController) syncSecretData(ctx context.Context, source *c
 // SetupWithManager sets up the controller with the Manager.
 func (r *UserDataSecretController) SetupWithManager(mgr ctrl.Manager) error {
 	if err := ctrl.NewControllerManagedBy(mgr).
+		Named(controllerName).
 		For(
 			&corev1.Secret{},
 			builder.WithPredicates(userDataSecretPredicate(r.ManagedNamespace)),
