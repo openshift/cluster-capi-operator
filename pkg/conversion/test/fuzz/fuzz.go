@@ -45,6 +45,8 @@ import (
 	capiv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
+const powerVSMachineKind = "IBMPowerVSMachine"
+
 // CAPI2MAPIMachineConverterConstructor is a function that constructs a CAPI to MAPI Machine converter.
 // Since the CAPI to MAPI conversion relies on different types, it is expected that the constructor is wrapped in a closure
 // that handles type assertions to fit the interface.
@@ -159,7 +161,7 @@ func CAPI2MAPIMachineSetRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv
 	machineFuzzInputs := []TableEntry{}
 	fz := getFuzzer(scheme, fuzzerFuncs...)
 
-	for i := 0; i < 1; i++ {
+	for i := 0; i < 1000; i++ {
 		m := &capiv1.MachineSet{}
 		fz.Fuzz(m)
 		fz.Fuzz(infraMachineTemplate)
@@ -251,8 +253,8 @@ func MAPI2CAPIMachineRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv1.I
 		Expect(warnings).To(BeEmpty())
 
 		capiConverter := in.capiConverterConstructor(capiMachine, infraMachine, in.infraCluster)
-
 		mapiMachine, warnings, err := capiConverter.ToMachine()
+
 		Expect(err).ToNot(HaveOccurred())
 		Expect(warnings).To(BeEmpty())
 
@@ -427,6 +429,10 @@ func CAPIMachineFuzzerFuncs(providerIDFuzz StringFuzzer, infraKind, infraAPIVers
 
 				// Clear fields that are zero valued.
 				if m.FailureDomain != nil && *m.FailureDomain == "" {
+					m.FailureDomain = nil
+				}
+				// Power VS does not support failure domain
+				if infraKind == powerVSMachineKind {
 					m.FailureDomain = nil
 				}
 			},
