@@ -25,6 +25,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	capav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
+	capibmv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
 	capiv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
@@ -33,12 +34,15 @@ const (
 	workerUserDataSecretName = "worker-user-data"
 	awsMachineKind           = "AWSMachine"
 	awsMachineTemplateKind   = "AWSMachineTemplate"
+	ibmPowerVSMachineKind    = "IBMPowerVSMachine"
+	ibmPowerVSTemplateKind   = "IBMPowerVSMachineTemplate"
 )
 
 var (
 	// awsMachineAPIVersion is the API version for the AWSMachine API.
 	// Source it from the API group version so that it is always up to date.
-	awsMachineAPIVersion = capav1.GroupVersion.String() //nolint:gochecknoglobals
+	awsMachineAPIVersion        = capav1.GroupVersion.String()   //nolint:gochecknoglobals
+	ibmPowerVSMachineAPIVersion = capibmv1.GroupVersion.String() //nolint:gochecknoglobals
 )
 
 // fromMAPIMachineToCAPIMachine translates a MAPI Machine to its Core CAPI Machine correspondent.
