@@ -26,6 +26,7 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
+	awscapiv1beta1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta1"
 	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -58,6 +59,10 @@ type MachineSetSyncReconciler struct {
 
 // SetupWithManager sets the CoreClusterReconciler controller up with the given manager.
 func (r *MachineSetSyncReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	infraMachineTemplate, err := getInfraMachineTemplateFromProvider(r.Platform)
+	if err != nil {
+		return fmt.Errorf("failed to get InfraMachine from Provider: %w", err)
+	}
 	// Allow the namespaces to be set externally for test purposes, when not set,
 	// default to the production namespaces.
 	if r.CAPINamespace == "" {
@@ -76,6 +81,11 @@ func (r *MachineSetSyncReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			handler.EnqueueRequestsFromMapFunc(util.RewriteNamespace(r.MAPINamespace)),
 			builder.WithPredicates(util.FilterNamespace(r.CAPINamespace)),
 		).
+		Watches(
+			infraMachineTemplate,
+			handler.EnqueueRequestsFromMapFunc(util.ResolveCAPIMachineSetFromObject(r.MAPINamespace)),
+			builder.WithPredicates(util.FilterNamespace(r.CAPINamespace)),
+		).
 		Complete(r); err != nil {
 		return fmt.Errorf("failed to create controller: %w", err)
 	}
@@ -91,4 +101,17 @@ func (r *MachineSetSyncReconciler) SetupWithManager(mgr ctrl.Manager) error {
 // Reconcile reconciles CAPI and MAPI machines for their respective namespaces.
 func (r *MachineSetSyncReconciler) Reconcile(ctx context.Context, req reconcile.Request) (ctrl.Result, error) {
 	return ctrl.Result{}, nil
+}
+
+// getInfraMachineTemplateFromProvider returns the correct InfraMachineTemplate implementation
+// for a given provider.
+//
+// As we implement other cloud providers, we'll need to update this list.
+func getInfraMachineTemplateFromProvider(platform configv1.PlatformType) (client.Object, error) {
+	switch platform {
+	case configv1.AWSPlatformType:
+		return &awscapiv1beta1.AWSMachineTemplate{}, nil
+	default:
+		return nil, fmt.Errorf("%w: %s", errPlatformNotSupported, platform)
+	}
 }
