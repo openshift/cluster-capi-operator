@@ -37,7 +37,6 @@ var _ = Describe("Cluster API Azure MachineSet", Ordered, func() {
 		}
 		framework.CreateCoreCluster(cl, clusterName, "AzureCluster")
 		mapiMachineSpec = getAzureMAPIProviderSpec(cl)
-		createAzureCluster(cl, mapiMachineSpec)
 	})
 
 	AfterEach(func() {
@@ -83,121 +82,6 @@ func getAzureMAPIProviderSpec(cl client.Client) *mapiv1.AzureMachineProviderSpec
 	Expect(yaml.Unmarshal(machineSet.Spec.Template.Spec.ProviderSpec.Value.Raw, providerSpec)).To(Succeed())
 
 	return providerSpec
-}
-
-func createAzureCluster(cl client.Client, mapiProviderSpec *mapiv1.AzureMachineProviderSpec) *azurev1.AzureCluster {
-	By("Creating Azure cluster secret")
-	capzManagerBootstrapCredentialsKey := client.ObjectKey{Namespace: framework.CAPINamespace, Name: capzManagerBootstrapCredentials}
-	capzManagerBootstrapCredentials := &corev1.Secret{}
-
-	if err := cl.Get(ctx, capzManagerBootstrapCredentialsKey, capzManagerBootstrapCredentials); err != nil {
-		Expect(err).ToNot(HaveOccurred())
-	}
-
-	azureClientSecret, found := capzManagerBootstrapCredentials.Data["azure_client_secret"]
-	Expect(found).To(BeTrue())
-
-	azureSecretKey := corev1.SecretReference{Name: clusterSecretName, Namespace: framework.CAPINamespace}
-	azureSecret := corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      azureSecretKey.Name,
-			Namespace: azureSecretKey.Namespace,
-		},
-		Immutable: ptr.To(true),
-		Data: map[string][]byte{
-			"clientSecret": azureClientSecret,
-		},
-	}
-
-	if err := cl.Create(ctx, &azureSecret); err != nil && !apierrors.IsAlreadyExists(err) {
-		Expect(err).ToNot(HaveOccurred())
-	}
-	By("Creating Azure cluster identity")
-
-	var azureClientID, azureTenantID []byte
-	azureClientID, found = capzManagerBootstrapCredentials.Data["azure_client_id"]
-	Expect(found).To(BeTrue())
-	azureTenantID, found = capzManagerBootstrapCredentials.Data["azure_tenant_id"]
-	Expect(found).To(BeTrue())
-
-	azureClusterIdentity := &azurev1.AzureClusterIdentity{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      clusterName,
-			Namespace: framework.CAPINamespace,
-		},
-		Spec: azurev1.AzureClusterIdentitySpec{
-			Type:              azurev1.ServicePrincipal,
-			AllowedNamespaces: &azurev1.AllowedNamespaces{NamespaceList: []string{framework.CAPINamespace}},
-			ClientID:          string(azureClientID),
-			TenantID:          string(azureTenantID),
-			ClientSecret:      corev1.SecretReference{Name: clusterSecretName, Namespace: framework.CAPINamespace},
-		},
-	}
-
-	if err := cl.Create(ctx, azureClusterIdentity); err != nil && !apierrors.IsAlreadyExists(err) {
-		Expect(err).ToNot(HaveOccurred())
-	}
-
-	By("Creating Azure cluster")
-	azureCluster := &azurev1.AzureCluster{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      clusterName,
-			Namespace: framework.CAPINamespace,
-			Annotations: map[string]string{
-				// The ManagedBy Annotation is set so CAPI infra providers ignore the InfraCluster object,
-				// as that's managed externally, in this case by the cluster-capi-operator's infracluster controller.
-				clusterv1.ManagedByAnnotation: managedByAnnotationValueClusterCAPIOperatorInfraClusterController,
-			},
-		},
-		Spec: azurev1.AzureClusterSpec{
-			AzureClusterClassSpec: azurev1.AzureClusterClassSpec{
-				Location:         mapiProviderSpec.Location,
-				AzureEnvironment: "AzurePublicCloud",
-				IdentityRef: &corev1.ObjectReference{
-					Name:      clusterName,
-					Namespace: framework.CAPINamespace,
-					Kind:      "AzureClusterIdentity",
-				},
-			},
-			NetworkSpec: azurev1.NetworkSpec{
-				NodeOutboundLB: &azurev1.LoadBalancerSpec{
-					Name: clusterName,
-					BackendPool: azurev1.BackendPool{
-						Name: clusterName,
-					},
-				},
-				Vnet: azurev1.VnetSpec{
-					Name:          mapiProviderSpec.Vnet,
-					ResourceGroup: mapiProviderSpec.NetworkResourceGroup,
-				},
-			},
-			ResourceGroup: mapiProviderSpec.ResourceGroup,
-		},
-	}
-
-	if err := cl.Create(ctx, azureCluster); err != nil && !apierrors.IsAlreadyExists(err) {
-		Expect(err).ToNot(HaveOccurred())
-	}
-
-	Eventually(func() (bool, error) {
-		patchedAzureCluster := &azurev1.AzureCluster{}
-		err := cl.Get(ctx, client.ObjectKeyFromObject(azureCluster), patchedAzureCluster)
-		if err != nil {
-			return false, err
-		}
-
-		if patchedAzureCluster.Annotations == nil {
-			return false, nil
-		}
-
-		if _, ok := patchedAzureCluster.Annotations[clusterv1.ManagedByAnnotation]; !ok {
-			return false, nil
-		}
-
-		return patchedAzureCluster.Status.Ready, nil
-	}, framework.WaitShort).Should(BeTrue())
-
-	return azureCluster
 }
 
 func createAzureMachineTemplate(cl client.Client, mapiProviderSpec *mapiv1.AzureMachineProviderSpec) *azurev1.AzureMachineTemplate {
