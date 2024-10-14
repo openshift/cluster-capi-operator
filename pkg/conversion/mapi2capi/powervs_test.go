@@ -18,6 +18,7 @@ package mapi2capi
 import (
 	"encoding/json"
 	"fmt"
+
 	mapiv1 "github.com/openshift/api/machine/v1"
 	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -68,11 +69,10 @@ var _ = Describe("mapi2capi PowerVS", func() {
 	}
 
 	// We need to add error handling for the providerSpec issues before we can enable the following tests.
-	PIt("should be able to convert a MAPI Power VS Machine to a CAPI Machine", func() {
+	It("should be able to convert a MAPI Power VS Machine to a CAPI Machine", func() {
 		// Convert a MAPI Machine to a CAPI Core Machine + a CAPI InfraMachine.
 		capiMachine, capiInfraMachine, warns, err :=
 			FromPowerVSMachineAndInfra(powerVSMAPIMachine, &infra).ToMachineAndInfrastructureMachine()
-		fmt.Print(capiMachine)
 		Expect(err).ToNot(HaveOccurred(), "should have been able to convert providerSpec to MachineTemplateSpec")
 		Expect(warns).To(BeEmpty(), "should have not warned while converting providerSpec to MachineTemplateSpec")
 		Expect(capiMachine).To(Not(BeNil()), "should not have a nil CAPI Machine")
@@ -91,7 +91,7 @@ var _ = Describe("mapi2capi PowerVS", func() {
 
 })
 
-// getPowerVSProviderSpec builds and returns PowerVSProviderConfig
+// getPowerVSProviderSpec builds and returns PowerVSProviderConfig.
 func getPowerVSProviderSpec() *mapiv1.PowerVSMachineProviderConfig {
 	// TODO: May be we can add this in machine builder?
 	return &mapiv1.PowerVSMachineProviderConfig{
@@ -104,10 +104,8 @@ func getPowerVSProviderSpec() *mapiv1.PowerVSMachineProviderConfig {
 			Name: "powervs-credentials",
 		},
 		ServiceInstance: mapiv1.PowerVSResource{
-			Type:  mapiv1.PowerVSResourceTypeID,
-			ID:    ptr.To("1234"),
-			Name:  nil,
-			RegEx: nil,
+			Type: mapiv1.PowerVSResourceTypeID,
+			ID:   ptr.To("1234"),
 		},
 		Image: mapiv1.PowerVSResource{
 			Type: mapiv1.PowerVSResourceTypeName,

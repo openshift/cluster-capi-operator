@@ -24,7 +24,6 @@ import (
 	mapiv1 "github.com/openshift/api/machine/v1"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -53,6 +52,7 @@ func FromPowerVSMachineAndInfra(m *mapiv1beta1.Machine, i *configv1.Infrastructu
 	return &powerVSMachineAndInfra{machine: m, infrastructure: i}
 }
 
+// FromPowerVSMachineSetAndInfra wraps a Machine API MachineSet for Power VS and the OCP Infrastructure object into a mapi2capi PowerVSProviderSpec.
 func FromPowerVSMachineSetAndInfra(m *mapiv1beta1.MachineSet, i *configv1.Infrastructure) MachineSet {
 	return &powerVSMachineSetAndInfra{
 		machineSet:     m,
@@ -89,14 +89,12 @@ func (m *powerVSMachineAndInfra) toMachineAndInfrastructureMachine() (*capiv1.Ma
 		return nil, nil, nil, field.ErrorList{field.Invalid(field.NewPath("spec", "providerSpec", "value"), m.machine.Spec.ProviderSpec.Value, err.Error())}
 	}
 
-	capIBMPowerVSMachine, warn, machineErrs := m.toPowerVSMachine(powerVSProviderConfig)
+	capIBMPowerVSMachine, machineErrs := m.toPowerVSMachine(powerVSProviderConfig)
 	if machineErrs != nil {
 		errs = append(errs, machineErrs...)
 	}
 
-	warnings = append(warnings, warn...)
-
-	capiMachine, machineErrs := fromPowerVSMAPIMachineToCAPIMachine(m.machine)
+	capiMachine, machineErrs := fromMAPIMachineToCAPIMachine(m.machine, ibmPowerVSMachineAPIVersion, ibmPowerVSMachineKind)
 	if machineErrs != nil {
 		errs = append(errs, machineErrs...)
 	}
@@ -112,7 +110,7 @@ func (m *powerVSMachineAndInfra) toMachineAndInfrastructureMachine() (*capiv1.Ma
 
 	// Populate the CAPI Machine ClusterName from the OCP Infrastructure object.
 	if m.infrastructure == nil || m.infrastructure.Status.InfrastructureName == "" {
-		errs = append(errs, field.Invalid(field.NewPath("infrastructure", "status", "infrastructureName"), m.infrastructure.Status.InfrastructureName, errInfrastructureInfrastructureNameCannotBeNil))
+		errs = append(errs, field.Invalid(field.NewPath("infrastructure", "status", "infrastructureName"), m.infrastructure.Status.InfrastructureName, "infrastructure cannot be nil and infrastructure.Status.InfrastructureName cannot be empty"))
 	} else {
 		capiMachine.Spec.ClusterName = m.infrastructure.Status.InfrastructureName
 	}
@@ -122,7 +120,7 @@ func (m *powerVSMachineAndInfra) toMachineAndInfrastructureMachine() (*capiv1.Ma
 	capIBMPowerVSMachine.SetAnnotations(capiMachine.GetAnnotations())
 	capIBMPowerVSMachine.SetLabels(capiMachine.GetLabels())
 
-	return capiMachine, capIBMPowerVSMachine, warnings, nil
+	return capiMachine, capIBMPowerVSMachine, warnings, errs
 }
 
 // ToMachineSetAndMachineTemplate converts a mapi2capi PowerVSMachineSetAndInfra into a CAPI MachineSet and CAPIBM IBMPowerVSMachineTemplate.
@@ -163,7 +161,7 @@ func (m *powerVSMachineSetAndInfra) ToMachineSetAndMachineTemplate() (*capiv1.Ma
 	powerVSMachineSet.Spec.Template.Spec.InfrastructureRef.Name = powerVSMachineTemplate.Name
 
 	if m.infrastructure == nil || m.infrastructure.Status.InfrastructureName == "" {
-		errs = append(errs, field.Invalid(field.NewPath("infrastructure", "status", "infrastructureName"), m.infrastructure.Status.InfrastructureName, errInfrastructureInfrastructureNameCannotBeNil))
+		errs = append(errs, field.Invalid(field.NewPath("infrastructure", "status", "infrastructureName"), m.infrastructure.Status.InfrastructureName, "infrastructure cannot be nil and infrastructure.Status.InfrastructureName cannot be empty"))
 	} else {
 		powerVSMachineSet.Spec.Template.Spec.ClusterName = m.infrastructure.Status.InfrastructureName
 		powerVSMachineSet.Spec.ClusterName = m.infrastructure.Status.InfrastructureName
@@ -191,15 +189,10 @@ func powerVSProviderSpecFromRawExtension(rawExtension *runtime.RawExtension) (ma
 }
 
 // toPowerVSMachine converts PowerVSMachineProviderConfig to IBMPowerVSMachineSpec.
-//
-//nolint:funlen
-func (m *powerVSMachineAndInfra) toPowerVSMachine(providerSpec mapiv1.PowerVSMachineProviderConfig) (*capibmv1.IBMPowerVSMachine, []string, field.ErrorList) {
+func (m *powerVSMachineAndInfra) toPowerVSMachine(providerSpec mapiv1.PowerVSMachineProviderConfig) (*capibmv1.IBMPowerVSMachine, field.ErrorList) {
 	fldPath := field.NewPath("spec", "providerSpec", "value")
 
-	var (
-		errs     field.ErrorList
-		warnings []string
-	)
+	var errs field.ErrorList
 
 	serviceInstance, err := convertServiceInstanceToCAPI(fldPath.Child("serviceInstance"), providerSpec.ServiceInstance)
 	if err != nil {
@@ -237,7 +230,7 @@ func (m *powerVSMachineAndInfra) toPowerVSMachine(providerSpec mapiv1.PowerVSMac
 	}
 
 	if len(providerSpec.LoadBalancers) > 0 {
-		// TODO: CAPIBM only applies load balancers to the control plane nodes. We should always reject LBs on non-control plane and work out how to connect the control plane LBs correctly otherwise.
+		// TODO(MULTIARCH-5041): CAPIBM only applies load balancers to the control plane nodes. We should always reject LBs on non-control plane and work out how to connect the control plane LBs correctly otherwise.
 		errs = append(errs, field.Invalid(fldPath.Child("loadBalancers"), providerSpec.LoadBalancers, "loadBalancers are not supported"))
 	}
 
@@ -251,72 +244,7 @@ func (m *powerVSMachineAndInfra) toPowerVSMachine(providerSpec mapiv1.PowerVSMac
 			Namespace: capiNamespace,
 		},
 		Spec: spec,
-	}, warnings, errs
-}
-
-// fromPowerVSMAPIMachineToCAPIMachine translates a PowerVS MAPI Machine to its Core CAPI Machine correspondent.
-// TODO: May be generalise to support different infrastructure machines
-func fromPowerVSMAPIMachineToCAPIMachine(mapiMachine *mapiv1beta1.Machine) (*capiv1.Machine, field.ErrorList) {
-	var errs field.ErrorList
-
-	capiMachine := &capiv1.Machine{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        mapiMachine.Name,
-			Namespace:   capiNamespace,
-			Labels:      mapiMachine.Labels,
-			Annotations: mapiMachine.Annotations,
-			// OwnerReferences: TODO(OCPCLOUD-2716): These need to be converted so that any MachineSet owning a Machine is represented with the correct owner reference between the two APIs.
-		},
-		Spec: capiv1.MachineSpec{
-			InfrastructureRef: corev1.ObjectReference{
-				APIVersion: ibmPowerVSMachineAPIVersion,
-				Kind:       ibmPowerVSMachineKind,
-				Name:       mapiMachine.Name,
-				Namespace:  capiNamespace,
-			},
-			ProviderID: mapiMachine.Spec.ProviderID,
-
-			// Version: TODO(OCPCLOUD-2714): To be prevented by VAP.
-			// ClusterName: populated by higher level functions.
-
-			// TODO(OCPCLOUD-2715): These are not present on the MAPI API, we should implement them for feature parity.
-			// NodeDrainTimeout: ,
-			// NodeVolumeDetachTimeout: ,
-			// NodeDeletionTimeout: ,
-		},
-	}
-
-	// lifecycleHooks are handled via an annotation in Cluster API.
-	lifecycleAnnotations := getCAPILifecycleHookAnnotations(mapiMachine.Spec.LifecycleHooks)
-	if capiMachine.Annotations == nil {
-		capiMachine.Annotations = lifecycleAnnotations
-	} else {
-		for key, value := range lifecycleAnnotations {
-			capiMachine.Annotations[key] = value
-		}
-	}
-
-	if capiMachine.Labels == nil {
-		capiMachine.Labels = map[string]string{}
-	}
-
-	errs = append(errs, setMAPINodeLabelsToCAPIManagedNodeLabels(field.NewPath("spec", "metadata", "labels"), mapiMachine.Spec.ObjectMeta.Labels, capiMachine.Labels)...)
-
-	// Unused fields - Below this line are fields not used from the MAPI Machine.
-
-	if len(mapiMachine.OwnerReferences) > 0 {
-		// TODO(OCPCLOUD-2716): We should support converting CAPI MachineSet ORs to MAPI MachineSet ORs. NB working out the UID will be hard.
-		errs = append(errs, field.Invalid(field.NewPath("metadata", "ownerReferences"), mapiMachine.OwnerReferences, "ownerReferences are not supported"))
-	}
-
-	// mapiMachine.Spec.AuthoritativeAPI - Ignore as this is part of the conversion mechanism.
-
-	// metadata.labels - needs special handling
-	// metadata.annotations - needs special handling
-
-	errs = append(errs, handleUnsupportedMachineFields(mapiMachine.Spec)...)
-
-	return capiMachine, errs
+	}, errs
 }
 
 func powerVSMachineToPowerVSMachineTemplate(powerVSMachine *capibmv1.IBMPowerVSMachine, name string, namespace string) *capibmv1.IBMPowerVSMachineTemplate {
@@ -373,6 +301,5 @@ func convertNetworkToCAPI(fldPath *field.Path, network mapiv1.PowerVSResource) (
 		return capibmv1.IBMPowerVSResourceReference{RegEx: network.RegEx}, nil
 	default:
 		return capibmv1.IBMPowerVSResourceReference{}, field.Invalid(fldPath.Child("type"), network.Type, "unknown type")
-
 	}
 }

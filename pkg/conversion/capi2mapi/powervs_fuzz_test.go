@@ -27,7 +27,7 @@ import (
 	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/capi2mapi"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/mapi2capi"
-	conversiontest "github.com/openshift/cluster-capi-operator/pkg/conversion/test"
+	conversiontest "github.com/openshift/cluster-capi-operator/pkg/conversion/test/fuzz"
 
 	corev1 "k8s.io/api/core/v1"
 	runtimeserializer "k8s.io/apimachinery/pkg/runtime/serializer"
@@ -110,7 +110,7 @@ var _ = Describe("Power VS Fuzz (capi2mapi)", func() {
 })
 
 func powerVSProviderIDFuzzer(c fuzz.Continue) string {
-	//Power VS provider id format: ibmpowervs://<region>/<zone>/<service_instance_id>/<instance_id>
+	// Power VS provider id format: ibmpowervs://<region>/<zone>/<service_instance_id>/<instance_id>
 	return fmt.Sprintf("ibmpowervs://tok/tok04/%s/%s", strings.ReplaceAll(c.RandString(), "/", ""), strings.ReplaceAll(c.RandString(), "/", ""))
 }
 
@@ -122,7 +122,7 @@ func powerVSMachineFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interfac
 				serviceInstance.ID = ptr.To(c.RandString())
 			case 1:
 				serviceInstance.Name = ptr.To(c.RandString())
-			case 3:
+			case 2:
 				serviceInstance.RegEx = ptr.To(c.RandString())
 			}
 		},
@@ -132,20 +132,28 @@ func powerVSMachineFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interfac
 				network.ID = ptr.To(c.RandString())
 			case 1:
 				network.Name = ptr.To(c.RandString())
-			case 3:
+			case 2:
 				network.RegEx = ptr.To(c.RandString())
 			}
 		},
 		func(imageRef *corev1.LocalObjectReference, c fuzz.Continue) {
 			imageRef.Name = c.RandString()
-
+		},
+		func(image *capibmv1.IBMPowerVSResourceReference, c fuzz.Continue) {
+			switch c.Int31n(3) {
+			case 0:
+				image.ID = ptr.To(c.RandString())
+			case 1:
+				image.Name = ptr.To(c.RandString())
+			case 2:
+				image.RegEx = ptr.To(c.RandString())
+			}
 		},
 		func(spec *capibmv1.IBMPowerVSMachineSpec, c fuzz.Continue) {
 			c.FuzzNoCustom(spec)
 
+			// spec.ServiceInstanceID is deprecated and its advised to use spec.ServiceInstance
 			spec.ServiceInstanceID = ""
-			spec.Image = nil
-
 		},
 		func(m *capibmv1.IBMPowerVSMachine, c fuzz.Continue) {
 			c.FuzzNoCustom(m)

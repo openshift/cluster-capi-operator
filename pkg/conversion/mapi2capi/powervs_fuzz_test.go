@@ -28,7 +28,7 @@ import (
 	mapiv1 "github.com/openshift/api/machine/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/capi2mapi"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/mapi2capi"
-	conversiontest "github.com/openshift/cluster-capi-operator/pkg/conversion/test"
+	conversiontest "github.com/openshift/cluster-capi-operator/pkg/conversion/test/fuzz"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtimeserializer "k8s.io/apimachinery/pkg/runtime/serializer"
@@ -76,7 +76,7 @@ var _ = Describe("PowerVS Fuzz (mapi2capi)", func() {
 		)
 	})
 
-	Context("IBMPowerVSMachineSet Conversion", func() {
+	Context("PowerVSMachineSet Conversion", func() {
 		fromMachineSetAndPowerVSMachineTemplateAndPowerVSCluster := func(machineSet *capiv1.MachineSet, infraMachineTemplate client.Object, infraCluster client.Object) capi2mapi.MachineSetAndMachineTemplate {
 			powerVSMachineTemplate, ok := infraMachineTemplate.(*capibmv1.IBMPowerVSMachineTemplate)
 			Expect(ok).To(BeTrue(), "input infra machine template should be of type %T, got %T", &capibmv1.IBMPowerVSMachineTemplate{}, infraMachineTemplate)
@@ -102,7 +102,7 @@ var _ = Describe("PowerVS Fuzz (mapi2capi)", func() {
 })
 
 func powerVSProviderIDFuzzer(c fuzz.Continue) string {
-	//Power VS provider id format: ibmpowervs://<region>/<zone>/<service_instance_id>/<instance_id>
+	// Power VS provider id format: ibmpowervs://<region>/<zone>/<service_instance_id>/<instance_id>
 	return fmt.Sprintf("ibmpowervs://tok/tok04/%s/%s", strings.ReplaceAll(c.RandString(), "/", ""), strings.ReplaceAll(c.RandString(), "/", ""))
 }
 
@@ -121,7 +121,7 @@ func powerVSProviderSpecFuzzerFuncs(codecs runtimeserializer.CodecFactory) []int
 					Type: mapiv1.PowerVSResourceTypeID,
 					ID:   ptr.To(c.RandString()),
 				}
-			case 3:
+			case 2:
 				*serviceInstance = mapiv1.PowerVSResource{
 					Type: mapiv1.PowerVSResourceTypeID,
 					ID:   ptr.To(c.RandString()),
@@ -140,7 +140,7 @@ func powerVSProviderSpecFuzzerFuncs(codecs runtimeserializer.CodecFactory) []int
 					Type: mapiv1.PowerVSResourceTypeName,
 					Name: ptr.To(c.RandString()),
 				}
-			case 3:
+			case 2:
 				*image = mapiv1.PowerVSResource{
 					Type: mapiv1.PowerVSResourceTypeRegEx,
 					Name: ptr.To(c.RandString()),
@@ -159,7 +159,7 @@ func powerVSProviderSpecFuzzerFuncs(codecs runtimeserializer.CodecFactory) []int
 					Type: mapiv1.PowerVSResourceTypeName,
 					Name: ptr.To(c.RandString()),
 				}
-			case 3:
+			case 2:
 				*network = mapiv1.PowerVSResource{
 					Type:  mapiv1.PowerVSResourceTypeRegEx,
 					RegEx: ptr.To(c.RandString()),
