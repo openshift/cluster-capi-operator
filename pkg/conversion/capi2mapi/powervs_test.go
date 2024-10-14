@@ -31,8 +31,10 @@ var _ = Describe("capi2mapi PowerVS", func() {
 		Spec: capibmv1.IBMPowerVSMachineTemplateSpec{
 			Template: capibmv1.IBMPowerVSMachineTemplateResource{
 				Spec: capibmv1.IBMPowerVSMachineSpec{
-					ImageRef:   &corev1.LocalObjectReference{Name: "rhcos-capi-powervs"},
-					ProviderID: ptr.To("test-123"),
+					ImageRef:        &corev1.LocalObjectReference{Name: "rhcos-capi-powervs"},
+					ProviderID:      ptr.To("test-123"),
+					ServiceInstance: &capibmv1.IBMPowerVSResourceReference{Name: ptr.To("service-instance")},
+					Network:         capibmv1.IBMPowerVSResourceReference{Name: ptr.To("network")},
 				},
 			},
 		},
@@ -41,8 +43,10 @@ var _ = Describe("capi2mapi PowerVS", func() {
 
 	powerVSMachine := &capibmv1.IBMPowerVSMachine{
 		Spec: capibmv1.IBMPowerVSMachineSpec{
-			ImageRef:   &corev1.LocalObjectReference{Name: "rhcos-capi-powervs"},
-			ProviderID: ptr.To("test-123"),
+			ImageRef:        &corev1.LocalObjectReference{Name: "rhcos-capi-powervs"},
+			ProviderID:      ptr.To("test-123"),
+			ServiceInstance: &capibmv1.IBMPowerVSResourceReference{Name: ptr.To("service-instance")},
+			Network:         capibmv1.IBMPowerVSResourceReference{Name: ptr.To("network")},
 		},
 	}
 
@@ -77,8 +81,8 @@ var _ = Describe("capi2mapi PowerVS", func() {
 	It("should be able to convert a Power VS CAPI Machine to a Power VS MAPI Machine", func() {
 		mapiMachine, warns, err :=
 			FromMachineAndPowerVSMachineAndPowerVSCluster(capiMachine, powerVSMachine, capiPowerVSCluster).ToMachine()
-		Expect(mapiMachine).To(Not(BeNil()), "should not have a nil MAPI Machine")
 		Expect(err).ToNot(HaveOccurred(), "should have been able to convert CAPI Machine/PowerVSMachineTemplate to MAPI Machine")
+		Expect(mapiMachine).To(Not(BeNil()), "should not have a nil MAPI Machine")
 		Expect(warns).To(BeEmpty(), "should have not warned while converting CAPI Machine/PowerVSMachineTemplate to MAPI Machine")
 	})
 

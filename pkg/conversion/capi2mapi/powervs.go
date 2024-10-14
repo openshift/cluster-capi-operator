@@ -17,21 +17,18 @@ limitations under the License.
 package capi2mapi
 
 import (
-	"encoding/json"
 	"errors"
-	"fmt"
-	"k8s.io/apimachinery/pkg/util/validation/field"
-
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	utilerrors "k8s.io/apimachinery/pkg/util/errors"
-	"k8s.io/utils/ptr"
-	capibmv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
-	capiv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
 	mapiv1 "github.com/openshift/api/machine/v1"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
+
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/validation/field"
+	"k8s.io/utils/ptr"
+	capibmv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
+	capiv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
 var (
@@ -92,19 +89,17 @@ func (m machineAndPowerVSMachineAndPowerVSCluster) ToMachine() (*mapiv1beta1.Mac
 		warnings []string
 	)
 
-	mapiPowerVSSpec, warn, err := m.toProviderSpec()
+	mapiPowerVSSpec, err := m.toProviderSpec()
 	if err != nil {
 		errors = append(errors, err)
 	}
-
-	warnings = append(warnings, warn...)
 
 	mapiMachine, err := fromCAPIMachineToMAPIMachine(m.machine)
 	if err != nil {
 		errors = append(errors, err)
 	}
 
-	powerVSRawExt, err := rawExtensionFromPowerVSProviderSpec(mapiPowerVSSpec)
+	powerVSRawExt, err := RawExtensionFromProviderSpec(mapiPowerVSSpec)
 	if err != nil {
 		errors = append(errors, err)
 	}
@@ -125,7 +120,7 @@ func (m machineSetAndPowerVSMachineTemplateAndPowerVSCluster) ToMachineSet() (*m
 	}
 
 	var (
-		errors   []error
+		errs     []error
 		warnings []string
 	)
 
@@ -133,14 +128,14 @@ func (m machineSetAndPowerVSMachineTemplateAndPowerVSCluster) ToMachineSet() (*m
 	// any Machine level conversion errors in the spec translation.
 	mapiPowerVSMachine, warn, err := m.ToMachine()
 	if err != nil {
-		errors = append(errors, err)
+		errs = append(errs, err)
 	}
 
 	warnings = append(warnings, warn...)
 
 	mapiMachineSet, err := fromCAPIMachineSetToMAPIMachineSet(m.machineSet)
 	if err != nil {
-		errors = append(errors, err)
+		errs = append(errs, err)
 	}
 
 	mapiMachineSet.Spec.Template.Spec = mapiPowerVSMachine.Spec
@@ -149,38 +144,36 @@ func (m machineSetAndPowerVSMachineTemplateAndPowerVSCluster) ToMachineSet() (*m
 	mapiMachineSet.Spec.Template.ObjectMeta.Annotations = mapiPowerVSMachine.ObjectMeta.Annotations
 	mapiMachineSet.Spec.Template.ObjectMeta.Labels = mapiPowerVSMachine.ObjectMeta.Labels
 
-	if len(errors) > 0 {
-		return nil, warnings, utilerrors.NewAggregate(errors)
+	if len(errs) > 0 {
+		return nil, warnings, utilerrors.NewAggregate(errs)
 	}
 
 	return mapiMachineSet, warnings, nil
 }
 
 // toProviderSpec converts a capi2mapi machineAndPowerVSMachineAndPowerVSCluster into a MAPI PowerVSMachineProviderConfig.
-//
-//nolint:funlen
-func (m machineAndPowerVSMachineAndPowerVSCluster) toProviderSpec() (*mapiv1.PowerVSMachineProviderConfig, []string, error) {
+func (m machineAndPowerVSMachineAndPowerVSCluster) toProviderSpec() (*mapiv1.PowerVSMachineProviderConfig, error) {
 	if m.machine == nil || m.powerVSMachine == nil || m.powerVSCluster == nil {
-		return nil, nil, errCAPIMachinePowerVSMachinePowerVSClusterCannotBeNil
+		return nil, errCAPIMachinePowerVSMachinePowerVSClusterCannotBeNil
 	}
 
-	var (
-		warnings []string
-		errors   field.ErrorList
-	)
+	errs := field.ErrorList{}
+
 	fldPath := field.NewPath("spec")
+
 	serviceInstance, err := convertPowerVSServiceInstanceToMAPI(fldPath.Child("serviceInstance"), m.powerVSMachine.Spec.ServiceInstanceID, m.powerVSMachine.Spec.ServiceInstance)
 	if err != nil {
-		errors = append(errors, err)
+		errs = append(errs, err)
 	}
+
 	image, err := convertPowerVSImageToMAPI(fldPath.Child("image"), m.powerVSMachine.Spec.Image, m.powerVSMachine.Spec.ImageRef)
 	if err != nil {
-		errors = append(errors, err)
+		errs = append(errs, err)
 	}
 
 	network, err := convertPowerVSNetworkToMAPI(fldPath.Child("network"), m.powerVSMachine.Spec.Network)
 	if err != nil {
-		errors = append(errors, err)
+		errs = append(errs, err)
 	}
 
 	mapiProviderConfig := mapiv1.PowerVSMachineProviderConfig{
@@ -197,7 +190,7 @@ func (m machineAndPowerVSMachineAndPowerVSCluster) toProviderSpec() (*mapiv1.Pow
 		Processors:      m.powerVSMachine.Spec.Processors,
 		MemoryGiB:       m.powerVSMachine.Spec.MemoryGiB,
 		//CredentialsSecret:
-		//LoadBalancers: TODO: Not supported for workers.
+		//LoadBalancers: TODO(MULTIARCH-5041): Not supported for workers.
 	}
 
 	userDataSecretName := ptr.Deref(m.machine.Spec.Bootstrap.DataSecretName, "")
@@ -207,45 +200,37 @@ func (m machineAndPowerVSMachineAndPowerVSCluster) toProviderSpec() (*mapiv1.Pow
 		}
 	}
 
-	return &mapiProviderConfig, warnings, nil
+	if len(errs) > 0 {
+		return nil, errs.ToAggregate()
+	}
+
+	return &mapiProviderConfig, nil
 }
 
 // Conversion helpers.
 
-// TODO: May be we can use generics and support for all the platforms?
-// rawExtensionFromPowerVSProviderSpec marshals the machine provider spec.
-func rawExtensionFromPowerVSProviderSpec(spec *mapiv1.PowerVSMachineProviderConfig) (*runtime.RawExtension, error) {
-	if spec == nil {
-		return &runtime.RawExtension{}, nil
-	}
-
-	rawBytes, err := json.Marshal(spec)
-	if err != nil {
-		return nil, fmt.Errorf("error marshalling providerSpec: %w", err)
-	}
-
-	return &runtime.RawExtension{
-		Raw: rawBytes,
-	}, nil
-}
-
 func convertPowerVSNetworkToMAPI(fldPath *field.Path, network capibmv1.IBMPowerVSResourceReference) (mapiv1.PowerVSResource, *field.Error) {
 	var networkResource mapiv1.PowerVSResource
-	if network.ID != nil {
+
+	// In mapi provider the network resource is checked in the order of ID, Name followed by RegEx.
+	switch {
+	case network.ID != nil:
 		networkResource.Type = mapiv1.PowerVSResourceTypeID
 		networkResource.ID = network.ID
+
 		return networkResource, nil
-	}
-	if network.Name != nil {
+	case network.Name != nil:
 		networkResource.Type = mapiv1.PowerVSResourceTypeName
 		networkResource.Name = network.Name
+
 		return networkResource, nil
-	}
-	if network.RegEx != nil {
+	case network.RegEx != nil:
 		networkResource.Type = mapiv1.PowerVSResourceTypeRegEx
 		networkResource.RegEx = network.RegEx
+
 		return networkResource, nil
 	}
+
 	return networkResource, field.Invalid(fldPath, network, "unable to convert network to MAPI")
 }
 
@@ -253,27 +238,36 @@ func convertPowerVSImageToMAPI(fldPath *field.Path, image *capibmv1.IBMPowerVSRe
 	if image == nil && imageRef == nil {
 		return mapiv1.PowerVSResource{}, field.Invalid(fldPath, image, "unable to convert image, image and imageref is nil")
 	}
+
 	var imageResource mapiv1.PowerVSResource
-	if image != nil {
-		if image.ID != nil {
-			imageResource.Type = mapiv1.PowerVSResourceTypeID
-			imageResource.ID = image.ID
-			return imageResource, nil
-		}
-		if image.Name != nil {
-			imageResource.Type = mapiv1.PowerVSResourceTypeName
-			imageResource.Name = image.Name
-			return imageResource, nil
-		}
-		if image.RegEx != nil {
-			imageResource.Type = mapiv1.PowerVSResourceTypeRegEx
-			imageResource.RegEx = image.RegEx
-			return imageResource, nil
-		}
+
+	if image == nil {
+		imageResource.Type = mapiv1.PowerVSResourceTypeName
+		imageResource.Name = &imageRef.Name
+
+		return imageResource, nil
 	}
-	imageResource.Type = mapiv1.PowerVSResourceTypeName
-	imageResource.Name = &imageRef.Name
-	return imageResource, nil
+
+	// In mapi provider the image resource is checked in the order of ID, Name followed by RegEx.
+	switch {
+	case image.ID != nil:
+		imageResource.Type = mapiv1.PowerVSResourceTypeID
+		imageResource.ID = image.ID
+
+		return imageResource, nil
+	case image.Name != nil:
+		imageResource.Type = mapiv1.PowerVSResourceTypeName
+		imageResource.Name = image.Name
+
+		return imageResource, nil
+	case image.RegEx != nil:
+		imageResource.Type = mapiv1.PowerVSResourceTypeRegEx
+		imageResource.RegEx = image.RegEx
+
+		return imageResource, nil
+	}
+
+	return mapiv1.PowerVSResource{}, field.Invalid(fldPath, image, "unable to convert image, image id, name and regex all are nil")
 }
 
 func convertPowerVSServiceInstanceToMAPI(fldPath *field.Path, serviceInstanceID string, serviceInstance *capibmv1.IBMPowerVSResourceReference) (mapiv1.PowerVSResource, *field.Error) {
@@ -281,25 +275,32 @@ func convertPowerVSServiceInstanceToMAPI(fldPath *field.Path, serviceInstanceID 
 	if serviceInstanceID != "" {
 		serviceInstanceResource.Type = mapiv1.PowerVSResourceTypeID
 		serviceInstanceResource.ID = &serviceInstanceID
+
 		return serviceInstanceResource, nil
 	}
+
 	if serviceInstance == nil {
 		return serviceInstanceResource, field.Invalid(fldPath, serviceInstance, "unable to convert service instance, service instance is nil")
 	}
-	if serviceInstance.ID != nil {
+
+	// In mapi provider the service instance resource is checked in the order of ID, Name followed by RegEx.
+	switch {
+	case serviceInstance.ID != nil:
 		serviceInstanceResource.Type = mapiv1.PowerVSResourceTypeID
 		serviceInstanceResource.ID = serviceInstance.ID
+
 		return serviceInstanceResource, nil
-	}
-	if serviceInstance.Name != nil {
+	case serviceInstance.Name != nil:
 		serviceInstanceResource.Type = mapiv1.PowerVSResourceTypeName
 		serviceInstanceResource.Name = serviceInstance.Name
+
 		return serviceInstanceResource, nil
-	}
-	if serviceInstance.RegEx != nil {
+	case serviceInstance.RegEx != nil:
 		serviceInstanceResource.Type = mapiv1.PowerVSResourceTypeRegEx
 		serviceInstanceResource.RegEx = serviceInstance.RegEx
+
 		return serviceInstanceResource, nil
 	}
+
 	return serviceInstanceResource, field.Invalid(fldPath, serviceInstance, "unable to convert service instance to MAPI")
 }
