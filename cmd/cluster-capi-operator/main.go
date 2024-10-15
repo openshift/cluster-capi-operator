@@ -97,7 +97,7 @@ func main() {
 		ResourceName:      "cluster-capi-operator-leader",
 		ResourceNamespace: "openshift-cluster-api",
 	}
-	diagnosticsOptions := capiflags.DiagnosticsOptions{}
+	capiManagerOptions := capiflags.ManagerOptions{}
 
 	healthAddr := flag.String(
 		"health-addr",
@@ -139,7 +139,7 @@ func main() {
 	// to allow leader lection flags to be bound
 	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
 	options.BindLeaderElectionFlags(&leaderElectionConfig, pflag.CommandLine)
-	capiflags.AddDiagnosticsOptions(pflag.CommandLine, &diagnosticsOptions)
+	capiflags.AddManagerOptions(pflag.CommandLine, &capiManagerOptions)
 	pflag.Parse()
 
 	if err := setFeatureGatesEnvVars(); err != nil {
@@ -151,7 +151,12 @@ func main() {
 		klog.LogToStderr(*logToStderr)
 	}
 
-	diagnosticsOpts := capiflags.GetDiagnosticsOptions(diagnosticsOptions)
+	_, diagnosticsOpts, err := capiflags.GetManagerOptions(capiManagerOptions)
+	if err != nil {
+		klog.Error(err, "unable to get manager options")
+		os.Exit(1)
+	}
+
 	syncPeriod := 10 * time.Minute
 
 	cacheOpts := cache.Options{
@@ -167,7 +172,7 @@ func main() {
 
 	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
 		Scheme:                  scheme,
-		Metrics:                 diagnosticsOpts,
+		Metrics:                 *diagnosticsOpts,
 		HealthProbeBindAddress:  *healthAddr,
 		LeaderElectionNamespace: leaderElectionConfig.ResourceNamespace,
 		LeaderElection:          leaderElectionConfig.LeaderElect,
