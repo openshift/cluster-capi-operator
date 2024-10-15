@@ -168,7 +168,7 @@ func (r *MachineSyncReconciler) Reconcile(ctx context.Context, req reconcile.Req
 		logger.Info("machine currently migrating", "machine", mapiMachine.GetName())
 		return ctrl.Result{}, nil
 	default:
-		logger.Info("machine AuthoritativeAPI has unexpected value", "AuthoritativeAPI", mapiMachine.Status.AuthoritativeAPI, "machine", mapiMachine.GetName())
+		logger.Info("machine AuthoritativeAPI has unexpected value", "AuthoritativeAPI", mapiMachine.Status.AuthoritativeAPI)
 		return ctrl.Result{}, nil
 	}
 }
