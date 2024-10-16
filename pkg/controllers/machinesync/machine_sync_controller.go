@@ -48,10 +48,6 @@ const (
 var (
 	// errPlatformNotSupported is returned when the platform is not supported.
 	errPlatformNotSupported = errors.New("error determining InfraMachine type, platform not supported")
-
-	// errAuthoritativeAPIUnexpected is returned when we receive an unexpected
-	// AuthoritativeAPI.
-	errAuthoritativeAPIUnexpected = errors.New("AuthoritativeAPI unexpected value")
 )
 
 // MachineSyncReconciler reconciles CAPI and MAPI machines.
@@ -174,7 +170,8 @@ func (r *MachineSyncReconciler) Reconcile(ctx context.Context, req reconcile.Req
 		logger.Info("machine currently migrating", "machine", mapiMachine.GetName())
 		return ctrl.Result{}, nil
 	default:
-		return ctrl.Result{}, fmt.Errorf("%w: %s", errAuthoritativeAPIUnexpected, mapiMachine.Spec.AuthoritativeAPI)
+		logger.Info("machine AuthoritativeAPI has unexpected value", "AuthoritativeAPI", mapiMachine.Status.AuthoritativeAPI)
+		return ctrl.Result{}, nil
 	}
 }
 
