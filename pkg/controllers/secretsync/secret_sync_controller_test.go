@@ -28,8 +28,9 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/ptr"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/config"
 
 	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
@@ -93,9 +94,14 @@ var _ = Describe("User Data Secret controller", func() {
 	syncedSecretKey := client.ObjectKey{Namespace: controllers.DefaultManagedNamespace, Name: managedUserDataSecretName}
 
 	BeforeEach(func() {
-		By("Setting up a new manager")
-		mgr, err := manager.New(cfg, manager.Options{})
-		Expect(err).NotTo(HaveOccurred())
+		By("Setting up a manager and controller")
+		var err error
+		mgr, err := ctrl.NewManager(cfg, ctrl.Options{
+			Controller: config.Controller{
+				SkipNameValidation: ptr.To(true),
+			},
+		})
+		Expect(err).ToNot(HaveOccurred(), "Manager should be able to be created")
 
 		reconciler = &UserDataSecretController{
 			ClusterOperatorStatusClient: operatorstatus.ClusterOperatorStatusClient{
@@ -103,6 +109,7 @@ var _ = Describe("User Data Secret controller", func() {
 				Recorder:         rec,
 				ManagedNamespace: controllers.DefaultManagedNamespace,
 			},
+
 			Scheme: scheme.Scheme,
 		}
 		Expect(reconciler.SetupWithManager(mgr)).To(Succeed())

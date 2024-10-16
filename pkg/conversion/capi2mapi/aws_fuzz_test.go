@@ -26,7 +26,7 @@ import (
 	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/capi2mapi"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/mapi2capi"
-	conversiontest "github.com/openshift/cluster-capi-operator/pkg/conversion/test"
+	conversiontest "github.com/openshift/cluster-capi-operator/pkg/conversion/test/fuzz"
 
 	runtimeserializer "k8s.io/apimachinery/pkg/runtime/serializer"
 

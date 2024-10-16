@@ -54,6 +54,7 @@ const (
 
 	defaultCAPINamespace = "openshift-cluster-api"
 	defaultMAPINamespace = "openshift-machine-api"
+	controllerName       = "InfraClusterController"
 	clusterOperatorName  = "cluster-api"
 	// This is the managedByAnnotation value that this controller sets by default when it creates an InfraCluster object.
 	// If the managedByAnnotation key is set, and it has this as the value, it means this controller is managing the InfraCluster.
@@ -82,7 +83,7 @@ type InfraClusterController struct {
 
 // Reconcile reconciles the cluster-api ClusterOperator object.
 func (r *InfraClusterController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	log := ctrl.LoggerFrom(ctx).WithName("InfraClusterController")
+	log := ctrl.LoggerFrom(ctx).WithName(controllerName)
 
 	log.Info("Reconciling InfraCluster")
 
@@ -255,6 +256,7 @@ func (r *InfraClusterController) setAvailableCondition(ctx context.Context, log 
 // SetupWithManager sets up the controller with the Manager.
 func (r *InfraClusterController) SetupWithManager(mgr ctrl.Manager, watchedObject client.Object) error {
 	if err := ctrl.NewControllerManagedBy(mgr).
+		Named(controllerName).
 		For(&configv1.ClusterOperator{}, builder.WithPredicates(clusterOperatorPredicates())).
 		Watches(
 			watchedObject,

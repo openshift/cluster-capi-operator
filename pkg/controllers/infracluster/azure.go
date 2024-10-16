@@ -286,7 +286,7 @@ func (r *InfraClusterController) newAzureCluster(providerSpec *mapiv1beta1.Azure
 			ResourceGroup: providerSpec.ResourceGroup,
 			ControlPlaneEndpoint: clusterv1.APIEndpoint{
 				Host: apiURL.Hostname(),
-				Port: int32(port),
+				Port: int32(port), //nolint:gosec
 			},
 		},
 	}

@@ -27,7 +27,9 @@ import (
 	machinev1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/machine/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/config"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -82,6 +84,9 @@ var _ = Describe("MachineSync Reconciler", func() {
 		var err error
 		mgr, err = ctrl.NewManager(cfg, ctrl.Options{
 			Scheme: testScheme,
+			Controller: config.Controller{
+				SkipNameValidation: ptr.To(true),
+			},
 		})
 		Expect(err).ToNot(HaveOccurred(), "Manager should be able to be created")
 
