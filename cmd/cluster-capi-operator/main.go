@@ -267,10 +267,10 @@ func setupPlatformReconcilers(mgr manager.Manager, infra *configv1.Infrastructur
 		if azureCloudEnvironment == configv1.AzureStackCloud {
 			klog.Infof("Detected Azure Cloud Environment %q on platform %q is not supported, skipping capi controllers setup", azureCloudEnvironment, platform)
 			setupUnsupportedController(mgr, managedNamespace)
+		} else {
+			setupReconcilers(mgr, infra, platform, &azurev1.AzureCluster{}, containerImages, applyClient, apiextensionsClient, managedNamespace)
+			setupWebhooks(mgr)
 		}
-
-		setupReconcilers(mgr, infra, platform, &azurev1.AzureCluster{}, containerImages, applyClient, apiextensionsClient, managedNamespace)
-		setupWebhooks(mgr)
 	case configv1.PowerVSPlatformType:
 		setupReconcilers(mgr, infra, platform, &ibmpowervsv1.IBMPowerVSCluster{}, containerImages, applyClient, apiextensionsClient, managedNamespace)
 		setupWebhooks(mgr)
