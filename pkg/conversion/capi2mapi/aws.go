@@ -208,6 +208,8 @@ func (m machineAndAWSMachineAndAWSCluster) ToMachine() (*mapiv1.Machine, []strin
 }
 
 // ToMachineSet converts a capi2mapi MachineAndAWSMachineTemplate into a MAPI MachineSet.
+//
+//nolint:dupl
 func (m machineSetAndAWSMachineTemplateAndAWSCluster) ToMachineSet() (*mapiv1.MachineSet, []string, error) {
 	if m.machineSet == nil || m.template == nil || m.awsCluster == nil || m.machineAndAWSMachineAndAWSCluster == nil {
 		return nil, nil, errCAPIMachineSetAWSMachineTemplateAWSClusterCannotBeNil

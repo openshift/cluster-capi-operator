@@ -124,6 +124,8 @@ func (m *powerVSMachineAndInfra) toMachineAndInfrastructureMachine() (*capiv1.Ma
 }
 
 // ToMachineSetAndMachineTemplate converts a mapi2capi PowerVSMachineSetAndInfra into a CAPI MachineSet and CAPIBM IBMPowerVSMachineTemplate.
+//
+//nolint:dupl
 func (m *powerVSMachineSetAndInfra) ToMachineSetAndMachineTemplate() (*capiv1.MachineSet, client.Object, []string, error) {
 	var (
 		errs     []error
