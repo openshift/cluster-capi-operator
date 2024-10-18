@@ -15,6 +15,8 @@ limitations under the License.
 */
 package controllers
 
+import machinev1beta1 "github.com/openshift/api/machine/v1beta1"
+
 const (
 	// DefaultManagedNamespace is the default namespace where the operator
 	// manages CAPI resources.
@@ -32,4 +34,9 @@ const (
 
 	// InfrastructureResourceName is the name of the cluster global infrastructure resource.
 	InfrastructureResourceName = "cluster"
+
+	// ConditionSynchronised is used to denote when a MAPI or CAPI resource is synchronised.
+	// This condition should only be true when a synchronisation controller has successfully synchronised
+	// a non-authoritative resource.
+	ConditionSynchronised machinev1beta1.ConditionType = "Synchronised"
 )
