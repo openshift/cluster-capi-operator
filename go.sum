@@ -429,8 +429,6 @@ github.com/openshift/cluster-control-plane-machine-set-operator v0.0.0-202410080
 github.com/openshift/cluster-control-plane-machine-set-operator v0.0.0-20241008085214-8d85b2cb2c1d/go.mod h1:u+45mmWUg2ld7nsPDXzntjMsxannCV0CVmcUj9tIDvU=
 github.com/openshift/library-go v0.0.0-20240919205913-c96b82b3762b h1:y2DduJug7UZqTu0QTkRPAu73nskuUbFA66fmgxVf/fI=
 github.com/openshift/library-go v0.0.0-20240919205913-c96b82b3762b/go.mod h1:f8QcnrooSwGa96xI4UaKbKGJZskhTCGeimXKyc4t/ZU=
-github.com/openshift/machine-api-operator v0.2.1-0.20241009125928-52a965a42fac h1:qlOVMOPOJ/0YRDKUk5FUZspJSILUo/7P3V5Kd8vP4d8=
-github.com/openshift/machine-api-operator v0.2.1-0.20241009125928-52a965a42fac/go.mod h1:gXjplVdC80eclLdaZbWsDbbewhHmE99CVk4o61TiTbM=
 github.com/otiai10/copy v1.2.0/go.mod h1:rrF5dJ5F0t/EWSYODDu4j9/vEeYHMkc8jt0zJChqQWw=
 github.com/otiai10/copy v1.14.0 h1:dCI/t1iTdYGtkvCuBG2BgR6KZa83PTclw4U5n2wAllU=
 github.com/otiai10/copy v1.14.0/go.mod h1:ECfuL02W+/FkTWZWgQqXPWZgW9oeKCSQ5qVfSc4qc4w=
@@ -845,8 +843,8 @@ sigs.k8s.io/cluster-api-provider-openstack v0.11.1 h1:j3aBJr5DozXbOT25QHmbDdCKs6
 sigs.k8s.io/cluster-api-provider-openstack v0.11.1/go.mod h1:fH/eFFSgLtfyNB1OvYVPhrIdM7zhxAAkWbuJhr3ObpM=
 sigs.k8s.io/cluster-api-provider-vsphere v1.10.0 h1:UMdJgcaKm+RBLEG6k2jotXh4yuhCJg2OYv4eqOji1tU=
 sigs.k8s.io/cluster-api-provider-vsphere v1.10.0/go.mod h1:CksGHK/wRUPa9I9tmjb4xwM+0f/u/6L8o8EjTggt3xI=
-sigs.k8s.io/controller-runtime v0.19.0 h1:nWVM7aq+Il2ABxwiCizrVDSlmDcshi9llbaFbC0ji/Q=
-sigs.k8s.io/controller-runtime v0.19.0/go.mod h1:iRmWllt8IlaLjvTTDLhRBXIEtkCK6hwVBJJsYS9Ajf4=
+sigs.k8s.io/controller-runtime v0.19.1 h1:Son+Q40+Be3QWb+niBXAg2vFiYWolDjjRfO8hn/cxOk=
+sigs.k8s.io/controller-runtime v0.19.1/go.mod h1:iRmWllt8IlaLjvTTDLhRBXIEtkCK6hwVBJJsYS9Ajf4=
 sigs.k8s.io/controller-runtime/tools/setup-envtest v0.0.0-20240923090159-236e448db12c h1:w1vANkdIpYwbEZH0y1C7iJItgdEGvF9A3eCdRmLhg8I=
 sigs.k8s.io/controller-runtime/tools/setup-envtest v0.0.0-20240923090159-236e448db12c/go.mod h1:IaDsO8xSPRxRG1/rm9CP7+jPmj0nMNAuNi/yiHnLX8k=
 sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd h1:EDPBXCAspyGV4jQlpZSudPeMmr1bNJefnuqLsRAsHZo=

@@ -26,11 +26,10 @@ import (
 	corev1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/core/v1"
 	machinev1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/machine/v1beta1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	consts "github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/test"
 )
 
@@ -106,15 +105,33 @@ var _ = Describe("MachineSetSync Reconciler", func() {
 		stopManager()
 	})
 
-	It("should reconcile without erroring", func() {
-		machineset = machineSetBuilder.Build()
+	Context("when the MAPI machine set has MachineAuthority set to Cluster API", func() {
+		JustBeforeEach(func() {
+			By("Creating the CAPI and MAPI MachineSets")
+			mapiMachineSet = mapiMachineSetBuilder.Build()
+			capiMachineSet = capiMachineSetBuilder.Build()
 
-		_, err := reconciler.Reconcile(ctx, reconcile.Request{
-			NamespacedName: types.NamespacedName{
-				Namespace: namespaceName,
-				Name:      machineset.Name,
-			},
+			Expect(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
+			Expect(k8sClient.Create(ctx, mapiMachineSet)).Should(Succeed())
+
 		})
-		Expect(err).ToNot(HaveOccurred())
+
+		// For now only happy path
+		It("should update the synchronized condition", func() {
+
+			By("Setting the AuthoritativeAPI to ClusterAPI")
+			Eventually(k.UpdateStatus(mapiMachineSet, func() {
+				mapiMachineSet.Status.AuthoritativeAPI = machinev1beta1.MachineAuthorityClusterAPI
+			})).Should(Succeed())
+
+			Eventually(k.Object(mapiMachineSet), timeout).Should(
+				HaveField("Status.Conditions", ContainElement(
+					SatisfyAll(
+						HaveField("Type", Equal(consts.SynchronizedCondition)),
+						HaveField("Status", Equal(corev1.ConditionTrue)),
+					))),
+			)
+		})
+
 	})
 })

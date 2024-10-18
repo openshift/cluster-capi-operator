@@ -62,15 +62,23 @@ func StartEnvTest(testEnv *envtest.Environment) (*rest.Config, client.Client, er
 		fakeMachineCRD,
 		fakeMachineSetCRD,
 		fakeAWSClusterCRD,
+		fakeAWSMachineTemplateCRD,
 		fakeAzureClusterCRD,
 		fakeGCPClusterCRD,
 	}
+
 	testEnv.CRDDirectoryPaths = []string{
 		path.Join(root, "vendor", "github.com", "openshift", "api", "config", "v1", "zz_generated.crd-manifests"),
 		path.Join(root, "vendor", "github.com", "openshift", "api", "operator", "v1", "zz_generated.crd-manifests"),
-		path.Join(root, "vendor", "github.com", "openshift", "api", "machine", "v1beta1", "zz_generated.crd-manifests"),
 	}
 	testEnv.ErrorIfCRDPathMissing = true
+
+	testEnv.CRDInstallOptions = envtest.CRDInstallOptions{
+		Paths: []string{
+			path.Join(root, "vendor", "github.com", "openshift", "api", "machine", "v1beta1", "zz_generated.crd-manifests", "0000_10_machine-api_01_machinesets-CustomNoUpgrade.crd.yaml"),
+			path.Join(root, "vendor", "github.com", "openshift", "api", "machine", "v1beta1", "zz_generated.crd-manifests", "0000_10_machine-api_01_machines-CustomNoUpgrade.crd.yaml"),
+		},
+	}
 
 	cfg, err := testEnv.Start()
 	if err != nil {

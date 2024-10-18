@@ -18,7 +18,6 @@ require (
 	github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20241024095219-086923b9d3fd
 	github.com/openshift/cluster-control-plane-machine-set-operator v0.0.0-20241008085214-8d85b2cb2c1d
 	github.com/openshift/library-go v0.0.0-20240919205913-c96b82b3762b
-	github.com/openshift/machine-api-operator v0.2.1-0.20241009125928-52a965a42fac
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/pflag v1.0.6-0.20210604193023-d5e0c0615ace
 	gopkg.in/yaml.v2 v2.4.0
@@ -36,7 +35,7 @@ require (
 	sigs.k8s.io/cluster-api-provider-ibmcloud v0.8.0
 	sigs.k8s.io/cluster-api-provider-openstack v0.11.1
 	sigs.k8s.io/cluster-api-provider-vsphere v1.10.0
-	sigs.k8s.io/controller-runtime v0.19.0
+	sigs.k8s.io/controller-runtime v0.19.1
 	sigs.k8s.io/controller-runtime/tools/setup-envtest v0.0.0-20240923090159-236e448db12c
 	sigs.k8s.io/yaml v1.4.0
 )
