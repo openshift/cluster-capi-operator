@@ -18,6 +18,7 @@ require (
 	github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20241024095219-086923b9d3fd
 	github.com/openshift/cluster-control-plane-machine-set-operator v0.0.0-20241008085214-8d85b2cb2c1d
 	github.com/openshift/library-go v0.0.0-20240919205913-c96b82b3762b
+	github.com/openshift/machine-api-operator v0.2.1-0.20241009125928-52a965a42fac
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/pflag v1.0.6-0.20210604193023-d5e0c0615ace
 	gopkg.in/yaml.v2 v2.4.0
@@ -106,10 +107,10 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-logr/zapr v1.3.0 // indirect
 	github.com/go-openapi/errors v0.22.0 // indirect
-	github.com/go-openapi/jsonpointer v0.20.2 // indirect
-	github.com/go-openapi/jsonreference v0.20.4 // indirect
+	github.com/go-openapi/jsonpointer v0.21.0 // indirect
+	github.com/go-openapi/jsonreference v0.21.0 // indirect
 	github.com/go-openapi/strfmt v0.23.0 // indirect
-	github.com/go-openapi/swag v0.22.8 // indirect
+	github.com/go-openapi/swag v0.23.0 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/go-playground/validator/v10 v10.19.0 // indirect
