@@ -18,6 +18,7 @@ package capi2mapi
 
 import (
 	"errors"
+	"fmt"
 
 	mapiv1 "github.com/openshift/api/machine/v1"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
@@ -85,29 +86,29 @@ func (m machineAndPowerVSMachineAndPowerVSCluster) ToMachine() (*mapiv1beta1.Mac
 	}
 
 	var (
-		errors   []error
+		errors   field.ErrorList
 		warnings []string
 	)
 
 	mapiPowerVSSpec, err := m.toProviderSpec()
 	if err != nil {
-		errors = append(errors, err)
+		errors = append(errors, err...)
+	}
+
+	powerVSRawExt, errRaw := RawExtensionFromProviderSpec(mapiPowerVSSpec)
+	if errRaw != nil {
+		return nil, nil, fmt.Errorf("unable to convert PowerVS providerSpec to raw extension: %w", errRaw)
 	}
 
 	mapiMachine, err := fromCAPIMachineToMAPIMachine(m.machine)
 	if err != nil {
-		errors = append(errors, err)
-	}
-
-	powerVSRawExt, err := RawExtensionFromProviderSpec(mapiPowerVSSpec)
-	if err != nil {
-		errors = append(errors, err)
+		errors = append(errors, err...)
 	}
 
 	mapiMachine.Spec.ProviderSpec.Value = powerVSRawExt
 
 	if len(errors) > 0 {
-		return nil, warnings, utilerrors.NewAggregate(errors)
+		return nil, warnings, errors.ToAggregate()
 	}
 
 	return mapiMachine, warnings, nil
@@ -154,11 +155,7 @@ func (m machineSetAndPowerVSMachineTemplateAndPowerVSCluster) ToMachineSet() (*m
 }
 
 // toProviderSpec converts a capi2mapi machineAndPowerVSMachineAndPowerVSCluster into a MAPI PowerVSMachineProviderConfig.
-func (m machineAndPowerVSMachineAndPowerVSCluster) toProviderSpec() (*mapiv1.PowerVSMachineProviderConfig, error) {
-	if m.machine == nil || m.powerVSMachine == nil || m.powerVSCluster == nil {
-		return nil, errCAPIMachinePowerVSMachinePowerVSClusterCannotBeNil
-	}
-
+func (m machineAndPowerVSMachineAndPowerVSCluster) toProviderSpec() (*mapiv1.PowerVSMachineProviderConfig, field.ErrorList) {
 	errs := field.ErrorList{}
 
 	fldPath := field.NewPath("spec")
@@ -203,7 +200,7 @@ func (m machineAndPowerVSMachineAndPowerVSCluster) toProviderSpec() (*mapiv1.Pow
 	}
 
 	if len(errs) > 0 {
-		return nil, errs.ToAggregate()
+		return nil, errs
 	}
 
 	return &mapiProviderConfig, nil

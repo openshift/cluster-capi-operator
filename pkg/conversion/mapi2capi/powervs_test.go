@@ -19,81 +19,218 @@ import (
 	"encoding/json"
 	"fmt"
 
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+
+	configv1 "github.com/openshift/api/config/v1"
 	mapiv1 "github.com/openshift/api/machine/v1"
 	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
+	"github.com/openshift/cluster-capi-operator/pkg/conversion/test/matchers"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
-
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
-	configv1 "github.com/openshift/api/config/v1"
 )
 
-var _ = Describe("mapi2capi PowerVS", func() {
+var _ = Describe("mapi2capi PowerVS conversion", func() {
 
-	powerVSProviderSpec := getPowerVSProviderSpec()
+	var (
+		infra = &configv1.Infrastructure{
+			Spec:   configv1.InfrastructureSpec{},
+			Status: configv1.InfrastructureStatus{InfrastructureName: "sample-cluster-name"},
+		}
+		mustConvertPowerVSProviderSpecToRawExtension = func(spec *mapiv1.PowerVSMachineProviderConfig) *runtime.RawExtension {
+			if spec == nil {
+				return &runtime.RawExtension{}
+			}
 
-	powerVSRawExt, err := rawExtensionFromPowerVSProviderSpec(powerVSProviderSpec)
-	Expect(err).ToNot(HaveOccurred())
+			rawBytes, err := json.Marshal(spec)
+			if err != nil {
+				panic(fmt.Sprintf("unable to convert (marshal) test PowerVSProviderSpec to runtime.RawExtension: %v", err))
+			}
 
-	powerVSMAPIMachine := &machinev1beta1.Machine{
-		Spec: machinev1beta1.MachineSpec{
-			ProviderSpec: machinev1beta1.ProviderSpec{
-				Value: powerVSRawExt,
-			},
-			ProviderID: ptr.To("test-123"),
-		},
+			return &runtime.RawExtension{
+				Raw: rawBytes,
+			}
+		}
+	)
+
+	type powerVSMAPI2CAPIConversionInput struct {
+		machineFunc    func() *machinev1beta1.Machine
+		infra          *configv1.Infrastructure
+		expectedErrors []string
 	}
 
-	powerVSMAPIMachineSet := &machinev1beta1.MachineSet{
-		Spec: machinev1beta1.MachineSetSpec{
-			Selector: metav1.LabelSelector{},
-			Template: machinev1beta1.MachineTemplateSpec{
-				Spec: machinev1beta1.MachineSpec{
-					ProviderSpec: machinev1beta1.ProviderSpec{
-						Value: powerVSRawExt,
+	type powerVSMAPI2CAPIMachineSetConversionInput struct {
+		machineSetFunc func() *machinev1beta1.MachineSet
+		infra          *configv1.Infrastructure
+		expectedErrors []string
+	}
+
+	var _ = DescribeTable("mapi2capi PowerVS convert MAPI Machine",
+		func(in powerVSMAPI2CAPIConversionInput) {
+			_, _, _, err := FromPowerVSMachineAndInfra(in.machineFunc(), in.infra).ToMachineAndInfrastructureMachine()
+			Expect(err).To(matchers.ConsistOfMatchErrorSubstrings(in.expectedErrors), "should match expected errors while converting an PowerVS MAPI Machine to CAPI")
+		},
+
+		// Base Case.
+		Entry("With a Base configuration", powerVSMAPI2CAPIConversionInput{
+			machineFunc: func() *machinev1beta1.Machine {
+				return &machinev1beta1.Machine{
+					Spec: machinev1beta1.MachineSpec{
+						ProviderSpec: machinev1beta1.ProviderSpec{
+							Value: mustConvertPowerVSProviderSpecToRawExtension(getPowerVSProviderSpec()),
+						},
+						ProviderID: ptr.To("test-123"),
 					},
-					ProviderID: ptr.To("test-123"),
-				},
+				}
 			},
+			infra:          infra,
+			expectedErrors: []string{},
+		}),
+
+		// Only Error.
+		Entry("Without ServiceInstance", powerVSMAPI2CAPIConversionInput{
+			machineFunc: func() *machinev1beta1.Machine {
+				providerSpec := getPowerVSProviderSpec()
+				providerSpec.ServiceInstance = mapiv1.PowerVSResource{}
+				powerVSMAPIMachine := &machinev1beta1.Machine{
+					Spec: machinev1beta1.MachineSpec{
+						ProviderSpec: machinev1beta1.ProviderSpec{
+							Value: mustConvertPowerVSProviderSpecToRawExtension(providerSpec),
+						},
+						ProviderID: ptr.To("test-123"),
+					},
+				}
+
+				return powerVSMAPIMachine
+			},
+			infra: infra,
+			expectedErrors: []string{
+				"spec.providerSpec.value.serviceInstance.type: Invalid value: \"\": unknown type",
+			},
+		}),
+
+		Entry("Without Image", powerVSMAPI2CAPIConversionInput{
+			machineFunc: func() *machinev1beta1.Machine {
+				providerSpec := getPowerVSProviderSpec()
+				providerSpec.Image = mapiv1.PowerVSResource{}
+				powerVSMAPIMachine := &machinev1beta1.Machine{
+					Spec: machinev1beta1.MachineSpec{
+						ProviderSpec: machinev1beta1.ProviderSpec{
+							Value: mustConvertPowerVSProviderSpecToRawExtension(providerSpec),
+						},
+						ProviderID: ptr.To("test-123"),
+					},
+				}
+
+				return powerVSMAPIMachine
+			},
+			infra: infra,
+			expectedErrors: []string{
+				"spec.providerSpec.value.image.type: Invalid value: \"\": unknown type",
+			},
+		}),
+
+		Entry("Without Network", powerVSMAPI2CAPIConversionInput{
+			machineFunc: func() *machinev1beta1.Machine {
+				providerSpec := getPowerVSProviderSpec()
+				providerSpec.Network = mapiv1.PowerVSResource{}
+				powerVSMAPIMachine := &machinev1beta1.Machine{
+					Spec: machinev1beta1.MachineSpec{
+						ProviderSpec: machinev1beta1.ProviderSpec{
+							Value: mustConvertPowerVSProviderSpecToRawExtension(providerSpec),
+						},
+						ProviderID: ptr.To("test-123"),
+					},
+				}
+
+				return powerVSMAPIMachine
+			},
+			infra: infra,
+			expectedErrors: []string{
+				"spec.providerSpec.value.network.type: Invalid value: \"\": unknown type",
+			},
+		}),
+
+		Entry("With LoadBalancer", powerVSMAPI2CAPIConversionInput{
+			machineFunc: func() *machinev1beta1.Machine {
+				providerSpec := getPowerVSProviderSpec()
+				providerSpec.LoadBalancers = append(providerSpec.LoadBalancers, mapiv1.LoadBalancerReference{
+					Name: "LB-One",
+					Type: mapiv1.ApplicationLoadBalancerType,
+				})
+				powerVSMAPIMachine := &machinev1beta1.Machine{
+					Spec: machinev1beta1.MachineSpec{
+						ProviderSpec: machinev1beta1.ProviderSpec{
+							Value: mustConvertPowerVSProviderSpecToRawExtension(providerSpec),
+						},
+						ProviderID: ptr.To("test-123"),
+					},
+				}
+
+				return powerVSMAPIMachine
+			},
+			infra: infra,
+			expectedErrors: []string{
+				"spec.providerSpec.value.loadBalancers: Invalid value: []v1.LoadBalancerReference{v1.LoadBalancerReference{Name:\"LB-One\", Type:\"Application\"}}: loadBalancers are not supported",
+			},
+		}),
+
+		Entry("With metadata in provider spec", powerVSMAPI2CAPIConversionInput{
+
+			machineFunc: func() *machinev1beta1.Machine {
+				providerSpec := getPowerVSProviderSpec()
+				providerSpec.ObjectMeta = metav1.ObjectMeta{Name: "test"}
+				powerVSMAPIMachine := &machinev1beta1.Machine{
+					Spec: machinev1beta1.MachineSpec{
+						ProviderSpec: machinev1beta1.ProviderSpec{
+							Value: mustConvertPowerVSProviderSpecToRawExtension(providerSpec),
+						},
+						ProviderID: ptr.To("test-123"),
+					},
+				}
+
+				return powerVSMAPIMachine
+			},
+			infra: infra,
+			expectedErrors: []string{
+				"spec.providerSpec.value.metadata: Invalid value: v1.ObjectMeta{Name:\"test\", GenerateName:\"\", Namespace:\"\", SelfLink:\"\", UID:\"\", ResourceVersion:\"\", Generation:0, CreationTimestamp:time.Date(1, time.January, 1, 0, 0, 0, 0, time.UTC), DeletionTimestamp:<nil>, DeletionGracePeriodSeconds:(*int64)(nil), Labels:map[string]string(nil), Annotations:map[string]string(nil), OwnerReferences:[]v1.OwnerReference(nil), Finalizers:[]string(nil), ManagedFields:[]v1.ManagedFieldsEntry(nil)}: metadata is not supported",
+			},
+		}),
+	)
+
+	var _ = DescribeTable("mapi2capi PowerVS convert MAPI MachineSet",
+		func(in powerVSMAPI2CAPIMachineSetConversionInput) {
+			_, _, _, err := FromPowerVSMachineSetAndInfra(in.machineSetFunc(), in.infra).ToMachineSetAndMachineTemplate()
+			Expect(err).To(matchers.ConsistOfMatchErrorSubstrings(in.expectedErrors), "should match expected errors while converting an PowerVS MAPI MachineSet to CAPI")
 		},
-	}
 
-	infra := configv1.Infrastructure{
-		Spec: configv1.InfrastructureSpec{},
-		Status: configv1.InfrastructureStatus{
-			InfrastructureName: "sample-cluster-name",
-		},
-	}
-
-	// We need to add error handling for the providerSpec issues before we can enable the following tests.
-	It("should be able to convert a MAPI Power VS Machine to a CAPI Machine", func() {
-		// Convert a MAPI Machine to a CAPI Core Machine + a CAPI InfraMachine.
-		capiMachine, capiInfraMachine, warns, err :=
-			FromPowerVSMachineAndInfra(powerVSMAPIMachine, &infra).ToMachineAndInfrastructureMachine()
-		Expect(err).ToNot(HaveOccurred(), "should have been able to convert providerSpec to MachineTemplateSpec")
-		Expect(warns).To(BeEmpty(), "should have not warned while converting providerSpec to MachineTemplateSpec")
-		Expect(capiMachine).To(Not(BeNil()), "should not have a nil CAPI Machine")
-		Expect(capiInfraMachine).To(Not(BeNil()), "should not have a nil CAPI InfrastructureMachine")
-	})
-
-	It("should be able to convert a MAPI Power VS MachineSet to a CAPI MachineSet", func() {
-		// Convert a MAPI MachineSet to a CAPI Core MachineSet + a CAPI InfraMachineTemplateSpec.
-		capiMachineSet, capiInfraMachineTemplate, warns, err :=
-			FromPowerVSMachineSetAndInfra(powerVSMAPIMachineSet, &infra).ToMachineSetAndMachineTemplate()
-		Expect(err).ToNot(HaveOccurred(), "should have been able to convert MAPI MachineSet to CAPI MachineSet")
-		Expect(warns).To(BeEmpty(), "should have not warned while converting MAPI MachineSet to CAPI MachineSet")
-		Expect(capiMachineSet).To(Not(BeNil()), "should not have a nil CAPI MachineSet")
-		Expect(capiInfraMachineTemplate).To(Not(BeNil()), "should not have a nil CAPI MachineTemplate")
-	})
-
+		Entry("With a Base configuration", powerVSMAPI2CAPIMachineSetConversionInput{
+			machineSetFunc: func() *machinev1beta1.MachineSet {
+				return &machinev1beta1.MachineSet{
+					Spec: machinev1beta1.MachineSetSpec{
+						Template: machinev1beta1.MachineTemplateSpec{
+							Spec: machinev1beta1.MachineSpec{
+								ProviderSpec: machinev1beta1.ProviderSpec{
+									Value: mustConvertPowerVSProviderSpecToRawExtension(getPowerVSProviderSpec()),
+								},
+								ProviderID: ptr.To("test-123"),
+							},
+						},
+					},
+				}
+			},
+			infra:          infra,
+			expectedErrors: []string{},
+		}),
+	)
 })
 
+// TODO: We should add this to machine builder
 // getPowerVSProviderSpec builds and returns PowerVSProviderConfig.
 func getPowerVSProviderSpec() *mapiv1.PowerVSMachineProviderConfig {
-	// TODO: May be we can add this in machine builder?
 	return &mapiv1.PowerVSMachineProviderConfig{
 		TypeMeta:   metav1.TypeMeta{},
 		ObjectMeta: metav1.ObjectMeta{},
@@ -121,20 +258,4 @@ func getPowerVSProviderSpec() *mapiv1.PowerVSMachineProviderConfig {
 		Processors:    intstr.FromString("2"),
 		MemoryGiB:     32,
 	}
-}
-
-// rawExtensionFromPowerVSProviderSpec marshals the machine provider spec.
-func rawExtensionFromPowerVSProviderSpec(spec *mapiv1.PowerVSMachineProviderConfig) (*runtime.RawExtension, error) {
-	if spec == nil {
-		return &runtime.RawExtension{}, nil
-	}
-
-	rawBytes, err := json.Marshal(spec)
-	if err != nil {
-		return nil, fmt.Errorf("error marshalling providerSpec: %w", err)
-	}
-
-	return &runtime.RawExtension{
-		Raw: rawBytes,
-	}, nil
 }
