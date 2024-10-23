@@ -34,8 +34,8 @@ const (
 // fromCAPIMachineToMAPIMachine translates a core CAPI Machine to its MAPI Machine correspondent.
 //
 //nolint:funlen
-func fromCAPIMachineToMAPIMachine(capiMachine *capiv1.Machine) (*mapiv1.Machine, error) {
-	errs := []*field.Error{}
+func fromCAPIMachineToMAPIMachine(capiMachine *capiv1.Machine) (*mapiv1.Machine, field.ErrorList) {
+	errs := field.ErrorList{}
 
 	mapiMachine := &mapiv1.Machine{
 		ObjectMeta: metav1.ObjectMeta{
@@ -97,7 +97,7 @@ func fromCAPIMachineToMAPIMachine(capiMachine *capiv1.Machine) (*mapiv1.Machine,
 
 	if len(errs) > 0 {
 		// Return the mapiMachine so that the logic continues and collects all possible conversion errors.
-		return mapiMachine, field.ErrorList(errs).ToAggregate()
+		return mapiMachine, errs
 	}
 
 	return mapiMachine, nil

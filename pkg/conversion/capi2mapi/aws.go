@@ -88,11 +88,7 @@ func FromMachineSetAndAWSMachineTemplateAndAWSCluster(ms *capiv1.MachineSet, mts
 // toProviderSpec converts a capi2mapi MachineAndAWSMachineTemplateAndAWSCluster into a MAPI AWSMachineProviderConfig.
 //
 //nolint:funlen
-func (m machineAndAWSMachineAndAWSCluster) toProviderSpec() (*mapiv1.AWSMachineProviderConfig, []string, error) {
-	if m.machine == nil || m.awsMachine == nil || m.awsCluster == nil {
-		return nil, nil, errCAPIMachineAWSMachineAWSClusterCannotBeNil
-	}
-
+func (m machineAndAWSMachineAndAWSCluster) toProviderSpec() (*mapiv1.AWSMachineProviderConfig, []string, field.ErrorList) {
 	var (
 		warnings []string
 		errors   field.ErrorList
@@ -170,7 +166,7 @@ func (m machineAndAWSMachineAndAWSCluster) toProviderSpec() (*mapiv1.AWSMachineP
 	errors = append(errors, handleUnsupportedAWSMachineFields(fldPath, m.awsMachine.Spec)...)
 
 	if len(errors) > 0 {
-		return nil, warnings, errors.ToAggregate()
+		return nil, warnings, errors
 	}
 
 	return &mapaProviderConfig, warnings, nil
@@ -183,31 +179,31 @@ func (m machineAndAWSMachineAndAWSCluster) ToMachine() (*mapiv1.Machine, []strin
 	}
 
 	var (
-		errors   []error
+		errors   field.ErrorList
 		warnings []string
 	)
 
 	mapaSpec, warn, err := m.toProviderSpec()
 	if err != nil {
-		errors = append(errors, err)
+		errors = append(errors, err...)
+	}
+
+	awsRawExt, errRaw := RawExtensionFromProviderSpec(mapaSpec)
+	if errRaw != nil {
+		return nil, nil, fmt.Errorf("unable to convert AWS providerSpec to raw extension: %w", errRaw)
 	}
 
 	warnings = append(warnings, warn...)
 
 	mapiMachine, err := fromCAPIMachineToMAPIMachine(m.machine)
 	if err != nil {
-		errors = append(errors, err)
-	}
-
-	awsRawExt, err := RawExtensionFromProviderSpec(mapaSpec)
-	if err != nil {
-		errors = append(errors, err)
+		errors = append(errors, err...)
 	}
 
 	mapiMachine.Spec.ProviderSpec.Value = awsRawExt
 
 	if len(errors) > 0 {
-		return nil, warnings, utilerrors.NewAggregate(errors)
+		return nil, warnings, errors.ToAggregate()
 	}
 
 	return mapiMachine, warnings, nil
