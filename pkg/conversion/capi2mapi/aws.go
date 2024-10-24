@@ -16,7 +16,6 @@ limitations under the License.
 package capi2mapi
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -25,7 +24,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/utils/ptr"
@@ -210,6 +208,8 @@ func (m machineAndAWSMachineAndAWSCluster) ToMachine() (*mapiv1.Machine, []strin
 }
 
 // ToMachineSet converts a capi2mapi MachineAndAWSMachineTemplate into a MAPI MachineSet.
+//
+//nolint:dupl
 func (m machineSetAndAWSMachineTemplateAndAWSCluster) ToMachineSet() (*mapiv1.MachineSet, []string, error) {
 	if m.machineSet == nil || m.template == nil || m.awsCluster == nil || m.machineAndAWSMachineAndAWSCluster == nil {
 		return nil, nil, errCAPIMachineSetAWSMachineTemplateAWSClusterCannotBeNil
@@ -248,22 +248,6 @@ func (m machineSetAndAWSMachineTemplateAndAWSCluster) ToMachineSet() (*mapiv1.Ma
 }
 
 // Conversion helpers.
-
-// RawExtensionFromProviderSpec marshals the machine provider spec.
-func RawExtensionFromProviderSpec(spec *mapiv1.AWSMachineProviderConfig) (*runtime.RawExtension, error) {
-	if spec == nil {
-		return &runtime.RawExtension{}, nil
-	}
-
-	rawBytes, err := json.Marshal(spec)
-	if err != nil {
-		return nil, fmt.Errorf("error marshalling providerSpec: %w", err)
-	}
-
-	return &runtime.RawExtension{
-		Raw: rawBytes,
-	}, nil
-}
 
 func convertAWSMetadataOptionsToMAPI(fldPath *field.Path, capiMetadataOpts *capav1.InstanceMetadataOptions) (mapiv1.MetadataServiceOptions, []string, field.ErrorList) {
 	var (

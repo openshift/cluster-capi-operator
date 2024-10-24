@@ -29,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
 	awscapiv1beta1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta1"
+	capibmv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
 	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -193,6 +194,8 @@ func getInfraMachineFromProvider(platform configv1.PlatformType) (client.Object,
 	switch platform {
 	case configv1.AWSPlatformType:
 		return &awscapiv1beta1.AWSMachine{}, nil
+	case configv1.PowerVSPlatformType:
+		return &capibmv1.IBMPowerVSMachine{}, nil
 	default:
 		return nil, fmt.Errorf("%w: %s", errPlatformNotSupported, platform)
 	}
