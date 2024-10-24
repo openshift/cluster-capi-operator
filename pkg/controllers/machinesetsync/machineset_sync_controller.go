@@ -20,14 +20,20 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 
+	"github.com/go-logr/logr"
 	configv1 "github.com/openshift/api/config/v1"
 	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
+	consts "github.com/openshift/cluster-capi-operator/pkg/controllers"
+	"github.com/openshift/cluster-capi-operator/pkg/conversion/capi2mapi"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
+	"github.com/openshift/machine-api-operator/pkg/util/conditions"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
-	awscapiv1beta1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta1"
+	awscapiv1beta1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -58,12 +64,13 @@ type MachineSetSyncReconciler struct {
 	MAPINamespace string
 }
 
-// SetupWithManager sets the CoreClusterReconciler controller up with the given manager.
+// SetupWithManager sets up the controller with the Manager.
 func (r *MachineSetSyncReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	infraMachineTemplate, err := getInfraMachineTemplateFromProvider(r.Platform)
 	if err != nil {
-		return fmt.Errorf("failed to get InfraMachine from Provider: %w", err)
+		return fmt.Errorf("failed to get InfraMachineTemplate from Provider: %w", err)
 	}
+
 	// Allow the namespaces to be set externally for test purposes, when not set,
 	// default to the production namespaces.
 	if r.CAPINamespace == "" {
@@ -98,88 +105,218 @@ func (r *MachineSetSyncReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return nil
 }
 
-// Reconcile reconciles CAPI and MAPI machines for their respective namespaces.
-//
-//nolint:funlen
+// Reconcile reconciles CAPI and MAPI MachineSets for their respective namespaces.
 func (r *MachineSetSyncReconciler) Reconcile(ctx context.Context, req reconcile.Request) (ctrl.Result, error) {
-	logger := log.FromContext(ctx, "namespace", req.Namespace, "name", req.Name)
+	logger := log.FromContext(ctx).WithValues("namespace", req.Namespace, "name", req.Name)
+	ctx = logr.NewContext(ctx, logger)
 
-	logger.V(1).Info("Reconciling machineset")
-	defer logger.V(1).Info("Finished reconciling machineset")
+	logger.V(1).Info("Reconciling machine set")
+	defer logger.V(1).Info("Finished reconciling machine set")
 
-	var mapiMachineSetNotFound, capiMachineSetNotFound bool
+	mapiMachineSet, capiMachineSet, err := r.fetchMachineSets(ctx, req.Name)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to fetch machine sets: %w", err)
+	}
 
-	// Get the MAPI MachineSet.
+	if mapiMachineSet == nil && capiMachineSet == nil {
+		logger.Info("Both MAPI and CAPI machine sets not found, nothing to do")
+		return ctrl.Result{}, nil
+	}
+
+	if mapiMachineSet == nil {
+		logger.Info("Only CAPI machine set found, nothing to do")
+		return ctrl.Result{}, nil
+	}
+
+	return r.syncMachineSets(ctx, mapiMachineSet, capiMachineSet)
+}
+
+// fetchMachineSets fetches both MAPI and CAPI MachineSets.
+func (r *MachineSetSyncReconciler) fetchMachineSets(ctx context.Context, name string) (*machinev1beta1.MachineSet, *capiv1beta1.MachineSet, error) {
+	logger := log.FromContext(ctx)
+
+	// Fetch MAPI MachineSet
 	mapiMachineSet := &machinev1beta1.MachineSet{}
-	mapiNamespacedName := client.ObjectKey{
-		Namespace: r.MAPINamespace,
-		Name:      req.Name,
-	}
 
-	if err := r.Get(ctx, mapiNamespacedName, mapiMachineSet); apierrors.IsNotFound(err) {
-		logger.Info("MAPI MachineSet not found")
+	if err := r.Get(ctx, client.ObjectKey{Namespace: r.MAPINamespace, Name: name}, mapiMachineSet); apierrors.IsNotFound(err) {
+		logger.Info("MAPI machine set not found", "name", name)
 
-		mapiMachineSetNotFound = true
+		mapiMachineSet = nil
 	} else if err != nil {
-		logger.Error(err, "Failed to get MAPI MachineSet")
-		return ctrl.Result{}, fmt.Errorf("failed to get MAPI MachineSet: %w", err)
+		logger.Error(err, "Failed to get MAPI machine set", "name", name)
+		return nil, nil, fmt.Errorf("failed to get MAPI machine set: %w", err)
 	}
 
-	// Get the corresponding CAPI Machine.
+	// Fetch CAPI MachineSet
 	capiMachineSet := &capiv1beta1.MachineSet{}
-	capiNamespacedName := client.ObjectKey{
-		Namespace: r.CAPINamespace,
-		Name:      req.Name,
-	}
 
-	if err := r.Get(ctx, capiNamespacedName, capiMachineSet); apierrors.IsNotFound(err) {
-		logger.Info("CAPI MachineSet not found")
+	if err := r.Get(ctx, client.ObjectKey{Namespace: r.CAPINamespace, Name: name}, capiMachineSet); apierrors.IsNotFound(err) {
+		logger.Info("CAPI machine set not found", "name", name)
 
-		capiMachineSetNotFound = true
+		capiMachineSet = nil
 	} else if err != nil {
-		logger.Error(err, "Failed to get CAPI MachineSet")
-		return ctrl.Result{}, fmt.Errorf("failed to get CAPI MachineSet: %w", err)
+		logger.Error(err, "Failed to get CAPI machine set", "name", name)
+		return nil, nil, fmt.Errorf("failed to get CAPI machine set: %w", err)
 	}
 
-	if mapiMachineSetNotFound && capiMachineSetNotFound {
-		logger.Info("CAPI and MAPI MachineSets not found, nothing to do")
-		return ctrl.Result{}, nil
-	}
+	return mapiMachineSet, capiMachineSet, nil
+}
 
-	// If the MachineSet only exists in CAPI, we don't need to sync back to MAPI.
-	if mapiMachineSetNotFound {
-		logger.Info("Only CAPI MachineSet found, nothing to do")
-		return ctrl.Result{}, nil
-	}
+// syncMachineSets synchronizes MachineSets based on the authoritative API.
+func (r *MachineSetSyncReconciler) syncMachineSets(ctx context.Context, mapiMachineSet *machinev1beta1.MachineSet, capiMachineSet *capiv1beta1.MachineSet) (ctrl.Result, error) {
+	logger := log.FromContext(ctx)
 
 	switch mapiMachineSet.Status.AuthoritativeAPI {
 	case machinev1beta1.MachineAuthorityMachineAPI:
-		return r.reconcileMAPIMachineSettoCAPIMachineSet(ctx, mapiMachineSet, capiMachineSet)
+		return r.reconcileMAPIMachineSetToCAPIMachineSet(ctx, mapiMachineSet, capiMachineSet)
 	case machinev1beta1.MachineAuthorityClusterAPI:
-		return r.reconcileCAPIMachineSettoMAPIMachineSet(ctx, capiMachineSet, mapiMachineSet)
+		return r.reconcileCAPIMachineSetToMAPIMachineSet(ctx, capiMachineSet, mapiMachineSet)
 	case machinev1beta1.MachineAuthorityMigrating:
-		logger.Info("machine currently migrating", "machine", mapiMachineSet.GetName())
+		logger.Info("machine set is currently migrating", "machine set", mapiMachineSet.GetName())
 		return ctrl.Result{}, nil
 	default:
-		logger.Info("machine AuthoritativeAPI has unexpected value", "AuthoritativeAPI", mapiMachineSet.Status.AuthoritativeAPI)
+		logger.Info("Unexpected value for AuthoritativeAPI", "AuthoritativeAPI", mapiMachineSet.Status.AuthoritativeAPI)
 		return ctrl.Result{}, nil
 	}
 }
 
-// reconcileCAPIMachineSettoMAPIMachineSet reconciles a CAPI MachineSet to a MAPI MachineSet.
-func (r *MachineSetSyncReconciler) reconcileCAPIMachineSettoMAPIMachineSet(ctx context.Context, capiMachineSet *capiv1beta1.MachineSet, mapiMachineSet *machinev1beta1.MachineSet) (ctrl.Result, error) {
+// reconcileMAPIMachineSetToCAPIMachineSet reconciles a MAPI MachineSet to a CAPI MachineSet.
+func (r *MachineSetSyncReconciler) reconcileMAPIMachineSetToCAPIMachineSet(ctx context.Context, mapiMachineSet *machinev1beta1.MachineSet, capiMachineSet *capiv1beta1.MachineSet) (ctrl.Result, error) {
+	// This function is currently a placeholder.
 	return ctrl.Result{}, nil
 }
 
-// reconcileMAPIMachineSettoCAPIMachineSet MAPI MachineSet to a CAPI MachineSet.
-func (r *MachineSetSyncReconciler) reconcileMAPIMachineSettoCAPIMachineSet(ctx context.Context, mapiMachineSet *machinev1beta1.MachineSet, capiMachineSet *capiv1beta1.MachineSet) (ctrl.Result, error) {
+// reconcileCAPIMachineSetToMAPIMachineSet reconciles a CAPI MachineSet to a
+// MAPI MachineSet.
+//
+// TODO: Platform specific implementation (currently this works only for AWS,
+// we want a switch on platform somewhere).
+// TODO: Put Gets() for Cluster + Template in helper func.
+func (r *MachineSetSyncReconciler) reconcileCAPIMachineSetToMAPIMachineSet(ctx context.Context, capiMachineSet *capiv1beta1.MachineSet, mapiMachineSet *machinev1beta1.MachineSet) (ctrl.Result, error) {
+	logger := log.FromContext(ctx).WithValues("function", "reconcileCAPIMachineSetToMAPIMachineSet")
+
+	// Get the AWSCluster
+	cluster := &awscapiv1beta1.AWSCluster{}
+	clusterNamespacedName := client.ObjectKey{
+		Namespace: capiMachineSet.GetNamespace(),
+		Name:      capiMachineSet.Spec.ClusterName,
+	}
+
+	if err := r.Get(ctx, clusterNamespacedName, cluster); err != nil {
+		logger.Error(err, "Failed to get CAPI cluster", "cluster", clusterNamespacedName.Name)
+
+		r.updateSynchronizedConditionWithPatch(
+			ctx, mapiMachineSet, corev1.ConditionFalse,
+			"FailedToGetCluster", err.Error(),
+		)
+
+		return ctrl.Result{}, fmt.Errorf("failed to get CAPI cluster: %w", err)
+	}
+
+	// Get the AWSMachineTemplate
+	template := &awscapiv1beta1.AWSMachineTemplate{}
+	templateNamespacedName := client.ObjectKey{
+		Namespace: capiMachineSet.Spec.Template.Spec.InfrastructureRef.Namespace,
+		Name:      capiMachineSet.Spec.Template.Spec.InfrastructureRef.Name,
+	}
+
+	if err := r.Get(ctx, templateNamespacedName, template); err != nil {
+		logger.Error(err, "Failed to get AWSMachineTemplate", "name", templateNamespacedName.Name)
+
+		r.updateSynchronizedConditionWithPatch(
+			ctx, mapiMachineSet, corev1.ConditionFalse,
+			"FailedToGetAWSMachineTemplate", err.Error(),
+		)
+
+		return ctrl.Result{}, fmt.Errorf("failed to get AWSMachineTemplate: %w", err)
+	}
+
+	// Convert the CAPI MachineSet and AWS resources to a MAPI MachineSet
+	convertedMachineSet, warns, err := capi2mapi.FromMachineSetAndAWSMachineTemplateAndAWSCluster(
+		capiMachineSet, template, cluster,
+	).ToMachineSet()
+
+	if err != nil {
+		logger.Error(err, "Failed to convert CAPI MachineSet to MAPI machine set")
+
+		r.updateSynchronizedConditionWithPatch(
+			ctx, mapiMachineSet, corev1.ConditionFalse,
+			"FailedToConvertMachineSet", err.Error(),
+		)
+
+		return ctrl.Result{}, fmt.Errorf("failed to convert CAPI MachineSet to MAPI machine set: %w", err)
+	}
+
+	for _, warning := range warns {
+		logger.Info("Warning during conversion", "warning", warning)
+		r.Recorder.Event(mapiMachineSet, corev1.EventTypeWarning, "ConversionWarning", warning)
+	}
+
+	convertedMachineSet.Spec.Template.Labels = util.MergeMaps(mapiMachineSet.Spec.Template.Labels, convertedMachineSet.Spec.Template.Labels)
+
+	// Check if there are any changes after updating the spec
+	if !reflect.DeepEqual(convertedMachineSet.Spec, mapiMachineSet.Spec) {
+		logger.Info("Updating MAPI machine set spec")
+
+		if err := r.Update(ctx, convertedMachineSet); err != nil {
+			logger.Error(err, "Failed to update MAPI machine set")
+
+			r.updateSynchronizedConditionWithPatch(
+				ctx, mapiMachineSet, corev1.ConditionFalse,
+				"FailedToUpdateMAPI", err.Error(),
+			)
+
+			return ctrl.Result{}, fmt.Errorf("failed to update MAPI machine set: %w", err)
+		}
+
+		logger.Info("Successfully updated MAPI machine set spec")
+	} else {
+		logger.Info("No changes detected in MAPI machine set spec")
+	}
+
+	r.updateSynchronizedConditionWithPatch(ctx, convertedMachineSet, corev1.ConditionTrue,
+		consts.ReasonResourceSynchronized, "Synchronized CAPI to MAPI", capiMachineSet.Generation)
+
 	return ctrl.Result{}, nil
+}
+
+func (r *MachineSetSyncReconciler) updateSynchronizedConditionWithPatch(ctx context.Context, mapiMachineSet *machinev1beta1.MachineSet, status corev1.ConditionStatus, reason, message string, generation ...int64) {
+	logger := log.FromContext(ctx).WithValues("function", "updateSynchronizedConditionWithPatch")
+	machinesetCopy := mapiMachineSet.DeepCopy()
+
+	var newCondition *machinev1beta1.Condition
+	if status == corev1.ConditionTrue {
+		newCondition = conditions.TrueConditionWithReason(
+			consts.SynchronizedCondition, reason, message, //nolint:govet
+		)
+
+		// Update the synchronizedGeneration
+		mapiMachineSet.Status.SynchronizedGeneration = generation[0]
+	} else {
+		newCondition = conditions.FalseCondition(
+			consts.SynchronizedCondition, reason,
+			machinev1beta1.ConditionSeverityError, message, //nolint:govet
+		)
+	}
+
+	conditions.Set(&mapiMachineSet.Status.Conditions, newCondition)
+
+	// Create a Patch object using Apply
+	patch := client.MergeFrom(machinesetCopy)
+
+	data, err := patch.Data(mapiMachineSet)
+	if err != nil {
+		logger.Error(err, "failed serialising patch for log")
+	}
+	logger.Info("contents of patch", "data", data)
+
+	if err := r.Status().Patch(ctx, mapiMachineSet, patch); err != nil {
+		logger.Error(err, "Failed to patch MAPI machine set status with synchronized condition")
+	}
 }
 
 // getInfraMachineTemplateFromProvider returns the correct InfraMachineTemplate implementation
 // for a given provider.
-//
-// As we implement other cloud providers, we'll need to update this list.
 func getInfraMachineTemplateFromProvider(platform configv1.PlatformType) (client.Object, error) {
 	switch platform {
 	case configv1.AWSPlatformType:

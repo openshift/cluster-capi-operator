@@ -290,18 +290,18 @@ github.com/go-logr/zapr
 # github.com/go-openapi/errors v0.22.0
 ## explicit; go 1.20
 github.com/go-openapi/errors
-# github.com/go-openapi/jsonpointer v0.20.2
-## explicit; go 1.19
+# github.com/go-openapi/jsonpointer v0.21.0
+## explicit; go 1.20
 github.com/go-openapi/jsonpointer
-# github.com/go-openapi/jsonreference v0.20.4
-## explicit; go 1.19
+# github.com/go-openapi/jsonreference v0.21.0
+## explicit; go 1.20
 github.com/go-openapi/jsonreference
 github.com/go-openapi/jsonreference/internal
 # github.com/go-openapi/strfmt v0.23.0
 ## explicit; go 1.20
 github.com/go-openapi/strfmt
-# github.com/go-openapi/swag v0.22.8
-## explicit; go 1.19
+# github.com/go-openapi/swag v0.23.0
+## explicit; go 1.20
 github.com/go-openapi/swag
 # github.com/go-playground/locales v0.14.1
 ## explicit; go 1.17
@@ -960,6 +960,9 @@ github.com/openshift/library-go/pkg/operator/resource/resourcemerge
 github.com/openshift/library-go/pkg/operator/resource/resourceread
 github.com/openshift/library-go/pkg/operator/resourcesynccontroller
 github.com/openshift/library-go/pkg/operator/v1helpers
+# github.com/openshift/machine-api-operator v0.2.1-0.20241009125928-52a965a42fac
+## explicit; go 1.22.1
+github.com/openshift/machine-api-operator/pkg/util/conditions
 # github.com/pelletier/go-toml/v2 v2.2.3
 ## explicit; go 1.21.0
 github.com/pelletier/go-toml/v2
