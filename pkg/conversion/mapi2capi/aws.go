@@ -46,7 +46,7 @@ type awsMachineAndInfra struct {
 	infrastructure *configv1.Infrastructure
 }
 
-// awsMachineSetAndInfra stores the details of a Machine API AWSMachine and Infra.
+// awsMachineSetAndInfra stores the details of a Machine API AWSMachine set and Infra.
 type awsMachineSetAndInfra struct {
 	machineSet     *mapiv1.MachineSet
 	infrastructure *configv1.Infrastructure
@@ -128,7 +128,7 @@ func (m *awsMachineAndInfra) toMachineAndInfrastructureMachine() (*capiv1.Machin
 		}
 	}
 
-	// Popluate the CAPI Machine ClusterName from the OCP Infrastructure object.
+	// Populate the CAPI Machine ClusterName from the OCP Infrastructure object.
 	if m.infrastructure == nil || m.infrastructure.Status.InfrastructureName == "" {
 		errs = append(errs, field.Invalid(field.NewPath("infrastructure", "status", "infrastructureName"), m.infrastructure.Status.InfrastructureName, "infrastructure cannot be nil and infrastructure.Status.InfrastructureName cannot be empty"))
 	} else {
