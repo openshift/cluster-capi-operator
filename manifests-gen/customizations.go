@@ -341,7 +341,7 @@ func mergeMaps[K comparable, V any](maps ...map[K]V) map[K]V {
 func addInfraClusterProtectionPolicy(objs []unstructured.Unstructured, providerName string) []unstructured.Unstructured {
 	policy := &unstructured.Unstructured{
 		Object: map[string]interface{}{
-			"apiVersion": "admissionregistration.k8s.io/v1beta1",
+			"apiVersion": "admissionregistration.k8s.io/v1",
 			"kind":       "ValidatingAdmissionPolicy",
 			"metadata": map[string]interface{}{
 				"name": "openshift-cluster-api-protect-" + providerName + "cluster",
@@ -374,7 +374,7 @@ func addInfraClusterProtectionPolicy(objs []unstructured.Unstructured, providerN
 
 	binding := &unstructured.Unstructured{
 		Object: map[string]interface{}{
-			"apiVersion": "admissionregistration.k8s.io/v1beta1",
+			"apiVersion": "admissionregistration.k8s.io/v1",
 			"kind":       "ValidatingAdmissionPolicyBinding",
 			"metadata": map[string]interface{}{
 				"name": "openshift-cluster-api-protect-" + providerName + "cluster",
@@ -385,6 +385,135 @@ func addInfraClusterProtectionPolicy(objs []unstructured.Unstructured, providerN
 					"parameterNotFoundAction": "Deny",
 				},
 				"policyName":        "openshift-cluster-api-protect-" + providerName + "cluster",
+				"validationActions": []interface{}{"Deny"},
+				"matchResources": map[string]interface{}{
+					"namespaceSelector": map[string]interface{}{
+						"matchLabels": map[string]interface{}{
+							"kubernetes.io/metadata.name": "openshift-cluster-api",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	return append(objs, *policy, *binding)
+}
+
+// addAzureClusterIdentityProtectionPolicy adds a Validating Admission Policy and Binding for protecting
+// AzureClusterIdentities created by the cluster-capi-operator from deletion and editing.
+func addAzureClusterIdentityProtectionPolicy(objs []unstructured.Unstructured, providerName string) []unstructured.Unstructured {
+	policy := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "admissionregistration.k8s.io/v1",
+			"kind":       "ValidatingAdmissionPolicy",
+			"metadata": map[string]interface{}{
+				"name": "openshift-cluster-api-protect-" + providerName + "clusteridentities",
+			},
+			"spec": map[string]interface{}{
+				"failurePolicy": "Fail",
+				"paramKind": map[string]interface{}{
+					"apiVersion": "config.openshift.io/v1",
+					"kind":       "Infrastructure",
+				},
+				"matchConstraints": map[string]interface{}{
+					"resourceRules": []interface{}{
+						map[string]interface{}{
+							"apiGroups":   []interface{}{"infrastructure.cluster.x-k8s.io"},
+							"apiVersions": []interface{}{"*"},
+							"operations":  []interface{}{"DELETE"},
+							"resources":   []interface{}{providerName + "clusteridentities"},
+						},
+					},
+				},
+				"validations": []interface{}{
+					map[string]interface{}{
+						"expression": "!(oldObject.metadata.name == params.status.infrastructureName)",
+						"message":    "Azure Cluster Identity metadata.name corresponding to infrastructureName cannot be deleted.", //this isn't right
+					},
+				},
+			},
+		},
+	}
+
+	binding := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "admissionregistration.k8s.io/v1",
+			"kind":       "ValidatingAdmissionPolicyBinding",
+			"metadata": map[string]interface{}{
+				"name": "openshift-cluster-api-protect-" + providerName + "clusteridentities",
+			},
+			"spec": map[string]interface{}{
+				"paramRef": map[string]interface{}{
+					"name":                    "cluster",
+					"parameterNotFoundAction": "Deny",
+				},
+				"policyName":        "openshift-cluster-api-protect-" + providerName + "clusteridentities",
+				"validationActions": []interface{}{"Deny"},
+				"matchResources": map[string]interface{}{
+					"namespaceSelector": map[string]interface{}{
+						"matchLabels": map[string]interface{}{
+							"kubernetes.io/metadata.name": "openshift-cluster-api",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	return append(objs, *policy, *binding)
+}
+
+// addAzureClusterSecretProtectionPolicy adds a Validating Admission Policy and Binding for protecting
+// AzureClusterSecret created by the cluster-capi-operator from deletion and editing.
+func addAzureClusterSecretProtectionPolicy(objs []unstructured.Unstructured, providerName string) []unstructured.Unstructured {
+	policy := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "admissionregistration.k8s.io/v1",
+			"kind":       "ValidatingAdmissionPolicy",
+			"metadata": map[string]interface{}{
+				"name": "openshift-cluster-api-protect-" + providerName + "clustersecrets",
+			},
+			"spec": map[string]interface{}{
+				"failurePolicy": "Fail",
+				"paramKind": map[string]interface{}{
+					"apiVersion": "config.openshift.io/v1",
+					"kind":       "ClusterSecret",
+				},
+				"matchConstraints": map[string]interface{}{
+					"resourceRules": []interface{}{
+						map[string]interface{}{
+							"apiGroups":     []interface{}{""},
+							"apiVersions":   []interface{}{"*"},
+							"operations":    []interface{}{"DELETE"},
+							"resources":     []interface{}{"secret"},
+							"resourceNames": []interface{}{"capz-manager-bootstrap-credentials", "capz-manager-cluster-credential"},
+						},
+					},
+				},
+				"validations": []interface{}{
+					map[string]interface{}{
+						"expression": "!(oldObject.metadata.name == params.status.infrastructureName)",
+						"message":    "InfraCluster resources with metadata.name corresponding to the cluster infrastructureName cannot be deleted.",
+					},
+				},
+			},
+		},
+	}
+
+	binding := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "admissionregistration.k8s.io/v1beta1",
+			"kind":       "ValidatingAdmissionPolicyBinding",
+			"metadata": map[string]interface{}{
+				"name": "openshift-cluster-api-protect-" + providerName + "clustersecrets",
+			},
+			"spec": map[string]interface{}{
+				"paramRef": map[string]interface{}{
+					"name":                    "cluster",
+					"parameterNotFoundAction": "Deny",
+				},
+				"policyName":        "openshift-cluster-api-protect-" + providerName + "clustersecrets",
 				"validationActions": []interface{}{"Deny"},
 				"matchResources": map[string]interface{}{
 					"namespaceSelector": map[string]interface{}{
