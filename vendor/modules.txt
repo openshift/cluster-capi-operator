@@ -2352,8 +2352,8 @@ sigs.k8s.io/cluster-api-provider-gcp/api/v1beta1
 # sigs.k8s.io/cluster-api-provider-ibmcloud v0.8.0
 ## explicit; go 1.21
 sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2
-# sigs.k8s.io/cluster-api-provider-openstack v0.10.5
-## explicit; go 1.22
+# sigs.k8s.io/cluster-api-provider-openstack v0.11.0
+## explicit; go 1.22.0
 sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1
 sigs.k8s.io/cluster-api-provider-openstack/pkg/utils/optional
 # sigs.k8s.io/cluster-api-provider-vsphere v1.10.0
