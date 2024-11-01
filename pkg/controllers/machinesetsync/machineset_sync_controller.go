@@ -50,6 +50,21 @@ import (
 var (
 	// errPlatformNotSupported is returned when the platform is not supported.
 	errPlatformNotSupported = errors.New("error determining InfraMachineTemplate type, platform not supported")
+
+	// errUnexpectedInfraMachineTemplateType is returned when we receive an unexpected InfraMachineTemplate type.
+	errUnexpectedInfraMachineTemplateType = errors.New("unexpected InfraMachineTemplate type")
+
+	// errUnexpectedInfraClusterType is returned when we receive an unexpected InfraCluster type.
+	errUnexpectedInfraClusterType = errors.New("unexpected InfraCluster type")
+)
+
+const (
+	reasonFailedToGetCAPIInfraResources       = "FailedToGetCAPIInfraResources"
+	reasonFailedToConvertCAPIMachineSetToMAPI = "FailedToConvertCAPIMachineSetToMAPI"
+	reasonFailedToUpdateMAPIMachineSet        = "FailedToUpdateMAPIMachineSet"
+	reasonResourceSynchronized                = "ResourceSynchronized"
+
+	messageSuccessfullySynchronized = "Successfully synchronized CAPI MachineSet to MAPI"
 )
 
 // MachineSetSyncReconciler reconciles CAPI and MAPI MachineSets.
@@ -67,7 +82,7 @@ type MachineSetSyncReconciler struct {
 func (r *MachineSetSyncReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	infraMachineTemplate, err := getInfraMachineTemplateFromProvider(r.Platform)
 	if err != nil {
-		return fmt.Errorf("failed to get InfraMachineTemplate from Provider: %w", err)
+		return fmt.Errorf("failed to get infrastructure machine template from Provider: %w", err)
 	}
 
 	// Allow the namespaces to be set externally for test purposes, when not set,
@@ -136,6 +151,8 @@ func (r *MachineSetSyncReconciler) fetchMachineSets(ctx context.Context, name st
 
 	mapiMachineSet := &machinev1beta1.MachineSet{}
 
+	capiMachineSet := &capiv1beta1.MachineSet{}
+
 	if err := r.Get(ctx, client.ObjectKey{Namespace: r.MAPINamespace, Name: name}, mapiMachineSet); apierrors.IsNotFound(err) {
 		logger.Info("MAPI machine set not found")
 
@@ -143,8 +160,6 @@ func (r *MachineSetSyncReconciler) fetchMachineSets(ctx context.Context, name st
 	} else if err != nil {
 		return nil, nil, fmt.Errorf("failed to get MAPI machine set: %w", err)
 	}
-
-	capiMachineSet := &capiv1beta1.MachineSet{}
 
 	if err := r.Get(ctx, client.ObjectKey{Namespace: r.CAPINamespace, Name: name}, capiMachineSet); apierrors.IsNotFound(err) {
 		logger.Info("CAPI machine set not found")
@@ -155,6 +170,40 @@ func (r *MachineSetSyncReconciler) fetchMachineSets(ctx context.Context, name st
 	}
 
 	return mapiMachineSet, capiMachineSet, nil
+}
+
+// fetchCAPIInfraResources fetches the provider specific infrastructure resources depending on which provider is set.
+func (r *MachineSetSyncReconciler) fetchCAPIInfraResources(ctx context.Context, capiMachineSet *capiv1beta1.MachineSet) (client.Object, client.Object, error) {
+	var infraCluster, infraMachineTemplate client.Object
+
+	clusterKey := client.ObjectKey{
+		Namespace: capiMachineSet.Namespace,
+		Name:      capiMachineSet.Spec.ClusterName,
+	}
+
+	templateRef := capiMachineSet.Spec.Template.Spec.InfrastructureRef
+	templateKey := client.ObjectKey{
+		Namespace: templateRef.Namespace,
+		Name:      templateRef.Name,
+	}
+
+	switch r.Platform {
+	case configv1.AWSPlatformType:
+		infraCluster = &awscapiv1beta1.AWSCluster{}
+		infraMachineTemplate = &awscapiv1beta1.AWSMachineTemplate{}
+	default:
+		return nil, nil, fmt.Errorf("%w: %s", errPlatformNotSupported, r.Platform)
+	}
+
+	if err := r.Get(ctx, clusterKey, infraCluster); err != nil {
+		return nil, nil, fmt.Errorf("failed to get CAPI infrastructure cluster: %w", err)
+	}
+
+	if err := r.Get(ctx, templateKey, infraMachineTemplate); err != nil {
+		return nil, nil, fmt.Errorf("failed to get CAPI infrastructure machine template: %w", err)
+	}
+
+	return infraCluster, infraMachineTemplate, nil
 }
 
 // syncMachineSets synchronizes MachineSets based on the authoritative API.
@@ -170,7 +219,7 @@ func (r *MachineSetSyncReconciler) syncMachineSets(ctx context.Context, mapiMach
 		logger.Info("machine set is currently being migrated", "machine set", mapiMachineSet.GetName())
 		return ctrl.Result{}, nil
 	default:
-		logger.Info("Unexpected value for AuthoritativeAPI", "AuthoritativeAPI", mapiMachineSet.Status.AuthoritativeAPI)
+		logger.Info("unexpected value for authoritativeAPI", "AuthoritativeAPI", mapiMachineSet.Status.AuthoritativeAPI)
 		return ctrl.Result{}, nil
 	}
 }
@@ -183,60 +232,27 @@ func (r *MachineSetSyncReconciler) reconcileMAPIMachineSetToCAPIMachineSet(ctx c
 
 // reconcileCAPIMachineSetToMAPIMachineSet reconciles a CAPI MachineSet to a
 // MAPI MachineSet.
-//
-// TODO: Platform specific implementation (currently this works only for AWS,
-// we want a switch on platform somewhere).
-// TODO: Put Gets() for Cluster + Template in helper func.
-//
-//nolint:funlen
 func (r *MachineSetSyncReconciler) reconcileCAPIMachineSetToMAPIMachineSet(ctx context.Context, capiMachineSet *capiv1beta1.MachineSet, mapiMachineSet *machinev1beta1.MachineSet) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
-	infraCluster := &awscapiv1beta1.AWSCluster{}
-	clusterNamespacedName := client.ObjectKey{
-		Namespace: capiMachineSet.GetNamespace(),
-		Name:      capiMachineSet.Spec.ClusterName,
-	}
-
-	if err := r.Get(ctx, clusterNamespacedName, infraCluster); err != nil {
-		getErr := fmt.Errorf("failed to get CAPI InfraCluster: %w", err)
+	infraCluster, infraMachineTemplate, err := r.fetchCAPIInfraResources(ctx, capiMachineSet)
+	if err != nil {
+		fetchErr := fmt.Errorf("failed to fetch CAPI infra resources: %w", err)
 
 		if condErr := r.updateSynchronizedConditionWithPatch(
-			ctx, mapiMachineSet, corev1.ConditionFalse,
-			"FailedToGetCAPIInfraCluster", err.Error(), nil); condErr != nil {
-			return ctrl.Result{}, utilerrors.NewAggregate([]error{getErr, condErr})
+			ctx, mapiMachineSet, corev1.ConditionFalse, reasonFailedToGetCAPIInfraResources, fetchErr.Error(), nil); condErr != nil {
+			return ctrl.Result{}, utilerrors.NewAggregate([]error{fetchErr, condErr})
 		}
 
-		return ctrl.Result{}, getErr
+		return ctrl.Result{}, fetchErr
 	}
 
-	infraMachineTemplate := &awscapiv1beta1.AWSMachineTemplate{}
-	templateNamespacedName := client.ObjectKey{
-		Namespace: capiMachineSet.Spec.Template.Spec.InfrastructureRef.Namespace,
-		Name:      capiMachineSet.Spec.Template.Spec.InfrastructureRef.Name,
-	}
-
-	if err := r.Get(ctx, templateNamespacedName, infraMachineTemplate); err != nil {
-		getErr := fmt.Errorf("failed to get InfraMachineTemplate: %w", err)
-
-		if condErr := r.updateSynchronizedConditionWithPatch(
-			ctx, mapiMachineSet, corev1.ConditionFalse,
-			"FailedToGetCAPIInfraMachineTemplate", err.Error(), nil); condErr != nil {
-			return ctrl.Result{}, utilerrors.NewAggregate([]error{getErr, condErr})
-		}
-
-		return ctrl.Result{}, getErr
-	}
-
-	// Convert the CAPI MachineSet and AWS resources to a MAPI MachineSet
-	newMapiMachineSet, warns, err := capi2mapi.FromMachineSetAndAWSMachineTemplateAndAWSCluster(
-		capiMachineSet, infraMachineTemplate, infraCluster).ToMachineSet()
+	newMapiMachineSet, warns, err := r.convertCAPIToMAPIMachineSet(capiMachineSet, infraMachineTemplate, infraCluster)
 	if err != nil {
 		conversionErr := fmt.Errorf("failed to convert CAPI machine set to MAPI machine set: %w", err)
 
 		if condErr := r.updateSynchronizedConditionWithPatch(
-			ctx, mapiMachineSet, corev1.ConditionFalse,
-			"FailedToConvertCAPIMachineSetToMAPI", err.Error(), nil); condErr != nil {
+			ctx, mapiMachineSet, corev1.ConditionFalse, reasonFailedToConvertCAPIMachineSetToMAPI, conversionErr.Error(), nil); condErr != nil {
 			return ctrl.Result{}, utilerrors.NewAggregate([]error{conversionErr, condErr})
 		}
 
@@ -250,12 +266,10 @@ func (r *MachineSetSyncReconciler) reconcileCAPIMachineSetToMAPIMachineSet(ctx c
 
 	newMapiMachineSet.Spec.Template.Labels = util.MergeMaps(mapiMachineSet.Spec.Template.Labels, newMapiMachineSet.Spec.Template.Labels)
 
-	// We need to change the namespace as the newMapiMachineSet will have the CAPI namespace set otherwise
 	newMapiMachineSet.SetNamespace(mapiMachineSet.GetNamespace())
 	// The conversion does not set a resource version, so we must copy it over
 	newMapiMachineSet.SetResourceVersion(mapiMachineSet.GetResourceVersion())
 
-	// Check if there are any changes to spec or metadata
 	if !reflect.DeepEqual(newMapiMachineSet.Spec, mapiMachineSet.Spec) || !objectMetaIsEqual(newMapiMachineSet.ObjectMeta, mapiMachineSet.ObjectMeta) {
 		logger.Info("Updating MAPI machine set")
 
@@ -265,8 +279,7 @@ func (r *MachineSetSyncReconciler) reconcileCAPIMachineSetToMAPIMachineSet(ctx c
 			updateErr := fmt.Errorf("failed to update MAPI machine set: %w", err)
 
 			if condErr := r.updateSynchronizedConditionWithPatch(
-				ctx, mapiMachineSet, corev1.ConditionFalse,
-				"FailedToUpdateMAPIMachineSet", err.Error(), nil); condErr != nil {
+				ctx, mapiMachineSet, corev1.ConditionFalse, reasonFailedToUpdateMAPIMachineSet, updateErr.Error(), nil); condErr != nil {
 				return ctrl.Result{}, utilerrors.NewAggregate([]error{updateErr, condErr})
 			}
 
@@ -279,8 +292,30 @@ func (r *MachineSetSyncReconciler) reconcileCAPIMachineSetToMAPIMachineSet(ctx c
 	}
 
 	return ctrl.Result{}, r.updateSynchronizedConditionWithPatch(ctx, mapiMachineSet, corev1.ConditionTrue,
-		consts.ReasonResourceSynchronized, "Successfully synchronized CAPI MachineSet to MAPI",
-		&capiMachineSet.Generation)
+		consts.ReasonResourceSynchronized, messageSuccessfullySynchronized, &capiMachineSet.Generation)
+}
+
+// convertCAPIToMAPIMachineSet converts a CAPI MachineSet to a MAPI MachineSet, selecting the correct converter based on the platform.
+func (r *MachineSetSyncReconciler) convertCAPIToMAPIMachineSet(capiMachineSet *capiv1beta1.MachineSet, infraMachineTemplate client.Object, infraCluster client.Object) (*machinev1beta1.MachineSet, []string, error) {
+	switch r.Platform {
+	case configv1.AWSPlatformType:
+		awsMachineTemplate, ok := infraMachineTemplate.(*awscapiv1beta1.AWSMachineTemplate)
+		if !ok {
+			return nil, nil, fmt.Errorf("%w, expected AWSMachineTemplate, got %T", errUnexpectedInfraMachineTemplateType, infraMachineTemplate)
+		}
+
+		awsCluster, ok := infraCluster.(*awscapiv1beta1.AWSCluster)
+		if !ok {
+			return nil, nil, fmt.Errorf("%w, expected AWSCluster, got %T", errUnexpectedInfraClusterType, infraCluster)
+		}
+
+		return capi2mapi.FromMachineSetAndAWSMachineTemplateAndAWSCluster( //nolint: wrapcheck
+			capiMachineSet, awsMachineTemplate, awsCluster,
+		).ToMachineSet()
+
+	default:
+		return nil, nil, fmt.Errorf("%w: %s", errPlatformNotSupported, r.Platform)
+	}
 }
 
 // updateSynchronizedConditionWithPatch updates the synchronized condition
@@ -352,7 +387,7 @@ func setLastTransitionTime(condType machinev1beta1.ConditionType, conditions []m
 
 // hasSameState returns true if a condition has the same state as a condition
 // apply config; state is defined by the union of following fields: Type,
-// Status, Reason, Severity and Message (it excludes LastTransitionTime).
+// Status.
 func hasSameState(i *machinev1beta1.Condition, j *machinev1applyconfigs.ConditionApplyConfiguration) bool {
 	return i.Type == *j.Type &&
 		i.Status == *j.Status
@@ -361,9 +396,7 @@ func hasSameState(i *machinev1beta1.Condition, j *machinev1applyconfigs.Conditio
 // objectMetaIsEqual determines if the two ObjectMeta are equal for the fields we care about
 // when synchronising MAPI and CAPI MachineSets.
 func objectMetaIsEqual(a, b metav1.ObjectMeta) bool {
-	return a.DeletionTimestamp.Equal(b.DeletionTimestamp) &&
-		a.DeletionGracePeriodSeconds == b.DeletionGracePeriodSeconds &&
-		reflect.DeepEqual(a.Labels, b.Labels) &&
+	return reflect.DeepEqual(a.Labels, b.Labels) &&
 		reflect.DeepEqual(a.Annotations, b.Annotations) &&
 		reflect.DeepEqual(a.Finalizers, b.Finalizers) &&
 		reflect.DeepEqual(a.OwnerReferences, b.OwnerReferences)

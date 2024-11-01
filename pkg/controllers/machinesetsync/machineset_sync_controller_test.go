@@ -41,7 +41,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
 
-var _ = Describe("With a running controller", func() {
+var _ = Describe("With a running MachineSetSync controller", func() {
 	var mgrCancel context.CancelFunc
 	var mgrDone chan struct{}
 	var mgr manager.Manager
@@ -50,7 +50,7 @@ var _ = Describe("With a running controller", func() {
 
 	var syncControllerNamespace *corev1.Namespace
 	var capiNamespace *corev1.Namespace
-	var MapiNamespace *corev1.Namespace
+	var mapiNamespace *corev1.Namespace
 
 	var mapiMachineSetBuilder machinev1resourcebuilder.MachineSetBuilder
 	var mapiMachineSet *machinev1beta1.MachineSet
@@ -90,9 +90,9 @@ var _ = Describe("With a running controller", func() {
 			WithGenerateName("machineset-sync-controller-").Build()
 		Expect(k8sClient.Create(ctx, syncControllerNamespace)).To(Succeed())
 
-		MapiNamespace = corev1resourcebuilder.Namespace().
+		mapiNamespace = corev1resourcebuilder.Namespace().
 			WithGenerateName("openshift-machine-api-").Build()
-		Expect(k8sClient.Create(ctx, MapiNamespace)).To(Succeed())
+		Expect(k8sClient.Create(ctx, mapiNamespace)).To(Succeed())
 
 		capiNamespace = corev1resourcebuilder.Namespace().
 			WithGenerateName("openshift-cluster-api-").Build()
@@ -100,7 +100,7 @@ var _ = Describe("With a running controller", func() {
 
 		By("Setting up the builders")
 		mapiMachineSetBuilder = machinev1resourcebuilder.MachineSet().
-			WithNamespace(MapiNamespace.GetName()).
+			WithNamespace(mapiNamespace.GetName()).
 			WithName("foo").
 			WithProviderSpecBuilder(machinev1resourcebuilder.AWSProviderSpec())
 
@@ -150,7 +150,7 @@ var _ = Describe("With a running controller", func() {
 			Client:        mgr.GetClient(),
 			Platform:      configv1.AWSPlatformType,
 			CAPINamespace: capiNamespace.GetName(),
-			MAPINamespace: MapiNamespace.GetName(),
+			MAPINamespace: mapiNamespace.GetName(),
 		}
 		Expect(reconciler.SetupWithManager(mgr)).To(Succeed(),
 			"Reconciler should be able to setup with manager")
