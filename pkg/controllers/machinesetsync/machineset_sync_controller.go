@@ -62,6 +62,7 @@ const (
 	reasonFailedToGetCAPIInfraResources       = "FailedToGetCAPIInfraResources"
 	reasonFailedToConvertCAPIMachineSetToMAPI = "FailedToConvertCAPIMachineSetToMAPI"
 	reasonFailedToUpdateMAPIMachineSet        = "FailedToUpdateMAPIMachineSet"
+	reasonFailedToGetCAPIMachineSet           = "FailedToGetCAPIMachineSet"
 	reasonResourceSynchronized                = "ResourceSynchronized"
 
 	messageSuccessfullySynchronized = "Successfully synchronized CAPI MachineSet to MAPI"
@@ -210,18 +211,31 @@ func (r *MachineSetSyncReconciler) fetchCAPIInfraResources(ctx context.Context, 
 func (r *MachineSetSyncReconciler) syncMachineSets(ctx context.Context, mapiMachineSet *machinev1beta1.MachineSet, capiMachineSet *capiv1beta1.MachineSet) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
-	switch mapiMachineSet.Status.AuthoritativeAPI {
-	case machinev1beta1.MachineAuthorityMachineAPI:
+	authoritativeAPI := mapiMachineSet.Status.AuthoritativeAPI
+
+	switch {
+	case authoritativeAPI == machinev1beta1.MachineAuthorityMachineAPI:
 		return r.reconcileMAPIMachineSetToCAPIMachineSet(ctx, mapiMachineSet, capiMachineSet)
-	case machinev1beta1.MachineAuthorityClusterAPI:
+	case authoritativeAPI == machinev1beta1.MachineAuthorityClusterAPI && capiMachineSet == nil:
+		// We want to create a new CAPI MachineSet from the MAPI one.
+		// I think we may want to call a lot of the same logic we'll need for reconciling MAPI -> CAPI,
+		// as such I think we should hold off on implementing this until that logic is worked out
+		// (and hopefully it's just calling some of the same helper funcs)
+		// TODO: Implementation
+	case authoritativeAPI == machinev1beta1.MachineAuthorityClusterAPI && capiMachineSet != nil:
 		return r.reconcileCAPIMachineSetToMAPIMachineSet(ctx, capiMachineSet, mapiMachineSet)
-	case machinev1beta1.MachineAuthorityMigrating:
-		logger.Info("machine set is currently being migrated", "machine set", mapiMachineSet.GetName())
+
+	case authoritativeAPI == machinev1beta1.MachineAuthorityMigrating:
+		logger.Info("machine set is currently being migrated")
 		return ctrl.Result{}, nil
+
 	default:
 		logger.Info("unexpected value for authoritativeAPI", "AuthoritativeAPI", mapiMachineSet.Status.AuthoritativeAPI)
+
 		return ctrl.Result{}, nil
 	}
+
+	return ctrl.Result{}, nil
 }
 
 // reconcileMAPIMachineSetToCAPIMachineSet reconciles a MAPI MachineSet to a CAPI MachineSet.
