@@ -42,7 +42,6 @@ var _ = Describe("Cluster API AWS MachineSet", Ordered, func() {
 		}
 		mapiDefaultMS, mapiDefaultProviderSpec = getDefaultAWSMAPIProviderSpec(cl)
 		awsClient = createAWSClient(mapiDefaultProviderSpec.Placement.Region)
-		framework.CreateCoreCluster(cl, clusterName, "AWSCluster")
 	})
 
 	AfterEach(func() {

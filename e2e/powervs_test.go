@@ -34,7 +34,6 @@ var _ = Describe("Cluster API IBMPowerVS MachineSet", Ordered, func() {
 		if platform != configv1.PowerVSPlatformType {
 			Skip("Skipping PowerVS E2E tests")
 		}
-		framework.CreateCoreCluster(cl, clusterName, "IBMPowerVSCluster")
 		mapiMachineSpec = getPowerVSMAPIProviderSpec(cl)
 	})
 

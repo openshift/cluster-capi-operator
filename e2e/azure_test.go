@@ -35,7 +35,6 @@ var _ = Describe("Cluster API Azure MachineSet", Ordered, func() {
 		if platform != configv1.AzurePlatformType {
 			Skip("Skipping Azure E2E tests")
 		}
-		framework.CreateCoreCluster(cl, clusterName, "AzureCluster")
 		mapiMachineSpec = getAzureMAPIProviderSpec(cl)
 	})
 
