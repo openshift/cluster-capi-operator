@@ -40,7 +40,11 @@ migration:
 	go build -o bin/machine-api-migration cmd/machine-api-migration/main.go
 
 unit:
+<<<<<<< Updated upstream
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path --bin-dir $(PROJECT_DIR)/bin --index https://raw.githubusercontent.com/openshift/api/master/envtest-releases.yaml)" ./hack/test.sh "./pkg/... ./assets/..." 5m
+=======
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path --bin-dir $(PROJECT_DIR)/bin --index https://raw.githubusercontent.com/openshift/api/master/envtest-releases.yaml)" ./hack/test.sh "./pkg/... ./manifests-gen/..." 5m
+>>>>>>> Stashed changes
 
 .PHONY: e2e
 e2e:

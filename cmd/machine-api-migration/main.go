@@ -217,6 +217,7 @@ func main() {
 	}
 
 	machineSyncReconciler := machinesync.MachineSyncReconciler{
+		Infra:    infra,
 		Platform: provider,
 
 		MAPINamespace: *mapiManagedNamespace,
@@ -230,6 +231,7 @@ func main() {
 
 	machineSetSyncReconciler := machinesetsync.MachineSetSyncReconciler{
 		Platform: provider,
+		Infra:    infra,
 
 		MAPINamespace: *mapiManagedNamespace,
 		CAPINamespace: *capiManagedNamespace,

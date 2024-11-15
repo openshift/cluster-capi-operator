@@ -56,6 +56,7 @@ type MachineSyncReconciler struct {
 	Scheme   *runtime.Scheme
 	Recorder record.EventRecorder
 
+	Infra         *configv1.Infrastructure
 	Platform      configv1.PlatformType
 	CAPINamespace string
 	MAPINamespace string
