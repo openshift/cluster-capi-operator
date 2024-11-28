@@ -36,7 +36,6 @@ var _ = Describe("Cluster API IBMPowerVS MachineSet", Ordered, func() {
 		}
 		framework.CreateCoreCluster(cl, clusterName, "IBMPowerVSCluster")
 		mapiMachineSpec = getPowerVSMAPIProviderSpec(cl)
-		createIBMPowerVSCluster(cl, mapiMachineSpec)
 	})
 
 	AfterEach(func() {
@@ -83,63 +82,19 @@ func getPowerVSMAPIProviderSpec(cl client.Client) *mapiv1.PowerVSMachineProvider
 	return providerSpec
 }
 
-func createIBMPowerVSCluster(cl client.Client, mapiProviderSpec *mapiv1.PowerVSMachineProviderConfig) *ibmpowervsv1.IBMPowerVSCluster {
-	By("Creating IBMPowerVSCluster cluster")
-
-	powerVSCluster := &ibmpowervsv1.IBMPowerVSCluster{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      clusterName,
-			Namespace: framework.CAPINamespace,
-			// The ManagedBy Annotation is set so CAPI infra providers ignore the InfraCluster object,
-			// as that's managed externally, in this case by the cluster-capi-operator's infracluster controller.
-			Annotations: map[string]string{
-				clusterv1.ManagedByAnnotation: managedByAnnotationValueClusterCAPIOperatorInfraClusterController,
-			},
-		},
-		Spec: ibmpowervsv1.IBMPowerVSClusterSpec{
-			ServiceInstanceID: *mapiProviderSpec.ServiceInstance.ID,
-			Network:           getNetworkResourceReference(mapiProviderSpec.Network),
-		},
-	}
-
-	if err := cl.Create(ctx, powerVSCluster); err != nil && !apierrors.IsAlreadyExists(err) {
-		Expect(err).ToNot(HaveOccurred())
-	}
-
-	Eventually(func() (bool, error) {
-		patchedIBMPowerVSCluster := &ibmpowervsv1.IBMPowerVSCluster{}
-		err := cl.Get(ctx, client.ObjectKeyFromObject(powerVSCluster), patchedIBMPowerVSCluster)
-		if err != nil {
-			return false, err
-		}
-
-		if patchedIBMPowerVSCluster.Annotations == nil {
-			return false, nil
-		}
-
-		if _, ok := patchedIBMPowerVSCluster.Annotations[clusterv1.ManagedByAnnotation]; !ok {
-			return false, nil
-		}
-
-		return patchedIBMPowerVSCluster.Status.Ready, nil
-	}, framework.WaitShort).Should(BeTrue())
-
-	return powerVSCluster
-}
-
 func createIBMPowerVSMachineTemplate(cl client.Client, mapiProviderSpec *mapiv1.PowerVSMachineProviderConfig) *ibmpowervsv1.IBMPowerVSMachineTemplate {
 	By("Creating IBMPowerVS machine template")
 
 	Expect(mapiProviderSpec).ToNot(BeNil())
-	Expect(mapiProviderSpec.ServiceInstance.ID).ToNot(BeNil())
+	Expect(mapiProviderSpec.ServiceInstance).ToNot(BeNil())
 	Expect(mapiProviderSpec.KeyPairName).ToNot(BeEmpty())
 	Expect(mapiProviderSpec.Image).ToNot(BeNil())
 	Expect(mapiProviderSpec.SystemType).ToNot(BeEmpty())
 	Expect(mapiProviderSpec.ProcessorType).ToNot(BeEmpty())
 
 	ibmPowerVSMachineSpec := ibmpowervsv1.IBMPowerVSMachineSpec{
-		ServiceInstanceID: *mapiProviderSpec.ServiceInstance.ID,
-		SSHKey:            mapiProviderSpec.KeyPairName,
+		ServiceInstance: getServiceInstance(mapiProviderSpec.ServiceInstance),
+		SSHKey:          mapiProviderSpec.KeyPairName,
 		Image: &ibmpowervsv1.IBMPowerVSResourceReference{
 			Name: mapiProviderSpec.Image.Name,
 		},
@@ -195,5 +150,18 @@ func getNetworkResourceReference(networkResource mapiv1.PowerVSResource) ibmpowe
 		}
 	default:
 		panic("networkResource reference is not specified")
+	}
+}
+
+func getServiceInstance(serviceInstance mapiv1.PowerVSResource) *ibmpowervsv1.IBMPowerVSResourceReference {
+	switch serviceInstance.Type {
+	case mapiv1.PowerVSResourceTypeID:
+		return &ibmpowervsv1.IBMPowerVSResourceReference{ID: serviceInstance.ID}
+	case mapiv1.PowerVSResourceTypeName:
+		return &ibmpowervsv1.IBMPowerVSResourceReference{Name: serviceInstance.Name}
+	case mapiv1.PowerVSResourceTypeRegEx:
+		return &ibmpowervsv1.IBMPowerVSResourceReference{RegEx: serviceInstance.RegEx}
+	default:
+		panic("unknown type for service instance")
 	}
 }

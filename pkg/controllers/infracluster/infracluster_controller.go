@@ -33,7 +33,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 
-	ibmpowervsv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
 	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
 
 	configv1 "github.com/openshift/api/config/v1"
@@ -201,12 +200,12 @@ func (r *InfraClusterController) ensureInfraCluster(ctx context.Context, log log
 			return nil, fmt.Errorf("error getting InfraCluster object: %w", err)
 		}
 	case configv1.PowerVSPlatformType:
-		powervsCluster := &ibmpowervsv1.IBMPowerVSCluster{}
-		if err := r.Get(ctx, client.ObjectKey{Namespace: defaultCAPINamespace, Name: r.Infra.Status.InfrastructureName}, powervsCluster); err != nil && !kerrors.IsNotFound(err) {
-			return nil, fmt.Errorf("error getting InfraCluster object: %w", err)
-		}
+		var err error
 
-		infraCluster = powervsCluster
+		infraCluster, err = r.ensureIBMPowerVSCluster(ctx, log)
+		if err != nil {
+			return nil, fmt.Errorf("error ensuring IBMPowerVSCluster: %w", err)
+		}
 	case configv1.VSpherePlatformType:
 		var err error
 
