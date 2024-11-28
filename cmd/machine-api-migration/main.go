@@ -29,6 +29,8 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/machinesetsync"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/machinesync"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
+	capav1beta1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
+	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
 	"github.com/openshift/api/features"
 	featuregates "github.com/openshift/library-go/pkg/operator/configobserver/featuregates"
@@ -59,6 +61,8 @@ func initScheme(scheme *runtime.Scheme) {
 	// TODO(joelspeed): Add additional schemes here once we work out exactly which will be needed.
 	utilruntime.Must(mapiv1beta1.AddToScheme(scheme))
 	utilruntime.Must(configv1.AddToScheme(scheme))
+	utilruntime.Must(capav1beta1.AddToScheme(scheme))
+	utilruntime.Must(capiv1beta1.AddToScheme(scheme))
 }
 
 //nolint:funlen
@@ -76,7 +80,7 @@ func main() {
 	}
 
 	capiManagerOptions := capiflags.ManagerOptions{
-		MetricsBindAddr: ":8081",
+		DiagnosticsAddress: ":8081",
 	}
 
 	healthAddr := flag.String(
@@ -173,10 +177,14 @@ func main() {
 		os.Exit(0)
 	}
 
-	k8sclient := mgr.GetClient()
-	infra := &configv1.Infrastructure{}
+	infraClient, err := client.New(cfg, client.Options{Scheme: scheme})
+	if err != nil {
+		klog.Error(err, "unable to set up infra client")
+		os.Exit(1)
+	}
 
-	if err := k8sclient.Get(stop, client.ObjectKey{Name: controllers.InfrastructureResourceName}, infra); err != nil {
+	infra := &configv1.Infrastructure{}
+	if err := infraClient.Get(stop, client.ObjectKey{Name: controllers.InfrastructureResourceName}, infra); err != nil {
 		klog.Errorf("failed to fetch infrastructure: %s", err)
 		os.Exit(1)
 	}
