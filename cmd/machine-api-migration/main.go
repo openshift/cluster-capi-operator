@@ -79,10 +79,6 @@ func main() {
 		ResourceNamespace: "openshift-cluster-api",
 	}
 
-	capiManagerOptions := capiflags.ManagerOptions{
-		DiagnosticsAddress: ":8081",
-	}
-
 	healthAddr := flag.String(
 		"health-addr",
 		":9441",
@@ -108,6 +104,8 @@ func main() {
 	textLoggerConfig := textlogger.NewConfig()
 	textLoggerConfig.AddFlags(flag.CommandLine)
 	ctrl.SetLogger(textlogger.NewLogger(textLoggerConfig))
+
+	capiManagerOptions := capiflags.ManagerOptions{}
 
 	// Once all the flags are registered, switch to pflag
 	// to allow leader lection flags to be bound.
