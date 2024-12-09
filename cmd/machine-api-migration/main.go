@@ -29,7 +29,7 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/machinesetsync"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/machinesync"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
-	capav1beta1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
+	capav1beta2 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
 	"github.com/openshift/api/features"
@@ -61,7 +61,7 @@ func initScheme(scheme *runtime.Scheme) {
 	// TODO(joelspeed): Add additional schemes here once we work out exactly which will be needed.
 	utilruntime.Must(mapiv1beta1.AddToScheme(scheme))
 	utilruntime.Must(configv1.AddToScheme(scheme))
-	utilruntime.Must(capav1beta1.AddToScheme(scheme))
+	utilruntime.Must(capav1beta2.AddToScheme(scheme))
 	utilruntime.Must(capiv1beta1.AddToScheme(scheme))
 }
 

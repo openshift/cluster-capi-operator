@@ -2330,13 +2330,11 @@ sigs.k8s.io/cluster-api/util
 sigs.k8s.io/cluster-api/util/annotations
 sigs.k8s.io/cluster-api/util/conditions
 sigs.k8s.io/cluster-api/util/contract
-sigs.k8s.io/cluster-api/util/conversion
 sigs.k8s.io/cluster-api/util/flags
 sigs.k8s.io/cluster-api/util/labels/format
 sigs.k8s.io/cluster-api/util/topology
 # sigs.k8s.io/cluster-api-provider-aws/v2 v2.6.1
 ## explicit; go 1.21
-sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta1
 sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2
 sigs.k8s.io/cluster-api-provider-aws/v2/feature
 # sigs.k8s.io/cluster-api-provider-azure v1.15.1
