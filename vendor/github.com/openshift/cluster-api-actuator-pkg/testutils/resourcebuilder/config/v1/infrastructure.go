@@ -348,9 +348,43 @@ func (i InfrastructureBuilder) AsVSphereWithFailureDomains(name string, failureD
 	return i
 }
 
+// AsPowerVS sets the Status for the infrastructure builder.
+func (i InfrastructureBuilder) AsPowerVS(name string) InfrastructureBuilder {
+	i.spec = &configv1.InfrastructureSpec{
+		PlatformSpec: configv1.PlatformSpec{
+			Type:    configv1.PowerVSPlatformType,
+			PowerVS: &configv1.PowerVSPlatformSpec{},
+		},
+	}
+	i.status = &configv1.InfrastructureStatus{
+		InfrastructureName: name,
+		PlatformStatus: &configv1.PlatformStatus{
+			Type:    configv1.PowerVSPlatformType,
+			PowerVS: &configv1.PowerVSPlatformStatus{},
+		},
+		APIServerURL:           "https://api.test-cluster.test-domain:6443",
+		APIServerInternalURL:   "https://api-int.test-cluster.test-domain:6443",
+		ControlPlaneTopology:   configv1.HighlyAvailableTopologyMode,
+		InfrastructureTopology: configv1.HighlyAvailableTopologyMode,
+	}
+
+	return i
+}
+
 // WithGenerateName sets the generateName for the infrastructure builder.
 func (i InfrastructureBuilder) WithGenerateName(generateName string) InfrastructureBuilder {
 	i.generateName = generateName
+	return i
+}
+
+// WithInfrastructureName sets the infrastructureName in the status for the infrastructure builder.
+func (i InfrastructureBuilder) WithInfrastructureName(infraName string) InfrastructureBuilder {
+	if i.status == nil {
+		i.status = &configv1.InfrastructureStatus{}
+	}
+
+	i.status.InfrastructureName = infraName
+
 	return i
 }
 
@@ -380,5 +414,22 @@ func (i InfrastructureBuilder) WithName(name string) InfrastructureBuilder {
 // WithNamespace sets the namespace for the infrastructure builder.
 func (i InfrastructureBuilder) WithNamespace(namespace string) InfrastructureBuilder {
 	i.namespace = namespace
+	return i
+}
+
+// WithPlatformStatus sets the platformStatus for the infrastructure builder.
+func (i InfrastructureBuilder) WithPlatformStatus(ps configv1.PlatformStatus) InfrastructureBuilder {
+	if i.status == nil {
+		i.status = &configv1.InfrastructureStatus{}
+	}
+
+	i.status.PlatformStatus = &ps
+
+	return i
+}
+
+// WithStatus sets the status for the infrastructure builder.
+func (i InfrastructureBuilder) WithStatus(status configv1.InfrastructureStatus) InfrastructureBuilder {
+	i.status = &status
 	return i
 }
