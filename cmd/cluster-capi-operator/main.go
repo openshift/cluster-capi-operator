@@ -53,7 +53,7 @@ import (
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/capiinstaller"
-	"github.com/openshift/cluster-capi-operator/pkg/controllers/cluster"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/corecluster"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/infracluster"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/kubeconfig"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/secretsync"
@@ -287,9 +287,11 @@ func setupPlatformReconcilers(mgr manager.Manager, infra *configv1.Infrastructur
 }
 
 func setupReconcilers(mgr manager.Manager, infra *configv1.Infrastructure, platform configv1.PlatformType, infraClusterObject client.Object, containerImages map[string]string, applyClient *kubernetes.Clientset, apiextensionsClient *apiextensionsclient.Clientset, managedNamespace string) {
-	if err := (&cluster.CoreClusterReconciler{
+	if err := (&corecluster.CoreClusterReconciler{
 		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-cluster-resource-controller", managedNamespace),
 		Cluster:                     &clusterv1.Cluster{},
+		Platform:                    platform,
+		Infra:                       infra,
 	}).SetupWithManager(mgr); err != nil {
 		klog.Error(err, "unable to create controller", "controller", "CoreCluster")
 		os.Exit(1)

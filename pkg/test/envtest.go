@@ -77,7 +77,9 @@ func StartEnvTest(testEnv *envtest.Environment) (*rest.Config, client.Client, er
 		Paths: []string{
 			path.Join(root, "vendor", "github.com", "openshift", "api", "machine", "v1beta1", "zz_generated.crd-manifests", "0000_10_machine-api_01_machinesets-CustomNoUpgrade.crd.yaml"),
 			path.Join(root, "vendor", "github.com", "openshift", "api", "machine", "v1beta1", "zz_generated.crd-manifests", "0000_10_machine-api_01_machines-CustomNoUpgrade.crd.yaml"),
+			path.Join(root, "vendor", "github.com", "openshift", "api", "config", "v1", "zz_generated.crd-manifests", "0000_00_cluster-version-operator_01_clusteroperators.crd.yaml"),
 		},
+		ErrorIfPathMissing: true,
 	}
 
 	cfg, err := testEnv.Start()

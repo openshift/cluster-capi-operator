@@ -11,30 +11,32 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-package cluster
+package corecluster
 
 import (
 	"context"
 	"testing"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
+	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
-	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/test"
 )
 
 var (
-	testEnv *envtest.Environment
-	cfg     *rest.Config
-	cl      client.Client
-	ctx     = context.Background()
+	testEnv    *envtest.Environment
+	cfg        *rest.Config
+	cl         client.Client
+	testScheme *runtime.Scheme
+	ctx        = context.Background()
 )
 
 func TestAPIs(t *testing.T) {
@@ -43,6 +45,9 @@ func TestAPIs(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
+	SetDefaultEventuallyTimeout(2 * time.Second)
+	SetDefaultConsistentlyDuration(2 * time.Second)
+
 	logf.SetLogger(klog.Background())
 
 	By("bootstrapping test environment")
@@ -53,9 +58,8 @@ var _ = BeforeSuite(func() {
 	Expect(cfg).NotTo(BeNil())
 	Expect(cl).NotTo(BeNil())
 
-	managedNamespace := &corev1.Namespace{}
-	managedNamespace.SetName(controllers.DefaultManagedNamespace)
-	Expect(cl.Create(context.Background(), managedNamespace)).To(Succeed())
+	komega.SetClient(cl)
+	komega.SetContext(ctx)
 })
 
 var _ = AfterSuite(func() {

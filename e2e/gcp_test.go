@@ -31,7 +31,6 @@ var _ = Describe("Cluster API GCP MachineSet", Ordered, func() {
 		if platform != configv1.GCPPlatformType {
 			Skip("Skipping GCP E2E tests")
 		}
-		framework.CreateCoreCluster(cl, clusterName, "GCPCluster")
 		mapiMachineSpec = getGCPMAPIProviderSpec(cl)
 	})
 
