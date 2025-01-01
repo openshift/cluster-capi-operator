@@ -225,6 +225,8 @@ func (m *powerVSMachineAndInfra) toPowerVSMachine(providerSpec mapiv1.PowerVSMac
 		// ProviderID. This is populated when this is called in higher level funcs (ToMachine(), ToMachineSet()).
 	}
 
+	// CredentialsSecret - TODO(MULTIARCH-5195): Explore on what needs to happen regarding credentials secrets.
+
 	if !reflect.DeepEqual(providerSpec.ObjectMeta, metav1.ObjectMeta{}) {
 		// We don't support setting the object metadata in the provider spec.
 		// It's only present for the purpose of the raw extension and doesn't have any functionality.

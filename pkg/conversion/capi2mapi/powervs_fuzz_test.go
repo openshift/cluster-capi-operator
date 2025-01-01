@@ -29,7 +29,6 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/mapi2capi"
 	conversiontest "github.com/openshift/cluster-capi-operator/pkg/conversion/test/fuzz"
 
-	corev1 "k8s.io/api/core/v1"
 	runtimeserializer "k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/utils/ptr"
 	capibmv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
@@ -135,9 +134,6 @@ func powerVSMachineFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interfac
 			case 2:
 				network.RegEx = ptr.To(c.RandString())
 			}
-		},
-		func(imageRef *corev1.LocalObjectReference, c fuzz.Continue) {
-			imageRef.Name = c.RandString()
 		},
 		func(image *capibmv1.IBMPowerVSResourceReference, c fuzz.Continue) {
 			switch c.Int31n(3) {

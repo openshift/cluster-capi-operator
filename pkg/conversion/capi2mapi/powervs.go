@@ -188,7 +188,7 @@ func (m machineAndPowerVSMachineAndPowerVSCluster) toProviderSpec() (*mapiv1.Pow
 		ProcessorType:   mapiv1.PowerVSProcessorType(m.powerVSMachine.Spec.ProcessorType),
 		Processors:      m.powerVSMachine.Spec.Processors,
 		MemoryGiB:       m.powerVSMachine.Spec.MemoryGiB,
-		//CredentialsSecret:
+		//CredentialsSecret: TODO(MULTIARCH-5195): Explore on what needs to happen regarding credentials secrets.
 		//LoadBalancers: TODO(MULTIARCH-5041): Not supported for workers.
 	}
 
