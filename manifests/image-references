@@ -26,6 +26,10 @@ spec:
     from:
       kind: DockerImage
       name: registry.ci.openshift.org/openshift:azure-cluster-api-controllers
+  - name: azure-service-operator
+    from:
+      kind: DockerImage
+      name: registry.ci.openshift.org/openshift:azure-service-operator
   - name: gcp-cluster-api-controllers
     from:
       kind: DockerImage
