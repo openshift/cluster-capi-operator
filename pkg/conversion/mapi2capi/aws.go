@@ -196,8 +196,8 @@ func (m *awsMachineSetAndInfra) ToMachineSetAndMachineTemplate() (*capiv1.Machin
 	return capiMachineSet, capaMachineTemplate, warnings, nil
 }
 
-// ToMachineTemplateSpec implements the ProviderSpec conversion interface for the AWS provider,
-// it converts AWSProviderSpec to AWSMachineTemplateSpec.
+// toAWSMachine implements the ProviderSpec conversion interface for the AWS provider,
+// it converts AWSMachineProviderConfig to AWSMachine.
 //
 //nolint:funlen
 func (m *awsMachineAndInfra) toAWSMachine(providerSpec mapiv1.AWSMachineProviderConfig) (*capav1.AWSMachine, []string, field.ErrorList) {
@@ -300,7 +300,7 @@ func (m *awsMachineAndInfra) toAWSMachine(providerSpec mapiv1.AWSMachineProvider
 	return &capav1.AWSMachine{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: capav1.GroupVersion.String(),
-			Kind:       "AWSMachine",
+			Kind:       awsMachineKind,
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      m.machine.Name,
@@ -310,7 +310,7 @@ func (m *awsMachineAndInfra) toAWSMachine(providerSpec mapiv1.AWSMachineProvider
 	}, warnings, errs
 }
 
-// awsProviderSpecFromRawExtension unmarshals a raw extension into an AWSMachineProviderSpec type.
+// awsProviderSpecFromRawExtension unmarshals a raw extension into an AWSMachineProviderConfig type.
 func awsProviderSpecFromRawExtension(rawExtension *runtime.RawExtension) (mapiv1.AWSMachineProviderConfig, error) {
 	if rawExtension == nil {
 		return mapiv1.AWSMachineProviderConfig{}, nil
@@ -328,7 +328,7 @@ func awsMachineToAWSMachineTemplate(awsMachine *capav1.AWSMachine, name string, 
 	return &capav1.AWSMachineTemplate{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: capav1.GroupVersion.String(),
-			Kind:       "AWSMachineTemplate",
+			Kind:       awsMachineTemplateKind,
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
