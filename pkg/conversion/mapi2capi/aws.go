@@ -16,7 +16,6 @@ limitations under the License.
 package mapi2capi
 
 import (
-	"errors"
 	"fmt"
 	"reflect"
 	"regexp"
@@ -40,10 +39,6 @@ import (
 const (
 	// DefaultCredentialsSecretName is the name of the default secret containing AWS cloud credentials.
 	DefaultCredentialsSecretName = "aws-cloud-credentials" //#nosec G101 -- This is a false positive.
-)
-
-var (
-	errUnexpectedObjectTypeForMachine = errors.New("unexpected type for capaMachineObj")
 )
 
 const (
