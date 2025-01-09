@@ -16,7 +16,6 @@ limitations under the License.
 package mapi2capi
 
 import (
-	"errors"
 	"fmt"
 	"reflect"
 	"regexp"
@@ -34,10 +33,6 @@ import (
 	capiv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
-)
-
-var (
-	errUnexpectedObjectTypeForMachine = errors.New("unexpected type for capaMachineObj")
 )
 
 // awsMachineAndInfra stores the details of a Machine API AWSMachine and Infra.
