@@ -70,7 +70,7 @@ func fromCAPIMachineToMAPIMachine(capiMachine *capiv1.Machine) (*mapiv1.Machine,
 	mapiMachine.Spec.ObjectMeta.Labels = map[string]string{}
 	setCAPIManagedNodeLabelsToMAPINodeLabels(capiMachine.Labels, mapiMachine.Spec.ObjectMeta.Labels)
 
-	// Unusued fields - Below this line are fields not used from the CAPI Machine.
+	// Unused fields - Below this line are fields not used from the CAPI Machine.
 
 	// capiMachine.Spec.ClusterName - Ignore this as it can be reconstructed from the infra object.
 	// capiMachine.Spec.Bootstrap.ConfigRef - Ignore as we use DataSecretName for the MAPI side.
