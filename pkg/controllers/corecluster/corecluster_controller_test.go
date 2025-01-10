@@ -43,6 +43,7 @@ var _ = Describe("Reconcile Core cluster", func() {
 	var testNamespaceName string
 	testInfraName := "test-ocp-infrastructure-name"
 	testRegionName := "eu-west-2"
+	desiredOperatorReleaseVersion := "this-is-the-desired-release-version"
 	var infra *configv1.Infrastructure
 	var mgrCancel context.CancelFunc
 	var mgrDone chan struct{}
@@ -64,6 +65,7 @@ var _ = Describe("Reconcile Core cluster", func() {
 			ClusterOperatorStatusClient: operatorstatus.ClusterOperatorStatusClient{
 				Client:           cl,
 				ManagedNamespace: testNamespaceName,
+				ReleaseVersion:   desiredOperatorReleaseVersion,
 			},
 			Cluster:  &capiv1.Cluster{},
 			Infra:    infra.DeepCopy(),
@@ -169,6 +171,30 @@ var _ = Describe("Reconcile Core cluster", func() {
 							)),
 						)),
 					)
+				})
+
+				Context("With a ClusterOperator", func() {
+					It("should update the ClusterOperator status to be available, upgradeable, non-progressing, non-degraded", func() {
+						co := komega.Object(configv1resourcebuilder.ClusterOperator().WithName(clusterOperatorName).Build())
+						Eventually(co).Should(
+							HaveField("Status.Conditions", SatisfyAll(
+								ContainElement(And(HaveField("Type", Equal(configv1.OperatorAvailable)), HaveField("Status", Equal(configv1.ConditionTrue)))),
+								ContainElement(And(HaveField("Type", Equal(configv1.OperatorProgressing)), HaveField("Status", Equal(configv1.ConditionFalse)))),
+								ContainElement(And(HaveField("Type", Equal(configv1.OperatorDegraded)), HaveField("Status", Equal(configv1.ConditionFalse)))),
+								ContainElement(And(HaveField("Type", Equal(configv1.OperatorUpgradeable)), HaveField("Status", Equal(configv1.ConditionTrue)))),
+							)),
+						)
+					})
+
+					It("should update the ClusterOperator status version to the desired one", func() {
+						co := komega.Object(configv1resourcebuilder.ClusterOperator().WithName(clusterOperatorName).Build())
+						Eventually(co).Should(
+							HaveField("Status.Versions", ContainElement(SatisfyAll(
+								HaveField("Name", Equal("operator")),
+								HaveField("Version", Equal(desiredOperatorReleaseVersion)),
+							))),
+						)
+					})
 				})
 			})
 		})
