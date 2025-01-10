@@ -147,7 +147,7 @@ func (m machineAndAWSMachineAndAWSCluster) toProviderSpec() (*mapiv1.AWSMachineP
 			Region:           m.awsCluster.Spec.Region,
 		},
 		// LoadBalancers - TODO(OCPCLOUD-2709) Not supported for workers.
-		BlockDevices:            convertAWSBlockDeviceMappingSpecToMAPI(m.awsMachine.Spec.RootVolume, m.awsMachine.Spec.NonRootVolumes),
+		BlockDevices:            convertAWSVolumesToMAPI(m.awsMachine.Spec.RootVolume, m.awsMachine.Spec.NonRootVolumes),
 		SpotMarketOptions:       convertAWSSpotMarketOptionsToMAPI(m.awsMachine.Spec.SpotMarketOptions),
 		MetadataServiceOptions:  mapiAWSMetadataOptions,
 		PlacementGroupName:      m.awsMachine.Spec.PlacementGroupName,
@@ -174,7 +174,7 @@ func (m machineAndAWSMachineAndAWSCluster) toProviderSpec() (*mapiv1.AWSMachineP
 	// Below this line are fields not used from the CAPI AWSMachine.
 
 	// ProviderID - Populated at a different level.
-	// IntsanceID - Ignore - Is a subset of providerID.
+	// InstanceID - Ignore - Is a subset of providerID.
 	// Ignition - Ignore - Only has a version field and we force this to a particular value.
 
 	if m.awsMachine.Spec.NetworkInterfaceType != "" && m.awsMachine.Spec.NetworkInterfaceType != capav1.NetworkInterfaceTypeEFAWithENAInterface && m.awsMachine.Spec.NetworkInterfaceType != capav1.NetworkInterfaceTypeENI {
@@ -404,27 +404,27 @@ func convertAWSMarketTypeToMAPI(fldPath *field.Path, marketType capav1.MarketTyp
 	}
 }
 
-func convertAWSBlockDeviceMappingSpecToMAPI(rootVolume *capav1.Volume, nonRootVolumes []capav1.Volume) []mapiv1.BlockDeviceMappingSpec {
+func convertAWSVolumesToMAPI(rootVolume *capav1.Volume, nonRootVolumes []capav1.Volume) []mapiv1.BlockDeviceMappingSpec {
 	blockDeviceMapping := []mapiv1.BlockDeviceMappingSpec{}
 
 	if rootVolume != nil && *rootVolume != (capav1.Volume{}) {
-		blockDeviceMapping = append(blockDeviceMapping, volumeToBlockDeviceMappingSpec(*rootVolume))
+		blockDeviceMapping = append(blockDeviceMapping, convertAWSVolumeToMAPI(*rootVolume))
 	}
 
 	for _, volume := range nonRootVolumes {
-		blockDeviceMapping = append(blockDeviceMapping, volumeToBlockDeviceMappingSpec(volume))
+		blockDeviceMapping = append(blockDeviceMapping, convertAWSVolumeToMAPI(volume))
 	}
 
 	return blockDeviceMapping
 }
 
-func volumeToBlockDeviceMappingSpec(volume capav1.Volume) mapiv1.BlockDeviceMappingSpec {
+func convertAWSVolumeToMAPI(volume capav1.Volume) mapiv1.BlockDeviceMappingSpec {
 	bdm := mapiv1.BlockDeviceMappingSpec{
 		EBS: &mapiv1.EBSBlockDeviceSpec{
 			DeleteOnTermination: ptr.To(true), // This is forced to true for now as CAPI doesn't support changing it.
 			VolumeSize:          ptr.To(volume.Size),
 			Encrypted:           volume.Encrypted,
-			KMSKey:              convertKMSKeyToMAPI(volume.EncryptionKey),
+			KMSKey:              convertAWSKMSKeyToMAPI(volume.EncryptionKey),
 		},
 	}
 
@@ -443,7 +443,7 @@ func volumeToBlockDeviceMappingSpec(volume capav1.Volume) mapiv1.BlockDeviceMapp
 	return bdm
 }
 
-func convertKMSKeyToMAPI(kmsKey string) mapiv1.AWSResourceReference {
+func convertAWSKMSKeyToMAPI(kmsKey string) mapiv1.AWSResourceReference {
 	if strings.HasPrefix(kmsKey, "arn:") {
 		return mapiv1.AWSResourceReference{
 			ARN: &kmsKey,
