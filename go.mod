@@ -6,6 +6,7 @@ toolchain go1.21.5
 
 replace (
 	github.com/google/cel-go => github.com/google/cel-go v0.16.1
+	github.com/openshift/cluster-api-actuator-pkg/testutils => github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20241223105153-0a8b1a3bb085
 	k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20230601164746-7562a1006961
 )
 
@@ -16,15 +17,16 @@ require (
 	github.com/golangci/golangci-lint v1.56.2
 	github.com/onsi/ginkgo/v2 v2.15.0
 	github.com/onsi/gomega v1.31.1
-	github.com/openshift/api v0.0.0-20231129134630-a782d1c1541c
+	github.com/openshift/api v0.0.0-20240115183315-0793e918179d
+	github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-00010101000000-000000000000
 	github.com/openshift/library-go v0.0.0-20231214171439-128164517bf7
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/pflag v1.0.6-0.20210604193023-d5e0c0615ace
 	gopkg.in/yaml.v2 v2.4.0
-	k8s.io/api v0.28.6
+	k8s.io/api v0.29.0
 	k8s.io/apiextensions-apiserver v0.28.6
-	k8s.io/apimachinery v0.28.6
-	k8s.io/client-go v0.28.6
+	k8s.io/apimachinery v0.29.0
+	k8s.io/client-go v0.29.0
 	k8s.io/component-base v0.28.6
 	k8s.io/klog/v2 v2.120.1
 	k8s.io/utils v0.0.0-20240102154912-e7106e64919e
@@ -35,7 +37,7 @@ require (
 	sigs.k8s.io/cluster-api-provider-ibmcloud v0.7.0
 	sigs.k8s.io/cluster-api-provider-vsphere v1.9.2
 	sigs.k8s.io/controller-runtime v0.16.5
-	sigs.k8s.io/controller-runtime/tools/setup-envtest v0.0.0-20221007015352-8ad090e0663e
+	sigs.k8s.io/controller-runtime/tools/setup-envtest v0.0.0-20230926180527-c93e2abcb28e
 )
 
 require sigs.k8s.io/yaml v1.4.0 // indirect
