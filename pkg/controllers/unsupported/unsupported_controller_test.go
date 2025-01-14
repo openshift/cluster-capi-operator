@@ -24,58 +24,98 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	configv1 "github.com/openshift/api/config/v1"
+	"github.com/openshift/cluster-api-actuator-pkg/testutils"
+	configv1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/config/v1"
+	corev1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/core/v1"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
-	"github.com/openshift/cluster-capi-operator/pkg/test"
 )
 
 var _ = Describe("CAPI unsupported controller", func() {
 	ctx := context.Background()
+	desiredOperatorReleaseVersion := "this-is-the-desired-release-version"
 	var r *UnsupportedController
 	var capiClusterOperator *configv1.ClusterOperator
-	capiClusterOperatorKey := client.ObjectKey{Name: "cluster-api"}
+	var testNamespaceName string
 
 	BeforeEach(func() {
-		r = &UnsupportedController{
-			ClusterOperatorStatusClient: operatorstatus.ClusterOperatorStatusClient{
-				Client: cl,
-			},
-		}
-
+		By("Creating the cluster-api ClusterOperator")
 		capiClusterOperator = &configv1.ClusterOperator{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "cluster-api",
+				Name: controllers.ClusterOperatorName,
 			},
 		}
-
 		Expect(cl.Create(ctx, capiClusterOperator)).To(Succeed(), "should be able to create the 'cluster-api' ClusterOperator object")
-	})
 
-	AfterEach(func() {
-		Expect(test.CleanupAndWait(ctx, cl, &configv1.ClusterOperator{})).To(Succeed())
-	})
+		By("Creating the testing namespace")
+		namespace := corev1resourcebuilder.Namespace().WithGenerateName("test-capi-corecluster-").Build()
+		Expect(cl.Create(ctx, namespace)).To(Succeed())
+		testNamespaceName = namespace.Name
 
-	It("should update cluster-api ClusterOperator status with an 'unsupported' message", func() {
+		By("Starting the controller")
+		r = &UnsupportedController{
+			ClusterOperatorStatusClient: operatorstatus.ClusterOperatorStatusClient{
+				Client:         cl,
+				ReleaseVersion: desiredOperatorReleaseVersion,
+			},
+		}
 		_, err := r.Reconcile(ctx, reconcile.Request{
 			NamespacedName: types.NamespacedName{
 				Name: capiClusterOperator.Name,
 			},
 		})
-
 		Expect(err).ToNot(HaveOccurred(), "should be able to reconcile the cluster-api ClusterOperator without erroring")
+	})
 
-		Eventually(func() (*configv1.ClusterOperator, error) {
-			err := cl.Get(ctx, capiClusterOperatorKey, capiClusterOperator)
-			return capiClusterOperator, err
-		}).Should(HaveField("Status.Conditions",
+	AfterEach(func() {
+		testutils.CleanupResources(Default, ctx, testEnv.Config, cl, testNamespaceName, &configv1.ClusterOperator{})
+	})
+
+	It("should update cluster-api ClusterOperator status with an 'unsupported' message", func() {
+		co := komega.Object(configv1resourcebuilder.ClusterOperator().WithName(controllers.ClusterOperatorName).Build())
+		Eventually(co).Should(HaveField("Status.Conditions",
 			SatisfyAll(
 				ContainElement(And(HaveField("Type", Equal(configv1.OperatorAvailable)), HaveField("Status", Equal(configv1.ConditionTrue)), HaveField("Message", Equal(capiUnsupportedPlatformMsg)))),
 				ContainElement(And(HaveField("Type", Equal(configv1.OperatorProgressing)), HaveField("Status", Equal(configv1.ConditionFalse)))),
 				ContainElement(And(HaveField("Type", Equal(configv1.OperatorDegraded)), HaveField("Status", Equal(configv1.ConditionFalse)))),
+				ContainElement(And(HaveField("Type", Equal(configv1.OperatorUpgradeable)), HaveField("Status", Equal(configv1.ConditionTrue)))),
 			),
 		), "should match the expected ClusterOperator status conditions")
 	})
 
+	It("should update the ClusterOperator status version to the desired one", func() {
+		co := komega.Object(configv1resourcebuilder.ClusterOperator().WithName(controllers.ClusterOperatorName).Build())
+		Eventually(co).Should(
+			HaveField("Status.Versions", ContainElement(SatisfyAll(
+				HaveField("Name", Equal("operator")),
+				HaveField("Version", Equal(desiredOperatorReleaseVersion)),
+			))),
+		)
+	})
+
+	It("should update the ClusterOperator status version to the desired one when an incorrect one is present", func() {
+		By("setting the ClusterOperator status version to an incorrect one")
+		patchBase := client.MergeFrom(capiClusterOperator.DeepCopy())
+		capiClusterOperator.Status.Versions = []configv1.OperandVersion{{Name: "operator", Version: "incorrect"}}
+		Expect(cl.Status().Patch(ctx, capiClusterOperator, patchBase)).To(Succeed())
+
+		_, err := r.Reconcile(ctx, reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Name: capiClusterOperator.Name,
+			},
+		})
+		Expect(err).ToNot(HaveOccurred(), "should be able to reconcile the cluster-api ClusterOperator without erroring")
+
+		co := komega.Object(configv1resourcebuilder.ClusterOperator().WithName(controllers.ClusterOperatorName).Build())
+		Eventually(co).Should(
+			HaveField("Status.Versions", ContainElement(SatisfyAll(
+				HaveField("Name", Equal("operator")),
+				HaveField("Version", Equal(desiredOperatorReleaseVersion)),
+			))),
+		)
+	})
 })

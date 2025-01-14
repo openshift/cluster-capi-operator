@@ -72,22 +72,15 @@ func (r *ClusterOperatorStatusClient) SetStatusAvailable(ctx context.Context, av
 	}
 
 	conds := []configv1.ClusterOperatorStatusCondition{
-		NewClusterOperatorStatusCondition(configv1.OperatorAvailable, configv1.ConditionTrue, ReasonAsExpected,
-			availableConditionMsg),
+		NewClusterOperatorStatusCondition(configv1.OperatorAvailable, configv1.ConditionTrue, ReasonAsExpected, availableConditionMsg),
 		NewClusterOperatorStatusCondition(configv1.OperatorProgressing, configv1.ConditionFalse, ReasonAsExpected, ""),
 		NewClusterOperatorStatusCondition(configv1.OperatorDegraded, configv1.ConditionFalse, ReasonAsExpected, ""),
 		NewClusterOperatorStatusCondition(configv1.OperatorUpgradeable, configv1.ConditionTrue, ReasonAsExpected, ""),
 	}
 
-	// Update cluster conditions only if they have been changed
-	for _, cond := range conds {
-		if !v1helpers.IsStatusConditionPresentAndEqual(co.Status.Conditions, cond.Type, cond.Status) {
-			log.V(2).Info("syncing status: available")
-
-			co.Status.Versions = []configv1.OperandVersion{{Name: controllers.OperatorVersionKey, Version: r.ReleaseVersion}}
-
-			return r.SyncStatus(ctx, co, conds)
-		}
+	if co, shouldUpdate := clusterObjectNeedsUpdating(co, conds, r.operandVersions(), r.relatedObjects()); shouldUpdate {
+		log.V(2).Info("syncing status: available")
+		return r.SyncStatus(ctx, co, conds)
 	}
 
 	return nil
@@ -105,7 +98,7 @@ func (r *ClusterOperatorStatusClient) SetStatusDegraded(ctx context.Context, rec
 		return err
 	}
 
-	desiredVersions := []configv1.OperandVersion{{Name: controllers.OperatorVersionKey, Version: r.ReleaseVersion}}
+	desiredVersions := r.operandVersions()
 	currentVersions := co.Status.Versions
 
 	var message string
@@ -170,10 +163,6 @@ func (r *ClusterOperatorStatusClient) SyncStatus(ctx context.Context, co *config
 		v1helpers.SetStatusCondition(&co.Status.Conditions, c)
 	}
 
-	if !equality.Semantic.DeepEqual(co.Status.RelatedObjects, r.relatedObjects()) {
-		co.Status.RelatedObjects = r.relatedObjects()
-	}
-
 	if err := r.Client.Status().Update(ctx, co); err != nil {
 		return fmt.Errorf("failed to update cluster operator status: %w", err)
 	}
@@ -191,6 +180,9 @@ func (r *ClusterOperatorStatusClient) relatedObjects() []configv1.ObjectReferenc
 		{Group: "", Resource: "configmaps", Name: "cluster-capi-operator-images"},
 		{Group: "apps", Resource: "deployments", Name: "cluster-capi-operator"},
 	}
+}
+func (r *ClusterOperatorStatusClient) operandVersions() []configv1.OperandVersion {
+	return []configv1.OperandVersion{{Name: controllers.OperatorVersionKey, Version: r.ReleaseVersion}}
 }
 
 // NewClusterOperatorStatusCondition creates a new ClusterOperatorStatusCondition.
@@ -213,4 +205,26 @@ func printOperandVersions(versions []configv1.OperandVersion) string {
 	}
 
 	return strings.Join(versionsOutput, ", ")
+}
+
+func clusterObjectNeedsUpdating(co *configv1.ClusterOperator, conds []configv1.ClusterOperatorStatusCondition, desiredVersions []configv1.OperandVersion, desiredRelatedObjects []configv1.ObjectReference) (*configv1.ClusterOperator, bool) {
+	shouldUpdate := false
+
+	for _, cond := range conds {
+		if !v1helpers.IsStatusConditionPresentAndEqual(co.Status.Conditions, cond.Type, cond.Status) {
+			shouldUpdate = true
+		}
+	}
+
+	if !equality.Semantic.DeepEqual(co.Status.Versions, desiredVersions) {
+		co.Status.Versions = desiredVersions
+		shouldUpdate = true
+	}
+
+	if !equality.Semantic.DeepEqual(co.Status.RelatedObjects, desiredRelatedObjects) {
+		co.Status.RelatedObjects = desiredRelatedObjects
+		shouldUpdate = true
+	}
+
+	return co, shouldUpdate
 }
