@@ -1,20 +1,28 @@
-# Core Cluster controller
+# Core Cluster Controller
 
 ## Overview
 
-[Core cluster controller](../../pkg/controllers/cluster/infra.go) is responsible for managing Cluster CRs. The cluster object will
-represent the current cluster where operator is running because we treat this cluster as both [management and workload](https://cluster-api.sigs.k8s.io/user/concepts.html#management-cluster).
-It's only purpose it to set `ControlPlaneInitialized` condition to true, in order to make Cluster API move the cluster
-to provisioned phase. We don't manage control plane machines using Cluster API now.
+[Core cluster controller](../../pkg/controllers/cluster/infra.go) is responsible for reconciling the core cluster object in the `openshift-cluster-api` namespace. It ensures that the infrastructure and control plane for the cluster are initialized (by setting the ControlPlaneInitialized annotation) and available.
+This controller will only manage cluster objects on supported platforms, and should fail early if the cluster platform is unsupported.
+
+## Key Features
+
+- Ensures the core cluster object is created and reconciled.
+- Maps supported OpenShift platform types to corresponding CAPI infrastructure clusters.
+- Monitors and updates `ControlPlaneInitializedCondition` annotation.
+- Updates the status of the cluster as available when conditions are met.
+
 
 ## Behavior
 
 ```mermaid
-stateDiagram-v2
-    [*] --> GetCluster
-    GetCluster --> IsDeletionTimestampPresent
-    state IsDeletionTimestampPresent <<choice>>
-    IsDeletionTimestampPresent --> [*]: True
-    IsDeletionTimestampPresent --> SetControlPlaneInitializedCondition: False
-    SetControlPlaneInitializedCondition --> [*]
+stateDiagram
+  [*] --> GetCluster
+  GetCluster --> DoesCoreClusterObjectExist
+  DoesCoreClusterObjectExist --> DoesClusterHaveControlPlaneInitializedCondition:Yes
+  DoesCoreClusterObjectExist --> CreateCoreClusterIfPlatformIsSupported:No
+  DoesClusterHaveControlPlaneInitializedCondition --> ReturnCoreCluster:Yes
+  DoesClusterHaveControlPlaneInitializedCondition --> PatchCoreClusterObjectAndAddAnnotation:No
+  PatchCoreClusterObjectAndAddAnnotation --> ReturnCoreCluster
+  CreateCoreClusterIfPlatformIsSupported --> DoesClusterHaveControlPlaneInitializedCondition
 ```
