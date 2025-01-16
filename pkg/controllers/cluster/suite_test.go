@@ -24,6 +24,7 @@ import (
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
+	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
@@ -56,6 +57,9 @@ var _ = BeforeSuite(func() {
 	managedNamespace := &corev1.Namespace{}
 	managedNamespace.SetName(controllers.DefaultManagedNamespace)
 	Expect(cl.Create(context.Background(), managedNamespace)).To(Succeed())
+
+	komega.SetClient(cl)
+	komega.SetContext(ctx)
 })
 
 var _ = AfterSuite(func() {
