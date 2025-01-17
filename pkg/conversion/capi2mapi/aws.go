@@ -234,15 +234,15 @@ func (m machineSetAndAWSMachineTemplateAndAWSCluster) ToMachineSet() (*mapiv1.Ma
 		errors = append(errors, err)
 	}
 
+	if len(errors) > 0 {
+		return nil, warnings, utilerrors.NewAggregate(errors)
+	}
+
 	mapiMachineSet.Spec.Template.Spec = mapaMachine.Spec
 
 	// Copy the labels and annotations from the Machine to the template.
 	mapiMachineSet.Spec.Template.ObjectMeta.Annotations = mapaMachine.ObjectMeta.Annotations
 	mapiMachineSet.Spec.Template.ObjectMeta.Labels = mapaMachine.ObjectMeta.Labels
-
-	if len(errors) > 0 {
-		return nil, warnings, utilerrors.NewAggregate(errors)
-	}
 
 	return mapiMachineSet, warnings, nil
 }
