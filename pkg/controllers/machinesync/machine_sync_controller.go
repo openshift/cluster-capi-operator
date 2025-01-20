@@ -30,6 +30,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	capav1beta2 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	capibmv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
+	capov1beta1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
 	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -195,6 +196,8 @@ func getInfraMachineFromProvider(platform configv1.PlatformType) (client.Object,
 	switch platform {
 	case configv1.AWSPlatformType:
 		return &capav1beta2.AWSMachine{}, nil
+	case configv1.OpenStackPlatformType:
+		return &capov1beta1.OpenStackMachine{}, nil
 	case configv1.PowerVSPlatformType:
 		return &capibmv1.IBMPowerVSMachine{}, nil
 	default:
