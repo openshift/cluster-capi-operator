@@ -37,13 +37,11 @@ import (
 )
 
 const (
-	awsMachineAPIVersion = "infrastructure.cluster.x-k8s.io/v1beta2"
-	awsMachineKind       = "AWSMachine"
-	awsTemplateKind      = "AWSMachineTemplate"
-	capiNamespace        = "openshift-cluster-api"
+	awsMachineKind  = "AWSMachine"
+	awsTemplateKind = "AWSMachineTemplate"
 )
 
-var _ = Describe("AWS Fuzz (mapi2capi)", func() {
+var _ = Describe("AWS Fuzz (capi2mapi)", func() {
 	infra := &configv1.Infrastructure{
 		Spec: configv1.InfrastructureSpec{},
 		Status: configv1.InfrastructureStatus{
@@ -76,7 +74,7 @@ var _ = Describe("AWS Fuzz (mapi2capi)", func() {
 			mapi2capi.FromAWSMachineAndInfra,
 			fromMachineAndAWSMachineAndAWSCluster,
 			conversiontest.ObjectMetaFuzzerFuncs(capiNamespace),
-			conversiontest.CAPIMachineFuzzerFuncs(awsProviderIDFuzzer, awsMachineKind, awsMachineAPIVersion, infra.Status.InfrastructureName),
+			conversiontest.CAPIMachineFuzzerFuncs(awsProviderIDFuzzer, awsMachineKind, capav1.GroupVersion.String(), infra.Status.InfrastructureName),
 			awsMachineFuzzerFuncs,
 		)
 	})
@@ -100,8 +98,8 @@ var _ = Describe("AWS Fuzz (mapi2capi)", func() {
 			mapi2capi.FromAWSMachineSetAndInfra,
 			fromMachineSetAndAWSMachineTemplateAndAWSCluster,
 			conversiontest.ObjectMetaFuzzerFuncs(capiNamespace),
-			conversiontest.CAPIMachineFuzzerFuncs(awsProviderIDFuzzer, awsTemplateKind, awsMachineAPIVersion, infra.Status.InfrastructureName),
-			conversiontest.CAPIMachineSetFuzzerFuncs(awsTemplateKind, awsMachineAPIVersion, infra.Status.InfrastructureName),
+			conversiontest.CAPIMachineFuzzerFuncs(awsProviderIDFuzzer, awsTemplateKind, capav1.GroupVersion.String(), infra.Status.InfrastructureName),
+			conversiontest.CAPIMachineSetFuzzerFuncs(awsTemplateKind, capav1.GroupVersion.String(), infra.Status.InfrastructureName),
 			awsMachineFuzzerFuncs,
 			awsMachineTemplateFuzzerFuncs,
 		)
@@ -172,7 +170,7 @@ func awsMachineFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interface{} 
 
 			// Ensure the type meta is set correctly.
 			m.TypeMeta.APIVersion = capav1.GroupVersion.String()
-			m.TypeMeta.Kind = "AWSMachine"
+			m.TypeMeta.Kind = awsMachineKind
 		},
 	}
 }
@@ -197,7 +195,7 @@ func awsMachineTemplateFuzzerFuncs(codecs runtimeserializer.CodecFactory) []inte
 
 			// Ensure the type meta is set correctly.
 			m.TypeMeta.APIVersion = capav1.GroupVersion.String()
-			m.TypeMeta.Kind = "AWSMachineTemplate"
+			m.TypeMeta.Kind = awsTemplateKind
 		},
 	}
 }
