@@ -95,6 +95,12 @@ linters-settings:
       arguments:
         - "checkPrivateReceivers"
         - "disableStutteringCheck"
+  staticcheck:
+    checks:
+      # SA1019: Using a deprecated function, variable, constant or field
+      #
+      # We need to consider deprecated fields in MAPO-CAPO conversions
+      - "-SA1019"
   stylecheck:
     # https://staticcheck.io/docs/options#checks
     checks: ["all", "-ST1000"]
