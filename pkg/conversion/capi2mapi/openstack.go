@@ -244,7 +244,7 @@ func (m machineSetAndOpenStackMachineTemplateAndOpenStackCluster) ToMachineSet()
 
 	// Run the full ToMachine conversion so that we can check for
 	// any Machine level conversion errors in the spec translation.
-	mapoMachine, warns, err := m.ToMachine()
+	mapiMachine, warns, err := m.ToMachine()
 	if err != nil {
 		errors = append(errors, err)
 	}
@@ -260,11 +260,11 @@ func (m machineSetAndOpenStackMachineTemplateAndOpenStackCluster) ToMachineSet()
 		return nil, warnings, utilerrors.NewAggregate(errors)
 	}
 
-	mapiMachineSet.Spec.Template.Spec = mapoMachine.Spec
+	mapiMachineSet.Spec.Template.Spec = mapiMachine.Spec
 
 	// Copy the labels and annotations from the Machine to the template.
-	mapiMachineSet.Spec.Template.ObjectMeta.Annotations = mapoMachine.ObjectMeta.Annotations
-	mapiMachineSet.Spec.Template.ObjectMeta.Labels = mapoMachine.ObjectMeta.Labels
+	mapiMachineSet.Spec.Template.ObjectMeta.Annotations = mapiMachine.ObjectMeta.Annotations
+	mapiMachineSet.Spec.Template.ObjectMeta.Labels = mapiMachine.ObjectMeta.Labels
 
 	return mapiMachineSet, warnings, nil
 }
