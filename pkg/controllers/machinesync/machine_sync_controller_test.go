@@ -36,7 +36,7 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/test"
 )
 
-var _ = Describe("MachineSync Reconciler", func() {
+var _ = Describe("MachineSync Reconciler (AWS)", func() {
 	var mgrCancel context.CancelFunc
 	var mgrDone chan struct{}
 	var mgr manager.Manager
@@ -93,6 +93,94 @@ var _ = Describe("MachineSync Reconciler", func() {
 		reconciler = &MachineSyncReconciler{
 			Client:   mgr.GetClient(),
 			Platform: configv1.AWSPlatformType,
+		}
+		Expect(reconciler.SetupWithManager(mgr)).To(Succeed(), "Reconciler should be able to setup with manager")
+	})
+
+	AfterEach(func() {
+		Expect(test.CleanupAndWait(ctx, k8sClient, machine)).To(Succeed())
+	})
+
+	JustBeforeEach(func() {
+		By("Starting the manager")
+		mgrCancel, mgrDone = startManager(&mgr)
+	})
+
+	JustAfterEach(func() {
+		By("Stopping the manager")
+		stopManager()
+	})
+
+	It("should reconcile without erroring", func() {
+		machine = machineBuilder.Build()
+
+		_, err := reconciler.Reconcile(ctx, reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Namespace: namespaceName,
+				Name:      machine.Name,
+			},
+		})
+		Expect(err).ToNot(HaveOccurred())
+	})
+})
+
+var _ = Describe("MachineSync Reconciler (OpenStack)", func() {
+	var mgrCancel context.CancelFunc
+	var mgrDone chan struct{}
+	var mgr manager.Manager
+	var reconciler *MachineSyncReconciler
+
+	var namespace *corev1.Namespace
+	var namespaceName string
+
+	var machineBuilder machinev1resourcebuilder.MachineBuilder
+	var machine *machinev1beta1.Machine
+
+	startManager := func(mgr *manager.Manager) (context.CancelFunc, chan struct{}) {
+		mgrCtx, mgrCancel := context.WithCancel(context.Background())
+		mgrDone := make(chan struct{})
+
+		go func() {
+			defer GinkgoRecover()
+			defer close(mgrDone)
+
+			Expect((*mgr).Start(mgrCtx)).To(Succeed())
+		}()
+
+		return mgrCancel, mgrDone
+	}
+
+	stopManager := func() {
+		mgrCancel()
+		// Wait for the mgrDone to be closed, which will happen once the mgr has stopped
+		<-mgrDone
+	}
+
+	BeforeEach(func() {
+		By("Setting up a namespace for the test")
+		namespace = corev1resourcebuilder.Namespace().WithGenerateName("machine-sync-controller-").Build()
+		Expect(k8sClient.Create(ctx, namespace)).To(Succeed())
+		namespaceName = namespace.GetName()
+
+		By("Setting up the machine builder")
+		machineBuilder = machinev1resourcebuilder.Machine().
+			WithNamespace(namespaceName).
+			WithGenerateName("foo").
+			WithProviderSpecBuilder(machinev1resourcebuilder.OpenStackProviderSpec())
+
+		By("Setting up a manager and controller")
+		var err error
+		mgr, err = ctrl.NewManager(cfg, ctrl.Options{
+			Scheme: testScheme,
+			Controller: config.Controller{
+				SkipNameValidation: ptr.To(true),
+			},
+		})
+		Expect(err).ToNot(HaveOccurred(), "Manager should be able to be created")
+
+		reconciler = &MachineSyncReconciler{
+			Client:   mgr.GetClient(),
+			Platform: configv1.OpenStackPlatformType,
 		}
 		Expect(reconciler.SetupWithManager(mgr)).To(Succeed(), "Reconciler should be able to setup with manager")
 	})
