@@ -96,7 +96,7 @@ func (m *openstackMachineAndInfra) toMachineAndInfrastructureMachine() (*capiv1.
 
 	warnings = append(warnings, warns...)
 
-	capiMachine, errs := fromMAPIMachineToCAPIMachine(m.machine, openstackMachineAPIVersion, openstackMachineKind)
+	capiMachine, errs := fromMAPIMachineToCAPIMachine(m.machine, capov1.SchemeGroupVersion.String(), openstackMachineKind)
 	if errs != nil {
 		errors = append(errors, errs...)
 	}
