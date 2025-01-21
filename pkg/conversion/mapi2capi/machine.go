@@ -23,9 +23,6 @@ import (
 	conversionutil "github.com/openshift/cluster-capi-operator/pkg/conversion/util"
 
 	"k8s.io/apimachinery/pkg/util/validation/field"
-	capav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
-	capibmv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
-	capov1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
 	capiv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
@@ -38,14 +35,6 @@ const (
 	ibmPowerVSTemplateKind       = "IBMPowerVSMachineTemplate"
 	openstackMachineKind         = "OpenStackMachine"
 	openstackMachineTemplateKind = "OpenStackMachineTemplate"
-)
-
-var (
-	// awsMachineAPIVersion is the API version for the AWSMachine API.
-	// Source it from the API group version so that it is always up to date.
-	awsMachineAPIVersion        = capav1.GroupVersion.String()       //nolint:gochecknoglobals
-	ibmPowerVSMachineAPIVersion = capibmv1.GroupVersion.String()     //nolint:gochecknoglobals
-	openstackMachineAPIVersion  = capov1.SchemeGroupVersion.String() //nolint:gochecknoglobals
 )
 
 func setMAPINodeLabelsToCAPIManagedNodeLabels(fldPath *field.Path, mapiNodeLabels map[string]string, capiNodeLabels map[string]string) field.ErrorList {

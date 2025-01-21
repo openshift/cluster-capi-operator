@@ -97,7 +97,7 @@ func (m *awsMachineAndInfra) toMachineAndInfrastructureMachine() (*capiv1.Machin
 
 	warnings = append(warnings, warn...)
 
-	capiMachine, machineErrs := fromMAPIMachineToCAPIMachine(m.machine, awsMachineAPIVersion, awsMachineKind)
+	capiMachine, machineErrs := fromMAPIMachineToCAPIMachine(m.machine, capav1.GroupVersion.String(), awsMachineKind)
 	if machineErrs != nil {
 		errs = append(errs, machineErrs...)
 	}

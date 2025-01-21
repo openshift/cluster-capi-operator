@@ -94,7 +94,7 @@ func (m *powerVSMachineAndInfra) toMachineAndInfrastructureMachine() (*capiv1.Ma
 		errs = append(errs, machineErrs...)
 	}
 
-	capiMachine, machineErrs := fromMAPIMachineToCAPIMachine(m.machine, ibmPowerVSMachineAPIVersion, ibmPowerVSMachineKind)
+	capiMachine, machineErrs := fromMAPIMachineToCAPIMachine(m.machine, capibmv1.GroupVersion.String(), ibmPowerVSMachineKind)
 	if machineErrs != nil {
 		errs = append(errs, machineErrs...)
 	}
