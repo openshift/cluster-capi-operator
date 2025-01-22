@@ -174,6 +174,8 @@ func (r *MachineSetSyncReconciler) fetchMachineSets(ctx context.Context, name st
 		mapiMachineSet = nil
 	} else if err != nil {
 		return nil, nil, fmt.Errorf("failed to get MAPI machine set: %w", err)
+	} else {
+		logger.Info("MAPI machine set found", "namespace", r.MAPINamespace, "name", name)
 	}
 
 	if err := r.Get(ctx, client.ObjectKey{Namespace: r.CAPINamespace, Name: name}, capiMachineSet); apierrors.IsNotFound(err) {
@@ -182,6 +184,8 @@ func (r *MachineSetSyncReconciler) fetchMachineSets(ctx context.Context, name st
 		capiMachineSet = nil
 	} else if err != nil {
 		return nil, nil, fmt.Errorf("failed to get CAPI machine set: %w", err)
+	} else {
+		logger.Info("CAPI machine set found", "namespace", r.MAPINamespace, "name", name)
 	}
 
 	return mapiMachineSet, capiMachineSet, nil
@@ -190,6 +194,8 @@ func (r *MachineSetSyncReconciler) fetchMachineSets(ctx context.Context, name st
 // fetchCAPIInfraResources fetches the provider specific infrastructure resources depending on which provider is set.
 func (r *MachineSetSyncReconciler) fetchCAPIInfraResources(ctx context.Context, capiMachineSet *capiv1beta1.MachineSet) (client.Object, client.Object, error) {
 	var infraCluster, infraMachineTemplate client.Object
+
+	logger := log.FromContext(ctx)
 
 	infraClusterKey := client.ObjectKey{
 		Namespace: capiMachineSet.Namespace,
@@ -215,10 +221,14 @@ func (r *MachineSetSyncReconciler) fetchCAPIInfraResources(ctx context.Context, 
 
 	if err := r.Get(ctx, infraClusterKey, infraCluster); err != nil {
 		return nil, nil, fmt.Errorf("failed to get CAPI infrastructure cluster: %w", err)
+	} else {
+		logger.Info("CAPI infrastructure cluster found", "namespace", capiMachineSet.Namespace, "name", capiMachineSet.Spec.ClusterName)
 	}
 
 	if err := r.Get(ctx, infraMachineTemplateKey, infraMachineTemplate); err != nil {
 		return nil, nil, fmt.Errorf("failed to get CAPI infrastructure machine template: %w", err)
+	} else {
+		logger.Info("CAPI infrastructure machine template found", "namespace", infraMachineTemplateRef.Namespace, "name", infraMachineTemplateRef.Name)
 	}
 
 	return infraCluster, infraMachineTemplate, nil
