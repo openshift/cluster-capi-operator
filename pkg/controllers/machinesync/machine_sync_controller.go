@@ -140,11 +140,11 @@ func (r *MachineSyncReconciler) Reconcile(ctx context.Context, req reconcile.Req
 	}
 
 	if err := r.Get(ctx, capiNamespacedName, capiMachine); apierrors.IsNotFound(err) {
-		logger.Info("CAPI Machine not found")
+		logger.Info("CAPI machine not found")
 
 		capiMachineNotFound = true
 	} else if err != nil {
-		logger.Error(err, "Failed to get CAPI Machine")
+		logger.Error(err, "Failed to get CAPI machine")
 		return ctrl.Result{}, fmt.Errorf("failed to get CAPI machine:: %w", err)
 	}
 
