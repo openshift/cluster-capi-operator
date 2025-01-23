@@ -16,12 +16,15 @@ limitations under the License.
 package capi2mapi
 
 import (
+	"encoding/json"
+	"fmt"
 	"strings"
 
 	mapiv1 "github.com/openshift/api/machine/v1beta1"
 	conversionutil "github.com/openshift/cluster-capi-operator/pkg/conversion/util"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	capiv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
@@ -152,4 +155,20 @@ func getMAPILifecycleHooks(capiMachine *capiv1.Machine) mapiv1.LifecycleHooks {
 	}
 
 	return hooks
+}
+
+// RawExtensionFromProviderSpec marshals the machine provider spec.
+func RawExtensionFromProviderSpec(spec interface{}) (*runtime.RawExtension, error) {
+	if spec == nil {
+		return &runtime.RawExtension{}, nil
+	}
+
+	rawBytes, err := json.Marshal(spec)
+	if err != nil {
+		return nil, fmt.Errorf("error marshalling providerSpec: %w", err)
+	}
+
+	return &runtime.RawExtension{
+		Raw: rawBytes,
+	}, nil
 }

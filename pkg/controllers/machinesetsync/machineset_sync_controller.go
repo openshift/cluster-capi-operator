@@ -39,6 +39,7 @@ import (
 	machinev1applyconfigs "github.com/openshift/client-go/machine/applyconfigurations/machine/v1beta1"
 	"k8s.io/client-go/tools/record"
 	awscapiv1beta1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
+	capibmv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
 	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -60,6 +61,9 @@ var (
 
 	// errAssertingCAPIAWSMachineTemplate is returned when we encounter an issue asserting a client.Object into a AWSMachineTemplate.
 	errAssertingCAPIAWSMachineTemplate = errors.New("error asserting the CAPI AWSMachineTemplate object")
+
+	// errAssertingCAPIPowerVSMachineTemplate is returned when we encounter an issue asserting a client.Object into a IBMPowerVSMachineTemplate.
+	errAssertingCAPIIBMPowerVSMachineTemplate = errors.New("error asserting the CAPI IBMPowerVSMachineTemplate object")
 )
 
 const (
@@ -202,6 +206,9 @@ func (r *MachineSetSyncReconciler) fetchCAPIInfraResources(ctx context.Context, 
 	case configv1.AWSPlatformType:
 		infraCluster = &awscapiv1beta1.AWSCluster{}
 		infraMachineTemplate = &awscapiv1beta1.AWSMachineTemplate{}
+	case configv1.PowerVSPlatformType:
+		infraCluster = &capibmv1.IBMPowerVSCluster{}
+		infraMachineTemplate = &capibmv1.IBMPowerVSMachineTemplate{}
 	default:
 		return nil, nil, fmt.Errorf("%w: %s", errPlatformNotSupported, r.Platform)
 	}
@@ -373,7 +380,20 @@ func (r *MachineSetSyncReconciler) convertCAPIToMAPIMachineSet(capiMachineSet *c
 		return capi2mapi.FromMachineSetAndAWSMachineTemplateAndAWSCluster( //nolint: wrapcheck
 			capiMachineSet, awsMachineTemplate, awsCluster,
 		).ToMachineSet()
+	case configv1.PowerVSPlatformType:
+		powerVSMachineTemplate, ok := infraMachineTemplate.(*capibmv1.IBMPowerVSMachineTemplate)
+		if !ok {
+			return nil, nil, fmt.Errorf("%w, expected IBMPowerVSMachineTemplate, got %T", errUnexpectedInfraMachineTemplateType, infraMachineTemplate)
+		}
 
+		powerVSCluster, ok := infraCluster.(*capibmv1.IBMPowerVSCluster)
+		if !ok {
+			return nil, nil, fmt.Errorf("%w, expected IBMPowerVSCluster, got %T", errUnexpectedInfraClusterType, infraCluster)
+		}
+
+		return capi2mapi.FromMachineSetAndPowerVSMachineTemplateAndPowerVSCluster( //nolint: wrapcheck
+			capiMachineSet, powerVSMachineTemplate, powerVSCluster,
+		).ToMachineSet()
 	default:
 		return nil, nil, fmt.Errorf("%w: %s", errPlatformNotSupported, r.Platform)
 	}
@@ -384,6 +404,8 @@ func (r *MachineSetSyncReconciler) convertMAPIToCAPIMachineSet(mapiMachineSet *m
 	switch r.Platform {
 	case configv1.AWSPlatformType:
 		return mapi2capi.FromAWSMachineSetAndInfra(mapiMachineSet, r.Infra).ToMachineSetAndMachineTemplate() //nolint:wrapcheck
+	case configv1.PowerVSPlatformType:
+		return mapi2capi.FromPowerVSMachineSetAndInfra(mapiMachineSet, r.Infra).ToMachineSetAndMachineTemplate() //nolint:wrapcheck
 	default:
 		return nil, nil, nil, fmt.Errorf("%w: %s", errPlatformNotSupported, r.Platform)
 	}
@@ -537,6 +559,8 @@ func getInfraMachineTemplateFromProvider(platform configv1.PlatformType) (client
 	switch platform {
 	case configv1.AWSPlatformType:
 		return &awscapiv1beta1.AWSMachineTemplate{}, nil
+	case configv1.PowerVSPlatformType:
+		return &capibmv1.IBMPowerVSMachineTemplate{}, nil
 	default:
 		return nil, fmt.Errorf("%w: %s", errPlatformNotSupported, platform)
 	}
@@ -590,6 +614,18 @@ func capiInfraMachineTemplateIsEqual(platform configv1.PlatformType, infraMachin
 		typedinfraMachineTemplate2, ok := infraMachineTemplate2.(*awscapiv1beta1.AWSMachineTemplate)
 		if !ok {
 			return false, errAssertingCAPIAWSMachineTemplate
+		}
+
+		return reflect.DeepEqual(typedInfraMachineTemplate1.Spec, typedinfraMachineTemplate2.Spec) && objectMetaIsEqual(typedInfraMachineTemplate1.ObjectMeta, typedinfraMachineTemplate2.ObjectMeta), nil
+	case configv1.PowerVSPlatformType:
+		typedInfraMachineTemplate1, ok := infraMachineTemplate1.(*capibmv1.IBMPowerVSMachineTemplate)
+		if !ok {
+			return false, errAssertingCAPIIBMPowerVSMachineTemplate
+		}
+
+		typedinfraMachineTemplate2, ok := infraMachineTemplate2.(*capibmv1.IBMPowerVSMachineTemplate)
+		if !ok {
+			return false, errAssertingCAPIIBMPowerVSMachineTemplate
 		}
 
 		return reflect.DeepEqual(typedInfraMachineTemplate1.Spec, typedinfraMachineTemplate2.Spec) && objectMetaIsEqual(typedInfraMachineTemplate1.ObjectMeta, typedinfraMachineTemplate2.ObjectMeta), nil
