@@ -22,14 +22,13 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
+	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
-	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/test"
 )
 
@@ -37,6 +36,7 @@ var (
 	testEnv *envtest.Environment
 	cfg     *rest.Config
 	cl      client.Client
+	ctx     = context.Background()
 )
 
 func TestAPIs(t *testing.T) {
@@ -55,12 +55,8 @@ var _ = BeforeSuite(func() {
 	Expect(cfg).NotTo(BeNil())
 	Expect(cl).NotTo(BeNil())
 
-	managedNamespace := &corev1.Namespace{}
-	managedNamespace.SetName(controllers.DefaultManagedNamespace)
-	Expect(cl.Create(context.Background(), managedNamespace)).To(Succeed())
-	ocpConfigNamespace := &corev1.Namespace{}
-	ocpConfigNamespace.SetName(SecretSourceNamespace)
-	Expect(cl.Create(context.Background(), ocpConfigNamespace)).To(Succeed())
+	komega.SetClient(cl)
+	komega.SetContext(ctx)
 })
 
 var _ = AfterSuite(func() {

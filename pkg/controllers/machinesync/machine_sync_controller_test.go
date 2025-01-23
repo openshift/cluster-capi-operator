@@ -23,17 +23,21 @@ import (
 	. "github.com/onsi/gomega"
 	configv1 "github.com/openshift/api/config/v1"
 	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
+	"github.com/openshift/cluster-api-actuator-pkg/testutils"
 	corev1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/core/v1"
 	machinev1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/machine/v1beta1"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
+	capav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
+	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/config"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	"github.com/openshift/cluster-capi-operator/pkg/test"
+	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 )
 
 var _ = Describe("MachineSync Controller", func() {
@@ -42,8 +46,9 @@ var _ = Describe("MachineSync Controller", func() {
 	var mgr manager.Manager
 	var reconciler *MachineSyncController
 
-	var namespace *corev1.Namespace
-	var namespaceName string
+	var syncControllerNamespace *corev1.Namespace
+	var capiNamespace *corev1.Namespace
+	var mapiNamespace *corev1.Namespace
 
 	var machineBuilder machinev1resourcebuilder.MachineBuilder
 	var machine *machinev1beta1.Machine
@@ -70,13 +75,29 @@ var _ = Describe("MachineSync Controller", func() {
 
 	BeforeEach(func() {
 		By("Setting up a namespace for the test")
-		namespace = corev1resourcebuilder.Namespace().WithGenerateName("machine-sync-controller-").Build()
-		Expect(k8sClient.Create(ctx, namespace)).To(Succeed())
-		namespaceName = namespace.GetName()
+		syncControllerNamespace = corev1resourcebuilder.Namespace().
+			WithGenerateName("machineset-sync-controller-").Build()
+		Expect(k8sClient.Create(ctx, syncControllerNamespace)).To(Succeed(), "sync controller namespace should be able to be created")
+
+		mapiNamespace = corev1resourcebuilder.Namespace().
+			WithGenerateName("openshift-machine-api-").Build()
+		Expect(k8sClient.Create(ctx, mapiNamespace)).To(Succeed(), "mapi namespace should be able to be created")
+
+		capiNamespace = corev1resourcebuilder.Namespace().
+			WithGenerateName("openshift-cluster-api-").Build()
+		Expect(k8sClient.Create(ctx, capiNamespace)).To(Succeed(), "capi namespace should be able to be created")
+
+		By("Creating the cluster-api ClusterOperator")
+		capiClusterOperator := &configv1.ClusterOperator{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "cluster-api",
+			},
+		}
+		Expect(k8sClient.Create(ctx, capiClusterOperator)).To(Succeed(), "should be able to create the 'cluster-api' ClusterOperator object")
 
 		By("Setting up the machine builder")
 		machineBuilder = machinev1resourcebuilder.Machine().
-			WithNamespace(namespaceName).
+			WithNamespace(mapiNamespace.Name).
 			WithGenerateName("foo").
 			WithProviderSpecBuilder(machinev1resourcebuilder.AWSProviderSpec())
 
@@ -91,6 +112,10 @@ var _ = Describe("MachineSync Controller", func() {
 		Expect(err).ToNot(HaveOccurred(), "Manager should be able to be created")
 
 		reconciler = &MachineSyncController{
+			ClusterOperatorStatusClient: operatorstatus.ClusterOperatorStatusClient{
+				Client:           mgr.GetClient(),
+				ManagedNamespace: capiNamespace.Name,
+			},
 			Client:   mgr.GetClient(),
 			Platform: configv1.AWSPlatformType,
 		}
@@ -98,7 +123,20 @@ var _ = Describe("MachineSync Controller", func() {
 	})
 
 	AfterEach(func() {
-		Expect(test.CleanupAndWait(ctx, k8sClient, machine)).To(Succeed())
+		By("Cleaning up MAPI test resources")
+		testutils.CleanupResources(Default, ctx, cfg, k8sClient, mapiNamespace.GetName(),
+			&machinev1beta1.Machine{},
+			&machinev1beta1.MachineSet{},
+			&configv1.ClusterOperator{},
+		)
+
+		By("Cleaning up CAPI test resources")
+		testutils.CleanupResources(Default, ctx, cfg, k8sClient, capiNamespace.GetName(),
+			&capiv1beta1.Machine{},
+			&capiv1beta1.MachineSet{},
+			&capav1.AWSCluster{},
+			&capav1.AWSMachineTemplate{},
+		)
 	})
 
 	JustBeforeEach(func() {
@@ -116,10 +154,13 @@ var _ = Describe("MachineSync Controller", func() {
 
 		_, err := reconciler.Reconcile(ctx, reconcile.Request{
 			NamespacedName: types.NamespacedName{
-				Namespace: namespaceName,
+				Namespace: capiNamespace.Name,
 				Name:      machine.Name,
 			},
 		})
 		Expect(err).ToNot(HaveOccurred())
 	})
+
+	// TODO: once real tests for the machinesync will be here, create some for
+	// MachineSyncControllerAvailableCondition, MachineSyncControllerDegradedCondition.
 })

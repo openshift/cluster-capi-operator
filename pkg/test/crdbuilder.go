@@ -70,6 +70,12 @@ var (
 	// fakeAWSClusterCRD is a fake AWSCluster CRD.
 	fakeAWSClusterCRD = generateCRD(v1beta2InfrastructureGroupVersion.WithKind(fakeAWSClusterKind))
 
+	// fakeAWSMachineKind is the kind for the AWSMachine.
+	fakeAWSMachineKind = "AWSMachine"
+
+	// fakeAWSMachineCRD is a fake AWSMachine CRD.
+	fakeAWSMachineCRD = generateCRD(v1beta2InfrastructureGroupVersion.WithKind(fakeAWSMachineKind))
+
 	// fakeAWSMachineTemplateKind is the kind for the AWSMachineTemplate.
 	fakeAWSMachineTemplateKind = "AWSMachineTemplate"
 

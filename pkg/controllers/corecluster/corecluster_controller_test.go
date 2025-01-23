@@ -35,6 +35,7 @@ import (
 	capabuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/cluster-api/infrastructure/v1beta2"
 	configv1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/config/v1"
 	corev1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/core/v1"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 )
 
@@ -100,7 +101,7 @@ var _ = Describe("Reconcile Core cluster", func() {
 		testNamespaceName = namespace.Name
 
 		By("Creating the testing ClusterOperator object")
-		cO := configv1resourcebuilder.ClusterOperator().WithName(clusterOperatorName).Build()
+		cO := configv1resourcebuilder.ClusterOperator().WithName(controllers.ClusterOperatorName).Build()
 		Expect(cl.Create(ctx, cO)).To(Succeed())
 	})
 
@@ -173,28 +174,19 @@ var _ = Describe("Reconcile Core cluster", func() {
 					)
 				})
 
-				Context("With a ClusterOperator", func() {
-					It("should update the ClusterOperator status to be available, upgradeable, non-progressing, non-degraded", func() {
-						co := komega.Object(configv1resourcebuilder.ClusterOperator().WithName(clusterOperatorName).Build())
-						Eventually(co).Should(
-							HaveField("Status.Conditions", SatisfyAll(
-								ContainElement(And(HaveField("Type", Equal(configv1.OperatorAvailable)), HaveField("Status", Equal(configv1.ConditionTrue)))),
-								ContainElement(And(HaveField("Type", Equal(configv1.OperatorProgressing)), HaveField("Status", Equal(configv1.ConditionFalse)))),
-								ContainElement(And(HaveField("Type", Equal(configv1.OperatorDegraded)), HaveField("Status", Equal(configv1.ConditionFalse)))),
-								ContainElement(And(HaveField("Type", Equal(configv1.OperatorUpgradeable)), HaveField("Status", Equal(configv1.ConditionTrue)))),
+				It("should update the ClusterOperator status conditions with controller specific ones to reflect a normal state", func() {
+					Eventually(komega.Object(configv1resourcebuilder.ClusterOperator().WithName(controllers.ClusterOperatorName).Build())).Should(
+						HaveField("Status.Conditions", SatisfyAll(
+							ContainElement(And(
+								HaveField("Type", BeEquivalentTo(operatorstatus.CoreClusterControllerAvailableCondition)),
+								HaveField("Status", BeEquivalentTo(configv1.ConditionTrue)),
 							)),
-						)
-					})
-
-					It("should update the ClusterOperator status version to the desired one", func() {
-						co := komega.Object(configv1resourcebuilder.ClusterOperator().WithName(clusterOperatorName).Build())
-						Eventually(co).Should(
-							HaveField("Status.Versions", ContainElement(SatisfyAll(
-								HaveField("Name", Equal("operator")),
-								HaveField("Version", Equal(desiredOperatorReleaseVersion)),
-							))),
-						)
-					})
+							ContainElement(And(
+								HaveField("Type", BeEquivalentTo(operatorstatus.CoreClusterControllerDegradedCondition)),
+								HaveField("Status", BeEquivalentTo(configv1.ConditionFalse)),
+							)),
+						)),
+					)
 				})
 			})
 		})
@@ -233,10 +225,28 @@ var _ = Describe("Reconcile Core cluster", func() {
 						)),
 					)
 				})
+
+				It("should update the ClusterOperator status conditions with controller specific ones to reflect a normal state", func() {
+					Eventually(komega.Object(configv1resourcebuilder.ClusterOperator().WithName(controllers.ClusterOperatorName).Build())).Should(
+						HaveField("Status.Conditions", SatisfyAll(
+							ContainElement(And(
+								HaveField("Type", BeEquivalentTo(operatorstatus.CoreClusterControllerAvailableCondition)),
+								HaveField("Status", BeEquivalentTo(configv1.ConditionTrue)),
+							)),
+							ContainElement(And(
+								HaveField("Type", BeEquivalentTo(operatorstatus.CoreClusterControllerDegradedCondition)),
+								HaveField("Status", BeEquivalentTo(configv1.ConditionFalse)),
+							)),
+						)),
+					)
+				})
 			})
+
 		})
 	})
 
+	// This case should not happen as this controller should not run on an unsupported platform.
+	// Still we want to test this as we have logic in place to handle cases where the controller runs out of band.
 	Context("With an unsupported platform", func() {
 		BeforeEach(func() {
 			By("Creating the testing infrastructure for NonePlatform")
@@ -253,7 +263,7 @@ var _ = Describe("Reconcile Core cluster", func() {
 					Type: configv1.NonePlatformType,
 				},
 			}
-			Expect(cl.Status().Patch(ctx, noneInfra, client.MergeFrom(infra))).To(Succeed())
+			Expect(cl.Status().Patch(ctx, infra, client.MergeFrom(noneInfra))).To(Succeed())
 		})
 
 		JustBeforeEach(func() {

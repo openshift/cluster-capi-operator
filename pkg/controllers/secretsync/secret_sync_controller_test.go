@@ -31,11 +31,14 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/config"
+	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 
 	configv1 "github.com/openshift/api/config/v1"
+	"github.com/openshift/cluster-api-actuator-pkg/testutils"
+	configv1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/config/v1"
+	corev1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/core/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
-	"github.com/openshift/cluster-capi-operator/pkg/test"
 )
 
 const (
@@ -48,10 +51,10 @@ var (
 	errMissingFormatKey = errors.New("could not find a format key in the worker data secret")
 )
 
-func makeUserDataSecret() *corev1.Secret {
+func makeUserDataSecret(name, namespace string) *corev1.Secret {
 	return &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
-		Name:      managedUserDataSecretName,
-		Namespace: SecretSourceNamespace,
+		Name:      name,
+		Namespace: namespace,
 	}, Data: map[string][]byte{mapiUserDataKey: []byte(defaultSecretValue)}}
 }
 
@@ -61,9 +64,16 @@ var _ = Describe("Secret Sync controller: areSecretsEqual reconciler method", fu
 	var sourceUserDataSecret *corev1.Secret
 	var targetUserDataSecret *corev1.Secret
 
+	var sourceNamespace *corev1.Namespace
+
 	BeforeEach(func() {
-		sourceUserDataSecret = makeUserDataSecret()
-		targetUserDataSecret = makeUserDataSecret()
+		By("Setting up the namespaces for the test")
+		sourceNamespace = corev1resourcebuilder.Namespace().
+			WithGenerateName("managed-").Build()
+		Expect(cl.Create(ctx, sourceNamespace)).To(Succeed(), "source namespace should be able to be created")
+
+		sourceUserDataSecret = makeUserDataSecret(managedUserDataSecretName, sourceNamespace.Name)
+		targetUserDataSecret = makeUserDataSecret(managedUserDataSecretName, sourceNamespace.Name)
 		targetUserDataSecret.Data[capiUserDataKey] = sourceUserDataSecret.Data[mapiUserDataKey]
 	})
 
@@ -91,9 +101,19 @@ var _ = Describe("Secret Sync controller", func() {
 
 	var reconciler *SecretSyncController
 
-	syncedSecretKey := client.ObjectKey{Namespace: controllers.DefaultManagedNamespace, Name: managedUserDataSecretName}
+	var managedNamespace *corev1.Namespace
+	var sourceNamespace *corev1.Namespace
+	var syncedSecretKey client.ObjectKey
 
 	BeforeEach(func() {
+		By("Setting up the namespaces for the test")
+		managedNamespace = corev1resourcebuilder.Namespace().WithGenerateName("managed-").Build()
+		Expect(cl.Create(ctx, managedNamespace)).To(Succeed(), "managed namespace should be able to be created")
+		syncedSecretKey = client.ObjectKey{Namespace: managedNamespace.Name, Name: managedUserDataSecretName}
+
+		sourceNamespace = corev1resourcebuilder.Namespace().WithGenerateName("managed-").Build()
+		Expect(cl.Create(ctx, sourceNamespace)).To(Succeed(), "source namespace should be able to be created")
+
 		By("Setting up a manager and controller")
 		var err error
 		mgr, err := ctrl.NewManager(cfg, ctrl.Options{
@@ -107,20 +127,28 @@ var _ = Describe("Secret Sync controller", func() {
 			ClusterOperatorStatusClient: operatorstatus.ClusterOperatorStatusClient{
 				Client:           cl,
 				Recorder:         rec,
-				ManagedNamespace: controllers.DefaultManagedNamespace,
+				ManagedNamespace: managedNamespace.Name,
 			},
-
-			Scheme: scheme.Scheme,
+			SourceNamespace: sourceNamespace.Name,
+			Scheme:          scheme.Scheme,
 		}
 		Expect(reconciler.SetupWithManager(mgr)).To(Succeed())
 
 		By("Creating needed Secret")
-		sourceSecret = makeUserDataSecret()
+		sourceSecret = makeUserDataSecret(managedUserDataSecretName, sourceNamespace.Name)
 		Expect(cl.Create(ctx, sourceSecret)).To(Succeed())
 
 		var mgrCtx context.Context
 		mgrCtx, mgrCtxCancel = context.WithCancel(ctx)
 		mgrStopped = make(chan struct{})
+
+		By("Creating the ClusterOperator")
+		co := &configv1.ClusterOperator{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: controllers.ClusterOperatorName,
+			},
+		}
+		Expect(cl.Create(context.Background(), co.DeepCopy())).To(Succeed())
 
 		By("Starting the manager")
 		go func() {
@@ -136,26 +164,11 @@ var _ = Describe("Secret Sync controller", func() {
 		mgrCtxCancel()
 		Eventually(mgrStopped, timeout).Should(BeClosed())
 
-		co := &configv1.ClusterOperator{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: controllers.ClusterOperatorName,
-			},
-		}
-		Expect(test.CleanupAndWait(ctx, cl, co))
-
-		By("Cleanup resources")
-		allSecrets := &corev1.SecretList{}
-		Expect(cl.List(ctx, allSecrets)).To(Succeed())
-		for _, cm := range allSecrets.Items {
-			Expect(test.CleanupAndWait(ctx, cl, cm.DeepCopy())).To(Succeed())
-		}
+		By("Cleaning up test resources")
+		testutils.CleanupResources(Default, ctx, cfg, cl, sourceNamespace.Name, &corev1.Secret{})
+		testutils.CleanupResources(Default, ctx, cfg, cl, managedNamespace.Name, &corev1.Secret{}, &configv1.ClusterOperator{})
 
 		sourceSecret = nil
-
-		// Creating the cluster api operator
-		co = &configv1.ClusterOperator{}
-		co.SetName(controllers.ClusterOperatorName)
-		Expect(cl.Create(context.Background(), co.DeepCopy())).To(Succeed())
 	})
 
 	It("secret should be synced up after first reconcile", func() {
@@ -220,8 +233,6 @@ var _ = Describe("Secret Sync controller", func() {
 
 			return bytes.Equal(syncedUserDataSecret.Data[capiUserDataKey], []byte(defaultSecretValue)), nil
 		}, timeout).Should(BeTrue())
-
-		Expect(test.CleanupAndWait(ctx, cl, sourceSecret)).To(Succeed())
 	})
 
 	It("secret not be updated if source and target secret contents are identical", func() {
@@ -233,5 +244,21 @@ var _ = Describe("Secret Sync controller", func() {
 
 		Expect(cl.Get(ctx, syncedSecretKey, syncedUserDataSecret)).Should(Succeed())
 		Expect(initialSecretresourceVersion).Should(BeEquivalentTo(syncedUserDataSecret.ResourceVersion))
+	})
+
+	It("should updated the ClusterOperator status conditions with controller specific ones to reflect a normal state", func() {
+		Eventually(komega.Object(configv1resourcebuilder.ClusterOperator().WithName(controllers.ClusterOperatorName).Build()), timeout).
+			Should(
+				HaveField("Status.Conditions", SatisfyAll(
+					ContainElement(And(
+						HaveField("Type", BeEquivalentTo(operatorstatus.SecretSyncControllerAvailableCondition)),
+						HaveField("Status", BeEquivalentTo(configv1.ConditionTrue)),
+					)),
+					ContainElement(And(
+						HaveField("Type", BeEquivalentTo(operatorstatus.SecretSyncControllerDegradedCondition)),
+						HaveField("Status", BeEquivalentTo(configv1.ConditionFalse)),
+					)),
+				)),
+			)
 	})
 })

@@ -22,6 +22,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -33,10 +34,11 @@ import (
 )
 
 var (
-	testEnv *envtest.Environment
-	cfg     *rest.Config
-	cl      client.Client
-	ctx     = context.Background()
+	testEnv    *envtest.Environment
+	cfg        *rest.Config
+	cl         client.Client
+	testScheme *runtime.Scheme
+	ctx        = context.Background()
 )
 
 func TestAPIs(t *testing.T) {
