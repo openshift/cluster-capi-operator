@@ -29,6 +29,7 @@ import (
 	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
+	featuregates "github.com/openshift/library-go/pkg/operator/configobserver/featuregates"
 )
 
 const (
@@ -40,6 +41,7 @@ type ClusterOperatorController struct {
 	operatorstatus.ClusterOperatorStatusClient
 	Scheme                *runtime.Scheme
 	IsUnsupportedPlatform bool
+	FeatureGates          featuregates.FeatureGate
 }
 
 // Reconcile reconciles the cluster-api ClusterOperator object.

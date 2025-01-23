@@ -33,12 +33,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	capav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 
-	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
-
 	"github.com/openshift/cluster-api-actuator-pkg/testutils"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 	"k8s.io/utils/ptr"
+	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/config"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
@@ -158,6 +157,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 			ClusterOperatorStatusClient: operatorstatus.ClusterOperatorStatusClient{
 				Client:           mgr.GetClient(),
 				ManagedNamespace: capiNamespace.GetNamespace(),
+				FeatureGates:     nil,
 			},
 			Client: mgr.GetClient(),
 			Infra: configv1resourcebuilder.Infrastructure().

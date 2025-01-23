@@ -28,8 +28,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1 "github.com/openshift/api/config/v1"
+	"github.com/openshift/api/features"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/library-go/pkg/config/clusteroperator/v1helpers"
+	featuregates "github.com/openshift/library-go/pkg/operator/configobserver/featuregates"
 )
 
 const (
@@ -100,6 +102,7 @@ type ClusterOperatorStatusClient struct {
 	Recorder         record.EventRecorder
 	ManagedNamespace string
 	ReleaseVersion   string
+	FeatureGates     featuregates.FeatureGate
 }
 
 // SetStatus sets the status for the ClusterOperator.
@@ -117,7 +120,7 @@ func (r *ClusterOperatorStatusClient) SetStatus(ctx context.Context, isUnsupport
 	if isUnsupportedPlatform {
 		conds = unsupportedConditions()
 	} else {
-		conds = aggregatedStatusConditions(co, r.ReleaseVersion)
+		conds = aggregatedStatusConditions(co, r.ReleaseVersion, r.FeatureGates)
 	}
 
 	if co, shouldUpdate := clusterObjectNeedsUpdating(co, conds, r.operandVersions(), r.relatedObjects()); shouldUpdate {
@@ -206,19 +209,24 @@ func unsupportedConditions() []configv1.ClusterOperatorStatusCondition {
 	}
 }
 
-func aggregatedStatusConditions(co *configv1.ClusterOperator, releaseVersion string) []configv1.ClusterOperatorStatusCondition {
-	// Define the controller conditions
-	controllerConditions := []struct {
+func aggregatedStatusConditions(co *configv1.ClusterOperator, releaseVersion string, currentFeatureGates featuregates.FeatureGate) []configv1.ClusterOperatorStatusCondition {
+	type controllerCondition struct {
 		available configv1.ClusterStatusConditionType
 		degraded  configv1.ClusterStatusConditionType
-	}{
-		{CoreClusterControllerAvailableCondition, CoreClusterControllerDegradedCondition},
-		{MachineSyncControllerAvailableCondition, MachineSyncControllerDegradedCondition},
-		{KubeconfigControllerAvailableCondition, KubeconfigControllerDegradedCondition},
+	}
+
+	// Define the controller conditions
+	controllerConditions := []controllerCondition{
 		{CapiInstallerControllerAvailableCondition, CapiInstallerControllerDegradedCondition},
-		{SecretSyncControllerAvailableCondition, SecretSyncControllerDegradedCondition},
-		{MachineSetSyncControllerAvailableCondition, MachineSetSyncControllerDegradedCondition},
+		{CoreClusterControllerAvailableCondition, CoreClusterControllerDegradedCondition},
 		{InfraClusterControllerAvailableCondition, InfraClusterControllerDegradedCondition},
+		{KubeconfigControllerAvailableCondition, KubeconfigControllerDegradedCondition},
+		{SecretSyncControllerAvailableCondition, SecretSyncControllerDegradedCondition},
+	}
+
+	if currentFeatureGates != nil && currentFeatureGates.Enabled(features.FeatureGateMachineAPIMigration) {
+		controllerConditions = append(controllerConditions, controllerCondition{MachineSyncControllerAvailableCondition, MachineSyncControllerDegradedCondition})
+		controllerConditions = append(controllerConditions, controllerCondition{MachineSetSyncControllerAvailableCondition, MachineSetSyncControllerDegradedCondition})
 	}
 
 	// Variables to store the conditions evaluation.
