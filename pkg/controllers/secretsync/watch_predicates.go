@@ -26,10 +26,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-func toUserDataSecret(ctx context.Context, obj client.Object) []reconcile.Request {
-	return []reconcile.Request{{
-		NamespacedName: client.ObjectKey{Name: managedUserDataSecretName, Namespace: SecretSourceNamespace},
-	}}
+func toUserDataSecret(namespace string) func(context.Context, client.Object) []reconcile.Request {
+	return func(ctx context.Context, o client.Object) []reconcile.Request {
+		return []reconcile.Request{{
+			NamespacedName: client.ObjectKey{Name: managedUserDataSecretName, Namespace: namespace},
+		}}
+	}
 }
 
 func userDataSecretPredicate(targetNamespace string) predicate.Funcs {

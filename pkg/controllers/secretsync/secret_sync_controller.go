@@ -32,51 +32,42 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 
 	configv1 "github.com/openshift/api/config/v1"
-	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 )
 
 const (
 	managedUserDataSecretName = "worker-user-data"
 
-	// SecretSourceNamespace is the source namespace to copy the user data secret from.
-	SecretSourceNamespace = "openshift-machine-api"
-
-	// Controller conditions for the Cluster Operator resource.
-	secretSyncControllerAvailableCondition = "SecretSyncControllerAvailable"
-	secretSyncControllerDegradedCondition  = "SecretSyncControllerDegraded"
-
 	mapiUserDataKey = "userData"
 	capiUserDataKey = "value"
-	controllerName  = "SecretSyncController"
+
+	controllerName = "SecretSyncController"
 )
 
 var (
 	errSourceSecretMissingUserData = errors.New("source secret does not have user data")
 )
 
-// UserDataSecretController reconciles a Secret object containing machine user data, from the Machine API to Cluster API namespaces.
-type UserDataSecretController struct {
+// SecretSyncController reconciles a Secret object containing machine user data, from the Machine API to Cluster API namespaces.
+type SecretSyncController struct {
 	operatorstatus.ClusterOperatorStatusClient
-	Scheme *runtime.Scheme
+	Scheme          *runtime.Scheme
+	SourceNamespace string
 }
 
 // Reconcile reconciles the user data secret.
-func (r *UserDataSecretController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *SecretSyncController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := ctrl.LoggerFrom(ctx).WithName(controllerName)
 	log.Info("reconciling worker user data secret")
 
 	defaultSourceSecretObjectKey := client.ObjectKey{
-		Name: managedUserDataSecretName, Namespace: SecretSourceNamespace,
+		Namespace: r.SourceNamespace,
+		Name:      managedUserDataSecretName,
 	}
 	sourceSecret := &corev1.Secret{}
 
 	if err := r.Get(ctx, defaultSourceSecretObjectKey, sourceSecret); err != nil {
 		log.Error(err, "unable to get source secret for sync")
-
-		if err := r.setDegradedCondition(ctx, log); err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to set conditions for secret sync controller: %w", err)
-		}
 
 		return ctrl.Result{}, fmt.Errorf("failed to get source secret: %w", err)
 	}
@@ -91,18 +82,14 @@ func (r *UserDataSecretController) Reconcile(ctx context.Context, req ctrl.Reque
 	if err := r.Get(ctx, targetSecretKey, targetSecret); err != nil && !apierrors.IsNotFound(err) {
 		log.Error(err, "unable to get target secret for sync")
 
-		if err := r.setDegradedCondition(ctx, log); err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to set conditions for secret controller: %w", err)
-		}
-
 		return ctrl.Result{}, fmt.Errorf("failed to get target secret: %w", err)
 	}
 
 	if r.areSecretsEqual(sourceSecret, targetSecret) {
 		log.Info("user data in source and target secrets is the same, no sync needed")
 
-		if err := r.setAvailableCondition(ctx, log); err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to set conditions for user data secret controller: %w", err)
+		if err := r.setControllerConditionsToNormal(ctx, log); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to set conditions for secret sync controller: %w", err)
 		}
 
 		return ctrl.Result{}, nil
@@ -110,28 +97,23 @@ func (r *UserDataSecretController) Reconcile(ctx context.Context, req ctrl.Reque
 
 	if err := r.syncSecretData(ctx, sourceSecret, targetSecret); err != nil {
 		log.Error(err, "unable to sync user data secret")
-
-		if err := r.setDegradedCondition(ctx, log); err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to set conditions for user data secret controller: %w", err)
-		}
-
 		return ctrl.Result{}, err
 	}
 
-	if err := r.setAvailableCondition(ctx, log); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to set conditions for user data secret controller: %w", err)
+	if err := r.setControllerConditionsToNormal(ctx, log); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to set conditions for secret sync controller: %w", err)
 	}
 
 	return ctrl.Result{}, nil
 }
 
-func (r *UserDataSecretController) areSecretsEqual(source *corev1.Secret, target *corev1.Secret) bool {
+func (r *SecretSyncController) areSecretsEqual(source *corev1.Secret, target *corev1.Secret) bool {
 	return source.Immutable == target.Immutable &&
 		reflect.DeepEqual(source.Data[mapiUserDataKey], target.Data[capiUserDataKey]) && reflect.DeepEqual(source.StringData, target.StringData) &&
 		source.Type == target.Type
 }
 
-func (r *UserDataSecretController) syncSecretData(ctx context.Context, source *corev1.Secret, target *corev1.Secret) error {
+func (r *SecretSyncController) syncSecretData(ctx context.Context, source *corev1.Secret, target *corev1.Secret) error {
 	userData := source.Data[mapiUserDataKey]
 	if userData == nil {
 		return errSourceSecretMissingUserData
@@ -167,7 +149,7 @@ func (r *UserDataSecretController) syncSecretData(ctx context.Context, source *c
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *UserDataSecretController) SetupWithManager(mgr ctrl.Manager) error {
+func (r *SecretSyncController) SetupWithManager(mgr ctrl.Manager) error {
 	if err := ctrl.NewControllerManagedBy(mgr).
 		Named(controllerName).
 		For(
@@ -176,59 +158,59 @@ func (r *UserDataSecretController) SetupWithManager(mgr ctrl.Manager) error {
 		).
 		Watches(
 			&corev1.Secret{},
-			handler.EnqueueRequestsFromMapFunc(toUserDataSecret),
-			builder.WithPredicates(userDataSecretPredicate(SecretSourceNamespace)),
+			handler.EnqueueRequestsFromMapFunc(toUserDataSecret(r.SourceNamespace)),
+			builder.WithPredicates(userDataSecretPredicate(r.SourceNamespace)),
 		).
 		Complete(r); err != nil {
-		return fmt.Errorf("failed to create controller: %w", err)
+		return fmt.Errorf("failed to create secret sync controller: %w", err)
 	}
 
 	return nil
 }
 
-func (r *UserDataSecretController) setAvailableCondition(ctx context.Context, log logr.Logger) error {
+// setControllerConditionsToNormal sets the SecretSyncController conditions to the normal state.
+func (r *SecretSyncController) setControllerConditionsToNormal(ctx context.Context, log logr.Logger) error {
 	co, err := r.GetOrCreateClusterOperator(ctx)
 	if err != nil {
-		return fmt.Errorf("unable to get cluster operator: %w", err)
+		return fmt.Errorf("failed to get cluster operator: %w", err)
 	}
 
 	conds := []configv1.ClusterOperatorStatusCondition{
-		operatorstatus.NewClusterOperatorStatusCondition(secretSyncControllerAvailableCondition, configv1.ConditionTrue, operatorstatus.ReasonAsExpected,
-			"User Data Secret Controller works as expected"),
-		operatorstatus.NewClusterOperatorStatusCondition(secretSyncControllerDegradedCondition, configv1.ConditionFalse, operatorstatus.ReasonAsExpected,
-			"User Data Secret Controller works as expected"),
+		operatorstatus.NewClusterOperatorStatusCondition(operatorstatus.SecretSyncControllerAvailableCondition, configv1.ConditionTrue, operatorstatus.ReasonAsExpected,
+			"Secret Sync Controller Controller works as expected"),
+		operatorstatus.NewClusterOperatorStatusCondition(operatorstatus.SecretSyncControllerDegradedCondition, configv1.ConditionFalse, operatorstatus.ReasonAsExpected,
+			"Secret Sync Controller Controller works as expected"),
 	}
 
-	co.Status.Versions = []configv1.OperandVersion{{Name: controllers.OperatorVersionKey, Version: r.ReleaseVersion}}
-
-	log.Info("user Data Secret Controller is available")
+	log.V(2).Info("Secret Sync Controller Controller is Available")
 
 	if err := r.SyncStatus(ctx, co, conds); err != nil {
-		return fmt.Errorf("failed to sync status: %w", err)
+		return fmt.Errorf("failed to sync cluster operator status: %w", err)
 	}
 
 	return nil
 }
 
-func (r *UserDataSecretController) setDegradedCondition(ctx context.Context, log logr.Logger) error {
+// setControllerConditionDegraded sets the UserDataSecretController conditions to a degraded state.
+//
+//nolint:unused
+func (r *SecretSyncController) setControllerConditionDegraded(ctx context.Context, log logr.Logger, reconcileErr error) error {
 	co, err := r.GetOrCreateClusterOperator(ctx)
 	if err != nil {
-		return fmt.Errorf("unable to get cluster operator: %w", err)
+		return fmt.Errorf("failed to get cluster operator: %w", err)
 	}
 
 	conds := []configv1.ClusterOperatorStatusCondition{
-		operatorstatus.NewClusterOperatorStatusCondition(secretSyncControllerAvailableCondition, configv1.ConditionFalse, operatorstatus.ReasonSyncFailed,
-			"User Data Secret Controller failed to sync secret"),
-		operatorstatus.NewClusterOperatorStatusCondition(secretSyncControllerDegradedCondition, configv1.ConditionTrue, operatorstatus.ReasonSyncFailed,
-			"User Data Secret Controller failed to sync secret"),
+		operatorstatus.NewClusterOperatorStatusCondition(operatorstatus.SecretSyncControllerAvailableCondition, configv1.ConditionTrue, operatorstatus.ReasonAsExpected,
+			"Secret Sync Controller works as expected"),
+		operatorstatus.NewClusterOperatorStatusCondition(operatorstatus.SecretSyncControllerDegradedCondition, configv1.ConditionTrue, operatorstatus.ReasonAsExpected,
+			fmt.Sprintf("Secret Sync Controller is degraded: %s", reconcileErr.Error())),
 	}
 
-	co.Status.Versions = []configv1.OperandVersion{{Name: controllers.OperatorVersionKey, Version: r.ReleaseVersion}}
-
-	log.Info("user Data Secret Controller is degraded")
+	log.Info("Secret Sync Controller is Degraded", reconcileErr.Error())
 
 	if err := r.SyncStatus(ctx, co, conds); err != nil {
-		return fmt.Errorf("failed to sync status: %w", err)
+		return fmt.Errorf("failed to sync cluster operator status: %w", err)
 	}
 
 	return nil

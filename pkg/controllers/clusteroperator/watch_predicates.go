@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package unsupported
+package clusteroperator
 
 import (
 	"k8s.io/apimachinery/pkg/runtime"

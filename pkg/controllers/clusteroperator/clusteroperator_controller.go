@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package unsupported
+package clusteroperator
 
 import (
 	"context"
@@ -24,29 +24,39 @@ import (
 
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
+	featuregates "github.com/openshift/library-go/pkg/operator/configobserver/featuregates"
 )
 
 const (
-	capiUnsupportedPlatformMsg = "Cluster API is not yet implemented on this platform"
-	controllerName             = "UnsupportedController"
+	controllerName = "ClusterOperatorController"
 )
 
-// UnsupportedController on unsupported platforms watches and keeps the cluster-api ClusterObject up to date.
-type UnsupportedController struct {
+// ClusterOperatorController watches and keeps the cluster-api ClusterObject up to date.
+type ClusterOperatorController struct {
 	operatorstatus.ClusterOperatorStatusClient
-	Scheme *runtime.Scheme
+	Scheme                *runtime.Scheme
+	IsUnsupportedPlatform bool
+	FeatureGates          featuregates.FeatureGate
 }
 
 // Reconcile reconciles the cluster-api ClusterOperator object.
-func (r *UnsupportedController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *ClusterOperatorController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := ctrl.LoggerFrom(ctx).WithName(controllerName)
-	log.Info(fmt.Sprintf("Reconciling %q ClusterObject", controllers.ClusterOperatorName))
 
-	if err := r.ClusterOperatorStatusClient.SetStatusAvailable(ctx, capiUnsupportedPlatformMsg); err != nil {
+	log.Info(fmt.Sprintf("Reconciling %q ClusterObject", controllers.ClusterOperatorName))
+	defer log.Info("Finished reconciling ClusterObject")
+
+	co := &configv1.ClusterOperator{}
+	if err := r.Get(ctx, client.ObjectKey{Name: req.Name}, co); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to get %q ClusterObject: %w", controllers.ClusterOperatorName, err)
+	}
+
+	if err := r.SetStatus(ctx, r.IsUnsupportedPlatform); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to set conditions for %q ClusterObject: %w", controllers.ClusterOperatorName, err)
 	}
 
@@ -54,7 +64,7 @@ func (r *UnsupportedController) Reconcile(ctx context.Context, req ctrl.Request)
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *UnsupportedController) SetupWithManager(mgr ctrl.Manager) error {
+func (r *ClusterOperatorController) SetupWithManager(mgr ctrl.Manager) error {
 	if err := ctrl.NewControllerManagedBy(mgr).
 		Named(controllerName).
 		For(&configv1.ClusterOperator{}, builder.WithPredicates(clusterOperatorPredicates())).

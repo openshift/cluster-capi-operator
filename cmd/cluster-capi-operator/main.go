@@ -15,6 +15,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -51,21 +52,28 @@ import (
 	configv1 "github.com/openshift/api/config/v1"
 	mapiv1 "github.com/openshift/api/machine/v1"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
+	configv1client "github.com/openshift/client-go/config/clientset/versioned"
+	configinformers "github.com/openshift/client-go/config/informers/externalversions"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/capiinstaller"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/clusteroperator"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/corecluster"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/infracluster"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/kubeconfig"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/secretsync"
-	"github.com/openshift/cluster-capi-operator/pkg/controllers/unsupported"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 	"github.com/openshift/cluster-capi-operator/pkg/webhook"
+	featuregates "github.com/openshift/library-go/pkg/operator/configobserver/featuregates"
+	"github.com/openshift/library-go/pkg/operator/events"
 )
 
 const (
 	defaultImagesLocation = "./dev-images.json"
 )
+
+// errTimedOutWaitingForFeatureGates is returned when the feature gates are not initialized within the timeout.
+var errTimedOutWaitingForFeatureGates = errors.New("timed out waiting for feature gates to be initialized")
 
 func initScheme(scheme *runtime.Scheme) {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
@@ -108,6 +116,11 @@ func main() {
 		"namespace",
 		controllers.DefaultManagedNamespace,
 		"The namespace where CAPI components will run.",
+	)
+	sourceNamespace := flag.String(
+		"source-namespace",
+		controllers.DefaultMAPIManagedNamespace,
+		"The namespace where MAPI components will run.",
 	)
 	imagesFile := flag.String(
 		"images-json",
@@ -161,9 +174,9 @@ func main() {
 
 	cacheOpts := cache.Options{
 		DefaultNamespaces: map[string]cache.Config{
-			*managedNamespace:                {},
-			secretsync.SecretSourceNamespace: {},
-			"kube-system":                    {}, // For fetching cloud credentials.
+			*managedNamespace: {},
+			*sourceNamespace:  {},
+			"kube-system":     {}, // For fetching cloud credentials.
 		},
 		SyncPeriod: &syncPeriod,
 	}
@@ -221,7 +234,19 @@ func main() {
 		os.Exit(1)
 	}
 
-	setupPlatformReconcilers(mgr, infra, platform, containerImages, applyClient, apiextensionsClient, *managedNamespace)
+	featureGateAccessor, err := getFeatureGates(mgr)
+	if err != nil {
+		klog.Error(err, "unable to get feature gates")
+		os.Exit(1)
+	}
+
+	currentFeatureGates, err := featureGateAccessor.CurrentFeatureGates()
+	if err != nil {
+		klog.Error(err, "unable to get current feature gates")
+		os.Exit(1)
+	}
+
+	setupPlatformReconcilers(mgr, infra, platform, containerImages, applyClient, apiextensionsClient, currentFeatureGates, *managedNamespace, *sourceNamespace)
 
 	// +kubebuilder:scaffold:builder
 
@@ -243,79 +268,88 @@ func main() {
 	}
 }
 
-func getClusterOperatorStatusClient(mgr manager.Manager, controller string, managedNamespace string) operatorstatus.ClusterOperatorStatusClient {
+func getClusterOperatorStatusClient(mgr manager.Manager, currentFeatureGates featuregates.FeatureGate, controller string, managedNamespace string) operatorstatus.ClusterOperatorStatusClient {
 	return operatorstatus.ClusterOperatorStatusClient{
 		Client:           mgr.GetClient(),
 		Recorder:         mgr.GetEventRecorderFor(controller),
 		ReleaseVersion:   util.GetReleaseVersion(),
 		ManagedNamespace: managedNamespace,
+		FeatureGates:     currentFeatureGates,
 	}
 }
 
-func setupPlatformReconcilers(mgr manager.Manager, infra *configv1.Infrastructure, platform configv1.PlatformType, containerImages map[string]string, applyClient *kubernetes.Clientset, apiextensionsClient *apiextensionsclient.Clientset, managedNamespace string) {
+func setupPlatformReconcilers(mgr manager.Manager, infra *configv1.Infrastructure, platform configv1.PlatformType, containerImages map[string]string, applyClient *kubernetes.Clientset,
+	apiextensionsClient *apiextensionsclient.Clientset, currentFeatureGates featuregates.FeatureGate, managedNamespace, sourceNamespace string) {
 	// Only setup reconcile controllers and webhooks when the platform is supported.
 	// This avoids unnecessary CAPI providers discovery, installs and reconciles when the platform is not supported.
 	switch platform {
 	case configv1.AWSPlatformType:
-		setupReconcilers(mgr, infra, platform, &awsv1.AWSCluster{}, containerImages, applyClient, apiextensionsClient, managedNamespace)
+		setupReconcilers(mgr, infra, platform, &awsv1.AWSCluster{}, containerImages, applyClient, apiextensionsClient, currentFeatureGates, managedNamespace, sourceNamespace)
 		setupWebhooks(mgr)
 	case configv1.GCPPlatformType:
-		setupReconcilers(mgr, infra, platform, &gcpv1.GCPCluster{}, containerImages, applyClient, apiextensionsClient, managedNamespace)
+		setupReconcilers(mgr, infra, platform, &gcpv1.GCPCluster{}, containerImages, applyClient, apiextensionsClient, currentFeatureGates, managedNamespace, sourceNamespace)
 		setupWebhooks(mgr)
 	case configv1.AzurePlatformType:
 		azureCloudEnvironment := getAzureCloudEnvironment(infra.Status.PlatformStatus)
 		if azureCloudEnvironment == configv1.AzureStackCloud {
 			klog.Infof("Detected Azure Cloud Environment %q on platform %q is not supported, skipping capi controllers setup", azureCloudEnvironment, platform)
-			setupUnsupportedController(mgr, managedNamespace)
+			setupClusterOperatorController(mgr, managedNamespace, currentFeatureGates, true)
 		} else {
-			setupReconcilers(mgr, infra, platform, &azurev1.AzureCluster{}, containerImages, applyClient, apiextensionsClient, managedNamespace)
+			// The ClusterOperator Controller must run in all cases.
+			setupReconcilers(mgr, infra, platform, &azurev1.AzureCluster{}, containerImages, applyClient, apiextensionsClient, currentFeatureGates, managedNamespace, sourceNamespace)
 			setupWebhooks(mgr)
 		}
 	case configv1.PowerVSPlatformType:
-		setupReconcilers(mgr, infra, platform, &ibmpowervsv1.IBMPowerVSCluster{}, containerImages, applyClient, apiextensionsClient, managedNamespace)
+		setupReconcilers(mgr, infra, platform, &ibmpowervsv1.IBMPowerVSCluster{}, containerImages, applyClient, apiextensionsClient, currentFeatureGates, managedNamespace, sourceNamespace)
 		setupWebhooks(mgr)
 	case configv1.VSpherePlatformType:
-		setupReconcilers(mgr, infra, platform, &vspherev1.VSphereCluster{}, containerImages, applyClient, apiextensionsClient, managedNamespace)
+		setupReconcilers(mgr, infra, platform, &vspherev1.VSphereCluster{}, containerImages, applyClient, apiextensionsClient, currentFeatureGates, managedNamespace, sourceNamespace)
 		setupWebhooks(mgr)
 	case configv1.OpenStackPlatformType:
-		setupReconcilers(mgr, infra, platform, &openstackv1.OpenStackCluster{}, containerImages, applyClient, apiextensionsClient, managedNamespace)
+		setupReconcilers(mgr, infra, platform, &openstackv1.OpenStackCluster{}, containerImages, applyClient, apiextensionsClient, currentFeatureGates, managedNamespace, sourceNamespace)
 		setupWebhooks(mgr)
 	default:
 		klog.Infof("Detected platform %q is not supported, skipping capi controllers setup", platform)
-		setupUnsupportedController(mgr, managedNamespace)
+		// The ClusterOperator Controller must run under all circumstances as it manages the ClusterOperator object for this operator.
+		setupClusterOperatorController(mgr, managedNamespace, currentFeatureGates, true)
 	}
 }
 
-func setupReconcilers(mgr manager.Manager, infra *configv1.Infrastructure, platform configv1.PlatformType, infraClusterObject client.Object, containerImages map[string]string, applyClient *kubernetes.Clientset, apiextensionsClient *apiextensionsclient.Clientset, managedNamespace string) {
-	if err := (&corecluster.CoreClusterReconciler{
-		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-cluster-resource-controller", managedNamespace),
+func setupReconcilers(mgr manager.Manager, infra *configv1.Infrastructure, platform configv1.PlatformType, infraClusterObject client.Object, containerImages map[string]string,
+	applyClient *kubernetes.Clientset, apiextensionsClient *apiextensionsclient.Clientset, currentFeatureGates featuregates.FeatureGate, managedNamespace, sourceNamespace string) {
+	// The ClusterOperator Controller must run under all circumstances as it manages the ClusterOperator object for this operator.
+	setupClusterOperatorController(mgr, managedNamespace, currentFeatureGates, false)
+
+	if err := (&corecluster.CoreClusterController{
+		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, currentFeatureGates, "cluster-capi-operator-cluster-resource-controller", managedNamespace),
 		Cluster:                     &clusterv1.Cluster{},
 		Platform:                    platform,
 		Infra:                       infra,
 	}).SetupWithManager(mgr); err != nil {
-		klog.Error(err, "unable to create controller", "controller", "CoreCluster")
+		klog.Error(err, "unable to create core cluster controller", "controller", "CoreCluster")
 		os.Exit(1)
 	}
 
-	if err := (&secretsync.UserDataSecretController{
-		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-user-data-secret-controller", managedNamespace),
+	if err := (&secretsync.SecretSyncController{
+		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, currentFeatureGates, "cluster-capi-operator-secret-sync-controller", managedNamespace),
 		Scheme:                      mgr.GetScheme(),
+		SourceNamespace:             sourceNamespace,
 	}).SetupWithManager(mgr); err != nil {
-		klog.Error(err, "unable to create user-data-secret controller", "controller", "UserDataSecret")
+		klog.Error(err, "unable to create secret sync controller", "controller", "SecretSync")
 		os.Exit(1)
 	}
 
-	if err := (&kubeconfig.KubeconfigReconciler{
-		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-kubeconfig-controller", managedNamespace),
+	if err := (&kubeconfig.KubeconfigController{
+		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, currentFeatureGates, "cluster-capi-operator-kubeconfig-controller", managedNamespace),
 		Scheme:                      mgr.GetScheme(),
 		RestCfg:                     mgr.GetConfig(),
 	}).SetupWithManager(mgr); err != nil {
-		klog.Error(err, "unable to create controller", "controller", "Kubeconfig")
+		klog.Error(err, "unable to create kubeconfig controller", "controller", "Kubeconfig")
 		os.Exit(1)
 	}
 
 	if err := (&capiinstaller.CapiInstallerController{
-		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-capi-installer-controller", managedNamespace),
+		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, currentFeatureGates, "cluster-capi-operator-capi-installer-controller", managedNamespace),
 		Scheme:                      mgr.GetScheme(),
 		Images:                      containerImages,
 		RestCfg:                     mgr.GetConfig(),
@@ -328,7 +362,7 @@ func setupReconcilers(mgr manager.Manager, infra *configv1.Infrastructure, platf
 	}
 
 	if err := (&infracluster.InfraClusterController{
-		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-infracluster-controller", managedNamespace),
+		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, currentFeatureGates, "cluster-capi-operator-infracluster-controller", managedNamespace),
 		Scheme:                      mgr.GetScheme(),
 		Images:                      containerImages,
 		RestCfg:                     mgr.GetConfig(),
@@ -372,13 +406,48 @@ func getAzureCloudEnvironment(ps *configv1.PlatformStatus) configv1.AzureCloudEn
 	return ps.Azure.CloudName
 }
 
-func setupUnsupportedController(mgr manager.Manager, ns string) {
-	// UnsupportedController runs on unsupported platforms, it watches and keeps the cluster-api ClusterObject up to date.
-	if err := (&unsupported.UnsupportedController{
-		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-unsupported-controller", ns),
+func setupClusterOperatorController(mgr manager.Manager, ns string, currentFeatureGates featuregates.FeatureGate, isUnsupportedPlatform bool) {
+	// ClusterOperator watches and keeps the cluster-api ClusterObject up to date.
+	if err := (&clusteroperator.ClusterOperatorController{
+		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, currentFeatureGates, "cluster-capi-operator-clusteroperator-controller", ns),
 		Scheme:                      mgr.GetScheme(),
+		IsUnsupportedPlatform:       isUnsupportedPlatform,
 	}).SetupWithManager(mgr); err != nil {
-		klog.Error(err, "unable to create unsupported controller", "controller", "Unsupported")
+		klog.Error(err, "unable to create clusteroperator controller", "controller", "ClusterOperator")
 		os.Exit(1)
 	}
+}
+
+// getFeatureGates is used to fetch the current feature gates from the cluster.
+// We use this to check if the machine api migration is actually enabled or not.
+func getFeatureGates(mgr ctrl.Manager) (featuregates.FeatureGateAccess, error) {
+	desiredVersion := util.GetReleaseVersion()
+	missingVersion := "0.0.1-snapshot"
+
+	configClient, err := configv1client.NewForConfig(mgr.GetConfig())
+	if err != nil {
+		return nil, fmt.Errorf("failed to create config client: %w", err)
+	}
+
+	configInformers := configinformers.NewSharedInformerFactory(configClient, 10*time.Minute)
+
+	// By default, this will exit(0) if the featuregates change.
+	featureGateAccessor := featuregates.NewFeatureGateAccess(
+		desiredVersion, missingVersion,
+		configInformers.Config().V1().ClusterVersions(),
+		configInformers.Config().V1().FeatureGates(),
+		events.NewLoggingEventRecorder("machineapimigration"),
+	)
+	go featureGateAccessor.Run(context.Background())
+	go configInformers.Start(context.Background().Done())
+
+	select {
+	case <-featureGateAccessor.InitialFeatureGatesObserved():
+		featureGates, _ := featureGateAccessor.CurrentFeatureGates()
+		klog.Infof("FeatureGates initialized: %v", featureGates.KnownFeatures())
+	case <-time.After(1 * time.Minute):
+		return nil, errTimedOutWaitingForFeatureGates
+	}
+
+	return featureGateAccessor, nil
 }

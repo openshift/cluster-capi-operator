@@ -33,11 +33,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	capav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 
-	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
-
 	"github.com/openshift/cluster-api-actuator-pkg/testutils"
-	consts "github.com/openshift/cluster-capi-operator/pkg/controllers"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers"
+	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 	"k8s.io/utils/ptr"
+	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/config"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
@@ -49,7 +49,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 	var mgrDone chan struct{}
 	var mgr manager.Manager
 	var k komega.Komega
-	var reconciler *MachineSetSyncReconciler
+	var reconciler *MachineSetSyncController
 
 	var syncControllerNamespace *corev1.Namespace
 	var capiNamespace *corev1.Namespace
@@ -100,6 +100,14 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 			WithGenerateName("openshift-cluster-api-").Build()
 		Expect(k8sClient.Create(ctx, capiNamespace)).To(Succeed(), "capi namespace should be able to be created")
 
+		By("Creating the cluster-api ClusterOperator")
+		capiClusterOperator := &configv1.ClusterOperator{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "cluster-api",
+			},
+		}
+		Expect(k8sClient.Create(ctx, capiClusterOperator)).To(Succeed(), "should be able to create the 'cluster-api' ClusterOperator object")
+
 		mapiMachineSetBuilder = machinev1resourcebuilder.MachineSet().
 			WithNamespace(mapiNamespace.GetName()).
 			WithName("foo").
@@ -145,7 +153,12 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 		})
 		Expect(err).ToNot(HaveOccurred(), "Manager should be able to be created")
 
-		reconciler = &MachineSetSyncReconciler{
+		reconciler = &MachineSetSyncController{
+			ClusterOperatorStatusClient: operatorstatus.ClusterOperatorStatusClient{
+				Client:           mgr.GetClient(),
+				ManagedNamespace: capiNamespace.GetNamespace(),
+				FeatureGates:     nil,
+			},
 			Client: mgr.GetClient(),
 			Infra: configv1resourcebuilder.Infrastructure().
 				AsAWS("cluster", "us-east-1").WithInfrastructureName(infrastructureName).Build(),
@@ -172,8 +185,10 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 		testutils.CleanupResources(Default, ctx, cfg, k8sClient, mapiNamespace.GetName(),
 			&machinev1beta1.Machine{},
 			&machinev1beta1.MachineSet{},
+			&configv1.ClusterOperator{},
 		)
 
+		By("Cleaning up CAPI test resources")
 		testutils.CleanupResources(Default, ctx, cfg, k8sClient, capiNamespace.GetName(),
 			&capiv1beta1.Machine{},
 			&capiv1beta1.MachineSet{},
@@ -211,12 +226,28 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 					Eventually(k.Object(mapiMachineSet), timeout).Should(
 						HaveField("Status.Conditions", ContainElement(
 							SatisfyAll(
-								HaveField("Type", Equal(consts.SynchronizedCondition)),
+								HaveField("Type", Equal(controllers.SynchronizedCondition)),
 								HaveField("Status", Equal(corev1.ConditionTrue)),
 								HaveField("Reason", Equal("ResourceSynchronized")),
 								HaveField("Message", Equal("Successfully synchronized CAPI MachineSet to MAPI")),
 							))),
 					)
+				})
+
+				It("should updated the ClusterOperator status conditions with controller specific ones to reflect a normal state", func() {
+					Eventually(komega.Object(configv1resourcebuilder.ClusterOperator().WithName(controllers.ClusterOperatorName).Build()), timeout).
+						Should(
+							HaveField("Status.Conditions", SatisfyAll(
+								ContainElement(And(
+									HaveField("Type", BeEquivalentTo(operatorstatus.MachineSetSyncControllerAvailableCondition)),
+									HaveField("Status", BeEquivalentTo(configv1.ConditionTrue)),
+								)),
+								ContainElement(And(
+									HaveField("Type", BeEquivalentTo(operatorstatus.MachineSetSyncControllerDegradedCondition)),
+									HaveField("Status", BeEquivalentTo(configv1.ConditionFalse)),
+								)),
+							)),
+						)
 				})
 			})
 
@@ -230,12 +261,28 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 					Eventually(k.Object(mapiMachineSet), timeout).Should(
 						HaveField("Status.Conditions", ContainElement(
 							SatisfyAll(
-								HaveField("Type", Equal(consts.SynchronizedCondition)),
+								HaveField("Type", Equal(controllers.SynchronizedCondition)),
 								HaveField("Status", Equal(corev1.ConditionTrue)),
 								HaveField("Reason", Equal("ResourceSynchronized")),
 								HaveField("Message", Equal("Successfully synchronized CAPI MachineSet to MAPI")),
 							))),
 					)
+				})
+
+				It("should updated the ClusterOperator status conditions with controller specific ones to reflect a normal state", func() {
+					Eventually(komega.Object(configv1resourcebuilder.ClusterOperator().WithName(controllers.ClusterOperatorName).Build()), timeout).
+						Should(
+							HaveField("Status.Conditions", SatisfyAll(
+								ContainElement(And(
+									HaveField("Type", BeEquivalentTo(operatorstatus.MachineSetSyncControllerAvailableCondition)),
+									HaveField("Status", BeEquivalentTo(configv1.ConditionTrue)),
+								)),
+								ContainElement(And(
+									HaveField("Type", BeEquivalentTo(operatorstatus.MachineSetSyncControllerDegradedCondition)),
+									HaveField("Status", BeEquivalentTo(configv1.ConditionFalse)),
+								)),
+							)),
+						)
 				})
 			})
 		})
@@ -264,7 +311,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 						SatisfyAll(
 							HaveField("Status.Conditions", ContainElement(
 								SatisfyAll(
-									HaveField("Type", Equal(consts.SynchronizedCondition)),
+									HaveField("Type", Equal(controllers.SynchronizedCondition)),
 									HaveField("Status", Equal(corev1.ConditionTrue)),
 								))),
 							HaveField("Status.SynchronizedGeneration", Equal(capiMachineSet.GetGeneration())),
@@ -275,6 +322,22 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 					Eventually(k.Object(mapiMachineSet), timeout).Should(
 						HaveField("Spec.Replicas", Equal(ptr.To(int32(4)))),
 					)
+				})
+
+				It("should updated the ClusterOperator status conditions with controller specific ones to reflect a normal state", func() {
+					Eventually(komega.Object(configv1resourcebuilder.ClusterOperator().WithName(controllers.ClusterOperatorName).Build()), timeout).
+						Should(
+							HaveField("Status.Conditions", SatisfyAll(
+								ContainElement(And(
+									HaveField("Type", BeEquivalentTo(operatorstatus.MachineSetSyncControllerAvailableCondition)),
+									HaveField("Status", BeEquivalentTo(configv1.ConditionTrue)),
+								)),
+								ContainElement(And(
+									HaveField("Type", BeEquivalentTo(operatorstatus.MachineSetSyncControllerDegradedCondition)),
+									HaveField("Status", BeEquivalentTo(configv1.ConditionFalse)),
+								)),
+							)),
+						)
 				})
 			})
 
@@ -291,7 +354,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 							SatisfyAll(
 								HaveField("Status.Conditions", ContainElement(
 									SatisfyAll(
-										HaveField("Type", Equal(consts.SynchronizedCondition)),
+										HaveField("Type", Equal(controllers.SynchronizedCondition)),
 										HaveField("Status", Equal(corev1.ConditionTrue)),
 									))),
 								HaveField("Status.SynchronizedGeneration", Equal(capiMachineSet.GetGeneration())),
@@ -304,6 +367,21 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 						)
 					})
 
+					It("should updated the ClusterOperator status conditions with controller specific ones to reflect a normal state", func() {
+						Eventually(komega.Object(configv1resourcebuilder.ClusterOperator().WithName(controllers.ClusterOperatorName).Build()), timeout).
+							Should(
+								HaveField("Status.Conditions", SatisfyAll(
+									ContainElement(And(
+										HaveField("Type", BeEquivalentTo(operatorstatus.MachineSetSyncControllerAvailableCondition)),
+										HaveField("Status", BeEquivalentTo(configv1.ConditionTrue)),
+									)),
+									ContainElement(And(
+										HaveField("Type", BeEquivalentTo(operatorstatus.MachineSetSyncControllerDegradedCondition)),
+										HaveField("Status", BeEquivalentTo(configv1.ConditionFalse)),
+									)),
+								)),
+							)
+					})
 				})
 
 				Context("where the field is not meant to be copied", func() {
@@ -319,7 +397,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 							SatisfyAll(
 								HaveField("Status.Conditions", ContainElement(
 									SatisfyAll(
-										HaveField("Type", Equal(consts.SynchronizedCondition)),
+										HaveField("Type", Equal(controllers.SynchronizedCondition)),
 										HaveField("Status", Equal(corev1.ConditionTrue)),
 									))),
 								HaveField("Status.SynchronizedGeneration", Equal(capiMachineSet.GetGeneration())),
@@ -330,6 +408,22 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 						Eventually(k.Object(mapiMachineSet), timeout).Should(
 							HaveField("Finalizers", BeEmpty()),
 						)
+					})
+
+					It("should updated the ClusterOperator status conditions with controller specific ones to reflect a normal state", func() {
+						Eventually(komega.Object(configv1resourcebuilder.ClusterOperator().WithName(controllers.ClusterOperatorName).Build()), timeout).
+							Should(
+								HaveField("Status.Conditions", SatisfyAll(
+									ContainElement(And(
+										HaveField("Type", BeEquivalentTo(operatorstatus.MachineSetSyncControllerAvailableCondition)),
+										HaveField("Status", BeEquivalentTo(configv1.ConditionTrue)),
+									)),
+									ContainElement(And(
+										HaveField("Type", BeEquivalentTo(operatorstatus.MachineSetSyncControllerDegradedCondition)),
+										HaveField("Status", BeEquivalentTo(configv1.ConditionFalse)),
+									)),
+								)),
+							)
 					})
 
 				})
@@ -349,13 +443,29 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 					Eventually(k.Object(mapiMachineSet), timeout).Should(
 						HaveField("Status.Conditions", ContainElement(
 							SatisfyAll(
-								HaveField("Type", Equal(consts.SynchronizedCondition)),
+								HaveField("Type", Equal(controllers.SynchronizedCondition)),
 								HaveField("Status", Equal(corev1.ConditionFalse)),
 								HaveField("Severity", Equal(machinev1beta1.ConditionSeverityError)),
 								HaveField("Reason", Equal("FailedToConvertCAPIMachineSetToMAPI")),
 							))),
 					)
 
+				})
+
+				It("should updated the ClusterOperator status conditions with controller specific ones to reflect a normal state", func() {
+					Eventually(komega.Object(configv1resourcebuilder.ClusterOperator().WithName(controllers.ClusterOperatorName).Build()), timeout).
+						Should(
+							HaveField("Status.Conditions", SatisfyAll(
+								ContainElement(And(
+									HaveField("Type", BeEquivalentTo(operatorstatus.MachineSetSyncControllerAvailableCondition)),
+									HaveField("Status", BeEquivalentTo(configv1.ConditionTrue)),
+								)),
+								ContainElement(And(
+									HaveField("Type", BeEquivalentTo(operatorstatus.MachineSetSyncControllerDegradedCondition)),
+									HaveField("Status", BeEquivalentTo(configv1.ConditionFalse)),
+								)),
+							)),
+						)
 				})
 			})
 
@@ -376,12 +486,28 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 					Eventually(k.Object(mapiMachineSet), timeout).Should(
 						HaveField("Status.Conditions", ContainElement(
 							SatisfyAll(
-								HaveField("Type", Equal(consts.SynchronizedCondition)),
+								HaveField("Type", Equal(controllers.SynchronizedCondition)),
 								HaveField("Status", Equal(corev1.ConditionTrue)),
 								HaveField("Reason", Equal("ResourceSynchronized")),
 								HaveField("Message", Equal("Successfully synchronized CAPI MachineSet to MAPI")),
 							))),
 					)
+				})
+
+				It("should updated the ClusterOperator status conditions with controller specific ones to reflect a normal state", func() {
+					Eventually(komega.Object(configv1resourcebuilder.ClusterOperator().WithName(controllers.ClusterOperatorName).Build()), timeout).
+						Should(
+							HaveField("Status.Conditions", SatisfyAll(
+								ContainElement(And(
+									HaveField("Type", BeEquivalentTo(operatorstatus.MachineSetSyncControllerAvailableCondition)),
+									HaveField("Status", BeEquivalentTo(configv1.ConditionTrue)),
+								)),
+								ContainElement(And(
+									HaveField("Type", BeEquivalentTo(operatorstatus.MachineSetSyncControllerDegradedCondition)),
+									HaveField("Status", BeEquivalentTo(configv1.ConditionFalse)),
+								)),
+							)),
+						)
 				})
 			})
 		})
@@ -413,6 +539,22 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 					HaveField("ResourceVersion", Equal(capiResourceVersion)),
 				)
 			})
+
+			It("should updated the ClusterOperator status conditions with controller specific ones to reflect a normal state", func() {
+				Eventually(komega.Object(configv1resourcebuilder.ClusterOperator().WithName(controllers.ClusterOperatorName).Build()), timeout).
+					Should(
+						HaveField("Status.Conditions", SatisfyAll(
+							ContainElement(And(
+								HaveField("Type", BeEquivalentTo(operatorstatus.MachineSetSyncControllerAvailableCondition)),
+								HaveField("Status", BeEquivalentTo(configv1.ConditionTrue)),
+							)),
+							ContainElement(And(
+								HaveField("Type", BeEquivalentTo(operatorstatus.MachineSetSyncControllerDegradedCondition)),
+								HaveField("Status", BeEquivalentTo(configv1.ConditionFalse)),
+							)),
+						)),
+					)
+			})
 		})
 
 		Context("when the MAPI machine set has MachineAuthority not set", func() {
@@ -436,6 +578,22 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 					HaveField("ResourceVersion", Equal(resourceVersion)),
 				)
 			})
+
+			It("should updated the ClusterOperator status conditions with controller specific ones to reflect a normal state", func() {
+				Eventually(komega.Object(configv1resourcebuilder.ClusterOperator().WithName(controllers.ClusterOperatorName).Build()), timeout).
+					Should(
+						HaveField("Status.Conditions", SatisfyAll(
+							ContainElement(And(
+								HaveField("Type", BeEquivalentTo(operatorstatus.MachineSetSyncControllerAvailableCondition)),
+								HaveField("Status", BeEquivalentTo(configv1.ConditionTrue)),
+							)),
+							ContainElement(And(
+								HaveField("Type", BeEquivalentTo(operatorstatus.MachineSetSyncControllerDegradedCondition)),
+								HaveField("Status", BeEquivalentTo(configv1.ConditionFalse)),
+							)),
+						)),
+					)
+			})
 		})
 
 		Context("when the MAPI machine set does not exist and the CAPI machine set does", func() {
@@ -458,6 +616,22 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 					ContainElement(HaveField("ObjectMeta.Name", Equal(capiMachineSet.GetName()))),
 				))
 			})
+
+			It("should updated the ClusterOperator status conditions with controller specific ones to reflect a normal state", func() {
+				Eventually(komega.Object(configv1resourcebuilder.ClusterOperator().WithName(controllers.ClusterOperatorName).Build()), timeout).
+					Should(
+						HaveField("Status.Conditions", SatisfyAll(
+							ContainElement(And(
+								HaveField("Type", BeEquivalentTo(operatorstatus.MachineSetSyncControllerAvailableCondition)),
+								HaveField("Status", BeEquivalentTo(configv1.ConditionTrue)),
+							)),
+							ContainElement(And(
+								HaveField("Type", BeEquivalentTo(operatorstatus.MachineSetSyncControllerDegradedCondition)),
+								HaveField("Status", BeEquivalentTo(configv1.ConditionFalse)),
+							)),
+						)),
+					)
+			})
 		})
 	})
 
@@ -477,7 +651,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 
 			Context("when the CAPI machine set does not exist", func() {
 				It("should create the CAPI machine set and CAPI infra machine template", func() {
-					capiMachineSet = capiv1resourcebuilder.MachineSet().WithName(mapiMachineSet.Name).WithNamespace(capiNamespace.Name).Build()
+					capiMachineSet = capiMachineSetBuilder.WithName(mapiMachineSet.Name).Build()
 					Expect(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
 
 					capiInfraMachineTemplate := capav1builder.AWSMachineTemplate().WithName(mapiMachineSet.Name).WithNamespace(capiNamespace.Name).Build()
@@ -488,12 +662,28 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 					Eventually(k.Object(mapiMachineSet), timeout).Should(
 						HaveField("Status.Conditions", ContainElement(
 							SatisfyAll(
-								HaveField("Type", Equal(consts.SynchronizedCondition)),
+								HaveField("Type", Equal(controllers.SynchronizedCondition)),
 								HaveField("Status", Equal(corev1.ConditionTrue)),
 								HaveField("Reason", Equal("ResourceSynchronized")),
 								HaveField("Message", Equal("Successfully synchronized CAPI MachineSet to MAPI")),
 							))),
 					)
+				})
+
+				It("should updated the ClusterOperator status conditions with controller specific ones to reflect a normal state", func() {
+					Eventually(komega.Object(configv1resourcebuilder.ClusterOperator().WithName(controllers.ClusterOperatorName).Build()), timeout).
+						Should(
+							HaveField("Status.Conditions", SatisfyAll(
+								ContainElement(And(
+									HaveField("Type", BeEquivalentTo(operatorstatus.MachineSetSyncControllerAvailableCondition)),
+									HaveField("Status", BeEquivalentTo(configv1.ConditionTrue)),
+								)),
+								ContainElement(And(
+									HaveField("Type", BeEquivalentTo(operatorstatus.MachineSetSyncControllerDegradedCondition)),
+									HaveField("Status", BeEquivalentTo(configv1.ConditionFalse)),
+								)),
+							)),
+						)
 				})
 			})
 
@@ -512,12 +702,28 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 					Eventually(k.Object(mapiMachineSet), timeout).Should(
 						HaveField("Status.Conditions", ContainElement(
 							SatisfyAll(
-								HaveField("Type", Equal(consts.SynchronizedCondition)),
+								HaveField("Type", Equal(controllers.SynchronizedCondition)),
 								HaveField("Status", Equal(corev1.ConditionTrue)),
 								HaveField("Reason", Equal("ResourceSynchronized")),
 								HaveField("Message", Equal("Successfully synchronized CAPI MachineSet to MAPI")),
 							))),
 					)
+				})
+
+				It("should updated the ClusterOperator status conditions with controller specific ones to reflect a normal state", func() {
+					Eventually(komega.Object(configv1resourcebuilder.ClusterOperator().WithName(controllers.ClusterOperatorName).Build()), timeout).
+						Should(
+							HaveField("Status.Conditions", SatisfyAll(
+								ContainElement(And(
+									HaveField("Type", BeEquivalentTo(operatorstatus.MachineSetSyncControllerAvailableCondition)),
+									HaveField("Status", BeEquivalentTo(configv1.ConditionTrue)),
+								)),
+								ContainElement(And(
+									HaveField("Type", BeEquivalentTo(operatorstatus.MachineSetSyncControllerDegradedCondition)),
+									HaveField("Status", BeEquivalentTo(configv1.ConditionFalse)),
+								)),
+							)),
+						)
 				})
 			})
 		})
@@ -544,19 +750,35 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 					Eventually(k.Object(mapiMachineSet), timeout).Should(
 						HaveField("Status.Conditions", ContainElement(
 							SatisfyAll(
-								HaveField("Type", Equal(consts.SynchronizedCondition)),
+								HaveField("Type", Equal(controllers.SynchronizedCondition)),
 								HaveField("Status", Equal(corev1.ConditionFalse)),
 								HaveField("Severity", Equal(machinev1beta1.ConditionSeverityError)),
 								HaveField("Reason", Equal("FailedToGetCAPIInfraResources")),
 							))),
 					)
 				})
+
+				It("should updated the ClusterOperator status conditions with controller specific ones to reflect a normal state", func() {
+					Eventually(komega.Object(configv1resourcebuilder.ClusterOperator().WithName(controllers.ClusterOperatorName).Build()), timeout).
+						Should(
+							HaveField("Status.Conditions", SatisfyAll(
+								ContainElement(And(
+									HaveField("Type", BeEquivalentTo(operatorstatus.MachineSetSyncControllerAvailableCondition)),
+									HaveField("Status", BeEquivalentTo(configv1.ConditionTrue)),
+								)),
+								ContainElement(And(
+									HaveField("Type", BeEquivalentTo(operatorstatus.MachineSetSyncControllerDegradedCondition)),
+									HaveField("Status", BeEquivalentTo(configv1.ConditionFalse)),
+								)),
+							)),
+						)
+				})
 			})
 
 			Context("when the CAPI machine set does not exist", func() {
 				It("should create the CAPI machine set and CAPI infra machine template", func() {
-					capiMachineSet = capiv1resourcebuilder.MachineSet().WithName(mapiMachineSet.Name).WithNamespace(capiNamespace.Name).Build()
-					Expect(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
+					capiMachineSet = capiMachineSetBuilder.Build()
+					Eventually(k.Get(capiMachineSet)).Should(Succeed())
 
 					capiInfraMachineTemplate := capav1builder.AWSMachineTemplate().WithName(mapiMachineSet.Name).WithNamespace(capiNamespace.Name).Build()
 					Eventually(k.Get(capiInfraMachineTemplate)).Should(Succeed())
@@ -566,15 +788,30 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 					Eventually(k.Object(mapiMachineSet), timeout).Should(
 						HaveField("Status.Conditions", ContainElement(
 							SatisfyAll(
-								HaveField("Type", Equal(consts.SynchronizedCondition)),
+								HaveField("Type", Equal(controllers.SynchronizedCondition)),
 								HaveField("Status", Equal(corev1.ConditionTrue)),
 								HaveField("Reason", Equal("ResourceSynchronized")),
 								HaveField("Message", Equal("Successfully synchronized CAPI MachineSet to MAPI")),
 							))),
 					)
 				})
+
+				It("should updated the ClusterOperator status conditions with controller specific ones to reflect a normal state", func() {
+					Eventually(komega.Object(configv1resourcebuilder.ClusterOperator().WithName(controllers.ClusterOperatorName).Build()), timeout).
+						Should(
+							HaveField("Status.Conditions", SatisfyAll(
+								ContainElement(And(
+									HaveField("Type", BeEquivalentTo(operatorstatus.MachineSetSyncControllerAvailableCondition)),
+									HaveField("Status", BeEquivalentTo(configv1.ConditionTrue)),
+								)),
+								ContainElement(And(
+									HaveField("Type", BeEquivalentTo(operatorstatus.MachineSetSyncControllerDegradedCondition)),
+									HaveField("Status", BeEquivalentTo(configv1.ConditionFalse)),
+								)),
+							)),
+						)
+				})
 			})
 		})
 	})
-
 })

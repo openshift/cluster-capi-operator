@@ -24,6 +24,7 @@ import (
 	"github.com/go-logr/logr"
 	configv1 "github.com/openshift/api/config/v1"
 	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
+	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -51,8 +52,9 @@ var (
 	errPlatformNotSupported = errors.New("error determining InfraMachine type, platform not supported")
 )
 
-// MachineSyncReconciler reconciles CAPI and MAPI machines.
-type MachineSyncReconciler struct {
+// MachineSyncController reconciles CAPI and MAPI machines.
+type MachineSyncController struct {
+	operatorstatus.ClusterOperatorStatusClient
 	client.Client
 	Scheme   *runtime.Scheme
 	Recorder record.EventRecorder
@@ -64,7 +66,7 @@ type MachineSyncReconciler struct {
 }
 
 // SetupWithManager sets the CoreClusterReconciler controller up with the given manager.
-func (r *MachineSyncReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *MachineSyncController) SetupWithManager(mgr ctrl.Manager) error {
 	infraMachine, err := getInfraMachineFromProvider(r.Platform)
 	if err != nil {
 		return fmt.Errorf("failed to get InfraMachine from Provider: %w", err)
@@ -108,7 +110,7 @@ func (r *MachineSyncReconciler) SetupWithManager(mgr ctrl.Manager) error {
 // Reconcile reconciles CAPI and MAPI machines for their respective namespaces.
 //
 //nolint:funlen
-func (r *MachineSyncReconciler) Reconcile(ctx context.Context, req reconcile.Request) (ctrl.Result, error) {
+func (r *MachineSyncController) Reconcile(ctx context.Context, req reconcile.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx, "namespace", req.Namespace, "name", req.Name)
 
 	logger.V(1).Info("Reconciling machine")
@@ -150,18 +152,49 @@ func (r *MachineSyncReconciler) Reconcile(ctx context.Context, req reconcile.Req
 
 	if mapiMachineNotFound && capiMachineNotFound {
 		logger.Info("CAPI and MAPI machines not found, nothing to do")
+
+		if err := r.setControllerConditionsToNormal(ctx, logger); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to set conditions for machine set sync controller: %w", err)
+		}
+
 		return ctrl.Result{}, nil
 	}
 
 	// We mirror if the CAPI machine is owned by a MachineSet which has a MAPI
 	// counterpart. This is because we want to be able to migrate in both directions.
+	//nolint:nestif
 	if mapiMachineNotFound {
 		if shouldReconcile, err := r.shouldMirrorCAPIMachineToMAPIMachine(ctx, logger, capiMachine); err != nil {
 			return ctrl.Result{}, err
 		} else if shouldReconcile {
-			return r.reconcileCAPIMachinetoMAPIMachine(ctx, capiMachine, mapiMachine)
+			result, err := r.reconcileCAPIMachinetoMAPIMachine(ctx, capiMachine, mapiMachine)
+			if err != nil {
+				return ctrl.Result{}, fmt.Errorf("failed to reconcile CAPI machine to MAPI machine: %w", err)
+			}
+
+			if err := r.setControllerConditionsToNormal(ctx, logger); err != nil {
+				return ctrl.Result{}, fmt.Errorf("failed to set conditions for machine set sync controller: %w", err)
+			}
+
+			return result, nil
 		}
 	}
+
+	result, err := r.syncMachines(ctx, mapiMachine, capiMachine)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to sync machines: %w", err)
+	}
+
+	if err := r.setControllerConditionsToNormal(ctx, logger); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to set conditions for machine set sync controller: %w", err)
+	}
+
+	return result, nil
+}
+
+// syncMachineSets synchronizes Machines based on the authoritative API.
+func (r *MachineSyncController) syncMachines(ctx context.Context, mapiMachine *machinev1beta1.Machine, capiMachine *capiv1beta1.Machine) (ctrl.Result, error) {
+	logger := log.FromContext(ctx)
 
 	switch mapiMachine.Status.AuthoritativeAPI {
 	case machinev1beta1.MachineAuthorityMachineAPI:
@@ -178,12 +211,12 @@ func (r *MachineSyncReconciler) Reconcile(ctx context.Context, req reconcile.Req
 }
 
 // reconcileCAPIMachinetoMAPIMachine reconciles a CAPI Machine to a MAPI Machine.
-func (r *MachineSyncReconciler) reconcileCAPIMachinetoMAPIMachine(ctx context.Context, capiMachine *capiv1beta1.Machine, mapiMachine *machinev1beta1.Machine) (ctrl.Result, error) {
+func (r *MachineSyncController) reconcileCAPIMachinetoMAPIMachine(ctx context.Context, capiMachine *capiv1beta1.Machine, mapiMachine *machinev1beta1.Machine) (ctrl.Result, error) {
 	return ctrl.Result{}, nil
 }
 
 // reconcileMAPIMachinetoCAPIMachine a MAPI Machine to a CAPI Machine.
-func (r *MachineSyncReconciler) reconcileMAPIMachinetoCAPIMachine(ctx context.Context, mapiMachine *machinev1beta1.Machine, capiMachine *capiv1beta1.Machine) (ctrl.Result, error) {
+func (r *MachineSyncController) reconcileMAPIMachinetoCAPIMachine(ctx context.Context, mapiMachine *machinev1beta1.Machine, capiMachine *capiv1beta1.Machine) (ctrl.Result, error) {
 	return ctrl.Result{}, nil
 }
 
@@ -207,7 +240,7 @@ func getInfraMachineFromProvider(platform configv1.PlatformType) (client.Object,
 //
 // 1. The CAPI Machine is owned by a CAPI MachineSet,
 // 2. That owning CAPI MachineSet has a MAPI MachineSet Mirror.
-func (r *MachineSyncReconciler) shouldMirrorCAPIMachineToMAPIMachine(ctx context.Context, logger logr.Logger, machine *capiv1beta1.Machine) (bool, error) {
+func (r *MachineSyncController) shouldMirrorCAPIMachineToMAPIMachine(ctx context.Context, logger logr.Logger, machine *capiv1beta1.Machine) (bool, error) {
 	logger.WithName("shouldMirrorCAPIMachineToMAPIMachine").
 		Info("checking if CAPI machine should be mirrored", "machine", machine.GetName())
 
@@ -243,4 +276,52 @@ func (r *MachineSyncReconciler) shouldMirrorCAPIMachineToMAPIMachine(ctx context
 	logger.Info("CAPI machine is not owned by a machineset, nothing to do", "machine", machine.GetName())
 
 	return false, nil
+}
+
+// setControllerConditionsToNormal sets the MachineSyncController conditions to the normal state.
+func (r *MachineSyncController) setControllerConditionsToNormal(ctx context.Context, log logr.Logger) error {
+	co, err := r.GetOrCreateClusterOperator(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get cluster operator: %w", err)
+	}
+
+	conds := []configv1.ClusterOperatorStatusCondition{
+		operatorstatus.NewClusterOperatorStatusCondition(operatorstatus.MachineSyncControllerAvailableCondition, configv1.ConditionTrue, operatorstatus.ReasonAsExpected,
+			"Machine Sync Controller works as expected"),
+		operatorstatus.NewClusterOperatorStatusCondition(operatorstatus.MachineSyncControllerDegradedCondition, configv1.ConditionFalse, operatorstatus.ReasonAsExpected,
+			"Machine Sync Controller works as expected"),
+	}
+
+	log.V(2).Info("Machine Sync Controller is Available")
+
+	if err := r.SyncStatus(ctx, co, conds); err != nil {
+		return fmt.Errorf("failed to sync cluster operator status: %w", err)
+	}
+
+	return nil
+}
+
+// setControllerConditionDegraded sets the MachineSyncController conditions to a degraded state.
+//
+//nolint:unused
+func (r *MachineSyncController) setControllerConditionDegraded(ctx context.Context, log logr.Logger, reconcileErr error) error {
+	co, err := r.GetOrCreateClusterOperator(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get cluster operator: %w", err)
+	}
+
+	conds := []configv1.ClusterOperatorStatusCondition{
+		operatorstatus.NewClusterOperatorStatusCondition(operatorstatus.MachineSyncControllerAvailableCondition, configv1.ConditionTrue, operatorstatus.ReasonAsExpected,
+			"Machine Sync Controller works as expected"),
+		operatorstatus.NewClusterOperatorStatusCondition(operatorstatus.MachineSyncControllerDegradedCondition, configv1.ConditionTrue, operatorstatus.ReasonAsExpected,
+			fmt.Sprintf("Machine Sync Controller is degraded: %s", reconcileErr.Error())),
+	}
+
+	log.Info("Machine Sync Controller is Degraded", reconcileErr.Error())
+
+	if err := r.SyncStatus(ctx, co, conds); err != nil {
+		return fmt.Errorf("failed to sync cluster operator status: %w", err)
+	}
+
+	return nil
 }

@@ -113,6 +113,21 @@ var _ = Describe("InfraCluster", func() {
 				HaveField("Annotations", HaveKeyWithValue(clusterv1.ManagedByAnnotation, managedByAnnotationValueClusterCAPIOperatorInfraClusterController)),
 			))
 		})
+
+		It("should update the ClusterOperator status conditions with controller specific ones to reflect a normal state", func() {
+			Eventually(komega.Object(configv1resourcebuilder.ClusterOperator().WithName(clusterOperatorName).Build())).Should(
+				HaveField("Status.Conditions", SatisfyAll(
+					ContainElement(And(
+						HaveField("Type", BeEquivalentTo(operatorstatus.InfraClusterControllerAvailableCondition)),
+						HaveField("Status", BeEquivalentTo(configv1.ConditionTrue)),
+					)),
+					ContainElement(And(
+						HaveField("Type", BeEquivalentTo(operatorstatus.InfraClusterControllerDegradedCondition)),
+						HaveField("Status", BeEquivalentTo(configv1.ConditionFalse)),
+					)),
+				)),
+			)
+		})
 	})
 
 	Context("When there is an InfraCluster with no externally ManagedBy Annotation", func() {
@@ -140,6 +155,21 @@ var _ = Describe("InfraCluster", func() {
 					HaveField("Status.Ready", BeFalse()),
 				)
 			})
+		})
+
+		It("should update the ClusterOperator status conditions with controller specific ones to reflect a normal state", func() {
+			Eventually(komega.Object(configv1resourcebuilder.ClusterOperator().WithName(clusterOperatorName).Build())).Should(
+				HaveField("Status.Conditions", SatisfyAll(
+					ContainElement(And(
+						HaveField("Type", BeEquivalentTo(operatorstatus.InfraClusterControllerAvailableCondition)),
+						HaveField("Status", BeEquivalentTo(configv1.ConditionTrue)),
+					)),
+					ContainElement(And(
+						HaveField("Type", BeEquivalentTo(operatorstatus.InfraClusterControllerDegradedCondition)),
+						HaveField("Status", BeEquivalentTo(configv1.ConditionFalse)),
+					)),
+				)),
+			)
 		})
 	})
 
@@ -170,6 +200,20 @@ var _ = Describe("InfraCluster", func() {
 				))
 			})
 		})
+		It("should update the ClusterOperator status conditions with controller specific ones to reflect a normal state", func() {
+			Eventually(komega.Object(configv1resourcebuilder.ClusterOperator().WithName(clusterOperatorName).Build())).Should(
+				HaveField("Status.Conditions", SatisfyAll(
+					ContainElement(And(
+						HaveField("Type", BeEquivalentTo(operatorstatus.InfraClusterControllerAvailableCondition)),
+						HaveField("Status", BeEquivalentTo(configv1.ConditionTrue)),
+					)),
+					ContainElement(And(
+						HaveField("Type", BeEquivalentTo(operatorstatus.InfraClusterControllerDegradedCondition)),
+						HaveField("Status", BeEquivalentTo(configv1.ConditionFalse)),
+					)),
+				)),
+			)
+		})
 	})
 
 	Context("When there is an InfraCluster with an externally ManagedBy Annotation with cluster-capi-operator value", func() {
@@ -198,6 +242,20 @@ var _ = Describe("InfraCluster", func() {
 					HaveField("Annotations", HaveKeyWithValue(clusterv1.ManagedByAnnotation, managedByAnnotationValueClusterCAPIOperatorInfraClusterController)),
 				))
 			})
+		})
+		It("should update the ClusterOperator status conditions with controller specific ones to reflect a normal state", func() {
+			Eventually(komega.Object(configv1resourcebuilder.ClusterOperator().WithName(clusterOperatorName).Build())).Should(
+				HaveField("Status.Conditions", SatisfyAll(
+					ContainElement(And(
+						HaveField("Type", BeEquivalentTo(operatorstatus.InfraClusterControllerAvailableCondition)),
+						HaveField("Status", BeEquivalentTo(configv1.ConditionTrue)),
+					)),
+					ContainElement(And(
+						HaveField("Type", BeEquivalentTo(operatorstatus.InfraClusterControllerDegradedCondition)),
+						HaveField("Status", BeEquivalentTo(configv1.ConditionFalse)),
+					)),
+				)),
+			)
 		})
 	})
 })

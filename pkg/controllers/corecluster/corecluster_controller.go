@@ -55,8 +55,8 @@ var (
 	errOpenshiftInfrastructureNameShouldNotBeEmpty = errors.New("infrastructure object's infrastructureName should not be empty")
 )
 
-// CoreClusterReconciler reconciles a Cluster object.
-type CoreClusterReconciler struct {
+// CoreClusterController reconciles a Cluster object.
+type CoreClusterController struct {
 	operatorstatus.ClusterOperatorStatusClient
 	Cluster  *clusterv1.Cluster
 	Infra    *configv1.Infrastructure
@@ -64,7 +64,7 @@ type CoreClusterReconciler struct {
 }
 
 // SetupWithManager sets the CoreClusterReconciler controller up with the given manager.
-func (r *CoreClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *CoreClusterController) SetupWithManager(mgr ctrl.Manager) error {
 	if err := ctrl.NewControllerManagedBy(mgr).
 		Named(controllerName).
 		For(&configv1.ClusterOperator{}, builder.WithPredicates(clusterOperatorPredicates())).
@@ -81,13 +81,17 @@ func (r *CoreClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 // Reconcile reconciles the core cluster object for the openshift-cluster-api namespace.
-func (r *CoreClusterReconciler) Reconcile(ctx context.Context, req reconcile.Request) (ctrl.Result, error) {
+func (r *CoreClusterController) Reconcile(ctx context.Context, req reconcile.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx).WithName(controllerName)
 	logger.Info("Reconciling core cluster")
 	defer logger.Info("Finished reconciling core cluster")
 
 	ocpInfrastructureName, err := getOCPInfrastructureName(r.Infra)
 	if err != nil {
+		if err := r.setControllerConditionDegraded(ctx, logger, err); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to set conditions for Core Cluster Controller: %w", err)
+		}
+
 		return ctrl.Result{}, fmt.Errorf("failed to obtain infrastructure name: %w", err)
 	}
 
@@ -97,8 +101,8 @@ func (r *CoreClusterReconciler) Reconcile(ctx context.Context, req reconcile.Req
 	}
 
 	if !cluster.DeletionTimestamp.IsZero() {
-		if err := r.SetStatusAvailable(ctx, ""); err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to set status available: %w", err)
+		if err := r.setControllerConditionsToNormal(ctx, logger); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to set conditions for Core Cluster Controller: %w", err)
 		}
 
 		return ctrl.Result{}, nil
@@ -108,15 +112,15 @@ func (r *CoreClusterReconciler) Reconcile(ctx context.Context, req reconcile.Req
 		return ctrl.Result{}, fmt.Errorf("failed to ensure core cluster has the ControlPlaneInitializedCondition: %w", err)
 	}
 
-	if err := r.SetStatusAvailable(ctx, ""); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to set status available: %w", err)
+	if err := r.setControllerConditionsToNormal(ctx, logger); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to set conditions for Core Cluster Controller: %w", err)
 	}
 
 	return ctrl.Result{}, nil
 }
 
 // ensureCoreCluster creates a cluster with the given name and returns the cluster object.
-func (r *CoreClusterReconciler) ensureCoreCluster(ctx context.Context, clusterObjectKey client.ObjectKey, logger logr.Logger) (*clusterv1.Cluster, error) {
+func (r *CoreClusterController) ensureCoreCluster(ctx context.Context, clusterObjectKey client.ObjectKey, logger logr.Logger) (*clusterv1.Cluster, error) {
 	cluster := &clusterv1.Cluster{}
 	if err := r.Client.Get(ctx, clusterObjectKey, cluster); err != nil && !kerrors.IsNotFound(err) {
 		return nil, fmt.Errorf("failed to get core cluster %s/%s: %w", clusterObjectKey.Namespace, clusterObjectKey.Name, err)
@@ -158,7 +162,7 @@ func (r *CoreClusterReconciler) ensureCoreCluster(ctx context.Context, clusterOb
 }
 
 // generateCoreClusterObject generates a new core cluster object to be created.
-func (r *CoreClusterReconciler) generateCoreClusterObject(_ context.Context, clusterObjectKey client.ObjectKey, infraClusterAPIVersion, infraClusterKind string) (*clusterv1.Cluster, error) {
+func (r *CoreClusterController) generateCoreClusterObject(_ context.Context, clusterObjectKey client.ObjectKey, infraClusterAPIVersion, infraClusterKind string) (*clusterv1.Cluster, error) {
 	apiURL, err := url.Parse(r.Infra.Status.APIServerInternalURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse apiURL: %w", err)
@@ -190,7 +194,7 @@ func (r *CoreClusterReconciler) generateCoreClusterObject(_ context.Context, clu
 }
 
 // ensureCoreClusterControlPlaneInitializedCondition makes sure the ControlPlaneInitializedCondition condition on the cluster.
-func (r *CoreClusterReconciler) ensureCoreClusterControlPlaneInitializedCondition(ctx context.Context, cluster *clusterv1.Cluster) error {
+func (r *CoreClusterController) ensureCoreClusterControlPlaneInitializedCondition(ctx context.Context, cluster *clusterv1.Cluster) error {
 	if conditions.Get(cluster, clusterv1.ControlPlaneInitializedCondition) != nil {
 		return nil
 	}
@@ -210,6 +214,52 @@ func (r *CoreClusterReconciler) ensureCoreClusterControlPlaneInitializedConditio
 		if err := r.Status().Patch(ctx, cluster, patch); err != nil {
 			return fmt.Errorf("unable to update core cluster status: %w", err)
 		}
+	}
+
+	return nil
+}
+
+// setControllerConditionsToNormal sets the CoreClusterController conditions to the normal state.
+func (r *CoreClusterController) setControllerConditionsToNormal(ctx context.Context, log logr.Logger) error {
+	co, err := r.GetOrCreateClusterOperator(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get cluster operator: %w", err)
+	}
+
+	conds := []configv1.ClusterOperatorStatusCondition{
+		operatorstatus.NewClusterOperatorStatusCondition(operatorstatus.CoreClusterControllerAvailableCondition, configv1.ConditionTrue, operatorstatus.ReasonAsExpected,
+			"Core Cluster Controller works as expected"),
+		operatorstatus.NewClusterOperatorStatusCondition(operatorstatus.CoreClusterControllerDegradedCondition, configv1.ConditionFalse, operatorstatus.ReasonAsExpected,
+			"Core Cluster Controller works as expected"),
+	}
+
+	log.V(2).Info("Core Cluster Controller is Available")
+
+	if err := r.SyncStatus(ctx, co, conds); err != nil {
+		return fmt.Errorf("failed to sync cluster operator status: %w", err)
+	}
+
+	return nil
+}
+
+// setControllerConditionDegraded sets the CoreClusterController conditions to a degraded state.
+func (r *CoreClusterController) setControllerConditionDegraded(ctx context.Context, log logr.Logger, reconcileErr error) error {
+	co, err := r.GetOrCreateClusterOperator(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get cluster operator: %w", err)
+	}
+
+	conds := []configv1.ClusterOperatorStatusCondition{
+		operatorstatus.NewClusterOperatorStatusCondition(operatorstatus.CoreClusterControllerAvailableCondition, configv1.ConditionTrue, operatorstatus.ReasonAsExpected,
+			"Core Cluster Controller works as expected"),
+		operatorstatus.NewClusterOperatorStatusCondition(operatorstatus.CoreClusterControllerDegradedCondition, configv1.ConditionTrue, operatorstatus.ReasonAsExpected,
+			fmt.Sprintf("Core Cluster Controller is degraded: %s", reconcileErr.Error())),
+	}
+
+	log.Info("Core Cluster Controller is Degraded", reconcileErr.Error())
+
+	if err := r.SyncStatus(ctx, co, conds); err != nil {
+		return fmt.Errorf("failed to sync cluster operator status: %w", err)
 	}
 
 	return nil

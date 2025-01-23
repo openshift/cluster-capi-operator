@@ -62,6 +62,7 @@ func StartEnvTest(testEnv *envtest.Environment) (*rest.Config, client.Client, er
 		fakeMachineCRD,
 		fakeMachineSetCRD,
 		fakeAWSClusterCRD,
+		fakeAWSMachineCRD,
 		fakeAWSMachineTemplateCRD,
 		fakeAzureClusterCRD,
 		fakeGCPClusterCRD,

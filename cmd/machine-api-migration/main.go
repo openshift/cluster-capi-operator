@@ -26,8 +26,10 @@ import (
 	configv1client "github.com/openshift/client-go/config/clientset/versioned"
 	configinformers "github.com/openshift/client-go/config/informers/externalversions"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/clusteroperator"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/machinesetsync"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/machinesync"
+	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 	capav1beta2 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
@@ -47,6 +49,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
 
 var (
@@ -216,29 +219,34 @@ func main() {
 		os.Exit(1)
 	}
 
-	machineSyncReconciler := machinesync.MachineSyncReconciler{
-		Infra:    infra,
-		Platform: provider,
-
-		MAPINamespace: *mapiManagedNamespace,
-		CAPINamespace: *capiManagedNamespace,
-	}
-
-	if err := machineSyncReconciler.SetupWithManager(mgr); err != nil {
-		klog.Error(err, "failed to set up machine sync reconciler with manager")
+	// ClusterOperator watches and keeps the cluster-api ClusterObject up to date.
+	if err := (&clusteroperator.ClusterOperatorController{
+		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-clusteroperator-controller", *capiManagedNamespace),
+		Scheme:                      mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		klog.Error(err, "unable to create clusteroperator controller", "controller", "ClusterOperator")
 		os.Exit(1)
 	}
 
-	machineSetSyncReconciler := machinesetsync.MachineSetSyncReconciler{
+	if err := (&machinesync.MachineSyncController{
+		Infra:    infra,
+		Platform: provider,
+
+		MAPINamespace: *mapiManagedNamespace,
+		CAPINamespace: *capiManagedNamespace,
+	}).SetupWithManager(mgr); err != nil {
+		klog.Error(err, "unable to create machine sync controller", "controller", "MachineSync")
+		os.Exit(1)
+	}
+
+	if err := (&machinesetsync.MachineSetSyncController{
 		Platform: provider,
 		Infra:    infra,
 
 		MAPINamespace: *mapiManagedNamespace,
 		CAPINamespace: *capiManagedNamespace,
-	}
-
-	if err := machineSetSyncReconciler.SetupWithManager(mgr); err != nil {
-		klog.Error(err, "failed to set up machineset sync reconciler with manager")
+	}).SetupWithManager(mgr); err != nil {
+		klog.Error(err, "unable to create machine set sync controller", "controller", "MachineSetSync")
 		os.Exit(1)
 	}
 
@@ -291,4 +299,13 @@ func getProviderFromInfrastructure(infra *configv1.Infrastructure) (configv1.Pla
 	}
 
 	return "", errPlatformNotFound
+}
+
+func getClusterOperatorStatusClient(mgr manager.Manager, controller string, managedNamespace string) operatorstatus.ClusterOperatorStatusClient {
+	return operatorstatus.ClusterOperatorStatusClient{
+		Client:           mgr.GetClient(),
+		Recorder:         mgr.GetEventRecorderFor(controller),
+		ReleaseVersion:   util.GetReleaseVersion(),
+		ManagedNamespace: managedNamespace,
+	}
 }
