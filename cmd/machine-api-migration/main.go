@@ -228,28 +228,25 @@ func main() {
 		os.Exit(1)
 	}
 
+	if err := (&machinesync.MachineSyncController{
 		Infra:    infra,
 		Platform: provider,
 
 		MAPINamespace: *mapiManagedNamespace,
 		CAPINamespace: *capiManagedNamespace,
-	}
-
-	if err := machineSyncReconciler.SetupWithManager(mgr); err != nil {
-		klog.Error(err, "failed to set up machine sync reconciler with manager")
+	}).SetupWithManager(mgr); err != nil {
+		klog.Error(err, "unable to create machine sync controller", "controller", "MachineSync")
 		os.Exit(1)
 	}
 
-	machineSetSyncReconciler := machinesetsync.MachineSetSyncReconciler{
+	if err := (&machinesetsync.MachineSetSyncController{
 		Platform: provider,
 		Infra:    infra,
 
 		MAPINamespace: *mapiManagedNamespace,
 		CAPINamespace: *capiManagedNamespace,
-	}
-
-	if err := machineSetSyncReconciler.SetupWithManager(mgr); err != nil {
-		klog.Error(err, "failed to set up machineset sync reconciler with manager")
+	}).SetupWithManager(mgr); err != nil {
+		klog.Error(err, "unable to create machine set sync controller", "controller", "MachineSetSync")
 		os.Exit(1)
 	}
 

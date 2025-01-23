@@ -55,8 +55,8 @@ func makeUserDataSecret() *corev1.Secret {
 	}, Data: map[string][]byte{mapiUserDataKey: []byte(defaultSecretValue)}}
 }
 
-var _ = Describe("areSecretsEqual reconciler method", func() {
-	reconciler := &UserDataSecretController{}
+var _ = Describe("Secret Sync controller: areSecretsEqual reconciler method", func() {
+	reconciler := &SecretSyncController{}
 
 	var sourceUserDataSecret *corev1.Secret
 	var targetUserDataSecret *corev1.Secret
@@ -80,7 +80,7 @@ var _ = Describe("areSecretsEqual reconciler method", func() {
 	})
 })
 
-var _ = Describe("User Data Secret controller", func() {
+var _ = Describe("Secret Sync controller", func() {
 	var rec *record.FakeRecorder
 
 	var mgrCtxCancel context.CancelFunc
@@ -89,7 +89,7 @@ var _ = Describe("User Data Secret controller", func() {
 
 	var sourceSecret *corev1.Secret
 
-	var reconciler *UserDataSecretController
+	var reconciler *SecretSyncController
 
 	syncedSecretKey := client.ObjectKey{Namespace: controllers.DefaultManagedNamespace, Name: managedUserDataSecretName}
 
@@ -103,7 +103,7 @@ var _ = Describe("User Data Secret controller", func() {
 		})
 		Expect(err).ToNot(HaveOccurred(), "Manager should be able to be created")
 
-		reconciler = &UserDataSecretController{
+		reconciler = &SecretSyncController{
 			ClusterOperatorStatusClient: operatorstatus.ClusterOperatorStatusClient{
 				Client:           cl,
 				Recorder:         rec,

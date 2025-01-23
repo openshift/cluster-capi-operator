@@ -34,13 +34,13 @@ import (
 
 var _ = Describe("Reconcile kubeconfig secret", func() {
 	Context("create or update kubeconfig secret", func() {
-		var r *KubeconfigReconciler
+		var r *KubeconfigController
 		var tokenSecret *corev1.Secret
 		kubeconfigSecret := &corev1.Secret{}
-		log := ctrl.LoggerFrom(ctx).WithName("KubeconfigController")
+		log := ctrl.LoggerFrom(ctx).WithName(controllerName)
 
 		BeforeEach(func() {
-			r = &KubeconfigReconciler{
+			r = &KubeconfigController{
 				ClusterOperatorStatusClient: operatorstatus.ClusterOperatorStatusClient{
 					Client: cl,
 				},

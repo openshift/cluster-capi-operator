@@ -36,11 +36,11 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/test"
 )
 
-var _ = Describe("MachineSync Reconciler", func() {
+var _ = Describe("MachineSync Controller", func() {
 	var mgrCancel context.CancelFunc
 	var mgrDone chan struct{}
 	var mgr manager.Manager
-	var reconciler *MachineSyncReconciler
+	var reconciler *MachineSyncController
 
 	var namespace *corev1.Namespace
 	var namespaceName string
@@ -90,7 +90,7 @@ var _ = Describe("MachineSync Reconciler", func() {
 		})
 		Expect(err).ToNot(HaveOccurred(), "Manager should be able to be created")
 
-		reconciler = &MachineSyncReconciler{
+		reconciler = &MachineSyncController{
 			Client:   mgr.GetClient(),
 			Platform: configv1.AWSPlatformType,
 		}

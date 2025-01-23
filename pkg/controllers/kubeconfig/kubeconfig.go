@@ -41,12 +41,18 @@ import (
 )
 
 const (
+	// KubeconfigControllerAvailableCondition is the condition type that indicates the Kubeconfig controller is available.
+	KubeconfigControllerAvailableCondition = "KubeconfigControllerAvailable"
+
+	// KubeconfigControllerDegradedCondition is the condition type that indicates the Kubeconfig controller is degraded.
+	KubeconfigControllerDegradedCondition = "KubeconfigControllerDegraded"
+
 	controllerName  = "KubeconfigController"
 	tokenSecretName = "cluster-capi-operator-secret" //nolint
 )
 
-// KubeconfigReconciler reconciles a ClusterOperator object.
-type KubeconfigReconciler struct {
+// KubeconfigController reconciles a ClusterOperator object.
+type KubeconfigController struct {
 	operatorstatus.ClusterOperatorStatusClient
 	Scheme      *runtime.Scheme
 	RestCfg     *rest.Config
@@ -54,7 +60,7 @@ type KubeconfigReconciler struct {
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *KubeconfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *KubeconfigController) SetupWithManager(mgr ctrl.Manager) error {
 	if err := ctrl.NewControllerManagedBy(mgr).
 		Named(controllerName).
 		For(
@@ -74,7 +80,7 @@ func (r *KubeconfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 // Reconcile reconciles the kubeconfig secret.
-func (r *KubeconfigReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (ctrl.Result, error) {
+func (r *KubeconfigController) Reconcile(ctx context.Context, _ ctrl.Request) (ctrl.Result, error) {
 	log := ctrl.LoggerFrom(ctx).WithName(controllerName)
 
 	infra := &configv1.Infrastructure{}
@@ -120,8 +126,8 @@ func (r *KubeconfigReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (c
 	return res, nil
 }
 
-func (r *KubeconfigReconciler) reconcileKubeconfig(ctx context.Context, log logr.Logger) (ctrl.Result, error) {
-	// Get the token secret
+func (r *KubeconfigController) reconcileKubeconfig(ctx context.Context, log logr.Logger) (ctrl.Result, error) {
+	// Get the token secret.
 	tokenSecret := &corev1.Secret{}
 	tokenSecretKey := client.ObjectKey{
 		Name:      tokenSecretName,
@@ -149,7 +155,7 @@ func (r *KubeconfigReconciler) reconcileKubeconfig(ctx context.Context, log logr
 		return ctrl.Result{RequeueAfter: 1 * time.Minute}, nil
 	}
 
-	// Generate kubeconfig
+	// Generate kubeconfig.
 	kubeconfig, err := generateKubeconfig(kubeconfigOptions{
 		token:            tokenSecret.Data["token"],
 		caCert:           tokenSecret.Data["ca.crt"],
@@ -161,7 +167,7 @@ func (r *KubeconfigReconciler) reconcileKubeconfig(ctx context.Context, log logr
 		return ctrl.Result{}, fmt.Errorf("error generating kubeconfig: %w", err)
 	}
 
-	// Create a secret with generated kubeconfig
+	// Create a secret with generated kubeconfig.
 	out, err := clientcmd.Write(*kubeconfig)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("error writing kubeconfig: %w", err)

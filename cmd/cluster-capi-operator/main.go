@@ -298,24 +298,24 @@ func setupReconcilers(mgr manager.Manager, infra *configv1.Infrastructure, platf
 		Platform:                    platform,
 		Infra:                       infra,
 	}).SetupWithManager(mgr); err != nil {
-		klog.Error(err, "unable to create controller", "controller", "CoreCluster")
+		klog.Error(err, "unable to create core cluster controller", "controller", "CoreCluster")
 		os.Exit(1)
 	}
 
-	if err := (&secretsync.UserDataSecretController{
-		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-user-data-secret-controller", managedNamespace),
+	if err := (&secretsync.SecretSyncController{
+		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-secret-sync-controller", managedNamespace),
 		Scheme:                      mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
-		klog.Error(err, "unable to create user-data-secret controller", "controller", "UserDataSecret")
+		klog.Error(err, "unable to create secret sync controller", "controller", "SecretSync")
 		os.Exit(1)
 	}
 
-	if err := (&kubeconfig.KubeconfigReconciler{
+	if err := (&kubeconfig.KubeconfigController{
 		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-kubeconfig-controller", managedNamespace),
 		Scheme:                      mgr.GetScheme(),
 		RestCfg:                     mgr.GetConfig(),
 	}).SetupWithManager(mgr); err != nil {
-		klog.Error(err, "unable to create controller", "controller", "Kubeconfig")
+		klog.Error(err, "unable to create kubeconfig controller", "controller", "Kubeconfig")
 		os.Exit(1)
 	}
 

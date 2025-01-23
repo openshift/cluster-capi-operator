@@ -49,7 +49,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 	var mgrDone chan struct{}
 	var mgr manager.Manager
 	var k komega.Komega
-	var reconciler *MachineSetSyncReconciler
+	var reconciler *MachineSetSyncController
 
 	var syncControllerNamespace *corev1.Namespace
 	var capiNamespace *corev1.Namespace
@@ -145,7 +145,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 		})
 		Expect(err).ToNot(HaveOccurred(), "Manager should be able to be created")
 
-		reconciler = &MachineSetSyncReconciler{
+		reconciler = &MachineSetSyncController{
 			Client: mgr.GetClient(),
 			Infra: configv1resourcebuilder.Infrastructure().
 				AsAWS("cluster", "us-east-1").WithInfrastructureName(infrastructureName).Build(),
