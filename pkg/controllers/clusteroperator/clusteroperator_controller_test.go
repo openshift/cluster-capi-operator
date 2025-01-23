@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package unsupported
+package clusteroperator
 
 import (
 	"context"
@@ -35,15 +35,15 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 )
 
-var _ = Describe("CAPI unsupported controller", func() {
+var _ = Describe("ClusterOperator controller", func() {
 	ctx := context.Background()
 	desiredOperatorReleaseVersion := "this-is-the-desired-release-version"
-	var r *UnsupportedController
+	var r *ClusterOperatorController
 	var capiClusterOperator *configv1.ClusterOperator
 	var testNamespaceName string
 
 	BeforeEach(func() {
-		r = &UnsupportedController{
+		r = &ClusterOperatorController{
 			ClusterOperatorStatusClient: operatorstatus.ClusterOperatorStatusClient{
 				Client:         cl,
 				ReleaseVersion: desiredOperatorReleaseVersion,
