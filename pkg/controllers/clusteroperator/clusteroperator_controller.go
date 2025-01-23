@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package unsupported
+package clusteroperator
 
 import (
 	"context"
@@ -32,29 +32,38 @@ import (
 
 const (
 	capiUnsupportedPlatformMsg = "Cluster API is not yet implemented on this platform"
-	controllerName             = "UnsupportedController"
+	controllerName             = "ClusterOperatorController"
 )
 
-// UnsupportedController on unsupported platforms watches and keeps the cluster-api ClusterObject up to date.
-type UnsupportedController struct {
+// ClusterOperatorController watches and keeps the cluster-api ClusterObject up to date.
+type ClusterOperatorController struct {
 	operatorstatus.ClusterOperatorStatusClient
-	Scheme *runtime.Scheme
+	Scheme                *runtime.Scheme
+	IsUnsupportedPlatform bool
 }
 
 // Reconcile reconciles the cluster-api ClusterOperator object.
-func (r *UnsupportedController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *ClusterOperatorController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := ctrl.LoggerFrom(ctx).WithName(controllerName)
 	log.Info(fmt.Sprintf("Reconciling %q ClusterObject", controllers.ClusterOperatorName))
 
-	if err := r.ClusterOperatorStatusClient.SetStatusAvailable(ctx, capiUnsupportedPlatformMsg); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to set conditions for %q ClusterObject: %w", controllers.ClusterOperatorName, err)
+	if r.IsUnsupportedPlatform {
+		if err := r.ClusterOperatorStatusClient.SetStatusAvailable(ctx, capiUnsupportedPlatformMsg); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to set conditions for %q ClusterObject: %w", controllers.ClusterOperatorName, err)
+		}
+	} else {
+		// TODO: wrap this into status aggregation logic to get these conditions conform,
+		// to the meaningful aggregation of all the other controllers ones.
+		if err := r.ClusterOperatorStatusClient.SetStatusAvailable(ctx, ""); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to set conditions for %q ClusterObject: %w", controllers.ClusterOperatorName, err)
+		}
 	}
 
 	return ctrl.Result{}, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *UnsupportedController) SetupWithManager(mgr ctrl.Manager) error {
+func (r *ClusterOperatorController) SetupWithManager(mgr ctrl.Manager) error {
 	if err := ctrl.NewControllerManagedBy(mgr).
 		Named(controllerName).
 		For(&configv1.ClusterOperator{}, builder.WithPredicates(clusterOperatorPredicates())).

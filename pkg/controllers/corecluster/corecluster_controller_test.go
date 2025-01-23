@@ -61,7 +61,7 @@ var _ = Describe("Reconcile Core cluster", func() {
 		})
 		Expect(err).ToNot(HaveOccurred(), "Manager should be able to be created")
 
-		r := &CoreClusterReconciler{
+		r := &CoreClusterController{
 			ClusterOperatorStatusClient: operatorstatus.ClusterOperatorStatusClient{
 				Client:           cl,
 				ManagedNamespace: testNamespaceName,
