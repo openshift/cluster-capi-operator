@@ -109,6 +109,11 @@ func main() {
 		controllers.DefaultManagedNamespace,
 		"The namespace where CAPI components will run.",
 	)
+	sourceNamespace := flag.String(
+		"source-namespace",
+		controllers.DefaultMAPIManagedNamespace,
+		"The namespace where MAPI components will run.",
+	)
 	imagesFile := flag.String(
 		"images-json",
 		defaultImagesLocation,
@@ -161,9 +166,9 @@ func main() {
 
 	cacheOpts := cache.Options{
 		DefaultNamespaces: map[string]cache.Config{
-			*managedNamespace:                {},
-			secretsync.SecretSourceNamespace: {},
-			"kube-system":                    {}, // For fetching cloud credentials.
+			*managedNamespace: {},
+			*sourceNamespace:  {},
+			"kube-system":     {}, // For fetching cloud credentials.
 		},
 		SyncPeriod: &syncPeriod,
 	}
@@ -221,7 +226,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	setupPlatformReconcilers(mgr, infra, platform, containerImages, applyClient, apiextensionsClient, *managedNamespace)
+	setupPlatformReconcilers(mgr, infra, platform, containerImages, applyClient, apiextensionsClient, *managedNamespace, *sourceNamespace)
 
 	// +kubebuilder:scaffold:builder
 
@@ -252,15 +257,15 @@ func getClusterOperatorStatusClient(mgr manager.Manager, controller string, mana
 	}
 }
 
-func setupPlatformReconcilers(mgr manager.Manager, infra *configv1.Infrastructure, platform configv1.PlatformType, containerImages map[string]string, applyClient *kubernetes.Clientset, apiextensionsClient *apiextensionsclient.Clientset, managedNamespace string) {
+func setupPlatformReconcilers(mgr manager.Manager, infra *configv1.Infrastructure, platform configv1.PlatformType, containerImages map[string]string, applyClient *kubernetes.Clientset, apiextensionsClient *apiextensionsclient.Clientset, managedNamespace, sourceNamespace string) {
 	// Only setup reconcile controllers and webhooks when the platform is supported.
 	// This avoids unnecessary CAPI providers discovery, installs and reconciles when the platform is not supported.
 	switch platform {
 	case configv1.AWSPlatformType:
-		setupReconcilers(mgr, infra, platform, &awsv1.AWSCluster{}, containerImages, applyClient, apiextensionsClient, managedNamespace)
+		setupReconcilers(mgr, infra, platform, &awsv1.AWSCluster{}, containerImages, applyClient, apiextensionsClient, managedNamespace, sourceNamespace)
 		setupWebhooks(mgr)
 	case configv1.GCPPlatformType:
-		setupReconcilers(mgr, infra, platform, &gcpv1.GCPCluster{}, containerImages, applyClient, apiextensionsClient, managedNamespace)
+		setupReconcilers(mgr, infra, platform, &gcpv1.GCPCluster{}, containerImages, applyClient, apiextensionsClient, managedNamespace, sourceNamespace)
 		setupWebhooks(mgr)
 	case configv1.AzurePlatformType:
 		azureCloudEnvironment := getAzureCloudEnvironment(infra.Status.PlatformStatus)
@@ -269,17 +274,17 @@ func setupPlatformReconcilers(mgr manager.Manager, infra *configv1.Infrastructur
 			setupClusterOperatorController(mgr, managedNamespace, true)
 		} else {
 			// The ClusterOperator Controller must run in all cases.
-			setupReconcilers(mgr, infra, platform, &azurev1.AzureCluster{}, containerImages, applyClient, apiextensionsClient, managedNamespace)
+			setupReconcilers(mgr, infra, platform, &azurev1.AzureCluster{}, containerImages, applyClient, apiextensionsClient, managedNamespace, sourceNamespace)
 			setupWebhooks(mgr)
 		}
 	case configv1.PowerVSPlatformType:
-		setupReconcilers(mgr, infra, platform, &ibmpowervsv1.IBMPowerVSCluster{}, containerImages, applyClient, apiextensionsClient, managedNamespace)
+		setupReconcilers(mgr, infra, platform, &ibmpowervsv1.IBMPowerVSCluster{}, containerImages, applyClient, apiextensionsClient, managedNamespace, sourceNamespace)
 		setupWebhooks(mgr)
 	case configv1.VSpherePlatformType:
-		setupReconcilers(mgr, infra, platform, &vspherev1.VSphereCluster{}, containerImages, applyClient, apiextensionsClient, managedNamespace)
+		setupReconcilers(mgr, infra, platform, &vspherev1.VSphereCluster{}, containerImages, applyClient, apiextensionsClient, managedNamespace, sourceNamespace)
 		setupWebhooks(mgr)
 	case configv1.OpenStackPlatformType:
-		setupReconcilers(mgr, infra, platform, &openstackv1.OpenStackCluster{}, containerImages, applyClient, apiextensionsClient, managedNamespace)
+		setupReconcilers(mgr, infra, platform, &openstackv1.OpenStackCluster{}, containerImages, applyClient, apiextensionsClient, managedNamespace, sourceNamespace)
 		setupWebhooks(mgr)
 	default:
 		klog.Infof("Detected platform %q is not supported, skipping capi controllers setup", platform)
@@ -288,7 +293,7 @@ func setupPlatformReconcilers(mgr manager.Manager, infra *configv1.Infrastructur
 	}
 }
 
-func setupReconcilers(mgr manager.Manager, infra *configv1.Infrastructure, platform configv1.PlatformType, infraClusterObject client.Object, containerImages map[string]string, applyClient *kubernetes.Clientset, apiextensionsClient *apiextensionsclient.Clientset, managedNamespace string) {
+func setupReconcilers(mgr manager.Manager, infra *configv1.Infrastructure, platform configv1.PlatformType, infraClusterObject client.Object, containerImages map[string]string, applyClient *kubernetes.Clientset, apiextensionsClient *apiextensionsclient.Clientset, managedNamespace, sourceNamespace string) {
 	// The ClusterOperator Controller must run under all circumstances as it manages the ClusterOperator object for this operator.
 	setupClusterOperatorController(mgr, managedNamespace, false)
 
@@ -305,6 +310,7 @@ func setupReconcilers(mgr manager.Manager, infra *configv1.Infrastructure, platf
 	if err := (&secretsync.SecretSyncController{
 		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-secret-sync-controller", managedNamespace),
 		Scheme:                      mgr.GetScheme(),
+		SourceNamespace:             sourceNamespace,
 	}).SetupWithManager(mgr); err != nil {
 		klog.Error(err, "unable to create secret sync controller", "controller", "SecretSync")
 		os.Exit(1)

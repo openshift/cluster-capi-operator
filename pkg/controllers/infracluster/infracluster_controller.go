@@ -38,19 +38,10 @@ import (
 	configv1 "github.com/openshift/api/config/v1"
 	mapiv1 "github.com/openshift/api/machine/v1"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
-	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 )
 
 const (
-	// Controller conditions for the Cluster Operator resource.
-
-	// InfraClusterControllerAvailableCondition is the condition type that indicates the InfraCluster controller is available.
-	InfraClusterControllerAvailableCondition = "InfraClusterControllerAvailable"
-
-	// InfraClusterControllerDegradedCondition is the condition type that indicates the InfraCluster controller is degraded.
-	InfraClusterControllerDegradedCondition = "InfraClusterControllerDegraded"
-
 	defaultCAPINamespace = "openshift-cluster-api"
 	defaultMAPINamespace = "openshift-machine-api"
 	controllerName       = "InfraClusterController"
@@ -91,7 +82,7 @@ func (r *InfraClusterController) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{}, fmt.Errorf("error during reconcile: %w", err)
 	}
 
-	if err := r.setAvailableCondition(ctx, log); err != nil {
+	if err := r.setControllerConditionsToNormal(ctx, log); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to set conditions for InfraCluster controller: %w", err)
 	}
 
@@ -227,26 +218,49 @@ func (r *InfraClusterController) ensureInfraCluster(ctx context.Context, log log
 	return infraCluster, nil
 }
 
-// setAvailableCondition sets the ClusterOperator status condition to Available.
-func (r *InfraClusterController) setAvailableCondition(ctx context.Context, log logr.Logger) error {
+// setControllerConditionsToNormal sets the InfraClusterController conditions to the normal state.
+func (r *InfraClusterController) setControllerConditionsToNormal(ctx context.Context, log logr.Logger) error {
 	co, err := r.GetOrCreateClusterOperator(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get cluster operator: %w", err)
 	}
 
 	conds := []configv1.ClusterOperatorStatusCondition{
-		operatorstatus.NewClusterOperatorStatusCondition(InfraClusterControllerAvailableCondition, configv1.ConditionTrue, operatorstatus.ReasonAsExpected,
+		operatorstatus.NewClusterOperatorStatusCondition(operatorstatus.InfraClusterControllerAvailableCondition, configv1.ConditionTrue, operatorstatus.ReasonAsExpected,
 			"InfraCluster Controller works as expected"),
-		operatorstatus.NewClusterOperatorStatusCondition(InfraClusterControllerDegradedCondition, configv1.ConditionFalse, operatorstatus.ReasonAsExpected,
+		operatorstatus.NewClusterOperatorStatusCondition(operatorstatus.InfraClusterControllerDegradedCondition, configv1.ConditionFalse, operatorstatus.ReasonAsExpected,
 			"InfraCluster Controller works as expected"),
 	}
-
-	co.Status.Versions = []configv1.OperandVersion{{Name: controllers.OperatorVersionKey, Version: r.ReleaseVersion}}
 
 	log.V(2).Info("InfraCluster Controller is Available")
 
 	if err := r.SyncStatus(ctx, co, conds); err != nil {
-		return fmt.Errorf("failed to sync status: %w", err)
+		return fmt.Errorf("failed to sync cluster operator status: %w", err)
+	}
+
+	return nil
+}
+
+// setControllerConditionDegraded sets the InfraClusterController conditions to a degraded state.
+//
+//nolint:unused
+func (r *InfraClusterController) setControllerConditionDegraded(ctx context.Context, log logr.Logger, reconcileErr error) error {
+	co, err := r.GetOrCreateClusterOperator(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get cluster operator: %w", err)
+	}
+
+	conds := []configv1.ClusterOperatorStatusCondition{
+		operatorstatus.NewClusterOperatorStatusCondition(operatorstatus.InfraClusterControllerAvailableCondition, configv1.ConditionTrue, operatorstatus.ReasonAsExpected,
+			"InfraCluster Controller works as expected"),
+		operatorstatus.NewClusterOperatorStatusCondition(operatorstatus.InfraClusterControllerDegradedCondition, configv1.ConditionTrue, operatorstatus.ReasonAsExpected,
+			fmt.Sprintf("InfraCluster Controller is degraded: %s", reconcileErr.Error())),
+	}
+
+	log.V(2).Info("InfraCluster Controller is Available")
+
+	if err := r.SyncStatus(ctx, co, conds); err != nil {
+		return fmt.Errorf("failed to sync cluster operator status: %w", err)
 	}
 
 	return nil

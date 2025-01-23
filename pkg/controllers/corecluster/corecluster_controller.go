@@ -88,6 +88,10 @@ func (r *CoreClusterController) Reconcile(ctx context.Context, req reconcile.Req
 
 	ocpInfrastructureName, err := getOCPInfrastructureName(r.Infra)
 	if err != nil {
+		if err := r.setControllerConditionDegraded(ctx, logger, err); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to set conditions for Core Cluster Controller: %w", err)
+		}
+
 		return ctrl.Result{}, fmt.Errorf("failed to obtain infrastructure name: %w", err)
 	}
 
@@ -97,8 +101,8 @@ func (r *CoreClusterController) Reconcile(ctx context.Context, req reconcile.Req
 	}
 
 	if !cluster.DeletionTimestamp.IsZero() {
-		if err := r.SetStatusAvailable(ctx, ""); err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to set status available: %w", err)
+		if err := r.setControllerConditionsToNormal(ctx, logger); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to set conditions for Core Cluster Controller: %w", err)
 		}
 
 		return ctrl.Result{}, nil
@@ -108,8 +112,8 @@ func (r *CoreClusterController) Reconcile(ctx context.Context, req reconcile.Req
 		return ctrl.Result{}, fmt.Errorf("failed to ensure core cluster has the ControlPlaneInitializedCondition: %w", err)
 	}
 
-	if err := r.SetStatusAvailable(ctx, ""); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to set status available: %w", err)
+	if err := r.setControllerConditionsToNormal(ctx, logger); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to set conditions for Core Cluster Controller: %w", err)
 	}
 
 	return ctrl.Result{}, nil
@@ -210,6 +214,52 @@ func (r *CoreClusterController) ensureCoreClusterControlPlaneInitializedConditio
 		if err := r.Status().Patch(ctx, cluster, patch); err != nil {
 			return fmt.Errorf("unable to update core cluster status: %w", err)
 		}
+	}
+
+	return nil
+}
+
+// setControllerConditionsToNormal sets the CoreClusterController conditions to the normal state.
+func (r *CoreClusterController) setControllerConditionsToNormal(ctx context.Context, log logr.Logger) error {
+	co, err := r.GetOrCreateClusterOperator(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get cluster operator: %w", err)
+	}
+
+	conds := []configv1.ClusterOperatorStatusCondition{
+		operatorstatus.NewClusterOperatorStatusCondition(operatorstatus.CoreClusterControllerAvailableCondition, configv1.ConditionTrue, operatorstatus.ReasonAsExpected,
+			"Core Cluster Controller works as expected"),
+		operatorstatus.NewClusterOperatorStatusCondition(operatorstatus.CoreClusterControllerDegradedCondition, configv1.ConditionFalse, operatorstatus.ReasonAsExpected,
+			"Core Cluster Controller works as expected"),
+	}
+
+	log.V(2).Info("Core Cluster Controller is Available")
+
+	if err := r.SyncStatus(ctx, co, conds); err != nil {
+		return fmt.Errorf("failed to sync cluster operator status: %w", err)
+	}
+
+	return nil
+}
+
+// setControllerConditionDegraded sets the CoreClusterController conditions to a degraded state.
+func (r *CoreClusterController) setControllerConditionDegraded(ctx context.Context, log logr.Logger, reconcileErr error) error {
+	co, err := r.GetOrCreateClusterOperator(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get cluster operator: %w", err)
+	}
+
+	conds := []configv1.ClusterOperatorStatusCondition{
+		operatorstatus.NewClusterOperatorStatusCondition(operatorstatus.CoreClusterControllerAvailableCondition, configv1.ConditionTrue, operatorstatus.ReasonAsExpected,
+			"Core Cluster Controller works as expected"),
+		operatorstatus.NewClusterOperatorStatusCondition(operatorstatus.CoreClusterControllerDegradedCondition, configv1.ConditionTrue, operatorstatus.ReasonAsExpected,
+			fmt.Sprintf("Core Cluster Controller is degraded: %s", reconcileErr.Error())),
+	}
+
+	log.Info("Core Cluster Controller is Degraded", reconcileErr.Error())
+
+	if err := r.SyncStatus(ctx, co, conds); err != nil {
+		return fmt.Errorf("failed to sync cluster operator status: %w", err)
 	}
 
 	return nil

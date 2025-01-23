@@ -28,6 +28,7 @@ import (
 	consts "github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/capi2mapi"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/mapi2capi"
+	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -83,6 +84,7 @@ const (
 
 // MachineSetSyncController reconciles CAPI and MAPI MachineSets.
 type MachineSetSyncController struct {
+	operatorstatus.ClusterOperatorStatusClient
 	client.Client
 	Scheme   *runtime.Scheme
 	Recorder record.EventRecorder
@@ -149,15 +151,34 @@ func (r *MachineSetSyncController) Reconcile(ctx context.Context, req reconcile.
 
 	if mapiMachineSet == nil && capiMachineSet == nil {
 		logger.Info("Both MAPI and CAPI machine sets not found, nothing to do")
+
+		if err := r.setControllerConditionsToNormal(ctx, logger); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to set conditions for machine set sync controller: %w", err)
+		}
+
 		return ctrl.Result{}, nil
 	}
 
 	if mapiMachineSet == nil {
 		logger.Info("Only CAPI machine set found, nothing to do")
+
+		if err := r.setControllerConditionsToNormal(ctx, logger); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to set conditions for machine set sync controller: %w", err)
+		}
+
 		return ctrl.Result{}, nil
 	}
 
-	return r.syncMachineSets(ctx, mapiMachineSet, capiMachineSet)
+	result, err := r.syncMachineSets(ctx, mapiMachineSet, capiMachineSet)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to sync machine sets: %w", err)
+	}
+
+	if err := r.setControllerConditionsToNormal(ctx, logger); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to set conditions for machine set sync controller: %w", err)
+	}
+
+	return result, nil
 }
 
 // fetchMachineSets fetches both MAPI and CAPI MachineSets.
@@ -641,4 +662,52 @@ func getResourceVersion(obj client.Object) string {
 	}
 
 	return obj.GetResourceVersion()
+}
+
+// setControllerConditionsToNormal sets the MachineSetSyncController conditions to the normal state.
+func (r *MachineSetSyncController) setControllerConditionsToNormal(ctx context.Context, log logr.Logger) error {
+	co, err := r.GetOrCreateClusterOperator(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get cluster operator: %w", err)
+	}
+
+	conds := []configv1.ClusterOperatorStatusCondition{
+		operatorstatus.NewClusterOperatorStatusCondition(operatorstatus.MachineSetSyncControllerAvailableCondition, configv1.ConditionTrue, operatorstatus.ReasonAsExpected,
+			"MachineSet Sync Controller works as expected"),
+		operatorstatus.NewClusterOperatorStatusCondition(operatorstatus.MachineSetSyncControllerDegradedCondition, configv1.ConditionFalse, operatorstatus.ReasonAsExpected,
+			"MachineSet Sync Controller works as expected"),
+	}
+
+	log.V(2).Info("MachineSet Sync Controller is Available")
+
+	if err := r.SyncStatus(ctx, co, conds); err != nil {
+		return fmt.Errorf("failed to sync cluster operator status: %w", err)
+	}
+
+	return nil
+}
+
+// setControllerConditionDegraded sets the MachineSetSyncController conditions to a degraded state.
+//
+//nolint:unused
+func (r *MachineSetSyncController) setControllerConditionDegraded(ctx context.Context, log logr.Logger, reconcileErr error) error {
+	co, err := r.GetOrCreateClusterOperator(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get cluster operator: %w", err)
+	}
+
+	conds := []configv1.ClusterOperatorStatusCondition{
+		operatorstatus.NewClusterOperatorStatusCondition(operatorstatus.MachineSetSyncControllerAvailableCondition, configv1.ConditionTrue, operatorstatus.ReasonAsExpected,
+			"MachineSet Sync Controller works as expected"),
+		operatorstatus.NewClusterOperatorStatusCondition(operatorstatus.MachineSetSyncControllerDegradedCondition, configv1.ConditionTrue, operatorstatus.ReasonAsExpected,
+			fmt.Sprintf("MachineSet Sync Controller is degraded: %s", reconcileErr.Error())),
+	}
+
+	log.Info("MachineSet Sync Controller is Degraded", reconcileErr.Error())
+
+	if err := r.SyncStatus(ctx, co, conds); err != nil {
+		return fmt.Errorf("failed to sync cluster operator status: %w", err)
+	}
+
+	return nil
 }

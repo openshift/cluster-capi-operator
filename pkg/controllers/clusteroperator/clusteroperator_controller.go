@@ -24,6 +24,7 @@ import (
 
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
@@ -31,8 +32,7 @@ import (
 )
 
 const (
-	capiUnsupportedPlatformMsg = "Cluster API is not yet implemented on this platform"
-	controllerName             = "ClusterOperatorController"
+	controllerName = "ClusterOperatorController"
 )
 
 // ClusterOperatorController watches and keeps the cluster-api ClusterObject up to date.
@@ -45,18 +45,17 @@ type ClusterOperatorController struct {
 // Reconcile reconciles the cluster-api ClusterOperator object.
 func (r *ClusterOperatorController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := ctrl.LoggerFrom(ctx).WithName(controllerName)
-	log.Info(fmt.Sprintf("Reconciling %q ClusterObject", controllers.ClusterOperatorName))
 
-	if r.IsUnsupportedPlatform {
-		if err := r.ClusterOperatorStatusClient.SetStatusAvailable(ctx, capiUnsupportedPlatformMsg); err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to set conditions for %q ClusterObject: %w", controllers.ClusterOperatorName, err)
-		}
-	} else {
-		// TODO: wrap this into status aggregation logic to get these conditions conform,
-		// to the meaningful aggregation of all the other controllers ones.
-		if err := r.ClusterOperatorStatusClient.SetStatusAvailable(ctx, ""); err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to set conditions for %q ClusterObject: %w", controllers.ClusterOperatorName, err)
-		}
+	log.Info(fmt.Sprintf("Reconciling %q ClusterObject", controllers.ClusterOperatorName))
+	defer log.Info("Finished reconciling ClusterObject")
+
+	co := &configv1.ClusterOperator{}
+	if err := r.Get(ctx, client.ObjectKey{Name: req.Name}, co); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to get %q ClusterObject: %w", controllers.ClusterOperatorName, err)
+	}
+
+	if err := r.SetStatus(ctx, r.IsUnsupportedPlatform); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to set conditions for %q ClusterObject: %w", controllers.ClusterOperatorName, err)
 	}
 
 	return ctrl.Result{}, nil

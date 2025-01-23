@@ -25,24 +25,24 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-
-	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 )
 
-func toTokenSecret(ctx context.Context, o client.Object) []reconcile.Request {
-	return []reconcile.Request{{
-		NamespacedName: client.ObjectKey{Name: tokenSecretName, Namespace: controllers.DefaultManagedNamespace},
-	}}
+func toTokenSecret(namespace string) func(context.Context, client.Object) []reconcile.Request {
+	return func(ctx context.Context, o client.Object) []reconcile.Request {
+		return []reconcile.Request{{
+			NamespacedName: client.ObjectKey{Name: tokenSecretName, Namespace: namespace},
+		}}
+	}
 }
 
-func tokenSecretPredicate() predicate.Funcs {
+func tokenSecretPredicate(namespace string) predicate.Funcs {
 	isOwnedTokenSecret := func(obj runtime.Object) bool {
 		secret, ok := obj.(*corev1.Secret)
 		if !ok {
 			panic("expected to get an of object of type corev1.Secret")
 		}
 
-		return secret.GetNamespace() == controllers.DefaultManagedNamespace && secret.GetName() == tokenSecretName
+		return secret.GetNamespace() == namespace && secret.GetName() == tokenSecretName
 	}
 
 	return predicate.Funcs{
@@ -53,14 +53,14 @@ func tokenSecretPredicate() predicate.Funcs {
 	}
 }
 
-func kubeconfigSecretPredicate() predicate.Funcs {
+func kubeconfigSecretPredicate(namespace string) predicate.Funcs {
 	isKubeconfigSecret := func(obj runtime.Object) bool {
 		secret, ok := obj.(*corev1.Secret)
 		if !ok {
 			panic("expected to get an of object of type corev1.Secret")
 		}
 
-		return secret.GetNamespace() == controllers.DefaultManagedNamespace && strings.HasSuffix(secret.GetName(), "-kubeconfig")
+		return secret.GetNamespace() == namespace && strings.HasSuffix(secret.GetName(), "-kubeconfig")
 	}
 
 	return predicate.Funcs{
