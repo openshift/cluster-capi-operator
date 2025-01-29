@@ -793,6 +793,11 @@ github.com/openshift/api/template
 github.com/openshift/api/template/v1
 github.com/openshift/api/user
 github.com/openshift/api/user/v1
+# github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20231030132718-3884f943d502
+## explicit; go 1.20
+github.com/openshift/cluster-api-actuator-pkg/testutils
+github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/config/v1
+github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/core/v1
 # github.com/openshift/library-go v0.0.0-20231214171439-128164517bf7
 ## explicit; go 1.20
 github.com/openshift/library-go/pkg/config/clusteroperator/v1helpers
@@ -2163,6 +2168,7 @@ sigs.k8s.io/controller-runtime/pkg/controller
 sigs.k8s.io/controller-runtime/pkg/controller/controllerutil
 sigs.k8s.io/controller-runtime/pkg/conversion
 sigs.k8s.io/controller-runtime/pkg/envtest
+sigs.k8s.io/controller-runtime/pkg/envtest/komega
 sigs.k8s.io/controller-runtime/pkg/event
 sigs.k8s.io/controller-runtime/pkg/handler
 sigs.k8s.io/controller-runtime/pkg/healthz
@@ -2196,8 +2202,8 @@ sigs.k8s.io/controller-runtime/pkg/webhook
 sigs.k8s.io/controller-runtime/pkg/webhook/admission
 sigs.k8s.io/controller-runtime/pkg/webhook/conversion
 sigs.k8s.io/controller-runtime/pkg/webhook/internal/metrics
-# sigs.k8s.io/controller-runtime/tools/setup-envtest v0.0.0-20221007015352-8ad090e0663e
-## explicit; go 1.17
+# sigs.k8s.io/controller-runtime/tools/setup-envtest v0.0.0-20230926180527-c93e2abcb28e
+## explicit; go 1.20
 sigs.k8s.io/controller-runtime/tools/setup-envtest
 sigs.k8s.io/controller-runtime/tools/setup-envtest/env
 sigs.k8s.io/controller-runtime/tools/setup-envtest/remote
