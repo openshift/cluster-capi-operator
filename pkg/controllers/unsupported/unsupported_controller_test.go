@@ -72,6 +72,7 @@ var _ = Describe("CAPI unsupported controller", func() {
 	})
 
 	AfterEach(func() {
+		By("Cleaning up the testing resources")
 		testutils.CleanupResources(Default, ctx, testEnv.Config, cl, testNamespaceName, &configv1.ClusterOperator{})
 	})
 

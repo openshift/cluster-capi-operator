@@ -3,7 +3,9 @@ package kubeconfig
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
 
+	"github.com/openshift/cluster-api-actuator-pkg/testutils"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 )
 
@@ -12,12 +14,21 @@ var _ = Describe("Generate kubeconfig", func() {
 	testBase64Text := "dGVzdA=="
 
 	BeforeEach(func() {
+		By("Creating the cluster-api namepsace")
+		managedNamespace := &corev1.Namespace{}
+		managedNamespace.SetName(controllers.DefaultManagedNamespace)
+		Expect(cl.Create(ctx, managedNamespace)).To(Succeed())
+
 		options = &kubeconfigOptions{
 			token:            []byte(testBase64Text),
 			caCert:           []byte(testBase64Text),
 			apiServerEnpoint: "https://example.com",
 			clusterName:      "test",
 		}
+	})
+
+	AfterEach(func() {
+		testutils.CleanupResources(Default, ctx, testEnv.Config, cl, controllers.DefaultManagedNamespace, &corev1.Secret{})
 	})
 
 	It("should generate kubeconfig", func() {

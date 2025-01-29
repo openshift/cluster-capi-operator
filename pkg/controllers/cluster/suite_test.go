@@ -6,7 +6,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -14,7 +13,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
-	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/test"
 )
 
@@ -40,10 +38,6 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	Expect(cfg).NotTo(BeNil())
 	Expect(cl).NotTo(BeNil())
-
-	managedNamespace := &corev1.Namespace{}
-	managedNamespace.SetName(controllers.DefaultManagedNamespace)
-	Expect(cl.Create(context.Background(), managedNamespace)).To(Succeed())
 
 	komega.SetClient(cl)
 	komega.SetContext(ctx)

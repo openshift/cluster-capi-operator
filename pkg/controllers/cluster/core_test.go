@@ -66,6 +66,7 @@ var _ = Describe("Reconcile Core cluster", func() {
 	})
 
 	AfterEach(func() {
+		By("Cleaning up the testing resources")
 		testutils.CleanupResources(Default, ctx, testEnv.Config, cl, testNamespaceName, &configv1.ClusterOperator{}, &clusterv1.Cluster{})
 	})
 
