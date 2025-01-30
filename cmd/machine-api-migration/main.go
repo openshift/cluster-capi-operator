@@ -75,7 +75,7 @@ func main() {
 	initScheme(scheme)
 
 	leaderElectionConfig := config.LeaderElectionConfiguration{
-		LeaderElect:       true,
+		LeaderElect:       false,
 		LeaseDuration:     util.LeaseDuration,
 		RenewDeadline:     util.RenewDeadline,
 		RetryPeriod:       util.RetryPeriod,
