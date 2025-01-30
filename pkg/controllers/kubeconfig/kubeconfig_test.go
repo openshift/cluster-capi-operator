@@ -12,9 +12,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
+	configv1 "github.com/openshift/api/config/v1"
+	"github.com/openshift/cluster-api-actuator-pkg/testutils"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
-	"github.com/openshift/cluster-capi-operator/pkg/test"
 )
 
 var _ = Describe("Reconcile kubeconfig secret", func() {
@@ -25,6 +26,19 @@ var _ = Describe("Reconcile kubeconfig secret", func() {
 		log := ctrl.LoggerFrom(ctx).WithName("KubeconfigController")
 
 		BeforeEach(func() {
+			By("Creating the cluster-api ClusterOperator")
+			capiClusterOperator := &configv1.ClusterOperator{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: controllers.ClusterOperatorName,
+				},
+			}
+			Expect(cl.Create(ctx, capiClusterOperator)).To(Succeed(), "should be able to create the 'cluster-api' ClusterOperator object")
+
+			By("Creating the cluster-api namepsace")
+			managedNamespace := &corev1.Namespace{}
+			managedNamespace.SetName(controllers.DefaultManagedNamespace)
+			Expect(cl.Create(ctx, managedNamespace)).To(Succeed())
+
 			r = &KubeconfigReconciler{
 				ClusterOperatorStatusClient: operatorstatus.ClusterOperatorStatusClient{
 					Client: cl,
@@ -48,7 +62,8 @@ var _ = Describe("Reconcile kubeconfig secret", func() {
 		})
 
 		AfterEach(func() {
-			Expect(test.CleanupAndWait(ctx, cl, tokenSecret, kubeconfigSecret)).To(Succeed())
+			testutils.CleanupResources(Default, ctx, testEnv.Config, cl, controllers.DefaultManagedNamespace, &corev1.Secret{})
+			testutils.CleanupResources(Default, ctx, testEnv.Config, cl, "", &configv1.ClusterOperator{})
 		})
 
 		It("should create a kubeconfig secret when it doesn't exist", func() {

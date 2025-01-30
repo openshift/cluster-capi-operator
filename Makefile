@@ -36,7 +36,7 @@ operator:
 	go build -o bin/cluster-capi-operator cmd/cluster-capi-operator/main.go
 
 unit:
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path --bin-dir $(PROJECT_DIR)/bin)" ./hack/test.sh "./pkg/... ./assets/..." 5m
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path --bin-dir $(PROJECT_DIR)/bin)" ./hack/test.sh "./pkg/... ./manifests-gen/..." 5m
 
 .PHONY: e2e
 e2e:

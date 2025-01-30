@@ -78,6 +78,11 @@ var _ = Describe("User Data Secret controller", func() {
 	syncedSecretKey := client.ObjectKey{Namespace: controllers.DefaultManagedNamespace, Name: managedUserDataSecretName}
 
 	BeforeEach(func() {
+		By("Creating the cluster-api ClusterOperator")
+		co := &configv1.ClusterOperator{}
+		co.SetName(controllers.ClusterOperatorName)
+		Expect(cl.Create(context.Background(), co.DeepCopy())).To(Succeed())
+
 		By("Setting up a new manager")
 		mgr, err := manager.New(cfg, manager.Options{})
 		Expect(err).NotTo(HaveOccurred())
@@ -114,6 +119,7 @@ var _ = Describe("User Data Secret controller", func() {
 		mgrCtxCancel()
 		Eventually(mgrStopped, timeout).Should(BeClosed())
 
+		By("Cleanup the cluster-api ClusterOperator")
 		co := &configv1.ClusterOperator{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: controllers.ClusterOperatorName,
@@ -129,11 +135,6 @@ var _ = Describe("User Data Secret controller", func() {
 		}
 
 		sourceSecret = nil
-
-		// Creating the cluster api operator
-		co = &configv1.ClusterOperator{}
-		co.SetName(controllers.ClusterOperatorName)
-		Expect(cl.Create(context.Background(), co.DeepCopy())).To(Succeed())
 	})
 
 	It("secret should be synced up after first reconcile", func() {

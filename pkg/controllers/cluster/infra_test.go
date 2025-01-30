@@ -10,19 +10,35 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	configv1 "github.com/openshift/api/config/v1"
+	"github.com/openshift/cluster-api-actuator-pkg/testutils"
+	corev1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/core/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
-	"github.com/openshift/cluster-capi-operator/pkg/test"
 )
 
 var _ = Describe("Reconcile Infrastructure cluster", func() {
 	var awsCluster *awsv1.AWSCluster
+	var testNamespaceName string
 
 	BeforeEach(func() {
+		By("Creating the cluster-api ClusterOperator")
+		capiClusterOperator := &configv1.ClusterOperator{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: controllers.ClusterOperatorName,
+			},
+		}
+		Expect(cl.Create(ctx, capiClusterOperator)).To(Succeed(), "should be able to create the 'cluster-api' ClusterOperator object")
+
+		By("Creating the testing namespace")
+		namespace := corev1resourcebuilder.Namespace().WithGenerateName("test-capi-infra-").Build()
+		Expect(cl.Create(ctx, namespace)).To(Succeed())
+		testNamespaceName = namespace.Name
+
 		awsCluster = &awsv1.AWSCluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-name",
-				Namespace: controllers.DefaultManagedNamespace,
+				Namespace: testNamespaceName,
 			},
 		}
 
@@ -30,7 +46,8 @@ var _ = Describe("Reconcile Infrastructure cluster", func() {
 	})
 
 	AfterEach(func() {
-		Expect(test.CleanupAndWait(ctx, cl, awsCluster)).To(Succeed())
+		testutils.CleanupResources(Default, ctx, testEnv.Config, cl, testNamespaceName,
+			&configv1.ClusterOperator{}, &awsv1.AWSCluster{})
 	})
 
 	It("set annotation and update aws cluster status", func() {

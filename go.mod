@@ -17,6 +17,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.15.0
 	github.com/onsi/gomega v1.31.1
 	github.com/openshift/api v0.0.0-20231129134630-a782d1c1541c
+	github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20231030132718-3884f943d502
 	github.com/openshift/library-go v0.0.0-20231214171439-128164517bf7
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/pflag v1.0.6-0.20210604193023-d5e0c0615ace
@@ -35,7 +36,7 @@ require (
 	sigs.k8s.io/cluster-api-provider-ibmcloud v0.7.0
 	sigs.k8s.io/cluster-api-provider-vsphere v1.9.2
 	sigs.k8s.io/controller-runtime v0.16.5
-	sigs.k8s.io/controller-runtime/tools/setup-envtest v0.0.0-20221007015352-8ad090e0663e
+	sigs.k8s.io/controller-runtime/tools/setup-envtest v0.0.0-20230926180527-c93e2abcb28e
 )
 
 require sigs.k8s.io/yaml v1.4.0 // indirect
