@@ -55,8 +55,8 @@ var (
 	errOpenshiftInfrastructureNameShouldNotBeEmpty = errors.New("infrastructure object's infrastructureName should not be empty")
 )
 
-// CoreClusterReconciler reconciles a Cluster object.
-type CoreClusterReconciler struct {
+// CoreClusterController reconciles a Cluster object.
+type CoreClusterController struct {
 	operatorstatus.ClusterOperatorStatusClient
 	Cluster  *clusterv1.Cluster
 	Infra    *configv1.Infrastructure
@@ -64,7 +64,7 @@ type CoreClusterReconciler struct {
 }
 
 // SetupWithManager sets the CoreClusterReconciler controller up with the given manager.
-func (r *CoreClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *CoreClusterController) SetupWithManager(mgr ctrl.Manager) error {
 	if err := ctrl.NewControllerManagedBy(mgr).
 		Named(controllerName).
 		For(&configv1.ClusterOperator{}, builder.WithPredicates(clusterOperatorPredicates())).
@@ -81,7 +81,7 @@ func (r *CoreClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 // Reconcile reconciles the core cluster object for the openshift-cluster-api namespace.
-func (r *CoreClusterReconciler) Reconcile(ctx context.Context, req reconcile.Request) (ctrl.Result, error) {
+func (r *CoreClusterController) Reconcile(ctx context.Context, req reconcile.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx).WithName(controllerName)
 	logger.Info("Reconciling core cluster")
 	defer logger.Info("Finished reconciling core cluster")
@@ -116,7 +116,7 @@ func (r *CoreClusterReconciler) Reconcile(ctx context.Context, req reconcile.Req
 }
 
 // ensureCoreCluster creates a cluster with the given name and returns the cluster object.
-func (r *CoreClusterReconciler) ensureCoreCluster(ctx context.Context, clusterObjectKey client.ObjectKey, logger logr.Logger) (*clusterv1.Cluster, error) {
+func (r *CoreClusterController) ensureCoreCluster(ctx context.Context, clusterObjectKey client.ObjectKey, logger logr.Logger) (*clusterv1.Cluster, error) {
 	cluster := &clusterv1.Cluster{}
 	if err := r.Client.Get(ctx, clusterObjectKey, cluster); err != nil && !kerrors.IsNotFound(err) {
 		return nil, fmt.Errorf("failed to get core cluster %s/%s: %w", clusterObjectKey.Namespace, clusterObjectKey.Name, err)
@@ -158,7 +158,7 @@ func (r *CoreClusterReconciler) ensureCoreCluster(ctx context.Context, clusterOb
 }
 
 // generateCoreClusterObject generates a new core cluster object to be created.
-func (r *CoreClusterReconciler) generateCoreClusterObject(_ context.Context, clusterObjectKey client.ObjectKey, infraClusterAPIVersion, infraClusterKind string) (*clusterv1.Cluster, error) {
+func (r *CoreClusterController) generateCoreClusterObject(_ context.Context, clusterObjectKey client.ObjectKey, infraClusterAPIVersion, infraClusterKind string) (*clusterv1.Cluster, error) {
 	apiURL, err := url.Parse(r.Infra.Status.APIServerInternalURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse apiURL: %w", err)
@@ -190,7 +190,7 @@ func (r *CoreClusterReconciler) generateCoreClusterObject(_ context.Context, clu
 }
 
 // ensureCoreClusterControlPlaneInitializedCondition makes sure the ControlPlaneInitializedCondition condition on the cluster.
-func (r *CoreClusterReconciler) ensureCoreClusterControlPlaneInitializedCondition(ctx context.Context, cluster *clusterv1.Cluster) error {
+func (r *CoreClusterController) ensureCoreClusterControlPlaneInitializedCondition(ctx context.Context, cluster *clusterv1.Cluster) error {
 	if conditions.Get(cluster, clusterv1.ControlPlaneInitializedCondition) != nil {
 		return nil
 	}
