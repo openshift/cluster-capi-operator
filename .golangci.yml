@@ -95,6 +95,8 @@ linters-settings:
       arguments:
         - "checkPrivateReceivers"
         - "disableStutteringCheck"
+  staticcheck:
+    checks: ["-SA1019"]
   stylecheck:
     # https://staticcheck.io/docs/options#checks
     checks: ["all", "-ST1000"]

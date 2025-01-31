@@ -38,6 +38,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+const (
+	powerVSProviderSpecKind = "PowerVSMachineProviderConfig"
+)
+
 var _ = Describe("PowerVS Fuzz (mapi2capi)", func() {
 	infra := &configv1.Infrastructure{
 		Spec: configv1.InfrastructureSpec{},
@@ -170,8 +174,8 @@ func powerVSProviderSpecFuzzerFuncs(codecs runtimeserializer.CodecFactory) []int
 			c.FuzzNoCustom(pc)
 
 			// The type meta is always set to these values by the conversion.
-			pc.Kind = "PowerVSMachineProviderConfig"
 			pc.APIVersion = mapiv1.SchemeGroupVersion.String()
+			pc.Kind = powerVSProviderSpecKind
 
 			pc.LoadBalancers = nil
 			pc.ObjectMeta = metav1.ObjectMeta{}

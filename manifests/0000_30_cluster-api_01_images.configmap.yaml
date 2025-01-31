@@ -18,6 +18,7 @@ data:
       "azure-cluster-api-controllers": "registry.ci.openshift.org/openshift:azure-cluster-api-controllers",
       "gcp-cluster-api-controllers": "registry.ci.openshift.org/openshift:gcp-cluster-api-controllers",
       "ibmcloud-cluster-api-controllers": "registry.ci.openshift.org/openshift:ibmcloud-cluster-api-controllers",
+      "openstack-cluster-api-controllers": "registry.ci.openshift.org/openshift:openstack-cluster-api-controllers",
       "vsphere-cluster-api-controllers": "registry.ci.openshift.org/openshift:vsphere-cluster-api-controllers",
       "kube-rbac-proxy": "registry.ci.openshift.org/openshift:kube-rbac-proxy"
     }
