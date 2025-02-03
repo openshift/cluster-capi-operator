@@ -46,6 +46,12 @@ const (
 
 	// ReasonSyncFailed is the reason for the condition when the operator failed to sync resources.
 	ReasonSyncFailed = "SyncingFailed"
+
+	// CoreClusterControllerAvailableCondition is the condition type that indicates the CoreCluster controller is available.
+	CoreClusterControllerAvailableCondition = "CoreClusterControllerAvailable"
+
+	// CoreClusterControllerDegradedCondition is the condition type that indicates the CoreCluster controller is degraded.
+	CoreClusterControllerDegradedCondition = "CoreClusterControllerDegraded"
 )
 
 // ClusterOperatorStatusClient is a client for managing the status of the ClusterOperator object.
@@ -196,6 +202,26 @@ func NewClusterOperatorStatusCondition(conditionType configv1.ClusterStatusCondi
 		Reason:             reason,
 		Message:            message,
 	}
+}
+
+// SetCondition updates or appends a condition to the conditions slice.
+// If the condition doesn't exist, it will be appended as a new entry,
+// otherwise if a condition of the same type already exists, it will be updated.
+// It also sets the condition LastTransitionTime to now().
+func SetCondition(conditions *[]configv1.ClusterOperatorStatusCondition, conditionType configv1.ClusterStatusConditionType,
+	conditionStatus configv1.ConditionStatus, reason string, message string) {
+	newCond := NewClusterOperatorStatusCondition(conditionType, conditionStatus, reason, message)
+
+	// Try to find and update existing condition.
+	for i := range *conditions {
+		if (*conditions)[i].Type == newCond.Type {
+			(*conditions)[i] = newCond
+			return
+		}
+	}
+
+	// If we get here, condition wasn't found, so append it.
+	*conditions = append(*conditions, newCond)
 }
 
 func printOperandVersions(versions []configv1.OperandVersion) string {
