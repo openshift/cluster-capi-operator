@@ -275,7 +275,7 @@ func (r *CoreClusterController) syncControllerConditions(ctx context.Context, co
 		return fmt.Errorf("failed to get cluster operator: %w", err)
 	}
 
-	if err := r.SyncStatus(ctx, co, *conds); err != nil {
+	if err := r.SyncStatus(ctx, controllerName, co, *conds); err != nil {
 		return fmt.Errorf("failed to sync cluster operator status: %w", err)
 	}
 

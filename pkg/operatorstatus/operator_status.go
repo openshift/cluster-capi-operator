@@ -30,7 +30,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1 "github.com/openshift/api/config/v1"
+	configv1applyconfigs "github.com/openshift/client-go/config/applyconfigurations/config/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
+	"github.com/openshift/cluster-capi-operator/pkg/util"
 	"github.com/openshift/library-go/pkg/config/clusteroperator/v1helpers"
 )
 
@@ -86,7 +88,7 @@ func (r *ClusterOperatorStatusClient) SetStatusAvailable(ctx context.Context, av
 
 	if co, shouldUpdate := clusterObjectNeedsUpdating(co, conds, r.operandVersions(), r.relatedObjects()); shouldUpdate {
 		log.V(2).Info("syncing status: available")
-		return r.SyncStatus(ctx, co, conds)
+		return r.SyncStatus(ctx, "cluster-operator-status-client", co, conds)
 	}
 
 	return nil
@@ -126,7 +128,7 @@ func (r *ClusterOperatorStatusClient) SetStatusDegraded(ctx context.Context, rec
 			r.Recorder.Eventf(co, corev1.EventTypeWarning, "Status degraded", reconcileErr.Error())
 			log.V(2).Info("syncing status: degraded", "message", message)
 
-			return r.SyncStatus(ctx, co, conds)
+			return r.SyncStatus(ctx, "cluster-operator-status-client", co, conds)
 		}
 	}
 
@@ -164,13 +166,52 @@ func (r *ClusterOperatorStatusClient) GetOrCreateClusterOperator(ctx context.Con
 }
 
 // SyncStatus applies the new condition to the ClusterOperator object.
-func (r *ClusterOperatorStatusClient) SyncStatus(ctx context.Context, co *configv1.ClusterOperator, conds []configv1.ClusterOperatorStatusCondition) error {
-	for _, c := range conds {
-		v1helpers.SetStatusCondition(&co.Status.Conditions, c)
+func (r *ClusterOperatorStatusClient) SyncStatus(ctx context.Context, fieldOwner string, co *configv1.ClusterOperator, conds []configv1.ClusterOperatorStatusCondition) error {
+	// Convert conditions to applyConfig ones.
+	conditionsAc := make([]*configv1applyconfigs.ClusterOperatorStatusConditionApplyConfiguration, len(conds))
+	for i, c := range conds {
+		conditionsAc[i] = configv1applyconfigs.
+			ClusterOperatorStatusCondition().
+			WithType(c.Type).
+			WithStatus(c.Status).
+			WithReason(c.Reason).
+			WithMessage(c.Message).
+			WithLastTransitionTime(c.LastTransitionTime)
 	}
 
-	if err := r.Client.Status().Update(ctx, co); err != nil {
-		return fmt.Errorf("failed to update cluster operator status: %w", err)
+	// Convert OperatorVersion to applyConfig.
+	versionsAc := make([]*configv1applyconfigs.OperandVersionApplyConfiguration, len(co.Status.Versions))
+	for i, v := range co.Status.Versions {
+		versionsAc[i] = &configv1applyconfigs.OperandVersionApplyConfiguration{
+			Name:    &v.Name,
+			Version: &v.Version,
+		}
+	}
+
+	// Convert RelatedObjects to applyConfig.
+	relatedObjectsAc := make([]*configv1applyconfigs.ObjectReferenceApplyConfiguration, len(co.Status.RelatedObjects))
+	for i, o := range co.Status.RelatedObjects {
+		relatedObjectsAc[i] = &configv1applyconfigs.ObjectReferenceApplyConfiguration{
+			Group:     &o.Group,
+			Name:      &o.Name,
+			Namespace: &o.Namespace,
+			Resource:  &o.Resource,
+		}
+	}
+
+	// Define the applyConfig to use as a patch.
+	coAc := configv1applyconfigs.
+		ClusterOperator(co.Name).
+		WithStatus(
+			configv1applyconfigs.ClusterOperatorStatus().
+				WithConditions(conditionsAc...).
+				WithRelatedObjects(relatedObjectsAc...).
+				WithVersions(versionsAc...),
+		)
+
+	// Apply the patch using ServerSideApply.
+	if err := r.Status().Patch(ctx, co, util.ApplyConfigPatch(coAc), client.ForceOwnership, client.FieldOwner(fieldOwner)); err != nil {
+		return fmt.Errorf("failed to patch cluster operator status with conditions: %w", err)
 	}
 
 	return nil
