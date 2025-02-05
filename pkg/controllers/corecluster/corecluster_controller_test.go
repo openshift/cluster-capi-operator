@@ -21,7 +21,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 	capav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	capiv1 "sigs.k8s.io/cluster-api/api/v1beta1"
@@ -156,11 +155,7 @@ var _ = Describe("Reconcile Core cluster", func() {
 					Eventually(komega.Object(configv1resourcebuilder.ClusterOperator().WithName(controllers.ClusterOperatorName).Build())).Should(
 						HaveField("Status.Conditions", SatisfyAll(
 							ContainElement(And(
-								HaveField("Type", BeEquivalentTo(operatorstatus.CoreClusterControllerAvailableCondition)),
-								HaveField("Status", BeEquivalentTo(configv1.ConditionTrue)),
-							)),
-							ContainElement(And(
-								HaveField("Type", BeEquivalentTo(operatorstatus.CoreClusterControllerDegradedCondition)),
+								HaveField("Type", BeEquivalentTo(CoreClusterControllerDegradedCondition)),
 								HaveField("Status", BeEquivalentTo(configv1.ConditionTrue)),
 							)),
 						)),
@@ -193,11 +188,11 @@ var _ = Describe("Reconcile Core cluster", func() {
 					Eventually(komega.Object(configv1resourcebuilder.ClusterOperator().WithName(controllers.ClusterOperatorName).Build())).Should(
 						HaveField("Status.Conditions", SatisfyAll(
 							ContainElement(And(
-								HaveField("Type", BeEquivalentTo(operatorstatus.CoreClusterControllerAvailableCondition)),
+								HaveField("Type", BeEquivalentTo(CoreClusterControllerAvailableCondition)),
 								HaveField("Status", BeEquivalentTo(configv1.ConditionTrue)),
 							)),
 							ContainElement(And(
-								HaveField("Type", BeEquivalentTo(operatorstatus.CoreClusterControllerDegradedCondition)),
+								HaveField("Type", BeEquivalentTo(CoreClusterControllerDegradedCondition)),
 								HaveField("Status", BeEquivalentTo(configv1.ConditionFalse)),
 							)),
 						)),
@@ -245,11 +240,11 @@ var _ = Describe("Reconcile Core cluster", func() {
 					Eventually(komega.Object(configv1resourcebuilder.ClusterOperator().WithName(controllers.ClusterOperatorName).Build())).Should(
 						HaveField("Status.Conditions", SatisfyAll(
 							ContainElement(And(
-								HaveField("Type", BeEquivalentTo(operatorstatus.CoreClusterControllerAvailableCondition)),
+								HaveField("Type", BeEquivalentTo(CoreClusterControllerAvailableCondition)),
 								HaveField("Status", BeEquivalentTo(configv1.ConditionTrue)),
 							)),
 							ContainElement(And(
-								HaveField("Type", BeEquivalentTo(operatorstatus.CoreClusterControllerDegradedCondition)),
+								HaveField("Type", BeEquivalentTo(CoreClusterControllerDegradedCondition)),
 								HaveField("Status", BeEquivalentTo(configv1.ConditionFalse)),
 							)),
 						)),
@@ -257,30 +252,6 @@ var _ = Describe("Reconcile Core cluster", func() {
 				})
 			})
 
-		})
-
-		Context("When there is an existing core cluster", func() {
-			BeforeEach(func() {
-				By("Creating a being-deleted testing core cluster object")
-				now := v1.Now()
-				coreCluster = capibuilder.Cluster().WithNamespace(testNamespaceName).WithName(testInfraName).WithDeletionTimestamp(&now).Build()
-				Eventually(cl.Create(ctx, coreCluster)).Should(Succeed())
-			})
-
-			It("should update the ClusterOperator status conditions with controller specific ones to reflect a normal state", func() {
-				Eventually(komega.Object(configv1resourcebuilder.ClusterOperator().WithName(controllers.ClusterOperatorName).Build())).Should(
-					HaveField("Status.Conditions", SatisfyAll(
-						ContainElement(And(
-							HaveField("Type", BeEquivalentTo(operatorstatus.CoreClusterControllerAvailableCondition)),
-							HaveField("Status", BeEquivalentTo(configv1.ConditionTrue)),
-						)),
-						ContainElement(And(
-							HaveField("Type", BeEquivalentTo(operatorstatus.CoreClusterControllerDegradedCondition)),
-							HaveField("Status", BeEquivalentTo(configv1.ConditionFalse)),
-						)),
-					)),
-				)
-			})
 		})
 	})
 

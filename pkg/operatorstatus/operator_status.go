@@ -48,12 +48,6 @@ const (
 
 	// ReasonSyncFailed is the reason for the condition when the operator failed to sync resources.
 	ReasonSyncFailed = "SyncingFailed"
-
-	// CoreClusterControllerAvailableCondition is the condition type that indicates the CoreCluster controller is available.
-	CoreClusterControllerAvailableCondition = "CoreClusterControllerAvailable"
-
-	// CoreClusterControllerDegradedCondition is the condition type that indicates the CoreCluster controller is degraded.
-	CoreClusterControllerDegradedCondition = "CoreClusterControllerDegraded"
 )
 
 // ClusterOperatorStatusClient is a client for managing the status of the ClusterOperator object.
@@ -117,8 +111,7 @@ func (r *ClusterOperatorStatusClient) SetStatusDegraded(ctx context.Context, rec
 	}
 
 	conds := []configv1.ClusterOperatorStatusCondition{
-		NewClusterOperatorStatusCondition(configv1.OperatorDegraded, configv1.ConditionTrue,
-			ReasonSyncFailed, message),
+		NewClusterOperatorStatusCondition(configv1.OperatorDegraded, configv1.ConditionTrue, ReasonSyncFailed, message),
 		NewClusterOperatorStatusCondition(configv1.OperatorUpgradeable, configv1.ConditionFalse, ReasonAsExpected, ""),
 	}
 
@@ -165,7 +158,42 @@ func (r *ClusterOperatorStatusClient) GetOrCreateClusterOperator(ctx context.Con
 	return co, nil
 }
 
-// SyncStatus applies the new condition to the ClusterOperator object.
+// SyncControllerConditions syncs the controller conditions to the ClusterOperator object status.
+func (r *ClusterOperatorStatusClient) SyncControllerConditions(ctx context.Context, co *configv1.ClusterOperator, controllerName string, conditions *[]configv1.ClusterOperatorStatusCondition, expectedConditionTypes []string) error {
+	// Mark the conditions not present as Unknown.
+	for _, v := range getMissingConditionTypes(conditions, expectedConditionTypes) {
+		co.Status.Conditions = append(co.Status.Conditions, NewClusterOperatorStatusCondition(configv1.ClusterStatusConditionType(v), configv1.ConditionUnknown, "Unknown", ""))
+	}
+
+	if err := r.SyncStatus(ctx, controllerName, co, *conditions); err != nil {
+		return fmt.Errorf("failed to sync cluster operator status: %w", err)
+	}
+
+	return nil
+}
+
+func getMissingConditionTypes(conditions *[]configv1.ClusterOperatorStatusCondition, expectedConditionTypes []string) []string {
+	missing := []string{}
+
+	for _, e := range expectedConditionTypes {
+		found := false
+
+		for _, c := range *conditions {
+			if c.Type == configv1.ClusterStatusConditionType(e) {
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			missing = append(missing, e)
+		}
+	}
+
+	return missing
+}
+
+// SyncStatus syncs the updated status to the ClusterOperator object.
 func (r *ClusterOperatorStatusClient) SyncStatus(ctx context.Context, fieldOwner string, co *configv1.ClusterOperator, conds []configv1.ClusterOperatorStatusCondition) error {
 	// Convert conditions to applyConfig ones.
 	conditionsAc := make([]*configv1applyconfigs.ClusterOperatorStatusConditionApplyConfiguration, len(conds))
@@ -248,7 +276,7 @@ func NewClusterOperatorStatusCondition(conditionType configv1.ClusterStatusCondi
 // SetCondition updates or appends a condition to the conditions slice.
 // If the condition doesn't exist, it will be appended as a new entry,
 // otherwise if a condition of the same type already exists, it will be updated.
-// It also sets the condition LastTransitionTime to now().
+// It also handles the condition LastTransitionTime.
 func SetCondition(conditions *[]configv1.ClusterOperatorStatusCondition, conditionType configv1.ClusterStatusConditionType,
 	conditionStatus configv1.ConditionStatus, reason string, message string) {
 	newCond := NewClusterOperatorStatusCondition(conditionType, conditionStatus, reason, message)
@@ -256,7 +284,16 @@ func SetCondition(conditions *[]configv1.ClusterOperatorStatusCondition, conditi
 	// Try to find and update existing condition.
 	for i := range *conditions {
 		if (*conditions)[i].Type == newCond.Type {
+			// The condition already exists.
+			if (*conditions)[i].Status == newCond.Status {
+				// The condition status hasn't changed, retain the previous lastTransitionTime.
+				newCond.LastTransitionTime = (*conditions)[i].LastTransitionTime
+			}
+
+			// Override the existing condition with the new one.
 			(*conditions)[i] = newCond
+
+			// Return early as we found and updated the condition in the slice.
 			return
 		}
 	}
@@ -294,4 +331,19 @@ func clusterObjectNeedsUpdating(co *configv1.ClusterOperator, conds []configv1.C
 	}
 
 	return co, shouldUpdate
+}
+
+// FilterOwnedConditions returns filters the list of provided conditions based on whether they have an expected condition type.
+func FilterOwnedConditions(conditions []configv1.ClusterOperatorStatusCondition, expectedConditionTypes []string) *[]configv1.ClusterOperatorStatusCondition {
+	filtered := []configv1.ClusterOperatorStatusCondition{}
+
+	for _, e := range expectedConditionTypes {
+		for _, c := range conditions {
+			if c.Type == configv1.ClusterStatusConditionType(e) {
+				filtered = append(filtered, c)
+			}
+		}
+	}
+
+	return &filtered
 }
