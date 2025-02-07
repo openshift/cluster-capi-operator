@@ -20,13 +20,22 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 
 	"github.com/go-logr/logr"
+
 	configv1 "github.com/openshift/api/config/v1"
 	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
+	machinev1applyconfigs "github.com/openshift/client-go/machine/applyconfigurations/machine/v1beta1"
+	consts "github.com/openshift/cluster-capi-operator/pkg/controllers"
+	"github.com/openshift/cluster-capi-operator/pkg/conversion/mapi2capi"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
+
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/tools/record"
 	capav1beta2 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	capibmv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
@@ -39,16 +48,38 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
+var (
+	// errAssertingCAPIAWSMachine is returned when we encounter an issue asserting a client.Object into a AWSMachine.
+	errAssertingCAPIAWSMachine = errors.New("error asserting the CAPI AWSMachine object")
+
+	// errAssertingCAPIPowerVSMachine is returned when we encounter an issue asserting a client.Object into a IBMPowerVSMachine.
+	errAssertingCAPIIBMPowerVSMachine = errors.New("error asserting the CAPI IBMPowerVSMachine object")
+)
+
 const (
+	reasonFailedToGetCAPIInfraResources       = "FailedToGetCAPIInfraResources"
+	reasonFailedToConvertMAPIMachineToCAPI    = "FailedToConvertMAPIMachineToCAPI"
+	reasonFailedToUpdateCAPIInfraMachine      = "FailedToUpdateCAPIInfraMachine"
+	reasonFailedToCreateCAPIInfraMachine      = "FailedToCreateCAPIInfraMachine"
+	reasonFailedToUpdateCAPIMachine           = "FailedToUpdateCAPIMachine"
+	reasonFailedToCreateCAPIMachine           = "FailedToCreateCAPIMachine"
+	reasonProgressingToCreateCAPIInfraMachine = "ProgressingToCreateCAPIInfraMachine"
+
 	capiNamespace  string = "openshift-cluster-api"
 	mapiNamespace  string = "openshift-machine-api"
 	machineSetKind string = "MachineSet"
 	controllerName string = "MachineSyncController"
+
+	messageSuccessfullySynchronizedCAPItoMAPI = "Successfully synchronized CAPI Machine to MAPI"
+	messageSuccessfullySynchronizedMAPItoCAPI = "Successfully synchronized MAPI Machine to CAPI"
+	progressingToSynchronizeMAPItoCAPI        = "Progressing to synchronize MAPI Machine to CAPI"
 )
 
 var (
 	// errPlatformNotSupported is returned when the platform is not supported.
 	errPlatformNotSupported = errors.New("error determining InfraMachine type, platform not supported")
+	// errUnrecognizedConditionStatus is returned when the condition status is not recognized.
+	errUnrecognizedConditionStatus = errors.New("error unrecognized condition status")
 )
 
 // MachineSyncReconciler reconciles CAPI and MAPI machines.
@@ -65,7 +96,7 @@ type MachineSyncReconciler struct {
 
 // SetupWithManager sets the CoreClusterReconciler controller up with the given manager.
 func (r *MachineSyncReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	infraMachine, err := getInfraMachineFromProvider(r.Platform)
+	infraMachine, _, err := initInfraMachineAndInfraClusterFromProvider(r.Platform)
 	if err != nil {
 		return fmt.Errorf("failed to get InfraMachine from Provider: %w", err)
 	}
@@ -153,8 +184,8 @@ func (r *MachineSyncReconciler) Reconcile(ctx context.Context, req reconcile.Req
 		return ctrl.Result{}, nil
 	}
 
-	// We mirror if the CAPI machine is owned by a MachineSet which has a MAPI
-	// counterpart. This is because we want to be able to migrate in both directions.
+	// We mirror a CAPI Machine to a MAPI Machine if the CAPI machine is owned by a CAPI MachineSet which has a MAPI MachineSet counterpart.
+	// This is because we want to be able to migrate in both directions.
 	if mapiMachineNotFound {
 		if shouldReconcile, err := r.shouldMirrorCAPIMachineToMAPIMachine(ctx, logger, capiMachine); err != nil {
 			return ctrl.Result{}, err
@@ -184,57 +215,243 @@ func (r *MachineSyncReconciler) reconcileCAPIMachinetoMAPIMachine(ctx context.Co
 
 // reconcileMAPIMachinetoCAPIMachine a MAPI Machine to a CAPI Machine.
 func (r *MachineSyncReconciler) reconcileMAPIMachinetoCAPIMachine(ctx context.Context, mapiMachine *machinev1beta1.Machine, capiMachine *capiv1beta1.Machine) (ctrl.Result, error) {
+	logger := log.FromContext(ctx)
+
+	newCAPIMachine, newCAPIInfraMachine, warns, err := r.convertMAPIToCAPIMachine(mapiMachine)
+	if err != nil {
+		conversionErr := fmt.Errorf("failed to convert MAPI machine to CAPI machine: %w", err)
+		if condErr := r.applySynchronizedConditionWithPatch(ctx, mapiMachine, corev1.ConditionFalse, reasonFailedToConvertMAPIMachineToCAPI, conversionErr.Error(), nil); condErr != nil {
+			return ctrl.Result{}, utilerrors.NewAggregate([]error{conversionErr, condErr})
+		}
+
+		return ctrl.Result{}, conversionErr
+	}
+
+	for _, warning := range warns {
+		logger.Info("Warning during conversion", "warning", warning)
+		r.Recorder.Event(mapiMachine, corev1.EventTypeWarning, "ConversionWarning", warning)
+	}
+
+	newCAPIMachine.SetResourceVersion(getResourceVersion(client.Object(capiMachine)))
+	newCAPIMachine.SetNamespace(r.CAPINamespace)
+	newCAPIMachine.Spec.InfrastructureRef.Namespace = r.CAPINamespace
+
+	_, infraMachine, err := r.fetchCAPIInfraResources(ctx, newCAPIMachine)
+	if err != nil && !apierrors.IsNotFound(err) {
+		fetchErr := fmt.Errorf("failed to fetch CAPI infra resources: %w", err)
+
+		if condErr := r.applySynchronizedConditionWithPatch(
+			ctx, mapiMachine, corev1.ConditionFalse, reasonFailedToGetCAPIInfraResources, fetchErr.Error(), nil); condErr != nil {
+			return ctrl.Result{}, utilerrors.NewAggregate([]error{fetchErr, condErr})
+		}
+
+		return ctrl.Result{}, fetchErr
+	}
+
+	if infraMachine != nil {
+		newCAPIInfraMachine.SetGeneration(infraMachine.GetGeneration())
+		newCAPIInfraMachine.SetUID(infraMachine.GetUID())
+		newCAPIInfraMachine.SetCreationTimestamp(infraMachine.GetCreationTimestamp())
+		newCAPIInfraMachine.SetManagedFields(infraMachine.GetManagedFields())
+	}
+
+	newCAPIInfraMachine.SetResourceVersion(util.GetResourceVersion(infraMachine))
+	newCAPIInfraMachine.SetNamespace(r.CAPINamespace)
+
+	result, syncronizationIsProgressing, err := r.createOrUpdateCAPIInfraMachine(ctx, mapiMachine, infraMachine, newCAPIInfraMachine)
+	if err != nil {
+		return result, fmt.Errorf("unable to ensure CAPI infra machine: %w", err)
+	}
+
+	if result, err := r.createOrUpdateCAPIMachine(ctx, mapiMachine, capiMachine, newCAPIMachine); err != nil {
+		return result, fmt.Errorf("unable to ensure CAPI machine: %w", err)
+	}
+
+	if syncronizationIsProgressing {
+		return ctrl.Result{}, r.applySynchronizedConditionWithPatch(ctx, mapiMachine, corev1.ConditionUnknown,
+			reasonProgressingToCreateCAPIInfraMachine, progressingToSynchronizeMAPItoCAPI, nil)
+	}
+
+	return ctrl.Result{}, r.applySynchronizedConditionWithPatch(ctx, mapiMachine, corev1.ConditionTrue,
+		consts.ReasonResourceSynchronized, messageSuccessfullySynchronizedMAPItoCAPI, &mapiMachine.Generation)
+}
+
+// convertMAPIToCAPIMachine converts a MAPI Machine to a CAPI Machine, selecting the correct converter based on the platform.
+func (r *MachineSyncReconciler) convertMAPIToCAPIMachine(mapiMachine *machinev1beta1.Machine) (*capiv1beta1.Machine, client.Object, []string, error) {
+	switch r.Platform {
+	case configv1.AWSPlatformType:
+		return mapi2capi.FromAWSMachineAndInfra(mapiMachine, r.Infra).ToMachineAndInfrastructureMachine() //nolint:wrapcheck
+	case configv1.PowerVSPlatformType:
+		return mapi2capi.FromPowerVSMachineAndInfra(mapiMachine, r.Infra).ToMachineAndInfrastructureMachine() //nolint:wrapcheck
+	default:
+		return nil, nil, nil, fmt.Errorf("%w: %s", errPlatformNotSupported, r.Platform)
+	}
+}
+
+// createOrUpdateCAPIInfraMachine creates a CAPI infra machine from a MAPI machine, or updates if it exists and it is out of date.
+//
+//nolint:funlen
+func (r *MachineSyncReconciler) createOrUpdateCAPIInfraMachine(ctx context.Context, mapiMachine *machinev1beta1.Machine, infraMachine client.Object, newCAPIInfraMachine client.Object) (ctrl.Result, bool, error) { //nolint:unparam
+	logger := log.FromContext(ctx)
+	// This variable tracks whether or not we are still progressing
+	// towards syncronizing the MAPI machine with the CAPI infra machine.
+	// It is then passed up the stack so the syncronized condition can be set accordingly.
+	syncronizationIsProgressing := false
+
+	if infraMachine == nil {
+		if err := r.Create(ctx, newCAPIInfraMachine); err != nil {
+			logger.Error(err, "Failed to create CAPI infra machine")
+			createErr := fmt.Errorf("failed to create CAPI infra machine: %w", err)
+
+			if condErr := r.applySynchronizedConditionWithPatch(ctx, mapiMachine, corev1.ConditionFalse, reasonFailedToCreateCAPIInfraMachine, createErr.Error(), nil); condErr != nil {
+				return ctrl.Result{}, syncronizationIsProgressing, utilerrors.NewAggregate([]error{createErr, condErr})
+			}
+
+			return ctrl.Result{}, syncronizationIsProgressing, createErr
+		}
+
+		logger.Info("Successfully created CAPI infra machine")
+
+		return ctrl.Result{}, syncronizationIsProgressing, nil
+	}
+
+	isEqualCAPIInfraMachine, err := capiInfraMachineIsEqual(r.Platform, infraMachine, newCAPIInfraMachine)
+	if err != nil {
+		logger.Error(err, "Failed to check CAPI infra machine diff")
+		updateErr := fmt.Errorf("failed to check CAPI infra machine diff: %w", err)
+
+		if condErr := r.applySynchronizedConditionWithPatch(
+			ctx, mapiMachine, corev1.ConditionFalse, reasonFailedToUpdateCAPIInfraMachine, updateErr.Error(), nil); condErr != nil {
+			return ctrl.Result{}, syncronizationIsProgressing, utilerrors.NewAggregate([]error{updateErr, condErr})
+		}
+
+		return ctrl.Result{}, syncronizationIsProgressing, updateErr
+	}
+
+	if isEqualCAPIInfraMachine {
+		logger.Info("No changes detected in CAPI infra machine")
+		return ctrl.Result{}, syncronizationIsProgressing, nil
+	}
+
+	logger.Info("Deleting the corresponding CAPI infra machine as it is out of date")
+
+	if err := r.Delete(ctx, infraMachine); err != nil {
+		logger.Error(err, "Failed to delete CAPI infra machine")
+
+		deleteErr := fmt.Errorf("failed to delete CAPI infra machine: %w", err)
+
+		if condErr := r.applySynchronizedConditionWithPatch(
+			ctx, mapiMachine, corev1.ConditionFalse, reasonFailedToUpdateCAPIInfraMachine, deleteErr.Error(), nil); condErr != nil {
+			return ctrl.Result{}, syncronizationIsProgressing, utilerrors.NewAggregate([]error{deleteErr, condErr})
+		}
+
+		return ctrl.Result{}, syncronizationIsProgressing, deleteErr
+	}
+
+	// The outdated outdated CAPI infra machine has been deleted.
+	// We will try and recreate an up-to-date one later.
+	logger.Info("Successfully deleted outdated CAPI infra machine")
+
+	// Set the syncronized as progressing to signal the caller
+	// we are still progressing and aren't fully synced yet.
+	syncronizationIsProgressing = true
+
+	return ctrl.Result{}, syncronizationIsProgressing, nil
+}
+
+// createOrUpdateCAPIMachine creates a CAPI machine from a MAPI one, or updates if it exists and it is out of date.
+func (r *MachineSyncReconciler) createOrUpdateCAPIMachine(ctx context.Context, mapiMachine *machinev1beta1.Machine, capiMachine *capiv1beta1.Machine, newCAPIMachine *capiv1beta1.Machine) (ctrl.Result, error) { //nolint:unparam
+	logger := log.FromContext(ctx)
+
+	if capiMachine == nil {
+		if err := r.Create(ctx, newCAPIMachine); err != nil {
+			logger.Error(err, "Failed to create CAPI machine")
+
+			createErr := fmt.Errorf("failed to create CAPI machine: %w", err)
+			if condErr := r.applySynchronizedConditionWithPatch(
+				ctx, mapiMachine, corev1.ConditionFalse, reasonFailedToCreateCAPIMachine, createErr.Error(), nil); condErr != nil {
+				return ctrl.Result{}, utilerrors.NewAggregate([]error{createErr, condErr})
+			}
+
+			return ctrl.Result{}, createErr
+		}
+
+		logger.Info("Successfully created CAPI machine")
+
+		return ctrl.Result{}, nil
+	}
+
+	if reflect.DeepEqual(newCAPIMachine.Spec, capiMachine.Spec) && objectMetaIsEqual(newCAPIMachine.ObjectMeta, capiMachine.ObjectMeta) {
+		logger.Info("No changes detected in CAPI machine")
+		return ctrl.Result{}, nil
+	}
+
+	logger.Info("Updating CAPI machine")
+
+	if err := r.Update(ctx, newCAPIMachine); err != nil {
+		logger.Error(err, "Failed to update CAPI machine")
+
+		updateErr := fmt.Errorf("failed to update CAPI machine: %w", err)
+
+		if condErr := r.applySynchronizedConditionWithPatch(ctx, mapiMachine, corev1.ConditionFalse, reasonFailedToUpdateCAPIMachine, updateErr.Error(), nil); condErr != nil {
+			return ctrl.Result{}, utilerrors.NewAggregate([]error{updateErr, condErr})
+		}
+
+		return ctrl.Result{}, updateErr
+	}
+
+	logger.Info("Successfully updated CAPI machine")
+
 	return ctrl.Result{}, nil
 }
 
-// getInfraMachineFromProvider returns the correct InfraMachine implementation
+// initInfraMachineAndInfraClusterFromProvider returns the correct InfraMachine and InfraCluster implementation
 // for a given provider.
 //
 // As we implement other cloud providers, we'll need to update this list.
-func getInfraMachineFromProvider(platform configv1.PlatformType) (client.Object, error) {
+func initInfraMachineAndInfraClusterFromProvider(platform configv1.PlatformType) (client.Object, client.Object, error) {
 	switch platform {
 	case configv1.AWSPlatformType:
-		return &capav1beta2.AWSMachine{}, nil
+		return &capav1beta2.AWSMachine{}, &capav1beta2.AWSCluster{}, nil
 	case configv1.PowerVSPlatformType:
-		return &capibmv1.IBMPowerVSMachine{}, nil
+		return &capibmv1.IBMPowerVSMachine{}, &capibmv1.IBMPowerVSCluster{}, nil
 	default:
-		return nil, fmt.Errorf("%w: %s", errPlatformNotSupported, platform)
+		return nil, nil, fmt.Errorf("%w: %s", errPlatformNotSupported, platform)
 	}
 }
 
 // shouldMirrorCAPIMachineToMAPIMachine takes a CAPI machine and determines if there should
 // be a MAPI mirror, it returns true only if:
 //
-// 1. The CAPI Machine is owned by a CAPI MachineSet,
-// 2. That owning CAPI MachineSet has a MAPI MachineSet Mirror.
+// 1. The CAPI machine is owned by a CAPI machineset,
+// 2. That owning CAPI machineset has a MAPI machineset Mirror.
 func (r *MachineSyncReconciler) shouldMirrorCAPIMachineToMAPIMachine(ctx context.Context, logger logr.Logger, machine *capiv1beta1.Machine) (bool, error) {
 	logger.WithName("shouldMirrorCAPIMachineToMAPIMachine").
 		Info("checking if CAPI machine should be mirrored", "machine", machine.GetName())
 
-	// Check if owner refs point to CAPI MachineSet
+	// Check if the CAPI machine has an ownerReference that points to a CAPI machineset.
 	for _, ref := range machine.ObjectMeta.OwnerReferences {
 		if ref.Kind != machineSetKind || ref.APIVersion != capiv1beta1.GroupVersion.String() {
 			continue
 		}
 
-		logger.Info("CAPI machine is owned by a machineset",
-			"machine", machine.GetName(), "machineset", ref.Name)
-		// Checks if the CAPI MS has a mirror in MAPI namespace
+		logger.Info("CAPI machine is owned by a CAPI machineset", "machine", machine.GetName(), "machineset", ref.Name)
+
+		// Checks if the CAPI machineset has a MAPI machineset mirror (same name) in MAPI namespace.
 		key := client.ObjectKey{
 			Namespace: r.MAPINamespace,
-			Name:      ref.Name,
+			Name:      ref.Name, // same name as the CAPI machineset.
 		}
 		mapiMachineSet := &machinev1beta1.MachineSet{}
 
 		if err := r.Get(ctx, key, mapiMachineSet); apierrors.IsNotFound(err) {
-			logger.Info("MAPI MachineSet mirror not found, nothing to do",
-				"machine", machine.GetName(), "machineset", ref.Name)
+			logger.Info("MAPI machineset mirror not found for the CAPI machineset, nothing to do", "machine", machine.GetName(), "machineset", ref.Name)
 
 			return false, nil
 		} else if err != nil {
-			logger.Error(err, "Failed to get MAPI MachineSet mirror")
+			logger.Error(err, "Failed to get MAPI machineset mirror")
 
-			return false, fmt.Errorf("failed to get MAPI MachineSet: %w", err)
+			return false, fmt.Errorf("failed to get MAPI machineset: %w", err)
 		}
 
 		return true, nil
@@ -243,4 +460,164 @@ func (r *MachineSyncReconciler) shouldMirrorCAPIMachineToMAPIMachine(ctx context
 	logger.Info("CAPI machine is not owned by a machineset, nothing to do", "machine", machine.GetName())
 
 	return false, nil
+}
+
+// fetchCAPIInfraResources fetches the provider specific infrastructure resources depending on which provider is set.
+func (r *MachineSyncReconciler) fetchCAPIInfraResources(ctx context.Context, capiMachine *capiv1beta1.Machine) (client.Object, client.Object, error) {
+	var infraCluster, infraMachine client.Object
+
+	infraClusterKey := client.ObjectKey{
+		Namespace: capiMachine.Namespace,
+		Name:      capiMachine.Spec.ClusterName,
+	}
+
+	infraMachineRef := capiMachine.Spec.InfrastructureRef
+	infraMachineKey := client.ObjectKey{
+		Namespace: infraMachineRef.Namespace,
+		Name:      infraMachineRef.Name,
+	}
+
+	infraMachine, infraCluster, err := initInfraMachineAndInfraClusterFromProvider(r.Platform)
+	if err != nil {
+		return nil, nil, fmt.Errorf("unable to devise CAPI infra resources: %w", err)
+	}
+
+	if err := r.Get(ctx, infraClusterKey, infraCluster); err != nil {
+		return nil, nil, fmt.Errorf("failed to get CAPI infrastructure cluster: %w", err)
+	}
+
+	if err := r.Get(ctx, infraMachineKey, infraMachine); err != nil {
+		return nil, nil, fmt.Errorf("failed to get CAPI infrastructure machine: %w", err)
+	}
+
+	return infraCluster, infraMachine, nil
+}
+
+// capiInfraMachineIsEqual checks whether the provided CAPI infra machines are equal.
+func capiInfraMachineIsEqual(platform configv1.PlatformType, infraMachine1, infraMachine2 client.Object) (bool, error) {
+	switch platform {
+	case configv1.AWSPlatformType:
+		typedInfraMachine1, ok := infraMachine1.(*capav1beta2.AWSMachine)
+		if !ok {
+			return false, errAssertingCAPIAWSMachine
+		}
+
+		typedinfraMachine2, ok := infraMachine2.(*capav1beta2.AWSMachine)
+		if !ok {
+			return false, errAssertingCAPIAWSMachine
+		}
+
+		return reflect.DeepEqual(typedInfraMachine1.Spec, typedinfraMachine2.Spec) && objectMetaIsEqual(typedInfraMachine1.ObjectMeta, typedinfraMachine2.ObjectMeta), nil
+	case configv1.PowerVSPlatformType:
+		typedInfraMachine1, ok := infraMachine1.(*capibmv1.IBMPowerVSMachine)
+		if !ok {
+			return false, errAssertingCAPIIBMPowerVSMachine
+		}
+
+		typedinfraMachine2, ok := infraMachine2.(*capibmv1.IBMPowerVSMachine)
+		if !ok {
+			return false, errAssertingCAPIIBMPowerVSMachine
+		}
+
+		return reflect.DeepEqual(typedInfraMachine1.Spec, typedinfraMachine2.Spec) && objectMetaIsEqual(typedInfraMachine1.ObjectMeta, typedinfraMachine2.ObjectMeta), nil
+	default:
+		return false, fmt.Errorf("%w: %s", errPlatformNotSupported, platform)
+	}
+}
+
+// applySynchronizedConditionWithPatch updates the synchronized condition
+// using a server side apply patch. We do this to force ownership of the
+// 'Synchronized' condition and 'SynchronizedGeneration'.
+func (r *MachineSyncReconciler) applySynchronizedConditionWithPatch(ctx context.Context, mapiMachine *machinev1beta1.Machine, status corev1.ConditionStatus, reason, message string, generation *int64) error {
+	var (
+		severity               machinev1beta1.ConditionSeverity
+		synchronizedGeneration int64
+	)
+
+	switch status {
+	case corev1.ConditionTrue:
+		severity = machinev1beta1.ConditionSeverityNone
+
+		if generation != nil {
+			// Update the SynchronizedGeneration to the newer Generation value.
+			synchronizedGeneration = *generation
+		}
+	case corev1.ConditionFalse:
+		severity = machinev1beta1.ConditionSeverityError
+		// Restore the old SynchronizedGeneration, otherwise if that's not set the existing one will be cleared.
+		synchronizedGeneration = mapiMachine.Status.SynchronizedGeneration
+	case corev1.ConditionUnknown:
+		severity = machinev1beta1.ConditionSeverityInfo
+		// Restore the old SynchronizedGeneration, otherwise if that's not set the existing one will be cleared.
+		synchronizedGeneration = mapiMachine.Status.SynchronizedGeneration
+	default:
+		return fmt.Errorf("%w: %s", errUnrecognizedConditionStatus, status)
+	}
+
+	conditionAc := machinev1applyconfigs.Condition().
+		WithType(consts.SynchronizedCondition).
+		WithStatus(status).
+		WithReason(reason).
+		WithMessage(message).
+		WithSeverity(severity)
+
+	setLastTransitionTime(consts.SynchronizedCondition, mapiMachine.Status.Conditions, conditionAc)
+
+	statusAc := machinev1applyconfigs.MachineStatus().
+		WithConditions(conditionAc).
+		WithSynchronizedGeneration(synchronizedGeneration)
+
+	msAc := machinev1applyconfigs.Machine(mapiMachine.GetName(), mapiMachine.GetNamespace()).
+		WithStatus(statusAc)
+
+	if err := r.Status().Patch(ctx, mapiMachine, util.ApplyConfigPatch(msAc), client.ForceOwnership, client.FieldOwner(controllerName+"-SynchronizedCondition")); err != nil {
+		return fmt.Errorf("failed to patch MAPI machine status with synchronized condition: %w", err)
+	}
+
+	return nil
+}
+
+// setLastTransitionTime determines if the last transition time should be set or updated for a given condition type.
+func setLastTransitionTime(condType machinev1beta1.ConditionType, conditions []machinev1beta1.Condition, conditionAc *machinev1applyconfigs.ConditionApplyConfiguration) {
+	for _, condition := range conditions {
+		if condition.Type == condType {
+			if !hasSameState(&condition, conditionAc) {
+				conditionAc.WithLastTransitionTime(metav1.Now())
+
+				return
+			}
+
+			conditionAc.WithLastTransitionTime(condition.LastTransitionTime)
+
+			return
+		}
+	}
+	// Condition does not exist; set the transition time
+	conditionAc.WithLastTransitionTime(metav1.Now())
+}
+
+// hasSameState returns true if a condition has the same state as a condition
+// apply config; state is defined by the union of following fields: Type,
+// Status.
+func hasSameState(i *machinev1beta1.Condition, j *machinev1applyconfigs.ConditionApplyConfiguration) bool {
+	return i.Type == *j.Type &&
+		i.Status == *j.Status
+}
+
+// objectMetaIsEqual determines if the two ObjectMeta are equal for the fields we care about
+// when synchronising MAPI and CAPI Machines.
+func objectMetaIsEqual(a, b metav1.ObjectMeta) bool {
+	return reflect.DeepEqual(a.Labels, b.Labels) &&
+		reflect.DeepEqual(a.Annotations, b.Annotations) &&
+		reflect.DeepEqual(a.Finalizers, b.Finalizers) &&
+		reflect.DeepEqual(a.OwnerReferences, b.OwnerReferences)
+}
+
+// getResourceVersion returns the object ResourceVersion or the zero value for it.
+func getResourceVersion(obj client.Object) string {
+	if obj == nil || reflect.ValueOf(obj).IsNil() {
+		return "0"
+	}
+
+	return obj.GetResourceVersion()
 }
