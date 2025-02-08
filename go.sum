@@ -383,6 +383,8 @@ github.com/mattn/go-isatty v0.0.20/go.mod h1:W+V8PltTTMOvKvAeJH7IuucS94S2C6jfK/D
 github.com/mattn/go-runewidth v0.0.9/go.mod h1:H031xJmbD/WCDINGzjvQ9THkh0rPKHF+m2gUSrubnMI=
 github.com/mattn/go-runewidth v0.0.14 h1:+xnbZSEeDbOIg5/mE6JF0w6n9duR1l3/WmbinWVwUuU=
 github.com/mattn/go-runewidth v0.0.14/go.mod h1:Jdepj2loyihRzMpdS35Xk/zdY8IAYHsh153qUoGf23w=
+github.com/metal3-io/ip-address-manager/api v1.9.2 h1:8pFVk2jhs3zpijIbr9nKaqKPPvg323Z2QKLBNRrKL2Y=
+github.com/metal3-io/ip-address-manager/api v1.9.2/go.mod h1:l4tGHeMiR3VfwAxOKw1O7f+3y9waB1tDQ0AVbRp9zoc=
 github.com/mgechev/revive v1.3.9 h1:18Y3R4a2USSBF+QZKFQwVkBROUda7uoBlkEuBD+YD1A=
 github.com/mgechev/revive v1.3.9/go.mod h1:+uxEIr5UH0TjXWHTno3xh4u7eg6jDpXKzQccA9UGhHU=
 github.com/mitchellh/go-homedir v1.1.0 h1:lukF9ziXFxDFPkA1vsr5zpc1XuPDn/wFntq5mG+4E0Y=
@@ -424,6 +426,8 @@ github.com/openshift/client-go v0.0.0-20250131180035-f7ec47e2d87a h1:duO3JMrUOqV
 github.com/openshift/client-go v0.0.0-20250131180035-f7ec47e2d87a/go.mod h1:Qw3ThpzVZ0bfTILpBNYg4LGyjtNxfyCiGh/uDLOOTP8=
 github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20250312115727-157f88eba755 h1:9CtJhXB7aw0sEtDVW23LzID9pSdTidIvTkRvw1/1QCw=
 github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20250312115727-157f88eba755/go.mod h1:3P6CIJp8Wyvg5YrUxA5Pkd7p+zWAgAmmG/3aticLr4I=
+github.com/openshift/cluster-api-provider-metal3/api v0.0.0-20250203115422-6f1457a92266 h1:ErY1gbHB3JeTNuoS2mAYdR+ymPPhg+FF7Fi10nk3NO4=
+github.com/openshift/cluster-api-provider-metal3/api v0.0.0-20250203115422-6f1457a92266/go.mod h1:UuIIrA9dSO/fuXxKcCpok9e9Mjj7tkxuEgwjwxhzYwU=
 github.com/openshift/library-go v0.0.0-20250203131244-80620876b7c2 h1:LaJmI+EeFnpbxs5H4Y6KOiNXhtPjldqvNzVfPpNM+dI=
 github.com/openshift/library-go v0.0.0-20250203131244-80620876b7c2/go.mod h1:GHwvopE5KXXCz4ULHp871sTPLLW+FB+hu/RIzlNwxx8=
 github.com/otiai10/copy v1.2.0/go.mod h1:rrF5dJ5F0t/EWSYODDu4j9/vEeYHMkc8jt0zJChqQWw=
