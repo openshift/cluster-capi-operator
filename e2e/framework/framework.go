@@ -16,13 +16,15 @@ const (
 
 	RetryShort  = 1 * time.Second
 	RetryMedium = 5 * time.Second
+	RetryLong   = 10 * time.Second
 )
 
 var (
-	WaitShort    = 1 * time.Minute
-	WaitMedium   = 3 * time.Minute
-	WaitLong     = 15 * time.Minute
-	WaitOverLong = 30 * time.Minute
+	WaitShort     = 1 * time.Minute
+	WaitMedium    = 3 * time.Minute
+	WaitLong      = 15 * time.Minute
+	WaitOverLong  = 30 * time.Minute
+	WaitBaremetal = 60 * time.Minute
 
 	ctx = context.Background()
 )
