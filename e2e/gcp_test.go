@@ -58,6 +58,7 @@ var _ = Describe("Cluster API GCP MachineSet", Ordered, func() {
 				APIVersion: infraAPIVersion,
 				Name:       gcpMachineTemplateName,
 			},
+			"worker-user-data",
 		))
 
 		framework.WaitForMachineSet(cl, machineSet.Name)
