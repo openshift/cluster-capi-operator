@@ -169,6 +169,8 @@ func (r *InfraClusterController) reconcileInfraCluster(ctx context.Context, log 
 }
 
 // ensureInfraCluster ensures an InfraCluster object exists in the cluster.
+//
+//nolint:funlen
 func (r *InfraClusterController) ensureInfraCluster(ctx context.Context, log logr.Logger) (client.Object, error) {
 	var infraCluster client.Object
 	// TODO: implement InfraCluster generation for missing platforms.
@@ -210,6 +212,13 @@ func (r *InfraClusterController) ensureInfraCluster(ctx context.Context, log log
 		var err error
 
 		infraCluster, err = r.ensureVSphereCluster(ctx, log)
+		if err != nil {
+			return nil, fmt.Errorf("error getting InfraCluster object: %w", err)
+		}
+	case configv1.BareMetalPlatformType:
+		var err error
+
+		infraCluster, err = r.ensureMetal3Cluster(ctx, log)
 		if err != nil {
 			return nil, fmt.Errorf("error getting InfraCluster object: %w", err)
 		}
