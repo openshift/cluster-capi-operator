@@ -221,11 +221,13 @@ func mapOCPPlatformToInfraClusterKindAndVersion(platform configv1.PlatformType) 
 	case configv1.AWSPlatformType:
 		return fmt.Sprintf("%sCluster", platform), capiInfraClusterAPIVersionV1Beta2, nil
 	case configv1.AzurePlatformType, configv1.GCPPlatformType,
-		configv1.VSpherePlatformType, configv1.OpenStackPlatformType, configv1.BareMetalPlatformType:
+		configv1.VSpherePlatformType, configv1.OpenStackPlatformType:
 		return fmt.Sprintf("%sCluster", platform), capiInfraClusterAPIVersionV1Beta1, nil
 	// The CAPI corresponding CRD name is IBMPowerVSCluster https://github.com/kubernetes-sigs/cluster-api-provider-ibmcloud/blob/main/api/v1beta2/ibmpowervscluster_types.go#L247
 	case configv1.PowerVSPlatformType:
 		return "ibmpowervscluster", capiInfraClusterAPIVersionV1Beta1, nil
+	case configv1.BareMetalPlatformType:
+		return "Metal3Cluster", capiInfraClusterAPIVersionV1Beta1, nil
 	default:
 		return "", "", fmt.Errorf("%w: %q", errUnsupportedPlatformType, platform)
 	}
