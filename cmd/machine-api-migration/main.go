@@ -34,7 +34,7 @@ import (
 	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
-	"github.com/openshift/api/features"
+	//"github.com/openshift/api/features"
 	featuregates "github.com/openshift/library-go/pkg/operator/configobserver/featuregates"
 	"github.com/openshift/library-go/pkg/operator/events"
 	"github.com/spf13/pflag"
@@ -161,23 +161,23 @@ func main() {
 	// Set it up here as we may need to branch early if the feature gate is not enabled.
 	stop := ctrl.SetupSignalHandler()
 
-	featureGateAccessor, err := getFeatureGates(mgr)
-	if err != nil {
-		klog.Error(err, "unable to get feature gates")
-		os.Exit(1)
-	}
+	//featureGateAccessor, err := getFeatureGates(mgr)
+	//if err != nil {
+	//	klog.Error(err, "unable to get feature gates")
+	//	os.Exit(1)
+	//}
 
-	currentFeatureGates, err := featureGateAccessor.CurrentFeatureGates()
-	if err != nil {
-		klog.Error(err, "unable to get current feature gates")
-		os.Exit(1)
-	}
+	//currentFeatureGates, err := featureGateAccessor.CurrentFeatureGates()
+	//if err != nil {
+	//	klog.Error(err, "unable to get current feature gates")
+	//	os.Exit(1)
+	//}
 
-	if !currentFeatureGates.Enabled(features.FeatureGateMachineAPIMigration) {
-		klog.Info("MachineAPIMigration feature gate is not enabled, nothing to do. Waiting for termination signal.")
-		<-stop.Done()
-		os.Exit(0)
-	}
+	//if !currentFeatureGates.Enabled(features.FeatureGateMachineAPIMigration) {
+	//	klog.Info("MachineAPIMigration feature gate is not enabled, nothing to do. Waiting for termination signal.")
+	//	<-stop.Done()
+	//	os.Exit(0)
+	//}
 
 	infraClient, err := client.New(cfg, client.Options{Scheme: scheme})
 	if err != nil {
