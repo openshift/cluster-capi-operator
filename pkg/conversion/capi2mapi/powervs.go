@@ -141,15 +141,15 @@ func (m machineSetAndPowerVSMachineTemplateAndPowerVSCluster) ToMachineSet() (*m
 		errs = append(errs, err)
 	}
 
+	if len(errs) > 0 {
+		return nil, warnings, utilerrors.NewAggregate(errs)
+	}
+
 	mapiMachineSet.Spec.Template.Spec = mapiPowerVSMachine.Spec
 
 	// Copy the labels and annotations from the Machine to the template.
 	mapiMachineSet.Spec.Template.ObjectMeta.Annotations = mapiPowerVSMachine.ObjectMeta.Annotations
 	mapiMachineSet.Spec.Template.ObjectMeta.Labels = mapiPowerVSMachine.ObjectMeta.Labels
-
-	if len(errs) > 0 {
-		return nil, warnings, utilerrors.NewAggregate(errs)
-	}
 
 	return mapiMachineSet, warnings, nil
 }

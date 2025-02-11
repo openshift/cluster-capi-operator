@@ -22,6 +22,7 @@ import (
 	"time"
 
 	configv1 "github.com/openshift/api/config/v1"
+	mapiv1alpha1 "github.com/openshift/api/machine/v1alpha1"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	configv1client "github.com/openshift/client-go/config/clientset/versioned"
 	configinformers "github.com/openshift/client-go/config/informers/externalversions"
@@ -29,10 +30,11 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/machinesetsync"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/machinesync"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
-	capav1beta2 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
-	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
+	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
-	"github.com/openshift/api/features"
+	//"github.com/openshift/api/features"
 	featuregates "github.com/openshift/library-go/pkg/operator/configobserver/featuregates"
 	"github.com/openshift/library-go/pkg/operator/events"
 	"github.com/spf13/pflag"
@@ -59,10 +61,12 @@ var (
 
 func initScheme(scheme *runtime.Scheme) {
 	// TODO(joelspeed): Add additional schemes here once we work out exactly which will be needed.
-	utilruntime.Must(mapiv1beta1.AddToScheme(scheme))
-	utilruntime.Must(configv1.AddToScheme(scheme))
-	utilruntime.Must(capav1beta2.AddToScheme(scheme))
-	utilruntime.Must(capiv1beta1.AddToScheme(scheme))
+	utilruntime.Must(mapiv1alpha1.Install(scheme))
+	utilruntime.Must(mapiv1beta1.Install(scheme))
+	utilruntime.Must(configv1.Install(scheme))
+	utilruntime.Must(awsv1.AddToScheme(scheme))
+	utilruntime.Must(openstackv1.AddToScheme(scheme))
+	utilruntime.Must(clusterv1.AddToScheme(scheme))
 }
 
 //nolint:funlen
@@ -71,7 +75,7 @@ func main() {
 	initScheme(scheme)
 
 	leaderElectionConfig := config.LeaderElectionConfiguration{
-		LeaderElect:       true,
+		LeaderElect:       false,
 		LeaseDuration:     util.LeaseDuration,
 		RenewDeadline:     util.RenewDeadline,
 		RetryPeriod:       util.RetryPeriod,
@@ -157,23 +161,23 @@ func main() {
 	// Set it up here as we may need to branch early if the feature gate is not enabled.
 	stop := ctrl.SetupSignalHandler()
 
-	featureGateAccessor, err := getFeatureGates(mgr)
-	if err != nil {
-		klog.Error(err, "unable to get feature gates")
-		os.Exit(1)
-	}
+	//featureGateAccessor, err := getFeatureGates(mgr)
+	//if err != nil {
+	//	klog.Error(err, "unable to get feature gates")
+	//	os.Exit(1)
+	//}
 
-	currentFeatureGates, err := featureGateAccessor.CurrentFeatureGates()
-	if err != nil {
-		klog.Error(err, "unable to get current feature gates")
-		os.Exit(1)
-	}
+	//currentFeatureGates, err := featureGateAccessor.CurrentFeatureGates()
+	//if err != nil {
+	//	klog.Error(err, "unable to get current feature gates")
+	//	os.Exit(1)
+	//}
 
-	if !currentFeatureGates.Enabled(features.FeatureGateMachineAPIMigration) {
-		klog.Info("MachineAPIMigration feature gate is not enabled, nothing to do. Waiting for termination signal.")
-		<-stop.Done()
-		os.Exit(0)
-	}
+	//if !currentFeatureGates.Enabled(features.FeatureGateMachineAPIMigration) {
+	//	klog.Info("MachineAPIMigration feature gate is not enabled, nothing to do. Waiting for termination signal.")
+	//	<-stop.Done()
+	//	os.Exit(0)
+	//}
 
 	infraClient, err := client.New(cfg, client.Options{Scheme: scheme})
 	if err != nil {
@@ -197,6 +201,9 @@ func main() {
 	switch provider {
 	case configv1.AWSPlatformType:
 		klog.Info("MachineAPIMigration: starting AWS controllers")
+
+	case configv1.OpenStackPlatformType:
+		klog.Info("MachineAPIMigration: starting OpenStack controllers")
 
 	default:
 		klog.Infof("MachineAPIMigration not implemented for platform %s, nothing to do. Waiting for termination signal.", provider)

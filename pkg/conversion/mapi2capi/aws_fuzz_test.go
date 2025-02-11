@@ -40,7 +40,7 @@ import (
 )
 
 const (
-	mapiNamespace = "openshift-machine-api"
+	awsProviderSpecKind = "AWSMachineProviderConfig"
 )
 
 var _ = Describe("AWS Fuzz (mapi2capi)", func() {
@@ -186,8 +186,8 @@ func awsProviderSpecFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interfa
 			c.FuzzNoCustom(ps)
 
 			// The type meta is always set to these values by the conversion.
-			ps.Kind = "AWSMachineProviderConfig"
-			ps.APIVersion = "machine.openshift.io/v1beta1"
+			ps.APIVersion = mapiv1.GroupVersion.String()
+			ps.Kind = awsProviderSpecKind
 
 			// region must match the input AWSCluster so force it here.
 			ps.Placement.Region = "us-east-1"
@@ -198,7 +198,7 @@ func awsProviderSpecFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interfa
 			ps.ObjectMeta = metav1.ObjectMeta{}
 			ps.CredentialsSecret = nil
 
-			// At lest one device mapping must have no device name.
+			// At least one device mapping must have no device name.
 			rootFound := false
 			for i := range ps.BlockDevices {
 				if ps.BlockDevices[i].DeviceName == nil {

@@ -25,8 +25,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	kubescheme "k8s.io/client-go/kubernetes/scheme"
 
-	capav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
-	capiv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
+	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
 var scheme *runtime.Scheme
@@ -35,12 +36,16 @@ func init() {
 	// Register the scheme for the test.
 	// This must be done before the tests are run as the fuzzer is needed before the test tree is compiled.
 	scheme = kubescheme.Scheme
-	if err := capiv1.AddToScheme(scheme); err != nil {
+	if err := clusterv1.AddToScheme(scheme); err != nil {
 		panic(fmt.Sprintf("failed to add cluster API scheme: %v", err))
 	}
 
-	if err := capav1.AddToScheme(scheme); err != nil {
-		panic(fmt.Sprintf("failed to add aws scheme: %v", err))
+	if err := awsv1.AddToScheme(scheme); err != nil {
+		panic(fmt.Sprintf("failed to add AWS scheme: %v", err))
+	}
+
+	if err := openstackv1.AddToScheme(scheme); err != nil {
+		panic(fmt.Sprintf("failed to add OpenStack scheme: %v", err))
 	}
 }
 
