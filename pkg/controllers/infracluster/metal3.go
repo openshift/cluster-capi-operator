@@ -25,6 +25,7 @@ import (
 	metal3v1 "github.com/metal3-io/cluster-api-provider-metal3/api/v1beta1"
 	cerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -69,6 +70,9 @@ func (r *InfraClusterController) ensureMetal3Cluster(ctx context.Context, log lo
 				Host: apiURL.Hostname(),
 				Port: int(port),
 			},
+			// These two fields say the same thing.  NoCloudProvider is deprecated.
+			NoCloudProvider:      ptr.To(true),
+			CloudProviderEnabled: ptr.To(false),
 		},
 	}
 
