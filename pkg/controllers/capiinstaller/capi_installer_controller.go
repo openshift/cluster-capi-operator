@@ -46,9 +46,6 @@ import (
 	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
-	"github.com/openshift/library-go/pkg/operator/events"
-	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
-	"github.com/openshift/library-go/pkg/operator/resource/resourcemerge"
 
 	"github.com/klauspost/compress/zstd"
 )
@@ -74,7 +71,6 @@ const (
 
 var (
 	errEmptyProviderConfigMap = errors.New("provider configmap has no components data")
-	errResourceNotFound       = errors.New("resource not found")
 )
 
 // CapiInstallerController reconciles a ClusterOperator object.
@@ -176,55 +172,19 @@ func (r *CapiInstallerController) reconcile(ctx context.Context, log logr.Logger
 // applyProviderComponents applies the provider components to the cluster.
 // It does so by differentiating between static components and dynamic components (i.e. Deployments).
 func (r *CapiInstallerController) applyProviderComponents(ctx context.Context, components []string) error {
-	componentsFilenames, componentsAssets, deploymentsFilenames, deploymentsAssets, err := getProviderComponents(r.Scheme, components)
+	providerObjects, err := getProviderObjects(r.Scheme, components)
 	if err != nil {
 		return fmt.Errorf("error getting provider components: %w", err)
 	}
 
-	// Perform a Direct apply of the static components.
-	res := resourceapply.ApplyDirectly(
-		ctx,
-		resourceapply.NewKubeClientHolder(r.ApplyClient).WithAPIExtensionsClient(r.APIExtensionsClient),
-		events.NewInMemoryRecorder("cluster-capi-operator-capi-installer-apply-client"),
-		resourceapply.NewResourceCache(),
-		assetFn(componentsAssets),
-		componentsFilenames...,
-	)
-
-	// For each of the Deployment components perform a Deployment-specific apply.
-	for _, d := range deploymentsFilenames {
-		deploymentManifest, ok := deploymentsAssets[d]
-		if !ok {
-			panic("error finding deployment manifest")
-		}
-
-		obj, err := yamlToRuntimeObject(r.Scheme, deploymentManifest)
-		if err != nil {
-			return fmt.Errorf("error parsing CAPI provider deployment manifets %q: %w", d, err)
-		}
-
-		// TODO: Deployments State/Conditions should influence the overall ClusterOperator Status.
-		deployment, ok := obj.(*appsv1.Deployment)
-		if !ok {
-			return fmt.Errorf("error casting object to Deployment: %w", err)
-		}
-
-		if _, _, err := resourceapply.ApplyDeployment(
-			ctx,
-			r.ApplyClient.AppsV1(),
-			events.NewInMemoryRecorder("cluster-capi-operator-capi-installer-apply-client"),
-			deployment,
-			resourcemerge.ExpectedDeploymentGeneration(deployment, nil),
-		); err != nil {
-			return fmt.Errorf("error applying CAPI provider deployment %q: %w", deployment.Name, err)
-		}
-	}
-
 	var errs error
 
-	for i, r := range res {
-		if r.Error != nil {
-			errs = errors.Join(errs, fmt.Errorf("error applying CAPI provider component %q at position %d: %w", r.File, i, r.Error))
+	for i, providerObject := range providerObjects {
+		err := r.Patch(ctx, providerObject, client.Apply, client.ForceOwnership, client.FieldOwner("cluster-capi-operator.openshift.io/installer"))
+		if err != nil {
+			gvk := providerObject.GroupVersionKind()
+			name := strings.Join([]string{gvk.Group, gvk.Version, gvk.Kind, providerObject.GetName()}, "/")
+			errs = errors.Join(errs, fmt.Errorf("error applying CAPI provider component %q at position %d: %w", name, i, err))
 		}
 	}
 
@@ -233,38 +193,20 @@ func (r *CapiInstallerController) applyProviderComponents(ctx context.Context, c
 
 // getProviderComponents parses the provided list of components into a map of filenames and assets.
 // Deployments are handled separately so are returned in a separate map.
-func getProviderComponents(scheme *runtime.Scheme, components []string) ([]string, map[string]string, []string, map[string]string, error) {
-	componentsFilenames := []string{}
-	componentsAssets := make(map[string]string)
-
-	deploymentsFilenames := []string{}
-	deploymentsAssets := make(map[string]string)
+func getProviderObjects(scheme *runtime.Scheme, components []string) ([]*unstructured.Unstructured, error) {
+	objects := make([]*unstructured.Unstructured, len(components))
 
 	for i, m := range components {
 		// Parse the YAML manifests into unstructure objects.
 		u, err := yamlToUnstructured(scheme, m)
 		if err != nil {
-			return nil, nil, nil, nil, fmt.Errorf("error parsing provider component at position %d to unstructured: %w", i, err)
+			return nil, fmt.Errorf("error parsing provider component at position %d to unstructured: %w", i, err)
 		}
 
-		name := fmt.Sprintf("%s/%s/%s - %s",
-			u.GroupVersionKind().Group,
-			u.GroupVersionKind().Version,
-			u.GroupVersionKind().Kind,
-			getResourceName(u.GetNamespace(), u.GetName()),
-		)
-
-		// Divide manifests into static vs deployment components.
-		if u.GroupVersionKind().Kind == "Deployment" {
-			deploymentsFilenames = append(deploymentsFilenames, name)
-			deploymentsAssets[name] = m
-		} else {
-			componentsFilenames = append(componentsFilenames, name)
-			componentsAssets[name] = m
-		}
+		objects[i] = u
 	}
 
-	return componentsFilenames, componentsAssets, deploymentsFilenames, deploymentsAssets, nil
+	return objects, nil
 }
 
 // setAvailableCondition sets the ClusterOperator status condition to Available.
@@ -443,28 +385,6 @@ func platformToInfraProviderComponentName(platform configv1.PlatformType) string
 	}
 
 	return strings.ToLower(fmt.Sprintf("infrastructure-%s", platform))
-}
-
-// getResourceName returns a "namespace/name" string or a "name" string if namespace is empty.
-func getResourceName(namespace, name string) string {
-	resourceName := fmt.Sprintf("%s/%s", namespace, name)
-	if namespace == "" {
-		resourceName = name
-	}
-
-	return resourceName
-}
-
-// assetsFn is a resourceapply.AssetFunc.
-func assetFn(assetsMap map[string]string) resourceapply.AssetFunc {
-	return func(name string) ([]byte, error) {
-		o, ok := assetsMap[name]
-		if !ok {
-			return nil, fmt.Errorf("error fetching resource %s: %w", name, errResourceNotFound)
-		}
-
-		return []byte(o), nil
-	}
 }
 
 // yamlToRuntimeObject parses a YAML manifest into a runtime.Object.
