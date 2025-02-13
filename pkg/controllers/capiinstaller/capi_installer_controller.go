@@ -42,6 +42,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
@@ -293,7 +294,16 @@ func (r *CapiInstallerController) SetupWithManager(mgr ctrl.Manager) error {
 		build = build.Watches(
 			w.obj,
 			handler.EnqueueRequestsFromMapFunc(toClusterOperator),
-			builder.WithPredicates(ownedPlatformLabelPredicate(w.namespace, r.Platform)),
+			builder.WithPredicates(
+				ownedPlatformLabelPredicate(w.namespace, r.Platform),
+
+				// We're only interested in changes which affect an object's spec
+				predicate.Or(
+					predicate.AnnotationChangedPredicate{},
+					predicate.LabelChangedPredicate{},
+					predicate.GenerationChangedPredicate{},
+				),
+			),
 		)
 	}
 
