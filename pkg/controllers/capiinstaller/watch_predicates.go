@@ -32,11 +32,12 @@ func clusterOperatorPredicates() predicate.Funcs {
 		return ok && clusterOperator.GetName() == clusterOperatorName
 	}
 
+	// We only want to be reconciled on creation of the cluster operator,
+	// because we wait for it before reconciling. The Create event also fires
+	// when the manager is started, so this will additionally ensure we are
+	// called at least once at startup.
 	return predicate.Funcs{
-		CreateFunc:  func(e event.CreateEvent) bool { return isClusterOperator(e.Object) },
-		UpdateFunc:  func(e event.UpdateEvent) bool { return isClusterOperator(e.ObjectNew) },
-		GenericFunc: func(e event.GenericEvent) bool { return isClusterOperator(e.Object) },
-		DeleteFunc:  func(e event.DeleteEvent) bool { return isClusterOperator(e.Object) },
+		CreateFunc: func(e event.CreateEvent) bool { return isClusterOperator(e.Object) },
 	}
 }
 
