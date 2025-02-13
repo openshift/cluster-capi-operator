@@ -31,9 +31,12 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
+	"k8s.io/utils/ptr"
 
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -90,7 +93,17 @@ type CapiInstallerController struct {
 func (r *CapiInstallerController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := ctrl.LoggerFrom(ctx).WithName(controllerName)
 
-	res, err := r.reconcile(ctx, log)
+	clusterOperator := &configv1.ClusterOperator{}
+	if err := r.Get(ctx, client.ObjectKey{Name: controllers.ClusterOperatorName}, clusterOperator); err != nil {
+		if apierrors.IsNotFound(err) {
+			log.Info("Waiting for creation of cluster operator")
+			return ctrl.Result{}, nil
+		}
+
+		return ctrl.Result{}, fmt.Errorf("failed to get cluster operator: %w", err)
+	}
+
+	res, err := r.reconcile(ctx, log, clusterOperator)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("error during reconcile: %w", err)
 	}
@@ -108,7 +121,7 @@ func (r *CapiInstallerController) Reconcile(ctx context.Context, req ctrl.Reques
 // and it applies them to the cluster.
 //
 //nolint:unparam
-func (r *CapiInstallerController) reconcile(ctx context.Context, log logr.Logger) (ctrl.Result, error) {
+func (r *CapiInstallerController) reconcile(ctx context.Context, log logr.Logger, clusterOperator *configv1.ClusterOperator) (ctrl.Result, error) {
 	// Define the desired providers to be installed for this cluster.
 	// We always want to install the core provider, which in our case is the default cluster-api core provider.
 	// We also want to install the infrastructure provider that matches the currently detected platform the cluster is running on.
@@ -156,7 +169,7 @@ func (r *CapiInstallerController) reconcile(ctx context.Context, log logr.Logger
 		}
 
 		// Apply all the collected provider components manifests.
-		if err := r.applyProviderComponents(ctx, providerComponents); err != nil {
+		if err := r.applyProviderComponents(ctx, providerComponents, clusterOperator); err != nil {
 			if err := r.setDegradedCondition(ctx, log); err != nil {
 				return ctrl.Result{}, fmt.Errorf("failed to set conditions for CAPI Installer controller: %w", err)
 			}
@@ -172,7 +185,7 @@ func (r *CapiInstallerController) reconcile(ctx context.Context, log logr.Logger
 
 // applyProviderComponents applies the provider components to the cluster.
 // It does so by differentiating between static components and dynamic components (i.e. Deployments).
-func (r *CapiInstallerController) applyProviderComponents(ctx context.Context, components []string) error {
+func (r *CapiInstallerController) applyProviderComponents(ctx context.Context, components []string, owner client.Object) error {
 	providerObjects, err := getProviderObjects(r.Scheme, components)
 	if err != nil {
 		return fmt.Errorf("error getting provider components: %w", err)
@@ -181,6 +194,17 @@ func (r *CapiInstallerController) applyProviderComponents(ctx context.Context, c
 	var errs error
 
 	for i, providerObject := range providerObjects {
+		// All objects created by cluster-capi-operator are owned by its cluster operator
+		providerObject.SetOwnerReferences([]metav1.OwnerReference{
+			{
+				APIVersion: owner.GetObjectKind().GroupVersionKind().Version,
+				Kind:       owner.GetObjectKind().GroupVersionKind().Kind,
+				Name:       owner.GetName(),
+				UID:        owner.GetUID(),
+				Controller: ptr.To(true),
+			},
+		})
+
 		err := r.Patch(ctx, providerObject, client.Apply, client.ForceOwnership, client.FieldOwner("cluster-capi-operator.openshift.io/installer"))
 		if err != nil {
 			gvk := providerObject.GroupVersionKind()
@@ -262,55 +286,53 @@ func (r *CapiInstallerController) setDegradedCondition(ctx context.Context, log 
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *CapiInstallerController) SetupWithManager(mgr ctrl.Manager) error {
+	namespacePredicate := []predicate.Predicate{predicate.NewPredicateFuncs(func(obj client.Object) bool {
+		return obj.GetNamespace() == r.ManagedNamespace
+	})}
+
 	build := ctrl.NewControllerManagedBy(mgr).
 		Named(controllerName).
 		For(&configv1.ClusterOperator{}, builder.WithPredicates(clusterOperatorPredicates())).
 		Watches(
 			&corev1.ConfigMap{},
 			handler.EnqueueRequestsFromMapFunc(toClusterOperator),
-			builder.WithPredicates(configMapPredicate(r.ManagedNamespace, r.Platform)),
+			builder.WithPredicates(transportConfigMapPredicate(r.ManagedNamespace, r.Platform)),
 		).
 		// We reconcile all Deployment changes because we intend to reflect the
 		// status of any created Deployment in the ClusterOperator status.
-		Watches(
-			&appsv1.Deployment{},
-			handler.EnqueueRequestsFromMapFunc(toClusterOperator),
-			builder.WithPredicates(ownedPlatformLabelPredicate(r.ManagedNamespace, r.Platform)),
-		)
+		Owns(&appsv1.Deployment{}, builder.WithPredicates(namespacePredicate...))
 
-	// All of the following watches share the ownedPlatformLabelPredicate.
-	watches := []struct {
-		obj       client.Object
-		namespace string
+	// All of the following ownsTypes share the ownedPlatformLabelPredicate.
+	ownsTypes := []struct {
+		obj        client.Object
+		predicates []predicate.Predicate
 	}{
-		{&admissionregistrationv1.ValidatingWebhookConfiguration{}, notNamespaced},
-		{&admissionregistrationv1.MutatingWebhookConfiguration{}, notNamespaced},
-		{&admissionregistrationv1.ValidatingAdmissionPolicy{}, notNamespaced},
-		{&admissionregistrationv1.ValidatingAdmissionPolicyBinding{}, notNamespaced},
-		{&corev1.Service{}, r.ManagedNamespace},
-		{&apiextensionsv1.CustomResourceDefinition{}, notNamespaced},
-		{&corev1.ServiceAccount{}, r.ManagedNamespace},
-		{&rbacv1.ClusterRoleBinding{}, notNamespaced},
-		{&rbacv1.ClusterRole{}, notNamespaced},
-		{&rbacv1.Role{}, r.ManagedNamespace},
-		{&rbacv1.RoleBinding{}, r.ManagedNamespace},
+		{&admissionregistrationv1.MutatingWebhookConfiguration{}, nil},
+		{&admissionregistrationv1.ValidatingWebhookConfiguration{}, nil},
+		{&admissionregistrationv1.ValidatingAdmissionPolicy{}, nil},
+		{&admissionregistrationv1.ValidatingAdmissionPolicyBinding{}, nil},
+		{&apiextensionsv1.CustomResourceDefinition{}, nil},
+		// These are any ConfigMaps we own, as opposed to the transport ConfigMap, which we don't
+		{&corev1.ConfigMap{}, namespacePredicate},
+		{&corev1.Service{}, namespacePredicate},
+		{&corev1.ServiceAccount{}, namespacePredicate},
+		{&rbacv1.ClusterRole{}, nil},
+		{&rbacv1.ClusterRoleBinding{}, nil},
+		{&rbacv1.Role{}, namespacePredicate},
+		{&rbacv1.RoleBinding{}, namespacePredicate},
 	}
 
-	for _, w := range watches {
-		build = build.Watches(
-			w.obj,
-			handler.EnqueueRequestsFromMapFunc(toClusterOperator),
-			builder.WithPredicates(
-				ownedPlatformLabelPredicate(w.namespace, r.Platform),
-
-				// We're only interested in changes which affect an object's spec
-				predicate.Or(
-					predicate.AnnotationChangedPredicate{},
-					predicate.LabelChangedPredicate{},
-					predicate.GenerationChangedPredicate{},
-				),
+	for _, owned := range ownsTypes {
+		// We're only interested in changes which affect an object's spec
+		predicates := append(owned.predicates,
+			predicate.Or(
+				predicate.AnnotationChangedPredicate{},
+				predicate.LabelChangedPredicate{},
+				predicate.GenerationChangedPredicate{},
 			),
 		)
+
+		build = build.Owns(owned.obj, builder.WithPredicates(predicates...))
 	}
 
 	if err := build.Complete(r); err != nil {
