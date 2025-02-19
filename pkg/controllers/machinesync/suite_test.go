@@ -19,6 +19,7 @@ package machinesync
 import (
 	"context"
 	"testing"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -47,6 +48,10 @@ var testEnv *envtest.Environment
 var testScheme *runtime.Scheme
 var testRESTMapper meta.RESTMapper
 var ctx = context.Background()
+
+const (
+	timeout = time.Second * 2
+)
 
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
