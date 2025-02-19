@@ -18,11 +18,24 @@ import (
 	mapiv1 "github.com/openshift/api/machine/v1beta1"
 	bmv1alpha1 "github.com/openshift/cluster-api-provider-baremetal/pkg/apis/baremetal/v1alpha1"
 	"github.com/openshift/cluster-capi-operator/e2e/framework"
+
+	certificatesv1 "k8s.io/api/certificates/v1"
+	clientset "k8s.io/client-go/kubernetes"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
 const (
 	baremetalMachineTemplateName = "baremetal-machine-template"
 )
+
+var bmhKey = client.ObjectKey{
+	Namespace: "openshift-cluster-api",
+	Name:      "ostest-extraworker-0",
+}
+
+var nodeKey = client.ObjectKey{
+	Name: "extraworker-0.ostest.test.metalkube.org",
+}
 
 var _ = Describe("Cluster API Baremetal MachineSet", Ordered, func() {
 	var baremetalMachineTemplate *metal3v1.Metal3MachineTemplate
@@ -49,12 +62,7 @@ var _ = Describe("Cluster API Baremetal MachineSet", Ordered, func() {
 	})
 
 	It("should be able to run a machine", func() {
-		key := client.ObjectKey{
-			Namespace: "openshift-cluster-api",
-			Name:      "ostest-extraworker-0", // name provided by dev-scripts in CI
-		}
-
-		waitForBaremetalHostState(cl, key, bmov1alpha1.StateAvailable)
+		waitForBaremetalHostState(cl, bmhKey, bmov1alpha1.StateAvailable)
 
 		baremetalMachineTemplate = createBaremetalMachineTemplate(cl, mapiMachineSpec)
 
@@ -71,7 +79,11 @@ var _ = Describe("Cluster API Baremetal MachineSet", Ordered, func() {
 			"worker-user-data-managed",
 		))
 
-		waitForBaremetalHostState(cl, key, bmov1alpha1.StateProvisioned)
+		waitForBaremetalHostState(cl, bmhKey, bmov1alpha1.StateProvisioned)
+		approveCertificates(cl)
+		waitForNode(cl)
+		labelNode(cl)
+
 		framework.WaitForMachineSet(cl, machineSet.Name)
 	})
 })
@@ -139,4 +151,106 @@ func createBaremetalMachineTemplate(cl client.Client, mapiProviderSpec *bmv1alph
 	}
 
 	return baremetalMachineTemplate
+}
+
+// After the baremetalhost is provisioned and boots, it will try to register
+// itself with the control plane as a Node.  Before that can succeed, we need
+// to approve 2 certificate signing requests.
+func approveCertificates(cl client.Client) {
+	By("Approving certificates")
+	approvalsLeft := 2
+
+	bootstrapperCsr := "system:serviceaccount:openshift-machine-config-operator:node-bootstrapper"
+	nodeCsr := "system:node:extraworker-0.ostest.test.metalkube.org"
+
+	Eventually(func() error {
+		csrs := &certificatesv1.CertificateSigningRequestList{}
+		Expect(cl.List(ctx, csrs)).To(Succeed())
+
+		cfg, err := config.GetConfig()
+		Expect(err).To(Succeed())
+
+		client, err := clientset.NewForConfig(cfg)
+		Expect(err).To(Succeed())
+
+		for _, csr := range csrs.Items {
+			pending := true
+
+			for _, condition := range csr.Status.Conditions {
+				if condition.Type == certificatesv1.CertificateApproved {
+					pending = false
+				}
+				if condition.Type == certificatesv1.CertificateDenied {
+					pending = false
+				}
+			}
+
+			if pending {
+				if csr.Spec.Username == bootstrapperCsr || csr.Spec.Username == nodeCsr {
+					csr.Status.Conditions = append(csr.Status.Conditions, certificatesv1.CertificateSigningRequestCondition{
+						Type:           certificatesv1.CertificateApproved,
+						Status:         corev1.ConditionTrue,
+						LastUpdateTime: metav1.Now(),
+					})
+
+					_, err := client.CertificatesV1().CertificateSigningRequests().UpdateApproval(ctx, csr.Name, &csr, metav1.UpdateOptions{})
+					Expect(err).To(Succeed())
+
+					approvalsLeft--
+
+					if approvalsLeft == 0 {
+						return nil
+					}
+				}
+			}
+		}
+
+		return fmt.Errorf("Not enought approvals yet")
+
+	}, framework.WaitLong, framework.RetryMedium).Should(Succeed())
+}
+
+// Wait for the Node to be Ready
+func waitForNode(cl client.Client) {
+	Eventually(func() error {
+		node := &corev1.Node{}
+		err := cl.Get(ctx, nodeKey, node)
+
+		Expect(err).To(Succeed())
+
+		isReady := false
+
+		for _, condition := range node.Status.Conditions {
+			if condition.Type == corev1.NodeReady && condition.Status == corev1.ConditionTrue {
+				isReady = true
+			}
+		}
+
+		if !isReady {
+			return fmt.Errorf("node is not ready yet")
+		}
+
+		return nil
+
+	}, framework.WaitLong, framework.RetryMedium).Should(Succeed())
+}
+
+// Label the Node with the baremetalhost's uuid
+func labelNode(cl client.Client) {
+	node := &corev1.Node{}
+	err := cl.Get(ctx, nodeKey, node)
+	Expect(err).To(Succeed())
+
+	bmh := bmov1alpha1.BareMetalHost{}
+	err = cl.Get(ctx, bmhKey, &bmh)
+	Expect(err).To(Succeed())
+
+	if node.Labels == nil {
+		node.Labels = map[string]string{}
+	}
+
+	node.Labels["metal3.io/uuid"] = fmt.Sprint(bmh.ObjectMeta.UID)
+
+	err = cl.Update(ctx, node)
+	Expect(err).To(Succeed())
 }
