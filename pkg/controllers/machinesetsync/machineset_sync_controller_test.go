@@ -87,7 +87,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 	}
 
 	BeforeEach(func() {
-		By("Setting up a namespace for the test")
+		By("Setting up a namespaces for the test")
 		syncControllerNamespace = corev1resourcebuilder.Namespace().
 			WithGenerateName("machineset-sync-controller-").Build()
 		Expect(k8sClient.Create(ctx, syncControllerNamespace)).To(Succeed(), "sync controller namespace should be able to be created")
