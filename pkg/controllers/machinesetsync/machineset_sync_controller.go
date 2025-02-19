@@ -30,7 +30,6 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/mapi2capi"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -264,7 +263,7 @@ func (r *MachineSetSyncReconciler) reconcileMAPIMachineSetToCAPIMachineSet(ctx c
 		r.Recorder.Event(mapiMachineSet, corev1.EventTypeWarning, "ConversionWarning", warning)
 	}
 
-	newCAPIMachineSet.SetResourceVersion(getResourceVersion(client.Object(capiMachineSet)))
+	newCAPIMachineSet.SetResourceVersion(util.GetResourceVersion(client.Object(capiMachineSet)))
 	newCAPIMachineSet.SetNamespace(r.CAPINamespace)
 	newCAPIMachineSet.Spec.Template.Spec.InfrastructureRef.Namespace = r.CAPINamespace
 
@@ -280,7 +279,7 @@ func (r *MachineSetSyncReconciler) reconcileMAPIMachineSetToCAPIMachineSet(ctx c
 		return ctrl.Result{}, fetchErr
 	}
 
-	newCAPIInfraMachineTemplate.SetResourceVersion(getResourceVersion(infraMachineTemplate))
+	newCAPIInfraMachineTemplate.SetResourceVersion(util.GetResourceVersion(infraMachineTemplate))
 	newCAPIInfraMachineTemplate.SetNamespace(r.CAPINamespace)
 
 	if result, err := r.createOrUpdateCAPIInfraMachineTemplate(ctx, mapiMachineSet, infraMachineTemplate, newCAPIInfraMachineTemplate); err != nil {
@@ -333,9 +332,9 @@ func (r *MachineSetSyncReconciler) reconcileCAPIMachineSetToMAPIMachineSet(ctx c
 
 	newMapiMachineSet.SetNamespace(mapiMachineSet.GetNamespace())
 	// The conversion does not set a resource version, so we must copy it over
-	newMapiMachineSet.SetResourceVersion(getResourceVersion(mapiMachineSet))
+	newMapiMachineSet.SetResourceVersion(util.GetResourceVersion(mapiMachineSet))
 
-	if !reflect.DeepEqual(newMapiMachineSet.Spec, mapiMachineSet.Spec) || !objectMetaIsEqual(newMapiMachineSet.ObjectMeta, mapiMachineSet.ObjectMeta) {
+	if !reflect.DeepEqual(newMapiMachineSet.Spec, mapiMachineSet.Spec) || !util.ObjectMetaIsEqual(newMapiMachineSet.ObjectMeta, mapiMachineSet.ObjectMeta) {
 		logger.Info("Updating MAPI machine set")
 
 		if err := r.Update(ctx, newMapiMachineSet); err != nil {
@@ -426,7 +425,7 @@ func (r *MachineSetSyncReconciler) applySynchronizedConditionWithPatch(ctx conte
 		WithMessage(message).
 		WithSeverity(severity)
 
-	setLastTransitionTime(consts.SynchronizedCondition, mapiMachineSet.Status.Conditions, conditionAc)
+	util.SetLastTransitionTime(consts.SynchronizedCondition, mapiMachineSet.Status.Conditions, conditionAc)
 
 	statusAc := machinev1applyconfigs.MachineSetStatus().
 		WithConditions(conditionAc)
@@ -526,7 +525,7 @@ func (r *MachineSetSyncReconciler) createOrUpdateCAPIMachineSet(ctx context.Cont
 		return ctrl.Result{}, nil
 	}
 
-	if reflect.DeepEqual(newCAPIMachineSet.Spec, capiMachineSet.Spec) && objectMetaIsEqual(newCAPIMachineSet.ObjectMeta, capiMachineSet.ObjectMeta) {
+	if reflect.DeepEqual(newCAPIMachineSet.Spec, capiMachineSet.Spec) && util.ObjectMetaIsEqual(newCAPIMachineSet.ObjectMeta, capiMachineSet.ObjectMeta) {
 		logger.Info("No changes detected in CAPI machine set")
 		return ctrl.Result{}, nil
 	}
@@ -565,42 +564,6 @@ func initInfraMachineTemplateAndInfraClusterFromProvider(platform configv1.Platf
 	}
 }
 
-// setLastTransitionTime determines if the last transition time should be set or updated for a given condition type.
-func setLastTransitionTime(condType machinev1beta1.ConditionType, conditions []machinev1beta1.Condition, conditionAc *machinev1applyconfigs.ConditionApplyConfiguration) {
-	for _, condition := range conditions {
-		if condition.Type == condType {
-			if !hasSameState(&condition, conditionAc) {
-				conditionAc.WithLastTransitionTime(metav1.Now())
-
-				return
-			}
-
-			conditionAc.WithLastTransitionTime(condition.LastTransitionTime)
-
-			return
-		}
-	}
-	// Condition does not exist; set the transition time
-	conditionAc.WithLastTransitionTime(metav1.Now())
-}
-
-// hasSameState returns true if a condition has the same state as a condition
-// apply config; state is defined by the union of following fields: Type,
-// Status.
-func hasSameState(i *machinev1beta1.Condition, j *machinev1applyconfigs.ConditionApplyConfiguration) bool {
-	return i.Type == *j.Type &&
-		i.Status == *j.Status
-}
-
-// objectMetaIsEqual determines if the two ObjectMeta are equal for the fields we care about
-// when synchronising MAPI and CAPI MachineSets.
-func objectMetaIsEqual(a, b metav1.ObjectMeta) bool {
-	return reflect.DeepEqual(a.Labels, b.Labels) &&
-		reflect.DeepEqual(a.Annotations, b.Annotations) &&
-		reflect.DeepEqual(a.Finalizers, b.Finalizers) &&
-		reflect.DeepEqual(a.OwnerReferences, b.OwnerReferences)
-}
-
 // capiInfraMachineTemplateIsEqual checks whether the provided CAPI infra machine templates are equal.
 func capiInfraMachineTemplateIsEqual(platform configv1.PlatformType, infraMachineTemplate1, infraMachineTemplate2 client.Object) (bool, error) {
 	switch platform {
@@ -615,7 +578,7 @@ func capiInfraMachineTemplateIsEqual(platform configv1.PlatformType, infraMachin
 			return false, errAssertingCAPIAWSMachineTemplate
 		}
 
-		return reflect.DeepEqual(typedInfraMachineTemplate1.Spec, typedinfraMachineTemplate2.Spec) && objectMetaIsEqual(typedInfraMachineTemplate1.ObjectMeta, typedinfraMachineTemplate2.ObjectMeta), nil
+		return reflect.DeepEqual(typedInfraMachineTemplate1.Spec, typedinfraMachineTemplate2.Spec) && util.ObjectMetaIsEqual(typedInfraMachineTemplate1.ObjectMeta, typedinfraMachineTemplate2.ObjectMeta), nil
 	case configv1.PowerVSPlatformType:
 		typedInfraMachineTemplate1, ok := infraMachineTemplate1.(*capibmv1.IBMPowerVSMachineTemplate)
 		if !ok {
@@ -627,17 +590,8 @@ func capiInfraMachineTemplateIsEqual(platform configv1.PlatformType, infraMachin
 			return false, errAssertingCAPIIBMPowerVSMachineTemplate
 		}
 
-		return reflect.DeepEqual(typedInfraMachineTemplate1.Spec, typedinfraMachineTemplate2.Spec) && objectMetaIsEqual(typedInfraMachineTemplate1.ObjectMeta, typedinfraMachineTemplate2.ObjectMeta), nil
+		return reflect.DeepEqual(typedInfraMachineTemplate1.Spec, typedinfraMachineTemplate2.Spec) && util.ObjectMetaIsEqual(typedInfraMachineTemplate1.ObjectMeta, typedinfraMachineTemplate2.ObjectMeta), nil
 	default:
 		return false, fmt.Errorf("%w: %s", errPlatformNotSupported, platform)
 	}
-}
-
-// getResourceVersion returns the object ResourceVersion or the zero value for it.
-func getResourceVersion(obj client.Object) string {
-	if obj == nil || reflect.ValueOf(obj).IsNil() {
-		return "0"
-	}
-
-	return obj.GetResourceVersion()
 }
