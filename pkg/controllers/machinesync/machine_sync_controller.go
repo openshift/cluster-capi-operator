@@ -33,7 +33,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/tools/record"
@@ -233,7 +232,7 @@ func (r *MachineSyncReconciler) reconcileMAPIMachinetoCAPIMachine(ctx context.Co
 		r.Recorder.Event(mapiMachine, corev1.EventTypeWarning, "ConversionWarning", warning)
 	}
 
-	newCAPIMachine.SetResourceVersion(getResourceVersion(client.Object(capiMachine)))
+	newCAPIMachine.SetResourceVersion(util.GetResourceVersion(client.Object(capiMachine)))
 	newCAPIMachine.SetNamespace(r.CAPINamespace)
 	newCAPIMachine.Spec.InfrastructureRef.Namespace = r.CAPINamespace
 
@@ -382,7 +381,7 @@ func (r *MachineSyncReconciler) createOrUpdateCAPIMachine(ctx context.Context, m
 		return ctrl.Result{}, nil
 	}
 
-	if reflect.DeepEqual(newCAPIMachine.Spec, capiMachine.Spec) && objectMetaIsEqual(newCAPIMachine.ObjectMeta, capiMachine.ObjectMeta) {
+	if reflect.DeepEqual(newCAPIMachine.Spec, capiMachine.Spec) && util.ObjectMetaIsEqual(newCAPIMachine.ObjectMeta, capiMachine.ObjectMeta) {
 		logger.Info("No changes detected in CAPI machine")
 		return ctrl.Result{}, nil
 	}
@@ -508,7 +507,7 @@ func capiInfraMachineIsEqual(platform configv1.PlatformType, infraMachine1, infr
 			return false, errAssertingCAPIAWSMachine
 		}
 
-		return reflect.DeepEqual(typedInfraMachine1.Spec, typedinfraMachine2.Spec) && objectMetaIsEqual(typedInfraMachine1.ObjectMeta, typedinfraMachine2.ObjectMeta), nil
+		return reflect.DeepEqual(typedInfraMachine1.Spec, typedinfraMachine2.Spec) && util.ObjectMetaIsEqual(typedInfraMachine1.ObjectMeta, typedinfraMachine2.ObjectMeta), nil
 	case configv1.PowerVSPlatformType:
 		typedInfraMachine1, ok := infraMachine1.(*capibmv1.IBMPowerVSMachine)
 		if !ok {
@@ -520,7 +519,7 @@ func capiInfraMachineIsEqual(platform configv1.PlatformType, infraMachine1, infr
 			return false, errAssertingCAPIIBMPowerVSMachine
 		}
 
-		return reflect.DeepEqual(typedInfraMachine1.Spec, typedinfraMachine2.Spec) && objectMetaIsEqual(typedInfraMachine1.ObjectMeta, typedinfraMachine2.ObjectMeta), nil
+		return reflect.DeepEqual(typedInfraMachine1.Spec, typedinfraMachine2.Spec) && util.ObjectMetaIsEqual(typedInfraMachine1.ObjectMeta, typedinfraMachine2.ObjectMeta), nil
 	default:
 		return false, fmt.Errorf("%w: %s", errPlatformNotSupported, platform)
 	}
@@ -562,7 +561,7 @@ func (r *MachineSyncReconciler) applySynchronizedConditionWithPatch(ctx context.
 		WithMessage(message).
 		WithSeverity(severity)
 
-	setLastTransitionTime(consts.SynchronizedCondition, mapiMachine.Status.Conditions, conditionAc)
+	util.SetLastTransitionTime(consts.SynchronizedCondition, mapiMachine.Status.Conditions, conditionAc)
 
 	statusAc := machinev1applyconfigs.MachineStatus().
 		WithConditions(conditionAc).
@@ -576,49 +575,4 @@ func (r *MachineSyncReconciler) applySynchronizedConditionWithPatch(ctx context.
 	}
 
 	return nil
-}
-
-// setLastTransitionTime determines if the last transition time should be set or updated for a given condition type.
-func setLastTransitionTime(condType machinev1beta1.ConditionType, conditions []machinev1beta1.Condition, conditionAc *machinev1applyconfigs.ConditionApplyConfiguration) {
-	for _, condition := range conditions {
-		if condition.Type == condType {
-			if !hasSameState(&condition, conditionAc) {
-				conditionAc.WithLastTransitionTime(metav1.Now())
-
-				return
-			}
-
-			conditionAc.WithLastTransitionTime(condition.LastTransitionTime)
-
-			return
-		}
-	}
-	// Condition does not exist; set the transition time
-	conditionAc.WithLastTransitionTime(metav1.Now())
-}
-
-// hasSameState returns true if a condition has the same state as a condition
-// apply config; state is defined by the union of following fields: Type,
-// Status.
-func hasSameState(i *machinev1beta1.Condition, j *machinev1applyconfigs.ConditionApplyConfiguration) bool {
-	return i.Type == *j.Type &&
-		i.Status == *j.Status
-}
-
-// objectMetaIsEqual determines if the two ObjectMeta are equal for the fields we care about
-// when synchronising MAPI and CAPI Machines.
-func objectMetaIsEqual(a, b metav1.ObjectMeta) bool {
-	return reflect.DeepEqual(a.Labels, b.Labels) &&
-		reflect.DeepEqual(a.Annotations, b.Annotations) &&
-		reflect.DeepEqual(a.Finalizers, b.Finalizers) &&
-		reflect.DeepEqual(a.OwnerReferences, b.OwnerReferences)
-}
-
-// getResourceVersion returns the object ResourceVersion or the zero value for it.
-func getResourceVersion(obj client.Object) string {
-	if obj == nil || reflect.ValueOf(obj).IsNil() {
-		return "0"
-	}
-
-	return obj.GetResourceVersion()
 }
