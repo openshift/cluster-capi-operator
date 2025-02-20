@@ -372,7 +372,7 @@ func ObjectMetaFuzzerFuncs(namespace string) fuzzer.FuzzerFuncs {
 
 				// Clear fields that are not required for conversion.
 				o.GenerateName = ""
-				o.SelfLink = "" //nolint:staticcheck
+				o.SelfLink = ""
 				o.UID = ""
 				o.ResourceVersion = ""
 				o.Generation = 0
