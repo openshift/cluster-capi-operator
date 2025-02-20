@@ -70,6 +70,7 @@ const (
 	clusterOperatorName               = "cluster-api"
 	defaultCoreProviderComponentName  = "cluster-api"
 	powerVSIBMCloudProvider           = "ibmcloud"
+	baremetalProvider                 = "metal3"
 )
 
 var (
@@ -432,6 +433,10 @@ func platformToProviderConfigMapLabelNameValue(platform configv1.PlatformType) s
 		platform = powerVSIBMCloudProvider
 	}
 
+	if platform == configv1.BareMetalPlatformType {
+		platform = baremetalProvider
+	}
+
 	return strings.ToLower(string(platform))
 }
 
@@ -440,6 +445,10 @@ func platformToProviderConfigMapLabelNameValue(platform configv1.PlatformType) s
 func platformToInfraProviderComponentName(platform configv1.PlatformType) string {
 	if platform == configv1.PowerVSPlatformType {
 		platform = powerVSIBMCloudProvider
+	}
+
+	if platform == configv1.BareMetalPlatformType {
+		platform = baremetalProvider
 	}
 
 	return strings.ToLower(fmt.Sprintf("infrastructure-%s", platform))
