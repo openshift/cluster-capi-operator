@@ -84,6 +84,7 @@ func (m *awsMachineAndInfra) ToMachineAndInfrastructureMachine() (*capiv1.Machin
 	return capiMachine, capaMachine, warnings, nil
 }
 
+//nolint:funlen
 func (m *awsMachineAndInfra) toMachineAndInfrastructureMachine() (*capiv1.Machine, client.Object, []string, field.ErrorList) {
 	var (
 		errs     field.ErrorList

@@ -18,6 +18,7 @@ package util
 import (
 	"reflect"
 
+	"github.com/go-test/deep"
 	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
 	machinev1applyconfigs "github.com/openshift/client-go/machine/applyconfigurations/machine/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -51,13 +52,17 @@ func hasSameState(i *machinev1beta1.Condition, j *machinev1applyconfigs.Conditio
 		i.Status == *j.Status
 }
 
-// ObjectMetaIsEqual determines if the two ObjectMeta are equal for the fields we care about
-// when synchronising MAPI and CAPI Machines.
-func ObjectMetaIsEqual(a, b metav1.ObjectMeta) bool {
-	return reflect.DeepEqual(a.Labels, b.Labels) &&
-		reflect.DeepEqual(a.Annotations, b.Annotations) &&
-		reflect.DeepEqual(a.Finalizers, b.Finalizers) &&
-		reflect.DeepEqual(a.OwnerReferences, b.OwnerReferences)
+// ObjectMetaEqual compares variables a and b,
+// and returns a list of differences, or nil if there are none,
+// for the fields we care about when synchronising MAPI and CAPI Machines.
+func ObjectMetaEqual(a, b metav1.ObjectMeta) []string {
+	objectMetaDiff := []string{}
+	objectMetaDiff = append(objectMetaDiff, deep.Equal(a.Labels, b.Labels)...)
+	objectMetaDiff = append(objectMetaDiff, deep.Equal(a.Annotations, b.Annotations)...)
+	objectMetaDiff = append(objectMetaDiff, deep.Equal(a.Finalizers, b.Finalizers)...)
+	objectMetaDiff = append(objectMetaDiff, deep.Equal(a.OwnerReferences, b.OwnerReferences)...)
+
+	return objectMetaDiff
 }
 
 // GetResourceVersion returns the object ResourceVersion or the zero value for it.

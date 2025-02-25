@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"reflect"
 
 	"github.com/go-logr/logr"
 	configv1 "github.com/openshift/api/config/v1"
@@ -35,6 +34,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 
+	"github.com/go-test/deep"
 	machinev1applyconfigs "github.com/openshift/client-go/machine/applyconfigurations/machine/v1beta1"
 	"k8s.io/client-go/tools/record"
 	awscapiv1beta1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
@@ -483,7 +483,7 @@ func (r *MachineSetSyncReconciler) createOrUpdateCAPIInfraMachineTemplate(ctx co
 		return ctrl.Result{}, nil
 	}
 
-	isEqualCAPIInfraMachineTemplate, err := capiInfraMachineTemplateIsEqual(r.Platform, infraMachineTemplate, newCAPIInfraMachineTemplate)
+	capiInfraMachineTemplatesDiff, err := compareCAPIInfraMachineTemplates(r.Platform, infraMachineTemplate, newCAPIInfraMachineTemplate)
 	if err != nil {
 		logger.Error(err, "Failed to check CAPI infra machine template diff")
 		updateErr := fmt.Errorf("failed to check CAPI infra machine template diff: %w", err)
@@ -496,12 +496,12 @@ func (r *MachineSetSyncReconciler) createOrUpdateCAPIInfraMachineTemplate(ctx co
 		return ctrl.Result{}, updateErr
 	}
 
-	if isEqualCAPIInfraMachineTemplate {
+	if len(capiInfraMachineTemplatesDiff) == 0 {
 		logger.Info("No changes detected in CAPI infra machine template")
 		return ctrl.Result{}, nil
 	}
 
-	logger.Info("Updating CAPI infra machine template")
+	logger.Info("Changes detected, updating CAPI infra machine template", "diff", capiInfraMachineTemplatesDiff)
 
 	if err := r.Update(ctx, newCAPIInfraMachineTemplate); err != nil {
 		logger.Error(err, "Failed to update CAPI infra machine template")
@@ -543,12 +543,14 @@ func (r *MachineSetSyncReconciler) createOrUpdateCAPIMachineSet(ctx context.Cont
 		return ctrl.Result{}, nil
 	}
 
-	if reflect.DeepEqual(newCAPIMachineSet.Spec, capiMachineSet.Spec) && util.ObjectMetaIsEqual(newCAPIMachineSet.ObjectMeta, capiMachineSet.ObjectMeta) {
+	capiMachineSetsDiff := compareCAPIMachineSets(capiMachineSet, newCAPIMachineSet)
+
+	if len(capiMachineSetsDiff) == 0 {
 		logger.Info("No changes detected in CAPI machine set")
 		return ctrl.Result{}, nil
 	}
 
-	logger.Info("Updating CAPI machine set")
+	logger.Info("Changes detected, updating CAPI machine set", "diff", capiMachineSetsDiff)
 
 	if err := r.Update(ctx, newCAPIMachineSet); err != nil {
 		logger.Error(err, "Failed to update CAPI machine set")
@@ -582,34 +584,60 @@ func initInfraMachineTemplateAndInfraClusterFromProvider(platform configv1.Platf
 	}
 }
 
-// capiInfraMachineTemplateIsEqual checks whether the provided CAPI infra machine templates are equal.
-func capiInfraMachineTemplateIsEqual(platform configv1.PlatformType, infraMachineTemplate1, infraMachineTemplate2 client.Object) (bool, error) {
+// compareCAPIInfraMachineTemplates compares CAPI infra machine templates a and b, and returns a list of differences, or none if there are none.
+func compareCAPIInfraMachineTemplates(platform configv1.PlatformType, infraMachineTemplate1, infraMachineTemplate2 client.Object) ([]string, error) {
 	switch platform {
 	case configv1.AWSPlatformType:
 		typedInfraMachineTemplate1, ok := infraMachineTemplate1.(*awscapiv1beta1.AWSMachineTemplate)
 		if !ok {
-			return false, errAssertingCAPIAWSMachineTemplate
+			return nil, errAssertingCAPIAWSMachineTemplate
 		}
 
 		typedinfraMachineTemplate2, ok := infraMachineTemplate2.(*awscapiv1beta1.AWSMachineTemplate)
 		if !ok {
-			return false, errAssertingCAPIAWSMachineTemplate
+			return nil, errAssertingCAPIAWSMachineTemplate
 		}
 
-		return reflect.DeepEqual(typedInfraMachineTemplate1.Spec, typedinfraMachineTemplate2.Spec) && util.ObjectMetaIsEqual(typedInfraMachineTemplate1.ObjectMeta, typedinfraMachineTemplate2.ObjectMeta), nil
+		var diff []string
+		diff = append(diff, deep.Equal(typedInfraMachineTemplate1.Spec, typedinfraMachineTemplate2.Spec)...)
+		diff = append(diff, util.ObjectMetaEqual(typedInfraMachineTemplate1.ObjectMeta, typedinfraMachineTemplate2.ObjectMeta)...)
+
+		return diff, nil
 	case configv1.PowerVSPlatformType:
 		typedInfraMachineTemplate1, ok := infraMachineTemplate1.(*capibmv1.IBMPowerVSMachineTemplate)
 		if !ok {
-			return false, errAssertingCAPIIBMPowerVSMachineTemplate
+			return nil, errAssertingCAPIIBMPowerVSMachineTemplate
 		}
 
 		typedinfraMachineTemplate2, ok := infraMachineTemplate2.(*capibmv1.IBMPowerVSMachineTemplate)
 		if !ok {
-			return false, errAssertingCAPIIBMPowerVSMachineTemplate
+			return nil, errAssertingCAPIIBMPowerVSMachineTemplate
 		}
 
-		return reflect.DeepEqual(typedInfraMachineTemplate1.Spec, typedinfraMachineTemplate2.Spec) && util.ObjectMetaIsEqual(typedInfraMachineTemplate1.ObjectMeta, typedinfraMachineTemplate2.ObjectMeta), nil
+		var diff []string
+		diff = append(diff, deep.Equal(typedInfraMachineTemplate1.Spec, typedinfraMachineTemplate2.Spec)...)
+		diff = append(diff, util.ObjectMetaEqual(typedInfraMachineTemplate1.ObjectMeta, typedinfraMachineTemplate2.ObjectMeta)...)
+
+		return diff, nil
 	default:
-		return false, fmt.Errorf("%w: %s", errPlatformNotSupported, platform)
+		return nil, fmt.Errorf("%w: %s", errPlatformNotSupported, platform)
 	}
+}
+
+// compareCAPIMachineSets compares CAPI machineSets a and b, and returns a list of differences, or none if there are none.
+func compareCAPIMachineSets(capiMachineSet1, capiMachineSet2 *capiv1beta1.MachineSet) []string {
+	var diff []string
+	diff = append(diff, deep.Equal(capiMachineSet1.Spec, capiMachineSet2.Spec)...)
+	diff = append(diff, util.ObjectMetaEqual(capiMachineSet1.ObjectMeta, capiMachineSet2.ObjectMeta)...)
+
+	return diff
+}
+
+// compareMAPIMachineSets compares MAPI machineSets a and b, and returns a list of differences, or none if there are none.
+func compareMAPIMachineSets(mapiMachineSet1, mapiMachineSet2 *machinev1beta1.MachineSet) []string {
+	var diff []string
+	diff = append(diff, deep.Equal(mapiMachineSet1.Spec, mapiMachineSet2.Spec)...)
+	diff = append(diff, util.ObjectMetaEqual(mapiMachineSet1.ObjectMeta, mapiMachineSet2.ObjectMeta)...)
+
+	return diff
 }

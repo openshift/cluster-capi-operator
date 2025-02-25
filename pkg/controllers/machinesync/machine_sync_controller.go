@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"reflect"
 
 	"github.com/go-logr/logr"
 
@@ -31,6 +30,7 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/mapi2capi"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 
+	"github.com/go-test/deep"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -315,7 +315,7 @@ func (r *MachineSyncReconciler) createOrUpdateCAPIInfraMachine(ctx context.Conte
 		return ctrl.Result{}, syncronizationIsProgressing, nil
 	}
 
-	isEqualCAPIInfraMachine, err := capiInfraMachineIsEqual(r.Platform, infraMachine, newCAPIInfraMachine)
+	capiInfraMachinesDiff, err := compareCAPIInfraMachines(r.Platform, infraMachine, newCAPIInfraMachine)
 	if err != nil {
 		logger.Error(err, "Failed to check CAPI infra machine diff")
 		updateErr := fmt.Errorf("failed to check CAPI infra machine diff: %w", err)
@@ -328,12 +328,12 @@ func (r *MachineSyncReconciler) createOrUpdateCAPIInfraMachine(ctx context.Conte
 		return ctrl.Result{}, syncronizationIsProgressing, updateErr
 	}
 
-	if isEqualCAPIInfraMachine {
+	if len(capiInfraMachinesDiff) == 0 {
 		logger.Info("No changes detected in CAPI infra machine")
 		return ctrl.Result{}, syncronizationIsProgressing, nil
 	}
 
-	logger.Info("Deleting the corresponding CAPI infra machine as it is out of date")
+	logger.Info("Deleting the corresponding CAPI infra machine as it is out of date, it will be recreated", "diff", capiInfraMachinesDiff)
 
 	if err := r.Delete(ctx, infraMachine); err != nil {
 		logger.Error(err, "Failed to delete CAPI infra machine")
@@ -381,12 +381,14 @@ func (r *MachineSyncReconciler) createOrUpdateCAPIMachine(ctx context.Context, m
 		return ctrl.Result{}, nil
 	}
 
-	if reflect.DeepEqual(newCAPIMachine.Spec, capiMachine.Spec) && util.ObjectMetaIsEqual(newCAPIMachine.ObjectMeta, capiMachine.ObjectMeta) {
+	capiMachinesDiff := compareCAPIMachines(capiMachine, newCAPIMachine)
+
+	if len(capiMachinesDiff) == 0 {
 		logger.Info("No changes detected in CAPI machine")
 		return ctrl.Result{}, nil
 	}
 
-	logger.Info("Updating CAPI machine")
+	logger.Info("Changes detected, updating CAPI machine", "diff", capiMachinesDiff)
 
 	if err := r.Update(ctx, newCAPIMachine); err != nil {
 		logger.Error(err, "Failed to update CAPI machine")
@@ -493,35 +495,52 @@ func (r *MachineSyncReconciler) fetchCAPIInfraResources(ctx context.Context, cap
 	return infraCluster, infraMachine, nil
 }
 
-// capiInfraMachineIsEqual checks whether the provided CAPI infra machines are equal.
-func capiInfraMachineIsEqual(platform configv1.PlatformType, infraMachine1, infraMachine2 client.Object) (bool, error) {
+// compareCAPIMachines compares CAPI machines a and b, and returns a list of differences, or none if there are none.
+func compareCAPIMachines(capiMachine1, capiMachine2 *capiv1beta1.Machine) []string {
+	var diff []string
+	diff = append(diff, deep.Equal(capiMachine1.Spec, capiMachine2.Spec)...)
+	diff = append(diff, util.ObjectMetaEqual(capiMachine1.ObjectMeta, capiMachine2.ObjectMeta)...)
+
+	return diff
+}
+
+// compareCAPIInfraMachines compares CAPI infra machines a and b, and returns a list of differences, or none if there are none.
+func compareCAPIInfraMachines(platform configv1.PlatformType, infraMachine1, infraMachine2 client.Object) ([]string, error) {
 	switch platform {
 	case configv1.AWSPlatformType:
 		typedInfraMachine1, ok := infraMachine1.(*capav1beta2.AWSMachine)
 		if !ok {
-			return false, errAssertingCAPIAWSMachine
+			return nil, errAssertingCAPIAWSMachine
 		}
 
 		typedinfraMachine2, ok := infraMachine2.(*capav1beta2.AWSMachine)
 		if !ok {
-			return false, errAssertingCAPIAWSMachine
+			return nil, errAssertingCAPIAWSMachine
 		}
 
-		return reflect.DeepEqual(typedInfraMachine1.Spec, typedinfraMachine2.Spec) && util.ObjectMetaIsEqual(typedInfraMachine1.ObjectMeta, typedinfraMachine2.ObjectMeta), nil
+		var diff []string
+		diff = append(diff, deep.Equal(typedInfraMachine1.Spec, typedinfraMachine2.Spec)...)
+		diff = append(diff, util.ObjectMetaEqual(typedInfraMachine1.ObjectMeta, typedinfraMachine2.ObjectMeta)...)
+
+		return diff, nil
 	case configv1.PowerVSPlatformType:
 		typedInfraMachine1, ok := infraMachine1.(*capibmv1.IBMPowerVSMachine)
 		if !ok {
-			return false, errAssertingCAPIIBMPowerVSMachine
+			return nil, errAssertingCAPIIBMPowerVSMachine
 		}
 
 		typedinfraMachine2, ok := infraMachine2.(*capibmv1.IBMPowerVSMachine)
 		if !ok {
-			return false, errAssertingCAPIIBMPowerVSMachine
+			return nil, errAssertingCAPIIBMPowerVSMachine
 		}
 
-		return reflect.DeepEqual(typedInfraMachine1.Spec, typedinfraMachine2.Spec) && util.ObjectMetaIsEqual(typedInfraMachine1.ObjectMeta, typedinfraMachine2.ObjectMeta), nil
+		var diff []string
+		diff = append(diff, deep.Equal(typedInfraMachine1.Spec, typedinfraMachine2.Spec)...)
+		diff = append(diff, util.ObjectMetaEqual(typedInfraMachine1.ObjectMeta, typedinfraMachine2.ObjectMeta)...)
+
+		return diff, nil
 	default:
-		return false, fmt.Errorf("%w: %s", errPlatformNotSupported, platform)
+		return nil, fmt.Errorf("%w: %s", errPlatformNotSupported, platform)
 	}
 }
 

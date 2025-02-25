@@ -7,6 +7,7 @@ toolchain go1.22.8
 require (
 	github.com/drone/envsubst/v2 v2.0.0-20210730161058-179042472c46
 	github.com/go-logr/logr v1.4.2
+	github.com/go-test/deep v1.1.1
 	github.com/gobuffalo/flect v1.0.2
 	github.com/golangci/golangci-lint v1.61.0
 	github.com/google/gofuzz v1.2.0
