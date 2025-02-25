@@ -87,7 +87,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 	}
 
 	BeforeEach(func() {
-		By("Setting up a namespace for the test")
+		By("Setting up a namespaces for the test")
 		syncControllerNamespace = corev1resourcebuilder.Namespace().
 			WithGenerateName("machineset-sync-controller-").Build()
 		Expect(k8sClient.Create(ctx, syncControllerNamespace)).To(Succeed(), "sync controller namespace should be able to be created")
@@ -214,7 +214,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 								HaveField("Type", Equal(consts.SynchronizedCondition)),
 								HaveField("Status", Equal(corev1.ConditionTrue)),
 								HaveField("Reason", Equal("ResourceSynchronized")),
-								HaveField("Message", Equal("Successfully synchronized CAPI MachineSet to MAPI")),
+								HaveField("Message", Equal("Successfully synchronized MAPI MachineSet to CAPI")),
 							))),
 					)
 				})
@@ -233,7 +233,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 								HaveField("Type", Equal(consts.SynchronizedCondition)),
 								HaveField("Status", Equal(corev1.ConditionTrue)),
 								HaveField("Reason", Equal("ResourceSynchronized")),
-								HaveField("Message", Equal("Successfully synchronized CAPI MachineSet to MAPI")),
+								HaveField("Message", Equal("Successfully synchronized MAPI MachineSet to CAPI")),
 							))),
 					)
 				})
@@ -379,7 +379,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 								HaveField("Type", Equal(consts.SynchronizedCondition)),
 								HaveField("Status", Equal(corev1.ConditionTrue)),
 								HaveField("Reason", Equal("ResourceSynchronized")),
-								HaveField("Message", Equal("Successfully synchronized CAPI MachineSet to MAPI")),
+								HaveField("Message", Equal("Successfully synchronized MAPI MachineSet to CAPI")),
 							))),
 					)
 				})
@@ -476,10 +476,12 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 			})
 
 			Context("when the CAPI machine set does not exist", func() {
-				It("should create the CAPI machine set and CAPI infra machine template", func() {
+				It("should create the CAPI machine set", func() {
 					capiMachineSet = capiv1resourcebuilder.MachineSet().WithName(mapiMachineSet.Name).WithNamespace(capiNamespace.Name).Build()
-					Expect(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
+					Eventually(k.Get(capiMachineSet)).Should(Succeed())
+				})
 
+				It("should create the CAPI infra machine template", func() {
 					capiInfraMachineTemplate := capav1builder.AWSMachineTemplate().WithName(mapiMachineSet.Name).WithNamespace(capiNamespace.Name).Build()
 					Eventually(k.Get(capiInfraMachineTemplate)).Should(Succeed())
 				})
@@ -491,7 +493,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 								HaveField("Type", Equal(consts.SynchronizedCondition)),
 								HaveField("Status", Equal(corev1.ConditionTrue)),
 								HaveField("Reason", Equal("ResourceSynchronized")),
-								HaveField("Message", Equal("Successfully synchronized CAPI MachineSet to MAPI")),
+								HaveField("Message", Equal("Successfully synchronized MAPI MachineSet to CAPI")),
 							))),
 					)
 				})
@@ -515,7 +517,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 								HaveField("Type", Equal(consts.SynchronizedCondition)),
 								HaveField("Status", Equal(corev1.ConditionTrue)),
 								HaveField("Reason", Equal("ResourceSynchronized")),
-								HaveField("Message", Equal("Successfully synchronized CAPI MachineSet to MAPI")),
+								HaveField("Message", Equal("Successfully synchronized MAPI MachineSet to CAPI")),
 							))),
 					)
 				})
@@ -554,10 +556,12 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 			})
 
 			Context("when the CAPI machine set does not exist", func() {
-				It("should create the CAPI machine set and CAPI infra machine template", func() {
+				It("should create the CAPI machine set", func() {
 					capiMachineSet = capiv1resourcebuilder.MachineSet().WithName(mapiMachineSet.Name).WithNamespace(capiNamespace.Name).Build()
 					Expect(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
+				})
 
+				It("should create the CAPI infra machine template", func() {
 					capiInfraMachineTemplate := capav1builder.AWSMachineTemplate().WithName(mapiMachineSet.Name).WithNamespace(capiNamespace.Name).Build()
 					Eventually(k.Get(capiInfraMachineTemplate)).Should(Succeed())
 				})
@@ -569,7 +573,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 								HaveField("Type", Equal(consts.SynchronizedCondition)),
 								HaveField("Status", Equal(corev1.ConditionTrue)),
 								HaveField("Reason", Equal("ResourceSynchronized")),
-								HaveField("Message", Equal("Successfully synchronized CAPI MachineSet to MAPI")),
+								HaveField("Message", Equal("Successfully synchronized MAPI MachineSet to CAPI")),
 							))),
 					)
 				})
