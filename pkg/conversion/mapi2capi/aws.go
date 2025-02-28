@@ -84,6 +84,7 @@ func (m *awsMachineAndInfra) ToMachineAndInfrastructureMachine() (*capiv1.Machin
 	return capiMachine, capaMachine, warnings, nil
 }
 
+//nolint:funlen
 func (m *awsMachineAndInfra) toMachineAndInfrastructureMachine() (*capiv1.Machine, client.Object, []string, field.ErrorList) {
 	var (
 		errs     field.ErrorList
@@ -137,8 +138,15 @@ func (m *awsMachineAndInfra) toMachineAndInfrastructureMachine() (*capiv1.Machin
 
 	// The InfraMachine should always have the same labels and annotations as the Machine.
 	// See https://github.com/kubernetes-sigs/cluster-api/blob/f88d7ae5155700c2cc367b31ddcc151c9ad579e4/internal/controllers/machineset/machineset_controller.go#L578-L579
-	capaMachine.SetAnnotations(capiMachine.GetAnnotations())
-	capaMachine.SetLabels(capiMachine.GetLabels())
+	capiMachineAnnotations := capiMachine.GetAnnotations()
+	if len(capiMachineAnnotations) > 0 {
+		capaMachine.SetAnnotations(capiMachineAnnotations)
+	}
+
+	capiMachineLabels := capiMachine.GetLabels()
+	if len(capiMachineLabels) > 0 {
+		capaMachine.SetLabels(capiMachineLabels)
+	}
 
 	return capiMachine, capaMachine, warnings, errs
 }
@@ -361,6 +369,10 @@ func convertAWSAMIResourceReferenceToCAPI(fldPath *field.Path, amiRef mapiv1.AWS
 }
 
 func convertAWSTagsToCAPI(mapiTags []mapiv1.TagSpecification) capav1.Tags {
+	if mapiTags == nil {
+		return nil
+	}
+
 	capiTags := map[string]string{}
 	for _, tag := range mapiTags {
 		capiTags[tag.Name] = tag.Value
@@ -424,8 +436,11 @@ func convertAWSSecurityGroupstoCAPI(sgs []mapiv1.AWSResourceReference) []capav1.
 }
 
 func convertAWSBlockDeviceMappingSpecToCAPI(fldPath *field.Path, mapiBlockDeviceMapping []mapiv1.BlockDeviceMappingSpec) (*capav1.Volume, []capav1.Volume, []string, field.ErrorList) {
+	// We do not want to preallocate this as we need it nil if no elements are added.
+	//nolint:prealloc
+	var nonRootVolumes []capav1.Volume
+
 	rootVolume := &capav1.Volume{}
-	nonRootVolumes := []capav1.Volume{}
 	errs := field.ErrorList{}
 	warnings := []string{}
 
