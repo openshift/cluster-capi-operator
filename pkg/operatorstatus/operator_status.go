@@ -177,9 +177,11 @@ func (r *ClusterOperatorStatusClient) relatedObjects() []configv1.ObjectReferenc
 		{Resource: "namespaces", Name: controllers.DefaultManagedNamespace},
 		{Group: configv1.GroupName, Resource: "clusteroperators", Name: controllers.ClusterOperatorName},
 		{Resource: "namespaces", Name: r.ManagedNamespace},
-		{Group: "", Resource: "serviceaccounts", Name: "cluster-capi-operator"},
-		{Group: "", Resource: "configmaps", Name: "cluster-capi-operator-images"},
-		{Group: "apps", Resource: "deployments", Name: "cluster-capi-operator"},
+		{Group: "", Resource: "serviceaccounts", Name: "cluster-capi-operator", Namespace: controllers.DefaultManagedNamespace},
+		{Group: "", Resource: "configmaps", Name: "cluster-capi-operator-images", Namespace: controllers.DefaultManagedNamespace},
+		{Group: "apps", Resource: "deployments", Name: "cluster-capi-operator", Namespace: controllers.DefaultManagedNamespace},
+		{Group: "cluster.x-k8s.io", Resource: "clusters", Namespace: controllers.DefaultManagedNamespace},
+		{Group: "cluster.x-k8s.io", Resource: "machines", Namespace: controllers.DefaultManagedNamespace},
 	}
 }
 func (r *ClusterOperatorStatusClient) operandVersions() []configv1.OperandVersion {
