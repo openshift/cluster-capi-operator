@@ -145,6 +145,7 @@ func awsProviderSpecFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interfa
 			c.FuzzNoCustom(ebs)
 
 			// Fuzz required fields so that they are not empty.
+			// Setting volumeSize to a random int64 value.
 			if ebs.VolumeSize == nil {
 				ebs.VolumeSize = ptr.To(c.Int63())
 			}
