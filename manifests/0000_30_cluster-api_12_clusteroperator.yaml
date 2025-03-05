@@ -31,3 +31,110 @@ status:
     name: cluster-capi-operator
     namespace: openshift-cluster-api
     resource: deployments
+  - group: "cluster.x-k8s.io"
+    name: ""
+    namespace: openshift-cluster-api
+    resource: clusters
+  - group: "cluster.x-k8s.io"
+    name: ""
+    namespace: openshift-cluster-api
+    resource: machinesets
+  - group: "cluster.x-k8s.io"
+    name: ""
+    namespace: openshift-cluster-api
+    resource: machines
+  - group: "cluster.x-k8s.io"
+    name: ""
+    namespace: openshift-cluster-api
+    resource: machinedeployments
+
+  - group: "infrastructure.cluster.x-k8s.io"
+    name: ""
+    namespace: openshift-cluster-api
+    resource: awscluster
+  - group: "infrastructure.cluster.x-k8s.io"
+    name: ""
+    namespace: openshift-cluster-api
+    resource: awsmachine
+  - group: "infrastructure.cluster.x-k8s.io"
+    name: ""
+    namespace: openshift-cluster-api
+    resource: awsmachinetemplate
+
+  - group: "infrastructure.cluster.x-k8s.io"
+    name: ""
+    namespace: openshift-cluster-api
+    resource: azurecluster
+  - group: "infrastructure.cluster.x-k8s.io"
+    name: ""
+    namespace: openshift-cluster-api
+    resource: azuremachine
+  - group: "infrastructure.cluster.x-k8s.io"
+    name: ""
+    namespace: openshift-cluster-api
+    resource: azuremachinetemplate
+
+  - group: "infrastructure.cluster.x-k8s.io"
+    name: ""
+    namespace: openshift-cluster-api
+    resource: gcpcluster
+  - group: "infrastructure.cluster.x-k8s.io"
+    name: ""
+    namespace: openshift-cluster-api
+    resource: gcpmachine
+  - group: "infrastructure.cluster.x-k8s.io"
+    name: ""
+    namespace: openshift-cluster-api
+    resource: gcpmachinetemplate
+
+  - group: "infrastructure.cluster.x-k8s.io"
+    name: ""
+    namespace: openshift-cluster-api
+    resource: ibmpowercluster
+  - group: "infrastructure.cluster.x-k8s.io"
+    name: ""
+    namespace: openshift-cluster-api
+    resource: ibmpowermachine
+  - group: "infrastructure.cluster.x-k8s.io"
+    name: ""
+    namespace: openshift-cluster-api
+    resource: ibmpowermachinetemplate
+
+  - group: "infrastructure.cluster.x-k8s.io"
+    name: ""
+    namespace: openshift-cluster-api
+    resource: metal3cluster
+  - group: "infrastructure.cluster.x-k8s.io"
+    name: ""
+    namespace: openshift-cluster-api
+    resource: metal3machine
+  - group: "infrastructure.cluster.x-k8s.io"
+    name: ""
+    namespace: openshift-cluster-api
+    resource: metal3machinetemplate
+
+  - group: "infrastructure.cluster.x-k8s.io"
+    name: ""
+    namespace: openshift-cluster-api
+    resource: openstackcluster
+  - group: "infrastructure.cluster.x-k8s.io"
+    name: ""
+    namespace: openshift-cluster-api
+    resource: openstackmachine
+  - group: "infrastructure.cluster.x-k8s.io"
+    name: ""
+    namespace: openshift-cluster-api
+    resource: openstackmachinetemplate
+
+  - group: "infrastructure.cluster.x-k8s.io"
+    name: ""
+    namespace: openshift-cluster-api
+    resource: vspherecluster
+  - group: "infrastructure.cluster.x-k8s.io"
+    name: ""
+    namespace: openshift-cluster-api
+    resource: vspheremachine
+  - group: "infrastructure.cluster.x-k8s.io"
+    name: ""
+    namespace: openshift-cluster-api
+    resource: vspheremachinetemplate
