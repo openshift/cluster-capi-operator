@@ -207,10 +207,8 @@ var _ = Describe("mapi2capi AWS conversion", func() {
 					EBS: &mapiv1.EBSBlockDeviceSpec{},
 				}}),
 			),
-			infra: infra,
-			expectedErrors: []string{
-				"spec.providerSpec.value.blockDevices[0].ebs.volumeSize: Required value: volumeSize is required, but is missing",
-			},
+			infra:            infra,
+			expectedErrors:   []string{}, // No error is expected anymore, because volumeSize is now set to a default amount if nil.
 			expectedWarnings: []string{},
 		}),
 		Entry("With non-root Volume not deleted on termination", awsMAPI2CAPIConversionInput{
