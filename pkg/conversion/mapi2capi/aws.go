@@ -492,12 +492,6 @@ func blockDeviceMappingSpecToVolume(fldPath *field.Path, bdm mapiv1.BlockDeviceM
 
 	capiKMSKey := convertKMSKeyToCAPI(bdm.EBS.KMSKey)
 
-	if bdm.EBS.VolumeSize == nil {
-		// The volume size is required in CAPA, we will have to return an error, until we can come up with an appropriate way to handle this.
-		// TODO(OCPCLOUD-2718): Either find a way to handle the required value, or, force users to set the value.
-		errs = append(errs, field.Required(fldPath.Child("ebs", "volumeSize"), "volumeSize is required, but is missing"))
-	}
-
 	if rootVolume && !ptr.Deref(bdm.EBS.DeleteOnTermination, true) {
 		warnings = append(warnings, field.Invalid(fldPath.Child("ebs", "deleteOnTermination"), bdm.EBS.DeleteOnTermination, "root volume must be deleted on termination, ignoring invalid value false").Error())
 	} else if !rootVolume && !ptr.Deref(bdm.EBS.DeleteOnTermination, true) {
@@ -511,7 +505,7 @@ func blockDeviceMappingSpecToVolume(fldPath *field.Path, bdm mapiv1.BlockDeviceM
 
 	return capav1.Volume{
 		DeviceName:    ptr.Deref(bdm.DeviceName, ""),
-		Size:          *bdm.EBS.VolumeSize,
+		Size:          ptr.Deref(bdm.EBS.VolumeSize, 120), // The installer uses 120GiB by default as of 4.19.
 		Type:          capav1.VolumeType(ptr.Deref(bdm.EBS.VolumeType, "")),
 		IOPS:          ptr.Deref(bdm.EBS.Iops, 0),
 		Encrypted:     bdm.EBS.Encrypted,
