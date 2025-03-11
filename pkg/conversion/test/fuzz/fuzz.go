@@ -524,7 +524,9 @@ func MAPIMachineFuzzerFuncs(providerSpec runtime.Object, providerIDFuzz StringFu
 				m.AuthoritativeAPI = ""
 
 				// Clear fields that are not yet supported in the conversion.
-				// TODO(OCPCLOUD-2680): For taints and annotations.
+				// TODO(OCPCLOUD-2680/2897): For labels
+				// TODO(OCPCLOUD-2860/2898): For annotations.
+				// TODO(OCPCLOUD-2861/2899): For taints.
 				m.ObjectMeta.Annotations = nil
 				m.Taints = nil
 

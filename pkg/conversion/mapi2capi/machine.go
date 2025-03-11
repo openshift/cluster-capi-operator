@@ -55,7 +55,7 @@ func setMAPINodeLabelsToCAPIManagedNodeLabels(fldPath *field.Path, mapiNodeLabel
 
 	errs := field.ErrorList{}
 
-	// TODO(OCPCLOUD-2680): Not all the labels on the CAPI Machine are propagated down to the corresponding CAPI Node, only the "CAPI Managed ones" are.
+	// TODO(OCPCLOUD-2680/2897): Not all the labels on the CAPI Machine are propagated down to the corresponding CAPI Node, only the "CAPI Managed ones" are.
 	// These are those prefix by "node-role.kubernetes.io" or in the domains of "node-restriction.kubernetes.io" and "node.cluster.x-k8s.io".
 	// See: https://github.com/kubernetes-sigs/cluster-api/pull/7173
 	// and: https://github.com/fabriziopandini/cluster-api/blob/main/docs/proposals/20220927-label-sync-between-machine-and-nodes.md
@@ -93,7 +93,7 @@ func handleUnsupportedMachineFields(spec mapiv1.MachineSpec) field.ErrorList {
 
 	errs = append(errs, handleUnsupportedMAPIObjectMetaFields(fldPath.Child("metadata"), spec.ObjectMeta)...)
 
-	// TODO(OCPCLOUD-2680): Taints are not supported by CAPI. add support for them via CAPI BootstrapConfig + minimal bootstrap controller.
+	// TODO(OCPCLOUD-2861/2899): Taints are not supported by CAPI. add support for them via CAPI BootstrapConfig + minimal bootstrap controller.
 	if len(spec.Taints) > 0 {
 		errs = append(errs, field.Invalid(fldPath.Child("taints"), spec.Taints, "taints are not currently supported"))
 	}
