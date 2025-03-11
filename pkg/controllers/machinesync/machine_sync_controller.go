@@ -29,6 +29,7 @@ import (
 	consts "github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/mapi2capi"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
+	"sigs.k8s.io/cluster-api/util/annotations"
 
 	"github.com/go-test/deep"
 	corev1 "k8s.io/api/core/v1"
@@ -236,6 +237,9 @@ func (r *MachineSyncReconciler) reconcileMAPIMachinetoCAPIMachine(ctx context.Co
 	newCAPIMachine.SetNamespace(r.CAPINamespace)
 	newCAPIMachine.Spec.InfrastructureRef.Namespace = r.CAPINamespace
 
+	// Set the paused annotation on the new CAPI Machine, as we want to create it paused.
+	annotations.AddAnnotations(newCAPIMachine, map[string]string{capiv1beta1.PausedAnnotation: ""})
+
 	_, infraMachine, err := r.fetchCAPIInfraResources(ctx, newCAPIMachine)
 	if err != nil && !apierrors.IsNotFound(err) {
 		fetchErr := fmt.Errorf("failed to fetch CAPI infra resources: %w", err)
@@ -257,6 +261,9 @@ func (r *MachineSyncReconciler) reconcileMAPIMachinetoCAPIMachine(ctx context.Co
 
 	newCAPIInfraMachine.SetResourceVersion(util.GetResourceVersion(infraMachine))
 	newCAPIInfraMachine.SetNamespace(r.CAPINamespace)
+
+	// Set the paused annotation on the new CAPI InfraMachine, as we want to create it paused.
+	annotations.AddAnnotations(newCAPIInfraMachine, map[string]string{capiv1beta1.PausedAnnotation: ""})
 
 	result, syncronizationIsProgressing, err := r.createOrUpdateCAPIInfraMachine(ctx, mapiMachine, infraMachine, newCAPIInfraMachine)
 	if err != nil {

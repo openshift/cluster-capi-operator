@@ -40,6 +40,7 @@ import (
 	awscapiv1beta1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	capibmv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
 	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	"sigs.k8s.io/cluster-api/util/annotations"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -270,6 +271,9 @@ func (r *MachineSetSyncReconciler) reconcileMAPIMachineSetToCAPIMachineSet(ctx c
 	newCAPIMachineSet.SetNamespace(r.CAPINamespace)
 	newCAPIMachineSet.Spec.Template.Spec.InfrastructureRef.Namespace = r.CAPINamespace
 
+	// Set the paused annotation on the new CAPI MachineSet, as we want to create it paused.
+	annotations.AddAnnotations(newCAPIMachineSet, map[string]string{capiv1beta1.PausedAnnotation: ""})
+
 	_, infraMachineTemplate, err := r.fetchCAPIInfraResources(ctx, newCAPIMachineSet)
 	if err != nil && !apierrors.IsNotFound(err) {
 		fetchErr := fmt.Errorf("failed to fetch CAPI infra resources: %w", err)
@@ -284,6 +288,9 @@ func (r *MachineSetSyncReconciler) reconcileMAPIMachineSetToCAPIMachineSet(ctx c
 
 	newCAPIInfraMachineTemplate.SetResourceVersion(util.GetResourceVersion(infraMachineTemplate))
 	newCAPIInfraMachineTemplate.SetNamespace(r.CAPINamespace)
+
+	// Set the paused annotation on the new CAPI InfraMachineTemplate, as we want to create it paused.
+	annotations.AddAnnotations(newCAPIInfraMachineTemplate, map[string]string{capiv1beta1.PausedAnnotation: ""})
 
 	if result, err := r.createOrUpdateCAPIInfraMachineTemplate(ctx, mapiMachineSet, infraMachineTemplate, newCAPIInfraMachineTemplate); err != nil {
 		return result, fmt.Errorf("unable to ensure CAPI infra machine template: %w", err)
