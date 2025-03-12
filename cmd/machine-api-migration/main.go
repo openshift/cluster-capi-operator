@@ -29,6 +29,7 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/machinesetsync"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/machinesync"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
+	"k8s.io/utils/clock"
 	capav1beta2 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
@@ -268,7 +269,7 @@ func getFeatureGates(mgr ctrl.Manager) (featuregates.FeatureGateAccess, error) {
 		desiredVersion, missingVersion,
 		configInformers.Config().V1().ClusterVersions(),
 		configInformers.Config().V1().FeatureGates(),
-		events.NewLoggingEventRecorder("machineapimigration"),
+		events.NewLoggingEventRecorder("machineapimigration", clock.RealClock{}),
 	)
 	go featureGateAccessor.Run(context.Background())
 	go configInformers.Start(context.Background().Done())

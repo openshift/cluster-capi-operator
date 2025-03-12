@@ -40,6 +40,10 @@ var (
 	errUnexpectedObjectTypeForMachine = errors.New("unexpected type for capaMachineObj")
 )
 
+const (
+	errUnsupportedMAPIMarketType = "unable to convert market type, unknown value"
+)
+
 // awsMachineAndInfra stores the details of a Machine API AWSMachine and Infra.
 type awsMachineAndInfra struct {
 	machine        *mapiv1.Machine
@@ -233,6 +237,11 @@ func (m *awsMachineAndInfra) toAWSMachine(providerSpec mapiv1.AWSMachineProvider
 		errs = append(errs, err)
 	}
 
+	capiAWSMarketType, err := convertAWSMarketTypeToCAPI(fldPath.Child("marketType"), providerSpec.MarketType)
+	if err != nil {
+		errs = append(errs, err)
+	}
+
 	spec := capav1.AWSMachineSpec{
 		AMI:                      capiAWSAMIReference,
 		AdditionalSecurityGroups: convertAWSSecurityGroupstoCAPI(providerSpec.SecurityGroups),
@@ -263,6 +272,7 @@ func (m *awsMachineAndInfra) toAWSMachine(providerSpec mapiv1.AWSMachineProvider
 		Subnet:            convertAWSResourceReferenceToCAPI(providerSpec.Subnet),
 		Tenancy:           string(providerSpec.Placement.Tenancy),
 		// UncompressedUserData: Not used in OpenShift.
+		MarketType: capiAWSMarketType,
 	}
 
 	if providerSpec.CapacityReservationID != "" {
@@ -379,6 +389,21 @@ func convertAWSTagsToCAPI(mapiTags []mapiv1.TagSpecification) capav1.Tags {
 	}
 
 	return capiTags
+}
+
+func convertAWSMarketTypeToCAPI(fldPath *field.Path, marketType mapiv1.MarketType) (capav1.MarketType, *field.Error) {
+	switch marketType {
+	case mapiv1.MarketTypeOnDemand:
+		return capav1.MarketTypeOnDemand, nil
+	case mapiv1.MarketTypeSpot:
+		return capav1.MarketTypeSpot, nil
+	case mapiv1.MarketTypeCapacityBlock:
+		return capav1.MarketTypeCapacityBlock, nil
+	case "":
+		return "", nil
+	default:
+		return "", field.Invalid(fldPath, marketType, errUnsupportedMAPIMarketType)
+	}
 }
 
 func convertMetadataServiceOptionstoCAPI(fldPath *field.Path, metad mapiv1.MetadataServiceOptions) (*capav1.InstanceMetadataOptions, *field.Error) {

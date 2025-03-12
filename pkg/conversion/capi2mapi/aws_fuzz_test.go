@@ -153,6 +153,7 @@ func awsMachineFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interface{} 
 			c.FuzzNoCustom(spec)
 
 			fuzzAWSMachineSpecTenancy(&spec.Tenancy, c)
+			fuzzAWSMachineSpecMarketType(&spec.MarketType, c)
 
 			// Fields not required for our use case can be ignored.
 			spec.ImageLookupFormat = ""
@@ -187,6 +188,19 @@ func fuzzAWSMachineSpecTenancy(tenancy *string, c fuzz.Continue) {
 		*tenancy = "host"
 	case 3:
 		*tenancy = ""
+	}
+}
+
+func fuzzAWSMachineSpecMarketType(marketType *capav1.MarketType, c fuzz.Continue) {
+	switch c.Int31n(4) {
+	case 0:
+		*marketType = capav1.MarketTypeOnDemand
+	case 1:
+		*marketType = capav1.MarketTypeSpot
+	case 2:
+		*marketType = capav1.MarketTypeCapacityBlock
+	case 3:
+		*marketType = ""
 	}
 }
 

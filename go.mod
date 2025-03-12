@@ -1,6 +1,6 @@
 module github.com/openshift/cluster-capi-operator
 
-go 1.22.7
+go 1.23.0
 
 require (
 	github.com/drone/envsubst/v2 v2.0.0-20210730161058-179042472c46
@@ -12,23 +12,22 @@ require (
 	github.com/klauspost/compress v1.17.9
 	github.com/onsi/ginkgo/v2 v2.22.2
 	github.com/onsi/gomega v1.36.2
-	github.com/openshift/api v0.0.0-20241009131553-a1523024209f
-	github.com/openshift/client-go v0.0.0-20241001162912-da6d55e4611f
-	github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20241204163806-84b171115300
-	github.com/openshift/cluster-control-plane-machine-set-operator v0.0.0-20241008085214-8d85b2cb2c1d
-	github.com/openshift/library-go v0.0.0-20240919205913-c96b82b3762b
+	github.com/openshift/api v0.0.0-20250311085700-14a17c7009c4
+	github.com/openshift/client-go v0.0.0-20250131180035-f7ec47e2d87a
+	github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20250312115727-157f88eba755
+	github.com/openshift/library-go v0.0.0-20250203131244-80620876b7c2
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/pflag v1.0.6
 	gopkg.in/yaml.v2 v2.4.0
-	k8s.io/api v0.31.5
-	k8s.io/apiextensions-apiserver v0.31.5
-	k8s.io/apimachinery v0.31.5
-	k8s.io/client-go v0.31.5
-	k8s.io/component-base v0.31.5
+	k8s.io/api v0.32.3
+	k8s.io/apiextensions-apiserver v0.32.3
+	k8s.io/apimachinery v0.32.3
+	k8s.io/client-go v0.32.3
+	k8s.io/component-base v0.32.3
 	k8s.io/klog/v2 v2.130.1
-	k8s.io/utils v0.0.0-20240921022957-49e7df575cb6
+	k8s.io/utils v0.0.0-20241104100929-3ea5e8cea738
 	sigs.k8s.io/cluster-api v1.9.5
-	sigs.k8s.io/cluster-api-provider-aws/v2 v2.7.1
+	sigs.k8s.io/cluster-api-provider-aws/v2 v2.7.1-0.20250311200346-7e954867f06b
 	sigs.k8s.io/cluster-api-provider-azure v1.18.1
 	sigs.k8s.io/cluster-api-provider-gcp v1.8.1
 	sigs.k8s.io/cluster-api-provider-ibmcloud v0.10.0
@@ -42,6 +41,7 @@ require (
 require (
 	4d63.com/gocheckcompilerdirectives v1.2.1 // indirect
 	4d63.com/gochecknoglobals v0.2.1 // indirect
+	cel.dev/expr v0.18.0 // indirect
 	github.com/4meepo/tagalign v1.3.4 // indirect
 	github.com/Abirdcfly/dupword v0.1.1 // indirect
 	github.com/Antonboom/errname v0.1.13 // indirect
@@ -90,7 +90,6 @@ require (
 	github.com/denis-tingaikin/go-header v0.5.0 // indirect
 	github.com/emicklei/go-restful/v3 v3.12.1 // indirect
 	github.com/ettle/strcase v0.2.0 // indirect
-	github.com/evanphx/json-patch v5.9.0+incompatible // indirect
 	github.com/evanphx/json-patch/v5 v5.9.0 // indirect
 	github.com/fatih/color v1.18.0 // indirect
 	github.com/fatih/structtag v1.2.0 // indirect
@@ -125,7 +124,6 @@ require (
 	github.com/gobwas/glob v0.2.3 // indirect
 	github.com/gofrs/flock v0.12.1 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
-	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/golangci/dupl v0.0.0-20180902072040-3e9179ac440a // indirect
 	github.com/golangci/gofmt v0.0.0-20240816233607-d8596aa466a9 // indirect
@@ -134,7 +132,8 @@ require (
 	github.com/golangci/plugin-module-register v0.1.1 // indirect
 	github.com/golangci/revgrep v0.5.3 // indirect
 	github.com/golangci/unconvert v0.0.0-20240309020433-c5143eacb3ed // indirect
-	github.com/google/cel-go v0.20.1 // indirect
+	github.com/google/btree v1.1.3 // indirect
+	github.com/google/cel-go v0.22.0 // indirect
 	github.com/google/gnostic-models v0.6.9-0.20230804172637-c7be7c783f49 // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/google/pprof v0.0.0-20241210010833-40e02aabc2ad // indirect
@@ -267,11 +266,11 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
 	golang.org/x/crypto v0.33.0 // indirect
-	golang.org/x/exp v0.0.0-20240904232852-e7e105dedf7e // indirect
-	golang.org/x/exp/typeparams v0.0.0-20240314144324-c7f7c6466f7f // indirect
+	golang.org/x/exp v0.0.0-20240909161429-701f63a606c0 // indirect
+	golang.org/x/exp/typeparams v0.0.0-20241108190413-2d47ceb2692f // indirect
 	golang.org/x/mod v0.22.0 // indirect
 	golang.org/x/net v0.35.0 // indirect
-	golang.org/x/oauth2 v0.24.0 // indirect
+	golang.org/x/oauth2 v0.27.0 // indirect
 	golang.org/x/sync v0.11.0 // indirect
 	golang.org/x/sys v0.30.0 // indirect
 	golang.org/x/term v0.29.0 // indirect
@@ -288,13 +287,13 @@ require (
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	honnef.co/go/tools v0.5.1 // indirect
-	k8s.io/apiserver v0.31.5 // indirect
-	k8s.io/kube-aggregator v0.30.1 // indirect
-	k8s.io/kube-openapi v0.0.0-20240521193020-835d969ad83a // indirect
+	k8s.io/apiserver v0.32.3 // indirect
+	k8s.io/kube-aggregator v0.32.1 // indirect
+	k8s.io/kube-openapi v0.0.0-20241105132330-32ad38e42d3f // indirect
 	mvdan.cc/gofumpt v0.7.0 // indirect
 	mvdan.cc/unparam v0.0.0-20240528143540-8a5130ca722f // indirect
-	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.30.3 // indirect
-	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
+	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.31.0 // indirect
+	sigs.k8s.io/json v0.0.0-20241010143419-9aa6b5e7a4b3 // indirect
 	sigs.k8s.io/kube-storage-version-migrator v0.0.6-0.20230721195810-5c8923c5ff96 // indirect
-	sigs.k8s.io/structured-merge-diff/v4 v4.4.1 // indirect
+	sigs.k8s.io/structured-merge-diff/v4 v4.4.2 // indirect
 )

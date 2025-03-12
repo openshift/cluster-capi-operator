@@ -2347,7 +2347,7 @@ sigs.k8s.io/cluster-api/util/contract
 sigs.k8s.io/cluster-api/util/flags
 sigs.k8s.io/cluster-api/util/labels/format
 sigs.k8s.io/cluster-api/util/topology
-# sigs.k8s.io/cluster-api-provider-aws/v2 v2.7.1 => sigs.k8s.io/cluster-api-provider-aws/v2 v2.7.1-0.20250311200346-7e954867f06b
+# sigs.k8s.io/cluster-api-provider-aws/v2 v2.7.1-0.20250311200346-7e954867f06b
 ## explicit; go 1.22.0
 sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2
 sigs.k8s.io/cluster-api-provider-aws/v2/feature
@@ -2457,4 +2457,3 @@ sigs.k8s.io/structured-merge-diff/v4/value
 ## explicit; go 1.12
 sigs.k8s.io/yaml
 sigs.k8s.io/yaml/goyaml.v2
-# sigs.k8s.io/cluster-api-provider-aws/v2 => sigs.k8s.io/cluster-api-provider-aws/v2 v2.7.1-0.20250311200346-7e954867f06b

@@ -26,6 +26,8 @@ import (
 )
 
 // fromMAPIMachineToCAPIMachine translates a MAPI Machine to its Core CAPI Machine correspondent.
+//
+//nolint:funlen
 func fromMAPIMachineToCAPIMachine(mapiMachine *mapiv1beta1.Machine, apiVersion, kind string) (*capiv1.Machine, field.ErrorList) {
 	var errs field.ErrorList
 
@@ -47,6 +49,8 @@ func fromMAPIMachineToCAPIMachine(mapiMachine *mapiv1beta1.Machine, apiVersion, 
 			ProviderID: mapiMachine.Spec.ProviderID,
 
 			// Version: TODO(OCPCLOUD-2714): To be prevented by VAP.
+			// ReadinessGates: TODO(OCPCLOUD-2714): To be prevented by VAP.
+
 			// ClusterName: populated by higher level functions.
 
 			// TODO(OCPCLOUD-2715): These are not present on the MAPI API, we should implement them for feature parity.
