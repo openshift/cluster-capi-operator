@@ -136,6 +136,17 @@ type NetworkSpec struct {
 	// HostProject is the name of the project hosting the shared VPC network resources.
 	// +optional
 	HostProject *string `json:"hostProject,omitempty"`
+
+	// Mtu: Maximum Transmission Unit in bytes. The minimum value for this field is
+	// 1300 and the maximum value is 8896. The suggested value is 1500, which is
+	// the default MTU used on the Internet, or 8896 if you want to use Jumbo
+	// frames. If unspecified, the value defaults to 1460.
+	// More info: https://pkg.go.dev/google.golang.org/api/compute/v1#Network
+	// +kubebuilder:validation:Minimum:=1300
+	// +kubebuilder:validation:Maximum:=8896
+	// +kubebuilder:default:=1460
+	// +optional
+	Mtu int64 `json:"mtu,omitempty"`
 }
 
 // LoadBalancerType defines the Load Balancer that should be created.
@@ -229,6 +240,22 @@ type SubnetSpec struct {
 	// +kubebuilder:default=PRIVATE_RFC_1918
 	// +optional
 	Purpose *string `json:"purpose,omitempty"`
+
+	// StackType: The stack type for the subnet. If set to IPV4_ONLY, new VMs in
+	// the subnet are assigned IPv4 addresses only. If set to IPV4_IPV6, new VMs in
+	// the subnet can be assigned both IPv4 and IPv6 addresses. If not specified,
+	// IPV4_ONLY is used. This field can be both set at resource creation time and
+	// updated using patch.
+	//
+	// Possible values:
+	//   "IPV4_IPV6" - New VMs in this subnet can have both IPv4 and IPv6
+	// addresses.
+	//   "IPV4_ONLY" - New VMs in this subnet will only be assigned IPv4 addresses.
+	//   "IPV6_ONLY" - New VMs in this subnet will only be assigned IPv6 addresses.
+	// +kubebuilder:validation:Enum=IPV4_ONLY;IPV4_IPV6;IPV6_ONLY
+	// +kubebuilder:default=IPV4_ONLY
+	// +optional
+	StackType string `json:"stackType,omitempty"`
 }
 
 // String returns a string representation of the subnet.
