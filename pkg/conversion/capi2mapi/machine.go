@@ -50,9 +50,9 @@ func fromCAPIMachineToMAPIMachine(capiMachine *capiv1.Machine) (*mapiv1.Machine,
 		},
 		Spec: mapiv1.MachineSpec{
 			ObjectMeta: mapiv1.ObjectMeta{
-				// TODO(OCPCLOUD-2680): Fix CAPI metadata support to mirror MAPI.
-				// Labels: We only expect labels and annotations to be present, but, they have nowhere to go on a CAPI Machine at present.
-				// Annotations: We only expect labels and annotations to be present, but, they have nowhere to go on a CAPI Machine at present.
+				// TODO: Fix CAPI metadata support to mirror MAPI.
+				// OCPCLOUD-2680/2897 Labels: We only expect labels and annotations to be present, but, they have nowhere to go on a CAPI Machine at present.
+				// OCPCLOUD-2860/2898 Annotations: We only expect labels and annotations to be present, but, they have nowhere to go on a CAPI Machine at present.
 			},
 			ProviderID:     capiMachine.Spec.ProviderID,
 			LifecycleHooks: getMAPILifecycleHooks(capiMachine),
