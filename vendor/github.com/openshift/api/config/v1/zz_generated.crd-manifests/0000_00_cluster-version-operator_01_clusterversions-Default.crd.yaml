@@ -94,6 +94,7 @@ spec:
                       - CloudCredential
                       - Ingress
                       - CloudControllerManager
+                      - OperatorLifecycleManagerV1
                       type: string
                     type: array
                     x-kubernetes-list-type: atomic
@@ -140,7 +141,7 @@ spec:
 
                   Some of the fields are inter-related with restrictions and meanings described here.
                   1. image is specified, version is specified, architecture is specified. API validation error.
-                  2. image is specified, version is specified, architecture is not specified. You should not do this. version is silently ignored and image is used.
+                  2. image is specified, version is specified, architecture is not specified. The version extracted from the referenced image must match the specified version.
                   3. image is specified, version is not specified, architecture is specified. API validation error.
                   4. image is specified, version is not specified, architecture is not specified. image is used.
                   5. image is not specified, version is specified, architecture is specified. version and desired architecture are used to select an image.
@@ -180,23 +181,23 @@ spec:
                     description: |-
                       image is a container image location that contains the update.
                       image should be used when the desired version does not exist in availableUpdates or history.
-                      When image is set, version is ignored. When image is set, version should be empty.
                       When image is set, architecture cannot be specified.
+                      If both version and image are set, the version extracted from the referenced image must match the specified version.
                     type: string
                   version:
                     description: |-
                       version is a semantic version identifying the update version.
-                      version is ignored if image is specified and required if
-                      architecture is specified.
+                      version is required if architecture is specified.
+                      If both version and image are set, the version extracted from the referenced image must match the specified version.
                     type: string
                 type: object
                 x-kubernetes-validations:
                 - message: cannot set both Architecture and Image
                   rule: 'has(self.architecture) && has(self.image) ? (self.architecture
-                    == '''' || self.image == '''') : true'
+                    == "" || self.image == "") : true'
                 - message: Version must be set if Architecture is set
-                  rule: 'has(self.architecture) && self.architecture != '''' ? self.version
-                    != '''' : true'
+                  rule: 'has(self.architecture) && self.architecture != "" ? self.version
+                    != "" : true'
               overrides:
                 description: |-
                   overrides is list of overides for components that are managed by
@@ -327,6 +328,7 @@ spec:
                       - CloudCredential
                       - Ingress
                       - CloudControllerManager
+                      - OperatorLifecycleManagerV1
                       type: string
                     type: array
                     x-kubernetes-list-type: atomic
@@ -353,6 +355,7 @@ spec:
                       - CloudCredential
                       - Ingress
                       - CloudControllerManager
+                      - OperatorLifecycleManagerV1
                       type: string
                     type: array
                     x-kubernetes-list-type: atomic
@@ -498,12 +501,12 @@ spec:
                                 fail to evaluate.
                               properties:
                                 promql:
-                                  description: promQL represents a cluster condition
+                                  description: promql represents a cluster condition
                                     based on PromQL.
                                   properties:
                                     promql:
                                       description: |-
-                                        PromQL is a PromQL query classifying clusters. This query
+                                        promql is a PromQL query classifying clusters. This query
                                         query should return a 1 in the match case and a 0 in the
                                         does-not-match case. Queries which return no time
                                         series, or which return values besides 0 or 1, are

@@ -420,6 +420,7 @@ func CAPIMachineFuzzerFuncs(providerIDFuzz StringFuzzer, infraKind, infraAPIVers
 
 				// Clear fields that are not supported in the machine spec.
 				m.Version = nil
+				m.ReadinessGates = nil
 
 				// Clear fields that are not yet supported in the conversion.
 				// TODO(OCPCLOUD-2715): Implement support for node draining options in MAPI.

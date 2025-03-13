@@ -109,7 +109,7 @@ func awsProviderIDFuzzer(c fuzz.Continue) string {
 	return "aws:///us-west-2a/i-" + strings.ReplaceAll(c.RandString(), "/", "")
 }
 
-//nolint:funlen
+//nolint:funlen,cyclop
 func awsProviderSpecFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interface{} {
 	return []interface{}{
 		func(nit *mapiv1.AWSNetworkInterfaceType, c fuzz.Continue) {
@@ -171,6 +171,18 @@ func awsProviderSpecFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interfa
 				*tenancy = mapiv1.HostTenancy
 			case 3:
 				*tenancy = ""
+			}
+		},
+		func(marketType *mapiv1.MarketType, c fuzz.Continue) {
+			switch c.Int31n(4) {
+			case 0:
+				*marketType = mapiv1.MarketTypeOnDemand
+			case 1:
+				*marketType = mapiv1.MarketTypeSpot
+			case 2:
+				*marketType = mapiv1.MarketTypeCapacityBlock
+			case 3:
+				*marketType = ""
 			}
 		},
 		func(msa *mapiv1.MetadataServiceAuthentication, c fuzz.Continue) {

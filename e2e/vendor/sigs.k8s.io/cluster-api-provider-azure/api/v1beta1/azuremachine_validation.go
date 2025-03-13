@@ -25,6 +25,7 @@ import (
 	"golang.org/x/crypto/ssh"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/utils/ptr"
+
 	azureutil "sigs.k8s.io/cluster-api-provider-azure/util/azure"
 )
 
@@ -138,6 +139,10 @@ func ValidateSystemAssignedIdentity(identityType VMIdentity, oldIdentity, newIde
 func ValidateUserAssignedIdentity(identityType VMIdentity, userAssignedIdentities []UserAssignedIdentity, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 
+	if len(userAssignedIdentities) > 0 && identityType != VMIdentityUserAssigned {
+		allErrs = append(allErrs, field.Invalid(fldPath, identityType, "must be set to 'UserAssigned' when assigning any user identity to the machine"))
+	}
+
 	if identityType == VMIdentityUserAssigned {
 		if len(userAssignedIdentities) == 0 {
 			allErrs = append(allErrs, field.Required(fldPath, "must be specified for the 'UserAssigned' identity type"))
@@ -160,7 +165,7 @@ func ValidateSystemAssignedIdentityRole(identityType VMIdentity, roleAssignmentN
 	if roleAssignmentName != "" && role != nil && role.Name != "" {
 		allErrs = append(allErrs, field.Invalid(fldPath, role.Name, "cannot set both roleAssignmentName and systemAssignedIdentityRole.name"))
 	}
-	if identityType == VMIdentitySystemAssigned {
+	if identityType == VMIdentitySystemAssigned && role != nil {
 		if role.DefinitionID == "" {
 			allErrs = append(allErrs, field.Invalid(field.NewPath("spec", "systemAssignedIdentityRole", "definitionID"), role.DefinitionID, "the definitionID field cannot be empty"))
 		}
@@ -487,7 +492,7 @@ func ValidateCapacityReservationGroupID(capacityReservationGroupID *string, fldP
 }
 
 // ValidateVMExtensions validates the VMExtensions spec.
-func ValidateVMExtensions(disableExtensionOperations *bool, vmExtensions []VMExtension, fldPath *field.Path) field.ErrorList {
+func ValidateVMExtensions(disableExtensionOperations *bool, vmExtensions []VMExtension, _ *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 
 	if ptr.Deref(disableExtensionOperations, false) && len(vmExtensions) > 0 {

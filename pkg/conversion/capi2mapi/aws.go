@@ -38,6 +38,7 @@ var (
 
 const (
 	errUnsupportedCAPATenancy     = "unable to convert tenancy, unknown value"
+	errUnsupportedCAPAMarketType  = "unable to convert market type, unknown value"
 	errUnsupportedHTTPTokensState = "unable to convert httpTokens state, unknown value" //nolint:gosec // This is an error message, not a credential
 )
 
@@ -104,6 +105,11 @@ func (m machineAndAWSMachineAndAWSCluster) toProviderSpec() (*mapiv1.AWSMachineP
 		errors = append(errors, errs...)
 	}
 
+	mapiAWSMarketType, err := convertAWSMarketTypeToMAPI(fldPath.Child("marketType"), m.awsMachine.Spec.MarketType)
+	if err != nil {
+		errors = append(errors, err)
+	}
+
 	warnings = append(warnings, warn...)
 
 	mapaProviderConfig := mapiv1.AWSMachineProviderConfig{
@@ -145,6 +151,7 @@ func (m machineAndAWSMachineAndAWSCluster) toProviderSpec() (*mapiv1.AWSMachineP
 		PlacementGroupName:      m.awsMachine.Spec.PlacementGroupName,
 		PlacementGroupPartition: convertAWSPlacementGroupPartition(m.awsMachine.Spec.PlacementGroupPartition),
 		CapacityReservationID:   ptr.Deref(m.awsMachine.Spec.CapacityReservationID, ""),
+		MarketType:              mapiAWSMarketType,
 	}
 
 	userDataSecretName := ptr.Deref(m.machine.Spec.Bootstrap.DataSecretName, "")
@@ -368,6 +375,21 @@ func convertAWSTenancyToMAPI(fldPath *field.Path, capiTenancy string) (mapiv1.In
 		return "", nil
 	default:
 		return "", field.Invalid(fldPath, capiTenancy, errUnsupportedCAPATenancy)
+	}
+}
+
+func convertAWSMarketTypeToMAPI(fldPath *field.Path, marketType capav1.MarketType) (mapiv1.MarketType, *field.Error) {
+	switch marketType {
+	case capav1.MarketTypeOnDemand:
+		return mapiv1.MarketTypeOnDemand, nil
+	case capav1.MarketTypeSpot:
+		return mapiv1.MarketTypeSpot, nil
+	case capav1.MarketTypeCapacityBlock:
+		return mapiv1.MarketTypeCapacityBlock, nil
+	case "":
+		return "", nil
+	default:
+		return "", field.Invalid(fldPath, marketType, errUnsupportedCAPAMarketType)
 	}
 }
 
