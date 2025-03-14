@@ -94,19 +94,34 @@ func (r *MachineSetMigrationReconciler) Reconcile(ctx context.Context, req recon
 		return ctrl.Result{}, fmt.Errorf("failed to get MAPI machine set: %w", err)
 	}
 
+	logger.WithValues("machineset", mapiMachineSet.Name)
+
 	// TODO: move this check in the watchPredicates?
 	// Observe the spec and status authoritative API fields and look for a difference between them.
 	// A difference indicating the cluster admin requested a migration between the two APIs.
-	if noMigrationRequested := mapiMachineSet.Spec.AuthoritativeAPI != mapiMachineSet.Status.AuthoritativeAPI; noMigrationRequested {
+	if noMigrationRequested := mapiMachineSet.Spec.AuthoritativeAPI == mapiMachineSet.Status.AuthoritativeAPI; noMigrationRequested {
 		// No migration is being requested for this MAPI MachineSet, nothing to do.
 		return ctrl.Result{}, nil
 	}
 
-	// Check if the Synchronized condition is set to True.
-	// If it is not, this indicates an unmigratable resource and therefore should take no action.
-	if getConditionStatus(mapiMachineSet, consts.SynchronizedCondition) != corev1.ConditionTrue {
-		// The Resource is NOT Syncronized, so the resource is not migrateable, nothing to do.
-		return ctrl.Result{}, nil
+	logger.Info("Detected migration request for resource")
+
+	// // Check if the Synchronized condition is set to True.
+	// // If it is not, this indicates an unmigratable resource and therefore should take no action.
+	// if getConditionStatus(mapiMachineSet, consts.SynchronizedCondition) != corev1.ConditionTrue {
+	// 	// The Resource is NOT Syncronized, so the resource is not migrateable, nothing to do.
+	// 	logger.Info("Cluster API mirror resource is not yet in sync with the Machine API one, trying again later")
+	// 	return ctrl.Result{}, nil
+	// }
+
+	// If authoritativeAPI status is empty, it means it is the first time we see this resource.
+	// Set the status.authoritativeAPI to match the spec.authoritativeAPI.
+	if mapiMachineSet.Status.AuthoritativeAPI == "" {
+		if err := r.applyStatusAuthoritativeAPIWithPatch(ctx, mapiMachineSet, mapiMachineSet.Spec.AuthoritativeAPI); err != nil {
+			return ctrl.Result{}, fmt.Errorf("unable to apply authoritativeAPI to status with patch: %w", err)
+		}
+
+		return ctrl.Result{Requeue: true}, nil
 	}
 
 	// Make sure the authoritativeAPI resource status is set to migrating.
@@ -115,15 +130,18 @@ func (r *MachineSetMigrationReconciler) Reconcile(ctx context.Context, req recon
 		if err := r.applyStatusAuthoritativeAPIWithPatch(ctx, mapiMachineSet, machinev1beta1.MachineAuthorityMigrating); err != nil {
 			return ctrl.Result{}, fmt.Errorf("unable to apply authoritativeAPI to status with patch: %w", err)
 		}
-
-		// Then wait for the old authoritativeAPI resource to have the Paused=True condition.
+		// Then wait for the old authoritativeAPI.
 		return ctrl.Result{Requeue: true}, nil
 	}
+
+	logger.Info("Acknowledged migration request for resource")
 
 	// Ensure the old authoritativeAPI resource has been requested to pause.
 	if err := r.ensurePausedRequestedOnOldAuthoritativeAPI(ctx, mapiMachineSet); err != nil {
 		return ctrl.Result{}, fmt.Errorf("unable to ensure old AuthoritativeAPI has been requested to pause: %w", err)
 	}
+
+	logger.Info("Requested pausing for old authoritative resource")
 
 	// Check if the old authoritativeAPI resource is actually paused.
 	if hasPausedConditionTrue, err := r.isOldAuthoritativeAPIStatusConditionPaused(ctx, mapiMachineSet); err != nil {
@@ -132,6 +150,8 @@ func (r *MachineSetMigrationReconciler) Reconcile(ctx context.Context, req recon
 		// The old Authoritative API resource is not paused yet, requeue to check later.
 		return ctrl.Result{Requeue: true}, nil
 	}
+
+	logger.Info("Confirmed pausing for old authoritative resource")
 
 	// Check if the synchronizedGeneration is up to date with the old authoritativeAPI's resource current generation.
 	if isSynchronizedGenMatching, err := r.isSynchronizedGenerationMatchingAuthoritativeAPIGeneration(ctx, mapiMachineSet); err != nil {
@@ -148,6 +168,8 @@ func (r *MachineSetMigrationReconciler) Reconcile(ctx context.Context, req recon
 		return ctrl.Result{}, errors.New("unable to proceed migrating, resources are not synchronized")
 	}
 
+	logger.Info("Confirmed syncronized status for to-be authoritative resource")
+
 	// Add finalizer to new authoritative API.
 	// This will ensure no status changes on the same reconcile.
 	// The finalizer must be present on the object before we take any actions.
@@ -156,6 +178,8 @@ func (r *MachineSetMigrationReconciler) Reconcile(ctx context.Context, req recon
 	} else if addedFinalizer {
 		return ctrl.Result{Requeue: true}, nil
 	}
+
+	logger.Info("Confirmed finalizer on to-be authoritative resource")
 
 	// Remove finalizer from the old authoritative API.
 	// This will ensure no status changes on the same reconcile.
@@ -166,15 +190,21 @@ func (r *MachineSetMigrationReconciler) Reconcile(ctx context.Context, req recon
 		return ctrl.Result{Requeue: true}, nil
 	}
 
+	logger.Info("Confirmed finalizer removed on old authoritative resource")
+
 	// Set the actual AuthoritativeAPI to the desired one.
 	if err := r.applyStatusAuthoritativeAPIWithPatch(ctx, mapiMachineSet, mapiMachineSet.Spec.AuthoritativeAPI); err != nil {
 		return ctrl.Result{}, fmt.Errorf("unable to apply authoritativeAPI to status with patch: %w", err)
 	}
 
+	logger.Info("Confirmed authoritativeAPI switch for resource")
+
 	// Make sure the new authoritativeAPI resource has been requested to unpause.
 	if err := r.ensureUnpausedRequestedOnNewAuthoritativeAPI(ctx, mapiMachineSet); err != nil {
 		return ctrl.Result{}, fmt.Errorf("unable to ensure the new AuthoritativeAPI has been un-paused: %w", err)
 	}
+
+	logger.Info("Confirmed new authoritativeAPI resource is now unpaused")
 
 	return ctrl.Result{}, nil
 }
