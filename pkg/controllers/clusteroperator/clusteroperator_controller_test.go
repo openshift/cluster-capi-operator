@@ -83,7 +83,7 @@ var _ = Describe("ClusterOperator controller", func() {
 			Eventually(co).Should(HaveField("Status.Conditions",
 				SatisfyAll(
 					ContainElement(And(HaveField("Type", Equal(configv1.OperatorAvailable)), HaveField("Status", Equal(configv1.ConditionTrue)),
-						HaveField("Message", Equal(fmt.Sprintf("Cluster CAPI Operator is available at %s", desiredOperatorReleaseVersion))))),
+						HaveField("Message", Equal(fmt.Sprintf("Cluster Cluster API Operator is available at %s", desiredOperatorReleaseVersion))))),
 					ContainElement(And(HaveField("Type", Equal(configv1.OperatorProgressing)), HaveField("Status", Equal(configv1.ConditionFalse)))),
 					ContainElement(And(HaveField("Type", Equal(configv1.OperatorDegraded)), HaveField("Status", Equal(configv1.ConditionFalse)))),
 					ContainElement(And(HaveField("Type", Equal(configv1.OperatorUpgradeable)), HaveField("Status", Equal(configv1.ConditionTrue)))),

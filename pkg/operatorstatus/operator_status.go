@@ -70,7 +70,7 @@ func (r *ClusterOperatorStatusClient) SetStatusAvailable(ctx context.Context, av
 	}
 
 	if availableConditionMsg == "" {
-		availableConditionMsg = fmt.Sprintf("Cluster CAPI Operator is available at %s", r.ReleaseVersion)
+		availableConditionMsg = fmt.Sprintf("Cluster Cluster API Operator is available at %s", r.ReleaseVersion)
 	}
 
 	conds := []configv1.ClusterOperatorStatusCondition{

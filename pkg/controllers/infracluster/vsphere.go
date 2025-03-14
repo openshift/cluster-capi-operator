@@ -50,7 +50,7 @@ func (r *InfraClusterController) ensureVSphereCluster(ctx context.Context, log l
 
 	// First make sure the CAPI VSphere credentials secret exists.
 	if err := r.ensureVSphereSecret(ctx, vsphereServerAddr); err != nil {
-		return nil, fmt.Errorf("unable to ensure CAPI VSphere credentials secret: %w", err)
+		return nil, fmt.Errorf("unable to ensure Cluster API VSphere credentials secret: %w", err)
 	}
 
 	target := &vspherev1.VSphereCluster{ObjectMeta: metav1.ObjectMeta{
@@ -117,12 +117,12 @@ func (r *InfraClusterController) ensureVSphereCluster(ctx context.Context, log l
 func getVSphereMAPIProviderSpec(ctx context.Context, cl client.Client) (*mapiv1beta1.VSphereMachineProviderSpec, error) {
 	rawProviderSpec, err := getRawMAPIProviderSpec(ctx, cl)
 	if err != nil {
-		return nil, fmt.Errorf("unable to obtain MAPI ProviderSpec: %w", err)
+		return nil, fmt.Errorf("unable to obtain Machine API ProviderSpec: %w", err)
 	}
 
 	providerSpec := &mapiv1beta1.VSphereMachineProviderSpec{}
 	if err := yaml.Unmarshal(rawProviderSpec, providerSpec); err != nil {
-		return nil, fmt.Errorf("unable to unmarshal MAPI ProviderSpec: %w", err)
+		return nil, fmt.Errorf("unable to unmarshal Machine API ProviderSpec: %w", err)
 	}
 
 	return providerSpec, nil
@@ -138,7 +138,7 @@ func (r *InfraClusterController) ensureVSphereSecret(ctx context.Context, vspher
 	}
 
 	if err := r.Client.Get(ctx, client.ObjectKeyFromObject(vSphereSecret), vSphereSecret); err != nil && !cerrors.IsNotFound(err) {
-		return fmt.Errorf("failed to get CAPI VSphere credentials secret: %w", err)
+		return fmt.Errorf("failed to get Cluster API VSphere credentials secret: %w", err)
 	} else if err == nil {
 		// The secret already exists.
 		return nil
@@ -155,7 +155,7 @@ func (r *InfraClusterController) ensureVSphereSecret(ctx context.Context, vspher
 	}
 
 	if err := r.Client.Create(ctx, vSphereSecret); err != nil && !cerrors.IsAlreadyExists(err) {
-		return fmt.Errorf("unable to create CAPI VSphere credentials secret: %w", err)
+		return fmt.Errorf("unable to create Cluster API VSphere credentials secret: %w", err)
 	}
 
 	return nil
@@ -190,7 +190,7 @@ func (r *InfraClusterController) getVSphereServerAddr(ctx context.Context) (stri
 		// Devise VSphere server addr via MAPI providerSpec.
 		machineSpec, err := getVSphereMAPIProviderSpec(ctx, r.Client)
 		if err != nil {
-			return "", fmt.Errorf("unable to get VSphere MAPI ProviderSpec: %w", err)
+			return "", fmt.Errorf("unable to get VSphere Machine API ProviderSpec: %w", err)
 		}
 
 		return machineSpec.Workspace.Server, nil
