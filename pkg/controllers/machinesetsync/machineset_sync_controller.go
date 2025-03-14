@@ -117,6 +117,7 @@ func (r *MachineSetSyncReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	}
 
 	if err := ctrl.NewControllerManagedBy(mgr).
+		Named(controllerName).
 		For(&machinev1beta1.MachineSet{}, builder.WithPredicates(util.FilterNamespace(r.MAPINamespace))).
 		Watches(
 			&capiv1beta1.MachineSet{},

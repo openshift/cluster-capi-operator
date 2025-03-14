@@ -68,6 +68,7 @@ func (r *MachineSetMigrationReconciler) SetupWithManager(mgr ctrl.Manager) error
 	}
 
 	if err := ctrl.NewControllerManagedBy(mgr).
+		Named(controllerName).
 		For(&machinev1beta1.MachineSet{}, builder.WithPredicates(util.FilterNamespace(r.MAPINamespace))).
 		Complete(r); err != nil {
 		return fmt.Errorf("failed to create controller: %w", err)
