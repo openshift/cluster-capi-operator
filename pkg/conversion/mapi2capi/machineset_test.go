@@ -49,9 +49,9 @@ var _ = Describe("mapi2capi MachineSet conversion", func() {
 				in.infraBuilder.Build(),
 			).ToMachineSetAndMachineTemplate()
 			Expect(err).To(matchers.ConsistOfMatchErrorSubstrings(in.expectedErrors),
-				"should match expected errors while converting MAPI MachineSet to CAPI MachineSet")
+				"should match expected errors while converting Machine API MachineSet to Cluster API MachineSet")
 			Expect(warns).To(matchers.ConsistOfSubstrings(in.expectedWarnings),
-				"should match expected warnings while converting MAPI MachineSet to CAPI MachineSet")
+				"should match expected warnings while converting Machine API MachineSet to Cluster API MachineSet")
 		},
 
 		// Base Case

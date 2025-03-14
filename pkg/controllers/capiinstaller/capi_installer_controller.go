@@ -100,7 +100,7 @@ func (r *CapiInstallerController) Reconcile(ctx context.Context, req ctrl.Reques
 	}
 
 	if err := r.setAvailableCondition(ctx, log); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to set conditions for CAPI Installer Controller: %w", err)
+		return ctrl.Result{}, fmt.Errorf("failed to set conditions for Cluster API Installer Controller: %w", err)
 	}
 
 	return res, nil
@@ -123,7 +123,7 @@ func (r *CapiInstallerController) reconcile(ctx context.Context, log logr.Logger
 
 	// Process each one of the desired providers.
 	for providerConfigMapLabelTypeVal, providerConfigMapLabelNameVal := range providerConfigMapLabels {
-		log.Info("reconciling CAPI provider", "name", providerConfigMapLabelNameVal)
+		log.Info("reconciling Cluster API provider", "name", providerConfigMapLabelNameVal)
 
 		// Get a List all the ConfigMaps matching the desired provider labels.
 		configMapList := &corev1.ConfigMapList{}
@@ -134,26 +134,26 @@ func (r *CapiInstallerController) reconcile(ctx context.Context, log logr.Logger
 			},
 		); err != nil {
 			if err := r.setDegradedCondition(ctx, log); err != nil {
-				return ctrl.Result{}, fmt.Errorf("failed to set conditions for CAPI Installer controller: %w", err)
+				return ctrl.Result{}, fmt.Errorf("failed to set conditions for Cluster API Installer controller: %w", err)
 			}
 
-			return ctrl.Result{}, fmt.Errorf("unable to list CAPI provider %q ConfigMaps: %w", providerConfigMapLabelNameVal, err)
+			return ctrl.Result{}, fmt.Errorf("unable to list Cluster API provider %q ConfigMaps: %w", providerConfigMapLabelNameVal, err)
 		}
 
 		// Extract the provider manifests stored each of the matching ConfigMaps.
 		var providerComponents []string
 
 		for _, cm := range configMapList.Items {
-			log.Info("processing CAPI provider ConfigMap", "configmapName", cm.Name, "providerType", cm.Labels[providerConfigMapLabelTypeKey],
+			log.Info("processing Cluster API provider ConfigMap", "configmapName", cm.Name, "providerType", cm.Labels[providerConfigMapLabelTypeKey],
 				"providerName", cm.Labels[providerConfigMapLabelNameKey], "providerVersion", cm.Labels[providerConfigMapLabelVersionKey])
 
 			partialComponents, err := r.extractProviderComponents(cm)
 			if err != nil {
 				if err := r.setDegradedCondition(ctx, log); err != nil {
-					return ctrl.Result{}, fmt.Errorf("failed to set conditions for CAPI Installer controller: %w", err)
+					return ctrl.Result{}, fmt.Errorf("failed to set conditions for Cluster API Installer controller: %w", err)
 				}
 
-				return ctrl.Result{}, fmt.Errorf("error extracting CAPI provider components from ConfigMap %q/%q: %w", cm.Namespace, cm.Name, err)
+				return ctrl.Result{}, fmt.Errorf("error extracting Cluster API provider components from ConfigMap %q/%q: %w", cm.Namespace, cm.Name, err)
 			}
 
 			providerComponents = append(providerComponents, partialComponents...)
@@ -162,13 +162,13 @@ func (r *CapiInstallerController) reconcile(ctx context.Context, log logr.Logger
 		// Apply all the collected provider components manifests.
 		if err := r.applyProviderComponents(ctx, providerComponents); err != nil {
 			if err := r.setDegradedCondition(ctx, log); err != nil {
-				return ctrl.Result{}, fmt.Errorf("failed to set conditions for CAPI Installer controller: %w", err)
+				return ctrl.Result{}, fmt.Errorf("failed to set conditions for Cluster API Installer controller: %w", err)
 			}
 
-			return ctrl.Result{}, fmt.Errorf("error applying CAPI provider %q components: %w", providerConfigMapLabelNameVal, err)
+			return ctrl.Result{}, fmt.Errorf("error applying Cluster API provider %q components: %w", providerConfigMapLabelNameVal, err)
 		}
 
-		log.Info("finished reconciling CAPI provider", "name", providerConfigMapLabelNameVal)
+		log.Info("finished reconciling Cluster API provider", "name", providerConfigMapLabelNameVal)
 	}
 
 	return ctrl.Result{}, nil
@@ -201,7 +201,7 @@ func (r *CapiInstallerController) applyProviderComponents(ctx context.Context, c
 
 		obj, err := yamlToRuntimeObject(r.Scheme, deploymentManifest)
 		if err != nil {
-			return fmt.Errorf("error parsing CAPI provider deployment manifets %q: %w", d, err)
+			return fmt.Errorf("error parsing Cluster API provider deployment manifets %q: %w", d, err)
 		}
 
 		// TODO: Deployments State/Conditions should influence the overall ClusterOperator Status.
@@ -217,7 +217,7 @@ func (r *CapiInstallerController) applyProviderComponents(ctx context.Context, c
 			deployment,
 			resourcemerge.ExpectedDeploymentGeneration(deployment, nil),
 		); err != nil {
-			return fmt.Errorf("error applying CAPI provider deployment %q: %w", deployment.Name, err)
+			return fmt.Errorf("error applying Cluster API provider deployment %q: %w", deployment.Name, err)
 		}
 	}
 
@@ -225,7 +225,7 @@ func (r *CapiInstallerController) applyProviderComponents(ctx context.Context, c
 
 	for i, r := range res {
 		if r.Error != nil {
-			errs = errors.Join(errs, fmt.Errorf("error applying CAPI provider component %q at position %d: %w", r.File, i, r.Error))
+			errs = errors.Join(errs, fmt.Errorf("error applying Cluster API provider component %q at position %d: %w", r.File, i, r.Error))
 		}
 	}
 
@@ -277,14 +277,14 @@ func (r *CapiInstallerController) setAvailableCondition(ctx context.Context, log
 
 	conds := []configv1.ClusterOperatorStatusCondition{
 		operatorstatus.NewClusterOperatorStatusCondition(capiInstallerControllerAvailableCondition, configv1.ConditionTrue, operatorstatus.ReasonAsExpected,
-			"CAPI Installer Controller works as expected"),
+			"Cluster API Installer Controller works as expected"),
 		operatorstatus.NewClusterOperatorStatusCondition(capiInstallerControllerDegradedCondition, configv1.ConditionFalse, operatorstatus.ReasonAsExpected,
-			"CAPI Installer Controller works as expected"),
+			"Cluster API Installer Controller works as expected"),
 	}
 
 	co.Status.Versions = []configv1.OperandVersion{{Name: controllers.OperatorVersionKey, Version: r.ReleaseVersion}}
 
-	log.V(2).Info("CAPI Installer Controller is Available")
+	log.V(2).Info("Cluster API Installer Controller is Available")
 
 	if err := r.SyncStatus(ctx, controllerName, co, conds); err != nil {
 		return fmt.Errorf("failed to sync status: %w", err)
@@ -302,14 +302,14 @@ func (r *CapiInstallerController) setDegradedCondition(ctx context.Context, log 
 
 	conds := []configv1.ClusterOperatorStatusCondition{
 		operatorstatus.NewClusterOperatorStatusCondition(capiInstallerControllerAvailableCondition, configv1.ConditionFalse, operatorstatus.ReasonSyncFailed,
-			"CAPI Installer Controller failed install"),
+			"Cluster API Installer Controller failed install"),
 		operatorstatus.NewClusterOperatorStatusCondition(capiInstallerControllerDegradedCondition, configv1.ConditionTrue, operatorstatus.ReasonSyncFailed,
-			"CAPI Installer Controller failed install"),
+			"Cluster API Installer Controller failed install"),
 	}
 
 	co.Status.Versions = []configv1.OperandVersion{{Name: controllers.OperatorVersionKey, Version: r.ReleaseVersion}}
 
-	log.Info("CAPI Installer Controller is Degraded")
+	log.Info("Cluster API Installer Controller is Degraded")
 
 	if err := r.SyncStatus(ctx, controllerName, co, conds); err != nil {
 		return fmt.Errorf("failed to sync status: %w", err)

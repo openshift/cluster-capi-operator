@@ -147,7 +147,7 @@ var _ = Describe("capi2mapi PowerVS conversion", func() {
 				return &pvsMachine
 			},
 			powerVSCluster: powerVSCluster,
-			expectedErrors: []string{"spec.network: Invalid value: v1beta2.IBMPowerVSResourceReference{ID:(*string)(nil), Name:(*string)(nil), RegEx:(*string)(nil)}: unable to convert network to MAPI"},
+			expectedErrors: []string{"spec.network: Invalid value: v1beta2.IBMPowerVSResourceReference{ID:(*string)(nil), Name:(*string)(nil), RegEx:(*string)(nil)}: unable to convert network to Machine API"},
 		}),
 	)
 

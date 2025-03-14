@@ -77,7 +77,7 @@ var _ = Describe("mapi2capi PowerVS conversion", func() {
 		func(in powerVSMAPI2CAPIConversionInput) {
 			_, _, _, err := FromPowerVSMachineAndInfra(in.machineBuilder.Build(), in.infra).ToMachineAndInfrastructureMachine()
 			fmt.Println(err)
-			Expect(err).To(matchers.ConsistOfMatchErrorSubstrings(in.expectedErrors), "should match expected errors while converting an PowerVS MAPI Machine to CAPI")
+			Expect(err).To(matchers.ConsistOfMatchErrorSubstrings(in.expectedErrors), "should match expected errors while converting an PowerVS Machine API Machine to Cluster API")
 
 		},
 
@@ -144,7 +144,7 @@ var _ = Describe("mapi2capi PowerVS conversion", func() {
 	var _ = DescribeTable("mapi2capi PowerVS convert MAPI MachineSet",
 		func(in powerVSMAPI2CAPIMachineSetConversionInput) {
 			_, _, _, err := FromPowerVSMachineSetAndInfra(in.machineSetBuilder.Build(), in.infra).ToMachineSetAndMachineTemplate()
-			Expect(err).To(matchers.ConsistOfMatchErrorSubstrings(in.expectedErrors), "should match expected errors while converting an PowerVS MAPI MachineSet to CAPI")
+			Expect(err).To(matchers.ConsistOfMatchErrorSubstrings(in.expectedErrors), "should match expected errors while converting an PowerVS Machine API MachineSet to Cluster API")
 		},
 
 		Entry("With a Base configuration", powerVSMAPI2CAPIMachineSetConversionInput{

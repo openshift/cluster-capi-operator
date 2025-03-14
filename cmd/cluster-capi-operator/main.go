@@ -107,12 +107,12 @@ func main() {
 	managedNamespace := flag.String(
 		"namespace",
 		controllers.DefaultManagedNamespace,
-		"The namespace where CAPI components will run.",
+		"The namespace where Cluster API components will run.",
 	)
 	imagesFile := flag.String(
 		"images-json",
 		defaultImagesLocation,
-		"The location of images file to use by operator for managed CAPI binaries.",
+		"The location of images file to use by operator for managed Cluster API binaries.",
 	)
 	webhookPort := flag.Int(
 		"webhook-port",
