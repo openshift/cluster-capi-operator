@@ -33,7 +33,9 @@ import (
 	"github.com/go-test/deep"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/tools/record"
 	capav1beta2 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
@@ -79,6 +81,9 @@ var (
 	errPlatformNotSupported = errors.New("error determining InfraMachine type, platform not supported")
 	// errUnrecognizedConditionStatus is returned when the condition status is not recognized.
 	errUnrecognizedConditionStatus = errors.New("error unrecognized condition status")
+
+	// errUnsuportedOwnerKindForConversion is returned when attempting to convert unsupported ownerReference.
+	errUnsuportedOwnerKindForConversion = errors.New("unsupported owner kind for ownerReference conversion")
 )
 
 // MachineSyncReconciler reconciles CAPI and MAPI machines.
@@ -217,7 +222,7 @@ func (r *MachineSyncReconciler) reconcileCAPIMachinetoMAPIMachine(ctx context.Co
 func (r *MachineSyncReconciler) reconcileMAPIMachinetoCAPIMachine(ctx context.Context, mapiMachine *machinev1beta1.Machine, capiMachine *capiv1beta1.Machine) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
-	newCAPIMachine, newCAPIInfraMachine, warns, err := r.convertMAPIToCAPIMachine(mapiMachine)
+	newCAPIMachine, newCAPIInfraMachine, warns, err := r.convertMAPIToCAPIMachine(ctx, mapiMachine)
 	if err != nil {
 		conversionErr := fmt.Errorf("failed to convert MAPI machine to CAPI machine: %w", err)
 		if condErr := r.applySynchronizedConditionWithPatch(ctx, mapiMachine, corev1.ConditionFalse, reasonFailedToConvertMAPIMachineToCAPI, conversionErr.Error(), nil); condErr != nil {
@@ -277,15 +282,38 @@ func (r *MachineSyncReconciler) reconcileMAPIMachinetoCAPIMachine(ctx context.Co
 }
 
 // convertMAPIToCAPIMachine converts a MAPI Machine to a CAPI Machine, selecting the correct converter based on the platform.
-func (r *MachineSyncReconciler) convertMAPIToCAPIMachine(mapiMachine *machinev1beta1.Machine) (*capiv1beta1.Machine, client.Object, []string, error) {
+func (r *MachineSyncReconciler) convertMAPIToCAPIMachine(ctx context.Context, mapiMachine *machinev1beta1.Machine) (*capiv1beta1.Machine, client.Object, []string, error) {
+	var (
+		capiMachine           *capiv1beta1.Machine
+		infrastructureMachine client.Object
+		warns                 []string
+		err                   error
+	)
+
+	mapiMachineOwnerReferencesCopy := mapiMachine.OwnerReferences
+	mapiMachine.OwnerReferences = []metav1.OwnerReference{}
+
 	switch r.Platform {
 	case configv1.AWSPlatformType:
-		return mapi2capi.FromAWSMachineAndInfra(mapiMachine, r.Infra).ToMachineAndInfrastructureMachine() //nolint:wrapcheck
+		capiMachine, infrastructureMachine, warns, err = mapi2capi.FromAWSMachineAndInfra(mapiMachine, r.Infra).ToMachineAndInfrastructureMachine()
+		if err != nil {
+			return capiMachine, infrastructureMachine, warns, err //nolint:wrapcheck
+		}
 	case configv1.PowerVSPlatformType:
-		return mapi2capi.FromPowerVSMachineAndInfra(mapiMachine, r.Infra).ToMachineAndInfrastructureMachine() //nolint:wrapcheck
+		capiMachine, infrastructureMachine, warns, err = mapi2capi.FromPowerVSMachineAndInfra(mapiMachine, r.Infra).ToMachineAndInfrastructureMachine()
+		if err != nil {
+			return capiMachine, infrastructureMachine, warns, err //nolint:wrapcheck
+		}
 	default:
 		return nil, nil, nil, fmt.Errorf("%w: %s", errPlatformNotSupported, r.Platform)
 	}
+
+	capiMachine.OwnerReferences, err = r.convertMAPIOwnerReferencesToCAPI(ctx, mapiMachineOwnerReferencesCopy)
+	if err != nil {
+		return nil, nil, warns, fmt.Errorf("failed to convert CAPI machine owner references to CAPI: %w", err)
+	}
+
+	return capiMachine, infrastructureMachine, warns, nil
 }
 
 // createOrUpdateCAPIInfraMachine creates a CAPI infra machine from a MAPI machine, or updates if it exists and it is out of date.
@@ -462,6 +490,86 @@ func (r *MachineSyncReconciler) shouldMirrorCAPIMachineToMAPIMachine(ctx context
 	logger.Info("CAPI machine is not owned by a machineset, nothing to do", "machine", machine.GetName())
 
 	return false, nil
+}
+
+//nolint:dupl
+func (r *MachineSyncReconciler) convertMAPIOwnerReferencesToCAPI(ctx context.Context, ownerReferences []metav1.OwnerReference) ([]metav1.OwnerReference, error) {
+	capiOwnerReferences := []metav1.OwnerReference{}
+
+	for _, ownerReference := range ownerReferences {
+		if ownerReference.Kind != machineSetKind || ownerReference.APIVersion != machinev1beta1.GroupVersion.String() {
+			return nil, errUnsuportedOwnerKindForConversion
+		}
+
+		// Get the CAPI machineSet with same name as MAPI machineSet
+		key := types.NamespacedName{
+			Namespace: r.CAPINamespace,
+			Name:      ownerReference.Name,
+		}
+
+		capiMachineSet := capiv1beta1.MachineSet{}
+		if err := r.Get(ctx, key, &capiMachineSet); err != nil {
+			if apierrors.IsNotFound(err) {
+				return nil, fmt.Errorf("failed to convert ownerReference because machineSet does not have CAPI mirror: %w", err)
+			} else {
+				return nil, fmt.Errorf("failed to get CAPI machineset: %w", err)
+			}
+		}
+
+		// Construct ownerReference from CAPI machineSet
+		capiOwnerReference := metav1.OwnerReference{
+			Kind:               capiMachineSet.Kind,
+			APIVersion:         capiMachineSet.APIVersion,
+			Name:               capiMachineSet.Name,
+			Controller:         ownerReference.Controller,
+			BlockOwnerDeletion: ownerReference.BlockOwnerDeletion,
+			UID:                capiMachineSet.UID,
+		}
+
+		capiOwnerReferences = append(capiOwnerReferences, capiOwnerReference)
+	}
+
+	return capiOwnerReferences, nil
+}
+
+//nolint:dupl
+func (r *MachineSyncReconciler) convertCAPIOwnerReferencesToMAPI(ctx context.Context, ownerReferences []metav1.OwnerReference) ([]metav1.OwnerReference, error) { //nolint:unused
+	mapiOwnerReferences := []metav1.OwnerReference{}
+
+	for _, ownerReference := range ownerReferences {
+		if ownerReference.Kind != machineSetKind || ownerReference.APIVersion != capiv1beta1.GroupVersion.String() {
+			return nil, errUnsuportedOwnerKindForConversion
+		}
+
+		// Get the MAPI machineSet with same name as CAPI machineSet
+		key := types.NamespacedName{
+			Namespace: r.MAPINamespace,
+			Name:      ownerReference.Name,
+		}
+
+		mapiMachineSet := machinev1beta1.MachineSet{}
+		if err := r.Get(ctx, key, &mapiMachineSet); err != nil {
+			if apierrors.IsNotFound(err) {
+				return nil, fmt.Errorf("failed to convert ownerReference because machineSet does not have MAPI mirror: %w", err)
+			} else {
+				return nil, fmt.Errorf("failed to get MAPI machineset: %w", err)
+			}
+		}
+
+		// Construct ownerReference from CAPI machineSet
+		mapiOwnerReference := metav1.OwnerReference{
+			Kind:               mapiMachineSet.Kind,
+			APIVersion:         mapiMachineSet.APIVersion,
+			Name:               mapiMachineSet.Name,
+			Controller:         ownerReference.Controller,
+			BlockOwnerDeletion: ownerReference.BlockOwnerDeletion,
+			UID:                mapiMachineSet.UID,
+		}
+
+		mapiOwnerReferences = append(mapiOwnerReferences, mapiOwnerReference)
+	}
+
+	return mapiOwnerReferences, nil
 }
 
 // fetchCAPIInfraResources fetches the provider specific infrastructure resources depending on which provider is set.
