@@ -209,7 +209,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 								HaveField("Type", Equal(consts.SynchronizedCondition)),
 								HaveField("Status", Equal(corev1.ConditionTrue)),
 								HaveField("Reason", Equal("ResourceSynchronized")),
-								HaveField("Message", Equal("Successfully synchronized MAPI Machine to CAPI")),
+								HaveField("Message", Equal("Successfully synchronized Machine API Machine to Cluster API")),
 							))),
 					)
 				})
@@ -228,7 +228,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 								HaveField("Type", Equal(consts.SynchronizedCondition)),
 								HaveField("Status", Equal(corev1.ConditionTrue)),
 								HaveField("Reason", Equal("ResourceSynchronized")),
-								HaveField("Message", Equal("Successfully synchronized MAPI Machine to CAPI")),
+								HaveField("Message", Equal("Successfully synchronized Machine API Machine to Cluster API")),
 							))),
 					)
 				})
@@ -265,7 +265,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 								HaveField("Type", Equal(consts.SynchronizedCondition)),
 								HaveField("Status", Equal(corev1.ConditionTrue)),
 								HaveField("Reason", Equal("ResourceSynchronized")),
-								HaveField("Message", Equal("Successfully synchronized MAPI Machine to CAPI")),
+								HaveField("Message", Equal("Successfully synchronized Machine API Machine to Cluster API")),
 							))),
 					)
 				})
@@ -381,7 +381,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 								HaveField("Type", Equal(consts.SynchronizedCondition)),
 								HaveField("Status", Equal(corev1.ConditionTrue)),
 								HaveField("Reason", Equal("ResourceSynchronized")),
-								HaveField("Message", Equal("Successfully synchronized MAPI Machine to CAPI")),
+								HaveField("Message", Equal("Successfully synchronized Machine API Machine to Cluster API")),
 							))),
 					)
 				})
@@ -405,7 +405,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 								HaveField("Type", Equal(consts.SynchronizedCondition)),
 								HaveField("Status", Equal(corev1.ConditionTrue)),
 								HaveField("Reason", Equal("ResourceSynchronized")),
-								HaveField("Message", Equal("Successfully synchronized MAPI Machine to CAPI")),
+								HaveField("Message", Equal("Successfully synchronized Machine API Machine to Cluster API")),
 							))),
 					)
 				})
@@ -504,7 +504,7 @@ var _ = Describe("applySynchronizedConditionWithPatch", func() {
 						HaveField("Type", Equal(consts.SynchronizedCondition)),
 						HaveField("Status", Equal(corev1.ConditionUnknown)),
 						HaveField("Reason", Equal("ProgressingToCreateCAPIInfraMachine")),
-						HaveField("Message", Equal("Progressing to synchronize MAPI Machine to CAPI")),
+						HaveField("Message", Equal("Progressing to synchronize Machine API Machine to Cluster API")),
 						HaveField("Severity", Equal(machinev1beta1.ConditionSeverityInfo)),
 					))),
 			)
@@ -530,7 +530,7 @@ var _ = Describe("applySynchronizedConditionWithPatch", func() {
 						HaveField("Type", Equal(consts.SynchronizedCondition)),
 						HaveField("Status", Equal(corev1.ConditionTrue)),
 						HaveField("Reason", Equal(consts.ReasonResourceSynchronized)),
-						HaveField("Message", Equal("Successfully synchronized MAPI Machine to CAPI")),
+						HaveField("Message", Equal("Successfully synchronized Machine API Machine to Cluster API")),
 						HaveField("Severity", Equal(machinev1beta1.ConditionSeverityNone)),
 					))),
 			)

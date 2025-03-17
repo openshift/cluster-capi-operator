@@ -35,7 +35,7 @@ import (
 )
 
 var (
-	errUnableToGetAzureMAPIProviderSpec = errors.New("unable to get Azure MAPI ProviderSpec")
+	errUnableToGetAzureMAPIProviderSpec = errors.New("unable to get Azure Machine API ProviderSpec")
 	errUnableToGetAzureClientID         = errors.New("unable to get Azure Client ID")
 	errUnableToGetAzureTenantID         = errors.New("unable to get Azure Tenant ID")
 	errPlatformStatusNil                = errors.New("platform status should not be nil")
@@ -79,12 +79,12 @@ func (r *InfraClusterController) ensureAzureCluster(ctx context.Context, log log
 func getAzureMAPIProviderSpec(ctx context.Context, cl client.Client) (*mapiv1beta1.AzureMachineProviderSpec, error) {
 	rawProviderSpec, err := getRawMAPIProviderSpec(ctx, cl)
 	if err != nil {
-		return nil, fmt.Errorf("unable to obtain MAPI ProviderSpec: %w", err)
+		return nil, fmt.Errorf("unable to obtain Machine API ProviderSpec: %w", err)
 	}
 
 	providerSpec := &mapiv1beta1.AzureMachineProviderSpec{}
 	if err := yaml.Unmarshal(rawProviderSpec, providerSpec); err != nil {
-		return nil, fmt.Errorf("unable to unmarshal MAPI ProviderSpec: %w", err)
+		return nil, fmt.Errorf("unable to unmarshal Machine API ProviderSpec: %w", err)
 	}
 
 	return providerSpec, nil

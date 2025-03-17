@@ -71,7 +71,7 @@ func ResolveCAPIMachineSetFromObject(namespace string) func(context.Context, cli
 				continue
 			}
 
-			klog.V(4).Info("Object is owned by a CAPI machineset, enqueueing request",
+			klog.V(4).Info("Object is owned by a Cluster API machineset, enqueueing request",
 				"machine", obj.GetName(), "machineset", ref.Name)
 
 			requests = append(requests, reconcile.Request{

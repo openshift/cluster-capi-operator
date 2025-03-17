@@ -123,7 +123,7 @@ func (r *CapiInstallerController) reconcile(ctx context.Context, log logr.Logger
 
 	// Process each one of the desired providers.
 	for providerConfigMapLabelTypeVal, providerConfigMapLabelNameVal := range providerConfigMapLabels {
-		log.Info("reconciling CAPI provider", "name", providerConfigMapLabelNameVal)
+		log.Info("reconciling Cluster API provider", "name", providerConfigMapLabelNameVal)
 
 		// Get a List all the ConfigMaps matching the desired provider labels.
 		configMapList := &corev1.ConfigMapList{}
@@ -137,14 +137,14 @@ func (r *CapiInstallerController) reconcile(ctx context.Context, log logr.Logger
 				return ctrl.Result{}, fmt.Errorf("failed to set conditions for CAPI Installer controller: %w", err)
 			}
 
-			return ctrl.Result{}, fmt.Errorf("unable to list CAPI provider %q ConfigMaps: %w", providerConfigMapLabelNameVal, err)
+			return ctrl.Result{}, fmt.Errorf("unable to list Cluster API provider %q ConfigMaps: %w", providerConfigMapLabelNameVal, err)
 		}
 
 		// Extract the provider manifests stored each of the matching ConfigMaps.
 		var providerComponents []string
 
 		for _, cm := range configMapList.Items {
-			log.Info("processing CAPI provider ConfigMap", "configmapName", cm.Name, "providerType", cm.Labels[providerConfigMapLabelTypeKey],
+			log.Info("processing Cluster API provider ConfigMap", "configmapName", cm.Name, "providerType", cm.Labels[providerConfigMapLabelTypeKey],
 				"providerName", cm.Labels[providerConfigMapLabelNameKey], "providerVersion", cm.Labels[providerConfigMapLabelVersionKey])
 
 			partialComponents, err := r.extractProviderComponents(cm)
@@ -153,7 +153,7 @@ func (r *CapiInstallerController) reconcile(ctx context.Context, log logr.Logger
 					return ctrl.Result{}, fmt.Errorf("failed to set conditions for CAPI Installer controller: %w", err)
 				}
 
-				return ctrl.Result{}, fmt.Errorf("error extracting CAPI provider components from ConfigMap %q/%q: %w", cm.Namespace, cm.Name, err)
+				return ctrl.Result{}, fmt.Errorf("error extracting Cluster API provider components from ConfigMap %q/%q: %w", cm.Namespace, cm.Name, err)
 			}
 
 			providerComponents = append(providerComponents, partialComponents...)
@@ -165,10 +165,10 @@ func (r *CapiInstallerController) reconcile(ctx context.Context, log logr.Logger
 				return ctrl.Result{}, fmt.Errorf("failed to set conditions for CAPI Installer controller: %w", err)
 			}
 
-			return ctrl.Result{}, fmt.Errorf("error applying CAPI provider %q components: %w", providerConfigMapLabelNameVal, err)
+			return ctrl.Result{}, fmt.Errorf("error applying Cluster API provider %q components: %w", providerConfigMapLabelNameVal, err)
 		}
 
-		log.Info("finished reconciling CAPI provider", "name", providerConfigMapLabelNameVal)
+		log.Info("finished reconciling Cluster API provider", "name", providerConfigMapLabelNameVal)
 	}
 
 	return ctrl.Result{}, nil
@@ -201,7 +201,7 @@ func (r *CapiInstallerController) applyProviderComponents(ctx context.Context, c
 
 		obj, err := yamlToRuntimeObject(r.Scheme, deploymentManifest)
 		if err != nil {
-			return fmt.Errorf("error parsing CAPI provider deployment manifets %q: %w", d, err)
+			return fmt.Errorf("error parsing Cluster API provider deployment manifets %q: %w", d, err)
 		}
 
 		// TODO: Deployments State/Conditions should influence the overall ClusterOperator Status.
@@ -217,7 +217,7 @@ func (r *CapiInstallerController) applyProviderComponents(ctx context.Context, c
 			deployment,
 			resourcemerge.ExpectedDeploymentGeneration(deployment, nil),
 		); err != nil {
-			return fmt.Errorf("error applying CAPI provider deployment %q: %w", deployment.Name, err)
+			return fmt.Errorf("error applying Cluster API provider deployment %q: %w", deployment.Name, err)
 		}
 	}
 
@@ -225,7 +225,7 @@ func (r *CapiInstallerController) applyProviderComponents(ctx context.Context, c
 
 	for i, r := range res {
 		if r.Error != nil {
-			errs = errors.Join(errs, fmt.Errorf("error applying CAPI provider component %q at position %d: %w", r.File, i, r.Error))
+			errs = errors.Join(errs, fmt.Errorf("error applying Cluster API provider component %q at position %d: %w", r.File, i, r.Error))
 		}
 	}
 

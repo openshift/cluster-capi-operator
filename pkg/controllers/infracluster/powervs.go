@@ -79,7 +79,7 @@ func (r *InfraClusterController) ensureIBMPowerVSCluster(ctx context.Context, lo
 
 	machineSpec, err := getPowerVSMAPIProviderSpec(ctx, r.Client)
 	if err != nil {
-		return nil, fmt.Errorf("unable to get PowerVS MAPI ProviderSpec: %w", err)
+		return nil, fmt.Errorf("unable to get PowerVS Machine API ProviderSpec: %w", err)
 	}
 
 	serviceInstance, err := getPowerVSServiceInstance(machineSpec.ServiceInstance)
@@ -125,12 +125,12 @@ func (r *InfraClusterController) ensureIBMPowerVSCluster(ctx context.Context, lo
 func getPowerVSMAPIProviderSpec(ctx context.Context, cl client.Client) (*mapiv1.PowerVSMachineProviderConfig, error) {
 	rawProviderSpec, err := getRawMAPIProviderSpec(ctx, cl)
 	if err != nil {
-		return nil, fmt.Errorf("unable to obtain MAPI ProviderSpec: %w", err)
+		return nil, fmt.Errorf("unable to obtain Machine API ProviderSpec: %w", err)
 	}
 
 	providerSpec := &mapiv1.PowerVSMachineProviderConfig{}
 	if err := yaml.Unmarshal(rawProviderSpec, providerSpec); err != nil {
-		return nil, fmt.Errorf("unable to unmarshal MAPI ProviderSpec: %w", err)
+		return nil, fmt.Errorf("unable to unmarshal Machine API ProviderSpec: %w", err)
 	}
 
 	return providerSpec, nil
