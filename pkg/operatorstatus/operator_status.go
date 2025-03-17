@@ -55,6 +55,7 @@ type ClusterOperatorStatusClient struct {
 	Recorder         record.EventRecorder
 	ManagedNamespace string
 	ReleaseVersion   string
+	Platform         configv1.PlatformType
 }
 
 // SetStatusAvailable sets the Available condition to True, with the given reason
@@ -171,18 +172,50 @@ func (r *ClusterOperatorStatusClient) SyncStatus(ctx context.Context, co *config
 	return nil
 }
 
+func platformToInfraPrefix(platform configv1.PlatformType) string {
+	switch platform {
+	case configv1.BareMetalPlatformType:
+		return "Metal3"
+	default:
+		return string(platform)
+	}
+}
+
 func (r *ClusterOperatorStatusClient) relatedObjects() []configv1.ObjectReference {
-	// TBD: Add an actual set of object references from getResources method
-	return []configv1.ObjectReference{
+	references := []configv1.ObjectReference{
 		{Resource: "namespaces", Name: controllers.DefaultManagedNamespace},
 		{Group: configv1.GroupName, Resource: "clusteroperators", Name: controllers.ClusterOperatorName},
 		{Resource: "namespaces", Name: r.ManagedNamespace},
 		{Group: "", Resource: "serviceaccounts", Name: "cluster-capi-operator", Namespace: controllers.DefaultManagedNamespace},
 		{Group: "", Resource: "configmaps", Name: "cluster-capi-operator-images", Namespace: controllers.DefaultManagedNamespace},
 		{Group: "apps", Resource: "deployments", Name: "cluster-capi-operator", Namespace: controllers.DefaultManagedNamespace},
-		{Group: "cluster.x-k8s.io", Resource: "clusters", Namespace: controllers.DefaultManagedNamespace},
-		{Group: "cluster.x-k8s.io", Resource: "machines", Namespace: controllers.DefaultManagedNamespace},
+		{Group: "cluster.x-k8s.io", Resource: "clusters", Namespace: r.ManagedNamespace},
+		{Group: "cluster.x-k8s.io", Resource: "machines", Namespace: r.ManagedNamespace},
+		{Group: "cluster.x-k8s.io", Resource: "machinesets", Namespace: r.ManagedNamespace},
 	}
+
+	platformPrefix := platformToInfraPrefix(r.Platform)
+
+	for groupVersionKind, t := range r.Scheme().AllKnownTypes() {
+		if strings.HasSuffix(groupVersionKind.Group, "cluster.x-k8s.io") {
+			// Ignore lists
+			if _, found := t.FieldByName("ObjectMeta"); !found {
+				continue
+			}
+
+			if strings.HasPrefix(t.Name(), platformPrefix) {
+				ref := configv1.ObjectReference{
+					Group:     groupVersionKind.Group,
+					Resource:  strings.ToLower(t.Name()),
+					Namespace: r.ManagedNamespace,
+				}
+
+				references = append(references, ref)
+			}
+		}
+	}
+
+	return references
 }
 func (r *ClusterOperatorStatusClient) operandVersions() []configv1.OperandVersion {
 	return []configv1.OperandVersion{{Name: controllers.OperatorVersionKey, Version: r.ReleaseVersion}}
