@@ -170,27 +170,27 @@ func (r *MachineSetMigrationReconciler) Reconcile(ctx context.Context, req recon
 
 	logger.Info("Confirmed syncronized status for to-be authoritative resource")
 
-	// Add finalizer to new authoritative API.
-	// This will ensure no status changes on the same reconcile.
-	// The finalizer must be present on the object before we take any actions.
-	if addedFinalizer, err := r.ensureFinalizerOnNewAuthoritativeAPI(ctx, mapiMachineSet); err != nil {
-		return ctrl.Result{}, fmt.Errorf("error adding finalizer: %w", err)
-	} else if addedFinalizer {
-		return ctrl.Result{Requeue: true}, nil
-	}
+	// // // Add finalizer to new authoritative API.
+	// // // This will ensure no status changes on the same reconcile.
+	// // // The finalizer must be present on the object before we take any actions.
+	// if addedFinalizer, err := r.ensureFinalizerOnNewAuthoritativeAPI(ctx, mapiMachineSet); err != nil {
+	// 	return ctrl.Result{}, fmt.Errorf("error adding finalizer: %w", err)
+	// } else if addedFinalizer {
+	// 	return ctrl.Result{Requeue: true}, nil
+	// }
 
-	logger.Info("Confirmed finalizer on to-be authoritative resource")
+	// logger.Info("Confirmed finalizer on to-be authoritative resource")
 
-	// Remove finalizer from the old authoritative API.
-	// This will ensure no status changes on the same reconcile.
-	// The finalizer must be removed from the object before we take any actions.
-	if removedFinalizer, err := r.ensureFinalizerRemovedOnOldAuthoritativeAPI(ctx, mapiMachineSet); err != nil {
-		return ctrl.Result{}, fmt.Errorf("error removing finalizer: %w", err)
-	} else if removedFinalizer {
-		return ctrl.Result{Requeue: true}, nil
-	}
+	// // Remove finalizer from the old authoritative API.
+	// // This will ensure no status changes on the same reconcile.
+	// // The finalizer must be removed from the object before we take any actions.
+	// if removedFinalizer, err := r.ensureFinalizerRemovedOnOldAuthoritativeAPI(ctx, mapiMachineSet); err != nil {
+	// 	return ctrl.Result{}, fmt.Errorf("error removing finalizer: %w", err)
+	// } else if removedFinalizer {
+	// 	return ctrl.Result{Requeue: true}, nil
+	// }
 
-	logger.Info("Confirmed finalizer removed on old authoritative resource")
+	// logger.Info("Confirmed finalizer removed on old authoritative resource")
 
 	// Set the actual AuthoritativeAPI to the desired one.
 	if err := r.applyStatusAuthoritativeAPIWithPatch(ctx, mapiMachineSet, mapiMachineSet.Spec.AuthoritativeAPI); err != nil {
@@ -364,24 +364,24 @@ func (r *MachineSetMigrationReconciler) ensureFinalizerOnNewAuthoritativeAPI(ctx
 		// TODO: InfraMachineTemplate.
 		capiMachineSet := &capiv1beta1.MachineSet{}
 		if err := r.Get(ctx, client.ObjectKey{Namespace: consts.DefaultManagedNamespace, Name: mapiMachineSet.Name}, capiMachineSet); err != nil {
-			return false, fmt.Errorf("failed to get CAPI machine set: %w", err)
+			return false, fmt.Errorf("failed to get Cluster API machine set: %w", err)
 		}
 
 		newAuthoritativeResource = capiMachineSet
+		// Check if we need to add the finalizer.
+		for _, finalizer := range newAuthoritativeResource.GetFinalizers() {
+			if finalizer == capiv1beta1.MachineSetFinalizer {
+				return false, nil
+			}
+		}
+
+		newAuthoritativeResource.SetFinalizers(append(newAuthoritativeResource.GetFinalizers(), capiv1beta1.MachineSetFinalizer))
+
 	case machinev1beta1.MachineAuthorityMachineAPI:
-		newAuthoritativeResource = mapiMachineSet
+		// No need to set finalizers on the Machine API machine set.
 	default:
 		// Any other value is disallowed by the openAPI schema validation.
 	}
-
-	// Check if we need to add the finalizer.
-	for _, finalizer := range newAuthoritativeResource.GetFinalizers() {
-		if finalizer == migrationControllerFinalizer {
-			return false, nil
-		}
-	}
-
-	newAuthoritativeResource.SetFinalizers(append(newAuthoritativeResource.GetFinalizers(), migrationControllerFinalizer))
 
 	if err := r.Update(ctx, newAuthoritativeResource); err != nil {
 		return false, fmt.Errorf("error updating authoritativeAPI resource: %w", err)
@@ -396,23 +396,25 @@ func (r *MachineSetMigrationReconciler) ensureFinalizerOnNewAuthoritativeAPI(ctx
 // Removing the finalizer in a separate reconcile ensures that spec updates are separate from status updates.
 func (r *MachineSetMigrationReconciler) ensureFinalizerRemovedOnOldAuthoritativeAPI(ctx context.Context, mapiMachineSet *machinev1beta1.MachineSet) (bool, error) {
 	var oldAuthoritativeResource client.Object
+	var finalizerToRemove string
 	switch mapiMachineSet.Spec.AuthoritativeAPI {
 	case machinev1beta1.MachineAuthorityClusterAPI:
 		// TODO: InfraMachineTemplate.
 		capiMachineSet := &capiv1beta1.MachineSet{}
 		if err := r.Get(ctx, client.ObjectKey{Namespace: consts.DefaultManagedNamespace, Name: mapiMachineSet.Name}, capiMachineSet); err != nil {
-			return false, fmt.Errorf("failed to get CAPI machine set: %w", err)
+			return false, fmt.Errorf("failed to get Cluster API machine set: %w", err)
 		}
 
 		oldAuthoritativeResource = capiMachineSet.DeepCopy()
+		finalizerToRemove = capiv1beta1.MachineSetFinalizer
 	case machinev1beta1.MachineAuthorityMachineAPI:
-		oldAuthoritativeResource = mapiMachineSet.DeepCopy()
+		// No need to remove any finalizer on the Machine API machine set.
 	default:
 		// Any other value is disallowed by the openAPI schema validation.
 	}
 
 	// Remove finalizer from the old authoritative API.
-	if finalizerUpdated := controllerutil.RemoveFinalizer(oldAuthoritativeResource, migrationControllerFinalizer); finalizerUpdated {
+	if finalizerUpdated := controllerutil.RemoveFinalizer(oldAuthoritativeResource, finalizerToRemove); finalizerUpdated {
 		if err := r.Update(ctx, oldAuthoritativeResource); err != nil {
 			return false, fmt.Errorf("failed to update old authoritativeAPI resource: %w", err)
 		}
