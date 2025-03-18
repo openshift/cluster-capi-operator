@@ -26,6 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/utils/clock"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -160,7 +161,7 @@ func (r *ClusterOperatorStatusClient) GetOrCreateClusterOperator(ctx context.Con
 // SyncStatus applies the new condition to the ClusterOperator object.
 func (r *ClusterOperatorStatusClient) SyncStatus(ctx context.Context, co *configv1.ClusterOperator, conds []configv1.ClusterOperatorStatusCondition) error {
 	for _, c := range conds {
-		v1helpers.SetStatusCondition(&co.Status.Conditions, c)
+		v1helpers.SetStatusCondition(&co.Status.Conditions, c, clock.RealClock{})
 	}
 
 	if err := r.Client.Status().Update(ctx, co); err != nil {
