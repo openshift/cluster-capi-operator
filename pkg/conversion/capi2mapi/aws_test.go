@@ -220,6 +220,21 @@ var _ = Describe("capi2mapi AWS conversion", func() {
 			expectedWarnings: []string{},
 		}),
 
+		Entry("With unsupported role identityRef", awsCAPI2MAPIMachineConversionInput{
+			awsClusterBuilder: awsCAPIAWSClusterBase.
+				WithIdentityRef(&capav1.AWSIdentityReference{
+					Kind: capav1.ClusterRoleIdentityKind,
+					Name: "invalid",
+				}),
+			awsMachineBuilder: awsCAPIAWSMachineBase,
+			machineBuilder:    awsCAPIMachineBase,
+			expectedErrors: []string{
+				"spec.identityRef.kind: Invalid value: \"AWSClusterRoleIdentity\": kind \"AWSClusterRoleIdentity\" cannot be converted to CredentialsSecret",
+				"spec.identityRef.name: Invalid value: \"invalid\": name \"invalid\" must be \"default\" when using an AWSClusterControllerIdentity",
+			},
+			expectedWarnings: []string{},
+		}),
+
 		// Test case for multiple metadata-related fields
 		Entry("With multiple unsupported metadata options", awsCAPI2MAPIMachineConversionInput{
 			awsClusterBuilder: awsCAPIAWSClusterBase,

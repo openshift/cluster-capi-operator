@@ -36,6 +36,10 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
+const (
+	defaultCredentialSecretName = "aws-cloud-credentials"
+)
+
 var (
 	errUnexpectedObjectTypeForMachine = errors.New("unexpected type for capaMachineObj")
 )
@@ -284,6 +288,13 @@ func (m *awsMachineAndInfra) toAWSMachine(providerSpec mapiv1.AWSMachineProvider
 
 	// TypeMeta - Only for the purpose of the raw extension, not used for any functionality.
 	// CredentialsSecret - TODO(OCPCLOUD-2713): Work out what needs to happen regarding credentials secrets.
+
+	if providerSpec.CredentialsSecret != nil &&
+		providerSpec.CredentialsSecret.Name == defaultCredentialSecretName {
+		// Convertable
+	} else {
+		// Not convertable; need a custom identity ref
+	}
 
 	if m.infrastructure.Status.PlatformStatus != nil &&
 		m.infrastructure.Status.PlatformStatus.AWS != nil &&
