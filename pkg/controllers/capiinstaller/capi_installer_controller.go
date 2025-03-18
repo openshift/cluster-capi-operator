@@ -286,7 +286,7 @@ func (r *CapiInstallerController) setAvailableCondition(ctx context.Context, log
 
 	log.V(2).Info("CAPI Installer Controller is Available")
 
-	if err := r.SyncStatus(ctx, controllerName, co, conds); err != nil {
+	if err := r.SyncStatus(ctx, co, conds); err != nil {
 		return fmt.Errorf("failed to sync status: %w", err)
 	}
 
@@ -311,7 +311,7 @@ func (r *CapiInstallerController) setDegradedCondition(ctx context.Context, log 
 
 	log.Info("CAPI Installer Controller is Degraded")
 
-	if err := r.SyncStatus(ctx, controllerName, co, conds); err != nil {
+	if err := r.SyncStatus(ctx, co, conds); err != nil {
 		return fmt.Errorf("failed to sync status: %w", err)
 	}
 
