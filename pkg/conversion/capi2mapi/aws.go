@@ -40,6 +40,8 @@ const (
 	errUnsupportedCAPATenancy     = "unable to convert tenancy, unknown value"
 	errUnsupportedCAPAMarketType  = "unable to convert market type, unknown value"
 	errUnsupportedHTTPTokensState = "unable to convert httpTokens state, unknown value" //nolint:gosec // This is an error message, not a credential
+	defaultIdentityName           = "default"
+	defaultCredentialsSecretName  = "aws-cloud-credentials" //#nosec G101 -- False positive, not actually a credential.
 )
 
 // machineAndAWSMachineAndAWSCluster stores the details of a Cluster API Machine and AWSMachine and AWSCluster.
@@ -132,14 +134,7 @@ func (m machineAndAWSMachineAndAWSCluster) toProviderSpec() (*mapiv1.AWSMachineP
 			ID: &m.awsMachine.Spec.IAMInstanceProfile,
 		},
 		// UserDataSecret - Populated below.
-		// CredentialsSecret - TODO(OCPCLOUD-2713)
-		// TODO(hack): for CredentialsSecret. Remove when the conversion is in place.
-		// this is the name of the default credentials and is in place to get the base case to work
-		// while we develop for the migration.
-		CredentialsSecret: &corev1.LocalObjectReference{
-			Name: "aws-cloud-credentials",
-		},
-
+		// CredentialsSecret - Handled below.
 		KeyName: m.awsMachine.Spec.SSHKeyName,
 		// DeviceIndex - OCPCLOUD-2707: Value must always be zero. No other values are valid in MAPA even though the value is configurable.
 		PublicIP:             m.awsMachine.Spec.PublicIP,
@@ -159,6 +154,14 @@ func (m machineAndAWSMachineAndAWSCluster) toProviderSpec() (*mapiv1.AWSMachineP
 		PlacementGroupPartition: convertAWSPlacementGroupPartition(m.awsMachine.Spec.PlacementGroupPartition),
 		CapacityReservationID:   ptr.Deref(m.awsMachine.Spec.CapacityReservationID, ""),
 		MarketType:              mapiAWSMarketType,
+	}
+
+	secretRef, errs := handleAWSIdentityRef(fldPath.Child("identityRef"), m.awsCluster.Spec.IdentityRef)
+
+	if len(errs) > 0 {
+		errors = append(errors, errs...)
+	} else {
+		mapaProviderConfig.CredentialsSecret = secretRef
 	}
 
 	userDataSecretName := ptr.Deref(m.machine.Spec.Bootstrap.DataSecretName, "")
@@ -538,4 +541,36 @@ func handleUnsupportedAWSMachineFields(fldPath *field.Path, spec capav1.AWSMachi
 	}
 
 	return errs
+}
+
+// handleAWSIdentityRef returns errors if the configuration IdentityRef is different from OCP defaults, and the default credential reference otherwise.
+// We only support the ControllerIdentityKind, which is the upstream default, when converting.
+// This default is what will happen when no IdentityRef is defined, so support both hard-coded values and the empty reference.
+func handleAWSIdentityRef(fldPath *field.Path, identityRef *capav1.AWSIdentityReference) (*corev1.LocalObjectReference, field.ErrorList) {
+	errs := field.ErrorList{}
+
+	ref := &corev1.LocalObjectReference{
+		Name: defaultCredentialsSecretName,
+	}
+
+	// An unset identityref will use the default values.
+	// This also protects against nil lookups below.
+	if identityRef == nil {
+		return ref, nil
+	}
+
+	if identityRef.Kind != capav1.ControllerIdentityKind && identityRef.Kind != "" {
+		errs = append(errs, field.Invalid(fldPath.Child("kind"), identityRef.Kind, fmt.Sprintf("kind %q cannot be converted to CredentialsSecret. Please see https://access.redhat.com/articles/7116313 for more details.", identityRef.Kind)))
+	}
+
+	if identityRef.Name != defaultIdentityName && identityRef.Name != "" {
+		errs = append(errs, field.Invalid(fldPath.Child("name"), identityRef.Name, fmt.Sprintf("name %q must be %q when using an AWSClusterControllerIdentity. Please see https://access.redhat.com/articles/7116313 for more details.", identityRef.Name, defaultIdentityName)))
+	}
+
+	if len(errs) > 0 {
+		return nil, errs
+	}
+
+	// Assume we're using the defaults.
+	return ref, nil
 }

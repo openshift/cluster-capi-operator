@@ -213,6 +213,11 @@ func awsProviderSpecFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interfa
 			// region must match the input AWSCluster so force it here.
 			ps.Placement.Region = "us-east-1"
 
+			// Only one value here is valid in terms of fuzzing, so it is hardcoded.
+			ps.CredentialsSecret = &corev1.LocalObjectReference{
+				Name: mapi2capi.DefaultCredentialsSecretName,
+			}
+
 			// Clear fields that are not supported in the provider spec.
 			ps.DeviceIndex = 0
 			ps.LoadBalancers = nil

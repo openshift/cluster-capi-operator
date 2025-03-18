@@ -30,6 +30,8 @@ import (
 )
 
 // ensureAWSCluster ensures the AWSCluster cluster object exists.
+//
+//nolint:funlen
 func (r *InfraClusterController) ensureAWSCluster(ctx context.Context, log logr.Logger) (client.Object, error) {
 	target := &awsv1.AWSCluster{ObjectMeta: metav1.ObjectMeta{
 		Name:      r.Infra.Status.InfrastructureName,
@@ -75,6 +77,14 @@ func (r *InfraClusterController) ensureAWSCluster(ctx context.Context, log logr.
 			ControlPlaneEndpoint: clusterv1.APIEndpoint{
 				Host: apiURL.Hostname(),
 				Port: int32(port),
+			},
+			// This default IdentityRef will be created by the controlleridentitycreator controller.
+			// Leaving it as nil works the same as this value, but fills the log with log messages
+			// about the field being nil. Setting it also makes it more obvious how CAPA's configured.
+			// We also hard-code this to be the ControllerIdentity since that's the only Identity method we support right now.
+			IdentityRef: &awsv1.AWSIdentityReference{
+				Kind: awsv1.ControllerIdentityKind,
+				Name: "default",
 			},
 		},
 	}
