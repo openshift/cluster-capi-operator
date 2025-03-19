@@ -16,6 +16,8 @@ limitations under the License.
 package mapi2capi
 
 import (
+	"cmp"
+
 	mapiv1 "github.com/openshift/api/machine/v1beta1"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -35,17 +37,18 @@ func fromMAPIMachineSetToCAPIMachineSet(mapiMachineSet *mapiv1.MachineSet) (*cap
 			Labels:      mapiMachineSet.Labels,
 			Annotations: mapiMachineSet.Annotations,
 			// OwnerReferences - There shouldn't be any ownerreferences on a MachineSet.
+			Finalizers: []string{"cluster.x-k8s.io/machineset"}, // TODO: set this dynamically in the machineset_migration_controller.
 		},
 		Spec: capiv1.MachineSetSpec{
 			Selector: mapiMachineSet.Spec.Selector,
 			Replicas: mapiMachineSet.Spec.Replicas,
 			// ClusterName // populated by higher level functions
 			MinReadySeconds: mapiMachineSet.Spec.MinReadySeconds,
-			DeletePolicy:    mapiMachineSet.Spec.DeletePolicy,
+			DeletePolicy:    cmp.Or(mapiMachineSet.Spec.DeletePolicy, string(capiv1.RandomMachineSetDeletePolicy)),
 			Template: capiv1.MachineTemplateSpec{
 				ObjectMeta: capiv1.ObjectMeta{
 					Labels:      mapiMachineSet.Spec.Template.Labels,
-					Annotations: mapiMachineSet.Spec.Template.Annotations,
+					Annotations: nullifyEmptyAnnotations(mapiMachineSet.Spec.Template.Annotations),
 				},
 				// Spec // Populated by higher level functions.
 			},
@@ -64,4 +67,12 @@ func fromMAPIMachineSetToCAPIMachineSet(mapiMachineSet *mapiv1.MachineSet) (*cap
 	// AuthoritativeAPI - Ignore, this is part of the conversion mechanism.
 
 	return capiMachineSet, errs.ToAggregate()
+}
+
+func nullifyEmptyAnnotations(a map[string]string) map[string]string {
+	if len(a) == 0 {
+		return nil
+	}
+
+	return a
 }
