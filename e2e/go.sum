@@ -136,6 +136,10 @@ github.com/mattn/go-colorable v0.1.13 h1:fFA4WZxdEF4tXPZVKMLwD8oUnCTTo08duU7wxec
 github.com/mattn/go-colorable v0.1.13/go.mod h1:7S9/ev0klgBDR4GtXTXX8a3vIGJpMovkB8vQcUbaXHg=
 github.com/mattn/go-isatty v0.0.20 h1:xfD0iDuEKnDkl03q4limB+vH+GxLEtL/jb4xVJSWWEY=
 github.com/mattn/go-isatty v0.0.20/go.mod h1:W+V8PltTTMOvKvAeJH7IuucS94S2C6jfK/D7dTCTo3Y=
+github.com/metal3-io/baremetal-operator/pkg/hardwareutils v0.5.1 h1:X0+MWsJ+Gj/TAkmhGybvesvxk6zQKu3NQXzvC6l0iJs=
+github.com/metal3-io/baremetal-operator/pkg/hardwareutils v0.5.1/go.mod h1:399nvdaqoU9rTI25UdFw2EWcVjmJPpeZPIhfDAIx/XU=
+github.com/metal3-io/ip-address-manager/api v1.8.0 h1:qEemVSb45uDbbQonr2StMV21RfSKNSO/NrPnhApV90w=
+github.com/metal3-io/ip-address-manager/api v1.8.0/go.mod h1:0PjnN4ke64Jh6A3U04mMvV2sBwePa7HKkiZXazktCTk=
 github.com/mitchellh/mapstructure v1.5.0 h1:jeMsZIYE/09sWLaz43PL7Gy6RuMjD2eJVyuac5Z2hdY=
 github.com/mitchellh/mapstructure v1.5.0/go.mod h1:bFUtVrKA4DC2yAKiSyO/QUcy7e+RRV2QTWOzhPopBRo=
 github.com/modern-go/concurrent v0.0.0-20180228061459-e0a39a4cb421/go.mod h1:6dJC0mAP4ikYIbvyc7fijjWJddQyLn8Ig3JB5CqoB9Q=
@@ -155,8 +159,14 @@ github.com/onsi/ginkgo/v2 v2.22.2 h1:/3X8Panh8/WwhU/3Ssa6rCKqPLuAkVY2I0RoyDLySlU
 github.com/onsi/ginkgo/v2 v2.22.2/go.mod h1:oeMosUL+8LtarXBHu/c0bx2D/K9zyQ6uX3cTyztHwsk=
 github.com/onsi/gomega v1.36.2 h1:koNYke6TVk6ZmnyHrCXba/T/MoLBXFjeC1PtvYgw0A8=
 github.com/onsi/gomega v1.36.2/go.mod h1:DdwyADRjrc825LhMEkD76cHR5+pUnjhUN8GlHlRPHzY=
-github.com/openshift/api v0.0.0-20220921125526-1866ef90edbf h1:Bohu/gUxpyuTjQx2m01DFNgtGMy3wtti6s7mJ+Gtblc=
-github.com/openshift/api v0.0.0-20220921125526-1866ef90edbf/go.mod h1:HJAEIh4gLXPDdWxgCbvmJjzd9QIxyPZJtPU0u2W4vH4=
+github.com/openshift/api v0.0.0-20240731195412-e863d9f8a215 h1:NY9X6aNRa3PKTRj9nTncCoGRbdwiis2CL1T3miXxjoc=
+github.com/openshift/api v0.0.0-20240731195412-e863d9f8a215/go.mod h1:OOh6Qopf21pSzqNVCB5gomomBXb8o5sGKZxG2KNpaXM=
+github.com/openshift/baremetal-operator/apis v0.0.0-20241114005417-044448aafa02 h1:vO/LZ1E8DXXz4FobR07oMIC5EB7ndkYT194Tp7hEXso=
+github.com/openshift/baremetal-operator/apis v0.0.0-20241114005417-044448aafa02/go.mod h1:tO+nL2r12/n6CC6gVj/K80R2v0fpEnBC1FYq5vCG3ns=
+github.com/openshift/cluster-api-provider-baremetal v0.0.0-20250115114740-9abe67f18345 h1:UPAGeMlifNdLqmyLTJK0FXvpYkWRmm49zSXDFDHNoP4=
+github.com/openshift/cluster-api-provider-baremetal v0.0.0-20250115114740-9abe67f18345/go.mod h1:TLLzqNgDqYeK8Dd9hCSS4aeracFqF1XT3uTQuKn9F4o=
+github.com/openshift/cluster-api-provider-metal3/api v0.0.0-20241120153823-7baca400194b h1:2rBYzD6R2cZenK2BgbHrM0WB9PyP6pIwiwIk+LldXTA=
+github.com/openshift/cluster-api-provider-metal3/api v0.0.0-20241120153823-7baca400194b/go.mod h1:T66OjXF5yGNJSuQ/xtHOTfVDxG44Jdafzy+nHwbrg0A=
 github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c h1:+mdjkGKdHQG3305AYmdv1U2eRNDiU2ErMBj1gwrq8eQ=
 github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c/go.mod h1:7rwL4CYBLnjLxUqIJNnCWiEdr3bn6IUYi15bNlnbCCU=
 github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=
