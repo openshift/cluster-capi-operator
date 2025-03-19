@@ -203,7 +203,7 @@ func (r *UserDataSecretController) setAvailableCondition(ctx context.Context, lo
 
 	log.Info("user Data Secret Controller is available")
 
-	if err := r.SyncStatus(ctx, controllerName, co, conds); err != nil {
+	if err := r.SyncStatus(ctx, co, conds); err != nil {
 		return fmt.Errorf("failed to sync status: %w", err)
 	}
 
@@ -227,7 +227,7 @@ func (r *UserDataSecretController) setDegradedCondition(ctx context.Context, log
 
 	log.Info("user Data Secret Controller is degraded")
 
-	if err := r.SyncStatus(ctx, controllerName, co, conds); err != nil {
+	if err := r.SyncStatus(ctx, co, conds); err != nil {
 		return fmt.Errorf("failed to sync status: %w", err)
 	}
 

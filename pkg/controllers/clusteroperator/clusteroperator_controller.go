@@ -54,11 +54,6 @@ func (r *ClusterOperatorController) Reconcile(ctx context.Context, req ctrl.Requ
 	} else {
 		// TODO: wrap this into status aggregation logic to get these conditions conform,
 		// to the meaningful aggregation of all the other controllers ones.
-		//
-		// TODO: set a time period where if one of the controllers conditions has been degraded=true (reduced QoS)
-		// for an extended period of time (eg. 30mins, degrade top level) we set the overall operator degraded=true.
-		// For any controller available=false condition instead (e.g. when the CAPI components are failing to run),
-		// we should immediately set the overall operator available=false immediately.
 		if err := r.ClusterOperatorStatusClient.SetStatusAvailable(ctx, ""); err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to set conditions for %q ClusterObject: %w", controllers.ClusterOperatorName, err)
 		}
