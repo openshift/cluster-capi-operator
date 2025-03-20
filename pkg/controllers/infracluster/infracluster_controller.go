@@ -67,7 +67,7 @@ var (
 	errPlatformNotSupported        = errors.New("infrastructure platform is not supported")
 	errCouldNotDeepCopyInfraObject = errors.New("unable to create a deep copy of InfraCluster object")
 	errUnableToListMachineSets     = errors.New("unable to list MachineSets")
-	errUnableToFindMachineSets     = errors.New("unable to find any MachineSets to extract a MAPI ProviderSpec from")
+	errUnableToFindMachineSets     = errors.New("unable to find any MachineSets to extract a Machine API ProviderSpec from")
 )
 
 // InfraClusterController is a controller that manages infrastructure cluster objects.
@@ -123,7 +123,7 @@ func (r *InfraClusterController) reconcileInfraCluster(ctx context.Context, log 
 		// This means, by definition, that the object is directly managed by CAPI infrastructure providers.
 		// No action should be taken by this controller.
 		log.Info(fmt.Sprintf("InfraCluster '%s/%s' does not have the externally managed-by annotation"+
-			" - skipping as this is managed directly by the CAPI infrastructure provider",
+			" - skipping as this is managed directly by the Cluster API infrastructure provider",
 			infraCluster.GetNamespace(), infraCluster.GetName()))
 
 		return ctrl.Result{}, nil

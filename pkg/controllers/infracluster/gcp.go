@@ -109,12 +109,12 @@ func (r *InfraClusterController) ensureGCPCluster(ctx context.Context, log logr.
 func getGCPMAPIProviderSpec(ctx context.Context, cl client.Client) (*mapiv1beta1.GCPMachineProviderSpec, error) {
 	rawProviderSpec, err := getRawMAPIProviderSpec(ctx, cl)
 	if err != nil {
-		return nil, fmt.Errorf("unable to obtain MAPI ProviderSpec: %w", err)
+		return nil, fmt.Errorf("unable to obtain Machine API ProviderSpec: %w", err)
 	}
 
 	providerSpec := &mapiv1beta1.GCPMachineProviderSpec{}
 	if err := yaml.Unmarshal(rawProviderSpec, providerSpec); err != nil {
-		return nil, fmt.Errorf("unable to unmarshal MAPI ProviderSpec: %w", err)
+		return nil, fmt.Errorf("unable to unmarshal Machine API ProviderSpec: %w", err)
 	}
 
 	return providerSpec, nil
@@ -126,7 +126,7 @@ func (r *InfraClusterController) getGCPProjectID(ctx context.Context) (string, e
 		// Devise GCP Project ID via MAPI providerSpec.
 		machineSpec, err := getGCPMAPIProviderSpec(ctx, r.Client)
 		if err != nil || machineSpec == nil {
-			return "", fmt.Errorf("unable to get GCP MAPI ProviderSpec: %w", err)
+			return "", fmt.Errorf("unable to get GCP Machine API ProviderSpec: %w", err)
 		}
 
 		return machineSpec.ProjectID, nil
