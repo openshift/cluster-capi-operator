@@ -95,7 +95,7 @@ func (m *awsMachineAndInfra) toMachineAndInfrastructureMachine() (*capiv1.Machin
 		warnings []string
 	)
 
-	awsProviderConfig, err := awsProviderSpecFromRawExtension(m.machine.Spec.ProviderSpec.Value)
+	awsProviderConfig, err := AWSProviderSpecFromRawExtension(m.machine.Spec.ProviderSpec.Value)
 	if err != nil {
 		return nil, nil, nil, field.ErrorList{field.Invalid(field.NewPath("spec", "providerSpec", "value"), m.machine.Spec.ProviderSpec.Value, err.Error())}
 	}
@@ -328,8 +328,8 @@ func (m *awsMachineAndInfra) toAWSMachine(providerSpec mapiv1.AWSMachineProvider
 	}, warnings, errs
 }
 
-// awsProviderSpecFromRawExtension unmarshals a raw extension into an AWSMachineProviderSpec type.
-func awsProviderSpecFromRawExtension(rawExtension *runtime.RawExtension) (mapiv1.AWSMachineProviderConfig, error) {
+// AWSProviderSpecFromRawExtension unmarshals a raw extension into an AWSMachineProviderSpec type.
+func AWSProviderSpecFromRawExtension(rawExtension *runtime.RawExtension) (mapiv1.AWSMachineProviderConfig, error) {
 	if rawExtension == nil {
 		return mapiv1.AWSMachineProviderConfig{}, nil
 	}
