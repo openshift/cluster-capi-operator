@@ -26,18 +26,16 @@ import (
 )
 
 // fromMAPIMachineToCAPIMachine translates a MAPI Machine to its Core CAPI Machine correspondent.
-//
-//nolint:funlen
 func fromMAPIMachineToCAPIMachine(mapiMachine *mapiv1beta1.Machine, apiVersion, kind string) (*capiv1.Machine, field.ErrorList) {
 	var errs field.ErrorList
 
 	capiMachine := &capiv1.Machine{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        mapiMachine.Name,
-			Namespace:   capiNamespace,
-			Labels:      mapiMachine.Labels,
-			Annotations: mapiMachine.Annotations,
-			// OwnerReferences: TODO(OCPCLOUD-2716): These need to be converted so that any MachineSet owning a Machine is represented with the correct owner reference between the two APIs.
+			Name:            mapiMachine.Name,
+			Namespace:       capiNamespace,
+			Labels:          mapiMachine.Labels,
+			Annotations:     mapiMachine.Annotations,
+			OwnerReferences: nil, // OwnerReferences not populated here. They are added later by the machineSync controller.
 		},
 		Spec: capiv1.MachineSpec{
 			InfrastructureRef: corev1.ObjectReference{
@@ -78,13 +76,9 @@ func fromMAPIMachineToCAPIMachine(mapiMachine *mapiv1beta1.Machine, apiVersion, 
 
 	// Unused fields - Below this line are fields not used from the MAPI Machine.
 
-	if len(mapiMachine.OwnerReferences) > 0 {
-		// TODO(OCPCLOUD-2716): We should support converting CAPI MachineSet ORs to MAPI MachineSet ORs. NB working out the UID will be hard.
-		errs = append(errs, field.Invalid(field.NewPath("metadata", "ownerReferences"), mapiMachine.OwnerReferences, "ownerReferences are not supported"))
-	}
-
 	// mapiMachine.Spec.AuthoritativeAPI - Ignore as this is part of the conversion mechanism.
 
+	// metadata.OwnerReferences - needs special handling
 	// metadata.labels - needs special handling
 	// metadata.annotations - needs special handling
 
