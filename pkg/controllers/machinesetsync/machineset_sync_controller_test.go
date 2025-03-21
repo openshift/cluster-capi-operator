@@ -67,6 +67,10 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 
 	var capaClusterBuilder capav1builder.AWSClusterBuilder
 
+	var capiClusterBuilder capiv1resourcebuilder.ClusterBuilder
+	var capiCluster *capiv1beta1.Cluster
+	var capiClusterOwnerReference []metav1.OwnerReference
+
 	startManager := func(mgr *manager.Manager) (context.CancelFunc, chan struct{}) {
 		mgrCtx, mgrCancel := context.WithCancel(context.Background())
 		mgrDone := make(chan struct{})
@@ -111,6 +115,20 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 			WithNamespace(capiNamespace.GetName()).
 			WithName(infrastructureName)
 		Expect(k8sClient.Create(ctx, capaClusterBuilder.Build())).To(Succeed(), "capa cluster should be able to be created")
+
+		capiClusterBuilder = capiv1resourcebuilder.Cluster().WithNamespace(capiNamespace.GetName()).WithName(infrastructureName)
+		Expect(k8sClient.Create(ctx, capiClusterBuilder.Build())).To(Succeed(), "capi cluster should be able to be created")
+
+		capiCluster = &capiv1beta1.Cluster{}
+		Expect(k8sClient.Get(ctx, client.ObjectKey{Name: infrastructureName, Namespace: capiNamespace.GetName()}, capiCluster)).To(Succeed())
+		capiClusterOwnerReference = []metav1.OwnerReference{{
+			APIVersion:         capiv1beta1.GroupVersion.String(),
+			Kind:               capiv1beta1.ClusterKind,
+			Name:               capiCluster.GetName(),
+			UID:                capiCluster.GetUID(),
+			Controller:         ptr.To(false),
+			BlockOwnerDeletion: ptr.To(true),
+		}}
 
 		// We need to build and create the CAPA MachineTemplate in order to
 		// reference it on the CAPI MachineSet
@@ -208,6 +226,16 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 					)).Should(Succeed())
 				})
 
+				It("should create MachineSet and InfraMachineTemplate with CAPI Cluster OwnerReference", func() {
+					capiMachineSet := capiv1resourcebuilder.MachineSet().WithName(mapiMachineSet.Name).WithNamespace(capiNamespace.Name).Build()
+					Eventually(k.Get(capiMachineSet)).Should(Succeed())
+					Expect(capiMachineSet.OwnerReferences).To(Equal(capiClusterOwnerReference))
+
+					capaMachineTemplate := capav1builder.AWSMachineTemplate().WithName(mapiMachineSet.Name).WithNamespace(capiNamespace.Name).Build()
+					Eventually(k.Get(capaMachineTemplate)).Should(Succeed())
+					Expect(capaMachineTemplate.OwnerReferences).To(Equal(capiClusterOwnerReference))
+				})
+
 				It("should update the synchronized condition on the MAPI machine set to True", func() {
 					Eventually(k.Object(mapiMachineSet), timeout).Should(
 						HaveField("Status.Conditions", ContainElement(
@@ -225,6 +253,19 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 				BeforeEach(func() {
 					capiMachineSet = capiMachineSetBuilder.Build()
 					Expect(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
+				})
+
+				It("should update MachineSet and InfraMachineTemplate with CAPI Cluster OwnerReference", func() {
+					capiMachineSet := capiv1resourcebuilder.MachineSet().WithName(mapiMachineSet.Name).WithNamespace(capiNamespace.Name).Build()
+					capaMachineTemplate := capav1builder.AWSMachineTemplate().WithName(mapiMachineSet.Name).WithNamespace(capiNamespace.Name).Build()
+
+					Eventually(k.Object(capiMachineSet), timeout).Should(
+						HaveField("OwnerReferences", Equal(capiClusterOwnerReference)),
+					)
+
+					Eventually(k.Object(capaMachineTemplate), timeout).Should(
+						HaveField("OwnerReferences", Equal(capiClusterOwnerReference)),
+					)
 				})
 
 				It("should update the synchronized condition on the MAPI machine set to True", func() {

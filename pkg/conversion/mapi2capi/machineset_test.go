@@ -62,13 +62,6 @@ var _ = Describe("mapi2capi MachineSet conversion", func() {
 			expectedWarnings:  []string{},
 		}),
 
-		Entry("With unsupported metadata.ownerReferences set", mapi2CAPIMachinesetConversionInput{
-			infraBuilder:      infraBase,
-			machineSetBuilder: mapiMachineSetBase.WithOwnerReferences([]metav1.OwnerReference{{Name: "a"}}),
-			expectedErrors:    []string{"metadata.ownerReferences: Invalid value: []v1.OwnerReference{v1.OwnerReference{APIVersion:\"\", Kind:\"\", Name:\"a\", UID:\"\", Controller:(*bool)(nil), BlockOwnerDeletion:(*bool)(nil)}}: ownerReferences are not supported"},
-			expectedWarnings:  []string{},
-		}),
-
 		Entry("With unsupported spec.metadata.generateName set", mapi2CAPIMachinesetConversionInput{
 			machineSetBuilder: mapiMachineSetBase.WithMachineSpecObjectMeta(mapiv1.ObjectMeta{
 				GenerateName: "test-generate-",

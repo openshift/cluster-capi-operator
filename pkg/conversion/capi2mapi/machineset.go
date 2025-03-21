@@ -31,11 +31,11 @@ func fromCAPIMachineSetToMAPIMachineSet(capiMachineSet *capiv1.MachineSet) (*map
 
 	mapiMachineSet := &mapiv1.MachineSet{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        capiMachineSet.Name,
-			Namespace:   capiMachineSet.Namespace,
-			Labels:      capiMachineSet.Labels,
-			Annotations: capiMachineSet.Annotations,
-			// OwnerReferences: There shouldn't be any OwnerReferences on a MachineSet.
+			Name:            capiMachineSet.Name,
+			Namespace:       capiMachineSet.Namespace,
+			Labels:          capiMachineSet.Labels,
+			Annotations:     capiMachineSet.Annotations,
+			OwnerReferences: nil, // OwnerReferences not populated here. They are added later by the machineSetSync controller.
 		},
 		Spec: mapiv1.MachineSetSpec{
 			Selector:        capiMachineSet.Spec.Selector,
@@ -49,11 +49,6 @@ func fromCAPIMachineSetToMAPIMachineSet(capiMachineSet *capiv1.MachineSet) (*map
 				},
 			},
 		},
-	}
-
-	if len(capiMachineSet.OwnerReferences) > 0 {
-		// TODO(OCPCLOUD-2748): We should prevent ownerreferences on MachineSets until such a time that we need to support them.
-		errs = append(errs, field.Invalid(field.NewPath("metadata", "ownerReferences"), capiMachineSet.OwnerReferences, "ownerReferences are not supported"))
 	}
 
 	for k, v := range capiMachineSet.Spec.Template.Labels {
@@ -73,6 +68,8 @@ func fromCAPIMachineSetToMAPIMachineSet(capiMachineSet *capiv1.MachineSet) (*map
 	setCAPIManagedNodeLabelsToMAPINodeLabels(capiMachineSet.Spec.Template.Labels, mapiMachineSet.Spec.Template.Spec.ObjectMeta.Labels)
 
 	// Unusued fields - Below this line are fields not used from the CAPI Machine.
+
+	// metadata.OwnerReferences - handled by the machineSetSync controller.
 
 	// capiMachineSet.Spec.ClusterName - Ignore this as it can be reconstructed from the infra object.
 	// capiMachineSet.Spec.Template.Spec - Ignore as we convert this at a higher level using the Machine conversion logic.
