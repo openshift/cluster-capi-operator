@@ -30,11 +30,11 @@ func fromMAPIMachineSetToCAPIMachineSet(mapiMachineSet *mapiv1.MachineSet) (*cap
 
 	capiMachineSet := &capiv1.MachineSet{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        mapiMachineSet.Name,
-			Namespace:   mapiMachineSet.Namespace,
-			Labels:      mapiMachineSet.Labels,
-			Annotations: mapiMachineSet.Annotations,
-			// OwnerReferences - There shouldn't be any ownerreferences on a MachineSet.
+			Name:            mapiMachineSet.Name,
+			Namespace:       mapiMachineSet.Namespace,
+			Labels:          mapiMachineSet.Labels,
+			Annotations:     mapiMachineSet.Annotations,
+			OwnerReferences: nil, // OwnerReferences not populated here. They are added later by the machineSetSync controller.
 		},
 		Spec: capiv1.MachineSetSpec{
 			Selector: mapiMachineSet.Spec.Selector,
@@ -52,12 +52,9 @@ func fromMAPIMachineSetToCAPIMachineSet(mapiMachineSet *mapiv1.MachineSet) (*cap
 		},
 	}
 
-	if len(mapiMachineSet.OwnerReferences) > 0 {
-		// TODO(OCPCLOUD-2748): Users may already have OwnerReferences on their MachineSets, where they do have them, we should work out how to translate them.
-		errs = append(errs, field.Invalid(field.NewPath("metadata", "ownerReferences"), mapiMachineSet.OwnerReferences, "ownerReferences are not supported"))
-	}
-
 	// Unused fields - Below this line are fields not used from the MAPI MachineSet.
+
+	// metadata.OwnerReferences - handled by the machineSetSync controller.
 
 	errs = append(errs, handleUnsupportedMAPIObjectMetaFields(field.NewPath("spec", "template", "metadata"), mapiMachineSet.Spec.Template.ObjectMeta)...)
 
