@@ -367,6 +367,8 @@ github.com/gofrs/flock
 ## explicit; go 1.15
 github.com/gogo/protobuf/proto
 github.com/gogo/protobuf/sortkeys
+# github.com/golang-jwt/jwt/v5 v5.2.2
+## explicit; go 1.18
 # github.com/golang/protobuf v1.5.4
 ## explicit; go 1.17
 github.com/golang/protobuf/proto
