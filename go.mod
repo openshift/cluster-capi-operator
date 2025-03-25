@@ -2,6 +2,8 @@ module github.com/openshift/cluster-capi-operator
 
 go 1.23.0
 
+replace github.com/metal3-io/cluster-api-provider-metal3/api => github.com/openshift/cluster-api-provider-metal3/api v0.0.0-20250203115422-6f1457a92266
+
 require (
 	github.com/drone/envsubst/v2 v2.0.0-20210730161058-179042472c46
 	github.com/go-logr/logr v1.4.2
@@ -10,6 +12,7 @@ require (
 	github.com/golangci/golangci-lint v1.61.0
 	github.com/google/gofuzz v1.2.0
 	github.com/klauspost/compress v1.17.9
+	github.com/metal3-io/cluster-api-provider-metal3/api v0.0.0-00010101000000-000000000000
 	github.com/onsi/ginkgo/v2 v2.22.2
 	github.com/onsi/gomega v1.36.2
 	github.com/openshift/api v0.0.0-20250311085700-14a17c7009c4
@@ -181,6 +184,7 @@ require (
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-runewidth v0.0.14 // indirect
+	github.com/metal3-io/ip-address-manager/api v1.9.2 // indirect
 	github.com/mgechev/revive v1.3.9 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect

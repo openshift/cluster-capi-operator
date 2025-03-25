@@ -16,6 +16,7 @@ const (
 
 	RetryShort  = 1 * time.Second
 	RetryMedium = 5 * time.Second
+	RetryLong   = 10 * time.Second
 )
 
 var (
