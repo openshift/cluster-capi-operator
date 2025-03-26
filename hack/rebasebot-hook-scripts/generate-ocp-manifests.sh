@@ -29,8 +29,8 @@ main(){
         exit 1
     fi
 
-    # Remove the leading 'v' from REBASEBOT_SOURCE
-    export PROVIDER_VERSION="${REBASEBOT_SOURCE#v}"
+    # Set PROVIDER_VERSION using the REBASEBOT_SOURCE tag, which corresponds to the provider's version number  
+    export PROVIDER_VERSION="${REBASEBOT_SOURCE}"
 
     pushd openshift
     make ocp-manifests
