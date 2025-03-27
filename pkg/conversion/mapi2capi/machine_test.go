@@ -25,6 +25,7 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/test/matchers"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 )
 
 var _ = Describe("mapi2capi Machine conversion", func() {
@@ -71,15 +72,17 @@ var _ = Describe("mapi2capi Machine conversion", func() {
 			expectedWarnings: []string{},
 		}),
 
-		Entry("With unsupported metadata.ownerReferences set", mapi2CAPIMachineConversionInput{
+		Entry("With machineSet owner reference", mapi2CAPIMachineConversionInput{
 			infraBuilder: infraBase,
 			machineBuilder: mapiMachineBase.WithOwnerReferences([]metav1.OwnerReference{{
-				APIVersion: "v1",
-				Kind:       "Pod",
-				Name:       "test-pod",
-				UID:        "test-uid",
+				APIVersion:         "machine.openshift.io/v1beta1",
+				Kind:               "MachineSet",
+				Name:               "test-machineset",
+				UID:                "test-uid",
+				Controller:         ptr.To(true),
+				BlockOwnerDeletion: ptr.To(true),
 			}}),
-			expectedErrors:   []string{"metadata.ownerReferences: Invalid value: []v1.OwnerReference{v1.OwnerReference{APIVersion:\"v1\", Kind:\"Pod\", Name:\"test-pod\", UID:\"test-uid\", Controller:(*bool)(nil), BlockOwnerDeletion:(*bool)(nil)}}: ownerReferences are not supported"},
+			expectedErrors:   []string{},
 			expectedWarnings: []string{},
 		}),
 

@@ -42,11 +42,11 @@ func fromCAPIMachineToMAPIMachine(capiMachine *capiv1.Machine) (*mapiv1.Machine,
 
 	mapiMachine := &mapiv1.Machine{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        capiMachine.Name,
-			Namespace:   mapiNamespace,
-			Labels:      capiMachine.Labels,
-			Annotations: capiMachine.Annotations,
-			// OwnerReferences: TODO(OCPCLOUD-2716): These need to be converted so that any MachineSet owning a Machine is represented with the correct owner reference between the two APIs.
+			Name:            capiMachine.Name,
+			Namespace:       mapiNamespace,
+			Labels:          capiMachine.Labels,
+			Annotations:     capiMachine.Annotations,
+			OwnerReferences: nil, // OwnerReferences not populated here. They are added later by the machineSync controller.
 		},
 		Spec: mapiv1.MachineSpec{
 			ObjectMeta: mapiv1.ObjectMeta{
@@ -62,16 +62,12 @@ func fromCAPIMachineToMAPIMachine(capiMachine *capiv1.Machine) (*mapiv1.Machine,
 		},
 	}
 
-	if len(capiMachine.OwnerReferences) > 0 {
-		// TODO(OCPCLOUD-2716): We should support converting CAPI MachineSet ORs to MAPI MachineSet ORs. NB working out the UID will be hard.
-		errs = append(errs, field.Invalid(field.NewPath("metadata", "ownerReferences"), capiMachine.OwnerReferences, "ownerReferences are not supported"))
-	}
-
 	// Make sure the machine has a label map.
 	mapiMachine.Spec.ObjectMeta.Labels = map[string]string{}
 	setCAPIManagedNodeLabelsToMAPINodeLabels(capiMachine.Labels, mapiMachine.Spec.ObjectMeta.Labels)
 
 	// Unusued fields - Below this line are fields not used from the CAPI Machine.
+	// capiMachine.ObjectMeta.OwnerReferences - handled by the machineSync controller.
 
 	// capiMachine.Spec.ClusterName - Ignore this as it can be reconstructed from the infra object.
 	// capiMachine.Spec.Bootstrap.ConfigRef - Ignore as we use DataSecretName for the MAPI side.
