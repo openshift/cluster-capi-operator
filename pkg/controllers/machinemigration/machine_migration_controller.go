@@ -23,6 +23,7 @@ import (
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
@@ -89,8 +90,11 @@ func (r *MachineMigrationReconciler) Reconcile(ctx context.Context, req reconcil
 	defer logger.V(1).Info("Finished reconciling machine")
 
 	mapiMachine := &machinev1beta1.Machine{}
-	if err := r.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: req.Name}, mapiMachine); err != nil {
+	if err := r.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: req.Name}, mapiMachine); err != nil && !apierrors.IsNotFound(err) {
 		return ctrl.Result{}, fmt.Errorf("failed to get MAPI machine: %w", err)
+	} else if apierrors.IsNotFound(err) {
+		logger.Info("Machine has been deleted. Migration not required")
+		return ctrl.Result{}, nil
 	}
 
 	if mapiMachine.Spec.AuthoritativeAPI == mapiMachine.Status.AuthoritativeAPI {

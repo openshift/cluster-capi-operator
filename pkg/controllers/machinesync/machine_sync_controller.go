@@ -20,6 +20,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -78,6 +80,8 @@ const (
 	messageSuccessfullySynchronizedCAPItoMAPI = "Successfully synchronized CAPI Machine to MAPI"
 	messageSuccessfullySynchronizedMAPItoCAPI = "Successfully synchronized MAPI Machine to CAPI"
 	progressingToSynchronizeMAPItoCAPI        = "Progressing to synchronize MAPI Machine to CAPI"
+
+	SyncFinalizer = "sync.machine.openshift.io/finalizer"
 )
 
 var (
@@ -110,6 +114,7 @@ var (
 
 	// errUnsupportedCPMSOwnedMachineConversion is returned when attempting to convert ControlPlaneMachineSet owned machines.
 	errUnsupportedCPMSOwnedMachineConversion = errors.New("conversion of control plane machines owned by control plane machine set is currently not supported")
+	errUnableToAssertClientObject            = errors.New("unable to assert client.Object after deepcopy")
 )
 
 // MachineSyncReconciler reconciles CAPI and MAPI machines.
@@ -360,9 +365,35 @@ func (r *MachineSyncReconciler) reconcileCAPIMachinetoMAPIMachine(ctx context.Co
 
 // reconcileMAPIMachinetoCAPIMachine a MAPI Machine to a CAPI Machine.
 //
+// it assumes the mapiMachine passed is not nil, as the switch above currently enforces this.
+//
 //nolint:funlen
 func (r *MachineSyncReconciler) reconcileMAPIMachinetoCAPIMachine(ctx context.Context, mapiMachine *machinev1beta1.Machine, capiMachine *capiv1beta1.Machine) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
+
+	_, infraMachine, err := r.fetchCAPIInfraResources(ctx, capiMachine)
+	if err != nil && !apierrors.IsNotFound(err) {
+		fetchErr := fmt.Errorf("failed to fetch Cluster API infra resources: %w", err)
+
+		if condErr := r.applySynchronizedConditionWithPatch(
+			ctx, mapiMachine, corev1.ConditionFalse, reasonFailedToGetCAPIInfraResources, fetchErr.Error(), nil); condErr != nil {
+			return ctrl.Result{}, utilerrors.NewAggregate([]error{fetchErr, condErr})
+		}
+
+		return ctrl.Result{}, fetchErr
+	}
+
+	if shouldRequeue, err := r.reconcileMAPItoCAPIMachineDeletion(ctx, mapiMachine, capiMachine, infraMachine); err != nil {
+		return ctrl.Result{}, err
+	} else if shouldRequeue {
+		return ctrl.Result{}, nil
+	}
+
+	if shouldRequeue, err := r.ensureSyncFinalizer(ctx, mapiMachine, capiMachine, infraMachine); err != nil {
+		return ctrl.Result{}, err
+	} else if shouldRequeue {
+		return ctrl.Result{}, nil
+	}
 
 	newCAPIOwnerReferences, err := r.convertMAPIMachineOwnerReferencesToCAPI(ctx, mapiMachine)
 	//nolint:nestif
@@ -435,18 +466,6 @@ func (r *MachineSyncReconciler) reconcileMAPIMachinetoCAPIMachine(ctx context.Co
 
 	// Set the paused annotation on the new CAPI Machine, as we want to create it paused.
 	annotations.AddAnnotations(newCAPIMachine, map[string]string{capiv1beta1.PausedAnnotation: ""})
-
-	_, infraMachine, err := r.fetchCAPIInfraResources(ctx, newCAPIMachine)
-	if err != nil && !apierrors.IsNotFound(err) {
-		fetchErr := fmt.Errorf("failed to fetch Cluster API infra resources: %w", err)
-
-		if condErr := r.applySynchronizedConditionWithPatch(
-			ctx, mapiMachine, corev1.ConditionFalse, reasonFailedToGetCAPIInfraResources, fetchErr.Error(), nil); condErr != nil {
-			return ctrl.Result{}, utilerrors.NewAggregate([]error{fetchErr, condErr})
-		}
-
-		return ctrl.Result{}, fetchErr
-	}
 
 	if !util.IsNilObject(infraMachine) {
 		newCAPIInfraMachine.SetGeneration(infraMachine.GetGeneration())
@@ -536,8 +555,10 @@ func (r *MachineSyncReconciler) createOrUpdateCAPIInfraMachine(ctx context.Conte
 	// It is then passed up the stack so the syncronized condition can be set accordingly.
 	syncronizationIsProgressing := false
 
+	alreadyExists := false
+
 	if util.IsNilObject(infraMachine) {
-		if err := r.Create(ctx, newCAPIInfraMachine); err != nil {
+		if err := r.Create(ctx, newCAPIInfraMachine); err != nil && !apierrors.IsAlreadyExists(err) {
 			logger.Error(err, "Failed to create Cluster API infra machine")
 			createErr := fmt.Errorf("failed to create Cluster API infra machine: %w", err)
 
@@ -546,11 +567,29 @@ func (r *MachineSyncReconciler) createOrUpdateCAPIInfraMachine(ctx context.Conte
 			}
 
 			return ctrl.Result{}, syncronizationIsProgressing, createErr
+		} else if apierrors.IsAlreadyExists(err) {
+			// this handles the case where the CAPI Machine is not present, so we can't resolve the
+			// infraMachine ref from it - but the InfraMachine exists. (e.g a user deletes the CAPI machine manaully).
+			//  This would lead to the call to fetchCAPIInfraResources returning nil for the infraMachine.
+			alreadyExists = true
+		} else {
+			logger.Info("Successfully created Cluster API infra machine")
+
+			return ctrl.Result{}, syncronizationIsProgressing, nil
 		}
+	}
 
-		logger.Info("Successfully created Cluster API infra machine")
+	if alreadyExists {
+		if err := r.Get(ctx, client.ObjectKeyFromObject(newCAPIInfraMachine), infraMachine); err != nil {
+			logger.Error(err, "Failed to get Cluster API infra machine")
+			getErr := fmt.Errorf("failed to get Cluster API infra machine: %w", err)
 
-		return ctrl.Result{}, syncronizationIsProgressing, nil
+			if condErr := r.applySynchronizedConditionWithPatch(ctx, mapiMachine, corev1.ConditionFalse, reasonFailedToGetCAPIInfraResources, getErr.Error(), nil); condErr != nil {
+				return ctrl.Result{}, syncronizationIsProgressing, utilerrors.NewAggregate([]error{getErr, condErr})
+			}
+
+			return ctrl.Result{}, syncronizationIsProgressing, getErr
+		}
 	}
 
 	capiInfraMachinesDiff, err := compareCAPIInfraMachines(r.Platform, infraMachine, newCAPIInfraMachine)
@@ -730,6 +769,12 @@ func (r *MachineSyncReconciler) shouldMirrorCAPIMachineToMAPIMachine(ctx context
 	logger.V(4).WithName("shouldMirrorCAPIMachineToMAPIMachine").
 		Info("Checking if Cluster API machine should be mirrored", "machine", machine.GetName())
 
+	// Handles when the CAPI machine is deleting, and we don't have a MAPI machine
+	// See (https://github.com/openshift/cluster-capi-operator/pull/281#discussion_r2029362674)
+	if !machine.GetDeletionTimestamp().IsZero() {
+		return false, nil
+	}
+
 	// Check if the CAPI machine has an ownerReference that points to a CAPI machineset.
 	for _, ref := range machine.ObjectMeta.OwnerReferences {
 		if ref.Kind != machineSetKind || ref.APIVersion != capiv1beta1.GroupVersion.String() {
@@ -861,6 +906,10 @@ func (r *MachineSyncReconciler) convertCAPIMachineOwnerReferencesToMAPI(ctx cont
 
 // fetchCAPIInfraResources fetches the provider specific infrastructure resources depending on which provider is set.
 func (r *MachineSyncReconciler) fetchCAPIInfraResources(ctx context.Context, capiMachine *capiv1beta1.Machine) (client.Object, client.Object, error) {
+	if capiMachine == nil {
+		return nil, nil, nil
+	}
+
 	var infraCluster, infraMachine client.Object
 
 	infraClusterKey := client.ObjectKey{
@@ -888,6 +937,142 @@ func (r *MachineSyncReconciler) fetchCAPIInfraResources(ctx context.Context, cap
 	}
 
 	return infraCluster, infraMachine, nil
+}
+
+func (r *MachineSyncReconciler) reconcileMAPItoCAPIMachineDeletion(ctx context.Context, mapiMachine *machinev1beta1.Machine, capiMachine *capiv1beta1.Machine, infraMachine client.Object) (bool, error) {
+	if mapiMachine.DeletionTimestamp.IsZero() {
+		return false, nil
+	}
+
+	if capiMachine == nil && util.IsNilObject(infraMachine) {
+		// We don't have  a capi machine or infra resouorces to clean up we can
+		// just let the MAPI operators function as normal, and remove our own sync finalizer.
+		_, err := util.RemoveFinalizer(ctx, r.Client, mapiMachine, SyncFinalizer)
+
+		return false, err
+	}
+
+	// propagate the deletion timestamp mapi -> capi,
+	if capiMachine.DeletionTimestamp.IsZero() {
+		if err := r.Client.Delete(ctx, capiMachine); err != nil {
+			return false, err
+		}
+
+	}
+
+	if !util.IsNilObject(infraMachine) {
+		if infraMachine.GetDeletionTimestamp().IsZero() {
+			if err := r.Client.Delete(ctx, infraMachine); err != nil {
+				return false, err
+			}
+		}
+	}
+
+	// wait until the machinev1.MachineFinalizer is removed before removing the capi finalizer we've set above,
+	// as well as our own. This ensures the CAPI mirror resource doesn't dissapear before
+	// the MAPI controller is done deleting the infra resource.
+	if slices.Contains(mapiMachine.Finalizers, machinev1beta1.MachineFinalizer) {
+		// We wait
+		// Requeue, the event of the mapiMachine having its finalizer removed will get us to re-reconcile.
+		return true, nil
+	}
+
+	// MAPI finalizer removed, we can clean up the finalizers on the capi machine & infra machine.
+	if !util.IsNilObject(infraMachine) {
+		finalizers := infraMachine.GetFinalizers()
+		hasChanged := false
+
+		for _, finalizer := range finalizers {
+			if strings.HasSuffix(finalizer, ".cluster.x-k8s.io") {
+				if changed, err := util.RemoveFinalizer(ctx, r.Client, infraMachine, finalizer); err != nil {
+					return false, err
+				} else if changed {
+					hasChanged = true
+				}
+			}
+		}
+
+		if hasChanged {
+			return true, nil
+		}
+	}
+
+	if changed, err := util.RemoveFinalizer(ctx, r.Client, capiMachine, capiv1beta1.MachineFinalizer); err != nil {
+		return false, err
+	} else if changed {
+		return true, nil
+	}
+
+	// We want to remove the SyncFinalizer in one reconcile
+	hasChanged := false
+	if changed, err := util.RemoveFinalizer(ctx, r.Client, capiMachine, SyncFinalizer); err != nil {
+		return false, err
+	} else if changed {
+		hasChanged = true
+	}
+
+	if changed, err := util.RemoveFinalizer(ctx, r.Client, infraMachine, SyncFinalizer); err != nil {
+		return false, err
+	} else if changed {
+		hasChanged = true
+	}
+
+	if changed, err := util.RemoveFinalizer(ctx, r.Client, mapiMachine, SyncFinalizer); err != nil {
+		return false, err
+	} else if changed {
+		hasChanged = true
+	}
+
+	return hasChanged, nil
+}
+
+// ensureSyncFinalizer ensures the sync finalizer is present across the mapi machine, capi machine and capi infra machine.
+func (r *MachineSyncReconciler) ensureSyncFinalizer(ctx context.Context, mapiMachine *machinev1beta1.Machine, capiMachine *capiv1beta1.Machine, infraMachine client.Object) (bool, error) {
+	var shouldRequeue bool
+	var errors []error
+
+	if mapiMachine.DeletionTimestamp.IsZero() {
+		didSet, err := util.EnsureFinalizer(ctx, r.Client, mapiMachine, SyncFinalizer)
+		if err != nil {
+			errors = append(errors, err)
+		}
+
+		if didSet {
+			//Patching the finalizer triggers a re-reconcile.
+			shouldRequeue = true
+		}
+
+		// Finalizer was not set, continue
+	}
+
+	// This will add the finalizer in the scenario where the capiMachine does not exist yet too,
+	// as the creation of the machine triggers a reconcile where this code path will run.
+	if capiMachine != nil {
+		if capiMachine.DeletionTimestamp.IsZero() {
+			didSet, err := util.EnsureFinalizer(ctx, r.Client, capiMachine, SyncFinalizer)
+			if err != nil {
+				errors = append(errors, err)
+			}
+
+			if didSet {
+				shouldRequeue = true
+			}
+		}
+	}
+
+	if infraMachine != nil {
+		if infraMachine.GetDeletionTimestamp().IsZero() {
+			didSet, err := util.EnsureFinalizer(ctx, r.Client, infraMachine, SyncFinalizer)
+			if err != nil {
+				errors = append(errors, err)
+			}
+			if didSet {
+				shouldRequeue = true
+			}
+		}
+	}
+
+	return shouldRequeue, utilerrors.NewAggregate(errors)
 }
 
 // compareCAPIMachines compares CAPI machines a and b, and returns a list of differences, or none if there are none.
