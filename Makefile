@@ -24,7 +24,7 @@ verify: fmt lint
 test: verify unit
 
 # Build binaries
-build: operator migration manifests-gen
+build: operator migration manifests-gen cluster-api-tests-ext 
 
 .PHONY: manifests-gen
 manifests-gen:
@@ -39,6 +39,10 @@ migration:
 	# building migration
 	go build -o bin/machine-api-migration cmd/machine-api-migration/main.go
 
+cluster-api-tests-ext:
+	# building cluster-api-tests-ext
+	go build -o bin/cluster-api-tests-ext ./cmd/cluster-api-tests-ext
+
 .PHONY: localtestenv
 localtestenv: .localtestenv
 
@@ -52,7 +56,7 @@ unit: .localtestenv
 
 .PHONY: e2e
 e2e:
-	./hack/test.sh "./e2e/..." 30m
+	./hack/test.sh "./e2e/..." 60m
 
 # Run against the configured Kubernetes cluster in ~/.kube/config
 run:
