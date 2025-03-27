@@ -364,11 +364,11 @@ func awsMachineToAWSMachineTemplate(awsMachine *capav1.AWSMachine, name string, 
 
 func convertAWSAMIResourceReferenceToCAPI(fldPath *field.Path, amiRef mapiv1.AWSResourceReference) (capav1.AMIReference, *field.Error) {
 	if amiRef.ARN != nil {
-		return capav1.AMIReference{}, field.Invalid(fldPath.Child("arn"), amiRef.ARN, "unable to convert AMI ARN reference. Not supported in CAPI")
+		return capav1.AMIReference{}, field.Invalid(fldPath.Child("arn"), amiRef.ARN, "unable to convert AMI ARN reference. Not supported in Cluster API")
 	}
 
 	if len(amiRef.Filters) > 0 {
-		return capav1.AMIReference{}, field.Invalid(fldPath.Child("filters"), amiRef.Filters, "unable to convert AMI Filters reference. Not supported in CAPI")
+		return capav1.AMIReference{}, field.Invalid(fldPath.Child("filters"), amiRef.Filters, "unable to convert AMI Filters reference. Not supported in Cluster API")
 	}
 
 	if amiRef.ID != nil {

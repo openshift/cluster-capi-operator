@@ -241,7 +241,7 @@ func getCAPICreatedInstance(awsClient *ec2.EC2, msName string) ec2.Instance {
 }
 
 func compareInstances(awsClient *ec2.EC2, mapiMsName, capiMsName string) {
-	By("Comparing instances created by MAPI and CAPI")
+	By("Comparing instances created by Machine API and Cluster API")
 	mapiEC2Instance := getMAPICreatedInstance(awsClient, mapiMsName)
 	capiEC2Instance := getCAPICreatedInstance(awsClient, capiMsName)
 
@@ -287,6 +287,6 @@ func compareInstances(awsClient *ec2.EC2, mapiMsName, capiMsName string) {
 	}
 
 	if !cmp.Equal(mapiEC2Instance, capiEC2Instance, cmpOpts...) {
-		GinkgoWriter.Print("Instances created by MAPI and CAPI are not equal\n" + cmp.Diff(mapiEC2Instance, capiEC2Instance, cmpOpts...))
+		GinkgoWriter.Print("Instances created by Machine API and Cluster API are not equal\n" + cmp.Diff(mapiEC2Instance, capiEC2Instance, cmpOpts...))
 	}
 }

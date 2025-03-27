@@ -230,7 +230,7 @@ func convertPowerVSNetworkToMAPI(fldPath *field.Path, network capibmv1.IBMPowerV
 		return networkResource, nil
 	}
 
-	return networkResource, field.Invalid(fldPath, network, "unable to convert network to MAPI")
+	return networkResource, field.Invalid(fldPath, network, "unable to convert network to Machine API")
 }
 
 func convertPowerVSImageToMAPI(fldPath *field.Path, image *capibmv1.IBMPowerVSResourceReference, imageRef *corev1.LocalObjectReference) (mapiv1.PowerVSResource, *field.Error) {
@@ -301,5 +301,5 @@ func convertPowerVSServiceInstanceToMAPI(fldPath *field.Path, serviceInstanceID 
 		return serviceInstanceResource, nil
 	}
 
-	return serviceInstanceResource, field.Invalid(fldPath, serviceInstance, "unable to convert service instance to MAPI")
+	return serviceInstanceResource, field.Invalid(fldPath, serviceInstance, "unable to convert service instance to Machine API")
 }

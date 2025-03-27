@@ -81,8 +81,8 @@ var _ = Describe("mapi2capi AWS conversion", func() {
 	var _ = DescribeTable("mapi2capi AWS convert MAPI Machine",
 		func(in awsMAPI2CAPIConversionInput) {
 			_, _, warns, err := FromAWSMachineAndInfra(in.machineBuilder.Build(), in.infra).ToMachineAndInfrastructureMachine()
-			Expect(err).To(matchers.ConsistOfMatchErrorSubstrings(in.expectedErrors), "should match expected errors while converting an AWS MAPI Machine to CAPI")
-			Expect(warns).To(matchers.ConsistOfSubstrings(in.expectedWarnings), "should match expected warnings while converting an AWS MAPI Machine to CAPI")
+			Expect(err).To(matchers.ConsistOfMatchErrorSubstrings(in.expectedErrors), "should match expected errors while converting an AWS Machine API Machine to Cluster API")
+			Expect(warns).To(matchers.ConsistOfSubstrings(in.expectedWarnings), "should match expected warnings while converting an AWS Machine API Machine to Cluster API")
 		},
 
 		// Base Case.
@@ -139,7 +139,7 @@ var _ = Describe("mapi2capi AWS conversion", func() {
 					" ResourceVersion:\"\", Generation:0, CreationTimestamp:time.Date(1, time.January, 1, 0, 0, 0, 0, time.UTC), DeletionTimestamp:<nil>," +
 					" DeletionGracePeriodSeconds:(*int64)(nil), Labels:map[string]string(nil), Annotations:map[string]string(nil)," +
 					" OwnerReferences:[]v1.OwnerReference(nil), Finalizers:[]string(nil), ManagedFields:[]v1.ManagedFieldsEntry(nil)}: metadata is not supported",
-				"spec.providerSpec.value.ami.arn: Invalid value: \"arn:aws:ec2:us-east-1::image/ami-1234567890abcdef0\": unable to convert AMI ARN reference. Not supported in CAPI",
+				"spec.providerSpec.value.ami.arn: Invalid value: \"arn:aws:ec2:us-east-1::image/ami-1234567890abcdef0\": unable to convert AMI ARN reference. Not supported in Cluster API",
 			},
 			expectedWarnings: []string{},
 		}),
@@ -161,7 +161,7 @@ var _ = Describe("mapi2capi AWS conversion", func() {
 			),
 			infra: infra,
 			expectedErrors: []string{
-				"spec.providerSpec.value.ami.arn: Invalid value: \"arn:aws:ec2:us-east-1::image/ami-1234567890abcdef0\": unable to convert AMI ARN reference. Not supported in CAPI",
+				"spec.providerSpec.value.ami.arn: Invalid value: \"arn:aws:ec2:us-east-1::image/ami-1234567890abcdef0\": unable to convert AMI ARN reference. Not supported in Cluster API",
 			},
 			expectedWarnings: []string{},
 		}),
@@ -173,7 +173,7 @@ var _ = Describe("mapi2capi AWS conversion", func() {
 			),
 			infra: infra,
 			expectedErrors: []string{
-				"spec.providerSpec.value.ami.filters: Invalid value: []v1beta1.Filter{v1beta1.Filter{Name:\"name\", Values:[]string{\"test\"}}}: unable to convert AMI Filters reference. Not supported in CAPI",
+				"spec.providerSpec.value.ami.filters: Invalid value: []v1beta1.Filter{v1beta1.Filter{Name:\"name\", Values:[]string{\"test\"}}}: unable to convert AMI Filters reference. Not supported in Cluster API",
 			},
 			expectedWarnings: []string{},
 		}),
@@ -323,8 +323,8 @@ var _ = Describe("mapi2capi AWS conversion", func() {
 	var _ = DescribeTable("mapi2capi AWS convert MAPI MachineSet",
 		func(in awsMAPI2CAPIMachinesetConversionInput) {
 			_, _, warns, err := FromAWSMachineSetAndInfra(in.machineSetBuilder.Build(), in.infra).ToMachineSetAndMachineTemplate()
-			Expect(err).To(matchers.ConsistOfMatchErrorSubstrings(in.expectedErrors), "should match expected errors while converting an AWS MAPI MachineSet to CAPI")
-			Expect(warns).To(matchers.ConsistOfSubstrings(in.expectedWarnings), "should match expected warnings while converting an AWS MAPI MachineSet to CAPI")
+			Expect(err).To(matchers.ConsistOfMatchErrorSubstrings(in.expectedErrors), "should match expected errors while converting an AWS Machine API MachineSet to Cluster API")
+			Expect(warns).To(matchers.ConsistOfSubstrings(in.expectedWarnings), "should match expected warnings while converting an AWS Machine API MachineSet to Cluster API")
 		},
 
 		Entry("With a Base configuration", awsMAPI2CAPIMachinesetConversionInput{

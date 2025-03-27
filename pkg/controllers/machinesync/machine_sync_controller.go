@@ -49,10 +49,10 @@ import (
 
 var (
 	// errAssertingCAPIAWSMachine is returned when we encounter an issue asserting a client.Object into a AWSMachine.
-	errAssertingCAPIAWSMachine = errors.New("error asserting the CAPI AWSMachine object")
+	errAssertingCAPIAWSMachine = errors.New("error asserting the Cluster API AWSMachine object")
 
 	// errAssertingCAPIPowerVSMachine is returned when we encounter an issue asserting a client.Object into a IBMPowerVSMachine.
-	errAssertingCAPIIBMPowerVSMachine = errors.New("error asserting the CAPI IBMPowerVSMachine object")
+	errAssertingCAPIIBMPowerVSMachine = errors.New("error asserting the Cluster API IBMPowerVSMachine object")
 )
 
 const (
@@ -69,9 +69,9 @@ const (
 	machineSetKind string = "MachineSet"
 	controllerName string = "MachineSyncController"
 
-	messageSuccessfullySynchronizedCAPItoMAPI = "Successfully synchronized CAPI Machine to MAPI"
-	messageSuccessfullySynchronizedMAPItoCAPI = "Successfully synchronized MAPI Machine to CAPI"
-	progressingToSynchronizeMAPItoCAPI        = "Progressing to synchronize MAPI Machine to CAPI"
+	messageSuccessfullySynchronizedCAPItoMAPI = "Successfully synchronized Cluster API Machine to Machine API"
+	messageSuccessfullySynchronizedMAPItoCAPI = "Successfully synchronized Machine API Machine to Cluster API"
+	progressingToSynchronizeMAPItoCAPI        = "Progressing to synchronize Machine API Machine to Cluster API"
 )
 
 var (
@@ -154,12 +154,12 @@ func (r *MachineSyncReconciler) Reconcile(ctx context.Context, req reconcile.Req
 	}
 
 	if err := r.Get(ctx, mapiNamespacedName, mapiMachine); apierrors.IsNotFound(err) {
-		logger.Info("MAPI Machine not found")
+		logger.Info("Machine API Machine not found")
 
 		mapiMachineNotFound = true
 	} else if err != nil {
-		logger.Error(err, "Failed to get MAPI Machine")
-		return ctrl.Result{}, fmt.Errorf("failed to get MAPI machine: %w", err)
+		logger.Error(err, "Failed to get Machine API Machine")
+		return ctrl.Result{}, fmt.Errorf("failed to get Machine API machine: %w", err)
 	}
 
 	// Get the corresponding CAPI Machine.
@@ -170,17 +170,17 @@ func (r *MachineSyncReconciler) Reconcile(ctx context.Context, req reconcile.Req
 	}
 
 	if err := r.Get(ctx, capiNamespacedName, capiMachine); apierrors.IsNotFound(err) {
-		logger.Info("CAPI Machine not found")
+		logger.Info("Cluster API Machine not found")
 
 		capiMachine = nil
 		capiMachineNotFound = true
 	} else if err != nil {
-		logger.Error(err, "Failed to get CAPI Machine")
-		return ctrl.Result{}, fmt.Errorf("failed to get CAPI machine:: %w", err)
+		logger.Error(err, "Failed to get Cluster API Machine")
+		return ctrl.Result{}, fmt.Errorf("failed to get Cluster API machine:: %w", err)
 	}
 
 	if mapiMachineNotFound && capiMachineNotFound {
-		logger.Info("CAPI and MAPI machines not found, nothing to do")
+		logger.Info("Cluster API and Machine API machines not found, nothing to do")
 		return ctrl.Result{}, nil
 	}
 
@@ -219,7 +219,7 @@ func (r *MachineSyncReconciler) reconcileMAPIMachinetoCAPIMachine(ctx context.Co
 
 	newCAPIMachine, newCAPIInfraMachine, warns, err := r.convertMAPIToCAPIMachine(mapiMachine)
 	if err != nil {
-		conversionErr := fmt.Errorf("failed to convert MAPI machine to CAPI machine: %w", err)
+		conversionErr := fmt.Errorf("failed to convert Machine API machine to Cluster API machine: %w", err)
 		if condErr := r.applySynchronizedConditionWithPatch(ctx, mapiMachine, corev1.ConditionFalse, reasonFailedToConvertMAPIMachineToCAPI, conversionErr.Error(), nil); condErr != nil {
 			return ctrl.Result{}, utilerrors.NewAggregate([]error{conversionErr, condErr})
 		}
@@ -238,7 +238,7 @@ func (r *MachineSyncReconciler) reconcileMAPIMachinetoCAPIMachine(ctx context.Co
 
 	_, infraMachine, err := r.fetchCAPIInfraResources(ctx, newCAPIMachine)
 	if err != nil && !apierrors.IsNotFound(err) {
-		fetchErr := fmt.Errorf("failed to fetch CAPI infra resources: %w", err)
+		fetchErr := fmt.Errorf("failed to fetch Cluster API infra resources: %w", err)
 
 		if condErr := r.applySynchronizedConditionWithPatch(
 			ctx, mapiMachine, corev1.ConditionFalse, reasonFailedToGetCAPIInfraResources, fetchErr.Error(), nil); condErr != nil {
@@ -260,11 +260,11 @@ func (r *MachineSyncReconciler) reconcileMAPIMachinetoCAPIMachine(ctx context.Co
 
 	result, syncronizationIsProgressing, err := r.createOrUpdateCAPIInfraMachine(ctx, mapiMachine, infraMachine, newCAPIInfraMachine)
 	if err != nil {
-		return result, fmt.Errorf("unable to ensure CAPI infra machine: %w", err)
+		return result, fmt.Errorf("unable to ensure Cluster API infra machine: %w", err)
 	}
 
 	if result, err := r.createOrUpdateCAPIMachine(ctx, mapiMachine, capiMachine, newCAPIMachine); err != nil {
-		return result, fmt.Errorf("unable to ensure CAPI machine: %w", err)
+		return result, fmt.Errorf("unable to ensure Cluster API machine: %w", err)
 	}
 
 	if syncronizationIsProgressing {
@@ -300,8 +300,8 @@ func (r *MachineSyncReconciler) createOrUpdateCAPIInfraMachine(ctx context.Conte
 
 	if infraMachine == nil {
 		if err := r.Create(ctx, newCAPIInfraMachine); err != nil {
-			logger.Error(err, "Failed to create CAPI infra machine")
-			createErr := fmt.Errorf("failed to create CAPI infra machine: %w", err)
+			logger.Error(err, "Failed to create Cluster API infra machine")
+			createErr := fmt.Errorf("failed to create Cluster API infra machine: %w", err)
 
 			if condErr := r.applySynchronizedConditionWithPatch(ctx, mapiMachine, corev1.ConditionFalse, reasonFailedToCreateCAPIInfraMachine, createErr.Error(), nil); condErr != nil {
 				return ctrl.Result{}, syncronizationIsProgressing, utilerrors.NewAggregate([]error{createErr, condErr})
@@ -310,15 +310,15 @@ func (r *MachineSyncReconciler) createOrUpdateCAPIInfraMachine(ctx context.Conte
 			return ctrl.Result{}, syncronizationIsProgressing, createErr
 		}
 
-		logger.Info("Successfully created CAPI infra machine")
+		logger.Info("Successfully created Cluster API infra machine")
 
 		return ctrl.Result{}, syncronizationIsProgressing, nil
 	}
 
 	capiInfraMachinesDiff, err := compareCAPIInfraMachines(r.Platform, infraMachine, newCAPIInfraMachine)
 	if err != nil {
-		logger.Error(err, "Failed to check CAPI infra machine diff")
-		updateErr := fmt.Errorf("failed to check CAPI infra machine diff: %w", err)
+		logger.Error(err, "Failed to check Cluster API infra machine diff")
+		updateErr := fmt.Errorf("failed to check Cluster API infra machine diff: %w", err)
 
 		if condErr := r.applySynchronizedConditionWithPatch(
 			ctx, mapiMachine, corev1.ConditionFalse, reasonFailedToUpdateCAPIInfraMachine, updateErr.Error(), nil); condErr != nil {
@@ -329,16 +329,16 @@ func (r *MachineSyncReconciler) createOrUpdateCAPIInfraMachine(ctx context.Conte
 	}
 
 	if len(capiInfraMachinesDiff) == 0 {
-		logger.Info("No changes detected in CAPI infra machine")
+		logger.Info("No changes detected in Cluster API infra machine")
 		return ctrl.Result{}, syncronizationIsProgressing, nil
 	}
 
-	logger.Info("Deleting the corresponding CAPI infra machine as it is out of date, it will be recreated", "diff", capiInfraMachinesDiff)
+	logger.Info("Deleting the corresponding Cluster API infra machine as it is out of date, it will be recreated", "diff", capiInfraMachinesDiff)
 
 	if err := r.Delete(ctx, infraMachine); err != nil {
-		logger.Error(err, "Failed to delete CAPI infra machine")
+		logger.Error(err, "Failed to delete Cluster API infra machine")
 
-		deleteErr := fmt.Errorf("failed to delete CAPI infra machine: %w", err)
+		deleteErr := fmt.Errorf("failed to delete Cluster API infra machine: %w", err)
 
 		if condErr := r.applySynchronizedConditionWithPatch(
 			ctx, mapiMachine, corev1.ConditionFalse, reasonFailedToUpdateCAPIInfraMachine, deleteErr.Error(), nil); condErr != nil {
@@ -350,7 +350,7 @@ func (r *MachineSyncReconciler) createOrUpdateCAPIInfraMachine(ctx context.Conte
 
 	// The outdated outdated CAPI infra machine has been deleted.
 	// We will try and recreate an up-to-date one later.
-	logger.Info("Successfully deleted outdated CAPI infra machine")
+	logger.Info("Successfully deleted outdated Cluster API infra machine")
 
 	// Set the syncronized as progressing to signal the caller
 	// we are still progressing and aren't fully synced yet.
@@ -365,9 +365,9 @@ func (r *MachineSyncReconciler) createOrUpdateCAPIMachine(ctx context.Context, m
 
 	if capiMachine == nil {
 		if err := r.Create(ctx, newCAPIMachine); err != nil {
-			logger.Error(err, "Failed to create CAPI machine")
+			logger.Error(err, "Failed to create Cluster API machine")
 
-			createErr := fmt.Errorf("failed to create CAPI machine: %w", err)
+			createErr := fmt.Errorf("failed to create Cluster API machine: %w", err)
 			if condErr := r.applySynchronizedConditionWithPatch(
 				ctx, mapiMachine, corev1.ConditionFalse, reasonFailedToCreateCAPIMachine, createErr.Error(), nil); condErr != nil {
 				return ctrl.Result{}, utilerrors.NewAggregate([]error{createErr, condErr})
@@ -376,7 +376,7 @@ func (r *MachineSyncReconciler) createOrUpdateCAPIMachine(ctx context.Context, m
 			return ctrl.Result{}, createErr
 		}
 
-		logger.Info("Successfully created CAPI machine")
+		logger.Info("Successfully created Cluster API machine")
 
 		return ctrl.Result{}, nil
 	}
@@ -384,16 +384,16 @@ func (r *MachineSyncReconciler) createOrUpdateCAPIMachine(ctx context.Context, m
 	capiMachinesDiff := compareCAPIMachines(capiMachine, newCAPIMachine)
 
 	if len(capiMachinesDiff) == 0 {
-		logger.Info("No changes detected in CAPI machine")
+		logger.Info("No changes detected in Cluster API machine")
 		return ctrl.Result{}, nil
 	}
 
-	logger.Info("Changes detected, updating CAPI machine", "diff", capiMachinesDiff)
+	logger.Info("Changes detected, updating Cluster API machine", "diff", capiMachinesDiff)
 
 	if err := r.Update(ctx, newCAPIMachine); err != nil {
-		logger.Error(err, "Failed to update CAPI machine")
+		logger.Error(err, "Failed to update Cluster API machine")
 
-		updateErr := fmt.Errorf("failed to update CAPI machine: %w", err)
+		updateErr := fmt.Errorf("failed to update Cluster API machine: %w", err)
 
 		if condErr := r.applySynchronizedConditionWithPatch(ctx, mapiMachine, corev1.ConditionFalse, reasonFailedToUpdateCAPIMachine, updateErr.Error(), nil); condErr != nil {
 			return ctrl.Result{}, utilerrors.NewAggregate([]error{updateErr, condErr})
@@ -402,7 +402,7 @@ func (r *MachineSyncReconciler) createOrUpdateCAPIMachine(ctx context.Context, m
 		return ctrl.Result{}, updateErr
 	}
 
-	logger.Info("Successfully updated CAPI machine")
+	logger.Info("Successfully updated Cluster API machine")
 
 	return ctrl.Result{}, nil
 }
@@ -429,7 +429,7 @@ func initInfraMachineAndInfraClusterFromProvider(platform configv1.PlatformType)
 // 2. That owning CAPI machineset has a MAPI machineset Mirror.
 func (r *MachineSyncReconciler) shouldMirrorCAPIMachineToMAPIMachine(ctx context.Context, logger logr.Logger, machine *capiv1beta1.Machine) (bool, error) {
 	logger.WithName("shouldMirrorCAPIMachineToMAPIMachine").
-		Info("checking if CAPI machine should be mirrored", "machine", machine.GetName())
+		Info("checking if Cluster API machine should be mirrored", "machine", machine.GetName())
 
 	// Check if the CAPI machine has an ownerReference that points to a CAPI machineset.
 	for _, ref := range machine.ObjectMeta.OwnerReferences {
@@ -437,7 +437,7 @@ func (r *MachineSyncReconciler) shouldMirrorCAPIMachineToMAPIMachine(ctx context
 			continue
 		}
 
-		logger.Info("CAPI machine is owned by a CAPI machineset", "machine", machine.GetName(), "machineset", ref.Name)
+		logger.Info("CAPI machine is owned by a Cluster API machineset", "machine", machine.GetName(), "machineset", ref.Name)
 
 		// Checks if the CAPI machineset has a MAPI machineset mirror (same name) in MAPI namespace.
 		key := client.ObjectKey{
@@ -447,19 +447,19 @@ func (r *MachineSyncReconciler) shouldMirrorCAPIMachineToMAPIMachine(ctx context
 		mapiMachineSet := &machinev1beta1.MachineSet{}
 
 		if err := r.Get(ctx, key, mapiMachineSet); apierrors.IsNotFound(err) {
-			logger.Info("MAPI machineset mirror not found for the CAPI machineset, nothing to do", "machine", machine.GetName(), "machineset", ref.Name)
+			logger.Info("Machine API machineset mirror not found for the Cluster API machineset, nothing to do", "machine", machine.GetName(), "machineset", ref.Name)
 
 			return false, nil
 		} else if err != nil {
-			logger.Error(err, "Failed to get MAPI machineset mirror")
+			logger.Error(err, "Failed to get Machine API machineset mirror")
 
-			return false, fmt.Errorf("failed to get MAPI machineset: %w", err)
+			return false, fmt.Errorf("failed to get Machine API machineset: %w", err)
 		}
 
 		return true, nil
 	}
 
-	logger.Info("CAPI machine is not owned by a machineset, nothing to do", "machine", machine.GetName())
+	logger.Info("Cluster API machine is not owned by a machineset, nothing to do", "machine", machine.GetName())
 
 	return false, nil
 }
@@ -481,15 +481,15 @@ func (r *MachineSyncReconciler) fetchCAPIInfraResources(ctx context.Context, cap
 
 	infraMachine, infraCluster, err := initInfraMachineAndInfraClusterFromProvider(r.Platform)
 	if err != nil {
-		return nil, nil, fmt.Errorf("unable to devise CAPI infra resources: %w", err)
+		return nil, nil, fmt.Errorf("unable to devise Cluster API infra resources: %w", err)
 	}
 
 	if err := r.Get(ctx, infraClusterKey, infraCluster); err != nil {
-		return nil, nil, fmt.Errorf("failed to get CAPI infrastructure cluster: %w", err)
+		return nil, nil, fmt.Errorf("failed to get Cluster API infrastructure cluster: %w", err)
 	}
 
 	if err := r.Get(ctx, infraMachineKey, infraMachine); err != nil {
-		return nil, nil, fmt.Errorf("failed to get CAPI infrastructure machine: %w", err)
+		return nil, nil, fmt.Errorf("failed to get Cluster API infrastructure machine: %w", err)
 	}
 
 	return infraCluster, infraMachine, nil
@@ -590,7 +590,7 @@ func (r *MachineSyncReconciler) applySynchronizedConditionWithPatch(ctx context.
 		WithStatus(statusAc)
 
 	if err := r.Status().Patch(ctx, mapiMachine, util.ApplyConfigPatch(msAc), client.ForceOwnership, client.FieldOwner(controllerName+"-SynchronizedCondition")); err != nil {
-		return fmt.Errorf("failed to patch MAPI machine status with synchronized condition: %w", err)
+		return fmt.Errorf("failed to patch Machine API machine status with synchronized condition: %w", err)
 	}
 
 	return nil

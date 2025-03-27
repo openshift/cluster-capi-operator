@@ -88,12 +88,12 @@ func main() {
 	capiManagedNamespace := flag.String(
 		"capi-namespace",
 		controllers.DefaultManagedNamespace,
-		"The namespace where CAPI components will run.",
+		"The namespace where Cluster API components will run.",
 	)
 	mapiManagedNamespace := flag.String(
 		"mapi-namespace",
 		controllers.DefaultMAPIManagedNamespace,
-		"The namespace to watch for MAPI resources.",
+		"The namespace to watch for Machine API resources.",
 	)
 
 	logToStderr := flag.Bool(
