@@ -1,3 +1,17 @@
+// Copyright 2024 Red Hat, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package e2e
 
 import (
@@ -25,7 +39,7 @@ const (
 	vSphereCredentialsName     = "vsphere-creds"
 )
 
-var _ = Describe("Cluster API vSphere MachineSet", Ordered, func() {
+var _ = Describe("Cluster API vSphere MachineSet", Ordered, Label("Conformance"), Label("Serial"), func() {
 	var vSphereMachineTemplate *vspherev1.VSphereMachineTemplate
 	var machineSet *clusterv1.MachineSet
 	var mapiMachineSpec *mapiv1.VSphereMachineProviderSpec
@@ -44,15 +58,15 @@ var _ = Describe("Cluster API vSphere MachineSet", Ordered, func() {
 			// explicitly skip it here for other platforms.
 			Skip("Skipping vSphere E2E tests")
 		}
-		framework.DeleteMachineSets(cl, machineSet)
-		framework.WaitForMachineSetsDeleted(cl, machineSet)
+		framework.DeleteMachineSets(cl, ctx, machineSet)
+		framework.WaitForMachineSetsDeleted(cl, ctx, machineSet)
 		framework.DeleteObjects(cl, vSphereMachineTemplate)
 	})
 
 	It("should be able to run a machine", func() {
 		vSphereMachineTemplate = createVSphereMachineTemplate(cl, mapiMachineSpec)
 
-		machineSet = framework.CreateMachineSet(cl, framework.NewMachineSetParams(
+		machineSet = framework.CreateMachineSet(cl, ctx, framework.NewMachineSetParams(
 			"vsphere-machineset",
 			clusterName,
 			"",
@@ -65,7 +79,7 @@ var _ = Describe("Cluster API vSphere MachineSet", Ordered, func() {
 			"worker-user-data",
 		))
 
-		framework.WaitForMachineSet(cl, machineSet.Name, machineSet.Namespace)
+		framework.WaitForMachineSet(cl, ctx, machineSet.Name, machineSet.Namespace)
 	})
 })
 
@@ -124,6 +138,7 @@ func getVSphereCredentials(cl client.Client, mapiProviderSpec *mapiv1.VSphereMac
 	return string(username), string(password)
 }
 
+/*
 func createVSphereCluster(cl client.Client, mapiProviderSpec *mapiv1.VSphereMachineProviderSpec) *vspherev1.VSphereCluster {
 	By("Creating vSphere cluster")
 
@@ -179,6 +194,7 @@ func createVSphereCluster(cl client.Client, mapiProviderSpec *mapiv1.VSphereMach
 
 	return vSphereCluster
 }
+*/
 
 func createVSphereMachineTemplate(cl client.Client, mapiProviderSpec *mapiv1.VSphereMachineProviderSpec) *vspherev1.VSphereMachineTemplate {
 	By("Creating vSphere machine template")
