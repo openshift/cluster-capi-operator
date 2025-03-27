@@ -62,15 +62,9 @@ func processObjects(objs []unstructured.Unstructured, providerName string) map[r
 			setNoUpgradeAnnotations(obj)
 			providerConfigMapObjs = append(providerConfigMapObjs, obj)
 		case "MutatingWebhookConfiguration":
-			// Explicitly remove defaulting webhooks for the cluster-api provider.
-			// We don't need CAPI to set any default to the cluster object because
-			// we have a custom controller for reconciling it.
-			// For more information: https://issues.redhat.com/browse/OCPCLOUD-1506
-			removeClusterDefaultingWebhooks(&obj)
 			replaceCertManagerAnnotations(&obj)
 			providerConfigMapObjs = append(providerConfigMapObjs, obj)
 		case "ValidatingWebhookConfiguration":
-			removeClusterValidatingWebhooks(&obj)
 			replaceCertManagerAnnotations(&obj)
 			providerConfigMapObjs = append(providerConfigMapObjs, obj)
 		case "CustomResourceDefinition":
