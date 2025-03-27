@@ -34,3 +34,8 @@ func DeleteObjects(cl client.Client, objs ...client.Object) {
 		Expect(cl.Delete(ctx, o)).To(Succeed())
 	}
 }
+
+// GetContext returns a context.
+func GetContext() context.Context {
+	return context.Background()
+}

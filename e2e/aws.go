@@ -1,3 +1,16 @@
+// Copyright 2024 Red Hat, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 package e2e
 
 import (
@@ -20,28 +33,49 @@ import (
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	yaml "sigs.k8s.io/yaml"
 )
 
 const (
 	awsMachineTemplateName = "aws-machine-template"
+	infrastructureName     = "cluster"
+	infraAPIVersion        = "infrastructure.cluster.x-k8s.io/v1beta1"
 )
 
 var _ = Describe("Cluster API AWS MachineSet", Ordered, func() {
 	var (
+		cl                      client.Client
+		ctx                     = context.Background()
 		awsMachineTemplate      *awsv1.AWSMachineTemplate
 		machineSet              *clusterv1.MachineSet
 		mapiDefaultMS           *mapiv1.MachineSet
 		mapiDefaultProviderSpec *mapiv1.AWSMachineProviderConfig
 		awsClient               *ec2.EC2
+		platform                configv1.PlatformType
+		clusterName             string
 	)
 
 	BeforeAll(func() {
+		cfg, err := config.GetConfig()
+		Expect(err).ToNot(HaveOccurred(), "Failed to GetConfig")
+
+		cl, err = client.New(cfg, client.Options{})
+		Expect(err).ToNot(HaveOccurred(), "Failed to create Kubernetes client for test")
+
+		infra := &configv1.Infrastructure{}
+		infraName := client.ObjectKey{
+			Name: infrastructureName,
+		}
+		Expect(cl.Get(ctx, infraName, infra)).To(Succeed(), "Failed to get cluster infrastructure object")
+		Expect(infra.Status.PlatformStatus).ToNot(BeNil(), "expected the infrastructure Status.PlatformStatus to not be nil")
+		clusterName = infra.Status.InfrastructureName
+		platform = infra.Status.PlatformStatus.Type
 		if platform != configv1.AWSPlatformType {
 			Skip("Skipping AWS E2E tests")
 		}
 		mapiDefaultMS, mapiDefaultProviderSpec = getDefaultAWSMAPIProviderSpec(cl)
-		awsClient = createAWSClient(mapiDefaultProviderSpec.Placement.Region)
+		awsClient = createAWSClient(cl, mapiDefaultProviderSpec.Placement.Region)
 	})
 
 	AfterEach(func() {
@@ -75,13 +109,13 @@ var _ = Describe("Cluster API AWS MachineSet", Ordered, func() {
 
 		framework.WaitForMachineSet(cl, machineSet.Name)
 
-		compareInstances(awsClient, mapiDefaultMS.Name, "aws-machineset")
+		compareInstances(cl, awsClient, mapiDefaultMS.Name, "aws-machineset")
 	})
 })
 
 func getDefaultAWSMAPIProviderSpec(cl client.Client) (*mapiv1.MachineSet, *mapiv1.AWSMachineProviderConfig) {
 	machineSetList := &mapiv1.MachineSetList{}
-	Expect(cl.List(ctx, machineSetList, client.InNamespace(framework.MAPINamespace))).To(Succeed())
+	Expect(cl.List(framework.GetContext(), machineSetList, client.InNamespace(framework.MAPINamespace))).To(Succeed())
 
 	Expect(machineSetList.Items).ToNot(HaveLen(0))
 	machineSet := &machineSetList.Items[0]
@@ -156,15 +190,17 @@ func newAWSMachineTemplate(mapiProviderSpec *mapiv1.AWSMachineProviderConfig) *a
 	return awsMachineTemplate
 }
 
-func createAWSClient(region string) *ec2.EC2 {
+func createAWSClient(cl client.Client, region string) *ec2.EC2 {
 	var secret corev1.Secret
-	Expect(cl.Get(context.Background(), client.ObjectKey{
+
+	Expect(cl.Get(framework.GetContext(), client.ObjectKey{
 		Namespace: framework.CAPINamespace,
 		Name:      "capa-manager-bootstrap-credentials",
 	}, &secret)).To(Succeed())
 
 	accessKey := secret.Data["aws_access_key_id"]
 	Expect(accessKey).ToNot(BeNil())
+
 	secretAccessKey := secret.Data["aws_secret_access_key"]
 	Expect(secretAccessKey).ToNot(BeNil())
 
@@ -183,11 +219,12 @@ func createAWSClient(region string) *ec2.EC2 {
 	return ec2.New(sess)
 }
 
-func getMAPICreatedInstance(awsClient *ec2.EC2, msName string) ec2.Instance {
+func getMAPICreatedInstance(cl client.Client, awsClient *ec2.EC2, msName string) ec2.Instance {
 	Expect(awsClient).ToNot(BeNil())
 	Expect(msName).ToNot(BeEmpty())
+
 	mapiMachineList := &mapiv1.MachineList{}
-	Expect(cl.List(ctx, mapiMachineList, client.InNamespace(framework.MAPINamespace), client.MatchingLabels{
+	Expect(cl.List(framework.GetContext(), mapiMachineList, client.InNamespace(framework.MAPINamespace), client.MatchingLabels{
 		"machine.openshift.io/cluster-api-machineset": msName,
 	})).To(Succeed())
 	Expect(len(mapiMachineList.Items)).To(BeNumerically(">", 0))
@@ -214,12 +251,13 @@ func getMAPICreatedInstance(awsClient *ec2.EC2, msName string) ec2.Instance {
 	return *result.Reservations[0].Instances[0]
 }
 
-func getCAPICreatedInstance(awsClient *ec2.EC2, msName string) ec2.Instance {
+func getCAPICreatedInstance(cl client.Client, awsClient *ec2.EC2, msName string) ec2.Instance {
 	Expect(awsClient).ToNot(BeNil())
 	Expect(msName).ToNot(BeEmpty())
+
 	capiMachineList := &awsv1.AWSMachineList{}
 
-	Expect(cl.List(ctx, capiMachineList, client.InNamespace(framework.CAPINamespace), client.MatchingLabels{
+	Expect(cl.List(framework.GetContext(), capiMachineList, client.InNamespace(framework.CAPINamespace), client.MatchingLabels{
 		"machine.openshift.io/cluster-api-machineset": msName,
 	})).To(Succeed())
 	Expect(capiMachineList.Items).To(HaveLen(1))
@@ -240,10 +278,11 @@ func getCAPICreatedInstance(awsClient *ec2.EC2, msName string) ec2.Instance {
 	return *result.Reservations[0].Instances[0]
 }
 
-func compareInstances(awsClient *ec2.EC2, mapiMsName, capiMsName string) {
+func compareInstances(cl client.Client, awsClient *ec2.EC2, mapiMsName, capiMsName string) {
 	By("Comparing instances created by MAPI and CAPI")
-	mapiEC2Instance := getMAPICreatedInstance(awsClient, mapiMsName)
-	capiEC2Instance := getCAPICreatedInstance(awsClient, capiMsName)
+
+	mapiEC2Instance := getMAPICreatedInstance(cl, awsClient, mapiMsName)
+	capiEC2Instance := getCAPICreatedInstance(cl, awsClient, capiMsName)
 
 	// Ignore fields that are unique for each instance
 	ignoreInstanceFields := cmpopts.IgnoreFields(ec2.Instance{},
@@ -270,7 +309,7 @@ func compareInstances(awsClient *ec2.EC2, mapiMsName, capiMsName string) {
 		"PrivateIpAddress",
 	)
 
-	ignorePrivateIpFields := cmpopts.IgnoreFields(ec2.InstancePrivateIpAddress{},
+	ignorePrivateIPFields := cmpopts.IgnoreFields(ec2.InstancePrivateIpAddress{},
 		"PrivateDnsName",
 		"PrivateIpAddress",
 	)
@@ -282,7 +321,7 @@ func compareInstances(awsClient *ec2.EC2, mapiMsName, capiMsName string) {
 		ignoreInstanceFields,
 		ignoreBlockDeviceFields,
 		ignoreNicFields,
-		ignorePrivateIpFields,
+		ignorePrivateIPFields,
 		ignoreTags,
 	}
 

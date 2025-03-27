@@ -18,6 +18,7 @@ import (
 	azurev1 "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	yaml "sigs.k8s.io/yaml"
 )
 
@@ -28,11 +29,31 @@ const (
 )
 
 var _ = Describe("Cluster API Azure MachineSet", Ordered, func() {
-	var azureMachineTemplate *azurev1.AzureMachineTemplate
-	var machineSet *clusterv1.MachineSet
-	var mapiMachineSpec *mapiv1.AzureMachineProviderSpec
+	var (
+		cl                   client.Client
+		ctx                  = context.Background()
+		azureMachineTemplate *azurev1.AzureMachineTemplate
+		machineSet           *clusterv1.MachineSet
+		mapiMachineSpec      *mapiv1.AzureMachineProviderSpec
+		platform             configv1.PlatformType
+		clusterName          string
+	)
 
 	BeforeAll(func() {
+		cfg, err := config.GetConfig()
+		Expect(err).ToNot(HaveOccurred(), "Failed to GetConfig")
+
+		cl, err = client.New(cfg, client.Options{})
+		Expect(err).ToNot(HaveOccurred(), "Failed to create Kubernetes client for test")
+
+		infra := &configv1.Infrastructure{}
+		infraName := client.ObjectKey{
+			Name: infrastructureName,
+		}
+		Expect(cl.Get(ctx, infraName, infra)).To(Succeed(), "Failed to get cluster infrastructure object")
+		Expect(infra.Status.PlatformStatus).ToNot(BeNil(), "expected the infrastructure Status.PlatformStatus to not be nil")
+		clusterName = infra.Status.InfrastructureName
+		platform = infra.Status.PlatformStatus.Type
 		if platform != configv1.AzurePlatformType {
 			Skip("Skipping Azure E2E tests")
 		}
@@ -72,7 +93,7 @@ var _ = Describe("Cluster API Azure MachineSet", Ordered, func() {
 
 func getAzureMAPIProviderSpec(cl client.Client) *mapiv1.AzureMachineProviderSpec {
 	machineSetList := &mapiv1.MachineSetList{}
-	Expect(cl.List(ctx, machineSetList, client.InNamespace(framework.MAPINamespace))).To(Succeed())
+	Expect(cl.List(framework.GetContext(), machineSetList, client.InNamespace(framework.MAPINamespace))).To(Succeed())
 
 	Expect(machineSetList.Items).ToNot(HaveLen(0))
 	machineSet := machineSetList.Items[0]
@@ -155,7 +176,7 @@ func createAzureMachineTemplate(cl client.Client, mapiProviderSpec *mapiv1.Azure
 		},
 	}
 
-	if err := cl.Create(ctx, azureMachineTemplate); err != nil && !apierrors.IsAlreadyExists(err) {
+	if err := cl.Create(framework.GetContext(), azureMachineTemplate); err != nil && !apierrors.IsAlreadyExists(err) {
 		Expect(err).ToNot(HaveOccurred())
 	}
 

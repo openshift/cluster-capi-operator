@@ -1,6 +1,20 @@
+// Copyright 2024 Red Hat, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 package e2e
 
 import (
+	"context"
 	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -12,6 +26,7 @@ import (
 	vspherev1 "sigs.k8s.io/cluster-api-provider-vsphere/apis/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	yaml "sigs.k8s.io/yaml"
 
 	configv1 "github.com/openshift/api/config/v1"
@@ -22,20 +37,42 @@ import (
 const (
 	vSphereMachineTemplateName = "vsphere-machine-template"
 	kubeSystemnamespace        = "kube-system"
-	vSphereCredentialsName     = "vsphere-creds"
+	//nolint:gosec // This is just the resource name, not the actual credentials
+	vSphereCredentialsName                                            = "vsphere-creds"
+	managedByAnnotationValueClusterCAPIOperatorInfraClusterController = "cluster-capi-operator-infracluster-controller"
 )
 
 var _ = Describe("Cluster API vSphere MachineSet", Ordered, func() {
-	var vSphereMachineTemplate *vspherev1.VSphereMachineTemplate
-	var machineSet *clusterv1.MachineSet
-	var mapiMachineSpec *mapiv1.VSphereMachineProviderSpec
+	var (
+		cl                     client.Client
+		ctx                    = context.Background()
+		vSphereMachineTemplate *vspherev1.VSphereMachineTemplate
+		machineSet             *clusterv1.MachineSet
+		mapiMachineSpec        *mapiv1.VSphereMachineProviderSpec
+		platform               configv1.PlatformType
+		clusterName            string
+	)
 
 	BeforeAll(func() {
+		cfg, err := config.GetConfig()
+		Expect(err).ToNot(HaveOccurred(), "Failed to GetConfig")
+
+		cl, err = client.New(cfg, client.Options{})
+		Expect(err).ToNot(HaveOccurred(), "Failed to create Kubernetes client for test")
+
+		infra := &configv1.Infrastructure{}
+		infraName := client.ObjectKey{
+			Name: infrastructureName,
+		}
+		Expect(cl.Get(ctx, infraName, infra)).To(Succeed(), "Failed to get cluster infrastructure object")
+		Expect(infra.Status.PlatformStatus).ToNot(BeNil(), "expected the infrastructure Status.PlatformStatus to not be nil")
+		clusterName = infra.Status.InfrastructureName
+		platform = infra.Status.PlatformStatus.Type
 		if platform != configv1.VSpherePlatformType {
 			Skip("Skipping vSphere E2E tests")
 		}
 		mapiMachineSpec = getVSphereMAPIProviderSpec(cl)
-		createVSphereSecret(cl, mapiMachineSpec)
+		createVSphereSecret(cl, mapiMachineSpec, clusterName)
 	})
 
 	AfterEach(func() {
@@ -70,7 +107,7 @@ var _ = Describe("Cluster API vSphere MachineSet", Ordered, func() {
 
 func getVSphereMAPIProviderSpec(cl client.Client) *mapiv1.VSphereMachineProviderSpec {
 	machineSetList := &mapiv1.MachineSetList{}
-	Expect(cl.List(ctx, machineSetList, client.InNamespace(framework.MAPINamespace))).To(Succeed(),
+	Expect(cl.List(framework.GetContext(), machineSetList, client.InNamespace(framework.MAPINamespace))).To(Succeed(),
 		"should not fail listing MAPI MachineSets")
 
 	Expect(machineSetList.Items).ToNot(HaveLen(0), "expected to have at least a MachineSet")
@@ -85,7 +122,7 @@ func getVSphereMAPIProviderSpec(cl client.Client) *mapiv1.VSphereMachineProvider
 	return providerSpec
 }
 
-func createVSphereSecret(cl client.Client, mapiProviderSpec *mapiv1.VSphereMachineProviderSpec) {
+func createVSphereSecret(cl client.Client, mapiProviderSpec *mapiv1.VSphereMachineProviderSpec, clusterName string) {
 	By("Creating a vSphere credentials secret")
 
 	username, password := getVSphereCredentials(cl, mapiProviderSpec)
@@ -101,14 +138,14 @@ func createVSphereSecret(cl client.Client, mapiProviderSpec *mapiv1.VSphereMachi
 		},
 	}
 
-	if err := cl.Create(ctx, vSphereSecret); err != nil && !apierrors.IsAlreadyExists(err) {
+	if err := cl.Create(framework.GetContext(), vSphereSecret); err != nil && !apierrors.IsAlreadyExists(err) {
 		Expect(err).ToNot(HaveOccurred(), "should not fail creating a VSphere credentials secret")
 	}
 }
 
 func getVSphereCredentials(cl client.Client, mapiProviderSpec *mapiv1.VSphereMachineProviderSpec) (string, string) {
 	vSphereCredentialsSecret := &corev1.Secret{}
-	err := cl.Get(ctx, types.NamespacedName{
+	err := cl.Get(framework.GetContext(), types.NamespacedName{
 		Namespace: kubeSystemnamespace,
 		Name:      vSphereCredentialsName,
 	}, vSphereCredentialsSecret)
@@ -121,62 +158,6 @@ func getVSphereCredentials(cl client.Client, mapiProviderSpec *mapiv1.VSphereMac
 	Expect(ok).To(BeTrue(), "expected to find a password in the VSphere credentials secret")
 
 	return string(username), string(password)
-}
-
-func createVSphereCluster(cl client.Client, mapiProviderSpec *mapiv1.VSphereMachineProviderSpec) *vspherev1.VSphereCluster {
-	By("Creating vSphere cluster")
-
-	host, port, err := framework.GetControlPlaneHostAndPort(cl)
-	if err != nil {
-		Expect(err).ToNot(HaveOccurred(), "should not fail getting the Control Plane host and port")
-	}
-
-	vSphereCluster := &vspherev1.VSphereCluster{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      clusterName,
-			Namespace: framework.CAPINamespace,
-			// The ManagedBy Annotation is set so CAPI infra providers ignore the InfraCluster object,
-			// as that's managed externally, in this case by the cluster-capi-operator's infracluster controller.
-			Annotations: map[string]string{
-				clusterv1.ManagedByAnnotation: managedByAnnotationValueClusterCAPIOperatorInfraClusterController,
-			},
-		},
-		Spec: vspherev1.VSphereClusterSpec{
-			Server: mapiProviderSpec.Workspace.Server,
-			IdentityRef: &vspherev1.VSphereIdentityReference{
-				Kind: "Secret",
-				Name: clusterName,
-			},
-			ControlPlaneEndpoint: vspherev1.APIEndpoint{
-				Host: host,
-				Port: port,
-			},
-		},
-	}
-
-	if err := cl.Create(ctx, vSphereCluster); err != nil && !apierrors.IsAlreadyExists(err) {
-		Expect(err).ToNot(HaveOccurred(), "should not error creating the VSphere Cluster object")
-	}
-
-	Eventually(func() (bool, error) {
-		patchedVSphereCluster := &vspherev1.VSphereCluster{}
-		err := cl.Get(ctx, client.ObjectKeyFromObject(vSphereCluster), patchedVSphereCluster)
-		if err != nil {
-			return false, err
-		}
-
-		if patchedVSphereCluster.Annotations == nil {
-			return false, nil
-		}
-
-		if _, ok := patchedVSphereCluster.Annotations[clusterv1.ManagedByAnnotation]; !ok {
-			return false, nil
-		}
-
-		return patchedVSphereCluster.Status.Ready, nil
-	}, framework.WaitShort).Should(BeTrue(), "should not time out waiting for the VSphere Cluster to become 'Ready'")
-
-	return vSphereCluster
 }
 
 func createVSphereMachineTemplate(cl client.Client, mapiProviderSpec *mapiv1.VSphereMachineProviderSpec) *vspherev1.VSphereMachineTemplate {
@@ -223,7 +204,7 @@ func createVSphereMachineTemplate(cl client.Client, mapiProviderSpec *mapiv1.VSp
 		},
 	}
 
-	if err := cl.Create(ctx, vSphereMachineTemplate); err != nil && !apierrors.IsAlreadyExists(err) {
+	if err := cl.Create(framework.GetContext(), vSphereMachineTemplate); err != nil && !apierrors.IsAlreadyExists(err) {
 		Expect(err).ToNot(HaveOccurred(), "should not error creating the VSphere Cluster object")
 	}
 
