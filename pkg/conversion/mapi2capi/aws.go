@@ -185,6 +185,14 @@ func (m *awsMachineSetAndInfra) ToMachineSetAndMachineTemplate() (*capiv1.Machin
 
 	capiMachineSet.Spec.Template.Spec = capiMachine.Spec
 
+	if m.infrastructure == nil || m.infrastructure.Status.InfrastructureName == "" {
+		errs = append(errs, field.Invalid(field.NewPath("infrastructure", "status", "infrastructureName"), m.infrastructure.Status.InfrastructureName, "infrastructure cannot be nil and infrastructure.Status.InfrastructureName cannot be empty"))
+	} else {
+		capiMachineSet.Spec.Template.Spec.ClusterName = m.infrastructure.Status.InfrastructureName
+		capiMachineSet.Spec.ClusterName = m.infrastructure.Status.InfrastructureName
+		capiMachineSet.Labels["cluster.x-k8s.io/cluster-name"] = m.infrastructure.Status.InfrastructureName
+	}
+
 	// We have to merge these two maps so that labels and annotations added to the template objectmeta are persisted
 	// along with the labels and annotations from the machine objectmeta.
 	capiMachineSet.Spec.Template.ObjectMeta.Labels = mergeMaps(capiMachineSet.Spec.Template.ObjectMeta.Labels, capiMachine.Labels)
@@ -193,13 +201,6 @@ func (m *awsMachineSetAndInfra) ToMachineSetAndMachineTemplate() (*capiv1.Machin
 	// Override the reference so that it matches the AWSMachineTemplate.
 	capiMachineSet.Spec.Template.Spec.InfrastructureRef.Kind = awsMachineTemplateKind
 	capiMachineSet.Spec.Template.Spec.InfrastructureRef.Name = capaMachineTemplate.Name
-
-	if m.infrastructure == nil || m.infrastructure.Status.InfrastructureName == "" {
-		errs = append(errs, field.Invalid(field.NewPath("infrastructure", "status", "infrastructureName"), m.infrastructure.Status.InfrastructureName, "infrastructure cannot be nil and infrastructure.Status.InfrastructureName cannot be empty"))
-	} else {
-		capiMachineSet.Spec.Template.Spec.ClusterName = m.infrastructure.Status.InfrastructureName
-		capiMachineSet.Spec.ClusterName = m.infrastructure.Status.InfrastructureName
-	}
 
 	if len(errs) > 0 {
 		return nil, nil, warnings, utilerrors.NewAggregate(errs)
@@ -415,7 +416,7 @@ func convertMetadataServiceOptionstoCAPI(fldPath *field.Path, metad mapiv1.Metad
 	case mapiv1.MetadataServiceAuthenticationRequired:
 		httpTokens = capav1.HTTPTokensStateRequired
 	case "":
-		// This means it's optional on both sides, so no need to set anything.
+		httpTokens = capav1.HTTPTokensStateOptional // Defaults to optional in the openAPI spec validation.
 	default:
 		return &capav1.InstanceMetadataOptions{}, field.Invalid(fldPath.Child("authentication"), metad.Authentication, "unsupported authentication value")
 	}
@@ -423,8 +424,9 @@ func convertMetadataServiceOptionstoCAPI(fldPath *field.Path, metad mapiv1.Metad
 	capiMetadataOpts := &capav1.InstanceMetadataOptions{
 		HTTPEndpoint: capav1.InstanceMetadataEndpointStateEnabled, // not present in MAPI, fallback to CAPI default.
 		// HTTPPutResponseHopLimit: not present in MAPI, fallback to CAPI default.
-		InstanceMetadataTags: capav1.InstanceMetadataEndpointStateDisabled, // not present in MAPI, fallback to CAPI default.
-		HTTPTokens:           httpTokens,
+		InstanceMetadataTags:    capav1.InstanceMetadataEndpointStateDisabled, // not present in MAPI, fallback to CAPI default.
+		HTTPTokens:              httpTokens,
+		HTTPPutResponseHopLimit: 1, // Defaults to one in the openAPI spec validation.
 	}
 
 	return capiMetadataOpts, nil

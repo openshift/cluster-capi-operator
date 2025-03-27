@@ -26,6 +26,7 @@ import (
 	configv1client "github.com/openshift/client-go/config/clientset/versioned"
 	configinformers "github.com/openshift/client-go/config/informers/externalversions"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/machinesetmigration"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/machinesetsync"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/machinesync"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
@@ -240,6 +241,16 @@ func main() {
 
 	if err := machineSetSyncReconciler.SetupWithManager(mgr); err != nil {
 		klog.Error(err, "failed to set up machineset sync reconciler with manager")
+		os.Exit(1)
+	}
+
+	machineSetMigrationReconciler := machinesetmigration.MachineSetMigrationReconciler{
+		MAPINamespace: *mapiManagedNamespace,
+		CAPINamespace: *capiManagedNamespace,
+	}
+
+	if err := machineSetMigrationReconciler.SetupWithManager(mgr); err != nil {
+		klog.Error(err, "failed to set up machineset migration reconciler with manager")
 		os.Exit(1)
 	}
 
