@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/go-logr/logr"
 
@@ -69,6 +70,8 @@ const (
 	messageSuccessfullySynchronizedCAPItoMAPI = "Successfully synchronized CAPI Machine to MAPI"
 	messageSuccessfullySynchronizedMAPItoCAPI = "Successfully synchronized MAPI Machine to CAPI"
 	progressingToSynchronizeMAPItoCAPI        = "Progressing to synchronize MAPI Machine to CAPI"
+
+	SyncFinalizer = "sync.machine.openshift.io/finalizer"
 )
 
 var (
@@ -320,6 +323,57 @@ func (r *MachineSyncReconciler) reconcileCAPIMachinetoMAPIMachine(ctx context.Co
 func (r *MachineSyncReconciler) reconcileMAPIMachinetoCAPIMachine(ctx context.Context, mapiMachine *machinev1beta1.Machine, capiMachine *capiv1beta1.Machine) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
+	// Add sync Finalizer to MAPI and CAPI
+	// make helperfun to add finalizer
+
+	// if mapi machine has deletion timestamp
+	// propagate to capi machine
+
+	// rely on the requeue: until we see mapi finalizer removed (underlying infra resource is gone)
+	// remove capi finalizer + sync finalizer
+
+	// remove own finalizer
+
+	// If object hasn't been deleted and doesn't have a finalizer, add one
+	// Add a finalizer to newly created objects.
+
+	// TODO: do we want a guard checking mapiMachine != nil ?
+	if mapiMachine.ObjectMeta.DeletionTimestamp.IsZero() {
+		finalizerCount := len(mapiMachine.Finalizers)
+
+		if !slices.Contains(mapiMachine.Finalizers, SyncFinalizer) {
+			mapiMachine.Finalizers = append(mapiMachine.ObjectMeta.Finalizers, SyncFinalizer)
+		}
+
+		if len(mapiMachine.Finalizers) > finalizerCount {
+			if err := r.Client.Update(ctx, mapiMachine); err != nil {
+				return reconcile.Result{}, err
+			}
+
+			// Since adding the finalizer updates the object return to avoid later update issues
+			return reconcile.Result{Requeue: true}, nil
+		}
+	}
+
+	if capiMachine != nil {
+		if capiMachine.ObjectMeta.DeletionTimestamp.IsZero() {
+			finalizerCount := len(capiMachine.Finalizers)
+
+			if !slices.Contains(capiMachine.Finalizers, SyncFinalizer) {
+				capiMachine.Finalizers = append(capiMachine.ObjectMeta.Finalizers, SyncFinalizer)
+			}
+
+			if len(capiMachine.Finalizers) > finalizerCount {
+				if err := r.Client.Update(ctx, capiMachine); err != nil {
+					return reconcile.Result{}, err
+				}
+
+				// Since adding the finalizer updates the object return to avoid later update issues
+				return reconcile.Result{Requeue: true}, nil
+			}
+		}
+	}
+
 	newCAPIMachine, newCAPIInfraMachine, warns, err := r.convertMAPIToCAPIMachine(mapiMachine)
 	if err != nil {
 		conversionErr := fmt.Errorf("failed to convert Machine API machine to Cluster API machine: %w", err)
@@ -333,6 +387,11 @@ func (r *MachineSyncReconciler) reconcileMAPIMachinetoCAPIMachine(ctx context.Co
 	for _, warning := range warns {
 		logger.Info("Warning during conversion", "warning", warning)
 		r.Recorder.Event(mapiMachine, corev1.EventTypeWarning, "ConversionWarning", warning)
+	}
+
+	if capiMachine != nil {
+		// We want to ensure we don't nuke existing finalizers
+		newCAPIMachine.SetFinalizers(capiMachine.Finalizers)
 	}
 
 	newCAPIMachine.SetResourceVersion(util.GetResourceVersion(client.Object(capiMachine)))
