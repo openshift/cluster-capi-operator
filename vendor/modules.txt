@@ -931,7 +931,7 @@ github.com/openshift/client-go/machine/applyconfigurations/internal
 github.com/openshift/client-go/machine/applyconfigurations/machine/v1beta1
 github.com/openshift/client-go/operator/applyconfigurations/internal
 github.com/openshift/client-go/operator/applyconfigurations/operator/v1
-# github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20250312115727-157f88eba755
+# github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20250401133953-e7e157c4c1fe
 ## explicit; go 1.23.0
 github.com/openshift/cluster-api-actuator-pkg/testutils
 github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder
@@ -2349,7 +2349,7 @@ sigs.k8s.io/cluster-api/util/contract
 sigs.k8s.io/cluster-api/util/flags
 sigs.k8s.io/cluster-api/util/labels/format
 sigs.k8s.io/cluster-api/util/topology
-# sigs.k8s.io/cluster-api-provider-aws/v2 v2.7.1-0.20250311200346-7e954867f06b
+# sigs.k8s.io/cluster-api-provider-aws/v2 v2.8.2
 ## explicit; go 1.22.0
 sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2
 sigs.k8s.io/cluster-api-provider-aws/v2/feature

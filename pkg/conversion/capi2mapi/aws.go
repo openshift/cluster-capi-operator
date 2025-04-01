@@ -136,8 +136,8 @@ func (m machineAndAWSMachineAndAWSCluster) toProviderSpec() (*mapiv1.AWSMachineP
 		KeyName: m.awsMachine.Spec.SSHKeyName,
 		// DeviceIndex - OCPCLOUD-2707: Value must always be zero. No other values are valid in MAPA even though the value is configurable.
 		PublicIP:             m.awsMachine.Spec.PublicIP,
-		NetworkInterfaceType: mapiv1.AWSENANetworkInterfaceType,                                          // TODO(OCPCLOUD-2708) This is the default value for MAPA, but other values are not configurable in CAPA.
 		SecurityGroups:       convertAWSSecurityGroupstoMAPI(m.awsMachine.Spec.AdditionalSecurityGroups), // This is the way we want to convert security groups, as the AdditionalSecurity Groups are what gets added to MAPI SGs.
+		NetworkInterfaceType: convertAWSNetworkInterfaceTypeToMAPI(m.awsMachine.Spec.NetworkInterfaceType),
 		Subnet:               convertAWSResourceReferenceToMAPI(ptr.Deref(m.awsMachine.Spec.Subnet, capav1.AWSResourceReference{})),
 		Placement: mapiv1.Placement{
 			AvailabilityZone: ptr.Deref(m.machine.Spec.FailureDomain, ""),
@@ -167,6 +167,9 @@ func (m machineAndAWSMachineAndAWSCluster) toProviderSpec() (*mapiv1.AWSMachineP
 	// IntsanceID - Ignore - Is a subset of providerID.
 	// Ignition - Ignore - Only has a version field and we force this to a particular value.
 
+	if m.awsMachine.Spec.NetworkInterfaceType != "" && m.awsMachine.Spec.NetworkInterfaceType != capav1.NetworkInterfaceTypeEFAWithENAInterface && m.awsMachine.Spec.NetworkInterfaceType != capav1.NetworkInterfaceTypeENI {
+		errors = append(errors, field.Invalid(fldPath.Child("networkInterfaceType"), m.awsMachine.Spec.NetworkInterfaceType, "networkInterface type must be one of interface, efa or omitted, unsupported value"))
+	}
 	// There are quite a few unsupported fields, so break them out for now.
 	errors = append(errors, handleUnsupportedAWSMachineFields(fldPath, m.awsMachine.Spec)...)
 
@@ -451,6 +454,17 @@ func convertAWSPlacementGroupPartition(in int64) *int32 {
 	// We know the value is between 0 and 7 based on API validation. Ignore gosec.
 	//nolint:gosec
 	return ptr.To(int32(in))
+}
+
+func convertAWSNetworkInterfaceTypeToMAPI(networkInterfaceType capav1.NetworkInterfaceType) mapiv1.AWSNetworkInterfaceType {
+	switch networkInterfaceType {
+	case capav1.NetworkInterfaceTypeEFAWithENAInterface:
+		return mapiv1.AWSEFANetworkInterfaceType
+	case capav1.NetworkInterfaceTypeENI:
+		return mapiv1.AWSENANetworkInterfaceType
+	}
+
+	return ""
 }
 
 // handleUnsupportedAWSMachineFields returns an error for every present field in the AWSMachineSpec that

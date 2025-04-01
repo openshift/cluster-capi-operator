@@ -220,8 +220,8 @@ github.com/gofrs/flock v0.12.1/go.mod h1:9zxTsyu5xtJ9DK+1tFZyibEV7y3uwDxPPfbxeeH
 github.com/gogo/protobuf v1.3.2 h1:Ov1cvc58UF3b5XjBnZv7+opcTcQFZebYjWzi34vdm4Q=
 github.com/gogo/protobuf v1.3.2/go.mod h1:P1XiOD3dCwIKUDQYPy72D8LYyHL2YPYrpS2s69NZV8Q=
 github.com/golang-jwt/jwt v3.2.2+incompatible h1:IfV12K8xAKAnZqdXVzCZ+TOjboZ2keLg81eXfW3O+oY=
-github.com/golang-jwt/jwt/v4 v4.5.1 h1:JdqV9zKUdtaa9gdPlywC3aeoEsR681PlKC+4F5gQgeo=
-github.com/golang-jwt/jwt/v4 v4.5.1/go.mod h1:m21LjoU+eqJr34lmDMbreY2eSTRJ1cv77w39/MY0Ch0=
+github.com/golang-jwt/jwt/v4 v4.5.2 h1:YtQM7lnr8iZ+j5q71MGKkNw9Mn7AjHM68uc9g5fXeUI=
+github.com/golang-jwt/jwt/v4 v4.5.2/go.mod h1:m21LjoU+eqJr34lmDMbreY2eSTRJ1cv77w39/MY0Ch0=
 github.com/golang-jwt/jwt/v5 v5.2.2 h1:Rl4B7itRWVtYIHFrSNd7vhTiz9UpLdi6gZhZ3wEeDy8=
 github.com/golang-jwt/jwt/v5 v5.2.2/go.mod h1:pqrtFR0X4osieyHYxtmOUWsAWrfe1Q5UVIyoH402zdk=
 github.com/golang/mock v1.6.0 h1:ErTB+efbowRARo13NNdxyJji2egdxLGQhRaY+DUumQc=
@@ -422,8 +422,8 @@ github.com/openshift/api v0.0.0-20250311085700-14a17c7009c4 h1:MC4ZZqMrvxJ7xK3Bl
 github.com/openshift/api v0.0.0-20250311085700-14a17c7009c4/go.mod h1:yk60tHAmHhtVpJQo3TwVYq2zpuP70iJIFDCmeKMIzPw=
 github.com/openshift/client-go v0.0.0-20250131180035-f7ec47e2d87a h1:duO3JMrUOqVx50QhzxvDeOYIwTNOB8/EEuRLPyvAMBg=
 github.com/openshift/client-go v0.0.0-20250131180035-f7ec47e2d87a/go.mod h1:Qw3ThpzVZ0bfTILpBNYg4LGyjtNxfyCiGh/uDLOOTP8=
-github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20250312115727-157f88eba755 h1:9CtJhXB7aw0sEtDVW23LzID9pSdTidIvTkRvw1/1QCw=
-github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20250312115727-157f88eba755/go.mod h1:3P6CIJp8Wyvg5YrUxA5Pkd7p+zWAgAmmG/3aticLr4I=
+github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20250401133953-e7e157c4c1fe h1:9QsRaVYDfO4Bw1RFE3mnaQWWaY2zEVqLnFfXpCZfcOs=
+github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20250401133953-e7e157c4c1fe/go.mod h1:3P6CIJp8Wyvg5YrUxA5Pkd7p+zWAgAmmG/3aticLr4I=
 github.com/openshift/library-go v0.0.0-20250203131244-80620876b7c2 h1:LaJmI+EeFnpbxs5H4Y6KOiNXhtPjldqvNzVfPpNM+dI=
 github.com/openshift/library-go v0.0.0-20250203131244-80620876b7c2/go.mod h1:GHwvopE5KXXCz4ULHp871sTPLLW+FB+hu/RIzlNwxx8=
 github.com/otiai10/copy v1.2.0/go.mod h1:rrF5dJ5F0t/EWSYODDu4j9/vEeYHMkc8jt0zJChqQWw=
@@ -831,8 +831,8 @@ sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.31.0 h1:CPT0ExVicCzcp
 sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.31.0/go.mod h1:Ve9uj1L+deCXFrPOk1LpFXqTg7LCFzFso6PA48q/XZw=
 sigs.k8s.io/cluster-api v1.9.5 h1:68164Q201Y5ANVkhyrOZenoMbfL2SEBjVYZs/ihhSro=
 sigs.k8s.io/cluster-api v1.9.5/go.mod h1:DyqyZ4jRvKGKewDRn1Q4OCHaVjsdTogymbO6mrgHEDI=
-sigs.k8s.io/cluster-api-provider-aws/v2 v2.7.1-0.20250311200346-7e954867f06b h1:+tnfKRcEB0AeTaQr/6493yGdC0GgcnPvggoeOdq9oC0=
-sigs.k8s.io/cluster-api-provider-aws/v2 v2.7.1-0.20250311200346-7e954867f06b/go.mod h1:UYuqaItsllaSd01Tw9Kq65nOSvDhLlPwqzJZFSAQx8U=
+sigs.k8s.io/cluster-api-provider-aws/v2 v2.8.2 h1:1RKzXkpnONouxBLxVa1xUtpYRfpG+Ek+9uT56WKyN4k=
+sigs.k8s.io/cluster-api-provider-aws/v2 v2.8.2/go.mod h1:ubZXYyieYt+I4jQFJ47J9Hq4W3zPernTWXlIfIZnB3Y=
 sigs.k8s.io/cluster-api-provider-azure v1.18.1 h1:R3phyUtBg8KN9TmaNH+uFf206SCkIWGmJv1Z0VS2A0w=
 sigs.k8s.io/cluster-api-provider-azure v1.18.1/go.mod h1:QITfkmdQ4oepr8exHPwYS9H7Py0TMtjVsUwl8pr2y5A=
 sigs.k8s.io/cluster-api-provider-gcp v1.8.1 h1:vhyHguhEktG1ChMnbofR5V1ttTmlHH40WUtlqBct1B4=
