@@ -103,7 +103,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 
 		mapiMachineBuilder = machinev1resourcebuilder.Machine().
 			WithNamespace(mapiNamespace.GetName()).
-			WithGenerateName("foo").
+			WithName("foo").
 			WithProviderSpecBuilder(machinev1resourcebuilder.AWSProviderSpec().WithLoadBalancers(nil))
 
 		infrastructureName := "cluster-foo"
@@ -215,11 +215,24 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 							))),
 					)
 				})
+
+				It("should set the sync.machine.openshift.io/finalizer finalizer on the MAPI machine", func() {
+					Eventually(k.Object(mapiMachine), timeout).Should(
+						HaveField("ObjectMeta.Finalizers", ContainElement("sync.machine.openshift.io/finalizer")),
+					)
+				})
+
+				It("should set the sync.machine.openshift.io/finalizer finalizer on the CAPI machine", func() {
+					capiMachine := capiMachineBuilder.Build()
+					Eventually(k.Object(capiMachine), timeout).Should(
+						HaveField("ObjectMeta.Finalizers", ContainElement("sync.machine.openshift.io/finalizer")),
+					)
+				})
 			})
 
 			Context("when the CAPI machine does exist", func() {
 				BeforeEach(func() {
-					capiMachine = capiMachineBuilder.Build()
+					capiMachine = capiMachineBuilder.WithName(mapiMachine.GetName()).Build()
 					Expect(k8sClient.Create(ctx, capiMachine)).Should(Succeed())
 				})
 
@@ -234,20 +247,34 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 							))),
 					)
 				})
+
+				It("should set the sync.machine.openshift.io/finalizer finalizer on the MAPI machine", func() {
+					Eventually(k.Object(mapiMachine), timeout).Should(
+						HaveField("ObjectMeta.Finalizers", ContainElement("sync.machine.openshift.io/finalizer")),
+					)
+				})
+
+				It("should set the sync.machine.openshift.io/finalizer finalizer on the CAPI machine", func() {
+					Eventually(k.Object(capiMachine), timeout).Should(
+						HaveField("ObjectMeta.Finalizers", ContainElement("sync.machine.openshift.io/finalizer")),
+					)
+				})
 			})
 
 			Context("when the MAPI machine providerSpec gets updated", func() {
 				BeforeEach(func() {
 					By("Updating the MAPI machine providerSpec")
-					modifiedMAPIMachineBuilder := machinev1resourcebuilder.Machine().
-						WithNamespace(mapiNamespace.GetName()).
-						WithName(mapiMachine.Name).
-						WithProviderSpecBuilder(machinev1resourcebuilder.AWSProviderSpec().WithLoadBalancers(nil).WithInstanceType("m6i.2xlarge")).Build()
+					mapiMachineCopy := mapiMachineBuilder.
+						WithProviderSpecBuilder(
+							machinev1resourcebuilder.
+								AWSProviderSpec().
+								WithLoadBalancers(nil).
+								WithInstanceType("m6i.2xlarge")).
+						Build()
 
-					mapiMachineCopy := mapiMachine.DeepCopy()
-					mapiMachineCopy.Spec.ProviderSpec = modifiedMAPIMachineBuilder.Spec.ProviderSpec
-
-					Expect(k8sClient.Update(ctx, mapiMachineCopy)).Should(Succeed())
+					Eventually(k.Update(mapiMachine, func() {
+						mapiMachine.Spec.ProviderSpec = mapiMachineCopy.Spec.ProviderSpec
+					})).Should(Succeed())
 				})
 
 				It("should recreate the CAPI infra machine", func() {
