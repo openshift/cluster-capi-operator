@@ -164,8 +164,7 @@ func awsMachineFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interface{} 
 			spec.UncompressedUserData = nil
 			spec.PrivateDNSName = nil
 
-			// Fields not yet supported for conversion.
-			// TODO(OCPCLOUD-2712): Security group overrides still need investigation.
+			// We don't support this field since the externally managed annotation is added, so it's best to keep this nil.
 			spec.SecurityGroupOverrides = nil
 		},
 		func(m *capav1.AWSMachine, c fuzz.Continue) {
