@@ -383,7 +383,7 @@ func ObjectMetaFuzzerFuncs(namespace string) fuzzer.FuzzerFuncs {
 				o.ManagedFields = nil
 
 				// Clear fields that are not currently supported in the conversion.
-				o.OwnerReferences = nil // TODO(OCPCLOUD-2716)
+				o.OwnerReferences = nil // Handled outside of the conversion library.
 
 				// Annotations and labels maps should be non-nil (Since the conversion initialises them).
 				if o.Annotations == nil {

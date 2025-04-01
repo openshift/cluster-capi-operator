@@ -36,10 +36,14 @@ import (
 
 	"github.com/go-test/deep"
 	machinev1applyconfigs "github.com/openshift/client-go/machine/applyconfigurations/machine/v1beta1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/utils/ptr"
 	awscapiv1beta1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	capibmv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
 	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
+
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -66,6 +70,12 @@ var (
 
 	// errUnrecognizedConditionStatus is returned when the condition status is not recognized.
 	errUnrecognizedConditionStatus = errors.New("error unrecognized condition status")
+
+	// errUnsuportedOwnerKindForConversion is returned when the owner kind is not supported for conversion.
+	errUnsuportedOwnerKindForConversion = errors.New("unsupported owner kind for conversion")
+
+	// errMachineAPIMachineSetOwnerReferenceConversionUnsupported.
+	errMachineAPIMachineSetOwnerReferenceConversionUnsupported = errors.New("could not convert Machine API machine set owner references to Cluster API")
 )
 
 const (
@@ -251,6 +261,20 @@ func (r *MachineSetSyncReconciler) syncMachineSets(ctx context.Context, mapiMach
 func (r *MachineSetSyncReconciler) reconcileMAPIMachineSetToCAPIMachineSet(ctx context.Context, mapiMachineSet *machinev1beta1.MachineSet, capiMachineSet *capiv1beta1.MachineSet) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
+	if err := r.validateMAPIMachineSetOwnerReferences(mapiMachineSet); err != nil {
+		if condErr := r.applySynchronizedConditionWithPatch(
+			ctx, mapiMachineSet, corev1.ConditionFalse, reasonFailedToConvertCAPIMachineSetToMAPI, err.Error(), nil); condErr != nil {
+			return ctrl.Result{}, utilerrors.NewAggregate([]error{err, condErr})
+		}
+
+		if errors.Is(err, errMachineAPIMachineSetOwnerReferenceConversionUnsupported) {
+			logger.Error(err, "unable to convert Machine API machine set to Cluster API, owner references conversion is not supported for machine set")
+			return ctrl.Result{}, nil
+		} else {
+			return ctrl.Result{}, fmt.Errorf("failed to convert Machine API machine set owner references to Cluster API: %w", err)
+		}
+	}
+
 	newCAPIMachineSet, newCAPIInfraMachineTemplate, warns, err := r.convertMAPIToCAPIMachineSet(mapiMachineSet)
 	if err != nil {
 		conversionErr := fmt.Errorf("failed to convert MAPI machine set to CAPI machine set: %w", err)
@@ -270,6 +294,27 @@ func (r *MachineSetSyncReconciler) reconcileMAPIMachineSetToCAPIMachineSet(ctx c
 	newCAPIMachineSet.SetNamespace(r.CAPINamespace)
 	newCAPIMachineSet.Spec.Template.Spec.InfrastructureRef.Namespace = r.CAPINamespace
 
+	clusterOwnerRefence, err := r.fetchCAPIClusterOwnerReference(ctx)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to get Cluster API cluster owner reference: %w", err)
+	}
+
+	newCAPIMachineSet.OwnerReferences = []metav1.OwnerReference{clusterOwnerRefence}
+
+	if result, err := r.ensureCAPIInfraMachineTemplate(ctx, mapiMachineSet, newCAPIMachineSet, newCAPIInfraMachineTemplate, clusterOwnerRefence); err != nil {
+		return result, fmt.Errorf("unable to ensure CAPI infra machine template: %w", err)
+	}
+
+	if result, err := r.createOrUpdateCAPIMachineSet(ctx, mapiMachineSet, capiMachineSet, newCAPIMachineSet); err != nil {
+		return result, fmt.Errorf("unable to ensure CAPI machine set: %w", err)
+	}
+
+	return ctrl.Result{}, r.applySynchronizedConditionWithPatch(ctx, mapiMachineSet, corev1.ConditionTrue,
+		consts.ReasonResourceSynchronized, messageSuccessfullySynchronizedMAPItoCAPI, &mapiMachineSet.Generation)
+}
+
+// ensureCAPIInfraMachineTemplate ensures the CAPI InfraMachineTemplate is created or updated from the MAPI MachineSet.
+func (r *MachineSetSyncReconciler) ensureCAPIInfraMachineTemplate(ctx context.Context, mapiMachineSet *machinev1beta1.MachineSet, newCAPIMachineSet *capiv1beta1.MachineSet, newCAPIInfraMachineTemplate client.Object, clusterOwnerRefence metav1.OwnerReference) (ctrl.Result, error) {
 	_, infraMachineTemplate, err := r.fetchCAPIInfraResources(ctx, newCAPIMachineSet)
 	if err != nil && !apierrors.IsNotFound(err) {
 		fetchErr := fmt.Errorf("failed to fetch CAPI infra resources: %w", err)
@@ -284,23 +329,31 @@ func (r *MachineSetSyncReconciler) reconcileMAPIMachineSetToCAPIMachineSet(ctx c
 
 	newCAPIInfraMachineTemplate.SetResourceVersion(util.GetResourceVersion(infraMachineTemplate))
 	newCAPIInfraMachineTemplate.SetNamespace(r.CAPINamespace)
+	newCAPIInfraMachineTemplate.SetOwnerReferences([]metav1.OwnerReference{clusterOwnerRefence})
 
 	if result, err := r.createOrUpdateCAPIInfraMachineTemplate(ctx, mapiMachineSet, infraMachineTemplate, newCAPIInfraMachineTemplate); err != nil {
 		return result, fmt.Errorf("unable to ensure CAPI infra machine template: %w", err)
 	}
 
-	if result, err := r.createOrUpdateCAPIMachineSet(ctx, mapiMachineSet, capiMachineSet, newCAPIMachineSet); err != nil {
-		return result, fmt.Errorf("unable to ensure CAPI machine set: %w", err)
-	}
-
-	return ctrl.Result{}, r.applySynchronizedConditionWithPatch(ctx, mapiMachineSet, corev1.ConditionTrue,
-		consts.ReasonResourceSynchronized, messageSuccessfullySynchronizedMAPItoCAPI, &mapiMachineSet.Generation)
+	return ctrl.Result{}, nil
 }
 
 // reconcileCAPIMachineSetToMAPIMachineSet reconciles a CAPI MachineSet to a
 // MAPI MachineSet.
+//
+//nolint:funlen
 func (r *MachineSetSyncReconciler) reconcileCAPIMachineSetToMAPIMachineSet(ctx context.Context, capiMachineSet *capiv1beta1.MachineSet, mapiMachineSet *machinev1beta1.MachineSet) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
+
+	if err := r.validateCAPIMachineSetOwnerReferences(capiMachineSet); err != nil {
+		logger.Error(err, "unable to convert Cluster API machine set to Machine API. Cluster API machine set has non-convertible owner references")
+
+		if condErr := r.applySynchronizedConditionWithPatch(ctx, mapiMachineSet, corev1.ConditionFalse, reasonFailedToConvertCAPIMachineSetToMAPI, err.Error(), nil); condErr != nil {
+			return ctrl.Result{}, utilerrors.NewAggregate([]error{err, condErr})
+		}
+
+		return ctrl.Result{}, nil
+	}
 
 	infraCluster, infraMachineTemplate, err := r.fetchCAPIInfraResources(ctx, capiMachineSet)
 	if err != nil {
@@ -335,6 +388,7 @@ func (r *MachineSetSyncReconciler) reconcileCAPIMachineSetToMAPIMachineSet(ctx c
 	newMapiMachineSet.SetNamespace(mapiMachineSet.GetNamespace())
 	// The conversion does not set a resource version, so we must copy it over
 	newMapiMachineSet.SetResourceVersion(util.GetResourceVersion(mapiMachineSet))
+	newMapiMachineSet.OwnerReferences = []metav1.OwnerReference{} // No CAPI machine set owner references are converted to MAPI machine set.
 
 	mapiMachineSetsDiff := compareMAPIMachineSets(mapiMachineSet, newMapiMachineSet)
 	if len(mapiMachineSetsDiff) > 0 {
@@ -360,6 +414,48 @@ func (r *MachineSetSyncReconciler) reconcileCAPIMachineSetToMAPIMachineSet(ctx c
 
 	return ctrl.Result{}, r.applySynchronizedConditionWithPatch(ctx, mapiMachineSet, corev1.ConditionTrue,
 		consts.ReasonResourceSynchronized, messageSuccessfullySynchronizedCAPItoMAPI, &capiMachineSet.Generation)
+}
+
+// fetchCAPIClusterOwnerReference fetches the OpenShift cluster object instance and returns owner reference to it.
+// The OwnerReference has Controller set to false and BlockOwnerDeletion set to true.
+func (r *MachineSetSyncReconciler) fetchCAPIClusterOwnerReference(ctx context.Context) (metav1.OwnerReference, error) {
+	cluster := &capiv1beta1.Cluster{}
+	if err := r.Get(ctx, client.ObjectKey{Namespace: r.CAPINamespace, Name: r.Infra.Status.InfrastructureName}, cluster); err != nil {
+		return metav1.OwnerReference{}, fmt.Errorf("failed to get CAPI cluster: %w", err)
+	}
+
+	return metav1.OwnerReference{
+		APIVersion:         cluster.APIVersion,
+		Kind:               cluster.Kind,
+		Name:               cluster.Name,
+		UID:                cluster.UID,
+		Controller:         ptr.To(false),
+		BlockOwnerDeletion: ptr.To(true),
+	}, nil
+}
+
+// validateMAPIMachineSetOwnerReferences validates the owner references are allowed for conversion.
+func (r *MachineSetSyncReconciler) validateMAPIMachineSetOwnerReferences(mapiMachineSet *machinev1beta1.MachineSet) error {
+	if len(mapiMachineSet.OwnerReferences) > 0 {
+		return field.Invalid(field.NewPath("metadata", "ownerReferences"), mapiMachineSet.OwnerReferences, errMachineAPIMachineSetOwnerReferenceConversionUnsupported.Error())
+	}
+
+	return nil
+}
+
+// validateCAPIMachineSetOwnerReferences validates the owner references are allowed for conversion.
+func (r *MachineSetSyncReconciler) validateCAPIMachineSetOwnerReferences(capiMachineSet *capiv1beta1.MachineSet) error {
+	if len(capiMachineSet.OwnerReferences) > 1 {
+		return field.TooMany(field.NewPath("metadata", "ownerReferences"), len(capiMachineSet.OwnerReferences), 1)
+	} else if len(capiMachineSet.OwnerReferences) == 1 {
+		// Only reference to the Cluster is allowed.
+		ownerRef := capiMachineSet.OwnerReferences[0]
+		if ownerRef.Kind != capiv1beta1.ClusterKind || ownerRef.APIVersion != capiv1beta1.GroupVersion.String() {
+			return field.Invalid(field.NewPath("metadata", "ownerReferences"), capiMachineSet.OwnerReferences, errUnsuportedOwnerKindForConversion.Error())
+		}
+	}
+
+	return nil
 }
 
 // convertCAPIToMAPIMachineSet converts a CAPI MachineSet to a MAPI MachineSet, selecting the correct converter based on the platform.
