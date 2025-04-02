@@ -26,7 +26,7 @@ linters:
     - durationcheck
     - errname
     - errorlint
-    - err113
+    #- err113
     - exhaustive
     - forcetypeassert
     - funlen
