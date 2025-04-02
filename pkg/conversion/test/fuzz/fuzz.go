@@ -19,18 +19,20 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
-	"strings"
-
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
+	"reflect"
+	"time"
 
 	fuzz "github.com/google/gofuzz"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/types"
 
 	configv1 "github.com/openshift/api/config/v1"
 	mapiv1 "github.com/openshift/api/machine/v1beta1"
 	"github.com/openshift/cluster-api-actuator-pkg/testutils"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/capi2mapi"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/mapi2capi"
+	"github.com/openshift/cluster-capi-operator/pkg/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	corev1 "k8s.io/api/core/v1"
@@ -108,7 +110,7 @@ func CAPI2MAPIMachineRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv1.I
 		machineFuzzInputs = append(machineFuzzInputs, Entry(fmt.Sprintf("%d", i), in))
 	}
 
-	DescribeTable("should be able to roundtrip fuzzed Machines", func(in capiToMapiMachineFuzzInput) { //nolint:dupl
+	DescribeTable("should be able to roundtrip fuzzed Machines", func(in capiToMapiMachineFuzzInput) {
 		capiConverter := in.capiConverterConstructor(in.machine, in.infraMachine, in.infraCluster)
 
 		mapiMachine, warnings, err := capiConverter.ToMachine()
@@ -178,7 +180,7 @@ func CAPI2MAPIMachineSetRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv
 		machineFuzzInputs = append(machineFuzzInputs, Entry(fmt.Sprintf("%d", i), in))
 	}
 
-	DescribeTable("should be able to roundtrip fuzzed MachineSets", func(in capiToMapiMachineSetFuzzInput) { //nolint:dupl
+	DescribeTable("should be able to roundtrip fuzzed MachineSets", func(in capiToMapiMachineSetFuzzInput) {
 		capiConverter := in.capiConverterConstructor(in.machineSet, in.infraMachineTemplate, in.infraCluster)
 
 		mapiMachineSet, warnings, err := capiConverter.ToMachineSet()
@@ -199,6 +201,11 @@ func CAPI2MAPIMachineSetRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv
 
 		Expect(capiMachineSet.TypeMeta).To(Equal(in.machineSet.TypeMeta))
 		Expect(capiMachineSet.ObjectMeta).To(Equal(in.machineSet.ObjectMeta))
+
+		Expect(capiMachineSet.Spec.Selector.MatchLabels).To(equalMap(in.machineSet.Spec.Selector.MatchLabels))
+		capiMachineSet.Spec.Selector.MatchLabels = nil
+		in.machineSet.Spec.Selector.MatchLabels = nil
+
 		Expect(capiMachineSet.Spec).To(Equal(in.machineSet.Spec))
 
 		infraMachineTemplateJSON, err := json.Marshal(infraMachineTemplate)
@@ -263,10 +270,28 @@ func MAPI2CAPIMachineRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv1.I
 		// Do not match on status yet, we do not support status conversion.
 		// Expect(mapiMachine.Status).To(Equal(in.machine.Status))
 
-		Expect(mapiMachine.TypeMeta).To(Equal(in.machine.TypeMeta))
-		Expect(mapiMachine.ObjectMeta).To(Equal(in.machine.ObjectMeta))
-		Expect(mapiMachine.Spec).To(WithTransform(ignoreMachineProviderSpec, testutils.MatchViaJSON(ignoreMachineProviderSpec(in.machine.Spec))))
-		Expect(mapiMachine.Spec.ProviderSpec.Value.Raw).To(MatchJSON(in.machine.Spec.ProviderSpec.Value.Raw))
+		// Annotations propagation happens differently in MAPI vs CAPI, so the roundtrip is lossy.
+		// We document this in the migration docs.
+		Expect(mapiMachine.ObjectMeta.Annotations).To(equalMap(util.MergeMaps(in.machine.ObjectMeta.Annotations, in.machine.Spec.ObjectMeta.Annotations)), "converted MAPI machine should have matching .metadata.annotations")
+		Expect(mapiMachine.Spec.ObjectMeta.Annotations).To(equalMap(util.MergeMaps(in.machine.ObjectMeta.Annotations, in.machine.Spec.ObjectMeta.Annotations)), "converted MAPI machine should have matching .spec.annotations")
+		mapiMachine.ObjectMeta.Annotations = nil
+		mapiMachine.Spec.ObjectMeta.Annotations = nil
+		in.machine.ObjectMeta.Annotations = nil
+		in.machine.Spec.ObjectMeta.Annotations = nil
+
+		// Labels propagation happens differently in MAPI vs CAPI, so the roundtrip is lossy.
+		// We document this in the migration docs.
+		Expect(mapiMachine.ObjectMeta.Labels).To(equalMap(util.MergeMaps(in.machine.ObjectMeta.Labels, in.machine.Spec.ObjectMeta.Labels)), "converted MAPI machine should have matching .metadata.labels")
+		Expect(mapiMachine.Spec.ObjectMeta.Labels).To(equalMap(util.MergeMaps(in.machine.ObjectMeta.Labels, in.machine.Spec.ObjectMeta.Labels)), "converted MAPI machine should have matching .spec.labels")
+		mapiMachine.ObjectMeta.Labels = nil
+		mapiMachine.Spec.ObjectMeta.Labels = nil
+		in.machine.ObjectMeta.Labels = nil
+		in.machine.Spec.ObjectMeta.Labels = nil
+
+		Expect(mapiMachine.TypeMeta).To(Equal(in.machine.TypeMeta), "converted MAPI machine should have matching .typeMeta")
+		Expect(mapiMachine.ObjectMeta).To(Equal(in.machine.ObjectMeta), "converted MAPI machine should have matching .metadata")
+		Expect(mapiMachine.Spec).To(WithTransform(ignoreMachineProviderSpec, testutils.MatchViaJSON(ignoreMachineProviderSpec(in.machine.Spec))), "converted MAPI machine should have matching .spec")
+		Expect(mapiMachine.Spec.ProviderSpec.Value.Raw).To(MatchJSON(in.machine.Spec.ProviderSpec.Value.Raw), "converted MAPI machine should have matching .spec.providerSpec")
 	}, machineFuzzInputs)
 }
 
@@ -320,10 +345,28 @@ func MAPI2CAPIMachineSetRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv
 		// Do not match on status yet, we do not support status conversion.
 		// Expect(mapiMachineSet.Status).To(Equal(in.machineSet.Status))
 
-		Expect(mapiMachineSet.TypeMeta).To(Equal(in.machineSet.TypeMeta))
-		Expect(mapiMachineSet.ObjectMeta).To(Equal(in.machineSet.ObjectMeta))
-		Expect(mapiMachineSet.Spec).To(WithTransform(ignoreMachineSetProviderSpec, testutils.MatchViaJSON(ignoreMachineSetProviderSpec(in.machineSet.Spec))))
-		Expect(mapiMachineSet.Spec.Template.Spec.ProviderSpec.Value.Raw).To(MatchJSON(in.machineSet.Spec.Template.Spec.ProviderSpec.Value.Raw))
+		// Annotation propagation happens differently in MAPI vs CAPI, so the roundtrip is lossy.
+		// We document this in the migration docs.
+		Expect(mapiMachineSet.Spec.Template.ObjectMeta.Annotations).To(equalMap(util.MergeMaps(in.machineSet.Spec.Template.ObjectMeta.Annotations, in.machineSet.Spec.Template.Spec.ObjectMeta.Annotations)), "converted MAPI machine set should have matching .metadata.annotations")
+		Expect(mapiMachineSet.Spec.Template.Spec.ObjectMeta.Annotations).To(equalMap(util.MergeMaps(in.machineSet.Spec.Template.ObjectMeta.Annotations, in.machineSet.Spec.Template.Spec.ObjectMeta.Annotations)), "converted MAPI machine set should have matching .spec.annotations")
+		mapiMachineSet.Spec.Template.ObjectMeta.Annotations = nil
+		mapiMachineSet.Spec.Template.Spec.ObjectMeta.Annotations = nil
+		in.machineSet.Spec.Template.ObjectMeta.Annotations = nil
+		in.machineSet.Spec.Template.Spec.ObjectMeta.Annotations = nil
+
+		// Labels propagation happens differently in MAPI vs CAPI, so the roundtrip is lossy.
+		// We document this in the migration docs.
+		Expect(mapiMachineSet.Spec.Template.ObjectMeta.Labels).To(equalMap(util.MergeMaps(in.machineSet.Spec.Template.ObjectMeta.Labels, in.machineSet.Spec.Template.Spec.ObjectMeta.Labels)), "converted MAPI machine set should have matching .metadata.labels")
+		Expect(mapiMachineSet.Spec.Template.Spec.ObjectMeta.Labels).To(equalMap(util.MergeMaps(in.machineSet.Spec.Template.ObjectMeta.Labels, in.machineSet.Spec.Template.Spec.ObjectMeta.Labels)), "converted MAPI machine set should have matching .spec.labels")
+		mapiMachineSet.Spec.Template.ObjectMeta.Labels = nil
+		mapiMachineSet.Spec.Template.Spec.ObjectMeta.Labels = nil
+		in.machineSet.Spec.Template.ObjectMeta.Labels = nil
+		in.machineSet.Spec.Template.Spec.ObjectMeta.Labels = nil
+
+		Expect(mapiMachineSet.TypeMeta).To(Equal(in.machineSet.TypeMeta), "converted MAPI machine set should have matching .typeMeta")
+		Expect(mapiMachineSet.ObjectMeta).To(Equal(in.machineSet.ObjectMeta), "converted MAPI machine set should have matching .metadata")
+		Expect(mapiMachineSet.Spec).To(WithTransform(ignoreMachineSetProviderSpec, testutils.MatchViaJSON(ignoreMachineSetProviderSpec(in.machineSet.Spec))), "converted MAPI machine set should have matching .spec")
+		Expect(mapiMachineSet.Spec.Template.Spec.ProviderSpec.Value.Raw).To(MatchJSON(in.machineSet.Spec.Template.Spec.ProviderSpec.Value.Raw), "converted MAPI machine set should have matching .spec.template.spec.providerSpec")
 	}, machineFuzzInputs)
 }
 
@@ -385,12 +428,12 @@ func ObjectMetaFuzzerFuncs(namespace string) fuzzer.FuzzerFuncs {
 				// Clear fields that are not currently supported in the conversion.
 				o.OwnerReferences = nil // Handled outside of the conversion library.
 
-				// Annotations and labels maps should be non-nil (Since the conversion initialises them).
-				if o.Annotations == nil {
-					o.Annotations = map[string]string{}
+				// Empty annotations and labels maps should be nil (Since the conversion nils them).
+				if len(o.Annotations) == 0 {
+					o.Annotations = nil
 				}
-				if o.Labels == nil {
-					o.Labels = map[string]string{}
+				if len(o.Labels) == 0 {
+					o.Labels = nil
 				}
 			},
 		}
@@ -421,12 +464,11 @@ func CAPIMachineFuzzerFuncs(providerIDFuzz StringFuzzer, infraKind, infraAPIVers
 				// Clear fields that are not supported in the machine spec.
 				m.Version = nil
 				m.ReadinessGates = nil
-
 				// Clear fields that are not yet supported in the conversion.
 				// TODO(OCPCLOUD-2715): Implement support for node draining options in MAPI.
 				m.NodeDrainTimeout = nil
 				m.NodeVolumeDetachTimeout = nil
-				m.NodeDeletionTimeout = nil
+				m.NodeDeletionTimeout = &metav1.Duration{Duration: time.Second * 10} // This is defaulted to 10s by default in CAPI.
 
 				// Clear fields that are zero valued.
 				if m.FailureDomain != nil && *m.FailureDomain == "" {
@@ -439,6 +481,12 @@ func CAPIMachineFuzzerFuncs(providerIDFuzz StringFuzzer, infraKind, infraAPIVers
 			},
 			func(m *capiv1.Machine, c fuzz.Continue) {
 				c.FuzzNoCustom(m)
+
+				if m.Labels == nil {
+					m.Labels = make(map[string]string)
+				}
+				// CAPI resources normally have the ClusterNameLabel.
+				m.Labels[capiv1.ClusterNameLabel] = clusterName
 
 				// The reference from a Machine to the InfraMachine should
 				// always use the same name and namespace as the Machine itself.
@@ -463,21 +511,32 @@ func CAPIMachineSetFuzzerFuncs(infraTemplateKind, infraAPIVersion, clusterName s
 			func(t *capiv1.MachineTemplateSpec, c fuzz.Continue) {
 				c.FuzzNoCustom(t)
 
-				// Annotations and labels maps should be non-nil (Since the conversion initialises them).
-				if t.Annotations == nil {
-					t.Annotations = map[string]string{}
+				// Empty annotations and labels maps should be nil (Since the conversion nils them).
+				if len(t.Annotations) == 0 {
+					t.Annotations = nil
 				}
+
 				if t.Labels == nil {
-					t.Labels = map[string]string{}
+					t.Labels = make(map[string]string)
 				}
+				// CAPI resources normally have the ClusterNameLabel.
+				t.Labels[capiv1.ClusterNameLabel] = clusterName
 			},
 			func(m *capiv1.MachineSetSpec, c fuzz.Continue) {
 				c.FuzzNoCustom(m)
 
 				m.ClusterName = clusterName
+
+				fuzzCAPIMachineSetSpecDeletePolicy(&m.DeletePolicy, c)
 			},
 			func(m *capiv1.MachineSet, c fuzz.Continue) {
 				c.FuzzNoCustom(m)
+
+				if m.Labels == nil {
+					m.Labels = make(map[string]string)
+				}
+				// CAPI resources normally have the ClusterNameLabel.
+				m.Labels[capiv1.ClusterNameLabel] = clusterName
 
 				// The reference from a MachineSet to the InfraMachine should
 				// always use the same name and namespace as the Machine itself.
@@ -525,23 +584,11 @@ func MAPIMachineFuzzerFuncs(providerSpec runtime.Object, providerIDFuzz StringFu
 				m.AuthoritativeAPI = ""
 
 				// Clear fields that are not yet supported in the conversion.
-				// TODO(OCPCLOUD-2680/2897): For labels
-				// TODO(OCPCLOUD-2860/2898): For annotations.
 				// TODO(OCPCLOUD-2861/2899): For taints.
-				m.ObjectMeta.Annotations = nil
 				m.Taints = nil
 
 				// Set the providerID to a valid providerID that will at least pass through the conversion.
 				m.ProviderID = ptr.To(providerIDFuzz(c))
-
-				// Labels to go onto the node have to have specific prefixes.
-				m.ObjectMeta.Labels = map[string]string{
-					"node-role.kubernetes.io/worker":                                                "",
-					"node-restriction.kubernetes.io/" + strings.ReplaceAll(c.RandString(), "/", ""): c.RandString(),
-					"node.cluster.x-k8s.io/" + strings.ReplaceAll(c.RandString(), "/", ""):          c.RandString(),
-					strings.ReplaceAll(c.RandString(), "/", "") + ".node-restriction.kubernetes.io": c.RandString(),
-					strings.ReplaceAll(c.RandString(), "/", "") + ".node.cluster.x-k8s.io":          c.RandString(),
-				}
 			},
 			func(hooks *mapiv1.LifecycleHooks, c fuzz.Continue) {
 				c.FuzzNoCustom(hooks)
@@ -575,9 +622,70 @@ func MAPIMachineSetFuzzerFuncs() fuzzer.FuzzerFuncs {
 				m.Template.ObjectMeta.Namespace = ""
 				m.Template.ObjectMeta.OwnerReferences = nil
 
+				fuzzMAPIMachineSetSpecDeletePolicy(&m.DeletePolicy, c)
+
 				// Clear the authoritative API since that's not relevant for conversion.
 				m.AuthoritativeAPI = ""
 			},
 		}
 	}
+}
+
+func fuzzMAPIMachineSetSpecDeletePolicy(deletePolicy *string, c fuzz.Continue) {
+	switch c.Int31n(3) {
+	case 0:
+		*deletePolicy = string(mapiv1.RandomMachineSetDeletePolicy)
+	case 1:
+		*deletePolicy = string(mapiv1.NewestMachineSetDeletePolicy)
+	case 2:
+		*deletePolicy = string(mapiv1.OldestMachineSetDeletePolicy)
+		// case 3:
+		// 	*deletePolicy = "" // Do not fuzz MAPI MachineSetDeletePolicy to the empty value.
+		// It will otherwise get converted to CAPI RandomMachineSetDeletePolicy (default in CAPI) which
+		// if converted back to MAPI will become RandomMachineSetDeletePolicy,
+		// resulting in a known lossy rountrip conversion, which would make the test to fail.
+		// This is not an issue in real conditions as the defaults are the same for CAPI and MAPI (Random).
+	} //nolint:wsl
+}
+
+func fuzzCAPIMachineSetSpecDeletePolicy(deletePolicy *string, c fuzz.Continue) {
+	switch c.Int31n(3) {
+	case 0:
+		*deletePolicy = string(capiv1.RandomMachineSetDeletePolicy)
+	case 1:
+		*deletePolicy = string(capiv1.NewestMachineSetDeletePolicy)
+	case 2:
+		*deletePolicy = string(capiv1.OldestMachineSetDeletePolicy)
+		// case 3:
+		// 	*deletePolicy = "" // Do not fuzz CAPI MachineSetDeletePolicy to the empty value.
+		// It will otherwise get converted to CAPI RandomMachineSetDeletePolicy (default in CAPI) which
+		// if to MAPI will become RandomMachineSetDeletePolicy,
+		// and converted back to CAPI will become RandomMachineSetDeletePolicy,
+		// resulting in a known lossy rountrip conversion, which would make the test to fail.
+		// This is not an issue in real conditions as the defaults are the same for CAPI and MAPI (Random).
+	} //nolint:wsl
+}
+
+// EqualMap returns a Gomega matcher that compares two maps for equality
+// while treating nil maps and empty maps as equivalent.
+func equalMap(expected interface{}) types.GomegaMatcher {
+	// normalizeMap converts nil maps to empty maps. If the input is not a map,
+	// it returns the value unchanged.
+	normalizeMap := func(m interface{}) interface{} {
+		v := reflect.ValueOf(m)
+		if v.Kind() != reflect.Map {
+			return m
+		}
+
+		if v.IsNil() {
+			return reflect.MakeMap(v.Type()).Interface()
+		}
+
+		return m
+	}
+
+	// Normalize the expected value.
+	normalizedExpected := normalizeMap(expected)
+	// Use WithTransform to normalize the actual value before comparing.
+	return WithTransform(normalizeMap, Equal(normalizedExpected))
 }

@@ -29,11 +29,9 @@ import (
 	conversiontest "github.com/openshift/cluster-capi-operator/pkg/conversion/test/fuzz"
 
 	runtimeserializer "k8s.io/apimachinery/pkg/runtime/serializer"
-
-	"sigs.k8s.io/controller-runtime/pkg/client"
-
 	capav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	capiv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
@@ -43,7 +41,7 @@ const (
 	capiNamespace        = "openshift-cluster-api"
 )
 
-var _ = Describe("AWS Fuzz (mapi2capi)", func() {
+var _ = Describe("AWS Fuzz (capi2mapi)", func() {
 	infra := &configv1.Infrastructure{
 		Spec: configv1.InfrastructureSpec{},
 		Status: configv1.InfrastructureStatus{
@@ -112,7 +110,6 @@ func awsProviderIDFuzzer(c fuzz.Continue) string {
 	return "aws:///us-west-2a/i-" + strings.ReplaceAll(c.RandString(), "/", "")
 }
 
-//nolint:funlen
 func awsMachineFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interface{} {
 	return []interface{}{
 		func(imdo *capav1.InstanceMetadataOptions, c fuzz.Continue) {
@@ -138,7 +135,6 @@ func awsMachineFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interface{} 
 			for ami.ID == nil || *ami.ID == "" {
 				c.Fuzz(&ami.ID)
 			}
-
 			// Not required for our use case. Can be ignored.
 			ami.EKSOptimizedLookupType = nil
 		},
@@ -163,7 +159,6 @@ func awsMachineFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interface{} 
 			spec.CloudInit = capav1.CloudInit{}
 			spec.UncompressedUserData = nil
 			spec.PrivateDNSName = nil
-
 			// We don't support this field since the externally managed annotation is added, so it's best to keep this nil.
 			spec.SecurityGroupOverrides = nil
 		},

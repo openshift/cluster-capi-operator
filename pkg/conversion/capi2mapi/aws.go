@@ -133,6 +133,13 @@ func (m machineAndAWSMachineAndAWSCluster) toProviderSpec() (*mapiv1.AWSMachineP
 		},
 		// UserDataSecret - Populated below.
 		// CredentialsSecret - TODO(OCPCLOUD-2713)
+		// TODO(hack): for CredentialsSecret. Remove when the conversion is in place.
+		// this is the name of the default credentials and is in place to get the base case to work
+		// while we develop for the migration.
+		CredentialsSecret: &corev1.LocalObjectReference{
+			Name: "aws-cloud-credentials",
+		},
+
 		KeyName: m.awsMachine.Spec.SSHKeyName,
 		// DeviceIndex - OCPCLOUD-2707: Value must always be zero. No other values are valid in MAPA even though the value is configurable.
 		PublicIP:             m.awsMachine.Spec.PublicIP,
@@ -215,8 +222,6 @@ func (m machineAndAWSMachineAndAWSCluster) ToMachine() (*mapiv1.Machine, []strin
 }
 
 // ToMachineSet converts a capi2mapi MachineAndAWSMachineTemplate into a MAPI MachineSet.
-//
-//nolint:dupl
 func (m machineSetAndAWSMachineTemplateAndAWSCluster) ToMachineSet() (*mapiv1.MachineSet, []string, error) {
 	if m.machineSet == nil || m.template == nil || m.awsCluster == nil || m.machineAndAWSMachineAndAWSCluster == nil {
 		return nil, nil, errCAPIMachineSetAWSMachineTemplateAWSClusterCannotBeNil
@@ -229,7 +234,7 @@ func (m machineSetAndAWSMachineTemplateAndAWSCluster) ToMachineSet() (*mapiv1.Ma
 
 	// Run the full ToMachine conversion so that we can check for
 	// any Machine level conversion errors in the spec translation.
-	mapaMachine, warn, err := m.ToMachine()
+	mapiMachine, warn, err := m.ToMachine()
 	if err != nil {
 		errors = append(errors, err)
 	}
@@ -241,11 +246,13 @@ func (m machineSetAndAWSMachineTemplateAndAWSCluster) ToMachineSet() (*mapiv1.Ma
 		errors = append(errors, err)
 	}
 
-	mapiMachineSet.Spec.Template.Spec = mapaMachine.Spec
+	if mapiMachine != nil {
+		mapiMachineSet.Spec.Template.Spec = mapiMachine.Spec
 
-	// Copy the labels and annotations from the Machine to the template.
-	mapiMachineSet.Spec.Template.ObjectMeta.Annotations = mapaMachine.ObjectMeta.Annotations
-	mapiMachineSet.Spec.Template.ObjectMeta.Labels = mapaMachine.ObjectMeta.Labels
+		// Copy the labels and annotations from the Machine to the template.
+		mapiMachineSet.Spec.Template.ObjectMeta.Annotations = mapiMachine.ObjectMeta.Annotations
+		mapiMachineSet.Spec.Template.ObjectMeta.Labels = mapiMachine.ObjectMeta.Labels
+	}
 
 	if len(errors) > 0 {
 		return nil, warnings, utilerrors.NewAggregate(errors)
