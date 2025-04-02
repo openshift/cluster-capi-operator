@@ -29,6 +29,7 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/mapi2capi"
 	conversiontest "github.com/openshift/cluster-capi-operator/pkg/conversion/test/fuzz"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtimeserializer "k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/utils/ptr"
@@ -186,13 +187,16 @@ func awsProviderSpecFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interfa
 			}
 		},
 		func(msa *mapiv1.MetadataServiceAuthentication, c fuzz.Continue) {
-			switch c.Intn(3) {
+			switch c.Intn(2) {
 			case 0:
-				*msa = ""
-			case 1:
 				*msa = mapiv1.MetadataServiceAuthenticationOptional
-			case 2:
+			case 1:
 				*msa = mapiv1.MetadataServiceAuthenticationRequired
+				// case 3:
+				// 	*msa = "" // Do not fuzz MAPI MetadataServiceAuthentication to the empty value.
+				// It will otherwise get converted to CAPA HTTPTokensStateOptional which
+				// if converted back to MAPI will become MetadataServiceAuthenticationOptional,
+				// resulting in a documented lossy rountrip conversion, which would make the test to fail.
 			}
 		},
 		func(ps *mapiv1.AWSMachineProviderConfig, c fuzz.Continue) {
@@ -209,7 +213,8 @@ func awsProviderSpecFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interfa
 			ps.DeviceIndex = 0
 			ps.LoadBalancers = nil
 			ps.ObjectMeta = metav1.ObjectMeta{}
-			ps.CredentialsSecret = nil
+			// TODO(OCPCLOUD-2713): remove this, temporarily hardcoded for AWS to make the migration to work.
+			ps.CredentialsSecret = &corev1.LocalObjectReference{Name: "aws-cloud-credentials"}
 
 			// At lest one device mapping must have no device name.
 			rootFound := false

@@ -25,6 +25,7 @@ import (
 	configv1 "github.com/openshift/api/config/v1"
 	mapiv1 "github.com/openshift/api/machine/v1beta1"
 
+	"github.com/openshift/cluster-capi-operator/pkg/util"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -41,6 +42,9 @@ var (
 )
 
 const (
+	awsMachineKind         = "AWSMachine"
+	awsMachineTemplateKind = "AWSMachineTemplate"
+
 	errUnsupportedMAPIMarketType = "unable to convert market type, unknown value"
 )
 
@@ -107,18 +111,19 @@ func (m *awsMachineAndInfra) toMachineAndInfrastructureMachine() (*capiv1.Machin
 
 	warnings = append(warnings, warn...)
 
-	capiMachine, machineErrs := fromMAPIMachineToCAPIMachine(m.machine, awsMachineAPIVersion, awsMachineKind)
+	capiMachine, machineErrs := fromMAPIMachineToCAPIMachine(m.machine, capav1.GroupVersion.String(), awsMachineKind)
 	if machineErrs != nil {
 		errs = append(errs, machineErrs...)
 	}
 
-	// Extract and plug InstanceID, if the providerID is present (instance has been provisioned).
+	// Extract and plug InstanceID and ProviderID on CAPA, if the providerID is present on CAPI (instance has been provisioned).
 	if capiMachine.Spec.ProviderID != nil {
 		instanceID := instanceIDFromProviderID(*capiMachine.Spec.ProviderID)
 		if instanceID == "" {
 			errs = append(errs, field.Invalid(field.NewPath("spec", "providerID"), capiMachine.Spec.ProviderID, "unable to find InstanceID in ProviderID"))
 		} else {
 			capaMachine.Spec.InstanceID = ptr.To(instanceID)
+			capaMachine.Spec.ProviderID = capiMachine.Spec.ProviderID
 		}
 	}
 
@@ -138,6 +143,7 @@ func (m *awsMachineAndInfra) toMachineAndInfrastructureMachine() (*capiv1.Machin
 		errs = append(errs, field.Invalid(field.NewPath("infrastructure", "status", "infrastructureName"), m.infrastructure.Status.InfrastructureName, "infrastructure cannot be nil and infrastructure.Status.InfrastructureName cannot be empty"))
 	} else {
 		capiMachine.Spec.ClusterName = m.infrastructure.Status.InfrastructureName
+		capiMachine.Labels[capiv1.ClusterNameLabel] = m.infrastructure.Status.InfrastructureName
 	}
 
 	// The InfraMachine should always have the same labels and annotations as the Machine.
@@ -187,8 +193,8 @@ func (m *awsMachineSetAndInfra) ToMachineSetAndMachineTemplate() (*capiv1.Machin
 
 	// We have to merge these two maps so that labels and annotations added to the template objectmeta are persisted
 	// along with the labels and annotations from the machine objectmeta.
-	capiMachineSet.Spec.Template.ObjectMeta.Labels = mergeMaps(capiMachineSet.Spec.Template.ObjectMeta.Labels, capiMachine.Labels)
-	capiMachineSet.Spec.Template.ObjectMeta.Annotations = mergeMaps(capiMachineSet.Spec.Template.ObjectMeta.Annotations, capiMachine.Annotations)
+	capiMachineSet.Spec.Template.ObjectMeta.Labels = util.MergeMaps(capiMachineSet.Spec.Template.ObjectMeta.Labels, capiMachine.Labels)
+	capiMachineSet.Spec.Template.ObjectMeta.Annotations = util.MergeMaps(capiMachineSet.Spec.Template.ObjectMeta.Annotations, capiMachine.Annotations)
 
 	// Override the reference so that it matches the AWSMachineTemplate.
 	capiMachineSet.Spec.Template.Spec.InfrastructureRef.Kind = awsMachineTemplateKind
@@ -199,6 +205,7 @@ func (m *awsMachineSetAndInfra) ToMachineSetAndMachineTemplate() (*capiv1.Machin
 	} else {
 		capiMachineSet.Spec.Template.Spec.ClusterName = m.infrastructure.Status.InfrastructureName
 		capiMachineSet.Spec.ClusterName = m.infrastructure.Status.InfrastructureName
+		capiMachineSet.Labels[capiv1.ClusterNameLabel] = m.infrastructure.Status.InfrastructureName
 	}
 
 	if len(errs) > 0 {
@@ -415,7 +422,7 @@ func convertMetadataServiceOptionstoCAPI(fldPath *field.Path, metad mapiv1.Metad
 	case mapiv1.MetadataServiceAuthenticationRequired:
 		httpTokens = capav1.HTTPTokensStateRequired
 	case "":
-		// This means it's optional on both sides, so no need to set anything.
+		httpTokens = capav1.HTTPTokensStateOptional // TODO(docs): CAPA defaults to optional (in the openAPI spec validation) if the field is empty, lossy translation to document.
 	default:
 		return &capav1.InstanceMetadataOptions{}, field.Invalid(fldPath.Child("authentication"), metad.Authentication, "unsupported authentication value")
 	}
@@ -423,8 +430,9 @@ func convertMetadataServiceOptionstoCAPI(fldPath *field.Path, metad mapiv1.Metad
 	capiMetadataOpts := &capav1.InstanceMetadataOptions{
 		HTTPEndpoint: capav1.InstanceMetadataEndpointStateEnabled, // not present in MAPI, fallback to CAPI default.
 		// HTTPPutResponseHopLimit: not present in MAPI, fallback to CAPI default.
-		InstanceMetadataTags: capav1.InstanceMetadataEndpointStateDisabled, // not present in MAPI, fallback to CAPI default.
-		HTTPTokens:           httpTokens,
+		InstanceMetadataTags:    capav1.InstanceMetadataEndpointStateDisabled, // not present in MAPI, fallback to CAPI default.
+		HTTPTokens:              httpTokens,
+		HTTPPutResponseHopLimit: 1, // TODO(docs): CAPA defaults to 1 (in the openAPI spec validation) if the field is empty, lossy translation to document.
 	}
 
 	return capiMetadataOpts, nil
@@ -575,17 +583,4 @@ func instanceIDFromProviderID(s string) string {
 	lastPart := parts[len(parts)-1]
 
 	return regexp.MustCompile(`i-.*$`).FindString(lastPart)
-}
-
-// mergeMaps merges two maps together, if the first map is nil, it will be initialized.
-func mergeMaps(m1, m2 map[string]string) map[string]string {
-	if m1 == nil {
-		m1 = map[string]string{}
-	}
-
-	for k, v := range m2 {
-		m1[k] = v
-	}
-
-	return m1
 }

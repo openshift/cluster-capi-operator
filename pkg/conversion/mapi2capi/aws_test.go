@@ -34,7 +34,7 @@ import (
 
 var _ = Describe("mapi2capi AWS conversion", func() {
 	var (
-		testValue                          = ptr.To[string]("test")
+		testValue                          = ptr.To("test")
 		blockDeviceMappingWithVirtualName  = &mapiv1.BlockDeviceMappingSpec{VirtualName: testValue}
 		blockDeviceMappingWithoutEBSConfig = &mapiv1.BlockDeviceMappingSpec{DeviceName: ptr.To("/dev/sdb")}
 

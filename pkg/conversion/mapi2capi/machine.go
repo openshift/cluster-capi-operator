@@ -17,113 +17,66 @@ limitations under the License.
 package mapi2capi
 
 import (
-	"fmt"
+	"time"
 
-	mapiv1 "github.com/openshift/api/machine/v1beta1"
-	conversionutil "github.com/openshift/cluster-capi-operator/pkg/conversion/util"
-
+	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation/field"
-	capav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
-	capibmv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
 	capiv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
 const (
 	capiNamespace            = "openshift-cluster-api"
 	workerUserDataSecretName = "worker-user-data"
-	awsMachineKind           = "AWSMachine"
-	awsMachineTemplateKind   = "AWSMachineTemplate"
-	ibmPowerVSMachineKind    = "IBMPowerVSMachine"
-	ibmPowerVSTemplateKind   = "IBMPowerVSMachineTemplate"
 )
 
-var (
-	// awsMachineAPIVersion is the API version for the AWSMachine API.
-	// Source it from the API group version so that it is always up to date.
-	awsMachineAPIVersion        = capav1.GroupVersion.String()   //nolint:gochecknoglobals
-	ibmPowerVSMachineAPIVersion = capibmv1.GroupVersion.String() //nolint:gochecknoglobals
-)
-
-func setMAPINodeLabelsToCAPIManagedNodeLabels(fldPath *field.Path, mapiNodeLabels map[string]string, capiNodeLabels map[string]string) field.ErrorList {
-	if len(mapiNodeLabels) == 0 {
-		return field.ErrorList{}
-	}
-
-	if capiNodeLabels == nil {
-		capiNodeLabels = map[string]string{}
-	}
-
-	errs := field.ErrorList{}
-
-	// TODO(OCPCLOUD-2680/2897): Not all the labels on the CAPI Machine are propagated down to the corresponding CAPI Node, only the "CAPI Managed ones" are.
-	// These are those prefix by "node-role.kubernetes.io" or in the domains of "node-restriction.kubernetes.io" and "node.cluster.x-k8s.io".
-	// See: https://github.com/kubernetes-sigs/cluster-api/pull/7173
-	// and: https://github.com/fabriziopandini/cluster-api/blob/main/docs/proposals/20220927-label-sync-between-machine-and-nodes.md
-	for k, v := range mapiNodeLabels {
-		if !conversionutil.IsCAPIManagedLabel(k) {
-			errs = append(errs, field.Invalid(fldPath.Key(k), v, "label propagation is not currently supported for this label"))
-		}
-
-		capiNodeLabels[k] = v
-	}
-
-	return errs
-}
-
-// getCAPILifecycleHookAnnotations returns the annotations that should be added to a CAPI Machine to represent the lifecycle hooks.
-func getCAPILifecycleHookAnnotations(hooks mapiv1.LifecycleHooks) map[string]string {
-	annotations := make(map[string]string)
-
-	for _, hook := range hooks.PreDrain {
-		annotations[fmt.Sprintf("%s/%s", capiv1.PreDrainDeleteHookAnnotationPrefix, hook.Name)] = hook.Owner
-	}
-
-	for _, hook := range hooks.PreTerminate {
-		annotations[fmt.Sprintf("%s/%s", capiv1.PreTerminateDeleteHookAnnotationPrefix, hook.Name)] = hook.Owner
-	}
-
-	return annotations
-}
-
-// handleUnsupportedMachineFields checks for fields that are not supported by CAPI and returns a list of errors.
-func handleUnsupportedMachineFields(spec mapiv1.MachineSpec) field.ErrorList {
+// fromMAPIMachineToCAPIMachine translates a MAPI Machine to its Core CAPI Machine correspondent.
+func fromMAPIMachineToCAPIMachine(mapiMachine *mapiv1beta1.Machine, apiVersion, kind string) (*capiv1.Machine, field.ErrorList) {
 	var errs field.ErrorList
 
-	fldPath := field.NewPath("spec")
+	capiMachine := &capiv1.Machine{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:            mapiMachine.Name,
+			Namespace:       capiNamespace,
+			Labels:          convertMAPILabelsToCAPI(mapiMachine.Labels),
+			Annotations:     convertMAPIAnnotationsToCAPI(mapiMachine.Annotations),
+			OwnerReferences: nil, // OwnerReferences not populated here. They are added later by the machineSync controller.
+			Finalizers:      nil, // Finalizers not populated here. They are added later by the machine controllers.
+		},
+		Spec: capiv1.MachineSpec{
+			InfrastructureRef: corev1.ObjectReference{
+				APIVersion: apiVersion,
+				Kind:       kind,
+				Name:       mapiMachine.Name,
+				Namespace:  capiNamespace,
+			},
+			ProviderID: mapiMachine.Spec.ProviderID,
+			// ClusterName: // ClusterName not populated here. It is added by higher level functions.
+			// AuthoritativeAPI: // AuthoritativeAPI not populated here. Ignore as this is part of the conversion mechanism.
 
-	errs = append(errs, handleUnsupportedMAPIObjectMetaFields(fldPath.Child("metadata"), spec.ObjectMeta)...)
-
-	// TODO(OCPCLOUD-2861/2899): Taints are not supported by CAPI. add support for them via CAPI BootstrapConfig + minimal bootstrap controller.
-	if len(spec.Taints) > 0 {
-		errs = append(errs, field.Invalid(fldPath.Child("taints"), spec.Taints, "taints are not currently supported"))
+			// Version:        // TODO(OCPCLOUD-2714): To be prevented by VAP.
+			// ReadinessGates: // TODO(OCPCLOUD-2714): To be prevented by VAP.
+			// NodeDrainTimeout:        // TODO(OCPCLOUD-2715): not present on the MAPI API, we should implement them for feature parity.
+			// NodeVolumeDetachTimeout: // TODO(OCPCLOUD-2715): not present on the MAPI API, we should implement them for feature parity.
+			// NodeDeletionTimeout:     // TODO(OCPCLOUD-2715): not present on the MAPI API, we should implement them for feature parity.
+			NodeDeletionTimeout: &metav1.Duration{Duration: time.Second * 10}, // Hardcode it to the CAPI default value until this is implemented in MAPI.
+		},
 	}
 
-	return errs
-}
+	// Node labels in MAPI are stored under .spec.metadata.labels and then propagated down to the node,
+	// whereas in CAPI they are stored in the top level .labels and later propagated down to the node.
+	setMAPINodeLabelsToCAPINodeLabels(mapiMachine.Spec.ObjectMeta.Labels, capiMachine)
 
-// handleUnsupportedMAPIObjectMetaFields checks for unsupported MAPI metadta fields and returns a list of errors
-// if any of them are currently set.
-// This is used to prevent usage of these fields in both the Machine and MachineSet specs.
-func handleUnsupportedMAPIObjectMetaFields(fldPath *field.Path, objectMeta mapiv1.ObjectMeta) field.ErrorList {
-	var errs field.ErrorList
+	// Node annotations in MAPI are stored under .spec.metadata.annotations and then propagated down to the node,
+	// whereas in CAPI they are stored in the top level .annotations and later propagated down to the node.
+	setMAPINodeAnnotationsToCAPINodeAnnotations(mapiMachine.Spec.ObjectMeta.Annotations, capiMachine)
 
-	// ObjectMeta related fields should never get converted (aside from labels and annotations).
-	// They are meaningless in MAPI and don't contribute to the logic of the product.
-	if objectMeta.Name != "" {
-		errs = append(errs, field.Invalid(fldPath.Child("name"), objectMeta.Name, "name is not supported"))
-	}
+	// LifecycleHooks in MAPI are a special field (.spec.lifecycleHooks),
+	// whereas in CAPI they are defined via special annotations.
+	setCAPILifecycleHookAnnotations(mapiMachine.Spec.LifecycleHooks, capiMachine)
 
-	if objectMeta.GenerateName != "" {
-		errs = append(errs, field.Invalid(fldPath.Child("generateName"), objectMeta.GenerateName, "generateName is not supported"))
-	}
+	errs = append(errs, handleUnsupportedMachineFields(mapiMachine.Spec)...)
 
-	if objectMeta.Namespace != "" {
-		errs = append(errs, field.Invalid(fldPath.Child("namespace"), objectMeta.Namespace, "namespace is not supported"))
-	}
-
-	if len(objectMeta.OwnerReferences) > 0 {
-		errs = append(errs, field.Invalid(fldPath.Child("ownerReferences"), objectMeta.OwnerReferences, "ownerReferences are not supported"))
-	}
-
-	return errs
+	return capiMachine, errs
 }

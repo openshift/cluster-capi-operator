@@ -236,7 +236,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 			})
 
 			Context("when the CAPI machine does not exist", func() {
-				It("should create the CAPI machine", func() {
+				It("should create a paused CAPI machine", func() {
 					Eventually(k.Get(
 						capiv1resourcebuilder.Machine().WithName(mapiMachine.Name).WithNamespace(capiNamespace.Name).Build(),
 					)).Should(Succeed())
