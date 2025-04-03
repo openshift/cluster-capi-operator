@@ -121,6 +121,14 @@ var _ = Describe("capi2mapi AWS conversion", func() {
 			expectedWarnings: []string{},
 		}),
 
+		Entry("With unsupported NetworkInterfaceType", awsCAPI2MAPIMachineConversionInput{
+			awsClusterBuilder: awsCAPIAWSClusterBase,
+			awsMachineBuilder: awsCAPIAWSMachineBase.WithNetworkInterfaceType("unsupported-networkInterfaceType"),
+			machineBuilder:    awsCAPIMachineBase,
+			expectedErrors:    []string{"spec.networkInterfaceType: Invalid value: \"unsupported-networkInterfaceType\": networkInterface type must be one of interface, efa or omitted, unsupported value"},
+			expectedWarnings:  []string{},
+		}),
+
 		Entry("With unsupported UncompressedUserData", awsCAPI2MAPIMachineConversionInput{
 			awsClusterBuilder: awsCAPIAWSClusterBase,
 			awsMachineBuilder: awsCAPIAWSMachineBase.WithUncompressedUserData(ptr.To(true)),

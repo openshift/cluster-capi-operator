@@ -258,6 +258,7 @@ func (m *awsMachineAndInfra) toAWSMachine(providerSpec mapiv1.AWSMachineProvider
 		// ImageLookupOrg. Not used in OpenShift.
 		// NetworkInterfaces. Not used in OpenShift.
 
+		NetworkInterfaceType:    convertNetworkInterfaceType(providerSpec.NetworkInterfaceType),
 		InstanceMetadataOptions: instanceMetadataOptions,
 		InstanceType:            providerSpec.InstanceType,
 		NonRootVolumes:          nonRootVolumes,
@@ -305,9 +306,8 @@ func (m *awsMachineAndInfra) toAWSMachine(providerSpec mapiv1.AWSMachineProvider
 		errs = append(errs, field.Invalid(fldPath.Child("deviceIndex"), providerSpec.DeviceIndex, "deviceIndex must be 0 or unset"))
 	}
 
-	if providerSpec.NetworkInterfaceType != "" && providerSpec.NetworkInterfaceType != mapiv1.AWSENANetworkInterfaceType {
-		// TODO(OCPCLOUD-2708): We need to upstream the network interface choice to allow the elastic fabric adapter.
-		errs = append(errs, field.Invalid(fldPath.Child("networkInterfaceType"), providerSpec.NetworkInterfaceType, "networkInterface type must be one of ENA or omitted, unsupported value"))
+	if providerSpec.NetworkInterfaceType != "" && providerSpec.NetworkInterfaceType != mapiv1.AWSENANetworkInterfaceType && providerSpec.NetworkInterfaceType != mapiv1.AWSEFANetworkInterfaceType {
+		errs = append(errs, field.Invalid(fldPath.Child("networkInterfaceType"), providerSpec.NetworkInterfaceType, "networkInterface type must be one of ENA, EFA or omitted, unsupported value"))
 	}
 
 	if len(providerSpec.LoadBalancers) > 0 {
@@ -567,6 +567,17 @@ func convertAWSFiltersToCAPI(mapiFilters []mapiv1.Filter) []capav1.Filter {
 	}
 
 	return capiFilters
+}
+
+func convertNetworkInterfaceType(networkInterfaceType mapiv1.AWSNetworkInterfaceType) capav1.NetworkInterfaceType {
+	switch networkInterfaceType {
+	case mapiv1.AWSENANetworkInterfaceType:
+		return capav1.NetworkInterfaceTypeENI
+	case mapiv1.AWSEFANetworkInterfaceType:
+		return capav1.NetworkInterfaceTypeEFAWithENAInterface
+	}
+
+	return ""
 }
 
 // instanceIDFromProviderID extracts the instanceID from the ProviderID.

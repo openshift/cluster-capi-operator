@@ -14,7 +14,7 @@ require (
 	github.com/onsi/gomega v1.36.2
 	github.com/openshift/api v0.0.0-20250311085700-14a17c7009c4
 	github.com/openshift/client-go v0.0.0-20250131180035-f7ec47e2d87a
-	github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20250312115727-157f88eba755
+	github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20250401133953-e7e157c4c1fe
 	github.com/openshift/library-go v0.0.0-20250203131244-80620876b7c2
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/pflag v1.0.6
@@ -27,7 +27,7 @@ require (
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/utils v0.0.0-20241104100929-3ea5e8cea738
 	sigs.k8s.io/cluster-api v1.9.5
-	sigs.k8s.io/cluster-api-provider-aws/v2 v2.7.1-0.20250311200346-7e954867f06b
+	sigs.k8s.io/cluster-api-provider-aws/v2 v2.8.2
 	sigs.k8s.io/cluster-api-provider-azure v1.18.1
 	sigs.k8s.io/cluster-api-provider-gcp v1.8.1
 	sigs.k8s.io/cluster-api-provider-ibmcloud v0.10.0

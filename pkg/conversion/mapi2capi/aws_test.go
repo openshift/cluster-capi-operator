@@ -149,7 +149,7 @@ var _ = Describe("mapi2capi AWS conversion", func() {
 			),
 			infra: infra,
 			expectedErrors: []string{
-				"spec.providerSpec.value.networkInterfaceType: Invalid value: \"unsupported-value\": networkInterface type must be one of ENA or omitted, unsupported value",
+				"spec.providerSpec.value.networkInterfaceType: Invalid value: \"unsupported-value\": networkInterface type must be one of ENA, EFA or omitted, unsupported value",
 			},
 			expectedWarnings: []string{},
 		}),

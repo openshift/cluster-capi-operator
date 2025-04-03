@@ -113,10 +113,14 @@ func awsProviderIDFuzzer(c fuzz.Continue) string {
 func awsProviderSpecFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interface{} {
 	return []interface{}{
 		func(nit *mapiv1.AWSNetworkInterfaceType, c fuzz.Continue) {
-			// Use this value always as this field doesn't currently get converted.
-			// The default value is always true in CAPI.
-			// TODO(OCPCLOUD-2708): Make this randomly choose between the three valid values.
-			*nit = mapiv1.AWSENANetworkInterfaceType
+			switch c.Int31n(3) {
+			case 0:
+				*nit = mapiv1.AWSEFANetworkInterfaceType
+			case 1:
+				*nit = mapiv1.AWSENANetworkInterfaceType
+			case 2:
+				*nit = ""
+			}
 		},
 		func(amiRef *mapiv1.AWSResourceReference, c fuzz.Continue) {
 			var amiID string

@@ -37,6 +37,7 @@ type AWSMachineTemplateBuilder struct {
 	labels            map[string]string
 	name              string
 	namespace         string
+	ownerReferences   []metav1.OwnerReference
 
 	// Spec fields.
 	additionalSecurityGroups []capav1.AWSResourceReference
@@ -54,6 +55,7 @@ type AWSMachineTemplateBuilder struct {
 	instanceMetadataOptions  *capav1.InstanceMetadataOptions
 	instanceType             string
 	networkInterfaces        []string
+	networkInterfaceType     capav1.NetworkInterfaceType
 	nonRootVolumes           []capav1.Volume
 	placementGroupName       string
 	placementGroupPartition  int64
@@ -87,6 +89,7 @@ func (a AWSMachineTemplateBuilder) Build() *capav1.AWSMachineTemplate {
 			Labels:            a.labels,
 			Name:              a.name,
 			Namespace:         a.namespace,
+			OwnerReferences:   a.ownerReferences,
 		},
 		Spec: capav1.AWSMachineTemplateSpec{
 			Template: capav1.AWSMachineTemplateResource{
@@ -106,6 +109,7 @@ func (a AWSMachineTemplateBuilder) Build() *capav1.AWSMachineTemplate {
 					InstanceMetadataOptions:  a.instanceMetadataOptions,
 					InstanceType:             a.instanceType,
 					NetworkInterfaces:        a.networkInterfaces,
+					NetworkInterfaceType:     a.networkInterfaceType,
 					NonRootVolumes:           a.nonRootVolumes,
 					PlacementGroupName:       a.placementGroupName,
 					PlacementGroupPartition:  a.placementGroupPartition,
@@ -171,6 +175,12 @@ func (a AWSMachineTemplateBuilder) WithName(name string) AWSMachineTemplateBuild
 // WithNamespace sets the namespace for the AWSMachineTemplate builder.
 func (a AWSMachineTemplateBuilder) WithNamespace(namespace string) AWSMachineTemplateBuilder {
 	a.namespace = namespace
+	return a
+}
+
+// WithOwnerReferences sets the OwnerReferences for the AWSMachineTemplate builder.
+func (a AWSMachineTemplateBuilder) WithOwnerReferences(ownerRefs []metav1.OwnerReference) AWSMachineTemplateBuilder {
+	a.ownerReferences = ownerRefs
 	return a
 }
 
@@ -263,6 +273,12 @@ func (a AWSMachineTemplateBuilder) WithInstanceType(instanceType string) AWSMach
 // WithNetworkInterfaces sets the networkInterfaces for the AWSMachineTemplate builder.
 func (a AWSMachineTemplateBuilder) WithNetworkInterfaces(interfaces []string) AWSMachineTemplateBuilder {
 	a.networkInterfaces = interfaces
+	return a
+}
+
+// WithNetworkInterfaceType sets the networkInterfaceType networkInterfaceType for the AWSMAchineTemplate builder.
+func (a AWSMachineTemplateBuilder) WithNetworkInterfaceType(networkInterfaceType capav1.NetworkInterfaceType) AWSMachineTemplateBuilder {
+	a.networkInterfaceType = networkInterfaceType
 	return a
 }
 

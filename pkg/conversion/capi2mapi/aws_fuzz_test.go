@@ -115,6 +115,16 @@ func awsProviderIDFuzzer(c fuzz.Continue) string {
 //nolint:funlen
 func awsMachineFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interface{} {
 	return []interface{}{
+		func(nit *capav1.NetworkInterfaceType, c fuzz.Continue) {
+			switch c.Int31n(3) {
+			case 0:
+				*nit = capav1.NetworkInterfaceTypeEFAWithENAInterface
+			case 1:
+				*nit = capav1.NetworkInterfaceTypeENI
+			case 2:
+				*nit = ""
+			}
+		},
 		func(imdo *capav1.InstanceMetadataOptions, c fuzz.Continue) {
 			c.FuzzNoCustom(imdo)
 
