@@ -16,6 +16,8 @@ limitations under the License.
 package mapi2capi
 
 import (
+	"cmp"
+
 	mapiv1 "github.com/openshift/api/machine/v1beta1"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -32,33 +34,28 @@ func fromMAPIMachineSetToCAPIMachineSet(mapiMachineSet *mapiv1.MachineSet) (*cap
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            mapiMachineSet.Name,
 			Namespace:       mapiMachineSet.Namespace,
-			Labels:          mapiMachineSet.Labels,
-			Annotations:     mapiMachineSet.Annotations,
+			Labels:          convertMAPILabelsToCAPI(mapiMachineSet.Labels),
+			Annotations:     convertMAPIAnnotationsToCAPI(mapiMachineSet.Annotations),
 			OwnerReferences: nil, // OwnerReferences not populated here. They are added later by the machineSetSync controller.
 		},
 		Spec: capiv1.MachineSetSpec{
-			Selector: mapiMachineSet.Spec.Selector,
+			Selector: convertMAPIMachineSetSelectorToCAPI(mapiMachineSet.Spec.Selector),
 			Replicas: mapiMachineSet.Spec.Replicas,
-			// ClusterName // populated by higher level functions
+			// ClusterName: // ClusterName not populated here. It is added later by higher level functions
 			MinReadySeconds: mapiMachineSet.Spec.MinReadySeconds,
-			DeletePolicy:    mapiMachineSet.Spec.DeletePolicy,
+			DeletePolicy:    cmp.Or(mapiMachineSet.Spec.DeletePolicy, string(capiv1.RandomMachineSetDeletePolicy)), // CAPI defaults to Random if empty.
 			Template: capiv1.MachineTemplateSpec{
 				ObjectMeta: capiv1.ObjectMeta{
-					Labels:      mapiMachineSet.Spec.Template.Labels,
-					Annotations: mapiMachineSet.Spec.Template.Annotations,
+					Labels:      convertMAPILabelsToCAPI(mapiMachineSet.Spec.Template.Labels),
+					Annotations: convertMAPIAnnotationsToCAPI(mapiMachineSet.Spec.Template.Annotations),
 				},
-				// Spec // Populated by higher level functions.
+				// Spec: // Spec not populated here. It is added later by higher level functions.
 			},
+			// AuthoritativeAPI: // Ignore, this is part of the conversion mechanism.
 		},
 	}
 
-	// Unused fields - Below this line are fields not used from the MAPI MachineSet.
-
-	// metadata.OwnerReferences - handled by the machineSetSync controller.
-
 	errs = append(errs, handleUnsupportedMAPIObjectMetaFields(field.NewPath("spec", "template", "metadata"), mapiMachineSet.Spec.Template.ObjectMeta)...)
-
-	// AuthoritativeAPI - Ignore, this is part of the conversion mechanism.
 
 	return capiMachineSet, errs.ToAggregate()
 }

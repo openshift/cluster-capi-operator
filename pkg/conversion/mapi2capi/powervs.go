@@ -23,6 +23,7 @@ import (
 	configv1 "github.com/openshift/api/config/v1"
 	mapiv1 "github.com/openshift/api/machine/v1"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
+	"github.com/openshift/cluster-capi-operator/pkg/util"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -32,6 +33,11 @@ import (
 	capiv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
+)
+
+const (
+	ibmPowerVSMachineKind  = "IBMPowerVSMachine"
+	ibmPowerVSTemplateKind = "IBMPowerVSMachineTemplate"
 )
 
 // powerVSMachineAndInfra stores the details of a Machine API PowerVSMachine and Infra.
@@ -94,7 +100,7 @@ func (m *powerVSMachineAndInfra) toMachineAndInfrastructureMachine() (*capiv1.Ma
 		errs = append(errs, machineErrs...)
 	}
 
-	capiMachine, machineErrs := fromMAPIMachineToCAPIMachine(m.machine, ibmPowerVSMachineAPIVersion, ibmPowerVSMachineKind)
+	capiMachine, machineErrs := fromMAPIMachineToCAPIMachine(m.machine, capibmv1.GroupVersion.String(), ibmPowerVSMachineKind)
 	if machineErrs != nil {
 		errs = append(errs, machineErrs...)
 	}
@@ -113,6 +119,7 @@ func (m *powerVSMachineAndInfra) toMachineAndInfrastructureMachine() (*capiv1.Ma
 		errs = append(errs, field.Invalid(field.NewPath("infrastructure", "status", "infrastructureName"), m.infrastructure.Status.InfrastructureName, "infrastructure cannot be nil and infrastructure.Status.InfrastructureName cannot be empty"))
 	} else {
 		capiMachine.Spec.ClusterName = m.infrastructure.Status.InfrastructureName
+		capiMachine.Labels[capiv1.ClusterNameLabel] = m.infrastructure.Status.InfrastructureName
 	}
 
 	// The InfraMachine should always have the same labels and annotations as the Machine.
@@ -155,8 +162,8 @@ func (m *powerVSMachineSetAndInfra) ToMachineSetAndMachineTemplate() (*capiv1.Ma
 
 	// We have to merge these two maps so that labels and annotations added to the template objectmeta are persisted
 	// along with the labels and annotations from the machine objectmeta.
-	powerVSMachineSet.Spec.Template.ObjectMeta.Labels = mergeMaps(powerVSMachineSet.Spec.Template.ObjectMeta.Labels, capiMachine.Labels)
-	powerVSMachineSet.Spec.Template.ObjectMeta.Annotations = mergeMaps(powerVSMachineSet.Spec.Template.ObjectMeta.Annotations, capiMachine.Annotations)
+	powerVSMachineSet.Spec.Template.ObjectMeta.Labels = util.MergeMaps(powerVSMachineSet.Spec.Template.ObjectMeta.Labels, capiMachine.Labels)
+	powerVSMachineSet.Spec.Template.ObjectMeta.Annotations = util.MergeMaps(powerVSMachineSet.Spec.Template.ObjectMeta.Annotations, capiMachine.Annotations)
 
 	// Override the reference so that it matches the AWSMachineTemplate.
 	powerVSMachineSet.Spec.Template.Spec.InfrastructureRef.Kind = ibmPowerVSTemplateKind
@@ -167,6 +174,7 @@ func (m *powerVSMachineSetAndInfra) ToMachineSetAndMachineTemplate() (*capiv1.Ma
 	} else {
 		powerVSMachineSet.Spec.Template.Spec.ClusterName = m.infrastructure.Status.InfrastructureName
 		powerVSMachineSet.Spec.ClusterName = m.infrastructure.Status.InfrastructureName
+		powerVSMachineSet.Labels[capiv1.ClusterNameLabel] = m.infrastructure.Status.InfrastructureName
 	}
 
 	if len(errs) > 0 {

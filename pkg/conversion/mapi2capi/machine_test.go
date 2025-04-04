@@ -86,17 +86,6 @@ var _ = Describe("mapi2capi Machine conversion", func() {
 			expectedWarnings: []string{},
 		}),
 
-		Entry("With unsupported non-CAPI managed labels", mapi2CAPIMachineConversionInput{
-			infraBuilder: infraBase,
-			machineBuilder: mapiMachineBase.WithMachineSpecObjectMeta(mapiv1.ObjectMeta{
-				Labels: map[string]string{
-					"custom.domain/label": "value",
-				},
-			}),
-			expectedErrors:   []string{"spec.metadata.labels[custom.domain/label]: Invalid value: \"value\": label propagation is not currently supported for this label"},
-			expectedWarnings: []string{},
-		}),
-
 		Entry("With unsupported spec.metadata.generateName set", mapi2CAPIMachineConversionInput{
 			machineBuilder: mapiMachineBase.WithMachineSpecObjectMeta(mapiv1.ObjectMeta{
 				GenerateName: "test-generate-",
@@ -121,20 +110,6 @@ var _ = Describe("mapi2capi Machine conversion", func() {
 				Namespace: "test-namespace",
 			}),
 			expectedErrors:   []string{"spec.metadata.namespace: Invalid value: \"test-namespace\": namespace is not supported"},
-			expectedWarnings: []string{},
-		}),
-
-		Entry("With unsupported spec.metadata.ownerReferences set", mapi2CAPIMachineConversionInput{
-			infraBuilder: infraBase,
-			machineBuilder: mapiMachineBase.WithMachineSpecObjectMeta(mapiv1.ObjectMeta{
-				OwnerReferences: []metav1.OwnerReference{{
-					APIVersion: "v1",
-					Kind:       "Pod",
-					Name:       "test-pod",
-					UID:        "test-uid",
-				}},
-			}),
-			expectedErrors:   []string{"spec.metadata.ownerReferences: Invalid value: []v1.OwnerReference{v1.OwnerReference{APIVersion:\"v1\", Kind:\"Pod\", Name:\"test-pod\", UID:\"test-uid\", Controller:(*bool)(nil), BlockOwnerDeletion:(*bool)(nil)}}: ownerReferences are not supported"},
 			expectedWarnings: []string{},
 		}),
 

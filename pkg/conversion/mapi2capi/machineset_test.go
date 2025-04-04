@@ -24,8 +24,6 @@ import (
 	machinebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/machine/v1beta1"
 
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/test/matchers"
-
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 var _ = Describe("mapi2capi MachineSet conversion", func() {
@@ -86,20 +84,6 @@ var _ = Describe("mapi2capi MachineSet conversion", func() {
 				Namespace: "test-namespace",
 			}),
 			expectedErrors:   []string{"spec.metadata.namespace: Invalid value: \"test-namespace\": namespace is not supported"},
-			expectedWarnings: []string{},
-		}),
-
-		Entry("With unsupported spec.metadata.ownerReferences set", mapi2CAPIMachinesetConversionInput{
-			infraBuilder: infraBase,
-			machineSetBuilder: mapiMachineSetBase.WithMachineSpecObjectMeta(mapiv1.ObjectMeta{
-				OwnerReferences: []metav1.OwnerReference{{
-					APIVersion: "v1",
-					Kind:       "Pod",
-					Name:       "test-pod",
-					UID:        "test-uid",
-				}},
-			}),
-			expectedErrors:   []string{"spec.metadata.ownerReferences: Invalid value: []v1.OwnerReference{v1.OwnerReference{APIVersion:\"v1\", Kind:\"Pod\", Name:\"test-pod\", UID:\"test-uid\", Controller:(*bool)(nil), BlockOwnerDeletion:(*bool)(nil)}}: ownerReferences are not supported"},
 			expectedWarnings: []string{},
 		}),
 	)

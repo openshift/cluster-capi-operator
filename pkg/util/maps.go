@@ -17,6 +17,10 @@ package util
 
 // MergeMaps merges two maps, with values from the second map taking precedence.
 func MergeMaps(m1, m2 map[string]string) map[string]string {
+	if len(m1) == 0 && len(m2) == 0 {
+		return nil
+	}
+
 	result := make(map[string]string, len(m1))
 	for k, v := range m1 {
 		result[k] = v
