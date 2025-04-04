@@ -16,8 +16,6 @@ limitations under the License.
 package capi2mapi
 
 import (
-	"strings"
-
 	mapiv1 "github.com/openshift/api/machine/v1beta1"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -33,44 +31,26 @@ func fromCAPIMachineSetToMAPIMachineSet(capiMachineSet *capiv1.MachineSet) (*map
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            capiMachineSet.Name,
 			Namespace:       capiMachineSet.Namespace,
-			Labels:          capiMachineSet.Labels,
-			Annotations:     capiMachineSet.Annotations,
+			Labels:          convertCAPILabelsToMAPILabels(capiMachineSet.Labels),
+			Annotations:     convertCAPIAnnotationsToMAPIAnnotations(capiMachineSet.Annotations),
 			OwnerReferences: nil, // OwnerReferences not populated here. They are added later by the machineSetSync controller.
 		},
 		Spec: mapiv1.MachineSetSpec{
-			Selector:        capiMachineSet.Spec.Selector,
+			Selector:        convertCAPIMachineSetSelectorToMAPI(capiMachineSet.Spec.Selector),
 			Replicas:        capiMachineSet.Spec.Replicas,
 			MinReadySeconds: capiMachineSet.Spec.MinReadySeconds,
 			DeletePolicy:    capiMachineSet.Spec.DeletePolicy,
 			Template: mapiv1.MachineTemplateSpec{
 				ObjectMeta: mapiv1.ObjectMeta{
-					Labels:      capiMachineSet.Spec.Template.Labels,
-					Annotations: capiMachineSet.Spec.Template.Annotations,
+					Labels:      convertCAPILabelsToMAPILabels(capiMachineSet.Spec.Template.Labels),
+					Annotations: convertCAPIAnnotationsToMAPIAnnotations(capiMachineSet.Spec.Template.Annotations),
 				},
 			},
 		},
 	}
 
-	for k, v := range capiMachineSet.Spec.Template.Labels {
-		// Only CAPI managed labels are propagated down to the kubernetes nodes.
-		// So only put those back to the MAPI Machine's Spec.ObjectMeta.Labels.
-		// See: https://github.com/kubernetes-sigs/cluster-api/pull/7173
-		// and: https://github.com/fabriziopandini/cluster-api/blob/main/docs/proposals/20220927-label-sync-between-machine-and-nodes.md
-		if strings.HasPrefix(k, capiv1.NodeRoleLabelPrefix) || k == capiv1.ManagedNodeLabelDomain || k == capiv1.NodeRestrictionLabelDomain {
-			if mapiMachineSet.Spec.Template.Spec.ObjectMeta.Labels == nil {
-				mapiMachineSet.Spec.Template.Spec.ObjectMeta.Labels = map[string]string{}
-			}
-
-			mapiMachineSet.Spec.Template.Spec.ObjectMeta.Labels[k] = v
-		}
-	}
-
-	setCAPIManagedNodeLabelsToMAPINodeLabels(capiMachineSet.Spec.Template.Labels, mapiMachineSet.Spec.Template.Spec.ObjectMeta.Labels)
-
-	// Unusued fields - Below this line are fields not used from the CAPI Machine.
-
+	// Unused fields - Below this line are fields not used from the CAPI Machine.
 	// metadata.OwnerReferences - handled by the machineSetSync controller.
-
 	// capiMachineSet.Spec.ClusterName - Ignore this as it can be reconstructed from the infra object.
 	// capiMachineSet.Spec.Template.Spec - Ignore as we convert this at a higher level using the Machine conversion logic.
 

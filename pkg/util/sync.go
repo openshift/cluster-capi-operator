@@ -55,12 +55,26 @@ func hasSameState(i *machinev1beta1.Condition, j *machinev1applyconfigs.Conditio
 // ObjectMetaEqual compares variables a and b,
 // and returns a list of differences, or nil if there are none,
 // for the fields we care about when synchronising MAPI and CAPI Machines.
-func ObjectMetaEqual(a, b metav1.ObjectMeta) []string {
-	objectMetaDiff := []string{}
-	objectMetaDiff = append(objectMetaDiff, deep.Equal(a.Labels, b.Labels)...)
-	objectMetaDiff = append(objectMetaDiff, deep.Equal(a.Annotations, b.Annotations)...)
-	objectMetaDiff = append(objectMetaDiff, deep.Equal(a.Finalizers, b.Finalizers)...)
-	objectMetaDiff = append(objectMetaDiff, deep.Equal(a.OwnerReferences, b.OwnerReferences)...)
+func ObjectMetaEqual(a, b metav1.ObjectMeta) map[string]any {
+	objectMetaDiff := map[string]any{}
+
+	if diffLabels := deep.Equal(a.Labels, b.Labels); len(diffLabels) > 0 {
+		objectMetaDiff[".labels"] = diffLabels
+	}
+
+	if diffAnnotations := deep.Equal(a.Annotations, b.Annotations); len(diffAnnotations) > 0 {
+		objectMetaDiff[".annotations"] = diffAnnotations
+	}
+
+	// TODO: uncomment once the issue where CAPI controllers add the finalizer even on paused resources is fixed.
+	// https://github.com/kubernetes-sigs/cluster-api/blob/c70dca0fc387b44457c69b71a719132a0d9bed58/internal/controllers/machine/machine_controller.go#L207-L210
+	// if diffFinalizers := deep.Equal(a.Finalizers, b.Finalizers); len(diffFinalizers) > 0 {
+	// 	objectMetaDiff[".finalizers"] = diffFinalizers
+	// }
+
+	if diffOwnerReferences := deep.Equal(a.OwnerReferences, b.OwnerReferences); len(diffOwnerReferences) > 0 {
+		objectMetaDiff[".ownerReferences"] = diffOwnerReferences
+	}
 
 	return objectMetaDiff
 }

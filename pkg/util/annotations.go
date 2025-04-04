@@ -15,20 +15,21 @@ limitations under the License.
 */
 package util
 
-// MergeMaps merges two maps, with values from the second map taking precedence.
-func MergeMaps(m1, m2 map[string]string) map[string]string {
-	if len(m1) == 0 && len(m2) == 0 {
-		return nil
+import (
+	"sigs.k8s.io/controller-runtime/pkg/client"
+)
+
+// RemoveAnnotation deletes a specific annotation from a client.Object.
+func RemoveAnnotation(obj client.Object, key string) {
+	annotations := obj.GetAnnotations()
+	if annotations == nil {
+		return
 	}
 
-	result := make(map[string]string, len(m1))
-	for k, v := range m1 {
-		result[k] = v
+	if _, exists := annotations[key]; !exists {
+		return
 	}
 
-	for k, v := range m2 {
-		result[k] = v
-	}
-
-	return result
+	delete(annotations, key)
+	obj.SetAnnotations(annotations)
 }
