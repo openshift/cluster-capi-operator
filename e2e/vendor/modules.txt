@@ -229,6 +229,18 @@ github.com/leodido/go-urn/scim/schema
 github.com/mailru/easyjson/buffer
 github.com/mailru/easyjson/jlexer
 github.com/mailru/easyjson/jwriter
+# github.com/metal3-io/baremetal-operator/apis v0.5.1 => github.com/openshift/baremetal-operator/apis v0.0.0-20241114005417-044448aafa02
+## explicit; go 1.22.4
+github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1
+# github.com/metal3-io/baremetal-operator/pkg/hardwareutils v0.5.1
+## explicit; go 1.20
+github.com/metal3-io/baremetal-operator/pkg/hardwareutils/bmc
+# github.com/metal3-io/cluster-api-provider-metal3/api v1.7.0 => github.com/openshift/cluster-api-provider-metal3/api v0.0.0-20241120153823-7baca400194b
+## explicit; go 1.22.3
+github.com/metal3-io/cluster-api-provider-metal3/api/v1beta1
+# github.com/metal3-io/ip-address-manager/api v1.8.0
+## explicit; go 1.22.3
+github.com/metal3-io/ip-address-manager/api/v1alpha1
 # github.com/mitchellh/mapstructure v1.5.0
 ## explicit; go 1.14
 github.com/mitchellh/mapstructure
@@ -279,11 +291,14 @@ github.com/onsi/gomega/matchers/support/goraph/edge
 github.com/onsi/gomega/matchers/support/goraph/node
 github.com/onsi/gomega/matchers/support/goraph/util
 github.com/onsi/gomega/types
-# github.com/openshift/api v0.0.0-20220921125526-1866ef90edbf
-## explicit; go 1.18
+# github.com/openshift/api v0.0.0-20240731195412-e863d9f8a215
+## explicit; go 1.22.0
 github.com/openshift/api/config/v1
 github.com/openshift/api/machine/v1
 github.com/openshift/api/machine/v1beta1
+# github.com/openshift/cluster-api-provider-baremetal v0.0.0-20250115114740-9abe67f18345
+## explicit; go 1.22.0
+github.com/openshift/cluster-api-provider-baremetal/pkg/apis/baremetal/v1alpha1
 # github.com/pkg/errors v0.9.1
 ## explicit
 github.com/pkg/errors
@@ -957,3 +972,6 @@ sigs.k8s.io/structured-merge-diff/v4/value
 ## explicit; go 1.12
 sigs.k8s.io/yaml
 sigs.k8s.io/yaml/goyaml.v2
+# github.com/metal3-io/cluster-api-provider-metal3/api => github.com/openshift/cluster-api-provider-metal3/api v0.0.0-20241120153823-7baca400194b
+# github.com/metal3-io/baremetal-operator/apis => github.com/openshift/baremetal-operator/apis v0.0.0-20241114005417-044448aafa02
+# github.com/metal3-io/baremetal-operator => github.com/openshift/baremetal-operator v0.0.0-20241114005417-044448aafa02
