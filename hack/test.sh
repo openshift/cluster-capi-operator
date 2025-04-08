@@ -5,9 +5,10 @@ set -o pipefail
 
 REPO_ROOT=$(dirname "${BASH_SOURCE}")/..
 
-
-TEST_DIRS=$1
-TIMEOUT=$2
+# Use existing value of TEST_DIRS, or $1 if not set. Makes it easier to target suites.
+TEST_DIRS=${TEST_DIRS:-$1}
+# Use 2nd arg, or 5m.
+TIMEOUT=${2:-"5m"}
 
 OPENSHIFT_CI=${OPENSHIFT_CI:-""}
 ARTIFACT_DIR=${ARTIFACT_DIR:-""}
