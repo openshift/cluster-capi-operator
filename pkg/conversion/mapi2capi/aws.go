@@ -289,11 +289,21 @@ func (m *awsMachineAndInfra) toAWSMachine(providerSpec mapiv1.AWSMachineProvider
 	// TypeMeta - Only for the purpose of the raw extension, not used for any functionality.
 	// CredentialsSecret - TODO(OCPCLOUD-2713): Work out what needs to happen regarding credentials secrets.
 
+	// Only take action when a non-default credentials secret is being used in MAPI.
+	// If the user is using the default, then their CAPI secret will already be configured and no action is necessary.
 	if providerSpec.CredentialsSecret != nil &&
-		providerSpec.CredentialsSecret.Name == defaultCredentialSecretName {
-		// Convertable
-	} else {
+		providerSpec.CredentialsSecret.Name != defaultCredentialSecretName {
 		// Not convertable; need a custom identity ref
+		errs = append(errs, field.Invalid(fldPath.Child("credentialsSecret"), providerSpec.CredentialsSecret.Name, fmt.Sprintf("credential secret does not match the default of %q, manual conversion is necessary", defaultCredentialSecretName)))
+
+		// Other option:
+		// 1. Copy the name of the current credentials secret
+		// 2. Create an AWSClusterStaticIdentity that references a secret with the name from 1.
+		// 3. Create a secret with the name and contents of 1., but the in CAPA namespace
+		// The AWSClusterStaticIdentity and Secret would need to be returned up the stack in order to be properly created.
+
+		// Third option
+		// Create another credentials request?
 	}
 
 	if m.infrastructure.Status.PlatformStatus != nil &&

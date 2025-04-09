@@ -21,6 +21,7 @@ import (
 
 	mapiv1 "github.com/openshift/api/machine/v1beta1"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/test/matchers"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/ptr"
@@ -247,6 +248,18 @@ var _ = Describe("mapi2capi AWS conversion", func() {
 			infra: infra,
 			expectedErrors: []string{
 				"spec.providerSpec.value.blockDevices[0].virtualName: Invalid value: \"test\": virtualName is not supported",
+			},
+			expectedWarnings: []string{},
+		}),
+		Entry("With non-default CredentialsSecret", awsMAPI2CAPIConversionInput{
+			machineBuilder: awsMAPIMachineBase.WithProviderSpecBuilder(
+				awsBaseProviderSpec.WithCredentialsSecret(&corev1.LocalObjectReference{
+					Name: "invalid",
+				}),
+			),
+			infra: infra,
+			expectedErrors: []string{
+				"spec.providerSpec.value.credentialsSecret: Invalid value: \"invalid\": credential secret does not match the default of \"aws-cloud-credentials\", manual conversion is necessary",
 			},
 			expectedWarnings: []string{},
 		}),
