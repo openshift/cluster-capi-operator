@@ -294,7 +294,7 @@ func (m *awsMachineAndInfra) toAWSMachine(providerSpec mapiv1.AWSMachineProvider
 	if providerSpec.CredentialsSecret != nil &&
 		providerSpec.CredentialsSecret.Name != defaultCredentialSecretName {
 		// Not convertable; need a custom identity ref
-		errs = append(errs, field.Invalid(fldPath.Child("credentialsSecret"), providerSpec.CredentialsSecret.Name, fmt.Sprintf("credential secret does not match the default of %q, manual conversion is necessary", defaultCredentialSecretName)))
+		errs = append(errs, field.Invalid(fldPath.Child("credentialsSecret"), providerSpec.CredentialsSecret.Name, fmt.Sprintf("credential secret does not match the default of %q, manual conversion is necessary. Please see https://access.redhat.com/solutions/7115130 for more details.", defaultCredentialSecretName)))
 
 		// Other option:
 		// 1. Copy the name of the current credentials secret
