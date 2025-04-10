@@ -41,7 +41,7 @@ const (
 	powerVSTemplateKind = "IBMPowerVSMachineTemplate"
 )
 
-var _ = Describe("Power VS Fuzz (capi2mapi)", func() {
+var _ = Describe("PowerVS Fuzz (capi2mapi)", func() {
 	infra := &configv1.Infrastructure{
 		Spec: configv1.InfrastructureSpec{},
 		Status: configv1.InfrastructureStatus{
