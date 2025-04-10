@@ -45,6 +45,7 @@ func fromCAPIMachineToMAPIMachine(capiMachine *capiv1.Machine) (*mapiv1.Machine,
 			Namespace:       mapiNamespace,
 			Labels:          convertCAPILabelsToMAPILabels(capiMachine.Labels),
 			Annotations:     convertCAPIAnnotationsToMAPIAnnotations(capiMachineNonHookAnnotations),
+			Finalizers:      []string{mapiv1.MachineFinalizer},
 			OwnerReferences: nil, // OwnerReferences not populated here. They are added later by the machineSync controller.
 		},
 		Spec: mapiv1.MachineSpec{

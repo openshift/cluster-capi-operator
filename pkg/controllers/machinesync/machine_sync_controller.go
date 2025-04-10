@@ -586,6 +586,22 @@ func (r *MachineSyncReconciler) createOrUpdateCAPIInfraMachine(ctx context.Conte
 		return ctrl.Result{}, syncronizationIsProgressing, deleteErr
 	}
 
+	// Remove finalizers from the deleting CAPI infraMachine, it is not authoritative.
+	infraMachine.SetFinalizers(nil)
+
+	if err := r.Update(ctx, infraMachine); err != nil {
+		logger.Error(err, "Failed to remove finalizer for deleting Cluster API infra machine")
+
+		deleteErr := fmt.Errorf("failed to remove finalizer for deleting Cluster API infra machine: %w", err)
+
+		if condErr := r.applySynchronizedConditionWithPatch(
+			ctx, mapiMachine, corev1.ConditionFalse, reasonFailedToUpdateCAPIInfraMachine, deleteErr.Error(), nil); condErr != nil {
+			return ctrl.Result{}, syncronizationIsProgressing, utilerrors.NewAggregate([]error{deleteErr, condErr})
+		}
+
+		return ctrl.Result{}, syncronizationIsProgressing, deleteErr
+	}
+
 	// The outdated outdated CAPI infra machine has been deleted.
 	// We will try and recreate an up-to-date one later.
 	logger.Info("Successfully deleted outdated Cluster API infra machine")

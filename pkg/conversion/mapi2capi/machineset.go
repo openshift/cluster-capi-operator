@@ -36,6 +36,7 @@ func fromMAPIMachineSetToCAPIMachineSet(mapiMachineSet *mapiv1.MachineSet) (*cap
 			Namespace:       mapiMachineSet.Namespace,
 			Labels:          convertMAPILabelsToCAPI(mapiMachineSet.Labels),
 			Annotations:     convertMAPIAnnotationsToCAPI(mapiMachineSet.Annotations),
+			Finalizers:      nil, // The CAPI MachineSet finalizer is managed by the CAPI machineset controller.
 			OwnerReferences: nil, // OwnerReferences not populated here. They are added later by the machineSetSync controller.
 		},
 		Spec: capiv1.MachineSetSpec{
