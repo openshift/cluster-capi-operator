@@ -52,7 +52,7 @@ var testScheme *runtime.Scheme
 var testRESTMapper meta.RESTMapper
 var ctx = context.Background()
 
-func TestAPIs(t *testing.T) {
+func TestMachineSetMigration(t *testing.T) {
 	RegisterFailHandler(Fail)
 
 	RunSpecs(t, "Controller Suite")

@@ -19,8 +19,6 @@ package machinemigration
 import (
 	"context"
 	"fmt"
-	"strings"
-	"time"
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
@@ -106,8 +104,8 @@ func (r *MachineMigrationReconciler) Reconcile(ctx context.Context, req reconcil
 			return ctrl.Result{}, fmt.Errorf("unable to apply authoritativeAPI to status with patch: %w", err)
 		}
 
-		// Check again later.
-		return ctrl.Result{RequeueAfter: time.Second}, nil
+		// Wait for the patching to take effect.
+		return ctrl.Result{}, nil
 	}
 
 	// Check if the Synchronized condition is set to True.
@@ -115,87 +113,67 @@ func (r *MachineMigrationReconciler) Reconcile(ctx context.Context, req reconcil
 	if cond, err := util.GetConditionStatus(mapiMachine, string(consts.SynchronizedCondition)); err != nil {
 		return ctrl.Result{}, fmt.Errorf("unable to get synchronizedCondition for %s/%s: %w", mapiMachine.Namespace, mapiMachine.Name, err)
 	} else if cond != corev1.ConditionTrue {
-		logger.Info("New machine not yet in sync with the old authoritative one, will retry later")
-		return ctrl.Result{RequeueAfter: time.Second}, nil
-	}
+		logger.Info("Machine not synchronized with latest authoritative generation, will retry later")
 
-	logger.Info("Detected migration request for machine")
+		return ctrl.Result{}, nil
+	}
 
 	// Make sure the authoritativeAPI resource status is set to migrating.
 	if mapiMachine.Status.AuthoritativeAPI != machinev1beta1.MachineAuthorityMigrating {
+		logger.Info("Detected migration request for machine")
+
 		if err := r.applyStatusAuthoritativeAPIWithPatch(ctx, mapiMachine, machinev1beta1.MachineAuthorityMigrating); err != nil {
 			return ctrl.Result{}, fmt.Errorf("unable to set authoritativeAPI %q to status: %w", machinev1beta1.MachineAuthorityMigrating, err)
 		}
-		// Then wait for it to take effect.
-		return ctrl.Result{RequeueAfter: time.Second}, nil
+
+		logger.Info("Acknowledged migration request for machine")
+
+		// Wait for the change to propagate.
+		return ctrl.Result{}, nil
 	}
 
-	logger.Info("Acknowledged migration request for machine")
-
-	// Request pausing on the old authoritative resource.
+	// Request pausing on the authoritative resource.
 	if updated, err := r.requestOldAuthoritativeResourcePaused(ctx, mapiMachine); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to request pause on old authoritative machine: %w", err)
+		return ctrl.Result{}, fmt.Errorf("failed to request pause on authoritative machine: %w", err)
 	} else if updated {
-		// Wait for it to take effect.
-		return ctrl.Result{RequeueAfter: time.Second}, nil
+		logger.Info("Requested pausing for authoritative machine")
+
+		// Wait for the change to propagate.
+		return ctrl.Result{}, nil
 	}
 
-	logger.Info("Requested pausing for old authoritative machine")
-
-	// Check that the old authoritative resource is paused.
+	// Check that the authoritative resource is paused.
 	if paused, err := r.isOldAuthoritativeResourcePaused(ctx, mapiMachine); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to check paused on old authoritative machine: %w", err)
+		return ctrl.Result{}, fmt.Errorf("failed to check paused on authoritative machine: %w", err)
 	} else if !paused {
-		// The old Authoritative API resource is not paused yet, requeue to check later.
-		return ctrl.Result{RequeueAfter: time.Second}, nil
-	}
+		// The Authoritative API resource is not paused yet, requeue to check later.
+		logger.Info("Authoritative machine is not paused yet, will retry later")
 
-	logger.Info("Old authoritative machine is now paused")
+		return ctrl.Result{}, nil
+	}
 
 	// Check if the synchronizedGeneration matches the old authoritativeAPI's resource current generation.
 	if isSynchronizedGenMatchingOldAuthority, err := r.isSynchronizedGenerationMatchingOldAuthoritativeAPIGeneration(ctx, mapiMachine); err != nil {
 		return ctrl.Result{}, fmt.Errorf("unable to check synchronizedGeneration matches old authority: %w", err)
 	} else if !isSynchronizedGenMatchingOldAuthority {
 		// The to-be Authoritative API resource is not fully synced up yet, requeue to check later.
-		logger.Info("To-be authoritative and old machine are not synced yet, will retry later")
+		logger.Info("Authoritative machine and its copy are not synchronized yet, will retry later")
 
-		return ctrl.Result{RequeueAfter: time.Second}, nil
+		return ctrl.Result{}, nil
 	}
-
-	logger.Info("New machine is now in sync with the old authoritative one")
-
-	// Add finalizer to new authoritative API, this ensures no status changes on the same reconcile.
-	if added, err := r.ensureFinalizerOnNewAuthoritativeResource(ctx, mapiMachine); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to ensure finalizer on resource: %w", err)
-	} else if added {
-		// Wait for it to take effect.
-		return ctrl.Result{RequeueAfter: time.Second}, nil
-	}
-
-	// Remove finalizer from the old authoritative API, this ensures no status changes on the same reconcile.
-	if removed, err := r.ensureNoFinalizerOnOldAuthoritativeResource(ctx, mapiMachine); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to remove finalizer from old resource: %w", err)
-	} else if removed {
-		// Wait for it to take effect.
-		return ctrl.Result{RequeueAfter: time.Second}, nil
-	}
-
-	logger.Info("Switching authoritativeAPI for machine")
 
 	// Set the actual AuthoritativeAPI to the desired one, reset the synchronized generation and condition.
 	if err := r.setNewAuthoritativeAPIAndResetSynchronized(ctx, mapiMachine, mapiMachine.Spec.AuthoritativeAPI); err != nil {
 		return ctrl.Result{}, fmt.Errorf("unable to apply authoritativeAPI to status with patch: %w", err)
 	}
 
-	logger.Info("Successfully switched authoritativeAPI for machine")
-
 	// Make sure the new authoritative resource has been requested to unpause.
 	if err := r.ensureUnpauseRequestedOnNewAuthoritativeResource(ctx, mapiMachine); err != nil {
 		return ctrl.Result{}, fmt.Errorf("unable to ensure the new AuthoritativeAPI has been un-paused: %w", err)
 	}
 
-	logger.Info("Successfully unpaused new authoritative machine")
-	logger.Info("Migration completed for machine")
+	logger.Info("Machine authority switch has now been completed and the resource unpaused")
+	logger.Info("Machine migrated successfully")
 
 	return ctrl.Result{}, nil
 }
@@ -412,81 +390,4 @@ func (r *MachineMigrationReconciler) setNewAuthoritativeAPIAndResetSynchronized(
 	}
 
 	return nil
-}
-
-// ensureFinalizerOnNewAuthoritativeResource adds a finalizer to the resource if required.
-// If the finalizer already exists, this function should be a no-op.
-// If the finalizer is added, the function will return true so that the reconciler can requeue the object.
-// Adding the finalizer in a separate reconcile ensures that spec updates are separate from status updates.
-func (r *MachineMigrationReconciler) ensureFinalizerOnNewAuthoritativeResource(ctx context.Context, m *machinev1beta1.Machine) (bool, error) {
-	if m.Spec.AuthoritativeAPI != machinev1beta1.MachineAuthorityClusterAPI {
-		return false, nil
-	}
-
-	capiMachine := &capiv1beta1.Machine{}
-	if err := r.Get(ctx, client.ObjectKey{Namespace: consts.DefaultManagedNamespace, Name: m.Name}, capiMachine); err != nil {
-		return false, fmt.Errorf("failed to get Cluster API machine: %w", err)
-	}
-
-	updated, err := util.EnsureFinalizer(ctx, r.Client, capiMachine, capiv1beta1.MachineFinalizer)
-	if err != nil {
-		return false, fmt.Errorf("failed to ensure finalizer on Cluster API machine: %w", err)
-	}
-
-	infraMachineRef := capiMachine.Spec.InfrastructureRef
-
-	infraMachine, err := util.GetReferencedObject(ctx, r.Client, r.Scheme, infraMachineRef)
-	if err != nil {
-		return false, fmt.Errorf("failed to get Cluster API infra machine: %w", err)
-	}
-
-	// All the CAPI providers I checked do use this format for their infra machine finalizer.
-	infraMachineFinalizer := fmt.Sprintf("%s.infrastructure.cluster.x-k8s.io", strings.ToLower(infraMachineRef.Kind))
-
-	infraMachineUpdated, err := util.EnsureFinalizer(ctx, r.Client, infraMachine, infraMachineFinalizer)
-	if err != nil {
-		return false, fmt.Errorf("failed to ensure finalizer on Cluster API machine: %w", err)
-	}
-
-	return updated || infraMachineUpdated, nil
-}
-
-// ensureNoFinalizerOnOldAuthoritativeResource removes the finalizer from the resource if required.
-// If the finalizer doesn't exists, this function should be a no-op.
-// If the finalizer gets removed, the function will return true so that the reconciler can requeue the object.
-func (r *MachineMigrationReconciler) ensureNoFinalizerOnOldAuthoritativeResource(ctx context.Context, m *machinev1beta1.Machine) (bool, error) {
-	if m.Spec.AuthoritativeAPI == machinev1beta1.MachineAuthorityClusterAPI {
-		return false, nil
-	}
-
-	capiMachine := &capiv1beta1.Machine{}
-	if err := r.Get(ctx, client.ObjectKey{Namespace: consts.DefaultManagedNamespace, Name: m.Name}, capiMachine); err != nil {
-		return false, fmt.Errorf("failed to get Cluster API machine: %w", err)
-	}
-
-	// TODO: uncomment this, at the moment there is a bug in the cluster-api controllers that
-	// set the finalizer before checking for the paused condition, as such the finalizer is always
-	// repopulted even though the controller is paused.
-	// ref: https://github.com/kubernetes-sigs/cluster-api/blob/c70dca0fc387b44457c69b71a719132a0d9bed58/internal/controllers/machine/machine_controller.go#L207-L210
-	// updated, err := util.RemoveFinalizer(ctx, r.Client, capiMachine, capiv1beta1.MachineFinalizer)
-	// if err != nil {
-	// 	return false, fmt.Errorf("failed to remove finalizer from Cluster API machine: %w", err)
-	// }
-	updated := false
-
-	infraMachineRef := capiMachine.Spec.InfrastructureRef
-
-	infraMachine, err := util.GetReferencedObject(ctx, r.Client, r.Scheme, infraMachineRef)
-	if err != nil {
-		return false, fmt.Errorf("failed to get Cluster API infra machine: %w", err)
-	}
-
-	infraMachineFinalizer := fmt.Sprintf("%s.infrastructure.cluster.x-k8s.io", strings.ToLower(infraMachineRef.Kind))
-
-	infraMachineUpdated, err := util.RemoveFinalizer(ctx, r.Client, infraMachine, infraMachineFinalizer)
-	if err != nil {
-		return false, fmt.Errorf("failed to remove finalizer from Cluster API infra machine: %w", err)
-	}
-
-	return updated || infraMachineUpdated, nil
 }
