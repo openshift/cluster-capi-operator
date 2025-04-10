@@ -43,7 +43,7 @@ const (
 	capiNamespace        = "openshift-cluster-api"
 )
 
-var _ = Describe("AWS Fuzz (mapi2capi)", func() {
+var _ = Describe("AWS Fuzz (capi2mapi)", func() {
 	infra := &configv1.Infrastructure{
 		Spec: configv1.InfrastructureSpec{},
 		Status: configv1.InfrastructureStatus{
@@ -102,6 +102,7 @@ var _ = Describe("AWS Fuzz (mapi2capi)", func() {
 			conversiontest.ObjectMetaFuzzerFuncs(capiNamespace),
 			conversiontest.CAPIMachineFuzzerFuncs(awsProviderIDFuzzer, awsTemplateKind, awsMachineAPIVersion, infra.Status.InfrastructureName),
 			conversiontest.CAPIMachineSetFuzzerFuncs(awsTemplateKind, awsMachineAPIVersion, infra.Status.InfrastructureName),
+			awsClusterFuzzerFuncs,
 			awsMachineFuzzerFuncs,
 			awsMachineTemplateFuzzerFuncs,
 		)
@@ -210,6 +211,32 @@ func fuzzAWSMachineSpecMarketType(marketType *capav1.MarketType, c fuzz.Continue
 		*marketType = capav1.MarketTypeCapacityBlock
 	case 3:
 		*marketType = ""
+	}
+}
+
+func awsClusterFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interface{} {
+	return []interface{}{
+		func(idRef *capav1.AWSIdentityReference, c fuzz.Continue) {
+			switch c.Int31n(4) {
+			case 0:
+				idRef.Kind = capav1.ControllerIdentityKind
+			case 1:
+				idRef.Kind = capav1.ClusterStaticIdentityKind
+			case 2:
+				idRef.Kind = capav1.ClusterRoleIdentityKind
+			case 3:
+				// No IdentifyReference is set
+			}
+
+			if idRef.Kind == "" || idRef.Kind == capav1.ControllerIdentityKind {
+				switch c.Int31n(2) {
+				case 0:
+					idRef.Name = "default"
+				case 1:
+					idRef.Name = c.RandString()
+				}
+			}
+		},
 	}
 }
 
