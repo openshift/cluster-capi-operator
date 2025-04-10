@@ -29,6 +29,7 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/mapi2capi"
 	conversiontest "github.com/openshift/cluster-capi-operator/pkg/conversion/test/fuzz"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtimeserializer "k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/utils/ptr"
@@ -209,11 +210,14 @@ func awsProviderSpecFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interfa
 			// region must match the input AWSCluster so force it here.
 			ps.Placement.Region = "us-east-1"
 
+			ps.CredentialsSecret = &corev1.LocalObjectReference{
+				Name: mapi2capi.DefaultCredentialsSecretName,
+			}
+
 			// Clear fields that are not supported in the provider spec.
 			ps.DeviceIndex = 0
 			ps.LoadBalancers = nil
 			ps.ObjectMeta = metav1.ObjectMeta{}
-			ps.CredentialsSecret = nil
 
 			// At lest one device mapping must have no device name.
 			rootFound := false

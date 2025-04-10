@@ -41,7 +41,7 @@ const (
 	errUnsupportedCAPAMarketType  = "unable to convert market type, unknown value"
 	errUnsupportedHTTPTokensState = "unable to convert httpTokens state, unknown value" //nolint:gosec // This is an error message, not a credential
 	defaultIdentityName           = "default"
-	defaultCredentialsSecretName  = "aws-cloud-credentials"
+	defaultCredentialsSecretName  = "aws-cloud-credentials" //#nosec G101 -- False positive, not actually a credential.
 )
 
 // machineAndAWSMachineAndAWSCluster stores the details of a Cluster API Machine and AWSMachine and AWSCluster.
@@ -155,7 +155,9 @@ func (m machineAndAWSMachineAndAWSCluster) toProviderSpec() (*mapiv1.AWSMachineP
 		CapacityReservationID:   ptr.Deref(m.awsMachine.Spec.CapacityReservationID, ""),
 		MarketType:              mapiAWSMarketType,
 	}
+
 	secretRef, errs := handleAWSIdentityRef(fldPath.Child("identityRef"), m.awsCluster.Spec.IdentityRef)
+
 	if len(errs) > 0 {
 		errors = append(errors, errs...)
 	} else {
@@ -561,6 +563,7 @@ func handleAWSIdentityRef(fldPath *field.Path, identityRef *capav1.AWSIdentityRe
 	if identityRef.Kind != capav1.ControllerIdentityKind && identityRef.Kind != "" {
 		errs = append(errs, field.Invalid(fldPath.Child("kind"), identityRef.Kind, fmt.Sprintf("kind %q cannot be converted to CredentialsSecret. Please see https://access.redhat.com/solutions/7115131 for more details.", identityRef.Kind)))
 	}
+
 	if identityRef.Name != defaultIdentityName && identityRef.Name != "" {
 		errs = append(errs, field.Invalid(fldPath.Child("name"), identityRef.Name, fmt.Sprintf("name %q must be %q when using an AWSClusterControllerIdentity. Please see https://access.redhat.com/solutions/7115131 for more details.", identityRef.Name, defaultIdentityName)))
 	}
