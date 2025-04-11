@@ -191,7 +191,7 @@ func (r *MachineMigrationReconciler) isOldAuthoritativeResourcePaused(ctx contex
 
 	// For MachineAuthorityMachineAPI, check the corresponding CAPI resource.
 	capiMachine := &capiv1beta1.Machine{}
-	if err := r.Get(ctx, client.ObjectKey{Namespace: consts.DefaultManagedNamespace, Name: m.Name}, capiMachine); err != nil {
+	if err := r.Get(ctx, client.ObjectKey{Namespace: r.CAPINamespace, Name: m.Name}, capiMachine); err != nil {
 		return false, fmt.Errorf("failed to get Cluster API machine: %w", err)
 	}
 
@@ -223,7 +223,7 @@ func (r *MachineMigrationReconciler) ensureUnpauseRequestedOnNewAuthoritativeRes
 		// For requesting unpausing of a CAPI resource, remove the paused annotation on it.
 		// So check if the ClusterAPI resource has the paused annotation and if so remove it.
 		capiMachine := &capiv1beta1.Machine{}
-		if err := r.Get(ctx, client.ObjectKey{Namespace: consts.DefaultManagedNamespace, Name: mapiMachine.Name}, capiMachine); err != nil {
+		if err := r.Get(ctx, client.ObjectKey{Namespace: r.CAPINamespace, Name: mapiMachine.Name}, capiMachine); err != nil {
 			return fmt.Errorf("failed to get Cluster API machine: %w", err)
 		}
 
@@ -278,7 +278,7 @@ func (r *MachineMigrationReconciler) requestOldAuthoritativeResourcePaused(ctx c
 		// The spec.AuthoritativeAPI is set to MachineAPI, meaning that the old authoritativeAPI was ClusterAPI.
 		// So Check if the ClusterAPI resource has the paused annotation, otherwise set it.
 		capiMachine := &capiv1beta1.Machine{}
-		if err := r.Get(ctx, client.ObjectKey{Namespace: consts.DefaultManagedNamespace, Name: m.Name}, capiMachine); err != nil {
+		if err := r.Get(ctx, client.ObjectKey{Namespace: r.CAPINamespace, Name: m.Name}, capiMachine); err != nil {
 			return false, fmt.Errorf("failed to get Cluster API machine: %w", err)
 		}
 
@@ -331,7 +331,7 @@ func (r *MachineMigrationReconciler) isSynchronizedGenerationMatchingOldAuthorit
 		// ClusterAPI is currently still the authoritative one.
 		// Check ClusterAPI generation against the synchronized one.
 		capiMachine := &capiv1beta1.Machine{}
-		if err := r.Get(ctx, client.ObjectKey{Namespace: consts.DefaultManagedNamespace, Name: mapiMachine.Name}, capiMachine); err != nil {
+		if err := r.Get(ctx, client.ObjectKey{Namespace: r.CAPINamespace, Name: mapiMachine.Name}, capiMachine); err != nil {
 			return false, fmt.Errorf("failed to get Cluster API machine: %w", err)
 		}
 

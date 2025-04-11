@@ -162,7 +162,6 @@ var _ = Describe("With a running MachineSetMigration controller", func() {
 				result, err := reconciler.Reconcile(ctx, req)
 				Expect(err).NotTo(HaveOccurred(), "reconciler should not have errored")
 				Expect(result.Requeue).To(BeFalse())
-				Expect(result.RequeueAfter).To(BeZero())
 			})
 		})
 
@@ -181,9 +180,8 @@ var _ = Describe("With a running MachineSetMigration controller", func() {
 
 			It("should patch the status to match spec and requeue", func() {
 				By("Running one reconciliation")
-				result, err := reconciler.Reconcile(ctx, req)
+				_, err := reconciler.Reconcile(ctx, req)
 				Expect(err).NotTo(HaveOccurred(), "reconciler should not have errored")
-				Expect(result.RequeueAfter).To(BeNumerically(">", 0))
 				updatedMS := &machinev1beta1.MachineSet{}
 				Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(mapiMachineSet), updatedMS)).To(Succeed())
 				Expect(updatedMS.Status.AuthoritativeAPI).To(Equal(updatedMS.Spec.AuthoritativeAPI))
@@ -215,9 +213,8 @@ var _ = Describe("With a running MachineSetMigration controller", func() {
 			})
 
 			It("should requeue for later processing", func() {
-				result, err := reconciler.Reconcile(ctx, req)
+				_, err := reconciler.Reconcile(ctx, req)
 				Expect(err).NotTo(HaveOccurred(), "reconciler should not have errored")
-				Expect(result.RequeueAfter).To(BeNumerically(">", 0))
 			})
 		})
 
@@ -246,9 +243,8 @@ var _ = Describe("With a running MachineSetMigration controller", func() {
 			})
 
 			It("should acknowledge the migration by updating status to 'Migrating' and requeuing", func() {
-				result, err := reconciler.Reconcile(ctx, req)
+				_, err := reconciler.Reconcile(ctx, req)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(result.RequeueAfter).To(BeNumerically(">", 0))
 
 				updatedMS := &machinev1beta1.MachineSet{}
 				Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(mapiMachineSet), updatedMS)).To(Succeed())
@@ -282,9 +278,8 @@ var _ = Describe("With a running MachineSetMigration controller", func() {
 				})
 
 				It("should request pausing for the old authoritative resource (MAPI) and stay in Migrating status", func() {
-					result, err := reconciler.Reconcile(ctx, req)
+					_, err := reconciler.Reconcile(ctx, req)
 					Expect(err).NotTo(HaveOccurred())
-					Expect(result.RequeueAfter).To(BeNumerically(">", 0))
 
 					updatedMS := &machinev1beta1.MachineSet{}
 					Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(mapiMachineSet), updatedMS)).To(Succeed())
@@ -322,9 +317,8 @@ var _ = Describe("With a running MachineSetMigration controller", func() {
 				})
 
 				It("should request pausing for the old authoritative resource (CAPI) and stay in Migrating status", func() {
-					result, err := reconciler.Reconcile(ctx, req)
+					_, err := reconciler.Reconcile(ctx, req)
 					Expect(err).NotTo(HaveOccurred())
-					Expect(result.RequeueAfter).To(BeNumerically(">", 0))
 
 					updatedMS := &machinev1beta1.MachineSet{}
 					Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(mapiMachineSet), updatedMS)).To(Succeed())
@@ -375,9 +369,8 @@ var _ = Describe("With a running MachineSetMigration controller", func() {
 					})
 
 					It("should set old authoritative API (MAPI) status to paused and requeue", func() {
-						result, err := reconciler.Reconcile(ctx, req)
+						_, err := reconciler.Reconcile(ctx, req)
 						Expect(err).NotTo(HaveOccurred())
-						Expect(result.RequeueAfter).To(BeNumerically(">", 0))
 
 						Eventually(komega.Object(mapiMachineSet)).Should(
 							HaveField("Status.Conditions", SatisfyAll(
@@ -434,9 +427,8 @@ var _ = Describe("With a running MachineSetMigration controller", func() {
 					})
 
 					It("should set old authoritative API (CAPI) status to paused and requeue", func() {
-						result, err := reconciler.Reconcile(ctx, req)
+						_, err := reconciler.Reconcile(ctx, req)
 						Expect(err).NotTo(HaveOccurred())
-						Expect(result.RequeueAfter).To(BeNumerically(">", 0))
 
 						Eventually(komega.Object(capiMachineSet)).Should(
 							HaveField("Status.V1Beta2.Conditions", SatisfyAll(
@@ -484,9 +476,8 @@ var _ = Describe("With a running MachineSetMigration controller", func() {
 					})
 
 					It("should do nothing and requeue", func() {
-						result, err := reconciler.Reconcile(ctx, req)
+						_, err := reconciler.Reconcile(ctx, req)
 						Expect(err).NotTo(HaveOccurred())
-						Expect(result.RequeueAfter).To(BeNumerically(">", 0))
 					})
 				})
 			})
@@ -522,142 +513,8 @@ var _ = Describe("With a running MachineSetMigration controller", func() {
 					})
 
 					It("should do nothing and requeue", func() {
-						result, err := reconciler.Reconcile(ctx, req)
+						_, err := reconciler.Reconcile(ctx, req)
 						Expect(err).NotTo(HaveOccurred())
-						Expect(result.RequeueAfter).To(BeNumerically(">", 0))
-					})
-				})
-			})
-		})
-
-		Context("when the old authoritative resource is paused and fully synchronized", func() {
-			Context("when migrating from MachineAPI to ClusterAPI", func() {
-				Context("when no finalizer on the new to-be authoritative resource (CAPI)", func() {
-					BeforeEach(func() {
-						By("Setting the MAPI machine set spec AuthoritativeAPI to ClusterAPI")
-						mapiMachineSet = mapiMachineSetBuilder.
-							// Set desired authoritative API in spec to ClusterAPI.
-							// To check for requesting pausing on the the MAPI resource it is sufficient
-							// see that the spec.AuthoritativeAPI field is set to ClusterAPI.
-							WithAuthoritativeAPI(machinev1beta1.MachineAuthorityClusterAPI).
-							Build()
-						Eventually(k8sClient.Create(ctx, mapiMachineSet)).Should(Succeed())
-
-						By("Setting the MAPI machine set status AuthoritativeAPI to 'Migrating'")
-						Eventually(k.UpdateStatus(mapiMachineSet, func() {
-							updatedMAPIMachineSet := mapiMachineSetBuilder.
-								WithAuthoritativeAPIStatus(machinev1beta1.MachineAuthorityMigrating).
-								WithSynchronizedGeneration(mapiMachineSet.Generation). // Match the MAPI .metadata.generation field.
-								WithConditions([]machinev1beta1.Condition{
-									{
-										Type:               consts.SynchronizedCondition,
-										LastTransitionTime: metav1.Now(),
-										Status:             corev1.ConditionTrue,
-									},
-									{
-										Type:               "Paused",
-										LastTransitionTime: metav1.Now(),
-										Status:             corev1.ConditionTrue,
-									},
-								}).
-								Build()
-							mapiMachineSet.Status.AuthoritativeAPI = updatedMAPIMachineSet.Status.AuthoritativeAPI
-							mapiMachineSet.Status.SynchronizedGeneration = updatedMAPIMachineSet.Status.SynchronizedGeneration
-							mapiMachineSet.Status.Conditions = updatedMAPIMachineSet.Status.Conditions
-						})).Should(Succeed())
-
-						By("Creating a mirror CAPI machine set")
-						capiMachineSet = capiMachineSetBuilder.
-							WithAnnotations(map[string]string{
-								capiv1beta1.PausedAnnotation: "",
-							}).
-							Build()
-						Eventually(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
-
-						By("Setting the CAPI machine set status condition to 'Paused'")
-						Eventually(k.UpdateStatus(capiMachineSet, func() {
-							updatedCAPIMachineSet := capiMachineSetBuilder.Build()
-							updatedCAPIMachineSet.Status.V1Beta2 = &capiv1beta1.MachineSetV1Beta2Status{
-								Conditions: []metav1.Condition{{
-									Type:               capiv1beta1.PausedV1Beta2Condition,
-									Status:             metav1.ConditionTrue,
-									LastTransitionTime: metav1.Now(),
-								}},
-							}
-							capiMachineSet.Status = updatedCAPIMachineSet.Status
-						})).Should(Succeed())
-
-						req = reconcile.Request{NamespacedName: client.ObjectKeyFromObject(mapiMachineSet)}
-					})
-
-					It("should set the finalizer on the new to-be authoritative resource (CAPI) and requeue", func() {
-						result, err := reconciler.Reconcile(ctx, req)
-						Expect(err).NotTo(HaveOccurred())
-						Expect(result.RequeueAfter).To(BeNumerically(">", 0))
-
-						Eventually(komega.Object(capiMachineSet)).Should(
-							HaveField("ObjectMeta.Finalizers", SatisfyAll(
-								ContainElement(capiv1beta1.MachineSetFinalizer),
-							)),
-						)
-					})
-
-				})
-			})
-			Context("when migrating from ClusterAPI to MachineAPI", func() {
-				Context("when no finalizer on the new to-be authoritative resource (MAPI), should NOT set it", func() {
-					BeforeEach(func() {
-						By("Setting the MAPI machine set spec AuthoritativeAPI to MachineAPI")
-						mapiMachineSet = mapiMachineSetBuilder.
-							WithAuthoritativeAPI(machinev1beta1.MachineAuthorityMachineAPI).
-							Build()
-						Eventually(k8sClient.Create(ctx, mapiMachineSet)).Should(Succeed())
-
-						By("Creating a mirror CAPI machine set")
-						capiMachineSet = capiMachineSetBuilder.Build()
-						Eventually(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
-
-						By("Setting the MAPI machine set status AuthoritativeAPI to 'Migrating'")
-						Eventually(k.UpdateStatus(mapiMachineSet, func() {
-							updatedMAPIMachineSet := mapiMachineSetBuilder.
-								WithAuthoritativeAPIStatus(machinev1beta1.MachineAuthorityMigrating).
-								WithSynchronizedGeneration(capiMachineSet.Generation). // Match the CAPI .metadata.generation field.
-								WithConditions([]machinev1beta1.Condition{{
-									Type:               consts.SynchronizedCondition,
-									LastTransitionTime: metav1.Now(),
-									Status:             corev1.ConditionTrue}}).
-								Build()
-							mapiMachineSet.Status.AuthoritativeAPI = updatedMAPIMachineSet.Status.AuthoritativeAPI
-							mapiMachineSet.Status.SynchronizedGeneration = updatedMAPIMachineSet.Status.SynchronizedGeneration
-							mapiMachineSet.Status.Conditions = updatedMAPIMachineSet.Status.Conditions
-						})).Should(Succeed())
-
-						By("Setting the CAPI machine set status condition to 'Paused'")
-						Eventually(k.UpdateStatus(capiMachineSet, func() {
-							updatedCAPIMachineSet := capiMachineSetBuilder.Build()
-							updatedCAPIMachineSet.Status.V1Beta2 = &capiv1beta1.MachineSetV1Beta2Status{
-								Conditions: []metav1.Condition{{
-									Type:               capiv1beta1.PausedV1Beta2Condition,
-									Status:             metav1.ConditionTrue,
-									LastTransitionTime: metav1.Now(),
-								}},
-							}
-							capiMachineSet.Status = updatedCAPIMachineSet.Status
-						})).Should(Succeed())
-
-						req = reconcile.Request{NamespacedName: client.ObjectKeyFromObject(mapiMachineSet)}
-					})
-
-					It("should NOT set the finalizer on the new to-be authoritative resource (MAPI) and requeue", func() {
-						result, err := reconciler.Reconcile(ctx, req)
-						Expect(err).NotTo(HaveOccurred())
-						Expect(result.RequeueAfter).To(BeNumerically(">", 0))
-
-						Eventually(komega.Object(mapiMachineSet)).ShouldNot(
-							HaveField("ObjectMeta.Finalizers", SatisfyAll(
-								ContainElement("machineset.machine.openshift.io"),
-							)),
-						)
 					})
 				})
 			})
@@ -727,7 +584,6 @@ var _ = Describe("With a running MachineSetMigration controller", func() {
 					result, err := reconciler.Reconcile(ctx, req)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(result.Requeue).To(BeFalse())
-					Expect(result.RequeueAfter).To(BeZero())
 
 					Eventually(komega.Object(mapiMachineSet)).Should(SatisfyAll(
 						HaveField("Status.AuthoritativeAPI", Equal(machinev1beta1.MachineAuthorityClusterAPI)),
@@ -797,7 +653,6 @@ var _ = Describe("With a running MachineSetMigration controller", func() {
 					result, err := reconciler.Reconcile(ctx, req)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(result.Requeue).To(BeFalse())
-					Expect(result.RequeueAfter).To(BeZero())
 
 					Eventually(komega.Object(mapiMachineSet)).Should(SatisfyAll(
 						HaveField("Status.AuthoritativeAPI", Equal(machinev1beta1.MachineAuthorityMachineAPI)),
