@@ -746,12 +746,6 @@ github.com/mattn/go-isatty
 # github.com/mattn/go-runewidth v0.0.14
 ## explicit; go 1.9
 github.com/mattn/go-runewidth
-# github.com/metal3-io/cluster-api-provider-metal3/api v1.8.6
-## explicit; go 1.22.3
-github.com/metal3-io/cluster-api-provider-metal3/api/v1beta1
-# github.com/metal3-io/ip-address-manager/api v1.9.2
-## explicit; go 1.22.3
-github.com/metal3-io/ip-address-manager/api/v1alpha1
 # github.com/mgechev/revive v1.3.9
 ## explicit; go 1.21
 github.com/mgechev/revive/config
