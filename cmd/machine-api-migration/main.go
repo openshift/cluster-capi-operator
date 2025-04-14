@@ -32,8 +32,8 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/machinesync"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 	"k8s.io/utils/clock"
-	capav1beta2 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
-	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
 	"github.com/openshift/api/features"
 	featuregates "github.com/openshift/library-go/pkg/operator/configobserver/featuregates"
@@ -64,8 +64,8 @@ func initScheme(scheme *runtime.Scheme) {
 	// TODO(joelspeed): Add additional schemes here once we work out exactly which will be needed.
 	utilruntime.Must(mapiv1beta1.AddToScheme(scheme))
 	utilruntime.Must(configv1.AddToScheme(scheme))
-	utilruntime.Must(capav1beta2.AddToScheme(scheme))
-	utilruntime.Must(capiv1beta1.AddToScheme(scheme))
+	utilruntime.Must(awsv1.AddToScheme(scheme))
+	utilruntime.Must(clusterv1.AddToScheme(scheme))
 }
 
 //nolint:funlen
