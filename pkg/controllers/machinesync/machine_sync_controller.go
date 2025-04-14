@@ -44,6 +44,7 @@ import (
 	"k8s.io/utils/ptr"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	ibmv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
+	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util/annotations"
 	"sigs.k8s.io/cluster-api/util/labels/format"
@@ -714,6 +715,8 @@ func initInfraMachineAndInfraClusterFromProvider(platform configv1.PlatformType)
 	switch platform {
 	case configv1.AWSPlatformType:
 		return &awsv1.AWSMachine{}, &awsv1.AWSCluster{}, nil
+	case configv1.OpenStackPlatformType:
+		return &openstackv1.OpenStackMachine{}, &openstackv1.OpenStackCluster{}, nil
 	case configv1.PowerVSPlatformType:
 		return &ibmv1.IBMPowerVSMachine{}, &ibmv1.IBMPowerVSCluster{}, nil
 	default:
