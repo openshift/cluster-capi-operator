@@ -18,7 +18,7 @@ package util
 import (
 	"strings"
 
-	capiv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
 // IsCAPIManagedLabel determines of a label is managed by CAPI or not.
@@ -26,7 +26,7 @@ import (
 func IsCAPIManagedLabel(key string) bool {
 	dnsSubdomainOrName := strings.Split(key, "/")[0]
 
-	return dnsSubdomainOrName == capiv1.NodeRoleLabelPrefix ||
-		dnsSubdomainOrName == capiv1.NodeRestrictionLabelDomain || strings.HasSuffix(dnsSubdomainOrName, "."+capiv1.NodeRestrictionLabelDomain) ||
-		dnsSubdomainOrName == capiv1.ManagedNodeLabelDomain || strings.HasSuffix(dnsSubdomainOrName, "."+capiv1.ManagedNodeLabelDomain)
+	return dnsSubdomainOrName == clusterv1.NodeRoleLabelPrefix ||
+		dnsSubdomainOrName == clusterv1.NodeRestrictionLabelDomain || strings.HasSuffix(dnsSubdomainOrName, "."+clusterv1.NodeRestrictionLabelDomain) ||
+		dnsSubdomainOrName == clusterv1.ManagedNodeLabelDomain || strings.HasSuffix(dnsSubdomainOrName, "."+clusterv1.ManagedNodeLabelDomain)
 }

@@ -20,11 +20,11 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation/field"
-	capiv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
 // fromCAPIMachineSetToMAPIMachineSet takes a CAPI MachineSet and returns a converted MAPI MachineSet.
-func fromCAPIMachineSetToMAPIMachineSet(capiMachineSet *capiv1.MachineSet) (*mapiv1.MachineSet, error) {
+func fromCAPIMachineSetToMAPIMachineSet(capiMachineSet *clusterv1.MachineSet) (*mapiv1.MachineSet, error) {
 	errs := field.ErrorList{}
 
 	mapiMachineSet := &mapiv1.MachineSet{

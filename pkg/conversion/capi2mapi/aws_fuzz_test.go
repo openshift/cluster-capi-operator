@@ -29,8 +29,8 @@ import (
 	conversiontest "github.com/openshift/cluster-capi-operator/pkg/conversion/test/fuzz"
 
 	runtimeserializer "k8s.io/apimachinery/pkg/runtime/serializer"
-	capav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
-	capiv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -49,19 +49,19 @@ var _ = Describe("AWS Fuzz (capi2mapi)", func() {
 		},
 	}
 
-	infraCluster := &capav1.AWSCluster{
-		Spec: capav1.AWSClusterSpec{
+	infraCluster := &awsv1.AWSCluster{
+		Spec: awsv1.AWSClusterSpec{
 			Region: "us-east-1",
 		},
 	}
 
 	Context("AWSMachine Conversion", func() {
-		fromMachineAndAWSMachineAndAWSCluster := func(machine *capiv1.Machine, infraMachine client.Object, infraCluster client.Object) capi2mapi.MachineAndInfrastructureMachine {
-			awsMachine, ok := infraMachine.(*capav1.AWSMachine)
-			Expect(ok).To(BeTrue(), "input infra machine should be of type %T, got %T", &capav1.AWSMachine{}, infraMachine)
+		fromMachineAndAWSMachineAndAWSCluster := func(machine *clusterv1.Machine, infraMachine client.Object, infraCluster client.Object) capi2mapi.MachineAndInfrastructureMachine {
+			awsMachine, ok := infraMachine.(*awsv1.AWSMachine)
+			Expect(ok).To(BeTrue(), "input infra machine should be of type %T, got %T", &awsv1.AWSMachine{}, infraMachine)
 
-			awsCluster, ok := infraCluster.(*capav1.AWSCluster)
-			Expect(ok).To(BeTrue(), "input infra cluster should be of type %T, got %T", &capav1.AWSCluster{}, infraCluster)
+			awsCluster, ok := infraCluster.(*awsv1.AWSCluster)
+			Expect(ok).To(BeTrue(), "input infra cluster should be of type %T, got %T", &awsv1.AWSCluster{}, infraCluster)
 
 			return capi2mapi.FromMachineAndAWSMachineAndAWSCluster(machine, awsMachine, awsCluster)
 		}
@@ -70,7 +70,7 @@ var _ = Describe("AWS Fuzz (capi2mapi)", func() {
 			scheme,
 			infra,
 			infraCluster,
-			&capav1.AWSMachine{},
+			&awsv1.AWSMachine{},
 			mapi2capi.FromAWSMachineAndInfra,
 			fromMachineAndAWSMachineAndAWSCluster,
 			conversiontest.ObjectMetaFuzzerFuncs(capiNamespace),
@@ -80,12 +80,12 @@ var _ = Describe("AWS Fuzz (capi2mapi)", func() {
 	})
 
 	Context("AWSMachineSet Conversion", func() {
-		fromMachineSetAndAWSMachineTemplateAndAWSCluster := func(machineSet *capiv1.MachineSet, infraMachineTemplate client.Object, infraCluster client.Object) capi2mapi.MachineSetAndMachineTemplate {
-			awsMachineTemplate, ok := infraMachineTemplate.(*capav1.AWSMachineTemplate)
-			Expect(ok).To(BeTrue(), "input infra machine template should be of type %T, got %T", &capav1.AWSMachineTemplate{}, infraMachineTemplate)
+		fromMachineSetAndAWSMachineTemplateAndAWSCluster := func(machineSet *clusterv1.MachineSet, infraMachineTemplate client.Object, infraCluster client.Object) capi2mapi.MachineSetAndMachineTemplate {
+			awsMachineTemplate, ok := infraMachineTemplate.(*awsv1.AWSMachineTemplate)
+			Expect(ok).To(BeTrue(), "input infra machine template should be of type %T, got %T", &awsv1.AWSMachineTemplate{}, infraMachineTemplate)
 
-			awsCluster, ok := infraCluster.(*capav1.AWSCluster)
-			Expect(ok).To(BeTrue(), "input infra cluster should be of type %T, got %T", &capav1.AWSCluster{}, infraCluster)
+			awsCluster, ok := infraCluster.(*awsv1.AWSCluster)
+			Expect(ok).To(BeTrue(), "input infra cluster should be of type %T, got %T", &awsv1.AWSCluster{}, infraCluster)
 
 			return capi2mapi.FromMachineSetAndAWSMachineTemplateAndAWSCluster(machineSet, awsMachineTemplate, awsCluster)
 		}
@@ -94,7 +94,7 @@ var _ = Describe("AWS Fuzz (capi2mapi)", func() {
 			scheme,
 			infra,
 			infraCluster,
-			&capav1.AWSMachineTemplate{},
+			&awsv1.AWSMachineTemplate{},
 			mapi2capi.FromAWSMachineSetAndInfra,
 			fromMachineSetAndAWSMachineTemplateAndAWSCluster,
 			conversiontest.ObjectMetaFuzzerFuncs(capiNamespace),
@@ -113,33 +113,33 @@ func awsProviderIDFuzzer(c fuzz.Continue) string {
 //nolint:funlen
 func awsMachineFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interface{} {
 	return []interface{}{
-		func(nit *capav1.NetworkInterfaceType, c fuzz.Continue) {
+		func(nit *awsv1.NetworkInterfaceType, c fuzz.Continue) {
 			switch c.Int31n(3) {
 			case 0:
-				*nit = capav1.NetworkInterfaceTypeEFAWithENAInterface
+				*nit = awsv1.NetworkInterfaceTypeEFAWithENAInterface
 			case 1:
-				*nit = capav1.NetworkInterfaceTypeENI
+				*nit = awsv1.NetworkInterfaceTypeENI
 			case 2:
 				*nit = ""
 			}
 		},
-		func(imdo *capav1.InstanceMetadataOptions, c fuzz.Continue) {
+		func(imdo *awsv1.InstanceMetadataOptions, c fuzz.Continue) {
 			c.FuzzNoCustom(imdo)
 
 			// TODO(OCPCLOUD-2710): Fields not yet supported by MAPI.
-			imdo.HTTPEndpoint = capav1.InstanceMetadataEndpointStateEnabled
+			imdo.HTTPEndpoint = awsv1.InstanceMetadataEndpointStateEnabled
 			imdo.HTTPPutResponseHopLimit = 0
-			imdo.InstanceMetadataTags = capav1.InstanceMetadataEndpointStateDisabled
+			imdo.InstanceMetadataTags = awsv1.InstanceMetadataEndpointStateDisabled
 		},
-		func(tokenState *capav1.HTTPTokensState, c fuzz.Continue) {
+		func(tokenState *awsv1.HTTPTokensState, c fuzz.Continue) {
 			switch c.Int31n(2) {
 			case 0:
-				*tokenState = capav1.HTTPTokensStateOptional
+				*tokenState = awsv1.HTTPTokensStateOptional
 			case 1:
-				*tokenState = capav1.HTTPTokensStateRequired
+				*tokenState = awsv1.HTTPTokensStateRequired
 			}
 		},
-		func(ami *capav1.AMIReference, c fuzz.Continue) {
+		func(ami *awsv1.AMIReference, c fuzz.Continue) {
 			c.FuzzNoCustom(ami)
 
 			// Ensure that the AMI ID is set.
@@ -149,14 +149,14 @@ func awsMachineFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interface{} 
 			// Not required for our use case. Can be ignored.
 			ami.EKSOptimizedLookupType = nil
 		},
-		func(ignition *capav1.Ignition, c fuzz.Continue) {
+		func(ignition *awsv1.Ignition, c fuzz.Continue) {
 			// We force these fields, so they must be fuzzed in this way.
-			*ignition = capav1.Ignition{
+			*ignition = awsv1.Ignition{
 				Version:     "3.4",
-				StorageType: capav1.IgnitionStorageTypeOptionUnencryptedUserData,
+				StorageType: awsv1.IgnitionStorageTypeOptionUnencryptedUserData,
 			}
 		},
-		func(spec *capav1.AWSMachineSpec, c fuzz.Continue) {
+		func(spec *awsv1.AWSMachineSpec, c fuzz.Continue) {
 			c.FuzzNoCustom(spec)
 
 			fuzzAWSMachineSpecTenancy(&spec.Tenancy, c)
@@ -167,17 +167,17 @@ func awsMachineFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interface{} 
 			spec.ImageLookupOrg = ""
 			spec.ImageLookupBaseOS = ""
 			spec.NetworkInterfaces = nil
-			spec.CloudInit = capav1.CloudInit{}
+			spec.CloudInit = awsv1.CloudInit{}
 			spec.UncompressedUserData = nil
 			spec.PrivateDNSName = nil
 			// We don't support this field since the externally managed annotation is added, so it's best to keep this nil.
 			spec.SecurityGroupOverrides = nil
 		},
-		func(m *capav1.AWSMachine, c fuzz.Continue) {
+		func(m *awsv1.AWSMachine, c fuzz.Continue) {
 			c.FuzzNoCustom(m)
 
 			// Ensure the type meta is set correctly.
-			m.TypeMeta.APIVersion = capav1.GroupVersion.String()
+			m.TypeMeta.APIVersion = awsv1.GroupVersion.String()
 			m.TypeMeta.Kind = "AWSMachine"
 		},
 	}
@@ -196,14 +196,14 @@ func fuzzAWSMachineSpecTenancy(tenancy *string, c fuzz.Continue) {
 	}
 }
 
-func fuzzAWSMachineSpecMarketType(marketType *capav1.MarketType, c fuzz.Continue) {
+func fuzzAWSMachineSpecMarketType(marketType *awsv1.MarketType, c fuzz.Continue) {
 	switch c.Int31n(4) {
 	case 0:
-		*marketType = capav1.MarketTypeOnDemand
+		*marketType = awsv1.MarketTypeOnDemand
 	case 1:
-		*marketType = capav1.MarketTypeSpot
+		*marketType = awsv1.MarketTypeSpot
 	case 2:
-		*marketType = capav1.MarketTypeCapacityBlock
+		*marketType = awsv1.MarketTypeCapacityBlock
 	case 3:
 		*marketType = ""
 	}
@@ -211,11 +211,11 @@ func fuzzAWSMachineSpecMarketType(marketType *capav1.MarketType, c fuzz.Continue
 
 func awsMachineTemplateFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interface{} {
 	return []interface{}{
-		func(m *capav1.AWSMachineTemplate, c fuzz.Continue) {
+		func(m *awsv1.AWSMachineTemplate, c fuzz.Continue) {
 			c.FuzzNoCustom(m)
 
 			// Ensure the type meta is set correctly.
-			m.TypeMeta.APIVersion = capav1.GroupVersion.String()
+			m.TypeMeta.APIVersion = awsv1.GroupVersion.String()
 			m.TypeMeta.Kind = "AWSMachineTemplate"
 		},
 	}

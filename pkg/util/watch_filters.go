@@ -21,7 +21,7 @@ import (
 	"fmt"
 
 	"k8s.io/klog/v2"
-	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -67,7 +67,7 @@ func ResolveCAPIMachineSetFromObject(namespace string) func(context.Context, cli
 		requests := []reconcile.Request{}
 
 		for _, ref := range ownerReferences {
-			if ref.Kind != machineSetKind || ref.APIVersion != capiv1beta1.GroupVersion.String() {
+			if ref.Kind != machineSetKind || ref.APIVersion != clusterv1.GroupVersion.String() {
 				continue
 			}
 

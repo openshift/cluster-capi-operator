@@ -28,8 +28,8 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/utils/ptr"
-	capibmv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
-	capiv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	ibmpowervsv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
 var (
@@ -39,39 +39,39 @@ var (
 
 // machineAndPowerVSMachineAndPowerVSCluster stores the details of a Cluster API Machine and PowerVSMachine and PowerVSCluster.
 type machineAndPowerVSMachineAndPowerVSCluster struct {
-	machine        *capiv1.Machine
-	powerVSMachine *capibmv1.IBMPowerVSMachine
-	powerVSCluster *capibmv1.IBMPowerVSCluster
+	machine        *clusterv1.Machine
+	powerVSMachine *ibmpowervsv1.IBMPowerVSMachine
+	powerVSCluster *ibmpowervsv1.IBMPowerVSCluster
 }
 
 // machineSetAndPowerVSMachineTemplateAndPowerVSCluster stores the details of a Cluster API MachineSet and PowerVSMachineTemplate and AWSCluster.
 type machineSetAndPowerVSMachineTemplateAndPowerVSCluster struct {
-	machineSet     *capiv1.MachineSet
-	template       *capibmv1.IBMPowerVSMachineTemplate
-	powerVSCluster *capibmv1.IBMPowerVSCluster
+	machineSet     *clusterv1.MachineSet
+	template       *ibmpowervsv1.IBMPowerVSMachineTemplate
+	powerVSCluster *ibmpowervsv1.IBMPowerVSCluster
 	*machineAndPowerVSMachineAndPowerVSCluster
 }
 
 // FromMachineAndPowerVSMachineAndPowerVSCluster wraps a CAPI Machine and CAPIBM PowerVSMachine and CAPIBM PowerVSCluster into a capi2mapi MachineAndInfrastructureMachine.
-func FromMachineAndPowerVSMachineAndPowerVSCluster(m *capiv1.Machine, pm *capibmv1.IBMPowerVSMachine, pc *capibmv1.IBMPowerVSCluster) MachineAndInfrastructureMachine {
+func FromMachineAndPowerVSMachineAndPowerVSCluster(m *clusterv1.Machine, pm *ibmpowervsv1.IBMPowerVSMachine, pc *ibmpowervsv1.IBMPowerVSCluster) MachineAndInfrastructureMachine {
 	return &machineAndPowerVSMachineAndPowerVSCluster{machine: m, powerVSMachine: pm, powerVSCluster: pc}
 }
 
 // FromMachineSetAndPowerVSMachineTemplateAndPowerVSCluster wraps a CAPI MachineSet and CAPIBM PowerVSMachineTemplate and CAPIBM PowerVSCluster into a capi2mapi MachineSetAndAWSMachineTemplateAndAWSCluster.
-func FromMachineSetAndPowerVSMachineTemplateAndPowerVSCluster(ms *capiv1.MachineSet, mts *capibmv1.IBMPowerVSMachineTemplate, pc *capibmv1.IBMPowerVSCluster) MachineSetAndMachineTemplate {
+func FromMachineSetAndPowerVSMachineTemplateAndPowerVSCluster(ms *clusterv1.MachineSet, mts *ibmpowervsv1.IBMPowerVSMachineTemplate, pc *ibmpowervsv1.IBMPowerVSCluster) MachineSetAndMachineTemplate {
 	return machineSetAndPowerVSMachineTemplateAndPowerVSCluster{
 		machineSet:     ms,
 		template:       mts,
 		powerVSCluster: pc,
 		machineAndPowerVSMachineAndPowerVSCluster: &machineAndPowerVSMachineAndPowerVSCluster{
-			machine: &capiv1.Machine{
+			machine: &clusterv1.Machine{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels:      ms.Spec.Template.ObjectMeta.Labels,
 					Annotations: ms.Spec.Template.ObjectMeta.Annotations,
 				},
 				Spec: ms.Spec.Template.Spec,
 			},
-			powerVSMachine: &capibmv1.IBMPowerVSMachine{
+			powerVSMachine: &ibmpowervsv1.IBMPowerVSMachine{
 				Spec: mts.Spec.Template.Spec,
 			},
 			powerVSCluster: pc,
@@ -206,7 +206,7 @@ func (m machineAndPowerVSMachineAndPowerVSCluster) toProviderSpec() (*mapiv1.Pow
 
 // Conversion helpers.
 
-func convertPowerVSNetworkToMAPI(fldPath *field.Path, network capibmv1.IBMPowerVSResourceReference) (mapiv1.PowerVSResource, *field.Error) {
+func convertPowerVSNetworkToMAPI(fldPath *field.Path, network ibmpowervsv1.IBMPowerVSResourceReference) (mapiv1.PowerVSResource, *field.Error) {
 	var networkResource mapiv1.PowerVSResource
 
 	// In mapi provider the network resource is checked in the order of ID, Name followed by RegEx.
@@ -231,7 +231,7 @@ func convertPowerVSNetworkToMAPI(fldPath *field.Path, network capibmv1.IBMPowerV
 	return networkResource, field.Invalid(fldPath, network, "unable to convert network to MAPI")
 }
 
-func convertPowerVSImageToMAPI(fldPath *field.Path, image *capibmv1.IBMPowerVSResourceReference, imageRef *corev1.LocalObjectReference) (mapiv1.PowerVSResource, *field.Error) {
+func convertPowerVSImageToMAPI(fldPath *field.Path, image *ibmpowervsv1.IBMPowerVSResourceReference, imageRef *corev1.LocalObjectReference) (mapiv1.PowerVSResource, *field.Error) {
 	if image == nil && imageRef == nil {
 		return mapiv1.PowerVSResource{}, field.Invalid(fldPath, image, "unable to convert image, image and imageref is nil")
 	}
@@ -267,7 +267,7 @@ func convertPowerVSImageToMAPI(fldPath *field.Path, image *capibmv1.IBMPowerVSRe
 	return mapiv1.PowerVSResource{}, field.Invalid(fldPath, image, "unable to convert image, image id, name and regex all are nil")
 }
 
-func convertPowerVSServiceInstanceToMAPI(fldPath *field.Path, serviceInstanceID string, serviceInstance *capibmv1.IBMPowerVSResourceReference) (mapiv1.PowerVSResource, *field.Error) {
+func convertPowerVSServiceInstanceToMAPI(fldPath *field.Path, serviceInstanceID string, serviceInstance *ibmpowervsv1.IBMPowerVSResourceReference) (mapiv1.PowerVSResource, *field.Error) {
 	var serviceInstanceResource mapiv1.PowerVSResource
 	if serviceInstanceID != "" {
 		serviceInstanceResource.Type = mapiv1.PowerVSResourceTypeID

@@ -23,14 +23,14 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/validation/field"
-	capiv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
 // fromMAPIMachineSetToCAPIMachineSet takes a MAPI MachineSet and returns a converted CAPI MachineSet.
-func fromMAPIMachineSetToCAPIMachineSet(mapiMachineSet *mapiv1.MachineSet) (*capiv1.MachineSet, utilerrors.Aggregate) {
+func fromMAPIMachineSetToCAPIMachineSet(mapiMachineSet *mapiv1.MachineSet) (*clusterv1.MachineSet, utilerrors.Aggregate) {
 	var errs field.ErrorList
 
-	capiMachineSet := &capiv1.MachineSet{
+	capiMachineSet := &clusterv1.MachineSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            mapiMachineSet.Name,
 			Namespace:       mapiMachineSet.Namespace,
@@ -39,14 +39,14 @@ func fromMAPIMachineSetToCAPIMachineSet(mapiMachineSet *mapiv1.MachineSet) (*cap
 			Finalizers:      nil, // The CAPI MachineSet finalizer is managed by the CAPI machineset controller.
 			OwnerReferences: nil, // OwnerReferences not populated here. They are added later by the machineSetSync controller.
 		},
-		Spec: capiv1.MachineSetSpec{
+		Spec: clusterv1.MachineSetSpec{
 			Selector: convertMAPIMachineSetSelectorToCAPI(mapiMachineSet.Spec.Selector),
 			Replicas: mapiMachineSet.Spec.Replicas,
 			// ClusterName: // ClusterName not populated here. It is added later by higher level functions
 			MinReadySeconds: mapiMachineSet.Spec.MinReadySeconds,
-			DeletePolicy:    cmp.Or(mapiMachineSet.Spec.DeletePolicy, string(capiv1.RandomMachineSetDeletePolicy)), // CAPI defaults to Random if empty.
-			Template: capiv1.MachineTemplateSpec{
-				ObjectMeta: capiv1.ObjectMeta{
+			DeletePolicy:    cmp.Or(mapiMachineSet.Spec.DeletePolicy, string(clusterv1.RandomMachineSetDeletePolicy)), // CAPI defaults to Random if empty.
+			Template: clusterv1.MachineTemplateSpec{
+				ObjectMeta: clusterv1.ObjectMeta{
 					Labels:      convertMAPILabelsToCAPI(mapiMachineSet.Spec.Template.Labels),
 					Annotations: convertMAPIAnnotationsToCAPI(mapiMachineSet.Spec.Template.Annotations),
 				},

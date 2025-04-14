@@ -16,16 +16,16 @@ limitations under the License.
 package mapi2capi
 
 import (
-	capiv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // Machine represents a type holding MAPI Machine.
 type Machine interface {
-	ToMachineAndInfrastructureMachine() (*capiv1.Machine, client.Object, []string, error)
+	ToMachineAndInfrastructureMachine() (*clusterv1.Machine, client.Object, []string, error)
 }
 
 // MachineSet represents a type holding MAPI MachineSet.
 type MachineSet interface {
-	ToMachineSetAndMachineTemplate() (*capiv1.MachineSet, client.Object, []string, error)
+	ToMachineSetAndMachineTemplate() (*clusterv1.MachineSet, client.Object, []string, error)
 }

@@ -29,8 +29,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/validation/field"
-	capibmv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
-	capiv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	ibmpowervsv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 )
@@ -74,7 +74,7 @@ func FromPowerVSMachineSetAndInfra(m *mapiv1beta1.MachineSet, i *configv1.Infras
 
 // ToMachineAndInfrastructureMachine is used to generate a CAPI Machine and the corresponding InfrastructureMachine
 // from the stored MAPI Machine and Infrastructure objects.
-func (m *powerVSMachineAndInfra) ToMachineAndInfrastructureMachine() (*capiv1.Machine, client.Object, []string, error) {
+func (m *powerVSMachineAndInfra) ToMachineAndInfrastructureMachine() (*clusterv1.Machine, client.Object, []string, error) {
 	capiMachine, powerVSMachine, warnings, errs := m.toMachineAndInfrastructureMachine()
 
 	if len(errs) > 0 {
@@ -84,7 +84,7 @@ func (m *powerVSMachineAndInfra) ToMachineAndInfrastructureMachine() (*capiv1.Ma
 	return capiMachine, powerVSMachine, warnings, nil
 }
 
-func (m *powerVSMachineAndInfra) toMachineAndInfrastructureMachine() (*capiv1.Machine, client.Object, []string, field.ErrorList) {
+func (m *powerVSMachineAndInfra) toMachineAndInfrastructureMachine() (*clusterv1.Machine, client.Object, []string, field.ErrorList) {
 	var (
 		errs     field.ErrorList
 		warnings []string
@@ -100,13 +100,13 @@ func (m *powerVSMachineAndInfra) toMachineAndInfrastructureMachine() (*capiv1.Ma
 		errs = append(errs, machineErrs...)
 	}
 
-	capiMachine, machineErrs := fromMAPIMachineToCAPIMachine(m.machine, capibmv1.GroupVersion.String(), ibmPowerVSMachineKind)
+	capiMachine, machineErrs := fromMAPIMachineToCAPIMachine(m.machine, ibmpowervsv1.GroupVersion.String(), ibmPowerVSMachineKind)
 	if machineErrs != nil {
 		errs = append(errs, machineErrs...)
 	}
 
 	if powerVSProviderConfig.UserDataSecret != nil && powerVSProviderConfig.UserDataSecret.Name != "" {
-		capiMachine.Spec.Bootstrap = capiv1.Bootstrap{
+		capiMachine.Spec.Bootstrap = clusterv1.Bootstrap{
 			DataSecretName: &powerVSProviderConfig.UserDataSecret.Name,
 		}
 	}
@@ -119,7 +119,7 @@ func (m *powerVSMachineAndInfra) toMachineAndInfrastructureMachine() (*capiv1.Ma
 		errs = append(errs, field.Invalid(field.NewPath("infrastructure", "status", "infrastructureName"), m.infrastructure.Status.InfrastructureName, "infrastructure cannot be nil and infrastructure.Status.InfrastructureName cannot be empty"))
 	} else {
 		capiMachine.Spec.ClusterName = m.infrastructure.Status.InfrastructureName
-		capiMachine.Labels[capiv1.ClusterNameLabel] = m.infrastructure.Status.InfrastructureName
+		capiMachine.Labels[clusterv1.ClusterNameLabel] = m.infrastructure.Status.InfrastructureName
 	}
 
 	// The InfraMachine should always have the same labels and annotations as the Machine.
@@ -133,7 +133,7 @@ func (m *powerVSMachineAndInfra) toMachineAndInfrastructureMachine() (*capiv1.Ma
 // ToMachineSetAndMachineTemplate converts a mapi2capi PowerVSMachineSetAndInfra into a CAPI MachineSet and CAPIBM IBMPowerVSMachineTemplate.
 //
 //nolint:dupl
-func (m *powerVSMachineSetAndInfra) ToMachineSetAndMachineTemplate() (*capiv1.MachineSet, client.Object, []string, error) {
+func (m *powerVSMachineSetAndInfra) ToMachineSetAndMachineTemplate() (*clusterv1.MachineSet, client.Object, []string, error) {
 	var (
 		errs     []error
 		warnings []string
@@ -146,7 +146,7 @@ func (m *powerVSMachineSetAndInfra) ToMachineSetAndMachineTemplate() (*capiv1.Ma
 
 	warnings = append(warnings, warn...)
 
-	powerVSMachine, ok := powerVSMachineObj.(*capibmv1.IBMPowerVSMachine)
+	powerVSMachine, ok := powerVSMachineObj.(*ibmpowervsv1.IBMPowerVSMachine)
 	if !ok {
 		panic(fmt.Errorf("%w: %T", errUnexpectedObjectTypeForMachine, powerVSMachineObj))
 	}
@@ -174,7 +174,7 @@ func (m *powerVSMachineSetAndInfra) ToMachineSetAndMachineTemplate() (*capiv1.Ma
 	} else {
 		powerVSMachineSet.Spec.Template.Spec.ClusterName = m.infrastructure.Status.InfrastructureName
 		powerVSMachineSet.Spec.ClusterName = m.infrastructure.Status.InfrastructureName
-		powerVSMachineSet.Labels[capiv1.ClusterNameLabel] = m.infrastructure.Status.InfrastructureName
+		powerVSMachineSet.Labels[clusterv1.ClusterNameLabel] = m.infrastructure.Status.InfrastructureName
 	}
 
 	if len(errs) > 0 {
@@ -199,7 +199,7 @@ func powerVSProviderSpecFromRawExtension(rawExtension *runtime.RawExtension) (ma
 }
 
 // toPowerVSMachine converts PowerVSMachineProviderConfig to IBMPowerVSMachineSpec.
-func (m *powerVSMachineAndInfra) toPowerVSMachine(providerSpec mapiv1.PowerVSMachineProviderConfig) (*capibmv1.IBMPowerVSMachine, field.ErrorList) {
+func (m *powerVSMachineAndInfra) toPowerVSMachine(providerSpec mapiv1.PowerVSMachineProviderConfig) (*ibmpowervsv1.IBMPowerVSMachine, field.ErrorList) {
 	fldPath := field.NewPath("spec", "providerSpec", "value")
 
 	var errs field.ErrorList
@@ -219,14 +219,14 @@ func (m *powerVSMachineAndInfra) toPowerVSMachine(providerSpec mapiv1.PowerVSMac
 		errs = append(errs, err)
 	}
 
-	spec := capibmv1.IBMPowerVSMachineSpec{
+	spec := ibmpowervsv1.IBMPowerVSMachineSpec{
 		//	ServiceInstanceID: Deprecated, Use ServiceInstance.
 		ServiceInstance: serviceInstance,
 		SSHKey:          providerSpec.KeyPairName,
 		Image:           image,
 		// ImageRef: Not required as image is set above
 		SystemType:    providerSpec.SystemType,
-		ProcessorType: capibmv1.PowerVSProcessorType(providerSpec.ProcessorType),
+		ProcessorType: ibmpowervsv1.PowerVSProcessorType(providerSpec.ProcessorType),
 		Processors:    providerSpec.Processors,
 		MemoryGiB:     providerSpec.MemoryGiB,
 		Network:       network,
@@ -246,9 +246,9 @@ func (m *powerVSMachineAndInfra) toPowerVSMachine(providerSpec mapiv1.PowerVSMac
 		errs = append(errs, field.Invalid(fldPath.Child("loadBalancers"), providerSpec.LoadBalancers, "loadBalancers are not supported"))
 	}
 
-	return &capibmv1.IBMPowerVSMachine{
+	return &ibmpowervsv1.IBMPowerVSMachine{
 		TypeMeta: metav1.TypeMeta{
-			APIVersion: capibmv1.GroupVersion.String(),
+			APIVersion: ibmpowervsv1.GroupVersion.String(),
 			Kind:       ibmPowerVSMachineKind,
 		},
 		ObjectMeta: metav1.ObjectMeta{
@@ -259,59 +259,59 @@ func (m *powerVSMachineAndInfra) toPowerVSMachine(providerSpec mapiv1.PowerVSMac
 	}, errs
 }
 
-func powerVSMachineToPowerVSMachineTemplate(powerVSMachine *capibmv1.IBMPowerVSMachine, name string, namespace string) *capibmv1.IBMPowerVSMachineTemplate {
-	return &capibmv1.IBMPowerVSMachineTemplate{
+func powerVSMachineToPowerVSMachineTemplate(powerVSMachine *ibmpowervsv1.IBMPowerVSMachine, name string, namespace string) *ibmpowervsv1.IBMPowerVSMachineTemplate {
+	return &ibmpowervsv1.IBMPowerVSMachineTemplate{
 		TypeMeta: metav1.TypeMeta{
-			APIVersion: capibmv1.GroupVersion.String(),
+			APIVersion: ibmpowervsv1.GroupVersion.String(),
 			Kind:       ibmPowerVSTemplateKind,
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
 		},
-		Spec: capibmv1.IBMPowerVSMachineTemplateSpec{
-			Template: capibmv1.IBMPowerVSMachineTemplateResource{
+		Spec: ibmpowervsv1.IBMPowerVSMachineTemplateSpec{
+			Template: ibmpowervsv1.IBMPowerVSMachineTemplateResource{
 				Spec: powerVSMachine.Spec,
 			},
 		},
 	}
 }
 
-func convertServiceInstanceToCAPI(fldPath *field.Path, serviceInstance mapiv1.PowerVSResource) (*capibmv1.IBMPowerVSResourceReference, *field.Error) {
+func convertServiceInstanceToCAPI(fldPath *field.Path, serviceInstance mapiv1.PowerVSResource) (*ibmpowervsv1.IBMPowerVSResourceReference, *field.Error) {
 	switch serviceInstance.Type {
 	case mapiv1.PowerVSResourceTypeID:
-		return &capibmv1.IBMPowerVSResourceReference{ID: serviceInstance.ID}, nil
+		return &ibmpowervsv1.IBMPowerVSResourceReference{ID: serviceInstance.ID}, nil
 	case mapiv1.PowerVSResourceTypeName:
-		return &capibmv1.IBMPowerVSResourceReference{Name: serviceInstance.Name}, nil
+		return &ibmpowervsv1.IBMPowerVSResourceReference{Name: serviceInstance.Name}, nil
 	case mapiv1.PowerVSResourceTypeRegEx:
-		return &capibmv1.IBMPowerVSResourceReference{RegEx: serviceInstance.RegEx}, nil
+		return &ibmpowervsv1.IBMPowerVSResourceReference{RegEx: serviceInstance.RegEx}, nil
 	default:
 		return nil, field.Invalid(fldPath.Child("type"), serviceInstance.Type, "unknown type")
 	}
 }
 
-func convertImageToCAPI(fldPath *field.Path, image mapiv1.PowerVSResource) (*capibmv1.IBMPowerVSResourceReference, *field.Error) {
+func convertImageToCAPI(fldPath *field.Path, image mapiv1.PowerVSResource) (*ibmpowervsv1.IBMPowerVSResourceReference, *field.Error) {
 	switch image.Type {
 	case mapiv1.PowerVSResourceTypeID:
-		return &capibmv1.IBMPowerVSResourceReference{ID: image.ID}, nil
+		return &ibmpowervsv1.IBMPowerVSResourceReference{ID: image.ID}, nil
 	case mapiv1.PowerVSResourceTypeName:
-		return &capibmv1.IBMPowerVSResourceReference{Name: image.Name}, nil
+		return &ibmpowervsv1.IBMPowerVSResourceReference{Name: image.Name}, nil
 	case mapiv1.PowerVSResourceTypeRegEx:
-		return &capibmv1.IBMPowerVSResourceReference{RegEx: image.RegEx}, nil
+		return &ibmpowervsv1.IBMPowerVSResourceReference{RegEx: image.RegEx}, nil
 	default:
 		return nil, field.Invalid(fldPath.Child("type"), image.Type, "unknown type")
 	}
 }
 
-func convertNetworkToCAPI(fldPath *field.Path, network mapiv1.PowerVSResource) (capibmv1.IBMPowerVSResourceReference, *field.Error) {
+func convertNetworkToCAPI(fldPath *field.Path, network mapiv1.PowerVSResource) (ibmpowervsv1.IBMPowerVSResourceReference, *field.Error) {
 	switch network.Type {
 	case mapiv1.PowerVSResourceTypeID:
-		return capibmv1.IBMPowerVSResourceReference{ID: network.ID}, nil
+		return ibmpowervsv1.IBMPowerVSResourceReference{ID: network.ID}, nil
 	case mapiv1.PowerVSResourceTypeName:
-		return capibmv1.IBMPowerVSResourceReference{Name: network.Name}, nil
+		return ibmpowervsv1.IBMPowerVSResourceReference{Name: network.Name}, nil
 	case mapiv1.PowerVSResourceTypeRegEx:
-		return capibmv1.IBMPowerVSResourceReference{RegEx: network.RegEx}, nil
+		return ibmpowervsv1.IBMPowerVSResourceReference{RegEx: network.RegEx}, nil
 	default:
-		return capibmv1.IBMPowerVSResourceReference{}, field.Invalid(fldPath.Child("type"), network.Type, "unknown type")
+		return ibmpowervsv1.IBMPowerVSResourceReference{}, field.Invalid(fldPath.Child("type"), network.Type, "unknown type")
 	}
 }

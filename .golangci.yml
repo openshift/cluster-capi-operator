@@ -84,6 +84,15 @@ linters-settings:
       WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
       See the License for the specific language governing permissions and
       limitations under the License.
+  importas:
+    alias:
+      - pkg: "sigs.k8s.io/cluster-api/api/v1beta1"
+        alias: "clusterv1"
+      - pkg: "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
+        alias: "awsv1"
+      - pkg: "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
+        alias: "ibmpowervsv1"
+    no-unaliased: true
   nlreturn:
     block-size: 2
   revive:

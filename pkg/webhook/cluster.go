@@ -21,7 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/validation/field"
-	"sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
@@ -50,7 +50,7 @@ func (r *ClusterWebhook) SetupWebhookWithManager(mgr ctrl.Manager) error {
 
 	if err := ctrl.NewWebhookManagedBy(mgr).
 		WithValidator(r).
-		For(&v1beta1.Cluster{}).
+		For(&clusterv1.Cluster{}).
 		Complete(); err != nil {
 		return fmt.Errorf("failed to create webhook: %w", err)
 	}
@@ -73,7 +73,7 @@ func (r *ClusterWebhook) fetchInfrastructureObject(ctx context.Context) (*config
 }
 
 // In openshift-cluster-api allow only one Cluster object to be created. This Cluster manages the cluster we are running on.
-func (r *ClusterWebhook) validateClusterName(ctx context.Context, cluster *v1beta1.Cluster) error {
+func (r *ClusterWebhook) validateClusterName(ctx context.Context, cluster *clusterv1.Cluster) error {
 	if cluster.Namespace != openshiftCAPINamespace {
 		return nil
 	}
@@ -93,7 +93,7 @@ func (r *ClusterWebhook) validateClusterName(ctx context.Context, cluster *v1bet
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type.
 func (r *ClusterWebhook) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	cluster, ok := obj.(*v1beta1.Cluster)
+	cluster, ok := obj.(*clusterv1.Cluster)
 	if !ok {
 		panic("expected to get an of object of type v1beta1.Cluster")
 	}
@@ -123,12 +123,12 @@ func (r *ClusterWebhook) ValidateCreate(ctx context.Context, obj runtime.Object)
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type.
 func (r *ClusterWebhook) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
-	_, ok := oldObj.(*v1beta1.Cluster)
+	_, ok := oldObj.(*clusterv1.Cluster)
 	if !ok {
 		panic("expected to get an of object of type v1beta1.Cluster")
 	}
 
-	newCluster, ok := newObj.(*v1beta1.Cluster)
+	newCluster, ok := newObj.(*clusterv1.Cluster)
 	if !ok {
 		panic("expected to get an of object of type v1beta1.Cluster")
 	}
@@ -149,7 +149,7 @@ func (r *ClusterWebhook) ValidateUpdate(ctx context.Context, oldObj, newObj runt
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type.
 func (r *ClusterWebhook) ValidateDelete(_ context.Context, obj runtime.Object) (admission.Warnings, error) {
-	cluster, ok := obj.(*v1beta1.Cluster)
+	cluster, ok := obj.(*clusterv1.Cluster)
 	if !ok {
 		panic("expected to get an of object of type v1beta1.Cluster")
 	}

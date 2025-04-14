@@ -18,53 +18,53 @@ package capi2mapi
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	capibuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/cluster-api/core/v1beta1"
 
-	powervsbuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/cluster-api/infrastructure/v1beta2"
+	clusterv1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/cluster-api/core/v1beta1"
+	ibmpowervsv1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/cluster-api/infrastructure/v1beta2"
 
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/test/matchers"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/utils/ptr"
-	capibmv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
-	capiv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	ibmpowervsv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
 var _ = Describe("capi2mapi PowerVS conversion", func() {
-	capiMachine := capibuilder.Machine().WithName("test-name").Build()
+	capiMachine := clusterv1resourcebuilder.Machine().WithName("test-name").Build()
 
-	capiMachineSet := capibuilder.MachineSet().WithReplicas(2).
+	capiMachineSet := clusterv1resourcebuilder.MachineSet().WithReplicas(2).
 		WithName("test-name").
 		WithClusterName("test-name").
 		Build()
 
-	powerVSMachineTemplate := powervsbuilder.PowerVSMachineTemplate().WithImageRef(&corev1.LocalObjectReference{Name: "rhcos-capi-powervs"}).
+	powerVSMachineTemplate := ibmpowervsv1resourcebuilder.PowerVSMachineTemplate().WithImageRef(&corev1.LocalObjectReference{Name: "rhcos-capi-powervs"}).
 		WithProviderID(ptr.To("test-123")).
-		WithServiceInstance(&capibmv1.IBMPowerVSResourceReference{Name: ptr.To("service-instance")}).
-		WithNetwork(capibmv1.IBMPowerVSResourceReference{Name: ptr.To("network")}).
+		WithServiceInstance(&ibmpowervsv1.IBMPowerVSResourceReference{Name: ptr.To("service-instance")}).
+		WithNetwork(ibmpowervsv1.IBMPowerVSResourceReference{Name: ptr.To("network")}).
 		Build()
 
-	powerVSMachine := powervsbuilder.PowerVSMachine().WithImageRef(&corev1.LocalObjectReference{Name: "rhcos-capi-powervs"}).
+	powerVSMachine := ibmpowervsv1resourcebuilder.PowerVSMachine().WithImageRef(&corev1.LocalObjectReference{Name: "rhcos-capi-powervs"}).
 		WithProviderID(ptr.To("test-123")).
-		WithServiceInstance(&capibmv1.IBMPowerVSResourceReference{Name: ptr.To("service-instance")}).
-		WithNetwork(capibmv1.IBMPowerVSResourceReference{Name: ptr.To("network")}).
+		WithServiceInstance(&ibmpowervsv1.IBMPowerVSResourceReference{Name: ptr.To("service-instance")}).
+		WithNetwork(ibmpowervsv1.IBMPowerVSResourceReference{Name: ptr.To("network")}).
 		Build()
 
-	powerVSCluster := powervsbuilder.PowerVSCluster().WithServiceInstance(&capibmv1.IBMPowerVSResourceReference{Name: ptr.To("serviceInstance")}).
+	powerVSCluster := ibmpowervsv1resourcebuilder.PowerVSCluster().WithServiceInstance(&ibmpowervsv1.IBMPowerVSResourceReference{Name: ptr.To("serviceInstance")}).
 		WithZone(ptr.To("test-zone")).
 		WithReady(true).Build()
 
 	type powerVSCAPI2MAPIMachineConversionInput struct {
-		machine            *capiv1.Machine
-		powerVSMachineFunc func() *capibmv1.IBMPowerVSMachine
-		powerVSCluster     *capibmv1.IBMPowerVSCluster
+		machine            *clusterv1.Machine
+		powerVSMachineFunc func() *ibmpowervsv1.IBMPowerVSMachine
+		powerVSCluster     *ibmpowervsv1.IBMPowerVSCluster
 		expectedErrors     []string
 	}
 
 	type powerVSCAPI2MAPIMachineSetConversionInput struct {
-		machineSet             *capiv1.MachineSet
-		powerVSMachineTemplate *capibmv1.IBMPowerVSMachineTemplate
-		powerVSCluster         *capibmv1.IBMPowerVSCluster
+		machineSet             *clusterv1.MachineSet
+		powerVSMachineTemplate *ibmpowervsv1.IBMPowerVSMachineTemplate
+		powerVSCluster         *ibmpowervsv1.IBMPowerVSCluster
 		expectedErrors         []string
 	}
 
@@ -81,7 +81,7 @@ var _ = Describe("capi2mapi PowerVS conversion", func() {
 
 		Entry("With a Base configuration", powerVSCAPI2MAPIMachineConversionInput{
 			machine: capiMachine,
-			powerVSMachineFunc: func() *capibmv1.IBMPowerVSMachine {
+			powerVSMachineFunc: func() *ibmpowervsv1.IBMPowerVSMachine {
 				return powerVSMachine
 			},
 			powerVSCluster: powerVSCluster,
@@ -90,7 +90,7 @@ var _ = Describe("capi2mapi PowerVS conversion", func() {
 
 		Entry("Without service instance", powerVSCAPI2MAPIMachineConversionInput{
 			machine: capiMachine,
-			powerVSMachineFunc: func() *capibmv1.IBMPowerVSMachine {
+			powerVSMachineFunc: func() *ibmpowervsv1.IBMPowerVSMachine {
 				pvsMachine := *powerVSMachine
 				pvsMachine.Spec.ServiceInstance = nil
 
@@ -102,7 +102,7 @@ var _ = Describe("capi2mapi PowerVS conversion", func() {
 
 		Entry("With service instance id, without service instance", powerVSCAPI2MAPIMachineConversionInput{
 			machine: capiMachine,
-			powerVSMachineFunc: func() *capibmv1.IBMPowerVSMachine {
+			powerVSMachineFunc: func() *ibmpowervsv1.IBMPowerVSMachine {
 				pvsMachine := *powerVSMachine
 				pvsMachine.Spec.ServiceInstance = nil
 				pvsMachine.Spec.ServiceInstanceID = "test-id"
@@ -115,7 +115,7 @@ var _ = Describe("capi2mapi PowerVS conversion", func() {
 
 		Entry("Without image", powerVSCAPI2MAPIMachineConversionInput{
 			machine: capiMachine,
-			powerVSMachineFunc: func() *capibmv1.IBMPowerVSMachine {
+			powerVSMachineFunc: func() *ibmpowervsv1.IBMPowerVSMachine {
 				pvsMachine := *powerVSMachine
 				pvsMachine.Spec.ImageRef = nil
 
@@ -127,10 +127,10 @@ var _ = Describe("capi2mapi PowerVS conversion", func() {
 
 		Entry("Without imageref, with image", powerVSCAPI2MAPIMachineConversionInput{
 			machine: capiMachine,
-			powerVSMachineFunc: func() *capibmv1.IBMPowerVSMachine {
+			powerVSMachineFunc: func() *ibmpowervsv1.IBMPowerVSMachine {
 				pvsMachine := *powerVSMachine
 				pvsMachine.Spec.ImageRef = nil
-				pvsMachine.Spec.Image = &capibmv1.IBMPowerVSResourceReference{Name: ptr.To("test-image")}
+				pvsMachine.Spec.Image = &ibmpowervsv1.IBMPowerVSResourceReference{Name: ptr.To("test-image")}
 
 				return &pvsMachine
 			},
@@ -140,9 +140,9 @@ var _ = Describe("capi2mapi PowerVS conversion", func() {
 
 		Entry("Without network", powerVSCAPI2MAPIMachineConversionInput{
 			machine: capiMachine,
-			powerVSMachineFunc: func() *capibmv1.IBMPowerVSMachine {
+			powerVSMachineFunc: func() *ibmpowervsv1.IBMPowerVSMachine {
 				pvsMachine := *powerVSMachine
-				pvsMachine.Spec.Network = capibmv1.IBMPowerVSResourceReference{}
+				pvsMachine.Spec.Network = ibmpowervsv1.IBMPowerVSResourceReference{}
 
 				return &pvsMachine
 			},

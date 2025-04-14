@@ -31,8 +31,8 @@ import (
 
 	runtimeserializer "k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/utils/ptr"
-	capibmv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
-	capiv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	ibmpowervsv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -49,20 +49,20 @@ var _ = Describe("PowerVS Fuzz (capi2mapi)", func() {
 		},
 	}
 
-	infraCluster := &capibmv1.IBMPowerVSCluster{
-		Spec: capibmv1.IBMPowerVSClusterSpec{
-			ServiceInstance: &capibmv1.IBMPowerVSResourceReference{Name: ptr.To("serviceInstance")},
+	infraCluster := &ibmpowervsv1.IBMPowerVSCluster{
+		Spec: ibmpowervsv1.IBMPowerVSClusterSpec{
+			ServiceInstance: &ibmpowervsv1.IBMPowerVSResourceReference{Name: ptr.To("serviceInstance")},
 			Zone:            ptr.To("test-zone"),
 		},
 	}
 
 	Context("IBMPowerVSMachine Conversion", func() {
-		fromMachineAndPowerVSMachineAndPowerVSCluster := func(machine *capiv1.Machine, infraMachine client.Object, infraCluster client.Object) capi2mapi.MachineAndInfrastructureMachine {
-			powerVSMachine, ok := infraMachine.(*capibmv1.IBMPowerVSMachine)
-			Expect(ok).To(BeTrue(), "input infra machine should be of type %T, got %T", &capibmv1.IBMPowerVSMachine{}, infraMachine)
+		fromMachineAndPowerVSMachineAndPowerVSCluster := func(machine *clusterv1.Machine, infraMachine client.Object, infraCluster client.Object) capi2mapi.MachineAndInfrastructureMachine {
+			powerVSMachine, ok := infraMachine.(*ibmpowervsv1.IBMPowerVSMachine)
+			Expect(ok).To(BeTrue(), "input infra machine should be of type %T, got %T", &ibmpowervsv1.IBMPowerVSMachine{}, infraMachine)
 
-			powerVSCluster, ok := infraCluster.(*capibmv1.IBMPowerVSCluster)
-			Expect(ok).To(BeTrue(), "input infra cluster should be of type %T, got %T", &capibmv1.IBMPowerVSCluster{}, infraCluster)
+			powerVSCluster, ok := infraCluster.(*ibmpowervsv1.IBMPowerVSCluster)
+			Expect(ok).To(BeTrue(), "input infra cluster should be of type %T, got %T", &ibmpowervsv1.IBMPowerVSCluster{}, infraCluster)
 
 			return capi2mapi.FromMachineAndPowerVSMachineAndPowerVSCluster(machine, powerVSMachine, powerVSCluster)
 		}
@@ -71,23 +71,23 @@ var _ = Describe("PowerVS Fuzz (capi2mapi)", func() {
 			scheme,
 			infra,
 			infraCluster,
-			&capibmv1.IBMPowerVSMachine{},
+			&ibmpowervsv1.IBMPowerVSMachine{},
 			mapi2capi.FromPowerVSMachineAndInfra,
 			fromMachineAndPowerVSMachineAndPowerVSCluster,
 			conversiontest.ObjectMetaFuzzerFuncs(capiNamespace),
-			conversiontest.CAPIMachineFuzzerFuncs(powerVSProviderIDFuzzer, powerVSMachineKind, capibmv1.GroupVersion.String(), infra.Status.InfrastructureName),
+			conversiontest.CAPIMachineFuzzerFuncs(powerVSProviderIDFuzzer, powerVSMachineKind, ibmpowervsv1.GroupVersion.String(), infra.Status.InfrastructureName),
 			powerVSMachineFuzzerFuncs,
 		)
 	})
 
 	Context("PowerVSMachineSet Conversion", func() {
 
-		fromMachineSetAndPowerVSMachineTemplateAndPowerVSCluster := func(machineSet *capiv1.MachineSet, infraMachineTemplate client.Object, infraCluster client.Object) capi2mapi.MachineSetAndMachineTemplate {
-			powerVSMachineTemplate, ok := infraMachineTemplate.(*capibmv1.IBMPowerVSMachineTemplate)
-			Expect(ok).To(BeTrue(), "input infra machine template should be of type %T, got %T", &capibmv1.IBMPowerVSMachineTemplate{}, infraMachineTemplate)
+		fromMachineSetAndPowerVSMachineTemplateAndPowerVSCluster := func(machineSet *clusterv1.MachineSet, infraMachineTemplate client.Object, infraCluster client.Object) capi2mapi.MachineSetAndMachineTemplate {
+			powerVSMachineTemplate, ok := infraMachineTemplate.(*ibmpowervsv1.IBMPowerVSMachineTemplate)
+			Expect(ok).To(BeTrue(), "input infra machine template should be of type %T, got %T", &ibmpowervsv1.IBMPowerVSMachineTemplate{}, infraMachineTemplate)
 
-			powerVSCluster, ok := infraCluster.(*capibmv1.IBMPowerVSCluster)
-			Expect(ok).To(BeTrue(), "input infra cluster should be of type %T, got %T", &capibmv1.IBMPowerVSCluster{}, infraCluster)
+			powerVSCluster, ok := infraCluster.(*ibmpowervsv1.IBMPowerVSCluster)
+			Expect(ok).To(BeTrue(), "input infra cluster should be of type %T, got %T", &ibmpowervsv1.IBMPowerVSCluster{}, infraCluster)
 
 			return capi2mapi.FromMachineSetAndPowerVSMachineTemplateAndPowerVSCluster(machineSet, powerVSMachineTemplate, powerVSCluster)
 		}
@@ -96,12 +96,12 @@ var _ = Describe("PowerVS Fuzz (capi2mapi)", func() {
 			scheme,
 			infra,
 			infraCluster,
-			&capibmv1.IBMPowerVSMachineTemplate{},
+			&ibmpowervsv1.IBMPowerVSMachineTemplate{},
 			mapi2capi.FromPowerVSMachineSetAndInfra,
 			fromMachineSetAndPowerVSMachineTemplateAndPowerVSCluster,
 			conversiontest.ObjectMetaFuzzerFuncs(capiNamespace),
-			conversiontest.CAPIMachineFuzzerFuncs(powerVSProviderIDFuzzer, powerVSMachineKind, capibmv1.GroupVersion.String(), infra.Status.InfrastructureName),
-			conversiontest.CAPIMachineSetFuzzerFuncs(powerVSTemplateKind, capibmv1.GroupVersion.String(), infra.Status.InfrastructureName),
+			conversiontest.CAPIMachineFuzzerFuncs(powerVSProviderIDFuzzer, powerVSMachineKind, ibmpowervsv1.GroupVersion.String(), infra.Status.InfrastructureName),
+			conversiontest.CAPIMachineSetFuzzerFuncs(powerVSTemplateKind, ibmpowervsv1.GroupVersion.String(), infra.Status.InfrastructureName),
 			powerVSMachineFuzzerFuncs,
 			powerVSMachineTemplateFuzzerFuncs,
 		)
@@ -115,7 +115,7 @@ func powerVSProviderIDFuzzer(c fuzz.Continue) string {
 
 func powerVSMachineFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interface{} {
 	return []interface{}{
-		func(serviceInstance *capibmv1.IBMPowerVSResourceReference, c fuzz.Continue) {
+		func(serviceInstance *ibmpowervsv1.IBMPowerVSResourceReference, c fuzz.Continue) {
 			switch c.Int31n(3) {
 			case 0:
 				serviceInstance.ID = ptr.To(c.RandString())
@@ -125,7 +125,7 @@ func powerVSMachineFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interfac
 				serviceInstance.RegEx = ptr.To(c.RandString())
 			}
 		},
-		func(network *capibmv1.IBMPowerVSResourceReference, c fuzz.Continue) {
+		func(network *ibmpowervsv1.IBMPowerVSResourceReference, c fuzz.Continue) {
 			switch c.Int31n(3) {
 			case 0:
 				network.ID = ptr.To(c.RandString())
@@ -135,7 +135,7 @@ func powerVSMachineFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interfac
 				network.RegEx = ptr.To(c.RandString())
 			}
 		},
-		func(image *capibmv1.IBMPowerVSResourceReference, c fuzz.Continue) {
+		func(image *ibmpowervsv1.IBMPowerVSResourceReference, c fuzz.Continue) {
 			switch c.Int31n(3) {
 			case 0:
 				image.ID = ptr.To(c.RandString())
@@ -145,17 +145,17 @@ func powerVSMachineFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interfac
 				image.RegEx = ptr.To(c.RandString())
 			}
 		},
-		func(spec *capibmv1.IBMPowerVSMachineSpec, c fuzz.Continue) {
+		func(spec *ibmpowervsv1.IBMPowerVSMachineSpec, c fuzz.Continue) {
 			c.FuzzNoCustom(spec)
 
 			// spec.ServiceInstanceID is deprecated and its advised to use spec.ServiceInstance
 			spec.ServiceInstanceID = ""
 		},
-		func(m *capibmv1.IBMPowerVSMachine, c fuzz.Continue) {
+		func(m *ibmpowervsv1.IBMPowerVSMachine, c fuzz.Continue) {
 			c.FuzzNoCustom(m)
 
 			// Ensure the type meta is set correctly.
-			m.TypeMeta.APIVersion = capibmv1.GroupVersion.String()
+			m.TypeMeta.APIVersion = ibmpowervsv1.GroupVersion.String()
 			m.TypeMeta.Kind = powerVSMachineKind
 		},
 	}
@@ -163,11 +163,11 @@ func powerVSMachineFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interfac
 
 func powerVSMachineTemplateFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interface{} {
 	return []interface{}{
-		func(m *capibmv1.IBMPowerVSMachineTemplate, c fuzz.Continue) {
+		func(m *ibmpowervsv1.IBMPowerVSMachineTemplate, c fuzz.Continue) {
 			c.FuzzNoCustom(m)
 
 			// Ensure the type meta is set correctly.
-			m.TypeMeta.APIVersion = capibmv1.GroupVersion.String()
+			m.TypeMeta.APIVersion = ibmpowervsv1.GroupVersion.String()
 			m.TypeMeta.Kind = powerVSTemplateKind
 		},
 	}

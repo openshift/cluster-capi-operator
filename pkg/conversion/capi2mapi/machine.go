@@ -23,7 +23,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation/field"
-	capiv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
 const (
@@ -34,7 +34,7 @@ const (
 // fromCAPIMachineToMAPIMachine translates a core CAPI Machine to its MAPI Machine correspondent.
 //
 //nolint:funlen
-func fromCAPIMachineToMAPIMachine(capiMachine *capiv1.Machine) (*mapiv1.Machine, field.ErrorList) {
+func fromCAPIMachineToMAPIMachine(capiMachine *clusterv1.Machine) (*mapiv1.Machine, field.ErrorList) {
 	errs := field.ErrorList{}
 
 	lifecycleHooks, capiMachineNonHookAnnotations := convertCAPILifecycleHookAnnotationsToMAPILifecycleHooksAndAnnotations(capiMachine.Annotations)
@@ -104,8 +104,8 @@ func fromCAPIMachineToMAPIMachine(capiMachine *capiv1.Machine) (*mapiv1.Machine,
 
 const (
 	// Note the trailing slash here is important when we are trimming the prefix.
-	capiPreDrainAnnotationPrefix     = capiv1.PreDrainDeleteHookAnnotationPrefix + "/"
-	capiPreTerminateAnnotationPrefix = capiv1.PreTerminateDeleteHookAnnotationPrefix + "/"
+	capiPreDrainAnnotationPrefix     = clusterv1.PreDrainDeleteHookAnnotationPrefix + "/"
+	capiPreTerminateAnnotationPrefix = clusterv1.PreTerminateDeleteHookAnnotationPrefix + "/"
 )
 
 // convertCAPILifecycleHookAnnotationsToMAPILifecycleHooksAndAnnotations extracts the lifecycle hooks from the CAPI Machine annotations.

@@ -27,8 +27,8 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/utils/ptr"
-	capav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
-	capiv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
 var (
@@ -46,39 +46,39 @@ const (
 
 // machineAndAWSMachineAndAWSCluster stores the details of a Cluster API Machine and AWSMachine and AWSCluster.
 type machineAndAWSMachineAndAWSCluster struct {
-	machine    *capiv1.Machine
-	awsMachine *capav1.AWSMachine
-	awsCluster *capav1.AWSCluster
+	machine    *clusterv1.Machine
+	awsMachine *awsv1.AWSMachine
+	awsCluster *awsv1.AWSCluster
 }
 
 // machineSetAndAWSMachineTemplateAndAWSCluster stores the details of a Cluster API MachineSet and AWSMachineTemplate and AWSCluster.
 type machineSetAndAWSMachineTemplateAndAWSCluster struct {
-	machineSet *capiv1.MachineSet
-	template   *capav1.AWSMachineTemplate
-	awsCluster *capav1.AWSCluster
+	machineSet *clusterv1.MachineSet
+	template   *awsv1.AWSMachineTemplate
+	awsCluster *awsv1.AWSCluster
 	*machineAndAWSMachineAndAWSCluster
 }
 
 // FromMachineAndAWSMachineAndAWSCluster wraps a CAPI Machine and CAPA AWSMachine and CAPA AWSCluster into a capi2mapi MachineAndInfrastructureMachine.
-func FromMachineAndAWSMachineAndAWSCluster(m *capiv1.Machine, am *capav1.AWSMachine, ac *capav1.AWSCluster) MachineAndInfrastructureMachine {
+func FromMachineAndAWSMachineAndAWSCluster(m *clusterv1.Machine, am *awsv1.AWSMachine, ac *awsv1.AWSCluster) MachineAndInfrastructureMachine {
 	return &machineAndAWSMachineAndAWSCluster{machine: m, awsMachine: am, awsCluster: ac}
 }
 
 // FromMachineSetAndAWSMachineTemplateAndAWSCluster wraps a CAPI MachineSet and CAPA AWSMachineTemplate and CAPA AWSCluster into a capi2mapi MachineSetAndAWSMachineTemplateAndAWSCluster.
-func FromMachineSetAndAWSMachineTemplateAndAWSCluster(ms *capiv1.MachineSet, mts *capav1.AWSMachineTemplate, ac *capav1.AWSCluster) MachineSetAndMachineTemplate {
+func FromMachineSetAndAWSMachineTemplateAndAWSCluster(ms *clusterv1.MachineSet, mts *awsv1.AWSMachineTemplate, ac *awsv1.AWSCluster) MachineSetAndMachineTemplate {
 	return &machineSetAndAWSMachineTemplateAndAWSCluster{
 		machineSet: ms,
 		template:   mts,
 		awsCluster: ac,
 		machineAndAWSMachineAndAWSCluster: &machineAndAWSMachineAndAWSCluster{
-			machine: &capiv1.Machine{
+			machine: &clusterv1.Machine{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels:      ms.Spec.Template.ObjectMeta.Labels,
 					Annotations: ms.Spec.Template.ObjectMeta.Annotations,
 				},
 				Spec: ms.Spec.Template.Spec,
 			},
-			awsMachine: &capav1.AWSMachine{
+			awsMachine: &awsv1.AWSMachine{
 				Spec: mts.Spec.Template.Spec,
 			},
 			awsCluster: ac,
@@ -140,7 +140,7 @@ func (m machineAndAWSMachineAndAWSCluster) toProviderSpec() (*mapiv1.AWSMachineP
 		PublicIP:             m.awsMachine.Spec.PublicIP,
 		SecurityGroups:       convertAWSSecurityGroupstoMAPI(m.awsMachine.Spec.AdditionalSecurityGroups), // This is the way we want to convert security groups, as the AdditionalSecurity Groups are what gets added to MAPI SGs.
 		NetworkInterfaceType: convertAWSNetworkInterfaceTypeToMAPI(m.awsMachine.Spec.NetworkInterfaceType),
-		Subnet:               convertAWSResourceReferenceToMAPI(ptr.Deref(m.awsMachine.Spec.Subnet, capav1.AWSResourceReference{})),
+		Subnet:               convertAWSResourceReferenceToMAPI(ptr.Deref(m.awsMachine.Spec.Subnet, awsv1.AWSResourceReference{})),
 		Placement: mapiv1.Placement{
 			AvailabilityZone: ptr.Deref(m.machine.Spec.FailureDomain, ""),
 			Tenancy:          mapaTenancy,
@@ -177,7 +177,7 @@ func (m machineAndAWSMachineAndAWSCluster) toProviderSpec() (*mapiv1.AWSMachineP
 	// InstanceID - Ignore - Is a subset of providerID.
 	// Ignition - Ignore - Only has a version field and we force this to a particular value.
 
-	if m.awsMachine.Spec.NetworkInterfaceType != "" && m.awsMachine.Spec.NetworkInterfaceType != capav1.NetworkInterfaceTypeEFAWithENAInterface && m.awsMachine.Spec.NetworkInterfaceType != capav1.NetworkInterfaceTypeENI {
+	if m.awsMachine.Spec.NetworkInterfaceType != "" && m.awsMachine.Spec.NetworkInterfaceType != awsv1.NetworkInterfaceTypeEFAWithENAInterface && m.awsMachine.Spec.NetworkInterfaceType != awsv1.NetworkInterfaceTypeENI {
 		errors = append(errors, field.Invalid(fldPath.Child("networkInterfaceType"), m.awsMachine.Spec.NetworkInterfaceType, "networkInterface type must be one of interface, efa or omitted, unsupported value"))
 	}
 	// There are quite a few unsupported fields, so break them out for now.
@@ -267,7 +267,7 @@ func (m machineSetAndAWSMachineTemplateAndAWSCluster) ToMachineSet() (*mapiv1.Ma
 
 // Conversion helpers.
 
-func convertAWSMetadataOptionsToMAPI(fldPath *field.Path, capiMetadataOpts *capav1.InstanceMetadataOptions) (mapiv1.MetadataServiceOptions, []string, field.ErrorList) {
+func convertAWSMetadataOptionsToMAPI(fldPath *field.Path, capiMetadataOpts *awsv1.InstanceMetadataOptions) (mapiv1.MetadataServiceOptions, []string, field.ErrorList) {
 	var (
 		errors   field.ErrorList
 		warnings []string
@@ -282,18 +282,18 @@ func convertAWSMetadataOptionsToMAPI(fldPath *field.Path, capiMetadataOpts *capa
 	switch capiMetadataOpts.HTTPTokens {
 	case "":
 		// Defaults to optional on both sides.
-	case capav1.HTTPTokensStateOptional:
+	case awsv1.HTTPTokensStateOptional:
 		auth = mapiv1.MetadataServiceAuthenticationOptional
-	case capav1.HTTPTokensStateRequired:
+	case awsv1.HTTPTokensStateRequired:
 		auth = mapiv1.MetadataServiceAuthenticationRequired
 	default:
 		errors = append(errors, field.Invalid(fldPath.Child("httpTokens"), capiMetadataOpts.HTTPTokens, errUnsupportedHTTPTokensState))
 	}
 
-	if capiMetadataOpts.HTTPEndpoint != "" && capiMetadataOpts.HTTPEndpoint != capav1.InstanceMetadataEndpointStateEnabled {
+	if capiMetadataOpts.HTTPEndpoint != "" && capiMetadataOpts.HTTPEndpoint != awsv1.InstanceMetadataEndpointStateEnabled {
 		// This defaults to "enabled" in CAPI and on the AWS side, so if it's not "enabled", the user explicitly chose another option.
 		// TODO(OCPCLOUD-2710): We should implement this within MAPI to create feature parity.
-		errors = append(errors, field.Invalid(fldPath.Child("httpEndpoint"), capiMetadataOpts.HTTPEndpoint, fmt.Sprintf("httpEndpoint values other than %q are not supported", capav1.InstanceMetadataEndpointStateEnabled)))
+		errors = append(errors, field.Invalid(fldPath.Child("httpEndpoint"), capiMetadataOpts.HTTPEndpoint, fmt.Sprintf("httpEndpoint values other than %q are not supported", awsv1.InstanceMetadataEndpointStateEnabled)))
 	}
 
 	if capiMetadataOpts.HTTPPutResponseHopLimit != 0 && capiMetadataOpts.HTTPPutResponseHopLimit != 1 {
@@ -302,10 +302,10 @@ func convertAWSMetadataOptionsToMAPI(fldPath *field.Path, capiMetadataOpts *capa
 		errors = append(errors, field.Invalid(fldPath.Child("httpPutResponseHopLimit"), capiMetadataOpts.HTTPPutResponseHopLimit, "httpPutResponseHopLimit values other than 1 are not supported"))
 	}
 
-	if capiMetadataOpts.InstanceMetadataTags != "" && capiMetadataOpts.InstanceMetadataTags != capav1.InstanceMetadataEndpointStateDisabled {
+	if capiMetadataOpts.InstanceMetadataTags != "" && capiMetadataOpts.InstanceMetadataTags != awsv1.InstanceMetadataEndpointStateDisabled {
 		// This defaults to "disabled" in CAPI and on the AWS side, so if it's not "disabled", the user explicitly chose another option.
 		// TODO(OCPCLOUD-2710): We should implement this within MAPI to create feature parity.
-		errors = append(errors, field.Invalid(fldPath.Child("instanceMetadataTags"), capiMetadataOpts.InstanceMetadataTags, fmt.Sprintf("instanceMetadataTags values other than %q are not supported", capav1.InstanceMetadataEndpointStateDisabled)))
+		errors = append(errors, field.Invalid(fldPath.Child("instanceMetadataTags"), capiMetadataOpts.InstanceMetadataTags, fmt.Sprintf("instanceMetadataTags values other than %q are not supported", awsv1.InstanceMetadataEndpointStateDisabled)))
 	}
 
 	metadataOpts := mapiv1.MetadataServiceOptions{
@@ -319,7 +319,7 @@ func convertAWSMetadataOptionsToMAPI(fldPath *field.Path, capiMetadataOpts *capa
 	return metadataOpts, warnings, nil
 }
 
-func convertAWSResourceReferenceToMAPI(capiReference capav1.AWSResourceReference) mapiv1.AWSResourceReference {
+func convertAWSResourceReferenceToMAPI(capiReference awsv1.AWSResourceReference) mapiv1.AWSResourceReference {
 	filters := convertAWSFiltersToMAPI(capiReference.Filters)
 
 	return mapiv1.AWSResourceReference{
@@ -328,7 +328,7 @@ func convertAWSResourceReferenceToMAPI(capiReference capav1.AWSResourceReference
 	}
 }
 
-func convertAWSFiltersToMAPI(capiFilters []capav1.Filter) []mapiv1.Filter {
+func convertAWSFiltersToMAPI(capiFilters []awsv1.Filter) []mapiv1.Filter {
 	mapiFilters := []mapiv1.Filter{}
 	for _, filter := range capiFilters {
 		mapiFilters = append(mapiFilters, mapiv1.Filter{
@@ -340,7 +340,7 @@ func convertAWSFiltersToMAPI(capiFilters []capav1.Filter) []mapiv1.Filter {
 	return mapiFilters
 }
 
-func convertAWSTagsToMAPI(capiTags capav1.Tags) []mapiv1.TagSpecification {
+func convertAWSTagsToMAPI(capiTags awsv1.Tags) []mapiv1.TagSpecification {
 	mapiTags := []mapiv1.TagSpecification{}
 	for key, value := range capiTags {
 		mapiTags = append(mapiTags, mapiv1.TagSpecification{
@@ -352,7 +352,7 @@ func convertAWSTagsToMAPI(capiTags capav1.Tags) []mapiv1.TagSpecification {
 	return mapiTags
 }
 
-func convertAWSSecurityGroupstoMAPI(sgs []capav1.AWSResourceReference) []mapiv1.AWSResourceReference {
+func convertAWSSecurityGroupstoMAPI(sgs []awsv1.AWSResourceReference) []mapiv1.AWSResourceReference {
 	mapiSGs := []mapiv1.AWSResourceReference{}
 
 	for _, sg := range sgs {
@@ -364,7 +364,7 @@ func convertAWSSecurityGroupstoMAPI(sgs []capav1.AWSResourceReference) []mapiv1.
 	return mapiSGs
 }
 
-func convertAWSSpotMarketOptionsToMAPI(capiSpotMarketOptions *capav1.SpotMarketOptions) *mapiv1.SpotMarketOptions {
+func convertAWSSpotMarketOptionsToMAPI(capiSpotMarketOptions *awsv1.SpotMarketOptions) *mapiv1.SpotMarketOptions {
 	if capiSpotMarketOptions == nil {
 		return nil
 	}
@@ -389,13 +389,13 @@ func convertAWSTenancyToMAPI(fldPath *field.Path, capiTenancy string) (mapiv1.In
 	}
 }
 
-func convertAWSMarketTypeToMAPI(fldPath *field.Path, marketType capav1.MarketType) (mapiv1.MarketType, *field.Error) {
+func convertAWSMarketTypeToMAPI(fldPath *field.Path, marketType awsv1.MarketType) (mapiv1.MarketType, *field.Error) {
 	switch marketType {
-	case capav1.MarketTypeOnDemand:
+	case awsv1.MarketTypeOnDemand:
 		return mapiv1.MarketTypeOnDemand, nil
-	case capav1.MarketTypeSpot:
+	case awsv1.MarketTypeSpot:
 		return mapiv1.MarketTypeSpot, nil
-	case capav1.MarketTypeCapacityBlock:
+	case awsv1.MarketTypeCapacityBlock:
 		return mapiv1.MarketTypeCapacityBlock, nil
 	case "":
 		return "", nil
@@ -404,10 +404,10 @@ func convertAWSMarketTypeToMAPI(fldPath *field.Path, marketType capav1.MarketTyp
 	}
 }
 
-func convertAWSVolumesToMAPI(rootVolume *capav1.Volume, nonRootVolumes []capav1.Volume) []mapiv1.BlockDeviceMappingSpec {
+func convertAWSVolumesToMAPI(rootVolume *awsv1.Volume, nonRootVolumes []awsv1.Volume) []mapiv1.BlockDeviceMappingSpec {
 	blockDeviceMapping := []mapiv1.BlockDeviceMappingSpec{}
 
-	if rootVolume != nil && *rootVolume != (capav1.Volume{}) {
+	if rootVolume != nil && *rootVolume != (awsv1.Volume{}) {
 		blockDeviceMapping = append(blockDeviceMapping, convertAWSVolumeToMAPI(*rootVolume))
 	}
 
@@ -418,7 +418,7 @@ func convertAWSVolumesToMAPI(rootVolume *capav1.Volume, nonRootVolumes []capav1.
 	return blockDeviceMapping
 }
 
-func convertAWSVolumeToMAPI(volume capav1.Volume) mapiv1.BlockDeviceMappingSpec {
+func convertAWSVolumeToMAPI(volume awsv1.Volume) mapiv1.BlockDeviceMappingSpec {
 	bdm := mapiv1.BlockDeviceMappingSpec{
 		EBS: &mapiv1.EBSBlockDeviceSpec{
 			DeleteOnTermination: ptr.To(true), // This is forced to true for now as CAPI doesn't support changing it.
@@ -464,11 +464,11 @@ func convertAWSPlacementGroupPartition(in int64) *int32 {
 	return ptr.To(int32(in))
 }
 
-func convertAWSNetworkInterfaceTypeToMAPI(networkInterfaceType capav1.NetworkInterfaceType) mapiv1.AWSNetworkInterfaceType {
+func convertAWSNetworkInterfaceTypeToMAPI(networkInterfaceType awsv1.NetworkInterfaceType) mapiv1.AWSNetworkInterfaceType {
 	switch networkInterfaceType {
-	case capav1.NetworkInterfaceTypeEFAWithENAInterface:
+	case awsv1.NetworkInterfaceTypeEFAWithENAInterface:
 		return mapiv1.AWSEFANetworkInterfaceType
-	case capav1.NetworkInterfaceTypeENI:
+	case awsv1.NetworkInterfaceTypeENI:
 		return mapiv1.AWSENANetworkInterfaceType
 	}
 
@@ -478,7 +478,7 @@ func convertAWSNetworkInterfaceTypeToMAPI(networkInterfaceType capav1.NetworkInt
 // handleUnsupportedAWSMachineFields returns an error for every present field in the AWSMachineSpec that
 // we are currently, or indefinitely not supporting.
 // TODO: These are protected by VAPs so should never actually cause an error here.
-func handleUnsupportedAWSMachineFields(fldPath *field.Path, spec capav1.AWSMachineSpec) field.ErrorList {
+func handleUnsupportedAWSMachineFields(fldPath *field.Path, spec awsv1.AWSMachineSpec) field.ErrorList {
 	errs := field.ErrorList{}
 
 	if spec.AMI.EKSOptimizedLookupType != nil {
@@ -516,7 +516,7 @@ func handleUnsupportedAWSMachineFields(fldPath *field.Path, spec capav1.AWSMachi
 		errs = append(errs, field.Invalid(fldPath.Child("uncompressedUserData"), spec.UncompressedUserData, "uncompressedUserData is not supported"))
 	}
 
-	if (spec.CloudInit != capav1.CloudInit{}) {
+	if (spec.CloudInit != awsv1.CloudInit{}) {
 		// TODO(OCPCLOUD-2711): Not required for our use case, add VAP to prevent usage.
 		errs = append(errs, field.Invalid(fldPath.Child("cloudInit"), spec.CloudInit, "cloudInit is not supported"))
 	}
@@ -544,7 +544,7 @@ func handleUnsupportedAWSMachineFields(fldPath *field.Path, spec capav1.AWSMachi
 // handleAWSIdentityRef returns errors if the configuration IdentityRef is different from OCP defaults, and the default credential reference otherwise.
 // We only support the ControllerIdentityKind, which is the upstream default, when converting.
 // This default is what will happen when no IdentityRef is defined, so support both hard-coded values and the empty reference.
-func handleAWSIdentityRef(fldPath *field.Path, identityRef *capav1.AWSIdentityReference) (*corev1.LocalObjectReference, field.ErrorList) {
+func handleAWSIdentityRef(fldPath *field.Path, identityRef *awsv1.AWSIdentityReference) (*corev1.LocalObjectReference, field.ErrorList) {
 	errs := field.ErrorList{}
 
 	ref := &corev1.LocalObjectReference{
@@ -557,7 +557,7 @@ func handleAWSIdentityRef(fldPath *field.Path, identityRef *capav1.AWSIdentityRe
 		return ref, nil
 	}
 
-	if identityRef.Kind != capav1.ControllerIdentityKind && identityRef.Kind != "" {
+	if identityRef.Kind != awsv1.ControllerIdentityKind && identityRef.Kind != "" {
 		errs = append(errs, field.Invalid(fldPath.Child("kind"), identityRef.Kind, fmt.Sprintf("kind %q cannot be converted to CredentialsSecret. Please see https://access.redhat.com/articles/7116313 for more details.", identityRef.Kind)))
 	}
 

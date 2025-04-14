@@ -23,7 +23,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation/field"
-	capiv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
 const (
@@ -32,19 +32,19 @@ const (
 )
 
 // fromMAPIMachineToCAPIMachine translates a MAPI Machine to its Core CAPI Machine correspondent.
-func fromMAPIMachineToCAPIMachine(mapiMachine *mapiv1beta1.Machine, apiVersion, kind string) (*capiv1.Machine, field.ErrorList) {
+func fromMAPIMachineToCAPIMachine(mapiMachine *mapiv1beta1.Machine, apiVersion, kind string) (*clusterv1.Machine, field.ErrorList) {
 	var errs field.ErrorList
 
-	capiMachine := &capiv1.Machine{
+	capiMachine := &clusterv1.Machine{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            mapiMachine.Name,
 			Namespace:       capiNamespace,
 			Labels:          convertMAPILabelsToCAPI(mapiMachine.Labels),
 			Annotations:     convertMAPIAnnotationsToCAPI(mapiMachine.Annotations),
-			Finalizers:      []string{capiv1.MachineFinalizer},
+			Finalizers:      []string{clusterv1.MachineFinalizer},
 			OwnerReferences: nil, // OwnerReferences not populated here. They are added later by the machineSync controller.
 		},
-		Spec: capiv1.MachineSpec{
+		Spec: clusterv1.MachineSpec{
 			InfrastructureRef: corev1.ObjectReference{
 				APIVersion: apiVersion,
 				Kind:       kind,

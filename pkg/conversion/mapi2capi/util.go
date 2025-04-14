@@ -22,7 +22,7 @@ import (
 	mapiv1 "github.com/openshift/api/machine/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation/field"
-	capiv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
 func convertMAPIMachineSetSelectorToCAPI(mapiSelector metav1.LabelSelector) metav1.LabelSelector {
@@ -37,10 +37,10 @@ func convertMAPILabelsToCAPI(mapiLabels map[string]string) map[string]string {
 
 	toTransformLabels := map[string]func(string) (string, string){
 		"machine.openshift.io/cluster-api-machine-type": func(mapiLabelValue string) (string, string) {
-			return fmt.Sprintf("%s/%s", capiv1.NodeRoleLabelPrefix, mapiLabelValue), ""
+			return fmt.Sprintf("%s/%s", clusterv1.NodeRoleLabelPrefix, mapiLabelValue), ""
 		},
 		"machine.openshift.io/cluster-api-machine-role": func(mapiLabelValue string) (string, string) {
-			return fmt.Sprintf("%s/%s", capiv1.NodeRoleLabelPrefix, mapiLabelValue), ""
+			return fmt.Sprintf("%s/%s", clusterv1.NodeRoleLabelPrefix, mapiLabelValue), ""
 		},
 	}
 
@@ -78,7 +78,7 @@ func convertMAPIAnnotationsToCAPI(mapiAnnotations map[string]string) map[string]
 	return capiAnnotations
 }
 
-func setMAPINodeAnnotationsToCAPINodeAnnotations(mapiNodeAnnotations map[string]string, capiMachine *capiv1.Machine) {
+func setMAPINodeAnnotationsToCAPINodeAnnotations(mapiNodeAnnotations map[string]string, capiMachine *clusterv1.Machine) {
 	if len(mapiNodeAnnotations) == 0 {
 		return
 	}
@@ -92,7 +92,7 @@ func setMAPINodeAnnotationsToCAPINodeAnnotations(mapiNodeAnnotations map[string]
 	}
 }
 
-func setMAPINodeLabelsToCAPINodeLabels(mapiNodeLabels map[string]string, capiMachine *capiv1.Machine) {
+func setMAPINodeLabelsToCAPINodeLabels(mapiNodeLabels map[string]string, capiMachine *clusterv1.Machine) {
 	if len(mapiNodeLabels) == 0 {
 		return
 	}
@@ -107,15 +107,15 @@ func setMAPINodeLabelsToCAPINodeLabels(mapiNodeLabels map[string]string, capiMac
 }
 
 // setCAPILifecycleHookAnnotations sets the annotations that should be added to a CAPI Machine to represent the lifecycle hooks.
-func setCAPILifecycleHookAnnotations(hooks mapiv1.LifecycleHooks, capiMachine *capiv1.Machine) {
+func setCAPILifecycleHookAnnotations(hooks mapiv1.LifecycleHooks, capiMachine *clusterv1.Machine) {
 	lifecycleAnnotations := make(map[string]string)
 
 	for _, hook := range hooks.PreDrain {
-		lifecycleAnnotations[fmt.Sprintf("%s/%s", capiv1.PreDrainDeleteHookAnnotationPrefix, hook.Name)] = hook.Owner
+		lifecycleAnnotations[fmt.Sprintf("%s/%s", clusterv1.PreDrainDeleteHookAnnotationPrefix, hook.Name)] = hook.Owner
 	}
 
 	for _, hook := range hooks.PreTerminate {
-		lifecycleAnnotations[fmt.Sprintf("%s/%s", capiv1.PreTerminateDeleteHookAnnotationPrefix, hook.Name)] = hook.Owner
+		lifecycleAnnotations[fmt.Sprintf("%s/%s", clusterv1.PreTerminateDeleteHookAnnotationPrefix, hook.Name)] = hook.Owner
 	}
 
 	if len(lifecycleAnnotations) > 0 && capiMachine.Annotations == nil {

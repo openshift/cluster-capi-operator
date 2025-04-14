@@ -20,8 +20,8 @@ import (
 	"fmt"
 
 	configv1 "github.com/openshift/api/config/v1"
-	capav1beta2 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
-	capibmv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
+	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
+	ibmpowervsv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -37,9 +37,9 @@ var (
 func InitInfraMachineAndInfraClusterFromProvider(platform configv1.PlatformType) (client.Object, client.Object, error) {
 	switch platform {
 	case configv1.AWSPlatformType:
-		return &capav1beta2.AWSMachine{}, &capav1beta2.AWSCluster{}, nil
+		return &awsv1.AWSMachine{}, &awsv1.AWSCluster{}, nil
 	case configv1.PowerVSPlatformType:
-		return &capibmv1.IBMPowerVSMachine{}, &capibmv1.IBMPowerVSCluster{}, nil
+		return &ibmpowervsv1.IBMPowerVSMachine{}, &ibmpowervsv1.IBMPowerVSCluster{}, nil
 	default:
 		return nil, nil, fmt.Errorf("%w: %s", errPlatformNotSupported, platform)
 	}
@@ -52,9 +52,9 @@ func InitInfraMachineAndInfraClusterFromProvider(platform configv1.PlatformType)
 func InitInfraMachineTemplateAndInfraClusterFromProvider(platform configv1.PlatformType) (client.Object, client.Object, error) {
 	switch platform {
 	case configv1.AWSPlatformType:
-		return &capav1beta2.AWSMachineTemplate{}, &capav1beta2.AWSCluster{}, nil
+		return &awsv1.AWSMachineTemplate{}, &awsv1.AWSCluster{}, nil
 	case configv1.PowerVSPlatformType:
-		return &capibmv1.IBMPowerVSMachineTemplate{}, &capibmv1.IBMPowerVSCluster{}, nil
+		return &ibmpowervsv1.IBMPowerVSMachineTemplate{}, &ibmpowervsv1.IBMPowerVSCluster{}, nil
 	default:
 		return nil, nil, fmt.Errorf("%w: %s", errPlatformNotSupported, platform)
 	}

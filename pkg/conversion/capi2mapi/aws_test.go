@@ -22,7 +22,7 @@ import (
 	capabuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/cluster-api/infrastructure/v1beta2"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/test/matchers"
 	"k8s.io/utils/ptr"
-	capav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
+	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 )
 
 var _ = Describe("capi2mapi AWS conversion", func() {
@@ -72,8 +72,8 @@ var _ = Describe("capi2mapi AWS conversion", func() {
 		Entry("With unsupported EKSOptimizedLookupType", awsCAPI2MAPIMachineConversionInput{
 			awsClusterBuilder: awsCAPIAWSClusterBase,
 			awsMachineBuilder: capabuilder.AWSMachine().
-				WithAMI(capav1.AMIReference{
-					EKSOptimizedLookupType: ptr.To(capav1.EKSAMILookupType("unsupported")),
+				WithAMI(awsv1.AMIReference{
+					EKSOptimizedLookupType: ptr.To(awsv1.EKSAMILookupType("unsupported")),
 				}),
 			machineBuilder:   awsCAPIMachineBase,
 			expectedErrors:   []string{"spec.ami.eksOptimizedLookupType: Invalid value: \"unsupported\": eksOptimizedLookupType is not supported"},
@@ -106,7 +106,7 @@ var _ = Describe("capi2mapi AWS conversion", func() {
 
 		Entry("With unsupported SecurityGroupOverrides", awsCAPI2MAPIMachineConversionInput{
 			awsClusterBuilder: awsCAPIAWSClusterBase,
-			awsMachineBuilder: awsCAPIAWSMachineBase.WithSecurityGroupOverrides(map[capav1.SecurityGroupRole]string{"sg-1": "sg-2"}),
+			awsMachineBuilder: awsCAPIAWSMachineBase.WithSecurityGroupOverrides(map[awsv1.SecurityGroupRole]string{"sg-1": "sg-2"}),
 			machineBuilder:    awsCAPIMachineBase,
 			expectedErrors:    []string{"spec.securityGroupOverrides: Invalid value: map[v1beta2.SecurityGroupRole]string{\"sg-1\":\"sg-2\"}: securityGroupOverrides are not supported"},
 			expectedWarnings:  []string{},
@@ -139,7 +139,7 @@ var _ = Describe("capi2mapi AWS conversion", func() {
 
 		Entry("With unsupported CloudInit", awsCAPI2MAPIMachineConversionInput{
 			awsClusterBuilder: awsCAPIAWSClusterBase,
-			awsMachineBuilder: awsCAPIAWSMachineBase.WithCloudInit(capav1.CloudInit{InsecureSkipSecretsManager: true}),
+			awsMachineBuilder: awsCAPIAWSMachineBase.WithCloudInit(awsv1.CloudInit{InsecureSkipSecretsManager: true}),
 			machineBuilder:    awsCAPIMachineBase,
 			expectedErrors:    []string{"spec.cloudInit: Invalid value: v1beta2.CloudInit{InsecureSkipSecretsManager:true, SecretCount:0, SecretPrefix:\"\", SecureSecretsBackend:\"\"}: cloudInit is not supported"},
 			expectedWarnings:  []string{},
@@ -147,7 +147,7 @@ var _ = Describe("capi2mapi AWS conversion", func() {
 
 		Entry("With unsupported PrivateDNSName", awsCAPI2MAPIMachineConversionInput{
 			awsClusterBuilder: awsCAPIAWSClusterBase,
-			awsMachineBuilder: awsCAPIAWSMachineBase.WithPrivateDNSName(&capav1.PrivateDNSName{}),
+			awsMachineBuilder: awsCAPIAWSMachineBase.WithPrivateDNSName(&awsv1.PrivateDNSName{}),
 			machineBuilder:    awsCAPIMachineBase,
 			expectedErrors:    []string{"spec.privateDNSName: Invalid value: v1beta2.PrivateDNSName{EnableResourceNameDNSAAAARecord:(*bool)(nil), EnableResourceNameDNSARecord:(*bool)(nil), HostnameType:(*string)(nil)}: privateDNSName is not supported"},
 			expectedWarnings:  []string{},
@@ -156,8 +156,8 @@ var _ = Describe("capi2mapi AWS conversion", func() {
 		Entry("With unsupported Ignition Proxy", awsCAPI2MAPIMachineConversionInput{
 			awsClusterBuilder: awsCAPIAWSClusterBase,
 			awsMachineBuilder: awsCAPIAWSMachineBase.
-				WithIgnition(&capav1.Ignition{
-					Proxy: &capav1.IgnitionProxy{},
+				WithIgnition(&awsv1.Ignition{
+					Proxy: &awsv1.IgnitionProxy{},
 				}),
 			machineBuilder:   awsCAPIMachineBase,
 			expectedErrors:   []string{"spec.ignition.proxy: Invalid value: v1beta2.IgnitionProxy{HTTPProxy:(*string)(nil), HTTPSProxy:(*string)(nil), NoProxy:[]v1beta2.IgnitionNoProxy(nil)}: ignition proxy is not supported"},
@@ -167,9 +167,9 @@ var _ = Describe("capi2mapi AWS conversion", func() {
 		Entry("With unsupported Ignition TLS", awsCAPI2MAPIMachineConversionInput{
 			awsClusterBuilder: awsCAPIAWSClusterBase,
 			awsMachineBuilder: awsCAPIAWSMachineBase.
-				WithIgnition(&capav1.Ignition{
-					TLS: &capav1.IgnitionTLS{
-						CASources: []capav1.IgnitionCASource{"a", "b"},
+				WithIgnition(&awsv1.Ignition{
+					TLS: &awsv1.IgnitionTLS{
+						CASources: []awsv1.IgnitionCASource{"a", "b"},
 					},
 				}),
 			machineBuilder:   awsCAPIMachineBase,
@@ -179,8 +179,8 @@ var _ = Describe("capi2mapi AWS conversion", func() {
 		Entry("With unsupported httpEndpoint", awsCAPI2MAPIMachineConversionInput{
 			awsClusterBuilder: awsCAPIAWSClusterBase,
 			awsMachineBuilder: awsCAPIAWSMachineBase.
-				WithInstanceMetadataOptions(&capav1.InstanceMetadataOptions{
-					HTTPEndpoint: capav1.InstanceMetadataEndpointStateDisabled,
+				WithInstanceMetadataOptions(&awsv1.InstanceMetadataOptions{
+					HTTPEndpoint: awsv1.InstanceMetadataEndpointStateDisabled,
 				}),
 			machineBuilder:   awsCAPIMachineBase,
 			expectedErrors:   []string{"spec.instanceMetadataOptions.httpEndpoint: Invalid value: \"disabled\": httpEndpoint values other than \"enabled\" are not supported"},
@@ -190,7 +190,7 @@ var _ = Describe("capi2mapi AWS conversion", func() {
 		Entry("With unsupported httpPutResponseHopLimit", awsCAPI2MAPIMachineConversionInput{
 			awsClusterBuilder: awsCAPIAWSClusterBase,
 			awsMachineBuilder: awsCAPIAWSMachineBase.
-				WithInstanceMetadataOptions(&capav1.InstanceMetadataOptions{
+				WithInstanceMetadataOptions(&awsv1.InstanceMetadataOptions{
 					HTTPPutResponseHopLimit: 2,
 				}),
 			machineBuilder:   awsCAPIMachineBase,
@@ -201,7 +201,7 @@ var _ = Describe("capi2mapi AWS conversion", func() {
 		Entry("With unsupported httpTokens", awsCAPI2MAPIMachineConversionInput{
 			awsClusterBuilder: awsCAPIAWSClusterBase,
 			awsMachineBuilder: awsCAPIAWSMachineBase.
-				WithInstanceMetadataOptions(&capav1.InstanceMetadataOptions{
+				WithInstanceMetadataOptions(&awsv1.InstanceMetadataOptions{
 					HTTPTokens: "unsupported",
 				}),
 			machineBuilder:   awsCAPIMachineBase,
@@ -212,8 +212,8 @@ var _ = Describe("capi2mapi AWS conversion", func() {
 		Entry("With unsupported instanceMetadataTags", awsCAPI2MAPIMachineConversionInput{
 			awsClusterBuilder: awsCAPIAWSClusterBase,
 			awsMachineBuilder: awsCAPIAWSMachineBase.
-				WithInstanceMetadataOptions(&capav1.InstanceMetadataOptions{
-					InstanceMetadataTags: capav1.InstanceMetadataEndpointStateEnabled,
+				WithInstanceMetadataOptions(&awsv1.InstanceMetadataOptions{
+					InstanceMetadataTags: awsv1.InstanceMetadataEndpointStateEnabled,
 				}),
 			machineBuilder:   awsCAPIMachineBase,
 			expectedErrors:   []string{"spec.instanceMetadataOptions.instanceMetadataTags: Invalid value: \"enabled\": instanceMetadataTags values other than \"disabled\" are not supported"},
@@ -222,8 +222,8 @@ var _ = Describe("capi2mapi AWS conversion", func() {
 
 		Entry("With unsupported role identityRef", awsCAPI2MAPIMachineConversionInput{
 			awsClusterBuilder: awsCAPIAWSClusterBase.
-				WithIdentityRef(&capav1.AWSIdentityReference{
-					Kind: capav1.ClusterRoleIdentityKind,
+				WithIdentityRef(&awsv1.AWSIdentityReference{
+					Kind: awsv1.ClusterRoleIdentityKind,
 					Name: "invalid",
 				}),
 			awsMachineBuilder: awsCAPIAWSMachineBase,
@@ -239,11 +239,11 @@ var _ = Describe("capi2mapi AWS conversion", func() {
 		Entry("With multiple unsupported metadata options", awsCAPI2MAPIMachineConversionInput{
 			awsClusterBuilder: awsCAPIAWSClusterBase,
 			awsMachineBuilder: awsCAPIAWSMachineBase.
-				WithInstanceMetadataOptions(&capav1.InstanceMetadataOptions{
-					HTTPEndpoint:            capav1.InstanceMetadataEndpointStateDisabled,
+				WithInstanceMetadataOptions(&awsv1.InstanceMetadataOptions{
+					HTTPEndpoint:            awsv1.InstanceMetadataEndpointStateDisabled,
 					HTTPPutResponseHopLimit: 2,
 					HTTPTokens:              "unsupported",
-					InstanceMetadataTags:    capav1.InstanceMetadataEndpointStateEnabled,
+					InstanceMetadataTags:    awsv1.InstanceMetadataEndpointStateEnabled,
 				}),
 			machineBuilder: awsCAPIMachineBase,
 			expectedErrors: []string{
