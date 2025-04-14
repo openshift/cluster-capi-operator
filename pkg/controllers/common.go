@@ -22,6 +22,7 @@ import (
 	configv1 "github.com/openshift/api/config/v1"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	ibmpowervsv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
+	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -41,6 +42,8 @@ func InitInfraMachineAndInfraClusterFromProvider(platform configv1.PlatformType)
 	switch platform {
 	case configv1.AWSPlatformType:
 		return &awsv1.AWSMachine{}, &awsv1.AWSCluster{}, nil
+	case configv1.OpenStackPlatformType:
+		return &openstackv1.OpenStackMachine{}, &openstackv1.OpenStackCluster{}, nil
 	case configv1.PowerVSPlatformType:
 		return &ibmpowervsv1.IBMPowerVSMachine{}, &ibmpowervsv1.IBMPowerVSCluster{}, nil
 	default:
@@ -56,6 +59,8 @@ func InitInfraMachineTemplateAndInfraClusterFromProvider(platform configv1.Platf
 	switch platform {
 	case configv1.AWSPlatformType:
 		return &awsv1.AWSMachineTemplate{}, &awsv1.AWSCluster{}, nil
+	case configv1.OpenStackPlatformType:
+		return &openstackv1.OpenStackMachineTemplate{}, &openstackv1.OpenStackCluster{}, nil
 	case configv1.PowerVSPlatformType:
 		return &ibmpowervsv1.IBMPowerVSMachineTemplate{}, &ibmpowervsv1.IBMPowerVSCluster{}, nil
 	default:

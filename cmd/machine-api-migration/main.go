@@ -22,6 +22,7 @@ import (
 	"time"
 
 	configv1 "github.com/openshift/api/config/v1"
+	mapiv1alpha1 "github.com/openshift/api/machine/v1alpha1"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	configv1client "github.com/openshift/client-go/config/clientset/versioned"
 	configinformers "github.com/openshift/client-go/config/informers/externalversions"
@@ -33,6 +34,7 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 	"k8s.io/utils/clock"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
+	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
 	"github.com/openshift/api/features"
@@ -62,9 +64,11 @@ var (
 
 func initScheme(scheme *runtime.Scheme) {
 	// TODO(joelspeed): Add additional schemes here once we work out exactly which will be needed.
-	utilruntime.Must(mapiv1beta1.AddToScheme(scheme))
-	utilruntime.Must(configv1.AddToScheme(scheme))
+	utilruntime.Must(mapiv1alpha1.Install(scheme))
+	utilruntime.Must(mapiv1beta1.Install(scheme))
+	utilruntime.Must(configv1.Install(scheme))
 	utilruntime.Must(awsv1.AddToScheme(scheme))
+	utilruntime.Must(openstackv1.AddToScheme(scheme))
 	utilruntime.Must(clusterv1.AddToScheme(scheme))
 }
 
@@ -192,8 +196,8 @@ func main() {
 
 	// Currently we only plan to support AWS, so all others are a noop until they're implemented.
 	switch provider {
-	case configv1.AWSPlatformType:
-		klog.Info("MachineAPIMigration: starting AWS controllers")
+	case configv1.AWSPlatformType, configv1.OpenStackPlatformType:
+		klog.Infof("MachineAPIMigration: starting %s controllers", provider)
 
 	default:
 		klog.Infof("MachineAPIMigration not implemented for platform %s, nothing to do. Waiting for termination signal.", provider)
