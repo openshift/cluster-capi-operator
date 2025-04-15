@@ -79,18 +79,6 @@ type AWSMachineProviderConfig struct {
 	// https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_InstanceMetadataOptionsRequest.html
 	// +optional
 	MetadataServiceOptions MetadataServiceOptions `json:"metadataServiceOptions,omitempty"`
-	// PlacementGroupName specifies the name of the placement group in which to launch the instance.
-	// The placement group must already be created and may use any placement strategy.
-	// When omitted, no placement group is used when creating the EC2 instance.
-	// +optional
-	PlacementGroupName string `json:"placementGroupName,omitempty"`
-	// placementGroupPartition is the partition number within the placement group in which to launch the instance.
-	// This must be an integer value between 1 and 7. It is only valid if the placement group, referred in
-	// `PlacementGroupName` was created with strategy set to partition.
-	// +kubebuilder:validation:Minimum:=1
-	// +kubebuilder:validation:Maximum:=7
-	// +optional
-	PlacementGroupPartition *int32 `json:"placementGroupPartition,omitempty"`
 }
 
 // BlockDeviceMappingSpec describes a block device mapping

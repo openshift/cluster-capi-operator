@@ -383,10 +383,6 @@ github.com/mattn/go-isatty v0.0.20/go.mod h1:W+V8PltTTMOvKvAeJH7IuucS94S2C6jfK/D
 github.com/mattn/go-runewidth v0.0.9/go.mod h1:H031xJmbD/WCDINGzjvQ9THkh0rPKHF+m2gUSrubnMI=
 github.com/mattn/go-runewidth v0.0.14 h1:+xnbZSEeDbOIg5/mE6JF0w6n9duR1l3/WmbinWVwUuU=
 github.com/mattn/go-runewidth v0.0.14/go.mod h1:Jdepj2loyihRzMpdS35Xk/zdY8IAYHsh153qUoGf23w=
-github.com/metal3-io/cluster-api-provider-metal3/api v1.8.6 h1:WlMnPiyi0hld1WZQRNb7gJv//dkbPNU1FaweRAOyDEo=
-github.com/metal3-io/cluster-api-provider-metal3/api v1.8.6/go.mod h1:vp7chfL24CoeOjjeVft1LZARz8qBjJ+mlp7tiFh2//0=
-github.com/metal3-io/ip-address-manager/api v1.9.2 h1:8pFVk2jhs3zpijIbr9nKaqKPPvg323Z2QKLBNRrKL2Y=
-github.com/metal3-io/ip-address-manager/api v1.9.2/go.mod h1:l4tGHeMiR3VfwAxOKw1O7f+3y9waB1tDQ0AVbRp9zoc=
 github.com/mgechev/revive v1.3.9 h1:18Y3R4a2USSBF+QZKFQwVkBROUda7uoBlkEuBD+YD1A=
 github.com/mgechev/revive v1.3.9/go.mod h1:+uxEIr5UH0TjXWHTno3xh4u7eg6jDpXKzQccA9UGhHU=
 github.com/mitchellh/go-homedir v1.1.0 h1:lukF9ziXFxDFPkA1vsr5zpc1XuPDn/wFntq5mG+4E0Y=

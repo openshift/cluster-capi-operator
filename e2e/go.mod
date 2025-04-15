@@ -5,12 +5,9 @@ go 1.22.7
 require (
 	github.com/aws/aws-sdk-go v1.55.5
 	github.com/google/go-cmp v0.6.0
-	github.com/metal3-io/baremetal-operator/apis v0.5.1
-	github.com/metal3-io/cluster-api-provider-metal3/api v1.8.6
 	github.com/onsi/ginkgo/v2 v2.22.2
 	github.com/onsi/gomega v1.36.2
-	github.com/openshift/api v0.0.0-20240731195412-e863d9f8a215
-	github.com/openshift/cluster-api-provider-baremetal v0.0.0-20250115114740-9abe67f18345
+	github.com/openshift/api v0.0.0-20220921125526-1866ef90edbf
 	k8s.io/api v0.31.5
 	k8s.io/apimachinery v0.31.5
 	k8s.io/client-go v0.31.5
@@ -69,8 +66,6 @@ require (
 	github.com/klauspost/compress v1.17.9 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
-	github.com/metal3-io/baremetal-operator/pkg/hardwareutils v0.5.1 // indirect
-	github.com/metal3-io/ip-address-manager/api v1.8.5 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect

@@ -71,7 +71,6 @@ var _ = Describe("Cluster API AWS MachineSet", Ordered, func() {
 				APIVersion: infraAPIVersion,
 				Name:       awsMachineTemplateName,
 			},
-			"worker-user-data",
 		))
 
 		framework.WaitForMachineSet(cl, machineSet.Name)

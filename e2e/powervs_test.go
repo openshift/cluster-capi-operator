@@ -61,7 +61,6 @@ var _ = Describe("Cluster API IBMPowerVS MachineSet", Ordered, func() {
 				APIVersion: powerVSMachineTemplateVersion,
 				Name:       powerVSMachineTemplateName,
 			},
-			"worker-user-data",
 		))
 		framework.WaitForMachineSet(cl, machineSet.Name)
 	})
