@@ -130,10 +130,12 @@ func CAPI2MAPIMachineRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv1.I
 		// Expect(capiMachine.Status).To(Equal(in.machine.Status))
 		// Expect(infraMachine.Status).To(Equal(in.infraMachine.Status))
 
+		capiMachine.Finalizers = nil
 		Expect(capiMachine.TypeMeta).To(Equal(in.machine.TypeMeta))
 		Expect(capiMachine.ObjectMeta).To(Equal(in.machine.ObjectMeta))
 		Expect(capiMachine.Spec).To(Equal(in.machine.Spec))
 
+		infraMachine.SetFinalizers(nil)
 		infraMachineJSON, err := json.Marshal(infraMachine)
 		Expect(err).ToNot(HaveOccurred())
 
@@ -201,10 +203,12 @@ func CAPI2MAPIMachineSetRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv
 		// Expect(capiMachineSet.Status).To(Equal(in.machineSet.Status))
 		// Expect(infraMachineTemplate.Status).To(Equal(in.infraMachineTemplate.Status))
 
+		capiMachineSet.Finalizers = nil
 		Expect(capiMachineSet.TypeMeta).To(Equal(in.machineSet.TypeMeta))
 		Expect(capiMachineSet.ObjectMeta).To(Equal(in.machineSet.ObjectMeta))
 		Expect(capiMachineSet.Spec).To(Equal(in.machineSet.Spec))
 
+		infraMachineTemplate.SetFinalizers(nil)
 		infraMachineTemplateJSON, err := json.Marshal(infraMachineTemplate)
 		Expect(err).ToNot(HaveOccurred())
 
@@ -267,6 +271,7 @@ func MAPI2CAPIMachineRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv1.I
 		// Do not match on status yet, we do not support status conversion.
 		// Expect(mapiMachine.Status).To(Equal(in.machine.Status))
 
+		mapiMachine.Finalizers = nil
 		Expect(mapiMachine.TypeMeta).To(Equal(in.machine.TypeMeta), "converted MAPI machine should have matching .typeMeta")
 		Expect(mapiMachine.ObjectMeta).To(Equal(in.machine.ObjectMeta), "converted MAPI machine should have matching .metadata")
 		Expect(mapiMachine.Spec).To(WithTransform(ignoreMachineProviderSpec, testutils.MatchViaJSON(ignoreMachineProviderSpec(in.machine.Spec))), "converted MAPI machine should have matching .spec")
@@ -324,6 +329,7 @@ func MAPI2CAPIMachineSetRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv
 		// Do not match on status yet, we do not support status conversion.
 		// Expect(mapiMachineSet.Status).To(Equal(in.machineSet.Status))
 
+		mapiMachineSet.Finalizers = nil
 		Expect(mapiMachineSet.TypeMeta).To(Equal(in.machineSet.TypeMeta), "converted MAPI machine set should have matching .typeMeta")
 		Expect(mapiMachineSet.ObjectMeta).To(Equal(in.machineSet.ObjectMeta), "converted MAPI machine set should have matching .metadata")
 		Expect(mapiMachineSet.Spec).To(WithTransform(ignoreMachineSetProviderSpec, testutils.MatchViaJSON(ignoreMachineSetProviderSpec(in.machineSet.Spec))), "converted MAPI machine set should have matching .spec")

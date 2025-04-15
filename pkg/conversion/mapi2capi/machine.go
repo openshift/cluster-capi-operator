@@ -41,8 +41,8 @@ func fromMAPIMachineToCAPIMachine(mapiMachine *mapiv1beta1.Machine, apiVersion, 
 			Namespace:       capiNamespace,
 			Labels:          convertMAPILabelsToCAPI(mapiMachine.Labels),
 			Annotations:     convertMAPIAnnotationsToCAPI(mapiMachine.Annotations),
+			Finalizers:      []string{capiv1.MachineFinalizer},
 			OwnerReferences: nil, // OwnerReferences not populated here. They are added later by the machineSync controller.
-			Finalizers:      nil, // Finalizers not populated here. They are added later by the machine controllers.
 		},
 		Spec: capiv1.MachineSpec{
 			InfrastructureRef: corev1.ObjectReference{

@@ -33,6 +33,7 @@ func fromCAPIMachineSetToMAPIMachineSet(capiMachineSet *capiv1.MachineSet) (*map
 			Namespace:       capiMachineSet.Namespace,
 			Labels:          convertCAPILabelsToMAPILabels(capiMachineSet.Labels),
 			Annotations:     convertCAPIAnnotationsToMAPIAnnotations(capiMachineSet.Annotations),
+			Finalizers:      nil, // MAPI MachineSet does not have finalizers.
 			OwnerReferences: nil, // OwnerReferences not populated here. They are added later by the machineSetSync controller.
 		},
 		Spec: mapiv1.MachineSetSpec{
