@@ -239,6 +239,7 @@ func (m *openstackMachineAndInfra) toOpenStackMachine(providerSpec mapiv1alpha1.
 		// AvailabilityZone is not provider-specific and is part of the CAPI Machine definition
 		ConfigDrive: providerSpec.ConfigDrive,
 		Flavor:      &providerSpec.Flavor,
+		// TODO(OSASINFRA-3779): Add VAP to prevent usage.
 		// FlavorID. Allows you to define flavor by ID, but MAPO uses names so we don't set this.
 		// FloatingIPPoolRef. Not used in OpenShift.
 		IdentityRef: convertMAPOCloudNameSecretToCAPO(providerSpec.CloudName, providerSpec.CloudsSecret),
