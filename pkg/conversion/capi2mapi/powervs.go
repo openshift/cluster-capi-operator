@@ -115,7 +115,7 @@ func (m machineAndPowerVSMachineAndPowerVSCluster) ToMachine() (*mapiv1beta1.Mac
 }
 
 // ToMachineSet converts a capi2mapi MachineAndPowerVSMachineTemplate into a MAPI MachineSet.
-func (m machineSetAndPowerVSMachineTemplateAndPowerVSCluster) ToMachineSet() (*mapiv1beta1.MachineSet, []string, error) {
+func (m machineSetAndPowerVSMachineTemplateAndPowerVSCluster) ToMachineSet() (*mapiv1beta1.MachineSet, []string, error) { //nolint:dupl
 	if m.machineSet == nil || m.template == nil || m.powerVSCluster == nil || m.machineAndPowerVSMachineAndPowerVSCluster == nil {
 		return nil, nil, errCAPIMachineSetPowerVSMachineTemplatePowerVSClusterCannotBeNil
 	}
@@ -139,15 +139,15 @@ func (m machineSetAndPowerVSMachineTemplateAndPowerVSCluster) ToMachineSet() (*m
 		errs = append(errs, err)
 	}
 
+	if len(errs) > 0 {
+		return nil, warnings, utilerrors.NewAggregate(errs)
+	}
+
 	mapiMachineSet.Spec.Template.Spec = mapiPowerVSMachine.Spec
 
 	// Copy the labels and annotations from the Machine to the template.
 	mapiMachineSet.Spec.Template.ObjectMeta.Annotations = mapiPowerVSMachine.ObjectMeta.Annotations
 	mapiMachineSet.Spec.Template.ObjectMeta.Labels = mapiPowerVSMachine.ObjectMeta.Labels
-
-	if len(errs) > 0 {
-		return nil, warnings, utilerrors.NewAggregate(errs)
-	}
 
 	return mapiMachineSet, warnings, nil
 }

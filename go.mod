@@ -9,12 +9,13 @@ require (
 	github.com/gobuffalo/flect v1.0.3
 	github.com/golangci/golangci-lint v1.61.0
 	github.com/google/gofuzz v1.2.0
+	github.com/google/uuid v1.6.0
 	github.com/klauspost/compress v1.17.9
 	github.com/onsi/ginkgo/v2 v2.22.2
 	github.com/onsi/gomega v1.36.2
 	github.com/openshift/api v0.0.0-20250311085700-14a17c7009c4
 	github.com/openshift/client-go v0.0.0-20250131180035-f7ec47e2d87a
-	github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20250401133953-e7e157c4c1fe
+	github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20250410093152-a5f6e35c5967
 	github.com/openshift/library-go v0.0.0-20250203131244-80620876b7c2
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/pflag v1.0.6
@@ -138,7 +139,6 @@ require (
 	github.com/google/gnostic-models v0.6.9-0.20230804172637-c7be7c783f49 // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/google/pprof v0.0.0-20241210010833-40e02aabc2ad // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/gordonklaus/ineffassign v0.1.0 // indirect
 	github.com/gostaticanalysis/analysisutil v0.7.1 // indirect
 	github.com/gostaticanalysis/comment v1.4.2 // indirect
