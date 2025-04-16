@@ -322,6 +322,7 @@ func convertCAPOImageParamToMAPO(fldPath *field.Path, capoImage capov1.ImagePara
 	errors := field.ErrorList{}
 	warnings := []string{}
 
+	// TODO(OSASINFRA-3779): Add VAP to prevent usage of the below fields.
 	if capoImage.ID != nil {
 		errors = append(errors, field.Invalid(fldPath.Child("id"), *capoImage.ID, "MAPO only supports defining images by names"))
 		return "", warnings, errors
@@ -378,6 +379,7 @@ func convertCAPOPortOptsToMAPONetwork(fldPath *field.Path, capoPort capov1.PortO
 			// TenantID is deprecated and covered by ProjectID so we don't set it
 		}
 	default:
+		// TODO(OSASINFRA-3779): Add VAP to prevent usage of the below field.
 		errors = append(errors, field.Invalid(fldPath.Child("network"), capoPort.Network, "A network must be referenced by a UUID or filter"))
 	}
 
@@ -477,6 +479,7 @@ func convertCAPOPortOptsToMAPOPort(fldPath *field.Path, capoPort capov1.PortOpts
 		}
 
 		if capoFixedIP.Subnet.Filter != nil && capoFixedIP.Subnet.Filter.Name != "" {
+			// TODO(OSASINFRA-3779): Add VAP to prevent usage of the below field.
 			errors = append(errors, field.Invalid(fldPath.Child("fixedIPs").Index(i).Child("subnet", "filter"), capoFixedIP.Subnet.Filter, "MAPO only supports defining subnets via IDs"))
 			continue
 		}
@@ -548,16 +551,19 @@ func convertCAPOPortOptsToMAPOPort(fldPath *field.Path, capoPort capov1.PortOpts
 
 	// ResolvedPortSpecFields.HostID has no equivalent in MAPO
 	if capoPort.HostID != nil {
+		// TODO(OSASINFRA-3779): Add VAP to prevent usage of the below field.
 		warnings = append(warnings, field.Invalid(fldPath.Child("hostID"), capoPort.HostID, "The hostID field has no equivalent in MAPO and is not supported").Error())
 	}
 
 	// ResolvedPortSpecFields.PropagateUplinkStatus has no equivalent in MAPO
 	if capoPort.PropagateUplinkStatus != nil {
+		// TODO(OSASINFRA-3779): Add VAP to prevent usage of the below field.
 		warnings = append(warnings, field.Invalid(fldPath.Child("propagateUplinkStatus"), capoPort.PropagateUplinkStatus, "The propagateUplinkStatus field has no equivalent in MAPO and is not supported").Error())
 	}
 
 	// ResolvedPortSpecFields.ValueSpecs has no equivalent in MAPO and is ignored
 	if capoPort.ValueSpecs != nil || len(capoPort.ValueSpecs) > 0 {
+		// TODO(OSASINFRA-3779): Add VAP to prevent usage of the below field.
 		warnings = append(warnings, field.Invalid(fldPath.Child("valueSpecs"), capoPort.ValueSpecs, "The valueSpecs field has no equivalent in MAPO and is not supported").Error())
 	}
 
