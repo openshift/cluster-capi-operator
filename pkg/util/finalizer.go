@@ -27,10 +27,14 @@ import (
 
 var (
 	errUnableToAssertClientObject = errors.New("unable to assert client.Object after deepcopy")
+	errObjectPassedIsNil          = errors.New("failed to ensure finalizer: object passed is nil")
 )
 
 // EnsureFinalizer ensures that the specified finalizer is added to the given object using a Patch operation.
 func EnsureFinalizer(ctx context.Context, c client.Client, obj client.Object, finalizer string) (bool, error) {
+	if IsNilObject(obj) {
+		return false, errObjectPassedIsNil
+	}
 	// Create a deep copy of the original object.
 	originalObj, ok := obj.DeepCopyObject().(client.Object)
 	if !ok {
@@ -54,6 +58,10 @@ func EnsureFinalizer(ctx context.Context, c client.Client, obj client.Object, fi
 
 // RemoveFinalizer ensures that the specified finalizer is removed from the given object using a Patch operation.
 func RemoveFinalizer(ctx context.Context, c client.Client, obj client.Object, finalizer string) (bool, error) {
+	if IsNilObject(obj) {
+		return false, nil
+	}
+
 	// Create a deep copy of the original object.
 	originalObj, ok := obj.DeepCopyObject().(client.Object)
 	if !ok {
