@@ -10,6 +10,7 @@ require (
 	github.com/golangci/golangci-lint v1.61.0
 	github.com/google/gofuzz v1.2.0
 	github.com/klauspost/compress v1.17.9
+	github.com/metal3-io/cluster-api-provider-metal3/api v1.8.6
 	github.com/onsi/ginkgo/v2 v2.22.2
 	github.com/onsi/gomega v1.36.2
 	github.com/openshift/api v0.0.0-20250311085700-14a17c7009c4
@@ -182,6 +183,7 @@ require (
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-runewidth v0.0.14 // indirect
+	github.com/metal3-io/ip-address-manager/api v1.9.2 // indirect
 	github.com/mgechev/revive v1.3.9 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
