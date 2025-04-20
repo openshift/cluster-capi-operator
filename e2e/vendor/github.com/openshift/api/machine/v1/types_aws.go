@@ -4,6 +4,9 @@ package v1
 // Only one of ID, ARN or Filters may be specified. Specifying more than one will result in
 // a validation error.
 // +union
+// +kubebuilder:validation:XValidation:rule="has(self.type) && self.type == 'ID' ?  has(self.id) : !has(self.id)",message="id is required when type is ID, and forbidden otherwise"
+// +kubebuilder:validation:XValidation:rule="has(self.type) && self.type == 'ARN' ?  has(self.arn) : !has(self.arn)",message="arn is required when type is ARN, and forbidden otherwise"
+// +kubebuilder:validation:XValidation:rule="has(self.type) && self.type == 'Filters' ?  has(self.filters) : !has(self.filters)",message="filters is required when type is Filters, and forbidden otherwise"
 type AWSResourceReference struct {
 	// Type determines how the reference will fetch the AWS resource.
 	// +unionDiscriminator
@@ -17,6 +20,7 @@ type AWSResourceReference struct {
 	ARN *string `json:"arn,omitempty"`
 	// Filters is a set of filters used to identify a resource.
 	// +optional
+	// +listType=atomic
 	Filters *[]AWSResourceFilter `json:"filters,omitempty"`
 }
 
@@ -42,5 +46,6 @@ type AWSResourceFilter struct {
 	Name string `json:"name"`
 	// Values includes one or more filter values. Filter values are case-sensitive.
 	// +optional
+	// +listType=atomic
 	Values []string `json:"values,omitempty"`
 }
