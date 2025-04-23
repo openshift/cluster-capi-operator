@@ -47,6 +47,16 @@ func GetPlatform(ctx context.Context, infra *configv1.Infrastructure) (configv1.
 	return infra.Status.PlatformStatus.Type, nil
 }
 
+// GetExternalPlatformName returns the external platform name from the infrastructure resource.
+func GetExternalPlatformName(infra *configv1.Infrastructure) (string, error) {
+	if infra == nil {
+		return "", errNilInfrastructure
+	}
+
+	// No error checking, just assume that platformName is always there
+	return infra.Spec.PlatformSpec.External.PlatformName, nil
+}
+
 // GetInfra returns the infrastructure resource.
 func GetInfra(ctx context.Context, cl client.Reader) (*configv1.Infrastructure, error) {
 	infra := &configv1.Infrastructure{}

@@ -966,6 +966,20 @@ github.com/openshift/library-go/pkg/operator/resource/resourcemerge
 github.com/openshift/library-go/pkg/operator/resource/resourceread
 github.com/openshift/library-go/pkg/operator/resourcesynccontroller
 github.com/openshift/library-go/pkg/operator/v1helpers
+# github.com/oracle/cluster-api-provider-oci v0.17.0
+## explicit; go 1.21
+github.com/oracle/cluster-api-provider-oci/api/v1beta2
+github.com/oracle/cluster-api-provider-oci/cloud/ociutil
+github.com/oracle/cluster-api-provider-oci/cloud/services/loadbalancer
+github.com/oracle/cluster-api-provider-oci/cloud/services/networkloadbalancer
+# github.com/oracle/oci-go-sdk/v65 v65.81.1
+## explicit; go 1.13
+github.com/oracle/oci-go-sdk/v65/common
+github.com/oracle/oci-go-sdk/v65/common/auth
+github.com/oracle/oci-go-sdk/v65/common/utils
+github.com/oracle/oci-go-sdk/v65/core
+github.com/oracle/oci-go-sdk/v65/loadbalancer
+github.com/oracle/oci-go-sdk/v65/networkloadbalancer
 # github.com/pelletier/go-toml/v2 v2.2.3
 ## explicit; go 1.21.0
 github.com/pelletier/go-toml/v2
@@ -1096,6 +1110,9 @@ github.com/sivchari/tenv
 github.com/sonatard/noctx
 github.com/sonatard/noctx/ngfunc
 github.com/sonatard/noctx/reqwithoutctx
+# github.com/sony/gobreaker v0.5.0
+## explicit; go 1.12
+github.com/sony/gobreaker
 # github.com/sourcegraph/conc v0.3.0
 ## explicit; go 1.19
 github.com/sourcegraph/conc
@@ -2254,6 +2271,8 @@ k8s.io/client-go/util/keyutil
 k8s.io/client-go/util/retry
 k8s.io/client-go/util/watchlist
 k8s.io/client-go/util/workqueue
+# k8s.io/cluster-bootstrap v0.31.3
+## explicit; go 1.22.0
 # k8s.io/component-base v0.32.3
 ## explicit; go 1.23.0
 k8s.io/component-base/cli/flag
