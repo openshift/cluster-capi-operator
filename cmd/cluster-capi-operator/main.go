@@ -22,7 +22,9 @@ import (
 
 	metal3v1 "github.com/metal3-io/cluster-api-provider-metal3/api/v1beta1"
 	"github.com/spf13/pflag"
+
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
+	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -33,6 +35,7 @@ import (
 	"k8s.io/component-base/config/options"
 	klog "k8s.io/klog/v2"
 	"k8s.io/klog/v2/textlogger"
+
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	azurev1 "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
 	gcpv1 "sigs.k8s.io/cluster-api-provider-gcp/api/v1beta1"
@@ -65,7 +68,8 @@ import (
 )
 
 const (
-	defaultImagesLocation = "./dev-images.json"
+	defaultImagesLocation      = "./dev-images.json"
+	defaultMachineAPINamespace = "openshift-machine-api"
 )
 
 func initScheme(scheme *runtime.Scheme) {
@@ -161,14 +165,7 @@ func main() {
 
 	syncPeriod := 10 * time.Minute
 
-	cacheOpts := cache.Options{
-		DefaultNamespaces: map[string]cache.Config{
-			*managedNamespace:                {},
-			secretsync.SecretSourceNamespace: {},
-			"kube-system":                    {}, // For fetching cloud credentials.
-		},
-		SyncPeriod: &syncPeriod,
-	}
+	cacheOpts := getDefaultCacheOptions(*managedNamespace, syncPeriod)
 
 	cfg := ctrl.GetConfigOrDie()
 
@@ -394,5 +391,33 @@ func setupClusterOperatorController(mgr manager.Manager, ns string, isUnsupporte
 	}).SetupWithManager(mgr); err != nil {
 		klog.Error(err, "unable to create clusteroperator controller", "controller", "ClusterOperator")
 		os.Exit(1)
+	}
+}
+
+func getDefaultCacheOptions(capiNamespace string, sync time.Duration) cache.Options {
+	return cache.Options{
+		DefaultNamespaces: map[string]cache.Config{
+			capiNamespace: {},
+		},
+		SyncPeriod: &sync,
+		ByObject: map[client.Object]cache.ByObject{
+			&corev1.Secret{}: {
+				Namespaces: map[string]cache.Config{
+					capiNamespace:                    {},
+					secretsync.SecretSourceNamespace: {},
+					"kube-system":                    {}, // For fetching cloud credentials.
+				},
+			},
+			&mapiv1.ControlPlaneMachineSet{}: {
+				Namespaces: map[string]cache.Config{
+					defaultMachineAPINamespace: {},
+				},
+			},
+			&mapiv1beta1.MachineSet{}: {
+				Namespaces: map[string]cache.Config{
+					defaultMachineAPINamespace: {},
+				},
+			},
+		},
 	}
 }

@@ -129,13 +129,7 @@ func main() {
 
 	syncPeriod := 10 * time.Minute
 
-	cacheOpts := cache.Options{
-		DefaultNamespaces: map[string]cache.Config{
-			*capiManagedNamespace: {},
-			*mapiManagedNamespace: {},
-		},
-		SyncPeriod: &syncPeriod,
-	}
+	cacheOpts := getDefaultCacheOptions(*capiManagedNamespace, *mapiManagedNamespace, syncPeriod)
 
 	cfg := ctrl.GetConfigOrDie()
 
@@ -314,4 +308,25 @@ func getProviderFromInfrastructure(infra *configv1.Infrastructure) (configv1.Pla
 	}
 
 	return "", errPlatformNotFound
+}
+
+func getDefaultCacheOptions(capiNamespace, mapiNamespace string, sync time.Duration) cache.Options {
+	return cache.Options{
+		DefaultNamespaces: map[string]cache.Config{
+			capiNamespace: {},
+		},
+		SyncPeriod: &sync,
+		ByObject: map[client.Object]cache.ByObject{
+			&mapiv1beta1.Machine{}: {
+				Namespaces: map[string]cache.Config{
+					mapiNamespace: {},
+				},
+			},
+			&mapiv1beta1.MachineSet{}: {
+				Namespaces: map[string]cache.Config{
+					mapiNamespace: {},
+				},
+			},
+		},
+	}
 }
