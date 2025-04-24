@@ -1202,15 +1202,12 @@ func (r *MachineSyncReconciler) ensureSyncFinalizer(ctx context.Context, mapiMac
 
 	var errors []error
 
-	//nolint: nestif
 	if mapiMachine != nil {
 		if mapiMachine.DeletionTimestamp.IsZero() {
 			didSet, err := util.EnsureFinalizer(ctx, r.Client, mapiMachine, SyncFinalizer)
 			if err != nil {
 				errors = append(errors, err)
-			}
-
-			if didSet {
+			} else if didSet {
 				shouldRequeue = true
 			}
 		}
@@ -1219,29 +1216,23 @@ func (r *MachineSyncReconciler) ensureSyncFinalizer(ctx context.Context, mapiMac
 	// This will add the finalizer in the scenario where the capiMachine does not
 	// exist yet too, as the creation of the machine triggers a reconcile where
 	// this code path will run.
-	//nolint: nestif
 	if capiMachine != nil {
 		if capiMachine.DeletionTimestamp.IsZero() {
 			didSet, err := util.EnsureFinalizer(ctx, r.Client, capiMachine, SyncFinalizer)
 			if err != nil {
 				errors = append(errors, err)
-			}
-
-			if didSet {
+			} else if didSet {
 				shouldRequeue = true
 			}
 		}
 	}
 
-	//nolint:nestif
 	if !util.IsNilObject(infraMachine) {
 		if infraMachine.GetDeletionTimestamp().IsZero() {
 			didSet, err := util.EnsureFinalizer(ctx, r.Client, infraMachine, SyncFinalizer)
 			if err != nil {
 				errors = append(errors, err)
-			}
-
-			if didSet {
+			} else if didSet {
 				shouldRequeue = true
 			}
 		}
