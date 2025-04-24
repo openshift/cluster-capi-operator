@@ -25,6 +25,7 @@ import (
 	configv1 "github.com/openshift/api/config/v1"
 	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
 	consts "github.com/openshift/cluster-capi-operator/pkg/controllers"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/machinesync"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/capi2mapi"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/mapi2capi"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
@@ -262,9 +263,21 @@ func (r *MachineSetSyncReconciler) syncMachineSets(ctx context.Context, mapiMach
 func (r *MachineSetSyncReconciler) reconcileMAPIMachineSetToCAPIMachineSet(ctx context.Context, mapiMachineSet *machinev1beta1.MachineSet, capiMachineSet *capiv1beta1.MachineSet) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
+	if shouldRequeue, err := r.reconcileMAPItoCAPIMachineSetDeletion(ctx, mapiMachineSet, capiMachineSet); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to reconcile Machine API to Cluster API machine set deletion: %w", err)
+	} else if shouldRequeue {
+		return ctrl.Result{}, nil
+	}
+
+	if shouldRequeue, err := r.ensureSyncFinalizer(ctx, mapiMachineSet, capiMachineSet); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to ensure sync finalizer: %w", err)
+	} else if shouldRequeue {
+		return ctrl.Result{}, nil
+	}
+
 	if err := r.validateMAPIMachineSetOwnerReferences(mapiMachineSet); err != nil {
 		if condErr := r.applySynchronizedConditionWithPatch(
-			ctx, mapiMachineSet, corev1.ConditionFalse, reasonFailedToConvertCAPIMachineSetToMAPI, err.Error(), nil); condErr != nil {
+			ctx, mapiMachineSet, corev1.ConditionFalse, reasonFailedToConvertMAPIMachineSetToCAPI, err.Error(), nil); condErr != nil {
 			return ctrl.Result{}, utilerrors.NewAggregate([]error{err, condErr})
 		}
 
@@ -296,19 +309,7 @@ func (r *MachineSetSyncReconciler) reconcileMAPIMachineSetToCAPIMachineSet(ctx c
 		r.Recorder.Event(mapiMachineSet, corev1.EventTypeWarning, "ConversionWarning", warning)
 	}
 
-	if capiMachineSet != nil {
-		newCAPIMachineSet.SetGeneration(capiMachineSet.GetGeneration())
-		newCAPIMachineSet.SetUID(capiMachineSet.GetUID())
-		newCAPIMachineSet.SetCreationTimestamp(capiMachineSet.GetCreationTimestamp())
-		newCAPIMachineSet.SetManagedFields(capiMachineSet.GetManagedFields())
-		newCAPIMachineSet.SetResourceVersion(util.GetResourceVersion(client.Object(capiMachineSet)))
-	}
-
-	newCAPIMachineSet.SetNamespace(r.CAPINamespace)
-	newCAPIMachineSet.Spec.Template.Spec.InfrastructureRef.Namespace = r.CAPINamespace
-	newCAPIMachineSet.OwnerReferences = []metav1.OwnerReference{clusterOwnerRefence}
-	// Set the paused annotation on the new CAPI MachineSet, as we want to create it paused.
-	annotations.AddAnnotations(newCAPIMachineSet, map[string]string{capiv1beta1.PausedAnnotation: ""})
+	copyCapiObjectMeta(capiMachineSet, newCAPIMachineSet, r.CAPINamespace, clusterOwnerRefence)
 
 	if result, err := r.ensureCAPIInfraMachineTemplate(ctx, mapiMachineSet, newCAPIMachineSet, newCAPIInfraMachineTemplate, clusterOwnerRefence); err != nil {
 		return result, fmt.Errorf("unable to ensure CAPI infra machine template: %w", err)
@@ -360,6 +361,12 @@ func (r *MachineSetSyncReconciler) ensureCAPIInfraMachineTemplate(ctx context.Co
 func (r *MachineSetSyncReconciler) reconcileCAPIMachineSetToMAPIMachineSet(ctx context.Context, capiMachineSet *capiv1beta1.MachineSet, mapiMachineSet *machinev1beta1.MachineSet) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
+	if shouldRequeue, err := r.ensureSyncFinalizer(ctx, mapiMachineSet, capiMachineSet); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to ensure sync finalizer: %w", err)
+	} else if shouldRequeue {
+		return ctrl.Result{}, nil
+	}
+
 	if err := r.validateCAPIMachineSetOwnerReferences(capiMachineSet); err != nil {
 		logger.Error(err, "unable to convert Cluster API machine set to Machine API. Cluster API machine set has non-convertible owner references")
 
@@ -399,20 +406,7 @@ func (r *MachineSetSyncReconciler) reconcileCAPIMachineSetToMAPIMachineSet(ctx c
 		r.Recorder.Event(mapiMachineSet, corev1.EventTypeWarning, "ConversionWarning", warning)
 	}
 
-	newMapiMachineSet.SetGeneration(mapiMachineSet.GetGeneration())
-	newMapiMachineSet.SetUID(mapiMachineSet.GetUID())
-	newMapiMachineSet.SetCreationTimestamp(mapiMachineSet.GetCreationTimestamp())
-	newMapiMachineSet.SetManagedFields(mapiMachineSet.GetManagedFields())
-	newMapiMachineSet.SetResourceVersion(util.GetResourceVersion(client.Object(mapiMachineSet)))
-	newMapiMachineSet.SetNamespace(mapiMachineSet.GetNamespace())
-	newMapiMachineSet.Spec.Template.ObjectMeta.Labels = util.MergeMaps(mapiMachineSet.Spec.Template.ObjectMeta.Labels, newMapiMachineSet.Spec.Template.ObjectMeta.Labels)
-	newMapiMachineSet.Spec.Template.Spec.ObjectMeta.Labels = util.MergeMaps(mapiMachineSet.Spec.Template.Spec.ObjectMeta.Labels, newMapiMachineSet.Spec.Template.Spec.ObjectMeta.Labels)
-	// Restore API authoritativeness, as it gets lost in MAPI->CAPI->MAPI translation.
-	newMapiMachineSet.Spec.AuthoritativeAPI = mapiMachineSet.Spec.AuthoritativeAPI
-	newMapiMachineSet.Spec.Template.Spec.AuthoritativeAPI = mapiMachineSet.Spec.Template.Spec.AuthoritativeAPI
-	// Restore the original MAPI selector as it is immutable.
-	newMapiMachineSet.Spec.Selector = mapiMachineSet.Spec.Selector
-	newMapiMachineSet.OwnerReferences = nil // No CAPI machine set owner references are converted to MAPI machine set.
+	copyMapiObjectMeta(mapiMachineSet, newMapiMachineSet)
 
 	mapiMachineSetsDiff, err := compareMAPIMachineSets(mapiMachineSet, newMapiMachineSet)
 	if err != nil {
@@ -693,6 +687,38 @@ func (r *MachineSetSyncReconciler) createOrUpdateCAPIMachineSet(ctx context.Cont
 	return ctrl.Result{}, nil
 }
 
+// ensureSyncFinalizer ensures the sync finalizer is present across mapi and capi machine sets.
+// It attempts to set both in one call, aggregating errors.
+func (r *MachineSetSyncReconciler) ensureSyncFinalizer(ctx context.Context, mapiMachineSet *machinev1beta1.MachineSet, capiMachineSet *capiv1beta1.MachineSet) (bool, error) {
+	var shouldRequeue bool
+
+	var errors []error
+
+	if mapiMachineSet != nil {
+		if mapiMachineSet.DeletionTimestamp.IsZero() {
+			didSet, err := util.EnsureFinalizer(ctx, r.Client, mapiMachineSet, machinesync.SyncFinalizer)
+			if err != nil {
+				errors = append(errors, err)
+			} else if didSet {
+				shouldRequeue = true
+			}
+		}
+	}
+
+	if capiMachineSet != nil {
+		if capiMachineSet.DeletionTimestamp.IsZero() {
+			didSet, err := util.EnsureFinalizer(ctx, r.Client, capiMachineSet, machinesync.SyncFinalizer)
+			if err != nil {
+				errors = append(errors, err)
+			} else if didSet {
+				shouldRequeue = true
+			}
+		}
+	}
+
+	return shouldRequeue, utilerrors.NewAggregate(errors)
+}
+
 // initInfraMachineTemplateAndInfraClusterFromProvider returns the correct InfraMachineTemplate and InfraCluster implementation
 // for a given provider.
 //
@@ -706,6 +732,14 @@ func initInfraMachineTemplateAndInfraClusterFromProvider(platform configv1.Platf
 	default:
 		return nil, nil, fmt.Errorf("%w: %s", errPlatformNotSupported, platform)
 	}
+}
+
+func (r *MachineSetSyncReconciler) reconcileMAPItoCAPIMachineSetDeletion(ctx context.Context, mapiMachineSet *machinev1beta1.MachineSet, capiMachineSet *capiv1beta1.MachineSet) (bool, error) {
+	if mapiMachineSet.DeletionTimestamp.IsZero() {
+		return false, nil
+	}
+
+	return false, nil
 }
 
 // compareCAPIInfraMachineTemplates compares CAPI infra machine templates a and b, and returns a list of differences, or none if there are none.
@@ -809,4 +843,37 @@ func compareMAPIMachineSets(a, b *machinev1beta1.MachineSet) (map[string]any, er
 	}
 
 	return diff, nil
+}
+
+func copyCapiObjectMeta(capiMachineSet, newCAPIMachineSet *capiv1beta1.MachineSet, capiNamespace string, clusterOwnerRefence metav1.OwnerReference) {
+	if capiMachineSet != nil {
+		newCAPIMachineSet.SetGeneration(capiMachineSet.GetGeneration())
+		newCAPIMachineSet.SetUID(capiMachineSet.GetUID())
+		newCAPIMachineSet.SetCreationTimestamp(capiMachineSet.GetCreationTimestamp())
+		newCAPIMachineSet.SetManagedFields(capiMachineSet.GetManagedFields())
+		newCAPIMachineSet.SetResourceVersion(util.GetResourceVersion(client.Object(capiMachineSet)))
+	}
+
+	newCAPIMachineSet.SetNamespace(capiNamespace)
+	newCAPIMachineSet.Spec.Template.Spec.InfrastructureRef.Namespace = capiNamespace
+	newCAPIMachineSet.OwnerReferences = []metav1.OwnerReference{clusterOwnerRefence}
+	// Set the paused annotation on the new CAPI MachineSet, as we want to create it paused.
+	annotations.AddAnnotations(newCAPIMachineSet, map[string]string{capiv1beta1.PausedAnnotation: ""})
+}
+
+func copyMapiObjectMeta(mapiMachineSet, newMapiMachineSet *machinev1beta1.MachineSet) {
+	newMapiMachineSet.SetGeneration(mapiMachineSet.GetGeneration())
+	newMapiMachineSet.SetUID(mapiMachineSet.GetUID())
+	newMapiMachineSet.SetCreationTimestamp(mapiMachineSet.GetCreationTimestamp())
+	newMapiMachineSet.SetManagedFields(mapiMachineSet.GetManagedFields())
+	newMapiMachineSet.SetResourceVersion(util.GetResourceVersion(client.Object(mapiMachineSet)))
+	newMapiMachineSet.SetNamespace(mapiMachineSet.GetNamespace())
+	newMapiMachineSet.Spec.Template.ObjectMeta.Labels = util.MergeMaps(mapiMachineSet.Spec.Template.ObjectMeta.Labels, newMapiMachineSet.Spec.Template.ObjectMeta.Labels)
+	newMapiMachineSet.Spec.Template.Spec.ObjectMeta.Labels = util.MergeMaps(mapiMachineSet.Spec.Template.Spec.ObjectMeta.Labels, newMapiMachineSet.Spec.Template.Spec.ObjectMeta.Labels)
+	// Restore API authoritativeness, as it gets lost in MAPI->CAPI->MAPI translation.
+	newMapiMachineSet.Spec.AuthoritativeAPI = mapiMachineSet.Spec.AuthoritativeAPI
+	newMapiMachineSet.Spec.Template.Spec.AuthoritativeAPI = mapiMachineSet.Spec.Template.Spec.AuthoritativeAPI
+	// Restore the original MAPI selector as it is immutable.
+	newMapiMachineSet.Spec.Selector = mapiMachineSet.Spec.Selector
+	newMapiMachineSet.OwnerReferences = nil // No CAPI machine set owner references are converted to MAPI machine set.
 }

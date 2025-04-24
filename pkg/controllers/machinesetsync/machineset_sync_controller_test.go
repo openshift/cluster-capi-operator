@@ -37,6 +37,7 @@ import (
 
 	"github.com/openshift/cluster-api-actuator-pkg/testutils"
 	consts "github.com/openshift/cluster-capi-operator/pkg/controllers"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/machinesync"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -247,6 +248,33 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 							))),
 					)
 				})
+
+				It("should set the sync finalizer on both the mapi and capi machine sets", func() {
+					Eventually(k.Object(mapiMachineSet), timeout).Should(
+						HaveField("ObjectMeta.Finalizers", ContainElement(machinesync.SyncFinalizer)),
+					)
+
+					capiMachineSet := capiv1resourcebuilder.MachineSet().WithName(mapiMachineSet.Name).WithNamespace(capiNamespace.Name).Build()
+					Eventually(k.Get(capiMachineSet)).Should(Succeed())
+					Eventually(k.Object(capiMachineSet), timeout).Should(
+						HaveField("ObjectMeta.Finalizers", ContainElement(machinesync.SyncFinalizer)),
+					)
+				})
+
+				Context("when the MAPI machine set has a non-zero deletion timestamp", func() {
+					BeforeEach(func() {
+						Expect(k8sClient.Delete(ctx, mapiMachineSet)).To(Succeed())
+					})
+					It("should not create the CAPI machine set", func() {
+						Consistently(k.Get(
+							capiv1resourcebuilder.MachineSet().WithName(mapiMachineSet.Name).WithNamespace(capiNamespace.Name).Build(),
+						), timeout).Should(Not(Succeed()))
+					})
+
+					It("should delete the MAPI machine set", func() {
+						Eventually(k.Get(mapiMachineSet)).ShouldNot(Succeed())
+					})
+				})
 			})
 
 			Context("when the CAPI machine set does exist", func() {
@@ -299,6 +327,18 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 					By("Creating the CAPI machine set with a differing spec")
 					capiMachineSet = capiMachineSetBuilder.WithReplicas(int32(4)).Build()
 					Expect(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
+				})
+
+				It("should set the sync finalizer on both the mapi and capi machine sets", func() {
+					Eventually(k.Object(mapiMachineSet), timeout).Should(
+						HaveField("ObjectMeta.Finalizers", ContainElement(machinesync.SyncFinalizer)),
+					)
+
+					capiMachineSet := capiv1resourcebuilder.MachineSet().WithName(mapiMachineSet.Name).WithNamespace(capiNamespace.Name).Build()
+					Eventually(k.Get(capiMachineSet)).Should(Succeed())
+					Eventually(k.Object(capiMachineSet), timeout).Should(
+						HaveField("ObjectMeta.Finalizers", ContainElement(machinesync.SyncFinalizer)),
+					)
 				})
 
 				It("should update the synchronized condition on the MAPI machine set to True", func() {
@@ -412,6 +452,18 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 					Eventually(k.Get(
 						capiv1resourcebuilder.MachineSet().WithName(mapiMachineSet.Name).WithNamespace(capiNamespace.Name).Build()),
 					).Should(Succeed())
+				})
+
+				It("should set the sync finalizer on both the mapi and capi machine sets", func() {
+					Eventually(k.Object(mapiMachineSet), timeout).Should(
+						HaveField("ObjectMeta.Finalizers", ContainElement(machinesync.SyncFinalizer)),
+					)
+
+					capiMachineSet := capiv1resourcebuilder.MachineSet().WithName(mapiMachineSet.Name).WithNamespace(capiNamespace.Name).Build()
+					Eventually(k.Get(capiMachineSet)).Should(Succeed())
+					Eventually(k.Object(capiMachineSet), timeout).Should(
+						HaveField("ObjectMeta.Finalizers", ContainElement(machinesync.SyncFinalizer)),
+					)
 				})
 
 				It("should update the synchronized condition on the MAPI machine set to True", func() {
