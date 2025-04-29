@@ -8,9 +8,16 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/discovery"
+	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/scale"
 	"k8s.io/utils/pointer"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
 type machineSetParams struct {
@@ -187,4 +194,56 @@ func GetMachinesFromMachineSet(cl client.Client, machineSet *clusterv1.MachineSe
 		}
 	}
 	return machinesForSet, nil
+}
+
+
+// ScaleMachineSet scales a machineSet with a given name to the given number of replicas.
+func ScaleMachineSet(name string, replicas int) error {
+	scaleClient, err := getScaleClient()
+	if err != nil {
+		return fmt.Errorf("error calling getScaleClient %w", err)
+	}
+
+	scale, err := scaleClient.Scales(CAPINamespace).Get(ctx, schema.GroupResource{Group: "cluster.x-k8s.io", Resource: "MachineSet"}, name, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("error calling scaleClient.Scales get: %w", err)
+	}
+
+	scaleUpdate := scale.DeepCopy()
+	scaleUpdate.Spec.Replicas = int32(replicas)
+
+	_, err = scaleClient.Scales(CAPINamespace).Update(ctx, schema.GroupResource{Group: "cluster.x-k8s.io", Resource: "MachineSet"}, scaleUpdate, metav1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("error calling scaleClient.Scales update: %w", err)
+	}
+
+	return nil
+}
+
+// getScaleClient returns a ScalesGetter object to manipulate scale subresources.
+func getScaleClient() (scale.ScalesGetter, error) {
+	cfg, err := config.GetConfig()
+	if err != nil {
+		return nil, fmt.Errorf("error getting config %w", err)
+	}
+
+	httpClient, err := rest.HTTPClientFor(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("error calling rest.HTTPClientFor %w", err)
+	}
+
+	mapper, err := apiutil.NewDynamicRESTMapper(cfg, httpClient)
+	if err != nil {
+		return nil, fmt.Errorf("error calling NewDiscoveryRESTMapper %w", err)
+	}
+
+	discovery := discovery.NewDiscoveryClientForConfigOrDie(cfg)
+	scaleKindResolver := scale.NewDiscoveryScaleKindResolver(discovery)
+
+	scaleClient, err := scale.NewForConfig(cfg, mapper, dynamic.LegacyAPIPathResolverFunc, scaleKindResolver)
+	if err != nil {
+		return nil, fmt.Errorf("error calling building scale client %w", err)
+	}
+
+	return scaleClient, nil
 }
