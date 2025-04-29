@@ -1,11 +1,13 @@
 package framework
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"strconv"
 
 	configv1 "github.com/openshift/api/config/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -31,4 +33,14 @@ func GetControlPlaneHostAndPort(cl client.Client) (string, int32, error) {
 	}
 
 	return apiUrl.Hostname(), int32(port), nil
+}
+
+// IsTechPreviewNoUpgrade checks if a cluster is a TechPreviewNoUpgrade cluster
+func IsTechPreviewNoUpgrade(ctx context.Context,  cl client.Client) bool {
+	featureGate := &configv1.FeatureGate{}
+	if err := cl.Get(ctx, types.NamespacedName{Name: "cluster"}, featureGate); err != nil {
+		return false
+	}
+
+	return featureGate.Spec.FeatureSet == configv1.TechPreviewNoUpgrade
 }
