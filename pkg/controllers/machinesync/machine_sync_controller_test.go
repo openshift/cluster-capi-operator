@@ -705,14 +705,32 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 				})
 
 				Context("when the CAPI machine does not exist", func() {
-					It("should update the synchronized condition on the MAPI machine to False", func() {
+					It("should create the CAPI machine", func() {
+						capiMachine := capiMachineBuilder.WithName("test-machine").Build()
+						Eventually(k.Get(capiMachine)).Should(Succeed())
+						Eventually(k.Object(capiMachine)).ShouldNot(
+							HaveField("ObjectMeta.Annotations", ContainElement(
+								HaveKeyWithValue(capiv1beta1.PausedAnnotation, ""),
+							)))
+					})
+
+					It("should create the CAPI Infra machine", func() {
+						capiInfraMachine := capav1builder.AWSMachine().WithName(mapiMachine.Name).WithNamespace(capiNamespace.Name).Build()
+						Eventually(k.Get(capiInfraMachine)).Should(Succeed())
+						Eventually(k.Object(capiInfraMachine)).ShouldNot(
+							HaveField("ObjectMeta.Annotations", ContainElement(
+								HaveKeyWithValue(capiv1beta1.PausedAnnotation, ""),
+							)))
+					})
+
+					It("should update the synchronized condition on the MAPI machine to True", func() {
 						Eventually(k.Object(mapiMachine), timeout).Should(
 							HaveField("Status.Conditions", ContainElement(
 								SatisfyAll(
 									HaveField("Type", Equal(consts.SynchronizedCondition)),
-									HaveField("Status", Equal(corev1.ConditionFalse)),
-									HaveField("Reason", Equal("CAPIMachineNotFound")),
-									HaveField("Message", Equal("Cluster API machine not found")),
+									HaveField("Status", Equal(corev1.ConditionTrue)),
+									HaveField("Reason", Equal("ResourceSynchronized")),
+									HaveField("Message", Equal("Successfully synchronized CAPI Machine to MAPI")),
 								))),
 						)
 					})

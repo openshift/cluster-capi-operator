@@ -238,15 +238,19 @@ func (r *MachineSyncReconciler) Reconcile(ctx context.Context, req reconcile.Req
 		return ctrl.Result{}, nil
 	}
 
-	switch mapiMachine.Status.AuthoritativeAPI {
-	case machinev1beta1.MachineAuthorityMachineAPI:
+	authoritativeAPI := mapiMachine.Status.AuthoritativeAPI
+
+	switch {
+	case authoritativeAPI == machinev1beta1.MachineAuthorityMachineAPI:
 		return r.reconcileMAPIMachinetoCAPIMachine(ctx, mapiMachine, capiMachine)
-	case machinev1beta1.MachineAuthorityClusterAPI:
+	case authoritativeAPI == machinev1beta1.MachineAuthorityClusterAPI && !capiMachineNotFound:
 		return r.reconcileCAPIMachinetoMAPIMachine(ctx, capiMachine, mapiMachine)
-	case machinev1beta1.MachineAuthorityMigrating:
+	case authoritativeAPI == machinev1beta1.MachineAuthorityClusterAPI && capiMachineNotFound:
+		return r.reconcileMAPIMachinetoCAPIMachine(ctx, mapiMachine, capiMachine)
+	case authoritativeAPI == machinev1beta1.MachineAuthorityMigrating:
 		logger.Info("Machine currently migrating", "machine", mapiMachine.GetName())
 		return ctrl.Result{}, nil
-	case "":
+	case authoritativeAPI == "":
 		logger.Info("Machine status.authoritativeAPI is empty, will check again later", "AuthoritativeAPI", mapiMachine.Status.AuthoritativeAPI)
 		return ctrl.Result{}, nil
 	default:
@@ -382,9 +386,15 @@ func (r *MachineSyncReconciler) reconcileCAPIMachinetoMAPIMachine(ctx context.Co
 // it assumes the mapiMachine passed is not nil, as the switch above currently
 // enforces this.
 //
-//nolint:funlen, cyclop
+//nolint:funlen, cyclop, gocognit
 func (r *MachineSyncReconciler) reconcileMAPIMachinetoCAPIMachine(ctx context.Context, mapiMachine *machinev1beta1.Machine, capiMachine *capiv1beta1.Machine) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
+
+	authoritativeAPI := mapiMachine.Status.AuthoritativeAPI
+
+	if authoritativeAPI == machinev1beta1.MachineAuthorityClusterAPI {
+		logger.Info("AuthoritativeAPI is set to Cluster API, but no Cluster API machine exists. Running an initial Machine API to Cluster API sync")
+	}
 
 	_, infraMachine, err := r.fetchCAPIInfraResources(ctx, capiMachine)
 	if err != nil {
@@ -480,7 +490,12 @@ func (r *MachineSyncReconciler) reconcileMAPIMachinetoCAPIMachine(ctx context.Co
 	}
 
 	// Set the paused annotation on the new CAPI Machine, as we want to create it paused.
-	annotations.AddAnnotations(newCAPIMachine, map[string]string{capiv1beta1.PausedAnnotation: ""})
+	//
+	// If we are doing an initial reconcile of MAPI -> CAPI, so
+	// the authoritative api is CAPI we don't want to pause the machine we create.
+	if authoritativeAPI == machinev1beta1.MachineAuthorityMachineAPI {
+		annotations.AddAnnotations(newCAPIMachine, map[string]string{capiv1beta1.PausedAnnotation: ""})
+	}
 
 	if !util.IsNilObject(infraMachine) {
 		newCAPIInfraMachine.SetGeneration(infraMachine.GetGeneration())
@@ -500,7 +515,12 @@ func (r *MachineSyncReconciler) reconcileMAPIMachinetoCAPIMachine(ctx context.Co
 	newCAPIInfraMachine.SetNamespace(r.CAPINamespace)
 
 	// Set the paused annotation on the new CAPI InfraMachine, as we want to create it paused.
-	annotations.AddAnnotations(newCAPIInfraMachine, map[string]string{capiv1beta1.PausedAnnotation: ""})
+	//
+	// If we are doing an initial reconcile of MAPI -> CAPI,
+	// the authoritative api is CAPI we don't want to pause the machine we create.
+	if authoritativeAPI == machinev1beta1.MachineAuthorityMachineAPI {
+		annotations.AddAnnotations(newCAPIInfraMachine, map[string]string{capiv1beta1.PausedAnnotation: ""})
+	}
 
 	if result, err := r.createOrUpdateCAPIMachine(ctx, mapiMachine, capiMachine, newCAPIMachine); err != nil {
 		return result, fmt.Errorf("unable to ensure Cluster API machine: %w", err)
