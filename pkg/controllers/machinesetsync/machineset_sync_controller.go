@@ -736,10 +736,47 @@ func initInfraMachineTemplateAndInfraClusterFromProvider(platform configv1.Platf
 
 func (r *MachineSetSyncReconciler) reconcileMAPItoCAPIMachineSetDeletion(ctx context.Context, mapiMachineSet *machinev1beta1.MachineSet, capiMachineSet *capiv1beta1.MachineSet) (bool, error) {
 	if mapiMachineSet.DeletionTimestamp.IsZero() {
-		return false, nil
+		if capiMachineSet == nil || capiMachineSet.DeletionTimestamp.IsZero() {
+			// Neither MAPI authoritative machine set nor its CAPI non-authoritative mirror
+			// are being deleted, nothing to reconcile for deletion.
+			return false, nil
+		}
+
+		// The MAPI authoritative machine set is not being deleted, but the CAPI non-authoritative one is.
+		// Issue a deletion also to the MAPI authoritative machine set.
+		if err := r.Client.Delete(ctx, mapiMachineSet); err != nil {
+			return false, fmt.Errorf("failed to delete Machine API machine set: %w", err)
+		}
+
+		// Return true to force a requeue, to allow the deletion propagation.
+		return true, nil
 	}
 
-	return false, nil
+	logger := log.FromContext(ctx)
+
+	if capiMachineSet == nil {
+		logger.Info("Cluster API machine set does not exist, removing corresponding Machine API machine set sync finalizer")
+		// We don't have  a capi machine set to clean up. Just let the MAPI operators
+		// function as normal, and remove the MAPI sync finalizer.
+		_, err := util.RemoveFinalizer(ctx, r.Client, mapiMachineSet, machinesync.SyncFinalizer)
+
+		return true, fmt.Errorf("failed to remove finalizer from Machine API machine set: %w", err)
+	}
+
+	if capiMachineSet.DeletionTimestamp.IsZero() {
+		logger.Info("Machine API machine set is being deleted, issuing deletion to corresponding Cluster API machine set")
+
+		if err := r.Client.Delete(ctx, capiMachineSet); err != nil {
+			return true, fmt.Errorf("failed delete Cluster API machine set: %w", err)
+		}
+	}
+
+	// We'll re-reconcile and remove the MAPI machineset once the CAPI one is not present
+	if _, err := util.RemoveFinalizer(ctx, r.Client, capiMachineSet, machinesync.SyncFinalizer); err != nil {
+		return true, fmt.Errorf("failed to remove finalizer from Cluster API machine set: %w", err)
+	}
+
+	return true, nil
 }
 
 // compareCAPIInfraMachineTemplates compares CAPI infra machine templates a and b, and returns a list of differences, or none if there are none.
@@ -852,6 +889,8 @@ func copyCapiObjectMeta(capiMachineSet, newCAPIMachineSet *capiv1beta1.MachineSe
 		newCAPIMachineSet.SetCreationTimestamp(capiMachineSet.GetCreationTimestamp())
 		newCAPIMachineSet.SetManagedFields(capiMachineSet.GetManagedFields())
 		newCAPIMachineSet.SetResourceVersion(util.GetResourceVersion(client.Object(capiMachineSet)))
+		// Restore finalizers.
+		newCAPIMachineSet.SetFinalizers(capiMachineSet.GetFinalizers())
 	}
 
 	newCAPIMachineSet.SetNamespace(capiNamespace)
