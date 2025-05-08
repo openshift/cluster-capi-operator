@@ -26,7 +26,6 @@ import (
 	"github.com/go-logr/logr"
 
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
-	admissionregistrationv1beta1 "k8s.io/api/admissionregistration/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -336,8 +335,8 @@ func (r *CapiInstallerController) SetupWithManager(mgr ctrl.Manager) error {
 		{&appsv1.Deployment{}, r.ManagedNamespace},
 		{&admissionregistrationv1.ValidatingWebhookConfiguration{}, notNamespaced},
 		{&admissionregistrationv1.MutatingWebhookConfiguration{}, notNamespaced},
-		{&admissionregistrationv1beta1.ValidatingAdmissionPolicy{}, notNamespaced},
-		{&admissionregistrationv1beta1.ValidatingAdmissionPolicyBinding{}, notNamespaced},
+		{&admissionregistrationv1.ValidatingAdmissionPolicy{}, notNamespaced},
+		{&admissionregistrationv1.ValidatingAdmissionPolicyBinding{}, notNamespaced},
 		{&corev1.Service{}, r.ManagedNamespace},
 		{&apiextensionsv1.CustomResourceDefinition{}, notNamespaced},
 		{&corev1.ServiceAccount{}, r.ManagedNamespace},
