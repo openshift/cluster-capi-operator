@@ -307,6 +307,51 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 							))),
 					)
 				})
+
+				Context("when the MAPI machine set has a non-zero deletion timestamp", func() {
+					BeforeEach(func() {
+						Eventually(k.Object(mapiMachineSet), timeout).Should(
+							HaveField("ObjectMeta.Finalizers", ContainElement(machinesync.SyncFinalizer)),
+						)
+						Eventually(k.Object(capiMachineSet), timeout).Should(
+							HaveField("ObjectMeta.Finalizers", ContainElement(machinesync.SyncFinalizer)),
+						)
+						Expect(k8sClient.Delete(ctx, mapiMachineSet)).To(Succeed())
+					})
+					// Expect to see the finalizers, so they're in place before
+					//  we Expect logic that relies on them to work
+					It("should delete the CAPI machine set", func() {
+						// Does this need to be more specific, e.g explicitly be a 404?
+						// TODO: 404
+						Eventually(k.Get(capiMachineSet), timeout).ShouldNot(Succeed())
+						// We don't want to re-create the machineset just deleted
+						Consistently(k.Get(capiMachineSet), timeout).ShouldNot(Succeed())
+					})
+
+					It("should delete the MAPI machine set", func() {
+						// Does this need to be more specific, e.g explicitly be a 404?
+						Eventually(k.Get(mapiMachineSet), timeout).ShouldNot(Succeed())
+						// We don't want to re-create the machineset just deleted
+						Consistently(k.Get(mapiMachineSet), timeout).ShouldNot(Succeed())
+					})
+				})
+
+				Context("when the CAPI machine set has a non-zero deletion timestamp", func() {
+					BeforeEach(func() {
+						Eventually(k.Object(mapiMachineSet), timeout).Should(
+							HaveField("ObjectMeta.Finalizers", ContainElement(machinesync.SyncFinalizer)),
+						)
+						Eventually(k.Object(capiMachineSet), timeout).Should(
+							HaveField("ObjectMeta.Finalizers", ContainElement(machinesync.SyncFinalizer)),
+						)
+						Expect(k8sClient.Delete(ctx, capiMachineSet)).To(Succeed())
+					})
+					It("should delete the MAPI machine set", func() {
+
+						// Does this need to be more specific, e.g explicitly be a 404?
+						Eventually(k.Get(mapiMachineSet), timeout).ShouldNot(Succeed())
+					})
+				})
 			})
 		})
 
