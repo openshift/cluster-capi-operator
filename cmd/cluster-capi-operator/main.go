@@ -242,12 +242,13 @@ func main() {
 	}
 }
 
-func getClusterOperatorStatusClient(mgr manager.Manager, controller string, managedNamespace string) operatorstatus.ClusterOperatorStatusClient {
+func getClusterOperatorStatusClient(mgr manager.Manager, controller string, platform configv1.PlatformType, managedNamespace string) operatorstatus.ClusterOperatorStatusClient {
 	return operatorstatus.ClusterOperatorStatusClient{
 		Client:           mgr.GetClient(),
 		Recorder:         mgr.GetEventRecorderFor(controller),
 		ReleaseVersion:   util.GetReleaseVersion(),
 		ManagedNamespace: managedNamespace,
+		Platform:         platform,
 	}
 }
 
@@ -293,12 +294,12 @@ func setupPlatformReconcilers(mgr manager.Manager, infra *configv1.Infrastructur
 	}
 
 	// The ClusterOperator Controller must run under all circumstances as it manages the ClusterOperator object for this operator.
-	setupClusterOperatorController(mgr, managedNamespace, isUnsupportedPlatform)
+	setupClusterOperatorController(mgr, platform, managedNamespace, isUnsupportedPlatform)
 }
 
 func setupReconcilers(mgr manager.Manager, infra *configv1.Infrastructure, platform configv1.PlatformType, infraClusterObject client.Object, containerImages map[string]string, applyClient *kubernetes.Clientset, apiextensionsClient *apiextensionsclient.Clientset, managedNamespace string) {
 	if err := (&corecluster.CoreClusterController{
-		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-cluster-resource-controller", managedNamespace),
+		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-cluster-resource-controller", platform, managedNamespace),
 		Cluster:                     &clusterv1.Cluster{},
 		Platform:                    platform,
 		Infra:                       infra,
@@ -308,7 +309,7 @@ func setupReconcilers(mgr manager.Manager, infra *configv1.Infrastructure, platf
 	}
 
 	if err := (&secretsync.UserDataSecretController{
-		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-user-data-secret-controller", managedNamespace),
+		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-user-data-secret-controller", platform, managedNamespace),
 		Scheme:                      mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		klog.Error(err, "unable to create user-data-secret controller", "controller", "UserDataSecret")
@@ -316,7 +317,7 @@ func setupReconcilers(mgr manager.Manager, infra *configv1.Infrastructure, platf
 	}
 
 	if err := (&kubeconfig.KubeconfigReconciler{
-		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-kubeconfig-controller", managedNamespace),
+		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-kubeconfig-controller", platform, managedNamespace),
 		Scheme:                      mgr.GetScheme(),
 		RestCfg:                     mgr.GetConfig(),
 	}).SetupWithManager(mgr); err != nil {
@@ -325,7 +326,7 @@ func setupReconcilers(mgr manager.Manager, infra *configv1.Infrastructure, platf
 	}
 
 	if err := (&capiinstaller.CapiInstallerController{
-		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-capi-installer-controller", managedNamespace),
+		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-capi-installer-controller", platform, managedNamespace),
 		Scheme:                      mgr.GetScheme(),
 		Images:                      containerImages,
 		RestCfg:                     mgr.GetConfig(),
@@ -338,7 +339,7 @@ func setupReconcilers(mgr manager.Manager, infra *configv1.Infrastructure, platf
 	}
 
 	if err := (&infracluster.InfraClusterController{
-		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-infracluster-controller", managedNamespace),
+		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-infracluster-controller", platform, managedNamespace),
 		Scheme:                      mgr.GetScheme(),
 		Images:                      containerImages,
 		RestCfg:                     mgr.GetConfig(),
@@ -382,10 +383,10 @@ func getAzureCloudEnvironment(ps *configv1.PlatformStatus) configv1.AzureCloudEn
 	return ps.Azure.CloudName
 }
 
-func setupClusterOperatorController(mgr manager.Manager, ns string, isUnsupportedPlatform bool) {
+func setupClusterOperatorController(mgr manager.Manager, platform configv1.PlatformType, ns string, isUnsupportedPlatform bool) {
 	// ClusterOperator watches and keeps the cluster-api ClusterObject up to date.
 	if err := (&clusteroperator.ClusterOperatorController{
-		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-clusteroperator-controller", ns),
+		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-clusteroperator-controller", platform, ns),
 		Scheme:                      mgr.GetScheme(),
 		IsUnsupportedPlatform:       isUnsupportedPlatform,
 	}).SetupWithManager(mgr); err != nil {
