@@ -982,7 +982,20 @@ func (r *MachineSyncReconciler) fetchCAPIInfraResources(ctx context.Context, cap
 //nolint:funlen,gocognit,cyclop
 func (r *MachineSyncReconciler) reconcileMAPItoCAPIMachineDeletion(ctx context.Context, mapiMachine *machinev1beta1.Machine, capiMachine *capiv1beta1.Machine, infraMachine client.Object) (bool, error) {
 	if mapiMachine.DeletionTimestamp.IsZero() {
-		return false, nil
+		if capiMachine == nil || capiMachine.DeletionTimestamp.IsZero() {
+			// Neither MAPI authoritative machine nor its CAPI non-authoritative machine mirror
+			// are being deleted, nothing to reconcile for deletion.
+			return false, nil
+		}
+
+		// The MAPI authoritative machine is not being deleted, but the CAPI non-authoritative one is.
+		// Issue a deletion also to the MAPI authoritative machine.
+		if err := r.Client.Delete(ctx, mapiMachine); err != nil {
+			return false, fmt.Errorf("failed to delete Machine API machine: %w", err)
+		}
+
+		// Return true to force a requeue, to allow the deletion propagation.
+		return true, nil
 	}
 
 	logger := log.FromContext(ctx)
@@ -1092,7 +1105,20 @@ func (r *MachineSyncReconciler) reconcileCAPItoMAPIMachineDeletion(ctx context.C
 	logger := log.FromContext(ctx)
 
 	if capiMachine.DeletionTimestamp.IsZero() {
-		return false, nil
+		if mapiMachine == nil || mapiMachine.DeletionTimestamp.IsZero() {
+			// Neither CAPI authoritative machine nor its MAPI non-authoritative machine mirror
+			// are being deleted, nothing to reconcile for deletion.
+			return false, nil
+		}
+
+		// The CAPI authoritative machine is not being deleted, but the MAPI non-authoritative one is
+		// Issue a deletion also to the CAPI authoritative machine.
+		if err := r.Client.Delete(ctx, capiMachine); err != nil {
+			return false, fmt.Errorf("failed to delete Cluster API machine: %w", err)
+		}
+
+		// Return true to force a requeue, to allow the deletion propagation.
+		return true, nil
 	}
 
 	if mapiMachine == nil {
