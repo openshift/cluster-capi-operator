@@ -167,17 +167,15 @@ func (m *awsMachineAndInfra) toMachineAndInfrastructureMachine() (*capiv1.Machin
 }
 
 // ToMachineSetAndMachineTemplate converts a mapi2capi AWSMachineSetAndInfra into a CAPI MachineSet and CAPA AWSMachineTemplate.
-//
-//nolint:dupl
 func (m *awsMachineSetAndInfra) ToMachineSetAndMachineTemplate() (*capiv1.MachineSet, client.Object, []string, error) {
 	var (
 		errs     []error
 		warnings []string
 	)
 
-	capiMachine, capaMachineObj, warn, err := m.toMachineAndInfrastructureMachine()
-	if err != nil {
-		errs = append(errs, err.ToAggregate().Errors()...)
+	capiMachine, capaMachineObj, warn, errList := m.toMachineAndInfrastructureMachine()
+	if errList != nil {
+		errs = append(errs, errList.ToAggregate().Errors()...)
 	}
 
 	warnings = append(warnings, warn...)
@@ -187,7 +185,10 @@ func (m *awsMachineSetAndInfra) ToMachineSetAndMachineTemplate() (*capiv1.Machin
 		panic(fmt.Errorf("%w: %T", errUnexpectedObjectTypeForMachine, capaMachineObj))
 	}
 
-	capaMachineTemplate := awsMachineToAWSMachineTemplate(capaMachine, m.machineSet.Name, capiNamespace)
+	capaMachineTemplate, err := awsMachineToAWSMachineTemplate(capaMachine, m.machineSet.Name, capiNamespace)
+	if err != nil {
+		errs = append(errs, err)
+	}
 
 	capiMachineSet, machineSetErrs := fromMAPIMachineSetToCAPIMachineSet(m.machineSet)
 	if machineSetErrs != nil {
@@ -361,14 +362,19 @@ func AWSProviderSpecFromRawExtension(rawExtension *runtime.RawExtension) (mapiv1
 	return spec, nil
 }
 
-func awsMachineToAWSMachineTemplate(awsMachine *capav1.AWSMachine, name string, namespace string) *capav1.AWSMachineTemplate {
+func awsMachineToAWSMachineTemplate(awsMachine *capav1.AWSMachine, name string, namespace string) (*capav1.AWSMachineTemplate, error) {
+	nameWithHash, err := util.GenerateInfraMachineTemplateNameWithSpecHash(name, awsMachine.Spec)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate infrastructure machine template name with spec hash: %w", err)
+	}
+
 	return &capav1.AWSMachineTemplate{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: capav1.GroupVersion.String(),
 			Kind:       "AWSMachineTemplate",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
+			Name:      nameWithHash,
 			Namespace: namespace,
 		},
 		Spec: capav1.AWSMachineTemplateSpec{
@@ -376,7 +382,7 @@ func awsMachineToAWSMachineTemplate(awsMachine *capav1.AWSMachine, name string, 
 				Spec: awsMachine.Spec,
 			},
 		},
-	}
+	}, nil
 }
 
 //////// Conversion helpers
