@@ -20,8 +20,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"k8s.io/klog/v2"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -49,12 +49,11 @@ func RewriteNamespace(namespace string) func(context.Context, client.Object) []r
 	}
 }
 
-// ResolveCAPIMachineSetFromObject should probably be renamed. It:
-// 1. takes a client.Object (expecting a CAPI InfrastructureMachineTemplate)
-// and checks to see if it's owned by a CAPI MachineSet
-// 2. If it is, returns a reconcile.Request for the MAPI namespace, so we
-// reconcile the mirror MAPI MachineSet.
-func ResolveCAPIMachineSetFromObject(namespace string) func(context.Context, client.Object) []reconcile.Request {
+// ResolveCAPIMachineSetFromInfraMachineTemplate resolves a synchronized MachineSet from an InfrastructureMachineTemplate.
+// It takes a client.Object (expecting a CAPI InfrastructureMachineTemplate) and checks if it has
+// the machine.openshift.io/cluster-api-machineset label. If present, it returns a reconcile.Request
+// for the corresponding MachineSet in the MAPI namespace to trigger reconciliation of the mirror MAPI MachineSet.
+func ResolveCAPIMachineSetFromInfraMachineTemplate(namespace string) func(context.Context, client.Object) []reconcile.Request {
 	return func(ctx context.Context, obj client.Object) []reconcile.Request {
 		klog.V(4).Info(
 			"reconcile triggered by object",
@@ -63,19 +62,16 @@ func ResolveCAPIMachineSetFromObject(namespace string) func(context.Context, cli
 			"name", obj.GetName(),
 		)
 
-		ownerReferences := obj.GetOwnerReferences()
+		objLabels := obj.GetLabels()
 		requests := []reconcile.Request{}
 
-		for _, ref := range ownerReferences {
-			if ref.Kind != machineSetKind || ref.APIVersion != clusterv1.GroupVersion.String() {
-				continue
-			}
-
-			klog.V(4).Info("Object is owned by a CAPI machineset, enqueueing request",
-				"machine", obj.GetName(), "machineset", ref.Name)
+		machineSetName, ok := objLabels[controllers.MachineSetOpenshiftLabelKey]
+		if ok {
+			klog.V(4).Info("Object has machine.openshift.io/cluster-api-machineset label, enqueueing request",
+				"InfraMachineTemplate", obj.GetName(), machineSetKind, machineSetName)
 
 			requests = append(requests, reconcile.Request{
-				NamespacedName: client.ObjectKey{Namespace: namespace, Name: ref.Name},
+				NamespacedName: client.ObjectKey{Namespace: namespace, Name: machineSetName},
 			})
 		}
 

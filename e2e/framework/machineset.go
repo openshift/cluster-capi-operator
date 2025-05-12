@@ -22,6 +22,8 @@ type machineSetParams struct {
 	userDataSecret    string
 }
 
+const machineSetOpenshiftLabelKey = "machine.openshift.io/cluster-api-machineset"
+
 // NewMachineSetParams returns a new machineSetParams object.
 func NewMachineSetParams(msName, clusterName, failureDomain string, replicas int32, infrastructureRef corev1.ObjectReference, userDataSecretName string) machineSetParams {
 	Expect(msName).ToNot(BeEmpty())
@@ -58,15 +60,15 @@ func CreateMachineSet(cl client.Client, params machineSetParams) *clusterv1.Mach
 			ClusterName: params.clusterName,
 			Selector: metav1.LabelSelector{
 				MatchLabels: map[string]string{
-					"machine.openshift.io/cluster-api-cluster":    params.clusterName,
-					"machine.openshift.io/cluster-api-machineset": params.msName,
+					"machine.openshift.io/cluster-api-cluster": params.clusterName,
+					machineSetOpenshiftLabelKey:                params.msName,
 				},
 			},
 			Template: clusterv1.MachineTemplateSpec{
 				ObjectMeta: clusterv1.ObjectMeta{
 					Labels: map[string]string{
-						"machine.openshift.io/cluster-api-cluster":    params.clusterName,
-						"machine.openshift.io/cluster-api-machineset": params.msName,
+						"machine.openshift.io/cluster-api-cluster": params.clusterName,
+						machineSetOpenshiftLabelKey:                params.msName,
 					},
 				},
 				Spec: clusterv1.MachineSpec{
