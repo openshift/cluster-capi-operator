@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
+	"regexp"
 	"time"
 
 	fuzz "github.com/google/gofuzz"
@@ -110,7 +111,6 @@ func CAPI2MAPIMachineRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv1.I
 		machineFuzzInputs = append(machineFuzzInputs, Entry(fmt.Sprintf("%d", i), in))
 	}
 
-	//nolint:dupl
 	DescribeTable("should be able to roundtrip fuzzed Machines", func(in capiToMapiMachineFuzzInput) {
 		capiConverter := in.capiConverterConstructor(in.machine, in.infraMachine, in.infraCluster)
 
@@ -162,6 +162,8 @@ type capiToMapiMachineSetFuzzInput struct {
 // It leverages fuzz testing to generate random CAPI objects and then converts them to MAPI objects and back to CAPI objects.
 // The test then compares the original CAPI object with the final CAPI object to ensure that the conversion is lossless.
 // Any lossy conversions must be accounted for within the fuzz functions passed in.
+//
+//nolint:funlen
 func CAPI2MAPIMachineSetRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv1.Infrastructure, infraCluster, infraMachineTemplate client.Object, mapiConverter MAPI2CAPIMachineSetConverterConstructor, capiConverter CAPI2MAPIMachineSetConverterConstructor, fuzzerFuncs ...fuzzer.FuzzerFuncs) {
 	machineFuzzInputs := []TableEntry{}
 	fz := getFuzzer(scheme, fuzzerFuncs...)
@@ -183,7 +185,6 @@ func CAPI2MAPIMachineSetRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv
 		machineFuzzInputs = append(machineFuzzInputs, Entry(fmt.Sprintf("%d", i), in))
 	}
 
-	//nolint:dupl
 	DescribeTable("should be able to roundtrip fuzzed MachineSets", func(in capiToMapiMachineSetFuzzInput) {
 		capiConverter := in.capiConverterConstructor(in.machineSet, in.infraMachineTemplate, in.infraCluster)
 
@@ -204,6 +205,15 @@ func CAPI2MAPIMachineSetRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv
 		// Expect(infraMachineTemplate.Status).To(Equal(in.infraMachineTemplate.Status))
 
 		capiMachineSet.Finalizers = nil
+
+		Expect(capiMachineSet.Spec.Template.Spec.InfrastructureRef.Name).To(
+			// During roundtrip conversion, the InfraMachineTemplate gains a hash suffix. This is intended.
+			MatchRegexp("^" + regexp.QuoteMeta(in.machineSet.Spec.Template.Spec.InfrastructureRef.Name) + "-[a-f0-9]{8}$"),
+		)
+
+		// Reset the name to match the original name. This is intentional lossy conversion that is checked above.
+		capiMachineSet.Spec.Template.Spec.InfrastructureRef.Name = in.machineSet.Spec.Template.Spec.InfrastructureRef.Name
+
 		Expect(capiMachineSet.TypeMeta).To(Equal(in.machineSet.TypeMeta))
 		Expect(capiMachineSet.ObjectMeta).To(Equal(in.machineSet.ObjectMeta))
 		Expect(capiMachineSet.Spec).To(Equal(in.machineSet.Spec))
