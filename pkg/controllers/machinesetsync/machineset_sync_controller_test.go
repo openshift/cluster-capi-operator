@@ -347,7 +347,6 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 						Expect(k8sClient.Delete(ctx, capiMachineSet)).To(Succeed())
 					})
 					It("should delete the MAPI machine set", func() {
-
 						// Does this need to be more specific, e.g explicitly be a 404?
 						Eventually(k.Get(mapiMachineSet), timeout).ShouldNot(Succeed())
 					})
@@ -455,7 +454,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 
 					It("should not populate the field", func() {
 						Eventually(k.Object(mapiMachineSet), timeout).Should(
-							HaveField("Finalizers", BeEmpty()),
+							HaveField("Finalizers", Not(ContainElements("foo", "bar"))),
 						)
 					})
 
@@ -521,6 +520,56 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 								HaveField("Message", Equal("Successfully synchronized MAPI MachineSet to CAPI")),
 							))),
 					)
+				})
+			})
+
+			Context("when the CAPI machine set has a non-zero deletion timestamp", func() {
+				BeforeEach(func() {
+					capiMachineSet = capiMachineSetBuilder.Build()
+					Expect(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
+
+					// Expect to see the finalizers, so they're in place before
+					//  we Expect logic that relies on them to work
+					Eventually(k.Object(mapiMachineSet), 24*timeout).Should(
+						HaveField("ObjectMeta.Finalizers", ContainElement(machinesync.SyncFinalizer)),
+					)
+					Eventually(k.Object(capiMachineSet), 24*timeout).Should(
+						HaveField("ObjectMeta.Finalizers", ContainElement(machinesync.SyncFinalizer)),
+					)
+					Expect(k8sClient.Delete(ctx, capiMachineSet)).To(Succeed())
+				})
+
+				It("should delete the MAPI machine set", func() {
+					// Does this need to be more specific, e.g explicitly be a 404?
+					// TODO: 404
+					Eventually(k.Get(mapiMachineSet), 2*timeout).ShouldNot(Succeed())
+					// We don't want to re-create the machineset just deleted
+					Consistently(k.Get(mapiMachineSet), 2*timeout).ShouldNot(Succeed())
+				})
+
+				It("should delete the CAPI machine set", func() {
+					// Does this need to be more specific, e.g explicitly be a 404?
+					Eventually(k.Get(capiMachineSet), 2*timeout).ShouldNot(Succeed())
+					// We don't want to re-create the machineset just deleted
+					Consistently(k.Get(capiMachineSet), 2*timeout).ShouldNot(Succeed())
+				})
+			})
+
+			Context("when the MAPI machine set has a non-zero deletion timestamp", func() {
+				BeforeEach(func() {
+					capiMachineSet = capiMachineSetBuilder.Build()
+					Expect(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
+					Eventually(k.Object(mapiMachineSet), 24*timeout).Should(
+						HaveField("ObjectMeta.Finalizers", ContainElement(machinesync.SyncFinalizer)),
+					)
+					Eventually(k.Object(capiMachineSet), 24*timeout).Should(
+						HaveField("ObjectMeta.Finalizers", ContainElement(machinesync.SyncFinalizer)),
+					)
+					Expect(k8sClient.Delete(ctx, mapiMachineSet)).To(Succeed())
+				})
+				It("should delete the CAPI machine set", func() {
+					// Does this need to be more specific, e.g explicitly be a 404?
+					Eventually(k.Get(capiMachineSet), 24*timeout).ShouldNot(Succeed())
 				})
 			})
 		})
