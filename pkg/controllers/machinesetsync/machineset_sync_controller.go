@@ -40,9 +40,10 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/ptr"
-	awscapiv1beta1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
-	capibmv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
-	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
+	ibmv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
+	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util/annotations"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -67,6 +68,9 @@ var (
 
 	// errAssertingCAPIPowerVSMachineTemplate is returned when we encounter an issue asserting a client.Object into a IBMPowerVSMachineTemplate.
 	errAssertingCAPIIBMPowerVSMachineTemplate = errors.New("error asserting the CAPI IBMPowerVSMachineTemplate object")
+
+	// errAssertingCAPIOpenStackMachineTemplate is returned when we encounter an issue asserting a client.Object into a OpenStackMachineTemplate.
+	errAssertingCAPIOpenStackMachineTemplate = errors.New("error asserting the CAPI OpenStackMachineTemplate object")
 
 	// errUnrecognizedConditionStatus is returned when the condition status is not recognized.
 	errUnrecognizedConditionStatus = errors.New("error unrecognized condition status")
@@ -129,7 +133,7 @@ func (r *MachineSetSyncReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Named(controllerName).
 		For(&machinev1beta1.MachineSet{}, builder.WithPredicates(util.FilterNamespace(r.MAPINamespace))).
 		Watches(
-			&capiv1beta1.MachineSet{},
+			&clusterv1.MachineSet{},
 			handler.EnqueueRequestsFromMapFunc(util.RewriteNamespace(r.MAPINamespace)),
 			builder.WithPredicates(util.FilterNamespace(r.CAPINamespace)),
 		).
@@ -177,12 +181,12 @@ func (r *MachineSetSyncReconciler) Reconcile(ctx context.Context, req reconcile.
 }
 
 // fetchMachineSets fetches both MAPI and CAPI MachineSets.
-func (r *MachineSetSyncReconciler) fetchMachineSets(ctx context.Context, name string) (*machinev1beta1.MachineSet, *capiv1beta1.MachineSet, error) {
+func (r *MachineSetSyncReconciler) fetchMachineSets(ctx context.Context, name string) (*machinev1beta1.MachineSet, *clusterv1.MachineSet, error) {
 	logger := log.FromContext(ctx)
 
 	mapiMachineSet := &machinev1beta1.MachineSet{}
 
-	capiMachineSet := &capiv1beta1.MachineSet{}
+	capiMachineSet := &clusterv1.MachineSet{}
 
 	if err := r.Get(ctx, client.ObjectKey{Namespace: r.MAPINamespace, Name: name}, mapiMachineSet); apierrors.IsNotFound(err) {
 		logger.Info("MAPI machine set not found")
@@ -190,6 +194,8 @@ func (r *MachineSetSyncReconciler) fetchMachineSets(ctx context.Context, name st
 		mapiMachineSet = nil
 	} else if err != nil {
 		return nil, nil, fmt.Errorf("failed to get MAPI machine set: %w", err)
+	} else {
+		logger.V(4).Info("MAPI machine set found", "namespace", r.MAPINamespace, "name", name)
 	}
 
 	if err := r.Get(ctx, client.ObjectKey{Namespace: r.CAPINamespace, Name: name}, capiMachineSet); apierrors.IsNotFound(err) {
@@ -198,14 +204,18 @@ func (r *MachineSetSyncReconciler) fetchMachineSets(ctx context.Context, name st
 		capiMachineSet = nil
 	} else if err != nil {
 		return nil, nil, fmt.Errorf("failed to get CAPI machine set: %w", err)
+	} else {
+		logger.V(4).Info("CAPI machine set found", "namespace", r.MAPINamespace, "name", name)
 	}
 
 	return mapiMachineSet, capiMachineSet, nil
 }
 
 // fetchCAPIInfraResources fetches the provider specific infrastructure resources depending on which provider is set.
-func (r *MachineSetSyncReconciler) fetchCAPIInfraResources(ctx context.Context, capiMachineSet *capiv1beta1.MachineSet) (client.Object, client.Object, error) {
+func (r *MachineSetSyncReconciler) fetchCAPIInfraResources(ctx context.Context, capiMachineSet *clusterv1.MachineSet) (client.Object, client.Object, error) {
 	var infraCluster, infraMachineTemplate client.Object
+
+	logger := log.FromContext(ctx)
 
 	infraClusterKey := client.ObjectKey{
 		Namespace: capiMachineSet.Namespace,
@@ -225,17 +235,21 @@ func (r *MachineSetSyncReconciler) fetchCAPIInfraResources(ctx context.Context, 
 
 	if err := r.Get(ctx, infraClusterKey, infraCluster); err != nil {
 		return nil, nil, fmt.Errorf("failed to get CAPI infrastructure cluster: %w", err)
+	} else {
+		logger.V(4).Info("CAPI infrastructure cluster found", "namespace", capiMachineSet.Namespace, "name", capiMachineSet.Spec.ClusterName)
 	}
 
 	if err := r.Get(ctx, infraMachineTemplateKey, infraMachineTemplate); err != nil {
 		return nil, nil, fmt.Errorf("failed to get CAPI infrastructure machine template: %w", err)
+	} else {
+		logger.V(4).Info("CAPI infrastructure machine template found", "namespace", infraMachineTemplateRef.Namespace, "name", infraMachineTemplateRef.Name)
 	}
 
 	return infraCluster, infraMachineTemplate, nil
 }
 
 // syncMachineSets synchronizes MachineSets based on the authoritative API.
-func (r *MachineSetSyncReconciler) syncMachineSets(ctx context.Context, mapiMachineSet *machinev1beta1.MachineSet, capiMachineSet *capiv1beta1.MachineSet) (ctrl.Result, error) {
+func (r *MachineSetSyncReconciler) syncMachineSets(ctx context.Context, mapiMachineSet *machinev1beta1.MachineSet, capiMachineSet *clusterv1.MachineSet) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
 	authoritativeAPI := mapiMachineSet.Status.AuthoritativeAPI
@@ -259,7 +273,7 @@ func (r *MachineSetSyncReconciler) syncMachineSets(ctx context.Context, mapiMach
 }
 
 // reconcileMAPIMachineSetToCAPIMachineSet reconciles a MAPI MachineSet to a CAPI MachineSet.
-func (r *MachineSetSyncReconciler) reconcileMAPIMachineSetToCAPIMachineSet(ctx context.Context, mapiMachineSet *machinev1beta1.MachineSet, capiMachineSet *capiv1beta1.MachineSet) (ctrl.Result, error) {
+func (r *MachineSetSyncReconciler) reconcileMAPIMachineSetToCAPIMachineSet(ctx context.Context, mapiMachineSet *machinev1beta1.MachineSet, capiMachineSet *clusterv1.MachineSet) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
 	if err := r.validateMAPIMachineSetOwnerReferences(mapiMachineSet); err != nil {
@@ -308,7 +322,7 @@ func (r *MachineSetSyncReconciler) reconcileMAPIMachineSetToCAPIMachineSet(ctx c
 	newCAPIMachineSet.Spec.Template.Spec.InfrastructureRef.Namespace = r.CAPINamespace
 	newCAPIMachineSet.OwnerReferences = []metav1.OwnerReference{clusterOwnerRefence}
 	// Set the paused annotation on the new CAPI MachineSet, as we want to create it paused.
-	annotations.AddAnnotations(newCAPIMachineSet, map[string]string{capiv1beta1.PausedAnnotation: ""})
+	annotations.AddAnnotations(newCAPIMachineSet, map[string]string{clusterv1.PausedAnnotation: ""})
 
 	if result, err := r.ensureCAPIInfraMachineTemplate(ctx, mapiMachineSet, newCAPIMachineSet, newCAPIInfraMachineTemplate, clusterOwnerRefence); err != nil {
 		return result, fmt.Errorf("unable to ensure CAPI infra machine template: %w", err)
@@ -323,7 +337,7 @@ func (r *MachineSetSyncReconciler) reconcileMAPIMachineSetToCAPIMachineSet(ctx c
 }
 
 // ensureCAPIInfraMachineTemplate ensures the CAPI InfraMachineTemplate is created or updated from the MAPI MachineSet.
-func (r *MachineSetSyncReconciler) ensureCAPIInfraMachineTemplate(ctx context.Context, mapiMachineSet *machinev1beta1.MachineSet, newCAPIMachineSet *capiv1beta1.MachineSet, newCAPIInfraMachineTemplate client.Object, clusterOwnerRefence metav1.OwnerReference) (ctrl.Result, error) {
+func (r *MachineSetSyncReconciler) ensureCAPIInfraMachineTemplate(ctx context.Context, mapiMachineSet *machinev1beta1.MachineSet, newCAPIMachineSet *clusterv1.MachineSet, newCAPIInfraMachineTemplate client.Object, clusterOwnerRefence metav1.OwnerReference) (ctrl.Result, error) {
 	_, infraMachineTemplate, err := r.fetchCAPIInfraResources(ctx, newCAPIMachineSet)
 	if err != nil && !apierrors.IsNotFound(err) {
 		fetchErr := fmt.Errorf("failed to fetch CAPI infra resources: %w", err)
@@ -344,7 +358,7 @@ func (r *MachineSetSyncReconciler) ensureCAPIInfraMachineTemplate(ctx context.Co
 	newCAPIInfraMachineTemplate.SetNamespace(r.CAPINamespace)
 	newCAPIInfraMachineTemplate.SetOwnerReferences([]metav1.OwnerReference{clusterOwnerRefence})
 	// Set the paused annotation on the new CAPI InfraMachineTemplate, as we want to create it paused.
-	annotations.AddAnnotations(newCAPIInfraMachineTemplate, map[string]string{capiv1beta1.PausedAnnotation: ""})
+	annotations.AddAnnotations(newCAPIInfraMachineTemplate, map[string]string{clusterv1.PausedAnnotation: ""})
 
 	if result, err := r.createOrUpdateCAPIInfraMachineTemplate(ctx, mapiMachineSet, infraMachineTemplate, newCAPIInfraMachineTemplate); err != nil {
 		return result, fmt.Errorf("unable to ensure CAPI infra machine template: %w", err)
@@ -357,7 +371,7 @@ func (r *MachineSetSyncReconciler) ensureCAPIInfraMachineTemplate(ctx context.Co
 // MAPI MachineSet.
 //
 //nolint:funlen
-func (r *MachineSetSyncReconciler) reconcileCAPIMachineSetToMAPIMachineSet(ctx context.Context, capiMachineSet *capiv1beta1.MachineSet, mapiMachineSet *machinev1beta1.MachineSet) (ctrl.Result, error) {
+func (r *MachineSetSyncReconciler) reconcileCAPIMachineSetToMAPIMachineSet(ctx context.Context, capiMachineSet *clusterv1.MachineSet, mapiMachineSet *machinev1beta1.MachineSet) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
 	if err := r.validateCAPIMachineSetOwnerReferences(capiMachineSet); err != nil {
@@ -447,7 +461,7 @@ func (r *MachineSetSyncReconciler) reconcileCAPIMachineSetToMAPIMachineSet(ctx c
 // fetchCAPIClusterOwnerReference fetches the OpenShift cluster object instance and returns owner reference to it.
 // The OwnerReference has Controller set to false and BlockOwnerDeletion set to true.
 func (r *MachineSetSyncReconciler) fetchCAPIClusterOwnerReference(ctx context.Context) (metav1.OwnerReference, error) {
-	cluster := &capiv1beta1.Cluster{}
+	cluster := &clusterv1.Cluster{}
 	if err := r.Get(ctx, client.ObjectKey{Namespace: r.CAPINamespace, Name: r.Infra.Status.InfrastructureName}, cluster); err != nil {
 		return metav1.OwnerReference{}, fmt.Errorf("failed to get CAPI cluster: %w", err)
 	}
@@ -472,13 +486,13 @@ func (r *MachineSetSyncReconciler) validateMAPIMachineSetOwnerReferences(mapiMac
 }
 
 // validateCAPIMachineSetOwnerReferences validates the owner references are allowed for conversion.
-func (r *MachineSetSyncReconciler) validateCAPIMachineSetOwnerReferences(capiMachineSet *capiv1beta1.MachineSet) error {
+func (r *MachineSetSyncReconciler) validateCAPIMachineSetOwnerReferences(capiMachineSet *clusterv1.MachineSet) error {
 	if len(capiMachineSet.OwnerReferences) > 1 {
 		return field.TooMany(field.NewPath("metadata", "ownerReferences"), len(capiMachineSet.OwnerReferences), 1)
 	} else if len(capiMachineSet.OwnerReferences) == 1 {
 		// Only reference to the Cluster is allowed.
 		ownerRef := capiMachineSet.OwnerReferences[0]
-		if ownerRef.Kind != capiv1beta1.ClusterKind || ownerRef.APIVersion != capiv1beta1.GroupVersion.String() {
+		if ownerRef.Kind != clusterv1.ClusterKind || ownerRef.APIVersion != clusterv1.GroupVersion.String() {
 			return field.Invalid(field.NewPath("metadata", "ownerReferences"), capiMachineSet.OwnerReferences, errUnsuportedOwnerKindForConversion.Error())
 		}
 	}
@@ -487,35 +501,49 @@ func (r *MachineSetSyncReconciler) validateCAPIMachineSetOwnerReferences(capiMac
 }
 
 // convertCAPIToMAPIMachineSet converts a CAPI MachineSet to a MAPI MachineSet, selecting the correct converter based on the platform.
-func (r *MachineSetSyncReconciler) convertCAPIToMAPIMachineSet(capiMachineSet *capiv1beta1.MachineSet, infraMachineTemplate client.Object, infraCluster client.Object) (*machinev1beta1.MachineSet, []string, error) {
+func (r *MachineSetSyncReconciler) convertCAPIToMAPIMachineSet(capiMachineSet *clusterv1.MachineSet, infraMachineTemplate client.Object, infraCluster client.Object) (*machinev1beta1.MachineSet, []string, error) {
 	switch r.Platform {
 	case configv1.AWSPlatformType:
-		awsMachineTemplate, ok := infraMachineTemplate.(*awscapiv1beta1.AWSMachineTemplate)
+		machineTemplate, ok := infraMachineTemplate.(*awsv1.AWSMachineTemplate)
 		if !ok {
 			return nil, nil, fmt.Errorf("%w, expected AWSMachineTemplate, got %T", errUnexpectedInfraMachineTemplateType, infraMachineTemplate)
 		}
 
-		awsCluster, ok := infraCluster.(*awscapiv1beta1.AWSCluster)
+		cluster, ok := infraCluster.(*awsv1.AWSCluster)
 		if !ok {
 			return nil, nil, fmt.Errorf("%w, expected AWSCluster, got %T", errUnexpectedInfraClusterType, infraCluster)
 		}
 
 		return capi2mapi.FromMachineSetAndAWSMachineTemplateAndAWSCluster( //nolint: wrapcheck
-			capiMachineSet, awsMachineTemplate, awsCluster,
+			capiMachineSet, machineTemplate, cluster,
+		).ToMachineSet()
+	case configv1.OpenStackPlatformType:
+		machineTemplate, ok := infraMachineTemplate.(*openstackv1.OpenStackMachineTemplate)
+		if !ok {
+			return nil, nil, fmt.Errorf("%w, expected OpenStackMachineTemplate, got %T", errUnexpectedInfraMachineTemplateType, infraMachineTemplate)
+		}
+
+		cluster, ok := infraCluster.(*openstackv1.OpenStackCluster)
+		if !ok {
+			return nil, nil, fmt.Errorf("%w, expected OpenStackCluster, got %T", errUnexpectedInfraClusterType, infraCluster)
+		}
+
+		return capi2mapi.FromMachineSetAndOpenStackMachineTemplateAndOpenStackCluster( //nolint: wrapcheck
+			capiMachineSet, machineTemplate, cluster,
 		).ToMachineSet()
 	case configv1.PowerVSPlatformType:
-		powerVSMachineTemplate, ok := infraMachineTemplate.(*capibmv1.IBMPowerVSMachineTemplate)
+		machineTemplate, ok := infraMachineTemplate.(*ibmv1.IBMPowerVSMachineTemplate)
 		if !ok {
 			return nil, nil, fmt.Errorf("%w, expected IBMPowerVSMachineTemplate, got %T", errUnexpectedInfraMachineTemplateType, infraMachineTemplate)
 		}
 
-		powerVSCluster, ok := infraCluster.(*capibmv1.IBMPowerVSCluster)
+		cluster, ok := infraCluster.(*ibmv1.IBMPowerVSCluster)
 		if !ok {
 			return nil, nil, fmt.Errorf("%w, expected IBMPowerVSCluster, got %T", errUnexpectedInfraClusterType, infraCluster)
 		}
 
 		return capi2mapi.FromMachineSetAndPowerVSMachineTemplateAndPowerVSCluster( //nolint: wrapcheck
-			capiMachineSet, powerVSMachineTemplate, powerVSCluster,
+			capiMachineSet, machineTemplate, cluster,
 		).ToMachineSet()
 	default:
 		return nil, nil, fmt.Errorf("%w: %s", errPlatformNotSupported, r.Platform)
@@ -523,10 +551,12 @@ func (r *MachineSetSyncReconciler) convertCAPIToMAPIMachineSet(capiMachineSet *c
 }
 
 // convertMAPIToCAPIMachineSet converts a MAPI MachineSet to a CAPI MachineSet, selecting the correct converter based on the platform.
-func (r *MachineSetSyncReconciler) convertMAPIToCAPIMachineSet(mapiMachineSet *machinev1beta1.MachineSet) (*capiv1beta1.MachineSet, client.Object, []string, error) {
+func (r *MachineSetSyncReconciler) convertMAPIToCAPIMachineSet(mapiMachineSet *machinev1beta1.MachineSet) (*clusterv1.MachineSet, client.Object, []string, error) {
 	switch r.Platform {
 	case configv1.AWSPlatformType:
 		return mapi2capi.FromAWSMachineSetAndInfra(mapiMachineSet, r.Infra).ToMachineSetAndMachineTemplate() //nolint:wrapcheck
+	case configv1.OpenStackPlatformType:
+		return mapi2capi.FromOpenStackMachineSetAndInfra(mapiMachineSet, r.Infra).ToMachineSetAndMachineTemplate() //nolint:wrapcheck
 	case configv1.PowerVSPlatformType:
 		return mapi2capi.FromPowerVSMachineSetAndInfra(mapiMachineSet, r.Infra).ToMachineSetAndMachineTemplate() //nolint:wrapcheck
 	default:
@@ -646,7 +676,7 @@ func (r *MachineSetSyncReconciler) createOrUpdateCAPIInfraMachineTemplate(ctx co
 }
 
 // createOrUpdateCAPIMachineSet creates a CAPI machine set from a MAPI one, or updates if it exists and it is out of date.
-func (r *MachineSetSyncReconciler) createOrUpdateCAPIMachineSet(ctx context.Context, mapiMachineSet *machinev1beta1.MachineSet, capiMachineSet *capiv1beta1.MachineSet, newCAPIMachineSet *capiv1beta1.MachineSet) (ctrl.Result, error) { //nolint:unparam
+func (r *MachineSetSyncReconciler) createOrUpdateCAPIMachineSet(ctx context.Context, mapiMachineSet *machinev1beta1.MachineSet, capiMachineSet *clusterv1.MachineSet, newCAPIMachineSet *clusterv1.MachineSet) (ctrl.Result, error) { //nolint:unparam
 	logger := log.FromContext(ctx)
 
 	if capiMachineSet == nil {
@@ -700,24 +730,28 @@ func (r *MachineSetSyncReconciler) createOrUpdateCAPIMachineSet(ctx context.Cont
 func initInfraMachineTemplateAndInfraClusterFromProvider(platform configv1.PlatformType) (client.Object, client.Object, error) {
 	switch platform {
 	case configv1.AWSPlatformType:
-		return &awscapiv1beta1.AWSMachineTemplate{}, &awscapiv1beta1.AWSCluster{}, nil
+		return &awsv1.AWSMachineTemplate{}, &awsv1.AWSCluster{}, nil
+	case configv1.OpenStackPlatformType:
+		return &openstackv1.OpenStackMachineTemplate{}, &openstackv1.OpenStackCluster{}, nil
 	case configv1.PowerVSPlatformType:
-		return &capibmv1.IBMPowerVSMachineTemplate{}, &capibmv1.IBMPowerVSCluster{}, nil
+		return &ibmv1.IBMPowerVSMachineTemplate{}, &ibmv1.IBMPowerVSCluster{}, nil
 	default:
 		return nil, nil, fmt.Errorf("%w: %s", errPlatformNotSupported, platform)
 	}
 }
 
 // compareCAPIInfraMachineTemplates compares CAPI infra machine templates a and b, and returns a list of differences, or none if there are none.
+//
+//nolint:funlen
 func compareCAPIInfraMachineTemplates(platform configv1.PlatformType, infraMachineTemplate1, infraMachineTemplate2 client.Object) (map[string]any, error) {
 	switch platform {
 	case configv1.AWSPlatformType:
-		typedInfraMachineTemplate1, ok := infraMachineTemplate1.(*awscapiv1beta1.AWSMachineTemplate)
+		typedInfraMachineTemplate1, ok := infraMachineTemplate1.(*awsv1.AWSMachineTemplate)
 		if !ok {
 			return nil, errAssertingCAPIAWSMachineTemplate
 		}
 
-		typedinfraMachineTemplate2, ok := infraMachineTemplate2.(*awscapiv1beta1.AWSMachineTemplate)
+		typedinfraMachineTemplate2, ok := infraMachineTemplate2.(*awsv1.AWSMachineTemplate)
 		if !ok {
 			return nil, errAssertingCAPIAWSMachineTemplate
 		}
@@ -733,13 +767,35 @@ func compareCAPIInfraMachineTemplates(platform configv1.PlatformType, infraMachi
 		}
 
 		return diff, nil
-	case configv1.PowerVSPlatformType:
-		typedInfraMachineTemplate1, ok := infraMachineTemplate1.(*capibmv1.IBMPowerVSMachineTemplate)
+	case configv1.OpenStackPlatformType:
+		typedInfraMachineTemplate1, ok := infraMachineTemplate1.(*openstackv1.OpenStackMachineTemplate)
 		if !ok {
 			return nil, errAssertingCAPIIBMPowerVSMachineTemplate
 		}
 
-		typedinfraMachineTemplate2, ok := infraMachineTemplate2.(*capibmv1.IBMPowerVSMachineTemplate)
+		typedinfraMachineTemplate2, ok := infraMachineTemplate2.(*openstackv1.OpenStackMachineTemplate)
+		if !ok {
+			return nil, errAssertingCAPIOpenStackMachineTemplate
+		}
+
+		diff := make(map[string]any)
+
+		if diffSpec := deep.Equal(typedInfraMachineTemplate1.Spec, typedinfraMachineTemplate2.Spec); len(diffSpec) > 0 {
+			diff[".spec"] = diffSpec
+		}
+
+		if diffObjectMeta := deep.Equal(typedInfraMachineTemplate1.ObjectMeta, typedinfraMachineTemplate2.ObjectMeta); len(diffObjectMeta) > 0 {
+			diff[".metadata"] = diffObjectMeta
+		}
+
+		return diff, nil
+	case configv1.PowerVSPlatformType:
+		typedInfraMachineTemplate1, ok := infraMachineTemplate1.(*ibmv1.IBMPowerVSMachineTemplate)
+		if !ok {
+			return nil, errAssertingCAPIIBMPowerVSMachineTemplate
+		}
+
+		typedinfraMachineTemplate2, ok := infraMachineTemplate2.(*ibmv1.IBMPowerVSMachineTemplate)
 		if !ok {
 			return nil, errAssertingCAPIIBMPowerVSMachineTemplate
 		}
@@ -761,7 +817,7 @@ func compareCAPIInfraMachineTemplates(platform configv1.PlatformType, infraMachi
 }
 
 // compareCAPIMachineSets compares CAPI machineSets a and b, and returns a list of differences, or none if there are none.
-func compareCAPIMachineSets(capiMachineSet1, capiMachineSet2 *capiv1beta1.MachineSet) map[string]any {
+func compareCAPIMachineSets(capiMachineSet1, capiMachineSet2 *clusterv1.MachineSet) map[string]any {
 	diff := make(map[string]any)
 
 	if diffSpec := deep.Equal(capiMachineSet1.Spec, capiMachineSet2.Spec); len(diffSpec) > 0 {
