@@ -567,7 +567,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 				})
 			})
 
-			Context("when the MAPI machine set has a non-zero deletion timestamp", func() {
+			Context("when the non-authoritative MAPI machine set has a non-zero deletion timestamp", func() {
 				BeforeEach(func() {
 					capiMachineSet = capiMachineSetBuilder.Build()
 					Expect(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
@@ -579,8 +579,22 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 					)
 					Expect(k8sClient.Delete(ctx, mapiMachineSet)).To(Succeed())
 				})
-				It("should delete the CAPI machine set", func() {
-					Eventually(k.Get(capiMachineSet), timeout).Should(WithTransform(apierrors.IsNotFound, BeTrue()), "eventually capiMachineSet should not be found")
+
+				It("should remove the machinesync finalizer from the CAPI machine set", func() {
+					Eventually(k.Object(capiMachineSet), timeout).Should(
+						HaveField("ObjectMeta.Finalizers", Not(ContainElement(machinesync.SyncFinalizer))),
+					)
+				})
+
+				It("should delete the MAPI machine set", func() {
+					Eventually(k.Get(mapiMachineSet), timeout).Should(WithTransform(apierrors.IsNotFound, BeTrue()), "eventually mapiMachineSet should not be found")
+
+				})
+
+				It("should not delete the CAPI machine set", func() {
+					Consistently(k.Object(capiMachineSet), timeout).Should(
+						HaveField("ObjectMeta.DeletionTimestamp", BeNil()),
+					)
 				})
 			})
 		})
