@@ -489,11 +489,12 @@ func (r *MachineSyncReconciler) reconcileMAPIMachinetoCAPIMachine(ctx context.Co
 		newCAPIMachine.Labels[capiv1beta1.MachineSetNameLabel] = format.MustFormatValue(newCAPIMachine.OwnerReferences[0].Name)
 	}
 
-	// Set the paused annotation on the new CAPI Machine, as we want to create it paused.
-	//
-	// If we are doing an initial reconcile of MAPI -> CAPI, so
-	// the authoritative api is CAPI we don't want to pause the machine we create.
 	if authoritativeAPI == machinev1beta1.MachineAuthorityMachineAPI {
+		// Set the paused annotation on the new CAPI Machine, if the authoritativeAPI is Machine API,
+		// as we want the new CAPI Machine to be initially paused when the MAPI Machine is the authoritative one.
+		// For the other case instead (authoritativeAPI == machinev1beta1.MachineAuthorityClusterAPI),
+		// when the new CAPI Machine that is being created is also expected to be the authority
+		// (i.e. in cases where the MAPI Machine is created as .spec.authoritativeAPI: ClusterAPI), we do not want to create it paused.
 		annotations.AddAnnotations(newCAPIMachine, map[string]string{capiv1beta1.PausedAnnotation: ""})
 	}
 
@@ -514,11 +515,12 @@ func (r *MachineSyncReconciler) reconcileMAPIMachinetoCAPIMachine(ctx context.Co
 
 	newCAPIInfraMachine.SetNamespace(r.CAPINamespace)
 
-	// Set the paused annotation on the new CAPI InfraMachine, as we want to create it paused.
-	//
-	// If we are doing an initial reconcile of MAPI -> CAPI,
-	// the authoritative api is CAPI we don't want to pause the machine we create.
 	if authoritativeAPI == machinev1beta1.MachineAuthorityMachineAPI {
+		// Set the paused annotation on the new CAPI Infra Machine, if the authoritativeAPI is Machine API,
+		// as we want the new CAPI Infra Machine to be initially paused when the MAPI Machine is the authoritative one.
+		// For the other case instead (authoritativeAPI == machinev1beta1.MachineAuthorityClusterAPI),
+		// when the new CAPI Infra Machine that is being created is also expected to be the authority
+		// (i.e. in cases where the MAPI Machine is created as .spec.authoritativeAPI: ClusterAPI), we do not want to create it paused.
 		annotations.AddAnnotations(newCAPIInfraMachine, map[string]string{capiv1beta1.PausedAnnotation: ""})
 	}
 
