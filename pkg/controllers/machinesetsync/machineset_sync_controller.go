@@ -250,7 +250,9 @@ func (r *MachineSetSyncReconciler) syncMachineSets(ctx context.Context, mapiMach
 	case authoritativeAPI == machinev1beta1.MachineAuthorityMigrating:
 		logger.Info("Machine set is currently being migrated")
 		return ctrl.Result{}, nil
-
+	case authoritativeAPI == "":
+		logger.Info("Machine set status.authoritativeAPI is empty, will check again later", "AuthoritativeAPI", mapiMachineSet.Status.AuthoritativeAPI)
+		return ctrl.Result{}, nil
 	default:
 		logger.Info("Unexpected value for authoritativeAPI", "AuthoritativeAPI", mapiMachineSet.Status.AuthoritativeAPI)
 
@@ -259,8 +261,16 @@ func (r *MachineSetSyncReconciler) syncMachineSets(ctx context.Context, mapiMach
 }
 
 // reconcileMAPIMachineSetToCAPIMachineSet reconciles a MAPI MachineSet to a CAPI MachineSet.
+//
+//nolint:funlen
 func (r *MachineSetSyncReconciler) reconcileMAPIMachineSetToCAPIMachineSet(ctx context.Context, mapiMachineSet *machinev1beta1.MachineSet, capiMachineSet *capiv1beta1.MachineSet) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
+
+	authoritativeAPI := mapiMachineSet.Status.AuthoritativeAPI
+
+	if authoritativeAPI == machinev1beta1.MachineAuthorityClusterAPI {
+		logger.Info("AuthoritativeAPI is set to Cluster API, but no Cluster API machine set exists. Running an initial Machine API to Cluster API sync")
+	}
 
 	if err := r.validateMAPIMachineSetOwnerReferences(mapiMachineSet); err != nil {
 		if condErr := r.applySynchronizedConditionWithPatch(
@@ -307,8 +317,11 @@ func (r *MachineSetSyncReconciler) reconcileMAPIMachineSetToCAPIMachineSet(ctx c
 	newCAPIMachineSet.SetNamespace(r.CAPINamespace)
 	newCAPIMachineSet.Spec.Template.Spec.InfrastructureRef.Namespace = r.CAPINamespace
 	newCAPIMachineSet.OwnerReferences = []metav1.OwnerReference{clusterOwnerRefence}
-	// Set the paused annotation on the new CAPI MachineSet, as we want to create it paused.
-	annotations.AddAnnotations(newCAPIMachineSet, map[string]string{capiv1beta1.PausedAnnotation: ""})
+
+	if authoritativeAPI == machinev1beta1.MachineAuthorityMachineAPI {
+		// Set the paused annotation on the new CAPI MachineSet, if the authoritativeAPI is Machine API.
+		annotations.AddAnnotations(newCAPIMachineSet, map[string]string{capiv1beta1.PausedAnnotation: ""})
+	}
 
 	if result, err := r.ensureCAPIInfraMachineTemplate(ctx, mapiMachineSet, newCAPIMachineSet, newCAPIInfraMachineTemplate, clusterOwnerRefence); err != nil {
 		return result, fmt.Errorf("unable to ensure CAPI infra machine template: %w", err)
@@ -343,8 +356,11 @@ func (r *MachineSetSyncReconciler) ensureCAPIInfraMachineTemplate(ctx context.Co
 
 	newCAPIInfraMachineTemplate.SetNamespace(r.CAPINamespace)
 	newCAPIInfraMachineTemplate.SetOwnerReferences([]metav1.OwnerReference{clusterOwnerRefence})
-	// Set the paused annotation on the new CAPI InfraMachineTemplate, as we want to create it paused.
-	annotations.AddAnnotations(newCAPIInfraMachineTemplate, map[string]string{capiv1beta1.PausedAnnotation: ""})
+
+	if mapiMachineSet.Status.AuthoritativeAPI == machinev1beta1.MachineAuthorityMachineAPI {
+		// Set the paused annotation on the new CAPI InfraMachineTemplate, if the authoritativeAPI is Machine API.
+		annotations.AddAnnotations(newCAPIInfraMachineTemplate, map[string]string{capiv1beta1.PausedAnnotation: ""})
+	}
 
 	if result, err := r.createOrUpdateCAPIInfraMachineTemplate(ctx, mapiMachineSet, infraMachineTemplate, newCAPIInfraMachineTemplate); err != nil {
 		return result, fmt.Errorf("unable to ensure CAPI infra machine template: %w", err)
