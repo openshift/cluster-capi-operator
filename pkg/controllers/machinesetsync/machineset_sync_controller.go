@@ -25,7 +25,7 @@ import (
 	"github.com/go-logr/logr"
 	configv1 "github.com/openshift/api/config/v1"
 	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
-	consts "github.com/openshift/cluster-capi-operator/pkg/controllers"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/machinesync"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/capi2mapi"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/mapi2capi"
@@ -112,7 +112,7 @@ type MachineSetSyncReconciler struct {
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *MachineSetSyncReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	infraMachineTemplate, _, err := initInfraMachineTemplateAndInfraClusterFromProvider(r.Platform)
+	infraMachineTemplate, _, err := controllers.InitInfraMachineTemplateAndInfraClusterFromProvider(r.Platform)
 	if err != nil {
 		return fmt.Errorf("failed to get infrastructure machine template from Provider: %w", err)
 	}
@@ -120,11 +120,11 @@ func (r *MachineSetSyncReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// Allow the namespaces to be set externally for test purposes, when not set,
 	// default to the production namespaces.
 	if r.CAPINamespace == "" {
-		r.CAPINamespace = consts.DefaultManagedNamespace
+		r.CAPINamespace = controllers.DefaultManagedNamespace
 	}
 
 	if r.MAPINamespace == "" {
-		r.MAPINamespace = consts.DefaultMAPIManagedNamespace
+		r.MAPINamespace = controllers.DefaultMAPIManagedNamespace
 	}
 
 	if err := ctrl.NewControllerManagedBy(mgr).
@@ -220,7 +220,7 @@ func (r *MachineSetSyncReconciler) fetchCAPIInfraResources(ctx context.Context, 
 		Name:      infraMachineTemplateRef.Name,
 	}
 
-	infraMachineTemplate, infraCluster, err := initInfraMachineTemplateAndInfraClusterFromProvider(r.Platform)
+	infraMachineTemplate, infraCluster, err := controllers.InitInfraMachineTemplateAndInfraClusterFromProvider(r.Platform)
 	if err != nil {
 		return nil, nil, fmt.Errorf("unable to devise CAPI infra resources: %w", err)
 	}
@@ -321,7 +321,7 @@ func (r *MachineSetSyncReconciler) reconcileMAPIMachineSetToCAPIMachineSet(ctx c
 	}
 
 	return ctrl.Result{}, r.applySynchronizedConditionWithPatch(ctx, mapiMachineSet, corev1.ConditionTrue,
-		consts.ReasonResourceSynchronized, messageSuccessfullySynchronizedMAPItoCAPI, &mapiMachineSet.Generation)
+		controllers.ReasonResourceSynchronized, messageSuccessfullySynchronizedMAPItoCAPI, &mapiMachineSet.Generation)
 }
 
 // ensureCAPIInfraMachineTemplate ensures the CAPI InfraMachineTemplate is created or updated from the MAPI MachineSet.
@@ -442,7 +442,7 @@ func (r *MachineSetSyncReconciler) reconcileCAPIMachineSetToMAPIMachineSet(ctx c
 	}
 
 	return ctrl.Result{}, r.applySynchronizedConditionWithPatch(ctx, mapiMachineSet, corev1.ConditionTrue,
-		consts.ReasonResourceSynchronized, messageSuccessfullySynchronizedCAPItoMAPI, &capiMachineSet.Generation)
+		controllers.ReasonResourceSynchronized, messageSuccessfullySynchronizedCAPItoMAPI, &capiMachineSet.Generation)
 }
 
 // fetchCAPIClusterOwnerReference fetches the OpenShift cluster object instance and returns owner reference to it.
@@ -565,13 +565,13 @@ func (r *MachineSetSyncReconciler) applySynchronizedConditionWithPatch(ctx conte
 	}
 
 	conditionAc := machinev1applyconfigs.Condition().
-		WithType(consts.SynchronizedCondition).
+		WithType(controllers.SynchronizedCondition).
 		WithStatus(status).
 		WithReason(reason).
 		WithMessage(message).
 		WithSeverity(severity)
 
-	util.SetLastTransitionTime(consts.SynchronizedCondition, mapiMachineSet.Status.Conditions, conditionAc)
+	util.SetLastTransitionTime(controllers.SynchronizedCondition, mapiMachineSet.Status.Conditions, conditionAc)
 
 	statusAc := machinev1applyconfigs.MachineSetStatus().
 		WithConditions(conditionAc).
@@ -724,21 +724,6 @@ func (r *MachineSetSyncReconciler) ensureSyncFinalizer(ctx context.Context, mapi
 	}
 
 	return shouldRequeue, utilerrors.NewAggregate(errors)
-}
-
-// initInfraMachineTemplateAndInfraClusterFromProvider returns the correct InfraMachineTemplate and InfraCluster implementation
-// for a given provider.
-//
-// As we implement other cloud providers, we'll need to update this list.
-func initInfraMachineTemplateAndInfraClusterFromProvider(platform configv1.PlatformType) (client.Object, client.Object, error) {
-	switch platform {
-	case configv1.AWSPlatformType:
-		return &awscapiv1beta1.AWSMachineTemplate{}, &awscapiv1beta1.AWSCluster{}, nil
-	case configv1.PowerVSPlatformType:
-		return &capibmv1.IBMPowerVSMachineTemplate{}, &capibmv1.IBMPowerVSCluster{}, nil
-	default:
-		return nil, nil, fmt.Errorf("%w: %s", errPlatformNotSupported, platform)
-	}
 }
 
 func (r *MachineSetSyncReconciler) reconcileMAPItoCAPIMachineSetDeletion(ctx context.Context, mapiMachineSet *machinev1beta1.MachineSet, capiMachineSet *capiv1beta1.MachineSet) (bool, error) {
