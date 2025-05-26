@@ -33,12 +33,14 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	configv1 "github.com/openshift/api/config/v1"
 	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
 	machinev1applyconfigs "github.com/openshift/client-go/machine/applyconfigurations/machine/v1beta1"
-	consts "github.com/openshift/cluster-capi-operator/pkg/controllers"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 )
 
@@ -47,27 +49,45 @@ const controllerName = "MachineSetMigrationController"
 // MachineSetMigrationReconciler reconciles MachineSet resources for migration.
 type MachineSetMigrationReconciler struct {
 	client.Client
-	Scheme        *runtime.Scheme
-	Recorder      record.EventRecorder
+	Scheme   *runtime.Scheme
+	Recorder record.EventRecorder
+
+	Infra         *configv1.Infrastructure
+	Platform      configv1.PlatformType
 	CAPINamespace string
 	MAPINamespace string
 }
 
 // SetupWithManager sets up the MachineSetMigration controller.
 func (r *MachineSetMigrationReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	infraMachineTemplate, _, err := controllers.InitInfraMachineTemplateAndInfraClusterFromProvider(r.Platform)
+	if err != nil {
+		return fmt.Errorf("failed to get infrastructure machine template from Provider: %w", err)
+	}
+
 	// Allow the namespaces to be set externally for test purposes, when not set,
 	// default to the production namespaces.
 	if r.CAPINamespace == "" {
-		r.CAPINamespace = consts.DefaultManagedNamespace
+		r.CAPINamespace = controllers.DefaultManagedNamespace
 	}
 
 	if r.MAPINamespace == "" {
-		r.MAPINamespace = consts.DefaultMAPIManagedNamespace
+		r.MAPINamespace = controllers.DefaultMAPIManagedNamespace
 	}
 
 	if err := ctrl.NewControllerManagedBy(mgr).
 		Named(controllerName).
 		For(&machinev1beta1.MachineSet{}, builder.WithPredicates(util.FilterNamespace(r.MAPINamespace))).
+		Watches(
+			&capiv1beta1.MachineSet{},
+			handler.EnqueueRequestsFromMapFunc(util.RewriteNamespace(r.MAPINamespace)),
+			builder.WithPredicates(util.FilterNamespace(r.CAPINamespace)),
+		).
+		Watches(
+			infraMachineTemplate,
+			handler.EnqueueRequestsFromMapFunc(util.RewriteNamespace(r.MAPINamespace)),
+			builder.WithPredicates(util.FilterNamespace(r.CAPINamespace)),
+		).
 		Complete(r); err != nil {
 		return fmt.Errorf("failed to create controller: %w", err)
 	}
@@ -115,7 +135,7 @@ func (r *MachineSetMigrationReconciler) Reconcile(ctx context.Context, req recon
 
 	// Check if the Synchronized condition is set to True.
 	// If it is not, this indicates an unmigratable resource and therefore should take no action.
-	if cond, err := util.GetConditionStatus(mapiMachineSet, string(consts.SynchronizedCondition)); err != nil {
+	if cond, err := util.GetConditionStatus(mapiMachineSet, string(controllers.SynchronizedCondition)); err != nil {
 		return ctrl.Result{}, fmt.Errorf("unable to get synchronizedCondition for %s/%s: %w", mapiMachineSet.Namespace, mapiMachineSet.Name, err)
 	} else if cond != corev1.ConditionTrue {
 		logger.Info("Machine set not synchronized with latest authoritative generation, will retry later")
@@ -334,7 +354,7 @@ func (r *MachineSetMigrationReconciler) setNewAuthoritativeAPIAndResetSynchroniz
 	var newConditions []*machinev1applyconfigs.ConditionApplyConfiguration
 
 	for _, cond := range ms.Status.Conditions {
-		if cond.Type != consts.SynchronizedCondition {
+		if cond.Type != controllers.SynchronizedCondition {
 			newConditions = append(newConditions, &machinev1applyconfigs.ConditionApplyConfiguration{
 				LastTransitionTime: &cond.LastTransitionTime,
 				Message:            &cond.Message,

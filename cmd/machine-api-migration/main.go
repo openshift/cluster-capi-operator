@@ -240,6 +240,9 @@ func main() {
 	}
 
 	machineMigrationReconciler := machinemigration.MachineMigrationReconciler{
+		Platform: provider,
+		Infra:    infra,
+
 		MAPINamespace: *mapiManagedNamespace,
 		CAPINamespace: *capiManagedNamespace,
 	}
@@ -250,6 +253,9 @@ func main() {
 	}
 
 	machineSetMigrationReconciler := machinesetmigration.MachineSetMigrationReconciler{
+		Platform: provider,
+		Infra:    infra,
+
 		MAPINamespace: *mapiManagedNamespace,
 		CAPINamespace: *capiManagedNamespace,
 	}
