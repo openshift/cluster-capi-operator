@@ -161,12 +161,14 @@ func (r *ClusterOperatorStatusClient) GetOrCreateClusterOperator(ctx context.Con
 
 // SyncStatus applies the new condition to the ClusterOperator object.
 func (r *ClusterOperatorStatusClient) SyncStatus(ctx context.Context, co *configv1.ClusterOperator, conds []configv1.ClusterOperatorStatusCondition) error {
+	patchBase := client.MergeFrom(co.DeepCopy())
+
 	for _, c := range conds {
 		v1helpers.SetStatusCondition(&co.Status.Conditions, c, clock.RealClock{})
 	}
 
-	if err := r.Client.Status().Update(ctx, co); err != nil {
-		return fmt.Errorf("failed to update cluster operator status: %w", err)
+	if err := r.Client.Status().Patch(ctx, co, patchBase); err != nil {
+		return fmt.Errorf("failed to patch cluster operator status: %w", err)
 	}
 
 	return nil
