@@ -32,11 +32,12 @@ func clusterOperatorPredicates() predicate.Funcs {
 		return ok && clusterOperator.GetName() == clusterOperatorName
 	}
 
+	// We only want to be reconciled on creation of the cluster operator,
+	// because we wait for it before reconciling. The Create event also fires
+	// when the manager is started, so this will additionally ensure we are
+	// called at least once at startup.
 	return predicate.Funcs{
-		CreateFunc:  func(e event.CreateEvent) bool { return isClusterOperator(e.Object) },
-		UpdateFunc:  func(e event.UpdateEvent) bool { return isClusterOperator(e.ObjectNew) },
-		GenericFunc: func(e event.GenericEvent) bool { return isClusterOperator(e.Object) },
-		DeleteFunc:  func(e event.DeleteEvent) bool { return isClusterOperator(e.Object) },
+		CreateFunc: func(e event.CreateEvent) bool { return isClusterOperator(e.Object) },
 	}
 }
 
@@ -47,22 +48,11 @@ func toClusterOperator(ctx context.Context, cO client.Object) []reconcile.Reques
 	}}
 }
 
-// configMapPredicate defines a predicate function for owned ConfigMaps.
-func configMapPredicate(namespace string, platform configv1.PlatformType) predicate.Funcs {
-	return predicate.Funcs{
-		CreateFunc:  func(e event.CreateEvent) bool { return isOwnedProviderComponent(e.Object, namespace, platform) },
-		UpdateFunc:  func(e event.UpdateEvent) bool { return isOwnedProviderComponent(e.ObjectNew, namespace, platform) },
-		DeleteFunc:  func(e event.DeleteEvent) bool { return isOwnedProviderComponent(e.Object, namespace, platform) },
-		GenericFunc: func(e event.GenericEvent) bool { return isOwnedProviderComponent(e.Object, namespace, platform) },
-	}
-}
-
-// ownedPlatformLabelPredicate defines a predicate function for owned objects.
-func ownedPlatformLabelPredicate(namespace string, platform configv1.PlatformType) predicate.Funcs {
-	return predicate.Funcs{
-		UpdateFunc: func(e event.UpdateEvent) bool { return isOwnedProviderComponent(e.ObjectNew, namespace, platform) },
-		DeleteFunc: func(e event.DeleteEvent) bool { return isOwnedProviderComponent(e.Object, namespace, platform) },
-	}
+// transportConfigMapPredicate defines a predicate function for transport ConfigMaps.
+func transportConfigMapPredicate(namespace string, platform configv1.PlatformType) predicate.Funcs {
+	return predicate.NewPredicateFuncs(func(obj client.Object) bool {
+		return isOwnedProviderComponent(obj, namespace, platform)
+	})
 }
 
 // isOwnedProviderComponent checks whether an object is an owned provider component.
