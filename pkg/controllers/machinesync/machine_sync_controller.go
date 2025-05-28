@@ -29,7 +29,7 @@ import (
 	configv1 "github.com/openshift/api/config/v1"
 	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
 	machinev1applyconfigs "github.com/openshift/client-go/machine/applyconfigurations/machine/v1beta1"
-	consts "github.com/openshift/cluster-capi-operator/pkg/controllers"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/capi2mapi"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/mapi2capi"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
@@ -133,9 +133,9 @@ type MachineSyncReconciler struct {
 
 // SetupWithManager sets the CoreClusterReconciler controller up with the given manager.
 func (r *MachineSyncReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	infraMachine, _, err := initInfraMachineAndInfraClusterFromProvider(r.Platform)
+	infraMachine, _, err := controllers.InitInfraMachineAndInfraClusterFromProvider(r.Platform)
 	if err != nil {
-		return fmt.Errorf("failed to get InfraMachine from Provider: %w", err)
+		return fmt.Errorf("failed to get infrastructure machine from Provider: %w", err)
 	}
 
 	// Allow the namespaces to be set externally for test purposes, when not set,
@@ -378,7 +378,7 @@ func (r *MachineSyncReconciler) reconcileCAPIMachinetoMAPIMachine(ctx context.Co
 	}
 
 	return ctrl.Result{}, r.applySynchronizedConditionWithPatch(ctx, newMapiMachine, corev1.ConditionTrue,
-		consts.ReasonResourceSynchronized, messageSuccessfullySynchronizedCAPItoMAPI, &capiMachine.Generation)
+		controllers.ReasonResourceSynchronized, messageSuccessfullySynchronizedCAPItoMAPI, &capiMachine.Generation)
 }
 
 // reconcileMAPIMachinetoCAPIMachine a MAPI Machine to a CAPI Machine.
@@ -546,7 +546,7 @@ func (r *MachineSyncReconciler) reconcileMAPIMachinetoCAPIMachine(ctx context.Co
 	}
 
 	return ctrl.Result{}, r.applySynchronizedConditionWithPatch(ctx, mapiMachine, corev1.ConditionTrue,
-		consts.ReasonResourceSynchronized, messageSuccessfullySynchronizedMAPItoCAPI, &mapiMachine.Generation)
+		controllers.ReasonResourceSynchronized, messageSuccessfullySynchronizedMAPItoCAPI, &mapiMachine.Generation)
 }
 
 // convertMAPIToCAPIMachine converts a MAPI Machine to a CAPI Machine, selecting the correct converter based on the platform.
@@ -781,21 +781,6 @@ func (r *MachineSyncReconciler) createOrUpdateMAPIMachine(ctx context.Context, m
 	return ctrl.Result{}, nil
 }
 
-// initInfraMachineAndInfraClusterFromProvider returns the correct InfraMachine and InfraCluster implementation
-// for a given provider.
-//
-// As we implement other cloud providers, we'll need to update this list.
-func initInfraMachineAndInfraClusterFromProvider(platform configv1.PlatformType) (client.Object, client.Object, error) {
-	switch platform {
-	case configv1.AWSPlatformType:
-		return &capav1beta2.AWSMachine{}, &capav1beta2.AWSCluster{}, nil
-	case configv1.PowerVSPlatformType:
-		return &capibmv1.IBMPowerVSMachine{}, &capibmv1.IBMPowerVSCluster{}, nil
-	default:
-		return nil, nil, fmt.Errorf("%w: %s", errPlatformNotSupported, platform)
-	}
-}
-
 // shouldMirrorCAPIMachineToMAPIMachine takes a CAPI machine and determines if there should
 // be a MAPI mirror, it returns true only if:
 //
@@ -961,7 +946,7 @@ func (r *MachineSyncReconciler) fetchCAPIInfraResources(ctx context.Context, cap
 		Name:      infraMachineRef.Name,
 	}
 
-	infraMachine, infraCluster, err := initInfraMachineAndInfraClusterFromProvider(r.Platform)
+	infraMachine, infraCluster, err := controllers.InitInfraMachineAndInfraClusterFromProvider(r.Platform)
 	if err != nil {
 		return nil, nil, fmt.Errorf("unable to devise Cluster API infra resources: %w", err)
 	}
@@ -1372,13 +1357,13 @@ func (r *MachineSyncReconciler) applySynchronizedConditionWithPatch(ctx context.
 	}
 
 	conditionAc := machinev1applyconfigs.Condition().
-		WithType(consts.SynchronizedCondition).
+		WithType(controllers.SynchronizedCondition).
 		WithStatus(status).
 		WithReason(reason).
 		WithMessage(message).
 		WithSeverity(severity)
 
-	util.SetLastTransitionTime(consts.SynchronizedCondition, mapiMachine.Status.Conditions, conditionAc)
+	util.SetLastTransitionTime(controllers.SynchronizedCondition, mapiMachine.Status.Conditions, conditionAc)
 
 	statusAc := machinev1applyconfigs.MachineStatus().
 		WithConditions(conditionAc).
