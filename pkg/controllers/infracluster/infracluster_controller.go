@@ -254,7 +254,7 @@ func (r *InfraClusterController) setAvailableCondition(ctx context.Context, log 
 
 	log.V(2).Info("InfraCluster Controller is Available")
 
-	if err := r.SyncStatus(ctx, co, conds); err != nil {
+	if err := r.SyncStatus(ctx, controllerName, co, conds); err != nil {
 		return fmt.Errorf("failed to sync status: %w", err)
 	}
 
