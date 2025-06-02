@@ -122,17 +122,6 @@ func (r *MachineMigrationReconciler) Reconcile(ctx context.Context, req reconcil
 		return ctrl.Result{}, nil
 	}
 
-	// If authoritativeAPI status is empty, it means it is the first time we see this resource.
-	// Set the status.authoritativeAPI to match the spec.authoritativeAPI.
-	if mapiMachine.Status.AuthoritativeAPI == "" {
-		if err := r.applyStatusAuthoritativeAPIWithPatch(ctx, mapiMachine, mapiMachine.Spec.AuthoritativeAPI); err != nil {
-			return ctrl.Result{}, fmt.Errorf("unable to apply authoritativeAPI to status with patch: %w", err)
-		}
-
-		// Wait for the patching to take effect.
-		return ctrl.Result{}, nil
-	}
-
 	// Check if the Synchronized condition is set to True.
 	// If it is not, this indicates an unmigratable resource and therefore should take no action.
 	if cond, err := util.GetConditionStatus(mapiMachine, string(controllers.SynchronizedCondition)); err != nil {
