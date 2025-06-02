@@ -25,7 +25,6 @@ import (
 
 	configv1builder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/config/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/test"
-	"github.com/openshift/cluster-control-plane-machine-set-operator/pkg/util"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -68,7 +67,7 @@ var _ = BeforeSuite(func() {
 	Expect(cfg).NotTo(BeNil())
 	Expect(k8sClient).NotTo(BeNil())
 
-	infrastructure := configv1builder.Infrastructure().AsAWS("test", "eu-west-2").WithName(util.InfrastructureName).Build()
+	infrastructure := configv1builder.Infrastructure().AsAWS("test", "eu-west-2").WithName("cluster").Build()
 	Expect(k8sClient.Create(ctx, infrastructure)).To(Succeed())
 
 	httpClient, err := rest.HTTPClientFor(cfg)

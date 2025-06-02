@@ -37,6 +37,7 @@ import (
 
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	"k8s.io/utils/clock"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -184,7 +185,7 @@ func (r *CapiInstallerController) applyProviderComponents(ctx context.Context, c
 	res := resourceapply.ApplyDirectly(
 		ctx,
 		resourceapply.NewKubeClientHolder(r.ApplyClient).WithAPIExtensionsClient(r.APIExtensionsClient),
-		events.NewInMemoryRecorder("cluster-capi-operator-capi-installer-apply-client"),
+		events.NewInMemoryRecorder("cluster-capi-operator-capi-installer-apply-client", clock.RealClock{}),
 		resourceapply.NewResourceCache(),
 		assetFn(componentsAssets),
 		componentsFilenames...,
@@ -211,7 +212,7 @@ func (r *CapiInstallerController) applyProviderComponents(ctx context.Context, c
 		if _, _, err := resourceapply.ApplyDeployment(
 			ctx,
 			r.ApplyClient.AppsV1(),
-			events.NewInMemoryRecorder("cluster-capi-operator-capi-installer-apply-client"),
+			events.NewInMemoryRecorder("cluster-capi-operator-capi-installer-apply-client", clock.RealClock{}),
 			deployment,
 			resourcemerge.ExpectedDeploymentGeneration(deployment, nil),
 		); err != nil {
