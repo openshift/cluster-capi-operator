@@ -835,7 +835,7 @@ github.com/onsi/gomega/matchers/support/goraph/edge
 github.com/onsi/gomega/matchers/support/goraph/node
 github.com/onsi/gomega/matchers/support/goraph/util
 github.com/onsi/gomega/types
-# github.com/openshift/api v0.0.0-20241009131553-a1523024209f
+# github.com/openshift/api v0.0.0-20241101202457-04eb3fd119d2
 ## explicit; go 1.22.0
 github.com/openshift/api
 github.com/openshift/api/annotations
@@ -939,15 +939,11 @@ github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/cluster-
 github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/config/v1
 github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/core/v1
 github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/machine/v1beta1
-# github.com/openshift/cluster-control-plane-machine-set-operator v0.0.0-20241008085214-8d85b2cb2c1d
-## explicit; go 1.22.1
-github.com/openshift/cluster-control-plane-machine-set-operator/pkg/util
-# github.com/openshift/library-go v0.0.0-20240919205913-c96b82b3762b
+# github.com/openshift/library-go v0.0.0-20250602082827-408fc1e33d77
 ## explicit; go 1.22.0
+github.com/openshift/library-go/pkg/apiserver/jsonpatch
 github.com/openshift/library-go/pkg/certs
 github.com/openshift/library-go/pkg/config/clusteroperator/v1helpers
-github.com/openshift/library-go/pkg/config/clusterstatus
-github.com/openshift/library-go/pkg/config/leaderelection
 github.com/openshift/library-go/pkg/controller/factory
 github.com/openshift/library-go/pkg/crypto
 github.com/openshift/library-go/pkg/operator/certrotation
@@ -2261,7 +2257,7 @@ k8s.io/klog/v2/internal/severity
 k8s.io/klog/v2/internal/sloghandler
 k8s.io/klog/v2/internal/verbosity
 k8s.io/klog/v2/textlogger
-# k8s.io/kube-aggregator v0.30.1
+# k8s.io/kube-aggregator v0.31.1
 ## explicit; go 1.22.0
 k8s.io/kube-aggregator/pkg/apis/apiregistration
 k8s.io/kube-aggregator/pkg/apis/apiregistration/v1
