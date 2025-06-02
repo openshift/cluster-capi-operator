@@ -187,14 +187,14 @@ func (r *MachineSetMigrationReconciler) Reconcile(ctx context.Context, req recon
 		return ctrl.Result{}, nil
 	}
 
-	// Set the actual AuthoritativeAPI to the desired one, reset the synchronized generation and condition.
-	if err := r.setNewAuthoritativeAPIAndResetSynchronized(ctx, mapiMachineSet, mapiMachineSet.Spec.AuthoritativeAPI); err != nil {
-		return ctrl.Result{}, fmt.Errorf("unable to apply authoritativeAPI to status with patch: %w", err)
-	}
-
 	// Make sure the new authoritative resource has been requested to unpause.
 	if err := r.ensureUnpauseRequestedOnNewAuthoritativeResource(ctx, mapiMachineSet); err != nil {
 		return ctrl.Result{}, fmt.Errorf("unable to ensure the new AuthoritativeAPI has been un-paused: %w", err)
+	}
+
+	// Set the actual AuthoritativeAPI to the desired one, reset the synchronized generation and condition.
+	if err := r.setNewAuthoritativeAPIAndResetSynchronized(ctx, mapiMachineSet, mapiMachineSet.Spec.AuthoritativeAPI); err != nil {
+		return ctrl.Result{}, fmt.Errorf("unable to apply authoritativeAPI to status with patch: %w", err)
 	}
 
 	logger.Info("Machine set authority switch has now been completed and the resource unpaused")
