@@ -229,6 +229,12 @@ var _ = Describe("With a running MachineMigration controller", func() {
 					Build()
 				Eventually(k8sClient.Create(ctx, mapiMachine)).Should(Succeed())
 
+				By("Creating a mirror CAPI machine")
+				capiMachine = capiMachineBuilder.Build()
+				Eventually(k8sClient.Create(ctx, capiMachine)).Should(Succeed())
+				capaMachine = capaMachineBuilder.Build()
+				Eventually(k8sClient.Create(ctx, capaMachine)).Should(Succeed())
+
 				By("Setting the MAPI machine status AuthoritativeAPI to MachineAPI")
 				Eventually(k.UpdateStatus(mapiMachine, func() {
 					updatedMAPIMachine := mapiMachineBuilder.
@@ -240,6 +246,7 @@ var _ = Describe("With a running MachineMigration controller", func() {
 						Build()
 					mapiMachine.Status.AuthoritativeAPI = updatedMAPIMachine.Status.AuthoritativeAPI
 					mapiMachine.Status.Conditions = updatedMAPIMachine.Status.Conditions
+					mapiMachine.Status.SynchronizedGeneration = capiMachine.Generation
 				})).Should(Succeed())
 
 				req = reconcile.Request{NamespacedName: client.ObjectKeyFromObject(mapiMachine)}
@@ -264,6 +271,12 @@ var _ = Describe("With a running MachineMigration controller", func() {
 						Build()
 					Eventually(k8sClient.Create(ctx, mapiMachine)).Should(Succeed())
 
+					By("Creating a mirror CAPI machine")
+					capiMachine = capiMachineBuilder.Build()
+					Eventually(k8sClient.Create(ctx, capiMachine)).Should(Succeed())
+					capaMachine = capaMachineBuilder.Build()
+					Eventually(k8sClient.Create(ctx, capaMachine)).Should(Succeed())
+
 					By("Setting the MAPI machine status AuthoritativeAPI to 'Migrating'")
 					Eventually(k.UpdateStatus(mapiMachine, func() {
 						updatedMAPIMachine := mapiMachineBuilder.
@@ -275,6 +288,7 @@ var _ = Describe("With a running MachineMigration controller", func() {
 							Build()
 						mapiMachine.Status.AuthoritativeAPI = updatedMAPIMachine.Status.AuthoritativeAPI
 						mapiMachine.Status.Conditions = updatedMAPIMachine.Status.Conditions
+						mapiMachine.Status.SynchronizedGeneration = capiMachine.Generation
 					})).Should(Succeed())
 
 					req = reconcile.Request{NamespacedName: client.ObjectKeyFromObject(mapiMachine)}
@@ -316,6 +330,7 @@ var _ = Describe("With a running MachineMigration controller", func() {
 							Build()
 						mapiMachine.Status.AuthoritativeAPI = updatedMAPIMachine.Status.AuthoritativeAPI
 						mapiMachine.Status.Conditions = updatedMAPIMachine.Status.Conditions
+						mapiMachine.Status.SynchronizedGeneration = mapiMachine.Generation
 					})).Should(Succeed())
 
 					req = reconcile.Request{NamespacedName: client.ObjectKeyFromObject(mapiMachine)}
@@ -353,6 +368,12 @@ var _ = Describe("With a running MachineMigration controller", func() {
 							Build()
 						Eventually(k8sClient.Create(ctx, mapiMachine)).Should(Succeed())
 
+						By("Creating a mirror CAPI machine")
+						capiMachine = capiMachineBuilder.Build()
+						Eventually(k8sClient.Create(ctx, capiMachine)).Should(Succeed())
+						capaMachine = capaMachineBuilder.Build()
+						Eventually(k8sClient.Create(ctx, capaMachine)).Should(Succeed())
+
 						By("Setting the MAPI machine status AuthoritativeAPI to 'Migrating'")
 						Eventually(k.UpdateStatus(mapiMachine, func() {
 							updatedMAPIMachine := mapiMachineBuilder.
@@ -372,6 +393,7 @@ var _ = Describe("With a running MachineMigration controller", func() {
 								Build()
 							mapiMachine.Status.AuthoritativeAPI = updatedMAPIMachine.Status.AuthoritativeAPI
 							mapiMachine.Status.Conditions = updatedMAPIMachine.Status.Conditions
+							mapiMachine.Status.SynchronizedGeneration = capiMachine.Generation
 						})).Should(Succeed())
 
 						req = reconcile.Request{NamespacedName: client.ObjectKeyFromObject(mapiMachine)}
@@ -489,6 +511,12 @@ var _ = Describe("With a running MachineMigration controller", func() {
 							WithAuthoritativeAPI(machinev1beta1.MachineAuthorityClusterAPI).
 							Build()
 						Eventually(k8sClient.Create(ctx, mapiMachine)).Should(Succeed())
+
+						By("Creating a mirror CAPI machine")
+						capiMachine = capiMachineBuilder.Build()
+						Eventually(k8sClient.Create(ctx, capiMachine)).Should(Succeed())
+						capaMachine = capaMachineBuilder.Build()
+						Eventually(k8sClient.Create(ctx, capaMachine)).Should(Succeed())
 
 						By("Setting the MAPI machine status AuthoritativeAPI to 'Migrating'")
 						Eventually(k.UpdateStatus(mapiMachine, func() {
