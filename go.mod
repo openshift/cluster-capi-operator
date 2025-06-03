@@ -13,11 +13,10 @@ require (
 	github.com/klauspost/compress v1.17.9
 	github.com/onsi/ginkgo/v2 v2.21.0
 	github.com/onsi/gomega v1.35.1
-	github.com/openshift/api v0.0.0-20241009131553-a1523024209f
+	github.com/openshift/api v0.0.0-20241101202457-04eb3fd119d2
 	github.com/openshift/client-go v0.0.0-20241001162912-da6d55e4611f
 	github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20241029130438-302aefe5af06
-	github.com/openshift/cluster-control-plane-machine-set-operator v0.0.0-20241008085214-8d85b2cb2c1d
-	github.com/openshift/library-go v0.0.0-20240919205913-c96b82b3762b
+	github.com/openshift/library-go v0.0.0-20250602082827-408fc1e33d77
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/pflag v1.0.6-0.20210604193023-d5e0c0615ace
 	gopkg.in/yaml.v2 v2.4.0
@@ -288,7 +287,7 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	honnef.co/go/tools v0.5.1 // indirect
 	k8s.io/apiserver v0.31.1 // indirect
-	k8s.io/kube-aggregator v0.30.1 // indirect
+	k8s.io/kube-aggregator v0.31.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20240228011516-70dd3763d340 // indirect
 	mvdan.cc/gofumpt v0.7.0 // indirect
 	mvdan.cc/unparam v0.0.0-20240528143540-8a5130ca722f // indirect

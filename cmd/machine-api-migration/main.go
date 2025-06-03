@@ -40,6 +40,7 @@ import (
 	"k8s.io/component-base/config/options"
 	klog "k8s.io/klog/v2"
 	"k8s.io/klog/v2/textlogger"
+	"k8s.io/utils/clock"
 	capiflags "sigs.k8s.io/cluster-api/util/flags"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
@@ -260,7 +261,7 @@ func getFeatureGates(mgr ctrl.Manager) (featuregates.FeatureGateAccess, error) {
 		desiredVersion, missingVersion,
 		configInformers.Config().V1().ClusterVersions(),
 		configInformers.Config().V1().FeatureGates(),
-		events.NewLoggingEventRecorder("machineapimigration"),
+		events.NewLoggingEventRecorder("machineapimigration", clock.RealClock{}),
 	)
 	go featureGateAccessor.Run(context.Background())
 	go configInformers.Start(context.Background().Done())
