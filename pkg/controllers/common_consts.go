@@ -43,4 +43,8 @@ const (
 	// ReasonResourceSynchronized denotes that the resource is synchronized
 	// successfully.
 	ReasonResourceSynchronized = "ResourceSynchronized"
+
+	// ReasonResourceAuthoritySwitched denotes that the resource is synchronization
+	// state is unknown due to the recent resource authority switch.
+	ReasonResourceAuthoritySwitched = "ResourceAuthoritySwitched"
 )

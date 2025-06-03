@@ -27,6 +27,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/utils/ptr"
 	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util/annotations"
 	conditionsv1beta2 "sigs.k8s.io/cluster-api/util/conditions/v1beta2"
@@ -393,18 +394,15 @@ func (r *MachineMigrationReconciler) applyStatusAuthoritativeAPIWithPatch(ctx co
 func (r *MachineMigrationReconciler) setNewAuthoritativeAPIAndResetSynchronized(ctx context.Context, m *machinev1beta1.Machine, authority machinev1beta1.MachineAuthority) error {
 	var newConditions []*machinev1applyconfigs.ConditionApplyConfiguration
 
-	for _, cond := range m.Status.Conditions {
-		if cond.Type != controllers.SynchronizedCondition {
-			newConditions = append(newConditions, &machinev1applyconfigs.ConditionApplyConfiguration{
-				LastTransitionTime: &cond.LastTransitionTime,
-				Message:            &cond.Message,
-				Reason:             &cond.Reason,
-				Status:             &cond.Status,
-				Severity:           &cond.Severity,
-				Type:               &cond.Type,
-			})
-		}
-	}
+	// Set the Synchronized condition to Unknown when the new authoritativeAPI is set,
+	// to hand over the condition responsibility to the sync controller.
+	newConditions = append(newConditions, &machinev1applyconfigs.ConditionApplyConfiguration{
+		LastTransitionTime: ptr.To(metav1.Now()),
+		Status:             ptr.To(corev1.ConditionUnknown),
+		Message:            ptr.To(""),
+		Reason:             ptr.To(controllers.ReasonResourceAuthoritySwitched),
+		Type:               ptr.To(controllers.SynchronizedCondition),
+	})
 
 	statusAc := machinev1applyconfigs.MachineStatus().
 		WithAuthoritativeAPI(authority).
