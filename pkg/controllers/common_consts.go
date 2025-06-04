@@ -43,4 +43,7 @@ const (
 	// ReasonResourceSynchronized denotes that the resource is synchronized
 	// successfully.
 	ReasonResourceSynchronized = "ResourceSynchronized"
+
+	// MachineSetOpenshiftLabelKey is the key for label referring to a Machine API MachineSet.
+	MachineSetOpenshiftLabelKey = "machine.openshift.io/cluster-api-machineset"
 )
