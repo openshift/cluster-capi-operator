@@ -25,8 +25,8 @@ import (
 	configv1 "github.com/openshift/api/config/v1"
 	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
 	"github.com/openshift/cluster-api-actuator-pkg/testutils"
-	capiv1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/cluster-api/core/v1beta1"
-	capav1builder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/cluster-api/infrastructure/v1beta2"
+	clusterv1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/cluster-api/core/v1beta1"
+	awsv1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/cluster-api/infrastructure/v1beta2"
 	configv1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/config/v1"
 	corev1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/core/v1"
 	machinev1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/machine/v1beta1"
@@ -36,8 +36,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
-	capav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
-	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/config"
@@ -58,19 +58,19 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 
 	var mapiMachineSetBuilder machinev1resourcebuilder.MachineSetBuilder
 
-	var capiMachineSet *capiv1beta1.MachineSet
-	var capiMachineSetBuilder capiv1resourcebuilder.MachineSetBuilder
+	var capiMachineSet *clusterv1.MachineSet
+	var capiMachineSetBuilder clusterv1resourcebuilder.MachineSetBuilder
 
 	var mapiMachineBuilder machinev1resourcebuilder.MachineBuilder
 	var mapiMachine *machinev1beta1.Machine
 
-	var capiMachineBuilder capiv1resourcebuilder.MachineBuilder
-	var capiMachine *capiv1beta1.Machine
+	var capiMachineBuilder clusterv1resourcebuilder.MachineBuilder
+	var capiMachine *clusterv1.Machine
 
-	var capaMachineBuilder capav1builder.AWSMachineBuilder
-	var capaMachine *capav1.AWSMachine
+	var capaMachineBuilder awsv1resourcebuilder.AWSMachineBuilder
+	var capaMachine *awsv1.AWSMachine
 
-	var capaClusterBuilder capav1builder.AWSClusterBuilder
+	var capaClusterBuilder awsv1resourcebuilder.AWSClusterBuilder
 
 	startManager := func(mgr *manager.Manager) (context.CancelFunc, chan struct{}) {
 		mgrCtx, mgrCancel := context.WithCancel(context.Background())
@@ -107,18 +107,18 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 		Expect(k8sClient.Create(ctx, capiNamespace)).To(Succeed(), "capi namespace should be able to be created")
 
 		infrastructureName := "cluster-foo"
-		capaClusterBuilder = capav1builder.AWSCluster().
+		capaClusterBuilder = awsv1resourcebuilder.AWSCluster().
 			WithNamespace(capiNamespace.GetName()).
 			WithName(infrastructureName)
 		Expect(k8sClient.Create(ctx, capaClusterBuilder.Build())).To(Succeed(), "capa cluster should be able to be created")
 
 		// Create the CAPI Cluster to have valid owner reference to it
-		capiClusterBuilder := capiv1resourcebuilder.Cluster().WithNamespace(capiNamespace.GetName()).WithName(infrastructureName)
+		capiClusterBuilder := clusterv1resourcebuilder.Cluster().WithNamespace(capiNamespace.GetName()).WithName(infrastructureName)
 		Expect(k8sClient.Create(ctx, capiClusterBuilder.Build())).To(Succeed(), "capi cluster should be able to be created")
 
 		// We need to build and create the CAPA Machine in order to
 		// reference it on the CAPI Machine
-		capaMachineBuilder = capav1builder.AWSMachine().
+		capaMachineBuilder = awsv1resourcebuilder.AWSMachine().
 			WithNamespace(capiNamespace.GetName()).
 			WithName("machine-template")
 
@@ -129,14 +129,14 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 
 		// We need to build and create the CAPA MachineTemplate in order to
 		// reference it on the CAPI MachineSet
-		capaMachineTemplateBuilder := capav1builder.AWSMachineTemplate().
+		capaMachineTemplateBuilder := awsv1resourcebuilder.AWSMachineTemplate().
 			WithNamespace(capiNamespace.GetName()).
 			WithName("machine-template")
 
 		capaMachineTemplate := capaMachineTemplateBuilder.Build()
 
-		capiMachineTemplate := capiv1beta1.MachineTemplateSpec{
-			Spec: capiv1beta1.MachineSpec{
+		capiMachineTemplate := clusterv1.MachineTemplateSpec{
+			Spec: clusterv1.MachineSpec{
 				InfrastructureRef: corev1.ObjectReference{
 					Kind:      capaMachineTemplate.Kind,
 					Name:      capaMachineTemplate.GetName(),
@@ -145,7 +145,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 			},
 		}
 
-		capiMachineSetBuilder = capiv1resourcebuilder.MachineSet().
+		capiMachineSetBuilder = clusterv1resourcebuilder.MachineSet().
 			WithNamespace(capiNamespace.GetName()).
 			WithName("foo-machineset").
 			WithTemplate(capiMachineTemplate).
@@ -164,7 +164,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 			WithGenerateName("foo").
 			WithProviderSpecBuilder(machinev1resourcebuilder.AWSProviderSpec().WithLoadBalancers(nil))
 
-		capiMachineBuilder = capiv1resourcebuilder.Machine().
+		capiMachineBuilder = clusterv1resourcebuilder.Machine().
 			WithNamespace(capiNamespace.GetName()).
 			WithName("foo").
 			WithInfrastructureRef(capaMachineRef).
@@ -210,10 +210,10 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 		)
 
 		testutils.CleanupResources(Default, ctx, cfg, k8sClient, capiNamespace.GetName(),
-			&capiv1beta1.Machine{},
-			&capiv1beta1.MachineSet{},
-			&capav1.AWSCluster{},
-			&capav1.AWSMachineTemplate{},
+			&clusterv1.Machine{},
+			&clusterv1.MachineSet{},
+			&awsv1.AWSCluster{},
+			&awsv1.AWSMachineTemplate{},
 		)
 	})
 
@@ -238,7 +238,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 			Context("when the CAPI machine does not exist", func() {
 				It("should create a paused CAPI machine", func() {
 					Eventually(k.Get(
-						capiv1resourcebuilder.Machine().WithName(mapiMachine.Name).WithNamespace(capiNamespace.Name).Build(),
+						clusterv1resourcebuilder.Machine().WithName(mapiMachine.Name).WithNamespace(capiNamespace.Name).Build(),
 					)).Should(Succeed())
 				})
 
@@ -289,7 +289,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 				})
 
 				It("should recreate the CAPI infra machine", func() {
-					capaMachineBuilder = capav1builder.AWSMachine().
+					capaMachineBuilder = awsv1resourcebuilder.AWSMachine().
 						WithNamespace(capiNamespace.GetName()).
 						WithName(mapiMachine.Name)
 
@@ -384,7 +384,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 
 			It("should not create the CAPI machine", func() {
 				Consistently(k.Get(
-					capiv1resourcebuilder.Machine().WithName(mapiMachine.Name).WithNamespace(capiNamespace.Name).Build(),
+					clusterv1resourcebuilder.Machine().WithName(mapiMachine.Name).WithNamespace(capiNamespace.Name).Build(),
 				)).Should(Not(Succeed()))
 			})
 
@@ -485,7 +485,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 					Expect(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
 
 					ownerReferencesToCapiMachineSet = []metav1.OwnerReference{{
-						APIVersion:         capiv1beta1.GroupVersion.String(),
+						APIVersion:         clusterv1.GroupVersion.String(),
 						Kind:               machineSetKind,
 						Name:               capiMachineSet.Name,
 						UID:                capiMachineSet.UID,
@@ -591,33 +591,33 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 
 				Context("when the CAPI machine does not exist", func() {
 					It("should create the CAPI machine", func() {
-						capiMachine = capiv1resourcebuilder.Machine().WithName(mapiMachine.Name).WithNamespace(capiNamespace.Name).Build()
+						capiMachine = clusterv1resourcebuilder.Machine().WithName(mapiMachine.Name).WithNamespace(capiNamespace.Name).Build()
 						Eventually(k.Get(capiMachine)).Should(Succeed(), "should have succeeded getting a CAPI Machine")
 					})
 
 					It("should have CAPI MachineSet OwnerReference", func() {
-						capiMachine = capiv1resourcebuilder.Machine().WithName(mapiMachine.Name).WithNamespace(capiNamespace.Name).Build()
+						capiMachine = clusterv1resourcebuilder.Machine().WithName(mapiMachine.Name).WithNamespace(capiNamespace.Name).Build()
 						Eventually(k.Object(capiMachine), timeout).Should(HaveField("ObjectMeta.OwnerReferences", ContainElement(
 							SatisfyAll(
 								HaveField("Kind", Equal(machineSetKind)),
-								HaveField("APIVersion", Equal(capiv1beta1.GroupVersion.String())),
+								HaveField("APIVersion", Equal(clusterv1.GroupVersion.String())),
 							),
 						)))
 					})
 
 					It("should create the CAPI infra machine", func() {
-						capiInfraMachine := capav1builder.AWSMachine().WithName(mapiMachine.Name).WithNamespace(capiNamespace.Name).Build()
+						capiInfraMachine := awsv1resourcebuilder.AWSMachine().WithName(mapiMachine.Name).WithNamespace(capiNamespace.Name).Build()
 						Eventually(k.Get(capiInfraMachine)).Should(Succeed(), "should have succeeded getting a CAPI Infra Machine")
 					})
 
 					It("should have Machine as an OwnerReference on the InfraMachine", func() {
-						capiMachine = capiv1resourcebuilder.Machine().WithName(mapiMachine.Name).WithNamespace(capiNamespace.Name).Build()
+						capiMachine = clusterv1resourcebuilder.Machine().WithName(mapiMachine.Name).WithNamespace(capiNamespace.Name).Build()
 						Eventually(k.Get(capiMachine)).Should(Succeed(), "should have succeeded getting a CAPI Machine")
 
-						capiInfraMachine := capav1builder.AWSMachine().WithName(mapiMachine.Name).WithNamespace(capiNamespace.Name).Build()
+						capiInfraMachine := awsv1resourcebuilder.AWSMachine().WithName(mapiMachine.Name).WithNamespace(capiNamespace.Name).Build()
 						Eventually(k.Get(capiInfraMachine)).Should(Succeed(), "should have succeeded getting a CAPI Infra Machine")
 						ownerReferencesOnMachine := []metav1.OwnerReference{{
-							APIVersion:         capiv1beta1.GroupVersion.String(),
+							APIVersion:         clusterv1.GroupVersion.String(),
 							Kind:               machineKind,
 							Name:               capiMachine.Name,
 							UID:                capiMachine.UID,
@@ -648,7 +648,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 					})
 
 					It("should create the CAPI infra machine", func() {
-						capiInfraMachine := capav1builder.AWSMachine().WithName(mapiMachine.Name).WithNamespace(capiNamespace.Name).Build()
+						capiInfraMachine := awsv1resourcebuilder.AWSMachine().WithName(mapiMachine.Name).WithNamespace(capiNamespace.Name).Build()
 						Eventually(k.Get(capiInfraMachine)).Should(Succeed())
 					})
 
@@ -710,16 +710,16 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 						Eventually(k.Get(capiMachine)).Should(Succeed())
 						Eventually(k.Object(capiMachine)).ShouldNot(
 							HaveField("ObjectMeta.Annotations", ContainElement(
-								HaveKeyWithValue(capiv1beta1.PausedAnnotation, ""),
+								HaveKeyWithValue(clusterv1.PausedAnnotation, ""),
 							)))
 					})
 
 					It("should create the CAPI Infra machine", func() {
-						capiInfraMachine := capav1builder.AWSMachine().WithName(mapiMachine.Name).WithNamespace(capiNamespace.Name).Build()
+						capiInfraMachine := awsv1resourcebuilder.AWSMachine().WithName(mapiMachine.Name).WithNamespace(capiNamespace.Name).Build()
 						Eventually(k.Get(capiInfraMachine)).Should(Succeed())
 						Eventually(k.Object(capiInfraMachine)).ShouldNot(
 							HaveField("ObjectMeta.Annotations", ContainElement(
-								HaveKeyWithValue(capiv1beta1.PausedAnnotation, ""),
+								HaveKeyWithValue(clusterv1.PausedAnnotation, ""),
 							)))
 					})
 

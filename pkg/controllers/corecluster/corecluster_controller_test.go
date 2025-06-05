@@ -22,8 +22,8 @@ import (
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/utils/ptr"
-	capav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
-	capiv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/config"
@@ -31,15 +31,15 @@ import (
 
 	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/cluster-api-actuator-pkg/testutils"
-	capibuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/cluster-api/core/v1beta1"
-	capabuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/cluster-api/infrastructure/v1beta2"
+	clusterv1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/cluster-api/core/v1beta1"
+	awsv1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/cluster-api/infrastructure/v1beta2"
 	configv1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/config/v1"
 	corev1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/core/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 )
 
 var _ = Describe("Reconcile Core cluster", func() {
-	var coreCluster *capiv1.Cluster
+	var coreCluster *clusterv1.Cluster
 	var testNamespaceName string
 	testInfraName := "test-ocp-infrastructure-name"
 	testRegionName := "eu-west-2"
@@ -67,7 +67,7 @@ var _ = Describe("Reconcile Core cluster", func() {
 				ManagedNamespace: testNamespaceName,
 				ReleaseVersion:   desiredOperatorReleaseVersion,
 			},
-			Cluster:  &capiv1.Cluster{},
+			Cluster:  &clusterv1.Cluster{},
 			Infra:    infra.DeepCopy(),
 			Platform: infra.Status.PlatformStatus.Type,
 		}
@@ -107,7 +107,7 @@ var _ = Describe("Reconcile Core cluster", func() {
 	AfterEach(func() {
 		By("Cleaning up the testing resources")
 		testutils.CleanupResources(Default, ctx, testEnv.Config, cl, testNamespaceName,
-			&configv1.Infrastructure{}, &capiv1.Cluster{}, &capav1.AWSCluster{}, &configv1.ClusterOperator{})
+			&configv1.Infrastructure{}, &clusterv1.Cluster{}, &awsv1.AWSCluster{}, &configv1.ClusterOperator{})
 	})
 
 	Context("With a supported platform", func() {
@@ -144,10 +144,10 @@ var _ = Describe("Reconcile Core cluster", func() {
 			Context("When there is no infra cluster", func() {
 				It("should not create core or infra cluster", func() {
 
-					testInfraCluster := capabuilder.AWSCluster().WithName(testInfraName).WithNamespace(testNamespaceName).Build()
+					testInfraCluster := awsv1resourcebuilder.AWSCluster().WithName(testInfraName).WithNamespace(testNamespaceName).Build()
 					Consistently(komega.Get(testInfraCluster)).Should(MatchError("awsclusters.infrastructure.cluster.x-k8s.io \"test-ocp-infrastructure-name\" not found"))
 
-					testCoreCluster := capibuilder.Cluster().WithName(testInfraName).WithNamespace(testNamespaceName).Build()
+					testCoreCluster := clusterv1resourcebuilder.Cluster().WithName(testInfraName).WithNamespace(testNamespaceName).Build()
 					Consistently(komega.Get(testCoreCluster)).Should(MatchError("clusters.cluster.x-k8s.io \"test-ocp-infrastructure-name\" not found"))
 				})
 			})
@@ -155,18 +155,18 @@ var _ = Describe("Reconcile Core cluster", func() {
 			Context("When there is an infra cluster", func() {
 				BeforeEach(func() {
 					By("Creating a testing infra cluster")
-					infraCluster := capabuilder.AWSCluster().WithName(testInfraName).WithNamespace(testNamespaceName).Build()
+					infraCluster := awsv1resourcebuilder.AWSCluster().WithName(testInfraName).WithNamespace(testNamespaceName).Build()
 					Eventually(cl.Create(ctx, infraCluster)).Should(Succeed())
 				})
 
 				It("should create the core cluster", func() {
-					testCoreCluster := capibuilder.Cluster().WithName(testInfraName).WithNamespace(testNamespaceName).Build()
+					testCoreCluster := clusterv1resourcebuilder.Cluster().WithName(testInfraName).WithNamespace(testNamespaceName).Build()
 					Eventually(komega.Get(testCoreCluster)).Should(Succeed(), "should have been able to successfully get the core cluster")
 					Eventually(komega.Object(testCoreCluster)).Should(
 						HaveField("Status.Conditions", SatisfyAll(
 							Not(BeEmpty()),
 							ContainElement(SatisfyAll(
-								HaveField("Type", Equal(capiv1.ControlPlaneInitializedCondition)),
+								HaveField("Type", Equal(clusterv1.ControlPlaneInitializedCondition)),
 								HaveField("Status", Equal(corev1.ConditionTrue)),
 							)),
 						)),
@@ -202,13 +202,13 @@ var _ = Describe("Reconcile Core cluster", func() {
 		Context("When there is an existing core cluster", func() {
 			BeforeEach(func() {
 				By("Creating a testing core cluster object")
-				coreCluster = capibuilder.Cluster().WithNamespace(testNamespaceName).WithName(testInfraName).Build()
+				coreCluster = clusterv1resourcebuilder.Cluster().WithNamespace(testNamespaceName).WithName(testInfraName).Build()
 				Eventually(cl.Create(ctx, coreCluster)).Should(Succeed())
 			})
 
 			Context("When there is no infra cluster", func() {
 				It("should not create the infra cluster", func() {
-					testInfraCluster := capabuilder.AWSCluster().WithName(testInfraName).WithNamespace(testNamespaceName).Build()
+					testInfraCluster := awsv1resourcebuilder.AWSCluster().WithName(testInfraName).WithNamespace(testNamespaceName).Build()
 					Consistently(komega.Get(testInfraCluster), "1s").Should(MatchError("awsclusters.infrastructure.cluster.x-k8s.io \"test-ocp-infrastructure-name\" not found"))
 				})
 			})
@@ -216,18 +216,18 @@ var _ = Describe("Reconcile Core cluster", func() {
 			Context("When there is an infra cluster", func() {
 				BeforeEach(func() {
 					By("Creating a testing infra cluster")
-					infraCluster := capabuilder.AWSCluster().WithName(testInfraName).WithNamespace(testNamespaceName).Build()
+					infraCluster := awsv1resourcebuilder.AWSCluster().WithName(testInfraName).WithNamespace(testNamespaceName).Build()
 					Eventually(cl.Create(ctx, infraCluster)).Should(Succeed())
 				})
 
 				It("should update core cluster status", func() {
-					testCoreCluster := capibuilder.Cluster().WithName(testInfraName).WithNamespace(testNamespaceName).Build()
+					testCoreCluster := clusterv1resourcebuilder.Cluster().WithName(testInfraName).WithNamespace(testNamespaceName).Build()
 					Eventually(komega.Get(testCoreCluster)).Should(Succeed(), "should have been able to successfully get the core cluster")
 					Eventually(komega.Object(testCoreCluster)).Should(
 						HaveField("Status.Conditions", SatisfyAll(
 							Not(BeEmpty()),
 							ContainElement(SatisfyAll(
-								HaveField("Type", Equal(capiv1.ControlPlaneInitializedCondition)),
+								HaveField("Type", Equal(clusterv1.ControlPlaneInitializedCondition)),
 								HaveField("Status", Equal(corev1.ConditionTrue)),
 							)),
 						)),
@@ -266,7 +266,7 @@ var _ = Describe("Reconcile Core cluster", func() {
 
 		Context("When there is no core cluster", func() {
 			It("should not create a core cluster", func() {
-				testCoreCluster := capibuilder.Cluster().WithName(testInfraName).WithNamespace(testNamespaceName).Build()
+				testCoreCluster := clusterv1resourcebuilder.Cluster().WithName(testInfraName).WithNamespace(testNamespaceName).Build()
 				Consistently(komega.Get(testCoreCluster), "1s").Should(MatchError("clusters.cluster.x-k8s.io \"test-ocp-infrastructure-name\" not found"))
 			})
 		})

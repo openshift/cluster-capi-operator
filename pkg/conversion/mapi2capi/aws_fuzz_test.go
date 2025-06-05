@@ -36,12 +36,12 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	capav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
-	capiv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
 const (
-	mapiNamespace = "openshift-machine-api"
+	awsProviderSpecKind = "AWSMachineProviderConfig"
 )
 
 var _ = Describe("AWS Fuzz (mapi2capi)", func() {
@@ -52,19 +52,19 @@ var _ = Describe("AWS Fuzz (mapi2capi)", func() {
 		},
 	}
 
-	infraCluster := &capav1.AWSCluster{
-		Spec: capav1.AWSClusterSpec{
+	infraCluster := &awsv1.AWSCluster{
+		Spec: awsv1.AWSClusterSpec{
 			Region: "us-east-1",
 		},
 	}
 
 	Context("AWSMachine Conversion", func() {
-		fromMachineAndAWSMachineAndAWSCluster := func(machine *capiv1.Machine, infraMachine client.Object, infraCluster client.Object) capi2mapi.MachineAndInfrastructureMachine {
-			awsMachine, ok := infraMachine.(*capav1.AWSMachine)
-			Expect(ok).To(BeTrue(), "input infra machine should be of type %T, got %T", &capav1.AWSMachine{}, infraMachine)
+		fromMachineAndAWSMachineAndAWSCluster := func(machine *clusterv1.Machine, infraMachine client.Object, infraCluster client.Object) capi2mapi.MachineAndInfrastructureMachine {
+			awsMachine, ok := infraMachine.(*awsv1.AWSMachine)
+			Expect(ok).To(BeTrue(), "input infra machine should be of type %T, got %T", &awsv1.AWSMachine{}, infraMachine)
 
-			awsCluster, ok := infraCluster.(*capav1.AWSCluster)
-			Expect(ok).To(BeTrue(), "input infra cluster should be of type %T, got %T", &capav1.AWSCluster{}, infraCluster)
+			awsCluster, ok := infraCluster.(*awsv1.AWSCluster)
+			Expect(ok).To(BeTrue(), "input infra cluster should be of type %T, got %T", &awsv1.AWSCluster{}, infraCluster)
 
 			return capi2mapi.FromMachineAndAWSMachineAndAWSCluster(machine, awsMachine, awsCluster)
 		}
@@ -82,12 +82,12 @@ var _ = Describe("AWS Fuzz (mapi2capi)", func() {
 	})
 
 	Context("AWSMachineSet Conversion", func() {
-		fromMachineSetAndAWSMachineTemplateAndAWSCluster := func(machineSet *capiv1.MachineSet, infraMachineTemplate client.Object, infraCluster client.Object) capi2mapi.MachineSetAndMachineTemplate {
-			awsMachineTemplate, ok := infraMachineTemplate.(*capav1.AWSMachineTemplate)
-			Expect(ok).To(BeTrue(), "input infra machine template should be of type %T, got %T", &capav1.AWSMachineTemplate{}, infraMachineTemplate)
+		fromMachineSetAndAWSMachineTemplateAndAWSCluster := func(machineSet *clusterv1.MachineSet, infraMachineTemplate client.Object, infraCluster client.Object) capi2mapi.MachineSetAndMachineTemplate {
+			awsMachineTemplate, ok := infraMachineTemplate.(*awsv1.AWSMachineTemplate)
+			Expect(ok).To(BeTrue(), "input infra machine template should be of type %T, got %T", &awsv1.AWSMachineTemplate{}, infraMachineTemplate)
 
-			awsCluster, ok := infraCluster.(*capav1.AWSCluster)
-			Expect(ok).To(BeTrue(), "input infra cluster should be of type %T, got %T", &capav1.AWSCluster{}, infraCluster)
+			awsCluster, ok := infraCluster.(*awsv1.AWSCluster)
+			Expect(ok).To(BeTrue(), "input infra cluster should be of type %T, got %T", &awsv1.AWSCluster{}, infraCluster)
 
 			return capi2mapi.FromMachineSetAndAWSMachineTemplateAndAWSCluster(machineSet, awsMachineTemplate, awsCluster)
 		}
@@ -207,8 +207,8 @@ func awsProviderSpecFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interfa
 			c.FuzzNoCustom(ps)
 
 			// The type meta is always set to these values by the conversion.
-			ps.Kind = "AWSMachineProviderConfig"
-			ps.APIVersion = "machine.openshift.io/v1beta1"
+			ps.APIVersion = mapiv1.GroupVersion.String()
+			ps.Kind = awsProviderSpecKind
 
 			// region must match the input AWSCluster so force it here.
 			ps.Placement.Region = "us-east-1"
@@ -225,7 +225,7 @@ func awsProviderSpecFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interfa
 			// TODO(OCPCLOUD-2713): remove this, temporarily hardcoded for AWS to make the migration to work.
 			ps.CredentialsSecret = &corev1.LocalObjectReference{Name: "aws-cloud-credentials"}
 
-			// At lest one device mapping must have no device name.
+			// At least one device mapping must have no device name.
 			rootFound := false
 			for i := range ps.BlockDevices {
 				if ps.BlockDevices[i].DeviceName == nil {

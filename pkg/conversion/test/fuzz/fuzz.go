@@ -42,7 +42,7 @@ import (
 	runtimeserializer "k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/utils/ptr"
 
-	capiv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
 const powerVSMachineKind = "IBMPowerVSMachine"
@@ -50,12 +50,12 @@ const powerVSMachineKind = "IBMPowerVSMachine"
 // CAPI2MAPIMachineConverterConstructor is a function that constructs a CAPI to MAPI Machine converter.
 // Since the CAPI to MAPI conversion relies on different types, it is expected that the constructor is wrapped in a closure
 // that handles type assertions to fit the interface.
-type CAPI2MAPIMachineConverterConstructor func(*capiv1.Machine, client.Object, client.Object) capi2mapi.MachineAndInfrastructureMachine
+type CAPI2MAPIMachineConverterConstructor func(*clusterv1.Machine, client.Object, client.Object) capi2mapi.MachineAndInfrastructureMachine
 
 // CAPI2MAPIMachineSetConverterConstructor is a function that constructs a CAPI to MAPI MachineSet converter.
 // Since the CAPI to MAPI conversion relies on different types, it is expected that the constructor is wrapped in a closure
 // that handles type assertions to fit the interface.
-type CAPI2MAPIMachineSetConverterConstructor func(*capiv1.MachineSet, client.Object, client.Object) capi2mapi.MachineSetAndMachineTemplate
+type CAPI2MAPIMachineSetConverterConstructor func(*clusterv1.MachineSet, client.Object, client.Object) capi2mapi.MachineSetAndMachineTemplate
 
 // MAPI2CAPIMachineConverterConstructor is a function that constructs a MAPI to CAPI Machine converter.
 type MAPI2CAPIMachineConverterConstructor func(*mapiv1.Machine, *configv1.Infrastructure) mapi2capi.Machine
@@ -68,7 +68,7 @@ type StringFuzzer func(fuzz.Continue) string
 
 // capiToMapiMachineFuzzInput is a struct that holds the input for the CAPI to MAPI fuzz test.
 type capiToMapiMachineFuzzInput struct {
-	machine                  *capiv1.Machine
+	machine                  *clusterv1.Machine
 	infra                    *configv1.Infrastructure
 	infraMachine             client.Object
 	infraCluster             client.Object
@@ -87,7 +87,7 @@ func CAPI2MAPIMachineRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv1.I
 	fz := getFuzzer(scheme, fuzzerFuncs...)
 
 	for i := 0; i < 1000; i++ {
-		m := &capiv1.Machine{}
+		m := &clusterv1.Machine{}
 		fz.Fuzz(m)
 		fz.Fuzz(infraMachine)
 
@@ -150,7 +150,7 @@ func CAPI2MAPIMachineRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv1.I
 
 // capiToMapiMachineSetFuzzInput is a struct that holds the input for the CAPI to MAPI fuzz test.
 type capiToMapiMachineSetFuzzInput struct {
-	machineSet               *capiv1.MachineSet
+	machineSet               *clusterv1.MachineSet
 	infra                    *configv1.Infrastructure
 	infraMachineTemplate     client.Object
 	infraCluster             client.Object
@@ -167,7 +167,7 @@ func CAPI2MAPIMachineSetRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv
 	fz := getFuzzer(scheme, fuzzerFuncs...)
 
 	for i := 0; i < 1000; i++ {
-		m := &capiv1.MachineSet{}
+		m := &clusterv1.MachineSet{}
 		fz.Fuzz(m)
 		fz.Fuzz(infraMachineTemplate)
 
@@ -382,7 +382,7 @@ func ObjectMetaFuzzerFuncs(namespace string) fuzzer.FuzzerFuncs {
 
 				// Clear fields that are not required for conversion.
 				o.GenerateName = ""
-				o.SelfLink = "" //nolint:staticcheck
+				o.SelfLink = ""
 				o.UID = ""
 				o.ResourceVersion = ""
 				o.Generation = 0
@@ -411,7 +411,7 @@ func ObjectMetaFuzzerFuncs(namespace string) fuzzer.FuzzerFuncs {
 func CAPIMachineFuzzerFuncs(providerIDFuzz StringFuzzer, infraKind, infraAPIVersion, clusterName string) fuzzer.FuzzerFuncs {
 	return func(codecs runtimeserializer.CodecFactory) []interface{} {
 		return []interface{}{
-			func(b *capiv1.Bootstrap, c fuzz.Continue) {
+			func(b *clusterv1.Bootstrap, c fuzz.Continue) {
 				c.FuzzNoCustom(b)
 
 				// Clear fields that are not supported in the bootstrap spec.
@@ -422,7 +422,7 @@ func CAPIMachineFuzzerFuncs(providerIDFuzz StringFuzzer, infraKind, infraAPIVers
 					b.DataSecretName = nil
 				}
 			},
-			func(m *capiv1.MachineSpec, c fuzz.Continue) {
+			func(m *clusterv1.MachineSpec, c fuzz.Continue) {
 				c.FuzzNoCustom(m)
 
 				m.ClusterName = clusterName
@@ -446,13 +446,13 @@ func CAPIMachineFuzzerFuncs(providerIDFuzz StringFuzzer, infraKind, infraAPIVers
 					m.FailureDomain = nil
 				}
 			},
-			func(m *capiv1.Machine, c fuzz.Continue) {
+			func(m *clusterv1.Machine, c fuzz.Continue) {
 				c.FuzzNoCustom(m)
 
 				if m.Labels == nil {
 					m.Labels = make(map[string]string)
 				}
-				m.Labels[capiv1.ClusterNameLabel] = clusterName
+				m.Labels[clusterv1.ClusterNameLabel] = clusterName
 
 				// The reference from a Machine to the InfraMachine should
 				// always use the same name and namespace as the Machine itself.
@@ -474,7 +474,7 @@ func CAPIMachineFuzzerFuncs(providerIDFuzz StringFuzzer, infraKind, infraAPIVers
 func CAPIMachineSetFuzzerFuncs(infraTemplateKind, infraAPIVersion, clusterName string) fuzzer.FuzzerFuncs {
 	return func(codecs runtimeserializer.CodecFactory) []interface{} {
 		return []interface{}{
-			func(t *capiv1.MachineTemplateSpec, c fuzz.Continue) {
+			func(t *clusterv1.MachineTemplateSpec, c fuzz.Continue) {
 				c.FuzzNoCustom(t)
 
 				if len(t.Annotations) == 0 {
@@ -484,9 +484,9 @@ func CAPIMachineSetFuzzerFuncs(infraTemplateKind, infraAPIVersion, clusterName s
 				if t.Labels == nil {
 					t.Labels = make(map[string]string)
 				}
-				t.Labels[capiv1.ClusterNameLabel] = clusterName
+				t.Labels[clusterv1.ClusterNameLabel] = clusterName
 			},
-			func(m *capiv1.MachineSetSpec, c fuzz.Continue) {
+			func(m *clusterv1.MachineSetSpec, c fuzz.Continue) {
 				c.FuzzNoCustom(m)
 
 				m.ClusterName = clusterName
@@ -497,13 +497,13 @@ func CAPIMachineSetFuzzerFuncs(infraTemplateKind, infraAPIVersion, clusterName s
 
 				fuzzCAPIMachineSetSpecDeletePolicy(&m.DeletePolicy, c)
 			},
-			func(m *capiv1.MachineSet, c fuzz.Continue) {
+			func(m *clusterv1.MachineSet, c fuzz.Continue) {
 				c.FuzzNoCustom(m)
 
 				if m.Labels == nil {
 					m.Labels = make(map[string]string)
 				}
-				m.Labels[capiv1.ClusterNameLabel] = clusterName
+				m.Labels[clusterv1.ClusterNameLabel] = clusterName
 
 				// The reference from a MachineSet to the InfraMachine should
 				// always use the same name and namespace as the Machine itself.
@@ -646,11 +646,11 @@ func fuzzMAPIMachineSetSpecDeletePolicy(deletePolicy *string, c fuzz.Continue) {
 func fuzzCAPIMachineSetSpecDeletePolicy(deletePolicy *string, c fuzz.Continue) {
 	switch c.Int31n(3) {
 	case 0:
-		*deletePolicy = string(capiv1.RandomMachineSetDeletePolicy)
+		*deletePolicy = string(clusterv1.RandomMachineSetDeletePolicy)
 	case 1:
-		*deletePolicy = string(capiv1.NewestMachineSetDeletePolicy)
+		*deletePolicy = string(clusterv1.NewestMachineSetDeletePolicy)
 	case 2:
-		*deletePolicy = string(capiv1.OldestMachineSetDeletePolicy)
+		*deletePolicy = string(clusterv1.OldestMachineSetDeletePolicy)
 		// case 3:
 		// 	*deletePolicy = "" // Do not fuzz CAPI MachineSetDeletePolicy to the empty value.
 		// It will otherwise get converted to CAPI RandomMachineSetDeletePolicy (default in CAPI) which

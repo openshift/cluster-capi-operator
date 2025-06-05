@@ -1,5 +1,5 @@
 /*
-Copyright 2024 Red Hat, Inc.
+Copyright 2025 Red Hat, Inc.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -16,16 +16,9 @@ limitations under the License.
 package mapi2capi
 
 import (
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
-	"sigs.k8s.io/controller-runtime/pkg/client"
+	"errors"
 )
 
-// Machine represents a type holding MAPI Machine.
-type Machine interface {
-	ToMachineAndInfrastructureMachine() (*clusterv1.Machine, client.Object, []string, error)
-}
-
-// MachineSet represents a type holding MAPI MachineSet.
-type MachineSet interface {
-	ToMachineSetAndMachineTemplate() (*clusterv1.MachineSet, client.Object, []string, error)
-}
+var (
+	errUnexpectedObjectTypeForMachine = errors.New("unexpected type for capaMachineObj")
+)

@@ -26,7 +26,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
-	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
 	"sigs.k8s.io/cluster-api/util/annotations"
 	conditionsv1beta2 "sigs.k8s.io/cluster-api/util/conditions/v1beta2"
@@ -79,7 +79,7 @@ func (r *MachineSetMigrationReconciler) SetupWithManager(mgr ctrl.Manager) error
 		Named(controllerName).
 		For(&machinev1beta1.MachineSet{}, builder.WithPredicates(util.FilterNamespace(r.MAPINamespace))).
 		Watches(
-			&capiv1beta1.MachineSet{},
+			&clusterv1.MachineSet{},
 			handler.EnqueueRequestsFromMapFunc(util.RewriteNamespace(r.MAPINamespace)),
 			builder.WithPredicates(util.FilterNamespace(r.CAPINamespace)),
 		).
@@ -215,12 +215,12 @@ func (r *MachineSetMigrationReconciler) isOldAuthoritativeResourcePaused(ctx con
 	}
 
 	// For MachineAuthorityMachineAPI, check the corresponding CAPI resource.
-	capiMachineSet := &capiv1beta1.MachineSet{}
+	capiMachineSet := &clusterv1.MachineSet{}
 	if err := r.Get(ctx, client.ObjectKey{Namespace: r.CAPINamespace, Name: ms.Name}, capiMachineSet); err != nil {
 		return false, fmt.Errorf("failed to get Cluster API machine set: %w", err)
 	}
 
-	machinePausedCondition := conditionsv1beta2.Get(capiMachineSet, capiv1beta1.PausedV1Beta2Condition)
+	machinePausedCondition := conditionsv1beta2.Get(capiMachineSet, clusterv1.PausedV1Beta2Condition)
 	if machinePausedCondition == nil {
 		return false, nil
 	}
@@ -239,14 +239,14 @@ func (r *MachineSetMigrationReconciler) ensureUnpauseRequestedOnNewAuthoritative
 	case machinev1beta1.MachineAuthorityClusterAPI:
 		// For requesting unpausing of a CAPI resource, remove the paused annotation on it.
 		// So check if the ClusterAPI resource has the paused annotation and if so remove it.
-		capiMachineSet := &capiv1beta1.MachineSet{}
+		capiMachineSet := &clusterv1.MachineSet{}
 		if err := r.Get(ctx, client.ObjectKey{Namespace: r.CAPINamespace, Name: mapiMachineSet.Name}, capiMachineSet); err != nil {
 			return fmt.Errorf("failed to get Cluster API machine set: %w", err)
 		}
 
 		if annotations.HasPaused(capiMachineSet) {
 			capiMachineSetCopy := capiMachineSet.DeepCopy()
-			delete(capiMachineSet.Annotations, capiv1beta1.PausedAnnotation)
+			delete(capiMachineSet.Annotations, clusterv1.PausedAnnotation)
 
 			if err := r.Patch(ctx, capiMachineSet, client.MergeFrom(capiMachineSetCopy)); err != nil {
 				return fmt.Errorf("failed to patch Cluster API machine set: %w", err)
@@ -280,14 +280,14 @@ func (r *MachineSetMigrationReconciler) requestOldAuthoritativeResourcePaused(ct
 		// For requesting pausing of a CAPI resource, set the paused annotation on it.
 		// The spec.AuthoritativeAPI is set to MachineAPI, meaning that the old authoritativeAPI was ClusterAPI.
 		// So Check if the ClusterAPI resource has the paused annotation, otherwise set it.
-		capiMachineSet := &capiv1beta1.MachineSet{}
+		capiMachineSet := &clusterv1.MachineSet{}
 		if err := r.Get(ctx, client.ObjectKey{Namespace: r.CAPINamespace, Name: ms.Name}, capiMachineSet); err != nil {
 			return false, fmt.Errorf("failed to get Cluster API machine set: %w", err)
 		}
 
 		if !annotations.HasPaused(capiMachineSet) {
 			capiMachineSetCopy := capiMachineSet.DeepCopy()
-			annotations.AddAnnotations(capiMachineSet, map[string]string{capiv1beta1.PausedAnnotation: ""})
+			annotations.AddAnnotations(capiMachineSet, map[string]string{clusterv1.PausedAnnotation: ""})
 			if err := r.Patch(ctx, capiMachineSet, client.MergeFrom(capiMachineSetCopy)); err != nil {
 				return false, fmt.Errorf("failed to patch Cluster API machine set: %w", err)
 			}
@@ -318,7 +318,7 @@ func (r *MachineSetMigrationReconciler) isSynchronizedGenerationMatchingOldAutho
 		// MachineAPI is the desired authoritative API but
 		// ClusterAPI is currently still the authoritative one.
 		// Check ClusterAPI generation against the synchronized one.
-		capiMachineSet := &capiv1beta1.MachineSet{}
+		capiMachineSet := &clusterv1.MachineSet{}
 		if err := r.Get(ctx, client.ObjectKey{Namespace: r.CAPINamespace, Name: mapiMachineSet.Name}, capiMachineSet); err != nil {
 			return false, fmt.Errorf("failed to get Cluster API machine set: %w", err)
 		}

@@ -27,7 +27,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
-	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util/annotations"
 	conditionsv1beta2 "sigs.k8s.io/cluster-api/util/conditions/v1beta2"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -79,7 +79,7 @@ func (r *MachineMigrationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Named(controllerName).
 		For(&machinev1beta1.Machine{}, builder.WithPredicates(util.FilterNamespace(r.MAPINamespace))).
 		Watches(
-			&capiv1beta1.Machine{},
+			&clusterv1.Machine{},
 			handler.EnqueueRequestsFromMapFunc(util.RewriteNamespace(r.MAPINamespace)),
 			builder.WithPredicates(util.FilterNamespace(r.CAPINamespace)),
 		).
@@ -218,12 +218,12 @@ func (r *MachineMigrationReconciler) isOldAuthoritativeResourcePaused(ctx contex
 	}
 
 	// For MachineAuthorityMachineAPI, check the corresponding CAPI resource.
-	capiMachine := &capiv1beta1.Machine{}
+	capiMachine := &clusterv1.Machine{}
 	if err := r.Get(ctx, client.ObjectKey{Namespace: r.CAPINamespace, Name: m.Name}, capiMachine); err != nil {
 		return false, fmt.Errorf("failed to get Cluster API machine: %w", err)
 	}
 
-	machinePausedCondition := conditionsv1beta2.Get(capiMachine, capiv1beta1.PausedV1Beta2Condition)
+	machinePausedCondition := conditionsv1beta2.Get(capiMachine, clusterv1.PausedV1Beta2Condition)
 	if machinePausedCondition == nil {
 		return false, nil
 	}
@@ -235,7 +235,7 @@ func (r *MachineMigrationReconciler) isOldAuthoritativeResourcePaused(ctx contex
 		return false, fmt.Errorf("failed to get Cluster API infra machine: %w", err)
 	}
 
-	infraMachinePausedConditionStatus, err := util.GetConditionStatus(infraMachine, capiv1beta1.PausedV1Beta2Condition)
+	infraMachinePausedConditionStatus, err := util.GetConditionStatus(infraMachine, clusterv1.PausedV1Beta2Condition)
 	if err != nil {
 		return false, fmt.Errorf("unable to get paused condition for %s/%s: %w", infraMachine.GetNamespace(), infraMachine.GetName(), err)
 	}
@@ -250,7 +250,7 @@ func (r *MachineMigrationReconciler) ensureUnpauseRequestedOnNewAuthoritativeRes
 	case machinev1beta1.MachineAuthorityClusterAPI:
 		// For requesting unpausing of a CAPI resource, remove the paused annotation on it.
 		// So check if the ClusterAPI resource has the paused annotation and if so remove it.
-		capiMachine := &capiv1beta1.Machine{}
+		capiMachine := &clusterv1.Machine{}
 		if err := r.Get(ctx, client.ObjectKey{Namespace: r.CAPINamespace, Name: mapiMachine.Name}, capiMachine); err != nil {
 			return fmt.Errorf("failed to get Cluster API machine: %w", err)
 		}
@@ -264,7 +264,7 @@ func (r *MachineMigrationReconciler) ensureUnpauseRequestedOnNewAuthoritativeRes
 
 		if annotations.HasPaused(capiMachine) {
 			capiMachineCopy := capiMachine.DeepCopy()
-			delete(capiMachine.Annotations, capiv1beta1.PausedAnnotation)
+			delete(capiMachine.Annotations, clusterv1.PausedAnnotation)
 
 			if err := r.Patch(ctx, capiMachine, client.MergeFrom(capiMachineCopy)); err != nil {
 				return fmt.Errorf("failed to patch Cluster API machine: %w", err)
@@ -276,7 +276,7 @@ func (r *MachineMigrationReconciler) ensureUnpauseRequestedOnNewAuthoritativeRes
 			if !ok {
 				return fmt.Errorf("unable to assert Cluster API infra machine as client.Object: %w", err)
 			}
-			util.RemoveAnnotation(infraMachine, capiv1beta1.PausedAnnotation)
+			util.RemoveAnnotation(infraMachine, clusterv1.PausedAnnotation)
 
 			if err := r.Patch(ctx, infraMachine, client.MergeFrom(infraMachineCopy)); err != nil {
 				return fmt.Errorf("failed to patch Cluster API infra machine: %w", err)
@@ -305,7 +305,7 @@ func (r *MachineMigrationReconciler) requestOldAuthoritativeResourcePaused(ctx c
 		// For requesting pausing of a CAPI resource, set the paused annotation on it.
 		// The spec.AuthoritativeAPI is set to MachineAPI, meaning that the old authoritativeAPI was ClusterAPI.
 		// So Check if the ClusterAPI resource has the paused annotation, otherwise set it.
-		capiMachine := &capiv1beta1.Machine{}
+		capiMachine := &clusterv1.Machine{}
 		if err := r.Get(ctx, client.ObjectKey{Namespace: r.CAPINamespace, Name: m.Name}, capiMachine); err != nil {
 			return false, fmt.Errorf("failed to get Cluster API machine: %w", err)
 		}
@@ -319,7 +319,7 @@ func (r *MachineMigrationReconciler) requestOldAuthoritativeResourcePaused(ctx c
 
 		if !annotations.HasPaused(capiMachine) {
 			capiMachineCopy := capiMachine.DeepCopy()
-			annotations.AddAnnotations(capiMachine, map[string]string{capiv1beta1.PausedAnnotation: ""})
+			annotations.AddAnnotations(capiMachine, map[string]string{clusterv1.PausedAnnotation: ""})
 			if err := r.Patch(ctx, capiMachine, client.MergeFrom(capiMachineCopy)); err != nil {
 				return false, fmt.Errorf("failed to patch Cluster API machine: %w", err)
 			}
@@ -332,7 +332,7 @@ func (r *MachineMigrationReconciler) requestOldAuthoritativeResourcePaused(ctx c
 			if !ok {
 				return false, fmt.Errorf("unable to assert Cluster API infra machine as client.Object: %w", err)
 			}
-			annotations.AddAnnotations(infraMachine, map[string]string{capiv1beta1.PausedAnnotation: ""})
+			annotations.AddAnnotations(infraMachine, map[string]string{clusterv1.PausedAnnotation: ""})
 			if err := r.Patch(ctx, infraMachine, client.MergeFrom(infraMachineCopy)); err != nil {
 				return false, fmt.Errorf("failed to patch Cluster API infra machine: %w", err)
 			}
@@ -358,7 +358,7 @@ func (r *MachineMigrationReconciler) isSynchronizedGenerationMatchingOldAuthorit
 		// MachineAPI is the desired authoritative API but
 		// ClusterAPI is currently still the authoritative one.
 		// Check ClusterAPI generation against the synchronized one.
-		capiMachine := &capiv1beta1.Machine{}
+		capiMachine := &clusterv1.Machine{}
 		if err := r.Get(ctx, client.ObjectKey{Namespace: r.CAPINamespace, Name: mapiMachine.Name}, capiMachine); err != nil {
 			return false, fmt.Errorf("failed to get Cluster API machine: %w", err)
 		}

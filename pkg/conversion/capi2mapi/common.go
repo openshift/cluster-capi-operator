@@ -23,7 +23,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
-	capiv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
 // RawExtensionFromProviderSpec marshals the machine provider spec.
@@ -58,7 +58,7 @@ func convertCAPILabelsToMAPILabels(capiLabels map[string]string) map[string]stri
 
 	for k, v := range capiLabels {
 		// Transform specific node-role label.
-		if strings.HasPrefix(k, capiv1.NodeRoleLabelPrefix) {
+		if strings.HasPrefix(k, clusterv1.NodeRoleLabelPrefix) {
 			if _, role, found := strings.Cut(k, "/"); found {
 				mapiLabels["machine.openshift.io/cluster-api-machine-type"] = role
 				mapiLabels["machine.openshift.io/cluster-api-machine-role"] = role
@@ -132,7 +132,7 @@ func convertCAPIAnnotationsToMAPIAnnotations(capiAnnotations map[string]string) 
 
 	toNotConvertAnnotations := sets.New(
 		// We want to skip the CAPI paused annotation to be copied over to MAPI.
-		capiv1.PausedAnnotation,
+		clusterv1.PausedAnnotation,
 	)
 
 	for k, v := range capiAnnotations {
