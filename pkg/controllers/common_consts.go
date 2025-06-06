@@ -43,4 +43,7 @@ const (
 	// ReasonResourceSynchronized denotes that the resource is synchronized
 	// successfully.
 	ReasonResourceSynchronized = "ResourceSynchronized"
+
+	// ReasonAuthoritativeAPIChanged indicates that sync state is stale due to a change of authoritativeAPI.
+	ReasonAuthoritativeAPIChanged = "AuthoritativeAPIChanged"
 )

@@ -30,6 +30,7 @@ import (
 	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
 	machinev1applyconfigs "github.com/openshift/client-go/machine/applyconfigurations/machine/v1beta1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/synccommon"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/capi2mapi"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/mapi2capi"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
@@ -102,9 +103,6 @@ var (
 
 	// errPlatformNotSupported is returned when the platform is not supported.
 	errPlatformNotSupported = errors.New("error determining InfraMachine type, platform not supported")
-
-	// errUnrecognizedConditionStatus is returned when the condition status is not recognized.
-	errUnrecognizedConditionStatus = errors.New("error unrecognized condition status")
 
 	// errUnexpectedInfraMachineType is returned when we receive an unexpected InfraMachine type.
 	errUnexpectedInfraMachineType = errors.New("unexpected InfraMachine type")
@@ -1333,50 +1331,8 @@ func compareCAPIInfraMachines(platform configv1.PlatformType, infraMachine1, inf
 // using a server side apply patch. We do this to force ownership of the
 // 'Synchronized' condition and 'SynchronizedGeneration'.
 func (r *MachineSyncReconciler) applySynchronizedConditionWithPatch(ctx context.Context, mapiMachine *machinev1beta1.Machine, status corev1.ConditionStatus, reason, message string, generation *int64) error {
-	var (
-		severity               machinev1beta1.ConditionSeverity
-		synchronizedGeneration int64
-	)
-
-	switch status {
-	case corev1.ConditionTrue:
-		severity = machinev1beta1.ConditionSeverityNone
-
-		if generation != nil {
-			// Update the SynchronizedGeneration to the newer Generation value.
-			synchronizedGeneration = *generation
-		}
-	case corev1.ConditionFalse:
-		severity = machinev1beta1.ConditionSeverityError
-		// Restore the old SynchronizedGeneration, otherwise if that's not set the existing one will be cleared.
-		synchronizedGeneration = mapiMachine.Status.SynchronizedGeneration
-	case corev1.ConditionUnknown:
-		severity = machinev1beta1.ConditionSeverityInfo
-		// Restore the old SynchronizedGeneration, otherwise if that's not set the existing one will be cleared.
-		synchronizedGeneration = mapiMachine.Status.SynchronizedGeneration
-	default:
-		return fmt.Errorf("%w: %s", errUnrecognizedConditionStatus, status)
-	}
-
-	conditionAc := machinev1applyconfigs.Condition().
-		WithType(controllers.SynchronizedCondition).
-		WithStatus(status).
-		WithReason(reason).
-		WithMessage(message).
-		WithSeverity(severity)
-
-	util.SetLastTransitionTime(controllers.SynchronizedCondition, mapiMachine.Status.Conditions, conditionAc)
-
-	statusAc := machinev1applyconfigs.MachineStatus().
-		WithConditions(conditionAc).
-		WithSynchronizedGeneration(synchronizedGeneration)
-
-	msAc := machinev1applyconfigs.Machine(mapiMachine.GetName(), mapiMachine.GetNamespace()).
-		WithStatus(statusAc)
-
-	if err := r.Status().Patch(ctx, mapiMachine, util.ApplyConfigPatch(msAc), client.ForceOwnership, client.FieldOwner(controllerName+"-SynchronizedCondition")); err != nil {
-		return fmt.Errorf("failed to patch Machine API machine status with synchronized condition: %w", err)
-	}
-
-	return nil
+	return synccommon.ApplySyncStatus[*machinev1applyconfigs.MachineStatusApplyConfiguration](
+		ctx, r.Client, controllerName,
+		machinev1applyconfigs.Machine, mapiMachine,
+		status, reason, message, generation)
 }

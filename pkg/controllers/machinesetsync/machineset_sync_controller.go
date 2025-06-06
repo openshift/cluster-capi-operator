@@ -27,6 +27,7 @@ import (
 	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/machinesync"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/synccommon"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/capi2mapi"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/mapi2capi"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
@@ -69,9 +70,6 @@ var (
 
 	// errAssertingCAPIPowerVSMachineTemplate is returned when we encounter an issue asserting a client.Object into a IBMPowerVSMachineTemplate.
 	errAssertingCAPIIBMPowerVSMachineTemplate = errors.New("error asserting the CAPI IBMPowerVSMachineTemplate object")
-
-	// errUnrecognizedConditionStatus is returned when the condition status is not recognized.
-	errUnrecognizedConditionStatus = errors.New("error unrecognized condition status")
 
 	// errUnsuportedOwnerKindForConversion is returned when the owner kind is not supported for conversion.
 	errUnsuportedOwnerKindForConversion = errors.New("unsupported owner kind for conversion")
@@ -564,52 +562,10 @@ func (r *MachineSetSyncReconciler) convertMAPIToCAPIMachineSet(mapiMachineSet *m
 // using a server side apply patch. We do this to force ownership of the
 // 'Synchronized' condition and 'SynchronizedGeneration'.
 func (r *MachineSetSyncReconciler) applySynchronizedConditionWithPatch(ctx context.Context, mapiMachineSet *machinev1beta1.MachineSet, status corev1.ConditionStatus, reason, message string, generation *int64) error {
-	var (
-		severity               machinev1beta1.ConditionSeverity
-		synchronizedGeneration int64
-	)
-
-	switch status {
-	case corev1.ConditionTrue:
-		severity = machinev1beta1.ConditionSeverityNone
-
-		if generation != nil {
-			// Update the SynchronizedGeneration to the newer Generation value.
-			synchronizedGeneration = *generation
-		}
-	case corev1.ConditionFalse:
-		severity = machinev1beta1.ConditionSeverityError
-		// Restore the old SynchronizedGeneration, otherwise if that's not set the existing one will be cleared.
-		synchronizedGeneration = mapiMachineSet.Status.SynchronizedGeneration
-	case corev1.ConditionUnknown:
-		severity = machinev1beta1.ConditionSeverityInfo
-		// Restore the old SynchronizedGeneration, otherwise if that's not set the existing one will be cleared.
-		synchronizedGeneration = mapiMachineSet.Status.SynchronizedGeneration
-	default:
-		return fmt.Errorf("%w: %s", errUnrecognizedConditionStatus, status)
-	}
-
-	conditionAc := machinev1applyconfigs.Condition().
-		WithType(controllers.SynchronizedCondition).
-		WithStatus(status).
-		WithReason(reason).
-		WithMessage(message).
-		WithSeverity(severity)
-
-	util.SetLastTransitionTime(controllers.SynchronizedCondition, mapiMachineSet.Status.Conditions, conditionAc)
-
-	statusAc := machinev1applyconfigs.MachineSetStatus().
-		WithConditions(conditionAc).
-		WithSynchronizedGeneration(synchronizedGeneration)
-
-	msAc := machinev1applyconfigs.MachineSet(mapiMachineSet.GetName(), mapiMachineSet.GetNamespace()).
-		WithStatus(statusAc)
-
-	if err := r.Status().Patch(ctx, mapiMachineSet, util.ApplyConfigPatch(msAc), client.ForceOwnership, client.FieldOwner(controllerName+"-SynchronizedCondition")); err != nil {
-		return fmt.Errorf("failed to patch MAPI machine set status with synchronized condition: %w", err)
-	}
-
-	return nil
+	return synccommon.ApplySyncStatus[*machinev1applyconfigs.MachineSetStatusApplyConfiguration](
+		ctx, r.Client, controllerName,
+		machinev1applyconfigs.MachineSet, mapiMachineSet,
+		status, reason, message, generation)
 }
 
 // createOrUpdateCAPIInfraMachineTemplate creates a CAPI infra machine template from a MAPI machine set, or updates if it exists and it is out of date.

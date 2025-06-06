@@ -277,15 +277,9 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 			Context("when the MAPI machine providerSpec gets updated", func() {
 				BeforeEach(func() {
 					By("Updating the MAPI machine providerSpec")
-					modifiedMAPIMachineBuilder := machinev1resourcebuilder.Machine().
-						WithNamespace(mapiNamespace.GetName()).
-						WithName(mapiMachine.Name).
-						WithProviderSpecBuilder(machinev1resourcebuilder.AWSProviderSpec().WithLoadBalancers(nil).WithInstanceType("m6i.2xlarge")).Build()
-
-					mapiMachineCopy := mapiMachine.DeepCopy()
-					mapiMachineCopy.Spec.ProviderSpec = modifiedMAPIMachineBuilder.Spec.ProviderSpec
-
-					Expect(k8sClient.Update(ctx, mapiMachineCopy)).Should(Succeed())
+					Eventually(k.Update(mapiMachine, func() {
+						mapiMachine.Spec.ProviderSpec.Value = machinev1resourcebuilder.AWSProviderSpec().WithLoadBalancers(nil).WithInstanceType("m6i.2xlarge").BuildRawExtension()
+					})).Should(Succeed())
 				})
 
 				It("should recreate the CAPI infra machine", func() {
