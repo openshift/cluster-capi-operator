@@ -28,6 +28,9 @@ import (
 var (
 	// errPlatformNotSupported is returned when the platform is not supported.
 	errPlatformNotSupported = errors.New("error determining InfraMachine type, platform not supported")
+
+	// ErrInvalidSpecAuthoritativeAPI is returned when spec.authoritativeAPI has a value which is not permitted.
+	ErrInvalidSpecAuthoritativeAPI = errors.New("invalid spec.authoritativeAPI")
 )
 
 // InitInfraMachineAndInfraClusterFromProvider returns the correct InfraMachine and InfraCluster implementation
