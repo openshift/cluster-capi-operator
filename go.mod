@@ -1,6 +1,6 @@
 module github.com/openshift/cluster-capi-operator
 
-go 1.22
+go 1.22.0
 
 //replace (
 //	github.com/google/cel-go => github.com/google/cel-go v0.16.1
