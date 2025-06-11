@@ -521,6 +521,64 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 				// We could also mock the conversion interface.
 			})
 
+			Context("when the CAPI machine set is updated to reference a new AWSMachineTemplate with different instanceType", func() {
+				var newCapaMachineTemplate *awsv1.AWSMachineTemplate
+
+				BeforeEach(func() {
+					capiMachineSet = capiMachineSetBuilder.Build()
+
+					By("Waiting for initial synchronization")
+					Eventually(k.Object(mapiMachineSet), timeout).Should(
+						HaveField("Status.Conditions", ContainElement(
+							SatisfyAll(
+								HaveField("Type", Equal(consts.SynchronizedCondition)),
+								HaveField("Status", Equal(corev1.ConditionTrue)),
+								HaveField("Reason", Equal("ResourceSynchronized")),
+								HaveField("Message", Equal("Successfully synchronized CAPI MachineSet to MAPI")),
+							))),
+					)
+
+					By("Creating a new CAPA machine template with different instanceType")
+					newCapaMachineTemplate = capav1builder.AWSMachineTemplate().
+						WithNamespace(capiNamespace.GetName()).
+						WithName("new-machine-template").
+						WithInstanceType("m5.xlarge").
+						Build()
+					Expect(k8sClient.Create(ctx, newCapaMachineTemplate)).Should(Succeed())
+
+					By("Updating the CAPI machine set to reference the new template")
+					Eventually(k.Update(capiMachineSet, func() {
+						capiMachineSet.Spec.Template.Spec.InfrastructureRef.Name = newCapaMachineTemplate.Name
+					})).Should(Succeed())
+				})
+
+				It("should update the MAPI machine set instanceType to match the new template", func() {
+					Eventually(func() (string, error) {
+						if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(mapiMachineSet), mapiMachineSet); err != nil {
+							return "", err
+						}
+						providerSpec, err := mapi2capi.AWSProviderSpecFromRawExtension(mapiMachineSet.Spec.Template.Spec.ProviderSpec.Value)
+						if err != nil {
+							return "", err
+						}
+
+						return providerSpec.InstanceType, nil
+					}, timeout).Should(Equal("m5.xlarge"))
+				})
+
+				It("should update the synchronized condition on the MAPI machine set to True", func() {
+					Eventually(k.Object(mapiMachineSet), timeout).Should(
+						HaveField("Status.Conditions", ContainElement(
+							SatisfyAll(
+								HaveField("Type", Equal(consts.SynchronizedCondition)),
+								HaveField("Status", Equal(corev1.ConditionTrue)),
+								HaveField("Reason", Equal("ResourceSynchronized")),
+								HaveField("Message", Equal("Successfully synchronized CAPI MachineSet to MAPI")),
+							))),
+					)
+				})
+			})
+
 			Context("when the CAPI machine set does not exist", func() {
 				It("should create the CAPI machine set", func() {
 					Eventually(k.Get(
@@ -868,6 +926,41 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 		})
 	})
 
+})
+
+var _ = Describe("compareMAPIMachineSets", func() {
+	var mapiMachineSet1, mapiMachineSet2 *machinev1beta1.MachineSet
+
+	BeforeEach(func() {
+		mapiMachineSet1 = machinev1resourcebuilder.MachineSet().
+			WithName("test-machineset-1").
+			WithNamespace("test-namespace").
+			WithProviderSpecBuilder(machinev1resourcebuilder.AWSProviderSpec().WithInstanceType("m6i.xlarge")).
+			Build()
+
+		mapiMachineSet2 = machinev1resourcebuilder.MachineSet().
+			WithName("test-machineset-2").
+			WithNamespace("test-namespace").
+			WithProviderSpecBuilder(machinev1resourcebuilder.AWSProviderSpec().WithInstanceType("m5.xlarge")).
+			Build()
+	})
+
+	Context("when comparing MachineSets with different instance types", func() {
+		It("should detect differences in providerSpec", func() {
+			diff, err := compareMAPIMachineSets(mapiMachineSet1, mapiMachineSet2)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(diff).To(HaveKey(".providerSpec"))
+			Expect(diff[".providerSpec"]).NotTo(BeEmpty())
+		})
+	})
+
+	Context("when comparing identical MachineSets", func() {
+		It("should detect no differences", func() {
+			diff, err := compareMAPIMachineSets(mapiMachineSet1, mapiMachineSet1)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(diff).To(BeEmpty())
+		})
+	})
 })
 
 var _ = Describe("applySynchronizedConditionWithPatch", func() {

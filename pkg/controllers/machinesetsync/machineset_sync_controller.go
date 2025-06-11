@@ -1014,7 +1014,7 @@ func compareMAPIMachineSets(a, b *machinev1beta1.MachineSet) (map[string]any, er
 		return nil, fmt.Errorf("unable to parse first MAPI machine set providerSpec: %w", err)
 	}
 
-	ps2, err := mapi2capi.AWSProviderSpecFromRawExtension(a.Spec.Template.Spec.ProviderSpec.Value)
+	ps2, err := mapi2capi.AWSProviderSpecFromRawExtension(b.Spec.Template.Spec.ProviderSpec.Value)
 	if err != nil {
 		return nil, fmt.Errorf("unable to parse second MAPI machine set providerSpec: %w", err)
 	}
