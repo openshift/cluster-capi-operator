@@ -18,6 +18,7 @@ package machinesync
 
 import (
 	"context"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -743,68 +744,27 @@ metadata:
   name: mapi-machine-vap
 spec:
   matchResources:
-    matchPolicy: Equivalent
     namespaceSelector:
       matchLabels:
         name: openshift-machine-api
-  paramRef:
-    namespace: openshift-cluster-api
-    parameterNotFoundAction: Deny
-    selector:
-      matchLabels:
-  policyName: mapi-migration-machine-policy.openshift.io
-  validationActions:
-  - Deny`
+  policyName: mapi-machine-vap
+  validationActions: [Deny]`
 
 		policyYaml := `
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
-  name: "mapi-machine-vap"
+  name: mapi-machine-vap
 spec:
-  failurePolicy: Fail
-  paramKind:
-    apiVersion: cluster.x-k8s.io/v1beta1
-    kind: Machine
   matchConstraints:
     resourceRules:
     - apiGroups:   ["machine.openshift.io"]
       apiVersions: ["v1beta1"]
       operations:  ["UPDATE"]
       resources:   ["machines"]
-  #all must evaluate to true in order to run validations
-  matchConditions:
-    # Only check requests not coming from MAPI or migration SA - they can do what they want
-    - name: "check-only-non-service-account-requests"
-      expression: '!(request.userInfo.username in [
-              "system:serviceaccount:openshift-machine-api:machine-api-controllers",
-              "system:serviceaccount:openshift-cluster-api:machine-api-migration"
-              ])'
-    # if we're authoritativeAPI Machine API we don't need to run checks on user changes
-    - name: "check-authoritativeAPI-clusterapi"
-      expression: 'object.status.authoritativeAPI == "ClusterAPI"'
-    # if the param name doesn't match the request name, we don't need to run validations
-    # uncomment once we're not in cel playground
-    - name: "check-param-match"
-      expression: 'object.metadata.name == params.metadata.name'
-  
   # everything must evaluate to true in order to pass
   validations:
-  # I think these all need to be OR'd together? Otherwise:
-  # what happens if we dont change authoritativeAPI but do make an allowed label shift?
-  # but then what if we change the authoritativeAPI, but make a disallowed label shift?
-    # if we change the authoritativeAPI, we allow the change (evaluate true)
-    - expression: "object.spec.authoritativeAPI != oldObject.spec.authoritativeAPI || object.spec == oldObject.spec"
-      message: "You may only modify spec.authoritativeAPI. Any other change inside .spec is not allowed."
-    # we dont want there to exist any labels where we have a key starting openshift.io where there is a change (evaluate false if we find one)
-    - expression: "!object.metadata.labels.exists(key, (key.startsWith('machine.openshift.io') || key.startsWith('kubernetes.io')) && object.metadata.labels[key] != oldObject.metadata.labels[key])"
-      message: "Cannot modify any machine.openshift.io/* label."
-    # we dont want there to exist any annotations where we have a key starting openshift.io where there is a change (evaluate false if we find one)
-    - expression:  "!object.metadata.annotations.exists(key, key.startsWith('machine.openshift.io') && object.metadata.annotations[key] != oldObject.metadata.annotations[key])"
-      message: "Cannot modify any machine.openshift.io/* annotation."
-    # we dont want there to exist any labels where we are changing a key value, OR that value is now equal to params value  (do we need key existence check?)
-    # uncomment once i work out how to check
-    - expression: "!object.metadata.labels.exists(key, (object.metadata.labels[key] != oldObject.metadata.labels[key]) || (object.metadata.labels[key] == params.metadata.labels[key]))"
+    - expression: "false"
   `
 
 		policyBinding := &admissionregistrationv1.ValidatingAdmissionPolicyBinding{}
@@ -824,16 +784,15 @@ spec:
 				})
 			})).Should(Succeed())
 
+			Eventually(k.Object(mapiNamespace)).Should(HaveField("ObjectMeta.Labels", ContainElement("openshift-machine-api")))
+
 			// We want to have our paramref reference the CAPI namespace,
 			// since we `GenerateName` it is not static
-			policyBinding.Spec.ParamRef.Namespace = capiNamespace.GetName()
+			// policyBinding.Spec.ParamRef.Namespace = capiNamespace.GetName()
 
 			By("Creating the VAP and it's binding")
 			Expect(k8sClient.Create(ctx, policy)).To(Succeed())
 			Expect(k8sClient.Create(ctx, policyBinding)).To(Succeed())
-			// fmt.Println("----DEBUG----")
-			// fmt.Printf("\n\n policy: %+v\n\n", policy)
-			// fmt.Printf("\n\n binding: %+v\n\n", policyBinding)
 
 			By("Creating the CAPI infra machine")
 			Expect(k8sClient.Create(ctx, capaMachine)).To(Succeed(), "capa machine should be able to be created")
@@ -850,6 +809,23 @@ spec:
 			Eventually(k.UpdateStatus(mapiMachine, func() {
 				mapiMachine.Status.AuthoritativeAPI = machinev1beta1.MachineAuthorityClusterAPI
 			})).Should(Succeed())
+
+			// Status controller doesn't run in envtest - we've got to sleep
+			// Eventually(func() bool {
+			// 	var p admissionregistrationv1.ValidatingAdmissionPolicy
+			// 	key := types.NamespacedName{Name: policy.GetName()}
+			// 	Expect(k8sClient.Get(ctx, key, &p)).To(Succeed())
+
+			// 	ready := p.Status.ObservedGeneration == p.Generation &&
+			// 		p.Status.TypeChecking != nil // finished
+
+			// 	fmt.Printf("\n\n---\n\n %+v \n\n", policy)
+
+			// 	return ready
+			// }, 10*time.Second, 100*time.Millisecond).Should(BeTrue(),
+			// 	"policy never became ready")
+
+			time.Sleep(1 * time.Second)
 
 		})
 
