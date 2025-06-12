@@ -26,6 +26,7 @@ import (
 	kubescheme "k8s.io/client-go/kubernetes/scheme"
 
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
+	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
@@ -40,7 +41,11 @@ func init() {
 	}
 
 	if err := awsv1.AddToScheme(scheme); err != nil {
-		panic(fmt.Sprintf("failed to add aws scheme: %v", err))
+		panic(fmt.Sprintf("failed to add AWS scheme: %v", err))
+	}
+
+	if err := openstackv1.AddToScheme(scheme); err != nil {
+		panic(fmt.Sprintf("failed to add OpenStack scheme: %v", err))
 	}
 }
 
