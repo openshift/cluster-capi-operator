@@ -748,6 +748,10 @@ spec:
     namespaceSelector:
       matchLabels:
         name: openshift-machine-api
+  paramRef:
+    namespace: openshift-cluster-api
+    parameterNotFoundAction: Deny
+    selector: {}
   policyName: mapi-machine-vap
   validationActions: [Deny]`
 
@@ -757,6 +761,10 @@ kind: ValidatingAdmissionPolicy
 metadata:
   name: mapi-machine-vap
 spec:
+  failurePolicy: Fail
+  paramKind:
+    apiVersion: cluster.x-k8s.io/v1beta1
+    kind: Machine
   matchConstraints:
     resourceRules:
     - apiGroups:   ["machine.openshift.io"]
@@ -789,7 +797,7 @@ spec:
 
 			// We want to have our paramref reference the CAPI namespace,
 			// since we `GenerateName` it is not static
-			// policyBinding.Spec.ParamRef.Namespace = capiNamespace.GetName()
+			policyBinding.Spec.ParamRef.Namespace = capiNamespace.GetName()
 
 			By("Creating the VAP and it's binding")
 			Expect(k8sClient.Create(ctx, policy)).To(Succeed())
