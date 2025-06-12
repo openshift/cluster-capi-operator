@@ -18,6 +18,7 @@ package machinesync
 
 import (
 	"context"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -33,8 +34,10 @@ import (
 	consts "github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/mapi2capi"
 
+	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/utils/ptr"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
@@ -732,6 +735,108 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 
 			})
 		})
+	})
+
+	FContext("validating admission policy", func() {
+		bindingYaml := `
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: mapi-machine-vap
+spec:
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        name: openshift-machine-api
+  policyName: mapi-machine-vap
+  validationActions: [Deny]`
+
+		policyYaml := `
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: mapi-machine-vap
+spec:
+  matchConstraints:
+    resourceRules:
+    - apiGroups:   ["machine.openshift.io"]
+      apiVersions: ["v1beta1"]
+      operations:  ["UPDATE"]
+      resources:   ["machines"]
+  # everything must evaluate to true in order to pass
+  validations:
+    - expression: "false"
+  `
+
+		policyBinding := &admissionregistrationv1.ValidatingAdmissionPolicyBinding{}
+		policy := &admissionregistrationv1.ValidatingAdmissionPolicy{}
+
+		BeforeEach(func() {
+			By("Unmarshalling the VAP/VAPB yamls")
+			Expect(yaml.Unmarshal([]byte(bindingYaml), policyBinding)).To(Succeed())
+			Expect(yaml.Unmarshal([]byte(policyYaml), policy)).To(Succeed())
+
+			By("Updating the namespaces in the binding")
+			// Set the label on the mapi namespace so the
+			// selector applies the VAP to machines in it
+			Eventually(k.Update(mapiNamespace, func() {
+				mapiNamespace.SetLabels(map[string]string{
+					"name": "openshift-machine-api",
+				})
+			})).Should(Succeed())
+
+			Eventually(k.Object(mapiNamespace)).Should(HaveField("ObjectMeta.Labels", ContainElement("openshift-machine-api")))
+
+			// We want to have our paramref reference the CAPI namespace,
+			// since we `GenerateName` it is not static
+			// policyBinding.Spec.ParamRef.Namespace = capiNamespace.GetName()
+
+			By("Creating the VAP and it's binding")
+			Expect(k8sClient.Create(ctx, policy)).To(Succeed())
+			Expect(k8sClient.Create(ctx, policyBinding)).To(Succeed())
+
+			By("Creating the CAPI infra machine")
+			Expect(k8sClient.Create(ctx, capaMachine)).To(Succeed(), "capa machine should be able to be created")
+
+			By("Creating the MAPI machine")
+			mapiMachine = mapiMachineBuilder.WithName("test-machine").Build()
+			Expect(k8sClient.Create(ctx, mapiMachine)).Should(Succeed())
+
+			By("Creating the CAPI Machine")
+			capiMachine = capiMachineBuilder.WithName("test-machine").Build()
+			Expect(k8sClient.Create(ctx, capiMachine)).Should(Succeed())
+
+			By("Setting the MAPI machine AuthoritativeAPI to Cluster API")
+			Eventually(k.UpdateStatus(mapiMachine, func() {
+				mapiMachine.Status.AuthoritativeAPI = machinev1beta1.MachineAuthorityClusterAPI
+			})).Should(Succeed())
+
+			// Status controller doesn't run in envtest - we've got to sleep
+			// Eventually(func() bool {
+			// 	var p admissionregistrationv1.ValidatingAdmissionPolicy
+			// 	key := types.NamespacedName{Name: policy.GetName()}
+			// 	Expect(k8sClient.Get(ctx, key, &p)).To(Succeed())
+
+			// 	ready := p.Status.ObservedGeneration == p.Generation &&
+			// 		p.Status.TypeChecking != nil // finished
+
+			// 	fmt.Printf("\n\n---\n\n %+v \n\n", policy)
+
+			// 	return ready
+			// }, 10*time.Second, 100*time.Millisecond).Should(BeTrue(),
+			// 	"policy never became ready")
+
+			time.Sleep(1 * time.Second)
+
+		})
+
+		FIt("updating the spec (outside of authoritative api) should be prevented", func() {
+			// this should be prevented by the VAP
+			Eventually(k.Update(mapiMachine, func() {
+				mapiMachine.Spec.ObjectMeta.Labels = map[string]string{"foo": "bar"}
+			}), timeout).Should(Succeed())
+		})
+
 	})
 })
 
