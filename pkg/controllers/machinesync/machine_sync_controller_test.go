@@ -771,6 +771,16 @@ spec:
       apiVersions: ["v1beta1"]
       operations:  ["UPDATE"]
       resources:   ["machines"]
+  matchConditions:
+    - name: "check-only-non-service-account-requests"
+      expression: '!(request.userInfo.username in [
+              "system:serviceaccount:openshift-machine-api:machine-api-controllers",
+              "system:serviceaccount:openshift-cluster-api:machine-api-migration"
+              ])'
+    - name: "check-authoritativeAPI-clusterapi"
+      expression: 'object.status.authoritativeAPI == "ClusterAPI"'
+    - name: "check-param-match"
+      expression: 'object.metadata.name == params.metadata.name'
   # everything must evaluate to true in order to pass
   validations:
     - expression: "false"
@@ -814,35 +824,45 @@ spec:
 			capiMachine = capiMachineBuilder.WithName("test-machine").Build()
 			Expect(k8sClient.Create(ctx, capiMachine)).Should(Succeed())
 
-			By("Setting the MAPI machine AuthoritativeAPI to Cluster API")
-			Eventually(k.UpdateStatus(mapiMachine, func() {
-				mapiMachine.Status.AuthoritativeAPI = machinev1beta1.MachineAuthorityClusterAPI
-			})).Should(Succeed())
+			// Status controller doesn't run in envtest - we've got to sleep?
 
-			// Status controller doesn't run in envtest - we've got to sleep
-			// Eventually(func() bool {
-			// 	var p admissionregistrationv1.ValidatingAdmissionPolicy
-			// 	key := types.NamespacedName{Name: policy.GetName()}
-			// 	Expect(k8sClient.Get(ctx, key, &p)).To(Succeed())
-
-			// 	ready := p.Status.ObservedGeneration == p.Generation &&
-			// 		p.Status.TypeChecking != nil // finished
-
-			// 	fmt.Printf("\n\n---\n\n %+v \n\n", policy)
-
-			// 	return ready
-			// }, 10*time.Second, 100*time.Millisecond).Should(BeTrue(),
-			// 	"policy never became ready")
-
+			// 'On my machine' 1s seems to be about right for the time required
+			// for the VAP to be loaded into the API Server
 			time.Sleep(1 * time.Second)
 
 		})
 
-		FIt("updating the spec (outside of authoritative api) should be prevented", func() {
-			// this should be prevented by the VAP
-			Eventually(k.Update(mapiMachine, func() {
-				mapiMachine.Spec.ObjectMeta.Labels = map[string]string{"foo": "bar"}
-			}), timeout).Should(Succeed())
+		Context("with AuthoritativeAPI Machine API", func() {
+			BeforeEach(func() {
+				By("Setting the MAPI machine AuthoritativeAPI to Machine API")
+				Eventually(k.UpdateStatus(mapiMachine, func() {
+					mapiMachine.Status.AuthoritativeAPI = machinev1beta1.MachineAuthorityMachineAPI
+				})).Should(Succeed())
+			})
+
+			FIt("updating the spec should be allowed", func() {
+				Eventually(k.Update(mapiMachine, func() {
+					mapiMachine.Spec.ObjectMeta.Labels = map[string]string{"foo": "bar"}
+				}), timeout).Should(Succeed())
+			})
+
+		})
+
+		Context("with AuthoritativeAPI Cluster API", func() {
+			BeforeEach(func() {
+				By("Setting the MAPI machine AuthoritativeAPI to Cluster API")
+				Eventually(k.UpdateStatus(mapiMachine, func() {
+					mapiMachine.Status.AuthoritativeAPI = machinev1beta1.MachineAuthorityClusterAPI
+				})).Should(Succeed())
+			})
+
+			It("updating the spec (outside of authoritative api) should be prevented", func() {
+				// this should be prevented by the VAP
+				Eventually(k.Update(mapiMachine, func() {
+					mapiMachine.Spec.ObjectMeta.Labels = map[string]string{"foo": "bar"}
+				}), timeout).Should(Succeed())
+			})
+
 		})
 
 	})
