@@ -1,0 +1,121 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: machine-api-machine-vap
+spec:
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        name: openshift-machine-api
+  paramRef:
+    namespace: openshift-cluster-api
+    parameterNotFoundAction: Deny
+    selector: {}
+  policyName: machine-api-machine-vap
+  validationActions: [Deny]
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: machine-api-machine-vap
+spec:
+  failurePolicy: Fail
+
+  paramKind:
+    apiVersion: cluster.x-k8s.io/v1beta1
+    kind: Machine
+
+  matchConstraints:
+    resourceRules:
+    - apiGroups:   ["machine.openshift.io"]
+      apiVersions: ["v1beta1"]
+      operations:  ["UPDATE"]
+      resources:   ["machines"]
+
+  # Requests must satisfy every matchCondition to reach the validations
+  matchConditions:
+    - name: check-only-non-service-account-requests
+      expression: >-
+        !(request.userInfo.username in [
+            "system:serviceaccount:openshift-machine-api:machine-api-controllers",
+            "system:serviceaccount:openshift-cluster-api:cluster-capi-operator"
+        ])
+    - name: check-authoritativeAPI-clusterapi
+      expression: 'object.status.authoritativeAPI == "ClusterAPI"'
+    - name: check-param-match
+      expression: 'object.metadata.name == params.metadata.name'
+
+  variables:
+    # label maps
+    - name: newLabels
+      expression: "object.metadata.?labels.hasValue() ? object.metadata.?labels.value()     : {}"
+    - name: oldLabels
+      expression: "oldObject.metadata.?labels.hasValue()   ? oldObject.metadata.?labels.value()   : {}"
+    - name: paramLabels
+      expression: "params.metadata.labels"
+
+    # annotation maps
+    - name: newAnn
+      expression: "object.metadata.?annotations.hasValue() ? object.metadata.?annotations.value() : {}"
+    - name: oldAnn
+      expression: "oldObject.metadata.?annotations.hasValue() ? oldObject.metadata.?annotations.value() : {}"
+
+    - name: specLockedExceptAuthoritativeAPI
+      expression: >
+        object.spec.authoritativeAPI != oldObject.spec.authoritativeAPI &&
+        [
+          [object.spec.?lifecycleHooks,   oldObject.spec.?lifecycleHooks],
+          [object.spec.?metadata,         oldObject.spec.?metadata],
+          [object.spec.?providerID,       oldObject.spec.?providerID],
+          [object.spec.?providerSpec,     oldObject.spec.?providerSpec],
+          [object.spec.?taints,           oldObject.spec.?taints]
+        ].all(p,
+          p[0].hasValue()
+            ? p[1].hasValue() && p[0].value() == p[1].value()
+            : !p[1].hasValue()
+        )
+
+  # All validations must evaluate to TRUE
+  validations:
+    # Only spec.authoritativeAPI may change
+    - expression: "object.spec == oldObject.spec || variables.specLockedExceptAuthoritativeAPI"
+      message:  "You may only modify spec.authoritativeAPI. Any other change inside .spec is not allowed."
+
+    # Guard machine.openshift.io/* and kubernetes.io/* labels
+    - expression: >
+        !(
+          variables.newLabels.exists(k,
+              (k.startsWith('machine.openshift.io') || k.startsWith('kubernetes.io')) &&
+              ((k in variables.oldLabels ? variables.oldLabels[k] : '') != variables.newLabels[k])
+          ) ||
+          variables.oldLabels.exists(k,
+              (k.startsWith('machine.openshift.io') || k.startsWith('kubernetes.io')) &&
+              !(k in variables.newLabels)
+          )
+        )
+      message: "Cannot modify or delete any machine.openshift.io/* or kubernetes.io/* label."
+
+    # Guard machine.openshift.io/* annotations
+    - expression: >
+        !(
+          variables.newAnn.exists(k,
+              k.startsWith('machine.openshift.io') &&
+              ((k in variables.oldAnn ? variables.oldAnn[k] : '') != variables.newAnn[k])
+          ) ||
+          variables.oldAnn.exists(k,
+              k.startsWith('machine.openshift.io') &&
+              !(k in variables.newAnn)
+          )
+        )
+      message: "Cannot modify or delete any machine.openshift.io/* annotation."
+
+    # Param-controlled labels (labels on the CAPI machine) may change only to match the value on the CAPI Machine
+    - expression: >
+        !variables.paramLabels.exists(k,
+          ((k in variables.newLabels ? variables.newLabels[k] : '') !=
+           (k in variables.oldLabels ? variables.oldLabels[k] : ''))
+          &&
+          ((k in variables.newLabels ? variables.newLabels[k] : '') !=
+           variables.paramLabels[k])
+        )
+      message: "Cannot modify a Cluster API controlled label except to match the Cluster API mirrored machine."
