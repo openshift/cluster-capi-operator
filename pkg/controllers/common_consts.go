@@ -46,4 +46,7 @@ const (
 
 	// ReasonAuthoritativeAPIChanged indicates that sync state is stale due to a change of authoritativeAPI.
 	ReasonAuthoritativeAPIChanged = "AuthoritativeAPIChanged"
+
+	// MachineSetOpenshiftLabelKey is the key for label referring to a Machine API MachineSet.
+	MachineSetOpenshiftLabelKey = "machine.openshift.io/cluster-api-machineset"
 )
