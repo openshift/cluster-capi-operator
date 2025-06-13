@@ -18,6 +18,8 @@ package machinesync
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -63,9 +65,48 @@ var _ = BeforeSuite(func() {
 
 	logf.SetLogger(textlogger.NewLogger(textlogger.NewConfig()))
 
+	By("writing out the audit policy to a temp dir")
+	policyYaml := `
+apiVersion: audit.k8s.io/v1
+kind: Policy
+# Drop the very first “RequestReceived” stage across the board
+omitStages:
+  - RequestReceived
+
+rules:
+  # 1) Full request+response for machine UPDATEs
+  - level: RequestResponse
+    verbs: ["update"]
+    resources:
+      - group: "machine.openshift.io"
+        resources: ["machines"]
+
+  # 2) Drop all other events (empty resources list => all groups & resources)
+  - level: None
+    resources: []
+`
+	tmp := os.TempDir()
+	policyPath := filepath.Join(tmp, "audit-policy.yaml")
+
+	Expect(os.WriteFile(policyPath, []byte(policyYaml), 0644)).To(Succeed())
+
 	By("bootstrapping test environment")
 	var err error
-	testEnv = &envtest.Environment{}
+	testEnv = &envtest.Environment{
+		ControlPlaneStartTimeout: 30 * time.Second,
+		// AttachControlPlaneOutput: true,
+		ControlPlane: envtest.ControlPlane{
+			APIServer: &envtest.APIServer{
+				Args: []string{
+					"--vmodule=validatingadmissionpolicy*=6,cel*=6",
+					// "--v=2",
+					"--audit-policy-file=" + policyPath,
+					"--audit-log-path=/tmp/kube-apiserver-audit.log",
+					"--audit-log-format=json",
+				},
+			},
+		},
+	}
 	cfg, k8sClient, err = test.StartEnvTest(testEnv)
 
 	Expect(err).NotTo(HaveOccurred())
