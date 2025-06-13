@@ -1,6 +1,7 @@
 package framework
 
 import (
+	"context"
 	"fmt"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -53,4 +54,16 @@ func FilterRunningMachines(machines []*clusterv1.Machine) []*clusterv1.Machine {
 	}
 
 	return result
+}
+
+// GetMachine get a machine by its name from the cluster API namespace.
+func GetMachine(cl client.Client, name string) (*clusterv1.Machine, error) {
+	machine := &clusterv1.Machine{}
+	key := client.ObjectKey{Namespace: CAPINamespace, Name: name}
+
+	if err := cl.Get(context.Background(), key, machine); err != nil {
+		return nil, fmt.Errorf("error querying api for machine object: %w", err)
+	}
+
+	return machine, nil
 }
