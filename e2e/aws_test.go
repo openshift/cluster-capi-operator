@@ -24,7 +24,8 @@ import (
 )
 
 const (
-	awsMachineTemplateName = "aws-machine-template"
+	awsMachineTemplateName      = "aws-machine-template"
+	machineSetOpenshiftLabelKey = "machine.openshift.io/cluster-api-machineset"
 )
 
 var _ = Describe("Cluster API AWS MachineSet", Ordered, func() {
@@ -189,7 +190,7 @@ func getMAPICreatedInstance(awsClient *ec2.EC2, msName string) ec2.Instance {
 	Expect(msName).ToNot(BeEmpty())
 	mapiMachineList := &mapiv1.MachineList{}
 	Expect(cl.List(ctx, mapiMachineList, client.InNamespace(framework.MAPINamespace), client.MatchingLabels{
-		"machine.openshift.io/cluster-api-machineset": msName,
+		machineSetOpenshiftLabelKey: msName,
 	})).To(Succeed())
 	Expect(len(mapiMachineList.Items)).To(BeNumerically(">", 0))
 
@@ -221,7 +222,7 @@ func getCAPICreatedInstance(awsClient *ec2.EC2, msName string) ec2.Instance {
 	capiMachineList := &awsv1.AWSMachineList{}
 
 	Expect(cl.List(ctx, capiMachineList, client.InNamespace(framework.CAPINamespace), client.MatchingLabels{
-		"machine.openshift.io/cluster-api-machineset": msName,
+		machineSetOpenshiftLabelKey: msName,
 	})).To(Succeed())
 	Expect(capiMachineList.Items).To(HaveLen(1))
 
