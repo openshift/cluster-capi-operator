@@ -797,7 +797,10 @@ spec:
   validations:
     - expression: "object.spec.authoritativeAPI != oldObject.spec.authoritativeAPI || object.spec == oldObject.spec"
       message: "You may only modify spec.authoritativeAPI. Any other change inside .spec is not allowed."
-  `
+    - expression: "!object.metadata.labels.exists(key, (key.startsWith('machine.openshift.io') || key.startsWith('kubernetes.io')) && object.metadata.labels[key] != oldObject.metadata.labels[key])"
+      message: "Cannot modify any machine.openshift.io/* label."
+    - expression:  "!object.metadata.annotations.exists(key, key.startsWith('machine.openshift.io') && object.metadata.annotations[key] != oldObject.metadata.annotations[key])"
+      message: "Cannot modify any machine.openshift.io/* annotation."`
 		var (
 			policyBinding *admissionregistrationv1.ValidatingAdmissionPolicyBinding
 			policy        *admissionregistrationv1.ValidatingAdmissionPolicy
@@ -834,7 +837,15 @@ spec:
 			Expect(k8sClient.Create(ctx, capaMachine)).To(Succeed(), "capa machine should be able to be created")
 
 			By("Creating the MAPI machine")
-			mapiMachine = mapiMachineBuilder.WithName("test-machine").Build()
+			mapiMachine = mapiMachineBuilder.WithName("test-machine").WithLabels(map[string]string{
+				"machine.openshift.io/cluster-api-cluster":      "ci-op-gs2k97d6-c9e33-2smph",
+				"machine.openshift.io/cluster-api-machine-role": "worker",
+				"machine.openshift.io/cluster-api-machine-type": "worker",
+				"machine.openshift.io/cluster-api-machineset":   "ci-op-gs2k97d6-c9e33-2smph-worker-us-west-2b",
+				"machine.openshift.io/instance-type":            "m6a.xlarge",
+			}).WithAnnotations(map[string]string{
+				"machine.openshift.io/instance-state": "running",
+			}).Build()
 			Expect(k8sClient.Create(ctx, mapiMachine)).Should(Succeed())
 
 			By("Creating the CAPI Machine")
@@ -883,6 +894,12 @@ spec:
 				Eventually(k.Update(mapiMachine, func() {
 					mapiMachine.Spec.ObjectMeta.Labels = map[string]string{"foo": "bar"}
 				}), timeout).Should(Not(Succeed()))
+			})
+
+			It("updating the spec.authoritativeAPI should be allowed", func() {
+				Eventually(k.Update(mapiMachine, func() {
+					mapiMachine.Spec.AuthoritativeAPI = machinev1beta1.MachineAuthorityMachineAPI
+				}), timeout).Should(Succeed())
 			})
 
 		})
