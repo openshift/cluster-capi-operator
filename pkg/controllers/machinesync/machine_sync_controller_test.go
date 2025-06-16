@@ -38,12 +38,14 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/yaml"
+	"k8s.io/client-go/rest"
 	"k8s.io/utils/ptr"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/config"
+	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
@@ -174,8 +176,18 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 			WithClusterName(infrastructureName)
 
 		By("Setting up a manager and controller")
+		// Adds new user to the api server so that the controller
+		// can be a different user to the one we use to manipulate test resources
 		var err error
-		mgr, err = ctrl.NewManager(cfg, ctrl.Options{
+		var controllerCfg *rest.Config
+
+		controllerCfg, err = testEnv.ControlPlane.APIServer.SecureServing.AddUser(envtest.User{
+			Name:   "system:serviceaccount:openshift-cluster-api:machine-api-migration",
+			Groups: []string{"system:masters", "system:authenticated"},
+		}, cfg)
+		Expect(err).ToNot(HaveOccurred(), "Manager user be able to be created")
+
+		mgr, err = ctrl.NewManager(controllerCfg, ctrl.Options{
 			Scheme: testScheme,
 			Controller: config.Controller{
 				SkipNameValidation: ptr.To(true),
@@ -840,7 +852,7 @@ spec:
 				})).Should(Succeed())
 			})
 
-			FIt("updating the spec should be allowed", func() {
+			It("updating the spec should be allowed", func() {
 				Eventually(k.Update(mapiMachine, func() {
 					mapiMachine.Spec.ObjectMeta.Labels = map[string]string{"foo": "bar"}
 				}), timeout).Should(Succeed())
@@ -856,8 +868,7 @@ spec:
 				})).Should(Succeed())
 			})
 
-			It("updating the spec (outside of authoritative api) should be prevented", func() {
-				// this should be prevented by the VAP
+			FIt("updating the spec (outside of authoritative api) should be prevented", func() {
 				Eventually(k.Update(mapiMachine, func() {
 					mapiMachine.Spec.ObjectMeta.Labels = map[string]string{"foo": "bar"}
 				}), timeout).Should(Succeed())

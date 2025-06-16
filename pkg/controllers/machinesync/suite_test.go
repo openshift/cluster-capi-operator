@@ -94,12 +94,10 @@ rules:
 	var err error
 	testEnv = &envtest.Environment{
 		ControlPlaneStartTimeout: 30 * time.Second,
-		// AttachControlPlaneOutput: true,
 		ControlPlane: envtest.ControlPlane{
 			APIServer: &envtest.APIServer{
 				Args: []string{
 					"--vmodule=validatingadmissionpolicy*=6,cel*=6",
-					// "--v=2",
 					"--audit-policy-file=" + policyPath,
 					"--audit-log-path=/tmp/kube-apiserver-audit.log",
 					"--audit-log-format=json",
