@@ -62,6 +62,7 @@ var _ = BeforeSuite(func() {
 
 	cl, err = runtimeclient.New(cfg, runtimeclient.Options{})
 	Expect(err).ToNot(HaveOccurred())
+	komega.SetClient(cl)
 
 	infra := &configv1.Infrastructure{}
 	infraName := runtimeclient.ObjectKey{
