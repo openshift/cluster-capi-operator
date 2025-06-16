@@ -795,13 +795,18 @@ spec:
       expression: 'object.metadata.name == params.metadata.name'
   # everything must evaluate to true in order to pass
   validations:
-    - expression: "false"
+    - expression: "object.spec.authoritativeAPI != oldObject.spec.authoritativeAPI || object.spec == oldObject.spec"
+      message: "You may only modify spec.authoritativeAPI. Any other change inside .spec is not allowed."
   `
-
-		policyBinding := &admissionregistrationv1.ValidatingAdmissionPolicyBinding{}
-		policy := &admissionregistrationv1.ValidatingAdmissionPolicy{}
+		var (
+			policyBinding *admissionregistrationv1.ValidatingAdmissionPolicyBinding
+			policy        *admissionregistrationv1.ValidatingAdmissionPolicy
+		)
 
 		BeforeEach(func() {
+			policyBinding = &admissionregistrationv1.ValidatingAdmissionPolicyBinding{}
+			policy = &admissionregistrationv1.ValidatingAdmissionPolicy{}
+
 			By("Unmarshalling the VAP/VAPB yamls")
 			Expect(yaml.Unmarshal([]byte(bindingYaml), policyBinding)).To(Succeed())
 			Expect(yaml.Unmarshal([]byte(policyYaml), policy)).To(Succeed())
@@ -844,6 +849,12 @@ spec:
 
 		})
 
+		AfterEach(func() {
+			By("Removing the VAP and it's binding")
+			Expect(k8sClient.Delete(ctx, policyBinding)).Should(Succeed())
+			Expect(k8sClient.Delete(ctx, policy)).Should(Succeed())
+		})
+
 		Context("with AuthoritativeAPI Machine API", func() {
 			BeforeEach(func() {
 				By("Setting the MAPI machine AuthoritativeAPI to Machine API")
@@ -868,10 +879,10 @@ spec:
 				})).Should(Succeed())
 			})
 
-			FIt("updating the spec (outside of authoritative api) should be prevented", func() {
+			It("updating the spec (outside of authoritative api) should be prevented", func() {
 				Eventually(k.Update(mapiMachine, func() {
 					mapiMachine.Spec.ObjectMeta.Labels = map[string]string{"foo": "bar"}
-				}), timeout).Should(Succeed())
+				}), timeout).Should(Not(Succeed()))
 			})
 
 		})
