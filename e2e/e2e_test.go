@@ -21,6 +21,7 @@ import (
 
 	configv1 "github.com/openshift/api/config/v1"
 	mapiv1 "github.com/openshift/api/machine/v1beta1"
+	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 )
 
 const (
@@ -61,6 +62,7 @@ var _ = BeforeSuite(func() {
 
 	cl, err = runtimeclient.New(cfg, runtimeclient.Options{})
 	Expect(err).ToNot(HaveOccurred())
+	komega.SetClient(cl)
 
 	infra := &configv1.Infrastructure{}
 	infraName := runtimeclient.ObjectKey{
