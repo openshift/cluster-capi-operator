@@ -800,7 +800,16 @@ spec:
     - expression: "!object.metadata.labels.exists(key, (key.startsWith('machine.openshift.io') || key.startsWith('kubernetes.io')) && object.metadata.labels[key] != oldObject.metadata.labels[key])"
       message: "Cannot modify any machine.openshift.io/* label."
     - expression:  "!object.metadata.annotations.exists(key, key.startsWith('machine.openshift.io') && object.metadata.annotations[key] != oldObject.metadata.annotations[key])"
-      message: "Cannot modify any machine.openshift.io/* annotation."`
+      message: "Cannot modify any machine.openshift.io/* annotation."
+    - expression: >
+        !params.metadata.labels.exists(k,
+          ((k in object.metadata.labels ? object.metadata.labels[k] : null) !=
+           (k in oldObject.metadata.labels ? oldObject.metadata.labels[k] : null))
+          &&
+          ((k in object.metadata.labels ? object.metadata.labels[k] : null) !=
+           params.metadata.labels[k]))
+      message: "Cannot modify any existing matching label on the mirror resource"`
+
 		var (
 			policyBinding *admissionregistrationv1.ValidatingAdmissionPolicyBinding
 			policy        *admissionregistrationv1.ValidatingAdmissionPolicy
@@ -849,7 +858,15 @@ spec:
 			Expect(k8sClient.Create(ctx, mapiMachine)).Should(Succeed())
 
 			By("Creating the CAPI Machine")
-			capiMachine = capiMachineBuilder.WithName("test-machine").Build()
+			capiMachine = capiMachineBuilder.WithName("test-machine").WithLabels(map[string]string{
+				"machine.openshift.io/cluster-api-cluster":      "ci-op-gs2k97d6-c9e33-2smph",
+				"machine.openshift.io/cluster-api-machine-role": "worker",
+				"machine.openshift.io/cluster-api-machine-type": "worker",
+				"machine.openshift.io/cluster-api-machineset":   "ci-op-gs2k97d6-c9e33-2smph-worker-us-west-2b",
+				"machine.openshift.io/instance-type":            "m6a.xlarge",
+			}).WithAnnotations(map[string]string{
+				"machine.openshift.io/instance-state": "running",
+			}).Build()
 			Expect(k8sClient.Create(ctx, capiMachine)).Should(Succeed())
 
 			// Status controller doesn't run in envtest - we've got to sleep?

@@ -101,6 +101,7 @@ rules:
 					"--audit-policy-file=" + policyPath,
 					"--audit-log-path=/tmp/kube-apiserver-audit.log",
 					"--audit-log-format=json",
+					"--advertise-address=127.0.0.1",
 				},
 			},
 		},
