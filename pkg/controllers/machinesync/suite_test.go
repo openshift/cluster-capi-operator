@@ -65,6 +65,7 @@ var _ = BeforeSuite(func() {
 
 	logf.SetLogger(textlogger.NewLogger(textlogger.NewConfig()))
 
+	// This is useful for debugging VAP related issues
 	By("writing out the audit policy to a temp dir")
 	policyYaml := `
 apiVersion: audit.k8s.io/v1

@@ -759,7 +759,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 		})
 	})
 
-	FContext("validating admission policy", func() {
+	FContext("validating admission policy tests", func() {
 		bindingYaml := `
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
@@ -810,25 +810,40 @@ spec:
       expression: 'object.metadata.name == params.metadata.name'
 
   variables:
-    # label maps (never null)
+    # label maps
     - name: newLabels
-      expression: "object.metadata.labels != null ? object.metadata.labels : {}"
+      expression: "object.metadata.?labels.hasValue() ? object.metadata.?labels.value()     : {}"
     - name: oldLabels
-      expression: "oldObject.metadata.labels != null ? oldObject.metadata.labels : {}"
+      expression: "oldObject.metadata.?labels.hasValue()   ? oldObject.metadata.?labels.value()   : {}"
     - name: paramLabels
       expression: "params.metadata.labels"
 
-    # annotation maps (never null)
+    # annotation maps
     - name: newAnn
-      expression: "object.metadata.annotations != null ? object.metadata.annotations : {}"
+      expression: "object.metadata.?annotations.hasValue() ? object.metadata.?annotations.value() : {}"
     - name: oldAnn
-      expression: "oldObject.metadata.annotations != null ? oldObject.metadata.annotations : {}"
+      expression: "oldObject.metadata.?annotations.hasValue() ? oldObject.metadata.?annotations.value() : {}"
+
+    - name: specLockedExceptAuthAPI
+      expression: >
+        object.spec.authoritativeAPI != oldObject.spec.authoritativeAPI &&
+        [
+          [object.spec.?lifecycleHooks,   oldObject.spec.?lifecycleHooks],
+          [object.spec.?metadata,         oldObject.spec.?metadata],
+          [object.spec.?providerID,       oldObject.spec.?providerID],
+          [object.spec.?providerSpec,     oldObject.spec.?providerSpec],
+          [object.spec.?taints,           oldObject.spec.?taints]
+        ].all(p,
+          p[0].hasValue()
+            ? p[1].hasValue() && p[0].value() == p[1].value()
+            : !p[1].hasValue()
+        )
 
   # All validations must evaluate to TRUE
   validations:
     # Only spec.authoritativeAPI may change
-    - expression: "object.spec.authoritativeAPI != oldObject.spec.authoritativeAPI || object.spec == oldObject.spec"
-      message: "You may only modify spec.authoritativeAPI. Any other change inside .spec is not allowed."
+    - expression: "object.spec == oldObject.spec || variables.specLockedExceptAuthAPI"
+      message:  "You may only modify spec.authoritativeAPI. Any other change inside .spec is not allowed."
 
     # Guard machine.openshift.io/* and kubernetes.io/* labels
     - expression: >
@@ -923,12 +938,15 @@ spec:
 				"machine.openshift.io/cluster-api-machine-type": "worker",
 				"machine.openshift.io/cluster-api-machineset":   "ci-op-gs2k97d6-c9e33-2smph-worker-us-west-2b",
 				"machine.openshift.io/instance-type":            "m6a.xlarge",
+				"cluster.x-k8s.io/cluster-name":                 "ci-op-gs2k97d6-c9e33-2smph",
+				"cluster.x-k8s.io/set-name":                     "ci-op-gs2k97d6-c9e33-2smph-worker-us-west-2b",
+				"node-role.kubernetes.io/worker":                "",
 			}).WithAnnotations(map[string]string{
 				"machine.openshift.io/instance-state": "running",
 			}).Build()
 			Expect(k8sClient.Create(ctx, capiMachine)).Should(Succeed())
 
-			// Status controller doesn't run in envtest - we've got to sleep?
+			// Status controller doesn't run in envtest, its part of KCM - we've got to sleep?
 
 			// 'On my machine' 1s seems to be about right for the time required
 			// for the VAP to be loaded into the API Server
