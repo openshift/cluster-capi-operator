@@ -212,19 +212,6 @@ var _ = Describe("mapi2capi AWS conversion", func() {
 			expectedErrors:   []string{}, // No error is expected anymore, because volumeSize is now set to a default amount if nil.
 			expectedWarnings: []string{},
 		}),
-		Entry("With non-root Volume not deleted on termination", awsMAPI2CAPIConversionInput{
-			machineBuilder: awsMAPIMachineBase.WithProviderSpecBuilder(
-				awsBaseProviderSpec.WithBlockDevices([]mapiv1.BlockDeviceMappingSpec{{
-					DeviceName: ptr.To("/dev/sdb"),
-					EBS:        &mapiv1.EBSBlockDeviceSpec{VolumeSize: ptr.To(int64(10)), DeleteOnTermination: ptr.To(false)},
-				}}),
-			),
-			infra: infra,
-			expectedErrors: []string{
-				"spec.providerSpec.value.blockDevices[0].ebs.deleteOnTermination: Invalid value: false: non-root volumes must be deleted on termination, unsupported value false",
-			},
-			expectedWarnings: []string{},
-		}),
 		Entry("With NoDevice specified", awsMAPI2CAPIConversionInput{
 			machineBuilder: awsMAPIMachineBase.WithProviderSpecBuilder(
 				awsBaseProviderSpec.WithBlockDevices([]mapiv1.BlockDeviceMappingSpec{{
@@ -276,21 +263,6 @@ var _ = Describe("mapi2capi AWS conversion", func() {
 				"spec.providerSpec.value.blockDevices[0].ebs: Invalid value: \"null\": missing ebs configuration for block device",
 			},
 		}),
-		Entry("With VirtualName specified and root Volume not deleted on termination", awsMAPI2CAPIConversionInput{
-			machineBuilder: awsMAPIMachineBase.WithProviderSpecBuilder(
-				awsBaseProviderSpec.WithBlockDevices([]mapiv1.BlockDeviceMappingSpec{{
-					VirtualName: testValue,
-					EBS:         &mapiv1.EBSBlockDeviceSpec{VolumeSize: ptr.To(int64(10)), DeleteOnTermination: ptr.To(false)},
-				}}),
-			),
-			infra: infra,
-			expectedErrors: []string{
-				"spec.providerSpec.value.blockDevices[0].virtualName: Invalid value: \"test\": virtualName is not supported",
-			},
-			expectedWarnings: []string{
-				"spec.providerSpec.value.blockDevices[0].ebs.deleteOnTermination: Invalid value: false: root volume must be deleted on termination, ignoring invalid value false",
-			},
-		}),
 		// Double Errors.
 		Entry("With NoDevice and VirtualName specified", awsMAPI2CAPIConversionInput{
 			machineBuilder: awsMAPIMachineBase.WithProviderSpecBuilder(
@@ -317,18 +289,6 @@ var _ = Describe("mapi2capi AWS conversion", func() {
 			expectedErrors: []string{},
 			expectedWarnings: []string{
 				"spec.providerSpec.value.blockDevices[0].ebs: Invalid value: \"null\": missing ebs configuration for block device",
-			},
-		}),
-		Entry("With root Volume not deleted on termination", awsMAPI2CAPIConversionInput{
-			machineBuilder: awsMAPIMachineBase.WithProviderSpecBuilder(
-				awsBaseProviderSpec.WithBlockDevices([]mapiv1.BlockDeviceMappingSpec{{
-					EBS: &mapiv1.EBSBlockDeviceSpec{VolumeSize: ptr.To(int64(10)), DeleteOnTermination: ptr.To(false)},
-				}}),
-			),
-			infra:          infra,
-			expectedErrors: []string{},
-			expectedWarnings: []string{
-				"spec.providerSpec.value.blockDevices[0].ebs.deleteOnTermination: Invalid value: false: root volume must be deleted on termination, ignoring invalid value false",
 			},
 		}),
 	)

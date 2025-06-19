@@ -155,9 +155,6 @@ func awsProviderSpecFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interfa
 				ebs.VolumeSize = ptr.To(c.Int63())
 			}
 
-			// Force DeleteOnTermination to be true.
-			ebs.DeleteOnTermination = ptr.To(true)
-
 			// Clear pointers to empty fields.
 			if ebs.VolumeType != nil && *ebs.VolumeType == "" {
 				ebs.VolumeType = nil

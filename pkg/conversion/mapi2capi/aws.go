@@ -540,13 +540,6 @@ func blockDeviceMappingSpecToVolume(fldPath *field.Path, bdm mapiv1.BlockDeviceM
 
 	capiKMSKey := convertKMSKeyToCAPI(bdm.EBS.KMSKey)
 
-	if rootVolume && !ptr.Deref(bdm.EBS.DeleteOnTermination, true) {
-		warnings = append(warnings, field.Invalid(fldPath.Child("ebs", "deleteOnTermination"), bdm.EBS.DeleteOnTermination, "root volume must be deleted on termination, ignoring invalid value false").Error())
-	} else if !rootVolume && !ptr.Deref(bdm.EBS.DeleteOnTermination, true) {
-		// TODO(OCPCLOUD-2717): We should support a non-true value for non-root volumes for feature parity.
-		errs = append(errs, field.Invalid(fldPath.Child("ebs", "deleteOnTermination"), bdm.EBS.DeleteOnTermination, "non-root volumes must be deleted on termination, unsupported value false"))
-	}
-
 	if len(errs) > 0 {
 		return awsv1.Volume{}, warnings, errs
 	}
