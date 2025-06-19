@@ -421,10 +421,9 @@ func convertAWSVolumesToMAPI(rootVolume *awsv1.Volume, nonRootVolumes []awsv1.Vo
 func convertAWSVolumeToMAPI(volume awsv1.Volume) mapiv1.BlockDeviceMappingSpec {
 	bdm := mapiv1.BlockDeviceMappingSpec{
 		EBS: &mapiv1.EBSBlockDeviceSpec{
-			DeleteOnTermination: ptr.To(true), // This is forced to true for now as CAPI doesn't support changing it.
-			VolumeSize:          ptr.To(volume.Size),
-			Encrypted:           volume.Encrypted,
-			KMSKey:              convertAWSKMSKeyToMAPI(volume.EncryptionKey),
+			VolumeSize: ptr.To(volume.Size),
+			Encrypted:  volume.Encrypted,
+			KMSKey:     convertAWSKMSKeyToMAPI(volume.EncryptionKey),
 		},
 	}
 
