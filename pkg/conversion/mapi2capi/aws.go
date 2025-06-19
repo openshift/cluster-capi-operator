@@ -511,7 +511,7 @@ func convertAWSBlockDeviceMappingSpecToCAPI(fldPath *field.Path, mapiBlockDevice
 		}
 
 		if mapping.DeviceName == nil {
-			volume, warn, err := blockDeviceMappingSpecToVolume(fldPath.Index(i), mapping, true)
+			volume, warn, err := blockDeviceMappingSpecToVolume(fldPath.Index(i), mapping)
 			errs = append(errs, err...)
 			warnings = append(warnings, warn...)
 
@@ -520,7 +520,7 @@ func convertAWSBlockDeviceMappingSpecToCAPI(fldPath *field.Path, mapiBlockDevice
 			continue
 		}
 
-		volume, warn, err := blockDeviceMappingSpecToVolume(fldPath.Index(i), mapping, false)
+		volume, warn, err := blockDeviceMappingSpecToVolume(fldPath.Index(i), mapping)
 		errs = append(errs, err...)
 		warnings = append(warnings, warn...)
 
@@ -530,7 +530,7 @@ func convertAWSBlockDeviceMappingSpecToCAPI(fldPath *field.Path, mapiBlockDevice
 	return rootVolume, nonRootVolumes, warnings, errs
 }
 
-func blockDeviceMappingSpecToVolume(fldPath *field.Path, bdm mapiv1.BlockDeviceMappingSpec, rootVolume bool) (awsv1.Volume, []string, field.ErrorList) {
+func blockDeviceMappingSpecToVolume(fldPath *field.Path, bdm mapiv1.BlockDeviceMappingSpec) (awsv1.Volume, []string, field.ErrorList) {
 	errs := field.ErrorList{}
 	warnings := []string{}
 
