@@ -79,6 +79,12 @@ image:
 push:
 	docker push ${IMG}
 
+.PHONY: crds-sync
+api_module_dir ?= $(shell go list -f '{{.Dir}}' github.com/openshift/api)
+crds := operator/v1alpha1/zz_generated.crd-manifests/0000_20_crd-compatibility-checker_01_crdcompatibilityrequirements.crd.yaml
+crds-sync: $(crds:%=$(api_module_dir)/%)
+	cp $? ./manifests/
+
 aws-cluster:
 	./hack/clusters/create-aws.sh
 
