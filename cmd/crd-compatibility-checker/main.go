@@ -1,4 +1,4 @@
-// Copyright 2024 Red Hat, Inc.
+// Copyright 2025 Red Hat, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ import (
 
 	"github.com/spf13/pflag"
 
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -33,10 +34,12 @@ import (
 
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
+	crwebhook "sigs.k8s.io/controller-runtime/pkg/webhook"
 )
 
 func initScheme(scheme *runtime.Scheme) {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
+	utilruntime.Must(apiextensionsv1.AddToScheme(scheme))
 	utilruntime.Must(operatorv1alpha1.AddToScheme(scheme))
 }
 
@@ -57,6 +60,17 @@ func main() {
 		"health-addr",
 		":9441",
 		"The address for health checking.",
+	)
+
+	webhookPort := flag.Int(
+		"webhook-port",
+		9443,
+		"The port for the webhook server to listen on.",
+	)
+	webhookCertDir := flag.String(
+		"webhook-cert-dir",
+		"/tmp/k8s-webhook-server/serving-certs/",
+		"Webhook cert dir, only used when webhook-port is specified.",
 	)
 
 	logToStderr := flag.Bool(
@@ -90,17 +104,23 @@ func main() {
 		LeaderElectionID:        leaderElectionConfig.ResourceName,
 		RetryPeriod:             &leaderElectionConfig.RetryPeriod.Duration,
 		RenewDeadline:           &leaderElectionConfig.RenewDeadline.Duration,
+		WebhookServer: crwebhook.NewServer(crwebhook.Options{
+			Port:    *webhookPort,
+			CertDir: *webhookCertDir,
+		}),
 	})
 	if err != nil {
 		klog.Error(err, "unable to start manager")
 		os.Exit(1)
 	}
 
+	ctx := ctrl.SetupSignalHandler()
+
 	// Setup the CRD compatibility controller
 	if err := (&crdcompatibility.CRDCompatibilityReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
+	}).SetupWithManager(ctx, mgr); err != nil {
 		klog.Error(err, "unable to create controller", "controller", "CRDCompatibility")
 		os.Exit(1)
 	}
@@ -118,7 +138,7 @@ func main() {
 
 	klog.Info("Starting CRD compatibility checker manager")
 
-	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+	if err := mgr.Start(ctx); err != nil {
 		klog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
