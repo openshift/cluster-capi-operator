@@ -21,6 +21,7 @@ import (
 
 	configv1 "github.com/openshift/api/config/v1"
 	mapiv1 "github.com/openshift/api/machine/v1beta1"
+	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 )
 
 const (
@@ -71,4 +72,7 @@ var _ = BeforeSuite(func() {
 	mapiInfrastructure = infra
 	clusterName = infra.Status.InfrastructureName
 	platform = infra.Status.PlatformStatus.Type
+
+	komega.SetClient(cl)
+	komega.SetContext(ctx)
 })
