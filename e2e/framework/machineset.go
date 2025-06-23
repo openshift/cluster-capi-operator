@@ -2,6 +2,7 @@ package framework
 
 import (
 	"fmt"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -11,6 +12,7 @@ import (
 	"k8s.io/utils/pointer"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 )
 
 type machineSetParams struct {
@@ -113,21 +115,29 @@ func WaitForMachineSetsDeleted(cl client.Client, machineSets ...*clusterv1.Machi
 	}
 }
 
-// DeleteMachineSets deletes the specified machinesets and returns an error on failure.
 func DeleteMachineSets(cl client.Client, machineSets ...*clusterv1.MachineSet) {
 	for _, ms := range machineSets {
+		if ms == nil {
+			continue
+		}
 		By(fmt.Sprintf("Deleting MachineSet %q", ms.GetName()))
-		Expect(cl.Delete(ctx, ms)).To(Succeed())
+		Eventually(func() error {
+			return cl.Delete(ctx, ms)
+		}, time.Minute, RetryShort).Should(SatisfyAny(
+			Succeed(),
+			WithTransform(apierrors.IsNotFound, BeTrue()),
+		), "Delete machineSet %s/%s should succeed, or machineSet should not be found.",
+			ms.Namespace, ms.Name)
 	}
 }
 
 // WaitForMachineSet waits for the all Machines belonging to the named
 // MachineSet to enter the "Running" phase, and for all nodes belonging to those
 // Machines to be ready.
-func WaitForMachineSet(cl client.Client, name string) {
+func WaitForMachineSet(cl client.Client, name string, namespace string) {
 	By(fmt.Sprintf("Waiting for MachineSet machines %q to enter Running phase", name))
 
-	machineSet, err := GetMachineSet(cl, name)
+	machineSet, err := GetMachineSet(cl, name, namespace)
 	Expect(err).ToNot(HaveOccurred())
 
 	Eventually(func() error {
@@ -166,12 +176,20 @@ func WaitForMachineSet(cl client.Client, name string) {
 	}, WaitOverLong, RetryMedium).Should(Succeed())
 }
 
-// GetMachineSet gets a machineset by its name from the default machine API namespace.
-func GetMachineSet(cl client.Client, name string) (*clusterv1.MachineSet, error) {
-	machineSet := &clusterv1.MachineSet{}
-	key := client.ObjectKey{Namespace: CAPINamespace, Name: name}
+// GetMachineSet gets a machineset by its name.
+func GetMachineSet(cl client.Client, name string, namespace string) (*clusterv1.MachineSet, error) {
+	if name == "" {
+		return nil, fmt.Errorf("MachineSet name cannot be empty")
+	}
 
-	Expect(cl.Get(ctx, key, machineSet)).To(Succeed())
+	machineSet := &clusterv1.MachineSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+	}
+
+	Eventually(komega.Get(machineSet), time.Minute, RetryShort).Should(Succeed(), "Failed to get machineset %s/%s.", machineSet.Namespace, machineSet.Name)
 
 	return machineSet, nil
 }
@@ -189,4 +207,42 @@ func GetMachinesFromMachineSet(cl client.Client, machineSet *clusterv1.MachineSe
 		}
 	}
 	return machinesForSet, nil
+}
+
+// GetNewestMachineFromMachineSet returns the new created machine by a given machineSet.
+func GetNewestMachineFromMachineSet(cl client.Client, machineSet *clusterv1.MachineSet) (*clusterv1.Machine, error) {
+	machines, err := GetMachinesFromMachineSet(cl, machineSet)
+	if err != nil {
+		return nil, fmt.Errorf("error getting machines: %w", err)
+	}
+
+	var machine *clusterv1.Machine
+
+	t := time.Date(0001, 01, 01, 00, 00, 00, 00, time.UTC)
+
+	for key := range machines {
+		createTime := machines[key].CreationTimestamp.Time
+		if createTime.After(t) {
+			t = createTime
+			machine = machines[key]
+		}
+	}
+
+	return machine, nil
+}
+
+// ScaleMachineSet scales a machineSet with a given name to the given number of replicas.
+func ScaleMachineSet(name string, replicas int32, namespace string) error {
+	machineSet := &clusterv1.MachineSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+	}
+
+	Eventually(komega.Update(machineSet, func() {
+		machineSet.Spec.Replicas = &replicas
+	})).Should(Succeed())
+
+	return nil
 }

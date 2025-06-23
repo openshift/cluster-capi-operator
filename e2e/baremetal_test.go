@@ -70,7 +70,7 @@ var _ = Describe("Cluster API Baremetal MachineSet", Ordered, func() {
 			"worker-user-data-managed",
 		))
 
-		framework.WaitForMachineSet(cl, machineSet.Name)
+		framework.WaitForMachineSet(cl, machineSet.Name, machineSet.Namespace)
 	})
 })
 
