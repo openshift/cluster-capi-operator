@@ -1,11 +1,13 @@
 package framework
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"strconv"
 
 	configv1 "github.com/openshift/api/config/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -31,4 +33,43 @@ func GetControlPlaneHostAndPort(cl client.Client) (string, int32, error) {
 	}
 
 	return apiUrl.Hostname(), int32(port), nil
+}
+
+// IsMachineAPIMigrationEnabled checks if the "MachineAPIMigration" feature is enabled via FeatureGate status
+func IsMachineAPIMigrationEnabled(ctx context.Context, cl client.Client) bool {
+	// Get the cluster's desired version
+	clusterVersion := &configv1.ClusterVersion{}
+	if err := cl.Get(ctx, types.NamespacedName{Name: "version"}, clusterVersion); err != nil {
+		return false
+	}
+
+	// Get the current desired version
+	var desiredVersion string
+	for _, history := range clusterVersion.Status.History {
+		if history.State == "Completed" {
+			desiredVersion = history.Version
+			break
+		}
+	}
+	if desiredVersion == "" {
+		return false
+	}
+
+	featureGate := &configv1.FeatureGate{}
+	if err := cl.Get(ctx, types.NamespacedName{Name: "cluster"}, featureGate); err != nil {
+		return false
+	}
+
+	for _, fg := range featureGate.Status.FeatureGates {
+		if fg.Version != desiredVersion {
+			continue // Skip versions that don't match our desired version
+		}
+		for _, enabled := range fg.Enabled {
+			if enabled.Name == "MachineAPIMigration" {
+				return true
+			}
+		}
+	}
+
+	return false
 }
