@@ -47,6 +47,7 @@ import (
 	"k8s.io/utils/ptr"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	ibmpowervsv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
+	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util/annotations"
 	"sigs.k8s.io/cluster-api/util/labels/format"
@@ -89,10 +90,13 @@ const (
 )
 
 var (
-	// errAssertingCAPIAWSMachine is returned when we encounter an issue asserting a client.Object into a AWSMachine.
+	// errAssertingCAPIAWSMachine is returned when we encounter an issue asserting a client.Object into an AWSMachine.
 	errAssertingCAPIAWSMachine = errors.New("error asserting the Cluster API AWSMachine object")
 
-	// errAssertingCAPIPowerVSMachine is returned when we encounter an issue asserting a client.Object into a IBMPowerVSMachine.
+	// errAssertingCAPIOpenStackMachine is returned when we encounter an issue asserting a client.Object into an OpenStackVSMachine.
+	errAssertingCAPIOpenStackMachine = errors.New("error asserting the Cluster API OpenStackMachine object")
+
+	// errAssertingCAPIBMPowerVSMachine is returned when we encounter an issue asserting a client.Object into an IBMPowerVSMachine.
 	errAssertingCAPIIBMPowerVSMachine = errors.New("error asserting the Cluster API IBMPowerVSMachine object")
 
 	// errCAPIMachineNotFound is returned when the AuthoritativeAPI is set to CAPI on the MAPI machine,
@@ -554,6 +558,8 @@ func (r *MachineSyncReconciler) convertMAPIToCAPIMachine(mapiMachine *machinev1b
 	switch r.Platform {
 	case configv1.AWSPlatformType:
 		return mapi2capi.FromAWSMachineAndInfra(mapiMachine, r.Infra).ToMachineAndInfrastructureMachine() //nolint:wrapcheck
+	case configv1.OpenStackPlatformType:
+		return mapi2capi.FromOpenStackMachineAndInfra(mapiMachine, r.Infra).ToMachineAndInfrastructureMachine() //nolint:wrapcheck
 	case configv1.PowerVSPlatformType:
 		return mapi2capi.FromPowerVSMachineAndInfra(mapiMachine, r.Infra).ToMachineAndInfrastructureMachine() //nolint:wrapcheck
 	default:
@@ -575,6 +581,18 @@ func (r *MachineSyncReconciler) convertCAPIToMAPIMachine(capiMachine *clusterv1.
 		}
 
 		return capi2mapi.FromMachineAndAWSMachineAndAWSCluster(capiMachine, awsMachine, awsCluster).ToMachine() //nolint:wrapcheck
+	case configv1.OpenStackPlatformType:
+		openStackMachine, ok := infraMachine.(*openstackv1.OpenStackMachine)
+		if !ok {
+			return nil, nil, fmt.Errorf("%w, expected OpenStackMachine, got %T", errUnexpectedInfraMachineType, infraMachine)
+		}
+
+		openStackCluster, ok := infraCluster.(*openstackv1.OpenStackCluster)
+		if !ok {
+			return nil, nil, fmt.Errorf("%w, expected OpenStackCluster, got %T", errUnexpectedInfraClusterType, infraCluster)
+		}
+
+		return capi2mapi.FromMachineAndOpenStackMachineAndOpenStackCluster(capiMachine, openStackMachine, openStackCluster).ToMachine() //nolint:wrapcheck
 	default:
 		return nil, nil, fmt.Errorf("%w: %s", errPlatformNotSupported, r.Platform)
 	}
@@ -1278,6 +1296,8 @@ func compareMAPIMachines(a, b *machinev1beta1.Machine) (map[string]any, error) {
 }
 
 // compareCAPIInfraMachines compares CAPI infra machines a and b, and returns a list of differences, or none if there are none.
+//
+//nolint:funlen
 func compareCAPIInfraMachines(platform configv1.PlatformType, infraMachine1, infraMachine2 client.Object) (map[string]any, error) {
 	switch platform {
 	case configv1.AWSPlatformType:
@@ -1289,6 +1309,27 @@ func compareCAPIInfraMachines(platform configv1.PlatformType, infraMachine1, inf
 		typedinfraMachine2, ok := infraMachine2.(*awsv1.AWSMachine)
 		if !ok {
 			return nil, errAssertingCAPIAWSMachine
+		}
+
+		diff := make(map[string]any)
+		if diffSpec := deep.Equal(typedInfraMachine1.Spec, typedinfraMachine2.Spec); len(diffSpec) > 0 {
+			diff[".spec"] = diffSpec
+		}
+
+		if diffMetadata := util.ObjectMetaEqual(typedInfraMachine1.ObjectMeta, typedinfraMachine2.ObjectMeta); len(diffMetadata) > 0 {
+			diff[".metadata"] = diffMetadata
+		}
+
+		return diff, nil
+	case configv1.OpenStackPlatformType:
+		typedInfraMachine1, ok := infraMachine1.(*openstackv1.OpenStackMachine)
+		if !ok {
+			return nil, errAssertingCAPIOpenStackMachine
+		}
+
+		typedinfraMachine2, ok := infraMachine2.(*openstackv1.OpenStackMachine)
+		if !ok {
+			return nil, errAssertingCAPIOpenStackMachine
 		}
 
 		diff := make(map[string]any)
