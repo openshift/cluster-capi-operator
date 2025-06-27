@@ -511,7 +511,7 @@ func convertAWSBlockDeviceMappingSpecToCAPI(fldPath *field.Path, mapiBlockDevice
 		}
 
 		if mapping.DeviceName == nil {
-			volume, warn, err := blockDeviceMappingSpecToVolume(fldPath.Index(i), mapping, true)
+			volume, warn, err := blockDeviceMappingSpecToVolume(fldPath.Index(i), mapping)
 			errs = append(errs, err...)
 			warnings = append(warnings, warn...)
 
@@ -520,7 +520,7 @@ func convertAWSBlockDeviceMappingSpecToCAPI(fldPath *field.Path, mapiBlockDevice
 			continue
 		}
 
-		volume, warn, err := blockDeviceMappingSpecToVolume(fldPath.Index(i), mapping, false)
+		volume, warn, err := blockDeviceMappingSpecToVolume(fldPath.Index(i), mapping)
 		errs = append(errs, err...)
 		warnings = append(warnings, warn...)
 
@@ -530,7 +530,7 @@ func convertAWSBlockDeviceMappingSpecToCAPI(fldPath *field.Path, mapiBlockDevice
 	return rootVolume, nonRootVolumes, warnings, errs
 }
 
-func blockDeviceMappingSpecToVolume(fldPath *field.Path, bdm mapiv1.BlockDeviceMappingSpec, rootVolume bool) (awsv1.Volume, []string, field.ErrorList) {
+func blockDeviceMappingSpecToVolume(fldPath *field.Path, bdm mapiv1.BlockDeviceMappingSpec) (awsv1.Volume, []string, field.ErrorList) {
 	errs := field.ErrorList{}
 	warnings := []string{}
 
@@ -539,13 +539,6 @@ func blockDeviceMappingSpecToVolume(fldPath *field.Path, bdm mapiv1.BlockDeviceM
 	}
 
 	capiKMSKey := convertKMSKeyToCAPI(bdm.EBS.KMSKey)
-
-	if rootVolume && !ptr.Deref(bdm.EBS.DeleteOnTermination, true) {
-		warnings = append(warnings, field.Invalid(fldPath.Child("ebs", "deleteOnTermination"), bdm.EBS.DeleteOnTermination, "root volume must be deleted on termination, ignoring invalid value false").Error())
-	} else if !rootVolume && !ptr.Deref(bdm.EBS.DeleteOnTermination, true) {
-		// TODO(OCPCLOUD-2717): We should support a non-true value for non-root volumes for feature parity.
-		errs = append(errs, field.Invalid(fldPath.Child("ebs", "deleteOnTermination"), bdm.EBS.DeleteOnTermination, "non-root volumes must be deleted on termination, unsupported value false"))
-	}
 
 	if len(errs) > 0 {
 		return awsv1.Volume{}, warnings, errs
