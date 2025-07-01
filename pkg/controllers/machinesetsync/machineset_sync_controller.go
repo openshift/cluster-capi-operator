@@ -342,7 +342,7 @@ func (r *MachineSetSyncReconciler) reconcileMAPIMachineSetToCAPIMachineSet(ctx c
 		return ctrl.Result{}, fmt.Errorf("unable to ensure CAPI machine set: %w", err)
 	}
 
-	if err := r.deleteOutdatedCAPIInfraMachineTemplates(ctx, mapiMachineSet, newCAPIInfraMachineTemplate); err != nil {
+	if err := r.deleteOutdatedCAPIInfraMachineTemplates(ctx, mapiMachineSet, newCAPIInfraMachineTemplate.GetName()); err != nil {
 		return ctrl.Result{}, fmt.Errorf("unable to delete outdated Cluster API infrastructure machine templates: %w", err)
 	}
 
@@ -351,19 +351,19 @@ func (r *MachineSetSyncReconciler) reconcileMAPIMachineSetToCAPIMachineSet(ctx c
 }
 
 // filterOutdatedInfraMachineTemplates takes infraMachineTemplatesList and constructs a slice of InfraMachineTemplates without newInfraMachineTemplate.
-func filterOutdatedInfraMachineTemplates(infraMachineTemplateList client.ObjectList, newInfraMachineTemplate client.Object) ([]client.Object, error) {
+func filterOutdatedInfraMachineTemplates(infraMachineTemplateList client.ObjectList, newInfraMachineTemplateName string) ([]client.Object, error) {
 	outdatedTemplates := []client.Object{}
 
 	switch list := infraMachineTemplateList.(type) {
 	case *awsv1.AWSMachineTemplateList:
 		for _, template := range list.Items {
-			if template.GetName() != newInfraMachineTemplate.GetName() {
+			if template.GetDeletionTimestamp().IsZero() && template.GetName() != newInfraMachineTemplateName {
 				outdatedTemplates = append(outdatedTemplates, &template)
 			}
 		}
 	case *ibmpowervsv1.IBMPowerVSMachineTemplateList:
 		for _, template := range list.Items {
-			if template.GetName() != newInfraMachineTemplate.GetName() {
+			if template.GetDeletionTimestamp().IsZero() && template.GetName() != newInfraMachineTemplateName {
 				outdatedTemplates = append(outdatedTemplates, &template)
 			}
 		}
@@ -375,7 +375,8 @@ func filterOutdatedInfraMachineTemplates(infraMachineTemplateList client.ObjectL
 }
 
 // deleteOutdatedCAPIInfraMachineTemplates deletes infra machine templates that have MAPI machine label of the current MachineSet and don't have the current computed hash.
-func (r *MachineSetSyncReconciler) deleteOutdatedCAPIInfraMachineTemplates(ctx context.Context, mapiMachineSet *machinev1beta1.MachineSet, newCAPIInfraMachineTemplate client.Object) error {
+// newCAPIInfraMachineTemplateName is the latest synchronized template that should not be removed.
+func (r *MachineSetSyncReconciler) deleteOutdatedCAPIInfraMachineTemplates(ctx context.Context, mapiMachineSet *machinev1beta1.MachineSet, newCAPIInfraMachineTemplateName string) error {
 	logger := log.FromContext(ctx)
 
 	machineSetMAPILabelSelector := labels.SelectorFromSet(map[string]string{controllers.MachineSetOpenshiftLabelKey: mapiMachineSet.Name})
@@ -395,7 +396,7 @@ func (r *MachineSetSyncReconciler) deleteOutdatedCAPIInfraMachineTemplates(ctx c
 		return fmt.Errorf("failed to list Cluster API infrastructure machine templates: %w", err)
 	}
 
-	outdatedTemplates, err := filterOutdatedInfraMachineTemplates(infraTemplateList, newCAPIInfraMachineTemplate)
+	outdatedTemplates, err := filterOutdatedInfraMachineTemplates(infraTemplateList, newCAPIInfraMachineTemplateName)
 	if err != nil {
 		return fmt.Errorf("failed to filter outdated Cluster API infrastructure machine templates: %w", err)
 	}
@@ -412,7 +413,7 @@ func (r *MachineSetSyncReconciler) deleteOutdatedCAPIInfraMachineTemplates(ctx c
 
 	logger.Info("Found outdated Cluster API infrastructure machine templates. Proceeding to delete", "infraMachineTemplateNames", infraMachineTemplateNames)
 
-	if err := r.deleteAllOutdatedCAPIInfraMachineTemplates(ctx, mapiMachineSet, newCAPIInfraMachineTemplate.GetName()); err != nil {
+	if err := r.deleteAllOutdatedCAPIInfraMachineTemplates(ctx, mapiMachineSet, newCAPIInfraMachineTemplateName); err != nil {
 		return fmt.Errorf("failed to delete outdated Cluster API infrastructure machine templates: %w", err)
 	}
 
@@ -833,7 +834,14 @@ func (r *MachineSetSyncReconciler) reconcileMAPItoCAPIMachineSetDeletion(ctx con
 
 	if capiMachineSet == nil {
 		logger.Info("Cluster API machine set does not exist, removing corresponding Machine API machine set sync finalizer")
-		// We don't have  a capi machine set to clean up. Just let the MAPI operators
+
+		// Clean up any CAPI infrastructure machine templates that may still exist
+		if err := r.deleteOutdatedCAPIInfraMachineTemplates(ctx, mapiMachineSet, ""); err != nil {
+			logger.Error(err, "Failed to clean up CAPI infrastructure machine templates during deletion")
+			return true, err
+		}
+
+		// We don't have a capi machine set to clean up. Just let the MAPI operators
 		// function as normal, and remove the MAPI sync finalizer.
 		if _, err := util.RemoveFinalizer(ctx, r.Client, mapiMachineSet, machinesync.SyncFinalizer); err != nil {
 			return true, fmt.Errorf("failed to remove finalizer from Machine API machine set: %w", err)
@@ -848,6 +856,12 @@ func (r *MachineSetSyncReconciler) reconcileMAPItoCAPIMachineSetDeletion(ctx con
 		if err := r.Client.Delete(ctx, capiMachineSet); err != nil {
 			return true, fmt.Errorf("failed delete Cluster API machine set: %w", err)
 		}
+	}
+
+	// Clean up CAPI infrastructure machine templates that have the machine set label
+	if err := r.deleteOutdatedCAPIInfraMachineTemplates(ctx, mapiMachineSet, ""); err != nil {
+		logger.Error(err, "Failed to clean up CAPI infrastructure machine templates during deletion")
+		return true, err
 	}
 
 	// Because the CAPI machineset is paused we must remove the CAPI finalizer manually.
@@ -909,6 +923,11 @@ func (r *MachineSetSyncReconciler) reconcileCAPItoMAPIMachineSetDeletion(ctx con
 	if slices.Contains(capiMachineSet.Finalizers, clusterv1.MachineSetFinalizer) {
 		logger.Info("Waiting on Cluster API machine set specific finalizer to be removed")
 		return true, nil
+	}
+
+	// Delete infraMachineTemplates that have the MAPI machineSet label
+	if err := r.deleteOutdatedCAPIInfraMachineTemplates(ctx, mapiMachineSet, ""); err != nil {
+		logger.Error(err, "Failed to clean up CAPI infrastructure machine templates during deletion")
 	}
 
 	// Once the CAPI machine set finalizer is gone, we can remove our sync finalizer
