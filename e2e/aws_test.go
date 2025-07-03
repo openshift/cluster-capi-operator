@@ -75,7 +75,7 @@ var _ = Describe("Cluster API AWS MachineSet", Ordered, func() {
 			"worker-user-data",
 		))
 
-		framework.WaitForMachineSet(cl, machineSet.Name)
+		framework.WaitForMachineSet(cl, machineSet.Name, machineSet.Namespace)
 
 		compareInstances(awsClient, mapiDefaultMS.Name, "aws-machineset")
 	})
