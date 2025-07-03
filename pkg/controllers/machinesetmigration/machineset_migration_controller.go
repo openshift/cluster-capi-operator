@@ -125,6 +125,11 @@ func (r *MachineSetMigrationReconciler) Reconcile(ctx context.Context, req recon
 
 	// If authoritativeAPI status is empty, it means it is the first time we see this resource.
 	// Set the status.authoritativeAPI to match the spec.authoritativeAPI.
+	//
+	// N.B. Very similar logic is also present in the Machine API machine/machineset controllers
+	// to cover for the cases when the migration controller is not running (e.g. on not yet supported platforms),
+	// as such if any change is done to this logic, please consider changing it also there. See:
+	// https://github.com/openshift/machine-api-operator/pull/1386/files#diff-3a93acbdaa255c0afa7f52535fc7df9c3890d6403035dd4c3bd47b0092eb3a37R177-R194
 	if mapiMachineSet.Status.AuthoritativeAPI == "" {
 		if err := r.applyStatusAuthoritativeAPIWithPatch(ctx, mapiMachineSet, mapiMachineSet.Spec.AuthoritativeAPI); err != nil {
 			return ctrl.Result{}, fmt.Errorf("unable to apply authoritativeAPI to status with patch: %w", err)
