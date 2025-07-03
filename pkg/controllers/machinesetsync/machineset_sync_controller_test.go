@@ -43,7 +43,6 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/mapi2capi"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -689,14 +688,11 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 						Eventually(k.Get(mapiMachineSet), timeout).Should(WithTransform(apierrors.IsNotFound, BeTrue()), "eventually mapiMachineSet should not be found")
 						Eventually(k.Get(capiMachineSet), timeout).Should(WithTransform(apierrors.IsNotFound, BeTrue()), "eventually capiMachineSet should not be found")
 
-						// The CAPA machine template should not be deleted
-						Consistently(func() (types.UID, error) {
-							if err := k.Get(capaMachineTemplate)(); err != nil {
-								return "", err
-							}
-
-							return capaMachineTemplate.GetUID(), nil
-						}).Should(Equal(uid), "machine template should not be deleted")
+						// The CAPA machine template should still exist after the MAPI and CAPI machine sets are deleted
+						Expect(k.Object(capaMachineTemplate)()).To(SatisfyAll(
+							HaveField("ObjectMeta.UID", Equal(uid)),
+							HaveField("ObjectMeta.DeletionTimestamp", BeNil()),
+						))
 					})
 
 					Context("when the CAPA machine template is updated to contain the machine set label", func() {
