@@ -342,8 +342,12 @@ func (r *MachineSetSyncReconciler) reconcileMAPIMachineSetToCAPIMachineSet(ctx c
 		return ctrl.Result{}, fmt.Errorf("unable to ensure CAPI machine set: %w", err)
 	}
 
-	if err := r.deleteOutdatedCAPIInfraMachineTemplates(ctx, mapiMachineSet, newCAPIInfraMachineTemplate.GetName()); err != nil {
+	shouldRequeue, err := r.deleteOutdatedCAPIInfraMachineTemplates(ctx, mapiMachineSet, newCAPIInfraMachineTemplate.GetName())
+	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("unable to delete outdated Cluster API infrastructure machine templates: %w", err)
+	} else if shouldRequeue {
+		logger.Info("Waiting for Cluster API infrastructure machine templates to be deleted")
+		return ctrl.Result{}, nil
 	}
 
 	return ctrl.Result{}, r.applySynchronizedConditionWithPatch(ctx, mapiMachineSet, corev1.ConditionTrue,
@@ -357,13 +361,13 @@ func filterOutdatedInfraMachineTemplates(infraMachineTemplateList client.ObjectL
 	switch list := infraMachineTemplateList.(type) {
 	case *awsv1.AWSMachineTemplateList:
 		for _, template := range list.Items {
-			if template.GetDeletionTimestamp().IsZero() && template.GetName() != newInfraMachineTemplateName {
+			if template.GetName() != newInfraMachineTemplateName {
 				outdatedTemplates = append(outdatedTemplates, &template)
 			}
 		}
 	case *ibmpowervsv1.IBMPowerVSMachineTemplateList:
 		for _, template := range list.Items {
-			if template.GetDeletionTimestamp().IsZero() && template.GetName() != newInfraMachineTemplateName {
+			if template.GetName() != newInfraMachineTemplateName {
 				outdatedTemplates = append(outdatedTemplates, &template)
 			}
 		}
@@ -374,13 +378,48 @@ func filterOutdatedInfraMachineTemplates(infraMachineTemplateList client.ObjectL
 	return outdatedTemplates, nil
 }
 
-// deleteOutdatedCAPIInfraMachineTemplates deletes infra machine templates that have MAPI machine label of the current MachineSet and don't have the current computed hash.
-// newCAPIInfraMachineTemplateName is the latest synchronized template that should not be removed.
-func (r *MachineSetSyncReconciler) deleteOutdatedCAPIInfraMachineTemplates(ctx context.Context, mapiMachineSet *machinev1beta1.MachineSet, newCAPIInfraMachineTemplateName string) error {
+// deleteOutdatedCAPIInfraMachineTemplates deletes infra machine templates that have MAPI machine set label and are not newCAPIInfraMachineTemplateName.
+func (r *MachineSetSyncReconciler) deleteOutdatedCAPIInfraMachineTemplates(ctx context.Context, mapiMachineSet *machinev1beta1.MachineSet, newCAPIInfraMachineTemplateName string) (bool, error) {
+	logger := log.FromContext(ctx)
+
+	outdatedTemplates, err := r.listOutdatedInfraMachineTemplates(ctx, mapiMachineSet, newCAPIInfraMachineTemplateName)
+	if err != nil {
+		return false, err
+	}
+
+	if len(outdatedTemplates) == 0 {
+		// There is nothing to delete. We are done.
+		return false, nil
+	}
+
+	templatesToDelete, deletingTemplates := categorizeInfraMachineTemplates(outdatedTemplates)
+
+	if len(templatesToDelete) > 0 {
+		infraMachineTemplateNames := make([]string, 0, len(templatesToDelete))
+		for _, template := range templatesToDelete {
+			infraMachineTemplateNames = append(infraMachineTemplateNames, template.GetName())
+		}
+
+		logger.Info("Found Cluster API infrastructure machine templates without deletion timestamp. Proceeding to delete", "infraMachineTemplateNames", infraMachineTemplateNames)
+
+		if err := r.deleteAllOutdatedCAPIInfraMachineTemplates(ctx, mapiMachineSet, newCAPIInfraMachineTemplateName); err != nil {
+			return true, fmt.Errorf("unable to delete outdated Cluster API infrastructure machine templates: %w", err)
+		}
+
+		return true, nil
+	}
+
+	// If we reach here, all outdated templates are being deleted.
+	logger.Info("Still waiting for Cluster API infrastructure machine templates to be deleted", "remaining", len(deletingTemplates))
+
+	return true, nil
+}
+
+// listOutdatedInfraMachineTemplates lists and filters outdated infrastructure machine templates.
+func (r *MachineSetSyncReconciler) listOutdatedInfraMachineTemplates(ctx context.Context, mapiMachineSet *machinev1beta1.MachineSet, newCAPIInfraMachineTemplateName string) ([]client.Object, error) {
 	logger := log.FromContext(ctx)
 
 	machineSetMAPILabelSelector := labels.SelectorFromSet(map[string]string{controllers.MachineSetOpenshiftLabelKey: mapiMachineSet.Name})
-
 	listOptions := []client.ListOption{
 		client.InNamespace(r.CAPINamespace),
 		client.MatchingLabelsSelector{Selector: machineSetMAPILabelSelector},
@@ -388,36 +427,33 @@ func (r *MachineSetSyncReconciler) deleteOutdatedCAPIInfraMachineTemplates(ctx c
 
 	infraTemplateList, _, err := initInfraMachineTemplateListAndInfraClusterListFromProvider(r.Platform)
 	if err != nil {
-		return fmt.Errorf("failed to get infrastructure machine template list from platform: %w", err)
+		return nil, fmt.Errorf("failed to get infrastructure machine template list from platform: %w", err)
 	}
 
 	if err := r.List(ctx, infraTemplateList, listOptions...); err != nil {
 		logger.Error(err, "Failed to list Cluster API infrastructure machine templates")
-		return fmt.Errorf("failed to list Cluster API infrastructure machine templates: %w", err)
+		return nil, fmt.Errorf("failed to list Cluster API infrastructure machine templates: %w", err)
 	}
 
 	outdatedTemplates, err := filterOutdatedInfraMachineTemplates(infraTemplateList, newCAPIInfraMachineTemplateName)
 	if err != nil {
-		return fmt.Errorf("failed to filter outdated Cluster API infrastructure machine templates: %w", err)
+		return nil, fmt.Errorf("failed to filter outdated Cluster API infrastructure machine templates: %w", err)
 	}
 
-	if len(outdatedTemplates) == 0 {
-		logger.Info("No outdated Cluster API infrastructure machine templates to delete")
-		return nil
+	return outdatedTemplates, nil
+}
+
+// categorizeInfraMachineTemplates separates templates into those that need deletion and those already being deleted.
+func categorizeInfraMachineTemplates(outdatedTemplates []client.Object) (templatesToDelete []client.Object, deletingTemplates []client.Object) {
+	for _, template := range outdatedTemplates {
+		if template.GetDeletionTimestamp().IsZero() {
+			templatesToDelete = append(templatesToDelete, template)
+		} else {
+			deletingTemplates = append(deletingTemplates, template)
+		}
 	}
 
-	infraMachineTemplateNames := []string{}
-	for _, outdatedTemplate := range outdatedTemplates {
-		infraMachineTemplateNames = append(infraMachineTemplateNames, outdatedTemplate.GetName())
-	}
-
-	logger.Info("Found outdated Cluster API infrastructure machine templates. Proceeding to delete", "infraMachineTemplateNames", infraMachineTemplateNames)
-
-	if err := r.deleteAllOutdatedCAPIInfraMachineTemplates(ctx, mapiMachineSet, newCAPIInfraMachineTemplateName); err != nil {
-		return fmt.Errorf("failed to delete outdated Cluster API infrastructure machine templates: %w", err)
-	}
-
-	return nil
+	return templatesToDelete, deletingTemplates
 }
 
 // deleteAllOutdatedCAPIInfraMachineTemplates deletes infra machine templates that have MAPI machine set label that of the current machine set and are not newCAPIInfraMachineTemplateName.
@@ -448,8 +484,6 @@ func (r *MachineSetSyncReconciler) deleteAllOutdatedCAPIInfraMachineTemplates(ct
 			return utilerrors.NewAggregate([]error{updateErr, condErr})
 		}
 	}
-
-	logger.Info("Successfully deleted outdated Cluster API infrastructure machine templates")
 
 	return nil
 }
@@ -853,9 +887,13 @@ func (r *MachineSetSyncReconciler) reconcileMAPItoCAPIMachineSetDeletionNoCAPI(c
 	logger.Info("Cluster API machine set does not exist, removing corresponding Machine API machine set sync finalizer")
 
 	// Clean up any CAPI infrastructure machine templates that may still exist
-	if err := r.deleteOutdatedCAPIInfraMachineTemplates(ctx, mapiMachineSet, ""); err != nil {
-		logger.Error(err, "Failed to clean up CAPI infrastructure machine templates during deletion")
-		return true, err
+	shouldRequeue, err := r.deleteOutdatedCAPIInfraMachineTemplates(ctx, mapiMachineSet, "")
+	if err != nil {
+		logger.Error(err, "Failed to clean up Cluster API infrastructure machine templates during deletion")
+		return true, fmt.Errorf("unable to clean up Cluster API infrastructure machine templates during deletion: %w", err)
+	} else if shouldRequeue {
+		logger.Info("Waiting for Cluster API infrastructure machine templates to be deleted")
+		return true, nil
 	}
 
 	// We don't have a capi machine set to clean up. Just let the MAPI operators
@@ -881,9 +919,13 @@ func (r *MachineSetSyncReconciler) reconcileMAPItoCAPIMachineSetDeletionNormal(c
 	}
 
 	// Clean up CAPI infrastructure machine templates that have the machine set label
-	if err := r.deleteOutdatedCAPIInfraMachineTemplates(ctx, mapiMachineSet, ""); err != nil {
-		logger.Error(err, "Failed to clean up CAPI infrastructure machine templates during deletion")
-		return true, err
+	shouldRequeue, err := r.deleteOutdatedCAPIInfraMachineTemplates(ctx, mapiMachineSet, "")
+	if err != nil {
+		logger.Error(err, "Failed to clean up Cluster API infrastructure machine templates during deletion")
+		return true, fmt.Errorf("failed to clean up Cluster API infrastructure machine templates during deletion: %w", err)
+	} else if shouldRequeue {
+		logger.Info("Waiting for Cluster API infrastructure machine templates to be deleted")
+		return true, nil
 	}
 
 	// Because the CAPI machineset is paused we must remove the CAPI finalizer manually.
@@ -970,8 +1012,13 @@ func (r *MachineSetSyncReconciler) reconcileCAPItoMAPIMachineSetDeletionNormal(c
 	}
 
 	// Delete infraMachineTemplates that have the MAPI machineSet label
-	if err := r.deleteOutdatedCAPIInfraMachineTemplates(ctx, mapiMachineSet, ""); err != nil {
-		logger.Error(err, "Failed to clean up CAPI infrastructure machine templates during deletion")
+	shouldRequeue, err := r.deleteOutdatedCAPIInfraMachineTemplates(ctx, mapiMachineSet, "")
+	if err != nil {
+		logger.Error(err, "Failed to clean up Cluster API infrastructure machine templates during deletion")
+		return true, fmt.Errorf("unable to clean up Cluster API infrastructure machine templates during deletion: %w", err)
+	} else if shouldRequeue {
+		logger.Info("Waiting for Cluster API infrastructure machine templates to be deleted")
+		return true, nil
 	}
 
 	// Once the CAPI machine set finalizer is gone, we can remove our sync finalizer
