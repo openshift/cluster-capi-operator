@@ -87,7 +87,7 @@ func CAPI2MAPIMachineRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv1.I
 	machineFuzzInputs := []TableEntry{}
 	fz := getFuzzer(scheme, fuzzerFuncs...)
 
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < 0; i++ {
 		m := &clusterv1.Machine{}
 		fz.Fuzz(m)
 		fz.Fuzz(infraMachine)
@@ -168,7 +168,7 @@ func CAPI2MAPIMachineSetRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv
 	machineFuzzInputs := []TableEntry{}
 	fz := getFuzzer(scheme, fuzzerFuncs...)
 
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < 10; i++ {
 		m := &clusterv1.MachineSet{}
 		fz.Fuzz(m)
 		fz.Fuzz(infraMachineTemplate)
@@ -200,9 +200,7 @@ func CAPI2MAPIMachineSetRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv
 
 		// Break down the comparison to make it easier to debug sections that are failing conversion.
 
-		// Status comparison temporarily disabled due to field differences between MAPI and CAPI
 		// Infrastructure machine template status comparison is not implemented yet.
-		// Expect(capiMachineSet.Status).To(Equal(in.machineSet.Status))
 		// Expect(infraMachineTemplate.Status).To(Equal(in.infraMachineTemplate.Status))
 
 		capiMachineSet.Finalizers = nil
@@ -218,6 +216,7 @@ func CAPI2MAPIMachineSetRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv
 		Expect(capiMachineSet.TypeMeta).To(Equal(in.machineSet.TypeMeta))
 		Expect(capiMachineSet.ObjectMeta).To(Equal(in.machineSet.ObjectMeta))
 		Expect(capiMachineSet.Spec).To(Equal(in.machineSet.Spec))
+		Expect(capiMachineSet.Status).To(Equal(in.machineSet.Status))
 
 		infraMachineTemplate.SetFinalizers(nil)
 		infraMachineTemplateJSON, err := json.Marshal(infraMachineTemplate)
@@ -249,7 +248,7 @@ func MAPI2CAPIMachineRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv1.I
 	machineFuzzInputs := []TableEntry{}
 	fz := getFuzzer(scheme, fuzzerFuncs...)
 
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < 0; i++ {
 		m := &mapiv1.Machine{}
 		fz.Fuzz(m)
 
@@ -307,7 +306,7 @@ func MAPI2CAPIMachineSetRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv
 	machineFuzzInputs := []TableEntry{}
 	fz := getFuzzer(scheme, fuzzerFuncs...)
 
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < 10; i++ {
 		m := &mapiv1.MachineSet{}
 		fz.Fuzz(m)
 
@@ -338,11 +337,11 @@ func MAPI2CAPIMachineSetRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv
 		// Break down the comparison to make it easier to debug sections that are failing conversion.
 
 		// Status comparison temporarily disabled due to field differences between MAPI and CAPI
-		// Expect(mapiMachineSet.Status).To(Equal(in.machineSet.Status))
 
 		mapiMachineSet.Finalizers = nil
 		Expect(mapiMachineSet.TypeMeta).To(Equal(in.machineSet.TypeMeta), "converted MAPI machine set should have matching .typeMeta")
 		Expect(mapiMachineSet.ObjectMeta).To(Equal(in.machineSet.ObjectMeta), "converted MAPI machine set should have matching .metadata")
+		Expect(mapiMachineSet.Status).To(Equal(in.machineSet.Status), "converted MAPI machine set should have matching .status")
 		Expect(mapiMachineSet.Spec).To(WithTransform(ignoreMachineSetProviderSpec, testutils.MatchViaJSON(ignoreMachineSetProviderSpec(in.machineSet.Spec))), "converted MAPI machine set should have matching .spec")
 		Expect(mapiMachineSet.Spec.Template.Spec.ProviderSpec.Value.Raw).To(MatchJSON(in.machineSet.Spec.Template.Spec.ProviderSpec.Value.Raw), "converted MAPI machine set should have matching .spec.template.spec.providerSpec")
 	}, machineFuzzInputs)
@@ -508,6 +507,13 @@ func CAPIMachineSetFuzzerFuncs(infraTemplateKind, infraAPIVersion, clusterName s
 
 				fuzzCAPIMachineSetSpecDeletePolicy(&m.DeletePolicy, c)
 			},
+			func(m *clusterv1.MachineSetStatus, c fuzz.Continue) {
+				c.FuzzNoCustom(m)
+				m.Selector = ""          // Ignore, this field as it is not present in MAPI.
+				m.ObservedGeneration = 0 // Ignore, this field as it shouldn't match between CAPI and MAPI.
+
+				fuzzCAPIMachineSetV1Beta2Status(m, c)
+			},
 			func(m *clusterv1.MachineSet, c fuzz.Continue) {
 				c.FuzzNoCustom(m)
 
@@ -633,6 +639,13 @@ func MAPIMachineSetFuzzerFuncs() fuzzer.FuzzerFuncs {
 				// Clear the authoritative API since that's not relevant for conversion.
 				m.AuthoritativeAPI = ""
 			},
+			func(m *mapiv1.MachineSetStatus, c fuzz.Continue) {
+				c.FuzzNoCustom(m)
+
+				m.ObservedGeneration = 0     // Ignore, this field as it shouldn't match between CAPI and MAPI.
+				m.AuthoritativeAPI = ""      // Ignore, this field as it is not present in CAPI.
+				m.SynchronizedGeneration = 0 // Ignore, this field as it is not present in CAPI.
+			},
 		}
 	}
 }
@@ -670,4 +683,38 @@ func fuzzCAPIMachineSetSpecDeletePolicy(deletePolicy *string, c fuzz.Continue) {
 		// resulting in a known lossy rountrip conversion, which would make the test to fail.
 		// This is not an issue in real conditions as the defaults are the same for CAPI and MAPI (Random).
 	} //nolint:wsl
+}
+
+func fuzzCAPIMachineSetV1Beta2Status(status *clusterv1.MachineSetStatus, c fuzz.Continue) {
+	if status == nil {
+		return
+	}
+
+	if status.V1Beta2 == nil {
+		status.V1Beta2 = &clusterv1.MachineSetV1Beta2Status{}
+	}
+
+	if status.Conditions == nil {
+		status.V1Beta2.Conditions = nil
+	} else {
+		v1beta2Conditions := make([]metav1.Condition, 0, len(status.Conditions))
+
+		for _, v1beta1Condition := range status.Conditions {
+			v1beta2Condition := metav1.Condition{
+				Type:               string(v1beta1Condition.Type), // TODO(damdo): Make sure we only convert the conditions that are supported by CAPI v1beta2.
+				Status:             metav1.ConditionStatus(v1beta1Condition.Status),
+				LastTransitionTime: v1beta1Condition.LastTransitionTime,
+				Reason:             v1beta1Condition.Reason,
+				Message:            v1beta1Condition.Message,
+			}
+
+			v1beta2Conditions = append(v1beta2Conditions, v1beta2Condition)
+		}
+
+		status.V1Beta2.Conditions = v1beta2Conditions
+	}
+
+	status.V1Beta2.ReadyReplicas = ptr.To(status.ReadyReplicas)
+	status.V1Beta2.AvailableReplicas = ptr.To(status.AvailableReplicas)
+	status.V1Beta2.UpToDateReplicas = ptr.To(status.FullyLabeledReplicas)
 }

@@ -23,6 +23,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/validation/field"
+	ptr "k8s.io/utils/ptr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	capierrors "sigs.k8s.io/cluster-api/errors"
 )
@@ -66,13 +67,14 @@ func fromMAPIMachineSetToCAPIMachineSet(mapiMachineSet *mapiv1.MachineSet) (*clu
 // convertMAPIMachineSetStatusToCAPI converts a MAPI MachineSetStatus to CAPI format.
 func convertMAPIMachineSetStatusToCAPI(mapiStatus mapiv1.MachineSetStatus) clusterv1.MachineSetStatus {
 	capiStatus := clusterv1.MachineSetStatus{
-		Selector:             "", // CAPI Selector field is not available in MAPI, will be populated by CAPI controller
+		Selector:             "", // TODO(damdo): check this: CAPI Selector field is not available in MAPI, will be populated by CAPI controller
 		Replicas:             mapiStatus.Replicas,
 		FullyLabeledReplicas: mapiStatus.FullyLabeledReplicas,
 		ReadyReplicas:        mapiStatus.ReadyReplicas,
 		AvailableReplicas:    mapiStatus.AvailableReplicas,
-		ObservedGeneration:   mapiStatus.ObservedGeneration,
-		Conditions:           convertMAPIConditionsToCAPI(mapiStatus.Conditions),
+		// ObservedGeneration: // Ignore, this field as it shouldn't match between CAPI and MAPI.
+		Conditions: convertMAPIMachineSetConditionsToCAPIMachineSetConditions(mapiStatus.Conditions),
+		V1Beta2:    convertMAPIMachineSetStatusToCAPIMachineSetV1Beta2Status(mapiStatus),
 	}
 
 	// Convert ErrorReason/ErrorMessage to FailureReason/FailureMessage
@@ -86,24 +88,55 @@ func convertMAPIMachineSetStatusToCAPI(mapiStatus mapiv1.MachineSetStatus) clust
 	return capiStatus
 }
 
+func convertMAPIMachineSetStatusToCAPIMachineSetV1Beta2Status(mapiStatus mapiv1.MachineSetStatus) *clusterv1.MachineSetV1Beta2Status {
+	return &clusterv1.MachineSetV1Beta2Status{
+		ReadyReplicas:     ptr.To(mapiStatus.ReadyReplicas),
+		AvailableReplicas: ptr.To(mapiStatus.AvailableReplicas),
+		UpToDateReplicas:  ptr.To(mapiStatus.FullyLabeledReplicas), // TODO(damdo): is it ok to do this?
+		Conditions:        convertMAPIMachineSetConditionsToCAPIMachineSetV1Beta2StatusConditions(mapiStatus.Conditions),
+	}
+}
+
 // convertMAPIErrorReasonToCAPIFailureReason converts MAPI MachineSetStatusError to CAPI MachineSetStatusError.
 func convertMAPIErrorReasonToCAPIFailureReason(mapiErrorReason mapiv1.MachineSetStatusError) *capierrors.MachineSetStatusError {
 	capiErrorReason := capierrors.MachineSetStatusError(mapiErrorReason)
 	return &capiErrorReason
 }
 
-// convertMAPIConditionsToCAPI converts MAPI conditions to CAPI conditions.
-func convertMAPIConditionsToCAPI(mapiConditions []mapiv1.Condition) clusterv1.Conditions {
-	if len(mapiConditions) == 0 {
+// convertMAPIMachineSetConditionsToCAPIMachineSetConditions converts MAPI conditions to CAPI conditions.
+func convertMAPIMachineSetConditionsToCAPIMachineSetConditions(mapiConditions []mapiv1.Condition) clusterv1.Conditions {
+	if mapiConditions == nil {
 		return nil
 	}
 
 	capiConditions := make(clusterv1.Conditions, 0, len(mapiConditions))
+
 	for _, mapiCondition := range mapiConditions {
 		capiCondition := clusterv1.Condition{
 			Type:               clusterv1.ConditionType(mapiCondition.Type),
 			Status:             mapiCondition.Status,
 			Severity:           clusterv1.ConditionSeverity(mapiCondition.Severity),
+			LastTransitionTime: mapiCondition.LastTransitionTime,
+			Reason:             mapiCondition.Reason,
+			Message:            mapiCondition.Message,
+		}
+		capiConditions = append(capiConditions, capiCondition)
+	}
+
+	return capiConditions
+}
+
+func convertMAPIMachineSetConditionsToCAPIMachineSetV1Beta2StatusConditions(mapiConditions []mapiv1.Condition) []metav1.Condition {
+	if mapiConditions == nil {
+		return nil
+	}
+
+	capiConditions := make([]metav1.Condition, 0, len(mapiConditions))
+
+	for _, mapiCondition := range mapiConditions {
+		capiCondition := metav1.Condition{
+			Type:               string(mapiCondition.Type), // TODO(damdo): Make sure we only convert the conditions that are supported by CAPI.
+			Status:             metav1.ConditionStatus(mapiCondition.Status),
 			LastTransitionTime: mapiCondition.LastTransitionTime,
 			Reason:             mapiCondition.Reason,
 			Message:            mapiCondition.Message,

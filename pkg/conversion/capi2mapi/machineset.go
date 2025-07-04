@@ -49,7 +49,7 @@ func fromCAPIMachineSetToMAPIMachineSet(capiMachineSet *clusterv1.MachineSet) (*
 				},
 			},
 		},
-		Status: ConvertCAPIMachineSetStatusToMAPI(capiMachineSet.Status),
+		Status: convertCAPIMachineSetStatusToMAPI(capiMachineSet.Status),
 	}
 
 	// Unused fields - Below this line are fields not used from the CAPI Machine.
@@ -66,14 +66,16 @@ func fromCAPIMachineSetToMAPIMachineSet(capiMachineSet *clusterv1.MachineSet) (*
 }
 
 // convertCAPIMachineSetStatusToMAPI converts a CAPI MachineSetStatus to MAPI format.
-func ConvertCAPIMachineSetStatusToMAPI(capiStatus clusterv1.MachineSetStatus) mapiv1.MachineSetStatus {
+func convertCAPIMachineSetStatusToMAPI(capiStatus clusterv1.MachineSetStatus) mapiv1.MachineSetStatus {
 	mapiStatus := mapiv1.MachineSetStatus{
 		Replicas:             capiStatus.Replicas,
 		FullyLabeledReplicas: capiStatus.FullyLabeledReplicas,
 		ReadyReplicas:        capiStatus.ReadyReplicas,
 		AvailableReplicas:    capiStatus.AvailableReplicas,
-		ObservedGeneration:   capiStatus.ObservedGeneration,
-		Conditions:           ConvertCAPIConditionsToMAPI(capiStatus.Conditions),
+		// ObservedGeneration: // Ignore, this field as it shouldn't match between CAPI and MAPI.
+		// AuthoritativeAPI: // Ignore, this field as it is not present in CAPI.
+		// SynchronizedGeneration: // Ignore, this field as it is not present in CAPI.
+		Conditions: convertCAPIConditionsToMAPI(capiStatus.Conditions),
 	}
 
 	// Convert FailureReason/FailureMessage to ErrorReason/ErrorMessage
@@ -94,12 +96,13 @@ func convertCAPIFailureReasonToMAPIErrorReason(capiFailureReason capierrors.Mach
 }
 
 // convertCAPIConditionsToMAPI converts CAPI conditions to MAPI conditions.
-func ConvertCAPIConditionsToMAPI(capiConditions clusterv1.Conditions) []mapiv1.Condition {
-	if len(capiConditions) == 0 {
+func convertCAPIConditionsToMAPI(capiConditions clusterv1.Conditions) []mapiv1.Condition {
+	if capiConditions == nil {
 		return nil
 	}
 
 	mapiConditions := make([]mapiv1.Condition, 0, len(capiConditions))
+
 	for _, capiCondition := range capiConditions {
 		mapiCondition := mapiv1.Condition{
 			Type:               mapiv1.ConditionType(capiCondition.Type),

@@ -38,7 +38,6 @@ var _ = Describe("capi2mapi MachineSet Status Conversion", func() {
 				FullyLabeledReplicas: 5,
 				ReadyReplicas:        4,
 				AvailableReplicas:    3,
-				ObservedGeneration:   10,
 				FailureReason:        ptr.To(capierrors.MachineSetStatusError("InvalidConfiguration")),
 				FailureMessage:       ptr.To("Test failure message"),
 				Conditions: clusterv1.Conditions{
@@ -53,13 +52,12 @@ var _ = Describe("capi2mapi MachineSet Status Conversion", func() {
 				},
 			}
 
-			mapiStatus := ConvertCAPIMachineSetStatusToMAPI(capiStatus)
+			mapiStatus := convertCAPIMachineSetStatusToMAPI(capiStatus)
 
 			Expect(mapiStatus.Replicas).To(Equal(int32(5)))
 			Expect(mapiStatus.FullyLabeledReplicas).To(Equal(int32(5)))
 			Expect(mapiStatus.ReadyReplicas).To(Equal(int32(4)))
 			Expect(mapiStatus.AvailableReplicas).To(Equal(int32(3)))
-			Expect(mapiStatus.ObservedGeneration).To(Equal(int64(10)))
 			Expect(mapiStatus.ErrorReason).ToNot(BeNil())
 			Expect(string(*mapiStatus.ErrorReason)).To(Equal("InvalidConfiguration"))
 			Expect(mapiStatus.ErrorMessage).ToNot(BeNil())
@@ -74,13 +72,12 @@ var _ = Describe("capi2mapi MachineSet Status Conversion", func() {
 		It("should handle empty CAPI MachineSetStatus", func() {
 			capiStatus := clusterv1.MachineSetStatus{}
 
-			mapiStatus := ConvertCAPIMachineSetStatusToMAPI(capiStatus)
+			mapiStatus := convertCAPIMachineSetStatusToMAPI(capiStatus)
 
 			Expect(mapiStatus.Replicas).To(Equal(int32(0)))
 			Expect(mapiStatus.FullyLabeledReplicas).To(Equal(int32(0)))
 			Expect(mapiStatus.ReadyReplicas).To(Equal(int32(0)))
 			Expect(mapiStatus.AvailableReplicas).To(Equal(int32(0)))
-			Expect(mapiStatus.ObservedGeneration).To(Equal(int64(0)))
 			Expect(mapiStatus.ErrorReason).To(BeNil())
 			Expect(mapiStatus.ErrorMessage).To(BeNil())
 			Expect(mapiStatus.Conditions).To(BeNil())
@@ -108,7 +105,7 @@ var _ = Describe("capi2mapi MachineSet Status Conversion", func() {
 				},
 			}
 
-			mapiConditions := ConvertCAPIConditionsToMAPI(capiConditions)
+			mapiConditions := convertCAPIConditionsToMAPI(capiConditions)
 
 			Expect(mapiConditions).To(HaveLen(2))
 			Expect(mapiConditions[0].Type).To(Equal(mapiv1.ConditionType("Available")))
@@ -126,7 +123,7 @@ var _ = Describe("capi2mapi MachineSet Status Conversion", func() {
 
 		It("should return nil for empty conditions", func() {
 			var capiConditions clusterv1.Conditions
-			mapiConditions := ConvertCAPIConditionsToMAPI(capiConditions)
+			mapiConditions := convertCAPIConditionsToMAPI(capiConditions)
 			Expect(mapiConditions).To(BeNil())
 		})
 	})
