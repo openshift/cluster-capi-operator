@@ -1,0 +1,6 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+For user-facing text like logs and errors, use "Cluster API" and "Machine API". For code and internal identifiers, use "CAPI" and "MAPI".
