@@ -30,7 +30,7 @@ The repository also includes:
 ### Migration Controllers
 
 - **Machine Migration Controller** (`pkg/controllers/machinemigration/`) - Handles handover of AuthoritativeAPI and object pausing for machine migration
-- **MachineSet Migration Controller** (`pkg/controllers/machinesetmigration/`) - Handles handover of AuthoritativeAPI and object pausing for machine migration
+- **MachineSet Migration Controller** (`pkg/controllers/machinesetmigration/`) - Handles handover of AuthoritativeAPI and object pausing for machineset migration
 - **Machine Sync Controller** (`pkg/controllers/machinesync/`) - Synchronizes individual machine related resources between APIs
 - **MachineSet Sync Controller** (`pkg/controllers/machinesetsync/`) - Synchronizes machineset related objects resources between APIs
 

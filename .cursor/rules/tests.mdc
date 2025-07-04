@@ -1,6 +1,5 @@
 ---
-description: ALWAYS read before running tests and linters
-globs: 
+description: ALWAYS USE before running tests and linters
 alwaysApply: false
 ---
 ### Testing Commands
