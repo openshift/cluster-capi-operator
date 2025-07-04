@@ -126,7 +126,7 @@ func CAPI2MAPIMachineRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv1.I
 
 		// Break down the comparison to make it easier to debug sections that are failing conversion.
 
-		// Do not match on status yet, we do not support status conversion.
+		// Status comparison for infrastructure machines is not implemented yet.
 		// Expect(capiMachine.Status).To(Equal(in.machine.Status))
 		// Expect(infraMachine.Status).To(Equal(in.infraMachine.Status))
 
@@ -200,7 +200,8 @@ func CAPI2MAPIMachineSetRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv
 
 		// Break down the comparison to make it easier to debug sections that are failing conversion.
 
-		// Do not match on status yet, we do not support status conversion.
+		// Status comparison temporarily disabled due to field differences between MAPI and CAPI
+		// Infrastructure machine template status comparison is not implemented yet.
 		// Expect(capiMachineSet.Status).To(Equal(in.machineSet.Status))
 		// Expect(infraMachineTemplate.Status).To(Equal(in.infraMachineTemplate.Status))
 
@@ -278,7 +279,7 @@ func MAPI2CAPIMachineRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv1.I
 
 		// Break down the comparison to make it easier to debug sections that are failing conversion.
 
-		// Do not match on status yet, we do not support status conversion.
+		// Status comparison for machines is not implemented yet.
 		// Expect(mapiMachine.Status).To(Equal(in.machine.Status))
 
 		mapiMachine.Finalizers = nil
@@ -336,7 +337,7 @@ func MAPI2CAPIMachineSetRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv
 
 		// Break down the comparison to make it easier to debug sections that are failing conversion.
 
-		// Do not match on status yet, we do not support status conversion.
+		// Status comparison temporarily disabled due to field differences between MAPI and CAPI
 		// Expect(mapiMachineSet.Status).To(Equal(in.machineSet.Status))
 
 		mapiMachineSet.Finalizers = nil
