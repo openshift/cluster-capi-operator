@@ -19,6 +19,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"sort"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
@@ -183,12 +184,11 @@ func platformToInfraPrefix(platform configv1.PlatformType) string {
 
 func (r *ClusterOperatorStatusClient) relatedObjects() []configv1.ObjectReference {
 	references := []configv1.ObjectReference{
-		{Resource: "namespaces", Name: controllers.DefaultManagedNamespace},
-		{Group: configv1.GroupName, Resource: "clusteroperators", Name: controllers.ClusterOperatorName},
-		{Resource: "namespaces", Name: r.ManagedNamespace},
+		{Group: "", Resource: "namespaces", Name: r.ManagedNamespace},
 		{Group: "", Resource: "serviceaccounts", Name: "cluster-capi-operator", Namespace: controllers.DefaultManagedNamespace},
 		{Group: "", Resource: "configmaps", Name: "cluster-capi-operator-images", Namespace: controllers.DefaultManagedNamespace},
 		{Group: "apps", Resource: "deployments", Name: "cluster-capi-operator", Namespace: controllers.DefaultManagedNamespace},
+		{Group: configv1.GroupName, Resource: "clusteroperators", Name: controllers.ClusterOperatorName},
 		{Group: "cluster.x-k8s.io", Resource: "clusters", Namespace: r.ManagedNamespace},
 		{Group: "cluster.x-k8s.io", Resource: "machines", Namespace: r.ManagedNamespace},
 		{Group: "cluster.x-k8s.io", Resource: "machinesets", Namespace: r.ManagedNamespace},
@@ -257,10 +257,57 @@ func clusterObjectNeedsUpdating(co *configv1.ClusterOperator, conds []configv1.C
 		shouldUpdate = true
 	}
 
-	if !equality.Semantic.DeepEqual(co.Status.RelatedObjects, desiredRelatedObjects) {
+	if !isRelatedObjectsDeepEqual(co.Status.RelatedObjects, desiredRelatedObjects) {
 		co.Status.RelatedObjects = desiredRelatedObjects
 		shouldUpdate = true
 	}
 
 	return co, shouldUpdate
+}
+
+// isRelatedObjectsDeepEqual compares two slices of ObjectReference and returns true if they are equal.
+// Slices that have the same elements but different ordering are still considered equal.
+func isRelatedObjectsDeepEqual(currentRelatedObjects, desiredRelatedObjects []configv1.ObjectReference) bool {
+	// Deep copy current related objects to avoid modifying the original slice.
+	currentRelatedObjectsCopy := make([]configv1.ObjectReference, len(currentRelatedObjects))
+	copy(currentRelatedObjectsCopy, currentRelatedObjects)
+
+	// Deep copy desired related objects to avoid modifying the original slice.
+	desiredRelatedObjectsCopy := make([]configv1.ObjectReference, len(desiredRelatedObjects))
+	copy(desiredRelatedObjectsCopy, desiredRelatedObjects)
+
+	// Sort current and desired related objects to make a consistent comparison.
+	// This is necessary because the related objects are not sorted by default.
+	sortRelatedObjects(currentRelatedObjectsCopy)
+	sortRelatedObjects(desiredRelatedObjectsCopy)
+
+	return equality.Semantic.DeepEqual(currentRelatedObjectsCopy, desiredRelatedObjectsCopy)
+}
+
+// isStatusConditionPresentAndEqual returns true when cond is present and equal.
+func isStatusConditionPresentAndEqual(conditions []configv1.ClusterOperatorStatusCondition, cond configv1.ClusterOperatorStatusCondition) bool {
+	for _, condition := range conditions {
+		if condition.Type == cond.Type {
+			return condition.Status == cond.Status && condition.Reason == cond.Reason && condition.Message == cond.Message
+		}
+	}
+
+	return false
+}
+
+// sortRelatedObjects sorts the related objects by group and then by resource.
+func sortRelatedObjects(relatedObjects []configv1.ObjectReference) {
+	sort.Slice(relatedObjects, func(i, j int) bool {
+		a, b := relatedObjects[i], relatedObjects[j]
+		if a.Group != b.Group {
+			return a.Group < b.Group
+		}
+		if a.Resource != b.Resource { //nolint:wsl
+			return a.Resource < b.Resource
+		}
+		if a.Namespace != b.Namespace { //nolint:wsl
+			return a.Namespace < b.Namespace
+		}
+		return a.Name < b.Name //nolint:wsl,nlreturn
+	})
 }
