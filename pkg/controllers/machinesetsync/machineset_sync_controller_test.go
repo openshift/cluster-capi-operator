@@ -35,6 +35,7 @@ import (
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	capierrors "sigs.k8s.io/cluster-api/errors"
 
 	"github.com/openshift/cluster-api-actuator-pkg/testutils"
 	consts "github.com/openshift/cluster-capi-operator/pkg/controllers"
@@ -926,6 +927,237 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 		})
 	})
 
+	Context("when testing status conversion and syncing", func() {
+		Context("when the MAPI machine set has MachineAuthority set to Machine API", func() {
+			BeforeEach(func() {
+				By("Creating the MAPI machine set")
+				mapiMachineSet = mapiMachineSetBuilder.Build()
+				Expect(k8sClient.Create(ctx, mapiMachineSet)).Should(Succeed())
+
+				By("Setting the MAPI machine set AuthoritativeAPI to MachineAPI")
+				Eventually(k.UpdateStatus(mapiMachineSet, func() {
+					mapiMachineSet.Status.AuthoritativeAPI = machinev1beta1.MachineAuthorityMachineAPI
+				})).Should(Succeed())
+			})
+
+			It("should sync MAPI status to CAPI status when MAPI machine set status is updated", func() {
+				// Wait for CAPI machine set to be created
+				capiMachineSet := capiv1resourcebuilder.MachineSet().WithName(mapiMachineSet.Name).WithNamespace(capiNamespace.Name).Build()
+				Eventually(k.Get(capiMachineSet)).Should(Succeed())
+
+				By("Updating MAPI machine set status with replica counts")
+				Eventually(k.UpdateStatus(mapiMachineSet, func() {
+					mapiMachineSet.Status.Replicas = 5
+					mapiMachineSet.Status.ReadyReplicas = 4
+					mapiMachineSet.Status.AvailableReplicas = 3
+					mapiMachineSet.Status.FullyLabeledReplicas = 5
+					mapiMachineSet.Status.ObservedGeneration = 1
+					errorReason := machinev1beta1.MachineSetStatusError("TestErrorReason")
+					mapiMachineSet.Status.ErrorReason = &errorReason
+					mapiMachineSet.Status.ErrorMessage = ptr.To("Test error message")
+				})).Should(Succeed())
+
+				By("Verifying CAPI machine set status is updated with converted values")
+				Eventually(k.Object(capiMachineSet), timeout).Should(
+					SatisfyAll(
+						HaveField("Status.Replicas", Equal(int32(5))),
+						HaveField("Status.ReadyReplicas", Equal(int32(4))),
+						HaveField("Status.AvailableReplicas", Equal(int32(3))),
+						HaveField("Status.FullyLabeledReplicas", Equal(int32(5))),
+						HaveField("Status.ObservedGeneration", Equal(int64(1))),
+					),
+				)
+
+				By("Verifying CAPI machine set has converted error fields")
+				Eventually(k.Get(capiMachineSet)).Should(Succeed())
+				Expect(capiMachineSet.Status.FailureReason).ToNot(BeNil())
+				Expect(string(*capiMachineSet.Status.FailureReason)).To(Equal("TestErrorReason"))
+				Expect(capiMachineSet.Status.FailureMessage).ToNot(BeNil())
+				Expect(*capiMachineSet.Status.FailureMessage).To(Equal("Test error message"))
+
+				By("Verifying CAPI-specific fields are properly set")
+				Eventually(k.Get(capiMachineSet)).Should(Succeed())
+				Expect(capiMachineSet.Status.Selector).To(BeEmpty()) // Selector is CAPI-specific and not converted
+			})
+
+			It("should handle MAPI condition conversion to CAPI conditions", func() {
+				// Wait for CAPI machine set to be created
+				capiMachineSet := capiv1resourcebuilder.MachineSet().WithName(mapiMachineSet.Name).WithNamespace(capiNamespace.Name).Build()
+				Eventually(k.Get(capiMachineSet)).Should(Succeed())
+
+				By("Updating MAPI machine set with conditions")
+				Eventually(k.UpdateStatus(mapiMachineSet, func() {
+					mapiMachineSet.Status.Conditions = []machinev1beta1.Condition{
+						{
+							Type:               "Ready",
+							Status:             corev1.ConditionTrue,
+							LastTransitionTime: metav1.Now(),
+							Reason:             "MachineReady",
+							Message:            "Machine is ready",
+						},
+						{
+							Type:               "Available",
+							Status:             corev1.ConditionFalse,
+							LastTransitionTime: metav1.Now(),
+							Reason:             "MachineNotAvailable",
+							Message:            "Machine is not available",
+						},
+					}
+				})).Should(Succeed())
+
+				By("Verifying CAPI machine set has converted conditions")
+				Eventually(k.Object(capiMachineSet), timeout).Should(
+					HaveField("Status.Conditions", HaveLen(2)),
+				)
+
+				Eventually(k.Get(capiMachineSet)).Should(Succeed())
+				Expect(capiMachineSet.Status.Conditions).To(ContainElement(
+					SatisfyAll(
+						HaveField("Type", Equal(clusterv1.ConditionType("Ready"))),
+						HaveField("Status", Equal(corev1.ConditionTrue)),
+						HaveField("Reason", Equal("MachineReady")),
+						HaveField("Message", Equal("Machine is ready")),
+					),
+				))
+				Expect(capiMachineSet.Status.Conditions).To(ContainElement(
+					SatisfyAll(
+						HaveField("Type", Equal(clusterv1.ConditionType("Available"))),
+						HaveField("Status", Equal(corev1.ConditionFalse)),
+						HaveField("Reason", Equal("MachineNotAvailable")),
+						HaveField("Message", Equal("Machine is not available")),
+					),
+				))
+			})
+		})
+
+		Context("when the MAPI machine set has MachineAuthority set to Cluster API", func() {
+			BeforeEach(func() {
+				By("Creating the MAPI machine set")
+				mapiMachineSet = mapiMachineSetBuilder.Build()
+				Expect(k8sClient.Create(ctx, mapiMachineSet)).Should(Succeed())
+
+				By("Creating the CAPI machine set")
+				capiMachineSet = capiMachineSetBuilder.Build()
+				capiMachineSet.SetFinalizers([]string{clusterv1.MachineSetFinalizer})
+				Expect(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
+
+				By("Setting the MAPI machine set AuthoritativeAPI to ClusterAPI")
+				Eventually(k.UpdateStatus(mapiMachineSet, func() {
+					mapiMachineSet.Status.AuthoritativeAPI = machinev1beta1.MachineAuthorityClusterAPI
+				})).Should(Succeed())
+			})
+
+			It("should sync CAPI status to MAPI status when CAPI machine set status is updated", func() {
+				By("Updating CAPI machine set status with replica counts")
+				Eventually(k.UpdateStatus(capiMachineSet, func() {
+					capiMachineSet.Status.Replicas = 7
+					capiMachineSet.Status.ReadyReplicas = 6
+					capiMachineSet.Status.AvailableReplicas = 5
+					capiMachineSet.Status.FullyLabeledReplicas = 7
+					capiMachineSet.Status.ObservedGeneration = 2
+					failureReason := capierrors.MachineSetStatusError("TestCAPIFailureReason")
+					capiMachineSet.Status.FailureReason = &failureReason
+					capiMachineSet.Status.FailureMessage = ptr.To("Test CAPI failure message")
+					capiMachineSet.Status.Selector = "test-selector" // CAPI-specific field
+				})).Should(Succeed())
+
+				By("Verifying MAPI machine set status is updated with converted values")
+				Eventually(k.Object(mapiMachineSet), timeout).Should(
+					SatisfyAll(
+						HaveField("Status.Replicas", Equal(int32(7))),
+						HaveField("Status.ReadyReplicas", Equal(int32(6))),
+						HaveField("Status.AvailableReplicas", Equal(int32(5))),
+						HaveField("Status.FullyLabeledReplicas", Equal(int32(7))),
+						HaveField("Status.ObservedGeneration", Equal(int64(2))),
+					),
+				)
+
+				By("Verifying MAPI machine set has converted error fields")
+				Eventually(k.Get(mapiMachineSet)).Should(Succeed())
+				Expect(mapiMachineSet.Status.ErrorReason).ToNot(BeNil())
+				Expect(string(*mapiMachineSet.Status.ErrorReason)).To(Equal("TestCAPIFailureReason"))
+				Expect(mapiMachineSet.Status.ErrorMessage).ToNot(BeNil())
+				Expect(*mapiMachineSet.Status.ErrorMessage).To(Equal("Test CAPI failure message"))
+
+				By("Verifying MAPI-specific fields are preserved")
+				Eventually(k.Get(mapiMachineSet)).Should(Succeed())
+				Expect(mapiMachineSet.Status.AuthoritativeAPI).To(Equal(machinev1beta1.MachineAuthorityClusterAPI))
+			})
+
+			It("should handle CAPI condition conversion to MAPI conditions", func() {
+				By("Updating CAPI machine set with conditions")
+				Eventually(k.UpdateStatus(capiMachineSet, func() {
+					capiMachineSet.Status.Conditions = []clusterv1.Condition{
+						{
+							Type:               "ReplicasReady",
+							Status:             corev1.ConditionTrue,
+							LastTransitionTime: metav1.Now(),
+							Reason:             "AllReplicasReady",
+							Message:            "All replicas are ready",
+						},
+						{
+							Type:               "ScalingUp",
+							Status:             corev1.ConditionFalse,
+							LastTransitionTime: metav1.Now(),
+							Reason:             "NotScaling",
+							Message:            "Not currently scaling",
+						},
+					}
+				})).Should(Succeed())
+
+				By("Verifying MAPI machine set has converted conditions")
+				Eventually(k.Object(mapiMachineSet), timeout).Should(
+					HaveField("Status.Conditions", HaveLen(2)),
+				)
+
+				Eventually(k.Get(mapiMachineSet)).Should(Succeed())
+				Expect(mapiMachineSet.Status.Conditions).To(ContainElement(
+					SatisfyAll(
+						HaveField("Type", Equal("ReplicasReady")),
+						HaveField("Status", Equal(corev1.ConditionTrue)),
+						HaveField("Reason", Equal("AllReplicasReady")),
+						HaveField("Message", Equal("All replicas are ready")),
+					),
+				))
+				Expect(mapiMachineSet.Status.Conditions).To(ContainElement(
+					SatisfyAll(
+						HaveField("Type", Equal("ScalingUp")),
+						HaveField("Status", Equal(corev1.ConditionFalse)),
+						HaveField("Reason", Equal("NotScaling")),
+						HaveField("Message", Equal("Not currently scaling")),
+					),
+				))
+			})
+
+			It("should properly handle status-only updates without affecting spec", func() {
+				// Get initial generation of both machine sets
+				Eventually(k.Get(mapiMachineSet)).Should(Succeed())
+				initialMAPIGeneration := mapiMachineSet.Generation
+				Eventually(k.Get(capiMachineSet)).Should(Succeed())
+				initialCAPIGeneration := capiMachineSet.Generation
+
+				By("Updating only CAPI machine set status")
+				Eventually(k.UpdateStatus(capiMachineSet, func() {
+					capiMachineSet.Status.Replicas = 10
+					capiMachineSet.Status.ReadyReplicas = 9
+				})).Should(Succeed())
+
+				By("Verifying MAPI machine set status is updated")
+				Eventually(k.Object(mapiMachineSet), timeout).Should(
+					SatisfyAll(
+						HaveField("Status.Replicas", Equal(int32(10))),
+						HaveField("Status.ReadyReplicas", Equal(int32(9))),
+					),
+				)
+
+				By("Verifying spec generation is not changed (status-only update)")
+				Eventually(k.Get(mapiMachineSet)).Should(Succeed())
+				Expect(mapiMachineSet.Generation).To(Equal(initialMAPIGeneration))
+				Eventually(k.Get(capiMachineSet)).Should(Succeed())
+				Expect(capiMachineSet.Generation).To(Equal(initialCAPIGeneration))
+			})
+		})
+	})
 })
 
 var _ = Describe("compareMAPIMachineSets", func() {
