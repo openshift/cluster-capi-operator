@@ -20,6 +20,7 @@ import (
 
 	mapiv1 "github.com/openshift/api/machine/v1beta1"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/validation/field"
@@ -112,15 +113,29 @@ func convertMAPIMachineSetConditionsToCAPIMachineSetConditions(mapiConditions []
 	capiConditions := make(clusterv1.Conditions, 0, len(mapiConditions))
 
 	for _, mapiCondition := range mapiConditions {
+		// Ignore MAPI specific conditions.
+		// TODO(damdo): Make sure we only convert the conditions that are supported by CAPI.
+		if mapiCondition.Type == "Paused" || mapiCondition.Type == "Synchronized" {
+			continue
+		}
+
 		capiCondition := clusterv1.Condition{
 			Type:               clusterv1.ConditionType(mapiCondition.Type),
 			Status:             mapiCondition.Status,
-			Severity:           clusterv1.ConditionSeverity(mapiCondition.Severity),
 			LastTransitionTime: mapiCondition.LastTransitionTime,
 			Reason:             mapiCondition.Reason,
 			Message:            mapiCondition.Message,
 		}
+		// Severity must only be set when the condition is False.
+		if mapiCondition.Status == corev1.ConditionFalse && mapiCondition.Severity != "" {
+			capiCondition.Severity = clusterv1.ConditionSeverity(mapiCondition.Severity)
+		}
+
 		capiConditions = append(capiConditions, capiCondition)
+	}
+
+	if len(capiConditions) == 0 {
+		return nil
 	}
 
 	return capiConditions
@@ -134,14 +149,26 @@ func convertMAPIMachineSetConditionsToCAPIMachineSetV1Beta2StatusConditions(mapi
 	capiConditions := make([]metav1.Condition, 0, len(mapiConditions))
 
 	for _, mapiCondition := range mapiConditions {
+		// Ignore MAPI specific conditions.
+		// TODO(damdo): Make sure we only convert the conditions that are supported by CAPI.
+		if mapiCondition.Type == "Paused" || mapiCondition.Type == "Synchronized" {
+			continue
+		}
+
 		capiCondition := metav1.Condition{
-			Type:               string(mapiCondition.Type), // TODO(damdo): Make sure we only convert the conditions that are supported by CAPI.
+			Type:               string(mapiCondition.Type),
 			Status:             metav1.ConditionStatus(mapiCondition.Status),
 			LastTransitionTime: mapiCondition.LastTransitionTime,
-			Reason:             mapiCondition.Reason,
-			Message:            mapiCondition.Message,
+			// Severity is not supported by CAPI v1beta2 status condition (metav1.Condition).
+			Reason:  mapiCondition.Reason,
+			Message: mapiCondition.Message,
 		}
+
 		capiConditions = append(capiConditions, capiCondition)
+	}
+
+	if len(capiConditions) == 0 {
+		return nil
 	}
 
 	return capiConditions
