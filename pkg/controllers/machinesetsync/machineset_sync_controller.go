@@ -333,7 +333,7 @@ func (r *MachineSetSyncReconciler) reconcileMAPIMachineSetToCAPIMachineSet(ctx c
 		r.Recorder.Event(mapiMachineSet, corev1.EventTypeWarning, "ConversionWarning", warning)
 	}
 
-	copyCapiObjectMeta(capiMachineSet, newCAPIMachineSet, r.CAPINamespace, authoritativeAPI, clusterOwnerRefence)
+	restoreCAPIFields(capiMachineSet, newCAPIMachineSet, r.CAPINamespace, authoritativeAPI, clusterOwnerRefence)
 
 	if err := r.ensureCAPIInfraMachineTemplate(ctx, mapiMachineSet, newCAPIMachineSet, newCAPIInfraMachineTemplate, clusterOwnerRefence); err != nil {
 		return ctrl.Result{}, fmt.Errorf("unable to ensure CAPI infra machine template: %w", err)
@@ -551,7 +551,7 @@ func (r *MachineSetSyncReconciler) reconcileCAPIMachineSetToMAPIMachineSet(ctx c
 		r.Recorder.Event(mapiMachineSet, corev1.EventTypeWarning, "ConversionWarning", warning)
 	}
 
-	copyMapiObjectMeta(mapiMachineSet, newMapiMachineSet)
+	restoreMAPIFields(mapiMachineSet, newMapiMachineSet)
 
 	if err := r.createOrUpdateMAPIMachineSet(ctx, mapiMachineSet, newMapiMachineSet); err != nil {
 		return ctrl.Result{}, fmt.Errorf("unable to ensure MAPI machine set: %w", err)
@@ -1161,7 +1161,9 @@ func compareMAPIMachineSets(a, b *machinev1beta1.MachineSet) (map[string]any, er
 	return diff, nil
 }
 
-func copyCapiObjectMeta(capiMachineSet, newCAPIMachineSet *clusterv1.MachineSet, capiNamespace string, authoritativeAPI machinev1beta1.MachineAuthority, clusterOwnerRefence metav1.OwnerReference) {
+// restoreCAPIFields restores the CAPI machine set fields to the new CAPI machine set.
+func restoreCAPIFields(capiMachineSet, newCAPIMachineSet *clusterv1.MachineSet, capiNamespace string, authoritativeAPI machinev1beta1.MachineAuthority, clusterOwnerRefence metav1.OwnerReference) {
+	// Restore the CAPI object fields if a CAPI machine set already existed.
 	if capiMachineSet != nil {
 		newCAPIMachineSet.SetGeneration(capiMachineSet.GetGeneration())
 		newCAPIMachineSet.SetUID(capiMachineSet.GetUID())
@@ -1172,8 +1174,11 @@ func copyCapiObjectMeta(capiMachineSet, newCAPIMachineSet *clusterv1.MachineSet,
 		newCAPIMachineSet.SetFinalizers(capiMachineSet.GetFinalizers())
 	}
 
+	// Restore the CAPI machine set namespace and template infrastructure ref namespace.
 	newCAPIMachineSet.SetNamespace(capiNamespace)
 	newCAPIMachineSet.Spec.Template.Spec.InfrastructureRef.Namespace = capiNamespace
+
+	// Restore the Cluster object owner reference.
 	newCAPIMachineSet.OwnerReferences = []metav1.OwnerReference{clusterOwnerRefence}
 
 	if authoritativeAPI == machinev1beta1.MachineAuthorityMachineAPI {
@@ -1186,13 +1191,16 @@ func copyCapiObjectMeta(capiMachineSet, newCAPIMachineSet *clusterv1.MachineSet,
 	}
 }
 
-func copyMapiObjectMeta(mapiMachineSet, newMapiMachineSet *machinev1beta1.MachineSet) {
+// restoreMAPIFields restores the MAPI machine set fields to the new MAPI machine set.
+func restoreMAPIFields(mapiMachineSet, newMapiMachineSet *machinev1beta1.MachineSet) {
+	// Restore the MAPI object metadata fields.
 	newMapiMachineSet.SetGeneration(mapiMachineSet.GetGeneration())
 	newMapiMachineSet.SetUID(mapiMachineSet.GetUID())
 	newMapiMachineSet.SetCreationTimestamp(mapiMachineSet.GetCreationTimestamp())
 	newMapiMachineSet.SetManagedFields(mapiMachineSet.GetManagedFields())
 	newMapiMachineSet.SetResourceVersion(util.GetResourceVersion(client.Object(mapiMachineSet)))
 	newMapiMachineSet.SetNamespace(mapiMachineSet.GetNamespace())
+	// Restore the MAPI machine set template labels.
 	newMapiMachineSet.Spec.Template.ObjectMeta.Labels = util.MergeMaps(mapiMachineSet.Spec.Template.ObjectMeta.Labels, newMapiMachineSet.Spec.Template.ObjectMeta.Labels)
 	newMapiMachineSet.Spec.Template.Spec.ObjectMeta.Labels = util.MergeMaps(mapiMachineSet.Spec.Template.Spec.ObjectMeta.Labels, newMapiMachineSet.Spec.Template.Spec.ObjectMeta.Labels)
 	// Restore API authoritativeness, as it gets lost in MAPI->CAPI->MAPI translation.
