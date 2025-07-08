@@ -553,82 +553,8 @@ func (r *MachineSetSyncReconciler) reconcileCAPIMachineSetToMAPIMachineSet(ctx c
 
 	copyMapiObjectMeta(mapiMachineSet, newMapiMachineSet)
 
-	mapiMachineSetsDiff, err := compareMAPIMachineSets(mapiMachineSet, newMapiMachineSet)
-	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("unable to compare MAPI machine sets: %w", err)
-	}
-
-	updated := false
-	bkNewMapiMachineSet := newMapiMachineSet.DeepCopy()
-
-	if hasSpecOrMetadataOrProviderSpecChanges(mapiMachineSetsDiff) {
-		logger.Info("Changes detected for MAPI machine set. Updating it", "diff", fmt.Sprintf("%+v", mapiMachineSetsDiff))
-
-		if err := r.Update(ctx, newMapiMachineSet.DeepCopy()); err != nil {
-			logger.Error(err, "Failed to update MAPI machine set")
-
-			updateErr := fmt.Errorf("failed to update MAPI machine set: %w", err)
-
-			if condErr := r.applySynchronizedConditionWithPatch(
-				ctx, mapiMachineSet, corev1.ConditionFalse, reasonFailedToUpdateMAPIMachineSet, updateErr.Error(), nil); condErr != nil {
-				return ctrl.Result{}, utilerrors.NewAggregate([]error{updateErr, condErr})
-			}
-
-			return ctrl.Result{}, updateErr
-		}
-
-		updated = true
-	}
-
-	// If the MAPI machine set was updated, we need to compare it again to the new MAPI machine set to see if there are any changes.
-	if updated {
-		mapiMachineSet = bkNewMapiMachineSet.DeepCopy()
-		mapiMachineSetsDiff, err = compareMAPIMachineSets(mapiMachineSet, newMapiMachineSet)
-		if err != nil {
-			return ctrl.Result{}, fmt.Errorf("unable to compare MAPI machine sets: %w", err)
-		}
-	}
-
-	if hasStatusChanges(mapiMachineSetsDiff) {
-		logger.Info("Changes detected for MAPI machine set status. Updating it", "diff", fmt.Sprintf("%+v", mapiMachineSetsDiff))
-
-		patchBase := client.MergeFrom(mapiMachineSet.DeepCopy())
-
-		// Apply status changes from the new MAPI machine set.
-		mapiMachineSet.Status.Replicas = newMapiMachineSet.Status.Replicas
-		mapiMachineSet.Status.ReadyReplicas = newMapiMachineSet.Status.ReadyReplicas
-		mapiMachineSet.Status.AvailableReplicas = newMapiMachineSet.Status.AvailableReplicas
-		mapiMachineSet.Status.FullyLabeledReplicas = newMapiMachineSet.Status.FullyLabeledReplicas
-		mapiMachineSet.Status.ErrorReason = newMapiMachineSet.Status.ErrorReason
-		mapiMachineSet.Status.ErrorMessage = newMapiMachineSet.Status.ErrorMessage
-
-		// TODO(damdo): Restore the Conditions.
-		// Conditions: newMapiMachineSet.Status.Conditions, // These will need to be appended?
-
-		if isPatchRequired, err := util.IsPatchRequired(mapiMachineSet, patchBase); err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to check if patch is required: %w", err)
-		} else if isPatchRequired {
-			if err := r.Status().Patch(ctx, mapiMachineSet, patchBase); err != nil {
-				logger.Error(err, "Failed to update MAPI machine set status")
-
-				updateErr := fmt.Errorf("failed to update MAPI machine set status: %w", err)
-
-				if condErr := r.applySynchronizedConditionWithPatch(
-					ctx, mapiMachineSet, corev1.ConditionFalse, reasonFailedToUpdateMAPIMachineSet, updateErr.Error(), nil); condErr != nil {
-					return ctrl.Result{}, utilerrors.NewAggregate([]error{updateErr, condErr})
-				}
-
-				return ctrl.Result{}, updateErr
-			}
-
-			updated = true
-		}
-	}
-
-	if updated {
-		logger.Info("Successfully updated MAPI machine set")
-	} else {
-		logger.Info("No changes detected for MAPI machine set")
+	if err := r.createOrUpdateMAPIMachineSet(ctx, mapiMachineSet, newMapiMachineSet); err != nil {
+		return ctrl.Result{}, fmt.Errorf("unable to ensure MAPI machine set: %w", err)
 	}
 
 	return ctrl.Result{}, r.applySynchronizedConditionWithPatch(ctx, mapiMachineSet, corev1.ConditionTrue,
@@ -807,7 +733,6 @@ func (r *MachineSetSyncReconciler) createOrUpdateCAPIMachineSet(ctx context.Cont
 	capiMachineSetsDiff := compareCAPIMachineSets(capiMachineSet, newCAPIMachineSet)
 
 	updated := false
-	bkNewCAPIMachineSet := newCAPIMachineSet.DeepCopy()
 
 	if hasSpecOrMetadataOrProviderSpecChanges(capiMachineSetsDiff) {
 		logger.Info("Changes detected for CAPI machine set. Updating it", "diff", fmt.Sprintf("%+v", capiMachineSetsDiff))
@@ -827,12 +752,6 @@ func (r *MachineSetSyncReconciler) createOrUpdateCAPIMachineSet(ctx context.Cont
 		updated = true
 	}
 
-	// If the CAPI machine set was updated, we need to compare it again to the new CAPI machine set to see if there are any changes.
-	if updated {
-		capiMachineSet = bkNewCAPIMachineSet.DeepCopy()
-		capiMachineSetsDiff = compareCAPIMachineSets(capiMachineSet, newCAPIMachineSet)
-	}
-
 	if hasStatusChanges(capiMachineSetsDiff) {
 		logger.Info("Changes detected for CAPI machine set status. Updating it", "diff", fmt.Sprintf("%+v", capiMachineSetsDiff))
 
@@ -846,21 +765,58 @@ func (r *MachineSetSyncReconciler) createOrUpdateCAPIMachineSet(ctx context.Cont
 		capiMachineSet.Status.FailureReason = newCAPIMachineSet.Status.FailureReason
 		capiMachineSet.Status.FailureMessage = newCAPIMachineSet.Status.FailureMessage
 
-		patchBaseData, _ := patchBase.Data(capiMachineSet)
-		logger.Info("patchBase", "patchBase", string(patchBaseData))
-
 		// TODO(damdo): Restore the Conditions.
 		// Conditions: newCAPIMachineSet.Status.Conditions, // These will need to be appended?
 
-		// if isPatchRequired, err := util.IsPatchRequired(capiMachineSet, patchBase); err != nil {
-		// 	return fmt.Errorf("failed to check if patch is required: %w", err)
-		// } else if isPatchRequired {
-		if err := r.Status().Patch(ctx, capiMachineSet, patchBase); err != nil {
-			logger.Error(err, "Failed to update CAPI machine set status")
+		if isPatchRequired, err := util.IsPatchRequired(capiMachineSet, patchBase); err != nil {
+			return fmt.Errorf("failed to check if patch is required: %w", err)
+		} else if isPatchRequired {
+			if err := r.Status().Patch(ctx, capiMachineSet, patchBase); err != nil {
+				logger.Error(err, "Failed to update CAPI machine set status")
 
-			updateErr := fmt.Errorf("failed to update CAPI machine set status: %w", err)
+				updateErr := fmt.Errorf("failed to update CAPI machine set status: %w", err)
 
-			if condErr := r.applySynchronizedConditionWithPatch(ctx, mapiMachineSet, corev1.ConditionFalse, reasonFailedToUpdateCAPIMachineSet, updateErr.Error(), nil); condErr != nil {
+				if condErr := r.applySynchronizedConditionWithPatch(ctx, mapiMachineSet, corev1.ConditionFalse, reasonFailedToUpdateCAPIMachineSet, updateErr.Error(), nil); condErr != nil {
+					return utilerrors.NewAggregate([]error{updateErr, condErr})
+				}
+
+				return updateErr
+			}
+
+			updated = true
+		}
+	}
+
+	if updated {
+		logger.Info("Successfully updated CAPI machine set")
+	} else {
+		logger.Info("No changes detected for CAPI machine set")
+	}
+
+	return nil
+}
+
+// createOrUpdateMAPIMachineSet creates a MAPI machine set from a CAPI one, or updates if it exists and it is out of date.
+func (r *MachineSetSyncReconciler) createOrUpdateMAPIMachineSet(ctx context.Context, mapiMachineSet *machinev1beta1.MachineSet, newMAPIMachineSet *machinev1beta1.MachineSet) error {
+	logger := log.FromContext(ctx)
+
+	mapiMachineSetsDiff, err := compareMAPIMachineSets(mapiMachineSet, newMAPIMachineSet)
+	if err != nil {
+		return fmt.Errorf("unable to compare MAPI machine sets: %w", err)
+	}
+
+	updated := false
+
+	if hasSpecOrMetadataOrProviderSpecChanges(mapiMachineSetsDiff) {
+		logger.Info("Changes detected for MAPI machine set. Updating it", "diff", fmt.Sprintf("%+v", mapiMachineSetsDiff))
+
+		if err := r.Update(ctx, newMAPIMachineSet.DeepCopy()); err != nil {
+			logger.Error(err, "Failed to update MAPI machine set")
+
+			updateErr := fmt.Errorf("failed to update MAPI machine set: %w", err)
+
+			if condErr := r.applySynchronizedConditionWithPatch(
+				ctx, mapiMachineSet, corev1.ConditionFalse, reasonFailedToUpdateMAPIMachineSet, updateErr.Error(), nil); condErr != nil {
 				return utilerrors.NewAggregate([]error{updateErr, condErr})
 			}
 
@@ -868,13 +824,48 @@ func (r *MachineSetSyncReconciler) createOrUpdateCAPIMachineSet(ctx context.Cont
 		}
 
 		updated = true
-		// }
+	}
+
+	if hasStatusChanges(mapiMachineSetsDiff) {
+		logger.Info("Changes detected for MAPI machine set status. Updating it", "diff", fmt.Sprintf("%+v", mapiMachineSetsDiff))
+
+		patchBase := client.MergeFrom(mapiMachineSet.DeepCopy())
+
+		// Apply status changes from the new MAPI machine set.
+		mapiMachineSet.Status.Replicas = newMAPIMachineSet.Status.Replicas
+		mapiMachineSet.Status.ReadyReplicas = newMAPIMachineSet.Status.ReadyReplicas
+		mapiMachineSet.Status.AvailableReplicas = newMAPIMachineSet.Status.AvailableReplicas
+		mapiMachineSet.Status.FullyLabeledReplicas = newMAPIMachineSet.Status.FullyLabeledReplicas
+		mapiMachineSet.Status.ErrorReason = newMAPIMachineSet.Status.ErrorReason
+		mapiMachineSet.Status.ErrorMessage = newMAPIMachineSet.Status.ErrorMessage
+
+		// TODO(damdo): Restore the Conditions.
+		// Conditions: newMapiMachineSet.Status.Conditions, // These will need to be appended?
+
+		if isPatchRequired, err := util.IsPatchRequired(mapiMachineSet, patchBase); err != nil {
+			return fmt.Errorf("failed to check if patch is required: %w", err)
+		} else if isPatchRequired {
+			if err := r.Status().Patch(ctx, mapiMachineSet, patchBase); err != nil {
+				logger.Error(err, "Failed to update MAPI machine set status")
+
+				updateErr := fmt.Errorf("failed to update MAPI machine set status: %w", err)
+
+				if condErr := r.applySynchronizedConditionWithPatch(
+					ctx, mapiMachineSet, corev1.ConditionFalse, reasonFailedToUpdateMAPIMachineSet, updateErr.Error(), nil); condErr != nil {
+					return utilerrors.NewAggregate([]error{updateErr, condErr})
+				}
+
+				return updateErr
+			}
+
+			updated = true
+		}
 	}
 
 	if updated {
-		logger.Info("Successfully updated CAPI machine set")
+		logger.Info("Successfully updated MAPI machine set")
 	} else {
-		logger.Info("No changes detected for CAPI machine set")
+		logger.Info("No changes detected for MAPI machine set")
 	}
 
 	return nil
