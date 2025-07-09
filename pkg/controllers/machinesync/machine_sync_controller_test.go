@@ -723,13 +723,13 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
 metadata:
-  name: openshift-cluster-api-stop-machine-version-edits
+  name: openshift-cluster-api-stop-edits-machine
 spec:
   matchResources:
     namespaceSelector:
       matchLabels:
         name: openshift-cluster-api
-  policyName: openshift-cluster-api-stop-machine-version-edits
+  policyName: openshift-cluster-api-stop-edits-machine
   validationActions:
       - Deny`
 
@@ -737,7 +737,7 @@ spec:
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
-  name: openshift-cluster-api-stop-machine-version-edits
+  name: openshift-cluster-api-stop-edits-machine
 spec:
   failurePolicy: Fail
   matchConstraints:
@@ -746,10 +746,56 @@ spec:
         apiVersions: ["*"]
         operations: ["CREATE", "UPDATE"]
         resources: ["machines"]
+  variables:
+    - name: newVersion
+      expression: "object.spec.?version.hasValue() ? object.spec.?version.value()     : {}"
+    - name: newReadinessGates
+      expression: "object.spec.?readinessGates.hasValue() ? object.spec.?readinessGates.value()      : {}"
   validations:
-    - expression: "false"
-      message: "The 'spec.template.version' field should not be set."
+    - expression: "variables.newVersion == {}"
+      message: "The 'spec.version' field should not be set."
+    - expression: "variables.newReadinessGates == {}"
+      message: "The 'spec.readinessGates' field should not be set."
   `
+
+		// 		bindingYaml := `
+		// apiVersion: admissionregistration.k8s.io/v1
+		// kind: ValidatingAdmissionPolicyBinding
+		// metadata:
+		//   name: openshift-cluster-api-stop-edits-machinesets
+		// spec:
+		//   matchResources:
+		//     namespaceSelector:
+		//       matchLabels:
+		//         name: openshift-cluster-api
+		//   policyName: openshift-cluster-api-stop-edits-machinesets
+		//   validationActions:
+		//       - Deny`
+
+		// 		policyYaml := `
+		// apiVersion: admissionregistration.k8s.io/v1
+		// kind: ValidatingAdmissionPolicy
+		// metadata:
+		//   name: openshift-cluster-api-stop-edits-machinesets
+		// spec:
+		//   failurePolicy: Fail
+		//   matchConstraints:
+		//     resourceRules:
+		//       - apiGroups: ["cluster.x-k8s.io"]
+		//         apiVersions: ["*"]
+		//         operations: ["CREATE", "UPDATE"]
+		//         resources: ["machinesets"]
+		//   variables:
+		//     - name: newVersion
+		//       expression: "object.spec.template.spec.?version.hasValue() ? object.spec.template.spec.?version.value() : {}"
+		//     - name: newReadinessGates
+		//       expression: "object.spec.template.spec.?readinessGates.hasValue() ? object.spec.template.spec.?readinessGates.value() : {}"
+		//   validations:
+		//     - expression: "variables.newVersion == {}"
+		//       message: "The 'spec.template.spec.version' field should not be set."
+		//     - expression: "variables.newReadinessGates == {}"
+		//       message: "The 'spec.template.spec.readinessGates' field should not be set."
+		//   `
 
 		policyBinding := &admissionregistrationv1.ValidatingAdmissionPolicyBinding{}
 		policy := &admissionregistrationv1.ValidatingAdmissionPolicy{}
@@ -777,6 +823,10 @@ spec:
 			By("Creating the CAPI infra machine")
 			Expect(k8sClient.Create(ctx, capaMachine)).To(Succeed(), "capa machine should be able to be created")
 
+			By("Creating the CAPI machineset")
+			capiMachineSet = capiMachineSetBuilder.Build()
+			Expect(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
+
 			By("Creating the MAPI machine")
 			mapiMachine = mapiMachineBuilder.WithName("test-machine").Build()
 			Expect(k8sClient.Create(ctx, mapiMachine)).Should(Succeed())
@@ -794,12 +844,38 @@ spec:
 
 		})
 
-		FIt("updating the spec (outside of authoritative api) should be prevented", func() {
+		It("updating the spec.Version on machines should be prevented", func() {
 			// this should be prevented by the VAP
 			Eventually(k.Update(capiMachine, func() {
-				capiMachine.ObjectMeta.Labels = map[string]string{"foo": "bar"}
+				testVersion := "test"
+				capiMachine.Spec.Version = &testVersion
+				capiMachine.Spec.ReadinessGates = []capiv1beta1.MachineReadinessGate{{ConditionType: "foo"}}
+				// capiMachine.ObjectMeta.SetLabels(map[string]string{"foo": "bar"})
 			}), timeout).Should(Succeed())
 		})
+
+		It("updating the spec.readinessGates on machines should be prevented", func() {
+			// this should be prevented by the VAP
+			Eventually(k.Update(capiMachine, func() {
+				capiMachine.Spec.ReadinessGates = []capiv1beta1.MachineReadinessGate{{ConditionType: "foo"}}
+				// capiMachine.ObjectMeta.SetLabels(map[string]string{"foo": "bar"})
+			}), timeout).Should(Succeed())
+		})
+
+		// FIt("updating the spec.template.spec.Version on machinesets should be prevented", func() {
+		// 	// this should be prevented by the VAP
+		// 	Eventually(k.Update(capiMachineSet, func() {
+		// 		//testVersion := "test"
+		// 		//capiMachineSet.Spec.Template.Spec.Version = &testVersion
+		// 	}), timeout).Should(Succeed())
+		// })
+
+		// FIt("updating the spec.template.spec.readinessGates on machinesets should be prevented", func() {
+		// 	// this should be prevented by the VAP
+		// 	Eventually(k.Update(capiMachineSet, func() {
+		// 		capiMachineSet.Spec.Template.Spec.ReadinessGates = []capiv1beta1.MachineReadinessGate{{ConditionType: "foo"}}
+		// 	}), timeout).Should(Succeed())
+		// })
 
 	})
 })

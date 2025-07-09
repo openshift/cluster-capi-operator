@@ -80,6 +80,8 @@ rules:
     resources:
       - group: "machine.openshift.io"
         resources: ["machines"]
+      - group: "cluster.x-k8s.io"
+        resources: ["machines"]
 
   # 2) Drop all other events (empty resources list => all groups & resources)
   - level: None
