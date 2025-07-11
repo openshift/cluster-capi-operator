@@ -32,7 +32,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 
 	configv1 "github.com/openshift/api/config/v1"
-	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 )
 
@@ -199,11 +198,9 @@ func (r *UserDataSecretController) setAvailableCondition(ctx context.Context, lo
 			"User Data Secret Controller works as expected"),
 	}
 
-	co.Status.Versions = []configv1.OperandVersion{{Name: controllers.OperatorVersionKey, Version: r.ReleaseVersion}}
-
 	log.Info("user Data Secret Controller is available")
 
-	if err := r.SyncStatus(ctx, co, conds); err != nil {
+	if err := r.SyncStatus(ctx, co, conds, r.OperandVersions(), r.RelatedObjects()); err != nil {
 		return fmt.Errorf("failed to sync status: %w", err)
 	}
 
@@ -223,11 +220,9 @@ func (r *UserDataSecretController) setDegradedCondition(ctx context.Context, log
 			"User Data Secret Controller failed to sync secret"),
 	}
 
-	co.Status.Versions = []configv1.OperandVersion{{Name: controllers.OperatorVersionKey, Version: r.ReleaseVersion}}
-
 	log.Info("user Data Secret Controller is degraded")
 
-	if err := r.SyncStatus(ctx, co, conds); err != nil {
+	if err := r.SyncStatus(ctx, co, conds, r.OperandVersions(), r.RelatedObjects()); err != nil {
 		return fmt.Errorf("failed to sync status: %w", err)
 	}
 
