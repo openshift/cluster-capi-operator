@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 
+	nutanixv1 "github.com/nutanix-cloud-native/cluster-api-provider-nutanix/api/v1beta1"
 	configv1 "github.com/openshift/api/config/v1"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	ibmpowervsv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
@@ -38,6 +39,8 @@ func InitInfraMachineAndInfraClusterFromProvider(platform configv1.PlatformType)
 	switch platform {
 	case configv1.AWSPlatformType:
 		return &awsv1.AWSMachine{}, &awsv1.AWSCluster{}, nil
+	case configv1.NutanixPlatformType:
+		return &nutanixv1.NutanixMachine{}, &nutanixv1.NutanixCluster{}, nil
 	case configv1.PowerVSPlatformType:
 		return &ibmpowervsv1.IBMPowerVSMachine{}, &ibmpowervsv1.IBMPowerVSCluster{}, nil
 	default:
@@ -53,6 +56,8 @@ func InitInfraMachineTemplateAndInfraClusterFromProvider(platform configv1.Platf
 	switch platform {
 	case configv1.AWSPlatformType:
 		return &awsv1.AWSMachineTemplate{}, &awsv1.AWSCluster{}, nil
+	case configv1.NutanixPlatformType:
+		return &nutanixv1.NutanixMachineTemplate{}, &nutanixv1.NutanixCluster{}, nil
 	case configv1.PowerVSPlatformType:
 		return &ibmpowervsv1.IBMPowerVSMachineTemplate{}, &ibmpowervsv1.IBMPowerVSCluster{}, nil
 	default:

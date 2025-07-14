@@ -37,6 +37,7 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 
 	"github.com/go-test/deep"
+	nutanixv1 "github.com/nutanix-cloud-native/cluster-api-provider-nutanix/api/v1beta1"
 	machinev1applyconfigs "github.com/openshift/client-go/machine/applyconfigurations/machine/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation/field"
@@ -66,6 +67,9 @@ var (
 
 	// errAssertingCAPIAWSMachineTemplate is returned when we encounter an issue asserting a client.Object into a AWSMachineTemplate.
 	errAssertingCAPIAWSMachineTemplate = errors.New("error asserting the CAPI AWSMachineTemplate object")
+
+	// errAssertingCAPINutanixMachineTemplate is returned when we encounter an issue asserting a client.Object into a NutanixMachineTemplate.
+	errAssertingCAPINutanixMachineTemplate = errors.New("error asserting the CAPI NutanixMachineTemplate object")
 
 	// errAssertingCAPIPowerVSMachineTemplate is returned when we encounter an issue asserting a client.Object into a IBMPowerVSMachineTemplate.
 	errAssertingCAPIIBMPowerVSMachineTemplate = errors.New("error asserting the CAPI IBMPowerVSMachineTemplate object")
@@ -516,32 +520,46 @@ func (r *MachineSetSyncReconciler) validateCAPIMachineSetOwnerReferences(capiMac
 func (r *MachineSetSyncReconciler) convertCAPIToMAPIMachineSet(capiMachineSet *clusterv1.MachineSet, infraMachineTemplate client.Object, infraCluster client.Object) (*machinev1beta1.MachineSet, []string, error) {
 	switch r.Platform {
 	case configv1.AWSPlatformType:
-		awsMachineTemplate, ok := infraMachineTemplate.(*awsv1.AWSMachineTemplate)
+		machineTemplate, ok := infraMachineTemplate.(*awsv1.AWSMachineTemplate)
 		if !ok {
 			return nil, nil, fmt.Errorf("%w, expected AWSMachineTemplate, got %T", errUnexpectedInfraMachineTemplateType, infraMachineTemplate)
 		}
 
-		awsCluster, ok := infraCluster.(*awsv1.AWSCluster)
+		cluster, ok := infraCluster.(*awsv1.AWSCluster)
 		if !ok {
 			return nil, nil, fmt.Errorf("%w, expected AWSCluster, got %T", errUnexpectedInfraClusterType, infraCluster)
 		}
 
 		return capi2mapi.FromMachineSetAndAWSMachineTemplateAndAWSCluster( //nolint: wrapcheck
-			capiMachineSet, awsMachineTemplate, awsCluster,
+			capiMachineSet, machineTemplate, cluster,
 		).ToMachineSet()
+
+	case configv1.NutanixPlatformType:
+		machineTemplate, ok := infraMachineTemplate.(*nutanixv1.NutanixMachineTemplate)
+		if !ok {
+			return nil, nil, fmt.Errorf("%w, expected NutanixMachineTemplate, got %T", errUnexpectedInfraMachineTemplateType, infraMachineTemplate)
+		}
+		cluster, ok := infraCluster.(*nutanixv1.NutanixCluster)
+		if !ok {
+			return nil, nil, fmt.Errorf("%w, expected NutanixCluster, got %T", errUnexpectedInfraClusterType, infraCluster)
+		}
+		return capi2mapi.FromMachineSetAndNutanixMachineTemplateAndNutanixCluster( //nolint: wrapcheck
+			capiMachineSet, machineTemplate, cluster,
+		).ToMachineSet()
+		
 	case configv1.PowerVSPlatformType:
-		powerVSMachineTemplate, ok := infraMachineTemplate.(*ibmpowervsv1.IBMPowerVSMachineTemplate)
+		machineTemplate, ok := infraMachineTemplate.(*ibmpowervsv1.IBMPowerVSMachineTemplate)
 		if !ok {
 			return nil, nil, fmt.Errorf("%w, expected IBMPowerVSMachineTemplate, got %T", errUnexpectedInfraMachineTemplateType, infraMachineTemplate)
 		}
 
-		powerVSCluster, ok := infraCluster.(*ibmpowervsv1.IBMPowerVSCluster)
+		cluster, ok := infraCluster.(*ibmpowervsv1.IBMPowerVSCluster)
 		if !ok {
 			return nil, nil, fmt.Errorf("%w, expected IBMPowerVSCluster, got %T", errUnexpectedInfraClusterType, infraCluster)
 		}
 
 		return capi2mapi.FromMachineSetAndPowerVSMachineTemplateAndPowerVSCluster( //nolint: wrapcheck
-			capiMachineSet, powerVSMachineTemplate, powerVSCluster,
+			capiMachineSet, machineTemplate, cluster,
 		).ToMachineSet()
 	default:
 		return nil, nil, fmt.Errorf("%w: %s", errPlatformNotSupported, r.Platform)
@@ -553,6 +571,8 @@ func (r *MachineSetSyncReconciler) convertMAPIToCAPIMachineSet(mapiMachineSet *m
 	switch r.Platform {
 	case configv1.AWSPlatformType:
 		return mapi2capi.FromAWSMachineSetAndInfra(mapiMachineSet, r.Infra).ToMachineSetAndMachineTemplate() //nolint:wrapcheck
+	case configv1.NutanixPlatformType:
+		return mapi2capi.FromNutanixMachineSetAndInfra(mapiMachineSet, r.Infra).ToMachineSetAndMachineTemplate() //nolint:wrapcheck
 	case configv1.PowerVSPlatformType:
 		return mapi2capi.FromPowerVSMachineSetAndInfra(mapiMachineSet, r.Infra).ToMachineSetAndMachineTemplate() //nolint:wrapcheck
 	default:
@@ -891,6 +911,23 @@ func compareCAPIInfraMachineTemplates(platform configv1.PlatformType, infraMachi
 			diff[".metadata"] = diffObjectMeta
 		}
 
+		return diff, nil
+	case configv1.NutanixPlatformType:
+		typedInfraMachineTemplate1, ok := infraMachineTemplate1.(*nutanixv1.NutanixMachineTemplate)
+		if !ok {
+			return nil, errAssertingCAPINutanixMachineTemplate
+		}
+		typedinfraMachineTemplate2, ok := infraMachineTemplate2.(*nutanixv1.NutanixMachineTemplate)
+		if !ok {
+			return nil, errAssertingCAPINutanixMachineTemplate
+		}
+		diff := make(map[string]any)
+		if diffSpec := deep.Equal(typedInfraMachineTemplate1.Spec, typedinfraMachineTemplate2.Spec); len(diffSpec) > 0 {
+			diff[".spec"] = diffSpec
+		}
+		if diffObjectMeta := util.ObjectMetaEqual(typedInfraMachineTemplate1.ObjectMeta, typedinfraMachineTemplate2.ObjectMeta); len(diffObjectMeta) > 0 {
+			diff[".metadata"] = diffObjectMeta
+		}
 		return diff, nil
 	case configv1.PowerVSPlatformType:
 		typedInfraMachineTemplate1, ok := infraMachineTemplate1.(*ibmpowervsv1.IBMPowerVSMachineTemplate)
