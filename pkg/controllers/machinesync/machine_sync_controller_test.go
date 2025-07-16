@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"os"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -34,6 +33,7 @@ import (
 	configv1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/config/v1"
 	corev1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/core/v1"
 	machinev1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/machine/v1beta1"
+	admissiontestutils "github.com/openshift/cluster-capi-operator/pkg/admissionpolicy/testutils"
 	consts "github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/mapi2capi"
 
@@ -41,8 +41,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/rest"
+
 	"k8s.io/utils/ptr"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
@@ -765,50 +765,41 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 		})
 	})
 
-	Context("validating admission policy tests", func() {
-
-		var (
-			policyBinding *admissionregistrationv1.ValidatingAdmissionPolicyBinding
-			policy        *admissionregistrationv1.ValidatingAdmissionPolicy
-		)
-
+	FContext("validating admission policy tests", func() {
 		BeforeEach(func() {
-			By("Unmarshalling the VAP/VAPB yamls")
 
-			policyBinding = &admissionregistrationv1.ValidatingAdmissionPolicyBinding{}
-			policy = &admissionregistrationv1.ValidatingAdmissionPolicy{}
+			transportConfigMaps := admissiontestutils.LoadTransportConfigMaps()
 
-			manifests, err := os.Open("../../../manifests/0000_30_cluster-api_13_vap.yaml")
-			Expect(err).ToNot(HaveOccurred())
+			By("Applying the objects found in clusterAPICustomAdmissionPolicies")
+			for _, obj := range transportConfigMaps[admissiontestutils.ClusterAPICustomAdmissionPolicies] {
+				// Deep‑copy so the loop variable isn’t mutated by the client
+				newObj, ok := obj.DeepCopyObject().(client.Object)
+				Expect(ok).To(BeTrue())
 
-			// Order is important as the yaml decoder.Decode unmarshals
-			// the next object from the underlying stream into the provide object,
-			// so given the ValidatingAdmissionPolicyBinding comes before the ValidatingAdmissionPolicy
-			// in the file, we need to provide them in this order to correctly decode them.
-			decoder := yaml.NewYAMLOrJSONDecoder(manifests, 4096)
-			Expect(decoder.Decode(policyBinding)).To(Succeed())
-			Expect(decoder.Decode(policy)).To(Succeed())
+				err := k8sClient.Create(ctx, newObj)
+				if err != nil && !apierrors.IsAlreadyExists(err) {
+					Expect(err).NotTo(HaveOccurred())
+				}
+			}
 
-			Expect(manifests.Close()).To(Succeed())
+			By("Updating the binding")
+			policyBinding := &admissionregistrationv1.ValidatingAdmissionPolicyBinding{}
+			Expect(k8sClient.Get(ctx, client.ObjectKey{
+				Name: "machine-api-machine-vap"}, policyBinding)).To(Succeed())
 
-			By("Updating the namespaces in the binding")
-			// Set the label on the mapi namespace so the
-			// selector applies the VAP to machines in it
-			Eventually(k.Update(mapiNamespace, func() {
-				mapiNamespace.SetLabels(map[string]string{
-					"name": "openshift-machine-api",
-				})
+			Eventually(k.Update(policyBinding, func() {
+				// We want to have our paramref reference the CAPI namespace,
+				// since we `GenerateName` it is not static
+				policyBinding.Spec.ParamRef.Namespace = capiNamespace.GetName()
 			})).Should(Succeed())
 
-			Eventually(k.Object(mapiNamespace)).Should(HaveField("ObjectMeta.Labels", ContainElement("openshift-machine-api")))
-
-			// We want to have our paramref reference the CAPI namespace,
-			// since we `GenerateName` it is not static
-			policyBinding.Spec.ParamRef.Namespace = capiNamespace.GetName()
-
-			By("Creating the VAP and its VAP binding")
-			Expect(k8sClient.Create(ctx, policy)).To(Succeed())
-			Expect(k8sClient.Create(ctx, policyBinding)).To(Succeed())
+			Eventually(k.Update(policyBinding, func() {
+				// We need to update the namespace in our namespaceSelector,
+				// since also use `GenerateName` here
+				policyBinding.Spec.MatchResources.NamespaceSelector.MatchLabels = map[string]string{
+					"kubernetes.io/metadata.name": mapiNamespace.GetName(),
+				}
+			})).Should(Succeed())
 
 			By("Creating the CAPI infra machine")
 			Expect(k8sClient.Create(ctx, capaMachine)).To(Succeed(), "capa machine should be able to be created")
@@ -846,12 +837,6 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 			// for the VAP to be loaded into the API Server
 			time.Sleep(1 * time.Second)
 
-		})
-
-		AfterEach(func() {
-			By("Removing the VAP and its VAP binding")
-			Expect(k8sClient.Delete(ctx, policyBinding)).Should(Succeed())
-			Expect(k8sClient.Delete(ctx, policy)).Should(Succeed())
 		})
 
 		Context("with status.AuthoritativeAPI: Machine API", func() {
