@@ -116,12 +116,14 @@ func (r *CapiInstallerController) reconcile(ctx context.Context, log logr.Logger
 	// We always want to install the core provider, which in our case is the default cluster-api core provider.
 	// We also want to install the infrastructure provider that matches the currently detected platform the cluster is running on.
 	providerConfigMapLabels := map[string]string{
-		"core":           defaultCoreProviderComponentName,
-		"infrastructure": platformToProviderConfigMapLabelNameValue(r.Platform),
+		defaultCoreProviderComponentName:                                                 "core",
+		"openshift-cluster-api":                                                          "core",
+		platformToProviderConfigMapLabelNameValue(r.Platform):                            "infrastructure",
+		"openshift-cluster-api-" + platformToProviderConfigMapLabelNameValue(r.Platform): "infrastructure",
 	}
 
 	// Process each one of the desired providers.
-	for providerConfigMapLabelTypeVal, providerConfigMapLabelNameVal := range providerConfigMapLabels {
+	for providerConfigMapLabelNameVal, providerConfigMapLabelTypeVal := range providerConfigMapLabels {
 		log.Info("reconciling CAPI provider", "name", providerConfigMapLabelNameVal)
 
 		// Get a List all the ConfigMaps matching the desired provider labels.
@@ -383,7 +385,7 @@ func (r *CapiInstallerController) extractProviderComponents(cm corev1.ConfigMap)
 	return replacedYamlManifests, nil
 }
 
-// extractManifests extracts and processes component manifests from given ConfiMap.
+// extractManifests extracts and processes component manifests from given ConfigMap.
 // If the data is in compressed binary form, it decompresses them.
 func extractManifests(cm corev1.ConfigMap) ([]string, error) {
 	data, hasData := cm.Data["components"]

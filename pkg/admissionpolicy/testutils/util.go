@@ -17,15 +17,28 @@ limitations under the License.
 package testutils
 
 import (
+	"errors"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
+	corev1 "k8s.io/api/core/v1"
+
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
+
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/yaml"
+	"k8s.io/client-go/kubernetes/scheme"
+
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // This set of utils is intended to assist with VAP debugging.
-// we provide common audit policies that may be useful across CCAPIO.
+
+// We provide common audit policies that may be useful across CCAPIO.
 // Example usage below:
 //
 //  By("bootstrapping test environment")
@@ -71,6 +84,19 @@ import (
 //   "userAgent",
 //   "verb"
 // ]
+
+const (
+	// ClusterAPIAdmissionPolicies is the name of the ClusterAPIAdmissionPolicies transport config map.
+	ClusterAPIAdmissionPolicies string = "cluster-api-admission-policies"
+
+	// ClusterAPICustomAdmissionPolicies is the name of the ClusterAPICustomAdmissionPolicies transport config map.
+	ClusterAPICustomAdmissionPolicies string = "cluster-api-custom-admission-policies"
+
+	// ClusterAPIAWSAdmissionPolicies is the name of the ClusterAPIAWSAdmissionPolicies transport config map.
+	ClusterAPIAWSAdmissionPolicies string = "cluster-api-aws-admission-policies"
+
+	yamlChunk = 4 << 10
+)
 
 // MachineAPIMachineUpdateAuditPolicy is an audit policy that captures
 // Request and Response for any UPDATE to a Machine API Machine.
@@ -142,4 +168,94 @@ func EnvTestWithAuditPolicy(policyYaml string, env *envtest.Environment) {
 	args.Append("audit-policy-file", policyPath)
 	args.Append("audit-log-path", "/tmp/kube-apiserver-audit.log")
 	args.Append("audit-log-format", "json")
+}
+
+// LoadTransportConfigMaps loads admission policies from the transport config maps in
+// `manifests`, providing a map of []client.Object, one per transport config map.
+//
+// This is intended to allow for loading the admission policies into envtest,
+// therefore it doesn't return errors, but Expects() them not to happen.
+func LoadTransportConfigMaps() map[string][]client.Object {
+	By("Unmarshalling the admission policy transport configmaps")
+
+	configMaps, err := os.Open("../../../manifests/0000_30_cluster-api_09_admission-policies.yaml")
+	Expect(err).ToNot(HaveOccurred())
+	DeferCleanup(func() {
+		Expect(configMaps.Close()).To(Succeed())
+	})
+
+	decoder := yaml.NewYAMLOrJSONDecoder(configMaps, yamlChunk)
+
+	// When we add more provider specific admission policies, we'll need to update this list.
+	// e.g for clusterAPI<Provider>AdmissionPolicies
+
+	// ClusterAPIAdmissionPolicies and ClusterAPIAWSAdmissionPolicies exist commented out in
+	// the admission policies manifest.
+	configMapByName := map[string]*corev1.ConfigMap{
+		// ClusterAPIAdmissionPolicies:       nil,
+		ClusterAPICustomAdmissionPolicies: nil,
+		// ClusterAPIAWSAdmissionPolicies:    nil,
+	}
+
+	for {
+		var cm corev1.ConfigMap
+		if err := decoder.Decode(&cm); err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
+
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		if _, want := configMapByName[cm.Name]; want {
+			configMapByName[cm.Name] = cm.DeepCopy()
+		}
+	}
+
+	// Assert we found everything we care about.
+	for name, cm := range configMapByName {
+		Expect(cm).NotTo(BeNil(), "expected ConfigMap %q in manifest", name)
+	}
+
+	By("Unmarshalling the admission policies in each configmap")
+
+	// each ConfigMap produces a list of client.Objects obtained from that configMap
+	mapObjs := map[string][]client.Object{}
+
+	for _, configMap := range configMapByName {
+		objs := []client.Object{}
+
+		if components, ok := configMap.Data["components"]; ok && len(components) > 0 { //nolint: nestif
+			policyDecoder := yaml.NewYAMLOrJSONDecoder(strings.NewReader(components), yamlChunk)
+
+			for {
+				var r runtime.RawExtension
+				if err := policyDecoder.Decode(&r); err != nil {
+					if errors.Is(err, io.EOF) {
+						break
+					}
+
+					Expect(err).NotTo(HaveOccurred())
+				}
+
+				if len(r.Raw) == 0 {
+					continue
+				}
+
+				o, _, err := scheme.Codecs.UniversalDeserializer().Decode(r.Raw, nil, nil)
+
+				Expect(err).NotTo(HaveOccurred())
+
+				// only keep objects that implement client.Object
+				if co, ok := o.(client.Object); ok {
+					objs = append(objs, co)
+				}
+			}
+		}
+
+		// sets the client.Objects we've just extracted
+		mapObjs[configMap.GetName()] = objs
+	}
+
+	return mapObjs
 }
