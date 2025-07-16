@@ -126,16 +126,12 @@ func convertMAPIMachineSetConditionsToCAPIMachineSetConditions(mapiConditions []
 			Reason:             mapiCondition.Reason,
 			Message:            mapiCondition.Message,
 		}
-		// Severity must only be set when the condition is False.
-		if mapiCondition.Status == corev1.ConditionFalse && mapiCondition.Severity != "" {
+		// Severity must only be set when the condition is not True.
+		if mapiCondition.Status != corev1.ConditionTrue && mapiCondition.Severity != "" {
 			capiCondition.Severity = clusterv1.ConditionSeverity(mapiCondition.Severity)
 		}
 
 		capiConditions = append(capiConditions, capiCondition)
-	}
-
-	if len(capiConditions) == 0 {
-		return nil
 	}
 
 	return capiConditions
@@ -165,10 +161,6 @@ func convertMAPIMachineSetConditionsToCAPIMachineSetV1Beta2StatusConditions(mapi
 		}
 
 		capiConditions = append(capiConditions, capiCondition)
-	}
-
-	if len(capiConditions) == 0 {
-		return nil
 	}
 
 	return capiConditions

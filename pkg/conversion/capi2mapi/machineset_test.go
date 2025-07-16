@@ -62,11 +62,15 @@ var _ = Describe("capi2mapi MachineSet Status Conversion", func() {
 			Expect(string(*mapiStatus.ErrorReason)).To(Equal("InvalidConfiguration"))
 			Expect(mapiStatus.ErrorMessage).ToNot(BeNil())
 			Expect(*mapiStatus.ErrorMessage).To(Equal("Test failure message"))
-			Expect(mapiStatus.Conditions).To(HaveLen(1))
-			Expect(mapiStatus.Conditions[0].Type).To(Equal(mapiv1.ConditionType("Available")))
-			Expect(mapiStatus.Conditions[0].Status).To(Equal(corev1.ConditionTrue))
-			Expect(mapiStatus.Conditions[0].Reason).To(Equal("MachineSetAvailable"))
-			Expect(mapiStatus.Conditions[0].Message).To(Equal("MachineSet is available"))
+			Expect(mapiStatus.Conditions).To(SatisfyAll(
+				HaveLen(1),
+				ContainElement(matchers.MatchMAPICondition(mapiv1.Condition{
+					Type:    "Available",
+					Status:  corev1.ConditionTrue,
+					Reason:  "MachineSetAvailable",
+					Message: "MachineSet is available",
+				})),
+			))
 		})
 
 		It("should handle empty CAPI MachineSetStatus", func() {
@@ -88,9 +92,9 @@ var _ = Describe("capi2mapi MachineSet Status Conversion", func() {
 		It("should convert CAPI conditions to MAPI conditions", func() {
 			capiConditions := clusterv1.Conditions{
 				{
-					Type:               "Available",
-					Status:             corev1.ConditionTrue,
-					Severity:           clusterv1.ConditionSeverityNone,
+					Type:   "Available",
+					Status: corev1.ConditionTrue,
+					// Severity must only be set when the condition is not True.
 					LastTransitionTime: metav1.Now(),
 					Reason:             "MachineSetAvailable",
 					Message:            "MachineSet is available",
@@ -107,18 +111,22 @@ var _ = Describe("capi2mapi MachineSet Status Conversion", func() {
 
 			mapiConditions := convertCAPIConditionsToMAPI(capiConditions)
 
-			Expect(mapiConditions).To(HaveLen(2))
-			Expect(mapiConditions[0].Type).To(Equal(mapiv1.ConditionType("Available")))
-			Expect(mapiConditions[0].Status).To(Equal(corev1.ConditionTrue))
-			Expect(mapiConditions[0].Severity).To(Equal(mapiv1.ConditionSeverityNone))
-			Expect(mapiConditions[0].Reason).To(Equal("MachineSetAvailable"))
-			Expect(mapiConditions[0].Message).To(Equal("MachineSet is available"))
-
-			Expect(mapiConditions[1].Type).To(Equal(mapiv1.ConditionType("Progressing")))
-			Expect(mapiConditions[1].Status).To(Equal(corev1.ConditionFalse))
-			Expect(mapiConditions[1].Severity).To(Equal(mapiv1.ConditionSeverityError))
-			Expect(mapiConditions[1].Reason).To(Equal("MachineSetNotProgressing"))
-			Expect(mapiConditions[1].Message).To(Equal("MachineSet is not progressing"))
+			Expect(mapiConditions).To(SatisfyAll(
+				HaveLen(2),
+				ContainElement(matchers.MatchMAPICondition(mapiv1.Condition{
+					Type:    "Available",
+					Status:  corev1.ConditionTrue,
+					Reason:  "MachineSetAvailable",
+					Message: "MachineSet is available",
+				})),
+				ContainElement(matchers.MatchMAPICondition(mapiv1.Condition{
+					Type:     "Progressing",
+					Status:   corev1.ConditionFalse,
+					Severity: mapiv1.ConditionSeverityError,
+					Reason:   "MachineSetNotProgressing",
+					Message:  "MachineSet is not progressing",
+				})),
+			))
 		})
 
 		It("should return nil for empty conditions", func() {

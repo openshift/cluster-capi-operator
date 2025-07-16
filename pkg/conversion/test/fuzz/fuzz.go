@@ -87,7 +87,7 @@ func CAPI2MAPIMachineRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv1.I
 	machineFuzzInputs := []TableEntry{}
 	fz := getFuzzer(scheme, fuzzerFuncs...)
 
-	for i := 0; i < 0; i++ {
+	for i := 0; i < 1000; i++ {
 		m := &clusterv1.Machine{}
 		fz.Fuzz(m)
 		fz.Fuzz(infraMachine)
@@ -168,7 +168,7 @@ func CAPI2MAPIMachineSetRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv
 	machineFuzzInputs := []TableEntry{}
 	fz := getFuzzer(scheme, fuzzerFuncs...)
 
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 1000; i++ {
 		m := &clusterv1.MachineSet{}
 		fz.Fuzz(m)
 		fz.Fuzz(infraMachineTemplate)
@@ -248,7 +248,7 @@ func MAPI2CAPIMachineRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv1.I
 	machineFuzzInputs := []TableEntry{}
 	fz := getFuzzer(scheme, fuzzerFuncs...)
 
-	for i := 0; i < 0; i++ {
+	for i := 0; i < 1000; i++ {
 		m := &mapiv1.Machine{}
 		fz.Fuzz(m)
 
@@ -306,7 +306,7 @@ func MAPI2CAPIMachineSetRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv
 	machineFuzzInputs := []TableEntry{}
 	fz := getFuzzer(scheme, fuzzerFuncs...)
 
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 1000; i++ {
 		m := &mapiv1.MachineSet{}
 		fz.Fuzz(m)
 

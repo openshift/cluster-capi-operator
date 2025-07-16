@@ -1215,22 +1215,16 @@ func restoreMAPIFields(mapiMachineSet, newMapiMachineSet *machinev1beta1.Machine
 
 // hasStatusChanges returns true if there are changes to the status.
 func hasStatusChanges(diff map[string]any) bool {
-	for key := range diff {
-		if key == ".status" {
-			return true
-		}
-	}
+	_, ok := diff[".status"]
 
-	return false
+	return ok
 }
 
 // hasSpecOrMetadataOrProviderSpecChanges returns true if there are changes to the spec, metadata, or providerSpec.
 func hasSpecOrMetadataOrProviderSpecChanges(diff map[string]any) bool {
-	for key := range diff {
-		if key == ".spec" || key == ".metadata" || key == ".providerSpec" {
-			return true
-		}
-	}
+	_, ok1 := diff[".spec"]
+	_, ok2 := diff[".metadata"]
+	_, ok3 := diff[".providerSpec"]
 
-	return false
+	return ok1 || ok2 || ok3
 }

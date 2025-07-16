@@ -119,16 +119,12 @@ func convertCAPIConditionsToMAPI(capiConditions clusterv1.Conditions) []mapiv1.C
 			Message:            capiCondition.Message,
 		}
 
-		// Severity must only be set when the condition is False.
-		if capiCondition.Status == corev1.ConditionFalse && capiCondition.Severity != "" {
+		// Severity must only be set when the condition is not True.
+		if capiCondition.Status != corev1.ConditionTrue && capiCondition.Severity != "" {
 			mapiCondition.Severity = mapiv1.ConditionSeverity(capiCondition.Severity)
 		}
 
 		mapiConditions = append(mapiConditions, mapiCondition)
-	}
-
-	if len(mapiConditions) == 0 {
-		return nil
 	}
 
 	return mapiConditions
