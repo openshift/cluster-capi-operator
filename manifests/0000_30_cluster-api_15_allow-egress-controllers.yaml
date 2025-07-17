@@ -37,5 +37,6 @@ spec:
       - capv-controller-manager
       - capo-controller-manager
       - capibm-controller-manager
+      - capo-infracluster-controller
   policyTypes:
   - Egress
