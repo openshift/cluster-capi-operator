@@ -86,6 +86,8 @@ linters-settings:
       limitations under the License.
   importas:
     alias:
+      - pkg: "github.com/nutanix-cloud-native/cluster-api-provider-nutanix/api/v1beta1"
+        alias: "nutanixv1"
       - pkg: "sigs.k8s.io/cluster-api/api/v1beta1"
         alias: "clusterv1"
       - pkg: "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
