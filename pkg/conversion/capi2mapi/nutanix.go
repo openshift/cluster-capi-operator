@@ -88,15 +88,6 @@ func (m machineAndNutanixMachineAndNutanixCluster) toProviderSpec() (*mapiv1.Nut
 		warnings []string
 	)
 
-	if m.machine == nil {
-		errors = append(errors, field.Required(field.NewPath("machine"), "machine must not be nil"))
-		return nil, warnings, errors
-	}
-	if m.nutanixMachine == nil {
-		errors = append(errors, field.Required(field.NewPath("nutanixMachine"), "nutanixMachine must not be nil"))
-		return nil, warnings, errors
-	}
-
 	var userData *corev1.LocalObjectReference
 	if m.machine.Spec.Bootstrap.DataSecretName != nil {
 		userData = &corev1.LocalObjectReference{
@@ -106,41 +97,53 @@ func (m machineAndNutanixMachineAndNutanixCluster) toProviderSpec() (*mapiv1.Nut
 
 	var image mapiv1.NutanixResourceIdentifier
 	if m.nutanixMachine.Spec.Image != nil {
-		image = *convertNutanixResourceIdentifierToMapi(m.nutanixMachine.Spec.Image)
+		img, errs := convertNutanixResourceIdentifierToMapi(m.nutanixMachine.Spec.Image)
+		if len(errs) > 0 {
+			errors = append(errors, errs...)
+		}
+		image = *img
 	}
 
 	var project mapiv1.NutanixResourceIdentifier
 	if m.nutanixMachine.Spec.Project != nil {
-		if proj := convertNutanixResourceIdentifierToMapi(m.nutanixMachine.Spec.Project); proj != nil {
-			project = *proj
+		proj, errs := convertNutanixResourceIdentifierToMapi(m.nutanixMachine.Spec.Project)
+		if len(errs) > 0 {
+			errors = append(errors, errs...)
 		}
+		project = *proj
 	}
 
 	subnets := make([]mapiv1.NutanixResourceIdentifier, 0, len(m.nutanixMachine.Spec.Subnets))
 	for _, s := range m.nutanixMachine.Spec.Subnets {
-		if id := convertNutanixResourceIdentifierToMapi(&s); id != nil {
-			subnets = append(subnets, *id)
+		id, errs := convertNutanixResourceIdentifierToMapi(&s)
+		if len(errs) > 0 {
+			errors = append(errors, errs...)
 		}
+		subnets = append(subnets, *id)
 	}
 
 	dataDisks := make([]mapiv1.NutanixVMDisk, 0, len(m.nutanixMachine.Spec.DataDisks))
 	for _, d := range m.nutanixMachine.Spec.DataDisks {
-		if disk := convertNutanixVMDiskToMapi(&d); disk != nil {
-			dataDisks = append(dataDisks, *disk)
+		disk, errs := convertNutanixVMDiskToMapi(&d)
+		if len(errs) > 0 {
+			errors = append(errors, errs...)
 		}
+		dataDisks = append(dataDisks, *disk)
 	}
 
-	gpus := make([]mapiv1.NutanixGPU, 0, len(m.nutanixMachine.Spec.GPUs))
-	for _, g := range m.nutanixMachine.Spec.GPUs {
-		gpu := mapiv1.NutanixGPU{
-			Type: mapiv1.NutanixGPUIdentifierType(g.Type),
-			Name: g.Name,
-		}
-		if g.DeviceID != nil {
-			val := int32(*g.DeviceID)
-			gpu.DeviceID = &val
-		}
-		gpus = append(gpus, gpu)
+	gpus, errs := convertNutanixGPUToMapi(&m.nutanixMachine.Spec.GPUs)
+	if len(errs) > 0 {
+		errors = append(errors, errs...)
+	}
+
+	bootType, errs := convertNutanixBootTypeToMapi(m.nutanixMachine.Spec.BootType)
+	if len(errs) > 0 {
+		errors = append(errors, errs...)
+	}
+
+	cluster, errs := convertNutanixResourceIdentifierToMapi(&m.nutanixMachine.Spec.Cluster)
+	if len(errs) > 0 {
+		errors = append(errors, errs...)
 	}
 
 	var failureDomainRef *mapiv1.NutanixFailureDomainReference
@@ -164,12 +167,12 @@ func (m machineAndNutanixMachineAndNutanixCluster) toProviderSpec() (*mapiv1.Nut
 		MemorySize:     m.nutanixMachine.Spec.MemorySize,
 		SystemDiskSize: m.nutanixMachine.Spec.SystemDiskSize,
 		Image:          image,
-		Cluster:        *convertNutanixResourceIdentifierToMapi(&m.nutanixMachine.Spec.Cluster),
+		Cluster:        *cluster,
 		Subnets:        subnets,
 		Project:        project,
-		BootType:       mapiv1.NutanixBootType(m.nutanixMachine.Spec.BootType),
+		BootType:       bootType,
 		DataDisks:      dataDisks,
-		GPUs:           gpus,
+		GPUs:           *gpus,
 		UserDataSecret: userData,
 		FailureDomain:  failureDomainRef,
 	}
@@ -207,7 +210,7 @@ func (m machineAndNutanixMachineAndNutanixCluster) ToMachine() (*mapiv1beta1.Mac
 	)
 
 	mapiSpec, warns, errs := m.toProviderSpec()
-	if errs != nil {
+	if len(errs) > 0 {
 		errors = append(errors, errs...)
 	}
 
@@ -270,89 +273,182 @@ func (m machineSetAndNutanixMachineTemplateAndNutanixCluster) ToMachineSet() (*m
 	return mapiMachineSet, warnings, nil
 }
 
-func convertNutanixResourceIdentifierToMapi(identifier *nutanixv1.NutanixResourceIdentifier) *mapiv1.NutanixResourceIdentifier {
+func convertNutanixResourceIdentifierToMapi(identifier *nutanixv1.NutanixResourceIdentifier) (*mapiv1.NutanixResourceIdentifier, field.ErrorList) {
+	errors := field.ErrorList{}
 	if identifier == nil {
-		return &mapiv1.NutanixResourceIdentifier{}
+		return &mapiv1.NutanixResourceIdentifier{}, errors
 	}
 
-	obj := mapiv1.NutanixResourceIdentifier{
-		Type: mapiv1.NutanixIdentifierType(identifier.Type),
-	}
-
-	if identifier.Name != nil {
+	obj := mapiv1.NutanixResourceIdentifier{}
+	switch identifier.Type {
+	case nutanixv1.NutanixIdentifierName:
+		obj.Type = mapiv1.NutanixIdentifierName
+		if identifier.Name == nil {
+			errors = append(errors, field.Required(field.NewPath("name"), "Name must be set for Name type identifier"))
+		}
 		obj.Name = ptr.To(*identifier.Name)
+	case nutanixv1.NutanixIdentifierUUID:
+		obj.Type = mapiv1.NutanixIdentifierUUID
+		if identifier.UUID == nil {
+			errors = append(errors, field.Required(field.NewPath("uuid"), "UUID must be set for UUID type identifier"))
+		}
+		obj.UUID = identifier.UUID
+	default:
+		errors = append(errors, field.Invalid(field.NewPath("type"), identifier.Type, "invalid identifier type"))
 	}
-
-	if identifier.UUID != nil {
-		obj.UUID = ptr.To(*identifier.UUID)
-	}
-
-	return &obj
+	return &obj, errors
 }
 
-func convertNutanixResourceIdentifierToStorageMapi(id *nutanixv1.NutanixResourceIdentifier) *mapiv1.NutanixStorageResourceIdentifier {
+func convertNutanixResourceIdentifierToStorageMapi(id *nutanixv1.NutanixResourceIdentifier) (*mapiv1.NutanixStorageResourceIdentifier, field.ErrorList) {
+	errors := field.ErrorList{}
 	if id == nil {
-		return &mapiv1.NutanixStorageResourceIdentifier{}
+		return &mapiv1.NutanixStorageResourceIdentifier{}, errors
 	}
-	out := &mapiv1.NutanixStorageResourceIdentifier{
-		Type: mapiv1.NutanixIdentifierType(id.Type),
+	out := &mapiv1.NutanixStorageResourceIdentifier{}
+	switch id.Type {
+	case nutanixv1.NutanixIdentifierUUID:
+		out.Type = mapiv1.NutanixIdentifierUUID
+		if id.UUID == nil {
+			errors = append(errors, field.Required(field.NewPath("uuid"), "UUID must be set for UUID type identifier"))
+		}
+		out.UUID = id.UUID
+	default:
+		errors = append(errors, field.Invalid(field.NewPath("type"), id.Type, "invalid identifier type"))
 	}
-	if id.UUID != nil {
-		out.UUID = ptr.To(*id.UUID)
-	}
-	return out
+	return out, errors
 }
 
-func convertNutanixVMDiskToMapi(disk *nutanixv1.NutanixMachineVMDisk) *mapiv1.NutanixVMDisk {
+func convertNutanixVMDiskToMapi(disk *nutanixv1.NutanixMachineVMDisk) (*mapiv1.NutanixVMDisk, field.ErrorList) {
+	errors := field.ErrorList{}
 	if disk == nil {
-		return &mapiv1.NutanixVMDisk{}
+		return &mapiv1.NutanixVMDisk{}, errors
 	}
 
 	mapiDisk := &mapiv1.NutanixVMDisk{
 		DiskSize: disk.DiskSize,
 	}
 
-	if disk.DataSource != nil {
-		if ds := convertNutanixResourceIdentifierToMapi(disk.DataSource); ds != nil {
-			mapiDisk.DataSource = ds
+	switch disk.DataSource {
+	case nil:
+	default:
+		ds, errs := convertNutanixResourceIdentifierToMapi(disk.DataSource)
+		if len(errs) > 0 {
+			errors = append(errors, field.Invalid(field.NewPath("dataSource"), disk.DataSource, "DataSource failed to convert"))
+		}
+		mapiDisk.DataSource = ds
+	}
+
+	switch dp := disk.DeviceProperties; {
+	case dp == nil:
+		// leave nil
+	default:
+		ddp := &mapiv1.NutanixVMDiskDeviceProperties{}
+		switch dp.DeviceType {
+		case nutanixv1.NutanixMachineDiskDeviceTypeCDRom:
+			ddp.DeviceType = mapiv1.NutanixDiskDeviceTypeCDROM
+		case nutanixv1.NutanixMachineDiskDeviceTypeDisk:
+			ddp.DeviceType = mapiv1.NutanixDiskDeviceTypeDisk
+		default:
+			errors = append(errors, field.Invalid(field.NewPath("DeviceType"), dp.DeviceType, "DeviceType should be CDRom or Disk"))
+		}
+
+		switch dp.AdapterType {
+		case nutanixv1.NutanixMachineDiskAdapterTypeIDE:
+			ddp.AdapterType = mapiv1.NutanixDiskAdapterTypeIDE
+		case nutanixv1.NutanixMachineDiskAdapterTypePCI:
+			ddp.AdapterType = mapiv1.NutanixDiskAdapterTypePCI
+		case nutanixv1.NutanixMachineDiskAdapterTypeSATA:
+			ddp.AdapterType = mapiv1.NutanixDiskAdapterTypeSATA
+		case nutanixv1.NutanixMachineDiskAdapterTypeSCSI:
+			ddp.AdapterType = mapiv1.NutanixDiskAdapterTypeSCSI
+		case nutanixv1.NutanixMachineDiskAdapterTypeSPAPR:
+			ddp.AdapterType = mapiv1.NutanixDiskAdapterTypeSPAPR
+		default:
+			errors = append(errors, field.Invalid(field.NewPath("AdapterType"), dp.AdapterType, "AdapterType can be SCSI, IDE, PCI, SATA or SPAPR"))
+		}
+
+		switch {
+		case dp.DeviceIndex != 0:
+			ddp.DeviceIndex = dp.DeviceIndex
+		}
+		// Remove if all zero/nil
+		if ddp.DeviceType != "" || ddp.AdapterType != "" || ddp.DeviceIndex != 0 {
+			mapiDisk.DeviceProperties = ddp
 		}
 	}
 
-	if disk.DeviceProperties != nil {
-		mapiDisk.DeviceProperties = &mapiv1.NutanixVMDiskDeviceProperties{}
-		if disk.DeviceProperties.DeviceType != "" {
-			mapiDisk.DeviceProperties.DeviceType = mapiv1.NutanixDiskDeviceType(disk.DeviceProperties.DeviceType)
-		}
-		if disk.DeviceProperties.AdapterType != "" {
-			mapiDisk.DeviceProperties.AdapterType = mapiv1.NutanixDiskAdapterType(disk.DeviceProperties.AdapterType)
-		}
-		if disk.DeviceProperties.DeviceIndex != 0 {
-			mapiDisk.DeviceProperties.DeviceIndex = disk.DeviceProperties.DeviceIndex
-		}
-		// Remove DeviceProperties if all fields are zero/nil
-		if mapiDisk.DeviceProperties.DeviceType == "" &&
-			mapiDisk.DeviceProperties.AdapterType == "" &&
-			mapiDisk.DeviceProperties.DeviceIndex == 0 {
-			mapiDisk.DeviceProperties = nil
-		}
-	}
-
-	if disk.StorageConfig != nil {
+	// StorageConfig with switch
+	switch sc := disk.StorageConfig; {
+	case sc == nil:
+		// leave nil
+	default:
 		storage := &mapiv1.NutanixVMStorageConfig{}
-		if disk.StorageConfig.DiskMode != "" {
-			storage.DiskMode = mapiv1.NutanixDiskMode(disk.StorageConfig.DiskMode)
+		switch sc.DiskMode {
+		case nutanixv1.NutanixMachineDiskModeFlash:
+			storage.DiskMode = mapiv1.NutanixDiskModeFlash
+		case nutanixv1.NutanixMachineDiskModeStandard:
+			storage.DiskMode = mapiv1.NutanixDiskModeStandard
+		default:
+			errors = append(errors, field.Invalid(field.NewPath("DiskMode"), sc.DiskMode, "DiskMode can be Standard and Flash"))
 		}
-		if disk.StorageConfig.StorageContainer != nil {
-			storage.StorageContainer = convertNutanixResourceIdentifierToStorageMapi(disk.StorageConfig.StorageContainer)
+		switch {
+		case sc.StorageContainer != nil:
+			storageContainer, errs := convertNutanixResourceIdentifierToStorageMapi(sc.StorageContainer)
+			if len(errs) > 0 {
+				errors = append(errors, errs...)
+			}
+			storage.StorageContainer = storageContainer
 		}
-		// Remove StorageConfig if all fields are zero/nil
-		if storage.StorageContainer != nil &&
-			storage.DiskMode != "" &&
-			storage.StorageContainer.Type != "" &&
-			storage.StorageContainer.UUID != nil {
+		// Remove if all fields are zero/nil
+		if storage.DiskMode != "" || (storage.StorageContainer != nil && storage.StorageContainer.Type != "" && storage.StorageContainer.UUID != nil) {
 			mapiDisk.StorageConfig = storage
 		}
 	}
 
-	return mapiDisk
+	return mapiDisk, errors
+}
+
+func convertNutanixGPUToMapi(gpus *[]nutanixv1.NutanixGPU) (*[]mapiv1.NutanixGPU, field.ErrorList) {
+	mapiGPUs := make([]mapiv1.NutanixGPU, 0, len(*gpus))
+	errors := field.ErrorList{}
+	for _, g := range *gpus {
+		obj := mapiv1.NutanixGPU{}
+		switch g.Type {
+		case nutanixv1.NutanixGPUIdentifierDeviceID:
+			obj.Type = mapiv1.NutanixGPUIdentifierDeviceID
+			if g.DeviceID == nil {
+				errors = append(errors, field.Required(field.NewPath("gpus").Index(len(mapiGPUs)), "DeviceID must be set for DeviceID type GPU"))
+				continue
+			}
+			obj.DeviceID = ptr.To(int32(*g.DeviceID))
+
+		case nutanixv1.NutanixGPUIdentifierName:
+			obj.Type = mapiv1.NutanixGPUIdentifierName
+			if g.Name == nil {
+				errors = append(errors, field.Required(field.NewPath("gpus").Index(len(mapiGPUs)), "Name must be set for Name type GPU"))
+				continue
+			}
+			obj.Name = ptr.To(*g.Name)
+
+		default:
+			errors = append(errors, field.Invalid(field.NewPath("gpus").Index(len(mapiGPUs)), g.Type, "invalid GPU identifier type"))
+			continue
+		}
+		mapiGPUs = append(mapiGPUs, obj)
+	}
+	return &mapiGPUs, errors
+}
+
+func convertNutanixBootTypeToMapi(bootType nutanixv1.NutanixBootType) (mapiv1.NutanixBootType, field.ErrorList) {
+	var mapiBootType mapiv1.NutanixBootType
+	errors := field.ErrorList{}
+	switch bootType {
+	case nutanixv1.NutanixBootTypeUEFI:
+		mapiBootType = mapiv1.NutanixUEFIBoot
+	case nutanixv1.NutanixBootTypeLegacy:
+		mapiBootType = mapiv1.NutanixLegacyBoot
+	default:
+		errors = append(errors, field.Invalid(field.NewPath("bootType"), bootType, "invalid boot type"))
+	}
+	return mapiBootType, errors
 }

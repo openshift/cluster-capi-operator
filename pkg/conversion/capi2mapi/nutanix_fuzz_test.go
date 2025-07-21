@@ -10,7 +10,9 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/capi2mapi"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/mapi2capi"
 	conversiontest "github.com/openshift/cluster-capi-operator/pkg/conversion/test/fuzz"
+	"k8s.io/apimachinery/pkg/api/resource"
 	runtimeserializer "k8s.io/apimachinery/pkg/runtime/serializer"
+	"k8s.io/utils/ptr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -93,6 +95,108 @@ func nutanixMachineTemplateFuzzerFuncs(codecs runtimeserializer.CodecFactory) []
 			// Ensure the type meta is set correctly.
 			m.TypeMeta.APIVersion = nutanixv1.GroupVersion.Version
 			m.TypeMeta.Kind = nutanixTemplateKind
+		},
+		func(bootType *nutanixv1.NutanixBootType, c fuzz.Continue) {
+			// Fuzz the boot type, but ensure it is a valid value.
+			val := nutanixv1.NutanixBootTypeUEFI
+			*bootType = val
+		},
+		func(image *nutanixv1.NutanixResourceIdentifier, c fuzz.Continue) {
+			image.Name = ptr.To("test-image")
+			image.Type = nutanixv1.NutanixIdentifierUUID
+			image.UUID = ptr.To(uuid.NewString())
+		},
+		func(dataDisks *[]nutanixv1.NutanixMachineVMDisk, c fuzz.Continue) {
+			// If you want the slice to be empty (to test empty cases):
+			// *dataDisks = []nutanixv1.NutanixMachineVMDisk{}
+			// If you want to fuzz with some sample disk(s), do:
+			*dataDisks = []nutanixv1.NutanixMachineVMDisk{
+				{
+					DiskSize: resource.MustParse("10Gi"),
+					DeviceProperties: &nutanixv1.NutanixMachineVMDiskDeviceProperties{
+						DeviceType:  nutanixv1.NutanixMachineDiskDeviceTypeCDRom,
+						AdapterType: nutanixv1.NutanixMachineDiskAdapterTypeSCSI,
+						DeviceIndex: 0,
+					},
+					StorageConfig: &nutanixv1.NutanixMachineVMStorageConfig{
+						DiskMode: nutanixv1.NutanixMachineDiskModeStandard,
+						StorageContainer: &nutanixv1.NutanixResourceIdentifier{
+							Type: nutanixv1.NutanixIdentifierUUID,
+							UUID: ptr.To(uuid.NewString()),
+						},
+					},
+					DataSource: &nutanixv1.NutanixResourceIdentifier{
+						Type: nutanixv1.NutanixIdentifierUUID,
+						UUID: ptr.To(uuid.NewString()),
+					},
+				},
+				{
+					DiskSize: resource.MustParse("10Gi"),
+					DeviceProperties: &nutanixv1.NutanixMachineVMDiskDeviceProperties{
+						DeviceType:  nutanixv1.NutanixMachineDiskDeviceTypeDisk,
+						AdapterType: nutanixv1.NutanixMachineDiskAdapterTypeSPAPR,
+					},
+					StorageConfig: &nutanixv1.NutanixMachineVMStorageConfig{
+						DiskMode: nutanixv1.NutanixMachineDiskModeFlash,
+						StorageContainer: &nutanixv1.NutanixResourceIdentifier{
+							Type: nutanixv1.NutanixIdentifierUUID,
+							UUID: ptr.To(uuid.NewString()),
+						},
+					},
+					DataSource: &nutanixv1.NutanixResourceIdentifier{
+						Type: nutanixv1.NutanixIdentifierUUID,
+						UUID: ptr.To(uuid.NewString()),
+					},
+				},
+				{
+					DiskSize: resource.MustParse("10Gi"),
+					DeviceProperties: &nutanixv1.NutanixMachineVMDiskDeviceProperties{
+						DeviceType:  nutanixv1.NutanixMachineDiskDeviceTypeDisk,
+						AdapterType: nutanixv1.NutanixMachineDiskAdapterTypeSCSI,
+						DeviceIndex: 2,
+					},
+					StorageConfig: &nutanixv1.NutanixMachineVMStorageConfig{
+						DiskMode: nutanixv1.NutanixMachineDiskModeFlash,
+						StorageContainer: &nutanixv1.NutanixResourceIdentifier{
+							Type: nutanixv1.NutanixIdentifierUUID,
+							UUID: ptr.To(uuid.NewString()),
+						},
+					},
+					DataSource: &nutanixv1.NutanixResourceIdentifier{
+						Type: nutanixv1.NutanixIdentifierUUID,
+						UUID: ptr.To(uuid.NewString()),
+					},
+				},
+			}
+		},
+		func(subnets *[]nutanixv1.NutanixResourceIdentifier, c fuzz.Continue) {
+			*subnets = []nutanixv1.NutanixResourceIdentifier{
+				{
+					Type: nutanixv1.NutanixIdentifierUUID,
+					UUID: ptr.To(uuid.NewString()),
+				},
+				{
+					Type: nutanixv1.NutanixIdentifierName,
+					Name: ptr.To("test-subnet"),
+				},
+			}
+		},
+		func(gpus *[]nutanixv1.NutanixGPU, c fuzz.Continue) {
+			// Fuzz two example GPUs: one with device ID, one with name, one with both nil, etc.
+			gpuName := "my-gpu"
+			deviceID := c.Int63() // returns int64
+			*gpus = []nutanixv1.NutanixGPU{
+				{
+					Type:     nutanixv1.NutanixGPUIdentifierDeviceID,
+					DeviceID: &deviceID,
+					Name:     nil,
+				},
+				{
+					Type:     nutanixv1.NutanixGPUIdentifierName,
+					DeviceID: nil,
+					Name:     &gpuName,
+				},
+			}
 		},
 	}
 }
