@@ -102,12 +102,6 @@ var (
 	// errAssertingCAPIBMPowerVSMachine is returned when we encounter an issue asserting a client.Object into an IBMPowerVSMachine.
 	errAssertingCAPIIBMPowerVSMachine = errors.New("error asserting the Cluster API IBMPowerVSMachine object")
 
-	// errCAPIMachineNotFound is returned when the AuthoritativeAPI is set to CAPI on the MAPI machine,
-	// but we can't find the CAPI machine.
-	//lint:ignore ST1005 Cluster API is a name.
-	//nolint:stylecheck
-	errCAPIMachineNotFound = errors.New("Cluster API machine not found")
-
 	// errPlatformNotSupported is returned when the platform is not supported.
 	errPlatformNotSupported = errors.New("error determining InfraMachine type, platform not supported")
 
@@ -266,20 +260,9 @@ func (r *MachineSyncReconciler) Reconcile(ctx context.Context, req reconcile.Req
 
 // reconcileCAPIMachinetoMAPIMachine reconciles a CAPI Machine to a MAPI Machine.
 //
-//nolint:gocognit,funlen, cyclop
+//nolint:gocognit,funlen
 func (r *MachineSyncReconciler) reconcileCAPIMachinetoMAPIMachine(ctx context.Context, sourceCAPIMachine *clusterv1.Machine, existingMAPIMachine *mapiv1beta1.Machine) (ctrl.Result, error) {
 	logger := logf.FromContext(ctx)
-
-	if sourceCAPIMachine == nil {
-		logger.Error(errCAPIMachineNotFound, "machine", existingMAPIMachine.Name)
-
-		if condErr := r.applySynchronizedConditionWithPatch(
-			ctx, existingMAPIMachine, corev1.ConditionFalse, reasonCAPIMachineNotFound, errCAPIMachineNotFound.Error(), nil); condErr != nil {
-			return ctrl.Result{}, utilerrors.NewAggregate([]error{errCAPIMachineNotFound, condErr})
-		}
-
-		return ctrl.Result{}, errCAPIMachineNotFound
-	}
 
 	infraCluster, infraMachine, err := r.fetchCAPIInfraResources(ctx, sourceCAPIMachine)
 	if err != nil {
