@@ -368,13 +368,10 @@ func convertNutanixResourceIdentifierToStorageCAPX(id *mapiv1.NutanixStorageReso
 	obj := &nutanixv1.NutanixResourceIdentifier{}
 	switch id.Type {
 	case mapiv1.NutanixIdentifierName:
-		obj.Type = nutanixv1.NutanixIdentifierName
-		if obj.Name == nil {
-			errors = append(errors, field.Required(field.NewPath("name"), "Name must be set for Name type identifier"))
-		}
+		errors = append(errors, field.Invalid(field.NewPath("type"), id.Type, "invalid identifier type"))
 	case mapiv1.NutanixIdentifierUUID:
 		obj.Type = nutanixv1.NutanixIdentifierUUID
-		if obj.UUID == nil {
+		if id.UUID == nil {
 			errors = append(errors, field.Required(field.NewPath("uuid"), "UUID must be set for UUID type identifier"))
 		}
 	default:
