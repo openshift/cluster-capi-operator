@@ -263,17 +263,6 @@ func (r *MachineSyncReconciler) Reconcile(ctx context.Context, req reconcile.Req
 func (r *MachineSyncReconciler) reconcileCAPIMachinetoMAPIMachine(ctx context.Context, capiMachine *clusterv1.Machine, mapiMachine *machinev1beta1.Machine) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
-	if capiMachine == nil {
-		logger.Error(errCAPIMachineNotFound, "machine", mapiMachine.Name)
-
-		if condErr := r.applySynchronizedConditionWithPatch(
-			ctx, mapiMachine, corev1.ConditionFalse, reasonCAPIMachineNotFound, errCAPIMachineNotFound.Error(), nil); condErr != nil {
-			return ctrl.Result{}, utilerrors.NewAggregate([]error{errCAPIMachineNotFound, condErr})
-		}
-
-		return ctrl.Result{}, errCAPIMachineNotFound
-	}
-
 	infraCluster, infraMachine, err := r.fetchCAPIInfraResources(ctx, capiMachine)
 	if err != nil {
 		fetchErr := fmt.Errorf("failed to fetch Cluster API infra resources: %w", err)
