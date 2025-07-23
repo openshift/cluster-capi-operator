@@ -153,28 +153,47 @@ func (m machineAndNutanixMachineAndNutanixCluster) toProviderSpec() (*mapiv1.Nut
 		}
 	}
 
+	var credSecretRef *corev1.LocalObjectReference
+	if m.nutanixCluster.Spec.PrismCentral != nil && m.nutanixCluster.Spec.PrismCentral.CredentialRef != nil {
+		credSecretRef = &corev1.LocalObjectReference{
+			Name: m.nutanixCluster.Spec.PrismCentral.CredentialRef.Name,
+		}
+	}
+
+	categoriesIdentifiers := m.nutanixMachine.Spec.AdditionalCategories
+	categories := make([]mapiv1.NutanixCategory, len(categoriesIdentifiers))
+
+	for i, cat := range categoriesIdentifiers {
+		categories[i] = mapiv1.NutanixCategory{
+			Key:   cat.Key,
+			Value: cat.Value,
+		}
+	}
+
 	mapiProviderConfig := mapiv1.NutanixMachineProviderConfig{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "NutanixMachineProviderConfig",
-			APIVersion: "machine.openshift.io/v1alpha1",
+			APIVersion: "machine.openshift.io/v1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Labels:      m.machine.ObjectMeta.Labels,
 			Annotations: m.machine.ObjectMeta.Annotations,
 		},
-		VCPUsPerSocket: m.nutanixMachine.Spec.VCPUsPerSocket,
-		VCPUSockets:    m.nutanixMachine.Spec.VCPUSockets,
-		MemorySize:     m.nutanixMachine.Spec.MemorySize,
-		SystemDiskSize: m.nutanixMachine.Spec.SystemDiskSize,
-		Image:          image,
-		Cluster:        *cluster,
-		Subnets:        subnets,
-		Project:        project,
-		BootType:       bootType,
-		DataDisks:      dataDisks,
-		GPUs:           *gpus,
-		UserDataSecret: userData,
-		FailureDomain:  failureDomainRef,
+		VCPUsPerSocket:    m.nutanixMachine.Spec.VCPUsPerSocket,
+		VCPUSockets:       m.nutanixMachine.Spec.VCPUSockets,
+		MemorySize:        m.nutanixMachine.Spec.MemorySize,
+		SystemDiskSize:    m.nutanixMachine.Spec.SystemDiskSize,
+		Image:             image,
+		Cluster:           *cluster,
+		Subnets:           subnets,
+		Project:           project,
+		BootType:          bootType,
+		DataDisks:         dataDisks,
+		GPUs:              *gpus,
+		UserDataSecret:    userData,
+		FailureDomain:     failureDomainRef,
+		CredentialsSecret: credSecretRef,
+		Categories:        categories,
 	}
 
 	if len(errors) > 0 {
@@ -285,17 +304,20 @@ func convertNutanixResourceIdentifierToMapi(identifier *nutanixv1.NutanixResourc
 		obj.Type = mapiv1.NutanixIdentifierName
 		if identifier.Name == nil {
 			errors = append(errors, field.Required(field.NewPath("name"), "Name must be set for Name type identifier"))
+		} else {
+			obj.Name = ptr.To(*identifier.Name)
 		}
-		obj.Name = ptr.To(*identifier.Name)
 	case nutanixv1.NutanixIdentifierUUID:
 		obj.Type = mapiv1.NutanixIdentifierUUID
 		if identifier.UUID == nil {
 			errors = append(errors, field.Required(field.NewPath("uuid"), "UUID must be set for UUID type identifier"))
+		} else {
+			obj.UUID = identifier.UUID
 		}
-		obj.UUID = identifier.UUID
 	default:
 		errors = append(errors, field.Invalid(field.NewPath("type"), identifier.Type, "invalid identifier type"))
 	}
+
 	return &obj, errors
 }
 
@@ -310,8 +332,9 @@ func convertNutanixResourceIdentifierToStorageMapi(id *nutanixv1.NutanixResource
 		out.Type = mapiv1.NutanixIdentifierUUID
 		if id.UUID == nil {
 			errors = append(errors, field.Required(field.NewPath("uuid"), "UUID must be set for UUID type identifier"))
+		} else {
+			out.UUID = id.UUID
 		}
-		out.UUID = id.UUID
 	default:
 		errors = append(errors, field.Invalid(field.NewPath("type"), id.Type, "invalid identifier type"))
 	}
@@ -418,17 +441,17 @@ func convertNutanixGPUToMapi(gpus *[]nutanixv1.NutanixGPU) (*[]mapiv1.NutanixGPU
 			obj.Type = mapiv1.NutanixGPUIdentifierDeviceID
 			if g.DeviceID == nil {
 				errors = append(errors, field.Required(field.NewPath("gpus").Index(len(mapiGPUs)), "DeviceID must be set for DeviceID type GPU"))
-				continue
+			} else {
+				obj.DeviceID = ptr.To(int32(*g.DeviceID))
 			}
-			obj.DeviceID = ptr.To(int32(*g.DeviceID))
 
 		case nutanixv1.NutanixGPUIdentifierName:
 			obj.Type = mapiv1.NutanixGPUIdentifierName
 			if g.Name == nil {
 				errors = append(errors, field.Required(field.NewPath("gpus").Index(len(mapiGPUs)), "Name must be set for Name type GPU"))
-				continue
+			} else {
+				obj.Name = ptr.To(*g.Name)
 			}
-			obj.Name = ptr.To(*g.Name)
 
 		default:
 			errors = append(errors, field.Invalid(field.NewPath("gpus").Index(len(mapiGPUs)), g.Type, "invalid GPU identifier type"))
