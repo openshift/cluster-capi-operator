@@ -209,6 +209,8 @@ func (r *ClusterOperatorStatusClient) RelatedObjects() []configv1.ObjectReferenc
 		{Group: "cluster.x-k8s.io", Resource: "clusters", Namespace: r.ManagedNamespace},
 		{Group: "cluster.x-k8s.io", Resource: "machines", Namespace: r.ManagedNamespace},
 		{Group: "cluster.x-k8s.io", Resource: "machinesets", Namespace: r.ManagedNamespace},
+		{Group: "admissionregistration", Resource: "validatingadmissionpolicy", Name: "machine-api-machine-vap"},
+		{Group: "admissionregistration", Resource: "validatingadmissionpolicybinding", Name: "machine-api-machine-vap"},
 	}
 
 	platformPrefix := platformToInfraPrefix(r.Platform)

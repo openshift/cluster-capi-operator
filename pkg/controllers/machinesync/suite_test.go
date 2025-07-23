@@ -66,7 +66,6 @@ var _ = BeforeSuite(func() {
 	By("bootstrapping test environment")
 	var err error
 	testEnv = &envtest.Environment{}
-
 	cfg, k8sClient, err = test.StartEnvTest(testEnv)
 
 	Expect(err).NotTo(HaveOccurred())

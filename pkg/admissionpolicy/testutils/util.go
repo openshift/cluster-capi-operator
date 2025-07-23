@@ -95,7 +95,7 @@ const (
 	// ClusterAPIAWSAdmissionPolicies is the name of the ClusterAPIAWSAdmissionPolicies transport config map.
 	ClusterAPIAWSAdmissionPolicies string = "cluster-api-aws-admission-policies"
 
-	yamlChunk = 4 << 10
+	yamlChunk = 4096
 )
 
 // MachineAPIMachineUpdateAuditPolicy is an audit policy that captures
@@ -179,9 +179,9 @@ func LoadTransportConfigMaps() map[string][]client.Object {
 	By("Unmarshalling the admission policy transport configmaps")
 
 	configMaps, err := os.Open("../../../manifests/0000_30_cluster-api_09_admission-policies.yaml")
-	Expect(err).ToNot(HaveOccurred())
+	Expect(err).WithOffset(1).ToNot(HaveOccurred())
 	DeferCleanup(func() {
-		Expect(configMaps.Close()).To(Succeed())
+		Expect(configMaps.Close()).WithOffset(1).To(Succeed())
 	})
 
 	decoder := yaml.NewYAMLOrJSONDecoder(configMaps, yamlChunk)
@@ -204,7 +204,7 @@ func LoadTransportConfigMaps() map[string][]client.Object {
 				break
 			}
 
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).WithOffset(1).NotTo(HaveOccurred())
 		}
 
 		if _, want := configMapByName[cm.Name]; want {
@@ -214,7 +214,7 @@ func LoadTransportConfigMaps() map[string][]client.Object {
 
 	// Assert we found everything we care about.
 	for name, cm := range configMapByName {
-		Expect(cm).NotTo(BeNil(), "expected ConfigMap %q in manifest", name)
+		Expect(cm).WithOffset(1).NotTo(BeNil(), "expected ConfigMap %q in manifest", name)
 	}
 
 	By("Unmarshalling the admission policies in each configmap")
@@ -235,7 +235,7 @@ func LoadTransportConfigMaps() map[string][]client.Object {
 						break
 					}
 
-					Expect(err).NotTo(HaveOccurred())
+					Expect(err).WithOffset(1).NotTo(HaveOccurred())
 				}
 
 				if len(r.Raw) == 0 {
@@ -244,7 +244,7 @@ func LoadTransportConfigMaps() map[string][]client.Object {
 
 				o, _, err := scheme.Codecs.UniversalDeserializer().Decode(r.Raw, nil, nil)
 
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).WithOffset(1).NotTo(HaveOccurred())
 
 				// only keep objects that implement client.Object
 				if co, ok := o.(client.Object); ok {
