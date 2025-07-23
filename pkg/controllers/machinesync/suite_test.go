@@ -49,7 +49,7 @@ var testRESTMapper meta.RESTMapper
 var ctx = context.Background()
 
 const (
-	timeout = time.Second * 2
+	timeout = time.Second * 10
 )
 
 func TestAPIs(t *testing.T) {

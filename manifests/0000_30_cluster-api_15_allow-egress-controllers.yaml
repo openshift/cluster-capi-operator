@@ -1,0 +1,42 @@
+# This NetworkPolicy allows egress traffic required for cluster-api controllers.
+# Controllers need broad internet access for cloud provider APIs, container registries,
+# and other external services required for cluster management operations.
+#
+# This policy allows all egress traffic from CAPI controller pods, which is necessary
+# because controllers need to communicate with various external services:
+# - Cloud provider APIs (AWS, Azure, GCP, etc.)
+# - Container registries for image pulls
+# - External services for cluster management
+# - Webhook services for validation
+#
+# This approach is more practical than overly granular rules since controllers
+# need broad access to function properly in various environments.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  annotations:
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/feature-set: CustomNoUpgrade,TechPreviewNoUpgrade
+  name: allow-egress-controllers
+  namespace: openshift-cluster-api
+spec:
+  egress:
+  # Allow all egress traffic - controllers need broad access
+  - {} # Empty rule allows all egress
+  podSelector:
+    matchExpressions:
+    - key: control-plane
+      operator: In
+      values:
+      - controller-manager
+      - capa-controller-manager
+      - capg-controller-manager
+      - capz-controller-manager
+      - capv-controller-manager
+      - capo-controller-manager
+      - capibm-controller-manager
+      - capo-infracluster-controller
+  policyTypes:
+  - Egress
