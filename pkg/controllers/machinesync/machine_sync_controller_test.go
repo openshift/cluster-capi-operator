@@ -765,7 +765,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 		})
 	})
 
-	FContext("validating admission policy tests", func() {
+	Context("validating admission policy tests", func() {
 		BeforeEach(func() {
 
 			transportConfigMaps := admissiontestutils.LoadTransportConfigMaps()
@@ -845,6 +845,9 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 				Eventually(k.UpdateStatus(mapiMachine, func() {
 					mapiMachine.Status.AuthoritativeAPI = machinev1beta1.MachineAuthorityMachineAPI
 				})).Should(Succeed())
+
+				Eventually(k.Object(mapiMachine), timeout).Should(
+					HaveField("Status.AuthoritativeAPI", Equal(machinev1beta1.MachineAuthorityMachineAPI)))
 			})
 
 			It("updating the spec should be allowed", func() {
@@ -861,6 +864,9 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 				Eventually(k.UpdateStatus(mapiMachine, func() {
 					mapiMachine.Status.AuthoritativeAPI = machinev1beta1.MachineAuthorityClusterAPI
 				})).Should(Succeed())
+
+				Eventually(k.Object(mapiMachine), timeout).Should(
+					HaveField("Status.AuthoritativeAPI", Equal(machinev1beta1.MachineAuthorityClusterAPI)))
 			})
 
 			It("updating the spec (outside of authoritative api) should be prevented", func() {
@@ -891,7 +897,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 
 						return err
 					}, timeout).ShouldNot(Succeed())
-					expectVAPError(err, "Cannot modify or delete any machine.openshift.io/* or kubernetes.io/* label")
+					expectVAPError(err, "Cannot add, modify or delete any machine.openshift.io/* or kubernetes.io/* label")
 				})
 
 				It("rejects deletion of the protected machine.openshift.io label", func() {
@@ -903,7 +909,43 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 
 						return err
 					}, timeout).ShouldNot(Succeed())
-					expectVAPError(err, "Cannot modify or delete any machine.openshift.io/* or kubernetes.io/* label")
+					expectVAPError(err, "Cannot add, modify or delete any machine.openshift.io/* or kubernetes.io/* label")
+				})
+
+				It("rejects setting of the protected machine.openshift.io label to the empty string ''", func() {
+					var err error
+					Eventually(func() error {
+						err = k.Update(mapiMachine, func() {
+							mapiMachine.Labels["machine.openshift.io/instance-type"] = ""
+						})()
+
+						return err
+					}, timeout).ShouldNot(Succeed())
+					expectVAPError(err, "Cannot add, modify or delete any machine.openshift.io/* or kubernetes.io/* label")
+				})
+
+				It("rejects adding a new machine.openshift.io label", func() {
+					var err error
+					Eventually(func() error {
+						err = k.Update(mapiMachine, func() {
+							mapiMachine.Labels["machine.openshift.io/foo"] = "bar"
+						})()
+
+						return err
+					}, timeout).ShouldNot(Succeed())
+					expectVAPError(err, "Cannot add, modify or delete any machine.openshift.io/* or kubernetes.io/* label")
+				})
+
+				It("rejects adding a new machine.openshift.io label with an empty string value", func() {
+					var err error
+					Eventually(func() error {
+						err = k.Update(mapiMachine, func() {
+							mapiMachine.Labels["machine.openshift.io/foo"] = ""
+						})()
+
+						return err
+					}, timeout).ShouldNot(Succeed())
+					expectVAPError(err, "Cannot add, modify or delete any machine.openshift.io/* or kubernetes.io/* label")
 				})
 
 				It("allows modification of a non-protected label", func() {
@@ -923,7 +965,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 
 						return err
 					}, timeout).ShouldNot(Succeed())
-					expectVAPError(err, "Cannot modify or delete any machine.openshift.io/* annotation")
+					expectVAPError(err, "Cannot add, modify or delete any machine.openshift.io/* annotation")
 				})
 
 				It("rejects deletion of a protected machine.openshift.io annotation", func() {
@@ -935,7 +977,43 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 
 						return err
 					}, timeout).ShouldNot(Succeed())
-					expectVAPError(err, "Cannot modify or delete any machine.openshift.io/* annotation")
+					expectVAPError(err, "Cannot add, modify or delete any machine.openshift.io/* annotation")
+				})
+
+				It("rejects modification of a protected machine.openshift.io annotation to the empty string ''", func() {
+					var err error
+					Eventually(func() error {
+						err = k.Update(mapiMachine, func() {
+							mapiMachine.Annotations["machine.openshift.io/instance-state"] = ""
+						})()
+
+						return err
+					}, timeout).ShouldNot(Succeed())
+					expectVAPError(err, "Cannot add, modify or delete any machine.openshift.io/* annotation")
+				})
+
+				It("rejects adding a new protected machine.openshift.io annotation", func() {
+					var err error
+					Eventually(func() error {
+						err = k.Update(mapiMachine, func() {
+							mapiMachine.Annotations["machine.openshift.io/foo"] = "bar"
+						})()
+
+						return err
+					}, timeout).ShouldNot(Succeed())
+					expectVAPError(err, "Cannot add, modify or delete any machine.openshift.io/* annotation")
+				})
+
+				It("rejects adding a new protected machine.openshift.io annotation with an empty string value", func() {
+					var err error
+					Eventually(func() error {
+						err = k.Update(mapiMachine, func() {
+							mapiMachine.Annotations["machine.openshift.io/foo"] = ""
+						})()
+
+						return err
+					}, timeout).ShouldNot(Succeed())
+					expectVAPError(err, "Cannot add, modify or delete any machine.openshift.io/* annotation")
 				})
 
 				It("allows modification of a non-protected annotation", func() {
