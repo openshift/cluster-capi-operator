@@ -18,6 +18,9 @@ package machinesync
 
 import (
 	"context"
+	"errors"
+	"net/http"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -30,17 +33,23 @@ import (
 	configv1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/config/v1"
 	corev1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/core/v1"
 	machinev1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/machine/v1beta1"
+	admissiontestutils "github.com/openshift/cluster-capi-operator/pkg/admissionpolicy/testutils"
 	consts "github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/mapi2capi"
 
+	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/rest"
+
 	"k8s.io/utils/ptr"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/config"
+	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
@@ -90,6 +99,13 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 		mgrCancel()
 		// Wait for the mgrDone to be closed, which will happen once the mgr has stopped
 		<-mgrDone
+	}
+
+	expectVAPError := func(err error, msg string) {
+		var statusErr *apierrors.StatusError
+		ExpectWithOffset(1, errors.As(err, &statusErr)).To(BeTrue())
+		ExpectWithOffset(1, statusErr.Status().Code).To(Equal(int32(http.StatusUnprocessableEntity)))
+		ExpectWithOffset(1, statusErr.Error()).To(ContainSubstring(msg))
 	}
 
 	BeforeEach(func() {
@@ -171,8 +187,18 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 			WithClusterName(infrastructureName)
 
 		By("Setting up a manager and controller")
+		// Adds new user to the api server so that the controller
+		// can be a different user to the one we use to manipulate test resources
 		var err error
-		mgr, err = ctrl.NewManager(cfg, ctrl.Options{
+		var controllerCfg *rest.Config
+
+		controllerCfg, err = testEnv.ControlPlane.APIServer.SecureServing.AddUser(envtest.User{
+			Name:   "system:serviceaccount:openshift-cluster-api:cluster-capi-operator",
+			Groups: []string{"system:masters", "system:authenticated"},
+		}, cfg)
+		Expect(err).ToNot(HaveOccurred(), "User be able to be created")
+
+		mgr, err = ctrl.NewManager(controllerCfg, ctrl.Options{
 			Scheme: testScheme,
 			Controller: config.Controller{
 				SkipNameValidation: ptr.To(true),
@@ -737,6 +763,304 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 
 			})
 		})
+	})
+
+	Context("validating admission policy tests", func() {
+		BeforeEach(func() {
+
+			transportConfigMaps := admissiontestutils.LoadTransportConfigMaps()
+
+			By("Applying the objects found in clusterAPICustomAdmissionPolicies")
+			for _, obj := range transportConfigMaps[admissiontestutils.ClusterAPICustomAdmissionPolicies] {
+				// Deep‑copy so the loop variable isn’t mutated by the client
+				newObj, ok := obj.DeepCopyObject().(client.Object)
+				Expect(ok).To(BeTrue())
+
+				err := k8sClient.Create(ctx, newObj)
+				if err != nil && !apierrors.IsAlreadyExists(err) {
+					Expect(err).NotTo(HaveOccurred())
+				}
+			}
+
+			By("Updating the binding")
+			policyBinding := &admissionregistrationv1.ValidatingAdmissionPolicyBinding{}
+			Expect(k8sClient.Get(ctx, client.ObjectKey{
+				Name: "machine-api-machine-vap"}, policyBinding)).To(Succeed())
+
+			Eventually(k.Update(policyBinding, func() {
+				// We want to have our paramref reference the CAPI namespace,
+				// since we `GenerateName` it is not static
+				policyBinding.Spec.ParamRef.Namespace = capiNamespace.GetName()
+			})).Should(Succeed())
+
+			Eventually(k.Update(policyBinding, func() {
+				// We need to update the namespace in our namespaceSelector,
+				// since also use `GenerateName` here
+				policyBinding.Spec.MatchResources.NamespaceSelector.MatchLabels = map[string]string{
+					"kubernetes.io/metadata.name": mapiNamespace.GetName(),
+				}
+			})).Should(Succeed())
+
+			By("Creating the CAPI infra machine")
+			Expect(k8sClient.Create(ctx, capaMachine)).To(Succeed(), "capa machine should be able to be created")
+
+			By("Creating the MAPI machine")
+			mapiMachine = mapiMachineBuilder.WithName("test-machine").WithLabels(map[string]string{
+				"machine.openshift.io/cluster-api-cluster":      "ci-op-gs2k97d6-c9e33-2smph",
+				"machine.openshift.io/cluster-api-machine-role": "worker",
+				"machine.openshift.io/cluster-api-machine-type": "worker",
+				"machine.openshift.io/cluster-api-machineset":   "ci-op-gs2k97d6-c9e33-2smph-worker-us-west-2b",
+				"machine.openshift.io/instance-type":            "m6a.xlarge",
+			}).WithAnnotations(map[string]string{
+				"machine.openshift.io/instance-state": "running",
+			}).Build()
+			Expect(k8sClient.Create(ctx, mapiMachine)).Should(Succeed())
+
+			By("Creating the CAPI Machine")
+			capiMachine = capiMachineBuilder.WithName("test-machine").WithLabels(map[string]string{
+				"machine.openshift.io/cluster-api-cluster":      "ci-op-gs2k97d6-c9e33-2smph",
+				"machine.openshift.io/cluster-api-machine-role": "worker",
+				"machine.openshift.io/cluster-api-machine-type": "worker",
+				"machine.openshift.io/cluster-api-machineset":   "ci-op-gs2k97d6-c9e33-2smph-worker-us-west-2b",
+				"machine.openshift.io/instance-type":            "m6a.xlarge",
+				"cluster.x-k8s.io/cluster-name":                 "ci-op-gs2k97d6-c9e33-2smph",
+				"cluster.x-k8s.io/set-name":                     "ci-op-gs2k97d6-c9e33-2smph-worker-us-west-2b",
+				"node-role.kubernetes.io/worker":                "",
+			}).WithAnnotations(map[string]string{
+				"machine.openshift.io/instance-state": "running",
+			}).Build()
+			Expect(k8sClient.Create(ctx, capiMachine)).Should(Succeed())
+
+			// Status controller doesn't run in envtest, its part of KCM - we've got to sleep?
+
+			// 'On my machine' 1s seems to be about right for the time required
+			// for the VAP to be loaded into the API Server
+			time.Sleep(1 * time.Second)
+
+		})
+
+		Context("with status.AuthoritativeAPI: Machine API", func() {
+			BeforeEach(func() {
+				By("Setting the MAPI machine AuthoritativeAPI to Machine API")
+				Eventually(k.UpdateStatus(mapiMachine, func() {
+					mapiMachine.Status.AuthoritativeAPI = machinev1beta1.MachineAuthorityMachineAPI
+				})).Should(Succeed())
+
+				Eventually(k.Object(mapiMachine), timeout).Should(
+					HaveField("Status.AuthoritativeAPI", Equal(machinev1beta1.MachineAuthorityMachineAPI)))
+			})
+
+			It("updating the spec should be allowed", func() {
+				Eventually(k.Update(mapiMachine, func() {
+					mapiMachine.Spec.ObjectMeta.Labels = map[string]string{"foo": "bar"}
+				}), timeout).Should(Succeed(), "expected success when updating the spec")
+			})
+
+		})
+
+		Context("with status.AuthoritativeAPI: Cluster API", func() {
+			BeforeEach(func() {
+				By("Setting the MAPI machine AuthoritativeAPI to Cluster API")
+				Eventually(k.UpdateStatus(mapiMachine, func() {
+					mapiMachine.Status.AuthoritativeAPI = machinev1beta1.MachineAuthorityClusterAPI
+				})).Should(Succeed())
+
+				Eventually(k.Object(mapiMachine), timeout).Should(
+					HaveField("Status.AuthoritativeAPI", Equal(machinev1beta1.MachineAuthorityClusterAPI)))
+			})
+
+			It("updating the spec (outside of authoritative api) should be prevented", func() {
+				var err error
+				Eventually(func() error {
+					err = k.Update(mapiMachine, func() {
+						mapiMachine.Spec.ObjectMeta.Labels = map[string]string{"foo": "bar"}
+					})()
+
+					return err
+				}, timeout).ShouldNot(Succeed())
+				expectVAPError(err, "You may only modify spec.authoritativeAPI")
+			})
+
+			It("updating the spec.authoritativeAPI should be allowed", func() {
+				Eventually(k.Update(mapiMachine, func() {
+					mapiMachine.Spec.AuthoritativeAPI = machinev1beta1.MachineAuthorityMachineAPI
+				}), timeout).Should(Succeed(), "expected success when updating spec.authoritativeAPI")
+			})
+
+			Context("when trying to update metadata.labels", func() {
+				It("rejects modification of the protected machine.openshift.io label", func() {
+					var err error
+					Eventually(func() error {
+						err = k.Update(mapiMachine, func() {
+							mapiMachine.Labels["machine.openshift.io/instance-type"] = "m5.large"
+						})()
+
+						return err
+					}, timeout).ShouldNot(Succeed())
+					expectVAPError(err, "Cannot add, modify or delete any machine.openshift.io/* or kubernetes.io/* label")
+				})
+
+				It("rejects deletion of the protected machine.openshift.io label", func() {
+					var err error
+					Eventually(func() error {
+						err = k.Update(mapiMachine, func() {
+							delete(mapiMachine.Labels, "machine.openshift.io/instance-type")
+						})()
+
+						return err
+					}, timeout).ShouldNot(Succeed())
+					expectVAPError(err, "Cannot add, modify or delete any machine.openshift.io/* or kubernetes.io/* label")
+				})
+
+				It("rejects setting of the protected machine.openshift.io label to the empty string ''", func() {
+					var err error
+					Eventually(func() error {
+						err = k.Update(mapiMachine, func() {
+							mapiMachine.Labels["machine.openshift.io/instance-type"] = ""
+						})()
+
+						return err
+					}, timeout).ShouldNot(Succeed())
+					expectVAPError(err, "Cannot add, modify or delete any machine.openshift.io/* or kubernetes.io/* label")
+				})
+
+				It("rejects adding a new machine.openshift.io label", func() {
+					var err error
+					Eventually(func() error {
+						err = k.Update(mapiMachine, func() {
+							mapiMachine.Labels["machine.openshift.io/foo"] = "bar"
+						})()
+
+						return err
+					}, timeout).ShouldNot(Succeed())
+					expectVAPError(err, "Cannot add, modify or delete any machine.openshift.io/* or kubernetes.io/* label")
+				})
+
+				It("rejects adding a new machine.openshift.io label with an empty string value", func() {
+					var err error
+					Eventually(func() error {
+						err = k.Update(mapiMachine, func() {
+							mapiMachine.Labels["machine.openshift.io/foo"] = ""
+						})()
+
+						return err
+					}, timeout).ShouldNot(Succeed())
+					expectVAPError(err, "Cannot add, modify or delete any machine.openshift.io/* or kubernetes.io/* label")
+				})
+
+				It("allows modification of a non-protected label", func() {
+					Eventually(k.Update(mapiMachine, func() {
+						mapiMachine.Labels["test"] = "val"
+					}), timeout).Should(Succeed(), "expected success when modifying unrelated labels")
+				})
+			})
+
+			Context("when trying to update metadata.Annotations", func() {
+				It("rejects modification of a protected machine.openshift.io annotation", func() {
+					var err error
+					Eventually(func() error {
+						err = k.Update(mapiMachine, func() {
+							mapiMachine.Annotations["machine.openshift.io/instance-state"] = "stopped"
+						})()
+
+						return err
+					}, timeout).ShouldNot(Succeed())
+					expectVAPError(err, "Cannot add, modify or delete any machine.openshift.io/* annotation")
+				})
+
+				It("rejects deletion of a protected machine.openshift.io annotation", func() {
+					var err error
+					Eventually(func() error {
+						err = k.Update(mapiMachine, func() {
+							delete(mapiMachine.Annotations, "machine.openshift.io/instance-state")
+						})()
+
+						return err
+					}, timeout).ShouldNot(Succeed())
+					expectVAPError(err, "Cannot add, modify or delete any machine.openshift.io/* annotation")
+				})
+
+				It("rejects modification of a protected machine.openshift.io annotation to the empty string ''", func() {
+					var err error
+					Eventually(func() error {
+						err = k.Update(mapiMachine, func() {
+							mapiMachine.Annotations["machine.openshift.io/instance-state"] = ""
+						})()
+
+						return err
+					}, timeout).ShouldNot(Succeed())
+					expectVAPError(err, "Cannot add, modify or delete any machine.openshift.io/* annotation")
+				})
+
+				It("rejects adding a new protected machine.openshift.io annotation", func() {
+					var err error
+					Eventually(func() error {
+						err = k.Update(mapiMachine, func() {
+							mapiMachine.Annotations["machine.openshift.io/foo"] = "bar"
+						})()
+
+						return err
+					}, timeout).ShouldNot(Succeed())
+					expectVAPError(err, "Cannot add, modify or delete any machine.openshift.io/* annotation")
+				})
+
+				It("rejects adding a new protected machine.openshift.io annotation with an empty string value", func() {
+					var err error
+					Eventually(func() error {
+						err = k.Update(mapiMachine, func() {
+							mapiMachine.Annotations["machine.openshift.io/foo"] = ""
+						})()
+
+						return err
+					}, timeout).ShouldNot(Succeed())
+					expectVAPError(err, "Cannot add, modify or delete any machine.openshift.io/* annotation")
+				})
+
+				It("allows modification of a non-protected annotation", func() {
+					Eventually(k.Update(mapiMachine, func() {
+						mapiMachine.Annotations["bar"] = "baz"
+					}), timeout).Should(Succeed(), "expected success when modifying unrelated annotaitons")
+				})
+			})
+
+			Context("when trying to update Cluster API owned metadata.labels", func() {
+				It("allows changing a metadata label to match the param machine", func() {
+					Eventually(k.Object(capiMachine), timeout).Should(
+						HaveField("Labels", HaveKeyWithValue("cluster.x-k8s.io/cluster-name", "ci-op-gs2k97d6-c9e33-2smph")))
+
+					Eventually(k.Update(mapiMachine, func() {
+						mapiMachine.Labels["cluster.x-k8s.io/cluster-name"] = "ci-op-gs2k97d6-c9e33-2smph"
+					}), timeout).Should(Succeed(), "expected success when updating label to match CAPI machine")
+				})
+
+				It("rejects changing a label to differ from the param machine", func() {
+					var err error
+					Eventually(func() error {
+						err = k.Update(mapiMachine, func() {
+							mapiMachine.Labels["cluster.x-k8s.io/cluster-name"] = "foo"
+						})()
+
+						return err
+					}, timeout).ShouldNot(Succeed())
+					expectVAPError(err, "Cannot modify a Cluster API controlled label except to match the Cluster API mirrored machine")
+				})
+			})
+
+			It("rejects updating spec.authoritativeAPI alongside other spec fields", func() {
+				var err error
+				Eventually(func() error {
+					err = k.Update(mapiMachine, func() {
+						mapiMachine.Spec.AuthoritativeAPI = machinev1beta1.MachineAuthorityMachineAPI
+						mapiMachine.Spec.ObjectMeta.Labels = map[string]string{"foo": "bar"}
+					})()
+
+					return err
+				}, timeout).ShouldNot(Succeed())
+				expectVAPError(err, "You may only modify spec.authoritativeAPI")
+			})
+
+		})
+
 	})
 })
 
