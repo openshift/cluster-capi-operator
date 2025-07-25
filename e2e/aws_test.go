@@ -110,12 +110,13 @@ func newAWSMachineTemplate(mapiProviderSpec *mapiv1.AWSMachineProviderConfig) *a
 	Expect(mapiProviderSpec.SecurityGroups[0].Filters).ToNot(HaveLen(0))
 	Expect(mapiProviderSpec.SecurityGroups[0].Filters[0].Values).ToNot(HaveLen(0))
 
-	uncompressedUserData := true
+	// Comment this as it is a known unsupported field
+	//uncompressedUserData := true
 
 	awsMachineSpec := awsv1.AWSMachineSpec{
-		UncompressedUserData: &uncompressedUserData,
-		IAMInstanceProfile:   *mapiProviderSpec.IAMInstanceProfile.ID,
-		InstanceType:         mapiProviderSpec.InstanceType,
+		//UncompressedUserData: &uncompressedUserData,
+		IAMInstanceProfile: *mapiProviderSpec.IAMInstanceProfile.ID,
+		InstanceType:       mapiProviderSpec.InstanceType,
 		AMI: awsv1.AMIReference{
 			ID: mapiProviderSpec.AMI.ID,
 		},
