@@ -1,0 +1,41 @@
+# This NetworkPolicy allows ingress traffic to CAPI operator pods on the metrics port (8443).
+# This enables monitoring and observability of the cluster-capi-operator by allowing:
+# - Prometheus scraping of operator metrics
+# - Health check endpoints for operator status
+# - Monitoring tools to collect performance data
+# - Observability platforms to track operator behavior
+#
+# The policy applies to all CAPI controller pods (control-plane label) and allows
+# traffic from any namespace or pod to access the metrics endpoint.
+# This is essential for maintaining operational visibility of the cluster-api operator.
+#
+# This policy works with the deny-all policy to ensure metrics are accessible
+# while maintaining the default-deny security model for other traffic.
+# Note: This policy targets the same controllers as the metrics-controllers policy
+# but serves as a separate policy for operator-specific metrics collection.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  annotations:
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/feature-set: CustomNoUpgrade,TechPreviewNoUpgrade
+  name: allow-ingress-to-metrics-operators
+  namespace: openshift-cluster-api
+spec:
+  ingress:
+  - from:
+    - namespaceSelector: {}
+    - podSelector: {}
+    ports:
+    - port: 8443
+      protocol: TCP
+  podSelector:
+    matchExpressions:
+    - key: k8s-app
+      operator: In
+      values:
+      - cluster-capi-operator
+  policyTypes:
+  - Ingress
