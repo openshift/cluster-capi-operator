@@ -8,6 +8,7 @@ import (
 	mapiv1 "github.com/openshift/api/machine/v1"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -98,7 +99,7 @@ func (m *nutanixMachineSetAndInfra) ToMachineSetAndMachineTemplate() (*clusterv1
 	capiMachineSet.Spec.Template.ObjectMeta.Labels = util.MergeMaps(capiMachineSet.Spec.Template.ObjectMeta.Labels, capiMachine.Labels)
 	capiMachineSet.Spec.Template.ObjectMeta.Annotations = util.MergeMaps(capiMachineSet.Spec.Template.ObjectMeta.Annotations, capiMachine.Annotations)
 
-	// capiMachineSet.Spec.Template.Spec.InfrastructureRef.Kind = nutanixMachineTemplateKind
+	capiMachineSet.Spec.Template.Spec.InfrastructureRef.Kind = nutanixMachineTemplateKind
 	capiMachineSet.Spec.Template.Spec.InfrastructureRef.Name = capxMachineTemplate.Name
 
 	if m.infrastructure == nil || m.infrastructure.Status.InfrastructureName == "" {
@@ -192,17 +193,32 @@ func (m *nutanixMachineAndInfra) toNutanixMachine(providerConfig *mapiv1.Nutanix
 		errors = append(errors, errs...)
 	}
 
+	project, errs := convertNutanixResourceIdentifierToCAPX(&providerConfig.Project)
+	if len(errs) > 0 {
+		errors = append(errors, errs...)
+	}
+
+	var additionalCategories []nutanixv1.NutanixCategoryIdentifier
+	for _, category := range providerConfig.Categories {
+		additionalCategories = append(additionalCategories, nutanixv1.NutanixCategoryIdentifier{
+			Key:   category.Key,
+			Value: category.Value,
+		})
+	}
+
 	spec := &nutanixv1.NutanixMachineSpec{
-		VCPUsPerSocket: providerConfig.VCPUsPerSocket,
-		VCPUSockets:    providerConfig.VCPUSockets,
-		MemorySize:     providerConfig.MemorySize,
-		Image:          &image,
-		Cluster:        *cluster,
-		BootType:       bootType,
-		SystemDiskSize: providerConfig.SystemDiskSize,
-		DataDisks:      dataDisks,
-		GPUs:           *gpus,
-		Subnets:        subnets,
+		VCPUsPerSocket:       providerConfig.VCPUsPerSocket,
+		VCPUSockets:          providerConfig.VCPUSockets,
+		MemorySize:           providerConfig.MemorySize,
+		Image:                &image,
+		Cluster:              *cluster,
+		BootType:             bootType,
+		SystemDiskSize:       providerConfig.SystemDiskSize,
+		DataDisks:            dataDisks,
+		GPUs:                 *gpus,
+		Subnets:              subnets,
+		Project:              project,
+		AdditionalCategories: additionalCategories,
 	}
 
 	return &nutanixv1.NutanixMachine{
@@ -211,8 +227,10 @@ func (m *nutanixMachineAndInfra) toNutanixMachine(providerConfig *mapiv1.Nutanix
 			Kind:       nutanixMachineKind,
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      m.machine.Name,
-			Namespace: capiNamespace,
+			Name:        m.machine.Name,
+			Namespace:   capiNamespace,
+			Labels:      providerConfig.ObjectMeta.Labels,
+			Annotations: providerConfig.ObjectMeta.Annotations,
 		},
 		Spec: *spec,
 	}, warnings, errors
@@ -245,9 +263,17 @@ func (m *nutanixMachineAndInfra) toMachineAndInfrastructureMachine() (*clusterv1
 		capiMachine.Spec.FailureDomain = ptr.To(nutanixProviderConfig.FailureDomain.Name)
 	}
 
+	capiMachine.Spec.Bootstrap = clusterv1.Bootstrap{}
+
+	// Set DataSecretName if UserDataSecret is provided.
 	if nutanixProviderConfig.UserDataSecret != nil {
-		capiMachine.Spec.Bootstrap = clusterv1.Bootstrap{
-			DataSecretName: &nutanixProviderConfig.UserDataSecret.Name,
+		capiMachine.Spec.Bootstrap.DataSecretName = &nutanixProviderConfig.UserDataSecret.Name
+	}
+
+	// Set ConfigRef if CredentialsSecret is provided.
+	if nutanixProviderConfig.CredentialsSecret != nil {
+		capiMachine.Spec.Bootstrap.ConfigRef = &corev1.ObjectReference{
+			Name: nutanixProviderConfig.CredentialsSecret.Name,
 		}
 	}
 
@@ -373,7 +399,10 @@ func convertNutanixResourceIdentifierToStorageCAPX(id *mapiv1.NutanixStorageReso
 		obj.Type = nutanixv1.NutanixIdentifierUUID
 		if id.UUID == nil {
 			errors = append(errors, field.Required(field.NewPath("uuid"), "UUID must be set for UUID type identifier"))
+		} else {
+			obj.UUID = id.UUID
 		}
+
 	default:
 		errors = append(errors, field.Invalid(field.NewPath("type"), id.Type, "invalid identifier type"))
 	}
@@ -392,14 +421,16 @@ func convertNutanixResourceIdentifierToCAPX(identifier *mapiv1.NutanixResourceId
 		obj.Type = nutanixv1.NutanixIdentifierName
 		if identifier.Name == nil {
 			errors = append(errors, field.Required(field.NewPath("name"), "Name must be set for Name type identifier"))
+		} else {
+			obj.Name = identifier.Name
 		}
-		obj.Name = identifier.Name
 	case mapiv1.NutanixIdentifierUUID:
 		obj.Type = nutanixv1.NutanixIdentifierUUID
 		if identifier.UUID == nil {
 			errors = append(errors, field.Required(field.NewPath("uuid"), "UUID must be set for UUID type identifier"))
+		} else {
+			obj.UUID = identifier.UUID
 		}
-		obj.UUID = identifier.UUID
 	default:
 		errors = append(errors, field.Invalid(field.NewPath("type"), identifier.Type, "invalid identifier type"))
 	}
@@ -430,18 +461,17 @@ func convertNutanixGPUToCAPX(gpus *[]mapiv1.NutanixGPU) (*[]nutanixv1.NutanixGPU
 			obj.Type = nutanixv1.NutanixGPUIdentifierDeviceID
 			if g.DeviceID == nil {
 				errors = append(errors, field.Required(field.NewPath("gpus").Index(len(mapiGPUs)), "DeviceID must be set for DeviceID type GPU"))
-				continue
+			} else {
+				obj.DeviceID = ptr.To(int64(*g.DeviceID))
 			}
-			obj.DeviceID = ptr.To(int64(*g.DeviceID))
 
 		case mapiv1.NutanixGPUIdentifierName:
 			obj.Type = nutanixv1.NutanixGPUIdentifierName
 			if g.Name == nil {
 				errors = append(errors, field.Required(field.NewPath("gpus").Index(len(mapiGPUs)), "Name must be set for Name type GPU"))
-				continue
+			} else {
+				obj.Name = ptr.To(*g.Name)
 			}
-			obj.Name = ptr.To(*g.Name)
-
 		default:
 			errors = append(errors, field.Invalid(field.NewPath("gpus").Index(len(mapiGPUs)), g.Type, "invalid GPU identifier type"))
 			continue
