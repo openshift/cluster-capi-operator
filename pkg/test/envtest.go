@@ -16,12 +16,14 @@ limitations under the License.
 package test
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"path"
-	goruntime "runtime"
 
 	machinev1 "github.com/openshift/api/machine/v1"
 	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
+	"golang.org/x/tools/go/packages"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -51,9 +53,11 @@ func init() {
 
 // StartEnvTest starts a new test environment and returns a client and config.
 func StartEnvTest(testEnv *envtest.Environment) (*rest.Config, client.Client, error) {
-	// Get the root of the current file to use in CRD paths.
-	_, filename, _, _ := goruntime.Caller(0) //nolint:dogsled
-	root := path.Join(path.Dir(filename), "..", "..", "..", "cluster-capi-operator")
+	// Get the directory containing the openshift/api package.
+	openshiftAPIPath, err := getPackageDir(context.TODO(), "github.com/openshift/api")
+	if err != nil {
+		return nil, nil, err
+	}
 
 	testEnv.CRDs = []*apiextensionsv1.CustomResourceDefinition{
 		fakeCoreProviderCRD,
@@ -69,16 +73,16 @@ func StartEnvTest(testEnv *envtest.Environment) (*rest.Config, client.Client, er
 	}
 
 	testEnv.CRDDirectoryPaths = []string{
-		path.Join(root, "vendor", "github.com", "openshift", "api", "config", "v1", "zz_generated.crd-manifests"),
-		path.Join(root, "vendor", "github.com", "openshift", "api", "operator", "v1", "zz_generated.crd-manifests", "0000_10_config-operator_01_configs.crd.yaml"),
+		path.Join(openshiftAPIPath, "config", "v1", "zz_generated.crd-manifests"),
+		path.Join(openshiftAPIPath, "operator", "v1", "zz_generated.crd-manifests", "0000_10_config-operator_01_configs.crd.yaml"),
 	}
 	testEnv.ErrorIfCRDPathMissing = true
 
 	testEnv.CRDInstallOptions = envtest.CRDInstallOptions{
 		Paths: []string{
-			path.Join(root, "vendor", "github.com", "openshift", "api", "machine", "v1beta1", "zz_generated.crd-manifests", "0000_10_machine-api_01_machinesets-CustomNoUpgrade.crd.yaml"),
-			path.Join(root, "vendor", "github.com", "openshift", "api", "machine", "v1beta1", "zz_generated.crd-manifests", "0000_10_machine-api_01_machines-CustomNoUpgrade.crd.yaml"),
-			path.Join(root, "vendor", "github.com", "openshift", "api", "config", "v1", "zz_generated.crd-manifests", "0000_00_cluster-version-operator_01_clusteroperators.crd.yaml"),
+			path.Join(openshiftAPIPath, "machine", "v1beta1", "zz_generated.crd-manifests", "0000_10_machine-api_01_machinesets-CustomNoUpgrade.crd.yaml"),
+			path.Join(openshiftAPIPath, "machine", "v1beta1", "zz_generated.crd-manifests", "0000_10_machine-api_01_machines-CustomNoUpgrade.crd.yaml"),
+			path.Join(openshiftAPIPath, "config", "v1", "zz_generated.crd-manifests", "0000_00_cluster-version-operator_01_clusteroperators.crd.yaml"),
 		},
 		ErrorIfPathMissing: true,
 	}
@@ -103,4 +107,26 @@ func StartEnvTest(testEnv *envtest.Environment) (*rest.Config, client.Client, er
 // StopEnvTest stops the test environment.
 func StopEnvTest(testEnv *envtest.Environment) error {
 	return testEnv.Stop()
+}
+
+func getPackageDir(ctx context.Context, pkgName string) (string, error) {
+	cfg := &packages.Config{
+		Mode:    packages.NeedFiles,
+		Context: ctx,
+	}
+
+	pkgs, err := packages.Load(cfg, pkgName)
+	if err != nil {
+		return "", err
+	}
+
+	if len(pkgs) == 0 {
+		return "", fmt.Errorf("package %s not found", pkgName)
+	}
+
+	if len(pkgs) > 1 {
+		return "", fmt.Errorf("multiple packages found for %s", pkgName)
+	}
+
+	return pkgs[0].Dir, nil
 }
