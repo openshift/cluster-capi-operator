@@ -36,6 +36,7 @@ import (
 	klog "k8s.io/klog/v2"
 	"k8s.io/klog/v2/textlogger"
 
+	nutanixv1 "github.com/nutanix-cloud-native/cluster-api-provider-nutanix/api/v1beta1"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	azurev1 "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
 	gcpv1 "sigs.k8s.io/cluster-api-provider-gcp/api/v1beta1"
@@ -83,6 +84,7 @@ func initScheme(scheme *runtime.Scheme) {
 	utilruntime.Must(clusterv1.AddToScheme(scheme))
 	utilruntime.Must(clusterctlv1.AddToScheme(scheme))
 	utilruntime.Must(ibmpowervsv1.AddToScheme(scheme))
+	utilruntime.Must(nutanixv1.AddToScheme(scheme))
 	utilruntime.Must(openstackv1.AddToScheme(scheme))
 	utilruntime.Must(vspherev1.AddToScheme(scheme))
 	utilruntime.Must(mapiv1.AddToScheme(scheme))
@@ -278,6 +280,9 @@ func setupPlatformReconcilers(mgr manager.Manager, infra *configv1.Infrastructur
 	case configv1.PowerVSPlatformType:
 		setupReconcilers(mgr, infra, platform, &ibmpowervsv1.IBMPowerVSCluster{}, containerImages, applyClient, apiextensionsClient, managedNamespace)
 		setupWebhooks(mgr)
+	case configv1.NutanixPlatformType:
+		setupReconcilers(mgr, infra, platform, &nutanixv1.NutanixCluster{}, containerImages, applyClient, apiextensionsClient, managedNamespace)
+		// setupWebhooks(mgr)
 	case configv1.VSpherePlatformType:
 		setupReconcilers(mgr, infra, platform, &vspherev1.VSphereCluster{}, containerImages, applyClient, apiextensionsClient, managedNamespace)
 		setupWebhooks(mgr)

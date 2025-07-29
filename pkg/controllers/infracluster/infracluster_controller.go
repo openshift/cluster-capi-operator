@@ -189,6 +189,13 @@ func (r *InfraClusterController) ensureInfraCluster(ctx context.Context, log log
 		if err != nil {
 			return nil, fmt.Errorf("error ensuring GCPCluster: %w", err)
 		}
+	case configv1.NutanixPlatformType:
+		var err error
+
+		infraCluster, err = r.ensureNutanixCluster(ctx, log)
+		if err != nil {
+			return nil, fmt.Errorf("error ensuring GCPCluster: %w", err)
+		}
 	case configv1.AzurePlatformType:
 		if r.Infra.Status.PlatformStatus.Azure.CloudName == configv1.AzureStackCloud {
 			log.Info("%s cloud environment for platform %s is not supported", "environment", configv1.AzureStackCloud, "platform", configv1.AzurePlatformType)
