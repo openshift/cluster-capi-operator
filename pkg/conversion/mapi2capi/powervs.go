@@ -139,9 +139,9 @@ func (m *powerVSMachineSetAndInfra) ToMachineSetAndMachineTemplate() (*clusterv1
 		warnings []string
 	)
 
-	capiMachine, powerVSMachineObj, warn, err := m.toMachineAndInfrastructureMachine()
-	if err != nil {
-		errs = append(errs, err.ToAggregate().Errors()...)
+	capiMachine, powerVSMachineObj, warn, errList := m.toMachineAndInfrastructureMachine()
+	if errList != nil {
+		errs = append(errs, errList.ToAggregate().Errors()...)
 	}
 
 	warnings = append(warnings, warn...)
@@ -151,7 +151,10 @@ func (m *powerVSMachineSetAndInfra) ToMachineSetAndMachineTemplate() (*clusterv1
 		panic(fmt.Errorf("%w: %T", errUnexpectedObjectTypeForMachine, powerVSMachineObj))
 	}
 
-	powerVSMachineTemplate := powerVSMachineToPowerVSMachineTemplate(powerVSMachine, m.machineSet.Name, capiNamespace)
+	powerVSMachineTemplate, err := powerVSMachineToPowerVSMachineTemplate(powerVSMachine, m.machineSet.Name, capiNamespace)
+	if err != nil {
+		errs = append(errs, err)
+	}
 
 	powerVSMachineSet, machineSetErrs := fromMAPIMachineSetToCAPIMachineSet(m.machineSet)
 	if machineSetErrs != nil {
@@ -259,14 +262,19 @@ func (m *powerVSMachineAndInfra) toPowerVSMachine(providerSpec mapiv1.PowerVSMac
 	}, errs
 }
 
-func powerVSMachineToPowerVSMachineTemplate(powerVSMachine *ibmpowervsv1.IBMPowerVSMachine, name string, namespace string) *ibmpowervsv1.IBMPowerVSMachineTemplate {
+func powerVSMachineToPowerVSMachineTemplate(powerVSMachine *ibmpowervsv1.IBMPowerVSMachine, name string, namespace string) (*ibmpowervsv1.IBMPowerVSMachineTemplate, error) {
+	nameWithHash, err := util.GenerateInfraMachineTemplateNameWithSpecHash(name, powerVSMachine.Spec)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate infrastructure machine template name with spec hash: %w", err)
+	}
+
 	return &ibmpowervsv1.IBMPowerVSMachineTemplate{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: ibmpowervsv1.GroupVersion.String(),
 			Kind:       ibmPowerVSTemplateKind,
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
+			Name:      nameWithHash,
 			Namespace: namespace,
 		},
 		Spec: ibmpowervsv1.IBMPowerVSMachineTemplateSpec{
@@ -274,7 +282,7 @@ func powerVSMachineToPowerVSMachineTemplate(powerVSMachine *ibmpowervsv1.IBMPowe
 				Spec: powerVSMachine.Spec,
 			},
 		},
-	}
+	}, nil
 }
 
 func convertServiceInstanceToCAPI(fldPath *field.Path, serviceInstance mapiv1.PowerVSResource) (*ibmpowervsv1.IBMPowerVSResourceReference, *field.Error) {

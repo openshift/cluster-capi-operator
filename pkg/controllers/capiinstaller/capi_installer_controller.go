@@ -44,7 +44,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 
 	configv1 "github.com/openshift/api/config/v1"
-	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 	"github.com/openshift/library-go/pkg/operator/events"
 	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
@@ -282,11 +281,9 @@ func (r *CapiInstallerController) setAvailableCondition(ctx context.Context, log
 			"CAPI Installer Controller works as expected"),
 	}
 
-	co.Status.Versions = []configv1.OperandVersion{{Name: controllers.OperatorVersionKey, Version: r.ReleaseVersion}}
-
 	log.V(2).Info("CAPI Installer Controller is Available")
 
-	if err := r.SyncStatus(ctx, co, conds); err != nil {
+	if err := r.SyncStatus(ctx, co, conds, r.OperandVersions(), r.RelatedObjects()); err != nil {
 		return fmt.Errorf("failed to sync status: %w", err)
 	}
 
@@ -307,11 +304,9 @@ func (r *CapiInstallerController) setDegradedCondition(ctx context.Context, log 
 			"CAPI Installer Controller failed install"),
 	}
 
-	co.Status.Versions = []configv1.OperandVersion{{Name: controllers.OperatorVersionKey, Version: r.ReleaseVersion}}
-
 	log.Info("CAPI Installer Controller is Degraded")
 
-	if err := r.SyncStatus(ctx, co, conds); err != nil {
+	if err := r.SyncStatus(ctx, co, conds, r.OperandVersions(), r.RelatedObjects()); err != nil {
 		return fmt.Errorf("failed to sync status: %w", err)
 	}
 

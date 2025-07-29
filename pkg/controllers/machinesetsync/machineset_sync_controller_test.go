@@ -18,6 +18,7 @@ package machinesetsync
 
 import (
 	"context"
+	"encoding/json"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -38,6 +39,8 @@ import (
 	"github.com/openshift/cluster-api-actuator-pkg/testutils"
 	consts "github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/machinesync"
+	"github.com/openshift/cluster-capi-operator/pkg/conversion/mapi2capi"
+	"github.com/openshift/cluster-capi-operator/pkg/util"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -73,6 +76,18 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 	var capiCluster *clusterv1.Cluster
 	var capiClusterOwnerReference []metav1.OwnerReference
 
+	eventuallyCAPIMachineSetShouldHaveAWSMachineTemplateRefThatExists := func() {
+		capiMachineSet = capiv1resourcebuilder.MachineSet().WithName(mapiMachineSet.Name).WithNamespace(capiNamespace.Name).Build()
+		Eventually(func() error {
+			if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(capiMachineSet), capiMachineSet); err != nil {
+				return err
+			}
+			awsMachineTemplate := capav1builder.AWSMachineTemplate().WithName(capiMachineSet.Spec.Template.Spec.InfrastructureRef.Name).WithNamespace(capiNamespace.Name).Build()
+
+			return k.Get(awsMachineTemplate)()
+		}).Should(Succeed())
+	}
+
 	startManager := func(mgr *manager.Manager) (context.CancelFunc, chan struct{}) {
 		mgrCtx, mgrCancel := context.WithCancel(context.Background())
 		mgrDone := make(chan struct{})
@@ -94,6 +109,8 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 	}
 
 	BeforeEach(func() {
+		var err error
+
 		By("Setting up a namespaces for the test")
 		syncControllerNamespace = corev1resourcebuilder.Namespace().
 			WithGenerateName("machineset-sync-controller-").Build()
@@ -157,7 +174,6 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 			WithClusterName(infrastructureName)
 
 		By("Setting up a manager and controller")
-		var err error
 		mgr, err = ctrl.NewManager(cfg, ctrl.Options{
 			Scheme: testScheme,
 			Controller: config.Controller{
@@ -233,9 +249,21 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 					Eventually(k.Get(capiMachineSet)).Should(Succeed())
 					Expect(capiMachineSet.OwnerReferences).To(Equal(capiClusterOwnerReference))
 
-					capaMachineTemplate := capav1builder.AWSMachineTemplate().WithName(mapiMachineSet.Name).WithNamespace(capiNamespace.Name).Build()
-					Eventually(k.Get(capaMachineTemplate)).Should(Succeed())
-					Expect(capaMachineTemplate.OwnerReferences).To(Equal(capiClusterOwnerReference))
+					By("Checking the CAPI infra machine template")
+					newCAPAMachineTemplate := capav1builder.AWSMachineTemplate().WithName(capiMachineSet.Spec.Template.Spec.InfrastructureRef.Name).WithNamespace(capiNamespace.Name).Build()
+					Eventually(k.Get(newCAPAMachineTemplate)).Should(Succeed())
+
+					By("Checking the CAPI infra machine template has the expected name")
+					generateName, err := util.GenerateInfraMachineTemplateNameWithSpecHash(capiMachineSet.Name, newCAPAMachineTemplate.Spec.Template.Spec)
+					Expect(err).To(BeNil())
+					Expect(newCAPAMachineTemplate.Name).To(Equal(generateName))
+
+					By("Checking the CAPI infra machine template has the expected owner reference")
+					Expect(newCAPAMachineTemplate.OwnerReferences).To(Equal(capiClusterOwnerReference))
+				})
+
+				It("should not delete the old CAPI infra machine template without MAPI machine set label", func() {
+					Consistently(k.Get(capaMachineTemplate)).Should(Succeed())
 				})
 
 				It("should update the synchronized condition on the MAPI machine set to True", func() {
@@ -287,12 +315,13 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 
 				It("should update MachineSet and InfraMachineTemplate with CAPI Cluster OwnerReference", func() {
 					capiMachineSet := capiv1resourcebuilder.MachineSet().WithName(mapiMachineSet.Name).WithNamespace(capiNamespace.Name).Build()
-					capaMachineTemplate := capav1builder.AWSMachineTemplate().WithName(mapiMachineSet.Name).WithNamespace(capiNamespace.Name).Build()
 
 					Eventually(k.Object(capiMachineSet), timeout).Should(
 						HaveField("OwnerReferences", Equal(capiClusterOwnerReference)),
 					)
 
+					Eventually(k.Get(capiMachineSet)).Should(Succeed())
+					capaMachineTemplate := capav1builder.AWSMachineTemplate().WithName(capiMachineSet.Spec.Template.Spec.InfrastructureRef.Name).WithNamespace(capiNamespace.Name).Build()
 					Eventually(k.Object(capaMachineTemplate), timeout).Should(
 						HaveField("OwnerReferences", Equal(capiClusterOwnerReference)),
 					)
@@ -490,6 +519,64 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 				// The AWS conversion library currently does not throw any warnings.
 				// When we have a conversion that does, this test should be filled out.
 				// We could also mock the conversion interface.
+			})
+
+			Context("when the CAPI machine set is updated to reference a new AWSMachineTemplate with different instanceType", func() {
+				var newCapaMachineTemplate *awsv1.AWSMachineTemplate
+
+				BeforeEach(func() {
+					capiMachineSet = capiMachineSetBuilder.Build()
+
+					By("Waiting for initial synchronization")
+					Eventually(k.Object(mapiMachineSet), timeout).Should(
+						HaveField("Status.Conditions", ContainElement(
+							SatisfyAll(
+								HaveField("Type", Equal(consts.SynchronizedCondition)),
+								HaveField("Status", Equal(corev1.ConditionTrue)),
+								HaveField("Reason", Equal("ResourceSynchronized")),
+								HaveField("Message", Equal("Successfully synchronized CAPI MachineSet to MAPI")),
+							))),
+					)
+
+					By("Creating a new CAPA machine template with different instanceType")
+					newCapaMachineTemplate = capav1builder.AWSMachineTemplate().
+						WithNamespace(capiNamespace.GetName()).
+						WithName("new-machine-template").
+						WithInstanceType("m5.xlarge").
+						Build()
+					Expect(k8sClient.Create(ctx, newCapaMachineTemplate)).Should(Succeed())
+
+					By("Updating the CAPI machine set to reference the new template")
+					Eventually(k.Update(capiMachineSet, func() {
+						capiMachineSet.Spec.Template.Spec.InfrastructureRef.Name = newCapaMachineTemplate.Name
+					})).Should(Succeed())
+				})
+
+				It("should update the MAPI machine set instanceType to match the new template", func() {
+					Eventually(func() (string, error) {
+						if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(mapiMachineSet), mapiMachineSet); err != nil {
+							return "", err
+						}
+						providerSpec, err := mapi2capi.AWSProviderSpecFromRawExtension(mapiMachineSet.Spec.Template.Spec.ProviderSpec.Value)
+						if err != nil {
+							return "", err
+						}
+
+						return providerSpec.InstanceType, nil
+					}, timeout).Should(Equal("m5.xlarge"))
+				})
+
+				It("should update the synchronized condition on the MAPI machine set to True", func() {
+					Eventually(k.Object(mapiMachineSet), timeout).Should(
+						HaveField("Status.Conditions", ContainElement(
+							SatisfyAll(
+								HaveField("Type", Equal(consts.SynchronizedCondition)),
+								HaveField("Status", Equal(corev1.ConditionTrue)),
+								HaveField("Reason", Equal("ResourceSynchronized")),
+								HaveField("Message", Equal("Successfully synchronized CAPI MachineSet to MAPI")),
+							))),
+					)
+				})
 			})
 
 			Context("when the CAPI machine set does not exist", func() {
@@ -696,10 +783,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 					Eventually(k.Get(capiMachineSet)).Should(Succeed())
 				})
 
-				It("should create the CAPI infra machine template", func() {
-					capiInfraMachineTemplate := capav1builder.AWSMachineTemplate().WithName(mapiMachineSet.Name).WithNamespace(capiNamespace.Name).Build()
-					Eventually(k.Get(capiInfraMachineTemplate)).Should(Succeed())
-				})
+				It("should create the CAPI infra machine template", eventuallyCAPIMachineSetShouldHaveAWSMachineTemplateRefThatExists)
 
 				It("should update the synchronized condition on the MAPI machine set to True", func() {
 					Eventually(k.Object(mapiMachineSet), timeout).Should(
@@ -712,6 +796,58 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 							))),
 					)
 				})
+
+				Context("when the MAPI machine set is updated", func() {
+					var oldMachineTemplate *awsv1.AWSMachineTemplate
+					BeforeEach(func() {
+						capiMachineSet = capiv1resourcebuilder.MachineSet().WithName(mapiMachineSet.Name).WithNamespace(capiNamespace.Name).Build()
+						Eventually(func() error {
+							if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(capiMachineSet), capiMachineSet); err != nil {
+								return err
+							}
+
+							oldMachineTemplate = capav1builder.AWSMachineTemplate().WithName(capiMachineSet.Spec.Template.Spec.InfrastructureRef.Name).WithNamespace(capiNamespace.Name).Build()
+
+							return k.Get(oldMachineTemplate)()
+						}).Should(Succeed())
+						// Update the MAPI machine set instance type
+						providerSpec, err := mapi2capi.AWSProviderSpecFromRawExtension(mapiMachineSet.Spec.Template.Spec.ProviderSpec.Value)
+						Expect(err).NotTo(HaveOccurred())
+						providerSpec.InstanceType = "new-instance-type"
+						updatedProviderSpec, err := json.Marshal(providerSpec)
+						Expect(err).NotTo(HaveOccurred())
+
+						Eventually(k.Update(mapiMachineSet, func() {
+							mapiMachineSet.Spec.Template.Spec.ProviderSpec.Value.Raw = updatedProviderSpec
+						})).Should(Succeed())
+					})
+
+					It("should create new CAPI infra machine template with updated instance type", func() {
+						capiMachineSet = capiv1resourcebuilder.MachineSet().WithName(mapiMachineSet.Name).WithNamespace(capiNamespace.Name).Build()
+						Eventually(func() (client.Object, error) {
+							_ = k8sClient.Get(ctx, client.ObjectKeyFromObject(capiMachineSet), capiMachineSet)
+							awsMachineTemplate := capav1builder.AWSMachineTemplate().WithName(capiMachineSet.Spec.Template.Spec.InfrastructureRef.Name).WithNamespace(capiNamespace.Name).Build()
+
+							return k.Object(awsMachineTemplate)()
+						}).Should(HaveField("Spec.Template.Spec.InstanceType", Equal("new-instance-type")))
+					})
+
+					It("should update the synchronized condition on the MAPI machine set to True", func() {
+						Eventually(k.Object(mapiMachineSet), timeout).Should(
+							HaveField("Status.Conditions", ContainElement(
+								SatisfyAll(
+									HaveField("Type", Equal(consts.SynchronizedCondition)),
+									HaveField("Status", Equal(corev1.ConditionTrue)),
+									HaveField("Reason", Equal("ResourceSynchronized")),
+									HaveField("Message", Equal("Successfully synchronized MAPI MachineSet to CAPI")),
+								))),
+						)
+					})
+
+					It("should delete the old CAPI infra machine template", func() {
+						Eventually(k.Get(oldMachineTemplate)).ShouldNot(Succeed())
+					})
+				})
 			})
 
 			Context("when the CAPI machine set does exist", func() {
@@ -720,10 +856,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 					Expect(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
 				})
 
-				It("should create the CAPI infra machine template", func() {
-					capiInfraMachineTemplate := capav1builder.AWSMachineTemplate().WithName(mapiMachineSet.Name).WithNamespace(capiNamespace.Name).Build()
-					Eventually(k.Get(capiInfraMachineTemplate)).Should(Succeed())
-				})
+				It("should create the CAPI infra machine template", eventuallyCAPIMachineSetShouldHaveAWSMachineTemplateRefThatExists)
 
 				It("should update the synchronized condition on the MAPI machine set to True", func() {
 					Eventually(k.Object(mapiMachineSet), timeout).Should(
@@ -776,10 +909,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 					Expect(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
 				})
 
-				It("should create the CAPI infra machine template", func() {
-					capiInfraMachineTemplate := capav1builder.AWSMachineTemplate().WithName(mapiMachineSet.Name).WithNamespace(capiNamespace.Name).Build()
-					Eventually(k.Get(capiInfraMachineTemplate)).Should(Succeed())
-				})
+				It("should create the CAPI infra machine template", eventuallyCAPIMachineSetShouldHaveAWSMachineTemplateRefThatExists)
 
 				It("should update the synchronized condition on the MAPI machine set to True", func() {
 					Eventually(k.Object(mapiMachineSet), timeout).Should(
@@ -796,6 +926,41 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 		})
 	})
 
+})
+
+var _ = Describe("compareMAPIMachineSets", func() {
+	var mapiMachineSet1, mapiMachineSet2 *machinev1beta1.MachineSet
+
+	BeforeEach(func() {
+		mapiMachineSet1 = machinev1resourcebuilder.MachineSet().
+			WithName("test-machineset-1").
+			WithNamespace("test-namespace").
+			WithProviderSpecBuilder(machinev1resourcebuilder.AWSProviderSpec().WithInstanceType("m6i.xlarge")).
+			Build()
+
+		mapiMachineSet2 = machinev1resourcebuilder.MachineSet().
+			WithName("test-machineset-2").
+			WithNamespace("test-namespace").
+			WithProviderSpecBuilder(machinev1resourcebuilder.AWSProviderSpec().WithInstanceType("m5.xlarge")).
+			Build()
+	})
+
+	Context("when comparing MachineSets with different instance types", func() {
+		It("should detect differences in providerSpec", func() {
+			diff, err := compareMAPIMachineSets(mapiMachineSet1, mapiMachineSet2)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(diff).To(HaveKey(".providerSpec"))
+			Expect(diff[".providerSpec"]).NotTo(BeEmpty())
+		})
+	})
+
+	Context("when comparing identical MachineSets", func() {
+		It("should detect no differences", func() {
+			diff, err := compareMAPIMachineSets(mapiMachineSet1, mapiMachineSet1)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(diff).To(BeEmpty())
+		})
+	})
 })
 
 var _ = Describe("applySynchronizedConditionWithPatch", func() {

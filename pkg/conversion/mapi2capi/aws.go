@@ -170,9 +170,9 @@ func (m *awsMachineSetAndInfra) ToMachineSetAndMachineTemplate() (*clusterv1.Mac
 		warnings []string
 	)
 
-	capiMachine, capaMachineObj, warn, err := m.toMachineAndInfrastructureMachine()
-	if err != nil {
-		errs = append(errs, err.ToAggregate().Errors()...)
+	capiMachine, capaMachineObj, warn, errList := m.toMachineAndInfrastructureMachine()
+	if errList != nil {
+		errs = append(errs, errList.ToAggregate().Errors()...)
 	}
 
 	warnings = append(warnings, warn...)
@@ -182,7 +182,10 @@ func (m *awsMachineSetAndInfra) ToMachineSetAndMachineTemplate() (*clusterv1.Mac
 		panic(fmt.Errorf("%w: %T", errUnexpectedObjectTypeForMachine, capaMachineObj))
 	}
 
-	capaMachineTemplate := awsMachineToAWSMachineTemplate(capaMachine, m.machineSet.Name, capiNamespace)
+	capaMachineTemplate, err := awsMachineToAWSMachineTemplate(capaMachine, m.machineSet.Name, capiNamespace)
+	if err != nil {
+		errs = append(errs, err)
+	}
 
 	capiMachineSet, machineSetErrs := fromMAPIMachineSetToCAPIMachineSet(m.machineSet)
 	if machineSetErrs != nil {
@@ -356,14 +359,19 @@ func AWSProviderSpecFromRawExtension(rawExtension *runtime.RawExtension) (mapiv1
 	return spec, nil
 }
 
-func awsMachineToAWSMachineTemplate(awsMachine *awsv1.AWSMachine, name string, namespace string) *awsv1.AWSMachineTemplate {
+func awsMachineToAWSMachineTemplate(awsMachine *awsv1.AWSMachine, name string, namespace string) (*awsv1.AWSMachineTemplate, error) {
+	nameWithHash, err := util.GenerateInfraMachineTemplateNameWithSpecHash(name, awsMachine.Spec)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate infrastructure machine template name with spec hash: %w", err)
+	}
+
 	return &awsv1.AWSMachineTemplate{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: awsv1.GroupVersion.String(),
 			Kind:       awsMachineTemplateKind,
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
+			Name:      nameWithHash,
 			Namespace: namespace,
 		},
 		Spec: awsv1.AWSMachineTemplateSpec{
@@ -371,7 +379,7 @@ func awsMachineToAWSMachineTemplate(awsMachine *awsv1.AWSMachine, name string, n
 				Spec: awsMachine.Spec,
 			},
 		},
-	}
+	}, nil
 }
 
 //////// Conversion helpers

@@ -38,7 +38,6 @@ import (
 	configv1 "github.com/openshift/api/config/v1"
 	mapiv1 "github.com/openshift/api/machine/v1"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
-	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 )
 
@@ -257,11 +256,9 @@ func (r *InfraClusterController) setAvailableCondition(ctx context.Context, log 
 			"InfraCluster Controller works as expected"),
 	}
 
-	co.Status.Versions = []configv1.OperandVersion{{Name: controllers.OperatorVersionKey, Version: r.ReleaseVersion}}
-
 	log.V(2).Info("InfraCluster Controller is Available")
 
-	if err := r.SyncStatus(ctx, co, conds); err != nil {
+	if err := r.SyncStatus(ctx, co, conds, r.OperandVersions(), r.RelatedObjects()); err != nil {
 		return fmt.Errorf("failed to sync status: %w", err)
 	}
 

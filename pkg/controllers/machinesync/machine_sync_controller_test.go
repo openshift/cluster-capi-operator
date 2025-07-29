@@ -282,10 +282,9 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 						WithName(mapiMachine.Name).
 						WithProviderSpecBuilder(machinev1resourcebuilder.AWSProviderSpec().WithLoadBalancers(nil).WithInstanceType("m6i.2xlarge")).Build()
 
-					mapiMachineCopy := mapiMachine.DeepCopy()
-					mapiMachineCopy.Spec.ProviderSpec = modifiedMAPIMachineBuilder.Spec.ProviderSpec
-
-					Expect(k8sClient.Update(ctx, mapiMachineCopy)).Should(Succeed())
+					Eventually(k.Update(mapiMachine, func() {
+						mapiMachine.Spec.ProviderSpec = modifiedMAPIMachineBuilder.Spec.ProviderSpec
+					})).Should(Succeed())
 				})
 
 				It("should recreate the CAPI infra machine", func() {
