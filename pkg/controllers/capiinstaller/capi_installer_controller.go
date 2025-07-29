@@ -112,8 +112,7 @@ func (r *CapiInstallerController) Reconcile(ctx context.Context, req ctrl.Reques
 //
 //nolint:unparam
 func (r *CapiInstallerController) reconcile(ctx context.Context, log logr.Logger) (ctrl.Result, error) {
-	// Define the desired providers to be installed for this cluster.
-	// We always want to install the core provider, which in our case is the default cluster-api core provider.
+	// Define the desired providers to be installed for this cluster. We always want to install the core provider, which in our case is the default cluster-api core provider.
 	// We also want to install the infrastructure provider that matches the currently detected platform the cluster is running on.
 	providerConfigMapLabels := map[string]string{
 		defaultCoreProviderComponentName:                                                 "core",

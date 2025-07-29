@@ -151,10 +151,6 @@ data:
               variables.newLabels[?k].orValue(null) == variables.paramLabels[k]
             )
           message: "Cannot modify a Cluster API controlled label except to match the Cluster API mirrored machine. This is because status.authoritativeAPI is set to Cluster API."
-        # For testing purposes
-        - expression: > 
-            !(variables.newLabels[?"test-sentinel"].orValue("") == "fubar")
-          message: "policy in place"
 ---
 # apiVersion: v1
 # kind: ConfigMap

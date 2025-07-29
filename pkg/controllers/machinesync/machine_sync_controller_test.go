@@ -771,17 +771,28 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 				newObj, ok := obj.DeepCopyObject().(client.Object)
 				Expect(ok).To(BeTrue())
 
-				err := k8sClient.Create(ctx, newObj)
-				if err != nil && !apierrors.IsAlreadyExists(err) {
-					Expect(err).NotTo(HaveOccurred())
-				}
+				Eventually(func() error {
+					err := k8sClient.Create(ctx, newObj)
+					if err != nil && !apierrors.IsAlreadyExists(err) {
+						return nil
+					}
+
+					return err
+				}, timeout).Should(Succeed())
 			}
 
-			By("waiting for VAP to be ready")
+			By("Waiting for VAP to be ready")
 			machineVap = &admissionregistrationv1.ValidatingAdmissionPolicy{}
 			Eventually(k8sClient.Get(ctx, client.ObjectKey{Name: "machine-api-machine-vap"}, machineVap), timeout).Should(Succeed())
+			Eventually(k.Update(machineVap, func() {
+				machineVap.Spec.Validations = append(machineVap.Spec.Validations, admissionregistrationv1.Validation{
+					Expression: "!(variables.newLabels[?\"test-sentinel\"].orValue(\"\") == \"fubar\")",
+					Message:    "policy in place",
+				})
+			})).Should(Succeed())
+
 			Eventually(k.Object(machineVap), timeout).Should(
-				HaveField("Status.ObservedGeneration", BeNumerically(">=", 1)),
+				HaveField("Status.ObservedGeneration", BeNumerically(">=", 2)),
 			)
 
 			By("Updating the VAP binding")
@@ -814,7 +825,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 
 			By("Creating a throwaway MAPI machine")
 			testMachine := mapiMachineBuilder.WithGenerateName("test-machine").Build()
-			Expect(k8sClient.Create(ctx, testMachine)).Should(Succeed())
+			Eventually(k8sClient.Create(ctx, testMachine), timeout).Should(Succeed())
 
 			By("Setting the throwaway MAPI machine AuthoritativeAPI to Cluster API")
 			Eventually(k.UpdateStatus(testMachine, func() {
@@ -841,7 +852,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 			}).WithAnnotations(map[string]string{
 				"machine.openshift.io/instance-state": "running",
 			}).Build()
-			Expect(k8sClient.Create(ctx, mapiMachine)).Should(Succeed())
+			Eventually(k8sClient.Create(ctx, mapiMachine), timeout).Should(Succeed())
 
 			By("Creating the CAPI Machine")
 			capiMachine = capiMachineBuilder.WithName("test-machine").WithLabels(map[string]string{
@@ -856,7 +867,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 			}).WithAnnotations(map[string]string{
 				"machine.openshift.io/instance-state": "running",
 			}).Build()
-			Expect(k8sClient.Create(ctx, capiMachine)).Should(Succeed())
+			Eventually(k8sClient.Create(ctx, capiMachine), timeout).Should(Succeed())
 
 			Eventually(k.Get(capiMachine)).Should(Succeed())
 			Eventually(k.Get(mapiMachine)).Should(Succeed())
@@ -890,7 +901,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 
 		})
 
-		Context("with status.AuthoritativeAPI: Cluster API", func() {
+		Context("with status.AuthoritativeAPI: ClusterAPI", func() {
 			BeforeEach(func() {
 				By("Setting the MAPI machine AuthoritativeAPI to Cluster API")
 				Eventually(k.UpdateStatus(mapiMachine, func() {
