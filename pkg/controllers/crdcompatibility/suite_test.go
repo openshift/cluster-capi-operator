@@ -22,6 +22,8 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -54,6 +56,8 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	Expect(cfg).NotTo(BeNil())
 	Expect(cl).NotTo(BeNil())
+
+	utilruntime.Must(operatorv1alpha1.Install(cl.Scheme()))
 
 	komega.SetClient(cl)
 	komega.SetContext(ctx)
