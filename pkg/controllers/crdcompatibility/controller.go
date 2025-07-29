@@ -18,7 +18,6 @@ package crdcompatibility
 
 import (
 	"context"
-	"fmt"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -28,77 +27,23 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/yaml"
 
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 )
 
-// CRDCompatibilityReconciler reconciles CRDCompatibilityRequirement resources
-type CRDCompatibilityReconciler struct {
-	client.Client
-	Scheme *runtime.Scheme
-}
+const (
+	controllerName string = "CRDCompatibilityController"
+)
 
 //+kubebuilder:rbac:groups=operator.openshift.io,resources=crdcompatibilityrequirements,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=operator.openshift.io,resources=crdcompatibilityrequirements/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=operator.openshift.io,resources=crdcompatibilityrequirements/finalizers,verbs=update
 //+kubebuilder:rbac:groups=apiextensions.k8s.io,resources=customresourcedefinitions,verbs=get;list;watch
 
-// Reconcile handles the reconciliation of CRDCompatibilityRequirement resources
-func (r *CRDCompatibilityReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	logger := log.FromContext(ctx)
-
-	// Fetch the CRDCompatibilityRequirement instance
-	crdCompatibility := &operatorv1alpha1.CRDCompatibilityRequirement{}
-	if err := r.Get(ctx, req.NamespacedName, crdCompatibility); err != nil {
-		logger.V(4).Info("Observed CRDCompatibilityRequirement deleted")
-
-		// Handle the case where the resource is not found
-		return ctrl.Result{}, client.IgnoreNotFound(err)
-	}
-	logger = logger.WithValues("crd", crdCompatibility.Spec.CRDRef)
-	ctx = ctrl.LoggerInto(ctx, logger)
-
-	if !crdCompatibility.DeletionTimestamp.IsZero() {
-		return r.reconcileDelete(ctx, crdCompatibility)
-	}
-
-	return r.reconcileCreateOrUpdate(ctx, crdCompatibility)
-}
-
-func (r *CRDCompatibilityReconciler) reconcileCreateOrUpdate(ctx context.Context, crdCompatibility *operatorv1alpha1.CRDCompatibilityRequirement) (ctrl.Result, error) {
-	logger := log.FromContext(ctx)
-
-	logger.Info("Reconciling CRDCompatibilityRequirement")
-
-	// Parse the CRD in compatibilityCRD into a CRD object
-	compatibilityCRD := &apiextensionsv1.CustomResourceDefinition{}
-	if err := yaml.Unmarshal([]byte(crdCompatibility.Spec.CompatibilityCRD), compatibilityCRD); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to parse CRD for %s: %w", crdCompatibility.Spec.CRDRef, err)
-	}
-
-	// Fetch the CRD referenced by crdRef
-	crd := &apiextensionsv1.CustomResourceDefinition{}
-	if err := r.Get(ctx, types.NamespacedName{Name: crdCompatibility.Spec.CRDRef}, crd); err != nil {
-		logger.Error(err, "failed to fetch CRD", "crdRef", crdCompatibility.Spec.CRDRef)
-		return ctrl.Result{}, err
-	}
-
-	// TODO: Implement reconciliation logic
-	// - Validate CRDCompatibilityRequirement spec
-	// - Check if required CRDs exist
-	// - Update status based on compatibility requirements
-	// - Handle any errors and update conditions
-
-	return ctrl.Result{}, nil
-}
-
-func (r *CRDCompatibilityReconciler) reconcileDelete(ctx context.Context, crdCompatibility *operatorv1alpha1.CRDCompatibilityRequirement) (ctrl.Result, error) {
-	logger := log.FromContext(ctx)
-
-	logger.Info("Reconciling CRDCompatibilityRequirement deletion")
-
-	return ctrl.Result{}, nil
+// CRDCompatibilityReconciler reconciles CRDCompatibilityRequirement resources
+type CRDCompatibilityReconciler struct {
+	client.Client
+	Scheme *runtime.Scheme
 }
 
 // SetupWithManager sets up the controller with the Manager
