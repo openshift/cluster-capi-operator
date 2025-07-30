@@ -17,7 +17,6 @@ limitations under the License.
 package crdcompatibility
 
 import (
-	"context"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -38,7 +37,6 @@ var (
 	testEnv *envtest.Environment
 	cfg     *rest.Config
 	cl      client.Client
-	ctx     = context.Background()
 )
 
 func TestAPIs(t *testing.T) {
@@ -53,6 +51,11 @@ var _ = BeforeSuite(func() {
 	var err error
 	testEnv = &envtest.Environment{}
 	cfg, cl, err = test.StartEnvTest(testEnv)
+	DeferCleanup(func() {
+		By("tearing down the test environment")
+		Expect(test.StopEnvTest(testEnv)).To(Succeed())
+	})
+
 	Expect(err).NotTo(HaveOccurred())
 	Expect(cfg).NotTo(BeNil())
 	Expect(cl).NotTo(BeNil())
@@ -60,10 +63,4 @@ var _ = BeforeSuite(func() {
 	utilruntime.Must(operatorv1alpha1.Install(cl.Scheme()))
 
 	komega.SetClient(cl)
-	komega.SetContext(ctx)
-})
-
-var _ = AfterSuite(func() {
-	By("tearing down the test environment")
-	Expect(test.StopEnvTest(testEnv)).To(Succeed())
 })
