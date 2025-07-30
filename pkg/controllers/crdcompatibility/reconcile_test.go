@@ -29,9 +29,7 @@ import (
 
 var _ = Describe("CRDCompatibilityRequirement", func() {
 	Context("When creating a CRDCompatibilityRequirement", func() {
-		It("Should admit the simplest possible CRDCompatibilityRequirement object", func() {
-			ctx := context.Background()
-
+		It("Should admit the simplest possible CRDCompatibilityRequirement object", func(ctx context.Context) {
 			// Create the simplest possible CRDCompatibilityRequirement
 			requirement := &operatorv1alpha1.CRDCompatibilityRequirement{
 				ObjectMeta: metav1.ObjectMeta{
