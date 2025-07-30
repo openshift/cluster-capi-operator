@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"time"
 
+	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -110,4 +111,25 @@ func getTime(data map[string]interface{}, key string) metav1.Time {
 	}
 
 	return metav1.Time{}
+}
+
+func GetMAPIMachineSetCondition(conditions []machinev1beta1.Condition, conditionType string) *machinev1beta1.Condition {
+	for _, c := range conditions {
+		if string(c.Type) == conditionType {
+			return &c
+		}
+	}
+
+	return nil
+}
+
+func SetMAPIMachineSetCondition(conditions []machinev1beta1.Condition, condition *machinev1beta1.Condition) []machinev1beta1.Condition {
+	for i, c := range conditions {
+		if string(c.Type) == string(condition.Type) {
+			conditions[i] = *condition
+			return conditions
+		}
+	}
+
+	return append(conditions, *condition)
 }

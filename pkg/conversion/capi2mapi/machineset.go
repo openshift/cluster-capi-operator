@@ -18,9 +18,11 @@ package capi2mapi
 import (
 	mapiv1 "github.com/openshift/api/machine/v1beta1"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	capierrors "sigs.k8s.io/cluster-api/errors"
 )
 
 // fromCAPIMachineSetToMAPIMachineSet takes a CAPI MachineSet and returns a converted MAPI MachineSet.
@@ -48,6 +50,7 @@ func fromCAPIMachineSetToMAPIMachineSet(capiMachineSet *clusterv1.MachineSet) (*
 				},
 			},
 		},
+		Status: convertCAPIMachineSetStatusToMAPI(capiMachineSet.Status),
 	}
 
 	// Unused fields - Below this line are fields not used from the CAPI Machine.
@@ -62,4 +65,68 @@ func fromCAPIMachineSetToMAPIMachineSet(capiMachineSet *clusterv1.MachineSet) (*
 	}
 
 	return mapiMachineSet, nil
+}
+
+// convertCAPIMachineSetStatusToMAPI converts a CAPI MachineSetStatus to MAPI format.
+func convertCAPIMachineSetStatusToMAPI(capiStatus clusterv1.MachineSetStatus) mapiv1.MachineSetStatus {
+	mapiStatus := mapiv1.MachineSetStatus{
+		Replicas:             capiStatus.Replicas,
+		FullyLabeledReplicas: capiStatus.FullyLabeledReplicas,
+		ReadyReplicas:        capiStatus.ReadyReplicas,
+		AvailableReplicas:    capiStatus.AvailableReplicas,
+		// ObservedGeneration: // Ignore, this field as it shouldn't match between CAPI and MAPI.
+		// AuthoritativeAPI: // Ignore, this field as it is not present in CAPI.
+		// SynchronizedGeneration: // Ignore, this field as it is not present in CAPI.
+		Conditions: convertCAPIConditionsToMAPI(capiStatus.Conditions),
+	}
+
+	// Convert FailureReason/FailureMessage to ErrorReason/ErrorMessage
+	if capiStatus.FailureReason != nil {
+		mapiStatus.ErrorReason = convertCAPIFailureReasonToMAPIErrorReason(*capiStatus.FailureReason)
+	}
+	if capiStatus.FailureMessage != nil {
+		mapiStatus.ErrorMessage = capiStatus.FailureMessage
+	}
+
+	return mapiStatus
+}
+
+// convertCAPIFailureReasonToMAPIErrorReason converts CAPI MachineSetStatusError to MAPI MachineSetStatusError.
+func convertCAPIFailureReasonToMAPIErrorReason(capiFailureReason capierrors.MachineSetStatusError) *mapiv1.MachineSetStatusError {
+	mapiErrorReason := mapiv1.MachineSetStatusError(capiFailureReason)
+	return &mapiErrorReason
+}
+
+// convertCAPIConditionsToMAPI converts CAPI conditions to MAPI conditions.
+func convertCAPIConditionsToMAPI(capiConditions clusterv1.Conditions) []mapiv1.Condition {
+	if capiConditions == nil {
+		return nil
+	}
+
+	mapiConditions := make([]mapiv1.Condition, 0, len(capiConditions))
+
+	for _, capiCondition := range capiConditions {
+		// Ignore CAPI specific conditions.
+		// TODO(damdo): Make sure we only convert the conditions that are supported by MAPI.
+		if capiCondition.Type == "Paused" || capiCondition.Type == "MachinesCreated" || capiCondition.Type == "Ready" || capiCondition.Type == "Synchronized" {
+			continue
+		}
+
+		mapiCondition := mapiv1.Condition{
+			Type:               mapiv1.ConditionType(capiCondition.Type),
+			Status:             capiCondition.Status,
+			LastTransitionTime: capiCondition.LastTransitionTime,
+			Reason:             capiCondition.Reason,
+			Message:            capiCondition.Message,
+		}
+
+		// Severity must only be set when the condition is not True.
+		if capiCondition.Status != corev1.ConditionTrue && capiCondition.Severity != "" {
+			mapiCondition.Severity = mapiv1.ConditionSeverity(capiCondition.Severity)
+		}
+
+		mapiConditions = append(mapiConditions, mapiCondition)
+	}
+
+	return mapiConditions
 }

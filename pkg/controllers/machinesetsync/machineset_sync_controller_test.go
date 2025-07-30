@@ -38,6 +38,7 @@ import (
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	capierrors "sigs.k8s.io/cluster-api/errors"
 
 	"github.com/openshift/cluster-api-actuator-pkg/testutils"
 	consts "github.com/openshift/cluster-capi-operator/pkg/controllers"
@@ -354,6 +355,67 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 					)
 				})
 
+				Context("when the CAPI machine set spec differs (replica count)", func() {
+					BeforeEach(func() {
+						By("Updating the CAPI machine set with a differing spec from the MAPI machine set")
+						Eventually(k.Update(capiMachineSet, func() {
+							capiMachineSet.Spec.Replicas = ptr.To(int32(4))
+						})).Should(Succeed())
+					})
+
+					It("should set the sync finalizer on both the mapi and capi machine sets", func() {
+						Eventually(k.Object(mapiMachineSet), timeout).Should(
+							HaveField("ObjectMeta.Finalizers", ContainElement(machinesync.SyncFinalizer)),
+						)
+
+						capiMachineSet := capiv1resourcebuilder.MachineSet().WithName(mapiMachineSet.Name).WithNamespace(capiNamespace.Name).Build()
+						Eventually(k.Get(capiMachineSet)).Should(Succeed())
+						Eventually(k.Object(capiMachineSet), timeout).Should(
+							HaveField("ObjectMeta.Finalizers", ContainElement(machinesync.SyncFinalizer)),
+						)
+					})
+
+					It("should update the synchronized condition on the MAPI machine set to True", func() {
+						Eventually(k.Object(mapiMachineSet), timeout).Should(
+							SatisfyAll(
+								HaveField("Status.Conditions", ContainElement(
+									SatisfyAll(
+										HaveField("Type", Equal(consts.SynchronizedCondition)),
+										HaveField("Status", Equal(corev1.ConditionTrue)),
+									))),
+								HaveField("Status.SynchronizedGeneration", Equal(mapiMachineSet.GetGeneration())),
+							))
+					})
+
+					It("should sync the spec of the machine sets (updating the CAPI machine set replica count)", func() {
+						// The CAPI machine set should be updated to the original MAPI machine set spec.
+						Eventually(k.Object(capiMachineSet), timeout).Should(
+							HaveField("Spec.Replicas", BeEquivalentTo(mapiMachineSet.Spec.Replicas)),
+						)
+					})
+
+					It("should sync the status of the machine sets (updating the CAPI machine set status replicas)", func() {
+						Eventually(k.Object(capiMachineSet), timeout).Should(
+							HaveField("Status.Replicas", BeEquivalentTo(mapiMachineSet.Status.Replicas)),
+						)
+					})
+				})
+
+				Context("when the CAPI machine set status differs (ready replicas)", func() {
+					BeforeEach(func() {
+						By("Updating the CAPI machine set with a differing status from the MAPI machine set")
+						Eventually(k.UpdateStatus(capiMachineSet, func() {
+							capiMachineSet.Status.ReadyReplicas = 2
+						})).Should(Succeed())
+					})
+
+					It("should sync the status of the machine sets (updating the CAPI machine set status ready replicas)", func() {
+						Eventually(k.Object(capiMachineSet), timeout).Should(
+							HaveField("Status.ReadyReplicas", BeEquivalentTo(mapiMachineSet.Status.ReadyReplicas)),
+						)
+					})
+				})
+
 				Context("when the MAPI machine set has a non-zero deletion timestamp", func() {
 					BeforeEach(func() {
 						Eventually(k.Object(mapiMachineSet), timeout).Should(
@@ -459,9 +521,15 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 						))
 				})
 
-				It("should sync the spec of the machine sets (updating the replica count)", func() {
+				It("should sync the spec of the machine sets (updating the MAPI machine set spec replicas)", func() {
 					Eventually(k.Object(mapiMachineSet), timeout).Should(
-						HaveField("Spec.Replicas", Equal(ptr.To(int32(4)))),
+						HaveField("Spec.Replicas", BeEquivalentTo(capiMachineSet.Spec.Replicas)),
+					)
+				})
+
+				It("should sync the status of the machine sets (updating the MAPI machine set status replicas)", func() {
+					Eventually(k.Object(mapiMachineSet), timeout).Should(
+						HaveField("Status.Replicas", BeEquivalentTo(capiMachineSet.Status.Replicas)),
 					)
 				})
 			})
@@ -520,6 +588,66 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 						)
 					})
 
+				})
+			})
+
+			Context("when the CAPI machine set exists and the status differs (ready replicas)", func() {
+				BeforeEach(func() {
+					By("Creating the CAPI machine set")
+					capiMachineSet = capiMachineSetBuilder.WithReplicas(int32(3)).Build()
+					Expect(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
+
+					By("Updating the CAPI machine set with a differing status")
+					Eventually(k.UpdateStatus(capiMachineSet, func() {
+						capiMachineSet.Status.ReadyReplicas = 2
+						capiMachineSet.Status.Replicas = 3
+						capiMachineSet.Status.AvailableReplicas = 2
+						capiMachineSet.Status.FailureMessage = ptr.To("test failure message")
+						capiMachineSet.Status.FailureReason = ptr.To(capierrors.MachineSetStatusError("test failure reason"))
+						// capiMachineSet.Status.Conditions = []clusterv1.Condition{
+						// 	{
+						// 		Type:               "ReplicasReady",
+						// 		Status:             corev1.ConditionTrue,
+						// 		LastTransitionTime: metav1.Now(),
+						// 		Reason:             "AllReplicasReady",
+						// 		Message:            "All replicas are ready",
+						// 	},
+						// 	{
+						// 		Type:               "ScalingUp",
+						// 		Status:             corev1.ConditionFalse,
+						// 		LastTransitionTime: metav1.Now(),
+						// 		Reason:             "NotScaling",
+						// 		Message:            "Not currently scaling",
+						// 	},
+						// }
+					})).Should(Succeed())
+				})
+
+				It("should sync the status of the machine sets (updating the MAPI machine set status ready replicas)", func() {
+					Eventually(k.Object(mapiMachineSet), timeout).Should(
+						SatisfyAll(
+							HaveField("Status.Replicas", BeEquivalentTo(capiMachineSet.Status.Replicas)),
+							HaveField("Status.ReadyReplicas", BeEquivalentTo(capiMachineSet.Status.ReadyReplicas)),
+							HaveField("Status.AvailableReplicas", BeEquivalentTo(capiMachineSet.Status.AvailableReplicas)),
+							HaveField("Status.ErrorMessage", BeEquivalentTo(capiMachineSet.Status.FailureMessage)),
+							HaveField("Status.ErrorReason", BeEquivalentTo(capiMachineSet.Status.FailureReason)),
+							// HaveField("Status.Conditions", ContainElement(
+							// 	SatisfyAll(
+							// 		HaveField("Type", Equal("ReplicasReady")),
+							// 		HaveField("Status", Equal(corev1.ConditionTrue)),
+							// 		HaveField("Reason", Equal("AllReplicasReady")),
+							// 		HaveField("Message", Equal("All replicas are ready")),
+							// 	),
+							// )),
+							// HaveField("Status.Conditions", ContainElement(
+							// 	SatisfyAll(
+							// 		HaveField("Type", Equal("ScalingUp")),
+							// 		HaveField("Status", Equal(corev1.ConditionFalse)),
+							// 		HaveField("Reason", Equal("NotScaling")),
+							// 		HaveField("Message", Equal("Not currently scaling")),
+							// 	),
+							// )),
+						))
 				})
 			})
 
@@ -1002,7 +1130,6 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 			})
 		})
 	})
-
 })
 
 var _ = Describe("compareMAPIMachineSets", func() {
