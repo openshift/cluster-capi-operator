@@ -1,0 +1,35 @@
+---
+description: ALWAYS USE before running tests and linters
+alwaysApply: false
+---
+### Testing Commands
+```bash
+make unit # Run unit tests for all packages
+```
+
+### Code Quality Commands
+```bash
+make fmt # Format Go code
+make lint # Run linter checks
+```
+
+**Package Selection:**
+```bash
+# Run tests for specific controllers
+make unit TEST_PACKAGES="./pkg/controllers/machinesync/..."
+```
+
+**Running Individual Tests:**
+For complex nested Ginkgo tests, programmatic focus is most reliable:
+```go
+// Change It to FIt, Context to FContext, or Describe to FDescribe
+FIt("should have the desired behavior", func() {
+    // test code
+})
+```
+Then run only on the files with focus eg.: `make unit TEST_PACKAGES="./pkg/controllers/machinesetsync/..."`
+
+**Environment Setup:**
+- Tests use envtest framework with kubebuilder assets and MUST be executed using `make unit` target to work.
+
+**Important:** Always revert programmatic focus changes (remove `F` prefix) before committing.
