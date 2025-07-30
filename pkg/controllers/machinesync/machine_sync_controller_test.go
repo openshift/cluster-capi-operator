@@ -339,6 +339,15 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 					})
 
 					It("should update the MAPI provider spec", func() {
+						// awsProviderSpecFromMachine wraps AWSProviderSpecFromRawExtension for use with WithTransform.
+						awsProviderSpecFromMachine := func(mapiMachine *machinev1beta1.Machine) (machinev1beta1.AWSMachineProviderConfig, error) {
+							if mapiMachine == nil {
+								return machinev1beta1.AWSMachineProviderConfig{}, nil
+							}
+
+							return mapi2capi.AWSProviderSpecFromRawExtension(mapiMachine.Spec.ProviderSpec.Value)
+						}
+
 						Eventually(k.Object(mapiMachine), timeout).Should(
 							WithTransform(awsProviderSpecFromMachine,
 								HaveField("InstanceType", Equal("m7i.4xlarge")),
@@ -870,12 +879,3 @@ var _ = Describe("applySynchronizedConditionWithPatch", func() {
 	})
 
 })
-
-// awsProviderSpecFromMachine wraps AWSProviderSpecFromRawExtension for use with WithTransform.
-func awsProviderSpecFromMachine(mapiMachine *machinev1beta1.Machine) (machinev1beta1.AWSMachineProviderConfig, error) {
-	if mapiMachine == nil {
-		return machinev1beta1.AWSMachineProviderConfig{}, nil
-	}
-
-	return mapi2capi.AWSProviderSpecFromRawExtension(mapiMachine.Spec.ProviderSpec.Value)
-}
