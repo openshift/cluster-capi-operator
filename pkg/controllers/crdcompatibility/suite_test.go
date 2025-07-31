@@ -17,12 +17,14 @@ limitations under the License.
 package crdcompatibility
 
 import (
+	"fmt"
+	"reflect"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"github.com/onsi/gomega/types"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -60,7 +62,96 @@ var _ = BeforeSuite(func() {
 	Expect(cfg).NotTo(BeNil())
 	Expect(cl).NotTo(BeNil())
 
-	utilruntime.Must(operatorv1alpha1.Install(cl.Scheme()))
-
 	komega.SetClient(cl)
 })
+
+type haveConditionMatcher struct {
+	conditionType    string
+	conditionStatus  metav1.ConditionStatus
+	conditionReason  string
+	conditionMessage string
+}
+
+func HaveCondition(conditionType string, conditionStatus metav1.ConditionStatus, conditionReason string, conditionMessage string) types.GomegaMatcher {
+	return &haveConditionMatcher{
+		conditionType:    conditionType,
+		conditionStatus:  conditionStatus,
+		conditionReason:  conditionReason,
+		conditionMessage: conditionMessage,
+	}
+}
+
+func (m haveConditionMatcher) Match(actual interface{}) (success bool, err error) {
+	condition, ok := actual.(metav1.Condition)
+	if !ok {
+		return false, fmt.Errorf("value is not a metav1.Condition")
+	}
+
+	if condition.Type != m.conditionType {
+		return false, fmt.Errorf("condition type is not %s", m.conditionType)
+	}
+
+	if condition.Status != m.conditionStatus {
+		return false, fmt.Errorf("condition status is not %s", m.conditionStatus)
+	}
+
+	if condition.Reason != m.conditionReason {
+		return false, fmt.Errorf("condition reason is not %s", m.conditionReason)
+	}
+
+	if condition.Message != m.conditionMessage {
+		return false, fmt.Errorf("condition message is not %s", m.conditionMessage)
+	}
+
+	return true, nil
+}
+
+func (m haveConditionMatcher) FailureMessage(actual interface{}) (message string) {
+	return fmt.Sprintf("Expected condition to have type=%s, status=%s, reason=%s, message=%s",
+		m.conditionType, m.conditionStatus, m.conditionReason, m.conditionMessage)
+}
+
+func (m haveConditionMatcher) NegatedFailureMessage(actual interface{}) (message string) {
+	return fmt.Sprintf("Expected condition to not have type=%s, status=%s, reason=%s, message=%s",
+		m.conditionType, m.conditionStatus, m.conditionReason, m.conditionMessage)
+}
+
+// extractConditions uses reflection to safely extract the Conditions field from a client.Object.
+// It returns an error if the object doesn't have the expected structure.
+func extractConditions(obj client.Object) ([]metav1.Condition, error) {
+	if obj == nil {
+		return nil, fmt.Errorf("object is nil")
+	}
+
+	// Get the reflect.Value of the object
+	objValue := reflect.ValueOf(obj)
+	if objValue.Kind() == reflect.Ptr {
+		objValue = objValue.Elem()
+	}
+
+	// Check if the object has a Status field
+	statusField := objValue.FieldByName("Status")
+	if !statusField.IsValid() {
+		return nil, fmt.Errorf("object does not have a Status field")
+	}
+
+	// Check if Status is a struct
+	if statusField.Kind() != reflect.Struct {
+		return nil, fmt.Errorf("Status field is not a struct, got %v", statusField.Kind())
+	}
+
+	// Check if Status has a Conditions field
+	conditionsField := statusField.FieldByName("Conditions")
+	if !conditionsField.IsValid() {
+		return nil, fmt.Errorf("Status does not have a Conditions field")
+	}
+
+	// Check if Conditions is a slice
+	if conditionsField.Kind() != reflect.Slice {
+		return nil, fmt.Errorf("Conditions field is not a slice, got %v", conditionsField.Kind())
+	}
+
+	// Convert the reflect.Value to []metav1.Condition
+	conditions := conditionsField.Interface().([]metav1.Condition)
+	return conditions, nil
+}

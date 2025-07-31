@@ -2,8 +2,10 @@ package crdcompatibility
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
+	"github.com/go-logr/logr"
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -61,30 +63,45 @@ func (r *reconcileState) reconcile(ctx context.Context, crdCompatibilityRequirem
 	return r.reconcileCreateOrUpdate(ctx, crdCompatibilityRequirement)
 }
 
+func (r *reconcileState) fetchCompatibilityCRD(ctx context.Context, crdCompatibilityRequirement *operatorv1alpha1.CRDCompatibilityRequirement) error {
+	// Parse the CRD in compatibilityCRD into a CRD object
+	compatibilityCRD := &apiextensionsv1.CustomResourceDefinition{}
+	if err := yaml.Unmarshal([]byte(crdCompatibilityRequirement.Spec.CompatibilityCRD), compatibilityCRD); err != nil {
+		return noRequeueError(fmt.Errorf("failed to parse compatibilityCRD for %s: %w", crdCompatibilityRequirement.Spec.CRDRef, err), noRequeueErrorReasonInvalidCompatibilityCRD)
+	}
+	r.compatibilityCRD = compatibilityCRD
+
+	return nil
+}
+
+func (r *reconcileState) fetchCurrentCRD(ctx context.Context, log logr.Logger, crdCompatibilityRequirement *operatorv1alpha1.CRDCompatibilityRequirement) error {
+	currentCRD := &apiextensionsv1.CustomResourceDefinition{}
+	if err := r.Get(ctx, types.NamespacedName{Name: crdCompatibilityRequirement.Spec.CRDRef}, currentCRD); err != nil {
+		if apierrors.IsNotFound(err) {
+			log.Info("CRD not found", "crdRef", crdCompatibilityRequirement.Spec.CRDRef)
+			return nil
+		} else {
+			return fmt.Errorf("failed to fetch CRD %s: %w", crdCompatibilityRequirement.Spec.CRDRef, err)
+		}
+	}
+	r.currentCRD = currentCRD
+
+	return nil
+}
+
 func (r *reconcileState) reconcileCreateOrUpdate(ctx context.Context, crdCompatibilityRequirement *operatorv1alpha1.CRDCompatibilityRequirement) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
 	logger.Info("Reconciling CRDCompatibilityRequirement")
 
-	// Parse the CRD in compatibilityCRD into a CRD object
-	compatibilityCRD := &apiextensionsv1.CustomResourceDefinition{}
-	if err := yaml.Unmarshal([]byte(crdCompatibilityRequirement.Spec.CompatibilityCRD), compatibilityCRD); err != nil {
-		return ctrl.Result{}, noRequeueError(fmt.Errorf("failed to parse compatibilityCRD for %s: %w", crdCompatibilityRequirement.Spec.CRDRef, err), noRequeueErrorReasonInvalidCompatibilityCRD)
-	}
-	r.compatibilityCRD = compatibilityCRD
+	err := errors.Join(
+		r.fetchCompatibilityCRD(ctx, crdCompatibilityRequirement),
+		r.fetchCurrentCRD(ctx, logger, crdCompatibilityRequirement),
+	)
 
-	// Fetch the CRD referenced by crdRef
-	currentCRD := &apiextensionsv1.CustomResourceDefinition{}
-	if err := r.Get(ctx, types.NamespacedName{Name: crdCompatibilityRequirement.Spec.CRDRef}, currentCRD); err != nil {
-		if apierrors.IsNotFound(err) {
-			logger.Info("CRD not found", "crdRef", crdCompatibilityRequirement.Spec.CRDRef)
-			currentCRD = nil
-		} else {
-			logger.Error(err, "failed to fetch CRD", "crdRef", crdCompatibilityRequirement.Spec.CRDRef)
-			return ctrl.Result{}, err
-		}
+	if err != nil {
+		return ctrl.Result{}, err
 	}
-	r.currentCRD = currentCRD
 
 	// TODO: Implement reconciliation logic
 	// - Validate CRDCompatibilityRequirement spec
