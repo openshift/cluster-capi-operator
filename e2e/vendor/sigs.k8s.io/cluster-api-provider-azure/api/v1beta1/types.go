@@ -111,7 +111,21 @@ type NetworkSpec struct {
 	// +optional
 	ControlPlaneOutboundLB *LoadBalancerSpec `json:"controlPlaneOutboundLB,omitempty"`
 
+	// AdditionalAPIServerLBPorts specifies extra inbound ports for the APIServer load balancer.
+	// Each port specified (e.g., 9345) creates an inbound rule where the frontend port and the backend port are the same.
+	// +optional
+	AdditionalAPIServerLBPorts []LoadBalancerPort `json:"additionalAPIServerLBPorts,omitempty"`
+
 	NetworkClassSpec `json:",inline"`
+}
+
+// LoadBalancerPort specifies additional port for the API server load balancer.
+type LoadBalancerPort struct {
+	// Name for the additional port within LB definition
+	Name string `json:"name"`
+
+	// Port for the LB definition
+	Port int32 `json:"port"`
 }
 
 // VnetSpec configures an Azure virtual network.
@@ -570,7 +584,7 @@ type UserAssignedIdentity struct {
 }
 
 // IdentityType represents different types of identities.
-// +kubebuilder:validation:Enum=ServicePrincipal;UserAssignedMSI;ManualServicePrincipal;ServicePrincipalCertificate;WorkloadIdentity
+// +kubebuilder:validation:Enum=ServicePrincipal;UserAssignedMSI;ManualServicePrincipal;ServicePrincipalCertificate;WorkloadIdentity;UserAssignedIdentityCredential
 type IdentityType string
 
 const (
@@ -588,6 +602,9 @@ const (
 
 	// WorkloadIdentity represents a WorkloadIdentity.
 	WorkloadIdentity IdentityType = "WorkloadIdentity"
+
+	// UserAssignedIdentityCredential represents a UserAssignedIdentityCredential.
+	UserAssignedIdentityCredential IdentityType = "UserAssignedIdentityCredential"
 )
 
 // OSDisk defines the operating system disk for a VM.
@@ -888,6 +905,17 @@ func (s SubnetSpec) IsIPv6Enabled() bool {
 		}
 	}
 	return false
+}
+
+// GetSecurityRuleByDestination returns security group rule, which matches provided destination ports.
+func (s SubnetSpec) GetSecurityRuleByDestination(port string) *SecurityRule {
+	for _, rule := range s.SecurityGroup.SecurityRules {
+		if rule.DestinationPorts != nil && *rule.DestinationPorts == port {
+			return &rule
+		}
+	}
+
+	return nil
 }
 
 // SecurityProfile specifies the Security profile settings for a
@@ -1217,3 +1245,23 @@ const (
 	// AKSAssignedIdentityUserAssigned ...
 	AKSAssignedIdentityUserAssigned AKSAssignedIdentity = "UserAssigned"
 )
+
+// DisableComponent defines a component to be disabled in CAPZ such as a controller or webhook.
+// +kubebuilder:validation:Enum=DisableASOSecretController;DisableAzureJSONMachineController
+type DisableComponent string
+
+// NOTE: when adding a new DisableComponent, please also add it to the ValidDisableableComponents map.
+const (
+	// DisableASOSecretController disables the ASOSecretController from being deployed.
+	DisableASOSecretController DisableComponent = "DisableASOSecretController"
+
+	// DisableAzureJSONMachineController disables the AzureJSONMachineController from being deployed.
+	DisableAzureJSONMachineController DisableComponent = "DisableAzureJSONMachineController"
+)
+
+// ValidDisableableComponents is a map of valid disableable components used to quickly validate whether a component is
+// valid or not.
+var ValidDisableableComponents = map[DisableComponent]struct{}{
+	DisableASOSecretController:        {},
+	DisableAzureJSONMachineController: {},
+}
