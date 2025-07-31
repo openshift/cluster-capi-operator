@@ -216,7 +216,10 @@ var _ = Describe("mapi2capi AWS conversion", func() {
 			machineBuilder: awsMAPIMachineBase.WithProviderSpecBuilder(
 				awsBaseProviderSpec.WithBlockDevices([]mapiv1.BlockDeviceMappingSpec{{
 					DeviceName: ptr.To("/dev/sdb"),
-					EBS:        &mapiv1.EBSBlockDeviceSpec{VolumeSize: ptr.To(int64(10)), DeleteOnTermination: ptr.To(false)},
+					EBS: &mapiv1.EBSBlockDeviceSpec{
+						VolumeSize:                    ptr.To(int64(10)),
+						DeprecatedDeleteOnTermination: ptr.To(false), // Explicitly set to trigger validation error
+					},
 				}}),
 			),
 			infra: infra,
@@ -280,7 +283,10 @@ var _ = Describe("mapi2capi AWS conversion", func() {
 			machineBuilder: awsMAPIMachineBase.WithProviderSpecBuilder(
 				awsBaseProviderSpec.WithBlockDevices([]mapiv1.BlockDeviceMappingSpec{{
 					VirtualName: testValue,
-					EBS:         &mapiv1.EBSBlockDeviceSpec{VolumeSize: ptr.To(int64(10)), DeleteOnTermination: ptr.To(false)},
+					EBS: &mapiv1.EBSBlockDeviceSpec{
+						VolumeSize:                    ptr.To(int64(10)),
+						DeprecatedDeleteOnTermination: ptr.To(false), // Explicitly set to trigger validation error
+					},
 				}}),
 			),
 			infra: infra,
@@ -322,7 +328,10 @@ var _ = Describe("mapi2capi AWS conversion", func() {
 		Entry("With root Volume not deleted on termination", awsMAPI2CAPIConversionInput{
 			machineBuilder: awsMAPIMachineBase.WithProviderSpecBuilder(
 				awsBaseProviderSpec.WithBlockDevices([]mapiv1.BlockDeviceMappingSpec{{
-					EBS: &mapiv1.EBSBlockDeviceSpec{VolumeSize: ptr.To(int64(10)), DeleteOnTermination: ptr.To(false)},
+					EBS: &mapiv1.EBSBlockDeviceSpec{
+						VolumeSize:                    ptr.To(int64(10)),
+						DeprecatedDeleteOnTermination: ptr.To(false), // Explicitly set to trigger validation error
+					},
 				}}),
 			),
 			infra:          infra,

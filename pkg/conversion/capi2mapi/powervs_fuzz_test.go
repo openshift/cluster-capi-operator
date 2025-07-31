@@ -22,7 +22,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	fuzz "github.com/google/gofuzz"
+	randfill "sigs.k8s.io/randfill"
 
 	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/capi2mapi"
@@ -108,51 +108,51 @@ var _ = Describe("PowerVS Fuzz (capi2mapi)", func() {
 	})
 })
 
-func powerVSProviderIDFuzzer(c fuzz.Continue) string {
+func powerVSProviderIDFuzzer(c randfill.Continue) string {
 	// Power VS provider id format: ibmpowervs://<region>/<zone>/<service_instance_id>/<instance_id>
-	return fmt.Sprintf("ibmpowervs://tok/tok04/%s/%s", strings.ReplaceAll(c.RandString(), "/", ""), strings.ReplaceAll(c.RandString(), "/", ""))
+	return fmt.Sprintf("ibmpowervs://tok/tok04/%s/%s", strings.ReplaceAll(c.String(0), "/", ""), strings.ReplaceAll(c.String(0), "/", ""))
 }
 
 func powerVSMachineFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interface{} {
 	return []interface{}{
-		func(serviceInstance *ibmpowervsv1.IBMPowerVSResourceReference, c fuzz.Continue) {
+		func(serviceInstance *ibmpowervsv1.IBMPowerVSResourceReference, c randfill.Continue) {
 			switch c.Int31n(3) {
 			case 0:
-				serviceInstance.ID = ptr.To(c.RandString())
+				serviceInstance.ID = ptr.To(c.String(0))
 			case 1:
-				serviceInstance.Name = ptr.To(c.RandString())
+				serviceInstance.Name = ptr.To(c.String(0))
 			case 2:
-				serviceInstance.RegEx = ptr.To(c.RandString())
+				serviceInstance.RegEx = ptr.To(c.String(0))
 			}
 		},
-		func(network *ibmpowervsv1.IBMPowerVSResourceReference, c fuzz.Continue) {
+		func(network *ibmpowervsv1.IBMPowerVSResourceReference, c randfill.Continue) {
 			switch c.Int31n(3) {
 			case 0:
-				network.ID = ptr.To(c.RandString())
+				network.ID = ptr.To(c.String(0))
 			case 1:
-				network.Name = ptr.To(c.RandString())
+				network.Name = ptr.To(c.String(0))
 			case 2:
-				network.RegEx = ptr.To(c.RandString())
+				network.RegEx = ptr.To(c.String(0))
 			}
 		},
-		func(image *ibmpowervsv1.IBMPowerVSResourceReference, c fuzz.Continue) {
+		func(image *ibmpowervsv1.IBMPowerVSResourceReference, c randfill.Continue) {
 			switch c.Int31n(3) {
 			case 0:
-				image.ID = ptr.To(c.RandString())
+				image.ID = ptr.To(c.String(0))
 			case 1:
-				image.Name = ptr.To(c.RandString())
+				image.Name = ptr.To(c.String(0))
 			case 2:
-				image.RegEx = ptr.To(c.RandString())
+				image.RegEx = ptr.To(c.String(0))
 			}
 		},
-		func(spec *ibmpowervsv1.IBMPowerVSMachineSpec, c fuzz.Continue) {
-			c.FuzzNoCustom(spec)
+		func(spec *ibmpowervsv1.IBMPowerVSMachineSpec, c randfill.Continue) {
+			c.FillNoCustom(spec)
 
 			// spec.ServiceInstanceID is deprecated and its advised to use spec.ServiceInstance
 			spec.ServiceInstanceID = ""
 		},
-		func(m *ibmpowervsv1.IBMPowerVSMachine, c fuzz.Continue) {
-			c.FuzzNoCustom(m)
+		func(m *ibmpowervsv1.IBMPowerVSMachine, c randfill.Continue) {
+			c.FillNoCustom(m)
 
 			// Ensure the type meta is set correctly.
 			m.TypeMeta.APIVersion = ibmpowervsv1.GroupVersion.String()
@@ -163,8 +163,8 @@ func powerVSMachineFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interfac
 
 func powerVSMachineTemplateFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interface{} {
 	return []interface{}{
-		func(m *ibmpowervsv1.IBMPowerVSMachineTemplate, c fuzz.Continue) {
-			c.FuzzNoCustom(m)
+		func(m *ibmpowervsv1.IBMPowerVSMachineTemplate, c randfill.Continue) {
+			c.FillNoCustom(m)
 
 			// Ensure the type meta is set correctly.
 			m.TypeMeta.APIVersion = ibmpowervsv1.GroupVersion.String()

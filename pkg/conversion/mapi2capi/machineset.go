@@ -52,6 +52,7 @@ func fromMAPIMachineSetToCAPIMachineSet(mapiMachineSet *mapiv1.MachineSet) (*clu
 				},
 				// Spec: // Spec not populated here. It is added later by higher level functions.
 			},
+			// MachineNamingStrategy: // Not supported in MAPI, remains nil. No equivalent field in MAPI MachineSet.
 			// AuthoritativeAPI: // Ignore, this is part of the conversion mechanism.
 		},
 	}
