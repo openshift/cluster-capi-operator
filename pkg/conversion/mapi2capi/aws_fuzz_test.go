@@ -21,7 +21,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	fuzz "github.com/google/gofuzz"
+	randfill "sigs.k8s.io/randfill"
 
 	configv1 "github.com/openshift/api/config/v1"
 	mapiv1 "github.com/openshift/api/machine/v1beta1"
@@ -106,14 +106,14 @@ var _ = Describe("AWS Fuzz (mapi2capi)", func() {
 	})
 })
 
-func awsProviderIDFuzzer(c fuzz.Continue) string {
-	return "aws:///us-west-2a/i-" + strings.ReplaceAll(c.RandString(), "/", "")
+func awsProviderIDFuzzer(c randfill.Continue) string {
+	return "aws:///us-west-2a/i-" + strings.ReplaceAll(c.String(0), "/", "")
 }
 
 //nolint:funlen,cyclop
 func awsProviderSpecFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interface{} {
 	return []interface{}{
-		func(nit *mapiv1.AWSNetworkInterfaceType, c fuzz.Continue) {
+		func(nit *mapiv1.AWSNetworkInterfaceType, c randfill.Continue) {
 			switch c.Int31n(3) {
 			case 0:
 				*nit = mapiv1.AWSEFANetworkInterfaceType
@@ -123,21 +123,21 @@ func awsProviderSpecFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interfa
 				*nit = ""
 			}
 		},
-		func(amiRef *mapiv1.AWSResourceReference, c fuzz.Continue) {
+		func(amiRef *mapiv1.AWSResourceReference, c randfill.Continue) {
 			var amiID string
-			c.Fuzz(&amiID)
+			c.Fill(&amiID)
 
 			*amiRef = mapiv1.AWSResourceReference{
 				ID: &amiID,
 			}
 		},
-		func(bdm *mapiv1.BlockDeviceMappingSpec, c fuzz.Continue) {
-			c.FuzzNoCustom(bdm)
+		func(bdm *mapiv1.BlockDeviceMappingSpec, c randfill.Continue) {
+			c.FillNoCustom(bdm)
 
 			// Fuzz required fields so that they are not empty.
 			if bdm.EBS == nil {
 				ebs := &mapiv1.EBSBlockDeviceSpec{}
-				c.Fuzz(ebs)
+				c.Fill(ebs)
 				bdm.EBS = ebs
 			}
 
@@ -146,8 +146,8 @@ func awsProviderSpecFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interfa
 			bdm.NoDevice = nil
 			bdm.VirtualName = nil
 		},
-		func(ebs *mapiv1.EBSBlockDeviceSpec, c fuzz.Continue) {
-			c.FuzzNoCustom(ebs)
+		func(ebs *mapiv1.EBSBlockDeviceSpec, c randfill.Continue) {
+			c.FillNoCustom(ebs)
 
 			// Fuzz required fields so that they are not empty.
 			// Setting volumeSize to a random int64 value.
@@ -155,8 +155,9 @@ func awsProviderSpecFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interfa
 				ebs.VolumeSize = ptr.To(c.Int63())
 			}
 
-			// Force DeleteOnTermination to be true.
-			ebs.DeleteOnTermination = ptr.To(true)
+			// Clear the deprecated deleteOnTermination field as it has no effect and
+			// may cause roundtrip conversion failures when the conversion logic ignores it.
+			ebs.DeprecatedDeleteOnTermination = nil
 
 			// Clear pointers to empty fields.
 			if ebs.VolumeType != nil && *ebs.VolumeType == "" {
@@ -166,7 +167,7 @@ func awsProviderSpecFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interfa
 				ebs.Iops = nil
 			}
 		},
-		func(tenancy *mapiv1.InstanceTenancy, c fuzz.Continue) {
+		func(tenancy *mapiv1.InstanceTenancy, c randfill.Continue) {
 			switch c.Int31n(4) {
 			case 0:
 				*tenancy = mapiv1.DefaultTenancy
@@ -178,7 +179,7 @@ func awsProviderSpecFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interfa
 				*tenancy = ""
 			}
 		},
-		func(marketType *mapiv1.MarketType, c fuzz.Continue) {
+		func(marketType *mapiv1.MarketType, c randfill.Continue) {
 			switch c.Int31n(4) {
 			case 0:
 				*marketType = mapiv1.MarketTypeOnDemand
@@ -190,7 +191,7 @@ func awsProviderSpecFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interfa
 				*marketType = ""
 			}
 		},
-		func(msa *mapiv1.MetadataServiceAuthentication, c fuzz.Continue) {
+		func(msa *mapiv1.MetadataServiceAuthentication, c randfill.Continue) {
 			switch c.Intn(2) {
 			case 0:
 				*msa = mapiv1.MetadataServiceAuthenticationOptional
@@ -203,8 +204,8 @@ func awsProviderSpecFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interfa
 				// resulting in a documented lossy rountrip conversion, which would make the test to fail.
 			}
 		},
-		func(ps *mapiv1.AWSMachineProviderConfig, c fuzz.Continue) {
-			c.FuzzNoCustom(ps)
+		func(ps *mapiv1.AWSMachineProviderConfig, c randfill.Continue) {
+			c.FillNoCustom(ps)
 
 			// The type meta is always set to these values by the conversion.
 			ps.APIVersion = mapiv1.GroupVersion.String()

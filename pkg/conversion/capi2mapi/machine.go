@@ -32,8 +32,6 @@ const (
 )
 
 // fromCAPIMachineToMAPIMachine translates a core CAPI Machine to its MAPI Machine correspondent.
-//
-//nolint:funlen
 func fromCAPIMachineToMAPIMachine(capiMachine *clusterv1.Machine) (*mapiv1.Machine, field.ErrorList) {
 	errs := field.ErrorList{}
 

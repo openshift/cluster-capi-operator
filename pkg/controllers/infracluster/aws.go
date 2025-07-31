@@ -30,8 +30,6 @@ import (
 )
 
 // ensureAWSCluster ensures the AWSCluster cluster object exists.
-//
-//nolint:funlen
 func (r *InfraClusterController) ensureAWSCluster(ctx context.Context, log logr.Logger) (client.Object, error) {
 	target := &awsv1.AWSCluster{ObjectMeta: metav1.ObjectMeta{
 		Name:      r.Infra.Status.InfrastructureName,
