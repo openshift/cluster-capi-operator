@@ -9,6 +9,7 @@ require (
 	github.com/gobuffalo/flect v1.0.3
 	github.com/golangci/golangci-lint v1.61.0
 	github.com/google/gofuzz v1.2.0
+	github.com/google/uuid v1.6.0
 	github.com/klauspost/compress v1.17.9
 	github.com/metal3-io/cluster-api-provider-metal3/api v1.8.6
 	github.com/onsi/ginkgo/v2 v2.22.2
@@ -140,7 +141,6 @@ require (
 	github.com/google/gnostic-models v0.6.9-0.20230804172637-c7be7c783f49 // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/google/pprof v0.0.0-20241210010833-40e02aabc2ad // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/gordonklaus/ineffassign v0.1.0 // indirect
 	github.com/gostaticanalysis/analysisutil v0.7.1 // indirect
 	github.com/gostaticanalysis/comment v1.4.2 // indirect
