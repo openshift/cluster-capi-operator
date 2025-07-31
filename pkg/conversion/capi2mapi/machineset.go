@@ -54,6 +54,7 @@ func fromCAPIMachineSetToMAPIMachineSet(capiMachineSet *clusterv1.MachineSet) (*
 	// metadata.OwnerReferences - handled by the machineSetSync controller.
 	// capiMachineSet.Spec.ClusterName - Ignore this as it can be reconstructed from the infra object.
 	// capiMachineSet.Spec.Template.Spec - Ignore as we convert this at a higher level using the Machine conversion logic.
+	// capiMachineSet.Spec.MachineNamingStrategy - Not supported in MAPI, no equivalent field exists.
 
 	if len(errs) > 0 {
 		// Return the mapiMachine so that the logic continues and collects all possible conversion errors.
