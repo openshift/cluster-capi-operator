@@ -23,6 +23,7 @@ import (
 
 	machinev1 "github.com/openshift/api/machine/v1"
 	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
+	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	"golang.org/x/tools/go/packages"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -49,6 +50,7 @@ func init() {
 	utilruntime.Must(azurev1.AddToScheme(scheme.Scheme))
 	utilruntime.Must(gcpv1.AddToScheme(scheme.Scheme))
 	utilruntime.Must(clusterv1.AddToScheme(scheme.Scheme))
+	utilruntime.Must(operatorv1alpha1.Install(scheme.Scheme))
 }
 
 // StartEnvTest starts a new test environment and returns a client and config.
@@ -83,6 +85,7 @@ func StartEnvTest(testEnv *envtest.Environment) (*rest.Config, client.Client, er
 			path.Join(openshiftAPIPath, "machine", "v1beta1", "zz_generated.crd-manifests", "0000_10_machine-api_01_machinesets-CustomNoUpgrade.crd.yaml"),
 			path.Join(openshiftAPIPath, "machine", "v1beta1", "zz_generated.crd-manifests", "0000_10_machine-api_01_machines-CustomNoUpgrade.crd.yaml"),
 			path.Join(openshiftAPIPath, "config", "v1", "zz_generated.crd-manifests", "0000_00_cluster-version-operator_01_clusteroperators.crd.yaml"),
+			path.Join(openshiftAPIPath, "operator", "v1alpha1", "zz_generated.crd-manifests", "0000_20_crd-compatibility-checker_01_crdcompatibilityrequirements.crd.yaml"),
 		},
 		ErrorIfPathMissing: true,
 	}

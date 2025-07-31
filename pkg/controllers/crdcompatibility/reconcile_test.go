@@ -21,13 +21,32 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/yaml"
 
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 )
 
 var _ = Describe("CRDCompatibilityRequirement", func() {
+	const (
+		testCRDName = "crdcompatibilityrequirements.operator.openshift.io"
+	)
+
+	validCRD := func(ctx context.Context) *apiextensionsv1.CustomResourceDefinition {
+		// Fetch the CRDCompatibilityRequirement CRD itself, because we know it's definitely loaded
+		crd := &apiextensionsv1.CustomResourceDefinition{}
+		Expect(cl.Get(ctx, types.NamespacedName{Name: testCRDName}, crd)).To(Succeed(), "CRDCompatibilityRequirement CRD should be loaded")
+		return crd
+	}
+
+	toYAML := func(crd *apiextensionsv1.CustomResourceDefinition) string {
+		yaml, err := yaml.Marshal(crd)
+		Expect(err).To(Succeed())
+		return string(yaml)
+	}
+
 	Context("When creating a CRDCompatibilityRequirement", func() {
 		It("Should admit the simplest possible CRDCompatibilityRequirement object", func(ctx context.Context) {
 			// Create the simplest possible CRDCompatibilityRequirement
@@ -36,26 +55,8 @@ var _ = Describe("CRDCompatibilityRequirement", func() {
 					Name: "test-requirement",
 				},
 				Spec: operatorv1alpha1.CRDCompatibilityRequirementSpec{
-					CRDRef: "test.example.com",
-					CompatibilityCRD: `apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition
-metadata:
-  name: test.example.com
-spec:
-  group: test.example.com
-  names:
-    kind: Test
-    listKind: TestList
-    plural: tests
-    singular: test
-  scope: Namespaced
-  versions:
-  - name: v1
-    schema:
-      openAPIV3Schema:
-        type: object
-    served: true
-    storage: true`,
+					CRDRef:             testCRDName,
+					CompatibilityCRD:   toYAML(validCRD(ctx)),
 					CRDAdmitAction:     "Warn",
 					CreatorDescription: "Test Creator",
 				},
@@ -66,6 +67,16 @@ spec:
 			DeferCleanup(func() {
 				Expect(cl.Delete(ctx, requirement)).To(Succeed())
 			})
+
+			Eventually(func() (*operatorv1alpha1.CRDCompatibilityRequirement, error) {
+				var fetched operatorv1alpha1.CRDCompatibilityRequirement
+				if err := cl.Get(ctx, types.NamespacedName{Name: requirement.Name}, &fetched); err != nil {
+					return nil, err
+				}
+				return &fetched, nil
+			}).Should(SatisfyAll(
+				HaveField("Name", Equal("test-requirement")),
+			))
 
 			// Verify the object was created successfully
 			var fetched operatorv1alpha1.CRDCompatibilityRequirement
