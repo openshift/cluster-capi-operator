@@ -24,9 +24,9 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/yaml"
 
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
+	"github.com/openshift/cluster-capi-operator/pkg/test"
 )
 
 var _ = Describe("CRDCompatibilityRequirement", func() {
@@ -41,51 +41,96 @@ var _ = Describe("CRDCompatibilityRequirement", func() {
 		return crd
 	}
 
-	toYAML := func(crd *apiextensionsv1.CustomResourceDefinition) string {
-		yaml, err := yaml.Marshal(crd)
-		Expect(err).To(Succeed())
-		return string(yaml)
+	createRequirement := func(ctx context.Context, requirement *operatorv1alpha1.CRDCompatibilityRequirement) {
+		By("Creating the CRDCompatibilityRequirement")
+		Expect(cl.Create(ctx, requirement)).To(Succeed())
+
+		DeferCleanup(func(ctx context.Context) {
+			By("Deleting the CRDCompatibilityRequirement")
+			Expect(cl.Delete(ctx, requirement)).To(Succeed())
+		})
 	}
 
 	Context("When creating a CRDCompatibilityRequirement", func() {
-		It("Should admit the simplest possible CRDCompatibilityRequirement object", func(ctx context.Context) {
+		It("Should set Progressing condition and observed CRD", func(ctx context.Context) {
+			testCRD := validCRD(ctx)
+
 			// Create the simplest possible CRDCompatibilityRequirement
 			requirement := &operatorv1alpha1.CRDCompatibilityRequirement{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-requirement",
+					GenerateName: "test-requirement-",
 				},
 				Spec: operatorv1alpha1.CRDCompatibilityRequirementSpec{
 					CRDRef:             testCRDName,
-					CompatibilityCRD:   toYAML(validCRD(ctx)),
-					CRDAdmitAction:     "Warn",
+					CompatibilityCRD:   toYAML(testCRD),
+					CRDAdmitAction:     operatorv1alpha1.CRDAdmitActionEnforce,
 					CreatorDescription: "Test Creator",
 				},
 			}
 
-			// Create the CRDCompatibilityRequirement
-			Expect(cl.Create(ctx, requirement)).To(Succeed())
-			DeferCleanup(func() {
-				Expect(cl.Delete(ctx, requirement)).To(Succeed())
-			})
+			createRequirement(ctx, requirement)
 
-			Eventually(func() (*operatorv1alpha1.CRDCompatibilityRequirement, error) {
-				var fetched operatorv1alpha1.CRDCompatibilityRequirement
-				if err := cl.Get(ctx, types.NamespacedName{Name: requirement.Name}, &fetched); err != nil {
-					return nil, err
-				}
-				return &fetched, nil
-			}).Should(SatisfyAll(
-				HaveField("Name", Equal("test-requirement")),
+			By("Waiting for the CRDCompatibilityRequirement to have the expected status")
+			Eventually(kWithCtx(ctx).Object(requirement)).Should(SatisfyAll(
+				test.HaveCondition("Progressing", metav1.ConditionFalse, progressingReasonUpToDate, "The CRDCompatibilityRequirement is up to date"),
+				HaveField("Status.ObservedCRD.UID", BeEquivalentTo(testCRD.UID)),
+				HaveField("Status.ObservedCRD.Generation", BeEquivalentTo(testCRD.Generation)),
 			))
+		})
 
-			// Verify the object was created successfully
-			var fetched operatorv1alpha1.CRDCompatibilityRequirement
-			Expect(cl.Get(ctx, types.NamespacedName{Name: requirement.Name}, &fetched)).To(Succeed())
-			Expect(fetched.Name).To(Equal("test-requirement"))
-			Expect(fetched.Spec.CRDRef).To(Equal("test.example.com"))
-			Expect(fetched.Spec.CRDAdmitAction).To(Equal("Warn"))
-			Expect(fetched.Spec.CreatorDescription).To(Equal("Test Creator"))
-			Expect(fetched.Spec.CompatibilityCRD).To(ContainSubstring("apiVersion: apiextensions.k8s.io/v1"))
+		It("Should set a terminal failure when compatibility CRD does not parse", func(ctx context.Context) {
+			testCRD := validCRD(ctx)
+
+			// Create the simplest possible CRDCompatibilityRequirement
+			requirement := &operatorv1alpha1.CRDCompatibilityRequirement{
+				ObjectMeta: metav1.ObjectMeta{
+					GenerateName: "test-requirement-",
+				},
+				Spec: operatorv1alpha1.CRDCompatibilityRequirementSpec{
+					CRDRef:             testCRDName,
+					CompatibilityCRD:   "invalid",
+					CRDAdmitAction:     operatorv1alpha1.CRDAdmitActionEnforce,
+					CreatorDescription: "Test Creator",
+				},
+			}
+
+			createRequirement(ctx, requirement)
+
+			By("Waiting for the CRDCompatibilityRequirement to have the expected status")
+			Eventually(kWithCtx(ctx).Object(requirement)).Should(SatisfyAll(
+				test.HaveCondition("Progressing", metav1.ConditionFalse, progressingReasonConfigurationError, "failed to parse compatibilityCRD for crdcompatibilityrequirements.operator.openshift.io: error unmarshaling JSON: while decoding JSON: json: cannot unmarshal string into Go value of type v1.CustomResourceDefinition"),
+
+				// It should still set the observed CRD
+				HaveField("Status.ObservedCRD.UID", BeEquivalentTo(testCRD.UID)),
+				HaveField("Status.ObservedCRD.Generation", BeEquivalentTo(testCRD.Generation)),
+			))
+		})
+
+		It("Should not set an error when the CRD is not found", func(ctx context.Context) {
+			testCRD := validCRD(ctx)
+
+			// Create the simplest possible CRDCompatibilityRequirement
+			requirement := &operatorv1alpha1.CRDCompatibilityRequirement{
+				ObjectMeta: metav1.ObjectMeta{
+					GenerateName: "test-requirement-",
+				},
+				Spec: operatorv1alpha1.CRDCompatibilityRequirementSpec{
+					CRDRef:             testCRDName + "-foo",
+					CompatibilityCRD:   toYAML(testCRD),
+					CRDAdmitAction:     operatorv1alpha1.CRDAdmitActionEnforce,
+					CreatorDescription: "Test Creator",
+				},
+			}
+
+			createRequirement(ctx, requirement)
+
+			By("Waiting for the CRDCompatibilityRequirement to have the expected status")
+			Eventually(kWithCtx(ctx).Object(requirement)).Should(SatisfyAll(
+				test.HaveCondition("Progressing", metav1.ConditionFalse, progressingReasonUpToDate, "The CRDCompatibilityRequirement is up to date"),
+
+				// observed CRD should be empty
+				HaveField("Status.ObservedCRD", BeNil()),
+			))
 		})
 	})
 })

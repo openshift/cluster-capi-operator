@@ -32,7 +32,7 @@ func (r *CRDCompatibilityReconciler) Reconcile(ctx context.Context, req ctrl.Req
 
 	// Fetch the CRDCompatibilityRequirement instance
 	obj := &operatorv1alpha1.CRDCompatibilityRequirement{}
-	if err := r.Get(ctx, req.NamespacedName, obj); err != nil {
+	if err := r.client.Get(ctx, req.NamespacedName, obj); err != nil {
 		if apierrors.IsNotFound(err) {
 			logger.V(4).Info("Observed CRDCompatibilityRequirement deleted")
 			return ctrl.Result{}, nil
@@ -44,7 +44,7 @@ func (r *CRDCompatibilityReconciler) Reconcile(ctx context.Context, req ctrl.Req
 	state := &reconcileState{CRDCompatibilityReconciler: r}
 
 	result, reconcileErr := state.reconcile(ctx, obj)
-	if err := state.writeStatus(ctx, reconcileErr); err != nil {
+	if err := state.writeStatus(ctx, obj, reconcileErr); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -76,7 +76,7 @@ func (r *reconcileState) fetchCompatibilityCRD(ctx context.Context, crdCompatibi
 
 func (r *reconcileState) fetchCurrentCRD(ctx context.Context, log logr.Logger, crdCompatibilityRequirement *operatorv1alpha1.CRDCompatibilityRequirement) error {
 	currentCRD := &apiextensionsv1.CustomResourceDefinition{}
-	if err := r.Get(ctx, types.NamespacedName{Name: crdCompatibilityRequirement.Spec.CRDRef}, currentCRD); err != nil {
+	if err := r.client.Get(ctx, types.NamespacedName{Name: crdCompatibilityRequirement.Spec.CRDRef}, currentCRD); err != nil {
 		if apierrors.IsNotFound(err) {
 			log.Info("CRD not found", "crdRef", crdCompatibilityRequirement.Spec.CRDRef)
 			return nil
