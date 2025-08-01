@@ -24,7 +24,7 @@ verify: fmt lint
 test: verify unit
 
 # Build binaries
-build: operator migration manifests-gen
+build: operator migration manifests-gen cluster-api-tests-ext 
 
 .PHONY: manifests-gen
 manifests-gen:
@@ -38,6 +38,10 @@ operator:
 migration:
 	# building migration
 	go build -o bin/machine-api-migration cmd/machine-api-migration/main.go
+
+cluster-api-tests-ext:
+	# building cluster-api-tests-ext
+	go build -o bin/cluster-api-tests-ext ./cmd/cluster-api-tests-ext
 
 unit:
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path --bin-dir $(PROJECT_DIR)/bin --index https://raw.githubusercontent.com/openshift/api/master/envtest-releases.yaml)" ./hack/test.sh "./pkg/... ./manifests-gen/..." 5m
