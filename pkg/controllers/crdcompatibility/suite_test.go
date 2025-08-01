@@ -17,20 +17,19 @@ limitations under the License.
 package crdcompatibility
 
 import (
-	"fmt"
-	"reflect"
+	"context"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/onsi/gomega/types"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
-	"k8s.io/klog/v2"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/cluster-capi-operator/pkg/test"
 )
@@ -47,12 +46,13 @@ func TestAPIs(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
-	logf.SetLogger(klog.Background())
+	logf.SetLogger(GinkgoLogr)
 
 	By("bootstrapping test environment")
 	var err error
 	testEnv = &envtest.Environment{}
 	cfg, cl, err = test.StartEnvTest(testEnv)
+
 	DeferCleanup(func() {
 		By("tearing down the test environment")
 		Expect(test.StopEnvTest(testEnv)).To(Succeed())
@@ -62,96 +62,53 @@ var _ = BeforeSuite(func() {
 	Expect(cfg).NotTo(BeNil())
 	Expect(cl).NotTo(BeNil())
 
-	komega.SetClient(cl)
+	mgrCancel, mgrDone := startManager(context.Background(), cfg, cl.Scheme())
+
+	DeferCleanup(func() {
+		By("Stopping the manager")
+		stopManager(mgrCancel, mgrDone)
+	})
 })
 
-type haveConditionMatcher struct {
-	conditionType    string
-	conditionStatus  metav1.ConditionStatus
-	conditionReason  string
-	conditionMessage string
+func startManager(ctx context.Context, cfg *rest.Config, scheme *runtime.Scheme) (context.CancelFunc, chan struct{}) {
+	mgrCtx, mgrCancel := context.WithCancel(ctx)
+	mgrDone := make(chan struct{})
+
+	By("Setting up a manager and controller")
+	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
+		Scheme: scheme,
+	})
+	Expect(err).ToNot(HaveOccurred(), "Manager should be created")
+
+	r := &CRDCompatibilityReconciler{mgr.GetClient()}
+	Expect(r.SetupWithManager(ctx, mgr)).To(Succeed(), "Reconciler should be setup with manager")
+
+	By("Starting the manager")
+	go func() {
+		defer GinkgoRecover()
+		defer close(mgrDone)
+
+		Expect((mgr).Start(mgrCtx)).To(Succeed())
+	}()
+
+	return mgrCancel, mgrDone
 }
 
-func HaveCondition(conditionType string, conditionStatus metav1.ConditionStatus, conditionReason string, conditionMessage string) types.GomegaMatcher {
-	return &haveConditionMatcher{
-		conditionType:    conditionType,
-		conditionStatus:  conditionStatus,
-		conditionReason:  conditionReason,
-		conditionMessage: conditionMessage,
-	}
+func stopManager(mgrCancel context.CancelFunc, mgrDone chan struct{}) {
+	By("Stopping the manager")
+	mgrCancel()
+	// Wait for the mgrDone to be closed, which will happen once the mgr has stopped.
+	<-mgrDone
+
+	Eventually(mgrDone).Should(BeClosed())
 }
 
-func (m haveConditionMatcher) Match(actual interface{}) (success bool, err error) {
-	condition, ok := actual.(metav1.Condition)
-	if !ok {
-		return false, fmt.Errorf("value is not a metav1.Condition")
-	}
-
-	if condition.Type != m.conditionType {
-		return false, fmt.Errorf("condition type is not %s", m.conditionType)
-	}
-
-	if condition.Status != m.conditionStatus {
-		return false, fmt.Errorf("condition status is not %s", m.conditionStatus)
-	}
-
-	if condition.Reason != m.conditionReason {
-		return false, fmt.Errorf("condition reason is not %s", m.conditionReason)
-	}
-
-	if condition.Message != m.conditionMessage {
-		return false, fmt.Errorf("condition message is not %s", m.conditionMessage)
-	}
-
-	return true, nil
+func toYAML(obj any) string {
+	yaml, err := yaml.Marshal(obj)
+	Expect(err).To(Succeed())
+	return string(yaml)
 }
 
-func (m haveConditionMatcher) FailureMessage(actual interface{}) (message string) {
-	return fmt.Sprintf("Expected condition to have type=%s, status=%s, reason=%s, message=%s",
-		m.conditionType, m.conditionStatus, m.conditionReason, m.conditionMessage)
-}
-
-func (m haveConditionMatcher) NegatedFailureMessage(actual interface{}) (message string) {
-	return fmt.Sprintf("Expected condition to not have type=%s, status=%s, reason=%s, message=%s",
-		m.conditionType, m.conditionStatus, m.conditionReason, m.conditionMessage)
-}
-
-// extractConditions uses reflection to safely extract the Conditions field from a client.Object.
-// It returns an error if the object doesn't have the expected structure.
-func extractConditions(obj client.Object) ([]metav1.Condition, error) {
-	if obj == nil {
-		return nil, fmt.Errorf("object is nil")
-	}
-
-	// Get the reflect.Value of the object
-	objValue := reflect.ValueOf(obj)
-	if objValue.Kind() == reflect.Ptr {
-		objValue = objValue.Elem()
-	}
-
-	// Check if the object has a Status field
-	statusField := objValue.FieldByName("Status")
-	if !statusField.IsValid() {
-		return nil, fmt.Errorf("object does not have a Status field")
-	}
-
-	// Check if Status is a struct
-	if statusField.Kind() != reflect.Struct {
-		return nil, fmt.Errorf("Status field is not a struct, got %v", statusField.Kind())
-	}
-
-	// Check if Status has a Conditions field
-	conditionsField := statusField.FieldByName("Conditions")
-	if !conditionsField.IsValid() {
-		return nil, fmt.Errorf("Status does not have a Conditions field")
-	}
-
-	// Check if Conditions is a slice
-	if conditionsField.Kind() != reflect.Slice {
-		return nil, fmt.Errorf("Conditions field is not a slice, got %v", conditionsField.Kind())
-	}
-
-	// Convert the reflect.Value to []metav1.Condition
-	conditions := conditionsField.Interface().([]metav1.Condition)
-	return conditions, nil
+func kWithCtx(ctx context.Context) komega.Komega {
+	return komega.New(cl).WithContext(ctx)
 }

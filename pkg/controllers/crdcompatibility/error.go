@@ -30,7 +30,7 @@ func noRequeueError(err error, reason string) error {
 // logNoRequeueError filters out noRequeueError errors from the error chain.
 func logNoRequeueError(err error, log logr.Logger) error {
 	noRequeue := &noRequeueErrorWrapper{}
-	if errors.As(err, noRequeue) {
+	if errors.As(err, &noRequeue) {
 		log.Error(err, "Not requeuing after error", "reason", noRequeue.reason)
 		return nil
 	}

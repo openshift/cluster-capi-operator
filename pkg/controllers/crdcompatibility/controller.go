@@ -18,9 +18,9 @@ package crdcompatibility
 
 import (
 	"context"
+	"fmt"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -42,14 +42,17 @@ const (
 
 // CRDCompatibilityReconciler reconciles CRDCompatibilityRequirement resources
 type CRDCompatibilityReconciler struct {
-	client.Client
-	Scheme *runtime.Scheme
+	client client.Client
 }
+
+const (
+	fieldIndexCRDRef = "spec.crdRef"
+)
 
 // SetupWithManager sets up the controller with the Manager
 func (r *CRDCompatibilityReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager) error {
 	// Create field index for spec.crdRef
-	if err := mgr.GetFieldIndexer().IndexField(ctx, &operatorv1alpha1.CRDCompatibilityRequirement{}, "spec.crdRef", func(obj client.Object) []string {
+	if err := mgr.GetFieldIndexer().IndexField(ctx, &operatorv1alpha1.CRDCompatibilityRequirement{}, fieldIndexCRDRef, func(obj client.Object) []string {
 		requirement := obj.(*operatorv1alpha1.CRDCompatibilityRequirement)
 		return []string{requirement.Spec.CRDRef}
 	}); err != nil {
@@ -74,8 +77,8 @@ func (r *CRDCompatibilityReconciler) findCRDCompatibilityRequirementsForCRD(ctx 
 
 	// Use field index to find CRDCompatibilityRequirements that reference this CRD
 	var requirements operatorv1alpha1.CRDCompatibilityRequirementList
-	if err := r.List(ctx, &requirements, client.MatchingFields{"spec.crdRef": crd.Name}); err != nil {
-		log.FromContext(ctx).Error(err, "failed to list CRDCompatibilityRequirements for CRD", "crdName", crd.Name)
+	if err := r.client.List(ctx, &requirements, client.MatchingFields{fieldIndexCRDRef: crd.Name}); err != nil {
+		log.FromContext(ctx).Error(err, "failed to list CRDCompatibilityRequirements for CRD", "crdName", crd.Name, "clientType", fmt.Sprintf("%T", r.client))
 		return nil
 	}
 
