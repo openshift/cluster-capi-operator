@@ -1,0 +1,4 @@
+{
+    "editor.stickyScroll.defaultModel": "foldingProviderModel",
+    "go.testEnvFile": "${workspaceFolder}/.localtestenv"
+}
