@@ -39,9 +39,16 @@ migration:
 	# building migration
 	go build -o bin/machine-api-migration cmd/machine-api-migration/main.go
 
+.PHONY: localtestenv
+localtestenv: .localtestenv
+
+KUBEBUILDER_ASSETS ?= $(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path --bin-dir $(PROJECT_DIR)/bin --index https://raw.githubusercontent.com/openshift/api/master/envtest-releases.yaml)
+.localtestenv: Makefile
+	echo "KUBEBUILDER_ASSETS=$(KUBEBUILDER_ASSETS)" > $@
+
 TEST_DIRS ?= ./pkg/... ./manifests-gen/...
-unit:
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path --bin-dir $(PROJECT_DIR)/bin --index https://raw.githubusercontent.com/openshift/api/master/envtest-releases.yaml)" ./hack/test.sh "$(TEST_DIRS)" 10m
+unit: .localtestenv
+	./hack/test.sh "$(TEST_DIRS)" 10m
 
 .PHONY: e2e
 e2e:
