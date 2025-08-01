@@ -39,8 +39,9 @@ migration:
 	# building migration
 	go build -o bin/machine-api-migration cmd/machine-api-migration/main.go
 
+TEST_DIRS ?= ./pkg/... ./manifests-gen/...
 unit:
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path --bin-dir $(PROJECT_DIR)/bin --index https://raw.githubusercontent.com/openshift/api/master/envtest-releases.yaml)" ./hack/test.sh "./pkg/... ./manifests-gen/..." 10m
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path --bin-dir $(PROJECT_DIR)/bin --index https://raw.githubusercontent.com/openshift/api/master/envtest-releases.yaml)" ./hack/test.sh "$(TEST_DIRS)" 10m
 
 .PHONY: e2e
 e2e:
