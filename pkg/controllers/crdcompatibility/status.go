@@ -2,7 +2,6 @@ package crdcompatibility
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
@@ -56,12 +55,11 @@ func (r *reconcileState) writeStatus(ctx context.Context, obj *operatorv1alpha1.
 func (r *reconcileState) getProgressingCondition(reconcileErr error) *metav1applyconfig.ConditionApplyConfiguration {
 	progressingCondition := metav1applyconfig.Condition().WithType("Progressing")
 	if reconcileErr != nil {
-		noRequeueError := &noRequeueErrorWrapper{}
-		if errors.As(reconcileErr, &noRequeueError) {
+		if noRequeueError := util.AsNoRequeueError(reconcileErr); noRequeueError != nil {
 			progressingCondition.
 				WithStatus(metav1.ConditionFalse).
-				WithReason(progressingReasonConfigurationError).
-				WithMessage(reconcileErr.Error())
+				WithReason(noRequeueError.Reason).
+				WithMessage(noRequeueError.Error())
 		} else {
 			progressingCondition.
 				WithStatus(metav1.ConditionTrue).
@@ -78,7 +76,7 @@ func (r *reconcileState) getProgressingCondition(reconcileErr error) *metav1appl
 	return progressingCondition
 }
 
-// Ready indicates whether the CRDCompatibililtyRequirement has been completely admitted, i.e. all required admission policies have been
+// Ready indicates whether the CRDCompatibililtyRequirement has been completely admitted, i.e. all required admission policies have been created.
 // Not yet implemented
 func (r *reconcileState) getReadyCondition() *metav1applyconfig.ConditionApplyConfiguration {
 	return metav1applyconfig.Condition().WithType("Ready").
