@@ -40,6 +40,12 @@ const (
 //+kubebuilder:rbac:groups=operator.openshift.io,resources=crdcompatibilityrequirements/finalizers,verbs=update
 //+kubebuilder:rbac:groups=apiextensions.k8s.io,resources=customresourcedefinitions,verbs=get;list;watch
 
+func NewCRDCompatibilityReconciler(client client.Client) *CRDCompatibilityReconciler {
+	return &CRDCompatibilityReconciler{
+		client: client,
+	}
+}
+
 // CRDCompatibilityReconciler reconciles CRDCompatibilityRequirement resources
 type CRDCompatibilityReconciler struct {
 	client client.Client

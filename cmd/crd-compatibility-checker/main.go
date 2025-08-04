@@ -117,10 +117,7 @@ func main() {
 	ctx := ctrl.SetupSignalHandler()
 
 	// Setup the CRD compatibility controller
-	if err := (&crdcompatibility.CRDCompatibilityReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(ctx, mgr); err != nil {
+	if err := crdcompatibility.NewCRDCompatibilityReconciler(mgr.GetClient()).SetupWithManager(ctx, mgr); err != nil {
 		klog.Error(err, "unable to create controller", "controller", "CRDCompatibility")
 		os.Exit(1)
 	}

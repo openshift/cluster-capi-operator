@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-logr/logr"
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
+	"github.com/openshift/cluster-capi-operator/pkg/util"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
@@ -49,7 +50,7 @@ func (r *CRDCompatibilityReconciler) Reconcile(ctx context.Context, req ctrl.Req
 	}
 
 	if reconcileErr != nil {
-		return ctrl.Result{}, logNoRequeueError(reconcileErr, logger)
+		return ctrl.Result{}, util.LogNoRequeueError(reconcileErr, logger)
 	}
 
 	return result, nil
@@ -63,11 +64,11 @@ func (r *reconcileState) reconcile(ctx context.Context, crdCompatibilityRequirem
 	return r.reconcileCreateOrUpdate(ctx, crdCompatibilityRequirement)
 }
 
-func (r *reconcileState) fetchCompatibilityCRD(ctx context.Context, crdCompatibilityRequirement *operatorv1alpha1.CRDCompatibilityRequirement) error {
+func (r *reconcileState) parseCompatibilityCRD(crdCompatibilityRequirement *operatorv1alpha1.CRDCompatibilityRequirement) error {
 	// Parse the CRD in compatibilityCRD into a CRD object
 	compatibilityCRD := &apiextensionsv1.CustomResourceDefinition{}
 	if err := yaml.Unmarshal([]byte(crdCompatibilityRequirement.Spec.CompatibilityCRD), compatibilityCRD); err != nil {
-		return noRequeueError(fmt.Errorf("failed to parse compatibilityCRD for %s: %w", crdCompatibilityRequirement.Spec.CRDRef, err), noRequeueErrorReasonInvalidCompatibilityCRD)
+		return util.NoRequeueError(fmt.Errorf("failed to parse compatibilityCRD for %s: %w", crdCompatibilityRequirement.Spec.CRDRef, err), noRequeueErrorReasonInvalidCompatibilityCRD)
 	}
 	r.compatibilityCRD = compatibilityCRD
 
@@ -95,7 +96,7 @@ func (r *reconcileState) reconcileCreateOrUpdate(ctx context.Context, crdCompati
 	logger.Info("Reconciling CRDCompatibilityRequirement")
 
 	err := errors.Join(
-		r.fetchCompatibilityCRD(ctx, crdCompatibilityRequirement),
+		r.parseCompatibilityCRD(crdCompatibilityRequirement),
 		r.fetchCurrentCRD(ctx, logger, crdCompatibilityRequirement),
 	)
 
