@@ -22,7 +22,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	fuzz "github.com/google/gofuzz"
+	randfill "sigs.k8s.io/randfill"
 
 	configv1 "github.com/openshift/api/config/v1"
 	mapiv1 "github.com/openshift/api/machine/v1"
@@ -105,73 +105,73 @@ var _ = Describe("PowerVS Fuzz (mapi2capi)", func() {
 	})
 })
 
-func powerVSProviderIDFuzzer(c fuzz.Continue) string {
+func powerVSProviderIDFuzzer(c randfill.Continue) string {
 	// Power VS provider id format: ibmpowervs://<region>/<zone>/<service_instance_id>/<instance_id>
-	return fmt.Sprintf("ibmpowervs://tok/tok04/%s/%s", strings.ReplaceAll(c.RandString(), "/", ""), strings.ReplaceAll(c.RandString(), "/", ""))
+	return fmt.Sprintf("ibmpowervs://tok/tok04/%s/%s", strings.ReplaceAll(c.String(0), "/", ""), strings.ReplaceAll(c.String(0), "/", ""))
 }
 
 //nolint:funlen
 func powerVSProviderSpecFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interface{} {
 	return []interface{}{
-		func(serviceInstance *mapiv1.PowerVSResource, c fuzz.Continue) {
+		func(serviceInstance *mapiv1.PowerVSResource, c randfill.Continue) {
 			switch c.Int31n(3) {
 			case 0:
 				*serviceInstance = mapiv1.PowerVSResource{
 					Type: mapiv1.PowerVSResourceTypeID,
-					ID:   ptr.To(c.RandString()),
+					ID:   ptr.To(c.String(0)),
 				}
 			case 1:
 				*serviceInstance = mapiv1.PowerVSResource{
 					Type: mapiv1.PowerVSResourceTypeID,
-					ID:   ptr.To(c.RandString()),
+					ID:   ptr.To(c.String(0)),
 				}
 			case 2:
 				*serviceInstance = mapiv1.PowerVSResource{
 					Type: mapiv1.PowerVSResourceTypeID,
-					ID:   ptr.To(c.RandString()),
+					ID:   ptr.To(c.String(0)),
 				}
 			}
 		},
-		func(image *mapiv1.PowerVSResource, c fuzz.Continue) {
+		func(image *mapiv1.PowerVSResource, c randfill.Continue) {
 			switch c.Int31n(3) {
 			case 0:
 				*image = mapiv1.PowerVSResource{
 					Type: mapiv1.PowerVSResourceTypeID,
-					ID:   ptr.To(c.RandString()),
+					ID:   ptr.To(c.String(0)),
 				}
 			case 1:
 				*image = mapiv1.PowerVSResource{
 					Type: mapiv1.PowerVSResourceTypeName,
-					Name: ptr.To(c.RandString()),
+					Name: ptr.To(c.String(0)),
 				}
 			case 2:
 				*image = mapiv1.PowerVSResource{
 					Type: mapiv1.PowerVSResourceTypeRegEx,
-					Name: ptr.To(c.RandString()),
+					Name: ptr.To(c.String(0)),
 				}
 			}
 		},
-		func(network *mapiv1.PowerVSResource, c fuzz.Continue) {
+		func(network *mapiv1.PowerVSResource, c randfill.Continue) {
 			switch c.Int31n(3) {
 			case 0:
 				*network = mapiv1.PowerVSResource{
 					Type: mapiv1.PowerVSResourceTypeID,
-					ID:   ptr.To(c.RandString()),
+					ID:   ptr.To(c.String(0)),
 				}
 			case 1:
 				*network = mapiv1.PowerVSResource{
 					Type: mapiv1.PowerVSResourceTypeName,
-					Name: ptr.To(c.RandString()),
+					Name: ptr.To(c.String(0)),
 				}
 			case 2:
 				*network = mapiv1.PowerVSResource{
 					Type:  mapiv1.PowerVSResourceTypeRegEx,
-					RegEx: ptr.To(c.RandString()),
+					RegEx: ptr.To(c.String(0)),
 				}
 			}
 		},
-		func(pc *mapiv1.PowerVSMachineProviderConfig, c fuzz.Continue) {
-			c.FuzzNoCustom(pc)
+		func(pc *mapiv1.PowerVSMachineProviderConfig, c randfill.Continue) {
+			c.FillNoCustom(pc)
 
 			// The type meta is always set to these values by the conversion.
 			pc.APIVersion = mapiv1.SchemeGroupVersion.String()

@@ -22,7 +22,6 @@ import (
 	"regexp"
 	"time"
 
-	fuzz "github.com/google/gofuzz"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -33,6 +32,7 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/mapi2capi"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/randfill"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/apitesting/fuzzer"
@@ -65,7 +65,7 @@ type MAPI2CAPIMachineConverterConstructor func(*mapiv1.Machine, *configv1.Infras
 type MAPI2CAPIMachineSetConverterConstructor func(*mapiv1.MachineSet, *configv1.Infrastructure) mapi2capi.MachineSet
 
 // StringFuzzer is a function that returns a random string.
-type StringFuzzer func(fuzz.Continue) string
+type StringFuzzer func(randfill.Continue) string
 
 // capiToMapiMachineFuzzInput is a struct that holds the input for the CAPI to MAPI fuzz test.
 type capiToMapiMachineFuzzInput struct {
@@ -81,16 +81,14 @@ type capiToMapiMachineFuzzInput struct {
 // It leverages fuzz testing to generate random CAPI objects and then converts them to MAPI objects and back to CAPI objects.
 // The test then compares the original CAPI object with the final CAPI object to ensure that the conversion is lossless.
 // Any lossy conversions must be accounted for within the fuzz functions passed in.
-//
-//nolint:funlen
 func CAPI2MAPIMachineRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv1.Infrastructure, infraCluster, infraMachine client.Object, mapiConverter MAPI2CAPIMachineConverterConstructor, capiConverter CAPI2MAPIMachineConverterConstructor, fuzzerFuncs ...fuzzer.FuzzerFuncs) {
 	machineFuzzInputs := []TableEntry{}
 	fz := getFuzzer(scheme, fuzzerFuncs...)
 
 	for i := 0; i < 1000; i++ {
 		m := &clusterv1.Machine{}
-		fz.Fuzz(m)
-		fz.Fuzz(infraMachine)
+		fz.Fill(m)
+		fz.Fill(infraMachine)
 
 		// The infraMachine should always have the same name, namespace labels and annotations as its parent machine.
 		// https://github.com/kubernetes-sigs/cluster-api/blob/f88d7ae5155700c2cc367b31ddcc151c9ad579e4/internal/controllers/machineset/machineset_controller.go#L575-L579
@@ -162,16 +160,14 @@ type capiToMapiMachineSetFuzzInput struct {
 // It leverages fuzz testing to generate random CAPI objects and then converts them to MAPI objects and back to CAPI objects.
 // The test then compares the original CAPI object with the final CAPI object to ensure that the conversion is lossless.
 // Any lossy conversions must be accounted for within the fuzz functions passed in.
-//
-//nolint:funlen
 func CAPI2MAPIMachineSetRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv1.Infrastructure, infraCluster, infraMachineTemplate client.Object, mapiConverter MAPI2CAPIMachineSetConverterConstructor, capiConverter CAPI2MAPIMachineSetConverterConstructor, fuzzerFuncs ...fuzzer.FuzzerFuncs) {
 	machineFuzzInputs := []TableEntry{}
 	fz := getFuzzer(scheme, fuzzerFuncs...)
 
 	for i := 0; i < 1000; i++ {
 		m := &clusterv1.MachineSet{}
-		fz.Fuzz(m)
-		fz.Fuzz(infraMachineTemplate)
+		fz.Fill(m)
+		fz.Fill(infraMachineTemplate)
 
 		in := capiToMapiMachineSetFuzzInput{
 			machineSet:               m,
@@ -250,7 +246,7 @@ func MAPI2CAPIMachineRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv1.I
 
 	for i := 0; i < 1000; i++ {
 		m := &mapiv1.Machine{}
-		fz.Fuzz(m)
+		fz.Fill(m)
 
 		in := mapiToCapiMachineFuzzInput{
 			machine:                  m,
@@ -308,7 +304,7 @@ func MAPI2CAPIMachineSetRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv
 
 	for i := 0; i < 1000; i++ {
 		m := &mapiv1.MachineSet{}
-		fz.Fuzz(m)
+		fz.Fill(m)
 
 		in := mapiToCapiMachineSetFuzzInput{
 			machineSet:               m,
@@ -348,7 +344,7 @@ func MAPI2CAPIMachineSetRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv
 }
 
 // getFuzzer returns a new fuzzer to be used for testing.
-func getFuzzer(scheme *runtime.Scheme, funcs ...fuzzer.FuzzerFuncs) *fuzz.Fuzzer {
+func getFuzzer(scheme *runtime.Scheme, funcs ...fuzzer.FuzzerFuncs) *randfill.Filler {
 	funcs = append([]fuzzer.FuzzerFuncs{
 		metafuzzer.Funcs,
 	}, funcs...)
@@ -384,8 +380,8 @@ func ignoreMachineSetProviderSpec(in mapiv1.MachineSetSpec) mapiv1.MachineSetSpe
 func ObjectMetaFuzzerFuncs(namespace string) fuzzer.FuzzerFuncs {
 	return func(codecs runtimeserializer.CodecFactory) []interface{} {
 		return []interface{}{
-			func(o *metav1.ObjectMeta, c fuzz.Continue) {
-				c.FuzzNoCustom(o)
+			func(o *metav1.ObjectMeta, c randfill.Continue) {
+				c.FillNoCustom(o)
 
 				// Force the namespace else the conversion will fail as it always sets the namespaces deliberately.
 				o.Namespace = namespace
@@ -421,8 +417,8 @@ func ObjectMetaFuzzerFuncs(namespace string) fuzzer.FuzzerFuncs {
 func CAPIMachineFuzzerFuncs(providerIDFuzz StringFuzzer, infraKind, infraAPIVersion, clusterName string) fuzzer.FuzzerFuncs {
 	return func(codecs runtimeserializer.CodecFactory) []interface{} {
 		return []interface{}{
-			func(b *clusterv1.Bootstrap, c fuzz.Continue) {
-				c.FuzzNoCustom(b)
+			func(b *clusterv1.Bootstrap, c randfill.Continue) {
+				c.FillNoCustom(b)
 
 				// Clear fields that are not supported in the bootstrap spec.
 				b.ConfigRef = nil
@@ -432,8 +428,8 @@ func CAPIMachineFuzzerFuncs(providerIDFuzz StringFuzzer, infraKind, infraAPIVers
 					b.DataSecretName = nil
 				}
 			},
-			func(m *clusterv1.MachineSpec, c fuzz.Continue) {
-				c.FuzzNoCustom(m)
+			func(m *clusterv1.MachineSpec, c randfill.Continue) {
+				c.FillNoCustom(m)
 
 				m.ClusterName = clusterName
 				m.ProviderID = ptr.To(providerIDFuzz(c))
@@ -456,8 +452,8 @@ func CAPIMachineFuzzerFuncs(providerIDFuzz StringFuzzer, infraKind, infraAPIVers
 					m.FailureDomain = nil
 				}
 			},
-			func(m *clusterv1.Machine, c fuzz.Continue) {
-				c.FuzzNoCustom(m)
+			func(m *clusterv1.Machine, c randfill.Continue) {
+				c.FillNoCustom(m)
 
 				if m.Labels == nil {
 					m.Labels = make(map[string]string)
@@ -484,8 +480,8 @@ func CAPIMachineFuzzerFuncs(providerIDFuzz StringFuzzer, infraKind, infraAPIVers
 func CAPIMachineSetFuzzerFuncs(infraTemplateKind, infraAPIVersion, clusterName string) fuzzer.FuzzerFuncs {
 	return func(codecs runtimeserializer.CodecFactory) []interface{} {
 		return []interface{}{
-			func(t *clusterv1.MachineTemplateSpec, c fuzz.Continue) {
-				c.FuzzNoCustom(t)
+			func(t *clusterv1.MachineTemplateSpec, c randfill.Continue) {
+				c.FillNoCustom(t)
 
 				if len(t.Annotations) == 0 {
 					t.Annotations = nil
@@ -496,8 +492,8 @@ func CAPIMachineSetFuzzerFuncs(infraTemplateKind, infraAPIVersion, clusterName s
 				}
 				t.Labels[clusterv1.ClusterNameLabel] = clusterName
 			},
-			func(m *clusterv1.MachineSetSpec, c fuzz.Continue) {
-				c.FuzzNoCustom(m)
+			func(m *clusterv1.MachineSetSpec, c randfill.Continue) {
+				c.FillNoCustom(m)
 
 				m.ClusterName = clusterName
 
@@ -505,10 +501,15 @@ func CAPIMachineSetFuzzerFuncs(infraTemplateKind, infraAPIVersion, clusterName s
 					m.Selector.MatchLabels = map[string]string{}
 				}
 
+				// Clear MachineNamingStrategy as it is not supported in MAPI conversion.
+				// This field does not have an equivalent in MAPI MachineSet and would be lost
+				// during CAPI->MAPI->CAPI roundtrip conversion.
+				m.MachineNamingStrategy = nil
+
 				fuzzCAPIMachineSetSpecDeletePolicy(&m.DeletePolicy, c)
 			},
-			func(m *clusterv1.MachineSet, c fuzz.Continue) {
-				c.FuzzNoCustom(m)
+			func(m *clusterv1.MachineSet, c randfill.Continue) {
+				c.FillNoCustom(m)
 
 				if m.Labels == nil {
 					m.Labels = make(map[string]string)
@@ -539,8 +540,8 @@ func MAPIMachineFuzzerFuncs(providerSpec runtime.Object, providerIDFuzz StringFu
 	return func(codecs runtimeserializer.CodecFactory) []interface{} {
 		return []interface{}{
 			// MAPI to CAPI conversion functions.
-			func(m *mapiv1.Machine, c fuzz.Continue) {
-				c.FuzzNoCustom(m)
+			func(m *mapiv1.Machine, c randfill.Continue) {
+				c.FillNoCustom(m)
 				// The conversion library while converting
 				// machine labels and annotations from MAPI->CAPI merges the
 				// MAPI machine.spec.metadata.labels/annotations and MAPI machine.metadata.labels/annotations
@@ -553,9 +554,9 @@ func MAPIMachineFuzzerFuncs(providerSpec runtime.Object, providerIDFuzz StringFu
 				m.Spec.ObjectMeta.Annotations = util.DeepCopyMapStringString(m.Annotations)
 				m.Spec.ObjectMeta.Labels = util.DeepCopyMapStringString(m.Labels)
 			},
-			func(m *mapiv1.MachineSpec, c fuzz.Continue) {
-				c.FuzzNoCustom(m)
-				c.Fuzz(providerSpec)
+			func(m *mapiv1.MachineSpec, c randfill.Continue) {
+				c.FillNoCustom(m)
+				c.Fill(providerSpec)
 
 				bytes, err := json.Marshal(providerSpec)
 				if err != nil {
@@ -581,8 +582,8 @@ func MAPIMachineFuzzerFuncs(providerSpec runtime.Object, providerIDFuzz StringFu
 				// Set the providerID to a valid providerID that will at least pass through the conversion.
 				m.ProviderID = ptr.To(providerIDFuzz(c))
 			},
-			func(hooks *mapiv1.LifecycleHooks, c fuzz.Continue) {
-				c.FuzzNoCustom(hooks)
+			func(hooks *mapiv1.LifecycleHooks, c randfill.Continue) {
+				c.FillNoCustom(hooks)
 
 				// Clear the slices if they are empty.
 				// This aids in comparison with the conversion which doesn't initialise the slices.
@@ -604,8 +605,8 @@ func MAPIMachineSetFuzzerFuncs() fuzzer.FuzzerFuncs {
 	return func(codecs runtimeserializer.CodecFactory) []interface{} {
 		return []interface{}{
 			// MAPI to CAPI conversion functions.
-			func(m *mapiv1.MachineSetSpec, c fuzz.Continue) {
-				c.FuzzNoCustom(m)
+			func(m *mapiv1.MachineSetSpec, c randfill.Continue) {
+				c.FillNoCustom(m)
 
 				// Clear fields that are not supported in the machine template objectmeta.
 				m.Template.ObjectMeta.Name = ""
@@ -636,7 +637,7 @@ func MAPIMachineSetFuzzerFuncs() fuzzer.FuzzerFuncs {
 	}
 }
 
-func fuzzMAPIMachineSetSpecDeletePolicy(deletePolicy *string, c fuzz.Continue) {
+func fuzzMAPIMachineSetSpecDeletePolicy(deletePolicy *string, c randfill.Continue) {
 	switch c.Int31n(3) {
 	case 0:
 		*deletePolicy = string(mapiv1.RandomMachineSetDeletePolicy)
@@ -653,7 +654,7 @@ func fuzzMAPIMachineSetSpecDeletePolicy(deletePolicy *string, c fuzz.Continue) {
 	} //nolint:wsl
 }
 
-func fuzzCAPIMachineSetSpecDeletePolicy(deletePolicy *string, c fuzz.Continue) {
+func fuzzCAPIMachineSetSpecDeletePolicy(deletePolicy *string, c randfill.Continue) {
 	switch c.Int31n(3) {
 	case 0:
 		*deletePolicy = string(clusterv1.RandomMachineSetDeletePolicy)

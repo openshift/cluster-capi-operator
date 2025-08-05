@@ -21,7 +21,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	fuzz "github.com/google/gofuzz"
+	randfill "sigs.k8s.io/randfill"
 
 	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/capi2mapi"
@@ -104,14 +104,14 @@ var _ = Describe("AWS Fuzz (capi2mapi)", func() {
 	})
 })
 
-func awsProviderIDFuzzer(c fuzz.Continue) string {
-	return "aws:///us-west-2a/i-" + strings.ReplaceAll(c.RandString(), "/", "")
+func awsProviderIDFuzzer(c randfill.Continue) string {
+	return "aws:///us-west-2a/i-" + strings.ReplaceAll(c.String(0), "/", "")
 }
 
 //nolint:funlen
 func awsMachineFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interface{} {
 	return []interface{}{
-		func(nit *awsv1.NetworkInterfaceType, c fuzz.Continue) {
+		func(nit *awsv1.NetworkInterfaceType, c randfill.Continue) {
 			switch c.Int31n(3) {
 			case 0:
 				*nit = awsv1.NetworkInterfaceTypeEFAWithENAInterface
@@ -121,15 +121,15 @@ func awsMachineFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interface{} 
 				*nit = ""
 			}
 		},
-		func(imdo *awsv1.InstanceMetadataOptions, c fuzz.Continue) {
-			c.FuzzNoCustom(imdo)
+		func(imdo *awsv1.InstanceMetadataOptions, c randfill.Continue) {
+			c.FillNoCustom(imdo)
 
 			// TODO(OCPCLOUD-2710): Fields not yet supported by MAPI.
 			imdo.HTTPEndpoint = awsv1.InstanceMetadataEndpointStateEnabled
 			imdo.HTTPPutResponseHopLimit = 0
 			imdo.InstanceMetadataTags = awsv1.InstanceMetadataEndpointStateDisabled
 		},
-		func(tokenState *awsv1.HTTPTokensState, c fuzz.Continue) {
+		func(tokenState *awsv1.HTTPTokensState, c randfill.Continue) {
 			switch c.Int31n(2) {
 			case 0:
 				*tokenState = awsv1.HTTPTokensStateOptional
@@ -137,25 +137,25 @@ func awsMachineFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interface{} 
 				*tokenState = awsv1.HTTPTokensStateRequired
 			}
 		},
-		func(ami *awsv1.AMIReference, c fuzz.Continue) {
-			c.FuzzNoCustom(ami)
+		func(ami *awsv1.AMIReference, c randfill.Continue) {
+			c.FillNoCustom(ami)
 
 			// Ensure that the AMI ID is set.
 			for ami.ID == nil || *ami.ID == "" {
-				c.Fuzz(&ami.ID)
+				c.Fill(&ami.ID)
 			}
 			// Not required for our use case. Can be ignored.
 			ami.EKSOptimizedLookupType = nil
 		},
-		func(ignition *awsv1.Ignition, c fuzz.Continue) {
+		func(ignition *awsv1.Ignition, c randfill.Continue) {
 			// We force these fields, so they must be fuzzed in this way.
 			*ignition = awsv1.Ignition{
 				Version:     "3.4",
 				StorageType: awsv1.IgnitionStorageTypeOptionUnencryptedUserData,
 			}
 		},
-		func(spec *awsv1.AWSMachineSpec, c fuzz.Continue) {
-			c.FuzzNoCustom(spec)
+		func(spec *awsv1.AWSMachineSpec, c randfill.Continue) {
+			c.FillNoCustom(spec)
 
 			fuzzAWSMachineSpecTenancy(&spec.Tenancy, c)
 			fuzzAWSMachineSpecMarketType(&spec.MarketType, c)
@@ -171,8 +171,8 @@ func awsMachineFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interface{} 
 			// We don't support this field since the externally managed annotation is added, so it's best to keep this nil.
 			spec.SecurityGroupOverrides = nil
 		},
-		func(m *awsv1.AWSMachine, c fuzz.Continue) {
-			c.FuzzNoCustom(m)
+		func(m *awsv1.AWSMachine, c randfill.Continue) {
+			c.FillNoCustom(m)
 
 			// Ensure the type meta is set correctly.
 			m.TypeMeta.APIVersion = awsv1.GroupVersion.String()
@@ -181,7 +181,7 @@ func awsMachineFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interface{} 
 	}
 }
 
-func fuzzAWSMachineSpecTenancy(tenancy *string, c fuzz.Continue) {
+func fuzzAWSMachineSpecTenancy(tenancy *string, c randfill.Continue) {
 	switch c.Int31n(4) {
 	case 0:
 		*tenancy = "default"
@@ -194,7 +194,7 @@ func fuzzAWSMachineSpecTenancy(tenancy *string, c fuzz.Continue) {
 	}
 }
 
-func fuzzAWSMachineSpecMarketType(marketType *awsv1.MarketType, c fuzz.Continue) {
+func fuzzAWSMachineSpecMarketType(marketType *awsv1.MarketType, c randfill.Continue) {
 	switch c.Int31n(4) {
 	case 0:
 		*marketType = awsv1.MarketTypeOnDemand
@@ -209,8 +209,8 @@ func fuzzAWSMachineSpecMarketType(marketType *awsv1.MarketType, c fuzz.Continue)
 
 func awsMachineTemplateFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interface{} {
 	return []interface{}{
-		func(m *awsv1.AWSMachineTemplate, c fuzz.Continue) {
-			c.FuzzNoCustom(m)
+		func(m *awsv1.AWSMachineTemplate, c randfill.Continue) {
+			c.FillNoCustom(m)
 
 			// Ensure the type meta is set correctly.
 			m.TypeMeta.APIVersion = awsv1.GroupVersion.String()
