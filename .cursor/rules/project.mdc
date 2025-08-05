@@ -1,0 +1,62 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+## Overview
+
+The Cluster CAPI Operator manages the installation and lifecycle of Cluster API components on OpenShift clusters. It serves as a bridge between OpenShift's Machine API (MAPI) and the upstream Cluster API (CAPI), providing forward compatibility and migration capabilities.
+
+## Architecture
+
+The operator consists of two main binaries:
+
+1. **cluster-capi-operator** - Main operator that manages CAPI component installation and lifecycle
+2. **machine-api-migration** - Handles migration between MAPI and CAPI resources
+
+The repository also includes:
+
+3. **manifests-gen** (`manifests-gen/`) - Standalone tool that transforms upstream Cluster API provider manifests into OpenShift-compatible format, applying OpenShift-specific annotations, replacing cert-manager with service-ca, and generating provider ConfigMaps with compressed components
+
+### Core Controllers
+
+- **ClusterOperator Controller** (`pkg/controllers/clusteroperator/`) - Manages the operator's status in the cluster
+- **CAPI Installer Controller** (`pkg/controllers/capiinstaller/`) - Handles installation of CAPI components
+- **Core Cluster Controller** (`pkg/controllers/corecluster/`) - Manages CAPI Cluster resources representing the OpenShift cluster
+- **Infra Cluster Controller** (`pkg/controllers/infracluster/`) - Manages infrastructure-specific cluster resources (AWS, Azure, GCP, etc.)
+- **Secret Sync Controller** (`pkg/controllers/secretsync/`) - Synchronizes secrets between MAPI and CAPI namespaces
+- **Kubeconfig Controller** (`pkg/controllers/kubeconfig/`) - Manages kubeconfig secrets for cluster access
+
+### Migration Controllers
+
+- **Machine Migration Controller** (`pkg/controllers/machinemigration/`) - Handles handover of AuthoritativeAPI and object pausing for machine migration
+- **MachineSet Migration Controller** (`pkg/controllers/machinesetmigration/`) - Handles handover of AuthoritativeAPI and object pausing for machineset migration
+- **Machine Sync Controller** (`pkg/controllers/machinesync/`) - Synchronizes individual machine related resources between APIs
+- **MachineSet Sync Controller** (`pkg/controllers/machinesetsync/`) - Synchronizes machineset related objects resources between APIs
+
+### Conversion Framework
+
+- **MAPI to CAPI Conversion** (`pkg/conversion/mapi2capi/`) - Library implementing Conversion of MAPI resources to CAPI
+- **CAPI to MAPI Conversion** (`pkg/conversion/capi2mapi/`) - Library implementing conversion of CAPI resources to MAPI
+
+## File Structure
+
+- `manifests/` - Contains OpenShift manifests for operator deployment
+- `manifests-gen/` - Tool for generating customized provider manifests
+- `hack/` - Development and testing scripts
+- `docs/controllers/` - Detailed controller documentation
+- `e2e/` - End-to-end tests for each supported platform
+
+## Key Concepts
+
+### Namespaces
+- `openshift-cluster-api` - Main namespace for CAPI resources
+- `openshift-machine-api` - Namespace for existing MAPI resources
+
+## Testing Notes
+
+The operator includes comprehensive testing:
+- Unit tests for all controllers and conversion logic
+- E2E tests for each supported platform
+- Fuzz testing for conversion functions
+- Integration tests using envtest framework
