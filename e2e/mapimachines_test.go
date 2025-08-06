@@ -81,8 +81,8 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 			It("should create MAPI Machine .status.authoritativeAPI to equal MAPI successfully", func() {
 				newMachine = verifyMapiAutoritative(cl)
 			})
-			It("should verify that MAPI Machine Synchronized condition is True and statusAPI updated to reflect AuthoritativeAPI: MachineAPI", func() {
-				verifyMapiMachineSynchrozised(newMachine)
+			It("should verify that MAPI Machine Synchronized condition is True ,Paused condition is False and statusAPI updated to reflect AuthoritativeAPI: MachineAPI", func() {
+				verifyMapiMachineSynchrozisedPaused(newMachine)
 			})
 			It("should verify that the mirror CAPI Infra Machine has Paused condition True and MAPI Machine has a CAPI Infra Machine mirror", func() {
 				verifyCapiMachinePaused(cl, newMachine.Name)
@@ -142,7 +142,7 @@ func verifyMapiAutoritative(cl client.Client) *machinev1.Machine {
 }
 
 // verifyMapiMachineSynchrozised verifies that MAPI Machine Synchronized condition is True and statusAPI updated to reflect AuthoritativeAPI: MachineAPI
-func verifyMapiMachineSynchrozised(machine *machinev1.Machine) {
+func verifyMapiMachineSynchrozisedPaused(machine *machinev1.Machine) {
 	Expect(machine.Status.Conditions).To(ContainElement(
 		SatisfyAll(
 			HaveField("Type", ConditionSynchronized),
