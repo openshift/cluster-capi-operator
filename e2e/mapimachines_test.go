@@ -45,7 +45,7 @@ const (
 	CapiConditionPaused = "Paused"
 )
 
-var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Machines Migration Tests", Ordered, func() {
+var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Machine Migration Tests", Ordered, func() {
 	BeforeAll(func() {
 		if platform != configv1.AWSPlatformType {
 			Skip(fmt.Sprintf("Skipping tests on %s, this is only supported on AWS for now", platform))
@@ -78,13 +78,13 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 					}, DefaultTimeout, DefaultInterval).Should(BeTrue(), "Eventually the machine should not be found")
 				}
 			})
-			It("should create MAPI Machine .status.authoritativeAPI to equal MAPI successfully", func() {
+			It("should create MAPI Machine and find its status.authoritativeAPI: MachineAPI", func() {
 				newMachine = verifyMapiAutoritative(cl)
 			})
-			It("should verify that MAPI Machine Synchronized condition is True ,Paused condition is False and statusAPI updated to reflect AuthoritativeAPI: MachineAPI", func() {
-				verifyMapiMachineSynchrozisedPaused(newMachine)
+			It("should verify that MAPI Machine Synchronized condition is True, Paused condition is False and status.authoritativeAPI: MachineAPI", func() {
+				verifyMapiMachineSynchronizedPaused(newMachine)
 			})
-			It("should verify that the mirror CAPI Infra Machine has Paused condition True and MAPI Machine has a CAPI Infra Machine mirror", func() {
+			It("should verify that the MAPI Machine has a CAPI Machine and CAPI Infra Machine mirrors, both with Paused condition True", func() {
 				verifyCapiMachinePaused(cl, newMachine.Name)
 			})
 		})
@@ -97,8 +97,7 @@ func verifyMapiAutoritative(cl client.Client) *machinev1.Machine {
 	machineList := &machinev1.MachineList{}
 	By(fmt.Sprintf("Listing worker machines in namespace: %s", machineAPINamespace))
 	workerLabelSelector := client.MatchingLabels{RoleLabel: "worker"}
-	err := cl.List(ctx, machineList, client.InNamespace(machineAPINamespace), workerLabelSelector)
-	Expect(err).NotTo(HaveOccurred(), "Failed to list worker machines")
+	Eventually(cl.List(ctx, machineList, client.InNamespace(machineAPINamespace), workerLabelSelector)).Should(Succeed(), "Failed to list worker machines")
 	Expect(machineList.Items).NotTo(BeEmpty(), "No worker machines found in the namespace to use as a template")
 
 	var templateMachine *machinev1.Machine
@@ -128,7 +127,7 @@ func verifyMapiAutoritative(cl client.Client) *machinev1.Machine {
 	newMachine.ObjectMeta.Labels = nil
 	By(fmt.Sprintf("Creating a new machine in namespace: %s", newMachine.Namespace))
 	// Create the new machine object in the cluster.
-	Expect(cl.Create(ctx, newMachine)).To(Succeed(), "Failed to create new machine")
+	Eventually(cl.Create(ctx, newMachine)).Should(Succeed(), "Failed to create new machine")
 
 	By("Waiting for the new machine to enter 'Running' phase")
 	Eventually(komega.Object(newMachine), DefaultTimeout, DefaultInterval).
@@ -141,8 +140,8 @@ func verifyMapiAutoritative(cl client.Client) *machinev1.Machine {
 	return newMachine
 }
 
-// verifyMapiMachineSynchrozised verifies that MAPI Machine Synchronized condition is True and statusAPI updated to reflect AuthoritativeAPI: MachineAPI
-func verifyMapiMachineSynchrozisedPaused(machine *machinev1.Machine) {
+// verifyMapiMachineSynchronizedPaused verifies that the MAPI Machine Synchronized condition is True and the MAPI Machine Paused condition is False and its status.authoritativeAPI equals MachineAPI.
+func verifyMapiMachineSynchronizedPaused(machine *machinev1.Machine) {
 	Expect(machine.Status.Conditions).To(ContainElement(
 		SatisfyAll(
 			HaveField("Type", ConditionSynchronized),
