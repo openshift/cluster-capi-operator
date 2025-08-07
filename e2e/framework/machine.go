@@ -7,6 +7,7 @@ import (
 	. "github.com/onsi/gomega"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	capav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
@@ -57,6 +58,20 @@ func FilterRunningMachines(machines []*clusterv1.Machine) []*clusterv1.Machine {
 	}
 
 	return result
+}
+
+// GetAWSMachine get a awsmachine by its name.
+func GetAWSMachine(cl client.Client, name string, namespace string) (*capav1.AWSMachine, error) {
+	machine := &capav1.AWSMachine{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+	}
+
+	Eventually(komega.Get(machine), time.Minute, RetryShort).Should(Succeed(), "Failed to get awsmachine %s/%s.", machine.Namespace, machine.Name)
+
+	return machine, nil
 }
 
 // GetMachine get a machine by its name.
