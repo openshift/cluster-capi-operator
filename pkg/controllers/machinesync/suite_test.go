@@ -25,10 +25,12 @@ import (
 	. "github.com/onsi/gomega"
 
 	configv1builder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/config/v1"
+	admissiontestutils "github.com/openshift/cluster-capi-operator/pkg/admissionpolicy/testutils"
 	"github.com/openshift/cluster-capi-operator/pkg/test"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 	"k8s.io/klog/v2/textlogger"
@@ -47,6 +49,7 @@ var testEnv *envtest.Environment
 var testScheme *runtime.Scheme
 var testRESTMapper meta.RESTMapper
 var ctx = context.Background()
+var vapCleanup func()
 
 const (
 	timeout = time.Second * 10
@@ -72,6 +75,13 @@ var _ = BeforeSuite(func() {
 	Expect(cfg).NotTo(BeNil())
 	Expect(k8sClient).NotTo(BeNil())
 
+	testScheme = scheme.Scheme
+
+	// Start VAP Status Controller
+	By("Starting the ValidatingAdmissionPolicy status controller")
+	vapCleanup, err = admissiontestutils.StartVAPStatusController(ctx, cfg, testScheme)
+	Expect(err).NotTo(HaveOccurred())
+
 	infrastructure := configv1builder.Infrastructure().AsAWS("test", "eu-west-2").WithName("cluster").Build()
 	Expect(k8sClient.Create(ctx, infrastructure)).To(Succeed())
 
@@ -86,8 +96,16 @@ var _ = BeforeSuite(func() {
 	komega.SetContext(ctx)
 })
 
-var _ = AfterSuite(func() {
-	By("tearing down the test environment")
-	err := testEnv.Stop()
-	Expect(err).NotTo(HaveOccurred())
-})
+var _ = AfterSuite(
+	func(ctx SpecContext) {
+		By("stopping VAP status controller")
+		if vapCleanup != nil {
+			vapCleanup()
+		}
+
+		By("tearing down the test environment")
+		err := testEnv.Stop()
+		Expect(err).NotTo(HaveOccurred())
+	},
+	NodeTimeout(timeout),
+)
