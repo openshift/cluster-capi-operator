@@ -5,6 +5,11 @@ set -o pipefail
 
 REPO_ROOT=$(dirname "${BASH_SOURCE}")/..
 
+localtestenv=${REPO_ROOT}/.localtestenv
+if [ -e "$localtestenv" ]; then
+    export $(xargs < "$localtestenv")
+fi
+
 # Use existing value of TEST_DIRS, or $1 if not set. Makes it easier to target suites.
 TEST_DIRS=${TEST_DIRS:-$1}
 # Use 2nd arg, or 5m.
