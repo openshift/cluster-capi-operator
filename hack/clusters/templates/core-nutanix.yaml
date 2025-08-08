@@ -1,0 +1,14 @@
+apiVersion: cluster.x-k8s.io/v1beta1
+kind: Cluster
+metadata:
+  name: ${CLUSTER_NAME}
+  namespace: openshift-cluster-api
+spec:
+  controlPlaneEndpoint:
+    host: ${CONTROL_PLANE_ENDPOINT_IP}
+    port: 6443
+  infrastructureRef:
+    apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+    kind: NutanixCluster
+    name: ${CLUSTER_NAME}
+    namespace: openshift-cluster-api
