@@ -18,6 +18,8 @@ package machinesync
 
 import (
 	"context"
+	"errors"
+	"net/http"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -33,7 +35,6 @@ import (
 	admissiontestutils "github.com/openshift/cluster-capi-operator/pkg/admissionpolicy/testutils"
 	consts "github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/mapi2capi"
-
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -1169,3 +1170,249 @@ func awsProviderSpecFromMachine(mapiMachine *machinev1beta1.Machine) (machinev1b
 
 	return mapi2capi.AWSProviderSpecFromRawExtension(mapiMachine.Spec.ProviderSpec.Value)
 }
+
+var _ = Describe("Unsupported AWS fields validating admission policy", Ordered, func() {
+	var (
+		namespace *corev1.Namespace
+		k         komega.Komega
+	)
+
+	expectVAPError := func(err error, msg string) {
+		var statusErr *apierrors.StatusError
+		ExpectWithOffset(1, errors.As(err, &statusErr)).To(BeTrue())
+		ExpectWithOffset(1, statusErr.Status().Code).To(Equal(int32(http.StatusUnprocessableEntity)))
+		ExpectWithOffset(1, statusErr.Error()).To(ContainSubstring(msg))
+	}
+
+	BeforeAll(func() {
+		k = komega.New(k8sClient)
+
+		By("Loading the transport config maps")
+		transportConfigMaps := admissiontestutils.LoadTransportConfigMaps()
+
+		By("creating a namespace for the test")
+		namespace = corev1resourcebuilder.Namespace().WithGenerateName("unsupported-aws-fields-").Build()
+		Expect(k8sClient.Create(ctx, namespace)).To(Succeed())
+
+		By("Applying the objects found in clusterAPIAWSAdmissionPolicies for the test namespace")
+		for _, obj := range transportConfigMaps[admissiontestutils.ClusterAPIAWSAdmissionPolicies] {
+			newObj, ok := obj.DeepCopyObject().(client.Object)
+			Expect(ok).To(BeTrue())
+
+			// Update the "openshift-cluster-api" namespace to the test namespace
+			if binding, ok := newObj.(*admissionregistrationv1.ValidatingAdmissionPolicyBinding); ok {
+				if binding.Spec.MatchResources != nil && binding.Spec.MatchResources.NamespaceSelector != nil {
+					for i, expr := range binding.Spec.MatchResources.NamespaceSelector.MatchExpressions {
+						if expr.Key == "kubernetes.io/metadata.name" && expr.Values[i] == capiNamespace {
+							binding.Spec.MatchResources.NamespaceSelector.MatchExpressions[i].Values = []string{namespace.Name}
+						}
+					}
+				}
+			}
+
+			Expect(k8sClient.Create(ctx, newObj)).To(Succeed())
+		}
+
+		checkVAPMachine := awsv1resourcebuilder.AWSMachine().WithName("check-vap-machine").WithNamespace(namespace.Name).Build()
+		Expect(k8sClient.Create(ctx, checkVAPMachine)).To(Succeed())
+
+		// Continually try to update the AWSMachine to a forbidden field until the VAP blocks it
+		Eventually(k.Update(checkVAPMachine, func() {
+			checkVAPMachine.Spec.ImageLookupFormat = "forbidden-format"
+		})).Should(MatchError(ContainSubstring("spec.imageLookupFormat is a forbidden field")))
+	})
+
+	AfterAll(func() {
+		// Cleanup all VAPs
+		testutils.CleanupResources(Default, ctx, cfg, k8sClient, "",
+			&admissionregistrationv1.ValidatingAdmissionPolicy{},
+			&admissionregistrationv1.ValidatingAdmissionPolicyBinding{},
+		)
+
+		By("deleting the namespace")
+		Expect(k8sClient.Delete(ctx, namespace)).To(Succeed())
+
+	})
+
+	Context("AWSMachine validation", func() {
+		const (
+			testImageLookupFormat = "ami-format"
+			testImageLookupOrg    = "123456789012"
+			testImageLookupBaseOS = "linux"
+			testSecretPrefix      = "my-secret"
+			testSecurityGroupID   = "sg-123"
+			testNetworkInterface  = "eni-12345678"
+			testVaultBackend      = "vault"
+		)
+
+		DescribeTable("should validate AWSMachine creation",
+			func(name string, modifier func(*awsv1.AWSMachine), expectedError string) {
+				awsMachine := awsv1resourcebuilder.AWSMachine().WithGenerateName("test-aws-machine").WithNamespace(namespace.Name).Build()
+
+				if modifier != nil {
+					modifier(awsMachine)
+				}
+
+				err := k8sClient.Create(ctx, awsMachine)
+
+				if expectedError != "" {
+					Expect(err).To(HaveOccurred())
+					expectVAPError(err, expectedError)
+				} else {
+					Expect(err).ToNot(HaveOccurred())
+				}
+			},
+			Entry("without forbidden fields", "", nil, ""),
+			Entry("with a forbidden field (ami.eksLookupType)", "ami.eksLookupType", func(m *awsv1.AWSMachine) {
+				m.Spec.AMI.EKSOptimizedLookupType = ptr.To(awsv1.AmazonLinux)
+			}, "spec.ami.eksLookupType is a forbidden field"),
+			Entry("with a forbidden field (imageLookupFormat)", "imageLookupFormat", func(m *awsv1.AWSMachine) {
+				m.Spec.ImageLookupFormat = testImageLookupFormat
+			}, "spec.imageLookupFormat is a forbidden field"),
+			Entry("with a forbidden field (imageLookupOrg)", "imageLookupOrg", func(m *awsv1.AWSMachine) {
+				m.Spec.ImageLookupOrg = testImageLookupOrg
+			}, "spec.imageLookupOrg is a forbidden field"),
+			Entry("with a forbidden field (imageLookupBaseOS)", "imageLookupBaseOS", func(m *awsv1.AWSMachine) {
+				m.Spec.ImageLookupBaseOS = testImageLookupBaseOS
+			}, "spec.imageLookupBaseOS is a forbidden field"),
+			Entry("with a forbidden field (networkInterfaces)", "networkInterfaces", func(m *awsv1.AWSMachine) {
+				m.Spec.NetworkInterfaces = []string{testNetworkInterface}
+			}, "spec.networkInterfaces is a forbidden field"),
+			Entry("with a forbidden field (uncompressedUserData)", "uncompressedUserData", func(m *awsv1.AWSMachine) {
+				m.Spec.UncompressedUserData = ptr.To(true)
+			}, "spec.uncompressedUserData is a forbidden field"),
+			Entry("with a forbidden field (cloudInit)", "cloudInit", func(m *awsv1.AWSMachine) {
+				m.Spec.CloudInit = awsv1.CloudInit{SecretCount: 1}
+			}, "spec.cloudInit is a forbidden field"),
+			Entry("with a forbidden field (privateDNSName)", "privateDNSName", func(m *awsv1.AWSMachine) {
+				m.Spec.PrivateDNSName = &awsv1.PrivateDNSName{}
+			}, "spec.privateDnsName is a forbidden field"),
+			Entry("with a forbidden field (ignition.proxy)", "ignition.proxy", func(m *awsv1.AWSMachine) {
+				m.Spec.Ignition = &awsv1.Ignition{Proxy: &awsv1.IgnitionProxy{}}
+			}, "spec.ignition.proxy is a forbidden field"),
+			Entry("with a forbidden field (ignition.tls)", "ignition.tls", func(m *awsv1.AWSMachine) {
+				m.Spec.Ignition = &awsv1.Ignition{TLS: &awsv1.IgnitionTLS{}}
+			}, "spec.ignition.tls is a forbidden field"),
+			Entry("with a forbidden field (securityGroupOverrides)", "securityGroupOverrides", func(m *awsv1.AWSMachine) {
+				m.Spec.SecurityGroupOverrides = map[awsv1.SecurityGroupRole]string{"bastion": testSecurityGroupID}
+			}, "spec.securityGroupOverrides is a forbidden field"),
+		)
+
+		It("should block updates that add multiple forbidden fields to AWSMachine", func() {
+			awsMachine := awsv1resourcebuilder.AWSMachine().WithGenerateName("test-aws-machine").WithNamespace(namespace.Name).Build()
+			Expect(k8sClient.Create(ctx, awsMachine)).To(Succeed())
+
+			// Add multiple forbidden fields in one update
+			awsMachine.Spec.ImageLookupFormat = testImageLookupFormat
+			awsMachine.Spec.NetworkInterfaces = []string{testNetworkInterface}
+			awsMachine.Spec.UncompressedUserData = ptr.To(true)
+
+			err := k8sClient.Update(ctx, awsMachine)
+			Expect(err).To(HaveOccurred())
+			// Should catch the first forbidden field (validation stops at first error)
+			expectVAPError(err, "spec.imageLookupFormat is a forbidden field")
+		})
+
+		It("should not enforce the VAP on other namespaces", func() {
+			otherNamespace := corev1resourcebuilder.Namespace().WithGenerateName("other-namespace").Build()
+			Expect(k8sClient.Create(ctx, otherNamespace)).To(Succeed())
+
+			awsMachine := awsv1resourcebuilder.AWSMachine().WithGenerateName("test-aws-machine").WithNamespace(otherNamespace.Name).Build()
+			awsMachine.Spec.ImageLookupFormat = testImageLookupFormat
+			err := k8sClient.Create(ctx, awsMachine)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+	})
+
+	Context("AWSMachineTemplate validation", func() {
+		const (
+			testImageLookupFormat = "ami-format"
+			testImageLookupOrg    = "123456789012"
+			testImageLookupBaseOS = "linux"
+			testSecretPrefix      = "my-secret"
+			testSecurityGroupID   = "sg-123"
+			testNetworkInterface  = "eni-12345678"
+			testVaultBackend      = "vault"
+		)
+
+		DescribeTable("should validate AWSMachineTemplate creation",
+			func(name string, modifier func(*awsv1.AWSMachineTemplate), expectedError string) {
+				awsMachineTemplate := awsv1resourcebuilder.AWSMachineTemplate().WithGenerateName("test-aws-machine-template").WithNamespace(namespace.Name).Build()
+
+				if modifier != nil {
+					modifier(awsMachineTemplate)
+				}
+
+				err := k8sClient.Create(ctx, awsMachineTemplate)
+
+				if expectedError != "" {
+					Expect(err).To(HaveOccurred())
+					expectVAPError(err, expectedError)
+				} else {
+					Expect(err).ToNot(HaveOccurred())
+				}
+			},
+			Entry("without forbidden fields", "", nil, ""),
+			Entry("with a forbidden field (ami.eksLookupType)", "ami.eksLookupType", func(mt *awsv1.AWSMachineTemplate) {
+				mt.Spec.Template.Spec.AMI.EKSOptimizedLookupType = ptr.To(awsv1.AmazonLinux)
+			}, "spec.ami.eksLookupType is a forbidden field"),
+			Entry("with a forbidden field (imageLookupFormat)", "imageLookupFormat", func(mt *awsv1.AWSMachineTemplate) {
+				mt.Spec.Template.Spec.ImageLookupFormat = testImageLookupFormat
+			}, "spec.imageLookupFormat is a forbidden field"),
+			Entry("with a forbidden field (imageLookupOrg)", "imageLookupOrg", func(mt *awsv1.AWSMachineTemplate) {
+				mt.Spec.Template.Spec.ImageLookupOrg = testImageLookupOrg
+			}, "spec.imageLookupOrg is a forbidden field"),
+			Entry("with a forbidden field (imageLookupBaseOS)", "imageLookupBaseOS", func(mt *awsv1.AWSMachineTemplate) {
+				mt.Spec.Template.Spec.ImageLookupBaseOS = testImageLookupBaseOS
+			}, "spec.imageLookupBaseOS is a forbidden field"),
+			Entry("with a forbidden field (networkInterfaces)", "networkInterfaces", func(mt *awsv1.AWSMachineTemplate) {
+				mt.Spec.Template.Spec.NetworkInterfaces = []string{testNetworkInterface}
+			}, "spec.networkInterfaces is a forbidden field"),
+			Entry("with a forbidden field (uncompressedUserData)", "uncompressedUserData", func(mt *awsv1.AWSMachineTemplate) {
+				mt.Spec.Template.Spec.UncompressedUserData = ptr.To(true)
+			}, "spec.uncompressedUserData is a forbidden field"),
+			Entry("with a forbidden field (cloudInit)", "cloudInit", func(mt *awsv1.AWSMachineTemplate) {
+				mt.Spec.Template.Spec.CloudInit = awsv1.CloudInit{SecretCount: 1}
+			}, "spec.cloudInit is a forbidden field"),
+			Entry("with a forbidden field (privateDNSName)", "privateDNSName", func(mt *awsv1.AWSMachineTemplate) {
+				mt.Spec.Template.Spec.PrivateDNSName = &awsv1.PrivateDNSName{}
+			}, "spec.privateDnsName is a forbidden field"),
+			Entry("with a forbidden field (ignition.proxy)", "ignition.proxy", func(mt *awsv1.AWSMachineTemplate) {
+				mt.Spec.Template.Spec.Ignition = &awsv1.Ignition{Proxy: &awsv1.IgnitionProxy{}}
+			}, "spec.ignition.proxy is a forbidden field"),
+			Entry("with a forbidden field (ignition.tls)", "ignition.tls", func(mt *awsv1.AWSMachineTemplate) {
+				mt.Spec.Template.Spec.Ignition = &awsv1.Ignition{TLS: &awsv1.IgnitionTLS{}}
+			}, "spec.ignition.tls is a forbidden field"),
+			Entry("with a forbidden field (securityGroupOverrides)", "securityGroupOverrides", func(mt *awsv1.AWSMachineTemplate) {
+				mt.Spec.Template.Spec.SecurityGroupOverrides = map[awsv1.SecurityGroupRole]string{"bastion": testSecurityGroupID}
+			}, "spec.securityGroupOverrides is a forbidden field"),
+		)
+
+		It("should not enforce the VAP on other namespaces", func() {
+			otherNamespace := corev1resourcebuilder.Namespace().WithGenerateName("other-namespace").Build()
+			Expect(k8sClient.Create(ctx, otherNamespace)).To(Succeed())
+
+			awsMachineTemplate := awsv1resourcebuilder.AWSMachineTemplate().WithGenerateName("test-aws-machine-template").WithNamespace(otherNamespace.Name).Build()
+			awsMachineTemplate.Spec.Template.Spec.ImageLookupBaseOS = testImageLookupBaseOS
+			err := k8sClient.Create(ctx, awsMachineTemplate)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("should block updates that add multiple forbidden fields", func() {
+			awsMachineTemplate := awsv1resourcebuilder.AWSMachineTemplate().WithGenerateName("test-aws-machine-template").WithNamespace(namespace.Name).Build()
+			Expect(k8sClient.Create(ctx, awsMachineTemplate)).To(Succeed())
+
+			// Add multiple forbidden fields in one update
+			awsMachineTemplate.Spec.Template.Spec.ImageLookupFormat = testImageLookupFormat
+			awsMachineTemplate.Spec.Template.Spec.NetworkInterfaces = []string{testNetworkInterface}
+			awsMachineTemplate.Spec.Template.Spec.UncompressedUserData = ptr.To(true)
+
+			err := k8sClient.Update(ctx, awsMachineTemplate)
+			Expect(err).To(HaveOccurred())
+			// Should catch the first forbidden field (validation stops at first error)
+			expectVAPError(err, "spec.imageLookupFormat is a forbidden field")
+		})
+
+	})
+})
