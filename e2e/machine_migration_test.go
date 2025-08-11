@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -19,6 +20,7 @@ import (
 	mapiframework "github.com/openshift/cluster-api-actuator-pkg/pkg/framework"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 )
 
 var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Machine Migration Tests", Ordered, func() {
@@ -108,6 +110,401 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 
 			It("should verify CAPI Machine Paused condition is False", func() {
 				verifyCAPIMachinePausedCondition(newCapiMachine, machinev1beta1.MachineAuthorityClusterAPI)
+			})
+		})
+
+		Context("with spec.authoritativeAPI: ClusterAPI, Prevent changes to non-authoritative Machines except from sync controller", func() {
+			var testMachineName = "machine-vap-83955"
+			var testMapiMachine *machinev1beta1.Machine
+			var testCapiMachine *clusterv1.Machine
+
+			BeforeAll(func() {
+				testMapiMachine = createMAPIMachineWithAuthority(ctx, cl, testMachineName, machinev1beta1.MachineAuthorityClusterAPI)
+
+				DeferCleanup(func() {
+					By("Cleaning up machine resources")
+					cleanupMachineResources(
+						ctx,
+						cl,
+						[]*clusterv1.Machine{testCapiMachine},
+						[]*machinev1beta1.Machine{testMapiMachine},
+					)
+				})
+			})
+
+			It("should verify CAPI Machine gets created and becomes Running", func() {
+				verifyMachineRunning(cl, testMachineName, machinev1beta1.MachineAuthorityClusterAPI)
+			})
+
+			It("should verify that the non-authoritative MAPI Machine has an authoritative CAPI Machine mirror", func() {
+				Eventually(func() error {
+					testCapiMachine, err = capiframework.GetMachine(cl, testMachineName, capiframework.CAPINamespace)
+					return err
+				}, capiframework.WaitLong, capiframework.RetryLong).Should(Succeed(), "CAPI Machine should exist")
+			})
+
+			It("should prevent modification of InstanceType in non-authoritative MAPI Machine", func() {
+				By("Attempting to modify InstanceType in MAPI Machine")
+
+				currentMachine, err := mapiframework.GetMachine(cl, testMapiMachine.Name)
+				if err != nil {
+					Fail(fmt.Sprintf("Failed to get current machine: %v", err))
+				}
+				updatedMachine := currentMachine.DeepCopy()
+				// Modify the InstanceType in the provider spec
+				if updatedMachine.Spec.ProviderSpec.Value != nil {
+					var providerSpec machinev1beta1.AWSMachineProviderConfig
+					if err := json.Unmarshal(updatedMachine.Spec.ProviderSpec.Value.Raw, &providerSpec); err != nil {
+						Fail(fmt.Sprintf("Failed to unmarshal provider spec: %v", err))
+					}
+					providerSpec.InstanceType = "m5.xlarge" // Change from original
+					rawProviderSpec, err := json.Marshal(providerSpec)
+					if err != nil {
+						Fail(fmt.Sprintf("Failed to marshal provider spec: %v", err))
+					}
+					updatedMachine.Spec.ProviderSpec.Value.Raw = rawProviderSpec
+				}
+
+				err = cl.Update(ctx, updatedMachine)
+				if err != nil {
+					fmt.Printf("Update error: %v\n", err.Error())
+				}
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("ValidatingAdmissionPolicy 'machine-api-machine-vap' with binding 'machine-api-machine-vap' denied request"))
+			})
+
+			It("should prevent removal of labels in non-authoritative MAPI Machine", func() {
+				By("Attempting to remove labels from MAPI Machine")
+
+				currentMachine, err := mapiframework.GetMachine(cl, testMapiMachine.Name)
+				if err != nil {
+					Fail(fmt.Sprintf("Failed to get current machine: %v", err))
+				}
+				updatedMachine := currentMachine.DeepCopy()
+				updatedMachine.Labels = nil
+				err = cl.Update(ctx, updatedMachine)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("ValidatingAdmissionPolicy 'machine-api-machine-vap' with binding 'machine-api-machine-vap' denied request"))
+			})
+
+			It("should prevent addition of annotations machine.openshift.io. in non-authoritative MAPI Machine", func() {
+				By("Attempting to add annotations machine.openshift.io. to MAPI Machine")
+
+				currentMachine, err := mapiframework.GetMachine(cl, testMapiMachine.Name)
+				if err != nil {
+					Fail(fmt.Sprintf("Failed to get current machine: %v", err))
+				}
+				// Try to add a test annotation that should be protected
+				updatedMachine := currentMachine.DeepCopy()
+				if updatedMachine.Annotations == nil {
+					updatedMachine.Annotations = make(map[string]string)
+				}
+
+				// Add a test annotation that should be protected
+				updatedMachine.Annotations["machine.openshift.io/test-annotation"] = "test-value"
+				fmt.Printf("Attempting to add test annotation: machine.openshift.io/test-annotation\n")
+
+				fmt.Printf("Updated machine annotations: %+v\n", updatedMachine.Annotations)
+
+				err = cl.Update(ctx, updatedMachine)
+				if err != nil {
+					fmt.Printf("Update error: %v\n", err.Error())
+				}
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("ValidatingAdmissionPolicy 'machine-api-machine-vap' with binding 'machine-api-machine-vap' denied request"))
+				Expect(err.Error()).To(ContainSubstring("Cannot add, modify or delete any machine.openshift.io/* annotation"))
+			})
+
+			It("should prevent modification of AMI ID in non-authoritative MAPI Machine", func() {
+				By("Attempting to modify AMI ID in MAPI Machine")
+
+				currentMachine, err := mapiframework.GetMachine(cl, testMapiMachine.Name)
+				if err != nil {
+					Fail(fmt.Sprintf("Failed to get current machine: %v", err))
+				}
+				updatedMachine := currentMachine.DeepCopy()
+				if updatedMachine.Spec.ProviderSpec.Value != nil {
+					var providerSpec machinev1beta1.AWSMachineProviderConfig
+					if err := json.Unmarshal(updatedMachine.Spec.ProviderSpec.Value.Raw, &providerSpec); err != nil {
+						Fail(fmt.Sprintf("Failed to unmarshal provider spec: %v", err))
+					}
+					providerSpec.AMI.ID = ptr.To("ami-different123")
+					rawProviderSpec, err := json.Marshal(providerSpec)
+					if err != nil {
+						Fail(fmt.Sprintf("Failed to marshal provider spec: %v", err))
+					}
+					updatedMachine.Spec.ProviderSpec.Value.Raw = rawProviderSpec
+				}
+				err = cl.Update(ctx, updatedMachine)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("ValidatingAdmissionPolicy 'machine-api-machine-vap' with binding 'machine-api-machine-vap' denied request"))
+			})
+
+			It("should prevent modification of encryption for block devices in non-authoritative MAPI Machine", func() {
+				By("Attempting to modify encryption for block devices in MAPI Machine")
+
+				currentMachine, err := mapiframework.GetMachine(cl, testMapiMachine.Name)
+				if err != nil {
+					Fail(fmt.Sprintf("Failed to get current machine: %v", err))
+				}
+				updatedMachine := currentMachine.DeepCopy()
+				if updatedMachine.Spec.ProviderSpec.Value != nil {
+					var providerSpec machinev1beta1.AWSMachineProviderConfig
+					if err := json.Unmarshal(updatedMachine.Spec.ProviderSpec.Value.Raw, &providerSpec); err != nil {
+						Fail(fmt.Sprintf("Failed to unmarshal provider spec: %v", err))
+					}
+					// Modify encryption setting for block devices
+					if len(providerSpec.BlockDevices) > 0 && providerSpec.BlockDevices[0].EBS != nil {
+						providerSpec.BlockDevices[0].EBS.Encrypted = ptr.To(false)
+					}
+					rawProviderSpec, err := json.Marshal(providerSpec)
+					if err != nil {
+						Fail(fmt.Sprintf("Failed to marshal provider spec: %v", err))
+					}
+					updatedMachine.Spec.ProviderSpec.Value.Raw = rawProviderSpec
+				}
+				err = cl.Update(ctx, updatedMachine)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("ValidatingAdmissionPolicy 'machine-api-machine-vap' with binding 'machine-api-machine-vap' denied request"))
+			})
+
+			It("should prevent modification of VolumeSize in non-authoritative MAPI Machine", func() {
+				By("Attempting to modify VolumeSize in MAPI Machine")
+
+				currentMachine, err := mapiframework.GetMachine(cl, testMapiMachine.Name)
+				if err != nil {
+					Fail(fmt.Sprintf("Failed to get current machine: %v", err))
+				}
+				updatedMachine := currentMachine.DeepCopy()
+				if updatedMachine.Spec.ProviderSpec.Value != nil {
+					var providerSpec machinev1beta1.AWSMachineProviderConfig
+					if err := json.Unmarshal(updatedMachine.Spec.ProviderSpec.Value.Raw, &providerSpec); err != nil {
+						Fail(fmt.Sprintf("Failed to unmarshal provider spec: %v", err))
+					}
+					// Modify volume size for block devices
+					if len(providerSpec.BlockDevices) > 0 && providerSpec.BlockDevices[0].EBS != nil {
+						providerSpec.BlockDevices[0].EBS.VolumeSize = ptr.To(int64(200))
+					}
+					rawProviderSpec, err := json.Marshal(providerSpec)
+					if err != nil {
+						Fail(fmt.Sprintf("Failed to marshal provider spec: %v", err))
+					}
+					updatedMachine.Spec.ProviderSpec.Value.Raw = rawProviderSpec
+				}
+				err = cl.Update(ctx, updatedMachine)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("ValidatingAdmissionPolicy 'machine-api-machine-vap' with binding 'machine-api-machine-vap' denied request"))
+			})
+
+			It("should prevent modification of VolumeType in non-authoritative MAPI Machine", func() {
+				By("Attempting to modify VolumeType in MAPI Machine")
+
+				currentMachine, err := mapiframework.GetMachine(cl, testMapiMachine.Name)
+				if err != nil {
+					Fail(fmt.Sprintf("Failed to get current machine: %v", err))
+				}
+				updatedMachine := currentMachine.DeepCopy()
+				if updatedMachine.Spec.ProviderSpec.Value != nil {
+					var providerSpec machinev1beta1.AWSMachineProviderConfig
+					if err := json.Unmarshal(updatedMachine.Spec.ProviderSpec.Value.Raw, &providerSpec); err != nil {
+						Fail(fmt.Sprintf("Failed to unmarshal provider spec: %v", err))
+					}
+					// Modify volume type for block devices
+					if len(providerSpec.BlockDevices) > 0 && providerSpec.BlockDevices[0].EBS != nil {
+						providerSpec.BlockDevices[0].EBS.VolumeType = ptr.To("io1")
+					}
+					rawProviderSpec, err := json.Marshal(providerSpec)
+					if err != nil {
+						Fail(fmt.Sprintf("Failed to marshal provider spec: %v", err))
+					}
+					updatedMachine.Spec.ProviderSpec.Value.Raw = rawProviderSpec
+				}
+				err = cl.Update(ctx, updatedMachine)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("ValidatingAdmissionPolicy 'machine-api-machine-vap' with binding 'machine-api-machine-vap' denied request"))
+			})
+
+			It("should prevent modification of AvailabilityZone in non-authoritative MAPI Machine", func() {
+				By("Attempting to modify AvailabilityZone in MAPI Machine")
+
+				currentMachine, err := mapiframework.GetMachine(cl, testMapiMachine.Name)
+				if err != nil {
+					Fail(fmt.Sprintf("Failed to get current machine: %v", err))
+				}
+				updatedMachine := currentMachine.DeepCopy()
+				if updatedMachine.Spec.ProviderSpec.Value != nil {
+					var providerSpec machinev1beta1.AWSMachineProviderConfig
+					if err := json.Unmarshal(updatedMachine.Spec.ProviderSpec.Value.Raw, &providerSpec); err != nil {
+						Fail(fmt.Sprintf("Failed to unmarshal provider spec: %v", err))
+					}
+					providerSpec.Placement.AvailabilityZone = "us-east-1b"
+					rawProviderSpec, err := json.Marshal(providerSpec)
+					if err != nil {
+						Fail(fmt.Sprintf("Failed to marshal provider spec: %v", err))
+					}
+					updatedMachine.Spec.ProviderSpec.Value.Raw = rawProviderSpec
+				}
+				err = cl.Update(ctx, updatedMachine)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("ValidatingAdmissionPolicy 'machine-api-machine-vap' with binding 'machine-api-machine-vap' denied request"))
+			})
+
+			It("should prevent modification of Subnet in non-authoritative MAPI Machine", func() {
+				By("Attempting to modify Subnet in MAPI Machine")
+
+				currentMachine, err := mapiframework.GetMachine(cl, testMapiMachine.Name)
+				if err != nil {
+					Fail(fmt.Sprintf("Failed to get current machine: %v", err))
+				}
+				updatedMachine := currentMachine.DeepCopy()
+				if updatedMachine.Spec.ProviderSpec.Value != nil {
+					var providerSpec machinev1beta1.AWSMachineProviderConfig
+					if err := json.Unmarshal(updatedMachine.Spec.ProviderSpec.Value.Raw, &providerSpec); err != nil {
+						Fail(fmt.Sprintf("Failed to unmarshal provider spec: %v", err))
+					}
+					providerSpec.Subnet.ID = ptr.To("subnet-different123")
+					rawProviderSpec, err := json.Marshal(providerSpec)
+					if err != nil {
+						Fail(fmt.Sprintf("Failed to marshal provider spec: %v", err))
+					}
+					updatedMachine.Spec.ProviderSpec.Value.Raw = rawProviderSpec
+				}
+				err = cl.Update(ctx, updatedMachine)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("ValidatingAdmissionPolicy 'machine-api-machine-vap' with binding 'machine-api-machine-vap' denied request"))
+			})
+
+			It("should prevent modification of SecurityGroups in non-authoritative MAPI Machine", func() {
+				By("Attempting to modify SecurityGroups in MAPI Machine")
+
+				currentMachine, err := mapiframework.GetMachine(cl, testMapiMachine.Name)
+				if err != nil {
+					Fail(fmt.Sprintf("Failed to get current machine: %v", err))
+				}
+				updatedMachine := currentMachine.DeepCopy()
+				if updatedMachine.Spec.ProviderSpec.Value != nil {
+					var providerSpec machinev1beta1.AWSMachineProviderConfig
+					if err := json.Unmarshal(updatedMachine.Spec.ProviderSpec.Value.Raw, &providerSpec); err != nil {
+						Fail(fmt.Sprintf("Failed to unmarshal provider spec: %v", err))
+					}
+					// Add a different security group
+					providerSpec.SecurityGroups = append(providerSpec.SecurityGroups, machinev1beta1.AWSResourceReference{
+						ID: ptr.To("sg-different123"),
+					})
+					rawProviderSpec, err := json.Marshal(providerSpec)
+					if err != nil {
+						Fail(fmt.Sprintf("Failed to marshal provider spec: %v", err))
+					}
+					updatedMachine.Spec.ProviderSpec.Value.Raw = rawProviderSpec
+				}
+				err = cl.Update(ctx, updatedMachine)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("ValidatingAdmissionPolicy 'machine-api-machine-vap' with binding 'machine-api-machine-vap' denied request"))
+			})
+
+			It("should prevent modification of Tags in non-authoritative MAPI Machine", func() {
+				By("Attempting to modify Tags in MAPI Machine")
+
+				currentMachine, err := mapiframework.GetMachine(cl, testMapiMachine.Name)
+				if err != nil {
+					Fail(fmt.Sprintf("Failed to get current machine: %v", err))
+				}
+				updatedMachine := currentMachine.DeepCopy()
+				if updatedMachine.Spec.ProviderSpec.Value != nil {
+					var providerSpec machinev1beta1.AWSMachineProviderConfig
+					if err := json.Unmarshal(updatedMachine.Spec.ProviderSpec.Value.Raw, &providerSpec); err != nil {
+						Fail(fmt.Sprintf("Failed to unmarshal provider spec: %v", err))
+					}
+					// Add a new tag
+					providerSpec.Tags = append(providerSpec.Tags, machinev1beta1.TagSpecification{
+						Name:  "test-tag",
+						Value: "test-value",
+					})
+					rawProviderSpec, err := json.Marshal(providerSpec)
+					if err != nil {
+						Fail(fmt.Sprintf("Failed to marshal provider spec: %v", err))
+					}
+					updatedMachine.Spec.ProviderSpec.Value.Raw = rawProviderSpec
+				}
+				err = cl.Update(ctx, updatedMachine)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("ValidatingAdmissionPolicy 'machine-api-machine-vap' with binding 'machine-api-machine-vap' denied request"))
+			})
+
+			It("should prevent modification of capacityReservationId in non-authoritative MAPI Machine", func() {
+				By("Attempting to modify capacityReservationId in MAPI Machine")
+
+				currentMachine, err := mapiframework.GetMachine(cl, testMapiMachine.Name)
+				if err != nil {
+					Fail(fmt.Sprintf("Failed to get current machine: %v", err))
+				}
+				updatedMachine := currentMachine.DeepCopy()
+				if updatedMachine.Spec.ProviderSpec.Value != nil {
+					var providerSpec machinev1beta1.AWSMachineProviderConfig
+					if err := json.Unmarshal(updatedMachine.Spec.ProviderSpec.Value.Raw, &providerSpec); err != nil {
+						Fail(fmt.Sprintf("Failed to unmarshal provider spec: %v", err))
+					}
+					providerSpec.CapacityReservationID = "cr-different123456789"
+					rawProviderSpec, err := json.Marshal(providerSpec)
+					if err != nil {
+						Fail(fmt.Sprintf("Failed to marshal provider spec: %v", err))
+					}
+					updatedMachine.Spec.ProviderSpec.Value.Raw = rawProviderSpec
+				}
+				err = cl.Update(ctx, updatedMachine)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("ValidatingAdmissionPolicy 'machine-api-machine-vap' with binding 'machine-api-machine-vap' denied request"))
+			})
+
+			It("should allow modification of authoritativeAPI from ClusterAPI to MachineAPI", func() {
+				By("Attempting to modify authoritativeAPI from ClusterAPI to MachineAPI")
+
+				// Create a new machine for this test to avoid affecting other tests
+				testMachineName := "machine-auth-change-83955"
+				testMachine := createMAPIMachineWithAuthority(ctx, cl, testMachineName, machinev1beta1.MachineAuthorityClusterAPI)
+
+				// Wait for the CAPI machine to be created (any status is fine for this test)
+				Eventually(func() error {
+					_, err := capiframework.GetMachine(cl, testMachineName, capiframework.CAPINamespace)
+					return err
+				}, capiframework.WaitLong, capiframework.RetryLong).Should(Succeed(), "CAPI Machine should be created")
+
+				// Add a small delay to ensure any pending updates are processed
+				Eventually(func() error {
+					// Get the latest version again right before update
+					currentMachine, err := mapiframework.GetMachine(cl, testMachineName)
+					if err != nil {
+						return err
+					}
+
+					updatedMachine := currentMachine.DeepCopy()
+					updatedMachine.Spec.AuthoritativeAPI = machinev1beta1.MachineAuthorityMachineAPI
+
+					err = cl.Update(ctx, updatedMachine)
+					return err
+				}, capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(), "Should allow modification of authoritativeAPI")
+
+				// Verify the machine still exists after the change (don't wait for specific status)
+				Eventually(func() error {
+					_, err := mapiframework.GetMachine(cl, testMachineName)
+					return err
+				}, capiframework.WaitLong, capiframework.RetryLong).Should(Succeed(), "Machine should still exist after authoritativeAPI change")
+
+				// Clean up the test machine
+				DeferCleanup(func() {
+					By("Cleaning up test machine")
+					// Try to delete the MAPI machine first
+					if testMachine != nil {
+						mapiframework.DeleteMachines(ctx, cl, testMachine)
+					}
+					// Try to delete the CAPI machine as well
+					capiMachine := &clusterv1.Machine{}
+					err := cl.Get(ctx, client.ObjectKey{Name: testMachineName, Namespace: capiframework.CAPINamespace}, capiMachine)
+					if err == nil {
+						cl.Delete(ctx, capiMachine)
+					}
+					// Don't wait for deletion to complete - just attempt it
+				})
 			})
 		})
 	})
