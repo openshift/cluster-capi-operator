@@ -115,32 +115,27 @@ var _ = Describe("mapi2capi MachineSet Status Conversion", func() {
 				},
 			}
 
-			capiStatus := convertMAPIMachineSetStatusToCAPI(mapiStatus)
+			capiStatus := convertMAPIMachineSetStatusToCAPI(mapiStatus, 1)
 
 			Expect(capiStatus.Selector).To(Equal(""))
 			Expect(capiStatus.Replicas).To(Equal(int32(5)))
 			Expect(capiStatus.FullyLabeledReplicas).To(Equal(int32(5)))
 			Expect(capiStatus.ReadyReplicas).To(Equal(int32(4)))
 			Expect(capiStatus.AvailableReplicas).To(Equal(int32(3)))
-			Expect(capiStatus.FailureReason).ToNot(BeNil())
-			Expect(string(*capiStatus.FailureReason)).To(Equal("InvalidConfiguration"))
-			Expect(capiStatus.FailureMessage).ToNot(BeNil())
-			Expect(*capiStatus.FailureMessage).To(Equal("Test error message"))
-			Expect(capiStatus.Conditions).To(SatisfyAll(
-				HaveLen(1),
-				ContainElement(matchers.MatchCAPICondition(clusterv1.Condition{
-					Type:    "Available",
-					Status:  corev1.ConditionTrue,
-					Reason:  "MachineSetAvailable",
-					Message: "MachineSet is available",
-				})),
-			))
+			Expect(capiStatus.FailureReason).To(HaveValue(BeEquivalentTo(mapiv1.MachineSetStatusError("InvalidConfiguration"))))
+			Expect(capiStatus.FailureMessage).To(HaveValue(BeEquivalentTo("Test error message")))
+			Expect(capiStatus.Conditions).To(ContainElement(matchers.MatchCAPICondition(clusterv1.Condition{
+				Type:    "Available",
+				Status:  corev1.ConditionTrue,
+				Reason:  "MachineSetAvailable",
+				Message: "MachineSet is available",
+			})))
 		})
 
 		It("should handle empty MAPI MachineSet Status", func() {
 			mapiStatus := mapiv1.MachineSetStatus{}
 
-			capiStatus := convertMAPIMachineSetStatusToCAPI(mapiStatus)
+			capiStatus := convertMAPIMachineSetStatusToCAPI(mapiStatus, 0)
 
 			Expect(capiStatus.Selector).To(Equal(""))
 			Expect(capiStatus.Replicas).To(Equal(int32(0)))
