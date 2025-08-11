@@ -58,7 +58,7 @@ func fromMAPIMachineSetToCAPIMachineSet(mapiMachineSet *mapiv1.MachineSet) (*clu
 			// MachineNamingStrategy: // Not supported in MAPI, remains nil. No equivalent field in MAPI MachineSet.
 			// AuthoritativeAPI: // Ignore, this is part of the conversion mechanism.
 		},
-		Status: convertMAPIMachineSetStatusToCAPI(mapiMachineSet.Status),
+		Status: convertMAPIMachineSetStatusToCAPI(mapiMachineSet.Status, mapiMachineSet.Generation),
 	}
 
 	errs = append(errs, handleUnsupportedMAPIObjectMetaFields(field.NewPath("spec", "template", "metadata"), mapiMachineSet.Spec.Template.ObjectMeta)...)
@@ -67,25 +67,30 @@ func fromMAPIMachineSetToCAPIMachineSet(mapiMachineSet *mapiv1.MachineSet) (*clu
 }
 
 // convertMAPIMachineSetStatusToCAPI converts a MAPI MachineSetStatus to CAPI format.
-func convertMAPIMachineSetStatusToCAPI(mapiStatus mapiv1.MachineSetStatus) clusterv1.MachineSetStatus {
+func convertMAPIMachineSetStatusToCAPI(mapiStatus mapiv1.MachineSetStatus, observedGeneration int64) clusterv1.MachineSetStatus {
 	capiStatus := clusterv1.MachineSetStatus{
-		Selector:             "", // TODO(damdo): check this: CAPI Selector field is not available in MAPI, will be populated by CAPI controller
 		Replicas:             mapiStatus.Replicas,
 		FullyLabeledReplicas: mapiStatus.FullyLabeledReplicas,
 		ReadyReplicas:        mapiStatus.ReadyReplicas,
 		AvailableReplicas:    mapiStatus.AvailableReplicas,
-		// ObservedGeneration: // Ignore, this field as it shouldn't match between CAPI and MAPI.
-		Conditions: convertMAPIMachineSetConditionsToCAPIMachineSetConditions(mapiStatus.Conditions),
-		V1Beta2:    convertMAPIMachineSetStatusToCAPIMachineSetV1Beta2Status(mapiStatus),
+		ObservedGeneration:   observedGeneration, // Set the observed generation to the current CAPI MachineSet generation.
+		Conditions:           convertMAPIMachineSetConditionsToCAPIMachineSetConditions(mapiStatus.Conditions),
+		V1Beta2:              convertMAPIMachineSetStatusToCAPIMachineSetV1Beta2Status(mapiStatus),
 	}
 
 	// Convert ErrorReason/ErrorMessage to FailureReason/FailureMessage
 	if mapiStatus.ErrorReason != nil {
 		capiStatus.FailureReason = convertMAPIErrorReasonToCAPIFailureReason(*mapiStatus.ErrorReason)
 	}
+
 	if mapiStatus.ErrorMessage != nil {
 		capiStatus.FailureMessage = mapiStatus.ErrorMessage
 	}
+
+	// unused fields from MAPI MachineSetStatus
+	// - Selector: label selection is different between CAPI and MAPI.
+	// - AuthoritativeAPI: this is part of the conversion mechanism, it is not used in CAPI.
+	// - SynchronizedGeneration: this is part of the conversion mechanism, it is not used in CAPI.
 
 	return capiStatus
 }
@@ -94,7 +99,7 @@ func convertMAPIMachineSetStatusToCAPIMachineSetV1Beta2Status(mapiStatus mapiv1.
 	return &clusterv1.MachineSetV1Beta2Status{
 		ReadyReplicas:     ptr.To(mapiStatus.ReadyReplicas),
 		AvailableReplicas: ptr.To(mapiStatus.AvailableReplicas),
-		UpToDateReplicas:  ptr.To(mapiStatus.FullyLabeledReplicas), // TODO(damdo): is it ok to do this?
+		UpToDateReplicas:  ptr.To(mapiStatus.FullyLabeledReplicas), // Should be ok to do this.
 		Conditions:        convertMAPIMachineSetConditionsToCAPIMachineSetV1Beta2StatusConditions(mapiStatus.Conditions),
 	}
 }

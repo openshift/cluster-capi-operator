@@ -19,18 +19,34 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/onsi/gomega"
 	"github.com/onsi/gomega/types"
+	"github.com/openshift/cluster-api-actuator-pkg/testutils"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
 // errActualTypeMismatchCAPICondition is used when the type of the actual object does not match the expected type of clusterv1.Condition.
 var errActualTypeMismatchCAPICondition = errors.New("actual should be of type clusterv1.Condition")
 
-// MatchCAPICondition returns a custom matcher to check equality of clusterv1.Condition.
-// It follows the same pattern as testutils.MatchCondition but for CAPI v1beta1.Condition types.
-// Note: This matcher deliberately ignores LastTransitionTime field
+// convertCAPIConditionToMetav1Condition converts a clusterv1.Condition to metav1.Condition.
+// Note: This conversion deliberately ignores the Severity field as metav1.Condition
+// does not have a Severity field, and also ignores LastTransitionTime
 // as it may vary between conversions and fuzzing.
+func convertCAPIConditionToMetav1Condition(capiCondition clusterv1.Condition) metav1.Condition {
+	return metav1.Condition{
+		Type:    string(capiCondition.Type),
+		Status:  metav1.ConditionStatus(capiCondition.Status),
+		Reason:  capiCondition.Reason,
+		Message: capiCondition.Message,
+		// Note: We deliberately ignore LastTransitionTime and Severity fields
+		// as they may vary between conversions and fuzzing or are not supported
+	}
+}
+
+// MatchCAPICondition returns a custom matcher to check equality of clusterv1.Condition.
+// It converts the CAPI condition to metav1.Condition and delegates to testutils.MatchCondition.
+// Note: This matcher deliberately ignores LastTransitionTime and Severity fields
+// as they may vary between conversions and fuzzing or are not supported by metav1.Condition.
 func MatchCAPICondition(expected clusterv1.Condition) types.GomegaMatcher {
 	return &matchCAPICondition{
 		expected: expected,
@@ -48,35 +64,17 @@ func (m matchCAPICondition) Match(actual interface{}) (success bool, err error) 
 		return false, errActualTypeMismatchCAPICondition
 	}
 
-	ok, err = gomega.Equal(m.expected.Type).Match(actualCondition.Type)
-	if !ok {
-		return false, fmt.Errorf("condition type does not match: %w", err)
+	// Convert both expected and actual CAPI conditions to metav1.Condition
+	expectedMetav1Condition := convertCAPIConditionToMetav1Condition(m.expected)
+	actualMetav1Condition := convertCAPIConditionToMetav1Condition(actualCondition)
+
+	// Delegate to the original metav1.Condition matcher
+	success, err = testutils.MatchCondition(expectedMetav1Condition).Match(actualMetav1Condition)
+	if err != nil {
+		return false, fmt.Errorf("condition matching failed: %w", err)
 	}
 
-	ok, err = gomega.Equal(m.expected.Status).Match(actualCondition.Status)
-	if !ok {
-		return false, fmt.Errorf("condition status does not match: %w", err)
-	}
-
-	ok, err = gomega.Equal(m.expected.Reason).Match(actualCondition.Reason)
-	if !ok {
-		return false, fmt.Errorf("condition reason does not match: %w", err)
-	}
-
-	ok, err = gomega.Equal(m.expected.Message).Match(actualCondition.Message)
-	if !ok {
-		return false, fmt.Errorf("condition message does not match: %w", err)
-	}
-
-	ok, err = gomega.Equal(m.expected.Severity).Match(actualCondition.Severity)
-	if !ok {
-		return false, fmt.Errorf("condition severity does not match: %w", err)
-	}
-
-	// Note: We deliberately ignore LastTransitionTime field
-	// as it may vary between conversions and fuzzing
-
-	return true, nil
+	return success, nil
 }
 
 // FailureMessage is the message returned to the test when the actual and expected
