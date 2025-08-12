@@ -18,21 +18,27 @@ package crdcompatibility
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 )
 
 const (
-	controllerName string = "CRDCompatibilityController"
+	fieldIndexCRDRef string = "spec.crdRef"
+
+	controllerName string = "crdcompatibility.operator.openshift.io"
 )
 
 //+kubebuilder:rbac:groups=operator.openshift.io,resources=crdcompatibilityrequirements,verbs=get;list;watch;create;update;patch;delete
@@ -49,11 +55,9 @@ func NewCRDCompatibilityReconciler(client client.Client) *CRDCompatibilityReconc
 // CRDCompatibilityReconciler reconciles CRDCompatibilityRequirement resources
 type CRDCompatibilityReconciler struct {
 	client client.Client
-}
 
-const (
-	fieldIndexCRDRef = "spec.crdRef"
-)
+	validator *crdValidator
+}
 
 // SetupWithManager sets up the controller with the Manager
 func (r *CRDCompatibilityReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager) error {
@@ -65,13 +69,36 @@ func (r *CRDCompatibilityReconciler) SetupWithManager(ctx context.Context, mgr c
 		return err
 	}
 
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&operatorv1alpha1.CRDCompatibilityRequirement{}).
-		Watches(
-			&apiextensionsv1.CustomResourceDefinition{},
-			handler.EnqueueRequestsFromMapFunc(r.findCRDCompatibilityRequirementsForCRD),
-		).
-		Complete(r)
+	// TODO: For safety we need to ensure that we have reconciled every
+	// CRDCompatibilityRequirement at least once before we the webhook is
+	// registered. The webhook will allow any change for a CRD if it has not
+	// seen a CRDCompatibilityRequirement for it. This would be a race
+	// immedately after failover.
+
+	crdValidator := &crdValidator{
+		client: mgr.GetClient(),
+	}
+	r.validator = crdValidator
+
+	return errors.Join(
+		ctrl.NewWebhookManagedBy(mgr).
+			For(&apiextensionsv1.CustomResourceDefinition{}).
+			WithValidator(crdValidator).
+			Complete(),
+
+		ctrl.NewControllerManagedBy(mgr).
+			// We don't need to reconcile deletion because we use a finalizer
+			For(&operatorv1alpha1.CRDCompatibilityRequirement{}, builder.WithPredicates(predicate.Funcs{
+				CreateFunc:  func(e event.CreateEvent) bool { return true },
+				UpdateFunc:  func(e event.UpdateEvent) bool { return true },
+				GenericFunc: func(e event.GenericEvent) bool { return true },
+			})).
+			Watches(
+				&apiextensionsv1.CustomResourceDefinition{},
+				handler.EnqueueRequestsFromMapFunc(r.findCRDCompatibilityRequirementsForCRD),
+			).
+			Complete(r),
+	)
 }
 
 // findCRDCompatibilityRequirementsForCRD finds all CRDCompatibilityRequirements that reference the given CRD

@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/go-logr/logr"
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
@@ -34,7 +35,7 @@ import (
 )
 
 const (
-	noRequeueErrorReasonInvalidCompatibilityCRD string = "InvalidCompatibilityCRD"
+	noRequeueErrorReasonConfigurationError string = "ConfigurationError"
 )
 
 type reconcileState struct {
@@ -88,7 +89,7 @@ func (r *reconcileState) parseCompatibilityCRD(crdCompatibilityRequirement *oper
 	// Parse the CRD in compatibilityCRD into a CRD object
 	compatibilityCRD := &apiextensionsv1.CustomResourceDefinition{}
 	if err := yaml.Unmarshal([]byte(crdCompatibilityRequirement.Spec.CompatibilityCRD), compatibilityCRD); err != nil {
-		return util.NoRequeueError(fmt.Errorf("failed to parse compatibilityCRD for %s: %w", crdCompatibilityRequirement.Spec.CRDRef, err), noRequeueErrorReasonInvalidCompatibilityCRD)
+		return util.NoRequeueError(fmt.Errorf("failed to parse compatibilityCRD for %s: %w", crdCompatibilityRequirement.Spec.CRDRef, err), noRequeueErrorReasonConfigurationError)
 	}
 	r.compatibilityCRD = compatibilityCRD
 
@@ -127,6 +128,13 @@ func (r *reconcileState) reconcileCreateOrUpdate(ctx context.Context, crdCompati
 
 	logger.Info("Reconciling CRDCompatibilityRequirement")
 
+	// Set the finalizer before reconciling
+	if !slices.Contains(crdCompatibilityRequirement.Finalizers, finalizerName) {
+		if err := setFinalizer(ctx, r.client, crdCompatibilityRequirement); err != nil {
+			return ctrl.Result{}, err
+		}
+	}
+
 	err := errors.Join(
 		r.parseCompatibilityCRD(crdCompatibilityRequirement),
 		r.fetchCurrentCRD(ctx, logger, crdCompatibilityRequirement),
@@ -138,8 +146,11 @@ func (r *reconcileState) reconcileCreateOrUpdate(ctx context.Context, crdCompati
 
 	if r.compatibilityCRD == nil {
 		// Should have been handled by API validation
-		return ctrl.Result{}, util.NoRequeueError(fmt.Errorf("compatibilityCRD was not provided"), noRequeueErrorReasonInvalidCompatibilityCRD)
+		return ctrl.Result{}, util.NoRequeueError(fmt.Errorf("compatibilityCRD was not provided"), noRequeueErrorReasonConfigurationError)
 	}
+
+	// Add the requirement to the webhook validator
+	r.validator.setRequirement(crdCompatibilityRequirement.Spec.CRDRef, r.compatibilityCRD)
 
 	// TODO: Implement reconciliation logic
 	// - Validate CRDCompatibilityRequirement spec
@@ -150,10 +161,17 @@ func (r *reconcileState) reconcileCreateOrUpdate(ctx context.Context, crdCompati
 	return ctrl.Result{}, nil
 }
 
-func (r *reconcileState) reconcileDelete(ctx context.Context, _ *operatorv1alpha1.CRDCompatibilityRequirement) (ctrl.Result, error) {
+func (r *reconcileState) reconcileDelete(ctx context.Context, obj *operatorv1alpha1.CRDCompatibilityRequirement) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
 	logger.Info("Reconciling CRDCompatibilityRequirement deletion")
+
+	// Remove the requirement from the webhook validator
+	r.validator.setRequirement(obj.Spec.CRDRef, nil)
+
+	if err := clearFinalizer(ctx, r.client, obj); err != nil {
+		return ctrl.Result{}, err
+	}
 
 	return ctrl.Result{}, nil
 }

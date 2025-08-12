@@ -21,12 +21,19 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func HaveCondition(conditionType string, conditionStatus metav1.ConditionStatus, conditionReason string, conditionMessage string) types.GomegaMatcher {
-	return g.HaveField("Status.Conditions", g.ContainElement(
-		g.SatisfyAll(
-			g.HaveField("Type", g.Equal(conditionType)),
-			g.HaveField("Status", g.Equal(conditionStatus)),
-			g.HaveField("Reason", g.Equal(conditionReason)),
-			g.HaveField("Message", g.Equal(conditionMessage)),
-		)))
+func WithConditionReason(conditionReason string) types.GomegaMatcher {
+	return g.HaveField("Reason", g.Equal(conditionReason))
+}
+
+func WithConditionMessage(conditionMessage string) types.GomegaMatcher {
+	return g.HaveField("Message", g.Equal(conditionMessage))
+}
+
+func HaveCondition(conditionType string, conditionStatus metav1.ConditionStatus, conditionMatcher ...types.GomegaMatcher) types.GomegaMatcher {
+	conditionMatchers := []types.GomegaMatcher{
+		g.HaveField("Type", g.Equal(conditionType)),
+		g.HaveField("Status", g.Equal(conditionStatus)),
+	}
+	conditionMatchers = append(conditionMatchers, conditionMatcher...)
+	return g.HaveField("Status.Conditions", g.ContainElement(g.SatisfyAll(conditionMatchers...)))
 }

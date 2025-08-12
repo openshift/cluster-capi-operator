@@ -18,10 +18,12 @@ package crdcompatibility
 
 import (
 	"context"
+	"path/filepath"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -29,6 +31,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/cluster-capi-operator/pkg/test"
@@ -50,7 +53,11 @@ var _ = BeforeSuite(func() {
 
 	By("bootstrapping test environment")
 	var err error
-	testEnv = &envtest.Environment{}
+	testEnv = &envtest.Environment{
+		WebhookInstallOptions: envtest.WebhookInstallOptions{
+			Paths: []string{filepath.Join("..", "..", "..", "manifests", "0000_20_crd-compatibility-checker_02_webhooks.yaml")},
+		},
+	}
 	cfg, cl, err = test.StartEnvTest(testEnv)
 
 	DeferCleanup(func() {
@@ -62,7 +69,7 @@ var _ = BeforeSuite(func() {
 	Expect(cfg).NotTo(BeNil())
 	Expect(cl).NotTo(BeNil())
 
-	mgrCancel, mgrDone := startManager(context.Background(), cfg, cl.Scheme())
+	mgrCancel, mgrDone := startManager(context.Background(), cfg, cl.Scheme(), testEnv)
 
 	DeferCleanup(func() {
 		By("Stopping the manager")
@@ -70,17 +77,22 @@ var _ = BeforeSuite(func() {
 	})
 })
 
-func startManager(ctx context.Context, cfg *rest.Config, scheme *runtime.Scheme) (context.CancelFunc, chan struct{}) {
+func startManager(ctx context.Context, cfg *rest.Config, scheme *runtime.Scheme, testEnv *envtest.Environment) (context.CancelFunc, chan struct{}) {
 	mgrCtx, mgrCancel := context.WithCancel(ctx)
 	mgrDone := make(chan struct{})
 
 	By("Setting up a manager and controller")
 	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
 		Scheme: scheme,
+		WebhookServer: webhook.NewServer(webhook.Options{
+			CertDir: testEnv.WebhookInstallOptions.LocalServingCertDir,
+			Port:    testEnv.WebhookInstallOptions.LocalServingPort,
+			Host:    testEnv.WebhookInstallOptions.LocalServingHost,
+		}),
 	})
 	Expect(err).ToNot(HaveOccurred(), "Manager should be created")
 
-	r := &CRDCompatibilityReconciler{mgr.GetClient()}
+	r := &CRDCompatibilityReconciler{client: mgr.GetClient()}
 	Expect(r.SetupWithManager(ctx, mgr)).To(Succeed(), "Reconciler should be setup with manager")
 
 	By("Starting the manager")
@@ -90,6 +102,8 @@ func startManager(ctx context.Context, cfg *rest.Config, scheme *runtime.Scheme)
 
 		Expect((mgr).Start(mgrCtx)).To(Succeed())
 	}()
+
+	Eventually(mgr.Elected()).Should(BeClosed())
 
 	return mgrCancel, mgrDone
 }
