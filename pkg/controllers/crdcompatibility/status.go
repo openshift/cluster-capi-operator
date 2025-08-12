@@ -19,12 +19,15 @@ package crdcompatibility
 import (
 	"context"
 	"fmt"
+	"slices"
+	"strings"
 
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	operatorapplyconfig "github.com/openshift/client-go/operator/applyconfigurations/operator/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	metav1applyconfig "k8s.io/client-go/applyconfigurations/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 )
@@ -33,10 +36,23 @@ const (
 	progressingReasonConfigurationError string = "ConfigurationError"
 	progressingReasonTransientError     string = "TransientError"
 	progressingReasonUpToDate           string = "UpToDate"
+
+	compatibleReasonRequirementsNotMet     string = "RequirementsNotMet"
+	compatibleReasonCompatibleWithWarnings string = "CompatibleWithWarnings"
+	compatibleReasonCompatible             string = "Compatible"
+
+	admittedReasonAdmitted               string = "Admitted"
+	admittedReasonCompatibilityCRDNotSet string = "CompatibilityCRDNotSet"
 )
 
 func (r *reconcileState) writeStatus(ctx context.Context, obj *operatorv1alpha1.CRDCompatibilityRequirement, reconcileErr error) error {
-	readyCondition := r.getReadyCondition()
+	// Don't write status if the object has no finalizer
+	if obj.DeletionTimestamp.IsZero() && !slices.Contains(obj.Finalizers, finalizerName) {
+		log.FromContext(ctx).Info("Skipping status because the object is being deleted")
+		return nil
+	}
+
+	admittedCondition := r.getAdmittedCondition()
 	compatibleCondition := r.getCompatibleCondition()
 	progressingCondition := r.getProgressingCondition(reconcileErr)
 
@@ -44,7 +60,7 @@ func (r *reconcileState) writeStatus(ctx context.Context, obj *operatorv1alpha1.
 	now := metav1.Now()
 	applyConfigStatus := operatorapplyconfig.CRDCompatibilityRequirementStatus().
 		WithConditions(
-			util.SetLastTransitionTimeMetaV1(now, currentConditions, readyCondition),
+			util.SetLastTransitionTimeMetaV1(now, currentConditions, admittedCondition),
 			util.SetLastTransitionTimeMetaV1(now, currentConditions, compatibleCondition),
 			util.SetLastTransitionTimeMetaV1(now, currentConditions, progressingCondition),
 		)
@@ -94,18 +110,45 @@ func (r *reconcileState) getProgressingCondition(reconcileErr error) *metav1appl
 
 // Ready indicates whether the CRDCompatibililtyRequirement has been completely admitted, i.e. all required admission policies have been created.
 // Not yet implemented
-func (r *reconcileState) getReadyCondition() *metav1applyconfig.ConditionApplyConfiguration {
-	return metav1applyconfig.Condition().WithType("Ready").
-		WithStatus(metav1.ConditionFalse).
-		WithReason("NotImplemented").
-		WithMessage("Not implemented")
+func (r *reconcileState) getAdmittedCondition() *metav1applyconfig.ConditionApplyConfiguration {
+	admittedCondition := metav1applyconfig.Condition().WithType("Admitted")
+
+	if r.compatibilityCRD != nil {
+		admittedCondition.
+			WithStatus(metav1.ConditionTrue).
+			WithReason(admittedReasonAdmitted).
+			WithMessage("The CRDCompatibilityRequirement has been admitted")
+	} else {
+		admittedCondition.
+			WithStatus(metav1.ConditionFalse).
+			WithReason(admittedReasonCompatibilityCRDNotSet).
+			WithMessage("The compatibility CRD is not set")
+	}
+
+	return admittedCondition
 }
 
 // Compatible indicates whether the CRD is compatible with the compatibilityCRD
 // Not yet implemented
 func (r *reconcileState) getCompatibleCondition() *metav1applyconfig.ConditionApplyConfiguration {
-	return metav1applyconfig.Condition().WithType("Compatible").
-		WithStatus(metav1.ConditionFalse).
-		WithReason("NotImplemented").
-		WithMessage("Not implemented")
+	compatibleCondition := metav1applyconfig.Condition().WithType("Compatible")
+
+	if len(r.compatibilityErrors) > 0 {
+		compatibleCondition.
+			WithStatus(metav1.ConditionFalse).
+			WithReason(compatibleReasonRequirementsNotMet).
+			WithMessage(strings.Join(r.compatibilityErrors, "\n"))
+	} else {
+		compatibleCondition.WithStatus(metav1.ConditionTrue)
+
+		if len(r.compatibilityWarnings) > 0 {
+			compatibleCondition.WithReason(compatibleReasonCompatibleWithWarnings).
+				WithMessage(strings.Join(r.compatibilityWarnings, "\n"))
+		} else {
+			compatibleCondition.WithReason(compatibleReasonCompatible).
+				WithMessage("The CRD is compatible with this requirement")
+		}
+	}
+
+	return compatibleCondition
 }
