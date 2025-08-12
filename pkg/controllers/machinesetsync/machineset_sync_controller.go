@@ -771,7 +771,7 @@ func (r *MachineSetSyncReconciler) createOrUpdateCAPIInfraMachineTemplate(ctx co
 
 // createOrUpdateCAPIMachineSet creates a CAPI machine set from a MAPI one, or updates if it exists and it is out of date.
 //
-//nolint:funlen
+//nolint:funlen,gocognit,cyclop
 func (r *MachineSetSyncReconciler) createOrUpdateCAPIMachineSet(ctx context.Context, mapiMachineSet *machinev1beta1.MachineSet, capiMachineSet *clusterv1.MachineSet, newCAPIMachineSet *clusterv1.MachineSet) error {
 	logger := log.FromContext(ctx)
 
@@ -815,7 +815,7 @@ func (r *MachineSetSyncReconciler) createOrUpdateCAPIMachineSet(ctx context.Cont
 		updated = true
 	}
 
-	//nolint:dupl,nestif
+	//nolint:nestif
 	if hasStatusChanges(capiMachineSetsDiff) {
 		logger.Info("Changes detected for CAPI machine set status. Updating it", "diff", fmt.Sprintf("%+v", capiMachineSetsDiff))
 
@@ -829,8 +829,52 @@ func (r *MachineSetSyncReconciler) createOrUpdateCAPIMachineSet(ctx context.Cont
 		capiMachineSet.Status.FailureReason = newCAPIMachineSet.Status.FailureReason
 		capiMachineSet.Status.FailureMessage = newCAPIMachineSet.Status.FailureMessage
 
-		// TODO(damdo): Restore the Conditions.
-		// Conditions: newCAPIMachineSet.Status.Conditions, // These will need to be appended?
+		// Update the conditions if they exist (ignoring lasttransitiontime), append new ones.
+		for i := range newCAPIMachineSet.Status.Conditions {
+			hasCondition := false
+
+			for j := range capiMachineSet.Status.Conditions {
+				if capiMachineSet.Status.Conditions[j].Type == newCAPIMachineSet.Status.Conditions[i].Type {
+					hasCondition = true
+					capiMachineSet.Status.Conditions[j].Status = newCAPIMachineSet.Status.Conditions[i].Status
+					capiMachineSet.Status.Conditions[j].Reason = newCAPIMachineSet.Status.Conditions[i].Reason
+					capiMachineSet.Status.Conditions[j].Message = newCAPIMachineSet.Status.Conditions[i].Message
+
+					break
+				}
+			}
+
+			if !hasCondition {
+				capiMachineSet.Status.Conditions = append(capiMachineSet.Status.Conditions, newCAPIMachineSet.Status.Conditions[i])
+			}
+		}
+
+		// Update the v1beta2 conditions if they exist (ignoring lasttransitiontime), append new ones.
+		switch {
+		case newCAPIMachineSet.Status.V1Beta2 == nil:
+			capiMachineSet.Status.V1Beta2 = nil
+		case capiMachineSet.Status.V1Beta2 == nil:
+			capiMachineSet.Status.V1Beta2 = newCAPIMachineSet.Status.V1Beta2
+		default:
+			for i := range newCAPIMachineSet.Status.V1Beta2.Conditions {
+				hasCondition := false
+
+				for j := range capiMachineSet.Status.V1Beta2.Conditions {
+					if capiMachineSet.Status.V1Beta2.Conditions[j].Type == newCAPIMachineSet.Status.V1Beta2.Conditions[i].Type {
+						hasCondition = true
+						capiMachineSet.Status.V1Beta2.Conditions[j].Status = newCAPIMachineSet.Status.V1Beta2.Conditions[i].Status
+						capiMachineSet.Status.V1Beta2.Conditions[j].Reason = newCAPIMachineSet.Status.V1Beta2.Conditions[i].Reason
+						capiMachineSet.Status.V1Beta2.Conditions[j].Message = newCAPIMachineSet.Status.V1Beta2.Conditions[i].Message
+
+						break
+					}
+				}
+
+				if !hasCondition {
+					capiMachineSet.Status.V1Beta2.Conditions = append(capiMachineSet.Status.V1Beta2.Conditions, newCAPIMachineSet.Status.V1Beta2.Conditions[i])
+				}
+			}
+		}
 
 		if isPatchRequired, err := util.IsPatchRequired(capiMachineSet, patchBase); err != nil {
 			return fmt.Errorf("failed to check if patch is required: %w", err)
@@ -862,7 +906,7 @@ func (r *MachineSetSyncReconciler) createOrUpdateCAPIMachineSet(ctx context.Cont
 
 // createOrUpdateMAPIMachineSet creates a MAPI machine set from a CAPI one, or updates if it exists and it is out of date.
 //
-//nolint:funlen
+//nolint:funlen,gocognit
 func (r *MachineSetSyncReconciler) createOrUpdateMAPIMachineSet(ctx context.Context, mapiMachineSet *machinev1beta1.MachineSet, newMAPIMachineSet *machinev1beta1.MachineSet) error {
 	logger := log.FromContext(ctx)
 
@@ -892,7 +936,7 @@ func (r *MachineSetSyncReconciler) createOrUpdateMAPIMachineSet(ctx context.Cont
 		updated = true
 	}
 
-	//nolint:dupl,nestif
+	//nolint:nestif
 	if hasStatusChanges(mapiMachineSetsDiff) {
 		logger.Info("Changes detected for MAPI machine set status. Updating it", "diff", fmt.Sprintf("%+v", mapiMachineSetsDiff))
 
@@ -906,8 +950,25 @@ func (r *MachineSetSyncReconciler) createOrUpdateMAPIMachineSet(ctx context.Cont
 		mapiMachineSet.Status.ErrorReason = newMAPIMachineSet.Status.ErrorReason
 		mapiMachineSet.Status.ErrorMessage = newMAPIMachineSet.Status.ErrorMessage
 
-		// TODO(damdo): Restore the Conditions.
-		// Conditions: newMapiMachineSet.Status.Conditions, // These will need to be appended?
+		// Update the conditions if they exist (ignoring lasttransitiontime), append new ones.
+		for i := range newMAPIMachineSet.Status.Conditions {
+			hasCondition := false
+
+			for j := range mapiMachineSet.Status.Conditions {
+				if mapiMachineSet.Status.Conditions[j].Type == newMAPIMachineSet.Status.Conditions[i].Type {
+					hasCondition = true
+					mapiMachineSet.Status.Conditions[j].Status = newMAPIMachineSet.Status.Conditions[i].Status
+					mapiMachineSet.Status.Conditions[j].Reason = newMAPIMachineSet.Status.Conditions[i].Reason
+					mapiMachineSet.Status.Conditions[j].Message = newMAPIMachineSet.Status.Conditions[i].Message
+
+					break
+				}
+			}
+
+			if !hasCondition {
+				mapiMachineSet.Status.Conditions = append(mapiMachineSet.Status.Conditions, newMAPIMachineSet.Status.Conditions[i])
+			}
+		}
 
 		if isPatchRequired, err := util.IsPatchRequired(mapiMachineSet, patchBase); err != nil {
 			return fmt.Errorf("failed to check if patch is required: %w", err)

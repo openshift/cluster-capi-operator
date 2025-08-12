@@ -604,22 +604,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 						capiMachineSet.Status.AvailableReplicas = 2
 						capiMachineSet.Status.FailureMessage = ptr.To("test failure message")
 						capiMachineSet.Status.FailureReason = ptr.To(capierrors.MachineSetStatusError("test failure reason"))
-						// capiMachineSet.Status.Conditions = []clusterv1.Condition{
-						// 	{
-						// 		Type:               "ReplicasReady",
-						// 		Status:             corev1.ConditionTrue,
-						// 		LastTransitionTime: metav1.Now(),
-						// 		Reason:             "AllReplicasReady",
-						// 		Message:            "All replicas are ready",
-						// 	},
-						// 	{
-						// 		Type:               "ScalingUp",
-						// 		Status:             corev1.ConditionFalse,
-						// 		LastTransitionTime: metav1.Now(),
-						// 		Reason:             "NotScaling",
-						// 		Message:            "Not currently scaling",
-						// 	},
-						// }
+						// capiMachineSet.Status.Conditions // Conditions are not a 1:1 matching and are computed separately, so don't check them here.
 					})).Should(Succeed())
 				})
 
@@ -631,22 +616,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 							HaveField("Status.AvailableReplicas", BeEquivalentTo(capiMachineSet.Status.AvailableReplicas)),
 							HaveField("Status.ErrorMessage", BeEquivalentTo(capiMachineSet.Status.FailureMessage)),
 							HaveField("Status.ErrorReason", BeEquivalentTo(capiMachineSet.Status.FailureReason)),
-							// HaveField("Status.Conditions", ContainElement(
-							// 	SatisfyAll(
-							// 		HaveField("Type", Equal("ReplicasReady")),
-							// 		HaveField("Status", Equal(corev1.ConditionTrue)),
-							// 		HaveField("Reason", Equal("AllReplicasReady")),
-							// 		HaveField("Message", Equal("All replicas are ready")),
-							// 	),
-							// )),
-							// HaveField("Status.Conditions", ContainElement(
-							// 	SatisfyAll(
-							// 		HaveField("Type", Equal("ScalingUp")),
-							// 		HaveField("Status", Equal(corev1.ConditionFalse)),
-							// 		HaveField("Reason", Equal("NotScaling")),
-							// 		HaveField("Message", Equal("Not currently scaling")),
-							// 	),
-							// )),
+							// Status.Conditions // Conditions are not a 1:1 matching and are computed separately, so don't check them here.
 						))
 				})
 			})
