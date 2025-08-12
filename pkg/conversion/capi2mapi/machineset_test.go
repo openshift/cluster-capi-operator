@@ -18,7 +18,6 @@ package capi2mapi
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	mapiv1 "github.com/openshift/api/machine/v1beta1"
 	capibuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/cluster-api/core/v1beta1"
 	capabuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/cluster-api/infrastructure/v1beta2"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/test/matchers"
@@ -28,6 +27,39 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	capierrors "sigs.k8s.io/cluster-api/errors"
 )
+
+var _ = Describe("capi2mapi MachineSet conversion", func() {
+	var (
+		capiMachineSetBase = capibuilder.MachineSet()
+	)
+
+	type capi2MAPIMachinesetConversionInput struct {
+		machineSetBuilder capibuilder.MachineSetBuilder
+		expectedErrors    []string
+		expectedWarnings  []string
+	}
+
+	var _ = DescribeTable("capi2mapi convert CAPI MachineSet/InfraMachineTemplate/InfraCluster to MAPI MachineSet",
+		func(in capi2MAPIMachinesetConversionInput) {
+			_, warns, err := FromMachineSetAndAWSMachineTemplateAndAWSCluster(
+				in.machineSetBuilder.Build(),
+				capabuilder.AWSMachineTemplate().Build(),
+				capabuilder.AWSCluster().Build(),
+			).ToMachineSet()
+			Expect(err).To(matchers.ConsistOfMatchErrorSubstrings(in.expectedErrors),
+				"should match expected errors while converting CAPI resources to MAPI MachineSet")
+			Expect(warns).To(matchers.ConsistOfSubstrings(in.expectedWarnings),
+				"should match expected warnings while converting CAPI resources to MAPI MachineSet")
+		},
+
+		// Base Case.
+		Entry("With a Base configuration", capi2MAPIMachinesetConversionInput{
+			machineSetBuilder: capiMachineSetBase,
+			expectedErrors:    []string{},
+			expectedWarnings:  []string{},
+		}),
+	)
+})
 
 var _ = Describe("capi2mapi MachineSet Status Conversion", func() {
 	Describe("convertCAPIMachineSetStatusToMAPI", func() {
@@ -62,15 +94,7 @@ var _ = Describe("capi2mapi MachineSet Status Conversion", func() {
 			Expect(string(*mapiStatus.ErrorReason)).To(Equal("InvalidConfiguration"))
 			Expect(mapiStatus.ErrorMessage).ToNot(BeNil())
 			Expect(*mapiStatus.ErrorMessage).To(Equal("Test failure message"))
-			Expect(mapiStatus.Conditions).To(SatisfyAll(
-				HaveLen(1),
-				ContainElement(matchers.MatchMAPICondition(mapiv1.Condition{
-					Type:    "Available",
-					Status:  corev1.ConditionTrue,
-					Reason:  "MachineSetAvailable",
-					Message: "MachineSet is available",
-				})),
-			))
+			Expect(mapiStatus.Conditions).To(BeNil())
 		})
 
 		It("should handle empty CAPI MachineSetStatus", func() {
@@ -88,85 +112,4 @@ var _ = Describe("capi2mapi MachineSet Status Conversion", func() {
 			Expect(mapiStatus.Conditions).To(BeNil())
 		})
 	})
-
-	Describe("convertCAPIConditionsToMAPI", func() {
-		It("should convert CAPI conditions to MAPI conditions", func() {
-			capiConditions := clusterv1.Conditions{
-				{
-					Type:   "Available",
-					Status: corev1.ConditionTrue,
-					// Severity must only be set when the condition is not True.
-					LastTransitionTime: metav1.Now(),
-					Reason:             "MachineSetAvailable",
-					Message:            "MachineSet is available",
-				},
-				{
-					Type:               "Progressing",
-					Status:             corev1.ConditionFalse,
-					Severity:           clusterv1.ConditionSeverityError,
-					LastTransitionTime: metav1.Now(),
-					Reason:             "MachineSetNotProgressing",
-					Message:            "MachineSet is not progressing",
-				},
-			}
-
-			mapiConditions := convertCAPIConditionsToMAPI(capiConditions)
-
-			Expect(mapiConditions).To(SatisfyAll(
-				HaveLen(2),
-				ContainElement(matchers.MatchMAPICondition(mapiv1.Condition{
-					Type:    "Available",
-					Status:  corev1.ConditionTrue,
-					Reason:  "MachineSetAvailable",
-					Message: "MachineSet is available",
-				})),
-				ContainElement(matchers.MatchMAPICondition(mapiv1.Condition{
-					Type:     "Progressing",
-					Status:   corev1.ConditionFalse,
-					Severity: mapiv1.ConditionSeverityError,
-					Reason:   "MachineSetNotProgressing",
-					Message:  "MachineSet is not progressing",
-				})),
-			))
-		})
-
-		It("should return nil for empty conditions", func() {
-			var capiConditions clusterv1.Conditions
-			mapiConditions := convertCAPIConditionsToMAPI(capiConditions)
-			Expect(mapiConditions).To(BeNil())
-		})
-	})
-})
-
-var _ = Describe("capi2mapi MachineSet conversion", func() {
-	var (
-		capiMachineSetBase = capibuilder.MachineSet()
-	)
-
-	type capi2MAPIMachinesetConversionInput struct {
-		machineSetBuilder capibuilder.MachineSetBuilder
-		expectedErrors    []string
-		expectedWarnings  []string
-	}
-
-	var _ = DescribeTable("capi2mapi convert CAPI MachineSet/InfraMachineTemplate/InfraCluster to MAPI MachineSet",
-		func(in capi2MAPIMachinesetConversionInput) {
-			_, warns, err := FromMachineSetAndAWSMachineTemplateAndAWSCluster(
-				in.machineSetBuilder.Build(),
-				capabuilder.AWSMachineTemplate().Build(),
-				capabuilder.AWSCluster().Build(),
-			).ToMachineSet()
-			Expect(err).To(matchers.ConsistOfMatchErrorSubstrings(in.expectedErrors),
-				"should match expected errors while converting CAPI resources to MAPI MachineSet")
-			Expect(warns).To(matchers.ConsistOfSubstrings(in.expectedWarnings),
-				"should match expected warnings while converting CAPI resources to MAPI MachineSet")
-		},
-
-		// Base Case.
-		Entry("With a Base configuration", capi2MAPIMachinesetConversionInput{
-			machineSetBuilder: capiMachineSetBase,
-			expectedErrors:    []string{},
-			expectedWarnings:  []string{},
-		}),
-	)
 })

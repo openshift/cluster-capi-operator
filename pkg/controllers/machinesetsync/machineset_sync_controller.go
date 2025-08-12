@@ -770,6 +770,8 @@ func (r *MachineSetSyncReconciler) createOrUpdateCAPIInfraMachineTemplate(ctx co
 }
 
 // createOrUpdateCAPIMachineSet creates a CAPI machine set from a MAPI one, or updates if it exists and it is out of date.
+//
+//nolint:funlen
 func (r *MachineSetSyncReconciler) createOrUpdateCAPIMachineSet(ctx context.Context, mapiMachineSet *machinev1beta1.MachineSet, capiMachineSet *clusterv1.MachineSet, newCAPIMachineSet *clusterv1.MachineSet) error {
 	logger := log.FromContext(ctx)
 
@@ -813,6 +815,7 @@ func (r *MachineSetSyncReconciler) createOrUpdateCAPIMachineSet(ctx context.Cont
 		updated = true
 	}
 
+	//nolint:dupl,nestif
 	if hasStatusChanges(capiMachineSetsDiff) {
 		logger.Info("Changes detected for CAPI machine set status. Updating it", "diff", fmt.Sprintf("%+v", capiMachineSetsDiff))
 
@@ -858,6 +861,8 @@ func (r *MachineSetSyncReconciler) createOrUpdateCAPIMachineSet(ctx context.Cont
 }
 
 // createOrUpdateMAPIMachineSet creates a MAPI machine set from a CAPI one, or updates if it exists and it is out of date.
+//
+//nolint:funlen
 func (r *MachineSetSyncReconciler) createOrUpdateMAPIMachineSet(ctx context.Context, mapiMachineSet *machinev1beta1.MachineSet, newMAPIMachineSet *machinev1beta1.MachineSet) error {
 	logger := log.FromContext(ctx)
 
@@ -887,6 +892,7 @@ func (r *MachineSetSyncReconciler) createOrUpdateMAPIMachineSet(ctx context.Cont
 		updated = true
 	}
 
+	//nolint:dupl,nestif
 	if hasStatusChanges(mapiMachineSetsDiff) {
 		logger.Info("Changes detected for MAPI machine set status. Updating it", "diff", fmt.Sprintf("%+v", mapiMachineSetsDiff))
 

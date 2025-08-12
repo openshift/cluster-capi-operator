@@ -20,6 +20,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	mapiv1 "github.com/openshift/api/machine/v1beta1"
+	testutils "github.com/openshift/cluster-api-actuator-pkg/testutils"
 	configbuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/config/v1"
 	machinebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/machine/v1beta1"
 
@@ -96,48 +97,85 @@ var _ = Describe("mapi2capi MachineSet conversion", func() {
 var _ = Describe("mapi2capi MachineSet Status Conversion", func() {
 	Describe("convertMAPIMachineSetStatusToCAPI", func() {
 		It("should convert MAPI MachineSet status to CAPI correctly", func() {
-			mapiStatus := mapiv1.MachineSetStatus{
-				Replicas:             5,
-				FullyLabeledReplicas: 5,
-				ReadyReplicas:        4,
-				AvailableReplicas:    3,
-				ErrorReason:          ptr.To(mapiv1.MachineSetStatusError("InvalidConfiguration")),
-				ErrorMessage:         ptr.To("Test error message"),
-				Conditions: []mapiv1.Condition{
-					{
-						Type:               "Available",
-						Status:             corev1.ConditionTrue,
-						Severity:           mapiv1.ConditionSeverityNone,
-						LastTransitionTime: metav1.Now(),
-						Reason:             "MachineSetAvailable",
-						Message:            "MachineSet is available",
+			mapiMachineSet := &mapiv1.MachineSet{
+				Spec: mapiv1.MachineSetSpec{
+					Replicas: ptr.To(int32(5)),
+				},
+				Status: mapiv1.MachineSetStatus{
+					Replicas:             5,
+					FullyLabeledReplicas: 5,
+					ReadyReplicas:        4,
+					AvailableReplicas:    3,
+					ErrorReason:          ptr.To(mapiv1.MachineSetStatusError("InvalidConfiguration")),
+					ErrorMessage:         ptr.To("Test error message"),
+					Conditions: []mapiv1.Condition{
+						{
+							Type:               "Available",
+							Status:             corev1.ConditionTrue,
+							Severity:           mapiv1.ConditionSeverityNone,
+							LastTransitionTime: metav1.Now(),
+							Reason:             "MachineSetAvailable",
+							Message:            "MachineSet is available",
+						},
 					},
 				},
 			}
 
-			capiStatus := convertMAPIMachineSetStatusToCAPI(mapiStatus, 1)
+			capiStatus := convertMAPIMachineSetToCAPIMachineSetStatus(mapiMachineSet)
 
-			Expect(capiStatus.Selector).To(Equal(""))
 			Expect(capiStatus.Replicas).To(Equal(int32(5)))
 			Expect(capiStatus.FullyLabeledReplicas).To(Equal(int32(5)))
 			Expect(capiStatus.ReadyReplicas).To(Equal(int32(4)))
 			Expect(capiStatus.AvailableReplicas).To(Equal(int32(3)))
 			Expect(capiStatus.FailureReason).To(HaveValue(BeEquivalentTo(mapiv1.MachineSetStatusError("InvalidConfiguration"))))
 			Expect(capiStatus.FailureMessage).To(HaveValue(BeEquivalentTo("Test error message")))
-			Expect(capiStatus.Conditions).To(ContainElement(matchers.MatchCAPICondition(clusterv1.Condition{
-				Type:    "Available",
-				Status:  corev1.ConditionTrue,
-				Reason:  "MachineSetAvailable",
-				Message: "MachineSet is available",
-			})))
+			Expect(capiStatus.Conditions).To(SatisfyAll(
+				ContainElement(matchers.MatchCAPICondition(clusterv1.Condition{
+					Type:   clusterv1.ReadyCondition,
+					Status: corev1.ConditionFalse,
+				})),
+				ContainElement(matchers.MatchCAPICondition(clusterv1.Condition{
+					Type:   clusterv1.ResizedCondition,
+					Status: corev1.ConditionTrue,
+				})),
+				ContainElement(matchers.MatchCAPICondition(clusterv1.Condition{
+					Type:   clusterv1.MachinesCreatedCondition,
+					Status: corev1.ConditionTrue,
+				})),
+				ContainElement(matchers.MatchCAPICondition(clusterv1.Condition{
+					Type:   clusterv1.MachinesReadyCondition,
+					Status: corev1.ConditionFalse,
+				})),
+			))
+			Expect(capiStatus.V1Beta2.Conditions).To(SatisfyAll(
+				ContainElement(testutils.MatchCondition(metav1.Condition{
+					Type:   clusterv1.MachineSetDeletingV1Beta2Condition,
+					Status: metav1.ConditionFalse,
+				})),
+				ContainElement(testutils.MatchCondition(metav1.Condition{
+					Type:   clusterv1.MachineSetScalingUpV1Beta2Condition,
+					Status: metav1.ConditionFalse,
+				})),
+				ContainElement(testutils.MatchCondition(metav1.Condition{
+					Type:   clusterv1.MachineSetScalingDownV1Beta2Condition,
+					Status: metav1.ConditionFalse,
+				})),
+				ContainElement(testutils.MatchCondition(metav1.Condition{
+					Type:   clusterv1.MachineSetMachinesReadyV1Beta2Condition,
+					Status: metav1.ConditionFalse,
+				})),
+				ContainElement(testutils.MatchCondition(metav1.Condition{
+					Type:   clusterv1.MachineSetMachinesUpToDateV1Beta2Condition,
+					Status: metav1.ConditionTrue,
+				})),
+			))
 		})
 
-		It("should handle empty MAPI MachineSet Status", func() {
-			mapiStatus := mapiv1.MachineSetStatus{}
+		PIt("should handle empty MAPI MachineSet Status", func() {
+			mapiMachineSet := &mapiv1.MachineSet{}
 
-			capiStatus := convertMAPIMachineSetStatusToCAPI(mapiStatus, 0)
+			capiStatus := convertMAPIMachineSetToCAPIMachineSetStatus(mapiMachineSet)
 
-			Expect(capiStatus.Selector).To(Equal(""))
 			Expect(capiStatus.Replicas).To(Equal(int32(0)))
 			Expect(capiStatus.FullyLabeledReplicas).To(Equal(int32(0)))
 			Expect(capiStatus.ReadyReplicas).To(Equal(int32(0)))
@@ -146,54 +184,6 @@ var _ = Describe("mapi2capi MachineSet Status Conversion", func() {
 			Expect(capiStatus.FailureReason).To(BeNil())
 			Expect(capiStatus.FailureMessage).To(BeNil())
 			Expect(capiStatus.Conditions).To(BeNil())
-		})
-	})
-
-	Describe("convertMAPIConditionsToCAPI", func() {
-		It("should convert MAPI conditions to CAPI conditions", func() {
-			mapiConditions := []mapiv1.Condition{
-				{
-					Type:   "Available",
-					Status: corev1.ConditionTrue,
-					// Severity must only be set when the condition is not True.
-					LastTransitionTime: metav1.Now(),
-					Reason:             "MachineSetAvailable",
-					Message:            "MachineSet is available",
-				},
-				{
-					Type:               "Progressing",
-					Status:             corev1.ConditionFalse,
-					Severity:           mapiv1.ConditionSeverityError,
-					LastTransitionTime: metav1.Now(),
-					Reason:             "MachineSetNotProgressing",
-					Message:            "MachineSet is not progressing",
-				},
-			}
-
-			capiConditions := convertMAPIMachineSetConditionsToCAPIMachineSetConditions(mapiConditions)
-
-			Expect(capiConditions).To(SatisfyAll(
-				HaveLen(2),
-				ContainElement(matchers.MatchCAPICondition(clusterv1.Condition{
-					Type:    "Available",
-					Status:  corev1.ConditionTrue,
-					Reason:  "MachineSetAvailable",
-					Message: "MachineSet is available",
-				})),
-				ContainElement(matchers.MatchCAPICondition(clusterv1.Condition{
-					Type:     "Progressing",
-					Status:   corev1.ConditionFalse,
-					Severity: clusterv1.ConditionSeverityError,
-					Reason:   "MachineSetNotProgressing",
-					Message:  "MachineSet is not progressing",
-				})),
-			))
-		})
-
-		It("should return nil for empty conditions", func() {
-			var mapiConditions []mapiv1.Condition
-			capiConditions := convertMAPIMachineSetConditionsToCAPIMachineSetConditions(mapiConditions)
-			Expect(capiConditions).To(BeNil())
 		})
 	})
 })

@@ -160,6 +160,8 @@ type capiToMapiMachineSetFuzzInput struct {
 // It leverages fuzz testing to generate random CAPI objects and then converts them to MAPI objects and back to CAPI objects.
 // The test then compares the original CAPI object with the final CAPI object to ensure that the conversion is lossless.
 // Any lossy conversions must be accounted for within the fuzz functions passed in.
+//
+//nolint:funlen
 func CAPI2MAPIMachineSetRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv1.Infrastructure, infraCluster, infraMachineTemplate client.Object, mapiConverter MAPI2CAPIMachineSetConverterConstructor, capiConverter CAPI2MAPIMachineSetConverterConstructor, fuzzerFuncs ...fuzzer.FuzzerFuncs) {
 	machineFuzzInputs := []TableEntry{}
 	fz := getFuzzer(scheme, fuzzerFuncs...)
@@ -212,6 +214,11 @@ func CAPI2MAPIMachineSetRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv
 		Expect(capiMachineSet.TypeMeta).To(Equal(in.machineSet.TypeMeta))
 		Expect(capiMachineSet.ObjectMeta).To(Equal(in.machineSet.ObjectMeta))
 		Expect(capiMachineSet.Spec).To(Equal(in.machineSet.Spec))
+
+		// The conditions are not a 1:1 mapping conversion between CAPI and MAPI.
+		// So null them out to match the original nil fuzzing.
+		capiMachineSet.Status.Conditions = nil
+		capiMachineSet.Status.V1Beta2.Conditions = nil
 		Expect(capiMachineSet.Status).To(Equal(in.machineSet.Status))
 
 		infraMachineTemplate.SetFinalizers(nil)
@@ -512,8 +519,9 @@ func CAPIMachineSetFuzzerFuncs(infraTemplateKind, infraAPIVersion, clusterName s
 				c.FillNoCustom(m)
 				m.Selector = ""          // Ignore, this field as it is not present in MAPI.
 				m.ObservedGeneration = 0 // Ignore, this field as it shouldn't match between CAPI and MAPI.
+				m.Conditions = nil       // Ignore, this field as it is not a 1:1 mapping between CAPI and MAPI but rather a recomputation of the conditions based on other fields.
 
-				fuzzCAPIMachineSetV1Beta2Status(m, c)
+				fuzzCAPIMachineSetV1Beta2Status(m)
 			},
 			func(m *clusterv1.MachineSet, c randfill.Continue) {
 				c.FillNoCustom(m)
@@ -646,6 +654,7 @@ func MAPIMachineSetFuzzerFuncs() fuzzer.FuzzerFuncs {
 				m.ObservedGeneration = 0     // Ignore, this field as it shouldn't match between CAPI and MAPI.
 				m.AuthoritativeAPI = ""      // Ignore, this field as it is not present in CAPI.
 				m.SynchronizedGeneration = 0 // Ignore, this field as it is not present in CAPI.
+				m.Conditions = nil           // Ignore, this field as it is not a 1:1 mapping between CAPI and MAPI but rather a recomputation of the conditions based on other fields.
 			},
 		}
 	}
@@ -686,7 +695,7 @@ func fuzzCAPIMachineSetSpecDeletePolicy(deletePolicy *string, c randfill.Continu
 	} //nolint:wsl
 }
 
-func fuzzCAPIMachineSetV1Beta2Status(status *clusterv1.MachineSetStatus, c randfill.Continue) {
+func fuzzCAPIMachineSetV1Beta2Status(status *clusterv1.MachineSetStatus) {
 	if status == nil {
 		return
 	}
@@ -695,26 +704,7 @@ func fuzzCAPIMachineSetV1Beta2Status(status *clusterv1.MachineSetStatus, c randf
 		status.V1Beta2 = &clusterv1.MachineSetV1Beta2Status{}
 	}
 
-	if status.Conditions == nil {
-		status.V1Beta2.Conditions = nil
-	} else {
-		v1beta2Conditions := make([]metav1.Condition, 0, len(status.Conditions))
-
-		for _, v1beta1Condition := range status.Conditions {
-			v1beta2Condition := metav1.Condition{
-				Type:               string(v1beta1Condition.Type), // TODO(damdo): Make sure we only convert the conditions that are supported by CAPI v1beta2.
-				Status:             metav1.ConditionStatus(v1beta1Condition.Status),
-				LastTransitionTime: v1beta1Condition.LastTransitionTime,
-				Reason:             v1beta1Condition.Reason,
-				Message:            v1beta1Condition.Message,
-			}
-
-			v1beta2Conditions = append(v1beta2Conditions, v1beta2Condition)
-		}
-
-		status.V1Beta2.Conditions = v1beta2Conditions
-	}
-
+	status.V1Beta2.Conditions = nil
 	status.V1Beta2.ReadyReplicas = ptr.To(status.ReadyReplicas)
 	status.V1Beta2.AvailableReplicas = ptr.To(status.AvailableReplicas)
 	status.V1Beta2.UpToDateReplicas = ptr.To(status.FullyLabeledReplicas)
