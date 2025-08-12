@@ -4,8 +4,12 @@ PROJECT_DIR := $(shell dirname $(abspath $(lastword $(MAKEFILE_LIST))))
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 ENVTEST_K8S_VERSION = 1.33.2
 
-ENVTEST = go run ${PROJECT_DIR}/vendor/sigs.k8s.io/controller-runtime/tools/setup-envtest
-GOLANGCI_LINT = go run ${PROJECT_DIR}/vendor/github.com/golangci/golangci-lint/cmd/golangci-lint
+define go-package-dir
+	$(shell go list -f '{{ .Dir }}' $(1))
+endef
+
+ENVTEST = go run $(call go-package-dir,sigs.k8s.io/controller-runtime/tools/setup-envtest)
+GOLANGCI_LINT = go run $(call go-package-dir,github.com/golangci/golangci-lint/cmd/golangci-lint)
 
 HOME ?= /tmp/kubebuilder-testing
 ifeq ($(HOME), /)
