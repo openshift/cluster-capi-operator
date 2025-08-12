@@ -113,6 +113,7 @@ func getTime(data map[string]interface{}, key string) metav1.Time {
 	return metav1.Time{}
 }
 
+// GetMAPIMachineSetCondition retrieves a specific condition from a list of MAPI MachineSet conditions.
 func GetMAPIMachineSetCondition(conditions []machinev1beta1.Condition, conditionType string) *machinev1beta1.Condition {
 	for _, c := range conditions {
 		if string(c.Type) == conditionType {
@@ -123,6 +124,9 @@ func GetMAPIMachineSetCondition(conditions []machinev1beta1.Condition, condition
 	return nil
 }
 
+// SetMAPIMachineSetCondition sets a condition in a list of MAPI MachineSet conditions.
+// If the condition already exists, it updates it.
+// If the condition does not exist, it adds it.
 func SetMAPIMachineSetCondition(conditions []machinev1beta1.Condition, condition *machinev1beta1.Condition) []machinev1beta1.Condition {
 	for i, c := range conditions {
 		if string(c.Type) == string(condition.Type) {

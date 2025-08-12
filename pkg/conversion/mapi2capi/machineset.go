@@ -58,7 +58,7 @@ func fromMAPIMachineSetToCAPIMachineSet(mapiMachineSet *mapiv1.MachineSet) (*clu
 			// MachineNamingStrategy: // Not supported in MAPI, remains nil. No equivalent field in MAPI MachineSet.
 			// AuthoritativeAPI: // Ignore, this is part of the conversion mechanism.
 		},
-		Status: convertMAPIMachineSetStatusToCAPI(mapiMachineSet.Status, mapiMachineSet.Generation),
+		Status: convertMAPIMachineSetToCAPIMachineSetStatus(mapiMachineSet),
 	}
 
 	errs = append(errs, handleUnsupportedMAPIObjectMetaFields(field.NewPath("spec", "template", "metadata"), mapiMachineSet.Spec.Template.ObjectMeta)...)
@@ -66,25 +66,25 @@ func fromMAPIMachineSetToCAPIMachineSet(mapiMachineSet *mapiv1.MachineSet) (*clu
 	return capiMachineSet, errs.ToAggregate()
 }
 
-// convertMAPIMachineSetStatusToCAPI converts a MAPI MachineSetStatus to CAPI format.
-func convertMAPIMachineSetStatusToCAPI(mapiStatus mapiv1.MachineSetStatus, observedGeneration int64) clusterv1.MachineSetStatus {
+// convertMAPIMachineSetToCAPIMachineSetStatus converts a MAPI MachineSet to CAPI MachineSetStatus.
+func convertMAPIMachineSetToCAPIMachineSetStatus(mapiMachineSet *mapiv1.MachineSet) clusterv1.MachineSetStatus {
 	capiStatus := clusterv1.MachineSetStatus{
-		Replicas:             mapiStatus.Replicas,
-		FullyLabeledReplicas: mapiStatus.FullyLabeledReplicas,
-		ReadyReplicas:        mapiStatus.ReadyReplicas,
-		AvailableReplicas:    mapiStatus.AvailableReplicas,
-		ObservedGeneration:   observedGeneration, // Set the observed generation to the current CAPI MachineSet generation.
-		Conditions:           convertMAPIMachineSetConditionsToCAPIMachineSetConditions(mapiStatus.Conditions),
-		V1Beta2:              convertMAPIMachineSetStatusToCAPIMachineSetV1Beta2Status(mapiStatus),
+		Replicas:             mapiMachineSet.Status.Replicas,
+		FullyLabeledReplicas: mapiMachineSet.Status.FullyLabeledReplicas,
+		ReadyReplicas:        mapiMachineSet.Status.ReadyReplicas,
+		AvailableReplicas:    mapiMachineSet.Status.AvailableReplicas,
+		ObservedGeneration:   mapiMachineSet.Generation, // Set the observed generation to the current CAPI MachineSet generation.
+		Conditions:           convertMAPIMachineSetConditionsToCAPIMachineSetConditions(mapiMachineSet),
+		V1Beta2:              convertMAPIMachineSetStatusToCAPIMachineSetV1Beta2Status(mapiMachineSet),
 	}
 
 	// Convert ErrorReason/ErrorMessage to FailureReason/FailureMessage
-	if mapiStatus.ErrorReason != nil {
-		capiStatus.FailureReason = convertMAPIErrorReasonToCAPIFailureReason(*mapiStatus.ErrorReason)
+	if mapiMachineSet.Status.ErrorReason != nil {
+		capiStatus.FailureReason = convertMAPIErrorReasonToCAPIFailureReason(*mapiMachineSet.Status.ErrorReason)
 	}
 
-	if mapiStatus.ErrorMessage != nil {
-		capiStatus.FailureMessage = mapiStatus.ErrorMessage
+	if mapiMachineSet.Status.ErrorMessage != nil {
+		capiStatus.FailureMessage = mapiMachineSet.Status.ErrorMessage
 	}
 
 	// unused fields from MAPI MachineSetStatus
@@ -95,12 +95,12 @@ func convertMAPIMachineSetStatusToCAPI(mapiStatus mapiv1.MachineSetStatus, obser
 	return capiStatus
 }
 
-func convertMAPIMachineSetStatusToCAPIMachineSetV1Beta2Status(mapiStatus mapiv1.MachineSetStatus) *clusterv1.MachineSetV1Beta2Status {
+func convertMAPIMachineSetStatusToCAPIMachineSetV1Beta2Status(mapiMachineSet *mapiv1.MachineSet) *clusterv1.MachineSetV1Beta2Status {
 	return &clusterv1.MachineSetV1Beta2Status{
-		ReadyReplicas:     ptr.To(mapiStatus.ReadyReplicas),
-		AvailableReplicas: ptr.To(mapiStatus.AvailableReplicas),
-		UpToDateReplicas:  ptr.To(mapiStatus.FullyLabeledReplicas), // Should be ok to do this.
-		Conditions:        convertMAPIMachineSetConditionsToCAPIMachineSetV1Beta2StatusConditions(mapiStatus.Conditions),
+		ReadyReplicas:     ptr.To(mapiMachineSet.Status.ReadyReplicas),
+		AvailableReplicas: ptr.To(mapiMachineSet.Status.AvailableReplicas),
+		UpToDateReplicas:  ptr.To(mapiMachineSet.Status.FullyLabeledReplicas), // Should be ok to do this.
+		Conditions:        convertMAPIMachineSetConditionsToCAPIMachineSetV1Beta2StatusConditions(mapiMachineSet),
 	}
 }
 
@@ -111,63 +111,197 @@ func convertMAPIErrorReasonToCAPIFailureReason(mapiErrorReason mapiv1.MachineSet
 }
 
 // convertMAPIMachineSetConditionsToCAPIMachineSetConditions converts MAPI conditions to CAPI conditions.
-func convertMAPIMachineSetConditionsToCAPIMachineSetConditions(mapiConditions []mapiv1.Condition) clusterv1.Conditions {
-	if mapiConditions == nil {
-		return nil
+//
+//nolint:funlen
+func convertMAPIMachineSetConditionsToCAPIMachineSetConditions(mapiMachineSet *mapiv1.MachineSet) clusterv1.Conditions {
+	capiConditions := []clusterv1.Condition{}
+
+	// According to https://github.com/kubernetes-sigs/cluster-api/blob/a5e21a3f92b863f65668d2140632a73003b4d76b/docs/proposals/20240916-improve-status-in-CAPI-resources.md#machineset-newconditions
+	// these are the conditions that are supported by CAPI in the v1beta1 status:
+	// Ready, MachinesCreated, Resized, MachinesReady.
+
+	// CAPI ResizedCondition documents a MachineSet is resizing the set of controlled machines.
+	resizedCondition := clusterv1.Condition{
+		Type: clusterv1.ResizedCondition,
+		// Compute the status for this CAPI condition based on the number of existing .status.replicas vs spec.replicas of the MAPI MachineSet.
+		Status: func() corev1.ConditionStatus {
+			mapiMachineSetSpecReplicas := mapiMachineSet.Spec.Replicas
+			if mapiMachineSetSpecReplicas == nil {
+				mapiMachineSetSpecReplicas = ptr.To(int32(1))
+			}
+
+			if mapiMachineSet.Status.Replicas == *mapiMachineSetSpecReplicas {
+				return corev1.ConditionTrue
+			}
+
+			return corev1.ConditionFalse
+		}(),
+		LastTransitionTime: metav1.Now(),
 	}
 
-	capiConditions := make(clusterv1.Conditions, 0, len(mapiConditions))
+	// CAPI MachinesCreatedCondition documents that the machines controlled by the MachineSet are created.
+	// When this condition is false, it indicates that there was an error when cloning the infrastructure/bootstrap template or
+	// when generating the machine object.
+	machinesCreatedCondition := clusterv1.Condition{
+		Type: clusterv1.MachinesCreatedCondition,
+		// Compute the status for this CAPI condition based on the number of existing .status.replicas vs spec.replicas of the MAPI MachineSet.
+		Status: func() corev1.ConditionStatus {
+			mapiMachineSetSpecReplicas := mapiMachineSet.Spec.Replicas
+			if mapiMachineSetSpecReplicas == nil {
+				mapiMachineSetSpecReplicas = ptr.To(int32(1))
+			}
 
-	for _, mapiCondition := range mapiConditions {
-		// Ignore MAPI specific conditions.
-		// TODO(damdo): Make sure we only convert the conditions that are supported by CAPI.
-		if mapiCondition.Type == "Paused" || mapiCondition.Type == "Synchronized" {
-			continue
-		}
+			if mapiMachineSet.Status.Replicas == *mapiMachineSetSpecReplicas {
+				return corev1.ConditionTrue
+			}
 
-		capiCondition := clusterv1.Condition{
-			Type:               clusterv1.ConditionType(mapiCondition.Type),
-			Status:             mapiCondition.Status,
-			LastTransitionTime: mapiCondition.LastTransitionTime,
-			Reason:             mapiCondition.Reason,
-			Message:            mapiCondition.Message,
-		}
-		// Severity must only be set when the condition is not True.
-		if mapiCondition.Status != corev1.ConditionTrue && mapiCondition.Severity != "" {
-			capiCondition.Severity = clusterv1.ConditionSeverity(mapiCondition.Severity)
-		}
-
-		capiConditions = append(capiConditions, capiCondition)
+			return corev1.ConditionFalse
+		}(),
+		LastTransitionTime: metav1.Now(),
 	}
+
+	// CAPI MachinesReadyCondition reports an aggregate of current status of the machines controlled by the MachineSet.
+	machinesReadyCondition := clusterv1.Condition{
+		Type: clusterv1.MachinesReadyCondition,
+		// Compute the status for this CAPI condition based on the number of existing .status.readyReplicas vs spec.replicas of the MAPI MachineSet.
+		Status: func() corev1.ConditionStatus {
+			mapiMachineSetSpecReplicas := mapiMachineSet.Spec.Replicas
+			if mapiMachineSetSpecReplicas == nil {
+				mapiMachineSetSpecReplicas = ptr.To(int32(1))
+			}
+			if mapiMachineSet.Status.ReadyReplicas == *mapiMachineSetSpecReplicas {
+				return corev1.ConditionTrue
+			}
+
+			return corev1.ConditionFalse
+		}(),
+		LastTransitionTime: metav1.Now(),
+	}
+
+	// ReadyCondition defines the Ready condition type that summarizes the operational state of a Cluster API object.
+	// This is a summary of the other conditions.
+	readyCondition := clusterv1.Condition{
+		Type: clusterv1.ReadyCondition,
+		// Compute the status for this CAPI condition based on the status of the other conditions (resized, machinesCreated, machinesReady).
+		Status: func() corev1.ConditionStatus {
+			if resizedCondition.Status == corev1.ConditionTrue &&
+				machinesCreatedCondition.Status == corev1.ConditionTrue &&
+				machinesReadyCondition.Status == corev1.ConditionTrue {
+				return corev1.ConditionTrue
+			}
+
+			return corev1.ConditionFalse
+		}(),
+		LastTransitionTime: metav1.Now(),
+	}
+
+	capiConditions = append(capiConditions, readyCondition, resizedCondition, machinesCreatedCondition, machinesReadyCondition)
 
 	return capiConditions
 }
 
-func convertMAPIMachineSetConditionsToCAPIMachineSetV1Beta2StatusConditions(mapiConditions []mapiv1.Condition) []metav1.Condition {
-	if mapiConditions == nil {
-		return nil
+// convertMAPIMachineSetConditionsToCAPIMachineSetV1Beta2StatusConditions converts MAPI conditions to CAPI v1beta2 conditions.
+//
+//nolint:funlen
+func convertMAPIMachineSetConditionsToCAPIMachineSetV1Beta2StatusConditions(mapiMachineSet *mapiv1.MachineSet) []metav1.Condition {
+	capiConditions := []metav1.Condition{}
+
+	// According to https://github.com/kubernetes-sigs/cluster-api/blob/a5e21a3f92b863f65668d2140632a73003b4d76b/docs/proposals/20240916-improve-status-in-CAPI-resources.md#machineset-newconditions
+	// these are the conditions that are supported by CAPI in the v1beta2 status:
+	// MachinesReady, MachinesUpToDate, ScalingUp, ScalingDown, Remediating, Deleting, Paused
+
+	// Paused documents that the MachineSet is paused.
+	// We ignore paused condition at this level as it is handled by the machineSetMigration controller.
+
+	// Remediating If the MachineSet is remediating, this condition surfaces details about ongoing remediation of the controlled machines
+	// We don't have details about this on the MAPI MachineSet status, so we don't populate this condition.
+
+	// Deleting If the MachineSet is deleted, this condition surfaces details about ongoing deletion of the controlled machines
+	deletingCondition := metav1.Condition{
+		Type: clusterv1.MachineSetDeletingV1Beta2Condition,
+		Status: func() metav1.ConditionStatus {
+			if mapiMachineSet.DeletionTimestamp != nil && !mapiMachineSet.DeletionTimestamp.IsZero() {
+				return metav1.ConditionTrue
+			}
+
+			return metav1.ConditionFalse
+		}(),
+		LastTransitionTime: metav1.Now(),
 	}
 
-	capiConditions := make([]metav1.Condition, 0, len(mapiConditions))
+	// ScalingUp If the MachineSet is scaling up, this condition surfaces details about ongoing scaling up of the controlled machines
+	scalingUpCondition := metav1.Condition{
+		Type: clusterv1.MachineSetScalingUpV1Beta2Condition,
+		Status: func() metav1.ConditionStatus {
+			mapiMachineSetSpecReplicas := mapiMachineSet.Spec.Replicas
+			if mapiMachineSetSpecReplicas == nil {
+				mapiMachineSetSpecReplicas = ptr.To(int32(1))
+			}
 
-	for _, mapiCondition := range mapiConditions {
-		// Ignore MAPI specific conditions.
-		// TODO(damdo): Make sure we only convert the conditions that are supported by CAPI.
-		if mapiCondition.Type == "Paused" || mapiCondition.Type == "Synchronized" {
-			continue
-		}
+			if *mapiMachineSetSpecReplicas > mapiMachineSet.Status.Replicas {
+				return metav1.ConditionTrue
+			}
 
-		capiCondition := metav1.Condition{
-			Type:               string(mapiCondition.Type),
-			Status:             metav1.ConditionStatus(mapiCondition.Status),
-			LastTransitionTime: mapiCondition.LastTransitionTime,
-			// Severity is not supported by CAPI v1beta2 status condition (metav1.Condition).
-			Reason:  mapiCondition.Reason,
-			Message: mapiCondition.Message,
-		}
-
-		capiConditions = append(capiConditions, capiCondition)
+			return metav1.ConditionFalse
+		}(),
+		LastTransitionTime: metav1.Now(),
 	}
+
+	// ScalingDown If the MachineSet is scaling down, this condition surfaces details about ongoing scaling down of the controlled machines
+	scalingDownCondition := metav1.Condition{
+		Type: clusterv1.MachineSetScalingDownV1Beta2Condition,
+		Status: func() metav1.ConditionStatus {
+			mapiMachineSetSpecReplicas := mapiMachineSet.Spec.Replicas
+			if mapiMachineSetSpecReplicas == nil {
+				mapiMachineSetSpecReplicas = ptr.To(int32(1))
+			}
+
+			if *mapiMachineSetSpecReplicas < mapiMachineSet.Status.Replicas {
+				return metav1.ConditionTrue
+			}
+
+			return metav1.ConditionFalse
+		}(),
+		LastTransitionTime: metav1.Now(),
+	}
+
+	// MachinesReady If the MachineSet is ready, This condition surfaces detail of issues on the controlled machines, if any
+	machinesReadyCondition := metav1.Condition{
+		Type: clusterv1.MachineSetMachinesReadyV1Beta2Condition,
+		Status: func() metav1.ConditionStatus {
+			mapiMachineSetSpecReplicas := mapiMachineSet.Spec.Replicas
+			if mapiMachineSetSpecReplicas == nil {
+				mapiMachineSetSpecReplicas = ptr.To(int32(1))
+			}
+
+			if mapiMachineSet.Status.ReadyReplicas == *mapiMachineSetSpecReplicas {
+				return metav1.ConditionTrue
+			}
+
+			return metav1.ConditionFalse
+		}(),
+		LastTransitionTime: metav1.Now(),
+	}
+
+	// MachinesUpToDate If the MachineSet is up to date, this condition surfaces details about the status of the controlled machines
+	machinesUpToDateCondition := metav1.Condition{
+		Type: clusterv1.MachineSetMachinesUpToDateV1Beta2Condition,
+		Status: func() metav1.ConditionStatus {
+			mapiMachineSetSpecReplicas := mapiMachineSet.Spec.Replicas
+			if mapiMachineSetSpecReplicas == nil {
+				mapiMachineSetSpecReplicas = ptr.To(int32(1))
+			}
+
+			if mapiMachineSet.Status.FullyLabeledReplicas == *mapiMachineSetSpecReplicas {
+				return metav1.ConditionTrue
+			}
+
+			return metav1.ConditionFalse
+		}(),
+		LastTransitionTime: metav1.Now(),
+	}
+
+	capiConditions = append(capiConditions, deletingCondition, scalingUpCondition, scalingDownCondition, machinesReadyCondition, machinesUpToDateCondition)
 
 	return capiConditions
 }

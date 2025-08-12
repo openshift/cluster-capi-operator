@@ -18,7 +18,6 @@ package capi2mapi
 import (
 	mapiv1 "github.com/openshift/api/machine/v1beta1"
 
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
@@ -104,34 +103,7 @@ func convertCAPIFailureReasonToMAPIErrorReason(capiFailureReason capierrors.Mach
 
 // convertCAPIConditionsToMAPI converts CAPI conditions to MAPI conditions.
 func convertCAPIConditionsToMAPI(capiConditions clusterv1.Conditions) []mapiv1.Condition {
-	if capiConditions == nil {
-		return nil
-	}
-
-	mapiConditions := make([]mapiv1.Condition, 0, len(capiConditions))
-
-	for _, capiCondition := range capiConditions {
-		// Ignore CAPI specific conditions.
-		// TODO(damdo): Make sure we only convert the conditions that are supported by MAPI.
-		if capiCondition.Type == "Paused" || capiCondition.Type == "MachinesCreated" || capiCondition.Type == "Ready" || capiCondition.Type == "Synchronized" {
-			continue
-		}
-
-		mapiCondition := mapiv1.Condition{
-			Type:               mapiv1.ConditionType(capiCondition.Type),
-			Status:             capiCondition.Status,
-			LastTransitionTime: capiCondition.LastTransitionTime,
-			Reason:             capiCondition.Reason,
-			Message:            capiCondition.Message,
-		}
-
-		// Severity must only be set when the condition is not True.
-		if capiCondition.Status != corev1.ConditionTrue && capiCondition.Severity != "" {
-			mapiCondition.Severity = mapiv1.ConditionSeverity(capiCondition.Severity)
-		}
-
-		mapiConditions = append(mapiConditions, mapiCondition)
-	}
-
-	return mapiConditions
+	// The only two conditions normally used for MAPI MachineSets are Paused and Synchronized.
+	// We do not convert these conditions to MAPI conditions as they are managed directly by the machineSet sync and migration controllers.
+	return nil
 }
