@@ -260,7 +260,7 @@ var _ = Describe("CRDCompatibilityRequirement", func() {
 				Expect(cl.Delete(ctx, testCRD)).NotTo(Succeed(), "The test CRD should not be deleted")
 			})
 
-			FIt("Should not permit an invalid CRD modification", func(ctx context.Context) {
+			It("Should not permit an invalid CRD modification", func(ctx context.Context) {
 				requirement := &operatorv1alpha1.CRDCompatibilityRequirement{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: testCRD.Name,
