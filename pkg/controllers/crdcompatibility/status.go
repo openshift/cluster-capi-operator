@@ -60,9 +60,9 @@ func (r *reconcileState) writeStatus(ctx context.Context, obj *operatorv1alpha1.
 	now := metav1.Now()
 	applyConfigStatus := operatorapplyconfig.CRDCompatibilityRequirementStatus().
 		WithConditions(
-			util.SetLastTransitionTimeMetaV1(now, currentConditions, admittedCondition),
-			util.SetLastTransitionTimeMetaV1(now, currentConditions, compatibleCondition),
-			util.SetLastTransitionTimeMetaV1(now, currentConditions, progressingCondition),
+			util.SetLastTransitionTimeMetaV1(now, currentConditions, admittedCondition).WithObservedGeneration(obj.GetGeneration()),
+			util.SetLastTransitionTimeMetaV1(now, currentConditions, compatibleCondition).WithObservedGeneration(obj.GetGeneration()),
+			util.SetLastTransitionTimeMetaV1(now, currentConditions, progressingCondition).WithObservedGeneration(obj.GetGeneration()),
 		)
 	if r.currentCRD != nil {
 		applyConfigObservedCRD := operatorapplyconfig.ObservedCRD().
