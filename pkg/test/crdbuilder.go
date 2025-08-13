@@ -20,9 +20,11 @@ import (
 	"strings"
 
 	"github.com/gobuffalo/flect"
+	"github.com/openshift/cluster-capi-operator/pkg/util"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/utils/ptr"
 )
 
 var (
@@ -32,13 +34,13 @@ var (
 	// fakeCoreProviderKind is the Kind for the CoreProvider.
 	fakeCoreProviderKind = "CoreProvider"
 	// fakeCoreProviderCRD is a fake CoreProvider CRD.
-	fakeCoreProviderCRD = generateCRD(operatorGroupVersion.WithKind(fakeCoreProviderKind))
+	fakeCoreProviderCRD = GenerateCRD(operatorGroupVersion.WithKind(fakeCoreProviderKind))
 
 	// fakeInfrastructureProviderKind is the Kind for the CoreProvider.
 	fakeInfrastructureProviderKind = "InfrastructureProvider"
 
 	// fakeInfrastructureProviderCRD is a fake CoreProvider CRD.
-	fakeInfrastructureProviderCRD = generateCRD(operatorGroupVersion.WithKind(fakeInfrastructureProviderKind))
+	fakeInfrastructureProviderCRD = GenerateCRD(operatorGroupVersion.WithKind(fakeInfrastructureProviderKind))
 
 	// clusterGroupVersion is group version used for cluster objects.
 	clusterGroupVersion = schema.GroupVersion{Group: "cluster.x-k8s.io", Version: "v1beta1"}
@@ -47,19 +49,19 @@ var (
 	fakeClusterKind = "Cluster"
 
 	// fakeClusterCRD is a fake Cluster CRD.
-	fakeClusterCRD = generateCRD(clusterGroupVersion.WithKind(fakeClusterKind))
+	fakeClusterCRD = GenerateCRD(clusterGroupVersion.WithKind(fakeClusterKind))
 
 	// fakeMachineKind is the Kind for the Machine.
 	fakeMachineKind = "Machine"
 
 	// fakeMachineCRD is a fake Machine CRD.
-	fakeMachineCRD = generateCRD(clusterGroupVersion.WithKind(fakeMachineKind))
+	fakeMachineCRD = GenerateCRD(clusterGroupVersion.WithKind(fakeMachineKind))
 
 	// fakeMachineSetKind is the kind for the MachineSet.
 	fakeMachineSetKind = "MachineSet"
 
 	// fakeMachineSetCRD is a fake MachineSet CRD.
-	fakeMachineSetCRD = generateCRD(clusterGroupVersion.WithKind(fakeMachineSetKind))
+	fakeMachineSetCRD = GenerateCRD(clusterGroupVersion.WithKind(fakeMachineSetKind))
 
 	// v1beta2InfrastructureGroupVersion is a v1beta2 group version used for infrastructure objects.
 	v1beta2InfrastructureGroupVersion = schema.GroupVersion{Group: "infrastructure.cluster.x-k8s.io", Version: "v1beta2"}
@@ -68,35 +70,59 @@ var (
 	fakeAWSClusterKind = "AWSCluster"
 
 	// fakeAWSClusterCRD is a fake AWSCluster CRD.
-	fakeAWSClusterCRD = generateCRD(v1beta2InfrastructureGroupVersion.WithKind(fakeAWSClusterKind))
+	fakeAWSClusterCRD = GenerateCRD(v1beta2InfrastructureGroupVersion.WithKind(fakeAWSClusterKind))
 
 	// fakeAWSMachineTemplateKind is the kind for the AWSMachineTemplate.
 	fakeAWSMachineTemplateKind = "AWSMachineTemplate"
 
 	// fakeAWSMachineTemplateCRD is a fake AWSMachineTemplate CRD.
-	fakeAWSMachineTemplateCRD = generateCRD(v1beta2InfrastructureGroupVersion.WithKind(fakeAWSMachineTemplateKind))
+	fakeAWSMachineTemplateCRD = GenerateCRD(v1beta2InfrastructureGroupVersion.WithKind(fakeAWSMachineTemplateKind))
 
 	// fakeAWSMachineKind is the kind for the AWSMachine.
 	fakeAWSMachineKind = "AWSMachine"
 
 	// fakeAWSMachineCRD is a fake AWSMachine CRD.
-	fakeAWSMachineCRD = generateCRD(v1beta2InfrastructureGroupVersion.WithKind(fakeAWSMachineKind))
+	fakeAWSMachineCRD = GenerateCRD(v1beta2InfrastructureGroupVersion.WithKind(fakeAWSMachineKind))
 
 	// fakeAzureClusterKind is the Kind for the AWSCluster.
 	fakeAzureClusterKind = "AzureCluster"
 
 	// fakeAWSClusterCRD is a fake AzureCluster CRD.
-	fakeAzureClusterCRD = generateCRD(v1beta2InfrastructureGroupVersion.WithKind(fakeAzureClusterKind))
+	fakeAzureClusterCRD = GenerateCRD(v1beta2InfrastructureGroupVersion.WithKind(fakeAzureClusterKind))
 
 	// fakeGCPClusterKind is the Kind for the GCPCluster.
 	fakeGCPClusterKind = "GCPCluster"
 
 	// fakeGCPClusterCRD is a fake GCPCluster CRD.
-	fakeGCPClusterCRD = generateCRD(v1beta2InfrastructureGroupVersion.WithKind(fakeGCPClusterKind))
+	fakeGCPClusterCRD = GenerateCRD(v1beta2InfrastructureGroupVersion.WithKind(fakeGCPClusterKind))
 )
 
-func generateCRD(gvk schema.GroupVersionKind) *apiextensionsv1.CustomResourceDefinition {
-	shouldPreserveUnknownFields := true
+func GenerateCRD(gvk schema.GroupVersionKind, additionalVersions ...string) *apiextensionsv1.CustomResourceDefinition {
+	generateVersion := func(version string) apiextensionsv1.CustomResourceDefinitionVersion {
+		return apiextensionsv1.CustomResourceDefinitionVersion{
+			Name:    version,
+			Served:  true,
+			Storage: version == gvk.Version,
+			Subresources: &apiextensionsv1.CustomResourceSubresources{
+				Status: &apiextensionsv1.CustomResourceSubresourceStatus{},
+			},
+			Schema: &apiextensionsv1.CustomResourceValidation{
+				OpenAPIV3Schema: &apiextensionsv1.JSONSchemaProps{
+					Type: "object",
+					Properties: map[string]apiextensionsv1.JSONSchemaProps{
+						"spec": {
+							Type:                   "object",
+							XPreserveUnknownFields: ptr.To(true),
+						},
+						"status": {
+							Type:                   "object",
+							XPreserveUnknownFields: ptr.To(true),
+						},
+					},
+				},
+			},
+		}
+	}
 
 	return &apiextensionsv1.CustomResourceDefinition{
 		TypeMeta: metav1.TypeMeta{
@@ -113,31 +139,7 @@ func generateCRD(gvk schema.GroupVersionKind) *apiextensionsv1.CustomResourceDef
 				Kind:   gvk.Kind,
 				Plural: flect.Pluralize(strings.ToLower(gvk.Kind)),
 			},
-			Versions: []apiextensionsv1.CustomResourceDefinitionVersion{
-				{
-					Name:    gvk.Version,
-					Served:  true,
-					Storage: true,
-					Subresources: &apiextensionsv1.CustomResourceSubresources{
-						Status: &apiextensionsv1.CustomResourceSubresourceStatus{},
-					},
-					Schema: &apiextensionsv1.CustomResourceValidation{
-						OpenAPIV3Schema: &apiextensionsv1.JSONSchemaProps{
-							Type: "object",
-							Properties: map[string]apiextensionsv1.JSONSchemaProps{
-								"spec": {
-									Type:                   "object",
-									XPreserveUnknownFields: &shouldPreserveUnknownFields,
-								},
-								"status": {
-									Type:                   "object",
-									XPreserveUnknownFields: &shouldPreserveUnknownFields,
-								},
-							},
-						},
-					},
-				},
-			},
+			Versions: append(util.SliceMap(additionalVersions, generateVersion), generateVersion(gvk.Version)),
 		},
 	}
 }
