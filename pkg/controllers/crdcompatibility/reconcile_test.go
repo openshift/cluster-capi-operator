@@ -80,6 +80,48 @@ var _ = Describe("CRDCompatibilityRequirement", func() {
 			))
 		})
 
+		It("Should correctly set observed generation on conditions", func(ctx context.Context) {
+			requirement := &operatorv1alpha1.CRDCompatibilityRequirement{
+				ObjectMeta: metav1.ObjectMeta{
+					GenerateName: "test-requirement-",
+				},
+				Spec: operatorv1alpha1.CRDCompatibilityRequirementSpec{
+					CRDRef:             testCRD.Name,
+					CompatibilityCRD:   toYAML(testCRD),
+					CRDAdmitAction:     operatorv1alpha1.CRDAdmitActionEnforce,
+					CreatorDescription: "Test Creator",
+				},
+			}
+
+			createRequirement(ctx, requirement)
+
+			// Update the requirement to bump the generation
+			Eventually(kWithCtx(ctx).Update(requirement, func() {
+				requirement.Spec.CRDAdmitAction = operatorv1alpha1.CRDAdmitActionWarn
+			})).Should(Succeed())
+
+			Expect(requirement).To(HaveField("ObjectMeta.Generation", Equal(int64(2))))
+
+			By("Waiting for the CRDCompatibilityRequirement to have the expected status")
+			Eventually(kWithCtx(ctx).Object(requirement)).Should(SatisfyAll(
+				test.HaveCondition("Progressing", metav1.ConditionFalse,
+					test.WithConditionReason(progressingReasonUpToDate),
+					test.WithConditionMessage("The CRDCompatibilityRequirement is up to date"),
+					test.WithConditionObservedGeneration(requirement.GetGeneration()),
+				),
+				test.HaveCondition("Admitted", metav1.ConditionTrue,
+					test.WithConditionReason(admittedReasonAdmitted),
+					test.WithConditionMessage("The CRDCompatibilityRequirement has been admitted"),
+					test.WithConditionObservedGeneration(requirement.GetGeneration()),
+				),
+				test.HaveCondition("Compatible", metav1.ConditionTrue,
+					test.WithConditionReason(compatibleReasonCompatible),
+					test.WithConditionMessage("The CRD is compatible with this requirement"),
+					test.WithConditionObservedGeneration(requirement.GetGeneration()),
+				),
+			))
+		})
+
 		It("Should set a terminal failure when compatibility CRD does not parse", func(ctx context.Context) {
 			// Create the simplest possible CRDCompatibilityRequirement
 			requirement := &operatorv1alpha1.CRDCompatibilityRequirement{

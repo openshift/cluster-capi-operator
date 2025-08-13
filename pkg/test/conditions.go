@@ -29,6 +29,10 @@ func WithConditionMessage(conditionMessage string) types.GomegaMatcher {
 	return g.HaveField("Message", g.Equal(conditionMessage))
 }
 
+func WithConditionObservedGeneration(observedGeneration int64) types.GomegaMatcher {
+	return g.HaveField("ObservedGeneration", g.Equal(observedGeneration))
+}
+
 func HaveCondition(conditionType string, conditionStatus metav1.ConditionStatus, conditionMatcher ...types.GomegaMatcher) types.GomegaMatcher {
 	conditionMatchers := []types.GomegaMatcher{
 		g.HaveField("Type", g.Equal(conditionType)),
