@@ -19,17 +19,18 @@ package crdcompatibility
 import (
 	"context"
 	"fmt"
-	"iter"
 	"maps"
 	"slices"
 	"strings"
 	"sync"
 
-	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility/crdchecker"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
+
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility/crdchecker"
+	"github.com/openshift/cluster-capi-operator/pkg/util"
 )
 
 type crdValidator struct {
@@ -83,12 +84,12 @@ func (v *crdValidator) validateCreateOrUpdate(obj runtime.Object) (admission.War
 		prependName := func(s string) string {
 			return fmt.Sprintf("requirement %s: %s", name, s)
 		}
-		allReqErrors = slices.AppendSeq(allReqErrors, iterMap(slices.Values(reqErrors), prependName))
-		allReqWarnings = slices.AppendSeq(allReqWarnings, iterMap(slices.Values(reqWarnings), prependName))
+		allReqErrors = append(allReqErrors, util.SliceMap(reqErrors, prependName)...)
+		allReqWarnings = append(allReqWarnings, util.SliceMap(reqWarnings, prependName)...)
 	}
 
 	if len(allReqErrors) > 0 {
-		return nil, fmt.Errorf("new CRD is not compatible with the following requirements: %s", strings.Join(allReqErrors, "\n"))
+		return nil, fmt.Errorf("new CRD is not compatible with the following: %s", strings.Join(allReqErrors, "\n"))
 	}
 
 	return allReqWarnings, nil
@@ -117,14 +118,4 @@ func (v *crdValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (
 	}
 
 	return nil, nil
-}
-
-func iterMap[A, B any](source iter.Seq[A], fn func(A) B) iter.Seq[B] {
-	return func(yield func(B) bool) {
-		for a := range source {
-			if !yield(fn(a)) {
-				return
-			}
-		}
-	}
 }
