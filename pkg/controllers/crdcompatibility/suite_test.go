@@ -20,6 +20,7 @@ import (
 	"context"
 	"path/filepath"
 	"testing"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -48,7 +49,7 @@ func TestAPIs(t *testing.T) {
 	RunSpecs(t, "CRDCompatibility Controller Suite")
 }
 
-var _ = BeforeSuite(func() {
+var _ = BeforeSuite(func(ctx context.Context) {
 	logf.SetLogger(GinkgoLogr)
 
 	By("bootstrapping test environment")
@@ -69,18 +70,10 @@ var _ = BeforeSuite(func() {
 	Expect(cfg).NotTo(BeNil())
 	Expect(cl).NotTo(BeNil())
 
-	mgrCancel, mgrDone := startManager(context.Background(), cfg, cl.Scheme(), testEnv)
+	startManager(ctx, cfg, cl.Scheme(), testEnv)
+}, NodeTimeout(30*time.Second))
 
-	DeferCleanup(func() {
-		By("Stopping the manager")
-		stopManager(mgrCancel, mgrDone)
-	})
-})
-
-func startManager(ctx context.Context, cfg *rest.Config, scheme *runtime.Scheme, testEnv *envtest.Environment) (context.CancelFunc, chan struct{}) {
-	mgrCtx, mgrCancel := context.WithCancel(ctx)
-	mgrDone := make(chan struct{})
-
+func startManager(ginkgoCtx context.Context, cfg *rest.Config, scheme *runtime.Scheme, testEnv *envtest.Environment) {
 	By("Setting up a manager and controller")
 
 	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
@@ -94,9 +87,14 @@ func startManager(ctx context.Context, cfg *rest.Config, scheme *runtime.Scheme,
 	Expect(err).ToNot(HaveOccurred(), "Manager should be created")
 
 	r := &CRDCompatibilityReconciler{client: mgr.GetClient()}
-	Expect(r.SetupWithManager(ctx, mgr)).To(Succeed(), "Reconciler should be setup with manager")
+
+	Expect(r.SetupWithManager(ginkgoCtx, mgr)).To(Succeed(), "Reconciler should be setup with manager")
 
 	By("Starting the manager")
+
+	// Don't start the manager with the ginkgo context from BeforeSuite because it'll be cancelled after initialisation.
+	mgrCtx, mgrCancel := context.WithCancel(context.Background())
+	mgrDone := make(chan struct{})
 
 	go func() {
 		defer GinkgoRecover()
@@ -105,18 +103,33 @@ func startManager(ctx context.Context, cfg *rest.Config, scheme *runtime.Scheme,
 		Expect((mgr).Start(mgrCtx)).To(Succeed())
 	}()
 
-	Eventually(mgr.Elected()).Should(BeClosed())
+	DeferCleanup(func(ctx context.Context) {
+		By("Stopping the manager")
+		stopManager(ctx, mgrCancel, mgrDone)
+	})
 
-	return mgrCancel, mgrDone
+	// Wait for the manager to signal that it became leader (i.e. it completed initialisation)
+	select {
+	case <-mgr.Elected():
+	case <-ginkgoCtx.Done():
+	}
+
+	// Error if the manager didn't startup in time.
+	Expect(mgr.Elected()).To(BeClosed(), "Manager didn't startup in time")
 }
 
-func stopManager(mgrCancel context.CancelFunc, mgrDone chan struct{}) {
+func stopManager(ctx context.Context, mgrCancel context.CancelFunc, mgrDone chan struct{}) {
 	By("Stopping the manager")
 	mgrCancel()
-	// Wait for the mgrDone to be closed, which will happen once the mgr has stopped.
-	<-mgrDone
 
-	Eventually(mgrDone).Should(BeClosed())
+	// Wait for the mgrDone to be closed, which will happen once the mgr has stopped.
+	select {
+	case <-mgrDone:
+	case <-ctx.Done():
+	}
+
+	// Error if the manager didn't stop in time.
+	Expect(mgrDone).To(BeClosed(), "Manager didn't stop in time")
 }
 
 func toYAML(obj any) string {
