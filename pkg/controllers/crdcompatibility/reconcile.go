@@ -39,6 +39,10 @@ const (
 	noRequeueErrorReasonConfigurationError string = "ConfigurationError"
 )
 
+var (
+	errNoCompatibilityCRD = errors.New("compatibilityCRD was not provided")
+)
+
 type reconcileState struct {
 	*CRDCompatibilityReconciler
 
@@ -49,7 +53,7 @@ type reconcileState struct {
 	compatibilityWarnings []string
 }
 
-// Reconcile handles the reconciliation of CRDCompatibilityRequirement resources
+// Reconcile handles the reconciliation of CRDCompatibilityRequirement resources.
 func (r *CRDCompatibilityReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
@@ -72,7 +76,7 @@ func (r *CRDCompatibilityReconciler) Reconcile(ctx context.Context, req ctrl.Req
 	}
 
 	if reconcileErr != nil {
-		return ctrl.Result{}, util.LogNoRequeueError(reconcileErr, logger)
+		return ctrl.Result{}, util.LogNoRequeueError(reconcileErr, logger) //nolint:wrapcheck
 	}
 
 	return result, nil
@@ -90,8 +94,9 @@ func (r *reconcileState) parseCompatibilityCRD(crdCompatibilityRequirement *oper
 	// Parse the CRD in compatibilityCRD into a CRD object
 	compatibilityCRD := &apiextensionsv1.CustomResourceDefinition{}
 	if err := yaml.Unmarshal([]byte(crdCompatibilityRequirement.Spec.CompatibilityCRD), compatibilityCRD); err != nil {
-		return util.NoRequeueError(fmt.Errorf("failed to parse compatibilityCRD: %w", err), noRequeueErrorReasonConfigurationError)
+		return util.NoRequeueError(fmt.Errorf("failed to parse compatibilityCRD: %w", err), noRequeueErrorReasonConfigurationError) //nolint:wrapcheck
 	}
+
 	r.compatibilityCRD = compatibilityCRD
 
 	return nil
@@ -107,6 +112,7 @@ func (r *reconcileState) fetchCurrentCRD(ctx context.Context, log logr.Logger, c
 			return fmt.Errorf("failed to fetch CRD %s: %w", crdCompatibilityRequirement.Spec.CRDRef, err)
 		}
 	}
+
 	r.currentCRD = currentCRD
 
 	return nil
@@ -121,7 +127,11 @@ func (r *reconcileState) checkCRDCompatibility() error {
 	r.compatibilityErrors = errors
 	r.compatibilityWarnings = warnings
 
-	return err
+	if err != nil {
+		return fmt.Errorf("failed to check CRD compatibility: %w", err)
+	}
+
+	return nil
 }
 
 func (r *reconcileState) reconcileCreateOrUpdate(ctx context.Context, crdCompatibilityRequirement *operatorv1alpha1.CRDCompatibilityRequirement) (ctrl.Result, error) {
@@ -147,7 +157,7 @@ func (r *reconcileState) reconcileCreateOrUpdate(ctx context.Context, crdCompati
 
 	if r.compatibilityCRD == nil {
 		// Should have been handled by API validation
-		return ctrl.Result{}, util.NoRequeueError(fmt.Errorf("compatibilityCRD was not provided"), noRequeueErrorReasonConfigurationError)
+		return ctrl.Result{}, util.NoRequeueError(errNoCompatibilityCRD, noRequeueErrorReasonConfigurationError) //nolint:wrapcheck
 	}
 
 	// Add the requirement to the webhook validator

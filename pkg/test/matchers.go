@@ -22,6 +22,8 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 )
 
+// BeK8SNotFound is a gomega matcher that checks if an error is a NotFound error
+// returned by the Kubernetes API.
 func BeK8SNotFound() types.GomegaMatcher {
 	return gomega.WithTransform(apierrors.IsNotFound, gomega.BeTrue())
 }

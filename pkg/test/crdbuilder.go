@@ -97,6 +97,11 @@ var (
 	fakeGCPClusterCRD = GenerateCRD(v1beta2InfrastructureGroupVersion.WithKind(fakeGCPClusterKind))
 )
 
+// GenerateCRD generates a fake CustomResourceDefinition for a given
+// GroupVersionKind for use in tests. It may optionally be given a set of
+// additional versions to include in the CRD. The additional versions will be
+// added before the primary version. Only the primary version will be marked as
+// a storage version.
 func GenerateCRD(gvk schema.GroupVersionKind, additionalVersions ...string) *apiextensionsv1.CustomResourceDefinition {
 	generateVersion := func(version string) apiextensionsv1.CustomResourceDefinitionVersion {
 		return apiextensionsv1.CustomResourceDefinitionVersion{

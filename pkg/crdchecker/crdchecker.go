@@ -39,11 +39,15 @@ func CheckCRDCompatibility(requirement, target *apiextensionsv1.CustomResourceDe
 
 	results := run.Run(requirement, target)
 
-	var errors []string
-	var warnings []string
+	var (
+		errors   []string
+		warnings []string
+	)
+
 	for _, result := range results.CRDValidation {
 		errors = append(errors, result.Errors...)
 		warnings = append(warnings, result.Warnings...)
 	}
+
 	return errors, warnings, nil
 }

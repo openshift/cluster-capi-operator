@@ -45,5 +45,6 @@ func writeFinalizer(ctx context.Context, cl client.Client, obj *operatorv1alpha1
 	if err := cl.Patch(ctx, obj, util.ApplyConfigPatch(applyConfig), client.ForceOwnership, client.FieldOwner(finalizerName)); err != nil {
 		return fmt.Errorf("failed to write finalizer: %w", err)
 	}
+
 	return nil
 }

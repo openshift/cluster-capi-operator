@@ -82,6 +82,7 @@ func startManager(ctx context.Context, cfg *rest.Config, scheme *runtime.Scheme,
 	mgrDone := make(chan struct{})
 
 	By("Setting up a manager and controller")
+
 	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
 		Scheme: scheme,
 		WebhookServer: webhook.NewServer(webhook.Options{
@@ -96,6 +97,7 @@ func startManager(ctx context.Context, cfg *rest.Config, scheme *runtime.Scheme,
 	Expect(r.SetupWithManager(ctx, mgr)).To(Succeed(), "Reconciler should be setup with manager")
 
 	By("Starting the manager")
+
 	go func() {
 		defer GinkgoRecover()
 		defer close(mgrDone)
@@ -120,6 +122,7 @@ func stopManager(mgrCancel context.CancelFunc, mgrDone chan struct{}) {
 func toYAML(obj any) string {
 	yaml, err := yaml.Marshal(obj)
 	Expect(err).To(Succeed())
+
 	return string(yaml)
 }
 

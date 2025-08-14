@@ -46,27 +46,33 @@ const (
 //+kubebuilder:rbac:groups=operator.openshift.io,resources=crdcompatibilityrequirements/finalizers,verbs=update
 //+kubebuilder:rbac:groups=apiextensions.k8s.io,resources=customresourcedefinitions,verbs=get;list;watch
 
+// NewCRDCompatibilityReconciler returns a partially initialised CRDCompatibilityReconciler.
 func NewCRDCompatibilityReconciler(client client.Client) *CRDCompatibilityReconciler {
 	return &CRDCompatibilityReconciler{
 		client: client,
 	}
 }
 
-// CRDCompatibilityReconciler reconciles CRDCompatibilityRequirement resources
+// CRDCompatibilityReconciler reconciles CRDCompatibilityRequirement resources.
 type CRDCompatibilityReconciler struct {
 	client client.Client
 
 	validator *crdValidator
 }
 
-// SetupWithManager sets up the controller with the Manager
+// SetupWithManager sets up the controller with the Manager.
 func (r *CRDCompatibilityReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager) error {
 	// Create field index for spec.crdRef
 	if err := mgr.GetFieldIndexer().IndexField(ctx, &operatorv1alpha1.CRDCompatibilityRequirement{}, fieldIndexCRDRef, func(obj client.Object) []string {
-		requirement := obj.(*operatorv1alpha1.CRDCompatibilityRequirement)
+		requirement, ok := obj.(*operatorv1alpha1.CRDCompatibilityRequirement)
+		if !ok {
+			log.FromContext(ctx).Error(errInvalidObjectType, "expected a CRDCompatibilityRequirement", "receivedType", fmt.Sprintf("%T", obj))
+			return nil
+		}
+
 		return []string{requirement.Spec.CRDRef}
 	}); err != nil {
-		return err
+		return fmt.Errorf("failed to add index to CRDCompatibilityRequirements: %w", err)
 	}
 
 	// TODO: For safety we need to ensure that we have reconciled every
@@ -101,7 +107,7 @@ func (r *CRDCompatibilityReconciler) SetupWithManager(ctx context.Context, mgr c
 	)
 }
 
-// findCRDCompatibilityRequirementsForCRD finds all CRDCompatibilityRequirements that reference the given CRD
+// findCRDCompatibilityRequirementsForCRD finds all CRDCompatibilityRequirements that reference the given CRD.
 func (r *CRDCompatibilityReconciler) findCRDCompatibilityRequirementsForCRD(ctx context.Context, obj client.Object) []reconcile.Request {
 	crd, ok := obj.(*apiextensionsv1.CustomResourceDefinition)
 	if !ok {
@@ -115,13 +121,13 @@ func (r *CRDCompatibilityReconciler) findCRDCompatibilityRequirementsForCRD(ctx 
 		return nil
 	}
 
-	var requests []reconcile.Request
-	for _, requirement := range requirements.Items {
-		requests = append(requests, reconcile.Request{
+	requests := make([]reconcile.Request, len(requirements.Items))
+	for i := range requirements.Items {
+		requests[i] = reconcile.Request{
 			NamespacedName: types.NamespacedName{
-				Name: requirement.Name,
+				Name: requirements.Items[i].Name,
 			},
-		})
+		}
 	}
 
 	return requests

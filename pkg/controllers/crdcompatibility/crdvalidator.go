@@ -18,6 +18,7 @@ package crdcompatibility
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"slices"
@@ -31,6 +32,12 @@ import (
 
 	"github.com/openshift/cluster-capi-operator/pkg/crdchecker"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
+)
+
+var (
+	errInvalidObjectType  = errors.New("expected a CustomResourceDefinition")
+	errCRDHasRequirements = errors.New("cannot delete CRD because it has CRDCompatibilityRequirements")
+	errCRDNotCompatible   = errors.New("CRD is not compatible with CRDCompatibilityRequirements")
 )
 
 type crdValidator struct {
@@ -64,7 +71,7 @@ func (v *crdValidator) setRequirement(crdRef string, crd *apiextensionsv1.Custom
 func (v *crdValidator) validateCreateOrUpdate(obj runtime.Object) (admission.Warnings, error) {
 	crd, ok := obj.(*apiextensionsv1.CustomResourceDefinition)
 	if !ok {
-		return nil, fmt.Errorf("expected a CustomResourceDefinition, got %T", obj)
+		return nil, fmt.Errorf("%w: got %T", errInvalidObjectType, obj)
 	}
 
 	// We don't need to hold a lock while we use the requirement because nothing
@@ -72,8 +79,10 @@ func (v *crdValidator) validateCreateOrUpdate(obj runtime.Object) (admission.War
 	v.requirementsLock.RLock()
 	defer v.requirementsLock.RUnlock()
 
-	var allReqErrors []string
-	var allReqWarnings []string
+	var (
+		allReqErrors   []string
+		allReqWarnings []string
+	)
 
 	for name, requirement := range v.requirements[crd.Name] {
 		reqErrors, reqWarnings, err := crdchecker.CheckCRDCompatibility(requirement, crd)
@@ -89,24 +98,27 @@ func (v *crdValidator) validateCreateOrUpdate(obj runtime.Object) (admission.War
 	}
 
 	if len(allReqErrors) > 0 {
-		return nil, fmt.Errorf("new CRD is not compatible with the following: %s", strings.Join(allReqErrors, "\n"))
+		return nil, fmt.Errorf("%w: %s", errCRDNotCompatible, strings.Join(allReqErrors, "\n"))
 	}
 
 	return allReqWarnings, nil
 }
 
+// ValidateCreate validates a Create event for a CustomResourceDefinition.
 func (v *crdValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
 	return v.validateCreateOrUpdate(obj)
 }
 
+// ValidateUpdate validates an Update event for a CustomResourceDefinition.
 func (v *crdValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
 	return v.validateCreateOrUpdate(newObj)
 }
 
+// ValidateDelete validates a Delete event for a CustomResourceDefinition.
 func (v *crdValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
 	crd, ok := obj.(*apiextensionsv1.CustomResourceDefinition)
 	if !ok {
-		return nil, fmt.Errorf("expected a CustomResourceDefinition, got %T", obj)
+		return nil, fmt.Errorf("%w: got %T", errInvalidObjectType, obj)
 	}
 
 	// A CRD may not be deleted if it has requirements
@@ -114,7 +126,7 @@ func (v *crdValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (
 	defer v.requirementsLock.RUnlock()
 
 	if requirements := v.requirements[crd.Name]; len(requirements) > 0 {
-		return nil, fmt.Errorf("cannot delete CRD because it has the following CRDCompatibilityRequirements: %s", strings.Join(slices.Collect(maps.Keys(requirements)), ", "))
+		return nil, fmt.Errorf("%w: %s", errCRDHasRequirements, strings.Join(slices.Collect(maps.Keys(requirements)), ", "))
 	}
 
 	return nil, nil
