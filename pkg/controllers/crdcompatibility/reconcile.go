@@ -23,15 +23,16 @@ import (
 	"slices"
 
 	"github.com/go-logr/logr"
-	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
-	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility/crdchecker"
-	"github.com/openshift/cluster-capi-operator/pkg/util"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/yaml"
+
+	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
+	"github.com/openshift/cluster-capi-operator/pkg/crdchecker"
+	"github.com/openshift/cluster-capi-operator/pkg/util"
 )
 
 const (
