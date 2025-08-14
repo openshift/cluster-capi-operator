@@ -15,7 +15,7 @@ limitations under the License.
 */
 package util
 
-// SliceMap applies a map function to each element of a slice and returns a new slice
+// SliceMap applies a map function to each element of a slice and returns a new slice.
 func SliceMap[A, B any](source []A, fn func(A) B) []B {
 	if len(source) == 0 {
 		return nil
@@ -25,5 +25,6 @@ func SliceMap[A, B any](source []A, fn func(A) B) []B {
 	for i, a := range source {
 		result[i] = fn(a)
 	}
+
 	return result
 }

@@ -43,6 +43,7 @@ func initScheme(scheme *runtime.Scheme) {
 	utilruntime.Must(operatorv1alpha1.AddToScheme(scheme))
 }
 
+//nolint:funlen
 func main() {
 	scheme := runtime.NewScheme()
 	initScheme(scheme)

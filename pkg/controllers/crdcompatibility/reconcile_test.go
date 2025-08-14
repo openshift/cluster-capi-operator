@@ -184,7 +184,7 @@ var _ = Describe("CRDCompatibilityRequirement", func() {
 				delete(testCRD.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties, "status")
 			})
 			Eventually(updateCRD).Should(WithTransform(func(err error) string { return err.Error() },
-				Equal(fmt.Sprintf("admission webhook \"crdcompatibility.operator.openshift.io\" denied the request: new CRD is not compatible with the following: requirement %s: removed field : v1beta1.^.status", requirement.Name))))
+				Equal(fmt.Sprintf("admission webhook \"crdcompatibility.operator.openshift.io\" denied the request: CRD is not compatible with CRDCompatibilityRequirements: requirement %s: removed field : v1beta1.^.status", requirement.Name))))
 		}
 
 		testValidCRD := func(ctx context.Context, testCRD *apiextensionsv1.CustomResourceDefinition, createOrUpdateCRD func(context.Context, client.Object, func()) func() error) {
@@ -251,6 +251,7 @@ var _ = Describe("CRDCompatibilityRequirement", func() {
 						if apierrors.IsNotFound(err) {
 							return nil
 						}
+
 						return err
 					}, Succeed()))
 					Eventually(kWithCtx(ctx).Get(testCRD)).Should(test.BeK8SNotFound())
@@ -263,8 +264,8 @@ var _ = Describe("CRDCompatibilityRequirement", func() {
 				return func() error {
 					updateFn()
 
-					By("Creating test CRD " + testCRD.Name)
-					if err := cl.Create(ctx, testCRD); err != nil {
+					By("Creating test CRD " + obj.GetName())
+					if err := cl.Create(ctx, obj); err != nil {
 						return err
 					}
 
@@ -307,17 +308,22 @@ func createTestRequirement(ctx context.Context, testCRD *apiextensionsv1.CustomR
 
 func generateTestCRD() *apiextensionsv1.CustomResourceDefinition {
 	const validChars = "abcdefghijklmnopqrstuvwxyz"
+
 	randBytes := make([]byte, 10)
+
 	for i := range randBytes {
 		randInt, err := rand.Int(rand.Reader, big.NewInt(int64(len(validChars))))
 		Expect(err).To(Succeed())
+
 		randBytes[i] = validChars[randInt.Int64()]
 	}
+
 	gvk := schema.GroupVersionKind{
 		Group:   "example.com",
 		Version: "v1",
 		Kind:    string(unicode.ToUpper(rune(randBytes[0]))) + string(randBytes[1:]),
 	}
+
 	return test.GenerateCRD(gvk, "v1beta1")
 }
 

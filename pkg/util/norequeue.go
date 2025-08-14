@@ -1,3 +1,18 @@
+/*
+Copyright 2025 Red Hat, Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+	http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 package util
 
 import (
@@ -6,44 +21,42 @@ import (
 	"github.com/go-logr/logr"
 )
 
-type NoRequeueErrorWrapper struct {
+type noRequeueError struct {
 	error
 	Reason string
 }
 
-var _ error = &NoRequeueErrorWrapper{}
+var _ error = &noRequeueError{}
 
-func (e *NoRequeueErrorWrapper) Unwrap() error {
+func (e *noRequeueError) Unwrap() error {
 	return e.error
 }
 
-// NoRequeueError is a wrapper for an error that should not cause the
-// reconciliation to be requeued. This is for situations when we know the error
-// will occur again on the next reconciliation, for example due to a
-// misconfiguration.
-
-// An error wrapped with NoRequeueError will be logged, but not returned to
-// controller-runtime.
+// NoRequeueError returns an error that will not be returned to
+// controller-runtime to trigger a requeue.
 func NoRequeueError(err error, reason string) error {
-	return &NoRequeueErrorWrapper{err, reason}
+	return &noRequeueError{err, reason}
 }
 
-// LogNoRequeueError filters out NoRequeueError errors from the error chain.
+// LogNoRequeueError ensures that its error argument is logged but not returned if it is a NoRequeueError.
 func LogNoRequeueError(err error, log logr.Logger) error {
-	noRequeue := &NoRequeueErrorWrapper{}
+	noRequeue := &noRequeueError{}
 	if errors.As(err, &noRequeue) {
 		// Note that we log the original error not the wrapped error in case it
 		// is itself wrapped or joined.
 		log.Error(err, "Not requeuing after error", "reason", noRequeue.Reason)
 		return nil
 	}
+
 	return err
 }
 
-func AsNoRequeueError(err error) *NoRequeueErrorWrapper {
-	noRequeue := &NoRequeueErrorWrapper{}
+// AsNoRequeueError returns its argument as a NoRequeueError if it is one, otherwise nil.
+func AsNoRequeueError(err error) *noRequeueError {
+	noRequeue := &noRequeueError{}
 	if errors.As(err, &noRequeue) {
 		return noRequeue
 	}
+
 	return nil
 }

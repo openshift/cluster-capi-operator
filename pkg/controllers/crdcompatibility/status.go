@@ -64,6 +64,7 @@ func (r *reconcileState) writeStatus(ctx context.Context, obj *operatorv1alpha1.
 			util.SetLastTransitionTimeMetaV1(now, currentConditions, compatibleCondition).WithObservedGeneration(obj.GetGeneration()),
 			util.SetLastTransitionTimeMetaV1(now, currentConditions, progressingCondition).WithObservedGeneration(obj.GetGeneration()),
 		)
+
 	if r.currentCRD != nil {
 		applyConfigObservedCRD := operatorapplyconfig.ObservedCRD().
 			WithUID(string(r.currentCRD.GetUID())).
@@ -86,6 +87,7 @@ func (r *reconcileState) writeStatus(ctx context.Context, obj *operatorv1alpha1.
 // current state is final until a change is made.
 func (r *reconcileState) getProgressingCondition(reconcileErr error) *metav1applyconfig.ConditionApplyConfiguration {
 	progressingCondition := metav1applyconfig.Condition().WithType("Progressing")
+
 	if reconcileErr != nil {
 		if noRequeueError := util.AsNoRequeueError(reconcileErr); noRequeueError != nil {
 			progressingCondition.
@@ -109,7 +111,6 @@ func (r *reconcileState) getProgressingCondition(reconcileErr error) *metav1appl
 }
 
 // Ready indicates whether the CRDCompatibililtyRequirement has been completely admitted, i.e. all required admission policies have been created.
-// Not yet implemented
 func (r *reconcileState) getAdmittedCondition() *metav1applyconfig.ConditionApplyConfiguration {
 	admittedCondition := metav1applyconfig.Condition().WithType("Admitted")
 
@@ -128,8 +129,7 @@ func (r *reconcileState) getAdmittedCondition() *metav1applyconfig.ConditionAppl
 	return admittedCondition
 }
 
-// Compatible indicates whether the CRD is compatible with the compatibilityCRD
-// Not yet implemented
+// Compatible indicates whether the CRD is compatible with the compatibilityCRD.
 func (r *reconcileState) getCompatibleCondition() *metav1applyconfig.ConditionApplyConfiguration {
 	compatibleCondition := metav1applyconfig.Condition().WithType("Compatible")
 

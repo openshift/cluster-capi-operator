@@ -41,6 +41,7 @@ func getCRDVersion(crd *apiextensionsv1.CustomResourceDefinition, version string
 			return &v
 		}
 	}
+
 	return nil
 }
 
@@ -61,6 +62,7 @@ var _ = Describe("CRD Compatibility Checker", func() {
 	runTest := func(mutator crdMutator) ([]string, []string) {
 		errors, warnings, err := CheckCRDCompatibility(baseCRD, mutator(baseCRD.DeepCopy()))
 		Expect(err).To(BeNil(), "CheckCRDCompatibility should not return an error")
+
 		return errors, warnings
 	}
 
@@ -82,6 +84,7 @@ var _ = Describe("CRD Compatibility Checker", func() {
 				func(target *apiextensionsv1.CustomResourceDefinition) *apiextensionsv1.CustomResourceDefinition {
 					version := getCRDVersion(target, "v1")
 					delete(version.Schema.OpenAPIV3Schema.Properties, "spec")
+
 					return target
 				},
 			)
@@ -96,6 +99,7 @@ var _ = Describe("CRD Compatibility Checker", func() {
 					version.Schema.OpenAPIV3Schema.Properties["foo"] = apiextensionsv1.JSONSchemaProps{
 						Type: "string",
 					}
+
 					return crd
 				},
 			)
