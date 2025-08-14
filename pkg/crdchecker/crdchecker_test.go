@@ -23,7 +23,9 @@ import (
 	. "github.com/onsi/gomega"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+
+	"github.com/openshift/cluster-capi-operator/pkg/test"
 )
 
 func TestCRDChecker(t *testing.T) {
@@ -32,77 +34,6 @@ func TestCRDChecker(t *testing.T) {
 }
 
 type crdMutator func(*apiextensionsv1.CustomResourceDefinition) *apiextensionsv1.CustomResourceDefinition
-
-// getValidBaseCRD returns a valid CRD that can be used as the base for all tests
-func getValidBaseCRD() *apiextensionsv1.CustomResourceDefinition {
-	return &apiextensionsv1.CustomResourceDefinition{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "apiextensions.k8s.io/v1",
-			Kind:       "CustomResourceDefinition",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "tests.example.com",
-		},
-		Spec: apiextensionsv1.CustomResourceDefinitionSpec{
-			Group: "example.com",
-			Names: apiextensionsv1.CustomResourceDefinitionNames{
-				Kind:     "Test",
-				ListKind: "TestList",
-				Plural:   "tests",
-				Singular: "test",
-			},
-			Scope: apiextensionsv1.ClusterScoped,
-			Versions: []apiextensionsv1.CustomResourceDefinitionVersion{
-				{
-					Name:    "v1",
-					Served:  true,
-					Storage: false,
-					Schema: &apiextensionsv1.CustomResourceValidation{
-						OpenAPIV3Schema: &apiextensionsv1.JSONSchemaProps{
-							Type: "object",
-							Properties: map[string]apiextensionsv1.JSONSchemaProps{
-								"spec": {
-									Type: "object",
-									Properties: map[string]apiextensionsv1.JSONSchemaProps{
-										"field1": {
-											Type: "string",
-										},
-										"field2": {
-											Type: "integer",
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-				{
-					Name:    "v2",
-					Served:  true,
-					Storage: true,
-					Schema: &apiextensionsv1.CustomResourceValidation{
-						OpenAPIV3Schema: &apiextensionsv1.JSONSchemaProps{
-							Type: "object",
-							Properties: map[string]apiextensionsv1.JSONSchemaProps{
-								"spec": {
-									Type: "object",
-									Properties: map[string]apiextensionsv1.JSONSchemaProps{
-										"field1": {
-											Type: "string",
-										},
-										"field2": {
-											Type: "integer",
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-}
 
 func getCRDVersion(crd *apiextensionsv1.CustomResourceDefinition, version string) *apiextensionsv1.CustomResourceDefinitionVersion {
 	for _, v := range crd.Spec.Versions {
@@ -119,7 +50,12 @@ var _ = Describe("CRD Compatibility Checker", func() {
 	)
 
 	BeforeEach(func() {
-		baseCRD = getValidBaseCRD()
+		gvk := schema.GroupVersionKind{
+			Group:   "example.com",
+			Version: "v1",
+			Kind:    "Test",
+		}
+		baseCRD = test.GenerateCRD(gvk, "v1beta1")
 	})
 
 	runTest := func(mutator crdMutator) ([]string, []string) {
@@ -144,8 +80,8 @@ var _ = Describe("CRD Compatibility Checker", func() {
 		It("should fail when a field is removed", func() {
 			errors, _ := runTest(
 				func(target *apiextensionsv1.CustomResourceDefinition) *apiextensionsv1.CustomResourceDefinition {
-					version := getCRDVersion(target, "v2")
-					delete(version.Schema.OpenAPIV3Schema.Properties["spec"].Properties, "field1")
+					version := getCRDVersion(target, "v1")
+					delete(version.Schema.OpenAPIV3Schema.Properties, "spec")
 					return target
 				},
 			)
@@ -156,8 +92,8 @@ var _ = Describe("CRD Compatibility Checker", func() {
 		It("should permit an optional field to be added", func() {
 			errors, warnings := runTest(
 				func(crd *apiextensionsv1.CustomResourceDefinition) *apiextensionsv1.CustomResourceDefinition {
-					version := getCRDVersion(crd, "v2")
-					version.Schema.OpenAPIV3Schema.Properties["spec"].Properties["field3"] = apiextensionsv1.JSONSchemaProps{
+					version := getCRDVersion(crd, "v1")
+					version.Schema.OpenAPIV3Schema.Properties["foo"] = apiextensionsv1.JSONSchemaProps{
 						Type: "string",
 					}
 					return crd
