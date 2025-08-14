@@ -22,13 +22,13 @@ import (
 	"slices"
 	"strings"
 
-	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
-	operatorapplyconfig "github.com/openshift/client-go/operator/applyconfigurations/operator/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	metav1applyconfig "k8s.io/client-go/applyconfigurations/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
+	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
+	operatorapplyconfig "github.com/openshift/client-go/operator/applyconfigurations/operator/v1alpha1"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 )
 

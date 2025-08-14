@@ -29,7 +29,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
-	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility/crdchecker"
+	"github.com/openshift/cluster-capi-operator/pkg/crdchecker"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 )
 
