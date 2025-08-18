@@ -1,0 +1,71 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: openshift-cluster-api-stop-edits-machine
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["cluster.x-k8s.io"]
+        apiVersions: ["*"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["machines"]
+  variables:
+    - name: newVersion
+      expression: "object.spec.?version.hasValue() ? object.spec.?version.value()     : {}"
+    - name: newReadinessGates
+      expression: "object.spec.?readinessGates.hasValue() ? object.spec.?readinessGates.value()      : {}"
+  validations:
+    - expression: "variables.newVersion == {}"
+      message: "The 'spec.version' field should not be set."
+    - expression: "variables.newReadinessGates == {}"
+      message: "The 'spec.readinessGates' field should not be set."
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: openshift-cluster-api-stop-edits-machine
+spec:
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        name: openshift-cluster-api
+  policyName: openshift-cluster-api-stop-edits-machine
+  validationActions:
+      - Deny
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: openshift-cluster-api-stop-edits-machinesets
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["cluster.x-k8s.io"]
+        apiVersions: ["*"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["machinesets"]
+  variables:
+    - name: newVersion
+      expression: "object.spec.?template.spec.version.hasValue() ? object.spec.?template.spec.version.value() : {}"
+    - name: newReadinessGates
+      expression: "object.spec.?template.spec.readinessGates.hasValue() ? object.spec.?template.spec.readinessGates.value() : {}"
+  validations:
+    - expression: "variables.newVersion == {}"
+      message: "The 'spec.template.spec.version' field should not be set."
+    - expression: "variables.newReadinessGates == {}"
+      message: "The 'spec.template.spec.readinessGates' field should not be set."
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: openshift-cluster-api-stop-edits-machinesets
+spec:
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        name: openshift-cluster-api
+  policyName: openshift-cluster-api-stop-edits-machinesets
+  validationActions:
+      - Deny
