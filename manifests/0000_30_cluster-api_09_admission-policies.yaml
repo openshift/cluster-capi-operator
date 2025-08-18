@@ -151,6 +151,42 @@ data:
               variables.newLabels[?k].orValue(null) == variables.paramLabels[k]
             )
           message: "Cannot modify a Cluster API controlled label except to match the Cluster API mirrored machine. This is because status.authoritativeAPI is set to Cluster API."
+    ---
+    apiVersion: admissionregistration.k8s.io/v1
+    kind: ValidatingAdmissionPolicy
+    metadata:
+      name: openshift-cluster-api-prevent-setting-of-capi-fields-unsupported-by-mapi
+    spec:
+      failurePolicy: Fail
+      matchConstraints:
+        resourceRules:
+          - apiGroups: ["cluster.x-k8s.io"]
+            apiVersions: ["*"]
+            operations: ["CREATE", "UPDATE"]
+            resources: ["machines", "machinesets"]
+      variables:
+      - name: machineSpec
+        expression: "object.kind == 'Machine' ? object.spec : object.spec.template.spec"
+      - name: specPath
+        expression: "object.kind == 'Machine' ? 'spec' : 'spec.template.spec'"
+      validations:
+      - expression: "!has(variables.machineSpec.version)"
+        messageExpression: "variables.specPath + '.version is a forbidden field'"
+      - expression: "!has(variables.machineSpec.readinessGates)"
+        messageExpression: "variables.specPath + '.readinessGates is a forbidden field'"
+    ---
+    apiVersion: admissionregistration.k8s.io/v1
+    kind: ValidatingAdmissionPolicyBinding
+    metadata:
+      name: openshift-cluster-api-prevent-setting-of-capi-fields-unsupported-by-mapi
+    spec:
+      matchResources:
+        namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: openshift-cluster-api
+      policyName: openshift-cluster-api-prevent-setting-of-capi-fields-unsupported-by-mapi
+      validationActions:
+          - Deny
 ---
 apiVersion: v1
 kind: ConfigMap
