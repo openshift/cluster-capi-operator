@@ -66,7 +66,7 @@ func (r *CRDCompatibilityReconciler) SetupWithManager(ctx context.Context, mgr c
 	if err := mgr.GetFieldIndexer().IndexField(ctx, &operatorv1alpha1.CRDCompatibilityRequirement{}, fieldIndexCRDRef, func(obj client.Object) []string {
 		requirement, ok := obj.(*operatorv1alpha1.CRDCompatibilityRequirement)
 		if !ok {
-			log.FromContext(ctx).Error(errInvalidObjectType, "expected a CRDCompatibilityRequirement", "receivedType", fmt.Sprintf("%T", obj))
+			log.FromContext(ctx).Error(errExpectedCRD, "expected a CRDCompatibilityRequirement", "receivedType", fmt.Sprintf("%T", obj))
 			return nil
 		}
 
@@ -90,6 +90,11 @@ func (r *CRDCompatibilityReconciler) SetupWithManager(ctx context.Context, mgr c
 		ctrl.NewWebhookManagedBy(mgr).
 			For(&apiextensionsv1.CustomResourceDefinition{}).
 			WithValidator(crdValidator).
+			Complete(),
+
+		ctrl.NewWebhookManagedBy(mgr).
+			For(&operatorv1alpha1.CRDCompatibilityRequirement{}).
+			WithValidator(&crdRequirementValidator{}).
 			Complete(),
 
 		ctrl.NewControllerManagedBy(mgr).

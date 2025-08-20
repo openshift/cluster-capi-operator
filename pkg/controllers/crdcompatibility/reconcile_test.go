@@ -38,14 +38,20 @@ import (
 
 var _ = Describe("CRDCompatibilityRequirement", func() {
 	Context("When creating a CRDCompatibilityRequirement", func() {
-		var testCRD *apiextensionsv1.CustomResourceDefinition
+		var (
+			testCRD, testCRDWorking *apiextensionsv1.CustomResourceDefinition
+		)
 
 		BeforeEach(func(ctx context.Context) {
 			testCRD = generateTestCRD()
-			Expect(cl.Create(ctx, testCRD)).To(Succeed())
+
+			// Create a working copy of the CRD so we maintain a clean version
+			// with no runtime metadata
+			testCRDWorking = testCRD.DeepCopy()
+			Expect(cl.Create(ctx, testCRDWorking)).To(Succeed())
 			DeferCleanup(func(ctx context.Context) {
-				By("Deleting test CRD " + testCRD.Name)
-				Expect(cl.Delete(ctx, testCRD)).To(Succeed())
+				By("Deleting test CRD " + testCRDWorking.Name)
+				Expect(cl.Delete(ctx, testCRDWorking)).To(Succeed())
 			})
 		})
 
@@ -76,8 +82,8 @@ var _ = Describe("CRDCompatibilityRequirement", func() {
 				test.HaveCondition("Compatible", metav1.ConditionTrue,
 					test.WithConditionReason(compatibleReasonCompatible),
 					test.WithConditionMessage("The CRD is compatible with this requirement")),
-				HaveField("Status.ObservedCRD.UID", BeEquivalentTo(testCRD.UID)),
-				HaveField("Status.ObservedCRD.Generation", BeEquivalentTo(testCRD.Generation)),
+				HaveField("Status.ObservedCRD.UID", BeEquivalentTo(testCRDWorking.UID)),
+				HaveField("Status.ObservedCRD.Generation", BeEquivalentTo(testCRDWorking.Generation)),
 			))
 		})
 
@@ -123,7 +129,7 @@ var _ = Describe("CRDCompatibilityRequirement", func() {
 			))
 		})
 
-		It("Should set a terminal failure when compatibility CRD does not parse", func(ctx context.Context) {
+		It("Should not admit yaml which does not parse", func(ctx context.Context) {
 			// Create the simplest possible CRDCompatibilityRequirement
 			requirement := &operatorv1alpha1.CRDCompatibilityRequirement{
 				ObjectMeta: metav1.ObjectMeta{
@@ -131,24 +137,34 @@ var _ = Describe("CRDCompatibilityRequirement", func() {
 				},
 				Spec: operatorv1alpha1.CRDCompatibilityRequirementSpec{
 					CRDRef:             testCRD.Name,
-					CompatibilityCRD:   "invalid",
+					CompatibilityCRD:   "not YAML",
 					CRDAdmitAction:     operatorv1alpha1.CRDAdmitActionEnforce,
 					CreatorDescription: "Test Creator",
 				},
 			}
 
-			createRequirement(ctx, requirement)
+			By("Attempting to create invalid CRDCompatibilityRequirement " + requirement.Name)
+			expectedError := "admission webhook \"crdcompatibility.operator.openshift.io\" denied the request: expected a valid CustomResourceDefinition in YAML format: error unmarshaling JSON: while decoding JSON: json: cannot unmarshal string into Go value of type v1.CustomResourceDefinition"
+			Eventually(cl.Create(ctx, requirement)).Should(MatchError(expectedError))
+		})
 
-			By("Waiting for the CRDCompatibilityRequirement to have the expected status")
-			Eventually(kWithCtx(ctx).Object(requirement)).Should(SatisfyAll(
-				test.HaveCondition("Progressing", metav1.ConditionFalse,
-					test.WithConditionReason(progressingReasonConfigurationError),
-					test.WithConditionMessage("failed to parse compatibilityCRD: error unmarshaling JSON: while decoding JSON: json: cannot unmarshal string into Go value of type v1.CustomResourceDefinition")),
+		It("Should not admit yaml which parses but is not a CRD", func(ctx context.Context) {
+			// Create the simplest possible CRDCompatibilityRequirement
+			requirement := &operatorv1alpha1.CRDCompatibilityRequirement{
+				ObjectMeta: metav1.ObjectMeta{
+					GenerateName: "test-requirement-",
+				},
+				Spec: operatorv1alpha1.CRDCompatibilityRequirementSpec{
+					CRDRef:             testCRD.Name,
+					CompatibilityCRD:   "{}",
+					CRDAdmitAction:     operatorv1alpha1.CRDAdmitActionEnforce,
+					CreatorDescription: "Test Creator",
+				},
+			}
 
-				// It should still set the observed CRD
-				HaveField("Status.ObservedCRD.UID", BeEquivalentTo(testCRD.UID)),
-				HaveField("Status.ObservedCRD.Generation", BeEquivalentTo(testCRD.Generation)),
-			))
+			By("Attempting to create invalid CRDCompatibilityRequirement " + requirement.Name)
+			expectedError := "admission webhook \"crdcompatibility.operator.openshift.io\" denied the request: expected a valid CustomResourceDefinition in YAML format: expected APIVersion to be apiextensions.k8s.io/v1 and Kind to be CustomResourceDefinition, got /"
+			Eventually(cl.Create(ctx, requirement)).Should(MatchError(expectedError))
 		})
 
 		It("Should not set an error when the CRD is not found", func(ctx context.Context) {
@@ -179,18 +195,27 @@ var _ = Describe("CRDCompatibilityRequirement", func() {
 
 	Context("When creating or modifying a CRD", func() {
 		testInvalidCRD := func(ctx context.Context, testCRD *apiextensionsv1.CustomResourceDefinition, requirement *operatorv1alpha1.CRDCompatibilityRequirement, createOrUpdateCRD func(context.Context, client.Object, func()) func() error) {
+			// Create a working copy of the CRD so we maintain a clean version
+			// without runtime metadata
+			testCRDWorking := testCRD.DeepCopy()
+
 			By("Attempting to make an invalid modification by removing a field")
-			updateCRD := createOrUpdateCRD(ctx, testCRD, func() {
-				delete(testCRD.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties, "status")
+			expectedError := fmt.Sprintf("admission webhook \"crdcompatibility.operator.openshift.io\" denied the request: CRD is not compatible with CRDCompatibilityRequirements: requirement %s: removed field : v1beta1.^.status", requirement.Name)
+
+			updateCRD := createOrUpdateCRD(ctx, testCRDWorking, func() {
+				delete(testCRDWorking.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties, "status")
 			})
-			Eventually(updateCRD).Should(WithTransform(func(err error) string { return err.Error() },
-				Equal(fmt.Sprintf("admission webhook \"crdcompatibility.operator.openshift.io\" denied the request: CRD is not compatible with CRDCompatibilityRequirements: requirement %s: removed field : v1beta1.^.status", requirement.Name))))
+			Eventually(updateCRD).Should(MatchError(expectedError))
 		}
 
 		testValidCRD := func(ctx context.Context, testCRD *apiextensionsv1.CustomResourceDefinition, createOrUpdateCRD func(context.Context, client.Object, func()) func() error) {
+			// Create a working copy of the CRD so we maintain a clean version
+			// without runtime metadata
+			testCRDWorking := testCRD.DeepCopy()
+
 			By("Attempting to make a valid modification by adding a field")
-			updateCRD := createOrUpdateCRD(ctx, testCRD, func() {
-				testCRD.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["foo"] = apiextensionsv1.JSONSchemaProps{
+			updateCRD := createOrUpdateCRD(ctx, testCRDWorking, func() {
+				testCRDWorking.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["foo"] = apiextensionsv1.JSONSchemaProps{
 					Type: "string",
 				}
 			})
@@ -206,12 +231,16 @@ var _ = Describe("CRDCompatibilityRequirement", func() {
 			BeforeEach(func(ctx context.Context) {
 				testCRD = generateTestCRD()
 
+				// Create a working copy of the CRD so we maintain a clean version
+				// without runtime metadata
+				testCRDWorking := testCRD.DeepCopy()
+
 				By("Creating test CRD " + testCRD.Name)
-				Expect(cl.Create(ctx, testCRD)).To(Succeed())
+				Expect(cl.Create(ctx, testCRDWorking)).To(Succeed())
 
 				DeferCleanup(func(ctx context.Context) {
-					By("Deleting test CRD " + testCRD.Name)
-					Expect(cl.Delete(ctx, testCRD)).To(Succeed())
+					By("Deleting test CRD " + testCRDWorking.Name)
+					Expect(cl.Delete(ctx, testCRDWorking)).To(Succeed())
 				})
 
 				requirement = createTestRequirement(ctx, testCRD)

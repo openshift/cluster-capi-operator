@@ -35,7 +35,7 @@ import (
 )
 
 var (
-	errInvalidObjectType  = errors.New("expected a CustomResourceDefinition")
+	errExpectedCRD        = errors.New("expected a CustomResourceDefinition")
 	errCRDHasRequirements = errors.New("cannot delete CRD because it has CRDCompatibilityRequirements")
 	errCRDNotCompatible   = errors.New("CRD is not compatible with CRDCompatibilityRequirements")
 )
@@ -71,7 +71,7 @@ func (v *crdValidator) setRequirement(crdRef string, crd *apiextensionsv1.Custom
 func (v *crdValidator) validateCreateOrUpdate(obj runtime.Object) (admission.Warnings, error) {
 	crd, ok := obj.(*apiextensionsv1.CustomResourceDefinition)
 	if !ok {
-		return nil, fmt.Errorf("%w: got %T", errInvalidObjectType, obj)
+		return nil, fmt.Errorf("%w: got %T", errExpectedCRD, obj)
 	}
 
 	// We don't need to hold a lock while we use the requirement because nothing
@@ -118,7 +118,7 @@ func (v *crdValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtim
 func (v *crdValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
 	crd, ok := obj.(*apiextensionsv1.CustomResourceDefinition)
 	if !ok {
-		return nil, fmt.Errorf("%w: got %T", errInvalidObjectType, obj)
+		return nil, fmt.Errorf("%w: got %T", errExpectedCRD, obj)
 	}
 
 	// A CRD may not be deleted if it has requirements
