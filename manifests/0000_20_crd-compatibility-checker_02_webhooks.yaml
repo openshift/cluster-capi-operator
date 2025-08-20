@@ -1,9 +1,7 @@
-
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingWebhookConfiguration
 metadata:
-  creationTimestamp: null
   name: crd-compatibility-requirements
 webhooks:
 - admissionReviewVersions:
@@ -27,4 +25,31 @@ webhooks:
     - DELETE
     resources:
     - customresourcedefinitions
+  sideEffects: None
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: crd-compatibility-controller
+webhooks:
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-operator-openshift-io-v1alpha1-crdcompatibilityrequirement
+  failurePolicy: Fail
+  matchPolicy: Equivalent
+  name: crdcompatibility.operator.openshift.io
+  rules:
+  - apiGroups:
+    - operator.openshift.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - crdcompatibilityrequirements
   sideEffects: None
