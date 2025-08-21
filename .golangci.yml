@@ -56,7 +56,7 @@ linters:
     - revive
     - stylecheck
     - tagliatelle
-    - tenv
+    - usetesting
     - unconvert
     - unparam
     - wastedassign
