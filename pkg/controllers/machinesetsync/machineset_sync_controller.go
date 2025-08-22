@@ -1061,6 +1061,8 @@ func initInfraMachineTemplateListAndInfraClusterListFromProvider(platform config
 	switch platform {
 	case configv1.AWSPlatformType:
 		return &awsv1.AWSMachineTemplateList{}, &awsv1.AWSClusterList{}, nil
+	case configv1.OpenStackPlatformType:
+		return &openstackv1.OpenStackMachineTemplateList{}, &openstackv1.OpenStackClusterList{}, nil
 	case configv1.PowerVSPlatformType:
 		return &ibmpowervsv1.IBMPowerVSMachineTemplateList{}, &ibmpowervsv1.IBMPowerVSClusterList{}, nil
 	default:
