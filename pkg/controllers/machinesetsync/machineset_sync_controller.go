@@ -375,6 +375,12 @@ func filterOutdatedInfraMachineTemplates(infraMachineTemplateList client.ObjectL
 				outdatedTemplates = append(outdatedTemplates, &template)
 			}
 		}
+	case *openstackv1.OpenStackMachineTemplateList:
+		for _, template := range list.Items {
+			if template.GetName() != newInfraMachineTemplateName {
+				outdatedTemplates = append(outdatedTemplates, &template)
+			}
+		}
 	default:
 		return nil, fmt.Errorf("%w: got unknown type %T", errUnexpectedInfraMachineTemplateListType, list)
 	}
