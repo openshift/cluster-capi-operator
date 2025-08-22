@@ -31,6 +31,7 @@ import (
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	azurev1 "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
 	gcpv1 "sigs.k8s.io/cluster-api-provider-gcp/api/v1beta1"
+	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
@@ -48,6 +49,7 @@ func init() {
 	utilruntime.Must(awsv1.AddToScheme(scheme.Scheme))
 	utilruntime.Must(azurev1.AddToScheme(scheme.Scheme))
 	utilruntime.Must(gcpv1.AddToScheme(scheme.Scheme))
+	utilruntime.Must(openstackv1.AddToScheme(scheme.Scheme))
 	utilruntime.Must(clusterv1.AddToScheme(scheme.Scheme))
 }
 
@@ -70,6 +72,8 @@ func StartEnvTest(testEnv *envtest.Environment) (*rest.Config, client.Client, er
 		fakeAWSMachineCRD,
 		fakeAzureClusterCRD,
 		fakeGCPClusterCRD,
+		fakeOpenStackClusterCRD,
+		fakeOpenStackMachineTemplateCRD,
 	}
 
 	testEnv.CRDDirectoryPaths = []string{

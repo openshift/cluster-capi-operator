@@ -47,6 +47,7 @@ import (
 	"k8s.io/utils/ptr"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	ibmpowervsv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
+	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util/annotations"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -75,6 +76,9 @@ var (
 
 	// errAssertingCAPIPowerVSMachineTemplate is returned when we encounter an issue asserting a client.Object into a IBMPowerVSMachineTemplate.
 	errAssertingCAPIIBMPowerVSMachineTemplate = errors.New("error asserting the CAPI IBMPowerVSMachineTemplate object")
+
+	// errAssertingCAPIOpenStackMachineTemplate is returned when we encounter an issue asserting a client.Object into a OpenStackMachineTemplate.
+	errAssertingCAPIOpenStackMachineTemplate = errors.New("error asserting the CAPI OpenStackMachineTemplate object")
 
 	// errUnsuportedOwnerKindForConversion is returned when the owner kind is not supported for conversion.
 	errUnsuportedOwnerKindForConversion = errors.New("unsupported owner kind for conversion")
@@ -366,6 +370,12 @@ func filterOutdatedInfraMachineTemplates(infraMachineTemplateList client.ObjectL
 			}
 		}
 	case *ibmpowervsv1.IBMPowerVSMachineTemplateList:
+		for _, template := range list.Items {
+			if template.GetName() != newInfraMachineTemplateName {
+				outdatedTemplates = append(outdatedTemplates, &template)
+			}
+		}
+	case *openstackv1.OpenStackMachineTemplateList:
 		for _, template := range list.Items {
 			if template.GetName() != newInfraMachineTemplateName {
 				outdatedTemplates = append(outdatedTemplates, &template)
@@ -663,32 +673,46 @@ func (r *MachineSetSyncReconciler) validateCAPIMachineSetOwnerReferences(capiMac
 func (r *MachineSetSyncReconciler) convertCAPIToMAPIMachineSet(capiMachineSet *clusterv1.MachineSet, infraMachineTemplate client.Object, infraCluster client.Object) (*machinev1beta1.MachineSet, []string, error) {
 	switch r.Platform {
 	case configv1.AWSPlatformType:
-		awsMachineTemplate, ok := infraMachineTemplate.(*awsv1.AWSMachineTemplate)
+		machineTemplate, ok := infraMachineTemplate.(*awsv1.AWSMachineTemplate)
 		if !ok {
 			return nil, nil, fmt.Errorf("%w, expected AWSMachineTemplate, got %T", errUnexpectedInfraMachineTemplateType, infraMachineTemplate)
 		}
 
-		awsCluster, ok := infraCluster.(*awsv1.AWSCluster)
+		cluster, ok := infraCluster.(*awsv1.AWSCluster)
 		if !ok {
 			return nil, nil, fmt.Errorf("%w, expected AWSCluster, got %T", errUnexpectedInfraClusterType, infraCluster)
 		}
 
 		return capi2mapi.FromMachineSetAndAWSMachineTemplateAndAWSCluster( //nolint: wrapcheck
-			capiMachineSet, awsMachineTemplate, awsCluster,
+			capiMachineSet, machineTemplate, cluster,
+		).ToMachineSet()
+	case configv1.OpenStackPlatformType:
+		machineTemplate, ok := infraMachineTemplate.(*openstackv1.OpenStackMachineTemplate)
+		if !ok {
+			return nil, nil, fmt.Errorf("%w, expected OpenStackMachineTemplate, got %T", errUnexpectedInfraMachineTemplateType, infraMachineTemplate)
+		}
+
+		cluster, ok := infraCluster.(*openstackv1.OpenStackCluster)
+		if !ok {
+			return nil, nil, fmt.Errorf("%w, expected OpenStackCluster, got %T", errUnexpectedInfraClusterType, infraCluster)
+		}
+
+		return capi2mapi.FromMachineSetAndOpenStackMachineTemplateAndOpenStackCluster( //nolint: wrapcheck
+			capiMachineSet, machineTemplate, cluster,
 		).ToMachineSet()
 	case configv1.PowerVSPlatformType:
-		powerVSMachineTemplate, ok := infraMachineTemplate.(*ibmpowervsv1.IBMPowerVSMachineTemplate)
+		machineTemplate, ok := infraMachineTemplate.(*ibmpowervsv1.IBMPowerVSMachineTemplate)
 		if !ok {
 			return nil, nil, fmt.Errorf("%w, expected IBMPowerVSMachineTemplate, got %T", errUnexpectedInfraMachineTemplateType, infraMachineTemplate)
 		}
 
-		powerVSCluster, ok := infraCluster.(*ibmpowervsv1.IBMPowerVSCluster)
+		cluster, ok := infraCluster.(*ibmpowervsv1.IBMPowerVSCluster)
 		if !ok {
 			return nil, nil, fmt.Errorf("%w, expected IBMPowerVSCluster, got %T", errUnexpectedInfraClusterType, infraCluster)
 		}
 
 		return capi2mapi.FromMachineSetAndPowerVSMachineTemplateAndPowerVSCluster( //nolint: wrapcheck
-			capiMachineSet, powerVSMachineTemplate, powerVSCluster,
+			capiMachineSet, machineTemplate, cluster,
 		).ToMachineSet()
 	default:
 		return nil, nil, fmt.Errorf("%w: %s", errPlatformNotSupported, r.Platform)
@@ -700,6 +724,8 @@ func (r *MachineSetSyncReconciler) convertMAPIToCAPIMachineSet(mapiMachineSet *m
 	switch r.Platform {
 	case configv1.AWSPlatformType:
 		return mapi2capi.FromAWSMachineSetAndInfra(mapiMachineSet, r.Infra).ToMachineSetAndMachineTemplate() //nolint:wrapcheck
+	case configv1.OpenStackPlatformType:
+		return mapi2capi.FromOpenStackMachineSetAndInfra(mapiMachineSet, r.Infra).ToMachineSetAndMachineTemplate() //nolint:wrapcheck
 	case configv1.PowerVSPlatformType:
 		return mapi2capi.FromPowerVSMachineSetAndInfra(mapiMachineSet, r.Infra).ToMachineSetAndMachineTemplate() //nolint:wrapcheck
 	default:
@@ -1041,6 +1067,8 @@ func initInfraMachineTemplateListAndInfraClusterListFromProvider(platform config
 	switch platform {
 	case configv1.AWSPlatformType:
 		return &awsv1.AWSMachineTemplateList{}, &awsv1.AWSClusterList{}, nil
+	case configv1.OpenStackPlatformType:
+		return &openstackv1.OpenStackMachineTemplateList{}, &openstackv1.OpenStackClusterList{}, nil
 	case configv1.PowerVSPlatformType:
 		return &ibmpowervsv1.IBMPowerVSMachineTemplateList{}, &ibmpowervsv1.IBMPowerVSClusterList{}, nil
 	default:
@@ -1049,6 +1077,8 @@ func initInfraMachineTemplateListAndInfraClusterListFromProvider(platform config
 }
 
 // compareCAPIInfraMachineTemplates compares CAPI infra machine templates a and b, and returns a list of differences, or none if there are none.
+//
+//nolint:funlen
 func compareCAPIInfraMachineTemplates(platform configv1.PlatformType, infraMachineTemplate1, infraMachineTemplate2 client.Object) (map[string]any, error) {
 	switch platform {
 	case configv1.AWSPlatformType:
@@ -1069,6 +1099,28 @@ func compareCAPIInfraMachineTemplates(platform configv1.PlatformType, infraMachi
 		}
 
 		if diffObjectMeta := util.ObjectMetaEqual(typedInfraMachineTemplate1.ObjectMeta, typedinfraMachineTemplate2.ObjectMeta); len(diffObjectMeta) > 0 {
+			diff[".metadata"] = diffObjectMeta
+		}
+
+		return diff, nil
+	case configv1.OpenStackPlatformType:
+		typedInfraMachineTemplate1, ok := infraMachineTemplate1.(*openstackv1.OpenStackMachineTemplate)
+		if !ok {
+			return nil, errAssertingCAPIIBMPowerVSMachineTemplate
+		}
+
+		typedinfraMachineTemplate2, ok := infraMachineTemplate2.(*openstackv1.OpenStackMachineTemplate)
+		if !ok {
+			return nil, errAssertingCAPIOpenStackMachineTemplate
+		}
+
+		diff := make(map[string]any)
+
+		if diffSpec := deep.Equal(typedInfraMachineTemplate1.Spec, typedinfraMachineTemplate2.Spec); len(diffSpec) > 0 {
+			diff[".spec"] = diffSpec
+		}
+
+		if diffObjectMeta := deep.Equal(typedInfraMachineTemplate1.ObjectMeta, typedinfraMachineTemplate2.ObjectMeta); len(diffObjectMeta) > 0 {
 			diff[".metadata"] = diffObjectMeta
 		}
 

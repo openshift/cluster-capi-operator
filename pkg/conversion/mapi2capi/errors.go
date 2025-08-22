@@ -20,5 +20,5 @@ import (
 )
 
 var (
-	errUnexpectedObjectTypeForMachine = errors.New("unexpected type for capaMachineObj")
+	errUnexpectedObjectTypeForMachine = errors.New("unexpected type for CAPI machine")
 )
