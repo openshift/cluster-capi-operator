@@ -18,6 +18,7 @@ import (
 
 	mapiframework "github.com/openshift/cluster-api-actuator-pkg/pkg/framework"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -108,6 +109,72 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 
 			It("should verify CAPI Machine Paused condition is False", func() {
 				verifyCAPIMachinePausedCondition(newCapiMachine, machinev1beta1.MachineAuthorityClusterAPI)
+			})
+		})
+	})
+
+	var _ = Describe("Deleting MAPI/CAPI Machines", Ordered, func() {
+		var mapiMachineAuthCAPIName = "machine-authoritativeapi-capi-deletion"
+		var newCapiMachine *clusterv1.Machine
+		var newMapiMachine *machinev1beta1.Machine
+		var err error
+
+		Context("with spec.authoritativeAPI: ClusterAPI and delete MAPI machine", func() {
+			BeforeAll(func() {
+				newMapiMachine = createMAPIMachineWithAuthority(ctx, cl, mapiMachineAuthCAPIName, machinev1beta1.MachineAuthorityClusterAPI)
+				verifyMachineRunning(cl, newMapiMachine.Name, machinev1beta1.MachineAuthorityClusterAPI)
+
+				DeferCleanup(func() {
+					By("Cleaning up machine resources")
+					cleanupMachineResources(
+						ctx,
+						cl,
+						[]*clusterv1.Machine{newCapiMachine},
+						[]*machinev1beta1.Machine{newMapiMachine},
+					)
+				})
+			})
+
+			It("should delete MAPI Machine works", func() {
+				mapiframework.DeleteMachines(ctx, cl, newMapiMachine)
+				mapiframework.WaitForMachinesDeleted(cl, newMapiMachine)
+			})
+
+			It("should verify the CAPI machine is deleted", func() {
+				verifyCAPIMachineRemoved(cl, mapiMachineAuthCAPIName)
+			})
+			It("should verify the AWS machine is deleted", func() {
+				verifyAWSMachineRemoved(cl, mapiMachineAuthCAPIName)
+			})
+		})
+
+		Context("with spec.authoritativeAPI: ClusterAPI and delete CAPI machine", func() {
+			BeforeAll(func() {
+				newMapiMachine = createMAPIMachineWithAuthority(ctx, cl, mapiMachineAuthCAPIName, machinev1beta1.MachineAuthorityClusterAPI)
+				verifyMachineRunning(cl, newMapiMachine.Name, machinev1beta1.MachineAuthorityClusterAPI)
+				newCapiMachine, err = capiframework.GetMachine(cl, newMapiMachine.Name, capiframework.CAPINamespace)
+				Expect(err).NotTo(HaveOccurred(), "Failed to get capi machine")
+
+				DeferCleanup(func() {
+					By("Cleaning up machine resources")
+					cleanupMachineResources(
+						ctx,
+						cl,
+						[]*clusterv1.Machine{newCapiMachine},
+						[]*machinev1beta1.Machine{newMapiMachine},
+					)
+				})
+			})
+
+			It("should delete CAPI Machine works", func() {
+				capiframework.DeleteMachines(cl, capiframework.CAPINamespace, newCapiMachine)
+			})
+
+			It("should verify the MAPI machine is deleted", func() {
+				verifyMAPIMachineRemoved(cl, mapiMachineAuthCAPIName)
+			})
+			It("should verify the AWS machine is deleted", func() {
+				verifyAWSMachineRemoved(cl, mapiMachineAuthCAPIName)
 			})
 		})
 	})
@@ -327,6 +394,39 @@ func verifyCAPIMachinePausedCondition(capiMachine *clusterv1.Machine, authority 
 		HaveField("Status.V1Beta2.Conditions", ContainElement(conditionMatcher)),
 		fmt.Sprintf("Expected CAPI Machine with correct paused condition for %s", authority),
 	)
+}
+
+func verifyCAPIMachineRemoved(cl client.Client, machineName string) {
+	By(fmt.Sprintf("Verifying the CAPI Machine %s is removed", machineName))
+	Eventually(func() bool {
+		err := komega.Get(&clusterv1.Machine{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      machineName,
+				Namespace: capiframework.CAPINamespace,
+			},
+		})()
+		return apierrors.IsNotFound(err)
+	}).Should(BeTrue())
+}
+
+func verifyAWSMachineRemoved(cl client.Client, machineName string) {
+	By(fmt.Sprintf("Verifying the AWSMachine %s is removed", machineName))
+	Eventually(func() bool {
+		err := komega.Get(&awsv1.AWSMachine{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      machineName,
+				Namespace: capiframework.CAPINamespace,
+			},
+		})()
+		return apierrors.IsNotFound(err)
+	}).Should(BeTrue())
+}
+
+func verifyMAPIMachineRemoved(cl client.Client, machineName string) {
+	By(fmt.Sprintf("Verifying the MAPI Machine %s is removed", machineName))
+	mapimachine, err := mapiframework.GetMachine(cl, machineName)
+	Expect(err).To(HaveOccurred())
+	Expect(mapimachine).To(BeNil())
 }
 
 func cleanupMachineResources(ctx context.Context, cl client.Client, capiMachines []*clusterv1.Machine, mapiMachines []*machinev1beta1.Machine) {
