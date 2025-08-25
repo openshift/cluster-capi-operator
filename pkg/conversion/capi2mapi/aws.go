@@ -476,27 +476,27 @@ func convertAWSNetworkInterfaceTypeToMAPI(networkInterfaceType awsv1.NetworkInte
 
 // handleUnsupportedAWSMachineFields returns an error for every present field in the AWSMachineSpec that
 // we are currently, or indefinitely not supporting.
-// TODO: These are protected by VAPs so should never actually cause an error here.
+// These are protected by VAPs so should never actually cause an error here.
 func handleUnsupportedAWSMachineFields(fldPath *field.Path, spec awsv1.AWSMachineSpec) field.ErrorList {
 	errs := field.ErrorList{}
 
 	if spec.AMI.EKSOptimizedLookupType != nil {
-		// TODO(OCPCLOUD-2711): Not required for our use case, add VAP to prevent usage.
+		// Not required for our use case.
 		errs = append(errs, field.Invalid(fldPath.Child("ami", "eksOptimizedLookupType"), spec.AMI.EKSOptimizedLookupType, "eksOptimizedLookupType is not supported"))
 	}
 
 	if spec.ImageLookupFormat != "" {
-		// TODO(OCPCLOUD-2711): Not required for our use case, add VAP to prevent usage.
+		// Not required for our use case.
 		errs = append(errs, field.Invalid(fldPath.Child("imageLookupFormat"), spec.ImageLookupFormat, "imageLookupFormat is not supported"))
 	}
 
 	if spec.ImageLookupOrg != "" {
-		// TODO(OCPCLOUD-2711): Not required for our use case, add VAP to prevent usage.
+		// Not required for our use case.
 		errs = append(errs, field.Invalid(fldPath.Child("imageLookupOrg"), spec.ImageLookupOrg, "imageLookupOrg is not supported"))
 	}
 
 	if spec.ImageLookupBaseOS != "" {
-		// TODO(OCPCLOUD-2711): Not required for our use case, add VAP to prevent usage.
+		// Not required for our use case.
 		errs = append(errs, field.Invalid(fldPath.Child("imageLookupBaseOS"), spec.ImageLookupBaseOS, "imageLookupBaseOS is not supported"))
 	}
 
@@ -506,33 +506,33 @@ func handleUnsupportedAWSMachineFields(fldPath *field.Path, spec awsv1.AWSMachin
 	}
 
 	if len(spec.NetworkInterfaces) > 0 {
-		// TODO(OCPCLOUD-2711): Not required for our use case, add VAP to prevent usage.
+		// Not required for our use case.
 		errs = append(errs, field.Invalid(fldPath.Child("networkInterfaces"), spec.NetworkInterfaces, "networkInterfaces are not supported"))
 	}
 
 	if spec.UncompressedUserData != nil {
-		// TODO(OCPCLOUD-2711): Not required for our use case, add VAP to prevent usage.
+		// Not required for our use case.
 		errs = append(errs, field.Invalid(fldPath.Child("uncompressedUserData"), spec.UncompressedUserData, "uncompressedUserData is not supported"))
 	}
 
 	if (spec.CloudInit != awsv1.CloudInit{}) {
-		// TODO(OCPCLOUD-2711): Not required for our use case, add VAP to prevent usage.
+		// Not required for our use case.
 		errs = append(errs, field.Invalid(fldPath.Child("cloudInit"), spec.CloudInit, "cloudInit is not supported"))
 	}
 
 	if spec.PrivateDNSName != nil {
-		// TODO(OCPCLOUD-2711): Not required for our use case, add VAP to prevent usage.
+		// Not required for our use case.
 		errs = append(errs, field.Invalid(fldPath.Child("privateDNSName"), spec.PrivateDNSName, "privateDNSName is not supported"))
 	}
 
 	if spec.Ignition != nil {
 		if spec.Ignition.Proxy != nil {
-			// TODO(OCPCLOUD-2711): Ignition proxy is not configurable in MAPI. Not required for our use case, add VAP to prevent usage.
+			// Ignition proxy is not configurable in MAPI. Not required for our use case.
 			errs = append(errs, field.Invalid(fldPath.Child("ignition", "proxy"), spec.Ignition.Proxy, "ignition proxy is not supported"))
 		}
 
 		if spec.Ignition.TLS != nil {
-			// TODO(OCPCLOUD-2711): Ignition TLS is not configurable in MAPI. Not required for our use case, add VAP to prevent usage.
+			// Ignition TLS is not configurable in MAPI. Not required for our use case.
 			errs = append(errs, field.Invalid(fldPath.Child("ignition", "tls"), spec.Ignition.TLS, "ignition tls is not supported"))
 		}
 	}

@@ -14,7 +14,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-//nolint
 package testutils
 
 import (
@@ -176,6 +175,8 @@ func EnvTestWithAuditPolicy(policyYaml string, env *envtest.Environment) {
 //
 // This is intended to allow for loading the admission policies into envtest,
 // therefore it doesn't return errors, but Expects() them not to happen.
+//
+//nolint:gocognit,funlen
 func LoadTransportConfigMaps() map[string][]client.Object {
 	By("Unmarshalling the admission policy transport configmaps")
 
@@ -195,7 +196,7 @@ func LoadTransportConfigMaps() map[string][]client.Object {
 	configMapByName := map[string]*corev1.ConfigMap{
 		// ClusterAPIAdmissionPolicies:       nil,
 		ClusterAPICustomAdmissionPolicies: nil,
-		// ClusterAPIAWSAdmissionPolicies:    nil,
+		ClusterAPIAWSAdmissionPolicies:    nil,
 	}
 
 	for {
