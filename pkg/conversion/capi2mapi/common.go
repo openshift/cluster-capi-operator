@@ -26,6 +26,8 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
+var mapiDeleteMachineAnnotation = "machine.openshift.io/delete-machine"
+
 // RawExtensionFromProviderSpec marshals the machine provider spec.
 func RawExtensionFromProviderSpec(spec interface{}) (*runtime.RawExtension, error) {
 	if spec == nil {
@@ -138,6 +140,11 @@ func convertCAPIAnnotationsToMAPIAnnotations(capiAnnotations map[string]string) 
 	for k, v := range capiAnnotations {
 		if toNotConvertAnnotations.Has(k) {
 			// Skip this annotation.
+			continue
+		}
+
+		if k == clusterv1.DeleteMachineAnnotation {
+			capiAnnotations[mapiDeleteMachineAnnotation] = v
 			continue
 		}
 

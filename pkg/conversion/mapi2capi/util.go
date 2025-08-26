@@ -25,6 +25,8 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
+var mapiDeleteMachineAnnotation = "machine.openshift.io/delete-machine"
+
 func convertMAPIMachineSetSelectorToCAPI(mapiSelector metav1.LabelSelector) metav1.LabelSelector {
 	capiSelector := mapiSelector.DeepCopy()
 	capiSelector.MatchLabels = convertMAPILabelsToCAPI(mapiSelector.MatchLabels)
@@ -72,6 +74,10 @@ func convertMAPIAnnotationsToCAPI(mapiAnnotations map[string]string) map[string]
 	capiAnnotations := make(map[string]string)
 
 	for k, v := range mapiAnnotations {
+		if k == mapiDeleteMachineAnnotation {
+			capiAnnotations[clusterv1.DeleteMachineAnnotation] = v
+			continue
+		}
 		capiAnnotations[k] = v
 	}
 
