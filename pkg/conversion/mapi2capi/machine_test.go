@@ -23,6 +23,7 @@ import (
 	configbuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/config/v1"
 	machinebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/machine/v1beta1"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/test/matchers"
+	"github.com/openshift/cluster-capi-operator/pkg/util"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
@@ -128,12 +129,12 @@ var _ = Describe("mapi2capi Machine conversion", func() {
 
 		Entry("With delete-machine annotation", mapi2CAPIMachineConversionInput{
 			infraBuilder:     infraBase,
-			machineBuilder:   mapiMachineBase.WithAnnotations(map[string]string{mapiDeleteMachineAnnotation: "true"}),
+			machineBuilder:   mapiMachineBase.WithAnnotations(map[string]string{util.MapiDeleteMachineAnnotation: "true"}),
 			expectedErrors:   []string{},
 			expectedWarnings: []string{},
 			assertion: func(machine *mapiv1.Machine) {
 				Expect(machine.Annotations).To(HaveKeyWithValue(clusterv1.DeleteMachineAnnotation, "true"))
-				Expect(machine.Annotations).ToNot(HaveKey(mapiDeleteMachineAnnotation))
+				Expect(machine.Annotations).ToNot(HaveKey(util.MapiDeleteMachineAnnotation))
 			},
 		}),
 	)

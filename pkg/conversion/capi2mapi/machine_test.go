@@ -24,6 +24,7 @@ import (
 	capibuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/cluster-api/core/v1beta1"
 	capabuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/cluster-api/infrastructure/v1beta2"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/test/matchers"
+	"github.com/openshift/cluster-capi-operator/pkg/util"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -90,7 +91,7 @@ var _ = Describe("capi2mapi Machine conversion", func() {
 			expectedErrors:   []string{},
 			expectedWarnings: []string{},
 			assertion: func(machine *v1beta1.Machine) {
-				Expect(machine.Annotations).To(HaveKeyWithValue(mapiDeleteMachineAnnotation, "true"))
+				Expect(machine.Annotations).To(HaveKeyWithValue(util.MapiDeleteMachineAnnotation, "true"))
 				Expect(machine.Annotations).ToNot(HaveKey(clusterv1.DeleteMachineAnnotation))
 			},
 		}),

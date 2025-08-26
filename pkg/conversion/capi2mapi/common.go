@@ -20,13 +20,12 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/openshift/cluster-capi-operator/pkg/util"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
-
-var mapiDeleteMachineAnnotation = "machine.openshift.io/delete-machine"
 
 // RawExtensionFromProviderSpec marshals the machine provider spec.
 func RawExtensionFromProviderSpec(spec interface{}) (*runtime.RawExtension, error) {
@@ -144,7 +143,7 @@ func convertCAPIAnnotationsToMAPIAnnotations(capiAnnotations map[string]string) 
 		}
 
 		if k == clusterv1.DeleteMachineAnnotation {
-			capiAnnotations[mapiDeleteMachineAnnotation] = v
+			capiAnnotations[util.MapiDeleteMachineAnnotation] = v
 			continue
 		}
 
