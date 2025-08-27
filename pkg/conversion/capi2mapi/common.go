@@ -143,7 +143,7 @@ func convertCAPIAnnotationsToMAPIAnnotations(capiAnnotations map[string]string) 
 		}
 
 		if k == clusterv1.DeleteMachineAnnotation {
-			capiAnnotations[util.MapiDeleteMachineAnnotation] = v
+			mapiAnnotations[util.MapiDeleteMachineAnnotation] = v
 			continue
 		}
 
