@@ -63,20 +63,22 @@ const (
 )
 
 var (
-	errPlatformNotSupported        = errors.New("infrastructure platform is not supported")
-	errCouldNotDeepCopyInfraObject = errors.New("unable to create a deep copy of InfraCluster object")
-	errUnableToListMachineSets     = errors.New("unable to list MachineSets")
-	errUnableToFindMachineSets     = errors.New("unable to find any MachineSets to extract a MAPI ProviderSpec from")
+	errPlatformNotSupported             = errors.New("infrastructure platform is not supported")
+	errCouldNotDeepCopyInfraObject      = errors.New("unable to create a deep copy of InfraCluster object")
+	errUnableToListControlPlaneMachines = errors.New("unable to list Control Plane Machines")
+	errUnableToFindControlPlaneMachines = errors.New("unable to find any Control Plane Machines to extract a MAPI ProviderSpec from")
 )
 
 // InfraClusterController is a controller that manages infrastructure cluster objects.
 type InfraClusterController struct {
 	operatorstatus.ClusterOperatorStatusClient
-	Scheme   *runtime.Scheme
-	Images   map[string]string
-	RestCfg  *rest.Config
-	Platform configv1.PlatformType
-	Infra    *configv1.Infrastructure
+	Scheme        *runtime.Scheme
+	Images        map[string]string
+	RestCfg       *rest.Config
+	Platform      configv1.PlatformType
+	Infra         *configv1.Infrastructure
+	MAPINamespace string
+	CAPINamespace string
 }
 
 // Reconcile reconciles the cluster-api ClusterOperator object.
@@ -179,6 +181,10 @@ func (r *InfraClusterController) ensureInfraCluster(ctx context.Context, log log
 
 		infraCluster, err = r.ensureAWSCluster(ctx, log)
 		if err != nil {
+			if setErr := r.setDegradedCondition(ctx, log, err); setErr != nil {
+				return nil, fmt.Errorf("%w: failed to set degraded condition for InfraCluster controller: %w", err, setErr)
+			}
+
 			return nil, fmt.Errorf("error ensuring AWSCluster: %w", err)
 		}
 	case configv1.GCPPlatformType:
@@ -223,7 +229,7 @@ func (r *InfraClusterController) ensureInfraCluster(ctx context.Context, log log
 		}
 	case configv1.OpenStackPlatformType:
 		openstackCluster := &openstackv1.OpenStackCluster{}
-		if err := r.Get(ctx, client.ObjectKey{Namespace: defaultCAPINamespace, Name: r.Infra.Status.InfrastructureName}, openstackCluster); err != nil && !kerrors.IsNotFound(err) {
+		if err := r.Get(ctx, client.ObjectKey{Namespace: r.CAPINamespace, Name: r.Infra.Status.InfrastructureName}, openstackCluster); err != nil && !kerrors.IsNotFound(err) {
 			return nil, fmt.Errorf("error getting InfraCluster object: %w", err)
 		}
 
@@ -233,6 +239,24 @@ func (r *InfraClusterController) ensureInfraCluster(ctx context.Context, log log
 	}
 
 	return infraCluster, nil
+}
+
+func (r *InfraClusterController) setDegradedCondition(ctx context.Context, log logr.Logger, reconcileErr error) error {
+	co, err := r.GetOrCreateClusterOperator(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get cluster operator: %w", err)
+	}
+
+	conds := []configv1.ClusterOperatorStatusCondition{
+		operatorstatus.NewClusterOperatorStatusCondition(InfraClusterControllerDegradedCondition, configv1.ConditionTrue, operatorstatus.ReasonSyncFailed,
+			fmt.Sprintf("InfraCluster controller reconcile failed: %v", reconcileErr)),
+	}
+
+	if err := r.SyncStatus(ctx, co, conds, r.OperandVersions(), r.RelatedObjects()); err != nil {
+		return fmt.Errorf("failed to sync status: %w", err)
+	}
+
+	return nil
 }
 
 // setAvailableCondition sets the ClusterOperator status condition to Available.
@@ -260,6 +284,16 @@ func (r *InfraClusterController) setAvailableCondition(ctx context.Context, log 
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *InfraClusterController) SetupWithManager(mgr ctrl.Manager, watchedObject client.Object) error {
+	// Allow the namespaces to be set externally for test purposes, when not set,
+	// default to the production namespaces.
+	if r.CAPINamespace == "" {
+		r.CAPINamespace = defaultCAPINamespace
+	}
+
+	if r.MAPINamespace == "" {
+		r.MAPINamespace = r.MAPINamespace
+	}
+
 	if err := ctrl.NewControllerManagedBy(mgr).
 		Named(controllerName).
 		For(&configv1.ClusterOperator{}, builder.WithPredicates(clusterOperatorPredicates())).
@@ -311,35 +345,40 @@ func getReadiness(infraCluster client.Object) (bool, error) {
 }
 
 // getRawMAPIProviderSpec returns a raw Machine ProviderSpec from the the cluster.
-func getRawMAPIProviderSpec(ctx context.Context, cl client.Client) ([]byte, error) {
-	cpms, err := getActiveCPMS(ctx, cl)
+func (r *InfraClusterController) getRawMAPIProviderSpec(ctx context.Context, cl client.Client) ([]byte, error) {
+	cpms, err := r.getActiveCPMS(ctx, cl)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get control plane machine set: %w", err)
 	}
 
-	if cpms == nil {
-		// The CPMS is not present or inactive.
-		// Devise VSphere providerSpec via one of the machines in the cluster.
-		machineSetList := &mapiv1beta1.MachineSetList{}
-		if err := cl.List(ctx, machineSetList, client.InNamespace(defaultMAPINamespace)); err != nil {
-			return nil, fmt.Errorf("%w: %w", errUnableToListMachineSets, err)
-		}
-
-		if len(machineSetList.Items) == 0 {
-			return nil, errUnableToFindMachineSets
-		}
-
-		return machineSetList.Items[0].Spec.Template.Spec.ProviderSpec.Value.Raw, nil
+	controlPlaneSelector := client.MatchingLabels{
+		"machine.openshift.io/cluster-api-machine-role": "master",
+		"machine.openshift.io/cluster-api-machine-type": "master",
 	}
 
-	// Devise VSphere providerSpec via CPMS.
+	if cpms == nil {
+		// The CPMS is not present or inactive.
+		// Devise providerSpec via one of the control plane machines in the cluster.
+		machineList := &mapiv1beta1.MachineList{}
+		if err := cl.List(ctx, machineList, controlPlaneSelector, client.InNamespace(r.MAPINamespace)); err != nil {
+			return nil, fmt.Errorf("%w: %w", errUnableToListControlPlaneMachines, err)
+		}
+
+		if len(machineList.Items) == 0 {
+			return nil, errUnableToFindControlPlaneMachines
+		}
+
+		return machineList.Items[0].Spec.ProviderSpec.Value.Raw, nil
+	}
+
+	// Devise providerSpec via CPMS.
 	return cpms.Spec.Template.OpenShiftMachineV1Beta1Machine.Spec.ProviderSpec.Value.Raw, nil
 }
 
 // getActiveCPMS returns the CPMS if it exists and it is in Active state, otherwise returns nil.
-func getActiveCPMS(ctx context.Context, cl client.Client) (*mapiv1.ControlPlaneMachineSet, error) {
+func (r *InfraClusterController) getActiveCPMS(ctx context.Context, cl client.Client) (*mapiv1.ControlPlaneMachineSet, error) {
 	cpms := &mapiv1.ControlPlaneMachineSet{}
-	if err := cl.Get(ctx, client.ObjectKey{Name: "cluster", Namespace: defaultMAPINamespace}, cpms); err != nil {
+	if err := cl.Get(ctx, client.ObjectKey{Name: "cluster", Namespace: r.MAPINamespace}, cpms); err != nil {
 		if kerrors.IsNotFound(err) {
 			return nil, nil //nolint:nilnil
 		}

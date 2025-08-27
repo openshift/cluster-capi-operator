@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	mapiv1 "github.com/openshift/api/machine/v1beta1"
+	"github.com/openshift/cluster-capi-operator/pkg/util"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -112,6 +113,11 @@ func (m machineAndAWSMachineAndAWSCluster) toProviderSpec() (*mapiv1.AWSMachineP
 		errors = append(errors, err)
 	}
 
+	mapiLoadBalancers, err := convertAWSClusterLoadBalancersToMAPI(m.machine, m.awsCluster)
+	if err != nil {
+		errors = append(errors, err)
+	}
+
 	warnings = append(warnings, warn...)
 
 	mapaProviderConfig := mapiv1.AWSMachineProviderConfig{
@@ -146,7 +152,7 @@ func (m machineAndAWSMachineAndAWSCluster) toProviderSpec() (*mapiv1.AWSMachineP
 			Tenancy:          mapaTenancy,
 			Region:           m.awsCluster.Spec.Region,
 		},
-		// LoadBalancers - TODO(OCPCLOUD-2709) Not supported for workers.
+		LoadBalancers:           mapiLoadBalancers,
 		BlockDevices:            convertAWSVolumesToMAPI(m.awsMachine.Spec.RootVolume, m.awsMachine.Spec.NonRootVolumes),
 		SpotMarketOptions:       convertAWSSpotMarketOptionsToMAPI(m.awsMachine.Spec.SpotMarketOptions),
 		MetadataServiceOptions:  mapiAWSMetadataOptions,
@@ -570,4 +576,37 @@ func handleAWSIdentityRef(fldPath *field.Path, identityRef *awsv1.AWSIdentityRef
 
 	// Assume we're using the defaults.
 	return ref, nil
+}
+
+func convertAWSClusterLoadBalancersToMAPI(machine *clusterv1.Machine, awsCluster *awsv1.AWSCluster) ([]mapiv1.LoadBalancerReference, *field.Error) {
+	if !util.IsControlPlaneCAPIMachine(machine) || awsCluster.Spec.ControlPlaneLoadBalancer == nil {
+		return nil, nil
+	}
+
+	lbType, err := convertAWSLoadBalancerTypeToMAPI(field.NewPath("spec", "controlPlaneLoadBalancer", "loadBalancerType"), awsCluster.Spec.ControlPlaneLoadBalancer.LoadBalancerType)
+	if err != nil {
+		return nil, err
+	}
+
+	lbRef := mapiv1.LoadBalancerReference{
+		Name: ptr.Deref(awsCluster.Spec.ControlPlaneLoadBalancer.Name, ""),
+		Type: lbType,
+	}
+
+	return []mapiv1.LoadBalancerReference{lbRef}, nil
+}
+
+// convertAWSLoadBalancerTypeToMAPI converts CAPI LoadBalancerType to MAPI AWSLoadBalancerType.
+func convertAWSLoadBalancerTypeToMAPI(fldPath *field.Path, capiType awsv1.LoadBalancerType) (mapiv1.AWSLoadBalancerType, *field.Error) {
+	switch capiType {
+	case awsv1.LoadBalancerTypeClassic, awsv1.LoadBalancerTypeELB:
+		return mapiv1.ClassicLoadBalancerType, nil
+	case awsv1.LoadBalancerTypeNLB:
+		return mapiv1.NetworkLoadBalancerType, nil
+	case "":
+		// Default is classic in CAPI
+		return mapiv1.ClassicLoadBalancerType, nil
+	default:
+		return "", field.Invalid(fldPath.Child("loadBalancerType"), capiType, "unsupported load balancer type")
+	}
 }

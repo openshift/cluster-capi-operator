@@ -22,12 +22,15 @@ import (
 	. "github.com/onsi/gomega"
 
 	configv1 "github.com/openshift/api/config/v1"
+	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 
 	"github.com/openshift/cluster-api-actuator-pkg/testutils"
 	configv1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/config/v1"
 	corev1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/core/v1"
-
+	mapiv1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/machine/v1"
+	mapiv1beta1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/machine/v1beta1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
@@ -46,14 +49,15 @@ var _ = Describe("InfraCluster", func() {
 	var mgrCancel context.CancelFunc
 	var mgrDone chan struct{}
 	var bareInfraCluster *awsv1.AWSCluster
+	var capiNamespace *corev1.Namespace
+	var mapiNamespace *corev1.Namespace
 
 	ocpInfraClusterName := "test-infra-cluster-name"
 	ocpInfraAWS := configv1resourcebuilder.Infrastructure().AsAWS(ocpInfraClusterName, awsTestRegion).Build()
 
 	infraClusterWithExternallyManagedByAnnotation := &awsv1.AWSCluster{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      ocpInfraClusterName,
-			Namespace: defaultCAPINamespace,
+			Name: ocpInfraClusterName,
 			Annotations: map[string]string{
 				clusterv1.ManagedByAnnotation: managedByAnnotationValueClusterCAPIOperatorInfraClusterController,
 			},
@@ -66,8 +70,7 @@ var _ = Describe("InfraCluster", func() {
 	thirdPartyAnnotation := "thirdparty"
 	infraClusterWithExternallyManagedByAnnotationWithValue := &awsv1.AWSCluster{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      ocpInfraClusterName,
-			Namespace: defaultCAPINamespace,
+			Name: ocpInfraClusterName,
 			Annotations: map[string]string{
 				clusterv1.ManagedByAnnotation: thirdPartyAnnotation,
 			},
@@ -76,26 +79,40 @@ var _ = Describe("InfraCluster", func() {
 
 	infraClusterWithoutExternallyManagedByAnnotation := &awsv1.AWSCluster{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      ocpInfraClusterName,
-			Namespace: defaultCAPINamespace,
+			Name: ocpInfraClusterName,
 		},
 	}
 
 	BeforeEach(func() {
+		// Create ClusterOperator.
+		Expect(cl.Create(ctx, configv1resourcebuilder.ClusterOperator().WithName(clusterOperatorName).Build())).To(Succeed())
+		// Create dynamic MAPI and CAPI namespaces.
+
+		// Create dynamic MAPI and CAPI namespaces.
+		mapiNamespace = corev1resourcebuilder.Namespace().
+			WithGenerateName("openshift-machine-api-").Build()
+		Expect(cl.Create(ctx, mapiNamespace)).To(Succeed(), "MAPI namespace should be able to be created")
+
+		capiNamespace = corev1resourcebuilder.Namespace().
+			WithGenerateName("openshift-cluster-api-").Build()
+		Expect(cl.Create(ctx, capiNamespace)).To(Succeed(), "CAPI namespace should be able to be created")
+
+		// Ensure test AWSClusters reference the dynamic CAPI namespace.
 		bareInfraCluster = &awsv1.AWSCluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      ocpInfraClusterName,
-				Namespace: defaultCAPINamespace,
+				Namespace: capiNamespace.Name,
 			},
 		}
-		// Create ClusterOperator.
-		Expect(cl.Create(ctx, configv1resourcebuilder.ClusterOperator().WithName(clusterOperatorName).Build())).To(Succeed())
-		// Create CAPI Namespace.
-		Expect(cl.Create(ctx, corev1resourcebuilder.Namespace().WithName(defaultCAPINamespace).Build())).To(Succeed())
+
+		infraClusterWithExternallyManagedByAnnotation.Namespace = capiNamespace.Name
+		infraClusterWithExternallyManagedByAnnotationWithValue.Namespace = capiNamespace.Name
+		infraClusterWithoutExternallyManagedByAnnotation.Namespace = capiNamespace.Name
+
 		// Setup and Start Manager.
 		mgrCtx, mgrCancel = context.WithCancel(context.Background())
 		mgrDone = make(chan struct{})
-		startManager(mgrCtx, mgrDone, ocpInfraAWS)
+		startManager(mgrCtx, mgrDone, ocpInfraAWS, capiNamespace.Name, mapiNamespace.Name)
 	})
 
 	AfterEach(func() {
@@ -103,15 +120,37 @@ var _ = Describe("InfraCluster", func() {
 		stopManager(mgrCancel, mgrDone)
 		// Cleanup Resources.
 		testutils.CleanupResources(Default, ctx, cfg, cl, "", &configv1.ClusterOperator{})
-		testutils.CleanupResources(Default, ctx, cfg, cl, defaultCAPINamespace, &awsv1.AWSCluster{})
+		testutils.CleanupResources(Default, ctx, cfg, cl, capiNamespace.Name, &awsv1.AWSCluster{})
+		testutils.CleanupResources(Default, ctx, cfg, cl, mapiNamespace.Name, &mapiv1beta1.Machine{})
 	})
 
 	Context("When there is no InfraCluster", func() {
-		It("should create an InfraCluster, with Ready: true and externally ManagedBy Annotation", func() {
-			Eventually(komega.Object(bareInfraCluster)).Should(SatisfyAll(
-				HaveField("Status.Ready", BeTrue()),
-				HaveField("Annotations", HaveKeyWithValue(clusterv1.ManagedByAnnotation, managedByAnnotationValueClusterCAPIOperatorInfraClusterController)),
-			))
+		Context("When there is a ControlPlaneMachineSet", func() {
+			BeforeEach(func() {
+				cpms := mapiv1resourcebuilder.ControlPlaneMachineSet().WithNamespace(mapiNamespace.Name).WithName("cluster").Build()
+				Expect(cl.Create(ctx, cpms)).To(Succeed())
+			})
+
+			It("should create an InfraCluster, with Ready: true and externally ManagedBy Annotation", func() {
+				Eventually(komega.Object(bareInfraCluster)).Should(SatisfyAll(
+					HaveField("Status.Ready", BeTrue()),
+					HaveField("Annotations", HaveKeyWithValue(clusterv1.ManagedByAnnotation, managedByAnnotationValueClusterCAPIOperatorInfraClusterController)),
+				))
+			})
+		})
+
+		Context("When there is no ControlPlaneMachineSet and no Control Plane Machines", func() {
+			It("Sets the degraded condition", func() {
+				co := &configv1.ClusterOperator{ObjectMeta: metav1.ObjectMeta{Name: clusterOperatorName}}
+				Eventually(komega.Object(co)).Should(
+					HaveField("Status.Conditions",
+						ContainElement(SatisfyAll(
+							HaveField("Type", Equal(configv1.ClusterStatusConditionType(InfraClusterControllerDegradedCondition))),
+							HaveField("Status", Equal(configv1.ConditionTrue)),
+						)),
+					),
+				)
+			})
 		})
 	})
 
@@ -189,7 +228,7 @@ var _ = Describe("InfraCluster", func() {
 		Context("When the InfraCluster is not Ready", func() {
 			BeforeEach(func() {
 				Expect(cl.Create(ctx, infraClusterWithExternallyManagedByAnnotation.DeepCopy())).To(Succeed())
-				mustPatchAWSInfraClusterReadiness(infraClusterWithExternallyManagedByAnnotation.DeepCopy(), true)
+				mustPatchAWSInfraClusterReadiness(infraClusterWithExternallyManagedByAnnotation.DeepCopy(), false)
 			})
 
 			It("should change the Status.Ready field to true", func() {
@@ -200,6 +239,73 @@ var _ = Describe("InfraCluster", func() {
 			})
 		})
 	})
+
+	Context("AWS control plane load balancer extraction", func() {
+		It("sets ClusterOperator degraded when no control plane machines exist", func() {
+			co := &configv1.ClusterOperator{ObjectMeta: metav1.ObjectMeta{Name: clusterOperatorName}}
+			Eventually(komega.Object(co)).Should(
+				HaveField("Status.Conditions",
+					ContainElement(SatisfyAll(
+						HaveField("Type", Equal(configv1.ClusterStatusConditionType(InfraClusterControllerDegradedCondition))),
+						HaveField("Status", Equal(configv1.ConditionTrue)),
+					)),
+				),
+			)
+		})
+
+		It("uses youngest machine's single load balancer as primary", func() {
+			loadBalancers := []mapiv1beta1.LoadBalancerReference{{Name: "young-int", Type: mapiv1beta1.NetworkLoadBalancerType}}
+			machine1 := mapiv1beta1resourcebuilder.Machine().AsMaster().WithNamespace(mapiNamespace.Name).WithName("master-1").WithProviderSpecBuilder(mapiv1beta1resourcebuilder.AWSProviderSpec().WithLoadBalancers(loadBalancers)).Build()
+			machine2 := mapiv1beta1resourcebuilder.Machine().AsMaster().WithNamespace(mapiNamespace.Name).WithName("master-2").WithProviderSpecBuilder(mapiv1beta1resourcebuilder.AWSProviderSpec().WithLoadBalancers(loadBalancers)).Build()
+			machine3 := mapiv1beta1resourcebuilder.Machine().AsMaster().WithNamespace(mapiNamespace.Name).WithName("master-3").WithProviderSpecBuilder(mapiv1beta1resourcebuilder.AWSProviderSpec().WithLoadBalancers(loadBalancers)).Build()
+			Expect(cl.Create(ctx, machine1)).To(Succeed())
+			Expect(cl.Create(ctx, machine2)).To(Succeed())
+			Expect(cl.Create(ctx, machine3)).To(Succeed())
+
+			// Force re-creation of AWSCluster so controller reads MAPI machines
+			_ = cl.Delete(ctx, &awsv1.AWSCluster{ObjectMeta: metav1.ObjectMeta{Name: ocpInfraClusterName, Namespace: capiNamespace.Name}})
+
+			Eventually(komega.Object(bareInfraCluster)).Should(SatisfyAll(
+				HaveField("Spec.ControlPlaneLoadBalancer", Not(BeNil())),
+				HaveField("Spec.SecondaryControlPlaneLoadBalancer", BeNil()),
+				WithTransform(func(c *awsv1.AWSCluster) *awsv1.AWSLoadBalancerSpec { return c.Spec.ControlPlaneLoadBalancer }, SatisfyAll(
+					HaveField("LoadBalancerType", Equal(awsv1.LoadBalancerTypeNLB)),
+					HaveField("Name", Not(BeNil())),
+					WithTransform(func(lb *awsv1.AWSLoadBalancerSpec) string { return *lb.Name }, Equal("young-int")),
+				)),
+			))
+		})
+
+		It("orders two load balancers preferring '-int' as primary", func() {
+			loadBalancers := []mapiv1beta1.LoadBalancerReference{
+				{Name: "external", Type: mapiv1beta1.ClassicLoadBalancerType},
+				{Name: "internal-int", Type: mapiv1beta1.NetworkLoadBalancerType},
+			}
+
+			machine1 := mapiv1beta1resourcebuilder.Machine().AsMaster().WithNamespace(mapiNamespace.Name).WithName("master-1").WithProviderSpecBuilder(mapiv1beta1resourcebuilder.AWSProviderSpec().WithLoadBalancers(loadBalancers)).Build()
+			machine2 := mapiv1beta1resourcebuilder.Machine().AsMaster().WithNamespace(mapiNamespace.Name).WithName("master-2").WithProviderSpecBuilder(mapiv1beta1resourcebuilder.AWSProviderSpec().WithLoadBalancers(loadBalancers)).Build()
+			machine3 := mapiv1beta1resourcebuilder.Machine().AsMaster().WithNamespace(mapiNamespace.Name).WithName("master-3").WithProviderSpecBuilder(mapiv1beta1resourcebuilder.AWSProviderSpec().WithLoadBalancers(loadBalancers)).Build()
+			Expect(cl.Create(ctx, machine1)).To(Succeed())
+			Expect(cl.Create(ctx, machine2)).To(Succeed())
+			Expect(cl.Create(ctx, machine3)).To(Succeed())
+
+			// Force re-creation of AWSCluster so controller reads MAPI machines
+			_ = cl.Delete(ctx, &awsv1.AWSCluster{ObjectMeta: metav1.ObjectMeta{Name: ocpInfraClusterName, Namespace: capiNamespace.Name}})
+
+			Eventually(komega.Object(bareInfraCluster)).Should(SatisfyAll(
+				HaveField("Spec.ControlPlaneLoadBalancer", Not(BeNil())),
+				HaveField("Spec.SecondaryControlPlaneLoadBalancer", Not(BeNil())),
+				WithTransform(func(c *awsv1.AWSCluster) string { return *c.Spec.ControlPlaneLoadBalancer.Name }, Equal("internal-int")),
+				WithTransform(func(c *awsv1.AWSCluster) awsv1.LoadBalancerType {
+					return c.Spec.ControlPlaneLoadBalancer.LoadBalancerType
+				}, Equal(awsv1.LoadBalancerTypeNLB)),
+				WithTransform(func(c *awsv1.AWSCluster) string { return *c.Spec.SecondaryControlPlaneLoadBalancer.Name }, Equal("external")),
+				WithTransform(func(c *awsv1.AWSCluster) awsv1.LoadBalancerType {
+					return c.Spec.SecondaryControlPlaneLoadBalancer.LoadBalancerType
+				}, Equal(awsv1.LoadBalancerTypeClassic)),
+			))
+		})
+	})
 })
 
 func mustPatchAWSInfraClusterReadiness(awsInfraCluster *awsv1.AWSCluster, readiness bool) {
@@ -208,7 +314,7 @@ func mustPatchAWSInfraClusterReadiness(awsInfraCluster *awsv1.AWSCluster, readin
 	})).Should(Succeed())
 }
 
-func startManager(mgrCtx context.Context, mgrDone chan struct{}, ocpInfra *configv1.Infrastructure) {
+func startManager(mgrCtx context.Context, mgrDone chan struct{}, ocpInfra *configv1.Infrastructure, capiNamespace string, mapiNamespace string) {
 	By("Setting up a manager and controller")
 
 	var mgr ctrl.Manager
@@ -231,8 +337,10 @@ func startManager(mgrCtx context.Context, mgrDone chan struct{}, ocpInfra *confi
 		ClusterOperatorStatusClient: operatorstatus.ClusterOperatorStatusClient{
 			Client: cl,
 		},
-		Infra:    ocpInfra,
-		Platform: ocpInfra.Status.PlatformStatus.Type,
+		Infra:         ocpInfra,
+		Platform:      ocpInfra.Status.PlatformStatus.Type,
+		CAPINamespace: capiNamespace,
+		MAPINamespace: mapiNamespace,
 	}
 
 	// TODO: set watch to the right Infra Cluster in setupwithmanager

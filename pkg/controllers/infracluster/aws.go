@@ -17,9 +17,11 @@ package infracluster
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/go-logr/logr"
 	cerrors "k8s.io/apimachinery/pkg/api/errors"
@@ -27,24 +29,33 @@ import (
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
+	"sigs.k8s.io/yaml"
+)
+
+var (
+	// ErrNoControlPlaneLoadBalancerConfigured indicates there is no control plane load balancer configuration present.
+	ErrNoControlPlaneLoadBalancerConfigured = errors.New("no control plane load balancer configured")
+	// ErrNilProviderSpec indicates a nil provider spec raw extension.
+	ErrNilProviderSpec = errors.New("provider spec is nil")
 )
 
 // ensureAWSCluster ensures the AWSCluster cluster object exists.
 func (r *InfraClusterController) ensureAWSCluster(ctx context.Context, log logr.Logger) (client.Object, error) {
-	target := &awsv1.AWSCluster{ObjectMeta: metav1.ObjectMeta{
+	awsCluster := &awsv1.AWSCluster{ObjectMeta: metav1.ObjectMeta{
 		Name:      r.Infra.Status.InfrastructureName,
-		Namespace: defaultCAPINamespace,
+		Namespace: r.CAPINamespace,
 	}}
 
 	// Checking whether InfraCluster object exists. If it doesn't, create it.
-
-	if err := r.Get(ctx, client.ObjectKeyFromObject(target), target); err != nil && !cerrors.IsNotFound(err) {
+	if err := r.Get(ctx, client.ObjectKeyFromObject(awsCluster), awsCluster); err != nil && !cerrors.IsNotFound(err) {
 		return nil, fmt.Errorf("failed to get InfraCluster: %w", err)
 	} else if err == nil {
-		return target, nil
+		return awsCluster, nil
 	}
 
-	log.Info(fmt.Sprintf("AWSCluster %s/%s does not exist, creating it", target.Namespace, target.Name))
+	log.Info(fmt.Sprintf("AWSCluster %s/%s does not exist, creating it", awsCluster.Namespace, awsCluster.Name))
 
 	apiURL, err := url.Parse(r.Infra.Status.APIServerInternalURL)
 	if err != nil {
@@ -60,10 +71,35 @@ func (r *InfraClusterController) ensureAWSCluster(ctx context.Context, log logr.
 		return nil, fmt.Errorf("infrastructure PlatformStatus should not be nil: %w", err)
 	}
 
-	target = &awsv1.AWSCluster{
+	providerSpec, err := r.getAWSMAPIProviderSpec(ctx, r.Client)
+	if err != nil {
+		return nil, fmt.Errorf("unable to obtain MAPI ProviderSpec: %w", err)
+	}
+
+	awsCluster, err = r.newAWSCluster(providerSpec, apiURL, port)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get AWSCluster: %w", err)
+	}
+
+	if err := r.Create(ctx, awsCluster); err != nil {
+		return nil, fmt.Errorf("failed to create AWSCluster: %w", err)
+	}
+
+	log.Info(fmt.Sprintf("InfraCluster '%s/%s' successfully created", r.CAPINamespace, r.Infra.Status.InfrastructureName))
+
+	return awsCluster, nil
+}
+
+func (r *InfraClusterController) newAWSCluster(providerSpec *mapiv1beta1.AWSMachineProviderConfig, apiURL *url.URL, port int64) (*awsv1.AWSCluster, error) {
+	controlPlaneLoadBalancer, secondaryControlPlaneLoadBalancer, err := extractLoadBalancerConfigFromMAPIProviderSpec(providerSpec)
+	if err != nil {
+		return nil, fmt.Errorf("failed to extract control plane load balancer configuration: %w", err)
+	}
+
+	target := &awsv1.AWSCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      r.Infra.Status.InfrastructureName,
-			Namespace: defaultCAPINamespace,
+			Namespace: r.CAPINamespace,
 			// The ManagedBy Annotation is set so CAPI infra providers ignore the InfraCluster object,
 			// as that's managed externally, in this case by this controller.
 			Annotations: map[string]string{
@@ -84,14 +120,69 @@ func (r *InfraClusterController) ensureAWSCluster(ctx context.Context, log logr.
 				Kind: awsv1.ControllerIdentityKind,
 				Name: "default",
 			},
+			// Set control plane load balancer configuration extracted from MAPI machines
+			ControlPlaneLoadBalancer:          controlPlaneLoadBalancer,
+			SecondaryControlPlaneLoadBalancer: secondaryControlPlaneLoadBalancer,
 		},
 	}
 
-	if err := r.Create(ctx, target); err != nil {
-		return nil, fmt.Errorf("failed to create InfraCluster: %w", err)
+	return target, nil
+}
+
+func (r *InfraClusterController) getAWSMAPIProviderSpec(ctx context.Context, cl client.Client) (*mapiv1beta1.AWSMachineProviderConfig, error) {
+	rawProviderSpec, err := r.getRawMAPIProviderSpec(ctx, cl)
+	if err != nil {
+		return nil, fmt.Errorf("unable to obtain MAPI ProviderSpec: %w", err)
 	}
 
-	log.Info(fmt.Sprintf("InfraCluster '%s/%s' successfully created", defaultCAPINamespace, r.Infra.Status.InfrastructureName))
+	providerSpec := &mapiv1beta1.AWSMachineProviderConfig{}
+	if err := yaml.Unmarshal(rawProviderSpec, providerSpec); err != nil {
+		return nil, fmt.Errorf("unable to unmarshal MAPI ProviderSpec: %w", err)
+	}
 
-	return target, nil
+	return providerSpec, nil
+}
+
+// extractLoadBalancerConfigFromMAPIProviderSpec extracts 1-2 control plane load balancers from a MAPI machine's provider spec.
+// The first load balancer is treated as the internal load balancer, and the second (if present) as the secondary one.
+// When two load balancers are present, prefer the one whose name ends with "-int" as the first return value.
+// Fails if fewer than 1 or more than 2 load balancers are defined.
+func extractLoadBalancerConfigFromMAPIProviderSpec(providerSpec *mapiv1beta1.AWSMachineProviderConfig) (*awsv1.AWSLoadBalancerSpec, *awsv1.AWSLoadBalancerSpec, error) {
+	switch len(providerSpec.LoadBalancers) {
+	case 1:
+		lbPrimary := providerSpec.LoadBalancers[0]
+		return &awsv1.AWSLoadBalancerSpec{
+			Name:             &lbPrimary.Name,
+			LoadBalancerType: convertMAPILoadBalancerTypeToCAPI(lbPrimary.Type),
+		}, nil, nil
+	case 2:
+		lbFirst := providerSpec.LoadBalancers[0]
+		lbSecond := providerSpec.LoadBalancers[1]
+		// Prefer the load balancer with "-int" suffix as primary when two are present.
+		if strings.HasSuffix(lbSecond.Name, "-int") && !strings.HasSuffix(lbFirst.Name, "-int") {
+			lbFirst, lbSecond = lbSecond, lbFirst
+		}
+		return &awsv1.AWSLoadBalancerSpec{
+				Name:             &lbFirst.Name,
+				LoadBalancerType: convertMAPILoadBalancerTypeToCAPI(lbFirst.Type),
+			}, &awsv1.AWSLoadBalancerSpec{
+				Name:             &lbSecond.Name,
+				LoadBalancerType: convertMAPILoadBalancerTypeToCAPI(lbSecond.Type),
+			}, nil
+	default:
+		return nil, nil, fmt.Errorf("invalid number of control plane load balancers: expected 1 or 2, got %d", len(providerSpec.LoadBalancers))
+	}
+}
+
+// convertMAPILoadBalancerTypeToCAPI converts MAPI AWSLoadBalancerType to CAPI LoadBalancerType.
+func convertMAPILoadBalancerTypeToCAPI(mapiType mapiv1beta1.AWSLoadBalancerType) awsv1.LoadBalancerType {
+	switch mapiType {
+	case mapiv1beta1.ClassicLoadBalancerType:
+		return awsv1.LoadBalancerTypeClassic
+	case mapiv1beta1.NetworkLoadBalancerType:
+		return awsv1.LoadBalancerTypeNLB
+	default:
+		// Default to classic for unknown types
+		return awsv1.LoadBalancerTypeClassic
+	}
 }
