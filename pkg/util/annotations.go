@@ -19,6 +19,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+// MapiDeleteMachineAnnotation is the delete-machine annotation used in Machine API.
+// It has an equivalent annotation in Cluster API to convert to.
+const MapiDeleteMachineAnnotation = "machine.openshift.io/delete-machine"
+
 // RemoveAnnotation deletes a specific annotation from a client.Object.
 func RemoveAnnotation(obj client.Object, key string) {
 	annotations := obj.GetAnnotations()

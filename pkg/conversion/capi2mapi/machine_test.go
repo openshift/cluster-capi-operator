@@ -20,9 +20,12 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/openshift/api/machine/v1beta1"
 	capibuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/cluster-api/core/v1beta1"
 	capabuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/cluster-api/infrastructure/v1beta2"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/test/matchers"
+	"github.com/openshift/cluster-capi-operator/pkg/util"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
@@ -37,19 +40,24 @@ var _ = Describe("capi2mapi Machine conversion", func() {
 		machineBuilder   capibuilder.MachineBuilder
 		expectedErrors   []string
 		expectedWarnings []string
+		assertion        func(machine *v1beta1.Machine)
 	}
 
 	var _ = DescribeTable("capi2mapi convert CAPI Machine/InfraMachine/InfraCluster to a MAPI Machine",
 		func(in capi2MAPIMachineConversionInput) {
-			_, warns, err := FromMachineAndAWSMachineAndAWSCluster(
+			m := FromMachineAndAWSMachineAndAWSCluster(
 				in.machineBuilder.Build(),
 				capabuilder.AWSMachine().Build(),
 				capabuilder.AWSCluster().Build(),
-			).ToMachine()
+			)
+			machine, warns, err := m.ToMachine()
 			Expect(err).To(matchers.ConsistOfMatchErrorSubstrings(in.expectedErrors),
 				"should match expected errors while converting CAPI resources to MAPI Machine")
 			Expect(warns).To(matchers.ConsistOfSubstrings(in.expectedWarnings),
 				"should match expected warnings while converting CAPI resources to MAPI Machine")
+			if in.assertion != nil {
+				in.assertion(machine)
+			}
 		},
 
 		// Base Case.
@@ -77,6 +85,15 @@ var _ = Describe("capi2mapi Machine conversion", func() {
 			machineBuilder:   capiMachineBase.WithNodeDeletionTimeout(ptr.To(metav1.Duration{Duration: 1 * time.Second})),
 			expectedErrors:   []string{"spec.nodeDeletionTimeout: Invalid value: v1.Duration{Duration:1000000000}: nodeDeletionTimeout is not supported"},
 			expectedWarnings: []string{},
+		}),
+		Entry("With delete-machine annotation", capi2MAPIMachineConversionInput{
+			machineBuilder:   capiMachineBase.WithAnnotations(map[string]string{clusterv1.DeleteMachineAnnotation: "true"}),
+			expectedErrors:   []string{},
+			expectedWarnings: []string{},
+			assertion: func(machine *v1beta1.Machine) {
+				Expect(machine.Annotations).To(HaveKeyWithValue(util.MapiDeleteMachineAnnotation, "true"))
+				Expect(machine.Annotations).ToNot(HaveKey(clusterv1.DeleteMachineAnnotation))
+			},
 		}),
 	)
 })

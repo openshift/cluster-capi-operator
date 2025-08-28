@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/openshift/cluster-capi-operator/pkg/util"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -138,6 +139,11 @@ func convertCAPIAnnotationsToMAPIAnnotations(capiAnnotations map[string]string) 
 	for k, v := range capiAnnotations {
 		if toNotConvertAnnotations.Has(k) {
 			// Skip this annotation.
+			continue
+		}
+
+		if k == clusterv1.DeleteMachineAnnotation {
+			mapiAnnotations[util.MapiDeleteMachineAnnotation] = v
 			continue
 		}
 
