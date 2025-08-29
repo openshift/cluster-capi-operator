@@ -1,0 +1,4 @@
+# .coderabbit.yaml
+path_filters:
+  - "!**/vendor/**"
+  - "!vendor/**"
