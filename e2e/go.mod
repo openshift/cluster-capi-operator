@@ -2,8 +2,6 @@ module github.com/openshift/cluster-capi-operator/e2e
 
 go 1.24.0
 
-replace sigs.k8s.io/cluster-api-provider-aws/v2 => sigs.k8s.io/cluster-api-provider-aws/v2 v2.8.2-0.20250728153031-483f3a96c060
-
 require (
 	github.com/aws/aws-sdk-go v1.55.7
 	github.com/google/go-cmp v0.7.0
@@ -19,7 +17,7 @@ require (
 	k8s.io/client-go v0.33.3
 	k8s.io/utils v0.0.0-20250321185631-1f6e0b77f77e
 	sigs.k8s.io/cluster-api v1.10.4
-	sigs.k8s.io/cluster-api-provider-aws/v2 v2.8.4
+	sigs.k8s.io/cluster-api-provider-aws/v2 v2.9.0
 	sigs.k8s.io/cluster-api-provider-azure v1.20.2
 	sigs.k8s.io/cluster-api-provider-gcp v1.10.0
 	sigs.k8s.io/cluster-api-provider-ibmcloud v0.11.0
@@ -36,8 +34,9 @@ require (
 	github.com/IBM/vpc-go-sdk v0.68.0 // indirect
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
 	github.com/asaskevich/govalidator/v11 v11.0.2-0.20250122183457-e11347878e23 // indirect
+	github.com/aws/aws-sdk-go-v2 v1.38.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ec2 v1.233.0 // indirect
-	github.com/aws/smithy-go v1.22.4 // indirect
+	github.com/aws/smithy-go v1.22.5 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/blang/semver/v4 v4.0.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
