@@ -253,6 +253,55 @@ var _ = Describe("capi2mapi AWS conversion", func() {
 				"spec.instanceMetadataOptions.instanceMetadataTags: Invalid value: \"enabled\": instanceMetadataTags values other than \"disabled\" are not supported"},
 			expectedWarnings: []string{},
 		}),
+		Entry("With ControlPlaneLoadBalancer and a worker machine", awsCAPI2MAPIMachineConversionInput{
+			awsClusterBuilder: awsCAPIAWSClusterBase.WithControlPlaneLoadBalancer(&awsv1.AWSLoadBalancerSpec{
+				Name:             ptr.To("test-control-plane-lb"),
+				LoadBalancerType: awsv1.LoadBalancerTypeClassic,
+			}),
+			awsMachineBuilder: awsCAPIAWSMachineBase,
+			machineBuilder:    awsCAPIMachineBase, // Worker machine (no control plane role)
+			expectedErrors:    []string{},
+			expectedWarnings:  []string{},
+		}),
+		Entry("With ControlPlaneLoadBalancer and a control plane machine", awsCAPI2MAPIMachineConversionInput{
+			awsClusterBuilder: awsCAPIAWSClusterBase.WithControlPlaneLoadBalancer(&awsv1.AWSLoadBalancerSpec{
+				Name:             ptr.To("test-control-plane-lb"),
+				LoadBalancerType: awsv1.LoadBalancerTypeClassic,
+			}),
+			awsMachineBuilder: awsCAPIAWSMachineBase,
+			machineBuilder: awsCAPIMachineBase.WithLabels(map[string]string{
+				"node-role.kubernetes.io/master": "",
+			}),
+			expectedErrors:   []string{},
+			expectedWarnings: []string{},
+		}),
+		Entry("With ControlPlaneLoadBalancer NLB and a control plane machine", awsCAPI2MAPIMachineConversionInput{
+			awsClusterBuilder: awsCAPIAWSClusterBase.WithControlPlaneLoadBalancer(&awsv1.AWSLoadBalancerSpec{
+				Name:             ptr.To("test-nlb"),
+				LoadBalancerType: awsv1.LoadBalancerTypeNLB,
+			}),
+			awsMachineBuilder: awsCAPIAWSMachineBase,
+			machineBuilder: awsCAPIMachineBase.WithLabels(map[string]string{
+				"cluster.x-k8s.io/control-plane": "",
+			}),
+			expectedErrors:   []string{},
+			expectedWarnings: []string{},
+		}),
+		Entry("With both ControlPlaneLoadBalancer and SecondaryControlPlaneLoadBalancer and a control plane machine", awsCAPI2MAPIMachineConversionInput{
+			awsClusterBuilder: awsCAPIAWSClusterBase.WithControlPlaneLoadBalancer(&awsv1.AWSLoadBalancerSpec{
+				Name:             ptr.To("test-nlb"),
+				LoadBalancerType: awsv1.LoadBalancerTypeNLB,
+			}).WithSecondaryControlPlaneLoadBalancer(&awsv1.AWSLoadBalancerSpec{
+				Name:             ptr.To("test-external-lb"),
+				LoadBalancerType: awsv1.LoadBalancerTypeClassic,
+			}),
+			awsMachineBuilder: awsCAPIAWSMachineBase,
+			machineBuilder: awsCAPIMachineBase.WithLabels(map[string]string{
+				"node-role.kubernetes.io/master": "",
+			}),
+			expectedErrors:   []string{},
+			expectedWarnings: []string{},
+		}),
 	)
 
 	var _ = DescribeTable("capi2mapi AWS convert CAPI MachineSet/InfraMachineTemplate/InfraCluster to MAPI MachineSet",

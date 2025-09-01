@@ -451,6 +451,15 @@ func (r *MachineSyncReconciler) reconcileMAPIMachinetoCAPIMachine(ctx context.Co
 		return ctrl.Result{}, fmt.Errorf("failed to convert Machine API machine owner references to Cluster API: %w", err)
 	}
 
+	if err := r.ensurePlatformMAPIToCAPIValidations(ctx, sourceMAPIMachine); err != nil {
+		conversionErr := fmt.Errorf("failed to convert Machine API machine to Cluster API machine: %w", err)
+		if condErr := r.applySynchronizedConditionWithPatch(ctx, sourceMAPIMachine, corev1.ConditionFalse, reasonFailedToConvertMAPIMachineToCAPI, conversionErr.Error(), nil); condErr != nil {
+			return ctrl.Result{}, utilerrors.NewAggregate([]error{conversionErr, condErr})
+		}
+
+		return ctrl.Result{}, conversionErr
+	}
+
 	convertedCAPIMachine, convertedCAPIInfraMachine, warns, err := r.convertMAPIToCAPIMachine(sourceMAPIMachine)
 	if err != nil {
 		conversionErr := fmt.Errorf("failed to convert Machine API machine to Cluster API machine: %w", err)

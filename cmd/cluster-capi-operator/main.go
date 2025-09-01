@@ -419,6 +419,11 @@ func getDefaultCacheOptions(capiNamespace string, sync time.Duration) cache.Opti
 					defaultMachineAPINamespace: {},
 				},
 			},
+			&mapiv1beta1.Machine{}: {
+				Namespaces: map[string]cache.Config{
+					defaultMachineAPINamespace: {},
+				},
+			},
 		},
 	}
 }
