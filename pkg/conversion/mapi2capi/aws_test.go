@@ -95,7 +95,7 @@ var _ = Describe("mapi2capi AWS conversion", func() {
 		}),
 
 		// Only Error.
-		Entry("With LoadBalancers", awsMAPI2CAPIConversionInput{
+		Entry("With LoadBalancers on worker machine", awsMAPI2CAPIConversionInput{
 			machineBuilder: awsMAPIMachineBase.WithProviderSpecBuilder(
 				awsBaseProviderSpec.WithLoadBalancers(
 					[]mapiv1beta1.LoadBalancerReference{{Name: "a", Type: mapiv1beta1.ClassicLoadBalancerType}},
@@ -103,8 +103,54 @@ var _ = Describe("mapi2capi AWS conversion", func() {
 			),
 			infra: infra,
 			expectedErrors: []string{
-				"spec.providerSpec.value.loadBalancers: Invalid value: []v1beta1.LoadBalancerReference{v1beta1.LoadBalancerReference{Name:\"a\", Type:\"classic\"}}: loadBalancers are not supported",
+				"spec.providerSpec.value.loadBalancers: Invalid value: []v1beta1.LoadBalancerReference{v1beta1.LoadBalancerReference{Name:\"a\", Type:\"classic\"}}: loadBalancers are not supported for non-control plane machines",
 			},
+			expectedWarnings: []string{},
+		}),
+		Entry("With LoadBalancers on control plane machine with role label", awsMAPI2CAPIConversionInput{
+			machineBuilder: awsMAPIMachineBase.WithLabels(map[string]string{
+				"machine.openshift.io/cluster-api-machine-role": "master",
+			}).WithOwnerReferences(
+				[]metav1.OwnerReference{
+					{
+						APIVersion: mapiv1beta1.SchemeGroupVersion.String(),
+						Kind:       "ControlPlaneMachineSet",
+						Name:       "cluster",
+						UID:        "cpms-uid",
+					},
+				},
+			).WithProviderSpecBuilder(
+				awsBaseProviderSpec.WithLoadBalancers(
+					[]mapiv1beta1.LoadBalancerReference{
+						{Name: "ci-ln-d2q97ct-76ef8-httpb-int", Type: mapiv1beta1.NetworkLoadBalancerType},
+						{Name: "ci-ln-d2q97ct-76ef8-httpb-ext", Type: mapiv1beta1.NetworkLoadBalancerType},
+					},
+				),
+			),
+			infra:            infra,
+			expectedErrors:   []string{},
+			expectedWarnings: []string{},
+		}),
+		Entry("With LoadBalancers on control plane machine with CPMS owner reference; no role label", awsMAPI2CAPIConversionInput{
+			machineBuilder: awsMAPIMachineBase.
+				WithOwnerReferences([]metav1.OwnerReference{
+					{
+						APIVersion: mapiv1beta1.SchemeGroupVersion.String(),
+						Kind:       "ControlPlaneMachineSet",
+						Name:       "cluster",
+						UID:        "cpms-uid",
+					},
+				}).
+				WithProviderSpecBuilder(
+					awsBaseProviderSpec.WithLoadBalancers(
+						[]mapiv1beta1.LoadBalancerReference{
+							{Name: "ci-ln-d2q97ct-76ef8-httpb-int", Type: mapiv1beta1.NetworkLoadBalancerType},
+							{Name: "ci-ln-d2q97ct-76ef8-httpb-ext", Type: mapiv1beta1.NetworkLoadBalancerType},
+						},
+					),
+				),
+			infra:            infra,
+			expectedErrors:   []string{},
 			expectedWarnings: []string{},
 		}),
 		Entry("With DeviceIndex non-zero", awsMAPI2CAPIConversionInput{

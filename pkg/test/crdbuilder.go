@@ -76,6 +76,15 @@ var (
 	// fakeOpenStackMachineTemplateCRD is a fake OpenStackMachineTemplate CRD.
 	fakeOpenStackMachineTemplateCRD = generateCRD(v1beta1InfrastructureGroupVersion.WithKind(fakeOpenStackMachineTemplateKind))
 
+	// mapiv1GroupVersion is group version used for MAPI v1 objects.
+	mapiv1GroupVersion = schema.GroupVersion{Group: "machine.openshift.io", Version: "v1"}
+
+	// fakeControlPlaneMachineSetKind is the Kind for the ControlPlaneMachineSet.
+	fakeControlPlaneMachineSetKind = "ControlPlaneMachineSet"
+
+	// fakeControlPlaneMachineSetCRD is a fake ControlPlaneMachineSet CRD.
+	fakeControlPlaneMachineSetCRD = generateCRD(mapiv1GroupVersion.WithKind(fakeControlPlaneMachineSetKind))
+
 	// v1beta2InfrastructureGroupVersion is a v1beta2 group version used for infrastructure objects.
 	v1beta2InfrastructureGroupVersion = schema.GroupVersion{Group: "infrastructure.cluster.x-k8s.io", Version: "v1beta2"}
 

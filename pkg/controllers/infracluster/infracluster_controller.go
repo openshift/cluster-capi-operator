@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 
 	"github.com/go-logr/logr"
 
@@ -39,6 +40,8 @@ import (
 	mapiv1 "github.com/openshift/api/machine/v1"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
+	"github.com/openshift/cluster-capi-operator/pkg/util"
+	"sigs.k8s.io/yaml"
 )
 
 const (
@@ -63,20 +66,22 @@ const (
 )
 
 var (
-	errPlatformNotSupported        = errors.New("infrastructure platform is not supported")
-	errCouldNotDeepCopyInfraObject = errors.New("unable to create a deep copy of InfraCluster object")
-	errUnableToListMachineSets     = errors.New("unable to list MachineSets")
-	errUnableToFindMachineSets     = errors.New("unable to find any MachineSets to extract a MAPI ProviderSpec from")
+	errPlatformNotSupported             = errors.New("infrastructure platform is not supported")
+	errCouldNotDeepCopyInfraObject      = errors.New("unable to create a deep copy of InfraCluster object")
+	errUnableToListControlPlaneMachines = errors.New("unable to list Control Plane Machines")
+	errUnableToFindControlPlaneMachines = errors.New("unable to find any Control Plane Machines to extract a MAPI ProviderSpec from")
 )
 
 // InfraClusterController is a controller that manages infrastructure cluster objects.
 type InfraClusterController struct {
 	operatorstatus.ClusterOperatorStatusClient
-	Scheme   *runtime.Scheme
-	Images   map[string]string
-	RestCfg  *rest.Config
-	Platform configv1.PlatformType
-	Infra    *configv1.Infrastructure
+	Scheme        *runtime.Scheme
+	Images        map[string]string
+	RestCfg       *rest.Config
+	Platform      configv1.PlatformType
+	Infra         *configv1.Infrastructure
+	MAPINamespace string
+	CAPINamespace string
 }
 
 // Reconcile reconciles the cluster-api ClusterOperator object.
@@ -223,7 +228,7 @@ func (r *InfraClusterController) ensureInfraCluster(ctx context.Context, log log
 		}
 	case configv1.OpenStackPlatformType:
 		openstackCluster := &openstackv1.OpenStackCluster{}
-		if err := r.Get(ctx, client.ObjectKey{Namespace: defaultCAPINamespace, Name: r.Infra.Status.InfrastructureName}, openstackCluster); err != nil && !kerrors.IsNotFound(err) {
+		if err := r.Get(ctx, client.ObjectKey{Namespace: r.CAPINamespace, Name: r.Infra.Status.InfrastructureName}, openstackCluster); err != nil && !kerrors.IsNotFound(err) {
 			return nil, fmt.Errorf("error getting InfraCluster object: %w", err)
 		}
 
@@ -260,13 +265,37 @@ func (r *InfraClusterController) setAvailableCondition(ctx context.Context, log 
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *InfraClusterController) SetupWithManager(mgr ctrl.Manager, watchedObject client.Object) error {
+	// Allow the namespaces to be set externally for test purposes, when not set,
+	// default to the production namespaces.
+	if r.CAPINamespace == "" {
+		r.CAPINamespace = defaultCAPINamespace
+	}
+
+	if r.MAPINamespace == "" {
+		r.MAPINamespace = defaultMAPINamespace
+	}
+
 	if err := ctrl.NewControllerManagedBy(mgr).
 		Named(controllerName).
 		For(&configv1.ClusterOperator{}, builder.WithPredicates(clusterOperatorPredicates())).
+		// Watch the provider-specific InfraCluster object.
 		Watches(
 			watchedObject,
 			handler.EnqueueRequestsFromMapFunc(toClusterOperator),
 			builder.WithPredicates(infraClusterPredicate(r.ManagedNamespace)),
+		).
+		// Watch CPMS as the primary source for deriving a provider spec during InfraCluster
+		// generation. CPMS events should retrigger reconciliation so we re-evaluate InfraCluster creation and CO status.
+		Watches(
+			&mapiv1.ControlPlaneMachineSet{},
+			handler.EnqueueRequestsFromMapFunc(toClusterOperator),
+			builder.WithPredicates(util.FilterNamespace(r.MAPINamespace)),
+		).
+		// Watch control plane Machines as a fallback provider spec source when CPMS is absent or inactive.
+		Watches(
+			&mapiv1beta1.Machine{},
+			handler.EnqueueRequestsFromMapFunc(toClusterOperator),
+			builder.WithPredicates(util.FilterNamespace(r.MAPINamespace)),
 		).
 		Complete(r); err != nil {
 		return fmt.Errorf("failed to create controller: %w", err)
@@ -311,35 +340,80 @@ func getReadiness(infraCluster client.Object) (bool, error) {
 }
 
 // getRawMAPIProviderSpec returns a raw Machine ProviderSpec from the the cluster.
-func getRawMAPIProviderSpec(ctx context.Context, cl client.Client) ([]byte, error) {
-	cpms, err := getActiveCPMS(ctx, cl)
+func (r *InfraClusterController) getRawMAPIProviderSpec(ctx context.Context, cl client.Client) ([]byte, error) {
+	cpms, err := r.getActiveCPMS(ctx, cl)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get control plane machine set: %w", err)
 	}
 
-	if cpms == nil {
-		// The CPMS is not present or inactive.
-		// Devise VSphere providerSpec via one of the machines in the cluster.
-		machineSetList := &mapiv1beta1.MachineSetList{}
-		if err := cl.List(ctx, machineSetList, client.InNamespace(defaultMAPINamespace)); err != nil {
-			return nil, fmt.Errorf("%w: %w", errUnableToListMachineSets, err)
-		}
-
-		if len(machineSetList.Items) == 0 {
-			return nil, errUnableToFindMachineSets
-		}
-
-		return machineSetList.Items[0].Spec.Template.Spec.ProviderSpec.Value.Raw, nil
+	controlPlaneSelector := client.MatchingLabels{
+		"machine.openshift.io/cluster-api-machine-role": "master",
+		"machine.openshift.io/cluster-api-machine-type": "master",
 	}
 
-	// Devise VSphere providerSpec via CPMS.
+	if cpms == nil {
+		// The CPMS is not present or inactive.
+		// Devise providerSpec via one of the control plane machines in the cluster.
+		machineList := &mapiv1beta1.MachineList{}
+		if err := cl.List(ctx, machineList, controlPlaneSelector, client.InNamespace(r.MAPINamespace)); err != nil {
+			return nil, fmt.Errorf("%w: %w", errUnableToListControlPlaneMachines, err)
+		}
+
+		if len(machineList.Items) == 0 {
+			return nil, errUnableToFindControlPlaneMachines
+		}
+
+		sortedMachines := sortMachinesByCreationTimeDescending(machineList.Items)
+		newest := sortedMachines[0]
+
+		// Take the Provider Spec of the first in the machines slice
+		// as a the one to be put on the ControlPlaneMachineSet spec.
+		// Since the `machines` slice is sorted by descending creation time
+		// we are guaranteed to get the newest Provider Spec of a machine.
+		// This is done so that if there are control plane machines with differing
+		// Provider Specs, we will use the most recent one. This is an attempt to try and inferr
+		// the spec that the user might want to choose among the different ones found in the cluster.
+		return newest.Spec.ProviderSpec.Value.Raw, nil
+	}
+
+	// Devise providerSpec via CPMS.
 	return cpms.Spec.Template.OpenShiftMachineV1Beta1Machine.Spec.ProviderSpec.Value.Raw, nil
 }
 
+// getMAPIProviderSpec obtains the raw provider spec using the provided getter and unmarshals it into the specified type.
+func getMAPIProviderSpec[T any](ctx context.Context, cl client.Client, getter func(context.Context, client.Client) ([]byte, error)) (*T, error) {
+	rawProviderSpec, err := getter(ctx, cl)
+	if err != nil {
+		return nil, fmt.Errorf("unable to obtain MAPI ProviderSpec: %w", err)
+	}
+
+	providerSpec := new(T)
+	if err := yaml.Unmarshal(rawProviderSpec, providerSpec); err != nil {
+		return nil, fmt.Errorf("unable to unmarshal MAPI ProviderSpec: %w", err)
+	}
+
+	return providerSpec, nil
+}
+
+// sortMachinesByCreationTimeDescending sorts a slice of Machines by CreationTime, Name (descending).
+func sortMachinesByCreationTimeDescending(machines []mapiv1beta1.Machine) []mapiv1beta1.Machine {
+	// Sort in inverse order so that the newest one is first.
+	sort.Slice(machines, func(i, j int) bool {
+		first, second := machines[i].CreationTimestamp, machines[j].CreationTimestamp
+		if first != second {
+			return second.Before(&first)
+		}
+
+		return machines[i].Name > machines[j].Name
+	})
+
+	return machines
+}
+
 // getActiveCPMS returns the CPMS if it exists and it is in Active state, otherwise returns nil.
-func getActiveCPMS(ctx context.Context, cl client.Client) (*mapiv1.ControlPlaneMachineSet, error) {
+func (r *InfraClusterController) getActiveCPMS(ctx context.Context, cl client.Client) (*mapiv1.ControlPlaneMachineSet, error) {
 	cpms := &mapiv1.ControlPlaneMachineSet{}
-	if err := cl.Get(ctx, client.ObjectKey{Name: "cluster", Namespace: defaultMAPINamespace}, cpms); err != nil {
+	if err := cl.Get(ctx, client.ObjectKey{Name: "cluster", Namespace: r.MAPINamespace}, cpms); err != nil {
 		if kerrors.IsNotFound(err) {
 			return nil, nil //nolint:nilnil
 		}
