@@ -1,3 +1,17 @@
+// Copyright 2024 Red Hat, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package e2e
 
 import (
@@ -25,12 +39,13 @@ const (
 	powerVSMachineTemplateVersion = "infrastructure.cluster.x-k8s.io/v1beta2"
 )
 
-var _ = Describe("Cluster API IBMPowerVS MachineSet", Ordered, func() {
+var _ = Describe("[sig-cluster-lifecycle][Feature:ClusterAPI][platform:powervs][Disruptive] Cluster API IBMPowerVS MachineSet", Ordered, Label("Conformance"), Label("Serial"), func() {
 	var powerVSMachineTemplate *ibmpowervsv1.IBMPowerVSMachineTemplate
 	var machineSet *clusterv1.MachineSet
 	var mapiMachineSpec *mapiv1.PowerVSMachineProviderConfig
 
 	BeforeAll(func() {
+		InitCommonVariables()
 		if platform != configv1.PowerVSPlatformType {
 			Skip("Skipping PowerVS E2E tests")
 		}
@@ -43,15 +58,15 @@ var _ = Describe("Cluster API IBMPowerVS MachineSet", Ordered, func() {
 			// explicitly skip it here for other platforms.
 			Skip("Skipping PowerVS E2E tests")
 		}
-		framework.DeleteMachineSets(cl, machineSet)
-		framework.WaitForMachineSetsDeleted(cl, machineSet)
+		framework.DeleteMachineSets(ctx, cl, machineSet)
+		framework.WaitForMachineSetsDeleted(ctx, cl, machineSet)
 		framework.DeleteObjects(cl, powerVSMachineTemplate)
 	})
 
 	It("should be able to run a machine", func() {
 		powerVSMachineTemplate = createIBMPowerVSMachineTemplate(cl, mapiMachineSpec)
 
-		machineSet = framework.CreateMachineSet(cl, framework.NewMachineSetParams(
+		machineSet = framework.CreateMachineSet(ctx, cl, framework.NewMachineSetParams(
 			"ibmpowervs-machineset",
 			clusterName,
 			"",
@@ -63,7 +78,7 @@ var _ = Describe("Cluster API IBMPowerVS MachineSet", Ordered, func() {
 			},
 			"worker-user-data",
 		))
-		framework.WaitForMachineSet(cl, machineSet.Name, machineSet.Namespace)
+		framework.WaitForMachineSet(ctx, cl, machineSet.Name, machineSet.Namespace)
 	})
 
 })
@@ -131,6 +146,7 @@ func getNetworkResourceReference(networkResource mapiv1.PowerVSResource) ibmpowe
 		if networkResource.ID == nil {
 			panic("networkResource reference is specified as ID but it is nil")
 		}
+
 		return ibmpowervsv1.IBMPowerVSResourceReference{
 			ID: networkResource.ID,
 		}
@@ -138,6 +154,7 @@ func getNetworkResourceReference(networkResource mapiv1.PowerVSResource) ibmpowe
 		if networkResource.Name == nil {
 			panic("networkResource reference is specified as Name but it is nil")
 		}
+
 		return ibmpowervsv1.IBMPowerVSResourceReference{
 			Name: networkResource.Name,
 		}
@@ -145,6 +162,7 @@ func getNetworkResourceReference(networkResource mapiv1.PowerVSResource) ibmpowe
 		if networkResource.RegEx == nil {
 			panic("networkResource reference is specified as RegEx but it is nil")
 		}
+
 		return ibmpowervsv1.IBMPowerVSResourceReference{
 			RegEx: networkResource.RegEx,
 		}

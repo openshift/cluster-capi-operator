@@ -1,18 +1,16 @@
-/*
-Copyright 2024 The Kubernetes Authors.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
+// Copyright 2024 Red Hat, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 package e2e
 
@@ -35,18 +33,23 @@ import (
 
 const (
 	machineAPINamespace = "openshift-machine-api"
-	RoleLabel           = "machine.openshift.io/cluster-api-machine-role"
-	DefaultTimeout      = 5 * time.Minute
-	DefaultInterval     = 10 * time.Second
-	// MAPI condition types
-	MapiConditionPaused   machinev1.ConditionType = "Paused"
+	// RoleLabel defines the label key for cluster API machine roles.
+	RoleLabel = "machine.openshift.io/cluster-api-machine-role"
+	// DefaultTimeout is the default timeout for the operation.
+	DefaultTimeout = 5 * time.Minute
+	// DefaultInterval is the default interval for the operation.
+	DefaultInterval = 10 * time.Second
+	// MapiConditionPaused represents the MAPI condition type for paused machines.
+	MapiConditionPaused machinev1.ConditionType = "Paused"
+	// ConditionSynchronized indicates that the machine is synchronized with the provider's state.
 	ConditionSynchronized machinev1.ConditionType = "Synchronized"
-	// CAPI condition types
+	// CapiConditionPaused represents the CAPI condition type for paused machines.
 	CapiConditionPaused = "Paused"
 )
 
-var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Machine Migration Tests", Ordered, func() {
+var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration][platform:aws][Disruptive] Machine Migration Tests", Ordered, Label("Conformance"), Label("Serial"), func() {
 	BeforeAll(func() {
+		InitCommonVariables()
 		if platform != configv1.AWSPlatformType {
 			Skip(fmt.Sprintf("Skipping tests on %s, this is only supported on AWS for now", platform))
 		}
@@ -91,24 +94,30 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 	})
 })
 
-// verifyMapiAutoritative creates and verifies a MAPI machine with AuthoritativeAPI set to MachineAPI
+// verifyMapiAutoritative creates and verifies a MAPI machine with AuthoritativeAPI set to MachineAPI.
 func verifyMapiAutoritative(cl client.Client) *machinev1.Machine {
 	ctx := context.Background()
 	machineList := &machinev1.MachineList{}
+
 	By(fmt.Sprintf("Listing worker machines in namespace: %s", machineAPINamespace))
+
 	workerLabelSelector := client.MatchingLabels{RoleLabel: "worker"}
 	Eventually(cl.List(ctx, machineList, client.InNamespace(machineAPINamespace), workerLabelSelector)).Should(Succeed(), "Failed to list worker machines")
 	Expect(machineList.Items).NotTo(BeEmpty(), "No worker machines found in the namespace to use as a template")
 
 	var templateMachine *machinev1.Machine
+
 	foundMapiMachine := false
+
 	for i, m := range machineList.Items {
 		if m.Spec.AuthoritativeAPI == "MachineAPI" {
 			templateMachine = &machineList.Items[i]
 			foundMapiMachine = true
+
 			break
 		}
 	}
+
 	if !foundMapiMachine {
 		Skip("No machine found with AuthoritativeAPI set to MachineAPI")
 	}
@@ -159,7 +168,7 @@ func verifyMapiMachineSynchronizedPaused(machine *machinev1.Machine) {
 	))
 }
 
-// verifyCapiMachinePaused verifies that the mirror CAPI Infra Machine has Paused condition True and MAPI Machine has a CAPI Infra Machine mirror
+// verifyCapiMachinePaused verifies that the mirror CAPI Infra Machine has Paused condition True and MAPI Machine has a CAPI Infra Machine mirror.
 func verifyCapiMachinePaused(cl client.Client, machineName string) {
 	// Use framework utility to get the CAPI machine
 	targetMachine, err := framework.GetMachine(cl, machineName, framework.CAPINamespace)

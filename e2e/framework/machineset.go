@@ -1,6 +1,21 @@
+// Copyright 2024 Red Hat, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package framework
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -45,7 +60,7 @@ func NewMachineSetParams(msName, clusterName, failureDomain string, replicas int
 }
 
 // CreateMachineSet creates a new MachineSet resource.
-func CreateMachineSet(cl client.Client, params machineSetParams) *clusterv1.MachineSet {
+func CreateMachineSet(ctx context.Context, cl client.Client, params machineSetParams) *clusterv1.MachineSet {
 	By(fmt.Sprintf("Creating MachineSet %q", params.msName))
 
 	ms := &clusterv1.MachineSet{
@@ -89,18 +104,19 @@ func CreateMachineSet(cl client.Client, params machineSetParams) *clusterv1.Mach
 	}
 
 	Expect(cl.Create(ctx, ms)).To(Succeed())
+
 	return ms
 }
 
 // WaitForMachineSetsDeleted polls until the given MachineSets are not found, and
 // there are zero Machines found matching the MachineSet's label selector.
-func WaitForMachineSetsDeleted(cl client.Client, machineSets ...*clusterv1.MachineSet) {
+func WaitForMachineSetsDeleted(ctx context.Context, cl client.Client, machineSets ...*clusterv1.MachineSet) {
 	for _, ms := range machineSets {
 		By(fmt.Sprintf("Waiting for MachineSet %q to be deleted", ms.GetName()))
 		Eventually(func() bool {
 			selector := ms.Spec.Selector
 
-			machines, err := GetMachines(cl, &selector)
+			machines, err := GetMachines(ctx, cl, &selector)
 			if err != nil || len(machines) != 0 {
 				return false // Still have Machines, or other error.
 			}
@@ -115,11 +131,13 @@ func WaitForMachineSetsDeleted(cl client.Client, machineSets ...*clusterv1.Machi
 	}
 }
 
-func DeleteMachineSets(cl client.Client, machineSets ...*clusterv1.MachineSet) {
+// DeleteMachineSets deletes one or more MachineSet resources.
+func DeleteMachineSets(ctx context.Context, cl client.Client, machineSets ...*clusterv1.MachineSet) {
 	for _, ms := range machineSets {
 		if ms == nil {
 			continue
 		}
+
 		By(fmt.Sprintf("Deleting MachineSet %q", ms.GetName()))
 		Eventually(func() error {
 			return cl.Delete(ctx, ms)
@@ -134,14 +152,14 @@ func DeleteMachineSets(cl client.Client, machineSets ...*clusterv1.MachineSet) {
 // WaitForMachineSet waits for the all Machines belonging to the named
 // MachineSet to enter the "Running" phase, and for all nodes belonging to those
 // Machines to be ready.
-func WaitForMachineSet(cl client.Client, name string, namespace string) {
+func WaitForMachineSet(ctx context.Context, cl client.Client, name string, namespace string) {
 	By(fmt.Sprintf("Waiting for MachineSet machines %q to enter Running phase", name))
 
 	machineSet, err := GetMachineSet(cl, name, namespace)
 	Expect(err).ToNot(HaveOccurred())
 
 	Eventually(func() error {
-		machines, err := GetMachinesFromMachineSet(cl, machineSet)
+		machines, err := GetMachinesFromMachineSet(ctx, cl, machineSet)
 		if err != nil {
 			return err
 		}
@@ -162,7 +180,7 @@ func WaitForMachineSet(cl client.Client, name string, namespace string) {
 		}
 
 		for _, m := range running {
-			node, err := GetNodeForMachine(cl, m)
+			node, err := GetNodeForMachine(ctx, cl, m)
 			if err != nil {
 				return err
 			}
@@ -194,24 +212,27 @@ func GetMachineSet(cl client.Client, name string, namespace string) (*clusterv1.
 	return machineSet, nil
 }
 
-// GetMachinesFromMachineSet returns an array of machines owned by a given machineSet
-func GetMachinesFromMachineSet(cl client.Client, machineSet *clusterv1.MachineSet) ([]*clusterv1.Machine, error) {
-	machines, err := GetMachines(cl)
+// GetMachinesFromMachineSet returns an array of machines owned by a given machineSet.
+func GetMachinesFromMachineSet(ctx context.Context, cl client.Client, machineSet *clusterv1.MachineSet) ([]*clusterv1.Machine, error) {
+	machines, err := GetMachines(ctx, cl)
 	if err != nil {
 		return nil, fmt.Errorf("error getting machines: %w", err)
 	}
+
 	var machinesForSet []*clusterv1.Machine
+
 	for key := range machines {
 		if metav1.IsControlledBy(machines[key], machineSet) {
 			machinesForSet = append(machinesForSet, machines[key])
 		}
 	}
+
 	return machinesForSet, nil
 }
 
 // GetNewestMachineFromMachineSet returns the new created machine by a given machineSet.
 func GetNewestMachineFromMachineSet(cl client.Client, machineSet *clusterv1.MachineSet) (*clusterv1.Machine, error) {
-	machines, err := GetMachinesFromMachineSet(cl, machineSet)
+	machines, err := GetMachinesFromMachineSet(ctx, cl, machineSet)
 	if err != nil {
 		return nil, fmt.Errorf("error getting machines: %w", err)
 	}

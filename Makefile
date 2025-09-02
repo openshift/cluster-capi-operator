@@ -24,7 +24,7 @@ verify: fmt lint
 test: verify unit
 
 # Build binaries
-build: operator migration manifests-gen
+build: operator migration manifests-gen cluster-api-tests-ext 
 
 .PHONY: manifests-gen
 manifests-gen:
@@ -38,6 +38,10 @@ operator:
 migration:
 	# building migration
 	go build -o bin/machine-api-migration cmd/machine-api-migration/main.go
+
+cluster-api-tests-ext:
+	# building cluster-api-tests-ext
+	go build -o bin/cluster-api-tests-ext ./cmd/cluster-api-tests-ext
 
 .PHONY: localtestenv
 localtestenv: .localtestenv

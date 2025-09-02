@@ -1,3 +1,17 @@
+// Copyright 2024 Red Hat, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package e2e
 
 import (
@@ -14,21 +28,26 @@ import (
 	mapiframework "github.com/openshift/cluster-api-actuator-pkg/pkg/framework"
 	capiframework "github.com/openshift/cluster-capi-operator/e2e/framework"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	capav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
-	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 )
 
 const (
+	// SynchronizedCondition indicates that the machine is synchronized with the provider's state.
 	SynchronizedCondition machinev1beta1.ConditionType = "Synchronized"
-	MAPIPausedCondition   machinev1beta1.ConditionType = "Paused"
-	CAPIPausedCondition                                = capiv1beta1.PausedV1Beta2Condition
+	// MAPIPausedCondition indicates that the machine API is paused.
+	MAPIPausedCondition machinev1beta1.ConditionType = "Paused"
+	// CAPIPausedCondition indicates that the cluster API is paused.
+	CAPIPausedCondition = clusterv1.PausedV1Beta2Condition
 )
 
-var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] MachineSet Migration Tests", Ordered, func() {
+var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration][platform:aws][Disruptive] MachineSet Migration Tests", Ordered, Label("Conformance"), Label("Serial"), func() {
 	BeforeAll(func() {
+		InitCommonVariables()
 		if platform != configv1.AWSPlatformType {
 			Skip(fmt.Sprintf("Skipping tests on %s, this only support on aws", platform))
 		}
@@ -44,19 +63,22 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 		var existingCAPIMSAuthorityMAPIName = "capi-machineset-authoritativeapi-mapi"
 		var existingCAPIMSAuthorityCAPIName = "capi-machineset-authoritativeapi-capi"
 
-		var awsMachineTemplate *capav1.AWSMachineTemplate
-		var capiMachineSet *capiv1beta1.MachineSet
+		var awsMachineTemplate *awsv1.AWSMachineTemplate
+		var capiMachineSet *clusterv1.MachineSet
 		var mapiMachineSet *machinev1beta1.MachineSet
 		var err error
 
 		Context("with spec.authoritativeAPI: MAPI and existing CAPI MachineSet with same name", func() {
 			BeforeAll(func() {
-				capiMachineSet, err = createCAPIMachineSet(ctx, cl, 0, existingCAPIMSAuthorityMAPIName, "")
-				Expect(err).ToNot(HaveOccurred(), "CAPI MachineSet %s creation should succeed", capiMachineSet.GetName())
+				capiMachineSet = createCAPIMachineSet(ctx, cl, 0, existingCAPIMSAuthorityMAPIName, "")
 
 				Eventually(func() error {
 					awsMachineTemplate, err = capiframework.GetAWSMachineTemplateByPrefix(cl, existingCAPIMSAuthorityMAPIName, capiframework.CAPINamespace)
-					return err
+					if err != nil {
+						return fmt.Errorf("failed to get AWSMachineTemplate: %w", err)
+					}
+
+					return nil
 				}, capiframework.WaitMedium, capiframework.RetryShort).Should(Succeed(), "awsMachineTemplate should exist")
 
 				DeferCleanup(func() {
@@ -64,8 +86,8 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 					cleanupTestResources(
 						ctx,
 						cl,
-						[]*capiv1beta1.MachineSet{capiMachineSet},
-						[]*capav1.AWSMachineTemplate{awsMachineTemplate},
+						[]*clusterv1.MachineSet{capiMachineSet},
+						[]*awsv1.AWSMachineTemplate{awsMachineTemplate},
 						[]*machinev1beta1.MachineSet{},
 					)
 				})
@@ -86,7 +108,11 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 
 				Eventually(func() error {
 					awsMachineTemplate, err = capiframework.GetAWSMachineTemplateByPrefix(cl, mapiMSAuthMAPIName, capiframework.CAPINamespace)
-					return err
+					if err != nil {
+						return fmt.Errorf("failed to get AWSMachineTemplate: %w", err)
+					}
+
+					return nil
 				}, capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(), "awsMachineTemplate should exist")
 
 				DeferCleanup(func() {
@@ -94,8 +120,8 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 					cleanupTestResources(
 						ctx,
 						cl,
-						[]*capiv1beta1.MachineSet{},
-						[]*capav1.AWSMachineTemplate{awsMachineTemplate},
+						[]*clusterv1.MachineSet{},
+						[]*awsv1.AWSMachineTemplate{awsMachineTemplate},
 						[]*machinev1beta1.MachineSet{mapiMachineSet},
 					)
 				})
@@ -116,7 +142,11 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 			It("should find that MAPI MachineSet has a CAPI MachineSet mirror", func() {
 				Eventually(func() error {
 					capiMachineSet, err = capiframework.GetMachineSet(cl, mapiMSAuthMAPIName, capiframework.CAPINamespace)
-					return err
+					if err != nil {
+						return fmt.Errorf("failed to get CAPI MachineSet: %w", err)
+					}
+
+					return nil
 				}, capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(), "CAPI MachineSet mirror should exist")
 			})
 
@@ -127,8 +157,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 
 		Context("with spec.authoritativeAPI: CAPI and existing CAPI MachineSet with same name", func() {
 			BeforeAll(func() {
-				capiMachineSet, err = createCAPIMachineSet(ctx, cl, 0, existingCAPIMSAuthorityCAPIName, "m5.large")
-				Expect(err).ToNot(HaveOccurred(), "CAPI MachineSet %s creation should succeed", capiMachineSet.GetName())
+				capiMachineSet = createCAPIMachineSet(ctx, cl, 0, existingCAPIMSAuthorityCAPIName, "m5.large")
 
 				By("Creating a same name MAPI MachineSet")
 				mapiMachineSet, err = createMAPIMachineSetWithAuthoritativeAPI(ctx, cl, 0, existingCAPIMSAuthorityCAPIName, machinev1beta1.MachineAuthorityClusterAPI, machinev1beta1.MachineAuthorityClusterAPI)
@@ -136,7 +165,11 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 
 				Eventually(func() error {
 					awsMachineTemplate, err = capiframework.GetAWSMachineTemplateByPrefix(cl, existingCAPIMSAuthorityCAPIName, capiframework.CAPINamespace)
-					return err
+					if err != nil {
+						return fmt.Errorf("failed to get AWSMachineTemplate: %w", err)
+					}
+
+					return nil
 				}, capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(), "awsMachineTemplate should exist")
 
 				DeferCleanup(func() {
@@ -144,8 +177,8 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 					cleanupTestResources(
 						ctx,
 						cl,
-						[]*capiv1beta1.MachineSet{capiMachineSet},
-						[]*capav1.AWSMachineTemplate{awsMachineTemplate},
+						[]*clusterv1.MachineSet{capiMachineSet},
+						[]*awsv1.AWSMachineTemplate{awsMachineTemplate},
 						[]*machinev1beta1.MachineSet{mapiMachineSet},
 					)
 				})
@@ -161,6 +194,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 					providerSpec := mapiMachineSet.Spec.Template.Spec.ProviderSpec
 					var awsConfig machinev1beta1.AWSMachineProviderConfig
 					_ = json.Unmarshal(providerSpec.Value.Raw, &awsConfig)
+
 					return awsConfig.InstanceType
 				}, capiframework.WaitMedium, capiframework.RetryShort).Should(Equal("m5.large"), "MAPI MSet Sepc should be updated to reflect existing CAPI mirror")
 			})
@@ -173,12 +207,20 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 
 				Eventually(func() error {
 					capiMachineSet, err = capiframework.GetMachineSet(cl, mapiMSAuthCAPIName, capiframework.CAPINamespace)
-					return err
+					if err != nil {
+						return fmt.Errorf("failed to get CAPI MachineSet: %w", err)
+					}
+
+					return nil
 				}, capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(), "CAPI MachineSet should exist")
 
 				Eventually(func() error {
 					awsMachineTemplate, err = capiframework.GetAWSMachineTemplateByPrefix(cl, mapiMSAuthCAPIName, capiframework.CAPINamespace)
-					return err
+					if err != nil {
+						return fmt.Errorf("failed to get AWSMachineTemplate: %w", err)
+					}
+
+					return nil
 				}, capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(), "awsMachineTemplate should exist")
 
 				DeferCleanup(func() {
@@ -186,8 +228,8 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 					cleanupTestResources(
 						ctx,
 						cl,
-						[]*capiv1beta1.MachineSet{capiMachineSet},
-						[]*capav1.AWSMachineTemplate{awsMachineTemplate},
+						[]*clusterv1.MachineSet{capiMachineSet},
+						[]*awsv1.AWSMachineTemplate{awsMachineTemplate},
 						[]*machinev1beta1.MachineSet{mapiMachineSet},
 					)
 				})
@@ -208,7 +250,11 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 			It("should verify that the non-authoritative MAPI MachineSet has an authoritative CAPI MachineSet mirror", func() {
 				Eventually(func() error {
 					capiMachineSet, err = capiframework.GetMachineSet(cl, mapiMSAuthCAPIName, capiframework.CAPINamespace)
-					return err
+					if err != nil {
+						return fmt.Errorf("failed to get CAPI MachineSet: %w", err)
+					}
+
+					return nil
 				}, capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(), "CAPI MachineSet should exist")
 			})
 
@@ -219,6 +265,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 	})
 })
 
+//nolint:unparam
 func createMAPIMachineSetWithAuthoritativeAPI(ctx context.Context, cl client.Client, replicas int, machineSetName string, machineSetAuthority machinev1beta1.MachineAuthority, machineAuthority machinev1beta1.MachineAuthority) (*machinev1beta1.MachineSet, error) {
 	By(fmt.Sprintf("Creating MAPI MachineSet with spec.authoritativeAPI: %s, spec.template.spec.authoritativeAPI: %s, replicas=%d", machineSetAuthority, machineAuthority, replicas))
 	machineSetParams := mapiframework.BuildMachineSetParams(ctx, cl, replicas)
@@ -230,7 +277,7 @@ func createMAPIMachineSetWithAuthoritativeAPI(ctx context.Context, cl client.Cli
 	mapiMachineSet, err := mapiframework.CreateMachineSet(cl, machineSetParams)
 	Expect(err).ToNot(HaveOccurred(), "MAPI MachineSet %s creation should succeed", machineSetName)
 
-	capiMachineSet := &capiv1beta1.MachineSet{
+	capiMachineSet := &clusterv1.MachineSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      machineSetName,
 			Namespace: capiframework.CAPINamespace,
@@ -239,22 +286,25 @@ func createMAPIMachineSetWithAuthoritativeAPI(ctx context.Context, cl client.Cli
 	Eventually(komega.Get(capiMachineSet), capiframework.WaitShort, capiframework.RetryShort).Should(
 		Succeed(), "Mirror CAPI MachineSet should be created within 1 minute")
 
+	//nolint:exhaustive
 	switch machineAuthority {
 	case machinev1beta1.MachineAuthorityMachineAPI:
 		mapiframework.WaitForMachineSet(ctx, cl, machineSetName)
 	case machinev1beta1.MachineAuthorityClusterAPI:
-		capiframework.WaitForMachineSet(cl, machineSetName, capiframework.CAPINamespace)
+		capiframework.WaitForMachineSet(ctx, cl, machineSetName, capiframework.CAPINamespace)
 	}
+
 	return mapiMachineSet, nil
 }
 
-func createCAPIMachineSet(ctx context.Context, cl client.Client, replicas int32, machineSetName string, instanceType string) (*capiv1beta1.MachineSet, error) {
+func createCAPIMachineSet(ctx context.Context, cl client.Client, replicas int32, machineSetName string, instanceType string) *clusterv1.MachineSet {
 	By(fmt.Sprintf("Creating CAPI MachineSet %s with %d replicas", machineSetName, replicas))
 
-	_, mapiDefaultProviderSpec := getDefaultAWSMAPIProviderSpec(cl)
-	createAWSClient(mapiDefaultProviderSpec.Placement.Region)
+	_, mapiDefaultProviderSpec := getDefaultAWSMAPIProviderSpec(cl, ctx)
+	createAWSClient(ctx, mapiDefaultProviderSpec.Placement.Region)
 	awsMachineTemplate := newAWSMachineTemplate(mapiDefaultProviderSpec)
 	awsMachineTemplate.Name = machineSetName
+
 	if instanceType != "" {
 		awsMachineTemplate.Spec.Template.Spec.InstanceType = instanceType
 	}
@@ -263,7 +313,7 @@ func createCAPIMachineSet(ctx context.Context, cl client.Client, replicas int32,
 		Expect(err).ToNot(HaveOccurred())
 	}
 
-	machineSet := capiframework.CreateMachineSet(cl, capiframework.NewMachineSetParams(
+	machineSet := capiframework.CreateMachineSet(ctx, cl, capiframework.NewMachineSetParams(
 		machineSetName,
 		clusterName,
 		"",
@@ -276,14 +326,17 @@ func createCAPIMachineSet(ctx context.Context, cl client.Client, replicas int32,
 		"worker-user-data",
 	))
 
-	capiframework.WaitForMachineSet(cl, machineSet.Name, machineSet.Namespace)
-	return machineSet, nil
+	capiframework.WaitForMachineSet(ctx, cl, machineSet.Name, machineSet.Namespace)
+
+	return machineSet
 }
 
 func verifySynchronizedCondition(mapiMachineSet *machinev1beta1.MachineSet, authority machinev1beta1.MachineAuthority) {
 	By("Verify the MAPI MachineSet Synchronized condition is True")
+
 	var expectedMessage string
 
+	//nolint:exhaustive
 	switch authority {
 	case machinev1beta1.MachineAuthorityMachineAPI:
 		expectedMessage = "Successfully synchronized MAPI MachineSet to CAPI"
@@ -314,9 +367,11 @@ func verifySynchronizedCondition(mapiMachineSet *machinev1beta1.MachineSet, auth
 func verifyMAPIPausedCondition(mapiMachineSet *machinev1beta1.MachineSet, authority machinev1beta1.MachineAuthority) {
 	var conditionMatcher types.GomegaMatcher
 
+	//nolint:exhaustive
 	switch authority {
 	case machinev1beta1.MachineAuthorityMachineAPI:
 		By("Verifying MAPI MachineSet is unpaused")
+
 		conditionMatcher = SatisfyAll(
 			HaveField("Type", Equal(MAPIPausedCondition)),
 			HaveField("Status", Equal(corev1.ConditionFalse)),
@@ -325,6 +380,7 @@ func verifyMAPIPausedCondition(mapiMachineSet *machinev1beta1.MachineSet, author
 		)
 	case machinev1beta1.MachineAuthorityClusterAPI:
 		By("Verifying MAPI MachineSet is paused")
+
 		conditionMatcher = SatisfyAll(
 			HaveField("Type", Equal(MAPIPausedCondition)),
 			HaveField("Status", Equal(corev1.ConditionTrue)),
@@ -341,12 +397,14 @@ func verifyMAPIPausedCondition(mapiMachineSet *machinev1beta1.MachineSet, author
 	)
 }
 
-func verifyCAPIPausedCondition(capiMachineSet *capiv1beta1.MachineSet, authority machinev1beta1.MachineAuthority) {
+func verifyCAPIPausedCondition(capiMachineSet *clusterv1.MachineSet, authority machinev1beta1.MachineAuthority) {
 	var conditionMatcher types.GomegaMatcher
 
+	//nolint:exhaustive
 	switch authority {
 	case machinev1beta1.MachineAuthorityClusterAPI:
 		By("Verifying CAPI MachineSet is unpaused (ClusterAPI is authoritative)")
+
 		conditionMatcher = SatisfyAll(
 			HaveField("Type", Equal(CAPIPausedCondition)),
 			HaveField("Status", Equal(metav1.ConditionFalse)),
@@ -354,6 +412,7 @@ func verifyCAPIPausedCondition(capiMachineSet *capiv1beta1.MachineSet, authority
 		)
 	case machinev1beta1.MachineAuthorityMachineAPI:
 		By("Verifying CAPI MachineSet is paused (MachineAPI is authoritative)")
+
 		conditionMatcher = SatisfyAll(
 			HaveField("Type", Equal(CAPIPausedCondition)),
 			HaveField("Status", Equal(metav1.ConditionTrue)),
@@ -369,22 +428,29 @@ func verifyCAPIPausedCondition(capiMachineSet *capiv1beta1.MachineSet, authority
 	)
 }
 
-func cleanupTestResources(ctx context.Context, cl client.Client, capiMachineSets []*capiv1beta1.MachineSet, awsMachineTemplates []*capav1.AWSMachineTemplate, mapiMachineSets []*machinev1beta1.MachineSet) {
+func cleanupTestResources(ctx context.Context, cl client.Client, capiMachineSets []*clusterv1.MachineSet, awsMachineTemplates []*awsv1.AWSMachineTemplate, mapiMachineSets []*machinev1beta1.MachineSet) {
 	for _, ms := range capiMachineSets {
 		if ms == nil {
 			continue
 		}
+
 		By(fmt.Sprintf("Deleting CAPI MachineSet %s", ms.Name))
-		capiframework.DeleteMachineSets(cl, ms)
-		capiframework.WaitForMachineSetsDeleted(cl, ms)
+		capiframework.DeleteMachineSets(ctx, cl, ms)
+		capiframework.WaitForMachineSetsDeleted(ctx, cl, ms)
 	}
 
 	for _, ms := range mapiMachineSets {
 		if ms == nil {
 			continue
 		}
+
 		By(fmt.Sprintf("Deleting MAPI MachineSet %s", ms.Name))
-		mapiframework.DeleteMachineSets(cl, ms)
+
+		err := mapiframework.DeleteMachineSets(cl, ms)
+		if err != nil && !apierrors.IsNotFound(err) {
+			Expect(err).ToNot(HaveOccurred(), "Failed to delete MAPI MachineSet")
+		}
+
 		mapiframework.WaitForMachineSetsDeleted(ctx, cl, ms)
 	}
 
@@ -392,7 +458,8 @@ func cleanupTestResources(ctx context.Context, cl client.Client, capiMachineSets
 		if template == nil {
 			continue
 		}
+
 		By(fmt.Sprintf("Deleting awsMachineTemplate %s", template.Name))
-		capiframework.DeleteAWSMachineTemplates(cl, template)
+		capiframework.DeleteAWSMachineTemplates(ctx, cl, template)
 	}
 }

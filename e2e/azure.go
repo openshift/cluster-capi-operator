@@ -1,3 +1,17 @@
+// Copyright 2024 Red Hat, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package e2e
 
 import (
@@ -27,12 +41,13 @@ const (
 	capzManagerBootstrapCredentials = "capz-manager-bootstrap-credentials"
 )
 
-var _ = Describe("Cluster API Azure MachineSet", Ordered, func() {
+var _ = Describe("[sig-cluster-lifecycle][Feature:ClusterAPI][platform:azure][Disruptive] Cluster API Azure MachineSet", Ordered, Label("Conformance"), Label("Serial"), func() {
 	var azureMachineTemplate *azurev1.AzureMachineTemplate
 	var machineSet *clusterv1.MachineSet
 	var mapiMachineSpec *mapiv1.AzureMachineProviderSpec
 
 	BeforeAll(func() {
+		InitCommonVariables()
 		if platform != configv1.AzurePlatformType {
 			Skip("Skipping Azure E2E tests")
 		}
@@ -45,15 +60,15 @@ var _ = Describe("Cluster API Azure MachineSet", Ordered, func() {
 			// explicitly skip it here for other platforms.
 			Skip("Skipping Azure E2E tests")
 		}
-		framework.DeleteMachineSets(cl, machineSet)
-		framework.WaitForMachineSetsDeleted(cl, machineSet)
+		framework.DeleteMachineSets(ctx, cl, machineSet)
+		framework.WaitForMachineSetsDeleted(ctx, cl, machineSet)
 		framework.DeleteObjects(cl, azureMachineTemplate)
 	})
 
 	It("should be able to run a machine", func() {
 		azureMachineTemplate = createAzureMachineTemplate(cl, mapiMachineSpec)
 
-		machineSet = framework.CreateMachineSet(cl, framework.NewMachineSetParams(
+		machineSet = framework.CreateMachineSet(ctx, cl, framework.NewMachineSetParams(
 			"azure-machineset",
 			clusterName,
 			"",
@@ -66,7 +81,7 @@ var _ = Describe("Cluster API Azure MachineSet", Ordered, func() {
 			"worker-user-data",
 		))
 
-		framework.WaitForMachineSet(cl, machineSet.Name, machineSet.Namespace)
+		framework.WaitForMachineSet(ctx, cl, machineSet.Name, machineSet.Namespace)
 	})
 
 })
@@ -97,15 +112,16 @@ func createAzureMachineTemplate(cl client.Client, mapiProviderSpec *mapiv1.Azure
 	Expect(mapiProviderSpec.OSDisk.OSType).ToNot(BeEmpty())
 	Expect(mapiProviderSpec.VMSize).ToNot(BeEmpty())
 
-	azure_credentials_secret := corev1.Secret{}
-	azure_credentials_secret_key := types.NamespacedName{Name: "capz-manager-bootstrap-credentials", Namespace: "openshift-cluster-api"}
-	err := cl.Get(context.Background(), azure_credentials_secret_key, &azure_credentials_secret)
+	azureCredentialsSecret := corev1.Secret{}
+	azureCredentialsSecretKey := types.NamespacedName{Name: "capz-manager-bootstrap-credentials", Namespace: "openshift-cluster-api"}
+	err := cl.Get(context.Background(), azureCredentialsSecretKey, &azureCredentialsSecret)
 	Expect(err).To(BeNil(), "capz-manager-bootstrap-credentials secret should exist")
-	subscriptionID := azure_credentials_secret.Data["azure_subscription_id"]
+
+	subscriptionID := azureCredentialsSecret.Data["azure_subscription_id"]
 	azureImageID := fmt.Sprintf("/subscriptions/%s%s", subscriptionID, mapiProviderSpec.Image.ResourceID)
 
 	var (
-		identity               azurev1.VMIdentity = azurev1.VMIdentityNone
+		identity               = azurev1.VMIdentityNone
 		userAssignedIdentities []azurev1.UserAssignedIdentity
 	)
 
@@ -114,6 +130,7 @@ func createAzureMachineTemplate(cl client.Client, mapiProviderSpec *mapiv1.Azure
 		if !strings.HasPrefix(mi, "/subscriptions/") {
 			providerID = fmt.Sprintf("azure:///subscriptions/%s/resourcegroups/%s/providers/Microsoft.ManagedIdentity/userAssignedIdentities/%s", subscriptionID, mapiProviderSpec.ResourceGroup, mi)
 		}
+
 		userAssignedIdentities = []azurev1.UserAssignedIdentity{{ProviderID: providerID}}
 		identity = azurev1.VMIdentityUserAssigned
 	}
