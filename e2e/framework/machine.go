@@ -1,7 +1,6 @@
 package framework
 
 import (
-	"fmt"
 	"time"
 
 	. "github.com/onsi/gomega"
@@ -15,7 +14,7 @@ import (
 
 // GetMachines gets a list of machines from the default cluster API namespace.
 // Optionaly, labels may be used to constrain listed machinesets.
-func GetMachines(cl client.Client, selectors ...*metav1.LabelSelector) ([]*clusterv1.Machine, error) {
+func GetMachines(cl client.Client, selectors ...*metav1.LabelSelector) []*clusterv1.Machine {
 	machineList := &clusterv1.MachineList{}
 
 	listOpts := append([]client.ListOption{},
@@ -24,18 +23,15 @@ func GetMachines(cl client.Client, selectors ...*metav1.LabelSelector) ([]*clust
 
 	for _, selector := range selectors {
 		s, err := metav1.LabelSelectorAsSelector(selector)
-		if err != nil {
-			return nil, err
-		}
+		Expect(err).ToNot(HaveOccurred(), "invalid label selector")
 
 		listOpts = append(listOpts,
 			client.MatchingLabelsSelector{Selector: s},
 		)
 	}
 
-	if err := cl.List(ctx, machineList, listOpts...); err != nil {
-		return nil, fmt.Errorf("error querying api for machineList object: %w", err)
-	}
+	Eventually(komega.List(machineList, listOpts...)).
+		Should(Succeed(), "failed to list machineList in namespace %s", CAPINamespace)
 
 	var machines []*clusterv1.Machine
 
@@ -43,7 +39,7 @@ func GetMachines(cl client.Client, selectors ...*metav1.LabelSelector) ([]*clust
 		machines = append(machines, &machineList.Items[i])
 	}
 
-	return machines, nil
+	return machines
 }
 
 // FilterRunningMachines returns a slice of only those Machines in the input

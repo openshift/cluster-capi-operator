@@ -114,8 +114,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 })
 
 func createCAPIMachine(ctx context.Context, cl client.Client, machineName string) *clusterv1.Machine {
-	capiMachineList, err := capiframework.GetMachines(cl)
-	Expect(err).NotTo(HaveOccurred(), "Failed to list CAPI machines")
+	capiMachineList := capiframework.GetMachines(cl)
 	// The test requires at least one existing CAPI machine to act as a reference for creating a new one.
 	Expect(capiMachineList).NotTo(BeEmpty(), "No CAPI machines found in the openshift-cluster-api namespace to use as a reference for creating a new one")
 

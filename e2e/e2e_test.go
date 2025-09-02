@@ -16,6 +16,7 @@ import (
 	ibmpowervsv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
 	vspherev1 "sigs.k8s.io/cluster-api-provider-vsphere/apis/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
@@ -36,6 +37,7 @@ var (
 	platform           configv1.PlatformType
 	clusterName        string
 	mapiInfrastructure *configv1.Infrastructure
+	k8sClient client.Client
 )
 
 func init() {
@@ -76,4 +78,7 @@ var _ = BeforeSuite(func() {
 
 	komega.SetClient(cl)
 	komega.SetContext(ctx)
+
+	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
+	Expect(err).ToNot(HaveOccurred())
 })
