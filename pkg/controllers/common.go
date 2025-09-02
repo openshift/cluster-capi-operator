@@ -23,6 +23,7 @@ import (
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	ibmpowervsv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
 	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
+	vspherev1 "sigs.k8s.io/cluster-api-provider-vsphere/apis/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -46,6 +47,8 @@ func InitInfraMachineAndInfraClusterFromProvider(platform configv1.PlatformType)
 		return &openstackv1.OpenStackMachine{}, &openstackv1.OpenStackCluster{}, nil
 	case configv1.PowerVSPlatformType:
 		return &ibmpowervsv1.IBMPowerVSMachine{}, &ibmpowervsv1.IBMPowerVSCluster{}, nil
+	case configv1.VSpherePlatformType:
+		return &vspherev1.VSphereMachine{}, &vspherev1.VSphereCluster{}, nil
 	default:
 		return nil, nil, fmt.Errorf("%w: %s", errPlatformNotSupported, platform)
 	}
@@ -63,6 +66,8 @@ func InitInfraMachineTemplateAndInfraClusterFromProvider(platform configv1.Platf
 		return &openstackv1.OpenStackMachineTemplate{}, &openstackv1.OpenStackCluster{}, nil
 	case configv1.PowerVSPlatformType:
 		return &ibmpowervsv1.IBMPowerVSMachineTemplate{}, &ibmpowervsv1.IBMPowerVSCluster{}, nil
+	case configv1.VSpherePlatformType:
+		return &vspherev1.VSphereMachineTemplate{}, &vspherev1.VSphereCluster{}, nil
 	default:
 		return nil, nil, fmt.Errorf("%w: %s", errPlatformNotSupported, platform)
 	}

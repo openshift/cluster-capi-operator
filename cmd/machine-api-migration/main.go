@@ -21,6 +21,12 @@ import (
 	"os"
 	"time"
 
+	"k8s.io/utils/clock"
+	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
+	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
+	vspherev1 "sigs.k8s.io/cluster-api-provider-vsphere/apis/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+
 	configv1 "github.com/openshift/api/config/v1"
 	mapiv1alpha1 "github.com/openshift/api/machine/v1alpha1"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
@@ -32,14 +38,7 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/machinesetsync"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/machinesync"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
-	"k8s.io/utils/clock"
-	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
-	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
-	"github.com/openshift/api/features"
-	featuregates "github.com/openshift/library-go/pkg/operator/configobserver/featuregates"
-	"github.com/openshift/library-go/pkg/operator/events"
 	"github.com/spf13/pflag"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -52,6 +51,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
+
+	"github.com/openshift/api/features"
+	featuregates "github.com/openshift/library-go/pkg/operator/configobserver/featuregates"
+	"github.com/openshift/library-go/pkg/operator/events"
 )
 
 var (
@@ -70,6 +73,7 @@ func initScheme(scheme *runtime.Scheme) {
 	utilruntime.Must(awsv1.AddToScheme(scheme))
 	utilruntime.Must(openstackv1.AddToScheme(scheme))
 	utilruntime.Must(clusterv1.AddToScheme(scheme))
+	utilruntime.Must(vspherev1.AddToScheme(scheme))
 }
 
 //nolint:funlen
@@ -196,7 +200,7 @@ func main() {
 
 	// Currently we only plan to support AWS, so all others are a noop until they're implemented.
 	switch provider {
-	case configv1.AWSPlatformType, configv1.OpenStackPlatformType:
+	case configv1.AWSPlatformType, configv1.OpenStackPlatformType, configv1.VSpherePlatformType:
 		klog.Infof("MachineAPIMigration: starting %s controllers", provider)
 
 	default:

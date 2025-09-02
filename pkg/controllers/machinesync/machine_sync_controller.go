@@ -48,6 +48,7 @@ import (
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	ibmpowervsv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
 	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
+	vspherev1 "sigs.k8s.io/cluster-api-provider-vsphere/apis/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util/annotations"
 	"sigs.k8s.io/cluster-api/util/labels/format"
@@ -98,6 +99,9 @@ var (
 
 	// errAssertingCAPIBMPowerVSMachine is returned when we encounter an issue asserting a client.Object into an IBMPowerVSMachine.
 	errAssertingCAPIIBMPowerVSMachine = errors.New("error asserting the Cluster API IBMPowerVSMachine object")
+
+	// errAssertingCAPIVSphereMachine is returned when we encounter an issue asserting a client.Object into a VSphereMachine.
+	errAssertingCAPIVSphereMachine = errors.New("error asserting the Cluster API VSphereMachine object")
 
 	// errCAPIMachineNotFound is returned when the AuthoritativeAPI is set to CAPI on the MAPI machine,
 	// but we can't find the CAPI machine.
@@ -562,6 +566,8 @@ func (r *MachineSyncReconciler) convertMAPIToCAPIMachine(mapiMachine *machinev1b
 		return mapi2capi.FromOpenStackMachineAndInfra(mapiMachine, r.Infra).ToMachineAndInfrastructureMachine() //nolint:wrapcheck
 	case configv1.PowerVSPlatformType:
 		return mapi2capi.FromPowerVSMachineAndInfra(mapiMachine, r.Infra).ToMachineAndInfrastructureMachine() //nolint:wrapcheck
+	case configv1.VSpherePlatformType:
+		return mapi2capi.FromVSphereMachineAndInfra(mapiMachine, r.Infra).ToMachineAndInfrastructureMachine() //nolint:wrapcheck
 	default:
 		return nil, nil, nil, fmt.Errorf("%w: %s", errPlatformNotSupported, r.Platform)
 	}
@@ -593,6 +599,18 @@ func (r *MachineSyncReconciler) convertCAPIToMAPIMachine(capiMachine *clusterv1.
 		}
 
 		return capi2mapi.FromMachineAndOpenStackMachineAndOpenStackCluster(capiMachine, openStackMachine, openStackCluster).ToMachine() //nolint:wrapcheck
+	case configv1.VSpherePlatformType:
+		vsphereMachine, ok := infraMachine.(*vspherev1.VSphereMachine)
+		if !ok {
+			return nil, nil, fmt.Errorf("%w, expected VSphereMachine, got %T", errUnexpectedInfraMachineType, infraMachine)
+		}
+
+		vsphereCluster, ok := infraCluster.(*vspherev1.VSphereCluster)
+		if !ok {
+			return nil, nil, fmt.Errorf("%w, expected VSphereCluster, got %T", errUnexpectedInfraClusterType, infraCluster)
+		}
+
+		return capi2mapi.FromMachineAndVSphereMachineAndVSphereCluster(capiMachine, vsphereMachine, vsphereCluster).ToMachine() //nolint:wrapcheck
 	default:
 		return nil, nil, fmt.Errorf("%w: %s", errPlatformNotSupported, r.Platform)
 	}
@@ -1351,6 +1369,27 @@ func compareCAPIInfraMachines(platform configv1.PlatformType, infraMachine1, inf
 		typedinfraMachine2, ok := infraMachine2.(*ibmpowervsv1.IBMPowerVSMachine)
 		if !ok {
 			return nil, errAssertingCAPIIBMPowerVSMachine
+		}
+
+		diff := make(map[string]any)
+		if diffSpec := deep.Equal(typedInfraMachine1.Spec, typedinfraMachine2.Spec); len(diffSpec) > 0 {
+			diff[".spec"] = diffSpec
+		}
+
+		if diffMetadata := util.ObjectMetaEqual(typedInfraMachine1.ObjectMeta, typedinfraMachine2.ObjectMeta); len(diffMetadata) > 0 {
+			diff[".metadata"] = diffMetadata
+		}
+
+		return diff, nil
+	case configv1.VSpherePlatformType:
+		typedInfraMachine1, ok := infraMachine1.(*vspherev1.VSphereMachine)
+		if !ok {
+			return nil, errAssertingCAPIVSphereMachine
+		}
+
+		typedinfraMachine2, ok := infraMachine2.(*vspherev1.VSphereMachine)
+		if !ok {
+			return nil, errAssertingCAPIVSphereMachine
 		}
 
 		diff := make(map[string]any)
