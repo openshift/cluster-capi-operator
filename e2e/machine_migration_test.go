@@ -140,12 +140,9 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				testMachineName := "machine-auth-change-83955"
 				testMachine := createMAPIMachineWithAuthority(ctx, cl, testMachineName, machinev1beta1.MachineAuthorityClusterAPI)
 
-				// Wait for the CAPI machine to be created (any status is fine for this test)
-				var err error
-				_, err = capiframework.GetMachine(cl, testMachineName, capiframework.CAPINamespace)
+				_, err := capiframework.GetMachine(cl, testMachineName, capiframework.CAPINamespace)
 				Expect(err).ToNot(HaveOccurred(), "CAPI Machine should be created")
-
-				// Add a small delay to ensure any pending updates are processed
+				// Ensure any pending updates are processed
 				Eventually(func() error {
 					// Get the latest version again right before update
 					currentMachine, err := mapiframework.GetMachine(cl, testMachineName)
@@ -211,10 +208,9 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 
 				It("should prevent modification of InstanceType in non-authoritative MAPI Machine", func() {
 					verifyFieldModificationPrevented(cl, testMapiMachine.Name, "InstanceType", func(machine *machinev1beta1.Machine) {
-						err := updateMachineProviderSpec(machine, func(providerSpec *machinev1beta1.AWSMachineProviderConfig) {
+						Expect(updateAWSMachineProviderSpec(machine, func(providerSpec *machinev1beta1.AWSMachineProviderConfig) {
 							providerSpec.InstanceType = testInstanceType
-						})
-						Expect(err).NotTo(HaveOccurred(), "Failed to update InstanceType in provider spec")
+						})).To(Succeed(), "Failed to update InstanceType in provider spec")
 					})
 				})
 
@@ -230,93 +226,84 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 
 				It("should prevent modification of AMI ID in non-authoritative MAPI Machine", func() {
 					verifyFieldModificationPrevented(cl, testMapiMachine.Name, "AMI ID", func(machine *machinev1beta1.Machine) {
-						err := updateMachineProviderSpec(machine, func(providerSpec *machinev1beta1.AWSMachineProviderConfig) {
+						Expect(updateAWSMachineProviderSpec(machine, func(providerSpec *machinev1beta1.AWSMachineProviderConfig) {
 							providerSpec.AMI.ID = ptr.To(testAMIID)
-						})
-						Expect(err).NotTo(HaveOccurred(), "Failed to update AMI ID in provider spec")
+						})).To(Succeed(), "Failed to update AMI ID in provider spec")
 					})
 				})
 
 				It("should prevent modification of encryption for block devices in non-authoritative MAPI Machine", func() {
 					verifyFieldModificationPrevented(cl, testMapiMachine.Name, "block device encryption", func(machine *machinev1beta1.Machine) {
-						err := updateMachineProviderSpec(machine, func(providerSpec *machinev1beta1.AWSMachineProviderConfig) {
+						Expect(updateAWSMachineProviderSpec(machine, func(providerSpec *machinev1beta1.AWSMachineProviderConfig) {
 							if len(providerSpec.BlockDevices) > 0 && providerSpec.BlockDevices[0].EBS != nil {
 								providerSpec.BlockDevices[0].EBS.Encrypted = ptr.To(false)
 							}
-						})
-						Expect(err).NotTo(HaveOccurred(), "Failed to update block device encryption in provider spec")
+						})).To(Succeed(), "Failed to update block device encryption in provider spec")
 					})
 				})
 
 				It("should prevent modification of VolumeSize in non-authoritative MAPI Machine", func() {
 					verifyFieldModificationPrevented(cl, testMapiMachine.Name, "VolumeSize", func(machine *machinev1beta1.Machine) {
-						err := updateMachineProviderSpec(machine, func(providerSpec *machinev1beta1.AWSMachineProviderConfig) {
+						Expect(updateAWSMachineProviderSpec(machine, func(providerSpec *machinev1beta1.AWSMachineProviderConfig) {
 							if len(providerSpec.BlockDevices) > 0 && providerSpec.BlockDevices[0].EBS != nil {
 								providerSpec.BlockDevices[0].EBS.VolumeSize = ptr.To(testVolumeSize)
 							}
-						})
-						Expect(err).NotTo(HaveOccurred(), "Failed to update VolumeSize in provider spec")
+						})).To(Succeed(), "Failed to update VolumeSize in provider spec")
 					})
 				})
 
 				It("should prevent modification of VolumeType in non-authoritative MAPI Machine", func() {
 					verifyFieldModificationPrevented(cl, testMapiMachine.Name, "VolumeType", func(machine *machinev1beta1.Machine) {
-						err := updateMachineProviderSpec(machine, func(providerSpec *machinev1beta1.AWSMachineProviderConfig) {
+						Expect(updateAWSMachineProviderSpec(machine, func(providerSpec *machinev1beta1.AWSMachineProviderConfig) {
 							if len(providerSpec.BlockDevices) > 0 && providerSpec.BlockDevices[0].EBS != nil {
 								providerSpec.BlockDevices[0].EBS.VolumeType = ptr.To(testVolumeType)
 							}
-						})
-						Expect(err).NotTo(HaveOccurred(), "Failed to update VolumeType in provider spec")
+						})).To(Succeed(), "Failed to update VolumeType in provider spec")
 					})
 				})
 
 				It("should prevent modification of AvailabilityZone in non-authoritative MAPI Machine", func() {
 					verifyFieldModificationPrevented(cl, testMapiMachine.Name, "AvailabilityZone", func(machine *machinev1beta1.Machine) {
-						err := updateMachineProviderSpec(machine, func(providerSpec *machinev1beta1.AWSMachineProviderConfig) {
+						Expect(updateAWSMachineProviderSpec(machine, func(providerSpec *machinev1beta1.AWSMachineProviderConfig) {
 							providerSpec.Placement.AvailabilityZone = testAvailabilityZone
-						})
-						Expect(err).NotTo(HaveOccurred(), "Failed to update AvailabilityZone in provider spec")
+						})).To(Succeed(), "Failed to update AvailabilityZone in provider spec")
 					})
 				})
 
 				It("should prevent modification of Subnet in non-authoritative MAPI Machine", func() {
 					verifyFieldModificationPrevented(cl, testMapiMachine.Name, "Subnet", func(machine *machinev1beta1.Machine) {
-						err := updateMachineProviderSpec(machine, func(providerSpec *machinev1beta1.AWSMachineProviderConfig) {
+						Expect(updateAWSMachineProviderSpec(machine, func(providerSpec *machinev1beta1.AWSMachineProviderConfig) {
 							providerSpec.Subnet.ID = ptr.To(testSubnetID)
-						})
-						Expect(err).NotTo(HaveOccurred(), "Failed to update Subnet in provider spec")
+						})).To(Succeed(), "Failed to update Subnet in provider spec")
 					})
 				})
 
 				It("should prevent modification of SecurityGroups in non-authoritative MAPI Machine", func() {
 					verifyFieldModificationPrevented(cl, testMapiMachine.Name, "SecurityGroups", func(machine *machinev1beta1.Machine) {
-						err := updateMachineProviderSpec(machine, func(providerSpec *machinev1beta1.AWSMachineProviderConfig) {
+						Expect(updateAWSMachineProviderSpec(machine, func(providerSpec *machinev1beta1.AWSMachineProviderConfig) {
 							providerSpec.SecurityGroups = append(providerSpec.SecurityGroups, machinev1beta1.AWSResourceReference{
 								ID: ptr.To(testSecurityGroupID),
 							})
-						})
-						Expect(err).NotTo(HaveOccurred(), "Failed to update SecurityGroups in provider spec")
+						})).To(Succeed(), "Failed to update SecurityGroups in provider spec")
 					})
 				})
 
 				It("should prevent modification of Tags in non-authoritative MAPI Machine", func() {
 					verifyFieldModificationPrevented(cl, testMapiMachine.Name, "Tags", func(machine *machinev1beta1.Machine) {
-						err := updateMachineProviderSpec(machine, func(providerSpec *machinev1beta1.AWSMachineProviderConfig) {
+						Expect(updateAWSMachineProviderSpec(machine, func(providerSpec *machinev1beta1.AWSMachineProviderConfig) {
 							providerSpec.Tags = append(providerSpec.Tags, machinev1beta1.TagSpecification{
 								Name:  testTagName,
 								Value: testTagValue,
 							})
-						})
-						Expect(err).NotTo(HaveOccurred(), "Failed to update Tags in provider spec")
+						})).To(Succeed(), "Failed to update Tags in provider spec")
 					})
 				})
 
 				It("should prevent modification of capacityReservationId in non-authoritative MAPI Machine", func() {
 					verifyFieldModificationPrevented(cl, testMapiMachine.Name, "capacityReservationId", func(machine *machinev1beta1.Machine) {
-						err := updateMachineProviderSpec(machine, func(providerSpec *machinev1beta1.AWSMachineProviderConfig) {
+						Expect(updateAWSMachineProviderSpec(machine, func(providerSpec *machinev1beta1.AWSMachineProviderConfig) {
 							providerSpec.CapacityReservationID = testCapacityReservationID
-						})
-						Expect(err).NotTo(HaveOccurred(), "Failed to update capacityReservationId in provider spec")
+						})).To(Succeed(), "Failed to update capacityReservationId in provider spec")
 					})
 				})
 			})
@@ -549,13 +536,12 @@ func verifyMachineRunning(cl client.Client, machineName string, authority machin
 		case machinev1beta1.MachineAuthorityClusterAPI:
 			By("Verify the CAPI Machine is Running")
 			capiMachine, err := capiframework.GetMachine(cl, machineName, capiframework.CAPINamespace)
-			if err != nil {
-				return ""
-			}
+			Expect(err).NotTo(HaveOccurred(), "Failed to get CAPI Machine Running %s", machineName)
 			return string(capiMachine.Status.Phase)
 		case machinev1beta1.MachineAuthorityMachineAPI:
 			By("Verify the MAPI Machine is Running")
 			mapiMachine, err := mapiframework.GetMachine(cl, machineName)
+<<<<<<< HEAD
 			if err != nil {
 				return ""
 			}
@@ -563,11 +549,14 @@ func verifyMachineRunning(cl client.Client, machineName string, authority machin
 				return string(*mapiMachine.Status.Phase)
 			}
 			return ""
+=======
+			Expect(err).NotTo(HaveOccurred(), "Failed to get MAPI Machine Running %s", machineName)
+			return string(*mapiMachine.Status.Phase)
+>>>>>>> d835b87f (simplified pattern ,for assertion.)
 		default:
 			Fail(fmt.Sprintf("unknown authoritativeAPI type: %v", authority))
 			return ""
 		}
-
 	}, capiframework.WaitLong, capiframework.RetryLong).Should(Equal("Running"), "%s Machine did not get Running", authority)
 }
 
@@ -725,9 +714,7 @@ func verifyFieldModificationPrevented(cl client.Client, machineName string, fiel
 	By(fmt.Sprintf("Attempting to modify %s in MAPI Machine", fieldName))
 
 	currentMachine, err := mapiframework.GetMachine(cl, machineName)
-	if err != nil {
-		Fail(fmt.Sprintf("Failed to get current machine: %v", err))
-	}
+	Expect(err).NotTo(HaveOccurred(), "Failed to get current machine")
 	updatedMachine := currentMachine.DeepCopy()
 	modifyFunc(updatedMachine)
 
@@ -740,9 +727,7 @@ func verifyAnnotationModificationPrevented(cl client.Client, machineName string)
 	By("Attempting to add annotations machine.openshift.io. to MAPI Machine")
 
 	currentMachine, err := mapiframework.GetMachine(cl, machineName)
-	if err != nil {
-		Fail(fmt.Sprintf("Failed to get current machine: %v", err))
-	}
+	Expect(err).NotTo(HaveOccurred(), "Failed to get current machine")
 	updatedMachine := currentMachine.DeepCopy()
 	if updatedMachine.Annotations == nil {
 		updatedMachine.Annotations = make(map[string]string)
@@ -770,8 +755,8 @@ func getAWSProviderSpecFromMachine(machine *machinev1beta1.Machine) (*machinev1b
 	return &providerSpec, nil
 }
 
-// updateMachineProviderSpec updates the machine's provider spec with the given function
-func updateMachineProviderSpec(machine *machinev1beta1.Machine, updateFunc func(*machinev1beta1.AWSMachineProviderConfig)) error {
+// updateAWSMachineProviderSpec updates the machine's AWS provider spec with the given function
+func updateAWSMachineProviderSpec(machine *machinev1beta1.Machine, updateFunc func(*machinev1beta1.AWSMachineProviderConfig)) error {
 	providerSpec, err := getAWSProviderSpecFromMachine(machine)
 	if err != nil {
 		return err

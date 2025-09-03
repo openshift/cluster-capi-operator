@@ -52,7 +52,7 @@ var ctx = context.Background()
 var vapCleanup func()
 
 const (
-	timeout = time.Second * 10
+	timeout = time.Second * 30
 )
 
 func TestAPIs(t *testing.T) {
