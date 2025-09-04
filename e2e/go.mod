@@ -27,6 +27,8 @@ require (
 	sigs.k8s.io/yaml v1.4.0
 )
 
+replace github.com/openshift/cluster-capi-operator => ../
+
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.18.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/internal v1.11.1 // indirect
