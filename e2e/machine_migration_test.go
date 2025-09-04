@@ -121,12 +121,138 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 			})
 
 			It("should verify that the non-authoritative MAPI Machine has an authoritative CAPI Machine mirror", func() {
-				newCapiMachine, err = capiframework.GetMachine(cl, mapiMachineAuthCAPIName, capiframework.CAPINamespace)
-				Expect(err).ToNot(HaveOccurred(), "CAPI Machine should exist")
+				Eventually(func() error {
+					newCapiMachine, err = capiframework.GetMachine(cl, mapiMachineAuthCAPIName, capiframework.CAPINamespace)
+					return err
+				}, capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(), "CAPI Machine should exist")
 			})
 
 			It("should verify CAPI Machine Paused condition is False", func() {
 				verifyCAPIMachinePausedCondition(newCapiMachine, machinev1beta1.MachineAuthorityClusterAPI)
+			})
+		})
+	})
+
+	var _ = Describe("Deleting MAPI/CAPI Machines", Ordered, func() {
+		var mapiMachineAuthCAPINameDeletion = "machine-authoritativeapi-capi-deletion"
+		var mapiMachineAuthMAPINameDeleteMAPIMachine = "machine-authoritativeapi-mapi-delete-mapi"
+		var mapiMachineAuthMAPINameDeleteCAPIMachine = "machine-authoritativeapi-mapi-delete-capi"
+		var newCapiMachine *clusterv1.Machine
+		var newMapiMachine *machinev1beta1.Machine
+		var err error
+
+		Context("with spec.authoritativeAPI: ClusterAPI", func() {
+			Context("when deleting the non-authoritative MAPI Machine", func() {
+				BeforeAll(func() {
+					newMapiMachine = createMAPIMachineWithAuthority(ctx, cl, mapiMachineAuthCAPINameDeletion, machinev1beta1.MachineAuthorityClusterAPI)
+					verifyMachineRunning(cl, newMapiMachine.Name, machinev1beta1.MachineAuthorityClusterAPI)
+
+					DeferCleanup(func() {
+						By("Cleaning up machine resources")
+						cleanupMachineResources(
+							ctx,
+							cl,
+							[]*clusterv1.Machine{newCapiMachine},
+							[]*machinev1beta1.Machine{newMapiMachine},
+						)
+					})
+				})
+				It("should delete MAPI Machine", func() {
+					mapiframework.DeleteMachines(ctx, cl, newMapiMachine)
+					mapiframework.WaitForMachinesDeleted(cl, newMapiMachine)
+				})
+
+				It("should verify the CAPI machine is deleted", func() {
+					verifyCAPIMachineRemoved(cl, mapiMachineAuthCAPINameDeletion)
+				})
+				It("should verify the AWS machine is deleted", func() {
+					verifyAWSMachineRemoved(cl, mapiMachineAuthCAPINameDeletion)
+				})
+			})
+			Context("when deleting the authoritative CAPI Machine", func() {
+				BeforeAll(func() {
+					newMapiMachine = createMAPIMachineWithAuthority(ctx, cl, mapiMachineAuthCAPINameDeletion, machinev1beta1.MachineAuthorityClusterAPI)
+					verifyMachineRunning(cl, newMapiMachine.Name, machinev1beta1.MachineAuthorityClusterAPI)
+					newCapiMachine, err = capiframework.GetMachine(cl, newMapiMachine.Name, capiframework.CAPINamespace)
+					Expect(err).NotTo(HaveOccurred(), "Failed to get capi machine")
+
+					DeferCleanup(func() {
+						By("Cleaning up machine resources")
+						cleanupMachineResources(
+							ctx,
+							cl,
+							[]*clusterv1.Machine{newCapiMachine},
+							[]*machinev1beta1.Machine{newMapiMachine},
+						)
+					})
+				})
+				It("should delete CAPI Machine", func() {
+					capiframework.DeleteMachines(cl, capiframework.CAPINamespace, newCapiMachine)
+				})
+
+				It("should verify the MAPI machine is deleted", func() {
+					verifyMAPIMachineRemoved(cl, mapiMachineAuthCAPINameDeletion)
+				})
+				It("should verify the AWS machine is deleted", func() {
+					verifyAWSMachineRemoved(cl, mapiMachineAuthCAPINameDeletion)
+				})
+			})
+		})
+		Context("with spec.authoritativeAPI: MachineAPI", func() {
+			Context("when deleting the authoritative MAPI Machine", func() {
+				BeforeAll(func() {
+					newMapiMachine = createMAPIMachineWithAuthority(ctx, cl, mapiMachineAuthMAPINameDeleteMAPIMachine, machinev1beta1.MachineAuthorityMachineAPI)
+					verifyMachineRunning(cl, newMapiMachine.Name, machinev1beta1.MachineAuthorityMachineAPI)
+
+					DeferCleanup(func() {
+						By("Cleaning up machine resources")
+						cleanupMachineResources(
+							ctx,
+							cl,
+							[]*clusterv1.Machine{newCapiMachine},
+							[]*machinev1beta1.Machine{newMapiMachine},
+						)
+					})
+				})
+				It("should delete MAPI Machine", func() {
+					mapiframework.DeleteMachines(ctx, cl, newMapiMachine)
+					mapiframework.WaitForMachinesDeleted(cl, newMapiMachine)
+				})
+
+				It("should verify the CAPI machine is deleted", func() {
+					verifyCAPIMachineRemoved(cl, mapiMachineAuthMAPINameDeleteMAPIMachine)
+				})
+				It("should verify the AWS machine is deleted", func() {
+					verifyAWSMachineRemoved(cl, mapiMachineAuthMAPINameDeleteMAPIMachine)
+				})
+			})
+			Context("when deleting the non-authoritative CAPI Machine", func() {
+				BeforeAll(func() {
+					newMapiMachine = createMAPIMachineWithAuthority(ctx, cl, mapiMachineAuthMAPINameDeleteCAPIMachine, machinev1beta1.MachineAuthorityMachineAPI)
+					verifyMachineRunning(cl, newMapiMachine.Name, machinev1beta1.MachineAuthorityMachineAPI)
+					newCapiMachine, err = capiframework.GetMachine(cl, newMapiMachine.Name, capiframework.CAPINamespace)
+					Expect(err).NotTo(HaveOccurred(), "Failed to get capi machine")
+
+					DeferCleanup(func() {
+						By("Cleaning up machine resources")
+						cleanupMachineResources(
+							ctx,
+							cl,
+							[]*clusterv1.Machine{newCapiMachine},
+							[]*machinev1beta1.Machine{newMapiMachine},
+						)
+					})
+				})
+				It("should delete CAPI Machine", func() {
+					capiframework.DeleteMachines(cl, capiframework.CAPINamespace, newCapiMachine)
+				})
+
+				It("should verify the MAPI machine is deleted", func() {
+					verifyMAPIMachineRemoved(cl, mapiMachineAuthMAPINameDeleteCAPIMachine)
+				})
+				It("should verify the AWS machine is deleted", func() {
+					verifyAWSMachineRemoved(cl, mapiMachineAuthMAPINameDeleteCAPIMachine)
+				})
 			})
 		})
 	})
@@ -309,130 +435,6 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 			})
 		})
 	})
-
-	var _ = Describe("Deleting MAPI/CAPI Machines", Ordered, func() {
-		var mapiMachineAuthCAPINameDeletion = "machine-authoritativeapi-capi-deletion"
-		var mapiMachineAuthMAPINameDeleteMAPIMachine = "machine-authoritativeapi-mapi-delete-mapi"
-		var mapiMachineAuthMAPINameDeleteCAPIMachine = "machine-authoritativeapi-mapi-delete-capi"
-		var newCapiMachine *clusterv1.Machine
-		var newMapiMachine *machinev1beta1.Machine
-		var err error
-
-		Context("with spec.authoritativeAPI: ClusterAPI", func() {
-			Context("when deleting the non-authoritative MAPI Machine", func() {
-				BeforeAll(func() {
-					newMapiMachine = createMAPIMachineWithAuthority(ctx, cl, mapiMachineAuthCAPINameDeletion, machinev1beta1.MachineAuthorityClusterAPI)
-					verifyMachineRunning(cl, newMapiMachine.Name, machinev1beta1.MachineAuthorityClusterAPI)
-
-					DeferCleanup(func() {
-						By("Cleaning up machine resources")
-						cleanupMachineResources(
-							ctx,
-							cl,
-							[]*clusterv1.Machine{newCapiMachine},
-							[]*machinev1beta1.Machine{newMapiMachine},
-						)
-					})
-				})
-				It("should delete MAPI Machine", func() {
-					mapiframework.DeleteMachines(ctx, cl, newMapiMachine)
-					mapiframework.WaitForMachinesDeleted(cl, newMapiMachine)
-				})
-
-				It("should verify the CAPI machine is deleted", func() {
-					verifyCAPIMachineRemoved(cl, mapiMachineAuthCAPINameDeletion)
-				})
-				It("should verify the AWS machine is deleted", func() {
-					verifyAWSMachineRemoved(cl, mapiMachineAuthCAPINameDeletion)
-				})
-			})
-			Context("when deleting the authoritative CAPI Machine", func() {
-				BeforeAll(func() {
-					newMapiMachine = createMAPIMachineWithAuthority(ctx, cl, mapiMachineAuthCAPINameDeletion, machinev1beta1.MachineAuthorityClusterAPI)
-					verifyMachineRunning(cl, newMapiMachine.Name, machinev1beta1.MachineAuthorityClusterAPI)
-					newCapiMachine, err = capiframework.GetMachine(cl, newMapiMachine.Name, capiframework.CAPINamespace)
-					Expect(err).NotTo(HaveOccurred(), "Failed to get capi machine")
-
-					DeferCleanup(func() {
-						By("Cleaning up machine resources")
-						cleanupMachineResources(
-							ctx,
-							cl,
-							[]*clusterv1.Machine{newCapiMachine},
-							[]*machinev1beta1.Machine{newMapiMachine},
-						)
-					})
-				})
-				It("should delete CAPI Machine", func() {
-					capiframework.DeleteMachines(cl, capiframework.CAPINamespace, newCapiMachine)
-				})
-
-				It("should verify the MAPI machine is deleted", func() {
-					verifyMAPIMachineRemoved(cl, mapiMachineAuthCAPINameDeletion)
-				})
-				It("should verify the AWS machine is deleted", func() {
-					verifyAWSMachineRemoved(cl, mapiMachineAuthCAPINameDeletion)
-				})
-			})
-		})
-		Context("with spec.authoritativeAPI: MachineAPI", func() {
-			Context("when deleting the authoritative MAPI Machine", func() {
-				BeforeAll(func() {
-					newMapiMachine = createMAPIMachineWithAuthority(ctx, cl, mapiMachineAuthMAPINameDeleteMAPIMachine, machinev1beta1.MachineAuthorityMachineAPI)
-					verifyMachineRunning(cl, newMapiMachine.Name, machinev1beta1.MachineAuthorityMachineAPI)
-
-					DeferCleanup(func() {
-						By("Cleaning up machine resources")
-						cleanupMachineResources(
-							ctx,
-							cl,
-							[]*clusterv1.Machine{newCapiMachine},
-							[]*machinev1beta1.Machine{newMapiMachine},
-						)
-					})
-				})
-				It("should delete MAPI Machine", func() {
-					mapiframework.DeleteMachines(ctx, cl, newMapiMachine)
-					mapiframework.WaitForMachinesDeleted(cl, newMapiMachine)
-				})
-
-				It("should verify the CAPI machine is deleted", func() {
-					verifyCAPIMachineRemoved(cl, mapiMachineAuthMAPINameDeleteMAPIMachine)
-				})
-				It("should verify the AWS machine is deleted", func() {
-					verifyAWSMachineRemoved(cl, mapiMachineAuthMAPINameDeleteMAPIMachine)
-				})
-			})
-			Context("when deleting the non-authoritative CAPI Machine", func() {
-				BeforeAll(func() {
-					newMapiMachine = createMAPIMachineWithAuthority(ctx, cl, mapiMachineAuthMAPINameDeleteCAPIMachine, machinev1beta1.MachineAuthorityMachineAPI)
-					verifyMachineRunning(cl, newMapiMachine.Name, machinev1beta1.MachineAuthorityMachineAPI)
-					newCapiMachine, err = capiframework.GetMachine(cl, newMapiMachine.Name, capiframework.CAPINamespace)
-					Expect(err).NotTo(HaveOccurred(), "Failed to get capi machine")
-
-					DeferCleanup(func() {
-						By("Cleaning up machine resources")
-						cleanupMachineResources(
-							ctx,
-							cl,
-							[]*clusterv1.Machine{newCapiMachine},
-							[]*machinev1beta1.Machine{newMapiMachine},
-						)
-					})
-				})
-				It("should delete CAPI Machine", func() {
-					capiframework.DeleteMachines(cl, capiframework.CAPINamespace, newCapiMachine)
-				})
-
-				It("should verify the MAPI machine is deleted", func() {
-					verifyMAPIMachineRemoved(cl, mapiMachineAuthMAPINameDeleteCAPIMachine)
-				})
-				It("should verify the AWS machine is deleted", func() {
-					verifyAWSMachineRemoved(cl, mapiMachineAuthMAPINameDeleteCAPIMachine)
-				})
-			})
-		})
-	})
 })
 
 func createCAPIMachine(ctx context.Context, cl client.Client, machineName string) *clusterv1.Machine {
@@ -541,18 +543,8 @@ func verifyMachineRunning(cl client.Client, machineName string, authority machin
 		case machinev1beta1.MachineAuthorityMachineAPI:
 			By("Verify the MAPI Machine is Running")
 			mapiMachine, err := mapiframework.GetMachine(cl, machineName)
-<<<<<<< HEAD
-			if err != nil {
-				return ""
-			}
-			if mapiMachine.Status.Phase != nil {
-				return string(*mapiMachine.Status.Phase)
-			}
-			return ""
-=======
 			Expect(err).NotTo(HaveOccurred(), "Failed to get MAPI Machine Running %s", machineName)
 			return string(*mapiMachine.Status.Phase)
->>>>>>> d835b87f (simplified pattern ,for assertion.)
 		default:
 			Fail(fmt.Sprintf("unknown authoritativeAPI type: %v", authority))
 			return ""
