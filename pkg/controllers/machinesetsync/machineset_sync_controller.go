@@ -771,7 +771,7 @@ func (r *MachineSetSyncReconciler) createOrUpdateCAPIInfraMachineTemplate(ctx co
 
 // createOrUpdateCAPIMachineSet creates a CAPI machine set from a MAPI one, or updates if it exists and it is out of date.
 //
-//nolint:funlen,gocognit,cyclop
+//nolint:funlen
 func (r *MachineSetSyncReconciler) createOrUpdateCAPIMachineSet(ctx context.Context, mapiMachineSet *machinev1beta1.MachineSet, capiMachineSet *clusterv1.MachineSet, newCAPIMachineSet *clusterv1.MachineSet) error {
 	logger := log.FromContext(ctx)
 
@@ -821,60 +821,7 @@ func (r *MachineSetSyncReconciler) createOrUpdateCAPIMachineSet(ctx context.Cont
 
 		patchBase := client.MergeFrom(capiMachineSet.DeepCopy())
 
-		// Apply status changes from the new CAPI machine set.
-		capiMachineSet.Status.Replicas = newCAPIMachineSet.Status.Replicas
-		capiMachineSet.Status.ReadyReplicas = newCAPIMachineSet.Status.ReadyReplicas
-		capiMachineSet.Status.AvailableReplicas = newCAPIMachineSet.Status.AvailableReplicas
-		capiMachineSet.Status.FullyLabeledReplicas = newCAPIMachineSet.Status.FullyLabeledReplicas
-		capiMachineSet.Status.FailureReason = newCAPIMachineSet.Status.FailureReason
-		capiMachineSet.Status.FailureMessage = newCAPIMachineSet.Status.FailureMessage
-
-		// Update the conditions if they exist (ignoring lasttransitiontime), append new ones.
-		for i := range newCAPIMachineSet.Status.Conditions {
-			hasCondition := false
-
-			for j := range capiMachineSet.Status.Conditions {
-				if capiMachineSet.Status.Conditions[j].Type == newCAPIMachineSet.Status.Conditions[i].Type {
-					hasCondition = true
-					capiMachineSet.Status.Conditions[j].Status = newCAPIMachineSet.Status.Conditions[i].Status
-					capiMachineSet.Status.Conditions[j].Reason = newCAPIMachineSet.Status.Conditions[i].Reason
-					capiMachineSet.Status.Conditions[j].Message = newCAPIMachineSet.Status.Conditions[i].Message
-
-					break
-				}
-			}
-
-			if !hasCondition {
-				capiMachineSet.Status.Conditions = append(capiMachineSet.Status.Conditions, newCAPIMachineSet.Status.Conditions[i])
-			}
-		}
-
-		// Update the v1beta2 conditions if they exist (ignoring lasttransitiontime), append new ones.
-		switch {
-		case newCAPIMachineSet.Status.V1Beta2 == nil:
-			capiMachineSet.Status.V1Beta2 = nil
-		case capiMachineSet.Status.V1Beta2 == nil:
-			capiMachineSet.Status.V1Beta2 = newCAPIMachineSet.Status.V1Beta2
-		default:
-			for i := range newCAPIMachineSet.Status.V1Beta2.Conditions {
-				hasCondition := false
-
-				for j := range capiMachineSet.Status.V1Beta2.Conditions {
-					if capiMachineSet.Status.V1Beta2.Conditions[j].Type == newCAPIMachineSet.Status.V1Beta2.Conditions[i].Type {
-						hasCondition = true
-						capiMachineSet.Status.V1Beta2.Conditions[j].Status = newCAPIMachineSet.Status.V1Beta2.Conditions[i].Status
-						capiMachineSet.Status.V1Beta2.Conditions[j].Reason = newCAPIMachineSet.Status.V1Beta2.Conditions[i].Reason
-						capiMachineSet.Status.V1Beta2.Conditions[j].Message = newCAPIMachineSet.Status.V1Beta2.Conditions[i].Message
-
-						break
-					}
-				}
-
-				if !hasCondition {
-					capiMachineSet.Status.V1Beta2.Conditions = append(capiMachineSet.Status.V1Beta2.Conditions, newCAPIMachineSet.Status.V1Beta2.Conditions[i])
-				}
-			}
-		}
+		setChangedCAPIMachineSetStatusFields(capiMachineSet, newCAPIMachineSet)
 
 		if isPatchRequired, err := util.IsPatchRequired(capiMachineSet, patchBase); err != nil {
 			return fmt.Errorf("failed to check if patch is required: %w", err)
@@ -904,9 +851,69 @@ func (r *MachineSetSyncReconciler) createOrUpdateCAPIMachineSet(ctx context.Cont
 	return nil
 }
 
+// setChangedCAPIMachineSetStatusFields sets the updated fields in the CAPI machine set status.
+// The capiMachineSet argument is the existing CAPI machine set.
+// The newCAPIMachineSet argument is the new CAPI machine set with the desired status changes.
+func setChangedCAPIMachineSetStatusFields(capiMachineSet, newCAPIMachineSet *clusterv1.MachineSet) {
+	// newCAPIMachineSet holds the computed and desired status changes, so apply them to the existing capiMachineSet.
+	capiMachineSet.Status.Replicas = newCAPIMachineSet.Status.Replicas
+	capiMachineSet.Status.ReadyReplicas = newCAPIMachineSet.Status.ReadyReplicas
+	capiMachineSet.Status.AvailableReplicas = newCAPIMachineSet.Status.AvailableReplicas
+	capiMachineSet.Status.FullyLabeledReplicas = newCAPIMachineSet.Status.FullyLabeledReplicas
+	capiMachineSet.Status.FailureReason = newCAPIMachineSet.Status.FailureReason
+	capiMachineSet.Status.FailureMessage = newCAPIMachineSet.Status.FailureMessage
+
+	// Update the conditions if they exist (ignoring lasttransitiontime), append new ones.
+	for i := range newCAPIMachineSet.Status.Conditions {
+		hasCondition := false
+
+		for j := range capiMachineSet.Status.Conditions {
+			if capiMachineSet.Status.Conditions[j].Type == newCAPIMachineSet.Status.Conditions[i].Type {
+				hasCondition = true
+				capiMachineSet.Status.Conditions[j].Status = newCAPIMachineSet.Status.Conditions[i].Status
+				capiMachineSet.Status.Conditions[j].Reason = newCAPIMachineSet.Status.Conditions[i].Reason
+				capiMachineSet.Status.Conditions[j].Message = newCAPIMachineSet.Status.Conditions[i].Message
+
+				break
+			}
+		}
+
+		if !hasCondition {
+			capiMachineSet.Status.Conditions = append(capiMachineSet.Status.Conditions, newCAPIMachineSet.Status.Conditions[i])
+		}
+	}
+
+	// Update the v1beta2 conditions if they exist (ignoring lasttransitiontime), append new ones.
+	switch {
+	case newCAPIMachineSet.Status.V1Beta2 == nil:
+		capiMachineSet.Status.V1Beta2 = nil
+	case capiMachineSet.Status.V1Beta2 == nil:
+		capiMachineSet.Status.V1Beta2 = newCAPIMachineSet.Status.V1Beta2
+	default:
+		for i := range newCAPIMachineSet.Status.V1Beta2.Conditions {
+			hasCondition := false
+
+			for j := range capiMachineSet.Status.V1Beta2.Conditions {
+				if capiMachineSet.Status.V1Beta2.Conditions[j].Type == newCAPIMachineSet.Status.V1Beta2.Conditions[i].Type {
+					hasCondition = true
+					capiMachineSet.Status.V1Beta2.Conditions[j].Status = newCAPIMachineSet.Status.V1Beta2.Conditions[i].Status
+					capiMachineSet.Status.V1Beta2.Conditions[j].Reason = newCAPIMachineSet.Status.V1Beta2.Conditions[i].Reason
+					capiMachineSet.Status.V1Beta2.Conditions[j].Message = newCAPIMachineSet.Status.V1Beta2.Conditions[i].Message
+
+					break
+				}
+			}
+
+			if !hasCondition {
+				capiMachineSet.Status.V1Beta2.Conditions = append(capiMachineSet.Status.V1Beta2.Conditions, newCAPIMachineSet.Status.V1Beta2.Conditions[i])
+			}
+		}
+	}
+}
+
 // createOrUpdateMAPIMachineSet creates a MAPI machine set from a CAPI one, or updates if it exists and it is out of date.
 //
-//nolint:funlen,gocognit
+//nolint:funlen
 func (r *MachineSetSyncReconciler) createOrUpdateMAPIMachineSet(ctx context.Context, mapiMachineSet *machinev1beta1.MachineSet, newMAPIMachineSet *machinev1beta1.MachineSet) error {
 	logger := log.FromContext(ctx)
 
@@ -942,33 +949,8 @@ func (r *MachineSetSyncReconciler) createOrUpdateMAPIMachineSet(ctx context.Cont
 
 		patchBase := client.MergeFrom(mapiMachineSet.DeepCopy())
 
-		// Apply status changes from the new MAPI machine set.
-		mapiMachineSet.Status.Replicas = newMAPIMachineSet.Status.Replicas
-		mapiMachineSet.Status.ReadyReplicas = newMAPIMachineSet.Status.ReadyReplicas
-		mapiMachineSet.Status.AvailableReplicas = newMAPIMachineSet.Status.AvailableReplicas
-		mapiMachineSet.Status.FullyLabeledReplicas = newMAPIMachineSet.Status.FullyLabeledReplicas
-		mapiMachineSet.Status.ErrorReason = newMAPIMachineSet.Status.ErrorReason
-		mapiMachineSet.Status.ErrorMessage = newMAPIMachineSet.Status.ErrorMessage
-
-		// Update the conditions if they exist (ignoring lasttransitiontime), append new ones.
-		for i := range newMAPIMachineSet.Status.Conditions {
-			hasCondition := false
-
-			for j := range mapiMachineSet.Status.Conditions {
-				if mapiMachineSet.Status.Conditions[j].Type == newMAPIMachineSet.Status.Conditions[i].Type {
-					hasCondition = true
-					mapiMachineSet.Status.Conditions[j].Status = newMAPIMachineSet.Status.Conditions[i].Status
-					mapiMachineSet.Status.Conditions[j].Reason = newMAPIMachineSet.Status.Conditions[i].Reason
-					mapiMachineSet.Status.Conditions[j].Message = newMAPIMachineSet.Status.Conditions[i].Message
-
-					break
-				}
-			}
-
-			if !hasCondition {
-				mapiMachineSet.Status.Conditions = append(mapiMachineSet.Status.Conditions, newMAPIMachineSet.Status.Conditions[i])
-			}
-		}
+		// Set the changed MAPI machine set status fields from the new MAPI machine set.
+		setChangedMAPIMachineSetStatusFields(mapiMachineSet, newMAPIMachineSet)
 
 		if isPatchRequired, err := util.IsPatchRequired(mapiMachineSet, patchBase); err != nil {
 			return fmt.Errorf("failed to check if patch is required: %w", err)
@@ -997,6 +979,39 @@ func (r *MachineSetSyncReconciler) createOrUpdateMAPIMachineSet(ctx context.Cont
 	}
 
 	return nil
+}
+
+// setChangedMAPIMachineSetStatusFields sets the updated fields in the MAPI machine set status.
+// The mapiMachineSet argument is the existing MAPI machine set.
+// The newMAPIMachineSet argument is the new MAPI machine set with the desired status changes.
+func setChangedMAPIMachineSetStatusFields(mapiMachineSet, newMAPIMachineSet *machinev1beta1.MachineSet) {
+	// newMAPIMachineSet holds the computed and desired status changes, so apply them to the existing mapiMachineSet.
+	mapiMachineSet.Status.Replicas = newMAPIMachineSet.Status.Replicas
+	mapiMachineSet.Status.ReadyReplicas = newMAPIMachineSet.Status.ReadyReplicas
+	mapiMachineSet.Status.AvailableReplicas = newMAPIMachineSet.Status.AvailableReplicas
+	mapiMachineSet.Status.FullyLabeledReplicas = newMAPIMachineSet.Status.FullyLabeledReplicas
+	mapiMachineSet.Status.ErrorReason = newMAPIMachineSet.Status.ErrorReason
+	mapiMachineSet.Status.ErrorMessage = newMAPIMachineSet.Status.ErrorMessage
+
+	// Update the conditions if they exist (ignoring lasttransitiontime), append new ones.
+	for i := range newMAPIMachineSet.Status.Conditions {
+		hasCondition := false
+
+		for j := range mapiMachineSet.Status.Conditions {
+			if mapiMachineSet.Status.Conditions[j].Type == newMAPIMachineSet.Status.Conditions[i].Type {
+				hasCondition = true
+				mapiMachineSet.Status.Conditions[j].Status = newMAPIMachineSet.Status.Conditions[i].Status
+				mapiMachineSet.Status.Conditions[j].Reason = newMAPIMachineSet.Status.Conditions[i].Reason
+				mapiMachineSet.Status.Conditions[j].Message = newMAPIMachineSet.Status.Conditions[i].Message
+
+				break
+			}
+		}
+
+		if !hasCondition {
+			mapiMachineSet.Status.Conditions = append(mapiMachineSet.Status.Conditions, newMAPIMachineSet.Status.Conditions[i])
+		}
+	}
 }
 
 // ensureSyncFinalizer ensures the sync finalizer is present across mapi and capi machine sets.
