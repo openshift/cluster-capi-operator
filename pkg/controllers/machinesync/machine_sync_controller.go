@@ -853,6 +853,20 @@ func (r *MachineSyncReconciler) convertMAPIMachineOwnerReferencesToCAPI(ctx cont
 	capiOwnerReferences := []metav1.OwnerReference{}
 
 	if len(mapiMachine.OwnerReferences) == 0 {
+		clusterObject := &clusterv1.Cluster{}
+		if err := r.Get(ctx, client.ObjectKey{Namespace: r.CAPINamespace, Name: r.Infra.Status.InfrastructureName}, clusterObject); err != nil {
+			return nil, fmt.Errorf("failed to get Cluster API cluster: %w", err)
+		}
+
+		capiOwnerReferences = append(capiOwnerReferences, metav1.OwnerReference{
+			Kind:               clusterObject.Kind,
+			APIVersion:         clusterObject.APIVersion,
+			Name:               clusterObject.Name,
+			UID:                clusterObject.UID,
+			Controller:         ptr.To(false),
+			BlockOwnerDeletion: ptr.To(true),
+		})
+
 		return capiOwnerReferences, nil
 	}
 
@@ -911,35 +925,48 @@ func (r *MachineSyncReconciler) convertCAPIMachineOwnerReferencesToMAPI(ctx cont
 	}
 
 	capiOwnerReference := capiMachine.OwnerReferences[0]
-	if capiOwnerReference.Kind != machineSetKind || capiOwnerReference.APIVersion != clusterv1.GroupVersion.String() {
+	switch capiOwnerReference.Kind {
+	case machineSetKind:
+		if capiOwnerReference.APIVersion != clusterv1.GroupVersion.String() {
+			return nil, field.Invalid(field.NewPath("metadata", "ownerReferences"), capiMachine.OwnerReferences, errUnsuportedOwnerKindForConversion.Error())
+		}
+
+		key := types.NamespacedName{
+			Namespace: r.MAPINamespace,
+			Name:      capiOwnerReference.Name,
+		}
+
+		mapiMachineSet := machinev1beta1.MachineSet{}
+		// Get the MAPI machineSet with same name as CAPI machineSet
+		if err := r.Get(ctx, key, &mapiMachineSet); err != nil {
+			if apierrors.IsNotFound(err) {
+				return nil, fmt.Errorf("could not find Machine API machine set: %w", err)
+			} else {
+				return nil, fmt.Errorf("error getting Machine API machine set: %w", err)
+			}
+		}
+
+		mapiOwnerReference := metav1.OwnerReference{
+			Kind:               mapiMachineSet.Kind,
+			APIVersion:         mapiMachineSet.APIVersion,
+			Name:               mapiMachineSet.Name,
+			Controller:         capiOwnerReference.Controller,
+			BlockOwnerDeletion: capiOwnerReference.BlockOwnerDeletion,
+			UID:                mapiMachineSet.UID,
+		}
+
+		mapiOwnerReferences = append(mapiOwnerReferences, mapiOwnerReference)
+
+	case clusterv1.ClusterKind:
+		if capiOwnerReference.APIVersion != clusterv1.GroupVersion.String() {
+			return nil, field.Invalid(field.NewPath("metadata", "ownerReferences"), capiMachine.OwnerReferences, errUnsuportedOwnerKindForConversion.Error())
+		}
+
+		// MAPI doesn't have a cluster, so we don't need to add an owner reference.
+		return mapiOwnerReferences, nil
+	default:
 		return nil, field.Invalid(field.NewPath("metadata", "ownerReferences"), capiMachine.OwnerReferences, errUnsuportedOwnerKindForConversion.Error())
 	}
-
-	key := types.NamespacedName{
-		Namespace: r.MAPINamespace,
-		Name:      capiOwnerReference.Name,
-	}
-
-	mapiMachineSet := machinev1beta1.MachineSet{}
-	// Get the MAPI machineSet with same name as CAPI machineSet
-	if err := r.Get(ctx, key, &mapiMachineSet); err != nil {
-		if apierrors.IsNotFound(err) {
-			return nil, fmt.Errorf("could not find Machine API machine set: %w", err)
-		} else {
-			return nil, fmt.Errorf("error getting Machine API machine set: %w", err)
-		}
-	}
-
-	mapiOwnerReference := metav1.OwnerReference{
-		Kind:               mapiMachineSet.Kind,
-		APIVersion:         mapiMachineSet.APIVersion,
-		Name:               mapiMachineSet.Name,
-		Controller:         capiOwnerReference.Controller,
-		BlockOwnerDeletion: capiOwnerReference.BlockOwnerDeletion,
-		UID:                mapiMachineSet.UID,
-	}
-
-	mapiOwnerReferences = append(mapiOwnerReferences, mapiOwnerReference)
 
 	return mapiOwnerReferences, nil
 }
