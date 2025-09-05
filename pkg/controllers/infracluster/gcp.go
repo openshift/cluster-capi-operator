@@ -37,7 +37,7 @@ import (
 func (r *InfraClusterController) ensureGCPCluster(ctx context.Context, log logr.Logger) (client.Object, error) {
 	target := &gcpv1.GCPCluster{ObjectMeta: metav1.ObjectMeta{
 		Name:      r.Infra.Status.InfrastructureName,
-		Namespace: defaultCAPINamespace,
+		Namespace: r.CAPINamespace,
 	}}
 
 	// Checking whether InfraCluster object exists. If it doesn't, create it.
@@ -68,7 +68,7 @@ func (r *InfraClusterController) ensureGCPCluster(ctx context.Context, log logr.
 		return nil, fmt.Errorf("error obtaining GCP Project ID: %w", err)
 	}
 
-	providerSpec, err := getGCPMAPIProviderSpec(ctx, r.Client)
+	providerSpec, err := r.getGCPMAPIProviderSpec(ctx, r.Client)
 	if err != nil {
 		return nil, fmt.Errorf("error obtaining GCP Provider Spec: %w", err)
 	}
@@ -76,7 +76,7 @@ func (r *InfraClusterController) ensureGCPCluster(ctx context.Context, log logr.
 	target = &gcpv1.GCPCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      r.Infra.Status.InfrastructureName,
-			Namespace: defaultCAPINamespace,
+			Namespace: r.CAPINamespace,
 			// The ManagedBy Annotation is set so CAPI infra providers ignore the InfraCluster object,
 			// as that's managed externally, in this case by this controller.
 			Annotations: map[string]string{
@@ -100,14 +100,14 @@ func (r *InfraClusterController) ensureGCPCluster(ctx context.Context, log logr.
 		return nil, fmt.Errorf("failed to create InfraCluster: %w", err)
 	}
 
-	log.Info(fmt.Sprintf("InfraCluster '%s/%s' successfully created", defaultCAPINamespace, r.Infra.Status.InfrastructureName))
+	log.Info(fmt.Sprintf("InfraCluster '%s/%s' successfully created", r.CAPINamespace, r.Infra.Status.InfrastructureName))
 
 	return target, nil
 }
 
 // getGCPMAPIProviderSpec returns a GCP Machine ProviderSpec from the the cluster.
-func getGCPMAPIProviderSpec(ctx context.Context, cl client.Client) (*mapiv1beta1.GCPMachineProviderSpec, error) {
-	rawProviderSpec, err := getRawMAPIProviderSpec(ctx, cl)
+func (r *InfraClusterController) getGCPMAPIProviderSpec(ctx context.Context, cl client.Client) (*mapiv1beta1.GCPMachineProviderSpec, error) {
+	rawProviderSpec, err := r.getRawMAPIProviderSpec(ctx, cl)
 	if err != nil {
 		return nil, fmt.Errorf("unable to obtain MAPI ProviderSpec: %w", err)
 	}
@@ -124,7 +124,7 @@ func getGCPMAPIProviderSpec(ctx context.Context, cl client.Client) (*mapiv1beta1
 func (r *InfraClusterController) getGCPProjectID(ctx context.Context) (string, error) {
 	if r.Infra.Spec.PlatformSpec.GCP == nil || len(r.Infra.Status.PlatformStatus.GCP.ProjectID) == 0 {
 		// Devise GCP Project ID via MAPI providerSpec.
-		machineSpec, err := getGCPMAPIProviderSpec(ctx, r.Client)
+		machineSpec, err := r.getGCPMAPIProviderSpec(ctx, r.Client)
 		if err != nil || machineSpec == nil {
 			return "", fmt.Errorf("unable to get GCP MAPI ProviderSpec: %w", err)
 		}
