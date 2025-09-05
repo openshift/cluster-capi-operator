@@ -27,8 +27,11 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -43,6 +46,17 @@ var (
 	cfg     *rest.Config
 	cl      client.Client
 )
+
+// InitManager initialises a manager and adds a CRDCompatibilityReconciler to
+// it. It returns the reconciler, and a startmanager function. It is not
+// necessary to call startmanager if, for example, the test will call the
+// reconcile function directly.
+//
+// startmanager blocks until the manager has started and is ready to be used,
+// which must happen before the context passed to InitManager is cancelled. It
+// uses DeferCleanup to ensure that the manager will be stopped at the
+// appropriate time.
+var InitManager func(context.Context) (*CRDCompatibilityReconciler, func())
 
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -70,10 +84,12 @@ var _ = BeforeSuite(func(ctx context.Context) {
 	Expect(cfg).NotTo(BeNil())
 	Expect(cl).NotTo(BeNil())
 
-	startManager(ctx, cfg, cl.Scheme(), testEnv)
+	InitManager = func(nodeCtx context.Context) (*CRDCompatibilityReconciler, func()) {
+		return initManager(nodeCtx, cfg, cl.Scheme(), testEnv)
+	}
 }, NodeTimeout(30*time.Second))
 
-func startManager(ginkgoCtx context.Context, cfg *rest.Config, scheme *runtime.Scheme, testEnv *envtest.Environment) {
+func initManager(nodeCtx context.Context, cfg *rest.Config, scheme *runtime.Scheme, testEnv *envtest.Environment) (*CRDCompatibilityReconciler, func()) {
 	By("Setting up a manager and controller")
 
 	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
@@ -88,11 +104,28 @@ func startManager(ginkgoCtx context.Context, cfg *rest.Config, scheme *runtime.S
 
 	r := &CRDCompatibilityReconciler{client: mgr.GetClient()}
 
-	Expect(r.SetupWithManager(ginkgoCtx, mgr)).To(Succeed(), "Reconciler should be setup with manager")
+	// controller-runtime stores controller names in a global which we can't
+	// clear between test runs. This causes name validation to fail every time
+	// we start a manager after the first time.
+	skipNameValidation := func(builder *builder.Builder) *builder.Builder {
+		return builder.WithOptions(controller.Options{
+			SkipNameValidation: ptr.To(true),
+		})
+	}
 
+	Expect(r.SetupWithManager(nodeCtx, mgr, skipNameValidation)).To(Succeed(), "Reconciler should be setup with manager")
+
+	return r, func() {
+		startManager(nodeCtx, mgr)
+	}
+}
+
+func startManager(nodeCtx context.Context, mgr ctrl.Manager) {
 	By("Starting the manager")
 
-	// Don't start the manager with the ginkgo context from BeforeSuite because it'll be cancelled after initialisation.
+	// We expect to start the manager from a Before node. We start the manager
+	// with its own context because we need it to live longer than the Before
+	// node.
 	mgrCtx, mgrCancel := context.WithCancel(context.Background())
 	mgrDone := make(chan struct{})
 
@@ -111,7 +144,7 @@ func startManager(ginkgoCtx context.Context, cfg *rest.Config, scheme *runtime.S
 	// Wait for the manager to signal that it became leader (i.e. it completed initialisation)
 	select {
 	case <-mgr.Elected():
-	case <-ginkgoCtx.Done():
+	case <-nodeCtx.Done():
 	}
 
 	// Error if the manager didn't startup in time.

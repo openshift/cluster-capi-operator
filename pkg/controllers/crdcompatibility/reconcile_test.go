@@ -36,7 +36,14 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/test"
 )
 
-var _ = Describe("CRDCompatibilityRequirement", func() {
+var _ = Describe("CRDCompatibilityRequirement", Ordered, ContinueOnFailure, func() {
+	// Starting and stopping the manager is quite expensive, so we share one amongst all the tests.
+	// Unfortunately ginkgo forces us to use Ordered when doing this.
+	BeforeAll(func(ctx context.Context) {
+		_, startManager := InitManager(ctx)
+		startManager()
+	})
+
 	Context("When creating a CRDCompatibilityRequirement", func() {
 		var (
 			testCRD, testCRDWorking *apiextensionsv1.CustomResourceDefinition
