@@ -294,13 +294,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 					if testMachine != nil {
 						mapiframework.DeleteMachines(ctx, cl, testMachine)
 					}
-					// Try to delete the CAPI machine as well
-					capiMachine := &clusterv1.Machine{}
-					err := cl.Get(ctx, client.ObjectKey{Name: testMachineName, Namespace: capiframework.CAPINamespace}, capiMachine)
-					if err == nil {
-						cl.Delete(ctx, capiMachine)
-					}
-					// Don't wait for deletion to complete - just attempt it
+
 				})
 			})
 		})
