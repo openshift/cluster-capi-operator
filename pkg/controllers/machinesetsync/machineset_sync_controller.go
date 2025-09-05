@@ -854,6 +854,8 @@ func (r *MachineSetSyncReconciler) createOrUpdateCAPIMachineSet(ctx context.Cont
 // setChangedCAPIMachineSetStatusFields sets the updated fields in the CAPI machine set status.
 // The capiMachineSet argument is the existing CAPI machine set.
 // The newCAPIMachineSet argument is the new CAPI machine set with the desired status changes.
+//
+//nolint:gocognit,funlen
 func setChangedCAPIMachineSetStatusFields(capiMachineSet, newCAPIMachineSet *clusterv1.MachineSet) {
 	// newCAPIMachineSet holds the computed and desired status changes, so apply them to the existing capiMachineSet.
 	capiMachineSet.Status.Replicas = newCAPIMachineSet.Status.Replicas
@@ -869,10 +871,28 @@ func setChangedCAPIMachineSetStatusFields(capiMachineSet, newCAPIMachineSet *clu
 
 		for j := range capiMachineSet.Status.Conditions {
 			if capiMachineSet.Status.Conditions[j].Type == newCAPIMachineSet.Status.Conditions[i].Type {
+				hasChanged := false
 				hasCondition = true
-				capiMachineSet.Status.Conditions[j].Status = newCAPIMachineSet.Status.Conditions[i].Status
-				capiMachineSet.Status.Conditions[j].Reason = newCAPIMachineSet.Status.Conditions[i].Reason
-				capiMachineSet.Status.Conditions[j].Message = newCAPIMachineSet.Status.Conditions[i].Message
+
+				if capiMachineSet.Status.Conditions[j].Status != newCAPIMachineSet.Status.Conditions[i].Status {
+					capiMachineSet.Status.Conditions[j].Status = newCAPIMachineSet.Status.Conditions[i].Status
+					hasChanged = true
+				}
+
+				if capiMachineSet.Status.Conditions[j].Reason != newCAPIMachineSet.Status.Conditions[i].Reason {
+					capiMachineSet.Status.Conditions[j].Reason = newCAPIMachineSet.Status.Conditions[i].Reason
+					hasChanged = true
+				}
+
+				if capiMachineSet.Status.Conditions[j].Message != newCAPIMachineSet.Status.Conditions[i].Message {
+					capiMachineSet.Status.Conditions[j].Message = newCAPIMachineSet.Status.Conditions[i].Message
+					hasChanged = true
+				}
+
+				if hasChanged {
+					// Set the last transition time to the new condition's last transition time only if the condition has changed.
+					capiMachineSet.Status.Conditions[j].LastTransitionTime = newCAPIMachineSet.Status.Conditions[i].LastTransitionTime
+				}
 
 				break
 			}
@@ -896,9 +916,27 @@ func setChangedCAPIMachineSetStatusFields(capiMachineSet, newCAPIMachineSet *clu
 			for j := range capiMachineSet.Status.V1Beta2.Conditions {
 				if capiMachineSet.Status.V1Beta2.Conditions[j].Type == newCAPIMachineSet.Status.V1Beta2.Conditions[i].Type {
 					hasCondition = true
-					capiMachineSet.Status.V1Beta2.Conditions[j].Status = newCAPIMachineSet.Status.V1Beta2.Conditions[i].Status
-					capiMachineSet.Status.V1Beta2.Conditions[j].Reason = newCAPIMachineSet.Status.V1Beta2.Conditions[i].Reason
-					capiMachineSet.Status.V1Beta2.Conditions[j].Message = newCAPIMachineSet.Status.V1Beta2.Conditions[i].Message
+					hasChanged := false
+
+					if capiMachineSet.Status.V1Beta2.Conditions[j].Status != newCAPIMachineSet.Status.V1Beta2.Conditions[i].Status {
+						capiMachineSet.Status.V1Beta2.Conditions[j].Status = newCAPIMachineSet.Status.V1Beta2.Conditions[i].Status
+						hasChanged = true
+					}
+
+					if capiMachineSet.Status.V1Beta2.Conditions[j].Reason != newCAPIMachineSet.Status.V1Beta2.Conditions[i].Reason {
+						capiMachineSet.Status.V1Beta2.Conditions[j].Reason = newCAPIMachineSet.Status.V1Beta2.Conditions[i].Reason
+						hasChanged = true
+					}
+
+					if capiMachineSet.Status.V1Beta2.Conditions[j].Message != newCAPIMachineSet.Status.V1Beta2.Conditions[i].Message {
+						capiMachineSet.Status.V1Beta2.Conditions[j].Message = newCAPIMachineSet.Status.V1Beta2.Conditions[i].Message
+						hasChanged = true
+					}
+
+					if hasChanged {
+						// Set the last transition time to the new condition's last transition time only if the condition has changed.
+						capiMachineSet.Status.V1Beta2.Conditions[j].LastTransitionTime = newCAPIMachineSet.Status.V1Beta2.Conditions[i].LastTransitionTime
+					}
 
 					break
 				}
@@ -1000,9 +1038,27 @@ func setChangedMAPIMachineSetStatusFields(mapiMachineSet, newMAPIMachineSet *mac
 		for j := range mapiMachineSet.Status.Conditions {
 			if mapiMachineSet.Status.Conditions[j].Type == newMAPIMachineSet.Status.Conditions[i].Type {
 				hasCondition = true
-				mapiMachineSet.Status.Conditions[j].Status = newMAPIMachineSet.Status.Conditions[i].Status
-				mapiMachineSet.Status.Conditions[j].Reason = newMAPIMachineSet.Status.Conditions[i].Reason
-				mapiMachineSet.Status.Conditions[j].Message = newMAPIMachineSet.Status.Conditions[i].Message
+				hasChanged := false
+
+				if mapiMachineSet.Status.Conditions[j].Status != newMAPIMachineSet.Status.Conditions[i].Status {
+					mapiMachineSet.Status.Conditions[j].Status = newMAPIMachineSet.Status.Conditions[i].Status
+					hasChanged = true
+				}
+
+				if mapiMachineSet.Status.Conditions[j].Reason != newMAPIMachineSet.Status.Conditions[i].Reason {
+					mapiMachineSet.Status.Conditions[j].Reason = newMAPIMachineSet.Status.Conditions[i].Reason
+					hasChanged = true
+				}
+
+				if mapiMachineSet.Status.Conditions[j].Message != newMAPIMachineSet.Status.Conditions[i].Message {
+					mapiMachineSet.Status.Conditions[j].Message = newMAPIMachineSet.Status.Conditions[i].Message
+					hasChanged = true
+				}
+
+				if hasChanged {
+					// Set the last transition time to the new condition's last transition time only if the condition has changed.
+					mapiMachineSet.Status.Conditions[j].LastTransitionTime = newMAPIMachineSet.Status.Conditions[i].LastTransitionTime
+				}
 
 				break
 			}
