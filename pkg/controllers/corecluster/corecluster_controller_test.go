@@ -28,6 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/config"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
+	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/cluster-api-actuator-pkg/testutils"
@@ -55,6 +56,9 @@ var _ = Describe("Reconcile Core cluster", func() {
 		By("Setting up a manager and controller")
 		mgr, err := ctrl.NewManager(cfg, ctrl.Options{
 			Scheme: testScheme,
+			Metrics: server.Options{
+				BindAddress: "0",
+			},
 			Controller: config.Controller{
 				SkipNameValidation: ptr.To(true),
 			},
