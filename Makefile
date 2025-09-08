@@ -12,102 +12,81 @@ ifeq ($(HOME), /)
 HOME = /tmp/kubebuilder-testing
 endif
 
-all: build
+.PHONY: help all verify test build operator migration manifests-gen unit e2e run fmt vet lint vendor image push aws-cluster azure-cluster gcp-cluster powervs-cluster vsphere-cluster
+.DEFAULT_GOAL := build
+
+help: ## Display this help message
+	@echo "Available targets:"
+	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+
+all: build ## Build all binaries
 
 verify-%:
 	make $*
 	./hack/verify-diff.sh
 
-verify: fmt lint
+verify: fmt lint ## Run formatting and linting checks
 
-# Run tests
-test: verify unit
+test: verify unit ## Run verification and unit tests
 
-# Build binaries
-build: operator migration manifests-gen
+build: operator migration manifests-gen ## Build all binaries
 
-.PHONY: manifests-gen
-manifests-gen:
-	# building manifests-gen
+manifests-gen: ## Build manifests-gen binary
 	cd manifests-gen && go build -o ../bin/manifests-gen && cd ..
 
-operator:
-	# building cluster-capi-operator
+operator: ## Build cluster-capi-operator binary
 	go build -o bin/cluster-capi-operator cmd/cluster-capi-operator/main.go
 
-migration:
-	# building migration
+migration: ## Build machine-api-migration binary
 	go build -o bin/machine-api-migration cmd/machine-api-migration/main.go
 
 .PHONY: localtestenv
 localtestenv: .localtestenv
 
 KUBEBUILDER_ASSETS ?= $(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path --bin-dir $(PROJECT_DIR)/bin --index https://raw.githubusercontent.com/openshift/api/master/envtest-releases.yaml)
-.localtestenv: Makefile
+.localtestenv: Makefile ## Set up local test environment
 	echo "KUBEBUILDER_ASSETS=$(KUBEBUILDER_ASSETS)" > $@
 
 TEST_DIRS ?= ./pkg/... ./manifests-gen/...
-unit: .localtestenv
+unit: .localtestenv ## Run unit tests
 	./hack/test.sh "$(TEST_DIRS)" 10m
 
 .PHONY: e2e
-e2e:
+e2e: ## Run e2e tests against active kubeconfig
 	./hack/test.sh "./e2e/..." 90m
 
-# Run against the configured Kubernetes cluster in ~/.kube/config
-run:
+run: ## Run the operator against the configured Kubernetes cluster
 	oc -n openshift-cluster-api patch lease cluster-capi-operator-leader -p '{"spec":{"acquireTime": null, "holderIdentity": null, "renewTime": null}}' --type=merge
 	go run cmd/cluster-capi-operator/main.go --images-json=./dev-images.json --leader-elect=true --leader-elect-lease-duration=120s --namespace="openshift-cluster-api" --leader-elect-resource-namespace="openshift-cluster-api"
 
-# Run go fmt against code
-.PHONY: fmt
-fmt:
+fmt: ## Format Go code
 	$(call ensure-home, ${GOLANGCI_LINT} run ./... --fix)
 
-# Run go vet against code
-.PHONY: vet
-vet: lint
-
-.PHONY: lint
-lint:
+lint: ## Run linter checks
 	$(call ensure-home, ${GOLANGCI_LINT} run ./...)
 
-.PHONY: lint-fix
-lint-fix:
-	$(call ensure-home, ${GOLANGCI_LINT} run ./... --fix)
-
-# Run go mod
-.PHONY: vendor
-vendor:
+vendor: ## Vendor dependencies
 	./hack/vendor.sh
 
-# Alias for vendor (used by verify-deps)
-.PHONY: deps
-deps: vendor
-
-# Build the docker image
-.PHONY: image
-image:
+image: ## Build the Docker image
 	docker build -t ${IMG} .
 
-# Push the docker image
-.PHONY: push
-push:
+push: ## Push the Docker image
 	docker push ${IMG}
 
-aws-cluster:
+aws-cluster: ## Create an AWS cluster for testing
 	./hack/clusters/create-aws.sh
 
-azure-cluster:
+azure-cluster: ## Create an Azure cluster for testing
 	./hack/clusters/create-azure.sh
 
-gcp-cluster:
+gcp-cluster: ## Create a GCP cluster for testing
 	./hack/clusters/create-gcp.sh
 
-powervs-cluster:
+powervs-cluster: ## Create a PowerVS cluster for testing
 	./hack/clusters/create-powervs.sh
 
-vsphere-cluster:
+vsphere-cluster: ## Create a vSphere cluster for testing
 	./hack/clusters/create-vsphere.sh
 
 define ensure-home
