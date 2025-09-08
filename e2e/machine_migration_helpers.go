@@ -8,236 +8,19 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/types"
-	configv1 "github.com/openshift/api/config/v1"
+
 	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
+	mapiframework "github.com/openshift/cluster-api-actuator-pkg/pkg/framework"
+	"github.com/openshift/cluster-capi-operator/e2e/framework"
 	capiframework "github.com/openshift/cluster-capi-operator/e2e/framework"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
-
-	mapiframework "github.com/openshift/cluster-api-actuator-pkg/pkg/framework"
-
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
-
-var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Machine Migration Tests", Ordered, func() {
-	BeforeAll(func() {
-		if platform != configv1.AWSPlatformType {
-			Skip(fmt.Sprintf("Skipping tests on %s, this only support on aws", platform))
-		}
-
-		if !capiframework.IsMachineAPIMigrationEnabled(ctx, cl) {
-			Skip("Skipping, this feature is only supported on MachineAPIMigration enabled clusters")
-		}
-	})
-
-	var _ = Describe("Create MAPI Machine", Ordered, func() {
-		var mapiMachineAuthCAPIName = "machine-authoritativeapi-capi"
-		var newCapiMachine *clusterv1.Machine
-		var newMapiMachine *machinev1beta1.Machine
-		var err error
-
-		Context("with spec.authoritativeAPI: ClusterAPI and already existing CAPI Machine with same name", func() {
-			BeforeAll(func() {
-				newCapiMachine = createCAPIMachine(ctx, cl, mapiMachineAuthCAPIName)
-				newMapiMachine = createMAPIMachineWithAuthority(ctx, cl, mapiMachineAuthCAPIName, machinev1beta1.MachineAuthorityClusterAPI)
-
-				DeferCleanup(func() {
-					By("Cleaning up machine resources")
-					cleanupMachineResources(
-						ctx,
-						cl,
-						[]*clusterv1.Machine{newCapiMachine},
-						[]*machinev1beta1.Machine{newMapiMachine},
-					)
-				})
-			})
-
-			It("should find MAPI Machine .status.authoritativeAPI to equal ClusterAPI", func() {
-				verifyMachineAuthoritative(newMapiMachine, machinev1beta1.MachineAuthorityClusterAPI)
-			})
-			//there is a bug for this https://issues.redhat.com/browse/OCPBUGS-54703
-			PIt("should verify MAPI Machine Synchronized condition is True", func() {
-				verifyMachineSynchronizedCondition(newMapiMachine, machinev1beta1.MachineAuthorityClusterAPI)
-			})
-			It("should verify MAPI Machine Paused condition is True", func() {
-				verifyMAPIMachinePausedCondition(newMapiMachine, machinev1beta1.MachineAuthorityClusterAPI)
-			})
-			It("should verify CAPI Machine Paused condition is False", func() {
-				verifyCAPIMachinePausedCondition(newCapiMachine, machinev1beta1.MachineAuthorityClusterAPI)
-			})
-		})
-
-		Context("with spec.authoritativeAPI: ClusterAPI and no existing CAPI Machine with same name", func() {
-			BeforeAll(func() {
-				newMapiMachine = createMAPIMachineWithAuthority(ctx, cl, mapiMachineAuthCAPIName, machinev1beta1.MachineAuthorityClusterAPI)
-
-				DeferCleanup(func() {
-					By("Cleaning up machine resources")
-					cleanupMachineResources(
-						ctx,
-						cl,
-						[]*clusterv1.Machine{},
-						[]*machinev1beta1.Machine{newMapiMachine},
-					)
-				})
-			})
-
-			It("should verify CAPI Machine gets created and becomes Running", func() {
-				verifyMachineRunning(cl, newMapiMachine.Name, machinev1beta1.MachineAuthorityClusterAPI)
-			})
-
-			It("should find MAPI Machine .status.authoritativeAPI to equal ClusterAPI", func() {
-				verifyMachineAuthoritative(newMapiMachine, machinev1beta1.MachineAuthorityClusterAPI)
-			})
-			//there is a bug for this https://issues.redhat.com/browse/OCPBUGS-54703
-			PIt("should verify MAPI Machine Synchronized condition is True", func() {
-				verifyMachineSynchronizedCondition(newMapiMachine, machinev1beta1.MachineAuthorityClusterAPI)
-			})
-			It("should verify MAPI Machine Paused condition is True", func() {
-				verifyMAPIMachinePausedCondition(newMapiMachine, machinev1beta1.MachineAuthorityClusterAPI)
-			})
-
-			It("should verify that the non-authoritative MAPI Machine has an authoritative CAPI Machine mirror", func() {
-				Eventually(func() error {
-					newCapiMachine, err = capiframework.GetMachine(cl, mapiMachineAuthCAPIName, capiframework.CAPINamespace)
-					return err
-				}, capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(), "CAPI Machine should exist")
-			})
-
-			It("should verify CAPI Machine Paused condition is False", func() {
-				verifyCAPIMachinePausedCondition(newCapiMachine, machinev1beta1.MachineAuthorityClusterAPI)
-			})
-		})
-	})
-
-	var _ = Describe("Deleting MAPI/CAPI Machines", Ordered, func() {
-		var mapiMachineAuthCAPINameDeletion = "machine-authoritativeapi-capi-deletion"
-		var mapiMachineAuthMAPINameDeleteMAPIMachine = "machine-authoritativeapi-mapi-delete-mapi"
-		var mapiMachineAuthMAPINameDeleteCAPIMachine = "machine-authoritativeapi-mapi-delete-capi"
-		var newCapiMachine *clusterv1.Machine
-		var newMapiMachine *machinev1beta1.Machine
-		var err error
-
-		Context("with spec.authoritativeAPI: ClusterAPI", func() {
-			Context("when deleting the non-authoritative MAPI Machine", func() {
-				BeforeAll(func() {
-					newMapiMachine = createMAPIMachineWithAuthority(ctx, cl, mapiMachineAuthCAPINameDeletion, machinev1beta1.MachineAuthorityClusterAPI)
-					verifyMachineRunning(cl, newMapiMachine.Name, machinev1beta1.MachineAuthorityClusterAPI)
-
-					DeferCleanup(func() {
-						By("Cleaning up machine resources")
-						cleanupMachineResources(
-							ctx,
-							cl,
-							[]*clusterv1.Machine{newCapiMachine},
-							[]*machinev1beta1.Machine{newMapiMachine},
-						)
-					})
-				})
-				It("should delete MAPI Machine", func() {
-					mapiframework.DeleteMachines(ctx, cl, newMapiMachine)
-					mapiframework.WaitForMachinesDeleted(cl, newMapiMachine)
-				})
-
-				It("should verify the CAPI machine is deleted", func() {
-					verifyCAPIMachineRemoved(cl, mapiMachineAuthCAPINameDeletion)
-				})
-				It("should verify the AWS machine is deleted", func() {
-					verifyAWSMachineRemoved(cl, mapiMachineAuthCAPINameDeletion)
-				})
-			})
-			Context("when deleting the authoritative CAPI Machine", func() {
-				BeforeAll(func() {
-					newMapiMachine = createMAPIMachineWithAuthority(ctx, cl, mapiMachineAuthCAPINameDeletion, machinev1beta1.MachineAuthorityClusterAPI)
-					verifyMachineRunning(cl, newMapiMachine.Name, machinev1beta1.MachineAuthorityClusterAPI)
-					newCapiMachine, err = capiframework.GetMachine(cl, newMapiMachine.Name, capiframework.CAPINamespace)
-					Expect(err).NotTo(HaveOccurred(), "Failed to get capi machine")
-
-					DeferCleanup(func() {
-						By("Cleaning up machine resources")
-						cleanupMachineResources(
-							ctx,
-							cl,
-							[]*clusterv1.Machine{newCapiMachine},
-							[]*machinev1beta1.Machine{newMapiMachine},
-						)
-					})
-				})
-				It("should delete CAPI Machine", func() {
-					capiframework.DeleteMachines(cl, capiframework.CAPINamespace, newCapiMachine)
-				})
-
-				It("should verify the MAPI machine is deleted", func() {
-					verifyMAPIMachineRemoved(cl, mapiMachineAuthCAPINameDeletion)
-				})
-				It("should verify the AWS machine is deleted", func() {
-					verifyAWSMachineRemoved(cl, mapiMachineAuthCAPINameDeletion)
-				})
-			})
-		})
-		Context("with spec.authoritativeAPI: MachineAPI", func() {
-			Context("when deleting the authoritative MAPI Machine", func() {
-				BeforeAll(func() {
-					newMapiMachine = createMAPIMachineWithAuthority(ctx, cl, mapiMachineAuthMAPINameDeleteMAPIMachine, machinev1beta1.MachineAuthorityMachineAPI)
-					verifyMachineRunning(cl, newMapiMachine.Name, machinev1beta1.MachineAuthorityMachineAPI)
-
-					DeferCleanup(func() {
-						By("Cleaning up machine resources")
-						cleanupMachineResources(
-							ctx,
-							cl,
-							[]*clusterv1.Machine{newCapiMachine},
-							[]*machinev1beta1.Machine{newMapiMachine},
-						)
-					})
-				})
-				It("should delete MAPI Machine", func() {
-					mapiframework.DeleteMachines(ctx, cl, newMapiMachine)
-					mapiframework.WaitForMachinesDeleted(cl, newMapiMachine)
-				})
-
-				It("should verify the CAPI machine is deleted", func() {
-					verifyCAPIMachineRemoved(cl, mapiMachineAuthMAPINameDeleteMAPIMachine)
-				})
-				It("should verify the AWS machine is deleted", func() {
-					verifyAWSMachineRemoved(cl, mapiMachineAuthMAPINameDeleteMAPIMachine)
-				})
-			})
-			Context("when deleting the non-authoritative CAPI Machine", func() {
-				BeforeAll(func() {
-					newMapiMachine = createMAPIMachineWithAuthority(ctx, cl, mapiMachineAuthMAPINameDeleteCAPIMachine, machinev1beta1.MachineAuthorityMachineAPI)
-					verifyMachineRunning(cl, newMapiMachine.Name, machinev1beta1.MachineAuthorityMachineAPI)
-					newCapiMachine, err = capiframework.GetMachine(cl, newMapiMachine.Name, capiframework.CAPINamespace)
-					Expect(err).NotTo(HaveOccurred(), "Failed to get capi machine")
-
-					DeferCleanup(func() {
-						By("Cleaning up machine resources")
-						cleanupMachineResources(
-							ctx,
-							cl,
-							[]*clusterv1.Machine{newCapiMachine},
-							[]*machinev1beta1.Machine{newMapiMachine},
-						)
-					})
-				})
-				It("should delete CAPI Machine", func() {
-					capiframework.DeleteMachines(cl, capiframework.CAPINamespace, newCapiMachine)
-				})
-
-				It("should verify the MAPI machine is deleted", func() {
-					verifyMAPIMachineRemoved(cl, mapiMachineAuthMAPINameDeleteCAPIMachine)
-				})
-				It("should verify the AWS machine is deleted", func() {
-					verifyAWSMachineRemoved(cl, mapiMachineAuthMAPINameDeleteCAPIMachine)
-				})
-			})
-		})
-	})
-})
 
 func createCAPIMachine(ctx context.Context, cl client.Client, machineName string) *clusterv1.Machine {
 	capiMachineList := capiframework.GetMachines(cl)
@@ -349,10 +132,7 @@ func verifyMachineRunning(cl client.Client, machineName string, authority machin
 			if err != nil {
 				return ""
 			}
-			if mapiMachine.Status.Phase != nil {
-				return string(*mapiMachine.Status.Phase)
-			}
-			return ""
+			return string(*mapiMachine.Status.Phase)
 		default:
 			Fail(fmt.Sprintf("unknown authoritativeAPI type: %v", authority))
 			return ""
@@ -455,6 +235,87 @@ func verifyCAPIMachinePausedCondition(capiMachine *clusterv1.Machine, authority 
 		HaveField("Status.V1Beta2.Conditions", ContainElement(conditionMatcher)),
 		fmt.Sprintf("Expected CAPI Machine with correct paused condition for %s", authority),
 	)
+}
+
+// verifyMapiAutoritative creates and verifies a MAPI machine with AuthoritativeAPI set to MachineAPI
+func verifyMapiAutoritative(cl client.Client) *machinev1beta1.Machine {
+	ctx := context.Background()
+	machineList := &machinev1beta1.MachineList{}
+	By(fmt.Sprintf("Listing worker machines in namespace: %s", capiframework.MAPINamespace))
+	workerLabelSelector := client.MatchingLabels{RoleLabel: "worker"}
+	Eventually(cl.List(ctx, machineList, client.InNamespace(capiframework.MAPINamespace), workerLabelSelector)).Should(Succeed(), "Failed to list worker machines")
+	Expect(machineList.Items).NotTo(BeEmpty(), "No worker machines found in the namespace to use as a template")
+
+	var templateMachine *machinev1beta1.Machine
+	foundMapiMachine := false
+	for i, m := range machineList.Items {
+		if m.Spec.AuthoritativeAPI == "MachineAPI" {
+			templateMachine = &machineList.Items[i]
+			foundMapiMachine = true
+			break
+		}
+	}
+	if !foundMapiMachine {
+		Skip("No machine found with AuthoritativeAPI set to MachineAPI")
+	}
+	// Define the new machine based on the template.
+	newMachine := &machinev1beta1.Machine{
+		ObjectMeta: metav1.ObjectMeta{
+			// Using a predictable name based on the testcase in polarion.
+			Name:      fmt.Sprintf("%s-test-%s", templateMachine.Name, "ocp-82196"),
+			Namespace: templateMachine.Namespace,
+			Labels:    templateMachine.Labels,
+		},
+		Spec: *templateMachine.Spec.DeepCopy(),
+	}
+	// Clear status and other instance-specific fields that should not be copied.
+	newMachine.Spec.ProviderID = nil
+	newMachine.ObjectMeta.Labels = nil
+	By(fmt.Sprintf("Creating a new machine in namespace: %s", newMachine.Namespace))
+	// Create the new machine object in the cluster.
+	Eventually(cl.Create(ctx, newMachine)).Should(Succeed(), "Failed to create new machine")
+
+	By("Waiting for the new machine to enter 'Running' phase")
+	Eventually(komega.Object(newMachine), DefaultTimeout, DefaultInterval).
+		Should(HaveField("Status.Phase", HaveValue(Equal("Running"))),
+			fmt.Sprintf("Machine %s did not enter 'Running' phase within the timeout", newMachine.Name))
+
+	By("Verifying the new machine has a node reference")
+	Eventually(komega.Object(newMachine)).Should(HaveField("Status.NodeRef", Not(BeNil())))
+
+	return newMachine
+}
+
+// verifyMapiMachineSynchronizedPaused verifies that the MAPI Machine Synchronized condition is True and the MAPI Machine Paused condition is False and its status.authoritativeAPI equals MachineAPI.
+func verifyMapiMachineSynchronizedPaused(machine *machinev1beta1.Machine) {
+	Expect(machine.Status.Conditions).To(ContainElement(
+		SatisfyAll(
+			HaveField("Type", SynchronizedCondition),
+			HaveField("Status", corev1.ConditionTrue),
+			HaveField("Message", ContainSubstring("Successfully synchronized MAPI Machine to CAPI")),
+		),
+	))
+
+	Expect(machine.Status.Conditions).To(ContainElement(
+		SatisfyAll(
+			HaveField("Type", MAPIPausedCondition),
+			HaveField("Status", corev1.ConditionFalse),
+			HaveField("Message", ContainSubstring("The AuthoritativeAPI status is set to 'MachineAPI'")),
+		),
+	))
+}
+
+// verifyCapiMachinePaused verifies that the mirror CAPI Infra Machine has Paused condition True and MAPI Machine has a CAPI Infra Machine mirror
+func verifyCapiMachinePaused(cl client.Client, machineName string) {
+	// Use framework utility to get the CAPI machine
+	targetMachine, err := framework.GetMachine(cl, machineName, framework.CAPINamespace)
+	Expect(err).NotTo(HaveOccurred(), "Failed to get CAPI machine")
+
+	Expect(targetMachine.Status.V1Beta2.Conditions).To(ContainElement(SatisfyAll(
+		HaveField("Type", Equal(CAPIPausedCondition)),
+		HaveField("Status", Equal(metav1.ConditionTrue)),
+		HaveField("Message", ContainSubstring("Machine has the cluster.x-k8s.io/paused annotation")),
+	)))
 }
 
 func verifyCAPIMachineRemoved(cl client.Client, machineName string) {
