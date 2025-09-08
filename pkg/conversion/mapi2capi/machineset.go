@@ -111,8 +111,6 @@ func convertMAPIErrorReasonToCAPIFailureReason(mapiErrorReason mapiv1.MachineSet
 }
 
 // convertMAPIMachineSetConditionsToCAPIMachineSetConditions converts MAPI conditions to CAPI conditions.
-//
-//nolint:funlen
 func convertMAPIMachineSetConditionsToCAPIMachineSetConditions(mapiMachineSet *mapiv1.MachineSet) clusterv1.Conditions {
 	capiConditions := []clusterv1.Condition{}
 
@@ -125,12 +123,7 @@ func convertMAPIMachineSetConditionsToCAPIMachineSetConditions(mapiMachineSet *m
 		Type: clusterv1.ResizedCondition,
 		// Compute the status for this CAPI condition based on the number of existing .status.replicas vs spec.replicas of the MAPI MachineSet.
 		Status: func() corev1.ConditionStatus {
-			mapiMachineSetSpecReplicas := mapiMachineSet.Spec.Replicas
-			if mapiMachineSetSpecReplicas == nil {
-				mapiMachineSetSpecReplicas = ptr.To(int32(1))
-			}
-
-			if mapiMachineSet.Status.Replicas == *mapiMachineSetSpecReplicas {
+			if mapiMachineSet.Status.Replicas == ptr.Deref(mapiMachineSet.Spec.Replicas, 1) {
 				return corev1.ConditionTrue
 			}
 
@@ -146,12 +139,7 @@ func convertMAPIMachineSetConditionsToCAPIMachineSetConditions(mapiMachineSet *m
 		Type: clusterv1.MachinesCreatedCondition,
 		// Compute the status for this CAPI condition based on the number of existing .status.replicas vs spec.replicas of the MAPI MachineSet.
 		Status: func() corev1.ConditionStatus {
-			mapiMachineSetSpecReplicas := mapiMachineSet.Spec.Replicas
-			if mapiMachineSetSpecReplicas == nil {
-				mapiMachineSetSpecReplicas = ptr.To(int32(1))
-			}
-
-			if mapiMachineSet.Status.Replicas == *mapiMachineSetSpecReplicas {
+			if mapiMachineSet.Status.Replicas == ptr.Deref(mapiMachineSet.Spec.Replicas, 1) {
 				return corev1.ConditionTrue
 			}
 
@@ -165,11 +153,7 @@ func convertMAPIMachineSetConditionsToCAPIMachineSetConditions(mapiMachineSet *m
 		Type: clusterv1.MachinesReadyCondition,
 		// Compute the status for this CAPI condition based on the number of existing .status.readyReplicas vs spec.replicas of the MAPI MachineSet.
 		Status: func() corev1.ConditionStatus {
-			mapiMachineSetSpecReplicas := mapiMachineSet.Spec.Replicas
-			if mapiMachineSetSpecReplicas == nil {
-				mapiMachineSetSpecReplicas = ptr.To(int32(1))
-			}
-			if mapiMachineSet.Status.ReadyReplicas == *mapiMachineSetSpecReplicas {
+			if mapiMachineSet.Status.ReadyReplicas == ptr.Deref(mapiMachineSet.Spec.Replicas, 1) {
 				return corev1.ConditionTrue
 			}
 

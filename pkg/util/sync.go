@@ -124,6 +124,8 @@ func compareCAPIMachineSetConditions(a, b []clusterv1.Condition) []string {
 					condition.Message != conditionB.Message {
 					diff = append(diff, deep.Equal(condition, conditionB)...)
 				}
+
+				break // Break out of the inner loop once we have found a match.
 			}
 		}
 	}
@@ -144,6 +146,8 @@ func compareMAPIMachineSetConditions(a, b []machinev1beta1.Condition) []string {
 					condition.Message != conditionB.Message {
 					diff = append(diff, deep.Equal(condition, conditionB)...)
 				}
+
+				break // Break out of the inner loop once we have found a match.
 			}
 		}
 	}
