@@ -31,21 +31,25 @@ test: verify unit ## Run verification and unit tests
 
 build: operator migration manifests-gen ## Build all binaries
 
-manifests-gen: ## Build manifests-gen binary
+# Ensure bin directory exists for build outputs
+bin/:
+	mkdir -p bin
+
+manifests-gen: | bin/ ## Build manifests-gen binary
 	cd manifests-gen && go build -o ../bin/manifests-gen && cd ..
 
-operator: ## Build cluster-capi-operator binary
+operator: | bin/ ## Build cluster-capi-operator binary
 	go build -o bin/cluster-capi-operator cmd/cluster-capi-operator/main.go
 
-migration: ## Build machine-api-migration binary
+migration: | bin/ ## Build machine-api-migration binary
 	go build -o bin/machine-api-migration cmd/machine-api-migration/main.go
 
 .PHONY: localtestenv
 localtestenv: .localtestenv
 
-KUBEBUILDER_ASSETS ?= $(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path --bin-dir $(PROJECT_DIR)/bin --index https://raw.githubusercontent.com/openshift/api/master/envtest-releases.yaml)
 .localtestenv: Makefile ## Set up local test environment
-	echo "KUBEBUILDER_ASSETS=$(KUBEBUILDER_ASSETS)" > $@
+	KUBEBUILDER_ASSETS="$$($(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path --bin-dir $(PROJECT_DIR)/bin --index https://raw.githubusercontent.com/openshift/api/master/envtest-releases.yaml)"; \
+	echo "KUBEBUILDER_ASSETS=$${KUBEBUILDER_ASSETS}" > $@
 
 TEST_DIRS ?= ./pkg/... ./manifests-gen/...
 unit: .localtestenv ## Run unit tests
