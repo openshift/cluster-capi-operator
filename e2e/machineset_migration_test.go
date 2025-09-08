@@ -27,6 +27,8 @@ const (
 	CAPIPausedCondition                                = capiv1beta1.PausedV1Beta2Condition
 )
 
+/*just to trigger the build for baremetal*/
+
 var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] MachineSet Migration Tests", Ordered, func() {
 	BeforeAll(func() {
 		if platform != configv1.AWSPlatformType {
