@@ -33,11 +33,11 @@ manifests-gen:
 
 operator:
 	# building cluster-capi-operator
-	go build -o bin/cluster-capi-operator cmd/cluster-capi-operator/main.go
+	GOWORK=off go build -o bin/cluster-capi-operator cmd/cluster-capi-operator/main.go
 
 migration:
 	# building migration
-	go build -o bin/machine-api-migration cmd/machine-api-migration/main.go
+	GOWORK=off go build -o bin/machine-api-migration cmd/machine-api-migration/main.go
 
 .PHONY: localtestenv
 localtestenv: .localtestenv
@@ -57,7 +57,7 @@ e2e:
 # Run against the configured Kubernetes cluster in ~/.kube/config
 run:
 	oc -n openshift-cluster-api patch lease cluster-capi-operator-leader -p '{"spec":{"acquireTime": null, "holderIdentity": null, "renewTime": null}}' --type=merge
-	go run cmd/cluster-capi-operator/main.go --images-json=./dev-images.json --leader-elect=true --leader-elect-lease-duration=120s --namespace="openshift-cluster-api" --leader-elect-resource-namespace="openshift-cluster-api"
+	GOWORK=off go run cmd/cluster-capi-operator/main.go --images-json=./dev-images.json --leader-elect=true --leader-elect-lease-duration=120s --namespace="openshift-cluster-api" --leader-elect-resource-namespace="openshift-cluster-api"
 
 # Run go fmt against code
 .PHONY: fmt
