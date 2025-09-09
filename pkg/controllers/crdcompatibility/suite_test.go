@@ -34,7 +34,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	admissionv1 "k8s.io/api/admissionregistration/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	k8syaml "k8s.io/apimachinery/pkg/util/yaml"
@@ -87,6 +86,8 @@ var _ = BeforeSuite(func(ctx context.Context) {
 	By("bootstrapping test environment")
 	var err error
 	testEnv = &envtest.Environment{
+		// This struct intentionally left blank
+		// We do this in startManager instead
 		WebhookInstallOptions: envtest.WebhookInstallOptions{},
 	}
 	cfg, cl, err = test.StartEnvTest(testEnv)
@@ -100,12 +101,12 @@ var _ = BeforeSuite(func(ctx context.Context) {
 	Expect(cfg).NotTo(BeNil())
 	Expect(cl).NotTo(BeNil())
 
-	InitManager = func(nodeCtx context.Context) (*CRDCompatibilityReconciler, func()) {
-		return initManager(nodeCtx, cfg, cl.Scheme(), testEnv)
+	InitManager = func(ctx context.Context) (*CRDCompatibilityReconciler, func()) {
+		return initManager(ctx, cfg, cl.Scheme(), testEnv)
 	}
 }, NodeTimeout(30*time.Second))
 
-func initManager(nodeCtx context.Context, cfg *rest.Config, scheme *runtime.Scheme, testEnv *envtest.Environment) (*CRDCompatibilityReconciler, func()) {
+func initManager(ctx context.Context, cfg *rest.Config, scheme *runtime.Scheme, testEnv *envtest.Environment) (*CRDCompatibilityReconciler, func()) {
 	By("Setting up a manager and controller")
 
 	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
@@ -129,30 +130,30 @@ func initManager(nodeCtx context.Context, cfg *rest.Config, scheme *runtime.Sche
 		})
 	}
 
-	Expect(r.SetupWithManager(nodeCtx, mgr, skipNameValidation)).To(Succeed(), "Reconciler should be setup with manager")
+	Expect(r.SetupWithManager(ctx, mgr, skipNameValidation)).To(Succeed(), "Reconciler should be setup with manager")
 
 	return r, func() {
-		startManager(nodeCtx, mgr)
+		startManager(ctx, mgr)
 	}
 }
 
-func startManager(nodeCtx context.Context, mgr ctrl.Manager) {
-	// We only register webhooks if we're starting the manager, otherwise
-	// they'll prevent us from creating CRDs
+// startManager starts the manager and registers the webhooks.
+//
+//nolint:contextcheck // the comment below explains why we don't inherit the ginkgo node context
+func startManager(ctx context.Context, mgr ctrl.Manager) {
+	// Normally we would let controller-runtime register webhooks for us by
+	// specifying them in WebhookInstallOptions. However, this means we cannot
+	// perform CRUD operations when the manager is not running. As not all tests
+	// run the manager, we manually register and deregister the webhooks when
+	// starting and stopping the manager.
+	// This code borrows heavily from the equivalent code in controller-runtime.
 	By("Registering webhooks")
+
 	for hook, err := range readWebhookManifests(
 		filepath.Join("..", "..", "..", "manifests", "0000_20_crd-compatibility-checker_02_webhooks.yaml"),
 	) {
 		Expect(err).NotTo(HaveOccurred(), "reading webhook manifests")
-		Eventually(func() error { return cl.Create(nodeCtx, hook) }).Should(Succeed())
-
-		DeferCleanup(func(ctx context.Context) {
-			By("Deleting webhook " + hook.GetName())
-			Eventually(func() error { return cl.Delete(ctx, hook) }).Should(Succeed())
-			Eventually(func() bool {
-				return apierrors.IsNotFound(cl.Get(ctx, client.ObjectKeyFromObject(hook), hook))
-			}).Should(BeTrue())
-		})
+		createTestObject(ctx, hook, "webhook "+hook.GetName())
 	}
 
 	By("Starting the manager")
@@ -175,10 +176,11 @@ func startManager(nodeCtx context.Context, mgr ctrl.Manager) {
 		stopManager(ctx, mgrCancel, mgrDone)
 	})
 
-	// Wait for the manager to signal that it became leader (i.e. it completed initialisation)
+	// Wait for the manager to signal that it became leader (i.e. it completed
+	// initialisation), or the node context to be cancelled
 	select {
 	case <-mgr.Elected():
-	case <-nodeCtx.Done():
+	case <-ctx.Done():
 	}
 
 	// Error if the manager didn't startup in time.
@@ -210,6 +212,19 @@ func kWithCtx(ctx context.Context) komega.Komega {
 	return komega.New(cl).WithContext(ctx)
 }
 
+// updateClientConfig updates the client config to point to testEnv's webhook endpoint.
+func updateClientConfig(clientConfig *admissionv1.WebhookClientConfig) {
+	clientConfig.CABundle = testEnv.WebhookInstallOptions.LocalServingCAData
+	if clientConfig.Service != nil && clientConfig.Service.Path != nil {
+		hostPort := net.JoinHostPort(testEnv.WebhookInstallOptions.LocalServingHost, fmt.Sprintf("%d", testEnv.WebhookInstallOptions.LocalServingPort))
+		clientConfig.URL = ptr.To(fmt.Sprintf("https://%s/%s", hostPort, *clientConfig.Service.Path))
+		clientConfig.Service = nil
+	}
+}
+
+// readWebhookManifests returns an iterator over all webhook configuration
+// objects defined in the given paths. The client config of each webhook is
+// updated to point to testEnv's webhook endpoint.
 func readWebhookManifests(paths ...string) iter.Seq2[client.Object, error] {
 	return func(yield func(client.Object, error) bool) {
 		for doc, err := range readYAMLDocuments(paths) {
@@ -237,27 +252,23 @@ func readWebhookManifests(paths ...string) iter.Seq2[client.Object, error] {
 					return
 				}
 
+				// Update the client config to point to testEnv's webhook endpoint
 				for i := range hook.Webhooks {
-					webhook := &hook.Webhooks[i]
-
-					webhook.ClientConfig.CABundle = testEnv.WebhookInstallOptions.LocalServingCAData
-					if webhook.ClientConfig.Service != nil && webhook.ClientConfig.Service.Path != nil {
-						hostPort := net.JoinHostPort(testEnv.WebhookInstallOptions.LocalServingHost, fmt.Sprintf("%d", testEnv.WebhookInstallOptions.LocalServingPort))
-						webhook.ClientConfig.URL = ptr.To(fmt.Sprintf("https://%s/%s", hostPort, ptr.Deref(webhook.ClientConfig.Service.Path, "")))
-						webhook.ClientConfig.Service = nil
-					}
+					updateClientConfig(&hook.Webhooks[i].ClientConfig)
 				}
 
 				if !yield(hook, nil) {
 					return
 				}
+
+			// Ignore unexpected kinds
 			default:
-				// Ignore unexpected kinds
 			}
 		}
 	}
 }
 
+// readYAMLDocuments returns an iterator over all YAML documents contained in all the given paths.
 func readYAMLDocuments(paths []string) iter.Seq2[[]byte, error] {
 	return func(yield func([]byte, error) bool) {
 		for _, path := range paths {
@@ -268,6 +279,7 @@ func readYAMLDocuments(paths []string) iter.Seq2[[]byte, error] {
 			}
 
 			reader := k8syaml.NewYAMLReader(bufio.NewReader(bytes.NewReader(b)))
+
 			for {
 				// Read document
 				doc, err := reader.Read()
@@ -277,6 +289,7 @@ func readYAMLDocuments(paths []string) iter.Seq2[[]byte, error] {
 					}
 
 					yield(nil, err)
+
 					return
 				}
 
