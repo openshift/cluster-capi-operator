@@ -23,7 +23,6 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/test/matchers"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/ptr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	capierrors "sigs.k8s.io/cluster-api/errors"
 )
@@ -62,17 +61,20 @@ var _ = Describe("capi2mapi MachineSet conversion", func() {
 })
 
 var _ = Describe("capi2mapi MachineSet Status Conversion", func() {
-	Describe("convertCAPIMachineSetStatusToMAPI", func() {
-		It("should convert CAPI MachineSet status to MAPI correctly", func() {
-			capiStatus := clusterv1.MachineSetStatus{
-				Selector:             "app=test",
-				Replicas:             5,
-				FullyLabeledReplicas: 5,
-				ReadyReplicas:        4,
-				AvailableReplicas:    3,
-				FailureReason:        ptr.To(capierrors.MachineSetStatusError("InvalidConfiguration")),
-				FailureMessage:       ptr.To("Test failure message"),
-				Conditions: clusterv1.Conditions{
+	Context("when converting CAPI MachineSet status to MAPI", func() {
+		It("should set all MAPI MachineSet status fields and conditions to the expected values", func() {
+			capiMachineSet := capibuilder.MachineSet().
+				WithSelector(metav1.LabelSelector{
+					MatchLabels: map[string]string{"app": "test"},
+				}).
+				WithReplicas(5).
+				WithStatusReplicas(5).
+				WithStatusFullyLabeledReplicas(5).
+				WithStatusReadyReplicas(4).
+				WithStatusAvailableReplicas(3).
+				WithStatusFailureReason(capierrors.MachineSetStatusError("InvalidConfiguration")).
+				WithStatusFailureMessage("Test failure message").
+				WithStatusConditions([]clusterv1.Condition{
 					{
 						Type:               "Available",
 						Status:             corev1.ConditionTrue,
@@ -81,10 +83,10 @@ var _ = Describe("capi2mapi MachineSet Status Conversion", func() {
 						Reason:             "MachineSetAvailable",
 						Message:            "MachineSet is available",
 					},
-				},
-			}
+				}).
+				Build()
 
-			mapiStatus := convertCAPIMachineSetStatusToMAPI(capiStatus, 1)
+			mapiStatus := convertCAPIMachineSetStatusToMAPI(capiMachineSet.Status, 1)
 
 			Expect(mapiStatus.Replicas).To(Equal(int32(5)))
 			Expect(mapiStatus.FullyLabeledReplicas).To(Equal(int32(5)))
@@ -94,10 +96,12 @@ var _ = Describe("capi2mapi MachineSet Status Conversion", func() {
 			Expect(string(*mapiStatus.ErrorReason)).To(Equal("InvalidConfiguration"))
 			Expect(mapiStatus.ErrorMessage).ToNot(BeNil())
 			Expect(*mapiStatus.ErrorMessage).To(Equal("Test failure message"))
+			// The only two conditions normally used for MAPI MachineSets are Paused and Synchronized.
+			// We do not convert these conditions to MAPI conditions as they are managed directly by the machineSet sync and migration controllers.
 			Expect(mapiStatus.Conditions).To(BeNil())
 		})
 
-		It("should handle empty CAPI MachineSetStatus", func() {
+		It("should set all MAPI MachineSet status fields and conditions to empty when CAPI MachineSetStatus is empty", func() {
 			capiStatus := clusterv1.MachineSetStatus{}
 
 			mapiStatus := convertCAPIMachineSetStatusToMAPI(capiStatus, 0)
