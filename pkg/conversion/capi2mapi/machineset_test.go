@@ -76,12 +76,11 @@ var _ = Describe("capi2mapi MachineSet Status Conversion", func() {
 				WithStatusFailureMessage("Test failure message").
 				WithStatusConditions([]clusterv1.Condition{
 					{
-						Type:               "Available",
-						Status:             corev1.ConditionTrue,
-						Severity:           clusterv1.ConditionSeverityNone,
-						LastTransitionTime: metav1.Now(),
-						Reason:             "MachineSetAvailable",
-						Message:            "MachineSet is available",
+						Type:     "Available",
+						Status:   corev1.ConditionTrue,
+						Severity: clusterv1.ConditionSeverityNone,
+						Reason:   "MachineSetAvailable",
+						Message:  "MachineSet is available",
 					},
 				}).
 				Build()

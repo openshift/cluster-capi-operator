@@ -31,23 +31,23 @@ var errActualTypeMismatchCAPICondition = errors.New("actual should be of type cl
 
 // convertCAPIConditionToMetav1Condition converts a clusterv1.Condition to metav1.Condition.
 // Note: This conversion deliberately ignores the Severity field as metav1.Condition
-// does not have a Severity field, and also ignores LastTransitionTime
-// as it may vary between conversions and fuzzing.
+// does not have a Severity field.
 func convertCAPIConditionToMetav1Condition(capiCondition clusterv1.Condition) metav1.Condition {
 	return metav1.Condition{
-		Type:    string(capiCondition.Type),
-		Status:  metav1.ConditionStatus(capiCondition.Status),
-		Reason:  capiCondition.Reason,
-		Message: capiCondition.Message,
-		// Note: We deliberately ignore LastTransitionTime and Severity fields
-		// as they may vary between conversions and fuzzing or are not supported
+		Type:               string(capiCondition.Type),
+		Status:             metav1.ConditionStatus(capiCondition.Status),
+		Reason:             capiCondition.Reason,
+		Message:            capiCondition.Message,
+		LastTransitionTime: capiCondition.LastTransitionTime,
+		// Note: We deliberately ignore the Severity field
+		// as it is not supported by metav1.Condition.
 	}
 }
 
 // MatchCAPICondition returns a custom matcher to check equality of clusterv1.Condition.
 // It converts the CAPI condition to metav1.Condition and delegates to testutils.MatchCondition.
-// Note: This matcher deliberately ignores LastTransitionTime and Severity fields
-// as they may vary between conversions and fuzzing or are not supported by metav1.Condition.
+// Note: This matcher deliberately ignores the Severity field
+// as it is not supported by metav1.Condition.
 func MatchCAPICondition(expected clusterv1.Condition) types.GomegaMatcher {
 	return &matchCAPICondition{
 		expected: expected,

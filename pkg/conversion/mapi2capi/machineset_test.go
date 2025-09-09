@@ -117,12 +117,11 @@ var _ = Describe("mapi2capi MachineSet Status Conversion", func() {
 			// Add a MAPI "Available" condition to the status.
 			mapiMachineSet.Status.Conditions = []mapiv1.Condition{
 				{
-					Type:               "Available",
-					Status:             corev1.ConditionTrue,
-					Severity:           mapiv1.ConditionSeverityNone,
-					LastTransitionTime: metav1.Now(),
-					Reason:             "MachineSetAvailable",
-					Message:            "MachineSet is available",
+					Type:     "Available",
+					Status:   corev1.ConditionTrue,
+					Severity: mapiv1.ConditionSeverityNone,
+					Reason:   "MachineSetAvailable",
+					Message:  "MachineSet is available",
 				},
 			}
 

@@ -31,23 +31,23 @@ var errActualTypeMismatchMAPICondition = errors.New("actual should be of type ma
 
 // convertMAPIConditionToMetav1Condition converts a mapiv1.Condition to metav1.Condition.
 // Note: This conversion deliberately ignores the Severity field as metav1.Condition
-// does not have a Severity field, and also ignores LastTransitionTime
-// as it may vary between conversions and fuzzing.
+// does not have a Severity field.
 func convertMAPIConditionToMetav1Condition(mapiCondition mapiv1.Condition) metav1.Condition {
 	return metav1.Condition{
-		Type:    string(mapiCondition.Type),
-		Status:  metav1.ConditionStatus(mapiCondition.Status),
-		Reason:  mapiCondition.Reason,
-		Message: mapiCondition.Message,
-		// Note: We deliberately ignore LastTransitionTime and Severity fields
-		// as they may vary between conversions and fuzzing or are not supported
+		Type:               string(mapiCondition.Type),
+		Status:             metav1.ConditionStatus(mapiCondition.Status),
+		Reason:             mapiCondition.Reason,
+		Message:            mapiCondition.Message,
+		LastTransitionTime: mapiCondition.LastTransitionTime,
+		// Note: We deliberately ignore the Severity field
+		// as it is not supported by metav1.Condition.
 	}
 }
 
 // MatchMAPICondition returns a custom matcher to check equality of mapiv1.Condition.
 // It converts the MAPI condition to metav1.Condition and delegates to testutils.MatchCondition.
-// Note: This matcher deliberately ignores LastTransitionTime and Severity fields
-// as they may vary between conversions and fuzzing or are not supported by metav1.Condition.
+// Note: This matcher deliberately ignores LastTransitionTime and the Severity field
+// as it is not supported by metav1.Condition.
 func MatchMAPICondition(expected mapiv1.Condition) types.GomegaMatcher {
 	return &matchMAPICondition{
 		expected: expected,
