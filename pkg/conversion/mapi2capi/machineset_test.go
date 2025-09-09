@@ -131,40 +131,58 @@ var _ = Describe("mapi2capi MachineSet Status Conversion", func() {
 			Expect(capiStatus.FailureMessage).To(HaveValue(BeEquivalentTo("Test error message")))
 			Expect(capiStatus.Conditions).To(SatisfyAll(
 				ContainElement(matchers.MatchCAPICondition(clusterv1.Condition{
+					// The Ready condition is computed based on the ReadyReplicas and the Replicas.
+					// In this case they differ, so the condition is false.
 					Type:   clusterv1.ReadyCondition,
 					Status: corev1.ConditionFalse,
 				})),
 				ContainElement(matchers.MatchCAPICondition(clusterv1.Condition{
+					// The Resized condition is computed based on the .Spec.Replicas vs .Status.Replicas.
+					// In this case they are equal, so the condition is true.
 					Type:   clusterv1.ResizedCondition,
 					Status: corev1.ConditionTrue,
 				})),
 				ContainElement(matchers.MatchCAPICondition(clusterv1.Condition{
+					// The MachinesCreated condition is computed based on the .Spec.Replicas vs .Status.Replicas.
+					// In this case they are equal, so the condition is true.
 					Type:   clusterv1.MachinesCreatedCondition,
 					Status: corev1.ConditionTrue,
 				})),
 				ContainElement(matchers.MatchCAPICondition(clusterv1.Condition{
+					// The MachinesReady condition is computed based on the ReadyReplicas and the Replicas.
+					// In this case they differ, so the condition is false.
 					Type:   clusterv1.MachinesReadyCondition,
 					Status: corev1.ConditionFalse,
 				})),
 			))
 			Expect(capiStatus.V1Beta2.Conditions).To(SatisfyAll(
 				ContainElement(testutils.MatchCondition(metav1.Condition{
+					// The Deleting condition is computed based on the .Spec.Replicas vs .Status.Replicas.
+					// In this case they are equal, so the condition is false.
 					Type:   clusterv1.MachineSetDeletingV1Beta2Condition,
 					Status: metav1.ConditionFalse,
 				})),
 				ContainElement(testutils.MatchCondition(metav1.Condition{
+					// The ScalingUp condition is computed based on the .Spec.Replicas vs .Status.Replicas.
+					// In this case they are equal, so the condition is false.
 					Type:   clusterv1.MachineSetScalingUpV1Beta2Condition,
 					Status: metav1.ConditionFalse,
 				})),
 				ContainElement(testutils.MatchCondition(metav1.Condition{
+					// The ScalingDown condition is computed based on the .Spec.Replicas vs .Status.Replicas.
+					// In this case they are equal, so the condition is false.
 					Type:   clusterv1.MachineSetScalingDownV1Beta2Condition,
 					Status: metav1.ConditionFalse,
 				})),
 				ContainElement(testutils.MatchCondition(metav1.Condition{
+					// The MachinesReady condition is computed based on the ReadyReplicas and the Replicas.
+					// In this case they differ, so the condition is false.
 					Type:   clusterv1.MachineSetMachinesReadyV1Beta2Condition,
 					Status: metav1.ConditionFalse,
 				})),
 				ContainElement(testutils.MatchCondition(metav1.Condition{
+					// The MachinesUpToDate condition is computed based on the .Spec.Replicas vs .Status.Replicas.
+					// In this case they are equal, so the condition is true.
 					Type:   clusterv1.MachineSetMachinesUpToDateV1Beta2Condition,
 					Status: metav1.ConditionTrue,
 				})),
