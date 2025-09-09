@@ -80,10 +80,10 @@ func createTestObject(ctx context.Context, obj client.Object, desc string) {
 	Eventually(func() error { return cl.Create(ctx, obj) }).Should(Succeed())
 	GinkgoWriter.Println("Created " + desc + " " + obj.GetName())
 
-	deferCleanupTestObject(ctx, obj, desc)
+	deferCleanupTestObject(obj, desc)
 }
 
-func deferCleanupTestObject(ctx context.Context, testObject client.Object, desc string) {
+func deferCleanupTestObject(testObject client.Object, desc string) {
 	DeferCleanup(func(ctx context.Context) {
 		By("Deleting " + desc + " " + testObject.GetName())
 		Eventually(tryDelete(ctx, testObject)).Should(test.BeK8SNotFound())

@@ -169,6 +169,7 @@ func (r *CRDCompatibilityReconciler) findCRDCompatibilityRequirementsForCRD(ctx 
 func (r *CRDCompatibilityReconciler) IsSynced() bool {
 	r.lock.RLock()
 	defer r.lock.RUnlock()
+
 	return r.synced
 }
 
@@ -198,6 +199,7 @@ func (r *CRDCompatibilityReconciler) getRequirementsToSync(ctx context.Context) 
 	}
 
 	toSync := make(map[string]struct{}, len(allRequirements.Items))
+
 	for i := range allRequirements.Items {
 		requirement := allRequirements.Items[i]
 
@@ -251,6 +253,7 @@ func (r *CRDCompatibilityReconciler) WaitForSynced(ctx context.Context) error {
 			logger.Error(err, "failed to get requirements to sync")
 			return false, nil
 		}
+
 		return true, nil
 	}); err != nil {
 		return fmt.Errorf("WaitForSynced: %w", err)
@@ -263,7 +266,7 @@ func (r *CRDCompatibilityReconciler) WaitForSynced(ctx context.Context) error {
 		case requirement := <-r.syncedRequirementChan:
 			delete(toSync, requirement)
 		case <-ctx.Done():
-			return ctx.Err()
+			return fmt.Errorf("WaitForSynced: %w", ctx.Err())
 		}
 
 		if len(toSync) == 0 {

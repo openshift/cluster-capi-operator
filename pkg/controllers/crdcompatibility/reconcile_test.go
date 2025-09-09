@@ -282,7 +282,7 @@ var _ = Describe("CRDCompatibilityRequirement", Ordered, ContinueOnFailure, func
 
 				// We need to register this before the requirement is created so
 				// it will be deleted after the requirement is deleted
-				deferCleanupTestObject(ctx, testCRDWorking, "test CRD")
+				deferCleanupTestObject(testCRDWorking, "test CRD")
 
 				requirement = baseRequirement(testCRDWorking)
 				createTestObject(ctx, requirement, "test CRDCompatibilityRequirement")
@@ -291,9 +291,10 @@ var _ = Describe("CRDCompatibilityRequirement", Ordered, ContinueOnFailure, func
 
 			createCRD := func(ctx context.Context, obj client.Object, updateFn func()) func() error {
 				return func() error {
+					By("Creating test CRD " + obj.GetName())
+
 					updateFn()
 
-					By("Creating test CRD " + obj.GetName())
 					return cl.Create(ctx, obj)
 				}
 			}

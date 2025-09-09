@@ -17,6 +17,7 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"net/http"
 	"os"
 
@@ -118,16 +119,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	ctx, cancel := context.WithCancel(ctrl.SetupSignalHandler())
-	defer cancel()
-
 	crdCompatibilityReconciler := crdcompatibility.NewCRDCompatibilityReconciler(mgr.GetClient())
-
-	// Setup the CRD compatibility controller
-	if err := crdCompatibilityReconciler.SetupWithManager(ctx, mgr); err != nil {
-		klog.Error(err, "unable to create controller", "controller", "CRDCompatibility")
-		os.Exit(1)
-	}
 
 	// Setup health checks
 	if err := mgr.AddHealthzCheck("health", healthz.Ping); err != nil {
@@ -135,8 +127,18 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Allows the sync waiter to cancel the manager if it fails to sync
+	ctx, cancel := context.WithCancel(ctrl.SetupSignalHandler())
+	defer cancel()
+
 	if err := addReadyzCheck(ctx, cancel, mgr, crdCompatibilityReconciler); err != nil {
 		klog.Error(err, "unable to set up ready check")
+		os.Exit(1) //nolint:gocritic // we don't care if cancel is not called
+	}
+
+	// Setup the CRD compatibility controller
+	if err := crdCompatibilityReconciler.SetupWithManager(ctx, mgr); err != nil {
+		klog.Error(err, "unable to create controller", "controller", "CRDCompatibility")
 		os.Exit(1)
 	}
 
@@ -148,20 +150,21 @@ func main() {
 	}
 }
 
+var errWaitingForSync = errors.New("waiting for requirements to be synced")
+
 // addReadyzCheck sets up a readyz check which ensures that the pod will not be
 // added to the webhook service until it has synced its state.
 func addReadyzCheck(ctx context.Context, cancel context.CancelFunc, mgr ctrl.Manager, crdCompatibilityReconciler *crdcompatibility.CRDCompatibilityReconciler) error {
-	waitingForSyncErr := errors.New("waiting for requirements to be synced")
-
 	readyCheck := func(_ *http.Request) error {
 		if !crdCompatibilityReconciler.IsSynced() {
-			return waitingForSyncErr
+			return errWaitingForSync
 		}
+
 		return nil
 	}
 
 	if err := mgr.AddReadyzCheck("check", readyCheck); err != nil {
-		return err
+		return fmt.Errorf("unable to add readyz check: %w", err)
 	}
 
 	go func() {

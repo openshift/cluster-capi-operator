@@ -145,6 +145,7 @@ var _ = Describe("CRDCompatibilityReconciler Controller Setup", func() {
 							Name: requirement.Name,
 						},
 					})
+
 					return err
 				}).Should(Succeed())
 			}
@@ -169,6 +170,7 @@ var _ = Describe("CRDCompatibilityReconciler Controller Setup", func() {
 							Name: requirement.Name,
 						},
 					})
+
 					return err
 				}).Should(Succeed())
 			}
