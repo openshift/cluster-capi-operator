@@ -4,8 +4,8 @@ PROJECT_DIR := $(shell dirname $(abspath $(lastword $(MAKEFILE_LIST))))
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 ENVTEST_K8S_VERSION = 1.33.2
 
-ENVTEST = go run ${PROJECT_DIR}/vendor/sigs.k8s.io/controller-runtime/tools/setup-envtest
-GOLANGCI_LINT = go run ${PROJECT_DIR}/vendor/github.com/golangci/golangci-lint/cmd/golangci-lint
+ENVTEST = go run -mod=vendor ${PROJECT_DIR}/vendor/sigs.k8s.io/controller-runtime/tools/setup-envtest
+GOLANGCI_LINT = go run -mod=vendor ${PROJECT_DIR}/vendor/github.com/golangci/golangci-lint/cmd/golangci-lint
 
 HOME ?= /tmp/kubebuilder-testing
 ifeq ($(HOME), /)
@@ -76,6 +76,10 @@ lint:
 .PHONY: vendor
 vendor:
 	./hack/vendor.sh
+
+# Alias for vendor (used by verify-deps)
+.PHONY: deps
+deps: vendor
 
 # Build the docker image
 .PHONY: image
