@@ -18,18 +18,12 @@ package crdcompatibility
 
 import (
 	"context"
-	"crypto/rand"
-	"fmt"
-	"math/big"
-	"unicode"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
@@ -40,26 +34,27 @@ var _ = Describe("CRDCompatibilityRequirement", Ordered, ContinueOnFailure, func
 	// Starting and stopping the manager is quite expensive, so we share one amongst all the tests.
 	// Unfortunately ginkgo forces us to use Ordered when doing this.
 	BeforeAll(func(ctx context.Context) {
-		_, startManager := InitManager(ctx)
+		reconciler, startManager := InitManager(ctx)
+
+		// Mark the reconciler synced to avoid the complexity of running the
+		// wait for synced loop
+		reconciler.synced = true
+
 		startManager()
 	})
 
 	Context("When creating a CRDCompatibilityRequirement", func() {
 		var (
-			testCRD, testCRDWorking *apiextensionsv1.CustomResourceDefinition
+			testCRDClean, testCRDWorking *apiextensionsv1.CustomResourceDefinition
 		)
 
 		BeforeEach(func(ctx context.Context) {
-			testCRD = generateTestCRD()
+			testCRDClean = generateTestCRD()
 
 			// Create a working copy of the CRD so we maintain a clean version
 			// with no runtime metadata
-			testCRDWorking = testCRD.DeepCopy()
-			Expect(cl.Create(ctx, testCRDWorking)).To(Succeed())
-			DeferCleanup(func(ctx context.Context) {
-				By("Deleting test CRD " + testCRDWorking.Name)
-				Expect(cl.Delete(ctx, testCRDWorking)).To(Succeed())
-			})
+			testCRDWorking = testCRDClean.DeepCopy()
+			createTestObject(ctx, testCRDWorking, "test CRD")
 		})
 
 		It("Should set all conditions and observed CRD", func(ctx context.Context) {
@@ -69,14 +64,14 @@ var _ = Describe("CRDCompatibilityRequirement", Ordered, ContinueOnFailure, func
 					GenerateName: "test-requirement-",
 				},
 				Spec: operatorv1alpha1.CRDCompatibilityRequirementSpec{
-					CRDRef:             testCRD.Name,
-					CompatibilityCRD:   toYAML(testCRD),
+					CRDRef:             testCRDClean.Name,
+					CompatibilityCRD:   toYAML(testCRDClean),
 					CRDAdmitAction:     operatorv1alpha1.CRDAdmitActionEnforce,
 					CreatorDescription: "Test Creator",
 				},
 			}
 
-			createRequirement(ctx, requirement)
+			createTestObject(ctx, requirement, "test CRDCompatibilityRequirement")
 
 			By("Waiting for the CRDCompatibilityRequirement to have the expected status")
 			Eventually(kWithCtx(ctx).Object(requirement)).Should(SatisfyAll(
@@ -100,50 +95,60 @@ var _ = Describe("CRDCompatibilityRequirement", Ordered, ContinueOnFailure, func
 					GenerateName: "test-requirement-",
 				},
 				Spec: operatorv1alpha1.CRDCompatibilityRequirementSpec{
-					CRDRef:             testCRD.Name,
-					CompatibilityCRD:   toYAML(testCRD),
+					CRDRef:             testCRDClean.Name,
+					CompatibilityCRD:   toYAML(testCRDClean),
 					CRDAdmitAction:     operatorv1alpha1.CRDAdmitActionEnforce,
 					CreatorDescription: "Test Creator",
 				},
 			}
 
-			createRequirement(ctx, requirement)
+			createTestObject(ctx, requirement, "test CRDCompatibilityRequirement")
+
+			generation := requirement.GetGeneration()
+			checkForStatusWithGeneration := func(generation int64) {
+				Eventually(kWithCtx(ctx).Object(requirement)).Should(SatisfyAll(
+					test.HaveCondition("Progressing", metav1.ConditionFalse,
+						test.WithConditionReason(progressingReasonUpToDate),
+						test.WithConditionMessage("The CRDCompatibilityRequirement is up to date"),
+						test.WithConditionObservedGeneration(generation),
+					),
+					test.HaveCondition("Admitted", metav1.ConditionTrue,
+						test.WithConditionReason(admittedReasonAdmitted),
+						test.WithConditionMessage("The CRDCompatibilityRequirement has been admitted"),
+						test.WithConditionObservedGeneration(generation),
+					),
+					test.HaveCondition("Compatible", metav1.ConditionTrue,
+						test.WithConditionReason(compatibleReasonCompatible),
+						test.WithConditionMessage("The CRD is compatible with this requirement"),
+						test.WithConditionObservedGeneration(generation),
+					),
+				))
+			}
+
+			By("Waiting for the CRDCompatibilityRequirement to have the expected status with observed generation 1")
+			checkForStatusWithGeneration(generation)
 
 			// Update the requirement to bump the generation
 			Eventually(kWithCtx(ctx).Update(requirement, func() {
 				requirement.Spec.CRDAdmitAction = operatorv1alpha1.CRDAdmitActionWarn
 			})).Should(Succeed())
 
-			Expect(requirement).To(HaveField("ObjectMeta.Generation", Equal(int64(2))))
+			// Sanity check that the generation has been bumped
+			Expect(requirement).To(HaveField("ObjectMeta.Generation", BeNumerically(">", generation)))
+			generation = requirement.GetGeneration()
 
-			By("Waiting for the CRDCompatibilityRequirement to have the expected status")
-			Eventually(kWithCtx(ctx).Object(requirement)).Should(SatisfyAll(
-				test.HaveCondition("Progressing", metav1.ConditionFalse,
-					test.WithConditionReason(progressingReasonUpToDate),
-					test.WithConditionMessage("The CRDCompatibilityRequirement is up to date"),
-					test.WithConditionObservedGeneration(requirement.GetGeneration()),
-				),
-				test.HaveCondition("Admitted", metav1.ConditionTrue,
-					test.WithConditionReason(admittedReasonAdmitted),
-					test.WithConditionMessage("The CRDCompatibilityRequirement has been admitted"),
-					test.WithConditionObservedGeneration(requirement.GetGeneration()),
-				),
-				test.HaveCondition("Compatible", metav1.ConditionTrue,
-					test.WithConditionReason(compatibleReasonCompatible),
-					test.WithConditionMessage("The CRD is compatible with this requirement"),
-					test.WithConditionObservedGeneration(requirement.GetGeneration()),
-				),
-			))
+			By("Waiting for the CRDCompatibilityRequirement to have the expected status with observed generation 2")
+			checkForStatusWithGeneration(generation)
 		})
 
-		It("Should not admit yaml which does not parse", func(ctx context.Context) {
+		It("Should not admit a CRDCompatibilityRequirement if the CompatibilityCRD which does not parse", func(ctx context.Context) {
 			// Create the simplest possible CRDCompatibilityRequirement
 			requirement := &operatorv1alpha1.CRDCompatibilityRequirement{
 				ObjectMeta: metav1.ObjectMeta{
 					GenerateName: "test-requirement-",
 				},
 				Spec: operatorv1alpha1.CRDCompatibilityRequirementSpec{
-					CRDRef:             testCRD.Name,
+					CRDRef:             testCRDClean.Name,
 					CompatibilityCRD:   "not YAML",
 					CRDAdmitAction:     operatorv1alpha1.CRDAdmitActionEnforce,
 					CreatorDescription: "Test Creator",
@@ -152,17 +157,17 @@ var _ = Describe("CRDCompatibilityRequirement", Ordered, ContinueOnFailure, func
 
 			By("Attempting to create invalid CRDCompatibilityRequirement " + requirement.Name)
 			expectedError := "admission webhook \"crdcompatibility.operator.openshift.io\" denied the request: expected a valid CustomResourceDefinition in YAML format: error unmarshaling JSON: while decoding JSON: json: cannot unmarshal string into Go value of type v1.CustomResourceDefinition"
-			Eventually(cl.Create(ctx, requirement)).Should(MatchError(expectedError))
+			Eventually(tryCreate(ctx, requirement)).Should(MatchError(expectedError))
 		})
 
-		It("Should not admit yaml which parses but is not a CRD", func(ctx context.Context) {
+		It("Should not admit a CRDCompatibilityRequirement if the CompatibilityCRD parses but is not a CRD", func(ctx context.Context) {
 			// Create the simplest possible CRDCompatibilityRequirement
 			requirement := &operatorv1alpha1.CRDCompatibilityRequirement{
 				ObjectMeta: metav1.ObjectMeta{
 					GenerateName: "test-requirement-",
 				},
 				Spec: operatorv1alpha1.CRDCompatibilityRequirementSpec{
-					CRDRef:             testCRD.Name,
+					CRDRef:             testCRDClean.Name,
 					CompatibilityCRD:   "{}",
 					CRDAdmitAction:     operatorv1alpha1.CRDAdmitActionEnforce,
 					CreatorDescription: "Test Creator",
@@ -171,7 +176,7 @@ var _ = Describe("CRDCompatibilityRequirement", Ordered, ContinueOnFailure, func
 
 			By("Attempting to create invalid CRDCompatibilityRequirement " + requirement.Name)
 			expectedError := "admission webhook \"crdcompatibility.operator.openshift.io\" denied the request: expected a valid CustomResourceDefinition in YAML format: expected APIVersion to be apiextensions.k8s.io/v1 and Kind to be CustomResourceDefinition, got /"
-			Eventually(cl.Create(ctx, requirement)).Should(MatchError(expectedError))
+			Eventually(tryCreate(ctx, requirement)).Should(MatchError(expectedError))
 		})
 
 		It("Should not set an error when the CRD is not found", func(ctx context.Context) {
@@ -182,13 +187,13 @@ var _ = Describe("CRDCompatibilityRequirement", Ordered, ContinueOnFailure, func
 				},
 				Spec: operatorv1alpha1.CRDCompatibilityRequirementSpec{
 					CRDRef:             "tests.example.com",
-					CompatibilityCRD:   toYAML(testCRD),
+					CompatibilityCRD:   toYAML(testCRDClean),
 					CRDAdmitAction:     operatorv1alpha1.CRDAdmitActionEnforce,
 					CreatorDescription: "Test Creator",
 				},
 			}
 
-			createRequirement(ctx, requirement)
+			createTestObject(ctx, requirement, "test CRDCompatibilityRequirement")
 
 			By("Waiting for the CRDCompatibilityRequirement to have the expected status")
 			Eventually(kWithCtx(ctx).Object(requirement)).Should(SatisfyAll(
@@ -207,8 +212,7 @@ var _ = Describe("CRDCompatibilityRequirement", Ordered, ContinueOnFailure, func
 			testCRDWorking := testCRD.DeepCopy()
 
 			By("Attempting to make an invalid modification by removing a field")
-			expectedError := fmt.Sprintf("admission webhook \"crdcompatibility.operator.openshift.io\" denied the request: CRD is not compatible with CRDCompatibilityRequirements: requirement %s: removed field : v1beta1.^.status", requirement.Name)
-
+			expectedError := "admission webhook \"crdcompatibility.operator.openshift.io\" denied the request: CRD is not compatible with CRDCompatibilityRequirements: requirement " + requirement.Name + ": removed field : v1beta1.^.status"
 			updateCRD := createOrUpdateCRD(ctx, testCRDWorking, func() {
 				delete(testCRDWorking.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties, "status")
 			})
@@ -231,31 +235,27 @@ var _ = Describe("CRDCompatibilityRequirement", Ordered, ContinueOnFailure, func
 
 		Context("When modifying a CRD with a requirement", func() {
 			var (
-				testCRD     *apiextensionsv1.CustomResourceDefinition
-				requirement *operatorv1alpha1.CRDCompatibilityRequirement
+				testCRDClean *apiextensionsv1.CustomResourceDefinition
+				requirement  *operatorv1alpha1.CRDCompatibilityRequirement
 			)
 
 			BeforeEach(func(ctx context.Context) {
-				testCRD = generateTestCRD()
+				testCRDClean = generateTestCRD()
 
-				// Create a working copy of the CRD so we maintain a clean version
+				// Create a copy of the CRD so we maintain a clean version
 				// without runtime metadata
-				testCRDWorking := testCRD.DeepCopy()
+				testCRDWorking := testCRDClean.DeepCopy()
 
-				By("Creating test CRD " + testCRD.Name)
-				Expect(cl.Create(ctx, testCRDWorking)).To(Succeed())
+				createTestObject(ctx, testCRDWorking, "test CRD")
 
-				DeferCleanup(func(ctx context.Context) {
-					By("Deleting test CRD " + testCRDWorking.Name)
-					Expect(cl.Delete(ctx, testCRDWorking)).To(Succeed())
-				})
-
-				requirement = createTestRequirement(ctx, testCRD)
+				requirement = baseRequirement(testCRDClean)
+				createTestObject(ctx, requirement, "test CRDCompatibilityRequirement")
+				waitForAdmitted(ctx, requirement)
 			})
 
 			It("Should not permit a CRD with requirements to be deleted", func(ctx context.Context) {
-				By("Attempting to delete CRD " + testCRD.Name)
-				Expect(cl.Delete(ctx, testCRD)).NotTo(Succeed(), "The test CRD should not be deleted")
+				By("Attempting to delete CRD " + testCRDClean.Name)
+				Eventually(tryDelete(ctx, testCRDClean)).Should(MatchError(ContainSubstring(errCRDHasRequirements.Error())), "The test CRD should not be deleted")
 			})
 
 			updateCRD := func(ctx context.Context, obj client.Object, updateFn func()) func() error {
@@ -263,37 +263,30 @@ var _ = Describe("CRDCompatibilityRequirement", Ordered, ContinueOnFailure, func
 			}
 
 			It("Should not permit an invalid CRD modification", func(ctx context.Context) {
-				testInvalidCRD(ctx, testCRD, requirement, updateCRD)
+				testInvalidCRD(ctx, testCRDClean, requirement, updateCRD)
 			})
 
 			It("Should permit a valid CRD modification", func(ctx context.Context) {
-				testValidCRD(ctx, testCRD, updateCRD)
+				testValidCRD(ctx, testCRDClean, updateCRD)
 			})
 		})
 
 		Context("When creating a CRD with a requirement", func() {
 			var (
-				testCRD     *apiextensionsv1.CustomResourceDefinition
-				requirement *operatorv1alpha1.CRDCompatibilityRequirement
+				testCRDWorking *apiextensionsv1.CustomResourceDefinition
+				requirement    *operatorv1alpha1.CRDCompatibilityRequirement
 			)
 
 			BeforeEach(func(ctx context.Context) {
-				testCRD = generateTestCRD()
+				testCRDWorking = generateTestCRD()
 
-				DeferCleanup(func(ctx context.Context) {
-					// We need to register this before requirement is created so it will be deleted after
-					By("Deleting test CRD " + testCRD.Name)
-					Eventually(cl.Delete(ctx, testCRD)).Should(WithTransform(func(err error) error {
-						if apierrors.IsNotFound(err) {
-							return nil
-						}
+				// We need to register this before the requirement is created so
+				// it will be deleted after the requirement is deleted
+				deferCleanupTestObject(ctx, testCRDWorking, "test CRD")
 
-						return err
-					}, Succeed()))
-					Eventually(kWithCtx(ctx).Get(testCRD)).Should(test.BeK8SNotFound())
-				})
-
-				requirement = createTestRequirement(ctx, testCRD)
+				requirement = baseRequirement(testCRDWorking)
+				createTestObject(ctx, requirement, "test CRDCompatibilityRequirement")
+				waitForAdmitted(ctx, requirement)
 			})
 
 			createCRD := func(ctx context.Context, obj client.Object, updateFn func()) func() error {
@@ -301,77 +294,17 @@ var _ = Describe("CRDCompatibilityRequirement", Ordered, ContinueOnFailure, func
 					updateFn()
 
 					By("Creating test CRD " + obj.GetName())
-					if err := cl.Create(ctx, obj); err != nil {
-						return err
-					}
-
-					return nil
+					return cl.Create(ctx, obj)
 				}
 			}
 
 			It("Should not permit an invalid CRD to be created", func(ctx context.Context) {
-				testInvalidCRD(ctx, testCRD, requirement, createCRD)
+				testInvalidCRD(ctx, testCRDWorking, requirement, createCRD)
 			})
 
 			It("Should permit a valid CRD to be created", func(ctx context.Context) {
-				testValidCRD(ctx, testCRD, createCRD)
+				testValidCRD(ctx, testCRDWorking, createCRD)
 			})
 		})
 	})
 })
-
-func createTestRequirement(ctx context.Context, testCRD *apiextensionsv1.CustomResourceDefinition) *operatorv1alpha1.CRDCompatibilityRequirement {
-	requirement := &operatorv1alpha1.CRDCompatibilityRequirement{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: testCRD.Name,
-		},
-		Spec: operatorv1alpha1.CRDCompatibilityRequirementSpec{
-			CRDRef:             testCRD.Name,
-			CompatibilityCRD:   toYAML(testCRD),
-			CRDAdmitAction:     operatorv1alpha1.CRDAdmitActionEnforce,
-			CreatorDescription: "Test Creator",
-		},
-	}
-	createRequirement(ctx, requirement)
-
-	By("Waiting for the CRDCompatibilityRequirement to be admitted")
-	Eventually(kWithCtx(ctx).Object(requirement)).Should(SatisfyAll(
-		test.HaveCondition("Admitted", metav1.ConditionTrue),
-	))
-
-	return requirement
-}
-
-func generateTestCRD() *apiextensionsv1.CustomResourceDefinition {
-	const validChars = "abcdefghijklmnopqrstuvwxyz"
-
-	randBytes := make([]byte, 10)
-
-	for i := range randBytes {
-		randInt, err := rand.Int(rand.Reader, big.NewInt(int64(len(validChars))))
-		Expect(err).To(Succeed())
-
-		randBytes[i] = validChars[randInt.Int64()]
-	}
-
-	gvk := schema.GroupVersionKind{
-		Group:   "example.com",
-		Version: "v1",
-		Kind:    string(unicode.ToUpper(rune(randBytes[0]))) + string(randBytes[1:]),
-	}
-
-	return test.GenerateCRD(gvk, "v1beta1")
-}
-
-func createRequirement(ctx context.Context, requirement *operatorv1alpha1.CRDCompatibilityRequirement) {
-	By("Creating CRDCompatibilityRequirement " + requirement.Name)
-	Expect(cl.Create(ctx, requirement)).To(Succeed())
-
-	DeferCleanup(func(ctx context.Context) {
-		By("Deleting CRDCompatibilityRequirement " + requirement.Name)
-		Expect(cl.Delete(ctx, requirement)).To(Succeed())
-
-		// Need to wait for it to be gone, or CRD deletion will fail
-		Eventually(kWithCtx(ctx).Get(requirement)).Should(test.BeK8SNotFound())
-	})
-}

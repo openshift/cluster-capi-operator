@@ -54,7 +54,8 @@ func SetLastTransitionTimeMetaV1(now metav1.Time, currentConditions []metav1.Con
 	matchingCondition := func(condition *metav1.Condition, conditionAC *metav1applyconfig.ConditionApplyConfiguration) bool {
 		return (conditionAC.Status == nil || condition.Status == *conditionAC.Status) &&
 			(conditionAC.Reason == nil || condition.Reason == *conditionAC.Reason) &&
-			(conditionAC.Message == nil || condition.Message == *conditionAC.Message)
+			(conditionAC.Message == nil || condition.Message == *conditionAC.Message) &&
+			(conditionAC.ObservedGeneration == nil || condition.ObservedGeneration == *conditionAC.ObservedGeneration)
 	}
 
 	for _, condition := range currentConditions {

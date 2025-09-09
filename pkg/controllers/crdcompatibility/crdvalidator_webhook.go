@@ -49,7 +49,7 @@ type crdValidator struct {
 
 var _ admission.CustomValidator = &crdValidator{}
 
-func (v *crdValidator) setRequirement(crdRef string, crd *apiextensionsv1.CustomResourceDefinition) {
+func (v *crdValidator) updateRequirements(crdRef string, fn func(requirements map[string]*apiextensionsv1.CustomResourceDefinition)) {
 	v.requirementsLock.Lock()
 	defer v.requirementsLock.Unlock()
 
@@ -61,11 +61,19 @@ func (v *crdValidator) setRequirement(crdRef string, crd *apiextensionsv1.Custom
 		v.requirements[crdRef] = make(map[string]*apiextensionsv1.CustomResourceDefinition)
 	}
 
-	if crd == nil {
-		delete(v.requirements[crdRef], crdRef)
-	} else {
-		v.requirements[crdRef][crd.Name] = crd
-	}
+	fn(v.requirements[crdRef])
+}
+
+func (v *crdValidator) setRequirement(crdRef string, requirementName string, crd *apiextensionsv1.CustomResourceDefinition) {
+	v.updateRequirements(crdRef, func(requirements map[string]*apiextensionsv1.CustomResourceDefinition) {
+		requirements[requirementName] = crd
+	})
+}
+
+func (v *crdValidator) unsetRequirement(crdRef string, requirementName string) {
+	v.updateRequirements(crdRef, func(requirements map[string]*apiextensionsv1.CustomResourceDefinition) {
+		delete(requirements, requirementName)
+	})
 }
 
 func (v *crdValidator) validateCreateOrUpdate(obj runtime.Object) (admission.Warnings, error) {

@@ -17,7 +17,15 @@ limitations under the License.
 package crdcompatibility
 
 import (
+	"bufio"
+	"bytes"
 	"context"
+	"errors"
+	"fmt"
+	"io"
+	"iter"
+	"net"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -25,7 +33,11 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	admissionv1 "k8s.io/api/admissionregistration/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	k8syaml "k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/rest"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -46,6 +58,12 @@ var (
 	cfg     *rest.Config
 	cl      client.Client
 )
+
+const (
+	admissionregv1 = "admissionregistration.k8s.io/v1"
+)
+
+var errUnsupportedAPIVersion = errors.New("only " + admissionregv1 + " is supported")
 
 // InitManager initialises a manager and adds a CRDCompatibilityReconciler to
 // it. It returns the reconciler, and a startmanager function. It is not
@@ -69,9 +87,7 @@ var _ = BeforeSuite(func(ctx context.Context) {
 	By("bootstrapping test environment")
 	var err error
 	testEnv = &envtest.Environment{
-		WebhookInstallOptions: envtest.WebhookInstallOptions{
-			Paths: []string{filepath.Join("..", "..", "..", "manifests", "0000_20_crd-compatibility-checker_02_webhooks.yaml")},
-		},
+		WebhookInstallOptions: envtest.WebhookInstallOptions{},
 	}
 	cfg, cl, err = test.StartEnvTest(testEnv)
 
@@ -102,7 +118,7 @@ func initManager(nodeCtx context.Context, cfg *rest.Config, scheme *runtime.Sche
 	})
 	Expect(err).ToNot(HaveOccurred(), "Manager should be created")
 
-	r := &CRDCompatibilityReconciler{client: mgr.GetClient()}
+	r := NewCRDCompatibilityReconciler(mgr.GetClient())
 
 	// controller-runtime stores controller names in a global which we can't
 	// clear between test runs. This causes name validation to fail every time
@@ -121,6 +137,24 @@ func initManager(nodeCtx context.Context, cfg *rest.Config, scheme *runtime.Sche
 }
 
 func startManager(nodeCtx context.Context, mgr ctrl.Manager) {
+	// We only register webhooks if we're starting the manager, otherwise
+	// they'll prevent us from creating CRDs
+	By("Registering webhooks")
+	for hook, err := range readWebhookManifests(
+		filepath.Join("..", "..", "..", "manifests", "0000_20_crd-compatibility-checker_02_webhooks.yaml"),
+	) {
+		Expect(err).NotTo(HaveOccurred(), "reading webhook manifests")
+		Eventually(func() error { return cl.Create(nodeCtx, hook) }).Should(Succeed())
+
+		DeferCleanup(func(ctx context.Context) {
+			By("Deleting webhook " + hook.GetName())
+			Eventually(func() error { return cl.Delete(ctx, hook) }).Should(Succeed())
+			Eventually(func() bool {
+				return apierrors.IsNotFound(cl.Get(ctx, client.ObjectKeyFromObject(hook), hook))
+			}).Should(BeTrue())
+		})
+	}
+
 	By("Starting the manager")
 
 	// We expect to start the manager from a Before node. We start the manager
@@ -174,4 +208,82 @@ func toYAML(obj any) string {
 
 func kWithCtx(ctx context.Context) komega.Komega {
 	return komega.New(cl).WithContext(ctx)
+}
+
+func readWebhookManifests(paths ...string) iter.Seq2[client.Object, error] {
+	return func(yield func(client.Object, error) bool) {
+		for doc, err := range readYAMLDocuments(paths) {
+			if err != nil {
+				yield(nil, err)
+				return
+			}
+
+			var generic metav1.PartialObjectMetadata
+			if err = yaml.Unmarshal(doc, &generic); err != nil {
+				yield(nil, err)
+				return
+			}
+
+			if generic.APIVersion != admissionregv1 {
+				yield(nil, fmt.Errorf("%w: APIVersion=%s", errUnsupportedAPIVersion, generic.APIVersion))
+				return
+			}
+
+			switch generic.Kind {
+			case "ValidatingWebhookConfiguration":
+				hook := &admissionv1.ValidatingWebhookConfiguration{}
+				if err := yaml.Unmarshal(doc, hook); err != nil {
+					yield(nil, err)
+					return
+				}
+
+				for i := range hook.Webhooks {
+					webhook := &hook.Webhooks[i]
+
+					webhook.ClientConfig.CABundle = testEnv.WebhookInstallOptions.LocalServingCAData
+					if webhook.ClientConfig.Service != nil && webhook.ClientConfig.Service.Path != nil {
+						hostPort := net.JoinHostPort(testEnv.WebhookInstallOptions.LocalServingHost, fmt.Sprintf("%d", testEnv.WebhookInstallOptions.LocalServingPort))
+						webhook.ClientConfig.URL = ptr.To(fmt.Sprintf("https://%s/%s", hostPort, ptr.Deref(webhook.ClientConfig.Service.Path, "")))
+						webhook.ClientConfig.Service = nil
+					}
+				}
+
+				if !yield(hook, nil) {
+					return
+				}
+			default:
+				// Ignore unexpected kinds
+			}
+		}
+	}
+}
+
+func readYAMLDocuments(paths []string) iter.Seq2[[]byte, error] {
+	return func(yield func([]byte, error) bool) {
+		for _, path := range paths {
+			b, err := os.ReadFile(path)
+			if err != nil {
+				yield(nil, err)
+				return
+			}
+
+			reader := k8syaml.NewYAMLReader(bufio.NewReader(bytes.NewReader(b)))
+			for {
+				// Read document
+				doc, err := reader.Read()
+				if err != nil {
+					if errors.Is(err, io.EOF) {
+						break
+					}
+
+					yield(nil, err)
+					return
+				}
+
+				if !yield(doc, nil) {
+					return
+				}
+			}
+		}
+	}
 }
