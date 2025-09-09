@@ -75,6 +75,10 @@ func (r *CRDCompatibilityReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		return ctrl.Result{}, err
 	}
 
+	if state.compatibilityCRD != nil {
+		r.syncedRequirement(ctx, obj.Name)
+	}
+
 	if reconcileErr != nil {
 		return ctrl.Result{}, util.LogNoRequeueError(reconcileErr, logger) //nolint:wrapcheck
 	}
@@ -134,21 +138,21 @@ func (r *reconcileState) checkCRDCompatibility() error {
 	return nil
 }
 
-func (r *reconcileState) reconcileCreateOrUpdate(ctx context.Context, crdCompatibilityRequirement *operatorv1alpha1.CRDCompatibilityRequirement) (ctrl.Result, error) {
+func (r *reconcileState) reconcileCreateOrUpdate(ctx context.Context, obj *operatorv1alpha1.CRDCompatibilityRequirement) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
 	logger.Info("Reconciling CRDCompatibilityRequirement")
 
 	// Set the finalizer before reconciling
-	if !slices.Contains(crdCompatibilityRequirement.Finalizers, finalizerName) {
-		if err := setFinalizer(ctx, r.client, crdCompatibilityRequirement); err != nil {
+	if !slices.Contains(obj.Finalizers, finalizerName) {
+		if err := setFinalizer(ctx, r.client, obj); err != nil {
 			return ctrl.Result{}, err
 		}
 	}
 
 	err := errors.Join(
-		r.parseCompatibilityCRD(crdCompatibilityRequirement),
-		r.fetchCurrentCRD(ctx, logger, crdCompatibilityRequirement),
+		r.parseCompatibilityCRD(obj),
+		r.fetchCurrentCRD(ctx, logger, obj),
 		r.checkCRDCompatibility(),
 	)
 	if err != nil {
@@ -161,7 +165,7 @@ func (r *reconcileState) reconcileCreateOrUpdate(ctx context.Context, crdCompati
 	}
 
 	// Add the requirement to the webhook validator
-	r.validator.setRequirement(crdCompatibilityRequirement.Spec.CRDRef, r.compatibilityCRD)
+	r.validator.setRequirement(obj.Spec.CRDRef, obj.Name, r.compatibilityCRD)
 
 	// TODO: Implement reconciliation logic
 	// - Validate CRDCompatibilityRequirement spec
@@ -178,7 +182,7 @@ func (r *reconcileState) reconcileDelete(ctx context.Context, obj *operatorv1alp
 	logger.Info("Reconciling CRDCompatibilityRequirement deletion")
 
 	// Remove the requirement from the webhook validator
-	r.validator.setRequirement(obj.Spec.CRDRef, nil)
+	r.validator.unsetRequirement(obj.Spec.CRDRef, obj.Name)
 
 	if err := clearFinalizer(ctx, r.client, obj); err != nil {
 		return ctrl.Result{}, err

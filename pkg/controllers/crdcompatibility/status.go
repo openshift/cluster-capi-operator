@@ -33,6 +33,10 @@ import (
 )
 
 const (
+	conditionTypeAdmitted    string = "Admitted"
+	conditionTypeCompatible  string = "Compatible"
+	conditionTypeProgressing string = "Progressing"
+
 	progressingReasonConfigurationError string = "ConfigurationError"
 	progressingReasonTransientError     string = "TransientError"
 	progressingReasonUpToDate           string = "UpToDate"
@@ -86,7 +90,7 @@ func (r *reconcileState) writeStatus(ctx context.Context, obj *operatorv1alpha1.
 // being Ready. Setting Progressing to False indicates to an observer that the
 // current state is final until a change is made.
 func (r *reconcileState) getProgressingCondition(reconcileErr error) *metav1applyconfig.ConditionApplyConfiguration {
-	progressingCondition := metav1applyconfig.Condition().WithType("Progressing")
+	progressingCondition := metav1applyconfig.Condition().WithType(conditionTypeProgressing)
 
 	if reconcileErr != nil {
 		if noRequeueError := util.AsNoRequeueError(reconcileErr); noRequeueError != nil {
@@ -112,7 +116,7 @@ func (r *reconcileState) getProgressingCondition(reconcileErr error) *metav1appl
 
 // Ready indicates whether the CRDCompatibililtyRequirement has been completely admitted, i.e. all required admission policies have been created.
 func (r *reconcileState) getAdmittedCondition() *metav1applyconfig.ConditionApplyConfiguration {
-	admittedCondition := metav1applyconfig.Condition().WithType("Admitted")
+	admittedCondition := metav1applyconfig.Condition().WithType(conditionTypeAdmitted)
 
 	if r.compatibilityCRD != nil {
 		admittedCondition.
@@ -131,7 +135,7 @@ func (r *reconcileState) getAdmittedCondition() *metav1applyconfig.ConditionAppl
 
 // Compatible indicates whether the CRD is compatible with the compatibilityCRD.
 func (r *reconcileState) getCompatibleCondition() *metav1applyconfig.ConditionApplyConfiguration {
-	compatibleCondition := metav1applyconfig.Condition().WithType("Compatible")
+	compatibleCondition := metav1applyconfig.Condition().WithType(conditionTypeCompatible)
 
 	if len(r.compatibilityErrors) > 0 {
 		compatibleCondition.
