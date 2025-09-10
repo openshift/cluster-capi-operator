@@ -33,7 +33,7 @@ import (
 )
 
 func createRequirementWithCleanup(ctx context.Context, requirement *operatorv1alpha1.CRDCompatibilityRequirement) {
-	createTestObject(ctx, requirement, "test CRDCompatibilityRequirement")
+	createTestObject(ctx, requirement, "CRDCompatibilityRequirement")
 
 	// The reconciler added a finalizer which we need to remove manually because
 	// we're not running the controller
@@ -64,7 +64,7 @@ var _ = Describe("CRDCompatibilityReconciler Controller Setup", func() {
 		// Create a working copy of the CRD so we maintain a clean version
 		// with no runtime metadata
 		testCRDWorking := testCRD.DeepCopy()
-		createTestObject(ctx, testCRDWorking, "test CRD")
+		createTestObject(ctx, testCRDWorking, "CRD")
 	})
 
 	Context("When starting the controller with existing state", func() {
@@ -76,12 +76,12 @@ var _ = Describe("CRDCompatibilityReconciler Controller Setup", func() {
 		BeforeEach(func(ctx context.Context) {
 			By("Creating 2 admitted and 2 non-admitted requirements")
 			admittedRequirements = []*operatorv1alpha1.CRDCompatibilityRequirement{
-				baseRequirement(testCRD),
-				baseRequirement(testCRD),
+				generateTestRequirement(testCRD),
+				generateTestRequirement(testCRD),
 			}
 			nonAdmittedRequirements = []*operatorv1alpha1.CRDCompatibilityRequirement{
-				baseRequirement(testCRD),
-				baseRequirement(testCRD),
+				generateTestRequirement(testCRD),
+				generateTestRequirement(testCRD),
 			}
 
 			for _, requirement := range slices.Concat(admittedRequirements, nonAdmittedRequirements) {

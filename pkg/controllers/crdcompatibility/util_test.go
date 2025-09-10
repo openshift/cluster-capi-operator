@@ -33,7 +33,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func baseRequirement(testCRD *apiextensionsv1.CustomResourceDefinition) *operatorv1alpha1.CRDCompatibilityRequirement {
+// generateTestRequirement generates a simple CRDCompatibilityRequirement using the given CRD as the CompatibilityCRD
+// The generated requirement uses GenerateName, so it will not have a valid Name until it is created
+func generateTestRequirement(testCRD *apiextensionsv1.CustomResourceDefinition) *operatorv1alpha1.CRDCompatibilityRequirement {
 	return &operatorv1alpha1.CRDCompatibilityRequirement{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: "test-requirement-",
@@ -47,7 +49,10 @@ func baseRequirement(testCRD *apiextensionsv1.CustomResourceDefinition) *operato
 	}
 }
 
-func generateTestCRD() *apiextensionsv1.CustomResourceDefinition {
+// generateTestCRD generates a simple CRD with a randomly generated Kind
+// Version is always v1
+// Group is always example.com
+func generateTestCRD(additionalVersions ...string) *apiextensionsv1.CustomResourceDefinition {
 	const validChars = "abcdefghijklmnopqrstuvwxyz"
 
 	randBytes := make([]byte, 10)
@@ -65,9 +70,10 @@ func generateTestCRD() *apiextensionsv1.CustomResourceDefinition {
 		Kind:    string(unicode.ToUpper(rune(randBytes[0]))) + string(randBytes[1:]),
 	}
 
-	return test.GenerateCRD(gvk, "v1beta1")
+	return test.GenerateCRD(gvk, additionalVersions...)
 }
 
+// waitForAdmitted waits until a CRDCompatibilityRequirement has the Admitted condition set to True
 func waitForAdmitted(ctx context.Context, requirement *operatorv1alpha1.CRDCompatibilityRequirement) {
 	By("Waiting for the CRDCompatibilityRequirement to be admitted")
 	Eventually(kWithCtx(ctx).Object(requirement)).Should(SatisfyAll(
@@ -75,31 +81,37 @@ func waitForAdmitted(ctx context.Context, requirement *operatorv1alpha1.CRDCompa
 	))
 }
 
+// createTestObject creates a test object and defers its deletion
 func createTestObject(ctx context.Context, obj client.Object, desc string) {
-	By("Creating " + desc)
+	By("Creating test " + desc)
 	Eventually(func() error { return cl.Create(ctx, obj) }).Should(Succeed())
 	GinkgoWriter.Println("Created " + desc + " " + obj.GetName())
 
 	deferCleanupTestObject(obj, desc)
 }
 
+// deferCleanupTestObject defers the deletion of a test object
 func deferCleanupTestObject(testObject client.Object, desc string) {
 	DeferCleanup(func(ctx context.Context) {
-		By("Deleting " + desc + " " + testObject.GetName())
+		By("Deleting test " + desc + " " + testObject.GetName())
 		Eventually(tryDelete(ctx, testObject)).Should(test.BeK8SNotFound())
 	})
 }
 
-func eventuallyWrapper[T any](fn func(ctx context.Context, obj client.Object, opts ...T) error, ctx context.Context, obj client.Object) func() error {
+func clientOpWrapper[T any](fn func(ctx context.Context, obj client.Object, opts ...T) error, ctx context.Context, obj client.Object) func() error {
 	return func() error {
 		return fn(ctx, obj)
 	}
 }
 
+// tryCreate returns a function which attempts to create the given object
+// It is useful in Eventually calls to avoid flakiness
 func tryCreate(ctx context.Context, obj client.Object) func() error {
-	return eventuallyWrapper(cl.Create, ctx, obj)
+	return clientOpWrapper(cl.Create, ctx, obj)
 }
 
+// tryDelete returns a function which attempts to delete the given object
+// It is useful in Eventually calls to avoid flakiness
 func tryDelete(ctx context.Context, obj client.Object) func() error {
-	return eventuallyWrapper(cl.Delete, ctx, obj)
+	return clientOpWrapper(cl.Delete, ctx, obj)
 }
