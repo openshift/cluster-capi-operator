@@ -1,13 +1,28 @@
+// Copyright 2024 Red Hat, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package framework
 
 import (
+	"context"
 	"fmt"
 	"time"
 
 	. "github.com/onsi/gomega"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	capav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
+	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
@@ -15,7 +30,7 @@ import (
 
 // GetMachines gets a list of machines from the default cluster API namespace.
 // Optionaly, labels may be used to constrain listed machinesets.
-func GetMachines(cl client.Client, selectors ...*metav1.LabelSelector) ([]*clusterv1.Machine, error) {
+func GetMachines(ctx context.Context, cl client.Client, selectors ...*metav1.LabelSelector) ([]*clusterv1.Machine, error) {
 	machineList := &clusterv1.MachineList{}
 
 	listOpts := append([]client.ListOption{},
@@ -25,7 +40,7 @@ func GetMachines(cl client.Client, selectors ...*metav1.LabelSelector) ([]*clust
 	for _, selector := range selectors {
 		s, err := metav1.LabelSelectorAsSelector(selector)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to convert label selector: %w", err)
 		}
 
 		listOpts = append(listOpts,
@@ -37,7 +52,7 @@ func GetMachines(cl client.Client, selectors ...*metav1.LabelSelector) ([]*clust
 		return nil, fmt.Errorf("error querying api for machineList object: %w", err)
 	}
 
-	var machines []*clusterv1.Machine
+	machines := make([]*clusterv1.Machine, 0, len(machineList.Items))
 
 	for i := range machineList.Items {
 		machines = append(machines, &machineList.Items[i])
@@ -61,8 +76,8 @@ func FilterRunningMachines(machines []*clusterv1.Machine) []*clusterv1.Machine {
 }
 
 // GetAWSMachine get a awsmachine by its name.
-func GetAWSMachine(cl client.Client, name string, namespace string) (*capav1.AWSMachine, error) {
-	machine := &capav1.AWSMachine{
+func GetAWSMachine(cl client.Client, name string, namespace string) (*awsv1.AWSMachine, error) {
+	machine := &awsv1.AWSMachine{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
@@ -89,12 +104,13 @@ func GetMachine(cl client.Client, name string, namespace string) (*clusterv1.Mac
 }
 
 // DeleteMachines deletes the specified machines and returns an error on failure.
-func DeleteMachines(cl client.Client, namespace string, machines ...*clusterv1.Machine) error {
+func DeleteMachines(ctx context.Context, cl client.Client, namespace string, machines ...*clusterv1.Machine) {
 	// 1. delete all machines
 	for _, machine := range machines {
 		if machine == nil {
 			continue
 		}
+
 		Eventually(func() error {
 			return cl.Delete(ctx, machine)
 		}, time.Minute, RetryShort).Should(SatisfyAny(
@@ -118,6 +134,4 @@ func DeleteMachines(cl client.Client, namespace string, machines ...*clusterv1.M
 			HaveField("ObjectMeta.Name", BeElementOf(machineNames)),
 		))),
 	)
-
-	return nil
 }

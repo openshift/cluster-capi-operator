@@ -134,3 +134,13 @@ issues:
         - gochecknoglobals
         - err113
         - wrapcheck
+
+    # Exclude some linters from running on tests files.
+    - path: e2e/.*|e2e/framework/.*
+      linters:
+        - gocyclo
+        - dupl 
+        - gosec
+        - gochecknoglobals
+        - err113
+        - funlen

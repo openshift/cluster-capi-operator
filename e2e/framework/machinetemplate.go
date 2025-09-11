@@ -1,6 +1,21 @@
+// Copyright 2024 Red Hat, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package framework
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -33,11 +48,12 @@ func GetAWSMachineTemplateByName(cl client.Client, name string, namespace string
 }
 
 // DeleteAWSMachineTemplates deletes the specified awsMachineTemplates.
-func DeleteAWSMachineTemplates(cl client.Client, templates ...*awsv1.AWSMachineTemplate) {
+func DeleteAWSMachineTemplates(ctx context.Context, cl client.Client, templates ...*awsv1.AWSMachineTemplate) {
 	for _, template := range templates {
 		if template == nil {
 			continue
 		}
+
 		By(fmt.Sprintf("Deleting awsMachineTemplate %q", template.GetName()))
 		Eventually(func() error {
 			return cl.Delete(ctx, template)
@@ -52,12 +68,14 @@ func DeleteAWSMachineTemplates(cl client.Client, templates ...*awsv1.AWSMachineT
 // GetAWSMachineTemplateByPrefix gets awsMachineTemplate by its prefix.
 func GetAWSMachineTemplateByPrefix(cl client.Client, prefix string, namespace string) (*awsv1.AWSMachineTemplate, error) {
 	if prefix == "" {
-		return nil, nil
+		return nil, fmt.Errorf("prefix cannot be empty")
 	}
+
 	templateList := &awsv1.AWSMachineTemplateList{}
 	Eventually(komega.List(templateList, client.InNamespace(namespace))).Should(Succeed(), "failed to list AWSMachineTemplates in namespace %s.", namespace)
 
 	var matches []*awsv1.AWSMachineTemplate
+
 	for i, t := range templateList.Items {
 		if strings.HasPrefix(t.Name, prefix) {
 			matches = append(matches, &templateList.Items[i])
@@ -74,11 +92,12 @@ func GetAWSMachineTemplateByPrefix(cl client.Client, prefix string, namespace st
 	}
 }
 
-// DeleteAWSMachineTemplateByPrefix deletes all AWSMachineTemplates with matching name prefix
+// DeleteAWSMachineTemplateByPrefix deletes all AWSMachineTemplates with matching name prefix.
 func DeleteAWSMachineTemplateByPrefix(cl client.Client, prefix string, namespace string) error {
 	if prefix == "" {
 		return nil
 	}
+
 	templateList := &awsv1.AWSMachineTemplateList{}
 	Eventually(komega.List(templateList, client.InNamespace(namespace))).Should(Succeed(), "failed to list AWSMachineTemplates in namespace %s.", namespace)
 
