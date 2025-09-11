@@ -242,6 +242,8 @@ github.com/emicklei/go-restful/v3/log
 # github.com/ettle/strcase v0.2.0
 ## explicit; go 1.12
 github.com/ettle/strcase
+# github.com/evanphx/json-patch v5.9.11+incompatible
+## explicit
 # github.com/evanphx/json-patch/v5 v5.9.11
 ## explicit; go 1.18
 github.com/evanphx/json-patch/v5
@@ -375,6 +377,8 @@ github.com/gofrs/flock
 ## explicit; go 1.15
 github.com/gogo/protobuf/proto
 github.com/gogo/protobuf/sortkeys
+# github.com/golang/mock v1.7.0-rc.1
+## explicit; go 1.15
 # github.com/golangci/dupl v0.0.0-20250308024227-f665c8d69b32
 ## explicit; go 1.22.0
 github.com/golangci/dupl/job
@@ -2567,7 +2571,7 @@ sigs.k8s.io/controller-runtime/pkg/webhook/admission
 sigs.k8s.io/controller-runtime/pkg/webhook/admission/metrics
 sigs.k8s.io/controller-runtime/pkg/webhook/conversion
 sigs.k8s.io/controller-runtime/pkg/webhook/internal/metrics
-# sigs.k8s.io/controller-runtime/tools/setup-envtest v0.0.0-20240923090159-236e448db12c
+# sigs.k8s.io/controller-runtime/tools/setup-envtest v0.0.0-20240927101401-4381fa0aeee4
 ## explicit; go 1.22.0
 sigs.k8s.io/controller-runtime/tools/setup-envtest
 sigs.k8s.io/controller-runtime/tools/setup-envtest/env

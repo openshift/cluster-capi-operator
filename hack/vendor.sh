@@ -6,14 +6,17 @@ vendor() {
   go mod verify
 }
 
+vendor_in_subdir() {
+  local dir=$1
+  echo "Updating dependencies for $dir"
+  cd "$dir" && GOWORK=off vendor && cd -
+}
+
 echo "Updating dependencies for Cluster CAPI Operator"
-vendor
+GOWORK=off vendor
 
-echo "Updating dependencies for E2E tests"
-cd e2e/ && vendor && cd -
+echo "Syncing Go workspace"
+go work sync
 
-echo "Updating dependencies for hack/tools"
-cd hack/tools/ && vendor && cd -
-
-echo "Updating dependencies for manifests-gen"
-cd manifests-gen/ && vendor && cd -
+vendor_in_subdir "hack/tools"
+vendor_in_subdir "manifests-gen"

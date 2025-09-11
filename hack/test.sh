@@ -34,6 +34,7 @@ fi
 
 # Print the command we are going to run as Make would.
 echo ${GINKGO} ${GINKGO_ARGS} ${GINKGO_EXTRA_ARGS} ${TEST_DIRS}
+export GOWORK=off
 ${GINKGO} ${GINKGO_ARGS} ${GINKGO_EXTRA_ARGS} ${TEST_DIRS}
 # Capture the test result to exit on error after coverage.
 TEST_RESULT=$?
