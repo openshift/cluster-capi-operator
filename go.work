@@ -1,0 +1,9 @@
+go 1.24.0
+
+use (
+	.
+	./e2e
+	./manifests-gen
+)
+
+replace github.com/metal3-io/baremetal-operator => github.com/metal3-io/baremetal-operator v0.8.1
