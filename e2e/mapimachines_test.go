@@ -36,7 +36,7 @@ import (
 const (
 	machineAPINamespace = "openshift-machine-api"
 	RoleLabel           = "machine.openshift.io/cluster-api-machine-role"
-	DefaultTimeout      = 5 * time.Minute
+	DefaultTimeout      = 400 * time.Second
 	DefaultInterval     = 10 * time.Second
 	// MAPI condition types
 	MapiConditionPaused   machinev1.ConditionType = "Paused"
