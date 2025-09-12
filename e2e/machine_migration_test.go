@@ -3,6 +3,7 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -110,6 +111,27 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 
 			It("should verify CAPI Machine Paused condition is False", func() {
 				verifyCAPIMachinePausedCondition(newCapiMachine, machinev1beta1.MachineAuthorityClusterAPI)
+			})
+		})
+	})
+
+	var _ = Describe("VAP Validation Tests Core", Ordered, func() {
+		Context("CAPI Machine field validation", func() {
+			It("should prevent setting of capi fields that are not supported by mapi(version)", func() {
+				verifyCAPIMachineUpdateBlocked(cl, func(capiMachine *clusterv1.Machine) {
+					version := "v1"
+					capiMachine.Spec.Version = &version
+				}, "spec.version")
+			})
+
+			It("should prevent setting of capi fields that are not supported by mapi(readinessGates)", func() {
+				verifyCAPIMachineUpdateBlocked(cl, func(capiMachine *clusterv1.Machine) {
+					capiMachine.Spec.ReadinessGates = []clusterv1.MachineReadinessGate{
+						{
+							ConditionType: "READY",
+						},
+					}
+				}, "spec.readinessGates")
 			})
 		})
 	})
@@ -456,6 +478,64 @@ func verifyCAPIMachinePausedCondition(capiMachine *clusterv1.Machine, authority 
 		HaveField("Status.V1Beta2.Conditions", ContainElement(conditionMatcher)),
 		fmt.Sprintf("Expected CAPI Machine with correct paused condition for %s", authority),
 	)
+}
+
+func verifyCAPIMachineUpdateBlocked(cl client.Client, updateFunc func(*clusterv1.Machine), fieldName string) {
+	By(fmt.Sprintf("Attempting to update CAPI Machine %s field", fieldName))
+
+	// Get any existing CAPI machine from the namespace
+	capiMachineList, err := capiframework.GetMachines(cl)
+	Expect(err).NotTo(HaveOccurred(), "Failed to list CAPI machines")
+	Expect(capiMachineList).NotTo(BeEmpty(), "No CAPI machines found in the openshift-cluster-api namespace")
+
+	// Use the first machine from the list
+	existingMachine := capiMachineList[0]
+	By(fmt.Sprintf("Using existing CAPI machine %s for VAP testing", existingMachine.Name))
+
+	// Store original machine state for cleanup
+	originalMachine, err := capiframework.GetMachine(cl, existingMachine.Name, capiframework.CAPINamespace)
+	Expect(err).NotTo(HaveOccurred(), "Failed to get original CAPI machine")
+
+	// Ensure cleanup happens even if test fails
+	defer func() {
+		By("Restoring original machine state")
+		// Get current machine state
+		currentMachine, err := capiframework.GetMachine(cl, existingMachine.Name, capiframework.CAPINamespace)
+		if err != nil {
+			// If machine doesn't exist, that's fine - no cleanup needed
+			return
+		}
+
+		// Restore original spec
+		currentMachine.Spec = originalMachine.Spec
+
+		// Update back to original state
+		err = cl.Update(ctx, currentMachine)
+		if err != nil {
+			// Log the error but don't fail the test
+			fmt.Printf("Warning: Failed to restore original machine state: %v\n", err)
+		}
+	}()
+
+	// Get the current CAPI machine
+	capiMachine, err := capiframework.GetMachine(cl, existingMachine.Name, capiframework.CAPINamespace)
+	Expect(err).NotTo(HaveOccurred(), "Failed to get CAPI machine")
+
+	// Apply the update function
+	updateFunc(capiMachine)
+
+	// Try to update the machine - this should fail due to VAP
+	err = cl.Update(ctx, capiMachine)
+	Expect(err).To(HaveOccurred(), "Update should fail due to VAP")
+
+	// The VAP is working correctly - verify the error message contains the expected VAP policy name
+	errorMsg := fmt.Sprintf("%v", err)
+	Expect(strings.Contains(errorMsg, "openshift-cluster-api-prevent-setting-of-capi-fields-unsupported-by-mapi")).To(BeTrue(),
+		"Error message should contain VAP policy name: %s", errorMsg)
+
+	// Also check that the error message contains "forbidden" and "denied request"
+	Expect(strings.Contains(errorMsg, "forbidden")).To(BeTrue(), "Error message should contain 'forbidden': %s", errorMsg)
+	Expect(strings.Contains(errorMsg, "denied request")).To(BeTrue(), "Error message should contain 'denied request': %s", errorMsg)
 }
 
 func verifyCAPIMachineRemoved(cl client.Client, machineName string) {
