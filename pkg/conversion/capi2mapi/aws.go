@@ -29,11 +29,14 @@ import (
 	"k8s.io/utils/ptr"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	capiutil "sigs.k8s.io/cluster-api/util"
 )
 
 var (
 	errCAPIMachineAWSMachineAWSClusterCannotBeNil            = errors.New("provided Machine, AWSMachine and AWSCluster can not be nil")
 	errCAPIMachineSetAWSMachineTemplateAWSClusterCannotBeNil = errors.New("provided MachineSet, AWSMachineTemplate and AWSCluster can not be nil")
+	errNilLoadBalancer                                       = errors.New("nil load balancer")
+	errUnsupportedLoadBalancerType                           = errors.New("unsupported load balancer type")
 )
 
 const (
@@ -112,6 +115,11 @@ func (m machineAndAWSMachineAndAWSCluster) toProviderSpec() (*mapiv1.AWSMachineP
 		errors = append(errors, err)
 	}
 
+	mapiLoadBalancers, err := convertAWSClusterLoadBalancersToMAPI(fldPath, m.machine, m.awsCluster)
+	if err != nil {
+		errors = append(errors, err)
+	}
+
 	warnings = append(warnings, warn...)
 
 	mapaProviderConfig := mapiv1.AWSMachineProviderConfig{
@@ -146,7 +154,7 @@ func (m machineAndAWSMachineAndAWSCluster) toProviderSpec() (*mapiv1.AWSMachineP
 			Tenancy:          mapaTenancy,
 			Region:           m.awsCluster.Spec.Region,
 		},
-		// LoadBalancers - TODO(OCPCLOUD-2709) Not supported for workers.
+		LoadBalancers:           mapiLoadBalancers,
 		BlockDevices:            convertAWSVolumesToMAPI(m.awsMachine.Spec.RootVolume, m.awsMachine.Spec.NonRootVolumes),
 		SpotMarketOptions:       convertAWSSpotMarketOptionsToMAPI(m.awsMachine.Spec.SpotMarketOptions),
 		MetadataServiceOptions:  mapiAWSMetadataOptions,
@@ -570,4 +578,60 @@ func handleAWSIdentityRef(fldPath *field.Path, identityRef *awsv1.AWSIdentityRef
 
 	// Assume we're using the defaults.
 	return ref, nil
+}
+
+// convertAWSClusterLoadBalancersToMAPI convert CAPI LoadBalancers from the AWSCluster spec to MAPI LoadBalancerReferences on the Machine.
+func convertAWSClusterLoadBalancersToMAPI(fldPath *field.Path, machine *clusterv1.Machine, awsCluster *awsv1.AWSCluster) ([]mapiv1.LoadBalancerReference, *field.Error) {
+	var loadBalancers []mapiv1.LoadBalancerReference
+
+	if !capiutil.IsControlPlaneMachine(machine) {
+		// No loadbalancer on non-control plane machines.
+		return nil, nil
+	}
+
+	internalLoadBalancerRef, err := convertAWSLoadBalancerToMAPI(awsCluster.Spec.ControlPlaneLoadBalancer)
+	if err != nil {
+		return nil, field.Invalid(fldPath.Child("controlPlaneLoadBalancer"), awsCluster.Spec.ControlPlaneLoadBalancer, err.Error())
+	}
+
+	loadBalancers = append(loadBalancers, internalLoadBalancerRef)
+
+	if awsCluster.Spec.SecondaryControlPlaneLoadBalancer != nil {
+		externalLoadBalancerRef, err := convertAWSLoadBalancerToMAPI(awsCluster.Spec.SecondaryControlPlaneLoadBalancer)
+		if err != nil {
+			return nil, field.Invalid(fldPath.Child("secondaryControlPlaneLoadBalancer"), awsCluster.Spec.SecondaryControlPlaneLoadBalancer, err.Error())
+		}
+
+		loadBalancers = append(loadBalancers, externalLoadBalancerRef)
+	}
+
+	return loadBalancers, nil
+}
+
+// convertAWSLoadBalancerToMAPI converts CAPI AWSLoadBalancerSpec to MAPI LoadBalancerReference.
+func convertAWSLoadBalancerToMAPI(loadBalancer *awsv1.AWSLoadBalancerSpec) (mapiv1.LoadBalancerReference, error) {
+	if loadBalancer == nil {
+		return mapiv1.LoadBalancerReference{}, errNilLoadBalancer
+	}
+
+	switch loadBalancer.LoadBalancerType {
+	case awsv1.LoadBalancerTypeClassic, awsv1.LoadBalancerTypeELB:
+		return mapiv1.LoadBalancerReference{
+			Name: ptr.Deref(loadBalancer.Name, ""),
+			Type: mapiv1.ClassicLoadBalancerType,
+		}, nil
+	case awsv1.LoadBalancerTypeNLB:
+		return mapiv1.LoadBalancerReference{
+			Name: ptr.Deref(loadBalancer.Name, ""),
+			Type: mapiv1.NetworkLoadBalancerType,
+		}, nil
+	case "":
+		// Default is classic in CAPI
+		return mapiv1.LoadBalancerReference{
+			Name: ptr.Deref(loadBalancer.Name, ""),
+			Type: mapiv1.ClassicLoadBalancerType,
+		}, nil
+	default:
+		return mapiv1.LoadBalancerReference{}, errUnsupportedLoadBalancerType
+	}
 }
