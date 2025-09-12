@@ -59,8 +59,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 			It("should find MAPI Machine .status.authoritativeAPI to equal ClusterAPI", func() {
 				verifyMachineAuthoritative(newMapiMachine, machinev1beta1.MachineAuthorityClusterAPI)
 			})
-			//there is a bug for this https://issues.redhat.com/browse/OCPBUGS-54703
-			PIt("should verify MAPI Machine Synchronized condition is True", func() {
+			It("should verify MAPI Machine Synchronized condition is True", func() {
 				verifyMachineSynchronizedCondition(newMapiMachine, machinev1beta1.MachineAuthorityClusterAPI)
 			})
 			It("should verify MAPI Machine Paused condition is True", func() {
@@ -93,8 +92,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 			It("should find MAPI Machine .status.authoritativeAPI to equal ClusterAPI", func() {
 				verifyMachineAuthoritative(newMapiMachine, machinev1beta1.MachineAuthorityClusterAPI)
 			})
-			//there is a bug for this https://issues.redhat.com/browse/OCPBUGS-54703
-			PIt("should verify MAPI Machine Synchronized condition is True", func() {
+			It("should verify MAPI Machine Synchronized condition is True", func() {
 				verifyMachineSynchronizedCondition(newMapiMachine, machinev1beta1.MachineAuthorityClusterAPI)
 			})
 			It("should verify MAPI Machine Paused condition is True", func() {
