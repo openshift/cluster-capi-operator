@@ -1,6 +1,9 @@
 //go:build tools
 // +build tools
 
+// Package tools contains build tool imports to ensure they are available in go.mod
+// This file is excluded from normal builds via build constraints.
+
 /*
 Copyright 2019 The Kubernetes Authors.
 
@@ -24,5 +27,5 @@ import (
 	_ "github.com/golangci/golangci-lint/cmd/golangci-lint"
 	_ "github.com/jstemmer/go-junit-report"
 	_ "github.com/onsi/ginkgo/v2"
-	_ "sigs.k8s.io/kustomize/kustomize/v3"
+	_ "sigs.k8s.io/kustomize/kustomize/v5"
 )
