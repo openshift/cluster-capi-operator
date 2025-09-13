@@ -51,6 +51,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/config"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 )
 
 var (
@@ -190,7 +191,8 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 
 		By("Setting up a manager and controller")
 		mgr, err = ctrl.NewManager(cfg, ctrl.Options{
-			Scheme: testScheme,
+			Scheme:  testScheme,
+			Metrics: server.Options{BindAddress: "0"},
 			Controller: config.Controller{
 				SkipNameValidation: ptr.To(true),
 			},
