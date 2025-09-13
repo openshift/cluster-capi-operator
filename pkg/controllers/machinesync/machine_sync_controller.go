@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"sort"
 	"strings"
 	"time"
 
@@ -1299,6 +1300,20 @@ func compareMAPIMachines(a, b *machinev1beta1.Machine) (map[string]any, error) {
 	if err != nil {
 		return nil, fmt.Errorf("unable to parse second Machine API machine set providerSpec: %w", err)
 	}
+
+	// Sort the tags by name to ensure consistent ordering.
+	// On the CAPI side these tags are in a map,
+	// so the order is not guaranteed when converting back from a CAPI map to a MAPI slice.
+	sort.Slice(ps1.Tags, func(i, j int) bool {
+		return ps1.Tags[i].Name < ps1.Tags[j].Name
+	})
+
+	// Sort the tags by name to ensure consistent ordering.
+	// On the CAPI side these tags are in a map,
+	// so the order is not guaranteed when converting back from a CAPI map to a MAPI slice.
+	sort.Slice(ps2.Tags, func(i, j int) bool {
+		return ps2.Tags[i].Name < ps2.Tags[j].Name
+	})
 
 	if diffProviderSpec := deep.Equal(ps1, ps2); len(diffProviderSpec) > 0 {
 		diff[".providerSpec"] = diffProviderSpec
