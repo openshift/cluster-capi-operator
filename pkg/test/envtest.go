@@ -16,15 +16,15 @@ limitations under the License.
 package test
 
 import (
-	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"os/exec"
 	"path"
 
 	machinev1 "github.com/openshift/api/machine/v1"
 	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
-	"golang.org/x/tools/go/packages"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -56,7 +56,7 @@ func init() {
 // StartEnvTest starts a new test environment and returns a client and config.
 func StartEnvTest(testEnv *envtest.Environment) (*rest.Config, client.Client, error) {
 	// Get the directory containing the openshift/api package.
-	openshiftAPIPath, err := getPackageDir(context.TODO(), "github.com/openshift/api")
+	openshiftAPIPath, err := getPackageDir("github.com/openshift/api")
 	if err != nil {
 		return nil, nil, err
 	}
@@ -112,24 +112,30 @@ func StopEnvTest(testEnv *envtest.Environment) error {
 	return testEnv.Stop()
 }
 
-func getPackageDir(ctx context.Context, pkgName string) (string, error) {
-	cfg := &packages.Config{
-		Mode:    packages.NeedFiles,
-		Context: ctx,
-	}
+func getPackageDir(module string) (string, error) {
+	cmd := exec.Command("go", "list", "-json", "-m", module)
 
-	pkgs, err := packages.Load(cfg, pkgName)
+	out, err := cmd.Output()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to run go list to find module %q directory: %w", module, err)
 	}
 
-	if len(pkgs) == 0 {
-		return "", fmt.Errorf("package %s not found", pkgName)
+	info := struct {
+		Dir     string
+		Replace struct {
+			Dir string
+		}
+	}{}
+
+	if err := json.Unmarshal(out, &info); err != nil {
+		return "", fmt.Errorf("failed to unmarshal output from go list command: %w", err)
+	} else if info.Dir == "" {
+		if info.Replace.Dir != "" {
+			return info.Replace.Dir, nil
+		}
+
+		return "", fmt.Errorf("failed to find go module %q directory, received %v", module, string(out))
 	}
 
-	if len(pkgs) > 1 {
-		return "", fmt.Errorf("multiple packages found for %s", pkgName)
-	}
-
-	return pkgs[0].Dir, nil
+	return info.Dir, nil
 }
