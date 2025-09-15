@@ -155,23 +155,24 @@ func (r *reconcileState) reconcileCreateOrUpdate(ctx context.Context, obj *opera
 		r.fetchCurrentCRD(ctx, logger, obj),
 		r.checkCRDCompatibility(),
 	)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
 
 	if r.compatibilityCRD == nil {
 		// Should have been handled by API validation
-		return ctrl.Result{}, util.NoRequeueError(errNoCompatibilityCRD, noRequeueErrorReasonConfigurationError) //nolint:wrapcheck
+		// parseCompatibilityCRD will have returned a NoRequeueError
+		r.validator.unsetRequirement(obj.DeepCopy())
+	} else {
+		// Add the requirement to the webhook validator
+		r.validator.setRequirement(obj.DeepCopy(), r.compatibilityCRD)
 	}
-
-	// Add the requirement to the webhook validator
-	r.validator.setRequirement(obj.DeepCopy(), r.compatibilityCRD)
 
 	// TODO: Implement reconciliation logic
 	// - Validate CRDCompatibilityRequirement spec
 	// - Check if required CRDs exist
 	// - Update status based on compatibility requirements
 	// - Handle any errors and update conditions
+	if err != nil {
+		return ctrl.Result{}, err
+	}
 
 	return ctrl.Result{}, nil
 }
