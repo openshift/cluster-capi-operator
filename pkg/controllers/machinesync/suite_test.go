@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -48,6 +49,7 @@ var k8sClient client.Client
 var testEnv *envtest.Environment
 var testScheme *runtime.Scheme
 var testRESTMapper meta.RESTMapper
+var testLogger logr.Logger
 var ctx = context.Background()
 var vapCleanup func()
 
@@ -64,8 +66,11 @@ func TestAPIs(t *testing.T) {
 var _ = BeforeSuite(func() {
 	klog.SetOutput(GinkgoWriter)
 
-	logf.SetLogger(GinkgoLogr)
-	ctrl.SetLogger(GinkgoLogr)
+	testLogger = GinkgoLogr.V(5)
+	logf.SetLogger(testLogger)
+	ctrl.SetLogger(testLogger)
+
+	ctx = logf.IntoContext(ctx, testLogger)
 
 	By("bootstrapping test environment")
 	var err error
