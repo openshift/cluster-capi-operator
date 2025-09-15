@@ -80,6 +80,11 @@ const (
 	mapiNamespace                  string = "openshift-machine-api"
 	capiInfraCommonFinalizerSuffix string = ".cluster.x-k8s.io"
 
+	// Requeue delays (tunable; avoid magic numbers).
+	requeueUnknownAuthoritativeAPI    = 2 * time.Second
+	requeueUnexpectedAuthoritativeAPI = 2 * time.Second
+	requeueInfraProgress              = 1 * time.Second
+
 	messageSuccessfullySynchronizedCAPItoMAPI = "Successfully synchronized CAPI Machine to MAPI"
 	messageSuccessfullySynchronizedMAPItoCAPI = "Successfully synchronized MAPI Machine to CAPI"
 	progressingToSynchronizeMAPItoCAPI        = "Progressing to synchronize MAPI Machine to CAPI"
@@ -254,10 +259,10 @@ func (r *MachineSyncReconciler) Reconcile(ctx context.Context, req reconcile.Req
 		return ctrl.Result{}, nil
 	case authoritativeAPI == "":
 		logger.Info("Machine status.authoritativeAPI is empty, will check again later", "AuthoritativeAPI", mapiMachine.Status.AuthoritativeAPI)
-		return ctrl.Result{}, nil
+		return ctrl.Result{RequeueAfter: requeueUnknownAuthoritativeAPI}, nil
 	default:
 		logger.Info("Machine status.authoritativeAPI has unexpected value", "AuthoritativeAPI", mapiMachine.Status.AuthoritativeAPI)
-		return ctrl.Result{}, nil
+		return ctrl.Result{RequeueAfter: requeueUnexpectedAuthoritativeAPI}, nil
 	}
 }
 
@@ -539,13 +544,13 @@ func (r *MachineSyncReconciler) reconcileMAPIMachinetoCAPIMachine(ctx context.Co
 		BlockOwnerDeletion: ptr.To(true),
 	}})
 
-	result, syncronizationIsProgressing, err := r.createOrUpdateCAPIInfraMachine(ctx, mapiMachine, infraMachine, newCAPIInfraMachine)
+	result, synchronizationIsProgressing, err := r.createOrUpdateCAPIInfraMachine(ctx, mapiMachine, infraMachine, newCAPIInfraMachine)
 	if err != nil {
 		return result, fmt.Errorf("unable to ensure Cluster API infra machine: %w", err)
 	}
 
-	if syncronizationIsProgressing {
-		return ctrl.Result{RequeueAfter: time.Second * 1}, r.applySynchronizedConditionWithPatch(ctx, mapiMachine, corev1.ConditionUnknown,
+	if synchronizationIsProgressing {
+		return ctrl.Result{RequeueAfter: requeueInfraProgress}, r.applySynchronizedConditionWithPatch(ctx, mapiMachine, corev1.ConditionUnknown,
 			reasonProgressingToCreateCAPIInfraMachine, progressingToSynchronizeMAPItoCAPI, nil)
 	}
 
@@ -604,9 +609,9 @@ func (r *MachineSyncReconciler) convertCAPIToMAPIMachine(capiMachine *clusterv1.
 func (r *MachineSyncReconciler) createOrUpdateCAPIInfraMachine(ctx context.Context, mapiMachine *machinev1beta1.Machine, infraMachine client.Object, newCAPIInfraMachine client.Object) (ctrl.Result, bool, error) { //nolint:unparam
 	logger := log.FromContext(ctx)
 	// This variable tracks whether or not we are still progressing
-	// towards syncronizing the MAPI machine with the CAPI infra machine.
+	// towards synchronized the MAPI machine with the CAPI infra machine.
 	// It is then passed up the stack so the syncronized condition can be set accordingly.
-	syncronizationIsProgressing := false
+	synchronizationIsProgressing := false
 
 	alreadyExists := false
 
@@ -617,10 +622,10 @@ func (r *MachineSyncReconciler) createOrUpdateCAPIInfraMachine(ctx context.Conte
 			createErr := fmt.Errorf("failed to create Cluster API infra machine: %w", err)
 
 			if condErr := r.applySynchronizedConditionWithPatch(ctx, mapiMachine, corev1.ConditionFalse, reasonFailedToCreateCAPIInfraMachine, createErr.Error(), nil); condErr != nil {
-				return ctrl.Result{}, syncronizationIsProgressing, utilerrors.NewAggregate([]error{createErr, condErr})
+				return ctrl.Result{}, synchronizationIsProgressing, utilerrors.NewAggregate([]error{createErr, condErr})
 			}
 
-			return ctrl.Result{}, syncronizationIsProgressing, createErr
+			return ctrl.Result{}, synchronizationIsProgressing, createErr
 		} else if apierrors.IsAlreadyExists(err) {
 			// this handles the case where the CAPI Machine is not present, so we can't resolve the
 			// infraMachine ref from it - but the InfraMachine exists. (e.g a user deletes the CAPI machine manually).
@@ -629,7 +634,7 @@ func (r *MachineSyncReconciler) createOrUpdateCAPIInfraMachine(ctx context.Conte
 		} else {
 			logger.Info("Successfully created Cluster API infra machine")
 
-			return ctrl.Result{}, syncronizationIsProgressing, nil
+			return ctrl.Result{}, synchronizationIsProgressing, nil
 		}
 	}
 
@@ -639,10 +644,10 @@ func (r *MachineSyncReconciler) createOrUpdateCAPIInfraMachine(ctx context.Conte
 			getErr := fmt.Errorf("failed to get Cluster API infra machine: %w", err)
 
 			if condErr := r.applySynchronizedConditionWithPatch(ctx, mapiMachine, corev1.ConditionFalse, reasonFailedToGetCAPIInfraResources, getErr.Error(), nil); condErr != nil {
-				return ctrl.Result{}, syncronizationIsProgressing, utilerrors.NewAggregate([]error{getErr, condErr})
+				return ctrl.Result{}, synchronizationIsProgressing, utilerrors.NewAggregate([]error{getErr, condErr})
 			}
 
-			return ctrl.Result{}, syncronizationIsProgressing, getErr
+			return ctrl.Result{}, synchronizationIsProgressing, getErr
 		}
 	}
 
@@ -653,15 +658,15 @@ func (r *MachineSyncReconciler) createOrUpdateCAPIInfraMachine(ctx context.Conte
 
 		if condErr := r.applySynchronizedConditionWithPatch(
 			ctx, mapiMachine, corev1.ConditionFalse, reasonFailedToUpdateCAPIInfraMachine, updateErr.Error(), nil); condErr != nil {
-			return ctrl.Result{}, syncronizationIsProgressing, utilerrors.NewAggregate([]error{updateErr, condErr})
+			return ctrl.Result{}, synchronizationIsProgressing, utilerrors.NewAggregate([]error{updateErr, condErr})
 		}
 
-		return ctrl.Result{}, syncronizationIsProgressing, updateErr
+		return ctrl.Result{}, synchronizationIsProgressing, updateErr
 	}
 
 	if len(capiInfraMachinesDiff) == 0 {
 		logger.Info("No changes detected in Cluster API infra machine")
-		return ctrl.Result{}, syncronizationIsProgressing, nil
+		return ctrl.Result{}, synchronizationIsProgressing, nil
 	}
 
 	logger.Info("Deleting the corresponding Cluster API infra machine as it is out of date, it will be recreated", "diff", fmt.Sprintf("%+v", capiInfraMachinesDiff))
@@ -673,10 +678,10 @@ func (r *MachineSyncReconciler) createOrUpdateCAPIInfraMachine(ctx context.Conte
 
 		if condErr := r.applySynchronizedConditionWithPatch(
 			ctx, mapiMachine, corev1.ConditionFalse, reasonFailedToUpdateCAPIInfraMachine, deleteErr.Error(), nil); condErr != nil {
-			return ctrl.Result{}, syncronizationIsProgressing, utilerrors.NewAggregate([]error{deleteErr, condErr})
+			return ctrl.Result{}, synchronizationIsProgressing, utilerrors.NewAggregate([]error{deleteErr, condErr})
 		}
 
-		return ctrl.Result{}, syncronizationIsProgressing, deleteErr
+		return ctrl.Result{}, synchronizationIsProgressing, deleteErr
 	}
 
 	// Remove finalizers from the deleting CAPI infraMachine, it is not authoritative.
@@ -689,10 +694,10 @@ func (r *MachineSyncReconciler) createOrUpdateCAPIInfraMachine(ctx context.Conte
 
 		if condErr := r.applySynchronizedConditionWithPatch(
 			ctx, mapiMachine, corev1.ConditionFalse, reasonFailedToUpdateCAPIInfraMachine, deleteErr.Error(), nil); condErr != nil {
-			return ctrl.Result{}, syncronizationIsProgressing, utilerrors.NewAggregate([]error{deleteErr, condErr})
+			return ctrl.Result{}, synchronizationIsProgressing, utilerrors.NewAggregate([]error{deleteErr, condErr})
 		}
 
-		return ctrl.Result{}, syncronizationIsProgressing, deleteErr
+		return ctrl.Result{}, synchronizationIsProgressing, deleteErr
 	}
 
 	// The outdated outdated CAPI infra machine has been deleted.
@@ -701,9 +706,9 @@ func (r *MachineSyncReconciler) createOrUpdateCAPIInfraMachine(ctx context.Conte
 
 	// Set the syncronized as progressing to signal the caller
 	// we are still progressing and aren't fully synced yet.
-	syncronizationIsProgressing = true
+	synchronizationIsProgressing = true
 
-	return ctrl.Result{}, syncronizationIsProgressing, nil
+	return ctrl.Result{}, synchronizationIsProgressing, nil
 }
 
 // createOrUpdateCAPIMachine creates a CAPI machine from a MAPI one, or updates if it exists and it is out of date.
