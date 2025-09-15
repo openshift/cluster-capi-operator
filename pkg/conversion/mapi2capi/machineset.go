@@ -99,8 +99,19 @@ func convertMAPIMachineSetStatusToCAPIMachineSetV1Beta2Status(mapiMachineSet *ma
 	return &clusterv1.MachineSetV1Beta2Status{
 		ReadyReplicas:     ptr.To(mapiMachineSet.Status.ReadyReplicas),
 		AvailableReplicas: ptr.To(mapiMachineSet.Status.AvailableReplicas),
-		UpToDateReplicas:  ptr.To(mapiMachineSet.Status.FullyLabeledReplicas), // Should be ok to do this.
 		Conditions:        convertMAPIMachineSetConditionsToCAPIMachineSetV1Beta2StatusConditions(mapiMachineSet),
+		// If the current MachineSet is a stand-alone MachineSet, the MachineSet controller does not set an up-to-date condition
+		// on its child Machines, allowing tools managing higher level abstractions to set this condition.
+		// This is also consistent with the fact that the MachineSet controller primarily takes care of the number of Machine
+		// replicas, it doesn't reconcile them (even if we have a few exceptions like in-place propagation of a few selected
+		// fields and remediation).
+		// So considering we don't use the MachineDeployments on the MAPI side
+		// and don't support "matching" higher level abstractions
+		// for the conversion of a MachineSet from MAPI to CAPI
+		// We always want to set this to zero on conversion.
+		// ref:
+		// https://github.com/kubernetes-sigs/cluster-api/blob/9c2eb0a04d5a03e18f2d557f1297391fb635f88d/internal/controllers/machineset/machineset_controller.go#L610-L618
+		UpToDateReplicas: ptr.To(int32(0)),
 	}
 }
 

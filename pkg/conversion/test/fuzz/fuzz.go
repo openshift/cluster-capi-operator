@@ -707,5 +707,16 @@ func fuzzCAPIMachineSetV1Beta2Status(status *clusterv1.MachineSetStatus) {
 	status.V1Beta2.Conditions = nil
 	status.V1Beta2.ReadyReplicas = ptr.To(status.ReadyReplicas)
 	status.V1Beta2.AvailableReplicas = ptr.To(status.AvailableReplicas)
-	status.V1Beta2.UpToDateReplicas = ptr.To(status.FullyLabeledReplicas)
+	// If the current MachineSet is a stand-alone MachineSet, the MachineSet controller does not set an up-to-date condition
+	// on its child Machines, allowing tools managing higher level abstractions to set this condition.
+	// This is also consistent with the fact that the MachineSet controller primarily takes care of the number of Machine
+	// replicas, it doesn't reconcile them (even if we have a few exceptions like in-place propagation of a few selected
+	// fields and remediation).
+	// So considering we don't use the MachineDeployments on the MAPI side
+	// and don't support "matching" higher level abstractions
+	// for the conversion of a MachineSet from MAPI to CAPI
+	// We always want to set this to zero on conversion.
+	// ref:
+	// https://github.com/kubernetes-sigs/cluster-api/blob/9c2eb0a04d5a03e18f2d557f1297391fb635f88d/internal/controllers/machineset/machineset_controller.go#L610-L618
+	status.V1Beta2.UpToDateReplicas = ptr.To(int32(0))
 }
