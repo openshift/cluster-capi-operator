@@ -17,6 +17,7 @@ package mapi2capi
 
 import (
 	"cmp"
+	"sort"
 
 	mapiv1 "github.com/openshift/api/machine/v1beta1"
 
@@ -192,6 +193,11 @@ func convertMAPIMachineSetConditionsToCAPIMachineSetConditions(mapiMachineSet *m
 
 	capiConditions = append(capiConditions, readyCondition, resizedCondition, machinesCreatedCondition, machinesReadyCondition)
 
+	// Sort the CAPI conditions by type, as CAPI ensures specific order of conditions.
+	sort.SliceStable(capiConditions, func(i, j int) bool {
+		return capiConditions[i].Type < capiConditions[j].Type
+	})
+
 	return capiConditions
 }
 
@@ -297,6 +303,11 @@ func convertMAPIMachineSetConditionsToCAPIMachineSetV1Beta2StatusConditions(mapi
 	}
 
 	capiConditions = append(capiConditions, deletingCondition, scalingUpCondition, scalingDownCondition, machinesReadyCondition, machinesUpToDateCondition)
+
+	// Sort the CAPI conditions by type, as CAPI ensures specific order of conditions.
+	sort.SliceStable(capiConditions, func(i, j int) bool {
+		return capiConditions[i].Type < capiConditions[j].Type
+	})
 
 	return capiConditions
 }
