@@ -211,7 +211,7 @@ var _ = Describe("CRDCompatibilityRequirement", Ordered, ContinueOnFailure, func
 				))
 
 				By("Attempt to update the CRD to add a different extra field")
-				expectedError := "admission webhook \"crdcompatibility.operator.openshift.io\" denied the request: CRD is not compatible with CRDCompatibilityRequirements: requirement " + requirement.Name + ": removed field : v1.^.extra"
+				expectedError := "admission webhook \"crdcompatibility.operator.openshift.io\" denied the request: CRD is not compatible with CRDCompatibilityRequirements: This requirement was added by Test Creator: requirement " + requirement.Name + ": removed field : v1.^.extra"
 				Eventually(kWithCtx(ctx).Update(testCRDWorking, addProperty(testCRDWorking, "extra2"))).Should(MatchError(expectedError))
 			})
 		})
@@ -225,7 +225,7 @@ var _ = Describe("CRDCompatibilityRequirement", Ordered, ContinueOnFailure, func
 			testCRDWorking := testCRD.DeepCopy()
 
 			By("Attempting to make an invalid modification by removing a field")
-			expectedError := "admission webhook \"crdcompatibility.operator.openshift.io\" denied the request: CRD is not compatible with CRDCompatibilityRequirements: requirement " + requirement.Name + ": removed field : v1.^.status"
+			expectedError := "admission webhook \"crdcompatibility.operator.openshift.io\" denied the request: CRD is not compatible with CRDCompatibilityRequirements: This requirement was added by Test Creator: requirement " + requirement.Name + ": removed field : v1.^.status"
 			updateCRD := createOrUpdateCRD(ctx, testCRDWorking, func() {
 				delete(testCRDWorking.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties, "status")
 			})
