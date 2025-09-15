@@ -42,6 +42,7 @@ const (
 	progressingReasonUpToDate           string = "UpToDate"
 
 	compatibleReasonRequirementsNotMet     string = "RequirementsNotMet"
+	compatibleReasonCRDDoesNotExist        string = "CRDDoesNotExist"
 	compatibleReasonCompatibleWithWarnings string = "CompatibleWithWarnings"
 	compatibleReasonCompatible             string = "Compatible"
 
@@ -137,7 +138,12 @@ func (r *reconcileState) getAdmittedCondition() *metav1applyconfig.ConditionAppl
 func (r *reconcileState) getCompatibleCondition() *metav1applyconfig.ConditionApplyConfiguration {
 	compatibleCondition := metav1applyconfig.Condition().WithType(conditionTypeCompatible)
 
-	if len(r.compatibilityErrors) > 0 {
+	if r.currentCRD == nil {
+		compatibleCondition.
+			WithStatus(metav1.ConditionFalse).
+			WithReason(compatibleReasonCRDDoesNotExist).
+			WithMessage("The target CRD does not exist")
+	} else if len(r.compatibilityErrors) > 0 {
 		compatibleCondition.
 			WithStatus(metav1.ConditionFalse).
 			WithReason(compatibleReasonRequirementsNotMet).
