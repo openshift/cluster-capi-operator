@@ -106,7 +106,7 @@ func (v *crdValidator) validateCreateOrUpdate(obj runtime.Object) (admission.War
 	}
 
 	if len(allReqErrors) > 0 {
-		return nil, fmt.Errorf("%w: %s", errCRDNotCompatible, strings.Join(allReqErrors, "\n"))
+		return allReqWarnings, fmt.Errorf("%w: %s", errCRDNotCompatible, strings.Join(allReqErrors, "\n"))
 	}
 
 	return allReqWarnings, nil
