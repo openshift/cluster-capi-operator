@@ -71,15 +71,18 @@ func (v *crdValidator) updateRequirements(crdRef string, fn func(requirements ma
 	fn(v.requirements[crdRef])
 }
 
-func (v *crdValidator) setRequirement(crdRef string, requirementName string, crd requirement) {
-	v.updateRequirements(crdRef, func(requirements map[string]requirement) {
-		requirements[requirementName] = crd
+func (v *crdValidator) setRequirement(req *operatorv1alpha1.CRDCompatibilityRequirement, crd *apiextensionsv1.CustomResourceDefinition) {
+	v.updateRequirements(req.Spec.CRDRef, func(requirements map[string]requirement) {
+		requirements[req.Name] = requirement{
+			CRD:         crd,
+			Requirement: req,
+		}
 	})
 }
 
-func (v *crdValidator) unsetRequirement(crdRef string, requirementName string) {
-	v.updateRequirements(crdRef, func(requirements map[string]requirement) {
-		delete(requirements, requirementName)
+func (v *crdValidator) unsetRequirement(req *operatorv1alpha1.CRDCompatibilityRequirement) {
+	v.updateRequirements(req.Spec.CRDRef, func(requirements map[string]requirement) {
+		delete(requirements, req.Name)
 	})
 }
 
