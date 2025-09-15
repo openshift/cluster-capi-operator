@@ -795,12 +795,15 @@ func (r *MachineSetSyncReconciler) createOrUpdateCAPIMachineSet(ctx context.Cont
 
 	capiMachineSetsDiff := compareCAPIMachineSets(capiMachineSet, newCAPIMachineSet)
 
-	updated := false
+	specUpdated := false
+	statusUpdated := false
+
+	updatedOrCreatedCAPIMachineSet := newCAPIMachineSet.DeepCopy()
 
 	if hasSpecOrMetadataOrProviderSpecChanges(capiMachineSetsDiff) {
 		logger.Info("Changes detected for CAPI machine set. Updating it", "diff", fmt.Sprintf("%+v", capiMachineSetsDiff))
 
-		if err := r.Update(ctx, newCAPIMachineSet.DeepCopy()); err != nil {
+		if err := r.Update(ctx, updatedOrCreatedCAPIMachineSet); err != nil {
 			logger.Error(err, "Failed to update CAPI machine set")
 
 			updateErr := fmt.Errorf("failed to update CAPI machine set: %w", err)
@@ -812,16 +815,19 @@ func (r *MachineSetSyncReconciler) createOrUpdateCAPIMachineSet(ctx context.Cont
 			return updateErr
 		}
 
-		updated = true
+		specUpdated = true
 	}
 
 	//nolint:nestif
-	if hasStatusChanges(capiMachineSetsDiff) {
+	if hasStatusChanges(capiMachineSetsDiff) || specUpdated {
 		logger.Info("Changes detected for CAPI machine set status. Updating it", "diff", fmt.Sprintf("%+v", capiMachineSetsDiff))
 
 		patchBase := client.MergeFrom(capiMachineSet.DeepCopy())
 
 		setChangedCAPIMachineSetStatusFields(capiMachineSet, newCAPIMachineSet)
+
+		// Set the new status ObservedGeneration to the newest CAPI MachineSet generation after the previous spec/metadata update/create.
+		capiMachineSet.Status.ObservedGeneration = updatedOrCreatedCAPIMachineSet.ObjectMeta.Generation
 
 		if isPatchRequired, err := util.IsPatchRequired(capiMachineSet, patchBase); err != nil {
 			return fmt.Errorf("failed to check if patch is required: %w", err)
@@ -838,11 +844,11 @@ func (r *MachineSetSyncReconciler) createOrUpdateCAPIMachineSet(ctx context.Cont
 				return updateErr
 			}
 
-			updated = true
+			statusUpdated = true
 		}
 	}
 
-	if updated {
+	if specUpdated || statusUpdated {
 		logger.Info("Successfully updated CAPI machine set")
 	} else {
 		logger.Info("No changes detected for CAPI machine set")
@@ -960,12 +966,15 @@ func (r *MachineSetSyncReconciler) createOrUpdateMAPIMachineSet(ctx context.Cont
 		return fmt.Errorf("unable to compare MAPI machine sets: %w", err)
 	}
 
-	updated := false
+	specUpdated := false
+	statusUpdated := false
+
+	updatedMAPIMachineSet := newMAPIMachineSet.DeepCopy()
 
 	if hasSpecOrMetadataOrProviderSpecChanges(mapiMachineSetsDiff) {
 		logger.Info("Changes detected for MAPI machine set. Updating it", "diff", fmt.Sprintf("%+v", mapiMachineSetsDiff))
 
-		if err := r.Update(ctx, newMAPIMachineSet.DeepCopy()); err != nil {
+		if err := r.Update(ctx, updatedMAPIMachineSet); err != nil {
 			logger.Error(err, "Failed to update MAPI machine set")
 
 			updateErr := fmt.Errorf("failed to update MAPI machine set: %w", err)
@@ -978,17 +987,20 @@ func (r *MachineSetSyncReconciler) createOrUpdateMAPIMachineSet(ctx context.Cont
 			return updateErr
 		}
 
-		updated = true
+		specUpdated = true
 	}
 
 	//nolint:nestif
-	if hasStatusChanges(mapiMachineSetsDiff) {
+	if hasStatusChanges(mapiMachineSetsDiff) || specUpdated {
 		logger.Info("Changes detected for MAPI machine set status. Updating it", "diff", fmt.Sprintf("%+v", mapiMachineSetsDiff))
 
 		patchBase := client.MergeFrom(mapiMachineSet.DeepCopy())
 
 		// Set the changed MAPI machine set status fields from the new MAPI machine set.
 		setChangedMAPIMachineSetStatusFields(mapiMachineSet, newMAPIMachineSet)
+
+		// Set the new status ObservedGeneration to the newest MAPI MachineSet generation after the previous spec/metadata update.
+		mapiMachineSet.Status.ObservedGeneration = updatedMAPIMachineSet.ObjectMeta.Generation
 
 		if isPatchRequired, err := util.IsPatchRequired(mapiMachineSet, patchBase); err != nil {
 			return fmt.Errorf("failed to check if patch is required: %w", err)
@@ -1006,11 +1018,11 @@ func (r *MachineSetSyncReconciler) createOrUpdateMAPIMachineSet(ctx context.Cont
 				return updateErr
 			}
 
-			updated = true
+			statusUpdated = true
 		}
 	}
 
-	if updated {
+	if specUpdated || statusUpdated {
 		logger.Info("Successfully updated MAPI machine set")
 	} else {
 		logger.Info("No changes detected for MAPI machine set")

@@ -74,9 +74,9 @@ func convertMAPIMachineSetToCAPIMachineSetStatus(mapiMachineSet *mapiv1.MachineS
 		FullyLabeledReplicas: mapiMachineSet.Status.FullyLabeledReplicas,
 		ReadyReplicas:        mapiMachineSet.Status.ReadyReplicas,
 		AvailableReplicas:    mapiMachineSet.Status.AvailableReplicas,
-		ObservedGeneration:   mapiMachineSet.Generation, // Set the observed generation to the current CAPI MachineSet generation.
-		Conditions:           convertMAPIMachineSetConditionsToCAPIMachineSetConditions(mapiMachineSet),
-		V1Beta2:              convertMAPIMachineSetStatusToCAPIMachineSetV1Beta2Status(mapiMachineSet),
+		// ObservedGeneration: // We don't set the observed generation at this stage as it is handled by the machineSetSync controller.
+		Conditions: convertMAPIMachineSetConditionsToCAPIMachineSetConditions(mapiMachineSet),
+		V1Beta2:    convertMAPIMachineSetStatusToCAPIMachineSetV1Beta2Status(mapiMachineSet),
 	}
 
 	// Convert ErrorReason/ErrorMessage to FailureReason/FailureMessage

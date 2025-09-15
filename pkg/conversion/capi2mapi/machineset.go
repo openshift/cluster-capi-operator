@@ -73,7 +73,7 @@ func convertCAPIMachineSetStatusToMAPI(capiStatus clusterv1.MachineSetStatus, ob
 		FullyLabeledReplicas: capiStatus.FullyLabeledReplicas,
 		ReadyReplicas:        capiStatus.ReadyReplicas,
 		AvailableReplicas:    capiStatus.AvailableReplicas,
-		ObservedGeneration:   observedGeneration, // Set the observed generation to the current CAPI MachineSet generation.
+		// ObservedGeneration: // We don't set the observed generation at this stage as it is handled by the machineSetSync controller.
 		// AuthoritativeAPI: // Ignore, this field as it is not present in CAPI.
 		// SynchronizedGeneration: // Ignore, this field as it is not present in CAPI.
 		Conditions: convertCAPIConditionsToMAPI(capiStatus.Conditions),
