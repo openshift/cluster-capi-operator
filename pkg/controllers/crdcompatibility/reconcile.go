@@ -165,7 +165,7 @@ func (r *reconcileState) reconcileCreateOrUpdate(ctx context.Context, obj *opera
 	}
 
 	// Add the requirement to the webhook validator
-	r.validator.setRequirement(obj.Spec.CRDRef, obj.Name, requirement{CRD: r.compatibilityCRD, Requirement: obj})
+	r.validator.setRequirement(obj.DeepCopy(), r.compatibilityCRD)
 
 	// TODO: Implement reconciliation logic
 	// - Validate CRDCompatibilityRequirement spec
@@ -182,7 +182,7 @@ func (r *reconcileState) reconcileDelete(ctx context.Context, obj *operatorv1alp
 	logger.Info("Reconciling CRDCompatibilityRequirement deletion")
 
 	// Remove the requirement from the webhook validator
-	r.validator.unsetRequirement(obj.Spec.CRDRef, obj.Name)
+	r.validator.unsetRequirement(obj.DeepCopy())
 
 	if err := clearFinalizer(ctx, r.client, obj); err != nil {
 		return ctrl.Result{}, err
