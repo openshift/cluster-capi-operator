@@ -39,10 +39,6 @@ const (
 	noRequeueErrorReasonConfigurationError string = "ConfigurationError"
 )
 
-var (
-	errNoCompatibilityCRD = errors.New("compatibilityCRD was not provided")
-)
-
 type reconcileState struct {
 	*CRDCompatibilityReconciler
 

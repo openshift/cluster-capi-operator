@@ -52,7 +52,7 @@ func generateTestRequirement(testCRD *apiextensionsv1.CustomResourceDefinition) 
 // generateTestCRD generates a simple CRD with a randomly generated Kind.
 // Version is always v1.
 // Group is always example.com.
-func generateTestCRD(additionalVersions ...string) *apiextensionsv1.CustomResourceDefinition {
+func generateTestCRD() *apiextensionsv1.CustomResourceDefinition {
 	const validChars = "abcdefghijklmnopqrstuvwxyz"
 
 	randBytes := make([]byte, 10)
@@ -70,7 +70,7 @@ func generateTestCRD(additionalVersions ...string) *apiextensionsv1.CustomResour
 		Kind:    string(unicode.ToUpper(rune(randBytes[0]))) + string(randBytes[1:]),
 	}
 
-	return test.GenerateCRD(gvk, additionalVersions...)
+	return test.GenerateCRD(gvk)
 }
 
 // waitForAdmitted waits until a CRDCompatibilityRequirement has the Admitted condition set to True.
