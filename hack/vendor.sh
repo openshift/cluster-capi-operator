@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 echo "Updating dependencies for Cluster CAPI Operator workspace"
 
 # Tidy all modules in the workspace
@@ -23,7 +25,9 @@ done
 
 # Sync workspace
 echo "Syncing Go workspace..."
-if ! go work sync; then
+go work sync && sync_exit_code=$? || sync_exit_code=$?
+
+if [ $sync_exit_code -ne 0 ]; then
   echo "Warning: go work sync failed due to dependency conflicts. This is expected with the current vsphere provider dependency."
   echo "The workspace structure is in place for future use."
 fi
