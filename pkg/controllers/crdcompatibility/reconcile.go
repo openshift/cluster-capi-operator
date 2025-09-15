@@ -165,11 +165,6 @@ func (r *reconcileState) reconcileCreateOrUpdate(ctx context.Context, obj *opera
 		r.validator.setRequirement(obj.DeepCopy(), r.compatibilityCRD)
 	}
 
-	// TODO: Implement reconciliation logic
-	// - Validate CRDCompatibilityRequirement spec
-	// - Check if required CRDs exist
-	// - Update status based on compatibility requirements
-	// - Handle any errors and update conditions
 	if err != nil {
 		return ctrl.Result{}, err
 	}
