@@ -138,26 +138,27 @@ func (r *reconcileState) getAdmittedCondition() *metav1applyconfig.ConditionAppl
 func (r *reconcileState) getCompatibleCondition() *metav1applyconfig.ConditionApplyConfiguration {
 	compatibleCondition := metav1applyconfig.Condition().WithType(conditionTypeCompatible)
 
-	if r.currentCRD == nil {
+	switch {
+	case r.currentCRD == nil:
 		compatibleCondition.
 			WithStatus(metav1.ConditionFalse).
 			WithReason(compatibleReasonCRDDoesNotExist).
 			WithMessage("The target CRD does not exist")
-	} else if len(r.compatibilityErrors) > 0 {
+	case len(r.compatibilityErrors) > 0:
 		compatibleCondition.
 			WithStatus(metav1.ConditionFalse).
 			WithReason(compatibleReasonRequirementsNotMet).
 			WithMessage(strings.Join(r.compatibilityErrors, "\n"))
-	} else {
-		compatibleCondition.WithStatus(metav1.ConditionTrue)
-
-		if len(r.compatibilityWarnings) > 0 {
-			compatibleCondition.WithReason(compatibleReasonCompatibleWithWarnings).
-				WithMessage(strings.Join(r.compatibilityWarnings, "\n"))
-		} else {
-			compatibleCondition.WithReason(compatibleReasonCompatible).
-				WithMessage("The CRD is compatible with this requirement")
-		}
+	case len(r.compatibilityWarnings) > 0:
+		compatibleCondition.
+			WithStatus(metav1.ConditionTrue).
+			WithReason(compatibleReasonCompatibleWithWarnings).
+			WithMessage(strings.Join(r.compatibilityWarnings, "\n"))
+	default:
+		compatibleCondition.
+			WithStatus(metav1.ConditionTrue).
+			WithReason(compatibleReasonCompatible).
+			WithMessage("The CRD is compatible with this requirement")
 	}
 
 	return compatibleCondition
