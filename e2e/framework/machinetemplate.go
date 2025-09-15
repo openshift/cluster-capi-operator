@@ -1,6 +1,7 @@
 package framework
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -12,6 +13,11 @@ import (
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
+)
+var (
+    ErrEmptyPrefix     = errors.New("AWSMachineTemplate prefix is empty")
+    ErrNotFound        = errors.New("no AWSMachineTemplate found")
+    ErrMultipleMatches = errors.New("multiple AWSMachineTemplates found")
 )
 
 // GetAWSMachineTemplateByName gets awsMachineTemplate by its name.
@@ -52,7 +58,7 @@ func DeleteAWSMachineTemplates(cl client.Client, templates ...*awsv1.AWSMachineT
 // GetAWSMachineTemplateByPrefix gets awsMachineTemplate by its prefix.
 func GetAWSMachineTemplateByPrefix(cl client.Client, prefix string, namespace string) (*awsv1.AWSMachineTemplate, error) {
 	if prefix == "" {
-		return nil, nil
+		return nil, ErrEmptyPrefix
 	}
 	templateList := &awsv1.AWSMachineTemplateList{}
 	Eventually(komega.List(templateList, client.InNamespace(namespace))).Should(Succeed(), "failed to list AWSMachineTemplates in namespace %s.", namespace)
@@ -66,11 +72,11 @@ func GetAWSMachineTemplateByPrefix(cl client.Client, prefix string, namespace st
 
 	switch len(matches) {
 	case 0:
-		return nil, fmt.Errorf("no AWSMachineTemplate found with prefix %q", prefix)
+		return nil, ErrNotFound
 	case 1:
 		return matches[0], nil
 	default:
-		return nil, fmt.Errorf("multiple AWSMachineTemplates found with prefix %q (%d matches)", prefix, len(matches))
+		return nil, fmt.Errorf("%w: prefix %q (%d matches)", ErrMultipleMatches, prefix, len(matches))
 	}
 }
 

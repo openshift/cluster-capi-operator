@@ -100,12 +100,12 @@ func WaitForMachineSetsDeleted(cl client.Client, machineSets ...*clusterv1.Machi
 		Eventually(func() bool {
 			selector := ms.Spec.Selector
 
-			machines, err := GetMachines(cl, &selector)
-			if err != nil || len(machines) != 0 {
+			machines := GetMachines(cl, &selector)
+			if len(machines) != 0 {
 				return false // Still have Machines, or other error.
 			}
 
-			err = cl.Get(ctx, client.ObjectKey{
+			err := cl.Get(ctx, client.ObjectKey{
 				Name:      ms.GetName(),
 				Namespace: ms.GetNamespace(),
 			}, &clusterv1.MachineSet{})
@@ -137,14 +137,10 @@ func DeleteMachineSets(cl client.Client, machineSets ...*clusterv1.MachineSet) {
 func WaitForMachineSet(cl client.Client, name string, namespace string) {
 	By(fmt.Sprintf("Waiting for MachineSet machines %q to enter Running phase", name))
 
-	machineSet, err := GetMachineSet(cl, name, namespace)
-	Expect(err).ToNot(HaveOccurred())
+	machineSet := GetMachineSet(cl, name, namespace)
 
 	Eventually(func() error {
-		machines, err := GetMachinesFromMachineSet(cl, machineSet)
-		if err != nil {
-			return err
-		}
+		machines := GetMachinesFromMachineSet(cl, machineSet)
 
 		replicas := pointer.Int32PtrDerefOr(machineSet.Spec.Replicas, 0)
 
@@ -177,11 +173,7 @@ func WaitForMachineSet(cl client.Client, name string, namespace string) {
 }
 
 // GetMachineSet gets a machineset by its name.
-func GetMachineSet(cl client.Client, name string, namespace string) (*clusterv1.MachineSet, error) {
-	if name == "" {
-		return nil, fmt.Errorf("MachineSet name cannot be empty")
-	}
-
+func GetMachineSet(cl client.Client, name string, namespace string) *clusterv1.MachineSet {
 	machineSet := &clusterv1.MachineSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -191,30 +183,27 @@ func GetMachineSet(cl client.Client, name string, namespace string) (*clusterv1.
 
 	Eventually(komega.Get(machineSet), time.Minute, RetryShort).Should(Succeed(), "Failed to get machineset %s/%s.", machineSet.Namespace, machineSet.Name)
 
-	return machineSet, nil
+	return machineSet
 }
 
 // GetMachinesFromMachineSet returns an array of machines owned by a given machineSet
-func GetMachinesFromMachineSet(cl client.Client, machineSet *clusterv1.MachineSet) ([]*clusterv1.Machine, error) {
-	machines, err := GetMachines(cl)
-	if err != nil {
-		return nil, fmt.Errorf("error getting machines: %w", err)
-	}
+func GetMachinesFromMachineSet(cl client.Client, machineSet *clusterv1.MachineSet) []*clusterv1.Machine {
+	machines := GetMachines(cl)
+
 	var machinesForSet []*clusterv1.Machine
 	for key := range machines {
 		if metav1.IsControlledBy(machines[key], machineSet) {
 			machinesForSet = append(machinesForSet, machines[key])
 		}
 	}
-	return machinesForSet, nil
+
+	return machinesForSet
 }
 
 // GetNewestMachineFromMachineSet returns the new created machine by a given machineSet.
-func GetNewestMachineFromMachineSet(cl client.Client, machineSet *clusterv1.MachineSet) (*clusterv1.Machine, error) {
-	machines, err := GetMachinesFromMachineSet(cl, machineSet)
-	if err != nil {
-		return nil, fmt.Errorf("error getting machines: %w", err)
-	}
+func GetNewestMachineFromMachineSet(cl client.Client, machineSet *clusterv1.MachineSet) *clusterv1.Machine {
+	machines := GetMachinesFromMachineSet(cl, machineSet)
+    Expect(machines).ToNot(BeEmpty(), "no machines found for MachineSet %s/%s", machineSet.Namespace, machineSet.Name)
 
 	var machine *clusterv1.Machine
 
@@ -228,11 +217,11 @@ func GetNewestMachineFromMachineSet(cl client.Client, machineSet *clusterv1.Mach
 		}
 	}
 
-	return machine, nil
+	return machine
 }
 
 // ScaleMachineSet scales a machineSet with a given name to the given number of replicas.
-func ScaleMachineSet(name string, replicas int32, namespace string) error {
+func ScaleMachineSet(name string, replicas int32, namespace string) {
 	machineSet := &clusterv1.MachineSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -243,6 +232,4 @@ func ScaleMachineSet(name string, replicas int32, namespace string) error {
 	Eventually(komega.Update(machineSet, func() {
 		machineSet.Spec.Replicas = &replicas
 	})).Should(Succeed())
-
-	return nil
 }

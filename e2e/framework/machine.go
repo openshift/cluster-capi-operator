@@ -1,13 +1,12 @@
 package framework
 
 import (
-	"fmt"
 	"time"
 
 	. "github.com/onsi/gomega"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	capav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
+	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
@@ -15,7 +14,7 @@ import (
 
 // GetMachines gets a list of machines from the default cluster API namespace.
 // Optionaly, labels may be used to constrain listed machinesets.
-func GetMachines(cl client.Client, selectors ...*metav1.LabelSelector) ([]*clusterv1.Machine, error) {
+func GetMachines(cl client.Client, selectors ...*metav1.LabelSelector) []*clusterv1.Machine {
 	machineList := &clusterv1.MachineList{}
 
 	listOpts := append([]client.ListOption{},
@@ -24,18 +23,15 @@ func GetMachines(cl client.Client, selectors ...*metav1.LabelSelector) ([]*clust
 
 	for _, selector := range selectors {
 		s, err := metav1.LabelSelectorAsSelector(selector)
-		if err != nil {
-			return nil, err
-		}
+		Expect(err).ToNot(HaveOccurred(), "invalid label selector")
 
 		listOpts = append(listOpts,
 			client.MatchingLabelsSelector{Selector: s},
 		)
 	}
 
-	if err := cl.List(ctx, machineList, listOpts...); err != nil {
-		return nil, fmt.Errorf("error querying api for machineList object: %w", err)
-	}
+	Eventually(komega.List(machineList, listOpts...)).
+		Should(Succeed(), "failed to list machineList in namespace %s", CAPINamespace)
 
 	var machines []*clusterv1.Machine
 
@@ -43,7 +39,7 @@ func GetMachines(cl client.Client, selectors ...*metav1.LabelSelector) ([]*clust
 		machines = append(machines, &machineList.Items[i])
 	}
 
-	return machines, nil
+	return machines
 }
 
 // FilterRunningMachines returns a slice of only those Machines in the input
@@ -61,8 +57,8 @@ func FilterRunningMachines(machines []*clusterv1.Machine) []*clusterv1.Machine {
 }
 
 // GetAWSMachine get a awsmachine by its name.
-func GetAWSMachine(cl client.Client, name string, namespace string) (*capav1.AWSMachine, error) {
-	machine := &capav1.AWSMachine{
+func GetAWSMachine(cl client.Client, name string, namespace string) (*awsv1.AWSMachine, error) {
+	machine := &awsv1.AWSMachine{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
