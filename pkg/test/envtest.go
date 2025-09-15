@@ -114,7 +114,7 @@ func StopEnvTest(testEnv *envtest.Environment) error {
 
 func getPackageDir(ctx context.Context, pkgName string) (string, error) {
 	cfg := &packages.Config{
-		Mode:    packages.NeedFiles,
+		Mode:    packages.NeedFiles | packages.NeedModule,
 		Context: ctx,
 	}
 
@@ -131,5 +131,15 @@ func getPackageDir(ctx context.Context, pkgName string) (string, error) {
 		return "", fmt.Errorf("multiple packages found for %s", pkgName)
 	}
 
-	return pkgs[0].Dir, nil
+	// Follow the chain of module replacements to find the actual module
+	module := pkgs[0].Module
+	for module != nil && module.Replace != nil {
+		module = module.Replace
+	}
+
+	if module == nil {
+		return "", fmt.Errorf("module not found for %s", pkgName)
+	}
+
+	return module.Dir, nil
 }
