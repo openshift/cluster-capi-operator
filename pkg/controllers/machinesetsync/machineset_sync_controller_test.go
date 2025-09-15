@@ -251,6 +251,13 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 				Eventually(k.UpdateStatus(mapiMachineSet, func() {
 					mapiMachineSet.Status.AuthoritativeAPI = machinev1beta1.MachineAuthorityMachineAPI
 				})).Should(Succeed())
+
+				// We need to set the observed generation to the metadata generation
+				// to ensure the status is updated as that's a prerequisite for the status to be updated by the machinesetsync controller.
+				By("Setting the MAPI machine set observed generation to its metadata generation")
+				Eventually(k.UpdateStatus(mapiMachineSet, func() {
+					mapiMachineSet.Status.ObservedGeneration = mapiMachineSet.Generation
+				})).Should(Succeed())
 			})
 
 			Context("when the CAPI machine set does not exist", func() {
@@ -488,6 +495,13 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 				Eventually(k.UpdateStatus(mapiMachineSet, func() {
 					mapiMachineSet.Status.AuthoritativeAPI = machinev1beta1.MachineAuthorityClusterAPI
 				})).Should(Succeed())
+
+				// We need to set the observed generation to the metadata generation
+				// to ensure the status is updated as that's a prerequisite for the status to be updated by the machinesetsync controller.
+				By("Setting the MAPI machine set observed generation to its metadata generation")
+				Eventually(k.UpdateStatus(mapiMachineSet, func() {
+					mapiMachineSet.Status.ObservedGeneration = mapiMachineSet.Generation
+				})).Should(Succeed())
 			})
 
 			Context("when the CAPI machine set exists and the spec differs (replica count)", func() {
@@ -495,6 +509,13 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 					By("Creating the CAPI machine set with a differing spec")
 					capiMachineSet = capiMachineSetBuilder.WithReplicas(int32(4)).Build()
 					Expect(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
+
+					// We need to set the observed generation to the metadata generation
+					// to ensure the status is updated as that's a prerequisite for the status to be updated by the machinesetsync controller.
+					By("Setting the CAPI machine set observed generation to its metadata generation")
+					Eventually(k.UpdateStatus(capiMachineSet, func() {
+						capiMachineSet.Status.ObservedGeneration = capiMachineSet.Generation
+					})).Should(Succeed())
 				})
 
 				It("should set the sync finalizer on both the mapi and capi machine sets", func() {
@@ -540,6 +561,13 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 						By("Creating the MAPI machine set with differing object meta in relevant field")
 						capiMachineSet = capiMachineSetBuilder.WithLabels(map[string]string{"foo": "bar"}).Build()
 						Expect(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
+
+						// We need to set the observed generation to the metadata generation
+						// to ensure the status is updated as that's a prerequisite for the status to be updated by the machinesetsync controller.
+						By("Setting the CAPI machine set observed generation to its metadata generation")
+						Eventually(k.UpdateStatus(capiMachineSet, func() {
+							capiMachineSet.Status.ObservedGeneration = capiMachineSet.Generation
+						})).Should(Succeed())
 					})
 
 					It("should update the synchronized condition on the MAPI machine set to True", func() {
@@ -568,6 +596,13 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 						capiMachineSet = capiMachineSetBuilder.Build()
 						capiMachineSet.Finalizers = []string{"foo", "bar"}
 						Expect(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
+
+						// We need to set the observed generation to the metadata generation
+						// to ensure the status is updated as that's a prerequisite for the status to be updated by the machinesetsync controller.
+						By("Setting the CAPI machine set observed generation to its metadata generation")
+						Eventually(k.UpdateStatus(capiMachineSet, func() {
+							capiMachineSet.Status.ObservedGeneration = capiMachineSet.Generation
+						})).Should(Succeed())
 					})
 
 					It("should update the synchronized condition on the MAPI machine set to True", func() {
@@ -604,7 +639,11 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 						capiMachineSet.Status.AvailableReplicas = 2
 						capiMachineSet.Status.FailureMessage = ptr.To("test failure message")
 						capiMachineSet.Status.FailureReason = ptr.To(capierrors.MachineSetStatusError("test failure reason"))
-						// capiMachineSet.Status.Conditions // Conditions are not a 1:1 matching and are computed separately, so don't check them here.
+						// We need to set the observed generation to the metadata generation
+						// to ensure the status is updated as that's a prerequisite for the status to be updated by the machinesetsync controller.
+						By("Setting the CAPI machine set observed generation to its metadata generation")
+						capiMachineSet.Status.ObservedGeneration = capiMachineSet.Generation
+						// capiMachineSet.Status.Conditions // Conditions are not a 1:1 matching and are computed separately, so don't check them here. We have a separate test for this.
 					})).Should(Succeed())
 				})
 
@@ -616,7 +655,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 							HaveField("Status.AvailableReplicas", BeEquivalentTo(capiMachineSet.Status.AvailableReplicas)),
 							HaveField("Status.ErrorMessage", BeEquivalentTo(capiMachineSet.Status.FailureMessage)),
 							HaveField("Status.ErrorReason", BeEquivalentTo(capiMachineSet.Status.FailureReason)),
-							// Status.Conditions // Conditions are not a 1:1 matching and are computed separately, so don't check them here.
+							// Status.Conditions // Conditions are not a 1:1 matching and are computed separately, so don't check them here. We have a separate test for this.
 						))
 				})
 			})
@@ -629,6 +668,13 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 							{APIVersion: "FooAPIVersion", Kind: "FooKind", Name: "FooName", UID: "123"},
 						}).Build()
 					Expect(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
+
+					// We need to set the observed generation to the metadata generation
+					// to ensure the status is updated as that's a prerequisite for the status to be updated by the machinesetsync controller.
+					By("Setting the CAPI machine set observed generation to its metadata generation")
+					Eventually(k.UpdateStatus(capiMachineSet, func() {
+						capiMachineSet.Status.ObservedGeneration = capiMachineSet.Generation
+					})).Should(Succeed())
 				})
 
 				It("should update the synchronized condition on the MAPI machine set to False", func() {
@@ -679,6 +725,13 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 					By("Updating the CAPI machine set to reference the new template")
 					Eventually(k.Update(capiMachineSet, func() {
 						capiMachineSet.Spec.Template.Spec.InfrastructureRef.Name = newCapaMachineTemplate.Name
+					})).Should(Succeed())
+
+					// We need to set the observed generation to the metadata generation
+					// to ensure the status is updated as that's a prerequisite for the status to be updated by the machinesetsync controller.
+					By("Setting the CAPI machine set observed generation to its metadata generation")
+					Eventually(k.UpdateStatus(capiMachineSet, func() {
+						capiMachineSet.Status.ObservedGeneration = capiMachineSet.Generation
 					})).Should(Succeed())
 				})
 

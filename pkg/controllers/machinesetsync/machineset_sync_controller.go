@@ -598,7 +598,7 @@ func (r *MachineSetSyncReconciler) reconcileCAPIMachineSetToMAPIMachineSet(ctx c
 
 	restoreMAPIFields(mapiMachineSet, newMapiMachineSet)
 
-	if err := r.createOrUpdateMAPIMachineSet(ctx, mapiMachineSet, newMapiMachineSet); err != nil {
+	if err := r.createOrUpdateMAPIMachineSet(ctx, mapiMachineSet, newMapiMachineSet, capiMachineSet); err != nil {
 		return ctrl.Result{}, fmt.Errorf("unable to ensure MAPI machine set: %w", err)
 	}
 
@@ -818,8 +818,14 @@ func (r *MachineSetSyncReconciler) createOrUpdateCAPIMachineSet(ctx context.Cont
 		specUpdated = true
 	}
 
+	sourceAPIObjectHasMatchingGeneration := hasMatchingGenerations(mapiMachineSet.Status.ObservedGeneration, mapiMachineSet.ObjectMeta.Generation)
+
+	// Only update the status if there are status changes or the spec has been updated,
+	// and only if the source API object has a matching generation,
+	// as we don't want to update the status if the source API object status has not yet caught up with the desired spec.
+	//
 	//nolint:nestif
-	if hasStatusChanges(capiMachineSetsDiff) || specUpdated {
+	if (hasStatusChanges(capiMachineSetsDiff) || specUpdated) && sourceAPIObjectHasMatchingGeneration {
 		logger.Info("Changes detected for CAPI machine set status. Updating it", "diff", fmt.Sprintf("%+v", capiMachineSetsDiff))
 
 		patchBase := client.MergeFrom(capiMachineSet.DeepCopy())
@@ -958,7 +964,7 @@ func setChangedCAPIMachineSetStatusFields(capiMachineSet, newCAPIMachineSet *clu
 // createOrUpdateMAPIMachineSet creates a MAPI machine set from a CAPI one, or updates if it exists and it is out of date.
 //
 //nolint:funlen
-func (r *MachineSetSyncReconciler) createOrUpdateMAPIMachineSet(ctx context.Context, mapiMachineSet *machinev1beta1.MachineSet, newMAPIMachineSet *machinev1beta1.MachineSet) error {
+func (r *MachineSetSyncReconciler) createOrUpdateMAPIMachineSet(ctx context.Context, mapiMachineSet *machinev1beta1.MachineSet, newMAPIMachineSet *machinev1beta1.MachineSet, capiMachineSet *clusterv1.MachineSet) error {
 	logger := log.FromContext(ctx)
 
 	mapiMachineSetsDiff, err := compareMAPIMachineSets(mapiMachineSet, newMAPIMachineSet)
@@ -990,8 +996,14 @@ func (r *MachineSetSyncReconciler) createOrUpdateMAPIMachineSet(ctx context.Cont
 		specUpdated = true
 	}
 
+	sourceAPIObjectHasMatchingGeneration := hasMatchingGenerations(capiMachineSet.Status.ObservedGeneration, capiMachineSet.ObjectMeta.Generation)
+
+	// Only update the status if there are status changes or the spec has been updated,
+	// and only if the source API object has a matching generation,
+	// as we don't want to update the status if the source API object status has not yet caught up with the desired spec.
+	//
 	//nolint:nestif
-	if hasStatusChanges(mapiMachineSetsDiff) || specUpdated {
+	if (hasStatusChanges(mapiMachineSetsDiff) || specUpdated) && sourceAPIObjectHasMatchingGeneration {
 		logger.Info("Changes detected for MAPI machine set status. Updating it", "diff", fmt.Sprintf("%+v", mapiMachineSetsDiff))
 
 		patchBase := client.MergeFrom(mapiMachineSet.DeepCopy())
@@ -1539,4 +1551,9 @@ func hasSpecOrMetadataOrProviderSpecChanges(diff map[string]any) bool {
 	_, ok3 := diff[".providerSpec"]
 
 	return ok1 || ok2 || ok3
+}
+
+// hasMatchingGenerations returns true if the status observedGeneration matches the metadata generation.
+func hasMatchingGenerations(statusGeneration, metadataGeneration int64) bool {
+	return statusGeneration == metadataGeneration
 }
