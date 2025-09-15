@@ -57,17 +57,17 @@ func (r *reconcileState) writeStatus(ctx context.Context, obj *operatorv1alpha1.
 		return nil
 	}
 
-	admittedCondition := r.getAdmittedCondition()
-	compatibleCondition := r.getCompatibleCondition()
-	progressingCondition := r.getProgressingCondition(reconcileErr)
+	admittedCondition := r.getAdmittedCondition().WithObservedGeneration(obj.GetGeneration())
+	compatibleCondition := r.getCompatibleCondition().WithObservedGeneration(obj.GetGeneration())
+	progressingCondition := r.getProgressingCondition(reconcileErr).WithObservedGeneration(obj.GetGeneration())
 
 	currentConditions := obj.Status.Conditions
 	now := metav1.Now()
 	applyConfigStatus := operatorapplyconfig.CRDCompatibilityRequirementStatus().
 		WithConditions(
-			util.SetLastTransitionTimeMetaV1(now, currentConditions, admittedCondition).WithObservedGeneration(obj.GetGeneration()),
-			util.SetLastTransitionTimeMetaV1(now, currentConditions, compatibleCondition).WithObservedGeneration(obj.GetGeneration()),
-			util.SetLastTransitionTimeMetaV1(now, currentConditions, progressingCondition).WithObservedGeneration(obj.GetGeneration()),
+			util.SetLastTransitionTimeMetaV1(now, currentConditions, admittedCondition),
+			util.SetLastTransitionTimeMetaV1(now, currentConditions, compatibleCondition),
+			util.SetLastTransitionTimeMetaV1(now, currentConditions, progressingCondition),
 		)
 
 	if r.currentCRD != nil {
