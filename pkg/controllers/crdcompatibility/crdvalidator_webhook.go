@@ -30,49 +30,59 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
+	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	"github.com/openshift/cluster-capi-operator/pkg/crdchecker"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 )
 
 var (
-	errExpectedCRD        = errors.New("expected a CustomResourceDefinition")
-	errCRDHasRequirements = errors.New("cannot delete CRD because it has CRDCompatibilityRequirements")
-	errCRDNotCompatible   = errors.New("CRD is not compatible with CRDCompatibilityRequirements")
+	errExpectedCRD           = errors.New("expected a CustomResourceDefinition")
+	errCRDHasRequirements    = errors.New("cannot delete CRD because it has CRDCompatibilityRequirements")
+	errCRDNotCompatible      = errors.New("CRD is not compatible with CRDCompatibilityRequirements")
+	errUnknownCRDAdmitAction = errors.New("unknown CRDAdmitAction")
 )
+
+type requirement struct {
+	CRD         *apiextensionsv1.CustomResourceDefinition
+	Requirement *operatorv1alpha1.CRDCompatibilityRequirement
+}
 
 type crdValidator struct {
 	client client.Client
 
-	requirements     map[string]map[string]*apiextensionsv1.CustomResourceDefinition
+	requirements     map[string]map[string]requirement
 	requirementsLock sync.RWMutex
 }
 
 var _ admission.CustomValidator = &crdValidator{}
 
-func (v *crdValidator) updateRequirements(crdRef string, fn func(requirements map[string]*apiextensionsv1.CustomResourceDefinition)) {
+func (v *crdValidator) updateRequirements(crdRef string, fn func(requirements map[string]requirement)) {
 	v.requirementsLock.Lock()
 	defer v.requirementsLock.Unlock()
 
 	if v.requirements == nil {
-		v.requirements = make(map[string]map[string]*apiextensionsv1.CustomResourceDefinition)
+		v.requirements = make(map[string]map[string]requirement)
 	}
 
 	if v.requirements[crdRef] == nil {
-		v.requirements[crdRef] = make(map[string]*apiextensionsv1.CustomResourceDefinition)
+		v.requirements[crdRef] = make(map[string]requirement)
 	}
 
 	fn(v.requirements[crdRef])
 }
 
-func (v *crdValidator) setRequirement(crdRef string, requirementName string, crd *apiextensionsv1.CustomResourceDefinition) {
-	v.updateRequirements(crdRef, func(requirements map[string]*apiextensionsv1.CustomResourceDefinition) {
-		requirements[requirementName] = crd
+func (v *crdValidator) setRequirement(req *operatorv1alpha1.CRDCompatibilityRequirement, crd *apiextensionsv1.CustomResourceDefinition) {
+	v.updateRequirements(req.Spec.CRDRef, func(requirements map[string]requirement) {
+		requirements[req.Name] = requirement{
+			CRD:         crd,
+			Requirement: req,
+		}
 	})
 }
 
-func (v *crdValidator) unsetRequirement(crdRef string, requirementName string) {
-	v.updateRequirements(crdRef, func(requirements map[string]*apiextensionsv1.CustomResourceDefinition) {
-		delete(requirements, requirementName)
+func (v *crdValidator) unsetRequirement(req *operatorv1alpha1.CRDCompatibilityRequirement) {
+	v.updateRequirements(req.Spec.CRDRef, func(requirements map[string]requirement) {
+		delete(requirements, req.Name)
 	})
 }
 
@@ -93,20 +103,29 @@ func (v *crdValidator) validateCreateOrUpdate(obj runtime.Object) (admission.War
 	)
 
 	for name, requirement := range v.requirements[crd.Name] {
-		reqErrors, reqWarnings, err := crdchecker.CheckCRDCompatibility(requirement, crd)
+		reqErrors, reqWarnings, err := crdchecker.CheckCRDCompatibility(requirement.CRD, crd)
 		if err != nil {
 			return nil, fmt.Errorf("failed to check CRD compatibility: %w", err)
 		}
 
 		prependName := func(s string) string {
-			return fmt.Sprintf("requirement %s: %s", name, s)
+			return fmt.Sprintf("This requirement was added by %s: requirement %s: %s", requirement.Requirement.Spec.CreatorDescription, name, s)
 		}
-		allReqErrors = append(allReqErrors, util.SliceMap(reqErrors, prependName)...)
+
+		switch requirement.Requirement.Spec.CRDAdmitAction {
+		case operatorv1alpha1.CRDAdmitActionWarn:
+			allReqWarnings = append(allReqWarnings, util.SliceMap(reqErrors, prependName)...)
+		case operatorv1alpha1.CRDAdmitActionEnforce:
+			allReqErrors = append(allReqErrors, util.SliceMap(reqErrors, prependName)...)
+		default:
+			return nil, fmt.Errorf("%w: %q for requirement %s", errUnknownCRDAdmitAction, requirement.Requirement.Spec.CRDAdmitAction, name)
+		}
+
 		allReqWarnings = append(allReqWarnings, util.SliceMap(reqWarnings, prependName)...)
 	}
 
 	if len(allReqErrors) > 0 {
-		return nil, fmt.Errorf("%w: %s", errCRDNotCompatible, strings.Join(allReqErrors, "\n"))
+		return allReqWarnings, fmt.Errorf("%w: %s", errCRDNotCompatible, strings.Join(allReqErrors, "\n"))
 	}
 
 	return allReqWarnings, nil

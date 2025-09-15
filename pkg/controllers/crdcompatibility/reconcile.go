@@ -48,6 +48,7 @@ type reconcileState struct {
 
 	compatibilityCRD *apiextensionsv1.CustomResourceDefinition
 	currentCRD       *apiextensionsv1.CustomResourceDefinition
+	requirement      *operatorv1alpha1.CRDCompatibilityRequirement
 
 	compatibilityErrors   []string
 	compatibilityWarnings []string
@@ -68,7 +69,7 @@ func (r *CRDCompatibilityReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		return ctrl.Result{}, fmt.Errorf("failed to get CRDCompatibilityRequirement: %w", err)
 	}
 
-	state := &reconcileState{CRDCompatibilityReconciler: r}
+	state := &reconcileState{CRDCompatibilityReconciler: r, requirement: obj}
 
 	result, reconcileErr := state.reconcile(ctx, obj)
 	if err := state.writeStatus(ctx, obj, reconcileErr); err != nil {
@@ -127,9 +128,8 @@ func (r *reconcileState) checkCRDCompatibility() error {
 		return nil
 	}
 
-	errors, warnings, err := crdchecker.CheckCRDCompatibility(r.compatibilityCRD, r.currentCRD)
-	r.compatibilityErrors = errors
-	r.compatibilityWarnings = warnings
+	var err error
+	r.compatibilityErrors, r.compatibilityWarnings, err = crdchecker.CheckCRDCompatibility(r.compatibilityCRD, r.currentCRD)
 
 	if err != nil {
 		return fmt.Errorf("failed to check CRD compatibility: %w", err)
@@ -165,7 +165,7 @@ func (r *reconcileState) reconcileCreateOrUpdate(ctx context.Context, obj *opera
 	}
 
 	// Add the requirement to the webhook validator
-	r.validator.setRequirement(obj.Spec.CRDRef, obj.Name, r.compatibilityCRD)
+	r.validator.setRequirement(obj.DeepCopy(), r.compatibilityCRD)
 
 	// TODO: Implement reconciliation logic
 	// - Validate CRDCompatibilityRequirement spec
@@ -182,7 +182,7 @@ func (r *reconcileState) reconcileDelete(ctx context.Context, obj *operatorv1alp
 	logger.Info("Reconciling CRDCompatibilityRequirement deletion")
 
 	// Remove the requirement from the webhook validator
-	r.validator.unsetRequirement(obj.Spec.CRDRef, obj.Name)
+	r.validator.unsetRequirement(obj.DeepCopy())
 
 	if err := clearFinalizer(ctx, r.client, obj); err != nil {
 		return ctrl.Result{}, err
