@@ -36,9 +36,10 @@ import (
 )
 
 var (
-	errExpectedCRD        = errors.New("expected a CustomResourceDefinition")
-	errCRDHasRequirements = errors.New("cannot delete CRD because it has CRDCompatibilityRequirements")
-	errCRDNotCompatible   = errors.New("CRD is not compatible with CRDCompatibilityRequirements")
+	errExpectedCRD           = errors.New("expected a CustomResourceDefinition")
+	errCRDHasRequirements    = errors.New("cannot delete CRD because it has CRDCompatibilityRequirements")
+	errCRDNotCompatible      = errors.New("CRD is not compatible with CRDCompatibilityRequirements")
+	errUnknownCRDAdmitAction = errors.New("unknown CRDAdmitAction")
 )
 
 type requirement struct {
@@ -105,9 +106,18 @@ func (v *crdValidator) validateCreateOrUpdate(obj runtime.Object) (admission.War
 		}
 
 		prependName := func(s string) string {
-			return fmt.Sprintf("requirement %s: %s", name, s)
+			return fmt.Sprintf("This requirement was added by %s: requirement %s: %s", requirement.Requirement.Spec.CreatorDescription, name, s)
 		}
-		allReqErrors = append(allReqErrors, util.SliceMap(reqErrors, prependName)...)
+
+		switch requirement.Requirement.Spec.CRDAdmitAction {
+		case operatorv1alpha1.CRDAdmitActionWarn:
+			allReqWarnings = append(allReqWarnings, util.SliceMap(reqErrors, prependName)...)
+		case operatorv1alpha1.CRDAdmitActionEnforce:
+			allReqErrors = append(allReqErrors, util.SliceMap(reqErrors, prependName)...)
+		default:
+			return nil, fmt.Errorf("%w: %q for requirement %s", errUnknownCRDAdmitAction, requirement.Requirement.Spec.CRDAdmitAction, name)
+		}
+
 		allReqWarnings = append(allReqWarnings, util.SliceMap(reqWarnings, prependName)...)
 	}
 
