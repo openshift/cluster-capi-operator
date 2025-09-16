@@ -28,8 +28,13 @@ if [ $HOME == "/" ]; then
   export HOME=/tmp/kubebuilder-testing
 fi
 
-if [ "$OPENSHIFT_CI" == "true" ] && [ -n "$ARTIFACT_DIR" ] && [ -d "$ARTIFACT_DIR" ]; then # detect ci environment there
-  GINKGO_ARGS="${GINKGO_ARGS} --junit-report=junit_cluster_capi_operator.xml --cover --coverprofile=test-unit-coverage.out --output-dir=${ARTIFACT_DIR}"
+# Collect coverage only for non-e2e tests
+if [ "$OPENSHIFT_CI" == "true" ] && [ -n "$ARTIFACT_DIR" ] && [ -d "$ARTIFACT_DIR" ]; then
+  if [[ "${TEST_DIRS}" == *"./e2e/..."* ]]; then
+    GINKGO_ARGS="${GINKGO_ARGS} --junit-report=junit_cluster_capi_operator.xml --output-dir=${ARTIFACT_DIR}"
+  else
+    GINKGO_ARGS="${GINKGO_ARGS} --junit-report=junit_cluster_capi_operator.xml --cover --coverprofile=test-unit-coverage.out --output-dir=${ARTIFACT_DIR}"
+  fi
 fi
 
 # Print the command we are going to run as Make would.
