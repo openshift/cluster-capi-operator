@@ -41,11 +41,6 @@ var (
 	errUnknownCRDAdmitAction = errors.New("unknown CRDAdmitAction")
 )
 
-type requirement struct {
-	CRD         *apiextensionsv1.CustomResourceDefinition
-	Requirement *operatorv1alpha1.CRDCompatibilityRequirement
-}
-
 type crdValidator struct {
 	client client.Reader
 }

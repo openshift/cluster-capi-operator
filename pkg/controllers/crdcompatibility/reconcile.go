@@ -72,10 +72,6 @@ func (r *CRDCompatibilityReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		return ctrl.Result{}, err
 	}
 
-	if state.compatibilityCRD != nil {
-		r.syncedRequirement(ctx, obj.Name)
-	}
-
 	if reconcileErr != nil {
 		return ctrl.Result{}, util.LogNoRequeueError(reconcileErr, logger) //nolint:wrapcheck
 	}

@@ -20,13 +20,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
-	"time"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/wait"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -53,8 +49,7 @@ const (
 // NewCRDCompatibilityReconciler returns a partially initialised CRDCompatibilityReconciler.
 func NewCRDCompatibilityReconciler(client client.Client) *CRDCompatibilityReconciler {
 	return &CRDCompatibilityReconciler{
-		client:                client,
-		syncedRequirementChan: make(chan string, 5),
+		client: client,
 	}
 }
 
@@ -63,44 +58,14 @@ type CRDCompatibilityReconciler struct {
 	client client.Client
 
 	validator *crdValidator
-
-	// Lock is required to avoid writing to closed channel, which would panic.
-	//   receiver: waitForSynced()
-	//   senders: reconcile loops call syncedRequirement()
-	//
-	// We close the channel from the receiver, which is not the normal pattern.
-	// We do this because:
-	// * only the receiver knows when it has received enough data
-	// * the senders continue to run indefinitely after the receiver has finished
-	//
-	// The sender guards writing to the channel by checking synced in
-	// syncedRequirement(). Consequently we need to ensure that nothing is in
-	// this critical section when we close the channel.
-	lock sync.RWMutex
-
-	// synced indicates that the controller has synced the state of the webhook
-	synced bool
-	// syncedRequirementChan is used to send the name of a successfully
-	// reconciled requirement to the sync waiter.
-	syncedRequirementChan chan string
 }
 
 type controllerOption func(*builder.Builder) *builder.Builder
 
-// MachineByNodeName contains the logic to index Machines by Node name.
-func CRDByCRDRef(obj client.Object) []string {
-	requirement, ok := obj.(*operatorv1alpha1.CRDCompatibilityRequirement)
-	if !ok {
-		panic(fmt.Sprintf("Expected a CRDCompatibilityRequirement but got a %T", obj))
-	}
-
-	return []string{requirement.Spec.CRDRef}
-}
-
 // SetupWithManager sets up the controller with the Manager.
 func (r *CRDCompatibilityReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager, opts ...controllerOption) error {
 	// Create field index for spec.crdRef
-	if err := mgr.GetFieldIndexer().IndexField(ctx, &operatorv1alpha1.CRDCompatibilityRequirement{}, fieldIndexCRDRef, CRDByCRDRef); err != nil {
+	if err := mgr.GetFieldIndexer().IndexField(ctx, &operatorv1alpha1.CRDCompatibilityRequirement{}, fieldIndexCRDRef, crdByCRDRef); err != nil {
 		return fmt.Errorf("failed to add index to CRDCompatibilityRequirements: %w", err)
 	}
 
@@ -140,6 +105,16 @@ func (r *CRDCompatibilityReconciler) SetupWithManager(ctx context.Context, mgr c
 	)
 }
 
+// crdByCRDRef contains the logic to index CRDCompatibilityRequirement by CRDRef.
+func crdByCRDRef(obj client.Object) []string {
+	requirement, ok := obj.(*operatorv1alpha1.CRDCompatibilityRequirement)
+	if !ok {
+		panic(fmt.Sprintf("Expected a CRDCompatibilityRequirement but got a %T", obj))
+	}
+
+	return []string{requirement.Spec.CRDRef}
+}
+
 // findCRDCompatibilityRequirementsForCRD finds all CRDCompatibilityRequirements that reference the given CRD.
 func (r *CRDCompatibilityReconciler) findCRDCompatibilityRequirementsForCRD(ctx context.Context, obj client.Object) []reconcile.Request {
 	crd, ok := obj.(*apiextensionsv1.CustomResourceDefinition)
@@ -164,127 +139,4 @@ func (r *CRDCompatibilityReconciler) findCRDCompatibilityRequirementsForCRD(ctx 
 	}
 
 	return requests
-}
-
-// IsSynced returns true if the controller has synced the state of the webhook
-// and is ready to serve validations.
-func (r *CRDCompatibilityReconciler) IsSynced() bool {
-	r.lock.RLock()
-	defer r.lock.RUnlock()
-
-	return r.synced
-}
-
-// syncedRequirement is called by the reconcile loop to register a successful
-// reconciliation.
-func (r *CRDCompatibilityReconciler) syncedRequirement(ctx context.Context, requirement string) {
-	r.lock.RLock()
-	defer r.lock.RUnlock()
-
-	if !r.synced {
-		select {
-		case r.syncedRequirementChan <- requirement:
-		case <-ctx.Done():
-			return
-		}
-	}
-}
-
-// getRequirementsToSync returns the names of the requirements that need to be
-// synced before the webhook can serve validations. It returns every requirement
-// which was previously admitted, and therefore may have been in force by a
-// previous incarnation of the controller.
-func (r *CRDCompatibilityReconciler) getRequirementsToSync(ctx context.Context) (map[string]struct{}, error) {
-	allRequirements := operatorv1alpha1.CRDCompatibilityRequirementList{}
-	if err := r.client.List(ctx, &allRequirements); err != nil {
-		return nil, fmt.Errorf("listing CRDCompatibilityRequirements: %w", err)
-	}
-
-	toSync := make(map[string]struct{}, len(allRequirements.Items))
-
-	for i := range allRequirements.Items {
-		requirement := allRequirements.Items[i]
-
-		// We don't need to sync deleted requirements
-		if !requirement.DeletionTimestamp.IsZero() {
-			continue
-		}
-
-		// We don't need to sync requirements which were not previously admitted
-		admitted := func() bool {
-			for i := range requirement.Status.Conditions {
-				condition := &requirement.Status.Conditions[i]
-				if condition.Type == conditionTypeAdmitted {
-					return condition.Status == metav1.ConditionTrue
-				}
-			}
-
-			// If there is no admitted condition the requirement was not admitted
-			return false
-		}()
-		if !admitted {
-			continue
-		}
-
-		toSync[requirement.Name] = struct{}{}
-	}
-
-	return toSync, nil
-}
-
-// WaitForSynced blocks until the state of the CRD validator webhook is up to
-// date. The state of the webhook is up to date when every requirement which was
-// previously admitted has been reconciled at least once.
-func (r *CRDCompatibilityReconciler) WaitForSynced(ctx context.Context) error {
-	logger := log.FromContext(ctx)
-
-	var toSync map[string]struct{}
-
-	// Fetch the set of requirements to sync. We use an exponential backoff here because:
-	// * returning an error is expensive because we would have to terminate the container
-	// * depending on when we're starting up, cluster disruption is reasonably likely
-	if err := wait.ExponentialBackoffWithContext(ctx, wait.Backoff{
-		Steps:    10,
-		Factor:   1.25,
-		Duration: 1 * time.Second,
-		Jitter:   1.0,
-	}, func(ctx context.Context) (bool, error) {
-		var err error
-		toSync, err = r.getRequirementsToSync(ctx)
-		if err != nil {
-			logger.Error(err, "failed to get requirements to sync")
-			return false, nil
-		}
-
-		return true, nil
-	}); err != nil {
-		return fmt.Errorf("WaitForSynced: %w", err)
-	}
-
-	logger.Info("Waiting for requirements to be synced", "requirements", toSync)
-
-	for {
-		select {
-		case requirement := <-r.syncedRequirementChan:
-			delete(toSync, requirement)
-		case <-ctx.Done():
-			return fmt.Errorf("WaitForSynced: %w", ctx.Err())
-		}
-
-		if len(toSync) == 0 {
-			r.lock.Lock()
-			defer r.lock.Unlock()
-
-			r.synced = true
-			close(r.syncedRequirementChan)
-
-			// This ensures that the channel and any remaining buffered messages
-			// will eventually be garbage collected.
-			// This is only safe because we are holding the write lock, so we
-			// know nothing is sending to the channel.
-			r.syncedRequirementChan = nil
-
-			return nil
-		}
-	}
 }
