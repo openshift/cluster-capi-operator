@@ -283,29 +283,29 @@ func (r *MachineSetSyncReconciler) syncMachineSets(ctx context.Context, mapiMach
 // reconcileMAPIMachineSetToCAPIMachineSet reconciles a MAPI MachineSet to a CAPI MachineSet.
 //
 //nolint:funlen
-func (r *MachineSetSyncReconciler) reconcileMAPIMachineSetToCAPIMachineSet(ctx context.Context, mapiMachineSet *machinev1beta1.MachineSet, capiMachineSet *clusterv1.MachineSet) (ctrl.Result, error) {
+func (r *MachineSetSyncReconciler) reconcileMAPIMachineSetToCAPIMachineSet(ctx context.Context, sourceMAPIMachineSet *machinev1beta1.MachineSet, existingCAPIMachineSet *clusterv1.MachineSet) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
-	authoritativeAPI := mapiMachineSet.Status.AuthoritativeAPI
+	authoritativeAPI := sourceMAPIMachineSet.Status.AuthoritativeAPI
 	if authoritativeAPI == machinev1beta1.MachineAuthorityClusterAPI {
 		logger.Info("AuthoritativeAPI is set to Cluster API, but no Cluster API machine set exists. Running an initial Machine API to Cluster API sync")
 	}
 
-	if shouldRequeue, err := r.reconcileMAPItoCAPIMachineSetDeletion(ctx, mapiMachineSet, capiMachineSet); err != nil {
+	if shouldRequeue, err := r.reconcileMAPItoCAPIMachineSetDeletion(ctx, sourceMAPIMachineSet, existingCAPIMachineSet); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to reconcile Machine API to Cluster API machine set deletion: %w", err)
 	} else if shouldRequeue {
 		return ctrl.Result{}, nil
 	}
 
-	if shouldRequeue, err := r.ensureSyncFinalizer(ctx, mapiMachineSet, capiMachineSet); err != nil {
+	if shouldRequeue, err := r.ensureSyncFinalizer(ctx, sourceMAPIMachineSet, existingCAPIMachineSet); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to ensure sync finalizer: %w", err)
 	} else if shouldRequeue {
 		return ctrl.Result{}, nil
 	}
 
-	if err := r.validateMAPIMachineSetOwnerReferences(mapiMachineSet); err != nil {
+	if err := r.validateMAPIMachineSetOwnerReferences(sourceMAPIMachineSet); err != nil {
 		if condErr := r.applySynchronizedConditionWithPatch(
-			ctx, mapiMachineSet, corev1.ConditionFalse, reasonFailedToConvertMAPIMachineSetToCAPI, err.Error(), nil); condErr != nil {
+			ctx, sourceMAPIMachineSet, corev1.ConditionFalse, reasonFailedToConvertMAPIMachineSetToCAPI, err.Error(), nil); condErr != nil {
 			return ctrl.Result{}, utilerrors.NewAggregate([]error{err, condErr})
 		}
 
@@ -322,10 +322,10 @@ func (r *MachineSetSyncReconciler) reconcileMAPIMachineSetToCAPIMachineSet(ctx c
 		return ctrl.Result{}, fmt.Errorf("failed to get Cluster API cluster owner reference: %w", err)
 	}
 
-	newCAPIMachineSet, newCAPIInfraMachineTemplate, warns, err := r.convertMAPIToCAPIMachineSet(mapiMachineSet)
+	convertedCAPIMachineSet, convertedCAPIInfraMachineTemplate, warns, err := r.convertMAPIToCAPIMachineSet(sourceMAPIMachineSet)
 	if err != nil {
 		conversionErr := fmt.Errorf("failed to convert MAPI machine set to CAPI machine set: %w", err)
-		if condErr := r.applySynchronizedConditionWithPatch(ctx, mapiMachineSet, corev1.ConditionFalse, reasonFailedToConvertMAPIMachineSetToCAPI, conversionErr.Error(), nil); condErr != nil {
+		if condErr := r.applySynchronizedConditionWithPatch(ctx, sourceMAPIMachineSet, corev1.ConditionFalse, reasonFailedToConvertMAPIMachineSetToCAPI, conversionErr.Error(), nil); condErr != nil {
 			return ctrl.Result{}, utilerrors.NewAggregate([]error{conversionErr, condErr})
 		}
 
@@ -334,20 +334,20 @@ func (r *MachineSetSyncReconciler) reconcileMAPIMachineSetToCAPIMachineSet(ctx c
 
 	for _, warning := range warns {
 		logger.Info("Warning during conversion", "warning", warning)
-		r.Recorder.Event(mapiMachineSet, corev1.EventTypeWarning, "ConversionWarning", warning)
+		r.Recorder.Event(sourceMAPIMachineSet, corev1.EventTypeWarning, "ConversionWarning", warning)
 	}
 
-	restoreCAPIFields(capiMachineSet, newCAPIMachineSet, r.CAPINamespace, authoritativeAPI, clusterOwnerRefence)
+	restoreCAPIFields(existingCAPIMachineSet, convertedCAPIMachineSet, r.CAPINamespace, authoritativeAPI, clusterOwnerRefence)
 
-	if err := r.ensureCAPIInfraMachineTemplate(ctx, mapiMachineSet, newCAPIMachineSet, newCAPIInfraMachineTemplate, clusterOwnerRefence); err != nil {
+	if err := r.ensureCAPIInfraMachineTemplate(ctx, sourceMAPIMachineSet, convertedCAPIMachineSet, convertedCAPIInfraMachineTemplate, clusterOwnerRefence); err != nil {
 		return ctrl.Result{}, fmt.Errorf("unable to ensure CAPI infra machine template: %w", err)
 	}
 
-	if err := r.createOrUpdateCAPIMachineSet(ctx, mapiMachineSet, capiMachineSet, newCAPIMachineSet); err != nil {
+	if err := r.createOrUpdateCAPIMachineSet(ctx, sourceMAPIMachineSet, existingCAPIMachineSet, convertedCAPIMachineSet); err != nil {
 		return ctrl.Result{}, fmt.Errorf("unable to ensure CAPI machine set: %w", err)
 	}
 
-	shouldRequeue, err := r.deleteOutdatedCAPIInfraMachineTemplates(ctx, mapiMachineSet, newCAPIInfraMachineTemplate.GetName())
+	shouldRequeue, err := r.deleteOutdatedCAPIInfraMachineTemplates(ctx, sourceMAPIMachineSet, convertedCAPIInfraMachineTemplate.GetName())
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("unable to delete outdated Cluster API infrastructure machine templates: %w", err)
 	} else if shouldRequeue {
@@ -355,8 +355,8 @@ func (r *MachineSetSyncReconciler) reconcileMAPIMachineSetToCAPIMachineSet(ctx c
 		return ctrl.Result{}, nil
 	}
 
-	return ctrl.Result{}, r.applySynchronizedConditionWithPatch(ctx, mapiMachineSet, corev1.ConditionTrue,
-		controllers.ReasonResourceSynchronized, messageSuccessfullySynchronizedMAPItoCAPI, &mapiMachineSet.Generation)
+	return ctrl.Result{}, r.applySynchronizedConditionWithPatch(ctx, sourceMAPIMachineSet, corev1.ConditionTrue,
+		controllers.ReasonResourceSynchronized, messageSuccessfullySynchronizedMAPItoCAPI, &sourceMAPIMachineSet.Generation)
 }
 
 // filterOutdatedInfraMachineTemplates takes infraMachineTemplatesList and constructs a slice of InfraMachineTemplates without newInfraMachineTemplate.
@@ -500,13 +500,13 @@ func (r *MachineSetSyncReconciler) deleteAllOutdatedCAPIInfraMachineTemplates(ct
 }
 
 // ensureCAPIInfraMachineTemplate ensures the CAPI InfraMachineTemplate is created or updated from the MAPI MachineSet.
-func (r *MachineSetSyncReconciler) ensureCAPIInfraMachineTemplate(ctx context.Context, mapiMachineSet *machinev1beta1.MachineSet, newCAPIMachineSet *clusterv1.MachineSet, newCAPIInfraMachineTemplate client.Object, clusterOwnerRefence metav1.OwnerReference) error {
-	_, infraMachineTemplate, err := r.fetchCAPIInfraResources(ctx, newCAPIMachineSet)
+func (r *MachineSetSyncReconciler) ensureCAPIInfraMachineTemplate(ctx context.Context, sourceMAPIMachineSet *machinev1beta1.MachineSet, convertedCAPIMachineSet *clusterv1.MachineSet, convertedCAPIInfraMachineTemplate client.Object, clusterOwnerRefence metav1.OwnerReference) error {
+	_, infraMachineTemplate, err := r.fetchCAPIInfraResources(ctx, convertedCAPIMachineSet)
 	if err != nil && !apierrors.IsNotFound(err) {
 		fetchErr := fmt.Errorf("failed to fetch CAPI infra resources: %w", err)
 
 		if condErr := r.applySynchronizedConditionWithPatch(
-			ctx, mapiMachineSet, corev1.ConditionFalse, reasonFailedToGetCAPIInfraResources, fetchErr.Error(), nil); condErr != nil {
+			ctx, sourceMAPIMachineSet, corev1.ConditionFalse, reasonFailedToGetCAPIInfraResources, fetchErr.Error(), nil); condErr != nil {
 			return utilerrors.NewAggregate([]error{fetchErr, condErr})
 		}
 
@@ -514,24 +514,24 @@ func (r *MachineSetSyncReconciler) ensureCAPIInfraMachineTemplate(ctx context.Co
 	}
 
 	if !util.IsNilObject(infraMachineTemplate) {
-		newCAPIInfraMachineTemplate.SetResourceVersion(util.GetResourceVersion(infraMachineTemplate))
-		newCAPIInfraMachineTemplate.SetFinalizers(infraMachineTemplate.GetFinalizers())
+		convertedCAPIInfraMachineTemplate.SetResourceVersion(util.GetResourceVersion(infraMachineTemplate))
+		convertedCAPIInfraMachineTemplate.SetFinalizers(infraMachineTemplate.GetFinalizers())
 	}
 
-	newCAPIInfraMachineTemplate.SetNamespace(r.CAPINamespace)
-	newCAPIInfraMachineTemplate.SetOwnerReferences([]metav1.OwnerReference{clusterOwnerRefence})
+	convertedCAPIInfraMachineTemplate.SetNamespace(r.CAPINamespace)
+	convertedCAPIInfraMachineTemplate.SetOwnerReferences([]metav1.OwnerReference{clusterOwnerRefence})
 
-	if mapiMachineSet.Status.AuthoritativeAPI == machinev1beta1.MachineAuthorityMachineAPI {
+	if sourceMAPIMachineSet.Status.AuthoritativeAPI == machinev1beta1.MachineAuthorityMachineAPI {
 		// Set the paused annotation on the new CAPI InfraMachineTemplate, if the authoritativeAPI is Machine API,
 		// as we want the new CAPI InfraMachineTemplate to be initially paused when the MAPI MachineSet is the authoritative one.
 		// For the other case instead, when the new CAPI InfraMachineTemplate that is being created, is also expected to be the authority
 		// (i.e. in cases where the MAPI MachineSet is created as .spec.authoritativeAPI: ClusterAPI), we do not want to create it paused.
-		annotations.AddAnnotations(newCAPIInfraMachineTemplate, map[string]string{clusterv1.PausedAnnotation: ""})
+		annotations.AddAnnotations(convertedCAPIInfraMachineTemplate, map[string]string{clusterv1.PausedAnnotation: ""})
 	}
 
-	newCAPIInfraMachineTemplate.SetLabels(map[string]string{controllers.MachineSetOpenshiftLabelKey: mapiMachineSet.Name})
+	convertedCAPIInfraMachineTemplate.SetLabels(map[string]string{controllers.MachineSetOpenshiftLabelKey: sourceMAPIMachineSet.Name})
 
-	if err := r.createOrUpdateCAPIInfraMachineTemplate(ctx, mapiMachineSet, infraMachineTemplate, newCAPIInfraMachineTemplate); err != nil {
+	if err := r.createOrUpdateCAPIInfraMachineTemplate(ctx, sourceMAPIMachineSet, infraMachineTemplate, convertedCAPIInfraMachineTemplate); err != nil {
 		return fmt.Errorf("unable to ensure Cluster API infrastructure machine template: %w", err)
 	}
 
@@ -542,49 +542,49 @@ func (r *MachineSetSyncReconciler) ensureCAPIInfraMachineTemplate(ctx context.Co
 // MAPI MachineSet.
 //
 //nolint:funlen
-func (r *MachineSetSyncReconciler) reconcileCAPIMachineSetToMAPIMachineSet(ctx context.Context, capiMachineSet *clusterv1.MachineSet, mapiMachineSet *machinev1beta1.MachineSet) (ctrl.Result, error) {
+func (r *MachineSetSyncReconciler) reconcileCAPIMachineSetToMAPIMachineSet(ctx context.Context, sourceCAPIMachineSet *clusterv1.MachineSet, existingMAPIMachineSet *machinev1beta1.MachineSet) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
-	if shouldRequeue, err := r.reconcileCAPItoMAPIMachineSetDeletion(ctx, mapiMachineSet, capiMachineSet); err != nil {
+	if shouldRequeue, err := r.reconcileCAPItoMAPIMachineSetDeletion(ctx, existingMAPIMachineSet, sourceCAPIMachineSet); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to reconcile Machine API to Cluster API machine set deletion: %w", err)
 	} else if shouldRequeue {
 		return ctrl.Result{}, nil
 	}
 
-	if shouldRequeue, err := r.ensureSyncFinalizer(ctx, mapiMachineSet, capiMachineSet); err != nil {
+	if shouldRequeue, err := r.ensureSyncFinalizer(ctx, existingMAPIMachineSet, sourceCAPIMachineSet); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to ensure sync finalizer: %w", err)
 	} else if shouldRequeue {
 		return ctrl.Result{}, nil
 	}
 
-	if err := r.validateCAPIMachineSetOwnerReferences(capiMachineSet); err != nil {
+	if err := r.validateCAPIMachineSetOwnerReferences(sourceCAPIMachineSet); err != nil {
 		logger.Error(err, "unable to convert Cluster API machine set to Machine API. Cluster API machine set has non-convertible owner references")
 
-		if condErr := r.applySynchronizedConditionWithPatch(ctx, mapiMachineSet, corev1.ConditionFalse, reasonFailedToConvertCAPIMachineSetToMAPI, err.Error(), nil); condErr != nil {
+		if condErr := r.applySynchronizedConditionWithPatch(ctx, existingMAPIMachineSet, corev1.ConditionFalse, reasonFailedToConvertCAPIMachineSetToMAPI, err.Error(), nil); condErr != nil {
 			return ctrl.Result{}, utilerrors.NewAggregate([]error{err, condErr})
 		}
 
 		return ctrl.Result{}, nil
 	}
 
-	infraCluster, infraMachineTemplate, err := r.fetchCAPIInfraResources(ctx, capiMachineSet)
+	infraCluster, infraMachineTemplate, err := r.fetchCAPIInfraResources(ctx, sourceCAPIMachineSet)
 	if err != nil {
 		fetchErr := fmt.Errorf("failed to fetch CAPI infra resources: %w", err)
 
 		if condErr := r.applySynchronizedConditionWithPatch(
-			ctx, mapiMachineSet, corev1.ConditionFalse, reasonFailedToGetCAPIInfraResources, fetchErr.Error(), nil); condErr != nil {
+			ctx, existingMAPIMachineSet, corev1.ConditionFalse, reasonFailedToGetCAPIInfraResources, fetchErr.Error(), nil); condErr != nil {
 			return ctrl.Result{}, utilerrors.NewAggregate([]error{fetchErr, condErr})
 		}
 
 		return ctrl.Result{}, fetchErr
 	}
 
-	newMapiMachineSet, warns, err := r.convertCAPIToMAPIMachineSet(capiMachineSet, infraMachineTemplate, infraCluster)
+	convertedMAPIMachineSet, warns, err := r.convertCAPIToMAPIMachineSet(sourceCAPIMachineSet, infraMachineTemplate, infraCluster)
 	if err != nil {
 		conversionErr := fmt.Errorf("failed to convert CAPI machine set to MAPI machine set: %w", err)
 
 		if condErr := r.applySynchronizedConditionWithPatch(
-			ctx, mapiMachineSet, corev1.ConditionFalse, reasonFailedToConvertCAPIMachineSetToMAPI, conversionErr.Error(), nil); condErr != nil {
+			ctx, existingMAPIMachineSet, corev1.ConditionFalse, reasonFailedToConvertCAPIMachineSetToMAPI, conversionErr.Error(), nil); condErr != nil {
 			return ctrl.Result{}, utilerrors.NewAggregate([]error{conversionErr, condErr})
 		}
 
@@ -593,17 +593,17 @@ func (r *MachineSetSyncReconciler) reconcileCAPIMachineSetToMAPIMachineSet(ctx c
 
 	for _, warning := range warns {
 		logger.Info("Warning during conversion", "warning", warning)
-		r.Recorder.Event(mapiMachineSet, corev1.EventTypeWarning, "ConversionWarning", warning)
+		r.Recorder.Event(existingMAPIMachineSet, corev1.EventTypeWarning, "ConversionWarning", warning)
 	}
 
-	restoreMAPIFields(mapiMachineSet, newMapiMachineSet)
+	restoreMAPIFields(existingMAPIMachineSet, convertedMAPIMachineSet)
 
-	if err := r.createOrUpdateMAPIMachineSet(ctx, mapiMachineSet, newMapiMachineSet, capiMachineSet); err != nil {
+	if err := r.createOrUpdateMAPIMachineSet(ctx, existingMAPIMachineSet, convertedMAPIMachineSet, sourceCAPIMachineSet); err != nil {
 		return ctrl.Result{}, fmt.Errorf("unable to ensure MAPI machine set: %w", err)
 	}
 
-	return ctrl.Result{}, r.applySynchronizedConditionWithPatch(ctx, mapiMachineSet, corev1.ConditionTrue,
-		controllers.ReasonResourceSynchronized, messageSuccessfullySynchronizedCAPItoMAPI, &capiMachineSet.Generation)
+	return ctrl.Result{}, r.applySynchronizedConditionWithPatch(ctx, existingMAPIMachineSet, corev1.ConditionTrue,
+		controllers.ReasonResourceSynchronized, messageSuccessfullySynchronizedCAPItoMAPI, &sourceCAPIMachineSet.Generation)
 }
 
 // fetchCAPIClusterOwnerReference fetches the OpenShift cluster object instance and returns owner reference to it.
@@ -770,88 +770,36 @@ func (r *MachineSetSyncReconciler) createOrUpdateCAPIInfraMachineTemplate(ctx co
 }
 
 // createOrUpdateCAPIMachineSet creates a CAPI machine set from a MAPI one, or updates if it exists and it is out of date.
-//
-//nolint:funlen
-func (r *MachineSetSyncReconciler) createOrUpdateCAPIMachineSet(ctx context.Context, mapiMachineSet *machinev1beta1.MachineSet, capiMachineSet *clusterv1.MachineSet, newCAPIMachineSet *clusterv1.MachineSet) error {
+func (r *MachineSetSyncReconciler) createOrUpdateCAPIMachineSet(ctx context.Context, mapiMachineSet *machinev1beta1.MachineSet, existingCAPIMachineSet *clusterv1.MachineSet, convertedCAPIMachineSet *clusterv1.MachineSet) error {
 	logger := log.FromContext(ctx)
 
-	if capiMachineSet == nil {
-		if err := r.Create(ctx, newCAPIMachineSet); err != nil {
-			logger.Error(err, "Failed to create CAPI machine set")
-
-			createErr := fmt.Errorf("failed to create CAPI machine set: %w", err)
-			if condErr := r.applySynchronizedConditionWithPatch(
-				ctx, mapiMachineSet, corev1.ConditionFalse, reasonFailedToCreateCAPIMachineSet, createErr.Error(), nil); condErr != nil {
-				return utilerrors.NewAggregate([]error{createErr, condErr})
-			}
-
-			return createErr
-		}
-
-		logger.Info("Successfully created CAPI machine set", "name", newCAPIMachineSet.Name, "infraMachineTemplate", newCAPIMachineSet.Spec.Template.Spec.InfrastructureRef.Name)
-
+	// If there is no existing CAPI machine set, create a new one.
+	if created, err := r.ensureCAPIMachineSet(ctx, mapiMachineSet, existingCAPIMachineSet, convertedCAPIMachineSet); err != nil {
+		return err
+	} else if created {
+		// If the CAPI machine set was created,
+		// return early to allow for the change to be propagated.
 		return nil
 	}
 
-	capiMachineSetsDiff := compareCAPIMachineSets(capiMachineSet, newCAPIMachineSet)
+	// If there is an existing CAPI machine set, work out if it needs updating.
 
-	specUpdated := false
-	statusUpdated := false
+	// Compare the existing CAPI machine set with the converted CAPI machine set to check for changes.
+	capiMachineSetsDiff := compareCAPIMachineSets(existingCAPIMachineSet, convertedCAPIMachineSet)
 
-	updatedOrCreatedCAPIMachineSet := newCAPIMachineSet.DeepCopy()
+	// Make a deep copy of the converted CAPI machine set to avoid modifying the original.
+	updatedOrCreatedCAPIMachineSet := convertedCAPIMachineSet.DeepCopy()
 
-	if hasSpecOrMetadataOrProviderSpecChanges(capiMachineSetsDiff) {
-		logger.Info("Changes detected for CAPI machine set. Updating it", "diff", fmt.Sprintf("%+v", capiMachineSetsDiff))
-
-		if err := r.Update(ctx, updatedOrCreatedCAPIMachineSet); err != nil {
-			logger.Error(err, "Failed to update CAPI machine set")
-
-			updateErr := fmt.Errorf("failed to update CAPI machine set: %w", err)
-
-			if condErr := r.applySynchronizedConditionWithPatch(ctx, mapiMachineSet, corev1.ConditionFalse, reasonFailedToUpdateCAPIMachineSet, updateErr.Error(), nil); condErr != nil {
-				return utilerrors.NewAggregate([]error{updateErr, condErr})
-			}
-
-			return updateErr
-		}
-
-		specUpdated = true
+	// If there are spec changes, update the CAPI machine set.
+	specUpdated, err := r.ensureCAPIMachineSetSpecUpdated(ctx, mapiMachineSet, capiMachineSetsDiff, updatedOrCreatedCAPIMachineSet)
+	if err != nil {
+		return fmt.Errorf("failed to ensure CAPI machine set spec updated: %w", err)
 	}
 
-	sourceAPIObjectHasMatchingGeneration := hasMatchingGenerations(mapiMachineSet.Status.ObservedGeneration, mapiMachineSet.ObjectMeta.Generation)
-
-	// Only update the status if there are status changes or the spec has been updated,
-	// and only if the source API object has a matching generation,
-	// as we don't want to update the status if the source API object status has not yet caught up with the desired spec.
-	//
-	//nolint:nestif
-	if (hasStatusChanges(capiMachineSetsDiff) || specUpdated) && sourceAPIObjectHasMatchingGeneration {
-		logger.Info("Changes detected for CAPI machine set status. Updating it", "diff", fmt.Sprintf("%+v", capiMachineSetsDiff))
-
-		patchBase := client.MergeFrom(capiMachineSet.DeepCopy())
-
-		setChangedCAPIMachineSetStatusFields(capiMachineSet, newCAPIMachineSet)
-
-		// Set the new status ObservedGeneration to the newest CAPI MachineSet generation after the previous spec/metadata update/create.
-		capiMachineSet.Status.ObservedGeneration = updatedOrCreatedCAPIMachineSet.ObjectMeta.Generation
-
-		if isPatchRequired, err := util.IsPatchRequired(capiMachineSet, patchBase); err != nil {
-			return fmt.Errorf("failed to check if patch is required: %w", err)
-		} else if isPatchRequired {
-			if err := r.Status().Patch(ctx, capiMachineSet, patchBase); err != nil {
-				logger.Error(err, "Failed to update CAPI machine set status")
-
-				updateErr := fmt.Errorf("failed to update CAPI machine set status: %w", err)
-
-				if condErr := r.applySynchronizedConditionWithPatch(ctx, mapiMachineSet, corev1.ConditionFalse, reasonFailedToUpdateCAPIMachineSet, updateErr.Error(), nil); condErr != nil {
-					return utilerrors.NewAggregate([]error{updateErr, condErr})
-				}
-
-				return updateErr
-			}
-
-			statusUpdated = true
-		}
+	// If there are status changes, update the CAPI machine set status.
+	statusUpdated, err := r.ensureCAPIMachineSetStatusUpdated(ctx, mapiMachineSet, existingCAPIMachineSet, convertedCAPIMachineSet, updatedOrCreatedCAPIMachineSet, capiMachineSetsDiff, specUpdated)
+	if err != nil {
+		return fmt.Errorf("failed to ensure CAPI machine set status updated: %w", err)
 	}
 
 	if specUpdated || statusUpdated {
@@ -863,47 +811,220 @@ func (r *MachineSetSyncReconciler) createOrUpdateCAPIMachineSet(ctx context.Cont
 	return nil
 }
 
+// ensureCAPIMachineSet creates a new CAPI machine set if one doesn't exist.
+func (r *MachineSetSyncReconciler) ensureCAPIMachineSet(ctx context.Context, sourceMAPIMachineSet *machinev1beta1.MachineSet, existingCAPIMachineSet *clusterv1.MachineSet, convertedCAPIMachineSet *clusterv1.MachineSet) (bool, error) {
+	// If there is an existing CAPI machine set, no need to create one.
+	if existingCAPIMachineSet != nil {
+		return false, nil
+	}
+
+	logger := log.FromContext(ctx)
+
+	if err := r.Create(ctx, convertedCAPIMachineSet); err != nil {
+		logger.Error(err, "Failed to create CAPI machine set")
+
+		createErr := fmt.Errorf("failed to create CAPI machine set: %w", err)
+		if condErr := r.applySynchronizedConditionWithPatch(
+			ctx, sourceMAPIMachineSet, corev1.ConditionFalse, reasonFailedToCreateCAPIMachineSet, createErr.Error(), nil); condErr != nil {
+			return false, utilerrors.NewAggregate([]error{createErr, condErr})
+		}
+
+		return false, createErr
+	}
+
+	logger.Info("Successfully created CAPI machine set", "name", convertedCAPIMachineSet.Name, "infraMachineTemplate", convertedCAPIMachineSet.Spec.Template.Spec.InfrastructureRef.Name)
+
+	return true, nil
+}
+
+// ensureCAPIMachineSetSpecUpdated updates the CAPI machine set if changes are detected.
+func (r *MachineSetSyncReconciler) ensureCAPIMachineSetSpecUpdated(ctx context.Context, mapiMachineSet *machinev1beta1.MachineSet, capiMachineSetsDiff map[string]any, updatedOrCreatedCAPIMachineSet *clusterv1.MachineSet) (bool, error) {
+	logger := log.FromContext(ctx)
+
+	// If there are no spec changes, return early.
+	if !hasSpecOrMetadataOrProviderSpecChanges(capiMachineSetsDiff) {
+		return false, nil
+	}
+
+	logger.Info("Changes detected for CAPI machine set. Updating it", "diff", fmt.Sprintf("%+v", capiMachineSetsDiff))
+
+	if err := r.Update(ctx, updatedOrCreatedCAPIMachineSet); err != nil {
+		logger.Error(err, "Failed to update CAPI machine set")
+
+		updateErr := fmt.Errorf("failed to update CAPI machine set: %w", err)
+
+		if condErr := r.applySynchronizedConditionWithPatch(ctx, mapiMachineSet, corev1.ConditionFalse, reasonFailedToUpdateCAPIMachineSet, updateErr.Error(), nil); condErr != nil {
+			return false, utilerrors.NewAggregate([]error{updateErr, condErr})
+		}
+
+		return false, updateErr
+	}
+
+	return true, nil
+}
+
+// ensureCAPIMachineSetStatusUpdated updates the CAPI machine set status if changes are detected and conditions are met.
+func (r *MachineSetSyncReconciler) ensureCAPIMachineSetStatusUpdated(ctx context.Context, mapiMachineSet *machinev1beta1.MachineSet, existingCAPIMachineSet *clusterv1.MachineSet, convertedCAPIMachineSet *clusterv1.MachineSet, updatedOrCreatedCAPIMachineSet *clusterv1.MachineSet, capiMachineSetsDiff map[string]any, specUpdated bool) (bool, error) {
+	logger := log.FromContext(ctx)
+
+	// If there are no status changes and the spec has not been updated, return early.
+	if !hasStatusChanges(capiMachineSetsDiff) && !specUpdated {
+		return false, nil
+	}
+
+	// If the source API object (MAPI MachineSet) status.observedGeneration does not match the objectmeta.generation
+	// it means the source API object status has not yet caught up with the desired spec,
+	// so we don't want to update the CAPI machine set status until that has happened.
+	if mapiMachineSet.Status.ObservedGeneration != mapiMachineSet.ObjectMeta.Generation {
+		logger.Info("Changes detected for CAPI machine set status, but the MAPI machine spec has not been observed yet, skipping status update")
+
+		return false, nil
+	}
+
+	logger.Info("Changes detected for CAPI machine set status. Updating it")
+
+	patchBase := client.MergeFrom(existingCAPIMachineSet.DeepCopy())
+	setChangedCAPIMachineSetStatusFields(existingCAPIMachineSet, convertedCAPIMachineSet)
+
+	// Update the observed generation to match the updated source API object generation.
+	existingCAPIMachineSet.Status.ObservedGeneration = updatedOrCreatedCAPIMachineSet.ObjectMeta.Generation
+
+	isPatchRequired, err := util.IsPatchRequired(existingCAPIMachineSet, patchBase)
+	if err != nil {
+		return false, fmt.Errorf("failed to check if patch is required: %w", err)
+	}
+
+	if isPatchRequired {
+		if err := r.Status().Patch(ctx, existingCAPIMachineSet, patchBase); err != nil {
+			logger.Error(err, "Failed to update CAPI machine set status")
+
+			return false, fmt.Errorf("failed to update CAPI machine set status: %w", err)
+		}
+
+		return true, nil
+	}
+
+	return false, nil
+}
+
+// ensureMAPIMachineSetSpecUpdated updates the MAPI machine set if changes are detected.
+func (r *MachineSetSyncReconciler) ensureMAPIMachineSetSpecUpdated(ctx context.Context, mapiMachineSet *machinev1beta1.MachineSet, mapiMachineSetsDiff map[string]any, updatedMAPIMachineSet *machinev1beta1.MachineSet) (bool, error) {
+	logger := log.FromContext(ctx)
+
+	// If there are no spec changes, return early.
+	if !hasSpecOrMetadataOrProviderSpecChanges(mapiMachineSetsDiff) {
+		return false, nil
+	}
+
+	logger.Info("Changes detected for MAPI machine set. Updating it", "diff", fmt.Sprintf("%+v", mapiMachineSetsDiff))
+
+	if err := r.Update(ctx, updatedMAPIMachineSet); err != nil {
+		logger.Error(err, "Failed to update MAPI machine set")
+
+		updateErr := fmt.Errorf("failed to update MAPI machine set: %w", err)
+
+		if condErr := r.applySynchronizedConditionWithPatch(
+			ctx, mapiMachineSet, corev1.ConditionFalse, reasonFailedToUpdateMAPIMachineSet, updateErr.Error(), nil); condErr != nil {
+			return false, utilerrors.NewAggregate([]error{updateErr, condErr})
+		}
+
+		return false, updateErr
+	}
+
+	return true, nil
+}
+
+// ensureMAPIMachineSetStatusUpdated updates the MAPI machine set status if changes are detected and conditions are met.
+func (r *MachineSetSyncReconciler) ensureMAPIMachineSetStatusUpdated(ctx context.Context, existingMAPIMachineSet *machinev1beta1.MachineSet, convertedMAPIMachineSet *machinev1beta1.MachineSet, updatedMAPIMachineSet *machinev1beta1.MachineSet, sourceCAPIMachineSet *clusterv1.MachineSet, mapiMachineSetsDiff map[string]any, specUpdated bool) (bool, error) {
+	logger := log.FromContext(ctx)
+
+	// If there are no status changes and the spec has not been updated, return early.
+	if !hasStatusChanges(mapiMachineSetsDiff) && !specUpdated {
+		return false, nil
+	}
+
+	// If the source API object (CAPI MachineSet) status.observedGeneration does not match the objectmeta.generation
+	// it means the source API object status has not yet caught up with the desired spec,
+	// so we don't want to update the MAPI machine set status until that has happened.
+	if sourceCAPIMachineSet.Status.ObservedGeneration != sourceCAPIMachineSet.ObjectMeta.Generation {
+		logger.Info("Changes detected for MAPI machine set status, but the CAPI machine spec has not been observed yet, skipping status update")
+		return false, nil
+	}
+
+	logger.Info("Changes detected for MAPI machine set status. Updating it", "diff", fmt.Sprintf("%+v", mapiMachineSetsDiff))
+
+	patchBase := client.MergeFrom(existingMAPIMachineSet.DeepCopy())
+
+	// Set the changed MAPI machine set status fields from the converted MAPI machine set.
+	setChangedMAPIMachineSetStatusFields(existingMAPIMachineSet, convertedMAPIMachineSet)
+
+	// Update the observed generation to match the updated source API object generation.
+	existingMAPIMachineSet.Status.ObservedGeneration = updatedMAPIMachineSet.ObjectMeta.Generation
+
+	isPatchRequired, err := util.IsPatchRequired(existingMAPIMachineSet, patchBase)
+	if err != nil {
+		return false, fmt.Errorf("failed to check if patch is required: %w", err)
+	}
+
+	if isPatchRequired {
+		if err := r.Status().Patch(ctx, existingMAPIMachineSet, patchBase); err != nil {
+			logger.Error(err, "Failed to update MAPI machine set status")
+
+			updateErr := fmt.Errorf("failed to update MAPI machine set status: %w", err)
+
+			if condErr := r.applySynchronizedConditionWithPatch(
+				ctx, existingMAPIMachineSet, corev1.ConditionFalse, reasonFailedToUpdateMAPIMachineSet, updateErr.Error(), nil); condErr != nil {
+				return false, utilerrors.NewAggregate([]error{updateErr, condErr})
+			}
+
+			return false, updateErr
+		}
+
+		return true, nil
+	}
+
+	return false, nil
+}
+
 // setChangedCAPIMachineSetStatusFields sets the updated fields in the CAPI machine set status.
-// The capiMachineSet argument is the existing CAPI machine set.
-// The newCAPIMachineSet argument is the new CAPI machine set with the desired status changes.
 //
 //nolint:gocognit,funlen
-func setChangedCAPIMachineSetStatusFields(capiMachineSet, newCAPIMachineSet *clusterv1.MachineSet) {
-	// newCAPIMachineSet holds the computed and desired status changes, so apply them to the existing capiMachineSet.
-	capiMachineSet.Status.Replicas = newCAPIMachineSet.Status.Replicas
-	capiMachineSet.Status.ReadyReplicas = newCAPIMachineSet.Status.ReadyReplicas
-	capiMachineSet.Status.AvailableReplicas = newCAPIMachineSet.Status.AvailableReplicas
-	capiMachineSet.Status.FullyLabeledReplicas = newCAPIMachineSet.Status.FullyLabeledReplicas
-	capiMachineSet.Status.FailureReason = newCAPIMachineSet.Status.FailureReason
-	capiMachineSet.Status.FailureMessage = newCAPIMachineSet.Status.FailureMessage
+func setChangedCAPIMachineSetStatusFields(existingCAPIMachineSet, convertedCAPIMachineSet *clusterv1.MachineSet) {
+	// convertedCAPIMachineSet holds the computed and desired status changes, so apply them to the existing existingCAPIMachineSet.
+	existingCAPIMachineSet.Status.Replicas = convertedCAPIMachineSet.Status.Replicas
+	existingCAPIMachineSet.Status.ReadyReplicas = convertedCAPIMachineSet.Status.ReadyReplicas
+	existingCAPIMachineSet.Status.AvailableReplicas = convertedCAPIMachineSet.Status.AvailableReplicas
+	existingCAPIMachineSet.Status.FullyLabeledReplicas = convertedCAPIMachineSet.Status.FullyLabeledReplicas
+	existingCAPIMachineSet.Status.FailureReason = convertedCAPIMachineSet.Status.FailureReason
+	existingCAPIMachineSet.Status.FailureMessage = convertedCAPIMachineSet.Status.FailureMessage
 
 	// Update the conditions if they exist (ignoring lasttransitiontime), append new ones.
-	for i := range newCAPIMachineSet.Status.Conditions {
+	for i := range convertedCAPIMachineSet.Status.Conditions { //nolint:dupl
 		hasCondition := false
 
-		for j := range capiMachineSet.Status.Conditions {
-			if capiMachineSet.Status.Conditions[j].Type == newCAPIMachineSet.Status.Conditions[i].Type {
+		for j := range existingCAPIMachineSet.Status.Conditions {
+			if existingCAPIMachineSet.Status.Conditions[j].Type == convertedCAPIMachineSet.Status.Conditions[i].Type {
 				hasChanged := false
 				hasCondition = true
 
-				if capiMachineSet.Status.Conditions[j].Status != newCAPIMachineSet.Status.Conditions[i].Status {
-					capiMachineSet.Status.Conditions[j].Status = newCAPIMachineSet.Status.Conditions[i].Status
+				if existingCAPIMachineSet.Status.Conditions[j].Status != convertedCAPIMachineSet.Status.Conditions[i].Status {
+					existingCAPIMachineSet.Status.Conditions[j].Status = convertedCAPIMachineSet.Status.Conditions[i].Status
 					hasChanged = true
 				}
 
-				if capiMachineSet.Status.Conditions[j].Reason != newCAPIMachineSet.Status.Conditions[i].Reason {
-					capiMachineSet.Status.Conditions[j].Reason = newCAPIMachineSet.Status.Conditions[i].Reason
+				if existingCAPIMachineSet.Status.Conditions[j].Reason != convertedCAPIMachineSet.Status.Conditions[i].Reason {
+					existingCAPIMachineSet.Status.Conditions[j].Reason = convertedCAPIMachineSet.Status.Conditions[i].Reason
 					hasChanged = true
 				}
 
-				if capiMachineSet.Status.Conditions[j].Message != newCAPIMachineSet.Status.Conditions[i].Message {
-					capiMachineSet.Status.Conditions[j].Message = newCAPIMachineSet.Status.Conditions[i].Message
+				if existingCAPIMachineSet.Status.Conditions[j].Message != convertedCAPIMachineSet.Status.Conditions[i].Message {
+					existingCAPIMachineSet.Status.Conditions[j].Message = convertedCAPIMachineSet.Status.Conditions[i].Message
 					hasChanged = true
 				}
 
 				if hasChanged {
 					// Set the last transition time to the new condition's last transition time only if the condition has changed.
-					capiMachineSet.Status.Conditions[j].LastTransitionTime = newCAPIMachineSet.Status.Conditions[i].LastTransitionTime
+					existingCAPIMachineSet.Status.Conditions[j].LastTransitionTime = convertedCAPIMachineSet.Status.Conditions[i].LastTransitionTime
 				}
 
 				break
@@ -911,43 +1032,43 @@ func setChangedCAPIMachineSetStatusFields(capiMachineSet, newCAPIMachineSet *clu
 		}
 
 		if !hasCondition {
-			capiMachineSet.Status.Conditions = append(capiMachineSet.Status.Conditions, newCAPIMachineSet.Status.Conditions[i])
+			existingCAPIMachineSet.Status.Conditions = append(existingCAPIMachineSet.Status.Conditions, convertedCAPIMachineSet.Status.Conditions[i])
 		}
 	}
 
 	// Update the v1beta2 conditions if they exist (ignoring lasttransitiontime), append new ones.
 	switch {
-	case newCAPIMachineSet.Status.V1Beta2 == nil:
-		capiMachineSet.Status.V1Beta2 = nil
-	case capiMachineSet.Status.V1Beta2 == nil:
-		capiMachineSet.Status.V1Beta2 = newCAPIMachineSet.Status.V1Beta2
+	case convertedCAPIMachineSet.Status.V1Beta2 == nil:
+		existingCAPIMachineSet.Status.V1Beta2 = nil
+	case existingCAPIMachineSet.Status.V1Beta2 == nil:
+		existingCAPIMachineSet.Status.V1Beta2 = convertedCAPIMachineSet.Status.V1Beta2
 	default:
-		for i := range newCAPIMachineSet.Status.V1Beta2.Conditions {
+		for i := range convertedCAPIMachineSet.Status.V1Beta2.Conditions {
 			hasCondition := false
 
-			for j := range capiMachineSet.Status.V1Beta2.Conditions {
-				if capiMachineSet.Status.V1Beta2.Conditions[j].Type == newCAPIMachineSet.Status.V1Beta2.Conditions[i].Type {
+			for j := range existingCAPIMachineSet.Status.V1Beta2.Conditions {
+				if existingCAPIMachineSet.Status.V1Beta2.Conditions[j].Type == convertedCAPIMachineSet.Status.V1Beta2.Conditions[i].Type {
 					hasCondition = true
 					hasChanged := false
 
-					if capiMachineSet.Status.V1Beta2.Conditions[j].Status != newCAPIMachineSet.Status.V1Beta2.Conditions[i].Status {
-						capiMachineSet.Status.V1Beta2.Conditions[j].Status = newCAPIMachineSet.Status.V1Beta2.Conditions[i].Status
+					if existingCAPIMachineSet.Status.V1Beta2.Conditions[j].Status != convertedCAPIMachineSet.Status.V1Beta2.Conditions[i].Status {
+						existingCAPIMachineSet.Status.V1Beta2.Conditions[j].Status = convertedCAPIMachineSet.Status.V1Beta2.Conditions[i].Status
 						hasChanged = true
 					}
 
-					if capiMachineSet.Status.V1Beta2.Conditions[j].Reason != newCAPIMachineSet.Status.V1Beta2.Conditions[i].Reason {
-						capiMachineSet.Status.V1Beta2.Conditions[j].Reason = newCAPIMachineSet.Status.V1Beta2.Conditions[i].Reason
+					if existingCAPIMachineSet.Status.V1Beta2.Conditions[j].Reason != convertedCAPIMachineSet.Status.V1Beta2.Conditions[i].Reason {
+						existingCAPIMachineSet.Status.V1Beta2.Conditions[j].Reason = convertedCAPIMachineSet.Status.V1Beta2.Conditions[i].Reason
 						hasChanged = true
 					}
 
-					if capiMachineSet.Status.V1Beta2.Conditions[j].Message != newCAPIMachineSet.Status.V1Beta2.Conditions[i].Message {
-						capiMachineSet.Status.V1Beta2.Conditions[j].Message = newCAPIMachineSet.Status.V1Beta2.Conditions[i].Message
+					if existingCAPIMachineSet.Status.V1Beta2.Conditions[j].Message != convertedCAPIMachineSet.Status.V1Beta2.Conditions[i].Message {
+						existingCAPIMachineSet.Status.V1Beta2.Conditions[j].Message = convertedCAPIMachineSet.Status.V1Beta2.Conditions[i].Message
 						hasChanged = true
 					}
 
 					if hasChanged {
 						// Set the last transition time to the new condition's last transition time only if the condition has changed.
-						capiMachineSet.Status.V1Beta2.Conditions[j].LastTransitionTime = newCAPIMachineSet.Status.V1Beta2.Conditions[i].LastTransitionTime
+						existingCAPIMachineSet.Status.V1Beta2.Conditions[j].LastTransitionTime = convertedCAPIMachineSet.Status.V1Beta2.Conditions[i].LastTransitionTime
 					}
 
 					break
@@ -955,83 +1076,35 @@ func setChangedCAPIMachineSetStatusFields(capiMachineSet, newCAPIMachineSet *clu
 			}
 
 			if !hasCondition {
-				capiMachineSet.Status.V1Beta2.Conditions = append(capiMachineSet.Status.V1Beta2.Conditions, newCAPIMachineSet.Status.V1Beta2.Conditions[i])
+				existingCAPIMachineSet.Status.V1Beta2.Conditions = append(existingCAPIMachineSet.Status.V1Beta2.Conditions, convertedCAPIMachineSet.Status.V1Beta2.Conditions[i])
 			}
 		}
 	}
 }
 
 // createOrUpdateMAPIMachineSet creates a MAPI machine set from a CAPI one, or updates if it exists and it is out of date.
-//
-//nolint:funlen
-func (r *MachineSetSyncReconciler) createOrUpdateMAPIMachineSet(ctx context.Context, mapiMachineSet *machinev1beta1.MachineSet, newMAPIMachineSet *machinev1beta1.MachineSet, capiMachineSet *clusterv1.MachineSet) error {
+func (r *MachineSetSyncReconciler) createOrUpdateMAPIMachineSet(ctx context.Context, existingMAPIMachineSet *machinev1beta1.MachineSet, convertedMAPIMachineSet *machinev1beta1.MachineSet, capiMachineSet *clusterv1.MachineSet) error {
 	logger := log.FromContext(ctx)
 
-	mapiMachineSetsDiff, err := compareMAPIMachineSets(mapiMachineSet, newMAPIMachineSet)
+	// Here we always assume the existingMAPIMachineSet already exists, so we don't need to create it.
+
+	mapiMachineSetsDiff, err := compareMAPIMachineSets(existingMAPIMachineSet, convertedMAPIMachineSet)
 	if err != nil {
 		return fmt.Errorf("unable to compare MAPI machine sets: %w", err)
 	}
 
-	specUpdated := false
-	statusUpdated := false
+	updatedMAPIMachineSet := convertedMAPIMachineSet.DeepCopy()
 
-	updatedMAPIMachineSet := newMAPIMachineSet.DeepCopy()
-
-	if hasSpecOrMetadataOrProviderSpecChanges(mapiMachineSetsDiff) {
-		logger.Info("Changes detected for MAPI machine set. Updating it", "diff", fmt.Sprintf("%+v", mapiMachineSetsDiff))
-
-		if err := r.Update(ctx, updatedMAPIMachineSet); err != nil {
-			logger.Error(err, "Failed to update MAPI machine set")
-
-			updateErr := fmt.Errorf("failed to update MAPI machine set: %w", err)
-
-			if condErr := r.applySynchronizedConditionWithPatch(
-				ctx, mapiMachineSet, corev1.ConditionFalse, reasonFailedToUpdateMAPIMachineSet, updateErr.Error(), nil); condErr != nil {
-				return utilerrors.NewAggregate([]error{updateErr, condErr})
-			}
-
-			return updateErr
-		}
-
-		specUpdated = true
+	// If there are spec changes, update the MAPI machine set.
+	specUpdated, err := r.ensureMAPIMachineSetSpecUpdated(ctx, existingMAPIMachineSet, mapiMachineSetsDiff, updatedMAPIMachineSet)
+	if err != nil {
+		return fmt.Errorf("failed to ensure MAPI machine set spec updated: %w", err)
 	}
 
-	sourceAPIObjectHasMatchingGeneration := hasMatchingGenerations(capiMachineSet.Status.ObservedGeneration, capiMachineSet.ObjectMeta.Generation)
-
-	// Only update the status if there are status changes or the spec has been updated,
-	// and only if the source API object has a matching generation,
-	// as we don't want to update the status if the source API object status has not yet caught up with the desired spec.
-	//
-	//nolint:nestif
-	if (hasStatusChanges(mapiMachineSetsDiff) || specUpdated) && sourceAPIObjectHasMatchingGeneration {
-		logger.Info("Changes detected for MAPI machine set status. Updating it", "diff", fmt.Sprintf("%+v", mapiMachineSetsDiff))
-
-		patchBase := client.MergeFrom(mapiMachineSet.DeepCopy())
-
-		// Set the changed MAPI machine set status fields from the new MAPI machine set.
-		setChangedMAPIMachineSetStatusFields(mapiMachineSet, newMAPIMachineSet)
-
-		// Set the new status ObservedGeneration to the newest MAPI MachineSet generation after the previous spec/metadata update.
-		mapiMachineSet.Status.ObservedGeneration = updatedMAPIMachineSet.ObjectMeta.Generation
-
-		if isPatchRequired, err := util.IsPatchRequired(mapiMachineSet, patchBase); err != nil {
-			return fmt.Errorf("failed to check if patch is required: %w", err)
-		} else if isPatchRequired {
-			if err := r.Status().Patch(ctx, mapiMachineSet, patchBase); err != nil {
-				logger.Error(err, "Failed to update MAPI machine set status")
-
-				updateErr := fmt.Errorf("failed to update MAPI machine set status: %w", err)
-
-				if condErr := r.applySynchronizedConditionWithPatch(
-					ctx, mapiMachineSet, corev1.ConditionFalse, reasonFailedToUpdateMAPIMachineSet, updateErr.Error(), nil); condErr != nil {
-					return utilerrors.NewAggregate([]error{updateErr, condErr})
-				}
-
-				return updateErr
-			}
-
-			statusUpdated = true
-		}
+	// If there are status changes, update the MAPI machine set status.
+	statusUpdated, err := r.ensureMAPIMachineSetStatusUpdated(ctx, existingMAPIMachineSet, convertedMAPIMachineSet, updatedMAPIMachineSet, capiMachineSet, mapiMachineSetsDiff, specUpdated)
+	if err != nil {
+		return fmt.Errorf("failed to ensure MAPI machine set status updated: %w", err)
 	}
 
 	if specUpdated || statusUpdated {
@@ -1044,44 +1117,42 @@ func (r *MachineSetSyncReconciler) createOrUpdateMAPIMachineSet(ctx context.Cont
 }
 
 // setChangedMAPIMachineSetStatusFields sets the updated fields in the MAPI machine set status.
-// The mapiMachineSet argument is the existing MAPI machine set.
-// The newMAPIMachineSet argument is the new MAPI machine set with the desired status changes.
-func setChangedMAPIMachineSetStatusFields(mapiMachineSet, newMAPIMachineSet *machinev1beta1.MachineSet) {
-	// newMAPIMachineSet holds the computed and desired status changes, so apply them to the existing mapiMachineSet.
-	mapiMachineSet.Status.Replicas = newMAPIMachineSet.Status.Replicas
-	mapiMachineSet.Status.ReadyReplicas = newMAPIMachineSet.Status.ReadyReplicas
-	mapiMachineSet.Status.AvailableReplicas = newMAPIMachineSet.Status.AvailableReplicas
-	mapiMachineSet.Status.FullyLabeledReplicas = newMAPIMachineSet.Status.FullyLabeledReplicas
-	mapiMachineSet.Status.ErrorReason = newMAPIMachineSet.Status.ErrorReason
-	mapiMachineSet.Status.ErrorMessage = newMAPIMachineSet.Status.ErrorMessage
+func setChangedMAPIMachineSetStatusFields(existingMAPIMachineSet, convertedMAPIMachineSet *machinev1beta1.MachineSet) {
+	// convertedMAPIMachineSet holds the computed and desired status changes, so apply them to the existing existingMAPIMachineSet.
+	existingMAPIMachineSet.Status.Replicas = convertedMAPIMachineSet.Status.Replicas
+	existingMAPIMachineSet.Status.ReadyReplicas = convertedMAPIMachineSet.Status.ReadyReplicas
+	existingMAPIMachineSet.Status.AvailableReplicas = convertedMAPIMachineSet.Status.AvailableReplicas
+	existingMAPIMachineSet.Status.FullyLabeledReplicas = convertedMAPIMachineSet.Status.FullyLabeledReplicas
+	existingMAPIMachineSet.Status.ErrorReason = convertedMAPIMachineSet.Status.ErrorReason
+	existingMAPIMachineSet.Status.ErrorMessage = convertedMAPIMachineSet.Status.ErrorMessage
 
 	// Update the conditions if they exist (ignoring lasttransitiontime), append new ones.
-	for i := range newMAPIMachineSet.Status.Conditions {
+	for i := range convertedMAPIMachineSet.Status.Conditions { //nolint:dupl
 		hasCondition := false
 
-		for j := range mapiMachineSet.Status.Conditions {
-			if mapiMachineSet.Status.Conditions[j].Type == newMAPIMachineSet.Status.Conditions[i].Type {
+		for j := range existingMAPIMachineSet.Status.Conditions {
+			if existingMAPIMachineSet.Status.Conditions[j].Type == convertedMAPIMachineSet.Status.Conditions[i].Type {
 				hasCondition = true
 				hasChanged := false
 
-				if mapiMachineSet.Status.Conditions[j].Status != newMAPIMachineSet.Status.Conditions[i].Status {
-					mapiMachineSet.Status.Conditions[j].Status = newMAPIMachineSet.Status.Conditions[i].Status
+				if existingMAPIMachineSet.Status.Conditions[j].Status != convertedMAPIMachineSet.Status.Conditions[i].Status {
+					existingMAPIMachineSet.Status.Conditions[j].Status = convertedMAPIMachineSet.Status.Conditions[i].Status
 					hasChanged = true
 				}
 
-				if mapiMachineSet.Status.Conditions[j].Reason != newMAPIMachineSet.Status.Conditions[i].Reason {
-					mapiMachineSet.Status.Conditions[j].Reason = newMAPIMachineSet.Status.Conditions[i].Reason
+				if existingMAPIMachineSet.Status.Conditions[j].Reason != convertedMAPIMachineSet.Status.Conditions[i].Reason {
+					existingMAPIMachineSet.Status.Conditions[j].Reason = convertedMAPIMachineSet.Status.Conditions[i].Reason
 					hasChanged = true
 				}
 
-				if mapiMachineSet.Status.Conditions[j].Message != newMAPIMachineSet.Status.Conditions[i].Message {
-					mapiMachineSet.Status.Conditions[j].Message = newMAPIMachineSet.Status.Conditions[i].Message
+				if existingMAPIMachineSet.Status.Conditions[j].Message != convertedMAPIMachineSet.Status.Conditions[i].Message {
+					existingMAPIMachineSet.Status.Conditions[j].Message = convertedMAPIMachineSet.Status.Conditions[i].Message
 					hasChanged = true
 				}
 
 				if hasChanged {
 					// Set the last transition time to the new condition's last transition time only if the condition has changed.
-					mapiMachineSet.Status.Conditions[j].LastTransitionTime = newMAPIMachineSet.Status.Conditions[i].LastTransitionTime
+					existingMAPIMachineSet.Status.Conditions[j].LastTransitionTime = convertedMAPIMachineSet.Status.Conditions[i].LastTransitionTime
 				}
 
 				break
@@ -1089,7 +1160,7 @@ func setChangedMAPIMachineSetStatusFields(mapiMachineSet, newMAPIMachineSet *mac
 		}
 
 		if !hasCondition {
-			mapiMachineSet.Status.Conditions = append(mapiMachineSet.Status.Conditions, newMAPIMachineSet.Status.Conditions[i])
+			existingMAPIMachineSet.Status.Conditions = append(existingMAPIMachineSet.Status.Conditions, convertedMAPIMachineSet.Status.Conditions[i])
 		}
 	}
 }
@@ -1126,6 +1197,7 @@ func (r *MachineSetSyncReconciler) ensureSyncFinalizer(ctx context.Context, mapi
 	return shouldRequeue, utilerrors.NewAggregate(errors)
 }
 
+// reconcileMAPItoCAPIMachineSetDeletion handles deletion when the MAPI machine set is being deleted.
 func (r *MachineSetSyncReconciler) reconcileMAPItoCAPIMachineSetDeletion(ctx context.Context, mapiMachineSet *machinev1beta1.MachineSet, capiMachineSet *clusterv1.MachineSet) (bool, error) {
 	if mapiMachineSet.DeletionTimestamp.IsZero() {
 		return r.reconcileMAPItoCAPIMachineSetDeletionMAPINotDeleting(ctx, mapiMachineSet, capiMachineSet)
@@ -1223,6 +1295,7 @@ func (r *MachineSetSyncReconciler) reconcileMAPItoCAPIMachineSetDeletionNormal(c
 	return true, nil
 }
 
+// reconcileCAPItoMAPIMachineSetDeletion handles deletion when the CAPI machine set is being deleted.
 func (r *MachineSetSyncReconciler) reconcileCAPItoMAPIMachineSetDeletion(ctx context.Context, mapiMachineSet *machinev1beta1.MachineSet, capiMachineSet *clusterv1.MachineSet) (bool, error) {
 	if capiMachineSet.DeletionTimestamp.IsZero() {
 		return r.reconcileCAPItoMAPIMachineSetDeletionCAPINotDeleting(ctx, mapiMachineSet, capiMachineSet)
@@ -1485,25 +1558,25 @@ func compareMAPIMachineSets(a, b *machinev1beta1.MachineSet) (map[string]any, er
 	return diff, nil
 }
 
-// restoreCAPIFields restores the CAPI machine set fields to the new CAPI machine set.
-func restoreCAPIFields(capiMachineSet, newCAPIMachineSet *clusterv1.MachineSet, capiNamespace string, authoritativeAPI machinev1beta1.MachineAuthority, clusterOwnerRefence metav1.OwnerReference) {
+// restoreCAPIFields restores the existing CAPI machine set fields to the converted CAPI machine set.
+func restoreCAPIFields(existingCAPIMachineSet, convertedCAPIMachineSet *clusterv1.MachineSet, capiNamespace string, authoritativeAPI machinev1beta1.MachineAuthority, clusterOwnerRefence metav1.OwnerReference) {
 	// Restore the CAPI object fields if a CAPI machine set already existed.
-	if capiMachineSet != nil {
-		newCAPIMachineSet.SetGeneration(capiMachineSet.GetGeneration())
-		newCAPIMachineSet.SetUID(capiMachineSet.GetUID())
-		newCAPIMachineSet.SetCreationTimestamp(capiMachineSet.GetCreationTimestamp())
-		newCAPIMachineSet.SetManagedFields(capiMachineSet.GetManagedFields())
-		newCAPIMachineSet.SetResourceVersion(util.GetResourceVersion(client.Object(capiMachineSet)))
+	if existingCAPIMachineSet != nil {
+		convertedCAPIMachineSet.SetGeneration(existingCAPIMachineSet.GetGeneration())
+		convertedCAPIMachineSet.SetUID(existingCAPIMachineSet.GetUID())
+		convertedCAPIMachineSet.SetCreationTimestamp(existingCAPIMachineSet.GetCreationTimestamp())
+		convertedCAPIMachineSet.SetManagedFields(existingCAPIMachineSet.GetManagedFields())
+		convertedCAPIMachineSet.SetResourceVersion(util.GetResourceVersion(client.Object(existingCAPIMachineSet)))
 		// Restore finalizers.
-		newCAPIMachineSet.SetFinalizers(capiMachineSet.GetFinalizers())
+		convertedCAPIMachineSet.SetFinalizers(existingCAPIMachineSet.GetFinalizers())
 	}
 
 	// Restore the CAPI machine set namespace and template infrastructure ref namespace.
-	newCAPIMachineSet.SetNamespace(capiNamespace)
-	newCAPIMachineSet.Spec.Template.Spec.InfrastructureRef.Namespace = capiNamespace
+	convertedCAPIMachineSet.SetNamespace(capiNamespace)
+	convertedCAPIMachineSet.Spec.Template.Spec.InfrastructureRef.Namespace = capiNamespace
 
 	// Restore the Cluster object owner reference.
-	newCAPIMachineSet.OwnerReferences = []metav1.OwnerReference{clusterOwnerRefence}
+	convertedCAPIMachineSet.OwnerReferences = []metav1.OwnerReference{clusterOwnerRefence}
 
 	if authoritativeAPI == machinev1beta1.MachineAuthorityMachineAPI {
 		// Set the paused annotation on the new CAPI MachineSet, if the authoritativeAPI is Machine API,
@@ -1511,30 +1584,30 @@ func restoreCAPIFields(capiMachineSet, newCAPIMachineSet *clusterv1.MachineSet, 
 		// For the other case instead (authoritativeAPI == machinev1beta1.MachineAuthorityClusterAPI),
 		// when the new CAPI MachineSet that is being created is also expected to be the authority
 		// (i.e. in cases where the MAPI MachineSet is created as .spec.authoritativeAPI: ClusterAPI), we do not want to create it paused.
-		annotations.AddAnnotations(newCAPIMachineSet, map[string]string{clusterv1.PausedAnnotation: ""})
+		annotations.AddAnnotations(convertedCAPIMachineSet, map[string]string{clusterv1.PausedAnnotation: ""})
 	}
 }
 
-// restoreMAPIFields restores the MAPI machine set fields to the new MAPI machine set.
-func restoreMAPIFields(mapiMachineSet, newMapiMachineSet *machinev1beta1.MachineSet) {
+// restoreMAPIFields restores the existing MAPI machine set fields to the converted MAPI machine set.
+func restoreMAPIFields(existingMAPIMachineSet, convertedMAPIMachineSet *machinev1beta1.MachineSet) {
 	// Restore the MAPI object metadata fields.
-	newMapiMachineSet.SetGeneration(mapiMachineSet.GetGeneration())
-	newMapiMachineSet.SetUID(mapiMachineSet.GetUID())
-	newMapiMachineSet.SetCreationTimestamp(mapiMachineSet.GetCreationTimestamp())
-	newMapiMachineSet.SetManagedFields(mapiMachineSet.GetManagedFields())
-	newMapiMachineSet.SetResourceVersion(util.GetResourceVersion(client.Object(mapiMachineSet)))
-	newMapiMachineSet.SetNamespace(mapiMachineSet.GetNamespace())
+	convertedMAPIMachineSet.SetGeneration(existingMAPIMachineSet.GetGeneration())
+	convertedMAPIMachineSet.SetUID(existingMAPIMachineSet.GetUID())
+	convertedMAPIMachineSet.SetCreationTimestamp(existingMAPIMachineSet.GetCreationTimestamp())
+	convertedMAPIMachineSet.SetManagedFields(existingMAPIMachineSet.GetManagedFields())
+	convertedMAPIMachineSet.SetResourceVersion(util.GetResourceVersion(client.Object(existingMAPIMachineSet)))
+	convertedMAPIMachineSet.SetNamespace(existingMAPIMachineSet.GetNamespace())
 	// Restore the MAPI machine set template labels.
-	newMapiMachineSet.Spec.Template.ObjectMeta.Labels = util.MergeMaps(mapiMachineSet.Spec.Template.ObjectMeta.Labels, newMapiMachineSet.Spec.Template.ObjectMeta.Labels)
-	newMapiMachineSet.Spec.Template.Spec.ObjectMeta.Labels = util.MergeMaps(mapiMachineSet.Spec.Template.Spec.ObjectMeta.Labels, newMapiMachineSet.Spec.Template.Spec.ObjectMeta.Labels)
+	convertedMAPIMachineSet.Spec.Template.ObjectMeta.Labels = util.MergeMaps(existingMAPIMachineSet.Spec.Template.ObjectMeta.Labels, convertedMAPIMachineSet.Spec.Template.ObjectMeta.Labels)
+	convertedMAPIMachineSet.Spec.Template.Spec.ObjectMeta.Labels = util.MergeMaps(existingMAPIMachineSet.Spec.Template.Spec.ObjectMeta.Labels, convertedMAPIMachineSet.Spec.Template.Spec.ObjectMeta.Labels)
 	// Restore API authoritativeness, as it gets lost in MAPI->CAPI->MAPI translation.
-	newMapiMachineSet.Spec.AuthoritativeAPI = mapiMachineSet.Spec.AuthoritativeAPI
-	newMapiMachineSet.Spec.Template.Spec.AuthoritativeAPI = mapiMachineSet.Spec.Template.Spec.AuthoritativeAPI
+	convertedMAPIMachineSet.Spec.AuthoritativeAPI = existingMAPIMachineSet.Spec.AuthoritativeAPI
+	convertedMAPIMachineSet.Spec.Template.Spec.AuthoritativeAPI = existingMAPIMachineSet.Spec.Template.Spec.AuthoritativeAPI
 	// Restore the original MAPI selector as it is immutable.
-	newMapiMachineSet.Spec.Selector = mapiMachineSet.Spec.Selector
-	newMapiMachineSet.OwnerReferences = nil // No CAPI machine set owner references are converted to MAPI machine set.
+	convertedMAPIMachineSet.Spec.Selector = existingMAPIMachineSet.Spec.Selector
+	convertedMAPIMachineSet.OwnerReferences = nil // No CAPI machine set owner references are converted to MAPI machine set.
 	// Restore finalizers.
-	newMapiMachineSet.SetFinalizers(mapiMachineSet.GetFinalizers())
+	convertedMAPIMachineSet.SetFinalizers(existingMAPIMachineSet.GetFinalizers())
 }
 
 // hasStatusChanges returns true if there are changes to the status.
@@ -1551,9 +1624,4 @@ func hasSpecOrMetadataOrProviderSpecChanges(diff map[string]any) bool {
 	_, ok3 := diff[".providerSpec"]
 
 	return ok1 || ok2 || ok3
-}
-
-// hasMatchingGenerations returns true if the status observedGeneration matches the metadata generation.
-func hasMatchingGenerations(statusGeneration, metadataGeneration int64) bool {
-	return statusGeneration == metadataGeneration
 }
