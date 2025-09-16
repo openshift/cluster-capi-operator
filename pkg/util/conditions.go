@@ -115,9 +115,9 @@ func getTime(data map[string]interface{}, key string) metav1.Time {
 
 // GetMAPIMachineSetCondition retrieves a specific condition from a list of MAPI MachineSet conditions.
 func GetMAPIMachineSetCondition(conditions []machinev1beta1.Condition, conditionType string) *machinev1beta1.Condition {
-	for _, c := range conditions {
-		if string(c.Type) == conditionType {
-			return &c
+	for i := range conditions {
+		if string(conditions[i].Type) == conditionType {
+			return &conditions[i]
 		}
 	}
 
