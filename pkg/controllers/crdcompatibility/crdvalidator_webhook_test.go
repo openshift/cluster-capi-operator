@@ -53,28 +53,33 @@ func Test_crdValidator_validateCreateOrUpdate(t *testing.T) { //nolint:funlen
 		obj          runtime.Object
 		requirements []client.Object
 		wantWarnings OmegaMatcher
-		wantErr      string
+		wantErr      OmegaMatcher
 	}{
 		{
 			name:         "Should permit a valid CRD",
 			obj:          testCRDWorking.DeepCopy(),
 			requirements: []client.Object{generateTestRequirement(testCRDWorking.DeepCopy())},
 			wantWarnings: BeNil(),
-			wantErr:      "",
 		},
 		{
 			name:         "Should reject an incompatible CRD",
 			obj:          incompatibleCRD1.DeepCopy(),
 			requirements: []client.Object{generateTestRequirement(testCRDWorking.DeepCopy())},
 			wantWarnings: BeNil(),
-			wantErr:      "CRD is not compatible with CRDCompatibilityRequirements: This requirement was added by Test Creator: requirement : removed field : v1.^.foo1",
+			wantErr:      MatchError("CRD is not compatible with CRDCompatibilityRequirements: This requirement was added by Test Creator: requirement : removed field : v1.^.foo1"),
 		},
 		{
 			name:         "Should reject an incompatible CRD with multiple removed fields",
 			obj:          incompatibleCRD2.DeepCopy(),
 			requirements: []client.Object{generateTestRequirement(testCRDWorking.DeepCopy())},
 			wantWarnings: BeNil(),
-			wantErr:      "CRD is not compatible with CRDCompatibilityRequirements: This requirement was added by Test Creator: requirement : removed field : v1.^.foo1\nThis requirement was added by Test Creator: requirement : removed field : v1.^.foo2",
+			wantErr: MatchError(
+				SatisfyAll(
+					ContainSubstring("CRD is not compatible with CRDCompatibilityRequirements: "),
+					ContainSubstring("This requirement was added by Test Creator: requirement : removed field : v1.^.foo1"),
+					ContainSubstring("This requirement was added by Test Creator: requirement : removed field : v1.^.foo2"),
+				),
+			),
 		},
 		{
 			name: "Should permit an incompatible CRD with warnings for CRDAdmitAction set to Warn",
@@ -88,7 +93,6 @@ func Test_crdValidator_validateCreateOrUpdate(t *testing.T) { //nolint:funlen
 				}(),
 			},
 			wantWarnings: ConsistOf("This requirement was added by Test Creator: requirement : removed field : v1.^.foo1"),
-			wantErr:      "",
 		},
 		{
 			name: "Should permit an incompatible CRD with multiple warnings for CRDAdmitAction set to Warn",
@@ -105,7 +109,6 @@ func Test_crdValidator_validateCreateOrUpdate(t *testing.T) { //nolint:funlen
 				"This requirement was added by Test Creator: requirement : removed field : v1.^.foo1",
 				"This requirement was added by Test Creator: requirement : removed field : v1.^.foo2",
 			),
-			wantErr: "",
 		},
 	}
 	for _, tt := range tests {
@@ -116,8 +119,8 @@ func Test_crdValidator_validateCreateOrUpdate(t *testing.T) { //nolint:funlen
 			}
 
 			gotWarnings, gotErr := v.validateCreateOrUpdate(ctx, tt.obj)
-			if tt.wantErr != "" {
-				g.Expect(gotErr).To(MatchError(tt.wantErr))
+			if tt.wantErr != nil {
+				g.Expect(gotErr).To(tt.wantErr)
 			} else {
 				g.Expect(gotErr).ToNot(HaveOccurred())
 			}
