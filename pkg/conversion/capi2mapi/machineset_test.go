@@ -85,7 +85,7 @@ var _ = Describe("capi2mapi MachineSet Status Conversion", func() {
 				}).
 				Build()
 
-			mapiStatus := convertCAPIMachineSetStatusToMAPI(capiMachineSet.Status, 1)
+			mapiStatus := convertCAPIMachineSetStatusToMAPI(capiMachineSet.Status)
 
 			Expect(mapiStatus.Replicas).To(Equal(int32(5)))
 			Expect(mapiStatus.FullyLabeledReplicas).To(Equal(int32(5)))
@@ -103,7 +103,7 @@ var _ = Describe("capi2mapi MachineSet Status Conversion", func() {
 		It("should set all MAPI MachineSet status fields and conditions to empty when CAPI MachineSetStatus is empty", func() {
 			capiStatus := clusterv1.MachineSetStatus{}
 
-			mapiStatus := convertCAPIMachineSetStatusToMAPI(capiStatus, 0)
+			mapiStatus := convertCAPIMachineSetStatusToMAPI(capiStatus)
 
 			Expect(mapiStatus.Replicas).To(Equal(int32(0)))
 			Expect(mapiStatus.FullyLabeledReplicas).To(Equal(int32(0)))

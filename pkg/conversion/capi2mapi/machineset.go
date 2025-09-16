@@ -49,7 +49,7 @@ func fromCAPIMachineSetToMAPIMachineSet(capiMachineSet *clusterv1.MachineSet) (*
 				},
 			},
 		},
-		Status: convertCAPIMachineSetStatusToMAPI(capiMachineSet.Status, capiMachineSet.Generation),
+		Status: convertCAPIMachineSetStatusToMAPI(capiMachineSet.Status),
 	}
 
 	// Unused fields - Below this line are fields not used from the CAPI Machine.
@@ -67,7 +67,7 @@ func fromCAPIMachineSetToMAPIMachineSet(capiMachineSet *clusterv1.MachineSet) (*
 }
 
 // convertCAPIMachineSetStatusToMAPI converts a CAPI MachineSetStatus to MAPI format.
-func convertCAPIMachineSetStatusToMAPI(capiStatus clusterv1.MachineSetStatus, observedGeneration int64) mapiv1.MachineSetStatus {
+func convertCAPIMachineSetStatusToMAPI(capiStatus clusterv1.MachineSetStatus) mapiv1.MachineSetStatus {
 	mapiStatus := mapiv1.MachineSetStatus{
 		Replicas:             capiStatus.Replicas,
 		FullyLabeledReplicas: capiStatus.FullyLabeledReplicas,
