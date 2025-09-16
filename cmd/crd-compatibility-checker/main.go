@@ -15,10 +15,7 @@ package main
 
 import (
 	"context"
-	"errors"
 	"flag"
-	"fmt"
-	"net/http"
 	"os"
 
 	"github.com/spf13/pflag"
@@ -131,10 +128,7 @@ func main() {
 	ctx, cancel := context.WithCancel(ctrl.SetupSignalHandler())
 	defer cancel()
 
-	if err := addReadyzCheck(ctx, cancel, mgr, crdCompatibilityReconciler); err != nil {
-		klog.Error(err, "unable to set up ready check")
-		os.Exit(1) //nolint:gocritic // we don't care if cancel is not called
-	}
+	// FIXME(chrischdi): do we need to add something as new readyness probe?
 
 	// Setup the CRD compatibility controller
 	if err := crdCompatibilityReconciler.SetupWithManager(ctx, mgr); err != nil {
@@ -148,37 +142,4 @@ func main() {
 		klog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
-}
-
-var errWaitingForSync = errors.New("waiting for requirements to be synced")
-
-// addReadyzCheck sets up a readyz check which ensures that the pod will not be
-// added to the webhook service until it has synced its state.
-func addReadyzCheck(ctx context.Context, cancel context.CancelFunc, mgr ctrl.Manager, crdCompatibilityReconciler *crdcompatibility.CRDCompatibilityReconciler) error {
-	readyCheck := func(_ *http.Request) error {
-		if !crdCompatibilityReconciler.IsSynced() {
-			return errWaitingForSync
-		}
-
-		return nil
-	}
-
-	if err := mgr.AddReadyzCheck("check", readyCheck); err != nil {
-		return fmt.Errorf("unable to add readyz check: %w", err)
-	}
-
-	go func() {
-		select {
-		case <-ctx.Done():
-			return
-		case <-mgr.Elected():
-			if err := crdCompatibilityReconciler.WaitForSynced(ctx); err != nil {
-				// Failing to sync requirements is not recoverable, so shutdown the manager
-				cancel()
-				return
-			}
-		}
-	}()
-
-	return nil
 }

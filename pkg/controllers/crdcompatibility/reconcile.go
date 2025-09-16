@@ -152,15 +152,6 @@ func (r *reconcileState) reconcileCreateOrUpdate(ctx context.Context, obj *opera
 		r.checkCRDCompatibility(),
 	)
 
-	if r.compatibilityCRD == nil {
-		// Should have been handled by API validation
-		// parseCompatibilityCRD will have returned a NoRequeueError
-		r.validator.unsetRequirement(obj.DeepCopy())
-	} else {
-		// Add the requirement to the webhook validator
-		r.validator.setRequirement(obj.DeepCopy(), r.compatibilityCRD)
-	}
-
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -172,9 +163,6 @@ func (r *reconcileState) reconcileDelete(ctx context.Context, obj *operatorv1alp
 	logger := log.FromContext(ctx)
 
 	logger.Info("Reconciling CRDCompatibilityRequirement deletion")
-
-	// Remove the requirement from the webhook validator
-	r.validator.unsetRequirement(obj.DeepCopy())
 
 	if err := clearFinalizer(ctx, r.client, obj); err != nil {
 		return ctrl.Result{}, err

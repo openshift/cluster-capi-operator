@@ -17,9 +17,12 @@ limitations under the License.
 package crdcompatibility
 
 import (
+	"context"
 	"testing"
 
 	. "github.com/onsi/gomega"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -28,6 +31,7 @@ import (
 
 func Test_crdValidator_validateCreateOrUpdate(t *testing.T) { //nolint:funlen
 	RegisterTestingT(t)
+	ctx := context.Background()
 
 	testCRDWorking := generateTestCRD()
 	testCRDWorking.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["foo1"] = apiextensionsv1.JSONSchemaProps{
@@ -46,35 +50,35 @@ func Test_crdValidator_validateCreateOrUpdate(t *testing.T) { //nolint:funlen
 	tests := []struct {
 		name         string
 		obj          runtime.Object
-		requirements []*operatorv1alpha1.CRDCompatibilityRequirement
+		requirements []client.Object
 		wantWarnings OmegaMatcher
 		wantErr      string
 	}{
 		{
 			name:         "Should permit a valid CRD",
 			obj:          testCRDWorking.DeepCopy(),
-			requirements: []*operatorv1alpha1.CRDCompatibilityRequirement{generateTestRequirement(testCRDWorking.DeepCopy())},
+			requirements: []client.Object{generateTestRequirement(testCRDWorking.DeepCopy())},
 			wantWarnings: BeNil(),
 			wantErr:      "",
 		},
 		{
 			name:         "Should reject an incompatible CRD",
 			obj:          incompatibleCRD1.DeepCopy(),
-			requirements: []*operatorv1alpha1.CRDCompatibilityRequirement{generateTestRequirement(testCRDWorking.DeepCopy())},
+			requirements: []client.Object{generateTestRequirement(testCRDWorking.DeepCopy())},
 			wantWarnings: BeNil(),
 			wantErr:      "CRD is not compatible with CRDCompatibilityRequirements: This requirement was added by Test Creator: requirement : removed field : v1.^.foo1",
 		},
 		{
 			name:         "Should reject an incompatible CRD with multiple removed fields",
 			obj:          incompatibleCRD2.DeepCopy(),
-			requirements: []*operatorv1alpha1.CRDCompatibilityRequirement{generateTestRequirement(testCRDWorking.DeepCopy())},
+			requirements: []client.Object{generateTestRequirement(testCRDWorking.DeepCopy())},
 			wantWarnings: BeNil(),
 			wantErr:      "CRD is not compatible with CRDCompatibilityRequirements: This requirement was added by Test Creator: requirement : removed field : v1.^.foo1\nThis requirement was added by Test Creator: requirement : removed field : v1.^.foo2",
 		},
 		{
 			name: "Should permit an incompatible CRD with warnings for CRDAdmitAction set to Warn",
 			obj:  incompatibleCRD1.DeepCopy(),
-			requirements: []*operatorv1alpha1.CRDCompatibilityRequirement{
+			requirements: []client.Object{
 				func() *operatorv1alpha1.CRDCompatibilityRequirement {
 					r := generateTestRequirement(testCRDWorking.DeepCopy())
 					r.Spec.CRDAdmitAction = operatorv1alpha1.CRDAdmitActionWarn
@@ -88,7 +92,7 @@ func Test_crdValidator_validateCreateOrUpdate(t *testing.T) { //nolint:funlen
 		{
 			name: "Should permit an incompatible CRD with multiple warnings for CRDAdmitAction set to Warn",
 			obj:  incompatibleCRD2.DeepCopy(),
-			requirements: []*operatorv1alpha1.CRDCompatibilityRequirement{
+			requirements: []client.Object{
 				func() *operatorv1alpha1.CRDCompatibilityRequirement {
 					r := generateTestRequirement(testCRDWorking.DeepCopy())
 					r.Spec.CRDAdmitAction = operatorv1alpha1.CRDAdmitActionWarn
@@ -106,15 +110,11 @@ func Test_crdValidator_validateCreateOrUpdate(t *testing.T) { //nolint:funlen
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			g := NewWithT(t)
-			v := crdValidator{}
-
-			for _, req := range tt.requirements {
-				r := reconcileState{}
-				g.Expect(r.parseCompatibilityCRD(req)).To(Succeed())
-				v.setRequirement(req, r.compatibilityCRD)
+			v := crdValidator{
+				client: fake.NewClientBuilder().WithObjects(tt.requirements...).WithIndex(&operatorv1alpha1.CRDCompatibilityRequirement{}, fieldIndexCRDRef, CRDByCRDRef).Build(),
 			}
 
-			gotWarnings, gotErr := v.validateCreateOrUpdate(tt.obj)
+			gotWarnings, gotErr := v.validateCreateOrUpdate(ctx, tt.obj)
 			if tt.wantErr != "" {
 				g.Expect(gotErr).To(MatchError(tt.wantErr))
 			} else {

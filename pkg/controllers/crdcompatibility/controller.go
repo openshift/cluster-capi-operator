@@ -87,18 +87,20 @@ type CRDCompatibilityReconciler struct {
 
 type controllerOption func(*builder.Builder) *builder.Builder
 
+// MachineByNodeName contains the logic to index Machines by Node name.
+func CRDByCRDRef(obj client.Object) []string {
+	requirement, ok := obj.(*operatorv1alpha1.CRDCompatibilityRequirement)
+	if !ok {
+		panic(fmt.Sprintf("Expected a CRDCompatibilityRequirement but got a %T", obj))
+	}
+
+	return []string{requirement.Spec.CRDRef}
+}
+
 // SetupWithManager sets up the controller with the Manager.
 func (r *CRDCompatibilityReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager, opts ...controllerOption) error {
 	// Create field index for spec.crdRef
-	if err := mgr.GetFieldIndexer().IndexField(ctx, &operatorv1alpha1.CRDCompatibilityRequirement{}, fieldIndexCRDRef, func(obj client.Object) []string {
-		requirement, ok := obj.(*operatorv1alpha1.CRDCompatibilityRequirement)
-		if !ok {
-			log.FromContext(ctx).Error(errExpectedCRD, "expected a CRDCompatibilityRequirement", "receivedType", fmt.Sprintf("%T", obj))
-			return nil
-		}
-
-		return []string{requirement.Spec.CRDRef}
-	}); err != nil {
+	if err := mgr.GetFieldIndexer().IndexField(ctx, &operatorv1alpha1.CRDCompatibilityRequirement{}, fieldIndexCRDRef, CRDByCRDRef); err != nil {
 		return fmt.Errorf("failed to add index to CRDCompatibilityRequirements: %w", err)
 	}
 
