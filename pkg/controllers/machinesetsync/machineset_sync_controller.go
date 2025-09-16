@@ -51,6 +51,8 @@ import (
 	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util/annotations"
+	"sigs.k8s.io/cluster-api/util/conditions"
+	conditionsv1beta2 "sigs.k8s.io/cluster-api/util/conditions/v1beta2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -987,8 +989,6 @@ func (r *MachineSetSyncReconciler) ensureMAPIMachineSetStatusUpdated(ctx context
 }
 
 // setChangedCAPIMachineSetStatusFields sets the updated fields in the CAPI machine set status.
-//
-//nolint:gocognit,funlen
 func setChangedCAPIMachineSetStatusFields(existingCAPIMachineSet, convertedCAPIMachineSet *clusterv1.MachineSet) {
 	// convertedCAPIMachineSet holds the computed and desired status changes, so apply them to the existing existingCAPIMachineSet.
 	existingCAPIMachineSet.Status.Replicas = convertedCAPIMachineSet.Status.Replicas
@@ -998,42 +998,9 @@ func setChangedCAPIMachineSetStatusFields(existingCAPIMachineSet, convertedCAPIM
 	existingCAPIMachineSet.Status.FailureReason = convertedCAPIMachineSet.Status.FailureReason
 	existingCAPIMachineSet.Status.FailureMessage = convertedCAPIMachineSet.Status.FailureMessage
 
-	// Update the conditions if they exist (ignoring lasttransitiontime), append new ones.
-	for i := range convertedCAPIMachineSet.Status.Conditions { //nolint:dupl
-		hasCondition := false
-
-		for j := range existingCAPIMachineSet.Status.Conditions {
-			if existingCAPIMachineSet.Status.Conditions[j].Type == convertedCAPIMachineSet.Status.Conditions[i].Type {
-				hasChanged := false
-				hasCondition = true
-
-				if existingCAPIMachineSet.Status.Conditions[j].Status != convertedCAPIMachineSet.Status.Conditions[i].Status {
-					existingCAPIMachineSet.Status.Conditions[j].Status = convertedCAPIMachineSet.Status.Conditions[i].Status
-					hasChanged = true
-				}
-
-				if existingCAPIMachineSet.Status.Conditions[j].Reason != convertedCAPIMachineSet.Status.Conditions[i].Reason {
-					existingCAPIMachineSet.Status.Conditions[j].Reason = convertedCAPIMachineSet.Status.Conditions[i].Reason
-					hasChanged = true
-				}
-
-				if existingCAPIMachineSet.Status.Conditions[j].Message != convertedCAPIMachineSet.Status.Conditions[i].Message {
-					existingCAPIMachineSet.Status.Conditions[j].Message = convertedCAPIMachineSet.Status.Conditions[i].Message
-					hasChanged = true
-				}
-
-				if hasChanged {
-					// Set the last transition time to the new condition's last transition time only if the condition has changed.
-					existingCAPIMachineSet.Status.Conditions[j].LastTransitionTime = convertedCAPIMachineSet.Status.Conditions[i].LastTransitionTime
-				}
-
-				break
-			}
-		}
-
-		if !hasCondition {
-			existingCAPIMachineSet.Status.Conditions = append(existingCAPIMachineSet.Status.Conditions, convertedCAPIMachineSet.Status.Conditions[i])
-		}
+	// Update the conditions using the Cluster API conditions utility.
+	for i := range convertedCAPIMachineSet.Status.Conditions {
+		conditions.Set(existingCAPIMachineSet, &convertedCAPIMachineSet.Status.Conditions[i])
 	}
 
 	// Update the v1beta2 conditions if they exist (ignoring lasttransitiontime), append new ones.
@@ -1044,40 +1011,7 @@ func setChangedCAPIMachineSetStatusFields(existingCAPIMachineSet, convertedCAPIM
 		existingCAPIMachineSet.Status.V1Beta2 = convertedCAPIMachineSet.Status.V1Beta2
 	default:
 		for i := range convertedCAPIMachineSet.Status.V1Beta2.Conditions {
-			hasCondition := false
-
-			for j := range existingCAPIMachineSet.Status.V1Beta2.Conditions {
-				if existingCAPIMachineSet.Status.V1Beta2.Conditions[j].Type == convertedCAPIMachineSet.Status.V1Beta2.Conditions[i].Type {
-					hasCondition = true
-					hasChanged := false
-
-					if existingCAPIMachineSet.Status.V1Beta2.Conditions[j].Status != convertedCAPIMachineSet.Status.V1Beta2.Conditions[i].Status {
-						existingCAPIMachineSet.Status.V1Beta2.Conditions[j].Status = convertedCAPIMachineSet.Status.V1Beta2.Conditions[i].Status
-						hasChanged = true
-					}
-
-					if existingCAPIMachineSet.Status.V1Beta2.Conditions[j].Reason != convertedCAPIMachineSet.Status.V1Beta2.Conditions[i].Reason {
-						existingCAPIMachineSet.Status.V1Beta2.Conditions[j].Reason = convertedCAPIMachineSet.Status.V1Beta2.Conditions[i].Reason
-						hasChanged = true
-					}
-
-					if existingCAPIMachineSet.Status.V1Beta2.Conditions[j].Message != convertedCAPIMachineSet.Status.V1Beta2.Conditions[i].Message {
-						existingCAPIMachineSet.Status.V1Beta2.Conditions[j].Message = convertedCAPIMachineSet.Status.V1Beta2.Conditions[i].Message
-						hasChanged = true
-					}
-
-					if hasChanged {
-						// Set the last transition time to the new condition's last transition time only if the condition has changed.
-						existingCAPIMachineSet.Status.V1Beta2.Conditions[j].LastTransitionTime = convertedCAPIMachineSet.Status.V1Beta2.Conditions[i].LastTransitionTime
-					}
-
-					break
-				}
-			}
-
-			if !hasCondition {
-				existingCAPIMachineSet.Status.V1Beta2.Conditions = append(existingCAPIMachineSet.Status.V1Beta2.Conditions, convertedCAPIMachineSet.Status.V1Beta2.Conditions[i])
-			}
+			conditionsv1beta2.Set(existingCAPIMachineSet, convertedCAPIMachineSet.Status.V1Beta2.Conditions[i])
 		}
 	}
 }
@@ -1126,42 +1060,8 @@ func setChangedMAPIMachineSetStatusFields(existingMAPIMachineSet, convertedMAPIM
 	existingMAPIMachineSet.Status.ErrorReason = convertedMAPIMachineSet.Status.ErrorReason
 	existingMAPIMachineSet.Status.ErrorMessage = convertedMAPIMachineSet.Status.ErrorMessage
 
-	// Update the conditions if they exist (ignoring lasttransitiontime), append new ones.
-	for i := range convertedMAPIMachineSet.Status.Conditions { //nolint:dupl
-		hasCondition := false
-
-		for j := range existingMAPIMachineSet.Status.Conditions {
-			if existingMAPIMachineSet.Status.Conditions[j].Type == convertedMAPIMachineSet.Status.Conditions[i].Type {
-				hasCondition = true
-				hasChanged := false
-
-				if existingMAPIMachineSet.Status.Conditions[j].Status != convertedMAPIMachineSet.Status.Conditions[i].Status {
-					existingMAPIMachineSet.Status.Conditions[j].Status = convertedMAPIMachineSet.Status.Conditions[i].Status
-					hasChanged = true
-				}
-
-				if existingMAPIMachineSet.Status.Conditions[j].Reason != convertedMAPIMachineSet.Status.Conditions[i].Reason {
-					existingMAPIMachineSet.Status.Conditions[j].Reason = convertedMAPIMachineSet.Status.Conditions[i].Reason
-					hasChanged = true
-				}
-
-				if existingMAPIMachineSet.Status.Conditions[j].Message != convertedMAPIMachineSet.Status.Conditions[i].Message {
-					existingMAPIMachineSet.Status.Conditions[j].Message = convertedMAPIMachineSet.Status.Conditions[i].Message
-					hasChanged = true
-				}
-
-				if hasChanged {
-					// Set the last transition time to the new condition's last transition time only if the condition has changed.
-					existingMAPIMachineSet.Status.Conditions[j].LastTransitionTime = convertedMAPIMachineSet.Status.Conditions[i].LastTransitionTime
-				}
-
-				break
-			}
-		}
-
-		if !hasCondition {
-			existingMAPIMachineSet.Status.Conditions = append(existingMAPIMachineSet.Status.Conditions, convertedMAPIMachineSet.Status.Conditions[i])
-		}
+	for i := range convertedMAPIMachineSet.Status.Conditions {
+		existingMAPIMachineSet.Status.Conditions = util.SetMAPIMachineSetCondition(existingMAPIMachineSet.Status.Conditions, &convertedMAPIMachineSet.Status.Conditions[i])
 	}
 }
 
