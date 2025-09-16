@@ -775,7 +775,7 @@ func (r *MachineSetSyncReconciler) createOrUpdateCAPIMachineSet(ctx context.Cont
 
 	// If there is no existing CAPI machine set, create a new one.
 	if created, err := r.ensureCAPIMachineSet(ctx, mapiMachineSet, existingCAPIMachineSet, convertedCAPIMachineSet); err != nil {
-		return err
+		return fmt.Errorf("failed to ensure CAPI machine set: %w", err)
 	} else if created {
 		// If the CAPI machine set was created,
 		// return early to allow for the change to be propagated.
