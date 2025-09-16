@@ -34,6 +34,8 @@ import (
 func fromMAPIMachineSetToCAPIMachineSet(mapiMachineSet *mapiv1.MachineSet) (*clusterv1.MachineSet, utilerrors.Aggregate) {
 	var errs field.ErrorList
 
+	specSelector := convertMAPIMachineSetSelectorToCAPI(mapiMachineSet.Spec.Selector)
+
 	capiMachineSet := &clusterv1.MachineSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            mapiMachineSet.Name,
@@ -44,7 +46,7 @@ func fromMAPIMachineSetToCAPIMachineSet(mapiMachineSet *mapiv1.MachineSet) (*clu
 			OwnerReferences: nil, // OwnerReferences not populated here. They are added later by the machineSetSync controller.
 		},
 		Spec: clusterv1.MachineSetSpec{
-			Selector: convertMAPIMachineSetSelectorToCAPI(mapiMachineSet.Spec.Selector),
+			Selector: specSelector,
 			Replicas: mapiMachineSet.Spec.Replicas,
 			// ClusterName: // ClusterName not populated here. It is added later by higher level functions
 			MinReadySeconds: mapiMachineSet.Spec.MinReadySeconds,
@@ -59,7 +61,7 @@ func fromMAPIMachineSetToCAPIMachineSet(mapiMachineSet *mapiv1.MachineSet) (*clu
 			// MachineNamingStrategy: // Not supported in MAPI, remains nil. No equivalent field in MAPI MachineSet.
 			// AuthoritativeAPI: // Ignore, this is part of the conversion mechanism.
 		},
-		Status: convertMAPIMachineSetToCAPIMachineSetStatus(mapiMachineSet),
+		Status: convertMAPIMachineSetToCAPIMachineSetStatus(mapiMachineSet, specSelector),
 	}
 
 	errs = append(errs, handleUnsupportedMAPIObjectMetaFields(field.NewPath("spec", "template", "metadata"), mapiMachineSet.Spec.Template.ObjectMeta)...)
@@ -68,7 +70,7 @@ func fromMAPIMachineSetToCAPIMachineSet(mapiMachineSet *mapiv1.MachineSet) (*clu
 }
 
 // convertMAPIMachineSetToCAPIMachineSetStatus converts a MAPI MachineSet to CAPI MachineSetStatus.
-func convertMAPIMachineSetToCAPIMachineSetStatus(mapiMachineSet *mapiv1.MachineSet) clusterv1.MachineSetStatus {
+func convertMAPIMachineSetToCAPIMachineSetStatus(mapiMachineSet *mapiv1.MachineSet, specSelector metav1.LabelSelector) clusterv1.MachineSetStatus {
 	capiStatus := clusterv1.MachineSetStatus{
 		Replicas:             mapiMachineSet.Status.Replicas,
 		FullyLabeledReplicas: mapiMachineSet.Status.FullyLabeledReplicas,
@@ -88,8 +90,14 @@ func convertMAPIMachineSetToCAPIMachineSetStatus(mapiMachineSet *mapiv1.MachineS
 		capiStatus.FailureMessage = mapiMachineSet.Status.ErrorMessage
 	}
 
+	// Copy the CAPI MachineSet .spec.Selector (label selector) to its status.Selector counterpart in string format.
+	// Do this on a best effort basis, so only if the conversion is successful, otherwise we leave the field empty.
+	statusSelector, err := metav1.LabelSelectorAsSelector(&specSelector)
+	if err == nil {
+		capiStatus.Selector = statusSelector.String()
+	}
+
 	// unused fields from MAPI MachineSetStatus
-	// - Selector: label selection is different between CAPI and MAPI.
 	// - AuthoritativeAPI: this is part of the conversion mechanism, it is not used in CAPI.
 	// - SynchronizedGeneration: this is part of the conversion mechanism, it is not used in CAPI.
 

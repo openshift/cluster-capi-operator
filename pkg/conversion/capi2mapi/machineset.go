@@ -89,7 +89,7 @@ func convertCAPIMachineSetStatusToMAPI(capiStatus clusterv1.MachineSetStatus) ma
 	}
 
 	// unused fields from CAPI MachineSetStatus
-	// - Selector: label selection is different between CAPI and MAPI.
+	// - Selector: selector is not present on the MAPI MachineSet status.
 	// - V1Beta2: for now we use the V1Beta1 status fields to obtain the status of the MAPI MachineSet.
 
 	return mapiStatus

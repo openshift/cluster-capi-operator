@@ -117,7 +117,7 @@ var _ = Describe("mapi2capi MachineSet Status Conversion", func() {
 				},
 			}
 
-			capiStatus := convertMAPIMachineSetToCAPIMachineSetStatus(mapiMachineSet)
+			capiStatus := convertMAPIMachineSetToCAPIMachineSetStatus(mapiMachineSet, metav1.LabelSelector{})
 
 			Expect(capiStatus.Replicas).To(Equal(int32(5)))
 			Expect(capiStatus.FullyLabeledReplicas).To(Equal(int32(5)))
@@ -198,7 +198,7 @@ var _ = Describe("mapi2capi MachineSet Status Conversion", func() {
 		It("should set all CAPI MachineSet status fields to empty and conditions to false when MAPI MachineSet status is empty", func() {
 			mapiMachineSet := machinebuilder.MachineSet().Build() // No mutations for status or spec set
 
-			capiStatus := convertMAPIMachineSetToCAPIMachineSetStatus(mapiMachineSet)
+			capiStatus := convertMAPIMachineSetToCAPIMachineSetStatus(mapiMachineSet, metav1.LabelSelector{})
 
 			Expect(capiStatus.Replicas).To(Equal(int32(0)))
 			Expect(capiStatus.FullyLabeledReplicas).To(Equal(int32(0)))
@@ -243,7 +243,7 @@ var _ = Describe("mapi2capi MachineSet Status Conversion", func() {
 				WithAvailableReplicas(3).
 				Build()
 
-			capiStatus := convertMAPIMachineSetToCAPIMachineSetStatus(mapiMachineSet)
+			capiStatus := convertMAPIMachineSetToCAPIMachineSetStatus(mapiMachineSet, metav1.LabelSelector{})
 
 			Expect(capiStatus.ReadyReplicas).To(Equal(int32(3)))
 			Expect(capiStatus.Replicas).To(Equal(int32(3)))
@@ -271,7 +271,7 @@ var _ = Describe("mapi2capi MachineSet Status Conversion", func() {
 				WithAvailableReplicas(1).
 				Build()
 
-			capiStatus := convertMAPIMachineSetToCAPIMachineSetStatus(mapiMachineSet)
+			capiStatus := convertMAPIMachineSetToCAPIMachineSetStatus(mapiMachineSet, metav1.LabelSelector{})
 
 			Expect(capiStatus.Replicas).To(Equal(int32(1)))
 			Expect(capiStatus.Conditions).To(ContainElement(matchers.MatchCAPICondition(clusterv1.Condition{
@@ -298,7 +298,7 @@ var _ = Describe("mapi2capi MachineSet Status Conversion", func() {
 				WithAvailableReplicas(2).
 				Build()
 
-			capiStatus := convertMAPIMachineSetToCAPIMachineSetStatus(mapiMachineSet)
+			capiStatus := convertMAPIMachineSetToCAPIMachineSetStatus(mapiMachineSet, metav1.LabelSelector{})
 			Expect(capiStatus.V1Beta2.Conditions).To(ContainElement(testutils.MatchCondition(metav1.Condition{
 				// The ScalingUp condition is computed based on the .Spec.Replicas > .Status.Replicas.
 				// In this case, scaling up is true.
@@ -317,7 +317,7 @@ var _ = Describe("mapi2capi MachineSet Status Conversion", func() {
 				WithAvailableReplicas(1).
 				Build()
 
-			capiStatus := convertMAPIMachineSetToCAPIMachineSetStatus(mapiMachineSet)
+			capiStatus := convertMAPIMachineSetToCAPIMachineSetStatus(mapiMachineSet, metav1.LabelSelector{})
 			Expect(capiStatus.V1Beta2.Conditions).To(ContainElement(testutils.MatchCondition(metav1.Condition{
 				// The ScalingDown condition is computed based on the .Spec.Replicas < .Status.Replicas.
 				// In this case, scaling down is true.
@@ -336,7 +336,7 @@ var _ = Describe("mapi2capi MachineSet Status Conversion", func() {
 				WithAvailableReplicas(2).
 				Build()
 
-			capiStatus := convertMAPIMachineSetToCAPIMachineSetStatus(mapiMachineSet)
+			capiStatus := convertMAPIMachineSetToCAPIMachineSetStatus(mapiMachineSet, metav1.LabelSelector{})
 			Expect(capiStatus.V1Beta2.Conditions).To(ContainElement(testutils.MatchCondition(metav1.Condition{
 				// The MachinesUpToDate condition is computed based on the .Spec.Replicas == .Status.FullyLabeledReplicas.
 				// In this case they are equal, so the condition is true.
@@ -355,13 +355,33 @@ var _ = Describe("mapi2capi MachineSet Status Conversion", func() {
 				WithAvailableReplicas(2).
 				Build()
 
-			capiStatus := convertMAPIMachineSetToCAPIMachineSetStatus(mapiMachineSet)
+			capiStatus := convertMAPIMachineSetToCAPIMachineSetStatus(mapiMachineSet, metav1.LabelSelector{})
 			Expect(capiStatus.V1Beta2.Conditions).To(ContainElement(testutils.MatchCondition(metav1.Condition{
 				// The MachinesUpToDate condition is computed based on the .Spec.Replicas == .Status.FullyLabeledReplicas.
 				// In this case they are not equal, so the condition is false.
 				Type:   clusterv1.MachineSetMachinesUpToDateV1Beta2Condition,
 				Status: metav1.ConditionFalse,
 			})))
+		})
+
+		It("should set CAPI MachineSet Selector to the expected value when Spec.Selector is set", func() {
+			// Build a MAPI MachineSet with Spec.Selector set.
+			mapiMachineSet := machinebuilder.MachineSet().
+				WithMachineSetSpecSelector(metav1.LabelSelector{
+					MatchLabels: map[string]string{"foo": "bar"},
+				}).
+				Build()
+
+			capiStatus := convertMAPIMachineSetToCAPIMachineSetStatus(mapiMachineSet, mapiMachineSet.Spec.Selector)
+			Expect(capiStatus.Selector).To(Equal("foo=bar"))
+		})
+
+		It("should set CAPI MachineSet Selector to empty when Spec.Selector is not set", func() {
+			// Build a MAPI MachineSet with Spec.Selector not set.
+			mapiMachineSet := machinebuilder.MachineSet().Build()
+
+			capiStatus := convertMAPIMachineSetToCAPIMachineSetStatus(mapiMachineSet, metav1.LabelSelector{})
+			Expect(capiStatus.Selector).To(BeEmpty())
 		})
 	})
 })

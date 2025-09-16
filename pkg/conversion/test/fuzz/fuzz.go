@@ -219,6 +219,11 @@ func CAPI2MAPIMachineSetRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv
 		// So null them out to match the original nil fuzzing.
 		capiMachineSet.Status.Conditions = nil
 		capiMachineSet.Status.V1Beta2.Conditions = nil
+
+		// The status selector is computed based on the spec selector of the same object,
+		// so we don't want to compare it with the original object's status selector.
+		capiMachineSet.Status.Selector = ""
+
 		Expect(capiMachineSet.Status).To(Equal(in.machineSet.Status))
 
 		infraMachineTemplate.SetFinalizers(nil)
