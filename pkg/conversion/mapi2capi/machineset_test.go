@@ -95,17 +95,9 @@ var _ = Describe("mapi2capi MachineSet conversion", func() {
 
 var _ = Describe("mapi2capi MachineSet Status Conversion", func() {
 	Context("when converting MAPI MachineSet status to CAPI", func() {
-		var (
-			builder *machinebuilder.MachineSetBuilder
-		)
-
-		BeforeEach(func() {
-			builder = &machinebuilder.MachineSetBuilder{}
-		})
-
 		It("should set all CAPI MachineSet status fields and conditions to the expected values", func() {
 			// Build a MAPI MachineSet with a "Available" condition and some other status fields set.
-			mapiMachineSet := builder.
+			mapiMachineSet := machinebuilder.MachineSet().
 				WithReplicas(5).
 				WithReplicasStatus(5).
 				WithFullyLabeledReplicas(5).
@@ -204,7 +196,7 @@ var _ = Describe("mapi2capi MachineSet Status Conversion", func() {
 		})
 
 		It("should set all CAPI MachineSet status fields to empty and conditions to false when MAPI MachineSet status is empty", func() {
-			mapiMachineSet := builder.Build() // No mutations for status or spec set
+			mapiMachineSet := machinebuilder.MachineSet().Build() // No mutations for status or spec set
 
 			capiStatus := convertMAPIMachineSetToCAPIMachineSetStatus(mapiMachineSet)
 
@@ -243,7 +235,7 @@ var _ = Describe("mapi2capi MachineSet Status Conversion", func() {
 
 		It("should set CAPI MachineSet Ready and MachinesReady conditions to true when ReadyReplicas == Replicas", func() {
 			// Build a MAPI MachineSet with ReadyReplicas == Replicas.
-			mapiMachineSet := builder.
+			mapiMachineSet := machinebuilder.MachineSet().
 				WithReplicas(3).
 				WithReplicasStatus(3).
 				WithFullyLabeledReplicas(3).
@@ -271,7 +263,7 @@ var _ = Describe("mapi2capi MachineSet Status Conversion", func() {
 
 		It("should set CAPI MachineSet Resized and MachinesCreated conditions to false when Status.Replicas != Spec.Replicas", func() {
 			// Build a MAPI MachineSet with Status.Replicas != Spec.Replicas.
-			mapiMachineSet := builder.
+			mapiMachineSet := machinebuilder.MachineSet().
 				WithReplicas(2).
 				WithReplicasStatus(1).
 				WithFullyLabeledReplicas(1).
@@ -298,7 +290,7 @@ var _ = Describe("mapi2capi MachineSet Status Conversion", func() {
 
 		It("should set CAPI MachineSet ScalingUp condition to true when Spec.Replicas > Status.Replicas", func() {
 			// Build a MAPI MachineSet with Spec.Replicas > Status.Replicas (scaling up).
-			mapiMachineSet := builder.
+			mapiMachineSet := machinebuilder.MachineSet().
 				WithReplicas(4).
 				WithReplicasStatus(2).
 				WithFullyLabeledReplicas(2).
@@ -317,7 +309,7 @@ var _ = Describe("mapi2capi MachineSet Status Conversion", func() {
 
 		It("should set CAPI MachineSet ScalingDown condition to true when Spec.Replicas < Status.Replicas", func() {
 			// Build a MAPI MachineSet with Spec.Replicas < Status.Replicas (scaling down).
-			mapiMachineSet := builder.
+			mapiMachineSet := machinebuilder.MachineSet().
 				WithReplicas(1).
 				WithReplicasStatus(3).
 				WithFullyLabeledReplicas(3).
@@ -336,7 +328,7 @@ var _ = Describe("mapi2capi MachineSet Status Conversion", func() {
 
 		It("should set CAPI MachineSet MachinesUpToDate condition to true when FullyLabeledReplicas == Spec.Replicas", func() {
 			// Build a MAPI MachineSet with FullyLabeledReplicas == Spec.Replicas.
-			mapiMachineSet := builder.
+			mapiMachineSet := machinebuilder.MachineSet().
 				WithReplicas(2).
 				WithReplicasStatus(2).
 				WithFullyLabeledReplicas(2).
@@ -355,7 +347,7 @@ var _ = Describe("mapi2capi MachineSet Status Conversion", func() {
 
 		It("should set CAPI MachineSet MachinesUpToDate condition to false when FullyLabeledReplicas != Spec.Replicas", func() {
 			// Build a MAPI MachineSet with FullyLabeledReplicas != Spec.Replicas.
-			mapiMachineSet := builder.
+			mapiMachineSet := machinebuilder.MachineSet().
 				WithReplicas(3).
 				WithReplicasStatus(3).
 				WithFullyLabeledReplicas(2).
