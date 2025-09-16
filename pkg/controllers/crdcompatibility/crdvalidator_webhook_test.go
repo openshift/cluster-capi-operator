@@ -31,6 +31,7 @@ import (
 
 func Test_crdValidator_validateCreateOrUpdate(t *testing.T) { //nolint:funlen
 	RegisterTestingT(t)
+
 	ctx := context.Background()
 
 	testCRDWorking := generateTestCRD()
@@ -111,7 +112,7 @@ func Test_crdValidator_validateCreateOrUpdate(t *testing.T) { //nolint:funlen
 		t.Run(tt.name, func(t *testing.T) {
 			g := NewWithT(t)
 			v := crdValidator{
-				client: fake.NewClientBuilder().WithObjects(tt.requirements...).WithIndex(&operatorv1alpha1.CRDCompatibilityRequirement{}, fieldIndexCRDRef, CRDByCRDRef).Build(),
+				client: fake.NewClientBuilder().WithObjects(tt.requirements...).WithIndex(&operatorv1alpha1.CRDCompatibilityRequirement{}, fieldIndexCRDRef, crdByCRDRef).Build(),
 			}
 
 			gotWarnings, gotErr := v.validateCreateOrUpdate(ctx, tt.obj)

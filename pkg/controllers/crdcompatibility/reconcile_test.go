@@ -34,11 +34,7 @@ var _ = Describe("CRDCompatibilityRequirement", Ordered, ContinueOnFailure, func
 	// Starting and stopping the manager is quite expensive, so we share one amongst all the tests.
 	// Unfortunately ginkgo forces us to use Ordered when doing this.
 	BeforeAll(func(ctx context.Context) {
-		reconciler, startManager := InitManager(ctx)
-
-		// Mark the reconciler synced to avoid the complexity of running the
-		// wait for synced loop
-		reconciler.synced = true
+		_, startManager := InitManager(ctx)
 
 		startManager()
 	})

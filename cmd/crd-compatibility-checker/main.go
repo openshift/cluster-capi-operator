@@ -14,7 +14,6 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"os"
 
@@ -124,9 +123,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Allows the sync waiter to cancel the manager if it fails to sync
-	ctx, cancel := context.WithCancel(ctrl.SetupSignalHandler())
-	defer cancel()
+	ctx := ctrl.SetupSignalHandler()
 
 	// FIXME(chrischdi): do we need to add something as new readyness probe?
 
