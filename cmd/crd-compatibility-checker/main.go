@@ -125,11 +125,19 @@ func main() {
 
 	ctx := ctrl.SetupSignalHandler()
 
-	// FIXME(chrischdi): do we need to add something as new readyness probe?
-
 	// Setup the CRD compatibility controller
 	if err := crdCompatibilityReconciler.SetupWithManager(ctx, mgr); err != nil {
 		klog.Error(err, "unable to create controller", "controller", "CRDCompatibility")
+		os.Exit(1)
+	}
+
+	if err := mgr.AddHealthzCheck("health", healthz.Ping); err != nil {
+		klog.Error(err, "unable to set up health check")
+		os.Exit(1)
+	}
+
+	if err := mgr.AddReadyzCheck("check", healthz.Ping); err != nil {
+		klog.Error(err, "unable to set up ready check")
 		os.Exit(1)
 	}
 
