@@ -162,30 +162,35 @@ var _ = Describe("mapi2capi MachineSet Status Conversion", func() {
 					// In this case they are equal, so the condition is false.
 					Type:   clusterv1.MachineSetDeletingV1Beta2Condition,
 					Status: metav1.ConditionFalse,
+					Reason: clusterv1.MachineSetNotDeletingV1Beta2Reason,
 				})),
 				ContainElement(testutils.MatchCondition(metav1.Condition{
 					// The ScalingUp condition is computed based on the .Spec.Replicas vs .Status.Replicas.
 					// In this case they are equal, so the condition is false.
 					Type:   clusterv1.MachineSetScalingUpV1Beta2Condition,
 					Status: metav1.ConditionFalse,
+					Reason: clusterv1.MachineSetNotScalingUpV1Beta2Reason,
 				})),
 				ContainElement(testutils.MatchCondition(metav1.Condition{
 					// The ScalingDown condition is computed based on the .Spec.Replicas vs .Status.Replicas.
 					// In this case they are equal, so the condition is false.
 					Type:   clusterv1.MachineSetScalingDownV1Beta2Condition,
 					Status: metav1.ConditionFalse,
+					Reason: clusterv1.MachineSetNotScalingDownV1Beta2Reason,
 				})),
 				ContainElement(testutils.MatchCondition(metav1.Condition{
 					// The MachinesReady condition is computed based on the ReadyReplicas and the Replicas.
 					// In this case they differ, so the condition is false.
 					Type:   clusterv1.MachineSetMachinesReadyV1Beta2Condition,
 					Status: metav1.ConditionFalse,
+					Reason: clusterv1.MachineSetMachinesNotReadyV1Beta2Reason,
 				})),
 				ContainElement(testutils.MatchCondition(metav1.Condition{
 					// The MachinesUpToDate condition is computed based on the .Spec.Replicas vs .Status.FullyLabeledReplicas.
 					// In this case they are equal, so the condition is true.
 					Type:   clusterv1.MachineSetMachinesUpToDateV1Beta2Condition,
 					Status: metav1.ConditionTrue,
+					Reason: clusterv1.MachineSetMachinesUpToDateV1Beta2Reason,
 				})),
 				Not(ContainElement(testutils.MatchCondition(metav1.Condition{
 					// The Available condition is not copied from MAPI.
@@ -304,6 +309,7 @@ var _ = Describe("mapi2capi MachineSet Status Conversion", func() {
 				// In this case, scaling up is true.
 				Type:   clusterv1.MachineSetScalingUpV1Beta2Condition,
 				Status: metav1.ConditionTrue,
+				Reason: clusterv1.MachineSetScalingUpV1Beta2Reason,
 			})))
 		})
 
@@ -323,6 +329,7 @@ var _ = Describe("mapi2capi MachineSet Status Conversion", func() {
 				// In this case, scaling down is true.
 				Type:   clusterv1.MachineSetScalingDownV1Beta2Condition,
 				Status: metav1.ConditionTrue,
+				Reason: clusterv1.MachineSetScalingDownV1Beta2Reason,
 			})))
 		})
 
@@ -342,6 +349,7 @@ var _ = Describe("mapi2capi MachineSet Status Conversion", func() {
 				// In this case they are equal, so the condition is true.
 				Type:   clusterv1.MachineSetMachinesUpToDateV1Beta2Condition,
 				Status: metav1.ConditionTrue,
+				Reason: clusterv1.MachineSetMachinesUpToDateV1Beta2Reason,
 			})))
 		})
 
@@ -361,6 +369,7 @@ var _ = Describe("mapi2capi MachineSet Status Conversion", func() {
 				// In this case they are not equal, so the condition is false.
 				Type:   clusterv1.MachineSetMachinesUpToDateV1Beta2Condition,
 				Status: metav1.ConditionFalse,
+				Reason: clusterv1.MachineSetMachinesNotUpToDateV1Beta2Reason,
 			})))
 		})
 
