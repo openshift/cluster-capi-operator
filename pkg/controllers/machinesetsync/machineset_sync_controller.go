@@ -982,7 +982,7 @@ func (r *MachineSetSyncReconciler) ensureMAPIMachineSetStatusUpdated(ctx context
 
 	if err := r.Status().Patch(ctx, existingMAPIMachineSet, patchBase); err != nil {
 		logger.Error(err, "Failed to update MAPI machine set status")
-		updateErr := fmt.Errorf("failed to update MAPI machine set status: %w", err)
+		updateErr := fmt.Errorf("failed to update status: %w", err)
 
 		if condErr := r.applySynchronizedConditionWithPatch(
 			ctx, existingMAPIMachineSet, corev1.ConditionFalse, reasonFailedToUpdateMAPIMachineSet, updateErr.Error(), nil); condErr != nil {
@@ -1043,13 +1043,13 @@ func (r *MachineSetSyncReconciler) updateMAPIMachineSet(ctx context.Context, exi
 	// If there are spec changes, update the MAPI machine set.
 	specUpdated, err := r.ensureMAPIMachineSetSpecUpdated(ctx, existingMAPIMachineSet, mapiMachineSetsDiff, updatedMAPIMachineSet)
 	if err != nil {
-		return fmt.Errorf("failed to ensure MAPI machine set spec updated: %w", err)
+		return fmt.Errorf("failed to update spec: %w", err)
 	}
 
 	// If there are status changes, update the MAPI machine set status.
 	statusUpdated, err := r.ensureMAPIMachineSetStatusUpdated(ctx, existingMAPIMachineSet, convertedMAPIMachineSet, updatedMAPIMachineSet, capiMachineSet, mapiMachineSetsDiff, specUpdated)
 	if err != nil {
-		return fmt.Errorf("failed to ensure MAPI machine set status updated: %w", err)
+		return fmt.Errorf("failed to ensure status updated: %w", err)
 	}
 
 	if specUpdated || statusUpdated {
