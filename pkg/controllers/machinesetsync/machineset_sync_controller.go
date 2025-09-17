@@ -998,6 +998,7 @@ func (r *MachineSetSyncReconciler) ensureMAPIMachineSetStatusUpdated(ctx context
 // setChangedCAPIMachineSetStatusFields sets the updated fields in the CAPI machine set status.
 func setChangedCAPIMachineSetStatusFields(existingCAPIMachineSet, convertedCAPIMachineSet *clusterv1.MachineSet) {
 	// convertedCAPIMachineSet holds the computed and desired status changes, so apply them to the existing existingCAPIMachineSet.
+	// Set the changed v1beta1 fields.
 	existingCAPIMachineSet.Status.Replicas = convertedCAPIMachineSet.Status.Replicas
 	existingCAPIMachineSet.Status.ReadyReplicas = convertedCAPIMachineSet.Status.ReadyReplicas
 	existingCAPIMachineSet.Status.AvailableReplicas = convertedCAPIMachineSet.Status.AvailableReplicas
@@ -1005,18 +1006,21 @@ func setChangedCAPIMachineSetStatusFields(existingCAPIMachineSet, convertedCAPIM
 	existingCAPIMachineSet.Status.FailureReason = convertedCAPIMachineSet.Status.FailureReason
 	existingCAPIMachineSet.Status.FailureMessage = convertedCAPIMachineSet.Status.FailureMessage
 
-	// Update the conditions using the Cluster API conditions utility.
 	for i := range convertedCAPIMachineSet.Status.Conditions {
 		conditions.Set(existingCAPIMachineSet, &convertedCAPIMachineSet.Status.Conditions[i])
 	}
 
-	// Update the v1beta2 conditions if they exist (ignoring lasttransitiontime), append new ones.
+	// Set the changed v1beta2 fields.
 	switch {
 	case convertedCAPIMachineSet.Status.V1Beta2 == nil:
 		existingCAPIMachineSet.Status.V1Beta2 = nil
 	case existingCAPIMachineSet.Status.V1Beta2 == nil:
 		existingCAPIMachineSet.Status.V1Beta2 = convertedCAPIMachineSet.Status.V1Beta2
 	default:
+		existingCAPIMachineSet.Status.V1Beta2.UpToDateReplicas = convertedCAPIMachineSet.Status.V1Beta2.UpToDateReplicas
+		existingCAPIMachineSet.Status.V1Beta2.AvailableReplicas = convertedCAPIMachineSet.Status.V1Beta2.AvailableReplicas
+		existingCAPIMachineSet.Status.V1Beta2.ReadyReplicas = convertedCAPIMachineSet.Status.V1Beta2.ReadyReplicas
+
 		for i := range convertedCAPIMachineSet.Status.V1Beta2.Conditions {
 			conditionsv1beta2.Set(existingCAPIMachineSet, convertedCAPIMachineSet.Status.V1Beta2.Conditions[i])
 		}
