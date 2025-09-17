@@ -600,7 +600,7 @@ func (r *MachineSetSyncReconciler) reconcileCAPIMachineSetToMAPIMachineSet(ctx c
 
 	restoreMAPIFields(existingMAPIMachineSet, convertedMAPIMachineSet)
 
-	if err := r.createOrUpdateMAPIMachineSet(ctx, existingMAPIMachineSet, convertedMAPIMachineSet, sourceCAPIMachineSet); err != nil {
+	if err := r.updateMAPIMachineSet(ctx, existingMAPIMachineSet, convertedMAPIMachineSet, sourceCAPIMachineSet); err != nil {
 		return ctrl.Result{}, fmt.Errorf("unable to ensure MAPI machine set: %w", err)
 	}
 
@@ -896,17 +896,24 @@ func (r *MachineSetSyncReconciler) ensureCAPIMachineSetStatusUpdated(ctx context
 		return false, fmt.Errorf("failed to check if patch is required: %w", err)
 	}
 
-	if isPatchRequired {
-		if err := r.Status().Patch(ctx, existingCAPIMachineSet, patchBase); err != nil {
-			logger.Error(err, "Failed to update CAPI machine set status")
-
-			return false, fmt.Errorf("failed to update CAPI machine set status: %w", err)
-		}
-
-		return true, nil
+	if !isPatchRequired {
+		// If the patch is not required, return early.
+		return false, nil
 	}
 
-	return false, nil
+	if err := r.Status().Patch(ctx, existingCAPIMachineSet, patchBase); err != nil {
+		logger.Error(err, "Failed to update CAPI machine set status")
+		updateErr := fmt.Errorf("failed to update CAPI machine set status: %w", err)
+
+		if condErr := r.applySynchronizedConditionWithPatch(
+			ctx, mapiMachineSet, corev1.ConditionFalse, reasonFailedToUpdateCAPIMachineSet, updateErr.Error(), nil); condErr != nil {
+			return false, utilerrors.NewAggregate([]error{updateErr, condErr})
+		}
+
+		return false, updateErr
+	}
+
+	return true, nil
 }
 
 // ensureMAPIMachineSetSpecUpdated updates the MAPI machine set if changes are detected.
@@ -968,24 +975,24 @@ func (r *MachineSetSyncReconciler) ensureMAPIMachineSetStatusUpdated(ctx context
 		return false, fmt.Errorf("failed to check if patch is required: %w", err)
 	}
 
-	if isPatchRequired {
-		if err := r.Status().Patch(ctx, existingMAPIMachineSet, patchBase); err != nil {
-			logger.Error(err, "Failed to update MAPI machine set status")
-
-			updateErr := fmt.Errorf("failed to update MAPI machine set status: %w", err)
-
-			if condErr := r.applySynchronizedConditionWithPatch(
-				ctx, existingMAPIMachineSet, corev1.ConditionFalse, reasonFailedToUpdateMAPIMachineSet, updateErr.Error(), nil); condErr != nil {
-				return false, utilerrors.NewAggregate([]error{updateErr, condErr})
-			}
-
-			return false, updateErr
-		}
-
-		return true, nil
+	if !isPatchRequired {
+		// If the patch is not required, return early.
+		return false, nil
 	}
 
-	return false, nil
+	if err := r.Status().Patch(ctx, existingMAPIMachineSet, patchBase); err != nil {
+		logger.Error(err, "Failed to update MAPI machine set status")
+		updateErr := fmt.Errorf("failed to update MAPI machine set status: %w", err)
+
+		if condErr := r.applySynchronizedConditionWithPatch(
+			ctx, existingMAPIMachineSet, corev1.ConditionFalse, reasonFailedToUpdateMAPIMachineSet, updateErr.Error(), nil); condErr != nil {
+			return false, utilerrors.NewAggregate([]error{updateErr, condErr})
+		}
+
+		return false, updateErr
+	}
+
+	return true, nil
 }
 
 // setChangedCAPIMachineSetStatusFields sets the updated fields in the CAPI machine set status.
@@ -1016,8 +1023,8 @@ func setChangedCAPIMachineSetStatusFields(existingCAPIMachineSet, convertedCAPIM
 	}
 }
 
-// createOrUpdateMAPIMachineSet creates a MAPI machine set from a CAPI one, or updates if it exists and it is out of date.
-func (r *MachineSetSyncReconciler) createOrUpdateMAPIMachineSet(ctx context.Context, existingMAPIMachineSet *machinev1beta1.MachineSet, convertedMAPIMachineSet *machinev1beta1.MachineSet, capiMachineSet *clusterv1.MachineSet) error {
+// updateMAPIMachineSet updates a MAPI machine set if is out of date.
+func (r *MachineSetSyncReconciler) updateMAPIMachineSet(ctx context.Context, existingMAPIMachineSet *machinev1beta1.MachineSet, convertedMAPIMachineSet *machinev1beta1.MachineSet, capiMachineSet *clusterv1.MachineSet) error {
 	logger := log.FromContext(ctx)
 
 	// Here we always assume the existingMAPIMachineSet already exists, so we don't need to create it.
