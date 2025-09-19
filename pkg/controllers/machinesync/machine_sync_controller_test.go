@@ -198,7 +198,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 				SkipNameValidation:      ptr.To(true),
 			},
 			Cache: cache.Options{
-				SyncPeriod: ptr.To(500 * time.Millisecond),
+				SyncPeriod: ptr.To(1 * time.Second),
 			},
 		})
 		Expect(err).ToNot(HaveOccurred(), "Manager should be able to be created")
@@ -884,7 +884,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 				"machine.openshift.io/cluster-api-machine-type": "worker",
 				"machine.openshift.io/cluster-api-machineset":   "ci-op-gs2k97d6-c9e33-2smph-worker-us-west-2b",
 				"machine.openshift.io/instance-type":            "m6a.xlarge",
-				"param-controlled-label":                        "param-controlled-key",
+				"mapi-param-controlled-label":                   "param-controlled-key",
 			}).WithAnnotations(map[string]string{
 				"machine.openshift.io/instance-state": "running",
 			}).Build()
@@ -900,6 +900,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 				"cluster.x-k8s.io/cluster-name":                 "ci-op-gs2k97d6-c9e33-2smph",
 				"cluster.x-k8s.io/set-name":                     "ci-op-gs2k97d6-c9e33-2smph-worker-us-west-2b",
 				"node-role.kubernetes.io/worker":                "",
+				"capi-param-controlled-label":                   "param-controlled-key",
 			}).WithAnnotations(map[string]string{
 				"machine.openshift.io/instance-state": "running",
 			}).Build()
@@ -1048,6 +1049,12 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 						}), timeout).Should(MatchError(ContainSubstring("Cannot add, modify or delete any machine.openshift.io/* or kubernetes.io/* label")))
 					})
 
+					It("rejects adding a new the 'machine-template-hash' label", func() {
+						Eventually(k.Update(mapiMachine, func() {
+							mapiMachine.Labels["machine-template-hash"] = testLabelValue
+						}), timeout).Should(MatchError(ContainSubstring("Setting the 'machine-template-hash' label is forbidden")))
+					})
+
 					It("allows modification of a non-protected label", func() {
 						Eventually(k.Update(mapiMachine, func() {
 							mapiMachine.Labels["test"] = "val"
@@ -1096,16 +1103,16 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 				Context("when trying to update Cluster API owned metadata.labels", func() {
 					It("allows changing a metadata label to match the param machine", func() {
 						Eventually(k.Object(capiMachine), timeout).Should(
-							HaveField("Labels", HaveKeyWithValue("cluster.x-k8s.io/cluster-name", "ci-op-gs2k97d6-c9e33-2smph")))
+							HaveField("Labels", HaveKeyWithValue("capi-param-controlled-label", "param-controlled-key")))
 
 						Eventually(k.Update(mapiMachine, func() {
-							mapiMachine.Labels["cluster.x-k8s.io/cluster-name"] = "ci-op-gs2k97d6-c9e33-2smph"
+							mapiMachine.Labels["capi-param-controlled-label"] = "param-controlled-key"
 						}), timeout).Should(Succeed(), "expected success when updating label to match CAPI machine")
 					})
 
 					It("rejects changing a label to differ from the param machine", func() {
 						Eventually(k.Update(mapiMachine, func() {
-							mapiMachine.Labels["cluster.x-k8s.io/cluster-name"] = "foo"
+							mapiMachine.Labels["capi-param-controlled-label"] = "foo"
 						}), timeout).Should(MatchError(ContainSubstring("Cannot modify a Cluster API controlled label except to match the Cluster API mirrored machine")))
 					})
 				})
@@ -1248,6 +1255,12 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 						}), timeout).Should(MatchError(ContainSubstring("Cannot add, modify or delete any machine.openshift.io/*, kubernetes.io/* or cluster.x-k8s.io/* label")))
 					})
 
+					It("rejects adding a new the 'machine-template-hash' label", func() {
+						Eventually(k.Update(capiMachine, func() {
+							capiMachine.Labels["machine-template-hash"] = testLabelValue
+						}), timeout).Should(MatchError(ContainSubstring("Setting the 'machine-template-hash' label is forbidden")))
+					})
+
 					It("allows modification of a non-protected label", func() {
 						Eventually(k.Update(capiMachine, func() {
 							capiMachine.Labels["test"] = "val"
@@ -1296,16 +1309,16 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 				Context("when trying to update Machine API owned metadata.labels", func() {
 					It("allows changing a metadata label to match the param machine", func() {
 						Eventually(k.Object(mapiMachine), timeout).Should(
-							HaveField("Labels", HaveKeyWithValue("param-controlled-label", "param-controlled-key")))
+							HaveField("Labels", HaveKeyWithValue("mapi-param-controlled-label", "param-controlled-key")))
 
 						Eventually(k.Update(capiMachine, func() {
-							capiMachine.Labels["param-controlled-label"] = "param-controlled-key"
+							capiMachine.Labels["mapi-param-controlled-label"] = "param-controlled-key"
 						}), timeout).Should(Succeed(), "expected success when updating label to match MAPI machine")
 					})
 
 					It("rejects changing a label to differ from the param machine", func() {
 						Eventually(k.Update(capiMachine, func() {
-							capiMachine.Labels["param-controlled-label"] = testLabelValue
+							capiMachine.Labels["mapi-param-controlled-label"] = testLabelValue
 						}), timeout).Should(MatchError(ContainSubstring("Cannot modify a Machine API controlled label except to match the Machine API mirrored machine")))
 					})
 				})
