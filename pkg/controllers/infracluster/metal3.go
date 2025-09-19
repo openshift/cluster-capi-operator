@@ -33,7 +33,7 @@ import (
 func (r *InfraClusterController) ensureMetal3Cluster(ctx context.Context, log logr.Logger) (client.Object, error) {
 	target := &metal3v1.Metal3Cluster{ObjectMeta: metav1.ObjectMeta{
 		Name:      r.Infra.Status.InfrastructureName,
-		Namespace: defaultCAPINamespace,
+		Namespace: r.CAPINamespace,
 	}}
 
 	// Checking whether InfraCluster object exists. If it doesn't, create it.
@@ -58,7 +58,7 @@ func (r *InfraClusterController) ensureMetal3Cluster(ctx context.Context, log lo
 	target = &metal3v1.Metal3Cluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      r.Infra.Status.InfrastructureName,
-			Namespace: defaultCAPINamespace,
+			Namespace: r.CAPINamespace,
 			// The ManagedBy Annotation is set so CAPI infra providers ignore the InfraCluster object,
 			// as that's managed externally, in this case by the cluster-capi-operator's infracluster controller.
 			Annotations: map[string]string{
@@ -78,7 +78,7 @@ func (r *InfraClusterController) ensureMetal3Cluster(ctx context.Context, log lo
 		return nil, fmt.Errorf("failed to creat InfraCluster: %w", err)
 	}
 
-	log.Info(fmt.Sprintf("InfraCluster '%s/%s' successfully created", defaultCAPINamespace, r.Infra.Status.InfrastructureName))
+	log.Info(fmt.Sprintf("InfraCluster '%s/%s' successfully created", r.CAPINamespace, r.Infra.Status.InfrastructureName))
 
 	return target, nil
 }
