@@ -32,6 +32,7 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 
+	capiflags "sigs.k8s.io/cluster-api/util/flags"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	crwebhook "sigs.k8s.io/controller-runtime/pkg/webhook"
@@ -88,6 +89,11 @@ func main() {
 	// to allow leader election flags to be bound
 	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
 	options.BindLeaderElectionFlags(&leaderElectionConfig, pflag.CommandLine)
+
+	// Register CAPI flags for the diagnostics endpoint.
+	capiManagerOptions := capiflags.ManagerOptions{}
+	capiflags.AddManagerOptions(pflag.CommandLine, &capiManagerOptions)
+
 	pflag.Parse()
 
 	if logToStderr != nil {
