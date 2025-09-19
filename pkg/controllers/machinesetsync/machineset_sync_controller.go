@@ -1072,7 +1072,7 @@ func setChangedMAPIMachineSetStatusFields(existingMAPIMachineSet, convertedMAPIM
 	existingMAPIMachineSet.Status.ErrorMessage = convertedMAPIMachineSet.Status.ErrorMessage
 
 	for i := range convertedMAPIMachineSet.Status.Conditions {
-		existingMAPIMachineSet.Status.Conditions = util.SetMAPIMachineSetCondition(existingMAPIMachineSet.Status.Conditions, &convertedMAPIMachineSet.Status.Conditions[i])
+		existingMAPIMachineSet.Status.Conditions = util.SetMAPICondition(existingMAPIMachineSet.Status.Conditions, &convertedMAPIMachineSet.Status.Conditions[i])
 	}
 }
 
