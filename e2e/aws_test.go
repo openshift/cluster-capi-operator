@@ -117,7 +117,6 @@ func newAWSMachineTemplate(mapiProviderSpec *mapiv1.AWSMachineProviderConfig) *a
 			ID: mapiProviderSpec.AMI.ID,
 		},
 		Ignition: &awsv1.Ignition{
-			Version:     "3.4",
 			StorageType: awsv1.IgnitionStorageTypeOptionUnencryptedUserData,
 		},
 		Subnet: &awsv1.AWSResourceReference{

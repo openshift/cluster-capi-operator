@@ -257,7 +257,6 @@ func (m *awsMachineAndInfra) toAWSMachine(providerSpec mapiv1.AWSMachineProvider
 		AdditionalTags:           convertAWSTagsToCAPI(providerSpec.Tags),
 		IAMInstanceProfile:       convertIAMInstanceProfiletoCAPI(providerSpec.IAMInstanceProfile),
 		Ignition: &awsv1.Ignition{
-			Version:     "3.4",                                              // TODO(OCPCLOUD-2719): Should this be extracted from the ignition in the user data secret?
 			StorageType: awsv1.IgnitionStorageTypeOptionUnencryptedUserData, // Hardcoded for OpenShift.
 		},
 

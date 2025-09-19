@@ -150,7 +150,6 @@ func awsMachineFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interface{} 
 		func(ignition *awsv1.Ignition, c randfill.Continue) {
 			// We force these fields, so they must be fuzzed in this way.
 			*ignition = awsv1.Ignition{
-				Version:     "3.4",
 				StorageType: awsv1.IgnitionStorageTypeOptionUnencryptedUserData,
 			}
 		},
