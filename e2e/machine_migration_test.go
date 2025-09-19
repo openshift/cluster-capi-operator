@@ -3,6 +3,7 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -110,6 +111,39 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 
 			It("should verify CAPI Machine Paused condition is False", func() {
 				verifyCAPIMachinePausedCondition(newCapiMachine, machinev1beta1.MachineAuthorityClusterAPI)
+			})
+		})
+	})
+
+	var _ = Describe("VAP Validation Tests Core", Ordered, func() {
+		Context("CAPI Machine field validation", func() {
+			It("should prevent setting of capi fields that are not supported by mapi(version)", func() {
+				// Get any existing CAPI machine for VAP testing
+				capiMachineList, err := capiframework.GetMachines(cl)
+				Expect(err).NotTo(HaveOccurred(), "Failed to list CAPI machines")
+				Expect(capiMachineList).NotTo(BeEmpty(), "No CAPI machines found in the openshift-cluster-api namespace")
+
+				targetMachineName := capiMachineList[0].Name
+				verifyCAPIMachineUpdateBlocked(ctx, cl, targetMachineName, func(capiMachine *clusterv1.Machine) {
+					version := "v1"
+					capiMachine.Spec.Version = &version
+				}, "spec.version")
+			})
+
+			It("should prevent setting of capi fields that are not supported by mapi(readinessGates)", func() {
+				// Get any existing CAPI machine for VAP testing
+				capiMachineList, err := capiframework.GetMachines(cl)
+				Expect(err).NotTo(HaveOccurred(), "Failed to list CAPI machines")
+				Expect(capiMachineList).NotTo(BeEmpty(), "No CAPI machines found in the openshift-cluster-api namespace")
+
+				targetMachineName := capiMachineList[0].Name
+				verifyCAPIMachineUpdateBlocked(ctx, cl, targetMachineName, func(capiMachine *clusterv1.Machine) {
+					capiMachine.Spec.ReadinessGates = []clusterv1.MachineReadinessGate{
+						{
+							ConditionType: "READY",
+						},
+					}
+				}, "spec.readinessGates")
 			})
 		})
 	})
@@ -458,6 +492,74 @@ func verifyCAPIMachinePausedCondition(capiMachine *clusterv1.Machine, authority 
 	)
 }
 
+func verifyCAPIMachineUpdateBlocked(ctx context.Context, cl client.Client, machineName string, updateFunc func(*clusterv1.Machine), fieldName string) {
+	By(fmt.Sprintf("Attempting to update CAPI Machine %s field on machine %s", fieldName, machineName))
+
+	// Get the target machine
+	originalMachine, err := capiframework.GetMachine(cl, machineName, capiframework.CAPINamespace)
+	Expect(err).NotTo(HaveOccurred(), "Failed to get original CAPI machine %s", machineName)
+
+	// Ensure cleanup happens even if test fails
+	defer func() {
+		By("Restoring original machine state")
+		// Retry-on-conflict loop for restoring original spec
+		for {
+			// Get current machine state
+			currentMachine, err := capiframework.GetMachine(cl, machineName, capiframework.CAPINamespace)
+			if err != nil {
+				// If machine doesn't exist, that's fine - no cleanup needed
+				GinkgoWriter.Printf("Warning: Machine %s no longer exists, skipping cleanup\n", machineName)
+				return
+			}
+
+			// Create a patch to restore original spec
+			patch := client.MergeFrom(currentMachine.DeepCopy())
+			currentMachine.Spec = originalMachine.Spec
+
+			// Apply the patch
+			err = cl.Patch(ctx, currentMachine, patch)
+			if err == nil {
+				// Success - cleanup complete
+				break
+			}
+
+			// Check if it's a conflict error
+			if apierrors.IsConflict(err) {
+				GinkgoWriter.Printf("Warning: Conflict restoring machine %s, retrying: %v\n", machineName, err)
+				// Continue the loop to retry
+				continue
+			}
+
+			// For other errors, log and give up
+			GinkgoWriter.Printf("Warning: Failed to restore original machine state for %s: %v\n", machineName, err)
+			break
+		}
+	}()
+
+	// Get the current CAPI machine
+	capiMachine, err := capiframework.GetMachine(cl, machineName, capiframework.CAPINamespace)
+	Expect(err).NotTo(HaveOccurred(), "Failed to get CAPI machine %s", machineName)
+
+	// Create a copy for modification
+	modifiedMachine := capiMachine.DeepCopy()
+
+	// Apply the update function to the copy
+	updateFunc(modifiedMachine)
+
+	// Create a patch from the original to the modified version
+	patch := client.MergeFrom(capiMachine)
+
+	// Try to patch the machine with the modified version - this should fail due to VAP
+	err = cl.Patch(ctx, modifiedMachine, patch)
+	Expect(err).To(HaveOccurred(), "Patch should fail due to VAP")
+
+	// The VAP is working correctly - verify the error is Invalid and contains the expected VAP policy name
+	errorMsg := fmt.Sprintf("%v", err)
+	Expect(apierrors.IsInvalid(err)).To(BeTrue(), "Expected invalid error from VAP, got: %s", errorMsg)
+	Expect(strings.Contains(errorMsg, "openshift-cluster-api-prevent-setting-of-capi-fields-unsupported-by-mapi")).To(BeTrue(),
+		"Error message should contain the VAP policy name: %s", errorMsg)
+	Expect(strings.Contains(strings.ToLower(errorMsg), "denied")).To(BeTrue(), "Error message should contain 'denied': %s", errorMsg)
+}
 func verifyCAPIMachineRemoved(cl client.Client, machineName string) {
 	By(fmt.Sprintf("Verifying the CAPI Machine %s is removed", machineName))
 	Eventually(komega.Get(&clusterv1.Machine{
