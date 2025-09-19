@@ -115,29 +115,29 @@ data:
         - expression: "variables.specLockedExceptAuthoritativeAPI"
           message:  "You may only modify spec.authoritativeAPI. Any other change inside .spec is not allowed. This is because status.authoritativeAPI is set to Cluster API."
     
-        # Guard machine.openshift.io/* and kubernetes.io/* labels
+        # Guard machine.openshift.io/*, kubernetes.io/* and cluster.x-k8s.io labels
         - expression: >
             !(
               variables.newLabels.exists(k,
-                  (k.startsWith('machine.openshift.io') || k.startsWith('kubernetes.io')) &&
+                  (k.startsWith('machine.openshift.io') || k.startsWith('kubernetes.io') || k.contains('cluster.x-k8s.io/')) &&
                   (variables.oldLabels[?k].orValue(null) != variables.newLabels[k])
               ) ||
               variables.oldLabels.exists(k,
-                  (k.startsWith('machine.openshift.io') || k.startsWith('kubernetes.io')) &&
+                  (k.startsWith('machine.openshift.io') || k.startsWith('kubernetes.io') || k.contains('cluster.x-k8s.io/')) &&
                   !(k in variables.newLabels)
               )
             )
           message: "Cannot add, modify or delete any machine.openshift.io/* or kubernetes.io/* label. This is because status.authoritativeAPI is set to Cluster API."
     
-        # Guard machine.openshift.io/* annotations
+        # Guard machine.openshift.io/* and cluster(s).x-k8s.io annotations
         - expression: >
             !(
               variables.newAnn.exists(k,
-                  k.startsWith('machine.openshift.io') &&
+                  (k.startsWith('machine.openshift.io') || k.contains('cluster.x-k8s.io') || k.contains('clusters.x-k8s.io')) &&
                   (variables.oldAnn[?k].orValue(null) != variables.newAnn[k])
               ) ||
               variables.oldAnn.exists(k,
-                  k.startsWith('machine.openshift.io') &&
+                  (k.startsWith('machine.openshift.io') || k.contains('cluster.x-k8s.io') || k.contains('clusters.x-k8s.io')) &&
                   !(k in variables.newAnn)
               )
             )
@@ -151,6 +151,10 @@ data:
               variables.newLabels[?k].orValue(null) == variables.paramLabels[k]
             )
           message: "Cannot modify a Cluster API controlled label except to match the Cluster API mirrored machine. This is because status.authoritativeAPI is set to Cluster API."
+        
+        # Don't allow setting the 'machine-template-hash' label. It should only be set by the CAPI controllers.
+        - expression: "!('machine-template-hash' in variables.newLabels)"
+          message: "Setting the 'machine-template-hash' label is forbidden.'"
     ---
     apiVersion: admissionregistration.k8s.io/v1
     kind: ValidatingAdmissionPolicyBinding
@@ -258,6 +262,10 @@ data:
               variables.newLabels[?k].orValue(null) == variables.paramLabels[k]
             )
           message: "Cannot modify a Machine API controlled label except to match the Machine API mirrored machine. This is because status.authoritativeAPI is set to Machine API."
+        
+        # Don't allow setting the 'machine-template-hash' label. It should only be set by the CAPI controllers.
+        - expression: "!('machine-template-hash' in variables.newLabels)"
+          message: "Setting the 'machine-template-hash' label is forbidden.'"
     ---
     apiVersion: admissionregistration.k8s.io/v1
     kind: ValidatingAdmissionPolicy
