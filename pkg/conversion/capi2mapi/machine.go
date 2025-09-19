@@ -21,9 +21,12 @@ import (
 
 	mapiv1 "github.com/openshift/api/machine/v1beta1"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation/field"
+	"k8s.io/utils/ptr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	capierrors "sigs.k8s.io/cluster-api/errors"
 )
 
 const (
@@ -35,6 +38,7 @@ func fromCAPIMachineToMAPIMachine(capiMachine *clusterv1.Machine) (*mapiv1.Machi
 	errs := field.ErrorList{}
 
 	lifecycleHooks, capiMachineNonHookAnnotations := convertCAPILifecycleHookAnnotationsToMAPILifecycleHooksAndAnnotations(capiMachine.Annotations)
+	mapiMachineStatus, machineStatusErrs := convertCAPIMachineStatusToMAPI(capiMachine.Status)
 
 	mapiMachine := &mapiv1.Machine{
 		ObjectMeta: metav1.ObjectMeta{
@@ -55,6 +59,7 @@ func fromCAPIMachineToMAPIMachine(capiMachine *clusterv1.Machine) (*mapiv1.Machi
 			// ProviderSpec: // ProviderSpec MUST NOT be populated here. It is added later by higher level fuctions.
 			// Taints: // TODO(OCPCLOUD-2861): Taint propagation from Machines to Nodes is not yet implemented in CAPI.
 		},
+		Status: mapiMachineStatus,
 	}
 
 	// Unused fields - Below this line are fields not used from the CAPI Machine.
@@ -64,6 +69,10 @@ func fromCAPIMachineToMAPIMachine(capiMachine *clusterv1.Machine) (*mapiv1.Machi
 	// capiMachine.Spec.Bootstrap.ConfigRef - Ignore as we use DataSecretName for the MAPI side.
 	// capiMachine.Spec.InfrastructureRef - Ignore as this is the split between 1 to 2 resources from MAPI to CAPI.
 	// capiMachine.Spec.FailureDomain - Ignore because we use this to populate the providerSpec.
+
+	if len(machineStatusErrs) > 0 {
+		errs = append(errs, machineStatusErrs...)
+	}
 
 	if capiMachine.Spec.Version != nil {
 		// TODO(OCPCLOUD-2714): We should prevent this using a VAP until and unless we need to support the field.
@@ -97,6 +106,111 @@ func fromCAPIMachineToMAPIMachine(capiMachine *clusterv1.Machine) (*mapiv1.Machi
 	}
 
 	return mapiMachine, nil
+}
+
+// convertCAPIMachineStatusToMAPI converts a CAPI MachineStatus to MAPI format.
+func convertCAPIMachineStatusToMAPI(capiStatus clusterv1.MachineStatus) (mapiv1.MachineStatus, field.ErrorList) {
+	errs := field.ErrorList{}
+
+	addresses, addressesErr := convertCAPIMachineAddressesToMAPI(capiStatus.Addresses)
+	if addressesErr != nil {
+		errs = append(errs, addressesErr...)
+	}
+
+	mapiStatus := mapiv1.MachineStatus{
+		NodeRef:     capiStatus.NodeRef,
+		LastUpdated: capiStatus.LastUpdated,
+		// Conditions:   // We don't have any MAPI very relevant MAPI conditions to compute from CAPI.
+		ErrorReason:  convertCAPIMachineFailureReasonToMAPIErrorReason(capiStatus.FailureReason),
+		ErrorMessage: convertCAPIMachineFailureMessageToMAPIErrorMessage(capiStatus.FailureMessage),
+		Phase:        convertCAPIMachinePhaseToMAPI(capiStatus.Phase),
+		Addresses:    addresses,
+
+		// LastOperation // this is MAPI-specific and not used in CAPI.
+		// ObservedGeneration: // We don't set the observed generation at this stage as it is handled by the machineSync controller.
+		// AuthoritativeAPI: // Ignore, this field as it is not present in CAPI.
+		// SynchronizedGeneration: // Ignore, this field as it is not present in CAPI.
+	}
+
+	// unused fields from CAPI MachineStatus
+	// - NodeInfo: not present on the MAPI Machine status.
+	// - CertificatesExpiryDate: not present on the MAPI Machine status.
+	// - BootstrapReady: this is derived and not stored directly in MAPI.
+	// - InfrastructureReady: this is derived and not stored directly in MAPI.
+	// - Deletion: not present on the MAPI Machine status.
+	// - V1Beta2: for now we use the V1Beta1 status fields to obtain the status of the MAPI Machine.
+
+	return mapiStatus, errs
+}
+
+// convertCAPIMachineAddressesToMAPI converts CAPI machine addresses to MAPI format.
+func convertCAPIMachineAddressesToMAPI(capiAddresses clusterv1.MachineAddresses) ([]corev1.NodeAddress, field.ErrorList) {
+	// Addresses are slightly different between MAPI/CAPI.
+	// In CAPI the address type can be: Hostname, ExternalIP, InternalIP, ExternalDNS or InternalDNS
+	// In MAPI the address type can be: Hostname, ExternalIP, InternalIP (missing ExternalDNS and InternalDNS)
+	errs := field.ErrorList{}
+	mapiAddresses := make([]corev1.NodeAddress, len(capiAddresses))
+
+	for i, addr := range capiAddresses {
+		// Convert the CAPI address type to the MAPI address type.
+		switch addr.Type {
+		case clusterv1.MachineHostName, clusterv1.MachineExternalIP, clusterv1.MachineInternalIP:
+			mapiAddresses[i] = corev1.NodeAddress{
+				Type:    corev1.NodeAddressType(addr.Type),
+				Address: addr.Address,
+			}
+		case clusterv1.MachineExternalDNS, clusterv1.MachineInternalDNS:
+			// We don't support these address types in MAPI at the moment, don't error for now as CAPI machines get created with these address types by default.
+			// TODO: Should we support these two address types in MAPI?
+		default:
+			errs = append(errs, field.Invalid(field.NewPath("status", "addresses"), string(addr.Type), string(addr.Type)+" unrecognized address type"))
+		}
+	}
+
+	return mapiAddresses, errs
+}
+
+// convertCAPIMachinePhaseToMAPI converts CAPI machine phase to MAPI format.
+func convertCAPIMachinePhaseToMAPI(capiPhase string) *string {
+	// Phase is slightly different between MAPI/CAPI.
+	// In CAPI can be one of: Pending;Provisioning;Provisioned;Running;Deleting;Deleted;Failed;Unknown
+	// In MAPI can be one of: Provisioning;Provisioned;Running;Deleting;Failed (missing Pending,Deleted,Unknown)
+	switch capiPhase {
+	case "":
+		return nil // Empty is equivalent to nil in MAPI.
+	case "Pending":
+		return nil // Pending is not supported in MAPI but is is a very early state so we don't need to represent it.
+	case "Deleted":
+		return ptr.To("Deleting") // Deleted is not supported in MAPI but we can stay in Deleting until the machine is fully removed.
+	case "Unknown":
+		return nil // Unknown is not supported in MAPI but we can set it to nil until we know more.
+	case "Provisioning", "Provisioned", "Running", "Deleting", "Failed":
+		return &capiPhase // This is a supported phase so we can represent it in MAPI.
+	default:
+		return nil // This is an unknown phase so we can't represent it in MAPI.
+	}
+}
+
+// convertCAPIMachineFailureReasonToMAPIErrorReason converts CAPI MachineStatusError to MAPI MachineStatusError.
+func convertCAPIMachineFailureReasonToMAPIErrorReason(capiFailureReason *capierrors.MachineStatusError) *mapiv1.MachineStatusError {
+	if capiFailureReason == nil {
+		return nil
+	}
+
+	mapiErrorReason := mapiv1.MachineStatusError(*capiFailureReason)
+
+	return &mapiErrorReason
+}
+
+// convertCAPIMachineFailureMessageToMAPIErrorMessage converts CAPI MachineStatusError to MAPI MachineStatusError.
+func convertCAPIMachineFailureMessageToMAPIErrorMessage(capiFailureMessage *string) *string {
+	if capiFailureMessage == nil {
+		return nil
+	}
+
+	mapiErrorMessage := *capiFailureMessage
+
+	return &mapiErrorMessage
 }
 
 const (

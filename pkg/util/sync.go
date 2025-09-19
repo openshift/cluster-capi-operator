@@ -84,10 +84,6 @@ func ObjectMetaEqual(a, b metav1.ObjectMeta) map[string]any {
 func CAPIMachineSetStatusEqual(a, b clusterv1.MachineSetStatus) map[string]any { //nolint:dupl
 	diff := map[string]any{}
 
-	if diffConditions := compareCAPIMachineSetConditions(a.Conditions, b.Conditions); len(diffConditions) > 0 {
-		diff[".conditions"] = diffConditions
-	}
-
 	if diffReadyReplicas := deep.Equal(a.ReadyReplicas, b.ReadyReplicas); len(diffReadyReplicas) > 0 {
 		diff[".readyReplicas"] = diffReadyReplicas
 	}
@@ -108,10 +104,109 @@ func CAPIMachineSetStatusEqual(a, b clusterv1.MachineSetStatus) map[string]any {
 		diff[".failureMessage"] = diffFailureMessage
 	}
 
+	if diffConditions := compareCAPIV1Beta1Conditions(a.Conditions, b.Conditions); len(diffConditions) > 0 {
+		diff[".conditions"] = diffConditions
+	}
+
+	// TODO diff the v1beta2 fields
+	// if diffConditions := compareCAPIMachineV1Beta2Conditions(a.Conditions, b.Conditions); len(diffConditions) > 0 {
+	// 	diff[".v1beta2.conditions"] = diffConditions
+	// }
+
 	return diff
 }
 
-func compareCAPIMachineSetConditions(a, b []clusterv1.Condition) []string {
+// CAPIMachineStatusEqual compares variables a and b,
+// and returns a list of differences, or nil if there are none,
+// for the fields we care about when synchronising CAPI and MAPI Machines.
+func CAPIMachineStatusEqual(a, b clusterv1.MachineStatus) map[string]any {
+	diff := map[string]any{}
+
+	if diffFailureReason := deep.Equal(a.FailureReason, b.FailureReason); len(diffFailureReason) > 0 {
+		diff[".failureReason"] = diffFailureReason
+	}
+
+	if diffFailureMessage := deep.Equal(a.FailureMessage, b.FailureMessage); len(diffFailureMessage) > 0 {
+		diff[".failureMessage"] = diffFailureMessage
+	}
+
+	if diffLastUpdated := deep.Equal(a.LastUpdated, b.LastUpdated); len(diffLastUpdated) > 0 {
+		diff[".lastUpdated"] = diffLastUpdated
+	}
+
+	if diffPhase := deep.Equal(a.Phase, b.Phase); len(diffPhase) > 0 {
+		diff[".phase"] = diffPhase
+	}
+
+	if diffAddresses := deep.Equal(a.Addresses, b.Addresses); len(diffAddresses) > 0 {
+		diff[".addresses"] = diffAddresses
+	}
+
+	if diffBootstrapReady := deep.Equal(a.BootstrapReady, b.BootstrapReady); len(diffBootstrapReady) > 0 {
+		diff[".bootstrapReady"] = diffBootstrapReady
+	}
+
+	if diffInfrastructureReady := deep.Equal(a.InfrastructureReady, b.InfrastructureReady); len(diffInfrastructureReady) > 0 {
+		diff[".infrastructureReady"] = diffInfrastructureReady
+	}
+
+	if diffNodeInfo := deep.Equal(a.NodeInfo, b.NodeInfo); len(diffNodeInfo) > 0 {
+		diff[".nodeInfo"] = diffNodeInfo
+	}
+
+	if diffConditions := compareCAPIV1Beta1Conditions(a.Conditions, b.Conditions); len(diffConditions) > 0 {
+		diff[".conditions"] = diffConditions
+	}
+
+	// TODO diff the v1beta2 fields
+	// if diffV1Beta2 := deep.Equal(a.V1Beta2, b.V1Beta2); len(diffV1Beta2) > 0 {
+	// 	diff[".v1beta2"] = diffV1Beta2
+	// }
+
+	return diff
+}
+
+// MAPIMachineStatusEqual compares variables a and b,
+// and returns a list of differences, or nil if there are none,
+// for the fields we care about when synchronising CAPI and MAPI Machines.
+func MAPIMachineStatusEqual(a, b machinev1beta1.MachineStatus) map[string]any {
+	diff := map[string]any{}
+
+	if diffConditions := compareMAPIV1Beta1Conditions(a.Conditions, b.Conditions); len(diffConditions) > 0 {
+		diff[".conditions"] = diffConditions
+	}
+
+	if diffErrorReason := deep.Equal(a.ErrorReason, b.ErrorReason); len(diffErrorReason) > 0 {
+		diff[".errorReason"] = diffErrorReason
+	}
+
+	if diffErrorMessage := deep.Equal(a.ErrorMessage, b.ErrorMessage); len(diffErrorMessage) > 0 {
+		diff[".errorMessage"] = diffErrorMessage
+	}
+
+	if diffPhase := deep.Equal(a.Phase, b.Phase); len(diffPhase) > 0 {
+		diff[".phase"] = diffPhase
+	}
+
+	if diffAddresses := deep.Equal(a.Addresses, b.Addresses); len(diffAddresses) > 0 {
+		diff[".addresses"] = diffAddresses
+	}
+
+	if diffNodeRef := deep.Equal(a.NodeRef, b.NodeRef); len(diffNodeRef) > 0 {
+		diff[".nodeRef"] = diffNodeRef
+	}
+
+	if diffLastUpdated := deep.Equal(a.LastUpdated, b.LastUpdated); len(diffLastUpdated) > 0 {
+		diff[".lastUpdated"] = diffLastUpdated
+	}
+
+	return diff
+}
+
+// compareCAPIV1Beta1Conditions compares variables a and b,
+// and returns a list of differences, or nil if there are none,
+// for the fields we care about when synchronising CAPI v1beta1 and MAPI .
+func compareCAPIV1Beta1Conditions(a, b []clusterv1.Condition) []string {
 	diff := []string{}
 	// Compare the conditions one by one.
 	// Ignore the differences in LastTransitionTime.
@@ -133,7 +228,7 @@ func compareCAPIMachineSetConditions(a, b []clusterv1.Condition) []string {
 	return diff
 }
 
-func compareMAPIMachineSetConditions(a, b []machinev1beta1.Condition) []string {
+func compareMAPIV1Beta1Conditions(a, b []machinev1beta1.Condition) []string {
 	diff := []string{}
 	// Compare the conditions one by one.
 	// Ignore the differences in LastTransitionTime.
@@ -161,10 +256,6 @@ func compareMAPIMachineSetConditions(a, b []machinev1beta1.Condition) []string {
 func MAPIMachineSetStatusEqual(a, b machinev1beta1.MachineSetStatus) map[string]any { //nolint:dupl
 	diff := map[string]any{}
 
-	if diffConditions := compareMAPIMachineSetConditions(a.Conditions, b.Conditions); len(diffConditions) > 0 {
-		diff[".conditions"] = diffConditions
-	}
-
 	if diffReadyReplicas := deep.Equal(a.ReadyReplicas, b.ReadyReplicas); len(diffReadyReplicas) > 0 {
 		diff[".readyReplicas"] = diffReadyReplicas
 	}
@@ -183,6 +274,10 @@ func MAPIMachineSetStatusEqual(a, b machinev1beta1.MachineSetStatus) map[string]
 
 	if diffErrorMessage := deep.Equal(a.ErrorMessage, b.ErrorMessage); len(diffErrorMessage) > 0 {
 		diff[".errorMessage"] = diffErrorMessage
+	}
+
+	if diffConditions := compareMAPIV1Beta1Conditions(a.Conditions, b.Conditions); len(diffConditions) > 0 {
+		diff[".conditions"] = diffConditions
 	}
 
 	return diff
