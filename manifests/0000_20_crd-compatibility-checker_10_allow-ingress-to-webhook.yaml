@@ -1,0 +1,23 @@
+# This policy works with the deny-all policy to ensure webhook validation
+# is accessible while maintaining the default-deny security model for other traffic.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  annotations:
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/feature-set: CustomNoUpgrade,TechPreviewNoUpgrade
+  name: allow-ingress-to-webhook
+  namespace: openshift-cluster-api
+spec:
+  ingress:
+  - from:
+    - namespaceSelector: {} # Allow from any namespace (API server, other components)
+    - podSelector: {} # Allow from any pod
+    ports:
+    - port: 9443 # crd-compatibility-checker-webhook-service port
+      protocol: TCP
+  podSelector: {} # Allow ingress to all pods in the namespace
+  policyTypes:
+  - Ingress

@@ -1,0 +1,62 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  annotations:
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/feature-set: "CustomNoUpgrade,TechPreviewNoUpgrade"
+  name: crd-compatibility-checker
+rules:
+- apiGroups:
+  - apiextensions.k8s.io
+  resources:
+  - '*'
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - operator.openshift.io
+  resources:
+  - crdcompatibilityrequirements
+  - crdcompatibilityrequirements/finalizers
+  - crdcompatibilityrequirements/status
+  verbs:
+  - get
+  - list
+  - watch
+  - patch
+  - update
+---
+# permissions to do leader election and create events.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: crd-compatibility-checker
+  namespace: openshift-cluster-api
+  annotations:
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/feature-set: "CustomNoUpgrade,TechPreviewNoUpgrade"
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
