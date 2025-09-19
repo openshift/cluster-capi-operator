@@ -778,43 +778,30 @@ func (r *MachineSyncReconciler) createOrUpdateCAPIMachine(ctx context.Context, m
 func (r *MachineSyncReconciler) createOrUpdateMAPIMachine(ctx context.Context, existingMAPIMachine *machinev1beta1.Machine, convertedMAPIMachine *machinev1beta1.Machine) (ctrl.Result, error) { //nolint:unparam
 	logger := log.FromContext(ctx)
 
-	if existingMAPIMachine == nil {
-		if err := r.Create(ctx, convertedMAPIMachine); err != nil {
-			logger.Error(err, "Failed to create Machine API machine")
-			return ctrl.Result{}, fmt.Errorf("failed to create Machine API machine: %w", err)
-		}
-
-		logger.Info("Successfully created Machine API machine")
-
+	// If there is no existing CAPI machine, create a new one.
+	if created, err := r.ensureMAPIMachine(ctx, existingMAPIMachine, convertedMAPIMachine); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to ensure CAPI machine: %w", err)
+	} else if created {
+		// If the CAPI machine set was created,
+		// return early to allow for the change to be propagated.
 		return ctrl.Result{}, nil
 	}
 
+	// If there is an existing MAPI machine, work out if it needs updating.
+
+	// Compare the existing MAPI machine with the converted MAPI machine to check for changes.
 	mapiMachinesDiff, err := compareMAPIMachines(existingMAPIMachine, convertedMAPIMachine)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("unable to compare Machine API machines: %w", err)
 	}
 
-	if len(mapiMachinesDiff) == 0 {
-		logger.Info("No changes detected in Machine API machine")
-		return ctrl.Result{}, nil
-	}
+	// Make a deep copy of the converted MAPI machine set to avoid modifying the original.
 	updatedOrCreatedMAPIMachine := convertedMAPIMachine.DeepCopy()
 
-	logger.Info("Changes detected, updating Machine API machine", "diff", mapiMachinesDiff)
-
-	specUpdated := false
-	if err := r.Update(ctx, updatedOrCreatedMAPIMachine); err != nil {
-		logger.Error(err, "Failed to update Machine API machine")
-
-		updateErr := fmt.Errorf("failed to update Machine API machine: %w", err)
-
-		if condErr := r.applySynchronizedConditionWithPatch(ctx, existingMAPIMachine, corev1.ConditionFalse, reasonFailedToUpdateMAPIMachine, updateErr.Error(), nil); condErr != nil {
-			return ctrl.Result{}, utilerrors.NewAggregate([]error{updateErr, condErr})
-		}
-
-		return ctrl.Result{}, updateErr
-	} else {
-		specUpdated = true
+	// If there are spec changes, update the CAPI machine set.
+	specUpdated, err := r.ensureMAPIMachineSpecUpdated(ctx, existingMAPIMachine, mapiMachinesDiff, updatedOrCreatedMAPIMachine)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to ensure Machine API machine spec updated: %w", err)
 	}
 
 	// Update MAPI machine status if needed
@@ -1500,6 +1487,32 @@ func (r *MachineSyncReconciler) ensureCAPIMachineStatusUpdated(ctx context.Conte
 	return true, nil
 }
 
+// ensureMAPIMachine creates a new MAPI machine if one doesn't exist.
+func (r *MachineSyncReconciler) ensureMAPIMachine(ctx context.Context, existingMAPIMachine *machinev1beta1.Machine, convertedMAPIMachine *machinev1beta1.Machine) (bool, error) {
+	// If there is an existing MAPI machine, no need to create one.
+	if existingMAPIMachine != nil {
+		return false, nil
+	}
+
+	logger := log.FromContext(ctx)
+
+	if err := r.Create(ctx, convertedMAPIMachine); err != nil {
+		logger.Error(err, "Failed to create Machine API machine")
+
+		createErr := fmt.Errorf("failed to create Machine API machine: %w", err)
+		if condErr := r.applySynchronizedConditionWithPatch(
+			ctx, existingMAPIMachine, corev1.ConditionFalse, reasonFailedToCreateMAPIMachine, createErr.Error(), nil); condErr != nil {
+			return false, utilerrors.NewAggregate([]error{createErr, condErr})
+		}
+
+		return false, createErr
+	}
+
+	logger.Info("Successfully created Machine API machine", "name", convertedMAPIMachine.Name)
+
+	return true, nil
+}
+
 // ensureMAPIMachineStatusUpdated updates the MAPI machine status if changes are detected and conditions are met.
 func (r *MachineSyncReconciler) ensureMAPIMachineStatusUpdated(ctx context.Context, existingMAPIMachine *machinev1beta1.Machine, convertedMAPIMachine *machinev1beta1.Machine, mapiMachinesDiff map[string]any, specUpdated bool) (bool, error) {
 	logger := log.FromContext(ctx)
@@ -1535,6 +1548,33 @@ func (r *MachineSyncReconciler) ensureMAPIMachineStatusUpdated(ctx context.Conte
 
 		if condErr := r.applySynchronizedConditionWithPatch(
 			ctx, existingMAPIMachine, corev1.ConditionFalse, reasonFailedToUpdateMAPIMachine, updateErr.Error(), nil); condErr != nil {
+			return false, utilerrors.NewAggregate([]error{updateErr, condErr})
+		}
+
+		return false, updateErr
+	}
+
+	return true, nil
+}
+
+// ensureMAPIMachineSpecUpdated updates the MAPI machine if changes are detected.
+func (r *MachineSyncReconciler) ensureMAPIMachineSpecUpdated(ctx context.Context, existingMAPIMachine *machinev1beta1.Machine, mapiMachinesDiff map[string]any, updatedOrCreatedMAPIMachine *machinev1beta1.Machine) (bool, error) {
+	logger := log.FromContext(ctx)
+
+	// If there are no changes, return early.
+	if len(mapiMachinesDiff) == 0 {
+		logger.Info("No changes detected in Machine API machine")
+		return false, nil
+	}
+
+	logger.Info("Changes detected, updating Machine API machine", "diff", fmt.Sprintf("%+v", mapiMachinesDiff))
+
+	if err := r.Update(ctx, updatedOrCreatedMAPIMachine); err != nil {
+		logger.Error(err, "Failed to update Machine API machine")
+
+		updateErr := fmt.Errorf("failed to update Machine API machine: %w", err)
+
+		if condErr := r.applySynchronizedConditionWithPatch(ctx, existingMAPIMachine, corev1.ConditionFalse, reasonFailedToUpdateMAPIMachine, updateErr.Error(), nil); condErr != nil {
 			return false, utilerrors.NewAggregate([]error{updateErr, condErr})
 		}
 
