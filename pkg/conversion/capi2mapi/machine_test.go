@@ -25,10 +25,11 @@ import (
 	capabuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/cluster-api/infrastructure/v1beta2"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/test/matchers"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
-
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	capierrors "sigs.k8s.io/cluster-api/errors"
 )
 
 var _ = Describe("capi2mapi Machine conversion", func() {
@@ -96,4 +97,73 @@ var _ = Describe("capi2mapi Machine conversion", func() {
 			},
 		}),
 	)
+})
+
+var _ = Describe("capi2mapi Machine Status Conversion", func() {
+	Context("when converting CAPI Machine status to MAPI", func() {
+		It("should set all MAPI Machine status fields and conditions to the expected values", func() {
+			// Set CAPI machine status fields
+			nodeRef := &corev1.ObjectReference{
+				Kind:      "Node",
+				Name:      "test-node",
+				Namespace: "",
+			}
+			lastUpdated := &metav1.Time{Time: time.Now()}
+			condition := clusterv1.Condition{
+				Type: "Available", Status: corev1.ConditionTrue,
+				Severity: clusterv1.ConditionSeverityNone,
+				Reason:   "MachineAvailable", Message: "Machine is available",
+			}
+
+			capiMachine := capibuilder.Machine().
+				WithName("test-machine").
+				WithNamespace("test-namespace").
+				WithNodeRef(nodeRef).
+				WithLastUpdated(lastUpdated).
+				WithAddresses(clusterv1.MachineAddresses{
+					{Type: clusterv1.MachineAddressType(corev1.NodeInternalIP), Address: "10.0.0.1"},
+					{Type: clusterv1.MachineAddressType(corev1.NodeExternalIP), Address: "203.0.113.1"},
+				}).
+				WithPhase("Running").
+				WithFailureReason(ptr.To(capierrors.MachineStatusError("InvalidConfiguration"))).
+				WithFailureMessage(ptr.To(string("Test failure message"))).
+				WithConditions([]clusterv1.Condition{condition}).
+				Build()
+
+			mapiStatus, errs := convertCAPIMachineStatusToMAPI(capiMachine.Status)
+			Expect(errs).To(BeEmpty())
+
+			Expect(mapiStatus.NodeRef).To(Equal(nodeRef))
+			Expect(mapiStatus.LastUpdated).To(Equal(lastUpdated))
+			Expect(mapiStatus.Addresses).To(ConsistOf(
+				SatisfyAll(HaveField("Type", corev1.NodeInternalIP), HaveField("Address", "10.0.0.1")),
+				SatisfyAll(HaveField("Type", corev1.NodeExternalIP), HaveField("Address", "203.0.113.1")),
+			))
+
+			Expect(mapiStatus.Phase).To(HaveValue(BeEquivalentTo(mapiv1beta1.PhaseRunning)))
+			Expect(mapiStatus.ErrorReason).To(HaveValue(BeEquivalentTo(mapiv1beta1.MachineStatusError("InvalidConfiguration"))))
+			Expect(mapiStatus.ErrorMessage).To(HaveValue(BeEquivalentTo("Test failure message")))
+
+			// We do not convert these conditions to MAPI conditions as they are not a 1:1 mapping conversion between CAPI and MAPI.
+			Expect(mapiStatus.Conditions).To(BeNil())
+		})
+
+		It("should set all MAPI Machine status fields to empty when CAPI MachineStatus is empty", func() {
+			capiMachine := capibuilder.Machine().
+				WithName("test-machine").
+				WithNamespace("test-namespace").
+				Build()
+
+			mapiStatus, errs := convertCAPIMachineStatusToMAPI(capiMachine.Status)
+			Expect(errs).To(BeEmpty())
+
+			Expect(mapiStatus.NodeRef).To(BeNil())
+			Expect(mapiStatus.LastUpdated).To(BeNil())
+			Expect(mapiStatus.Addresses).To(BeEmpty())
+			Expect(mapiStatus.Phase).To(BeNil())
+			Expect(mapiStatus.ErrorReason).To(BeNil())
+			Expect(mapiStatus.ErrorMessage).To(BeNil())
+			Expect(mapiStatus.Conditions).To(BeEmpty())
+		})
+	})
 })

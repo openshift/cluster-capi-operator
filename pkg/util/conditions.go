@@ -113,8 +113,8 @@ func getTime(data map[string]interface{}, key string) metav1.Time {
 	return metav1.Time{}
 }
 
-// GetMAPIMachineSetCondition retrieves a specific condition from a list of MAPI MachineSet conditions.
-func GetMAPIMachineSetCondition(conditions []mapiv1beta1.Condition, conditionType string) *mapiv1beta1.Condition {
+// GetMAPICondition retrieves a specific condition from a list of MAPI conditions.
+func GetMAPICondition(conditions []mapiv1beta1.Condition, conditionType string) *mapiv1beta1.Condition {
 	for i := range conditions {
 		if string(conditions[i].Type) == conditionType {
 			return &conditions[i]
@@ -124,14 +124,14 @@ func GetMAPIMachineSetCondition(conditions []mapiv1beta1.Condition, conditionTyp
 	return nil
 }
 
-// SetMAPIMachineSetCondition sets a condition in a list of MAPI MachineSet conditions.
+// SetMAPICondition sets a condition in a list of MAPI conditions.
 // If the condition already exists and state (Status, Reason, Message) has changed:
 // - if the lasttransitiontime is not set, it sets it to the current time
 // - if the lasttransitiontime is set, it updates it with the one of the newly provided condition lasttransitiontime.
 // If the condition state has not changed, it preserves the existing LastTransitionTime.
 // If the condition does not exist, it adds it.
 // This function behaves similarly to conditions.Set() for CAPI conditions.
-func SetMAPIMachineSetCondition(conditions []mapiv1beta1.Condition, condition *mapiv1beta1.Condition) []mapiv1beta1.Condition {
+func SetMAPICondition(conditions []mapiv1beta1.Condition, condition *mapiv1beta1.Condition) []mapiv1beta1.Condition {
 	for i, currCondition := range conditions {
 		if string(currCondition.Type) == string(condition.Type) {
 			// Check if the condition state has changed (Status, Reason, Message)
@@ -153,6 +153,11 @@ func SetMAPIMachineSetCondition(conditions []mapiv1beta1.Condition, condition *m
 			// Condition found and updated, return the updated conditions.
 			return conditions
 		}
+	}
+
+	// Ensure LastTransitionTime is set also for new conditions.
+	if condition.LastTransitionTime.IsZero() {
+		condition.LastTransitionTime = metav1.NewTime(time.Now().UTC().Truncate(time.Second))
 	}
 
 	// Condition doesn't exist, add it
