@@ -269,36 +269,21 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				_, err := capiframework.GetMachine(cl, testMachineName, capiframework.CAPINamespace)
 				Expect(err).ToNot(HaveOccurred(), "CAPI Machine should be created")
 				// Ensure any pending updates are processed
-				Eventually(func() error {
-					// Get the latest version again right before update
-					currentMachine, err := mapiframework.GetMachine(cl, testMachineName)
-					if err != nil {
-						return err
-					}
-
-					updatedMachine := currentMachine.DeepCopy()
-					updatedMachine.Spec.AuthoritativeAPI = machinev1beta1.MachineAuthorityMachineAPI
-
-					err = cl.Update(ctx, updatedMachine)
-					return err
-				}, capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(), "Should allow modification of authoritativeAPI")
-
-				// Verify the machine still exists after the change (don't wait for specific status)
-				_, err = mapiframework.GetMachine(cl, testMachineName)
-				Expect(err).ToNot(HaveOccurred(), "Machine should still exist after authoritativeAPI change")
-
+				Eventually(komega.Update(testMachine, func() {
+					testMachine.Spec.AuthoritativeAPI = machinev1beta1.MachineAuthorityClusterAPI
+				}), capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(), "Should allow modification of authoritativeAPI")
 				// Clean up the test machine
+				// Clean up the test machine
+
 				DeferCleanup(func() {
 					By("Cleaning up test machine")
 					// Try to delete the MAPI machine first
 					if testMachine != nil {
 						mapiframework.DeleteMachines(ctx, cl, testMachine)
 					}
-
 				})
 			})
 		})
-
 		Context("with spec.authoritativeAPI: ClusterAPI", func() {
 			Context("with Validating Admission Policies in place preventing changes to non-authoritative Machines except from the sync controller", func() {
 				var testMachineName = "machine-vap-83955"
@@ -330,7 +315,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 					verifyFieldModificationPrevented(cl, testMapiMachine.Name, "InstanceType", func(machine *machinev1beta1.Machine) {
 						Expect(updateAWSMachineProviderSpec(machine, func(providerSpec *machinev1beta1.AWSMachineProviderConfig) {
 							providerSpec.InstanceType = testInstanceType
-						})).To(Succeed(), "Failed to update InstanceType in provider spec")
+						})).To(Succeed(), "Expected failure attempting to update  InstanceType in provider spec")
 					})
 				})
 
@@ -348,7 +333,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 					verifyFieldModificationPrevented(cl, testMapiMachine.Name, "AMI ID", func(machine *machinev1beta1.Machine) {
 						Expect(updateAWSMachineProviderSpec(machine, func(providerSpec *machinev1beta1.AWSMachineProviderConfig) {
 							providerSpec.AMI.ID = ptr.To(testAMIID)
-						})).To(Succeed(), "Failed to update AMI ID in provider spec")
+						})).To(Succeed(), "Expected failure attempting to update  AMI ID in provider spec")
 					})
 				})
 
@@ -358,7 +343,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 							if len(providerSpec.BlockDevices) > 0 && providerSpec.BlockDevices[0].EBS != nil {
 								providerSpec.BlockDevices[0].EBS.Encrypted = ptr.To(false)
 							}
-						})).To(Succeed(), "Failed to update block device encryption in provider spec")
+						})).To(Succeed(), "Expected failure attempting to update  block device encryption in provider spec")
 					})
 				})
 
@@ -368,7 +353,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 							if len(providerSpec.BlockDevices) > 0 && providerSpec.BlockDevices[0].EBS != nil {
 								providerSpec.BlockDevices[0].EBS.VolumeSize = ptr.To(testVolumeSize)
 							}
-						})).To(Succeed(), "Failed to update VolumeSize in provider spec")
+						})).To(Succeed(), "Expected failure attempting to update  VolumeSize in provider spec")
 					})
 				})
 
@@ -378,7 +363,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 							if len(providerSpec.BlockDevices) > 0 && providerSpec.BlockDevices[0].EBS != nil {
 								providerSpec.BlockDevices[0].EBS.VolumeType = ptr.To(testVolumeType)
 							}
-						})).To(Succeed(), "Failed to update VolumeType in provider spec")
+						})).To(Succeed(), "Expected failure attempting to update  VolumeType in provider spec")
 					})
 				})
 
@@ -386,7 +371,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 					verifyFieldModificationPrevented(cl, testMapiMachine.Name, "AvailabilityZone", func(machine *machinev1beta1.Machine) {
 						Expect(updateAWSMachineProviderSpec(machine, func(providerSpec *machinev1beta1.AWSMachineProviderConfig) {
 							providerSpec.Placement.AvailabilityZone = testAvailabilityZone
-						})).To(Succeed(), "Failed to update AvailabilityZone in provider spec")
+						})).To(Succeed(), "Expected failure attempting to update  AvailabilityZone in provider spec")
 					})
 				})
 
@@ -394,7 +379,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 					verifyFieldModificationPrevented(cl, testMapiMachine.Name, "Subnet", func(machine *machinev1beta1.Machine) {
 						Expect(updateAWSMachineProviderSpec(machine, func(providerSpec *machinev1beta1.AWSMachineProviderConfig) {
 							providerSpec.Subnet.ID = ptr.To(testSubnetID)
-						})).To(Succeed(), "Failed to update Subnet in provider spec")
+						})).To(Succeed(), "Expected failure attempting to update  Subnet in provider spec")
 					})
 				})
 
@@ -404,7 +389,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 							providerSpec.SecurityGroups = append(providerSpec.SecurityGroups, machinev1beta1.AWSResourceReference{
 								ID: ptr.To(testSecurityGroupID),
 							})
-						})).To(Succeed(), "Failed to update SecurityGroups in provider spec")
+						})).To(Succeed(), "Expected failure attempting to update  SecurityGroups in provider spec")
 					})
 				})
 
@@ -415,7 +400,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 								Name:  testTagName,
 								Value: testTagValue,
 							})
-						})).To(Succeed(), "Failed to update Tags in provider spec")
+						})).To(Succeed(), "Expected failure attempting to update  Tags in provider spec")
 					})
 				})
 
@@ -423,7 +408,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 					verifyFieldModificationPrevented(cl, testMapiMachine.Name, "capacityReservationId", func(machine *machinev1beta1.Machine) {
 						Expect(updateAWSMachineProviderSpec(machine, func(providerSpec *machinev1beta1.AWSMachineProviderConfig) {
 							providerSpec.CapacityReservationID = testCapacityReservationID
-						})).To(Succeed(), "Failed to update capacityReservationId in provider spec")
+						})).To(Succeed(), "Expected failure attempting to update  capacityReservationId in provider spec")
 					})
 				})
 			})
@@ -714,33 +699,38 @@ func updateAWSMachineProviderSpec(machine *machinev1beta1.Machine, updateFunc fu
 	machine.Spec.ProviderSpec.Value.Raw = rawProviderSpec
 	return nil
 }
-func verifyFieldModificationPrevented(cl client.Client, machineName string, fieldName string, modifyFunc func(*machinev1beta1.Machine)) {
-	By(fmt.Sprintf("Attempting to modify %s in MAPI Machine", fieldName))
+func verifyUpdatePrevented(cl client.Client, machineName string, description string, updateFunc func(*machinev1beta1.Machine), expectedErrorSubstrings ...string) {
+	By(fmt.Sprintf("Attempting to %s in MAPI Machine", description))
 
 	currentMachine, err := mapiframework.GetMachine(cl, machineName)
 	Expect(err).NotTo(HaveOccurred(), "Failed to get current machine")
 	updatedMachine := currentMachine.DeepCopy()
-	modifyFunc(updatedMachine)
+	updateFunc(updatedMachine)
 
 	err = cl.Update(ctx, updatedMachine)
 	Expect(err).To(HaveOccurred())
-	Expect(err.Error()).To(ContainSubstring("ValidatingAdmissionPolicy 'machine-api-machine-vap' with binding 'machine-api-machine-vap' denied request"))
-}
-func verifyAnnotationModificationPrevented(cl client.Client, machineName string) {
-	By("Attempting to add annotations machine.openshift.io. to MAPI Machine")
 
-	currentMachine, err := mapiframework.GetMachine(cl, machineName)
-	Expect(err).NotTo(HaveOccurred(), "Failed to get current machine")
-	updatedMachine := currentMachine.DeepCopy()
-	if updatedMachine.Annotations == nil {
-		updatedMachine.Annotations = make(map[string]string)
+	// Check for the default VAP error if no specific errors provided
+	if len(expectedErrorSubstrings) == 0 {
+		expectedErrorSubstrings = []string{"ValidatingAdmissionPolicy 'machine-api-machine-vap' with binding 'machine-api-machine-vap' denied request"}
 	}
-	updatedMachine.Annotations[testAnnotationKey] = testAnnotationValue
 
-	err = cl.Update(ctx, updatedMachine)
-	Expect(err).To(HaveOccurred())
-	Expect(err.Error()).To(ContainSubstring("ValidatingAdmissionPolicy 'machine-api-machine-vap' with binding 'machine-api-machine-vap' denied request"))
-	Expect(err.Error()).To(ContainSubstring("Cannot add, modify or delete any machine.openshift.io/* annotation"))
+	for _, expectedSubstring := range expectedErrorSubstrings {
+		Expect(err.Error()).To(ContainSubstring(expectedSubstring))
+	}
+}
+
+func verifyFieldModificationPrevented(cl client.Client, machineName string, fieldName string, modifyFunc func(*machinev1beta1.Machine)) {
+	verifyUpdatePrevented(cl, machineName, fmt.Sprintf("modify %s", fieldName), modifyFunc)
+}
+
+func verifyAnnotationModificationPrevented(cl client.Client, machineName string) {
+	verifyUpdatePrevented(cl, machineName, "add annotations machine.openshift.io.", func(machine *machinev1beta1.Machine) {
+		if machine.Annotations == nil {
+			machine.Annotations = make(map[string]string)
+		}
+		machine.Annotations[testAnnotationKey] = testAnnotationValue
+	}, "ValidatingAdmissionPolicy 'machine-api-machine-vap' with binding 'machine-api-machine-vap' denied request", "Cannot add, modify or delete any machine.openshift.io/* annotation")
 }
 func verifyCAPIMachineExists(cl client.Client, machineName string) {
 	_, err := capiframework.GetMachine(cl, machineName, capiframework.CAPINamespace)
