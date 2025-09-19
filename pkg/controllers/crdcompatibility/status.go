@@ -22,6 +22,7 @@ import (
 	"slices"
 	"strings"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	metav1applyconfig "k8s.io/client-go/applyconfigurations/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -63,6 +64,10 @@ func (r *reconcileState) writeStatus(ctx context.Context, obj *operatorv1alpha1.
 		WithUID(obj.GetUID()).
 		WithStatus(applyConfigStatus)
 	if err := r.client.Status().Patch(ctx, obj, util.ApplyConfigPatch(applyConfig), client.ForceOwnership, client.FieldOwner(controllerName+"-Status")); err != nil {
+		// Ignore the error if the object is already gone.
+		if !obj.DeletionTimestamp.IsZero() && apierrors.IsNotFound(err) {
+			return nil
+		}
 		return fmt.Errorf("failed to write status: %w", err)
 	}
 
