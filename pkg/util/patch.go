@@ -18,6 +18,7 @@ package util
 import (
 	"fmt"
 
+	"github.com/davecgh/go-spew/spew"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -27,6 +28,8 @@ func IsPatchRequired(origObj client.Object, patch client.Patch) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("failed to calculate patch: %w", err)
 	}
+
+	spew.Dump(string(data))
 
 	return string(data) != "{}", nil
 }

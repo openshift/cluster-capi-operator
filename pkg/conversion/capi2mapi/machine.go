@@ -126,6 +126,7 @@ func convertCAPIMachineStatusToMAPI(capiStatus clusterv1.MachineStatus) (mapiv1.
 		Phase:        convertCAPIMachinePhaseToMAPI(capiStatus.Phase),
 		Addresses:    addresses,
 
+		// LastOperation // this is MAPI-specific and not used in CAPI.
 		// ObservedGeneration: // We don't set the observed generation at this stage as it is handled by the machineSync controller.
 		// AuthoritativeAPI: // Ignore, this field as it is not present in CAPI.
 		// SynchronizedGeneration: // Ignore, this field as it is not present in CAPI.
@@ -159,7 +160,8 @@ func convertCAPIMachineAddressesToMAPI(capiAddresses clusterv1.MachineAddresses)
 				Address: addr.Address,
 			}
 		case clusterv1.MachineExternalDNS, clusterv1.MachineInternalDNS:
-			errs = append(errs, field.Invalid(field.NewPath("status", "addresses"), string(addr.Type), string(addr.Type)+" is not supported"))
+			// We don't support these address types in MAPI at the moment, don't error for now as CAPI machines get created with these address types by default.
+			// TODO: Should we support these two address types in MAPI?
 		default:
 			errs = append(errs, field.Invalid(field.NewPath("status", "addresses"), string(addr.Type), string(addr.Type)+" unrecognized address type"))
 		}
