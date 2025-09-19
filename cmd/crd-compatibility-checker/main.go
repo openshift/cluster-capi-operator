@@ -26,7 +26,6 @@ import (
 	"k8s.io/component-base/config"
 	"k8s.io/component-base/config/options"
 	klog "k8s.io/klog/v2"
-	"k8s.io/klog/v2/textlogger"
 
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility"
@@ -81,9 +80,8 @@ func main() {
 		"log to standard error instead of files",
 	)
 
-	textLoggerConfig := textlogger.NewConfig()
-	textLoggerConfig.AddFlags(flag.CommandLine)
-	ctrl.SetLogger(textlogger.NewLogger(textLoggerConfig))
+	// klog.Background will automatically use the right logger.
+	ctrl.SetLogger(klog.Background())
 
 	// Once all the flags are registered, switch to pflag
 	// to allow leader election flags to be bound
