@@ -287,3 +287,47 @@ func cleanupMachineResources(ctx context.Context, cl client.Client, capiMachines
 		mapiframework.WaitForMachinesDeleted(cl, m)
 	}
 }
+
+func updateMachineAuthoritativeAPI(ctx context.Context, cl client.Client, machineName string, newAuthority mapiv1beta1.MachineAuthority) {
+	Eventually(func() error {
+		currentMachine, err := mapiframework.GetMachine(cl, machineName)
+		if err != nil {
+			return err
+		}
+		currentMachine.Spec.AuthoritativeAPI = newAuthority
+		return cl.Update(ctx, currentMachine)
+	}, capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(), fmt.Sprintf("Failed to update MAPI Machine AuthoritativeAPI to %s", newAuthority))
+}
+
+func verifyMachineSynchronizedGeneration(cl client.Client, mapiMachine *mapiv1beta1.Machine, authority mapiv1beta1.MachineAuthority) {
+	Eventually(komega.Object(mapiMachine), capiframework.WaitMedium, capiframework.RetryMedium).Should(
+		HaveField("Status.SynchronizedGeneration", Not(BeZero())),
+		"MAPI Machine SynchronizedGeneration should not be zero",
+	)
+
+	var expectedGeneration int64
+	var authoritativeMachineType string
+
+	switch authority {
+	case mapiv1beta1.MachineAuthorityMachineAPI:
+		authoritativeMachineType = "MAPI"
+		expectedGeneration = mapiMachine.Generation
+	case mapiv1beta1.MachineAuthorityClusterAPI:
+		authoritativeMachineType = "CAPI"
+		Eventually(func() (int64, error) {
+			capiMachine := capiframework.GetMachine(cl, mapiMachine.Name, capiframework.CAPINamespace)
+			expectedGeneration = capiMachine.Generation
+			return expectedGeneration, nil
+		}, capiframework.WaitMedium, capiframework.RetryMedium).Should(Not(BeZero()), "CAPI Machine should exist and have a generation")
+	default:
+		Fail(fmt.Sprintf("unknown authoritativeAPI type: %v", authority))
+	}
+
+	By(fmt.Sprintf("Verifying MAPI Machine SynchronizedGeneration (%d) equals %s Machine Generation (%d)",
+		mapiMachine.Status.SynchronizedGeneration, authoritativeMachineType, expectedGeneration))
+
+	Eventually(komega.Object(mapiMachine), capiframework.WaitMedium, capiframework.RetryMedium).Should(
+		HaveField("Status.SynchronizedGeneration", Equal(expectedGeneration)),
+		fmt.Sprintf("MAPI Machine SynchronizedGeneration should equal %s Machine Generation (%d)", authoritativeMachineType, expectedGeneration),
+	)
+}
