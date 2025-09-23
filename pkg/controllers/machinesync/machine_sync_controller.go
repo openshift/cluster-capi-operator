@@ -122,6 +122,12 @@ var (
 
 	// errUnsupportedCPMSOwnedMachineConversion is returned when attempting to convert ControlPlaneMachineSet owned machines.
 	errUnsupportedCPMSOwnedMachineConversion = errors.New("conversion of control plane machines owned by control plane machine set is currently not supported")
+
+	// errInvalidInfraClusterReference is returned when the cluster name is empty in CAPI machine spec.
+	errInvalidInfraClusterReference = errors.New("cluster name is empty in CAPI machine spec")
+
+	// errInvalidInfraMachineReference is returned when the infrastructure machine reference is invalid or incomplete.
+	errInvalidInfraMachineReference = errors.New("infrastructure machine reference is invalid or incomplete")
 )
 
 // MachineSyncReconciler reconciles CAPI and MAPI machines.
@@ -136,7 +142,7 @@ type MachineSyncReconciler struct {
 	MAPINamespace string
 }
 
-// SetupWithManager sets the CoreClusterReconciler controller up with the given manager.
+// SetupWithManager sets the MachineSyncReconciler controller up with the given manager.
 func (r *MachineSyncReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	infraMachine, _, err := controllers.InitInfraMachineAndInfraClusterFromProvider(r.Platform)
 	if err != nil {
@@ -163,7 +169,7 @@ func (r *MachineSyncReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		).
 		Watches(
 			infraMachine,
-			handler.EnqueueRequestsFromMapFunc(util.RewriteNamespace(r.MAPINamespace)),
+			handler.EnqueueRequestsFromMapFunc(util.ResolveCAPIMachineFromInfraMachine(r.MAPINamespace)),
 			builder.WithPredicates(util.FilterNamespace(r.CAPINamespace)),
 		).
 		Complete(r); err != nil {
@@ -282,17 +288,32 @@ func (r *MachineSyncReconciler) reconcileCAPIMachinetoMAPIMachine(ctx context.Co
 	}
 
 	infraCluster, infraMachine, err := r.fetchCAPIInfraResources(ctx, sourceCAPIMachine)
-	if err != nil {
+	if err != nil { //nolint: nestif
 		fetchErr := fmt.Errorf("failed to fetch Cluster API infra resources: %w", err)
 
 		if existingMAPIMachine == nil {
+			// Don't requeue for terminal configuration errors
+			if errors.Is(err, errInvalidInfraClusterReference) || errors.Is(err, errInvalidInfraMachineReference) {
+				logger.Error(err, "Detected terminal configuration error - cluster name or infrastructure machine reference is empty, not requeuing")
+				r.Recorder.Event(sourceCAPIMachine, corev1.EventTypeWarning, "SynchronizationError", fetchErr.Error())
+
+				return ctrl.Result{}, nil
+			}
+
 			r.Recorder.Event(sourceCAPIMachine, corev1.EventTypeWarning, "SynchronizationWarning", fetchErr.Error())
+
 			return ctrl.Result{}, fetchErr
 		}
 
 		if condErr := r.applySynchronizedConditionWithPatch(
 			ctx, existingMAPIMachine, corev1.ConditionFalse, reasonFailedToGetCAPIInfraResources, fetchErr.Error(), nil); condErr != nil {
 			return ctrl.Result{}, utilerrors.NewAggregate([]error{fetchErr, condErr})
+		}
+
+		// Don't requeue for terminal configuration errors
+		if errors.Is(err, errInvalidInfraClusterReference) || errors.Is(err, errInvalidInfraMachineReference) {
+			logger.Error(err, "Detected terminal configuration error - cluster name or infrastructure machine reference is empty, not requeuing")
+			return ctrl.Result{}, nil
 		}
 
 		return ctrl.Result{}, fetchErr
@@ -408,6 +429,12 @@ func (r *MachineSyncReconciler) reconcileMAPIMachinetoCAPIMachine(ctx context.Co
 		if condErr := r.applySynchronizedConditionWithPatch(
 			ctx, sourceMAPIMachine, corev1.ConditionFalse, reasonFailedToGetCAPIInfraResources, fetchErr.Error(), nil); condErr != nil {
 			return ctrl.Result{}, utilerrors.NewAggregate([]error{fetchErr, condErr})
+		}
+
+		// Don't requeue for terminal configuration errors
+		if errors.Is(err, errInvalidInfraClusterReference) || errors.Is(err, errInvalidInfraMachineReference) {
+			logger.Error(err, "Detected terminal configuration error - cluster name or infrastructure machine reference is empty, not requeuing")
+			return ctrl.Result{}, nil
 		}
 
 		return ctrl.Result{}, fetchErr
@@ -949,6 +976,18 @@ func (r *MachineSyncReconciler) fetchCAPIInfraResources(ctx context.Context, cap
 		Name:      infraMachineRef.Name,
 	}
 
+	// Validate that required references are not empty to avoid nil pointer issues later.
+	// These are terminal configuration errors that require user intervention.
+	if capiMachine.Spec.ClusterName == "" {
+		return nil, nil, fmt.Errorf("machine %s/%s: %w",
+			capiMachine.Namespace, capiMachine.Name, errInvalidInfraClusterReference)
+	}
+
+	if infraMachineRef.Name == "" || infraMachineRef.Namespace == "" {
+		return nil, nil, fmt.Errorf("machine %s/%s: %w",
+			capiMachine.Namespace, capiMachine.Name, errInvalidInfraMachineReference)
+	}
+
 	infraMachine, infraCluster, err := controllers.InitInfraMachineAndInfraClusterFromProvider(r.Platform)
 	if err != nil {
 		return nil, nil, fmt.Errorf("unable to devise Cluster API infra resources: %w", err)
@@ -968,7 +1007,9 @@ func (r *MachineSyncReconciler) fetchCAPIInfraResources(ctx context.Context, cap
 }
 
 //nolint:funlen,gocognit,cyclop
-func (r *MachineSyncReconciler) reconcileMAPItoCAPIMachineDeletion(ctx context.Context, mapiMachine *mapiv1beta1.Machine, capiMachine *clusterv1.Machine, infraMachine client.Object) (bool, error) {
+func (r *MachineSyncReconciler) reconcileMAPItoCAPIMachineDeletion(ctx context.Context, mapiMachine *mapiv1beta1.Machine, capiMachine *clusterv1.Machine, infraMachine client.Object) (shouldRequeue bool, err error) {
+	logger := logf.FromContext(ctx)
+
 	if mapiMachine.DeletionTimestamp.IsZero() {
 		if capiMachine == nil || capiMachine.DeletionTimestamp.IsZero() {
 			// Neither MAPI authoritative machine nor its CAPI non-authoritative machine mirror
@@ -985,8 +1026,6 @@ func (r *MachineSyncReconciler) reconcileMAPItoCAPIMachineDeletion(ctx context.C
 		// Return true to force a requeue, to allow the deletion propagation.
 		return true, nil
 	}
-
-	logger := logf.FromContext(ctx)
 
 	if capiMachine == nil && util.IsNilObject(infraMachine) {
 		logger.Info("Cluster API machine and infra machine do not exist, removing corresponding Machine API machine sync finalizer")
@@ -1185,9 +1224,7 @@ func (r *MachineSyncReconciler) reconcileCAPItoMAPIMachineDeletion(ctx context.C
 
 // ensureSyncFinalizer ensures the sync finalizer is present across the mapi
 // machine, capi machine and capi infra machine.
-func (r *MachineSyncReconciler) ensureSyncFinalizer(ctx context.Context, mapiMachine *mapiv1beta1.Machine, capiMachine *clusterv1.Machine, infraMachine client.Object) (bool, error) {
-	var shouldRequeue bool
-
+func (r *MachineSyncReconciler) ensureSyncFinalizer(ctx context.Context, mapiMachine *mapiv1beta1.Machine, capiMachine *clusterv1.Machine, infraMachine client.Object) (shouldRequeue bool, err error) {
 	var errors []error
 
 	if mapiMachine != nil {
