@@ -31,8 +31,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
-	"k8s.io/klog/v2/textlogger"
 
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
@@ -61,7 +61,8 @@ func TestAPIs(t *testing.T) {
 var _ = BeforeSuite(func() {
 	klog.SetOutput(GinkgoWriter)
 
-	logf.SetLogger(textlogger.NewLogger(textlogger.NewConfig()))
+	logf.SetLogger(GinkgoLogr)
+	ctrl.SetLogger(GinkgoLogr)
 
 	By("bootstrapping test environment")
 	var err error
