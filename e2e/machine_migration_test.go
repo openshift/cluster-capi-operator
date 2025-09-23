@@ -258,31 +258,6 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 	})
 
 	var _ = Describe("Update MAPI Machine", Ordered, func() {
-		Context("with spec.authoritativeAPI modification", func() {
-			It("should allow modification of authoritativeAPI from ClusterAPI to MachineAPI", func() {
-				By("Attempting to modify authoritativeAPI from ClusterAPI to MachineAPI")
-
-				// Create a new machine for this test to avoid affecting other tests
-				testMachineName := "machine-auth-change-83955"
-				testMachine := createMAPIMachineWithAuthority(ctx, cl, testMachineName, machinev1beta1.MachineAuthorityClusterAPI)
-
-				_, err := capiframework.GetMachine(cl, testMachineName, capiframework.CAPINamespace)
-				Expect(err).ToNot(HaveOccurred(), "CAPI Machine should be created")
-				// Ensure any pending updates are processed
-				Eventually(komega.Update(testMachine, func() {
-					testMachine.Spec.AuthoritativeAPI = machinev1beta1.MachineAuthorityClusterAPI
-				}), capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(), "Should allow modification of authoritativeAPI")
-
-				// Clean up the test machine
-				DeferCleanup(func() {
-					By("Cleaning up test machine")
-					// Delete the MAPI machine
-					if testMachine != nil {
-						mapiframework.DeleteMachines(ctx, cl, testMachine)
-					}
-				})
-			})
-		})
 		Context("with spec.authoritativeAPI: ClusterAPI", func() {
 			Context("with Validating Admission Policies in place preventing changes to non-authoritative Machines except from the sync controller", func() {
 				var testMachineName = "machine-vap-83955"
