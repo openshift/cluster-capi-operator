@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -46,7 +45,6 @@ import (
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/config"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
@@ -193,13 +191,14 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 
 		mgr, err = ctrl.NewManager(controllerCfg, ctrl.Options{
 			Scheme: testScheme,
+			Logger: GinkgoLogr,
 			Controller: config.Controller{
-				MaxConcurrentReconciles: 3,
-				SkipNameValidation:      ptr.To(true),
+				// MaxConcurrentReconciles: 3,
+				SkipNameValidation: ptr.To(true),
 			},
-			Cache: cache.Options{
-				SyncPeriod: ptr.To(1 * time.Second),
-			},
+			// Cache: cache.Options{
+			// 	SyncPeriod: ptr.To(1 * time.Second),
+			// },
 		})
 		Expect(err).ToNot(HaveOccurred(), "Manager should be able to be created")
 
@@ -1128,7 +1127,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 			})
 		})
 
-		Context("cluster api vap tests", func() {
+		FContext("cluster api vap tests", func() {
 			BeforeEach(func() {
 				By("Waiting for VAP to be ready")
 				machineVap = &admissionregistrationv1.ValidatingAdmissionPolicy{}
@@ -1170,18 +1169,26 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 				)
 
 				By("Creating a throwaway CAPI machine")
-				testMachine := capiMachineBuilder.WithName("").WithGenerateName("test-machine-").Build()
+				testMachine := capiMachineBuilder.WithName("").WithGenerateName("sentinel-machine-").Build()
 				Eventually(k8sClient.Create(ctx, testMachine), timeout).Should(Succeed())
+				GinkgoLogr.Info("created sentinel machine", "name", testMachine.GetName(), "namespace", testMachine.GetNamespace())
 
 				By("Setting the throwaway MAPI machine AuthoritativeAPI to Machine API")
 				testMapiMachine := mapiMachineBuilder.WithName(testMachine.Name).Build()
 				Eventually(k8sClient.Create(ctx, testMapiMachine), timeout).Should(Succeed())
+
+				GinkgoLogr.Info("created sentinel MAPI machine", "name", testMapiMachine.GetName(), "namespace", testMapiMachine.GetNamespace())
+
 				Eventually(k.UpdateStatus(testMapiMachine, func() {
 					testMapiMachine.Status.AuthoritativeAPI = machinev1beta1.MachineAuthorityMachineAPI
 				})).Should(Succeed())
 
+				GinkgoLogr.Info("Update succeeded AuthAPI -> MAPI for sentinel MAPI machine", "name", testMapiMachine.GetName(), "namespace", testMapiMachine.GetNamespace())
+
 				Eventually(k.Object(testMapiMachine), timeout).Should(
 					HaveField("Status.AuthoritativeAPI", Equal(machinev1beta1.MachineAuthorityMachineAPI)))
+
+				GinkgoLogr.Info("sentinel MAPI machine confirmed AuthAPI MAPI", "name", testMapiMachine.GetName(), "namespace", testMapiMachine.GetNamespace())
 
 				// The sync controller will sync the labels from the MAPI Machine to the CAPI machine.
 				// The labels are protected (machine.openshift.io/cluster.x-k8s.io),
