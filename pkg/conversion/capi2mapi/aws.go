@@ -206,7 +206,7 @@ func (m machineAndAWSMachineAndAWSCluster) ToMachine() (*mapiv1.Machine, []strin
 		errors = append(errors, err...)
 	}
 
-	awsRawExt, errRaw := RawExtensionFromProviderSpec(mapaSpec)
+	awsSpecRawExt, errRaw := RawExtensionFromInterface(mapaSpec)
 	if errRaw != nil {
 		return nil, nil, fmt.Errorf("unable to convert AWS providerSpec to raw extension: %w", errRaw)
 	}

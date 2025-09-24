@@ -27,8 +27,8 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
-// RawExtensionFromProviderSpec marshals the machine provider spec.
-func RawExtensionFromProviderSpec(spec interface{}) (*runtime.RawExtension, error) {
+// RawExtensionFromInterface marshals the machine provider spec.
+func RawExtensionFromInterface(spec interface{}) (*runtime.RawExtension, error) {
 	if spec == nil {
 		return &runtime.RawExtension{}, nil
 	}
