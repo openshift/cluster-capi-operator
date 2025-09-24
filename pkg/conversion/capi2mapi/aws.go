@@ -198,6 +198,38 @@ func (m machineAndAWSMachineAndAWSCluster) toProviderSpec() (*mapiv1beta1.AWSMac
 	return &mapaProviderConfig, warnings, nil
 }
 
+func (m machineAndAWSMachineAndAWSCluster) toProviderStatus() *mapiv1beta1.AWSMachineProviderStatus {
+	s := &mapiv1beta1.AWSMachineProviderStatus{
+		InstanceState: ptr.To(string(ptr.Deref(m.awsMachine.Status.InstanceState, ""))),
+		InstanceID:    m.awsMachine.Spec.InstanceID,
+		Conditions:    convertCAPAMachineConditionsToMAPIMachineAWSProviderConditions(m.awsMachine),
+	}
+
+	return s
+}
+
+func convertCAPAMachineConditionsToMAPIMachineAWSProviderConditions(awsMachine *awsv1.AWSMachine) []metav1.Condition {
+	if ptr.Deref(awsMachine.Status.InstanceState, "") == awsv1.InstanceStateRunning {
+		// Set conditionSuccess
+		return []metav1.Condition{{
+			Type:    string(mapiv1beta1.MachineCreation),
+			Status:  metav1.ConditionTrue,
+			Reason:  mapiv1beta1.MachineCreationSucceededConditionReason,
+			Message: "Machine successfully created",
+			// LastTransitionTime will be set by the condition utilities.
+		}}
+	}
+
+	// Set conditionFailed
+	return []metav1.Condition{{
+		Type:    string(mapiv1beta1.MachineCreation),
+		Status:  metav1.ConditionFalse,
+		Reason:  mapiv1beta1.MachineCreationFailedConditionReason,
+		Message: "See AWSMachine conditions.",
+		// LastTransitionTime will be set by the condition utilities.
+	}}
+}
+
 // ToMachine converts a capi2mapi MachineAndAWSMachineTemplate into a MAPI Machine.
 func (m machineAndAWSMachineAndAWSCluster) ToMachine() (*mapiv1beta1.Machine, []string, error) {
 	if m.machine == nil || m.awsMachine == nil || m.awsCluster == nil {
@@ -214,9 +246,14 @@ func (m machineAndAWSMachineAndAWSCluster) ToMachine() (*mapiv1beta1.Machine, []
 		errors = append(errors, err...)
 	}
 
-	awsRawExt, errRaw := RawExtensionFromProviderSpec(mapaSpec)
+	awsSpecRawExt, errRaw := RawExtensionFromInterface(mapaSpec)
 	if errRaw != nil {
 		return nil, nil, fmt.Errorf("unable to convert AWS providerSpec to raw extension: %w", errRaw)
+	}
+
+	awsStatusRawExt, errRaw := RawExtensionFromInterface(m.toProviderStatus())
+	if errRaw != nil {
+		return nil, nil, fmt.Errorf("unable to convert AWS providerStatus to raw extension: %w", errRaw)
 	}
 
 	warnings = append(warnings, warn...)
@@ -226,7 +263,8 @@ func (m machineAndAWSMachineAndAWSCluster) ToMachine() (*mapiv1beta1.Machine, []
 		errors = append(errors, err...)
 	}
 
-	mapiMachine.Spec.ProviderSpec.Value = awsRawExt
+	mapiMachine.Spec.ProviderSpec.Value = awsSpecRawExt
+	mapiMachine.Status.ProviderStatus = awsStatusRawExt
 
 	if len(errors) > 0 {
 		return nil, warnings, errors.ToAggregate()

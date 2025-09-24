@@ -73,7 +73,7 @@ var _ = Describe("OpenStack Fuzz (mapi2capi)", func() {
 			mapi2capi.FromOpenStackMachineAndInfra,
 			fromMachineAndOpenStackMachineAndOpenStackCluster,
 			conversiontest.ObjectMetaFuzzerFuncs(mapiNamespace),
-			conversiontest.MAPIMachineFuzzerFuncs(&mapiv1alpha1.OpenstackProviderSpec{}, openstackProviderIDFuzzer),
+			conversiontest.MAPIMachineFuzzerFuncs(&mapiv1alpha1.OpenstackProviderSpec{}, nil, openstackProviderIDFuzzer),
 			openstackProviderSpecFuzzerFuncs,
 		)
 	})
@@ -96,7 +96,7 @@ var _ = Describe("OpenStack Fuzz (mapi2capi)", func() {
 			mapi2capi.FromOpenStackMachineSetAndInfra,
 			fromMachineSetAndOpenStackMachineTemplateAndOpenStackCluster,
 			conversiontest.ObjectMetaFuzzerFuncs(mapiNamespace),
-			conversiontest.MAPIMachineFuzzerFuncs(&mapiv1alpha1.OpenstackProviderSpec{}, openstackProviderIDFuzzer),
+			conversiontest.MAPIMachineFuzzerFuncs(&mapiv1alpha1.OpenstackProviderSpec{}, nil, openstackProviderIDFuzzer),
 			conversiontest.MAPIMachineSetFuzzerFuncs(),
 			openstackProviderSpecFuzzerFuncs,
 		)

@@ -25,6 +25,7 @@ import (
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 
 	"github.com/openshift/cluster-capi-operator/pkg/util"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -332,6 +333,11 @@ func (m *awsMachineAndInfra) toAWSMachine(providerSpec mapiv1beta1.AWSMachinePro
 		}
 	}
 
+	capaMachineStatus, capiMachineStatusErrs := convertMAPIMachineStatusToAWSMachineStatus(m.machine)
+	if len(capiMachineStatusErrs) > 0 {
+		errs = append(errs, capiMachineStatusErrs...)
+	}
+
 	return &awsv1.AWSMachine{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: awsv1.GroupVersion.String(),
@@ -341,8 +347,82 @@ func (m *awsMachineAndInfra) toAWSMachine(providerSpec mapiv1beta1.AWSMachinePro
 			Name:      m.machine.Name,
 			Namespace: capiNamespace,
 		},
-		Spec: spec,
+		Spec:   spec,
+		Status: capaMachineStatus,
 	}, warnings, errs
+}
+
+func convertMAPIMachineStatusToAWSMachineStatus(mapiMachine *mapiv1beta1.Machine) (awsv1.AWSMachineStatus, field.ErrorList) {
+	var errs field.ErrorList
+
+	mapiProviderStatus, err := AWSProviderStatusFromRawExtension(mapiMachine.Status.ProviderStatus)
+	if err != nil {
+		return awsv1.AWSMachineStatus{}, append(errs, field.InternalError(field.NewPath("status", "providerStatus"), err))
+	}
+
+	mapiProviderSpec, err := AWSProviderSpecFromRawExtension(mapiMachine.Spec.ProviderSpec.Value)
+	if err != nil {
+		return awsv1.AWSMachineStatus{}, append(errs, field.InternalError(field.NewPath("spec", "providerSpec"), err))
+	}
+
+	addresses, addressesErr := convertMAPIMachineAddressesToCAPI(mapiMachine.Status.Addresses)
+	if len(addressesErr) > 0 {
+		errs = append(errs, addressesErr...)
+	}
+
+	s := awsv1.AWSMachineStatus{
+		// CAPA sets Ready to true if InstanceState is running. Otherwise false.
+		Ready: awsv1.InstanceState(ptr.Deref(mapiProviderStatus.InstanceState, "")) == awsv1.InstanceStateRunning,
+		// Interruptible marks a machine as spot instance. In Machine API this is set via SpotMarketOptions.
+		Interruptible: mapiProviderSpec.SpotMarketOptions != nil,
+		Addresses:     addresses,
+		InstanceState: ptr.To(awsv1.InstanceState(ptr.Deref(mapiProviderStatus.InstanceState, ""))),
+		Conditions:    convertMAPIMachineAWSProviderConditionsToAWSMachineConditions(&mapiProviderStatus),
+
+		// FailureReason: // Not set here because we already set it on the Cluster API Machine form .Status.ErrReason
+		// FailureMessage: // Not set here because we already set it on the Cluster API Machine form .Status.ErrMessage
+	}
+
+	return s, errs
+}
+
+func convertMAPIMachineAWSProviderConditionsToAWSMachineConditions(mapiProviderStatus *mapiv1beta1.AWSMachineProviderStatus) clusterv1.Conditions {
+	capaMachineConditions := []clusterv1.Condition{}
+	instanceRunning := ptr.Deref(mapiProviderStatus.InstanceState, "") == string(awsv1.InstanceStateRunning)
+
+	// Best effort assertion for Ready and InstanceReady condition. Refer to Machine API machine in case of non-happy path.
+	for _, conditionType := range []clusterv1.ConditionType{clusterv1.ReadyCondition, awsv1.InstanceReadyCondition} {
+		c := clusterv1.Condition{
+			Type: conditionType,
+			Status: func() corev1.ConditionStatus {
+				if instanceRunning {
+					return corev1.ConditionTrue
+				}
+
+				return corev1.ConditionUnknown
+			}(),
+			Message: func() string {
+				if !instanceRunning {
+					return "See Machine API Machine.Status.Providerstatus conditions"
+				}
+
+				return ""
+			}(),
+			Severity: func() clusterv1.ConditionSeverity {
+				if instanceRunning {
+					return clusterv1.ConditionSeverityNone
+				}
+
+				return clusterv1.ConditionSeverityError
+			}(),
+			// LastTransitionTime will be set by the condition utilities.
+		}
+		capaMachineConditions = append(capaMachineConditions, c)
+	}
+
+	// awsv1.SecurityGroupsReadyCondition: there is no equivalent in Machine API.
+
+	return capaMachineConditions
 }
 
 // AWSProviderSpecFromRawExtension unmarshals a raw extension into an AWSMachineProviderConfig type.
@@ -357,6 +437,20 @@ func AWSProviderSpecFromRawExtension(rawExtension *runtime.RawExtension) (mapiv1
 	}
 
 	return spec, nil
+}
+
+// AWSProviderStatusFromRawExtension unmarshals a raw extension into an AWSMachineProviderConfig type.
+func AWSProviderStatusFromRawExtension(rawExtension *runtime.RawExtension) (mapiv1beta1.AWSMachineProviderStatus, error) {
+	if rawExtension == nil {
+		return mapiv1beta1.AWSMachineProviderStatus{}, nil
+	}
+
+	status := mapiv1beta1.AWSMachineProviderStatus{}
+	if err := yaml.Unmarshal(rawExtension.Raw, &status); err != nil {
+		return mapiv1beta1.AWSMachineProviderStatus{}, fmt.Errorf("error unmarshalling providerStatus %q: %w", string(rawExtension.Raw), err)
+	}
+
+	return status, nil
 }
 
 func awsMachineToAWSMachineTemplate(awsMachine *awsv1.AWSMachine, name string, namespace string) (*awsv1.AWSMachineTemplate, error) {

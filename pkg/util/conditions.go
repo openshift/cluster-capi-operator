@@ -25,6 +25,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/cluster-api/util/conditions"
+	conditionsv1beta2 "sigs.k8s.io/cluster-api/util/conditions/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -131,35 +133,109 @@ func GetMAPICondition(conditions []mapiv1beta1.Condition, conditionType string) 
 // If the condition state has not changed, it preserves the existing LastTransitionTime.
 // If the condition does not exist, it adds it.
 // This function behaves similarly to conditions.Set() for CAPI conditions.
+//
+//nolint:dupl
 func SetMAPICondition(conditions []mapiv1beta1.Condition, condition *mapiv1beta1.Condition) []mapiv1beta1.Condition {
 	for i, currCondition := range conditions {
-		if string(currCondition.Type) == string(condition.Type) {
-			// Check if the condition state has changed (Status, Reason, Message)
-			if currCondition.Status != condition.Status || currCondition.Reason != condition.Reason || currCondition.Message != condition.Message {
-				// State has changed, update the condition with the new LastTransitionTime
-				updatedCondition := *condition
-				if updatedCondition.LastTransitionTime.IsZero() {
-					updatedCondition.LastTransitionTime = metav1.NewTime(time.Now().UTC().Truncate(time.Second))
-				}
-
-				conditions[i] = updatedCondition
-			} else {
-				// State hasn't changed, preserve the existing LastTransitionTime
-				updatedCondition := *condition
-				updatedCondition.LastTransitionTime = currCondition.LastTransitionTime
-				conditions[i] = updatedCondition
-			}
-
-			// Condition found and updated, return the updated conditions.
-			return conditions
+		if currCondition.Type != condition.Type {
+			continue
 		}
+
+		updatedCondition := *condition
+
+		// Check if the condition state has changed (Status, Reason, Message)
+		if currCondition.Status != condition.Status || currCondition.Reason != condition.Reason || currCondition.Message != condition.Message {
+			// State has changed, update the condition with the new LastTransitionTime
+			if updatedCondition.LastTransitionTime.IsZero() {
+				updatedCondition.LastTransitionTime = metav1.NewTime(time.Now().UTC().Truncate(time.Second))
+			}
+		} else {
+			// State hasn't changed, preserve the existing LastTransitionTime
+			updatedCondition.LastTransitionTime = currCondition.LastTransitionTime
+		}
+
+		conditions[i] = updatedCondition
+
+		// Condition found and updated, return the updated conditions.
+		return conditions
 	}
 
 	// Ensure LastTransitionTime is set also for new conditions.
 	if condition.LastTransitionTime.IsZero() {
-		condition.LastTransitionTime = metav1.NewTime(time.Now().UTC().Truncate(time.Second))
+		condition.LastTransitionTime = metav1.Now()
 	}
+
+	condition.LastTransitionTime.Time = condition.LastTransitionTime.Truncate(1 * time.Second)
 
 	// Condition doesn't exist, add it
 	return append(conditions, *condition)
+}
+
+// SetMAPIProviderCondition sets a condition in a list of Machine API conditions.
+// If the condition already exists and state (Status, Reason, Message) has changed:
+// - if the lasttransitiontime is not set, it sets it to the current time
+// - if the lasttransitiontime is set, it updates it with the one of the newly provided condition lasttransitiontime.
+// If the condition state has not changed, it preserves the existing LastTransitionTime.
+// If the condition does not exist, it adds it.
+// This function behaves similarly to conditions.Set() for Cluster API conditions.
+//
+//nolint:dupl
+func SetMAPIProviderCondition(conditions []metav1.Condition, condition *metav1.Condition) []metav1.Condition {
+	for i, currCondition := range conditions {
+		if currCondition.Type != condition.Type {
+			continue
+		}
+
+		updatedCondition := *condition
+
+		// Check if the condition state has changed (Status, Reason, Message)
+		if currCondition.Status != condition.Status || currCondition.Reason != condition.Reason || currCondition.Message != condition.Message {
+			// State has changed, update the condition with the new LastTransitionTime
+			if updatedCondition.LastTransitionTime.IsZero() {
+				updatedCondition.LastTransitionTime = metav1.NewTime(time.Now().UTC().Truncate(time.Second))
+			}
+		} else {
+			// State hasn't changed, preserve the existing LastTransitionTime
+			updatedCondition.LastTransitionTime = currCondition.LastTransitionTime
+		}
+
+		conditions[i] = updatedCondition
+
+		// Condition found and updated, return the updated conditions.
+		return conditions
+	}
+
+	// Ensure LastTransitionTime is set also for new conditions.
+	if condition.LastTransitionTime.IsZero() {
+		condition.LastTransitionTime = metav1.Now()
+	}
+
+	condition.LastTransitionTime.Time = condition.LastTransitionTime.Truncate(1 * time.Second)
+
+	// Condition doesn't exist, add it
+	return append(conditions, *condition)
+}
+
+// EnsureCAPIConditions iterates over all CAPI v1beta1 conditions and sets them on the converted object.
+func EnsureCAPIConditions(existing conditions.Setter, converted conditions.Setter) {
+	// Merge the v1beta1 conditions.
+	convertedConditions := converted.GetConditions()
+	for i := range convertedConditions {
+		conditions.Set(existing, &convertedConditions[i])
+	}
+
+	// Copy them back to the convertedCAPIMachine.
+	converted.SetConditions(existing.GetConditions())
+}
+
+// EnsureCAPIV1Beta2Conditions iterates over all CAPI v1beta2 conditions and sets them on the converted object.
+func EnsureCAPIV1Beta2Conditions(existing conditionsv1beta2.Setter, converted conditionsv1beta2.Setter) {
+	// Merge the v1beta2 conditions.
+	convertedConditions := converted.GetV1Beta2Conditions()
+	for i := range convertedConditions {
+		conditionsv1beta2.Set(existing, convertedConditions[i])
+	}
+
+	// Copy them back to the convertedCAPIMachine.
+	converted.SetV1Beta2Conditions(existing.GetV1Beta2Conditions())
 }

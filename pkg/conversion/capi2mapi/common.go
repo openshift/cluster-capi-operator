@@ -27,15 +27,15 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
-// RawExtensionFromProviderSpec marshals the machine provider spec.
-func RawExtensionFromProviderSpec(spec interface{}) (*runtime.RawExtension, error) {
+// RawExtensionFromInterface marshals the machine provider spec.
+func RawExtensionFromInterface(spec interface{}) (*runtime.RawExtension, error) {
 	if spec == nil {
-		return &runtime.RawExtension{}, nil
+		return nil, nil //nolint:nilnil
 	}
 
 	rawBytes, err := json.Marshal(spec)
 	if err != nil {
-		return nil, fmt.Errorf("error marshalling providerSpec: %w", err)
+		return nil, fmt.Errorf("failed to marshal from RawExtension: %w", err)
 	}
 
 	return &runtime.RawExtension{

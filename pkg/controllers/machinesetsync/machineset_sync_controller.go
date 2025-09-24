@@ -51,8 +51,6 @@ import (
 	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util/annotations"
-	"sigs.k8s.io/cluster-api/util/conditions"
-	conditionsv1beta2 "sigs.k8s.io/cluster-api/util/conditions/v1beta2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -1000,26 +998,13 @@ func (r *MachineSetSyncReconciler) ensureMAPIMachineSetStatusUpdated(ctx context
 func setChangedCAPIMachineSetStatusFields(existingCAPIMachineSet, convertedCAPIMachineSet *clusterv1.MachineSet) {
 	// convertedCAPIMachine holds the computed and desired status changes converted from the source MAPI machine, so apply them to the existing existingCAPIMachine.
 	// Merge the v1beta1 conditions.
-	for _, condition := range convertedCAPIMachineSet.Status.Conditions {
-		conditions.Set(existingCAPIMachineSet, &condition)
-	}
+	util.EnsureCAPIConditions(existingCAPIMachineSet, convertedCAPIMachineSet)
 
 	// Copy them back to the convertedCAPIMachine.
 	convertedCAPIMachineSet.Status.Conditions = existingCAPIMachineSet.Status.Conditions
 
 	// Merge the v1beta2 conditions.
-	if convertedCAPIMachineSet.Status.V1Beta2 != nil {
-		if existingCAPIMachineSet.Status.V1Beta2 == nil {
-			existingCAPIMachineSet.Status.V1Beta2 = &clusterv1.MachineSetV1Beta2Status{}
-		}
-
-		for _, condition := range convertedCAPIMachineSet.Status.V1Beta2.Conditions {
-			conditionsv1beta2.Set(existingCAPIMachineSet, condition)
-		}
-
-		// Copy them back to the convertedCAPIMachine.
-		convertedCAPIMachineSet.Status.V1Beta2.Conditions = existingCAPIMachineSet.Status.V1Beta2.Conditions
-	}
+	util.EnsureCAPIV1Beta2Conditions(existingCAPIMachineSet, convertedCAPIMachineSet)
 
 	// Finally overwrite the entire existingCAPIMachine status with the convertedCAPIMachine status.
 	existingCAPIMachineSet.Status = convertedCAPIMachineSet.Status
