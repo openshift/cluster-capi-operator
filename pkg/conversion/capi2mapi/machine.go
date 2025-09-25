@@ -120,7 +120,7 @@ func convertCAPIMachineStatusToMAPI(capiStatus clusterv1.MachineStatus) (mapiv1.
 	mapiStatus := mapiv1.MachineStatus{
 		NodeRef:     capiStatus.NodeRef,
 		LastUpdated: capiStatus.LastUpdated,
-		// Conditions:   // We don't have any MAPI very relevant MAPI conditions to compute from CAPI.
+		// Conditions:   // We don't have any relevant MAPI conditions to copy/compute from CAPI.
 		ErrorReason:  convertCAPIMachineFailureReasonToMAPIErrorReason(capiStatus.FailureReason),
 		ErrorMessage: convertCAPIMachineFailureMessageToMAPIErrorMessage(capiStatus.FailureMessage),
 		Phase:        convertCAPIMachinePhaseToMAPI(capiStatus.Phase),
