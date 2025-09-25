@@ -17,7 +17,7 @@ limitations under the License.
 package synccommon
 
 import (
-	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
+	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	machinev1applyconfigs "github.com/openshift/client-go/machine/applyconfigurations/machine/v1beta1"
 )
 
@@ -40,7 +40,7 @@ type syncObjApplyConfigurationP[objT any, objPT *objT, statusPT syncStatusApplyC
 type syncStatusApplyConfiguration[statusPT any] interface {
 	WithConditions(...*machinev1applyconfigs.ConditionApplyConfiguration) statusPT
 	WithSynchronizedGeneration(int64) statusPT
-	WithAuthoritativeAPI(machinev1beta1.MachineAuthority) statusPT
+	WithAuthoritativeAPI(mapiv1beta1.MachineAuthority) statusPT
 }
 
 // syncStatusApplyConfigurationP asserts that a syncStatusApplyConfiguration is a pointer to a specific concrete type.

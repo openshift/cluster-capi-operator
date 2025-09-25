@@ -18,7 +18,7 @@ package mapi2capi
 import (
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/test/matchers"
 
-	mapiv1 "github.com/openshift/api/machine/v1alpha1"
+	mapiv1alpha1 "github.com/openshift/api/machine/v1alpha1"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -71,9 +71,9 @@ var _ = Describe("mapi2capi OpenStack conversion", func() {
 		Entry("fails with additional block device with nil volume", openstackMAPI2CAPIConversionInput{
 			machineBuilder: openstackMAPIMachineBase.WithProviderSpecBuilder(
 				openstackBaseProviderSpec.WithAdditionalBlockDevices(
-					[]mapiv1.AdditionalBlockDevice{
+					[]mapiv1alpha1.AdditionalBlockDevice{
 						{
-							Storage: mapiv1.BlockDeviceStorage{
+							Storage: mapiv1alpha1.BlockDeviceStorage{
 								Type: "Volume", Volume: nil,
 							},
 						},
@@ -91,11 +91,11 @@ var _ = Describe("mapi2capi OpenStack conversion", func() {
 		Entry("warns with a network with deprecated fields", openstackMAPI2CAPIConversionInput{
 			machineBuilder: openstackMAPIMachineBase.WithProviderSpecBuilder(
 				openstackBaseProviderSpec.WithNetworks(
-					[]mapiv1.NetworkParam{
+					[]mapiv1alpha1.NetworkParam{
 						{
 							FixedIp: "192.168.6.8",
 							UUID:    "8c57e4e2-9c79-4a5e-8e21-58064574518f",
-							Filter:  mapiv1.Filter{},
+							Filter:  mapiv1alpha1.Filter{},
 						},
 					},
 				),
@@ -109,25 +109,25 @@ var _ = Describe("mapi2capi OpenStack conversion", func() {
 		Entry("warns with network subnets with deprecated fields", openstackMAPI2CAPIConversionInput{
 			machineBuilder: openstackMAPIMachineBase.WithProviderSpecBuilder(
 				openstackBaseProviderSpec.WithNetworks(
-					[]mapiv1.NetworkParam{
+					[]mapiv1alpha1.NetworkParam{
 						{
 							UUID:   "8c57e4e2-9c79-4a5e-8e21-58064574518f",
-							Filter: mapiv1.Filter{},
-							Subnets: []mapiv1.SubnetParam{
+							Filter: mapiv1alpha1.Filter{},
+							Subnets: []mapiv1alpha1.SubnetParam{
 								{
 									UUID: "2dcb9441-f4ce-469d-a422-6769815b4966",
-									Filter: mapiv1.SubnetFilter{
+									Filter: mapiv1alpha1.SubnetFilter{
 										NetworkID: "8c57e4e2-9c79-4a5e-8e21-58064574518f",
 									},
 								},
 							},
 						},
 						{
-							Filter: mapiv1.Filter{},
-							Subnets: []mapiv1.SubnetParam{
+							Filter: mapiv1alpha1.Filter{},
+							Subnets: []mapiv1alpha1.SubnetParam{
 								{
 									UUID: "1d849606-4c13-4f8e-809c-9997393c1285",
-									Filter: mapiv1.SubnetFilter{
+									Filter: mapiv1alpha1.SubnetFilter{
 										NetworkID: "78a20e17-96e8-42a7-8301-c33b9a78daa4",
 									},
 								},
@@ -146,7 +146,7 @@ var _ = Describe("mapi2capi OpenStack conversion", func() {
 		Entry("warns with a port with deprecated fields", openstackMAPI2CAPIConversionInput{
 			machineBuilder: openstackMAPIMachineBase.WithProviderSpecBuilder(
 				openstackBaseProviderSpec.WithPorts(
-					[]mapiv1.PortOpts{
+					[]mapiv1alpha1.PortOpts{
 						{
 							DeprecatedHostID: "compute-b",
 						},
@@ -162,7 +162,7 @@ var _ = Describe("mapi2capi OpenStack conversion", func() {
 		Entry("warns with a root volume using deprecated fields", openstackMAPI2CAPIConversionInput{
 			machineBuilder: openstackMAPIMachineBase.WithProviderSpecBuilder(
 				openstackBaseProviderSpec.WithRootVolume(
-					&mapiv1.RootVolume{
+					&mapiv1alpha1.RootVolume{
 						Size: 10,
 						// https://wiki.openstack.org/wiki/BlockDeviceConfig#device_type
 						DeprecatedDeviceType: "disk",

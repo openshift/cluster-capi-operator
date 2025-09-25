@@ -24,7 +24,7 @@ import (
 	randfill "sigs.k8s.io/randfill"
 
 	configv1 "github.com/openshift/api/config/v1"
-	mapiv1 "github.com/openshift/api/machine/v1beta1"
+	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/capi2mapi"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/mapi2capi"
 	conversiontest "github.com/openshift/cluster-capi-operator/pkg/conversion/test/fuzz"
@@ -76,7 +76,7 @@ var _ = Describe("AWS Fuzz (mapi2capi)", func() {
 			mapi2capi.FromAWSMachineAndInfra,
 			fromMachineAndAWSMachineAndAWSCluster,
 			conversiontest.ObjectMetaFuzzerFuncs(mapiNamespace),
-			conversiontest.MAPIMachineFuzzerFuncs(&mapiv1.AWSMachineProviderConfig{}, awsProviderIDFuzzer),
+			conversiontest.MAPIMachineFuzzerFuncs(&mapiv1beta1.AWSMachineProviderConfig{}, awsProviderIDFuzzer),
 			awsProviderSpecFuzzerFuncs,
 		)
 	})
@@ -99,7 +99,7 @@ var _ = Describe("AWS Fuzz (mapi2capi)", func() {
 			mapi2capi.FromAWSMachineSetAndInfra,
 			fromMachineSetAndAWSMachineTemplateAndAWSCluster,
 			conversiontest.ObjectMetaFuzzerFuncs(mapiNamespace),
-			conversiontest.MAPIMachineFuzzerFuncs(&mapiv1.AWSMachineProviderConfig{}, awsProviderIDFuzzer),
+			conversiontest.MAPIMachineFuzzerFuncs(&mapiv1beta1.AWSMachineProviderConfig{}, awsProviderIDFuzzer),
 			conversiontest.MAPIMachineSetFuzzerFuncs(),
 			awsProviderSpecFuzzerFuncs,
 		)
@@ -113,30 +113,30 @@ func awsProviderIDFuzzer(c randfill.Continue) string {
 //nolint:funlen,cyclop
 func awsProviderSpecFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interface{} {
 	return []interface{}{
-		func(nit *mapiv1.AWSNetworkInterfaceType, c randfill.Continue) {
+		func(nit *mapiv1beta1.AWSNetworkInterfaceType, c randfill.Continue) {
 			switch c.Int31n(3) {
 			case 0:
-				*nit = mapiv1.AWSEFANetworkInterfaceType
+				*nit = mapiv1beta1.AWSEFANetworkInterfaceType
 			case 1:
-				*nit = mapiv1.AWSENANetworkInterfaceType
+				*nit = mapiv1beta1.AWSENANetworkInterfaceType
 			case 2:
 				*nit = ""
 			}
 		},
-		func(amiRef *mapiv1.AWSResourceReference, c randfill.Continue) {
+		func(amiRef *mapiv1beta1.AWSResourceReference, c randfill.Continue) {
 			var amiID string
 			c.Fill(&amiID)
 
-			*amiRef = mapiv1.AWSResourceReference{
+			*amiRef = mapiv1beta1.AWSResourceReference{
 				ID: &amiID,
 			}
 		},
-		func(bdm *mapiv1.BlockDeviceMappingSpec, c randfill.Continue) {
+		func(bdm *mapiv1beta1.BlockDeviceMappingSpec, c randfill.Continue) {
 			c.FillNoCustom(bdm)
 
 			// Fuzz required fields so that they are not empty.
 			if bdm.EBS == nil {
-				ebs := &mapiv1.EBSBlockDeviceSpec{}
+				ebs := &mapiv1beta1.EBSBlockDeviceSpec{}
 				c.Fill(ebs)
 				bdm.EBS = ebs
 			}
@@ -146,7 +146,7 @@ func awsProviderSpecFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interfa
 			bdm.NoDevice = nil
 			bdm.VirtualName = nil
 		},
-		func(ebs *mapiv1.EBSBlockDeviceSpec, c randfill.Continue) {
+		func(ebs *mapiv1beta1.EBSBlockDeviceSpec, c randfill.Continue) {
 			c.FillNoCustom(ebs)
 
 			// Fuzz required fields so that they are not empty.
@@ -167,36 +167,36 @@ func awsProviderSpecFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interfa
 				ebs.Iops = nil
 			}
 		},
-		func(tenancy *mapiv1.InstanceTenancy, c randfill.Continue) {
+		func(tenancy *mapiv1beta1.InstanceTenancy, c randfill.Continue) {
 			switch c.Int31n(4) {
 			case 0:
-				*tenancy = mapiv1.DefaultTenancy
+				*tenancy = mapiv1beta1.DefaultTenancy
 			case 1:
-				*tenancy = mapiv1.DedicatedTenancy
+				*tenancy = mapiv1beta1.DedicatedTenancy
 			case 2:
-				*tenancy = mapiv1.HostTenancy
+				*tenancy = mapiv1beta1.HostTenancy
 			case 3:
 				*tenancy = ""
 			}
 		},
-		func(marketType *mapiv1.MarketType, c randfill.Continue) {
+		func(marketType *mapiv1beta1.MarketType, c randfill.Continue) {
 			switch c.Int31n(4) {
 			case 0:
-				*marketType = mapiv1.MarketTypeOnDemand
+				*marketType = mapiv1beta1.MarketTypeOnDemand
 			case 1:
-				*marketType = mapiv1.MarketTypeSpot
+				*marketType = mapiv1beta1.MarketTypeSpot
 			case 2:
-				*marketType = mapiv1.MarketTypeCapacityBlock
+				*marketType = mapiv1beta1.MarketTypeCapacityBlock
 			case 3:
 				*marketType = ""
 			}
 		},
-		func(msa *mapiv1.MetadataServiceAuthentication, c randfill.Continue) {
+		func(msa *mapiv1beta1.MetadataServiceAuthentication, c randfill.Continue) {
 			switch c.Intn(2) {
 			case 0:
-				*msa = mapiv1.MetadataServiceAuthenticationOptional
+				*msa = mapiv1beta1.MetadataServiceAuthenticationOptional
 			case 1:
-				*msa = mapiv1.MetadataServiceAuthenticationRequired
+				*msa = mapiv1beta1.MetadataServiceAuthenticationRequired
 				// case 3:
 				// 	*msa = "" // Do not fuzz MAPI MetadataServiceAuthentication to the empty value.
 				// It will otherwise get converted to CAPA HTTPTokensStateOptional which
@@ -204,11 +204,11 @@ func awsProviderSpecFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interfa
 				// resulting in a documented lossy rountrip conversion, which would make the test to fail.
 			}
 		},
-		func(ps *mapiv1.AWSMachineProviderConfig, c randfill.Continue) {
+		func(ps *mapiv1beta1.AWSMachineProviderConfig, c randfill.Continue) {
 			c.FillNoCustom(ps)
 
 			// The type meta is always set to these values by the conversion.
-			ps.APIVersion = mapiv1.GroupVersion.String()
+			ps.APIVersion = mapiv1beta1.GroupVersion.String()
 			ps.Kind = awsProviderSpecKind
 
 			// region must match the input AWSCluster so force it here.

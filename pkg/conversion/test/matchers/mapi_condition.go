@@ -21,7 +21,7 @@ import (
 	"fmt"
 
 	"github.com/onsi/gomega/types"
-	mapiv1 "github.com/openshift/api/machine/v1beta1"
+	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	"github.com/openshift/cluster-api-actuator-pkg/testutils"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -32,7 +32,7 @@ var errActualTypeMismatchMAPICondition = errors.New("actual should be of type ma
 // convertMAPIConditionToMetav1Condition converts a mapiv1.Condition to metav1.Condition.
 // Note: This conversion deliberately ignores the Severity field as metav1.Condition
 // does not have a Severity field.
-func convertMAPIConditionToMetav1Condition(mapiCondition mapiv1.Condition) metav1.Condition {
+func convertMAPIConditionToMetav1Condition(mapiCondition mapiv1beta1.Condition) metav1.Condition {
 	return metav1.Condition{
 		Type:               string(mapiCondition.Type),
 		Status:             metav1.ConditionStatus(mapiCondition.Status),
@@ -48,19 +48,19 @@ func convertMAPIConditionToMetav1Condition(mapiCondition mapiv1.Condition) metav
 // It converts the MAPI condition to metav1.Condition and delegates to testutils.MatchCondition.
 // Note: This matcher deliberately ignores LastTransitionTime and the Severity field
 // as it is not supported by metav1.Condition.
-func MatchMAPICondition(expected mapiv1.Condition) types.GomegaMatcher {
+func MatchMAPICondition(expected mapiv1beta1.Condition) types.GomegaMatcher {
 	return &matchMAPICondition{
 		expected: expected,
 	}
 }
 
 type matchMAPICondition struct {
-	expected mapiv1.Condition
+	expected mapiv1beta1.Condition
 }
 
 // Match checks for equality between the actual and expected objects.
 func (m matchMAPICondition) Match(actual interface{}) (success bool, err error) {
-	actualCondition, ok := actual.(mapiv1.Condition)
+	actualCondition, ok := actual.(mapiv1beta1.Condition)
 	if !ok {
 		return false, errActualTypeMismatchMAPICondition
 	}

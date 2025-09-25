@@ -25,7 +25,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	configv1 "github.com/openshift/api/config/v1"
-	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
+	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	"github.com/openshift/cluster-api-actuator-pkg/testutils"
 	clusterv1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/cluster-api/core/v1beta1"
 	awsv1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/cluster-api/infrastructure/v1beta2"
@@ -69,7 +69,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 	var capiMachineSetBuilder clusterv1resourcebuilder.MachineSetBuilder
 
 	var mapiMachineBuilder machinev1resourcebuilder.MachineBuilder
-	var mapiMachine *machinev1beta1.Machine
+	var mapiMachine *mapiv1beta1.Machine
 
 	var capiMachineBuilder clusterv1resourcebuilder.MachineBuilder
 	var capiMachine *clusterv1.Machine
@@ -222,8 +222,8 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 
 		By("Cleaning up MAPI test resources")
 		testutils.CleanupResources(Default, ctx, cfg, k8sClient, mapiNamespace.GetName(),
-			&machinev1beta1.Machine{},
-			&machinev1beta1.MachineSet{},
+			&mapiv1beta1.Machine{},
+			&mapiv1beta1.MachineSet{},
 		)
 
 		testutils.CleanupResources(Default, ctx, cfg, k8sClient, capiNamespace.GetName(),
@@ -248,7 +248,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 
 				By("Setting the MAPI machine AuthoritativeAPI to MachineAPI")
 				Eventually(k.UpdateStatus(mapiMachine, func() {
-					mapiMachine.Status.AuthoritativeAPI = machinev1beta1.MachineAuthorityMachineAPI
+					mapiMachine.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityMachineAPI
 				})).Should(Succeed())
 			})
 
@@ -341,7 +341,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 
 				By("Setting the MAPI machine AuthoritativeAPI to Cluster API")
 				Eventually(k.UpdateStatus(mapiMachine, func() {
-					mapiMachine.Status.AuthoritativeAPI = machinev1beta1.MachineAuthorityClusterAPI
+					mapiMachine.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityClusterAPI
 				})).Should(Succeed())
 
 			})
@@ -380,7 +380,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 		Context("when the MAPI machine has status.authoritativeAPI set to MachineAPI and has CPMS owner reference", func() {
 			BeforeEach(func() {
 				fakeCPMSOwnerReference := metav1.OwnerReference{
-					APIVersion:         machinev1beta1.GroupVersion.String(),
+					APIVersion:         mapiv1beta1.GroupVersion.String(),
 					Kind:               "ControlPlaneMachineSet",
 					Name:               "cluster",
 					UID:                "cpms-uid",
@@ -394,7 +394,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 
 				By("Setting the MAPI machine status.authoritativeAPI to MachineAPI")
 				Eventually(k.UpdateStatus(mapiMachine, func() {
-					mapiMachine.Status.AuthoritativeAPI = machinev1beta1.MachineAuthorityMachineAPI
+					mapiMachine.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityMachineAPI
 				})).Should(Succeed())
 			})
 
@@ -426,7 +426,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 
 				By("Setting the MAPI machine status.authoritativeAPI to MachineAPI")
 				Eventually(k.UpdateStatus(mapiMachine, func() {
-					mapiMachine.Status.AuthoritativeAPI = machinev1beta1.MachineAuthorityMachineAPI
+					mapiMachine.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityMachineAPI
 				})).Should(Succeed())
 			})
 
@@ -469,7 +469,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 
 				By("Setting the status.authoritativeAPI to Migrating")
 				Eventually(k.UpdateStatus(mapiMachine, func() {
-					mapiMachine.Status.AuthoritativeAPI = machinev1beta1.MachineAuthorityMigrating
+					mapiMachine.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityMigrating
 				})).Should(Succeed())
 			})
 
@@ -538,19 +538,19 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 				})
 
 				It("should not create a MAPI machine", func() {
-					Consistently(k.ObjectList(&machinev1beta1.MachineList{}), timeout).ShouldNot(HaveField("Items",
+					Consistently(k.ObjectList(&mapiv1beta1.MachineList{}), timeout).ShouldNot(HaveField("Items",
 						ContainElement(HaveField("ObjectMeta.Name", Equal(capiMachine.GetName()))),
 					))
 				})
 
 				Context("when MAPI machine with the same name and status.authoritativeAPI set to ClusterAPI is created", func() {
 					BeforeEach(func() {
-						mapiMachine = mapiMachineBuilder.WithName(capiMachine.Name).WithAuthoritativeAPI(machinev1beta1.MachineAuthorityClusterAPI).Build()
+						mapiMachine = mapiMachineBuilder.WithName(capiMachine.Name).WithAuthoritativeAPI(mapiv1beta1.MachineAuthorityClusterAPI).Build()
 						Expect(k8sClient.Create(ctx, mapiMachine)).Should(Succeed())
 
 						By("Setting the status.authoritativeAPI to Cluster API")
 						Eventually(k.UpdateStatus(mapiMachine, func() {
-							mapiMachine.Status.AuthoritativeAPI = machinev1beta1.MachineAuthorityClusterAPI
+							mapiMachine.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityClusterAPI
 						})).Should(Succeed())
 					})
 
@@ -599,7 +599,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 					})
 
 					It("should not create a MAPI machine", func() {
-						Consistently(k.ObjectList(&machinev1beta1.MachineList{}), timeout).ShouldNot(HaveField("Items",
+						Consistently(k.ObjectList(&mapiv1beta1.MachineList{}), timeout).ShouldNot(HaveField("Items",
 							ContainElement(HaveField("ObjectMeta.Name", Equal(capiMachine.GetName()))),
 						))
 					})
@@ -622,14 +622,14 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 					// })
 
 					It("should create a MAPI machine", func() {
-						Eventually(k.ObjectList(&machinev1beta1.MachineList{}), timeout).Should(HaveField("Items",
+						Eventually(k.ObjectList(&mapiv1beta1.MachineList{}), timeout).Should(HaveField("Items",
 							ContainElement(HaveField("ObjectMeta.Name", Equal(capiMachine.GetName()))),
 						))
 
 						mapiMachine = machinev1resourcebuilder.Machine().WithName(capiMachine.Name).WithNamespace(mapiNamespace.Name).Build()
 						Eventually(k.Object(mapiMachine), timeout).Should(HaveField("ObjectMeta.OwnerReferences", ContainElement(
 							SatisfyAll(
-								HaveField("APIVersion", Equal(machinev1beta1.GroupVersion.String())),
+								HaveField("APIVersion", Equal(mapiv1beta1.GroupVersion.String())),
 								HaveField("Kind", Equal(machineSetKind)),
 								HaveField("Name", Equal(capiMachineSet.Name)),
 								HaveField("Controller", Equal(ptr.To(true))),
@@ -656,7 +656,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 				Expect(k8sClient.Create(ctx, mapiMachineSet)).Should(Succeed())
 
 				ownerReferencesToMapiMachineSet = []metav1.OwnerReference{{
-					APIVersion:         machinev1beta1.GroupVersion.String(),
+					APIVersion:         mapiv1beta1.GroupVersion.String(),
 					Kind:               machineSetKind,
 					Name:               mapiMachineSet.Name,
 					UID:                mapiMachineSet.UID,
@@ -677,7 +677,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 
 					By("Setting the AuthoritativeAPI to MachineAPI")
 					Eventually(k.UpdateStatus(mapiMachine, func() {
-						mapiMachine.Status.AuthoritativeAPI = machinev1beta1.MachineAuthorityMachineAPI
+						mapiMachine.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityMachineAPI
 					})).Should(Succeed(), "should have succeeded updating the AuthoritativeAPI")
 				})
 
@@ -767,7 +767,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 
 					By("Setting the AuthoritativeAPI to Cluster API")
 					Eventually(k.UpdateStatus(mapiMachine, func() {
-						mapiMachine.Status.AuthoritativeAPI = machinev1beta1.MachineAuthorityClusterAPI
+						mapiMachine.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityClusterAPI
 					})).Should(Succeed(), "should have succeeded updating the AuthoritativeAPI")
 				})
 
@@ -951,11 +951,11 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 
 				By("Setting the throwaway MAPI machine AuthoritativeAPI to Cluster API")
 				Eventually(k.UpdateStatus(testMachine, func() {
-					testMachine.Status.AuthoritativeAPI = machinev1beta1.MachineAuthorityClusterAPI
+					testMachine.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityClusterAPI
 				})).Should(Succeed())
 
 				Eventually(k.Object(testMachine), timeout).Should(
-					HaveField("Status.AuthoritativeAPI", Equal(machinev1beta1.MachineAuthorityClusterAPI)))
+					HaveField("Status.AuthoritativeAPI", Equal(mapiv1beta1.MachineAuthorityClusterAPI)))
 
 				Eventually(k.Update(testMachine, func() {
 					testMachine.ObjectMeta.Labels = map[string]string{"test-sentinel": "fubar"}
@@ -965,11 +965,11 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 				BeforeEach(func() {
 					By("Setting the MAPI machine AuthoritativeAPI to Machine API")
 					Eventually(k.UpdateStatus(mapiMachine, func() {
-						mapiMachine.Status.AuthoritativeAPI = machinev1beta1.MachineAuthorityMachineAPI
+						mapiMachine.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityMachineAPI
 					})).Should(Succeed())
 
 					Eventually(k.Object(mapiMachine), timeout).Should(
-						HaveField("Status.AuthoritativeAPI", Equal(machinev1beta1.MachineAuthorityMachineAPI)))
+						HaveField("Status.AuthoritativeAPI", Equal(mapiv1beta1.MachineAuthorityMachineAPI)))
 				})
 
 				It("updating the spec should be allowed", func() {
@@ -984,11 +984,11 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 				BeforeEach(func() {
 					By("Setting the MAPI machine AuthoritativeAPI to Cluster API")
 					Eventually(k.UpdateStatus(mapiMachine, func() {
-						mapiMachine.Status.AuthoritativeAPI = machinev1beta1.MachineAuthorityClusterAPI
+						mapiMachine.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityClusterAPI
 					})).Should(Succeed())
 
 					Eventually(k.Object(mapiMachine), timeout).Should(
-						HaveField("Status.AuthoritativeAPI", Equal(machinev1beta1.MachineAuthorityClusterAPI)))
+						HaveField("Status.AuthoritativeAPI", Equal(mapiv1beta1.MachineAuthorityClusterAPI)))
 				})
 
 				It("updating the spec (outside of authoritative api) should be prevented", func() {
@@ -999,7 +999,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 
 				It("updating the spec.authoritativeAPI should be allowed", func() {
 					Eventually(k.Update(mapiMachine, func() {
-						mapiMachine.Spec.AuthoritativeAPI = machinev1beta1.MachineAuthorityMachineAPI
+						mapiMachine.Spec.AuthoritativeAPI = mapiv1beta1.MachineAuthorityMachineAPI
 					}), timeout).Should(Succeed(), "expected success when updating spec.authoritativeAPI")
 				})
 
@@ -1098,7 +1098,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 
 				It("rejects updating spec.authoritativeAPI alongside other spec fields", func() {
 					Eventually(k.Update(mapiMachine, func() {
-						mapiMachine.Spec.AuthoritativeAPI = machinev1beta1.MachineAuthorityMachineAPI
+						mapiMachine.Spec.AuthoritativeAPI = mapiv1beta1.MachineAuthorityMachineAPI
 						mapiMachine.Spec.ObjectMeta.Labels = map[string]string{"foo": "bar"}
 					}), timeout).Should(MatchError(ContainSubstring("You may only modify spec.authoritativeAPI")))
 
@@ -1174,7 +1174,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 var _ = Describe("applySynchronizedConditionWithPatch", func() {
 	var mapiNamespace *corev1.Namespace
 	var reconciler *MachineSyncReconciler
-	var mapiMachine *machinev1beta1.Machine
+	var mapiMachine *mapiv1beta1.Machine
 	var k komega.Komega
 
 	BeforeEach(func() {
@@ -1196,13 +1196,13 @@ var _ = Describe("applySynchronizedConditionWithPatch", func() {
 			WithNamespace(mapiNamespace.Name)
 
 		mapiMachine = mapiMachineBuilder.Build()
-		mapiMachine.Spec.AuthoritativeAPI = machinev1beta1.MachineAuthorityMachineAPI
+		mapiMachine.Spec.AuthoritativeAPI = mapiv1beta1.MachineAuthorityMachineAPI
 		Expect(k8sClient.Create(ctx, mapiMachine))
 
 		By("Set the initial status of the MAPI Machine")
 		Eventually(k.UpdateStatus(mapiMachine, func() {
 			mapiMachine.Status.SynchronizedGeneration = int64(22)
-			mapiMachine.Status.AuthoritativeAPI = machinev1beta1.MachineAuthorityMachineAPI
+			mapiMachine.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityMachineAPI
 		})).Should(Succeed())
 
 		By("Get the MAPI Machine from the API Server")
@@ -1217,8 +1217,8 @@ var _ = Describe("applySynchronizedConditionWithPatch", func() {
 	AfterEach(func() {
 		By("Cleaning up MAPI test resources")
 		testutils.CleanupResources(Default, ctx, cfg, k8sClient, mapiNamespace.GetName(),
-			&machinev1beta1.Machine{},
-			&machinev1beta1.MachineSet{},
+			&mapiv1beta1.Machine{},
+			&mapiv1beta1.MachineSet{},
 		)
 	})
 
@@ -1236,7 +1236,7 @@ var _ = Describe("applySynchronizedConditionWithPatch", func() {
 						HaveField("Status", Equal(corev1.ConditionFalse)),
 						HaveField("Reason", Equal("ErrorReason")),
 						HaveField("Message", Equal("Error message")),
-						HaveField("Severity", Equal(machinev1beta1.ConditionSeverityError)),
+						HaveField("Severity", Equal(mapiv1beta1.ConditionSeverityError)),
 					))),
 			)
 		})
@@ -1262,7 +1262,7 @@ var _ = Describe("applySynchronizedConditionWithPatch", func() {
 						HaveField("Status", Equal(corev1.ConditionUnknown)),
 						HaveField("Reason", Equal("ProgressingToCreateCAPIInfraMachine")),
 						HaveField("Message", Equal("Progressing to synchronize MAPI Machine to CAPI")),
-						HaveField("Severity", Equal(machinev1beta1.ConditionSeverityInfo)),
+						HaveField("Severity", Equal(mapiv1beta1.ConditionSeverityInfo)),
 					))),
 			)
 		})
@@ -1288,7 +1288,7 @@ var _ = Describe("applySynchronizedConditionWithPatch", func() {
 						HaveField("Status", Equal(corev1.ConditionTrue)),
 						HaveField("Reason", Equal(consts.ReasonResourceSynchronized)),
 						HaveField("Message", Equal("Successfully synchronized MAPI Machine to CAPI")),
-						HaveField("Severity", Equal(machinev1beta1.ConditionSeverityNone)),
+						HaveField("Severity", Equal(mapiv1beta1.ConditionSeverityNone)),
 					))),
 			)
 		})
@@ -1303,9 +1303,9 @@ var _ = Describe("applySynchronizedConditionWithPatch", func() {
 })
 
 // awsProviderSpecFromMachine wraps AWSProviderSpecFromRawExtension for use with WithTransform.
-func awsProviderSpecFromMachine(mapiMachine *machinev1beta1.Machine) (machinev1beta1.AWSMachineProviderConfig, error) {
+func awsProviderSpecFromMachine(mapiMachine *mapiv1beta1.Machine) (mapiv1beta1.AWSMachineProviderConfig, error) {
 	if mapiMachine == nil {
-		return machinev1beta1.AWSMachineProviderConfig{}, nil
+		return mapiv1beta1.AWSMachineProviderConfig{}, nil
 	}
 
 	return mapi2capi.AWSProviderSpecFromRawExtension(mapiMachine.Spec.ProviderSpec.Value)

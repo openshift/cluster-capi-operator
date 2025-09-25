@@ -19,7 +19,7 @@ package mapi2capi
 import (
 	"fmt"
 
-	mapiv1 "github.com/openshift/api/machine/v1beta1"
+	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation/field"
@@ -113,7 +113,7 @@ func setMAPINodeLabelsToCAPINodeLabels(mapiNodeLabels map[string]string, capiMac
 }
 
 // setCAPILifecycleHookAnnotations sets the annotations that should be added to a CAPI Machine to represent the lifecycle hooks.
-func setCAPILifecycleHookAnnotations(hooks mapiv1.LifecycleHooks, capiMachine *clusterv1.Machine) {
+func setCAPILifecycleHookAnnotations(hooks mapiv1beta1.LifecycleHooks, capiMachine *clusterv1.Machine) {
 	lifecycleAnnotations := make(map[string]string)
 
 	for _, hook := range hooks.PreDrain {
@@ -134,7 +134,7 @@ func setCAPILifecycleHookAnnotations(hooks mapiv1.LifecycleHooks, capiMachine *c
 }
 
 // handleUnsupportedMachineFields checks for fields that are not supported by CAPI and returns a list of errors.
-func handleUnsupportedMachineFields(spec mapiv1.MachineSpec) field.ErrorList {
+func handleUnsupportedMachineFields(spec mapiv1beta1.MachineSpec) field.ErrorList {
 	var errs field.ErrorList
 
 	fldPath := field.NewPath("spec")
@@ -152,7 +152,7 @@ func handleUnsupportedMachineFields(spec mapiv1.MachineSpec) field.ErrorList {
 // handleUnsupportedMAPIObjectMetaFields checks for unsupported MAPI metadta fields and returns a list of errors
 // if any of them are currently set.
 // This is used to prevent usage of these fields in both the Machine and MachineSet specs.
-func handleUnsupportedMAPIObjectMetaFields(fldPath *field.Path, objectMeta mapiv1.ObjectMeta) field.ErrorList {
+func handleUnsupportedMAPIObjectMetaFields(fldPath *field.Path, objectMeta mapiv1beta1.ObjectMeta) field.ErrorList {
 	var errs field.ErrorList
 
 	// ObjectMeta related fields should never get converted (aside from labels and annotations).
