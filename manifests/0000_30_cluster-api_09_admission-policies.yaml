@@ -187,6 +187,55 @@ data:
       policyName: openshift-cluster-api-prevent-setting-of-capi-fields-unsupported-by-mapi
       validationActions:
           - Deny
+    ---
+    apiVersion: admissionregistration.k8s.io/v1
+    kind: ValidatingAdmissionPolicy
+    metadata:
+      name: openshift-only-create-mapi-machine-if-authoritative-api-capi
+    spec:
+      failurePolicy: Fail
+      
+      paramKind:
+        apiVersion: cluster.x-k8s.io/v1beta1
+        kind: Machine
+
+      matchConstraints:
+        resourceRules:
+          - apiGroups: ["machine.openshift.io"]
+            apiVersions: ["*"]
+            operations: ["CREATE"]
+            resources: ["machines"]
+      
+      # Requests must satisfy every matchCondition to reach the validations
+      matchConditions:
+        - name: check-param-match
+          expression: 'object.metadata.name == params.metadata.name'
+
+      # All validations must evaluate to true
+      validations:
+      - expression: 'object.spec.authoritativeAPI == "ClusterAPI"'
+        messageExpression: "'Can\\'t create Machine API Machine ' + object.metadata.name + ' with authoritativeAPI=' + object.spec.?authoritativeAPI.orValue('<unset>') + ' because a Cluster API Machine with the same name already exists.'"
+    ---
+    apiVersion: admissionregistration.k8s.io/v1
+    kind: ValidatingAdmissionPolicyBinding
+    metadata:
+      name: openshift-only-create-mapi-machine-if-authoritative-api-capi
+    spec:
+      matchResources:
+        namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: openshift-machine-api
+      paramRef:
+        namespace: openshift-cluster-api
+        # We 'Allow' here as we don't want to block MAPI Machine 
+        # functionality when no CAPI machine (param) exists. 
+        # This might happen when the synchronisation controller first
+        # is installed or when an unmigrateable machine is encountered.
+        parameterNotFoundAction: Allow
+        selector: {}
+      policyName: openshift-only-create-mapi-machine-if-authoritative-api-capi
+      validationActions:
+          - Deny
 ---
 apiVersion: v1
 kind: ConfigMap
