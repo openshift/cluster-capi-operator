@@ -29,6 +29,7 @@ import (
 
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility/objectvalidation"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 
 	capiflags "sigs.k8s.io/cluster-api/util/flags"
@@ -119,15 +120,16 @@ func main() {
 		os.Exit(1)
 	}
 
-	crdCompatibilityReconciler := crdcompatibility.NewCRDCompatibilityReconciler(mgr.GetClient())
+	ctx := ctrl.SetupSignalHandler()
 
-	// Setup health checks
-	if err := mgr.AddHealthzCheck("health", healthz.Ping); err != nil {
-		klog.Error(err, "unable to set up health check")
+	objectValidator := objectvalidation.NewObjectValidator()
+	// Setup the objectvalidation controller and webhook
+	if err := objectValidator.SetupWithManager(ctx, mgr); err != nil {
+		klog.Error(err, "unable to create controller", "controller", "CRDCompatibility")
 		os.Exit(1)
 	}
 
-	ctx := ctrl.SetupSignalHandler()
+	crdCompatibilityReconciler := crdcompatibility.NewCRDCompatibilityReconciler(mgr.GetClient())
 
 	// Setup the CRD compatibility controller
 	if err := crdCompatibilityReconciler.SetupWithManager(ctx, mgr); err != nil {
