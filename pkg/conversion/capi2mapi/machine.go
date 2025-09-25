@@ -38,7 +38,11 @@ func fromCAPIMachineToMAPIMachine(capiMachine *clusterv1.Machine) (*mapiv1.Machi
 	errs := field.ErrorList{}
 
 	lifecycleHooks, capiMachineNonHookAnnotations := convertCAPILifecycleHookAnnotationsToMAPILifecycleHooksAndAnnotations(capiMachine.Annotations)
+
 	mapiMachineStatus, machineStatusErrs := convertCAPIMachineStatusToMAPI(capiMachine.Status)
+	if len(machineStatusErrs) > 0 {
+		errs = append(errs, machineStatusErrs...)
+	}
 
 	mapiMachine := &mapiv1.Machine{
 		ObjectMeta: metav1.ObjectMeta{
@@ -69,10 +73,6 @@ func fromCAPIMachineToMAPIMachine(capiMachine *clusterv1.Machine) (*mapiv1.Machi
 	// capiMachine.Spec.Bootstrap.ConfigRef - Ignore as we use DataSecretName for the MAPI side.
 	// capiMachine.Spec.InfrastructureRef - Ignore as this is the split between 1 to 2 resources from MAPI to CAPI.
 	// capiMachine.Spec.FailureDomain - Ignore because we use this to populate the providerSpec.
-
-	if len(machineStatusErrs) > 0 {
-		errs = append(errs, machineStatusErrs...)
-	}
 
 	if capiMachine.Spec.Version != nil {
 		// TODO(OCPCLOUD-2714): We should prevent this using a VAP until and unless we need to support the field.

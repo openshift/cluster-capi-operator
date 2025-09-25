@@ -1591,13 +1591,12 @@ func (r *MachineSyncReconciler) ensureMAPIMachineStatusUpdated(ctx context.Conte
 func (r *MachineSyncReconciler) ensureMAPIMachineSpecUpdated(ctx context.Context, existingMAPIMachine *machinev1beta1.Machine, mapiMachinesDiff map[string]any, updatedOrCreatedMAPIMachine *machinev1beta1.Machine) (bool, error) {
 	logger := log.FromContext(ctx)
 
-	// If there are no changes, return early.
-	if len(mapiMachinesDiff) == 0 {
-		logger.Info("No changes detected in Machine API machine")
+	// If there are no spec changes, return early.
+	if !hasSpecOrMetadataOrProviderSpecChanges(mapiMachinesDiff) {
 		return false, nil
 	}
 
-	logger.Info("Changes detected, updating Machine API machine", "diff", fmt.Sprintf("%+v", mapiMachinesDiff))
+	logger.Info("Changes detected for Machine API machine. Updating it", "diff", fmt.Sprintf("%+v", mapiMachinesDiff))
 
 	if err := r.Update(ctx, updatedOrCreatedMAPIMachine); err != nil {
 		logger.Error(err, "Failed to update Machine API machine")
@@ -1617,31 +1616,26 @@ func (r *MachineSyncReconciler) ensureMAPIMachineSpecUpdated(ctx context.Context
 // setChangedCAPIMachineStatusFields sets the updated fields in the CAPI machine status.
 func setChangedCAPIMachineStatusFields(existingCAPIMachine, convertedCAPIMachine *clusterv1.Machine) {
 	// convertedCAPIMachine holds the computed and desired status changes converted from the source MAPI machine, so apply them to the existing existingCAPIMachine.
-	existingCAPIMachine.Status.NodeRef = convertedCAPIMachine.Status.NodeRef
-	existingCAPIMachine.Status.NodeInfo = convertedCAPIMachine.Status.NodeInfo
-	existingCAPIMachine.Status.LastUpdated = convertedCAPIMachine.Status.LastUpdated
-	existingCAPIMachine.Status.FailureReason = convertedCAPIMachine.Status.FailureReason
-	existingCAPIMachine.Status.FailureMessage = convertedCAPIMachine.Status.FailureMessage
-	existingCAPIMachine.Status.Addresses = convertedCAPIMachine.Status.Addresses
-	existingCAPIMachine.Status.Phase = convertedCAPIMachine.Status.Phase
-	existingCAPIMachine.Status.BootstrapReady = convertedCAPIMachine.Status.BootstrapReady
-	existingCAPIMachine.Status.InfrastructureReady = convertedCAPIMachine.Status.InfrastructureReady
-
+	// Merge the v1beta1 conditions.
 	for i := range convertedCAPIMachine.Status.Conditions {
 		conditions.Set(existingCAPIMachine, &convertedCAPIMachine.Status.Conditions[i])
 	}
 
-	// Set the changed v1beta2 fields.
-	switch {
-	case convertedCAPIMachine.Status.V1Beta2 == nil:
-		existingCAPIMachine.Status.V1Beta2 = nil
-	case existingCAPIMachine.Status.V1Beta2 == nil:
-		existingCAPIMachine.Status.V1Beta2 = convertedCAPIMachine.Status.V1Beta2
-	default:
+	// Copy them back to the convertedCAPIMachine.
+	convertedCAPIMachine.Status.Conditions = existingCAPIMachine.Status.Conditions
+
+	// Merge the v1beta2 conditions.
+	if convertedCAPIMachine.Status.V1Beta2 != nil && existingCAPIMachine.Status.V1Beta2 != nil {
 		for i := range convertedCAPIMachine.Status.V1Beta2.Conditions {
 			conditionsv1beta2.Set(existingCAPIMachine, convertedCAPIMachine.Status.V1Beta2.Conditions[i])
 		}
+
+		// Copy them back to the convertedCAPIMachine.
+		convertedCAPIMachine.Status.V1Beta2.Conditions = existingCAPIMachine.Status.V1Beta2.Conditions
 	}
+
+	// Finally overwrite the entire existingCAPIMachine status with the convertedCAPIMachine status.
+	existingCAPIMachine.Status = convertedCAPIMachine.Status
 }
 
 // setChangedMAPIMachineStatusFields sets the updated fields in the MAPI machine status.

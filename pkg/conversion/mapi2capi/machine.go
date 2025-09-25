@@ -23,6 +23,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation/field"
+	"k8s.io/utils/ptr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	capierrors "sigs.k8s.io/cluster-api/errors"
 )
@@ -95,7 +96,10 @@ func convertMAPIMachineToCAPIMachineStatus(mapiMachine *mapiv1beta1.Machine) clu
 		FailureMessage:      convertMAPIMachineErrorMessageToCAPIFailureMessage(mapiMachine.Status.ErrorMessage),
 		InfrastructureReady: deriveCAPIInfrastructureReadyFromMAPI(mapiMachine),
 		BootstrapReady:      deriveCAPIBootstrapReadyFromMAPI(mapiMachine),
-		NodeInfo:            deriveCAPINodeInfoFromMAPI(mapiMachine), // TODO: finish off internal implementation as needed.
+
+		// MAPI doesn't provide node system info, so we return nil
+		// This field is typically populated by the node controller in CAPI
+		NodeInfo: nil,
 
 		// Deletion: not present on the MAPI Machine status. // TODO: this is tied to the node draining and volume detaching, implement once those features are implemented in MAPI.
 
@@ -141,12 +145,8 @@ func convertMAPIMachinePhaseToCAPI(mapiPhase *string) string {
 	// In CAPI can be one of: Pending;Provisioning;Provisioned;Running;Deleting;Deleted;Failed;Unknown
 	// In MAPI can be one of: Provisioning;Provisioned;Running;Deleting;Failed (missing Pending,Unknown)
 	// This is fine when going from MAPI to CAPI, but needs to be handled when going from CAPI to MAPI.
-	if mapiPhase == nil {
-		return ""
-	}
-
 	// MAPI and CAPI phases are compatible, but we need to handle the pointer vs string difference
-	return *mapiPhase
+	return ptr.Deref(mapiPhase, "")
 }
 
 // convertMAPIMachineErrorReasonToCAPIFailureReason converts MAPI MachineStatusError to CAPI MachineStatusError.
@@ -155,9 +155,7 @@ func convertMAPIMachineErrorReasonToCAPIFailureReason(mapiErrorReason *mapiv1bet
 		return nil
 	}
 
-	capiErrorReason := capierrors.MachineStatusError(*mapiErrorReason)
-
-	return &capiErrorReason
+	return ptr.To(capierrors.MachineStatusError(*mapiErrorReason))
 }
 
 // convertMAPIMachineErrorMessageToCAPIFailureMessage converts MAPI MachineStatusError to CAPI MachineStatusError.
@@ -166,9 +164,7 @@ func convertMAPIMachineErrorMessageToCAPIFailureMessage(mapiErrorMessage *string
 		return nil
 	}
 
-	capiErrorMessage := *mapiErrorMessage
-
-	return &capiErrorMessage
+	return ptr.To(*mapiErrorMessage)
 }
 
 // deriveCAPIBootstrapReadyFromMAPI derives the CAPI BootstrapReady field from MAPI machine state.
@@ -192,13 +188,6 @@ func deriveCAPIInfrastructureReadyFromMAPI(mapiMachine *mapiv1beta1.Machine) boo
 	}
 
 	return false
-}
-
-// deriveCAPINodeInfoFromMAPI derives the CAPI NodeInfo field from MAPI machine state.
-func deriveCAPINodeInfoFromMAPI(mapiMachine *mapiv1beta1.Machine) *corev1.NodeSystemInfo {
-	// MAPI doesn't provide node system info, so we return nil
-	// This field is typically populated by the node controller in CAPI
-	return nil
 }
 
 // convertMAPIMachineStatusToCAPIMachineV1Beta2Status converts a MAPI Machine to CAPI MachineV1Beta2Status.
@@ -399,7 +388,9 @@ func convertMAPIMachineConditionsToCAPIMachineV1Beta2StatusConditions(mapiMachin
 
 	// NodeHealthy condition
 	// MachineNodeHealthyV1Beta2Condition is true if the Machine's Node is ready and it does not report MemoryPressure, DiskPressure and PIDPressure.
-	// TODO: Do we really need this? It would require significant hoops to get the Node object everytime and pipe it down to here?
+	// We don't ned this at the moment, and tt require significant hoops to get the Node object everytime and pipe it down to here.
+	// Do not implement this for now, rationale:
+	// https://github.com/openshift/cluster-capi-operator/pull/365#discussion_r2378857251
 
 	// UpToDate condition
 	// We should never set this condition in CAPI because we don't use MachineDeployments on the MAPI side

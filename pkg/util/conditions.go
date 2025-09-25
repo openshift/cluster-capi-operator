@@ -155,6 +155,11 @@ func SetMAPICondition(conditions []machinev1beta1.Condition, condition *machinev
 		}
 	}
 
+	// Ensure LastTransitionTime is set also for new conditions.
+	if condition.LastTransitionTime.IsZero() {
+		condition.LastTransitionTime = metav1.NewTime(time.Now().UTC().Truncate(time.Second))
+	}
+
 	// Condition doesn't exist, add it
 	return append(conditions, *condition)
 }
