@@ -36,6 +36,11 @@ const (
 func fromMAPIMachineToCAPIMachine(mapiMachine *mapiv1beta1.Machine, apiVersion, kind string) (*clusterv1.Machine, field.ErrorList) {
 	var errs field.ErrorList
 
+	capiMachineStatus, capiMachineStatusErrs := convertMAPIMachineToCAPIMachineStatus(mapiMachine)
+	if len(capiMachineStatusErrs) > 0 {
+		errs = append(errs, capiMachineStatusErrs...)
+	}
+
 	capiMachine := &clusterv1.Machine{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            mapiMachine.Name,
@@ -63,7 +68,7 @@ func fromMAPIMachineToCAPIMachine(mapiMachine *mapiv1beta1.Machine, apiVersion, 
 			// NodeDeletionTimeout:     // TODO(OCPCLOUD-2715): not present on the MAPI API, we should implement them for feature parity.
 			NodeDeletionTimeout: &metav1.Duration{Duration: time.Second * 10}, // Hardcode it to the CAPI default value until this is implemented in MAPI.
 		},
-		Status: convertMAPIMachineToCAPIMachineStatus(mapiMachine),
+		Status: capiMachineStatus,
 	}
 
 	// Node labels in MAPI are stored under .spec.metadata.labels and then propagated down to the node,
@@ -84,11 +89,18 @@ func fromMAPIMachineToCAPIMachine(mapiMachine *mapiv1beta1.Machine, apiVersion, 
 }
 
 // convertMAPIMachineToCAPIMachineStatus converts a MAPI Machine to CAPI MachineStatus.
-func convertMAPIMachineToCAPIMachineStatus(mapiMachine *mapiv1beta1.Machine) clusterv1.MachineStatus {
+func convertMAPIMachineToCAPIMachineStatus(mapiMachine *mapiv1beta1.Machine) (clusterv1.MachineStatus, field.ErrorList) {
+	var errs field.ErrorList
+
+	addresses, addressesErr := convertMAPIMachineAddressesToCAPI(mapiMachine.Status.Addresses)
+	if len(addressesErr) > 0 {
+		errs = append(errs, addressesErr...)
+	}
+
 	capiStatus := clusterv1.MachineStatus{
 		NodeRef:             mapiMachine.Status.NodeRef,
 		LastUpdated:         mapiMachine.Status.LastUpdated,
-		Addresses:           convertMAPIMachineAddressesToCAPI(mapiMachine.Status.Addresses),
+		Addresses:           addresses,
 		Phase:               convertMAPIMachinePhaseToCAPI(mapiMachine.Status.Phase),
 		Conditions:          convertMAPIMachineConditionsToCAPIMachineConditions(mapiMachine),
 		V1Beta2:             convertMAPIMachineStatusToCAPIMachineV1Beta2Status(mapiMachine),
@@ -115,28 +127,47 @@ func convertMAPIMachineToCAPIMachineStatus(mapiMachine *mapiv1beta1.Machine) clu
 	// - AuthoritativeAPI: this is part of the conversion mechanism, it is not used in CAPI.
 	// - SynchronizedGeneration: this is part of the conversion mechanism, it is not used in CAPI.
 
-	return capiStatus
+	return capiStatus, errs
 }
 
 // convertMAPIMachineAddressesToCAPI converts MAPI machine addresses to CAPI format.
-func convertMAPIMachineAddressesToCAPI(mapiAddresses []corev1.NodeAddress) clusterv1.MachineAddresses {
+func convertMAPIMachineAddressesToCAPI(mapiAddresses []corev1.NodeAddress) (clusterv1.MachineAddresses, field.ErrorList) {
+	if mapiAddresses == nil {
+		return nil, nil
+	}
+
+	errs := field.ErrorList{}
+	capiAddresses := make(clusterv1.MachineAddresses, 0, len(mapiAddresses))
+
 	// Addresses are slightly different between MAPI/CAPI.
 	// In CAPI the address type can be: Hostname, ExternalIP, InternalIP, ExternalDNS or InternalDNS
 	// In MAPI the address type can be: Hostname, ExternalIP, InternalIP (missing ExternalDNS and InternalDNS)
 	// This is fine when going from MAPI to CAPI, but needs to be handled when going from CAPI to MAPI.
-	if mapiAddresses == nil {
-		return nil
-	}
+	for _, addr := range mapiAddresses {
+		var t clusterv1.MachineAddressType
 
-	capiAddresses := make(clusterv1.MachineAddresses, len(mapiAddresses))
-	for i, addr := range mapiAddresses {
-		capiAddresses[i] = clusterv1.MachineAddress{
-			Type:    clusterv1.MachineAddressType(addr.Type),
-			Address: addr.Address,
+		switch addr.Type {
+		case corev1.NodeHostName:
+			t = clusterv1.MachineHostName
+		case corev1.NodeExternalIP:
+			t = clusterv1.MachineExternalIP
+		case corev1.NodeInternalIP:
+			t = clusterv1.MachineInternalIP
+		case corev1.NodeExternalDNS:
+			t = clusterv1.MachineExternalDNS
+		case corev1.NodeInternalDNS:
+			t = clusterv1.MachineInternalDNS
+		default:
+			errs = append(errs, field.Invalid(field.NewPath("status", "addresses"), string(addr.Type), string(addr.Type)+" unrecognized address type"))
 		}
+
+		capiAddresses = append(capiAddresses, clusterv1.MachineAddress{
+			Type:    t,
+			Address: addr.Address,
+		})
 	}
 
-	return capiAddresses
+	return capiAddresses, errs
 }
 
 // convertMAPIMachinePhaseToCAPI converts MAPI machine phase to CAPI format.

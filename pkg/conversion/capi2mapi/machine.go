@@ -145,27 +145,26 @@ func convertCAPIMachineStatusToMAPI(capiStatus clusterv1.MachineStatus) (mapiv1.
 
 // convertCAPIMachineAddressesToMAPI converts CAPI machine addresses to MAPI format.
 func convertCAPIMachineAddressesToMAPI(capiAddresses clusterv1.MachineAddresses) ([]corev1.NodeAddress, field.ErrorList) {
-	// Addresses are slightly different between MAPI/CAPI.
-	// In CAPI the address type can be: Hostname, ExternalIP, InternalIP, ExternalDNS or InternalDNS
-	// In MAPI the address type can be: Hostname, ExternalIP, InternalIP (missing ExternalDNS and InternalDNS)
 	if capiAddresses == nil {
 		return nil, nil
 	}
 
 	errs := field.ErrorList{}
-	mapiAddresses := make([]corev1.NodeAddress, len(capiAddresses))
+	mapiAddresses := make([]corev1.NodeAddress, 0, len(capiAddresses))
 
-	for i, addr := range capiAddresses {
-		// Convert the CAPI address type to the MAPI address type.
+	// Addresses are slightly different between MAPI/CAPI.
+	for _, addr := range capiAddresses {
 		switch addr.Type {
-		case clusterv1.MachineHostName, clusterv1.MachineExternalIP, clusterv1.MachineInternalIP:
-			mapiAddresses[i] = corev1.NodeAddress{
-				Type:    corev1.NodeAddressType(addr.Type),
-				Address: addr.Address,
-			}
-		case clusterv1.MachineExternalDNS, clusterv1.MachineInternalDNS:
-			// We don't support these address types in MAPI at the moment, don't error for now as CAPI machines get created with these address types by default.
-			// TODO: Should we support these two address types in MAPI?
+		case clusterv1.MachineHostName:
+			mapiAddresses = append(mapiAddresses, corev1.NodeAddress{Type: corev1.NodeHostName, Address: addr.Address})
+		case clusterv1.MachineExternalIP:
+			mapiAddresses = append(mapiAddresses, corev1.NodeAddress{Type: corev1.NodeExternalIP, Address: addr.Address})
+		case clusterv1.MachineInternalIP:
+			mapiAddresses = append(mapiAddresses, corev1.NodeAddress{Type: corev1.NodeInternalIP, Address: addr.Address})
+		case clusterv1.MachineExternalDNS:
+			mapiAddresses = append(mapiAddresses, corev1.NodeAddress{Type: corev1.NodeExternalDNS, Address: addr.Address})
+		case clusterv1.MachineInternalDNS:
+			mapiAddresses = append(mapiAddresses, corev1.NodeAddress{Type: corev1.NodeInternalDNS, Address: addr.Address})
 		default:
 			errs = append(errs, field.Invalid(field.NewPath("status", "addresses"), string(addr.Type), string(addr.Type)+" unrecognized address type"))
 		}

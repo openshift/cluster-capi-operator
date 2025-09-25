@@ -764,11 +764,13 @@ func fuzzCAPIMachineSetSpecDeletePolicy(deletePolicy *string, c randfill.Continu
 }
 
 // fuzzMAPIMachineStatusAddress fuzzes a single MAPI machine status address with valid address types and randomized IP addresses.
+//
+//nolint:dupl
 func fuzzMAPIMachineStatusAddress(address *corev1.NodeAddress, c randfill.Continue) {
 	// Fuzz the address type to one of the valid types for MAPI machines
 	// Based on the conversion code, MAPI supports: Hostname, ExternalIP, InternalIP
 	// (ExternalDNS and InternalDNS are not supported in MAPI conversion)
-	switch c.Int31n(3) {
+	switch c.Int31n(5) {
 	case 0:
 		address.Type = corev1.NodeHostName
 		// Generate a random hostname
@@ -798,6 +800,12 @@ func fuzzMAPIMachineStatusAddress(address *corev1.NodeAddress, c randfill.Contin
 			address.Address = fmt.Sprintf("192.168.%d.%d",
 				c.Int31n(256), c.Int31n(254)+1)
 		}
+	case 3:
+		address.Type = corev1.NodeExternalDNS
+		address.Address = fmt.Sprintf("node-%d.example.com", c.Int31n(1000))
+	case 4:
+		address.Type = corev1.NodeInternalDNS
+		address.Address = fmt.Sprintf("node-%d.example.com", c.Int31n(1000))
 	}
 }
 
@@ -872,6 +880,8 @@ func fuzzCAPIMachineStatusPhase(phase *string, c randfill.Continue) {
 }
 
 // fuzzCAPIMachineStatusAddress fuzzes a single CAPI machine status address with valid address types and randomized IP addresses.
+//
+//nolint:dupl
 func fuzzCAPIMachineStatusAddress(address *clusterv1.MachineAddress, c randfill.Continue) {
 	// Fuzz the address type to one of the valid types for CAPI machines
 	// Based on the conversion code, CAPI supports: Hostname, ExternalIP, InternalIP
