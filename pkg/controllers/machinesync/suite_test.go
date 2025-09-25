@@ -33,7 +33,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
-	"k8s.io/klog/v2/textlogger"
+	ctrl "sigs.k8s.io/controller-runtime"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
@@ -64,7 +64,17 @@ func TestAPIs(t *testing.T) {
 var _ = BeforeSuite(func() {
 	klog.SetOutput(GinkgoWriter)
 
-	logf.SetLogger(textlogger.NewLogger(textlogger.NewConfig()))
+	// // Create a new flag set
+	// fs := flag.NewFlagSet("klog", flag.ContinueOnError)
+	// klog.InitFlags(fs)
+
+	// // Set the V level flag
+	// if err := fs.Set("v", "4"); err != nil {
+	// 	panic(err)
+	// }
+
+	logf.SetLogger(GinkgoLogr)
+	ctrl.SetLogger(GinkgoLogr)
 
 	By("bootstrapping test environment")
 	var err error
