@@ -48,7 +48,7 @@ func (r *InfraClusterController) ensureIBMPowerVSCluster(ctx context.Context, lo
 	target := &ibmpowervsv1.IBMPowerVSCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      r.Infra.Status.InfrastructureName,
-			Namespace: defaultCAPINamespace,
+			Namespace: r.CAPINamespace,
 		}}
 
 	// Checking whether InfraCluster object exists. If it doesn't, create it.
@@ -77,7 +77,7 @@ func (r *InfraClusterController) ensureIBMPowerVSCluster(ctx context.Context, lo
 
 	// Derive service instance and network from machine spec
 
-	machineSpec, err := getPowerVSMAPIProviderSpec(ctx, r.Client)
+	machineSpec, err := r.getPowerVSMAPIProviderSpec(ctx, r.Client)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get PowerVS MAPI ProviderSpec: %w", err)
 	}
@@ -95,7 +95,7 @@ func (r *InfraClusterController) ensureIBMPowerVSCluster(ctx context.Context, lo
 	target = &ibmpowervsv1.IBMPowerVSCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      r.Infra.Status.InfrastructureName,
-			Namespace: defaultCAPINamespace,
+			Namespace: r.CAPINamespace,
 			// The ManagedBy Annotation is set so CAPI infra providers ignore the InfraCluster object,
 			// as that's managed externally, in this case by this controller.
 			Annotations: map[string]string{
@@ -122,8 +122,8 @@ func (r *InfraClusterController) ensureIBMPowerVSCluster(ctx context.Context, lo
 }
 
 // getPowerVSMAPIProviderSpec returns a PowerVS Machine ProviderSpec from the the cluster.
-func getPowerVSMAPIProviderSpec(ctx context.Context, cl client.Client) (*mapiv1.PowerVSMachineProviderConfig, error) {
-	rawProviderSpec, err := getRawMAPIProviderSpec(ctx, cl)
+func (r *InfraClusterController) getPowerVSMAPIProviderSpec(ctx context.Context, cl client.Client) (*mapiv1.PowerVSMachineProviderConfig, error) {
+	rawProviderSpec, err := r.getRawMAPIProviderSpec(ctx, cl)
 	if err != nil {
 		return nil, fmt.Errorf("unable to obtain MAPI ProviderSpec: %w", err)
 	}
