@@ -735,7 +735,7 @@ func (r *MachineSyncReconciler) ensureCAPIMachine(ctx context.Context, sourceMAP
 	return true, nil
 }
 
-// ensureCAPIMachineSpecUpdated updates the CAPI machine if changes are detected.
+// ensureCAPIMachineSpecUpdated updates the CAPI machine if changes are detected to the spec, metadata or provider spec.
 func (r *MachineSyncReconciler) ensureCAPIMachineSpecUpdated(ctx context.Context, mapiMachine *machinev1beta1.Machine, capiMachinesDiff map[string]any, updatedOrCreatedCAPIMachine *clusterv1.Machine) (bool, error) {
 	logger := log.FromContext(ctx)
 
@@ -761,7 +761,7 @@ func (r *MachineSyncReconciler) ensureCAPIMachineSpecUpdated(ctx context.Context
 	return true, nil
 }
 
-// createOrUpdateCAPIMachine creates a CAPI machine from a MAPI one, or updates if it exists and it is out of date.
+// createOrUpdateCAPIMachine creates or updates (if existing but out of date) a CAPI machine from a convertedCAPIMachine (CAPI machine object converted from MAPI).
 //
 //nolint:unparam
 func (r *MachineSyncReconciler) createOrUpdateCAPIMachine(ctx context.Context, sourceMAPIMachine *machinev1beta1.Machine, existingCAPIMachine *clusterv1.Machine, convertedCAPIMachine *clusterv1.Machine) (ctrl.Result, error) {
@@ -771,7 +771,7 @@ func (r *MachineSyncReconciler) createOrUpdateCAPIMachine(ctx context.Context, s
 	if created, err := r.ensureCAPIMachine(ctx, sourceMAPIMachine, existingCAPIMachine, convertedCAPIMachine); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to ensure CAPI machine: %w", err)
 	} else if created {
-		// If the CAPI machine was created here, requeue to allow for the change to be propagated.
+		// The CAPI machine was created here, return early to allow for the change to be propagated.
 		return ctrl.Result{}, nil
 	}
 	// There already is an existing CAPI machine, work out if it needs updating.
@@ -803,23 +803,21 @@ func (r *MachineSyncReconciler) createOrUpdateCAPIMachine(ctx context.Context, s
 	return ctrl.Result{}, nil
 }
 
-// createOrUpdateMAPIMachine creates a MAPI machine from a CAPI one, or updates
-// if it exists and it is out of date.
+// createOrUpdateMAPIMachine creates or updates (if existing but out of date) a MAPI machine from a convertedMAPIMachine (MAPI machine object converted from CAPI).
 //
 //nolint:unparam
 func (r *MachineSyncReconciler) createOrUpdateMAPIMachine(ctx context.Context, existingMAPIMachine *machinev1beta1.Machine, convertedMAPIMachine *machinev1beta1.Machine) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
-	// If there is no existing CAPI machine, create a new one.
+	// If there is no existing MAPI machine, create a new one.
 	if created, err := r.ensureMAPIMachine(ctx, existingMAPIMachine, convertedMAPIMachine); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to ensure CAPI machine: %w", err)
 	} else if created {
-		// If the CAPI machine set was created,
-		// return early to allow for the change to be propagated.
+		// The MAPI machine was created here, return early to allow for the change to be propagated.
 		return ctrl.Result{}, nil
 	}
 
-	// If there is an existing MAPI machine, work out if it needs updating.
+	// There already is an existing MAPI machine, work out if it needs updating.
 
 	// Compare the existing MAPI machine with the converted MAPI machine to check for changes.
 	mapiMachinesDiff, err := compareMAPIMachines(existingMAPIMachine, convertedMAPIMachine)
@@ -827,16 +825,16 @@ func (r *MachineSyncReconciler) createOrUpdateMAPIMachine(ctx context.Context, e
 		return ctrl.Result{}, fmt.Errorf("unable to compare Machine API machines: %w", err)
 	}
 
-	// Make a deep copy of the converted MAPI machine set to avoid modifying the original.
+	// Make a deep copy of the converted MAPI machine to avoid modifying the original.
 	updatedOrCreatedMAPIMachine := convertedMAPIMachine.DeepCopy()
 
-	// If there are spec changes, update the CAPI machine set.
+	// If there are spec changes, update the MAPI machine.
 	specUpdated, err := r.ensureMAPIMachineSpecUpdated(ctx, existingMAPIMachine, mapiMachinesDiff, updatedOrCreatedMAPIMachine)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to ensure Machine API machine spec updated: %w", err)
 	}
 
-	// Update MAPI machine status if needed
+	// Update MAPI machine status if needed.
 	statusUpdated, err := r.ensureMAPIMachineStatusUpdated(ctx, existingMAPIMachine, convertedMAPIMachine, mapiMachinesDiff, specUpdated)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to update Machine API machine status: %w", err)
@@ -1545,7 +1543,7 @@ func (r *MachineSyncReconciler) ensureMAPIMachine(ctx context.Context, existingM
 	return true, nil
 }
 
-// ensureMAPIMachineStatusUpdated updates the MAPI machine status if changes are detected and conditions are met.
+// ensureMAPIMachineStatusUpdated updates the MAPI machine status if changes are detected.
 func (r *MachineSyncReconciler) ensureMAPIMachineStatusUpdated(ctx context.Context, existingMAPIMachine *machinev1beta1.Machine, convertedMAPIMachine *machinev1beta1.Machine, mapiMachinesDiff map[string]any, specUpdated bool) (bool, error) {
 	logger := log.FromContext(ctx)
 
@@ -1618,7 +1616,7 @@ func (r *MachineSyncReconciler) ensureMAPIMachineSpecUpdated(ctx context.Context
 
 // setChangedCAPIMachineStatusFields sets the updated fields in the CAPI machine status.
 func setChangedCAPIMachineStatusFields(existingCAPIMachine, convertedCAPIMachine *clusterv1.Machine) {
-	// convertedCAPIMachine holds the computed and desired status changes, so apply them to the existing existingCAPIMachine.
+	// convertedCAPIMachine holds the computed and desired status changes converted from the source MAPI machine, so apply them to the existing existingCAPIMachine.
 	existingCAPIMachine.Status.NodeRef = convertedCAPIMachine.Status.NodeRef
 	existingCAPIMachine.Status.NodeInfo = convertedCAPIMachine.Status.NodeInfo
 	existingCAPIMachine.Status.LastUpdated = convertedCAPIMachine.Status.LastUpdated
