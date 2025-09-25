@@ -135,10 +135,9 @@ var _ = Describe("capi2mapi Machine Status Conversion", func() {
 
 			Expect(mapiStatus.NodeRef).To(Equal(nodeRef))
 			Expect(mapiStatus.LastUpdated).To(Equal(lastUpdated))
-			Expect(mapiStatus.Addresses).To(SatisfyAll(
-				HaveLen(2),
-				ContainElement(SatisfyAll(HaveField("Type", corev1.NodeInternalIP), HaveField("Address", "10.0.0.1"))),
-				ContainElement(SatisfyAll(HaveField("Type", corev1.NodeExternalIP), HaveField("Address", "203.0.113.1"))),
+			Expect(mapiStatus.Addresses).To(ConsistOf(
+				SatisfyAll(HaveField("Type", corev1.NodeInternalIP), HaveField("Address", "10.0.0.1")),
+				SatisfyAll(HaveField("Type", corev1.NodeExternalIP), HaveField("Address", "203.0.113.1")),
 			))
 
 			Expect(*mapiStatus.Phase).To(BeEquivalentTo(mapiv1.PhaseRunning))
