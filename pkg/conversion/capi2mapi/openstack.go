@@ -22,7 +22,7 @@ import (
 	"strings"
 
 	mapiv1alpha1 "github.com/openshift/api/machine/v1alpha1"
-	mapiv1 "github.com/openshift/api/machine/v1beta1"
+	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -179,7 +179,7 @@ func (m machineAndOpenStackMachineAndOpenStackCluster) toProviderSpec() (*mapiv1
 }
 
 // ToMachine converts a capi2mapi MachineAndOpenStackMachineTemplate into a MAPI Machine.
-func (m machineAndOpenStackMachineAndOpenStackCluster) ToMachine() (*mapiv1.Machine, []string, error) {
+func (m machineAndOpenStackMachineAndOpenStackCluster) ToMachine() (*mapiv1beta1.Machine, []string, error) {
 	if m.machine == nil || m.openstackMachine == nil || m.openstackCluster == nil {
 		return nil, nil, errCAPIMachineOpenStackMachineOpenStackClusterCannotBeNil
 	}
@@ -232,7 +232,7 @@ func openstackRawExtensionFromProviderSpec(spec *mapiv1alpha1.OpenstackProviderS
 }
 
 // ToMachineSet converts a capi2mapi MachineAndOpenStackMachineTemplate into a MAPI MachineSet.
-func (m machineSetAndOpenStackMachineTemplateAndOpenStackCluster) ToMachineSet() (*mapiv1.MachineSet, []string, error) { //nolint:dupl
+func (m machineSetAndOpenStackMachineTemplateAndOpenStackCluster) ToMachineSet() (*mapiv1beta1.MachineSet, []string, error) { //nolint:dupl
 	if m.machineSet == nil || m.template == nil || m.openstackCluster == nil || m.machineAndOpenStackMachineAndOpenStackCluster == nil {
 		return nil, nil, errCAPIMachineSetOpenStackMachineTemplateOpenStackClusterCannotBeNil
 	}

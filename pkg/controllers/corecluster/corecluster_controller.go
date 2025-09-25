@@ -34,7 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/log"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
@@ -82,7 +82,7 @@ func (r *CoreClusterController) SetupWithManager(mgr ctrl.Manager) error {
 
 // Reconcile reconciles the core cluster object for the openshift-cluster-api namespace.
 func (r *CoreClusterController) Reconcile(ctx context.Context, req reconcile.Request) (ctrl.Result, error) {
-	logger := log.FromContext(ctx).WithName(controllerName)
+	logger := logf.FromContext(ctx).WithName(controllerName)
 	logger.Info("Reconciling core cluster")
 	defer logger.Info("Finished reconciling core cluster")
 

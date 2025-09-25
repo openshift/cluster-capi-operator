@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"time"
 
-	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
+	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -114,7 +114,7 @@ func getTime(data map[string]interface{}, key string) metav1.Time {
 }
 
 // GetMAPIMachineSetCondition retrieves a specific condition from a list of MAPI MachineSet conditions.
-func GetMAPIMachineSetCondition(conditions []machinev1beta1.Condition, conditionType string) *machinev1beta1.Condition {
+func GetMAPIMachineSetCondition(conditions []mapiv1beta1.Condition, conditionType string) *mapiv1beta1.Condition {
 	for i := range conditions {
 		if string(conditions[i].Type) == conditionType {
 			return &conditions[i]
@@ -131,7 +131,7 @@ func GetMAPIMachineSetCondition(conditions []machinev1beta1.Condition, condition
 // If the condition state has not changed, it preserves the existing LastTransitionTime.
 // If the condition does not exist, it adds it.
 // This function behaves similarly to conditions.Set() for CAPI conditions.
-func SetMAPIMachineSetCondition(conditions []machinev1beta1.Condition, condition *machinev1beta1.Condition) []machinev1beta1.Condition {
+func SetMAPIMachineSetCondition(conditions []mapiv1beta1.Condition, condition *mapiv1beta1.Condition) []mapiv1beta1.Condition {
 	for i, currCondition := range conditions {
 		if string(currCondition.Type) == string(condition.Type) {
 			// Check if the condition state has changed (Status, Reason, Message)

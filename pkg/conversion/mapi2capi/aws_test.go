@@ -19,7 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	mapiv1 "github.com/openshift/api/machine/v1beta1"
+	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/test/matchers"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -36,8 +36,8 @@ import (
 var _ = Describe("mapi2capi AWS conversion", func() {
 	var (
 		testValue                          = ptr.To("test")
-		blockDeviceMappingWithVirtualName  = &mapiv1.BlockDeviceMappingSpec{VirtualName: testValue}
-		blockDeviceMappingWithoutEBSConfig = &mapiv1.BlockDeviceMappingSpec{DeviceName: ptr.To("/dev/sdb")}
+		blockDeviceMappingWithVirtualName  = &mapiv1beta1.BlockDeviceMappingSpec{VirtualName: testValue}
+		blockDeviceMappingWithoutEBSConfig = &mapiv1beta1.BlockDeviceMappingSpec{DeviceName: ptr.To("/dev/sdb")}
 
 		awsBaseProviderSpec   = machinebuilder.AWSProviderSpec().WithLoadBalancers(nil)
 		awsMAPIMachineBase    = machinebuilder.Machine().WithProviderSpecBuilder(awsBaseProviderSpec)
@@ -64,7 +64,7 @@ var _ = Describe("mapi2capi AWS conversion", func() {
 		expectedWarnings  []string
 	}
 
-	var mustConvertAWSProviderSpecToRawExtension = func(spec *mapiv1.AWSMachineProviderConfig) *runtime.RawExtension {
+	var mustConvertAWSProviderSpecToRawExtension = func(spec *mapiv1beta1.AWSMachineProviderConfig) *runtime.RawExtension {
 		if spec == nil {
 			return &runtime.RawExtension{}
 		}
@@ -98,7 +98,7 @@ var _ = Describe("mapi2capi AWS conversion", func() {
 		Entry("With LoadBalancers", awsMAPI2CAPIConversionInput{
 			machineBuilder: awsMAPIMachineBase.WithProviderSpecBuilder(
 				awsBaseProviderSpec.WithLoadBalancers(
-					[]mapiv1.LoadBalancerReference{{Name: "a", Type: mapiv1.ClassicLoadBalancerType}},
+					[]mapiv1beta1.LoadBalancerReference{{Name: "a", Type: mapiv1beta1.ClassicLoadBalancerType}},
 				),
 			),
 			infra: infra,
@@ -128,10 +128,10 @@ var _ = Describe("mapi2capi AWS conversion", func() {
 			expectedWarnings: []string{},
 		}),
 		Entry("With metadata in provider spec", awsMAPI2CAPIConversionInput{
-			machineBuilder: awsMAPIMachineBase.WithProviderSpec(mapiv1.ProviderSpec{
-				Value: mustConvertAWSProviderSpecToRawExtension(&mapiv1.AWSMachineProviderConfig{
+			machineBuilder: awsMAPIMachineBase.WithProviderSpec(mapiv1beta1.ProviderSpec{
+				Value: mustConvertAWSProviderSpecToRawExtension(&mapiv1beta1.AWSMachineProviderConfig{
 					ObjectMeta: metav1.ObjectMeta{Name: "test"},
-					AMI:        mapiv1.AWSResourceReference{ARN: ptr.To("arn:aws:ec2:us-east-1::image/ami-1234567890abcdef0")},
+					AMI:        mapiv1beta1.AWSResourceReference{ARN: ptr.To("arn:aws:ec2:us-east-1::image/ami-1234567890abcdef0")},
 				}),
 			}),
 			infra: infra,
@@ -156,7 +156,7 @@ var _ = Describe("mapi2capi AWS conversion", func() {
 		}),
 		Entry("With AMI ARN reference", awsMAPI2CAPIConversionInput{
 			machineBuilder: awsMAPIMachineBase.WithProviderSpecBuilder(
-				awsBaseProviderSpec.WithAMI(mapiv1.AWSResourceReference{
+				awsBaseProviderSpec.WithAMI(mapiv1beta1.AWSResourceReference{
 					ARN: ptr.To("arn:aws:ec2:us-east-1::image/ami-1234567890abcdef0"),
 				}),
 			),
@@ -168,8 +168,8 @@ var _ = Describe("mapi2capi AWS conversion", func() {
 		}),
 		Entry("With AMI filters", awsMAPI2CAPIConversionInput{
 			machineBuilder: awsMAPIMachineBase.WithProviderSpecBuilder(
-				awsBaseProviderSpec.WithAMI(mapiv1.AWSResourceReference{
-					Filters: []mapiv1.Filter{{Name: "name", Values: []string{"test"}}},
+				awsBaseProviderSpec.WithAMI(mapiv1beta1.AWSResourceReference{
+					Filters: []mapiv1beta1.Filter{{Name: "name", Values: []string{"test"}}},
 				}),
 			),
 			infra: infra,
@@ -181,7 +181,7 @@ var _ = Describe("mapi2capi AWS conversion", func() {
 		Entry("With missing AMI reference", awsMAPI2CAPIConversionInput{
 			machineBuilder: awsMAPIMachineBase.WithProviderSpecBuilder(
 				awsBaseProviderSpec.WithAMI(
-					mapiv1.AWSResourceReference{},
+					mapiv1beta1.AWSResourceReference{},
 				),
 			),
 			infra: infra,
@@ -192,7 +192,7 @@ var _ = Describe("mapi2capi AWS conversion", func() {
 		}),
 		Entry("With unsupported Metadata Authentication", awsMAPI2CAPIConversionInput{
 			machineBuilder: awsMAPIMachineBase.WithProviderSpecBuilder(
-				awsBaseProviderSpec.WithMetadataServiceOptions(mapiv1.MetadataServiceOptions{
+				awsBaseProviderSpec.WithMetadataServiceOptions(mapiv1beta1.MetadataServiceOptions{
 					Authentication: "unsupported",
 				}),
 			),
@@ -204,8 +204,8 @@ var _ = Describe("mapi2capi AWS conversion", func() {
 		}),
 		Entry("With missing Volume size for EBS", awsMAPI2CAPIConversionInput{
 			machineBuilder: awsMAPIMachineBase.WithProviderSpecBuilder(
-				awsBaseProviderSpec.WithBlockDevices([]mapiv1.BlockDeviceMappingSpec{{
-					EBS: &mapiv1.EBSBlockDeviceSpec{},
+				awsBaseProviderSpec.WithBlockDevices([]mapiv1beta1.BlockDeviceMappingSpec{{
+					EBS: &mapiv1beta1.EBSBlockDeviceSpec{},
 				}}),
 			),
 			infra:            infra,
@@ -214,9 +214,9 @@ var _ = Describe("mapi2capi AWS conversion", func() {
 		}),
 		Entry("With non-root Volume not deleted on termination", awsMAPI2CAPIConversionInput{
 			machineBuilder: awsMAPIMachineBase.WithProviderSpecBuilder(
-				awsBaseProviderSpec.WithBlockDevices([]mapiv1.BlockDeviceMappingSpec{{
+				awsBaseProviderSpec.WithBlockDevices([]mapiv1beta1.BlockDeviceMappingSpec{{
 					DeviceName: ptr.To("/dev/sdb"),
-					EBS: &mapiv1.EBSBlockDeviceSpec{
+					EBS: &mapiv1beta1.EBSBlockDeviceSpec{
 						VolumeSize:                    ptr.To(int64(10)),
 						DeprecatedDeleteOnTermination: ptr.To(false), // Explicitly set to trigger validation error
 					},
@@ -230,9 +230,9 @@ var _ = Describe("mapi2capi AWS conversion", func() {
 		}),
 		Entry("With NoDevice specified", awsMAPI2CAPIConversionInput{
 			machineBuilder: awsMAPIMachineBase.WithProviderSpecBuilder(
-				awsBaseProviderSpec.WithBlockDevices([]mapiv1.BlockDeviceMappingSpec{{
+				awsBaseProviderSpec.WithBlockDevices([]mapiv1beta1.BlockDeviceMappingSpec{{
 					NoDevice: testValue,
-					EBS:      &mapiv1.EBSBlockDeviceSpec{VolumeSize: ptr.To(int64(10))},
+					EBS:      &mapiv1beta1.EBSBlockDeviceSpec{VolumeSize: ptr.To(int64(10))},
 				}}),
 			),
 			infra: infra,
@@ -243,9 +243,9 @@ var _ = Describe("mapi2capi AWS conversion", func() {
 		}),
 		Entry("With VirtualName specified", awsMAPI2CAPIConversionInput{
 			machineBuilder: awsMAPIMachineBase.WithProviderSpecBuilder(
-				awsBaseProviderSpec.WithBlockDevices([]mapiv1.BlockDeviceMappingSpec{{
+				awsBaseProviderSpec.WithBlockDevices([]mapiv1beta1.BlockDeviceMappingSpec{{
 					VirtualName: testValue,
-					EBS:         &mapiv1.EBSBlockDeviceSpec{VolumeSize: ptr.To(int64(10))},
+					EBS:         &mapiv1beta1.EBSBlockDeviceSpec{VolumeSize: ptr.To(int64(10))},
 				}}),
 			),
 			infra: infra,
@@ -269,7 +269,7 @@ var _ = Describe("mapi2capi AWS conversion", func() {
 		// Error + Warning.
 		Entry("With VirtualName specified and missing EBS configuration", awsMAPI2CAPIConversionInput{
 			machineBuilder: awsMAPIMachineBase.WithProviderSpecBuilder(
-				awsBaseProviderSpec.WithBlockDevices([]mapiv1.BlockDeviceMappingSpec{*blockDeviceMappingWithVirtualName}),
+				awsBaseProviderSpec.WithBlockDevices([]mapiv1beta1.BlockDeviceMappingSpec{*blockDeviceMappingWithVirtualName}),
 			),
 			infra: infra,
 			expectedErrors: []string{
@@ -281,9 +281,9 @@ var _ = Describe("mapi2capi AWS conversion", func() {
 		}),
 		Entry("With VirtualName specified and root Volume not deleted on termination", awsMAPI2CAPIConversionInput{
 			machineBuilder: awsMAPIMachineBase.WithProviderSpecBuilder(
-				awsBaseProviderSpec.WithBlockDevices([]mapiv1.BlockDeviceMappingSpec{{
+				awsBaseProviderSpec.WithBlockDevices([]mapiv1beta1.BlockDeviceMappingSpec{{
 					VirtualName: testValue,
-					EBS: &mapiv1.EBSBlockDeviceSpec{
+					EBS: &mapiv1beta1.EBSBlockDeviceSpec{
 						VolumeSize:                    ptr.To(int64(10)),
 						DeprecatedDeleteOnTermination: ptr.To(false), // Explicitly set to trigger validation error
 					},
@@ -300,10 +300,10 @@ var _ = Describe("mapi2capi AWS conversion", func() {
 		// Double Errors.
 		Entry("With NoDevice and VirtualName specified", awsMAPI2CAPIConversionInput{
 			machineBuilder: awsMAPIMachineBase.WithProviderSpecBuilder(
-				awsBaseProviderSpec.WithBlockDevices([]mapiv1.BlockDeviceMappingSpec{{
+				awsBaseProviderSpec.WithBlockDevices([]mapiv1beta1.BlockDeviceMappingSpec{{
 					VirtualName: testValue,
 					NoDevice:    testValue,
-					EBS:         &mapiv1.EBSBlockDeviceSpec{VolumeSize: ptr.To(int64(10))},
+					EBS:         &mapiv1beta1.EBSBlockDeviceSpec{VolumeSize: ptr.To(int64(10))},
 				}}),
 			),
 			infra: infra,
@@ -317,7 +317,7 @@ var _ = Describe("mapi2capi AWS conversion", func() {
 		// Only Warnings.
 		Entry("With missing EBS configuration", awsMAPI2CAPIConversionInput{
 			machineBuilder: awsMAPIMachineBase.WithProviderSpecBuilder(
-				awsBaseProviderSpec.WithBlockDevices([]mapiv1.BlockDeviceMappingSpec{*blockDeviceMappingWithoutEBSConfig}),
+				awsBaseProviderSpec.WithBlockDevices([]mapiv1beta1.BlockDeviceMappingSpec{*blockDeviceMappingWithoutEBSConfig}),
 			),
 			infra:          infra,
 			expectedErrors: []string{},
@@ -327,8 +327,8 @@ var _ = Describe("mapi2capi AWS conversion", func() {
 		}),
 		Entry("With root Volume not deleted on termination", awsMAPI2CAPIConversionInput{
 			machineBuilder: awsMAPIMachineBase.WithProviderSpecBuilder(
-				awsBaseProviderSpec.WithBlockDevices([]mapiv1.BlockDeviceMappingSpec{{
-					EBS: &mapiv1.EBSBlockDeviceSpec{
+				awsBaseProviderSpec.WithBlockDevices([]mapiv1beta1.BlockDeviceMappingSpec{{
+					EBS: &mapiv1beta1.EBSBlockDeviceSpec{
 						VolumeSize:                    ptr.To(int64(10)),
 						DeprecatedDeleteOnTermination: ptr.To(false), // Explicitly set to trigger validation error
 					},

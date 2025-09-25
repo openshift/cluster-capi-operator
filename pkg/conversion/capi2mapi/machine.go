@@ -19,7 +19,7 @@ import (
 	"strings"
 	"time"
 
-	mapiv1 "github.com/openshift/api/machine/v1beta1"
+	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation/field"
@@ -31,22 +31,22 @@ const (
 )
 
 // fromCAPIMachineToMAPIMachine translates a core CAPI Machine to its MAPI Machine correspondent.
-func fromCAPIMachineToMAPIMachine(capiMachine *clusterv1.Machine) (*mapiv1.Machine, field.ErrorList) {
+func fromCAPIMachineToMAPIMachine(capiMachine *clusterv1.Machine) (*mapiv1beta1.Machine, field.ErrorList) {
 	errs := field.ErrorList{}
 
 	lifecycleHooks, capiMachineNonHookAnnotations := convertCAPILifecycleHookAnnotationsToMAPILifecycleHooksAndAnnotations(capiMachine.Annotations)
 
-	mapiMachine := &mapiv1.Machine{
+	mapiMachine := &mapiv1beta1.Machine{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            capiMachine.Name,
 			Namespace:       mapiNamespace,
 			Labels:          convertCAPILabelsToMAPILabels(capiMachine.Labels),
 			Annotations:     convertCAPIAnnotationsToMAPIAnnotations(capiMachineNonHookAnnotations),
-			Finalizers:      []string{mapiv1.MachineFinalizer},
+			Finalizers:      []string{mapiv1beta1.MachineFinalizer},
 			OwnerReferences: nil, // OwnerReferences not populated here. They are added later by the machineSync controller.
 		},
-		Spec: mapiv1.MachineSpec{
-			ObjectMeta: mapiv1.ObjectMeta{
+		Spec: mapiv1beta1.MachineSpec{
+			ObjectMeta: mapiv1beta1.ObjectMeta{
 				Labels:      convertCAPIMachineLabelsToMAPIMachineSpecObjectMetaLabels(capiMachine.Labels),
 				Annotations: convertCAPIMachineAnnotationsToMAPIMachineSpecObjectMetaAnnotations(capiMachineNonHookAnnotations),
 			},
@@ -106,19 +106,19 @@ const (
 )
 
 // convertCAPILifecycleHookAnnotationsToMAPILifecycleHooksAndAnnotations extracts the lifecycle hooks from the CAPI Machine annotations.
-func convertCAPILifecycleHookAnnotationsToMAPILifecycleHooksAndAnnotations(capiAnnotations map[string]string) (mapiv1.LifecycleHooks, map[string]string) {
-	hooks := mapiv1.LifecycleHooks{}
+func convertCAPILifecycleHookAnnotationsToMAPILifecycleHooksAndAnnotations(capiAnnotations map[string]string) (mapiv1beta1.LifecycleHooks, map[string]string) {
+	hooks := mapiv1beta1.LifecycleHooks{}
 	newAnnotations := make(map[string]string)
 
 	for k, v := range capiAnnotations {
 		switch {
 		case strings.HasPrefix(k, capiPreDrainAnnotationPrefix):
-			hooks.PreDrain = append(hooks.PreDrain, mapiv1.LifecycleHook{
+			hooks.PreDrain = append(hooks.PreDrain, mapiv1beta1.LifecycleHook{
 				Name:  strings.TrimPrefix(k, capiPreDrainAnnotationPrefix),
 				Owner: v,
 			})
 		case strings.HasPrefix(k, capiPreTerminateAnnotationPrefix):
-			hooks.PreTerminate = append(hooks.PreTerminate, mapiv1.LifecycleHook{
+			hooks.PreTerminate = append(hooks.PreTerminate, mapiv1beta1.LifecycleHook{
 				Name:  strings.TrimPrefix(k, capiPreTerminateAnnotationPrefix),
 				Owner: v,
 			})

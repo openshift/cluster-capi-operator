@@ -24,7 +24,7 @@ import (
 
 	"github.com/google/uuid"
 	configv1 "github.com/openshift/api/config/v1"
-	mapiv1 "github.com/openshift/api/machine/v1alpha1"
+	mapiv1alpha1 "github.com/openshift/api/machine/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtimeserializer "k8s.io/apimachinery/pkg/runtime/serializer"
 	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
@@ -73,7 +73,7 @@ var _ = Describe("OpenStack Fuzz (mapi2capi)", func() {
 			mapi2capi.FromOpenStackMachineAndInfra,
 			fromMachineAndOpenStackMachineAndOpenStackCluster,
 			conversiontest.ObjectMetaFuzzerFuncs(mapiNamespace),
-			conversiontest.MAPIMachineFuzzerFuncs(&mapiv1.OpenstackProviderSpec{}, openstackProviderIDFuzzer),
+			conversiontest.MAPIMachineFuzzerFuncs(&mapiv1alpha1.OpenstackProviderSpec{}, openstackProviderIDFuzzer),
 			openstackProviderSpecFuzzerFuncs,
 		)
 	})
@@ -96,7 +96,7 @@ var _ = Describe("OpenStack Fuzz (mapi2capi)", func() {
 			mapi2capi.FromOpenStackMachineSetAndInfra,
 			fromMachineSetAndOpenStackMachineTemplateAndOpenStackCluster,
 			conversiontest.ObjectMetaFuzzerFuncs(mapiNamespace),
-			conversiontest.MAPIMachineFuzzerFuncs(&mapiv1.OpenstackProviderSpec{}, openstackProviderIDFuzzer),
+			conversiontest.MAPIMachineFuzzerFuncs(&mapiv1alpha1.OpenstackProviderSpec{}, openstackProviderIDFuzzer),
 			conversiontest.MAPIMachineSetFuzzerFuncs(),
 			openstackProviderSpecFuzzerFuncs,
 		)
@@ -110,24 +110,24 @@ func openstackProviderIDFuzzer(c randfill.Continue) string {
 //nolint:funlen
 func openstackProviderSpecFuzzerFuncs(codecs runtimeserializer.CodecFactory) []any {
 	return []any{
-		func(bdm *mapiv1.BlockDeviceStorage, c randfill.Continue) {
+		func(bdm *mapiv1alpha1.BlockDeviceStorage, c randfill.Continue) {
 			switch c.Int31n(2) {
 			case 0:
-				bdm.Type = mapiv1.LocalBlockDevice
+				bdm.Type = mapiv1alpha1.LocalBlockDevice
 				bdm.Volume = nil
 			case 1:
-				bdm.Type = mapiv1.VolumeBlockDevice
+				bdm.Type = mapiv1alpha1.VolumeBlockDevice
 				// Fuzz required fields so that they are not empty.
-				volume := &mapiv1.BlockDeviceVolume{}
+				volume := &mapiv1alpha1.BlockDeviceVolume{}
 				c.Fill(volume)
 				bdm.Volume = volume
 			}
 		},
-		func(network *mapiv1.NetworkParam, c randfill.Continue) {
+		func(network *mapiv1alpha1.NetworkParam, c randfill.Continue) {
 			switch c.Int31n(2) {
 			case 0:
 				network.UUID = uuid.NewString()
-				network.Filter = mapiv1.Filter{}
+				network.Filter = mapiv1alpha1.Filter{}
 			case 1:
 				network.UUID = ""
 				c.Fill(&network.Filter)
@@ -152,12 +152,12 @@ func openstackProviderSpecFuzzerFuncs(codecs runtimeserializer.CodecFactory) []a
 				network.Filter.NotTagsAny = generateFakeTags()
 			}
 		},
-		func(port *mapiv1.PortOpts, c randfill.Continue) {
+		func(port *mapiv1alpha1.PortOpts, c randfill.Continue) {
 			// Clear fields that are not supported by conversion.
 			// These fields exist in the API but are not implemented in MAPO.
 			port.DeprecatedHostID = ""
 		},
-		func(rootVolume *mapiv1.RootVolume, c randfill.Continue) {
+		func(rootVolume *mapiv1alpha1.RootVolume, c randfill.Continue) {
 			c.FillNoCustom(rootVolume)
 
 			// Clear fields that are not supported by conversion.
@@ -166,12 +166,12 @@ func openstackProviderSpecFuzzerFuncs(codecs runtimeserializer.CodecFactory) []a
 			rootVolume.DeprecatedSourceType = ""
 			rootVolume.SourceUUID = ""
 		},
-		func(securityGroup *mapiv1.SecurityGroupParam, c randfill.Continue) {
+		func(securityGroup *mapiv1alpha1.SecurityGroupParam, c randfill.Continue) {
 			switch c.Int31n(2) {
 			case 0:
 				securityGroup.UUID = uuid.NewString()
 				securityGroup.Name = ""
-				securityGroup.Filter = mapiv1.SecurityGroupFilter{}
+				securityGroup.Filter = mapiv1alpha1.SecurityGroupFilter{}
 			case 1:
 				c.Fill(&securityGroup.Name)
 				securityGroup.UUID = ""
@@ -194,11 +194,11 @@ func openstackProviderSpecFuzzerFuncs(codecs runtimeserializer.CodecFactory) []a
 				securityGroup.Filter.NotTagsAny = generateFakeTags()
 			}
 		},
-		func(providerSpec *mapiv1.OpenstackProviderSpec, c randfill.Continue) {
+		func(providerSpec *mapiv1alpha1.OpenstackProviderSpec, c randfill.Continue) {
 			c.FillNoCustom(providerSpec)
 
 			// The type meta is always set to these values by the conversion.
-			providerSpec.APIVersion = mapiv1.GroupVersion.String()
+			providerSpec.APIVersion = mapiv1alpha1.GroupVersion.String()
 			providerSpec.Kind = openstackProviderSpecKind
 
 			// Clear fields that are not supported in the provider spec.

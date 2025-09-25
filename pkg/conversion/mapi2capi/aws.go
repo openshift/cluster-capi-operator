@@ -22,7 +22,7 @@ import (
 	"strings"
 
 	configv1 "github.com/openshift/api/config/v1"
-	mapiv1 "github.com/openshift/api/machine/v1beta1"
+	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -50,29 +50,29 @@ const (
 
 // awsMachineAndInfra stores the details of a Machine API AWSMachine and Infra.
 type awsMachineAndInfra struct {
-	machine        *mapiv1.Machine
+	machine        *mapiv1beta1.Machine
 	infrastructure *configv1.Infrastructure
 }
 
 // awsMachineSetAndInfra stores the details of a Machine API AWSMachine set and Infra.
 type awsMachineSetAndInfra struct {
-	machineSet     *mapiv1.MachineSet
+	machineSet     *mapiv1beta1.MachineSet
 	infrastructure *configv1.Infrastructure
 	*awsMachineAndInfra
 }
 
 // FromAWSMachineAndInfra wraps a Machine API Machine for AWS and the OCP Infrastructure object into a mapi2capi AWSProviderSpec.
-func FromAWSMachineAndInfra(m *mapiv1.Machine, i *configv1.Infrastructure) Machine {
+func FromAWSMachineAndInfra(m *mapiv1beta1.Machine, i *configv1.Infrastructure) Machine {
 	return &awsMachineAndInfra{machine: m, infrastructure: i}
 }
 
 // FromAWSMachineSetAndInfra wraps a Machine API MachineSet for AWS and the OCP Infrastructure object into a mapi2capi AWSProviderSpec.
-func FromAWSMachineSetAndInfra(m *mapiv1.MachineSet, i *configv1.Infrastructure) MachineSet {
+func FromAWSMachineSetAndInfra(m *mapiv1beta1.MachineSet, i *configv1.Infrastructure) MachineSet {
 	return &awsMachineSetAndInfra{
 		machineSet:     m,
 		infrastructure: i,
 		awsMachineAndInfra: &awsMachineAndInfra{
-			machine: &mapiv1.Machine{
+			machine: &mapiv1beta1.Machine{
 				Spec: m.Spec.Template.Spec,
 			},
 			infrastructure: i,
@@ -221,7 +221,7 @@ func (m *awsMachineSetAndInfra) ToMachineSetAndMachineTemplate() (*clusterv1.Mac
 // it converts AWSMachineProviderConfig to AWSMachine.
 //
 //nolint:funlen
-func (m *awsMachineAndInfra) toAWSMachine(providerSpec mapiv1.AWSMachineProviderConfig) (*awsv1.AWSMachine, []string, field.ErrorList) {
+func (m *awsMachineAndInfra) toAWSMachine(providerSpec mapiv1beta1.AWSMachineProviderConfig) (*awsv1.AWSMachine, []string, field.ErrorList) {
 	fldPath := field.NewPath("spec", "providerSpec", "value")
 
 	var (
@@ -321,7 +321,7 @@ func (m *awsMachineAndInfra) toAWSMachine(providerSpec mapiv1.AWSMachineProvider
 		errs = append(errs, field.Invalid(fldPath.Child("deviceIndex"), providerSpec.DeviceIndex, "deviceIndex must be 0 or unset"))
 	}
 
-	if providerSpec.NetworkInterfaceType != "" && providerSpec.NetworkInterfaceType != mapiv1.AWSENANetworkInterfaceType && providerSpec.NetworkInterfaceType != mapiv1.AWSEFANetworkInterfaceType {
+	if providerSpec.NetworkInterfaceType != "" && providerSpec.NetworkInterfaceType != mapiv1beta1.AWSENANetworkInterfaceType && providerSpec.NetworkInterfaceType != mapiv1beta1.AWSEFANetworkInterfaceType {
 		errs = append(errs, field.Invalid(fldPath.Child("networkInterfaceType"), providerSpec.NetworkInterfaceType, "networkInterface type must be one of ENA, EFA or omitted, unsupported value"))
 	}
 
@@ -344,14 +344,14 @@ func (m *awsMachineAndInfra) toAWSMachine(providerSpec mapiv1.AWSMachineProvider
 }
 
 // AWSProviderSpecFromRawExtension unmarshals a raw extension into an AWSMachineProviderConfig type.
-func AWSProviderSpecFromRawExtension(rawExtension *runtime.RawExtension) (mapiv1.AWSMachineProviderConfig, error) {
+func AWSProviderSpecFromRawExtension(rawExtension *runtime.RawExtension) (mapiv1beta1.AWSMachineProviderConfig, error) {
 	if rawExtension == nil {
-		return mapiv1.AWSMachineProviderConfig{}, nil
+		return mapiv1beta1.AWSMachineProviderConfig{}, nil
 	}
 
-	spec := mapiv1.AWSMachineProviderConfig{}
+	spec := mapiv1beta1.AWSMachineProviderConfig{}
 	if err := yaml.Unmarshal(rawExtension.Raw, &spec); err != nil {
-		return mapiv1.AWSMachineProviderConfig{}, fmt.Errorf("error unmarshalling providerSpec: %w", err)
+		return mapiv1beta1.AWSMachineProviderConfig{}, fmt.Errorf("error unmarshalling providerSpec: %w", err)
 	}
 
 	return spec, nil
@@ -382,7 +382,7 @@ func awsMachineToAWSMachineTemplate(awsMachine *awsv1.AWSMachine, name string, n
 
 //////// Conversion helpers
 
-func convertAWSAMIResourceReferenceToCAPI(fldPath *field.Path, amiRef mapiv1.AWSResourceReference) (awsv1.AMIReference, *field.Error) {
+func convertAWSAMIResourceReferenceToCAPI(fldPath *field.Path, amiRef mapiv1beta1.AWSResourceReference) (awsv1.AMIReference, *field.Error) {
 	if amiRef.ARN != nil {
 		return awsv1.AMIReference{}, field.Invalid(fldPath.Child("arn"), amiRef.ARN, "unable to convert AMI ARN reference. Not supported in CAPI")
 	}
@@ -398,7 +398,7 @@ func convertAWSAMIResourceReferenceToCAPI(fldPath *field.Path, amiRef mapiv1.AWS
 	return awsv1.AMIReference{}, field.Invalid(fldPath, amiRef, "unable to find a valid AMI resource reference")
 }
 
-func convertAWSTagsToCAPI(mapiTags []mapiv1.TagSpecification) awsv1.Tags {
+func convertAWSTagsToCAPI(mapiTags []mapiv1beta1.TagSpecification) awsv1.Tags {
 	if mapiTags == nil {
 		return nil
 	}
@@ -411,13 +411,13 @@ func convertAWSTagsToCAPI(mapiTags []mapiv1.TagSpecification) awsv1.Tags {
 	return capiTags
 }
 
-func convertAWSMarketTypeToCAPI(fldPath *field.Path, marketType mapiv1.MarketType) (awsv1.MarketType, *field.Error) {
+func convertAWSMarketTypeToCAPI(fldPath *field.Path, marketType mapiv1beta1.MarketType) (awsv1.MarketType, *field.Error) {
 	switch marketType {
-	case mapiv1.MarketTypeOnDemand:
+	case mapiv1beta1.MarketTypeOnDemand:
 		return awsv1.MarketTypeOnDemand, nil
-	case mapiv1.MarketTypeSpot:
+	case mapiv1beta1.MarketTypeSpot:
 		return awsv1.MarketTypeSpot, nil
-	case mapiv1.MarketTypeCapacityBlock:
+	case mapiv1beta1.MarketTypeCapacityBlock:
 		return awsv1.MarketTypeCapacityBlock, nil
 	case "":
 		return "", nil
@@ -426,13 +426,13 @@ func convertAWSMarketTypeToCAPI(fldPath *field.Path, marketType mapiv1.MarketTyp
 	}
 }
 
-func convertMetadataServiceOptionstoCAPI(fldPath *field.Path, metad mapiv1.MetadataServiceOptions) (*awsv1.InstanceMetadataOptions, *field.Error) {
+func convertMetadataServiceOptionstoCAPI(fldPath *field.Path, metad mapiv1beta1.MetadataServiceOptions) (*awsv1.InstanceMetadataOptions, *field.Error) {
 	var httpTokens awsv1.HTTPTokensState
 
 	switch metad.Authentication {
-	case mapiv1.MetadataServiceAuthenticationOptional:
+	case mapiv1beta1.MetadataServiceAuthenticationOptional:
 		httpTokens = awsv1.HTTPTokensStateOptional
-	case mapiv1.MetadataServiceAuthenticationRequired:
+	case mapiv1beta1.MetadataServiceAuthenticationRequired:
 		httpTokens = awsv1.HTTPTokensStateRequired
 	case "":
 		httpTokens = awsv1.HTTPTokensStateOptional // TODO(docs): CAPA defaults to optional (in the openAPI spec validation) if the field is empty, lossy translation to document.
@@ -451,7 +451,7 @@ func convertMetadataServiceOptionstoCAPI(fldPath *field.Path, metad mapiv1.Metad
 	return capiMetadataOpts, nil
 }
 
-func convertIAMInstanceProfiletoCAPI(mapiIAM *mapiv1.AWSResourceReference) string {
+func convertIAMInstanceProfiletoCAPI(mapiIAM *mapiv1beta1.AWSResourceReference) string {
 	if mapiIAM == nil || mapiIAM.ID == nil {
 		return ""
 	}
@@ -459,7 +459,7 @@ func convertIAMInstanceProfiletoCAPI(mapiIAM *mapiv1.AWSResourceReference) strin
 	return *mapiIAM.ID
 }
 
-func convertAWSSpotMarketOptionsToCAPI(mapiSpotMarketOptions *mapiv1.SpotMarketOptions) *awsv1.SpotMarketOptions {
+func convertAWSSpotMarketOptionsToCAPI(mapiSpotMarketOptions *mapiv1beta1.SpotMarketOptions) *awsv1.SpotMarketOptions {
 	if mapiSpotMarketOptions == nil {
 		return nil
 	}
@@ -469,7 +469,7 @@ func convertAWSSpotMarketOptionsToCAPI(mapiSpotMarketOptions *mapiv1.SpotMarketO
 	}
 }
 
-func convertAWSSecurityGroupstoCAPI(sgs []mapiv1.AWSResourceReference) []awsv1.AWSResourceReference {
+func convertAWSSecurityGroupstoCAPI(sgs []mapiv1beta1.AWSResourceReference) []awsv1.AWSResourceReference {
 	capiSGs := []awsv1.AWSResourceReference{}
 
 	for _, sg := range sgs {
@@ -481,7 +481,7 @@ func convertAWSSecurityGroupstoCAPI(sgs []mapiv1.AWSResourceReference) []awsv1.A
 	return capiSGs
 }
 
-func convertAWSBlockDeviceMappingSpecToCAPI(fldPath *field.Path, mapiBlockDeviceMapping []mapiv1.BlockDeviceMappingSpec) (*awsv1.Volume, []awsv1.Volume, []string, field.ErrorList) {
+func convertAWSBlockDeviceMappingSpecToCAPI(fldPath *field.Path, mapiBlockDeviceMapping []mapiv1beta1.BlockDeviceMappingSpec) (*awsv1.Volume, []awsv1.Volume, []string, field.ErrorList) {
 	// We do not want to preallocate this as we need it nil if no elements are added.
 	//nolint:prealloc
 	var nonRootVolumes []awsv1.Volume
@@ -528,7 +528,7 @@ func convertAWSBlockDeviceMappingSpecToCAPI(fldPath *field.Path, mapiBlockDevice
 	return rootVolume, nonRootVolumes, warnings, errs
 }
 
-func blockDeviceMappingSpecToVolume(fldPath *field.Path, bdm mapiv1.BlockDeviceMappingSpec, rootVolume bool) (awsv1.Volume, []string, field.ErrorList) {
+func blockDeviceMappingSpecToVolume(fldPath *field.Path, bdm mapiv1beta1.BlockDeviceMappingSpec, rootVolume bool) (awsv1.Volume, []string, field.ErrorList) {
 	errs := field.ErrorList{}
 	warnings := []string{}
 
@@ -559,7 +559,7 @@ func blockDeviceMappingSpecToVolume(fldPath *field.Path, bdm mapiv1.BlockDeviceM
 	}, warnings, nil
 }
 
-func convertKMSKeyToCAPI(kmsKey mapiv1.AWSResourceReference) string {
+func convertKMSKeyToCAPI(kmsKey mapiv1beta1.AWSResourceReference) string {
 	if kmsKey.ID != nil {
 		return *kmsKey.ID
 	}
@@ -571,14 +571,14 @@ func convertKMSKeyToCAPI(kmsKey mapiv1.AWSResourceReference) string {
 	return ""
 }
 
-func convertAWSResourceReferenceToCAPI(mapiReference mapiv1.AWSResourceReference) *awsv1.AWSResourceReference {
+func convertAWSResourceReferenceToCAPI(mapiReference mapiv1beta1.AWSResourceReference) *awsv1.AWSResourceReference {
 	return &awsv1.AWSResourceReference{
 		ID:      mapiReference.ID,
 		Filters: convertAWSFiltersToCAPI(mapiReference.Filters),
 	}
 }
 
-func convertAWSFiltersToCAPI(mapiFilters []mapiv1.Filter) []awsv1.Filter {
+func convertAWSFiltersToCAPI(mapiFilters []mapiv1beta1.Filter) []awsv1.Filter {
 	capiFilters := []awsv1.Filter{}
 	for _, filter := range mapiFilters {
 		capiFilters = append(capiFilters, awsv1.Filter{
@@ -590,11 +590,11 @@ func convertAWSFiltersToCAPI(mapiFilters []mapiv1.Filter) []awsv1.Filter {
 	return capiFilters
 }
 
-func convertNetworkInterfaceType(networkInterfaceType mapiv1.AWSNetworkInterfaceType) awsv1.NetworkInterfaceType {
+func convertNetworkInterfaceType(networkInterfaceType mapiv1beta1.AWSNetworkInterfaceType) awsv1.NetworkInterfaceType {
 	switch networkInterfaceType {
-	case mapiv1.AWSENANetworkInterfaceType:
+	case mapiv1beta1.AWSENANetworkInterfaceType:
 		return awsv1.NetworkInterfaceTypeENI
-	case mapiv1.AWSEFANetworkInterfaceType:
+	case mapiv1beta1.AWSEFANetworkInterfaceType:
 		return awsv1.NetworkInterfaceTypeEFAWithENAInterface
 	}
 

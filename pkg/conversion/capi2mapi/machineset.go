@@ -16,7 +16,7 @@ limitations under the License.
 package capi2mapi
 
 import (
-	mapiv1 "github.com/openshift/api/machine/v1beta1"
+	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation/field"
@@ -25,10 +25,10 @@ import (
 )
 
 // fromCAPIMachineSetToMAPIMachineSet takes a CAPI MachineSet and returns a converted MAPI MachineSet.
-func fromCAPIMachineSetToMAPIMachineSet(capiMachineSet *clusterv1.MachineSet) (*mapiv1.MachineSet, error) {
+func fromCAPIMachineSetToMAPIMachineSet(capiMachineSet *clusterv1.MachineSet) (*mapiv1beta1.MachineSet, error) {
 	errs := field.ErrorList{}
 
-	mapiMachineSet := &mapiv1.MachineSet{
+	mapiMachineSet := &mapiv1beta1.MachineSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            capiMachineSet.Name,
 			Namespace:       capiMachineSet.Namespace,
@@ -37,13 +37,13 @@ func fromCAPIMachineSetToMAPIMachineSet(capiMachineSet *clusterv1.MachineSet) (*
 			Finalizers:      nil, // MAPI MachineSet does not have finalizers.
 			OwnerReferences: nil, // OwnerReferences not populated here. They are added later by the machineSetSync controller.
 		},
-		Spec: mapiv1.MachineSetSpec{
+		Spec: mapiv1beta1.MachineSetSpec{
 			Selector:        convertCAPIMachineSetSelectorToMAPI(capiMachineSet.Spec.Selector),
 			Replicas:        capiMachineSet.Spec.Replicas,
 			MinReadySeconds: capiMachineSet.Spec.MinReadySeconds,
 			DeletePolicy:    capiMachineSet.Spec.DeletePolicy,
-			Template: mapiv1.MachineTemplateSpec{
-				ObjectMeta: mapiv1.ObjectMeta{
+			Template: mapiv1beta1.MachineTemplateSpec{
+				ObjectMeta: mapiv1beta1.ObjectMeta{
 					Labels:      convertCAPILabelsToMAPILabels(capiMachineSet.Spec.Template.Labels),
 					Annotations: convertCAPIAnnotationsToMAPIAnnotations(capiMachineSet.Spec.Template.Annotations),
 				},
@@ -67,8 +67,8 @@ func fromCAPIMachineSetToMAPIMachineSet(capiMachineSet *clusterv1.MachineSet) (*
 }
 
 // convertCAPIMachineSetStatusToMAPI converts a CAPI MachineSetStatus to MAPI format.
-func convertCAPIMachineSetStatusToMAPI(capiStatus clusterv1.MachineSetStatus) mapiv1.MachineSetStatus {
-	mapiStatus := mapiv1.MachineSetStatus{
+func convertCAPIMachineSetStatusToMAPI(capiStatus clusterv1.MachineSetStatus) mapiv1beta1.MachineSetStatus {
+	mapiStatus := mapiv1beta1.MachineSetStatus{
 		Replicas:             capiStatus.Replicas,
 		FullyLabeledReplicas: capiStatus.FullyLabeledReplicas,
 		ReadyReplicas:        capiStatus.ReadyReplicas,
@@ -96,13 +96,13 @@ func convertCAPIMachineSetStatusToMAPI(capiStatus clusterv1.MachineSetStatus) ma
 }
 
 // convertCAPIFailureReasonToMAPIErrorReason converts CAPI MachineSetStatusError to MAPI MachineSetStatusError.
-func convertCAPIFailureReasonToMAPIErrorReason(capiFailureReason capierrors.MachineSetStatusError) *mapiv1.MachineSetStatusError {
-	mapiErrorReason := mapiv1.MachineSetStatusError(capiFailureReason)
+func convertCAPIFailureReasonToMAPIErrorReason(capiFailureReason capierrors.MachineSetStatusError) *mapiv1beta1.MachineSetStatusError {
+	mapiErrorReason := mapiv1beta1.MachineSetStatusError(capiFailureReason)
 	return &mapiErrorReason
 }
 
 // convertCAPIConditionsToMAPI converts CAPI conditions to MAPI conditions.
-func convertCAPIConditionsToMAPI(capiConditions clusterv1.Conditions) []mapiv1.Condition {
+func convertCAPIConditionsToMAPI(capiConditions clusterv1.Conditions) []mapiv1beta1.Condition {
 	// The only two conditions normally used for MAPI MachineSets are Paused and Synchronized.
 	// We do not convert these conditions to MAPI conditions as they are managed directly by the machineSet sync and migration controllers.
 	return nil

@@ -19,7 +19,7 @@ import (
 	"reflect"
 
 	"github.com/go-test/deep"
-	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
+	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	machinev1applyconfigs "github.com/openshift/client-go/machine/applyconfigurations/machine/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
@@ -27,7 +27,7 @@ import (
 )
 
 // SetLastTransitionTime determines if the last transition time should be set or updated for a given condition type.
-func SetLastTransitionTime(condType machinev1beta1.ConditionType, conditions []machinev1beta1.Condition, conditionAc *machinev1applyconfigs.ConditionApplyConfiguration) {
+func SetLastTransitionTime(condType mapiv1beta1.ConditionType, conditions []mapiv1beta1.Condition, conditionAc *machinev1applyconfigs.ConditionApplyConfiguration) {
 	for _, condition := range conditions {
 		if condition.Type == condType {
 			if !hasSameState(&condition, conditionAc) {
@@ -48,7 +48,7 @@ func SetLastTransitionTime(condType machinev1beta1.ConditionType, conditions []m
 // HasSameState returns true if a condition has the same state as a condition
 // apply config; state is defined by the union of following fields: Type,
 // Status.
-func hasSameState(i *machinev1beta1.Condition, j *machinev1applyconfigs.ConditionApplyConfiguration) bool {
+func hasSameState(i *mapiv1beta1.Condition, j *machinev1applyconfigs.ConditionApplyConfiguration) bool {
 	return i.Type == *j.Type &&
 		i.Status == *j.Status
 }
@@ -133,7 +133,7 @@ func compareCAPIMachineSetConditions(a, b []clusterv1.Condition) []string {
 	return diff
 }
 
-func compareMAPIMachineSetConditions(a, b []machinev1beta1.Condition) []string {
+func compareMAPIMachineSetConditions(a, b []mapiv1beta1.Condition) []string {
 	diff := []string{}
 	// Compare the conditions one by one.
 	// Ignore the differences in LastTransitionTime.
@@ -158,7 +158,7 @@ func compareMAPIMachineSetConditions(a, b []machinev1beta1.Condition) []string {
 // MAPIMachineSetStatusEqual compares variables a and b,
 // and returns a list of differences, or nil if there are none,
 // for the fields we care about when synchronising MAPI and CAPI Machines.
-func MAPIMachineSetStatusEqual(a, b machinev1beta1.MachineSetStatus) map[string]any { //nolint:dupl
+func MAPIMachineSetStatusEqual(a, b mapiv1beta1.MachineSetStatus) map[string]any { //nolint:dupl
 	diff := map[string]any{}
 
 	if diffConditions := compareMAPIMachineSetConditions(a.Conditions, b.Conditions); len(diffConditions) > 0 {
