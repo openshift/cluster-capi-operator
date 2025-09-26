@@ -36,7 +36,7 @@ var _ = Describe("Cluster API Azure MachineSet", Ordered, func() {
 		if platform != configv1.AzurePlatformType {
 			Skip("Skipping Azure E2E tests")
 		}
-		mapiMachineSpec = getAzureMAPIProviderSpec(cl)
+		mapiMachineSpec = getAzureMAPIProviderSpec(ctx, cl)
 	})
 
 	AfterEach(func() {
@@ -45,15 +45,15 @@ var _ = Describe("Cluster API Azure MachineSet", Ordered, func() {
 			// explicitly skip it here for other platforms.
 			Skip("Skipping Azure E2E tests")
 		}
-		framework.DeleteMachineSets(cl, machineSet)
+		framework.DeleteMachineSets(ctx, cl, machineSet)
 		framework.WaitForMachineSetsDeleted(cl, machineSet)
-		framework.DeleteObjects(cl, azureMachineTemplate)
+		framework.DeleteObjects(ctx, cl, azureMachineTemplate)
 	})
 
 	It("should be able to run a machine", func() {
-		azureMachineTemplate = createAzureMachineTemplate(cl, mapiMachineSpec)
+		azureMachineTemplate = createAzureMachineTemplate(ctx, cl, mapiMachineSpec)
 
-		machineSet = framework.CreateMachineSet(cl, framework.NewMachineSetParams(
+		machineSet = framework.CreateMachineSet(ctx, cl, framework.NewMachineSetParams(
 			"azure-machineset",
 			clusterName,
 			"",
@@ -71,7 +71,7 @@ var _ = Describe("Cluster API Azure MachineSet", Ordered, func() {
 
 })
 
-func getAzureMAPIProviderSpec(cl client.Client) *mapiv1.AzureMachineProviderSpec {
+func getAzureMAPIProviderSpec(ctx context.Context, cl client.Client) *mapiv1.AzureMachineProviderSpec {
 	machineSetList := &mapiv1.MachineSetList{}
 	Expect(cl.List(ctx, machineSetList, client.InNamespace(framework.MAPINamespace))).To(Succeed())
 
@@ -85,7 +85,7 @@ func getAzureMAPIProviderSpec(cl client.Client) *mapiv1.AzureMachineProviderSpec
 	return providerSpec
 }
 
-func createAzureMachineTemplate(cl client.Client, mapiProviderSpec *mapiv1.AzureMachineProviderSpec) *azurev1.AzureMachineTemplate {
+func createAzureMachineTemplate(ctx context.Context, cl client.Client, mapiProviderSpec *mapiv1.AzureMachineProviderSpec) *azurev1.AzureMachineTemplate {
 	By("Creating Azure machine template")
 
 	Expect(mapiProviderSpec).ToNot(BeNil())

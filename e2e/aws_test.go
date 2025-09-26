@@ -51,9 +51,9 @@ var _ = Describe("Cluster API AWS MachineSet", Ordered, func() {
 			// explicitly skip it here for other platforms.
 			Skip("Skipping AWS E2E tests")
 		}
-		framework.DeleteMachineSets(cl, machineSet)
+		framework.DeleteMachineSets(ctx, cl, machineSet)
 		framework.WaitForMachineSetsDeleted(cl, machineSet)
-		framework.DeleteObjects(cl, awsMachineTemplate)
+		framework.DeleteObjects(ctx, cl, awsMachineTemplate)
 	})
 
 	It("should be able to run a machine with a default provider spec", func() {
@@ -62,7 +62,7 @@ var _ = Describe("Cluster API AWS MachineSet", Ordered, func() {
 			Expect(err).ToNot(HaveOccurred())
 		}
 
-		machineSet = framework.CreateMachineSet(cl, framework.NewMachineSetParams(
+		machineSet = framework.CreateMachineSet(ctx, cl, framework.NewMachineSetParams(
 			"aws-machineset",
 			clusterName,
 			"",

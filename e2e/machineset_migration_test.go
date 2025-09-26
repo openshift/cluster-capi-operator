@@ -247,7 +247,7 @@ func createCAPIMachineSet(ctx context.Context, cl client.Client, replicas int32,
 		Expect(err).ToNot(HaveOccurred())
 	}
 
-	machineSet := capiframework.CreateMachineSet(cl, capiframework.NewMachineSetParams(
+	machineSet := capiframework.CreateMachineSet(ctx, cl, capiframework.NewMachineSetParams(
 		machineSetName,
 		clusterName,
 		"",
@@ -359,7 +359,7 @@ func cleanupTestResources(ctx context.Context, cl client.Client, capiMachineSets
 			continue
 		}
 		By(fmt.Sprintf("Deleting CAPI MachineSet %s", ms.Name))
-		capiframework.DeleteMachineSets(cl, ms)
+		capiframework.DeleteMachineSets(ctx, cl, ms)
 		capiframework.WaitForMachineSetsDeleted(cl, ms)
 	}
 
@@ -377,6 +377,6 @@ func cleanupTestResources(ctx context.Context, cl client.Client, capiMachineSets
 			continue
 		}
 		By(fmt.Sprintf("Deleting awsMachineTemplate %s", template.Name))
-		capiframework.DeleteAWSMachineTemplates(cl, template)
+		capiframework.DeleteAWSMachineTemplates(ctx, cl, template)
 	}
 }

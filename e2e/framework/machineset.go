@@ -1,6 +1,7 @@
 package framework
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -45,7 +46,7 @@ func NewMachineSetParams(msName, clusterName, failureDomain string, replicas int
 }
 
 // CreateMachineSet creates a new CAPI MachineSet resource.
-func CreateMachineSet(cl client.Client, params machineSetParams) *clusterv1.MachineSet {
+func CreateMachineSet(ctx context.Context, cl client.Client, params machineSetParams) *clusterv1.MachineSet {
 	By(fmt.Sprintf("Creating MachineSet %q", params.msName))
 
 	ms := &clusterv1.MachineSet{
@@ -115,7 +116,7 @@ func WaitForMachineSetsDeleted(cl client.Client, machineSets ...*clusterv1.Machi
 	}
 }
 
-func DeleteMachineSets(cl client.Client, machineSets ...*clusterv1.MachineSet) {
+func DeleteMachineSets(ctx context.Context, cl client.Client, machineSets ...*clusterv1.MachineSet) {
 	for _, ms := range machineSets {
 		if ms == nil {
 			continue
@@ -158,7 +159,7 @@ func WaitForMachineSet(cl client.Client, name string, namespace string) {
 		}
 
 		for _, m := range running {
-			node, err := GetNodeForMachine(cl, m)
+			node, err := GetNodeForMachine(ctx, cl, m)
 			if err != nil {
 				return err
 			}
