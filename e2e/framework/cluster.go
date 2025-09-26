@@ -1,6 +1,8 @@
 package framework
 
 import (
+	"context"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -12,7 +14,7 @@ import (
 )
 
 // CreateCluster creates a cluster with the given name and returns the cluster object.
-func CreateCoreCluster(cl client.Client, clusterName, infraClusterKind string) *clusterv1.Cluster {
+func CreateCoreCluster(ctx context.Context, cl client.Client, clusterName, infraClusterKind string) *clusterv1.Cluster {
 	By("Creating core cluster")
 
 	cluster := &clusterv1.Cluster{

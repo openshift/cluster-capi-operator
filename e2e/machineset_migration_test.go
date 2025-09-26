@@ -21,16 +21,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 )
 
-const (
-	SynchronizedCondition machinev1beta1.ConditionType = "Synchronized"
-	MAPIPausedCondition   machinev1beta1.ConditionType = "Paused"
-	CAPIPausedCondition                                = capiv1beta1.PausedV1Beta2Condition
-)
-
 var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] MachineSet Migration Tests", Ordered, func() {
 	BeforeAll(func() {
 		if platform != configv1.AWSPlatformType {
-			Skip(fmt.Sprintf("Skipping tests on %s, this only support on aws", platform))
+			Skip(fmt.Sprintf("Skipping tests on %s, this is only supported on AWS", platform))
 		}
 
 		if !capiframework.IsMachineAPIMigrationEnabled(ctx, cl) {
@@ -114,10 +108,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 			})
 
 			It("should find that MAPI MachineSet has a CAPI MachineSet mirror", func() {
-				Eventually(func() error {
-					capiMachineSet, err = capiframework.GetMachineSet(cl, mapiMSAuthMAPIName, capiframework.CAPINamespace)
-					return err
-				}, capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(), "CAPI MachineSet mirror should exist")
+				capiMachineSet = capiframework.GetMachineSet(cl, mapiMSAuthMAPIName, capiframework.CAPINamespace)
 			})
 
 			It("should verify that the mirror CAPI MachineSet has Paused condition True", func() {
@@ -170,11 +161,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 			BeforeAll(func() {
 				mapiMachineSet, err = createMAPIMachineSetWithAuthoritativeAPI(ctx, cl, 0, mapiMSAuthCAPIName, machinev1beta1.MachineAuthorityClusterAPI, machinev1beta1.MachineAuthorityClusterAPI)
 				Expect(err).ToNot(HaveOccurred(), "MAPI MachineSet %s creation should succeed", mapiMachineSet.GetName())
-
-				Eventually(func() error {
-					capiMachineSet, err = capiframework.GetMachineSet(cl, mapiMSAuthCAPIName, capiframework.CAPINamespace)
-					return err
-				}, capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(), "CAPI MachineSet should exist")
+				capiMachineSet = capiframework.GetMachineSet(cl, mapiMSAuthCAPIName, capiframework.CAPINamespace)
 
 				Eventually(func() error {
 					awsMachineTemplate, err = capiframework.GetAWSMachineTemplateByPrefix(cl, mapiMSAuthCAPIName, capiframework.CAPINamespace)
@@ -206,10 +193,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 			})
 
 			It("should verify that the non-authoritative MAPI MachineSet has an authoritative CAPI MachineSet mirror", func() {
-				Eventually(func() error {
-					capiMachineSet, err = capiframework.GetMachineSet(cl, mapiMSAuthCAPIName, capiframework.CAPINamespace)
-					return err
-				}, capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(), "CAPI MachineSet should exist")
+				capiMachineSet = capiframework.GetMachineSet(cl, mapiMSAuthCAPIName, capiframework.CAPINamespace)
 			})
 
 			It("should verify that CAPI MachineSet has Paused condition False", func() {
@@ -263,7 +247,7 @@ func createCAPIMachineSet(ctx context.Context, cl client.Client, replicas int32,
 		Expect(err).ToNot(HaveOccurred())
 	}
 
-	machineSet := capiframework.CreateMachineSet(cl, capiframework.NewMachineSetParams(
+	machineSet := capiframework.CreateMachineSet(ctx, cl, capiframework.NewMachineSetParams(
 		machineSetName,
 		clusterName,
 		"",
@@ -375,7 +359,7 @@ func cleanupTestResources(ctx context.Context, cl client.Client, capiMachineSets
 			continue
 		}
 		By(fmt.Sprintf("Deleting CAPI MachineSet %s", ms.Name))
-		capiframework.DeleteMachineSets(cl, ms)
+		capiframework.DeleteMachineSets(ctx, cl, ms)
 		capiframework.WaitForMachineSetsDeleted(cl, ms)
 	}
 
@@ -393,6 +377,6 @@ func cleanupTestResources(ctx context.Context, cl client.Client, capiMachineSets
 			continue
 		}
 		By(fmt.Sprintf("Deleting awsMachineTemplate %s", template.Name))
-		capiframework.DeleteAWSMachineTemplates(cl, template)
+		capiframework.DeleteAWSMachineTemplates(ctx, cl, template)
 	}
 }

@@ -42,9 +42,9 @@ var _ = Describe("Cluster API Baremetal MachineSet", Ordered, func() {
 			// explicitly skip it here for other platforms.
 			Skip("Skipping Baremetal E2E tests")
 		}
-		framework.DeleteMachineSets(cl, machineSet)
+		framework.DeleteMachineSets(ctx, cl, machineSet)
 		framework.WaitForMachineSetsDeleted(cl, machineSet)
-		framework.DeleteObjects(cl, baremetalMachineTemplate)
+		framework.DeleteObjects(ctx, cl, baremetalMachineTemplate)
 	})
 
 	It("should be able to run a machine", func() {
@@ -57,7 +57,7 @@ var _ = Describe("Cluster API Baremetal MachineSet", Ordered, func() {
 
 		baremetalMachineTemplate = createBaremetalMachineTemplate(cl, mapiMachineSpec)
 
-		machineSet = framework.CreateMachineSet(cl, framework.NewMachineSetParams(
+		machineSet = framework.CreateMachineSet(ctx, cl, framework.NewMachineSetParams(
 			"baremetal-machineset",
 			clusterName,
 			"", // mapiMachineSpec.Zone,

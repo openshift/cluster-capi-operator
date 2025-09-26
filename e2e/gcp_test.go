@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"context"
 	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -31,7 +32,7 @@ var _ = Describe("Cluster API GCP MachineSet", Ordered, func() {
 		if platform != configv1.GCPPlatformType {
 			Skip("Skipping GCP E2E tests")
 		}
-		mapiMachineSpec = getGCPMAPIProviderSpec(cl)
+		mapiMachineSpec = getGCPMAPIProviderSpec(ctx, cl)
 	})
 
 	AfterEach(func() {
@@ -40,15 +41,15 @@ var _ = Describe("Cluster API GCP MachineSet", Ordered, func() {
 			// explicitly skip it here for other platforms.
 			Skip("Skipping GCP E2E tests")
 		}
-		framework.DeleteMachineSets(cl, machineSet)
+		framework.DeleteMachineSets(ctx, cl, machineSet)
 		framework.WaitForMachineSetsDeleted(cl, machineSet)
-		framework.DeleteObjects(cl, gcpMachineTemplate)
+		framework.DeleteObjects(ctx, cl, gcpMachineTemplate)
 	})
 
 	It("should be able to run a machine", func() {
-		gcpMachineTemplate = createGCPMachineTemplate(cl, mapiMachineSpec)
+		gcpMachineTemplate = createGCPMachineTemplate(ctx, cl, mapiMachineSpec)
 
-		machineSet = framework.CreateMachineSet(cl, framework.NewMachineSetParams(
+		machineSet = framework.CreateMachineSet(ctx, cl, framework.NewMachineSetParams(
 			"gcp-machineset",
 			clusterName,
 			mapiMachineSpec.Zone,
@@ -65,7 +66,7 @@ var _ = Describe("Cluster API GCP MachineSet", Ordered, func() {
 	})
 })
 
-func getGCPMAPIProviderSpec(cl client.Client) *mapiv1.GCPMachineProviderSpec {
+func getGCPMAPIProviderSpec(ctx context.Context, cl client.Client) *mapiv1.GCPMachineProviderSpec {
 	machineSetList := &mapiv1.MachineSetList{}
 	Expect(cl.List(ctx, machineSetList, client.InNamespace(framework.MAPINamespace))).To(Succeed())
 
@@ -79,7 +80,7 @@ func getGCPMAPIProviderSpec(cl client.Client) *mapiv1.GCPMachineProviderSpec {
 	return providerSpec
 }
 
-func createGCPMachineTemplate(cl client.Client, mapiProviderSpec *mapiv1.GCPMachineProviderSpec) *gcpv1.GCPMachineTemplate {
+func createGCPMachineTemplate(ctx context.Context, cl client.Client, mapiProviderSpec *mapiv1.GCPMachineProviderSpec) *gcpv1.GCPMachineTemplate {
 	By("Creating GCP machine template")
 
 	Expect(mapiProviderSpec).ToNot(BeNil())

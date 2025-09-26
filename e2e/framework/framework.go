@@ -29,7 +29,7 @@ var (
 )
 
 // DeleteObjects deletes the objects in the given list.
-func DeleteObjects(cl client.Client, objs ...client.Object) {
+func DeleteObjects(ctx context.Context, cl client.Client, objs ...client.Object) {
 	for _, o := range objs {
 		By(fmt.Sprintf("Deleting %s/%s", o.GetObjectKind().GroupVersionKind().Kind, o.GetName()))
 		Expect(cl.Delete(ctx, o)).To(Succeed())

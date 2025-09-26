@@ -1,6 +1,7 @@
 package framework
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -33,7 +34,7 @@ func GetAWSMachineTemplateByName(cl client.Client, name string, namespace string
 }
 
 // DeleteAWSMachineTemplates deletes the specified awsMachineTemplates.
-func DeleteAWSMachineTemplates(cl client.Client, templates ...*awsv1.AWSMachineTemplate) {
+func DeleteAWSMachineTemplates(ctx context.Context, cl client.Client, templates ...*awsv1.AWSMachineTemplate) {
 	for _, template := range templates {
 		if template == nil {
 			continue
@@ -75,7 +76,7 @@ func GetAWSMachineTemplateByPrefix(cl client.Client, prefix string, namespace st
 }
 
 // DeleteAWSMachineTemplateByPrefix deletes all AWSMachineTemplates with matching name prefix
-func DeleteAWSMachineTemplateByPrefix(cl client.Client, prefix string, namespace string) error {
+func DeleteAWSMachineTemplateByPrefix(ctx context.Context, cl client.Client, prefix string, namespace string) error {
 	if prefix == "" {
 		return nil
 	}
