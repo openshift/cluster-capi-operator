@@ -72,7 +72,7 @@ The repository also includes:
 ### Running Tests
 ```bash
 make unit                                    # All unit tests
-make unit TEST_PACKAGES="./pkg/controllers/machinesync/..."  # Specific package
+make unit TEST_DIRS="./pkg/controllers/machinesync/..."  # Specific package directories/dirs
 ./hack/test.sh "./pkg/..." 10m             # With timeout
 ```
 #### Default ginkgo arguments
