@@ -203,7 +203,7 @@ data:
         resourceRules:
           - apiGroups: ["machine.openshift.io"]
             apiVersions: ["*"]
-            operations: ["CREATE"]
+            operations: ["CREATE", "UPDATE"]
             resources: ["machines"]
       
       # Requests must satisfy every matchCondition to reach the validations

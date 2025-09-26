@@ -1168,8 +1168,22 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 			})
 		})
 
-		Context("Prevent creation of MAPI machine if authoritative API is not CAPI", func() {
+		FContext("Prevent creation of MAPI machine if authoritative API is not CAPI", func() {
 			BeforeEach(func() {
+				By("Waiting for VAP to be ready")
+				machineVap = &admissionregistrationv1.ValidatingAdmissionPolicy{}
+				Eventually(k8sClient.Get(ctx, client.ObjectKey{Name: "openshift-only-create-mapi-machine-if-authoritative-api-capi"}, machineVap), timeout).Should(Succeed())
+				Eventually(k.Update(machineVap, func() {
+					machineVap.Spec.Validations = append(machineVap.Spec.Validations, admissionregistrationv1.Validation{
+						Expression: "!(has(object.metadata.labels) && \"test-sentinel\" in object.metadata.labels)",
+						Message:    "policy in place",
+					})
+				})).Should(Succeed())
+
+				Eventually(k.Object(machineVap), timeout).Should(
+					HaveField("Status.ObservedGeneration", BeNumerically(">=", 2)),
+				)
+
 				By("Updating the VAP binding")
 				policyBinding = &admissionregistrationv1.ValidatingAdmissionPolicyBinding{}
 				Eventually(k8sClient.Get(ctx, client.ObjectKey{
@@ -1193,14 +1207,6 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 							HaveKeyWithValue("kubernetes.io/metadata.name",
 								mapiNamespace.GetName())),
 					),
-				)
-
-				By("Waiting for VAP to be ready")
-				machineVap = &admissionregistrationv1.ValidatingAdmissionPolicy{}
-				Eventually(k8sClient.Get(ctx, client.ObjectKey{Name: "openshift-only-create-mapi-machine-if-authoritative-api-capi"}, machineVap), timeout).Should(Succeed())
-
-				Eventually(k.Object(machineVap), timeout).Should(
-					HaveField("Status.ObservedGeneration", BeNumerically(">=", 1)),
 				)
 			})
 
