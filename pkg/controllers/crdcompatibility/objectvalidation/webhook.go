@@ -22,9 +22,12 @@ import (
 	apiextensionshelpers "k8s.io/apiextensions-apiserver/pkg/apihelpers"
 	apiextensionsinternal "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	structuralschema "k8s.io/apiextensions-apiserver/pkg/apiserver/schema"
+	"k8s.io/apiextensions-apiserver/pkg/apiserver/schema/cel"
 	apiextensionsvalidation "k8s.io/apiextensions-apiserver/pkg/apiserver/validation"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	celconfig "k8s.io/apiserver/pkg/apis/cel"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -65,7 +68,7 @@ func (h *objectValidator) SetupWithManager(ctx context.Context, mgr ctrl.Manager
 }
 
 func (h *objectValidator) ValidateCreate(ctx context.Context, crdCompatibilityRequirementName string, obj *unstructured.Unstructured) (warnings admission.Warnings, err error) {
-	validator, err := h.createSchemaValidator(ctx, crdCompatibilityRequirementName, obj.GroupVersionKind().Version)
+	validator, celValidator, err := h.createSchemaValidator(ctx, crdCompatibilityRequirementName, obj.GroupVersionKind().Version)
 	if err != nil {
 		return nil, fmt.Errorf("failed to validate: %w", err)
 	}
@@ -76,11 +79,16 @@ func (h *objectValidator) ValidateCreate(ctx context.Context, crdCompatibilityRe
 			warnings = append(warnings, warning.Error())
 		}
 	}
+
+	if celErrs, _ := celValidator.Validate(ctx, nil, nil, obj.Object, nil, celconfig.RuntimeCELCostBudget); celErrs != nil {
+		res.Errors = append(res.Errors, celErrs.ToAggregate())
+	}
+
 	return warnings, res.AsError()
 }
 
 func (h *objectValidator) ValidateUpdate(ctx context.Context, crdCompatibilityRequirementName string, oldObj, obj *unstructured.Unstructured) (warnings admission.Warnings, err error) {
-	validator, err := h.createSchemaValidator(ctx, crdCompatibilityRequirementName, obj.GroupVersionKind().Version)
+	validator, celValidator, err := h.createSchemaValidator(ctx, crdCompatibilityRequirementName, obj.GroupVersionKind().Version)
 	if err != nil {
 		return nil, fmt.Errorf("failed to validate: %w", err)
 	}
@@ -91,6 +99,11 @@ func (h *objectValidator) ValidateUpdate(ctx context.Context, crdCompatibilityRe
 			warnings = append(warnings, warning.Error())
 		}
 	}
+
+	if celErrs, _ := celValidator.Validate(ctx, nil, nil, obj, nil, celconfig.RuntimeCELCostBudget); celErrs != nil {
+		res.Errors = append(res.Errors, celErrs.ToAggregate())
+	}
+
 	return warnings, res.AsError()
 }
 
@@ -98,31 +111,31 @@ func (h *objectValidator) ValidateDelete(ctx context.Context, crdCompatibilityRe
 	return nil, nil
 }
 
-func (h *objectValidator) createSchemaValidator(ctx context.Context, crdCompatibilityRequirementName string, version string) (apiextensionsvalidation.SchemaValidator, error) {
+func (h *objectValidator) createSchemaValidator(ctx context.Context, crdCompatibilityRequirementName string, version string) (apiextensionsvalidation.SchemaValidator, *cel.Validator, error) {
 	// Get the CRDCompatibilityRequirement
 	crdCompatibilityRequirement := &operatorv1alpha1.CRDCompatibilityRequirement{}
 	if err := h.client.Get(ctx, client.ObjectKey{Name: crdCompatibilityRequirementName}, crdCompatibilityRequirement); err != nil {
-		return nil, fmt.Errorf("failed to get CRDCompatibilityRequirement %q: %w", crdCompatibilityRequirementName, err)
+		return nil, nil, fmt.Errorf("failed to get CRDCompatibilityRequirement %q: %w", crdCompatibilityRequirementName, err)
 	}
 
 	// Extract the CRD so we can use the schema.
 	compatibilityCRD := &apiextensionsv1.CustomResourceDefinition{}
 	if err := yaml.Unmarshal([]byte(crdCompatibilityRequirement.Spec.CompatibilityCRD), &compatibilityCRD); err != nil {
-		return nil, fmt.Errorf("failed to parse compatibilityCRD for CRDCompatibilityRequirement %q: %w", crdCompatibilityRequirement.Name, err)
+		return nil, nil, fmt.Errorf("failed to parse compatibilityCRD for CRDCompatibilityRequirement %q: %w", crdCompatibilityRequirement.Name, err)
 	}
 
 	if compatibilityCRD.APIVersion != "apiextensions.k8s.io/v1" || compatibilityCRD.Kind != "CustomResourceDefinition" {
-		return nil, fmt.Errorf("expected APIVersion to be apiextensions.k8s.io/v1 and Kind to be CustomResourceDefinition, got %s/%s", compatibilityCRD.APIVersion, compatibilityCRD.Kind)
+		return nil, nil, fmt.Errorf("expected APIVersion to be apiextensions.k8s.io/v1 and Kind to be CustomResourceDefinition, got %s/%s", compatibilityCRD.APIVersion, compatibilityCRD.Kind)
 	}
 
 	// Adapted from k8s.io/apiextensions-apiserver/pkg/apiserver/customresource_handler.go getOrCreateServingInfoFor.
 	// Creates the validator from JSONSchemaProps.
 	validationSchema, err := apiextensionshelpers.GetSchemaForVersion(compatibilityCRD, version)
 	if err != nil {
-		return nil, fmt.Errorf("the server could not properly serve the CR schema")
+		return nil, nil, fmt.Errorf("the server could not properly serve the CR schema")
 	}
 	if validationSchema == nil {
-		return nil, fmt.Errorf("the server could not create the validationSchema")
+		return nil, nil, fmt.Errorf("the server could not create the validationSchema")
 	}
 
 	var internalSchemaProps *apiextensionsinternal.JSONSchemaProps
@@ -130,14 +143,22 @@ func (h *objectValidator) createSchemaValidator(ctx context.Context, crdCompatib
 	if validationSchema != nil {
 		internalValidationSchema = &apiextensionsinternal.CustomResourceValidation{}
 		if err := apiextensionsv1.Convert_v1_CustomResourceValidation_To_apiextensions_CustomResourceValidation(validationSchema, internalValidationSchema, nil); err != nil {
-			return nil, fmt.Errorf("failed to convert CRD validation to internal version: %v", err)
+			return nil, nil, fmt.Errorf("failed to convert CRD validation to internal version: %v", err)
 		}
 		internalSchemaProps = internalValidationSchema.OpenAPIV3Schema
 	}
-	validator, _, err := apiextensionsvalidation.NewSchemaValidator(internalSchemaProps)
+
+	structuralSchema, err := structuralschema.NewStructural(internalValidationSchema.OpenAPIV3Schema)
 	if err != nil {
-		return nil, fmt.Errorf("the server could not properly create the SchemaValidator")
+		return nil, nil, fmt.Errorf("failed to convert CRD validation to internal version: %v", err)
 	}
 
-	return validator, nil
+	celValidator := cel.NewValidator(structuralSchema, true, celconfig.PerCallLimit)
+
+	validator, _, err := apiextensionsvalidation.NewSchemaValidator(internalSchemaProps)
+	if err != nil {
+		return nil, nil, fmt.Errorf("the server could not properly create the SchemaValidator")
+	}
+
+	return validator, celValidator, nil
 }
