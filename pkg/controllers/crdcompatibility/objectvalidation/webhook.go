@@ -16,139 +16,128 @@ package objectvalidation
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"net/http"
-	"strings"
 
-	admissionv1 "k8s.io/api/admission/v1"
-	v1 "k8s.io/api/admission/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
+	apiextensionshelpers "k8s.io/apiextensions-apiserver/pkg/apihelpers"
+	apiextensionsinternal "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apiextensionsvalidation "k8s.io/apiextensions-apiserver/pkg/apiserver/validation"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
+	"sigs.k8s.io/yaml"
 )
 
 const (
 	webhookPrefix = "/crdcompatibility/"
-	contextKey    = "CRDCompatibilityRequirementName"
 )
 
-func NewObjectValidator() *ObjectValidator {
-	return &ObjectValidator{
+var _ admission.Handler = &objectValidator{}
+
+// objectValidator implements the admission.Handler to have a custom Handle function which is able to
+// validate arbitrary objects against CRDCompatibilityRequirements by leveraging unstructured.
+type objectValidator struct {
+	client  client.Reader
+	decoder admission.Decoder
+}
+
+func NewObjectValidator() *objectValidator {
+	return &objectValidator{
 		// This decoder is only used to decode to unstructured and for CRDCompatibilityRequirements.
 		decoder: admission.NewDecoder(runtime.NewScheme()),
 	}
 }
 
-type ObjectValidator struct {
-	client  client.Reader
-	decoder admission.Decoder
-}
-
 type controllerOption func(*builder.Builder) *builder.Builder
 
-func (o *ObjectValidator) SetupWithManager(ctx context.Context, mgr ctrl.Manager, opts ...controllerOption) error {
-	o.client = mgr.GetClient()
+func (h *objectValidator) SetupWithManager(ctx context.Context, mgr ctrl.Manager, opts ...controllerOption) error {
+	h.client = mgr.GetClient()
 	mgr.GetWebhookServer().Register(webhookPrefix+"{CRDCompatibilityRequirement}", &admission.Webhook{
-		Handler: o,
-		WithContextFunc: func(ctx context.Context, r *http.Request) context.Context {
-			crdCompatibilityRequirementName := strings.TrimPrefix(r.URL.Path, webhookPrefix)
-			return context.WithValue(ctx, contextKey, crdCompatibilityRequirementName)
-		},
+		Handler:         h,
+		WithContextFunc: crdCompatibilityRequrementIntoContext,
 	})
 
 	return nil
 }
 
-// Handle handles admission requests.
-func (o *ObjectValidator) Handle(ctx context.Context, req admission.Request) admission.Response {
-	if o.client == nil {
-		panic("client should never be nil")
-	}
-
-	crdCompatibilityRequirementName, ok := ctx.Value(contextKey).(string)
-	if !ok {
-		admission.Errored(http.StatusBadRequest, fmt.Errorf("expected to have key CRDCompatibilityRequirementName in context"))
-	}
-
-	ctx = admission.NewContextWithRequest(ctx, req)
-
-	// Get the object in the request
-	obj := &unstructured.Unstructured{}
-
-	var err error
-	var warnings []string
-
-	fmt.Printf("Handling CRDCompatibilityRequirementName=%s %q %s %s/%s", crdCompatibilityRequirementName, req.Operation, req.Kind, req.Namespace, req.Name)
-
-	switch req.Operation {
-	case v1.Connect:
-		// No validation for connect requests.
-		// TODO(vincepri): Should we validate CONNECT requests? In what cases?
-	case v1.Create:
-		if err := o.decoder.Decode(req, obj); err != nil {
-			return admission.Errored(http.StatusBadRequest, err)
-		}
-
-		warnings, err = o.ValidateCreate(ctx, crdCompatibilityRequirementName, obj)
-	case v1.Update:
-		oldObj := &unstructured.Unstructured{}
-		if err := o.decoder.DecodeRaw(req.Object, obj); err != nil {
-			return admission.Errored(http.StatusBadRequest, err)
-		}
-		if err := o.decoder.DecodeRaw(req.OldObject, oldObj); err != nil {
-			return admission.Errored(http.StatusBadRequest, err)
-		}
-
-		warnings, err = o.ValidateUpdate(ctx, crdCompatibilityRequirementName, oldObj, obj)
-	case v1.Delete:
-		// In reference to PR: https://github.com/kubernetes/kubernetes/pull/76346
-		// OldObject contains the object being deleted
-		if err := o.decoder.DecodeRaw(req.OldObject, obj); err != nil {
-			return admission.Errored(http.StatusBadRequest, err)
-		}
-
-		warnings, err = o.ValidateDelete(ctx, crdCompatibilityRequirementName, obj)
-	default:
-		return admission.Errored(http.StatusBadRequest, fmt.Errorf("unknown operation %q", req.Operation))
-	}
-
-	// Check the error message first.
+func (h *objectValidator) ValidateCreate(ctx context.Context, crdCompatibilityRequirementName string, obj *unstructured.Unstructured) (warnings admission.Warnings, err error) {
+	validator, err := h.createSchemaValidator(ctx, crdCompatibilityRequirementName, obj.GroupVersionKind().Version)
 	if err != nil {
-		var apiStatus apierrors.APIStatus
-		if errors.As(err, &apiStatus) {
-			return validationResponseFromStatus(false, apiStatus.Status()).WithWarnings(warnings...)
+		return nil, fmt.Errorf("failed to validate: %w", err)
+	}
+
+	res := validator.Validate(obj)
+	if !res.IsValid() && res.HasWarnings() {
+		for _, warning := range res.Warnings {
+			warnings = append(warnings, warning.Error())
 		}
-		return admission.Denied(err.Error()).WithWarnings(warnings...)
+	}
+	return warnings, res.AsError()
+}
+
+func (h *objectValidator) ValidateUpdate(ctx context.Context, crdCompatibilityRequirementName string, oldObj, obj *unstructured.Unstructured) (warnings admission.Warnings, err error) {
+	validator, err := h.createSchemaValidator(ctx, crdCompatibilityRequirementName, obj.GroupVersionKind().Version)
+	if err != nil {
+		return nil, fmt.Errorf("failed to validate: %w", err)
 	}
 
-	// Return allowed if everything succeeded.
-	return admission.Allowed("").WithWarnings(warnings...)
-}
-
-func (o *ObjectValidator) ValidateCreate(ctx context.Context, crdCompatibilityRequirementName string, obj *unstructured.Unstructured) (warnings admission.Warnings, err error) {
-	return admission.Warnings{fmt.Sprintf("This is a POC, handling request from CRDCompatibilityRequirement %s for unstructured object of kind %s: %s/%s", crdCompatibilityRequirementName, obj.GetObjectKind().GroupVersionKind(), obj.GetNamespace(), obj.GetName())}, nil
-}
-
-func (o *ObjectValidator) ValidateUpdate(ctx context.Context, crdCompatibilityRequirementName string, oldObj, obj *unstructured.Unstructured) (warnings admission.Warnings, err error) {
-	return admission.Warnings{fmt.Sprintf("This is a POC, handling request from CRDCompatibilityRequirement %s for unstructured object of kind %s: %s/%s", crdCompatibilityRequirementName, obj.GetObjectKind().GroupVersionKind(), obj.GetNamespace(), obj.GetName())}, nil
-}
-
-func (o *ObjectValidator) ValidateDelete(ctx context.Context, crdCompatibilityRequirementName string, obj *unstructured.Unstructured) (warnings admission.Warnings, err error) {
-	return admission.Warnings{fmt.Sprintf("This is a POC, handling request from CRDCompatibilityRequirement %s for unstructured object of kind %s: %s/%s", crdCompatibilityRequirementName, obj.GetObjectKind().GroupVersionKind(), obj.GetNamespace(), obj.GetName())}, nil
-}
-
-func validationResponseFromStatus(allowed bool, status metav1.Status) admission.Response {
-	resp := admission.Response{
-		AdmissionResponse: admissionv1.AdmissionResponse{
-			Allowed: allowed,
-			Result:  &status,
-		},
+	res := validator.ValidateUpdate(obj, oldObj)
+	if !res.IsValid() && res.HasWarnings() {
+		for _, warning := range res.Warnings {
+			warnings = append(warnings, warning.Error())
+		}
 	}
-	return resp
+	return warnings, res.AsError()
+}
+
+func (h *objectValidator) ValidateDelete(ctx context.Context, crdCompatibilityRequirementName string, obj *unstructured.Unstructured) (warnings admission.Warnings, err error) {
+	return nil, nil
+}
+
+func (h *objectValidator) createSchemaValidator(ctx context.Context, crdCompatibilityRequirementName string, version string) (apiextensionsvalidation.SchemaValidator, error) {
+	// Get the CRDCompatibilityRequirement
+	crdCompatibilityRequirement := &operatorv1alpha1.CRDCompatibilityRequirement{}
+	if err := h.client.Get(ctx, client.ObjectKey{Name: crdCompatibilityRequirementName}, crdCompatibilityRequirement); err != nil {
+		return nil, fmt.Errorf("failed to get CRDCompatibilityRequirement %q: %w", crdCompatibilityRequirementName, err)
+	}
+
+	// Extract the CRD so we can use the schema.
+	compatibilityCRD := &apiextensionsv1.CustomResourceDefinition{}
+	if err := yaml.Unmarshal([]byte(crdCompatibilityRequirement.Spec.CompatibilityCRD), &compatibilityCRD); err != nil {
+		return nil, fmt.Errorf("failed to parse compatibilityCRD for CRDCompatibilityRequirement %q: %w", crdCompatibilityRequirement.Name, err)
+	}
+
+	if compatibilityCRD.APIVersion != "apiextensions.k8s.io/v1" || compatibilityCRD.Kind != "CustomResourceDefinition" {
+		return nil, fmt.Errorf("expected APIVersion to be apiextensions.k8s.io/v1 and Kind to be CustomResourceDefinition, got %s/%s", compatibilityCRD.APIVersion, compatibilityCRD.Kind)
+	}
+
+	// Adapted from k8s.io/apiextensions-apiserver/pkg/apiserver/customresource_handler.go getOrCreateServingInfoFor.
+	// Creates the validator from JSONSchemaProps.
+	validationSchema, err := apiextensionshelpers.GetSchemaForVersion(compatibilityCRD, version)
+	if err != nil {
+		return nil, fmt.Errorf("the server could not properly serve the CR schema")
+	}
+	if validationSchema == nil {
+		return nil, fmt.Errorf("the server could not create the validationSchema")
+	}
+
+	var internalSchemaProps *apiextensionsinternal.JSONSchemaProps
+	var internalValidationSchema *apiextensionsinternal.CustomResourceValidation
+	if validationSchema != nil {
+		internalValidationSchema = &apiextensionsinternal.CustomResourceValidation{}
+		if err := apiextensionsv1.Convert_v1_CustomResourceValidation_To_apiextensions_CustomResourceValidation(validationSchema, internalValidationSchema, nil); err != nil {
+			return nil, fmt.Errorf("failed to convert CRD validation to internal version: %v", err)
+		}
+		internalSchemaProps = internalValidationSchema.OpenAPIV3Schema
+	}
+	validator, _, err := apiextensionsvalidation.NewSchemaValidator(internalSchemaProps)
+	if err != nil {
+		return nil, fmt.Errorf("the server could not properly create the SchemaValidator")
+	}
+
+	return validator, nil
 }
