@@ -168,6 +168,16 @@ type MachineSetStatus struct {
 	// +optional
 	AuthoritativeAPI MachineAuthority `json:"authoritativeAPI,omitempty"`
 
+	// synchronizedAPI represents the API that is currently in sync with the state of the resource.
+	// When a migration begins, this field is set to the value of the authoritativeAPI before the transition to "Migrating".
+	// If a migration becomes stuck and authoritativeAPI is changed back to the original value, this field is used to determine the source of the migration,
+	// allowing for a clean rollback to the previously synchronized API.
+	// An empty value indicates that the resource has not yet been part of a migration.
+	// +kubebuilder:validation:Enum=MachineAPI;ClusterAPI
+	// +openshift:enable:FeatureGate=MachineAPIMigration
+	// +optional
+	SynchronizedAPI SynchronizedAPI `json:"synchronizedAPI,omitempty"`
+
 	// synchronizedGeneration is the generation of the authoritative resource that the non-authoritative resource is synchronised with.
 	// This field is set when the authoritative resource is updated and the sync controller has updated the non-authoritative resource to match.
 	// +kubebuilder:validation:Minimum=0
