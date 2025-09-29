@@ -1300,7 +1300,7 @@ func compareMAPIMachines(a, b *machinev1beta1.Machine) (map[string]any, error) {
 		return nil, fmt.Errorf("unable to parse first Machine API machine set providerSpec: %w", err)
 	}
 
-	ps2, err := mapi2capi.AWSProviderSpecFromRawExtension(a.Spec.ProviderSpec.Value)
+	ps2, err := mapi2capi.AWSProviderSpecFromRawExtension(b.Spec.ProviderSpec.Value)
 	if err != nil {
 		return nil, fmt.Errorf("unable to parse second Machine API machine set providerSpec: %w", err)
 	}
