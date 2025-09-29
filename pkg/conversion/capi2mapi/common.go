@@ -35,7 +35,7 @@ func RawExtensionFromInterface(spec interface{}) (*runtime.RawExtension, error) 
 
 	rawBytes, err := json.Marshal(spec)
 	if err != nil {
-		return nil, fmt.Errorf("error marshalling providerSpec: %w", err)
+		return nil, fmt.Errorf("failed to marshal from RawExtension: %w", err)
 	}
 
 	return &runtime.RawExtension{
