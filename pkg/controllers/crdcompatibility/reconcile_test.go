@@ -137,7 +137,7 @@ var _ = Describe("CRDCompatibilityRequirement", Ordered, ContinueOnFailure, func
 
 		It("Should not set an error when the CRD is not found", func(ctx context.Context) {
 			testCRD := testCRDClean.DeepCopy()
-			testCRD.Name = testCRD.Name + "notexists"
+			testCRD.Name += "notexists"
 			requirement := test.GenerateTestCRDCompatibilityRequirement(testCRD)
 
 			createTestObject(ctx, requirement, "CRDCompatibilityRequirement")
