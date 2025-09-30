@@ -136,7 +136,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	objectValidator := objectvalidation.NewObjectValidator()
+	objectValidator := objectvalidation.NewValidator()
 	// Setup the objectvalidation controller and webhook
 	if err := objectValidator.SetupWithManager(ctx, mgr); err != nil {
 		klog.Error(err, "unable to create controller", "controller", "ObjectValidator")
