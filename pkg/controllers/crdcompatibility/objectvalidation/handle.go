@@ -22,11 +22,14 @@ import (
 	"strings"
 
 	admissionv1 "k8s.io/api/admission/v1"
-	v1 "k8s.io/api/admission/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
+)
+
+var (
+	errUnknownOperation = errors.New("unknown operation")
 )
 
 type crdCompatibilityRequirementContextKey struct{}
@@ -70,28 +73,31 @@ func (h *objectValidator) Handle(ctx context.Context, req admission.Request) adm
 	obj := &unstructured.Unstructured{}
 
 	var err error
+
 	var warnings []string
 
 	switch req.Operation {
-	case v1.Connect:
+	case admissionv1.Connect:
 		// No validation for connect requests.
-	case v1.Create:
+	case admissionv1.Create:
 		if err := h.decoder.Decode(req, obj); err != nil {
 			return admission.Errored(http.StatusBadRequest, err)
 		}
 
 		warnings, err = h.ValidateCreate(ctx, crdCompatibilityRequirementName, obj)
-	case v1.Update:
+	case admissionv1.Update:
 		oldObj := &unstructured.Unstructured{}
+
 		if err := h.decoder.DecodeRaw(req.Object, obj); err != nil {
 			return admission.Errored(http.StatusBadRequest, err)
 		}
+
 		if err := h.decoder.DecodeRaw(req.OldObject, oldObj); err != nil {
 			return admission.Errored(http.StatusBadRequest, err)
 		}
 
 		warnings, err = h.ValidateUpdate(ctx, crdCompatibilityRequirementName, oldObj, obj)
-	case v1.Delete:
+	case admissionv1.Delete:
 		// In reference to PR: https://github.com/kubernetes/kubernetes/pull/76346
 		// OldObject contains the object being deleted
 		if err := h.decoder.DecodeRaw(req.OldObject, obj); err != nil {
@@ -100,7 +106,7 @@ func (h *objectValidator) Handle(ctx context.Context, req admission.Request) adm
 
 		warnings, err = h.ValidateDelete(ctx, crdCompatibilityRequirementName, obj)
 	default:
-		return admission.Errored(http.StatusBadRequest, fmt.Errorf("unknown operation %q", req.Operation))
+		return admission.Errored(http.StatusBadRequest, fmt.Errorf("%w: %q", errUnknownOperation, req.Operation))
 	}
 
 	// Check the error message first.
@@ -109,6 +115,7 @@ func (h *objectValidator) Handle(ctx context.Context, req admission.Request) adm
 		if errors.As(err, &apiStatus) {
 			return validationResponseFromStatus(false, apiStatus.Status()).WithWarnings(warnings...)
 		}
+
 		return admission.Denied(err.Error()).WithWarnings(warnings...)
 	}
 
@@ -123,5 +130,6 @@ func validationResponseFromStatus(allowed bool, status metav1.Status) admission.
 			Result:  &status,
 		},
 	}
+
 	return resp
 }

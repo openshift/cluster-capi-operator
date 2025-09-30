@@ -16,6 +16,7 @@ package objectvalidation
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
@@ -39,6 +40,10 @@ const (
 	webhookPrefix = "/crdcompatibility/"
 )
 
+var (
+	errObjectValidator = errors.New("failed to create the object validator")
+)
+
 var _ admission.Handler = &objectValidator{}
 
 // objectValidator implements the admission.Handler to have a custom Handle function which is able to
@@ -48,6 +53,7 @@ type objectValidator struct {
 	decoder admission.Decoder
 }
 
+// NewObjectValidator returns a partially initialized ObjectValidator.
 func NewObjectValidator() *objectValidator {
 	return &objectValidator{
 		// This decoder is only used to decode to unstructured and for CRDCompatibilityRequirements.
@@ -57,6 +63,7 @@ func NewObjectValidator() *objectValidator {
 
 type controllerOption func(*builder.Builder) *builder.Builder
 
+// SetupWithManager registers the objectValidator webhook with an manager.
 func (h *objectValidator) SetupWithManager(ctx context.Context, mgr ctrl.Manager, opts ...controllerOption) error {
 	h.client = mgr.GetClient()
 	mgr.GetWebhookServer().Register(webhookPrefix+"{CRDCompatibilityRequirement}", &admission.Webhook{
@@ -67,6 +74,7 @@ func (h *objectValidator) SetupWithManager(ctx context.Context, mgr ctrl.Manager
 	return nil
 }
 
+// ValidateCreate validates the creation of an object.
 func (h *objectValidator) ValidateCreate(ctx context.Context, crdCompatibilityRequirementName string, obj *unstructured.Unstructured) (warnings admission.Warnings, err error) {
 	validator, celValidator, err := h.createSchemaValidator(ctx, crdCompatibilityRequirementName, obj.GroupVersionKind().Version)
 	if err != nil {
@@ -86,9 +94,10 @@ func (h *objectValidator) ValidateCreate(ctx context.Context, crdCompatibilityRe
 		res.Errors = append(res.Errors, celErrs.ToAggregate())
 	}
 
-	return warnings, res.AsError()
+	return warnings, fmt.Errorf("validation failed: %w", res.AsError())
 }
 
+// ValidateUpdate validates the update of an object.
 func (h *objectValidator) ValidateUpdate(ctx context.Context, crdCompatibilityRequirementName string, oldObj, obj *unstructured.Unstructured) (warnings admission.Warnings, err error) {
 	validator, celValidator, err := h.createSchemaValidator(ctx, crdCompatibilityRequirementName, obj.GroupVersionKind().Version)
 	if err != nil {
@@ -106,18 +115,18 @@ func (h *objectValidator) ValidateUpdate(ctx context.Context, crdCompatibilityRe
 		res.Errors = append(res.Errors, celErrs.ToAggregate())
 	}
 
-	return warnings, res.AsError()
+	return warnings, fmt.Errorf("validation failed: %w", res.AsError())
 }
 
+// ValidateDelete validates the deletion of an object.
 func (h *objectValidator) ValidateDelete(ctx context.Context, crdCompatibilityRequirementName string, obj *unstructured.Unstructured) (warnings admission.Warnings, err error) {
 	return nil, nil
 }
 
+// FIXME(chrischdi):
+// Should we use NewStrategy instead and its public functions? or do we need to adapt some more from their pub funcs
+// https://github.com/kubernetes/kubernetes/blob/ebc1ccc491c944fa0633f147698e0dc02675051d/staging/src/k8s.io/apiextensions-apiserver/pkg/registry/customresource/strategy.go#L76
 func (h *objectValidator) createSchemaValidator(ctx context.Context, crdCompatibilityRequirementName string, version string) (apiextensionsvalidation.SchemaValidator, *cel.Validator, error) {
-	// TODO:
-	// Should we use NewStrategy instead and its public functions? or do we need to adapt some more from their pub funcs
-	// https://github.com/kubernetes/kubernetes/blob/ebc1ccc491c944fa0633f147698e0dc02675051d/staging/src/k8s.io/apiextensions-apiserver/pkg/registry/customresource/strategy.go#L76
-
 	// Get the CRDCompatibilityRequirement
 	crdCompatibilityRequirement := &operatorv1alpha1.CRDCompatibilityRequirement{}
 	if err := h.client.Get(ctx, client.ObjectKey{Name: crdCompatibilityRequirementName}, crdCompatibilityRequirement); err != nil {
@@ -131,39 +140,41 @@ func (h *objectValidator) createSchemaValidator(ctx context.Context, crdCompatib
 	}
 
 	if compatibilityCRD.APIVersion != "apiextensions.k8s.io/v1" || compatibilityCRD.Kind != "CustomResourceDefinition" {
-		return nil, nil, fmt.Errorf("expected APIVersion to be apiextensions.k8s.io/v1 and Kind to be CustomResourceDefinition, got %s/%s", compatibilityCRD.APIVersion, compatibilityCRD.Kind)
+		return nil, nil, fmt.Errorf("%w: expected APIVersion to be apiextensions.k8s.io/v1 and Kind to be CustomResourceDefinition, got %s/%s", errObjectValidator, compatibilityCRD.APIVersion, compatibilityCRD.Kind)
 	}
 
 	// Adapted from k8s.io/apiextensions-apiserver/pkg/apiserver/customresource_handler.go getOrCreateServingInfoFor.
 	// Creates the validator from JSONSchemaProps.
 	validationSchema, err := apiextensionshelpers.GetSchemaForVersion(compatibilityCRD, version)
 	if err != nil {
-		return nil, nil, fmt.Errorf("the server could not properly serve the CR schema")
-	}
-	if validationSchema == nil {
-		return nil, nil, fmt.Errorf("the server could not create the validationSchema")
+		return nil, nil, fmt.Errorf("the server could not properly serve the CR schema: %w", err)
+	} else if validationSchema == nil {
+		return nil, nil, fmt.Errorf("%w: validationSchema can't be nil", errObjectValidator)
 	}
 
 	var internalSchemaProps *apiextensionsinternal.JSONSchemaProps
+
 	var internalValidationSchema *apiextensionsinternal.CustomResourceValidation
+
 	if validationSchema != nil {
 		internalValidationSchema = &apiextensionsinternal.CustomResourceValidation{}
 		if err := apiextensionsv1.Convert_v1_CustomResourceValidation_To_apiextensions_CustomResourceValidation(validationSchema, internalValidationSchema, nil); err != nil {
-			return nil, nil, fmt.Errorf("failed to convert CRD validation to internal version: %v", err)
+			return nil, nil, fmt.Errorf("failed to convert CRD validation to internal version: %w", err)
 		}
+
 		internalSchemaProps = internalValidationSchema.OpenAPIV3Schema
 	}
 
 	structuralSchema, err := structuralschema.NewStructural(internalValidationSchema.OpenAPIV3Schema)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to convert CRD validation to internal version: %v", err)
+		return nil, nil, fmt.Errorf("failed to convert CRD validation to internal version: %w", err)
 	}
 
 	celValidator := cel.NewValidator(structuralSchema, true, celconfig.PerCallLimit)
 
 	validator, _, err := apiextensionsvalidation.NewSchemaValidator(internalSchemaProps)
 	if err != nil {
-		return nil, nil, fmt.Errorf("the server could not properly create the SchemaValidator")
+		return nil, nil, fmt.Errorf("failed to create a SchemaValidator: %w", err)
 	}
 
 	return validator, celValidator, nil
