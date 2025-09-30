@@ -18,60 +18,15 @@ package crdcompatibility
 
 import (
 	"context"
-	"crypto/rand"
-	"math/big"
-	"unicode"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	"github.com/openshift/cluster-capi-operator/pkg/test"
-	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
-
-// generateTestRequirement generates a simple CRDCompatibilityRequirement using the given CRD as the CompatibilityCRD.
-// The generated requirement uses GenerateName, so it will not have a valid Name until it is created.
-func generateTestRequirement(testCRD *apiextensionsv1.CustomResourceDefinition) *operatorv1alpha1.CRDCompatibilityRequirement {
-	return &operatorv1alpha1.CRDCompatibilityRequirement{
-		ObjectMeta: metav1.ObjectMeta{
-			GenerateName: "test-requirement-",
-		},
-		Spec: operatorv1alpha1.CRDCompatibilityRequirementSpec{
-			CRDRef:             testCRD.Name,
-			CompatibilityCRD:   toYAML(testCRD),
-			CRDAdmitAction:     operatorv1alpha1.CRDAdmitActionEnforce,
-			CreatorDescription: "Test Creator",
-		},
-	}
-}
-
-// generateTestCRD generates a simple CRD with a randomly generated Kind.
-// Version is always v1.
-// Group is always example.com.
-func generateTestCRD() *apiextensionsv1.CustomResourceDefinition {
-	const validChars = "abcdefghijklmnopqrstuvwxyz"
-
-	randBytes := make([]byte, 10)
-
-	for i := range randBytes {
-		randInt, err := rand.Int(rand.Reader, big.NewInt(int64(len(validChars))))
-		Expect(err).To(Succeed())
-
-		randBytes[i] = validChars[randInt.Int64()]
-	}
-
-	gvk := schema.GroupVersionKind{
-		Group:   "example.com",
-		Version: "v1",
-		Kind:    string(unicode.ToUpper(rune(randBytes[0]))) + string(randBytes[1:]),
-	}
-
-	return test.GenerateCRD(gvk)
-}
 
 // waitForAdmitted waits until a CRDCompatibilityRequirement has the Admitted condition set to True.
 func waitForAdmitted(ctx context.Context, requirement *operatorv1alpha1.CRDCompatibilityRequirement) {

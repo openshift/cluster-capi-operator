@@ -100,13 +100,17 @@ func (r *reconcileState) parseCompatibilityCRD(crdCompatibilityRequirement *oper
 }
 
 func (r *reconcileState) fetchCurrentCRD(ctx context.Context, log logr.Logger, crdCompatibilityRequirement *operatorv1alpha1.CRDCompatibilityRequirement) error {
+	crdName := crdCompatibilityRequirement.Status.ObservedCRD.Name
+	if crdName == "" {
+		return nil
+	}
 	currentCRD := &apiextensionsv1.CustomResourceDefinition{}
-	if err := r.client.Get(ctx, types.NamespacedName{Name: crdCompatibilityRequirement.Spec.CRDRef}, currentCRD); err != nil {
+	if err := r.client.Get(ctx, types.NamespacedName{Name: crdName}, currentCRD); err != nil {
 		if apierrors.IsNotFound(err) {
-			log.Info("CRD not found", "crdRef", crdCompatibilityRequirement.Spec.CRDRef)
+			log.Info("CRD not found", "crdRef", crdName)
 			return nil
 		} else {
-			return fmt.Errorf("failed to fetch CRD %s: %w", crdCompatibilityRequirement.Spec.CRDRef, err)
+			return fmt.Errorf("failed to fetch CRD %s: %w", crdName, err)
 		}
 	}
 

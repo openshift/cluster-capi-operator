@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package crdcompatibility
+package crdvalidation
 
 import (
 	"context"
@@ -25,21 +25,39 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 	"sigs.k8s.io/yaml"
 
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility/index"
 	"github.com/openshift/cluster-capi-operator/pkg/crdchecker"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 )
 
 var (
 	errExpectedCRD           = errors.New("expected a CustomResourceDefinition")
-	errCRDHasRequirements    = errors.New("cannot delete CRD because it has CRDCompatibilityRequirements")
+	ErrCRDHasRequirements    = errors.New("cannot delete CRD because it has CRDCompatibilityRequirements")
 	errCRDNotCompatible      = errors.New("CRD is not compatible with CRDCompatibilityRequirements")
 	errUnknownCRDAdmitAction = errors.New("unknown CRDAdmitAction")
 )
+
+type controllerOption func(*builder.Builder) *builder.Builder
+
+func (r *crdValidator) SetupWithManager(ctx context.Context, mgr ctrl.Manager, opts ...controllerOption) error {
+	// Create field index for spec.crdRef
+	if err := mgr.GetFieldIndexer().IndexField(ctx, &operatorv1alpha1.CRDCompatibilityRequirement{}, index.FieldCRDByName, index.CRDByName); err != nil {
+		return fmt.Errorf("failed to add index to CRDCompatibilityRequirements: %w", err)
+	}
+
+	r.client = mgr.GetClient()
+
+	return ctrl.NewWebhookManagedBy(mgr).
+		For(&apiextensionsv1.CustomResourceDefinition{}).
+		WithValidator(r).Complete()
+}
 
 type crdValidator struct {
 	client client.Reader
@@ -54,7 +72,7 @@ func (v *crdValidator) validateCreateOrUpdate(ctx context.Context, obj runtime.O
 	}
 
 	crdCompatibilityRequirements := operatorv1alpha1.CRDCompatibilityRequirementList{}
-	if err := v.client.List(ctx, &crdCompatibilityRequirements, &client.ListOptions{FieldSelector: fields.SelectorFromSet(fields.Set{fieldIndexCRDRef: crd.GetName()})}); err != nil {
+	if err := v.client.List(ctx, &crdCompatibilityRequirements, &client.ListOptions{FieldSelector: fields.SelectorFromSet(fields.Set{index.FieldCRDByName: crd.GetName()})}); err != nil {
 		return nil, fmt.Errorf("failed to list CRDCompatibilityRequirements: %w for CRD %q", err, crd.GetName())
 	}
 
@@ -115,7 +133,7 @@ func (v *crdValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (
 	}
 
 	crdCompatibilityRequirements := operatorv1alpha1.CRDCompatibilityRequirementList{}
-	if err := v.client.List(ctx, &crdCompatibilityRequirements, &client.ListOptions{FieldSelector: fields.SelectorFromSet(fields.Set{fieldIndexCRDRef: crd.GetName()})}); err != nil {
+	if err := v.client.List(ctx, &crdCompatibilityRequirements, &client.ListOptions{FieldSelector: fields.SelectorFromSet(fields.Set{index.FieldCRDByName: crd.GetName()})}); err != nil {
 		return nil, fmt.Errorf("failed to list CRDCompatibilityRequirements: %w for CRD %q", err, crd.GetName())
 	}
 
@@ -125,7 +143,7 @@ func (v *crdValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (
 			names = append(names, crdCompatibilityRequirement.Name)
 		}
 
-		return nil, fmt.Errorf("%w: %s", errCRDHasRequirements, strings.Join(names, ", "))
+		return nil, fmt.Errorf("%w: %s", ErrCRDHasRequirements, strings.Join(names, ", "))
 	}
 
 	return nil, nil

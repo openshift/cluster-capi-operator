@@ -55,7 +55,7 @@ var _ = Describe("CRDCompatibilityReconciler Controller Setup", func() {
 		// We aren't going to start the manager, so the cached client won't work
 		reconciler.client = cl
 
-		testCRD = generateTestCRD()
+		testCRD = test.GenerateTestCRD()
 
 		// Create a working copy of the CRD so we maintain a clean version
 		// with no runtime metadata
