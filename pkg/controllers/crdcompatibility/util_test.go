@@ -30,6 +30,7 @@ import (
 
 // waitForAdmitted waits until a CRDCompatibilityRequirement has the Admitted condition set to True.
 func waitForAdmitted(ctx context.Context, requirement *operatorv1alpha1.CRDCompatibilityRequirement) {
+	GinkgoHelper()
 	By("Waiting for the CRDCompatibilityRequirement to be admitted")
 	Eventually(kWithCtx(ctx).Object(requirement)).Should(SatisfyAll(
 		test.HaveCondition("Admitted", metav1.ConditionTrue),
@@ -38,6 +39,7 @@ func waitForAdmitted(ctx context.Context, requirement *operatorv1alpha1.CRDCompa
 
 // createTestObject creates a test object and defers its deletion.
 func createTestObject(ctx context.Context, obj client.Object, desc string) {
+	GinkgoHelper()
 	By("Creating test " + desc)
 	Eventually(func() error { return cl.Create(ctx, obj) }).Should(Succeed())
 	GinkgoWriter.Println("Created " + desc + " " + obj.GetName())

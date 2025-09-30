@@ -57,7 +57,7 @@ var _ = Describe("CRDCompatibilityRequirement", Ordered, ContinueOnFailure, func
 		})
 
 		It("Should set all conditions and observed CRD", func(ctx context.Context) {
-			requirement := generateTestRequirement(testCRDClean)
+			requirement := test.GenerateTestCRDCompatibilityRequirement(testCRDClean)
 			createTestObject(ctx, requirement, "CRDCompatibilityRequirement")
 
 			By("Waiting for the CRDCompatibilityRequirement to have the expected status")
@@ -77,7 +77,7 @@ var _ = Describe("CRDCompatibilityRequirement", Ordered, ContinueOnFailure, func
 		})
 
 		It("Should correctly update observed generation on conditions", func(ctx context.Context) {
-			requirement := generateTestRequirement(testCRDClean)
+			requirement := test.GenerateTestCRDCompatibilityRequirement(testCRDClean)
 			createTestObject(ctx, requirement, "CRDCompatibilityRequirement")
 
 			generation := requirement.GetGeneration()
@@ -118,7 +118,7 @@ var _ = Describe("CRDCompatibilityRequirement", Ordered, ContinueOnFailure, func
 		})
 
 		It("Should not admit a CRDCompatibilityRequirement if the CompatibilityCRD does not parse", func(ctx context.Context) {
-			requirement := generateTestRequirement(testCRDClean)
+			requirement := test.GenerateTestCRDCompatibilityRequirement(testCRDClean)
 			requirement.Spec.CompatibilityCRD = "not YAML"
 
 			By("Attempting to create invalid CRDCompatibilityRequirement " + requirement.Name)
@@ -127,7 +127,7 @@ var _ = Describe("CRDCompatibilityRequirement", Ordered, ContinueOnFailure, func
 		})
 
 		It("Should not admit a CRDCompatibilityRequirement if the CompatibilityCRD parses but is not a CRD", func(ctx context.Context) {
-			requirement := generateTestRequirement(testCRDClean)
+			requirement := test.GenerateTestCRDCompatibilityRequirement(testCRDClean)
 			requirement.Spec.CompatibilityCRD = "{}"
 
 			By("Attempting to create invalid CRDCompatibilityRequirement " + requirement.Name)
@@ -136,8 +136,9 @@ var _ = Describe("CRDCompatibilityRequirement", Ordered, ContinueOnFailure, func
 		})
 
 		It("Should not set an error when the CRD is not found", func(ctx context.Context) {
-			requirement := generateTestRequirement(testCRDClean)
-			// requirement.Spec.CRDRef = "tests.example.com"
+			testCRD := testCRDClean.DeepCopy()
+			testCRD.Name = testCRD.Name + "notexists"
+			requirement := test.GenerateTestCRDCompatibilityRequirement(testCRD)
 
 			createTestObject(ctx, requirement, "CRDCompatibilityRequirement")
 
@@ -146,7 +147,8 @@ var _ = Describe("CRDCompatibilityRequirement", Ordered, ContinueOnFailure, func
 				test.HaveCondition("Progressing", metav1.ConditionFalse, test.WithConditionReason(operatorv1alpha1.CRDCompatibilityProgressingReasonUpToDate), test.WithConditionMessage("The CRDCompatibilityRequirement is up to date")),
 
 				// observed CRD should be empty
-				HaveField("Status.ObservedCRD", BeZero()),
+				HaveField("Status.ObservedCRD.UID", BeZero()),
+				HaveField("Status.ObservedCRD.Generation", BeZero()),
 			))
 		})
 
@@ -170,7 +172,7 @@ var _ = Describe("CRDCompatibilityRequirement", Ordered, ContinueOnFailure, func
 				addProperty(incompatibleCRD, "extra")()
 
 				By("Creating a new CRDCompatibilityRequirement with a compatibility CRD which requires an extra field")
-				requirement = generateTestRequirement(incompatibleCRD)
+				requirement = test.GenerateTestCRDCompatibilityRequirement(incompatibleCRD)
 				createTestObject(ctx, requirement, "CRDCompatibilityRequirement")
 			})
 
@@ -251,7 +253,7 @@ var _ = Describe("CRDCompatibilityRequirement", Ordered, ContinueOnFailure, func
 			BeforeEach(func(ctx context.Context) {
 				createTestObject(ctx, testCRDWorking, "CRD")
 
-				requirement = generateTestRequirement(testCRDClean)
+				requirement = test.GenerateTestCRDCompatibilityRequirement(testCRDClean)
 				createTestObject(ctx, requirement, "CRDCompatibilityRequirement")
 				waitForAdmitted(ctx, requirement)
 			})
@@ -286,7 +288,7 @@ var _ = Describe("CRDCompatibilityRequirement", Ordered, ContinueOnFailure, func
 				// it will be deleted after the requirement is deleted
 				deferCleanupTestObject(testCRDWorking, "CRD")
 
-				requirement = generateTestRequirement(testCRDWorking)
+				requirement = test.GenerateTestCRDCompatibilityRequirement(testCRDWorking)
 				createTestObject(ctx, requirement, "CRDCompatibilityRequirement")
 				waitForAdmitted(ctx, requirement)
 			})

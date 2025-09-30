@@ -25,7 +25,7 @@ import (
 )
 
 const (
-	FieldCRDByName string = "status.observedCRD.name"
+	FieldCRDByName string = "status.crdName"
 )
 
 // CRDByName contains the logic to index CRDCompatibilityRequirement by CRDRef.
@@ -35,5 +35,5 @@ func CRDByName(obj client.Object) []string {
 		panic(fmt.Sprintf("Expected a CRDCompatibilityRequirement but got a %T", obj))
 	}
 
-	return []string{requirement.Status.ObservedCRD.Name}
+	return []string{requirement.Status.CRDName}
 }
