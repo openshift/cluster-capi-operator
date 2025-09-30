@@ -116,7 +116,7 @@ func Test_crdValidator_validateCreateOrUpdate(t *testing.T) { //nolint:funlen
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			g := NewWithT(t)
-			v := crdValidator{
+			v := Validator{
 				client: fake.NewClientBuilder().WithObjects(tt.requirements...).WithIndex(&operatorv1alpha1.CRDCompatibilityRequirement{}, index.FieldCRDByName, index.CRDByName).Build(),
 			}
 

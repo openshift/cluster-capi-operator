@@ -44,28 +44,33 @@ var (
 	errUnknownCRDAdmitAction = errors.New("unknown CRDAdmitAction")
 )
 
+// NewValidator returns a partially initialised Validator.
+func NewValidator(client client.Client) *Validator {
+	return &Validator{
+		client: client,
+	}
+}
+
 type controllerOption func(*builder.Builder) *builder.Builder
 
-func (r *crdValidator) SetupWithManager(ctx context.Context, mgr ctrl.Manager, opts ...controllerOption) error {
+func (r *Validator) SetupWithManager(ctx context.Context, mgr ctrl.Manager, opts ...controllerOption) error {
 	// Create field index for spec.crdRef
 	if err := mgr.GetFieldIndexer().IndexField(ctx, &operatorv1alpha1.CRDCompatibilityRequirement{}, index.FieldCRDByName, index.CRDByName); err != nil {
 		return fmt.Errorf("failed to add index to CRDCompatibilityRequirements: %w", err)
 	}
-
-	r.client = mgr.GetClient()
 
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(&apiextensionsv1.CustomResourceDefinition{}).
 		WithValidator(r).Complete()
 }
 
-type crdValidator struct {
+type Validator struct {
 	client client.Reader
 }
 
-var _ admission.CustomValidator = &crdValidator{}
+var _ admission.CustomValidator = &Validator{}
 
-func (v *crdValidator) validateCreateOrUpdate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
+func (v *Validator) validateCreateOrUpdate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
 	crd, ok := obj.(*apiextensionsv1.CustomResourceDefinition)
 	if !ok {
 		return nil, fmt.Errorf("%w: got %T", errExpectedCRD, obj)
@@ -116,17 +121,17 @@ func (v *crdValidator) validateCreateOrUpdate(ctx context.Context, obj runtime.O
 }
 
 // ValidateCreate validates a Create event for a CustomResourceDefinition.
-func (v *crdValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
+func (v *Validator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
 	return v.validateCreateOrUpdate(ctx, obj)
 }
 
 // ValidateUpdate validates an Update event for a CustomResourceDefinition.
-func (v *crdValidator) ValidateUpdate(ctx context.Context, _, newObj runtime.Object) (admission.Warnings, error) {
+func (v *Validator) ValidateUpdate(ctx context.Context, _, newObj runtime.Object) (admission.Warnings, error) {
 	return v.validateCreateOrUpdate(ctx, newObj)
 }
 
 // ValidateDelete validates a Delete event for a CustomResourceDefinition.
-func (v *crdValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
+func (v *Validator) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
 	crd, ok := obj.(*apiextensionsv1.CustomResourceDefinition)
 	if !ok {
 		return nil, fmt.Errorf("%w: got %T", errExpectedCRD, obj)
