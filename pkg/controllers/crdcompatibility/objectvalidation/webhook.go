@@ -80,6 +80,8 @@ func (h *objectValidator) ValidateCreate(ctx context.Context, crdCompatibilityRe
 		}
 	}
 
+	// TODO: should we
+
 	if celErrs, _ := celValidator.Validate(ctx, nil, nil, obj.Object, nil, celconfig.RuntimeCELCostBudget); celErrs != nil {
 		res.Errors = append(res.Errors, celErrs.ToAggregate())
 	}
@@ -112,6 +114,10 @@ func (h *objectValidator) ValidateDelete(ctx context.Context, crdCompatibilityRe
 }
 
 func (h *objectValidator) createSchemaValidator(ctx context.Context, crdCompatibilityRequirementName string, version string) (apiextensionsvalidation.SchemaValidator, *cel.Validator, error) {
+	// TODO:
+	// Should we use NewStrategy instead and its public functions? or do we need to adapt some more from their pub funcs
+	// https://github.com/kubernetes/kubernetes/blob/ebc1ccc491c944fa0633f147698e0dc02675051d/staging/src/k8s.io/apiextensions-apiserver/pkg/registry/customresource/strategy.go#L76
+
 	// Get the CRDCompatibilityRequirement
 	crdCompatibilityRequirement := &operatorv1alpha1.CRDCompatibilityRequirement{}
 	if err := h.client.Get(ctx, client.ObjectKey{Name: crdCompatibilityRequirementName}, crdCompatibilityRequirement); err != nil {

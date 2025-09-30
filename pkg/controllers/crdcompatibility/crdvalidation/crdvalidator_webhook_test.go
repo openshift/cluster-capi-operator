@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package crdcompatibility
+package crdvalidation
 
 import (
 	"context"
@@ -25,6 +25,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility/index"
+	"github.com/openshift/cluster-capi-operator/pkg/test"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
@@ -34,7 +36,7 @@ func Test_crdValidator_validateCreateOrUpdate(t *testing.T) { //nolint:funlen
 
 	ctx := context.Background()
 
-	testCRDWorking := generateTestCRD()
+	testCRDWorking := test.GenerateTestCRD()
 	testCRDWorking.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["foo1"] = apiextensionsv1.JSONSchemaProps{
 		Type: "string",
 	}
@@ -58,20 +60,20 @@ func Test_crdValidator_validateCreateOrUpdate(t *testing.T) { //nolint:funlen
 		{
 			name:         "Should permit a valid CRD",
 			obj:          testCRDWorking.DeepCopy(),
-			requirements: []client.Object{generateTestRequirement(testCRDWorking.DeepCopy())},
+			requirements: []client.Object{test.GenerateTestCRDCompatibilityRequirement(testCRDWorking.DeepCopy())},
 			wantWarnings: BeNil(),
 		},
 		{
 			name:         "Should reject an incompatible CRD",
 			obj:          incompatibleCRD1.DeepCopy(),
-			requirements: []client.Object{generateTestRequirement(testCRDWorking.DeepCopy())},
+			requirements: []client.Object{test.GenerateTestCRDCompatibilityRequirement(testCRDWorking.DeepCopy())},
 			wantWarnings: BeNil(),
 			wantErr:      MatchError("CRD is not compatible with CRDCompatibilityRequirements: This requirement was added by Test Creator: requirement : removed field : v1.^.foo1"),
 		},
 		{
 			name:         "Should reject an incompatible CRD with multiple removed fields",
 			obj:          incompatibleCRD2.DeepCopy(),
-			requirements: []client.Object{generateTestRequirement(testCRDWorking.DeepCopy())},
+			requirements: []client.Object{test.GenerateTestCRDCompatibilityRequirement(testCRDWorking.DeepCopy())},
 			wantWarnings: BeNil(),
 			wantErr: MatchError(
 				SatisfyAll(
@@ -86,7 +88,7 @@ func Test_crdValidator_validateCreateOrUpdate(t *testing.T) { //nolint:funlen
 			obj:  incompatibleCRD1.DeepCopy(),
 			requirements: []client.Object{
 				func() *operatorv1alpha1.CRDCompatibilityRequirement {
-					r := generateTestRequirement(testCRDWorking.DeepCopy())
+					r := test.GenerateTestCRDCompatibilityRequirement(testCRDWorking.DeepCopy())
 					r.Spec.CRDAdmitAction = operatorv1alpha1.CRDAdmitActionWarn
 
 					return r
@@ -99,7 +101,7 @@ func Test_crdValidator_validateCreateOrUpdate(t *testing.T) { //nolint:funlen
 			obj:  incompatibleCRD2.DeepCopy(),
 			requirements: []client.Object{
 				func() *operatorv1alpha1.CRDCompatibilityRequirement {
-					r := generateTestRequirement(testCRDWorking.DeepCopy())
+					r := test.GenerateTestCRDCompatibilityRequirement(testCRDWorking.DeepCopy())
 					r.Spec.CRDAdmitAction = operatorv1alpha1.CRDAdmitActionWarn
 
 					return r
@@ -115,7 +117,7 @@ func Test_crdValidator_validateCreateOrUpdate(t *testing.T) { //nolint:funlen
 		t.Run(tt.name, func(t *testing.T) {
 			g := NewWithT(t)
 			v := crdValidator{
-				client: fake.NewClientBuilder().WithObjects(tt.requirements...).WithIndex(&operatorv1alpha1.CRDCompatibilityRequirement{}, fieldIndexCRDRef, crdByCRDRef).Build(),
+				client: fake.NewClientBuilder().WithObjects(tt.requirements...).WithIndex(&operatorv1alpha1.CRDCompatibilityRequirement{}, index.FieldCRDByName, index.CRDByName).Build(),
 			}
 
 			gotWarnings, gotErr := v.validateCreateOrUpdate(ctx, tt.obj)

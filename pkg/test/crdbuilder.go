@@ -16,11 +16,17 @@ limitations under the License.
 package test
 
 import (
+	"crypto/rand"
 	"fmt"
+	"math/big"
 	"strings"
+	"unicode"
 
 	"github.com/gobuffalo/flect"
+	"github.com/onsi/gomega"
+	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
+	"gopkg.in/yaml.v2"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -145,6 +151,48 @@ func GenerateCRD(gvk schema.GroupVersionKind, additionalVersions ...string) *api
 				Plural: flect.Pluralize(strings.ToLower(gvk.Kind)),
 			},
 			Versions: append(util.SliceMap(additionalVersions, generateVersion), generateVersion(gvk.Version)),
+		},
+	}
+}
+
+// GenerateTestCRD generates a simple CRD with a randomly generated Kind.
+// Version is always v1.
+// Group is always example.com.
+func GenerateTestCRD() *apiextensionsv1.CustomResourceDefinition {
+	const validChars = "abcdefghijklmnopqrstuvwxyz"
+
+	randBytes := make([]byte, 10)
+
+	for i := range randBytes {
+		randInt, err := rand.Int(rand.Reader, big.NewInt(int64(len(validChars))))
+		gomega.Expect(err).To(gomega.Succeed())
+
+		randBytes[i] = validChars[randInt.Int64()]
+	}
+
+	gvk := schema.GroupVersionKind{
+		Group:   "example.com",
+		Version: "v1",
+		Kind:    string(unicode.ToUpper(rune(randBytes[0]))) + string(randBytes[1:]),
+	}
+
+	return GenerateCRD(gvk)
+}
+
+// GenerateTestCRDCompatibilityRequirement generates a simple CRDCompatibilityRequirement using the given CRD as the CompatibilityCRD.
+// The generated requirement uses GenerateName, so it will not have a valid Name until it is created.
+func GenerateTestCRDCompatibilityRequirement(testCRD *apiextensionsv1.CustomResourceDefinition) *operatorv1alpha1.CRDCompatibilityRequirement {
+	yaml, err := yaml.Marshal(testCRD)
+	gomega.Expect(err).To(gomega.Succeed())
+
+	return &operatorv1alpha1.CRDCompatibilityRequirement{
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: "test-requirement-",
+		},
+		Spec: operatorv1alpha1.CRDCompatibilityRequirementSpec{
+			CompatibilityCRD:   string(yaml),
+			CRDAdmitAction:     operatorv1alpha1.CRDAdmitActionEnforce,
+			CreatorDescription: "Test Creator",
 		},
 	}
 }

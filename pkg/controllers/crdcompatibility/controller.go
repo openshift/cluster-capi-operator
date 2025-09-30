@@ -33,11 +33,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility/index"
 )
 
 const (
-	fieldIndexCRDRef string = "spec.crdRef"
-
 	controllerName string = "crdcompatibility.operator.openshift.io"
 )
 
@@ -56,28 +55,12 @@ func NewCRDCompatibilityReconciler(client client.Client) *CRDCompatibilityReconc
 // CRDCompatibilityReconciler reconciles CRDCompatibilityRequirement resources.
 type CRDCompatibilityReconciler struct {
 	client client.Client
-
-	validator *crdValidator
 }
 
 type controllerOption func(*builder.Builder) *builder.Builder
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *CRDCompatibilityReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager, opts ...controllerOption) error {
-	// Create field index for spec.crdRef
-	if err := mgr.GetFieldIndexer().IndexField(ctx, &operatorv1alpha1.CRDCompatibilityRequirement{}, fieldIndexCRDRef, crdByCRDRef); err != nil {
-		return fmt.Errorf("failed to add index to CRDCompatibilityRequirements: %w", err)
-	}
-
-	crdValidator := &crdValidator{
-		client: mgr.GetClient(),
-	}
-	r.validator = crdValidator
-
-	crdValidatorBuilder := ctrl.NewWebhookManagedBy(mgr).
-		For(&apiextensionsv1.CustomResourceDefinition{}).
-		WithValidator(crdValidator)
-
 	crdRequirementValidatorBuilder := ctrl.NewWebhookManagedBy(mgr).
 		For(&operatorv1alpha1.CRDCompatibilityRequirement{}).
 		WithValidator(&crdRequirementValidator{})
@@ -99,20 +82,9 @@ func (r *CRDCompatibilityReconciler) SetupWithManager(ctx context.Context, mgr c
 	}
 
 	return errors.Join(
-		crdValidatorBuilder.Complete(),
 		crdRequirementValidatorBuilder.Complete(),
 		controllerBuilder.Complete(r),
 	)
-}
-
-// crdByCRDRef contains the logic to index CRDCompatibilityRequirement by CRDRef.
-func crdByCRDRef(obj client.Object) []string {
-	requirement, ok := obj.(*operatorv1alpha1.CRDCompatibilityRequirement)
-	if !ok {
-		panic(fmt.Sprintf("Expected a CRDCompatibilityRequirement but got a %T", obj))
-	}
-
-	return []string{requirement.Spec.CRDRef}
 }
 
 // findCRDCompatibilityRequirementsForCRD finds all CRDCompatibilityRequirements that reference the given CRD.
@@ -124,7 +96,7 @@ func (r *CRDCompatibilityReconciler) findCRDCompatibilityRequirementsForCRD(ctx 
 
 	// Use field index to find CRDCompatibilityRequirements that reference this CRD
 	var requirements operatorv1alpha1.CRDCompatibilityRequirementList
-	if err := r.client.List(ctx, &requirements, client.MatchingFields{fieldIndexCRDRef: crd.Name}); err != nil {
+	if err := r.client.List(ctx, &requirements, client.MatchingFields{index.FieldCRDByName: crd.Name}); err != nil {
 		log.FromContext(ctx).Error(err, "failed to list CRDCompatibilityRequirements for CRD", "crdName", crd.Name, "clientType", fmt.Sprintf("%T", r.client))
 		return nil
 	}

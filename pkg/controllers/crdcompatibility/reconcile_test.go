@@ -27,6 +27,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility/crdvalidation"
 	"github.com/openshift/cluster-capi-operator/pkg/test"
 )
 
@@ -46,7 +47,7 @@ var _ = Describe("CRDCompatibilityRequirement", Ordered, ContinueOnFailure, func
 	)
 
 	BeforeEach(func(ctx context.Context) {
-		testCRDClean = generateTestCRD()
+		testCRDClean = test.GenerateTestCRD()
 		testCRDWorking = testCRDClean.DeepCopy()
 	})
 
@@ -136,7 +137,7 @@ var _ = Describe("CRDCompatibilityRequirement", Ordered, ContinueOnFailure, func
 
 		It("Should not set an error when the CRD is not found", func(ctx context.Context) {
 			requirement := generateTestRequirement(testCRDClean)
-			requirement.Spec.CRDRef = "tests.example.com"
+			// requirement.Spec.CRDRef = "tests.example.com"
 
 			createTestObject(ctx, requirement, "CRDCompatibilityRequirement")
 
@@ -257,7 +258,7 @@ var _ = Describe("CRDCompatibilityRequirement", Ordered, ContinueOnFailure, func
 
 			It("Should not permit a CRD with requirements to be deleted", func(ctx context.Context) {
 				By("Attempting to delete CRD " + testCRDClean.Name)
-				Eventually(tryDelete(ctx, testCRDClean)).Should(MatchError(ContainSubstring(errCRDHasRequirements.Error())), "The test CRD should not be deleted")
+				Eventually(tryDelete(ctx, testCRDClean)).Should(MatchError(ContainSubstring(crdvalidation.ErrCRDHasRequirements.Error())), "The test CRD should not be deleted")
 			})
 
 			updateCRD := func(ctx context.Context, obj client.Object, updateFn func()) func() error {
@@ -279,7 +280,7 @@ var _ = Describe("CRDCompatibilityRequirement", Ordered, ContinueOnFailure, func
 			)
 
 			BeforeEach(func(ctx context.Context) {
-				testCRDWorking = generateTestCRD()
+				testCRDWorking = test.GenerateTestCRD()
 
 				// We need to register this before the requirement is created so
 				// it will be deleted after the requirement is deleted
