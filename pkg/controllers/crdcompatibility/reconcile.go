@@ -100,7 +100,7 @@ func (r *reconcileState) parseCompatibilityCRD(crdCompatibilityRequirement *oper
 }
 
 func (r *reconcileState) fetchCurrentCRD(ctx context.Context, log logr.Logger, crdCompatibilityRequirement *operatorv1alpha1.CRDCompatibilityRequirement) error {
-	crdName := crdCompatibilityRequirement.Status.ObservedCRD.Name
+	crdName := r.compatibilityCRD.GetName()
 	if crdName == "" {
 		return nil
 	}

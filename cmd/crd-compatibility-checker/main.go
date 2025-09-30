@@ -29,6 +29,7 @@ import (
 
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility/crdvalidation"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility/objectvalidation"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 
@@ -122,18 +123,23 @@ func main() {
 
 	ctx := ctrl.SetupSignalHandler()
 
-	objectValidator := objectvalidation.NewObjectValidator()
-	// Setup the objectvalidation controller and webhook
-	if err := objectValidator.SetupWithManager(ctx, mgr); err != nil {
+	crdCompatibilityReconciler := crdcompatibility.NewCRDCompatibilityReconciler(mgr.GetClient())
+	// Setup the CRD compatibility controller
+	if err := crdCompatibilityReconciler.SetupWithManager(ctx, mgr); err != nil {
 		klog.Error(err, "unable to create controller", "controller", "CRDCompatibility")
 		os.Exit(1)
 	}
 
-	crdCompatibilityReconciler := crdcompatibility.NewCRDCompatibilityReconciler(mgr.GetClient())
+	crdValidator := crdvalidation.NewValidator(mgr.GetClient())
+	if err := crdValidator.SetupWithManager(ctx, mgr); err != nil {
+		klog.Error(err, "unable to create controller", "controller", "CRDValidator")
+		os.Exit(1)
+	}
 
-	// Setup the CRD compatibility controller
-	if err := crdCompatibilityReconciler.SetupWithManager(ctx, mgr); err != nil {
-		klog.Error(err, "unable to create controller", "controller", "CRDCompatibility")
+	objectValidator := objectvalidation.NewObjectValidator()
+	// Setup the objectvalidation controller and webhook
+	if err := objectValidator.SetupWithManager(ctx, mgr); err != nil {
+		klog.Error(err, "unable to create controller", "controller", "ObjectValidator")
 		os.Exit(1)
 	}
 

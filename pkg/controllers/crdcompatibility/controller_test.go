@@ -72,12 +72,12 @@ var _ = Describe("CRDCompatibilityReconciler Controller Setup", func() {
 		BeforeEach(func(ctx context.Context) {
 			By("Creating 2 admitted and 2 non-admitted requirements")
 			admittedRequirements = []*operatorv1alpha1.CRDCompatibilityRequirement{
-				generateTestRequirement(testCRD),
-				generateTestRequirement(testCRD),
+				test.GenerateTestCRDCompatibilityRequirement(testCRD),
+				test.GenerateTestCRDCompatibilityRequirement(testCRD),
 			}
 			nonAdmittedRequirements = []*operatorv1alpha1.CRDCompatibilityRequirement{
-				generateTestRequirement(testCRD),
-				generateTestRequirement(testCRD),
+				test.GenerateTestCRDCompatibilityRequirement(testCRD),
+				test.GenerateTestCRDCompatibilityRequirement(testCRD),
 			}
 
 			for _, requirement := range slices.Concat(admittedRequirements, nonAdmittedRequirements) {

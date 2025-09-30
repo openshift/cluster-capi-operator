@@ -26,11 +26,11 @@ import (
 	"github.com/onsi/gomega"
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
-	"gopkg.in/yaml.v2"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/utils/ptr"
+	"sigs.k8s.io/yaml"
 )
 
 var (
@@ -193,6 +193,9 @@ func GenerateTestCRDCompatibilityRequirement(testCRD *apiextensionsv1.CustomReso
 			CompatibilityCRD:   string(yaml),
 			CRDAdmitAction:     operatorv1alpha1.CRDAdmitActionEnforce,
 			CreatorDescription: "Test Creator",
+		},
+		Status: operatorv1alpha1.CRDCompatibilityRequirementStatus{
+			CRDName: testCRD.GetName(),
 		},
 	}
 }

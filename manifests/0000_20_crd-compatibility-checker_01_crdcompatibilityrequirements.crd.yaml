@@ -56,32 +56,13 @@ spec:
                 minLength: 1
                 type: string
               crdAdmitAction:
-                allOf:
-                - enum:
-                  - Enforce
-                  - Warn
-                - enum:
-                  - Enforce
-                  - Warn
                 description: |-
                   crdAdmitAction determines whether the CRD admission controller will Enforce or Warn if the CRD presented is not compatible.
                   This field is required.
+                enum:
+                - Enforce
+                - Warn
                 type: string
-              crdRef:
-                description: |-
-                  crdRef is the name of the target CRD. The target CRD is not required to
-                  exist, as we may legitimately place requirements on it before it is
-                  created.  The observed CRD is given in status.observedCRD, which will be
-                  empty if no CRD is observed.
-                  This field is required.
-                maxLength: 253
-                minLength: 1
-                type: string
-                x-kubernetes-validations:
-                - message: a lowercase RFC 1123 subdomain must consist of lower case
-                    alphanumeric characters, '-' or '.', and must start and end with
-                    an alphanumeric character.
-                  rule: '!format.dns1123Subdomain().validate(self).hasValue()'
               creatorDescription:
                 description: |-
                   creatorDescription is a string describing the owner of this CRDCompatibilityRequirement. It will be printed in any error or
@@ -94,12 +75,12 @@ spec:
             required:
             - compatibilityCRD
             - crdAdmitAction
-            - crdRef
             - creatorDescription
             type: object
           status:
             description: status is the most recently observed status of the CRD Compatibility
               Requirement.
+            minProperties: 1
             properties:
               conditions:
                 description: conditions is a list of conditions and their status.
@@ -166,17 +147,37 @@ spec:
                 description: |-
                   observedCRD documents the uid and generation of the CRD object when the current status was written.
                   This field will not be emitted if the target CRD does not exist or could not be retrieved.
+                minProperties: 1
                 properties:
                   generation:
                     description: generation is the observed generation of the CRD.
                     format: int64
+                    minimum: 1
                     type: integer
+                  name:
+                    description: |-
+                      name is the name of the target CRD. The target CRD is not required to
+                      exist, as we may legitimately place requirements on it before it is
+                      created.  The observed CRD is given in status.observedCRD, which will be
+                      empty if no CRD is observed.
+                      This field is required.
+                    maxLength: 253
+                    minLength: 1
+                    type: string
+                    x-kubernetes-validations:
+                    - message: a lowercase RFC 1123 subdomain must consist of lower
+                        case alphanumeric characters, '-' or '.', and must start and
+                        end with an alphanumeric character.
+                      rule: '!format.dns1123Subdomain().validate(self).hasValue()'
                   uid:
                     description: uid is the uid of the observed CRD.
+                    format: uuid
                     maxLength: 36
+                    minLength: 1
                     type: string
                 required:
                 - generation
+                - name
                 - uid
                 type: object
             type: object
