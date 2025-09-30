@@ -38,8 +38,9 @@ import (
 )
 
 var (
-	errExpectedCRD           = errors.New("expected a CustomResourceDefinition")
+	// ErrCRDHasRequirements is the error which signals a deletion of a CRD is disallowed.
 	ErrCRDHasRequirements    = errors.New("cannot delete CRD because it has CRDCompatibilityRequirements")
+	errExpectedCRD           = errors.New("expected a CustomResourceDefinition")
 	errCRDNotCompatible      = errors.New("CRD is not compatible with CRDCompatibilityRequirements")
 	errUnknownCRDAdmitAction = errors.New("unknown CRDAdmitAction")
 )
@@ -53,17 +54,24 @@ func NewValidator(client client.Client) *Validator {
 
 type controllerOption func(*builder.Builder) *builder.Builder
 
-func (r *Validator) SetupWithManager(ctx context.Context, mgr ctrl.Manager, opts ...controllerOption) error {
+// SetupWithManager sets up the controller with the Manager.
+func (v *Validator) SetupWithManager(ctx context.Context, mgr ctrl.Manager, opts ...controllerOption) error {
 	// Create field index for spec.crdRef
 	if err := mgr.GetFieldIndexer().IndexField(ctx, &operatorv1alpha1.CRDCompatibilityRequirement{}, index.FieldCRDByName, index.CRDByName); err != nil {
 		return fmt.Errorf("failed to add index to CRDCompatibilityRequirements: %w", err)
 	}
 
-	return ctrl.NewWebhookManagedBy(mgr).
+	err := ctrl.NewWebhookManagedBy(mgr).
 		For(&apiextensionsv1.CustomResourceDefinition{}).
-		WithValidator(r).Complete()
+		WithValidator(v).Complete()
+	if err != nil {
+		return fmt.Errorf("failed to create controller: %w", err)
+	}
+
+	return nil
 }
 
+// Validator implements the crd validation webhook to validate a CRD for compatibility against defined CRDCompatibilityRequirements.
 type Validator struct {
 	client client.Reader
 }
