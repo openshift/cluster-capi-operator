@@ -352,24 +352,16 @@ func (m *awsMachineAndInfra) toAWSMachine(providerSpec mapiv1.AWSMachineProvider
 }
 
 func convertMAPIMachineStatusToCAPA(mapiMachine *mapiv1.Machine) (awsv1.AWSMachineStatus, field.ErrorList) {
-	if mapiMachine.Status.ProviderStatus == nil {
-		return awsv1.AWSMachineStatus{}, nil
-	}
-
-	if mapiMachine.Spec.ProviderSpec.Value == nil {
-		return awsv1.AWSMachineStatus{}, nil
-	}
-
 	var errs field.ErrorList
 
-	mapiProviderStatus := &mapiv1.AWSMachineProviderStatus{}
-	if err := yaml.Unmarshal(mapiMachine.Status.ProviderStatus.Raw, mapiProviderStatus); err != nil {
-		panic(err)
+	mapiProviderStatus, err := AWSProviderStatusFromRawExtension(mapiMachine.Status.ProviderStatus)
+	if err != nil {
+		return awsv1.AWSMachineStatus{}, append(errs, field.InternalError(field.NewPath("status", "providerStatus"), err))
 	}
 
-	mapiProviderSpec := &mapiv1.AWSMachineProviderConfig{}
-	if err := yaml.Unmarshal(mapiMachine.Spec.ProviderSpec.Value.Raw, mapiProviderSpec); err != nil {
-		panic(err)
+	mapiProviderSpec, err := AWSProviderSpecFromRawExtension(mapiMachine.Spec.ProviderSpec.Value)
+	if err != nil {
+		return awsv1.AWSMachineStatus{}, append(errs, field.InternalError(field.NewPath("spec", "providerSpec"), err))
 	}
 
 	addresses, addressesErr := convertMAPIMachineAddressesToCAPI(mapiMachine.Status.Addresses)
@@ -383,7 +375,7 @@ func convertMAPIMachineStatusToCAPA(mapiMachine *mapiv1.Machine) (awsv1.AWSMachi
 		Interruptible: mapiProviderSpec.SpotMarketOptions != nil,
 		Addresses:     addresses,
 		InstanceState: ptr.To(awsv1.InstanceState(ptr.Deref(mapiProviderStatus.InstanceState, ""))),
-		Conditions:    convertMAPIMachineAWSProviderConditionsToCAPAMachineConditions(mapiProviderStatus),
+		Conditions:    convertMAPIMachineAWSProviderConditionsToCAPAMachineConditions(&mapiProviderStatus),
 
 		// FailureReason: // Not set here because we already set it on the CAPI Machine form .Status.ErrReason
 		// FailureMessage: // Not set here because we already set it on the CAPI Machine form .Status.ErrMessage
