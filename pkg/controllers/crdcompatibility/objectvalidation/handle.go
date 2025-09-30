@@ -60,8 +60,8 @@ func crdCompatibilityRequrementIntoContext(ctx context.Context, r *http.Request)
 //
 // Note: This function is adapted from sigs.k8s.io/controller-runtime/pkg/webhook/admission/validator_custom.go validatorForType.Handle
 // and be compared to that.
-func (h *objectValidator) Handle(ctx context.Context, req admission.Request) admission.Response {
-	if h.decoder == nil {
+func (v *validator) Handle(ctx context.Context, req admission.Request) admission.Response {
+	if v.decoder == nil {
 		panic("decoder should never be nil")
 	}
 
@@ -80,31 +80,31 @@ func (h *objectValidator) Handle(ctx context.Context, req admission.Request) adm
 	case admissionv1.Connect:
 		// No validation for connect requests.
 	case admissionv1.Create:
-		if err := h.decoder.Decode(req, obj); err != nil {
+		if err := v.decoder.Decode(req, obj); err != nil {
 			return admission.Errored(http.StatusBadRequest, err)
 		}
 
-		warnings, err = h.ValidateCreate(ctx, crdCompatibilityRequirementName, obj)
+		warnings, err = v.ValidateCreate(ctx, crdCompatibilityRequirementName, obj)
 	case admissionv1.Update:
 		oldObj := &unstructured.Unstructured{}
 
-		if err := h.decoder.DecodeRaw(req.Object, obj); err != nil {
+		if err := v.decoder.DecodeRaw(req.Object, obj); err != nil {
 			return admission.Errored(http.StatusBadRequest, err)
 		}
 
-		if err := h.decoder.DecodeRaw(req.OldObject, oldObj); err != nil {
+		if err := v.decoder.DecodeRaw(req.OldObject, oldObj); err != nil {
 			return admission.Errored(http.StatusBadRequest, err)
 		}
 
-		warnings, err = h.ValidateUpdate(ctx, crdCompatibilityRequirementName, oldObj, obj)
+		warnings, err = v.ValidateUpdate(ctx, crdCompatibilityRequirementName, oldObj, obj)
 	case admissionv1.Delete:
 		// In reference to PR: https://github.com/kubernetes/kubernetes/pull/76346
 		// OldObject contains the object being deleted
-		if err := h.decoder.DecodeRaw(req.OldObject, obj); err != nil {
+		if err := v.decoder.DecodeRaw(req.OldObject, obj); err != nil {
 			return admission.Errored(http.StatusBadRequest, err)
 		}
 
-		warnings, err = h.ValidateDelete(ctx, crdCompatibilityRequirementName, obj)
+		warnings, err = v.ValidateDelete(ctx, crdCompatibilityRequirementName, obj)
 	default:
 		return admission.Errored(http.StatusBadRequest, fmt.Errorf("%w: %q", errUnknownOperation, req.Operation))
 	}

@@ -44,18 +44,18 @@ var (
 	errObjectValidator = errors.New("failed to create the object validator")
 )
 
-var _ admission.Handler = &objectValidator{}
+var _ admission.Handler = &validator{}
 
-// objectValidator implements the admission.Handler to have a custom Handle function which is able to
+// validator implements the admission.Handler to have a custom Handle function which is able to
 // validate arbitrary objects against CRDCompatibilityRequirements by leveraging unstructured.
-type objectValidator struct {
+type validator struct {
 	client  client.Reader
 	decoder admission.Decoder
 }
 
-// NewObjectValidator returns a partially initialized ObjectValidator.
-func NewObjectValidator() *objectValidator {
-	return &objectValidator{
+// NewValidator returns a partially initialized ObjectValidator.
+func NewValidator() *validator {
+	return &validator{
 		// This decoder is only used to decode to unstructured and for CRDCompatibilityRequirements.
 		decoder: admission.NewDecoder(runtime.NewScheme()),
 	}
@@ -64,10 +64,10 @@ func NewObjectValidator() *objectValidator {
 type controllerOption func(*builder.Builder) *builder.Builder
 
 // SetupWithManager registers the objectValidator webhook with an manager.
-func (h *objectValidator) SetupWithManager(ctx context.Context, mgr ctrl.Manager, opts ...controllerOption) error {
-	h.client = mgr.GetClient()
+func (v *validator) SetupWithManager(ctx context.Context, mgr ctrl.Manager, opts ...controllerOption) error {
+	v.client = mgr.GetClient()
 	mgr.GetWebhookServer().Register(webhookPrefix+"{CRDCompatibilityRequirement}", &admission.Webhook{
-		Handler:         h,
+		Handler:         v,
 		WithContextFunc: crdCompatibilityRequrementIntoContext,
 	})
 
@@ -75,8 +75,8 @@ func (h *objectValidator) SetupWithManager(ctx context.Context, mgr ctrl.Manager
 }
 
 // ValidateCreate validates the creation of an object.
-func (h *objectValidator) ValidateCreate(ctx context.Context, crdCompatibilityRequirementName string, obj *unstructured.Unstructured) (warnings admission.Warnings, err error) {
-	validator, celValidator, err := h.createSchemaValidator(ctx, crdCompatibilityRequirementName, obj.GroupVersionKind().Version)
+func (v *validator) ValidateCreate(ctx context.Context, crdCompatibilityRequirementName string, obj *unstructured.Unstructured) (warnings admission.Warnings, err error) {
+	validator, celValidator, err := v.createSchemaValidator(ctx, crdCompatibilityRequirementName, obj.GroupVersionKind().Version)
 	if err != nil {
 		return nil, fmt.Errorf("failed to validate: %w", err)
 	}
@@ -98,8 +98,8 @@ func (h *objectValidator) ValidateCreate(ctx context.Context, crdCompatibilityRe
 }
 
 // ValidateUpdate validates the update of an object.
-func (h *objectValidator) ValidateUpdate(ctx context.Context, crdCompatibilityRequirementName string, oldObj, obj *unstructured.Unstructured) (warnings admission.Warnings, err error) {
-	validator, celValidator, err := h.createSchemaValidator(ctx, crdCompatibilityRequirementName, obj.GroupVersionKind().Version)
+func (v *validator) ValidateUpdate(ctx context.Context, crdCompatibilityRequirementName string, oldObj, obj *unstructured.Unstructured) (warnings admission.Warnings, err error) {
+	validator, celValidator, err := v.createSchemaValidator(ctx, crdCompatibilityRequirementName, obj.GroupVersionKind().Version)
 	if err != nil {
 		return nil, fmt.Errorf("failed to validate: %w", err)
 	}
@@ -119,17 +119,17 @@ func (h *objectValidator) ValidateUpdate(ctx context.Context, crdCompatibilityRe
 }
 
 // ValidateDelete validates the deletion of an object.
-func (h *objectValidator) ValidateDelete(ctx context.Context, crdCompatibilityRequirementName string, obj *unstructured.Unstructured) (warnings admission.Warnings, err error) {
+func (v *validator) ValidateDelete(ctx context.Context, crdCompatibilityRequirementName string, obj *unstructured.Unstructured) (warnings admission.Warnings, err error) {
 	return nil, nil
 }
 
 // FIXME(chrischdi):
 // Should we use NewStrategy instead and its public functions? or do we need to adapt some more from their pub funcs
 // https://github.com/kubernetes/kubernetes/blob/ebc1ccc491c944fa0633f147698e0dc02675051d/staging/src/k8s.io/apiextensions-apiserver/pkg/registry/customresource/strategy.go#L76
-func (h *objectValidator) createSchemaValidator(ctx context.Context, crdCompatibilityRequirementName string, version string) (apiextensionsvalidation.SchemaValidator, *cel.Validator, error) {
+func (v *validator) createSchemaValidator(ctx context.Context, crdCompatibilityRequirementName string, version string) (apiextensionsvalidation.SchemaValidator, *cel.Validator, error) {
 	// Get the CRDCompatibilityRequirement
 	crdCompatibilityRequirement := &operatorv1alpha1.CRDCompatibilityRequirement{}
-	if err := h.client.Get(ctx, client.ObjectKey{Name: crdCompatibilityRequirementName}, crdCompatibilityRequirement); err != nil {
+	if err := v.client.Get(ctx, client.ObjectKey{Name: crdCompatibilityRequirementName}, crdCompatibilityRequirement); err != nil {
 		return nil, nil, fmt.Errorf("failed to get CRDCompatibilityRequirement %q: %w", crdCompatibilityRequirementName, err)
 	}
 
