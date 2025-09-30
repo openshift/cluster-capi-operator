@@ -25,6 +25,7 @@ import (
 )
 
 const (
+	// FieldCRDByName contains the path to the CRDName field to index on.
 	FieldCRDByName string = "status.crdName"
 )
 
