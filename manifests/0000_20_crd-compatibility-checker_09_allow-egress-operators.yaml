@@ -24,7 +24,7 @@ metadata:
   namespace: openshift-cluster-api
 spec:
   egress:
-    ports:
+  - ports:
     # Allow egress traffic to kube-apiserver
     - port: 6443
       protocol: TCP
