@@ -69,6 +69,7 @@ func (r *reconcileState) writeStatus(ctx context.Context, obj *operatorv1alpha1.
 		if !obj.DeletionTimestamp.IsZero() && apierrors.IsNotFound(err) {
 			return nil
 		}
+
 		return fmt.Errorf("failed to write status: %w", err)
 	}
 
