@@ -99,11 +99,12 @@ func (r *reconcileState) parseCompatibilityCRD(crdCompatibilityRequirement *oper
 	return nil
 }
 
-func (r *reconcileState) fetchCurrentCRD(ctx context.Context, log logr.Logger, crdCompatibilityRequirement *operatorv1alpha1.CRDCompatibilityRequirement) error {
+func (r *reconcileState) fetchCurrentCRD(ctx context.Context, log logr.Logger) error {
 	crdName := r.compatibilityCRD.GetName()
 	if crdName == "" {
 		return nil
 	}
+
 	currentCRD := &apiextensionsv1.CustomResourceDefinition{}
 	if err := r.client.Get(ctx, types.NamespacedName{Name: crdName}, currentCRD); err != nil {
 		if apierrors.IsNotFound(err) {
@@ -148,7 +149,7 @@ func (r *reconcileState) reconcileCreateOrUpdate(ctx context.Context, obj *opera
 
 	err := errors.Join(
 		r.parseCompatibilityCRD(obj),
-		r.fetchCurrentCRD(ctx, logger, obj),
+		r.fetchCurrentCRD(ctx, logger),
 		r.checkCRDCompatibility(),
 	)
 
