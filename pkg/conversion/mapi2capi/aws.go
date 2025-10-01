@@ -445,7 +445,7 @@ func AWSProviderStatusFromRawExtension(rawExtension *runtime.RawExtension) (mapi
 
 	status := mapiv1.AWSMachineProviderStatus{}
 	if err := yaml.Unmarshal(rawExtension.Raw, &status); err != nil {
-		return mapiv1.AWSMachineProviderStatus{}, fmt.Errorf("error unmarshalling providerStatus: %w", err)
+		return mapiv1.AWSMachineProviderStatus{}, fmt.Errorf("error unmarshalling providerStatus %q: %w", string(rawExtension.Raw), err)
 	}
 
 	return status, nil

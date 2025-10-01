@@ -615,7 +615,7 @@ func CAPIMachineSetFuzzerFuncs(infraTemplateKind, infraAPIVersion, clusterName s
 // The providerSpec should be a pointer to a providerSpec type for the platform being tested.
 // This will be fuzzed and then injected into the MachineSpec as a RawExtension.
 // The providerIDFuzz function should be a function that returns a valid providerID for the platform being tested.
-func MAPIMachineFuzzerFuncs(providerSpec runtime.Object, providerIDFuzz StringFuzzer) fuzzer.FuzzerFuncs {
+func MAPIMachineFuzzerFuncs(providerSpec runtime.Object, providerStatus interface{}, providerIDFuzz StringFuzzer) fuzzer.FuzzerFuncs {
 	return func(codecs runtimeserializer.CodecFactory) []interface{} {
 		return []interface{}{
 			// MAPI to CAPI conversion functions.
@@ -680,7 +680,7 @@ func MAPIMachineFuzzerFuncs(providerSpec runtime.Object, providerIDFuzz StringFu
 				fuzzMAPIMachineStatusAddresses(&m.Addresses, c)
 				fuzzMAPIMachineStatusPhase(m.Phase, c)
 
-				bytes, err := json.Marshal(`{}`)
+				bytes, err := json.Marshal(providerStatus)
 				if err != nil {
 					panic(err)
 				}
@@ -691,7 +691,6 @@ func MAPIMachineFuzzerFuncs(providerSpec runtime.Object, providerIDFuzz StringFu
 				}
 
 				m.LastOperation = nil        // Ignore, this field as it is not present in CAPI.
-				m.ProviderStatus = nil       // Ignore, this field as the conversion logic is not yet implemented. // TODO: remove this once the InfraMachine conversion is implemented.
 				m.AuthoritativeAPI = ""      // Ignore, this field as it is not present in CAPI.
 				m.SynchronizedGeneration = 0 // Ignore, this field as it is not present in CAPI.
 				m.Conditions = nil           // Ignore, this field as it is not a 1:1 mapping between CAPI and MAPI but rather a recomputation of the conditions based on other fields.
