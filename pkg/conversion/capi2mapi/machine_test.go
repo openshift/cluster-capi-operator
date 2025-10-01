@@ -20,7 +20,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/openshift/api/machine/v1beta1"
+	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	capibuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/cluster-api/core/v1beta1"
 	capabuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/cluster-api/infrastructure/v1beta2"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/test/matchers"
@@ -40,7 +40,7 @@ var _ = Describe("capi2mapi Machine conversion", func() {
 		machineBuilder   capibuilder.MachineBuilder
 		expectedErrors   []string
 		expectedWarnings []string
-		assertion        func(machine *v1beta1.Machine)
+		assertion        func(machine *mapiv1beta1.Machine)
 	}
 
 	var _ = DescribeTable("capi2mapi convert CAPI Machine/InfraMachine/InfraCluster to a MAPI Machine",
@@ -90,7 +90,7 @@ var _ = Describe("capi2mapi Machine conversion", func() {
 			machineBuilder:   capiMachineBase.WithAnnotations(map[string]string{clusterv1.DeleteMachineAnnotation: "true"}),
 			expectedErrors:   []string{},
 			expectedWarnings: []string{},
-			assertion: func(machine *v1beta1.Machine) {
+			assertion: func(machine *mapiv1beta1.Machine) {
 				Expect(machine.Annotations).To(HaveKeyWithValue(util.MapiDeleteMachineAnnotation, "true"))
 				Expect(machine.Annotations).ToNot(HaveKey(clusterv1.DeleteMachineAnnotation))
 			},

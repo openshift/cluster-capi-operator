@@ -19,7 +19,7 @@ import (
 	"cmp"
 	"sort"
 
-	mapiv1 "github.com/openshift/api/machine/v1beta1"
+	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -31,7 +31,7 @@ import (
 )
 
 // fromMAPIMachineSetToCAPIMachineSet takes a MAPI MachineSet and returns a converted CAPI MachineSet.
-func fromMAPIMachineSetToCAPIMachineSet(mapiMachineSet *mapiv1.MachineSet) (*clusterv1.MachineSet, utilerrors.Aggregate) {
+func fromMAPIMachineSetToCAPIMachineSet(mapiMachineSet *mapiv1beta1.MachineSet) (*clusterv1.MachineSet, utilerrors.Aggregate) {
 	var errs field.ErrorList
 
 	specSelector := convertMAPIMachineSetSelectorToCAPI(mapiMachineSet.Spec.Selector)
@@ -70,7 +70,7 @@ func fromMAPIMachineSetToCAPIMachineSet(mapiMachineSet *mapiv1.MachineSet) (*clu
 }
 
 // convertMAPIMachineSetToCAPIMachineSetStatus converts a MAPI MachineSet to CAPI MachineSetStatus.
-func convertMAPIMachineSetToCAPIMachineSetStatus(mapiMachineSet *mapiv1.MachineSet, specSelector metav1.LabelSelector) clusterv1.MachineSetStatus {
+func convertMAPIMachineSetToCAPIMachineSetStatus(mapiMachineSet *mapiv1beta1.MachineSet, specSelector metav1.LabelSelector) clusterv1.MachineSetStatus {
 	capiStatus := clusterv1.MachineSetStatus{
 		Replicas:             mapiMachineSet.Status.Replicas,
 		FullyLabeledReplicas: mapiMachineSet.Status.FullyLabeledReplicas,
@@ -104,7 +104,7 @@ func convertMAPIMachineSetToCAPIMachineSetStatus(mapiMachineSet *mapiv1.MachineS
 	return capiStatus
 }
 
-func convertMAPIMachineSetStatusToCAPIMachineSetV1Beta2Status(mapiMachineSet *mapiv1.MachineSet) *clusterv1.MachineSetV1Beta2Status {
+func convertMAPIMachineSetStatusToCAPIMachineSetV1Beta2Status(mapiMachineSet *mapiv1beta1.MachineSet) *clusterv1.MachineSetV1Beta2Status {
 	return &clusterv1.MachineSetV1Beta2Status{
 		ReadyReplicas:     ptr.To(mapiMachineSet.Status.ReadyReplicas),
 		AvailableReplicas: ptr.To(mapiMachineSet.Status.AvailableReplicas),
@@ -125,13 +125,13 @@ func convertMAPIMachineSetStatusToCAPIMachineSetV1Beta2Status(mapiMachineSet *ma
 }
 
 // convertMAPIErrorReasonToCAPIFailureReason converts MAPI MachineSetStatusError to CAPI MachineSetStatusError.
-func convertMAPIErrorReasonToCAPIFailureReason(mapiErrorReason mapiv1.MachineSetStatusError) *capierrors.MachineSetStatusError {
+func convertMAPIErrorReasonToCAPIFailureReason(mapiErrorReason mapiv1beta1.MachineSetStatusError) *capierrors.MachineSetStatusError {
 	capiErrorReason := capierrors.MachineSetStatusError(mapiErrorReason)
 	return &capiErrorReason
 }
 
 // convertMAPIMachineSetConditionsToCAPIMachineSetConditions converts MAPI conditions to CAPI conditions.
-func convertMAPIMachineSetConditionsToCAPIMachineSetConditions(mapiMachineSet *mapiv1.MachineSet) clusterv1.Conditions {
+func convertMAPIMachineSetConditionsToCAPIMachineSetConditions(mapiMachineSet *mapiv1beta1.MachineSet) clusterv1.Conditions {
 	capiConditions := []clusterv1.Condition{}
 
 	// According to https://github.com/kubernetes-sigs/cluster-api/blob/a5e21a3f92b863f65668d2140632a73003b4d76b/docs/proposals/20240916-improve-status-in-CAPI-resources.md#machineset-newconditions
@@ -210,7 +210,7 @@ func convertMAPIMachineSetConditionsToCAPIMachineSetConditions(mapiMachineSet *m
 }
 
 // convertMAPIMachineSetConditionsToCAPIMachineSetV1Beta2StatusConditions converts MAPI conditions to CAPI v1beta2 conditions.
-func convertMAPIMachineSetConditionsToCAPIMachineSetV1Beta2StatusConditions(mapiMachineSet *mapiv1.MachineSet) []metav1.Condition {
+func convertMAPIMachineSetConditionsToCAPIMachineSetV1Beta2StatusConditions(mapiMachineSet *mapiv1beta1.MachineSet) []metav1.Condition {
 	capiConditions := []metav1.Condition{}
 
 	// According to https://github.com/kubernetes-sigs/cluster-api/blob/a5e21a3f92b863f65668d2140632a73003b4d76b/docs/proposals/20240916-improve-status-in-CAPI-resources.md#machineset-newconditions

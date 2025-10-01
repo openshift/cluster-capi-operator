@@ -19,7 +19,7 @@ package mapi2capi
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	mapiv1 "github.com/openshift/api/machine/v1beta1"
+	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	configbuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/config/v1"
 	machinebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/machine/v1beta1"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/test/matchers"
@@ -42,7 +42,7 @@ var _ = Describe("mapi2capi Machine conversion", func() {
 		infraBuilder     configbuilder.InfrastructureBuilder
 		expectedErrors   []string
 		expectedWarnings []string
-		assertion        func(machine *mapiv1.Machine)
+		assertion        func(machine *mapiv1beta1.Machine)
 	}
 	var _ = DescribeTable("mapi2capi convert MAPI Machine to a CAPI Machine",
 		func(in mapi2CAPIMachineConversionInput) {
@@ -66,7 +66,7 @@ var _ = Describe("mapi2capi Machine conversion", func() {
 
 		Entry("With unsupported CAPI managed labels", mapi2CAPIMachineConversionInput{
 			infraBuilder: infraBase,
-			machineBuilder: mapiMachineBase.WithMachineSpecObjectMeta(mapiv1.ObjectMeta{
+			machineBuilder: mapiMachineBase.WithMachineSpecObjectMeta(mapiv1beta1.ObjectMeta{
 				Labels: map[string]string{
 					"node-role.kubernetes.io/worker": "true",
 				},
@@ -90,7 +90,7 @@ var _ = Describe("mapi2capi Machine conversion", func() {
 		}),
 
 		Entry("With unsupported spec.metadata.generateName set", mapi2CAPIMachineConversionInput{
-			machineBuilder: mapiMachineBase.WithMachineSpecObjectMeta(mapiv1.ObjectMeta{
+			machineBuilder: mapiMachineBase.WithMachineSpecObjectMeta(mapiv1beta1.ObjectMeta{
 				GenerateName: "test-generate-",
 			}),
 			infraBuilder:     infraBase,
@@ -99,7 +99,7 @@ var _ = Describe("mapi2capi Machine conversion", func() {
 		}),
 
 		Entry("With unsupported spec.metadata.name set", mapi2CAPIMachineConversionInput{
-			machineBuilder: mapiMachineBase.WithMachineSpecObjectMeta(mapiv1.ObjectMeta{
+			machineBuilder: mapiMachineBase.WithMachineSpecObjectMeta(mapiv1beta1.ObjectMeta{
 				Name: "test-name",
 			}),
 			infraBuilder:     infraBase,
@@ -109,7 +109,7 @@ var _ = Describe("mapi2capi Machine conversion", func() {
 
 		Entry("With unsupported spec.metadata.namespace set", mapi2CAPIMachineConversionInput{
 			infraBuilder: infraBase,
-			machineBuilder: mapiMachineBase.WithMachineSpecObjectMeta(mapiv1.ObjectMeta{
+			machineBuilder: mapiMachineBase.WithMachineSpecObjectMeta(mapiv1beta1.ObjectMeta{
 				Namespace: "test-namespace",
 			}),
 			expectedErrors:   []string{"spec.metadata.namespace: Invalid value: \"test-namespace\": namespace is not supported"},
@@ -132,7 +132,7 @@ var _ = Describe("mapi2capi Machine conversion", func() {
 			machineBuilder:   mapiMachineBase.WithAnnotations(map[string]string{util.MapiDeleteMachineAnnotation: "true"}),
 			expectedErrors:   []string{},
 			expectedWarnings: []string{},
-			assertion: func(machine *mapiv1.Machine) {
+			assertion: func(machine *mapiv1beta1.Machine) {
 				Expect(machine.Annotations).To(HaveKeyWithValue(clusterv1.DeleteMachineAnnotation, "true"))
 				Expect(machine.Annotations).ToNot(HaveKey(util.MapiDeleteMachineAnnotation))
 			},

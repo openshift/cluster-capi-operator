@@ -21,7 +21,7 @@ import (
 	"errors"
 	"fmt"
 
-	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
+	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 	corev1 "k8s.io/api/core/v1"
@@ -83,9 +83,9 @@ func newSyncStatusApplyConfiguration[
 	status corev1.ConditionStatus, reason, message string, generation *int64,
 ) (objPT, statusPT, error) {
 	var (
-		severity               machinev1beta1.ConditionSeverity
+		severity               mapiv1beta1.ConditionSeverity
 		synchronizedGeneration int64
-		oldConditions          []machinev1beta1.Condition
+		oldConditions          []mapiv1beta1.Condition
 
 		err error
 	)
@@ -102,11 +102,11 @@ func newSyncStatusApplyConfiguration[
 
 	switch status {
 	case corev1.ConditionTrue:
-		severity = machinev1beta1.ConditionSeverityNone
+		severity = mapiv1beta1.ConditionSeverityNone
 	case corev1.ConditionFalse:
-		severity = machinev1beta1.ConditionSeverityError
+		severity = mapiv1beta1.ConditionSeverityError
 	case corev1.ConditionUnknown:
-		severity = machinev1beta1.ConditionSeverityInfo
+		severity = mapiv1beta1.ConditionSeverityInfo
 	default:
 		return nil, nil, fmt.Errorf("%w: %s", errUnrecognizedConditionStatus, status)
 	}
@@ -131,13 +131,13 @@ func newSyncStatusApplyConfiguration[
 	return objAC, statusAC, nil
 }
 
-func getPreviousSyncStatus(mapiObj interface{}) (int64, []machinev1beta1.Condition, error) {
+func getPreviousSyncStatus(mapiObj interface{}) (int64, []mapiv1beta1.Condition, error) {
 	// Unlike the apply configurations, which have method accessors, we can't
 	// define an interface to assert the presence of fields.
 	switch o := mapiObj.(type) {
-	case *machinev1beta1.Machine:
+	case *mapiv1beta1.Machine:
 		return o.Status.SynchronizedGeneration, o.Status.Conditions, nil
-	case *machinev1beta1.MachineSet:
+	case *mapiv1beta1.MachineSet:
 		return o.Status.SynchronizedGeneration, o.Status.Conditions, nil
 	default:
 		return 0, nil, fmt.Errorf("%w: %T", errUnsupportedSyncStatusType, mapiObj)

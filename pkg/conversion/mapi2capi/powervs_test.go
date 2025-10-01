@@ -27,7 +27,7 @@ import (
 	. "github.com/onsi/gomega"
 	configv1 "github.com/openshift/api/config/v1"
 	mapiv1 "github.com/openshift/api/machine/v1"
-	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
+	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	powervsbuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/machine/v1"
 	machinebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/machine/v1beta1"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/test/matchers"
@@ -126,7 +126,7 @@ var _ = Describe("mapi2capi PowerVS conversion", func() {
 		}),
 
 		Entry("With metadata in provider spec", powerVSMAPI2CAPIConversionInput{
-			machineBuilder: powerVSMAPIMachineBase.WithProviderSpec(machinev1beta1.ProviderSpec{
+			machineBuilder: powerVSMAPIMachineBase.WithProviderSpec(mapiv1beta1.ProviderSpec{
 				Value: mustConvertPowerVSProviderSpecToRawExtension(&mapiv1.PowerVSMachineProviderConfig{
 					ObjectMeta:      metav1.ObjectMeta{Name: "test"},
 					ServiceInstance: mapiv1.PowerVSResource{Type: mapiv1.PowerVSResourceTypeID, ID: ptr.To("default-serviceInstanceID")},
