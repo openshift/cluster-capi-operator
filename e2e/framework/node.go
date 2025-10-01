@@ -1,6 +1,7 @@
 package framework
 
 import (
+	"context"
 	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
@@ -9,7 +10,7 @@ import (
 )
 
 // GetNodeForMachine retrieves the node backing the given Machine.
-func GetNodeForMachine(cl client.Client, m *clusterv1.Machine) (*corev1.Node, error) {
+func GetNodeForMachine(ctx context.Context, cl client.Client, m *clusterv1.Machine) (*corev1.Node, error) {
 	if m.Status.NodeRef == nil {
 		return nil, fmt.Errorf("%s: machine has no NodeRef", m.Name)
 	}

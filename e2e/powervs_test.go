@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"context"
 	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
@@ -34,7 +35,7 @@ var _ = Describe("Cluster API IBMPowerVS MachineSet", Ordered, func() {
 		if platform != configv1.PowerVSPlatformType {
 			Skip("Skipping PowerVS E2E tests")
 		}
-		mapiMachineSpec = getPowerVSMAPIProviderSpec(cl)
+		mapiMachineSpec = getPowerVSMAPIProviderSpec(ctx, cl)
 	})
 
 	AfterEach(func() {
@@ -43,15 +44,15 @@ var _ = Describe("Cluster API IBMPowerVS MachineSet", Ordered, func() {
 			// explicitly skip it here for other platforms.
 			Skip("Skipping PowerVS E2E tests")
 		}
-		framework.DeleteMachineSets(cl, machineSet)
+		framework.DeleteMachineSets(ctx, cl, machineSet)
 		framework.WaitForMachineSetsDeleted(cl, machineSet)
-		framework.DeleteObjects(cl, powerVSMachineTemplate)
+		framework.DeleteObjects(ctx, cl, powerVSMachineTemplate)
 	})
 
 	It("should be able to run a machine", func() {
-		powerVSMachineTemplate = createIBMPowerVSMachineTemplate(cl, mapiMachineSpec)
+		powerVSMachineTemplate = createIBMPowerVSMachineTemplate(ctx, cl, mapiMachineSpec)
 
-		machineSet = framework.CreateMachineSet(cl, framework.NewMachineSetParams(
+		machineSet = framework.CreateMachineSet(ctx, cl, framework.NewMachineSetParams(
 			"ibmpowervs-machineset",
 			clusterName,
 			"",
@@ -68,7 +69,7 @@ var _ = Describe("Cluster API IBMPowerVS MachineSet", Ordered, func() {
 
 })
 
-func getPowerVSMAPIProviderSpec(cl client.Client) *mapiv1.PowerVSMachineProviderConfig {
+func getPowerVSMAPIProviderSpec(ctx context.Context, cl client.Client) *mapiv1.PowerVSMachineProviderConfig {
 	machineSetList := &mapiv1beta1.MachineSetList{}
 	Expect(cl.List(ctx, machineSetList, client.InNamespace(framework.MAPINamespace))).To(Succeed())
 
@@ -82,7 +83,7 @@ func getPowerVSMAPIProviderSpec(cl client.Client) *mapiv1.PowerVSMachineProvider
 	return providerSpec
 }
 
-func createIBMPowerVSMachineTemplate(cl client.Client, mapiProviderSpec *mapiv1.PowerVSMachineProviderConfig) *ibmpowervsv1.IBMPowerVSMachineTemplate {
+func createIBMPowerVSMachineTemplate(ctx context.Context, cl client.Client, mapiProviderSpec *mapiv1.PowerVSMachineProviderConfig) *ibmpowervsv1.IBMPowerVSMachineTemplate {
 	By("Creating IBMPowerVS machine template")
 
 	Expect(mapiProviderSpec).ToNot(BeNil())

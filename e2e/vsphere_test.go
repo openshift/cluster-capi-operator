@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"context"
 	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -34,7 +35,7 @@ var _ = Describe("Cluster API vSphere MachineSet", Ordered, func() {
 		if platform != configv1.VSpherePlatformType {
 			Skip("Skipping vSphere E2E tests")
 		}
-		mapiMachineSpec = getVSphereMAPIProviderSpec(cl)
+		mapiMachineSpec = getVSphereMAPIProviderSpec(ctx, cl)
 		createVSphereSecret(cl, mapiMachineSpec)
 	})
 
@@ -44,15 +45,15 @@ var _ = Describe("Cluster API vSphere MachineSet", Ordered, func() {
 			// explicitly skip it here for other platforms.
 			Skip("Skipping vSphere E2E tests")
 		}
-		framework.DeleteMachineSets(cl, machineSet)
+		framework.DeleteMachineSets(ctx, cl, machineSet)
 		framework.WaitForMachineSetsDeleted(cl, machineSet)
-		framework.DeleteObjects(cl, vSphereMachineTemplate)
+		framework.DeleteObjects(ctx, cl, vSphereMachineTemplate)
 	})
 
 	It("should be able to run a machine", func() {
 		vSphereMachineTemplate = createVSphereMachineTemplate(cl, mapiMachineSpec)
 
-		machineSet = framework.CreateMachineSet(cl, framework.NewMachineSetParams(
+		machineSet = framework.CreateMachineSet(ctx, cl, framework.NewMachineSetParams(
 			"vsphere-machineset",
 			clusterName,
 			"",
@@ -69,7 +70,7 @@ var _ = Describe("Cluster API vSphere MachineSet", Ordered, func() {
 	})
 })
 
-func getVSphereMAPIProviderSpec(cl client.Client) *mapiv1.VSphereMachineProviderSpec {
+func getVSphereMAPIProviderSpec(ctx context.Context, cl client.Client) *mapiv1.VSphereMachineProviderSpec {
 	machineSetList := &mapiv1.MachineSetList{}
 	Expect(cl.List(ctx, machineSetList, client.InNamespace(framework.MAPINamespace))).To(Succeed(),
 		"should not fail listing MAPI MachineSets")
@@ -89,7 +90,7 @@ func getVSphereMAPIProviderSpec(cl client.Client) *mapiv1.VSphereMachineProvider
 func createVSphereSecret(cl client.Client, mapiProviderSpec *mapiv1.VSphereMachineProviderSpec) {
 	By("Creating a vSphere credentials secret")
 
-	username, password := getVSphereCredentials(cl, mapiProviderSpec)
+	username, password := getVSphereCredentials(ctx, cl, mapiProviderSpec)
 
 	vSphereSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -107,7 +108,7 @@ func createVSphereSecret(cl client.Client, mapiProviderSpec *mapiv1.VSphereMachi
 	}
 }
 
-func getVSphereCredentials(cl client.Client, mapiProviderSpec *mapiv1.VSphereMachineProviderSpec) (string, string) {
+func getVSphereCredentials(ctx context.Context, cl client.Client, mapiProviderSpec *mapiv1.VSphereMachineProviderSpec) (string, string) {
 	vSphereCredentialsSecret := &corev1.Secret{}
 	err := cl.Get(ctx, types.NamespacedName{
 		Namespace: kubeSystemnamespace,
@@ -124,7 +125,7 @@ func getVSphereCredentials(cl client.Client, mapiProviderSpec *mapiv1.VSphereMac
 	return string(username), string(password)
 }
 
-func createVSphereCluster(cl client.Client, mapiProviderSpec *mapiv1.VSphereMachineProviderSpec) *vspherev1.VSphereCluster {
+func createVSphereCluster(ctx context.Context, cl client.Client, mapiProviderSpec *mapiv1.VSphereMachineProviderSpec) *vspherev1.VSphereCluster {
 	By("Creating vSphere cluster")
 
 	host, port, err := framework.GetControlPlaneHostAndPort(cl)
