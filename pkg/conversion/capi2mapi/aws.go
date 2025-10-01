@@ -204,7 +204,7 @@ func convertCAPAMachineConditionsToMAPIMachineAWSProviderConditions(awsMachine *
 	if ptr.Deref(awsMachine.Status.InstanceState, "") == awsv1.InstanceStateRunning {
 		// Set conditionSuccess
 		return []metav1.Condition{{
-			Type:    string(mapiv1.MachineCreated),
+			Type:    string(mapiv1.MachineCreation),
 			Status:  metav1.ConditionTrue,
 			Reason:  mapiv1.MachineCreationSucceededConditionReason,
 			Message: "Machine successfully created",

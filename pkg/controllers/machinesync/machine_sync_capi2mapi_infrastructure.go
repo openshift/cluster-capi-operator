@@ -59,7 +59,7 @@ func setChangedMAPIMachineProviderStatusFields(platform configv1.PlatformType, e
 
 	rawExtension, err := capi2mapi.RawExtensionFromInterface(newProviderStatus)
 	if err != nil {
-		return fmt.Errorf("unable to convert ProviderSpec to RawExtension: %w", err)
+		return fmt.Errorf("unable to convert ProviderStatus to RawExtension: %w", err)
 	}
 
 	existingMAPIMachine.Status.ProviderStatus = rawExtension

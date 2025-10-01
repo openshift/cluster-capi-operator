@@ -443,12 +443,12 @@ func AWSProviderStatusFromRawExtension(rawExtension *runtime.RawExtension) (mapi
 		return mapiv1.AWSMachineProviderStatus{}, nil
 	}
 
-	spec := mapiv1.AWSMachineProviderStatus{}
-	if err := yaml.Unmarshal(rawExtension.Raw, &spec); err != nil {
-		return mapiv1.AWSMachineProviderStatus{}, fmt.Errorf("error unmarshalling providerSpec: %w", err)
+	status := mapiv1.AWSMachineProviderStatus{}
+	if err := yaml.Unmarshal(rawExtension.Raw, &status); err != nil {
+		return mapiv1.AWSMachineProviderStatus{}, fmt.Errorf("error unmarshalling providerStatus: %w", err)
 	}
 
-	return spec, nil
+	return status, nil
 }
 
 func awsMachineToAWSMachineTemplate(awsMachine *awsv1.AWSMachine, name string, namespace string) (*awsv1.AWSMachineTemplate, error) {

@@ -102,7 +102,7 @@ func (r *MachineSyncReconciler) ensureCAPIInfraMachine(ctx context.Context, sour
 
 	existingCAPIInfraMachine, ok = convertedCAPIInfraMachine.DeepCopyObject().(client.Object)
 	if !ok {
-		return fmt.Errorf("failed to assert convertedCAPIInfraMachine: %w", errAssertingClientObject)
+		return fmt.Errorf("failed to assert convertedCAPIInfraMachine: %w", errAssertingInfrasMachineClientObject)
 	}
 
 	if err := r.Create(ctx, existingCAPIInfraMachine); err != nil {
@@ -167,7 +167,7 @@ func (r *MachineSyncReconciler) ensureCAPIInfraMachineStatusUpdated(ctx context.
 
 	target, ok := existingCAPIInfraMachine.DeepCopyObject().(client.Object)
 	if !ok {
-		return false, fmt.Errorf("failed to assert existingCAPIInfraMachine: %w", errAssertingClientObject)
+		return false, fmt.Errorf("failed to assert existingCAPIInfraMachine: %w", errAssertingInfrasMachineClientObject)
 	}
 
 	patchBase := client.MergeFrom(target)
@@ -272,8 +272,8 @@ func compareCAPIInfraMachines(platform configv1.PlatformType, infraMachine1, inf
 			diff[".metadata"] = diffMetadata
 		}
 
-		if diffMetadata := util.ObjectMetaEqual(typedInfraMachine1.ObjectMeta, typedinfraMachine2.ObjectMeta); len(diffMetadata) > 0 {
-			diff[".status"] = diffMetadata
+		if diffStatus := deep.Equal(typedInfraMachine1.Status, typedinfraMachine2.Status); len(diffStatus) > 0 {
+			diff[".status"] = diffStatus
 		}
 	case configv1.OpenStackPlatformType:
 		typedInfraMachine1, ok := infraMachine1.(*openstackv1.OpenStackMachine)
@@ -294,8 +294,8 @@ func compareCAPIInfraMachines(platform configv1.PlatformType, infraMachine1, inf
 			diff[".metadata"] = diffMetadata
 		}
 
-		if diffMetadata := util.ObjectMetaEqual(typedInfraMachine1.ObjectMeta, typedinfraMachine2.ObjectMeta); len(diffMetadata) > 0 {
-			diff[".status"] = diffMetadata
+		if diffStatus := deep.Equal(typedInfraMachine1.Status, typedinfraMachine2.Status); len(diffStatus) > 0 {
+			diff[".status"] = diffStatus
 		}
 	case configv1.PowerVSPlatformType:
 		typedInfraMachine1, ok := infraMachine1.(*ibmpowervsv1.IBMPowerVSMachine)
@@ -316,8 +316,8 @@ func compareCAPIInfraMachines(platform configv1.PlatformType, infraMachine1, inf
 			diff[".metadata"] = diffMetadata
 		}
 
-		if diffMetadata := util.ObjectMetaEqual(typedInfraMachine1.ObjectMeta, typedinfraMachine2.ObjectMeta); len(diffMetadata) > 0 {
-			diff[".status"] = diffMetadata
+		if diffStatus := deep.Equal(typedInfraMachine1.Status, typedinfraMachine2.Status); len(diffStatus) > 0 {
+			diff[".status"] = diffStatus
 		}
 
 	default:

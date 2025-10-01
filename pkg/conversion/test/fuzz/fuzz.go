@@ -265,7 +265,7 @@ func MAPI2CAPIMachineRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv1.I
 	machineFuzzInputs := []TableEntry{}
 	fz := getFuzzer(scheme, fuzzerFuncs...)
 
-	for i := 0; i < 1; i++ {
+	for i := 0; i < 1000; i++ {
 		m := &mapiv1.Machine{}
 		fz.Fill(m)
 

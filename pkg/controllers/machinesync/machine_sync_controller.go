@@ -92,8 +92,8 @@ const (
 )
 
 var (
-	// errAssertingClientObject is returned when we encounter an issue asserting a runtime.Object into a client.Object.
-	errAssertingClientObject = errors.New("error asserting the Cluster API AWSMachine object")
+	// errAssertingInfrasMachineClientObject is returned when we encounter an issue asserting a runtime.Object into a client.Object.
+	errAssertingInfrasMachineClientObject = errors.New("error asserting the Cluster API Infrastructure Machine to client.Object")
 
 	// errAssertingCAPIAWSMachine is returned when we encounter an issue asserting a client.Object into an AWSMachine.
 	errAssertingCAPIAWSMachine = errors.New("error asserting the Cluster API AWSMachine object")
