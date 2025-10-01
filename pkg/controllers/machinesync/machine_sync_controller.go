@@ -917,6 +917,10 @@ func (r *MachineSyncReconciler) convertMAPIMachineOwnerReferencesToCAPI(ctx cont
 func (r *MachineSyncReconciler) convertCAPIMachineOwnerReferencesToMAPI(ctx context.Context, capiMachine *clusterv1.Machine) ([]metav1.OwnerReference, error) {
 	mapiOwnerReferences := []metav1.OwnerReference{}
 
+	if capiMachine.OwnerReferences == nil {
+		return nil, nil
+	}
+
 	if len(capiMachine.OwnerReferences) == 0 {
 		return mapiOwnerReferences, nil
 	}
@@ -964,7 +968,7 @@ func (r *MachineSyncReconciler) convertCAPIMachineOwnerReferencesToMAPI(ctx cont
 		}
 
 		// MAPI doesn't have a cluster, so we don't need to add an owner reference.
-		return mapiOwnerReferences, nil
+		return nil, nil
 	default:
 		return nil, field.Invalid(field.NewPath("metadata", "ownerReferences"), capiMachine.OwnerReferences, errUnsuportedOwnerKindForConversion.Error())
 	}
@@ -1296,7 +1300,7 @@ func compareMAPIMachines(a, b *machinev1beta1.Machine) (map[string]any, error) {
 		return nil, fmt.Errorf("unable to parse first Machine API machine set providerSpec: %w", err)
 	}
 
-	ps2, err := mapi2capi.AWSProviderSpecFromRawExtension(a.Spec.ProviderSpec.Value)
+	ps2, err := mapi2capi.AWSProviderSpecFromRawExtension(b.Spec.ProviderSpec.Value)
 	if err != nil {
 		return nil, fmt.Errorf("unable to parse second Machine API machine set providerSpec: %w", err)
 	}
