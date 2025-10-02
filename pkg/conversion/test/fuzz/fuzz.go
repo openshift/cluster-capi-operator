@@ -124,8 +124,17 @@ func CAPI2MAPIMachineRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv1.I
 
 		// Break down the comparison to make it easier to debug sections that are failing conversion.
 
+		// Status comparison
+		capiMachine.Status.Conditions = nil         // This is not a 1:1 mapping conversion between CAPI and MAPI.
+		capiMachine.Status.V1Beta2.Conditions = nil // This is not a 1:1 mapping conversion between CAPI and MAPI.
+
+		capiMachine.Status.CertificatesExpiryDate = nil // This is not present on the MAPI Machine status.
+		capiMachine.Status.Deletion = nil               // This is not present on the MAPI Machine status.
+		capiMachine.Status.NodeInfo = nil               // This is not present on the MAPI Machine status.
+
+		Expect(capiMachine.Status).To(Equal(in.machine.Status))
+
 		// Status comparison for infrastructure machines is not implemented yet.
-		// Expect(capiMachine.Status).To(Equal(in.machine.Status))
 		// Expect(infraMachine.Status).To(Equal(in.infraMachine.Status))
 
 		capiMachine.Finalizers = nil
@@ -286,8 +295,13 @@ func MAPI2CAPIMachineRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv1.I
 
 		// Break down the comparison to make it easier to debug sections that are failing conversion.
 
-		// Status comparison for machines is not implemented yet.
-		// Expect(mapiMachine.Status).To(Equal(in.machine.Status))
+		mapiMachine.Status.LastOperation = nil // Ignore, this field as it is not present in CAPI.
+		// The conditions are not a 1:1 mapping conversion between CAPI and MAPI.
+		// So null them out to match the original nil fuzzing.
+		mapiMachine.Status.Conditions = nil
+
+		// The ProviderStatus only contains non-roundtripable fields.
+		Expect(mapiMachine.Status).To(WithTransform(ignoreMachineProviderStatus, Equal(ignoreMachineProviderStatus(in.machine.Status))), "converted MAPI machine should have matching .status")
 
 		mapiMachine.Finalizers = nil
 		Expect(mapiMachine.TypeMeta).To(Equal(in.machine.TypeMeta), "converted MAPI machine should have matching .typeMeta")
@@ -343,9 +357,6 @@ func MAPI2CAPIMachineSetRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv
 		Expect(warnings).To(BeEmpty())
 
 		// Break down the comparison to make it easier to debug sections that are failing conversion.
-
-		// Status comparison temporarily disabled due to field differences between MAPI and CAPI
-
 		mapiMachineSet.Finalizers = nil
 		Expect(mapiMachineSet.TypeMeta).To(Equal(in.machineSet.TypeMeta), "converted MAPI machine set should have matching .typeMeta")
 		Expect(mapiMachineSet.ObjectMeta).To(Equal(in.machineSet.ObjectMeta), "converted MAPI machine set should have matching .metadata")
@@ -382,6 +393,15 @@ func ignoreMachineProviderSpec(in mapiv1.MachineSpec) mapiv1.MachineSpec {
 func ignoreMachineSetProviderSpec(in mapiv1.MachineSetSpec) mapiv1.MachineSetSpec {
 	out := in.DeepCopy()
 	out.Template.Spec.ProviderSpec.Value = nil
+
+	return *out
+}
+
+// ignoreMachineProviderStatus returns a copy of the MachineSpec with the ProviderSpec field set to nil.
+// This is used so that we can separate the comparison of the ProviderSpec field.
+func ignoreMachineProviderStatus(in mapiv1.MachineStatus) mapiv1.MachineStatus {
+	out := in.DeepCopy()
+	out.ProviderStatus = nil
 
 	return *out
 }
@@ -484,6 +504,25 @@ func CAPIMachineFuzzerFuncs(providerIDFuzz StringFuzzer, infraKind, infraAPIVers
 					Namespace:  m.Namespace,
 				}
 			},
+			func(m *clusterv1.MachineStatus, c randfill.Continue) {
+				c.FillNoCustom(m)
+
+				fuzzCAPIMachineStatusAddresses(&m.Addresses, c)
+				fuzzCAPIMachineStatusPhase(&m.Phase, c)
+
+				m.ObservedGeneration = 0       // Ignore, this field as it shouldn't match between CAPI and MAPI.
+				m.Conditions = nil             // Ignore, this field as it is not a 1:1 mapping between CAPI and MAPI but rather a recomputation of the conditions based on other fields.
+				m.CertificatesExpiryDate = nil // Ignore, this field as it is not present in MAPI.
+				m.Deletion = nil               // Ignore, this field as it is not present in MAPI.
+			},
+			func(m *clusterv1.MachineStatus, c randfill.Continue) {
+				// Deal with the V1Beta2 status field.
+				if m.V1Beta2 == nil {
+					m.V1Beta2 = &clusterv1.MachineV1Beta2Status{}
+				}
+
+				m.V1Beta2.Conditions = nil
+			},
 		}
 	}
 }
@@ -576,7 +615,7 @@ func CAPIMachineSetFuzzerFuncs(infraTemplateKind, infraAPIVersion, clusterName s
 // The providerSpec should be a pointer to a providerSpec type for the platform being tested.
 // This will be fuzzed and then injected into the MachineSpec as a RawExtension.
 // The providerIDFuzz function should be a function that returns a valid providerID for the platform being tested.
-func MAPIMachineFuzzerFuncs(providerSpec runtime.Object, providerIDFuzz StringFuzzer) fuzzer.FuzzerFuncs {
+func MAPIMachineFuzzerFuncs(providerSpec runtime.Object, providerStatus interface{}, providerIDFuzz StringFuzzer) fuzzer.FuzzerFuncs {
 	return func(codecs runtimeserializer.CodecFactory) []interface{} {
 		return []interface{}{
 			// MAPI to CAPI conversion functions.
@@ -635,6 +674,27 @@ func MAPIMachineFuzzerFuncs(providerSpec runtime.Object, providerIDFuzz StringFu
 					hooks.PreDrain = nil
 				}
 			},
+			func(m *mapiv1.MachineStatus, c randfill.Continue) {
+				c.FillNoCustom(m)
+
+				fuzzMAPIMachineStatusAddresses(&m.Addresses, c)
+				fuzzMAPIMachineStatusPhase(m.Phase, c)
+
+				bytes, err := json.Marshal(providerStatus)
+				if err != nil {
+					panic(err)
+				}
+
+				// Set the bytes field on the RawExtension
+				m.ProviderStatus = &runtime.RawExtension{
+					Raw: bytes,
+				}
+
+				m.LastOperation = nil        // Ignore, this field as it is not present in CAPI.
+				m.AuthoritativeAPI = ""      // Ignore, this field as it is not present in CAPI.
+				m.SynchronizedGeneration = 0 // Ignore, this field as it is not present in CAPI.
+				m.Conditions = nil           // Ignore, this field as it is not a 1:1 mapping between CAPI and MAPI but rather a recomputation of the conditions based on other fields.
+			},
 		}
 	}
 }
@@ -685,6 +745,7 @@ func MAPIMachineSetFuzzerFuncs() fuzzer.FuzzerFuncs {
 	}
 }
 
+// fuzzMAPIMachineSetSpecDeletePolicy fuzzes a single MAPI MachineSetDeletePolicy with valid values.
 func fuzzMAPIMachineSetSpecDeletePolicy(deletePolicy *string, c randfill.Continue) {
 	switch c.Int31n(3) {
 	case 0:
@@ -702,6 +763,7 @@ func fuzzMAPIMachineSetSpecDeletePolicy(deletePolicy *string, c randfill.Continu
 	} //nolint:wsl
 }
 
+// fuzzCAPIMachineSetSpecDeletePolicy fuzzes a single CAPI MachineSetDeletePolicy with valid values.
 func fuzzCAPIMachineSetSpecDeletePolicy(deletePolicy *string, c randfill.Continue) {
 	switch c.Int31n(3) {
 	case 0:
@@ -718,4 +780,168 @@ func fuzzCAPIMachineSetSpecDeletePolicy(deletePolicy *string, c randfill.Continu
 		// resulting in a known lossy rountrip conversion, which would make the test to fail.
 		// This is not an issue in real conditions as the defaults are the same for CAPI and MAPI (Random).
 	} //nolint:wsl
+}
+
+// fuzzMAPIMachineStatusAddress fuzzes a single MAPI machine status address with valid address types and randomized IP addresses.
+//
+//nolint:dupl
+func fuzzMAPIMachineStatusAddress(address *corev1.NodeAddress, c randfill.Continue) {
+	// Fuzz the address type to one of the valid types for MAPI machines
+	// Based on the conversion code, MAPI supports: Hostname, ExternalIP, InternalIP
+	// (ExternalDNS and InternalDNS are not supported in MAPI conversion)
+	switch c.Int31n(5) {
+	case 0:
+		address.Type = corev1.NodeHostName
+		// Generate a random hostname
+		address.Address = fmt.Sprintf("node-%d.example.com", c.Int31n(1000))
+	case 1:
+		address.Type = corev1.NodeExternalIP
+		// Generate a random external IP address (public IP range)
+		address.Address = fmt.Sprintf("%d.%d.%d.%d",
+			c.Int31n(223)+1, // 1-223 (avoid 0.x.x.x and 224+ multicast)
+			c.Int31n(256),   // 0-255
+			c.Int31n(256),   // 0-255
+			c.Int31n(254)+1) // 1-254 (avoid .0 and .255)
+	case 2:
+		address.Type = corev1.NodeInternalIP
+		// Generate a random internal IP address (private IP ranges)
+		switch c.Int31n(3) {
+		case 0:
+			// 10.0.0.0/8
+			address.Address = fmt.Sprintf("10.%d.%d.%d",
+				c.Int31n(256), c.Int31n(256), c.Int31n(254)+1)
+		case 1:
+			// 172.16.0.0/12
+			address.Address = fmt.Sprintf("172.%d.%d.%d",
+				c.Int31n(16)+16, c.Int31n(256), c.Int31n(254)+1)
+		case 2:
+			// 192.168.0.0/16
+			address.Address = fmt.Sprintf("192.168.%d.%d",
+				c.Int31n(256), c.Int31n(254)+1)
+		}
+	case 3:
+		address.Type = corev1.NodeExternalDNS
+		address.Address = fmt.Sprintf("node-%d.example.com", c.Int31n(1000))
+	case 4:
+		address.Type = corev1.NodeInternalDNS
+		address.Address = fmt.Sprintf("node-%d.example.com", c.Int31n(1000))
+	}
+}
+
+// fuzzMAPIMachineStatusAddresses fuzzes a slice of MAPI machine status addresses with randomized count and content.
+func fuzzMAPIMachineStatusAddresses(addresses *[]corev1.NodeAddress, c randfill.Continue) {
+	// Randomize the number of addresses (0-3 addresses)
+	count := c.Int31n(4)
+	*addresses = make([]corev1.NodeAddress, count)
+
+	// Fuzz each address
+	for i := range *addresses {
+		fuzzMAPIMachineStatusAddress(&(*addresses)[i], c)
+	}
+}
+
+// fuzzMAPIMachineStatusPhase fuzzes a single MAPI machine status phase with valid phases.
+func fuzzMAPIMachineStatusPhase(phase *string, c randfill.Continue) {
+	if phase == nil {
+		phase = ptr.To("")
+	}
+
+	switch c.Int31n(5) {
+	case 0:
+		*phase = "Running"
+	case 1:
+		*phase = "Provisioning"
+	case 2:
+		*phase = "Provisioned"
+	case 3:
+		*phase = "Deleting"
+	case 4:
+		*phase = "Failed"
+	}
+}
+
+// fuzzCAPIMachineStatusAddresses fuzzes a slice of CAPI machine status addresses with randomized count and content.
+func fuzzCAPIMachineStatusAddresses(addresses *clusterv1.MachineAddresses, c randfill.Continue) {
+	// Randomize the number of addresses (0-3 addresses)
+	count := c.Int31n(4)
+	*addresses = make(clusterv1.MachineAddresses, count)
+
+	// Fuzz each address
+	for i := range *addresses {
+		fuzzCAPIMachineStatusAddress(&(*addresses)[i], c)
+	}
+}
+
+// fuzzCAPIMachineStatusPhase fuzzes a single CAPI machine status phase with valid phases.
+func fuzzCAPIMachineStatusPhase(phase *string, c randfill.Continue) {
+	if phase == nil {
+		phase = ptr.To("")
+	}
+
+	switch c.Int31n(8) {
+	case 0:
+		*phase = string(clusterv1.MachinePhasePending)
+	case 1:
+		*phase = string(clusterv1.MachinePhaseRunning)
+	case 2:
+		*phase = string(clusterv1.MachinePhaseProvisioning)
+	case 3:
+		*phase = string(clusterv1.MachinePhaseProvisioned)
+	case 4:
+		*phase = string(clusterv1.MachinePhaseDeleting)
+	case 5:
+		*phase = string(clusterv1.MachinePhaseFailed)
+	case 6:
+		*phase = string(clusterv1.MachinePhaseDeleted)
+	case 7:
+		*phase = string(clusterv1.MachinePhaseUnknown)
+	}
+}
+
+// fuzzCAPIMachineStatusAddress fuzzes a single CAPI machine status address with valid address types and randomized IP addresses.
+//
+//nolint:dupl
+func fuzzCAPIMachineStatusAddress(address *clusterv1.MachineAddress, c randfill.Continue) {
+	// Fuzz the address type to one of the valid types for CAPI machines
+	// Based on the conversion code, CAPI supports: Hostname, ExternalIP, InternalIP
+	// (ExternalDNS and InternalDNS are not supported in CAPI conversion)
+	switch c.Int31n(5) {
+	case 0:
+		address.Type = clusterv1.MachineHostName
+		// Generate a random hostname
+		address.Address = fmt.Sprintf("node-%d.example.com", c.Int31n(1000))
+	case 1:
+		address.Type = clusterv1.MachineExternalIP
+		// Generate a random external IP address (public IP range)
+		address.Address = fmt.Sprintf("%d.%d.%d.%d",
+			c.Int31n(223)+1, // 1-223 (avoid 0.x.x.x and 224+ multicast)
+			c.Int31n(256),   // 0-255
+			c.Int31n(256),   // 0-255
+			c.Int31n(254)+1) // 1-254 (avoid .0 and .255)
+	case 2:
+		address.Type = clusterv1.MachineInternalIP
+		// Generate a random internal IP address (private IP ranges)
+		switch c.Int31n(3) {
+		case 0:
+			// 10.0.0.0/8
+			address.Address = fmt.Sprintf("10.%d.%d.%d",
+				c.Int31n(256), c.Int31n(256), c.Int31n(254)+1)
+		case 1:
+			// 172.16.0.0/12
+			address.Address = fmt.Sprintf("172.%d.%d.%d",
+				c.Int31n(16)+16, c.Int31n(256), c.Int31n(254)+1)
+		case 2:
+			// 192.168.0.0/16
+			address.Address = fmt.Sprintf("192.168.%d.%d",
+				c.Int31n(256), c.Int31n(254)+1)
+		}
+	case 3:
+		address.Type = clusterv1.MachineExternalDNS
+		// Generate a random external DNS address
+		address.Address = fmt.Sprintf("node-%d.example.com", c.Int31n(1000))
+	case 4:
+		address.Type = clusterv1.MachineInternalDNS
+		// Generate a random internal DNS address
+		address.Address = fmt.Sprintf("node-%d.example.com", c.Int31n(1000))
+	}
 }

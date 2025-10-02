@@ -113,8 +113,8 @@ func getTime(data map[string]interface{}, key string) metav1.Time {
 	return metav1.Time{}
 }
 
-// GetMAPIMachineSetCondition retrieves a specific condition from a list of MAPI MachineSet conditions.
-func GetMAPIMachineSetCondition(conditions []machinev1beta1.Condition, conditionType string) *machinev1beta1.Condition {
+// GetMAPICondition retrieves a specific condition from a list of MAPI conditions.
+func GetMAPICondition(conditions []machinev1beta1.Condition, conditionType string) *machinev1beta1.Condition {
 	for i := range conditions {
 		if string(conditions[i].Type) == conditionType {
 			return &conditions[i]
@@ -124,37 +124,87 @@ func GetMAPIMachineSetCondition(conditions []machinev1beta1.Condition, condition
 	return nil
 }
 
-// SetMAPIMachineSetCondition sets a condition in a list of MAPI MachineSet conditions.
+// SetMAPICondition sets a condition in a list of MAPI conditions.
 // If the condition already exists and state (Status, Reason, Message) has changed:
 // - if the lasttransitiontime is not set, it sets it to the current time
 // - if the lasttransitiontime is set, it updates it with the one of the newly provided condition lasttransitiontime.
 // If the condition state has not changed, it preserves the existing LastTransitionTime.
 // If the condition does not exist, it adds it.
 // This function behaves similarly to conditions.Set() for CAPI conditions.
-func SetMAPIMachineSetCondition(conditions []machinev1beta1.Condition, condition *machinev1beta1.Condition) []machinev1beta1.Condition {
+func SetMAPICondition(conditions []machinev1beta1.Condition, condition *machinev1beta1.Condition) []machinev1beta1.Condition {
 	for i, currCondition := range conditions {
-		if string(currCondition.Type) == string(condition.Type) {
-			// Check if the condition state has changed (Status, Reason, Message)
-			if currCondition.Status != condition.Status || currCondition.Reason != condition.Reason || currCondition.Message != condition.Message {
-				// State has changed, update the condition with the new LastTransitionTime
-				updatedCondition := *condition
-				if updatedCondition.LastTransitionTime.IsZero() {
-					updatedCondition.LastTransitionTime = metav1.NewTime(time.Now().UTC().Truncate(time.Second))
-				}
-
-				conditions[i] = updatedCondition
-			} else {
-				// State hasn't changed, preserve the existing LastTransitionTime
-				updatedCondition := *condition
-				updatedCondition.LastTransitionTime = currCondition.LastTransitionTime
-				conditions[i] = updatedCondition
-			}
-
-			// Condition found and updated, return the updated conditions.
-			return conditions
+		if currCondition.Type != condition.Type {
+			continue
 		}
+
+		updatedCondition := *condition
+
+		// Check if the condition state has changed (Status, Reason, Message)
+		if currCondition.Status != condition.Status || currCondition.Reason != condition.Reason || currCondition.Message != condition.Message {
+			// State has changed, update the condition with the new LastTransitionTime
+			if updatedCondition.LastTransitionTime.IsZero() {
+				updatedCondition.LastTransitionTime = metav1.NewTime(time.Now().UTC().Truncate(time.Second))
+			}
+		} else {
+			// State hasn't changed, preserve the existing LastTransitionTime
+			updatedCondition.LastTransitionTime = currCondition.LastTransitionTime
+		}
+
+		conditions[i] = updatedCondition
+
+		// Condition found and updated, return the updated conditions.
+		return conditions
 	}
 
+	// Ensure LastTransitionTime is set also for new conditions.
+	if condition.LastTransitionTime.IsZero() {
+		condition.LastTransitionTime = metav1.NewTime(time.Now().UTC().Truncate(time.Second))
+	}
+
+	condition.LastTransitionTime.Time = condition.LastTransitionTime.Truncate(1 * time.Second)
+
 	// Condition doesn't exist, add it
+	return append(conditions, *condition)
+}
+
+// SetMAPIProviderCondition sets a condition in a list of MAPI conditions.
+// If the condition already exists and state (Status, Reason, Message) has changed:
+// - if the lasttransitiontime is not set, it sets it to the current time
+// - if the lasttransitiontime is set, it updates it with the one of the newly provided condition lasttransitiontime.
+// If the condition state has not changed, it preserves the existing LastTransitionTime.
+// If the condition does not exist, it adds it.
+// This function behaves similarly to conditions.Set() for CAPI conditions.
+func SetMAPIProviderCondition(conditions []metav1.Condition, condition *metav1.Condition) []metav1.Condition {
+	for i, currCondition := range conditions {
+		if currCondition.Type != condition.Type {
+			continue
+		}
+
+		updatedCondition := *condition
+
+		// Check if the condition state has changed (Status, Reason, Message)
+		if currCondition.Status != condition.Status || currCondition.Reason != condition.Reason || currCondition.Message != condition.Message {
+			// State has changed, update the condition with the new LastTransitionTime
+			if updatedCondition.LastTransitionTime.IsZero() {
+				updatedCondition.LastTransitionTime = metav1.NewTime(time.Now().UTC().Truncate(time.Second))
+			}
+		} else {
+			// State hasn't changed, preserve the existing LastTransitionTime
+			updatedCondition.LastTransitionTime = currCondition.LastTransitionTime
+		}
+
+		conditions[i] = updatedCondition
+		// Condition found and updated, return the updated conditions.
+		return conditions
+	}
+
+	// Condition doesn't exist, add it and ensure LastTransitionTime is set.
+
+	if condition.LastTransitionTime.IsZero() {
+		condition.LastTransitionTime = metav1.Now()
+	}
+
+	condition.LastTransitionTime.Time = condition.LastTransitionTime.Truncate(1 * time.Second)
+
 	return append(conditions, *condition)
 }
