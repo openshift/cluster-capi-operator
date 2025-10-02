@@ -19,7 +19,7 @@ package mapi2capi
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	mapiv1 "github.com/openshift/api/machine/v1beta1"
+	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	testutils "github.com/openshift/cluster-api-actuator-pkg/testutils"
 	configbuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/config/v1"
 	machinebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/machine/v1beta1"
@@ -65,7 +65,7 @@ var _ = Describe("mapi2capi MachineSet conversion", func() {
 		}),
 
 		Entry("With unsupported spec.metadata.generateName set", mapi2CAPIMachinesetConversionInput{
-			machineSetBuilder: mapiMachineSetBase.WithMachineSpecObjectMeta(mapiv1.ObjectMeta{
+			machineSetBuilder: mapiMachineSetBase.WithMachineSpecObjectMeta(mapiv1beta1.ObjectMeta{
 				GenerateName: "test-generate-",
 			}),
 			infraBuilder:     infraBase,
@@ -74,7 +74,7 @@ var _ = Describe("mapi2capi MachineSet conversion", func() {
 		}),
 
 		Entry("With unsupported spec.metadata.name set", mapi2CAPIMachinesetConversionInput{
-			machineSetBuilder: mapiMachineSetBase.WithMachineSpecObjectMeta(mapiv1.ObjectMeta{
+			machineSetBuilder: mapiMachineSetBase.WithMachineSpecObjectMeta(mapiv1beta1.ObjectMeta{
 				Name: "test-name",
 			}),
 			infraBuilder:     infraBase,
@@ -84,7 +84,7 @@ var _ = Describe("mapi2capi MachineSet conversion", func() {
 
 		Entry("With unsupported spec.metadata.namespace set", mapi2CAPIMachinesetConversionInput{
 			infraBuilder: infraBase,
-			machineSetBuilder: mapiMachineSetBase.WithMachineSpecObjectMeta(mapiv1.ObjectMeta{
+			machineSetBuilder: mapiMachineSetBase.WithMachineSpecObjectMeta(mapiv1beta1.ObjectMeta{
 				Namespace: "test-namespace",
 			}),
 			expectedErrors:   []string{"spec.metadata.namespace: Invalid value: \"test-namespace\": namespace is not supported"},
@@ -103,15 +103,15 @@ var _ = Describe("mapi2capi MachineSet Status Conversion", func() {
 				WithFullyLabeledReplicas(5).
 				WithReadyReplicas(4).
 				WithAvailableReplicas(3).
-				WithErrorReason(mapiv1.MachineSetStatusError("InvalidConfiguration")).
+				WithErrorReason(mapiv1beta1.MachineSetStatusError("InvalidConfiguration")).
 				WithErrorMessage("Test error message").
 				Build()
 			// Add a MAPI "Available" condition to the status.
-			mapiMachineSet.Status.Conditions = []mapiv1.Condition{
+			mapiMachineSet.Status.Conditions = []mapiv1beta1.Condition{
 				{
 					Type:     "Available",
 					Status:   corev1.ConditionTrue,
-					Severity: mapiv1.ConditionSeverityNone,
+					Severity: mapiv1beta1.ConditionSeverityNone,
 					Reason:   "MachineSetAvailable",
 					Message:  "MachineSet is available",
 				},
@@ -123,7 +123,7 @@ var _ = Describe("mapi2capi MachineSet Status Conversion", func() {
 			Expect(capiStatus.FullyLabeledReplicas).To(Equal(int32(5)))
 			Expect(capiStatus.ReadyReplicas).To(Equal(int32(4)))
 			Expect(capiStatus.AvailableReplicas).To(Equal(int32(3)))
-			Expect(capiStatus.FailureReason).To(HaveValue(BeEquivalentTo(mapiv1.MachineSetStatusError("InvalidConfiguration"))))
+			Expect(capiStatus.FailureReason).To(HaveValue(BeEquivalentTo(mapiv1beta1.MachineSetStatusError("InvalidConfiguration"))))
 			Expect(capiStatus.FailureMessage).To(HaveValue(BeEquivalentTo("Test error message")))
 			Expect(capiStatus.Conditions).To(SatisfyAll(
 				ContainElement(matchers.MatchCAPICondition(clusterv1.Condition{

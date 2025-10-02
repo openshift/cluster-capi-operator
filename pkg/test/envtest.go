@@ -21,8 +21,8 @@ import (
 	"fmt"
 	"path"
 
-	machinev1 "github.com/openshift/api/machine/v1"
-	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
+	mapiv1 "github.com/openshift/api/machine/v1"
+	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	"golang.org/x/tools/go/packages"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -42,8 +42,8 @@ import (
 
 func init() {
 	utilruntime.Must(configv1.Install(scheme.Scheme))
-	utilruntime.Must(machinev1.Install(scheme.Scheme))
-	utilruntime.Must(machinev1beta1.Install(scheme.Scheme))
+	utilruntime.Must(mapiv1.Install(scheme.Scheme))
+	utilruntime.Must(mapiv1beta1.Install(scheme.Scheme))
 	utilruntime.Must(clusteroperatorv1.Install(scheme.Scheme))
 	utilruntime.Must(apiextensionsv1.AddToScheme(scheme.Scheme))
 	utilruntime.Must(awsv1.AddToScheme(scheme.Scheme))

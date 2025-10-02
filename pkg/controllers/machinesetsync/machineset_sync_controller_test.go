@@ -25,7 +25,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	configv1 "github.com/openshift/api/config/v1"
-	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
+	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 
 	capiv1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/cluster-api/core/v1beta1"
 	capav1builder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/cluster-api/infrastructure/v1beta2"
@@ -71,7 +71,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 	var mapiNamespace *corev1.Namespace
 
 	var mapiMachineSetBuilder machinev1resourcebuilder.MachineSetBuilder
-	var mapiMachineSet *machinev1beta1.MachineSet
+	var mapiMachineSet *mapiv1beta1.MachineSet
 
 	var capiMachineSetBuilder capiv1resourcebuilder.MachineSetBuilder
 	var capiMachineSet *clusterv1.MachineSet
@@ -223,8 +223,8 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 
 		By("Cleaning up MAPI test resources")
 		testutils.CleanupResources(Default, ctx, cfg, k8sClient, mapiNamespace.GetName(),
-			&machinev1beta1.Machine{},
-			&machinev1beta1.MachineSet{},
+			&mapiv1beta1.Machine{},
+			&mapiv1beta1.MachineSet{},
 		)
 
 		testutils.CleanupResources(Default, ctx, cfg, k8sClient, capiNamespace.GetName(),
@@ -249,7 +249,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 
 				By("Setting the MAPI machine set AuthoritativeAPI to MachineAPI")
 				Eventually(k.UpdateStatus(mapiMachineSet, func() {
-					mapiMachineSet.Status.AuthoritativeAPI = machinev1beta1.MachineAuthorityMachineAPI
+					mapiMachineSet.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityMachineAPI
 				})).Should(Succeed())
 
 				// We need to set the observed generation to the metadata generation
@@ -493,7 +493,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 
 				By("Setting the MAPI machine set AuthoritativeAPI to ClusterAPI")
 				Eventually(k.UpdateStatus(mapiMachineSet, func() {
-					mapiMachineSet.Status.AuthoritativeAPI = machinev1beta1.MachineAuthorityClusterAPI
+					mapiMachineSet.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityClusterAPI
 				})).Should(Succeed())
 
 				// We need to set the observed generation to the metadata generation
@@ -683,7 +683,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 							SatisfyAll(
 								HaveField("Type", Equal(consts.SynchronizedCondition)),
 								HaveField("Status", Equal(corev1.ConditionFalse)),
-								HaveField("Severity", Equal(machinev1beta1.ConditionSeverityError)),
+								HaveField("Severity", Equal(mapiv1beta1.ConditionSeverityError)),
 								HaveField("Reason", Equal("FailedToConvertCAPIMachineSetToMAPI")),
 							))),
 					)
@@ -927,7 +927,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 
 				By("Setting the AuthoritativeAPI to Migrating")
 				Eventually(k.UpdateStatus(mapiMachineSet, func() {
-					mapiMachineSet.Status.AuthoritativeAPI = machinev1beta1.MachineAuthorityMigrating
+					mapiMachineSet.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityMigrating
 				})).Should(Succeed())
 			})
 
@@ -984,7 +984,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 			})
 
 			It("should not create a MAPI machine set", func() {
-				Consistently(k.ObjectList(&machinev1beta1.MachineSetList{}), timeout).ShouldNot(HaveField("Items",
+				Consistently(k.ObjectList(&mapiv1beta1.MachineSetList{}), timeout).ShouldNot(HaveField("Items",
 					ContainElement(HaveField("ObjectMeta.Name", Equal(capiMachineSet.GetName()))),
 				))
 			})
@@ -1001,7 +1001,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 
 				By("Setting the AuthoritativeAPI to MachineAPI")
 				Eventually(k.UpdateStatus(mapiMachineSet, func() {
-					mapiMachineSet.Status.AuthoritativeAPI = machinev1beta1.MachineAuthorityMachineAPI
+					mapiMachineSet.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityMachineAPI
 				})).Should(Succeed())
 			})
 
@@ -1108,7 +1108,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 
 				By("Setting the AuthoritativeAPI to ClusterAPI")
 				Eventually(k.UpdateStatus(mapiMachineSet, func() {
-					mapiMachineSet.Status.AuthoritativeAPI = machinev1beta1.MachineAuthorityClusterAPI
+					mapiMachineSet.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityClusterAPI
 				})).Should(Succeed())
 			})
 
@@ -1124,7 +1124,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 							SatisfyAll(
 								HaveField("Type", Equal(consts.SynchronizedCondition)),
 								HaveField("Status", Equal(corev1.ConditionFalse)),
-								HaveField("Severity", Equal(machinev1beta1.ConditionSeverityError)),
+								HaveField("Severity", Equal(mapiv1beta1.ConditionSeverityError)),
 								HaveField("Reason", Equal("FailedToGetCAPIInfraResources")),
 							))),
 					)
@@ -1156,7 +1156,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 })
 
 var _ = Describe("compareMAPIMachineSets", func() {
-	var mapiMachineSet1, mapiMachineSet2 *machinev1beta1.MachineSet
+	var mapiMachineSet1, mapiMachineSet2 *mapiv1beta1.MachineSet
 
 	BeforeEach(func() {
 		mapiMachineSet1 = machinev1resourcebuilder.MachineSet().
@@ -1193,7 +1193,7 @@ var _ = Describe("compareMAPIMachineSets", func() {
 var _ = Describe("applySynchronizedConditionWithPatch", func() {
 	var mapiNamespace *corev1.Namespace
 	var reconciler *MachineSetSyncReconciler
-	var mapiMachineSet *machinev1beta1.MachineSet
+	var mapiMachineSet *mapiv1beta1.MachineSet
 	var k komega.Komega
 
 	BeforeEach(func() {
@@ -1215,13 +1215,13 @@ var _ = Describe("applySynchronizedConditionWithPatch", func() {
 			WithNamespace(mapiNamespace.Name)
 
 		mapiMachineSet = mapiMachineSetBuilder.Build()
-		mapiMachineSet.Spec.AuthoritativeAPI = machinev1beta1.MachineAuthorityMachineAPI
+		mapiMachineSet.Spec.AuthoritativeAPI = mapiv1beta1.MachineAuthorityMachineAPI
 		Expect(k8sClient.Create(ctx, mapiMachineSet))
 
 		By("Set the initial status of the MAPI Machine")
 		Eventually(k.UpdateStatus(mapiMachineSet, func() {
 			mapiMachineSet.Status.SynchronizedGeneration = int64(22)
-			mapiMachineSet.Status.AuthoritativeAPI = machinev1beta1.MachineAuthorityMachineAPI
+			mapiMachineSet.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityMachineAPI
 		})).Should(Succeed())
 
 		By("Get the MAPI Machine from the API Server")
@@ -1236,8 +1236,8 @@ var _ = Describe("applySynchronizedConditionWithPatch", func() {
 	AfterEach(func() {
 		By("Cleaning up MAPI test resources")
 		testutils.CleanupResources(Default, ctx, cfg, k8sClient, mapiNamespace.GetName(),
-			&machinev1beta1.Machine{},
-			&machinev1beta1.MachineSet{},
+			&mapiv1beta1.Machine{},
+			&mapiv1beta1.MachineSet{},
 		)
 	})
 
@@ -1255,7 +1255,7 @@ var _ = Describe("applySynchronizedConditionWithPatch", func() {
 						HaveField("Status", Equal(corev1.ConditionFalse)),
 						HaveField("Reason", Equal("ErrorReason")),
 						HaveField("Message", Equal("Error message")),
-						HaveField("Severity", Equal(machinev1beta1.ConditionSeverityError)),
+						HaveField("Severity", Equal(mapiv1beta1.ConditionSeverityError)),
 					))),
 			)
 		})
@@ -1281,7 +1281,7 @@ var _ = Describe("applySynchronizedConditionWithPatch", func() {
 						HaveField("Status", Equal(corev1.ConditionUnknown)),
 						HaveField("Reason", Equal("")),
 						HaveField("Message", Equal("")),
-						HaveField("Severity", Equal(machinev1beta1.ConditionSeverityInfo)),
+						HaveField("Severity", Equal(mapiv1beta1.ConditionSeverityInfo)),
 					))),
 			)
 		})
@@ -1307,7 +1307,7 @@ var _ = Describe("applySynchronizedConditionWithPatch", func() {
 						HaveField("Status", Equal(corev1.ConditionTrue)),
 						HaveField("Reason", Equal(consts.ReasonResourceSynchronized)),
 						HaveField("Message", Equal("Successfully synchronized MAPI MachineSet to CAPI")),
-						HaveField("Severity", Equal(machinev1beta1.ConditionSeverityNone)),
+						HaveField("Severity", Equal(mapiv1beta1.ConditionSeverityNone)),
 					))),
 			)
 		})

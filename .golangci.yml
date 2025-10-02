@@ -94,6 +94,14 @@ linters-settings:
         alias: "ibmpowervsv1"
       - pkg: "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
         alias: "openstackv1"
+      - pkg: "github.com/openshift/api/machine/v1"
+        alias: "mapiv1"
+      - pkg: "github.com/openshift/api/machine/v1beta1"
+        alias: "mapiv1beta1"
+      - pkg: "github.com/openshift/api/machine/v1alpha1"
+        alias: "mapiv1alpha1"
+      - pkg: "sigs.k8s.io/controller-runtime/pkg/log"
+        alias: "logf"
     no-unaliased: true
   nlreturn:
     block-size: 2

@@ -72,6 +72,10 @@ vet: lint
 lint:
 	$(call ensure-home, ${GOLANGCI_LINT} run ./...)
 
+.PHONY: lint-fix
+lint-fix:
+	$(call ensure-home, ${GOLANGCI_LINT} run ./... --fix)
+
 # Run go mod
 .PHONY: vendor
 vendor:

@@ -21,7 +21,7 @@ import (
 
 	configv1 "github.com/openshift/api/config/v1"
 	mapiv1alpha1 "github.com/openshift/api/machine/v1alpha1"
-	mapiv1 "github.com/openshift/api/machine/v1beta1"
+	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -42,29 +42,29 @@ const (
 
 // openstackMachineAndInfra stores the details of a Machine API Machine for OpenStack and Infra.
 type openstackMachineAndInfra struct {
-	machine        *mapiv1.Machine
+	machine        *mapiv1beta1.Machine
 	infrastructure *configv1.Infrastructure
 }
 
 // openstackMachineSetAndInfra stores the details of a Machine API Machine Set for OpenStack and Infra.
 type openstackMachineSetAndInfra struct {
-	machineSet     *mapiv1.MachineSet
+	machineSet     *mapiv1beta1.MachineSet
 	infrastructure *configv1.Infrastructure
 	*openstackMachineAndInfra
 }
 
 // FromOpenStackMachineAndInfra wraps a Machine API Machine for OpenStack and the OCP Infrastructure object into a mapi2capi OpenstackProviderSpec.
-func FromOpenStackMachineAndInfra(m *mapiv1.Machine, i *configv1.Infrastructure) Machine {
+func FromOpenStackMachineAndInfra(m *mapiv1beta1.Machine, i *configv1.Infrastructure) Machine {
 	return &openstackMachineAndInfra{machine: m, infrastructure: i}
 }
 
 // FromOpenStackMachineSetAndInfra wraps a Machine API MachineSet for OpenStack and the OCP Infrastructure object into a mapi2capi OpenstackProviderSpec.
-func FromOpenStackMachineSetAndInfra(m *mapiv1.MachineSet, i *configv1.Infrastructure) MachineSet {
+func FromOpenStackMachineSetAndInfra(m *mapiv1beta1.MachineSet, i *configv1.Infrastructure) MachineSet {
 	return &openstackMachineSetAndInfra{
 		machineSet:     m,
 		infrastructure: i,
 		openstackMachineAndInfra: &openstackMachineAndInfra{
-			machine: &mapiv1.Machine{
+			machine: &mapiv1beta1.Machine{
 				Spec: m.Spec.Template.Spec,
 			},
 			infrastructure: i,

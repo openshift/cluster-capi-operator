@@ -20,12 +20,12 @@ import (
 	"context"
 	"fmt"
 
-	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
+	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/utils/ptr"
-	"sigs.k8s.io/controller-runtime/pkg/log"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -44,7 +44,7 @@ func ApplyAuthoritativeAPIAndResetSyncStatus[
 ](
 	ctx context.Context, k8sClient client.Client, controllerName string,
 	newApplyConfig syncObjApplyConfigurationConstructor[objPT, statusPT], mapiObj client.Object,
-	authority machinev1beta1.MachineAuthority,
+	authority mapiv1beta1.MachineAuthority,
 ) error {
 	objAC, statusAC, err := newSyncStatusApplyConfiguration(newApplyConfig, mapiObj,
 		corev1.ConditionUnknown, controllers.ReasonAuthoritativeAPIChanged, "Waiting for resync after change of AuthoritativeAPI", ptr.To(int64(0)))
@@ -64,7 +64,7 @@ func ApplyAuthoritativeAPI[
 ](
 	ctx context.Context, k8sClient client.Client, controllerName string,
 	newApplyConfig syncObjApplyConfigurationConstructor[objPT, statusPT], mapiObj client.Object,
-	authority machinev1beta1.MachineAuthority,
+	authority mapiv1beta1.MachineAuthority,
 ) error {
 	statusAC := statusPT(new(statusT))
 	objAC := newApplyConfig(mapiObj.GetName(), mapiObj.GetNamespace()).
@@ -84,10 +84,10 @@ func applyAuthoritativeAPI[
 ](
 	ctx context.Context, k8sClient client.Client, controllerName string,
 	mapiObj client.Object,
-	authority machinev1beta1.MachineAuthority,
+	authority mapiv1beta1.MachineAuthority,
 	objAC objPT, statusAC statusPT,
 ) error {
-	logger := log.FromContext(ctx)
+	logger := logf.FromContext(ctx)
 	logger.Info("Setting AuthoritativeAPI status", "authoritativeAPI", authority)
 
 	statusAC.WithAuthoritativeAPI(authority)
