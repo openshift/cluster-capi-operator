@@ -236,6 +236,40 @@ data:
       policyName: openshift-only-create-mapi-machine-if-authoritative-api-capi
       validationActions:
           - Deny
+    ---
+    apiVersion: admissionregistration.k8s.io/v1
+    kind: ValidatingAdmissionPolicy
+    metadata:
+      name: openshift-prevent-migration-when-machine-updating
+    spec:
+      failurePolicy: Fail
+
+      matchConstraints:
+        resourceRules:
+          - apiGroups: ["machine.openshift.io"]
+            apiVersions: ["*"]
+            operations: ["UPDATE"]
+            resources: ["machines"]
+      
+      # All validations must evaluate to true
+      validations:
+      - expression: '!(has(object.status) && has(object.status.phase) && object.status.phase == "Provisioning" && (oldObject.spec.authoritativeAPI != object.spec.authoritativeAPI))'
+        message: 'Cannot update .spec.authoritativeAPI when machine is in Provisioning phase'
+      - expression: '!(has(object.metadata.deletionTimestamp) && (oldObject.spec.authoritativeAPI != object.spec.authoritativeAPI))'
+        message: 'Cannot update .spec.authoritativeAPI when machine has a non-zero deletion timestamp'
+    ---
+    apiVersion: admissionregistration.k8s.io/v1
+    kind: ValidatingAdmissionPolicyBinding
+    metadata:
+      name: openshift-prevent-migration-when-machine-updating
+    spec:
+      matchResources:
+        namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: openshift-machine-api
+      policyName: openshift-prevent-migration-when-machine-updating
+      validationActions:
+          - Deny
 ---
 apiVersion: v1
 kind: ConfigMap
