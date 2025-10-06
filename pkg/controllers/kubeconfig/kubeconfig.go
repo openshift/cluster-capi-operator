@@ -22,8 +22,10 @@ import (
 
 	"github.com/go-logr/logr"
 
+	"errors"
+
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
@@ -120,6 +122,9 @@ func (r *KubeconfigReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (c
 	return res, nil
 }
 
+// reconcileKubeconfig reconciles the kubeconfig secret.
+//
+//nolint:funlen
 func (r *KubeconfigReconciler) reconcileKubeconfig(ctx context.Context, log logr.Logger) (ctrl.Result, error) {
 	// Get the token secret
 	tokenSecret := &corev1.Secret{}
@@ -129,7 +134,7 @@ func (r *KubeconfigReconciler) reconcileKubeconfig(ctx context.Context, log logr
 	}
 
 	if err := r.Get(ctx, tokenSecretKey, tokenSecret); err != nil {
-		if errors.IsNotFound(err) {
+		if kerrors.IsNotFound(err) {
 			log.Info("Waiting for token secret to be created")
 
 			return ctrl.Result{RequeueAfter: 1 * time.Minute}, nil
@@ -149,17 +154,27 @@ func (r *KubeconfigReconciler) reconcileKubeconfig(ctx context.Context, log logr
 		return ctrl.Result{RequeueAfter: 1 * time.Minute}, nil
 	}
 
-	// Generate kubeconfig
-	kubeconfig, err := generateKubeconfig(kubeconfigOptions{
+	kubeconfigOptions := kubeconfigOptions{
 		token:            tokenSecret.Data["token"],
 		caCert:           tokenSecret.Data["ca.crt"],
 		apiServerEnpoint: r.RestCfg.Host,
 		clusterName:      r.clusterName,
-	})
-
-	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("error generating kubeconfig: %w", err)
 	}
+
+	if err := validateKubeconfigOptions(kubeconfigOptions); err != nil {
+		if errors.Is(err, errTokenEmpty) || errors.Is(err, errCACertEmpty) {
+			// If the validation fails with these errors it means
+			// the token secret has not been populated by the kubernetes control plane yet.
+			// Requeue to wait for the token secret to be populated.
+			log.Info("Token secret has not been populated by the control plane yet, waiting..")
+			return ctrl.Result{}, nil
+		}
+
+		// If the validation fails with other errors throw a reconciler error instead.
+		return ctrl.Result{}, fmt.Errorf("invalid kubeconfig options: %w", err)
+	}
+
+	kubeconfig := generateKubeconfig(kubeconfigOptions)
 
 	// Create a secret with generated kubeconfig
 	out, err := clientcmd.Write(*kubeconfig)

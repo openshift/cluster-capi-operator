@@ -37,23 +37,27 @@ type kubeconfigOptions struct {
 	clusterName      string
 }
 
-func generateKubeconfig(options kubeconfigOptions) (*api.Config, error) {
+func validateKubeconfigOptions(options kubeconfigOptions) error {
 	if len(options.token) == 0 {
-		return nil, errTokenEmpty
+		return errTokenEmpty
 	}
 
 	if len(options.caCert) == 0 {
-		return nil, errCACertEmpty
+		return errCACertEmpty
 	}
 
 	if options.apiServerEnpoint == "" {
-		return nil, errAPIServerEndpointEmpty
+		return errAPIServerEndpointEmpty
 	}
 
 	if options.clusterName == "" {
-		return nil, errClusterNameEmpty
+		return errClusterNameEmpty
 	}
 
+	return nil
+}
+
+func generateKubeconfig(options kubeconfigOptions) *api.Config {
 	userName := "cluster-capi-operator"
 	kubeconfig := &api.Config{
 		Clusters: map[string]*api.Cluster{
@@ -77,5 +81,5 @@ func generateKubeconfig(options kubeconfigOptions) (*api.Config, error) {
 		CurrentContext: options.clusterName,
 	}
 
-	return kubeconfig, nil
+	return kubeconfig
 }

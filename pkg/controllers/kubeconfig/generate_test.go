@@ -36,8 +36,10 @@ var _ = Describe("Generate kubeconfig", func() {
 	})
 
 	It("should generate kubeconfig", func() {
-		kubeconfig, err := generateKubeconfig(*options)
+		err := validateKubeconfigOptions(*options)
 		Expect(err).NotTo(HaveOccurred())
+
+		kubeconfig := generateKubeconfig(*options)
 		Expect(kubeconfig).NotTo(BeNil())
 
 		Expect(kubeconfig.Clusters).To(HaveKey(options.clusterName))
@@ -55,29 +57,25 @@ var _ = Describe("Generate kubeconfig", func() {
 
 	It("should fail with empty token", func() {
 		options.token = nil
-		kubeconfig, err := generateKubeconfig(*options)
-		Expect(err).To((HaveOccurred()))
-		Expect(kubeconfig).To(BeNil())
+		err := validateKubeconfigOptions(*options)
+		Expect(err).To(MatchError(errTokenEmpty))
 	})
 
 	It("should fail with empty ca cert", func() {
 		options.caCert = nil
-		kubeconfig, err := generateKubeconfig(*options)
-		Expect(err).To((HaveOccurred()))
-		Expect(kubeconfig).To(BeNil())
+		err := validateKubeconfigOptions(*options)
+		Expect(err).To(MatchError(errCACertEmpty))
 	})
 
 	It("should fail with empty api server endpoint", func() {
 		options.apiServerEnpoint = ""
-		kubeconfig, err := generateKubeconfig(*options)
-		Expect(err).To((HaveOccurred()))
-		Expect(kubeconfig).To(BeNil())
+		err := validateKubeconfigOptions(*options)
+		Expect(err).To(MatchError(errAPIServerEndpointEmpty))
 	})
 
 	It("should fail with empty cluster name", func() {
 		options.clusterName = ""
-		kubeconfig, err := generateKubeconfig(*options)
-		Expect(err).To((HaveOccurred()))
-		Expect(kubeconfig).To(BeNil())
+		err := validateKubeconfigOptions(*options)
+		Expect(err).To(MatchError(errClusterNameEmpty))
 	})
 })
