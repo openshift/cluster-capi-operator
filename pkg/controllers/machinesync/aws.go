@@ -22,7 +22,7 @@ import (
 	"sort"
 
 	configv1 "github.com/openshift/api/config/v1"
-	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
+	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/mapi2capi"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 
@@ -37,7 +37,7 @@ import (
 //   - Control plane machines can define an secondary external load balancer with "-ext" suffix.
 //   - MAPI machine's load balancers must match the AWSCluster load balancers.
 //   - Worker machines must not define load balancers.
-func (r *MachineSyncReconciler) ensureAWSLoadBalancerMatch(ctx context.Context, mapiMachine *machinev1beta1.Machine) error {
+func (r *MachineSyncReconciler) ensureAWSLoadBalancerMatch(ctx context.Context, mapiMachine *mapiv1beta1.Machine) error {
 	providerSpec, err := mapi2capi.AWSProviderSpecFromRawExtension(mapiMachine.Spec.ProviderSpec.Value)
 	if err != nil {
 		return fmt.Errorf("unable to parse Machine API providerSpec: %w", err)
@@ -64,7 +64,7 @@ func (r *MachineSyncReconciler) ensureAWSLoadBalancerMatch(ctx context.Context, 
 			ToAggregate()
 	}
 
-	loadBalancersCopy := map[string]machinev1beta1.AWSLoadBalancerType{}
+	loadBalancersCopy := map[string]mapiv1beta1.AWSLoadBalancerType{}
 	for _, lb := range providerSpec.LoadBalancers {
 		loadBalancersCopy[lb.Name] = lb.Type
 	}
@@ -87,8 +87,8 @@ func (r *MachineSyncReconciler) ensureAWSLoadBalancerMatch(ctx context.Context, 
 // ensureNoRemainingLoadBalancers validates that there are no unexpected load balancers left defined on the machine.
 func ensureNoRemainingLoadBalancers(
 	lbfieldPath *field.Path,
-	providerConfig *machinev1beta1.AWSMachineProviderConfig,
-	remainingLoadBalancers map[string]machinev1beta1.AWSLoadBalancerType,
+	providerConfig *mapiv1beta1.AWSMachineProviderConfig,
+	remainingLoadBalancers map[string]mapiv1beta1.AWSLoadBalancerType,
 ) field.ErrorList {
 	// Everything in remainingLoadBalancers should be empty
 	errList := field.ErrorList{}
@@ -114,8 +114,8 @@ func ensureNoRemainingLoadBalancers(
 // If the expected load balancer is found, it is removed from remainingLoadBalancers.
 func ensureExpectedLoadBalancer(
 	lbfieldPath *field.Path,
-	providerConfig *machinev1beta1.AWSMachineProviderConfig,
-	remainingLoadBalancers map[string]machinev1beta1.AWSLoadBalancerType,
+	providerConfig *mapiv1beta1.AWSMachineProviderConfig,
+	remainingLoadBalancers map[string]mapiv1beta1.AWSLoadBalancerType,
 	expectedLoadBalancer *awsv1.AWSLoadBalancerSpec,
 ) field.ErrorList {
 	if expectedLoadBalancer == nil {
@@ -138,19 +138,19 @@ func ensureExpectedLoadBalancer(
 }
 
 // convertAWSLBTypeToMAPI converts CAPI LoadBalancerType to MAPI AWSLoadBalancerType.
-func convertAWSLBTypeToMAPI(capiType awsv1.LoadBalancerType) machinev1beta1.AWSLoadBalancerType {
+func convertAWSLBTypeToMAPI(capiType awsv1.LoadBalancerType) mapiv1beta1.AWSLoadBalancerType {
 	switch capiType {
 	case awsv1.LoadBalancerTypeClassic, awsv1.LoadBalancerTypeELB, "":
-		return machinev1beta1.ClassicLoadBalancerType
+		return mapiv1beta1.ClassicLoadBalancerType
 	case awsv1.LoadBalancerTypeNLB:
-		return machinev1beta1.NetworkLoadBalancerType
+		return mapiv1beta1.NetworkLoadBalancerType
 	default:
-		return machinev1beta1.ClassicLoadBalancerType
+		return mapiv1beta1.ClassicLoadBalancerType
 	}
 }
 
 // ensurePlatformMAPIToCAPIValidations verifies that shared CAPI resources are compatible before converting from MAPI -> CAPI.
-func (r *MachineSyncReconciler) ensurePlatformMAPIToCAPIValidations(ctx context.Context, mapiMachine *machinev1beta1.Machine) error {
+func (r *MachineSyncReconciler) ensurePlatformMAPIToCAPIValidations(ctx context.Context, mapiMachine *mapiv1beta1.Machine) error {
 	switch r.Platform {
 	case configv1.AWSPlatformType:
 		return r.ensureAWSLoadBalancerMatch(ctx, mapiMachine)

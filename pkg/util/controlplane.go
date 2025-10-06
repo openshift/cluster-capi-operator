@@ -17,7 +17,7 @@ limitations under the License.
 package util
 
 import (
-	mapiv1 "github.com/openshift/api/machine/v1beta1"
+	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -30,7 +30,7 @@ const (
 )
 
 // IsControlPlaneMAPIMachine returns true if the given MAPI Machine is a control plane machine.
-func IsControlPlaneMAPIMachine(machine *mapiv1.Machine) bool {
+func IsControlPlaneMAPIMachine(machine *mapiv1beta1.Machine) bool {
 	if machine == nil {
 		return false
 	}

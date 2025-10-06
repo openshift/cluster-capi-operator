@@ -23,7 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	configv1 "github.com/openshift/api/config/v1"
-	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
+	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	clusterv1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/cluster-api/core/v1beta1"
 	awsv1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/cluster-api/infrastructure/v1beta2"
 	configv1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/config/v1"
@@ -151,8 +151,8 @@ var _ = Describe("AWS load balancer validation during MAPI->CAPI conversion", fu
 		awsCluster := awsClusterBuilder.WithControlPlaneLoadBalancer(loadBalancerSpec).Build()
 		Expect(k8sClient.Create(ctx, awsCluster)).To(Succeed())
 
-		lbRefs := []machinev1beta1.LoadBalancerReference{
-			{Name: "cluster-int", Type: machinev1beta1.NetworkLoadBalancerType},
+		lbRefs := []mapiv1beta1.LoadBalancerReference{
+			{Name: "cluster-int", Type: mapiv1beta1.NetworkLoadBalancerType},
 		}
 
 		mapiMachine := machinev1resourcebuilder.Machine().
@@ -163,7 +163,7 @@ var _ = Describe("AWS load balancer validation during MAPI->CAPI conversion", fu
 			Build()
 
 		Expect(k8sClient.Create(ctx, mapiMachine)).To(Succeed())
-		Eventually(k.UpdateStatus(mapiMachine, func() { mapiMachine.Status.AuthoritativeAPI = machinev1beta1.MachineAuthorityMachineAPI })).Should(Succeed())
+		Eventually(k.UpdateStatus(mapiMachine, func() { mapiMachine.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityMachineAPI })).Should(Succeed())
 
 		Eventually(k.Object(mapiMachine), timeout).Should(
 			HaveField("Status.Conditions", ContainElement(
@@ -192,7 +192,7 @@ var _ = Describe("AWS load balancer validation during MAPI->CAPI conversion", fu
 			Build()
 
 		Expect(k8sClient.Create(ctx, mapiMachine)).To(Succeed())
-		Eventually(k.UpdateStatus(mapiMachine, func() { mapiMachine.Status.AuthoritativeAPI = machinev1beta1.MachineAuthorityMachineAPI })).Should(Succeed())
+		Eventually(k.UpdateStatus(mapiMachine, func() { mapiMachine.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityMachineAPI })).Should(Succeed())
 
 		Eventually(k.Object(mapiMachine), timeout).Should(
 			HaveField("Status.Conditions", ContainElement(
@@ -218,9 +218,9 @@ var _ = Describe("AWS load balancer validation during MAPI->CAPI conversion", fu
 		Expect(k8sClient.Create(ctx, awsCluster)).To(Succeed())
 
 		// Provide wrong type for cluster-int and an extra unexpected lb
-		lbRefs := []machinev1beta1.LoadBalancerReference{
-			{Name: "cluster-int", Type: machinev1beta1.ClassicLoadBalancerType},
-			{Name: "unexpected", Type: machinev1beta1.NetworkLoadBalancerType},
+		lbRefs := []mapiv1beta1.LoadBalancerReference{
+			{Name: "cluster-int", Type: mapiv1beta1.ClassicLoadBalancerType},
+			{Name: "unexpected", Type: mapiv1beta1.NetworkLoadBalancerType},
 			// Purposely omit cluster-ext to also trigger missing secondary error
 		}
 
@@ -231,7 +231,7 @@ var _ = Describe("AWS load balancer validation during MAPI->CAPI conversion", fu
 			Build()
 
 		Expect(k8sClient.Create(ctx, mapiMachine)).To(Succeed())
-		Eventually(k.UpdateStatus(mapiMachine, func() { mapiMachine.Status.AuthoritativeAPI = machinev1beta1.MachineAuthorityMachineAPI })).Should(Succeed())
+		Eventually(k.UpdateStatus(mapiMachine, func() { mapiMachine.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityMachineAPI })).Should(Succeed())
 
 		Eventually(k.Object(mapiMachine), timeout).Should(
 			HaveField("Status.Conditions", ContainElement(
@@ -260,9 +260,9 @@ var _ = Describe("AWS load balancer validation during MAPI->CAPI conversion", fu
 		awsCluster := awsClusterBuilder.WithControlPlaneLoadBalancer(loadBalancerSpec).WithSecondaryControlPlaneLoadBalancer(secondaryLoadBalancerSpec).Build()
 		Expect(k8sClient.Create(ctx, awsCluster)).To(Succeed())
 
-		lbRefs := []machinev1beta1.LoadBalancerReference{
-			{Name: "cluster-int", Type: machinev1beta1.NetworkLoadBalancerType},
-			{Name: "cluster-ext", Type: machinev1beta1.NetworkLoadBalancerType},
+		lbRefs := []mapiv1beta1.LoadBalancerReference{
+			{Name: "cluster-int", Type: mapiv1beta1.NetworkLoadBalancerType},
+			{Name: "cluster-ext", Type: mapiv1beta1.NetworkLoadBalancerType},
 		}
 
 		mapiMachine := machinev1resourcebuilder.Machine().
@@ -273,7 +273,7 @@ var _ = Describe("AWS load balancer validation during MAPI->CAPI conversion", fu
 			Build()
 
 		Expect(k8sClient.Create(ctx, mapiMachine)).To(Succeed())
-		Eventually(k.UpdateStatus(mapiMachine, func() { mapiMachine.Status.AuthoritativeAPI = machinev1beta1.MachineAuthorityMachineAPI })).Should(Succeed())
+		Eventually(k.UpdateStatus(mapiMachine, func() { mapiMachine.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityMachineAPI })).Should(Succeed())
 
 		// Expect success condition
 		Eventually(k.Object(mapiMachine), timeout).Should(

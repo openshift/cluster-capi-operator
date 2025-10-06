@@ -581,8 +581,8 @@ func handleAWSIdentityRef(fldPath *field.Path, identityRef *awsv1.AWSIdentityRef
 }
 
 // convertAWSClusterLoadBalancersToMAPI convert CAPI LoadBalancers from the AWSCluster spec to MAPI LoadBalancerReferences on the Machine.
-func convertAWSClusterLoadBalancersToMAPI(fldPath *field.Path, machine *clusterv1.Machine, awsCluster *awsv1.AWSCluster) ([]mapiv1.LoadBalancerReference, *field.Error) {
-	var loadBalancers []mapiv1.LoadBalancerReference
+func convertAWSClusterLoadBalancersToMAPI(fldPath *field.Path, machine *clusterv1.Machine, awsCluster *awsv1.AWSCluster) ([]mapiv1beta1.LoadBalancerReference, *field.Error) {
+	var loadBalancers []mapiv1beta1.LoadBalancerReference
 
 	if !capiutil.IsControlPlaneMachine(machine) {
 		// No loadbalancer on non-control plane machines.
@@ -609,29 +609,29 @@ func convertAWSClusterLoadBalancersToMAPI(fldPath *field.Path, machine *clusterv
 }
 
 // convertAWSLoadBalancerToMAPI converts CAPI AWSLoadBalancerSpec to MAPI LoadBalancerReference.
-func convertAWSLoadBalancerToMAPI(loadBalancer *awsv1.AWSLoadBalancerSpec) (mapiv1.LoadBalancerReference, error) {
+func convertAWSLoadBalancerToMAPI(loadBalancer *awsv1.AWSLoadBalancerSpec) (mapiv1beta1.LoadBalancerReference, error) {
 	if loadBalancer == nil {
-		return mapiv1.LoadBalancerReference{}, errNilLoadBalancer
+		return mapiv1beta1.LoadBalancerReference{}, errNilLoadBalancer
 	}
 
 	switch loadBalancer.LoadBalancerType {
 	case awsv1.LoadBalancerTypeClassic, awsv1.LoadBalancerTypeELB:
-		return mapiv1.LoadBalancerReference{
+		return mapiv1beta1.LoadBalancerReference{
 			Name: ptr.Deref(loadBalancer.Name, ""),
-			Type: mapiv1.ClassicLoadBalancerType,
+			Type: mapiv1beta1.ClassicLoadBalancerType,
 		}, nil
 	case awsv1.LoadBalancerTypeNLB:
-		return mapiv1.LoadBalancerReference{
+		return mapiv1beta1.LoadBalancerReference{
 			Name: ptr.Deref(loadBalancer.Name, ""),
-			Type: mapiv1.NetworkLoadBalancerType,
+			Type: mapiv1beta1.NetworkLoadBalancerType,
 		}, nil
 	case "":
 		// Default is classic in CAPI
-		return mapiv1.LoadBalancerReference{
+		return mapiv1beta1.LoadBalancerReference{
 			Name: ptr.Deref(loadBalancer.Name, ""),
-			Type: mapiv1.ClassicLoadBalancerType,
+			Type: mapiv1beta1.ClassicLoadBalancerType,
 		}, nil
 	default:
-		return mapiv1.LoadBalancerReference{}, errUnsupportedLoadBalancerType
+		return mapiv1beta1.LoadBalancerReference{}, errUnsupportedLoadBalancerType
 	}
 }

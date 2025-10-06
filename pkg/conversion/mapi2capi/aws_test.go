@@ -113,7 +113,7 @@ var _ = Describe("mapi2capi AWS conversion", func() {
 			}).WithOwnerReferences(
 				[]metav1.OwnerReference{
 					{
-						APIVersion: mapiv1.GroupVersion.String(),
+						APIVersion: mapiv1beta1.SchemeGroupVersion.String(),
 						Kind:       "ControlPlaneMachineSet",
 						Name:       "cluster",
 						UID:        "cpms-uid",
@@ -121,9 +121,9 @@ var _ = Describe("mapi2capi AWS conversion", func() {
 				},
 			).WithProviderSpecBuilder(
 				awsBaseProviderSpec.WithLoadBalancers(
-					[]mapiv1.LoadBalancerReference{
-						{Name: "ci-ln-d2q97ct-76ef8-httpb-int", Type: mapiv1.NetworkLoadBalancerType},
-						{Name: "ci-ln-d2q97ct-76ef8-httpb-ext", Type: mapiv1.NetworkLoadBalancerType},
+					[]mapiv1beta1.LoadBalancerReference{
+						{Name: "ci-ln-d2q97ct-76ef8-httpb-int", Type: mapiv1beta1.NetworkLoadBalancerType},
+						{Name: "ci-ln-d2q97ct-76ef8-httpb-ext", Type: mapiv1beta1.NetworkLoadBalancerType},
 					},
 				),
 			),
