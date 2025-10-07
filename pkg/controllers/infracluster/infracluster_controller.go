@@ -184,7 +184,7 @@ func (r *InfraClusterController) ensureInfraCluster(ctx context.Context, log log
 		infraCluster, err = r.ensureAWSCluster(ctx, log)
 		if err != nil {
 			if setErr := r.setDegradedCondition(ctx, err); setErr != nil {
-				return nil, fmt.Errorf("%w: failed to set degraded condition for InfraCluster controller: %w", err, setErr)
+				return nil, fmt.Errorf("error ensuring AWSCluster: %w: failed to set degraded condition for InfraCluster controller: %w", err, setErr)
 			}
 
 			return nil, fmt.Errorf("error ensuring AWSCluster: %w", err)
@@ -299,16 +299,20 @@ func (r *InfraClusterController) SetupWithManager(mgr ctrl.Manager, watchedObjec
 	if err := ctrl.NewControllerManagedBy(mgr).
 		Named(controllerName).
 		For(&configv1.ClusterOperator{}, builder.WithPredicates(clusterOperatorPredicates())).
+		// Watch the provider-specific InfraCluster object.
 		Watches(
 			watchedObject,
 			handler.EnqueueRequestsFromMapFunc(toClusterOperator),
 			builder.WithPredicates(infraClusterPredicate(r.ManagedNamespace)),
 		).
+		// Watch CPMS as the primary source for deriving a provider spec during InfraCluster
+		// generation. CPMS events should retrigger reconciliation so we re-evaluate InfraCluster creation and CO status.
 		Watches(
 			&mapiv1.ControlPlaneMachineSet{},
 			handler.EnqueueRequestsFromMapFunc(toClusterOperator),
 			builder.WithPredicates(util.FilterNamespace(r.MAPINamespace)),
 		).
+		// Watch control plane Machines as a fallback provider spec source when CPMS is absent or inactive.
 		Watches(
 			&mapiv1beta1.Machine{},
 			handler.EnqueueRequestsFromMapFunc(toClusterOperator),

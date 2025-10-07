@@ -567,6 +567,16 @@ func (r *MachineSyncReconciler) reconcileMAPIMachinetoCAPIMachine(ctx context.Co
 		controllers.ReasonResourceSynchronized, messageSuccessfullySynchronizedMAPItoCAPI, &sourceMAPIMachine.Generation)
 }
 
+// ensurePlatformMAPIToCAPIValidations verifies that shared CAPI resources are compatible before converting from MAPI -> CAPI.
+func (r *MachineSyncReconciler) ensurePlatformMAPIToCAPIValidations(ctx context.Context, mapiMachine *mapiv1beta1.Machine) error {
+	switch r.Platform {
+	case configv1.AWSPlatformType:
+		return r.validateMachineAWSLoadBalancers(ctx, mapiMachine)
+	default:
+		return nil
+	}
+}
+
 // convertMAPIToCAPIMachine converts a MAPI Machine to a CAPI Machine, selecting the correct converter based on the platform.
 func (r *MachineSyncReconciler) convertMAPIToCAPIMachine(mapiMachine *mapiv1beta1.Machine) (*clusterv1.Machine, client.Object, []string, error) {
 	switch r.Platform {

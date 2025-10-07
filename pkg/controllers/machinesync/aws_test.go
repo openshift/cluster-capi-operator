@@ -32,6 +32,7 @@ import (
 	consts "github.com/openshift/cluster-capi-operator/pkg/controllers"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/client-go/rest"
 
 	"k8s.io/utils/ptr"
@@ -290,4 +291,127 @@ var _ = Describe("AWS load balancer validation during MAPI->CAPI conversion", fu
 		capiMachine := clusterv1resourcebuilder.Machine().WithNamespace(capiNamespace.GetName()).WithName(mapiMachine.GetName()).Build()
 		Eventually(k8sClient.Get(ctx, client.ObjectKeyFromObject(capiMachine), capiMachine), timeout).Should(Succeed())
 	})
+})
+
+var _ = Describe("validateLoadBalancerReferencesAgainstExpected", func() {
+	var (
+		lbfieldPath *field.Path
+	)
+
+	BeforeEach(func() {
+		lbfieldPath = field.NewPath("spec", "providerSpec", "value", "loadBalancers")
+	})
+
+	type validateLoadBalancerMatchTableInput struct {
+		actualLoadBalancers   []mapiv1beta1.LoadBalancerReference
+		expectedLoadBalancers map[string]mapiv1beta1.AWSLoadBalancerType
+		expectError           bool
+		expectedErrorMessages []string
+	}
+
+	DescribeTable("validate load balancer matching",
+		func(in validateLoadBalancerMatchTableInput) {
+			err := validateLoadBalancerReferencesAgainstExpected(in.actualLoadBalancers, in.expectedLoadBalancers, lbfieldPath)
+
+			if in.expectError {
+				Expect(err).ToNot(BeNil())
+				for _, expectedMsg := range in.expectedErrorMessages {
+					Expect(err.Error()).To(ContainSubstring(expectedMsg))
+				}
+			} else {
+				Expect(err).To(BeNil())
+			}
+		},
+		Entry("should succeed when actual and expected load balancers match perfectly", validateLoadBalancerMatchTableInput{
+			actualLoadBalancers: []mapiv1beta1.LoadBalancerReference{
+				{Name: "cluster-int", Type: mapiv1beta1.NetworkLoadBalancerType},
+				{Name: "cluster-ext", Type: mapiv1beta1.ClassicLoadBalancerType},
+			},
+			expectedLoadBalancers: map[string]mapiv1beta1.AWSLoadBalancerType{
+				"cluster-int": mapiv1beta1.NetworkLoadBalancerType,
+				"cluster-ext": mapiv1beta1.ClassicLoadBalancerType,
+			},
+			expectError: false,
+		}),
+		Entry("should succeed when load balancers are in different order", validateLoadBalancerMatchTableInput{
+			actualLoadBalancers: []mapiv1beta1.LoadBalancerReference{
+				{Name: "cluster-ext", Type: mapiv1beta1.ClassicLoadBalancerType},
+				{Name: "cluster-int", Type: mapiv1beta1.NetworkLoadBalancerType},
+			},
+			expectedLoadBalancers: map[string]mapiv1beta1.AWSLoadBalancerType{
+				"cluster-int": mapiv1beta1.NetworkLoadBalancerType,
+				"cluster-ext": mapiv1beta1.ClassicLoadBalancerType,
+			},
+			expectError: false,
+		}),
+		Entry("should fail when an unexpected load balancer is present", validateLoadBalancerMatchTableInput{
+			actualLoadBalancers: []mapiv1beta1.LoadBalancerReference{
+				{Name: "cluster-int", Type: mapiv1beta1.NetworkLoadBalancerType},
+				{Name: "unexpected-lb", Type: mapiv1beta1.NetworkLoadBalancerType},
+			},
+			expectedLoadBalancers: map[string]mapiv1beta1.AWSLoadBalancerType{
+				"cluster-int": mapiv1beta1.NetworkLoadBalancerType,
+			},
+			expectError:           true,
+			expectedErrorMessages: []string{"unexpected load balancer \"unexpected-lb\" defined on machine"},
+		}),
+		Entry("should fail when a required load balancer is missing", validateLoadBalancerMatchTableInput{
+			actualLoadBalancers: []mapiv1beta1.LoadBalancerReference{
+				{Name: "cluster-int", Type: mapiv1beta1.NetworkLoadBalancerType},
+			},
+			expectedLoadBalancers: map[string]mapiv1beta1.AWSLoadBalancerType{
+				"cluster-int": mapiv1beta1.NetworkLoadBalancerType,
+				"cluster-ext": mapiv1beta1.ClassicLoadBalancerType,
+			},
+			expectError:           true,
+			expectedErrorMessages: []string{"must include load balancer named \"cluster-ext\""},
+		}),
+		Entry("should fail when load balancer type is incorrect", validateLoadBalancerMatchTableInput{
+			actualLoadBalancers: []mapiv1beta1.LoadBalancerReference{
+				{Name: "cluster-int", Type: mapiv1beta1.ClassicLoadBalancerType},
+			},
+			expectedLoadBalancers: map[string]mapiv1beta1.AWSLoadBalancerType{
+				"cluster-int": mapiv1beta1.NetworkLoadBalancerType,
+			},
+			expectError:           true,
+			expectedErrorMessages: []string{"load balancer \"cluster-int\" must be of type \"network\" to match AWSCluster"},
+		}),
+		Entry("should report multiple errors when multiple issues are present", validateLoadBalancerMatchTableInput{
+			actualLoadBalancers: []mapiv1beta1.LoadBalancerReference{
+				{Name: "cluster-int", Type: mapiv1beta1.ClassicLoadBalancerType},
+				{Name: "unexpected-lb", Type: mapiv1beta1.NetworkLoadBalancerType},
+			},
+			expectedLoadBalancers: map[string]mapiv1beta1.AWSLoadBalancerType{
+				"cluster-int": mapiv1beta1.NetworkLoadBalancerType,
+				"cluster-ext": mapiv1beta1.ClassicLoadBalancerType,
+			},
+			expectError: true,
+			expectedErrorMessages: []string{
+				"load balancer \"cluster-int\" must be of type \"network\" to match AWSCluster",
+				"unexpected load balancer \"unexpected-lb\" defined on machine",
+				"must include load balancer named \"cluster-ext\"",
+			},
+		}),
+		Entry("should succeed when both actual and expected are empty", validateLoadBalancerMatchTableInput{
+			actualLoadBalancers:   []mapiv1beta1.LoadBalancerReference{},
+			expectedLoadBalancers: map[string]mapiv1beta1.AWSLoadBalancerType{},
+			expectError:           false,
+		}),
+		Entry("should fail when actual is empty but expected has values", validateLoadBalancerMatchTableInput{
+			actualLoadBalancers: []mapiv1beta1.LoadBalancerReference{},
+			expectedLoadBalancers: map[string]mapiv1beta1.AWSLoadBalancerType{
+				"cluster-int": mapiv1beta1.NetworkLoadBalancerType,
+			},
+			expectError:           true,
+			expectedErrorMessages: []string{"must include load balancer named \"cluster-int\""},
+		}),
+		Entry("should fail when expected is empty but actual has values", validateLoadBalancerMatchTableInput{
+			actualLoadBalancers: []mapiv1beta1.LoadBalancerReference{
+				{Name: "unexpected-lb", Type: mapiv1beta1.NetworkLoadBalancerType},
+			},
+			expectedLoadBalancers: map[string]mapiv1beta1.AWSLoadBalancerType{},
+			expectError:           true,
+			expectedErrorMessages: []string{"unexpected load balancer \"unexpected-lb\" defined on machine"},
+		}),
+	)
 })

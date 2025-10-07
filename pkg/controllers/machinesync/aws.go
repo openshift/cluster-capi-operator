@@ -19,9 +19,7 @@ package machinesync
 import (
 	"context"
 	"fmt"
-	"sort"
 
-	configv1 "github.com/openshift/api/config/v1"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/mapi2capi"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
@@ -32,12 +30,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// ensureAWSLoadBalancerMatch validates that when converting from MAPI->CAPI:
+// validateMachineAWSLoadBalancers validates that when converting from MAPI->CAPI:
 //   - Control plane machines must define an internal load balancer with "-int" suffix.
 //   - Control plane machines can define an secondary external load balancer with "-ext" suffix.
 //   - MAPI machine's load balancers must match the AWSCluster load balancers.
 //   - Worker machines must not define load balancers.
-func (r *MachineSyncReconciler) ensureAWSLoadBalancerMatch(ctx context.Context, mapiMachine *mapiv1beta1.Machine) error {
+func (r *MachineSyncReconciler) validateMachineAWSLoadBalancers(ctx context.Context, mapiMachine *mapiv1beta1.Machine) error {
 	providerSpec, err := mapi2capi.AWSProviderSpecFromRawExtension(mapiMachine.Spec.ProviderSpec.Value)
 	if err != nil {
 		return fmt.Errorf("unable to parse Machine API providerSpec: %w", err)
@@ -64,77 +62,54 @@ func (r *MachineSyncReconciler) ensureAWSLoadBalancerMatch(ctx context.Context, 
 			ToAggregate()
 	}
 
-	loadBalancersCopy := map[string]mapiv1beta1.AWSLoadBalancerType{}
-	for _, lb := range providerSpec.LoadBalancers {
-		loadBalancersCopy[lb.Name] = lb.Type
+	expectedLoadBalancers := map[string]mapiv1beta1.AWSLoadBalancerType{
+		ptr.Deref(awsCluster.Spec.ControlPlaneLoadBalancer.Name, ""): convertAWSLBTypeToMAPI(awsCluster.Spec.ControlPlaneLoadBalancer.LoadBalancerType),
 	}
-
-	errs := ensureExpectedLoadBalancer(lbfieldPath, &providerSpec, loadBalancersCopy, awsCluster.Spec.ControlPlaneLoadBalancer)
 
 	if awsCluster.Spec.SecondaryControlPlaneLoadBalancer != nil {
-		errs = append(errs, ensureExpectedLoadBalancer(lbfieldPath, &providerSpec, loadBalancersCopy, awsCluster.Spec.SecondaryControlPlaneLoadBalancer)...)
+		if awsCluster.Spec.SecondaryControlPlaneLoadBalancer.Name == nil || *awsCluster.Spec.SecondaryControlPlaneLoadBalancer.Name == "" {
+			return field.ErrorList{field.Invalid(lbfieldPath, providerSpec.LoadBalancers, "secondary control plane load balancer name is not configured on AWSCluster")}.
+				ToAggregate()
+		}
+
+		expectedLoadBalancers[ptr.Deref(awsCluster.Spec.SecondaryControlPlaneLoadBalancer.Name, "")] = convertAWSLBTypeToMAPI(awsCluster.Spec.SecondaryControlPlaneLoadBalancer.LoadBalancerType)
 	}
 
-	errs = append(errs, ensureNoRemainingLoadBalancers(lbfieldPath, &providerSpec, loadBalancersCopy)...)
-
-	if len(errs) > 0 {
-		return errs.ToAggregate()
-	}
-
-	return nil
+	return validateLoadBalancerReferencesAgainstExpected(providerSpec.LoadBalancers, expectedLoadBalancers, lbfieldPath)
 }
 
-// ensureNoRemainingLoadBalancers validates that there are no unexpected load balancers left defined on the machine.
-func ensureNoRemainingLoadBalancers(
+// validateLoadBalancerReferencesAgainstExpected validates that the actual load balancers match the expected load balancers.
+func validateLoadBalancerReferencesAgainstExpected(
+	actualLoadBalancers []mapiv1beta1.LoadBalancerReference,
+	expectedLoadBalancers map[string]mapiv1beta1.AWSLoadBalancerType,
 	lbfieldPath *field.Path,
-	providerConfig *mapiv1beta1.AWSMachineProviderConfig,
-	remainingLoadBalancers map[string]mapiv1beta1.AWSLoadBalancerType,
-) field.ErrorList {
-	// Everything in remainingLoadBalancers should be empty
-	errList := field.ErrorList{}
-	if len(remainingLoadBalancers) == 0 {
-		return errList
+) error {
+	errs := field.ErrorList{}
+	foundLoadBalancers := map[string]bool{}
+
+	for i, lb := range actualLoadBalancers {
+		indexPath := lbfieldPath.Index(i)
+
+		expectedType, isExpected := expectedLoadBalancers[lb.Name]
+		if !isExpected {
+			errs = append(errs, field.Invalid(indexPath.Child("name"), lb.Name, fmt.Sprintf("unexpected load balancer %q defined on machine", lb.Name)))
+			continue
+		}
+
+		if lb.Type != expectedType {
+			errs = append(errs, field.Invalid(indexPath.Child("type"), lb.Type, fmt.Sprintf("load balancer %q must be of type %q to match AWSCluster", lb.Name, expectedType)))
+		}
+
+		foundLoadBalancers[lb.Name] = true
 	}
 
-	unexpectedNames := make([]string, 0, len(remainingLoadBalancers))
-	for name := range remainingLoadBalancers {
-		unexpectedNames = append(unexpectedNames, name)
+	for expectedName := range expectedLoadBalancers {
+		if !foundLoadBalancers[expectedName] {
+			errs = append(errs, field.Invalid(lbfieldPath, actualLoadBalancers, fmt.Sprintf("must include load balancer named %q", expectedName)))
+		}
 	}
 
-	sort.Strings(unexpectedNames)
-
-	for _, name := range unexpectedNames {
-		errList = append(errList, field.Invalid(lbfieldPath, providerConfig.LoadBalancers, fmt.Sprintf("unexpected load balancer %q defined on machine", name)))
-	}
-
-	return errList
-}
-
-// ensureExpectedLoadBalancer validates that remainingLoadBalancers contains the expected load balancer.
-// If the expected load balancer is found, it is removed from remainingLoadBalancers.
-func ensureExpectedLoadBalancer(
-	lbfieldPath *field.Path,
-	providerConfig *mapiv1beta1.AWSMachineProviderConfig,
-	remainingLoadBalancers map[string]mapiv1beta1.AWSLoadBalancerType,
-	expectedLoadBalancer *awsv1.AWSLoadBalancerSpec,
-) field.ErrorList {
-	if expectedLoadBalancer == nil {
-		return field.ErrorList{}
-	}
-
-	expectedLBName := ptr.Deref(expectedLoadBalancer.Name, "")
-	expectedLBType := convertAWSLBTypeToMAPI(expectedLoadBalancer.LoadBalancerType)
-
-	errList := field.ErrorList{}
-	if t, found := remainingLoadBalancers[expectedLBName]; !found {
-		errList = append(errList, field.Invalid(lbfieldPath, providerConfig.LoadBalancers, fmt.Sprintf("must include load balancer named %q", expectedLBName)))
-	} else if t != expectedLBType {
-		errList = append(errList, field.Invalid(lbfieldPath, providerConfig.LoadBalancers, fmt.Sprintf("load balancer %q must be of type %q to match AWSCluster", expectedLBName, expectedLBType)))
-	}
-
-	delete(remainingLoadBalancers, expectedLBName)
-
-	return errList
+	return errs.ToAggregate()
 }
 
 // convertAWSLBTypeToMAPI converts CAPI LoadBalancerType to MAPI AWSLoadBalancerType.
@@ -146,15 +121,5 @@ func convertAWSLBTypeToMAPI(capiType awsv1.LoadBalancerType) mapiv1beta1.AWSLoad
 		return mapiv1beta1.NetworkLoadBalancerType
 	default:
 		return mapiv1beta1.ClassicLoadBalancerType
-	}
-}
-
-// ensurePlatformMAPIToCAPIValidations verifies that shared CAPI resources are compatible before converting from MAPI -> CAPI.
-func (r *MachineSyncReconciler) ensurePlatformMAPIToCAPIValidations(ctx context.Context, mapiMachine *mapiv1beta1.Machine) error {
-	switch r.Platform {
-	case configv1.AWSPlatformType:
-		return r.ensureAWSLoadBalancerMatch(ctx, mapiMachine)
-	default:
-		return nil
 	}
 }

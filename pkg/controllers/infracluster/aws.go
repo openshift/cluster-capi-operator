@@ -26,6 +26,7 @@ import (
 	"github.com/go-logr/logr"
 	cerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/klog/v2"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -59,7 +60,8 @@ func (r *InfraClusterController) ensureAWSCluster(ctx context.Context, log logr.
 		return awsCluster, nil
 	}
 
-	log.Info(fmt.Sprintf("AWSCluster %s/%s does not exist, creating it", awsCluster.Namespace, awsCluster.Name))
+	log = log.WithValues("AWSCluster", klog.KObj(awsCluster))
+	log.Info("AWSCluster does not exist, creating it")
 
 	apiURL, err := url.Parse(r.Infra.Status.APIServerInternalURL)
 	if err != nil {
@@ -89,13 +91,13 @@ func (r *InfraClusterController) ensureAWSCluster(ctx context.Context, log logr.
 		return nil, fmt.Errorf("failed to create AWSCluster: %w", err)
 	}
 
-	log.Info(fmt.Sprintf("InfraCluster '%s/%s' successfully created", r.CAPINamespace, r.Infra.Status.InfrastructureName))
+	log.Info("AWSCluster successfully created")
 
 	return awsCluster, nil
 }
 
 func (r *InfraClusterController) newAWSCluster(providerSpec *mapiv1beta1.AWSMachineProviderConfig, apiURL *url.URL, port int32) (*awsv1.AWSCluster, error) {
-	controlPlaneLoadBalancer, secondaryControlPlaneLoadBalancer, err := extractLoadBalancerConfigFromMAPIProviderSpec(providerSpec)
+	controlPlaneLoadBalancer, secondaryControlPlaneLoadBalancer, err := extractLoadBalancerConfigFromMAPIAWSProviderSpec(providerSpec)
 	if err != nil {
 		return nil, fmt.Errorf("failed to extract control plane load balancer configuration: %w", err)
 	}
@@ -147,11 +149,10 @@ func (r *InfraClusterController) getAWSMAPIProviderSpec(ctx context.Context, cl 
 	return providerSpec, nil
 }
 
-// extractLoadBalancerConfigFromMAPIProviderSpec extracts 1-2 control plane load balancers from a MAPI machine's provider spec.
-// The first load balancer is treated as the internal load balancer, and the second (if present) as the secondary one.
-// When two load balancers are present, prefer the one whose name ends with "-int" as the first return value.
-// Fails if fewer than 1 or more than 2 load balancers are defined.
-func extractLoadBalancerConfigFromMAPIProviderSpec(providerSpec *mapiv1beta1.AWSMachineProviderConfig) (*awsv1.AWSLoadBalancerSpec, *awsv1.AWSLoadBalancerSpec, error) {
+// extractLoadBalancerConfigFromMAPIAWSProviderSpec extracts one or two control plane load balancers from a MAPI machine's provider spec.
+// When two load balancers are present, the one whose name ends with "-int" is preferred as the return value.
+// Returns an error if zero or more than two load balancers are defined.
+func extractLoadBalancerConfigFromMAPIAWSProviderSpec(providerSpec *mapiv1beta1.AWSMachineProviderConfig) (*awsv1.AWSLoadBalancerSpec, *awsv1.AWSLoadBalancerSpec, error) {
 	if providerSpec == nil {
 		return nil, nil, ErrNilProviderSpec
 	}
