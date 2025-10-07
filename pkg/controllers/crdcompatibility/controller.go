@@ -28,7 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/log"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -97,7 +97,7 @@ func (r *CRDCompatibilityReconciler) findCRDCompatibilityRequirementsForCRD(ctx 
 	// Use field index to find CRDCompatibilityRequirements that reference this CRD
 	var requirements operatorv1alpha1.CRDCompatibilityRequirementList
 	if err := r.client.List(ctx, &requirements, client.MatchingFields{index.FieldCRDByName: crd.Name}); err != nil {
-		log.FromContext(ctx).Error(err, "failed to list CRDCompatibilityRequirements for CRD", "crdName", crd.Name, "clientType", fmt.Sprintf("%T", r.client))
+		logf.FromContext(ctx).Error(err, "failed to list CRDCompatibilityRequirements for CRD", "crdName", crd.Name, "clientType", fmt.Sprintf("%T", r.client))
 		return nil
 	}
 

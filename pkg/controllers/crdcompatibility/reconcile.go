@@ -27,7 +27,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/log"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/yaml"
 
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
@@ -52,7 +52,7 @@ type reconcileState struct {
 
 // Reconcile handles the reconciliation of CRDCompatibilityRequirement resources.
 func (r *CRDCompatibilityReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	logger := log.FromContext(ctx)
+	logger := logf.FromContext(ctx)
 
 	// Fetch the CRDCompatibilityRequirement instance
 	obj := &operatorv1alpha1.CRDCompatibilityRequirement{}
@@ -136,7 +136,7 @@ func (r *reconcileState) checkCRDCompatibility() error {
 }
 
 func (r *reconcileState) reconcileCreateOrUpdate(ctx context.Context, obj *operatorv1alpha1.CRDCompatibilityRequirement) (ctrl.Result, error) {
-	logger := log.FromContext(ctx)
+	logger := logf.FromContext(ctx)
 
 	logger.Info("Reconciling CRDCompatibilityRequirement")
 
@@ -161,7 +161,7 @@ func (r *reconcileState) reconcileCreateOrUpdate(ctx context.Context, obj *opera
 }
 
 func (r *reconcileState) reconcileDelete(ctx context.Context, obj *operatorv1alpha1.CRDCompatibilityRequirement) (ctrl.Result, error) {
-	logger := log.FromContext(ctx)
+	logger := logf.FromContext(ctx)
 
 	logger.Info("Reconciling CRDCompatibilityRequirement deletion")
 

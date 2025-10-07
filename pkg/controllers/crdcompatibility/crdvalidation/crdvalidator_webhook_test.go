@@ -17,7 +17,6 @@ limitations under the License.
 package crdvalidation
 
 import (
-	"context"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -34,7 +33,7 @@ import (
 func Test_crdValidator_validateCreateOrUpdate(t *testing.T) { //nolint:funlen
 	RegisterTestingT(t)
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	testCRDWorking := test.GenerateTestCRD()
 	testCRDWorking.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["foo1"] = apiextensionsv1.JSONSchemaProps{
