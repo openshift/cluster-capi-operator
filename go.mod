@@ -5,6 +5,12 @@ go 1.24.0
 // TODO: remove when CAPA v2.9.0 is out
 replace sigs.k8s.io/cluster-api-provider-aws/v2 => sigs.k8s.io/cluster-api-provider-aws/v2 v2.8.2-0.20250728153031-483f3a96c060
 
+// FIXME(chrischdi): DONOTMERGE only for testing purposes until we have a merged API PR
+replace (
+	github.com/openshift/api => github.com/chrischdi/openshift-api v0.0.0-20251007112510-8c98aed88c05
+	github.com/openshift/client-go => github.com/chrischdi/openshift-client-go v0.0.0-20251007113406-c5afd6f1204c
+)
+
 require (
 	github.com/drone/envsubst/v2 v2.0.0-20210730161058-179042472c46
 	github.com/go-logr/logr v1.4.3
@@ -15,7 +21,7 @@ require (
 	github.com/metal3-io/cluster-api-provider-metal3/api v1.10.1
 	github.com/onsi/ginkgo/v2 v2.23.4
 	github.com/onsi/gomega v1.38.0
-	github.com/openshift/api v0.0.0-20250731015415-ed654edbd7c6
+	github.com/openshift/api v0.0.0-20250911131931-2acafd4d1ed2
 	github.com/openshift/client-go v0.0.0-20250710075018-396b36f983ee
 	github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20250729202911-167220318f40
 	github.com/openshift/library-go v0.0.0-20250729191057-91376e1b394e
