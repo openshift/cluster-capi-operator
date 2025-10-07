@@ -51,8 +51,10 @@ func (r *reconcileState) writeStatus(ctx context.Context, obj *operatorv1alpha1.
 			util.SetLastTransitionTimeMetaV1(now, currentConditions, admittedCondition),
 			util.SetLastTransitionTimeMetaV1(now, currentConditions, compatibleCondition),
 			util.SetLastTransitionTimeMetaV1(now, currentConditions, progressingCondition),
-		).
-		WithCRDName(r.compatibilityCRD.GetName())
+		)
+	if r.compatibilityCRD != nil {
+		applyConfigStatus = applyConfigStatus.WithCRDName(r.compatibilityCRD.GetName())
+	}
 
 	if r.currentCRD != nil {
 		applyConfigObservedCRD := operatorapplyconfig.ObservedCRD().
