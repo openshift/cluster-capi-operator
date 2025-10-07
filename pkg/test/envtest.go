@@ -137,12 +137,18 @@ func getPackageDir(ctx context.Context, pkgName string) (string, error) {
 
 	// Follow the chain of module replacements to find the actual module
 	module := pkgs[0].Module
-	for module != nil && module.Replace != nil {
+	for module != nil && module.Dir == "" && module.Replace != nil {
 		module = module.Replace
 	}
 
 	if module == nil {
 		return "", fmt.Errorf("module not found for %s", pkgName)
+	}
+
+	// Fallback to the package dir if nothing else is found.
+	// This can be the case when using vendoring with a remote replacement.
+	if module.Dir == "" && pkgs[0].Dir != "" {
+		return pkgs[0].Dir, nil
 	}
 
 	return module.Dir, nil
