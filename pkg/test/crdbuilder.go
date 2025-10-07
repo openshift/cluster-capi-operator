@@ -76,13 +76,13 @@ var (
 	fakeOpenStackClusterKind = "OpenStackCluster"
 
 	// fakeOpenStackClusterCRD is a fake OpenStackCluster CRD.
-	fakeOpenStackClusterCRD = generateCRD(v1beta1InfrastructureGroupVersion.WithKind(fakeOpenStackClusterKind))
+	fakeOpenStackClusterCRD = GenerateCRD(v1beta1InfrastructureGroupVersion.WithKind(fakeOpenStackClusterKind))
 
 	// fakeOpenStackMachineTemplateKind is the kind for the OpenStackMachineTemplate.
 	fakeOpenStackMachineTemplateKind = "OpenStackMachineTemplate"
 
 	// fakeOpenStackMachineTemplateCRD is a fake OpenStackMachineTemplate CRD.
-	fakeOpenStackMachineTemplateCRD = generateCRD(v1beta1InfrastructureGroupVersion.WithKind(fakeOpenStackMachineTemplateKind))
+	fakeOpenStackMachineTemplateCRD = GenerateCRD(v1beta1InfrastructureGroupVersion.WithKind(fakeOpenStackMachineTemplateKind))
 
 	// v1beta2InfrastructureGroupVersion is a v1beta2 group version used for infrastructure objects.
 	v1beta2InfrastructureGroupVersion = schema.GroupVersion{Group: "infrastructure.cluster.x-k8s.io", Version: "v1beta2"}
