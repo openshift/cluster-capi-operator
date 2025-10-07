@@ -167,13 +167,13 @@ func SetMAPICondition(conditions []machinev1beta1.Condition, condition *machinev
 	return append(conditions, *condition)
 }
 
-// SetMAPIProviderCondition sets a condition in a list of MAPI conditions.
+// SetMAPIProviderCondition sets a condition in a list of Machine API conditions.
 // If the condition already exists and state (Status, Reason, Message) has changed:
 // - if the lasttransitiontime is not set, it sets it to the current time
 // - if the lasttransitiontime is set, it updates it with the one of the newly provided condition lasttransitiontime.
 // If the condition state has not changed, it preserves the existing LastTransitionTime.
 // If the condition does not exist, it adds it.
-// This function behaves similarly to conditions.Set() for CAPI conditions.
+// This function behaves similarly to conditions.Set() for Cluster API conditions.
 func SetMAPIProviderCondition(conditions []metav1.Condition, condition *metav1.Condition) []metav1.Condition {
 	for i, currCondition := range conditions {
 		if currCondition.Type != condition.Type {

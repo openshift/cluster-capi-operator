@@ -377,8 +377,8 @@ func convertMAPIMachineStatusToCAPA(mapiMachine *mapiv1.Machine) (awsv1.AWSMachi
 		InstanceState: ptr.To(awsv1.InstanceState(ptr.Deref(mapiProviderStatus.InstanceState, ""))),
 		Conditions:    convertMAPIMachineAWSProviderConditionsToCAPAMachineConditions(&mapiProviderStatus),
 
-		// FailureReason: // Not set here because we already set it on the CAPI Machine form .Status.ErrReason
-		// FailureMessage: // Not set here because we already set it on the CAPI Machine form .Status.ErrMessage
+		// FailureReason: // Not set here because we already set it on the Cluster API Machine form .Status.ErrReason
+		// FailureMessage: // Not set here because we already set it on the Cluster API Machine form .Status.ErrMessage
 	}
 
 	return s, errs
@@ -388,7 +388,7 @@ func convertMAPIMachineAWSProviderConditionsToCAPAMachineConditions(mapiProvider
 	capaMachineConditions := []clusterv1.Condition{}
 	instanceRunning := ptr.Deref(mapiProviderStatus.InstanceState, "") == mapiv1.PhaseRunning
 
-	// Best effort assertion for Ready and InstanceReady condition. Refer to MAPI machine in case of non-happy path.
+	// Best effort assertion for Ready and InstanceReady condition. Refer to Machine API machine in case of non-happy path.
 	for _, conditionType := range []clusterv1.ConditionType{clusterv1.ReadyCondition, awsv1.InstanceReadyCondition} {
 		c := clusterv1.Condition{
 			Type: conditionType,
@@ -401,7 +401,7 @@ func convertMAPIMachineAWSProviderConditionsToCAPAMachineConditions(mapiProvider
 			}(),
 			Message: func() string {
 				if !instanceRunning {
-					return "See MAPI Machine.Status.Providerstatus conditions"
+					return "See Machine API Machine.Status.Providerstatus conditions"
 				}
 
 				return ""
@@ -418,7 +418,7 @@ func convertMAPIMachineAWSProviderConditionsToCAPAMachineConditions(mapiProvider
 		capaMachineConditions = append(capaMachineConditions, c)
 	}
 
-	// awsv1.SecurityGroupsReadyCondition: there is no equivalent in MAPI.
+	// awsv1.SecurityGroupsReadyCondition: there is no equivalent in Machine API.
 
 	return capaMachineConditions
 }

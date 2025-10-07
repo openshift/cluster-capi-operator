@@ -35,26 +35,26 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-// createOrUpdateCAPIInfraMachine creates a CAPI infra machine from a MAPI machine, or updates if it exists and it is out of date.
-// syncronizationIsProgressing will be set to true if an existing CAPI Infrastructure Machine was deleted for later recreation due to immutable changes.
+// createOrUpdateCAPIInfraMachine creates a Cluster API infra machine from a Machine API machine, or updates if it exists and it is out of date.
+// syncronizationIsProgressing will be set to true if an existing Cluster API Infrastructure Machine was deleted for later recreation due to immutable changes.
 //
 //nolint:unparam
 func (r *MachineSyncReconciler) createOrUpdateCAPIInfraMachine(ctx context.Context, sourceMAPIMachine *machinev1beta1.Machine, existingCAPIInfraMachine client.Object, convertedCAPIInfraMachine client.Object) (res ctrl.Result, zc bool, err error) {
 	logger := log.FromContext(ctx)
 	// This const signals whether or not we are still progressing
-	// towards syncronizing the MAPI machine with the CAPI infra machine.
+	// towards syncronizing the Machine API machine with the Cluster API infra machine.
 	// It is then passed up the stack so the syncronized condition can be set accordingly.
 	const syncronizationIsProgressingFalse = false
 
-	// If there is no existing CAPI Infrastructure machine, create a new one.
+	// If there is no existing Cluster API Infrastructure machine, create a new one.
 	if err := r.ensureCAPIInfraMachine(ctx, sourceMAPIMachine, existingCAPIInfraMachine, convertedCAPIInfraMachine); err != nil {
-		return ctrl.Result{}, syncronizationIsProgressingFalse, fmt.Errorf("failed to ensure CAPI Infrastructure machine: %w", err)
+		return ctrl.Result{}, syncronizationIsProgressingFalse, fmt.Errorf("failed to ensure Cluster API Infrastructure machine: %w", err)
 	}
 
-	// Compare the existing CAPI Infrastructure machine with the converted CAPI Infrastructure machine to check for changes.
+	// Compare the existing Cluster API Infrastructure machine with the converted Cluster API Infrastructure machine to check for changes.
 	diff, err := compareCAPIInfraMachines(r.Platform, existingCAPIInfraMachine, convertedCAPIInfraMachine)
 	if err != nil {
-		return ctrl.Result{}, syncronizationIsProgressingFalse, fmt.Errorf("failed to compare CAPI Infrastructure machines: %w", err)
+		return ctrl.Result{}, syncronizationIsProgressingFalse, fmt.Errorf("failed to compare Cluster API Infrastructure machines: %w", err)
 	}
 
 	// Infrastructure machines are immutable so we delete it for spec changes.
@@ -68,30 +68,30 @@ func (r *MachineSyncReconciler) createOrUpdateCAPIInfraMachine(ctx context.Conte
 		return ctrl.Result{}, syncronizationIsProgressing, err
 	}
 
-	// Update CAPI Infrastructure machine metadata if needed.
+	// Update Cluster API Infrastructure machine metadata if needed.
 	metadataUpdated, err := r.ensureCAPIInfraMachineMetadataUpdated(ctx, sourceMAPIMachine, diff, convertedCAPIInfraMachine)
 	if err != nil {
-		return ctrl.Result{}, syncronizationIsProgressingFalse, fmt.Errorf("failed to update CAPI Infrastructure machine metadata: %w", err)
+		return ctrl.Result{}, syncronizationIsProgressingFalse, fmt.Errorf("failed to update Cluster API Infrastructure machine metadata: %w", err)
 	}
 
-	// Update CAPI Infrastructure machine status if needed.
+	// Update Cluster API Infrastructure machine status if needed.
 	statusUpdated, err := r.ensureCAPIInfraMachineStatusUpdated(ctx, sourceMAPIMachine, existingCAPIInfraMachine, convertedCAPIInfraMachine, diff, metadataUpdated)
 	if err != nil {
-		return ctrl.Result{}, syncronizationIsProgressingFalse, fmt.Errorf("failed to update CAPI Infrastructure machine status: %w", err)
+		return ctrl.Result{}, syncronizationIsProgressingFalse, fmt.Errorf("failed to update Cluster API Infrastructure machine status: %w", err)
 	}
 
 	if metadataUpdated || statusUpdated {
-		logger.Info("Successfully updated CAPI machine")
+		logger.Info("Successfully updated Cluster API machine")
 	} else {
-		logger.Info("No changes detected for CAPI machine")
+		logger.Info("No changes detected for Cluster API machine")
 	}
 
 	return ctrl.Result{}, syncronizationIsProgressingFalse, nil
 }
 
-// ensureCAPIInfraMachine creates a new CAPI Infrastructure machine if one doesn't exist.
+// ensureCAPIInfraMachine creates a new Cluster API Infrastructure machine if one doesn't exist.
 func (r *MachineSyncReconciler) ensureCAPIInfraMachine(ctx context.Context, sourceMAPIMachine *machinev1beta1.Machine, existingCAPIInfraMachine, convertedCAPIInfraMachine client.Object) error {
-	// If there is an existing CAPI Infrastructure machine, no need to create one.
+	// If there is an existing Cluster API Infrastructure machine, no need to create one.
 	if existingCAPIInfraMachine != nil {
 		return nil
 	}
@@ -106,9 +106,9 @@ func (r *MachineSyncReconciler) ensureCAPIInfraMachine(ctx context.Context, sour
 	}
 
 	if err := r.Create(ctx, existingCAPIInfraMachine); err != nil {
-		logger.Error(err, "Failed to create CAPI Infrastructure machine")
+		logger.Error(err, "Failed to create Cluster API Infrastructure machine")
 
-		createErr := fmt.Errorf("failed to create CAPI Infrastructure machine: %w", err)
+		createErr := fmt.Errorf("failed to create Cluster API Infrastructure machine: %w", err)
 		if condErr := r.applySynchronizedConditionWithPatch(
 			ctx, sourceMAPIMachine, corev1.ConditionFalse, reasonFailedToCreateCAPIMachine, createErr.Error(), nil); condErr != nil {
 			return utilerrors.NewAggregate([]error{createErr, condErr})
@@ -117,12 +117,12 @@ func (r *MachineSyncReconciler) ensureCAPIInfraMachine(ctx context.Context, sour
 		return createErr
 	}
 
-	logger.Info("Successfully created CAPI Infrastructure machine", "name", existingCAPIInfraMachine.GetName())
+	logger.Info("Successfully created Cluster API Infrastructure machine", "name", existingCAPIInfraMachine.GetName())
 
 	return nil
 }
 
-// ensureCAPIInfraMachineMetadataUpdated updates the CAPI Infrastructure machine if changes are detected to the metadata or spec (if possible).
+// ensureCAPIInfraMachineMetadataUpdated updates the Cluster API Infrastructure machine if changes are detected to the metadata or spec (if possible).
 func (r *MachineSyncReconciler) ensureCAPIInfraMachineMetadataUpdated(ctx context.Context, mapiMachine *machinev1beta1.Machine, diff map[string]any, updatedOrCreatedCAPIInfraMachine client.Object) (bool, error) {
 	logger := log.FromContext(ctx)
 
@@ -131,12 +131,12 @@ func (r *MachineSyncReconciler) ensureCAPIInfraMachineMetadataUpdated(ctx contex
 		return false, nil
 	}
 
-	logger.Info("Changes detected for CAPI Infrastructure machine. Updating it", "diff", fmt.Sprintf("%+v", diff))
+	logger.Info("Changes detected for Cluster API Infrastructure machine. Updating it", "diff", fmt.Sprintf("%+v", diff))
 
 	if err := r.Update(ctx, updatedOrCreatedCAPIInfraMachine); err != nil {
-		logger.Error(err, "Failed to update CAPI Infrastructure machine")
+		logger.Error(err, "Failed to update Cluster API Infrastructure machine")
 
-		updateErr := fmt.Errorf("failed to update CAPI Infrastructure machine: %w", err)
+		updateErr := fmt.Errorf("failed to update Cluster API Infrastructure machine: %w", err)
 
 		if condErr := r.applySynchronizedConditionWithPatch(ctx, mapiMachine, corev1.ConditionFalse, reasonFailedToUpdateCAPIMachine, updateErr.Error(), nil); condErr != nil {
 			return false, utilerrors.NewAggregate([]error{updateErr, condErr})
@@ -158,9 +158,9 @@ func (r *MachineSyncReconciler) ensureCAPIInfraMachineStatusUpdated(ctx context.
 
 	// If the source API object (MAPI Machine) status.synchronizedGeneration does not match the objectmeta.generation
 	// it means the source API object status has not yet caught up with the desired spec,
-	// so we don't want to update the CAPI Infrastructure machine status until that has happened.
+	// so we don't want to update the Cluster API Infrastructure machine status until that has happened.
 	if mapiMachine.Status.SynchronizedGeneration != mapiMachine.ObjectMeta.Generation {
-		logger.Info("Changes detected for CAPI Infrastructure machine status, but the MAPI machine spec has not been observed yet, skipping status update")
+		logger.Info("Changes detected for Cluster API Infrastructure machine status, but the MAPI machine spec has not been observed yet, skipping status update")
 
 		return false, nil
 	}
@@ -173,7 +173,7 @@ func (r *MachineSyncReconciler) ensureCAPIInfraMachineStatusUpdated(ctx context.
 	patchBase := client.MergeFrom(target)
 
 	if err := setChangedCAPIInfraMachineStatusFields(r.Platform, existingCAPIInfraMachine, convertedCAPIInfraMachine); err != nil {
-		return false, fmt.Errorf("failed to set CAPI Infrastructure Machine status: %w", err)
+		return false, fmt.Errorf("failed to set Cluster API Infrastructure Machine status: %w", err)
 	}
 
 	// // Update the observed generation to match the updated source API object generation.
@@ -189,10 +189,10 @@ func (r *MachineSyncReconciler) ensureCAPIInfraMachineStatusUpdated(ctx context.
 		return false, nil
 	}
 
-	logger.Info("Changes detected for CAPI Infrastructure machine status. Updating it")
+	logger.Info("Changes detected for Cluster API Infrastructure machine status. Updating it")
 
 	if err := r.Status().Patch(ctx, existingCAPIInfraMachine, patchBase); err != nil {
-		logger.Error(err, "Failed to update CAPI Infrastructure machine status")
+		logger.Error(err, "Failed to update Cluster API Infrastructure machine status")
 		updateErr := fmt.Errorf("failed to update status: %w", err)
 
 		if condErr := r.applySynchronizedConditionWithPatch(ctx, mapiMachine, corev1.ConditionFalse, reasonFailedToUpdateCAPIMachine, updateErr.Error(), nil); condErr != nil {
@@ -205,7 +205,7 @@ func (r *MachineSyncReconciler) ensureCAPIInfraMachineStatusUpdated(ctx context.
 	return true, nil
 }
 
-// ensureCAPIInfraMachineDeleted deletes the CAPI Infrastructure machine if changes are detected to the spec which is immutable.
+// ensureCAPIInfraMachineDeleted deletes the Cluster API Infrastructure machine if changes are detected to the spec which is immutable.
 func (r *MachineSyncReconciler) ensureCAPIInfraMachineDeleted(ctx context.Context, sourceMAPIMachine *machinev1beta1.Machine, existingCAPIInfraMachine client.Object) (bool, error) {
 	logger := log.FromContext(ctx)
 
@@ -223,7 +223,7 @@ func (r *MachineSyncReconciler) ensureCAPIInfraMachineDeleted(ctx context.Contex
 		return false, deleteErr
 	}
 
-	// Remove finalizers from the deleting CAPI infraMachine, it is not authoritative.
+	// Remove finalizers from the deleting Cluster API infraMachine, it is not authoritative.
 	existingCAPIInfraMachine.SetFinalizers(nil)
 
 	if err := r.Update(ctx, existingCAPIInfraMachine); err != nil {
@@ -246,7 +246,7 @@ func (r *MachineSyncReconciler) ensureCAPIInfraMachineDeleted(ctx context.Contex
 	return true, nil
 }
 
-// compareCAPIInfraMachines compares CAPI infra machines a and b, and returns a list of differences, or none if there are none.
+// compareCAPIInfraMachines compares Cluster API infra machines a and b, and returns a list of differences, or none if there are none.
 //
 //nolint:funlen,gocognit
 func compareCAPIInfraMachines(platform configv1.PlatformType, infraMachine1, infraMachine2 client.Object) (map[string]any, error) {
@@ -327,7 +327,7 @@ func compareCAPIInfraMachines(platform configv1.PlatformType, infraMachine1, inf
 	return diff, nil
 }
 
-// setChangedCAPIInfraMachineStatusFields sets the updated fields in the CAPI Infrastructure machine status.
+// setChangedCAPIInfraMachineStatusFields sets the updated fields in the Cluster API Infrastructure machine status.
 func setChangedCAPIInfraMachineStatusFields(platform configv1.PlatformType, existingCAPIInfraMachine, convertedCAPIInfraMachine client.Object) error {
 	switch platform {
 	case configv1.AWSPlatformType:
