@@ -997,7 +997,7 @@ github.com/onsi/gomega/types
 # github.com/opencontainers/go-digest v1.0.0
 ## explicit; go 1.13
 github.com/opencontainers/go-digest
-# github.com/openshift/api v0.0.0-20250911131931-2acafd4d1ed2 => github.com/chrischdi/openshift-api v0.0.0-20251007112510-8c98aed88c05
+# github.com/openshift/api v0.0.0-20250922161302-04f99ea228f5 => github.com/openshift-cloud-team/openshift-api v0.0.0-20251007112510-8c98aed88c05
 ## explicit; go 1.24.0
 github.com/openshift/api
 github.com/openshift/api/annotations
@@ -1074,7 +1074,7 @@ github.com/openshift/api/template
 github.com/openshift/api/template/v1
 github.com/openshift/api/user
 github.com/openshift/api/user/v1
-# github.com/openshift/client-go v0.0.0-20250710075018-396b36f983ee => github.com/chrischdi/openshift-client-go v0.0.0-20251007113406-c5afd6f1204c
+# github.com/openshift/client-go v0.0.0-20250710075018-396b36f983ee => github.com/openshift-cloud-team/client-go v0.0.0-20251007132907-7af451b76251
 ## explicit; go 1.24.0
 github.com/openshift/client-go/config/applyconfigurations/config/v1
 github.com/openshift/client-go/config/applyconfigurations/config/v1alpha1
@@ -2051,15 +2051,21 @@ k8s.io/api/storage/v1beta1
 k8s.io/api/storagemigration/v1alpha1
 # k8s.io/apiextensions-apiserver v0.33.3
 ## explicit; go 1.24.0
+k8s.io/apiextensions-apiserver/pkg/apihelpers
 k8s.io/apiextensions-apiserver/pkg/apis/apiextensions
 k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1
 k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1
+k8s.io/apiextensions-apiserver/pkg/apiserver/schema
+k8s.io/apiextensions-apiserver/pkg/apiserver/schema/cel
+k8s.io/apiextensions-apiserver/pkg/apiserver/schema/cel/model
+k8s.io/apiextensions-apiserver/pkg/apiserver/validation
 k8s.io/apiextensions-apiserver/pkg/client/applyconfiguration/apiextensions/v1
 k8s.io/apiextensions-apiserver/pkg/client/applyconfiguration/apiextensions/v1beta1
 k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset
 k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/scheme
 k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/typed/apiextensions/v1
 k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/typed/apiextensions/v1beta1
+k8s.io/apiextensions-apiserver/pkg/features
 # k8s.io/apimachinery v0.33.3
 ## explicit; go 1.24.0
 k8s.io/apimachinery/pkg/api/apitesting
@@ -2182,6 +2188,7 @@ k8s.io/apiserver/pkg/cel/common
 k8s.io/apiserver/pkg/cel/environment
 k8s.io/apiserver/pkg/cel/lazy
 k8s.io/apiserver/pkg/cel/library
+k8s.io/apiserver/pkg/cel/metrics
 k8s.io/apiserver/pkg/cel/mutation
 k8s.io/apiserver/pkg/cel/mutation/dynamic
 k8s.io/apiserver/pkg/cel/openapi
@@ -2631,6 +2638,7 @@ k8s.io/kube-openapi/pkg/validation/errors
 k8s.io/kube-openapi/pkg/validation/spec
 k8s.io/kube-openapi/pkg/validation/strfmt
 k8s.io/kube-openapi/pkg/validation/strfmt/bson
+k8s.io/kube-openapi/pkg/validation/validate
 # k8s.io/utils v0.0.0-20250321185631-1f6e0b77f77e
 ## explicit; go 1.18
 k8s.io/utils/buffer
@@ -2936,5 +2944,5 @@ sigs.k8s.io/yaml/goyaml.v2
 sigs.k8s.io/yaml/goyaml.v3
 # github.com/metal3-io/baremetal-operator => github.com/metal3-io/baremetal-operator v0.5.1
 # sigs.k8s.io/cluster-api => sigs.k8s.io/cluster-api v1.10.4
-# github.com/openshift/api => github.com/chrischdi/openshift-api v0.0.0-20251007112510-8c98aed88c05
-# github.com/openshift/client-go => github.com/chrischdi/openshift-client-go v0.0.0-20251007113406-c5afd6f1204c
+# github.com/openshift/api => github.com/openshift-cloud-team/openshift-api v0.0.0-20251007112510-8c98aed88c05
+# github.com/openshift/client-go => github.com/openshift-cloud-team/client-go v0.0.0-20251007132907-7af451b76251
