@@ -183,10 +183,6 @@ func (r *InfraClusterController) ensureInfraCluster(ctx context.Context, log log
 
 		infraCluster, err = r.ensureAWSCluster(ctx, log)
 		if err != nil {
-			if setErr := r.setDegradedCondition(ctx, err); setErr != nil {
-				return nil, fmt.Errorf("error ensuring AWSCluster: %w: failed to set degraded condition for InfraCluster controller: %w", err, setErr)
-			}
-
 			return nil, fmt.Errorf("error ensuring AWSCluster: %w", err)
 		}
 	case configv1.GCPPlatformType:
@@ -241,24 +237,6 @@ func (r *InfraClusterController) ensureInfraCluster(ctx context.Context, log log
 	}
 
 	return infraCluster, nil
-}
-
-func (r *InfraClusterController) setDegradedCondition(ctx context.Context, reconcileErr error) error {
-	co, err := r.GetOrCreateClusterOperator(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get cluster operator: %w", err)
-	}
-
-	conds := []configv1.ClusterOperatorStatusCondition{
-		operatorstatus.NewClusterOperatorStatusCondition(InfraClusterControllerDegradedCondition, configv1.ConditionTrue, operatorstatus.ReasonSyncFailed,
-			fmt.Sprintf("InfraCluster controller reconcile failed: %v", reconcileErr)),
-	}
-
-	if err := r.SyncStatus(ctx, co, conds, r.OperandVersions(), r.RelatedObjects()); err != nil {
-		return fmt.Errorf("failed to sync status: %w", err)
-	}
-
-	return nil
 }
 
 // setAvailableCondition sets the ClusterOperator status condition to Available.
