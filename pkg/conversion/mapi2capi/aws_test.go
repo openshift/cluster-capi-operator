@@ -103,7 +103,7 @@ var _ = Describe("mapi2capi AWS conversion", func() {
 			),
 			infra: infra,
 			expectedErrors: []string{
-				"spec.providerSpec.value.loadBalancers: Invalid value: []v1beta1.LoadBalancerReference{v1beta1.LoadBalancerReference{Name:\"a\", Type:\"classic\"}}: loadBalancers are not supported for worker machines",
+				"spec.providerSpec.value.loadBalancers: Invalid value: []v1beta1.LoadBalancerReference{v1beta1.LoadBalancerReference{Name:\"a\", Type:\"classic\"}}: loadBalancers are not supported for non-control plane machines",
 			},
 			expectedWarnings: []string{},
 		}),

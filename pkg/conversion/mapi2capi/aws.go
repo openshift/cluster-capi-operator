@@ -328,7 +328,7 @@ func (m *awsMachineAndInfra) toAWSMachine(providerSpec mapiv1beta1.AWSMachinePro
 	if len(providerSpec.LoadBalancers) > 0 {
 		// Load balancers are only supported for control plane machines
 		if !util.IsControlPlaneMAPIMachine(m.machine) {
-			errs = append(errs, field.Invalid(fldPath.Child("loadBalancers"), providerSpec.LoadBalancers, "loadBalancers are not supported for worker machines"))
+			errs = append(errs, field.Invalid(fldPath.Child("loadBalancers"), providerSpec.LoadBalancers, "loadBalancers are not supported for non-control plane machines"))
 		}
 	}
 

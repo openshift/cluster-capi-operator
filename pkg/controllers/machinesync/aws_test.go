@@ -172,7 +172,7 @@ var _ = Describe("AWS load balancer validation during MAPI->CAPI conversion", fu
 					HaveField("Type", Equal(consts.SynchronizedCondition)),
 					HaveField("Status", Equal(corev1.ConditionFalse)),
 					HaveField("Reason", Equal("FailedToConvertMAPIMachineToCAPI")),
-					HaveField("Message", ContainSubstring("loadBalancers are not supported for worker machines")),
+					HaveField("Message", ContainSubstring("loadBalancers are not supported for non-control plane machines")),
 				))),
 		)
 	})

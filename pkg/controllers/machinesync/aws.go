@@ -48,7 +48,7 @@ func (r *MachineSyncReconciler) validateMachineAWSLoadBalancers(ctx context.Cont
 			return nil
 		}
 
-		return field.ErrorList{field.Invalid(lbfieldPath, providerSpec.LoadBalancers, "loadBalancers are not supported for worker machines")}.
+		return field.ErrorList{field.Invalid(lbfieldPath, providerSpec.LoadBalancers, "loadBalancers are not supported for non-control plane machines")}.
 			ToAggregate()
 	}
 
