@@ -1015,7 +1015,8 @@ func setChangedCAPIMachineSetStatusFields(existingCAPIMachineSet, convertedCAPIM
 	case convertedCAPIMachineSet.Status.V1Beta2 == nil:
 		existingCAPIMachineSet.Status.V1Beta2 = nil
 	case existingCAPIMachineSet.Status.V1Beta2 == nil:
-		existingCAPIMachineSet.Status.V1Beta2 = convertedCAPIMachineSet.Status.V1Beta2
+		existingCAPIMachineSet.Status.V1Beta2 = &clusterv1.MachineSetV1Beta2Status{}
+		fallthrough
 	default:
 		existingCAPIMachineSet.Status.V1Beta2.UpToDateReplicas = convertedCAPIMachineSet.Status.V1Beta2.UpToDateReplicas
 		existingCAPIMachineSet.Status.V1Beta2.AvailableReplicas = convertedCAPIMachineSet.Status.V1Beta2.AvailableReplicas
