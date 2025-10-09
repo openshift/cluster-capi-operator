@@ -1169,6 +1169,90 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 			})
 		})
 
+		Context("Prevent creation of MAPI machine if authoritative API is not CAPI", func() {
+			BeforeEach(func() {
+				By("Waiting for VAP to be ready")
+				machineVap = &admissionregistrationv1.ValidatingAdmissionPolicy{}
+				Eventually(k8sClient.Get(ctx, client.ObjectKey{Name: "openshift-only-create-mapi-machine-if-authoritative-api-capi"}, machineVap), timeout).Should(Succeed())
+				resourceRules := machineVap.Spec.MatchConstraints.ResourceRules
+				Expect(resourceRules).To(HaveLen(1))
+				resourceRules[0].Operations = append(resourceRules[0].Operations, admissionregistrationv1.Update)
+				Eventually(k.Update(machineVap, func() {
+					machineVap.Spec.Validations = append(machineVap.Spec.Validations, admissionregistrationv1.Validation{
+						Expression: "!(has(object.metadata.labels) && \"test-sentinel\" in object.metadata.labels)",
+						Message:    "policy in place",
+					})
+					// Updating the VAP so that it functions on "UPDATE" as well as "CREATE" only in this test suite to make it easier to test the functionality
+					machineVap.Spec.MatchConstraints.ResourceRules = resourceRules
+
+				})).Should(Succeed())
+
+				Eventually(k.Object(machineVap), timeout).Should(
+					HaveField("Status.ObservedGeneration", BeNumerically(">=", 2)),
+				)
+
+				By("Updating the VAP binding")
+				policyBinding = &admissionregistrationv1.ValidatingAdmissionPolicyBinding{}
+				Eventually(k8sClient.Get(ctx, client.ObjectKey{
+					Name: "openshift-only-create-mapi-machine-if-authoritative-api-capi"}, policyBinding), timeout).Should(Succeed())
+
+				Eventually(k.Update(policyBinding, func() {
+					// We want to have our paramref reference the CAPI namespace,
+					// since we `GenerateName` it is not static
+					policyBinding.Spec.ParamRef.Namespace = capiNamespace.GetName()
+					// We need to update the namespace in our namespaceSelector,
+					// since also use `GenerateName` here
+					policyBinding.Spec.MatchResources.NamespaceSelector.MatchLabels = map[string]string{
+						"kubernetes.io/metadata.name": mapiNamespace.GetName(),
+					}
+				}), timeout).Should(Succeed())
+
+				// Wait until the binding shows the patched values
+				Eventually(k.Object(policyBinding), timeout).Should(
+					SatisfyAll(
+						HaveField("Spec.MatchResources.NamespaceSelector.MatchLabels",
+							HaveKeyWithValue("kubernetes.io/metadata.name",
+								mapiNamespace.GetName())),
+					),
+				)
+
+				By("Creating a throwaway MAPI machine")
+				sentinelMachine := mapiMachineBuilder.WithName("sentinel-machine").WithAuthoritativeAPI(mapiv1beta1.MachineAuthorityClusterAPI).Build()
+				Eventually(k8sClient.Create(ctx, sentinelMachine), timeout).Should(Succeed())
+
+				capiSentinelMachine := clusterv1resourcebuilder.Machine().WithName("sentinel-machine").WithNamespace(capiNamespace.Name).Build()
+				Expect(k8sClient.Create(ctx, capiSentinelMachine)).To(Succeed())
+
+				Eventually(k.Get(capiSentinelMachine)).Should(Succeed())
+
+				Eventually(k.Update(sentinelMachine, func() {
+					sentinelMachine.ObjectMeta.Labels = map[string]string{"test-sentinel": "fubar"}
+				}), timeout).Should(MatchError(ContainSubstring("policy in place")))
+			})
+
+			// The Authoritative API defaults to MachineAPI so we can't test if it's unset.
+			It("Doesn't allow creation of a MAPI machine with authoritative API MachineAPI and the same name", func() {
+				By("Create the Capi Machine")
+				newCapiMachine := clusterv1resourcebuilder.Machine().WithName("validation-machine").WithNamespace(capiNamespace.Name).Build()
+				Expect(k8sClient.Create(ctx, newCapiMachine)).To(Succeed())
+
+				By("Create the Mapi Machine")
+				newMapiMachine := mapiMachineBuilder.WithName("validation-machine").WithAuthoritativeAPI(mapiv1beta1.MachineAuthorityMachineAPI).Build()
+				Eventually(k8sClient.Create(ctx, newMapiMachine), timeout).Should(MatchError(ContainSubstring("with authoritativeAPI=MachineAPI because a Cluster API Machine with the same name already exists.")))
+			})
+
+			It("Does allow creation of a MAPI machine with authoritative API Cluster and the same name", func() {
+				By("Create the Capi Machine")
+				newCapiMachine := clusterv1resourcebuilder.Machine().WithName("validation-machine").WithNamespace(capiNamespace.Name).Build()
+				Expect(k8sClient.Create(ctx, newCapiMachine)).To(Succeed())
+
+				By("Create the Mapi Machine")
+				newMapiMachine := mapiMachineBuilder.WithName("validation-machine").WithAuthoritativeAPI(mapiv1beta1.MachineAuthorityClusterAPI).Build()
+				Eventually(k8sClient.Create(ctx, newMapiMachine), timeout).Should(Succeed())
+			})
+
+		})
+
 	})
 })
 
