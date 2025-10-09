@@ -67,7 +67,7 @@ func Test_crdValidator_validateCreateOrUpdate(t *testing.T) { //nolint:funlen
 			obj:          incompatibleCRD1.DeepCopy(),
 			requirements: []client.Object{test.GenerateTestCRDCompatibilityRequirement(testCRDWorking.DeepCopy())},
 			wantWarnings: BeNil(),
-			wantErr:      MatchError("CRD is not compatible with CRDCompatibilityRequirements: This requirement was added by Test Creator: requirement : removed field : v1.^.foo1"),
+			wantErr:      MatchError("CRD is not compatible with CRDCompatibilityRequirements: This requirement was added by CRDCompatibilityRequirement : removed field : v1.^.foo1"),
 		},
 		{
 			name:         "Should reject an incompatible CRD with multiple removed fields",
@@ -77,8 +77,8 @@ func Test_crdValidator_validateCreateOrUpdate(t *testing.T) { //nolint:funlen
 			wantErr: MatchError(
 				SatisfyAll(
 					ContainSubstring("CRD is not compatible with CRDCompatibilityRequirements: "),
-					ContainSubstring("This requirement was added by Test Creator: requirement : removed field : v1.^.foo1"),
-					ContainSubstring("This requirement was added by Test Creator: requirement : removed field : v1.^.foo2"),
+					ContainSubstring("This requirement was added by CRDCompatibilityRequirement : removed field : v1.^.foo1"),
+					ContainSubstring("This requirement was added by CRDCompatibilityRequirement : removed field : v1.^.foo2"),
 				),
 			),
 		},
@@ -93,7 +93,7 @@ func Test_crdValidator_validateCreateOrUpdate(t *testing.T) { //nolint:funlen
 					return r
 				}(),
 			},
-			wantWarnings: ConsistOf("This requirement was added by Test Creator: requirement : removed field : v1.^.foo1"),
+			wantWarnings: ConsistOf("This requirement was added by CRDCompatibilityRequirement : removed field : v1.^.foo1"),
 		},
 		{
 			name: "Should permit an incompatible CRD with multiple warnings for CRDAdmitAction set to Warn",
@@ -107,8 +107,8 @@ func Test_crdValidator_validateCreateOrUpdate(t *testing.T) { //nolint:funlen
 				}(),
 			},
 			wantWarnings: ConsistOf(
-				"This requirement was added by Test Creator: requirement : removed field : v1.^.foo1",
-				"This requirement was added by Test Creator: requirement : removed field : v1.^.foo2",
+				"This requirement was added by CRDCompatibilityRequirement : removed field : v1.^.foo1",
+				"This requirement was added by CRDCompatibilityRequirement : removed field : v1.^.foo2",
 			),
 		},
 	}
