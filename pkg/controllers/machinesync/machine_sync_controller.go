@@ -56,6 +56,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
@@ -80,6 +81,8 @@ const (
 	controllerName                 string = "MachineSyncController"
 	mapiNamespace                  string = "openshift-machine-api"
 	capiInfraCommonFinalizerSuffix string = ".cluster.x-k8s.io"
+
+	requeueInfraProgress = 1 * time.Second
 
 	messageSuccessfullySynchronizedCAPItoMAPI = "Successfully synchronized CAPI Machine to MAPI"
 	messageSuccessfullySynchronizedMAPItoCAPI = "Successfully synchronized MAPI Machine to CAPI"
@@ -134,7 +137,7 @@ type MachineSyncReconciler struct {
 	MAPINamespace string
 }
 
-// SetupWithManager sets the CoreClusterReconciler controller up with the given manager.
+// SetupWithManager sets the MachineSyncReconciler controller up with the given manager.
 func (r *MachineSyncReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	infraMachine, _, err := controllers.InitInfraMachineAndInfraClusterFromProvider(r.Platform)
 	if err != nil {
@@ -161,7 +164,7 @@ func (r *MachineSyncReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		).
 		Watches(
 			infraMachine,
-			handler.EnqueueRequestsFromMapFunc(util.RewriteNamespace(r.MAPINamespace)),
+			handler.EnqueueRequestsFromMapFunc(util.ResolveCAPIMachineFromInfraMachine(r.MAPINamespace)),
 			builder.WithPredicates(util.FilterNamespace(r.CAPINamespace)),
 		).
 		Complete(r); err != nil {
@@ -182,8 +185,8 @@ func (r *MachineSyncReconciler) SetupWithManager(mgr ctrl.Manager) error {
 func (r *MachineSyncReconciler) Reconcile(ctx context.Context, req reconcile.Request) (ctrl.Result, error) {
 	logger := logf.FromContext(ctx, "namespace", req.Namespace, "name", req.Name)
 
-	logger.V(1).Info("Reconciling machine")
-	defer logger.V(1).Info("Finished reconciling machine")
+	logger.Info("Reconciling machine")
+	defer logger.Info("Finished reconciling machine")
 
 	var mapiMachineNotFound, capiMachineNotFound bool
 
@@ -279,6 +282,8 @@ func (r *MachineSyncReconciler) reconcileCAPIMachinetoMAPIMachine(ctx context.Co
 		return ctrl.Result{}, errCAPIMachineNotFound
 	}
 
+	// TODO (In review cc @dam): Currently, if we dont have an infra ref this fails:  unexpected InfraMachine type, expected AWSMachine, got <nil>
+	// should we make this error more human friendly? Is this a scenario we're likely to have users hit?
 	infraCluster, infraMachine, err := r.fetchCAPIInfraResources(ctx, capiMachine)
 	if err != nil {
 		fetchErr := fmt.Errorf("failed to fetch Cluster API infra resources: %w", err)
@@ -495,7 +500,7 @@ func (r *MachineSyncReconciler) reconcileMAPIMachinetoCAPIMachine(ctx context.Co
 	if authoritativeAPI == mapiv1beta1.MachineAuthorityMachineAPI {
 		// Set the paused annotation on the new CAPI Machine, if the authoritativeAPI is Machine API,
 		// as we want the new CAPI Machine to be initially paused when the MAPI Machine is the authoritative one.
-		// For the other case instead (authoritativeAPI == machinev1beta1.MachineAuthorityClusterAPI),
+		// For the other case instead (authoritativeAPI == mapiv1beta1.MachineAuthorityClusterAPI),
 		// when the new CAPI Machine that is being created is also expected to be the authority
 		// (i.e. in cases where the MAPI Machine is created as .spec.authoritativeAPI: ClusterAPI), we do not want to create it paused.
 		annotations.AddAnnotations(newCAPIMachine, map[string]string{clusterv1.PausedAnnotation: ""})
@@ -521,7 +526,7 @@ func (r *MachineSyncReconciler) reconcileMAPIMachinetoCAPIMachine(ctx context.Co
 	if authoritativeAPI == mapiv1beta1.MachineAuthorityMachineAPI {
 		// Set the paused annotation on the new CAPI Infra Machine, if the authoritativeAPI is Machine API,
 		// as we want the new CAPI Infra Machine to be initially paused when the MAPI Machine is the authoritative one.
-		// For the other case instead (authoritativeAPI == machinev1beta1.MachineAuthorityClusterAPI),
+		// For the other case instead (authoritativeAPI == mapiv1beta1.MachineAuthorityClusterAPI),
 		// when the new CAPI Infra Machine that is being created is also expected to be the authority
 		// (i.e. in cases where the MAPI Machine is created as .spec.authoritativeAPI: ClusterAPI), we do not want to create it paused.
 		annotations.AddAnnotations(newCAPIInfraMachine, map[string]string{clusterv1.PausedAnnotation: ""})
@@ -540,13 +545,13 @@ func (r *MachineSyncReconciler) reconcileMAPIMachinetoCAPIMachine(ctx context.Co
 		BlockOwnerDeletion: ptr.To(true),
 	}})
 
-	result, syncronizationIsProgressing, err := r.createOrUpdateCAPIInfraMachine(ctx, mapiMachine, infraMachine, newCAPIInfraMachine)
+	result, synchronizationIsProgressing, err := r.createOrUpdateCAPIInfraMachine(ctx, mapiMachine, infraMachine, newCAPIInfraMachine)
 	if err != nil {
 		return result, fmt.Errorf("unable to ensure Cluster API infra machine: %w", err)
 	}
 
-	if syncronizationIsProgressing {
-		return ctrl.Result{RequeueAfter: time.Second * 1}, r.applySynchronizedConditionWithPatch(ctx, mapiMachine, corev1.ConditionUnknown,
+	if synchronizationIsProgressing {
+		return ctrl.Result{RequeueAfter: requeueInfraProgress}, r.applySynchronizedConditionWithPatch(ctx, mapiMachine, corev1.ConditionUnknown,
 			reasonProgressingToCreateCAPIInfraMachine, progressingToSynchronizeMAPItoCAPI, nil)
 	}
 
@@ -1015,7 +1020,9 @@ func (r *MachineSyncReconciler) fetchCAPIInfraResources(ctx context.Context, cap
 }
 
 //nolint:funlen,gocognit,cyclop
-func (r *MachineSyncReconciler) reconcileMAPItoCAPIMachineDeletion(ctx context.Context, mapiMachine *mapiv1beta1.Machine, capiMachine *clusterv1.Machine, infraMachine client.Object) (bool, error) {
+func (r *MachineSyncReconciler) reconcileMAPItoCAPIMachineDeletion(ctx context.Context, mapiMachine *mapiv1beta1.Machine, capiMachine *clusterv1.Machine, infraMachine client.Object) (shouldReqeue bool, err error) {
+	logger := log.FromContext(ctx)
+
 	if mapiMachine.DeletionTimestamp.IsZero() {
 		if capiMachine == nil || capiMachine.DeletionTimestamp.IsZero() {
 			// Neither MAPI authoritative machine nor its CAPI non-authoritative machine mirror
@@ -1032,8 +1039,6 @@ func (r *MachineSyncReconciler) reconcileMAPItoCAPIMachineDeletion(ctx context.C
 		// Return true to force a requeue, to allow the deletion propagation.
 		return true, nil
 	}
-
-	logger := logf.FromContext(ctx)
 
 	if capiMachine == nil && util.IsNilObject(infraMachine) {
 		logger.Info("Cluster API machine and infra machine do not exist, removing corresponding Machine API machine sync finalizer")
@@ -1232,9 +1237,7 @@ func (r *MachineSyncReconciler) reconcileCAPItoMAPIMachineDeletion(ctx context.C
 
 // ensureSyncFinalizer ensures the sync finalizer is present across the mapi
 // machine, capi machine and capi infra machine.
-func (r *MachineSyncReconciler) ensureSyncFinalizer(ctx context.Context, mapiMachine *mapiv1beta1.Machine, capiMachine *clusterv1.Machine, infraMachine client.Object) (bool, error) {
-	var shouldRequeue bool
-
+func (r *MachineSyncReconciler) ensureSyncFinalizer(ctx context.Context, mapiMachine *mapiv1beta1.Machine, capiMachine *clusterv1.Machine, infraMachine client.Object) (shouldRequeue bool, err error) {
 	var errors []error
 
 	if mapiMachine != nil {
