@@ -28,7 +28,6 @@ import (
 	gcpv1 "sigs.k8s.io/cluster-api-provider-gcp/api/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/yaml"
 )
 
 // ensureGCPCluster ensures the GCPCluster cluster object exists.
@@ -107,17 +106,7 @@ func (r *InfraClusterController) ensureGCPCluster(ctx context.Context, log logr.
 
 // getGCPMAPIProviderSpec returns a GCP Machine ProviderSpec from the the cluster.
 func (r *InfraClusterController) getGCPMAPIProviderSpec(ctx context.Context, cl client.Client) (*mapiv1beta1.GCPMachineProviderSpec, error) {
-	rawProviderSpec, err := r.getRawMAPIProviderSpec(ctx, cl)
-	if err != nil {
-		return nil, fmt.Errorf("unable to obtain MAPI ProviderSpec: %w", err)
-	}
-
-	providerSpec := &mapiv1beta1.GCPMachineProviderSpec{}
-	if err := yaml.Unmarshal(rawProviderSpec, providerSpec); err != nil {
-		return nil, fmt.Errorf("unable to unmarshal MAPI ProviderSpec: %w", err)
-	}
-
-	return providerSpec, nil
+	return getMAPIProviderSpec[mapiv1beta1.GCPMachineProviderSpec](ctx, cl, r.getRawMAPIProviderSpec)
 }
 
 // getGCPProjectID obtains the GCP Project ID.

@@ -31,7 +31,6 @@ import (
 	azurev1 "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/yaml"
 )
 
 var (
@@ -77,17 +76,7 @@ func (r *InfraClusterController) ensureAzureCluster(ctx context.Context, log log
 
 // getAzureMAPIProviderSpec returns a Azure Machine ProviderSpec from the the cluster.
 func (r *InfraClusterController) getAzureMAPIProviderSpec(ctx context.Context, cl client.Client) (*mapiv1beta1.AzureMachineProviderSpec, error) {
-	rawProviderSpec, err := r.getRawMAPIProviderSpec(ctx, cl)
-	if err != nil {
-		return nil, fmt.Errorf("unable to obtain MAPI ProviderSpec: %w", err)
-	}
-
-	providerSpec := &mapiv1beta1.AzureMachineProviderSpec{}
-	if err := yaml.Unmarshal(rawProviderSpec, providerSpec); err != nil {
-		return nil, fmt.Errorf("unable to unmarshal MAPI ProviderSpec: %w", err)
-	}
-
-	return providerSpec, nil
+	return getMAPIProviderSpec[mapiv1beta1.AzureMachineProviderSpec](ctx, cl, r.getRawMAPIProviderSpec)
 }
 
 // getAzureLocation obtains the Azure Location.

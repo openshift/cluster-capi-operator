@@ -31,7 +31,6 @@ import (
 	vspherev1 "sigs.k8s.io/cluster-api-provider-vsphere/apis/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/yaml"
 )
 
 var (
@@ -115,17 +114,7 @@ func (r *InfraClusterController) ensureVSphereCluster(ctx context.Context, log l
 
 // getVSphereMAPIProviderSpec returns a VSphere Machine ProviderSpec from the the cluster.
 func (r *InfraClusterController) getVSphereMAPIProviderSpec(ctx context.Context, cl client.Client) (*mapiv1beta1.VSphereMachineProviderSpec, error) {
-	rawProviderSpec, err := r.getRawMAPIProviderSpec(ctx, cl)
-	if err != nil {
-		return nil, fmt.Errorf("unable to obtain MAPI ProviderSpec: %w", err)
-	}
-
-	providerSpec := &mapiv1beta1.VSphereMachineProviderSpec{}
-	if err := yaml.Unmarshal(rawProviderSpec, providerSpec); err != nil {
-		return nil, fmt.Errorf("unable to unmarshal MAPI ProviderSpec: %w", err)
-	}
-
-	return providerSpec, nil
+	return getMAPIProviderSpec[mapiv1beta1.VSphereMachineProviderSpec](ctx, cl, r.getRawMAPIProviderSpec)
 }
 
 // ensureVSphereSecret ensures the CAPI VSphere credentials secret exists.

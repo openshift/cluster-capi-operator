@@ -31,7 +31,6 @@ import (
 	ibmpowervsv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/yaml"
 
 	mapiv1 "github.com/openshift/api/machine/v1"
 )
@@ -123,17 +122,7 @@ func (r *InfraClusterController) ensureIBMPowerVSCluster(ctx context.Context, lo
 
 // getPowerVSMAPIProviderSpec returns a PowerVS Machine ProviderSpec from the the cluster.
 func (r *InfraClusterController) getPowerVSMAPIProviderSpec(ctx context.Context, cl client.Client) (*mapiv1.PowerVSMachineProviderConfig, error) {
-	rawProviderSpec, err := r.getRawMAPIProviderSpec(ctx, cl)
-	if err != nil {
-		return nil, fmt.Errorf("unable to obtain MAPI ProviderSpec: %w", err)
-	}
-
-	providerSpec := &mapiv1.PowerVSMachineProviderConfig{}
-	if err := yaml.Unmarshal(rawProviderSpec, providerSpec); err != nil {
-		return nil, fmt.Errorf("unable to unmarshal MAPI ProviderSpec: %w", err)
-	}
-
-	return providerSpec, nil
+	return getMAPIProviderSpec[mapiv1.PowerVSMachineProviderConfig](ctx, cl, r.getRawMAPIProviderSpec)
 }
 
 func getPowerVSServiceInstance(serviceInstance mapiv1.PowerVSResource) (*ibmpowervsv1.IBMPowerVSResourceReference, error) {

@@ -32,7 +32,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
-	"sigs.k8s.io/yaml"
 )
 
 var (
@@ -136,17 +135,7 @@ func (r *InfraClusterController) newAWSCluster(providerSpec *mapiv1beta1.AWSMach
 }
 
 func (r *InfraClusterController) getAWSMAPIProviderSpec(ctx context.Context, cl client.Client) (*mapiv1beta1.AWSMachineProviderConfig, error) {
-	rawProviderSpec, err := r.getRawMAPIProviderSpec(ctx, cl)
-	if err != nil {
-		return nil, fmt.Errorf("unable to obtain MAPI ProviderSpec: %w", err)
-	}
-
-	providerSpec := &mapiv1beta1.AWSMachineProviderConfig{}
-	if err := yaml.Unmarshal(rawProviderSpec, providerSpec); err != nil {
-		return nil, fmt.Errorf("unable to unmarshal MAPI ProviderSpec: %w", err)
-	}
-
-	return providerSpec, nil
+	return getMAPIProviderSpec[mapiv1beta1.AWSMachineProviderConfig](ctx, cl, r.getRawMAPIProviderSpec)
 }
 
 // extractLoadBalancerConfigFromMAPIAWSProviderSpec extracts one or two control plane load balancers from a MAPI machine's provider spec.

@@ -41,6 +41,7 @@ import (
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
+	"sigs.k8s.io/yaml"
 )
 
 const (
@@ -377,6 +378,21 @@ func (r *InfraClusterController) getRawMAPIProviderSpec(ctx context.Context, cl 
 
 	// Devise providerSpec via CPMS.
 	return cpms.Spec.Template.OpenShiftMachineV1Beta1Machine.Spec.ProviderSpec.Value.Raw, nil
+}
+
+// getMAPIProviderSpec obtains the raw provider spec using the provided getter and unmarshals it into the specified type.
+func getMAPIProviderSpec[T any](ctx context.Context, cl client.Client, getter func(context.Context, client.Client) ([]byte, error)) (*T, error) {
+	rawProviderSpec, err := getter(ctx, cl)
+	if err != nil {
+		return nil, fmt.Errorf("unable to obtain MAPI ProviderSpec: %w", err)
+	}
+
+	providerSpec := new(T)
+	if err := yaml.Unmarshal(rawProviderSpec, providerSpec); err != nil {
+		return nil, fmt.Errorf("unable to unmarshal MAPI ProviderSpec: %w", err)
+	}
+
+	return providerSpec, nil
 }
 
 // sortMachinesByCreationTimeDescending sorts a slice of Machines by CreationTime, Name (descending).
