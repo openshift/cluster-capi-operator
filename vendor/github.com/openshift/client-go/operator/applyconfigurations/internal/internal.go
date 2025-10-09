@@ -4003,15 +4003,18 @@ var schemaYAML = typed.YAMLObject(`types:
 - name: com.github.openshift.api.operator.v1alpha1.CRDCompatibilityRequirementSpec
   map:
     fields:
-    - name: compatibilityCRD
+    - name: compatibilitySchema
       type:
-        scalar: string
-    - name: crdAdmitAction
+        namedType: com.github.openshift.api.operator.v1alpha1.CompatibilitySchema
+      default: {}
+    - name: crdSchemaValidation
       type:
-        scalar: string
-    - name: creatorDescription
+        namedType: com.github.openshift.api.operator.v1alpha1.CRDSchemaValidation
+      default: {}
+    - name: objectSchemaValidation
       type:
-        scalar: string
+        namedType: com.github.openshift.api.operator.v1alpha1.ObjectSchemaValidation
+      default: {}
 - name: com.github.openshift.api.operator.v1alpha1.CRDCompatibilityRequirementStatus
   map:
     fields:
@@ -4030,6 +4033,12 @@ var schemaYAML = typed.YAMLObject(`types:
       type:
         namedType: com.github.openshift.api.operator.v1alpha1.ObservedCRD
       default: {}
+- name: com.github.openshift.api.operator.v1alpha1.CRDSchemaValidation
+  map:
+    fields:
+    - name: action
+      type:
+        scalar: string
 - name: com.github.openshift.api.operator.v1alpha1.ClusterVersionOperator
   map:
     fields:
@@ -4063,6 +4072,27 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: observedGeneration
       type:
         scalar: numeric
+- name: com.github.openshift.api.operator.v1alpha1.CompatibilitySchema
+  map:
+    fields:
+    - name: additionalVersions
+      type:
+        list:
+          elementType:
+            scalar: string
+          elementRelationship: associative
+    - name: crdYAML
+      type:
+        scalar: string
+    - name: excludeFields
+      type:
+        list:
+          elementType:
+            scalar: string
+          elementRelationship: associative
+    - name: requireVersions
+      type:
+        scalar: string
 - name: com.github.openshift.api.operator.v1alpha1.EtcdBackup
   map:
     fields:
@@ -4206,6 +4236,26 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: version
       type:
         scalar: string
+- name: com.github.openshift.api.operator.v1alpha1.ObjectSchemaValidation
+  map:
+    fields:
+    - name: action
+      type:
+        scalar: string
+    - name: matchConditions
+      type:
+        list:
+          elementType:
+            namedType: io.k8s.api.admissionregistration.v1.MatchCondition
+          elementRelationship: associative
+          keys:
+          - name
+    - name: namespaceSelector
+      type:
+        namedType: io.k8s.apimachinery.pkg.apis.meta.v1.LabelSelector
+    - name: objectSelector
+      type:
+        namedType: io.k8s.apimachinery.pkg.apis.meta.v1.LabelSelector
 - name: com.github.openshift.api.operator.v1alpha1.ObservedCRD
   map:
     fields:
@@ -4225,6 +4275,17 @@ var schemaYAML = typed.YAMLObject(`types:
             scalar: string
           elementRelationship: atomic
     - name: source
+      type:
+        scalar: string
+      default: ""
+- name: io.k8s.api.admissionregistration.v1.MatchCondition
+  map:
+    fields:
+    - name: expression
+      type:
+        scalar: string
+      default: ""
+    - name: name
       type:
         scalar: string
       default: ""

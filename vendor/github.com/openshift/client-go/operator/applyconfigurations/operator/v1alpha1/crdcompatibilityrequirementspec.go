@@ -2,17 +2,12 @@
 
 package v1alpha1
 
-import (
-	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
-)
-
 // CRDCompatibilityRequirementSpecApplyConfiguration represents a declarative configuration of the CRDCompatibilityRequirementSpec type for use
 // with apply.
 type CRDCompatibilityRequirementSpecApplyConfiguration struct {
-	CreatorDescription *string                                                            `json:"creatorDescription,omitempty"`
-	CompatibilityCRD   *string                                                            `json:"compatibilityCRD,omitempty"`
-	CRDAdmitAction     *operatorv1alpha1.CRDAdmitAction                                   `json:"crdAdmitAction,omitempty"`
-	ObjectValidation   *CRDCompatibilityRequirementSpecObjectValidationApplyConfiguration `json:"objectValidation,omitempty"`
+	CompatibilitySchema    *CompatibilitySchemaApplyConfiguration    `json:"compatibilitySchema,omitempty"`
+	CRDSchemaValidation    *CRDSchemaValidationApplyConfiguration    `json:"crdSchemaValidation,omitempty"`
+	ObjectSchemaValidation *ObjectSchemaValidationApplyConfiguration `json:"objectSchemaValidation,omitempty"`
 }
 
 // CRDCompatibilityRequirementSpecApplyConfiguration constructs a declarative configuration of the CRDCompatibilityRequirementSpec type for use with
@@ -21,34 +16,26 @@ func CRDCompatibilityRequirementSpec() *CRDCompatibilityRequirementSpecApplyConf
 	return &CRDCompatibilityRequirementSpecApplyConfiguration{}
 }
 
-// WithCreatorDescription sets the CreatorDescription field in the declarative configuration to the given value
+// WithCompatibilitySchema sets the CompatibilitySchema field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the CreatorDescription field is set to the value of the last call.
-func (b *CRDCompatibilityRequirementSpecApplyConfiguration) WithCreatorDescription(value string) *CRDCompatibilityRequirementSpecApplyConfiguration {
-	b.CreatorDescription = &value
+// If called multiple times, the CompatibilitySchema field is set to the value of the last call.
+func (b *CRDCompatibilityRequirementSpecApplyConfiguration) WithCompatibilitySchema(value *CompatibilitySchemaApplyConfiguration) *CRDCompatibilityRequirementSpecApplyConfiguration {
+	b.CompatibilitySchema = value
 	return b
 }
 
-// WithCompatibilityCRD sets the CompatibilityCRD field in the declarative configuration to the given value
+// WithCRDSchemaValidation sets the CRDSchemaValidation field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the CompatibilityCRD field is set to the value of the last call.
-func (b *CRDCompatibilityRequirementSpecApplyConfiguration) WithCompatibilityCRD(value string) *CRDCompatibilityRequirementSpecApplyConfiguration {
-	b.CompatibilityCRD = &value
+// If called multiple times, the CRDSchemaValidation field is set to the value of the last call.
+func (b *CRDCompatibilityRequirementSpecApplyConfiguration) WithCRDSchemaValidation(value *CRDSchemaValidationApplyConfiguration) *CRDCompatibilityRequirementSpecApplyConfiguration {
+	b.CRDSchemaValidation = value
 	return b
 }
 
-// WithCRDAdmitAction sets the CRDAdmitAction field in the declarative configuration to the given value
+// WithObjectSchemaValidation sets the ObjectSchemaValidation field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the CRDAdmitAction field is set to the value of the last call.
-func (b *CRDCompatibilityRequirementSpecApplyConfiguration) WithCRDAdmitAction(value operatorv1alpha1.CRDAdmitAction) *CRDCompatibilityRequirementSpecApplyConfiguration {
-	b.CRDAdmitAction = &value
-	return b
-}
-
-// WithObjectValidation sets the ObjectValidation field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the ObjectValidation field is set to the value of the last call.
-func (b *CRDCompatibilityRequirementSpecApplyConfiguration) WithObjectValidation(value *CRDCompatibilityRequirementSpecObjectValidationApplyConfiguration) *CRDCompatibilityRequirementSpecApplyConfiguration {
-	b.ObjectValidation = value
+// If called multiple times, the ObjectSchemaValidation field is set to the value of the last call.
+func (b *CRDCompatibilityRequirementSpecApplyConfiguration) WithObjectSchemaValidation(value *ObjectSchemaValidationApplyConfiguration) *CRDCompatibilityRequirementSpecApplyConfiguration {
+	b.ObjectSchemaValidation = value
 	return b
 }

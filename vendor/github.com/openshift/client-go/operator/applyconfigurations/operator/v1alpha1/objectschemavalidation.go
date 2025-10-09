@@ -8,25 +8,25 @@ import (
 	v1 "k8s.io/client-go/applyconfigurations/meta/v1"
 )
 
-// CRDCompatibilityRequirementSpecObjectValidationApplyConfiguration represents a declarative configuration of the CRDCompatibilityRequirementSpecObjectValidation type for use
+// ObjectSchemaValidationApplyConfiguration represents a declarative configuration of the ObjectSchemaValidation type for use
 // with apply.
-type CRDCompatibilityRequirementSpecObjectValidationApplyConfiguration struct {
+type ObjectSchemaValidationApplyConfiguration struct {
 	Action            *operatorv1alpha1.CRDAdmitAction         `json:"action,omitempty"`
 	NamespaceSelector *v1.LabelSelectorApplyConfiguration      `json:"namespaceSelector,omitempty"`
 	ObjectSelector    *v1.LabelSelectorApplyConfiguration      `json:"objectSelector,omitempty"`
 	MatchConditions   []admissionregistrationv1.MatchCondition `json:"matchConditions,omitempty"`
 }
 
-// CRDCompatibilityRequirementSpecObjectValidationApplyConfiguration constructs a declarative configuration of the CRDCompatibilityRequirementSpecObjectValidation type for use with
+// ObjectSchemaValidationApplyConfiguration constructs a declarative configuration of the ObjectSchemaValidation type for use with
 // apply.
-func CRDCompatibilityRequirementSpecObjectValidation() *CRDCompatibilityRequirementSpecObjectValidationApplyConfiguration {
-	return &CRDCompatibilityRequirementSpecObjectValidationApplyConfiguration{}
+func ObjectSchemaValidation() *ObjectSchemaValidationApplyConfiguration {
+	return &ObjectSchemaValidationApplyConfiguration{}
 }
 
 // WithAction sets the Action field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Action field is set to the value of the last call.
-func (b *CRDCompatibilityRequirementSpecObjectValidationApplyConfiguration) WithAction(value operatorv1alpha1.CRDAdmitAction) *CRDCompatibilityRequirementSpecObjectValidationApplyConfiguration {
+func (b *ObjectSchemaValidationApplyConfiguration) WithAction(value operatorv1alpha1.CRDAdmitAction) *ObjectSchemaValidationApplyConfiguration {
 	b.Action = &value
 	return b
 }
@@ -34,7 +34,7 @@ func (b *CRDCompatibilityRequirementSpecObjectValidationApplyConfiguration) With
 // WithNamespaceSelector sets the NamespaceSelector field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the NamespaceSelector field is set to the value of the last call.
-func (b *CRDCompatibilityRequirementSpecObjectValidationApplyConfiguration) WithNamespaceSelector(value *v1.LabelSelectorApplyConfiguration) *CRDCompatibilityRequirementSpecObjectValidationApplyConfiguration {
+func (b *ObjectSchemaValidationApplyConfiguration) WithNamespaceSelector(value *v1.LabelSelectorApplyConfiguration) *ObjectSchemaValidationApplyConfiguration {
 	b.NamespaceSelector = value
 	return b
 }
@@ -42,7 +42,7 @@ func (b *CRDCompatibilityRequirementSpecObjectValidationApplyConfiguration) With
 // WithObjectSelector sets the ObjectSelector field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the ObjectSelector field is set to the value of the last call.
-func (b *CRDCompatibilityRequirementSpecObjectValidationApplyConfiguration) WithObjectSelector(value *v1.LabelSelectorApplyConfiguration) *CRDCompatibilityRequirementSpecObjectValidationApplyConfiguration {
+func (b *ObjectSchemaValidationApplyConfiguration) WithObjectSelector(value *v1.LabelSelectorApplyConfiguration) *ObjectSchemaValidationApplyConfiguration {
 	b.ObjectSelector = value
 	return b
 }
@@ -50,7 +50,7 @@ func (b *CRDCompatibilityRequirementSpecObjectValidationApplyConfiguration) With
 // WithMatchConditions adds the given value to the MatchConditions field in the declarative configuration
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, values provided by each call will be appended to the MatchConditions field.
-func (b *CRDCompatibilityRequirementSpecObjectValidationApplyConfiguration) WithMatchConditions(values ...admissionregistrationv1.MatchCondition) *CRDCompatibilityRequirementSpecObjectValidationApplyConfiguration {
+func (b *ObjectSchemaValidationApplyConfiguration) WithMatchConditions(values ...admissionregistrationv1.MatchCondition) *ObjectSchemaValidationApplyConfiguration {
 	for i := range values {
 		b.MatchConditions = append(b.MatchConditions, values[i])
 	}
