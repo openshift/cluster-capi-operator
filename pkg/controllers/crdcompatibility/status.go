@@ -83,7 +83,7 @@ func (r *reconcileState) writeStatus(ctx context.Context, obj *operatorv1alpha1.
 // being Ready. Setting Progressing to False indicates to an observer that the
 // current state is final until a change is made.
 func (r *reconcileState) getProgressingCondition(reconcileErr error) *metav1applyconfig.ConditionApplyConfiguration {
-	progressingCondition := metav1applyconfig.Condition().WithType(operatorv1alpha1.CRDCompatibilityConditionTypeProgressing)
+	progressingCondition := metav1applyconfig.Condition().WithType(operatorv1alpha1.CRDCompatibilityRequirementProgressing)
 
 	if reconcileErr != nil {
 		if noRequeueError := util.AsNoRequeueError(reconcileErr); noRequeueError != nil {
@@ -94,13 +94,13 @@ func (r *reconcileState) getProgressingCondition(reconcileErr error) *metav1appl
 		} else {
 			progressingCondition.
 				WithStatus(metav1.ConditionTrue).
-				WithReason(operatorv1alpha1.CRDCompatibilityProgressingReasonTransientError).
+				WithReason(operatorv1alpha1.CRDCompatibilityRequirementTransientErrorReason).
 				WithMessage(reconcileErr.Error())
 		}
 	} else {
 		progressingCondition.
 			WithStatus(metav1.ConditionFalse).
-			WithReason(operatorv1alpha1.CRDCompatibilityProgressingReasonUpToDate).
+			WithReason(operatorv1alpha1.CRDCompatibilityRequirementUpToDateReason).
 			WithMessage("The CRDCompatibilityRequirement is up to date")
 	}
 
@@ -109,17 +109,17 @@ func (r *reconcileState) getProgressingCondition(reconcileErr error) *metav1appl
 
 // Ready indicates whether the CRDCompatibililtyRequirement has been completely admitted, i.e. all required admission policies have been created.
 func (r *reconcileState) getAdmittedCondition() *metav1applyconfig.ConditionApplyConfiguration {
-	admittedCondition := metav1applyconfig.Condition().WithType(operatorv1alpha1.CRDCompatibilityConditionTypeAdmitted)
+	admittedCondition := metav1applyconfig.Condition().WithType(operatorv1alpha1.CRDCompatibilityRequirementAdmitted)
 
 	if r.compatibilityCRD != nil {
 		admittedCondition.
 			WithStatus(metav1.ConditionTrue).
-			WithReason(operatorv1alpha1.CRDCompatibilityAdmittedReasonAdmitted).
+			WithReason(operatorv1alpha1.CRDCompatibilityRequirementAdmittedReason).
 			WithMessage("The CRDCompatibilityRequirement has been admitted")
 	} else {
 		admittedCondition.
 			WithStatus(metav1.ConditionFalse).
-			WithReason(operatorv1alpha1.CRDCompatibilityAdmittedReasonNotAdmitted).
+			WithReason(operatorv1alpha1.CRDCompatibilityRequirementNotAdmittedReason).
 			WithMessage("The compatibility CRD is not set")
 	}
 
@@ -128,28 +128,28 @@ func (r *reconcileState) getAdmittedCondition() *metav1applyconfig.ConditionAppl
 
 // Compatible indicates whether the CRD is compatible with the compatibilityCRD.
 func (r *reconcileState) getCompatibleCondition() *metav1applyconfig.ConditionApplyConfiguration {
-	compatibleCondition := metav1applyconfig.Condition().WithType(operatorv1alpha1.CRDCompatibilityConditionTypeCompatible)
+	compatibleCondition := metav1applyconfig.Condition().WithType(operatorv1alpha1.CRDCompatibilityRequirementCompatible)
 
 	switch {
 	case r.currentCRD == nil:
 		compatibleCondition.
 			WithStatus(metav1.ConditionFalse).
-			WithReason(operatorv1alpha1.CRDCompatibilityCompatibleReasonCRDDoesNotExist).
+			WithReason(operatorv1alpha1.CRDCompatibilityRequirementCRDDoesNotExistReason).
 			WithMessage("The target CRD does not exist")
 	case len(r.compatibilityErrors) > 0:
 		compatibleCondition.
 			WithStatus(metav1.ConditionFalse).
-			WithReason(operatorv1alpha1.CRDCompatibilityCompatibleReasonRequirementsNotMet).
+			WithReason(operatorv1alpha1.CRDCompatibilityRequirementRequirementsNotMetReason).
 			WithMessage(strings.Join(r.compatibilityErrors, "\n"))
 	case len(r.compatibilityWarnings) > 0:
 		compatibleCondition.
 			WithStatus(metav1.ConditionTrue).
-			WithReason(operatorv1alpha1.CRDCompatibilityCompatibleReasonCompatibleWithWarnings).
+			WithReason(operatorv1alpha1.CRDCompatibilityRequirementCompatibleWithWarningsReason).
 			WithMessage(strings.Join(r.compatibilityWarnings, "\n"))
 	default:
 		compatibleCondition.
 			WithStatus(metav1.ConditionTrue).
-			WithReason(operatorv1alpha1.CRDCompatibilityCompatibleReasonCompatible).
+			WithReason(operatorv1alpha1.CRDCompatibilityRequirementCompatibleReason).
 			WithMessage("The CRD is compatible with this requirement")
 	}
 

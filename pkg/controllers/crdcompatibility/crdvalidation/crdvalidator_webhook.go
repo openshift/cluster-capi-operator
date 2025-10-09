@@ -96,7 +96,7 @@ func (v *Validator) validateCreateOrUpdate(ctx context.Context, obj runtime.Obje
 
 	for _, crdCompatibilityRequirement := range crdCompatibilityRequirements.Items {
 		compatibilityCRD := &apiextensionsv1.CustomResourceDefinition{}
-		if err := yaml.Unmarshal([]byte(crdCompatibilityRequirement.Spec.CompatibilityCRD), compatibilityCRD); err != nil {
+		if err := yaml.Unmarshal([]byte(crdCompatibilityRequirement.Spec.CompatibilitySchema.CRDYAML), compatibilityCRD); err != nil {
 			return nil, fmt.Errorf("failed to parse compatibilityCRD for CRDCompatibilityRequirement %q: %w", crdCompatibilityRequirement.Name, err)
 		}
 
@@ -106,16 +106,16 @@ func (v *Validator) validateCreateOrUpdate(ctx context.Context, obj runtime.Obje
 		}
 
 		prependName := func(s string) string {
-			return fmt.Sprintf("This requirement was added by %s: requirement %s: %s", crdCompatibilityRequirement.Spec.CreatorDescription, crdCompatibilityRequirement.Name, s)
+			return fmt.Sprintf("This requirement was added by CRDCompatibilityRequirement %s: %s", crdCompatibilityRequirement.Name, s)
 		}
 
-		switch crdCompatibilityRequirement.Spec.CRDAdmitAction {
+		switch crdCompatibilityRequirement.Spec.CRDSchemaValidation.Action {
 		case operatorv1alpha1.CRDAdmitActionWarn:
 			allReqWarnings = append(allReqWarnings, util.SliceMap(reqErrors, prependName)...)
 		case operatorv1alpha1.CRDAdmitActionEnforce:
 			allReqErrors = append(allReqErrors, util.SliceMap(reqErrors, prependName)...)
 		default:
-			return nil, fmt.Errorf("%w: %q for requirement %s", errUnknownCRDAdmitAction, crdCompatibilityRequirement.Spec.CRDAdmitAction, crdCompatibilityRequirement.Name)
+			return nil, fmt.Errorf("%w: %q for requirement %s", errUnknownCRDAdmitAction, crdCompatibilityRequirement.Spec.CRDSchemaValidation, crdCompatibilityRequirement.Name)
 		}
 
 		allReqWarnings = append(allReqWarnings, util.SliceMap(reqWarnings, prependName)...)

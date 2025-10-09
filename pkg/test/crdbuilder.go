@@ -205,9 +205,12 @@ func GenerateTestCRDCompatibilityRequirement(testCRD *apiextensionsv1.CustomReso
 			GenerateName: "test-requirement-",
 		},
 		Spec: operatorv1alpha1.CRDCompatibilityRequirementSpec{
-			CompatibilityCRD:   string(yaml),
-			CRDAdmitAction:     operatorv1alpha1.CRDAdmitActionEnforce,
-			CreatorDescription: "Test Creator",
+			CompatibilitySchema: operatorv1alpha1.CompatibilitySchema{
+				CRDYAML: string(yaml),
+			},
+			CRDSchemaValidation: operatorv1alpha1.CRDSchemaValidation{
+				Action: operatorv1alpha1.CRDAdmitActionEnforce,
+			},
 		},
 		Status: operatorv1alpha1.CRDCompatibilityRequirementStatus{
 			CRDName: testCRD.GetName(),

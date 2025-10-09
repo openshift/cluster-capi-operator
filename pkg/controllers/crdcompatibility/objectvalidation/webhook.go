@@ -135,7 +135,7 @@ func (v *validator) createSchemaValidator(ctx context.Context, crdCompatibilityR
 
 	// Extract the CRD so we can use the schema.
 	compatibilityCRD := &apiextensionsv1.CustomResourceDefinition{}
-	if err := yaml.Unmarshal([]byte(crdCompatibilityRequirement.Spec.CompatibilityCRD), &compatibilityCRD); err != nil {
+	if err := yaml.Unmarshal([]byte(crdCompatibilityRequirement.Spec.CompatibilitySchema.CRDYAML), &compatibilityCRD); err != nil {
 		return nil, nil, fmt.Errorf("failed to parse compatibilityCRD for CRDCompatibilityRequirement %q: %w", crdCompatibilityRequirement.Name, err)
 	}
 

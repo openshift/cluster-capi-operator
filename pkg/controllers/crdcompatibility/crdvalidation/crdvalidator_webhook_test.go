@@ -88,7 +88,7 @@ func Test_crdValidator_validateCreateOrUpdate(t *testing.T) { //nolint:funlen
 			requirements: []client.Object{
 				func() *operatorv1alpha1.CRDCompatibilityRequirement {
 					r := test.GenerateTestCRDCompatibilityRequirement(testCRDWorking.DeepCopy())
-					r.Spec.CRDAdmitAction = operatorv1alpha1.CRDAdmitActionWarn
+					r.Spec.CRDSchemaValidation.Action = operatorv1alpha1.CRDAdmitActionWarn
 
 					return r
 				}(),
@@ -101,7 +101,7 @@ func Test_crdValidator_validateCreateOrUpdate(t *testing.T) { //nolint:funlen
 			requirements: []client.Object{
 				func() *operatorv1alpha1.CRDCompatibilityRequirement {
 					r := test.GenerateTestCRDCompatibilityRequirement(testCRDWorking.DeepCopy())
-					r.Spec.CRDAdmitAction = operatorv1alpha1.CRDAdmitActionWarn
+					r.Spec.CRDSchemaValidation.Action = operatorv1alpha1.CRDAdmitActionWarn
 
 					return r
 				}(),

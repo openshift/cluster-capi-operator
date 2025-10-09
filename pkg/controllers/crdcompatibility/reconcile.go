@@ -90,7 +90,7 @@ func (r *reconcileState) reconcile(ctx context.Context, crdCompatibilityRequirem
 func (r *reconcileState) parseCompatibilityCRD(crdCompatibilityRequirement *operatorv1alpha1.CRDCompatibilityRequirement) error {
 	// Parse the CRD in compatibilityCRD into a CRD object
 	compatibilityCRD := &apiextensionsv1.CustomResourceDefinition{}
-	if err := yaml.Unmarshal([]byte(crdCompatibilityRequirement.Spec.CompatibilityCRD), compatibilityCRD); err != nil {
+	if err := yaml.Unmarshal([]byte(crdCompatibilityRequirement.Spec.CompatibilitySchema.CRDYAML), compatibilityCRD); err != nil {
 		return util.NoRequeueError(fmt.Errorf("failed to parse compatibilityCRD: %w", err), noRequeueErrorReasonConfigurationError) //nolint:wrapcheck
 	}
 

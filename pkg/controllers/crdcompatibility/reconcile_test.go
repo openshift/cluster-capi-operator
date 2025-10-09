@@ -63,13 +63,13 @@ var _ = Describe("CRDCompatibilityRequirement", Ordered, ContinueOnFailure, func
 			By("Waiting for the CRDCompatibilityRequirement to have the expected status")
 			Eventually(kWithCtx(ctx).Object(requirement)).Should(SatisfyAll(
 				test.HaveCondition("Progressing", metav1.ConditionFalse,
-					test.WithConditionReason(operatorv1alpha1.CRDCompatibilityProgressingReasonUpToDate),
+					test.WithConditionReason(operatorv1alpha1.CRDCompatibilityRequirementUpToDateReason),
 					test.WithConditionMessage("The CRDCompatibilityRequirement is up to date")),
 				test.HaveCondition("Admitted", metav1.ConditionTrue,
-					test.WithConditionReason(operatorv1alpha1.CRDCompatibilityAdmittedReasonAdmitted),
+					test.WithConditionReason(operatorv1alpha1.CRDCompatibilityRequirementAdmittedReason),
 					test.WithConditionMessage("The CRDCompatibilityRequirement has been admitted")),
 				test.HaveCondition("Compatible", metav1.ConditionTrue,
-					test.WithConditionReason(operatorv1alpha1.CRDCompatibilityCompatibleReasonCompatible),
+					test.WithConditionReason(operatorv1alpha1.CRDCompatibilityRequirementCompatibleReason),
 					test.WithConditionMessage("The CRD is compatible with this requirement")),
 				HaveField("Status.ObservedCRD.UID", BeEquivalentTo(testCRDWorking.UID)),
 				HaveField("Status.ObservedCRD.Generation", BeEquivalentTo(testCRDWorking.Generation)),
@@ -84,17 +84,17 @@ var _ = Describe("CRDCompatibilityRequirement", Ordered, ContinueOnFailure, func
 			checkForStatusWithGeneration := func(generation int64) {
 				Eventually(kWithCtx(ctx).Object(requirement)).Should(SatisfyAll(
 					test.HaveCondition("Progressing", metav1.ConditionFalse,
-						test.WithConditionReason(operatorv1alpha1.CRDCompatibilityProgressingReasonUpToDate),
+						test.WithConditionReason(operatorv1alpha1.CRDCompatibilityRequirementUpToDateReason),
 						test.WithConditionMessage("The CRDCompatibilityRequirement is up to date"),
 						test.WithConditionObservedGeneration(generation),
 					),
 					test.HaveCondition("Admitted", metav1.ConditionTrue,
-						test.WithConditionReason(operatorv1alpha1.CRDCompatibilityAdmittedReasonAdmitted),
+						test.WithConditionReason(operatorv1alpha1.CRDCompatibilityRequirementAdmittedReason),
 						test.WithConditionMessage("The CRDCompatibilityRequirement has been admitted"),
 						test.WithConditionObservedGeneration(generation),
 					),
 					test.HaveCondition("Compatible", metav1.ConditionTrue,
-						test.WithConditionReason(operatorv1alpha1.CRDCompatibilityCompatibleReasonCompatible),
+						test.WithConditionReason(operatorv1alpha1.CRDCompatibilityRequirementCompatibleReason),
 						test.WithConditionMessage("The CRD is compatible with this requirement"),
 						test.WithConditionObservedGeneration(generation),
 					),
@@ -106,7 +106,7 @@ var _ = Describe("CRDCompatibilityRequirement", Ordered, ContinueOnFailure, func
 
 			// Update the requirement to bump the generation
 			Eventually(kWithCtx(ctx).Update(requirement, func() {
-				requirement.Spec.CRDAdmitAction = operatorv1alpha1.CRDAdmitActionWarn
+				requirement.Spec.CRDSchemaValidation.Action = operatorv1alpha1.CRDAdmitActionWarn
 			})).Should(Succeed())
 
 			// Sanity check that the generation has been bumped
@@ -117,18 +117,18 @@ var _ = Describe("CRDCompatibilityRequirement", Ordered, ContinueOnFailure, func
 			checkForStatusWithGeneration(generation)
 		})
 
-		It("Should not admit a CRDCompatibilityRequirement if the CompatibilityCRD does not parse", func(ctx context.Context) {
+		It("Should not admit a CRDCompatibilityRequirement if the CompatibilitySchema.CRDYAML does not parse", func(ctx context.Context) {
 			requirement := test.GenerateTestCRDCompatibilityRequirement(testCRDClean)
-			requirement.Spec.CompatibilityCRD = "not YAML"
+			requirement.Spec.CompatibilitySchema.CRDYAML = "not YAML"
 
 			By("Attempting to create invalid CRDCompatibilityRequirement " + requirement.Name)
 			expectedError := "admission webhook \"crdcompatibility.operator.openshift.io\" denied the request: expected a valid CustomResourceDefinition in YAML format: error unmarshaling JSON: while decoding JSON: json: cannot unmarshal string into Go value of type v1.CustomResourceDefinition"
 			Eventually(tryCreate(ctx, requirement)).Should(MatchError(expectedError))
 		})
 
-		It("Should not admit a CRDCompatibilityRequirement if the CompatibilityCRD parses but is not a CRD", func(ctx context.Context) {
+		It("Should not admit a CRDCompatibilityRequirement if the CompatibilitySchema.CRDYAML parses but is not a CRD", func(ctx context.Context) {
 			requirement := test.GenerateTestCRDCompatibilityRequirement(testCRDClean)
-			requirement.Spec.CompatibilityCRD = "{}"
+			requirement.Spec.CompatibilitySchema.CRDYAML = "{}"
 
 			By("Attempting to create invalid CRDCompatibilityRequirement " + requirement.Name)
 			expectedError := "admission webhook \"crdcompatibility.operator.openshift.io\" denied the request: expected a valid CustomResourceDefinition in YAML format: expected APIVersion to be apiextensions.k8s.io/v1 and Kind to be CustomResourceDefinition, got /"
@@ -144,7 +144,7 @@ var _ = Describe("CRDCompatibilityRequirement", Ordered, ContinueOnFailure, func
 
 			By("Waiting for the CRDCompatibilityRequirement to have the expected status")
 			Eventually(kWithCtx(ctx).Object(requirement)).Should(SatisfyAll(
-				test.HaveCondition("Progressing", metav1.ConditionFalse, test.WithConditionReason(operatorv1alpha1.CRDCompatibilityProgressingReasonUpToDate), test.WithConditionMessage("The CRDCompatibilityRequirement is up to date")),
+				test.HaveCondition("Progressing", metav1.ConditionFalse, test.WithConditionReason(operatorv1alpha1.CRDCompatibilityRequirementUpToDateReason), test.WithConditionMessage("The CRDCompatibilityRequirement is up to date")),
 
 				// observed CRD should be empty
 				HaveField("Status.ObservedCRD.UID", BeZero()),
@@ -179,17 +179,17 @@ var _ = Describe("CRDCompatibilityRequirement", Ordered, ContinueOnFailure, func
 			It("Should set not Compatible", func(ctx context.Context) {
 				By("Checking that the CRDCompatibilityRequirement is admitted but not compatible")
 				Eventually(kWithCtx(ctx).Object(requirement)).Should(SatisfyAll(
-					test.HaveCondition("Progressing", metav1.ConditionFalse, test.WithConditionReason(operatorv1alpha1.CRDCompatibilityProgressingReasonUpToDate)),
-					test.HaveCondition("Admitted", metav1.ConditionTrue, test.WithConditionReason(operatorv1alpha1.CRDCompatibilityAdmittedReasonAdmitted)),
-					test.HaveCondition("Compatible", metav1.ConditionFalse, test.WithConditionReason(operatorv1alpha1.CRDCompatibilityCompatibleReasonRequirementsNotMet)),
+					test.HaveCondition("Progressing", metav1.ConditionFalse, test.WithConditionReason(operatorv1alpha1.CRDCompatibilityRequirementUpToDateReason)),
+					test.HaveCondition("Admitted", metav1.ConditionTrue, test.WithConditionReason(operatorv1alpha1.CRDCompatibilityRequirementAdmittedReason)),
+					test.HaveCondition("Compatible", metav1.ConditionFalse, test.WithConditionReason(operatorv1alpha1.CRDCompatibilityRequirementRequirementsNotMetReason)),
 				))
 			})
 
 			It("Should permit the CRD to be updated to be compatible", func(ctx context.Context) {
 				By("Checking that the CRDCompatibilityRequirement is not compatible")
 				Eventually(kWithCtx(ctx).Object(requirement)).Should(SatisfyAll(
-					test.HaveCondition("Progressing", metav1.ConditionFalse, test.WithConditionReason(operatorv1alpha1.CRDCompatibilityProgressingReasonUpToDate)),
-					test.HaveCondition("Compatible", metav1.ConditionFalse, test.WithConditionReason(operatorv1alpha1.CRDCompatibilityCompatibleReasonRequirementsNotMet)),
+					test.HaveCondition("Progressing", metav1.ConditionFalse, test.WithConditionReason(operatorv1alpha1.CRDCompatibilityRequirementUpToDateReason)),
+					test.HaveCondition("Compatible", metav1.ConditionFalse, test.WithConditionReason(operatorv1alpha1.CRDCompatibilityRequirementRequirementsNotMetReason)),
 				))
 
 				By("Updating the CRD to add the extra field")
@@ -197,16 +197,16 @@ var _ = Describe("CRDCompatibilityRequirement", Ordered, ContinueOnFailure, func
 
 				By("Checking that the CRDCompatibilityRequirement becomes compatible")
 				Eventually(kWithCtx(ctx).Object(requirement)).Should(SatisfyAll(
-					test.HaveCondition("Progressing", metav1.ConditionFalse, test.WithConditionReason(operatorv1alpha1.CRDCompatibilityProgressingReasonUpToDate)),
-					test.HaveCondition("Compatible", metav1.ConditionTrue, test.WithConditionReason(operatorv1alpha1.CRDCompatibilityCompatibleReasonCompatible)),
+					test.HaveCondition("Progressing", metav1.ConditionFalse, test.WithConditionReason(operatorv1alpha1.CRDCompatibilityRequirementUpToDateReason)),
+					test.HaveCondition("Compatible", metav1.ConditionTrue, test.WithConditionReason(operatorv1alpha1.CRDCompatibilityRequirementCompatibleReason)),
 				))
 			})
 
 			It("Should not permit the CRD to be updated if it would remain incompatible", func(ctx context.Context) {
 				By("Checking that the CRDCompatibilityRequirement is not compatible")
 				Eventually(kWithCtx(ctx).Object(requirement)).Should(SatisfyAll(
-					test.HaveCondition("Progressing", metav1.ConditionFalse, test.WithConditionReason(operatorv1alpha1.CRDCompatibilityProgressingReasonUpToDate)),
-					test.HaveCondition("Compatible", metav1.ConditionFalse, test.WithConditionReason(operatorv1alpha1.CRDCompatibilityCompatibleReasonRequirementsNotMet)),
+					test.HaveCondition("Progressing", metav1.ConditionFalse, test.WithConditionReason(operatorv1alpha1.CRDCompatibilityRequirementUpToDateReason)),
+					test.HaveCondition("Compatible", metav1.ConditionFalse, test.WithConditionReason(operatorv1alpha1.CRDCompatibilityRequirementRequirementsNotMetReason)),
 				))
 
 				By("Attempt to update the CRD to add a different extra field")

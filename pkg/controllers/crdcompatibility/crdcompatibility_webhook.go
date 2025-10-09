@@ -57,7 +57,7 @@ func (v *crdRequirementValidator) validateCreateOrUpdate(_ context.Context, obj 
 
 	// Parse the CRD in compatibilityCRD into a CRD object
 	compatibilityCRD := &apiextensionsv1.CustomResourceDefinition{}
-	if err := yaml.Unmarshal([]byte(crdCompatibilityRequirement.Spec.CompatibilityCRD), &compatibilityCRD); err != nil {
+	if err := yaml.Unmarshal([]byte(crdCompatibilityRequirement.Spec.CompatibilitySchema.CRDYAML), &compatibilityCRD); err != nil {
 		return nil, fmt.Errorf("%w: %w", errInvalidCompatibilityCRD, err)
 	}
 
