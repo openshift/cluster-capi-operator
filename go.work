@@ -14,6 +14,6 @@ replace (
 
 // FIXME(chrischdi): DONOTMERGE only for testing purposes until we have a merged API PR
 replace (
-	github.com/openshift/api => github.com/openshift-cloud-team/openshift-api v0.0.0-20251007112510-8c98aed88c05
-	github.com/openshift/client-go => github.com/openshift-cloud-team/client-go v0.0.0-20251007132907-7af451b76251
+	github.com/openshift/api => github.com/openshift-cloud-team/openshift-api v0.0.0-20251009074826-a8e1698c6d8e
+	github.com/openshift/client-go => github.com/openshift-cloud-team/client-go v0.0.0-20251009080711-ae22c1eb5a5c
 )
