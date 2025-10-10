@@ -627,9 +627,6 @@ func ConvertAWSLoadBalancerToMAPI(loadBalancer *awsv1.AWSLoadBalancerSpec) (mapi
 			Name: ptr.Deref(loadBalancer.Name, ""),
 			Type: mapiv1beta1.NetworkLoadBalancerType,
 		}, nil
-	case awsv1.LoadBalancerTypeDisabled:
-		// Explicitly disabled load balancer
-		return mapiv1beta1.LoadBalancerReference{}, nil
 	default:
 		return mapiv1beta1.LoadBalancerReference{}, errUnsupportedLoadBalancerType
 	}
