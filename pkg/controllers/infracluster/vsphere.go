@@ -31,7 +31,6 @@ import (
 	vspherev1 "sigs.k8s.io/cluster-api-provider-vsphere/apis/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/yaml"
 )
 
 var (
@@ -55,7 +54,7 @@ func (r *InfraClusterController) ensureVSphereCluster(ctx context.Context, log l
 
 	target := &vspherev1.VSphereCluster{ObjectMeta: metav1.ObjectMeta{
 		Name:      r.Infra.Status.InfrastructureName,
-		Namespace: defaultCAPINamespace,
+		Namespace: r.CAPINamespace,
 	}}
 
 	// Checking whether InfraCluster object exists. If it doesn't, create it.
@@ -84,7 +83,7 @@ func (r *InfraClusterController) ensureVSphereCluster(ctx context.Context, log l
 	target = &vspherev1.VSphereCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      r.Infra.Status.InfrastructureName,
-			Namespace: defaultCAPINamespace,
+			Namespace: r.CAPINamespace,
 			// The ManagedBy Annotation is set so CAPI infra providers ignore the InfraCluster object,
 			// as that's managed externally, in this case by this controller.
 			Annotations: map[string]string{
@@ -108,24 +107,14 @@ func (r *InfraClusterController) ensureVSphereCluster(ctx context.Context, log l
 		return nil, fmt.Errorf("failed to create InfraCluster: %w", err)
 	}
 
-	log.Info(fmt.Sprintf("InfraCluster '%s/%s' successfully created", defaultCAPINamespace, r.Infra.Status.InfrastructureName))
+	log.Info(fmt.Sprintf("InfraCluster '%s/%s' successfully created", r.CAPINamespace, r.Infra.Status.InfrastructureName))
 
 	return target, nil
 }
 
 // getVSphereMAPIProviderSpec returns a VSphere Machine ProviderSpec from the the cluster.
-func getVSphereMAPIProviderSpec(ctx context.Context, cl client.Client) (*mapiv1beta1.VSphereMachineProviderSpec, error) {
-	rawProviderSpec, err := getRawMAPIProviderSpec(ctx, cl)
-	if err != nil {
-		return nil, fmt.Errorf("unable to obtain MAPI ProviderSpec: %w", err)
-	}
-
-	providerSpec := &mapiv1beta1.VSphereMachineProviderSpec{}
-	if err := yaml.Unmarshal(rawProviderSpec, providerSpec); err != nil {
-		return nil, fmt.Errorf("unable to unmarshal MAPI ProviderSpec: %w", err)
-	}
-
-	return providerSpec, nil
+func (r *InfraClusterController) getVSphereMAPIProviderSpec(ctx context.Context, cl client.Client) (*mapiv1beta1.VSphereMachineProviderSpec, error) {
+	return getMAPIProviderSpec[mapiv1beta1.VSphereMachineProviderSpec](ctx, cl, r.getRawMAPIProviderSpec)
 }
 
 // ensureVSphereSecret ensures the CAPI VSphere credentials secret exists.
@@ -133,7 +122,7 @@ func (r *InfraClusterController) ensureVSphereSecret(ctx context.Context, vspher
 	vSphereSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      r.Infra.Status.InfrastructureName,
-			Namespace: defaultCAPINamespace,
+			Namespace: r.CAPINamespace,
 		},
 	}
 
@@ -188,7 +177,7 @@ func (r *InfraClusterController) getVSphereCredentials(ctx context.Context, vsph
 func (r *InfraClusterController) getVSphereServerAddr(ctx context.Context) (string, error) {
 	if r.Infra.Spec.PlatformSpec.VSphere == nil || len(r.Infra.Spec.PlatformSpec.VSphere.VCenters) == 0 {
 		// Devise VSphere server addr via MAPI providerSpec.
-		machineSpec, err := getVSphereMAPIProviderSpec(ctx, r.Client)
+		machineSpec, err := r.getVSphereMAPIProviderSpec(ctx, r.Client)
 		if err != nil {
 			return "", fmt.Errorf("unable to get VSphere MAPI ProviderSpec: %w", err)
 		}

@@ -28,7 +28,6 @@ import (
 	gcpv1 "sigs.k8s.io/cluster-api-provider-gcp/api/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/yaml"
 )
 
 // ensureGCPCluster ensures the GCPCluster cluster object exists.
@@ -37,7 +36,7 @@ import (
 func (r *InfraClusterController) ensureGCPCluster(ctx context.Context, log logr.Logger) (client.Object, error) {
 	target := &gcpv1.GCPCluster{ObjectMeta: metav1.ObjectMeta{
 		Name:      r.Infra.Status.InfrastructureName,
-		Namespace: defaultCAPINamespace,
+		Namespace: r.CAPINamespace,
 	}}
 
 	// Checking whether InfraCluster object exists. If it doesn't, create it.
@@ -68,7 +67,7 @@ func (r *InfraClusterController) ensureGCPCluster(ctx context.Context, log logr.
 		return nil, fmt.Errorf("error obtaining GCP Project ID: %w", err)
 	}
 
-	providerSpec, err := getGCPMAPIProviderSpec(ctx, r.Client)
+	providerSpec, err := r.getGCPMAPIProviderSpec(ctx, r.Client)
 	if err != nil {
 		return nil, fmt.Errorf("error obtaining GCP Provider Spec: %w", err)
 	}
@@ -76,7 +75,7 @@ func (r *InfraClusterController) ensureGCPCluster(ctx context.Context, log logr.
 	target = &gcpv1.GCPCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      r.Infra.Status.InfrastructureName,
-			Namespace: defaultCAPINamespace,
+			Namespace: r.CAPINamespace,
 			// The ManagedBy Annotation is set so CAPI infra providers ignore the InfraCluster object,
 			// as that's managed externally, in this case by this controller.
 			Annotations: map[string]string{
@@ -100,31 +99,21 @@ func (r *InfraClusterController) ensureGCPCluster(ctx context.Context, log logr.
 		return nil, fmt.Errorf("failed to create InfraCluster: %w", err)
 	}
 
-	log.Info(fmt.Sprintf("InfraCluster '%s/%s' successfully created", defaultCAPINamespace, r.Infra.Status.InfrastructureName))
+	log.Info(fmt.Sprintf("InfraCluster '%s/%s' successfully created", r.CAPINamespace, r.Infra.Status.InfrastructureName))
 
 	return target, nil
 }
 
 // getGCPMAPIProviderSpec returns a GCP Machine ProviderSpec from the the cluster.
-func getGCPMAPIProviderSpec(ctx context.Context, cl client.Client) (*mapiv1beta1.GCPMachineProviderSpec, error) {
-	rawProviderSpec, err := getRawMAPIProviderSpec(ctx, cl)
-	if err != nil {
-		return nil, fmt.Errorf("unable to obtain MAPI ProviderSpec: %w", err)
-	}
-
-	providerSpec := &mapiv1beta1.GCPMachineProviderSpec{}
-	if err := yaml.Unmarshal(rawProviderSpec, providerSpec); err != nil {
-		return nil, fmt.Errorf("unable to unmarshal MAPI ProviderSpec: %w", err)
-	}
-
-	return providerSpec, nil
+func (r *InfraClusterController) getGCPMAPIProviderSpec(ctx context.Context, cl client.Client) (*mapiv1beta1.GCPMachineProviderSpec, error) {
+	return getMAPIProviderSpec[mapiv1beta1.GCPMachineProviderSpec](ctx, cl, r.getRawMAPIProviderSpec)
 }
 
 // getGCPProjectID obtains the GCP Project ID.
 func (r *InfraClusterController) getGCPProjectID(ctx context.Context) (string, error) {
 	if r.Infra.Spec.PlatformSpec.GCP == nil || len(r.Infra.Status.PlatformStatus.GCP.ProjectID) == 0 {
 		// Devise GCP Project ID via MAPI providerSpec.
-		machineSpec, err := getGCPMAPIProviderSpec(ctx, r.Client)
+		machineSpec, err := r.getGCPMAPIProviderSpec(ctx, r.Client)
 		if err != nil || machineSpec == nil {
 			return "", fmt.Errorf("unable to get GCP MAPI ProviderSpec: %w", err)
 		}

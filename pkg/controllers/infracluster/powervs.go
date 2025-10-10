@@ -31,7 +31,6 @@ import (
 	ibmpowervsv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/yaml"
 
 	mapiv1 "github.com/openshift/api/machine/v1"
 )
@@ -48,7 +47,7 @@ func (r *InfraClusterController) ensureIBMPowerVSCluster(ctx context.Context, lo
 	target := &ibmpowervsv1.IBMPowerVSCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      r.Infra.Status.InfrastructureName,
-			Namespace: defaultCAPINamespace,
+			Namespace: r.CAPINamespace,
 		}}
 
 	// Checking whether InfraCluster object exists. If it doesn't, create it.
@@ -77,7 +76,7 @@ func (r *InfraClusterController) ensureIBMPowerVSCluster(ctx context.Context, lo
 
 	// Derive service instance and network from machine spec
 
-	machineSpec, err := getPowerVSMAPIProviderSpec(ctx, r.Client)
+	machineSpec, err := r.getPowerVSMAPIProviderSpec(ctx, r.Client)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get PowerVS MAPI ProviderSpec: %w", err)
 	}
@@ -95,7 +94,7 @@ func (r *InfraClusterController) ensureIBMPowerVSCluster(ctx context.Context, lo
 	target = &ibmpowervsv1.IBMPowerVSCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      r.Infra.Status.InfrastructureName,
-			Namespace: defaultCAPINamespace,
+			Namespace: r.CAPINamespace,
 			// The ManagedBy Annotation is set so CAPI infra providers ignore the InfraCluster object,
 			// as that's managed externally, in this case by this controller.
 			Annotations: map[string]string{
@@ -122,18 +121,8 @@ func (r *InfraClusterController) ensureIBMPowerVSCluster(ctx context.Context, lo
 }
 
 // getPowerVSMAPIProviderSpec returns a PowerVS Machine ProviderSpec from the the cluster.
-func getPowerVSMAPIProviderSpec(ctx context.Context, cl client.Client) (*mapiv1.PowerVSMachineProviderConfig, error) {
-	rawProviderSpec, err := getRawMAPIProviderSpec(ctx, cl)
-	if err != nil {
-		return nil, fmt.Errorf("unable to obtain MAPI ProviderSpec: %w", err)
-	}
-
-	providerSpec := &mapiv1.PowerVSMachineProviderConfig{}
-	if err := yaml.Unmarshal(rawProviderSpec, providerSpec); err != nil {
-		return nil, fmt.Errorf("unable to unmarshal MAPI ProviderSpec: %w", err)
-	}
-
-	return providerSpec, nil
+func (r *InfraClusterController) getPowerVSMAPIProviderSpec(ctx context.Context, cl client.Client) (*mapiv1.PowerVSMachineProviderConfig, error) {
+	return getMAPIProviderSpec[mapiv1.PowerVSMachineProviderConfig](ctx, cl, r.getRawMAPIProviderSpec)
 }
 
 func getPowerVSServiceInstance(serviceInstance mapiv1.PowerVSResource) (*ibmpowervsv1.IBMPowerVSResourceReference, error) {

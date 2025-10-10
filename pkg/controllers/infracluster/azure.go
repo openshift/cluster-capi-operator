@@ -31,7 +31,6 @@ import (
 	azurev1 "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/yaml"
 )
 
 var (
@@ -51,7 +50,7 @@ func (r *InfraClusterController) ensureAzureCluster(ctx context.Context, log log
 	// Get the Azure Bootstrap Credentials Secret.
 	// This is created by the Cluster Credential Operator and should always exist. We expect to always find it, if not, we error.
 	capzManagerBootstrapSecret := &corev1.Secret{}
-	if err := r.Get(ctx, client.ObjectKey{Namespace: defaultCAPINamespace, Name: capzManagerBootstrapCredentials}, capzManagerBootstrapSecret); err != nil && !cerrors.IsNotFound(err) {
+	if err := r.Get(ctx, client.ObjectKey{Namespace: r.CAPINamespace, Name: capzManagerBootstrapCredentials}, capzManagerBootstrapSecret); err != nil && !cerrors.IsNotFound(err) {
 		return nil, fmt.Errorf("failed to get Azure Boostrap Credentials Secret: %w", err)
 	}
 
@@ -65,7 +64,7 @@ func (r *InfraClusterController) ensureAzureCluster(ctx context.Context, log log
 
 	target := &azurev1.AzureCluster{ObjectMeta: metav1.ObjectMeta{
 		Name:      r.Infra.Status.InfrastructureName,
-		Namespace: defaultCAPINamespace,
+		Namespace: r.CAPINamespace,
 	}}
 
 	if err := r.ensureAzureInfraCluster(ctx, target, log); err != nil {
@@ -76,24 +75,14 @@ func (r *InfraClusterController) ensureAzureCluster(ctx context.Context, log log
 }
 
 // getAzureMAPIProviderSpec returns a Azure Machine ProviderSpec from the the cluster.
-func getAzureMAPIProviderSpec(ctx context.Context, cl client.Client) (*mapiv1beta1.AzureMachineProviderSpec, error) {
-	rawProviderSpec, err := getRawMAPIProviderSpec(ctx, cl)
-	if err != nil {
-		return nil, fmt.Errorf("unable to obtain MAPI ProviderSpec: %w", err)
-	}
-
-	providerSpec := &mapiv1beta1.AzureMachineProviderSpec{}
-	if err := yaml.Unmarshal(rawProviderSpec, providerSpec); err != nil {
-		return nil, fmt.Errorf("unable to unmarshal MAPI ProviderSpec: %w", err)
-	}
-
-	return providerSpec, nil
+func (r *InfraClusterController) getAzureMAPIProviderSpec(ctx context.Context, cl client.Client) (*mapiv1beta1.AzureMachineProviderSpec, error) {
+	return getMAPIProviderSpec[mapiv1beta1.AzureMachineProviderSpec](ctx, cl, r.getRawMAPIProviderSpec)
 }
 
 // getAzureLocation obtains the Azure Location.
 func (r *InfraClusterController) getAzureLocation(ctx context.Context) (string, error) {
 	// Devise Azure location via MAPI providerSpec.
-	machineSpec, err := getAzureMAPIProviderSpec(ctx, r.Client)
+	machineSpec, err := r.getAzureMAPIProviderSpec(ctx, r.Client)
 	if err != nil {
 		return "", fmt.Errorf("error getting azure providerSpec: %w", err)
 	}
@@ -111,14 +100,14 @@ func (r *InfraClusterController) ensureClusterSecret(ctx context.Context, capzMa
 	// CAPZ controllers expect a Secret Ref with a different data structure to what the secret we get from the Cluster Credential Operator above provides.
 	// That is why we are creating a new secret below to copy the values to.
 	clusterSecret := &corev1.Secret{}
-	if err := r.Get(ctx, client.ObjectKey{Namespace: defaultCAPINamespace, Name: clusterSecretName}, clusterSecret); err != nil && !cerrors.IsNotFound(err) {
+	if err := r.Get(ctx, client.ObjectKey{Namespace: r.CAPINamespace, Name: clusterSecretName}, clusterSecret); err != nil && !cerrors.IsNotFound(err) {
 		return fmt.Errorf("failed to get Azure Cluster Secret: %w", err)
 	} else if err == nil {
 		// When the object already exists, there's nothing to do.
 		return nil
 	}
 
-	if err := createNewAzureSecret(ctx, r.Client, capzManagerBootstrapSecret.Data["azure_client_secret"]); err != nil {
+	if err := r.createNewAzureSecret(ctx, r.Client, capzManagerBootstrapSecret.Data["azure_client_secret"]); err != nil {
 		return fmt.Errorf("failed to create Azure Cluster secret: %w", err)
 	}
 
@@ -126,11 +115,11 @@ func (r *InfraClusterController) ensureClusterSecret(ctx context.Context, capzMa
 }
 
 // createNewAzureSecret creates a new Azure Cluster Secret.
-func createNewAzureSecret(ctx context.Context, cl client.Client, azureClientSecret []byte) error {
+func (r *InfraClusterController) createNewAzureSecret(ctx context.Context, cl client.Client, azureClientSecret []byte) error {
 	azureSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      clusterSecretName,
-			Namespace: defaultCAPINamespace,
+			Namespace: r.CAPINamespace,
 		},
 		Immutable: ptr.To(true),
 		Data: map[string][]byte{
@@ -149,7 +138,7 @@ func createNewAzureSecret(ctx context.Context, cl client.Client, azureClientSecr
 func (r *InfraClusterController) ensureClusterIdentity(ctx context.Context, capzManagerBootstrapSecret corev1.Secret) error {
 	azureClusterIdentity := &azurev1.AzureClusterIdentity{}
 	// Get the Azure Cluster Identity.
-	if err := r.Get(ctx, client.ObjectKey{Namespace: defaultCAPINamespace, Name: r.Infra.Status.InfrastructureName}, azureClusterIdentity); err != nil && !cerrors.IsNotFound(err) {
+	if err := r.Get(ctx, client.ObjectKey{Namespace: r.CAPINamespace, Name: r.Infra.Status.InfrastructureName}, azureClusterIdentity); err != nil && !cerrors.IsNotFound(err) {
 		return fmt.Errorf("failed to get Azure Cluster Identity: %w", err)
 	} else if err == nil {
 		// When the object already exists, there's nothing to do.
@@ -178,7 +167,7 @@ func (r *InfraClusterController) createAzureClusterIdentity(ctx context.Context,
 	azureClusterIdentity := &azurev1.AzureClusterIdentity{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      r.Infra.Status.InfrastructureName,
-			Namespace: defaultCAPINamespace,
+			Namespace: r.CAPINamespace,
 			Annotations: map[string]string{
 				// The ManagedBy Annotation is set so CAPI infra providers ignore the InfraCluster object,
 				// as that's managed externally, in this case by the cluster-capi-operator's infracluster controller.
@@ -228,7 +217,7 @@ func (r *InfraClusterController) ensureAzureInfraCluster(ctx context.Context, ta
 		return fmt.Errorf("failed to parse apiUrl port: %w", err)
 	}
 
-	providerSpec, err := getAzureMAPIProviderSpec(ctx, r.Client)
+	providerSpec, err := r.getAzureMAPIProviderSpec(ctx, r.Client)
 	if err != nil {
 		return fmt.Errorf("error obtaining Azure Provider Spec: %w", err)
 	}
@@ -243,7 +232,7 @@ func (r *InfraClusterController) ensureAzureInfraCluster(ctx context.Context, ta
 		return fmt.Errorf("error creating New Azure Cluster: %w", err)
 	}
 
-	log.Info(fmt.Sprintf("InfraCluster '%s/%s' successfully created", defaultCAPINamespace, r.Infra.Status.InfrastructureName))
+	log.Info(fmt.Sprintf("InfraCluster '%s/%s' successfully created", r.CAPINamespace, r.Infra.Status.InfrastructureName))
 
 	return nil
 }
@@ -253,7 +242,7 @@ func (r *InfraClusterController) newAzureCluster(providerSpec *mapiv1beta1.Azure
 	return &azurev1.AzureCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      r.Infra.Status.InfrastructureName,
-			Namespace: defaultCAPINamespace,
+			Namespace: r.CAPINamespace,
 			// The ManagedBy Annotation is set so CAPI infra providers ignore the InfraCluster object,
 			// as that's managed externally, in this case by this controller.
 			Annotations: map[string]string{
@@ -267,7 +256,7 @@ func (r *InfraClusterController) newAzureCluster(providerSpec *mapiv1beta1.Azure
 				AzureEnvironment: "AzurePublicCloud",
 				IdentityRef: &corev1.ObjectReference{
 					Name:      r.Infra.Status.InfrastructureName,
-					Namespace: defaultCAPINamespace,
+					Namespace: r.CAPINamespace,
 					Kind:      "AzureClusterIdentity",
 				},
 			},

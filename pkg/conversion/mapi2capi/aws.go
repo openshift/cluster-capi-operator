@@ -326,8 +326,10 @@ func (m *awsMachineAndInfra) toAWSMachine(providerSpec mapiv1beta1.AWSMachinePro
 	}
 
 	if len(providerSpec.LoadBalancers) > 0 {
-		// TODO(OCPCLOUD-2709): CAPA only applies load balancers to the control plane nodes. We should always reject LBs on non-control plane and work out how to connect the control plane LBs correctly otherwise.
-		errs = append(errs, field.Invalid(fldPath.Child("loadBalancers"), providerSpec.LoadBalancers, "loadBalancers are not supported"))
+		// Load balancers are only supported for control plane machines
+		if !util.IsControlPlaneMAPIMachine(m.machine) {
+			errs = append(errs, field.Invalid(fldPath.Child("loadBalancers"), providerSpec.LoadBalancers, "loadBalancers are not supported for non-control plane machines"))
+		}
 	}
 
 	return &awsv1.AWSMachine{
