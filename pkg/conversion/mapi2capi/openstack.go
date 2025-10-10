@@ -397,21 +397,23 @@ func convertMAPONetworksToCAPO(fldPath *field.Path, mapoNetworks []mapiv1alpha1.
 		}
 
 		// convert .Filter
-		projectID := mapoNetwork.Filter.ProjectID
-		if projectID == "" {
-			projectID = mapoNetwork.Filter.TenantID
-		}
+		if (mapoNetwork.Filter != mapiv1alpha1.Filter{}) {
+			projectID := mapoNetwork.Filter.ProjectID
+			if projectID == "" {
+				projectID = mapoNetwork.Filter.TenantID
+			}
 
-		network.Filter = &openstackv1.NetworkFilter{
-			Name:        mapoNetwork.Filter.Name,
-			Description: mapoNetwork.Filter.Description,
-			ProjectID:   projectID,
-			FilterByNeutronTags: openstackv1.FilterByNeutronTags{
-				NotTags:    splitTags(mapoNetwork.Filter.NotTags),
-				NotTagsAny: splitTags(mapoNetwork.Filter.NotTagsAny),
-				Tags:       splitTags(mapoNetwork.Filter.Tags),
-				TagsAny:    splitTags(mapoNetwork.Filter.TagsAny),
-			},
+			network.Filter = &openstackv1.NetworkFilter{
+				Name:        mapoNetwork.Filter.Name,
+				Description: mapoNetwork.Filter.Description,
+				ProjectID:   projectID,
+				FilterByNeutronTags: openstackv1.FilterByNeutronTags{
+					NotTags:    splitTags(mapoNetwork.Filter.NotTags),
+					NotTagsAny: splitTags(mapoNetwork.Filter.NotTagsAny),
+					Tags:       splitTags(mapoNetwork.Filter.Tags),
+					TagsAny:    splitTags(mapoNetwork.Filter.TagsAny),
+				},
+			}
 		}
 
 		tags := mapoNetwork.PortTags
@@ -439,7 +441,6 @@ func convertMAPONetworksToCAPO(fldPath *field.Path, mapoNetworks []mapiv1alpha1.
 				}
 
 				capoPort := openstackv1.PortOpts{
-					Network: &network,
 					FixedIPs: []openstackv1.FixedIP{
 						{
 							Subnet: &openstackv1.SubnetParam{
@@ -465,6 +466,10 @@ func convertMAPONetworksToCAPO(fldPath *field.Path, mapoNetworks []mapiv1alpha1.
 						},
 					},
 					Tags: portTags,
+				}
+
+				if (network != openstackv1.NetworkParam{}) {
+					capoPort.Network = &network
 				}
 
 				if mapoSubnet.PortSecurity != nil && !*mapoSubnet.PortSecurity {
