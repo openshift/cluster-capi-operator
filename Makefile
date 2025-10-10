@@ -24,20 +24,24 @@ verify: fmt lint
 test: verify unit
 
 # Build binaries
-build: operator migration manifests-gen
+build: operator migration crd-compatibility-checker manifests-gen
 
 .PHONY: manifests-gen
 manifests-gen:
 	# building manifests-gen
-	cd manifests-gen && go build -o ../bin/manifests-gen && cd ..
+	cd manifests-gen && GOOS=linux GOARCH=amd64 go build -o ../bin/manifests-gen && cd ..
 
 operator:
 	# building cluster-capi-operator
-	go build -o bin/cluster-capi-operator cmd/cluster-capi-operator/main.go
+	GOOS=linux GOARCH=amd64 go build -o bin/cluster-capi-operator cmd/cluster-capi-operator/main.go
 
 migration:
 	# building migration
-	go build -o bin/machine-api-migration cmd/machine-api-migration/main.go
+	GOOS=linux GOARCH=amd64 go build -o bin/machine-api-migration cmd/machine-api-migration/main.go
+
+crd-compatibility-checker:
+	# building crd-compatibility-checker
+	GOOS=linux GOARCH=amd64 go build -o bin/crd-compatibility-checker cmd/crd-compatibility-checker/main.go
 
 .PHONY: localtestenv
 localtestenv: .localtestenv
@@ -94,6 +98,12 @@ image:
 .PHONY: push
 push:
 	docker push ${IMG}
+
+.PHONY: crds-sync
+api_module_dir ?= $(shell go list -f '{{.Dir}}' github.com/openshift/api)
+crds := operator/v1alpha1/zz_generated.crd-manifests/0000_20_crd-compatibility-checker_01_crdcompatibilityrequirements.crd.yaml
+crds-sync: $(crds:%=$(api_module_dir)/%)
+	cp $? ./manifests/
 
 aws-cluster:
 	./hack/clusters/create-aws.sh
