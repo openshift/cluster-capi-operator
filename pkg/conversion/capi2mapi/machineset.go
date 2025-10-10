@@ -76,7 +76,10 @@ func convertCAPIMachineSetStatusToMAPI(capiStatus clusterv1.MachineSetStatus) ma
 		// ObservedGeneration: // We don't set the observed generation at this stage as it is handled by the machineSetSync controller.
 		// AuthoritativeAPI: // Ignore, this field as it is not present in CAPI.
 		// SynchronizedGeneration: // Ignore, this field as it is not present in CAPI.
-		Conditions: convertCAPIConditionsToMAPI(capiStatus.Conditions),
+
+		// The only two conditions normally used for MAPI MachineSets are Paused and Synchronized.
+		// We do not convert these conditions to MAPI conditions as they are managed directly by the machineSet sync and migration controllers.
+		Conditions: nil,
 	}
 
 	// Convert FailureReason/FailureMessage to ErrorReason/ErrorMessage
@@ -99,11 +102,4 @@ func convertCAPIMachineSetStatusToMAPI(capiStatus clusterv1.MachineSetStatus) ma
 func convertCAPIFailureReasonToMAPIErrorReason(capiFailureReason capierrors.MachineSetStatusError) *mapiv1beta1.MachineSetStatusError {
 	mapiErrorReason := mapiv1beta1.MachineSetStatusError(capiFailureReason)
 	return &mapiErrorReason
-}
-
-// convertCAPIConditionsToMAPI converts CAPI conditions to MAPI conditions.
-func convertCAPIConditionsToMAPI(capiConditions clusterv1.Conditions) []mapiv1beta1.Condition {
-	// The only two conditions normally used for MAPI MachineSets are Paused and Synchronized.
-	// We do not convert these conditions to MAPI conditions as they are managed directly by the machineSet sync and migration controllers.
-	return nil
 }
