@@ -132,4 +132,78 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 			})
 		})
 	})
+
+	var _ = Describe("Machine Migration Round Trip Tests", Ordered, func() {
+		var mapiCapiMapiRoundTripName = "machine-mapi-capi-mapi-roundtrip"
+		var newMapiMachine *mapiv1beta1.Machine
+		var newCapiMachine *clusterv1.Machine
+
+		Context("MAPI -> CAPI -> MAPI round trip", func() {
+			BeforeAll(func() {
+				DeferCleanup(func() {
+					By("Cleaning up machine resources")
+					cleanupMachineResources(
+						ctx,
+						cl,
+						[]*clusterv1.Machine{newCapiMachine},
+						[]*mapiv1beta1.Machine{newMapiMachine},
+					)
+				})
+			})
+
+			It("should create MAPI Machine with specAPI: MachineAPI", func() {
+				newMapiMachine = createMAPIMachineWithAuthority(ctx, cl, mapiCapiMapiRoundTripName, mapiv1beta1.MachineAuthorityMachineAPI)
+				newCapiMachine = capiframework.GetMachine(cl, mapiCapiMapiRoundTripName, capiframework.CAPINamespace)
+				verifyMachineRunning(cl, newMapiMachine)
+			})
+
+			It("should wait for synchronization to complete", func() {
+				verifyMachineAuthoritative(newMapiMachine, mapiv1beta1.MachineAuthorityMachineAPI)
+				verifyMAPIMachineSynchronizedCondition(newMapiMachine, mapiv1beta1.MachineAuthorityMachineAPI)
+				verifyMachineSynchronizedGeneration(cl, newMapiMachine, mapiv1beta1.MachineAuthorityMachineAPI)
+				verifyMachinePausedCondition(newMapiMachine, mapiv1beta1.MachineAuthorityMachineAPI)
+				verifyMachinePausedCondition(newCapiMachine, mapiv1beta1.MachineAuthorityMachineAPI)
+			})
+
+			It("should update specAPI: ClusterAPI", func() {
+				updateMachineAuthoritativeAPI(ctx, cl, newMapiMachine.Name, mapiv1beta1.MachineAuthorityClusterAPI)
+			})
+
+			It("should wait for migration to complete", func() {
+				verifyMachineRunning(cl, newCapiMachine)
+				verifyMachineAuthoritative(newMapiMachine, mapiv1beta1.MachineAuthorityClusterAPI)
+				verifyMAPIMachineSynchronizedCondition(newMapiMachine, mapiv1beta1.MachineAuthorityClusterAPI)
+				verifyMachineSynchronizedGeneration(cl, newMapiMachine, mapiv1beta1.MachineAuthorityClusterAPI)
+				verifyMachinePausedCondition(newMapiMachine, mapiv1beta1.MachineAuthorityClusterAPI)
+				verifyMachinePausedCondition(newCapiMachine, mapiv1beta1.MachineAuthorityClusterAPI)
+			})
+
+			It("should update specAPI: MachineAPI", func() {
+				updateMachineAuthoritativeAPI(ctx, cl, newMapiMachine.Name, mapiv1beta1.MachineAuthorityMachineAPI)
+			})
+
+			It("should wait for migration to complete", func() {
+				verifyMachineRunning(cl, newMapiMachine)
+				verifyMachineAuthoritative(newMapiMachine, mapiv1beta1.MachineAuthorityMachineAPI)
+				verifyMAPIMachineSynchronizedCondition(newMapiMachine, mapiv1beta1.MachineAuthorityMachineAPI)
+				verifyMachineSynchronizedGeneration(cl, newMapiMachine, mapiv1beta1.MachineAuthorityMachineAPI)
+				verifyMachinePausedCondition(newMapiMachine, mapiv1beta1.MachineAuthorityMachineAPI)
+				verifyMachinePausedCondition(newCapiMachine, mapiv1beta1.MachineAuthorityMachineAPI)
+			})
+
+			It("should delete MAPI machine", func() {
+				mapiframework.DeleteMachines(ctx, cl, newMapiMachine)
+				mapiframework.WaitForMachinesDeleted(cl, newMapiMachine)
+			})
+
+			It("should wait for both machines to be removed", func() {
+				verifyResourceRemoved(newMapiMachine)
+				verifyResourceRemoved(newCapiMachine)
+				verifyResourceRemoved(&awsv1.AWSMachine{
+					TypeMeta: metav1.TypeMeta{Kind: "AWSMachine", APIVersion: awsv1.GroupVersion.String()},
+					ObjectMeta: metav1.ObjectMeta{Name: mapiCapiMapiRoundTripName, Namespace: capiframework.CAPINamespace},
+				})
+			})
+		})
+	})
 })
