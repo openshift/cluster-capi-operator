@@ -820,7 +820,10 @@ func (r *MachineSetSyncReconciler) createOrUpdateCAPIMachineSet(ctx context.Cont
 	// If there is an existing CAPI machine set, work out if it needs updating.
 
 	// Compare the existing CAPI machine set with the converted CAPI machine set to check for changes.
-	capiMachineSetsDiff := compareCAPIMachineSets(existingCAPIMachineSet, convertedCAPIMachineSet)
+	capiMachineSetsDiff, err := compareCAPIMachineSets(existingCAPIMachineSet, convertedCAPIMachineSet)
+	if err != nil {
+		return fmt.Errorf("failed to compare CAPI machine sets: %w", err)
+	}
 
 	// Make a deep copy of the converted CAPI machine set to avoid modifying the original.
 	updatedOrCreatedCAPIMachineSet := convertedCAPIMachineSet.DeepCopy()
@@ -1427,7 +1430,7 @@ func compareCAPIInfraMachineTemplates(platform configv1.PlatformType, infraMachi
 }
 
 // compareCAPIMachineSets compares CAPI machineSets a and b, and returns a list of differences, or none if there are none.
-func compareCAPIMachineSets(capiMachineSet1, capiMachineSet2 *clusterv1.MachineSet) map[string]any {
+func compareCAPIMachineSets(capiMachineSet1, capiMachineSet2 *clusterv1.MachineSet) (map[string]any, error) {
 	diff := make(map[string]any)
 
 	if diffSpec := deep.Equal(capiMachineSet1.Spec, capiMachineSet2.Spec); len(diffSpec) > 0 {
@@ -1438,11 +1441,13 @@ func compareCAPIMachineSets(capiMachineSet1, capiMachineSet2 *clusterv1.MachineS
 		diff[".metadata"] = diffObjectMeta
 	}
 
-	if diffStatus := util.CAPIMachineSetStatusEqual(capiMachineSet1.Status, capiMachineSet2.Status); len(diffStatus) > 0 {
-		diff[".status"] = diffStatus
+	if diffStatus, err := util.CAPIMachineSetStatusEqual(capiMachineSet1.Status, capiMachineSet2.Status); err != nil {
+		return nil, fmt.Errorf("failed to compare CAPI machine set status: %w", err)
+	} else if diffStatus.Changed() {
+		diff[".status"] = diffStatus.String()
 	}
 
-	return diff
+	return diff, nil
 }
 
 // compareMAPIMachineSets compares MAPI machineSets a and b, and returns a list of differences, or none if there are none.

@@ -88,59 +88,12 @@ func ObjectMetaEqual(a, b metav1.ObjectMeta) map[string]any {
 // CAPIMachineSetStatusEqual compares variables a and b,
 // and returns a list of differences, or nil if there are none,
 // for the fields we care about when synchronising MAPI and CAPI Machines.
-func CAPIMachineSetStatusEqual(a, b clusterv1.MachineSetStatus) map[string]any {
-	diff := map[string]any{}
+func CAPIMachineSetStatusEqual(a, b clusterv1.MachineSetStatus) (DiffResult, error) {
+	differ := newDiffer(
+		WithIgnoreConditionsLastTransitionTime(),
+	)
 
-	if diffReadyReplicas := deep.Equal(a.ReadyReplicas, b.ReadyReplicas); len(diffReadyReplicas) > 0 {
-		diff[".readyReplicas"] = diffReadyReplicas
-	}
-
-	if diffAvailableReplicas := deep.Equal(a.AvailableReplicas, b.AvailableReplicas); len(diffAvailableReplicas) > 0 {
-		diff[".availableReplicas"] = diffAvailableReplicas
-	}
-
-	if diffFullyLabeledReplicas := deep.Equal(a.FullyLabeledReplicas, b.FullyLabeledReplicas); len(diffFullyLabeledReplicas) > 0 {
-		diff[".fullyLabeledReplicas"] = diffFullyLabeledReplicas
-	}
-
-	if diffFailureReason := deep.Equal(a.FailureReason, b.FailureReason); len(diffFailureReason) > 0 {
-		diff[".failureReason"] = diffFailureReason
-	}
-
-	if diffFailureMessage := deep.Equal(a.FailureMessage, b.FailureMessage); len(diffFailureMessage) > 0 {
-		diff[".failureMessage"] = diffFailureMessage
-	}
-
-	if diffConditions := compareCAPIV1Beta1Conditions(a.Conditions, b.Conditions); len(diffConditions) > 0 {
-		diff[".conditions"] = diffConditions
-	}
-
-	// Compare the v1beta2 fields.
-	if a.V1Beta2 == nil {
-		a.V1Beta2 = &clusterv1.MachineSetV1Beta2Status{}
-	}
-
-	if b.V1Beta2 == nil {
-		b.V1Beta2 = &clusterv1.MachineSetV1Beta2Status{}
-	}
-
-	if diffUpToDateReplicas := deep.Equal(a.V1Beta2.UpToDateReplicas, b.V1Beta2.UpToDateReplicas); len(diffUpToDateReplicas) > 0 {
-		diff[".v1beta2.upToDateReplicas"] = diffUpToDateReplicas
-	}
-
-	if diffAvailableReplicas := deep.Equal(a.V1Beta2.AvailableReplicas, b.V1Beta2.AvailableReplicas); len(diffAvailableReplicas) > 0 {
-		diff[".v1beta2.availableReplicas"] = diffAvailableReplicas
-	}
-
-	if diffReadyReplicas := deep.Equal(a.V1Beta2.ReadyReplicas, b.V1Beta2.ReadyReplicas); len(diffReadyReplicas) > 0 {
-		diff[".v1beta2.readyReplicas"] = diffReadyReplicas
-	}
-
-	if diffConditions := compareCAPIV1Beta2Conditions(a.V1Beta2.Conditions, b.V1Beta2.Conditions); len(diffConditions) > 0 {
-		diff[".v1beta2.conditions"] = diffConditions
-	}
-
-	return diff
+	return differ.Diff(a, b)
 }
 
 // CAPIMachineStatusEqual compares variables a and b,
