@@ -305,7 +305,6 @@ var _ = Describe("validateLoadBalancerReferencesAgainstExpected", func() {
 	type validateLoadBalancerMatchTableInput struct {
 		actualLoadBalancers   []mapiv1beta1.LoadBalancerReference
 		expectedLoadBalancers map[string]mapiv1beta1.AWSLoadBalancerType
-		expectError           bool
 		expectedErrorMessages []string
 	}
 
@@ -313,7 +312,7 @@ var _ = Describe("validateLoadBalancerReferencesAgainstExpected", func() {
 		func(in validateLoadBalancerMatchTableInput) {
 			err := validateLoadBalancerReferencesAgainstExpected(in.actualLoadBalancers, in.expectedLoadBalancers, lbfieldPath)
 
-			if in.expectError {
+			if len(in.expectedErrorMessages) > 0 {
 				Expect(err).ToNot(BeNil())
 				for _, expectedMsg := range in.expectedErrorMessages {
 					Expect(err.Error()).To(ContainSubstring(expectedMsg))
@@ -331,7 +330,6 @@ var _ = Describe("validateLoadBalancerReferencesAgainstExpected", func() {
 				"cluster-int": mapiv1beta1.NetworkLoadBalancerType,
 				"cluster-ext": mapiv1beta1.ClassicLoadBalancerType,
 			},
-			expectError: false,
 		}),
 		Entry("should succeed when load balancers are in different order", validateLoadBalancerMatchTableInput{
 			actualLoadBalancers: []mapiv1beta1.LoadBalancerReference{
@@ -342,7 +340,6 @@ var _ = Describe("validateLoadBalancerReferencesAgainstExpected", func() {
 				"cluster-int": mapiv1beta1.NetworkLoadBalancerType,
 				"cluster-ext": mapiv1beta1.ClassicLoadBalancerType,
 			},
-			expectError: false,
 		}),
 		Entry("should fail when an unexpected load balancer is present", validateLoadBalancerMatchTableInput{
 			actualLoadBalancers: []mapiv1beta1.LoadBalancerReference{
@@ -352,7 +349,6 @@ var _ = Describe("validateLoadBalancerReferencesAgainstExpected", func() {
 			expectedLoadBalancers: map[string]mapiv1beta1.AWSLoadBalancerType{
 				"cluster-int": mapiv1beta1.NetworkLoadBalancerType,
 			},
-			expectError:           true,
 			expectedErrorMessages: []string{"unexpected load balancer \"unexpected-lb\" defined on machine"},
 		}),
 		Entry("should fail when a required load balancer is missing", validateLoadBalancerMatchTableInput{
@@ -363,7 +359,6 @@ var _ = Describe("validateLoadBalancerReferencesAgainstExpected", func() {
 				"cluster-int": mapiv1beta1.NetworkLoadBalancerType,
 				"cluster-ext": mapiv1beta1.ClassicLoadBalancerType,
 			},
-			expectError:           true,
 			expectedErrorMessages: []string{"must include load balancer named \"cluster-ext\""},
 		}),
 		Entry("should fail when load balancer type is incorrect", validateLoadBalancerMatchTableInput{
@@ -373,7 +368,6 @@ var _ = Describe("validateLoadBalancerReferencesAgainstExpected", func() {
 			expectedLoadBalancers: map[string]mapiv1beta1.AWSLoadBalancerType{
 				"cluster-int": mapiv1beta1.NetworkLoadBalancerType,
 			},
-			expectError:           true,
 			expectedErrorMessages: []string{"load balancer \"cluster-int\" must be of type \"network\" to match AWSCluster"},
 		}),
 		Entry("should report multiple errors when multiple issues are present", validateLoadBalancerMatchTableInput{
@@ -385,7 +379,6 @@ var _ = Describe("validateLoadBalancerReferencesAgainstExpected", func() {
 				"cluster-int": mapiv1beta1.NetworkLoadBalancerType,
 				"cluster-ext": mapiv1beta1.ClassicLoadBalancerType,
 			},
-			expectError: true,
 			expectedErrorMessages: []string{
 				"load balancer \"cluster-int\" must be of type \"network\" to match AWSCluster",
 				"unexpected load balancer \"unexpected-lb\" defined on machine",
@@ -395,14 +388,12 @@ var _ = Describe("validateLoadBalancerReferencesAgainstExpected", func() {
 		Entry("should succeed when both actual and expected are empty", validateLoadBalancerMatchTableInput{
 			actualLoadBalancers:   []mapiv1beta1.LoadBalancerReference{},
 			expectedLoadBalancers: map[string]mapiv1beta1.AWSLoadBalancerType{},
-			expectError:           false,
 		}),
 		Entry("should fail when actual is empty but expected has values", validateLoadBalancerMatchTableInput{
 			actualLoadBalancers: []mapiv1beta1.LoadBalancerReference{},
 			expectedLoadBalancers: map[string]mapiv1beta1.AWSLoadBalancerType{
 				"cluster-int": mapiv1beta1.NetworkLoadBalancerType,
 			},
-			expectError:           true,
 			expectedErrorMessages: []string{"must include load balancer named \"cluster-int\""},
 		}),
 		Entry("should fail when expected is empty but actual has values", validateLoadBalancerMatchTableInput{
@@ -410,7 +401,6 @@ var _ = Describe("validateLoadBalancerReferencesAgainstExpected", func() {
 				{Name: "unexpected-lb", Type: mapiv1beta1.NetworkLoadBalancerType},
 			},
 			expectedLoadBalancers: map[string]mapiv1beta1.AWSLoadBalancerType{},
-			expectError:           true,
 			expectedErrorMessages: []string{"unexpected load balancer \"unexpected-lb\" defined on machine"},
 		}),
 	)
