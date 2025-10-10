@@ -37,11 +37,12 @@ var (
 )
 
 const (
-	errUnsupportedCAPATenancy     = "unable to convert tenancy, unknown value"
-	errUnsupportedCAPAMarketType  = "unable to convert market type, unknown value"
-	errUnsupportedHTTPTokensState = "unable to convert httpTokens state, unknown value" //nolint:gosec // This is an error message, not a credential
-	defaultIdentityName           = "default"
-	defaultCredentialsSecretName  = "aws-cloud-credentials" //#nosec G101 -- False positive, not actually a credential.
+	errUnsupportedCAPATenancy      = "unable to convert tenancy, unknown value"
+	errUnsupportedCAPAMarketType   = "unable to convert market type, unknown value"
+	errUnsupportedHTTPTokensState  = "unable to convert httpTokens state, unknown value" //nolint:gosec // This is an error message, not a credential
+	defaultIdentityName            = "default"
+	defaultCredentialsSecretName   = "aws-cloud-credentials" //#nosec G101 -- False positive, not actually a credential.
+	errUnsupportedHostAffinityType = "unable to convert hostAffinity, unknown value"
 )
 
 // machineAndAWSMachineAndAWSCluster stores the details of a Cluster API Machine and AWSMachine and AWSCluster.
@@ -154,6 +155,21 @@ func (m machineAndAWSMachineAndAWSCluster) toProviderSpec() (*mapiv1beta1.AWSMac
 		PlacementGroupPartition: convertAWSPlacementGroupPartition(m.awsMachine.Spec.PlacementGroupPartition),
 		CapacityReservationID:   ptr.Deref(m.awsMachine.Spec.CapacityReservationID, ""),
 		MarketType:              mapiAWSMarketType,
+	}
+
+	// Dedicated host support
+	if m.awsMachine.Spec.HostID != nil {
+		mapaProviderConfig.HostID = m.awsMachine.Spec.HostID
+	}
+	if m.awsMachine.Spec.HostAffinity != nil {
+		switch *m.awsMachine.Spec.HostAffinity {
+		case "host":
+			*mapaProviderConfig.HostAffinity = mapiv1.HostAffinityHost
+		case "default":
+			*mapaProviderConfig.HostAffinity = mapiv1.HostAffinityAnyAvailable
+		default:
+			errors = append(errors, field.Invalid(fldPath.Child("hostAffinity"), m.awsMachine.Spec.HostAffinity, errUnsupportedHostAffinityType))
+		}
 	}
 
 	secretRef, errs := handleAWSIdentityRef(fldPath.Child("identityRef"), m.awsCluster.Spec.IdentityRef)
@@ -523,6 +539,15 @@ func handleUnsupportedAWSMachineFields(fldPath *field.Path, spec awsv1.AWSMachin
 	if spec.PrivateDNSName != nil {
 		// Not required for our use case.
 		errs = append(errs, field.Invalid(fldPath.Child("privateDNSName"), spec.PrivateDNSName, "privateDNSName is not supported"))
+	}
+
+	// Unsupported new fields in newer CAPA versions
+	if spec.ElasticIPPool != nil {
+		errs = append(errs, field.Invalid(fldPath.Child("elasticIpPool"), spec.ElasticIPPool, "elasticIpPool is not supported"))
+	}
+
+	if spec.CapacityReservationPreference != "" {
+		errs = append(errs, field.Invalid(fldPath.Child("capacityReservationPreference"), spec.CapacityReservationPreference, "capacityReservationPreference is not supported"))
 	}
 
 	if spec.Ignition != nil {

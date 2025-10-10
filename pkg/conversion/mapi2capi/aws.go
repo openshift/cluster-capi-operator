@@ -284,6 +284,17 @@ func (m *awsMachineAndInfra) toAWSMachine(providerSpec mapiv1beta1.AWSMachinePro
 		MarketType: capiAWSMarketType,
 	}
 
+	// Dedicated host support
+	if providerSpec.HostID != nil {
+		spec.HostID = providerSpec.HostID
+	}
+	if providerSpec.HostAffinity != nil {
+		spec.HostAffinity = ptr.To(string(*providerSpec.HostAffinity))
+	}
+	if providerSpec.HostAffinity != nil && providerSpec.HostID == nil {
+		errs = append(errs, field.Invalid(fldPath.Child("hostAffinity"), providerSpec.HostAffinity, "hostAffinity requires hostID to be set"))
+	}
+
 	if providerSpec.CapacityReservationID != "" {
 		spec.CapacityReservationID = &providerSpec.CapacityReservationID
 	}

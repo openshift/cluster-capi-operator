@@ -303,3 +303,7 @@ require (
 	sigs.k8s.io/kube-storage-version-migrator v0.0.6-0.20230721195810-5c8923c5ff96 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.7.0 // indirect
 )
+
+replace sigs.k8s.io/cluster-api-provider-aws/v2 => github.com/openshift-splat-team/cluster-api-provider-aws/v2 v2.0.0-20250912141505-d5a03c3dd2ed
+
+replace github.com/openshift/api => github.com/vr4manta/api v0.0.0-20250929154722-9355a7602b96
