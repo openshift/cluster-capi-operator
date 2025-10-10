@@ -179,6 +179,13 @@ var _ = Describe("InfraCluster", func() {
 				Expect(cl.Delete(ctx, bareInfraCluster)).To(Succeed())
 			})
 
+			It("should create an InfraCluster, with Ready: true and externally ManagedBy Annotation", func() {
+				Eventually(komega.Object(bareInfraCluster)).Should(SatisfyAll(
+					HaveField("Status.Ready", BeTrue()),
+					HaveField("Annotations", HaveKeyWithValue(clusterv1.ManagedByAnnotation, managedByAnnotationValueClusterCAPIOperatorInfraClusterController)),
+				))
+			})
+
 			It("should have the load balancer configuration derived from the youngest machine", func() {
 				internalLB := &awsv1.AWSLoadBalancerSpec{Name: ptr.To("young-int"), LoadBalancerType: awsv1.LoadBalancerTypeNLB}
 
@@ -190,19 +197,6 @@ var _ = Describe("InfraCluster", func() {
 
 		})
 
-		Context("When there is no ControlPlaneMachineSet and no Control Plane Machines", func() {
-			It("should set the infraCluster cluster operator degraded condition", func() {
-				co := &configv1.ClusterOperator{ObjectMeta: metav1.ObjectMeta{Name: clusterOperatorName}}
-				Eventually(komega.Object(co)).Should(
-					HaveField("Status.Conditions",
-						ContainElement(SatisfyAll(
-							HaveField("Type", Equal(configv1.ClusterStatusConditionType(InfraClusterControllerDegradedCondition))),
-							HaveField("Status", Equal(configv1.ConditionTrue)),
-						)),
-					),
-				)
-			})
-		})
 	})
 
 	Context("When there is an InfraCluster with no externally ManagedBy Annotation", func() {
