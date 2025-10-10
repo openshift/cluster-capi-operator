@@ -138,3 +138,16 @@ status:
     name: ""
     namespace: openshift-cluster-api
     resource: vspheremachinetemplates
+
+  - group: "infrastructure.cluster.x-k8s.io"
+    name: ""
+    namespace: openshift-cluster-api
+    resource: nutanixclusters
+  - group: "infrastructure.cluster.x-k8s.io"
+    name: ""
+    namespace: openshift-cluster-api
+    resource: nutanixmachines
+  - group: "infrastructure.cluster.x-k8s.io"
+    name: ""
+    namespace: openshift-cluster-api
+    resource: nutanixmachinetemplates
