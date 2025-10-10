@@ -591,7 +591,7 @@ func convertAWSClusterLoadBalancersToMAPI(fldPath *field.Path, machine *clusterv
 		return nil, nil
 	}
 
-	internalLoadBalancerRef, err := convertAWSLoadBalancerToMAPI(awsCluster.Spec.ControlPlaneLoadBalancer)
+	internalLoadBalancerRef, err := ConvertAWSLoadBalancerToMAPI(awsCluster.Spec.ControlPlaneLoadBalancer)
 	if err != nil {
 		errs = append(errs, field.Invalid(fldPath.Child("controlPlaneLoadBalancer"), awsCluster.Spec.ControlPlaneLoadBalancer, fmt.Errorf("failed to convert load balancer: %w", err).Error()))
 	} else {
@@ -599,7 +599,7 @@ func convertAWSClusterLoadBalancersToMAPI(fldPath *field.Path, machine *clusterv
 	}
 
 	if awsCluster.Spec.SecondaryControlPlaneLoadBalancer != nil {
-		externalLoadBalancerRef, err := convertAWSLoadBalancerToMAPI(awsCluster.Spec.SecondaryControlPlaneLoadBalancer)
+		externalLoadBalancerRef, err := ConvertAWSLoadBalancerToMAPI(awsCluster.Spec.SecondaryControlPlaneLoadBalancer)
 		if err != nil {
 			errs = append(errs, field.Invalid(fldPath.Child("secondaryControlPlaneLoadBalancer"), awsCluster.Spec.SecondaryControlPlaneLoadBalancer, fmt.Errorf("failed to convert load balancer: %w", err).Error()))
 		} else {
@@ -610,8 +610,8 @@ func convertAWSClusterLoadBalancersToMAPI(fldPath *field.Path, machine *clusterv
 	return loadBalancers, errs
 }
 
-// convertAWSLoadBalancerToMAPI converts CAPI AWSLoadBalancerSpec to MAPI LoadBalancerReference.
-func convertAWSLoadBalancerToMAPI(loadBalancer *awsv1.AWSLoadBalancerSpec) (mapiv1beta1.LoadBalancerReference, error) {
+// ConvertAWSLoadBalancerToMAPI converts CAPI AWSLoadBalancerSpec to MAPI LoadBalancerReference.
+func ConvertAWSLoadBalancerToMAPI(loadBalancer *awsv1.AWSLoadBalancerSpec) (mapiv1beta1.LoadBalancerReference, error) {
 	if loadBalancer == nil {
 		return mapiv1beta1.LoadBalancerReference{}, errNilLoadBalancer
 	}

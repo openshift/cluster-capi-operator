@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
+	"github.com/openshift/cluster-capi-operator/pkg/conversion/capi2mapi"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/mapi2capi"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 
@@ -60,8 +61,13 @@ func (r *MachineSyncReconciler) validateMachineAWSLoadBalancers(ctx context.Cont
 		return field.Invalid(lbFieldPath, providerSpec.LoadBalancers, "no control plane load balancer configured on AWSCluster")
 	}
 
+	controlPlaneLB, err := capi2mapi.ConvertAWSLoadBalancerToMAPI(awsCluster.Spec.ControlPlaneLoadBalancer)
+	if err != nil {
+		return field.Invalid(lbFieldPath, providerSpec.LoadBalancers, fmt.Sprintf("failed to convert control plane load balancer: %v", err))
+	}
+
 	expectedLoadBalancers := map[string]mapiv1beta1.AWSLoadBalancerType{
-		ptr.Deref(awsCluster.Spec.ControlPlaneLoadBalancer.Name, ""): convertAWSLBTypeToMAPI(awsCluster.Spec.ControlPlaneLoadBalancer.LoadBalancerType),
+		ptr.Deref(awsCluster.Spec.ControlPlaneLoadBalancer.Name, ""): controlPlaneLB.Type,
 	}
 
 	if awsCluster.Spec.SecondaryControlPlaneLoadBalancer != nil {
@@ -69,7 +75,12 @@ func (r *MachineSyncReconciler) validateMachineAWSLoadBalancers(ctx context.Cont
 			return field.Invalid(lbFieldPath, providerSpec.LoadBalancers, "secondary control plane load balancer name is not configured on AWSCluster")
 		}
 
-		expectedLoadBalancers[ptr.Deref(awsCluster.Spec.SecondaryControlPlaneLoadBalancer.Name, "")] = convertAWSLBTypeToMAPI(awsCluster.Spec.SecondaryControlPlaneLoadBalancer.LoadBalancerType)
+		secondaryControlPlaneLB, err := capi2mapi.ConvertAWSLoadBalancerToMAPI(awsCluster.Spec.SecondaryControlPlaneLoadBalancer)
+		if err != nil {
+			return field.Invalid(lbFieldPath, providerSpec.LoadBalancers, fmt.Sprintf("failed to convert secondary control plane load balancer: %v", err))
+		}
+
+		expectedLoadBalancers[ptr.Deref(awsCluster.Spec.SecondaryControlPlaneLoadBalancer.Name, "")] = secondaryControlPlaneLB.Type
 	}
 
 	return validateLoadBalancerReferencesAgainstExpected(providerSpec.LoadBalancers, expectedLoadBalancers, lbFieldPath)
@@ -107,16 +118,4 @@ func validateLoadBalancerReferencesAgainstExpected(
 	}
 
 	return errs.ToAggregate()
-}
-
-// convertAWSLBTypeToMAPI converts CAPI LoadBalancerType to MAPI AWSLoadBalancerType.
-func convertAWSLBTypeToMAPI(capiType awsv1.LoadBalancerType) mapiv1beta1.AWSLoadBalancerType {
-	switch capiType {
-	case awsv1.LoadBalancerTypeClassic, awsv1.LoadBalancerTypeELB, "":
-		return mapiv1beta1.ClassicLoadBalancerType
-	case awsv1.LoadBalancerTypeNLB:
-		return mapiv1beta1.NetworkLoadBalancerType
-	default:
-		return mapiv1beta1.ClassicLoadBalancerType
-	}
 }
