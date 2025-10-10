@@ -185,6 +185,16 @@ const (
 	MachineAuthorityMigrating MachineAuthority = "Migrating"
 )
 
+type SynchronizedAPI string
+
+const (
+	// MachineAPISynchronized indicates that the Machine API is the last synchronized API.
+	MachineAPISynchronized SynchronizedAPI = "MachineAPI"
+
+	// ClusterAPISynchronized indicates that the Cluster API is the last synchronized API.
+	ClusterAPISynchronized SynchronizedAPI = "ClusterAPI"
+)
+
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
@@ -412,6 +422,16 @@ type MachineStatus struct {
 	// +openshift:enable:FeatureGate=MachineAPIMigration
 	// +optional
 	SynchronizedGeneration int64 `json:"synchronizedGeneration,omitempty"`
+
+	// synchronizedAPI represents the API that is currently in sync with the state of the resource.
+	// When a migration begins, this field is set to the value of the authoritativeAPI before the transition to "Migrating".
+	// If a migration becomes stuck and authoritativeAPI is changed back to the original value, this field is used to determine the source of the migration,
+	// allowing for a clean rollback to the previously synchronized API.
+	// An empty value indicates that the resource has not yet been part of a migration.
+	// +kubebuilder:validation:Enum=MachineAPI;ClusterAPI
+	// +openshift:enable:FeatureGate=MachineAPIMigration
+	// +optional
+	SynchronizedAPI SynchronizedAPI `json:"synchronizedAPI,omitempty"`
 }
 
 // LastOperation represents the detail of the last performed operation on the MachineObject.
