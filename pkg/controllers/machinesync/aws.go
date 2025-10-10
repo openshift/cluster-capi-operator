@@ -41,15 +41,14 @@ func (r *MachineSyncReconciler) validateMachineAWSLoadBalancers(ctx context.Cont
 		return fmt.Errorf("unable to parse Machine API providerSpec: %w", err)
 	}
 
-	lbfieldPath := field.NewPath("spec", "providerSpec", "value", "loadBalancers")
+	lbFieldPath := field.NewPath("spec", "providerSpec", "value", "loadBalancers")
 
 	if !util.IsControlPlaneMAPIMachine(mapiMachine) {
 		if len(providerSpec.LoadBalancers) == 0 {
 			return nil
 		}
 
-		return field.ErrorList{field.Invalid(lbfieldPath, providerSpec.LoadBalancers, "loadBalancers are not supported for non-control plane machines")}.
-			ToAggregate()
+		return field.Invalid(lbFieldPath, providerSpec.LoadBalancers, "loadBalancers are not supported for non-control plane machines")
 	}
 
 	awsCluster := &awsv1.AWSCluster{}
@@ -57,9 +56,8 @@ func (r *MachineSyncReconciler) validateMachineAWSLoadBalancers(ctx context.Cont
 		return fmt.Errorf("failed to get AWSCluster: %w", err)
 	}
 
-	if awsCluster.Spec.ControlPlaneLoadBalancer == nil || awsCluster.Spec.ControlPlaneLoadBalancer.Name == nil || *awsCluster.Spec.ControlPlaneLoadBalancer.Name == "" {
-		return field.ErrorList{field.Invalid(lbfieldPath, providerSpec.LoadBalancers, "no control plane load balancer configured on AWSCluster")}.
-			ToAggregate()
+	if awsCluster.Spec.ControlPlaneLoadBalancer == nil || ptr.Deref(awsCluster.Spec.ControlPlaneLoadBalancer.Name, "") == "" {
+		return field.Invalid(lbFieldPath, providerSpec.LoadBalancers, "no control plane load balancer configured on AWSCluster")
 	}
 
 	expectedLoadBalancers := map[string]mapiv1beta1.AWSLoadBalancerType{
@@ -67,28 +65,27 @@ func (r *MachineSyncReconciler) validateMachineAWSLoadBalancers(ctx context.Cont
 	}
 
 	if awsCluster.Spec.SecondaryControlPlaneLoadBalancer != nil {
-		if awsCluster.Spec.SecondaryControlPlaneLoadBalancer.Name == nil || *awsCluster.Spec.SecondaryControlPlaneLoadBalancer.Name == "" {
-			return field.ErrorList{field.Invalid(lbfieldPath, providerSpec.LoadBalancers, "secondary control plane load balancer name is not configured on AWSCluster")}.
-				ToAggregate()
+		if ptr.Deref(awsCluster.Spec.SecondaryControlPlaneLoadBalancer.Name, "") == "" {
+			return field.Invalid(lbFieldPath, providerSpec.LoadBalancers, "secondary control plane load balancer name is not configured on AWSCluster")
 		}
 
 		expectedLoadBalancers[ptr.Deref(awsCluster.Spec.SecondaryControlPlaneLoadBalancer.Name, "")] = convertAWSLBTypeToMAPI(awsCluster.Spec.SecondaryControlPlaneLoadBalancer.LoadBalancerType)
 	}
 
-	return validateLoadBalancerReferencesAgainstExpected(providerSpec.LoadBalancers, expectedLoadBalancers, lbfieldPath)
+	return validateLoadBalancerReferencesAgainstExpected(providerSpec.LoadBalancers, expectedLoadBalancers, lbFieldPath)
 }
 
 // validateLoadBalancerReferencesAgainstExpected validates that the actual load balancers match the expected load balancers.
 func validateLoadBalancerReferencesAgainstExpected(
 	actualLoadBalancers []mapiv1beta1.LoadBalancerReference,
 	expectedLoadBalancers map[string]mapiv1beta1.AWSLoadBalancerType,
-	lbfieldPath *field.Path,
+	lbFieldPath *field.Path,
 ) error {
 	errs := field.ErrorList{}
 	foundLoadBalancers := map[string]bool{}
 
 	for i, lb := range actualLoadBalancers {
-		indexPath := lbfieldPath.Index(i)
+		indexPath := lbFieldPath.Index(i)
 
 		expectedType, isExpected := expectedLoadBalancers[lb.Name]
 		if !isExpected {
@@ -105,7 +102,7 @@ func validateLoadBalancerReferencesAgainstExpected(
 
 	for expectedName := range expectedLoadBalancers {
 		if !foundLoadBalancers[expectedName] {
-			errs = append(errs, field.Invalid(lbfieldPath, actualLoadBalancers, fmt.Sprintf("must include load balancer named %q", expectedName)))
+			errs = append(errs, field.Invalid(lbFieldPath, actualLoadBalancers, fmt.Sprintf("must include load balancer named %q", expectedName)))
 		}
 	}
 
