@@ -16,7 +16,6 @@ limitations under the License.
 package util
 
 import (
-	"fmt"
 	"testing"
 	"time"
 
@@ -55,7 +54,7 @@ func TestCAPIMachineSetStatusEqual(t *testing.T) {
 			b: clusterv1.MachineSetStatus{
 				ReadyReplicas: 5,
 			},
-			want:        "map[.readyReplicas:[3 != 5]]",
+			want:        "map[readyReplicas]: 3 != 5",
 			wantChanges: true,
 		},
 		{
@@ -66,7 +65,7 @@ func TestCAPIMachineSetStatusEqual(t *testing.T) {
 			b: clusterv1.MachineSetStatus{
 				AvailableReplicas: 4,
 			},
-			want:        "map[.availableReplicas:[2 != 4]]",
+			want:        "map[availableReplicas]: 2 != 4",
 			wantChanges: true,
 		},
 		{
@@ -79,7 +78,7 @@ func TestCAPIMachineSetStatusEqual(t *testing.T) {
 				ReadyReplicas:     5,
 				AvailableReplicas: 4,
 			},
-			want:        "map[.availableReplicas:[2 != 4] .readyReplicas:[3 != 5]]",
+			want:        "map[readyReplicas]: 3 != 5, map[availableReplicas]: 2 != 4",
 			wantChanges: true,
 		},
 		{
@@ -102,7 +101,7 @@ func TestCAPIMachineSetStatusEqual(t *testing.T) {
 					},
 				},
 			},
-			want:        "map[]",
+			want:        "",
 			wantChanges: false,
 		},
 		{
@@ -125,7 +124,7 @@ func TestCAPIMachineSetStatusEqual(t *testing.T) {
 					},
 				},
 			},
-			want:        "map[.conditions:[Status: True != False]]",
+			want:        "map[conditions].slice[0].map[status]: True != False",
 			wantChanges: true,
 		},
 		{
@@ -148,7 +147,7 @@ func TestCAPIMachineSetStatusEqual(t *testing.T) {
 					},
 				},
 			},
-			want:        "map[]",
+			want:        "",
 			wantChanges: false,
 		},
 		{
@@ -181,7 +180,7 @@ func TestCAPIMachineSetStatusEqual(t *testing.T) {
 					},
 				},
 			},
-			want:        "map[.conditions:[Status: True != False]]",
+			want:        "map[conditions].slice[1].map[status]: True != False",
 			wantChanges: true,
 		},
 		{
@@ -212,7 +211,7 @@ func TestCAPIMachineSetStatusEqual(t *testing.T) {
 					},
 				},
 			},
-			want:        "map[]",
+			want:        "",
 			wantChanges: false,
 		},
 		{
@@ -239,7 +238,7 @@ func TestCAPIMachineSetStatusEqual(t *testing.T) {
 					},
 				},
 			},
-			want:        "map[.v1beta2.conditions:[Status: True != False]]",
+			want:        "map[v1beta2].map[conditions].slice[0].map[status]: True != False",
 			wantChanges: true,
 		},
 		{
@@ -270,7 +269,7 @@ func TestCAPIMachineSetStatusEqual(t *testing.T) {
 					},
 				},
 			},
-			want:        "map[]",
+			want:        "",
 			wantChanges: false,
 		},
 		{
@@ -307,7 +306,7 @@ func TestCAPIMachineSetStatusEqual(t *testing.T) {
 					},
 				},
 			},
-			want:        "map[.v1beta2.conditions:[Status: True != False]]",
+			want:        "map[v1beta2].map[conditions].slice[1].map[status]: True != False",
 			wantChanges: true,
 		},
 		{
@@ -320,7 +319,7 @@ func TestCAPIMachineSetStatusEqual(t *testing.T) {
 					ReadyReplicas: ptr.To[int32](3),
 				},
 			},
-			want:        "map[.v1beta2.readyReplicas:[<nil pointer> != int32]]",
+			want:        "map[v1beta2]: <does not have key> != map[readyReplicas:3]",
 			wantChanges: true,
 		},
 	}
@@ -329,15 +328,15 @@ func TestCAPIMachineSetStatusEqual(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			g := NewWithT(t)
 
-			got := CAPIMachineSetStatusEqual(tt.a, tt.b)
+			got, err := CAPIMachineSetStatusEqual(tt.a, tt.b)
+			g.Expect(err).ToNot(HaveOccurred())
 
-			gotChanges := len(got) > 0
+			gotChanges := got.Changed()
 
 			g.Expect(gotChanges).To(Equal(tt.wantChanges))
 
 			if tt.wantChanges {
-				gotString := fmt.Sprintf("%+v", got)
-
+				gotString := got.String()
 				g.Expect(gotString).To(Equal(tt.want))
 			}
 		})
