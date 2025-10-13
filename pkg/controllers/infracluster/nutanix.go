@@ -25,6 +25,7 @@ import (
 	"github.com/go-logr/logr"
 	nutanixv1 "github.com/nutanix-cloud-native/cluster-api-provider-nutanix/api/v1beta1"
 	credentialTypes "github.com/nutanix-cloud-native/prism-go-client/environment/credentials"
+	corev1 "k8s.io/api/core/v1"
 	cerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
@@ -109,14 +110,14 @@ func (r *InfraClusterController) buildNutanixClusterSpec(apiURL *url.URL, port i
 
 	// Add failure domains if available in the Infrastructure spec
 	if r.Infra.Spec.PlatformSpec.Nutanix != nil && len(r.Infra.Spec.PlatformSpec.Nutanix.FailureDomains) > 0 {
-		failureDomains := make([]nutanixv1.NutanixFailureDomainConfig, 0, len(r.Infra.Spec.PlatformSpec.Nutanix.FailureDomains))
+		failureDomains := make([]corev1.LocalObjectReference, 0, len(r.Infra.Spec.PlatformSpec.Nutanix.FailureDomains))
 		for _, fd := range r.Infra.Spec.PlatformSpec.Nutanix.FailureDomains {
-			failureDomains = append(failureDomains, nutanixv1.NutanixFailureDomainConfig{
+			failureDomains = append(failureDomains, corev1.LocalObjectReference{
 				Name: fd.Name,
 			})
 		}
 
-		clusterSpec.FailureDomains = failureDomains
+		clusterSpec.ControlPlaneFailureDomains = failureDomains
 	}
 
 	return clusterSpec
