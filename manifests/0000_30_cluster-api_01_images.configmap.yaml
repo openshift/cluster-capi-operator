@@ -12,7 +12,6 @@ data:
   images.json: >
     {
       "cluster-capi-operator": "registry.ci.openshift.org/openshift:cluster-capi-operator",
-      "cluster-kube-cluster-api-operator": "registry.ci.openshift.org/openshift:cluster-kube-cluster-api-operator",
       "cluster-capi-controllers": "registry.ci.openshift.org/openshift:cluster-capi-controllers",
       "aws-cluster-api-controllers": "registry.ci.openshift.org/openshift:aws-cluster-api-controllers",
       "azure-cluster-api-controllers": "registry.ci.openshift.org/openshift:azure-cluster-api-controllers",
