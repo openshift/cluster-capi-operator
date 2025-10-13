@@ -997,35 +997,31 @@ func (r *MachineSetSyncReconciler) ensureMAPIMachineSetStatusUpdated(ctx context
 
 // setChangedCAPIMachineSetStatusFields sets the updated fields in the CAPI machine set status.
 func setChangedCAPIMachineSetStatusFields(existingCAPIMachineSet, convertedCAPIMachineSet *clusterv1.MachineSet) {
-	// convertedCAPIMachineSet holds the computed and desired status changes, so apply them to the existing existingCAPIMachineSet.
-	// Set the changed v1beta1 fields.
-	existingCAPIMachineSet.Status.Replicas = convertedCAPIMachineSet.Status.Replicas
-	existingCAPIMachineSet.Status.ReadyReplicas = convertedCAPIMachineSet.Status.ReadyReplicas
-	existingCAPIMachineSet.Status.AvailableReplicas = convertedCAPIMachineSet.Status.AvailableReplicas
-	existingCAPIMachineSet.Status.FullyLabeledReplicas = convertedCAPIMachineSet.Status.FullyLabeledReplicas
-	existingCAPIMachineSet.Status.FailureReason = convertedCAPIMachineSet.Status.FailureReason
-	existingCAPIMachineSet.Status.FailureMessage = convertedCAPIMachineSet.Status.FailureMessage
-
-	for i := range convertedCAPIMachineSet.Status.Conditions {
-		conditions.Set(existingCAPIMachineSet, &convertedCAPIMachineSet.Status.Conditions[i])
+	// convertedCAPIMachine holds the computed and desired status changes converted from the source MAPI machine, so apply them to the existing existingCAPIMachine.
+	// Merge the v1beta1 conditions.
+	for _, condition := range convertedCAPIMachineSet.Status.Conditions {
+		conditions.Set(existingCAPIMachineSet, &condition)
 	}
 
-	// Set the changed v1beta2 fields.
-	switch {
-	case convertedCAPIMachineSet.Status.V1Beta2 == nil:
-		existingCAPIMachineSet.Status.V1Beta2 = nil
-	case existingCAPIMachineSet.Status.V1Beta2 == nil:
-		existingCAPIMachineSet.Status.V1Beta2 = &clusterv1.MachineSetV1Beta2Status{}
-		fallthrough
-	default:
-		existingCAPIMachineSet.Status.V1Beta2.UpToDateReplicas = convertedCAPIMachineSet.Status.V1Beta2.UpToDateReplicas
-		existingCAPIMachineSet.Status.V1Beta2.AvailableReplicas = convertedCAPIMachineSet.Status.V1Beta2.AvailableReplicas
-		existingCAPIMachineSet.Status.V1Beta2.ReadyReplicas = convertedCAPIMachineSet.Status.V1Beta2.ReadyReplicas
+	// Copy them back to the convertedCAPIMachine.
+	convertedCAPIMachineSet.Status.Conditions = existingCAPIMachineSet.Status.Conditions
 
-		for i := range convertedCAPIMachineSet.Status.V1Beta2.Conditions {
-			conditionsv1beta2.Set(existingCAPIMachineSet, convertedCAPIMachineSet.Status.V1Beta2.Conditions[i])
+	// Merge the v1beta2 conditions.
+	if convertedCAPIMachineSet.Status.V1Beta2 != nil {
+		if existingCAPIMachineSet.Status.V1Beta2 == nil {
+			existingCAPIMachineSet.Status.V1Beta2 = &clusterv1.MachineSetV1Beta2Status{}
 		}
+
+		for _, condition := range convertedCAPIMachineSet.Status.V1Beta2.Conditions {
+			conditionsv1beta2.Set(existingCAPIMachineSet, condition)
+		}
+
+		// Copy them back to the convertedCAPIMachine.
+		convertedCAPIMachineSet.Status.V1Beta2.Conditions = existingCAPIMachineSet.Status.V1Beta2.Conditions
 	}
+
+	// Finally overwrite the entire existingCAPIMachine status with the convertedCAPIMachine status.
+	existingCAPIMachineSet.Status = convertedCAPIMachineSet.Status
 }
 
 // updateMAPIMachineSet updates a MAPI machine set if is out of date.
