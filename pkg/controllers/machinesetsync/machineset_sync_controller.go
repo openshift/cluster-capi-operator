@@ -996,6 +996,7 @@ func (r *MachineSetSyncReconciler) ensureMAPIMachineSetStatusUpdated(ctx context
 }
 
 // setChangedCAPIMachineSetStatusFields sets the updated fields in the CAPI machine set status.
+// Note: ObservedGeneration is handled after calling this function.
 func setChangedCAPIMachineSetStatusFields(existingCAPIMachineSet, convertedCAPIMachineSet *clusterv1.MachineSet) {
 	// convertedCAPIMachine holds the computed and desired status changes converted from the source MAPI machine, so apply them to the existing existingCAPIMachine.
 	// Merge the v1beta1 conditions.
@@ -1059,6 +1060,7 @@ func (r *MachineSetSyncReconciler) updateMAPIMachineSet(ctx context.Context, exi
 }
 
 // setChangedMAPIMachineSetStatusFields sets the updated fields in the MAPI machine set status.
+// Note: ObservedGeneration is handled after calling this function.
 func setChangedMAPIMachineSetStatusFields(existingMAPIMachineSet, convertedMAPIMachineSet *mapiv1beta1.MachineSet) {
 	// convertedMAPIMachineSet holds the computed and desired status changes, so apply them to the existing existingMAPIMachineSet.
 	existingMAPIMachineSet.Status.Replicas = convertedMAPIMachineSet.Status.Replicas
@@ -1068,9 +1070,20 @@ func setChangedMAPIMachineSetStatusFields(existingMAPIMachineSet, convertedMAPIM
 	existingMAPIMachineSet.Status.ErrorReason = convertedMAPIMachineSet.Status.ErrorReason
 	existingMAPIMachineSet.Status.ErrorMessage = convertedMAPIMachineSet.Status.ErrorMessage
 
+	// Merge the v1beta1 conditions.
 	for i := range convertedMAPIMachineSet.Status.Conditions {
 		existingMAPIMachineSet.Status.Conditions = util.SetMAPICondition(existingMAPIMachineSet.Status.Conditions, &convertedMAPIMachineSet.Status.Conditions[i])
 	}
+
+	// Copy them back to the convertedMAPIMachineSet.
+	convertedMAPIMachineSet.Status.Conditions = existingMAPIMachineSet.Status.Conditions
+
+	// Keep the current SynchronizedGeneration and AuthorativeAPI. They get handled separately in `applySynchronizedConditionWithPatch`
+	convertedMAPIMachineSet.Status.SynchronizedGeneration = existingMAPIMachineSet.Status.SynchronizedGeneration
+	convertedMAPIMachineSet.Status.AuthoritativeAPI = existingMAPIMachineSet.Status.AuthoritativeAPI
+
+	// Finally overwrite the entire existingMAPIMachineSet status with the convertedMAPIMachineSet status.
+	existingMAPIMachineSet.Status = convertedMAPIMachineSet.Status
 }
 
 // ensureSyncFinalizer ensures the sync finalizer is present across mapi and capi machine sets.
