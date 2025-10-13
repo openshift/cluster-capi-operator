@@ -385,7 +385,7 @@ func convertMAPONetworksToCAPO(fldPath *field.Path, mapoNetworks []mapiv1alpha1.
 			warnings = append(warnings, field.Invalid(fldPath.Index(i).Child("fixedIP"), mapoNetwork.FixedIp, "fixedIp is ignored by MAPO, ignoring").Error())
 		}
 
-		network := openstackv1.NetworkParam{}
+		capoNetwork := openstackv1.NetworkParam{}
 
 		networkID := mapoNetwork.UUID
 		if networkID == "" {
@@ -393,7 +393,7 @@ func convertMAPONetworksToCAPO(fldPath *field.Path, mapoNetworks []mapiv1alpha1.
 		}
 
 		if networkID != "" {
-			network.ID = &networkID
+			capoNetwork.ID = &networkID
 		}
 
 		// convert .Filter
@@ -402,7 +402,7 @@ func convertMAPONetworksToCAPO(fldPath *field.Path, mapoNetworks []mapiv1alpha1.
 			projectID = mapoNetwork.Filter.TenantID
 		}
 
-		network.Filter = &openstackv1.NetworkFilter{
+		capoNetwork.Filter = &openstackv1.NetworkFilter{
 			Name:        mapoNetwork.Filter.Name,
 			Description: mapoNetwork.Filter.Description,
 			ProjectID:   projectID,
@@ -439,7 +439,7 @@ func convertMAPONetworksToCAPO(fldPath *field.Path, mapoNetworks []mapiv1alpha1.
 				}
 
 				capoPort := openstackv1.PortOpts{
-					Network: &network,
+					Network: &capoNetwork,
 					FixedIPs: []openstackv1.FixedIP{
 						{
 							Subnet: &openstackv1.SubnetParam{
@@ -478,7 +478,7 @@ func convertMAPONetworksToCAPO(fldPath *field.Path, mapoNetworks []mapiv1alpha1.
 		} else {
 			// Case: network and subnet are defined
 			// Create a single port with an interface for each subnet
-			fixedIPs := make([]openstackv1.FixedIP, len(mapoNetwork.Subnets))
+			capoFixedIPs := make([]openstackv1.FixedIP, len(mapoNetwork.Subnets))
 
 			for j, mapoSubnet := range mapoNetwork.Subnets {
 				subnetID := mapoSubnet.UUID
@@ -496,7 +496,7 @@ func convertMAPONetworksToCAPO(fldPath *field.Path, mapoNetworks []mapiv1alpha1.
 					warnings = append(warnings, field.Invalid(fldPath.Index(j).Child("subnets").Index(j).Child("filter", "networkId"), mapoSubnet.Filter.NetworkID, "networkId is ignored by MAPO, ignoring").Error())
 				}
 
-				fixedIPs[j] = openstackv1.FixedIP{
+				capoFixedIPs[j] = openstackv1.FixedIP{
 					Subnet: &openstackv1.SubnetParam{
 						ID: &subnetID,
 						Filter: &openstackv1.SubnetFilter{
@@ -523,8 +523,8 @@ func convertMAPONetworksToCAPO(fldPath *field.Path, mapoNetworks []mapiv1alpha1.
 			}
 
 			capoPort := openstackv1.PortOpts{
-				FixedIPs: fixedIPs,
-				Network:  &network,
+				FixedIPs: capoFixedIPs,
+				Network:  &capoNetwork,
 				Tags:     tags,
 			}
 
