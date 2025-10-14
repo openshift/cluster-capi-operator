@@ -346,7 +346,10 @@ func verifyMachineSynchronizedGeneration(cl client.Client, mapiMachine *mapiv1be
 
 // verifyMAPIMachineProviderStatus verifies that a MAPI Machine's providerStatus matches the given Gomega matcher.
 func verifyMAPIMachineProviderStatus(mapiMachine *mapiv1beta1.Machine, matcher types.GomegaMatcher) {
+<<<<<<< HEAD
 	GinkgoHelper()
+=======
+>>>>>>> 94da2d0cd (machineset/machine status conversion e2e)
 	By(fmt.Sprintf("Verifying MAPI Machine %s providerStatus matches AWSMachine status", mapiMachine.Name))
 	Eventually(komega.Object(mapiMachine), capiframework.WaitMedium, capiframework.RetryMedium).Should(
 		WithTransform(getAWSProviderStatusFromMachine, matcher),
