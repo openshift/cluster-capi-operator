@@ -19,6 +19,7 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
+	yaml "sigs.k8s.io/yaml"
 )
 
 func createCAPIMachine(ctx context.Context, cl client.Client, machineName string) *clusterv1.Machine {
@@ -332,4 +333,22 @@ func verifyMachineSynchronizedGeneration(cl client.Client, mapiMachine *mapiv1be
 		HaveField("Status.SynchronizedGeneration", Equal(expectedGeneration)),
 		fmt.Sprintf("MAPI Machine SynchronizedGeneration should equal %s Machine Generation (%d)", authoritativeMachineType, expectedGeneration),
 	)
+}
+
+// verifyMAPIMachineProviderStatus verifies that a MAPI Machine's providerStatus matches the given Gomega matcher.
+func verifyMAPIMachineProviderStatus(mapiMachine *mapiv1beta1.Machine, matcher types.GomegaMatcher) {
+	By(fmt.Sprintf("Verifying MAPI Machine %s providerStatus matches AWSMachine status", mapiMachine.Name))
+	Eventually(komega.Object(mapiMachine), capiframework.WaitMedium, capiframework.RetryMedium).Should(
+		WithTransform(getAWSProviderStatusFromMachine, matcher),
+	)
+}
+
+// getAWSProviderStatusFromMachine extracts and unmarshals the AWSMachineProviderStatus from a MAPI Machine.
+func getAWSProviderStatusFromMachine(mapiMachine *mapiv1beta1.Machine) *mapiv1beta1.AWSMachineProviderStatus {
+	Expect(mapiMachine.Status.ProviderStatus.Raw).ToNot(BeNil())
+
+	providerStatus := &mapiv1beta1.AWSMachineProviderStatus{}
+	Expect(yaml.Unmarshal(mapiMachine.Status.ProviderStatus.Raw, providerStatus)).To(Succeed())
+
+	return providerStatus
 }
