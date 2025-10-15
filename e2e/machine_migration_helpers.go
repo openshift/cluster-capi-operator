@@ -333,3 +333,65 @@ func verifyMachineSynchronizedGeneration(cl client.Client, mapiMachine *mapiv1be
 		fmt.Sprintf("MAPI Machine SynchronizedGeneration should equal %s Machine Generation (%d)", authoritativeMachineType, expectedGeneration),
 	)
 }
+
+// MachineState holds the state of both MAPI and CAPI Machines before an update operation.
+type MachineState struct {
+	MAPIGeneration int64
+	CAPIGeneration int64
+}
+
+// captureMachineStateBeforeUpdate captures the current state (generation) of both MAPI and CAPI Machines
+// before an update operation. The captured state is later used by verifyMachineStateChanged or verifyMachineStateUnchanged
+// to verify whether the state has changed or remained the same after the operation.
+func captureMachineStateBeforeUpdate(cl client.Client, currentMAPIMachine *mapiv1beta1.Machine) *MachineState {
+	Eventually(komega.Get(currentMAPIMachine), capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(), "Failed to get MAPI Machine before capturing state")
+
+	currentCAPIMachine := capiframework.GetMachine(cl, currentMAPIMachine.Name, capiframework.CAPINamespace)
+
+	return &MachineState{
+		MAPIGeneration: currentMAPIMachine.Generation,
+		CAPIGeneration: currentCAPIMachine.Generation,
+	}
+}
+
+// verifyMachineStateChanged verifies that:
+// 1. CAPI Machine generation remains unchanged (metadata-only changes don't bump spec generation)
+// 2. MAPI Machine generation has changed (spec.objectMeta was updated)
+// 3. Synchronized condition and generation are correct
+// This is used for CAPI authoritative scenarios where CAPI metadata changes are synced to MAPI spec.
+// Note: SynchronizedGeneration equals the authoritative machine's generation, so for metadata-only
+// changes it will not increase (since CAPI Machine generation doesn't change).
+func verifyMachineStateChanged(cl client.Client, mapiMachine *mapiv1beta1.Machine, previousState *MachineState, authority mapiv1beta1.MachineAuthority, operation string) {
+	// First verify CAPI Machine generation remains unchanged
+	currentCAPIMachine := capiframework.GetMachine(cl, mapiMachine.Name, capiframework.CAPINamespace)
+	By(fmt.Sprintf("Verifying CAPI Machine generation unchanged after %s (previous: %d, current: %d)", operation, previousState.CAPIGeneration, currentCAPIMachine.Generation))
+	Expect(currentCAPIMachine.Generation).To(Equal(previousState.CAPIGeneration), "CAPI Machine generation should not change for metadata-only updates")
+
+	// Then verify MAPI Machine generation has changed
+	By(fmt.Sprintf("Verifying MAPI Machine generation changed after %s (previous: %d, current: %d)", operation, previousState.MAPIGeneration, mapiMachine.Generation))
+	Expect(mapiMachine.Generation).To(BeNumerically(">", previousState.MAPIGeneration), "MAPI Machine generation should increment when spec.objectMeta is updated")
+
+	// Verify status remains correct (SynchronizedGeneration should equal authoritative machine's generation)
+	verifyMAPIMachineSynchronizedCondition(mapiMachine, authority)
+	verifyMachineSynchronizedGeneration(cl, mapiMachine, authority)
+}
+
+// verifyMachineStateUnchanged verifies that:
+// 1. CAPI Machine generation remains unchanged
+// 2. MAPI Machine generation remains unchanged
+// 3. Synchronized condition and generation are correct
+// This is used for MAPI authoritative scenarios where MAPI metadata-only changes should not trigger any updates.
+func verifyMachineStateUnchanged(cl client.Client, mapiMachine *mapiv1beta1.Machine, previousState *MachineState, authority mapiv1beta1.MachineAuthority, operation string) {
+	// Verify CAPI Machine generation remains unchanged
+	currentCAPIMachine := capiframework.GetMachine(cl, mapiMachine.Name, capiframework.CAPINamespace)
+	By(fmt.Sprintf("Verifying CAPI Machine generation unchanged after %s (previous: %d, current: %d)", operation, previousState.CAPIGeneration, currentCAPIMachine.Generation))
+	Expect(currentCAPIMachine.Generation).To(Equal(previousState.CAPIGeneration), "CAPI Machine generation should not change for metadata-only updates")
+
+	// Verify MAPI Machine generation remains unchanged
+	By(fmt.Sprintf("Verifying MAPI Machine generation unchanged after %s (previous: %d, current: %d)", operation, previousState.MAPIGeneration, mapiMachine.Generation))
+	Expect(mapiMachine.Generation).To(Equal(previousState.MAPIGeneration), "MAPI Machine generation should not change for metadata-only updates")
+
+	// Verify status remains correct (SynchronizedGeneration should equal authoritative machine's generation)
+	verifyMAPIMachineSynchronizedCondition(mapiMachine, authority)
+	verifyMachineSynchronizedGeneration(cl, mapiMachine, authority)
+}
