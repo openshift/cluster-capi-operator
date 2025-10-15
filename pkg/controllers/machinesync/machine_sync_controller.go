@@ -451,6 +451,15 @@ func (r *MachineSyncReconciler) reconcileMAPIMachinetoCAPIMachine(ctx context.Co
 		return ctrl.Result{}, fmt.Errorf("failed to convert Machine API machine owner references to Cluster API: %w", err)
 	}
 
+	if err := r.validateMAPIToCAPIPlatfromSpecifics(ctx, sourceMAPIMachine); err != nil {
+		conversionErr := fmt.Errorf("failed to convert Machine API machine to Cluster API machine: %w", err)
+		if condErr := r.applySynchronizedConditionWithPatch(ctx, sourceMAPIMachine, corev1.ConditionFalse, reasonFailedToConvertMAPIMachineToCAPI, conversionErr.Error(), nil); condErr != nil {
+			return ctrl.Result{}, utilerrors.NewAggregate([]error{conversionErr, condErr})
+		}
+
+		return ctrl.Result{}, conversionErr
+	}
+
 	convertedCAPIMachine, convertedCAPIInfraMachine, warns, err := r.convertMAPIToCAPIMachine(sourceMAPIMachine)
 	if err != nil {
 		conversionErr := fmt.Errorf("failed to convert Machine API machine to Cluster API machine: %w", err)
@@ -556,6 +565,16 @@ func (r *MachineSyncReconciler) reconcileMAPIMachinetoCAPIMachine(ctx context.Co
 
 	return ctrl.Result{}, r.applySynchronizedConditionWithPatch(ctx, sourceMAPIMachine, corev1.ConditionTrue,
 		controllers.ReasonResourceSynchronized, messageSuccessfullySynchronizedMAPItoCAPI, &sourceMAPIMachine.Generation)
+}
+
+// validateMAPIToCAPIPlatfromSpecifics verifies that shared CAPI resources are compatible before converting from MAPI -> CAPI.
+func (r *MachineSyncReconciler) validateMAPIToCAPIPlatfromSpecifics(ctx context.Context, mapiMachine *mapiv1beta1.Machine) error {
+	switch r.Platform {
+	case configv1.AWSPlatformType:
+		return r.validateMachineAWSLoadBalancers(ctx, mapiMachine)
+	default:
+		return nil
+	}
 }
 
 // convertMAPIToCAPIMachine converts a MAPI Machine to a CAPI Machine, selecting the correct converter based on the platform.

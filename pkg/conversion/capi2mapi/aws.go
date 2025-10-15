@@ -1,5 +1,5 @@
 /*
-Copyright 2024 Red Hat, Inc.
+Copyright 2025 Red Hat, Inc.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -29,11 +29,14 @@ import (
 	"k8s.io/utils/ptr"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	capiutil "sigs.k8s.io/cluster-api/util"
 )
 
 var (
 	errCAPIMachineAWSMachineAWSClusterCannotBeNil            = errors.New("provided Machine, AWSMachine and AWSCluster can not be nil")
 	errCAPIMachineSetAWSMachineTemplateAWSClusterCannotBeNil = errors.New("provided MachineSet, AWSMachineTemplate and AWSCluster can not be nil")
+	errNilLoadBalancer                                       = errors.New("nil load balancer")
+	errUnsupportedLoadBalancerType                           = errors.New("unsupported load balancer type")
 )
 
 const (
@@ -112,6 +115,11 @@ func (m machineAndAWSMachineAndAWSCluster) toProviderSpec() (*mapiv1beta1.AWSMac
 		errors = append(errors, err)
 	}
 
+	mapiLoadBalancers, lbErrs := convertAWSClusterLoadBalancersToMAPI(fldPath, m.machine, m.awsCluster)
+	if len(lbErrs) > 0 {
+		errors = append(errors, lbErrs...)
+	}
+
 	warnings = append(warnings, warn...)
 
 	mapaProviderConfig := mapiv1beta1.AWSMachineProviderConfig{
@@ -146,7 +154,7 @@ func (m machineAndAWSMachineAndAWSCluster) toProviderSpec() (*mapiv1beta1.AWSMac
 			Tenancy:          mapaTenancy,
 			Region:           m.awsCluster.Spec.Region,
 		},
-		// LoadBalancers - TODO(OCPCLOUD-2709) Not supported for workers.
+		LoadBalancers:           mapiLoadBalancers,
 		BlockDevices:            convertAWSVolumesToMAPI(m.awsMachine.Spec.RootVolume, m.awsMachine.Spec.NonRootVolumes),
 		SpotMarketOptions:       convertAWSSpotMarketOptionsToMAPI(m.awsMachine.Spec.SpotMarketOptions),
 		MetadataServiceOptions:  mapiAWSMetadataOptions,
@@ -570,4 +578,56 @@ func handleAWSIdentityRef(fldPath *field.Path, identityRef *awsv1.AWSIdentityRef
 
 	// Assume we're using the defaults.
 	return ref, nil
+}
+
+// convertAWSClusterLoadBalancersToMAPI convert CAPI LoadBalancers from the AWSCluster spec to MAPI LoadBalancerReferences on the Machine.
+func convertAWSClusterLoadBalancersToMAPI(fldPath *field.Path, machine *clusterv1.Machine, awsCluster *awsv1.AWSCluster) ([]mapiv1beta1.LoadBalancerReference, field.ErrorList) {
+	var loadBalancers []mapiv1beta1.LoadBalancerReference
+
+	errs := field.ErrorList{}
+
+	if !capiutil.IsControlPlaneMachine(machine) {
+		// No loadbalancer on non-control plane machines.
+		return nil, nil
+	}
+
+	internalLoadBalancerRef, err := ConvertAWSLoadBalancerToMAPI(awsCluster.Spec.ControlPlaneLoadBalancer)
+	if err != nil {
+		errs = append(errs, field.Invalid(fldPath.Child("controlPlaneLoadBalancer"), awsCluster.Spec.ControlPlaneLoadBalancer, fmt.Errorf("failed to convert load balancer: %w", err).Error()))
+	} else {
+		loadBalancers = append(loadBalancers, internalLoadBalancerRef)
+	}
+
+	if awsCluster.Spec.SecondaryControlPlaneLoadBalancer != nil {
+		externalLoadBalancerRef, err := ConvertAWSLoadBalancerToMAPI(awsCluster.Spec.SecondaryControlPlaneLoadBalancer)
+		if err != nil {
+			errs = append(errs, field.Invalid(fldPath.Child("secondaryControlPlaneLoadBalancer"), awsCluster.Spec.SecondaryControlPlaneLoadBalancer, fmt.Errorf("failed to convert load balancer: %w", err).Error()))
+		} else {
+			loadBalancers = append(loadBalancers, externalLoadBalancerRef)
+		}
+	}
+
+	return loadBalancers, errs
+}
+
+// ConvertAWSLoadBalancerToMAPI converts CAPI AWSLoadBalancerSpec to MAPI LoadBalancerReference.
+func ConvertAWSLoadBalancerToMAPI(loadBalancer *awsv1.AWSLoadBalancerSpec) (mapiv1beta1.LoadBalancerReference, error) {
+	if loadBalancer == nil {
+		return mapiv1beta1.LoadBalancerReference{}, errNilLoadBalancer
+	}
+
+	switch loadBalancer.LoadBalancerType {
+	case awsv1.LoadBalancerTypeClassic, awsv1.LoadBalancerTypeELB:
+		return mapiv1beta1.LoadBalancerReference{
+			Name: ptr.Deref(loadBalancer.Name, ""),
+			Type: mapiv1beta1.ClassicLoadBalancerType,
+		}, nil
+	case awsv1.LoadBalancerTypeNLB:
+		return mapiv1beta1.LoadBalancerReference{
+			Name: ptr.Deref(loadBalancer.Name, ""),
+			Type: mapiv1beta1.NetworkLoadBalancerType,
+		}, nil
+	default:
+		return mapiv1beta1.LoadBalancerReference{}, errUnsupportedLoadBalancerType
+	}
 }
