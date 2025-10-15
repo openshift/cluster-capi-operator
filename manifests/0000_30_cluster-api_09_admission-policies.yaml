@@ -243,14 +243,13 @@ data:
       name: openshift-prevent-migration-when-machine-updating
     spec:
       failurePolicy: Fail
-
       matchConstraints:
         resourceRules:
           - apiGroups: ["machine.openshift.io"]
             apiVersions: ["*"]
             operations: ["UPDATE"]
             resources: ["machines"]
-      
+
       # All validations must evaluate to true
       validations:
       - expression: '!(has(object.status) && has(object.status.phase) && object.status.phase == "Provisioning" && (oldObject.spec.authoritativeAPI != object.spec.authoritativeAPI))'
@@ -270,6 +269,39 @@ data:
       policyName: openshift-prevent-migration-when-machine-updating
       validationActions:
           - Deny
+    ---
+    apiVersion: admissionregistration.k8s.io/v1
+    kind: ValidatingAdmissionPolicy
+    metadata:
+      name: openshift-provide-warning-when-not-synchronized
+    spec:
+      failurePolicy: Ignore
+
+      matchConstraints:
+        resourceRules:
+          - apiGroups: ["machine.openshift.io"]
+            apiVersions: ["*"]
+            operations: ["UPDATE"]
+            resources: ["machines"]
+
+      # All validations must evaluate to true
+      validations:
+      - expression: '!(has(object.status) && has(object.status.conditions) && object.status.conditions.exists(c, c.type == "Synchronized" && c.status == "False") && (oldObject.spec.authoritativeAPI != object.spec.authoritativeAPI))'
+        message: 'Warning: updating .spec.authoritativeAPI when Synchronized=false on resource means changes may not take effect'
+      validationActions: [Warn]
+    ---
+    apiVersion: admissionregistration.k8s.io/v1
+    kind: ValidatingAdmissionPolicyBinding
+    metadata:
+      name: openshift-provide-warning-when-not-synchronized
+    spec:
+      matchResources:
+        namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: openshift-machine-api
+      policyName: openshift-provide-warning-when-not-synchronized
+      validationActions:
+          - Warn
 ---
 apiVersion: v1
 kind: ConfigMap
