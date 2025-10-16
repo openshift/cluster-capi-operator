@@ -76,7 +76,7 @@ var _ = Describe("AWS Fuzz (mapi2capi)", func() {
 			mapi2capi.FromAWSMachineAndInfra,
 			fromMachineAndAWSMachineAndAWSCluster,
 			conversiontest.ObjectMetaFuzzerFuncs(mapiNamespace),
-			conversiontest.MAPIMachineFuzzerFuncs(&mapiv1beta1.AWSMachineProviderConfig{}, awsProviderIDFuzzer),
+			conversiontest.MAPIMachineFuzzerFuncs(&mapiv1beta1.AWSMachineProviderConfig{}, &mapiv1beta1.AWSMachineProviderStatus{}, awsProviderIDFuzzer),
 			awsProviderSpecFuzzerFuncs,
 		)
 	})
@@ -99,7 +99,7 @@ var _ = Describe("AWS Fuzz (mapi2capi)", func() {
 			mapi2capi.FromAWSMachineSetAndInfra,
 			fromMachineSetAndAWSMachineTemplateAndAWSCluster,
 			conversiontest.ObjectMetaFuzzerFuncs(mapiNamespace),
-			conversiontest.MAPIMachineFuzzerFuncs(&mapiv1beta1.AWSMachineProviderConfig{}, awsProviderIDFuzzer),
+			conversiontest.MAPIMachineFuzzerFuncs(&mapiv1beta1.AWSMachineProviderConfig{}, &mapiv1beta1.AWSMachineProviderStatus{}, awsProviderIDFuzzer),
 			conversiontest.MAPIMachineSetFuzzerFuncs(),
 			awsProviderSpecFuzzerFuncs,
 		)

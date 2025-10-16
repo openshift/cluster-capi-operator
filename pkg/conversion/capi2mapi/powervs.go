@@ -95,7 +95,7 @@ func (m machineAndPowerVSMachineAndPowerVSCluster) ToMachine() (*mapiv1beta1.Mac
 		errors = append(errors, err...)
 	}
 
-	powerVSRawExt, errRaw := RawExtensionFromProviderSpec(mapiPowerVSSpec)
+	powerVSRawExt, errRaw := RawExtensionFromInterface(mapiPowerVSSpec)
 	if errRaw != nil {
 		return nil, nil, fmt.Errorf("unable to convert PowerVS providerSpec to raw extension: %w", errRaw)
 	}

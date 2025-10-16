@@ -295,12 +295,13 @@ func MAPI2CAPIMachineRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv1.I
 
 		// Break down the comparison to make it easier to debug sections that are failing conversion.
 
-		mapiMachine.Status.ProviderStatus = nil // TODO: This should be removed once the CAPI InfraMachine to MAPI Machine conversion is implemented.
-		mapiMachine.Status.LastOperation = nil  // Ignore, this field as it is not present in CAPI.
+		mapiMachine.Status.LastOperation = nil // Ignore, this field as it is not present in CAPI.
 		// The conditions are not a 1:1 mapping conversion between CAPI and MAPI.
 		// So null them out to match the original nil fuzzing.
 		mapiMachine.Status.Conditions = nil
-		Expect(mapiMachine.Status).To(Equal(in.machine.Status))
+
+		// The ProviderStatus only contains non-roundtripable fields.
+		Expect(mapiMachine.Status).To(WithTransform(ignoreMachineProviderStatus, Equal(ignoreMachineProviderStatus(in.machine.Status))), "converted MAPI machine should have matching .status")
 
 		mapiMachine.Finalizers = nil
 		Expect(mapiMachine.TypeMeta).To(Equal(in.machine.TypeMeta), "converted MAPI machine should have matching .typeMeta")
@@ -392,6 +393,15 @@ func ignoreMachineProviderSpec(in mapiv1beta1.MachineSpec) mapiv1beta1.MachineSp
 func ignoreMachineSetProviderSpec(in mapiv1beta1.MachineSetSpec) mapiv1beta1.MachineSetSpec {
 	out := in.DeepCopy()
 	out.Template.Spec.ProviderSpec.Value = nil
+
+	return *out
+}
+
+// ignoreMachineProviderStatus returns a copy of the MachineSpec with the ProviderSpec field set to nil.
+// This is used so that we can separate the comparison of the ProviderSpec field.
+func ignoreMachineProviderStatus(in mapiv1beta1.MachineStatus) mapiv1beta1.MachineStatus {
+	out := in.DeepCopy()
+	out.ProviderStatus = nil
 
 	return *out
 }
@@ -605,7 +615,7 @@ func CAPIMachineSetFuzzerFuncs(infraTemplateKind, infraAPIVersion, clusterName s
 // The providerSpec should be a pointer to a providerSpec type for the platform being tested.
 // This will be fuzzed and then injected into the MachineSpec as a RawExtension.
 // The providerIDFuzz function should be a function that returns a valid providerID for the platform being tested.
-func MAPIMachineFuzzerFuncs(providerSpec runtime.Object, providerIDFuzz StringFuzzer) fuzzer.FuzzerFuncs {
+func MAPIMachineFuzzerFuncs(providerSpec runtime.Object, providerStatus interface{}, providerIDFuzz StringFuzzer) fuzzer.FuzzerFuncs {
 	return func(codecs runtimeserializer.CodecFactory) []interface{} {
 		return []interface{}{
 			// MAPI to CAPI conversion functions.
@@ -670,8 +680,17 @@ func MAPIMachineFuzzerFuncs(providerSpec runtime.Object, providerIDFuzz StringFu
 				fuzzMAPIMachineStatusAddresses(&m.Addresses, c)
 				fuzzMAPIMachineStatusPhase(m.Phase, c)
 
+				bytes, err := json.Marshal(providerStatus)
+				if err != nil {
+					panic(err)
+				}
+
+				// Set the bytes field on the RawExtension
+				m.ProviderStatus = &runtime.RawExtension{
+					Raw: bytes,
+				}
+
 				m.LastOperation = nil        // Ignore, this field as it is not present in CAPI.
-				m.ProviderStatus = nil       // Ignore, this field as the conversion logic is not yet implemented. // TODO: remove this once the InfraMachine conversion is implemented.
 				m.AuthoritativeAPI = ""      // Ignore, this field as it is not present in CAPI.
 				m.SynchronizedGeneration = 0 // Ignore, this field as it is not present in CAPI.
 				m.Conditions = nil           // Ignore, this field as it is not a 1:1 mapping between CAPI and MAPI but rather a recomputation of the conditions based on other fields.

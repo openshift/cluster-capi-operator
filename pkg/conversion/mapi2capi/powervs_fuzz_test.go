@@ -75,7 +75,7 @@ var _ = Describe("PowerVS Fuzz (mapi2capi)", func() {
 			mapi2capi.FromPowerVSMachineAndInfra,
 			fromMachineAndPowerVSMachineAndPowerVSCluster,
 			conversiontest.ObjectMetaFuzzerFuncs(mapiNamespace),
-			conversiontest.MAPIMachineFuzzerFuncs(&mapiv1.PowerVSMachineProviderConfig{}, powerVSProviderIDFuzzer),
+			conversiontest.MAPIMachineFuzzerFuncs(&mapiv1.PowerVSMachineProviderConfig{}, &mapiv1.PowerVSMachineProviderStatus{}, powerVSProviderIDFuzzer),
 			powerVSProviderSpecFuzzerFuncs,
 		)
 	})
@@ -98,7 +98,7 @@ var _ = Describe("PowerVS Fuzz (mapi2capi)", func() {
 			mapi2capi.FromPowerVSMachineSetAndInfra,
 			fromMachineSetAndPowerVSMachineTemplateAndPowerVSCluster,
 			conversiontest.ObjectMetaFuzzerFuncs(mapiNamespace),
-			conversiontest.MAPIMachineFuzzerFuncs(&mapiv1.PowerVSMachineProviderConfig{}, powerVSProviderIDFuzzer),
+			conversiontest.MAPIMachineFuzzerFuncs(&mapiv1.PowerVSMachineProviderConfig{}, &mapiv1.PowerVSMachineProviderStatus{}, powerVSProviderIDFuzzer),
 			conversiontest.MAPIMachineSetFuzzerFuncs(),
 			powerVSProviderSpecFuzzerFuncs,
 		)

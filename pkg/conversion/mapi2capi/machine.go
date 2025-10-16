@@ -141,11 +141,8 @@ func convertMAPIMachineStatusToCAPIMachineV1Beta2Status(mapiMachine *mapiv1beta1
 //
 //nolint:funlen
 func convertMAPIMachineConditionsToCAPIMachineConditions(mapiMachine *mapiv1beta1.Machine) clusterv1.Conditions {
-	capiConditions := []clusterv1.Condition{}
-
 	// According to CAPI v1beta1 machine conditions, there are three main conditions:
 	// Ready, BootstrapReady, InfrastructureReady
-
 	readyCondition := clusterv1.Condition{
 		Type: clusterv1.ReadyCondition,
 		Status: func() corev1.ConditionStatus {
@@ -210,9 +207,7 @@ func convertMAPIMachineConditionsToCAPIMachineConditions(mapiMachine *mapiv1beta
 		// LastTransitionTime will be set by the condition utilities.
 	}
 
-	capiConditions = append(capiConditions, readyCondition, bootstrapReadyCondition, infrastructureReadyCondition)
-
-	return capiConditions
+	return []clusterv1.Condition{readyCondition, bootstrapReadyCondition, infrastructureReadyCondition}
 }
 
 // convertMAPIMachineConditionsToCAPIMachineV1Beta2StatusConditions converts MAPI conditions to CAPI v1beta2 conditions.
