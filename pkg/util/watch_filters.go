@@ -22,9 +22,9 @@ import (
 
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/klog/v2"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
@@ -38,12 +38,12 @@ const machineSetKind = "MachineSet"
 // there to be a mirror object in the MAPI namespace.
 func RewriteNamespace(namespace string) func(context.Context, client.Object) []reconcile.Request {
 	return func(ctx context.Context, obj client.Object) []reconcile.Request {
-		klog.V(4).Info(
-			"reconcile triggered by ",
-			"objectType: ", fmt.Sprintf("%T", obj),
-			"namespace: ", obj.GetNamespace(),
-			"name: ", obj.GetName(),
+		logger := logf.FromContext(ctx).WithValues(
+			"objectType", fmt.Sprintf("%T", obj),
+			"namespace", obj.GetNamespace(),
+			"name", obj.GetName(),
 		)
+		logger.V(4).Info("reconcile triggered")
 
 		return []reconcile.Request{{
 			NamespacedName: client.ObjectKey{Namespace: namespace, Name: obj.GetName()},
@@ -57,19 +57,19 @@ func RewriteNamespace(namespace string) func(context.Context, client.Object) []r
 // for the corresponding MachineSet in the MAPI namespace to trigger reconciliation of the mirror MAPI MachineSet.
 func ResolveCAPIMachineSetFromInfraMachineTemplate(namespace string) func(context.Context, client.Object) []reconcile.Request {
 	return func(ctx context.Context, obj client.Object) []reconcile.Request {
-		klog.V(4).Info(
-			"reconcile triggered by ",
-			"objectType: ", fmt.Sprintf("%T", obj),
-			"namespace: ", obj.GetNamespace(),
-			"name: ", obj.GetName(),
+		logger := logf.FromContext(ctx).WithValues(
+			"objectType", fmt.Sprintf("%T", obj),
+			"namespace", obj.GetNamespace(),
+			"name", obj.GetName(),
 		)
+		logger.V(4).Info("reconcile triggered")
 
 		objLabels := obj.GetLabels()
 		requests := []reconcile.Request{}
 
 		machineSetName, ok := objLabels[controllers.MachineSetOpenshiftLabelKey]
 		if ok {
-			klog.V(4).Info("Object has machine.openshift.io/cluster-api-machineset label, enqueueing request",
+			logger.V(4).Info("Object has machine.openshift.io/cluster-api-machineset label, enqueueing request",
 				"InfraMachineTemplate", obj.GetName(), machineSetKind, machineSetName)
 
 			requests = append(requests, reconcile.Request{
@@ -86,19 +86,20 @@ func ResolveCAPIMachineSetFromInfraMachineTemplate(namespace string) func(contex
 // for the corresponding MAPI Machine in the MAPI namespace to trigger reconciliation of the mirror MAPI Machine.
 func ResolveCAPIMachineFromInfraMachine(namespace string) func(context.Context, client.Object) []reconcile.Request {
 	return func(ctx context.Context, obj client.Object) []reconcile.Request {
-		klog.V(4).Info(
-			"reconcile triggered by ",
-			"objectType: ", fmt.Sprintf("%T", obj),
-			"namespace: ", obj.GetNamespace(),
-			"name: ", obj.GetName(),
+		logger := logf.FromContext(ctx).WithValues(
+			"objectType", fmt.Sprintf("%T", obj),
+			"namespace", obj.GetNamespace(),
+			"name", obj.GetName(),
 		)
+		logger.V(4).Info("reconcile triggered")
 
 		requests := []reconcile.Request{}
 
 		for _, ref := range obj.GetOwnerReferences() {
 			gv, err := schema.ParseGroupVersion(ref.APIVersion)
 			if err != nil {
-				klog.Info("Failed to parse GroupVersion", "name", obj.GetName(), "APIVersion", ref.APIVersion)
+				logger.Error(err, "Failed to parse GroupVersion", "APIVersion", ref.APIVersion)
+				continue
 			}
 
 			if ref.Kind == "Machine" && gv.Group == clusterv1.GroupVersion.Group {
@@ -116,12 +117,6 @@ func ResolveCAPIMachineFromInfraMachine(namespace string) func(context.Context, 
 // namespace provided.
 func FilterNamespace(namespace string) predicate.Predicate {
 	return predicate.NewPredicateFuncs(func(obj client.Object) bool {
-		klog.V(4).Info(
-			"reconcile triggered by ",
-			"objectType: ", fmt.Sprintf("%T", obj),
-			"namespace: ", obj.GetNamespace(),
-			"name: ", obj.GetName(),
-		)
 		// Check namespace is as expected
 		return obj.GetNamespace() == namespace
 	})
