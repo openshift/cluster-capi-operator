@@ -41,6 +41,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/validation/field"
@@ -885,7 +886,7 @@ func (r *MachineSyncReconciler) convertCAPIMachineOwnerReferencesToMAPI(ctx cont
 	capiOwnerReference := capiMachine.OwnerReferences[0]
 	switch capiOwnerReference.Kind {
 	case machineSetKind:
-		if capiOwnerReference.APIVersion != clusterv1.GroupVersion.String() {
+		if capiOwnerReference.APIVersion != clusterv1.GroupVersion.String() && capiOwnerReference.APIVersion != (schema.GroupVersion{Group: clusterv1.GroupVersion.Group, Version: "v1beta2"}).String() {
 			return nil, field.Invalid(field.NewPath("metadata", "ownerReferences"), capiMachine.OwnerReferences, errUnsuportedOwnerKindForConversion.Error())
 		}
 
@@ -916,7 +917,7 @@ func (r *MachineSyncReconciler) convertCAPIMachineOwnerReferencesToMAPI(ctx cont
 		mapiOwnerReferences = append(mapiOwnerReferences, mapiOwnerReference)
 
 	case clusterv1.ClusterKind:
-		if capiOwnerReference.APIVersion != clusterv1.GroupVersion.String() {
+		if capiOwnerReference.APIVersion != clusterv1.GroupVersion.String() && capiOwnerReference.APIVersion != (schema.GroupVersion{Group: clusterv1.GroupVersion.Group, Version: "v1beta2"}).String() {
 			return nil, field.Invalid(field.NewPath("metadata", "ownerReferences"), capiMachine.OwnerReferences, errUnsuportedOwnerKindForConversion.Error())
 		}
 
