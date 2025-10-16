@@ -20,7 +20,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 
 	BeforeAll(func() {
 		if platform != configv1.AWSPlatformType {
-			Skip(fmt.Sprintf("Skipping tests on %s, this only support on aws", platform))
+			Skip(fmt.Sprintf("Skipping tests on %s, this is only supported on AWS", platform))
 		}
 
 		if !capiframework.IsMachineAPIMigrationEnabled(ctx, cl) {
@@ -296,8 +296,8 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				}), capiframework.WaitMedium, capiframework.RetryShort).Should(Succeed(), "Failed to update CAPI MachineSet DeletePolicy")
 
 				By("Verifying both MAPI and CAPI MachineSet spec value are restored to original value")
-				Eventually(k.Object(mapiMachineSet), capiframework.WaitShort, capiframework.RetryShort).Should(HaveField("Spec.DeletePolicy", SatisfyAny(BeEmpty(), Equal("Random"))), "DeletePolicy should be either empty or 'Random'")
-				Eventually(k.Object(capiMachineSet), capiframework.WaitShort, capiframework.RetryShort).Should(HaveField("Spec.DeletePolicy", HaveValue(Equal("Random"))), "DeletePolicy should be 'Random'")
+				Eventually(k.Object(mapiMachineSet), capiframework.WaitShort, capiframework.RetryShort).Should(HaveField("Spec.DeletePolicy", SatisfyAny(BeEmpty(), Equal("Random"))), "Should have DeletePolicy be either empty or 'Random'")
+				Eventually(k.Object(capiMachineSet), capiframework.WaitShort, capiframework.RetryShort).Should(HaveField("Spec.DeletePolicy", HaveValue(Equal("Random"))), "Should have DeletePolicy be 'Random'")
 			})
 
 			It("should create a new InfraTemplate when update MAPI MachineSet providerSpec", func() {
@@ -310,7 +310,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				By("Waiting for new InfraTemplate to be created")
 				originalAWSMachineTemplateName := capiMachineSet.Spec.Template.Spec.InfrastructureRef.Name
 				capiMachineSet = capiframework.GetMachineSet(cl, mapiMSAuthMAPIName, capiframework.CAPINamespace)
-				Eventually(k.Object(capiMachineSet), capiframework.WaitMedium, capiframework.RetryMedium).Should(HaveField("Spec.Template.Spec.InfrastructureRef.Name", Not(Equal(originalAWSMachineTemplateName))), "InfraTemplate name should be changed")
+				Eventually(k.Object(capiMachineSet), capiframework.WaitMedium, capiframework.RetryMedium).Should(HaveField("Spec.Template.Spec.InfrastructureRef.Name", Not(Equal(originalAWSMachineTemplateName))), "Should have InfraTemplate name changed")
 
 				By("Verifying new InfraTemplate has the updated InstanceType")
 				newAWSMachineTemplate, err := capiframework.GetAWSMachineTemplateByPrefix(cl, mapiMSAuthMAPIName, capiframework.CAPINamespace)
@@ -364,7 +364,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				mapiMachineSet, _ = mapiframework.GetMachineSet(ctx, cl, mapiMSAuthMAPIName)
 				Eventually(k.Object(mapiMachineSet), capiframework.WaitMedium, capiframework.RetryMedium).Should(
 					HaveField("Spec.Template.Spec.ProviderSpec.Value.Raw", ContainSubstring(newInstanceType)),
-					"MAPI MachineSet providerSpec should be updated to reflect the new InfraTemplate with InstanceType %s", newInstanceType,
+					"Should have MAPI MachineSet providerSpec updated to reflect the new InfraTemplate with InstanceType %s", newInstanceType,
 				)
 			})
 		})

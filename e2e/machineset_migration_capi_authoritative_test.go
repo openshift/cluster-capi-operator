@@ -17,7 +17,7 @@ import (
 var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] MachineSet Migration CAPI Authoritative Tests", Ordered, func() {
 	BeforeAll(func() {
 		if platform != configv1.AWSPlatformType {
-			Skip(fmt.Sprintf("Skipping tests on %s, this only support on aws", platform))
+			Skip(fmt.Sprintf("Skipping tests on %s, this is only supported on AWS", platform))
 		}
 
 		if !capiframework.IsMachineAPIMigrationEnabled(ctx, cl) {
@@ -120,8 +120,9 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 
 				mapiMachines, err := mapiframework.GetMachinesFromMachineSet(ctx, cl, mapiMachineSet)
 				Expect(err).ToNot(HaveOccurred(), "failed to get MAPI Machines from MachineSet")
-				capiMachines := capiframework.GetMachinesFromMachineSet(cl, capiMachineSet)
 				Expect(mapiMachines).ToNot(BeEmpty(), "no MAPI Machines found")
+
+				capiMachines := capiframework.GetMachinesFromMachineSet(cl, capiMachineSet)
 				Expect(capiMachines).ToNot(BeEmpty(), "no CAPI Machines found")
 				Expect(capiMachines[0].Name).To(Equal(mapiMachines[0].Name))
 				firstMAPIMachine = mapiMachines[0]
@@ -268,8 +269,10 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				Expect(err).ToNot(HaveOccurred(), "failed to get mapiMachineSet")
 				mapiframework.DeleteMachineSets(cl, mapiMachineSet)
 
-				// TODO bug https://issues.redhat.com/browse/OCPBUGS-56897
 				By("Verifying CAPI MachineSet not removed, both MAPI Machines and Mirrors remain")
+				// TODO: Add full verification once OCPBUGS-56897 is fixed
+				capiMS := capiframework.GetMachineSet(cl, mapiMSAuthMAPIName, capiframework.CAPINamespace)
+				Expect(capiMS).ToNot(BeNil(), "CAPI MachineSet should still exist after deleting non-authoritative MAPI MachineSet")
 			})
 		})
 	})

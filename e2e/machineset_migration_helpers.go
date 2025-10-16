@@ -69,7 +69,7 @@ func createMAPIMachineSetWithAuthoritativeAPI(ctx context.Context, cl client.Cli
 		},
 	}
 	Eventually(komega.Get(capiMachineSet), capiframework.WaitShort, capiframework.RetryShort).Should(
-		Succeed(), "Mirror CAPI MachineSet should be created within 1 minute")
+		Succeed(), "Should have mirror CAPI MachineSet created within 1 minute")
 
 	switch machineAuthority {
 	case mapiv1beta1.MachineAuthorityMachineAPI:
@@ -127,7 +127,7 @@ func verifyMachineSetPausedCondition(machineSet client.Object, authority mapiv1b
 
 		Eventually(komega.Object(ms), capiframework.WaitMedium, capiframework.RetryMedium).Should(
 			HaveField("Status.Conditions", ContainElement(conditionMatcher)),
-			fmt.Sprintf("Should have found the expected Paused condition for MAPI MachineSet %s with authority: %s", ms.Name, authority),
+			fmt.Sprintf("Should have the expected Paused condition for MAPI MachineSet %s with authority: %s", ms.Name, authority),
 		)
 
 	case *clusterv1.MachineSet:
@@ -153,7 +153,7 @@ func verifyMachineSetPausedCondition(machineSet client.Object, authority mapiv1b
 
 		Eventually(komega.Object(ms), capiframework.WaitMedium, capiframework.RetryMedium).Should(
 			HaveField("Status.V1Beta2.Conditions", ContainElement(conditionMatcher)),
-			fmt.Sprintf("Should have found the expected Paused condition for CAPI MachineSet %s with authority: %s", ms.Name, authority),
+			fmt.Sprintf("Should have the expected Paused condition for CAPI MachineSet %s with authority: %s", ms.Name, authority),
 		)
 
 	default:
@@ -168,13 +168,13 @@ func verifyMachinesetReplicas(machineSet client.Object, replicas int) {
 	case *mapiv1beta1.MachineSet:
 		By(fmt.Sprintf("Verifying MAPI MachineSet status.Replicas is %d", replicas))
 		Eventually(komega.Object(ms), capiframework.WaitLong, capiframework.RetryLong).Should(
-			HaveField("Status.Replicas", HaveValue(Equal(int32(replicas)))),
-			"MAPI MachineSet %q replicas status should eventually be %d", ms.Name, replicas)
+			HaveField("Status.Replicas", Equal(int32(replicas))),
+			"Should have MAPI MachineSet %q replicas status eventually be %d", ms.Name, replicas)
 	case *clusterv1.MachineSet:
 		By(fmt.Sprintf("Verifying CAPI MachineSet status.Replicas is %d", replicas))
 		Eventually(komega.Object(ms), capiframework.WaitLong, capiframework.RetryLong).Should(
-			HaveField("Status.Replicas", HaveValue(Equal(int32(replicas)))),
-			"CAPI MachineSet %q replicas status should eventually be %d", ms.Name, replicas)
+			HaveField("Status.Replicas", Equal(int32(replicas))),
+			"Should have CAPI MachineSet %q replicas status eventually be %d", ms.Name, replicas)
 	default:
 		Fail(fmt.Sprintf("unsupported MachineSet type: %T", machineSet))
 	}
@@ -207,7 +207,7 @@ func verifyMAPIMachineSetSynchronizedCondition(mapiMachineSet *mapiv1beta1.Machi
 				),
 			),
 		),
-		fmt.Sprintf("Expected Synchronized condition for %s not found or incorrect", authority),
+		fmt.Sprintf("Should have Synchronized condition for %s", authority),
 	)
 }
 
@@ -256,12 +256,12 @@ func waitForMAPIMachineSetMirrors(cl client.Client, machineSetNameMAPI string) (
 			return fmt.Errorf("CAPI MachineSet %s/%s not found", capiframework.CAPINamespace, machineSetNameMAPI)
 		}
 		return nil
-	}, capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(), "CAPI MachineSet %s/%s should exist", capiframework.CAPINamespace, machineSetNameMAPI)
+	}, capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(), "Should have CAPI MachineSet %s/%s exist", capiframework.CAPINamespace, machineSetNameMAPI)
 
 	Eventually(func() error {
 		awsMachineTemplate, err = capiframework.GetAWSMachineTemplateByPrefix(cl, machineSetNameMAPI, capiframework.CAPINamespace)
 		return err
-	}, capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(), "AWSMachineTemplate with prefix %s should exist", machineSetNameMAPI)
+	}, capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(), "Should have AWSMachineTemplate with prefix %s exist", machineSetNameMAPI)
 
 	return capiMachineSet, awsMachineTemplate
 }
@@ -275,7 +275,7 @@ func waitForCAPIMachineSetMirror(cl client.Client, machineName string) *clusterv
 			return fmt.Errorf("CAPI MachineSet %s/%s not found", capiframework.CAPINamespace, machineName)
 		}
 		return nil
-	}, capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(), "CAPI MachineSet %s/%s should exist", capiframework.CAPINamespace, machineName)
+	}, capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(), "Should have CAPI MachineSet %s/%s exist", capiframework.CAPINamespace, machineName)
 	return capiMachineSet
 }
 
@@ -290,7 +290,7 @@ func waitForAWSMachineTemplate(cl client.Client, prefix string) *awsv1.AWSMachin
 		}
 		return nil
 	}, capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(),
-		"AWSMachineTemplate with prefix %s should exist", prefix)
+		"Should have AWSMachineTemplate with prefix %s exist", prefix)
 	return awsMachineTemplate
 }
 
