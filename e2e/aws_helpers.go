@@ -168,7 +168,8 @@ func getCAPICreatedInstance(awsClient *ec2.EC2, msName string) ec2.Instance {
 	})).Should(HaveField("Items", HaveLen(1)), "Failed to find exactly one CAPI AWSMachine for MachineSet %s", msName)
 
 	capiMachine := capiMachineList.Items[0]
-	Expect(capiMachine.Status).ToNot(BeNil())
+	Expect(capiMachine.Spec.InstanceID).ToNot(BeNil(), "AWSMachine InstanceID not set in Spec")
+	Expect(*capiMachine.Spec.InstanceID).ToNot(BeEmpty(), "AWSMachine InstanceID is empty")
 
 	request := &ec2.DescribeInstancesInput{
 		InstanceIds: aws.StringSlice([]string{*capiMachine.Spec.InstanceID}),
