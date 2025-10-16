@@ -126,8 +126,13 @@ func openstackProviderSpecFuzzerFuncs(codecs runtimeserializer.CodecFactory) []a
 		func(network *mapiv1alpha1.NetworkParam, c randfill.Continue) {
 			switch c.Int31n(2) {
 			case 0:
-				network.UUID = uuid.NewString()
+				network.UUID = ""
 				network.Filter = mapiv1alpha1.Filter{}
+				network.Subnets = []mapiv1alpha1.SubnetParam{
+					{
+						UUID: uuid.NewString(),
+					},
+				}
 			case 1:
 				network.UUID = ""
 				c.Fill(&network.Filter)
