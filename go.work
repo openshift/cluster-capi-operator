@@ -11,3 +11,9 @@ replace (
 	github.com/metal3-io/baremetal-operator => github.com/metal3-io/baremetal-operator v0.5.1
 	sigs.k8s.io/cluster-api => sigs.k8s.io/cluster-api v1.10.4
 )
+
+// FIXME(chrischdi): DONOTMERGE only for testing purposes until we have a merged API PR
+replace (
+	github.com/openshift/api => github.com/openshift-cloud-team/openshift-api v0.0.0-20251009074826-a8e1698c6d8e
+	github.com/openshift/client-go => github.com/openshift-cloud-team/client-go v0.0.0-20251009080711-ae22c1eb5a5c
+)
