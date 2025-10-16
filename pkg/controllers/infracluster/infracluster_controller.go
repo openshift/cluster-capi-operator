@@ -233,6 +233,13 @@ func (r *InfraClusterController) ensureInfraCluster(ctx context.Context, log log
 		}
 
 		infraCluster = openstackCluster
+	case configv1.NutanixPlatformType:
+		var err error
+
+		infraCluster, err = r.ensureNutanixCluster(ctx, log)
+		if err != nil {
+			return nil, fmt.Errorf("error ensuring NutanixCluster: %w", err)
+		}
 	default:
 		return nil, errPlatformNotSupported
 	}
