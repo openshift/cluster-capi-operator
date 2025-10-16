@@ -45,13 +45,13 @@ func RawExtensionFromProviderSpec(spec interface{}) (*runtime.RawExtension, erro
 
 func convertCAPIMachineSetSelectorToMAPI(capiSelector metav1.LabelSelector) metav1.LabelSelector {
 	mapiSelector := capiSelector.DeepCopy()
-	mapiSelector.MatchLabels = convertCAPILabelsToMAPILabels(capiSelector.MatchLabels)
+	mapiSelector.MatchLabels = convertCAPILabelsToMAPILabels(capiSelector.MatchLabels, nil)
 
 	return *mapiSelector
 }
 
-func convertCAPILabelsToMAPILabels(capiLabels map[string]string) map[string]string {
-	if len(capiLabels) == 0 {
+func convertCAPILabelsToMAPILabels(capiLabels map[string]string, machineAPILabels map[string]string) map[string]string {
+	if len(capiLabels) == 0 && len(machineAPILabels) == 0 {
 		return nil
 	}
 
@@ -74,6 +74,15 @@ func convertCAPILabelsToMAPILabels(capiLabels map[string]string) map[string]stri
 		}
 
 		// Default case - copy over the label as-is to MAPI.
+		mapiLabels[k] = v
+	}
+
+	for k, v := range machineAPILabels {
+		// Ignore empty labels to ensure to not overwrite potentially existing labels with empty values.
+		if v == "" {
+			continue
+		}
+
 		mapiLabels[k] = v
 	}
 
@@ -154,6 +163,9 @@ func convertCAPIAnnotationsToMAPIAnnotations(capiAnnotations map[string]string) 
 
 		mapiAnnotations[k] = v
 	}
+
+	// TODO
+	// - machine.openshift.io/instance-state
 
 	return mapiAnnotations
 }
