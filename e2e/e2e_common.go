@@ -26,7 +26,7 @@ import (
 
 const (
 	infrastructureName                                                = "cluster"
-	infraAPIVersion                                                   = "infrastructure.cluster.x-k8s.io/v1beta1"
+	infraAPIVersion                                                   = "infrastructure.cluster.x-k8s.io/v1beta2"
 	managedByAnnotationValueClusterCAPIOperatorInfraClusterController = "cluster-capi-operator-infracluster-controller"
 )
 
