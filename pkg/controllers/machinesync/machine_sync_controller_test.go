@@ -1253,6 +1253,117 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 
 		})
 
+		Context("Prevent updates to MAPI machine if migrating would be unpredictable", func() {
+			BeforeEach(func() {
+				By("Waiting for VAP to be ready")
+				machineVap = &admissionregistrationv1.ValidatingAdmissionPolicy{}
+				Eventually(k8sClient.Get(ctx, client.ObjectKey{Name: "openshift-prevent-migration-when-machine-updating"}, machineVap), timeout).Should(Succeed())
+				Eventually(k.Update(machineVap, func() {
+					machineVap.Spec.Validations = append(machineVap.Spec.Validations, admissionregistrationv1.Validation{
+						Expression: "!(has(object.metadata.labels) && \"test-sentinel\" in object.metadata.labels)",
+						Message:    "policy in place",
+					})
+				})).Should(Succeed())
+
+				Eventually(k.Object(machineVap), timeout).Should(
+					HaveField("Status.ObservedGeneration", BeNumerically(">=", 2)),
+				)
+
+				By("Updating the VAP binding")
+				policyBinding = &admissionregistrationv1.ValidatingAdmissionPolicyBinding{}
+				Eventually(k8sClient.Get(ctx, client.ObjectKey{
+					Name: "openshift-prevent-migration-when-machine-updating"}, policyBinding), timeout).Should(Succeed())
+
+				Eventually(k.Update(policyBinding, func() {
+					policyBinding.Spec.MatchResources.NamespaceSelector.MatchLabels = map[string]string{
+						"kubernetes.io/metadata.name": mapiNamespace.GetName(),
+					}
+				}), timeout).Should(Succeed())
+
+				// Wait until the binding shows the patched values
+				Eventually(k.Object(policyBinding), timeout).Should(
+					SatisfyAll(
+						HaveField("Spec.MatchResources.NamespaceSelector.MatchLabels",
+							HaveKeyWithValue("kubernetes.io/metadata.name",
+								mapiNamespace.GetName())),
+					),
+				)
+
+				By("Creating a throwaway MAPI machine")
+				sentinelMachine := mapiMachineBuilder.WithName("sentinel-machine").WithAuthoritativeAPI(mapiv1beta1.MachineAuthorityClusterAPI).Build()
+				Eventually(k8sClient.Create(ctx, sentinelMachine), timeout).Should(Succeed())
+
+				capiSentinelMachine := clusterv1resourcebuilder.Machine().WithName("sentinel-machine").WithNamespace(capiNamespace.Name).Build()
+				Expect(k8sClient.Create(ctx, capiSentinelMachine)).To(Succeed())
+
+				Eventually(k.Get(capiSentinelMachine)).Should(Succeed())
+
+				Eventually(k.Update(sentinelMachine, func() {
+					sentinelMachine.ObjectMeta.Labels = map[string]string{"test-sentinel": "fubar"}
+				}), timeout).Should(MatchError(ContainSubstring("policy in place")))
+			})
+
+			It("denies updating the AuthoritativeAPI when the machine is in Provisioning", func() {
+				By("Updating the MAPI machine phase to be provisioning")
+				Eventually(k.UpdateStatus(mapiMachine, func() {
+					provisioningPhase := mapiv1beta1.PhaseProvisioning
+					mapiMachine.Status.Phase = &provisioningPhase
+				})).Should(Succeed())
+
+				By("Attempting to update the authoritativeAPI should be blocked")
+				Eventually(k.Update(mapiMachine, func() {
+					mapiMachine.Spec.AuthoritativeAPI = mapiv1beta1.MachineAuthorityClusterAPI
+				}), timeout).Should(MatchError(ContainSubstring("Cannot update .spec.authoritativeAPI when machine is in Provisioning phase")))
+			})
+
+			It("denies updating the AuthoritativeAPI when the machine has a non-zero deletion timestamp", func() {
+				By("Adding a finalizer to prevent actual deletion")
+				Eventually(k.Update(mapiMachine, func() {
+					mapiMachine.Finalizers = append(mapiMachine.Finalizers, "test-finalizer")
+				})).Should(Succeed())
+
+				By("Deleting the MAPI machine to set deletion timestamp")
+				Eventually(k8sClient.Delete(ctx, mapiMachine)).Should(Succeed())
+
+				By("Waiting for deletion timestamp to be set")
+				Eventually(k.Object(mapiMachine)).Should(SatisfyAll(
+					HaveField("DeletionTimestamp", Not(BeNil())),
+				))
+
+				By("Attempting to update the authoritativeAPI should be blocked")
+				Eventually(k.Update(mapiMachine, func() {
+					mapiMachine.Spec.AuthoritativeAPI = mapiv1beta1.MachineAuthorityClusterAPI
+				}), timeout).Should(MatchError(ContainSubstring("Cannot update .spec.authoritativeAPI when machine has a non-zero deletion timestamp")))
+			})
+
+			It("allows updating the AuthoritativeAPI when the machine is in Running phase", func() {
+				By("Updating the MAPI machine phase to be running")
+				Eventually(k.UpdateStatus(mapiMachine, func() {
+					runningPhase := mapiv1beta1.PhaseRunning
+					mapiMachine.Status.Phase = &runningPhase
+				})).Should(Succeed())
+
+				By("Attempting to update the authoritativeAPI should succeed")
+				Eventually(k.Update(mapiMachine, func() {
+					mapiMachine.Spec.AuthoritativeAPI = mapiv1beta1.MachineAuthorityClusterAPI
+				}), timeout).Should(Succeed())
+			})
+
+			It("allows updating labels when the machine is in Provisioning phase but not changing AuthoritativeAPI", func() {
+				By("Updating the MAPI machine phase to be provisioning")
+				Eventually(k.UpdateStatus(mapiMachine, func() {
+					provisioningPhase := mapiv1beta1.PhaseProvisioning
+					mapiMachine.Status.Phase = &provisioningPhase
+				})).Should(Succeed())
+
+				By("Attempting to update labels should succeed")
+				Eventually(k.Update(mapiMachine, func() {
+					mapiMachine.ObjectMeta.Labels = map[string]string{"test-label": "fubar"}
+				}), timeout).Should(Succeed())
+			})
+
+		})
+
 	})
 })
 
