@@ -41,6 +41,7 @@ type syncStatusApplyConfiguration[statusPT any] interface {
 	WithConditions(...*machinev1applyconfigs.ConditionApplyConfiguration) statusPT
 	WithSynchronizedGeneration(int64) statusPT
 	WithAuthoritativeAPI(mapiv1beta1.MachineAuthority) statusPT
+	WithSynchronizedAPI(mapiv1beta1.SynchronizedAPI) statusPT
 }
 
 // syncStatusApplyConfigurationP asserts that a syncStatusApplyConfiguration is a pointer to a specific concrete type.
