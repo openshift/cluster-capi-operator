@@ -226,7 +226,7 @@ func (m machineAndAWSMachineAndAWSCluster) ToMachine() (*mapiv1beta1.Machine, []
 		"machine.openshift.io/region":        m.awsCluster.Spec.Region,
 	}
 
-	mapiMachine, err := fromCAPIMachineToMAPIMachine(m.machine, additionalMachineAPILabels)
+	mapiMachine, err := fromCAPIMachineToMAPIMachine(m.machine, additionalMachineAPILabels, string(ptr.Deref(m.awsMachine.Status.InstanceState, "")))
 	if err != nil {
 		errors = append(errors, err...)
 	}

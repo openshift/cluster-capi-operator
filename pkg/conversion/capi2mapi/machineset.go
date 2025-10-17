@@ -33,7 +33,7 @@ func fromCAPIMachineSetToMAPIMachineSet(capiMachineSet *clusterv1.MachineSet) (*
 			Name:            capiMachineSet.Name,
 			Namespace:       capiMachineSet.Namespace,
 			Labels:          convertCAPILabelsToMAPILabels(capiMachineSet.Labels, nil),
-			Annotations:     convertCAPIAnnotationsToMAPIAnnotations(capiMachineSet.Annotations),
+			Annotations:     convertCAPIAnnotationsToMAPIAnnotations(capiMachineSet.Annotations, ""),
 			Finalizers:      nil, // MAPI MachineSet does not have finalizers.
 			OwnerReferences: nil, // OwnerReferences not populated here. They are added later by the machineSetSync controller.
 		},
@@ -45,7 +45,7 @@ func fromCAPIMachineSetToMAPIMachineSet(capiMachineSet *clusterv1.MachineSet) (*
 			Template: mapiv1beta1.MachineTemplateSpec{
 				ObjectMeta: mapiv1beta1.ObjectMeta{
 					Labels:      convertCAPILabelsToMAPILabels(capiMachineSet.Spec.Template.Labels, nil),
-					Annotations: convertCAPIAnnotationsToMAPIAnnotations(capiMachineSet.Spec.Template.Annotations),
+					Annotations: convertCAPIAnnotationsToMAPIAnnotations(capiMachineSet.Spec.Template.Annotations, ""),
 				},
 			},
 		},

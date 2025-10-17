@@ -133,7 +133,7 @@ func convertCAPIMachineAnnotationsToMAPIMachineSpecObjectMetaAnnotations(capiAnn
 	return mapiAnnotations
 }
 
-func convertCAPIAnnotationsToMAPIAnnotations(capiAnnotations map[string]string) map[string]string {
+func convertCAPIAnnotationsToMAPIAnnotations(capiAnnotations map[string]string, instanceState string) map[string]string {
 	if len(capiAnnotations) == 0 {
 		return nil
 	}
@@ -164,8 +164,9 @@ func convertCAPIAnnotationsToMAPIAnnotations(capiAnnotations map[string]string) 
 		mapiAnnotations[k] = v
 	}
 
-	// TODO
-	// - machine.openshift.io/instance-state
+	if instanceState != "" {
+		mapiAnnotations["machine.openshift.io/instance-state"] = instanceState
+	}
 
 	return mapiAnnotations
 }

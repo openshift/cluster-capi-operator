@@ -209,7 +209,7 @@ func (m machineAndOpenStackMachineAndOpenStackCluster) ToMachine() (*mapiv1beta1
 		"machine.openshift.io/instance-type": ptr.Deref(m.openstackMachine.Spec.Flavor, ""),
 	}
 
-	mapiMachine, errs := fromCAPIMachineToMAPIMachine(m.machine, additionalMachineAPILabels)
+	mapiMachine, errs := fromCAPIMachineToMAPIMachine(m.machine, additionalMachineAPILabels, string(ptr.Deref(m.openstackMachine.Status.InstanceState, "")))
 	if errs != nil {
 		errors = append(errors, errs...)
 	}

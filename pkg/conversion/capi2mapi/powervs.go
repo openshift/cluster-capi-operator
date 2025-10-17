@@ -105,7 +105,7 @@ func (m machineAndPowerVSMachineAndPowerVSCluster) ToMachine() (*mapiv1beta1.Mac
 		"machine.openshift.io/region":        ptr.Deref(m.powerVSMachine.Status.Region, ""),
 	}
 
-	mapiMachine, err := fromCAPIMachineToMAPIMachine(m.machine, additionalMachineAPILabels)
+	mapiMachine, err := fromCAPIMachineToMAPIMachine(m.machine, additionalMachineAPILabels, string(m.powerVSMachine.Status.InstanceState))
 	if err != nil {
 		errors = append(errors, err...)
 	}
