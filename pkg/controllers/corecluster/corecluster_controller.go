@@ -30,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util/conditions"
+	conditionsv1beta2 "sigs.k8s.io/cluster-api/util/conditions/v1beta2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -198,6 +199,12 @@ func (r *CoreClusterController) ensureCoreClusterControlPlaneInitializedConditio
 	clusterCopy := cluster.DeepCopy()
 
 	conditions.MarkTrue(cluster, clusterv1.ControlPlaneInitializedCondition)
+
+	conditionsv1beta2.Set(cluster, metav1.Condition{
+		Type:   clusterv1.ClusterControlPlaneInitializedV1Beta2Condition,
+		Reason: clusterv1.ClusterControlPlaneInitializedV1Beta2Reason,
+		Status: metav1.ConditionTrue,
+	})
 
 	patch := client.MergeFrom(clusterCopy)
 
