@@ -100,7 +100,12 @@ func (m machineAndPowerVSMachineAndPowerVSCluster) ToMachine() (*mapiv1beta1.Mac
 		return nil, nil, fmt.Errorf("unable to convert PowerVS providerSpec to raw extension: %w", errRaw)
 	}
 
-	mapiMachine, err := fromCAPIMachineToMAPIMachine(m.machine)
+	additionalMachineAPILabels := map[string]string{
+		"machine.openshift.io/instance-type": m.powerVSMachine.Spec.SystemType,
+		"machine.openshift.io/region":        ptr.Deref(m.powerVSMachine.Status.Region, ""),
+	}
+
+	mapiMachine, err := fromCAPIMachineToMAPIMachine(m.machine, additionalMachineAPILabels, string(m.powerVSMachine.Status.InstanceState))
 	if err != nil {
 		errors = append(errors, err...)
 	}

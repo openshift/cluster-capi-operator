@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/validation/field"
+	"k8s.io/utils/ptr"
 	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
@@ -201,7 +202,14 @@ func (m machineAndOpenStackMachineAndOpenStackCluster) ToMachine() (*mapiv1beta1
 
 	warnings = append(warnings, warns...)
 
-	mapiMachine, errs := fromCAPIMachineToMAPIMachine(m.machine)
+	additionalMachineAPILabels := map[string]string{
+		// Unable to determine the region without fetching the identity resources as done at:
+		// https://github.com/openshift/machine-api-provider-openstack/blob/2defb131bd0836beba0a9790de7c9a63137a5cec/pkg/machine/actuator.go#L85-L89
+		// "machine.openshift.io/region":
+		"machine.openshift.io/instance-type": ptr.Deref(m.openstackMachine.Spec.Flavor, ""),
+	}
+
+	mapiMachine, errs := fromCAPIMachineToMAPIMachine(m.machine, additionalMachineAPILabels, string(ptr.Deref(m.openstackMachine.Status.InstanceState, "")))
 	if errs != nil {
 		errors = append(errors, errs...)
 	}

@@ -258,7 +258,12 @@ func (m machineAndAWSMachineAndAWSCluster) ToMachine() (*mapiv1beta1.Machine, []
 
 	warnings = append(warnings, warn...)
 
-	mapiMachine, err := fromCAPIMachineToMAPIMachine(m.machine)
+	additionalMachineAPILabels := map[string]string{
+		"machine.openshift.io/instance-type": m.awsMachine.Spec.InstanceType,
+		"machine.openshift.io/region":        m.awsCluster.Spec.Region,
+	}
+
+	mapiMachine, err := fromCAPIMachineToMAPIMachine(m.machine, additionalMachineAPILabels, string(ptr.Deref(m.awsMachine.Status.InstanceState, "")))
 	if err != nil {
 		errors = append(errors, err...)
 	}

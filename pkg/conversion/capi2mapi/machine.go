@@ -34,7 +34,7 @@ const (
 )
 
 // fromCAPIMachineToMAPIMachine translates a core CAPI Machine to its MAPI Machine correspondent.
-func fromCAPIMachineToMAPIMachine(capiMachine *clusterv1.Machine) (*mapiv1beta1.Machine, field.ErrorList) {
+func fromCAPIMachineToMAPIMachine(capiMachine *clusterv1.Machine, additionalMachineAPILabels map[string]string, instanceState string) (*mapiv1beta1.Machine, field.ErrorList) {
 	errs := field.ErrorList{}
 
 	lifecycleHooks, capiMachineNonHookAnnotations := convertCAPILifecycleHookAnnotationsToMAPILifecycleHooksAndAnnotations(capiMachine.Annotations)
@@ -44,12 +44,14 @@ func fromCAPIMachineToMAPIMachine(capiMachine *clusterv1.Machine) (*mapiv1beta1.
 		errs = append(errs, machineStatusErrs...)
 	}
 
+	additionalMachineAPILabels["machine.openshift.io/zone"] = ptr.Deref(capiMachine.Spec.FailureDomain, "")
+
 	mapiMachine := &mapiv1beta1.Machine{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            capiMachine.Name,
 			Namespace:       mapiNamespace,
-			Labels:          convertCAPILabelsToMAPILabels(capiMachine.Labels),
-			Annotations:     convertCAPIAnnotationsToMAPIAnnotations(capiMachineNonHookAnnotations),
+			Labels:          convertCAPILabelsToMAPILabels(capiMachine.Labels, additionalMachineAPILabels),
+			Annotations:     convertCAPIAnnotationsToMAPIAnnotations(capiMachineNonHookAnnotations, instanceState),
 			Finalizers:      []string{mapiv1beta1.MachineFinalizer},
 			OwnerReferences: nil, // OwnerReferences not populated here. They are added later by the machineSync controller.
 		},
