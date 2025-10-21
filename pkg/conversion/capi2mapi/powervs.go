@@ -39,9 +39,10 @@ var (
 
 // machineAndPowerVSMachineAndPowerVSCluster stores the details of a Cluster API Machine and PowerVSMachine and PowerVSCluster.
 type machineAndPowerVSMachineAndPowerVSCluster struct {
-	machine        *clusterv1.Machine
-	powerVSMachine *ibmpowervsv1.IBMPowerVSMachine
-	powerVSCluster *ibmpowervsv1.IBMPowerVSCluster
+	machine                               *clusterv1.Machine
+	powerVSMachine                        *ibmpowervsv1.IBMPowerVSMachine
+	powerVSCluster                        *ibmpowervsv1.IBMPowerVSCluster
+	excludeMachineAPILabelsAndAnnotations bool
 }
 
 // machineSetAndPowerVSMachineTemplateAndPowerVSCluster stores the details of a Cluster API MachineSet and PowerVSMachineTemplate and AWSCluster.
@@ -74,7 +75,8 @@ func FromMachineSetAndPowerVSMachineTemplateAndPowerVSCluster(ms *clusterv1.Mach
 			powerVSMachine: &ibmpowervsv1.IBMPowerVSMachine{
 				Spec: mts.Spec.Template.Spec,
 			},
-			powerVSCluster: pc,
+			powerVSCluster:                        pc,
+			excludeMachineAPILabelsAndAnnotations: true,
 		},
 	}
 }
@@ -100,7 +102,20 @@ func (m machineAndPowerVSMachineAndPowerVSCluster) ToMachine() (*mapiv1beta1.Mac
 		return nil, nil, fmt.Errorf("unable to convert PowerVS providerSpec to raw extension: %w", errRaw)
 	}
 
-	mapiMachine, err := fromCAPIMachineToMAPIMachine(m.machine)
+	var additionalMachineAPILabels, additionalMachineAPIAnnotations map[string]string
+	if !m.excludeMachineAPILabelsAndAnnotations {
+		additionalMachineAPILabels = map[string]string{
+			"machine.openshift.io/instance-type": m.powerVSMachine.Spec.SystemType,
+			"machine.openshift.io/region":        ptr.Deref(m.powerVSMachine.Status.Region, ""),
+			"machine.openshift.io/zone":          ptr.Deref(m.machine.Spec.FailureDomain, ""),
+		}
+
+		additionalMachineAPIAnnotations = map[string]string{
+			"machine.openshift.io/instance-state": string(m.powerVSMachine.Status.InstanceState),
+		}
+	}
+
+	mapiMachine, err := fromCAPIMachineToMAPIMachine(m.machine, additionalMachineAPILabels, additionalMachineAPIAnnotations)
 	if err != nil {
 		errors = append(errors, err...)
 	}
