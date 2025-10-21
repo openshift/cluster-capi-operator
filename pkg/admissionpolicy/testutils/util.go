@@ -25,12 +25,14 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
+	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -185,6 +187,24 @@ func AddSentinelValidation(vap *admissionregistrationv1.ValidatingAdmissionPolic
 		Expression: SentinelValidationExpression,
 		Message:    "policy in place",
 	})
+}
+
+// VerifySentinelValidation tries to update a resource to hit the sentinel validation to see that the VAP is in-place.
+func VerifySentinelValidation(k komega.Komega, sentinelObject client.Object, timeout time.Duration) {
+	Eventually(k.Update(sentinelObject, func() {
+		SetSentinelValidationLabel(sentinelObject)
+	}), timeout).Should(MatchError(ContainSubstring("policy in place")))
+}
+
+// SetSentinelValidationLabel sets the sentinel validation label on a resource.
+func SetSentinelValidationLabel(sentinelObject client.Object) {
+	currentLabels := sentinelObject.GetLabels()
+	if currentLabels == nil {
+		currentLabels = map[string]string{}
+	}
+
+	currentLabels["test-sentinel"] = "fubar"
+	sentinelObject.SetLabels(currentLabels)
 }
 
 // UpdateVAPBindingNamespaces updates a VAP binding's namespace configuration.

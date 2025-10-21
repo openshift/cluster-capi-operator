@@ -34,7 +34,7 @@ const (
 )
 
 // fromCAPIMachineToMAPIMachine translates a core CAPI Machine to its MAPI Machine correspondent.
-func fromCAPIMachineToMAPIMachine(capiMachine *clusterv1.Machine) (*mapiv1beta1.Machine, field.ErrorList) {
+func fromCAPIMachineToMAPIMachine(capiMachine *clusterv1.Machine, additionalMachineAPIMetadataLabels, additionalMachineAPIMetadataAnnotations map[string]string) (*mapiv1beta1.Machine, field.ErrorList) {
 	errs := field.ErrorList{}
 
 	lifecycleHooks, capiMachineNonHookAnnotations := convertCAPILifecycleHookAnnotationsToMAPILifecycleHooksAndAnnotations(capiMachine.Annotations)
@@ -48,8 +48,8 @@ func fromCAPIMachineToMAPIMachine(capiMachine *clusterv1.Machine) (*mapiv1beta1.
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            capiMachine.Name,
 			Namespace:       mapiNamespace,
-			Labels:          convertCAPILabelsToMAPILabels(capiMachine.Labels),
-			Annotations:     convertCAPIAnnotationsToMAPIAnnotations(capiMachineNonHookAnnotations),
+			Labels:          convertCAPILabelsToMAPILabels(capiMachine.Labels, additionalMachineAPIMetadataLabels),
+			Annotations:     convertCAPIAnnotationsToMAPIAnnotations(capiMachineNonHookAnnotations, additionalMachineAPIMetadataAnnotations),
 			Finalizers:      []string{mapiv1beta1.MachineFinalizer},
 			OwnerReferences: nil, // OwnerReferences not populated here. They are added later by the machineSync controller.
 		},

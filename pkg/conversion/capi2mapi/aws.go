@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
+	"github.com/openshift/cluster-capi-operator/pkg/conversion/consts"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -49,9 +50,10 @@ const (
 
 // machineAndAWSMachineAndAWSCluster stores the details of a Cluster API Machine and AWSMachine and AWSCluster.
 type machineAndAWSMachineAndAWSCluster struct {
-	machine    *clusterv1.Machine
-	awsMachine *awsv1.AWSMachine
-	awsCluster *awsv1.AWSCluster
+	machine                               *clusterv1.Machine
+	awsMachine                            *awsv1.AWSMachine
+	awsCluster                            *awsv1.AWSCluster
+	excludeMachineAPILabelsAndAnnotations bool
 }
 
 // machineSetAndAWSMachineTemplateAndAWSCluster stores the details of a Cluster API MachineSet and AWSMachineTemplate and AWSCluster.
@@ -84,7 +86,8 @@ func FromMachineSetAndAWSMachineTemplateAndAWSCluster(ms *clusterv1.MachineSet, 
 			awsMachine: &awsv1.AWSMachine{
 				Spec: mts.Spec.Template.Spec,
 			},
-			awsCluster: ac,
+			awsCluster:                            ac,
+			excludeMachineAPILabelsAndAnnotations: true,
 		},
 	}
 }
@@ -258,7 +261,20 @@ func (m machineAndAWSMachineAndAWSCluster) ToMachine() (*mapiv1beta1.Machine, []
 
 	warnings = append(warnings, warn...)
 
-	mapiMachine, err := fromCAPIMachineToMAPIMachine(m.machine)
+	var additionalMachineAPIMetadataLabels, additionalMachineAPIMetadataAnnotations map[string]string
+	if !m.excludeMachineAPILabelsAndAnnotations {
+		additionalMachineAPIMetadataLabels = map[string]string{
+			consts.MAPIMachineMetadataLabelInstanceType: m.awsMachine.Spec.InstanceType,
+			consts.MAPIMachineMetadataLabelRegion:       m.awsCluster.Spec.Region,
+			consts.MAPIMachineMetadataLabelZone:         ptr.Deref(m.machine.Spec.FailureDomain, ""),
+		}
+
+		additionalMachineAPIMetadataAnnotations = map[string]string{
+			consts.MAPIMachineMetadataAnnotationInstanceState: string(ptr.Deref(m.awsMachine.Status.InstanceState, "")),
+		}
+	}
+
+	mapiMachine, err := fromCAPIMachineToMAPIMachine(m.machine, additionalMachineAPIMetadataLabels, additionalMachineAPIMetadataAnnotations)
 	if err != nil {
 		errors = append(errors, err...)
 	}

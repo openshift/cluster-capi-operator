@@ -45,13 +45,13 @@ func RawExtensionFromInterface(spec interface{}) (*runtime.RawExtension, error) 
 
 func convertCAPIMachineSetSelectorToMAPI(capiSelector metav1.LabelSelector) metav1.LabelSelector {
 	mapiSelector := capiSelector.DeepCopy()
-	mapiSelector.MatchLabels = convertCAPILabelsToMAPILabels(capiSelector.MatchLabels)
+	mapiSelector.MatchLabels = convertCAPILabelsToMAPILabels(capiSelector.MatchLabels, nil)
 
 	return *mapiSelector
 }
 
-func convertCAPILabelsToMAPILabels(capiLabels map[string]string) map[string]string {
-	if len(capiLabels) == 0 {
+func convertCAPILabelsToMAPILabels(capiLabels map[string]string, machineAPILabels map[string]string) map[string]string {
+	if len(capiLabels) == 0 && len(machineAPILabels) == 0 {
 		return nil
 	}
 
@@ -74,6 +74,15 @@ func convertCAPILabelsToMAPILabels(capiLabels map[string]string) map[string]stri
 		}
 
 		// Default case - copy over the label as-is to MAPI.
+		mapiLabels[k] = v
+	}
+
+	for k, v := range machineAPILabels {
+		// Ignore empty labels to ensure to not overwrite potentially existing labels with empty values.
+		if v == "" {
+			continue
+		}
+
 		mapiLabels[k] = v
 	}
 
@@ -124,8 +133,8 @@ func convertCAPIMachineAnnotationsToMAPIMachineSpecObjectMetaAnnotations(capiAnn
 	return mapiAnnotations
 }
 
-func convertCAPIAnnotationsToMAPIAnnotations(capiAnnotations map[string]string) map[string]string {
-	if len(capiAnnotations) == 0 {
+func convertCAPIAnnotationsToMAPIAnnotations(capiAnnotations map[string]string, machineAPIAnnotations map[string]string) map[string]string {
+	if len(capiAnnotations) == 0 && len(machineAPIAnnotations) == 0 {
 		return nil
 	}
 
@@ -153,6 +162,21 @@ func convertCAPIAnnotationsToMAPIAnnotations(capiAnnotations map[string]string) 
 		}
 
 		mapiAnnotations[k] = v
+	}
+
+	for k, v := range machineAPIAnnotations {
+		// Ignore empty annotations to ensure to not overwrite potentially existing annotations with empty values.
+		if v == "" {
+			continue
+		}
+
+		mapiAnnotations[k] = v
+	}
+
+	// On the original MAPI object some label fields are nil rather than empty.
+	// So return nil instead to avoid unnecessary diff being picked up by the diff checker.
+	if len(mapiAnnotations) == 0 {
+		return nil
 	}
 
 	return mapiAnnotations

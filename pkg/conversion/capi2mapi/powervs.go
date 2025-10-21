@@ -22,6 +22,7 @@ import (
 
 	mapiv1 "github.com/openshift/api/machine/v1"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
+	"github.com/openshift/cluster-capi-operator/pkg/conversion/consts"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -39,9 +40,10 @@ var (
 
 // machineAndPowerVSMachineAndPowerVSCluster stores the details of a Cluster API Machine and PowerVSMachine and PowerVSCluster.
 type machineAndPowerVSMachineAndPowerVSCluster struct {
-	machine        *clusterv1.Machine
-	powerVSMachine *ibmpowervsv1.IBMPowerVSMachine
-	powerVSCluster *ibmpowervsv1.IBMPowerVSCluster
+	machine                               *clusterv1.Machine
+	powerVSMachine                        *ibmpowervsv1.IBMPowerVSMachine
+	powerVSCluster                        *ibmpowervsv1.IBMPowerVSCluster
+	excludeMachineAPILabelsAndAnnotations bool
 }
 
 // machineSetAndPowerVSMachineTemplateAndPowerVSCluster stores the details of a Cluster API MachineSet and PowerVSMachineTemplate and AWSCluster.
@@ -74,7 +76,8 @@ func FromMachineSetAndPowerVSMachineTemplateAndPowerVSCluster(ms *clusterv1.Mach
 			powerVSMachine: &ibmpowervsv1.IBMPowerVSMachine{
 				Spec: mts.Spec.Template.Spec,
 			},
-			powerVSCluster: pc,
+			powerVSCluster:                        pc,
+			excludeMachineAPILabelsAndAnnotations: true,
 		},
 	}
 }
@@ -100,7 +103,20 @@ func (m machineAndPowerVSMachineAndPowerVSCluster) ToMachine() (*mapiv1beta1.Mac
 		return nil, nil, fmt.Errorf("unable to convert PowerVS providerSpec to raw extension: %w", errRaw)
 	}
 
-	mapiMachine, err := fromCAPIMachineToMAPIMachine(m.machine)
+	var additionalMachineAPIMetadataLabels, additionalMachineAPIMetadataAnnotations map[string]string
+	if !m.excludeMachineAPILabelsAndAnnotations {
+		additionalMachineAPIMetadataLabels = map[string]string{
+			consts.MAPIMachineMetadataLabelInstanceType: m.powerVSMachine.Spec.SystemType,
+			consts.MAPIMachineMetadataLabelRegion:       ptr.Deref(m.powerVSMachine.Status.Region, ""),
+			consts.MAPIMachineMetadataLabelZone:         ptr.Deref(m.machine.Spec.FailureDomain, ""),
+		}
+
+		additionalMachineAPIMetadataAnnotations = map[string]string{
+			consts.MAPIMachineMetadataAnnotationInstanceState: string(m.powerVSMachine.Status.InstanceState),
+		}
+	}
+
+	mapiMachine, err := fromCAPIMachineToMAPIMachine(m.machine, additionalMachineAPIMetadataLabels, additionalMachineAPIMetadataAnnotations)
 	if err != nil {
 		errors = append(errors, err...)
 	}
