@@ -18,6 +18,7 @@ package mapi2capi
 
 import (
 	"fmt"
+	"strings"
 
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
@@ -54,9 +55,9 @@ func convertMAPILabelsToCAPI(mapiLabels map[string]string) map[string]string {
 		}
 
 		// Ignore MAPI-specific labels that are not explicitly handled.
-		// if strings.HasPrefix(mapiLabelKey, "machine.openshift.io/") {
-		// 	continue
-		// }
+		if strings.HasPrefix(mapiLabelKey, "machine.openshift.io/") {
+			continue
+		}
 
 		// Default case - copy over the label as-is to CAPI.
 		capiLabels[mapiLabelKey] = mapiLabelVal
@@ -75,6 +76,11 @@ func convertMAPIAnnotationsToCAPI(mapiAnnotations map[string]string) map[string]
 	for k, v := range mapiAnnotations {
 		if k == util.MapiDeleteMachineAnnotation {
 			capiAnnotations[clusterv1.DeleteMachineAnnotation] = v
+			continue
+		}
+
+		// Ignore MAPI-specific labels that are not explicitly handled.
+		if strings.HasPrefix(k, "machine.openshift.io/") {
 			continue
 		}
 
