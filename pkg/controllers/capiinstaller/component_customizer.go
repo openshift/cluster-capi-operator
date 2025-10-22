@@ -32,6 +32,8 @@ func providerNameToImageKey(name string) string {
 		return "baremetal-cluster-api-controllers"
 	case "ibmcloud":
 		return "ibmcloud-cluster-api-controllers"
+	case "nutanix":
+		return "nutanix-cluster-api-controllers"
 	case "cluster-api":
 		return "cluster-capi-controllers"
 	default:
@@ -41,7 +43,7 @@ func providerNameToImageKey(name string) string {
 
 func providerNameToCommand(name string) string {
 	switch name {
-	case "aws", "gcp", "ibmcloud":
+	case "aws", "gcp", "ibmcloud", "nutanix":
 		return "./bin/cluster-api-provider-" + name + "-controller-manager"
 	case "cluster-api":
 		return "./bin/cluster-api-controller-manager"

@@ -235,6 +235,8 @@ func mapOCPPlatformToInfraClusterKindAndVersion(platform configv1.PlatformType) 
 		return "ibmpowervscluster", capiInfraClusterAPIVersionV1Beta1, nil
 	case configv1.BareMetalPlatformType:
 		return "Metal3Cluster", capiInfraClusterAPIVersionV1Beta1, nil
+	case configv1.NutanixPlatformType:
+		return "NutanixCluster", capiInfraClusterAPIVersionV1Beta1, nil
 	default:
 		return "", "", fmt.Errorf("%w: %q", errUnsupportedPlatformType, platform)
 	}

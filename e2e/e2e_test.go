@@ -19,6 +19,7 @@ import (
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
+	nutanixv1 "github.com/nutanix-cloud-native/cluster-api-provider-nutanix/api/v1beta1"
 	configv1 "github.com/openshift/api/config/v1"
 	mapiv1 "github.com/openshift/api/machine/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
@@ -49,6 +50,7 @@ func init() {
 	utilruntime.Must(vspherev1.AddToScheme(scheme.Scheme))
 	utilruntime.Must(metal3v1.AddToScheme(scheme.Scheme))
 	utilruntime.Must(bmov1alpha1.AddToScheme(scheme.Scheme))
+	utilruntime.Must(nutanixv1.AddToScheme(scheme.Scheme))
 }
 
 func TestAPIs(t *testing.T) {

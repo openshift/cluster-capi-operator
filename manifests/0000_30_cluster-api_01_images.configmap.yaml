@@ -20,5 +20,6 @@ data:
       "ibmcloud-cluster-api-controllers": "registry.ci.openshift.org/openshift:ibmcloud-cluster-api-controllers",
       "vsphere-cluster-api-controllers": "registry.ci.openshift.org/openshift:vsphere-cluster-api-controllers",
       "baremetal-cluster-api-controllers": "registry.ci.openshift.org/openshift:baremetal-cluster-api-controllers",
+      "nutanix-cluster-api-controllers": "registry.ci.openshift.org/openshift:nutanix-cluster-api-controllers",
       "kube-rbac-proxy": "registry.ci.openshift.org/openshift:kube-rbac-proxy"
     }
