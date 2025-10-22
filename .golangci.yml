@@ -94,6 +94,8 @@ linters-settings:
         alias: "ibmpowervsv1"
       - pkg: "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
         alias: "openstackv1"
+      - pkg: "github.com/nutanix-cloud-native/cluster-api-provider-nutanix/api/v1beta1"
+        alias: "nutanixv1"
       - pkg: "github.com/openshift/api/machine/v1"
         alias: "mapiv1"
       - pkg: "github.com/openshift/api/machine/v1beta1"
