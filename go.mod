@@ -2,6 +2,10 @@ module github.com/openshift/cluster-capi-operator
 
 go 1.24.0
 
+replace github.com/openshift/api => github.com/radekmanak/api v0.0.0-20251001145747-e7f57bd8d9e8
+
+replace github.com/openshift/client-go => github.com/RadekManak/client-go v0.0.0-20250915114216-e4aee662f020
+
 require (
 	github.com/drone/envsubst/v2 v2.0.0-20210730161058-179042472c46
 	github.com/go-logr/logr v1.4.3
@@ -13,7 +17,7 @@ require (
 	github.com/metal3-io/cluster-api-provider-metal3/api v1.10.1
 	github.com/onsi/ginkgo/v2 v2.23.4
 	github.com/onsi/gomega v1.38.0
-	github.com/openshift/api v0.0.0-20250731015415-ed654edbd7c6
+	github.com/openshift/api v0.0.0-20250911131931-2acafd4d1ed2
 	github.com/openshift/client-go v0.0.0-20250710075018-396b36f983ee
 	github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20250821122144-fd0936342469
 	github.com/openshift/library-go v0.0.0-20250729191057-91376e1b394e
