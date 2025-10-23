@@ -586,6 +586,8 @@ func (r *MachineSyncReconciler) convertMAPIToCAPIMachine(mapiMachine *mapiv1beta
 		return mapi2capi.FromOpenStackMachineAndInfra(mapiMachine, r.Infra).ToMachineAndInfrastructureMachine() //nolint:wrapcheck
 	case configv1.PowerVSPlatformType:
 		return mapi2capi.FromPowerVSMachineAndInfra(mapiMachine, r.Infra).ToMachineAndInfrastructureMachine() //nolint:wrapcheck
+	case configv1.NutanixPlatformType:
+		return mapi2capi.FromNutanixMachineAndInfra(mapiMachine, r.Infra).ToMachineAndInfrastructureMachine() //nolint:wrapcheck
 	default:
 		return nil, nil, nil, fmt.Errorf("%w: %s", errPlatformNotSupported, r.Platform)
 	}
