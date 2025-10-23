@@ -191,6 +191,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 
 		mgr, err = ctrl.NewManager(controllerCfg, ctrl.Options{
 			Scheme: testScheme,
+			Logger: GinkgoLogr,
 			Controller: config.Controller{
 				SkipNameValidation: ptr.To(true),
 			},
@@ -235,11 +236,6 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 	})
 
 	Context("when all the CAPI infra resources exist", func() {
-		BeforeEach(func() {
-			By("Creating the CAPI infra machine")
-			Eventually(k8sClient.Create(ctx, capaMachine)).Should(Succeed(), "capa machine should be able to be created")
-		})
-
 		Context("when the MAPI machine has MachineAuthority set to Machine API", func() {
 			BeforeEach(func() {
 				By("Creating the MAPI machine")
@@ -272,11 +268,28 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 				})
 			})
 
-			Context("when the CAPI machine does exist", func() {
+			Context("when the CAPI machine and infra machine do exist", func() {
 				BeforeEach(func() {
 					By("Creating the CAPI machine")
 					capiMachine = capiMachineBuilder.Build()
 					Eventually(k8sClient.Create(ctx, capiMachine)).Should(Succeed(), "capi machine should be able to be created")
+
+					By("Creating the CAPI infra machine")
+					// we must set the capi machine as an owner of the capa machine
+					//  in order to ensure we reconcile capa changes in our sync controller.
+					capaMachine = capaMachineBuilder.WithOwnerReferences([]metav1.OwnerReference{
+						{
+							Kind:               machineKind,
+							APIVersion:         clusterv1.GroupVersion.String(),
+							Name:               capiMachine.Name,
+							UID:                capiMachine.UID,
+							BlockOwnerDeletion: ptr.To(true),
+							Controller:         ptr.To(false),
+						},
+					}).Build()
+
+					Expect(k8sClient.Create(ctx, capaMachine)).To(Succeed(), "capa machine should be able to be created")
+
 				})
 
 				It("should update the synchronized condition on the MAPI machine to True", func() {
@@ -290,41 +303,41 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 							))),
 					)
 				})
-			})
 
-			Context("when the MAPI machine providerSpec gets updated", func() {
-				BeforeEach(func() {
-					By("Updating the MAPI machine providerSpec")
-					modifiedMAPIMachineBuilder := machinev1resourcebuilder.Machine().
-						WithNamespace(mapiNamespace.GetName()).
-						WithName(mapiMachine.Name).
-						WithProviderSpecBuilder(machinev1resourcebuilder.AWSProviderSpec().WithLoadBalancers(nil).WithInstanceType("m6i.2xlarge")).Build()
+				Context("when the MAPI machine providerSpec gets updated", func() {
+					BeforeEach(func() {
+						By("Updating the MAPI machine providerSpec")
+						modifiedMAPIMachineBuilder := machinev1resourcebuilder.Machine().
+							WithNamespace(mapiNamespace.GetName()).
+							WithName(mapiMachine.Name).
+							WithProviderSpecBuilder(machinev1resourcebuilder.AWSProviderSpec().WithLoadBalancers(nil).WithInstanceType("m6i.2xlarge")).Build()
 
-					Eventually(k.Update(mapiMachine, func() {
-						mapiMachine.Spec.ProviderSpec = modifiedMAPIMachineBuilder.Spec.ProviderSpec
-					})).Should(Succeed(), "mapi machine providerSpec should be able to be updated")
-				})
+						Eventually(k.Update(mapiMachine, func() {
+							mapiMachine.Spec.ProviderSpec = modifiedMAPIMachineBuilder.Spec.ProviderSpec
+						})).Should(Succeed(), "mapi machine providerSpec should be able to be updated")
+					})
 
-				It("should recreate the CAPI infra machine", func() {
-					capaMachineBuilder = awsv1resourcebuilder.AWSMachine().
-						WithNamespace(capiNamespace.GetName()).
-						WithName(mapiMachine.Name)
+					It("should recreate the CAPI infra machine", func() {
+						capaMachineBuilder = awsv1resourcebuilder.AWSMachine().
+							WithNamespace(capiNamespace.GetName()).
+							WithName(mapiMachine.Name)
 
-					Eventually(k.Object(capaMachineBuilder.Build()), timeout).Should(
-						HaveField("Spec.InstanceType", Equal("m6i.2xlarge")),
-					)
-				})
+						Eventually(k.Object(capaMachineBuilder.Build()), timeout).Should(
+							HaveField("Spec.InstanceType", Equal("m6i.2xlarge")),
+						)
+					})
 
-				It("should update the synchronized condition on the MAPI machine to True", func() {
-					Eventually(k.Object(mapiMachine), timeout).Should(
-						HaveField("Status.Conditions", ContainElement(
-							SatisfyAll(
-								HaveField("Type", Equal(consts.SynchronizedCondition)),
-								HaveField("Status", Equal(corev1.ConditionTrue)),
-								HaveField("Reason", Equal("ResourceSynchronized")),
-								HaveField("Message", Equal("Successfully synchronized MAPI Machine to CAPI")),
-							))),
-					)
+					It("should update the synchronized condition on the MAPI machine to True", func() {
+						Eventually(k.Object(mapiMachine), timeout).Should(
+							HaveField("Status.Conditions", ContainElement(
+								SatisfyAll(
+									HaveField("Type", Equal(consts.SynchronizedCondition)),
+									HaveField("Status", Equal(corev1.ConditionTrue)),
+									HaveField("Reason", Equal("ResourceSynchronized")),
+									HaveField("Message", Equal("Successfully synchronized MAPI Machine to CAPI")),
+								))),
+						)
+					})
 				})
 			})
 		})
@@ -339,6 +352,26 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 				By("Creating the CAPI Machine")
 				capiMachine = capiMachineBuilder.Build()
 				Eventually(k8sClient.Create(ctx, capiMachine)).Should(Succeed(), "capi machine should be able to be created")
+
+				By("Creating the CAPI infra machine")
+				// we must set the capi machine as an owner of the capa machine
+				//  in order to ensure we reconcile capa changes in our sync controller.
+
+				// Updates the capaMachineBuilder with the correct owner ref,
+				// so when we use it later on, we don't need to repeat ourselves.
+				capaMachineBuilder = capaMachineBuilder.WithOwnerReferences([]metav1.OwnerReference{
+					{
+						Kind:               machineKind,
+						APIVersion:         clusterv1.GroupVersion.String(),
+						Name:               capiMachine.Name,
+						UID:                capiMachine.UID,
+						BlockOwnerDeletion: ptr.To(true),
+						Controller:         ptr.To(false),
+					},
+				})
+
+				capaMachine = capaMachineBuilder.Build()
+				Expect(k8sClient.Create(ctx, capaMachine)).To(Succeed(), "capa machine should be able to be created")
 
 				By("Setting the MAPI machine AuthoritativeAPI to Cluster API")
 				Eventually(k.UpdateStatus(mapiMachine, func() {
@@ -429,18 +462,32 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 				Eventually(k.UpdateStatus(mapiMachine, func() {
 					mapiMachine.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityMachineAPI
 				})).Should(Succeed())
+
+				capiMachine = capiMachineBuilder.WithName(mapiMachine.Name).Build()
 			})
 
 			It("should successfully create the CAPI machine", func() {
-				Eventually(k.Get(
-					clusterv1resourcebuilder.Machine().WithName(mapiMachine.Name).WithNamespace(capiNamespace.Name).Build(),
-				)).Should(Succeed())
+				Eventually(k.Get(capiMachine)).Should(Succeed())
 			})
 
-			It("should successfully create the CAPA machine", func() {
-				Eventually(k.Get(
-					awsv1resourcebuilder.AWSMachine().WithName(mapiMachine.Name).WithNamespace(capiNamespace.Name).Build(),
-				)).Should(Succeed())
+			It("should successfully create the CAPA machine with correct owner references", func() {
+				// Get the CAPI machine, so we know the UID in the api server
+				Eventually(k.Get(capiMachine)).Should(Succeed())
+
+				// the MAPI Machine builder uses generateName, the controller makes an infra machine
+				// with the same name, so in order to avoid a 404 we rebuild the capa machine.
+				capaMachine = capaMachineBuilder.WithName(mapiMachine.Name).Build()
+
+				Eventually(k.Object(capaMachine), timeout).Should(
+					HaveField("ObjectMeta.OwnerReferences", ContainElement(
+						SatisfyAll(
+							HaveField("Kind", Equal(machineKind)),
+							HaveField("APIVersion", Equal(clusterv1.GroupVersion.String())),
+							HaveField("Name", Equal(capiMachine.Name)),
+							HaveField("UID", Equal(capiMachine.UID)),
+						))),
+				)
+
 			})
 
 			It("should update the synchronized condition on the MAPI machine to True", func() {
@@ -497,7 +544,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 				Eventually(k8sClient.Create(ctx, capiMachine)).Should(Succeed(), "capi machine should be able to be created")
 				Eventually(k8sClient.Create(ctx, mapiMachine)).Should(Succeed(), "mapi machine should be able to be created")
 
-				By("Setting the status.authoritativeAPI to Migrating")
+				By("Setting the status.authoritativeAPI to the empty string")
 				Eventually(k.UpdateStatus(mapiMachine, func() {
 					mapiMachine.Status.AuthoritativeAPI = ""
 				})).Should(Succeed())
@@ -514,21 +561,32 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 		Context("when the MAPI machine does not exist and the CAPI machine does", func() {
 			Context("and there is no CAPI machineSet owning the machine", func() {
 				BeforeEach(func() {
-					By("Creating the CAPI machine")
-					capiMachine = capiMachineBuilder.Build()
-					Eventually(k8sClient.Create(ctx, capiMachine)).Should(Succeed(), "capi machine should be able to be created")
 
-					By("Updating the CAPA machine adding the CAPI machine as an owner")
-					Eventually(k.Update(capaMachine, func() {
-						capaMachine.OwnerReferences = append(capaMachine.OwnerReferences, metav1.OwnerReference{
-							Kind:               machineKind,
-							APIVersion:         clusterv1.GroupVersion.String(),
-							Name:               capiMachine.Name,
-							UID:                capiMachine.UID,
-							BlockOwnerDeletion: ptr.To(true),
-							Controller:         ptr.To(false),
-						})
-					})).Should(Succeed(), "capa machine should be able to be updated")
+					// The CAPI Machine must reference the CAPA machine,
+					// so build the CAPA machine (without the owner reference) fist.
+					// Note we don't create it on the API server yet.
+					noMachineSetCapaMachineBuilder := capaMachineBuilder.WithName("test-machine-no-machineset")
+					capaMachine = noMachineSetCapaMachineBuilder.Build()
+
+					capiMachine = capiMachineBuilder.WithName("test-machine-no-machineset").WithInfrastructureRef(corev1.ObjectReference{
+						Kind:      capaMachine.Kind,
+						Name:      capaMachine.GetName(),
+						Namespace: capaMachine.GetNamespace(),
+					}).Build()
+					Expect(k8sClient.Create(ctx, capiMachine)).Should(Succeed())
+
+					// Once we have created the CAPI Machine, and have a UID, add the owner reference to the CAPA machine
+					// then we can Create() on the API server
+					noMachineSetCapaMachineBuilder = noMachineSetCapaMachineBuilder.WithOwnerReferences([]metav1.OwnerReference{{
+						Kind:               machineKind,
+						APIVersion:         clusterv1.GroupVersion.String(),
+						Name:               capiMachine.Name,
+						UID:                capiMachine.UID,
+						BlockOwnerDeletion: ptr.To(true),
+						Controller:         ptr.To(false),
+					}})
+					capaMachine = noMachineSetCapaMachineBuilder.Build()
+					Expect(k8sClient.Create(ctx, capaMachine)).Should(Succeed())
 				})
 
 				It("should not make any changes to the CAPI machine", func() {
@@ -546,7 +604,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 
 				Context("when MAPI machine with the same name and status.authoritativeAPI set to ClusterAPI is created", func() {
 					BeforeEach(func() {
-						mapiMachine = mapiMachineBuilder.WithName(capiMachine.Name).WithAuthoritativeAPI(mapiv1beta1.MachineAuthorityClusterAPI).Build()
+						mapiMachine = mapiMachineBuilder.WithGenerateName("").WithName(capiMachine.Name).WithAuthoritativeAPI(mapiv1beta1.MachineAuthorityClusterAPI).Build()
 						Eventually(k8sClient.Create(ctx, mapiMachine)).Should(Succeed(), "mapi machine should be able to be created")
 
 						By("Setting the status.authoritativeAPI to Cluster API")
@@ -589,6 +647,19 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 					By("Creating the CAPI machine")
 					capiMachine = capiMachineBuilder.WithOwnerReferences(ownerReferencesToCapiMachineSet).Build()
 					Eventually(k8sClient.Create(ctx, capiMachine)).Should(Succeed(), "capi machine should be able to be created")
+
+					// Because we expect our controller to sync from CAPI -> MAPI,
+					// we must ensure the CAPA machine exists, with the correct owner ref.
+					capaMachine = capaMachineBuilder.WithOwnerReferences([]metav1.OwnerReference{{
+						Kind:               machineKind,
+						APIVersion:         clusterv1.GroupVersion.String(),
+						Name:               capiMachine.Name,
+						UID:                capiMachine.UID,
+						BlockOwnerDeletion: ptr.To(true),
+						Controller:         ptr.To(false),
+					}}).Build()
+					Expect(k8sClient.Create(ctx, capaMachine)).Should(Succeed())
+
 				})
 
 				Context("with no MAPI counterpart", func() {
@@ -859,9 +930,6 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 				}, timeout).Should(Succeed())
 			}
 
-			By("Creating the CAPI infra machine")
-			Eventually(k8sClient.Create(ctx, capaMachine), timeout).Should(Succeed(), "capa machine should be able to be created")
-
 			By("Creating the MAPI machine")
 			mapiMachine = mapiMachineBuilder.WithName("test-machine").WithLabels(map[string]string{
 				"machine.openshift.io/cluster-api-cluster":      "ci-op-gs2k97d6-c9e33-2smph",
@@ -891,6 +959,20 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 
 			Eventually(k.Get(capiMachine)).Should(Succeed())
 			Eventually(k.Get(mapiMachine)).Should(Succeed())
+
+			By("Creating the CAPI infra machine")
+			capaMachine = capaMachineBuilder.WithOwnerReferences([]metav1.OwnerReference{
+				{
+					Kind:               machineKind,
+					APIVersion:         clusterv1.GroupVersion.String(),
+					Name:               capiMachine.Name,
+					UID:                capiMachine.UID,
+					BlockOwnerDeletion: ptr.To(true),
+					Controller:         ptr.To(false),
+				},
+			}).Build()
+
+			Eventually(k8sClient.Create(ctx, capaMachine), timeout).Should(Succeed(), "capa machine should be able to be created")
 
 		})
 
@@ -947,21 +1029,22 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 				)
 
 				By("Creating a throwaway MAPI machine")
-				testMachine := mapiMachineBuilder.WithGenerateName("test-machine").Build()
-				Eventually(k8sClient.Create(ctx, testMachine), timeout).Should(Succeed())
+				sentinelMachine := mapiMachineBuilder.WithGenerateName("sentinel-machine").Build()
+				Eventually(k8sClient.Create(ctx, sentinelMachine), timeout).Should(Succeed())
 
 				By("Setting the throwaway MAPI machine AuthoritativeAPI to Cluster API")
-				Eventually(k.UpdateStatus(testMachine, func() {
-					testMachine.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityClusterAPI
+				Eventually(k.UpdateStatus(sentinelMachine, func() {
+					sentinelMachine.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityClusterAPI
 				})).Should(Succeed())
 
-				Eventually(k.Object(testMachine), timeout).Should(
+				Eventually(k.Object(sentinelMachine), timeout).Should(
 					HaveField("Status.AuthoritativeAPI", Equal(mapiv1beta1.MachineAuthorityClusterAPI)))
 
-				Eventually(k.Update(testMachine, func() {
-					testMachine.ObjectMeta.Labels = map[string]string{"test-sentinel": "fubar"}
+				Eventually(k.Update(sentinelMachine, func() {
+					sentinelMachine.ObjectMeta.Labels = map[string]string{"test-sentinel": "fubar"}
 				}), timeout).Should(MatchError(ContainSubstring("policy in place")))
 			})
+
 			Context("with status.AuthoritativeAPI: Machine API", func() {
 				BeforeEach(func() {
 					By("Setting the MAPI machine AuthoritativeAPI to Machine API")
@@ -1146,12 +1229,12 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 					),
 				)
 
-				checkVAPMachine := clusterv1resourcebuilder.Machine().WithName("vap-checking-machine").WithNamespace(capiNamespace.Name).Build()
-				Eventually(k8sClient.Create(ctx, checkVAPMachine)).Should(Succeed(), "check vap machine should be able to be created")
+				sentinelMachine := clusterv1resourcebuilder.Machine().WithName("sentinel-machine").WithNamespace(capiNamespace.Name).Build()
+				Expect(k8sClient.Create(ctx, sentinelMachine)).To(Succeed())
 
 				// Continually try to update the capiMachine to a forbidden field until the VAP blocks it
-				Eventually(k.Update(checkVAPMachine, func() {
-					checkVAPMachine.ObjectMeta.Labels = map[string]string{"test-sentinel": "fubar"}
+				Eventually(k.Update(sentinelMachine, func() {
+					sentinelMachine.ObjectMeta.Labels = map[string]string{"test-sentinel": "fubar"}
 				}), timeout).Should(MatchError(ContainSubstring("policy in place")))
 			})
 
