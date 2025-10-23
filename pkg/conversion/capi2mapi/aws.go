@@ -49,9 +49,10 @@ const (
 
 // machineAndAWSMachineAndAWSCluster stores the details of a Cluster API Machine and AWSMachine and AWSCluster.
 type machineAndAWSMachineAndAWSCluster struct {
-	machine    *clusterv1.Machine
-	awsMachine *awsv1.AWSMachine
-	awsCluster *awsv1.AWSCluster
+	machine                               *clusterv1.Machine
+	awsMachine                            *awsv1.AWSMachine
+	awsCluster                            *awsv1.AWSCluster
+	excludeMachineAPILabelsAndAnnotations bool
 }
 
 // machineSetAndAWSMachineTemplateAndAWSCluster stores the details of a Cluster API MachineSet and AWSMachineTemplate and AWSCluster.
@@ -84,7 +85,8 @@ func FromMachineSetAndAWSMachineTemplateAndAWSCluster(ms *clusterv1.MachineSet, 
 			awsMachine: &awsv1.AWSMachine{
 				Spec: mts.Spec.Template.Spec,
 			},
-			awsCluster: ac,
+			awsCluster:                            ac,
+			excludeMachineAPILabelsAndAnnotations: true,
 		},
 	}
 }
@@ -258,7 +260,20 @@ func (m machineAndAWSMachineAndAWSCluster) ToMachine() (*mapiv1beta1.Machine, []
 
 	warnings = append(warnings, warn...)
 
-	mapiMachine, err := fromCAPIMachineToMAPIMachine(m.machine)
+	var additionalMachineAPILabels, additionalMachineAPIAnnotations map[string]string
+	if !m.excludeMachineAPILabelsAndAnnotations {
+		additionalMachineAPILabels = map[string]string{
+			"machine.openshift.io/instance-type": m.awsMachine.Spec.InstanceType,
+			"machine.openshift.io/region":        m.awsCluster.Spec.Region,
+			"machine.openshift.io/zone":          ptr.Deref(m.machine.Spec.FailureDomain, ""),
+		}
+
+		additionalMachineAPIAnnotations = map[string]string{
+			"machine.openshift.io/instance-state": string(ptr.Deref(m.awsMachine.Status.InstanceState, "")),
+		}
+	}
+
+	mapiMachine, err := fromCAPIMachineToMAPIMachine(m.machine, additionalMachineAPILabels, additionalMachineAPIAnnotations)
 	if err != nil {
 		errors = append(errors, err...)
 	}

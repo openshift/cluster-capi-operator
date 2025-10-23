@@ -959,7 +959,10 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 					HaveField("Status.AuthoritativeAPI", Equal(mapiv1beta1.MachineAuthorityClusterAPI)))
 
 				Eventually(k.Update(testMachine, func() {
-					testMachine.ObjectMeta.Labels = map[string]string{"test-sentinel": "fubar"}
+					if testMachine.ObjectMeta.Labels == nil {
+						testMachine.ObjectMeta.Labels = map[string]string{}
+					}
+					testMachine.ObjectMeta.Labels["test-sentinel"] = "fubar"
 				}), timeout).Should(MatchError(ContainSubstring("policy in place")))
 			})
 			Context("with status.AuthoritativeAPI: Machine API", func() {

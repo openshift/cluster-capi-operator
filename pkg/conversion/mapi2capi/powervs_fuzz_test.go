@@ -68,6 +68,8 @@ var _ = Describe("PowerVS Fuzz (mapi2capi)", func() {
 			return capi2mapi.FromMachineAndPowerVSMachineAndPowerVSCluster(machine, powerVSMachine, powerVSCluster)
 		}
 
+		f := powerVSFuzzer{}
+
 		conversiontest.MAPI2CAPIMachineRoundTripFuzzTest(
 			scheme,
 			infra,
@@ -76,7 +78,7 @@ var _ = Describe("PowerVS Fuzz (mapi2capi)", func() {
 			fromMachineAndPowerVSMachineAndPowerVSCluster,
 			conversiontest.ObjectMetaFuzzerFuncs(mapiNamespace),
 			conversiontest.MAPIMachineFuzzerFuncs(&mapiv1.PowerVSMachineProviderConfig{}, &mapiv1.PowerVSMachineProviderStatus{}, powerVSProviderIDFuzzer),
-			powerVSProviderSpecFuzzerFuncs,
+			f.FuzzerFuncsMachine,
 		)
 	})
 
@@ -91,6 +93,8 @@ var _ = Describe("PowerVS Fuzz (mapi2capi)", func() {
 			return capi2mapi.FromMachineSetAndPowerVSMachineTemplateAndPowerVSCluster(machineSet, powerVSMachineTemplate, powerVSCluster)
 		}
 
+		f := powerVSFuzzer{}
+
 		conversiontest.MAPI2CAPIMachineSetRoundTripFuzzTest(
 			scheme,
 			infra,
@@ -100,18 +104,41 @@ var _ = Describe("PowerVS Fuzz (mapi2capi)", func() {
 			conversiontest.ObjectMetaFuzzerFuncs(mapiNamespace),
 			conversiontest.MAPIMachineFuzzerFuncs(&mapiv1.PowerVSMachineProviderConfig{}, &mapiv1.PowerVSMachineProviderStatus{}, powerVSProviderIDFuzzer),
 			conversiontest.MAPIMachineSetFuzzerFuncs(),
-			powerVSProviderSpecFuzzerFuncs,
+			f.FuzzerFuncsMachineSet,
 		)
 	})
 })
+
+type powerVSFuzzer struct {
+	conversiontest.MAPIMachineFuzzer
+}
+
+func (f *powerVSFuzzer) fuzzProviderConfig(pc *mapiv1.PowerVSMachineProviderConfig, c randfill.Continue) {
+	c.FillNoCustom(pc)
+
+	// The type meta is always set to these values by the conversion.
+	pc.APIVersion = mapiv1.SchemeGroupVersion.String()
+	pc.Kind = powerVSProviderSpecKind
+
+	pc.LoadBalancers = nil
+	pc.ObjectMeta = metav1.ObjectMeta{}
+	pc.CredentialsSecret = nil
+
+	// Clear pointers to empty structs.
+	if pc.UserDataSecret != nil && pc.UserDataSecret.Name == "" {
+		pc.UserDataSecret = nil
+	}
+
+	// Copy instance-type, region and zone to the struct so they can be set at the machine labels too.
+	f.InstanceType = pc.SystemType
+}
 
 func powerVSProviderIDFuzzer(c randfill.Continue) string {
 	// Power VS provider id format: ibmpowervs://<region>/<zone>/<service_instance_id>/<instance_id>
 	return fmt.Sprintf("ibmpowervs://tok/tok04/%s/%s", strings.ReplaceAll(c.String(0), "/", ""), strings.ReplaceAll(c.String(0), "/", ""))
 }
 
-//nolint:funlen
-func powerVSProviderSpecFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interface{} {
+func (f *powerVSFuzzer) FuzzerFuncsMachineSet(codecs runtimeserializer.CodecFactory) []interface{} {
 	return []interface{}{
 		func(serviceInstance *mapiv1.PowerVSResource, c randfill.Continue) {
 			switch c.Int31n(3) {
@@ -170,21 +197,13 @@ func powerVSProviderSpecFuzzerFuncs(codecs runtimeserializer.CodecFactory) []int
 				}
 			}
 		},
-		func(pc *mapiv1.PowerVSMachineProviderConfig, c randfill.Continue) {
-			c.FillNoCustom(pc)
-
-			// The type meta is always set to these values by the conversion.
-			pc.APIVersion = mapiv1.SchemeGroupVersion.String()
-			pc.Kind = powerVSProviderSpecKind
-
-			pc.LoadBalancers = nil
-			pc.ObjectMeta = metav1.ObjectMeta{}
-			pc.CredentialsSecret = nil
-
-			// Clear pointers to empty structs.
-			if pc.UserDataSecret != nil && pc.UserDataSecret.Name == "" {
-				pc.UserDataSecret = nil
-			}
-		},
+		f.fuzzProviderConfig,
 	}
+}
+
+func (f *powerVSFuzzer) FuzzerFuncsMachine(codecs runtimeserializer.CodecFactory) []interface{} {
+	return append(
+		f.FuzzerFuncsMachineSet(codecs),
+		f.FuzzMachine,
+	)
 }

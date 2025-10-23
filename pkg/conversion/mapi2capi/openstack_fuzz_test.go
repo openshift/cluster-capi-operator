@@ -66,6 +66,8 @@ var _ = Describe("OpenStack Fuzz (mapi2capi)", func() {
 			return capi2mapi.FromMachineAndOpenStackMachineAndOpenStackCluster(machine, openstackMachine, openstackCluster)
 		}
 
+		f := &openstackProviderFuzzer{}
+
 		conversiontest.MAPI2CAPIMachineRoundTripFuzzTest(
 			scheme,
 			infra,
@@ -74,7 +76,7 @@ var _ = Describe("OpenStack Fuzz (mapi2capi)", func() {
 			fromMachineAndOpenStackMachineAndOpenStackCluster,
 			conversiontest.ObjectMetaFuzzerFuncs(mapiNamespace),
 			conversiontest.MAPIMachineFuzzerFuncs(&mapiv1alpha1.OpenstackProviderSpec{}, nil, openstackProviderIDFuzzer),
-			openstackProviderSpecFuzzerFuncs,
+			f.FuzzerFuncsMachine,
 		)
 	})
 
@@ -89,6 +91,8 @@ var _ = Describe("OpenStack Fuzz (mapi2capi)", func() {
 			return capi2mapi.FromMachineSetAndOpenStackMachineTemplateAndOpenStackCluster(machineSet, openstackMachineTemplate, openstackCluster)
 		}
 
+		f := &openstackProviderFuzzer{}
+
 		conversiontest.MAPI2CAPIMachineSetRoundTripFuzzTest(
 			scheme,
 			infra,
@@ -98,7 +102,7 @@ var _ = Describe("OpenStack Fuzz (mapi2capi)", func() {
 			conversiontest.ObjectMetaFuzzerFuncs(mapiNamespace),
 			conversiontest.MAPIMachineFuzzerFuncs(&mapiv1alpha1.OpenstackProviderSpec{}, nil, openstackProviderIDFuzzer),
 			conversiontest.MAPIMachineSetFuzzerFuncs(),
-			openstackProviderSpecFuzzerFuncs,
+			f.FuzzerFuncsMachineSet,
 		)
 	})
 })
@@ -107,8 +111,62 @@ func openstackProviderIDFuzzer(c randfill.Continue) string {
 	return "openstack://" + uuid.NewString()
 }
 
+type openstackProviderFuzzer struct {
+	conversiontest.MAPIMachineFuzzer
+}
+
+func (f *openstackProviderFuzzer) fuzzProviderSpec(providerSpec *mapiv1alpha1.OpenstackProviderSpec, c randfill.Continue) {
+	c.FillNoCustom(providerSpec)
+
+	// The type meta is always set to these values by the conversion.
+	providerSpec.APIVersion = mapiv1alpha1.GroupVersion.String()
+	providerSpec.Kind = openstackProviderSpecKind
+
+	// Clear fields that are not supported in the provider spec.
+	providerSpec.ObjectMeta = metav1.ObjectMeta{}
+	providerSpec.FloatingIP = ""
+	providerSpec.PrimarySubnet = ""
+	providerSpec.SshUserName = ""
+
+	// Clear namespace fields, since these are intentionally not copied
+	if providerSpec.UserDataSecret != nil {
+		providerSpec.UserDataSecret.Namespace = ""
+	}
+
+	if providerSpec.CloudsSecret != nil {
+		providerSpec.CloudsSecret.Namespace = ""
+
+		if providerSpec.CloudsSecret.Name == "" {
+			providerSpec.CloudsSecret = nil
+		}
+	}
+
+	// Clear fields that depend on other, unset fields or cannot coexist
+	if providerSpec.CloudsSecret == nil {
+		providerSpec.CloudName = ""
+	}
+
+	switch c.Int31n(2) {
+	case 0:
+		providerSpec.ServerGroupID = uuid.NewString()
+		providerSpec.ServerGroupName = ""
+	case 1:
+		providerSpec.ServerGroupID = ""
+		providerSpec.ServerGroupName = uuid.NewString()
+	}
+
+	// Clear pointers to empty structs.
+	if providerSpec.UserDataSecret != nil && providerSpec.UserDataSecret.Name == "" {
+		providerSpec.UserDataSecret = nil
+	}
+
+	// Copy instance-type, region and zone to the struct so they can be set at the machine labels too.
+	f.MAPIMachineFuzzer.InstanceType = providerSpec.Flavor
+	f.MAPIMachineFuzzer.Zone = providerSpec.AvailabilityZone
+}
+
 //nolint:funlen
-func openstackProviderSpecFuzzerFuncs(codecs runtimeserializer.CodecFactory) []any {
+func (f *openstackProviderFuzzer) FuzzerFuncsMachineSet(codecs runtimeserializer.CodecFactory) []any {
 	return []any{
 		func(bdm *mapiv1alpha1.BlockDeviceStorage, c randfill.Continue) {
 			switch c.Int31n(2) {
@@ -194,52 +252,15 @@ func openstackProviderSpecFuzzerFuncs(codecs runtimeserializer.CodecFactory) []a
 				securityGroup.Filter.NotTagsAny = generateFakeTags()
 			}
 		},
-		func(providerSpec *mapiv1alpha1.OpenstackProviderSpec, c randfill.Continue) {
-			c.FillNoCustom(providerSpec)
-
-			// The type meta is always set to these values by the conversion.
-			providerSpec.APIVersion = mapiv1alpha1.GroupVersion.String()
-			providerSpec.Kind = openstackProviderSpecKind
-
-			// Clear fields that are not supported in the provider spec.
-			providerSpec.ObjectMeta = metav1.ObjectMeta{}
-			providerSpec.FloatingIP = ""
-			providerSpec.PrimarySubnet = ""
-			providerSpec.SshUserName = ""
-
-			// Clear namespace fields, since these are intentionally not copied
-			if providerSpec.UserDataSecret != nil {
-				providerSpec.UserDataSecret.Namespace = ""
-			}
-
-			if providerSpec.CloudsSecret != nil {
-				providerSpec.CloudsSecret.Namespace = ""
-
-				if providerSpec.CloudsSecret.Name == "" {
-					providerSpec.CloudsSecret = nil
-				}
-			}
-
-			// Clear fields that depend on other, unset fields or cannot coexist
-			if providerSpec.CloudsSecret == nil {
-				providerSpec.CloudName = ""
-			}
-
-			switch c.Int31n(2) {
-			case 0:
-				providerSpec.ServerGroupID = uuid.NewString()
-				providerSpec.ServerGroupName = ""
-			case 1:
-				providerSpec.ServerGroupID = ""
-				providerSpec.ServerGroupName = uuid.NewString()
-			}
-
-			// Clear pointers to empty structs.
-			if providerSpec.UserDataSecret != nil && providerSpec.UserDataSecret.Name == "" {
-				providerSpec.UserDataSecret = nil
-			}
-		},
+		f.fuzzProviderSpec,
 	}
+}
+
+func (f *openstackProviderFuzzer) FuzzerFuncsMachine(codecs runtimeserializer.CodecFactory) []interface{} {
+	return append(
+		f.FuzzerFuncsMachineSet(codecs),
+		f.FuzzMachine,
+	)
 }
 
 // generateFakeTags generate a fake alphanumeric CSV string for use in a tags field.
