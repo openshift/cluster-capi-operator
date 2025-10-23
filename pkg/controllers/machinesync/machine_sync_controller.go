@@ -680,6 +680,7 @@ func (r *MachineSyncReconciler) createOrUpdateCAPIMachine(ctx context.Context, s
 	logger := logf.FromContext(ctx)
 
 	var machineCreated, specUpdated bool
+
 	var err error
 
 	// If there is no existing CAPI machine, create a new one and adjust the convertedCAPIMachine.
@@ -701,9 +702,15 @@ func (r *MachineSyncReconciler) createOrUpdateCAPIMachine(ctx context.Context, s
 	// Note: conversion or mutatingwebhook's could have lead to changes leading to a spec diff which we would try to update.
 	if !machineCreated {
 		// Update the CAPI machine spec/metadata/provider spec if needed.
-		specUpdated, existingCAPIMachine, err = r.ensureCAPIMachineSpecUpdated(ctx, sourceMAPIMachine, capiMachinesDiff, convertedCAPIMachine)
+		var updatedCAPIMachine *clusterv1.Machine
+
+		specUpdated, updatedCAPIMachine, err = r.ensureCAPIMachineSpecUpdated(ctx, sourceMAPIMachine, capiMachinesDiff, convertedCAPIMachine)
 		if err != nil {
 			return nil, fmt.Errorf("failed to ensure Cluster API machine spec updated: %w", err)
+		}
+
+		if specUpdated {
+			existingCAPIMachine = updatedCAPIMachine
 		}
 	}
 
