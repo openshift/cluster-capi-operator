@@ -21,6 +21,7 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/google/go-cmp/cmp"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -46,11 +47,111 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/config"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
+
+var _ = Describe("MachineSyncReconciler", func() {
+	type testCase struct {
+		sourceMapiMachine    *mapiv1beta1.Machine
+		existingCapiMachine  *clusterv1.Machine
+		convertedCapiMachine *clusterv1.Machine
+		expectedCAPIMachine  *clusterv1.Machine
+		expectErr            bool
+	}
+
+	convertedCapiMachineBuilder := clusterv1resourcebuilder.Machine().WithName("foo").WithNamespace("openshift-cluster-api")
+
+	DescribeTable("should createOrUpdateCAPIMachine",
+		func(tc testCase) {
+			objs := []client.Object{}
+			if tc.existingCapiMachine != nil {
+				objs = append(objs, tc.existingCapiMachine)
+			}
+
+			reconciler := &MachineSyncReconciler{
+				Client: fake.NewClientBuilder().WithObjects(objs...).WithStatusSubresource(&clusterv1.Machine{}).Build(),
+			}
+
+			// Update the existing CAPI machine with the created one to populate e.g. resourceVersion.
+			// Also update the resourceVersion on the convertedCAPIMachine.
+			if tc.existingCapiMachine != nil {
+				Expect(reconciler.Client.Get(ctx, client.ObjectKeyFromObject(tc.existingCapiMachine), tc.existingCapiMachine)).To(Succeed())
+				tc.convertedCapiMachine.ResourceVersion = tc.existingCapiMachine.ResourceVersion
+			}
+
+			_, err := reconciler.createOrUpdateCAPIMachine(ctx, tc.sourceMapiMachine, tc.existingCapiMachine, tc.convertedCapiMachine)
+
+			if tc.expectErr {
+				Expect(err).To(HaveOccurred())
+			} else {
+				Expect(err).ToNot(HaveOccurred())
+				gotCAPIMachine := &clusterv1.Machine{}
+				Expect(reconciler.Client.Get(ctx, client.ObjectKey{Namespace: tc.convertedCapiMachine.Namespace, Name: tc.convertedCapiMachine.Name}, gotCAPIMachine)).To(Succeed())
+
+				tc.expectedCAPIMachine.ResourceVersion = gotCAPIMachine.ResourceVersion
+				gotCAPIMachine.Status.V1Beta2 = nil
+
+				Expect(gotCAPIMachine).To(Equal(tc.expectedCAPIMachine), cmp.Diff(gotCAPIMachine, tc.expectedCAPIMachine))
+			}
+		},
+		Entry("when the MAPI machine does not exist", testCase{
+			sourceMapiMachine:    machinev1resourcebuilder.Machine().WithName("foo").WithNamespace("openshift-machine-api").Build(),
+			existingCapiMachine:  nil,
+			convertedCapiMachine: convertedCapiMachineBuilder.WithAddresses(clusterv1.MachineAddresses{{Address: "1.2.3.4"}}).Build(),
+			expectedCAPIMachine:  convertedCapiMachineBuilder.WithAddresses(clusterv1.MachineAddresses{{Address: "1.2.3.4"}}).Build(),
+			expectErr:            false,
+		}),
+		Entry("when the CAPI machine does exist and the spec only has changes", testCase{
+			sourceMapiMachine: machinev1resourcebuilder.Machine().WithName("foo").WithNamespace("openshift-machine-api").Build(),
+			existingCapiMachine: convertedCapiMachineBuilder.
+				WithLabels(map[string]string{"old-label": "old-value"}).
+				WithAddresses(clusterv1.MachineAddresses{{Address: "1.2.3.4"}}).
+				Build(),
+			convertedCapiMachine: convertedCapiMachineBuilder.
+				WithLabels(map[string]string{"new-label": "new-value"}).
+				WithAddresses(clusterv1.MachineAddresses{{Address: "1.2.3.4"}}).
+				Build(),
+			expectedCAPIMachine: convertedCapiMachineBuilder.
+				WithLabels(map[string]string{"new-label": "new-value"}).
+				WithAddresses(clusterv1.MachineAddresses{{Address: "1.2.3.4"}}).
+				Build(),
+			expectErr: false,
+		}),
+		Entry("when the CAPI machine does exist and the spec and status has changes", testCase{
+			sourceMapiMachine: machinev1resourcebuilder.Machine().WithName("foo").WithNamespace("openshift-machine-api").Build(),
+			existingCapiMachine: convertedCapiMachineBuilder.
+				WithLabels(map[string]string{"old-label": "old-value"}).
+				WithAddresses(clusterv1.MachineAddresses{{Address: "4.3.2.1"}}).
+				Build(),
+			convertedCapiMachine: convertedCapiMachineBuilder.
+				WithLabels(map[string]string{"new-label": "new-value"}).
+				WithAddresses(clusterv1.MachineAddresses{{Address: "1.2.3.4"}}).
+				Build(),
+			expectedCAPIMachine: convertedCapiMachineBuilder.
+				WithLabels(map[string]string{"new-label": "new-value"}).
+				WithAddresses(clusterv1.MachineAddresses{{Address: "1.2.3.4"}}).
+				Build(),
+			expectErr: false,
+		}),
+		Entry("when no changes are detected", testCase{
+			sourceMapiMachine: machinev1resourcebuilder.Machine().WithName("foo").WithNamespace("openshift-machine-api").Build(),
+			existingCapiMachine: convertedCapiMachineBuilder.
+				WithAddresses(clusterv1.MachineAddresses{{Address: "1.2.3.4"}}).
+				Build(),
+			convertedCapiMachine: convertedCapiMachineBuilder.
+				WithAddresses(clusterv1.MachineAddresses{{Address: "1.2.3.4"}}).
+				Build(),
+			expectedCAPIMachine: convertedCapiMachineBuilder.
+				WithAddresses(clusterv1.MachineAddresses{{Address: "1.2.3.4"}}).
+				Build(),
+			expectErr: false,
+		}),
+	)
+})
 
 var _ = Describe("With a running MachineSync Reconciler", func() {
 	var mgrCancel context.CancelFunc
