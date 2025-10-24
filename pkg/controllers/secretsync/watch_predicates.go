@@ -19,23 +19,38 @@ import (
 	"context"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-func toUserDataSecret(ctx context.Context, obj client.Object) []reconcile.Request {
-	return []reconcile.Request{{
-		NamespacedName: client.ObjectKey{Name: managedUserDataSecretName, Namespace: SecretSourceNamespace},
-	}}
+func toUserDataSecret(namespace string) func(context.Context, client.Object) []reconcile.Request {
+	return func(ctx context.Context, obj client.Object) []reconcile.Request {
+		secret, ok := obj.(*corev1.Secret)
+		if !ok {
+			return nil
+		}
+
+		// Map the source secret to the target secret with the same name
+		return []reconcile.Request{{
+			NamespacedName: client.ObjectKey{Name: secret.GetName(), Namespace: namespace},
+		}}
+	}
 }
 
 func userDataSecretPredicate(targetNamespace string) predicate.Funcs {
-	isOwnedUserDataSecret := func(obj runtime.Object) bool {
+	isOwnedUserDataSecret := func(obj client.Object) bool {
 		secret, ok := obj.(*corev1.Secret)
-		return ok && secret.GetNamespace() == targetNamespace && secret.GetName() == managedUserDataSecretName
+		if !ok {
+			return false
+		}
+
+		if secret.GetNamespace() != targetNamespace {
+			return false
+		}
+		// Accept both worker-user-data and master-user-data secrets
+		return isValidUserDataSecretName(secret.GetName())
 	}
 
 	return predicate.Funcs{
