@@ -37,6 +37,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 
 	"github.com/go-test/deep"
@@ -640,7 +641,7 @@ func (r *MachineSetSyncReconciler) validateCAPIMachineSetOwnerReferences(capiMac
 	} else if len(capiMachineSet.OwnerReferences) == 1 {
 		// Only reference to the Cluster is allowed.
 		ownerRef := capiMachineSet.OwnerReferences[0]
-		if ownerRef.Kind != clusterv1.ClusterKind || ownerRef.APIVersion != clusterv1.GroupVersion.String() {
+		if ownerRef.Kind != clusterv1.ClusterKind || (ownerRef.APIVersion != clusterv1.GroupVersion.String() && ownerRef.APIVersion != (schema.GroupVersion{Group: clusterv1.GroupVersion.Group, Version: "v1beta2"}).String()) {
 			return field.Invalid(field.NewPath("metadata", "ownerReferences"), capiMachineSet.OwnerReferences, errUnsuportedOwnerKindForConversion.Error())
 		}
 	}
