@@ -1400,13 +1400,7 @@ func compareCAPIMachineSets(capiMachineSet1, capiMachineSet2 *clusterv1.MachineS
 		diff[".spec"] = diffSpec
 	}
 
-	diffCAPIMachineSet1 := capiMachineSet1.DeepCopy()
-	delete(diffCAPIMachineSet1.Annotations, "cluster.x-k8s.io/conversion-data")
-
-	diffCAPIMachineSet2 := capiMachineSet1.DeepCopy()
-	delete(diffCAPIMachineSet2.Annotations, "cluster.x-k8s.io/conversion-data")
-
-	if diffObjectMeta := util.ObjectMetaEqual(diffCAPIMachineSet1.ObjectMeta, diffCAPIMachineSet2.ObjectMeta); len(diffObjectMeta) > 0 {
+	if diffObjectMeta := util.ObjectMetaEqual(capiMachineSet1.ObjectMeta, capiMachineSet2.ObjectMeta); len(diffObjectMeta) > 0 {
 		diff[".metadata"] = diffObjectMeta
 	}
 

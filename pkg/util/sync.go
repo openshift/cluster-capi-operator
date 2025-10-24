@@ -59,7 +59,14 @@ func hasSameState(i *mapiv1beta1.Condition, j *machinev1applyconfigs.ConditionAp
 func ObjectMetaEqual(a, b metav1.ObjectMeta) map[string]any {
 	objectMetaDiff := map[string]any{}
 
-	if diffLabels := deep.Equal(a.Labels, b.Labels); len(diffLabels) > 0 {
+	// Ignore conversion-data because this data is managed by Cluster API for down conversion.
+	aLabels := a.DeepCopy().GetLabels()
+	delete(aLabels, "cluster.x-k8s.io/conversion-data")
+
+	bLabels := b.DeepCopy().GetLabels()
+	delete(bLabels, "cluster.x-k8s.io/conversion-data")
+
+	if diffLabels := deep.Equal(aLabels, bLabels); len(diffLabels) > 0 {
 		objectMetaDiff[".labels"] = diffLabels
 	}
 
