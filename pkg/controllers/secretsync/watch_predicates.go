@@ -27,15 +27,29 @@ import (
 )
 
 func toUserDataSecret(ctx context.Context, obj client.Object) []reconcile.Request {
+	secret, ok := obj.(*corev1.Secret)
+	if !ok {
+		return nil
+	}
+
+	// Map the source secret to the target secret with the same name
 	return []reconcile.Request{{
-		NamespacedName: client.ObjectKey{Name: managedUserDataSecretName, Namespace: SecretSourceNamespace},
+		NamespacedName: client.ObjectKey{Name: secret.GetName(), Namespace: SecretSourceNamespace},
 	}}
 }
 
 func userDataSecretPredicate(targetNamespace string) predicate.Funcs {
 	isOwnedUserDataSecret := func(obj runtime.Object) bool {
 		secret, ok := obj.(*corev1.Secret)
-		return ok && secret.GetNamespace() == targetNamespace && secret.GetName() == managedUserDataSecretName
+		if !ok {
+			return false
+		}
+
+		if secret.GetNamespace() != targetNamespace {
+			return false
+		}
+		// Accept both worker-user-data and master-user-data secrets
+		return isValidUserDataSecretName(secret.GetName())
 	}
 
 	return predicate.Funcs{
