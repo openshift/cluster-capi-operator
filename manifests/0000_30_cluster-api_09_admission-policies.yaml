@@ -283,12 +283,27 @@ data:
             apiVersions: ["*"]
             operations: ["UPDATE"]
             resources: ["machines"]
+      variables:
+        - name: syncCond
+          expression: >
+            has(object.status.conditions) ?
+            object.status.conditions.exists(c, c.type == "Synchronized") :
+            false
+        - name: syncBad
+          expression: >
+              variables.syncCond &&
+              object.status.conditions.exists(c,
+                c.type == "Synchronized" &&
+                (c.status == "False" || c.status == "Unknown")
+              )
+        - name: authAPIChanged
+          expression: >
+            oldObject.spec.authoritativeAPI != object.spec.authoritativeAPI
 
       # All validations must evaluate to true
       validations:
-      - expression: '!(has(object.status) && has(object.status.conditions) && object.status.conditions.exists(c, c.type == "Synchronized" && c.status == "False") && (oldObject.spec.authoritativeAPI != object.spec.authoritativeAPI))'
-        message: 'Warning: updating .spec.authoritativeAPI when Synchronized=false on resource means changes may not take effect'
-      validationActions: [Warn]
+      - expression: '!variables.authAPIChanged || (variables.syncCond && !variables.syncBad)'
+        message: 'Updating .spec.authoritativeAPI when the Synchronized condition is not true means changes may not take effect'
     ---
     apiVersion: admissionregistration.k8s.io/v1
     kind: ValidatingAdmissionPolicyBinding
