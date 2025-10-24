@@ -18,6 +18,7 @@ package machinesync
 
 import (
 	"context"
+	"encoding/json"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -91,7 +92,7 @@ var _ = Describe("AWS load balancer validation during MAPI->CAPI conversion", fu
 		Expect(k8sClient.Create(ctx, capiNamespace)).To(Succeed())
 
 		infrastructureName = "cluster-aws-lb"
-		awsClusterBuilder = awsv1resourcebuilder.AWSCluster().WithNamespace(capiNamespace.GetName()).WithName(infrastructureName)
+		awsClusterBuilder = awsv1resourcebuilder.AWSCluster().WithNamespace(capiNamespace.GetName()).WithName(infrastructureName).WithRegion("us-east-1")
 
 		// Create CAPI Cluster that all tests will use
 		capiCluster := clusterv1resourcebuilder.Cluster().WithNamespace(capiNamespace.GetName()).WithName(infrastructureName).WithInfrastructureRef(clusterv1.ContractVersionedObjectReference{
@@ -289,6 +290,86 @@ var _ = Describe("AWS load balancer validation during MAPI->CAPI conversion", fu
 		// And that a CAPI machine has been created
 		capiMachine := clusterv1resourcebuilder.Machine().WithNamespace(capiNamespace.GetName()).WithName(mapiMachine.GetName()).Build()
 		Eventually(k8sClient.Get(ctx, client.ObjectKeyFromObject(capiMachine), capiMachine), timeout).Should(Succeed())
+	})
+
+	It("should preserve load balancers when toggling authoritativeAPI MAPI -> CAPI -> MAPI", func() {
+		By("Creating AWSCluster with load balancers")
+		loadBalancerSpec := &awsv1.AWSLoadBalancerSpec{
+			Name:             ptr.To("cluster-int"),
+			LoadBalancerType: awsv1.LoadBalancerTypeNLB,
+		}
+		secondaryLoadBalancerSpec := &awsv1.AWSLoadBalancerSpec{
+			Name:             ptr.To("cluster-ext"),
+			LoadBalancerType: awsv1.LoadBalancerTypeNLB,
+		}
+		awsCluster := awsClusterBuilder.WithControlPlaneLoadBalancer(loadBalancerSpec).WithSecondaryControlPlaneLoadBalancer(secondaryLoadBalancerSpec).Build()
+		Expect(k8sClient.Create(ctx, awsCluster)).To(Succeed())
+
+		lbRefs := []mapiv1beta1.LoadBalancerReference{
+			{Name: "cluster-int", Type: mapiv1beta1.NetworkLoadBalancerType},
+			{Name: "cluster-ext", Type: mapiv1beta1.NetworkLoadBalancerType},
+		}
+
+		By("Creating MAPI master machine with load balancers and authoritativeAPI: MachineAPI")
+		mapiMachine := machinev1resourcebuilder.Machine().
+			WithNamespace(mapiNamespace.GetName()).
+			WithGenerateName("master-").
+			AsMaster().
+			WithProviderSpecBuilder(machinev1resourcebuilder.AWSProviderSpec().WithLoadBalancers(lbRefs)).
+			Build()
+		Expect(k8sClient.Create(ctx, mapiMachine)).To(Succeed())
+		Eventually(k.UpdateStatus(mapiMachine, func() { mapiMachine.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityMachineAPI })).Should(Succeed())
+
+		By("Verifying MAPI -> CAPI sync is successful")
+		Eventually(k.Object(mapiMachine), timeout).Should(
+			HaveField("Status.Conditions", ContainElement(
+				SatisfyAll(
+					HaveField("Type", Equal(consts.SynchronizedCondition)),
+					HaveField("Status", Equal(corev1.ConditionTrue)),
+					HaveField("Reason", Equal("ResourceSynchronized")),
+					HaveField("Message", Equal("Successfully synchronized MAPI Machine to CAPI")),
+				))),
+		)
+
+		By("Capturing original providerSpec")
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(mapiMachine), mapiMachine)).To(Succeed())
+		originalProviderSpec := mapiMachine.Spec.ProviderSpec.Value.DeepCopy()
+
+		By("Switching authoritativeAPI to ClusterAPI")
+		transitionToAuthoritativeAPI(k, mapiMachine, mapiv1beta1.MachineAuthorityClusterAPI, timeout)
+
+		By("Verifying CAPI -> MAPI sync is successful")
+		Eventually(k.Object(mapiMachine), timeout).Should(
+			HaveField("Status.Conditions", ContainElement(
+				SatisfyAll(
+					HaveField("Type", Equal(consts.SynchronizedCondition)),
+					HaveField("Status", Equal(corev1.ConditionTrue)),
+					HaveField("Reason", Equal("ResourceSynchronized")),
+					HaveField("Message", Equal("Successfully synchronized CAPI Machine to MAPI")),
+				))),
+		)
+
+		By("Switching authoritativeAPI back to MachineAPI")
+		transitionToAuthoritativeAPI(k, mapiMachine, mapiv1beta1.MachineAuthorityMachineAPI, timeout)
+
+		By("Verifying MAPI -> CAPI sync is successful")
+		Eventually(k.Object(mapiMachine), timeout).Should(
+			HaveField("Status.Conditions", ContainElement(
+				SatisfyAll(
+					HaveField("Type", Equal(consts.SynchronizedCondition)),
+					HaveField("Status", Equal(corev1.ConditionTrue)),
+					HaveField("Reason", Equal("ResourceSynchronized")),
+					HaveField("Message", Equal("Successfully synchronized MAPI Machine to CAPI")),
+				))),
+		)
+
+		By("Verifying load balancers are unchanged after round trip")
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(mapiMachine), mapiMachine)).To(Succeed())
+
+		var originalSpec, finalSpec mapiv1beta1.AWSMachineProviderConfig
+		Expect(json.Unmarshal(originalProviderSpec.Raw, &originalSpec)).To(Succeed())
+		Expect(json.Unmarshal(mapiMachine.Spec.ProviderSpec.Value.Raw, &finalSpec)).To(Succeed())
+		Expect(finalSpec.LoadBalancers).To(Equal(originalSpec.LoadBalancers), "load balancers should not change after round trip")
 	})
 })
 
