@@ -419,8 +419,8 @@ github.com/onsi/ginkgo/v2 v2.23.4 h1:ktYTpKJAVZnDT4VjxSbiBenUjmlL/5QkBEocaWXiQus
 github.com/onsi/ginkgo/v2 v2.23.4/go.mod h1:Bt66ApGPBFzHyR+JO10Zbt0Gsp4uWxu5mIOTusL46e8=
 github.com/onsi/gomega v1.38.0 h1:c/WX+w8SLAinvuKKQFh77WEucCnPk4j2OTUr7lt7BeY=
 github.com/onsi/gomega v1.38.0/go.mod h1:OcXcwId0b9QsE7Y49u+BTrL4IdKOBOKnD6VQNTJEB6o=
-github.com/openshift/api v0.0.0-20250731015415-ed654edbd7c6 h1:Tgb04NUifdOs+6m/OOe0a1FcoIFMScI3tMJ8grnfb90=
-github.com/openshift/api v0.0.0-20250731015415-ed654edbd7c6/go.mod h1:SPLf21TYPipzCO67BURkCfK6dcIIxx0oNRVWaOyRcXM=
+github.com/openshift-splat-team/cluster-api-provider-aws/v2 v2.0.0-20250912141505-d5a03c3dd2ed h1:Aex9kayKTNwdLQbtVDWey0n+vVww07HNietP6TxGqxA=
+github.com/openshift-splat-team/cluster-api-provider-aws/v2 v2.0.0-20250912141505-d5a03c3dd2ed/go.mod h1:BHUiinQAEJQJpocfGJNdbN40AA3Q5tRhltjfV4aIs68=
 github.com/openshift/client-go v0.0.0-20250710075018-396b36f983ee h1:tOtrrxfDEW8hK3eEsHqxsXurq/D6LcINGfprkQC3hqY=
 github.com/openshift/client-go v0.0.0-20250710075018-396b36f983ee/go.mod h1:zhRiYyNMk89llof2qEuGPWPD+joQPhCRUc2IK0SB510=
 github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20250821122144-fd0936342469 h1:2Nb7w9xhgZg/ahmvrG4Y/+6Tp/Gfj7KGZZKAupKah8g=
@@ -569,6 +569,8 @@ github.com/uudashr/gocognit v1.2.0 h1:3BU9aMr1xbhPlvJLSydKwdLN3tEUUrzPSSM8S4hDYR
 github.com/uudashr/gocognit v1.2.0/go.mod h1:k/DdKPI6XBZO1q7HgoV2juESI2/Ofj9AcHPZhBBdrTU=
 github.com/uudashr/iface v1.3.1 h1:bA51vmVx1UIhiIsQFSNq6GZ6VPTk3WNMZgRiCe9R29U=
 github.com/uudashr/iface v1.3.1/go.mod h1:4QvspiRd3JLPAEXBQ9AiZpLbJlrWWgRChOKDJEuQTdg=
+github.com/vr4manta/api v0.0.0-20250929154722-9355a7602b96 h1:B1sDjz+OYr4DLrz2GpiC3o8+l//3V5XbdnXauKhD+6M=
+github.com/vr4manta/api v0.0.0-20250929154722-9355a7602b96/go.mod h1:SPLf21TYPipzCO67BURkCfK6dcIIxx0oNRVWaOyRcXM=
 github.com/x448/float16 v0.8.4 h1:qLwI1I70+NjRFUR3zs1JPUCgaCXSh3SW62uAKT1mSBM=
 github.com/x448/float16 v0.8.4/go.mod h1:14CWIYCyZA/cWjXOioeEpHeN/83MdbZDRQHoFcYsOfg=
 github.com/xen0n/gosmopolitan v1.2.2 h1:/p2KTnMzwRexIW8GlKawsTWOxn7UHA+jCMF/V8HHtvU=
@@ -811,8 +813,6 @@ sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.32.0 h1:XotDXzqvJ8Nx5
 sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.32.0/go.mod h1:Ve9uj1L+deCXFrPOk1LpFXqTg7LCFzFso6PA48q/XZw=
 sigs.k8s.io/cluster-api v1.10.4 h1:5mdyWLGbbwOowWrjqM/J9N600QnxTohu5J1/1YR6g7c=
 sigs.k8s.io/cluster-api v1.10.4/go.mod h1:68GJs286ZChsncp+TxYNj/vhy2NWokiPtH4+SA0afs0=
-sigs.k8s.io/cluster-api-provider-aws/v2 v2.9.0 h1:oP4GkhI4K/STwtt/Uzt6UdOnn+xMXhk7v3BJfr+dSx4=
-sigs.k8s.io/cluster-api-provider-aws/v2 v2.9.0/go.mod h1:wdqD8SRkgbIAoj0L2geEItos4X4xmCr8yQpEOqIwLp4=
 sigs.k8s.io/cluster-api-provider-azure v1.20.2 h1:+7BUb0zj0ICrI+P6NKw9txVV/iMS+R+4wRx+HvIVLQY=
 sigs.k8s.io/cluster-api-provider-azure v1.20.2/go.mod h1:ZqjFzJm2/7rveKakQtC7h4L0p7sk5u3zylRLW1NmL50=
 sigs.k8s.io/cluster-api-provider-gcp v1.10.0 h1:gngUxo9bz8l+otpdw9v3ULEXwAvijyqiBx2v8HSoRwA=
