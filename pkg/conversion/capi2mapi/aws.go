@@ -140,7 +140,9 @@ func (m machineAndAWSMachineAndAWSCluster) toProviderSpec() (*mapiv1beta1.AWSMac
 			ID: m.awsMachine.Spec.AMI.ID,
 		},
 		InstanceType: m.awsMachine.Spec.InstanceType,
-		Tags:         convertAWSTagsToMAPI(m.awsMachine.Spec.AdditionalTags),
+		// TODO: Bump CAPA and convert.
+		// CPUOptions: ,
+		Tags: convertAWSTagsToMAPI(m.awsMachine.Spec.AdditionalTags),
 		IAMInstanceProfile: &mapiv1beta1.AWSResourceReference{
 			ID: &m.awsMachine.Spec.IAMInstanceProfile,
 		},
