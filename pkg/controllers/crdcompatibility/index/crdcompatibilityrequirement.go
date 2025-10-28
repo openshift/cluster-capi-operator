@@ -17,8 +17,11 @@ limitations under the License.
 package index
 
 import (
+	"context"
 	"fmt"
+	"sync"
 
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
@@ -37,4 +40,31 @@ func CRDByName(obj client.Object) []string {
 	}
 
 	return []string{requirement.Status.CRDName}
+}
+
+var (
+	// Used to track indexes that have been added to the manager.
+	indexesAdded = sync.Map{}
+)
+
+// Use a struct to pair the index name with the manager.
+// Each manager can only have one index with the same name.
+type indexToManagerKey struct {
+	indexName string
+	manager   ctrl.Manager
+}
+
+// AddIndexThreadSafe adds an index to the manager for the given object and index name.
+// It uses a sync.Map to ensure that the index is added only once.
+func AddIndexThreadSafe(ctx context.Context, mgr ctrl.Manager, obj client.Object, indexName string, indexFunc func(obj client.Object) []string) error {
+	if _, ok := indexesAdded.LoadOrStore(indexToManagerKey{indexName: indexName, manager: mgr}, true); ok {
+		// We previously entered this function for this index name so we don't need to add it again.
+		return nil
+	}
+
+	if err := mgr.GetFieldIndexer().IndexField(ctx, obj, indexName, indexFunc); err != nil {
+		return fmt.Errorf("failed to add index to CompatibilityRequirements: %w", err)
+	}
+
+	return nil
 }
