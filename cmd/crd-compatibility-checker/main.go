@@ -27,6 +27,7 @@ import (
 	"k8s.io/component-base/config/options"
 	klog "k8s.io/klog/v2"
 
+	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 
 	capiflags "sigs.k8s.io/cluster-api/util/flags"
@@ -38,6 +39,7 @@ import (
 func initScheme(scheme *runtime.Scheme) {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(apiextensionsv1.AddToScheme(scheme))
+	utilruntime.Must(apiextensionsv1alpha1.AddToScheme(scheme))
 }
 
 //nolint:funlen
