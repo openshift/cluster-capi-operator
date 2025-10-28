@@ -25,6 +25,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	metav1applyconfig "k8s.io/client-go/applyconfigurations/meta/v1"
 )
 
 // SetLastTransitionTime determines if the last transition time should be set or updated for a given condition type.
@@ -44,6 +46,34 @@ func SetLastTransitionTime(condType mapiv1beta1.ConditionType, conditions []mapi
 	}
 	// Condition does not exist; set the transition time
 	conditionAc.WithLastTransitionTime(metav1.Now())
+}
+
+// SetLastTransitionTimeMetaV1 sets the last transition time of a condition
+// apply configuration. It retains the last transition time of the current
+// condition if it exists and matches new status, reason, and message values.
+// If it does not exist, it sets the last transition time to the current time.
+func SetLastTransitionTimeMetaV1(now metav1.Time, currentConditions []metav1.Condition, conditionAC *metav1applyconfig.ConditionApplyConfiguration) *metav1applyconfig.ConditionApplyConfiguration {
+	matchingCondition := func(condition *metav1.Condition, conditionAC *metav1applyconfig.ConditionApplyConfiguration) bool {
+		return (conditionAC.Status == nil || condition.Status == *conditionAC.Status) &&
+			(conditionAC.Reason == nil || condition.Reason == *conditionAC.Reason) &&
+			(conditionAC.Message == nil || condition.Message == *conditionAC.Message) &&
+			(conditionAC.ObservedGeneration == nil || condition.ObservedGeneration == *conditionAC.ObservedGeneration)
+	}
+
+	for _, condition := range currentConditions {
+		if condition.Type == *conditionAC.Type {
+			// Condition has not changed, retain the last transition time
+			if matchingCondition(&condition, conditionAC) {
+				return conditionAC.WithLastTransitionTime(condition.LastTransitionTime)
+			}
+
+			// Condition has changed, set the last transition time to the current time
+			return conditionAC.WithLastTransitionTime(now)
+		}
+	}
+
+	// Condition was not previously set, set the last transition time to the current time
+	return conditionAC.WithLastTransitionTime(now)
 }
 
 // HasSameState returns true if a condition has the same state as a condition
