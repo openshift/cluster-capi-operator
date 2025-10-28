@@ -44,7 +44,7 @@ func CRDByName(obj client.Object) []string {
 
 var (
 	// Used to track indexes that have been added to the manager.
-	indexesAdded = sync.Map{}
+	indexesAdded = sync.Map{} //nolint:gochecknoglobals
 )
 
 // Use a struct to pair the index name with the manager.
