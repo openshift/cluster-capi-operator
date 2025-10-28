@@ -5,6 +5,8 @@ go 1.24.0
 // TODO: these replaces should be removed when corresponding PRs are merged
 replace (
 	github.com/openshift/cluster-api-actuator-pkg/testutils => github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20251211141525-c707612472dc
+	github.com/openshift/api => github.com/chrischdi/openshift-api v0.0.0-20251216151131-93185f4149ff
+	github.com/openshift/client-go => github.com/openshift-cloud-team/client-go v0.0.0-20251216151710-bf6a5ccb43dc
 	sigs.k8s.io/cluster-api-provider-azure => github.com/openshift/cluster-api-provider-azure v0.0.0-20251202084521-c2e0e38d1e0e
 )
 
@@ -21,7 +23,7 @@ require (
 	github.com/metal3-io/cluster-api-provider-metal3/api v1.11.2
 	github.com/onsi/ginkgo/v2 v2.27.2
 	github.com/onsi/gomega v1.38.2
-	github.com/openshift/api v0.0.0-20251111193948-50e2ece149d7
+	github.com/openshift/api v0.0.0-20251216151131-93185f4149ff
 	github.com/openshift/client-go v0.0.0-20251015124057-db0dee36e235
 	github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0
 	github.com/openshift/library-go v0.0.0-20251112091634-ab97ebb73f0f
@@ -47,6 +49,7 @@ require (
 	sigs.k8s.io/controller-runtime v0.22.4
 	sigs.k8s.io/controller-runtime/tools/setup-envtest v0.0.0-20240927101401-4381fa0aeee4
 	sigs.k8s.io/kube-storage-version-migrator v0.0.6-0.20230721195810-5c8923c5ff96
+	sigs.k8s.io/crdify v0.4.0
 	sigs.k8s.io/randfill v1.0.0
 	sigs.k8s.io/yaml v1.6.0
 )

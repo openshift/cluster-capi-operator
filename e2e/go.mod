@@ -7,6 +7,7 @@ replace (
 	github.com/openshift/cluster-api-actuator-pkg => github.com/openshift/cluster-api-actuator-pkg v0.0.0-20251203134942-d9bd7b8593f3
 	github.com/openshift/cluster-api-actuator-pkg/testutils => github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20251203134942-d9bd7b8593f3
 	sigs.k8s.io/cluster-api-provider-azure => github.com/damdo/cluster-api-provider-azure v0.0.0-20251202084521-c2e0e38d1e0e
+	github.com/openshift/api => github.com/chrischdi/openshift-api v0.0.0-20251216151131-93185f4149ff
 )
 
 require (
@@ -16,7 +17,7 @@ require (
 	github.com/metal3-io/cluster-api-provider-metal3/api v1.11.2
 	github.com/onsi/ginkgo/v2 v2.27.2
 	github.com/onsi/gomega v1.38.2
-	github.com/openshift/api v0.0.0-20251111193948-50e2ece149d7
+	github.com/openshift/api v0.0.0-20251216151131-93185f4149ff
 	github.com/openshift/cluster-api-actuator-pkg v0.0.0-20251203134942-d9bd7b8593f3
 	github.com/openshift/cluster-api-provider-baremetal v0.0.0-20250619124612-fb678fec5f7e
 	k8s.io/api v0.34.1
