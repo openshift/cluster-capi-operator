@@ -20,22 +20,29 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
+	"sigs.k8s.io/yaml"
 
 	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility/index"
+	"github.com/openshift/cluster-capi-operator/pkg/crdchecker"
+	"github.com/openshift/cluster-capi-operator/pkg/util"
 )
 
 var (
 	// ErrCRDHasRequirements is the error which signals a deletion of a CRD is disallowed.
-	ErrCRDHasRequirements = errors.New("cannot delete CRD because it has CompatibilityRequirements")
-	errExpectedCRD        = errors.New("expected a CustomResourceDefinition")
+	ErrCRDHasRequirements    = errors.New("cannot delete CRD because it has CompatibilityRequirements")
+	errExpectedCRD           = errors.New("expected a CustomResourceDefinition")
+	errCRDNotCompatible      = errors.New("CRD is not compatible with CompatibilityRequirements")
+	errUnknownCRDAdmitAction = errors.New("unknown CRDAdmitAction")
 )
 
 // NewValidator returns a partially initialised Validator.
@@ -71,13 +78,54 @@ type Validator struct {
 
 var _ admission.CustomValidator = &Validator{}
 
-func (v *Validator) validateCreateOrUpdate(_ context.Context, obj runtime.Object) (admission.Warnings, error) {
-	_, ok := obj.(*apiextensionsv1.CustomResourceDefinition)
+func (v *Validator) validateCreateOrUpdate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
+	crd, ok := obj.(*apiextensionsv1.CustomResourceDefinition)
 	if !ok {
 		return nil, fmt.Errorf("%w: got %T", errExpectedCRD, obj)
 	}
 
-	return nil, nil
+	compatibilityRequirements := apiextensionsv1alpha1.CompatibilityRequirementList{}
+	if err := v.client.List(ctx, &compatibilityRequirements, &client.ListOptions{FieldSelector: fields.SelectorFromSet(fields.Set{index.FieldCRDByName: crd.GetName()})}); err != nil {
+		return nil, fmt.Errorf("failed to list CompatibilityRequirements: %w for CRD %q", err, crd.GetName())
+	}
+
+	var (
+		allReqErrors   []string
+		allReqWarnings []string
+	)
+
+	for _, compatibilityRequirement := range compatibilityRequirements.Items {
+		compatibilityCRD := &apiextensionsv1.CustomResourceDefinition{}
+		if err := yaml.Unmarshal([]byte(compatibilityRequirement.Spec.CompatibilitySchema.CustomResourceDefinition.Data), compatibilityCRD); err != nil {
+			return nil, fmt.Errorf("failed to parse compatibilityCRD for CompatibilityRequirement %q: %w", compatibilityRequirement.Name, err)
+		}
+
+		reqErrors, reqWarnings, err := crdchecker.CheckCompatibilityRequirement(compatibilityCRD, crd)
+		if err != nil {
+			return nil, fmt.Errorf("failed to check CRD compatibility: %w", err)
+		}
+
+		prependName := func(s string) string {
+			return fmt.Sprintf("This requirement was added by CompatibilityRequirement %s: %s", compatibilityRequirement.Name, s)
+		}
+
+		switch compatibilityRequirement.Spec.CustomResourceDefinitionSchemaValidation.Action {
+		case apiextensionsv1alpha1.CRDAdmitActionWarn:
+			allReqWarnings = append(allReqWarnings, util.SliceMap(reqErrors, prependName)...)
+		case apiextensionsv1alpha1.CRDAdmitActionDeny:
+			allReqErrors = append(allReqErrors, util.SliceMap(reqErrors, prependName)...)
+		default:
+			return nil, fmt.Errorf("%w: %q for requirement %s", errUnknownCRDAdmitAction, compatibilityRequirement.Spec.CustomResourceDefinitionSchemaValidation, compatibilityRequirement.Name)
+		}
+
+		allReqWarnings = append(allReqWarnings, util.SliceMap(reqWarnings, prependName)...)
+	}
+
+	if len(allReqErrors) > 0 {
+		return allReqWarnings, fmt.Errorf("%w: %s", errCRDNotCompatible, strings.Join(allReqErrors, "\n"))
+	}
+
+	return allReqWarnings, nil
 }
 
 // ValidateCreate validates a Create event for a CustomResourceDefinition.
@@ -92,9 +140,23 @@ func (v *Validator) ValidateUpdate(ctx context.Context, _, newObj runtime.Object
 
 // ValidateDelete validates a Delete event for a CustomResourceDefinition.
 func (v *Validator) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	_, ok := obj.(*apiextensionsv1.CustomResourceDefinition)
+	crd, ok := obj.(*apiextensionsv1.CustomResourceDefinition)
 	if !ok {
 		return nil, fmt.Errorf("%w: got %T", errExpectedCRD, obj)
+	}
+
+	compatibilityRequirements := apiextensionsv1alpha1.CompatibilityRequirementList{}
+	if err := v.client.List(ctx, &compatibilityRequirements, &client.ListOptions{FieldSelector: fields.SelectorFromSet(fields.Set{index.FieldCRDByName: crd.GetName()})}); err != nil {
+		return nil, fmt.Errorf("failed to list CompatibilityRequirements: %w for CRD %q", err, crd.GetName())
+	}
+
+	if len(compatibilityRequirements.Items) > 0 {
+		names := []string{}
+		for _, compatibilityRequirement := range compatibilityRequirements.Items {
+			names = append(names, compatibilityRequirement.Name)
+		}
+
+		return nil, fmt.Errorf("%w: %s", ErrCRDHasRequirements, strings.Join(names, ", "))
 	}
 
 	return nil, nil
