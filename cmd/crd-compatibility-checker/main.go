@@ -29,6 +29,7 @@ import (
 
 	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility/crdvalidation"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 
 	capiflags "sigs.k8s.io/cluster-api/util/flags"
@@ -125,6 +126,13 @@ func main() {
 	// Setup the CRD compatibility controller
 	if err := compatibilityRequirementReconciler.SetupWithManager(ctx, mgr); err != nil {
 		klog.Error(err, "unable to create controller", "controller", "CompatibilityRequirement")
+		os.Exit(1)
+	}
+
+	// Setup the validator for CustomResourceDefinition Create/Update/Delete events.
+	crdValidator := crdvalidation.NewValidator(mgr.GetClient())
+	if err := crdValidator.SetupWithManager(ctx, mgr); err != nil {
+		klog.Error(err, "unable to create controller", "controller", "CRDValidator")
 		os.Exit(1)
 	}
 
