@@ -36,6 +36,10 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility/index"
 )
 
+const (
+	controllerName string = "compatibilityrequirement.operator.openshift.io"
+)
+
 //+kubebuilder:rbac:groups=apiextensions.openshift.io,resources=compatibilityrequirements,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=apiextensions.openshift.io,resources=compatibilityrequirements/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=apiextensions.openshift.io,resources=compatibilityrequirements/finalizers,verbs=update
