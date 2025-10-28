@@ -21,14 +21,17 @@ import (
 	"errors"
 	"fmt"
 
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
+	"sigs.k8s.io/yaml"
 
 	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
 )
 
 var (
 	errExpectedCompatibilityRequirement = errors.New("expected a CompatibilityRequirement")
+	errInvalidCompatibilityCRD          = errors.New("expected a valid CustomResourceDefinition in YAML format")
 )
 
 type crdRequirementValidator struct{}
@@ -47,10 +50,25 @@ func (v *crdRequirementValidator) ValidateUpdate(ctx context.Context, _, newObj 
 
 // validateCreateOrUpdate ensures that the compatibility CRD is valid YAML.
 func (v *crdRequirementValidator) validateCreateOrUpdate(_ context.Context, obj runtime.Object) (admission.Warnings, error) {
-	_, ok := obj.(*apiextensionsv1alpha1.CompatibilityRequirement)
+	compatibilityRequirement, ok := obj.(*apiextensionsv1alpha1.CompatibilityRequirement)
 	if !ok {
 		return nil, fmt.Errorf("%w: got %T", errExpectedCompatibilityRequirement, obj)
 	}
+
+	// Parse the CRD in compatibilityCRD into a CRD object
+	compatibilityCRD := &apiextensionsv1.CustomResourceDefinition{}
+	if err := yaml.Unmarshal([]byte(compatibilityRequirement.Spec.CompatibilitySchema.CustomResourceDefinition.Data), &compatibilityCRD); err != nil {
+		return nil, fmt.Errorf("%w: %w", errInvalidCompatibilityCRD, err)
+	}
+
+	if compatibilityCRD.APIVersion != "apiextensions.k8s.io/v1" || compatibilityCRD.Kind != "CustomResourceDefinition" {
+		return nil, fmt.Errorf("%w: expected APIVersion to be apiextensions.k8s.io/v1 and Kind to be CustomResourceDefinition, got %s/%s", errInvalidCompatibilityCRD, compatibilityCRD.APIVersion, compatibilityCRD.Kind)
+	}
+
+	// TODO: investigate fully validating the CRD with k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/validation/ValidateCustomResourceDefinition
+
+	// TODO: Generate the potential desired ValidatingWebhookConfiguration and validate it via:
+	// k8s.io/pkg/apis/admissionregistration/validation.ValidateMutatingWebhookConfiguration(...)
 
 	return nil, nil
 }
