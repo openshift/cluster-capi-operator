@@ -223,6 +223,9 @@ func awsProviderSpecFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interfa
 			ps.DeviceIndex = 0
 			ps.LoadBalancers = nil
 			ps.ObjectMeta = metav1.ObjectMeta{}
+
+			// TODO: should be removed and converted instead after bumping CAPA.
+			ps.CPUOptions = nil
 			// TODO(OCPCLOUD-2713): remove this, temporarily hardcoded for AWS to make the migration to work.
 			ps.CredentialsSecret = &corev1.LocalObjectReference{Name: "aws-cloud-credentials"}
 
