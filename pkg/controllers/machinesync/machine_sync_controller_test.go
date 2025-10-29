@@ -1364,6 +1364,144 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 
 		})
 
+		Context("Updates to MAPI machine warns user if the Synchronized condition is set to false", func() {
+			var warnClient client.Client
+			var warnSink *admissiontestutils.WarningCollector
+			var warnKomega komega.Komega
+
+			BeforeEach(func() {
+				By("Waiting for VAP to be ready")
+				machineVap = &admissionregistrationv1.ValidatingAdmissionPolicy{}
+				Eventually(k8sClient.Get(ctx, client.ObjectKey{Name: "openshift-provide-warning-when-not-synchronized"}, machineVap), timeout).Should(Succeed())
+				Eventually(k.Update(machineVap, func() {
+					machineVap.Spec.Validations = append(machineVap.Spec.Validations, admissionregistrationv1.Validation{
+						Expression: "!(has(object.metadata.labels) && \"test-sentinel\" in object.metadata.labels)",
+						Message:    "policy in place",
+					})
+				})).Should(Succeed())
+
+				Eventually(k.Object(machineVap), timeout).Should(
+					HaveField("Status.ObservedGeneration", BeNumerically(">=", 2)),
+				)
+
+				By("Updating the VAP binding")
+				policyBinding = &admissionregistrationv1.ValidatingAdmissionPolicyBinding{}
+				Eventually(k8sClient.Get(ctx, client.ObjectKey{
+					Name: "openshift-provide-warning-when-not-synchronized"}, policyBinding), timeout).Should(Succeed())
+
+				Eventually(k.Update(policyBinding, func() {
+					// We need to update the namespace in our namespaceSelector,
+					// since also use `GenerateName` here
+					policyBinding.Spec.MatchResources.NamespaceSelector.MatchLabels = map[string]string{
+						"kubernetes.io/metadata.name": mapiNamespace.GetName(),
+					}
+				}), timeout).Should(Succeed())
+
+				// Wait until the binding shows the patched values
+				Eventually(k.Object(policyBinding), timeout).Should(
+					SatisfyAll(
+						HaveField("Spec.MatchResources.NamespaceSelector.MatchLabels",
+							HaveKeyWithValue("kubernetes.io/metadata.name",
+								mapiNamespace.GetName())),
+					),
+				)
+
+				By("Creating a throwaway MAPI machine")
+				sentinelMachine := mapiMachineBuilder.WithName("sentinel-machine").WithAuthoritativeAPI(mapiv1beta1.MachineAuthorityClusterAPI).Build()
+				Eventually(k8sClient.Create(ctx, sentinelMachine), timeout).Should(Succeed())
+
+				var err error
+				warnClient, warnSink, err = admissiontestutils.SetupClientWithWarningCollector(cfg, testScheme)
+				Expect(err).To(Not(HaveOccurred()))
+
+				warnKomega = komega.New(warnClient)
+
+				Eventually(func(g Gomega) {
+					warnSink.Reset() // keep each probe self-contained
+
+					err := warnKomega.Update(sentinelMachine, func() {
+						sentinelMachine.ObjectMeta.Labels = map[string]string{"test-sentinel": "fubar"}
+					})()
+					g.Expect(err).NotTo(HaveOccurred())
+
+					g.Expect(warnSink.Messages()).To(ContainElement(ContainSubstring("policy in place")))
+				}, timeout).Should(Succeed())
+
+			})
+
+			It("warns the user when the machine is still synchronizing", func() {
+				By("Setting the Synchronized condition to False")
+				Eventually(k.UpdateStatus(mapiMachine, func() {
+					mapiMachine.Status.Conditions = []mapiv1beta1.Condition{
+						{
+							Type:               consts.SynchronizedCondition,
+							Status:             corev1.ConditionFalse,
+							Reason:             "ErrorReason",
+							Message:            "Error message",
+							LastTransitionTime: metav1.Now(),
+						},
+					}
+				})).Should(Succeed())
+
+				By("Attempting to update the authoritativeAPI should emit a warning")
+				Eventually(func(g Gomega) {
+					warnSink.Reset() // keep each probe self-contained
+
+					err := warnKomega.Update(mapiMachine, func() {
+						mapiMachine.Spec.AuthoritativeAPI = mapiv1beta1.MachineAuthorityClusterAPI
+					})()
+					g.Expect(err).NotTo(HaveOccurred())
+
+					g.Expect(warnSink.Messages()).To(ContainElement(ContainSubstring("Updating .spec.authoritativeAPI when the Synchronized condition is not true means changes may not take effect")))
+				}, timeout).Should(Succeed())
+			})
+			It("warns the user when the machine synchronisation is unknown", func() {
+				By("Setting the Synchronized condition to Unknown")
+				Eventually(k.UpdateStatus(mapiMachine, func() {
+					mapiMachine.Status.Conditions = []mapiv1beta1.Condition{
+						{
+							Type:               consts.SynchronizedCondition,
+							Status:             corev1.ConditionUnknown,
+							Reason:             "ErrorReason",
+							Message:            "Error message",
+							LastTransitionTime: metav1.Now(),
+						},
+					}
+				})).Should(Succeed())
+
+				By("Attempting to update the authoritativeAPI should emit a warning")
+				Eventually(func(g Gomega) {
+					warnSink.Reset() // keep each probe self-contained
+
+					err := warnKomega.Update(mapiMachine, func() {
+						mapiMachine.Spec.AuthoritativeAPI = mapiv1beta1.MachineAuthorityClusterAPI
+					})()
+					g.Expect(err).NotTo(HaveOccurred())
+
+					g.Expect(warnSink.Messages()).To(ContainElement(ContainSubstring("Updating .spec.authoritativeAPI when the Synchronized condition is not true means changes may not take effect")))
+				}, timeout).Should(Succeed())
+			})
+
+			It("warns the user when the machine has no synchronized condition", func() {
+				By("Setting the conditions to empty")
+				Eventually(k.UpdateStatus(mapiMachine, func() {
+					mapiMachine.Status.Conditions = []mapiv1beta1.Condition{}
+				})).Should(Succeed())
+
+				By("Attempting to update the authoritativeAPI should emit a warning")
+				Eventually(func(g Gomega) {
+					warnSink.Reset() // keep each probe self-contained
+
+					err := warnKomega.Update(mapiMachine, func() {
+						mapiMachine.Spec.AuthoritativeAPI = mapiv1beta1.MachineAuthorityClusterAPI
+					})()
+					g.Expect(err).NotTo(HaveOccurred())
+
+					g.Expect(warnSink.Messages()).To(ContainElement(ContainSubstring("Updating .spec.authoritativeAPI when the Synchronized condition is not true means changes may not take effect")))
+				}, timeout).Should(Succeed())
+			})
+		})
+
 	})
 })
 

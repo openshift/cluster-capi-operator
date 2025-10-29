@@ -17,11 +17,14 @@ limitations under the License.
 package testutils
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	corev1 "k8s.io/api/core/v1"
 
@@ -32,6 +35,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -260,4 +264,55 @@ func LoadTransportConfigMaps() map[string][]client.Object {
 	}
 
 	return mapObjs
+}
+
+// WarningCollector is to provide a way to collect
+// kube client warnings, intended for testing VAPs that return warnings.
+type WarningCollector struct {
+	sync.Mutex
+	messages []string
+}
+
+// HandleWarningHeaderWithContext implements rest.WarningHandlerWithContext.
+// For test simplicity, only the message is captured; code and agent are ignored.
+func (w *WarningCollector) HandleWarningHeaderWithContext(_ context.Context, code int, _ string, message string) {
+	w.Lock()
+	w.messages = append(w.messages, message)
+	w.Unlock()
+}
+
+// Messages returns messages collected by a warning collector.
+func (w *WarningCollector) Messages() []string {
+	w.Lock()
+	defer w.Unlock()
+
+	// return a copy for thread-safety
+	out := make([]string, len(w.messages))
+	copy(out, w.messages)
+
+	return out
+}
+
+// Reset clears the messages, used between tests to reset state.
+func (w *WarningCollector) Reset() {
+	w.Lock()
+	w.messages = nil
+	w.Unlock()
+}
+
+// SetupClientWithWarningCollector creates a new client.Client, with a warning handler that writes to a returned WarningCollector.
+func SetupClientWithWarningCollector(cfg *rest.Config, scheme *runtime.Scheme) (client.Client, *WarningCollector, error) {
+	warnSink := &WarningCollector{}
+	// copy to avoid mutating the passed-in config
+	newcfg := rest.CopyConfig(cfg)
+
+	newcfg.WarningHandlerWithContext = warnSink
+
+	// Build the client with this config
+	client, err := client.New(newcfg, client.Options{Scheme: scheme})
+	if err != nil {
+		return nil, nil, fmt.Errorf("error creating new client: %w", err)
+	}
+
+	return client, warnSink, nil
 }
