@@ -1202,18 +1202,17 @@ var _ = Describe("compareMAPIMachineSets", func() {
 
 	Context("when comparing MachineSets with different instance types", func() {
 		It("should detect differences in providerSpec", func() {
-			diff, err := compareMAPIMachineSets(mapiMachineSet1, mapiMachineSet2)
+			diff, err := compareMAPIMachineSets(configv1.AWSPlatformType, mapiMachineSet1, mapiMachineSet2)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(diff).To(HaveKey(".providerSpec"))
-			Expect(diff[".providerSpec"]).NotTo(BeEmpty())
+			Expect(diff.HasProviderSpecChanges()).To(BeTrue())
 		})
 	})
 
 	Context("when comparing identical MachineSets", func() {
 		It("should detect no differences", func() {
-			diff, err := compareMAPIMachineSets(mapiMachineSet1, mapiMachineSet1)
+			diff, err := compareMAPIMachineSets(configv1.AWSPlatformType, mapiMachineSet1, mapiMachineSet1)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(diff).To(BeEmpty())
+			Expect(diff.HasChanges()).To(BeFalse())
 		})
 	})
 })

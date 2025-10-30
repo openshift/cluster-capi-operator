@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"sort"
 	"strings"
 	"time"
 
@@ -36,7 +35,6 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/mapi2capi"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 
-	"github.com/go-test/deep"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -230,7 +228,7 @@ func (r *MachineSyncReconciler) Reconcile(ctx context.Context, req reconcile.Req
 		capiMachineNotFound = true
 	} else if err != nil {
 		logger.Error(err, "Failed to get Cluster API Machine")
-		return ctrl.Result{}, fmt.Errorf("failed to get Cluster API machine:: %w", err)
+		return ctrl.Result{}, fmt.Errorf("failed to get Cluster API machine: %w", err)
 	}
 
 	if mapiMachineNotFound && capiMachineNotFound {
@@ -482,7 +480,7 @@ func (r *MachineSyncReconciler) reconcileMAPIMachinetoCAPIMachine(ctx context.Co
 		return ctrl.Result{}, fmt.Errorf("failed to convert Machine API machine owner references to Cluster API: %w", err)
 	}
 
-	if err := r.validateMAPIToCAPIPlatfromSpecifics(ctx, sourceMAPIMachine); err != nil {
+	if err := r.validateMAPIToCAPIPlatformSpecifics(ctx, sourceMAPIMachine); err != nil {
 		conversionErr := fmt.Errorf("failed to convert Machine API machine to Cluster API machine: %w", err)
 		if condErr := r.applySynchronizedConditionWithPatch(ctx, sourceMAPIMachine, corev1.ConditionFalse, reasonFailedToConvertMAPIMachineToCAPI, conversionErr.Error(), nil); condErr != nil {
 			return ctrl.Result{}, utilerrors.NewAggregate([]error{conversionErr, condErr})
@@ -597,8 +595,8 @@ func (r *MachineSyncReconciler) reconcileMAPIMachinetoCAPIMachine(ctx context.Co
 		controllers.ReasonResourceSynchronized, messageSuccessfullySynchronizedMAPItoCAPI, &sourceMAPIMachine.Generation)
 }
 
-// validateMAPIToCAPIPlatfromSpecifics verifies that shared CAPI resources are compatible before converting from MAPI -> CAPI.
-func (r *MachineSyncReconciler) validateMAPIToCAPIPlatfromSpecifics(ctx context.Context, mapiMachine *mapiv1beta1.Machine) error {
+// validateMAPIToCAPIPlatformSpecifics verifies that shared CAPI resources are compatible before converting from MAPI -> CAPI.
+func (r *MachineSyncReconciler) validateMAPIToCAPIPlatformSpecifics(ctx context.Context, mapiMachine *mapiv1beta1.Machine) error {
 	switch r.Platform {
 	case configv1.AWSPlatformType:
 		return r.validateMachineAWSLoadBalancers(ctx, mapiMachine)
@@ -677,11 +675,11 @@ func (r *MachineSyncReconciler) ensureCAPIMachine(ctx context.Context, sourceMAP
 }
 
 // ensureCAPIMachineSpecUpdated updates the Cluster API machine if changes are detected to the spec, metadata or provider spec.
-func (r *MachineSyncReconciler) ensureCAPIMachineSpecUpdated(ctx context.Context, mapiMachine *mapiv1beta1.Machine, capiMachinesDiff map[string]any, convertedCAPIMachine *clusterv1.Machine) (bool, *clusterv1.Machine, error) {
+func (r *MachineSyncReconciler) ensureCAPIMachineSpecUpdated(ctx context.Context, mapiMachine *mapiv1beta1.Machine, capiMachinesDiff util.DiffResult, convertedCAPIMachine *clusterv1.Machine) (bool, *clusterv1.Machine, error) {
 	logger := logf.FromContext(ctx)
 
 	// If there are no spec changes, return early.
-	if !hasSpecOrMetadataOrProviderSpecChanges(capiMachinesDiff) {
+	if !(capiMachinesDiff.HasMetadataChanges() || capiMachinesDiff.HasSpecChanges()) {
 		return false, nil, nil
 	}
 
@@ -725,7 +723,10 @@ func (r *MachineSyncReconciler) createOrUpdateCAPIMachine(ctx context.Context, s
 	}
 
 	// Compare the existing CAPI machine with the desired CAPI machine to check for changes.
-	capiMachinesDiff := compareCAPIMachines(existingCAPIMachine, convertedCAPIMachine)
+	capiMachinesDiff, err := compareCAPIMachines(existingCAPIMachine, convertedCAPIMachine)
+	if err != nil {
+		return nil, fmt.Errorf("failed to compare Cluster API machines: %w", err)
+	}
 
 	// Don't try to update the spec of the machine if it was just created it.
 	// The resourceVersion of the convertedCAPIMachine is empty and would lead to failure.
@@ -776,7 +777,7 @@ func (r *MachineSyncReconciler) createOrUpdateMAPIMachine(ctx context.Context, e
 	// There already is an existing MAPI machine, work out if it needs updating.
 
 	// Compare the existing MAPI machine with the converted MAPI machine to check for changes.
-	mapiMachinesDiff, err := compareMAPIMachines(existingMAPIMachine, convertedMAPIMachine)
+	mapiMachinesDiff, err := compareMAPIMachines(r.Platform, existingMAPIMachine, convertedMAPIMachine)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to compare Machine API machines: %w", err)
 	}
@@ -1289,86 +1290,55 @@ func (r *MachineSyncReconciler) ensureSyncFinalizer(ctx context.Context, mapiMac
 }
 
 // compareCAPIMachines compares CAPI machines a and b, and returns a list of differences, or none if there are none.
-func compareCAPIMachines(capiMachine1, capiMachine2 *clusterv1.Machine) map[string]any {
-	diff := make(map[string]any)
+func compareCAPIMachines(capiMachine1, capiMachine2 *clusterv1.Machine) (util.DiffResult, error) {
+	diff, err := util.NewDefaultDiffer(
+		// The paused condition is always handled by the corresponding CAPI controller.
+		util.WithIgnoreConditionType(clusterv1.PausedCondition),
 
-	if diffSpec := deep.Equal(capiMachine1.Spec, capiMachine2.Spec); len(diffSpec) > 0 {
-		diff[".spec"] = diffSpec
+		// We don't ned this at the moment, and tt require significant hoops to get the Node object everytime and pipe it down to here.
+		// Do not implement this for now, rationale:
+		// https://github.com/openshift/cluster-capi-operator/pull/365#discussion_r2378857251
+		util.WithIgnoreConditionType(clusterv1.MachineNodeHealthyCondition),
+
+		// We should never set this condition in CAPI because we don't use MachineDeployments on the MAPI side
+		// and/or don't support "matching" higher level abstractions for the conversion of a MachineSet from MAPI to CAPI
+		util.WithIgnoreConditionType(clusterv1.MachineUpToDateCondition),
+	).Diff(capiMachine1, capiMachine2)
+	if err != nil {
+		return nil, fmt.Errorf("failed to compare Cluster API machines: %w", err)
 	}
 
-	if diffObjectMeta := util.ObjectMetaEqual(capiMachine1.ObjectMeta, capiMachine2.ObjectMeta); len(diffObjectMeta) > 0 {
-		diff[".metadata"] = diffObjectMeta
-	}
-
-	if diffStatus := util.CAPIMachineStatusEqual(capiMachine1.Status, capiMachine2.Status); len(diffStatus) > 0 {
-		diff[".status"] = diffStatus
-	}
-
-	return diff
+	return diff, nil
 }
 
 // compareMAPIMachines compares MAPI machines a and b, and returns a list of differences, or none if there are none.
-func compareMAPIMachines(a, b *mapiv1beta1.Machine) (map[string]any, error) {
-	diff := make(map[string]any)
+func compareMAPIMachines(platform configv1.PlatformType, a, b *mapiv1beta1.Machine) (util.DiffResult, error) {
+	diff, err := util.NewDefaultDiffer(
+		util.WithProviderSpec(platform, []string{"spec", "providerSpec", "value"}, mapi2capi.ProviderSpecFromRawExtension),
+		// Other status fields to ignore
+		util.WithIgnoreField("status", "providerStatus"),
+		util.WithIgnoreField("status", "lastOperation"),
+		util.WithIgnoreField("status", "authoritativeAPI"),
+		util.WithIgnoreField("status", "synchronizedGeneration"),
+		// MAPI Machine conditions are not converted yet, TODO(OCPCLOUD-3193): Add condition types to ignore when conversion is implemented
+		util.WithIgnoreField("status", "conditions"),
+	).Diff(a, b)
 
-	ps1, err := mapi2capi.AWSProviderSpecFromRawExtension(a.Spec.ProviderSpec.Value)
 	if err != nil {
-		return nil, fmt.Errorf("unable to parse first Machine API machine set providerSpec: %w", err)
-	}
-
-	ps2, err := mapi2capi.AWSProviderSpecFromRawExtension(b.Spec.ProviderSpec.Value)
-	if err != nil {
-		return nil, fmt.Errorf("unable to parse second Machine API machine set providerSpec: %w", err)
-	}
-
-	// Sort the tags by name to ensure consistent ordering.
-	// On the CAPI side these tags are in a map,
-	// so the order is not guaranteed when converting back from a CAPI map to a MAPI slice.
-	sort.Slice(ps1.Tags, func(i, j int) bool {
-		return ps1.Tags[i].Name < ps1.Tags[j].Name
-	})
-
-	// Sort the tags by name to ensure consistent ordering.
-	// On the CAPI side these tags are in a map,
-	// so the order is not guaranteed when converting back from a CAPI map to a MAPI slice.
-	sort.Slice(ps2.Tags, func(i, j int) bool {
-		return ps2.Tags[i].Name < ps2.Tags[j].Name
-	})
-
-	if diffProviderSpec := deep.Equal(ps1, ps2); len(diffProviderSpec) > 0 {
-		diff[".providerSpec"] = diffProviderSpec
-	}
-
-	// Remove the providerSpec from the Spec as we've already compared them.
-	aCopy := a.DeepCopy()
-	aCopy.Spec.ProviderSpec.Value = nil
-
-	bCopy := b.DeepCopy()
-	bCopy.Spec.ProviderSpec.Value = nil
-
-	if diffSpec := deep.Equal(aCopy.Spec, bCopy.Spec); len(diffSpec) > 0 {
-		diff[".spec"] = diffSpec
-	}
-
-	if diffObjectMeta := util.ObjectMetaEqual(aCopy.ObjectMeta, bCopy.ObjectMeta); len(diffObjectMeta) > 0 {
-		diff[".metadata"] = diffObjectMeta
-	}
-
-	if diffStatus := util.MAPIMachineStatusEqual(a.Status, b.Status); len(diffStatus) > 0 {
-		diff[".status"] = diffStatus
+		return nil, fmt.Errorf("failed to compare Machine API machines: %w", err)
 	}
 
 	return diff, nil
 }
 
 // ensureCAPIMachineStatusUpdated updates the CAPI machine status if changes are detected and conditions are met.
-func (r *MachineSyncReconciler) ensureCAPIMachineStatusUpdated(ctx context.Context, mapiMachine *mapiv1beta1.Machine, existingCAPIMachine, convertedCAPIMachine *clusterv1.Machine, capiMachinesDiff map[string]any, forceUpdate bool) (bool, error) {
+func (r *MachineSyncReconciler) ensureCAPIMachineStatusUpdated(ctx context.Context, mapiMachine *mapiv1beta1.Machine, existingCAPIMachine, convertedCAPIMachine *clusterv1.Machine, capiMachinesDiff util.DiffResult, forceUpdate bool) (bool, error) {
 	logger := logf.FromContext(ctx)
 
 	// If there are spec changes we always want to update the status to sync the spec generation.
 	// If there are status changes we always want to update the status.
 	// If both the above are false, we can skip updating the status and return early.
-	if !forceUpdate && !hasStatusChanges(capiMachinesDiff) {
+	if !forceUpdate && !capiMachinesDiff.HasStatusChanges() {
 		return false, nil
 	}
 
@@ -1443,11 +1413,11 @@ func (r *MachineSyncReconciler) ensureMAPIMachine(ctx context.Context, existingM
 }
 
 // ensureMAPIMachineStatusUpdated updates the MAPI machine status if changes are detected.
-func (r *MachineSyncReconciler) ensureMAPIMachineStatusUpdated(ctx context.Context, existingMAPIMachine *mapiv1beta1.Machine, convertedMAPIMachine *mapiv1beta1.Machine, mapiMachinesDiff map[string]any, specUpdated bool) (bool, error) {
+func (r *MachineSyncReconciler) ensureMAPIMachineStatusUpdated(ctx context.Context, existingMAPIMachine *mapiv1beta1.Machine, convertedMAPIMachine *mapiv1beta1.Machine, mapiMachinesDiff util.DiffResult, specUpdated bool) (bool, error) {
 	logger := logf.FromContext(ctx)
 
 	// If there are no status changes and the spec has not been updated, return early.
-	if !hasStatusChanges(mapiMachinesDiff) && !specUpdated {
+	if !mapiMachinesDiff.HasStatusChanges() && !specUpdated {
 		return false, nil
 	}
 
@@ -1491,11 +1461,11 @@ func (r *MachineSyncReconciler) ensureMAPIMachineStatusUpdated(ctx context.Conte
 }
 
 // ensureMAPIMachineSpecUpdated updates the MAPI machine if changes are detected.
-func (r *MachineSyncReconciler) ensureMAPIMachineSpecUpdated(ctx context.Context, existingMAPIMachine *mapiv1beta1.Machine, mapiMachinesDiff map[string]any, updatedMAPIMachine *mapiv1beta1.Machine) (bool, error) {
+func (r *MachineSyncReconciler) ensureMAPIMachineSpecUpdated(ctx context.Context, existingMAPIMachine *mapiv1beta1.Machine, mapiMachinesDiff util.DiffResult, updatedMAPIMachine *mapiv1beta1.Machine) (bool, error) {
 	logger := logf.FromContext(ctx)
 
 	// If there are no spec changes, return early.
-	if !hasSpecOrMetadataOrProviderSpecChanges(mapiMachinesDiff) {
+	if !(mapiMachinesDiff.HasMetadataChanges() || mapiMachinesDiff.HasSpecChanges() || mapiMachinesDiff.HasProviderSpecChanges()) {
 		return false, nil
 	}
 
@@ -1549,12 +1519,6 @@ func setChangedMAPIMachineStatusFields(existingMAPIMachine, convertedMAPIMachine
 	existingMAPIMachine.Status = convertedMAPIMachine.Status
 }
 
-// hasStatusChanges checks if there are status-related changes in the diff.
-func hasStatusChanges(diff map[string]any) bool {
-	_, hasStatus := diff[".status"]
-	return hasStatus
-}
-
 // applySynchronizedConditionWithPatch updates the synchronized condition
 // using a server side apply patch. We do this to force ownership of the
 // 'Synchronized' condition and 'SynchronizedGeneration'.
@@ -1563,24 +1527,6 @@ func (r *MachineSyncReconciler) applySynchronizedConditionWithPatch(ctx context.
 		ctx, r.Client, controllerName,
 		machinev1applyconfigs.Machine, mapiMachine,
 		status, reason, message, generation)
-}
-
-// hasSpecOrMetadataOrProviderSpecChanges checks if there are spec, metadata, or provider spec changes in the diff.
-func hasSpecOrMetadataOrProviderSpecChanges(diff map[string]any) bool {
-	_, hasProviderSpec := diff[".providerSpec"]
-	return hasSpecChanges(diff) || hasMetadataChanges(diff) || hasProviderSpec
-}
-
-// hasSpecChanges checks if there are spec changes in the diff.
-func hasSpecChanges(diff map[string]any) bool {
-	_, hasSpec := diff[".spec"]
-	return hasSpec
-}
-
-// hasSpecChanges checks if there are spec changes in the diff.
-func hasMetadataChanges(diff map[string]any) bool {
-	_, hasSpec := diff[".metadata"]
-	return hasSpec
 }
 
 // isTerminalConfigurationError returns true if the provided error is

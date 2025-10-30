@@ -335,6 +335,47 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 		)
 	})
 
+	Context("when the MAPI machine has MachineAuthority set to Machine API and the providerSpec has security groups", func() {
+		BeforeEach(func() {
+			By("Creating the MAPI machine")
+			providerSpecBuilder := machinev1resourcebuilder.AWSProviderSpec().WithLoadBalancers(nil).
+				WithSecurityGroups(
+					[]mapiv1beta1.AWSResourceReference{
+						{
+							Filters: []mapiv1beta1.Filter{{
+								Name:   "tag:Name",
+								Values: []string{"some-tag"},
+							}},
+						},
+						{
+							ID: ptr.To("some-sg-id"),
+						},
+					},
+				)
+			mapiMachine = mapiMachineBuilder.WithProviderSpecBuilder(providerSpecBuilder).Build()
+
+			Eventually(k8sClient.Create(ctx, mapiMachine)).Should(Succeed(), "mapi machine should be able to be created")
+
+			By("Setting the MAPI machine AuthoritativeAPI to MachineAPI")
+			Eventually(k.UpdateStatus(mapiMachine, func() {
+				mapiMachine.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityMachineAPI
+			})).Should(Succeed())
+		})
+
+		Context("when the CAPI machine does not exist", func() {
+			It("should update the synchronized condition on the MAPI machine to True", func() {
+				Eventually(k.Object(mapiMachine), timeout).Should(
+					HaveField("Status.Conditions", ContainElement(
+						SatisfyAll(
+							HaveField("Type", Equal(consts.SynchronizedCondition)),
+							HaveField("Status", Equal(corev1.ConditionTrue)),
+							HaveField("Reason", Equal("ResourceSynchronized")),
+							HaveField("Message", Equal("Successfully synchronized MAPI Machine to CAPI")),
+						))),
+				)
+			})
+		})
+	})
 	Context("when the MAPI machine has MachineAuthority set to Machine API", func() {
 		BeforeEach(func() {
 			By("Creating the MAPI machine")
