@@ -54,7 +54,7 @@ func TestCAPIMachineSetStatusEqual(t *testing.T) {
 			b: clusterv1.MachineSetStatus{
 				ReadyReplicas: 5,
 			},
-			want:        "map[readyReplicas]: 3 != 5",
+			want:        ".[readyReplicas]: 3 != 5",
 			wantChanges: true,
 		},
 		{
@@ -65,7 +65,7 @@ func TestCAPIMachineSetStatusEqual(t *testing.T) {
 			b: clusterv1.MachineSetStatus{
 				AvailableReplicas: 4,
 			},
-			want:        "map[availableReplicas]: 2 != 4",
+			want:        ".[availableReplicas]: 2 != 4",
 			wantChanges: true,
 		},
 		{
@@ -78,7 +78,7 @@ func TestCAPIMachineSetStatusEqual(t *testing.T) {
 				ReadyReplicas:     5,
 				AvailableReplicas: 4,
 			},
-			want:        "map[readyReplicas]: 3 != 5, map[availableReplicas]: 2 != 4",
+			want:        ".[availableReplicas]: 2 != 4, .[readyReplicas]: 3 != 5",
 			wantChanges: true,
 		},
 		{
@@ -124,7 +124,7 @@ func TestCAPIMachineSetStatusEqual(t *testing.T) {
 					},
 				},
 			},
-			want:        "map[conditions].slice[0].map[status]: True != False",
+			want:        ".[conditions][0].[status]: True != False",
 			wantChanges: true,
 		},
 		{
@@ -180,7 +180,7 @@ func TestCAPIMachineSetStatusEqual(t *testing.T) {
 					},
 				},
 			},
-			want:        "map[conditions].slice[1].map[status]: True != False",
+			want:        ".[conditions][1].[status]: True != False",
 			wantChanges: true,
 		},
 		{
@@ -238,7 +238,7 @@ func TestCAPIMachineSetStatusEqual(t *testing.T) {
 					},
 				},
 			},
-			want:        "map[v1beta2].map[conditions].slice[0].map[status]: True != False",
+			want:        ".[v1beta2].[conditions][0].[status]: True != False",
 			wantChanges: true,
 		},
 		{
@@ -306,7 +306,7 @@ func TestCAPIMachineSetStatusEqual(t *testing.T) {
 					},
 				},
 			},
-			want:        "map[v1beta2].map[conditions].slice[1].map[status]: True != False",
+			want:        ".[v1beta2].[conditions][1].[status]: True != False",
 			wantChanges: true,
 		},
 		{
@@ -319,7 +319,7 @@ func TestCAPIMachineSetStatusEqual(t *testing.T) {
 					ReadyReplicas: ptr.To[int32](3),
 				},
 			},
-			want:        "map[v1beta2]: <does not have key> != map[readyReplicas:3]",
+			want:        ".[v1beta2]: <does not have key> != [readyReplicas:3]",
 			wantChanges: true,
 		},
 	}

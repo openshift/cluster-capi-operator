@@ -17,6 +17,7 @@ package util
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/go-test/deep"
@@ -41,7 +42,15 @@ func (d *diffResult) Changed() bool {
 
 // String returns the diff as a string.
 func (d *diffResult) String() string {
-	return strings.Join(d.diff, ", ")
+	if !d.Changed() {
+		return ""
+	}
+
+	out := "." + strings.Join(d.diff, ", .")
+	out = strings.ReplaceAll(out, ".slice[", "[")
+	out = strings.ReplaceAll(out, "map[", "[")
+
+	return out
 }
 
 type differ struct {

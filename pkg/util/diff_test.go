@@ -47,7 +47,7 @@ func TestDiff_basic_operations(t *testing.T) {
 				"b": 2,
 			},
 			wantChanged: true,
-			want:        "map[b]: <does not have key> != 2",
+			want:        ".[b]: <does not have key> != 2",
 		},
 		{
 			name: "diff when removing a field",
@@ -59,7 +59,7 @@ func TestDiff_basic_operations(t *testing.T) {
 				"a": 1,
 			},
 			wantChanged: true,
-			want:        "map[b]: 2 != <does not have key>",
+			want:        ".[b]: 2 != <does not have key>",
 		},
 		{
 			name: "diff when changing a field",
@@ -72,7 +72,7 @@ func TestDiff_basic_operations(t *testing.T) {
 				"b": 3,
 			},
 			wantChanged: true,
-			want:        "map[b]: 2 != 3",
+			want:        ".[b]: 2 != 3",
 		},
 		{
 			name: "diff when adding a entry to a list",
@@ -85,7 +85,7 @@ func TestDiff_basic_operations(t *testing.T) {
 				"b": []int{1, 2, 3},
 			},
 			wantChanged: true,
-			want:        "map[b].slice[2]: <no value> != 3",
+			want:        ".[b][2]: <no value> != 3",
 		},
 		{
 			name: "diff when removing a entry from a list",
@@ -98,7 +98,7 @@ func TestDiff_basic_operations(t *testing.T) {
 				"b": []int{1, 2},
 			},
 			wantChanged: true,
-			want:        "map[b].slice[2]: 3 != <no value>",
+			want:        ".[b][2]: 3 != <no value>",
 		},
 		{
 			name: "diff when changing a entry in a list",
@@ -111,7 +111,7 @@ func TestDiff_basic_operations(t *testing.T) {
 				"b": []int{1, 2, 4},
 			},
 			wantChanged: true,
-			want:        "map[b].slice[2]: 3 != 4",
+			want:        ".[b][2]: 3 != 4",
 		},
 		{
 			name: "diff when deleting a list",
@@ -123,7 +123,7 @@ func TestDiff_basic_operations(t *testing.T) {
 				"a": 1,
 			},
 			wantChanged: true,
-			want:        "map[b]: [1 2 3] != <does not have key>",
+			want:        ".[b]: [1 2 3] != <does not have key>",
 		},
 	}
 
