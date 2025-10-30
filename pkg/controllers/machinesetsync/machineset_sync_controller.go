@@ -40,7 +40,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 
-	"github.com/go-test/deep"
 	machinev1applyconfigs "github.com/openshift/client-go/machine/applyconfigurations/machine/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -822,7 +821,7 @@ func (r *MachineSetSyncReconciler) createOrUpdateCAPIMachineSet(ctx context.Cont
 	// Compare the existing CAPI machine set with the converted CAPI machine set to check for changes.
 	capiMachineSetsDiff, err := compareCAPIMachineSets(existingCAPIMachineSet, convertedCAPIMachineSet)
 	if err != nil {
-		return fmt.Errorf("failed to compare CAPI machine sets: %w", err)
+		return fmt.Errorf("failed to compare Cluster API machine sets: %w", err)
 	}
 
 	// Make a deep copy of the converted CAPI machine set to avoid modifying the original.
@@ -1353,6 +1352,12 @@ func initInfraMachineTemplateListAndInfraClusterListFromProvider(platform config
 //
 //nolint:funlen
 func compareCAPIInfraMachineTemplates(platform configv1.PlatformType, infraMachineTemplate1, infraMachineTemplate2 client.Object) (map[string]any, error) {
+	diff := make(map[string]any)
+
+	var metadata1, metadata2 metav1.ObjectMeta
+
+	var spec1, spec2, status1, status2 any
+
 	switch platform {
 	case configv1.AWSPlatformType:
 		typedInfraMachineTemplate1, ok := infraMachineTemplate1.(*awsv1.AWSMachineTemplate)
@@ -1365,19 +1370,12 @@ func compareCAPIInfraMachineTemplates(platform configv1.PlatformType, infraMachi
 			return nil, errAssertingCAPIAWSMachineTemplate
 		}
 
-		diff := make(map[string]any)
-
-		if diffSpec := deep.Equal(typedInfraMachineTemplate1.Spec, typedinfraMachineTemplate2.Spec); len(diffSpec) > 0 {
-			diff[".spec"] = diffSpec
-		}
-
-		if diffObjectMeta := util.ObjectMetaEqual(typedInfraMachineTemplate1.ObjectMeta, typedinfraMachineTemplate2.ObjectMeta); len(diffObjectMeta) > 0 {
-			diff[".metadata"] = diffObjectMeta
-		}
-
-		// TODO: Evaluate if we want to add status comparison if needed in the future (e.g. for scale from zero capacity).
-
-		return diff, nil
+		spec1 = typedInfraMachineTemplate1.Spec
+		spec2 = typedinfraMachineTemplate2.Spec
+		metadata1 = typedInfraMachineTemplate1.ObjectMeta
+		metadata2 = typedinfraMachineTemplate2.ObjectMeta
+		status1 = typedInfraMachineTemplate1.Status
+		status2 = typedinfraMachineTemplate2.Status
 	case configv1.OpenStackPlatformType:
 		typedInfraMachineTemplate1, ok := infraMachineTemplate1.(*openstackv1.OpenStackMachineTemplate)
 		if !ok {
@@ -1389,17 +1387,10 @@ func compareCAPIInfraMachineTemplates(platform configv1.PlatformType, infraMachi
 			return nil, errAssertingCAPIOpenStackMachineTemplate
 		}
 
-		diff := make(map[string]any)
-
-		if diffSpec := deep.Equal(typedInfraMachineTemplate1.Spec, typedinfraMachineTemplate2.Spec); len(diffSpec) > 0 {
-			diff[".spec"] = diffSpec
-		}
-
-		if diffObjectMeta := deep.Equal(typedInfraMachineTemplate1.ObjectMeta, typedinfraMachineTemplate2.ObjectMeta); len(diffObjectMeta) > 0 {
-			diff[".metadata"] = diffObjectMeta
-		}
-
-		return diff, nil
+		spec1 = typedInfraMachineTemplate1.Spec
+		spec2 = typedinfraMachineTemplate2.Spec
+		metadata1 = typedInfraMachineTemplate1.ObjectMeta
+		metadata2 = typedinfraMachineTemplate2.ObjectMeta
 	case configv1.PowerVSPlatformType:
 		typedInfraMachineTemplate1, ok := infraMachineTemplate1.(*ibmpowervsv1.IBMPowerVSMachineTemplate)
 		if !ok {
@@ -1411,38 +1402,61 @@ func compareCAPIInfraMachineTemplates(platform configv1.PlatformType, infraMachi
 			return nil, errAssertingCAPIIBMPowerVSMachineTemplate
 		}
 
-		diff := make(map[string]any)
-
-		if diffSpec := deep.Equal(typedInfraMachineTemplate1.Spec, typedinfraMachineTemplate2.Spec); len(diffSpec) > 0 {
-			diff[".spec"] = diffSpec
-		}
-
-		if diffObjectMeta := deep.Equal(typedInfraMachineTemplate1.ObjectMeta, typedinfraMachineTemplate2.ObjectMeta); len(diffObjectMeta) > 0 {
-			diff[".metadata"] = diffObjectMeta
-		}
-
-		// TODO: Evaluate if we want to add status comparison if needed in the future (e.g. for scale from zero capacity).
-
-		return diff, nil
+		spec1 = typedInfraMachineTemplate1.Spec
+		spec2 = typedinfraMachineTemplate2.Spec
+		metadata1 = typedInfraMachineTemplate1.ObjectMeta
+		metadata2 = typedinfraMachineTemplate2.ObjectMeta
+		status1 = typedInfraMachineTemplate1.Status
+		status2 = typedinfraMachineTemplate2.Status
 	default:
 		return nil, fmt.Errorf("%w: %s", errPlatformNotSupported, platform)
 	}
+
+	// Compare metadata
+	if diffMetadata, err := util.ObjectMetaEqual(metadata1, metadata2); err != nil {
+		return nil, fmt.Errorf("failed to compare Cluster API Infrastructure machine metadata: %w", err)
+	} else if diffMetadata.Changed() {
+		diff[".metadata"] = diffMetadata.String()
+	}
+
+	// Compare spec
+	if diffSpec, err := util.NewDiffer().Diff(spec1, spec2); err != nil {
+		return nil, fmt.Errorf("failed to compare Cluster API Infrastructure machine spec: %w", err)
+	} else if diffSpec.Changed() {
+		diff[".spec"] = diffSpec.String()
+	}
+
+	// Compare status
+	if diffStatus, err := util.NewDiffer(util.WithIgnoreConditionsLastTransitionTime()).Diff(status1, status2); err != nil {
+		return nil, fmt.Errorf("failed to compare Cluster API Infrastructure machine status: %w", err)
+	} else if diffStatus.Changed() {
+		diff[".status"] = diffStatus.String()
+	}
+
+	return diff, nil
 }
 
 // compareCAPIMachineSets compares CAPI machineSets a and b, and returns a list of differences, or none if there are none.
 func compareCAPIMachineSets(capiMachineSet1, capiMachineSet2 *clusterv1.MachineSet) (map[string]any, error) {
 	diff := make(map[string]any)
 
-	if diffSpec := deep.Equal(capiMachineSet1.Spec, capiMachineSet2.Spec); len(diffSpec) > 0 {
-		diff[".spec"] = diffSpec
+	// Compare metadata
+	if diffMetadata, err := util.ObjectMetaEqual(capiMachineSet1.ObjectMeta, capiMachineSet2.ObjectMeta); err != nil {
+		return nil, fmt.Errorf("failed to compare Cluster sAPI machine set metadata: %w", err)
+	} else if diffMetadata.Changed() {
+		diff[".metadata"] = diffMetadata.String()
 	}
 
-	if diffObjectMeta := util.ObjectMetaEqual(capiMachineSet1.ObjectMeta, capiMachineSet2.ObjectMeta); len(diffObjectMeta) > 0 {
-		diff[".metadata"] = diffObjectMeta
+	// Compare spec
+	if diffSpec, err := util.NewDiffer().Diff(capiMachineSet1.Spec, capiMachineSet2.Spec); err != nil {
+		return nil, fmt.Errorf("failed to compare Cluster API machine spec: %w", err)
+	} else if diffSpec.Changed() {
+		diff[".spec"] = diffSpec.String()
 	}
 
+	// Compare status
 	if diffStatus, err := util.CAPIMachineSetStatusEqual(capiMachineSet1.Status, capiMachineSet2.Status); err != nil {
-		return nil, fmt.Errorf("failed to compare CAPI machine set status: %w", err)
+		return nil, fmt.Errorf("failed to compare Cluster API machine set status: %w", err)
 	} else if diffStatus.Changed() {
 		diff[".status"] = diffStatus.String()
 	}
@@ -1478,27 +1492,34 @@ func compareMAPIMachineSets(a, b *mapiv1beta1.MachineSet) (map[string]any, error
 		return ps2.Tags[i].Name < ps2.Tags[j].Name
 	})
 
-	if diffProviderSpec := deep.Equal(ps1, ps2); len(diffProviderSpec) > 0 {
-		diff[".providerSpec"] = diffProviderSpec
+	// Compare providerSpec
+	if diffProviderSpec, err := util.NewDiffer().Diff(ps1, ps2); err != nil {
+		return nil, fmt.Errorf("failed to compare Machine API machine spec: %w", err)
+	} else if diffProviderSpec.Changed() {
+		diff[".providerSpec"] = diffProviderSpec.String()
 	}
 
-	// Remove the providerSpec from the Spec as we've already compared them.
-	aCopy := a.DeepCopy()
-	aCopy.Spec.Template.Spec.ProviderSpec.Value = nil
-
-	bCopy := b.DeepCopy()
-	bCopy.Spec.Template.Spec.ProviderSpec.Value = nil
-
-	if diffSpec := deep.Equal(aCopy.Spec, bCopy.Spec); len(diffSpec) > 0 {
-		diff[".spec"] = diffSpec
+	// Compare metadata
+	if diffMetadata, err := util.ObjectMetaEqual(a.ObjectMeta, b.ObjectMeta); err != nil {
+		return nil, fmt.Errorf("failed to compare Machine API machine set metadata: %w", err)
+	} else if diffMetadata.Changed() {
+		diff[".metadata"] = diffMetadata.String()
 	}
 
-	if diffMetadata := util.ObjectMetaEqual(aCopy.ObjectMeta, bCopy.ObjectMeta); len(diffMetadata) > 0 {
-		diff[".metadata"] = diffMetadata
+	// Compare spec
+	if diffSpec, err := util.NewDiffer(
+		util.WithIgnoreField("template", "providerSpec", "value"),
+	).Diff(a.Spec, b.Spec); err != nil {
+		return nil, fmt.Errorf("failed to compare Machine API machine spec: %w", err)
+	} else if diffSpec.Changed() {
+		diff[".spec"] = diffSpec.String()
 	}
 
-	if diffStatus := util.MAPIMachineSetStatusEqual(a.Status, b.Status); len(diffStatus) > 0 {
-		diff[".status"] = diffStatus
+	// Compare status
+	if diffStatus, err := util.MAPIMachineSetStatusEqual(a.Status, b.Status); err != nil {
+		return nil, fmt.Errorf("failed to compare Machine API machine set status: %w", err)
+	} else if diffStatus.Changed() {
+		diff[".status"] = diffStatus.String()
 	}
 
 	return diff, nil
