@@ -36,7 +36,6 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/mapi2capi"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 
-	"github.com/go-test/deep"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -727,7 +726,10 @@ func (r *MachineSyncReconciler) createOrUpdateCAPIMachine(ctx context.Context, s
 	}
 
 	// Compare the existing CAPI machine with the desired CAPI machine to check for changes.
-	capiMachinesDiff := compareCAPIMachines(existingCAPIMachine, convertedCAPIMachine)
+	capiMachinesDiff, err := compareCAPIMachines(existingCAPIMachine, convertedCAPIMachine)
+	if err != nil {
+		return nil, fmt.Errorf("failed to compare Cluster API machines: %w", err)
+	}
 
 	// Don't try to update the spec of the machine if it was just created it.
 	// The resourceVersion of the convertedCAPIMachine is empty and would lead to failure.
@@ -1291,22 +1293,31 @@ func (r *MachineSyncReconciler) ensureSyncFinalizer(ctx context.Context, mapiMac
 }
 
 // compareCAPIMachines compares CAPI machines a and b, and returns a list of differences, or none if there are none.
-func compareCAPIMachines(capiMachine1, capiMachine2 *clusterv1.Machine) map[string]any {
+func compareCAPIMachines(capiMachine1, capiMachine2 *clusterv1.Machine) (map[string]any, error) {
 	diff := make(map[string]any)
 
-	if diffSpec := deep.Equal(capiMachine1.Spec, capiMachine2.Spec); len(diffSpec) > 0 {
-		diff[".spec"] = diffSpec
+	// Compare metadata
+	if diffMetadata, err := util.ObjectMetaEqual(capiMachine1.ObjectMeta, capiMachine2.ObjectMeta); err != nil {
+		return nil, fmt.Errorf("failed to compare Cluster API Infrastructure machine metadata: %w", err)
+	} else if diffMetadata.Changed() {
+		diff[".metadata"] = diffMetadata.String()
 	}
 
-	if diffObjectMeta := util.ObjectMetaEqual(capiMachine1.ObjectMeta, capiMachine2.ObjectMeta); len(diffObjectMeta) > 0 {
-		diff[".metadata"] = diffObjectMeta
+	// Compare spec
+	if diffSpec, err := util.NewDiffer().Diff(capiMachine1.Spec, capiMachine2.Spec); err != nil {
+		return nil, fmt.Errorf("failed to compare Cluster API Infrastructure machine spec: %w", err)
+	} else if diffSpec.Changed() {
+		diff[".spec"] = diffSpec.String()
 	}
 
-	if diffStatus := util.CAPIMachineStatusEqual(capiMachine1.Status, capiMachine2.Status); len(diffStatus) > 0 {
-		diff[".status"] = diffStatus
+	// Compare status
+	if diffStatus, err := util.NewDiffer(util.WithIgnoreConditionsLastTransitionTime()).Diff(capiMachine1.Status, capiMachine2.Status); err != nil {
+		return nil, fmt.Errorf("failed to compare Cluster API Infrastructure machine status: %w", err)
+	} else if diffStatus.Changed() {
+		diff[".status"] = diffStatus.String()
 	}
 
-	return diff
+	return diff, nil
 }
 
 // compareMAPIMachines compares MAPI machines a and b, and returns a list of differences, or none if there are none.
@@ -1337,27 +1348,34 @@ func compareMAPIMachines(a, b *mapiv1beta1.Machine) (map[string]any, error) {
 		return ps2.Tags[i].Name < ps2.Tags[j].Name
 	})
 
-	if diffProviderSpec := deep.Equal(ps1, ps2); len(diffProviderSpec) > 0 {
-		diff[".providerSpec"] = diffProviderSpec
+	// Compare providerSpec
+	if diffProviderSpec, err := util.NewDiffer().Diff(ps1, ps2); err != nil {
+		return nil, fmt.Errorf("failed to compare Cluster API Infrastructure machine metadata: %w", err)
+	} else if diffProviderSpec.Changed() {
+		diff[".providerSpec"] = diffProviderSpec.String()
 	}
 
-	// Remove the providerSpec from the Spec as we've already compared them.
-	aCopy := a.DeepCopy()
-	aCopy.Spec.ProviderSpec.Value = nil
-
-	bCopy := b.DeepCopy()
-	bCopy.Spec.ProviderSpec.Value = nil
-
-	if diffSpec := deep.Equal(aCopy.Spec, bCopy.Spec); len(diffSpec) > 0 {
-		diff[".spec"] = diffSpec
+	// Compare metadata
+	if diffMetadata, err := util.ObjectMetaEqual(a.ObjectMeta, b.ObjectMeta); err != nil {
+		return nil, fmt.Errorf("failed to compare Cluster API Infrastructure machine metadata: %w", err)
+	} else if diffMetadata.Changed() {
+		diff[".metadata"] = diffMetadata.String()
 	}
 
-	if diffObjectMeta := util.ObjectMetaEqual(aCopy.ObjectMeta, bCopy.ObjectMeta); len(diffObjectMeta) > 0 {
-		diff[".metadata"] = diffObjectMeta
+	// Compare spec
+	if diffSpec, err := util.NewDiffer(
+		util.WithIgnoreField("providerSpec", "value"),
+	).Diff(a.Spec, b.Spec); err != nil {
+		return nil, fmt.Errorf("failed to compare Cluster API Infrastructure machine spec: %w", err)
+	} else if diffSpec.Changed() {
+		diff[".spec"] = diffSpec.String()
 	}
 
-	if diffStatus := util.MAPIMachineStatusEqual(a.Status, b.Status); len(diffStatus) > 0 {
-		diff[".status"] = diffStatus
+	// Compare status
+	if diffStatus, err := util.MAPIMachineStatusEqual(a.Status, b.Status); err != nil {
+		return nil, fmt.Errorf("failed to compare Cluster API Infrastructure machine status: %w", err)
+	} else if diffStatus.Changed() {
+		diff[".status"] = diffStatus.String()
 	}
 
 	return diff, nil
