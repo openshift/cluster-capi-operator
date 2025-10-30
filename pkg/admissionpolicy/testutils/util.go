@@ -206,6 +206,12 @@ func UpdateVAPBindingNamespaces(binding *admissionregistrationv1.ValidatingAdmis
 		binding.Spec.ParamRef.Namespace = paramNamespace
 	}
 
+	// Validate MatchResources structure
+	ExpectWithOffset(1, binding.Spec.MatchResources).ToNot(BeNil(),
+		"binding %q has nil MatchResources", binding.Name)
+	ExpectWithOffset(1, binding.Spec.MatchResources.NamespaceSelector).ToNot(BeNil(),
+		"binding %q has nil NamespaceSelector", binding.Name)
+
 	// Always update target namespace
 	binding.Spec.MatchResources.NamespaceSelector.MatchLabels = map[string]string{
 		"kubernetes.io/metadata.name": targetNamespace,
