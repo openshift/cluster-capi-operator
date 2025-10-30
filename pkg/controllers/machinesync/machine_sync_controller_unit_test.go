@@ -20,10 +20,9 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	configv1 "github.com/openshift/api/config/v1"
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
@@ -41,10 +40,10 @@ var _ = Describe("Unit tests for fetchCAPIInfraResources", func() {
 			},
 			Spec: clusterv1.MachineSpec{
 				ClusterName: "test-cluster",
-				InfrastructureRef: corev1.ObjectReference{
-					Kind:      "AWSMachine",
-					Name:      "test-machine",
-					Namespace: "test-namespace",
+				InfrastructureRef: clusterv1.ContractVersionedObjectReference{
+					APIGroup: awsv1.GroupVersion.Group,
+					Kind:     "AWSMachine",
+					Name:     "test-machine",
 				},
 			},
 		}

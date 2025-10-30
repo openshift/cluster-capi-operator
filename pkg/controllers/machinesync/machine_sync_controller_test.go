@@ -995,20 +995,19 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 					})
 
 					Context("and the InfraMachine does not exist", func() {
-						It("should update the synchronized condition on the MAPI machine to False", func() {
-							// TODO: Revert this to a useful error message.
-							// We changed how fetchCAPIInfraResources behaves, so now we fail at a later point in the code.
-							// This still fails, the behaviour is the same - it's just a less useful error for an end user.
-							// We need to revisit fetchCAPIInfraResources.
+						It("should create the Cluster API InfraMachine", func() {
 							Eventually(k.Object(mapiMachine), timeout).Should(
 								HaveField("Status.Conditions", ContainElement(
 									SatisfyAll(
 										HaveField("Type", Equal(consts.SynchronizedCondition)),
-										HaveField("Status", Equal(corev1.ConditionFalse)),
-										HaveField("Reason", Equal("FailedToConvertCAPIMachineToMAPI")),
-										HaveField("Message", ContainSubstring("unexpected InfraMachine type, expected AWSMachine, got <nil>")),
+										HaveField("Status", Equal(corev1.ConditionTrue)),
+										HaveField("Reason", Equal("ResourceSynchronized")),
+										HaveField("Message", ContainSubstring("Successfully synchronized CAPI Machine to MAPI")),
 									))),
 							)
+
+							capiInfraMachine := awsv1resourcebuilder.AWSMachine().WithName(mapiMachine.Name).WithNamespace(capiNamespace.Name).Build()
+							Eventually(k.Get(capiInfraMachine), timeout).Should(Succeed())
 						})
 					})
 				})
