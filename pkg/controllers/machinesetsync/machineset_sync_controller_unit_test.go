@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package util
+package machinesetsync
 
 import (
 	"testing"
@@ -54,7 +54,7 @@ func TestCAPIMachineSetStatusEqual(t *testing.T) {
 			b: clusterv1.MachineSetStatus{
 				ReadyReplicas: 5,
 			},
-			want:        ".[readyReplicas]: 3 != 5",
+			want:        ".[status].[readyReplicas]: 3 != 5",
 			wantChanges: true,
 		},
 		{
@@ -65,7 +65,7 @@ func TestCAPIMachineSetStatusEqual(t *testing.T) {
 			b: clusterv1.MachineSetStatus{
 				AvailableReplicas: 4,
 			},
-			want:        ".[availableReplicas]: 2 != 4",
+			want:        ".[status].[availableReplicas]: 2 != 4",
 			wantChanges: true,
 		},
 		{
@@ -78,7 +78,7 @@ func TestCAPIMachineSetStatusEqual(t *testing.T) {
 				ReadyReplicas:     5,
 				AvailableReplicas: 4,
 			},
-			want:        ".[availableReplicas]: 2 != 4, .[readyReplicas]: 3 != 5",
+			want:        ".[status].[availableReplicas]: 2 != 4, .[status].[readyReplicas]: 3 != 5",
 			wantChanges: true,
 		},
 		{
@@ -124,7 +124,7 @@ func TestCAPIMachineSetStatusEqual(t *testing.T) {
 					},
 				},
 			},
-			want:        ".[conditions][0].[status]: True != False",
+			want:        ".[status].[conditions][0].[status]: True != False",
 			wantChanges: true,
 		},
 		{
@@ -180,7 +180,7 @@ func TestCAPIMachineSetStatusEqual(t *testing.T) {
 					},
 				},
 			},
-			want:        ".[conditions][1].[status]: True != False",
+			want:        ".[status].[conditions][1].[status]: True != False",
 			wantChanges: true,
 		},
 		{
@@ -238,7 +238,7 @@ func TestCAPIMachineSetStatusEqual(t *testing.T) {
 					},
 				},
 			},
-			want:        ".[v1beta2].[conditions][0].[status]: True != False",
+			want:        ".[status].[v1beta2].[conditions][0].[status]: True != False",
 			wantChanges: true,
 		},
 		{
@@ -306,7 +306,7 @@ func TestCAPIMachineSetStatusEqual(t *testing.T) {
 					},
 				},
 			},
-			want:        ".[v1beta2].[conditions][1].[status]: True != False",
+			want:        ".[status].[v1beta2].[conditions][1].[status]: True != False",
 			wantChanges: true,
 		},
 		{
@@ -319,7 +319,7 @@ func TestCAPIMachineSetStatusEqual(t *testing.T) {
 					ReadyReplicas: ptr.To[int32](3),
 				},
 			},
-			want:        ".[v1beta2]: <does not have key> != [readyReplicas:3]",
+			want:        ".[status].[v1beta2]: <does not have key> != [readyReplicas:3]",
 			wantChanges: true,
 		},
 	}
@@ -328,10 +328,17 @@ func TestCAPIMachineSetStatusEqual(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			g := NewWithT(t)
 
-			got, err := CAPIMachineSetStatusEqual(tt.a, tt.b)
+			a := &clusterv1.MachineSet{
+				Status: tt.a,
+			}
+			b := &clusterv1.MachineSet{
+				Status: tt.b,
+			}
+
+			got, err := compareCAPIMachineSets(a, b)
 			g.Expect(err).ToNot(HaveOccurred())
 
-			gotChanges := got.Changed()
+			gotChanges := got.HasChanges()
 
 			g.Expect(gotChanges).To(Equal(tt.wantChanges))
 
