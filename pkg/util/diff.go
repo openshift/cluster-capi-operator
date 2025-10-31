@@ -294,9 +294,7 @@ func WithProviderSpec(platform configv1.PlatformType, path []string, marshalProv
 			// unset the nested field
 			unstructured.RemoveNestedField(obj, path...)
 			// add it as top-level field
-			if err := unstructured.SetNestedField(obj, providerSpec, d.providerSpecPath); err != nil {
-				return fmt.Errorf("failed to set nested field %s: %w", d.providerSpecPath, err)
-			}
+			obj[d.providerSpecPath] = providerSpec
 
 			return nil
 		}

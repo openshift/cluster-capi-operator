@@ -1416,7 +1416,7 @@ func compareCAPIMachineSets(capiMachineSet1, capiMachineSet2 *clusterv1.MachineS
 // compareMAPIMachineSets compares MAPI machineSets a and b, and returns a list of differences, or none if there are none.
 func compareMAPIMachineSets(platform configv1.PlatformType, a, b *mapiv1beta1.MachineSet) (util.DiffResult, error) {
 	diff, err := util.NewDefaultDiffer(
-		util.WithProviderSpec(platform, []string{"spec", "template", "providerSpec", "value"}, mapi2capi.ProviderSpecFromRawExtension),
+		util.WithProviderSpec(platform, []string{"spec", "template", "spec", "providerSpec", "value"}, mapi2capi.ProviderSpecFromRawExtension),
 
 		// Other status fields to ignore
 		util.WithIgnoreField("status", "replicas"),
