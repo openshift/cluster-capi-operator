@@ -17,16 +17,44 @@ limitations under the License.
 package mapi2capi
 
 import (
+	"errors"
 	"fmt"
+	"sort"
 
+	configv1 "github.com/openshift/api/config/v1"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/consts"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
+
+var errUnsupportedPlatform = errors.New("unsupported platform")
+
+// ProviderSpecFromRawExtension converts a MAPI providerSpec to a CAPI providerSpec.
+func ProviderSpecFromRawExtension(platform configv1.PlatformType, rawExtension *runtime.RawExtension) (any, error) {
+	switch platform {
+	case configv1.AWSPlatformType:
+		providerConfig, err := AWSProviderSpecFromRawExtension(rawExtension)
+		if err != nil {
+			return nil, fmt.Errorf("unable to parse AWS providerSpec: %w", err)
+		}
+
+		// Sort the tags by name to ensure consistent ordering.
+		// On the CAPI side these tags are in a map,
+		// so the order is not guaranteed when converting back from a CAPI map to a MAPI slice.
+		sort.Slice(providerConfig.Tags, func(i, j int) bool {
+			return providerConfig.Tags[i].Name < providerConfig.Tags[j].Name
+		})
+
+		return providerConfig, nil
+	default:
+		return nil, fmt.Errorf("%w: %s", errUnsupportedPlatform, platform)
+	}
+}
 
 func convertMAPIMachineSetSelectorToCAPI(mapiSelector metav1.LabelSelector) metav1.LabelSelector {
 	capiSelector := mapiSelector.DeepCopy()

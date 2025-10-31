@@ -19,111 +19,138 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
 //nolint:funlen
 func TestDiff_basic_operations(t *testing.T) {
 	tests := []struct {
 		name        string
-		a           map[string]any
-		b           map[string]any
+		a           unstructured.Unstructured
+		b           unstructured.Unstructured
 		wantChanged bool
 		want        string
 	}{
 		{
-			name:        "no diff on empty objects",
-			a:           map[string]any{},
-			b:           map[string]any{},
+			name: "no diff on empty objects",
+			a: unstructured.Unstructured{
+				Object: map[string]any{},
+			},
+			b: unstructured.Unstructured{
+				Object: map[string]any{},
+			},
 			wantChanged: false,
 			want:        "",
 		},
 		{
 			name: "diff when adding a field",
-			a: map[string]any{
+			a: unstructured.Unstructured{Object: map[string]any{
 				"a": 1,
-			},
-			b: map[string]any{
+			}},
+			b: unstructured.Unstructured{Object: map[string]any{
 				"a": 1,
 				"b": 2,
-			},
+			}},
 			wantChanged: true,
-			want:        ".[b]: <does not have key> != 2",
+			want:        ".[b]: <nil pointer> != 2",
+		},
+		{
+			name: "diff when adding a field nested",
+			a: unstructured.Unstructured{Object: map[string]any{
+				"foo": map[string]any{
+					"a": 1,
+					"c": map[string]any{
+						"d": 3,
+					},
+				},
+			}},
+			b: unstructured.Unstructured{Object: map[string]any{
+				"foo": map[string]any{
+					"a": 1,
+					"b": 2,
+					"c": map[string]any{
+						"d": 4,
+					},
+				},
+			}},
+			wantChanged: true,
+			want:        ".[foo].[b]: <does not have key> != 2, .[foo].[c].[d]: 3 != 4",
 		},
 		{
 			name: "diff when removing a field",
-			a: map[string]any{
+			a: unstructured.Unstructured{Object: map[string]any{
 				"a": 1,
 				"b": 2,
-			},
-			b: map[string]any{
+			}},
+			b: unstructured.Unstructured{Object: map[string]any{
 				"a": 1,
-			},
+			}},
 			wantChanged: true,
-			want:        ".[b]: 2 != <does not have key>",
+			want:        ".[b]: 2 != <nil pointer>",
 		},
 		{
 			name: "diff when changing a field",
-			a: map[string]any{
+			a: unstructured.Unstructured{Object: map[string]any{
 				"a": 1,
 				"b": 2,
-			},
-			b: map[string]any{
+			}},
+			b: unstructured.Unstructured{Object: map[string]any{
 				"a": 1,
 				"b": 3,
-			},
+			}},
 			wantChanged: true,
 			want:        ".[b]: 2 != 3",
 		},
 		{
 			name: "diff when adding a entry to a list",
-			a: map[string]any{
+			a: unstructured.Unstructured{Object: map[string]any{
 				"a": 1,
 				"b": []int{1, 2},
-			},
-			b: map[string]any{
+			}},
+			b: unstructured.Unstructured{Object: map[string]any{
 				"a": 1,
 				"b": []int{1, 2, 3},
-			},
+			}},
 			wantChanged: true,
 			want:        ".[b][2]: <no value> != 3",
 		},
 		{
 			name: "diff when removing a entry from a list",
-			a: map[string]any{
+			a: unstructured.Unstructured{Object: map[string]any{
 				"a": 1,
 				"b": []int{1, 2, 3},
-			},
-			b: map[string]any{
+			}},
+			b: unstructured.Unstructured{Object: map[string]any{
 				"a": 1,
 				"b": []int{1, 2},
-			},
+			}},
 			wantChanged: true,
 			want:        ".[b][2]: 3 != <no value>",
 		},
 		{
 			name: "diff when changing a entry in a list",
-			a: map[string]any{
+			a: unstructured.Unstructured{Object: map[string]any{
 				"a": 1,
 				"b": []int{1, 2, 3},
-			},
-			b: map[string]any{
+			}},
+			b: unstructured.Unstructured{Object: map[string]any{
 				"a": 1,
 				"b": []int{1, 2, 4},
-			},
+			}},
 			wantChanged: true,
 			want:        ".[b][2]: 3 != 4",
 		},
 		{
 			name: "diff when deleting a list",
-			a: map[string]any{
+			a: unstructured.Unstructured{Object: map[string]any{
 				"a": 1,
 				"b": []int{1, 2, 3},
-			},
-			b: map[string]any{
+			}},
+			b: unstructured.Unstructured{Object: map[string]any{
 				"a": 1,
-			},
+			}},
 			wantChanged: true,
-			want:        ".[b]: [1 2 3] != <does not have key>",
+			want:        ".[b]: [1 2 3] != <nil pointer>",
 		},
 	}
 
@@ -131,11 +158,11 @@ func TestDiff_basic_operations(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			g := NewWithT(t)
 
-			differ := NewDiffer()
+			differ := newDiffer()
 
-			diff, err := differ.Diff(tt.a, tt.b)
+			diff, err := differ.Diff(&tt.a, &tt.b)
 			g.Expect(err).ToNot(HaveOccurred())
-			g.Expect(diff.Changed()).To(Equal(tt.wantChanged))
+			g.Expect(diff.HasChanges()).To(Equal(tt.wantChanged))
 			g.Expect(diff.String()).To(Equal(tt.want))
 		})
 	}
