@@ -30,7 +30,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-var errTimedOutWaitingForFeatureGates = errors.New("objects to diff cannot be nil")
+var (
+	errObjectsToCompareCannotBeNil = errors.New("objects to diff cannot be nil")
+	errProviderSpecNotFound        = errors.New("providerSpec not found")
+)
 
 // DiffResult is the interface that represents the result of a diff operation.
 type DiffResult interface {
@@ -123,16 +126,16 @@ type differ struct {
 // Diff compares the objects a and b, and returns a DiffResult.
 func (d *differ) Diff(a, b client.Object) (DiffResult, error) {
 	if a == nil || b == nil {
-		return nil, errTimedOutWaitingForFeatureGates
+		return nil, errObjectsToCompareCannotBeNil
 	}
 
 	// 1. Convert the objects to unstructured.
-	unstructuredA, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&a)
+	unstructuredA, err := runtime.DefaultUnstructuredConverter.ToUnstructured(a)
 	if err != nil {
-		return nil, fmt.Errorf("failed to convert b to unstructured: %w", err)
+		return nil, fmt.Errorf("failed to convert a to unstructured: %w", err)
 	}
 
-	unstructuredB, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&b)
+	unstructuredB, err := runtime.DefaultUnstructuredConverter.ToUnstructured(b)
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert b to unstructured: %w", err)
 	}
@@ -148,7 +151,7 @@ func (d *differ) Diff(a, b client.Object) (DiffResult, error) {
 		}
 
 		if err := modifyFunc(unstructuredB); err != nil {
-			return nil, fmt.Errorf("failed to run modify function %son b: %w", funcName, err)
+			return nil, fmt.Errorf("failed to run modify function %s on b: %w", funcName, err)
 		}
 	}
 
@@ -172,22 +175,22 @@ func (d *differ) Diff(a, b client.Object) (DiffResult, error) {
 		allKeys.Insert(k)
 	}
 
-	diff := map[string][]string{}
+	diffByKey := map[string][]string{}
 
 	// Diff each top-level key separately and record the output to the diff map.
 	for k := range allKeys {
-		d := deep.Equal(unstructuredA[k], unstructuredB[k])
+		diff := deep.Equal(unstructuredA[k], unstructuredB[k])
 
 		// Make the result deterministic.
-		sort.Strings(d)
+		sort.Strings(diff)
 
-		if len(d) > 0 {
-			diff[k] = d
+		if len(diff) > 0 {
+			diffByKey[k] = diff
 		}
 	}
 
 	return &diffResult{
-		diff:             diff,
+		diff:             diffByKey,
 		providerSpecPath: d.providerSpecPath,
 	}, nil
 }
@@ -268,8 +271,10 @@ func WithProviderSpec(platform configv1.PlatformType, path []string, marshalProv
 
 		d.modifyFuncs["ProviderSpec"] = func(obj map[string]interface{}) error {
 			rawExtensionMap, found, err := unstructured.NestedMap(obj, path...)
-			if !found || err != nil {
+			if err != nil {
 				return fmt.Errorf("failed to get providerSpec value: %w", err)
+			} else if !found {
+				return fmt.Errorf("%w at path %s", errProviderSpecNotFound, strings.Join(path, "."))
 			}
 
 			rawExtension := &runtime.RawExtension{}
