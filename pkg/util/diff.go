@@ -42,6 +42,7 @@ type DiffResult interface {
 	HasStatusChanges() bool
 }
 
+// diffResult is the implementation of the DiffResult interface.
 type diffResult struct {
 	diff             map[string][]string
 	providerSpecPath string
@@ -65,6 +66,7 @@ func (d *diffResult) HasSpecChanges() bool {
 }
 
 // HasProviderSpecChanges returns true if the diff detected any changes to the providerSpec.
+// Only ever returns true if d.providerSpecPath was set.
 func (d *diffResult) HasProviderSpecChanges() bool {
 	if d.providerSpecPath == "" {
 		return false
@@ -109,20 +111,22 @@ func (d *diffResult) String() string {
 }
 
 type differ struct {
-	ignoreConditionsLastTransitionTime bool
-	modifyFuncs                        map[string]func(obj map[string]interface{}) error
-	ignoredPath                        [][]string
-	providerSpecPath                   string
+	modifyFuncs map[string]func(obj map[string]interface{}) error
+	ignoredPath [][]string
+
+	// providerSpecPath is a custom path to the providerSpec field which differs between
+	// Machine API Machines and MachineSets and is passed down to the result to enable HasProviderSpecChanges().
+	// It is only used when set, so it does not make a difference for non Machine API objects.
+	providerSpecPath string
 }
 
 // Diff compares the objects a and b, and returns a DiffResult.
-//
-//nolint:funlen
 func (d *differ) Diff(a, b client.Object) (DiffResult, error) {
 	if a == nil || b == nil {
 		return nil, errTimedOutWaitingForFeatureGates
 	}
 
+	// 1. Convert the objects to unstructured.
 	unstructuredA, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&a)
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert b to unstructured: %w", err)
@@ -135,16 +139,9 @@ func (d *differ) Diff(a, b client.Object) (DiffResult, error) {
 
 	var additionalIgnoredPaths [][]string
 
-	if d.ignoreConditionsLastTransitionTime {
-		if err := removeConditionsLastTransitionTime(unstructuredA); err != nil {
-			return nil, fmt.Errorf("failed to remove conditions last transition time from a: %w", err)
-		}
-
-		if err := removeConditionsLastTransitionTime(unstructuredB); err != nil {
-			return nil, fmt.Errorf("failed to remove conditions last transition time from b: %w", err)
-		}
-	}
-
+	// 2. Run the configured modify functions
+	// This allows customizing the diffing process, e.g. remove conditions last transition time to ignore them during diffing
+	// or separate handling for providerSpec.
 	for funcName, modifyFunc := range d.modifyFuncs {
 		if err := modifyFunc(unstructuredA); err != nil {
 			return nil, fmt.Errorf("failed to run modify function %s on a: %w", funcName, err)
@@ -154,12 +151,17 @@ func (d *differ) Diff(a, b client.Object) (DiffResult, error) {
 			return nil, fmt.Errorf("failed to run modify function %son b: %w", funcName, err)
 		}
 	}
-	// Remove fields that we want to ignore.
+
+	// 3. Remove fields configured to be ignored.
 	for _, ignorePath := range append(d.ignoredPath, additionalIgnoredPaths...) {
 		unstructured.RemoveNestedField(unstructuredA, ignorePath...)
 		unstructured.RemoveNestedField(unstructuredB, ignorePath...)
 	}
 
+	// 4. Diff both resulted unstructured objects.
+	// Record the result for each top-level key in the maps, so it can be used later on for the `Has*Changes` functions.
+
+	// Collect all top-level keys.
 	allKeys := sets.Set[string]{}
 
 	for k := range unstructuredA {
@@ -172,6 +174,7 @@ func (d *differ) Diff(a, b client.Object) (DiffResult, error) {
 
 	diff := map[string][]string{}
 
+	// Diff each top-level key separately and record the output to the diff map.
 	for k := range allKeys {
 		d := deep.Equal(unstructuredA[k], unstructuredB[k])
 
@@ -183,51 +186,10 @@ func (d *differ) Diff(a, b client.Object) (DiffResult, error) {
 		}
 	}
 
-	return &diffResult{diff: diff, providerSpecPath: d.providerSpecPath}, nil
-}
-
-func removeConditionsLastTransitionTime(a map[string]interface{}) error {
-	conditionPaths := [][]string{
-		{"status", "conditions"},
-		{"status", "v1beta2", "conditions"},
-		{"status", "deprecated", "v1beta1", "conditions"},
-	}
-
-	for _, conditionPath := range conditionPaths {
-		conditions, found, err := unstructured.NestedSlice(a, conditionPath...)
-		if !found || err != nil {
-			continue
-		}
-
-		for i, condition := range conditions {
-			conditionMap, ok := condition.(map[string]interface{})
-			if !ok {
-				continue
-			}
-
-			conditionMap["lastTransitionTime"] = "ignored"
-			conditions[i] = conditionMap
-		}
-
-		if err := unstructured.SetNestedField(a, conditions, conditionPath...); err != nil {
-			return fmt.Errorf("failed to set nested field %s: %w", strings.Join(conditionPath, "."), err)
-		}
-	}
-
-	return nil
-}
-
-type diffopts func(*differ)
-
-func newDiffer(opts ...diffopts) *differ {
-	d := &differ{
-		modifyFuncs: map[string]func(obj map[string]interface{}) error{},
-	}
-	for _, opt := range opts {
-		opt(d)
-	}
-
-	return d
+	return &diffResult{
+		diff:             diff,
+		providerSpecPath: d.providerSpecPath,
+	}, nil
 }
 
 // NewDefaultDiffer creates a new default differ with the default options.
@@ -266,7 +228,36 @@ func WithIgnoreField(path ...string) diffopts {
 // WithIgnoreConditionsLastTransitionTime configures the differ to ignore LastTransitionTime for conditions when executing Diff.
 func WithIgnoreConditionsLastTransitionTime() diffopts {
 	return func(d *differ) {
-		d.modifyFuncs["RemoveConditionsLastTransitionTime"] = removeConditionsLastTransitionTime
+		d.modifyFuncs["RemoveConditionsLastTransitionTime"] = func(a map[string]interface{}) error {
+			conditionPaths := [][]string{
+				{"status", "conditions"},
+				{"status", "v1beta2", "conditions"},
+				{"status", "deprecated", "v1beta1", "conditions"},
+			}
+
+			for _, conditionPath := range conditionPaths {
+				conditions, found, err := unstructured.NestedSlice(a, conditionPath...)
+				if !found || err != nil {
+					continue
+				}
+
+				for i, condition := range conditions {
+					conditionMap, ok := condition.(map[string]interface{})
+					if !ok {
+						continue
+					}
+
+					conditionMap["lastTransitionTime"] = "ignored"
+					conditions[i] = conditionMap
+				}
+
+				if err := unstructured.SetNestedField(a, conditions, conditionPath...); err != nil {
+					return fmt.Errorf("failed to set nested field %s: %w", strings.Join(conditionPath, "."), err)
+				}
+			}
+
+			return nil
+		}
 	}
 }
 
@@ -299,4 +290,17 @@ func WithProviderSpec(platform configv1.PlatformType, path []string, marshalProv
 			return nil
 		}
 	}
+}
+
+type diffopts func(*differ)
+
+func newDiffer(opts ...diffopts) *differ {
+	d := &differ{
+		modifyFuncs: map[string]func(obj map[string]interface{}) error{},
+	}
+	for _, opt := range opts {
+		opt(d)
+	}
+
+	return d
 }

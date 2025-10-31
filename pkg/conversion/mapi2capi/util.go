@@ -19,7 +19,6 @@ package mapi2capi
 import (
 	"errors"
 	"fmt"
-	"sort"
 
 	configv1 "github.com/openshift/api/config/v1"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
@@ -42,13 +41,6 @@ func ProviderSpecFromRawExtension(platform configv1.PlatformType, rawExtension *
 		if err != nil {
 			return nil, fmt.Errorf("unable to parse AWS providerSpec: %w", err)
 		}
-
-		// Sort the tags by name to ensure consistent ordering.
-		// On the Cluster API side these tags are in a map,
-		// so the order is not guaranteed when converting back from a Cluster API map to a Machine API slice.
-		sort.Slice(providerConfig.Tags, func(i, j int) bool {
-			return providerConfig.Tags[i].Name < providerConfig.Tags[j].Name
-		})
 
 		return providerConfig, nil
 	default:
