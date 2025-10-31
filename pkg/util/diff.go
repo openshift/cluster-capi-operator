@@ -235,7 +235,7 @@ func NewDefaultDiffer(opts ...diffopts) *differ {
 	return newDiffer(append(opts,
 		// Options for handling of metadata fields.
 
-		// Special handling for CAPI's conversion-data label.
+		// Special handling for Cluster API's conversion-data label.
 		WithIgnoreField("metadata", "annotations", "cluster.x-k8s.io/conversion-data"),
 
 		WithIgnoreField("metadata", "name"),

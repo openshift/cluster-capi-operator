@@ -1403,7 +1403,7 @@ func compareCAPIInfraMachineTemplates(platform configv1.PlatformType, infraMachi
 	return diff, nil
 }
 
-// compareCAPIMachineSets compares CAPI machineSets a and b, and returns a list of differences, or none if there are none.
+// compareCAPIMachineSets compares Cluster API machineSets a and b, and returns a list of differences, or none if there are none.
 func compareCAPIMachineSets(capiMachineSet1, capiMachineSet2 *clusterv1.MachineSet) (util.DiffResult, error) {
 	diff, err := util.NewDefaultDiffer().Diff(capiMachineSet1, capiMachineSet2)
 	if err != nil {
