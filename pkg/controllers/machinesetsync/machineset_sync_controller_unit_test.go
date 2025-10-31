@@ -16,9 +16,9 @@ limitations under the License.
 package machinesetsync
 
 import (
-	"testing"
 	"time"
 
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -27,27 +27,42 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
-//nolint:funlen
-func TestCAPIMachineSetStatusEqual(t *testing.T) {
+var _ = Describe("Unit tests for CAPIMachineSetStatusEqual", func() {
 	now := metav1.Now()
 	later := metav1.NewTime(now.Add(1 * time.Hour))
 
-	tests := []struct {
-		name        string
+	type testInput struct {
 		a           clusterv1.MachineSetStatus
 		b           clusterv1.MachineSetStatus
 		want        string
 		wantChanges bool
-	}{
-		{
-			name:        "no diff",
+	}
+
+	DescribeTable("when comparing Cluster API MachineSets",
+		func(tt testInput) {
+			a := &clusterv1.MachineSet{
+				Status: tt.a,
+			}
+			b := &clusterv1.MachineSet{
+				Status: tt.b,
+			}
+
+			got, err := compareCAPIMachineSets(a, b)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(got.HasChanges()).To(Equal(tt.wantChanges))
+
+			if tt.wantChanges {
+				Expect(got.String()).To(Equal(tt.want))
+			}
+		},
+		Entry("no diff", testInput{
 			a:           clusterv1.MachineSetStatus{},
 			b:           clusterv1.MachineSetStatus{},
 			want:        "",
 			wantChanges: false,
-		},
-		{
-			name: "diff in ReadyReplicas",
+		}),
+		Entry("diff in ReadyReplicas", testInput{
 			a: clusterv1.MachineSetStatus{
 				ReadyReplicas: 3,
 			},
@@ -56,9 +71,8 @@ func TestCAPIMachineSetStatusEqual(t *testing.T) {
 			},
 			want:        ".[status].[readyReplicas]: 3 != 5",
 			wantChanges: true,
-		},
-		{
-			name: "diff in AvailableReplicas",
+		}),
+		Entry("diff in AvailableReplicas", testInput{
 			a: clusterv1.MachineSetStatus{
 				AvailableReplicas: 2,
 			},
@@ -67,9 +81,8 @@ func TestCAPIMachineSetStatusEqual(t *testing.T) {
 			},
 			want:        ".[status].[availableReplicas]: 2 != 4",
 			wantChanges: true,
-		},
-		{
-			name: "diff in ReadyReplicas and AvailableReplicas",
+		}),
+		Entry("diff in ReadyReplicas and AvailableReplicas", testInput{
 			a: clusterv1.MachineSetStatus{
 				ReadyReplicas:     3,
 				AvailableReplicas: 2,
@@ -80,9 +93,8 @@ func TestCAPIMachineSetStatusEqual(t *testing.T) {
 			},
 			want:        ".[status].[availableReplicas]: 2 != 4, .[status].[readyReplicas]: 3 != 5",
 			wantChanges: true,
-		},
-		{
-			name: "same v1beta1 conditions",
+		}),
+		Entry("same v1beta1 conditions", testInput{
 			a: clusterv1.MachineSetStatus{
 				Conditions: []clusterv1.Condition{
 					{
@@ -103,9 +115,8 @@ func TestCAPIMachineSetStatusEqual(t *testing.T) {
 			},
 			want:        "",
 			wantChanges: false,
-		},
-		{
-			name: "changed v1beta1 condition Status",
+		}),
+		Entry("changed v1beta1 condition Status", testInput{
 			a: clusterv1.MachineSetStatus{
 				Conditions: []clusterv1.Condition{
 					{
@@ -126,9 +137,8 @@ func TestCAPIMachineSetStatusEqual(t *testing.T) {
 			},
 			want:        ".[status].[conditions][0].[status]: True != False",
 			wantChanges: true,
-		},
-		{
-			name: "v1beta1 condition LastTransitionTime ignored",
+		}),
+		Entry("v1beta1 condition LastTransitionTime ignored", testInput{
 			a: clusterv1.MachineSetStatus{
 				Conditions: []clusterv1.Condition{
 					{
@@ -149,9 +159,8 @@ func TestCAPIMachineSetStatusEqual(t *testing.T) {
 			},
 			want:        "",
 			wantChanges: false,
-		},
-		{
-			name: "multiple v1beta1 conditions with one changed",
+		}),
+		Entry("multiple v1beta1 conditions with one changed", testInput{
 			a: clusterv1.MachineSetStatus{
 				Conditions: []clusterv1.Condition{
 					{
@@ -182,9 +191,8 @@ func TestCAPIMachineSetStatusEqual(t *testing.T) {
 			},
 			want:        ".[status].[conditions][1].[status]: True != False",
 			wantChanges: true,
-		},
-		{
-			name: "same v1beta2 conditions",
+		}),
+		Entry("same v1beta2 conditions", testInput{
 			a: clusterv1.MachineSetStatus{
 				V1Beta2: &clusterv1.MachineSetV1Beta2Status{
 					Conditions: []metav1.Condition{
@@ -213,9 +221,8 @@ func TestCAPIMachineSetStatusEqual(t *testing.T) {
 			},
 			want:        "",
 			wantChanges: false,
-		},
-		{
-			name: "changed v1beta2 condition Status",
+		}),
+		Entry("changed v1beta2 condition Status", testInput{
 			a: clusterv1.MachineSetStatus{
 				V1Beta2: &clusterv1.MachineSetV1Beta2Status{
 					Conditions: []metav1.Condition{
@@ -240,9 +247,8 @@ func TestCAPIMachineSetStatusEqual(t *testing.T) {
 			},
 			want:        ".[status].[v1beta2].[conditions][0].[status]: True != False",
 			wantChanges: true,
-		},
-		{
-			name: "v1beta2 condition LastTransitionTime ignored",
+		}),
+		Entry("v1beta2 condition LastTransitionTime ignored", testInput{
 			a: clusterv1.MachineSetStatus{
 				V1Beta2: &clusterv1.MachineSetV1Beta2Status{
 					Conditions: []metav1.Condition{
@@ -271,9 +277,8 @@ func TestCAPIMachineSetStatusEqual(t *testing.T) {
 			},
 			want:        "",
 			wantChanges: false,
-		},
-		{
-			name: "multiple v1beta2 conditions with one changed",
+		}),
+		Entry("multiple v1beta2 conditions with one changed", testInput{
 			a: clusterv1.MachineSetStatus{
 				V1Beta2: &clusterv1.MachineSetV1Beta2Status{
 					Conditions: []metav1.Condition{
@@ -308,9 +313,8 @@ func TestCAPIMachineSetStatusEqual(t *testing.T) {
 			},
 			want:        ".[status].[v1beta2].[conditions][1].[status]: True != False",
 			wantChanges: true,
-		},
-		{
-			name: "v1beta2 nil vs non-nil",
+		}),
+		Entry("v1beta2 nil vs non-nil", testInput{
 			a: clusterv1.MachineSetStatus{
 				V1Beta2: nil,
 			},
@@ -321,31 +325,6 @@ func TestCAPIMachineSetStatusEqual(t *testing.T) {
 			},
 			want:        ".[status].[v1beta2]: <does not have key> != [readyReplicas:3]",
 			wantChanges: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			g := NewWithT(t)
-
-			a := &clusterv1.MachineSet{
-				Status: tt.a,
-			}
-			b := &clusterv1.MachineSet{
-				Status: tt.b,
-			}
-
-			got, err := compareCAPIMachineSets(a, b)
-			g.Expect(err).ToNot(HaveOccurred())
-
-			gotChanges := got.HasChanges()
-
-			g.Expect(gotChanges).To(Equal(tt.wantChanges))
-
-			if tt.wantChanges {
-				gotString := got.String()
-				g.Expect(gotString).To(Equal(tt.want))
-			}
-		})
-	}
-}
+		}),
+	)
+})
