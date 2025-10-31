@@ -16,23 +16,31 @@ limitations under the License.
 package util
 
 import (
-	"testing"
-
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
-//nolint:funlen
-func TestDiff_basic_operations(t *testing.T) {
-	tests := []struct {
-		name        string
+var _ = Describe("Unit test Diff", func() {
+	var differ *differ
+
+	BeforeEach(func() {
+		differ = newDiffer()
+	})
+
+	type testInput struct {
 		a           unstructured.Unstructured
 		b           unstructured.Unstructured
 		wantChanged bool
 		want        string
-	}{
-		{
-			name: "no diff on empty objects",
+	}
+	DescribeTable("basic operations", func(tt testInput) {
+		diff, err := differ.Diff(&tt.a, &tt.b)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(diff.HasChanges()).To(Equal(tt.wantChanged))
+		Expect(diff.String()).To(Equal(tt.want))
+	},
+		Entry("no diff on empty objects", testInput{
 			a: unstructured.Unstructured{
 				Object: map[string]any{},
 			},
@@ -41,9 +49,8 @@ func TestDiff_basic_operations(t *testing.T) {
 			},
 			wantChanged: false,
 			want:        "",
-		},
-		{
-			name: "diff when adding a field",
+		}),
+		Entry("diff when adding a field", testInput{
 			a: unstructured.Unstructured{Object: map[string]any{
 				"a": 1,
 			}},
@@ -53,9 +60,8 @@ func TestDiff_basic_operations(t *testing.T) {
 			}},
 			wantChanged: true,
 			want:        ".[b]: <nil pointer> != 2",
-		},
-		{
-			name: "diff when adding a field nested",
+		}),
+		Entry("diff when adding a field nested", testInput{
 			a: unstructured.Unstructured{Object: map[string]any{
 				"foo": map[string]any{
 					"a": 1,
@@ -75,9 +81,8 @@ func TestDiff_basic_operations(t *testing.T) {
 			}},
 			wantChanged: true,
 			want:        ".[foo].[b]: <does not have key> != 2, .[foo].[c].[d]: 3 != 4",
-		},
-		{
-			name: "diff when removing a field",
+		}),
+		Entry("diff when removing a field", testInput{
 			a: unstructured.Unstructured{Object: map[string]any{
 				"a": 1,
 				"b": 2,
@@ -87,9 +92,8 @@ func TestDiff_basic_operations(t *testing.T) {
 			}},
 			wantChanged: true,
 			want:        ".[b]: 2 != <nil pointer>",
-		},
-		{
-			name: "diff when changing a field",
+		}),
+		Entry("diff when changing a field", testInput{
 			a: unstructured.Unstructured{Object: map[string]any{
 				"a": 1,
 				"b": 2,
@@ -100,9 +104,8 @@ func TestDiff_basic_operations(t *testing.T) {
 			}},
 			wantChanged: true,
 			want:        ".[b]: 2 != 3",
-		},
-		{
-			name: "diff when adding a entry to a list",
+		}),
+		Entry("diff when adding a entry to a list", testInput{
 			a: unstructured.Unstructured{Object: map[string]any{
 				"a": 1,
 				"b": []int{1, 2},
@@ -113,9 +116,8 @@ func TestDiff_basic_operations(t *testing.T) {
 			}},
 			wantChanged: true,
 			want:        ".[b][2]: <no value> != 3",
-		},
-		{
-			name: "diff when removing a entry from a list",
+		}),
+		Entry("diff when removing a entry from a list", testInput{
 			a: unstructured.Unstructured{Object: map[string]any{
 				"a": 1,
 				"b": []int{1, 2, 3},
@@ -126,9 +128,8 @@ func TestDiff_basic_operations(t *testing.T) {
 			}},
 			wantChanged: true,
 			want:        ".[b][2]: 3 != <no value>",
-		},
-		{
-			name: "diff when changing a entry in a list",
+		}),
+		Entry("diff when changing a entry in a list", testInput{
 			a: unstructured.Unstructured{Object: map[string]any{
 				"a": 1,
 				"b": []int{1, 2, 3},
@@ -139,9 +140,8 @@ func TestDiff_basic_operations(t *testing.T) {
 			}},
 			wantChanged: true,
 			want:        ".[b][2]: 3 != 4",
-		},
-		{
-			name: "diff when deleting a list",
+		}),
+		Entry("diff when deleting a list", testInput{
 			a: unstructured.Unstructured{Object: map[string]any{
 				"a": 1,
 				"b": []int{1, 2, 3},
@@ -151,19 +151,6 @@ func TestDiff_basic_operations(t *testing.T) {
 			}},
 			wantChanged: true,
 			want:        ".[b]: [1 2 3] != <nil pointer>",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			g := NewWithT(t)
-
-			differ := newDiffer()
-
-			diff, err := differ.Diff(&tt.a, &tt.b)
-			g.Expect(err).ToNot(HaveOccurred())
-			g.Expect(diff.HasChanges()).To(Equal(tt.wantChanged))
-			g.Expect(diff.String()).To(Equal(tt.want))
-		})
-	}
-}
+		}),
+	)
+})
