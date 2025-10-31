@@ -773,7 +773,7 @@ func (r *MachineSetSyncReconciler) createOrUpdateCAPIInfraMachineTemplate(ctx co
 			return updateErr
 		}
 
-		if capiInfraMachineTemplatesDiff.HasChanges() {
+		if !capiInfraMachineTemplatesDiff.HasChanges() {
 			logger.Info("No changes detected for CAPI infra machine template")
 			return nil
 		}
