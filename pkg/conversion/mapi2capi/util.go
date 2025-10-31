@@ -34,7 +34,7 @@ import (
 
 var errUnsupportedPlatform = errors.New("unsupported platform")
 
-// ProviderSpecFromRawExtension converts a MAPI providerSpec to a CAPI providerSpec.
+// ProviderSpecFromRawExtension converts a Machine API providerSpec to a Cluster API providerSpec.
 func ProviderSpecFromRawExtension(platform configv1.PlatformType, rawExtension *runtime.RawExtension) (any, error) {
 	switch platform {
 	case configv1.AWSPlatformType:
@@ -44,8 +44,8 @@ func ProviderSpecFromRawExtension(platform configv1.PlatformType, rawExtension *
 		}
 
 		// Sort the tags by name to ensure consistent ordering.
-		// On the CAPI side these tags are in a map,
-		// so the order is not guaranteed when converting back from a CAPI map to a MAPI slice.
+		// On the Cluster API side these tags are in a map,
+		// so the order is not guaranteed when converting back from a Cluster API map to a Machine API slice.
 		sort.Slice(providerConfig.Tags, func(i, j int) bool {
 			return providerConfig.Tags[i].Name < providerConfig.Tags[j].Name
 		})
