@@ -140,8 +140,6 @@ func (d *differ) Diff(a, b client.Object) (DiffResult, error) {
 		return nil, fmt.Errorf("failed to convert b to unstructured: %w", err)
 	}
 
-	var additionalIgnoredPaths [][]string
-
 	// 2. Run the configured modify functions
 	// This allows customizing the diffing process, e.g. remove conditions last transition time to ignore them during diffing
 	// or separate handling for providerSpec.
@@ -156,7 +154,7 @@ func (d *differ) Diff(a, b client.Object) (DiffResult, error) {
 	}
 
 	// 3. Remove fields configured to be ignored.
-	for _, ignorePath := range append(d.ignoredPath, additionalIgnoredPaths...) {
+	for _, ignorePath := range d.ignoredPath {
 		unstructured.RemoveNestedField(unstructuredA, ignorePath...)
 		unstructured.RemoveNestedField(unstructuredB, ignorePath...)
 	}
