@@ -32,6 +32,7 @@ import (
 	. "github.com/onsi/gomega"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 
+	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -172,6 +173,49 @@ func EnvTestWithAuditPolicy(policyYaml string, env *envtest.Environment) {
 	args.Append("audit-policy-file", policyPath)
 	args.Append("audit-log-path", "/tmp/kube-apiserver-audit.log")
 	args.Append("audit-log-format", "json")
+}
+
+// SentinelValidationExpression is a CEL expression that blocks resources with the "test-sentinel" label.
+// Use this in tests to verify a VAP is actively enforcing.
+const SentinelValidationExpression = "!(has(object.metadata.labels) && \"test-sentinel\" in object.metadata.labels)"
+
+// AddSentinelValidation appends a sentinel validation rule to a VAP.
+func AddSentinelValidation(vap *admissionregistrationv1.ValidatingAdmissionPolicy) {
+	vap.Spec.Validations = append(vap.Spec.Validations, admissionregistrationv1.Validation{
+		Expression: SentinelValidationExpression,
+		Message:    "policy in place",
+	})
+}
+
+// UpdateVAPBindingNamespaces updates a VAP binding's namespace configuration.
+//
+// Parameters:
+//   - binding: The ValidatingAdmissionPolicyBinding to update
+//   - paramNamespace: Namespace containing parameter resources, or "" if no paramRef
+//   - targetNamespace: Namespace where policy is enforced
+func UpdateVAPBindingNamespaces(binding *admissionregistrationv1.ValidatingAdmissionPolicyBinding, paramNamespace, targetNamespace string) {
+	// Validate paramNamespace matches binding structure
+	hasParamRef := binding.Spec.ParamRef != nil
+	ExpectWithOffset(1, hasParamRef && paramNamespace == "").ToNot(BeTrue(),
+		"paramNamespace cannot be empty for binding %q with paramRef", binding.Name)
+	ExpectWithOffset(1, !hasParamRef && paramNamespace != "").ToNot(BeTrue(),
+		"paramNamespace %q provided but binding %q has no paramRef", paramNamespace, binding.Name)
+
+	// Update paramRef namespace if parameterized
+	if hasParamRef {
+		binding.Spec.ParamRef.Namespace = paramNamespace
+	}
+
+	// Validate MatchResources structure
+	ExpectWithOffset(1, binding.Spec.MatchResources).ToNot(BeNil(),
+		"binding %q has nil MatchResources", binding.Name)
+	ExpectWithOffset(1, binding.Spec.MatchResources.NamespaceSelector).ToNot(BeNil(),
+		"binding %q has nil NamespaceSelector", binding.Name)
+
+	// Always update target namespace
+	binding.Spec.MatchResources.NamespaceSelector.MatchLabels = map[string]string{
+		"kubernetes.io/metadata.name": targetNamespace,
+	}
 }
 
 // LoadTransportConfigMaps loads admission policies from the transport config maps in

@@ -1025,14 +1025,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 					Name: "machine-api-machine-vap"}, policyBinding), timeout).Should(Succeed())
 
 				Eventually(k.Update(policyBinding, func() {
-					// We want to have our paramref reference the CAPI namespace,
-					// since we `GenerateName` it is not static
-					policyBinding.Spec.ParamRef.Namespace = capiNamespace.GetName()
-					// We need to update the namespace in our namespaceSelector,
-					// since also use `GenerateName` here
-					policyBinding.Spec.MatchResources.NamespaceSelector.MatchLabels = map[string]string{
-						"kubernetes.io/metadata.name": mapiNamespace.GetName(),
-					}
+					admissiontestutils.UpdateVAPBindingNamespaces(policyBinding, capiNamespace.GetName(), mapiNamespace.GetName())
 				}), timeout).Should(Succeed())
 
 				// Wait until the binding shows the patched values
@@ -1215,10 +1208,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 				machineVap = &admissionregistrationv1.ValidatingAdmissionPolicy{}
 				Eventually(k8sClient.Get(ctx, client.ObjectKey{Name: "openshift-cluster-api-prevent-setting-of-capi-fields-unsupported-by-mapi"}, machineVap), timeout).Should(Succeed())
 				Eventually(k.Update(machineVap, func() {
-					machineVap.Spec.Validations = append(machineVap.Spec.Validations, admissionregistrationv1.Validation{
-						Expression: "!(has(object.metadata.labels) && \"test-sentinel\" in object.metadata.labels)",
-						Message:    "policy in place",
-					})
+					admissiontestutils.AddSentinelValidation(machineVap)
 				})).Should(Succeed())
 
 				Eventually(k.Object(machineVap), timeout).Should(
@@ -1231,11 +1221,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 					Name: "openshift-cluster-api-prevent-setting-of-capi-fields-unsupported-by-mapi"}, policyBinding), timeout).Should(Succeed())
 
 				Eventually(k.Update(policyBinding, func() {
-					// We need to update the namespace in our namespaceSelector,
-					// since also use `GenerateName` here
-					policyBinding.Spec.MatchResources.NamespaceSelector.MatchLabels = map[string]string{
-						"kubernetes.io/metadata.name": capiNamespace.GetName(),
-					}
+					admissiontestutils.UpdateVAPBindingNamespaces(policyBinding, "", capiNamespace.GetName())
 				}), timeout).Should(Succeed())
 
 				// Wait until the binding shows the patched values
@@ -1279,10 +1265,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 				Expect(resourceRules).To(HaveLen(1))
 				resourceRules[0].Operations = append(resourceRules[0].Operations, admissionregistrationv1.Update)
 				Eventually(k.Update(machineVap, func() {
-					machineVap.Spec.Validations = append(machineVap.Spec.Validations, admissionregistrationv1.Validation{
-						Expression: "!(has(object.metadata.labels) && \"test-sentinel\" in object.metadata.labels)",
-						Message:    "policy in place",
-					})
+					admissiontestutils.AddSentinelValidation(machineVap)
 					// Updating the VAP so that it functions on "UPDATE" as well as "CREATE" only in this test suite to make it easier to test the functionality
 					machineVap.Spec.MatchConstraints.ResourceRules = resourceRules
 
@@ -1298,14 +1281,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 					Name: "openshift-only-create-mapi-machine-if-authoritative-api-capi"}, policyBinding), timeout).Should(Succeed())
 
 				Eventually(k.Update(policyBinding, func() {
-					// We want to have our paramref reference the CAPI namespace,
-					// since we `GenerateName` it is not static
-					policyBinding.Spec.ParamRef.Namespace = capiNamespace.GetName()
-					// We need to update the namespace in our namespaceSelector,
-					// since also use `GenerateName` here
-					policyBinding.Spec.MatchResources.NamespaceSelector.MatchLabels = map[string]string{
-						"kubernetes.io/metadata.name": mapiNamespace.GetName(),
-					}
+					admissiontestutils.UpdateVAPBindingNamespaces(policyBinding, capiNamespace.GetName(), mapiNamespace.GetName())
 				}), timeout).Should(Succeed())
 
 				// Wait until the binding shows the patched values
@@ -1360,10 +1336,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 				machineVap = &admissionregistrationv1.ValidatingAdmissionPolicy{}
 				Eventually(k8sClient.Get(ctx, client.ObjectKey{Name: "openshift-prevent-migration-when-machine-updating"}, machineVap), timeout).Should(Succeed())
 				Eventually(k.Update(machineVap, func() {
-					machineVap.Spec.Validations = append(machineVap.Spec.Validations, admissionregistrationv1.Validation{
-						Expression: "!(has(object.metadata.labels) && \"test-sentinel\" in object.metadata.labels)",
-						Message:    "policy in place",
-					})
+					admissiontestutils.AddSentinelValidation(machineVap)
 				})).Should(Succeed())
 
 				Eventually(k.Object(machineVap), timeout).Should(
@@ -1376,9 +1349,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 					Name: "openshift-prevent-migration-when-machine-updating"}, policyBinding), timeout).Should(Succeed())
 
 				Eventually(k.Update(policyBinding, func() {
-					policyBinding.Spec.MatchResources.NamespaceSelector.MatchLabels = map[string]string{
-						"kubernetes.io/metadata.name": mapiNamespace.GetName(),
-					}
+					admissiontestutils.UpdateVAPBindingNamespaces(policyBinding, "", mapiNamespace.GetName())
 				}), timeout).Should(Succeed())
 
 				// Wait until the binding shows the patched values
@@ -1475,10 +1446,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 				machineVap = &admissionregistrationv1.ValidatingAdmissionPolicy{}
 				Eventually(k8sClient.Get(ctx, client.ObjectKey{Name: "openshift-provide-warning-when-not-synchronized"}, machineVap), timeout).Should(Succeed())
 				Eventually(k.Update(machineVap, func() {
-					machineVap.Spec.Validations = append(machineVap.Spec.Validations, admissionregistrationv1.Validation{
-						Expression: "!(has(object.metadata.labels) && \"test-sentinel\" in object.metadata.labels)",
-						Message:    "policy in place",
-					})
+					admissiontestutils.AddSentinelValidation(machineVap)
 				})).Should(Succeed())
 
 				Eventually(k.Object(machineVap), timeout).Should(
@@ -1491,11 +1459,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 					Name: "openshift-provide-warning-when-not-synchronized"}, policyBinding), timeout).Should(Succeed())
 
 				Eventually(k.Update(policyBinding, func() {
-					// We need to update the namespace in our namespaceSelector,
-					// since also use `GenerateName` here
-					policyBinding.Spec.MatchResources.NamespaceSelector.MatchLabels = map[string]string{
-						"kubernetes.io/metadata.name": mapiNamespace.GetName(),
-					}
+					admissiontestutils.UpdateVAPBindingNamespaces(policyBinding, "", mapiNamespace.GetName())
 				}), timeout).Should(Succeed())
 
 				// Wait until the binding shows the patched values
