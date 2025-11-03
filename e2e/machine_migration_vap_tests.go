@@ -13,7 +13,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 )
 
@@ -60,7 +59,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] MA
 			testCAPIMachine = capiframework.GetMachine(cl, testMachineName, capiframework.CAPINamespace)
 
 			// Wait until VAP match conditions are met
-			Eventually(komega.Object(testMAPIMachine), capiframework.WaitLong, capiframework.RetryMedium).Should(
+			Eventually(komega.Object(testMAPIMachine), capiframework.WaitMedium, capiframework.RetryMedium).Should(
 				WithTransform(func(m *mapiv1beta1.Machine) mapiv1beta1.MachineAuthority {
 					return m.Status.AuthoritativeAPI
 				}, Equal(mapiv1beta1.MachineAuthorityClusterAPI)),
@@ -259,19 +258,9 @@ func getAWSProviderSpecFromMachine(machine *mapiv1beta1.Machine) *mapiv1beta1.AW
 func verifyAWSProviderSpecUpdatePrevented(machine *mapiv1beta1.Machine, fieldName string, updateFunc func(*mapiv1beta1.AWSMachineProviderConfig), expectedError string) {
 	By(fmt.Sprintf("Verifying that updating AWS providerSpec.%s is prevented by VAP", fieldName))
 
-	Eventually(func() error {
-		// Get fresh copy to avoid conflicts
-		freshMachine := &mapiv1beta1.Machine{}
-		if err := cl.Get(ctx, client.ObjectKeyFromObject(machine), freshMachine); err != nil {
-			return err
-		}
-
-		if err := updateAWSMachineProviderSpec(freshMachine, updateFunc); err != nil {
-			return err
-		}
-
-		return cl.Update(ctx, freshMachine)
-	}, capiframework.WaitMedium, capiframework.RetryMedium).Should(
+	Eventually(komega.Update(machine, func() {
+		Expect(updateAWSMachineProviderSpec(machine, updateFunc)).To(Succeed())
+	}), capiframework.WaitMedium, capiframework.RetryMedium).Should(
 		MatchError(ContainSubstring(expectedError)),
 		"Expected AWS providerSpec.%s update to be blocked by VAP", fieldName)
 }
@@ -282,6 +271,14 @@ func verifyVAPNotAppliedForMachineAPIAuthority() {
 
 	// Create a test machine with MachineAPI authority
 	testMachine := createMAPIMachineWithAuthority(ctx, cl, "vap-test-mapi-authority", mapiv1beta1.MachineAuthorityMachineAPI)
+
+	// Wait until status reflects the expected authority
+	Eventually(komega.Object(testMachine), capiframework.WaitMedium, capiframework.RetryMedium).Should(
+		WithTransform(func(m *mapiv1beta1.Machine) mapiv1beta1.MachineAuthority {
+			return m.Status.AuthoritativeAPI
+		}, Equal(mapiv1beta1.MachineAuthorityMachineAPI)),
+		"Expected status.authoritativeAPI=MachineAPI before VAP bypass test",
+	)
 
 	DeferCleanup(func() {
 		By("Cleaning up test machine")
