@@ -87,6 +87,12 @@ var (
 
 	// errMachineAPIMachineSetOwnerReferenceConversionUnsupported.
 	errMachineAPIMachineSetOwnerReferenceConversionUnsupported = errors.New("could not convert Machine API machine set owner references to Cluster API")
+
+	// errInvalidInfraClusterReference is returned when the cluster name is empty in CAPI machineset spec.
+	errInvalidInfraClusterReference = errors.New("cluster name is empty in Cluster API machine set spec")
+
+	// errInvalidInfraMachineTemplateReference is returned when the infrastructure machine template reference is invalid or incomplete.
+	errInvalidInfraMachineTemplateReference = errors.New("infrastructure machine template reference is invalid or incomplete")
 )
 
 const (
@@ -105,6 +111,8 @@ const (
 	messageSuccessfullySynchronizedMAPItoCAPI = "Successfully synchronized MAPI MachineSet to CAPI"
 
 	controllerName string = "MachineSetSyncController"
+
+	terminalConfigurationErrorLog string = "Detected terminal configuration error - cluster name or infrastructure machine template reference is empty, not requeuing"
 )
 
 // MachineSetSyncReconciler reconciles CAPI and MAPI MachineSets.
@@ -235,6 +243,18 @@ func (r *MachineSetSyncReconciler) fetchCAPIInfraResources(ctx context.Context, 
 		Name:      infraMachineTemplateRef.Name,
 	}
 
+	// Validate that required references are not empty to avoid nil pointer issues later.
+	// These are terminal configuration errors that require user intervention.
+	if capiMachineSet.Spec.ClusterName == "" {
+		return nil, nil, fmt.Errorf("machine set %s/%s: %w",
+			capiMachineSet.Namespace, capiMachineSet.Name, errInvalidInfraClusterReference)
+	}
+
+	if infraMachineTemplateRef.Name == "" || infraMachineTemplateRef.Namespace == "" {
+		return nil, nil, fmt.Errorf("machine %s/%s: %w",
+			capiMachineSet.Namespace, capiMachineSet.Name, errInvalidInfraMachineTemplateReference)
+	}
+
 	infraMachineTemplate, infraCluster, err := controllers.InitInfraMachineTemplateAndInfraClusterFromProvider(r.Platform)
 	if err != nil {
 		return nil, nil, fmt.Errorf("unable to devise CAPI infra resources: %w", err)
@@ -341,6 +361,12 @@ func (r *MachineSetSyncReconciler) reconcileMAPIMachineSetToCAPIMachineSet(ctx c
 	restoreCAPIFields(existingCAPIMachineSet, convertedCAPIMachineSet, r.CAPINamespace, authoritativeAPI, clusterOwnerRefence)
 
 	if err := r.ensureCAPIInfraMachineTemplate(ctx, sourceMAPIMachineSet, convertedCAPIMachineSet, convertedCAPIInfraMachineTemplate, clusterOwnerRefence); err != nil {
+		// Don't requeue for terminal configuration errors
+		if isTerminalConfigurationError(err) {
+			logger.Error(err, terminalConfigurationErrorLog)
+			return ctrl.Result{}, nil
+		}
+
 		return ctrl.Result{}, fmt.Errorf("unable to ensure CAPI infra machine template: %w", err)
 	}
 
@@ -571,6 +597,14 @@ func (r *MachineSetSyncReconciler) reconcileCAPIMachineSetToMAPIMachineSet(ctx c
 	infraCluster, infraMachineTemplate, err := r.fetchCAPIInfraResources(ctx, sourceCAPIMachineSet)
 	if err != nil {
 		fetchErr := fmt.Errorf("failed to fetch CAPI infra resources: %w", err)
+
+		// Don't requeue for terminal configuration errors
+		if isTerminalConfigurationError(err) {
+			logger.Error(err, terminalConfigurationErrorLog)
+			r.Recorder.Event(sourceCAPIMachineSet, corev1.EventTypeWarning, "SynchronizationError", fetchErr.Error())
+
+			return ctrl.Result{}, nil
+		}
 
 		if condErr := r.applySynchronizedConditionWithPatch(
 			ctx, existingMAPIMachineSet, corev1.ConditionFalse, reasonFailedToGetCAPIInfraResources, fetchErr.Error(), nil); condErr != nil {
@@ -1531,4 +1565,14 @@ func hasSpecOrMetadataOrProviderSpecChanges(diff map[string]any) bool {
 	_, ok3 := diff[".providerSpec"]
 
 	return ok1 || ok2 || ok3
+}
+
+// isTerminalConfigurationError returns true if the provided error is
+// errInvalidClusterInfraReference or errInvalidInfraMachineTemplateReference.
+func isTerminalConfigurationError(err error) bool {
+	if errors.Is(err, errInvalidInfraClusterReference) || errors.Is(err, errInvalidInfraMachineTemplateReference) {
+		return true
+	}
+
+	return false
 }
