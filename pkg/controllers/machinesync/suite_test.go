@@ -66,7 +66,7 @@ func TestAPIs(t *testing.T) {
 var _ = BeforeSuite(func() {
 	klog.SetOutput(GinkgoWriter)
 
-	testLogger = GinkgoLogr.V(5)
+	testLogger = test.NewVerboseGinkgoLogger(0)
 	logf.SetLogger(testLogger)
 	ctrl.SetLogger(testLogger)
 

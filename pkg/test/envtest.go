@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"path"
 
+	"github.com/go-logr/logr"
+	"github.com/go-logr/logr/funcr"
 	mapiv1 "github.com/openshift/api/machine/v1"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	"golang.org/x/tools/go/packages"
@@ -36,6 +38,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 
+	. "github.com/onsi/ginkgo/v2"
 	configv1 "github.com/openshift/api/config/v1"
 	clusteroperatorv1 "github.com/openshift/api/operator/v1"
 )
@@ -134,4 +137,16 @@ func getPackageDir(ctx context.Context, pkgName string) (string, error) {
 	}
 
 	return pkgs[0].Dir, nil
+}
+
+// NewVerboseGinkgoLogger sets up a new logr.Logger that writes to GinkoWriter, and uses the passed verbosity
+// Useful for debugging.
+func NewVerboseGinkgoLogger(verbosity int) logr.Logger {
+	return funcr.New(func(prefix, args string) {
+		if prefix == "" {
+			fmt.Fprintf(GinkgoWriter, "%s\n", args) //nolint:errcheck
+		} else {
+			fmt.Fprintf(GinkgoWriter, "%s %s\n", prefix, args) //nolint:errcheck
+		}
+	}, funcr.Options{Verbosity: verbosity})
 }

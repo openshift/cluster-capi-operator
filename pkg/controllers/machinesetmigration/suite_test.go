@@ -20,6 +20,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -44,6 +45,7 @@ var k8sClient client.Client
 var testEnv *envtest.Environment
 var testRESTMapper meta.RESTMapper
 var ctx = context.Background()
+var testLogger logr.Logger
 
 func TestMachineSetMigration(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -54,8 +56,11 @@ func TestMachineSetMigration(t *testing.T) {
 var _ = BeforeSuite(func() {
 	klog.SetOutput(GinkgoWriter)
 
-	logf.SetLogger(GinkgoLogr)
-	ctrl.SetLogger(GinkgoLogr)
+	testLogger = test.NewVerboseGinkgoLogger(0)
+	logf.SetLogger(testLogger)
+	ctrl.SetLogger(testLogger)
+
+	ctx = logf.IntoContext(ctx, testLogger)
 
 	By("bootstrapping test environment")
 	var err error

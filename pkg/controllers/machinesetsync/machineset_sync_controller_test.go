@@ -105,7 +105,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 	}
 
 	startManager := func(mgr *manager.Manager) (context.CancelFunc, chan struct{}) {
-		mgrCtx, mgrCancel := context.WithCancel(context.Background())
+		mgrCtx, mgrCancel := context.WithCancel(ctx)
 		mgrDone := make(chan struct{})
 
 		go func() {
