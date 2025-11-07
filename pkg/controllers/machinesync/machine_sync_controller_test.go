@@ -1132,9 +1132,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 				Eventually(k.Object(sentinelMachine), timeout).Should(
 					HaveField("Status.AuthoritativeAPI", Equal(mapiv1beta1.MachineAuthorityClusterAPI)))
 
-				Eventually(k.Update(sentinelMachine, func() {
-					sentinelMachine.ObjectMeta.Labels = map[string]string{"test-sentinel": "fubar"}
-				}), timeout).Should(MatchError(ContainSubstring("policy in place")))
+				admissiontestutils.VerifySentinelValidation(k, sentinelMachine, timeout)
 			})
 
 			Context("with status.AuthoritativeAPI: Machine API", func() {
@@ -1318,9 +1316,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 				Eventually(k8sClient.Create(ctx, sentinelMachine)).Should(Succeed())
 
 				// Continually try to update the capiMachine to a forbidden field until the VAP blocks it
-				Eventually(k.Update(sentinelMachine, func() {
-					sentinelMachine.ObjectMeta.Labels = map[string]string{"test-sentinel": "fubar"}
-				}), timeout).Should(MatchError(ContainSubstring("policy in place")))
+				admissiontestutils.VerifySentinelValidation(k, sentinelMachine, timeout)
 			})
 
 			It("updating the spec.Version should not be allowed", func() {
@@ -1383,9 +1379,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 
 				Eventually(k.Get(capiSentinelMachine)).Should(Succeed())
 
-				Eventually(k.Update(sentinelMachine, func() {
-					sentinelMachine.ObjectMeta.Labels = map[string]string{"test-sentinel": "fubar"}
-				}), timeout).Should(MatchError(ContainSubstring("policy in place")))
+				admissiontestutils.VerifySentinelValidation(k, sentinelMachine, timeout)
 			})
 
 			// The Authoritative API defaults to MachineAPI so we can't test if it's unset.
@@ -1451,9 +1445,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 
 				Eventually(k.Get(capiSentinelMachine)).Should(Succeed())
 
-				Eventually(k.Update(sentinelMachine, func() {
-					sentinelMachine.ObjectMeta.Labels = map[string]string{"test-sentinel": "fubar"}
-				}), timeout).Should(MatchError(ContainSubstring("policy in place")))
+				admissiontestutils.VerifySentinelValidation(k, sentinelMachine, timeout)
 			})
 
 			It("denies updating the AuthoritativeAPI when the machine is in Provisioning", func() {
@@ -1566,7 +1558,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 					warnSink.Reset() // keep each probe self-contained
 
 					err := warnKomega.Update(sentinelMachine, func() {
-						sentinelMachine.ObjectMeta.Labels = map[string]string{"test-sentinel": "fubar"}
+						admissiontestutils.SetSentinelValidationLabel(sentinelMachine)
 					})()
 					g.Expect(err).NotTo(HaveOccurred())
 

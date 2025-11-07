@@ -188,9 +188,7 @@ var _ = Describe("MachineSet VAP Tests", func() {
 				Build()
 			Eventually(k8sClient.Create(ctx, sentinelMachineSet)).Should(Succeed(), "sentinel machineset should be able to be created")
 
-			Eventually(k.Update(sentinelMachineSet, func() {
-				sentinelMachineSet.ObjectMeta.Labels = map[string]string{"test-sentinel": "fubar"}
-			}), timeout).Should(MatchError(ContainSubstring("policy in place")))
+			admissiontestutils.VerifySentinelValidation(k, sentinelMachineSet, timeout)
 		})
 
 		It("should allow creating a MachineSet without forbidden fields", func() {
