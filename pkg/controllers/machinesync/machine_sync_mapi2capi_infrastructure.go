@@ -84,9 +84,9 @@ func (r *MachineSyncReconciler) createOrUpdateCAPIInfraMachine(ctx context.Conte
 	}
 
 	if metadataUpdated || statusUpdated {
-		logger.Info("Successfully updated Cluster API machine")
+		logger.Info("Successfully updated Cluster API Infrastructure machine")
 	} else {
-		logger.Info("No changes detected for Cluster API machine")
+		logger.Info("No changes detected for Cluster API Infrastructure machine")
 	}
 
 	return ctrl.Result{}, syncronizationIsProgressingFalse, nil
