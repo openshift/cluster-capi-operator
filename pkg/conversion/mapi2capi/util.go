@@ -20,8 +20,10 @@ import (
 	"fmt"
 
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
+	"github.com/openshift/cluster-capi-operator/pkg/conversion/consts"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
@@ -34,6 +36,9 @@ func convertMAPIMachineSetSelectorToCAPI(mapiSelector metav1.LabelSelector) meta
 }
 
 func convertMAPILabelsToCAPI(mapiLabels map[string]string) map[string]string {
+	// These labels should not be converted to CAPI labels as they are handled explicitly in the conversion logic.
+	mapiMetadataLabelsToSkip := sets.New(consts.MAPIMachineMetadataLabelInstanceType, consts.MAPIMachineMetadataLabelRegion, consts.MAPIMachineMetadataLabelZone)
+
 	capiLabels := make(map[string]string)
 
 	toTransformLabels := map[string]func(string) (string, string){
@@ -53,10 +58,10 @@ func convertMAPILabelsToCAPI(mapiLabels map[string]string) map[string]string {
 			continue
 		}
 
-		// Ignore MAPI-specific labels that are not explicitly handled.
-		// if strings.HasPrefix(mapiLabelKey, "machine.openshift.io/") {
-		// 	continue
-		// }
+		// Ignore MAPI-specific labels that are explicitly handled.
+		if mapiMetadataLabelsToSkip.Has(mapiLabelKey) {
+			continue
+		}
 
 		// Default case - copy over the label as-is to CAPI.
 		capiLabels[mapiLabelKey] = mapiLabelVal
@@ -70,6 +75,9 @@ func convertMAPIAnnotationsToCAPI(mapiAnnotations map[string]string) map[string]
 		return nil
 	}
 
+	// These annotations should not be converted to Cluster API annotations as they are handled explicitly in the conversion logic.
+	mapiMetadataAnnotationsToSkip := sets.New(consts.MAPIMachineMetadataAnnotationInstanceState)
+
 	capiAnnotations := make(map[string]string)
 
 	for k, v := range mapiAnnotations {
@@ -78,7 +86,16 @@ func convertMAPIAnnotationsToCAPI(mapiAnnotations map[string]string) map[string]
 			continue
 		}
 
+		// Ignore MAPI-specific annotations that are explicitly handled.
+		if mapiMetadataAnnotationsToSkip.Has(k) {
+			continue
+		}
+
 		capiAnnotations[k] = v
+	}
+
+	if len(capiAnnotations) == 0 {
+		return nil
 	}
 
 	return capiAnnotations

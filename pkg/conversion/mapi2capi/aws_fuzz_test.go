@@ -69,6 +69,8 @@ var _ = Describe("AWS Fuzz (mapi2capi)", func() {
 			return capi2mapi.FromMachineAndAWSMachineAndAWSCluster(machine, awsMachine, awsCluster)
 		}
 
+		f := &awsProviderFuzzer{}
+
 		conversiontest.MAPI2CAPIMachineRoundTripFuzzTest(
 			scheme,
 			infra,
@@ -77,7 +79,7 @@ var _ = Describe("AWS Fuzz (mapi2capi)", func() {
 			fromMachineAndAWSMachineAndAWSCluster,
 			conversiontest.ObjectMetaFuzzerFuncs(mapiNamespace),
 			conversiontest.MAPIMachineFuzzerFuncs(&mapiv1beta1.AWSMachineProviderConfig{}, &mapiv1beta1.AWSMachineProviderStatus{}, awsProviderIDFuzzer),
-			awsProviderSpecFuzzerFuncs,
+			f.FuzzerFuncsMachine,
 		)
 	})
 
@@ -92,6 +94,8 @@ var _ = Describe("AWS Fuzz (mapi2capi)", func() {
 			return capi2mapi.FromMachineSetAndAWSMachineTemplateAndAWSCluster(machineSet, awsMachineTemplate, awsCluster)
 		}
 
+		f := &awsProviderFuzzer{}
+
 		conversiontest.MAPI2CAPIMachineSetRoundTripFuzzTest(
 			scheme,
 			infra,
@@ -101,7 +105,7 @@ var _ = Describe("AWS Fuzz (mapi2capi)", func() {
 			conversiontest.ObjectMetaFuzzerFuncs(mapiNamespace),
 			conversiontest.MAPIMachineFuzzerFuncs(&mapiv1beta1.AWSMachineProviderConfig{}, &mapiv1beta1.AWSMachineProviderStatus{}, awsProviderIDFuzzer),
 			conversiontest.MAPIMachineSetFuzzerFuncs(),
-			awsProviderSpecFuzzerFuncs,
+			f.FuzzerFuncsMachineSet,
 		)
 	})
 })
@@ -110,8 +114,57 @@ func awsProviderIDFuzzer(c randfill.Continue) string {
 	return "aws:///us-west-2a/i-" + strings.ReplaceAll(c.String(0), "/", "")
 }
 
-//nolint:funlen,cyclop
-func awsProviderSpecFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interface{} {
+type awsProviderFuzzer struct {
+	conversiontest.MAPIMachineFuzzer
+}
+
+func (f *awsProviderFuzzer) fuzzProviderConfig(ps *mapiv1beta1.AWSMachineProviderConfig, c randfill.Continue) {
+	c.FillNoCustom(ps)
+
+	// The type meta is always set to these values by the conversion.
+	ps.APIVersion = mapiv1beta1.GroupVersion.String()
+	ps.Kind = awsProviderSpecKind
+
+	// region must match the input AWSCluster so force it here.
+	ps.Placement.Region = "us-east-1"
+
+	// Only one value here is valid in terms of fuzzing, so it is hardcoded.
+	ps.CredentialsSecret = &corev1.LocalObjectReference{
+		Name: mapi2capi.DefaultCredentialsSecretName,
+	}
+
+	// Clear fields that are not supported in the provider spec.
+	ps.DeviceIndex = 0
+	ps.LoadBalancers = nil
+	ps.ObjectMeta = metav1.ObjectMeta{}
+
+	// At least one device mapping must have no device name.
+	rootFound := false
+
+	for i := range ps.BlockDevices {
+		if ps.BlockDevices[i].DeviceName == nil {
+			rootFound = true
+			break
+		}
+	}
+
+	if !rootFound && len(ps.BlockDevices) > 0 {
+		ps.BlockDevices[0].DeviceName = nil
+	}
+
+	// Clear pointers to empty structs.
+	if ps.UserDataSecret != nil && ps.UserDataSecret.Name == "" {
+		ps.UserDataSecret = nil
+	}
+
+	// Copy instance-type, region and zone to the struct so they can be set at the machine labels too.
+	f.MAPIMachineFuzzer.InstanceType = ps.InstanceType
+	f.MAPIMachineFuzzer.Region = ps.Placement.Region
+	f.MAPIMachineFuzzer.Zone = ps.Placement.AvailabilityZone
+}
+
+//nolint:funlen
+func (f *awsProviderFuzzer) FuzzerFuncsMachineSet(codecs runtimeserializer.CodecFactory) []interface{} {
 	return []interface{}{
 		func(nit *mapiv1beta1.AWSNetworkInterfaceType, c randfill.Continue) {
 			switch c.Int31n(3) {
@@ -204,45 +257,13 @@ func awsProviderSpecFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interfa
 				// resulting in a documented lossy rountrip conversion, which would make the test to fail.
 			}
 		},
-		func(ps *mapiv1beta1.AWSMachineProviderConfig, c randfill.Continue) {
-			c.FillNoCustom(ps)
-
-			// The type meta is always set to these values by the conversion.
-			ps.APIVersion = mapiv1beta1.GroupVersion.String()
-			ps.Kind = awsProviderSpecKind
-
-			// region must match the input AWSCluster so force it here.
-			ps.Placement.Region = "us-east-1"
-
-			// Only one value here is valid in terms of fuzzing, so it is hardcoded.
-			ps.CredentialsSecret = &corev1.LocalObjectReference{
-				Name: mapi2capi.DefaultCredentialsSecretName,
-			}
-
-			// Clear fields that are not supported in the provider spec.
-			ps.DeviceIndex = 0
-			ps.LoadBalancers = nil
-			ps.ObjectMeta = metav1.ObjectMeta{}
-			// TODO(OCPCLOUD-2713): remove this, temporarily hardcoded for AWS to make the migration to work.
-			ps.CredentialsSecret = &corev1.LocalObjectReference{Name: "aws-cloud-credentials"}
-
-			// At least one device mapping must have no device name.
-			rootFound := false
-			for i := range ps.BlockDevices {
-				if ps.BlockDevices[i].DeviceName == nil {
-					rootFound = true
-					break
-				}
-			}
-
-			if !rootFound && len(ps.BlockDevices) > 0 {
-				ps.BlockDevices[0].DeviceName = nil
-			}
-
-			// Clear pointers to empty structs.
-			if ps.UserDataSecret != nil && ps.UserDataSecret.Name == "" {
-				ps.UserDataSecret = nil
-			}
-		},
+		f.fuzzProviderConfig,
 	}
+}
+
+func (f *awsProviderFuzzer) FuzzerFuncsMachine(codecs runtimeserializer.CodecFactory) []interface{} {
+	return append(
+		f.FuzzerFuncsMachineSet(codecs),
+		f.FuzzMachine,
+	)
 }

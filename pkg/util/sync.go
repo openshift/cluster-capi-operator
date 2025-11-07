@@ -63,7 +63,14 @@ func ObjectMetaEqual(a, b metav1.ObjectMeta) map[string]any {
 		objectMetaDiff[".labels"] = diffLabels
 	}
 
-	if diffAnnotations := deep.Equal(a.Annotations, b.Annotations); len(diffAnnotations) > 0 {
+	// Ignore conversion-data because this data is managed by Cluster API for down conversion.
+	aAnnotations := a.DeepCopy().GetAnnotations()
+	delete(aAnnotations, "cluster.x-k8s.io/conversion-data")
+
+	bAnnotations := b.DeepCopy().GetAnnotations()
+	delete(bAnnotations, "cluster.x-k8s.io/conversion-data")
+
+	if diffAnnotations := deep.Equal(aAnnotations, bAnnotations); len(diffAnnotations) > 0 {
 		objectMetaDiff[".annotations"] = diffAnnotations
 	}
 

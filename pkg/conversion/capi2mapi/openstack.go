@@ -23,11 +23,13 @@ import (
 
 	mapiv1alpha1 "github.com/openshift/api/machine/v1alpha1"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
+	"github.com/openshift/cluster-capi-operator/pkg/conversion/consts"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/validation/field"
+	"k8s.io/utils/ptr"
 	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
@@ -39,9 +41,10 @@ var (
 
 // machineAndOpenStackMachineAndOpenStackCluster stores the details of a Cluster API Machine and OpenStackMachine and OpenStackCluster.
 type machineAndOpenStackMachineAndOpenStackCluster struct {
-	machine          *clusterv1.Machine
-	openstackMachine *openstackv1.OpenStackMachine
-	openstackCluster *openstackv1.OpenStackCluster
+	machine                               *clusterv1.Machine
+	openstackMachine                      *openstackv1.OpenStackMachine
+	openstackCluster                      *openstackv1.OpenStackCluster
+	excludeMachineAPILabelsAndAnnotations bool
 }
 
 // machineSetAndOpenStackMachineTemplateAndOpenStackCluster stores the details of a Cluster API MachineSet and OpenStackMachineTemplate and OpenStackCluster.
@@ -74,7 +77,8 @@ func FromMachineSetAndOpenStackMachineTemplateAndOpenStackCluster(ms *clusterv1.
 			openstackMachine: &openstackv1.OpenStackMachine{
 				Spec: mts.Spec.Template.Spec,
 			},
-			openstackCluster: ac,
+			openstackCluster:                      ac,
+			excludeMachineAPILabelsAndAnnotations: true,
 		},
 	}
 }
@@ -201,7 +205,22 @@ func (m machineAndOpenStackMachineAndOpenStackCluster) ToMachine() (*mapiv1beta1
 
 	warnings = append(warnings, warns...)
 
-	mapiMachine, errs := fromCAPIMachineToMAPIMachine(m.machine)
+	var additionalMachineAPIMetadataLabels, additionalMachineAPIMetadataAnnotations map[string]string
+	if !m.excludeMachineAPILabelsAndAnnotations {
+		additionalMachineAPIMetadataLabels = map[string]string{
+			// Unable to determine the region without fetching the identity resources as done at:
+			// https://github.com/openshift/machine-api-provider-openstack/blob/2defb131bd0836beba0a9790de7c9a63137a5cec/pkg/machine/actuator.go#L85-L89
+			// consts.MAPIMachineMetadataLabelRegion
+			consts.MAPIMachineMetadataLabelInstanceType: ptr.Deref(m.openstackMachine.Spec.Flavor, ""),
+			consts.MAPIMachineMetadataLabelZone:         ptr.Deref(m.machine.Spec.FailureDomain, ""),
+		}
+
+		additionalMachineAPIMetadataAnnotations = map[string]string{
+			consts.MAPIMachineMetadataAnnotationInstanceState: string(ptr.Deref(m.openstackMachine.Status.InstanceState, "")),
+		}
+	}
+
+	mapiMachine, errs := fromCAPIMachineToMAPIMachine(m.machine, additionalMachineAPIMetadataLabels, additionalMachineAPIMetadataAnnotations)
 	if errs != nil {
 		errors = append(errors, errs...)
 	}

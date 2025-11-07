@@ -29,6 +29,7 @@ import (
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	"github.com/openshift/cluster-api-actuator-pkg/testutils"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/capi2mapi"
+	"github.com/openshift/cluster-capi-operator/pkg/conversion/consts"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/mapi2capi"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -611,6 +612,59 @@ func CAPIMachineSetFuzzerFuncs(infraTemplateKind, infraAPIVersion, clusterName s
 	}
 }
 
+// MAPIMachineFuzzer is a helper struct for fuzzing MAPI Machine objects.
+// It tracks instance type, region, and zone information to ensure consistency
+// between the provider spec and machine labels during fuzz testing.
+type MAPIMachineFuzzer struct {
+	InstanceType string
+	Region       string
+	Zone         string
+}
+
+// FuzzMachine fuzzes a MAPI Machine object and ensures that machine labels
+// are consistent with the provider spec fields (instance type, region, zone).
+func (f *MAPIMachineFuzzer) FuzzMachine(m *mapiv1beta1.Machine, c randfill.Continue) {
+	// Reset the fuzzer
+	f.InstanceType = ""
+	f.Region = ""
+	f.Zone = ""
+
+	c.FillNoCustom(m)
+
+	if m.Labels == nil {
+		m.Labels = map[string]string{}
+	}
+
+	// Copy over from fuzzed struct to the designated labels to have the same value.
+	if f.InstanceType != "" {
+		m.Labels[consts.MAPIMachineMetadataLabelInstanceType] = f.InstanceType
+	}
+
+	if f.Region != "" {
+		m.Labels[consts.MAPIMachineMetadataLabelRegion] = f.Region
+	}
+
+	if f.Zone != "" {
+		m.Labels[consts.MAPIMachineMetadataLabelZone] = f.Zone
+	}
+
+	if len(m.Labels) == 0 {
+		m.Labels = nil
+	}
+
+	// The conversion library while converting
+	// machine labels and annotations from MAPI->CAPI merges the
+	// MAPI machine.spec.metadata.labels/annotations and MAPI machine.metadata.labels/annotations
+	// into CAPI machine.metadata.labels/annotations as that's the only place for metadata that CAPI has.
+	// When they are back-converted from CAPI->MAPI
+	// the conversion library converts CAPI machine.metadata.labels copying them both to
+	// MAPI machine.spec.metadata.labels and MAPI machine.metadata.labels.
+	// So these should match when we generate the initial MAPI machine
+	// so we get the same MAPI machine after the roundtrip.
+	m.Spec.ObjectMeta.Annotations = util.DeepCopyMapStringString(m.Annotations)
+	m.Spec.ObjectMeta.Labels = util.DeepCopyMapStringString(m.Labels)
+}
+
 // MAPIMachineFuzzerFuncs returns a set of fuzzer functions that can be used to fuzz MachineSpec objects.
 // The providerSpec should be a pointer to a providerSpec type for the platform being tested.
 // This will be fuzzed and then injected into the MachineSpec as a RawExtension.
@@ -619,20 +673,7 @@ func MAPIMachineFuzzerFuncs(providerSpec runtime.Object, providerStatus interfac
 	return func(codecs runtimeserializer.CodecFactory) []interface{} {
 		return []interface{}{
 			// MAPI to CAPI conversion functions.
-			func(m *mapiv1beta1.Machine, c randfill.Continue) {
-				c.FillNoCustom(m)
-				// The conversion library while converting
-				// machine labels and annotations from MAPI->CAPI merges the
-				// MAPI machine.spec.metadata.labels/annotations and MAPI machine.metadata.labels/annotations
-				// into CAPI machine.metadata.labels/annotations as that's the only place for metadata that CAPI has.
-				// When they are back-converted from CAPI->MAPI
-				// the conversion library converts CAPI machine.metadata.labels copying them both to
-				// MAPI machine.spec.metadata.labels and MAPI machine.metadata.labels.
-				// So these should match when we generate the initial MAPI machine
-				// so we get the same MAPI machineer the roundtrip.
-				m.Spec.ObjectMeta.Annotations = util.DeepCopyMapStringString(m.Annotations)
-				m.Spec.ObjectMeta.Labels = util.DeepCopyMapStringString(m.Labels)
-			},
+			(&MAPIMachineFuzzer{}).FuzzMachine,
 			func(m *mapiv1beta1.MachineSpec, c randfill.Continue) {
 				c.FillNoCustom(m)
 				c.Fill(providerSpec)
