@@ -41,7 +41,7 @@ var (
 	errUnKnownNetworkType         = errors.New("unknown network type")
 )
 
-// ensureIBMPowerVSCluster ensures the IBMPowerVS cluster object exists.
+// ensureIBMPowerVSCluster ensures the IBMPowerVSCluster object exists.
 //
 //nolint:funlen
 func (r *InfraClusterController) ensureIBMPowerVSCluster(ctx context.Context, log logr.Logger) (client.Object, error) {
