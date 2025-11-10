@@ -46,7 +46,3 @@ spec:
     from:
       kind: DockerImage
       name: registry.ci.openshift.org/openshift:baremetal-cluster-api-controllers
-  - name: nutanix-cluster-api-controllers
-    from:
-      kind: DockerImage
-      name: registry.ci.openshift.org/openshift:nutanix-cluster-api-controllers
