@@ -48,9 +48,16 @@ var (
 	errMissingFormatKey = errors.New("could not find a format key in the worker data secret")
 )
 
-func makeUserDataSecret() *corev1.Secret {
+func makeWorkerUserDataSecret() *corev1.Secret {
 	return &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
-		Name:      managedUserDataSecretName,
+		Name:      workerUserDataSecretName,
+		Namespace: SecretSourceNamespace,
+	}, Data: map[string][]byte{mapiUserDataKey: []byte(defaultSecretValue)}}
+}
+
+func makeMasterUserDataSecret() *corev1.Secret {
+	return &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
+		Name:      masterUserDataSecretName,
 		Namespace: SecretSourceNamespace,
 	}, Data: map[string][]byte{mapiUserDataKey: []byte(defaultSecretValue)}}
 }
@@ -62,8 +69,8 @@ var _ = Describe("areSecretsEqual reconciler method", func() {
 	var targetUserDataSecret *corev1.Secret
 
 	BeforeEach(func() {
-		sourceUserDataSecret = makeUserDataSecret()
-		targetUserDataSecret = makeUserDataSecret()
+		sourceUserDataSecret = makeWorkerUserDataSecret()
+		targetUserDataSecret = makeWorkerUserDataSecret()
 		targetUserDataSecret.Data[capiUserDataKey] = sourceUserDataSecret.Data[mapiUserDataKey]
 	})
 
@@ -81,157 +88,184 @@ var _ = Describe("areSecretsEqual reconciler method", func() {
 })
 
 var _ = Describe("User Data Secret controller", func() {
-	var rec *record.FakeRecorder
+	type testConfig struct {
+		description   string
+		secretFactory func() *corev1.Secret
+		secretName    string
+	}
 
-	var mgrCtxCancel context.CancelFunc
-	var mgrStopped chan struct{}
-	ctx := context.Background()
+	configs := []testConfig{
+		{
+			description:   "Worker User Data Secret",
+			secretFactory: makeWorkerUserDataSecret,
+			secretName:    workerUserDataSecretName,
+		},
+		{
+			description:   "Master User Data Secret",
+			secretFactory: makeMasterUserDataSecret,
+			secretName:    masterUserDataSecretName,
+		},
+	}
 
-	var sourceSecret *corev1.Secret
+	// Run the same tests for both worker and master user data secrets
+	for i := range configs {
+		tc := configs[i]
 
-	var reconciler *UserDataSecretController
+		Describe(tc.description, func() {
+			var rec *record.FakeRecorder
 
-	syncedSecretKey := client.ObjectKey{Namespace: controllers.DefaultManagedNamespace, Name: managedUserDataSecretName}
+			var mgrCtxCancel context.CancelFunc
+			var mgrStopped chan struct{}
+			ctx := context.Background()
 
-	BeforeEach(func() {
-		By("Setting up a manager and controller")
-		var err error
-		mgr, err := ctrl.NewManager(cfg, ctrl.Options{
-			Controller: config.Controller{
-				SkipNameValidation: ptr.To(true),
-			},
+			var sourceSecret *corev1.Secret
+
+			var reconciler *UserDataSecretController
+
+			syncedSecretKey := client.ObjectKey{Namespace: controllers.DefaultManagedNamespace, Name: tc.secretName}
+
+			BeforeEach(func() {
+				By("Setting up a manager and controller")
+				var err error
+				mgr, err := ctrl.NewManager(cfg, ctrl.Options{
+					Controller: config.Controller{
+						SkipNameValidation: ptr.To(true),
+					},
+				})
+				Expect(err).ToNot(HaveOccurred(), "Manager should be able to be created")
+
+				rec = record.NewFakeRecorder(32)
+				reconciler = &UserDataSecretController{
+					ClusterOperatorStatusClient: operatorstatus.ClusterOperatorStatusClient{
+						Client:           cl,
+						Recorder:         rec,
+						ManagedNamespace: controllers.DefaultManagedNamespace,
+					},
+
+					Scheme: scheme.Scheme,
+				}
+				Expect(reconciler.SetupWithManager(mgr)).To(Succeed())
+
+				By("Creating needed Secret")
+				sourceSecret = tc.secretFactory()
+				Expect(cl.Create(ctx, sourceSecret)).To(Succeed())
+
+				var mgrCtx context.Context
+				mgrCtx, mgrCtxCancel = context.WithCancel(ctx)
+				mgrStopped = make(chan struct{})
+
+				By("Starting the manager")
+				go func() {
+					defer GinkgoRecover()
+					defer close(mgrStopped)
+
+					Expect(mgr.Start(mgrCtx)).To(Succeed())
+				}()
+			})
+
+			AfterEach(func() {
+				By("Closing the manager")
+				mgrCtxCancel()
+				Eventually(mgrStopped, timeout).Should(BeClosed())
+
+				co := &configv1.ClusterOperator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: controllers.ClusterOperatorName,
+					},
+				}
+				Expect(test.CleanupAndWait(ctx, cl, co)).To(Succeed())
+
+				By("Cleanup resources")
+				allSecrets := &corev1.SecretList{}
+				Expect(cl.List(ctx, allSecrets)).To(Succeed())
+				for _, cm := range allSecrets.Items {
+					Expect(test.CleanupAndWait(ctx, cl, cm.DeepCopy())).To(Succeed())
+				}
+
+				sourceSecret = nil
+
+				// Creating the cluster api operator
+				co = &configv1.ClusterOperator{}
+				co.SetName(controllers.ClusterOperatorName)
+				Expect(cl.Create(context.Background(), co.DeepCopy())).To(Succeed())
+			})
+
+			It("secret should be synced up after first reconcile", func() {
+				Eventually(func() (bool, error) {
+					syncedUserDataSecret := &corev1.Secret{}
+					err := cl.Get(ctx, syncedSecretKey, syncedUserDataSecret)
+					if err != nil {
+						return false, err
+					}
+
+					formatValue, ok := syncedUserDataSecret.Data["format"]
+					if !ok {
+						return false, errMissingFormatKey
+					}
+					Expect(string(formatValue)).Should(Equal("ignition"))
+
+					return bytes.Equal(syncedUserDataSecret.Data[capiUserDataKey], []byte(defaultSecretValue)), nil
+				}, timeout).Should(BeTrue())
+			})
+
+			It("secret should be synced up if managed user data secret changed", func() {
+				changedSourceSecret := sourceSecret.DeepCopy()
+				changedSourceSecret.Data = map[string][]byte{mapiUserDataKey: []byte("changed")}
+				Expect(cl.Update(ctx, changedSourceSecret)).To(Succeed())
+
+				Eventually(func() (bool, error) {
+					syncedUserDataSecret := &corev1.Secret{}
+					err := cl.Get(ctx, syncedSecretKey, syncedUserDataSecret)
+					if err != nil {
+						return false, err
+					}
+
+					formatValue, ok := syncedUserDataSecret.Data["format"]
+					if !ok {
+						return false, errMissingFormatKey
+					}
+					Expect(string(formatValue)).Should(Equal("ignition"))
+
+					return bytes.Equal(syncedUserDataSecret.Data[capiUserDataKey], []byte("changed")), nil
+				}, timeout).Should(BeTrue())
+			})
+
+			It("secret should be synced up if owned user data secret is deleted or changed", func() {
+				syncedUserDataSecret := &corev1.Secret{}
+				Eventually(func() error {
+					return cl.Get(ctx, syncedSecretKey, syncedUserDataSecret)
+				}, timeout).Should(Succeed())
+
+				syncedUserDataSecret.Data = map[string][]byte{capiUserDataKey: []byte("baz")}
+				Expect(cl.Update(ctx, syncedUserDataSecret)).To(Succeed())
+				Eventually(func() (bool, error) {
+					err := cl.Get(ctx, syncedSecretKey, syncedUserDataSecret)
+					if err != nil {
+						return false, err
+					}
+
+					formatValue, ok := syncedUserDataSecret.Data["format"]
+					if !ok {
+						return false, errMissingFormatKey
+					}
+					Expect(string(formatValue)).Should(Equal("ignition"))
+
+					return bytes.Equal(syncedUserDataSecret.Data[capiUserDataKey], []byte(defaultSecretValue)), nil
+				}, timeout).Should(BeTrue())
+
+				Expect(test.CleanupAndWait(ctx, cl, sourceSecret)).To(Succeed())
+			})
+
+			It("secret should not be updated if source and target secret contents are identical", func() {
+				syncedUserDataSecret := &corev1.Secret{}
+				Eventually(func() error {
+					return cl.Get(ctx, syncedSecretKey, syncedUserDataSecret)
+				}, timeout).Should(Succeed())
+				initialSecretresourceVersion := syncedUserDataSecret.ResourceVersion
+
+				Expect(cl.Get(ctx, syncedSecretKey, syncedUserDataSecret)).Should(Succeed())
+				Expect(initialSecretresourceVersion).Should(BeEquivalentTo(syncedUserDataSecret.ResourceVersion))
+			})
 		})
-		Expect(err).ToNot(HaveOccurred(), "Manager should be able to be created")
-
-		reconciler = &UserDataSecretController{
-			ClusterOperatorStatusClient: operatorstatus.ClusterOperatorStatusClient{
-				Client:           cl,
-				Recorder:         rec,
-				ManagedNamespace: controllers.DefaultManagedNamespace,
-			},
-
-			Scheme: scheme.Scheme,
-		}
-		Expect(reconciler.SetupWithManager(mgr)).To(Succeed())
-
-		By("Creating needed Secret")
-		sourceSecret = makeUserDataSecret()
-		Expect(cl.Create(ctx, sourceSecret)).To(Succeed())
-
-		var mgrCtx context.Context
-		mgrCtx, mgrCtxCancel = context.WithCancel(ctx)
-		mgrStopped = make(chan struct{})
-
-		By("Starting the manager")
-		go func() {
-			defer GinkgoRecover()
-			defer close(mgrStopped)
-
-			Expect(mgr.Start(mgrCtx)).To(Succeed())
-		}()
-	})
-
-	AfterEach(func() {
-		By("Closing the manager")
-		mgrCtxCancel()
-		Eventually(mgrStopped, timeout).Should(BeClosed())
-
-		co := &configv1.ClusterOperator{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: controllers.ClusterOperatorName,
-			},
-		}
-		Expect(test.CleanupAndWait(ctx, cl, co))
-
-		By("Cleanup resources")
-		allSecrets := &corev1.SecretList{}
-		Expect(cl.List(ctx, allSecrets)).To(Succeed())
-		for _, cm := range allSecrets.Items {
-			Expect(test.CleanupAndWait(ctx, cl, cm.DeepCopy())).To(Succeed())
-		}
-
-		sourceSecret = nil
-
-		// Creating the cluster api operator
-		co = &configv1.ClusterOperator{}
-		co.SetName(controllers.ClusterOperatorName)
-		Expect(cl.Create(context.Background(), co.DeepCopy())).To(Succeed())
-	})
-
-	It("secret should be synced up after first reconcile", func() {
-		Eventually(func() (bool, error) {
-			syncedUserDataSecret := &corev1.Secret{}
-			err := cl.Get(ctx, syncedSecretKey, syncedUserDataSecret)
-			if err != nil {
-				return false, err
-			}
-
-			formatValue, ok := syncedUserDataSecret.Data["format"]
-			if !ok {
-				return false, errMissingFormatKey
-			}
-			Expect(string(formatValue)).Should(Equal("ignition"))
-
-			return bytes.Equal(syncedUserDataSecret.Data[capiUserDataKey], []byte(defaultSecretValue)), nil
-		}, timeout).Should(BeTrue())
-	})
-
-	It("secret should be synced up if managed user data secret changed", func() {
-		changedSourceSecret := sourceSecret.DeepCopy()
-		changedSourceSecret.Data = map[string][]byte{mapiUserDataKey: []byte("managed one changed")}
-		Expect(cl.Update(ctx, changedSourceSecret)).To(Succeed())
-
-		Eventually(func() (bool, error) {
-			syncedUserDataSecret := &corev1.Secret{}
-			err := cl.Get(ctx, syncedSecretKey, syncedUserDataSecret)
-			if err != nil {
-				return false, err
-			}
-
-			formatValue, ok := syncedUserDataSecret.Data["format"]
-			if !ok {
-				return false, errMissingFormatKey
-			}
-			Expect(string(formatValue)).Should(Equal("ignition"))
-
-			return bytes.Equal(syncedUserDataSecret.Data[capiUserDataKey], []byte("managed one changed")), nil
-		}, timeout).Should(BeTrue())
-	})
-
-	It("secret should be synced up if owned user data secret is deleted or changed", func() {
-		syncedUserDataSecret := &corev1.Secret{}
-		Eventually(func() error {
-			return cl.Get(ctx, syncedSecretKey, syncedUserDataSecret)
-		}, timeout).Should(Succeed())
-
-		syncedUserDataSecret.Data = map[string][]byte{capiUserDataKey: []byte("baz")}
-		Expect(cl.Update(ctx, syncedUserDataSecret)).To(Succeed())
-		Eventually(func() (bool, error) {
-			err := cl.Get(ctx, syncedSecretKey, syncedUserDataSecret)
-			if err != nil {
-				return false, err
-			}
-
-			formatValue, ok := syncedUserDataSecret.Data["format"]
-			if !ok {
-				return false, errMissingFormatKey
-			}
-			Expect(string(formatValue)).Should(Equal("ignition"))
-
-			return bytes.Equal(syncedUserDataSecret.Data[capiUserDataKey], []byte(defaultSecretValue)), nil
-		}, timeout).Should(BeTrue())
-
-		Expect(test.CleanupAndWait(ctx, cl, sourceSecret)).To(Succeed())
-	})
-
-	It("secret not be updated if source and target secret contents are identical", func() {
-		syncedUserDataSecret := &corev1.Secret{}
-		Eventually(func() error {
-			return cl.Get(ctx, syncedSecretKey, syncedUserDataSecret)
-		}, timeout).Should(Succeed())
-		initialSecretresourceVersion := syncedUserDataSecret.ResourceVersion
-
-		Expect(cl.Get(ctx, syncedSecretKey, syncedUserDataSecret)).Should(Succeed())
-		Expect(initialSecretresourceVersion).Should(BeEquivalentTo(syncedUserDataSecret.ResourceVersion))
-	})
+	}
 })

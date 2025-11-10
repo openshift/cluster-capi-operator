@@ -26,6 +26,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -36,7 +37,8 @@ import (
 )
 
 const (
-	managedUserDataSecretName = "worker-user-data"
+	workerUserDataSecretName = "worker-user-data"
+	masterUserDataSecretName = "master-user-data"
 
 	// SecretSourceNamespace is the source namespace to copy the user data secret from.
 	SecretSourceNamespace = "openshift-machine-api"
@@ -63,55 +65,17 @@ type UserDataSecretController struct {
 // Reconcile reconciles the user data secret.
 func (r *UserDataSecretController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := ctrl.LoggerFrom(ctx).WithName(controllerName)
-	log.Info("reconciling worker user data secret")
+	secretName := req.Name
+	log.Info("reconciling user data secret", "secretName", secretName)
 
-	defaultSourceSecretObjectKey := client.ObjectKey{
-		Name: managedUserDataSecretName, Namespace: SecretSourceNamespace,
-	}
-	sourceSecret := &corev1.Secret{}
-
-	if err := r.Get(ctx, defaultSourceSecretObjectKey, sourceSecret); err != nil {
-		log.Error(err, "unable to get source secret for sync")
-
-		if err := r.setDegradedCondition(ctx, log); err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to set conditions for secret sync controller: %w", err)
-		}
-
-		return ctrl.Result{}, fmt.Errorf("failed to get source secret: %w", err)
-	}
-
-	targetSecret := &corev1.Secret{}
-	targetSecretKey := client.ObjectKey{
-		Namespace: r.ManagedNamespace,
-		Name:      managedUserDataSecretName,
-	}
-
-	// If the secret does not exist, it will be created later, so we can ignore a Not Found error
-	if err := r.Get(ctx, targetSecretKey, targetSecret); err != nil && !apierrors.IsNotFound(err) {
-		log.Error(err, "unable to get target secret for sync")
-
-		if err := r.setDegradedCondition(ctx, log); err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to set conditions for secret controller: %w", err)
-		}
-
-		return ctrl.Result{}, fmt.Errorf("failed to get target secret: %w", err)
-	}
-
-	if r.areSecretsEqual(sourceSecret, targetSecret) {
-		log.Info("user data in source and target secrets is the same, no sync needed")
-
-		if err := r.setAvailableCondition(ctx, log); err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to set conditions for user data secret controller: %w", err)
-		}
-
+	if !isValidUserDataSecretName(secretName) {
+		log.Info("ignoring request for unknown secret", "secretName", secretName)
 		return ctrl.Result{}, nil
 	}
 
-	if err := r.syncSecretData(ctx, sourceSecret, targetSecret); err != nil {
-		log.Error(err, "unable to sync user data secret")
-
+	if err := r.reconcileUserDataSecret(ctx, log, secretName); err != nil {
 		if err := r.setDegradedCondition(ctx, log); err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to set conditions for user data secret controller: %w", err)
+			return ctrl.Result{}, fmt.Errorf("failed to set conditions for secret sync controller: %w", err)
 		}
 
 		return ctrl.Result{}, err
@@ -124,25 +88,64 @@ func (r *UserDataSecretController) Reconcile(ctx context.Context, req ctrl.Reque
 	return ctrl.Result{}, nil
 }
 
-func (r *UserDataSecretController) areSecretsEqual(source *corev1.Secret, target *corev1.Secret) bool {
-	return source.Immutable == target.Immutable &&
-		reflect.DeepEqual(source.Data[mapiUserDataKey], target.Data[capiUserDataKey]) && reflect.DeepEqual(source.StringData, target.StringData) &&
+// reconcileUserDataSecret performs the actual reconciliation for a specific user data secret.
+func (r *UserDataSecretController) reconcileUserDataSecret(ctx context.Context, log logr.Logger, secretName string) error {
+	sourceSecret := &corev1.Secret{}
+	targetSecret := &corev1.Secret{}
+
+	sourceSecretObjectKey := client.ObjectKey{
+		Name: secretName, Namespace: SecretSourceNamespace,
+	}
+	if err := r.Get(ctx, sourceSecretObjectKey, sourceSecret); err != nil {
+		log.Error(err, "unable to get source secret for sync", "secretName", secretName)
+		return fmt.Errorf("failed to get source secret %s: %w", secretName, err)
+	}
+
+	targetSecretObjectKey := client.ObjectKey{
+		Namespace: r.ManagedNamespace,
+		Name:      secretName,
+	}
+	// If the secret does not exist, it will be created later, so we can ignore a Not Found error
+	if err := r.Get(ctx, targetSecretObjectKey, targetSecret); err != nil && !apierrors.IsNotFound(err) {
+		log.Error(err, "unable to get target secret for sync", "secretName", secretName)
+		return fmt.Errorf("failed to get target secret %s: %w", secretName, err)
+	}
+
+	if r.areSecretsEqual(sourceSecret, targetSecret) {
+		log.Info("user data in source and target secrets is the same, no sync needed", "secretName", secretName)
+		return nil
+	}
+
+	if err := r.syncSecretData(ctx, sourceSecret, targetSecret, secretName); err != nil {
+		log.Error(err, "unable to sync user data secret", "secretName", secretName)
+		return fmt.Errorf("failed to sync secret %s: %w", secretName, err)
+	}
+
+	log.Info("user data secret synced successfully", "secretName", secretName)
+
+	return nil
+}
+
+func (r *UserDataSecretController) areSecretsEqual(source, target *corev1.Secret) bool {
+	immutableEqual := ptr.Deref(source.Immutable, false) == ptr.Deref(target.Immutable, false)
+
+	return immutableEqual &&
+		reflect.DeepEqual(source.Data[mapiUserDataKey], target.Data[capiUserDataKey]) &&
 		source.Type == target.Type
 }
 
-func (r *UserDataSecretController) syncSecretData(ctx context.Context, source *corev1.Secret, target *corev1.Secret) error {
+func (r *UserDataSecretController) syncSecretData(ctx context.Context, source *corev1.Secret, target *corev1.Secret, secretName string) error {
 	userData := source.Data[mapiUserDataKey]
 	if userData == nil {
 		return errSourceSecretMissingUserData
 	}
 
-	target.SetName(managedUserDataSecretName)
+	target.SetName(secretName)
 	target.SetNamespace(r.ManagedNamespace)
 	target.Data = map[string][]byte{
-		"value":  userData,
-		"format": []byte("ignition"),
+		capiUserDataKey: userData,
+		"format":        []byte("ignition"),
 	}
-	target.StringData = source.StringData
 	target.Immutable = source.Immutable
 	target.Type = source.Type
 
@@ -175,7 +178,7 @@ func (r *UserDataSecretController) SetupWithManager(mgr ctrl.Manager) error {
 		).
 		Watches(
 			&corev1.Secret{},
-			handler.EnqueueRequestsFromMapFunc(toUserDataSecret),
+			handler.EnqueueRequestsFromMapFunc(toUserDataSecret(r.ManagedNamespace)),
 			builder.WithPredicates(userDataSecretPredicate(SecretSourceNamespace)),
 		).
 		Complete(r); err != nil {
@@ -183,6 +186,11 @@ func (r *UserDataSecretController) SetupWithManager(mgr ctrl.Manager) error {
 	}
 
 	return nil
+}
+
+// isValidUserDataSecretName checks if the given secret name is a user data secret we should sync.
+func isValidUserDataSecretName(secretName string) bool {
+	return secretName == workerUserDataSecretName || secretName == masterUserDataSecretName
 }
 
 func (r *UserDataSecretController) setAvailableCondition(ctx context.Context, log logr.Logger) error {
