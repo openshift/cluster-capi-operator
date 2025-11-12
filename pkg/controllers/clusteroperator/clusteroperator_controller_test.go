@@ -29,6 +29,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/config"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
+	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/cluster-api-actuator-pkg/testutils"
@@ -168,7 +169,8 @@ func startManager(isUnsupportedPlatform bool) (context.CancelFunc, chan struct{}
 	By("Setting up a manager and controller")
 
 	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
-		Scheme: testScheme,
+		Scheme:  testScheme,
+		Metrics: server.Options{BindAddress: "0"},
 		Controller: config.Controller{
 			SkipNameValidation: ptr.To(true),
 		},

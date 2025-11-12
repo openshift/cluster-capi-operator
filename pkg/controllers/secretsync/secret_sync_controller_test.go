@@ -31,6 +31,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/config"
+	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
@@ -97,6 +98,7 @@ var _ = Describe("User Data Secret controller", func() {
 		By("Setting up a manager and controller")
 		var err error
 		mgr, err := ctrl.NewManager(cfg, ctrl.Options{
+			Metrics: server.Options{BindAddress: "0"},
 			Controller: config.Controller{
 				SkipNameValidation: ptr.To(true),
 			},

@@ -80,11 +80,77 @@ make unit TEST_DIRS="./pkg/controllers/machinesync/..."  # Specific package dire
 Prefer using `GINKGO_EXTRA_ARGS` to pass additional arguments to ginkgo. Use `GINKGO_ARGS` when you need to override the default values entirely.
 
 ### Test Patterns
-- Use **Ginkgo/Gomega** framework
-- Use **Komega** for async assertions
-- Use **WithTransform** + helper functions
-- Provide detailed error context
-- Check existing test patterns before writing new ones
+
+#### Ginkgo/Gomega Best Practices
+Use **Ginkgo/Gomega** framework and prefer built-in features over custom implementations:
+- Use `DescribeTable` with `Entry` for table-driven tests instead of manual loops
+- Use `HaveField`, `HaveValue`, `HaveKey` for struct/map assertions instead of manual field checks
+- Use `ConsistOf` for unordered slice matching instead of sorting + `Equal`
+- Use `MatchError` for error checking instead of string contains
+- Use `BeNumerically` for numeric comparisons instead of manual range checks
+
+#### Async Assertions with Komega
+Use **Komega** for Kubernetes object assertions:
+```go
+// Use komega.Object for async assertions
+Eventually(k.Object(myResource)).Should(HaveField("ObjectMeta.ResourceVersion", Equal(expectedRV)))
+
+// Update resources with komega helpers
+Eventually(k.UpdateStatus(myResource, func() {
+    myResource.Status.SomeField = "value"
+})).Should(Succeed())
+```
+
+#### Test Organization
+- **Nested Contexts**: Organize related test scenarios with nested `Context()` blocks
+  ```go
+  Context("when migrating from MachineAPI to ClusterAPI", func() {
+      Context("when status is not paused", func() {
+          // Test cases
+      })
+  })
+  ```
+- **Descriptive test names**: Use "should..." format: `It("should do nothing", func() {...})`
+- **Use `By()` for test steps**: Document test phases with `By("Setting up namespaces for the test")`
+
+#### Resource Management
+- **Resource builders**: Use testutils resource builders for creating test objects
+  ```go
+  mapiMachine = mapiMachineBuilder.
+      WithNamespace(namespace).
+      WithName("foo").
+      WithAuthoritativeAPI(machinev1beta1.MachineAuthorityMachineAPI).
+      Build()
+  ```
+- **Standard cleanup**: Use `testutils.CleanupResources()` in AfterEach
+  ```go
+  testutils.CleanupResources(Default, ctx, cfg, k8sClient, namespace,
+      &machinev1beta1.Machine{},
+      &clusterv1.Machine{},
+  )
+  ```
+
+#### Assertions
+- **Complex assertions**: Combine matchers with `SatisfyAll`
+  ```go
+  Eventually(komega.Object(resource)).Should(SatisfyAll(
+      HaveField("Status.AuthoritativeAPI", Equal(expected)),
+      HaveField("Status.SynchronizedGeneration", BeZero()),
+  ))
+  ```
+- **Checking absence**: Use `ShouldNot` with appropriate matchers
+  ```go
+  Eventually(komega.Object(resource)).ShouldNot(
+      HaveField("ObjectMeta.Annotations", ContainElement(HaveKeyWithValue(key, value))))
+  ```
+- **Nested field checks**: Chain `HaveField` for nested assertions
+  ```go
+  HaveField("Status.Conditions", ContainElement(SatisfyAll(
+      HaveField("Type", Equal("Paused")),
+      HaveField("Status", Equal(corev1.ConditionTrue)),
+  )))
+  ```
+
 
 ### Focused Testing
 ```go
