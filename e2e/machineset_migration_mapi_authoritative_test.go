@@ -172,6 +172,10 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				By("Scaling up CAPI MachineSet to 3")
 				capiframework.ScaleCAPIMachineSet(mapiMSAuthMAPIName, 3, capiframework.CAPINamespace)
 
+				By("Verifying MachineSet status.replicas is set to 3")
+				verifyMachinesetReplicas(capiMachineSet, 3)
+				verifyMachinesetReplicas(mapiMachineSet, 3)
+
 				By("Verifying a new CAPI Machine is running and Paused condition is False")
 				capiMachine := capiframework.GetNewestMachineFromMachineSet(cl, capiMachineSet)
 				verifyMachineRunning(cl, capiMachine)

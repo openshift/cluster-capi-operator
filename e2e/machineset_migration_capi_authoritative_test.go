@@ -143,14 +143,15 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				By("Scaling up CAPI MachineSet to 2 replicas")
 				capiframework.ScaleCAPIMachineSet(mapiMSAuthCAPIName, 2, capiframework.CAPINamespace)
 
+				By("Verifying MachineSet status.replicas is set to 2")
+				verifyMachinesetReplicas(capiMachineSet, 2)
+				verifyMachinesetReplicas(mapiMachineSet, 2)
+
 				By("Verifying a new CAPI Machine is created and Paused condition is False")
 				capiMachineSet = capiframework.GetMachineSet(cl, mapiMSAuthCAPIName, capiframework.CAPINamespace)
 				capiMachine := capiframework.GetNewestMachineFromMachineSet(cl, capiMachineSet)
 				verifyMachineRunning(cl, capiMachine)
 				verifyMachinePausedCondition(capiMachine, mapiv1beta1.MachineAuthorityClusterAPI)
-
-				By("Verifying MAPI MachineSet status.replicas is set to 2")
-				verifyMachinesetReplicas(mapiMachineSet, 2)
 
 				By("Verifying there is a non-authoritative, paused MAPI Machine mirror for the new CAPI Machine")
 				var err error
@@ -171,16 +172,16 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				By("Scaling up MAPI MachineSet to 3 replicas")
 				Expect(mapiframework.ScaleMachineSet(mapiMSAuthCAPIName, 3)).To(Succeed(), "should be able to scale up MAPI MachineSet")
 
+				By("Verifying MachineSet status.replicas is set to 3")
+				verifyMachinesetReplicas(mapiMachineSet, 3)
+				verifyMachinesetReplicas(capiMachineSet, 3)
+
 				By("Verifying the newly requested MAPI Machine has been created and its status.authoritativeAPI is MachineAPI and its Paused condition is False")
 				mapiMachine, err := mapiframework.GetLatestMachineFromMachineSet(ctx, cl, mapiMachineSet)
 				Expect(err).ToNot(HaveOccurred(), "failed to get MAPI Machines from MachineSet")
 				verifyMachineRunning(cl, mapiMachine)
 				verifyMachineAuthoritative(mapiMachine, mapiv1beta1.MachineAuthorityMachineAPI)
 				verifyMachinePausedCondition(mapiMachine, mapiv1beta1.MachineAuthorityMachineAPI)
-
-				By("Verifying MachineSet status.replicas is set to 3")
-				verifyMachinesetReplicas(mapiMachineSet, 3)
-				verifyMachinesetReplicas(capiMachineSet, 3)
 
 				By("Verifying there is a non-authoritative, paused CAPI Machine mirror for the new MAPI Machine")
 				capiMachine := capiframework.GetNewestMachineFromMachineSet(cl, capiMachineSet)
@@ -194,6 +195,8 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 			It("should succeed scaling down MAPI MachineSet to 1, after the switch of AuthoritativeAPI to MachineAPI", func() {
 				By("Scaling down MAPI MachineSet to 1 replicas")
 				Expect(mapiframework.ScaleMachineSet(mapiMSAuthCAPIName, 1)).To(Succeed(), "should be able to scale down MAPI MachineSet")
+				verifyMachinesetReplicas(mapiMachineSet, 1)
+				verifyMachinesetReplicas(capiMachineSet, 1)
 			})
 
 			It("should succeed switching back MachineSet's AuthoritativeAPI to ClusterAPI, after the initial switch to AuthoritativeAPI: MachineAPI", func() {
@@ -250,13 +253,14 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				By("Scaling up CAPI MachineSet to 2 replicas")
 				capiframework.ScaleCAPIMachineSet(mapiMachineSet.GetName(), 2, capiframework.CAPINamespace)
 
+				By("Verifying MachineSet status.replicas is set to 2")
+				verifyMachinesetReplicas(capiMachineSet, 2)
+				verifyMachinesetReplicas(mapiMachineSet, 2)
+
 				By("Verifying new CAPI Machine is running")
 				capiMachine := capiframework.GetNewestMachineFromMachineSet(cl, capiMachineSet)
 				verifyMachineRunning(cl, capiMachine)
 				verifyMachinePausedCondition(capiMachine, mapiv1beta1.MachineAuthorityClusterAPI)
-
-				By("Verifying MAPI MachineSet status.replicas is set to 2")
-				verifyMachinesetReplicas(mapiMachineSet, 2)
 
 				By("Verifying there is a non-authoritative, paused MAPI Machine mirror for the new CAPI Machine")
 				mapiMachine, err := mapiframework.GetLatestMachineFromMachineSet(ctx, cl, mapiMachineSet)
