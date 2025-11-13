@@ -13,15 +13,20 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
+
 package infracluster
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
+	"slices"
+	"strings"
 
 	"github.com/go-logr/logr"
 	configv1 "github.com/openshift/api/config/v1"
+	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
@@ -29,12 +34,24 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/gophercloud/gophercloud/v2/openstack/networking/v2/extensions/layer3/routers"
+	"github.com/gophercloud/gophercloud/v2/openstack/networking/v2/ports"
+	"github.com/gophercloud/gophercloud/v2/openstack/networking/v2/subnets"
 	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
+	openstackclients "sigs.k8s.io/cluster-api-provider-openstack/pkg/clients"
+	openstackscope "sigs.k8s.io/cluster-api-provider-openstack/pkg/scope"
 )
 
 var (
 	errUnsupportedOpenStackLoadBalancerType = errors.New("unsupported load balancer type for OpenStack")
 	errOpenStackNoAPIServerInternalIPs      = errors.New("no APIServerInternalIPs available")
+	errOpenStackNoDefaultRouter             = errors.New("unable to determine default router from control plane machines")
+	errOpenStackNoDefaultSubnet             = errors.New("unable to determine default subnet from control plane machines")
+	errOpenStackNoControlPlaneMachines      = errors.New("no control plane machines found")
+)
+
+var (
+	scopeCacheMaxSize int //nolint:gochecknoglobals
 )
 
 // ensureOpenStackCluster ensures the OpenStackCluster object exists.
@@ -113,7 +130,6 @@ func (r *InfraClusterController) ensureOpenStackCluster(ctx context.Context, log
 			},
 			// NOTE(stephenfin): We deliberately don't add subnet here: CAPO will use all subnets in network,
 			// which should also cover dual stack deployments. Everything else is populated below.
-			// FIXME(stephenfin): Populate these.
 			Network:         nil,
 			Router:          nil,
 			ExternalNetwork: nil,
@@ -122,6 +138,40 @@ func (r *InfraClusterController) ensureOpenStackCluster(ctx context.Context, log
 		},
 	}
 
+	// FIXME(stephenfin): Where can I source caCertificates from? The legacy infracluster controller
+	// had the same issue.
+	caCertificates := []byte{} // PEM encoded CA certificates
+	scopeFactory := openstackscope.NewFactory(scopeCacheMaxSize)
+
+	scope, err := scopeFactory.NewClientScopeFromObject(ctx, r.Client, caCertificates, log, target)
+	if err != nil {
+		return nil, fmt.Errorf("creating OpenStack client: %w", err)
+	}
+
+	networkClient, err := scope.NewNetworkClient()
+	if err != nil {
+		return nil, fmt.Errorf("creating OpenStack Networking client: %w", err)
+	}
+
+	defaultSubnet, err := getDefaultSubnetFromMachines(ctx, log, r.Client, networkClient, platformStatus)
+	if err != nil {
+		return nil, err
+	}
+	// NOTE(stephenfin): As noted previously, we deliberately *do not* add subnet here: CAPO will
+	// use all subnets in network, which should also cover dual-stack deployments
+	target.Spec.Network = &openstackv1.NetworkParam{ID: ptr.To(defaultSubnet.NetworkID)}
+
+	router, err := getDefaultRouterFromSubnet(ctx, networkClient, defaultSubnet)
+	if err != nil {
+		return nil, err
+	}
+
+	target.Spec.Router = &openstackv1.RouterParam{ID: ptr.To(router.ID)}
+	// NOTE(stephenfin): The only reason we set ExternalNetworkID in the cluster spec is to avoid
+	// an error reconciling the external network if it isn't set. If CAPO ever no longer requires
+	// this we can just not set it and remove much of the code above. We don't actually use it.
+	target.Spec.ExternalNetwork = &openstackv1.NetworkParam{ID: ptr.To(router.GatewayInfo.NetworkID)}
+
 	if err := r.Create(ctx, target); err != nil {
 		return nil, fmt.Errorf("failed to create InfraCluster: %w", err)
 	}
@@ -129,4 +179,141 @@ func (r *InfraClusterController) ensureOpenStackCluster(ctx context.Context, log
 	log.Info(fmt.Sprintf("InfraCluster %s successfully created", klog.KObj(target)))
 
 	return target, nil
+}
+
+// getDefaultRouterFromSubnet attempts to infer the default router used for
+// the network by looking for ports with the given subnet and gateway IP
+// associated with them.
+func getDefaultRouterFromSubnet(_ context.Context, networkClient openstackclients.NetworkClient, subnet *subnets.Subnet) (*routers.Router, error) {
+	// Find the port which owns the subnet's gateway IP
+	ports, err := networkClient.ListPort(ports.ListOpts{
+		NetworkID: subnet.NetworkID,
+		FixedIPs: []ports.FixedIPOpts{
+			{
+				IPAddress: subnet.GatewayIP,
+				// XXX: We should search on both subnet and IP
+				// address here, but can't because of
+				// https://github.com/gophercloud/gophercloud/issues/2807
+				// SubnetID:  subnet.ID,
+			},
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("listing ports: %w", err)
+	}
+
+	if len(ports) == 0 {
+		return nil, fmt.Errorf("%w: no ports found for subnet %s", errOpenStackNoDefaultRouter, subnet.ID)
+	}
+
+	if len(ports) > 1 {
+		return nil, fmt.Errorf("%w: multiple ports found for subnet %s", errOpenStackNoDefaultRouter, subnet.ID)
+	}
+
+	routerID := ports[0].DeviceID
+
+	router, err := networkClient.GetRouter(routerID)
+	if err != nil {
+		return nil, fmt.Errorf("getting router %s: %w", routerID, err)
+	}
+
+	if router.GatewayInfo.NetworkID == "" {
+		return nil, fmt.Errorf("%w: router %s does not have an external gateway", errOpenStackNoDefaultRouter, routerID)
+	}
+
+	return router, nil
+}
+
+// getDefaultSubnetFromMachines attempts to infer the default cluster subnet by
+// directly examining the control plane machines. Specifically it looks for a
+// subnet attached to a control plane machine whose CIDR contains the API
+// loadbalancer internal VIP.
+//
+// This heuristic is only valid when the API loadbalancer type is
+// LoadBalancerTypeOpenShiftManagedDefault.
+//
+//nolint:gocognit,funlen
+func getDefaultSubnetFromMachines(ctx context.Context, log logr.Logger, kubeclient client.Client, networkClient openstackclients.NetworkClient, platformStatus *configv1.OpenStackPlatformStatus) (*subnets.Subnet, error) {
+	mapiMachines := mapiv1beta1.MachineList{}
+	if err := kubeclient.List(
+		ctx,
+		&mapiMachines,
+		client.InNamespace(defaultMAPINamespace),
+		client.MatchingLabels{"machine.openshift.io/cluster-api-machine-role": "master"},
+	); err != nil {
+		return nil, fmt.Errorf("listing control plane machines: %w", err)
+	}
+
+	if len(mapiMachines.Items) == 0 {
+		return nil, errOpenStackNoControlPlaneMachines
+	}
+
+	apiServerInternalIPs := make([]net.IP, len(platformStatus.APIServerInternalIPs))
+	for i, ipStr := range platformStatus.APIServerInternalIPs {
+		apiServerInternalIPs[i] = net.ParseIP(ipStr)
+	}
+
+	for _, mapiMachine := range mapiMachines.Items {
+		log := log.WithValues("machine", mapiMachine.Name)
+
+		providerID := mapiMachine.Spec.ProviderID
+		if providerID == nil {
+			log.V(3).Info("Skipping machine: providerID is not set")
+			continue
+		}
+
+		if !strings.HasPrefix(*providerID, "openstack:///") {
+			log.V(2).Info("Skipping machine: providerID has unexpected format", "providerID", *providerID)
+			continue
+		}
+
+		instanceID := (*providerID)[len("openstack:///"):]
+
+		portOpts := ports.ListOpts{
+			DeviceID: instanceID,
+		}
+
+		ports, err := networkClient.ListPort(portOpts)
+		if err != nil {
+			return nil, fmt.Errorf("listing ports for instance %s: %w", instanceID, err)
+		}
+
+		if len(ports) == 0 {
+			return nil, fmt.Errorf("%w: no ports found for instance %s", errOpenStackNoDefaultSubnet, instanceID)
+		}
+
+		for _, port := range ports {
+			log := log.WithValues("port", port.ID)
+
+			for _, fixedIP := range port.FixedIPs {
+				if fixedIP.SubnetID == "" {
+					continue
+				}
+
+				subnet, err := networkClient.GetSubnet(fixedIP.SubnetID)
+				if err != nil {
+					return nil, fmt.Errorf("getting subnet %s: %w", fixedIP.SubnetID, err)
+				}
+
+				_, cidr, err := net.ParseCIDR(subnet.CIDR)
+				if err != nil {
+					return nil, fmt.Errorf("parsing subnet CIDR %s: %w", subnet.CIDR, err)
+				}
+
+				if slices.ContainsFunc(
+					apiServerInternalIPs, func(ip net.IP) bool { return cidr.Contains(ip) },
+				) {
+					return subnet, nil
+				}
+
+				log.V(6).Info("subnet does not match any APIServerInternalIPs", "subnet", subnet.CIDR)
+			}
+
+			log.V(6).Info("port does not match any APIServerInternalIPs")
+		}
+
+		log.V(6).Info("machine does not match any APIServerInternalIPs")
+	}
+
+	return nil, fmt.Errorf("%w: no matching subnets found", errOpenStackNoDefaultSubnet)
 }
