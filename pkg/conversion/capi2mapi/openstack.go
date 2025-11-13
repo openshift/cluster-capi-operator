@@ -373,33 +373,36 @@ func convertCAPOPortOptsToMAPONetwork(fldPath *field.Path, capoPort openstackv1.
 
 	mapoNetwork := mapiv1alpha1.NetworkParam{}
 
-	// We have already asserted that .Network is non-nil in the caller
-
-	switch {
-	case capoPort.Network.ID != nil:
-		mapoNetwork.UUID = *capoPort.Network.ID
-	case capoPort.Network.Filter != nil:
-		mapoNetwork.Filter = mapiv1alpha1.Filter{
-			// DeprecatedAdminStateUp is deprecated and ignored by MAPO so we don't set it
-			// DeprecatedLimit is deprecated and ignored by MAPO so we don't set it
-			// DeprecatedMarker is deprecated and ignored by MAPO so we don't set it
-			// DeprecatedShared is deprecated and ignored by MAPO so we don't set it
-			// DeprecatedSortKey is deprecated and ignored by MAPO so we don't set it
-			// DeprecatedSortDir is deprecated and ignored by MAPO so we don't set it
-			// DeprecatedStatus is deprecated and ignored by MAPO so we don't set it
-			Description: capoPort.Network.Filter.Description,
-			// ID is deprecated and covered by UUID on the parent NetworkParam so we don't set it
-			Name:       capoPort.Network.Filter.Name,
-			NotTags:    joinTags(capoPort.Network.Filter.NotTags),
-			NotTagsAny: joinTags(capoPort.Network.Filter.NotTagsAny),
-			ProjectID:  capoPort.Network.Filter.ProjectID,
-			Tags:       joinTags(capoPort.Network.Filter.Tags),
-			TagsAny:    joinTags(capoPort.Network.Filter.TagsAny),
-			// TenantID is deprecated and covered by ProjectID so we don't set it
+	if capoPort.Network != nil {
+		switch {
+		case capoPort.Network.ID != nil:
+			mapoNetwork.UUID = *capoPort.Network.ID
+		case capoPort.Network.Filter != nil:
+			mapoNetwork.Filter = mapiv1alpha1.Filter{
+				// DeprecatedAdminStateUp is deprecated and ignored by MAPO so we don't set it
+				// DeprecatedLimit is deprecated and ignored by MAPO so we don't set it
+				// DeprecatedMarker is deprecated and ignored by MAPO so we don't set it
+				// DeprecatedShared is deprecated and ignored by MAPO so we don't set it
+				// DeprecatedSortKey is deprecated and ignored by MAPO so we don't set it
+				// DeprecatedSortDir is deprecated and ignored by MAPO so we don't set it
+				// DeprecatedStatus is deprecated and ignored by MAPO so we don't set it
+				Description: capoPort.Network.Filter.Description,
+				// ID is deprecated and covered by UUID on the parent NetworkParam so we don't set it
+				Name:       capoPort.Network.Filter.Name,
+				NotTags:    joinTags(capoPort.Network.Filter.NotTags),
+				NotTagsAny: joinTags(capoPort.Network.Filter.NotTagsAny),
+				ProjectID:  capoPort.Network.Filter.ProjectID,
+				Tags:       joinTags(capoPort.Network.Filter.Tags),
+				TagsAny:    joinTags(capoPort.Network.Filter.TagsAny),
+				// TenantID is deprecated and covered by ProjectID so we don't set it
+			}
+		default:
+			// TODO(OSASINFRA-3779): Add VAP to prevent usage of the below field.
+			errors = append(errors, field.Invalid(fldPath.Child("network"), capoPort.Network, "A network must be referenced by a UUID or filter"))
 		}
-	default:
+	} else if len(capoPort.FixedIPs) == 0 {
 		// TODO(OSASINFRA-3779): Add VAP to prevent usage of the below field.
-		errors = append(errors, field.Invalid(fldPath.Child("network"), capoPort.Network, "A network must be referenced by a UUID or filter"))
+		errors = append(errors, field.Invalid(fldPath.Child("network"), capoPort.Network, "Either a network or fixedIPs must be specified on a port"))
 	}
 
 	if capoPort.DisablePortSecurity != nil {
@@ -416,8 +419,16 @@ func convertCAPOPortOptsToMAPONetwork(fldPath *field.Path, capoPort openstackv1.
 		}
 
 		mapoSubnet := mapiv1alpha1.SubnetParam{
-			UUID: *capoFixedIP.Subnet.ID,
-			Filter: mapiv1alpha1.SubnetFilter{
+			PortTags: capoPort.Tags,
+			// PortSecurity is deprecated and ignored by MAPO so we don't set it here
+		}
+
+		if capoFixedIP.Subnet.ID != nil {
+			mapoSubnet.UUID = *capoFixedIP.Subnet.ID
+		}
+
+		if capoFixedIP.Subnet.Filter != nil {
+			mapoSubnet.Filter = mapiv1alpha1.SubnetFilter{
 				CIDR:        capoFixedIP.Subnet.Filter.CIDR,
 				Description: capoFixedIP.Subnet.Filter.Description,
 				GatewayIP:   capoFixedIP.Subnet.Filter.GatewayIP,
@@ -431,10 +442,9 @@ func convertCAPOPortOptsToMAPONetwork(fldPath *field.Path, capoPort openstackv1.
 				ProjectID:       capoFixedIP.Subnet.Filter.ProjectID,
 				Tags:            joinTags(capoFixedIP.Subnet.Filter.Tags),
 				TagsAny:         joinTags(capoFixedIP.Subnet.Filter.TagsAny),
-			},
-			PortTags: capoPort.Tags,
-			// PortSecurity is deprecated and ignored by MAPO so we don't set it here
+			}
 		}
+
 		mapoSubnets[i] = mapoSubnet
 	}
 
@@ -612,7 +622,7 @@ func convertCAPOPortOptsToMAPO(fldPath *field.Path, capoPorts []openstackv1.Port
 	warnings := []string{}
 
 	for i, capoPort := range capoPorts {
-		if capoPort.Network != nil && capoPort.Network.Filter != nil {
+		if (capoPort.Network != nil && capoPort.Network.Filter != nil) || (capoPort.Network == nil && len(capoPort.FixedIPs) > 0 && capoPort.FixedIPs[0].Subnet != nil) {
 			mapoNetwork, warns, errs := convertCAPOPortOptsToMAPONetwork(fldPath.Index(i), capoPort)
 			mapoNetworks = append(mapoNetworks, mapoNetwork)
 			errors = append(errors, errs...)

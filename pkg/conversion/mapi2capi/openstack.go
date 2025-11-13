@@ -371,7 +371,7 @@ func convertMAPOImageToCAPO(mapoImage string) openstackv1.ImageParam {
 }
 
 //nolint:funlen
-func convertMAPONetworksToCAPO(fldPath *field.Path, mapoNetworks []mapiv1alpha1.NetworkParam) ([]openstackv1.PortOpts, []string, field.ErrorList) { //nolint:gocognit,cyclop
+func convertMAPONetworksToCAPO(fldPath *field.Path, mapoNetworks []mapiv1alpha1.NetworkParam) ([]openstackv1.PortOpts, []string, field.ErrorList) { //nolint:gocognit,cyclop,gocyclo
 	errors := field.ErrorList{}
 	warnings := []string{}
 
@@ -385,7 +385,7 @@ func convertMAPONetworksToCAPO(fldPath *field.Path, mapoNetworks []mapiv1alpha1.
 			warnings = append(warnings, field.Invalid(fldPath.Index(i).Child("fixedIP"), mapoNetwork.FixedIp, "fixedIp is ignored by MAPO, ignoring").Error())
 		}
 
-		network := openstackv1.NetworkParam{}
+		capoNetwork := openstackv1.NetworkParam{}
 
 		networkID := mapoNetwork.UUID
 		if networkID == "" {
@@ -393,35 +393,38 @@ func convertMAPONetworksToCAPO(fldPath *field.Path, mapoNetworks []mapiv1alpha1.
 		}
 
 		if networkID != "" {
-			network.ID = &networkID
+			capoNetwork.ID = &networkID
 		}
 
 		// convert .Filter
-		projectID := mapoNetwork.Filter.ProjectID
-		if projectID == "" {
-			projectID = mapoNetwork.Filter.TenantID
-		}
+		if (capoNetwork.ID == nil && mapoNetwork.Filter != mapiv1alpha1.Filter{}) {
+			projectID := mapoNetwork.Filter.ProjectID
+			if projectID == "" {
+				projectID = mapoNetwork.Filter.TenantID
+			}
 
-		network.Filter = &openstackv1.NetworkFilter{
-			Name:        mapoNetwork.Filter.Name,
-			Description: mapoNetwork.Filter.Description,
-			ProjectID:   projectID,
-			FilterByNeutronTags: openstackv1.FilterByNeutronTags{
-				NotTags:    splitTags(mapoNetwork.Filter.NotTags),
-				NotTagsAny: splitTags(mapoNetwork.Filter.NotTagsAny),
-				Tags:       splitTags(mapoNetwork.Filter.Tags),
-				TagsAny:    splitTags(mapoNetwork.Filter.TagsAny),
-			},
+			capoNetwork.Filter = &openstackv1.NetworkFilter{
+				Name:        mapoNetwork.Filter.Name,
+				Description: mapoNetwork.Filter.Description,
+				ProjectID:   projectID,
+				FilterByNeutronTags: openstackv1.FilterByNeutronTags{
+					NotTags:    splitTags(mapoNetwork.Filter.NotTags),
+					NotTagsAny: splitTags(mapoNetwork.Filter.NotTagsAny),
+					Tags:       splitTags(mapoNetwork.Filter.Tags),
+					TagsAny:    splitTags(mapoNetwork.Filter.TagsAny),
+				},
+			}
 		}
 
 		tags := mapoNetwork.PortTags
 
 		// convert .Subnets
-		if networkID == "" && (mapoNetwork.Filter == mapiv1alpha1.Filter{}) { //nolint:nestif
+		if (capoNetwork == openstackv1.NetworkParam{}) { //nolint:nestif
 			// Case: network is undefined and only has subnets
 			// Create a port for each subnet
 			for j, mapoSubnet := range mapoNetwork.Subnets {
 				portTags := append(tags, mapoSubnet.PortTags...) //nolint:gocritic
+				capoPort := openstackv1.PortOpts{Tags: portTags}
 
 				subnetID := mapoSubnet.UUID
 				if subnetID == "" {
@@ -438,33 +441,35 @@ func convertMAPONetworksToCAPO(fldPath *field.Path, mapoNetworks []mapiv1alpha1.
 					warnings = append(warnings, field.Invalid(fldPath.Index(i).Child("subnets").Index(j).Child("filter", "networkId"), mapoSubnet.Filter.NetworkID, "networkId is ignored by MAPO, ignoring").Error())
 				}
 
-				capoPort := openstackv1.PortOpts{
-					Network: &network,
-					FixedIPs: []openstackv1.FixedIP{
-						{
-							Subnet: &openstackv1.SubnetParam{
-								ID: &subnetID,
-								Filter: &openstackv1.SubnetFilter{
-									CIDR:            mapoSubnet.Filter.CIDR,
-									Description:     mapoSubnet.Filter.Description,
-									GatewayIP:       mapoSubnet.Filter.GatewayIP,
-									IPVersion:       mapoSubnet.Filter.IPVersion,
-									IPv6AddressMode: mapoSubnet.Filter.IPv6AddressMode,
-									IPv6RAMode:      mapoSubnet.Filter.IPv6RAMode,
-									Name:            mapoSubnet.Filter.Name,
-									// We ignore NetworkID since it's silently ignored by MAPO itself
-									ProjectID: projectID,
-									FilterByNeutronTags: openstackv1.FilterByNeutronTags{
-										NotTags:    splitTags(mapoSubnet.Filter.NotTags),
-										NotTagsAny: splitTags(mapoSubnet.Filter.NotTagsAny),
-										Tags:       splitTags(mapoSubnet.Filter.Tags),
-										TagsAny:    splitTags(mapoSubnet.Filter.TagsAny),
-									},
-								},
-							},
+				capoSubnet := openstackv1.SubnetParam{}
+				if subnetID != "" {
+					capoSubnet.ID = &subnetID
+				}
+
+				if (mapoSubnet.Filter != mapiv1alpha1.SubnetFilter{}) {
+					capoSubnet.Filter = &openstackv1.SubnetFilter{
+						CIDR:            mapoSubnet.Filter.CIDR,
+						Description:     mapoSubnet.Filter.Description,
+						GatewayIP:       mapoSubnet.Filter.GatewayIP,
+						IPVersion:       mapoSubnet.Filter.IPVersion,
+						IPv6AddressMode: mapoSubnet.Filter.IPv6AddressMode,
+						IPv6RAMode:      mapoSubnet.Filter.IPv6RAMode,
+						Name:            mapoSubnet.Filter.Name,
+						// We ignore NetworkID since it's silently ignored by MAPO itself
+						ProjectID: projectID,
+						FilterByNeutronTags: openstackv1.FilterByNeutronTags{
+							NotTags:    splitTags(mapoSubnet.Filter.NotTags),
+							NotTagsAny: splitTags(mapoSubnet.Filter.NotTagsAny),
+							Tags:       splitTags(mapoSubnet.Filter.Tags),
+							TagsAny:    splitTags(mapoSubnet.Filter.TagsAny),
 						},
-					},
-					Tags: portTags,
+					}
+				}
+
+				if (capoSubnet != openstackv1.SubnetParam{}) {
+					capoPort.FixedIPs = []openstackv1.FixedIP{
+						{Subnet: &capoSubnet},
+					}
 				}
 
 				if mapoSubnet.PortSecurity != nil && !*mapoSubnet.PortSecurity {
@@ -478,7 +483,7 @@ func convertMAPONetworksToCAPO(fldPath *field.Path, mapoNetworks []mapiv1alpha1.
 		} else {
 			// Case: network and subnet are defined
 			// Create a single port with an interface for each subnet
-			fixedIPs := make([]openstackv1.FixedIP, len(mapoNetwork.Subnets))
+			capoFixedIPs := make([]openstackv1.FixedIP, len(mapoNetwork.Subnets))
 
 			for j, mapoSubnet := range mapoNetwork.Subnets {
 				subnetID := mapoSubnet.UUID
@@ -496,7 +501,7 @@ func convertMAPONetworksToCAPO(fldPath *field.Path, mapoNetworks []mapiv1alpha1.
 					warnings = append(warnings, field.Invalid(fldPath.Index(j).Child("subnets").Index(j).Child("filter", "networkId"), mapoSubnet.Filter.NetworkID, "networkId is ignored by MAPO, ignoring").Error())
 				}
 
-				fixedIPs[j] = openstackv1.FixedIP{
+				capoFixedIPs[j] = openstackv1.FixedIP{
 					Subnet: &openstackv1.SubnetParam{
 						ID: &subnetID,
 						Filter: &openstackv1.SubnetFilter{
@@ -523,8 +528,8 @@ func convertMAPONetworksToCAPO(fldPath *field.Path, mapoNetworks []mapiv1alpha1.
 			}
 
 			capoPort := openstackv1.PortOpts{
-				FixedIPs: fixedIPs,
-				Network:  &network,
+				FixedIPs: capoFixedIPs,
+				Network:  &capoNetwork,
 				Tags:     tags,
 			}
 
