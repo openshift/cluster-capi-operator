@@ -22,19 +22,16 @@ import (
 )
 
 var _ = Describe("Unit test Diff", func() {
-	var differ *differ
-
-	BeforeEach(func() {
-		differ = newDiffer()
-	})
 
 	type testInput struct {
 		a           unstructured.Unstructured
 		b           unstructured.Unstructured
+		diffOpts    []diffopts
 		wantChanged bool
 		want        string
 	}
 	DescribeTable("basic operations", func(tt testInput) {
+		differ := newDiffer(tt.diffOpts...)
 		diff, err := differ.Diff(&tt.a, &tt.b)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(diff.HasChanges()).To(Equal(tt.wantChanged))
@@ -47,6 +44,20 @@ var _ = Describe("Unit test Diff", func() {
 			b: unstructured.Unstructured{
 				Object: map[string]any{},
 			},
+			wantChanged: false,
+			want:        "",
+		}),
+		Entry("no diff on matching objects", testInput{
+			a: unstructured.Unstructured{Object: map[string]any{
+				"a": 1,
+				"b": 2,
+				"c": map[string]any{},
+			}},
+			b: unstructured.Unstructured{Object: map[string]any{
+				"a": 1,
+				"b": 2,
+				"c": map[string]any{},
+			}},
 			wantChanged: false,
 			want:        "",
 		}),
@@ -151,6 +162,83 @@ var _ = Describe("Unit test Diff", func() {
 			}},
 			wantChanged: true,
 			want:        ".[b]: [1 2 3] != <nil pointer>",
+		}),
+		Entry("no diff on matching objects with ignore fields", testInput{
+			a: unstructured.Unstructured{Object: map[string]any{
+				"someKey": "someValue",
+				"changed": 1,
+				"removed": 2,
+				"nil":     map[string]any{},
+			}},
+			b: unstructured.Unstructured{Object: map[string]any{
+				"someKey": "someValue",
+				"changed": 2,
+				"nil":     nil,
+			}},
+			diffOpts: []diffopts{
+				WithIgnoreField("changed"),
+				WithIgnoreField("removed"),
+				WithIgnoreField("nil"),
+			},
+			wantChanged: false,
+			want:        "",
+		}),
+		Entry("no diff on matching objects with ignore fields that does not exist", testInput{
+			a: unstructured.Unstructured{Object: map[string]any{
+				"someKey": "someValue",
+			}},
+			b: unstructured.Unstructured{Object: map[string]any{
+				"someKey": "someValue",
+			}},
+			diffOpts: []diffopts{
+				WithIgnoreField("doesnotexist"),
+			},
+			wantChanged: false,
+			want:        "",
+		}),
+		Entry("diff on not matching objects with ignore fields that do not exist or are properly ignored", testInput{
+			a: unstructured.Unstructured{Object: map[string]any{
+				"someKey":         "someValue",
+				"shouldbeignored": 1,
+				"someChangedKey":  "a",
+			}},
+			b: unstructured.Unstructured{Object: map[string]any{
+				"someKey":         "someValue",
+				"shouldbeignored": 2,
+				"someChangedKey":  "b",
+			}},
+			diffOpts: []diffopts{
+				WithIgnoreField("doesnotexist"),
+				WithIgnoreField("shouldbeignored"),
+			},
+			wantChanged: true,
+			want:        ".[someChangedKey]: a != b",
+		}),
+		Entry("no diff on matching objects with modifyFunc", testInput{
+			a: unstructured.Unstructured{Object: map[string]any{
+				"someKey": "someValue",
+				"changed": 1,
+				"removed": 2,
+				"nil":     map[string]any{},
+			}},
+			b: unstructured.Unstructured{Object: map[string]any{
+				"someKey": "someValue",
+				"changed": 2,
+				"nil":     nil,
+			}},
+			diffOpts: []diffopts{
+				func(d *differ) {
+					d.modifyFuncs["test"] = func(obj map[string]interface{}) error {
+						obj["new"] = "new"
+						obj["changed"] = 3
+						obj["removed"] = 3
+						obj["nil"] = nil
+						return nil
+					}
+				},
+			},
+			wantChanged: false,
+			want:        "",
 		}),
 	)
 })
