@@ -1,30 +1,22 @@
 package main
 
 import (
-	"bytes"
 	"strings"
 
 	certmangerv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	admissionregistration "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"sigs.k8s.io/kustomize/api/krusty"
-	"sigs.k8s.io/kustomize/kyaml/filesys"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-type resourceKey string
-
 var (
-	openshiftAnnotations = map[string]string{
-		"exclude.release.openshift.io/internal-openshift-hosted":      "true",
-		"include.release.openshift.io/self-managed-high-availability": "true",
-		"include.release.openshift.io/single-node-developer":          "true",
-	}
-
 	// Workload annotations are used by the workload admission webhook to modify pod
 	// resources and correctly schedule them while also pinning them to specific CPUSets.
 	// See for more info:
@@ -32,90 +24,59 @@ var (
 	openshiftWorkloadAnnotation = map[string]string{
 		"target.workload.openshift.io/management": `{"effect": "PreferredDuringScheduling"}`,
 	}
-
-	// featureSetAnnotationValue is a multiple-feature-sets annotation value
-	// adhering to the: %s,%s,... notation defined in the openshift/library-go/pkg/manifest parser.
-	featureSetAnnotationValue = "CustomNoUpgrade,TechPreviewNoUpgrade"
-	featureSetAnnotationKey   = "release.openshift.io/feature-set"
 )
 
-func processObjects(objs []unstructured.Unstructured, providerName string) []unstructured.Unstructured {
-	providerConfigMapObjs := []unstructured.Unstructured{}
-
-	objs = addInfraClusterProtectionPolicy(objs, providerName)
+func processObjects(objs []client.Object, providerName string) []client.Object {
+	providerConfigMapObjs := make([]client.Object, 0, len(objs))
 
 	serviceSecretNames := findWebhookServiceSecretName(objs)
 
 	for _, obj := range objs {
-		providerCustomizations(&obj, providerName)
-		switch obj.GetKind() {
-		case "ClusterRole", "Role", "ClusterRoleBinding", "RoleBinding", "ServiceAccount":
-			setOpenShiftAnnotations(obj, false)
-			setNoUpgradeAnnotations(obj)
-			providerConfigMapObjs = append(providerConfigMapObjs, obj)
-		case "MutatingWebhookConfiguration":
-			replaceCertManagerAnnotations(&obj)
-			providerConfigMapObjs = append(providerConfigMapObjs, obj)
-		case "ValidatingWebhookConfiguration":
-			replaceCertManagerAnnotations(&obj)
-			providerConfigMapObjs = append(providerConfigMapObjs, obj)
-		case "CustomResourceDefinition":
-			replaceCertManagerAnnotations(&obj)
-			setOpenShiftAnnotations(obj, true)
-			setNoUpgradeAnnotations(obj)
-			providerConfigMapObjs = append(providerConfigMapObjs, obj)
-		case "Service":
-			replaceCertMangerServiceSecret(&obj, serviceSecretNames)
-			setOpenShiftAnnotations(obj, true)
-			setNoUpgradeAnnotations(obj)
-			providerConfigMapObjs = append(providerConfigMapObjs, obj)
-		case "Deployment":
-			customizeDeployments(&obj)
-			if providerName == "operator" {
-				setOpenShiftAnnotations(obj, false)
-				setNoUpgradeAnnotations(obj)
+		obj = providerCustomizations(obj, providerName)
+
+		switch getGroup(obj) {
+		case "admissionregistration.k8s.io":
+			switch getKind(obj) {
+			case "MutatingWebhookConfiguration", "ValidatingWebhookConfiguration":
+				replaceCertManagerAnnotations(obj)
 			}
-			providerConfigMapObjs = append(providerConfigMapObjs, obj)
-		case "ValidatingAdmissionPolicy":
-			providerConfigMapObjs = append(providerConfigMapObjs, obj)
-		case "ValidatingAdmissionPolicyBinding":
-			providerConfigMapObjs = append(providerConfigMapObjs, obj)
-		case "ConfigMap":
-			providerConfigMapObjs = append(providerConfigMapObjs, obj)
-		case "Certificate", "Issuer", "Namespace", "Secret": // skip
+
+		case "apiextensions.k8s.io":
+			switch getKind(obj) {
+			case "CustomResourceDefinition":
+				replaceCertManagerAnnotations(obj)
+			}
+
+		case "": // core API group
+			switch getKind(obj) {
+			case "Service":
+				replaceCertMangerServiceSecret(obj, serviceSecretNames)
+
+			case "Namespace", "Secret":
+				// Don't emit these resources
+				continue
+			}
+
+		case "apps":
+			switch getKind(obj) {
+			case "Deployment":
+				obj = customizeDeployment(obj)
+			}
+
+		case "cert-manager.io":
+			// Upstream CAPI uses cert-manager.io for cert management by
+			// default, and most providers will use it too. Don't emit anything
+			// related to cert-manager.
+			continue
 		}
+
+		providerConfigMapObjs = append(providerConfigMapObjs, obj)
 	}
 
 	return providerConfigMapObjs
 }
 
-func setOpenShiftAnnotations(obj unstructured.Unstructured, merge bool) {
-	if !merge || len(obj.GetAnnotations()) == 0 {
-		obj.SetAnnotations(openshiftAnnotations)
-	}
-
-	anno := obj.GetAnnotations()
-	if anno == nil {
-		anno = map[string]string{}
-	}
-
-	for k, v := range openshiftAnnotations {
-		anno[k] = v
-	}
-	obj.SetAnnotations(anno)
-}
-
-func setNoUpgradeAnnotations(obj unstructured.Unstructured) {
-	anno := obj.GetAnnotations()
-	if anno == nil {
-		anno = map[string]string{}
-	}
-
-	anno[featureSetAnnotationKey] = featureSetAnnotationValue
-	obj.SetAnnotations(anno)
-}
-
-func findWebhookServiceSecretName(objs []unstructured.Unstructured) map[string]string {
+func findWebhookServiceSecretName(objs []client.Object) map[string]string {
 	serviceSecretNames := map[string]string{}
 	certSecretNames := map[string]string{}
 
@@ -130,25 +91,25 @@ func findWebhookServiceSecretName(objs []unstructured.Unstructured) map[string]s
 		}
 		return secretName, true
 	}
+
 	// find service, then cert, then secret
 	// return map[certName] = secretName
-	for i, obj := range objs {
-		switch obj.GetKind() {
+	for _, obj := range objs {
+		switch getKind(obj) {
 		case "Certificate":
 			cert := &certmangerv1.Certificate{}
-			if err := scheme.Convert(&objs[i], cert, nil); err != nil {
-				panic(err)
-			}
+			mustConvert(obj, cert)
+
 			certSecretNames[cert.Name] = cert.Spec.SecretName
 		}
 	}
+
 	for _, obj := range objs {
-		switch obj.GetKind() {
+		switch getKind(obj) {
 		case "CustomResourceDefinition":
 			crd := &apiextensionsv1.CustomResourceDefinition{}
-			if err := scheme.Convert(&obj, crd, nil); err != nil {
-				panic(err)
-			}
+			mustConvert(obj, crd)
+
 			if certNN, ok := crd.Annotations["cert-manager.io/inject-ca-from"]; ok {
 				secretName, ok := secretFromCertNN(certNN)
 				if !ok {
@@ -161,9 +122,8 @@ func findWebhookServiceSecretName(objs []unstructured.Unstructured) map[string]s
 
 		case "MutatingWebhookConfiguration":
 			mwc := &admissionregistration.MutatingWebhookConfiguration{}
-			if err := scheme.Convert(&obj, mwc, nil); err != nil {
-				panic(err)
-			}
+			mustConvert(obj, mwc)
+
 			if certNN, ok := mwc.Annotations["cert-manager.io/inject-ca-from"]; ok {
 				secretName, ok := secretFromCertNN(certNN)
 				if !ok {
@@ -174,9 +134,8 @@ func findWebhookServiceSecretName(objs []unstructured.Unstructured) map[string]s
 
 		case "ValidatingWebhookConfiguration":
 			vwc := &admissionregistration.ValidatingWebhookConfiguration{}
-			if err := scheme.Convert(&obj, vwc, nil); err != nil {
-				panic(err)
-			}
+			mustConvert(obj, vwc)
+
 			if certNN, ok := vwc.Annotations["cert-manager.io/inject-ca-from"]; ok {
 				secretName, ok := secretFromCertNN(certNN)
 				if !ok {
@@ -189,11 +148,10 @@ func findWebhookServiceSecretName(objs []unstructured.Unstructured) map[string]s
 	return serviceSecretNames
 }
 
-func customizeDeployments(obj *unstructured.Unstructured) {
+func customizeDeployment(obj client.Object) client.Object {
 	deployment := &appsv1.Deployment{}
-	if err := scheme.Convert(obj, deployment, nil); err != nil {
-		panic(err)
-	}
+	mustConvert(obj, deployment)
+
 	deployment.Spec.Template.Spec.PriorityClassName = "system-cluster-critical"
 
 	deployment.Spec.Template.Annotations = mergeMaps(deployment.Spec.Template.Annotations, openshiftWorkloadAnnotation)
@@ -219,12 +177,10 @@ func customizeDeployments(obj *unstructured.Unstructured) {
 		container.TerminationMessagePolicy = corev1.TerminationMessageFallbackToLogsOnError
 	}
 
-	if err := scheme.Convert(deployment, obj, nil); err != nil {
-		panic(err)
-	}
+	return deployment
 }
 
-func replaceCertManagerAnnotations(obj *unstructured.Unstructured) {
+func replaceCertManagerAnnotations(obj client.Object) {
 	anns := obj.GetAnnotations()
 	if anns == nil {
 		anns = map[string]string{}
@@ -236,7 +192,7 @@ func replaceCertManagerAnnotations(obj *unstructured.Unstructured) {
 	}
 }
 
-func replaceCertMangerServiceSecret(obj *unstructured.Unstructured, serviceSecretNames map[string]string) {
+func replaceCertMangerServiceSecret(obj client.Object, serviceSecretNames map[string]string) {
 	anns := obj.GetAnnotations()
 	if anns == nil {
 		anns = map[string]string{}
@@ -245,43 +201,6 @@ func replaceCertMangerServiceSecret(obj *unstructured.Unstructured, serviceSecre
 		anns["service.beta.openshift.io/serving-cert-secret-name"] = name
 		obj.SetAnnotations(anns)
 	}
-}
-
-// isCRDGroup checks whether the object provided is a CRD for the specified API group.
-func isCRDGroup(obj *unstructured.Unstructured, group string) bool {
-	switch obj.GetKind() {
-	case "CustomResourceDefinition":
-		crd := &apiextensions.CustomResourceDefinition{}
-		if err := scheme.Convert(obj, crd, nil); err != nil {
-			panic(err)
-		}
-
-		if crd.Spec.Group == group {
-			return true
-		}
-
-		return false
-	default:
-		return false
-	}
-}
-
-// ensureNewLine makes sure that there is one new line at the end of the file for git
-func ensureNewLine(b []byte) []byte {
-	return append(bytes.TrimRight(b, "\n"), []byte("\n")...)
-}
-
-func fetchAndCompileComponents(url string) ([]byte, error) {
-	k := krusty.MakeKustomizer(krusty.MakeDefaultOptions())
-
-	fSys := filesys.MakeFsOnDisk()
-
-	m, err := k.Run(fSys, url)
-	if err != nil {
-		return nil, err
-	}
-
-	return m.AsYaml()
 }
 
 // Variadic function to merge maps of like kind.
@@ -296,66 +215,96 @@ func mergeMaps[K comparable, V any](maps ...map[K]V) map[K]V {
 	return result
 }
 
-// addInfraClusterProtectionPolicy adds a Validating Admission Policy and Binding for protecting
+// generateInfraClusterProtectionPolicy generates a Validating Admission Policy and Binding for protecting
 // InfraClusters created by the cluster-capi-operator from deletion and editing.
-func addInfraClusterProtectionPolicy(objs []unstructured.Unstructured, providerName string) []unstructured.Unstructured {
-	policy := &unstructured.Unstructured{
-		Object: map[string]interface{}{
-			"apiVersion": "admissionregistration.k8s.io/v1",
-			"kind":       "ValidatingAdmissionPolicy",
-			"metadata": map[string]interface{}{
-				"name": "openshift-cluster-api-protect-" + providerName + "cluster",
+func generateInfraClusterProtectionPolicy(infraClusterResourceName string) []client.Object {
+	var policy client.Object = &admissionregistration.ValidatingAdmissionPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "openshift-cluster-api-protect-" + infraClusterResourceName,
+		},
+		Spec: admissionregistration.ValidatingAdmissionPolicySpec{
+			FailurePolicy: ptr.To(admissionregistration.Fail),
+			ParamKind: &admissionregistration.ParamKind{
+				APIVersion: "config.openshift.io/v1",
+				Kind:       "Infrastructure",
 			},
-			"spec": map[string]interface{}{
-				"failurePolicy": "Fail",
-				"paramKind": map[string]interface{}{
-					"apiVersion": "config.openshift.io/v1",
-					"kind":       "Infrastructure",
-				},
-				"matchConstraints": map[string]interface{}{
-					"resourceRules": []interface{}{
-						map[string]interface{}{
-							"apiGroups":   []interface{}{"infrastructure.cluster.x-k8s.io"},
-							"apiVersions": []interface{}{"*"},
-							"operations":  []interface{}{"DELETE"},
-							"resources":   []interface{}{providerName + "clusters"},
+			MatchConstraints: &admissionregistration.MatchResources{
+				ResourceRules: []admissionregistration.NamedRuleWithOperations{
+					{
+						RuleWithOperations: admissionregistration.RuleWithOperations{
+							Operations: []admissionregistration.OperationType{admissionregistration.Delete},
+							Rule: admissionregistration.Rule{
+								APIGroups:   []string{"infrastructure.cluster.x-k8s.io"},
+								APIVersions: []string{"*"},
+								Resources:   []string{infraClusterResourceName + "s"},
+							},
 						},
 					},
 				},
-				"validations": []interface{}{
-					map[string]interface{}{
-						"expression": "!(oldObject.metadata.name == params.status.infrastructureName)",
-						"message":    "InfraCluster resources with metadata.name corresponding to the cluster infrastructureName cannot be deleted.",
+			},
+			Validations: []admissionregistration.Validation{
+				{
+					Expression: "!(oldObject.metadata.name == params.status.infrastructureName)",
+					Message:    "InfraCluster resources with metadata.name corresponding to the cluster infrastructureName cannot be deleted.",
+				},
+			},
+		},
+	}
+
+	binding := &admissionregistration.ValidatingAdmissionPolicyBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: policy.GetName(),
+		},
+		Spec: admissionregistration.ValidatingAdmissionPolicyBindingSpec{
+			ParamRef: &admissionregistration.ParamRef{
+				Name:                    "cluster",
+				ParameterNotFoundAction: ptr.To(admissionregistration.DenyAction),
+			},
+			PolicyName:        policy.GetName(),
+			ValidationActions: []admissionregistration.ValidationAction{admissionregistration.Deny},
+			MatchResources: &admissionregistration.MatchResources{
+				NamespaceSelector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"kubernetes.io/metadata.name": "openshift-cluster-api",
 					},
 				},
 			},
 		},
 	}
 
-	binding := &unstructured.Unstructured{
-		Object: map[string]interface{}{
-			"apiVersion": "admissionregistration.k8s.io/v1",
-			"kind":       "ValidatingAdmissionPolicyBinding",
-			"metadata": map[string]interface{}{
-				"name": "openshift-cluster-api-protect-" + providerName + "cluster",
-			},
-			"spec": map[string]interface{}{
-				"paramRef": map[string]interface{}{
-					"name":                    "cluster",
-					"parameterNotFoundAction": "Deny",
-				},
-				"policyName":        "openshift-cluster-api-protect-" + providerName + "cluster",
-				"validationActions": []interface{}{"Deny"},
-				"matchResources": map[string]interface{}{
-					"namespaceSelector": map[string]interface{}{
-						"matchLabels": map[string]interface{}{
-							"kubernetes.io/metadata.name": "openshift-cluster-api",
-						},
-					},
-				},
-			},
-		},
+	// Set type metadata explicitly so it is present in the serialisation
+	for _, obj := range []client.Object{policy, binding} {
+		setTypeMetadataFromScheme(obj, "v1")
 	}
 
-	return append(objs, *policy, *binding)
+	// ValidatingAdmissionPolicy serialises with a redundant `status` field
+	policy = stripStatus(policy)
+
+	return []client.Object{policy, binding}
+}
+
+// stripStatus removes the status field from the serialisation of an object.
+func stripStatus(obj client.Object) client.Object {
+	unstructuredObj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
+	if err != nil {
+		panic(err)
+	}
+	delete(unstructuredObj, "status")
+	return &unstructured.Unstructured{Object: unstructuredObj}
+}
+
+func setTypeMetadataFromScheme(obj client.Object, version string) {
+	gvks, _, err := scheme.ObjectKinds(obj)
+	if err != nil {
+		panic(err)
+	}
+
+	// Get the GVK for the given version
+	for _, gvk := range gvks {
+		if gvk.Version == version {
+			obj.GetObjectKind().SetGroupVersionKind(gvk)
+			return
+		}
+	}
+	panic("no " + version + " GVK found")
 }
