@@ -749,5 +749,40 @@ var _ = Describe("With a running MachineMigration controller", func() {
 				})
 			})
 		})
+
+		Context("when a migration cancellation is requested during migration", func() {
+			BeforeEach(func() {
+				By("Setting the MAPI machine spec AuthoritativeAPI to MachineAPI")
+				mapiMachine = mapiMachineBuilder.
+					WithAuthoritativeAPI(mapiv1beta1.MachineAuthorityMachineAPI).
+					Build()
+				Eventually(k8sClient.Create(ctx, mapiMachine)).Should(Succeed())
+
+				By("Creating mirror CAPI machines")
+				capiMachine = capiMachineBuilder.Build()
+				Eventually(k8sClient.Create(ctx, capiMachine)).Should(Succeed())
+				capaMachine = capaMachineBuilder.Build()
+				Eventually(k8sClient.Create(ctx, capaMachine)).Should(Succeed())
+
+				By("Simulating stuck migration state with status Migrating and synchronizedAPI set to MachineAPI")
+				Eventually(k.UpdateStatus(mapiMachine, func() {
+					mapiMachine.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityMigrating
+					mapiMachine.Status.SynchronizedAPI = mapiv1beta1.MachineAPISynchronized
+				})).Should(Succeed())
+
+				req = reconcile.Request{NamespacedName: client.ObjectKeyFromObject(mapiMachine)}
+			})
+
+			It("should detect migration cancellation and transition back to MachineAPI", func() {
+				result, err := reconciler.Reconcile(ctx, req)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(result.Requeue).To(BeFalse())
+
+				Eventually(k.Object(mapiMachine)).Should(SatisfyAll(
+					HaveField("Status.AuthoritativeAPI", Equal(mapiv1beta1.MachineAuthorityMachineAPI)),
+					HaveField("Status.SynchronizedAPI", Equal(mapiv1beta1.MachineAPISynchronized)),
+				))
+			})
+		})
 	})
 })
