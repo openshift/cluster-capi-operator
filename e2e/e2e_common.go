@@ -1,0 +1,78 @@
+package e2e
+
+import (
+	"context"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/client-go/kubernetes/scheme"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
+
+	bmov1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
+	metal3v1 "github.com/metal3-io/cluster-api-provider-metal3/api/v1beta1"
+
+	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
+	azurev1 "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
+	gcpv1 "sigs.k8s.io/cluster-api-provider-gcp/api/v1beta1"
+	ibmpowervsv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
+	vspherev1 "sigs.k8s.io/cluster-api-provider-vsphere/apis/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	ctrl "sigs.k8s.io/controller-runtime"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
+
+	configv1 "github.com/openshift/api/config/v1"
+	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
+	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
+)
+
+const (
+	infrastructureName                                                = "cluster"
+	infraAPIVersion                                                   = "infrastructure.cluster.x-k8s.io/v1beta2"
+	managedByAnnotationValueClusterCAPIOperatorInfraClusterController = "cluster-capi-operator-infracluster-controller"
+)
+
+var (
+	cl                 client.Client
+	ctx                = context.Background()
+	platform           configv1.PlatformType
+	clusterName        string
+)
+
+func init() {
+	utilruntime.Must(configv1.Install(scheme.Scheme))
+	utilruntime.Must(awsv1.AddToScheme(scheme.Scheme))
+	utilruntime.Must(gcpv1.AddToScheme(scheme.Scheme))
+	utilruntime.Must(azurev1.AddToScheme(scheme.Scheme))
+	utilruntime.Must(clusterv1.AddToScheme(scheme.Scheme))
+	utilruntime.Must(mapiv1beta1.AddToScheme(scheme.Scheme))
+	utilruntime.Must(ibmpowervsv1.AddToScheme(scheme.Scheme))
+	utilruntime.Must(vspherev1.AddToScheme(scheme.Scheme))
+	utilruntime.Must(metal3v1.AddToScheme(scheme.Scheme))
+	utilruntime.Must(bmov1alpha1.AddToScheme(scheme.Scheme))
+}
+
+// InitCommonVariables initializes global variables used across test cases.
+func InitCommonVariables() {
+	logf.SetLogger(GinkgoLogr)
+	ctrl.SetLogger(GinkgoLogr)
+
+	cfg, err := config.GetConfig()
+	Expect(err).ToNot(HaveOccurred())
+
+	cl, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
+	Expect(err).ToNot(HaveOccurred())
+
+	infra := &configv1.Infrastructure{}
+	infraName := client.ObjectKey{
+		Name: infrastructureName,
+	}
+	Expect(cl.Get(ctx, infraName, infra)).To(Succeed())
+	Expect(infra.Status.PlatformStatus).ToNot(BeNil())
+	clusterName = infra.Status.InfrastructureName
+	platform = infra.Status.PlatformStatus.Type
+
+	komega.SetClient(cl)
+	komega.SetContext(ctx)
+}
