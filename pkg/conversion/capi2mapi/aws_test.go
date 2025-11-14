@@ -69,6 +69,33 @@ var _ = Describe("capi2mapi AWS conversion", func() {
 			expectedErrors:    []string{},
 			expectedWarnings:  []string{},
 		}),
+		Entry("With HostAffinity default", awsCAPI2MAPIMachineConversionInput{
+			awsClusterBuilder: awsCAPIAWSClusterBase,
+			awsMachineBuilder: awsCAPIAWSMachineBase.
+				WithHostAffinity(ptr.To("default")),
+			machineBuilder:   awsCAPIMachineBase,
+			expectedErrors:   []string{},
+			expectedWarnings: []string{},
+		}),
+		Entry("With HostAffinity host and HostID", awsCAPI2MAPIMachineConversionInput{
+			awsClusterBuilder: awsCAPIAWSClusterBase,
+			awsMachineBuilder: awsCAPIAWSMachineBase.
+				WithHostAffinity(ptr.To("host")).
+				WithHostID(ptr.To("h-1234567890abcdef0")),
+			machineBuilder:   awsCAPIMachineBase,
+			expectedErrors:   []string{},
+			expectedWarnings: []string{},
+		}),
+		Entry("With unsupported HostAffinity", awsCAPI2MAPIMachineConversionInput{
+			awsClusterBuilder: awsCAPIAWSClusterBase,
+			awsMachineBuilder: awsCAPIAWSMachineBase.
+				WithHostAffinity(ptr.To("unsupported")),
+			machineBuilder: awsCAPIMachineBase,
+			expectedErrors: []string{
+				"spec.hostAffinity: Invalid value: \"unsupported\": unable to convert hostAffinity, unknown value",
+			},
+			expectedWarnings: []string{},
+		}),
 		Entry("With unsupported EKSOptimizedLookupType", awsCAPI2MAPIMachineConversionInput{
 			awsClusterBuilder: awsCAPIAWSClusterBase,
 			awsMachineBuilder: capabuilder.AWSMachine().
@@ -108,7 +135,7 @@ var _ = Describe("capi2mapi AWS conversion", func() {
 			awsClusterBuilder: awsCAPIAWSClusterBase,
 			awsMachineBuilder: awsCAPIAWSMachineBase.WithSecurityGroupOverrides(map[awsv1.SecurityGroupRole]string{"sg-1": "sg-2"}),
 			machineBuilder:    awsCAPIMachineBase,
-			expectedErrors:    []string{"spec.securityGroupOverrides: Invalid value: map[v1beta2.SecurityGroupRole]string{\"sg-1\":\"sg-2\"}: securityGroupOverrides are not supported"},
+			expectedErrors:    []string{"spec.securityGroupOverrides: Invalid value: {\"sg-1\":\"sg-2\"}: securityGroupOverrides are not supported"},
 			expectedWarnings:  []string{},
 		}),
 
@@ -117,7 +144,7 @@ var _ = Describe("capi2mapi AWS conversion", func() {
 			awsMachineBuilder: awsCAPIAWSMachineBase.
 				WithNetworkInterfaces([]string{"eni-12345", "eni-67890"}),
 			machineBuilder:   awsCAPIMachineBase,
-			expectedErrors:   []string{"spec.networkInterfaces: Invalid value: []string{\"eni-12345\", \"eni-67890\"}: networkInterfaces are not supported"},
+			expectedErrors:   []string{"spec.networkInterfaces: Invalid value: [\"eni-12345\",\"eni-67890\"]: networkInterfaces are not supported"},
 			expectedWarnings: []string{},
 		}),
 
@@ -141,7 +168,7 @@ var _ = Describe("capi2mapi AWS conversion", func() {
 			awsClusterBuilder: awsCAPIAWSClusterBase,
 			awsMachineBuilder: awsCAPIAWSMachineBase.WithCloudInit(awsv1.CloudInit{InsecureSkipSecretsManager: true}),
 			machineBuilder:    awsCAPIMachineBase,
-			expectedErrors:    []string{"spec.cloudInit: Invalid value: v1beta2.CloudInit{InsecureSkipSecretsManager:true, SecretCount:0, SecretPrefix:\"\", SecureSecretsBackend:\"\"}: cloudInit is not supported"},
+			expectedErrors:    []string{"spec.cloudInit: Invalid value: {\"insecureSkipSecretsManager\":true}: cloudInit is not supported"},
 			expectedWarnings:  []string{},
 		}),
 
@@ -149,7 +176,7 @@ var _ = Describe("capi2mapi AWS conversion", func() {
 			awsClusterBuilder: awsCAPIAWSClusterBase,
 			awsMachineBuilder: awsCAPIAWSMachineBase.WithPrivateDNSName(&awsv1.PrivateDNSName{}),
 			machineBuilder:    awsCAPIMachineBase,
-			expectedErrors:    []string{"spec.privateDNSName: Invalid value: v1beta2.PrivateDNSName{EnableResourceNameDNSAAAARecord:(*bool)(nil), EnableResourceNameDNSARecord:(*bool)(nil), HostnameType:(*string)(nil)}: privateDNSName is not supported"},
+			expectedErrors:    []string{"spec.privateDNSName: Invalid value: {}: privateDNSName is not supported"},
 			expectedWarnings:  []string{},
 		}),
 
@@ -160,7 +187,7 @@ var _ = Describe("capi2mapi AWS conversion", func() {
 					Proxy: &awsv1.IgnitionProxy{},
 				}),
 			machineBuilder:   awsCAPIMachineBase,
-			expectedErrors:   []string{"spec.ignition.proxy: Invalid value: v1beta2.IgnitionProxy{HTTPProxy:(*string)(nil), HTTPSProxy:(*string)(nil), NoProxy:[]v1beta2.IgnitionNoProxy(nil)}: ignition proxy is not supported"},
+			expectedErrors:   []string{"spec.ignition.proxy: Invalid value: {}: ignition proxy is not supported"},
 			expectedWarnings: []string{},
 		}),
 
@@ -173,7 +200,7 @@ var _ = Describe("capi2mapi AWS conversion", func() {
 					},
 				}),
 			machineBuilder:   awsCAPIMachineBase,
-			expectedErrors:   []string{"spec.ignition.tls: Invalid value: v1beta2.IgnitionTLS{CASources:[]v1beta2.IgnitionCASource{\"a\", \"b\"}}: ignition tls is not supported"},
+			expectedErrors:   []string{"spec.ignition.tls: Invalid value: {\"certificateAuthorities\":[\"a\",\"b\"]}: ignition tls is not supported"},
 			expectedWarnings: []string{},
 		}),
 		Entry("With unsupported httpEndpoint", awsCAPI2MAPIMachineConversionInput{
