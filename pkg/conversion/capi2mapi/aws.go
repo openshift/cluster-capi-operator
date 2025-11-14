@@ -18,6 +18,7 @@ package capi2mapi
 import (
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
@@ -38,14 +39,19 @@ var (
 	errCAPIMachineSetAWSMachineTemplateAWSClusterCannotBeNil = errors.New("provided MachineSet, AWSMachineTemplate and AWSCluster can not be nil")
 	errNilLoadBalancer                                       = errors.New("nil load balancer")
 	errUnsupportedLoadBalancerType                           = errors.New("unsupported load balancer type")
+
+	// awsDedicatedHostNamePattern is used to validate the id of a dedicated host.
+	awsDedicatedHostNamePattern = regexp.MustCompile(`^h-[0-9a-f]{17}$`)
 )
 
 const (
-	errUnsupportedCAPATenancy     = "unable to convert tenancy, unknown value"
-	errUnsupportedCAPAMarketType  = "unable to convert market type, unknown value"
-	errUnsupportedHTTPTokensState = "unable to convert httpTokens state, unknown value" //nolint:gosec // This is an error message, not a credential
-	defaultIdentityName           = "default"
-	defaultCredentialsSecretName  = "aws-cloud-credentials" //#nosec G101 -- False positive, not actually a credential.
+	errUnsupportedCAPATenancy      = "unable to convert tenancy, unknown value"
+	errUnsupportedCAPAMarketType   = "unable to convert market type, unknown value"
+	errUnsupportedHTTPTokensState  = "unable to convert httpTokens state, unknown value" //nolint:gosec // This is an error message, not a credential
+	defaultIdentityName            = "default"
+	defaultCredentialsSecretName   = "aws-cloud-credentials" //#nosec G101 -- False positive, not actually a credential.
+	errUnsupportedHostAffinityType = "unable to convert hostAffinity, unknown value"
+	errHostIDRequred               = "id is required and must start with 'h-' followed by 17 lowercase hexadecimal characters (0-9 and a-f)"
 )
 
 // machineAndAWSMachineAndAWSCluster stores the details of a Cluster API Machine and AWSMachine and AWSCluster.
@@ -165,6 +171,33 @@ func (m machineAndAWSMachineAndAWSCluster) toProviderSpec() (*mapiv1beta1.AWSMac
 		PlacementGroupPartition: convertAWSPlacementGroupPartition(m.awsMachine.Spec.PlacementGroupPartition),
 		CapacityReservationID:   ptr.Deref(m.awsMachine.Spec.CapacityReservationID, ""),
 		MarketType:              mapiAWSMarketType,
+	}
+
+	// Dedicated host support
+	if m.awsMachine.Spec.HostAffinity != nil {
+		switch *m.awsMachine.Spec.HostAffinity {
+		case "host":
+			if m.awsMachine.Spec.HostID == nil {
+				errors = append(errors, field.Required(fldPath.Child("dedicatedHost").Child("id"), errHostIDRequred))
+				break
+			} else if !awsDedicatedHostNamePattern.MatchString(*m.awsMachine.Spec.HostID) { //!regexp.MustCompile(`^h-[0-9a-f]{17}$`).MatchString(*m.awsMachine.Spec.HostID) {
+				errors = append(errors, field.Invalid(fldPath.Child("dedicatedHost").Child("id"), *m.awsMachine.Spec.HostID, errHostIDRequred))
+				break
+			}
+
+			mapaProviderConfig.HostPlacement = &mapiv1beta1.HostPlacement{
+				Affinity: ptr.To(mapiv1beta1.HostAffinityDedicatedHost),
+				DedicatedHost: &mapiv1beta1.DedicatedHost{
+					ID: *m.awsMachine.Spec.HostID,
+				},
+			}
+		case "default":
+			mapaProviderConfig.HostPlacement = &mapiv1beta1.HostPlacement{
+				Affinity: ptr.To(mapiv1beta1.HostAffinityAnyAvailable),
+			}
+		default:
+			errors = append(errors, field.Invalid(fldPath.Child("hostAffinity"), m.awsMachine.Spec.HostAffinity, errUnsupportedHostAffinityType))
+		}
 	}
 
 	secretRef, errs := handleAWSIdentityRef(fldPath.Child("identityRef"), m.awsCluster.Spec.IdentityRef)
