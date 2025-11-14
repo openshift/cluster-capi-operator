@@ -324,3 +324,100 @@ func verifyMachineSynchronizedGeneration(cl client.Client, mapiMachine *mapiv1be
 		fmt.Sprintf("MAPI Machine SynchronizedGeneration should equal %s Machine Generation (%d)", authoritativeMachineType, expectedGeneration),
 	)
 }
+
+// MachineState holds the state of both MAPI and CAPI Machines before an update operation.
+type MachineState struct {
+	MAPIGeneration   int64
+	CAPIGeneration   int64
+	SynchronizedTime *metav1.Time
+}
+
+// captureMachineStateBeforeUpdate captures the current state (generation and synchronized time) of both MAPI and CAPI Machines
+// before an update operation. The captured state is later used by verifyMachineStateChanged or verifyMachineStateUnchanged
+// to verify whether the state has changed or remained the same after the operation.
+func captureMachineStateBeforeUpdate(cl client.Client, currentMAPIMachine *mapiv1beta1.Machine) *MachineState {
+	Eventually(komega.Get(currentMAPIMachine), capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(), "Failed to get MAPI Machine before capturing state")
+
+	currentCAPIMachine := capiframework.GetMachine(cl, currentMAPIMachine.Name, capiframework.CAPINamespace)
+
+	state := &MachineState{
+		MAPIGeneration: currentMAPIMachine.Generation,
+		CAPIGeneration: currentCAPIMachine.Generation,
+	}
+
+	// Find and store the synchronized condition's last transition time
+	for _, condition := range currentMAPIMachine.Status.Conditions {
+		if condition.Type == SynchronizedCondition {
+			state.SynchronizedTime = &condition.LastTransitionTime
+			break
+		}
+	}
+
+	return state
+}
+
+// verifyMachineStateChanged verifies that:
+// 1. CAPI Machine generation remains unchanged (metadata-only changes don't bump spec generation)
+// 2. MAPI Machine generation has changed (spec.objectMeta was updated)
+// 3. Synchronized time has changed (indicating a new synchronization occurred)
+// This is used for CAPI authoritative scenarios where CAPI metadata changes are synced to MAPI spec.
+func verifyMachineStateChanged(cl client.Client, mapiMachine *mapiv1beta1.Machine, previousState *MachineState, authority mapiv1beta1.MachineAuthority, operation string) {
+	// First verify CAPI Machine generation remains unchanged
+	currentCAPIMachine := capiframework.GetMachine(cl, mapiMachine.Name, capiframework.CAPINamespace)
+	By(fmt.Sprintf("Verifying CAPI Machine generation unchanged after %s (previous: %d, current: %d)", operation, previousState.CAPIGeneration, currentCAPIMachine.Generation))
+	Expect(currentCAPIMachine.Generation).To(Equal(previousState.CAPIGeneration), "CAPI Machine generation should not change for metadata-only updates")
+
+	// Then verify MAPI Machine generation has changed
+	By(fmt.Sprintf("Verifying MAPI Machine generation changed after %s (previous: %d, current: %d)", operation, previousState.MAPIGeneration, mapiMachine.Generation))
+	Expect(mapiMachine.Generation).To(BeNumerically(">", previousState.MAPIGeneration), "MAPI Machine generation should increment when spec.objectMeta is updated")
+
+	// Verify synchronized time is updated
+	var currentSynchronizedTime *metav1.Time
+	for _, condition := range mapiMachine.Status.Conditions {
+		if condition.Type == SynchronizedCondition {
+			currentSynchronizedTime = &condition.LastTransitionTime
+			break
+		}
+	}
+	Expect(currentSynchronizedTime).ToNot(BeNil(), "Synchronized condition should exist")
+	By(fmt.Sprintf("Verifying synchronized time changed after %s (previous: %v, current: %v)", operation, previousState.SynchronizedTime.Time, currentSynchronizedTime.Time))
+	Expect(currentSynchronizedTime.Time).To(BeTemporally(">", previousState.SynchronizedTime.Time), fmt.Sprintf("Synchronized time should change when syncing %s metadata to spec", operation))
+
+	// Verify status remains correct
+	verifyMAPIMachineSynchronizedCondition(mapiMachine, authority)
+	verifyMachineSynchronizedGeneration(cl, mapiMachine, authority)
+}
+
+// verifyMachineStateUnchanged verifies that:
+// 1. CAPI Machine generation remains unchanged
+// 2. MAPI Machine generation remains unchanged
+// 3. Synchronized time remains unchanged
+// This is used for MAPI authoritative scenarios where MAPI metadata-only changes should not trigger any updates.
+func verifyMachineStateUnchanged(cl client.Client, mapiMachine *mapiv1beta1.Machine, previousState *MachineState, authority mapiv1beta1.MachineAuthority, operation string) {
+	// Verify CAPI Machine generation remains unchanged
+	currentCAPIMachine := capiframework.GetMachine(cl, mapiMachine.Name, capiframework.CAPINamespace)
+	By(fmt.Sprintf("Verifying CAPI Machine generation unchanged after %s (previous: %d, current: %d)", operation, previousState.CAPIGeneration, currentCAPIMachine.Generation))
+	Expect(currentCAPIMachine.Generation).To(Equal(previousState.CAPIGeneration), "CAPI Machine generation should not change for metadata-only updates")
+
+	// Verify MAPI Machine generation remains unchanged
+	By(fmt.Sprintf("Verifying MAPI Machine generation unchanged after %s (previous: %d, current: %d)", operation, previousState.MAPIGeneration, mapiMachine.Generation))
+	Expect(mapiMachine.Generation).To(Equal(previousState.MAPIGeneration), "MAPI Machine generation should not change for metadata-only updates")
+
+	// Verify synchronized time remains unchanged
+	if previousState.SynchronizedTime != nil {
+		var currentSynchronizedTime *metav1.Time
+		for _, condition := range mapiMachine.Status.Conditions {
+			if condition.Type == SynchronizedCondition {
+				currentSynchronizedTime = &condition.LastTransitionTime
+				break
+			}
+		}
+		Expect(currentSynchronizedTime).ToNot(BeNil(), "Synchronized condition should exist")
+		By(fmt.Sprintf("Verifying synchronized time unchanged after %s (previous: %v, current: %v)", operation, previousState.SynchronizedTime.Time, currentSynchronizedTime.Time))
+		Expect(currentSynchronizedTime.Time).To(Equal(previousState.SynchronizedTime.Time), "Synchronized time should not change for metadata-only updates")
+	}
+
+	// Verify status remains correct
+	verifyMAPIMachineSynchronizedCondition(mapiMachine, authority)
+	verifyMachineSynchronizedGeneration(cl, mapiMachine, authority)
+}
