@@ -266,9 +266,10 @@ func (r *MachineSyncReconciler) Reconcile(ctx context.Context, req reconcile.Req
 	case authoritativeAPI == mapiv1beta1.MachineAuthorityMachineAPI:
 		return r.reconcileMAPIMachinetoCAPIMachine(ctx, mapiMachine, capiMachine)
 	case authoritativeAPI == mapiv1beta1.MachineAuthorityClusterAPI && !capiMachineNotFound:
-		// Create Cluster API Infrastructure Machine from MAPI if it doesn't exist, no deletion is in progress and.
-		// the CAPI machine is not marked for deletion.
-		if !capiInfraMachineExists && capiMachine.DeletionTimestamp.IsZero() && mapiMachine.DeletionTimestamp.IsZero() {
+		// Create Cluster API Infrastructure Machine from MAPI if it doesn't exist and no deletion is in progress.
+		// the CAPI machine is not marked for deletion and the MAPI machine was created before the Cluster API machine.
+		if capiMachine.DeletionTimestamp.IsZero() && mapiMachine.DeletionTimestamp.IsZero() &&
+			!capiInfraMachineExists && !mapiMachine.CreationTimestamp.After(capiMachine.CreationTimestamp.Time) {
 			return r.reconcileMAPIMachinetoCAPIMachine(ctx, mapiMachine, capiMachine)
 		}
 
