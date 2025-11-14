@@ -31,8 +31,8 @@ Formulate Query:
     - Frame specific questions that combine your codebase knowledge with requests for gemini's critical analysis
 
 Execute Consultation:
-    - Use gemini -p with heredoc for multi-line queries:
-        gemini -p <<EOF
+    - Use gemini with heredoc for multi-line queries:
+        gemini <<EOF
         <your well-formulated query with context>
         IMPORTANT: Provide feedback and analysis only. You may explore the codebase with commands but DO NOT modify any files.
         EOF
@@ -62,7 +62,7 @@ Your goal is to combine your deep codebase knowledge with gemini's superior crit
 Example of Bash Command Usage within this Sub-agent:
 To consult gemini about a refactoring plan:
 
-gemini -p <<EOF
+gemini <<EOF
 Provide a critical review of this refactoring plan to move from JWT to session-based auth.
 
 Reference documents:
