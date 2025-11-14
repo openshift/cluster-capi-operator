@@ -118,7 +118,7 @@ var _ = Describe("capi2mapi OpenStack conversion", func() {
 			),
 			machineBuilder: openstackCAPIMachineBase,
 			expectedErrors: []string{
-				"spec.image.imageRef: Invalid value: v1beta1.ResourceReference{Name:\"my-orc-image\"}: MAPO only supports defining images by names",
+				"spec.image.imageRef: Invalid value: {\"name\":\"my-orc-image\"}: MAPO only supports defining images by names",
 			},
 			expectedWarnings: []string{},
 		}),
@@ -175,7 +175,7 @@ var _ = Describe("capi2mapi OpenStack conversion", func() {
 			expectedErrors: []string{
 				"spec.ports[0].fixedIPs[0].subnet.id: Required value: MAPO only supports defining subnets via IDs",
 				"spec.ports[0].fixedIPs[1].subnet.id: Required value: MAPO only supports defining subnets via IDs",
-				"spec.ports[0].fixedIPs[2].subnet.filter: Invalid value: v1beta1.SubnetFilter{Name:\"my-subnet\", Description:\"\", ProjectID:\"\", IPVersion:0, GatewayIP:\"\", CIDR:\"\", IPv6AddressMode:\"\", IPv6RAMode:\"\", FilterByNeutronTags:v1beta1.FilterByNeutronTags{Tags:[]v1beta1.NeutronTag(nil), TagsAny:[]v1beta1.NeutronTag(nil), NotTags:[]v1beta1.NeutronTag(nil), NotTagsAny:[]v1beta1.NeutronTag(nil)}}: MAPO only supports defining subnets via IDs",
+				"spec.ports[0].fixedIPs[2].subnet.filter: Invalid value: {\"name\":\"my-subnet\"}: MAPO only supports defining subnets via IDs",
 			},
 			expectedWarnings: []string{},
 		}),
@@ -208,7 +208,7 @@ var _ = Describe("capi2mapi OpenStack conversion", func() {
 			),
 			machineBuilder: openstackCAPIMachineBase,
 			expectedErrors: []string{
-				"spec.securityGroups[0]: Invalid value: v1beta1.SecurityGroupParam{ID:(optional.String)(nil), Filter:(*v1beta1.SecurityGroupFilter)(nil)}: A security group must be referenced by a UUID or filter",
+				"spec.securityGroups[0]: Invalid value: {}: A security group must be referenced by a UUID or filter",
 			},
 			expectedWarnings: []string{},
 		}),
@@ -219,7 +219,7 @@ var _ = Describe("capi2mapi OpenStack conversion", func() {
 			),
 			machineBuilder: openstackCAPIMachineBase,
 			expectedErrors: []string{
-				"spec.serverGroup: Invalid value: v1beta1.ServerGroupParam{ID:(optional.String)(nil), Filter:(*v1beta1.ServerGroupFilter)(nil)}: A server group must be referenced by a UUID or filter",
+				"spec.serverGroup: Invalid value: {}: A server group must be referenced by a UUID or filter",
 			},
 			expectedWarnings: []string{},
 		}),
@@ -238,7 +238,7 @@ var _ = Describe("capi2mapi OpenStack conversion", func() {
 			machineBuilder: openstackCAPIMachineBase,
 			expectedErrors: []string{},
 			expectedWarnings: []string{
-				"spec.image.filter.tags: Invalid value: []string{\"tag-a\", \"tag-b\"}: MAPO does not support filtering image by tags",
+				"spec.image.filter.tags: Invalid value: [\"tag-a\",\"tag-b\"]: MAPO does not support filtering image by tags",
 			},
 		}),
 		Entry("warns with a port using unsupported fields", openstackCAPI2MAPIMachineConversionInput{
@@ -260,7 +260,7 @@ var _ = Describe("capi2mapi OpenStack conversion", func() {
 			expectedWarnings: []string{
 				"spec.ports[0].hostID: Invalid value: \"my-host\": The hostID field has no equivalent in MAPO and is not supported",
 				"spec.ports[0].propagateUplinkStatus: Invalid value: true: The propagateUplinkStatus field has no equivalent in MAPO and is not supported",
-				"spec.ports[0].valueSpecs: Invalid value: []v1beta1.ValueSpec{v1beta1.ValueSpec{Name:\"\", Key:\"\", Value:\"\"}}: The valueSpecs field has no equivalent in MAPO and is not supported",
+				"spec.ports[0].valueSpecs: Invalid value: [{\"name\":\"\",\"key\":\"\",\"value\":\"\"}]: The valueSpecs field has no equivalent in MAPO and is not supported",
 			},
 		}),
 	)

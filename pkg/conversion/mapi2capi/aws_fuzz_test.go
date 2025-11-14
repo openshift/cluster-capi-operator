@@ -137,6 +137,7 @@ func (f *awsProviderFuzzer) fuzzProviderConfig(ps *mapiv1beta1.AWSMachineProvide
 	ps.DeviceIndex = 0
 	ps.LoadBalancers = nil
 	ps.ObjectMeta = metav1.ObjectMeta{}
+	ps.CPUOptions = nil
 
 	// At least one device mapping must have no device name.
 	rootFound := false
@@ -255,6 +256,20 @@ func (f *awsProviderFuzzer) FuzzerFuncsMachineSet(codecs runtimeserializer.Codec
 				// It will otherwise get converted to CAPA HTTPTokensStateOptional which
 				// if converted back to MAPI will become MetadataServiceAuthenticationOptional,
 				// resulting in a documented lossy rountrip conversion, which would make the test to fail.
+			}
+		},
+		func(placement *mapiv1beta1.HostPlacement, c randfill.Continue) {
+			c.FillNoCustom(placement)
+
+			switch c.Int31n(2) {
+			case 0:
+				placement.Affinity = ptr.To(mapiv1beta1.HostAffinityAnyAvailable)
+				placement.DedicatedHost = nil
+			case 1:
+				placement.Affinity = ptr.To(mapiv1beta1.HostAffinityDedicatedHost)
+				placement.DedicatedHost = &mapiv1beta1.DedicatedHost{
+					ID: "h-0123456789abcdef0",
+				}
 			}
 		},
 		f.fuzzProviderConfig,
