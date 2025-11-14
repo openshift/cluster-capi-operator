@@ -93,6 +93,32 @@ var _ = Describe("mapi2capi AWS conversion", func() {
 			expectedErrors:   []string{},
 			expectedWarnings: []string{},
 		}),
+		// Dedicated host positive/negative cases
+		Entry("With HostPlacement AnyAvailable", awsMAPI2CAPIConversionInput{
+			machineBuilder: awsMAPIMachineBase.WithProviderSpecBuilder(
+				awsBaseProviderSpec.
+					WithHostPlacement(&mapiv1beta1.HostPlacement{
+						Affinity: ptr.To(mapiv1beta1.HostAffinityAnyAvailable),
+					}),
+			),
+			infra:            infra,
+			expectedErrors:   []string{},
+			expectedWarnings: []string{},
+		}),
+		Entry("With HostPlacement DedicatedHost", awsMAPI2CAPIConversionInput{
+			machineBuilder: awsMAPIMachineBase.WithProviderSpecBuilder(
+				awsBaseProviderSpec.
+					WithHostPlacement(&mapiv1beta1.HostPlacement{
+						Affinity: ptr.To(mapiv1beta1.HostAffinityDedicatedHost),
+						DedicatedHost: &mapiv1beta1.DedicatedHost{
+							ID: "h-0123456789abcdef0",
+						},
+					}),
+			),
+			infra:            infra,
+			expectedErrors:   []string{},
+			expectedWarnings: []string{},
+		}),
 
 		// Only Error.
 		Entry("With LoadBalancers on worker machine", awsMAPI2CAPIConversionInput{
