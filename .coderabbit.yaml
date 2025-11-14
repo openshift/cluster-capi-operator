@@ -1,4 +1,5 @@
-# .coderabbit.yaml
-path_filters:
-  - "!**/vendor/**"
-  - "!vendor/**"
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+reviews:
+  path_filters:
+    - "!**/vendor/**"
+    - "!vendor/**"
