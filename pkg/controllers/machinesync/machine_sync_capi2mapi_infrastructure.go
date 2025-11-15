@@ -55,6 +55,24 @@ func setChangedMAPIMachineProviderStatusFields(platform configv1.PlatformType, e
 	case configv1.PowerVSPlatformType:
 		// TODO(powervs): implement
 		return nil
+	case configv1.NutanixPlatformType:
+		existingStatus, err := mapi2capi.NutanixProviderStatusFromRawExtension(existingMAPIMachine.Status.ProviderStatus)
+		if err != nil {
+			return fmt.Errorf("unable to convert RawExtension to Nutanix ProviderStatus: %w", err)
+		}
+
+		convertedStatus, err := mapi2capi.NutanixProviderStatusFromRawExtension(convertedMAPIMachine.Status.ProviderStatus)
+		if err != nil {
+			return fmt.Errorf("unable to convert RawExtension to Nutanix ProviderStatus: %w", err)
+		}
+
+		for i := range convertedStatus.Conditions {
+			existingStatus.Conditions = util.SetMAPIProviderCondition(existingStatus.Conditions, &convertedStatus.Conditions[i])
+		}
+
+		convertedStatus.Conditions = existingStatus.Conditions
+
+		newProviderStatus = convertedStatus
 	}
 
 	rawExtension, err := capi2mapi.RawExtensionFromInterface(newProviderStatus)
