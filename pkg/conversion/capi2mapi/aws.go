@@ -41,11 +41,12 @@ var (
 )
 
 const (
-	errUnsupportedCAPATenancy     = "unable to convert tenancy, unknown value"
-	errUnsupportedCAPAMarketType  = "unable to convert market type, unknown value"
-	errUnsupportedHTTPTokensState = "unable to convert httpTokens state, unknown value" //nolint:gosec // This is an error message, not a credential
-	defaultIdentityName           = "default"
-	defaultCredentialsSecretName  = "aws-cloud-credentials" //#nosec G101 -- False positive, not actually a credential.
+	errUnsupportedCAPATenancy      = "unable to convert tenancy, unknown value"
+	errUnsupportedCAPAMarketType   = "unable to convert market type, unknown value"
+	errUnsupportedHTTPTokensState  = "unable to convert httpTokens state, unknown value" //nolint:gosec // This is an error message, not a credential
+	defaultIdentityName            = "default"
+	defaultCredentialsSecretName   = "aws-cloud-credentials" //#nosec G101 -- False positive, not actually a credential.
+	errUnsupportedHostAffinityType = "unable to convert hostAffinity, unknown value"
 )
 
 // machineAndAWSMachineAndAWSCluster stores the details of a Cluster API Machine and AWSMachine and AWSCluster.
@@ -165,6 +166,25 @@ func (m machineAndAWSMachineAndAWSCluster) toProviderSpec() (*mapiv1beta1.AWSMac
 		PlacementGroupPartition: convertAWSPlacementGroupPartition(m.awsMachine.Spec.PlacementGroupPartition),
 		CapacityReservationID:   ptr.Deref(m.awsMachine.Spec.CapacityReservationID, ""),
 		MarketType:              mapiAWSMarketType,
+	}
+
+	// Dedicated host support
+	if m.awsMachine.Spec.HostAffinity != nil {
+		switch *m.awsMachine.Spec.HostAffinity {
+		case "host":
+			mapaProviderConfig.HostPlacement = &mapiv1beta1.HostPlacement{
+				Affinity: ptr.To(mapiv1beta1.HostAffinityDedicatedHost),
+				DedicatedHost: &mapiv1beta1.DedicatedHost{
+					ID: *m.awsMachine.Spec.HostID,
+				},
+			}
+		case "default":
+			mapaProviderConfig.HostPlacement = &mapiv1beta1.HostPlacement{
+				Affinity: ptr.To(mapiv1beta1.HostAffinityAnyAvailable),
+			}
+		default:
+			errors = append(errors, field.Invalid(fldPath.Child("hostAffinity"), m.awsMachine.Spec.HostAffinity, errUnsupportedHostAffinityType))
+		}
 	}
 
 	secretRef, errs := handleAWSIdentityRef(fldPath.Child("identityRef"), m.awsCluster.Spec.IdentityRef)
