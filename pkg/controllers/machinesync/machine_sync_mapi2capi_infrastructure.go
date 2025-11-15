@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/go-test/deep"
 	configv1 "github.com/openshift/api/config/v1"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
@@ -64,7 +63,7 @@ func (r *MachineSyncReconciler) createOrUpdateCAPIInfraMachine(ctx context.Conte
 	// Infrastructure machines are immutable so we delete it for spec changes.
 	// The next reconciliation will create it with the expected changes.
 	// Note: this could be improved to only trigger deletion on known immutable changes.
-	if hasSpecChanges(diff) {
+	if diff.HasSpecChanges() {
 		logger.Info("Deleting the corresponding Cluster API Infrastructure machine as it is out of date, it will be recreated", "diff", fmt.Sprintf("%+v", diff))
 
 		syncronizationIsProgressing, err := r.ensureCAPIInfraMachineDeleted(ctx, sourceMAPIMachine, existingCAPIInfraMachine)
@@ -85,9 +84,9 @@ func (r *MachineSyncReconciler) createOrUpdateCAPIInfraMachine(ctx context.Conte
 	}
 
 	if metadataUpdated || statusUpdated {
-		logger.Info("Successfully updated Cluster API machine")
+		logger.Info("Successfully updated Cluster API Infrastructure machine")
 	} else {
-		logger.Info("No changes detected for Cluster API machine")
+		logger.Info("No changes detected for Cluster API Infrastructure machine")
 	}
 
 	return ctrl.Result{}, syncronizationIsProgressingFalse, nil
@@ -122,11 +121,11 @@ func (r *MachineSyncReconciler) ensureCAPIInfraMachine(ctx context.Context, sour
 }
 
 // ensureCAPIInfraMachineMetadataUpdated updates the Cluster API Infrastructure machine if changes are detected to the metadata or spec (if possible).
-func (r *MachineSyncReconciler) ensureCAPIInfraMachineMetadataUpdated(ctx context.Context, mapiMachine *mapiv1beta1.Machine, diff map[string]any, updatedOrCreatedCAPIInfraMachine client.Object) (bool, error) {
+func (r *MachineSyncReconciler) ensureCAPIInfraMachineMetadataUpdated(ctx context.Context, mapiMachine *mapiv1beta1.Machine, diff util.DiffResult, updatedOrCreatedCAPIInfraMachine client.Object) (bool, error) {
 	logger := logf.FromContext(ctx)
 
 	// If there are no spec changes, return early.
-	if !hasMetadataChanges(diff) {
+	if !diff.HasMetadataChanges() {
 		return false, nil
 	}
 
@@ -147,11 +146,11 @@ func (r *MachineSyncReconciler) ensureCAPIInfraMachineMetadataUpdated(ctx contex
 	return true, nil
 }
 
-func (r *MachineSyncReconciler) ensureCAPIInfraMachineStatusUpdated(ctx context.Context, mapiMachine *mapiv1beta1.Machine, existingCAPIInfraMachine, convertedCAPIInfraMachine client.Object, diff map[string]any, specUpdated bool) (bool, error) {
+func (r *MachineSyncReconciler) ensureCAPIInfraMachineStatusUpdated(ctx context.Context, mapiMachine *mapiv1beta1.Machine, existingCAPIInfraMachine, convertedCAPIInfraMachine client.Object, diff util.DiffResult, specUpdated bool) (bool, error) {
 	logger := logf.FromContext(ctx)
 
 	// If there are no status changes and the spec has not been updated, return early.
-	if !hasStatusChanges(diff) && !specUpdated {
+	if !diff.HasStatusChanges() && !specUpdated {
 		return false, nil
 	}
 
@@ -246,10 +245,8 @@ func (r *MachineSyncReconciler) ensureCAPIInfraMachineDeleted(ctx context.Contex
 }
 
 // compareCAPIInfraMachines compares Cluster API infra machines a and b, and returns a list of differences, or none if there are none.
-//
-//nolint:funlen,gocognit
-func compareCAPIInfraMachines(platform configv1.PlatformType, infraMachine1, infraMachine2 client.Object) (map[string]any, error) {
-	diff := make(map[string]any)
+func compareCAPIInfraMachines(platform configv1.PlatformType, infraMachine1, infraMachine2 client.Object) (util.DiffResult, error) {
+	var obj1, obj2 client.Object
 
 	switch platform {
 	case configv1.AWSPlatformType:
@@ -263,17 +260,8 @@ func compareCAPIInfraMachines(platform configv1.PlatformType, infraMachine1, inf
 			return nil, errAssertingCAPIAWSMachine
 		}
 
-		if diffSpec := deep.Equal(typedInfraMachine1.Spec, typedinfraMachine2.Spec); len(diffSpec) > 0 {
-			diff[".spec"] = diffSpec
-		}
-
-		if diffMetadata := util.ObjectMetaEqual(typedInfraMachine1.ObjectMeta, typedinfraMachine2.ObjectMeta); len(diffMetadata) > 0 {
-			diff[".metadata"] = diffMetadata
-		}
-
-		if diffStatus := deep.Equal(typedInfraMachine1.Status, typedinfraMachine2.Status); len(diffStatus) > 0 {
-			diff[".status"] = diffStatus
-		}
+		obj1 = typedInfraMachine1
+		obj2 = typedinfraMachine2
 	case configv1.OpenStackPlatformType:
 		typedInfraMachine1, ok := infraMachine1.(*openstackv1.OpenStackMachine)
 		if !ok {
@@ -285,17 +273,8 @@ func compareCAPIInfraMachines(platform configv1.PlatformType, infraMachine1, inf
 			return nil, errAssertingCAPIOpenStackMachine
 		}
 
-		if diffSpec := deep.Equal(typedInfraMachine1.Spec, typedinfraMachine2.Spec); len(diffSpec) > 0 {
-			diff[".spec"] = diffSpec
-		}
-
-		if diffMetadata := util.ObjectMetaEqual(typedInfraMachine1.ObjectMeta, typedinfraMachine2.ObjectMeta); len(diffMetadata) > 0 {
-			diff[".metadata"] = diffMetadata
-		}
-
-		if diffStatus := deep.Equal(typedInfraMachine1.Status, typedinfraMachine2.Status); len(diffStatus) > 0 {
-			diff[".status"] = diffStatus
-		}
+		obj1 = typedInfraMachine1
+		obj2 = typedinfraMachine2
 	case configv1.PowerVSPlatformType:
 		typedInfraMachine1, ok := infraMachine1.(*ibmpowervsv1.IBMPowerVSMachine)
 		if !ok {
@@ -307,20 +286,15 @@ func compareCAPIInfraMachines(platform configv1.PlatformType, infraMachine1, inf
 			return nil, errAssertingCAPIIBMPowerVSMachine
 		}
 
-		if diffSpec := deep.Equal(typedInfraMachine1.Spec, typedinfraMachine2.Spec); len(diffSpec) > 0 {
-			diff[".spec"] = diffSpec
-		}
-
-		if diffMetadata := util.ObjectMetaEqual(typedInfraMachine1.ObjectMeta, typedinfraMachine2.ObjectMeta); len(diffMetadata) > 0 {
-			diff[".metadata"] = diffMetadata
-		}
-
-		if diffStatus := deep.Equal(typedInfraMachine1.Status, typedinfraMachine2.Status); len(diffStatus) > 0 {
-			diff[".status"] = diffStatus
-		}
-
+		obj1 = typedInfraMachine1
+		obj2 = typedinfraMachine2
 	default:
 		return nil, fmt.Errorf("%w: %s", errPlatformNotSupported, platform)
+	}
+
+	diff, err := util.NewDefaultDiffer().Diff(obj1, obj2)
+	if err != nil {
+		return nil, fmt.Errorf("failed to compare Cluster API infrastructure machines: %w", err)
 	}
 
 	return diff, nil
