@@ -38,14 +38,3 @@ func providerNameToImageKey(name string) string {
 		return "none"
 	}
 }
-
-func providerNameToCommand(name string) string {
-	switch name {
-	case "aws", "gcp", "ibmcloud":
-		return "./bin/cluster-api-provider-" + name + "-controller-manager"
-	case "cluster-api":
-		return "./bin/cluster-api-controller-manager"
-	default:
-		return "/manager"
-	}
-}
