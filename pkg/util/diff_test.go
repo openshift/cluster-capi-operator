@@ -18,10 +18,21 @@ package util
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
 var _ = Describe("Unit test Diff", func() {
+
+	Describe("error cases", func() {
+		It("should return an error if the objects are not of the same type", func() {
+			a := &mapiv1beta1.MachineSet{}
+			b := &mapiv1beta1.Machine{}
+			_, err := NewDefaultDiffer().Diff(a, b)
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError(ContainSubstring("objects to diff are not of the same type")))
+		})
+	})
 
 	type testInput struct {
 		a           unstructured.Unstructured
