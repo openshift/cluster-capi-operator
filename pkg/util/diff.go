@@ -18,6 +18,7 @@ package util
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"sort"
 	"strings"
 
@@ -129,6 +130,10 @@ func (d *differ) Diff(a, b client.Object) (DiffResult, error) {
 		return nil, errObjectsToCompareCannotBeNil
 	}
 
+	if reflect.TypeOf(a) != reflect.TypeOf(b) {
+		return nil, fmt.Errorf("objects to diff are not of the same type: %T != %T", a, b)
+	}
+
 	// 1. Convert the objects to unstructured.
 	unstructuredA, err := runtime.DefaultUnstructuredConverter.ToUnstructured(a)
 	if err != nil {
@@ -196,6 +201,10 @@ func (d *differ) Diff(a, b client.Object) (DiffResult, error) {
 // NewDefaultDiffer creates a new default differ with the default options.
 func NewDefaultDiffer(opts ...diffopts) *differ {
 	return newDiffer(append(opts,
+		// Always ignore kind and apiVersion as they may not be always set. Instead the differ checks if the input objects have the same type.
+		WithIgnoreField("kind"),
+		WithIgnoreField("apiVersion"),
+
 		// Options for handling of metadata fields.
 
 		// Special handling for Cluster API's conversion-data label.
