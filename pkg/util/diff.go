@@ -33,6 +33,7 @@ import (
 
 var (
 	errObjectsToCompareCannotBeNil = errors.New("objects to diff cannot be nil")
+	errObjectsToCompareNotSameType = errors.New("objects to diff are not of the same type")
 	errProviderSpecNotFound        = errors.New("providerSpec not found")
 )
 
@@ -131,7 +132,7 @@ func (d *differ) Diff(a, b client.Object) (DiffResult, error) {
 	}
 
 	if reflect.TypeOf(a) != reflect.TypeOf(b) {
-		return nil, fmt.Errorf("objects to diff are not of the same type: %T != %T", a, b)
+		return nil, fmt.Errorf("%w: %T != %T", errObjectsToCompareNotSameType, a, b)
 	}
 
 	// 1. Convert the objects to unstructured.
