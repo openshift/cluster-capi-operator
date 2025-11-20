@@ -92,7 +92,7 @@ func createOpenStackMachineTemplate(ctx context.Context, cl client.Client, mapiP
 	Expect(mapiProviderSpec.Tags).ToNot(BeNil())
 	Expect(len(mapiProviderSpec.Tags)).To(BeNumerically(">", 0))
 
-	var image string
+	var image openstackv1.ImageParam
 	var rootVolume *openstackv1.RootVolume
 
 	if mapiProviderSpec.RootVolume != nil {
@@ -106,8 +106,9 @@ func createOpenStackMachineTemplate(ctx context.Context, cl client.Client, mapiP
 				},
 			},
 		}
+		image.ID = ptr.To(mapiProviderSpec.RootVolume.SourceUUID)
 	} else {
-		image = mapiProviderSpec.Image
+		image.Filter = &openstackv1.ImageFilter{Name: &mapiProviderSpec.Image}
 	}
 
 	// NOTE(stephenfin): We intentionally ignore additional security for now.
@@ -130,7 +131,7 @@ func createOpenStackMachineTemplate(ctx context.Context, cl client.Client, mapiP
 			CloudName: "openstack",
 			Name:      "openstack-cloud-credentials",
 		},
-		Image:          openstackv1.ImageParam{Filter: &openstackv1.ImageFilter{Name: &image}},
+		Image:          image,
 		RootVolume:     rootVolume,
 		SecurityGroups: securityGroups,
 	}
