@@ -1,14 +1,7 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-set -euo pipefail
+# TODO(stephenfin): This is legacy from when the OpenStack e2e tests lived
+# elsewhere. We should remove this script and update the CI jobs to call the
+# Makefile target like everyone else
 
-echo "Running e2e-openstack.sh"
-
-unset GOFLAGS
-tmp="$(mktemp -d)"
-
-echo "cloning github.com/openshift/cluster-api-provider-openstack at branch '$PULL_BASE_REF'"
-git clone --single-branch --branch="$PULL_BASE_REF" --depth=1 "https://github.com/openshift/cluster-api-provider-openstack.git" "$tmp"
-
-echo "running cluster-api-provider-openstack's: make e2e"
-exec make -C "$tmp/openshift" e2e
+exec make e2e
