@@ -10,7 +10,7 @@ require (
 	github.com/golangci/golangci-lint v1.64.8
 	github.com/google/go-cmp v0.7.0
 	github.com/google/uuid v1.6.0
-	github.com/gophercloud/gophercloud/v2 v2.7.0
+	github.com/gophercloud/gophercloud/v2 v2.9.0
 	github.com/klauspost/compress v1.18.0
 	github.com/metal3-io/cluster-api-provider-metal3/api v1.10.1
 	github.com/onsi/ginkgo/v2 v2.23.4
