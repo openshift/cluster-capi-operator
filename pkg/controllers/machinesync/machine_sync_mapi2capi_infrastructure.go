@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	"github.com/go-test/deep"
+	metal3v1 "github.com/metal3-io/cluster-api-provider-metal3/api/v1beta1"
 	configv1 "github.com/openshift/api/config/v1"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
@@ -247,7 +248,7 @@ func (r *MachineSyncReconciler) ensureCAPIInfraMachineDeleted(ctx context.Contex
 
 // compareCAPIInfraMachines compares Cluster API infra machines a and b, and returns a list of differences, or none if there are none.
 //
-//nolint:funlen,gocognit
+//nolint:funlen,gocognit,cyclop
 func compareCAPIInfraMachines(platform configv1.PlatformType, infraMachine1, infraMachine2 client.Object) (map[string]any, error) {
 	diff := make(map[string]any)
 
@@ -283,6 +284,28 @@ func compareCAPIInfraMachines(platform configv1.PlatformType, infraMachine1, inf
 		typedinfraMachine2, ok := infraMachine2.(*openstackv1.OpenStackMachine)
 		if !ok {
 			return nil, errAssertingCAPIOpenStackMachine
+		}
+
+		if diffSpec := deep.Equal(typedInfraMachine1.Spec, typedinfraMachine2.Spec); len(diffSpec) > 0 {
+			diff[".spec"] = diffSpec
+		}
+
+		if diffMetadata := util.ObjectMetaEqual(typedInfraMachine1.ObjectMeta, typedinfraMachine2.ObjectMeta); len(diffMetadata) > 0 {
+			diff[".metadata"] = diffMetadata
+		}
+
+		if diffStatus := deep.Equal(typedInfraMachine1.Status, typedinfraMachine2.Status); len(diffStatus) > 0 {
+			diff[".status"] = diffStatus
+		}
+	case configv1.BareMetalPlatformType:
+		typedInfraMachine1, ok := infraMachine1.(*metal3v1.Metal3Machine)
+		if !ok {
+			return nil, errAssertingCAPIMetal3Machine
+		}
+
+		typedinfraMachine2, ok := infraMachine2.(*metal3v1.Metal3Machine)
+		if !ok {
+			return nil, errAssertingCAPIMetal3Machine
 		}
 
 		if diffSpec := deep.Equal(typedInfraMachine1.Spec, typedinfraMachine2.Spec); len(diffSpec) > 0 {

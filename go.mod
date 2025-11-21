@@ -17,6 +17,7 @@ require (
 	github.com/openshift/api v0.0.0-20250731015415-ed654edbd7c6
 	github.com/openshift/client-go v0.0.0-20250710075018-396b36f983ee
 	github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20250821122144-fd0936342469
+	github.com/openshift/cluster-api-provider-baremetal v0.0.0-20250930083252-4e6a729c5ac8
 	github.com/openshift/library-go v0.0.0-20250729191057-91376e1b394e
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/pflag v1.0.6
@@ -303,3 +304,5 @@ require (
 	sigs.k8s.io/json v0.0.0-20241014173422-cfa47c3a1cc8 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.7.0 // indirect
 )
+
+replace github.com/metal3-io/cluster-api-provider-metal3/api => github.com/metal3-io/cluster-api-provider-metal3/api v1.10.1
