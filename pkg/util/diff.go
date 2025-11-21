@@ -272,6 +272,48 @@ func WithIgnoreConditionsLastTransitionTime() diffopts {
 	}
 }
 
+// WithIgnoreConditionType conditionType stringc onfigures the differ to ignore the condition of the given type when executing Diff.
+func WithIgnoreConditionType(conditionType string) diffopts {
+	return func(d *differ) {
+		d.modifyFuncs[fmt.Sprintf("RemoveCondition[%s]", conditionType)] = func(a map[string]interface{}) error {
+			conditionPaths := [][]string{
+				{"status", "conditions"},
+				{"status", "v1beta2", "conditions"},
+				{"status", "deprecated", "v1beta1", "conditions"},
+			}
+
+			for _, conditionPath := range conditionPaths {
+				conditions, found, err := unstructured.NestedSlice(a, conditionPath...)
+				if !found || err != nil {
+					continue
+				}
+
+				newConditions := []interface{}{}
+
+				for _, condition := range conditions {
+					conditionMap, ok := condition.(map[string]interface{})
+					if !ok {
+						continue
+					}
+
+					// Skip condition of the given type.
+					if conditionMap["type"] == conditionType {
+						continue
+					}
+
+					newConditions = append(newConditions, condition)
+				}
+
+				if err := unstructured.SetNestedField(a, newConditions, conditionPath...); err != nil {
+					return fmt.Errorf("failed to set nested field %s: %w", strings.Join(conditionPath, "."), err)
+				}
+			}
+
+			return nil
+		}
+	}
+}
+
 // WithProviderSpec configures the differ to separately diff .spec.providerSpec.
 func WithProviderSpec(platform configv1.PlatformType, path []string, marshalProviderSpec func(platform configv1.PlatformType, rawExtension *runtime.RawExtension) (any, error)) diffopts {
 	return func(d *differ) {

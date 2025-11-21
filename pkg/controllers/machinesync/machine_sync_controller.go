@@ -1293,7 +1293,10 @@ func (r *MachineSyncReconciler) ensureSyncFinalizer(ctx context.Context, mapiMac
 
 // compareCAPIMachines compares CAPI machines a and b, and returns a list of differences, or none if there are none.
 func compareCAPIMachines(capiMachine1, capiMachine2 *clusterv1.Machine) (util.DiffResult, error) {
-	diff, err := util.NewDefaultDiffer().Diff(capiMachine1, capiMachine2)
+	diff, err := util.NewDefaultDiffer(
+		// The paused condition is always handled by the corresponding CAPI controller.
+		util.WithIgnoreConditionType(clusterv1.PausedV1Beta2Condition),
+	).Diff(capiMachine1, capiMachine2)
 	if err != nil {
 		return nil, fmt.Errorf("failed to compare Cluster API machines: %w", err)
 	}
@@ -1310,6 +1313,8 @@ func compareMAPIMachines(platform configv1.PlatformType, a, b *mapiv1beta1.Machi
 		util.WithIgnoreField("status", "lastOperation"),
 		util.WithIgnoreField("status", "authoritativeAPI"),
 		util.WithIgnoreField("status", "synchronizedGeneration"),
+		// The synchronized condition is always handled by the migration controller separately.
+		util.WithIgnoreConditionType(string(controllers.SynchronizedCondition)),
 	).Diff(a, b)
 
 	if err != nil {

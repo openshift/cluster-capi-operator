@@ -29,6 +29,7 @@ import (
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	ibmpowervsv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
 	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -292,7 +293,10 @@ func compareCAPIInfraMachines(platform configv1.PlatformType, infraMachine1, inf
 		return nil, fmt.Errorf("%w: %s", errPlatformNotSupported, platform)
 	}
 
-	diff, err := util.NewDefaultDiffer().Diff(obj1, obj2)
+	diff, err := util.NewDefaultDiffer(
+		// The paused condition is always handled by the corresponding CAPI controller.
+		util.WithIgnoreConditionType(clusterv1.PausedV1Beta2Condition),
+	).Diff(obj1, obj2)
 	if err != nil {
 		return nil, fmt.Errorf("failed to compare Cluster API infrastructure machines: %w", err)
 	}
