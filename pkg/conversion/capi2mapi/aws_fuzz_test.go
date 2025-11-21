@@ -29,6 +29,7 @@ import (
 	conversiontest "github.com/openshift/cluster-capi-operator/pkg/conversion/test/fuzz"
 
 	runtimeserializer "k8s.io/apimachinery/pkg/runtime/serializer"
+	"k8s.io/utils/ptr"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -158,6 +159,7 @@ func awsMachineFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interface{} 
 
 			fuzzAWSMachineSpecTenancy(&spec.Tenancy, c)
 			fuzzAWSMachineSpecMarketType(&spec.MarketType, c)
+			fuzzAWSMachineSpecHostPlacement(spec, c)
 
 			// Fields not required for our use case can be ignored.
 			spec.ImageLookupFormat = ""
@@ -203,6 +205,18 @@ func fuzzAWSMachineSpecMarketType(marketType *awsv1.MarketType, c randfill.Conti
 		*marketType = awsv1.MarketTypeCapacityBlock
 	case 3:
 		*marketType = ""
+	}
+}
+
+func fuzzAWSMachineSpecHostPlacement(spec *awsv1.AWSMachineSpec, c randfill.Continue) {
+	switch c.Int31n(3) {
+	case 0:
+		spec.HostAffinity = nil
+	case 1:
+		spec.HostAffinity = ptr.To("default")
+	case 2:
+		spec.HostAffinity = ptr.To("host")
+		spec.HostID = ptr.To("h-0123456789abcdef0")
 	}
 }
 
