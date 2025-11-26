@@ -6,15 +6,15 @@ require (
 	github.com/onsi/ginkgo/v2 v2.27.2
 	github.com/onsi/gomega v1.38.2
 	github.com/openshift-eng/openshift-tests-extension v0.0.0-20251024155203-c498f9efe478
-	github.com/openshift/cluster-capi-operator/e2e v0.0.0-20251121101530-509ccfd2960c
 	github.com/spf13/cobra v1.10.1
 	k8s.io/api v0.34.2
 	k8s.io/client-go v0.34.2
-	k8s.io/kubernetes v1.34.1
+	k8s.io/kubernetes v1.33.3
 )
 
 require (
 	cel.dev/expr v0.24.0 // indirect
+	cyphar.com/go-pathrs v0.2.1 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.18.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/internal v1.11.1 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5 v5.7.0 // indirect
@@ -48,7 +48,7 @@ require (
 	github.com/containerd/typeurl/v2 v2.2.2 // indirect
 	github.com/coreos/go-semver v0.3.1 // indirect
 	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
-	github.com/cyphar/filepath-securejoin v0.4.1 // indirect
+	github.com/cyphar/filepath-securejoin v0.6.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/distribution/reference v0.6.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
@@ -119,15 +119,16 @@ require (
 	github.com/opencontainers/cgroups v0.0.3 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
-	github.com/opencontainers/runc v1.2.5 // indirect
+	github.com/opencontainers/runc v1.2.8 // indirect
 	github.com/opencontainers/runtime-spec v1.2.0 // indirect
-	github.com/opencontainers/selinux v1.11.1 // indirect
-	github.com/openshift/api v0.0.0-20251027215121-243758deaab1 // indirect
-	github.com/openshift/client-go v0.0.0-20251015124057-db0dee36e235 // indirect
+	github.com/opencontainers/selinux v1.13.0 // indirect
+	github.com/openshift/api v0.0.0-20251124235416-c11dd82e305c // indirect
+	github.com/openshift/client-go v0.0.0-20251125141819-b6281947c285 // indirect
 	github.com/openshift/cluster-api-actuator-pkg v0.0.0-20250729202911-167220318f40 // indirect
 	github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20250821122144-fd0936342469 // indirect
 	github.com/openshift/cluster-autoscaler-operator v0.0.1-0.20250702183526-4eb64d553940 // indirect
-	github.com/openshift/library-go v0.0.0-20251015151611-6fc7a74b67c5 // indirect
+	github.com/openshift/cluster-capi-operator/e2e v0.0.0-20251121101530-509ccfd2960c
+	github.com/openshift/library-go v0.0.0-20251120164824-14a789e09884 // indirect
 	github.com/openshift/machine-api-operator v0.2.1-0.20250721183005-388c07321caf // indirect
 	github.com/peterbourgon/diskv v2.0.1+incompatible // indirect
 	github.com/pkg/errors v0.9.1 // indirect
@@ -141,7 +142,7 @@ require (
 	github.com/spf13/pflag v1.0.9 // indirect
 	github.com/stoewer/go-strcase v1.3.0 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
-	github.com/stretchr/testify v1.10.0 // indirect
+	github.com/stretchr/testify v1.11.1 // indirect
 	github.com/tidwall/gjson v1.18.0 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect

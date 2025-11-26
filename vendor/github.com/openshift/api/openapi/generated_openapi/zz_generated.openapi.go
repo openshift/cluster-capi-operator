@@ -533,6 +533,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/openshift/api/console/v1.NamespaceDashboardSpec":                                         schema_openshift_api_console_v1_NamespaceDashboardSpec(ref),
 		"github.com/openshift/api/example/v1.CELUnion":                                                       schema_openshift_api_example_v1_CELUnion(ref),
 		"github.com/openshift/api/example/v1.EvolvingUnion":                                                  schema_openshift_api_example_v1_EvolvingUnion(ref),
+		"github.com/openshift/api/example/v1.FormatMarkerExamples":                                           schema_openshift_api_example_v1_FormatMarkerExamples(ref),
 		"github.com/openshift/api/example/v1.StableConfigType":                                               schema_openshift_api_example_v1_StableConfigType(ref),
 		"github.com/openshift/api/example/v1.StableConfigTypeList":                                           schema_openshift_api_example_v1_StableConfigTypeList(ref),
 		"github.com/openshift/api/example/v1.StableConfigTypeSpec":                                           schema_openshift_api_example_v1_StableConfigTypeSpec(ref),
@@ -794,6 +795,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/openshift/api/machine/v1beta1.ConfidentialVM":                                            schema_openshift_api_machine_v1beta1_ConfidentialVM(ref),
 		"github.com/openshift/api/machine/v1beta1.DataDisk":                                                  schema_openshift_api_machine_v1beta1_DataDisk(ref),
 		"github.com/openshift/api/machine/v1beta1.DataDiskManagedDiskParameters":                             schema_openshift_api_machine_v1beta1_DataDiskManagedDiskParameters(ref),
+		"github.com/openshift/api/machine/v1beta1.DedicatedHost":                                             schema_openshift_api_machine_v1beta1_DedicatedHost(ref),
 		"github.com/openshift/api/machine/v1beta1.DiskEncryptionSetParameters":                               schema_openshift_api_machine_v1beta1_DiskEncryptionSetParameters(ref),
 		"github.com/openshift/api/machine/v1beta1.DiskSettings":                                              schema_openshift_api_machine_v1beta1_DiskSettings(ref),
 		"github.com/openshift/api/machine/v1beta1.EBSBlockDeviceSpec":                                        schema_openshift_api_machine_v1beta1_EBSBlockDeviceSpec(ref),
@@ -808,6 +810,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/openshift/api/machine/v1beta1.GCPNetworkInterface":                                       schema_openshift_api_machine_v1beta1_GCPNetworkInterface(ref),
 		"github.com/openshift/api/machine/v1beta1.GCPServiceAccount":                                         schema_openshift_api_machine_v1beta1_GCPServiceAccount(ref),
 		"github.com/openshift/api/machine/v1beta1.GCPShieldedInstanceConfig":                                 schema_openshift_api_machine_v1beta1_GCPShieldedInstanceConfig(ref),
+		"github.com/openshift/api/machine/v1beta1.HostPlacement":                                             schema_openshift_api_machine_v1beta1_HostPlacement(ref),
 		"github.com/openshift/api/machine/v1beta1.Image":                                                     schema_openshift_api_machine_v1beta1_Image(ref),
 		"github.com/openshift/api/machine/v1beta1.LastOperation":                                             schema_openshift_api_machine_v1beta1_LastOperation(ref),
 		"github.com/openshift/api/machine/v1beta1.LifecycleHook":                                             schema_openshift_api_machine_v1beta1_LifecycleHook(ref),
@@ -848,6 +851,12 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/openshift/api/machine/v1beta1.VSphereMachineProviderSpec":                                schema_openshift_api_machine_v1beta1_VSphereMachineProviderSpec(ref),
 		"github.com/openshift/api/machine/v1beta1.VSphereMachineProviderStatus":                              schema_openshift_api_machine_v1beta1_VSphereMachineProviderStatus(ref),
 		"github.com/openshift/api/machine/v1beta1.Workspace":                                                 schema_openshift_api_machine_v1beta1_Workspace(ref),
+		"github.com/openshift/api/machineconfiguration/v1alpha1.InternalReleaseImage":                        schema_openshift_api_machineconfiguration_v1alpha1_InternalReleaseImage(ref),
+		"github.com/openshift/api/machineconfiguration/v1alpha1.InternalReleaseImageBundleStatus":            schema_openshift_api_machineconfiguration_v1alpha1_InternalReleaseImageBundleStatus(ref),
+		"github.com/openshift/api/machineconfiguration/v1alpha1.InternalReleaseImageList":                    schema_openshift_api_machineconfiguration_v1alpha1_InternalReleaseImageList(ref),
+		"github.com/openshift/api/machineconfiguration/v1alpha1.InternalReleaseImageRef":                     schema_openshift_api_machineconfiguration_v1alpha1_InternalReleaseImageRef(ref),
+		"github.com/openshift/api/machineconfiguration/v1alpha1.InternalReleaseImageSpec":                    schema_openshift_api_machineconfiguration_v1alpha1_InternalReleaseImageSpec(ref),
+		"github.com/openshift/api/machineconfiguration/v1alpha1.InternalReleaseImageStatus":                  schema_openshift_api_machineconfiguration_v1alpha1_InternalReleaseImageStatus(ref),
 		"github.com/openshift/api/machineconfiguration/v1alpha1.MCOObjectReference":                          schema_openshift_api_machineconfiguration_v1alpha1_MCOObjectReference(ref),
 		"github.com/openshift/api/machineconfiguration/v1alpha1.MachineConfigNode":                           schema_openshift_api_machineconfiguration_v1alpha1_MachineConfigNode(ref),
 		"github.com/openshift/api/machineconfiguration/v1alpha1.MachineConfigNodeList":                       schema_openshift_api_machineconfiguration_v1alpha1_MachineConfigNodeList(ref),
@@ -856,6 +865,11 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/openshift/api/machineconfiguration/v1alpha1.MachineConfigNodeStatus":                     schema_openshift_api_machineconfiguration_v1alpha1_MachineConfigNodeStatus(ref),
 		"github.com/openshift/api/machineconfiguration/v1alpha1.MachineConfigNodeStatusMachineConfigVersion": schema_openshift_api_machineconfiguration_v1alpha1_MachineConfigNodeStatusMachineConfigVersion(ref),
 		"github.com/openshift/api/machineconfiguration/v1alpha1.MachineConfigNodeStatusPinnedImageSet":       schema_openshift_api_machineconfiguration_v1alpha1_MachineConfigNodeStatusPinnedImageSet(ref),
+		"github.com/openshift/api/machineconfiguration/v1alpha1.OSImageStream":                               schema_openshift_api_machineconfiguration_v1alpha1_OSImageStream(ref),
+		"github.com/openshift/api/machineconfiguration/v1alpha1.OSImageStreamList":                           schema_openshift_api_machineconfiguration_v1alpha1_OSImageStreamList(ref),
+		"github.com/openshift/api/machineconfiguration/v1alpha1.OSImageStreamSet":                            schema_openshift_api_machineconfiguration_v1alpha1_OSImageStreamSet(ref),
+		"github.com/openshift/api/machineconfiguration/v1alpha1.OSImageStreamSpec":                           schema_openshift_api_machineconfiguration_v1alpha1_OSImageStreamSpec(ref),
+		"github.com/openshift/api/machineconfiguration/v1alpha1.OSImageStreamStatus":                         schema_openshift_api_machineconfiguration_v1alpha1_OSImageStreamStatus(ref),
 		"github.com/openshift/api/machineconfiguration/v1alpha1.PinnedImageRef":                              schema_openshift_api_machineconfiguration_v1alpha1_PinnedImageRef(ref),
 		"github.com/openshift/api/machineconfiguration/v1alpha1.PinnedImageSet":                              schema_openshift_api_machineconfiguration_v1alpha1_PinnedImageSet(ref),
 		"github.com/openshift/api/machineconfiguration/v1alpha1.PinnedImageSetList":                          schema_openshift_api_machineconfiguration_v1alpha1_PinnedImageSetList(ref),
@@ -9736,6 +9750,14 @@ func schema_openshift_api_config_v1_BareMetalPlatformStatus(ref common.Reference
 							Ref:         ref("github.com/openshift/api/config/v1.BareMetalPlatformLoadBalancer"),
 						},
 					},
+					"dnsRecordsType": {
+						SchemaProps: spec.SchemaProps{
+							Description: "dnsRecordsType determines whether records for api, api-int, and ingress are provided by the internal DNS service or externally. Allowed values are `Internal`, `External`, and omitted. When set to `Internal`, records are provided by the internal infrastructure and no additional user configuration is required for the cluster to function. When set to `External`, records are not provided by the internal infrastructure and must be configured by the user on a DNS server outside the cluster. Cluster nodes must use this external server for their upstream DNS requests. This value may only be set when loadBalancer.type is set to UserManaged. When omitted, this means the user has no opinion and the platform is left to choose reasonable defaults. These defaults are subject to change over time. The current default is `Internal`.\n\nPossible enum values:\n - `\"External\"`\n - `\"Internal\"`",
+							Type:        []string{"string"},
+							Format:      "",
+							Enum:        []interface{}{"External", "Internal"},
+						},
+					},
 					"machineNetworks": {
 						VendorExtensible: spec.VendorExtensible{
 							Extensions: spec.Extensions{
@@ -16835,6 +16857,14 @@ func schema_openshift_api_config_v1_NutanixPlatformStatus(ref common.ReferenceCa
 							Ref:         ref("github.com/openshift/api/config/v1.NutanixPlatformLoadBalancer"),
 						},
 					},
+					"dnsRecordsType": {
+						SchemaProps: spec.SchemaProps{
+							Description: "dnsRecordsType determines whether records for api, api-int, and ingress are provided by the internal DNS service or externally. Allowed values are `Internal`, `External`, and omitted. When set to `Internal`, records are provided by the internal infrastructure and no additional user configuration is required for the cluster to function. When set to `External`, records are not provided by the internal infrastructure and must be configured by the user on a DNS server outside the cluster. Cluster nodes must use this external server for their upstream DNS requests. This value may only be set when loadBalancer.type is set to UserManaged. When omitted, this means the user has no opinion and the platform is left to choose reasonable defaults. These defaults are subject to change over time. The current default is `Internal`.\n\nPossible enum values:\n - `\"External\"`\n - `\"Internal\"`",
+							Type:        []string{"string"},
+							Format:      "",
+							Enum:        []interface{}{"External", "Internal"},
+						},
+					},
 				},
 				Required: []string{"apiServerInternalIPs", "ingressIPs"},
 			},
@@ -17896,6 +17926,14 @@ func schema_openshift_api_config_v1_OpenStackPlatformStatus(ref common.Reference
 							Ref:         ref("github.com/openshift/api/config/v1.OpenStackPlatformLoadBalancer"),
 						},
 					},
+					"dnsRecordsType": {
+						SchemaProps: spec.SchemaProps{
+							Description: "dnsRecordsType determines whether records for api, api-int, and ingress are provided by the internal DNS service or externally. Allowed values are `Internal`, `External`, and omitted. When set to `Internal`, records are provided by the internal infrastructure and no additional user configuration is required for the cluster to function. When set to `External`, records are not provided by the internal infrastructure and must be configured by the user on a DNS server outside the cluster. Cluster nodes must use this external server for their upstream DNS requests. This value may only be set when loadBalancer.type is set to UserManaged. When omitted, this means the user has no opinion and the platform is left to choose reasonable defaults. These defaults are subject to change over time. The current default is `Internal`.\n\nPossible enum values:\n - `\"External\"`\n - `\"Internal\"`",
+							Type:        []string{"string"},
+							Format:      "",
+							Enum:        []interface{}{"External", "Internal"},
+						},
+					},
 					"machineNetworks": {
 						VendorExtensible: spec.VendorExtensible{
 							Extensions: spec.Extensions{
@@ -18233,6 +18271,14 @@ func schema_openshift_api_config_v1_OvirtPlatformStatus(ref common.ReferenceCall
 							Description: "loadBalancer defines how the load balancer used by the cluster is configured.",
 							Default:     map[string]interface{}{"type": "OpenShiftManagedDefault"},
 							Ref:         ref("github.com/openshift/api/config/v1.OvirtPlatformLoadBalancer"),
+						},
+					},
+					"dnsRecordsType": {
+						SchemaProps: spec.SchemaProps{
+							Description: "dnsRecordsType determines whether records for api, api-int, and ingress are provided by the internal DNS service or externally. Allowed values are `Internal`, `External`, and omitted. When set to `Internal`, records are provided by the internal infrastructure and no additional user configuration is required for the cluster to function. When set to `External`, records are not provided by the internal infrastructure and must be configured by the user on a DNS server outside the cluster. Cluster nodes must use this external server for their upstream DNS requests. This value may only be set when loadBalancer.type is set to UserManaged. When omitted, this means the user has no opinion and the platform is left to choose reasonable defaults. These defaults are subject to change over time. The current default is `Internal`.\n\nPossible enum values:\n - `\"External\"`\n - `\"Internal\"`",
+							Type:        []string{"string"},
+							Format:      "",
+							Enum:        []interface{}{"External", "Internal"},
 						},
 					},
 				},
@@ -19942,7 +19988,7 @@ func schema_openshift_api_config_v1_SchedulerSpec(ref common.ReferenceCallback) 
 					},
 					"profileCustomizations": {
 						SchemaProps: spec.SchemaProps{
-							Description: "profileCustomizations contains configuration for modifying the default behavior of existing scheduler profiles.",
+							Description: "profileCustomizations contains configuration for modifying the default behavior of existing scheduler profiles. Deprecated: no longer needed, since DRA is GA starting with 4.21, and is enabled by' default in the cluster, this field will be removed in 4.24.",
 							Default:     map[string]interface{}{},
 							Ref:         ref("github.com/openshift/api/config/v1.ProfileCustomizations"),
 						},
@@ -20777,7 +20823,7 @@ func schema_openshift_api_config_v1_Update(ref common.ReferenceCallback) common.
 					},
 					"force": {
 						SchemaProps: spec.SchemaProps{
-							Description: "force allows an administrator to update to an image that has failed verification or upgradeable checks that are designed to keep your cluster safe. Only use this if: * you are testing unsigned release images in short-lived test clusters or * you are working around a known bug in the cluster-version\n  operator and you have verified the authenticity of the provided\n  image yourself.\nThe provided image will run with full administrative access to the cluster. Do not use this flag with images that comes from unknown or potentially malicious sources.",
+							Description: "force allows an administrator to update to an image that has failed verification or upgradeable checks that are designed to keep your cluster safe. Only use this if: * you are testing unsigned release images in short-lived test clusters or * you are working around a known bug in the cluster-version\n  operator and you have verified the authenticity of the provided\n  image yourself.\nThe provided image will run with full administrative access to the cluster. Do not use this flag with images that come from unknown or potentially malicious sources.",
 							Default:     false,
 							Type:        []string{"boolean"},
 							Format:      "",
@@ -21426,6 +21472,14 @@ func schema_openshift_api_config_v1_VSpherePlatformStatus(ref common.ReferenceCa
 							Description: "loadBalancer defines how the load balancer used by the cluster is configured.",
 							Default:     map[string]interface{}{"type": "OpenShiftManagedDefault"},
 							Ref:         ref("github.com/openshift/api/config/v1.VSpherePlatformLoadBalancer"),
+						},
+					},
+					"dnsRecordsType": {
+						SchemaProps: spec.SchemaProps{
+							Description: "dnsRecordsType determines whether records for api, api-int, and ingress are provided by the internal DNS service or externally. Allowed values are `Internal`, `External`, and omitted. When set to `Internal`, records are provided by the internal infrastructure and no additional user configuration is required for the cluster to function. When set to `External`, records are not provided by the internal infrastructure and must be configured by the user on a DNS server outside the cluster. Cluster nodes must use this external server for their upstream DNS requests. This value may only be set when loadBalancer.type is set to UserManaged. When omitted, this means the user has no opinion and the platform is left to choose reasonable defaults. These defaults are subject to change over time. The current default is `Internal`.\n\nPossible enum values:\n - `\"External\"`\n - `\"Internal\"`",
+							Type:        []string{"string"},
+							Format:      "",
+							Enum:        []interface{}{"External", "Internal"},
 						},
 					},
 					"machineNetworks": {
@@ -24134,7 +24188,7 @@ func schema_openshift_api_console_v1_ConsoleLinkSpec(ref common.ReferenceCallbac
 					},
 					"href": {
 						SchemaProps: spec.SchemaProps{
-							Description: "href is the absolute secure URL for the link (must use https)",
+							Description: "href is the absolute URL for the link. Must use https:// for web URLs or mailto: for email links.",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
@@ -25633,7 +25687,7 @@ func schema_openshift_api_console_v1_Link(ref common.ReferenceCallback) common.O
 					},
 					"href": {
 						SchemaProps: spec.SchemaProps{
-							Description: "href is the absolute secure URL for the link (must use https)",
+							Description: "href is the absolute URL for the link. Must use https:// for web URLs or mailto: for email links.",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
@@ -25747,6 +25801,131 @@ func schema_openshift_api_example_v1_EvolvingUnion(ref common.ReferenceCallback)
 					},
 				},
 				Required: []string{"type"},
+			},
+		},
+	}
+}
+
+func schema_openshift_api_example_v1_FormatMarkerExamples(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "FormatMarkerExamples demonstrates all Kubebuilder Format markers supported as of Kubernetes 1.33. This struct provides a comprehensive reference for format marker validation. Each field uses a different format marker to validate its value.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"ipv4Address": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ipv4Address must be a valid IPv4 address in dotted-quad notation. Valid values range from 0.0.0.0 to 255.255.255.255 (e.g., 192.168.1.1).\n\nUse of Format=ipv4 is not recommended due to CVE-2021-29923 and CVE-2024-24790. Instead, use the CEL expression `isIP(self) && ip(self).family() == 4` to validate IPv4 addresses.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"ipv6Address": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ipv6Address must be a valid IPv6 address. Valid examples include full form (2001:0db8:0000:0000:0000:0000:0000:0001) or compressed form (2001:db8::1 or ::1).\n\nUse of Format=ipv6 is not recommended due to CVE-2021-29923 and CVE-2024-24790. Instead, use the CEL expression `isIP(self) && ip(self).family() == 6` to validate IPv6 addresses.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"cidrNotation": {
+						SchemaProps: spec.SchemaProps{
+							Description: "cidrNotation must be a valid CIDR notation IP address range. Valid examples include IPv4 CIDR (10.0.0.0/8, 192.168.1.0/24) or IPv6 CIDR (fd00::/8, 2001:db8::/32).\n\nUse of Format=cidr is not recommended due to CVE-2021-29923 and CVE-2024-24790. Instead, use the CEL expression `isCIDR(self)` to validate CIDR notation. Additionally, use `isCIDR(self) && cidr(self).ip().family() == X` to validate IPvX specifically.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"uriField": {
+						SchemaProps: spec.SchemaProps{
+							Description: "uriField must be a valid URI following RFC 3986 syntax. Valid examples include https://example.com/path?query=value or /absolute-path.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"emailAddress": {
+						SchemaProps: spec.SchemaProps{
+							Description: "emailAddress must be a valid email address. Valid examples include user@example.com or firstname.lastname@company.co.uk.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"hostnameField": {
+						SchemaProps: spec.SchemaProps{
+							Description: "hostnameField must be a valid Internet hostname per RFC 1034. Valid examples include example.com, api.example.com, or my-service.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"macAddress": {
+						SchemaProps: spec.SchemaProps{
+							Description: "macAddress must be a valid MAC address. Valid examples include 00:1A:2B:3C:4D:5E or 00-1A-2B-3C-4D-5E.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"uuidField": {
+						SchemaProps: spec.SchemaProps{
+							Description: "uuidField must be a valid UUID (any version) in 8-4-4-4-12 format. Valid examples include 550e8400-e29b-41d4-a716-446655440000 or 123e4567-e89b-12d3-a456-426614174000.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"uuid3Field": {
+						SchemaProps: spec.SchemaProps{
+							Description: "uuid3Field must be a valid UUID version 3 (MD5 hash-based). Version 3 UUIDs are generated using MD5 hashing of a namespace and name. Valid example: a3bb189e-8bf9-3888-9912-ace4e6543002.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"uuid4Field": {
+						SchemaProps: spec.SchemaProps{
+							Description: "uuid4Field must be a valid UUID version 4 (random). Version 4 UUIDs are randomly generated. Valid example: 550e8400-e29b-41d4-a716-446655440000.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"uuid5Field": {
+						SchemaProps: spec.SchemaProps{
+							Description: "uuid5Field must be a valid UUID version 5 (SHA-1 hash-based). Version 5 UUIDs are generated using SHA-1 hashing of a namespace and name. Valid example: 74738ff5-5367-5958-9aee-98fffdcd1876.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"dateField": {
+						SchemaProps: spec.SchemaProps{
+							Description: "dateField must be a valid date in RFC 3339 full-date format (YYYY-MM-DD). Valid examples include 2024-01-15 or 2023-12-31.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"dateTimeField": {
+						SchemaProps: spec.SchemaProps{
+							Description: "dateTimeField must be a valid RFC 3339 date-time. Valid examples include 2024-01-15T14:30:00Z, 2024-01-15T14:30:00+00:00, or 2024-01-15T14:30:00.123Z.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"durationField": {
+						SchemaProps: spec.SchemaProps{
+							Description: "durationField must be a valid duration string parseable by Go's time.ParseDuration. Valid time units are ns, us (or µs), ms, s, m, h. Valid examples include 30s, 5m, 1h30m, 100ms, or 1h.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"base64Data": {
+						SchemaProps: spec.SchemaProps{
+							Description: "base64Data must be valid base64-encoded data. Valid examples include aGVsbG8= (encodes \"hello\") or SGVsbG8gV29ybGQh (encodes \"Hello World!\").",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"passwordField": {
+						SchemaProps: spec.SchemaProps{
+							Description: "passwordField is a marker for sensitive data. Note that the password format marker does not perform any actual validation - it accepts any string value. This marker is primarily used to signal that the field contains sensitive information.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
 			},
 		},
 	}
@@ -25962,12 +26141,18 @@ func schema_openshift_api_example_v1_StableConfigTypeSpec(ref common.ReferenceCa
 							Ref:         ref("github.com/openshift/api/example/v1.SubnetsWithExclusions"),
 						},
 					},
+					"formatMarkerExamples": {
+						SchemaProps: spec.SchemaProps{
+							Description: "formatMarkerExamples demonstrates all Kubebuilder Format markers supported as of Kubernetes 1.33. This field serves as a comprehensive reference for format marker validation.",
+							Ref:         ref("github.com/openshift/api/example/v1.FormatMarkerExamples"),
+						},
+					},
 				},
 				Required: []string{"immutableField"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/openshift/api/example/v1.CELUnion", "github.com/openshift/api/example/v1.EvolvingUnion", "github.com/openshift/api/example/v1.SubnetsWithExclusions"},
+			"github.com/openshift/api/example/v1.CELUnion", "github.com/openshift/api/example/v1.EvolvingUnion", "github.com/openshift/api/example/v1.FormatMarkerExamples", "github.com/openshift/api/example/v1.SubnetsWithExclusions"},
 	}
 }
 
@@ -39481,12 +39666,18 @@ func schema_openshift_api_machine_v1beta1_AWSMachineProviderConfig(ref common.Re
 							Format:      "",
 						},
 					},
+					"hostPlacement": {
+						SchemaProps: spec.SchemaProps{
+							Description: "hostPlacement configures placement on AWS Dedicated Hosts. This allows admins to assign instances to specific host for a variety of needs including for regulatory compliance, to leverage existing per-socket or per-core software licenses (BYOL), and to gain visibility and control over instance placement on a physical server. When omitted, the instance is not constrained to a dedicated host.",
+							Ref:         ref("github.com/openshift/api/machine/v1beta1.HostPlacement"),
+						},
+					},
 				},
 				Required: []string{"ami", "instanceType", "deviceIndex", "subnet", "placement"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/openshift/api/machine/v1beta1.AWSResourceReference", "github.com/openshift/api/machine/v1beta1.BlockDeviceMappingSpec", "github.com/openshift/api/machine/v1beta1.CPUOptions", "github.com/openshift/api/machine/v1beta1.LoadBalancerReference", "github.com/openshift/api/machine/v1beta1.MetadataServiceOptions", "github.com/openshift/api/machine/v1beta1.Placement", "github.com/openshift/api/machine/v1beta1.SpotMarketOptions", "github.com/openshift/api/machine/v1beta1.TagSpecification", "k8s.io/api/core/v1.LocalObjectReference", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			"github.com/openshift/api/machine/v1beta1.AWSResourceReference", "github.com/openshift/api/machine/v1beta1.BlockDeviceMappingSpec", "github.com/openshift/api/machine/v1beta1.CPUOptions", "github.com/openshift/api/machine/v1beta1.HostPlacement", "github.com/openshift/api/machine/v1beta1.LoadBalancerReference", "github.com/openshift/api/machine/v1beta1.MetadataServiceOptions", "github.com/openshift/api/machine/v1beta1.Placement", "github.com/openshift/api/machine/v1beta1.SpotMarketOptions", "github.com/openshift/api/machine/v1beta1.TagSpecification", "k8s.io/api/core/v1.LocalObjectReference", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
 	}
 }
 
@@ -40331,6 +40522,27 @@ func schema_openshift_api_machine_v1beta1_DataDiskManagedDiskParameters(ref comm
 	}
 }
 
+func schema_openshift_api_machine_v1beta1_DedicatedHost(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "DedicatedHost represents the configuration for the usage of dedicated host.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"id": {
+						SchemaProps: spec.SchemaProps{
+							Description: "id identifies the AWS Dedicated Host on which the instance must run. The value must start with \"h-\" followed by 17 lowercase hexadecimal characters (0-9 and a-f). Must be exactly 19 characters in length.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"id"},
+			},
+		},
+	}
+}
+
 func schema_openshift_api_machine_v1beta1_DiskEncryptionSetParameters(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -40406,6 +40618,13 @@ func schema_openshift_api_machine_v1beta1_EBSBlockDeviceSpec(ref common.Referenc
 							Format:      "int64",
 						},
 					},
+					"throughputMib": {
+						SchemaProps: spec.SchemaProps{
+							Description: "throughputMib to provision in MiB/s supported for the volume type. Not applicable to all types.\n\nThis parameter is valid only for gp3 volumes. Valid Range: Minimum value of 125. Maximum value of 2000.\n\nWhen omitted, this means no opinion, and the platform is left to choose a reasonable default, which is subject to change over time. The current default is 125.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
 					"volumeSize": {
 						SchemaProps: spec.SchemaProps{
 							Description: "The size of the volume, in GiB.\n\nConstraints: 1-16384 for General Purpose SSD (gp2), 4-16384 for Provisioned IOPS SSD (io1), 500-16384 for Throughput Optimized HDD (st1), 500-16384 for Cold HDD (sc1), and 1-1024 for Magnetic (standard) volumes. If you specify a snapshot, the volume size must be equal to or larger than the snapshot size.\n\nDefault: If you're creating the volume from a snapshot and don't specify a volume size, the default is the snapshot size.",
@@ -40415,7 +40634,7 @@ func schema_openshift_api_machine_v1beta1_EBSBlockDeviceSpec(ref common.Referenc
 					},
 					"volumeType": {
 						SchemaProps: spec.SchemaProps{
-							Description: "The volume type: gp2, io1, st1, sc1, or standard. Default: standard",
+							Description: "volumeType can be of type gp2, gp3, io1, st1, sc1, or standard. Default: standard",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -40853,6 +41072,13 @@ func schema_openshift_api_machine_v1beta1_GCPMachineProviderSpec(ref common.Refe
 							Format:      "",
 						},
 					},
+					"provisioningModel": {
+						SchemaProps: spec.SchemaProps{
+							Description: "provisioningModel is an optional field that determines the provisioning model for the GCP machine instance. Valid values are \"Spot\" and omitted. When set to Spot, the instance runs as a Google Cloud Spot instance which provides significant cost savings but may be preempted by Google Cloud Platform when resources are needed elsewhere. When omitted, the machine will be provisioned as a standard on-demand instance. This field cannot be used together with the preemptible field.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"onHostMaintenance": {
 						SchemaProps: spec.SchemaProps{
 							Description: "onHostMaintenance determines the behavior when a maintenance event occurs that might cause the instance to reboot. This is required to be set to \"Terminate\" if you want to provision machine with attached GPUs. Otherwise, allowed values are \"Migrate\" and \"Terminate\". If omitted, the platform chooses a default, which is subject to change over time, currently that default is \"Migrate\".",
@@ -41121,6 +41347,47 @@ func schema_openshift_api_machine_v1beta1_GCPShieldedInstanceConfig(ref common.R
 				},
 			},
 		},
+	}
+}
+
+func schema_openshift_api_machine_v1beta1_HostPlacement(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "HostPlacement is the type that will be used to configure the placement of AWS instances.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"affinity": {
+						SchemaProps: spec.SchemaProps{
+							Description: "affinity specifies the affinity setting for the instance. Allowed values are AnyAvailable and DedicatedHost. When Affinity is set to DedicatedHost, an instance started onto a specific host always restarts on the same host if stopped. In this scenario, the `dedicatedHost` field must be set. When Affinity is set to AnyAvailable, and you stop and restart the instance, it can be restarted on any available host.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"dedicatedHost": {
+						SchemaProps: spec.SchemaProps{
+							Description: "dedicatedHost specifies the exact host that an instance should be restarted on if stopped. dedicatedHost is required when 'affinity' is set to DedicatedHost, and forbidden otherwise.",
+							Ref:         ref("github.com/openshift/api/machine/v1beta1.DedicatedHost"),
+						},
+					},
+				},
+				Required: []string{"affinity"},
+			},
+			VendorExtensible: spec.VendorExtensible{
+				Extensions: spec.Extensions{
+					"x-kubernetes-unions": []interface{}{
+						map[string]interface{}{
+							"discriminator": "affinity",
+							"fields-to-discriminateBy": map[string]interface{}{
+								"dedicatedHost": "DedicatedHost",
+							},
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/openshift/api/machine/v1beta1.DedicatedHost"},
 	}
 }
 
@@ -43101,6 +43368,255 @@ func schema_openshift_api_machine_v1beta1_Workspace(ref common.ReferenceCallback
 	}
 }
 
+func schema_openshift_api_machineconfiguration_v1alpha1_InternalReleaseImage(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "InternalReleaseImage is used to keep track and manage a set of release bundles (OCP and OLM operators images) that are stored into the control planes nodes.\n\nCompatibility level 4: No compatibility is provided, the API can change at any point for any reason. These capabilities should not be used by applications needing long term support.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Description: "metadata is the standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
+							Default:     map[string]interface{}{},
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						},
+					},
+					"spec": {
+						SchemaProps: spec.SchemaProps{
+							Description: "spec describes the configuration of this internal release image.",
+							Default:     map[string]interface{}{},
+							Ref:         ref("github.com/openshift/api/machineconfiguration/v1alpha1.InternalReleaseImageSpec"),
+						},
+					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Description: "status describes the last observed state of this internal release image.",
+							Default:     map[string]interface{}{},
+							Ref:         ref("github.com/openshift/api/machineconfiguration/v1alpha1.InternalReleaseImageStatus"),
+						},
+					},
+				},
+				Required: []string{"metadata", "spec"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/openshift/api/machineconfiguration/v1alpha1.InternalReleaseImageSpec", "github.com/openshift/api/machineconfiguration/v1alpha1.InternalReleaseImageStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+	}
+}
+
+func schema_openshift_api_machineconfiguration_v1alpha1_InternalReleaseImageBundleStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"conditions": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-map-keys": []interface{}{
+									"type",
+								},
+								"x-kubernetes-list-type": "map",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "conditions represent the observations of an internal release image current state. Valid types are: Mounted, Installing, Available, Removing and Degraded.\n\nIf Mounted is true, that means that a valid ISO has been discovered and mounted on one of the cluster nodes. If Installing is true, that means that a new release bundle is currently being copied on one (or more) cluster nodes, and not yet completed. If Available is true, it means that the release has been previously installed on all the cluster nodes, and it can be used. If Removing is true, it means that a release deletion is in progress on one (or more) cluster nodes, and not yet completed. If Degraded is true, that means something has gone wrong (possibly on one or more cluster nodes).\n\nIn general, after installing a new release bundle, it is required to wait for the Conditions \"Available\" to become \"True\" (and all the other conditions to be equal to \"False\") before being able to pull its content.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.Condition"),
+									},
+								},
+							},
+						},
+					},
+					"name": {
+						SchemaProps: spec.SchemaProps{
+							Description: "name indicates the desired release bundle identifier. This field is required and must be between 1 and 64 characters long. The expected name format is ocp-release-bundle-<version>-<arch|stream>.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"image": {
+						SchemaProps: spec.SchemaProps{
+							Description: "image is an OCP release image referenced by digest. The format of the image pull spec is: host[:port][/namespace]/name@sha256:<digest>, where the digest must be 64 characters long, and consist only of lowercase hexadecimal characters, a-f and 0-9. The length of the whole spec must be between 1 to 447 characters. The field is optional, and it will be provided after a release will be successfully installed.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"name"},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/apis/meta/v1.Condition"},
+	}
+}
+
+func schema_openshift_api_machineconfiguration_v1alpha1_InternalReleaseImageList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "InternalReleaseImageList is a list of InternalReleaseImage resources\n\nCompatibility level 4: No compatibility is provided, the API can change at any point for any reason. These capabilities should not be used by applications needing long term support.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Description: "metadata is the standard list's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
+							Default:     map[string]interface{}{},
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("github.com/openshift/api/machineconfiguration/v1alpha1.InternalReleaseImage"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"metadata", "items"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/openshift/api/machineconfiguration/v1alpha1.InternalReleaseImage", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+	}
+}
+
+func schema_openshift_api_machineconfiguration_v1alpha1_InternalReleaseImageRef(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "InternalReleaseImageRef is used to provide a simple reference for a release bundle. Currently it contains only the name field.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"name": {
+						SchemaProps: spec.SchemaProps{
+							Description: "name indicates the desired release bundle identifier. This field is required and must be between 1 and 64 characters long. The expected name format is ocp-release-bundle-<version>-<arch|stream>.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"name"},
+			},
+		},
+	}
+}
+
+func schema_openshift_api_machineconfiguration_v1alpha1_InternalReleaseImageSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "InternalReleaseImageSpec defines the desired state of a InternalReleaseImage.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"releases": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-map-keys": []interface{}{
+									"name",
+								},
+								"x-kubernetes-list-type": "map",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "releases is a list of release bundle identifiers that the user wants to add/remove to/from the control plane nodes. Entries must be unique, keyed on the name field. releases must contain at least one entry and must not exceed 16 entries.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("github.com/openshift/api/machineconfiguration/v1alpha1.InternalReleaseImageRef"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"releases"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/openshift/api/machineconfiguration/v1alpha1.InternalReleaseImageRef"},
+	}
+}
+
+func schema_openshift_api_machineconfiguration_v1alpha1_InternalReleaseImageStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "InternalReleaseImageStatus describes the current state of a InternalReleaseImage.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"releases": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-map-keys": []interface{}{
+									"name",
+								},
+								"x-kubernetes-list-type": "map",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "releases is a list of the release bundles currently owned and managed by the cluster. A release bundle content could be safely pulled only when its Conditions field contains at least an Available entry set to \"True\" and Degraded to \"False\". Entries must be unique, keyed on the name field. releases must contain at least one entry and must not exceed 32 entries.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("github.com/openshift/api/machineconfiguration/v1alpha1.InternalReleaseImageBundleStatus"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"releases"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/openshift/api/machineconfiguration/v1alpha1.InternalReleaseImageBundleStatus"},
+	}
+}
+
 func schema_openshift_api_machineconfiguration_v1alpha1_MCOObjectReference(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -43437,6 +43953,196 @@ func schema_openshift_api_machineconfiguration_v1alpha1_MachineConfigNodeStatusP
 	}
 }
 
+func schema_openshift_api_machineconfiguration_v1alpha1_OSImageStream(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "OSImageStream describes a set of streams and associated images available for the MachineConfigPools to be used as base OS images.\n\nThe resource is a singleton named \"cluster\".\n\nCompatibility level 4: No compatibility is provided, the API can change at any point for any reason. These capabilities should not be used by applications needing long term support.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Description: "metadata is the standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
+							Default:     map[string]interface{}{},
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						},
+					},
+					"spec": {
+						SchemaProps: spec.SchemaProps{
+							Description: "spec contains the desired OSImageStream config configuration.",
+							Ref:         ref("github.com/openshift/api/machineconfiguration/v1alpha1.OSImageStreamSpec"),
+						},
+					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Description: "status describes the last observed state of this OSImageStream. Populated by the MachineConfigOperator after reading release metadata. When not present, the controller has not yet reconciled this resource.",
+							Default:     map[string]interface{}{},
+							Ref:         ref("github.com/openshift/api/machineconfiguration/v1alpha1.OSImageStreamStatus"),
+						},
+					},
+				},
+				Required: []string{"spec"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/openshift/api/machineconfiguration/v1alpha1.OSImageStreamSpec", "github.com/openshift/api/machineconfiguration/v1alpha1.OSImageStreamStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+	}
+}
+
+func schema_openshift_api_machineconfiguration_v1alpha1_OSImageStreamList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "OSImageStreamList is a list of OSImageStream resources\n\nCompatibility level 4: No compatibility is provided, the API can change at any point for any reason. These capabilities should not be used by applications needing long term support.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Description: "metadata is the standard list's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
+							Default:     map[string]interface{}{},
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("github.com/openshift/api/machineconfiguration/v1alpha1.OSImageStream"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"metadata", "items"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/openshift/api/machineconfiguration/v1alpha1.OSImageStream", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+	}
+}
+
+func schema_openshift_api_machineconfiguration_v1alpha1_OSImageStreamSet(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"name": {
+						SchemaProps: spec.SchemaProps{
+							Description: "name is the required identifier of the stream.\n\nname is determined by the operator based on the OCI label of the discovered OS or Extension Image.\n\nMust be a valid RFC 1123 subdomain between 1 and 253 characters in length, consisting of lowercase alphanumeric characters, hyphens ('-'), and periods ('.').",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"osImage": {
+						SchemaProps: spec.SchemaProps{
+							Description: "osImage is a required OS Image referenced by digest.\n\nosImage contains the immutable, fundamental operating system components, including the kernel and base utilities, that define the core environment for the node's host operating system.\n\nThe format of the image pull spec is: host[:port][/namespace]/name@sha256:<digest>, where the digest must be 64 characters long, and consist only of lowercase hexadecimal characters, a-f and 0-9. The length of the whole spec must be between 1 to 447 characters.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"osExtensionsImage": {
+						SchemaProps: spec.SchemaProps{
+							Description: "osExtensionsImage is a required OS Extensions Image referenced by digest.\n\nosExtensionsImage bundles the extra repositories used to enable extensions, augmenting the base operating system without modifying the underlying immutable osImage.\n\nThe format of the image pull spec is: host[:port][/namespace]/name@sha256:<digest>, where the digest must be 64 characters long, and consist only of lowercase hexadecimal characters, a-f and 0-9. The length of the whole spec must be between 1 to 447 characters.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"name", "osImage", "osExtensionsImage"},
+			},
+		},
+	}
+}
+
+func schema_openshift_api_machineconfiguration_v1alpha1_OSImageStreamSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "OSImageStreamSpec defines the desired state of a OSImageStream.",
+				Type:        []string{"object"},
+			},
+		},
+	}
+}
+
+func schema_openshift_api_machineconfiguration_v1alpha1_OSImageStreamStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "OSImageStreamStatus describes the current state of a OSImageStream",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"availableStreams": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-map-keys": []interface{}{
+									"name",
+								},
+								"x-kubernetes-list-type": "map",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "availableStreams is a list of the available OS Image Streams that can be used as the base image for MachineConfigPools. availableStreams is required, must have at least one item, must not exceed 100 items, and must have unique entries keyed on the name field.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("github.com/openshift/api/machineconfiguration/v1alpha1.OSImageStreamSet"),
+									},
+								},
+							},
+						},
+					},
+					"defaultStream": {
+						SchemaProps: spec.SchemaProps{
+							Description: "defaultStream is the name of the stream that should be used as the default when no specific stream is requested by a MachineConfigPool.\n\nIt must be a valid RFC 1123 subdomain between 1 and 253 characters in length, consisting of lowercase alphanumeric characters, hyphens ('-'), and periods ('.'), and must reference the name of one of the streams in availableStreams.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"availableStreams", "defaultStream"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/openshift/api/machineconfiguration/v1alpha1.OSImageStreamSet"},
+	}
+}
+
 func schema_openshift_api_machineconfiguration_v1alpha1_PinnedImageRef(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -43445,8 +44151,7 @@ func schema_openshift_api_machineconfiguration_v1alpha1_PinnedImageRef(ref commo
 				Properties: map[string]spec.Schema{
 					"name": {
 						SchemaProps: spec.SchemaProps{
-							Description: "name is an OCI Image referenced by digest.\n\nThe format of the image ref is: host[:port][/namespace]/name@sha256:<digest>",
-							Default:     "",
+							Description: "name is an OCI Image referenced by digest. The format of the image pull spec is: host[:port][/namespace]/name@sha256:<digest>, where the digest must be 64 characters long, and consist only of lowercase hexadecimal characters, a-f and 0-9. The length of the whole spec must be between 1 to 447 characters.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -52612,8 +53317,16 @@ func schema_openshift_api_operator_v1_IngressControllerSpec(ref common.Reference
 					},
 					"idleConnectionTerminationPolicy": {
 						SchemaProps: spec.SchemaProps{
-							Description: "idleConnectionTerminationPolicy maps directly to HAProxy's idle-close-on-response option and controls whether HAProxy keeps idle frontend connections open during a soft stop (router reload).\n\nAllowed values for this field are \"Immediate\" and \"Deferred\". The default value is \"Immediate\".\n\nWhen set to \"Immediate\", idle connections are closed immediately during router reloads. This ensures immediate propagation of route changes but may impact clients sensitive to connection resets.\n\nWhen set to \"Deferred\", HAProxy will maintain idle connections during a soft reload instead of closing them immediately. These connections remain open until any of the following occurs:\n\n  - A new request is received on the connection, in which\n    case HAProxy handles it in the old process and closes\n    the connection after sending the response.\n\n  - HAProxy's `timeout http-keep-alive` duration expires\n    (300 seconds in OpenShift's configuration, not\n    configurable).\n\n  - The client's keep-alive timeout expires, causing the\n    client to close the connection.\n\nSetting Deferred can help prevent errors in clients or load balancers that do not properly handle connection resets. Additionally, this option allows you to retain the pre-2.4 HAProxy behaviour: in HAProxy version 2.2 (OpenShift versions < 4.14), maintaining idle connections during a soft reload was the default behaviour, but starting with HAProxy 2.4, the default changed to closing idle connections immediately.\n\nImportant Consideration:\n\n  - Using Deferred will result in temporary inconsistencies\n    for the first request on each persistent connection\n    after a route update and router reload. This request\n    will be processed by the old HAProxy process using its\n    old configuration. Subsequent requests will use the\n    updated configuration.\n\nOperational Considerations:\n\n  - Keeping idle connections open during reloads may lead\n    to an accumulation of old HAProxy processes if\n    connections remain idle for extended periods,\n    especially in environments where frequent reloads\n    occur.\n\n  - Consider monitoring the number of HAProxy processes in\n    the router pods when Deferred is set.\n\n  - You may need to enable or adjust the\n    `ingress.operator.openshift.io/hard-stop-after`\n    duration (configured via an annotation on the\n    IngressController resource) in environments with\n    frequent reloads to prevent resource exhaustion.",
+							Description: "idleConnectionTerminationPolicy maps directly to HAProxy's idle-close-on-response option and controls whether HAProxy keeps idle frontend connections open during a soft stop (router reload).\n\nAllowed values for this field are \"Immediate\" and \"Deferred\". The default value is \"Immediate\".\n\nWhen set to \"Immediate\", idle connections are closed immediately during router reloads. This ensures immediate propagation of route changes but may impact clients sensitive to connection resets.\n\nWhen set to \"Deferred\", HAProxy will maintain idle connections during a soft reload instead of closing them immediately. These connections remain open until any of the following occurs:\n\n  - A new request is received on the connection, in which\n    case HAProxy handles it in the old process and closes\n    the connection after sending the response.\n\n  - HAProxy's `timeout http-keep-alive` duration expires.\n    By default this is 300 seconds, but it can be changed\n    using httpKeepAliveTimeout tuning option.\n\n  - The client's keep-alive timeout expires, causing the\n    client to close the connection.\n\nSetting Deferred can help prevent errors in clients or load balancers that do not properly handle connection resets. Additionally, this option allows you to retain the pre-2.4 HAProxy behaviour: in HAProxy version 2.2 (OpenShift versions < 4.14), maintaining idle connections during a soft reload was the default behaviour, but starting with HAProxy 2.4, the default changed to closing idle connections immediately.\n\nImportant Consideration:\n\n  - Using Deferred will result in temporary inconsistencies\n    for the first request on each persistent connection\n    after a route update and router reload. This request\n    will be processed by the old HAProxy process using its\n    old configuration. Subsequent requests will use the\n    updated configuration.\n\nOperational Considerations:\n\n  - Keeping idle connections open during reloads may lead\n    to an accumulation of old HAProxy processes if\n    connections remain idle for extended periods,\n    especially in environments where frequent reloads\n    occur.\n\n  - Consider monitoring the number of HAProxy processes in\n    the router pods when Deferred is set.\n\n  - You may need to enable or adjust the\n    `ingress.operator.openshift.io/hard-stop-after`\n    duration (configured via an annotation on the\n    IngressController resource) in environments with\n    frequent reloads to prevent resource exhaustion.",
 							Default:     "Immediate",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"closedClientConnectionPolicy": {
+						SchemaProps: spec.SchemaProps{
+							Description: "closedClientConnectionPolicy controls how the IngressController behaves when the client closes the TCP connection while the TLS handshake or HTTP request is in progress. This option maps directly to HAProxy’s \"abortonclose\" option.\n\nValid values are: \"Abort\" and \"Continue\". The default value is \"Continue\".\n\nWhen set to \"Abort\", the router will stop processing the TLS handshake if it is in progress, and it will not send an HTTP request to the backend server if the request has not yet been sent when the client closes the connection.\n\nWhen set to \"Continue\", the router will complete the TLS handshake if it is in progress, or send an HTTP request to the backend server and wait for the backend server's response, regardless of whether the client has closed the connection.\n\nSetting \"Abort\" can help free CPU resources otherwise spent on TLS computation for connections the client has already closed, and can reduce request queue size, thereby reducing the load on saturated backend servers.\n\nImportant Considerations:\n\n  - The default policy (\"Continue\") is HTTP-compliant, and requests\n    for aborted client connections will still be served.\n    Use the \"Continue\" policy to allow a client to send a request\n    and then immediately close its side of the connection while\n    still receiving a response on the half-closed connection.\n\n  - When clients use keep-alive connections, the most common case for premature\n    closure is when the user wants to cancel the transfer or when a timeout\n    occurs. In that case, the \"Abort\" policy may be used to reduce resource consumption.\n\n  - Using RSA keys larger than 2048 bits can significantly slow down\n    TLS computations. Consider using the \"Abort\" policy to reduce CPU usage.",
+							Default:     "Continue",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -52779,6 +53492,12 @@ func schema_openshift_api_operator_v1_IngressControllerTuningOptions(ref common.
 					"connectTimeout": {
 						SchemaProps: spec.SchemaProps{
 							Description: "connectTimeout defines the maximum time to wait for a connection attempt to a server/backend to succeed.\n\nThis field expects an unsigned duration string of decimal numbers, each with optional fraction and a unit suffix, e.g. \"300ms\", \"1.5h\" or \"2h45m\". Valid time units are \"ns\", \"us\" (or \"µs\" U+00B5 or \"μs\" U+03BC), \"ms\", \"s\", \"m\", \"h\".\n\nWhen omitted, this means the user has no opinion and the platform is left to choose a reasonable default. This default is subject to change over time. The current default is 5s.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+						},
+					},
+					"httpKeepAliveTimeout": {
+						SchemaProps: spec.SchemaProps{
+							Description: "httpKeepAliveTimeout defines the maximum allowed time to wait for a new HTTP request to appear on a connection from the client to the router.\n\nThis field expects an unsigned duration string of a decimal number, with optional fraction and a unit suffix, e.g. \"300ms\", \"1.5s\" or \"2m45s\". Valid time units are \"ms\", \"s\", \"m\". The allowed range is from 1 millisecond to 15 minutes.\n\nWhen omitted, this means the user has no opinion and the platform is left to choose a reasonable default. This default is subject to change over time. The current default is 300s.\n\nLow values (tens of milliseconds or less) can cause clients to close and reopen connections for each request, leading to reduced connection sharing. For HTTP/2, special care should be taken with low values. A few seconds is a reasonable starting point to avoid holding idle connections open while still allowing subsequent requests to reuse the connection.\n\nHigh values (minutes or more) favor connection reuse but may cause idle connections to linger longer.",
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
 						},
 					},

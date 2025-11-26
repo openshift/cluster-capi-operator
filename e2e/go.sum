@@ -197,10 +197,10 @@ github.com/onsi/ginkgo/v2 v2.27.2 h1:LzwLj0b89qtIy6SSASkzlNvX6WktqurSHwkk2ipF/Ns
 github.com/onsi/ginkgo/v2 v2.27.2/go.mod h1:ArE1D/XhNXBXCBkKOLkbsb2c81dQHCRcF5zwn/ykDRo=
 github.com/onsi/gomega v1.38.2 h1:eZCjf2xjZAqe+LeWvKb5weQ+NcPwX84kqJ0cZNxok2A=
 github.com/onsi/gomega v1.38.2/go.mod h1:W2MJcYxRGV63b418Ai34Ud0hEdTVXq9NW9+Sx6uXf3k=
-github.com/openshift/api v0.0.0-20251027215121-243758deaab1 h1:HeLyeWSI40osOPW0TqitEZEVl0P38IkBAvjvmHB+LmU=
-github.com/openshift/api v0.0.0-20251027215121-243758deaab1/go.mod h1:d5uzF0YN2nQQFA0jIEWzzOZ+edmo6wzlGLvx5Fhz4uY=
-github.com/openshift/client-go v0.0.0-20251015124057-db0dee36e235 h1:9JBeIXmnHlpXTQPi7LPmu1jdxznBhAE7bb1K+3D8gxY=
-github.com/openshift/client-go v0.0.0-20251015124057-db0dee36e235/go.mod h1:L49W6pfrZkfOE5iC1PqEkuLkXG4W0BX4w8b+L2Bv7fM=
+github.com/openshift/api v0.0.0-20251124235416-c11dd82e305c h1:O72YjES6M2/H052TIZnrJVUNySjfOZy1t8w5hRcj6MM=
+github.com/openshift/api v0.0.0-20251124235416-c11dd82e305c/go.mod h1:d5uzF0YN2nQQFA0jIEWzzOZ+edmo6wzlGLvx5Fhz4uY=
+github.com/openshift/client-go v0.0.0-20251125141819-b6281947c285 h1:D3IKKxAR4Fvzi+kpw7Ji8bOfUlhSYjVqMi1efkBrwUU=
+github.com/openshift/client-go v0.0.0-20251125141819-b6281947c285/go.mod h1:58e6xmnj6BK9memKOhU1LVG5b6i88bn3hkYLdqKCPK0=
 github.com/openshift/cluster-api-actuator-pkg v0.0.0-20250729202911-167220318f40 h1:aliDKARnERRhPBvZBdzmOM/Ktz6pLpBTqcQsjtUDmrM=
 github.com/openshift/cluster-api-actuator-pkg v0.0.0-20250729202911-167220318f40/go.mod h1:gYQH3j+az83vG5IuZZohskiBmqLDw7dzhmn1x5Zq5pg=
 github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20250821122144-fd0936342469 h1:2Nb7w9xhgZg/ahmvrG4Y/+6Tp/Gfj7KGZZKAupKah8g=
@@ -209,8 +209,8 @@ github.com/openshift/cluster-api-provider-baremetal v0.0.0-20250619124612-fb678f
 github.com/openshift/cluster-api-provider-baremetal v0.0.0-20250619124612-fb678fec5f7e/go.mod h1:xMvpaHoSmJ48WvX970zF82PPD9Wj8cMuZBFH6UxnvbE=
 github.com/openshift/cluster-autoscaler-operator v0.0.1-0.20250702183526-4eb64d553940 h1:NCCRJ7JfGLpRu4IQSV7Qw9VoAdIgF1BiwospisP06a8=
 github.com/openshift/cluster-autoscaler-operator v0.0.1-0.20250702183526-4eb64d553940/go.mod h1:zCklcJwbnaNx46KvR38Rh86uZdow5gvub4ATcNDopTM=
-github.com/openshift/library-go v0.0.0-20251015151611-6fc7a74b67c5 h1:bANtDc8SgetSK4nQehf59x3+H9FqVJCprgjs49/OTg0=
-github.com/openshift/library-go v0.0.0-20251015151611-6fc7a74b67c5/go.mod h1:OlFFws1AO51uzfc48MsStGE4SFMWlMZD0+f5a/zCtKI=
+github.com/openshift/library-go v0.0.0-20251120164824-14a789e09884 h1:6512TMT14gnXQ4vyshzAQGjkctU0PO9G+y0tcBjw6Vk=
+github.com/openshift/library-go v0.0.0-20251120164824-14a789e09884/go.mod h1:ErDfiIrPHH+menTP/B4LKd0nxFDdvCbTamAc6SWMIh8=
 github.com/openshift/machine-api-operator v0.2.1-0.20250721183005-388c07321caf h1:KhtN61d6XNZsfZusHcItrwMqIoT3Ck4lFk/bRUiMxqo=
 github.com/openshift/machine-api-operator v0.2.1-0.20250721183005-388c07321caf/go.mod h1:IUXR/fHzKALjJ2M7IAAWS76UEVMig3qYATD6omexi10=
 github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c h1:+mdjkGKdHQG3305AYmdv1U2eRNDiU2ErMBj1gwrq8eQ=
@@ -250,8 +250,8 @@ github.com/stretchr/testify v1.3.0/go.mod h1:M5WIy9Dh21IEIfnGCwXGc5bZfKNJtfHm1UV
 github.com/stretchr/testify v1.7.1/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
 github.com/stretchr/testify v1.8.0/go.mod h1:yNjHg4UonilssWZ8iaSj1OCr/vHnekPRkoO+kdMU+MU=
 github.com/stretchr/testify v1.8.1/go.mod h1:w2LPCIKwWwSfY2zedu0+kehJoqGctiVI29o6fzry7u4=
-github.com/stretchr/testify v1.10.0 h1:Xv5erBjTwe/5IxqUQTdXv5kgmIvbHo3QQyRwhJsOfJA=
-github.com/stretchr/testify v1.10.0/go.mod h1:r2ic/lqez/lEtzL7wO/rwa5dbSLXVDPFyf8C91i36aY=
+github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu7U=
+github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
 github.com/tidwall/gjson v1.18.0 h1:FIDeeyB800efLX89e5a8Y0BNH+LOngJyGrIWxG2FKQY=
 github.com/tidwall/gjson v1.18.0/go.mod h1:/wbyibRr2FHMks5tjHJ5F8dMZh3AcwJEMf5vlfC0lxk=
 github.com/tidwall/match v1.1.1 h1:+Ho715JplO36QYgwN9PGYNhgZvoUSc9X2c80KVTi+GA=
