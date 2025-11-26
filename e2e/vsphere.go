@@ -26,12 +26,13 @@ const (
 	vSphereCredentialsName     = "vsphere-creds"
 )
 
-var _ = Describe("Cluster API vSphere MachineSet", Ordered, func() {
+var _ = Describe("[sig-cluster-lifecycle][Feature:ClusterAPI][platform:vsphere][Disruptive] Cluster API vSphere MachineSet", Ordered, Label("Conformance"), Label("Serial"), func() {
 	var vSphereMachineTemplate *vspherev1.VSphereMachineTemplate
 	var machineSet *clusterv1.MachineSet
 	var mapiMachineSpec *mapiv1.VSphereMachineProviderSpec
 
 	BeforeAll(func() {
+		InitCommonVariables()
 		if platform != configv1.VSpherePlatformType {
 			Skip("Skipping vSphere E2E tests")
 		}

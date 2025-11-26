@@ -14,8 +14,9 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
-var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] MachineSet Migration CAPI Authoritative Tests", Ordered, func() {
+var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration][platform:aws][Disruptive] MachineSet Migration CAPI Authoritative Tests", Ordered, Label("Conformance"), Label("Serial"), func() {
 	BeforeAll(func() {
+		InitCommonVariables()
 		if platform != configv1.AWSPlatformType {
 			Skip(fmt.Sprintf("Skipping tests on %s, this is only supported on AWS", platform))
 		}
