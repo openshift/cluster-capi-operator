@@ -2,7 +2,6 @@ package e2e
 
 import (
 	"context"
-	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -26,12 +25,13 @@ const (
 	powerVSMachineTemplateVersion = "infrastructure.cluster.x-k8s.io/v1beta2"
 )
 
-var _ = Describe("Cluster API IBMPowerVS MachineSet", Ordered, func() {
+var _ = Describe("[sig-cluster-lifecycle][Feature:ClusterAPI][platform:powervs][Disruptive] Cluster API IBMPowerVS MachineSet", Ordered, Label("Conformance"), Label("Serial"), func() {
 	var powerVSMachineTemplate *ibmpowervsv1.IBMPowerVSMachineTemplate
 	var machineSet *clusterv1.MachineSet
 	var mapiMachineSpec *mapiv1.PowerVSMachineProviderConfig
 
 	BeforeAll(func() {
+		InitCommonVariables()
 		if platform != configv1.PowerVSPlatformType {
 			Skip("Skipping PowerVS E2E tests")
 		}
@@ -92,6 +92,7 @@ func createIBMPowerVSMachineTemplate(ctx context.Context, cl client.Client, mapi
 	Expect(mapiProviderSpec.Image).ToNot(BeNil())
 	Expect(mapiProviderSpec.SystemType).ToNot(BeEmpty())
 	Expect(mapiProviderSpec.ProcessorType).ToNot(BeEmpty())
+	Expect(mapiProviderSpec.Network.Type).ToNot(BeEmpty())
 
 	ibmPowerVSMachineSpec := ibmpowervsv1.IBMPowerVSMachineSpec{
 		ServiceInstance: getServiceInstance(mapiProviderSpec.ServiceInstance),
@@ -119,7 +120,6 @@ func createIBMPowerVSMachineTemplate(ctx context.Context, cl client.Client, mapi
 	}
 
 	if err := cl.Create(ctx, ibmPowerVSMachineTemplate); err != nil && !apierrors.IsAlreadyExists(err) {
-		fmt.Println(err)
 		Expect(err).ToNot(HaveOccurred())
 	}
 

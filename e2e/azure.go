@@ -27,12 +27,13 @@ const (
 	capzManagerBootstrapCredentials = "capz-manager-bootstrap-credentials"
 )
 
-var _ = Describe("Cluster API Azure MachineSet", Ordered, func() {
+var _ = Describe("[sig-cluster-lifecycle][Feature:ClusterAPI][platform:azure][Disruptive] Cluster API Azure MachineSet", Ordered, Label("Conformance"), Label("Serial"), func() {
 	var azureMachineTemplate *azurev1.AzureMachineTemplate
 	var machineSet *clusterv1.MachineSet
 	var mapiMachineSpec *mapiv1.AzureMachineProviderSpec
 
 	BeforeAll(func() {
+		InitCommonVariables()
 		if platform != configv1.AzurePlatformType {
 			Skip("Skipping Azure E2E tests")
 		}
@@ -102,7 +103,7 @@ func createAzureMachineTemplate(ctx context.Context, cl client.Client, mapiProvi
 	err := cl.Get(context.Background(), azure_credentials_secret_key, &azure_credentials_secret)
 	Expect(err).To(BeNil(), "capz-manager-bootstrap-credentials secret should exist")
 	subscriptionID := azure_credentials_secret.Data["azure_subscription_id"]
-	azureImageID := fmt.Sprintf("/subscriptions/%s%s", subscriptionID, mapiProviderSpec.Image.ResourceID)
+	azureImageID := fmt.Sprintf("/subscriptions/%s%s", string(subscriptionID), mapiProviderSpec.Image.ResourceID)
 
 	var (
 		identity               azurev1.VMIdentity = azurev1.VMIdentityNone
@@ -112,7 +113,7 @@ func createAzureMachineTemplate(ctx context.Context, cl client.Client, mapiProvi
 	if mi := mapiProviderSpec.ManagedIdentity; mi != "" {
 		providerID := mi
 		if !strings.HasPrefix(mi, "/subscriptions/") {
-			providerID = fmt.Sprintf("azure:///subscriptions/%s/resourcegroups/%s/providers/Microsoft.ManagedIdentity/userAssignedIdentities/%s", subscriptionID, mapiProviderSpec.ResourceGroup, mi)
+			providerID = fmt.Sprintf("azure:///subscriptions/%s/resourcegroups/%s/providers/Microsoft.ManagedIdentity/userAssignedIdentities/%s", string(subscriptionID), mapiProviderSpec.ResourceGroup, mi)
 		}
 		userAssignedIdentities = []azurev1.UserAssignedIdentity{{ProviderID: providerID}}
 		identity = azurev1.VMIdentityUserAssigned
