@@ -21,7 +21,7 @@ go work sync
 
 # Pass 2: re-tidy after sync may have bumped versions
 echo "Running go mod tidy for all modules (pass 2)..."
-for module in . e2e manifests-gen hack/tools; do
+for module in . e2e manifests-gen hack/tools openshift-tests-extension; do
   if [ -f "$module/go.mod" ]; then
     echo "Tidying $module"
     (cd "$module" && go mod tidy)
@@ -30,7 +30,7 @@ done
 
 # Verify all modules
 echo "Verifying all modules..."
-for module in . e2e manifests-gen hack/tools; do
+for module in . e2e manifests-gen hack/tools openshift-tests-extension; do
   if [ -f "$module/go.mod" ]; then
     echo "Verifying $module"
     (cd "$module" && go mod verify)
