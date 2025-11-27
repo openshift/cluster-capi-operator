@@ -36,7 +36,7 @@ const (
 	openStackMachineTemplateName = "openstack-machine-template"
 )
 
-var _ = Describe("Cluster API OpenStack MachineSet", Ordered, func() {
+var _ = Describe("[sig-cluster-lifecycle][Feature:ClusterAPI] Cluster API OpenStack MachineSet", Ordered, Label("Platform:openstack"), Label("Serial"), Label("Disruptive"), func() {
 	var (
 		machineSet               *clusterv1.MachineSet
 		mapiMachineSpec          *mapiv1alpha1.OpenstackProviderSpec

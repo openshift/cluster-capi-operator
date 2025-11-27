@@ -424,6 +424,22 @@ func createAWSMachineTemplate(ctx context.Context, cl client.Client, originalNam
 	return newTemplate
 }
 
+// createSameNameMachineSetBlockedByVAPAuthMapi attempts to create a MAPI MachineSet with specified authoritativeAPI and expects the creation to fail.
+func createSameNameMachineSetBlockedByVAPAuthMapi(ctx context.Context, cl client.Client, replicas int, machineSetName string, machineSetAuthority mapiv1beta1.MachineAuthority, machineAuthority mapiv1beta1.MachineAuthority, expectedErrorMessage string) {
+	By(fmt.Sprintf("Attempting to create MAPI MachineSet (expecting failure) with spec.authoritativeAPI: %s, spec.template.spec.authoritativeAPI: %s, replicas=%d", machineSetAuthority, machineAuthority, replicas))
+	machineSetParams := mapiframework.BuildMachineSetParams(ctx, cl, replicas)
+	machineSetParams.Name = machineSetName
+	machineSetParams.Labels[mapiframework.MachineSetKey] = machineSetName
+	machineSetParams.MachinesetAuthoritativeAPI = machineSetAuthority
+	machineSetParams.MachineAuthoritativeAPI = machineAuthority
+	// Remove taints as CAPI MachineSets don't support them yet. This is a known limitation tracked in https://issues.redhat.com/browse/OCPCLOUD-2861
+	machineSetParams.Taints = []corev1.Taint{}
+
+	_, err := mapiframework.CreateMachineSet(cl, machineSetParams)
+	Expect(err).To(HaveOccurred(), "MAPI MachineSet %s creation should fail", machineSetName)
+	Expect(err.Error()).To(ContainSubstring(expectedErrorMessage), "Error message should contain expected text: %s", expectedErrorMessage)
+}
+
 // updateCAPIMachineSetInfraTemplate updates a CAPI MachineSet's infrastructureRef to point to a new template.
 func updateCAPIMachineSetInfraTemplate(capiMachineSet *clusterv1.MachineSet, newInfraTemplateName string) {
 	GinkgoHelper()

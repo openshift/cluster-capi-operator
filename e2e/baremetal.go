@@ -35,12 +35,13 @@ const (
 	baremetalMachineTemplateName = "baremetal-machine-template"
 )
 
-var _ = Describe("Cluster API Baremetal MachineSet", Ordered, func() {
+var _ = Describe("[sig-cluster-lifecycle][Feature:ClusterAPI] Cluster API Baremetal MachineSet", Ordered, Label("Platform:baremetal"), Label("Serial"), Label("Disruptive"), func() {
 	var baremetalMachineTemplate *metal3v1.Metal3MachineTemplate
 	var machineSet *clusterv1.MachineSet
 	var mapiMachineSpec *bmv1alpha1.BareMetalMachineProviderSpec
 
 	BeforeAll(func() {
+		InitCommonVariables()
 		if platform != configv1.BareMetalPlatformType {
 			Skip("Skipping Baremetal E2E tests")
 		}
