@@ -12,7 +12,7 @@ ifeq ($(HOME), /)
 HOME = /tmp/kubebuilder-testing
 endif
 
-.PHONY: help all verify test build operator migration manifests-gen unit e2e run fmt vet lint vendor image push aws-cluster azure-cluster gcp-cluster powervs-cluster vsphere-cluster
+.PHONY: help all verify test build operator migration manifests-gen tests-ext unit e2e run fmt vet lint vendor image push aws-cluster azure-cluster gcp-cluster powervs-cluster vsphere-cluster
 .DEFAULT_GOAL := build
 
 help: ## Display this help message
@@ -29,7 +29,7 @@ verify: fmt lint ## Run formatting and linting checks
 
 test: verify unit ## Run verification and unit tests
 
-build: operator migration manifests-gen ## Build all binaries
+build: operator migration manifests-gen tests-ext ## Build all binaries
 
 # Ensure bin directory exists for build outputs
 bin/:
@@ -43,6 +43,9 @@ operator: | bin/ ## Build cluster-capi-operator binary
 
 migration: | bin/ ## Build machine-api-migration binary
 	go build -o bin/machine-api-migration cmd/machine-api-migration/main.go
+
+tests-ext: | bin/ ## Build tests extension binary
+	cd openshift-tests-extension && go build -o ../bin/cluster-capi-operator-ext ./cmd
 
 .PHONY: localtestenv
 localtestenv: .localtestenv
