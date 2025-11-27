@@ -22,12 +22,13 @@ const (
 	gcpMachineTemplateName = "gcp-machine-template"
 )
 
-var _ = Describe("Cluster API GCP MachineSet", Ordered, func() {
+var _ = Describe("[sig-cluster-lifecycle][Feature:ClusterAPI][platform:gcp][Disruptive] Cluster API GCP MachineSet", Ordered, Label("Conformance"), Label("Serial"), func() {
 	var gcpMachineTemplate *gcpv1.GCPMachineTemplate
 	var machineSet *clusterv1.MachineSet
 	var mapiMachineSpec *mapiv1beta1.GCPMachineProviderSpec
 
 	BeforeAll(func() {
+		InitCommonVariables()
 		if platform != configv1.GCPPlatformType {
 			Skip("Skipping GCP E2E tests")
 		}
@@ -91,9 +92,9 @@ func createGCPMachineTemplate(ctx context.Context, cl client.Client, mapiProvide
 	Expect(len(mapiProviderSpec.NetworkInterfaces)).To(BeNumerically(">", 0))
 	Expect(mapiProviderSpec.NetworkInterfaces[0].Subnetwork).ToNot(BeEmpty())
 	Expect(mapiProviderSpec.ServiceAccounts).ToNot(BeNil())
+	Expect(len(mapiProviderSpec.ServiceAccounts)).To(BeNumerically(">", 0))
 	Expect(mapiProviderSpec.ServiceAccounts[0].Email).ToNot(BeEmpty())
 	Expect(mapiProviderSpec.ServiceAccounts[0].Scopes).ToNot(BeNil())
-	Expect(len(mapiProviderSpec.ServiceAccounts)).To(BeNumerically(">", 0))
 	Expect(mapiProviderSpec.Tags).ToNot(BeNil())
 	Expect(len(mapiProviderSpec.Tags)).To(BeNumerically(">", 0))
 

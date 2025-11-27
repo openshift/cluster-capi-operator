@@ -14,8 +14,9 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 )
 
-var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Machine Migration CAPI Authoritative Tests", Ordered, func() {
+var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration][platform:aws][Disruptive] Machine Migration CAPI Authoritative Tests", Ordered, Label("Conformance"), Label("Serial"), func() {
 	BeforeAll(func() {
+		InitCommonVariables()
 		if platform != configv1.AWSPlatformType {
 			Skip(fmt.Sprintf("Skipping tests on %s, this is only supported on AWS", platform))
 		}
@@ -63,13 +64,14 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 		Context("with spec.authoritativeAPI: ClusterAPI and no existing CAPI Machine with same name", func() {
 			BeforeAll(func() {
 				newMapiMachine = createMAPIMachineWithAuthority(ctx, cl, mapiMachineAuthCAPIName, mapiv1beta1.MachineAuthorityClusterAPI)
+				newCapiMachine = capiframework.GetMachine(cl, newMapiMachine.Name, capiframework.CAPINamespace)
 
 				DeferCleanup(func() {
 					By("Cleaning up machine resources")
 					cleanupMachineResources(
 						ctx,
 						cl,
-						[]*clusterv1.Machine{},
+						[]*clusterv1.Machine{newCapiMachine},
 						[]*mapiv1beta1.Machine{newMapiMachine},
 					)
 				})
