@@ -27,7 +27,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-var _ = Describe("Cluster API AWS MachineSet", Ordered, func() {
+var _ = Describe("[sig-cluster-lifecycle][Feature:ClusterAPI][platform:aws][Disruptive] Cluster API AWS MachineSet", Ordered, Label("Conformance"), Label("Serial"), func() {
 	var (
 		awsMachineTemplate      *awsv1.AWSMachineTemplate
 		machineSet              *clusterv1.MachineSet
@@ -37,6 +37,7 @@ var _ = Describe("Cluster API AWS MachineSet", Ordered, func() {
 	)
 
 	BeforeAll(func() {
+		InitCommonVariables()
 		if platform != configv1.AWSPlatformType {
 			Skip("Skipping AWS E2E tests")
 		}

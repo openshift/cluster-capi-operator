@@ -35,12 +35,13 @@ const (
 	gcpMachineTemplateName = "gcp-machine-template"
 )
 
-var _ = Describe("Cluster API GCP MachineSet", Ordered, func() {
+var _ = Describe("[sig-cluster-lifecycle][Feature:ClusterAPI][platform:gcp][Disruptive] Cluster API GCP MachineSet", Ordered, Label("Conformance"), Label("Serial"), func() {
 	var gcpMachineTemplate *gcpv1.GCPMachineTemplate
 	var machineSet *clusterv1.MachineSet
 	var mapiMachineSpec *mapiv1beta1.GCPMachineProviderSpec
 
 	BeforeAll(func() {
+		InitCommonVariables()
 		if platform != configv1.GCPPlatformType {
 			Skip("Skipping GCP E2E tests")
 		}
