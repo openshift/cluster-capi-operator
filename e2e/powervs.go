@@ -35,12 +35,13 @@ const (
 	powerVSMachineTemplateName = "powervs-machine-template"
 )
 
-var _ = Describe("Cluster API IBMPowerVS MachineSet", Ordered, func() {
+var _ = Describe("[sig-cluster-lifecycle][Feature:ClusterAPI] Cluster API IBMPowerVS MachineSet", Ordered, Label("Platform:powervs"), Label("Serial"), Label("Disruptive"), func() {
 	var powerVSMachineTemplate *ibmpowervsv1.IBMPowerVSMachineTemplate
 	var machineSet *clusterv1.MachineSet
 	var mapiMachineSpec *mapiv1.PowerVSMachineProviderConfig
 
 	BeforeAll(func() {
+		InitCommonVariables()
 		if platform != configv1.PowerVSPlatformType {
 			Skip("Skipping PowerVS E2E tests")
 		}

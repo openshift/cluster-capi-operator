@@ -20,6 +20,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	ote "github.com/openshift-eng/openshift-tests-extension/pkg/ginkgo"
 	configv1 "github.com/openshift/api/config/v1"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	mapiframework "github.com/openshift/cluster-api-actuator-pkg/pkg/framework"
@@ -28,8 +29,9 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 )
 
-var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] MachineSet Migration CAPI Authoritative Tests", Ordered, func() {
+var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] MachineSet Migration CAPI Authoritative Tests", Ordered, Label("Platform:aws"), Label("Serial"), ote.Informing(), func() {
 	BeforeAll(func() {
+		InitCommonVariables()
 		if platform != configv1.AWSPlatformType {
 			Skip(fmt.Sprintf("Skipping tests on %s, this is only supported on AWS", platform))
 		}
@@ -73,8 +75,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				verifyMachineSetPausedCondition(mapiMachineSet, mapiv1beta1.MachineAuthorityClusterAPI)
 			})
 
-			// bug https://issues.redhat.com/browse/OCPBUGS-55337
-			PIt("should verify that the non-authoritative MAPI MachineSet providerSpec has been updated to reflect the authoritative CAPI MachineSet mirror values", func() {
+			It("should verify that the non-authoritative MAPI MachineSet providerSpec has been updated to reflect the authoritative CAPI MachineSet mirror values", func() {
 				verifyMAPIMachineSetProviderSpec(mapiMachineSet, HaveField("InstanceType", Equal(instanceType)))
 			})
 		})
@@ -117,7 +118,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 		})
 	})
 
-	Describe("Scale MAPI MachineSets", Ordered, func() {
+	Describe("Scale MAPI MachineSets", Ordered, Label("Disruptive"), func() {
 		var mapiMSAuthCAPIName string
 
 		var awsMachineTemplate *awsv1.AWSMachineTemplate
@@ -183,7 +184,9 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				verifyMAPIMachineSetSynchronizedCondition(mapiMachineSet, mapiv1beta1.MachineAuthorityMachineAPI)
 
 				By("Scaling up MAPI MachineSet to 3 replicas")
-				Expect(mapiframework.ScaleMachineSet(mapiMSAuthCAPIName, 3)).To(Succeed(), "should be able to scale up MAPI MachineSet")
+				Eventually(func() error {
+					return mapiframework.ScaleMachineSet(mapiMSAuthCAPIName, 3)
+				}, capiframework.WaitShort, capiframework.RetryShort).Should(Succeed(), "Should be able to scale up MAPI MachineSet")
 
 				By("Verifying MachineSet status.replicas is set to 3")
 				verifyMachinesetReplicas(mapiMachineSet, 3)
@@ -205,7 +208,9 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				verifyMachineAuthoritative(secondMAPIMachine, mapiv1beta1.MachineAuthorityClusterAPI)
 
 				By("Scaling down MAPI MachineSet to 1 replicas")
-				Expect(mapiframework.ScaleMachineSet(mapiMSAuthCAPIName, 1)).To(Succeed(), "should be able to scale down MAPI MachineSet")
+				Eventually(func() error {
+					return mapiframework.ScaleMachineSet(mapiMSAuthCAPIName, 1)
+				}, capiframework.WaitShort, capiframework.RetryShort).Should(Succeed(), "Should be able to scale down MAPI MachineSet")
 				verifyMachinesetReplicas(mapiMachineSet, 1)
 				verifyMachinesetReplicas(capiMachineSet, 1)
 
@@ -225,7 +230,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 		})
 	})
 
-	Describe("Delete MachineSets", Ordered, func() {
+	Describe("Delete MachineSets", Ordered, Label("Disruptive"), func() {
 		var mapiMSAuthMAPIName string
 		var mapiMachineSet *mapiv1beta1.MachineSet
 		var capiMachineSet *clusterv1.MachineSet

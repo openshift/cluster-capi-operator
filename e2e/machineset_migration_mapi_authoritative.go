@@ -20,6 +20,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	ote "github.com/openshift-eng/openshift-tests-extension/pkg/ginkgo"
 	configv1 "github.com/openshift/api/config/v1"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	mapiframework "github.com/openshift/cluster-api-actuator-pkg/pkg/framework"
@@ -29,10 +30,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 )
 
-var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] MachineSet Migration MAPI Authoritative Tests", Ordered, func() {
+var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] MachineSet Migration MAPI Authoritative Tests", Ordered, Label("Platform:aws"), Label("Serial"), ote.Informing(), func() {
 	var k komega.Komega
 
 	BeforeAll(func() {
+		InitCommonVariables()
 		if platform != configv1.AWSPlatformType {
 			Skip(fmt.Sprintf("Skipping tests on %s, this is only supported on AWS", platform))
 		}
@@ -70,10 +72,8 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				})
 			})
 
-			// https://issues.redhat.com/browse/OCPCLOUD-3188
-			PIt("should reject creation of MAPI MachineSet with same name as existing CAPI MachineSet", func() {
-				By("Creating a same name MAPI MachineSet")
-				createMAPIMachineSetWithAuthoritativeAPI(ctx, cl, 0, existingCAPIMSAuthorityMAPIName, mapiv1beta1.MachineAuthorityMachineAPI, mapiv1beta1.MachineAuthorityMachineAPI)
+			It("should reject creation of MAPI MachineSet with same name as existing CAPI MachineSet", func() {
+				createSameNameMachineSetBlockedByVAPAuthMapi(ctx, cl, 0, existingCAPIMSAuthorityMAPIName, mapiv1beta1.MachineAuthorityMachineAPI, mapiv1beta1.MachineAuthorityMachineAPI, "a Cluster API MachineSet with the same name already exists")
 			})
 		})
 
@@ -89,7 +89,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 					cleanupMachineSetTestResources(
 						ctx,
 						cl,
-						[]*clusterv1.MachineSet{},
+						[]*clusterv1.MachineSet{capiMachineSet},
 						[]*awsv1.AWSMachineTemplate{awsMachineTemplate},
 						[]*mapiv1beta1.MachineSet{mapiMachineSet},
 					)
@@ -115,7 +115,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 		})
 	})
 
-	Describe("Scale MAPI MachineSets", Ordered, func() {
+	Describe("Scale MAPI MachineSets", Ordered, Label("Disruptive"), func() {
 		var mapiMSAuthMAPIName string
 		var mapiMSAuthMAPICAPI string
 
@@ -154,7 +154,9 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 
 			It("should scale, switch authority, and clean up successfully", func() {
 				By("Scaling up MAPI MachineSet to 2 replicas")
-				Expect(mapiframework.ScaleMachineSet(mapiMachineSet.GetName(), 2)).To(Succeed(), "should be able to scale up MAPI MachineSet")
+				Eventually(func() error {
+					return mapiframework.ScaleMachineSet(mapiMachineSet.GetName(), 2)
+				}, capiframework.WaitShort, capiframework.RetryShort).Should(Succeed(), "Should be able to scale up MAPI MachineSet")
 				mapiframework.WaitForMachineSet(ctx, cl, mapiMSAuthMAPIName)
 				verifyMachinesetReplicas(mapiMachineSet, 2)
 				verifyMachinesetReplicas(capiMachineSet, 2)
@@ -246,7 +248,9 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 
 			It("should create authoritative CAPI Machines and clean up successfully", func() {
 				By("Scaling up MAPI MachineSet to 1 replicas")
-				Expect(mapiframework.ScaleMachineSet(mapiMachineSet.GetName(), 1)).To(Succeed(), "should be able to scale up MAPI MachineSet")
+				Eventually(func() error {
+					return mapiframework.ScaleMachineSet(mapiMachineSet.GetName(), 1)
+				}, capiframework.WaitShort, capiframework.RetryShort).Should(Succeed(), "Should be able to scale up MAPI MachineSet")
 				capiframework.WaitForMachineSet(ctx, cl, mapiMSAuthMAPICAPI, capiframework.CAPINamespace)
 				verifyMachinesetReplicas(mapiMachineSet, 1)
 				verifyMachinesetReplicas(capiMachineSet, 1)
@@ -331,7 +335,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				By("Verifying new InfraTemplate has the updated InstanceType")
 				var err error
 				newAWSMachineTemplate, err = getAWSMachineTemplateByPrefix(mapiMSAuthMAPIName, capiframework.CAPINamespace)
-				Expect(err).ToNot(HaveOccurred(), "Failed to get new awsMachineTemplate  %s", newAWSMachineTemplate)
+				Expect(err).ToNot(HaveOccurred(), "Failed to get new awsMachineTemplate %s", newAWSMachineTemplate)
 				Expect(newAWSMachineTemplate.Spec.Template.Spec.InstanceType).To(Equal(newInstanceType))
 
 				By("Verifying the old InfraTemplate is deleted")
