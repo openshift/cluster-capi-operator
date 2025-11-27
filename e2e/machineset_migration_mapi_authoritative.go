@@ -29,10 +29,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 )
 
-var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] MachineSet Migration MAPI Authoritative Tests", Ordered, func() {
+var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration][platform:aws][Disruptive] MachineSet Migration MAPI Authoritative Tests", Ordered, Label("Conformance"), Label("Serial"), func() {
 	var k komega.Komega
 
 	BeforeAll(func() {
+		InitCommonVariables()
 		if platform != configv1.AWSPlatformType {
 			Skip(fmt.Sprintf("Skipping tests on %s, this is only supported on AWS", platform))
 		}
@@ -89,7 +90,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 					cleanupMachineSetTestResources(
 						ctx,
 						cl,
-						[]*clusterv1.MachineSet{},
+						[]*clusterv1.MachineSet{capiMachineSet},
 						[]*awsv1.AWSMachineTemplate{awsMachineTemplate},
 						[]*mapiv1beta1.MachineSet{mapiMachineSet},
 					)
@@ -331,7 +332,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				By("Verifying new InfraTemplate has the updated InstanceType")
 				var err error
 				newAWSMachineTemplate, err = getAWSMachineTemplateByPrefix(mapiMSAuthMAPIName, capiframework.CAPINamespace)
-				Expect(err).ToNot(HaveOccurred(), "Failed to get new awsMachineTemplate  %s", newAWSMachineTemplate)
+				Expect(err).ToNot(HaveOccurred(), "Failed to get new awsMachineTemplate %s", newAWSMachineTemplate)
 				Expect(newAWSMachineTemplate.Spec.Template.Spec.InstanceType).To(Equal(newInstanceType))
 
 				By("Verifying the old InfraTemplate is deleted")
