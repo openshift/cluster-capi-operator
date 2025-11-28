@@ -400,6 +400,46 @@ data:
           - Deny
     ---
     apiVersion: admissionregistration.k8s.io/v1
+    kind: ValidatingAdmissionPolicyBinding
+    metadata:
+      name: openshift-validate-capi-machine-creation
+    spec:
+      matchResources:
+        namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: openshift-cluster-api
+      paramRef:
+        namespace: openshift-machine-api
+        parameterNotFoundAction: Allow
+        selector: {}
+      policyName: openshift-validate-capi-machine-creation
+      validationActions:
+          - Deny
+    ---
+    apiVersion: admissionregistration.k8s.io/v1
+    kind: ValidatingAdmissionPolicy
+    metadata:
+      name: openshift-validate-capi-machine-creation 
+    spec:
+      failurePolicy: Fail
+      paramKind:
+        apiVersion: machine.openshift.io/v1beta1
+        kind: Machine
+      matchConstraints:
+        resourceRules:
+        - apiGroups:   ["cluster.x-k8s.io"]
+          apiVersions: ["v1beta1"]
+          operations:  ["CREATE"]
+          resources:   ["machines"]
+      # Requests must satisfy every matchCondition to reach the validations
+      matchConditions:
+        - name: check-param-match
+          expression: 'object.metadata.name == params.metadata.name'
+      # All validations must evaluate to true
+      validations:
+      - expression: 'true'
+    ---
+    apiVersion: admissionregistration.k8s.io/v1
     kind: ValidatingAdmissionPolicy
     metadata:
       name: openshift-prevent-migration-when-machine-updating
