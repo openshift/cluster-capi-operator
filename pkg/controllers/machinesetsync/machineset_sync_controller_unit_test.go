@@ -135,7 +135,7 @@ var _ = Describe("Unit tests for CAPIMachineSetStatusEqual", func() {
 					},
 				},
 			},
-			want:        ".[status].[conditions][0].[status]: True != False",
+			want:        ".[status].[conditions].[type=Ready].[status]: True != False",
 			wantChanges: true,
 		}),
 		Entry("v1beta1 condition LastTransitionTime ignored", testInput{
@@ -189,7 +189,7 @@ var _ = Describe("Unit tests for CAPIMachineSetStatusEqual", func() {
 					},
 				},
 			},
-			want:        ".[status].[conditions][1].[status]: True != False",
+			want:        ".[status].[conditions].[type=MachinesReady].[status]: True != False",
 			wantChanges: true,
 		}),
 		Entry("same v1beta2 conditions", testInput{
@@ -245,7 +245,7 @@ var _ = Describe("Unit tests for CAPIMachineSetStatusEqual", func() {
 					},
 				},
 			},
-			want:        ".[status].[v1beta2].[conditions][0].[status]: True != False",
+			want:        ".[status].[v1beta2].[conditions].[type=Ready].[status]: True != False",
 			wantChanges: true,
 		}),
 		Entry("v1beta2 condition LastTransitionTime ignored", testInput{
@@ -311,7 +311,7 @@ var _ = Describe("Unit tests for CAPIMachineSetStatusEqual", func() {
 					},
 				},
 			},
-			want:        ".[status].[v1beta2].[conditions][1].[status]: True != False",
+			want:        ".[status].[v1beta2].[conditions].[type=Available].[status]: True != False",
 			wantChanges: true,
 		}),
 		Entry("v1beta2 nil vs non-nil", testInput{

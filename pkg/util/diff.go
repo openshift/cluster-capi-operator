@@ -150,14 +150,8 @@ func (d *differ) Diff(a, b client.Object) (DiffResult, error) {
 	// 2. Run the configured modify functions
 	// This allows customizing the diffing process, e.g. remove conditions last transition time to ignore them during diffing
 	// or separate handling for providerSpec.
-	for funcName, modifyFunc := range d.modifyFuncs {
-		if err := modifyFunc(unstructuredA); err != nil {
-			return nil, fmt.Errorf("failed to run modify function %s on a: %w", funcName, err)
-		}
-
-		if err := modifyFunc(unstructuredB); err != nil {
-			return nil, fmt.Errorf("failed to run modify function %s on b: %w", funcName, err)
-		}
+	if err := d.applyModifyFuncs(unstructuredA, unstructuredB, d.modifyFuncs); err != nil {
+		return nil, fmt.Errorf("failed to apply modify functions: %w", err)
 	}
 
 	// 3. Remove fields configured to be ignored.
@@ -168,14 +162,8 @@ func (d *differ) Diff(a, b client.Object) (DiffResult, error) {
 
 	// 4. Run the late modify functions.
 	// This allows customize the diffing process to make objects better comparable. E.g. compare conditions as maps with their type as key.
-	for funcName, modifyFunc := range d.lateModifyFuncs {
-		if err := modifyFunc(unstructuredA); err != nil {
-			return nil, fmt.Errorf("failed to run modify function %s on a: %w", funcName, err)
-		}
-
-		if err := modifyFunc(unstructuredB); err != nil {
-			return nil, fmt.Errorf("failed to run modify function %s on b: %w", funcName, err)
-		}
+	if err := d.applyModifyFuncs(unstructuredA, unstructuredB, d.lateModifyFuncs); err != nil {
+		return nil, fmt.Errorf("failed to apply modify functions: %w", err)
 	}
 
 	// 4. Diff both resulted unstructured objects.
@@ -210,6 +198,20 @@ func (d *differ) Diff(a, b client.Object) (DiffResult, error) {
 		diff:             diffByKey,
 		providerSpecPath: d.providerSpecPath,
 	}, nil
+}
+
+func (d *differ) applyModifyFuncs(a, b map[string]interface{}, modifyFuncs map[string]func(obj map[string]interface{}) error) error {
+	for funcName, modifyFunc := range modifyFuncs {
+		if err := modifyFunc(a); err != nil {
+			return fmt.Errorf("modify function %s on a failed: %w", funcName, err)
+		}
+
+		if err := modifyFunc(b); err != nil {
+			return fmt.Errorf("modify function %s on b failed: %w", funcName, err)
+		}
+	}
+
+	return nil
 }
 
 // NewDefaultDiffer creates a new default differ with the default options.
@@ -306,12 +308,7 @@ func WithConditionsAsMap() diffopts {
 
 				for _, condition := range conditions {
 					conditionMap, ok := condition.(map[string]interface{})
-					if !ok {
-						continue
-					}
-
-					// Skip condition not having a type set.
-					if conditionMap["type"] == nil {
+					if !ok || conditionMap["type"] == nil {
 						continue
 					}
 

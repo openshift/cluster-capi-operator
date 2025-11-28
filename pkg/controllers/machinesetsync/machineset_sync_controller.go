@@ -1423,6 +1423,8 @@ func compareMAPIMachineSets(platform configv1.PlatformType, a, b *mapiv1beta1.Ma
 		util.WithIgnoreField("status", "observedGeneration"),
 		util.WithIgnoreField("status", "authoritativeAPI"),
 		util.WithIgnoreField("status", "synchronizedGeneration"),
+		// The synchronized condition is always handled by the migration controller separately.
+		util.WithIgnoreConditionType(string(controllers.SynchronizedCondition)),
 	).Diff(a, b)
 
 	if err != nil {
