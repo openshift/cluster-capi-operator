@@ -117,6 +117,8 @@ github.com/google/pprof v0.0.0-20250403155104-27863c87afa6 h1:BHT72Gu3keYf3ZEu2J
 github.com/google/pprof v0.0.0-20250403155104-27863c87afa6/go.mod h1:boTsfXsheKC2y+lKOCMpSfarhxDeIzfZG1jqGcPl3cA=
 github.com/google/uuid v1.6.0 h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=
 github.com/google/uuid v1.6.0/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
+github.com/gophercloud/gophercloud/v2 v2.9.0 h1:Y9OMrwKF9EDERcHFSOTpf/6XGoAI0yOxmsLmQki4LPM=
+github.com/gophercloud/gophercloud/v2 v2.9.0/go.mod h1:Ki/ILhYZr/5EPebrPL9Ej+tUg4lqx71/YH2JWVeU+Qk=
 github.com/hashicorp/go-cleanhttp v0.5.2 h1:035FKYIWjmULyFRBKPs8TBQoi0x6d9G4xc9neXJWAZQ=
 github.com/hashicorp/go-cleanhttp v0.5.2/go.mod h1:kO/YDlP8L1346E6Sodw+PrpBSV4/SoxCXGY6BqNFT48=
 github.com/hashicorp/go-hclog v1.6.3 h1:Qr2kF+eVWjTiYmU7Y31tYlP1h0q/X3Nl3tPGdaB11/k=
@@ -373,6 +375,8 @@ sigs.k8s.io/cluster-api-provider-gcp v1.10.0 h1:gngUxo9bz8l+otpdw9v3ULEXwAvijyqi
 sigs.k8s.io/cluster-api-provider-gcp v1.10.0/go.mod h1:VkmOqBgi3Jj+VR+YTZEHAlMMmyjqcKl4lXhpLsYnYok=
 sigs.k8s.io/cluster-api-provider-ibmcloud v0.11.0 h1:aunR3nnDzQ5x1Qj1hJbR3Xq4SCZth4XyTWAyUCN46kE=
 sigs.k8s.io/cluster-api-provider-ibmcloud v0.11.0/go.mod h1:9yPLATyiqLx4crMzbX11YQU+GuR5txjtiCt8z9sxDfM=
+sigs.k8s.io/cluster-api-provider-openstack v0.12.4 h1:zTg4UrFbK8GwUm+7983mm0Omz/w4BLB+VSmbELqGimc=
+sigs.k8s.io/cluster-api-provider-openstack v0.12.4/go.mod h1:tYFVtlu1NqU9H5edUaz2QkXDhucn6mAY9mHeK9pEKzU=
 sigs.k8s.io/cluster-api-provider-vsphere v1.13.0 h1:tvJX0p/LfBvOvF1EWNu4+9EJALBTAHU1US7Z1SX/24Q=
 sigs.k8s.io/cluster-api-provider-vsphere v1.13.0/go.mod h1:TgNq4vlGPmUhCmzT2hOptOZuNbyj0JfOXFLufr91tTY=
 sigs.k8s.io/controller-runtime v0.20.4 h1:X3c+Odnxz+iPTRobG4tp092+CvBU9UK0t/bRf+n0DGU=
