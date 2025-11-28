@@ -11,6 +11,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	yaml "sigs.k8s.io/yaml"
 
@@ -25,7 +26,11 @@ const (
 )
 
 var _ = Describe("Cluster API OpenStack MachineSet", Ordered, func() {
-	var mapiMachineSpec *mapiv1alpha1.OpenstackProviderSpec
+	var (
+		machineSet               *clusterv1.MachineSet
+		mapiMachineSpec          *mapiv1alpha1.OpenstackProviderSpec
+		openStackMachineTemplate *openstackv1.OpenStackMachineTemplate
+	)
 
 	BeforeAll(func() {
 		if platform != configv1.OpenStackPlatformType {
@@ -34,10 +39,22 @@ var _ = Describe("Cluster API OpenStack MachineSet", Ordered, func() {
 		mapiMachineSpec = getOpenStackMAPIProviderSpec(cl)
 	})
 
-	It("should be able to run a machine with implicit cluster default network", func() {
-		openStackMachineTemplate := createOpenStackMachineTemplate(ctx, cl, mapiMachineSpec)
+	AfterEach(func() {
+		if platform != configv1.OpenStackPlatformType {
+			// Because AfterEach always runs, even when tests are skipped, we have to
+			// explicitly skip it here for other platforms.
+			Skip("Skipping OpenStack E2E tests")
+		}
 
-		machineSet := framework.CreateMachineSet(ctx, cl, framework.NewMachineSetParams(
+		framework.DeleteMachineSets(ctx, cl, machineSet)
+		framework.WaitForMachineSetsDeleted(cl, machineSet)
+		framework.DeleteObjects(ctx, cl, openStackMachineTemplate)
+	})
+
+	It("should be able to run a machine with implicit cluster default network", func() {
+		openStackMachineTemplate = createOpenStackMachineTemplate(ctx, cl, mapiMachineSpec)
+
+		machineSet = framework.CreateMachineSet(ctx, cl, framework.NewMachineSetParams(
 			"openstack-machineset",
 			clusterName,
 			"",
@@ -49,11 +66,6 @@ var _ = Describe("Cluster API OpenStack MachineSet", Ordered, func() {
 			},
 			"worker-user-data",
 		))
-		DeferCleanup(func() {
-			By("Deleting machineset " + machineSet.Name)
-			Expect(cl.Delete(ctx, machineSet)).To(Succeed())
-			framework.WaitForMachineSetsDeleted(cl, machineSet)
-		})
 
 		framework.WaitForMachineSet(cl, machineSet.Name, machineSet.Namespace)
 	})
@@ -61,9 +73,9 @@ var _ = Describe("Cluster API OpenStack MachineSet", Ordered, func() {
 
 func getOpenStackMAPIProviderSpec(cl client.Client) *mapiv1alpha1.OpenstackProviderSpec {
 	machineSetList := &mapiv1beta1.MachineSetList{}
-	Expect(cl.List(ctx, machineSetList, client.InNamespace(framework.MAPINamespace))).To(Succeed())
+	Eventually(cl.List(ctx, machineSetList, client.InNamespace(framework.MAPINamespace))).Should(Succeed())
 
-	Expect(machineSetList.Items).ToNot(HaveLen(0))
+	Expect(machineSetList.Items).ToNot(HaveLen(0), "No MachineSets found in namespace %s", framework.MAPINamespace)
 	machineSet := machineSetList.Items[0]
 	Expect(machineSet.Spec.Template.Spec.ProviderSpec.Value).ToNot(BeNil())
 
@@ -113,6 +125,7 @@ func createOpenStackMachineTemplate(ctx context.Context, cl client.Client, mapiP
 
 	// NOTE(stephenfin): We intentionally ignore additional security for now.
 	var securityGroupParam openstackv1.SecurityGroupParam
+	Expect(len(mapiProviderSpec.SecurityGroups)).To(BeNumerically(">", 0))
 	securityGroup := mapiProviderSpec.SecurityGroups[0]
 	if securityGroup.UUID != "" {
 		securityGroupParam = openstackv1.SecurityGroupParam{ID: &securityGroup.UUID}
@@ -149,9 +162,6 @@ func createOpenStackMachineTemplate(ctx context.Context, cl client.Client, mapiP
 	}
 
 	Expect(cl.Create(ctx, openStackMachineTemplate)).To(Succeed(), format.Object(openStackMachineTemplate, 1))
-	// DeferCleanup(func() error {
-	// 	return cl.Delete(ctx, openStackMachineTemplate)
-	// })
 
 	return openStackMachineTemplate
 }
