@@ -252,5 +252,72 @@ var _ = Describe("Unit test Diff", func() {
 			wantChanged: false,
 			want:        "",
 		}),
+		Entry("no diff on objects having conditions in a different order", testInput{
+			a: unstructured.Unstructured{Object: map[string]any{
+				"status": map[string]any{
+
+					"conditions": []any{
+						map[string]any{
+							"type":   "Foo",
+							"status": "True",
+						},
+						map[string]any{
+							"type":   "Bar",
+							"status": "True",
+						},
+					},
+				},
+			}},
+			b: unstructured.Unstructured{Object: map[string]any{
+				"status": map[string]any{
+					"conditions": []any{
+						map[string]any{
+							"type":   "Bar",
+							"status": "True",
+						},
+						map[string]any{
+							"type":   "Foo",
+							"status": "True",
+						},
+					},
+				},
+			}},
+			diffOpts: []diffopts{
+				WithConditionsAsMap(),
+			},
+			wantChanged: false,
+			want:        "",
+		}),
+		Entry("diff on objects having conditions in a different order and one is different", testInput{
+			a: unstructured.Unstructured{Object: map[string]any{
+				"status": map[string]any{"conditions": []any{
+					map[string]any{
+						"type":   "Foo",
+						"status": "False",
+					},
+					map[string]any{
+						"type":   "Bar",
+						"status": "True",
+					},
+				}},
+			}},
+			b: unstructured.Unstructured{Object: map[string]any{
+				"status": map[string]any{"conditions": []any{
+					map[string]any{
+						"type":   "Bar",
+						"status": "True",
+					},
+					map[string]any{
+						"type":   "Foo",
+						"status": "True",
+					},
+				}},
+			}},
+			diffOpts: []diffopts{
+				WithConditionsAsMap(),
+			},
+			wantChanged: true,
+			want:        ".[status].[conditions].[type=Foo].[status]: False != True",
+		}),
 	)
 })

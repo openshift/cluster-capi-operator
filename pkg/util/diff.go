@@ -116,8 +116,9 @@ func (d *diffResult) String() string {
 }
 
 type differ struct {
-	modifyFuncs map[string]func(obj map[string]interface{}) error
-	ignoredPath [][]string
+	modifyFuncs     map[string]func(obj map[string]interface{}) error
+	lateModifyFuncs map[string]func(obj map[string]interface{}) error
+	ignoredPath     [][]string
 
 	// providerSpecPath is a custom path to the providerSpec field which differs between
 	// Machine API Machines and MachineSets and is passed down to the result to enable HasProviderSpecChanges().
@@ -163,6 +164,18 @@ func (d *differ) Diff(a, b client.Object) (DiffResult, error) {
 	for _, ignorePath := range d.ignoredPath {
 		unstructured.RemoveNestedField(unstructuredA, ignorePath...)
 		unstructured.RemoveNestedField(unstructuredB, ignorePath...)
+	}
+
+	// 4. Run the late modify functions.
+	// This allows customize the diffing process to make objects better comparable. E.g. compare conditions as maps with their type as key.
+	for funcName, modifyFunc := range d.lateModifyFuncs {
+		if err := modifyFunc(unstructuredA); err != nil {
+			return nil, fmt.Errorf("failed to run modify function %s on a: %w", funcName, err)
+		}
+
+		if err := modifyFunc(unstructuredB); err != nil {
+			return nil, fmt.Errorf("failed to run modify function %s on b: %w", funcName, err)
+		}
 	}
 
 	// 4. Diff both resulted unstructured objects.
@@ -226,6 +239,7 @@ func NewDefaultDiffer(opts ...diffopts) *differ {
 
 		// Options for handling of status fields.
 		WithIgnoreConditionsLastTransitionTime(),
+		WithConditionsAsMap(),
 	)...)
 }
 
@@ -272,7 +286,54 @@ func WithIgnoreConditionsLastTransitionTime() diffopts {
 	}
 }
 
-// WithIgnoreConditionType conditionType stringc onfigures the differ to ignore the condition of the given type when executing Diff.
+// WithConditionsAsMap ensures the conditions are converted to maps for comparison.
+func WithConditionsAsMap() diffopts {
+	return func(d *differ) {
+		d.modifyFuncs["ConditionsAsMap"] = func(a map[string]interface{}) error {
+			conditionPaths := [][]string{
+				{"status", "conditions"},
+				{"status", "v1beta2", "conditions"},
+				{"status", "deprecated", "v1beta1", "conditions"},
+			}
+
+			for _, conditionPath := range conditionPaths {
+				conditions, found, err := unstructured.NestedSlice(a, conditionPath...)
+				if !found || err != nil {
+					continue
+				}
+
+				newConditions := map[string]interface{}{}
+
+				for _, condition := range conditions {
+					conditionMap, ok := condition.(map[string]interface{})
+					if !ok {
+						continue
+					}
+
+					// Skip condition not having a type set.
+					if conditionMap["type"] == nil {
+						continue
+					}
+
+					conditionType, ok := conditionMap["type"].(string)
+					if !ok {
+						continue
+					}
+
+					newConditions[fmt.Sprintf("type=%s", conditionType)] = condition
+				}
+
+				if err := unstructured.SetNestedField(a, newConditions, conditionPath...); err != nil {
+					return fmt.Errorf("failed to set nested field %s: %w", strings.Join(conditionPath, "."), err)
+				}
+			}
+
+			return nil
+		}
+	}
+}
+
+// WithIgnoreConditionType conditionType configures the differ to ignore the condition of the given type when executing Diff.
 func WithIgnoreConditionType(conditionType string) diffopts {
 	return func(d *differ) {
 		d.modifyFuncs[fmt.Sprintf("RemoveCondition[%s]", conditionType)] = func(a map[string]interface{}) error {
