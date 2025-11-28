@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"sort"
 
 	"github.com/go-logr/logr"
 	configv1 "github.com/openshift/api/config/v1"
@@ -40,7 +39,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 
-	"github.com/go-test/deep"
 	machinev1applyconfigs "github.com/openshift/client-go/machine/applyconfigurations/machine/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -775,7 +773,7 @@ func (r *MachineSetSyncReconciler) createOrUpdateCAPIInfraMachineTemplate(ctx co
 			return updateErr
 		}
 
-		if len(capiInfraMachineTemplatesDiff) == 0 {
+		if !capiInfraMachineTemplatesDiff.HasChanges() {
 			logger.Info("No changes detected for CAPI infra machine template")
 			return nil
 		}
@@ -820,7 +818,10 @@ func (r *MachineSetSyncReconciler) createOrUpdateCAPIMachineSet(ctx context.Cont
 	// If there is an existing CAPI machine set, work out if it needs updating.
 
 	// Compare the existing CAPI machine set with the converted CAPI machine set to check for changes.
-	capiMachineSetsDiff := compareCAPIMachineSets(existingCAPIMachineSet, convertedCAPIMachineSet)
+	capiMachineSetsDiff, err := compareCAPIMachineSets(existingCAPIMachineSet, convertedCAPIMachineSet)
+	if err != nil {
+		return fmt.Errorf("failed to compare Cluster API machine sets: %w", err)
+	}
 
 	// Make a deep copy of the converted CAPI machine set to avoid modifying the original.
 	updatedOrCreatedCAPIMachineSet := convertedCAPIMachineSet.DeepCopy()
@@ -873,11 +874,11 @@ func (r *MachineSetSyncReconciler) ensureCAPIMachineSet(ctx context.Context, sou
 }
 
 // ensureCAPIMachineSetSpecUpdated updates the CAPI machine set if changes are detected.
-func (r *MachineSetSyncReconciler) ensureCAPIMachineSetSpecUpdated(ctx context.Context, mapiMachineSet *mapiv1beta1.MachineSet, capiMachineSetsDiff map[string]any, updatedOrCreatedCAPIMachineSet *clusterv1.MachineSet) (bool, error) {
+func (r *MachineSetSyncReconciler) ensureCAPIMachineSetSpecUpdated(ctx context.Context, mapiMachineSet *mapiv1beta1.MachineSet, capiMachineSetsDiff util.DiffResult, updatedOrCreatedCAPIMachineSet *clusterv1.MachineSet) (bool, error) {
 	logger := logf.FromContext(ctx)
 
 	// If there are no spec changes, return early.
-	if !hasSpecOrMetadataOrProviderSpecChanges(capiMachineSetsDiff) {
+	if !(capiMachineSetsDiff.HasMetadataChanges() || capiMachineSetsDiff.HasSpecChanges() || capiMachineSetsDiff.HasProviderSpecChanges()) {
 		return false, nil
 	}
 
@@ -899,11 +900,11 @@ func (r *MachineSetSyncReconciler) ensureCAPIMachineSetSpecUpdated(ctx context.C
 }
 
 // ensureCAPIMachineSetStatusUpdated updates the CAPI machine set status if changes are detected and conditions are met.
-func (r *MachineSetSyncReconciler) ensureCAPIMachineSetStatusUpdated(ctx context.Context, mapiMachineSet *mapiv1beta1.MachineSet, existingCAPIMachineSet *clusterv1.MachineSet, convertedCAPIMachineSet *clusterv1.MachineSet, updatedOrCreatedCAPIMachineSet *clusterv1.MachineSet, capiMachineSetsDiff map[string]any, specUpdated bool) (bool, error) {
+func (r *MachineSetSyncReconciler) ensureCAPIMachineSetStatusUpdated(ctx context.Context, mapiMachineSet *mapiv1beta1.MachineSet, existingCAPIMachineSet *clusterv1.MachineSet, convertedCAPIMachineSet *clusterv1.MachineSet, updatedOrCreatedCAPIMachineSet *clusterv1.MachineSet, capiMachineSetsDiff util.DiffResult, specUpdated bool) (bool, error) {
 	logger := logf.FromContext(ctx)
 
 	// If there are no status changes and the spec has not been updated, return early.
-	if !hasStatusChanges(capiMachineSetsDiff) && !specUpdated {
+	if !capiMachineSetsDiff.HasStatusChanges() && !specUpdated {
 		return false, nil
 	}
 
@@ -950,11 +951,11 @@ func (r *MachineSetSyncReconciler) ensureCAPIMachineSetStatusUpdated(ctx context
 }
 
 // ensureMAPIMachineSetSpecUpdated updates the MAPI machine set if changes are detected.
-func (r *MachineSetSyncReconciler) ensureMAPIMachineSetSpecUpdated(ctx context.Context, mapiMachineSet *mapiv1beta1.MachineSet, mapiMachineSetsDiff map[string]any, updatedMAPIMachineSet *mapiv1beta1.MachineSet) (bool, error) {
+func (r *MachineSetSyncReconciler) ensureMAPIMachineSetSpecUpdated(ctx context.Context, mapiMachineSet *mapiv1beta1.MachineSet, mapiMachineSetsDiff util.DiffResult, updatedMAPIMachineSet *mapiv1beta1.MachineSet) (bool, error) {
 	logger := logf.FromContext(ctx)
 
 	// If there are no spec changes, return early.
-	if !hasSpecOrMetadataOrProviderSpecChanges(mapiMachineSetsDiff) {
+	if !(mapiMachineSetsDiff.HasMetadataChanges() || mapiMachineSetsDiff.HasSpecChanges() || mapiMachineSetsDiff.HasProviderSpecChanges()) {
 		return false, nil
 	}
 
@@ -977,11 +978,11 @@ func (r *MachineSetSyncReconciler) ensureMAPIMachineSetSpecUpdated(ctx context.C
 }
 
 // ensureMAPIMachineSetStatusUpdated updates the MAPI machine set status if changes are detected and conditions are met.
-func (r *MachineSetSyncReconciler) ensureMAPIMachineSetStatusUpdated(ctx context.Context, existingMAPIMachineSet *mapiv1beta1.MachineSet, convertedMAPIMachineSet *mapiv1beta1.MachineSet, updatedMAPIMachineSet *mapiv1beta1.MachineSet, sourceCAPIMachineSet *clusterv1.MachineSet, mapiMachineSetsDiff map[string]any, specUpdated bool) (bool, error) {
+func (r *MachineSetSyncReconciler) ensureMAPIMachineSetStatusUpdated(ctx context.Context, existingMAPIMachineSet *mapiv1beta1.MachineSet, convertedMAPIMachineSet *mapiv1beta1.MachineSet, updatedMAPIMachineSet *mapiv1beta1.MachineSet, sourceCAPIMachineSet *clusterv1.MachineSet, mapiMachineSetsDiff util.DiffResult, specUpdated bool) (bool, error) {
 	logger := logf.FromContext(ctx)
 
 	// If there are no status changes and the spec has not been updated, return early.
-	if !hasStatusChanges(mapiMachineSetsDiff) && !specUpdated {
+	if !mapiMachineSetsDiff.HasStatusChanges() && !specUpdated {
 		return false, nil
 	}
 
@@ -1051,7 +1052,7 @@ func (r *MachineSetSyncReconciler) updateMAPIMachineSet(ctx context.Context, exi
 
 	// Here we always assume the existingMAPIMachineSet already exists, so we don't need to create it.
 
-	mapiMachineSetsDiff, err := compareMAPIMachineSets(existingMAPIMachineSet, convertedMAPIMachineSet)
+	mapiMachineSetsDiff, err := compareMAPIMachineSets(r.Platform, existingMAPIMachineSet, convertedMAPIMachineSet)
 	if err != nil {
 		return fmt.Errorf("unable to compare MAPI machine sets: %w", err)
 	}
@@ -1347,9 +1348,9 @@ func initInfraMachineTemplateListAndInfraClusterListFromProvider(platform config
 }
 
 // compareCAPIInfraMachineTemplates compares CAPI infra machine templates a and b, and returns a list of differences, or none if there are none.
-//
-//nolint:funlen
-func compareCAPIInfraMachineTemplates(platform configv1.PlatformType, infraMachineTemplate1, infraMachineTemplate2 client.Object) (map[string]any, error) {
+func compareCAPIInfraMachineTemplates(platform configv1.PlatformType, infraMachineTemplate1, infraMachineTemplate2 client.Object) (util.DiffResult, error) {
+	var obj1, obj2 client.Object
+
 	switch platform {
 	case configv1.AWSPlatformType:
 		typedInfraMachineTemplate1, ok := infraMachineTemplate1.(*awsv1.AWSMachineTemplate)
@@ -1362,19 +1363,8 @@ func compareCAPIInfraMachineTemplates(platform configv1.PlatformType, infraMachi
 			return nil, errAssertingCAPIAWSMachineTemplate
 		}
 
-		diff := make(map[string]any)
-
-		if diffSpec := deep.Equal(typedInfraMachineTemplate1.Spec, typedinfraMachineTemplate2.Spec); len(diffSpec) > 0 {
-			diff[".spec"] = diffSpec
-		}
-
-		if diffObjectMeta := util.ObjectMetaEqual(typedInfraMachineTemplate1.ObjectMeta, typedinfraMachineTemplate2.ObjectMeta); len(diffObjectMeta) > 0 {
-			diff[".metadata"] = diffObjectMeta
-		}
-
-		// TODO: Evaluate if we want to add status comparison if needed in the future (e.g. for scale from zero capacity).
-
-		return diff, nil
+		obj1 = typedInfraMachineTemplate1
+		obj2 = typedinfraMachineTemplate2
 	case configv1.OpenStackPlatformType:
 		typedInfraMachineTemplate1, ok := infraMachineTemplate1.(*openstackv1.OpenStackMachineTemplate)
 		if !ok {
@@ -1386,17 +1376,8 @@ func compareCAPIInfraMachineTemplates(platform configv1.PlatformType, infraMachi
 			return nil, errAssertingCAPIOpenStackMachineTemplate
 		}
 
-		diff := make(map[string]any)
-
-		if diffSpec := deep.Equal(typedInfraMachineTemplate1.Spec, typedinfraMachineTemplate2.Spec); len(diffSpec) > 0 {
-			diff[".spec"] = diffSpec
-		}
-
-		if diffObjectMeta := deep.Equal(typedInfraMachineTemplate1.ObjectMeta, typedinfraMachineTemplate2.ObjectMeta); len(diffObjectMeta) > 0 {
-			diff[".metadata"] = diffObjectMeta
-		}
-
-		return diff, nil
+		obj1 = typedInfraMachineTemplate1
+		obj2 = typedinfraMachineTemplate2
 	case configv1.PowerVSPlatformType:
 		typedInfraMachineTemplate1, ok := infraMachineTemplate1.(*ibmpowervsv1.IBMPowerVSMachineTemplate)
 		if !ok {
@@ -1408,92 +1389,46 @@ func compareCAPIInfraMachineTemplates(platform configv1.PlatformType, infraMachi
 			return nil, errAssertingCAPIIBMPowerVSMachineTemplate
 		}
 
-		diff := make(map[string]any)
-
-		if diffSpec := deep.Equal(typedInfraMachineTemplate1.Spec, typedinfraMachineTemplate2.Spec); len(diffSpec) > 0 {
-			diff[".spec"] = diffSpec
-		}
-
-		if diffObjectMeta := deep.Equal(typedInfraMachineTemplate1.ObjectMeta, typedinfraMachineTemplate2.ObjectMeta); len(diffObjectMeta) > 0 {
-			diff[".metadata"] = diffObjectMeta
-		}
-
-		// TODO: Evaluate if we want to add status comparison if needed in the future (e.g. for scale from zero capacity).
-
-		return diff, nil
+		obj1 = typedInfraMachineTemplate1
+		obj2 = typedinfraMachineTemplate2
 	default:
 		return nil, fmt.Errorf("%w: %s", errPlatformNotSupported, platform)
 	}
+
+	diff, err := util.NewDefaultDiffer().Diff(obj1, obj2)
+	if err != nil {
+		return nil, fmt.Errorf("failed to compare Cluster API infrastructure machine templates: %w", err)
+	}
+
+	return diff, nil
 }
 
-// compareCAPIMachineSets compares CAPI machineSets a and b, and returns a list of differences, or none if there are none.
-func compareCAPIMachineSets(capiMachineSet1, capiMachineSet2 *clusterv1.MachineSet) map[string]any {
-	diff := make(map[string]any)
-
-	if diffSpec := deep.Equal(capiMachineSet1.Spec, capiMachineSet2.Spec); len(diffSpec) > 0 {
-		diff[".spec"] = diffSpec
+// compareCAPIMachineSets compares Cluster API machineSets a and b, and returns a list of differences, or none if there are none.
+func compareCAPIMachineSets(capiMachineSet1, capiMachineSet2 *clusterv1.MachineSet) (util.DiffResult, error) {
+	diff, err := util.NewDefaultDiffer().Diff(capiMachineSet1, capiMachineSet2)
+	if err != nil {
+		return nil, fmt.Errorf("failed to compare Cluster API machinesets: %w", err)
 	}
 
-	if diffObjectMeta := util.ObjectMetaEqual(capiMachineSet1.ObjectMeta, capiMachineSet2.ObjectMeta); len(diffObjectMeta) > 0 {
-		diff[".metadata"] = diffObjectMeta
-	}
-
-	if diffStatus := util.CAPIMachineSetStatusEqual(capiMachineSet1.Status, capiMachineSet2.Status); len(diffStatus) > 0 {
-		diff[".status"] = diffStatus
-	}
-
-	return diff
+	return diff, nil
 }
 
 // compareMAPIMachineSets compares MAPI machineSets a and b, and returns a list of differences, or none if there are none.
-func compareMAPIMachineSets(a, b *mapiv1beta1.MachineSet) (map[string]any, error) {
-	diff := make(map[string]any)
+func compareMAPIMachineSets(platform configv1.PlatformType, a, b *mapiv1beta1.MachineSet) (util.DiffResult, error) {
+	diff, err := util.NewDefaultDiffer(
+		util.WithProviderSpec(platform, []string{"spec", "template", "spec", "providerSpec", "value"}, mapi2capi.ProviderSpecFromRawExtension),
 
-	ps1, err := mapi2capi.AWSProviderSpecFromRawExtension(a.Spec.Template.Spec.ProviderSpec.Value)
+		// Other status fields to ignore
+		util.WithIgnoreField("status", "replicas"),
+		util.WithIgnoreField("status", "observedGeneration"),
+		util.WithIgnoreField("status", "authoritativeAPI"),
+		util.WithIgnoreField("status", "synchronizedGeneration"),
+		// The synchronized condition is always handled by the migration controller separately.
+		util.WithIgnoreConditionType(string(controllers.SynchronizedCondition)),
+	).Diff(a, b)
+
 	if err != nil {
-		return nil, fmt.Errorf("unable to parse first MAPI machine set providerSpec: %w", err)
-	}
-
-	ps2, err := mapi2capi.AWSProviderSpecFromRawExtension(b.Spec.Template.Spec.ProviderSpec.Value)
-	if err != nil {
-		return nil, fmt.Errorf("unable to parse second MAPI machine set providerSpec: %w", err)
-	}
-
-	// Sort the tags by name to ensure consistent ordering.
-	// On the CAPI side these tags are in a map,
-	// so the order is not guaranteed when converting back from a CAPI map to a MAPI slice.
-	sort.Slice(ps1.Tags, func(i, j int) bool {
-		return ps1.Tags[i].Name < ps1.Tags[j].Name
-	})
-
-	// Sort the tags by name to ensure consistent ordering.
-	// On the CAPI side these tags are in a map,
-	// so the order is not guaranteed when converting back from a CAPI map to a MAPI slice.
-	sort.Slice(ps2.Tags, func(i, j int) bool {
-		return ps2.Tags[i].Name < ps2.Tags[j].Name
-	})
-
-	if diffProviderSpec := deep.Equal(ps1, ps2); len(diffProviderSpec) > 0 {
-		diff[".providerSpec"] = diffProviderSpec
-	}
-
-	// Remove the providerSpec from the Spec as we've already compared them.
-	aCopy := a.DeepCopy()
-	aCopy.Spec.Template.Spec.ProviderSpec.Value = nil
-
-	bCopy := b.DeepCopy()
-	bCopy.Spec.Template.Spec.ProviderSpec.Value = nil
-
-	if diffSpec := deep.Equal(aCopy.Spec, bCopy.Spec); len(diffSpec) > 0 {
-		diff[".spec"] = diffSpec
-	}
-
-	if diffMetadata := util.ObjectMetaEqual(aCopy.ObjectMeta, bCopy.ObjectMeta); len(diffMetadata) > 0 {
-		diff[".metadata"] = diffMetadata
-	}
-
-	if diffStatus := util.MAPIMachineSetStatusEqual(a.Status, b.Status); len(diffStatus) > 0 {
-		diff[".status"] = diffStatus
+		return nil, fmt.Errorf("failed to compare Machine API machinesets: %w", err)
 	}
 
 	return diff, nil
@@ -1549,22 +1484,6 @@ func restoreMAPIFields(existingMAPIMachineSet, convertedMAPIMachineSet *mapiv1be
 	convertedMAPIMachineSet.OwnerReferences = nil // No CAPI machine set owner references are converted to MAPI machine set.
 	// Restore finalizers.
 	convertedMAPIMachineSet.SetFinalizers(existingMAPIMachineSet.GetFinalizers())
-}
-
-// hasStatusChanges returns true if there are changes to the status.
-func hasStatusChanges(diff map[string]any) bool {
-	_, ok := diff[".status"]
-
-	return ok
-}
-
-// hasSpecOrMetadataOrProviderSpecChanges returns true if there are changes to the spec, metadata, or providerSpec.
-func hasSpecOrMetadataOrProviderSpecChanges(diff map[string]any) bool {
-	_, ok1 := diff[".spec"]
-	_, ok2 := diff[".metadata"]
-	_, ok3 := diff[".providerSpec"]
-
-	return ok1 || ok2 || ok3
 }
 
 // isTerminalConfigurationError returns true if the provided error is
