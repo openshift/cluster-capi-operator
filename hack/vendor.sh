@@ -7,7 +7,7 @@ echo "Updating dependencies for Cluster CAPI Operator workspace"
 # Tidy all modules in the workspace
 echo "Running go mod tidy for all modules..."
 go work use -r .
-for module in . e2e manifests-gen hack/tools; do
+for module in . e2e manifests-gen hack/tools openshift-tests-extension; do
   if [ -f "$module/go.mod" ]; then
     echo "Tidying $module"
     (cd "$module" && go mod tidy)
@@ -16,7 +16,7 @@ done
 
 # Verify all modules
 echo "Verifying all modules..."
-for module in . e2e manifests-gen hack/tools; do
+for module in . e2e manifests-gen hack/tools openshift-tests-extension; do
   if [ -f "$module/go.mod" ]; then
     echo "Verifying $module"
     (cd "$module" && go mod verify)
