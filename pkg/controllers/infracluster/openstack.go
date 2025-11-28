@@ -109,11 +109,9 @@ func (r *InfraClusterController) ensureOpenStackCluster(ctx context.Context, log
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      r.Infra.Status.InfrastructureName,
 			Namespace: r.CAPINamespace,
-			// The ManagedBy Annotation is set so CAPI infra providers ignore the InfraCluster object,
-			// as that's managed externally, in this case by this controller.
-			Annotations: map[string]string{
-				clusterv1.ManagedByAnnotation: managedByAnnotationValueClusterCAPIOperatorInfraClusterController,
-			},
+			// NOTE(stephenfin): Other providers set the ManagedBy annotation here so that CAPI
+			// infra providers (CAPO here) ignore the InfraCluster object. However, we need CAPO
+			// to populate the .Status field for us so we *do not* set the annotation here.
 		},
 		Spec: openstackv1.OpenStackClusterSpec{
 			ControlPlaneEndpoint: &clusterv1.APIEndpoint{
