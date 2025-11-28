@@ -21,6 +21,7 @@ import (
 	"os"
 	"time"
 
+	metal3v1 "github.com/metal3-io/cluster-api-provider-metal3/api/v1beta1"
 	configv1 "github.com/openshift/api/config/v1"
 	mapiv1alpha1 "github.com/openshift/api/machine/v1alpha1"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
@@ -68,6 +69,7 @@ func initScheme(scheme *runtime.Scheme) {
 	utilruntime.Must(mapiv1beta1.Install(scheme))
 	utilruntime.Must(configv1.Install(scheme))
 	utilruntime.Must(awsv1.AddToScheme(scheme))
+	utilruntime.Must(metal3v1.AddToScheme(scheme))
 	utilruntime.Must(openstackv1.AddToScheme(scheme))
 	utilruntime.Must(clusterv1.AddToScheme(scheme))
 }
@@ -196,7 +198,7 @@ func main() {
 
 	// Currently we only plan to support AWS, so all others are a noop until they're implemented.
 	switch provider {
-	case configv1.AWSPlatformType, configv1.OpenStackPlatformType:
+	case configv1.AWSPlatformType, configv1.BareMetalPlatformType, configv1.OpenStackPlatformType:
 		klog.Infof("MachineAPIMigration: starting %s controllers", provider)
 
 	default:
