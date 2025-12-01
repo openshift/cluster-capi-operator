@@ -58,8 +58,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				verifyMachineSetPausedCondition(mapiMachineSet, mapiv1beta1.MachineAuthorityClusterAPI)
 			})
 
-			// bug https://issues.redhat.com/browse/OCPBUGS-55337
-			PIt("should verify that the non-authoritative MAPI MachineSet providerSpec has been updated to reflect the authoritative CAPI MachineSet mirror values", func() {
+			It("should verify that the non-authoritative MAPI MachineSet providerSpec has been updated to reflect the authoritative CAPI MachineSet mirror values", func() {
 				verifyMAPIMachineSetProviderSpec(mapiMachineSet, HaveField("InstanceType", Equal(instanceType)))
 			})
 		})
