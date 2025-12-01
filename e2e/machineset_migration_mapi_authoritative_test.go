@@ -55,10 +55,8 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				})
 			})
 
-			// https://issues.redhat.com/browse/OCPCLOUD-3188
-			PIt("should reject creation of MAPI MachineSet with same name as existing CAPI MachineSet", func() {
-				By("Creating a same name MAPI MachineSet")
-				createMAPIMachineSetWithAuthoritativeAPI(ctx, cl, 0, existingCAPIMSAuthorityMAPIName, mapiv1beta1.MachineAuthorityMachineAPI, mapiv1beta1.MachineAuthorityMachineAPI)
+			It("should reject creation of MAPI MachineSet with same name as existing CAPI MachineSet", func() {
+				createSameNameMachineSetBlockedByVAPAuthMapi(ctx, cl, 0, existingCAPIMSAuthorityMAPIName, mapiv1beta1.MachineAuthorityMachineAPI, mapiv1beta1.MachineAuthorityMachineAPI, "a Cluster API MachineSet with the same name already exists")
 			})
 		})
 

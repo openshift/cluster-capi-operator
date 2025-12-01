@@ -128,6 +128,45 @@ func createMAPIMachineWithAuthority(ctx context.Context, cl client.Client, machi
 	return newMachine
 }
 
+// createSameNameMachineBlockedByVAPAuthMapi attempts to create a MAPI Machine with specified authoritativeAPI and expects the creation to fail.
+func createSameNameMachineBlockedByVAPAuthMapi(ctx context.Context, cl client.Client, machineName string, authority mapiv1beta1.MachineAuthority, expectedErrorMessage string) {
+	Expect(machineName).NotTo(BeEmpty(), "Machine name cannot be empty")
+	workerLabelSelector := metav1.LabelSelector{
+		MatchLabels: map[string]string{
+			"machine.openshift.io/cluster-api-machine-role": "worker",
+		},
+	}
+	machineList, err := mapiframework.GetMachines(ctx, cl, &workerLabelSelector)
+
+	Expect(err).NotTo(HaveOccurred(), "Should have successfully listed MAPI machines")
+	Expect(machineList).NotTo(BeEmpty(), "Should have found MAPI machines in the openshift-machine-api namespace to use as a reference for creating a new one")
+
+	referenceMachine := machineList[0]
+	By(fmt.Sprintf("Using MAPI machine %s as a reference", referenceMachine.Name))
+
+	newMachine := &mapiv1beta1.Machine{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Machine",
+			APIVersion: mapiv1beta1.GroupVersion.String(),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      machineName,
+			Namespace: referenceMachine.Namespace,
+		},
+		Spec: *referenceMachine.Spec.DeepCopy(),
+	}
+
+	newMachine.Spec.ProviderID = nil
+	newMachine.ObjectMeta.Labels = nil
+	newMachine.Status = mapiv1beta1.MachineStatus{}
+	newMachine.Spec.AuthoritativeAPI = authority
+
+	By(fmt.Sprintf("Attempting to create a MAPI machine (expecting failure) with AuthoritativeAPI: %s in namespace: %s", authority, newMachine.Namespace))
+	err = cl.Create(ctx, newMachine)
+	Expect(err).To(HaveOccurred(), "MAPI Machine %s creation should fail", machineName)
+	Expect(err.Error()).To(ContainSubstring(expectedErrorMessage), "Error message should contain expected text: %s", expectedErrorMessage)
+}
+
 // verifyMachineRunning verifies that a machine reaches Running state using the machine object directly.
 func verifyMachineRunning(cl client.Client, machine client.Object) {
 	Expect(machine).NotTo(BeNil(), "Machine parameter cannot be nil")
