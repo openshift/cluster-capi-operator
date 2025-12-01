@@ -822,7 +822,7 @@ func (r *MachineSyncReconciler) shouldMirrorCAPIMachineToMAPIMachine(ctx context
 
 	// Check if the CAPI machine has an ownerReference that points to a CAPI machineset.
 	for _, ref := range machine.ObjectMeta.OwnerReferences {
-		if ref.Kind != machineSetKind || ref.APIVersion != clusterv1.GroupVersion.String() {
+		if ref.Kind != machineSetKind || (ref.APIVersion != clusterv1.GroupVersion.String() && ref.APIVersion != (schema.GroupVersion{Group: clusterv1.GroupVersion.Group, Version: "v1beta2"}).String()) {
 			continue
 		}
 
