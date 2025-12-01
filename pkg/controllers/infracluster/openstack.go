@@ -50,10 +50,6 @@ var (
 	errOpenStackNoControlPlaneMachines      = errors.New("no control plane machines found")
 )
 
-var (
-	scopeCacheMaxSize int //nolint:gochecknoglobals
-)
-
 // ensureOpenStackCluster ensures the OpenStackCluster object exists.
 //
 //nolint:funlen
@@ -139,7 +135,7 @@ func (r *InfraClusterController) ensureOpenStackCluster(ctx context.Context, log
 	// FIXME(stephenfin): Where can I source caCertificates from? The legacy infracluster controller
 	// had the same issue.
 	caCertificates := []byte{} // PEM encoded CA certificates
-	scopeFactory := openstackscope.NewFactory(scopeCacheMaxSize)
+	scopeFactory := openstackscope.NewFactory(0)
 
 	scope, err := scopeFactory.NewClientScopeFromObject(ctx, r.Client, caCertificates, log, target)
 	if err != nil {
