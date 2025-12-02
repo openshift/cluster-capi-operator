@@ -1296,6 +1296,15 @@ func compareCAPIMachines(capiMachine1, capiMachine2 *clusterv1.Machine) (util.Di
 	diff, err := util.NewDefaultDiffer(
 		// The paused condition is always handled by the corresponding CAPI controller.
 		util.WithIgnoreConditionType(clusterv1.PausedV1Beta2Condition),
+
+		// We don't ned this at the moment, and tt require significant hoops to get the Node object everytime and pipe it down to here.
+		// Do not implement this for now, rationale:
+		// https://github.com/openshift/cluster-capi-operator/pull/365#discussion_r2378857251
+		util.WithIgnoreConditionType(clusterv1.MachineNodeHealthyV1Beta2Condition),
+
+		// We should never set this condition in CAPI because we don't use MachineDeployments on the MAPI side
+		// and/or don't support "matching" higher level abstractions for the conversion of a MachineSet from MAPI to CAPI
+		util.WithIgnoreConditionType(clusterv1.MachineUpToDateV1Beta2Condition),
 	).Diff(capiMachine1, capiMachine2)
 	if err != nil {
 		return nil, fmt.Errorf("failed to compare Cluster API machines: %w", err)
@@ -1313,8 +1322,8 @@ func compareMAPIMachines(platform configv1.PlatformType, a, b *mapiv1beta1.Machi
 		util.WithIgnoreField("status", "lastOperation"),
 		util.WithIgnoreField("status", "authoritativeAPI"),
 		util.WithIgnoreField("status", "synchronizedGeneration"),
-		// The synchronized condition is always handled by the migration controller separately.
-		util.WithIgnoreConditionType(string(controllers.SynchronizedCondition)),
+		// MAPI Machine conditions are not converted yet, TODO(OCPCLOUD-3193): Add condition types to ignore when conversion is implemented
+		util.WithIgnoreField("status", "conditions"),
 	).Diff(a, b)
 
 	if err != nil {

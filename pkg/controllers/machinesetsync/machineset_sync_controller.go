@@ -1405,7 +1405,10 @@ func compareCAPIInfraMachineTemplates(platform configv1.PlatformType, infraMachi
 
 // compareCAPIMachineSets compares Cluster API machineSets a and b, and returns a list of differences, or none if there are none.
 func compareCAPIMachineSets(capiMachineSet1, capiMachineSet2 *clusterv1.MachineSet) (util.DiffResult, error) {
-	diff, err := util.NewDefaultDiffer().Diff(capiMachineSet1, capiMachineSet2)
+	diff, err := util.NewDefaultDiffer(
+		util.WithIgnoreConditionType(clusterv1.PausedV1Beta2Condition),
+		util.WithIgnoreConditionType(clusterv1.RemediatingV1Beta2Condition),
+	).Diff(capiMachineSet1, capiMachineSet2)
 	if err != nil {
 		return nil, fmt.Errorf("failed to compare Cluster API machinesets: %w", err)
 	}
@@ -1423,8 +1426,9 @@ func compareMAPIMachineSets(platform configv1.PlatformType, a, b *mapiv1beta1.Ma
 		util.WithIgnoreField("status", "observedGeneration"),
 		util.WithIgnoreField("status", "authoritativeAPI"),
 		util.WithIgnoreField("status", "synchronizedGeneration"),
-		// The synchronized condition is always handled by the migration controller separately.
-		util.WithIgnoreConditionType(string(controllers.SynchronizedCondition)),
+		// The only two conditions normally used for MAPI MachineSets are Paused and Synchronized.
+		// We do not convert these conditions to MAPI conditions as they are managed directly by the machineSet sync and migration controllers.
+		util.WithIgnoreField("status", "conditions"),
 	).Diff(a, b)
 
 	if err != nil {
