@@ -2,6 +2,12 @@ module github.com/openshift/cluster-capi-operator
 
 go 1.24.0
 
+// TODO: these replaces should be removed when corresponding PRs are merged
+replace (
+	sigs.k8s.io/cluster-api-provider-azure => github.com/damdo/cluster-api-provider-azure v0.0.0-20251202084521-c2e0e38d1e0e
+	github.com/openshift/cluster-api-actuator-pkg/testutils => github.com/chrischdi/cluster-api-actuator-pkg/testutils v0.0.0-20251203134942-d9bd7b8593f3
+)
+
 require (
 	github.com/drone/envsubst/v2 v2.0.0-20210730161058-179042472c46
 	github.com/go-logr/logr v1.4.3
@@ -12,7 +18,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/gophercloud/gophercloud/v2 v2.9.0
 	github.com/klauspost/compress v1.18.0
-	github.com/metal3-io/cluster-api-provider-metal3/api v1.10.1
+	github.com/metal3-io/cluster-api-provider-metal3/api v1.11.2
 	github.com/onsi/ginkgo/v2 v2.23.4
 	github.com/onsi/gomega v1.38.0
 	github.com/openshift/api v0.0.0-20250731015415-ed654edbd7c6
@@ -31,13 +37,13 @@ require (
 	k8s.io/component-base v0.33.3
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/utils v0.0.0-20250321185631-1f6e0b77f77e
-	sigs.k8s.io/cluster-api v1.10.4
-	sigs.k8s.io/cluster-api-provider-aws/v2 v2.9.0
-	sigs.k8s.io/cluster-api-provider-azure v1.20.2
-	sigs.k8s.io/cluster-api-provider-gcp v1.10.0
-	sigs.k8s.io/cluster-api-provider-ibmcloud v0.11.0
-	sigs.k8s.io/cluster-api-provider-openstack v0.12.4
-	sigs.k8s.io/cluster-api-provider-vsphere v1.13.0
+	sigs.k8s.io/cluster-api v1.11.3
+	sigs.k8s.io/cluster-api-provider-aws/v2 v2.10.0
+	sigs.k8s.io/cluster-api-provider-azure v0.0.0-20251202084521-c2e0e38d1e0e
+	sigs.k8s.io/cluster-api-provider-gcp v1.11.0-beta.0
+	sigs.k8s.io/cluster-api-provider-ibmcloud v0.12.0
+	sigs.k8s.io/cluster-api-provider-openstack v0.13.1
+	sigs.k8s.io/cluster-api-provider-vsphere v1.14.0
 	sigs.k8s.io/controller-runtime v0.20.4
 	sigs.k8s.io/controller-runtime/tools/setup-envtest v0.0.0-20240927101401-4381fa0aeee4
 	sigs.k8s.io/kube-storage-version-migrator v0.0.6-0.20230721195810-5c8923c5ff96

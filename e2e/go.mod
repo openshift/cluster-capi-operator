@@ -2,27 +2,34 @@ module github.com/openshift/cluster-capi-operator/e2e
 
 go 1.24.0
 
+// TODO: these replaces should be removed when corresponding PRs are merged
+replace (
+	sigs.k8s.io/cluster-api-provider-azure => github.com/damdo/cluster-api-provider-azure v0.0.0-20251202084521-c2e0e38d1e0e
+	github.com/openshift/cluster-api-actuator-pkg => github.com/chrischdi/cluster-api-actuator-pkg v0.0.0-20251203134942-d9bd7b8593f3
+	github.com/openshift/cluster-api-actuator-pkg/testutils => github.com/chrischdi/cluster-api-actuator-pkg/testutils v0.0.0-20251203134942-d9bd7b8593f3
+)
+
 require (
 	github.com/aws/aws-sdk-go v1.55.7
 	github.com/google/go-cmp v0.7.0
 	github.com/metal3-io/baremetal-operator/apis v0.5.1
-	github.com/metal3-io/cluster-api-provider-metal3/api v1.10.1
+	github.com/metal3-io/cluster-api-provider-metal3/api v1.11.2
 	github.com/onsi/ginkgo/v2 v2.23.4
 	github.com/onsi/gomega v1.38.0
 	github.com/openshift/api v0.0.0-20250731015415-ed654edbd7c6
-	github.com/openshift/cluster-api-actuator-pkg v0.0.0-20250729202911-167220318f40
+	github.com/openshift/cluster-api-actuator-pkg v0.0.0-20251203134942-d9bd7b8593f3
 	github.com/openshift/cluster-api-provider-baremetal v0.0.0-20250619124612-fb678fec5f7e
 	k8s.io/api v0.33.3
 	k8s.io/apimachinery v0.33.3
 	k8s.io/client-go v0.33.3
 	k8s.io/utils v0.0.0-20250321185631-1f6e0b77f77e
-	sigs.k8s.io/cluster-api v1.10.4
-	sigs.k8s.io/cluster-api-provider-aws/v2 v2.9.0
-	sigs.k8s.io/cluster-api-provider-azure v1.20.2
-	sigs.k8s.io/cluster-api-provider-gcp v1.10.0
-	sigs.k8s.io/cluster-api-provider-ibmcloud v0.11.0
-	sigs.k8s.io/cluster-api-provider-openstack v0.12.4
-	sigs.k8s.io/cluster-api-provider-vsphere v1.13.0
+	sigs.k8s.io/cluster-api v1.11.3
+	sigs.k8s.io/cluster-api-provider-aws/v2 v2.10.0
+	sigs.k8s.io/cluster-api-provider-azure v0.0.0-20251202084521-c2e0e38d1e0e
+	sigs.k8s.io/cluster-api-provider-gcp v1.11.0-beta.0
+	sigs.k8s.io/cluster-api-provider-ibmcloud v0.12.0
+	sigs.k8s.io/cluster-api-provider-openstack v0.13.1
+	sigs.k8s.io/cluster-api-provider-vsphere v1.14.0
 	sigs.k8s.io/controller-runtime v0.20.4
 	sigs.k8s.io/yaml v1.4.0
 )
