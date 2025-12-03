@@ -23,6 +23,7 @@ import (
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/consts"
 
+	capiutilfork "github.com/openshift/cluster-capi-operator/third_party/sigs.k8s.io/cluster-api/util"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -30,7 +31,6 @@ import (
 	"k8s.io/utils/ptr"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
-	capiutil "sigs.k8s.io/cluster-api/util"
 )
 
 var (
@@ -640,7 +640,7 @@ func convertAWSClusterLoadBalancersToMAPI(fldPath *field.Path, machine *clusterv
 
 	errs := field.ErrorList{}
 
-	if !capiutil.IsControlPlaneMachine(machine) {
+	if !capiutilfork.IsControlPlaneMachine(machine) {
 		// No loadbalancer on non-control plane machines.
 		return nil, nil
 	}
