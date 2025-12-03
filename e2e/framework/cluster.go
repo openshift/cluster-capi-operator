@@ -8,21 +8,21 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
-	"sigs.k8s.io/cluster-api/util/conditions"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	v1beta1conditions "sigs.k8s.io/cluster-api/util/conditions"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // CreateCluster creates a cluster with the given name and returns the cluster object.
-func CreateCoreCluster(ctx context.Context, cl client.Client, clusterName, infraClusterKind string) *clusterv1.Cluster {
+func CreateCoreCluster(ctx context.Context, cl client.Client, clusterName, infraClusterKind string) *clusterv1beta1.Cluster {
 	By("Creating core cluster")
 
-	cluster := &clusterv1.Cluster{
+	cluster := &clusterv1beta1.Cluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      clusterName,
 			Namespace: CAPINamespace,
 		},
-		Spec: clusterv1.ClusterSpec{
+		Spec: clusterv1beta1.ClusterSpec{
 			InfrastructureRef: &corev1.ObjectReference{
 				APIVersion: "infrastructure.cluster.x-k8s.io/v1beta1",
 				Kind:       infraClusterKind,
@@ -38,7 +38,7 @@ func CreateCoreCluster(ctx context.Context, cl client.Client, clusterName, infra
 			Expect(err).ToNot(HaveOccurred())
 		}
 
-		cluster.Spec.ControlPlaneEndpoint = clusterv1.APIEndpoint{
+		cluster.Spec.ControlPlaneEndpoint = clusterv1beta1.APIEndpoint{
 			Host: host,
 			Port: port,
 		}
@@ -49,13 +49,13 @@ func CreateCoreCluster(ctx context.Context, cl client.Client, clusterName, infra
 	}
 
 	Eventually(func() (bool, error) {
-		patchedCluster := &clusterv1.Cluster{}
+		patchedCluster := &clusterv1beta1.Cluster{}
 		err := cl.Get(ctx, client.ObjectKeyFromObject(cluster), patchedCluster)
 		if err != nil {
 			return false, err
 		}
 
-		return conditions.IsTrue(patchedCluster, clusterv1.ControlPlaneInitializedCondition), nil
+		return v1beta1conditions.IsTrue(patchedCluster, clusterv1beta1.ControlPlaneInitializedCondition), nil
 	}, WaitMedium).Should(BeTrue())
 
 	return cluster

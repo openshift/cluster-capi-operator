@@ -8,7 +8,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	configv1 "github.com/openshift/api/config/v1"
-	mapiv1 "github.com/openshift/api/machine/v1beta1"
+	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	"github.com/openshift/cluster-capi-operator/e2e/framework"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -16,7 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ptr "k8s.io/utils/ptr"
 	azurev1 "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	yaml "sigs.k8s.io/yaml"
 )
@@ -29,8 +29,8 @@ const (
 
 var _ = Describe("Cluster API Azure MachineSet", Ordered, func() {
 	var azureMachineTemplate *azurev1.AzureMachineTemplate
-	var machineSet *clusterv1.MachineSet
-	var mapiMachineSpec *mapiv1.AzureMachineProviderSpec
+	var machineSet *clusterv1beta1.MachineSet
+	var mapiMachineSpec *mapiv1beta1.AzureMachineProviderSpec
 
 	BeforeAll(func() {
 		if platform != configv1.AzurePlatformType {
@@ -71,21 +71,21 @@ var _ = Describe("Cluster API Azure MachineSet", Ordered, func() {
 
 })
 
-func getAzureMAPIProviderSpec(ctx context.Context, cl client.Client) *mapiv1.AzureMachineProviderSpec {
-	machineSetList := &mapiv1.MachineSetList{}
+func getAzureMAPIProviderSpec(ctx context.Context, cl client.Client) *mapiv1beta1.AzureMachineProviderSpec {
+	machineSetList := &mapiv1beta1.MachineSetList{}
 	Expect(cl.List(ctx, machineSetList, client.InNamespace(framework.MAPINamespace))).To(Succeed())
 
 	Expect(machineSetList.Items).ToNot(HaveLen(0))
 	machineSet := machineSetList.Items[0]
 	Expect(machineSet.Spec.Template.Spec.ProviderSpec.Value).ToNot(BeNil())
 
-	providerSpec := &mapiv1.AzureMachineProviderSpec{}
+	providerSpec := &mapiv1beta1.AzureMachineProviderSpec{}
 	Expect(yaml.Unmarshal(machineSet.Spec.Template.Spec.ProviderSpec.Value.Raw, providerSpec)).To(Succeed())
 
 	return providerSpec
 }
 
-func createAzureMachineTemplate(ctx context.Context, cl client.Client, mapiProviderSpec *mapiv1.AzureMachineProviderSpec) *azurev1.AzureMachineTemplate {
+func createAzureMachineTemplate(ctx context.Context, cl client.Client, mapiProviderSpec *mapiv1beta1.AzureMachineProviderSpec) *azurev1.AzureMachineTemplate {
 	By("Creating Azure machine template")
 
 	Expect(mapiProviderSpec).ToNot(BeNil())

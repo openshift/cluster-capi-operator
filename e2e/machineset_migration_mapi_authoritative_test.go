@@ -11,7 +11,7 @@ import (
 	mapiframework "github.com/openshift/cluster-api-actuator-pkg/pkg/framework"
 	capiframework "github.com/openshift/cluster-capi-operator/e2e/framework"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 )
 
@@ -35,7 +35,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 		var existingCAPIMSAuthorityMAPIName = "capi-machineset-authoritativeapi-mapi"
 
 		var awsMachineTemplate *awsv1.AWSMachineTemplate
-		var capiMachineSet *clusterv1.MachineSet
+		var capiMachineSet *clusterv1beta1.MachineSet
 		var mapiMachineSet *mapiv1beta1.MachineSet
 
 		Context("with spec.authoritativeAPI: MachineAPI and existing CAPI MachineSet with same name", func() {
@@ -48,7 +48,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 					cleanupMachineSetTestResources(
 						ctx,
 						cl,
-						[]*clusterv1.MachineSet{capiMachineSet},
+						[]*clusterv1beta1.MachineSet{capiMachineSet},
 						[]*awsv1.AWSMachineTemplate{awsMachineTemplate},
 						[]*mapiv1beta1.MachineSet{},
 					)
@@ -73,7 +73,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 					cleanupMachineSetTestResources(
 						ctx,
 						cl,
-						[]*clusterv1.MachineSet{},
+						[]*clusterv1beta1.MachineSet{},
 						[]*awsv1.AWSMachineTemplate{awsMachineTemplate},
 						[]*mapiv1beta1.MachineSet{mapiMachineSet},
 					)
@@ -107,7 +107,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 		var mapiMSAuthMAPICAPI = "ms-mapi-machine-capi"
 
 		var awsMachineTemplate *awsv1.AWSMachineTemplate
-		var capiMachineSet *clusterv1.MachineSet
+		var capiMachineSet *clusterv1beta1.MachineSet
 		var mapiMachineSet *mapiv1beta1.MachineSet
 		var firstMAPIMachine *mapiv1beta1.Machine
 		var secondMAPIMachine *mapiv1beta1.Machine
@@ -131,7 +131,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 					cleanupMachineSetTestResources(
 						ctx,
 						cl,
-						[]*clusterv1.MachineSet{capiMachineSet},
+						[]*clusterv1beta1.MachineSet{capiMachineSet},
 						[]*awsv1.AWSMachineTemplate{awsMachineTemplate},
 						[]*mapiv1beta1.MachineSet{mapiMachineSet},
 					)
@@ -227,7 +227,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 					cleanupMachineSetTestResources(
 						ctx,
 						cl,
-						[]*clusterv1.MachineSet{capiMachineSet},
+						[]*clusterv1beta1.MachineSet{capiMachineSet},
 						[]*awsv1.AWSMachineTemplate{awsMachineTemplate},
 						[]*mapiv1beta1.MachineSet{mapiMachineSet},
 					)
@@ -265,7 +265,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 	var _ = Describe("Update MachineSets", Ordered, func() {
 		var mapiMSAuthMAPIName = "ms-authoritativeapi-mapi"
 		var mapiMachineSet *mapiv1beta1.MachineSet
-		var capiMachineSet *clusterv1.MachineSet
+		var capiMachineSet *clusterv1beta1.MachineSet
 		var awsMachineTemplate *awsv1.AWSMachineTemplate
 		var newAWSMachineTemplate *awsv1.AWSMachineTemplate
 
@@ -278,7 +278,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				cleanupMachineSetTestResources(
 					ctx,
 					cl,
-					[]*clusterv1.MachineSet{capiMachineSet},
+					[]*clusterv1beta1.MachineSet{capiMachineSet},
 					[]*awsv1.AWSMachineTemplate{awsMachineTemplate, newAWSMachineTemplate},
 					[]*mapiv1beta1.MachineSet{mapiMachineSet},
 				)

@@ -10,12 +10,12 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gcpv1 "sigs.k8s.io/cluster-api-provider-gcp/api/v1beta1"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	yaml "sigs.k8s.io/yaml"
 
 	configv1 "github.com/openshift/api/config/v1"
-	mapiv1 "github.com/openshift/api/machine/v1beta1"
+	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	"github.com/openshift/cluster-capi-operator/e2e/framework"
 )
 
@@ -25,8 +25,8 @@ const (
 
 var _ = Describe("Cluster API GCP MachineSet", Ordered, func() {
 	var gcpMachineTemplate *gcpv1.GCPMachineTemplate
-	var machineSet *clusterv1.MachineSet
-	var mapiMachineSpec *mapiv1.GCPMachineProviderSpec
+	var machineSet *clusterv1beta1.MachineSet
+	var mapiMachineSpec *mapiv1beta1.GCPMachineProviderSpec
 
 	BeforeAll(func() {
 		if platform != configv1.GCPPlatformType {
@@ -66,21 +66,21 @@ var _ = Describe("Cluster API GCP MachineSet", Ordered, func() {
 	})
 })
 
-func getGCPMAPIProviderSpec(ctx context.Context, cl client.Client) *mapiv1.GCPMachineProviderSpec {
-	machineSetList := &mapiv1.MachineSetList{}
+func getGCPMAPIProviderSpec(ctx context.Context, cl client.Client) *mapiv1beta1.GCPMachineProviderSpec {
+	machineSetList := &mapiv1beta1.MachineSetList{}
 	Expect(cl.List(ctx, machineSetList, client.InNamespace(framework.MAPINamespace))).To(Succeed())
 
 	Expect(machineSetList.Items).ToNot(HaveLen(0))
 	machineSet := machineSetList.Items[0]
 	Expect(machineSet.Spec.Template.Spec.ProviderSpec.Value).ToNot(BeNil())
 
-	providerSpec := &mapiv1.GCPMachineProviderSpec{}
+	providerSpec := &mapiv1beta1.GCPMachineProviderSpec{}
 	Expect(yaml.Unmarshal(machineSet.Spec.Template.Spec.ProviderSpec.Value.Raw, providerSpec)).To(Succeed())
 
 	return providerSpec
 }
 
-func createGCPMachineTemplate(ctx context.Context, cl client.Client, mapiProviderSpec *mapiv1.GCPMachineProviderSpec) *gcpv1.GCPMachineTemplate {
+func createGCPMachineTemplate(ctx context.Context, cl client.Client, mapiProviderSpec *mapiv1beta1.GCPMachineProviderSpec) *gcpv1.GCPMachineTemplate {
 	By("Creating GCP machine template")
 
 	Expect(mapiProviderSpec).ToNot(BeNil())

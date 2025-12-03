@@ -11,12 +11,12 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	vspherev1 "sigs.k8s.io/cluster-api-provider-vsphere/apis/v1beta1"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	yaml "sigs.k8s.io/yaml"
 
 	configv1 "github.com/openshift/api/config/v1"
-	mapiv1 "github.com/openshift/api/machine/v1beta1"
+	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	"github.com/openshift/cluster-capi-operator/e2e/framework"
 )
 
@@ -28,8 +28,8 @@ const (
 
 var _ = Describe("Cluster API vSphere MachineSet", Ordered, func() {
 	var vSphereMachineTemplate *vspherev1.VSphereMachineTemplate
-	var machineSet *clusterv1.MachineSet
-	var mapiMachineSpec *mapiv1.VSphereMachineProviderSpec
+	var machineSet *clusterv1beta1.MachineSet
+	var mapiMachineSpec *mapiv1beta1.VSphereMachineProviderSpec
 
 	BeforeAll(func() {
 		if platform != configv1.VSpherePlatformType {
@@ -70,8 +70,8 @@ var _ = Describe("Cluster API vSphere MachineSet", Ordered, func() {
 	})
 })
 
-func getVSphereMAPIProviderSpec(ctx context.Context, cl client.Client) *mapiv1.VSphereMachineProviderSpec {
-	machineSetList := &mapiv1.MachineSetList{}
+func getVSphereMAPIProviderSpec(ctx context.Context, cl client.Client) *mapiv1beta1.VSphereMachineProviderSpec {
+	machineSetList := &mapiv1beta1.MachineSetList{}
 	Expect(cl.List(ctx, machineSetList, client.InNamespace(framework.MAPINamespace))).To(Succeed(),
 		"should not fail listing MAPI MachineSets")
 
@@ -80,14 +80,14 @@ func getVSphereMAPIProviderSpec(ctx context.Context, cl client.Client) *mapiv1.V
 	Expect(machineSet.Spec.Template.Spec.ProviderSpec.Value).ToNot(BeNil(),
 		"expected not to have an empty MAPI MachineSet ProviderSpec")
 
-	providerSpec := &mapiv1.VSphereMachineProviderSpec{}
+	providerSpec := &mapiv1beta1.VSphereMachineProviderSpec{}
 	Expect(yaml.Unmarshal(machineSet.Spec.Template.Spec.ProviderSpec.Value.Raw, providerSpec)).To(Succeed(),
 		"should not fail YAML decoding MAPI MachineSet provider spec")
 
 	return providerSpec
 }
 
-func createVSphereSecret(cl client.Client, mapiProviderSpec *mapiv1.VSphereMachineProviderSpec) {
+func createVSphereSecret(cl client.Client, mapiProviderSpec *mapiv1beta1.VSphereMachineProviderSpec) {
 	By("Creating a vSphere credentials secret")
 
 	username, password := getVSphereCredentials(ctx, cl, mapiProviderSpec)
@@ -108,7 +108,7 @@ func createVSphereSecret(cl client.Client, mapiProviderSpec *mapiv1.VSphereMachi
 	}
 }
 
-func getVSphereCredentials(ctx context.Context, cl client.Client, mapiProviderSpec *mapiv1.VSphereMachineProviderSpec) (string, string) {
+func getVSphereCredentials(ctx context.Context, cl client.Client, mapiProviderSpec *mapiv1beta1.VSphereMachineProviderSpec) (string, string) {
 	vSphereCredentialsSecret := &corev1.Secret{}
 	err := cl.Get(ctx, types.NamespacedName{
 		Namespace: kubeSystemnamespace,
@@ -125,7 +125,7 @@ func getVSphereCredentials(ctx context.Context, cl client.Client, mapiProviderSp
 	return string(username), string(password)
 }
 
-func createVSphereCluster(ctx context.Context, cl client.Client, mapiProviderSpec *mapiv1.VSphereMachineProviderSpec) *vspherev1.VSphereCluster {
+func createVSphereCluster(ctx context.Context, cl client.Client, mapiProviderSpec *mapiv1beta1.VSphereMachineProviderSpec) *vspherev1.VSphereCluster {
 	By("Creating vSphere cluster")
 
 	host, port, err := framework.GetControlPlaneHostAndPort(cl)
@@ -140,7 +140,7 @@ func createVSphereCluster(ctx context.Context, cl client.Client, mapiProviderSpe
 			// The ManagedBy Annotation is set so CAPI infra providers ignore the InfraCluster object,
 			// as that's managed externally, in this case by the cluster-capi-operator's infracluster controller.
 			Annotations: map[string]string{
-				clusterv1.ManagedByAnnotation: managedByAnnotationValueClusterCAPIOperatorInfraClusterController,
+				clusterv1beta1.ManagedByAnnotation: managedByAnnotationValueClusterCAPIOperatorInfraClusterController,
 			},
 		},
 		Spec: vspherev1.VSphereClusterSpec{
@@ -171,7 +171,7 @@ func createVSphereCluster(ctx context.Context, cl client.Client, mapiProviderSpe
 			return false, nil
 		}
 
-		if _, ok := patchedVSphereCluster.Annotations[clusterv1.ManagedByAnnotation]; !ok {
+		if _, ok := patchedVSphereCluster.Annotations[clusterv1beta1.ManagedByAnnotation]; !ok {
 			return false, nil
 		}
 
@@ -181,7 +181,7 @@ func createVSphereCluster(ctx context.Context, cl client.Client, mapiProviderSpe
 	return vSphereCluster
 }
 
-func createVSphereMachineTemplate(cl client.Client, mapiProviderSpec *mapiv1.VSphereMachineProviderSpec) *vspherev1.VSphereMachineTemplate {
+func createVSphereMachineTemplate(cl client.Client, mapiProviderSpec *mapiv1beta1.VSphereMachineProviderSpec) *vspherev1.VSphereMachineTemplate {
 	By("Creating vSphere machine template")
 
 	Expect(mapiProviderSpec).ToNot(BeNil(), "expected MAPI ProviderSpec to not be nil")

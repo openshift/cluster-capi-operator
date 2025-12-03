@@ -5,20 +5,20 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	configv1 "github.com/openshift/api/config/v1"
-	mapiv1 "github.com/openshift/api/machine/v1beta1"
+	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	"github.com/openshift/cluster-capi-operator/e2e/framework"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
 var _ = Describe("Cluster API AWS MachineSet", Ordered, func() {
 	var (
 		awsMachineTemplate      *awsv1.AWSMachineTemplate
-		machineSet              *clusterv1.MachineSet
-		mapiDefaultMS           *mapiv1.MachineSet
-		mapiDefaultProviderSpec *mapiv1.AWSMachineProviderConfig
+		machineSet              *clusterv1beta1.MachineSet
+		mapiDefaultMS           *mapiv1beta1.MachineSet
+		mapiDefaultProviderSpec *mapiv1beta1.AWSMachineProviderConfig
 		awsClient               *ec2.EC2
 	)
 
