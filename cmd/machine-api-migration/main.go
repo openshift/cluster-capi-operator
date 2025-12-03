@@ -35,7 +35,7 @@ import (
 	"k8s.io/utils/clock"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
-	clusterv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 
 	"github.com/openshift/api/features"
 	featuregates "github.com/openshift/library-go/pkg/operator/configobserver/featuregates"

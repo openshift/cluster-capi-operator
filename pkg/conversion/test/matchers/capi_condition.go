@@ -23,7 +23,7 @@ import (
 	"github.com/onsi/gomega/types"
 	"github.com/openshift/cluster-api-actuator-pkg/testutils"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	clusterv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 )
 
 // errActualTypeMismatchCAPICondition is used when the type of the actual object does not match the expected type of clusterv1.Condition.
