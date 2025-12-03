@@ -412,6 +412,7 @@ type MachineStatus struct {
 	// When set to Migrating, the migration controller is currently performing the handover of authority from one API to the other.
 	// +kubebuilder:validation:Enum=MachineAPI;ClusterAPI;Migrating
 	// +kubebuilder:validation:XValidation:rule="self == 'Migrating' || self == oldSelf || oldSelf == 'Migrating'",message="The authoritativeAPI field must not transition directly from MachineAPI to ClusterAPI or vice versa. It must transition through Migrating."
+	// +kubebuilder:validation:XValidation:rule="oldSelf == ''|| self != ''",message="The authoritativeAPI field must not be set empty once it has a value."
 	// +openshift:enable:FeatureGate=MachineAPIMigration
 	// +optional
 	AuthoritativeAPI MachineAuthority `json:"authoritativeAPI,omitempty"`
