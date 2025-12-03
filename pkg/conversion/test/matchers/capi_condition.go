@@ -23,7 +23,7 @@ import (
 	"github.com/onsi/gomega/types"
 	"github.com/openshift/cluster-api-actuator-pkg/testutils"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
 // errActualTypeMismatchCAPICondition is used when the type of the actual object does not match the expected type of clusterv1.Condition.
@@ -32,7 +32,7 @@ var errActualTypeMismatchCAPICondition = errors.New("actual should be of type cl
 // convertCAPIConditionToMetav1Condition converts a clusterv1.Condition to metav1.Condition.
 // Note: This conversion deliberately ignores the Severity field as metav1.Condition
 // does not have a Severity field.
-func convertCAPIConditionToMetav1Condition(capiCondition clusterv1.Condition) metav1.Condition {
+func convertCAPIConditionToMetav1Condition(capiCondition clusterv1beta1.Condition) metav1.Condition {
 	return metav1.Condition{
 		Type:               string(capiCondition.Type),
 		Status:             metav1.ConditionStatus(capiCondition.Status),
@@ -48,19 +48,19 @@ func convertCAPIConditionToMetav1Condition(capiCondition clusterv1.Condition) me
 // It converts the CAPI condition to metav1.Condition and delegates to testutils.MatchCondition.
 // Note: This matcher deliberately ignores the Severity field
 // as it is not supported by metav1.Condition.
-func MatchCAPICondition(expected clusterv1.Condition) types.GomegaMatcher {
+func MatchCAPICondition(expected clusterv1beta1.Condition) types.GomegaMatcher {
 	return &matchCAPICondition{
 		expected: expected,
 	}
 }
 
 type matchCAPICondition struct {
-	expected clusterv1.Condition
+	expected clusterv1beta1.Condition
 }
 
 // Match checks for equality between the actual and expected objects.
 func (m matchCAPICondition) Match(actual interface{}) (success bool, err error) {
-	actualCondition, ok := actual.(clusterv1.Condition)
+	actualCondition, ok := actual.(clusterv1beta1.Condition)
 	if !ok {
 		return false, errActualTypeMismatchCAPICondition
 	}

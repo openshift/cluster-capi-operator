@@ -28,7 +28,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	capierrors "sigs.k8s.io/cluster-api/errors"
 )
 
@@ -88,12 +88,12 @@ var _ = Describe("capi2mapi Machine conversion", func() {
 			expectedWarnings: []string{},
 		}),
 		Entry("With delete-machine annotation", capi2MAPIMachineConversionInput{
-			machineBuilder:   capiMachineBase.WithAnnotations(map[string]string{clusterv1.DeleteMachineAnnotation: "true"}),
+			machineBuilder:   capiMachineBase.WithAnnotations(map[string]string{clusterv1beta1.DeleteMachineAnnotation: "true"}),
 			expectedErrors:   []string{},
 			expectedWarnings: []string{},
 			assertion: func(machine *mapiv1beta1.Machine) {
 				Expect(machine.Annotations).To(HaveKeyWithValue(util.MapiDeleteMachineAnnotation, "true"))
-				Expect(machine.Annotations).ToNot(HaveKey(clusterv1.DeleteMachineAnnotation))
+				Expect(machine.Annotations).ToNot(HaveKey(clusterv1beta1.DeleteMachineAnnotation))
 			},
 		}),
 	)
@@ -109,9 +109,9 @@ var _ = Describe("capi2mapi Machine Status Conversion", func() {
 				Namespace: "",
 			}
 			lastUpdated := &metav1.Time{Time: time.Now()}
-			condition := clusterv1.Condition{
+			condition := clusterv1beta1.Condition{
 				Type: "Available", Status: corev1.ConditionTrue,
-				Severity: clusterv1.ConditionSeverityNone,
+				Severity: clusterv1beta1.ConditionSeverityNone,
 				Reason:   "MachineAvailable", Message: "Machine is available",
 			}
 
@@ -120,14 +120,14 @@ var _ = Describe("capi2mapi Machine Status Conversion", func() {
 				WithNamespace("test-namespace").
 				WithNodeRef(nodeRef).
 				WithLastUpdated(lastUpdated).
-				WithAddresses(clusterv1.MachineAddresses{
-					{Type: clusterv1.MachineAddressType(corev1.NodeInternalIP), Address: "10.0.0.1"},
-					{Type: clusterv1.MachineAddressType(corev1.NodeExternalIP), Address: "203.0.113.1"},
+				WithAddresses(clusterv1beta1.MachineAddresses{
+					{Type: clusterv1beta1.MachineAddressType(corev1.NodeInternalIP), Address: "10.0.0.1"},
+					{Type: clusterv1beta1.MachineAddressType(corev1.NodeExternalIP), Address: "203.0.113.1"},
 				}).
 				WithPhase("Running").
 				WithFailureReason(ptr.To(capierrors.MachineStatusError("InvalidConfiguration"))).
 				WithFailureMessage(ptr.To(string("Test failure message"))).
-				WithConditions([]clusterv1.Condition{condition}).
+				WithConditions([]clusterv1beta1.Condition{condition}).
 				Build()
 
 			mapiStatus, errs := convertCAPIMachineStatusToMAPI(capiMachine.Status)

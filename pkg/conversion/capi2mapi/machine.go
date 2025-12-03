@@ -25,7 +25,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/utils/ptr"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	capierrors "sigs.k8s.io/cluster-api/errors"
 )
 
@@ -34,7 +34,7 @@ const (
 )
 
 // fromCAPIMachineToMAPIMachine translates a core CAPI Machine to its MAPI Machine correspondent.
-func fromCAPIMachineToMAPIMachine(capiMachine *clusterv1.Machine, additionalMachineAPIMetadataLabels, additionalMachineAPIMetadataAnnotations map[string]string) (*mapiv1beta1.Machine, field.ErrorList) {
+func fromCAPIMachineToMAPIMachine(capiMachine *clusterv1beta1.Machine, additionalMachineAPIMetadataLabels, additionalMachineAPIMetadataAnnotations map[string]string) (*mapiv1beta1.Machine, field.ErrorList) {
 	errs := field.ErrorList{}
 
 	lifecycleHooks, capiMachineNonHookAnnotations := convertCAPILifecycleHookAnnotationsToMAPILifecycleHooksAndAnnotations(capiMachine.Annotations)
@@ -109,7 +109,7 @@ func fromCAPIMachineToMAPIMachine(capiMachine *clusterv1.Machine, additionalMach
 }
 
 // convertCAPIMachineStatusToMAPI converts a CAPI MachineStatus to MAPI format.
-func convertCAPIMachineStatusToMAPI(capiStatus clusterv1.MachineStatus) (mapiv1beta1.MachineStatus, field.ErrorList) {
+func convertCAPIMachineStatusToMAPI(capiStatus clusterv1beta1.MachineStatus) (mapiv1beta1.MachineStatus, field.ErrorList) {
 	errs := field.ErrorList{}
 
 	addresses, addressesErr := convertCAPIMachineAddressesToMAPI(capiStatus.Addresses)
@@ -144,7 +144,7 @@ func convertCAPIMachineStatusToMAPI(capiStatus clusterv1.MachineStatus) (mapiv1b
 }
 
 // convertCAPIMachineAddressesToMAPI converts CAPI machine addresses to MAPI format.
-func convertCAPIMachineAddressesToMAPI(capiAddresses clusterv1.MachineAddresses) ([]corev1.NodeAddress, field.ErrorList) {
+func convertCAPIMachineAddressesToMAPI(capiAddresses clusterv1beta1.MachineAddresses) ([]corev1.NodeAddress, field.ErrorList) {
 	if capiAddresses == nil {
 		return nil, nil
 	}
@@ -155,15 +155,15 @@ func convertCAPIMachineAddressesToMAPI(capiAddresses clusterv1.MachineAddresses)
 	// Addresses are slightly different between MAPI/CAPI.
 	for _, addr := range capiAddresses {
 		switch addr.Type {
-		case clusterv1.MachineHostName:
+		case clusterv1beta1.MachineHostName:
 			mapiAddresses = append(mapiAddresses, corev1.NodeAddress{Type: corev1.NodeHostName, Address: addr.Address})
-		case clusterv1.MachineExternalIP:
+		case clusterv1beta1.MachineExternalIP:
 			mapiAddresses = append(mapiAddresses, corev1.NodeAddress{Type: corev1.NodeExternalIP, Address: addr.Address})
-		case clusterv1.MachineInternalIP:
+		case clusterv1beta1.MachineInternalIP:
 			mapiAddresses = append(mapiAddresses, corev1.NodeAddress{Type: corev1.NodeInternalIP, Address: addr.Address})
-		case clusterv1.MachineExternalDNS:
+		case clusterv1beta1.MachineExternalDNS:
 			mapiAddresses = append(mapiAddresses, corev1.NodeAddress{Type: corev1.NodeExternalDNS, Address: addr.Address})
-		case clusterv1.MachineInternalDNS:
+		case clusterv1beta1.MachineInternalDNS:
 			mapiAddresses = append(mapiAddresses, corev1.NodeAddress{Type: corev1.NodeInternalDNS, Address: addr.Address})
 		default:
 			errs = append(errs, field.Invalid(field.NewPath("status", "addresses"), string(addr.Type), string(addr.Type)+" unrecognized address type"))
@@ -218,8 +218,8 @@ func convertCAPIMachineFailureMessageToMAPIErrorMessage(capiFailureMessage *stri
 
 const (
 	// Note the trailing slash here is important when we are trimming the prefix.
-	capiPreDrainAnnotationPrefix     = clusterv1.PreDrainDeleteHookAnnotationPrefix + "/"
-	capiPreTerminateAnnotationPrefix = clusterv1.PreTerminateDeleteHookAnnotationPrefix + "/"
+	capiPreDrainAnnotationPrefix     = clusterv1beta1.PreDrainDeleteHookAnnotationPrefix + "/"
+	capiPreTerminateAnnotationPrefix = clusterv1beta1.PreTerminateDeleteHookAnnotationPrefix + "/"
 )
 
 // convertCAPILifecycleHookAnnotationsToMAPILifecycleHooksAndAnnotations extracts the lifecycle hooks from the CAPI Machine annotations.

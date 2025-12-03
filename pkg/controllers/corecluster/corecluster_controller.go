@@ -28,9 +28,9 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
-	"sigs.k8s.io/cluster-api/util/conditions"
-	conditionsv1beta2 "sigs.k8s.io/cluster-api/util/conditions/v1beta2"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	v1beta1conditions "sigs.k8s.io/cluster-api/util/conditions"
+	v1beta2conditions "sigs.k8s.io/cluster-api/util/conditions/v1beta2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -59,7 +59,7 @@ var (
 // CoreClusterController reconciles a Cluster object.
 type CoreClusterController struct {
 	operatorstatus.ClusterOperatorStatusClient
-	Cluster  *clusterv1.Cluster
+	Cluster  *clusterv1beta1.Cluster
 	Infra    *configv1.Infrastructure
 	Platform configv1.PlatformType
 }
@@ -70,7 +70,7 @@ func (r *CoreClusterController) SetupWithManager(mgr ctrl.Manager) error {
 		Named(controllerName).
 		For(&configv1.ClusterOperator{}, builder.WithPredicates(clusterOperatorPredicates())).
 		Watches(
-			&clusterv1.Cluster{},
+			&clusterv1beta1.Cluster{},
 			handler.EnqueueRequestsFromMapFunc(toClusterOperator),
 			builder.WithPredicates(coreClusterPredicate(r.ManagedNamespace)),
 		).
@@ -117,8 +117,8 @@ func (r *CoreClusterController) Reconcile(ctx context.Context, req reconcile.Req
 }
 
 // ensureCoreCluster creates a cluster with the given name and returns the cluster object.
-func (r *CoreClusterController) ensureCoreCluster(ctx context.Context, clusterObjectKey client.ObjectKey, logger logr.Logger) (*clusterv1.Cluster, error) {
-	cluster := &clusterv1.Cluster{}
+func (r *CoreClusterController) ensureCoreCluster(ctx context.Context, clusterObjectKey client.ObjectKey, logger logr.Logger) (*clusterv1beta1.Cluster, error) {
+	cluster := &clusterv1beta1.Cluster{}
 	if err := r.Client.Get(ctx, clusterObjectKey, cluster); err != nil && !kerrors.IsNotFound(err) {
 		return nil, fmt.Errorf("failed to get core cluster %s/%s: %w", clusterObjectKey.Namespace, clusterObjectKey.Name, err)
 	} else if err == nil {
@@ -159,7 +159,7 @@ func (r *CoreClusterController) ensureCoreCluster(ctx context.Context, clusterOb
 }
 
 // generateCoreClusterObject generates a new core cluster object to be created.
-func (r *CoreClusterController) generateCoreClusterObject(_ context.Context, clusterObjectKey client.ObjectKey, infraClusterAPIVersion, infraClusterKind string) (*clusterv1.Cluster, error) {
+func (r *CoreClusterController) generateCoreClusterObject(_ context.Context, clusterObjectKey client.ObjectKey, infraClusterAPIVersion, infraClusterKind string) (*clusterv1beta1.Cluster, error) {
 	apiURL, err := url.Parse(r.Infra.Status.APIServerInternalURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse apiURL: %w", err)
@@ -170,19 +170,19 @@ func (r *CoreClusterController) generateCoreClusterObject(_ context.Context, clu
 		return nil, fmt.Errorf("failed to parse apiURL port: %w", err)
 	}
 
-	return &clusterv1.Cluster{
+	return &clusterv1beta1.Cluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      clusterObjectKey.Name,
 			Namespace: clusterObjectKey.Namespace,
 		},
-		Spec: clusterv1.ClusterSpec{
+		Spec: clusterv1beta1.ClusterSpec{
 			InfrastructureRef: &corev1.ObjectReference{
 				APIVersion: infraClusterAPIVersion,
 				Kind:       infraClusterKind,
 				Name:       clusterObjectKey.Name,
 				Namespace:  clusterObjectKey.Namespace,
 			},
-			ControlPlaneEndpoint: clusterv1.APIEndpoint{
+			ControlPlaneEndpoint: clusterv1beta1.APIEndpoint{
 				Host: apiURL.Hostname(),
 				Port: int32(port),
 			},
@@ -191,18 +191,18 @@ func (r *CoreClusterController) generateCoreClusterObject(_ context.Context, clu
 }
 
 // ensureCoreClusterControlPlaneInitializedCondition makes sure the ControlPlaneInitializedCondition condition on the cluster.
-func (r *CoreClusterController) ensureCoreClusterControlPlaneInitializedCondition(ctx context.Context, cluster *clusterv1.Cluster) error {
-	if conditions.Get(cluster, clusterv1.ControlPlaneInitializedCondition) != nil {
+func (r *CoreClusterController) ensureCoreClusterControlPlaneInitializedCondition(ctx context.Context, cluster *clusterv1beta1.Cluster) error {
+	if v1beta1conditions.Get(cluster, clusterv1beta1.ControlPlaneInitializedCondition) != nil {
 		return nil
 	}
 
 	clusterCopy := cluster.DeepCopy()
 
-	conditions.MarkTrue(cluster, clusterv1.ControlPlaneInitializedCondition)
+	v1beta1conditions.MarkTrue(cluster, clusterv1beta1.ControlPlaneInitializedCondition)
 
-	conditionsv1beta2.Set(cluster, metav1.Condition{
-		Type:   clusterv1.ClusterControlPlaneInitializedV1Beta2Condition,
-		Reason: clusterv1.ClusterControlPlaneInitializedV1Beta2Reason,
+	v1beta2conditions.Set(cluster, metav1.Condition{
+		Type:   clusterv1beta1.ClusterControlPlaneInitializedV1Beta2Condition,
+		Reason: clusterv1beta1.ClusterControlPlaneInitializedV1Beta2Reason,
 		Status: metav1.ConditionTrue,
 	})
 

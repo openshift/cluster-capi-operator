@@ -31,7 +31,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/gophercloud/gophercloud/v2/openstack/networking/v2/extensions/layer3/routers"
@@ -110,7 +110,7 @@ func (r *InfraClusterController) ensureOpenStackCluster(ctx context.Context, log
 			// to populate the .Status field for us so we *do not* set the annotation here.
 		},
 		Spec: openstackv1.OpenStackClusterSpec{
-			ControlPlaneEndpoint: &clusterv1.APIEndpoint{
+			ControlPlaneEndpoint: &clusterv1beta1.APIEndpoint{
 				// FIXME(stephenfin): As above.
 				// Host: apiURL.Hostname(),
 				// Port: int32(port),

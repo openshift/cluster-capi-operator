@@ -26,7 +26,7 @@ import (
 	cerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gcpv1 "sigs.k8s.io/cluster-api-provider-gcp/api/v1beta1"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -79,7 +79,7 @@ func (r *InfraClusterController) ensureGCPCluster(ctx context.Context, log logr.
 			// The ManagedBy Annotation is set so CAPI infra providers ignore the InfraCluster object,
 			// as that's managed externally, in this case by this controller.
 			Annotations: map[string]string{
-				clusterv1.ManagedByAnnotation: managedByAnnotationValueClusterCAPIOperatorInfraClusterController,
+				clusterv1beta1.ManagedByAnnotation: managedByAnnotationValueClusterCAPIOperatorInfraClusterController,
 			},
 		},
 		Spec: gcpv1.GCPClusterSpec{
@@ -88,7 +88,7 @@ func (r *InfraClusterController) ensureGCPCluster(ctx context.Context, log logr.
 			},
 			Region:  r.Infra.Status.PlatformStatus.GCP.Region,
 			Project: gcpProjectID,
-			ControlPlaneEndpoint: clusterv1.APIEndpoint{
+			ControlPlaneEndpoint: clusterv1beta1.APIEndpoint{
 				Host: apiURL.Hostname(),
 				Port: int32(port),
 			},

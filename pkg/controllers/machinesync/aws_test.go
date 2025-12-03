@@ -37,7 +37,7 @@ import (
 
 	"k8s.io/utils/ptr"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/config"
@@ -135,10 +135,10 @@ var _ = Describe("AWS load balancer validation during MAPI->CAPI conversion", fu
 		stopManager()
 
 		// Cleanup created resources in test namespaces
-		Expect(k8sClient.DeleteAllOf(ctx, &clusterv1.Machine{}, client.InNamespace(capiNamespace.GetName()))).To(Succeed())
+		Expect(k8sClient.DeleteAllOf(ctx, &clusterv1beta1.Machine{}, client.InNamespace(capiNamespace.GetName()))).To(Succeed())
 		Expect(k8sClient.DeleteAllOf(ctx, &awsv1.AWSMachine{}, client.InNamespace(capiNamespace.GetName()))).To(Succeed())
 		Expect(k8sClient.DeleteAllOf(ctx, &awsv1.AWSCluster{}, client.InNamespace(capiNamespace.GetName()))).To(Succeed())
-		Expect(k8sClient.DeleteAllOf(ctx, &clusterv1.Cluster{}, client.InNamespace(capiNamespace.GetName()))).To(Succeed())
+		Expect(k8sClient.DeleteAllOf(ctx, &clusterv1beta1.Cluster{}, client.InNamespace(capiNamespace.GetName()))).To(Succeed())
 		Expect(k8sClient.Delete(ctx, mapiNamespace)).To(Succeed())
 		Expect(k8sClient.Delete(ctx, capiNamespace)).To(Succeed())
 	})

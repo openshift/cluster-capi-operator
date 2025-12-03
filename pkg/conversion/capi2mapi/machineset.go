@@ -20,12 +20,12 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation/field"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	capierrors "sigs.k8s.io/cluster-api/errors"
 )
 
 // fromCAPIMachineSetToMAPIMachineSet takes a CAPI MachineSet and returns a converted MAPI MachineSet.
-func fromCAPIMachineSetToMAPIMachineSet(capiMachineSet *clusterv1.MachineSet) (*mapiv1beta1.MachineSet, error) {
+func fromCAPIMachineSetToMAPIMachineSet(capiMachineSet *clusterv1beta1.MachineSet) (*mapiv1beta1.MachineSet, error) {
 	errs := field.ErrorList{}
 
 	mapiMachineSet := &mapiv1beta1.MachineSet{
@@ -67,7 +67,7 @@ func fromCAPIMachineSetToMAPIMachineSet(capiMachineSet *clusterv1.MachineSet) (*
 }
 
 // convertCAPIMachineSetStatusToMAPI converts a CAPI MachineSetStatus to MAPI format.
-func convertCAPIMachineSetStatusToMAPI(capiStatus clusterv1.MachineSetStatus) mapiv1beta1.MachineSetStatus {
+func convertCAPIMachineSetStatusToMAPI(capiStatus clusterv1beta1.MachineSetStatus) mapiv1beta1.MachineSetStatus {
 	mapiStatus := mapiv1beta1.MachineSetStatus{
 		Replicas:             capiStatus.Replicas,
 		FullyLabeledReplicas: capiStatus.FullyLabeledReplicas,

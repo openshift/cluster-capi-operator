@@ -28,7 +28,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtimeserializer "k8s.io/apimachinery/pkg/runtime/serializer"
 	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/randfill"
 
@@ -56,7 +56,7 @@ var _ = Describe("OpenStack Fuzz (mapi2capi)", func() {
 	}
 
 	Context("OpenStackMachine Conversion", func() {
-		fromMachineAndOpenStackMachineAndOpenStackCluster := func(machine *clusterv1.Machine, infraMachine client.Object, infraCluster client.Object) capi2mapi.MachineAndInfrastructureMachine {
+		fromMachineAndOpenStackMachineAndOpenStackCluster := func(machine *clusterv1beta1.Machine, infraMachine client.Object, infraCluster client.Object) capi2mapi.MachineAndInfrastructureMachine {
 			openstackMachine, ok := infraMachine.(*openstackv1.OpenStackMachine)
 			Expect(ok).To(BeTrue(), "input infra machine should be of type %T, got %T", &openstackv1.OpenStackMachine{}, infraMachine)
 
@@ -81,7 +81,7 @@ var _ = Describe("OpenStack Fuzz (mapi2capi)", func() {
 	})
 
 	Context("OpenStackMachineSet Conversion", func() {
-		fromMachineSetAndOpenStackMachineTemplateAndOpenStackCluster := func(machineSet *clusterv1.MachineSet, infraMachineTemplate client.Object, infraCluster client.Object) capi2mapi.MachineSetAndMachineTemplate {
+		fromMachineSetAndOpenStackMachineTemplateAndOpenStackCluster := func(machineSet *clusterv1beta1.MachineSet, infraMachineTemplate client.Object, infraCluster client.Object) capi2mapi.MachineSetAndMachineTemplate {
 			openstackMachineTemplate, ok := infraMachineTemplate.(*openstackv1.OpenStackMachineTemplate)
 			Expect(ok).To(BeTrue(), "input infra machine template should be of type %T, got %T", &openstackv1.OpenStackMachineTemplate{}, infraMachineTemplate)
 

@@ -23,7 +23,7 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/test/matchers"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	capierrors "sigs.k8s.io/cluster-api/errors"
 )
 
@@ -74,11 +74,11 @@ var _ = Describe("capi2mapi MachineSet Status Conversion", func() {
 				WithStatusAvailableReplicas(3).
 				WithStatusFailureReason(capierrors.MachineSetStatusError("InvalidConfiguration")).
 				WithStatusFailureMessage("Test failure message").
-				WithStatusConditions([]clusterv1.Condition{
+				WithStatusConditions([]clusterv1beta1.Condition{
 					{
 						Type:     "Available",
 						Status:   corev1.ConditionTrue,
-						Severity: clusterv1.ConditionSeverityNone,
+						Severity: clusterv1beta1.ConditionSeverityNone,
 						Reason:   "MachineSetAvailable",
 						Message:  "MachineSet is available",
 					},
@@ -101,7 +101,7 @@ var _ = Describe("capi2mapi MachineSet Status Conversion", func() {
 		})
 
 		It("should set all MAPI MachineSet status fields and conditions to empty when CAPI MachineSetStatus is empty", func() {
-			capiStatus := clusterv1.MachineSetStatus{}
+			capiStatus := clusterv1beta1.MachineSetStatus{}
 
 			mapiStatus := convertCAPIMachineSetStatusToMAPI(capiStatus)
 

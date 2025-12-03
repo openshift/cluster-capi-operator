@@ -22,7 +22,7 @@ import (
 
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
@@ -102,7 +102,7 @@ func ResolveCAPIMachineFromInfraMachine(namespace string) func(context.Context, 
 				continue
 			}
 
-			if ref.Kind == "Machine" && gv.Group == clusterv1.GroupVersion.Group {
+			if ref.Kind == "Machine" && gv.Group == clusterv1beta1.GroupVersion.Group {
 				requests = append(requests, reconcile.Request{
 					NamespacedName: client.ObjectKey{Namespace: namespace, Name: ref.Name},
 				})

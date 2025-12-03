@@ -29,7 +29,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ptr "k8s.io/utils/ptr"
 	azurev1 "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -171,7 +171,7 @@ func (r *InfraClusterController) createAzureClusterIdentity(ctx context.Context,
 			Annotations: map[string]string{
 				// The ManagedBy Annotation is set so CAPI infra providers ignore the InfraCluster object,
 				// as that's managed externally, in this case by the cluster-capi-operator's infracluster controller.
-				clusterv1.ManagedByAnnotation: managedByAnnotationValueClusterCAPIOperatorInfraClusterController,
+				clusterv1beta1.ManagedByAnnotation: managedByAnnotationValueClusterCAPIOperatorInfraClusterController,
 			},
 		},
 		Spec: azurev1.AzureClusterIdentitySpec{
@@ -246,7 +246,7 @@ func (r *InfraClusterController) newAzureCluster(providerSpec *mapiv1beta1.Azure
 			// The ManagedBy Annotation is set so CAPI infra providers ignore the InfraCluster object,
 			// as that's managed externally, in this case by this controller.
 			Annotations: map[string]string{
-				clusterv1.ManagedByAnnotation: managedByAnnotationValueClusterCAPIOperatorInfraClusterController,
+				clusterv1beta1.ManagedByAnnotation: managedByAnnotationValueClusterCAPIOperatorInfraClusterController,
 			},
 		},
 
@@ -273,7 +273,7 @@ func (r *InfraClusterController) newAzureCluster(providerSpec *mapiv1beta1.Azure
 				},
 			},
 			ResourceGroup: providerSpec.ResourceGroup,
-			ControlPlaneEndpoint: clusterv1.APIEndpoint{
+			ControlPlaneEndpoint: clusterv1beta1.APIEndpoint{
 				Host: apiURL.Hostname(),
 				// Port numbers are less than 65536, ignore gosec.
 				Port: int32(port), //nolint:gosec

@@ -25,8 +25,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"sigs.k8s.io/cluster-api/util/conditions"
-	conditionsv1beta2 "sigs.k8s.io/cluster-api/util/conditions/v1beta2"
+	v1beta1conditions "sigs.k8s.io/cluster-api/util/conditions"
+	v1beta2conditions "sigs.k8s.io/cluster-api/util/conditions/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -217,11 +217,11 @@ func SetMAPIProviderCondition(conditions []metav1.Condition, condition *metav1.C
 }
 
 // EnsureCAPIConditions iterates over all CAPI v1beta1 conditions and sets them on the converted object.
-func EnsureCAPIConditions(existing conditions.Setter, converted conditions.Setter) {
+func EnsureCAPIConditions(existing v1beta1conditions.Setter, converted v1beta1conditions.Setter) {
 	// Merge the v1beta1 conditions.
 	convertedConditions := converted.GetConditions()
 	for i := range convertedConditions {
-		conditions.Set(existing, &convertedConditions[i])
+		v1beta1conditions.Set(existing, &convertedConditions[i])
 	}
 
 	// Copy them back to the convertedCAPIMachine.
@@ -229,11 +229,11 @@ func EnsureCAPIConditions(existing conditions.Setter, converted conditions.Sette
 }
 
 // EnsureCAPIV1Beta2Conditions iterates over all CAPI v1beta2 conditions and sets them on the converted object.
-func EnsureCAPIV1Beta2Conditions(existing conditionsv1beta2.Setter, converted conditionsv1beta2.Setter) {
+func EnsureCAPIV1Beta2Conditions(existing v1beta2conditions.Setter, converted v1beta2conditions.Setter) {
 	// Merge the v1beta2 conditions.
 	convertedConditions := converted.GetV1Beta2Conditions()
 	for i := range convertedConditions {
-		conditionsv1beta2.Set(existing, convertedConditions[i])
+		v1beta2conditions.Set(existing, convertedConditions[i])
 	}
 
 	// Copy them back to the convertedCAPIMachine.
