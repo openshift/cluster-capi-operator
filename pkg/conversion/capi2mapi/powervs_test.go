@@ -97,7 +97,7 @@ var _ = Describe("capi2mapi PowerVS conversion", func() {
 				return &pvsMachine
 			},
 			powerVSCluster: powerVSCluster,
-			expectedErrors: []string{"spec.serviceInstance: Invalid value: \"null\": unable to convert service instance, service instance is nil"},
+			expectedErrors: []string{"spec.serviceInstance: Invalid value: null: unable to convert service instance, service instance is nil"},
 		}),
 
 		Entry("With service instance id, without service instance", powerVSCAPI2MAPIMachineConversionInput{
@@ -122,7 +122,7 @@ var _ = Describe("capi2mapi PowerVS conversion", func() {
 				return &pvsMachine
 			},
 			powerVSCluster: powerVSCluster,
-			expectedErrors: []string{"spec.image: Invalid value: \"null\": unable to convert image, image and imageref is nil"},
+			expectedErrors: []string{"spec.image: Invalid value: null: unable to convert image, image and imageref is nil"},
 		}),
 
 		Entry("Without imageref, with image", powerVSCAPI2MAPIMachineConversionInput{
@@ -147,7 +147,7 @@ var _ = Describe("capi2mapi PowerVS conversion", func() {
 				return &pvsMachine
 			},
 			powerVSCluster: powerVSCluster,
-			expectedErrors: []string{"spec.network: Invalid value: v1beta2.IBMPowerVSResourceReference{ID:(*string)(nil), Name:(*string)(nil), RegEx:(*string)(nil)}: unable to convert network to MAPI"},
+			expectedErrors: []string{"spec.network: Invalid value: {}: unable to convert network to MAPI"},
 		}),
 	)
 

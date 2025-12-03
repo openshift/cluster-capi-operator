@@ -103,7 +103,7 @@ var _ = Describe("mapi2capi AWS conversion", func() {
 			),
 			infra: infra,
 			expectedErrors: []string{
-				"spec.providerSpec.value.loadBalancers: Invalid value: []v1beta1.LoadBalancerReference{v1beta1.LoadBalancerReference{Name:\"a\", Type:\"classic\"}}: loadBalancers are not supported for non-control plane machines",
+				"spec.providerSpec.value.loadBalancers: Invalid value: [{\"name\":\"a\",\"type\":\"classic\"}]: loadBalancers are not supported for non-control plane machines",
 			},
 			expectedWarnings: []string{},
 		}),
@@ -182,10 +182,7 @@ var _ = Describe("mapi2capi AWS conversion", func() {
 			}),
 			infra: infra,
 			expectedErrors: []string{
-				"spec.providerSpec.value.metadata: Invalid value: v1.ObjectMeta{Name:\"test\", GenerateName:\"\", Namespace:\"\", SelfLink:\"\", UID:\"\"," +
-					" ResourceVersion:\"\", Generation:0, CreationTimestamp:time.Date(1, time.January, 1, 0, 0, 0, 0, time.UTC), DeletionTimestamp:<nil>," +
-					" DeletionGracePeriodSeconds:(*int64)(nil), Labels:map[string]string(nil), Annotations:map[string]string(nil)," +
-					" OwnerReferences:[]v1.OwnerReference(nil), Finalizers:[]string(nil), ManagedFields:[]v1.ManagedFieldsEntry(nil)}: metadata is not supported",
+				"spec.providerSpec.value.metadata: Invalid value: {\"name\":\"test\"}: metadata is not supported",
 				"spec.providerSpec.value.ami.arn: Invalid value: \"arn:aws:ec2:us-east-1::image/ami-1234567890abcdef0\": unable to convert AMI ARN reference. Not supported in CAPI",
 			},
 			expectedWarnings: []string{},
@@ -220,7 +217,7 @@ var _ = Describe("mapi2capi AWS conversion", func() {
 			),
 			infra: infra,
 			expectedErrors: []string{
-				"spec.providerSpec.value.ami.filters: Invalid value: []v1beta1.Filter{v1beta1.Filter{Name:\"name\", Values:[]string{\"test\"}}}: unable to convert AMI Filters reference. Not supported in CAPI",
+				"spec.providerSpec.value.ami.filters: Invalid value: [{\"name\":\"name\",\"values\":[\"test\"]}]: unable to convert AMI Filters reference. Not supported in CAPI",
 			},
 			expectedWarnings: []string{},
 		}),
@@ -232,7 +229,7 @@ var _ = Describe("mapi2capi AWS conversion", func() {
 			),
 			infra: infra,
 			expectedErrors: []string{
-				"spec.providerSpec.value.ami: Invalid value: v1beta1.AWSResourceReference{ID:(*string)(nil), ARN:(*string)(nil), Filters:[]v1beta1.Filter(nil)}: unable to find a valid AMI resource reference",
+				"spec.providerSpec.value.ami: Invalid value: {}: unable to find a valid AMI resource reference",
 			},
 			expectedWarnings: []string{},
 		}),
@@ -322,7 +319,7 @@ var _ = Describe("mapi2capi AWS conversion", func() {
 				"spec.providerSpec.value.blockDevices[0].virtualName: Invalid value: \"test\": virtualName is not supported",
 			},
 			expectedWarnings: []string{
-				"spec.providerSpec.value.blockDevices[0].ebs: Invalid value: \"null\": missing ebs configuration for block device",
+				"spec.providerSpec.value.blockDevices[0].ebs: Invalid value: null: missing ebs configuration for block device",
 			},
 		}),
 		Entry("With VirtualName specified and root Volume not deleted on termination", awsMAPI2CAPIConversionInput{
@@ -368,7 +365,7 @@ var _ = Describe("mapi2capi AWS conversion", func() {
 			infra:          infra,
 			expectedErrors: []string{},
 			expectedWarnings: []string{
-				"spec.providerSpec.value.blockDevices[0].ebs: Invalid value: \"null\": missing ebs configuration for block device",
+				"spec.providerSpec.value.blockDevices[0].ebs: Invalid value: null: missing ebs configuration for block device",
 			},
 		}),
 		Entry("With root Volume not deleted on termination", awsMAPI2CAPIConversionInput{

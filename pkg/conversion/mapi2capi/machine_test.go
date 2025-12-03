@@ -127,7 +127,7 @@ var _ = Describe("mapi2capi Machine conversion", func() {
 				Value:  "value1",
 				Effect: corev1.TaintEffectNoSchedule,
 			}}),
-			expectedErrors:   []string{"spec.taints: Invalid value: []v1.Taint{v1.Taint{Key:\"key1\", Value:\"value1\", Effect:\"NoSchedule\", TimeAdded:<nil>}}: taints are not currently supported"},
+			expectedErrors:   []string{"spec.taints: Invalid value: [{\"key\":\"key1\",\"value\":\"value1\",\"effect\":\"NoSchedule\"}]: taints are not currently supported"},
 			expectedWarnings: []string{},
 		}),
 

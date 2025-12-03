@@ -74,17 +74,17 @@ var _ = Describe("capi2mapi Machine conversion", func() {
 		}),
 		Entry("With unsupported NodeDrainTimeout", capi2MAPIMachineConversionInput{
 			machineBuilder:   capiMachineBase.WithNodeDrainTimeout(ptr.To(metav1.Duration{Duration: 1 * time.Second})),
-			expectedErrors:   []string{"spec.nodeDrainTimeout: Invalid value: v1.Duration{Duration:1000000000}: nodeDrainTimeout is not supported"},
+			expectedErrors:   []string{"spec.nodeDrainTimeout: Invalid value: \"1s\": nodeDrainTimeout is not supported"},
 			expectedWarnings: []string{},
 		}),
 		Entry("With unsupported NodeVolumeDetachTimeout", capi2MAPIMachineConversionInput{
 			machineBuilder:   capiMachineBase.WithNodeVolumeDetachTimeout(ptr.To(metav1.Duration{Duration: 1 * time.Second})),
-			expectedErrors:   []string{"spec.nodeVolumeDetachTimeout: Invalid value: v1.Duration{Duration:1000000000}: nodeVolumeDetachTimeout is not supported"},
+			expectedErrors:   []string{"spec.nodeVolumeDetachTimeout: Invalid value: \"1s\": nodeVolumeDetachTimeout is not supported"},
 			expectedWarnings: []string{},
 		}),
 		Entry("With unsupported NodeDeletionTimeout", capi2MAPIMachineConversionInput{
 			machineBuilder:   capiMachineBase.WithNodeDeletionTimeout(ptr.To(metav1.Duration{Duration: 1 * time.Second})),
-			expectedErrors:   []string{"spec.nodeDeletionTimeout: Invalid value: v1.Duration{Duration:1000000000}: nodeDeletionTimeout is not supported"},
+			expectedErrors:   []string{"spec.nodeDeletionTimeout: Invalid value: \"1s\": nodeDeletionTimeout is not supported"},
 			expectedWarnings: []string{},
 		}),
 		Entry("With delete-machine annotation", capi2MAPIMachineConversionInput{
