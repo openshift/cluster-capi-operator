@@ -169,6 +169,11 @@ func awsMachineFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interface{} 
 			spec.PrivateDNSName = nil
 			// We don't support this field since the externally managed annotation is added, so it's best to keep this nil.
 			spec.SecurityGroupOverrides = nil
+
+			// Conversion not yet implemented
+			spec.HostAffinity = nil
+			spec.HostID = nil
+			spec.CPUOptions.ConfidentialCompute = ""
 		},
 		func(m *awsv1.AWSMachine, c randfill.Continue) {
 			c.FillNoCustom(m)
