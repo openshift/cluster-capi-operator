@@ -1876,6 +1876,336 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 			})
 		})
 
+		Context("when validating MAPI authoritativeAPI transitions", func() {
+			const vapName = "openshift-mapi-authoritative-api-transition-requires-capi-infrastructure-ready-and-not-deleting"
+
+			BeforeEach(func() {
+				By("Waiting for VAP to be ready")
+				machineVap = &admissionregistrationv1.ValidatingAdmissionPolicy{}
+				Eventually(k8sClient.Get(ctx, client.ObjectKey{Name: vapName}, machineVap), timeout).Should(Succeed())
+				Eventually(k.Update(machineVap, func() {
+					admissiontestutils.AddSentinelValidation(machineVap)
+				})).Should(Succeed())
+
+				Eventually(k.Object(machineVap), timeout).Should(
+					HaveField("Status.ObservedGeneration", BeNumerically(">=", 2)),
+				)
+
+				By("Updating the VAP binding")
+				policyBinding = &admissionregistrationv1.ValidatingAdmissionPolicyBinding{}
+				Eventually(k8sClient.Get(ctx, client.ObjectKey{
+					Name: vapName}, policyBinding), timeout).Should(Succeed())
+
+				Eventually(k.Update(policyBinding, func() {
+					// paramNamespace=capiNamespace (CAPI resources are params)
+					// targetNamespace=mapiNamespace (MAPI resources are validated)
+					admissiontestutils.UpdateVAPBindingNamespaces(policyBinding, capiNamespace.GetName(), mapiNamespace.GetName())
+				}), timeout).Should(Succeed())
+
+				Eventually(k.Object(policyBinding), timeout).Should(
+					SatisfyAll(
+						HaveField("Spec.MatchResources.NamespaceSelector.MatchLabels",
+							HaveKeyWithValue("kubernetes.io/metadata.name",
+								mapiNamespace.GetName())),
+					),
+				)
+
+				By("Creating sentinel Machine pair for VAP verification")
+				sentinelCapiMachine := clusterv1resourcebuilder.Machine().
+					WithNamespace(capiNamespace.Name).
+					WithName("sentinel-machine").
+					Build()
+				Eventually(k8sClient.Create(ctx, sentinelCapiMachine)).Should(Succeed())
+
+				sentinelMapiMachine := machinev1resourcebuilder.Machine().
+					WithNamespace(mapiNamespace.Name).
+					WithName("sentinel-machine").
+					WithAuthoritativeAPI(mapiv1beta1.MachineAuthorityMachineAPI).
+					Build()
+				Eventually(k8sClient.Create(ctx, sentinelMapiMachine), timeout).Should(Succeed())
+
+				admissiontestutils.VerifySentinelValidation(k, sentinelMapiMachine, timeout)
+			})
+
+			Context("when validating infrastructure readiness", func() {
+				Context("when infrastructure is not ready", func() {
+					It("should deny authoritativeAPI change when infrastructureReady is false", func() {
+						By("Creating CAPI Machine with infrastructureReady=false")
+						Eventually(k.UpdateStatus(capiMachine, func() {
+							capiMachine.Status.InfrastructureReady = false
+						})).Should(Succeed())
+
+						By("Setting MAPI machine AuthoritativeAPI to MachineAPI")
+						Eventually(k.UpdateStatus(mapiMachine, func() {
+							mapiMachine.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityMachineAPI
+						})).Should(Succeed())
+
+						By("Attempting to change authoritativeAPI to ClusterAPI")
+						Eventually(k.Update(mapiMachine, func() {
+							mapiMachine.Spec.AuthoritativeAPI = mapiv1beta1.MachineAuthorityClusterAPI
+						}), timeout).Should(MatchError(ContainSubstring("status.infrastructureReady is true")))
+					})
+
+					It("should deny authoritativeAPI change when infrastructureReady is missing", func() {
+						By("CAPI Machine was created in BeforeEach without setting infrastructureReady")
+
+						By("Setting MAPI machine AuthoritativeAPI to MachineAPI")
+						Eventually(k.UpdateStatus(mapiMachine, func() {
+							mapiMachine.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityMachineAPI
+						})).Should(Succeed())
+
+						By("Attempting to change authoritativeAPI to ClusterAPI")
+						Eventually(k.Update(mapiMachine, func() {
+							mapiMachine.Spec.AuthoritativeAPI = mapiv1beta1.MachineAuthorityClusterAPI
+						}), timeout).Should(MatchError(ContainSubstring("status.infrastructureReady is true")))
+					})
+
+					It("should deny authoritativeAPI change when status field doesn't exist", func() {
+						By("CAPI Machine was created in BeforeEach without status")
+
+						By("Setting MAPI machine AuthoritativeAPI to MachineAPI")
+						Eventually(k.UpdateStatus(mapiMachine, func() {
+							mapiMachine.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityMachineAPI
+						})).Should(Succeed())
+
+						By("Attempting to change authoritativeAPI to ClusterAPI")
+						Eventually(k.Update(mapiMachine, func() {
+							mapiMachine.Spec.AuthoritativeAPI = mapiv1beta1.MachineAuthorityClusterAPI
+						}), timeout).Should(MatchError(ContainSubstring("status.infrastructureReady is true")))
+					})
+				})
+
+				Context("when infrastructure is ready", func() {
+					It("should allow authoritativeAPI change when infrastructureReady is true", func() {
+						By("Creating CAPI Machine with infrastructureReady=true")
+						Eventually(k.UpdateStatus(capiMachine, func() {
+							capiMachine.Status.InfrastructureReady = true
+						})).Should(Succeed())
+
+						By("Setting MAPI machine AuthoritativeAPI to MachineAPI")
+						Eventually(k.UpdateStatus(mapiMachine, func() {
+							mapiMachine.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityMachineAPI
+						})).Should(Succeed())
+
+						By("Changing authoritativeAPI to ClusterAPI")
+						Eventually(k.Update(mapiMachine, func() {
+							mapiMachine.Spec.AuthoritativeAPI = mapiv1beta1.MachineAuthorityClusterAPI
+						}), timeout).Should(Succeed())
+					})
+				})
+			})
+
+			Context("when validating deletion state", func() {
+				Context("when CAPI Machine is deleting", func() {
+					It("should deny authoritativeAPI change when deletionTimestamp is set", func() {
+						By("Creating CAPI Machine with infrastructureReady=true")
+						Eventually(k.UpdateStatus(capiMachine, func() {
+							capiMachine.Status.InfrastructureReady = true
+						})).Should(Succeed())
+
+						By("Adding finalizer and deleting CAPI Machine to set deletionTimestamp")
+						Eventually(k.Update(capiMachine, func() {
+							capiMachine.Finalizers = append(capiMachine.Finalizers, "test-finalizer")
+						})).Should(Succeed())
+
+						Eventually(k8sClient.Delete(ctx, capiMachine)).Should(Succeed())
+
+						By("Waiting for deletion timestamp to be set")
+						Eventually(k.Object(capiMachine)).Should(SatisfyAll(
+							HaveField("DeletionTimestamp", Not(BeNil())),
+						))
+
+						By("Setting MAPI machine AuthoritativeAPI to MachineAPI")
+						Eventually(k.UpdateStatus(mapiMachine, func() {
+							mapiMachine.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityMachineAPI
+						})).Should(Succeed())
+
+						By("Attempting to change authoritativeAPI to ClusterAPI")
+						Eventually(k.Update(mapiMachine, func() {
+							mapiMachine.Spec.AuthoritativeAPI = mapiv1beta1.MachineAuthorityClusterAPI
+						}), timeout).Should(MatchError(ContainSubstring("CAPI Machine is being deleted")))
+					})
+				})
+
+				Context("when CAPI Machine is not deleting", func() {
+					It("should allow authoritativeAPI change when deletionTimestamp is not set", func() {
+						By("Creating CAPI Machine with infrastructureReady=true and no deletionTimestamp")
+						Eventually(k.UpdateStatus(capiMachine, func() {
+							capiMachine.Status.InfrastructureReady = true
+						})).Should(Succeed())
+
+						By("Setting MAPI machine AuthoritativeAPI to MachineAPI")
+						Eventually(k.UpdateStatus(mapiMachine, func() {
+							mapiMachine.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityMachineAPI
+						})).Should(Succeed())
+
+						By("Changing authoritativeAPI to ClusterAPI")
+						Eventually(k.Update(mapiMachine, func() {
+							mapiMachine.Spec.AuthoritativeAPI = mapiv1beta1.MachineAuthorityClusterAPI
+						}), timeout).Should(Succeed())
+					})
+				})
+			})
+
+			Context("when validating mixed states", func() {
+				It("should deny authoritativeAPI change when infrastructureReady is true but deleting", func() {
+					By("Creating CAPI Machine with infrastructureReady=true")
+					Eventually(k.UpdateStatus(capiMachine, func() {
+						capiMachine.Status.InfrastructureReady = true
+					})).Should(Succeed())
+
+					By("Adding finalizer and deleting CAPI Machine to set deletionTimestamp")
+					Eventually(k.Update(capiMachine, func() {
+						capiMachine.Finalizers = append(capiMachine.Finalizers, "test-finalizer")
+					})).Should(Succeed())
+
+					Eventually(k8sClient.Delete(ctx, capiMachine)).Should(Succeed())
+
+					By("Waiting for deletion timestamp to be set")
+					Eventually(k.Object(capiMachine)).Should(SatisfyAll(
+						HaveField("DeletionTimestamp", Not(BeNil())),
+					))
+
+					By("Setting MAPI machine AuthoritativeAPI to MachineAPI")
+					Eventually(k.UpdateStatus(mapiMachine, func() {
+						mapiMachine.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityMachineAPI
+					})).Should(Succeed())
+
+					By("Attempting to change authoritativeAPI to ClusterAPI")
+					Eventually(k.Update(mapiMachine, func() {
+						mapiMachine.Spec.AuthoritativeAPI = mapiv1beta1.MachineAuthorityClusterAPI
+					}), timeout).Should(MatchError(ContainSubstring("CAPI Machine is being deleted")))
+				})
+
+				It("should deny authoritativeAPI change when infrastructureReady is false but not deleting", func() {
+					By("Creating CAPI Machine with infrastructureReady=false")
+					Eventually(k.UpdateStatus(capiMachine, func() {
+						capiMachine.Status.InfrastructureReady = false
+					})).Should(Succeed())
+
+					By("Setting MAPI machine AuthoritativeAPI to MachineAPI")
+					Eventually(k.UpdateStatus(mapiMachine, func() {
+						mapiMachine.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityMachineAPI
+					})).Should(Succeed())
+
+					By("Attempting to change authoritativeAPI to ClusterAPI")
+					Eventually(k.Update(mapiMachine, func() {
+						mapiMachine.Spec.AuthoritativeAPI = mapiv1beta1.MachineAuthorityClusterAPI
+					}), timeout).Should(MatchError(ContainSubstring("status.infrastructureReady is true")))
+				})
+			})
+
+			Context("when testing VAP trigger conditions", func() {
+				Context("when changing non-authoritativeAPI fields", func() {
+					It("should allow updating labels without changing authoritativeAPI", func() {
+						By("Creating CAPI Machine with infrastructureReady=false")
+						Eventually(k.UpdateStatus(capiMachine, func() {
+							capiMachine.Status.InfrastructureReady = false
+						})).Should(Succeed())
+
+						By("Setting MAPI machine AuthoritativeAPI to MachineAPI")
+						Eventually(k.UpdateStatus(mapiMachine, func() {
+							mapiMachine.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityMachineAPI
+						})).Should(Succeed())
+
+						By("Updating labels without changing authoritativeAPI")
+						Eventually(k.Update(mapiMachine, func() {
+							if mapiMachine.Labels == nil {
+								mapiMachine.Labels = make(map[string]string)
+							}
+							mapiMachine.Labels["test-label"] = "test-value"
+						}), timeout).Should(Succeed())
+					})
+
+					It("should allow updating annotations without changing authoritativeAPI", func() {
+						By("Adding finalizer and deleting CAPI Machine to set deletionTimestamp")
+						Eventually(k.Update(capiMachine, func() {
+							capiMachine.Finalizers = append(capiMachine.Finalizers, "test-finalizer")
+						})).Should(Succeed())
+
+						Eventually(k8sClient.Delete(ctx, capiMachine)).Should(Succeed())
+
+						By("Waiting for deletion timestamp to be set")
+						Eventually(k.Object(capiMachine)).Should(SatisfyAll(
+							HaveField("DeletionTimestamp", Not(BeNil())),
+						))
+
+						By("Setting MAPI machine AuthoritativeAPI to MachineAPI")
+						Eventually(k.UpdateStatus(mapiMachine, func() {
+							mapiMachine.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityMachineAPI
+						})).Should(Succeed())
+
+						By("Updating annotations without changing authoritativeAPI")
+						Eventually(k.Update(mapiMachine, func() {
+							if mapiMachine.Annotations == nil {
+								mapiMachine.Annotations = make(map[string]string)
+							}
+							mapiMachine.Annotations["test-annotation"] = "test-value"
+						}), timeout).Should(Succeed())
+					})
+
+					It("should allow updating spec fields without changing authoritativeAPI", func() {
+						By("CAPI Machine was created without infrastructureReady")
+
+						By("Setting MAPI machine AuthoritativeAPI to MachineAPI")
+						Eventually(k.UpdateStatus(mapiMachine, func() {
+							mapiMachine.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityMachineAPI
+						})).Should(Succeed())
+
+						By("Updating spec.objectMeta.labels without changing authoritativeAPI")
+						Eventually(k.Update(mapiMachine, func() {
+							mapiMachine.Spec.ObjectMeta.Labels = map[string]string{"new-label": "new-value"}
+						}), timeout).Should(Succeed())
+					})
+				})
+
+				Context("when CAPI Machine parameter is not found", func() {
+					It("should allow authoritativeAPI change when CAPI Machine does not exist", func() {
+						By("Creating a new MAPI Machine without CAPI counterpart")
+						newMapiMachine := machinev1resourcebuilder.Machine().
+							WithNamespace(mapiNamespace.Name).
+							WithName("no-capi-equivalent").
+							WithAuthoritativeAPI(mapiv1beta1.MachineAuthorityMachineAPI).
+							Build()
+						Eventually(k8sClient.Create(ctx, newMapiMachine)).Should(Succeed())
+
+						By("Setting AuthoritativeAPI to MachineAPI")
+						Eventually(k.UpdateStatus(newMapiMachine, func() {
+							newMapiMachine.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityMachineAPI
+						})).Should(Succeed())
+
+						By("Changing authoritativeAPI to ClusterAPI")
+						Eventually(k.Update(newMapiMachine, func() {
+							newMapiMachine.Spec.AuthoritativeAPI = mapiv1beta1.MachineAuthorityClusterAPI
+						}), timeout).Should(Succeed())
+					})
+
+				})
+			})
+
+			Context("when testing edge cases", func() {
+				Context("when CAPI Machine is in various states", func() {
+
+					It("should deny authoritativeAPI change when CAPI Machine is provisioning", func() {
+						By("Creating CAPI Machine with infrastructureReady=false and no deletionTimestamp")
+						Eventually(k.UpdateStatus(capiMachine, func() {
+							capiMachine.Status.InfrastructureReady = false
+						})).Should(Succeed())
+
+						By("Setting MAPI machine AuthoritativeAPI to MachineAPI")
+						Eventually(k.UpdateStatus(mapiMachine, func() {
+							mapiMachine.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityMachineAPI
+						})).Should(Succeed())
+
+						By("Attempting to change authoritativeAPI to ClusterAPI")
+						Eventually(k.Update(mapiMachine, func() {
+							mapiMachine.Spec.AuthoritativeAPI = mapiv1beta1.MachineAuthorityClusterAPI
+						}), timeout).Should(MatchError(ContainSubstring("status.infrastructureReady is true")))
+					})
+				})
+			})
+		})
+
 	})
 })
 
