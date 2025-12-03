@@ -37,6 +37,7 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 
 	"github.com/go-test/deep"
+	metal3v1 "github.com/metal3-io/cluster-api-provider-metal3/api/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -96,6 +97,9 @@ var (
 
 	// errAssertingCAPIAWSMachine is returned when we encounter an issue asserting a client.Object into an AWSMachine.
 	errAssertingCAPIAWSMachine = errors.New("error asserting the Cluster API AWSMachine object")
+
+	// errAssertingCAPIMetal3Machine is returned when we encounter an issue asserting a client.Object into a Metal3Machine.
+	errAssertingCAPIMetal3Machine = errors.New("error asserting the Cluster API Metal3Machine object")
 
 	// errAssertingCAPIOpenStackMachine is returned when we encounter an issue asserting a client.Object into an OpenStackVSMachine.
 	errAssertingCAPIOpenStackMachine = errors.New("error asserting the Cluster API OpenStackMachine object")
@@ -614,6 +618,8 @@ func (r *MachineSyncReconciler) convertMAPIToCAPIMachine(mapiMachine *mapiv1beta
 	switch r.Platform {
 	case configv1.AWSPlatformType:
 		return mapi2capi.FromAWSMachineAndInfra(mapiMachine, r.Infra).ToMachineAndInfrastructureMachine() //nolint:wrapcheck
+	case configv1.BareMetalPlatformType:
+		return mapi2capi.FromMetal3MachineAndInfra(mapiMachine, r.Infra).ToMachineAndInfrastructureMachine() //nolint:wrapcheck
 	case configv1.OpenStackPlatformType:
 		return mapi2capi.FromOpenStackMachineAndInfra(mapiMachine, r.Infra).ToMachineAndInfrastructureMachine() //nolint:wrapcheck
 	case configv1.PowerVSPlatformType:
@@ -637,6 +643,18 @@ func (r *MachineSyncReconciler) convertCAPIToMAPIMachine(capiMachine *clusterv1.
 		}
 
 		return capi2mapi.FromMachineAndAWSMachineAndAWSCluster(capiMachine, awsMachine, awsCluster).ToMachine() //nolint:wrapcheck
+	case configv1.BareMetalPlatformType:
+		metal3Machine, ok := infraMachine.(*metal3v1.Metal3Machine)
+		if !ok {
+			return nil, nil, fmt.Errorf("%w, expected Metal3Machine, got %T", errUnexpectedInfraMachineType, infraMachine)
+		}
+
+		metal3Cluster, ok := infraCluster.(*metal3v1.Metal3Cluster)
+		if !ok {
+			return nil, nil, fmt.Errorf("%w, expected Metal3Cluster, got %T", errUnexpectedInfraClusterType, infraCluster)
+		}
+
+		return capi2mapi.FromMachineAndMetal3MachineAndMetal3Cluster(capiMachine, metal3Machine, metal3Cluster).ToMachine() //nolint:wrapcheck
 	case configv1.OpenStackPlatformType:
 		openStackMachine, ok := infraMachine.(*openstackv1.OpenStackMachine)
 		if !ok {

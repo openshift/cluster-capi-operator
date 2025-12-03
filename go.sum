@@ -425,6 +425,8 @@ github.com/openshift/client-go v0.0.0-20250710075018-396b36f983ee h1:tOtrrxfDEW8
 github.com/openshift/client-go v0.0.0-20250710075018-396b36f983ee/go.mod h1:zhRiYyNMk89llof2qEuGPWPD+joQPhCRUc2IK0SB510=
 github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20250821122144-fd0936342469 h1:2Nb7w9xhgZg/ahmvrG4Y/+6Tp/Gfj7KGZZKAupKah8g=
 github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20250821122144-fd0936342469/go.mod h1:9+FWWWLkVrnBo1eYhA/0Ehlq5JMgIAHtcB0IF+qV1AA=
+github.com/openshift/cluster-api-provider-baremetal v0.0.0-20250930083252-4e6a729c5ac8 h1:QMC+nokAQLdS8XK488fRlTNgbhuWytNUyRm2w0gsEBc=
+github.com/openshift/cluster-api-provider-baremetal v0.0.0-20250930083252-4e6a729c5ac8/go.mod h1:xMvpaHoSmJ48WvX970zF82PPD9Wj8cMuZBFH6UxnvbE=
 github.com/openshift/library-go v0.0.0-20250729191057-91376e1b394e h1:xYT+P++PSc9G+Y47pIcU9fm8IDV/tg6tMi3i+0m23pU=
 github.com/openshift/library-go v0.0.0-20250729191057-91376e1b394e/go.mod h1:tptKNust9MdRI0p90DoBSPHIrBa9oh+Rok59tF0vT8c=
 github.com/otiai10/copy v1.2.0/go.mod h1:rrF5dJ5F0t/EWSYODDu4j9/vEeYHMkc8jt0zJChqQWw=

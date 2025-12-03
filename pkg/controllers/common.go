@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 
+	metal3v1 "github.com/metal3-io/cluster-api-provider-metal3/api/v1beta1"
 	configv1 "github.com/openshift/api/config/v1"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	ibmpowervsv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
@@ -42,6 +43,8 @@ func InitInfraMachineAndInfraClusterFromProvider(platform configv1.PlatformType)
 	switch platform {
 	case configv1.AWSPlatformType:
 		return &awsv1.AWSMachine{}, &awsv1.AWSCluster{}, nil
+	case configv1.BareMetalPlatformType:
+		return &metal3v1.Metal3Machine{}, &metal3v1.Metal3Cluster{}, nil
 	case configv1.OpenStackPlatformType:
 		return &openstackv1.OpenStackMachine{}, &openstackv1.OpenStackCluster{}, nil
 	case configv1.PowerVSPlatformType:
@@ -59,6 +62,8 @@ func InitInfraMachineTemplateAndInfraClusterFromProvider(platform configv1.Platf
 	switch platform {
 	case configv1.AWSPlatformType:
 		return &awsv1.AWSMachineTemplate{}, &awsv1.AWSCluster{}, nil
+	case configv1.BareMetalPlatformType:
+		return &metal3v1.Metal3MachineTemplate{}, &metal3v1.Metal3Cluster{}, nil
 	case configv1.OpenStackPlatformType:
 		return &openstackv1.OpenStackMachineTemplate{}, &openstackv1.OpenStackCluster{}, nil
 	case configv1.PowerVSPlatformType:

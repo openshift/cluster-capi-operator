@@ -41,6 +41,7 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 
 	"github.com/go-test/deep"
+	metal3v1 "github.com/metal3-io/cluster-api-provider-metal3/api/v1beta1"
 	machinev1applyconfigs "github.com/openshift/client-go/machine/applyconfigurations/machine/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -75,6 +76,9 @@ var (
 
 	// errAssertingCAPIAWSMachineTemplate is returned when we encounter an issue asserting a client.Object into a AWSMachineTemplate.
 	errAssertingCAPIAWSMachineTemplate = errors.New("error asserting the CAPI AWSMachineTemplate object")
+
+	// errAssertingCAPIMetal3MachineTemplate is returned when we encounter an issue asserting a client.Object into a Metal3MachineTemplate.
+	errAssertingCAPIMetal3MachineTemplate = errors.New("error asserting the CAPI Metal3MachineTemplate object")
 
 	// errAssertingCAPIPowerVSMachineTemplate is returned when we encounter an issue asserting a client.Object into a IBMPowerVSMachineTemplate.
 	errAssertingCAPIIBMPowerVSMachineTemplate = errors.New("error asserting the CAPI IBMPowerVSMachineTemplate object")
@@ -700,6 +704,20 @@ func (r *MachineSetSyncReconciler) convertCAPIToMAPIMachineSet(capiMachineSet *c
 		return capi2mapi.FromMachineSetAndAWSMachineTemplateAndAWSCluster( //nolint: wrapcheck
 			capiMachineSet, machineTemplate, cluster,
 		).ToMachineSet()
+	case configv1.BareMetalPlatformType:
+		machineTemplate, ok := infraMachineTemplate.(*metal3v1.Metal3MachineTemplate)
+		if !ok {
+			return nil, nil, fmt.Errorf("%w, expected Metal3MachineTemplate, got %T", errUnexpectedInfraMachineTemplateType, infraMachineTemplate)
+		}
+
+		cluster, ok := infraCluster.(*metal3v1.Metal3Cluster)
+		if !ok {
+			return nil, nil, fmt.Errorf("%w, expected Metal3Cluster, got %T", errUnexpectedInfraClusterType, infraCluster)
+		}
+
+		return capi2mapi.FromMachineSetAndMetal3MachineTemplateAndMetal3Cluster( //nolint: wrapcheck
+			capiMachineSet, machineTemplate, cluster,
+		).ToMachineSet()
 	case configv1.OpenStackPlatformType:
 		machineTemplate, ok := infraMachineTemplate.(*openstackv1.OpenStackMachineTemplate)
 		if !ok {
@@ -738,6 +756,8 @@ func (r *MachineSetSyncReconciler) convertMAPIToCAPIMachineSet(mapiMachineSet *m
 	switch r.Platform {
 	case configv1.AWSPlatformType:
 		return mapi2capi.FromAWSMachineSetAndInfra(mapiMachineSet, r.Infra).ToMachineSetAndMachineTemplate() //nolint:wrapcheck
+	case configv1.BareMetalPlatformType:
+		return mapi2capi.FromMetal3MachineSetAndInfra(mapiMachineSet, r.Infra).ToMachineSetAndMachineTemplate() //nolint:wrapcheck
 	case configv1.OpenStackPlatformType:
 		return mapi2capi.FromOpenStackMachineSetAndInfra(mapiMachineSet, r.Infra).ToMachineSetAndMachineTemplate() //nolint:wrapcheck
 	case configv1.PowerVSPlatformType:
@@ -1337,6 +1357,8 @@ func initInfraMachineTemplateListAndInfraClusterListFromProvider(platform config
 	switch platform {
 	case configv1.AWSPlatformType:
 		return &awsv1.AWSMachineTemplateList{}, &awsv1.AWSClusterList{}, nil
+	case configv1.BareMetalPlatformType:
+		return &metal3v1.Metal3MachineTemplateList{}, &metal3v1.Metal3ClusterList{}, nil
 	case configv1.OpenStackPlatformType:
 		return &openstackv1.OpenStackMachineTemplateList{}, &openstackv1.OpenStackClusterList{}, nil
 	case configv1.PowerVSPlatformType:
@@ -1348,7 +1370,7 @@ func initInfraMachineTemplateListAndInfraClusterListFromProvider(platform config
 
 // compareCAPIInfraMachineTemplates compares CAPI infra machine templates a and b, and returns a list of differences, or none if there are none.
 //
-//nolint:funlen
+//nolint:funlen,gocognit,cyclop
 func compareCAPIInfraMachineTemplates(platform configv1.PlatformType, infraMachineTemplate1, infraMachineTemplate2 client.Object) (map[string]any, error) {
 	switch platform {
 	case configv1.AWSPlatformType:
@@ -1360,6 +1382,30 @@ func compareCAPIInfraMachineTemplates(platform configv1.PlatformType, infraMachi
 		typedinfraMachineTemplate2, ok := infraMachineTemplate2.(*awsv1.AWSMachineTemplate)
 		if !ok {
 			return nil, errAssertingCAPIAWSMachineTemplate
+		}
+
+		diff := make(map[string]any)
+
+		if diffSpec := deep.Equal(typedInfraMachineTemplate1.Spec, typedinfraMachineTemplate2.Spec); len(diffSpec) > 0 {
+			diff[".spec"] = diffSpec
+		}
+
+		if diffObjectMeta := util.ObjectMetaEqual(typedInfraMachineTemplate1.ObjectMeta, typedinfraMachineTemplate2.ObjectMeta); len(diffObjectMeta) > 0 {
+			diff[".metadata"] = diffObjectMeta
+		}
+
+		// TODO: Evaluate if we want to add status comparison if needed in the future (e.g. for scale from zero capacity).
+
+		return diff, nil
+	case configv1.BareMetalPlatformType:
+		typedInfraMachineTemplate1, ok := infraMachineTemplate1.(*metal3v1.Metal3MachineTemplate)
+		if !ok {
+			return nil, errAssertingCAPIMetal3MachineTemplate
+		}
+
+		typedinfraMachineTemplate2, ok := infraMachineTemplate2.(*metal3v1.Metal3MachineTemplate)
+		if !ok {
+			return nil, errAssertingCAPIMetal3MachineTemplate
 		}
 
 		diff := make(map[string]any)
