@@ -47,6 +47,7 @@ import (
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	ibmpowervsv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
 	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
+	vspherev1 "sigs.k8s.io/cluster-api-provider-vsphere/apis/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/cluster-api/util/annotations"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -391,6 +392,12 @@ func filterOutdatedInfraMachineTemplates(infraMachineTemplateList client.ObjectL
 				outdatedTemplates = append(outdatedTemplates, &template)
 			}
 		}
+	case *vspherev1.VSphereMachineTemplateList:
+		for _, template := range list.Items {
+			if template.GetName() != newInfraMachineTemplateName {
+				outdatedTemplates = append(outdatedTemplates, &template)
+			}
+		}
 	default:
 		return nil, fmt.Errorf("%w: got unknown type %T", errUnexpectedInfraMachineTemplateListType, list)
 	}
@@ -705,6 +712,20 @@ func (r *MachineSetSyncReconciler) convertCAPIToMAPIMachineSet(capiMachineSet *c
 		return capi2mapi.FromMachineSetAndPowerVSMachineTemplateAndPowerVSCluster( //nolint: wrapcheck
 			capiMachineSet, machineTemplate, cluster,
 		).ToMachineSet()
+	case configv1.VSpherePlatformType:
+		machineTemplate, ok := infraMachineTemplate.(*vspherev1.VSphereMachineTemplate)
+		if !ok {
+			return nil, nil, fmt.Errorf("%w, expected VSphereMachineTemplate, got %T", errUnexpectedInfraMachineTemplateType, infraMachineTemplate)
+		}
+
+		cluster, ok := infraCluster.(*vspherev1.VSphereCluster)
+		if !ok {
+			return nil, nil, fmt.Errorf("%w, expected VSphereCluster, got %T", errUnexpectedInfraClusterType, infraCluster)
+		}
+
+		return capi2mapi.FromMachineSetAndVSphereMachineTemplateAndVSphereCluster( //nolint: wrapcheck
+			capiMachineSet, machineTemplate, cluster,
+		).ToMachineSet()
 	default:
 		return nil, nil, fmt.Errorf("%w: %s", errPlatformNotSupported, r.Platform)
 	}
@@ -719,6 +740,8 @@ func (r *MachineSetSyncReconciler) convertMAPIToCAPIMachineSet(mapiMachineSet *m
 		return mapi2capi.FromOpenStackMachineSetAndInfra(mapiMachineSet, r.Infra).ToMachineSetAndMachineTemplate() //nolint:wrapcheck
 	case configv1.PowerVSPlatformType:
 		return mapi2capi.FromPowerVSMachineSetAndInfra(mapiMachineSet, r.Infra).ToMachineSetAndMachineTemplate() //nolint:wrapcheck
+	case configv1.VSpherePlatformType:
+		return mapi2capi.FromVSphereMachineSetAndInfra(mapiMachineSet, r.Infra).ToMachineSetAndMachineTemplate() //nolint:wrapcheck
 	default:
 		return nil, nil, nil, fmt.Errorf("%w: %s", errPlatformNotSupported, r.Platform)
 	}
@@ -1321,6 +1344,8 @@ func initInfraMachineTemplateListAndInfraClusterListFromProvider(platform config
 		return &openstackv1.OpenStackMachineTemplateList{}, &openstackv1.OpenStackClusterList{}, nil
 	case configv1.PowerVSPlatformType:
 		return &ibmpowervsv1.IBMPowerVSMachineTemplateList{}, &ibmpowervsv1.IBMPowerVSClusterList{}, nil
+	case configv1.VSpherePlatformType:
+		return &vspherev1.VSphereMachineTemplateList{}, &vspherev1.VSphereClusterList{}, nil
 	default:
 		return nil, nil, fmt.Errorf("%w: %s", errPlatformNotSupported, platform)
 	}
@@ -1338,6 +1363,7 @@ func compareCAPIInfraMachineTemplates(platform configv1.PlatformType, infraMachi
 		)
 	case configv1.OpenStackPlatformType:
 	case configv1.PowerVSPlatformType:
+	case configv1.VSpherePlatformType:
 	default:
 		return nil, fmt.Errorf("%w: %s", errPlatformNotSupported, platform)
 	}
