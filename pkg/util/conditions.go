@@ -18,6 +18,7 @@ package util
 import (
 	"errors"
 	"fmt"
+	"regexp"
 	"time"
 
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
@@ -32,33 +33,41 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-var (
-	errStatusNotMap                 = errors.New("unable to assert status structure to map")
-	errStatusConditionsNotInterface = errors.New("unable to assert status.condition structure to interface")
-)
+var errConditionsPathNotFound = errors.New("conditions path not found")
+
+// kubeVersionRegex matches Kubernetes API versions: v1, v2, v1alpha1, v1beta1, v1beta2, etc.
+var kubeVersionRegex = regexp.MustCompile(`^v\d+(?:(?:alpha|beta)\d+)?$`)
 
 // GetCondition retrieves a specific condition from a client.Object.
-func GetCondition(obj client.Object, conditionType string) (*metav1.Condition, error) {
-	// Convert client.Object to unstructured.Unstructured
+// It accepts an optional version string (e.g., "v1beta2") to look under status.<version>.conditions.
+// If no version is provided, it defaults to status.conditions.
+func GetCondition(obj client.Object, conditionType string, version ...string) (*metav1.Condition, error) {
 	unstructuredMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert object to unstructured: %w", err)
 	}
 
-	unstructuredObj := &unstructured.Unstructured{Object: unstructuredMap}
-
-	data := unstructuredObj.UnstructuredContent()
-
-	status, ok := data["status"].(map[string]interface{})
-	if !ok {
-		return nil, errStatusNotMap
+	path := []string{"status"}
+	if len(version) > 0 && version[0] != "" {
+		path = append(path, version[0])
 	}
 
-	conditions, ok := status["conditions"].([]interface{})
-	if !ok {
-		return nil, errStatusConditionsNotInterface
+	path = append(path, "conditions")
+
+	conds, found, err := unstructured.NestedSlice(unstructuredMap, path...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse conditions field at %v: %w", path, err)
 	}
 
+	if !found {
+		return nil, fmt.Errorf("%w: %v", errConditionsPathNotFound, path)
+	}
+
+	return getConditionFromList(conds, conditionType)
+}
+
+// getConditionFromList finds a specific condition in a conditions list.
+func getConditionFromList(conditions []interface{}, conditionType string) (*metav1.Condition, error) {
 	for _, c := range conditions {
 		condMap, ok := c.(map[string]interface{})
 		if !ok {
@@ -84,9 +93,10 @@ func GetCondition(obj client.Object, conditionType string) (*metav1.Condition, e
 	return nil, nil //nolint:nilnil
 }
 
-// GetConditionStatus returns the status for the condition.
-func GetConditionStatus(obj client.Object, conditionType string) (corev1.ConditionStatus, error) {
-	cond, err := GetCondition(obj, conditionType)
+// GetConditionStatus returns the status for the specified condition type.
+// It supports the same optional versioning as GetCondition.
+func GetConditionStatus(obj client.Object, conditionType string, version ...string) (corev1.ConditionStatus, error) {
+	cond, err := GetCondition(obj, conditionType, version...)
 	if err != nil {
 		return corev1.ConditionUnknown, fmt.Errorf("unable to get condition %q for the object: %w", conditionType, err)
 	}
@@ -96,6 +106,55 @@ func GetConditionStatus(obj client.Object, conditionType string) (corev1.Conditi
 	}
 
 	return corev1.ConditionStatus(cond.Status), nil
+}
+
+// GetConditionStatusFromInfraObject discovers a versioned condition path from the object's status
+// and tries it first, falling back to root status.conditions.
+// Returns the first non-Unknown status found, or ConditionUnknown if not found anywhere.
+func GetConditionStatusFromInfraObject(obj client.Object, conditionType string) (corev1.ConditionStatus, error) {
+	unstructuredMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
+	if err != nil {
+		return corev1.ConditionUnknown, fmt.Errorf("failed to convert object to unstructured: %w", err)
+	}
+
+	statusMap, ok := unstructuredMap["status"].(map[string]interface{})
+	if !ok {
+		return corev1.ConditionUnknown, nil
+	}
+
+	if version := findVersionedConditionPath(statusMap); version != "" {
+		return GetConditionStatus(obj, conditionType, version)
+	}
+
+	status, err := GetConditionStatus(obj, conditionType)
+	if err != nil && errors.Is(err, errConditionsPathNotFound) {
+		return corev1.ConditionUnknown, nil
+	}
+
+	return status, err
+}
+
+func isKubeVersion(s string) bool {
+	return kubeVersionRegex.MatchString(s)
+}
+
+func findVersionedConditionPath(statusMap map[string]interface{}) string {
+	for key, val := range statusMap {
+		if !isKubeVersion(key) {
+			continue
+		}
+
+		sub, ok := val.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		if _, has := sub["conditions"]; has {
+			return key
+		}
+	}
+
+	return ""
 }
 
 func getString(data map[string]interface{}, key string) string {
