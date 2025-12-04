@@ -19,7 +19,7 @@ require (
 	github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20250821122144-fd0936342469
 	github.com/openshift/library-go v0.0.0-20250729191057-91376e1b394e
 	github.com/pkg/errors v0.9.1
-	github.com/spf13/pflag v1.0.6
+	github.com/spf13/pflag v1.0.9
 	golang.org/x/tools v0.33.0
 	gopkg.in/yaml.v2 v2.4.0
 	k8s.io/api v0.33.3
@@ -236,7 +236,7 @@ require (
 	github.com/sourcegraph/go-diff v0.7.0 // indirect
 	github.com/spf13/afero v1.12.0 // indirect
 	github.com/spf13/cast v1.7.1 // indirect
-	github.com/spf13/cobra v1.9.1 // indirect
+	github.com/spf13/cobra v1.10.1 // indirect
 	github.com/spf13/viper v1.20.0 // indirect
 	github.com/ssgreg/nlreturn/v2 v2.2.1 // indirect
 	github.com/stbenjam/no-sprintf-host-port v0.2.0 // indirect

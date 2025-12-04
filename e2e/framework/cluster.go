@@ -13,7 +13,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// CreateCluster creates a cluster with the given name and returns the cluster object.
+// CreateCoreCluster creates a cluster with the given name and returns the cluster object.
 func CreateCoreCluster(ctx context.Context, cl client.Client, clusterName, infraClusterKind string) *clusterv1.Cluster {
 	By("Creating core cluster")
 
