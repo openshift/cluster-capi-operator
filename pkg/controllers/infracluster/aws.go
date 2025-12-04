@@ -139,7 +139,8 @@ func (r *InfraClusterController) getAWSMAPIProviderSpec(ctx context.Context, cl 
 }
 
 // extractLoadBalancerConfigFromMAPIAWSProviderSpec extracts one or two control plane load balancers from a MAPI machine's provider spec.
-// When two load balancers are present, the one whose name ends with "-int" is preferred as the return value.
+// When two load balancers are present, the one whose name ends with "-int" is preferred as the primary (internal).
+// The primary load balancer scheme is set to internal, secondary to internet-facing.
 // Returns an error if zero or more than two load balancers are defined.
 func extractLoadBalancerConfigFromMAPIAWSProviderSpec(providerSpec *mapiv1beta1.AWSMachineProviderConfig) (*awsv1.AWSLoadBalancerSpec, *awsv1.AWSLoadBalancerSpec, error) {
 	if providerSpec == nil {
@@ -160,6 +161,7 @@ func extractLoadBalancerConfigFromMAPIAWSProviderSpec(providerSpec *mapiv1beta1.
 		return &awsv1.AWSLoadBalancerSpec{
 			Name:             &lbPrimary.Name,
 			LoadBalancerType: lbType,
+			Scheme:           &awsv1.ELBSchemeInternal,
 		}, nil, nil
 	case 2:
 		lbFirst := providerSpec.LoadBalancers[0]
@@ -182,9 +184,11 @@ func extractLoadBalancerConfigFromMAPIAWSProviderSpec(providerSpec *mapiv1beta1.
 		return &awsv1.AWSLoadBalancerSpec{
 				Name:             &lbFirst.Name,
 				LoadBalancerType: lbTypeFirst,
+				Scheme:           &awsv1.ELBSchemeInternal,
 			}, &awsv1.AWSLoadBalancerSpec{
 				Name:             &lbSecond.Name,
 				LoadBalancerType: lbTypeSecond,
+				Scheme:           &awsv1.ELBSchemeInternetFacing,
 			}, nil
 	default:
 		return nil, nil, fmt.Errorf("%w: expected 1 or 2, got %d", ErrInvalidNumberOfControlPlaneLoadBalancers, len(providerSpec.LoadBalancers))
