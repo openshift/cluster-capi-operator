@@ -145,8 +145,8 @@ var _ = Describe("InfraCluster", func() {
 
 			Context("When there is a ControlPlaneLoadBalancer and a SecondaryControlPlaneLoadBalancer", func() {
 				It("should order two load balancers preferring '-int' as primary", func() {
-					internalLB := &awsv1.AWSLoadBalancerSpec{Name: ptr.To("testClusterID-int"), LoadBalancerType: awsv1.LoadBalancerTypeNLB}
-					externalLB := &awsv1.AWSLoadBalancerSpec{Name: ptr.To("testClusterID-ext"), LoadBalancerType: awsv1.LoadBalancerTypeNLB}
+					internalLB := &awsv1.AWSLoadBalancerSpec{Name: ptr.To("testClusterID-int"), LoadBalancerType: awsv1.LoadBalancerTypeNLB, Scheme: &awsv1.ELBSchemeInternal}
+					externalLB := &awsv1.AWSLoadBalancerSpec{Name: ptr.To("testClusterID-ext"), LoadBalancerType: awsv1.LoadBalancerTypeNLB, Scheme: &awsv1.ELBSchemeInternetFacing}
 
 					Eventually(komega.Object(bareInfraCluster)).Should(SatisfyAll(
 						HaveField("Spec.ControlPlaneLoadBalancer", Equal(internalLB)),
@@ -187,7 +187,7 @@ var _ = Describe("InfraCluster", func() {
 			})
 
 			It("should have the load balancer configuration derived from the youngest machine", func() {
-				internalLB := &awsv1.AWSLoadBalancerSpec{Name: ptr.To("young-int"), LoadBalancerType: awsv1.LoadBalancerTypeNLB}
+				internalLB := &awsv1.AWSLoadBalancerSpec{Name: ptr.To("young-int"), LoadBalancerType: awsv1.LoadBalancerTypeNLB, Scheme: &awsv1.ELBSchemeInternal}
 
 				Eventually(komega.Object(bareInfraCluster)).Should(SatisfyAll(
 					HaveField("Spec.ControlPlaneLoadBalancer", Equal(internalLB)),
