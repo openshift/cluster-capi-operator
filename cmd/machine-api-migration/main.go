@@ -64,6 +64,7 @@ func initScheme(scheme *runtime.Scheme) {
 	utilruntime.Must(awsv1.AddToScheme(scheme))
 	utilruntime.Must(openstackv1.AddToScheme(scheme))
 	utilruntime.Must(vspherev1.AddToScheme(scheme))
+	utilruntime.Must(clusterv1.AddToScheme(scheme))
 }
 
 func main() {
