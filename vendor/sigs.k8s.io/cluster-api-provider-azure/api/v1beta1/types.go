@@ -116,6 +116,12 @@ type NetworkSpec struct {
 	// +optional
 	AdditionalAPIServerLBPorts []LoadBalancerPort `json:"additionalAPIServerLBPorts,omitempty"`
 
+	// PrivateDNSZone enables private dns zone creation modes for a private cluster.
+	// When unspecified, it defaults to PrivateDNSZoneModeSystem which creates a private DNS zone.
+	// +kubebuilder:validation:Enum=System;None
+	// +optional
+	PrivateDNSZone *PrivateDNSZoneMode `json:"privateDNSZone,omitempty"`
+
 	NetworkClassSpec `json:",inline"`
 }
 
@@ -252,6 +258,10 @@ type NatGateway struct {
 	ID string `json:"id,omitempty"`
 	// +optional
 	NatGatewayIP PublicIPSpec `json:"ip,omitempty"`
+
+	// Zones mentions the list of zones the NAT gateway should be a part of.
+	// +optional
+	Zones []string `json:"zones,omitempty"`
 
 	NatGatewayClassSpec `json:",inline"`
 }

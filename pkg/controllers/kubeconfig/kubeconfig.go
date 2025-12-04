@@ -30,7 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -204,12 +204,12 @@ func newKubeConfigSecret(clusterName string, data []byte) *corev1.Secret {
 			Name:      fmt.Sprintf("%s-kubeconfig", clusterName),
 			Namespace: controllers.DefaultManagedNamespace,
 			Labels: map[string]string{
-				clusterv1.ClusterNameLabel: clusterName,
+				clusterv1beta1.ClusterNameLabel: clusterName,
 			},
 		},
 		Data: map[string][]byte{
 			"value": data,
 		},
-		Type: clusterv1.ClusterSecretType,
+		Type: clusterv1beta1.ClusterSecretType,
 	}
 }

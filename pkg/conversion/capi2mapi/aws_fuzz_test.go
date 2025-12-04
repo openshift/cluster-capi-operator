@@ -30,7 +30,7 @@ import (
 
 	runtimeserializer "k8s.io/apimachinery/pkg/runtime/serializer"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -54,7 +54,7 @@ var _ = Describe("AWS Fuzz (capi2mapi)", func() {
 	}
 
 	Context("AWSMachine Conversion", func() {
-		fromMachineAndAWSMachineAndAWSCluster := func(machine *clusterv1.Machine, infraMachine client.Object, infraCluster client.Object) capi2mapi.MachineAndInfrastructureMachine {
+		fromMachineAndAWSMachineAndAWSCluster := func(machine *clusterv1beta1.Machine, infraMachine client.Object, infraCluster client.Object) capi2mapi.MachineAndInfrastructureMachine {
 			awsMachine, ok := infraMachine.(*awsv1.AWSMachine)
 			Expect(ok).To(BeTrue(), "input infra machine should be of type %T, got %T", &awsv1.AWSMachine{}, infraMachine)
 
@@ -78,7 +78,7 @@ var _ = Describe("AWS Fuzz (capi2mapi)", func() {
 	})
 
 	Context("AWSMachineSet Conversion", func() {
-		fromMachineSetAndAWSMachineTemplateAndAWSCluster := func(machineSet *clusterv1.MachineSet, infraMachineTemplate client.Object, infraCluster client.Object) capi2mapi.MachineSetAndMachineTemplate {
+		fromMachineSetAndAWSMachineTemplateAndAWSCluster := func(machineSet *clusterv1beta1.MachineSet, infraMachineTemplate client.Object, infraCluster client.Object) capi2mapi.MachineSetAndMachineTemplate {
 			awsMachineTemplate, ok := infraMachineTemplate.(*awsv1.AWSMachineTemplate)
 			Expect(ok).To(BeTrue(), "input infra machine template should be of type %T, got %T", &awsv1.AWSMachineTemplate{}, infraMachineTemplate)
 
@@ -169,6 +169,11 @@ func awsMachineFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interface{} 
 			spec.PrivateDNSName = nil
 			// We don't support this field since the externally managed annotation is added, so it's best to keep this nil.
 			spec.SecurityGroupOverrides = nil
+
+			// Conversion not yet implemented
+			spec.HostAffinity = nil
+			spec.HostID = nil
+			spec.CPUOptions.ConfidentialCompute = ""
 		},
 		func(m *awsv1.AWSMachine, c randfill.Continue) {
 			c.FillNoCustom(m)

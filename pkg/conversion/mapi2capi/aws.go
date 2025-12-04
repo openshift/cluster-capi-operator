@@ -32,7 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/utils/ptr"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 )
@@ -83,7 +83,7 @@ func FromAWSMachineSetAndInfra(m *mapiv1beta1.MachineSet, i *configv1.Infrastruc
 
 // ToMachineAndInfrastructureMachine is used to generate a CAPI Machine and the corresponding InfrastructureMachine
 // from the stored MAPI Machine and Infrastructure objects.
-func (m *awsMachineAndInfra) ToMachineAndInfrastructureMachine() (*clusterv1.Machine, client.Object, []string, error) {
+func (m *awsMachineAndInfra) ToMachineAndInfrastructureMachine() (*clusterv1beta1.Machine, client.Object, []string, error) {
 	capiMachine, capaMachine, warnings, errs := m.toMachineAndInfrastructureMachine()
 
 	if len(errs) > 0 {
@@ -93,7 +93,7 @@ func (m *awsMachineAndInfra) ToMachineAndInfrastructureMachine() (*clusterv1.Mac
 	return capiMachine, capaMachine, warnings, nil
 }
 
-func (m *awsMachineAndInfra) toMachineAndInfrastructureMachine() (*clusterv1.Machine, client.Object, []string, field.ErrorList) {
+func (m *awsMachineAndInfra) toMachineAndInfrastructureMachine() (*clusterv1beta1.Machine, client.Object, []string, field.ErrorList) {
 	var (
 		errs     field.ErrorList
 		warnings []string
@@ -133,7 +133,7 @@ func (m *awsMachineAndInfra) toMachineAndInfrastructureMachine() (*clusterv1.Mac
 	}
 
 	if awsProviderConfig.UserDataSecret != nil && awsProviderConfig.UserDataSecret.Name != "" {
-		capiMachine.Spec.Bootstrap = clusterv1.Bootstrap{
+		capiMachine.Spec.Bootstrap = clusterv1beta1.Bootstrap{
 			DataSecretName: &awsProviderConfig.UserDataSecret.Name,
 		}
 	}
@@ -143,7 +143,7 @@ func (m *awsMachineAndInfra) toMachineAndInfrastructureMachine() (*clusterv1.Mac
 		errs = append(errs, field.Invalid(field.NewPath("infrastructure", "status", "infrastructureName"), m.infrastructure.Status.InfrastructureName, "infrastructure cannot be nil and infrastructure.Status.InfrastructureName cannot be empty"))
 	} else {
 		capiMachine.Spec.ClusterName = m.infrastructure.Status.InfrastructureName
-		capiMachine.Labels[clusterv1.ClusterNameLabel] = m.infrastructure.Status.InfrastructureName
+		capiMachine.Labels[clusterv1beta1.ClusterNameLabel] = m.infrastructure.Status.InfrastructureName
 	}
 
 	// The InfraMachine should always have the same labels and annotations as the Machine.
@@ -164,7 +164,7 @@ func (m *awsMachineAndInfra) toMachineAndInfrastructureMachine() (*clusterv1.Mac
 // ToMachineSetAndMachineTemplate converts a mapi2capi AWSMachineSetAndInfra into a CAPI MachineSet and CAPA AWSMachineTemplate.
 //
 //nolint:dupl
-func (m *awsMachineSetAndInfra) ToMachineSetAndMachineTemplate() (*clusterv1.MachineSet, client.Object, []string, error) {
+func (m *awsMachineSetAndInfra) ToMachineSetAndMachineTemplate() (*clusterv1beta1.MachineSet, client.Object, []string, error) {
 	var (
 		errs     []error
 		warnings []string
@@ -208,7 +208,7 @@ func (m *awsMachineSetAndInfra) ToMachineSetAndMachineTemplate() (*clusterv1.Mac
 	} else {
 		capiMachineSet.Spec.Template.Spec.ClusterName = m.infrastructure.Status.InfrastructureName
 		capiMachineSet.Spec.ClusterName = m.infrastructure.Status.InfrastructureName
-		capiMachineSet.Labels[clusterv1.ClusterNameLabel] = m.infrastructure.Status.InfrastructureName
+		capiMachineSet.Labels[clusterv1beta1.ClusterNameLabel] = m.infrastructure.Status.InfrastructureName
 	}
 
 	if len(errs) > 0 {
@@ -386,13 +386,13 @@ func convertMAPIMachineStatusToAWSMachineStatus(mapiMachine *mapiv1beta1.Machine
 	return s, errs
 }
 
-func convertMAPIMachineAWSProviderConditionsToAWSMachineConditions(mapiProviderStatus *mapiv1beta1.AWSMachineProviderStatus) clusterv1.Conditions {
-	capaMachineConditions := []clusterv1.Condition{}
+func convertMAPIMachineAWSProviderConditionsToAWSMachineConditions(mapiProviderStatus *mapiv1beta1.AWSMachineProviderStatus) clusterv1beta1.Conditions {
+	capaMachineConditions := []clusterv1beta1.Condition{}
 	instanceRunning := ptr.Deref(mapiProviderStatus.InstanceState, "") == string(awsv1.InstanceStateRunning)
 
 	// Best effort assertion for Ready and InstanceReady condition. Refer to Machine API machine in case of non-happy path.
-	for _, conditionType := range []clusterv1.ConditionType{clusterv1.ReadyCondition, awsv1.InstanceReadyCondition} {
-		c := clusterv1.Condition{
+	for _, conditionType := range []clusterv1beta1.ConditionType{clusterv1beta1.ReadyCondition, awsv1.InstanceReadyCondition} {
+		c := clusterv1beta1.Condition{
 			Type: conditionType,
 			Status: func() corev1.ConditionStatus {
 				if instanceRunning {
@@ -408,12 +408,12 @@ func convertMAPIMachineAWSProviderConditionsToAWSMachineConditions(mapiProviderS
 
 				return ""
 			}(),
-			Severity: func() clusterv1.ConditionSeverity {
+			Severity: func() clusterv1beta1.ConditionSeverity {
 				if instanceRunning {
-					return clusterv1.ConditionSeverityNone
+					return clusterv1beta1.ConditionSeverityNone
 				}
 
-				return clusterv1.ConditionSeverityError
+				return clusterv1beta1.ConditionSeverityError
 			}(),
 			// LastTransitionTime will be set by the condition utilities.
 		}

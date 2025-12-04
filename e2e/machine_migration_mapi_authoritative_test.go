@@ -10,7 +10,7 @@ import (
 	capiframework "github.com/openshift/cluster-capi-operator/e2e/framework"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 )
 
 var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Machine Migration MAPI Authoritative Tests", Ordered, func() {
@@ -26,7 +26,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 
 	var _ = Describe("Create standalone MAPI Machine", Ordered, func() {
 		var mapiMachineAuthMAPIName = "machine-authoritativeapi-mapi"
-		var newCapiMachine *clusterv1.Machine
+		var newCapiMachine *clusterv1beta1.Machine
 		var newMapiMachine *mapiv1beta1.Machine
 
 		Context("With spec.authoritativeAPI: MachineAPI and no existing CAPI Machine with that name", func() {
@@ -38,7 +38,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 					cleanupMachineResources(
 						ctx,
 						cl,
-						[]*clusterv1.Machine{},
+						[]*clusterv1beta1.Machine{},
 						[]*mapiv1beta1.Machine{newMapiMachine},
 					)
 				})
@@ -65,7 +65,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 	var _ = Describe("Deleting MAPI Machines", Ordered, func() {
 		var mapiMachineAuthMAPINameDeleteMAPIMachine = "machine-authoritativeapi-mapi-delete-mapi"
 		var mapiMachineAuthMAPINameDeleteCAPIMachine = "machine-authoritativeapi-mapi-delete-capi"
-		var newCapiMachine *clusterv1.Machine
+		var newCapiMachine *clusterv1beta1.Machine
 		var newMapiMachine *mapiv1beta1.Machine
 
 		Context("with spec.authoritativeAPI: MachineAPI", func() {
@@ -80,7 +80,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 						cleanupMachineResources(
 							ctx,
 							cl,
-							[]*clusterv1.Machine{newCapiMachine},
+							[]*clusterv1beta1.Machine{newCapiMachine},
 							[]*mapiv1beta1.Machine{newMapiMachine},
 						)
 					})
@@ -111,7 +111,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 						cleanupMachineResources(
 							ctx,
 							cl,
-							[]*clusterv1.Machine{newCapiMachine},
+							[]*clusterv1beta1.Machine{newCapiMachine},
 							[]*mapiv1beta1.Machine{newMapiMachine},
 						)
 					})
@@ -136,7 +136,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 	var _ = Describe("Machine Migration Round Trip Tests", Ordered, func() {
 		var mapiCapiMapiRoundTripName = "machine-mapi-capi-mapi-roundtrip"
 		var newMapiMachine *mapiv1beta1.Machine
-		var newCapiMachine *clusterv1.Machine
+		var newCapiMachine *clusterv1beta1.Machine
 
 		Context("MAPI -> CAPI -> MAPI round trip", func() {
 			BeforeAll(func() {
@@ -149,7 +149,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 					cleanupMachineResources(
 						ctx,
 						cl,
-						[]*clusterv1.Machine{newCapiMachine},
+						[]*clusterv1beta1.Machine{newCapiMachine},
 						[]*mapiv1beta1.Machine{newMapiMachine},
 					)
 				})

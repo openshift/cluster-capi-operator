@@ -19,7 +19,7 @@ import (
 	ibmpowervsv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
 	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
 	vspherev1 "sigs.k8s.io/cluster-api-provider-vsphere/apis/v1beta1"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
@@ -35,10 +35,10 @@ const (
 )
 
 var (
-	cl                 client.Client
-	ctx                = context.Background()
-	platform           configv1.PlatformType
-	clusterName        string
+	cl          client.Client
+	ctx         = context.Background()
+	platform    configv1.PlatformType
+	clusterName string
 )
 
 func init() {
@@ -46,7 +46,7 @@ func init() {
 	utilruntime.Must(awsv1.AddToScheme(scheme.Scheme))
 	utilruntime.Must(gcpv1.AddToScheme(scheme.Scheme))
 	utilruntime.Must(azurev1.AddToScheme(scheme.Scheme))
-	utilruntime.Must(clusterv1.AddToScheme(scheme.Scheme))
+	utilruntime.Must(clusterv1beta1.AddToScheme(scheme.Scheme))
 	utilruntime.Must(mapiv1beta1.AddToScheme(scheme.Scheme))
 	utilruntime.Must(ibmpowervsv1.AddToScheme(scheme.Scheme))
 	utilruntime.Must(openstackv1.AddToScheme(scheme.Scheme))

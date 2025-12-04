@@ -35,7 +35,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/config"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
@@ -60,7 +60,7 @@ var _ = Describe("InfraCluster", func() {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: ocpInfraClusterName,
 			Annotations: map[string]string{
-				clusterv1.ManagedByAnnotation: managedByAnnotationValueClusterCAPIOperatorInfraClusterController,
+				clusterv1beta1.ManagedByAnnotation: managedByAnnotationValueClusterCAPIOperatorInfraClusterController,
 			},
 		},
 	}
@@ -73,7 +73,7 @@ var _ = Describe("InfraCluster", func() {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: ocpInfraClusterName,
 			Annotations: map[string]string{
-				clusterv1.ManagedByAnnotation: thirdPartyAnnotation,
+				clusterv1beta1.ManagedByAnnotation: thirdPartyAnnotation,
 			},
 		},
 	}
@@ -139,7 +139,7 @@ var _ = Describe("InfraCluster", func() {
 			It("should create an InfraCluster, with Ready: true and externally ManagedBy Annotation", func() {
 				Eventually(komega.Object(bareInfraCluster)).Should(SatisfyAll(
 					HaveField("Status.Ready", BeTrue()),
-					HaveField("Annotations", HaveKeyWithValue(clusterv1.ManagedByAnnotation, managedByAnnotationValueClusterCAPIOperatorInfraClusterController)),
+					HaveField("Annotations", HaveKeyWithValue(clusterv1beta1.ManagedByAnnotation, managedByAnnotationValueClusterCAPIOperatorInfraClusterController)),
 				))
 			})
 
@@ -182,7 +182,7 @@ var _ = Describe("InfraCluster", func() {
 			It("should create an InfraCluster, with Ready: true and externally ManagedBy Annotation", func() {
 				Eventually(komega.Object(bareInfraCluster)).Should(SatisfyAll(
 					HaveField("Status.Ready", BeTrue()),
-					HaveField("Annotations", HaveKeyWithValue(clusterv1.ManagedByAnnotation, managedByAnnotationValueClusterCAPIOperatorInfraClusterController)),
+					HaveField("Annotations", HaveKeyWithValue(clusterv1beta1.ManagedByAnnotation, managedByAnnotationValueClusterCAPIOperatorInfraClusterController)),
 				))
 			})
 
@@ -237,7 +237,7 @@ var _ = Describe("InfraCluster", func() {
 			It("should not change the Status.Ready field", func() {
 				Eventually(komega.Object(bareInfraCluster)).Should(SatisfyAll(
 					HaveField("Status.Ready", BeTrue()),
-					HaveField("Annotations", HaveKeyWithValue(clusterv1.ManagedByAnnotation, thirdPartyAnnotation)),
+					HaveField("Annotations", HaveKeyWithValue(clusterv1beta1.ManagedByAnnotation, thirdPartyAnnotation)),
 				))
 			})
 		})
@@ -250,7 +250,7 @@ var _ = Describe("InfraCluster", func() {
 			It("should not change the Status.Ready field", func() {
 				Eventually(komega.Object(bareInfraCluster)).Should(SatisfyAll(
 					HaveField("Status.Ready", BeFalse()),
-					HaveField("Annotations", HaveKeyWithValue(clusterv1.ManagedByAnnotation, thirdPartyAnnotation)),
+					HaveField("Annotations", HaveKeyWithValue(clusterv1beta1.ManagedByAnnotation, thirdPartyAnnotation)),
 				))
 			})
 		})
@@ -266,7 +266,7 @@ var _ = Describe("InfraCluster", func() {
 			It("should not change the Status.Ready field", func() {
 				Eventually(komega.Object(bareInfraCluster)).Should(SatisfyAll(
 					HaveField("Status.Ready", BeTrue()),
-					HaveField("Annotations", HaveKeyWithValue(clusterv1.ManagedByAnnotation, managedByAnnotationValueClusterCAPIOperatorInfraClusterController)),
+					HaveField("Annotations", HaveKeyWithValue(clusterv1beta1.ManagedByAnnotation, managedByAnnotationValueClusterCAPIOperatorInfraClusterController)),
 				))
 			})
 		})
@@ -279,7 +279,7 @@ var _ = Describe("InfraCluster", func() {
 			It("should change the Status.Ready field to true", func() {
 				Eventually(komega.Object(bareInfraCluster)).Should(SatisfyAll(
 					HaveField("Status.Ready", BeTrue()),
-					HaveField("Annotations", HaveKeyWithValue(clusterv1.ManagedByAnnotation, managedByAnnotationValueClusterCAPIOperatorInfraClusterController)),
+					HaveField("Annotations", HaveKeyWithValue(clusterv1beta1.ManagedByAnnotation, managedByAnnotationValueClusterCAPIOperatorInfraClusterController)),
 				))
 			})
 		})

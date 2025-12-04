@@ -28,7 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 
 	"k8s.io/client-go/rest"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -117,7 +117,7 @@ func (r *InfraClusterController) reconcile(ctx context.Context, log logr.Logger)
 // reconcileInfraCluster reconciles the InfraCluster object.
 // It first determines if the infra cluster should be managed before setting the infra cluster ready.
 func (r *InfraClusterController) reconcileInfraCluster(ctx context.Context, log logr.Logger, infraCluster client.Object) (ctrl.Result, error) {
-	managedByAnnotationVal, foundAnnotation := infraCluster.GetAnnotations()[clusterv1.ManagedByAnnotation]
+	managedByAnnotationVal, foundAnnotation := infraCluster.GetAnnotations()[clusterv1beta1.ManagedByAnnotation]
 
 	switch {
 	case !foundAnnotation:

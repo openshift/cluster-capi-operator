@@ -121,7 +121,7 @@ var _ = Describe("mapi2capi PowerVS conversion", func() {
 			})),
 			infra: infra,
 			expectedErrors: []string{
-				"spec.providerSpec.value.loadBalancers: Invalid value: []v1.LoadBalancerReference{v1.LoadBalancerReference{Name:\"LB-One\", Type:\"Application\"}}: loadBalancers are not supported",
+				"spec.providerSpec.value.loadBalancers: Invalid value: [{\"name\":\"LB-One\",\"type\":\"Application\"}]: loadBalancers are not supported",
 			},
 		}),
 
@@ -136,7 +136,7 @@ var _ = Describe("mapi2capi PowerVS conversion", func() {
 			}),
 			infra: infra,
 			expectedErrors: []string{
-				"spec.providerSpec.value.metadata: Invalid value: v1.ObjectMeta{Name:\"test\", GenerateName:\"\", Namespace:\"\", SelfLink:\"\", UID:\"\", ResourceVersion:\"\", Generation:0, CreationTimestamp:time.Date(1, time.January, 1, 0, 0, 0, 0, time.UTC), DeletionTimestamp:<nil>, DeletionGracePeriodSeconds:(*int64)(nil), Labels:map[string]string(nil), Annotations:map[string]string(nil), OwnerReferences:[]v1.OwnerReference(nil), Finalizers:[]string(nil), ManagedFields:[]v1.ManagedFieldsEntry(nil)}: metadata is not supported",
+				"spec.providerSpec.value.metadata: Invalid value: {\"name\":\"test\"}: metadata is not supported",
 			},
 		}),
 	)

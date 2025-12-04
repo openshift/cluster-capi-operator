@@ -23,7 +23,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/utils/ptr"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/config"
@@ -40,7 +40,7 @@ import (
 )
 
 var _ = Describe("Reconcile Core cluster", func() {
-	var coreCluster *clusterv1.Cluster
+	var coreCluster *clusterv1beta1.Cluster
 	var testNamespaceName string
 	testInfraName := "test-ocp-infrastructure-name"
 	testRegionName := "eu-west-2"
@@ -71,7 +71,7 @@ var _ = Describe("Reconcile Core cluster", func() {
 				ManagedNamespace: testNamespaceName,
 				ReleaseVersion:   desiredOperatorReleaseVersion,
 			},
-			Cluster:  &clusterv1.Cluster{},
+			Cluster:  &clusterv1beta1.Cluster{},
 			Infra:    infra.DeepCopy(),
 			Platform: infra.Status.PlatformStatus.Type,
 		}
@@ -111,7 +111,7 @@ var _ = Describe("Reconcile Core cluster", func() {
 	AfterEach(func() {
 		By("Cleaning up the testing resources")
 		testutils.CleanupResources(Default, ctx, testEnv.Config, cl, testNamespaceName,
-			&configv1.Infrastructure{}, &clusterv1.Cluster{}, &awsv1.AWSCluster{}, &configv1.ClusterOperator{})
+			&configv1.Infrastructure{}, &clusterv1beta1.Cluster{}, &awsv1.AWSCluster{}, &configv1.ClusterOperator{})
 	})
 
 	Context("With a supported platform", func() {
@@ -170,7 +170,7 @@ var _ = Describe("Reconcile Core cluster", func() {
 						HaveField("Status.Conditions", SatisfyAll(
 							Not(BeEmpty()),
 							ContainElement(SatisfyAll(
-								HaveField("Type", Equal(clusterv1.ControlPlaneInitializedCondition)),
+								HaveField("Type", Equal(clusterv1beta1.ControlPlaneInitializedCondition)),
 								HaveField("Status", Equal(corev1.ConditionTrue)),
 							)),
 						)),
@@ -231,7 +231,7 @@ var _ = Describe("Reconcile Core cluster", func() {
 						HaveField("Status.Conditions", SatisfyAll(
 							Not(BeEmpty()),
 							ContainElement(SatisfyAll(
-								HaveField("Type", Equal(clusterv1.ControlPlaneInitializedCondition)),
+								HaveField("Type", Equal(clusterv1beta1.ControlPlaneInitializedCondition)),
 								HaveField("Status", Equal(corev1.ConditionTrue)),
 							)),
 						)),

@@ -22,7 +22,7 @@ import (
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	machinev1applyconfigs "github.com/openshift/client-go/machine/applyconfigurations/machine/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -88,7 +88,7 @@ func ObjectMetaEqual(a, b metav1.ObjectMeta) map[string]any {
 // CAPIMachineSetStatusEqual compares variables a and b,
 // and returns a list of differences, or nil if there are none,
 // for the fields we care about when synchronising MAPI and CAPI Machines.
-func CAPIMachineSetStatusEqual(a, b clusterv1.MachineSetStatus) map[string]any {
+func CAPIMachineSetStatusEqual(a, b clusterv1beta1.MachineSetStatus) map[string]any {
 	diff := map[string]any{}
 
 	if diffReadyReplicas := deep.Equal(a.ReadyReplicas, b.ReadyReplicas); len(diffReadyReplicas) > 0 {
@@ -117,11 +117,11 @@ func CAPIMachineSetStatusEqual(a, b clusterv1.MachineSetStatus) map[string]any {
 
 	// Compare the v1beta2 fields.
 	if a.V1Beta2 == nil {
-		a.V1Beta2 = &clusterv1.MachineSetV1Beta2Status{}
+		a.V1Beta2 = &clusterv1beta1.MachineSetV1Beta2Status{}
 	}
 
 	if b.V1Beta2 == nil {
-		b.V1Beta2 = &clusterv1.MachineSetV1Beta2Status{}
+		b.V1Beta2 = &clusterv1beta1.MachineSetV1Beta2Status{}
 	}
 
 	if diffUpToDateReplicas := deep.Equal(a.V1Beta2.UpToDateReplicas, b.V1Beta2.UpToDateReplicas); len(diffUpToDateReplicas) > 0 {
@@ -146,7 +146,7 @@ func CAPIMachineSetStatusEqual(a, b clusterv1.MachineSetStatus) map[string]any {
 // CAPIMachineStatusEqual compares variables a and b,
 // and returns a list of differences, or nil if there are none,
 // for the fields we care about when synchronising CAPI and MAPI Machines.
-func CAPIMachineStatusEqual(a, b clusterv1.MachineStatus) map[string]any {
+func CAPIMachineStatusEqual(a, b clusterv1beta1.MachineStatus) map[string]any {
 	diff := map[string]any{}
 
 	if diffFailureReason := deep.Equal(a.FailureReason, b.FailureReason); len(diffFailureReason) > 0 {
@@ -187,11 +187,11 @@ func CAPIMachineStatusEqual(a, b clusterv1.MachineStatus) map[string]any {
 
 	// Compare the v1beta2 fields.
 	if a.V1Beta2 == nil {
-		a.V1Beta2 = &clusterv1.MachineV1Beta2Status{}
+		a.V1Beta2 = &clusterv1beta1.MachineV1Beta2Status{}
 	}
 
 	if b.V1Beta2 == nil {
-		b.V1Beta2 = &clusterv1.MachineV1Beta2Status{}
+		b.V1Beta2 = &clusterv1beta1.MachineV1Beta2Status{}
 	}
 
 	if diffConditions := compareCAPIV1Beta2Conditions(a.V1Beta2.Conditions, b.V1Beta2.Conditions); len(diffConditions) > 0 {
@@ -241,7 +241,7 @@ func MAPIMachineStatusEqual(a, b mapiv1beta1.MachineStatus) map[string]any {
 // compareCAPIV1Beta1Conditions compares variables a and b,
 // and returns a list of differences, or nil if there are none,
 // for the fields we care about when synchronising CAPI v1beta1 and MAPI.
-func compareCAPIV1Beta1Conditions(a, b []clusterv1.Condition) []string {
+func compareCAPIV1Beta1Conditions(a, b []clusterv1beta1.Condition) []string {
 	diff := []string{}
 	// Compare the conditions one by one.
 	// Ignore the differences in LastTransitionTime.

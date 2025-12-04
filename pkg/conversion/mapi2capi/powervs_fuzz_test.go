@@ -34,7 +34,7 @@ import (
 	runtimeserializer "k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/utils/ptr"
 	ibmpowervsv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -58,7 +58,7 @@ var _ = Describe("PowerVS Fuzz (mapi2capi)", func() {
 	}
 
 	Context("PowerVSMachine Conversion", func() {
-		fromMachineAndPowerVSMachineAndPowerVSCluster := func(machine *clusterv1.Machine, infraMachine client.Object, infraCluster client.Object) capi2mapi.MachineAndInfrastructureMachine {
+		fromMachineAndPowerVSMachineAndPowerVSCluster := func(machine *clusterv1beta1.Machine, infraMachine client.Object, infraCluster client.Object) capi2mapi.MachineAndInfrastructureMachine {
 			powerVSMachine, ok := infraMachine.(*ibmpowervsv1.IBMPowerVSMachine)
 			Expect(ok).To(BeTrue(), "input infra machine should be of type %T, got %T", &ibmpowervsv1.IBMPowerVSMachine{}, infraMachine)
 
@@ -83,7 +83,7 @@ var _ = Describe("PowerVS Fuzz (mapi2capi)", func() {
 	})
 
 	Context("PowerVSMachineSet Conversion", func() {
-		fromMachineSetAndPowerVSMachineTemplateAndPowerVSCluster := func(machineSet *clusterv1.MachineSet, infraMachineTemplate client.Object, infraCluster client.Object) capi2mapi.MachineSetAndMachineTemplate {
+		fromMachineSetAndPowerVSMachineTemplateAndPowerVSCluster := func(machineSet *clusterv1beta1.MachineSet, infraMachineTemplate client.Object, infraCluster client.Object) capi2mapi.MachineSetAndMachineTemplate {
 			powerVSMachineTemplate, ok := infraMachineTemplate.(*ibmpowervsv1.IBMPowerVSMachineTemplate)
 			Expect(ok).To(BeTrue(), "input infra machine template should be of type %T, got %T", &ibmpowervsv1.IBMPowerVSMachineTemplate{}, infraMachineTemplate)
 

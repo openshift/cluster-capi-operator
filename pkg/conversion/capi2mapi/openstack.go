@@ -31,7 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/utils/ptr"
 	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 )
 
 var (
@@ -41,7 +41,7 @@ var (
 
 // machineAndOpenStackMachineAndOpenStackCluster stores the details of a Cluster API Machine and OpenStackMachine and OpenStackCluster.
 type machineAndOpenStackMachineAndOpenStackCluster struct {
-	machine                               *clusterv1.Machine
+	machine                               *clusterv1beta1.Machine
 	openstackMachine                      *openstackv1.OpenStackMachine
 	openstackCluster                      *openstackv1.OpenStackCluster
 	excludeMachineAPILabelsAndAnnotations bool
@@ -49,25 +49,25 @@ type machineAndOpenStackMachineAndOpenStackCluster struct {
 
 // machineSetAndOpenStackMachineTemplateAndOpenStackCluster stores the details of a Cluster API MachineSet and OpenStackMachineTemplate and OpenStackCluster.
 type machineSetAndOpenStackMachineTemplateAndOpenStackCluster struct {
-	machineSet       *clusterv1.MachineSet
+	machineSet       *clusterv1beta1.MachineSet
 	template         *openstackv1.OpenStackMachineTemplate
 	openstackCluster *openstackv1.OpenStackCluster
 	*machineAndOpenStackMachineAndOpenStackCluster
 }
 
 // FromMachineAndOpenStackMachineAndOpenStackCluster wraps a CAPI Machine and CAPO OpenStackMachine and CAPO OpenStackCluster into a capi2mapi MachineAndInfrastructureMachine.
-func FromMachineAndOpenStackMachineAndOpenStackCluster(m *clusterv1.Machine, am *openstackv1.OpenStackMachine, ac *openstackv1.OpenStackCluster) MachineAndInfrastructureMachine {
+func FromMachineAndOpenStackMachineAndOpenStackCluster(m *clusterv1beta1.Machine, am *openstackv1.OpenStackMachine, ac *openstackv1.OpenStackCluster) MachineAndInfrastructureMachine {
 	return &machineAndOpenStackMachineAndOpenStackCluster{machine: m, openstackMachine: am, openstackCluster: ac}
 }
 
 // FromMachineSetAndOpenStackMachineTemplateAndOpenStackCluster wraps a CAPI MachineSet and CAPO OpenStackMachineTemplate and CAPO OpenStackCluster into a capi2mapi MachineSetAndOpenStackMachineTemplateAndOpenStackCluster.
-func FromMachineSetAndOpenStackMachineTemplateAndOpenStackCluster(ms *clusterv1.MachineSet, mts *openstackv1.OpenStackMachineTemplate, ac *openstackv1.OpenStackCluster) MachineSetAndMachineTemplate {
+func FromMachineSetAndOpenStackMachineTemplateAndOpenStackCluster(ms *clusterv1beta1.MachineSet, mts *openstackv1.OpenStackMachineTemplate, ac *openstackv1.OpenStackCluster) MachineSetAndMachineTemplate {
 	return &machineSetAndOpenStackMachineTemplateAndOpenStackCluster{
 		machineSet:       ms,
 		template:         mts,
 		openstackCluster: ac,
 		machineAndOpenStackMachineAndOpenStackCluster: &machineAndOpenStackMachineAndOpenStackCluster{
-			machine: &clusterv1.Machine{
+			machine: &clusterv1beta1.Machine{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels:      ms.Spec.Template.ObjectMeta.Labels,
 					Annotations: ms.Spec.Template.ObjectMeta.Annotations,

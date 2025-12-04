@@ -10,12 +10,12 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	yaml "sigs.k8s.io/yaml"
 
 	configv1 "github.com/openshift/api/config/v1"
-	mapiv1 "github.com/openshift/api/machine/v1beta1"
+	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	bmv1alpha1 "github.com/openshift/cluster-api-provider-baremetal/pkg/apis/baremetal/v1alpha1"
 	"github.com/openshift/cluster-capi-operator/e2e/framework"
 )
@@ -26,7 +26,7 @@ const (
 
 var _ = Describe("Cluster API Baremetal MachineSet", Ordered, func() {
 	var baremetalMachineTemplate *metal3v1.Metal3MachineTemplate
-	var machineSet *clusterv1.MachineSet
+	var machineSet *clusterv1beta1.MachineSet
 	var mapiMachineSpec *bmv1alpha1.BareMetalMachineProviderSpec
 
 	BeforeAll(func() {
@@ -95,7 +95,7 @@ func waitForBaremetalHostState(cl client.Client, key client.ObjectKey, state bmo
 }
 
 func getBaremetalMAPIProviderSpec(cl client.Client) *bmv1alpha1.BareMetalMachineProviderSpec {
-	machineSetList := &mapiv1.MachineSetList{}
+	machineSetList := &mapiv1beta1.MachineSetList{}
 	Expect(cl.List(ctx, machineSetList, client.InNamespace(framework.MAPINamespace))).To(Succeed())
 
 	Expect(machineSetList.Items).ToNot(HaveLen(0))

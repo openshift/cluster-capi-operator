@@ -24,7 +24,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 )
 
 // RawExtensionFromInterface marshals the machine provider spec.
@@ -59,7 +59,7 @@ func convertCAPILabelsToMAPILabels(capiLabels map[string]string, machineAPILabel
 
 	for k, v := range capiLabels {
 		// Transform specific node-role label.
-		if strings.HasPrefix(k, clusterv1.NodeRoleLabelPrefix) {
+		if strings.HasPrefix(k, clusterv1beta1.NodeRoleLabelPrefix) {
 			if _, role, found := strings.Cut(k, "/"); found {
 				mapiLabels["machine.openshift.io/cluster-api-machine-type"] = role
 				mapiLabels["machine.openshift.io/cluster-api-machine-role"] = role
@@ -142,7 +142,7 @@ func convertCAPIAnnotationsToMAPIAnnotations(capiAnnotations map[string]string, 
 
 	toNotConvertAnnotations := sets.New(
 		// We want to skip the CAPI paused annotation to be copied over to MAPI.
-		clusterv1.PausedAnnotation,
+		clusterv1beta1.PausedAnnotation,
 	)
 
 	for k, v := range capiAnnotations {
@@ -151,7 +151,7 @@ func convertCAPIAnnotationsToMAPIAnnotations(capiAnnotations map[string]string, 
 			continue
 		}
 
-		if k == clusterv1.DeleteMachineAnnotation {
+		if k == clusterv1beta1.DeleteMachineAnnotation {
 			mapiAnnotations[util.MapiDeleteMachineAnnotation] = v
 			continue
 		}

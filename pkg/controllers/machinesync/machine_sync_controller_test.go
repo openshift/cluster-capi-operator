@@ -44,7 +44,7 @@ import (
 
 	"k8s.io/utils/ptr"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -57,9 +57,9 @@ import (
 var _ = Describe("MachineSyncReconciler", func() {
 	type testCase struct {
 		sourceMapiMachine    *mapiv1beta1.Machine
-		existingCapiMachine  *clusterv1.Machine
-		convertedCapiMachine *clusterv1.Machine
-		expectedCAPIMachine  *clusterv1.Machine
+		existingCapiMachine  *clusterv1beta1.Machine
+		convertedCapiMachine *clusterv1beta1.Machine
+		expectedCAPIMachine  *clusterv1beta1.Machine
 		expectErr            bool
 	}
 
@@ -73,7 +73,7 @@ var _ = Describe("MachineSyncReconciler", func() {
 			}
 
 			reconciler := &MachineSyncReconciler{
-				Client: fake.NewClientBuilder().WithObjects(objs...).WithStatusSubresource(&clusterv1.Machine{}).Build(),
+				Client: fake.NewClientBuilder().WithObjects(objs...).WithStatusSubresource(&clusterv1beta1.Machine{}).Build(),
 			}
 
 			// Update the existing CAPI machine with the created one to populate e.g. resourceVersion.
@@ -89,7 +89,7 @@ var _ = Describe("MachineSyncReconciler", func() {
 				Expect(err).To(HaveOccurred())
 			} else {
 				Expect(err).ToNot(HaveOccurred())
-				gotCAPIMachine := &clusterv1.Machine{}
+				gotCAPIMachine := &clusterv1beta1.Machine{}
 				Expect(reconciler.Client.Get(ctx, client.ObjectKey{Namespace: tc.convertedCapiMachine.Namespace, Name: tc.convertedCapiMachine.Name}, gotCAPIMachine)).To(Succeed())
 
 				tc.expectedCAPIMachine.ResourceVersion = gotCAPIMachine.ResourceVersion
@@ -101,23 +101,23 @@ var _ = Describe("MachineSyncReconciler", func() {
 		Entry("when the MAPI machine does not exist", testCase{
 			sourceMapiMachine:    machinev1resourcebuilder.Machine().WithName("foo").WithNamespace("openshift-machine-api").Build(),
 			existingCapiMachine:  nil,
-			convertedCapiMachine: convertedCapiMachineBuilder.WithAddresses(clusterv1.MachineAddresses{{Address: "1.2.3.4"}}).Build(),
-			expectedCAPIMachine:  convertedCapiMachineBuilder.WithAddresses(clusterv1.MachineAddresses{{Address: "1.2.3.4"}}).Build(),
+			convertedCapiMachine: convertedCapiMachineBuilder.WithAddresses(clusterv1beta1.MachineAddresses{{Address: "1.2.3.4"}}).Build(),
+			expectedCAPIMachine:  convertedCapiMachineBuilder.WithAddresses(clusterv1beta1.MachineAddresses{{Address: "1.2.3.4"}}).Build(),
 			expectErr:            false,
 		}),
 		Entry("when the CAPI machine does exist and the spec only has changes", testCase{
 			sourceMapiMachine: machinev1resourcebuilder.Machine().WithName("foo").WithNamespace("openshift-machine-api").Build(),
 			existingCapiMachine: convertedCapiMachineBuilder.
 				WithLabels(map[string]string{"old-label": "old-value"}).
-				WithAddresses(clusterv1.MachineAddresses{{Address: "1.2.3.4"}}).
+				WithAddresses(clusterv1beta1.MachineAddresses{{Address: "1.2.3.4"}}).
 				Build(),
 			convertedCapiMachine: convertedCapiMachineBuilder.
 				WithLabels(map[string]string{"new-label": "new-value"}).
-				WithAddresses(clusterv1.MachineAddresses{{Address: "1.2.3.4"}}).
+				WithAddresses(clusterv1beta1.MachineAddresses{{Address: "1.2.3.4"}}).
 				Build(),
 			expectedCAPIMachine: convertedCapiMachineBuilder.
 				WithLabels(map[string]string{"new-label": "new-value"}).
-				WithAddresses(clusterv1.MachineAddresses{{Address: "1.2.3.4"}}).
+				WithAddresses(clusterv1beta1.MachineAddresses{{Address: "1.2.3.4"}}).
 				Build(),
 			expectErr: false,
 		}),
@@ -125,28 +125,28 @@ var _ = Describe("MachineSyncReconciler", func() {
 			sourceMapiMachine: machinev1resourcebuilder.Machine().WithName("foo").WithNamespace("openshift-machine-api").Build(),
 			existingCapiMachine: convertedCapiMachineBuilder.
 				WithLabels(map[string]string{"old-label": "old-value"}).
-				WithAddresses(clusterv1.MachineAddresses{{Address: "4.3.2.1"}}).
+				WithAddresses(clusterv1beta1.MachineAddresses{{Address: "4.3.2.1"}}).
 				Build(),
 			convertedCapiMachine: convertedCapiMachineBuilder.
 				WithLabels(map[string]string{"new-label": "new-value"}).
-				WithAddresses(clusterv1.MachineAddresses{{Address: "1.2.3.4"}}).
+				WithAddresses(clusterv1beta1.MachineAddresses{{Address: "1.2.3.4"}}).
 				Build(),
 			expectedCAPIMachine: convertedCapiMachineBuilder.
 				WithLabels(map[string]string{"new-label": "new-value"}).
-				WithAddresses(clusterv1.MachineAddresses{{Address: "1.2.3.4"}}).
+				WithAddresses(clusterv1beta1.MachineAddresses{{Address: "1.2.3.4"}}).
 				Build(),
 			expectErr: false,
 		}),
 		Entry("when no changes are detected", testCase{
 			sourceMapiMachine: machinev1resourcebuilder.Machine().WithName("foo").WithNamespace("openshift-machine-api").Build(),
 			existingCapiMachine: convertedCapiMachineBuilder.
-				WithAddresses(clusterv1.MachineAddresses{{Address: "1.2.3.4"}}).
+				WithAddresses(clusterv1beta1.MachineAddresses{{Address: "1.2.3.4"}}).
 				Build(),
 			convertedCapiMachine: convertedCapiMachineBuilder.
-				WithAddresses(clusterv1.MachineAddresses{{Address: "1.2.3.4"}}).
+				WithAddresses(clusterv1beta1.MachineAddresses{{Address: "1.2.3.4"}}).
 				Build(),
 			expectedCAPIMachine: convertedCapiMachineBuilder.
-				WithAddresses(clusterv1.MachineAddresses{{Address: "1.2.3.4"}}).
+				WithAddresses(clusterv1beta1.MachineAddresses{{Address: "1.2.3.4"}}).
 				Build(),
 			expectErr: false,
 		}),
@@ -166,14 +166,14 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 
 	var mapiMachineSetBuilder machinev1resourcebuilder.MachineSetBuilder
 
-	var capiMachineSet *clusterv1.MachineSet
+	var capiMachineSet *clusterv1beta1.MachineSet
 	var capiMachineSetBuilder clusterv1resourcebuilder.MachineSetBuilder
 
 	var mapiMachineBuilder machinev1resourcebuilder.MachineBuilder
 	var mapiMachine *mapiv1beta1.Machine
 
 	var capiMachineBuilder clusterv1resourcebuilder.MachineBuilder
-	var capiMachine *clusterv1.Machine
+	var capiMachine *clusterv1beta1.Machine
 
 	var capaMachineBuilder awsv1resourcebuilder.AWSMachineBuilder
 	var capaMachine *awsv1.AWSMachine
@@ -243,8 +243,8 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 
 		capaMachineTemplate := capaMachineTemplateBuilder.Build()
 
-		capiMachineTemplate := clusterv1.MachineTemplateSpec{
-			Spec: clusterv1.MachineSpec{
+		capiMachineTemplate := clusterv1beta1.MachineTemplateSpec{
+			Spec: clusterv1beta1.MachineSpec{
 				InfrastructureRef: corev1.ObjectReference{
 					Kind:      capaMachineTemplate.Kind,
 					Name:      capaMachineTemplate.GetName(),
@@ -329,8 +329,8 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 		)
 
 		testutils.CleanupResources(Default, ctx, cfg, k8sClient, capiNamespace.GetName(),
-			&clusterv1.Machine{},
-			&clusterv1.MachineSet{},
+			&clusterv1beta1.Machine{},
+			&clusterv1beta1.MachineSet{},
 			&awsv1.AWSCluster{},
 			&awsv1.AWSMachineTemplate{},
 		)
@@ -380,7 +380,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 				capaMachine = capaMachineBuilder.WithOwnerReferences([]metav1.OwnerReference{
 					{
 						Kind:               machineKind,
-						APIVersion:         clusterv1.GroupVersion.String(),
+						APIVersion:         clusterv1beta1.GroupVersion.String(),
 						Name:               capiMachine.Name,
 						UID:                capiMachine.UID,
 						BlockOwnerDeletion: ptr.To(true),
@@ -462,7 +462,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 			capaMachineBuilder = capaMachineBuilder.WithOwnerReferences([]metav1.OwnerReference{
 				{
 					Kind:               machineKind,
-					APIVersion:         clusterv1.GroupVersion.String(),
+					APIVersion:         clusterv1beta1.GroupVersion.String(),
 					Name:               capiMachine.Name,
 					UID:                capiMachine.UID,
 					BlockOwnerDeletion: ptr.To(true),
@@ -582,7 +582,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 				HaveField("ObjectMeta.OwnerReferences", ContainElement(
 					SatisfyAll(
 						HaveField("Kind", Equal(machineKind)),
-						HaveField("APIVersion", Equal(clusterv1.GroupVersion.String())),
+						HaveField("APIVersion", Equal(clusterv1beta1.GroupVersion.String())),
 						HaveField("Name", Equal(capiMachine.Name)),
 						HaveField("UID", Equal(capiMachine.UID)),
 					))),
@@ -679,7 +679,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 				// then we can Create() on the API server
 				noMachineSetCapaMachineBuilder = noMachineSetCapaMachineBuilder.WithOwnerReferences([]metav1.OwnerReference{{
 					Kind:               machineKind,
-					APIVersion:         clusterv1.GroupVersion.String(),
+					APIVersion:         clusterv1beta1.GroupVersion.String(),
 					Name:               capiMachine.Name,
 					UID:                capiMachine.UID,
 					BlockOwnerDeletion: ptr.To(true),
@@ -736,7 +736,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 				Eventually(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed(), "capi machine set should be able to be created")
 
 				ownerReferencesToCapiMachineSet = []metav1.OwnerReference{{
-					APIVersion:         clusterv1.GroupVersion.String(),
+					APIVersion:         clusterv1beta1.GroupVersion.String(),
 					Kind:               machineSetKind,
 					Name:               capiMachineSet.Name,
 					UID:                capiMachineSet.UID,
@@ -752,7 +752,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 				// we must ensure the CAPA machine exists, with the correct owner ref.
 				capaMachine = capaMachineBuilder.WithOwnerReferences([]metav1.OwnerReference{{
 					Kind:               machineKind,
-					APIVersion:         clusterv1.GroupVersion.String(),
+					APIVersion:         clusterv1beta1.GroupVersion.String(),
 					Name:               capiMachine.Name,
 					UID:                capiMachine.UID,
 					BlockOwnerDeletion: ptr.To(true),
@@ -863,7 +863,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 						Eventually(k.Object(capiMachine), timeout).Should(HaveField("ObjectMeta.OwnerReferences", ContainElement(
 							SatisfyAll(
 								HaveField("Kind", Equal(machineSetKind)),
-								HaveField("APIVersion", Equal(clusterv1.GroupVersion.String())),
+								HaveField("APIVersion", Equal(clusterv1beta1.GroupVersion.String())),
 							),
 						)))
 					})
@@ -880,7 +880,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 						capiInfraMachine := awsv1resourcebuilder.AWSMachine().WithName(mapiMachine.Name).WithNamespace(capiNamespace.Name).Build()
 						Eventually(k.Get(capiInfraMachine), timeout).Should(Succeed(), "should have succeeded getting a CAPI Infra Machine")
 						ownerReferencesOnMachine := []metav1.OwnerReference{{
-							APIVersion:         clusterv1.GroupVersion.String(),
+							APIVersion:         clusterv1beta1.GroupVersion.String(),
 							Kind:               machineKind,
 							Name:               capiMachine.Name,
 							UID:                capiMachine.UID,
@@ -973,7 +973,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 						Eventually(k.Get(capiMachine), timeout).Should(Succeed())
 						Eventually(k.Object(capiMachine), timeout).ShouldNot(
 							HaveField("ObjectMeta.Annotations", ContainElement(
-								HaveKeyWithValue(clusterv1.PausedAnnotation, ""),
+								HaveKeyWithValue(clusterv1beta1.PausedAnnotation, ""),
 							)))
 					})
 
@@ -982,7 +982,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 						Eventually(k.Get(capiInfraMachine), timeout).Should(Succeed())
 						Eventually(k.Object(capiInfraMachine), timeout).ShouldNot(
 							HaveField("ObjectMeta.Annotations", ContainElement(
-								HaveKeyWithValue(clusterv1.PausedAnnotation, ""),
+								HaveKeyWithValue(clusterv1beta1.PausedAnnotation, ""),
 							)))
 					})
 
@@ -1071,7 +1071,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 			capaMachine = capaMachineBuilder.WithOwnerReferences([]metav1.OwnerReference{
 				{
 					Kind:               machineKind,
-					APIVersion:         clusterv1.GroupVersion.String(),
+					APIVersion:         clusterv1beta1.GroupVersion.String(),
 					Name:               capiMachine.Name,
 					UID:                capiMachine.UID,
 					BlockOwnerDeletion: ptr.To(true),
@@ -1345,7 +1345,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 					capaMachine.SetOwnerReferences([]metav1.OwnerReference{
 						{
 							Kind:               machineKind,
-							APIVersion:         clusterv1.GroupVersion.String(),
+							APIVersion:         clusterv1beta1.GroupVersion.String(),
 							Name:               testMachine.Name,
 							UID:                testMachine.UID,
 							BlockOwnerDeletion: ptr.To(true),
@@ -1564,7 +1564,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 
 			It("updating the spec.readinessGates on machines should not be allowed", func() {
 				Eventually(k.Update(capiMachine, func() {
-					capiMachine.Spec.ReadinessGates = []clusterv1.MachineReadinessGate{{ConditionType: "foo"}}
+					capiMachine.Spec.ReadinessGates = []clusterv1beta1.MachineReadinessGate{{ConditionType: "foo"}}
 				}), timeout).Should(MatchError(ContainSubstring(".readinessGates is a forbidden field")))
 			})
 		})

@@ -27,7 +27,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/utils/ptr"
 	ibmpowervsv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 )
 
 var _ = Describe("capi2mapi PowerVS conversion", func() {
@@ -55,14 +55,14 @@ var _ = Describe("capi2mapi PowerVS conversion", func() {
 		WithReady(true).Build()
 
 	type powerVSCAPI2MAPIMachineConversionInput struct {
-		machine            *clusterv1.Machine
+		machine            *clusterv1beta1.Machine
 		powerVSMachineFunc func() *ibmpowervsv1.IBMPowerVSMachine
 		powerVSCluster     *ibmpowervsv1.IBMPowerVSCluster
 		expectedErrors     []string
 	}
 
 	type powerVSCAPI2MAPIMachineSetConversionInput struct {
-		machineSet             *clusterv1.MachineSet
+		machineSet             *clusterv1beta1.MachineSet
 		powerVSMachineTemplate *ibmpowervsv1.IBMPowerVSMachineTemplate
 		powerVSCluster         *ibmpowervsv1.IBMPowerVSCluster
 		expectedErrors         []string
@@ -97,7 +97,7 @@ var _ = Describe("capi2mapi PowerVS conversion", func() {
 				return &pvsMachine
 			},
 			powerVSCluster: powerVSCluster,
-			expectedErrors: []string{"spec.serviceInstance: Invalid value: \"null\": unable to convert service instance, service instance is nil"},
+			expectedErrors: []string{"spec.serviceInstance: Invalid value: null: unable to convert service instance, service instance is nil"},
 		}),
 
 		Entry("With service instance id, without service instance", powerVSCAPI2MAPIMachineConversionInput{
@@ -122,7 +122,7 @@ var _ = Describe("capi2mapi PowerVS conversion", func() {
 				return &pvsMachine
 			},
 			powerVSCluster: powerVSCluster,
-			expectedErrors: []string{"spec.image: Invalid value: \"null\": unable to convert image, image and imageref is nil"},
+			expectedErrors: []string{"spec.image: Invalid value: null: unable to convert image, image and imageref is nil"},
 		}),
 
 		Entry("Without imageref, with image", powerVSCAPI2MAPIMachineConversionInput{
@@ -147,7 +147,7 @@ var _ = Describe("capi2mapi PowerVS conversion", func() {
 				return &pvsMachine
 			},
 			powerVSCluster: powerVSCluster,
-			expectedErrors: []string{"spec.network: Invalid value: v1beta2.IBMPowerVSResourceReference{ID:(*string)(nil), Name:(*string)(nil), RegEx:(*string)(nil)}: unable to convert network to MAPI"},
+			expectedErrors: []string{"spec.network: Invalid value: {}: unable to convert network to MAPI"},
 		}),
 	)
 

@@ -15,14 +15,14 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 	yaml "sigs.k8s.io/yaml"
 )
 
 // createCAPIMachineSet creates a CAPI MachineSet with an AWSMachineTemplate and waits for it to be ready.
-func createCAPIMachineSet(ctx context.Context, cl client.Client, replicas int32, machineSetName string, instanceType string) *clusterv1.MachineSet {
+func createCAPIMachineSet(ctx context.Context, cl client.Client, replicas int32, machineSetName string, instanceType string) *clusterv1beta1.MachineSet {
 	By(fmt.Sprintf("Creating CAPI MachineSet %s with %d replicas", machineSetName, replicas))
 	_, mapiDefaultProviderSpec := getDefaultAWSMAPIProviderSpec()
 	createAWSClient(mapiDefaultProviderSpec.Placement.Region)
@@ -64,7 +64,7 @@ func createMAPIMachineSetWithAuthoritativeAPI(ctx context.Context, cl client.Cli
 	mapiMachineSet, err := mapiframework.CreateMachineSet(cl, machineSetParams)
 	Expect(err).ToNot(HaveOccurred(), "MAPI MachineSet %s creation should succeed", machineSetName)
 
-	capiMachineSet := &clusterv1.MachineSet{
+	capiMachineSet := &clusterv1beta1.MachineSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      machineSetName,
 			Namespace: capiframework.CAPINamespace,
@@ -135,7 +135,7 @@ func verifyMachineSetPausedCondition(machineSet client.Object, authority mapiv1b
 			fmt.Sprintf("Should have the expected Paused condition for MAPI MachineSet %s with authority: %s", ms.Name, authority),
 		)
 
-	case *clusterv1.MachineSet:
+	case *clusterv1beta1.MachineSet:
 		// This is a CAPI MachineSet
 		switch authority {
 		case mapiv1beta1.MachineAuthorityClusterAPI:
@@ -176,7 +176,7 @@ func verifyMachinesetReplicas(machineSet client.Object, replicas int) {
 		Eventually(komega.Object(ms), capiframework.WaitLong, capiframework.RetryLong).Should(
 			HaveField("Status.Replicas", Equal(int32(replicas))),
 			"Should have MAPI MachineSet %q replicas status eventually be %d", ms.Name, replicas)
-	case *clusterv1.MachineSet:
+	case *clusterv1beta1.MachineSet:
 		By(fmt.Sprintf("Verifying CAPI MachineSet status.Replicas is %d", replicas))
 		Eventually(komega.Object(ms), capiframework.WaitLong, capiframework.RetryLong).Should(
 			HaveField("Status.Replicas", Equal(int32(replicas))),
@@ -254,10 +254,10 @@ func updateAWSMachineSetProviderSpec(ctx context.Context, cl client.Client, mapi
 }
 
 // waitForMAPIMachineSetMirrors waits for the corresponding CAPI MachineSet and AWSMachineTemplate mirrors to be created for a MAPI MachineSet.
-func waitForMAPIMachineSetMirrors(cl client.Client, machineSetNameMAPI string) (*clusterv1.MachineSet, *awsv1.AWSMachineTemplate) {
+func waitForMAPIMachineSetMirrors(cl client.Client, machineSetNameMAPI string) (*clusterv1beta1.MachineSet, *awsv1.AWSMachineTemplate) {
 	By(fmt.Sprintf("Verifying there is a CAPI MachineSet mirror and AWSMachineTemplate for MAPI MachineSet %s", machineSetNameMAPI))
 	var err error
-	var capiMachineSet *clusterv1.MachineSet
+	var capiMachineSet *clusterv1beta1.MachineSet
 	var awsMachineTemplate *awsv1.AWSMachineTemplate
 
 	Eventually(func() error {
@@ -277,9 +277,9 @@ func waitForMAPIMachineSetMirrors(cl client.Client, machineSetNameMAPI string) (
 }
 
 // waitForCAPIMachineSetMirror waits for a CAPI MachineSet mirror to be created for a MAPI MachineSet.
-func waitForCAPIMachineSetMirror(cl client.Client, machineName string) *clusterv1.MachineSet {
+func waitForCAPIMachineSetMirror(cl client.Client, machineName string) *clusterv1beta1.MachineSet {
 	By(fmt.Sprintf("Verifying there is a CAPI MachineSet mirror for MAPI MachineSet %s", machineName))
-	var capiMachineSet *clusterv1.MachineSet
+	var capiMachineSet *clusterv1beta1.MachineSet
 	Eventually(func() error {
 		capiMachineSet = capiframework.GetMachineSet(cl, machineName, capiframework.CAPINamespace)
 		if capiMachineSet == nil {
@@ -326,7 +326,7 @@ func createAWSMachineTemplate(ctx context.Context, cl client.Client, originalNam
 }
 
 // updateCAPIMachineSetInfraTemplate updates a CAPI MachineSet's infrastructureRef to point to a new template.
-func updateCAPIMachineSetInfraTemplate(capiMachineSet *clusterv1.MachineSet, newInfraTemplateName string) {
+func updateCAPIMachineSetInfraTemplate(capiMachineSet *clusterv1beta1.MachineSet, newInfraTemplateName string) {
 	By(fmt.Sprintf("Updating CAPI MachineSet %s to point to new InfraTemplate %s", capiMachineSet.Name, newInfraTemplateName))
 	Eventually(komega.Update(capiMachineSet, func() {
 		capiMachineSet.Spec.Template.Spec.InfrastructureRef.Name = newInfraTemplateName
@@ -338,7 +338,7 @@ func updateCAPIMachineSetInfraTemplate(capiMachineSet *clusterv1.MachineSet, new
 }
 
 // cleanupMachineSetTestResources deletes CAPI MachineSets, MAPI MachineSets, and AWSMachineTemplates created during tests.
-func cleanupMachineSetTestResources(ctx context.Context, cl client.Client, capiMachineSets []*clusterv1.MachineSet, awsMachineTemplates []*awsv1.AWSMachineTemplate, mapiMachineSets []*mapiv1beta1.MachineSet) {
+func cleanupMachineSetTestResources(ctx context.Context, cl client.Client, capiMachineSets []*clusterv1beta1.MachineSet, awsMachineTemplates []*awsv1.AWSMachineTemplate, mapiMachineSets []*mapiv1beta1.MachineSet) {
 	for _, ms := range capiMachineSets {
 		if ms == nil {
 			continue
