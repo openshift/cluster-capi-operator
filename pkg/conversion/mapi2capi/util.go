@@ -43,6 +43,13 @@ func ProviderSpecFromRawExtension(platform configv1.PlatformType, rawExtension *
 		}
 
 		return providerConfig, nil
+	case configv1.VSpherePlatformType:
+		providerConfig, err := vSphereProviderSpecFromRawExtension(rawExtension)
+		if err != nil {
+			return nil, fmt.Errorf("unable to parse vSphere providerSpec: %w", err)
+		}
+
+		return providerConfig, nil
 	default:
 		return nil, fmt.Errorf("%w: %s", errUnsupportedPlatform, platform)
 	}
