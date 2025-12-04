@@ -30,6 +30,7 @@ import (
 	"k8s.io/utils/clock"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
+	vspherev1 "sigs.k8s.io/cluster-api-provider-vsphere/apis/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 
 	"github.com/openshift/api/features"
@@ -66,6 +67,7 @@ func initScheme(scheme *runtime.Scheme) {
 	utilruntime.Must(configv1.Install(scheme))
 	utilruntime.Must(awsv1.AddToScheme(scheme))
 	utilruntime.Must(openstackv1.AddToScheme(scheme))
+	utilruntime.Must(vspherev1.AddToScheme(scheme))
 	utilruntime.Must(clusterv1.AddToScheme(scheme))
 }
 
@@ -151,8 +153,8 @@ func checkFeatureGates(ctx context.Context, log logr.Logger, mgr ctrl.Manager) e
 
 func checkPlatformSupported(ctx context.Context, log logr.Logger, platform configv1.PlatformType) {
 	switch platform {
-	case configv1.AWSPlatformType, configv1.OpenStackPlatformType:
-		log.Info("starting controllers", "platform", platform)
+	case configv1.AWSPlatformType, configv1.OpenStackPlatformType, configv1.VSpherePlatformType:
+		klog.Infof("MachineAPIMigration: starting %s controllers", platform)
 
 	default:
 		log.Info("MachineAPIMigration not implemented for platform, nothing to do. Waiting for termination signal.", "platform", platform)
