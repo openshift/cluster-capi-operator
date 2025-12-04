@@ -36,11 +36,12 @@ import (
 )
 
 var (
+	errInvalidPlatformStatus      = errors.New("infrastructure PlatformStatus should not be nil")
 	errUnKnownServiceInstanceType = errors.New("unknown service instance type")
 	errUnKnownNetworkType         = errors.New("unknown network type")
 )
 
-// ensureIBMPowerVSCluster ensures the IBMPowerVS cluster object exists.
+// ensureIBMPowerVSCluster ensures the IBMPowerVSCluster object exists.
 //
 //nolint:funlen
 func (r *InfraClusterController) ensureIBMPowerVSCluster(ctx context.Context, log logr.Logger) (client.Object, error) {
@@ -71,7 +72,7 @@ func (r *InfraClusterController) ensureIBMPowerVSCluster(ctx context.Context, lo
 	}
 
 	if r.Infra.Status.PlatformStatus == nil {
-		return nil, fmt.Errorf("infrastructure PlatformStatus should not be nil: %w", err)
+		return nil, errInvalidPlatformStatus
 	}
 
 	// Derive service instance and network from machine spec

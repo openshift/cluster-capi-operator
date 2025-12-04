@@ -34,8 +34,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 
-	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
-
 	configv1 "github.com/openshift/api/config/v1"
 	mapiv1 "github.com/openshift/api/machine/v1"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
@@ -210,7 +208,7 @@ func (r *InfraClusterController) ensureInfraCluster(ctx context.Context, log log
 
 		infraCluster, err = r.ensureIBMPowerVSCluster(ctx, log)
 		if err != nil {
-			return nil, fmt.Errorf("error ensuring IBMPowerVSCluster: %w", err)
+			return nil, fmt.Errorf("error getting InfraCluster object: %w", err)
 		}
 	case configv1.VSpherePlatformType:
 		var err error
@@ -227,12 +225,12 @@ func (r *InfraClusterController) ensureInfraCluster(ctx context.Context, log log
 			return nil, fmt.Errorf("error getting InfraCluster object: %w", err)
 		}
 	case configv1.OpenStackPlatformType:
-		openstackCluster := &openstackv1.OpenStackCluster{}
-		if err := r.Get(ctx, client.ObjectKey{Namespace: r.CAPINamespace, Name: r.Infra.Status.InfrastructureName}, openstackCluster); err != nil && !kerrors.IsNotFound(err) {
+		var err error
+
+		infraCluster, err = r.ensureOpenStackCluster(ctx, log)
+		if err != nil {
 			return nil, fmt.Errorf("error getting InfraCluster object: %w", err)
 		}
-
-		infraCluster = openstackCluster
 	default:
 		return nil, errPlatformNotSupported
 	}
