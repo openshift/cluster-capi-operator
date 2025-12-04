@@ -281,6 +281,8 @@ func (m *awsMachineAndInfra) toAWSMachine(providerSpec mapiv1beta1.AWSMachinePro
 		SpotMarketOptions: convertAWSSpotMarketOptionsToCAPI(providerSpec.SpotMarketOptions),
 		Subnet:            convertAWSResourceReferenceToCAPI(providerSpec.Subnet),
 		Tenancy:           string(providerSpec.Placement.Tenancy),
+		HostAffinity:      convertAWSHostAffinityToCAPI(providerSpec.HostPlacement),
+		HostID:            convertAWSHostIDToCAPI(providerSpec.HostPlacement),
 		// UncompressedUserData: Not used in OpenShift.
 		MarketType: capiAWSMarketType,
 	}
@@ -477,6 +479,40 @@ func awsMachineToAWSMachineTemplate(awsMachine *awsv1.AWSMachine, name string, n
 }
 
 //////// Conversion helpers
+
+func convertAWSHostAffinityToCAPI(placement *mapiv1beta1.HostPlacement) *string {
+	// Affinity is a ptr.  Even though field is required, API decided to allow it for webhook to be able to have different result message.
+	// We need to make sure placement AND affinity are not nil in order to process.
+	if placement != nil && placement.Affinity != nil {
+		switch *placement.Affinity {
+		case mapiv1beta1.HostAffinityAnyAvailable:
+			return ptr.To("default")
+		case mapiv1beta1.HostAffinityDedicatedHost:
+			return ptr.To("host")
+		default:
+			return nil
+		}
+	}
+
+	return nil
+}
+
+func convertAWSHostIDToCAPI(placement *mapiv1beta1.HostPlacement) *string {
+	if placement != nil && placement.Affinity != nil {
+		switch *placement.Affinity {
+		case mapiv1beta1.HostAffinityAnyAvailable:
+			return nil
+		case mapiv1beta1.HostAffinityDedicatedHost:
+			if placement.DedicatedHost != nil {
+				return ptr.To(placement.DedicatedHost.ID)
+			}
+		default:
+			return nil
+		}
+	}
+
+	return nil
+}
 
 func convertAWSAMIResourceReferenceToCAPI(fldPath *field.Path, amiRef mapiv1beta1.AWSResourceReference) (awsv1.AMIReference, *field.Error) {
 	if amiRef.ARN != nil {
