@@ -17,6 +17,7 @@ package util
 
 import (
 	"reflect"
+	"strings"
 
 	"github.com/go-test/deep"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
@@ -53,6 +54,24 @@ func hasSameState(i *mapiv1beta1.Condition, j *machinev1applyconfigs.ConditionAp
 		i.Status == *j.Status
 }
 
+// normalizeOwnerReferences normalizes owner references by standardizing the API version
+// for Cluster API types. The server might return v1beta1 or v1beta2 depending on the
+// stored version, but they are functionally equivalent. This ensures we don't see
+// spurious diffs due to API version conversion.
+func normalizeOwnerReferences(refs []metav1.OwnerReference) []metav1.OwnerReference {
+	normalized := make([]metav1.OwnerReference, len(refs))
+	for i, ref := range refs {
+		normalized[i] = ref
+		// Normalize Cluster API group versions to v1beta1 for comparison purposes.
+		// The server might store and return v1beta2 while our client uses v1beta1.
+		if strings.HasPrefix(ref.APIVersion, clusterv1beta1.GroupVersion.Group+"/") {
+			normalized[i].APIVersion = clusterv1beta1.GroupVersion.String()
+		}
+	}
+
+	return normalized
+}
+
 // ObjectMetaEqual compares variables a and b,
 // and returns a list of differences, or nil if there are none,
 // for the fields we care about when synchronising MAPI and CAPI Machines.
@@ -78,7 +97,13 @@ func ObjectMetaEqual(a, b metav1.ObjectMeta) map[string]any {
 	// even when its controllers are paused:
 	// https://github.com/kubernetes-sigs/cluster-api/blob/c70dca0fc387b44457c69b71a719132a0d9bed58/internal/controllers/machine/machine_controller.go#L207-L210
 
-	if diffOwnerReferences := deep.Equal(a.OwnerReferences, b.OwnerReferences); len(diffOwnerReferences) > 0 {
+	// Normalize owner references before comparison to avoid spurious diffs due to
+	// API version conversion (v1beta1 vs v1beta2) on the server side.
+	// TODO: Remove this once we have migrated to v1beta2.
+	aOwnerRefs := normalizeOwnerReferences(a.OwnerReferences)
+	bOwnerRefs := normalizeOwnerReferences(b.OwnerReferences)
+
+	if diffOwnerReferences := deep.Equal(aOwnerRefs, bOwnerRefs); len(diffOwnerReferences) > 0 {
 		objectMetaDiff[".ownerReferences"] = diffOwnerReferences
 	}
 
