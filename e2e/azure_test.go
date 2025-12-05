@@ -91,18 +91,20 @@ func createAzureMachineTemplate(ctx context.Context, cl client.Client, mapiProvi
 	Expect(mapiProviderSpec).ToNot(BeNil())
 	Expect(mapiProviderSpec.Subnet).ToNot(BeEmpty())
 	Expect(mapiProviderSpec.AcceleratedNetworking).ToNot(BeNil())
-	Expect(mapiProviderSpec.Image.ResourceID).ToNot(BeEmpty())
 	Expect(mapiProviderSpec.OSDisk.ManagedDisk.StorageAccountType).ToNot(BeEmpty())
 	Expect(mapiProviderSpec.OSDisk.DiskSizeGB).To(BeNumerically(">", 0))
 	Expect(mapiProviderSpec.OSDisk.OSType).ToNot(BeEmpty())
 	Expect(mapiProviderSpec.VMSize).ToNot(BeEmpty())
 
+	// Get Azure credentials secret
 	azure_credentials_secret := corev1.Secret{}
 	azure_credentials_secret_key := types.NamespacedName{Name: "capz-manager-bootstrap-credentials", Namespace: "openshift-cluster-api"}
-	err := cl.Get(context.Background(), azure_credentials_secret_key, &azure_credentials_secret)
+	err := cl.Get(ctx, azure_credentials_secret_key, &azure_credentials_secret)
 	Expect(err).To(BeNil(), "capz-manager-bootstrap-credentials secret should exist")
 	subscriptionID := azure_credentials_secret.Data["azure_subscription_id"]
-	azureImageID := fmt.Sprintf("/subscriptions/%s%s", subscriptionID, mapiProviderSpec.Image.ResourceID)
+
+	// Convert MAPI Image to CAPI Image
+	azureImage := convertMAPIImageToCAPIImage(&mapiProviderSpec.Image, subscriptionID)
 
 	var (
 		identity               azurev1.VMIdentity = azurev1.VMIdentityNone
@@ -128,9 +130,7 @@ func createAzureMachineTemplate(ctx context.Context, cl client.Client, mapiProvi
 				AcceleratedNetworking: &mapiProviderSpec.AcceleratedNetworking,
 			},
 		},
-		Image: &azurev1.Image{
-			ID: &azureImageID,
-		},
+		Image: azureImage,
 		OSDisk: azurev1.OSDisk{
 			DiskSizeGB: &mapiProviderSpec.OSDisk.DiskSizeGB,
 			ManagedDisk: &azurev1.ManagedDiskParameters{
@@ -161,4 +161,36 @@ func createAzureMachineTemplate(ctx context.Context, cl client.Client, mapiProvi
 	}
 
 	return azureMachineTemplate
+}
+
+// convertMAPIImageToCAPIImage converts a MAPI Azure Image to a CAPI Azure Image
+func convertMAPIImageToCAPIImage(mapiImage *mapiv1beta1.Image, subscriptionID []byte) *azurev1.Image {
+	if mapiImage.ResourceID != "" {
+		// Use ResourceID with provided subscription ID
+		azureImageID := fmt.Sprintf("/subscriptions/%s%s", subscriptionID, mapiImage.ResourceID)
+		return &azurev1.Image{ID: &azureImageID}
+	}
+
+	if mapiImage.Publisher != "" && mapiImage.Offer != "" && mapiImage.SKU != "" && mapiImage.Version != "" {
+		// Use marketplace image
+		thirdPartyImage := false
+		if mapiImage.Type == mapiv1beta1.AzureImageTypeMarketplaceWithPlan {
+			thirdPartyImage = true
+		}
+
+		return &azurev1.Image{
+			Marketplace: &azurev1.AzureMarketplaceImage{
+				ImagePlan: azurev1.ImagePlan{
+					Publisher: mapiImage.Publisher,
+					Offer:     mapiImage.Offer,
+					SKU:       mapiImage.SKU,
+				},
+				Version:         mapiImage.Version,
+				ThirdPartyImage: thirdPartyImage,
+			},
+		}
+	}
+
+	// No image specified - let CAPZ use defaults
+	return nil
 }
