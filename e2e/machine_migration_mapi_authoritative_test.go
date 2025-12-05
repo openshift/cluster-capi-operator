@@ -163,6 +163,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				verifyMachineAuthoritative(newMapiMachine, mapiv1beta1.MachineAuthorityMachineAPI)
 				verifyMAPIMachineSynchronizedCondition(newMapiMachine, mapiv1beta1.MachineAuthorityMachineAPI)
 				verifyMachineSynchronizedGeneration(cl, newMapiMachine, mapiv1beta1.MachineAuthorityMachineAPI)
+				verifyMachineSynchronizedAPI(newMapiMachine, mapiv1beta1.MachineAPISynchronized)
 				verifyMachinePausedCondition(newMapiMachine, mapiv1beta1.MachineAuthorityMachineAPI)
 				verifyMachinePausedCondition(newCapiMachine, mapiv1beta1.MachineAuthorityMachineAPI)
 			})
@@ -174,6 +175,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				verifyMachineAuthoritative(newMapiMachine, mapiv1beta1.MachineAuthorityClusterAPI)
 				verifyMAPIMachineSynchronizedCondition(newMapiMachine, mapiv1beta1.MachineAuthorityClusterAPI)
 				verifyMachineSynchronizedGeneration(cl, newMapiMachine, mapiv1beta1.MachineAuthorityClusterAPI)
+				verifyMachineSynchronizedAPI(newMapiMachine, mapiv1beta1.ClusterAPISynchronized)
 				verifyMachinePausedCondition(newMapiMachine, mapiv1beta1.MachineAuthorityClusterAPI)
 				verifyMachinePausedCondition(newCapiMachine, mapiv1beta1.MachineAuthorityClusterAPI)
 			})
@@ -185,6 +187,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				verifyMachineAuthoritative(newMapiMachine, mapiv1beta1.MachineAuthorityMachineAPI)
 				verifyMAPIMachineSynchronizedCondition(newMapiMachine, mapiv1beta1.MachineAuthorityMachineAPI)
 				verifyMachineSynchronizedGeneration(cl, newMapiMachine, mapiv1beta1.MachineAuthorityMachineAPI)
+				verifyMachineSynchronizedAPI(newMapiMachine, mapiv1beta1.MachineAPISynchronized)
 				verifyMachinePausedCondition(newMapiMachine, mapiv1beta1.MachineAuthorityMachineAPI)
 				verifyMachinePausedCondition(newCapiMachine, mapiv1beta1.MachineAuthorityMachineAPI)
 			})
@@ -198,6 +201,87 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				verifyResourceRemoved(&awsv1.AWSMachine{
 					TypeMeta:   metav1.TypeMeta{Kind: "AWSMachine", APIVersion: awsv1.GroupVersion.String()},
 					ObjectMeta: metav1.ObjectMeta{Name: mapiCapiMapiRoundTripName, Namespace: capiframework.CAPINamespace},
+				})
+			})
+		})
+
+		var _ = Describe("Machine Migration Rollback Tests", Ordered, func() {
+			var machineRollbackName = "machine-migration-rollback"
+			var newMapiMachine *mapiv1beta1.Machine
+			var newCapiMachine *clusterv1beta1.Machine
+
+			Context("MAPI -> Migrating -> MAPI rollback", func() {
+				BeforeAll(func() {
+					By("Creating a MAPI machine with spec.authoritativeAPI: MachineAPI")
+					newMapiMachine = createMAPIMachineWithAuthority(ctx, cl, machineRollbackName, mapiv1beta1.MachineAuthorityMachineAPI)
+					verifyMachineRunning(cl, newMapiMachine)
+
+					DeferCleanup(func() {
+						By("Cleaning up machine resources")
+						cleanupMachineResources(
+							ctx,
+							cl,
+							[]*clusterv1beta1.Machine{newCapiMachine},
+							[]*mapiv1beta1.Machine{newMapiMachine},
+						)
+					})
+				})
+
+				It("should create a CAPI mirror machine and verify initial state", func() {
+					newCapiMachine = capiframework.GetMachine(cl, machineRollbackName, capiframework.CAPINamespace)
+					verifyMachineAuthoritative(newMapiMachine, mapiv1beta1.MachineAuthorityMachineAPI)
+					verifyMachineSynchronizedAPI(newMapiMachine, mapiv1beta1.MachineAPISynchronized)
+					verifyMAPIMachineSynchronizedCondition(newMapiMachine, mapiv1beta1.MachineAuthorityMachineAPI)
+					verifyMachinePausedCondition(newMapiMachine, mapiv1beta1.MachineAuthorityMachineAPI)
+					verifyMachinePausedCondition(newCapiMachine, mapiv1beta1.MachineAuthorityMachineAPI)
+				})
+
+				It("should rollback to MachineAPI when migration is cancelled during Migrating state", func() {
+					By("Updating spec.authoritativeAPI: ClusterAPI to initiate migration")
+					updateMachineAuthoritativeAPI(newMapiMachine, mapiv1beta1.MachineAuthorityClusterAPI)
+
+					By("Waiting for the machine to enter Migrating state with SynchronizedAPI showing the source (MachineAPI)")
+					verifyMachineMigrating(newMapiMachine, mapiv1beta1.MachineAPISynchronized)
+
+					By("Cancelling migration by setting spec.authoritativeAPI back to MachineAPI")
+					updateMachineAuthoritativeAPI(newMapiMachine, mapiv1beta1.MachineAuthorityMachineAPI)
+
+					By("Verifying the machine returns to MachineAPI authority")
+					verifyMachineAuthoritative(newMapiMachine, mapiv1beta1.MachineAuthorityMachineAPI)
+
+					By("Verifying SynchronizedAPI is preserved as MachineAPI after rollback")
+					verifyMachineSynchronizedAPI(newMapiMachine, mapiv1beta1.MachineAPISynchronized)
+
+					By("Verifying the machine continues to run normally after rollback")
+					verifyMachineRunning(cl, newMapiMachine)
+
+					By("Verifying paused conditions are correct after rollback")
+					verifyMachinePausedCondition(newMapiMachine, mapiv1beta1.MachineAuthorityMachineAPI)
+					verifyMachinePausedCondition(newCapiMachine, mapiv1beta1.MachineAuthorityMachineAPI)
+				})
+
+				It("should complete a full migration to ClusterAPI after a previous rollback", func() {
+					By("Updating spec.authoritativeAPI: ClusterAPI again")
+					updateMachineAuthoritativeAPI(newMapiMachine, mapiv1beta1.MachineAuthorityClusterAPI)
+
+					By("Verifying migration completes successfully this time")
+					verifyMachineRunning(cl, newCapiMachine)
+					verifyMachineAuthoritative(newMapiMachine, mapiv1beta1.MachineAuthorityClusterAPI)
+					verifyMachineSynchronizedAPI(newMapiMachine, mapiv1beta1.ClusterAPISynchronized)
+					verifyMAPIMachineSynchronizedCondition(newMapiMachine, mapiv1beta1.MachineAuthorityClusterAPI)
+					verifyMachinePausedCondition(newMapiMachine, mapiv1beta1.MachineAuthorityClusterAPI)
+					verifyMachinePausedCondition(newCapiMachine, mapiv1beta1.MachineAuthorityClusterAPI)
+				})
+
+				It("should verify mirror machines are deleted when deleting CAPI machine", func() {
+					By("Deleting CAPI machine")
+					capiframework.DeleteMachines(ctx, cl, capiframework.CAPINamespace, newCapiMachine)
+					verifyResourceRemoved(newMapiMachine)
+					verifyResourceRemoved(newCapiMachine)
+					verifyResourceRemoved(&awsv1.AWSMachine{
+						TypeMeta:   metav1.TypeMeta{Kind: "AWSMachine", APIVersion: awsv1.GroupVersion.String()},
+						ObjectMeta: metav1.ObjectMeta{Name: machineRollbackName, Namespace: capiframework.CAPINamespace},
+					})
 				})
 			})
 		})
