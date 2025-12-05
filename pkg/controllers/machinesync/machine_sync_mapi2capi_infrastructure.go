@@ -263,7 +263,21 @@ func compareCAPIInfraMachines(platform configv1.PlatformType, infraMachine1, inf
 			return nil, errAssertingCAPIAWSMachine
 		}
 
-		if diffSpec := deep.Equal(typedInfraMachine1.Spec, typedinfraMachine2.Spec); len(diffSpec) > 0 {
+		// Create copies to avoid modifying the original objects
+		spec1 := typedInfraMachine1.Spec.DeepCopy()
+		spec2 := typedinfraMachine2.Spec.DeepCopy()
+
+		// Ignore HostAffinity and HostID fields to prevent conversion loops.
+		// CAPA defaults HostAffinity to "host" when not set, which would cause
+		// continuous drift detection.
+		// TODO: These fields will be properly converted
+		// when MAPI HostPlacement feature is stable.
+		spec1.HostAffinity = nil
+		spec1.HostID = nil
+		spec2.HostAffinity = nil
+		spec2.HostID = nil
+
+		if diffSpec := deep.Equal(*spec1, *spec2); len(diffSpec) > 0 {
 			diff[".spec"] = diffSpec
 		}
 

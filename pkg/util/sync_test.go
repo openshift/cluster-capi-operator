@@ -26,6 +26,8 @@ import (
 
 // TestNormalizeOwnerReferences tests the normalizeOwnerReferences function.
 // TODO: Remove this once we have migrated to v1beta2.
+//
+//nolint:funlen
 func TestNormalizeOwnerReferences(t *testing.T) {
 	g := NewWithT(t)
 
@@ -165,6 +167,8 @@ func TestNormalizeOwnerReferences(t *testing.T) {
 
 // TestObjectMetaEqual_OwnerReferences tests the ObjectMetaEqual function for owner references.
 // TODO: Update this once we have migrated to v1beta2.
+//
+//nolint:funlen
 func TestObjectMetaEqual_OwnerReferences(t *testing.T) {
 	g := NewWithT(t)
 
@@ -317,6 +321,7 @@ func TestObjectMetaEqual_OwnerReferences(t *testing.T) {
 				g.Expect(diff).To(BeEmpty(), "Expected no diff but got: %v", diff)
 			} else {
 				g.Expect(diff).NotTo(BeEmpty(), "Expected diff but got none")
+
 				if tt.diffKeyPresent != "" {
 					g.Expect(diff).To(HaveKey(tt.diffKeyPresent))
 				}

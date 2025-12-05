@@ -399,5 +399,4 @@ var _ = Describe("mapi2capi AWS conversion", func() {
 			expectedWarnings:  []string{},
 		}),
 	)
-
 })

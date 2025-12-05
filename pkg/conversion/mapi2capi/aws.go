@@ -267,6 +267,10 @@ func (m *awsMachineAndInfra) toAWSMachine(providerSpec mapiv1beta1.AWSMachinePro
 		// ImageLookupOrg. Not used in OpenShift.
 		// NetworkInterfaces. Not used in OpenShift.
 
+		// TODO: add conversion from MAPI HostPlacement to CAPA HostAffinity and HostID when the MAPA API is finalized.
+		// HostAffinity: not set yet as they are not stable in MAPI yet.
+		// HostID: not set yet as they are not stable in MAPI yet.
+
 		NetworkInterfaceType:    convertNetworkInterfaceType(providerSpec.NetworkInterfaceType),
 		InstanceMetadataOptions: instanceMetadataOptions,
 		InstanceType:            providerSpec.InstanceType,

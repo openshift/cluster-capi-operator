@@ -157,6 +157,7 @@ func (m machineAndAWSMachineAndAWSCluster) toProviderSpec() (*mapiv1beta1.AWSMac
 			Tenancy:          mapaTenancy,
 			Region:           m.awsCluster.Spec.Region,
 		},
+		// HostPlacement: TODO: add conversion from CAPA HostAffinity and HostID to MAPI HostPlacement when the MAPI API is finalized.
 		LoadBalancers:           mapiLoadBalancers,
 		BlockDevices:            convertAWSVolumesToMAPI(m.awsMachine.Spec.RootVolume, m.awsMachine.Spec.NonRootVolumes),
 		SpotMarketOptions:       convertAWSSpotMarketOptionsToMAPI(m.awsMachine.Spec.SpotMarketOptions),
