@@ -1043,7 +1043,7 @@ github.com/onsi/gomega/types
 # github.com/opencontainers/go-digest v1.0.0
 ## explicit; go 1.13
 github.com/opencontainers/go-digest
-# github.com/openshift/api v0.0.0-20251111193948-50e2ece149d7
+# github.com/openshift/api v0.0.0-20251202143230-02f6733e651c => github.com/radekmanak/api v0.0.0-20251204123453-af93e51a025c
 ## explicit; go 1.24.0
 github.com/openshift/api
 github.com/openshift/api/annotations
@@ -1120,7 +1120,7 @@ github.com/openshift/api/template
 github.com/openshift/api/template/v1
 github.com/openshift/api/user
 github.com/openshift/api/user/v1
-# github.com/openshift/client-go v0.0.0-20251015124057-db0dee36e235
+# github.com/openshift/client-go v0.0.0-20251015124057-db0dee36e235 => github.com/radekmanak/client-go v0.0.0-20251205110917-7a3c951f9e15
 ## explicit; go 1.24.0
 github.com/openshift/client-go/config/applyconfigurations/config/v1
 github.com/openshift/client-go/config/applyconfigurations/config/v1alpha1
@@ -2998,3 +2998,5 @@ sigs.k8s.io/yaml/goyaml.v2
 # github.com/openshift/cluster-api-actuator-pkg/testutils => github.com/chrischdi/cluster-api-actuator-pkg/testutils v0.0.0-20251203131133-74d90ddd23c9
 # sigs.k8s.io/cluster-api => sigs.k8s.io/cluster-api v1.11.3
 # sigs.k8s.io/cluster-api-provider-azure => github.com/damdo/cluster-api-provider-azure v0.0.0-20251202084521-c2e0e38d1e0e
+# github.com/openshift/api => github.com/radekmanak/api v0.0.0-20251204123453-af93e51a025c
+# github.com/openshift/client-go => github.com/radekmanak/client-go v0.0.0-20251205110917-7a3c951f9e15
