@@ -56,7 +56,7 @@ func GetAWSMachineTemplateByPrefix(cl client.Client, prefix string, namespace st
 		return nil, nil
 	}
 	templateList := &awsv1.AWSMachineTemplateList{}
-	Eventually(komega.List(templateList, client.InNamespace(namespace))).Should(Succeed(), "failed to list AWSMachineTemplates in namespace %s.", namespace)
+	Eventually(komega.List(templateList, client.InNamespace(namespace)), time.Minute, RetryShort).Should(Succeed(), "failed to list AWSMachineTemplates in namespace %s.", namespace)
 
 	var matches []*awsv1.AWSMachineTemplate
 	for i, t := range templateList.Items {
@@ -81,7 +81,7 @@ func DeleteAWSMachineTemplateByPrefix(ctx context.Context, cl client.Client, pre
 		return nil
 	}
 	templateList := &awsv1.AWSMachineTemplateList{}
-	Eventually(komega.List(templateList, client.InNamespace(namespace))).Should(Succeed(), "failed to list AWSMachineTemplates in namespace %s.", namespace)
+	Eventually(komega.List(templateList, client.InNamespace(namespace)), time.Minute, RetryShort).Should(Succeed(), "failed to list AWSMachineTemplates in namespace %s.", namespace)
 
 	for i := range templateList.Items {
 		if strings.HasPrefix(templateList.Items[i].Name, prefix) {
