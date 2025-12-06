@@ -173,12 +173,12 @@ func verifyMachinesetReplicas(machineSet client.Object, replicas int) {
 	switch ms := machineSet.(type) {
 	case *mapiv1beta1.MachineSet:
 		By(fmt.Sprintf("Verifying MAPI MachineSet status.Replicas is %d", replicas))
-		Eventually(komega.Object(ms), capiframework.WaitLong, capiframework.RetryLong).Should(
+		Eventually(komega.Object(ms), capiframework.WaitOverLong, capiframework.RetryLong).Should(
 			HaveField("Status.Replicas", Equal(int32(replicas))),
 			"Should have MAPI MachineSet %q replicas status eventually be %d", ms.Name, replicas)
 	case *clusterv1beta1.MachineSet:
 		By(fmt.Sprintf("Verifying CAPI MachineSet status.Replicas is %d", replicas))
-		Eventually(komega.Object(ms), capiframework.WaitLong, capiframework.RetryLong).Should(
+		Eventually(komega.Object(ms), capiframework.WaitOverLong, capiframework.RetryLong).Should(
 			HaveField("Status.Replicas", Equal(int32(replicas))),
 			"Should have CAPI MachineSet %q replicas status eventually be %d", ms.Name, replicas)
 	default:
