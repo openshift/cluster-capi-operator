@@ -176,10 +176,34 @@ func (r *CapiInstallerController) reconcile(ctx context.Context, log logr.Logger
 
 // applyProviderComponents applies the provider components to the cluster.
 // It does so by differentiating between static components and dynamic components (i.e. Deployments).
+//
+//nolint:funlen
 func (r *CapiInstallerController) applyProviderComponents(ctx context.Context, components []string) error {
-	componentsFilenames, componentsAssets, deploymentsFilenames, deploymentsAssets, err := getProviderComponents(r.Scheme, components)
+	componentsFilenames, componentsAssets, deploymentsFilenames, deploymentsAssets, customResourceDefinitionFilenames, customResourceDefinitionAssets, err := getProviderComponents(r.Scheme, components)
 	if err != nil {
 		return fmt.Errorf("error getting provider components: %w", err)
+	}
+
+	// For each of the CRD components perform a CRD-specific apply.
+	for _, c := range customResourceDefinitionFilenames {
+		customResourceDefinitionManifest, ok := customResourceDefinitionAssets[c]
+		if !ok {
+			panic("error finding custom resource definition manifest")
+		}
+
+		obj, err := yamlToRuntimeObject(r.Scheme, customResourceDefinitionManifest)
+		if err != nil {
+			return fmt.Errorf("error parsing CAPI provider CRD manifest %q: %w", c, err)
+		}
+
+		crd, ok := obj.(*apiextensionsv1.CustomResourceDefinition)
+		if !ok {
+			return fmt.Errorf("error casting object to CustomResourceDefinition: %w", err)
+		}
+
+		if _, _, err := applyCustomResourceDefinitionV1Improved(ctx, r.APIExtensionsClient.ApiextensionsV1(), events.NewInMemoryRecorder("cluster-capi-operator-capi-installer-apply-client", clock.RealClock{}), crd); err != nil {
+			return fmt.Errorf("error applying CAPI provider CRD %q: %w", crd.Name, err)
+		}
 	}
 
 	// Perform a Direct apply of the static components.
@@ -234,18 +258,21 @@ func (r *CapiInstallerController) applyProviderComponents(ctx context.Context, c
 
 // getProviderComponents parses the provided list of components into a map of filenames and assets.
 // Deployments are handled separately so are returned in a separate map.
-func getProviderComponents(scheme *runtime.Scheme, components []string) ([]string, map[string]string, []string, map[string]string, error) {
+func getProviderComponents(scheme *runtime.Scheme, components []string) ([]string, map[string]string, []string, map[string]string, []string, map[string]string, error) {
 	componentsFilenames := []string{}
 	componentsAssets := make(map[string]string)
 
 	deploymentsFilenames := []string{}
 	deploymentsAssets := make(map[string]string)
 
+	customResourceDefinitionFilenames := []string{}
+	customResourceDefinitionAssets := make(map[string]string)
+
 	for i, m := range components {
 		// Parse the YAML manifests into unstructure objects.
 		u, err := yamlToUnstructured(scheme, m)
 		if err != nil {
-			return nil, nil, nil, nil, fmt.Errorf("error parsing provider component at position %d to unstructured: %w", i, err)
+			return nil, nil, nil, nil, nil, nil, fmt.Errorf("error parsing provider component at position %d to unstructured: %w", i, err)
 		}
 
 		name := fmt.Sprintf("%s/%s/%s - %s",
@@ -255,17 +282,21 @@ func getProviderComponents(scheme *runtime.Scheme, components []string) ([]strin
 			getResourceName(u.GetNamespace(), u.GetName()),
 		)
 
-		// Divide manifests into static vs deployment components.
-		if u.GroupVersionKind().Kind == "Deployment" {
+		// Divide manifests into static vs deployment vs crd components.
+		switch u.GroupVersionKind().Kind {
+		case "Deployment":
 			deploymentsFilenames = append(deploymentsFilenames, name)
 			deploymentsAssets[name] = m
-		} else {
+		case "CustomResourceDefinition":
+			customResourceDefinitionFilenames = append(customResourceDefinitionFilenames, name)
+			customResourceDefinitionAssets[name] = m
+		default:
 			componentsFilenames = append(componentsFilenames, name)
 			componentsAssets[name] = m
 		}
 	}
 
-	return componentsFilenames, componentsAssets, deploymentsFilenames, deploymentsAssets, nil
+	return componentsFilenames, componentsAssets, deploymentsFilenames, deploymentsAssets, customResourceDefinitionFilenames, customResourceDefinitionAssets, nil
 }
 
 // setAvailableCondition sets the ClusterOperator status condition to Available.
