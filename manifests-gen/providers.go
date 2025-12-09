@@ -110,20 +110,13 @@ func (p *provider) writeProviderComponentsToManifest(fileName string, objs []uns
 }
 
 // writeProviderCustomizedComponents writes the customized infrastructure components to allow for code review
-func (p *provider) writeProviderCustomizedComponents(resourceMap map[resourceKey][]unstructured.Unstructured) error {
-	crds, err := utilyaml.FromUnstructured(resourceMap[crdKey])
+func (p *provider) writeProviderCustomizedComponents(resources []unstructured.Unstructured) error {
+	manifests, err := utilyaml.FromUnstructured(resources)
 	if err != nil {
 		return fmt.Errorf("error converting unstructured object to YAML: %w", err)
 	}
 
-	other, err := utilyaml.FromUnstructured(resourceMap[otherKey])
-	if err != nil {
-		return fmt.Errorf("error converting unstructured object to YAML: %w", err)
-	}
-
-	combined := utilyaml.JoinYaml(crds, other)
-
-	return os.WriteFile(path.Join(*basePath, "openshift", customizedComponentsFilename), ensureNewLine(combined), 0600)
+	return os.WriteFile(path.Join(*basePath, "openshift", customizedComponentsFilename), ensureNewLine(manifests), 0600)
 }
 
 // writeProviderComponentsConfigmap allows to write provider components to the provider (transport) ConfigMap.
@@ -237,7 +230,7 @@ func importProvider(p provider) error {
 	if initialProviderName == powerVSProvider {
 		p.Name = powerVSProvider
 	}
-	resourceMap := processObjects(p.components.Objs(), p.Name)
+	resources := processObjects(p.components.Objs(), p.Name)
 
 	// Write RBAC components to manifests, they will be managed by CVO
 	if p.Name == powerVSProvider {
@@ -245,25 +238,14 @@ func importProvider(p provider) error {
 	}
 
 	// Write modified infrastructure components to allow for code review.
-	if err := p.writeProviderCustomizedComponents(resourceMap); err != nil {
+	if err := p.writeProviderCustomizedComponents(resources); err != nil {
 		return fmt.Errorf("error writing %v file: %w", customizedComponentsFilename, err)
 	}
 
 	// Store provider components in the provider ConfigMap.
 	cmFileName := fmt.Sprintf("%s04_cm.%s-%s.yaml", manifestPrefix, strings.ToLower(p.providerTypeName()), p.Name)
-	if err := p.writeProviderComponentsConfigmap(cmFileName, resourceMap[otherKey]); err != nil {
+	if err := p.writeProviderComponentsConfigmap(cmFileName, resources); err != nil {
 		return fmt.Errorf("error writing provider ConfigMap: %w", err)
-	}
-
-	// Optionally write a separate CRD manifest file,
-	// to apply CRDs directly via CVO rather than through the cluster-capi-operator,
-	// useful in cases where the platform is not supported but some CRDs are needed
-	// by other OCP operators other than the cluster-capi-operator.
-	if len(resourceMap[crdKey]) > 0 {
-		cmFileName := fmt.Sprintf("%s04_crd.%s-%s.yaml", manifestPrefix, strings.ToLower(p.providerTypeName()), p.Name)
-		if err := p.writeProviderComponentsToManifest(cmFileName, resourceMap[crdKey]); err != nil {
-			return fmt.Errorf("error writing provider CRDs: %w", err)
-		}
 	}
 
 	return nil
