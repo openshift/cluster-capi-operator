@@ -23,7 +23,7 @@ import (
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	machinev1applyconfigs "github.com/openshift/client-go/machine/applyconfigurations/machine/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -64,8 +64,8 @@ func normalizeOwnerReferences(refs []metav1.OwnerReference) []metav1.OwnerRefere
 		normalized[i] = ref
 		// Normalize Cluster API group versions to v1beta1 for comparison purposes.
 		// The server might store and return v1beta2 while our client uses v1beta1.
-		if strings.HasPrefix(ref.APIVersion, clusterv1beta1.GroupVersion.Group+"/") {
-			normalized[i].APIVersion = clusterv1beta1.GroupVersion.String()
+		if strings.HasPrefix(ref.APIVersion, clusterv1.GroupVersion.Group+"/") {
+			normalized[i].APIVersion = clusterv1.GroupVersion.String()
 		}
 	}
 
@@ -113,7 +113,7 @@ func ObjectMetaEqual(a, b metav1.ObjectMeta) map[string]any {
 // CAPIMachineSetStatusEqual compares variables a and b,
 // and returns a list of differences, or nil if there are none,
 // for the fields we care about when synchronising MAPI and CAPI Machines.
-func CAPIMachineSetStatusEqual(a, b clusterv1beta1.MachineSetStatus) map[string]any {
+func CAPIMachineSetStatusEqual(a, b clusterv1.MachineSetStatus) map[string]any {
 	diff := map[string]any{}
 
 	if diffReadyReplicas := deep.Equal(a.ReadyReplicas, b.ReadyReplicas); len(diffReadyReplicas) > 0 {
@@ -124,45 +124,53 @@ func CAPIMachineSetStatusEqual(a, b clusterv1beta1.MachineSetStatus) map[string]
 		diff[".availableReplicas"] = diffAvailableReplicas
 	}
 
-	if diffFullyLabeledReplicas := deep.Equal(a.FullyLabeledReplicas, b.FullyLabeledReplicas); len(diffFullyLabeledReplicas) > 0 {
-		diff[".fullyLabeledReplicas"] = diffFullyLabeledReplicas
+	// Required to compare the v1beta1 fields.
+	if a.Deprecated == nil {
+		a.Deprecated = &clusterv1.MachineSetDeprecatedStatus{}
 	}
 
-	if diffFailureReason := deep.Equal(a.FailureReason, b.FailureReason); len(diffFailureReason) > 0 {
-		diff[".failureReason"] = diffFailureReason
+	if b.Deprecated == nil {
+		b.Deprecated = &clusterv1.MachineSetDeprecatedStatus{}
 	}
 
-	if diffFailureMessage := deep.Equal(a.FailureMessage, b.FailureMessage); len(diffFailureMessage) > 0 {
-		diff[".failureMessage"] = diffFailureMessage
+	if a.Deprecated.V1Beta1 == nil {
+		a.Deprecated.V1Beta1 = &clusterv1.MachineSetV1Beta1DeprecatedStatus{}
 	}
 
-	if diffConditions := compareCAPIV1Beta1Conditions(a.Conditions, b.Conditions); len(diffConditions) > 0 {
+	if b.Deprecated.V1Beta1 == nil {
+		b.Deprecated.V1Beta1 = &clusterv1.MachineSetV1Beta1DeprecatedStatus{}
+	}
+
+	if diffFullyLabeledReplicas := deep.Equal(a.Deprecated.V1Beta1.FullyLabeledReplicas, b.Deprecated.V1Beta1.FullyLabeledReplicas); len(diffFullyLabeledReplicas) > 0 {
+		diff[".deprecated.v1Beta1.fullyLabeledReplicas"] = diffFullyLabeledReplicas
+	}
+
+	if diffFailureReason := deep.Equal(a.Deprecated.V1Beta1.FailureReason, b.Deprecated.V1Beta1.FailureReason); len(diffFailureReason) > 0 {
+		diff[".deprecated.v1Beta1.failureReason"] = diffFailureReason
+	}
+
+	if diffFailureMessage := deep.Equal(a.Deprecated.V1Beta1.FailureMessage, b.Deprecated.V1Beta1.FailureMessage); len(diffFailureMessage) > 0 {
+		diff[".deprecated.v1Beta1.failureMessage"] = diffFailureMessage
+	}
+
+	if diffConditions := compareCAPIV1Beta1Conditions(a.Deprecated.V1Beta1.Conditions, b.Deprecated.V1Beta1.Conditions); len(diffConditions) > 0 {
+		diff[".deprecated.v1Beta1.conditions"] = diffConditions
+	}
+
+	if diffUpToDateReplicas := deep.Equal(a.UpToDateReplicas, b.UpToDateReplicas); len(diffUpToDateReplicas) > 0 {
+		diff[".upToDateReplicas"] = diffUpToDateReplicas
+	}
+
+	if diffAvailableReplicas := deep.Equal(a.AvailableReplicas, b.AvailableReplicas); len(diffAvailableReplicas) > 0 {
+		diff[".availableReplicas"] = diffAvailableReplicas
+	}
+
+	if diffReadyReplicas := deep.Equal(a.ReadyReplicas, b.ReadyReplicas); len(diffReadyReplicas) > 0 {
+		diff[".readyReplicas"] = diffReadyReplicas
+	}
+
+	if diffConditions := compareCAPIV1Beta2Conditions(a.Conditions, b.Conditions); len(diffConditions) > 0 {
 		diff[".conditions"] = diffConditions
-	}
-
-	// Compare the v1beta2 fields.
-	if a.V1Beta2 == nil {
-		a.V1Beta2 = &clusterv1beta1.MachineSetV1Beta2Status{}
-	}
-
-	if b.V1Beta2 == nil {
-		b.V1Beta2 = &clusterv1beta1.MachineSetV1Beta2Status{}
-	}
-
-	if diffUpToDateReplicas := deep.Equal(a.V1Beta2.UpToDateReplicas, b.V1Beta2.UpToDateReplicas); len(diffUpToDateReplicas) > 0 {
-		diff[".v1beta2.upToDateReplicas"] = diffUpToDateReplicas
-	}
-
-	if diffAvailableReplicas := deep.Equal(a.V1Beta2.AvailableReplicas, b.V1Beta2.AvailableReplicas); len(diffAvailableReplicas) > 0 {
-		diff[".v1beta2.availableReplicas"] = diffAvailableReplicas
-	}
-
-	if diffReadyReplicas := deep.Equal(a.V1Beta2.ReadyReplicas, b.V1Beta2.ReadyReplicas); len(diffReadyReplicas) > 0 {
-		diff[".v1beta2.readyReplicas"] = diffReadyReplicas
-	}
-
-	if diffConditions := compareCAPIV1Beta2Conditions(a.V1Beta2.Conditions, b.V1Beta2.Conditions); len(diffConditions) > 0 {
-		diff[".v1beta2.conditions"] = diffConditions
 	}
 
 	return diff
@@ -171,15 +179,32 @@ func CAPIMachineSetStatusEqual(a, b clusterv1beta1.MachineSetStatus) map[string]
 // CAPIMachineStatusEqual compares variables a and b,
 // and returns a list of differences, or nil if there are none,
 // for the fields we care about when synchronising CAPI and MAPI Machines.
-func CAPIMachineStatusEqual(a, b clusterv1beta1.MachineStatus) map[string]any {
+func CAPIMachineStatusEqual(a, b clusterv1.MachineStatus) map[string]any {
 	diff := map[string]any{}
 
-	if diffFailureReason := deep.Equal(a.FailureReason, b.FailureReason); len(diffFailureReason) > 0 {
-		diff[".failureReason"] = diffFailureReason
+	// Required to compare the v1beta1 fields.
+	if a.Deprecated == nil {
+		a.Deprecated = &clusterv1.MachineDeprecatedStatus{}
 	}
 
-	if diffFailureMessage := deep.Equal(a.FailureMessage, b.FailureMessage); len(diffFailureMessage) > 0 {
-		diff[".failureMessage"] = diffFailureMessage
+	if b.Deprecated == nil {
+		b.Deprecated = &clusterv1.MachineDeprecatedStatus{}
+	}
+
+	if a.Deprecated.V1Beta1 == nil {
+		a.Deprecated.V1Beta1 = &clusterv1.MachineV1Beta1DeprecatedStatus{}
+	}
+
+	if b.Deprecated.V1Beta1 == nil {
+		b.Deprecated.V1Beta1 = &clusterv1.MachineV1Beta1DeprecatedStatus{}
+	}
+
+	if diffFailureReason := deep.Equal(a.Deprecated.V1Beta1.FailureReason, b.Deprecated.V1Beta1.FailureReason); len(diffFailureReason) > 0 {
+		diff[".deprecated.v1Beta1.failureReason"] = diffFailureReason
+	}
+
+	if diffFailureMessage := deep.Equal(a.Deprecated.V1Beta1.FailureMessage, b.Deprecated.V1Beta1.FailureMessage); len(diffFailureMessage) > 0 {
+		diff[".deprecated.v1Beta1.failureMessage"] = diffFailureMessage
 	}
 
 	if diffLastUpdated := deep.Equal(a.LastUpdated, b.LastUpdated); len(diffLastUpdated) > 0 {
@@ -194,12 +219,8 @@ func CAPIMachineStatusEqual(a, b clusterv1beta1.MachineStatus) map[string]any {
 		diff[".addresses"] = diffAddresses
 	}
 
-	if diffBootstrapReady := deep.Equal(a.BootstrapReady, b.BootstrapReady); len(diffBootstrapReady) > 0 {
-		diff[".bootstrapReady"] = diffBootstrapReady
-	}
-
-	if diffInfrastructureReady := deep.Equal(a.InfrastructureReady, b.InfrastructureReady); len(diffInfrastructureReady) > 0 {
-		diff[".infrastructureReady"] = diffInfrastructureReady
+	if diffInitialization := deep.Equal(a.Initialization, b.Initialization); len(diffInitialization) > 0 {
+		diff[".initialization"] = diffInitialization
 	}
 
 	if diffNodeInfo := deep.Equal(a.NodeInfo, b.NodeInfo); len(diffNodeInfo) > 0 {
@@ -210,21 +231,12 @@ func CAPIMachineStatusEqual(a, b clusterv1beta1.MachineStatus) map[string]any {
 		diff[".nodeRef"] = diffNodeRef
 	}
 
-	if diffConditions := compareCAPIV1Beta1Conditions(a.Conditions, b.Conditions); len(diffConditions) > 0 {
+	if diffConditions := compareCAPIV1Beta1Conditions(a.Deprecated.V1Beta1.Conditions, b.Deprecated.V1Beta1.Conditions); len(diffConditions) > 0 {
+		diff[".deprecated.v1Beta1.conditions"] = diffConditions
+	}
+
+	if diffConditions := compareCAPIV1Beta2Conditions(a.Conditions, b.Conditions); len(diffConditions) > 0 {
 		diff[".conditions"] = diffConditions
-	}
-
-	// Compare the v1beta2 fields.
-	if a.V1Beta2 == nil {
-		a.V1Beta2 = &clusterv1beta1.MachineV1Beta2Status{}
-	}
-
-	if b.V1Beta2 == nil {
-		b.V1Beta2 = &clusterv1beta1.MachineV1Beta2Status{}
-	}
-
-	if diffConditions := compareCAPIV1Beta2Conditions(a.V1Beta2.Conditions, b.V1Beta2.Conditions); len(diffConditions) > 0 {
-		diff[".v1beta2.conditions"] = diffConditions
 	}
 
 	return diff
@@ -270,7 +282,7 @@ func MAPIMachineStatusEqual(a, b mapiv1beta1.MachineStatus) map[string]any {
 // compareCAPIV1Beta1Conditions compares variables a and b,
 // and returns a list of differences, or nil if there are none,
 // for the fields we care about when synchronising CAPI v1beta1 and MAPI.
-func compareCAPIV1Beta1Conditions(a, b []clusterv1beta1.Condition) []string {
+func compareCAPIV1Beta1Conditions(a, b []clusterv1.Condition) []string {
 	diff := []string{}
 	// Compare the conditions one by one.
 	// Ignore the differences in LastTransitionTime.

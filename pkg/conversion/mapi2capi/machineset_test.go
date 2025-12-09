@@ -27,7 +27,8 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/test/matchers"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	"k8s.io/utils/ptr"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 )
 
 var _ = Describe("mapi2capi MachineSet conversion", func() {
@@ -119,78 +120,78 @@ var _ = Describe("mapi2capi MachineSet Status Conversion", func() {
 
 			capiStatus := convertMAPIMachineSetToCAPIMachineSetStatus(mapiMachineSet, metav1.LabelSelector{})
 
-			Expect(capiStatus.Replicas).To(Equal(int32(5)))
-			Expect(capiStatus.FullyLabeledReplicas).To(Equal(int32(5)))
-			Expect(capiStatus.ReadyReplicas).To(Equal(int32(4)))
-			Expect(capiStatus.AvailableReplicas).To(Equal(int32(3)))
-			Expect(capiStatus.FailureReason).To(HaveValue(BeEquivalentTo(mapiv1beta1.MachineSetStatusError("InvalidConfiguration"))))
-			Expect(capiStatus.FailureMessage).To(HaveValue(BeEquivalentTo("Test error message")))
-			Expect(capiStatus.Conditions).To(SatisfyAll(
-				ContainElement(matchers.MatchCAPICondition(clusterv1beta1.Condition{
+			Expect(capiStatus.Replicas).To(Equal(ptr.To(int32(5))))
+			Expect(capiStatus.Deprecated.V1Beta1.FullyLabeledReplicas).To(Equal(int32(5)))
+			Expect(ptr.Deref(capiStatus.ReadyReplicas, 0)).To(Equal(int32(4)))
+			Expect(ptr.Deref(capiStatus.AvailableReplicas, 0)).To(Equal(int32(3)))
+			Expect(capiStatus.Deprecated.V1Beta1.FailureReason).To(HaveValue(BeEquivalentTo(mapiv1beta1.MachineSetStatusError("InvalidConfiguration"))))
+			Expect(capiStatus.Deprecated.V1Beta1.FailureMessage).To(HaveValue(BeEquivalentTo("Test error message")))
+			Expect(capiStatus.Deprecated.V1Beta1.Conditions).To(SatisfyAll(
+				ContainElement(matchers.MatchCAPICondition(clusterv1.Condition{
 					// The Ready condition is computed based on the ReadyReplicas and the Replicas.
 					// In this case they differ, so the condition is false.
-					Type:   clusterv1beta1.ReadyCondition,
+					Type:   clusterv1.ReadyV1Beta1Condition,
 					Status: corev1.ConditionFalse,
 				})),
-				ContainElement(matchers.MatchCAPICondition(clusterv1beta1.Condition{
+				ContainElement(matchers.MatchCAPICondition(clusterv1.Condition{
 					// The Resized condition is computed based on the .Spec.Replicas vs .Status.Replicas.
 					// In this case they are equal, so the condition is true.
-					Type:   clusterv1beta1.ResizedCondition,
+					Type:   clusterv1.ResizedV1Beta1Condition,
 					Status: corev1.ConditionTrue,
 				})),
-				ContainElement(matchers.MatchCAPICondition(clusterv1beta1.Condition{
+				ContainElement(matchers.MatchCAPICondition(clusterv1.Condition{
 					// The MachinesCreated condition is computed based on the .Spec.Replicas vs .Status.Replicas.
 					// In this case they are equal, so the condition is true.
-					Type:   clusterv1beta1.MachinesCreatedCondition,
+					Type:   clusterv1.MachinesCreatedV1Beta1Condition,
 					Status: corev1.ConditionTrue,
 				})),
-				ContainElement(matchers.MatchCAPICondition(clusterv1beta1.Condition{
+				ContainElement(matchers.MatchCAPICondition(clusterv1.Condition{
 					// The MachinesReady condition is computed based on the ReadyReplicas and the Replicas.
 					// In this case they differ, so the condition is false.
-					Type:   clusterv1beta1.MachinesReadyCondition,
+					Type:   clusterv1.MachinesReadyV1Beta1Condition,
 					Status: corev1.ConditionFalse,
 				})),
-				Not(ContainElement(matchers.MatchCAPICondition(clusterv1beta1.Condition{
+				Not(ContainElement(matchers.MatchCAPICondition(clusterv1.Condition{
 					// The Available condition is not copied from MAPI.
 					Type:   "Available",
 					Status: corev1.ConditionTrue,
 				}))),
 			))
-			Expect(capiStatus.V1Beta2.Conditions).To(SatisfyAll(
+			Expect(capiStatus.Conditions).To(SatisfyAll(
 				ContainElement(testutils.MatchCondition(metav1.Condition{
 					// The Deleting condition is computed based on the .Spec.Replicas vs .Status.Replicas.
 					// In this case they are equal, so the condition is false.
-					Type:   clusterv1beta1.MachineSetDeletingV1Beta2Condition,
+					Type:   clusterv1.MachineSetDeletingCondition,
 					Status: metav1.ConditionFalse,
-					Reason: clusterv1beta1.MachineSetNotDeletingV1Beta2Reason,
+					Reason: clusterv1.MachineSetNotDeletingReason,
 				})),
 				ContainElement(testutils.MatchCondition(metav1.Condition{
 					// The ScalingUp condition is computed based on the .Spec.Replicas vs .Status.Replicas.
 					// In this case they are equal, so the condition is false.
-					Type:   clusterv1beta1.MachineSetScalingUpV1Beta2Condition,
+					Type:   clusterv1.MachineSetScalingUpCondition,
 					Status: metav1.ConditionFalse,
-					Reason: clusterv1beta1.MachineSetNotScalingUpV1Beta2Reason,
+					Reason: clusterv1.MachineSetNotScalingUpReason,
 				})),
 				ContainElement(testutils.MatchCondition(metav1.Condition{
 					// The ScalingDown condition is computed based on the .Spec.Replicas vs .Status.Replicas.
 					// In this case they are equal, so the condition is false.
-					Type:   clusterv1beta1.MachineSetScalingDownV1Beta2Condition,
+					Type:   clusterv1.MachineSetScalingDownCondition,
 					Status: metav1.ConditionFalse,
-					Reason: clusterv1beta1.MachineSetNotScalingDownV1Beta2Reason,
+					Reason: clusterv1.MachineSetNotScalingDownReason,
 				})),
 				ContainElement(testutils.MatchCondition(metav1.Condition{
 					// The MachinesReady condition is computed based on the ReadyReplicas and the Replicas.
 					// In this case they differ, so the condition is false.
-					Type:   clusterv1beta1.MachineSetMachinesReadyV1Beta2Condition,
+					Type:   clusterv1.MachineSetMachinesReadyCondition,
 					Status: metav1.ConditionFalse,
-					Reason: clusterv1beta1.MachineSetMachinesNotReadyV1Beta2Reason,
+					Reason: clusterv1.MachineSetMachinesNotReadyReason,
 				})),
 				ContainElement(testutils.MatchCondition(metav1.Condition{
 					// The MachinesUpToDate condition is computed based on the .Spec.Replicas vs .Status.FullyLabeledReplicas.
 					// In this case they are equal, so the condition is true.
-					Type:   clusterv1beta1.MachineSetMachinesUpToDateV1Beta2Condition,
+					Type:   clusterv1.MachineSetMachinesUpToDateCondition,
 					Status: metav1.ConditionTrue,
-					Reason: clusterv1beta1.MachineSetMachinesUpToDateV1Beta2Reason,
+					Reason: clusterv1.MachineSetMachinesUpToDateReason,
 				})),
 				Not(ContainElement(testutils.MatchCondition(metav1.Condition{
 					// The Available condition is not copied from MAPI.
@@ -205,34 +206,34 @@ var _ = Describe("mapi2capi MachineSet Status Conversion", func() {
 
 			capiStatus := convertMAPIMachineSetToCAPIMachineSetStatus(mapiMachineSet, metav1.LabelSelector{})
 
-			Expect(capiStatus.Replicas).To(Equal(int32(0)))
-			Expect(capiStatus.FullyLabeledReplicas).To(Equal(int32(0)))
-			Expect(capiStatus.ReadyReplicas).To(Equal(int32(0)))
-			Expect(capiStatus.AvailableReplicas).To(Equal(int32(0)))
+			Expect(capiStatus.Replicas).To(Equal(ptr.To(int32(0))))
+			Expect(capiStatus.Deprecated.V1Beta1.FullyLabeledReplicas).To(Equal(int32(0)))
+			Expect(capiStatus.ReadyReplicas).To(BeNil())
+			Expect(capiStatus.AvailableReplicas).To(BeNil())
 			Expect(capiStatus.ObservedGeneration).To(Equal(int64(0)))
-			Expect(capiStatus.FailureReason).To(BeNil())
-			Expect(capiStatus.FailureMessage).To(BeNil())
+			Expect(capiStatus.Deprecated.V1Beta1.FailureReason).To(BeNil())
+			Expect(capiStatus.Deprecated.V1Beta1.FailureMessage).To(BeNil())
 			// All four conditions are expected to be false because the MAPI MachineSet status is empty,
 			// so there are no replicas, no ready replicas, and no created machines.
-			Expect(capiStatus.Conditions).To(ConsistOf(
-				matchers.MatchCAPICondition(clusterv1beta1.Condition{
+			Expect(capiStatus.Deprecated.V1Beta1.Conditions).To(ConsistOf(
+				matchers.MatchCAPICondition(clusterv1.Condition{
 					// The Ready condition is false because ReadyReplicas != Replicas (both are zero).
-					Type:   clusterv1beta1.ReadyCondition,
+					Type:   clusterv1.ReadyV1Beta1Condition,
 					Status: corev1.ConditionFalse,
 				}),
-				matchers.MatchCAPICondition(clusterv1beta1.Condition{
+				matchers.MatchCAPICondition(clusterv1.Condition{
 					// The MachinesReady condition is false because ReadyReplicas != Replicas (both are zero).
-					Type:   clusterv1beta1.MachinesReadyCondition,
+					Type:   clusterv1.MachinesReadyV1Beta1Condition,
 					Status: corev1.ConditionFalse,
 				}),
-				matchers.MatchCAPICondition(clusterv1beta1.Condition{
+				matchers.MatchCAPICondition(clusterv1.Condition{
 					// The Resized condition is false because Status.Replicas != Spec.Replicas (both are zero).
-					Type:   clusterv1beta1.ResizedCondition,
+					Type:   clusterv1.ResizedV1Beta1Condition,
 					Status: corev1.ConditionFalse,
 				}),
-				matchers.MatchCAPICondition(clusterv1beta1.Condition{
+				matchers.MatchCAPICondition(clusterv1.Condition{
 					// The MachinesCreated condition is false because Status.Replicas != Spec.Replicas (both are zero).
-					Type:   clusterv1beta1.MachinesCreatedCondition,
+					Type:   clusterv1.MachinesCreatedV1Beta1Condition,
 					Status: corev1.ConditionFalse,
 				}),
 			))
@@ -250,18 +251,18 @@ var _ = Describe("mapi2capi MachineSet Status Conversion", func() {
 
 			capiStatus := convertMAPIMachineSetToCAPIMachineSetStatus(mapiMachineSet, metav1.LabelSelector{})
 
-			Expect(capiStatus.ReadyReplicas).To(Equal(int32(3)))
-			Expect(capiStatus.Replicas).To(Equal(int32(3)))
-			Expect(capiStatus.Conditions).To(ContainElement(matchers.MatchCAPICondition(clusterv1beta1.Condition{
+			Expect(capiStatus.ReadyReplicas).To(Equal(ptr.To(int32(3))))
+			Expect(ptr.Deref(capiStatus.Replicas, 0)).To(Equal(int32(3)))
+			Expect(capiStatus.Deprecated.V1Beta1.Conditions).To(ContainElement(matchers.MatchCAPICondition(clusterv1.Condition{
 				// The Ready condition is computed based on the ReadyReplicas and the Replicas.
 				// In this case they are equal, so the condition is true.
-				Type:   clusterv1beta1.ReadyCondition,
+				Type:   clusterv1.ReadyV1Beta1Condition,
 				Status: corev1.ConditionTrue,
 			})))
-			Expect(capiStatus.Conditions).To(ContainElement(matchers.MatchCAPICondition(clusterv1beta1.Condition{
+			Expect(capiStatus.Deprecated.V1Beta1.Conditions).To(ContainElement(matchers.MatchCAPICondition(clusterv1.Condition{
 				// The MachinesReady condition is computed based on the ReadyReplicas and the Replicas.
 				// In this case they are equal, so the condition is true.
-				Type:   clusterv1beta1.MachinesReadyCondition,
+				Type:   clusterv1.MachinesReadyV1Beta1Condition,
 				Status: corev1.ConditionTrue,
 			})))
 		})
@@ -278,17 +279,17 @@ var _ = Describe("mapi2capi MachineSet Status Conversion", func() {
 
 			capiStatus := convertMAPIMachineSetToCAPIMachineSetStatus(mapiMachineSet, metav1.LabelSelector{})
 
-			Expect(capiStatus.Replicas).To(Equal(int32(1)))
-			Expect(capiStatus.Conditions).To(ContainElement(matchers.MatchCAPICondition(clusterv1beta1.Condition{
+			Expect(capiStatus.Replicas).To(Equal(ptr.To(int32(1))))
+			Expect(capiStatus.Deprecated.V1Beta1.Conditions).To(ContainElement(matchers.MatchCAPICondition(clusterv1.Condition{
 				// The Resized condition is computed based on the .Spec.Replicas vs .Status.Replicas.
 				// In this case they are not equal, so the condition is false.
-				Type:   clusterv1beta1.ResizedCondition,
+				Type:   clusterv1.ResizedV1Beta1Condition,
 				Status: corev1.ConditionFalse,
 			})))
-			Expect(capiStatus.Conditions).To(ContainElement(matchers.MatchCAPICondition(clusterv1beta1.Condition{
+			Expect(capiStatus.Deprecated.V1Beta1.Conditions).To(ContainElement(matchers.MatchCAPICondition(clusterv1.Condition{
 				// The MachinesCreated condition is computed based on the .Spec.Replicas vs .Status.Replicas.
 				// In this case they are not equal, so the condition is false.
-				Type:   clusterv1beta1.MachinesCreatedCondition,
+				Type:   clusterv1.MachinesCreatedV1Beta1Condition,
 				Status: corev1.ConditionFalse,
 			})))
 		})
@@ -304,12 +305,12 @@ var _ = Describe("mapi2capi MachineSet Status Conversion", func() {
 				Build()
 
 			capiStatus := convertMAPIMachineSetToCAPIMachineSetStatus(mapiMachineSet, metav1.LabelSelector{})
-			Expect(capiStatus.V1Beta2.Conditions).To(ContainElement(testutils.MatchCondition(metav1.Condition{
+			Expect(capiStatus.Conditions).To(ContainElement(testutils.MatchCondition(metav1.Condition{
 				// The ScalingUp condition is computed based on the .Spec.Replicas > .Status.Replicas.
 				// In this case, scaling up is true.
-				Type:   clusterv1beta1.MachineSetScalingUpV1Beta2Condition,
+				Type:   clusterv1.MachineSetScalingUpCondition,
 				Status: metav1.ConditionTrue,
-				Reason: clusterv1beta1.MachineSetScalingUpV1Beta2Reason,
+				Reason: clusterv1.MachineSetScalingUpReason,
 			})))
 		})
 
@@ -324,12 +325,12 @@ var _ = Describe("mapi2capi MachineSet Status Conversion", func() {
 				Build()
 
 			capiStatus := convertMAPIMachineSetToCAPIMachineSetStatus(mapiMachineSet, metav1.LabelSelector{})
-			Expect(capiStatus.V1Beta2.Conditions).To(ContainElement(testutils.MatchCondition(metav1.Condition{
+			Expect(capiStatus.Conditions).To(ContainElement(testutils.MatchCondition(metav1.Condition{
 				// The ScalingDown condition is computed based on the .Spec.Replicas < .Status.Replicas.
 				// In this case, scaling down is true.
-				Type:   clusterv1beta1.MachineSetScalingDownV1Beta2Condition,
+				Type:   clusterv1.MachineSetScalingDownCondition,
 				Status: metav1.ConditionTrue,
-				Reason: clusterv1beta1.MachineSetScalingDownV1Beta2Reason,
+				Reason: clusterv1.MachineSetScalingDownReason,
 			})))
 		})
 
@@ -344,12 +345,12 @@ var _ = Describe("mapi2capi MachineSet Status Conversion", func() {
 				Build()
 
 			capiStatus := convertMAPIMachineSetToCAPIMachineSetStatus(mapiMachineSet, metav1.LabelSelector{})
-			Expect(capiStatus.V1Beta2.Conditions).To(ContainElement(testutils.MatchCondition(metav1.Condition{
+			Expect(capiStatus.Conditions).To(ContainElement(testutils.MatchCondition(metav1.Condition{
 				// The MachinesUpToDate condition is computed based on the .Spec.Replicas == .Status.FullyLabeledReplicas.
 				// In this case they are equal, so the condition is true.
-				Type:   clusterv1beta1.MachineSetMachinesUpToDateV1Beta2Condition,
+				Type:   clusterv1.MachineSetMachinesUpToDateCondition,
 				Status: metav1.ConditionTrue,
-				Reason: clusterv1beta1.MachineSetMachinesUpToDateV1Beta2Reason,
+				Reason: clusterv1.MachineSetMachinesUpToDateReason,
 			})))
 		})
 
@@ -364,12 +365,12 @@ var _ = Describe("mapi2capi MachineSet Status Conversion", func() {
 				Build()
 
 			capiStatus := convertMAPIMachineSetToCAPIMachineSetStatus(mapiMachineSet, metav1.LabelSelector{})
-			Expect(capiStatus.V1Beta2.Conditions).To(ContainElement(testutils.MatchCondition(metav1.Condition{
+			Expect(capiStatus.Conditions).To(ContainElement(testutils.MatchCondition(metav1.Condition{
 				// The MachinesUpToDate condition is computed based on the .Spec.Replicas == .Status.FullyLabeledReplicas.
 				// In this case they are not equal, so the condition is false.
-				Type:   clusterv1beta1.MachineSetMachinesUpToDateV1Beta2Condition,
+				Type:   clusterv1.MachineSetMachinesUpToDateCondition,
 				Status: metav1.ConditionFalse,
-				Reason: clusterv1beta1.MachineSetMachinesNotUpToDateV1Beta2Reason,
+				Reason: clusterv1.MachineSetMachinesNotUpToDateReason,
 			})))
 		})
 

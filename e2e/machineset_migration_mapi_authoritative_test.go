@@ -11,7 +11,7 @@ import (
 	mapiframework "github.com/openshift/cluster-api-actuator-pkg/pkg/framework"
 	capiframework "github.com/openshift/cluster-capi-operator/e2e/framework"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
-	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 )
 
@@ -35,7 +35,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 		var existingCAPIMSAuthorityMAPIName = "capi-machineset-authoritativeapi-mapi"
 
 		var awsMachineTemplate *awsv1.AWSMachineTemplate
-		var capiMachineSet *clusterv1beta1.MachineSet
+		var capiMachineSet *clusterv1.MachineSet
 		var mapiMachineSet *mapiv1beta1.MachineSet
 
 		Context("with spec.authoritativeAPI: MachineAPI and existing CAPI MachineSet with same name", func() {
@@ -48,7 +48,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 					cleanupMachineSetTestResources(
 						ctx,
 						cl,
-						[]*clusterv1beta1.MachineSet{capiMachineSet},
+						[]*clusterv1.MachineSet{capiMachineSet},
 						[]*awsv1.AWSMachineTemplate{awsMachineTemplate},
 						[]*mapiv1beta1.MachineSet{},
 					)
@@ -73,7 +73,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 					cleanupMachineSetTestResources(
 						ctx,
 						cl,
-						[]*clusterv1beta1.MachineSet{},
+						[]*clusterv1.MachineSet{},
 						[]*awsv1.AWSMachineTemplate{awsMachineTemplate},
 						[]*mapiv1beta1.MachineSet{mapiMachineSet},
 					)
@@ -107,7 +107,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 		var mapiMSAuthMAPICAPI = "ms-mapi-machine-capi"
 
 		var awsMachineTemplate *awsv1.AWSMachineTemplate
-		var capiMachineSet *clusterv1beta1.MachineSet
+		var capiMachineSet *clusterv1.MachineSet
 		var mapiMachineSet *mapiv1beta1.MachineSet
 		var firstMAPIMachine *mapiv1beta1.Machine
 		var secondMAPIMachine *mapiv1beta1.Machine
@@ -131,7 +131,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 					cleanupMachineSetTestResources(
 						ctx,
 						cl,
-						[]*clusterv1beta1.MachineSet{capiMachineSet},
+						[]*clusterv1.MachineSet{capiMachineSet},
 						[]*awsv1.AWSMachineTemplate{awsMachineTemplate},
 						[]*mapiv1beta1.MachineSet{mapiMachineSet},
 					)
@@ -226,7 +226,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 					cleanupMachineSetTestResources(
 						ctx,
 						cl,
-						[]*clusterv1beta1.MachineSet{capiMachineSet},
+						[]*clusterv1.MachineSet{capiMachineSet},
 						[]*awsv1.AWSMachineTemplate{awsMachineTemplate},
 						[]*mapiv1beta1.MachineSet{mapiMachineSet},
 					)
@@ -264,7 +264,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 	var _ = Describe("Update MachineSets", Ordered, func() {
 		var mapiMSAuthMAPIName = "ms-authoritativeapi-mapi"
 		var mapiMachineSet *mapiv1beta1.MachineSet
-		var capiMachineSet *clusterv1beta1.MachineSet
+		var capiMachineSet *clusterv1.MachineSet
 		var awsMachineTemplate *awsv1.AWSMachineTemplate
 		var newAWSMachineTemplate *awsv1.AWSMachineTemplate
 
@@ -277,7 +277,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				cleanupMachineSetTestResources(
 					ctx,
 					cl,
-					[]*clusterv1beta1.MachineSet{capiMachineSet},
+					[]*clusterv1.MachineSet{capiMachineSet},
 					[]*awsv1.AWSMachineTemplate{awsMachineTemplate, newAWSMachineTemplate},
 					[]*mapiv1beta1.MachineSet{mapiMachineSet},
 				)
@@ -293,14 +293,16 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 			})
 
 			It("should reject update when attempting to change the spec of the CAPI MachineSet mirror", func() {
-				By("Updating CAPI mirror spec (such as DeletePolicy)")
+				By("Updating CAPI mirror spec (such as Deletion.Order)")
 				Eventually(k.Update(capiMachineSet, func() {
-					capiMachineSet.Spec.DeletePolicy = "Oldest"
-				}), capiframework.WaitMedium, capiframework.RetryShort).Should(Succeed(), "Failed to update CAPI MachineSet DeletePolicy")
+					capiMachineSet.Spec.Deletion = clusterv1.MachineSetDeletionSpec{
+						Order: clusterv1.OldestMachineSetDeletionOrder,
+					}
+				}), capiframework.WaitMedium, capiframework.RetryShort).Should(Succeed(), "Failed to update CAPI MachineSet Deletion.Order")
 
 				By("Verifying both MAPI and CAPI MachineSet spec value are restored to original value")
 				Eventually(k.Object(mapiMachineSet), capiframework.WaitShort, capiframework.RetryShort).Should(HaveField("Spec.DeletePolicy", SatisfyAny(BeEmpty(), Equal("Random"))), "Should have DeletePolicy be either empty or 'Random'")
-				Eventually(k.Object(capiMachineSet), capiframework.WaitShort, capiframework.RetryShort).Should(HaveField("Spec.DeletePolicy", Equal("Random")), "Should have DeletePolicy be 'Random'")
+				Eventually(k.Object(capiMachineSet), capiframework.WaitShort, capiframework.RetryShort).Should(HaveField("Spec.Deletion.Order", Equal(clusterv1.RandomMachineSetDeletionOrder)), "Should have Deletion.Order be 'Random'")
 			})
 
 			It("should create a new InfraTemplate when update MAPI MachineSet providerSpec", func() {

@@ -30,6 +30,7 @@ import (
 	ptr "k8s.io/utils/ptr"
 	azurev1 "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
 	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -171,7 +172,7 @@ func (r *InfraClusterController) createAzureClusterIdentity(ctx context.Context,
 			Annotations: map[string]string{
 				// The ManagedBy Annotation is set so CAPI infra providers ignore the InfraCluster object,
 				// as that's managed externally, in this case by the cluster-capi-operator's infracluster controller.
-				clusterv1beta1.ManagedByAnnotation: managedByAnnotationValueClusterCAPIOperatorInfraClusterController,
+				clusterv1.ManagedByAnnotation: managedByAnnotationValueClusterCAPIOperatorInfraClusterController,
 			},
 		},
 		Spec: azurev1.AzureClusterIdentitySpec{
@@ -246,7 +247,7 @@ func (r *InfraClusterController) newAzureCluster(providerSpec *mapiv1beta1.Azure
 			// The ManagedBy Annotation is set so CAPI infra providers ignore the InfraCluster object,
 			// as that's managed externally, in this case by this controller.
 			Annotations: map[string]string{
-				clusterv1beta1.ManagedByAnnotation: managedByAnnotationValueClusterCAPIOperatorInfraClusterController,
+				clusterv1.ManagedByAnnotation: managedByAnnotationValueClusterCAPIOperatorInfraClusterController,
 			},
 		},
 
