@@ -31,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	ibmpowervsv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
 	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 )
@@ -119,7 +120,7 @@ func (m *powerVSMachineAndInfra) toMachineAndInfrastructureMachine() (*clusterv1
 		errs = append(errs, field.Invalid(field.NewPath("infrastructure", "status", "infrastructureName"), m.infrastructure.Status.InfrastructureName, "infrastructure cannot be nil and infrastructure.Status.InfrastructureName cannot be empty"))
 	} else {
 		capiMachine.Spec.ClusterName = m.infrastructure.Status.InfrastructureName
-		capiMachine.Labels[clusterv1beta1.ClusterNameLabel] = m.infrastructure.Status.InfrastructureName
+		capiMachine.Labels[clusterv1.ClusterNameLabel] = m.infrastructure.Status.InfrastructureName
 	}
 
 	// The InfraMachine should always have the same labels and annotations as the Machine.
@@ -177,7 +178,7 @@ func (m *powerVSMachineSetAndInfra) ToMachineSetAndMachineTemplate() (*clusterv1
 	} else {
 		powerVSMachineSet.Spec.Template.Spec.ClusterName = m.infrastructure.Status.InfrastructureName
 		powerVSMachineSet.Spec.ClusterName = m.infrastructure.Status.InfrastructureName
-		powerVSMachineSet.Labels[clusterv1beta1.ClusterNameLabel] = m.infrastructure.Status.InfrastructureName
+		powerVSMachineSet.Labels[clusterv1.ClusterNameLabel] = m.infrastructure.Status.InfrastructureName
 	}
 
 	if len(errs) > 0 {

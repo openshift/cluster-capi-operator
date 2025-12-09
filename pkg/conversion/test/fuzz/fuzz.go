@@ -45,6 +45,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 )
 
 const powerVSMachineKind = "IBMPowerVSMachine"
@@ -491,7 +492,7 @@ func CAPIMachineFuzzerFuncs(providerIDFuzz StringFuzzer, infraKind, infraAPIVers
 				if m.Labels == nil {
 					m.Labels = make(map[string]string)
 				}
-				m.Labels[clusterv1beta1.ClusterNameLabel] = clusterName
+				m.Labels[clusterv1.ClusterNameLabel] = clusterName
 
 				// The reference from a Machine to the InfraMachine should
 				// always use the same name and namespace as the Machine itself.
@@ -542,7 +543,7 @@ func CAPIMachineSetFuzzerFuncs(infraTemplateKind, infraAPIVersion, clusterName s
 				if t.Labels == nil {
 					t.Labels = make(map[string]string)
 				}
-				t.Labels[clusterv1beta1.ClusterNameLabel] = clusterName
+				t.Labels[clusterv1.ClusterNameLabel] = clusterName
 			},
 			func(m *clusterv1beta1.MachineSetSpec, c randfill.Continue) {
 				c.FillNoCustom(m)
@@ -594,7 +595,7 @@ func CAPIMachineSetFuzzerFuncs(infraTemplateKind, infraAPIVersion, clusterName s
 				if m.Labels == nil {
 					m.Labels = make(map[string]string)
 				}
-				m.Labels[clusterv1beta1.ClusterNameLabel] = clusterName
+				m.Labels[clusterv1.ClusterNameLabel] = clusterName
 
 				// The reference from a MachineSet to the InfraMachine should
 				// always use the same name and namespace as the Machine itself.
