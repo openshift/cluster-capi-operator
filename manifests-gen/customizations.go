@@ -18,12 +18,6 @@ import (
 
 type resourceKey string
 
-const (
-	crdKey                                                            resourceKey = "crds"
-	otherKey                                                          resourceKey = "other"
-	managedByAnnotationValueClusterCAPIOperatorInfraClusterController             = "cluster-capi-operator-infracluster-controller"
-)
-
 var (
 	openshiftAnnotations = map[string]string{
 		"exclude.release.openshift.io/internal-openshift-hosted":      "true",
@@ -45,10 +39,8 @@ var (
 	featureSetAnnotationKey   = "release.openshift.io/feature-set"
 )
 
-func processObjects(objs []unstructured.Unstructured, providerName string) map[resourceKey][]unstructured.Unstructured {
-	resourceMap := map[resourceKey][]unstructured.Unstructured{}
+func processObjects(objs []unstructured.Unstructured, providerName string) []unstructured.Unstructured {
 	providerConfigMapObjs := []unstructured.Unstructured{}
-	crdObjs := []unstructured.Unstructured{}
 
 	objs = addInfraClusterProtectionPolicy(objs, providerName)
 
@@ -70,19 +62,8 @@ func processObjects(objs []unstructured.Unstructured, providerName string) map[r
 		case "CustomResourceDefinition":
 			replaceCertManagerAnnotations(&obj)
 			setOpenShiftAnnotations(obj, true)
-			// Apply NoUpgrade annotations unless IPAM CRDs,
-			// as those are in General Availability.
-			if !isCRDGroup(&obj, "ipam.cluster.x-k8s.io") {
-				setNoUpgradeAnnotations(obj)
-			}
-			// Store Core CAPI CRDs in their own manifest to get them applied by CVO directly.
-			// We want these to be installed independently from whether the cluster-capi-operator is enabled,
-			// as other Openshift components rely on them.
-			if providerName == coreCAPIProvider {
-				crdObjs = append(crdObjs, obj)
-			} else {
-				providerConfigMapObjs = append(providerConfigMapObjs, obj)
-			}
+			setNoUpgradeAnnotations(obj)
+			providerConfigMapObjs = append(providerConfigMapObjs, obj)
 		case "Service":
 			replaceCertMangerServiceSecret(&obj, serviceSecretNames)
 			setOpenShiftAnnotations(obj, true)
@@ -105,10 +86,7 @@ func processObjects(objs []unstructured.Unstructured, providerName string) map[r
 		}
 	}
 
-	resourceMap[crdKey] = crdObjs
-	resourceMap[otherKey] = providerConfigMapObjs
-
-	return resourceMap
+	return providerConfigMapObjs
 }
 
 func setOpenShiftAnnotations(obj unstructured.Unstructured, merge bool) {
