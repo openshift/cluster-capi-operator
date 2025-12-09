@@ -1144,16 +1144,17 @@ github.com/openshift/client-go/machine/applyconfigurations/internal
 github.com/openshift/client-go/machine/applyconfigurations/machine/v1beta1
 github.com/openshift/client-go/operator/applyconfigurations/internal
 github.com/openshift/client-go/operator/applyconfigurations/operator/v1
-# github.com/openshift/cluster-api-actuator-pkg v0.0.0-20251203134942-d9bd7b8593f3 => github.com/chrischdi/cluster-api-actuator-pkg v0.0.0-20251203131133-74d90ddd23c9
+# github.com/openshift/cluster-api-actuator-pkg v0.0.0-20251203134942-d9bd7b8593f3 => github.com/openshift/cluster-api-actuator-pkg v0.0.0-20251212150432-4a60119d9691
 ## explicit; go 1.24.0
 github.com/openshift/cluster-api-actuator-pkg/pkg/framework
 github.com/openshift/cluster-api-actuator-pkg/pkg/framework/gatherer
-# github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0 => github.com/chrischdi/cluster-api-actuator-pkg/testutils v0.0.0-20251203131133-74d90ddd23c9
+# github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0 => github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20251212150432-4a60119d9691
 ## explicit; go 1.24.0
 github.com/openshift/cluster-api-actuator-pkg/testutils
 github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder
 github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/apps/v1
 github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/cluster-api/core/v1beta1
+github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/cluster-api/core/v1beta2
 github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/cluster-api/infrastructure/v1beta1
 github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/cluster-api/infrastructure/v1beta2
 github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/config/v1
@@ -2740,24 +2741,32 @@ sigs.k8s.io/cluster-api/cmd/clusterctl/client/yamlprocessor
 sigs.k8s.io/cluster-api/cmd/clusterctl/internal/scheme
 sigs.k8s.io/cluster-api/cmd/clusterctl/internal/util
 sigs.k8s.io/cluster-api/cmd/clusterctl/log
+sigs.k8s.io/cluster-api/controllers/external
 sigs.k8s.io/cluster-api/errors
 sigs.k8s.io/cluster-api/feature
+sigs.k8s.io/cluster-api/internal/contract
 sigs.k8s.io/cluster-api/internal/goproxy
 sigs.k8s.io/cluster-api/util
 sigs.k8s.io/cluster-api/util/annotations
+sigs.k8s.io/cluster-api/util/conditions
+sigs.k8s.io/cluster-api/util/conditions/deprecated/v1beta1
 sigs.k8s.io/cluster-api/util/container
+sigs.k8s.io/cluster-api/util/contract
 sigs.k8s.io/cluster-api/util/conversion
 sigs.k8s.io/cluster-api/util/deprecated/v1beta1/conditions
 sigs.k8s.io/cluster-api/util/deprecated/v1beta1/conditions/v1beta2
 sigs.k8s.io/cluster-api/util/flags
+sigs.k8s.io/cluster-api/util/labels
 sigs.k8s.io/cluster-api/util/labels/format
+sigs.k8s.io/cluster-api/util/predicates
 sigs.k8s.io/cluster-api/util/topology
+sigs.k8s.io/cluster-api/util/version
 sigs.k8s.io/cluster-api/util/yaml
 # sigs.k8s.io/cluster-api-provider-aws/v2 v2.10.0
 ## explicit; go 1.24.0
 sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2
 sigs.k8s.io/cluster-api-provider-aws/v2/feature
-# sigs.k8s.io/cluster-api-provider-azure v0.0.0-20251202084521-c2e0e38d1e0e => github.com/damdo/cluster-api-provider-azure v0.0.0-20251202084521-c2e0e38d1e0e
+# sigs.k8s.io/cluster-api-provider-azure v0.0.0-20251202084521-c2e0e38d1e0e => github.com/openshift/cluster-api-provider-azure v0.0.0-20251202084521-c2e0e38d1e0e
 ## explicit; go 1.24.0
 sigs.k8s.io/cluster-api-provider-azure/api/v1beta1
 sigs.k8s.io/cluster-api-provider-azure/feature
@@ -2994,7 +3003,7 @@ sigs.k8s.io/structured-merge-diff/v6/value
 sigs.k8s.io/yaml
 sigs.k8s.io/yaml/goyaml.v2
 # github.com/metal3-io/baremetal-operator => github.com/metal3-io/baremetal-operator v0.5.1
-# github.com/openshift/cluster-api-actuator-pkg => github.com/chrischdi/cluster-api-actuator-pkg v0.0.0-20251203131133-74d90ddd23c9
-# github.com/openshift/cluster-api-actuator-pkg/testutils => github.com/chrischdi/cluster-api-actuator-pkg/testutils v0.0.0-20251203131133-74d90ddd23c9
+# github.com/openshift/cluster-api-actuator-pkg => github.com/openshift/cluster-api-actuator-pkg v0.0.0-20251212150432-4a60119d9691
+# github.com/openshift/cluster-api-actuator-pkg/testutils => github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20251212150432-4a60119d9691
 # sigs.k8s.io/cluster-api => sigs.k8s.io/cluster-api v1.11.3
-# sigs.k8s.io/cluster-api-provider-azure => github.com/damdo/cluster-api-provider-azure v0.0.0-20251202084521-c2e0e38d1e0e
+# sigs.k8s.io/cluster-api-provider-azure => github.com/openshift/cluster-api-provider-azure v0.0.0-20251202084521-c2e0e38d1e0e

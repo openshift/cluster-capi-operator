@@ -19,7 +19,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	clusterv1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/cluster-api/core/v1beta1"
+	clusterv1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/cluster-api/core/v1beta2"
 	ibmpowervsv1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/cluster-api/infrastructure/v1beta2"
 
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/test/matchers"
@@ -27,7 +27,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/utils/ptr"
 	ibmpowervsv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
-	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 )
 
 var _ = Describe("capi2mapi PowerVS conversion", func() {
@@ -55,14 +55,14 @@ var _ = Describe("capi2mapi PowerVS conversion", func() {
 		WithReady(true).Build()
 
 	type powerVSCAPI2MAPIMachineConversionInput struct {
-		machine            *clusterv1beta1.Machine
+		machine            *clusterv1.Machine
 		powerVSMachineFunc func() *ibmpowervsv1.IBMPowerVSMachine
 		powerVSCluster     *ibmpowervsv1.IBMPowerVSCluster
 		expectedErrors     []string
 	}
 
 	type powerVSCAPI2MAPIMachineSetConversionInput struct {
-		machineSet             *clusterv1beta1.MachineSet
+		machineSet             *clusterv1.MachineSet
 		powerVSMachineTemplate *ibmpowervsv1.IBMPowerVSMachineTemplate
 		powerVSCluster         *ibmpowervsv1.IBMPowerVSCluster
 		expectedErrors         []string

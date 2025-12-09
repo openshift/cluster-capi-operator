@@ -23,14 +23,14 @@ import (
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/consts"
 
-	capiutilfork "github.com/openshift/cluster-capi-operator/third_party/sigs.k8s.io/cluster-api/util"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/utils/ptr"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
-	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
+	capiutil "sigs.k8s.io/cluster-api/util"
 )
 
 var (
@@ -50,7 +50,7 @@ const (
 
 // machineAndAWSMachineAndAWSCluster stores the details of a Cluster API Machine and AWSMachine and AWSCluster.
 type machineAndAWSMachineAndAWSCluster struct {
-	machine                               *clusterv1beta1.Machine
+	machine                               *clusterv1.Machine
 	awsMachine                            *awsv1.AWSMachine
 	awsCluster                            *awsv1.AWSCluster
 	excludeMachineAPILabelsAndAnnotations bool
@@ -58,25 +58,25 @@ type machineAndAWSMachineAndAWSCluster struct {
 
 // machineSetAndAWSMachineTemplateAndAWSCluster stores the details of a Cluster API MachineSet and AWSMachineTemplate and AWSCluster.
 type machineSetAndAWSMachineTemplateAndAWSCluster struct {
-	machineSet *clusterv1beta1.MachineSet
+	machineSet *clusterv1.MachineSet
 	template   *awsv1.AWSMachineTemplate
 	awsCluster *awsv1.AWSCluster
 	*machineAndAWSMachineAndAWSCluster
 }
 
 // FromMachineAndAWSMachineAndAWSCluster wraps a CAPI Machine and CAPA AWSMachine and CAPA AWSCluster into a capi2mapi MachineAndInfrastructureMachine.
-func FromMachineAndAWSMachineAndAWSCluster(m *clusterv1beta1.Machine, am *awsv1.AWSMachine, ac *awsv1.AWSCluster) MachineAndInfrastructureMachine {
+func FromMachineAndAWSMachineAndAWSCluster(m *clusterv1.Machine, am *awsv1.AWSMachine, ac *awsv1.AWSCluster) MachineAndInfrastructureMachine {
 	return &machineAndAWSMachineAndAWSCluster{machine: m, awsMachine: am, awsCluster: ac}
 }
 
 // FromMachineSetAndAWSMachineTemplateAndAWSCluster wraps a CAPI MachineSet and CAPA AWSMachineTemplate and CAPA AWSCluster into a capi2mapi MachineSetAndAWSMachineTemplateAndAWSCluster.
-func FromMachineSetAndAWSMachineTemplateAndAWSCluster(ms *clusterv1beta1.MachineSet, mts *awsv1.AWSMachineTemplate, ac *awsv1.AWSCluster) MachineSetAndMachineTemplate {
+func FromMachineSetAndAWSMachineTemplateAndAWSCluster(ms *clusterv1.MachineSet, mts *awsv1.AWSMachineTemplate, ac *awsv1.AWSCluster) MachineSetAndMachineTemplate {
 	return &machineSetAndAWSMachineTemplateAndAWSCluster{
 		machineSet: ms,
 		template:   mts,
 		awsCluster: ac,
 		machineAndAWSMachineAndAWSCluster: &machineAndAWSMachineAndAWSCluster{
-			machine: &clusterv1beta1.Machine{
+			machine: &clusterv1.Machine{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels:      ms.Spec.Template.ObjectMeta.Labels,
 					Annotations: ms.Spec.Template.ObjectMeta.Annotations,
@@ -153,7 +153,7 @@ func (m machineAndAWSMachineAndAWSCluster) toProviderSpec() (*mapiv1beta1.AWSMac
 		NetworkInterfaceType: convertAWSNetworkInterfaceTypeToMAPI(m.awsMachine.Spec.NetworkInterfaceType),
 		Subnet:               convertAWSResourceReferenceToMAPI(ptr.Deref(m.awsMachine.Spec.Subnet, awsv1.AWSResourceReference{})),
 		Placement: mapiv1beta1.Placement{
-			AvailabilityZone: ptr.Deref(m.machine.Spec.FailureDomain, ""),
+			AvailabilityZone: m.machine.Spec.FailureDomain,
 			Tenancy:          mapaTenancy,
 			Region:           m.awsCluster.Spec.Region,
 		},
@@ -267,7 +267,7 @@ func (m machineAndAWSMachineAndAWSCluster) ToMachine() (*mapiv1beta1.Machine, []
 		additionalMachineAPIMetadataLabels = map[string]string{
 			consts.MAPIMachineMetadataLabelInstanceType: m.awsMachine.Spec.InstanceType,
 			consts.MAPIMachineMetadataLabelRegion:       m.awsCluster.Spec.Region,
-			consts.MAPIMachineMetadataLabelZone:         ptr.Deref(m.machine.Spec.FailureDomain, ""),
+			consts.MAPIMachineMetadataLabelZone:         m.machine.Spec.FailureDomain,
 		}
 
 		additionalMachineAPIMetadataAnnotations = map[string]string{
@@ -636,12 +636,12 @@ func handleAWSIdentityRef(fldPath *field.Path, identityRef *awsv1.AWSIdentityRef
 }
 
 // convertAWSClusterLoadBalancersToMAPI convert CAPI LoadBalancers from the AWSCluster spec to MAPI LoadBalancerReferences on the Machine.
-func convertAWSClusterLoadBalancersToMAPI(fldPath *field.Path, machine *clusterv1beta1.Machine, awsCluster *awsv1.AWSCluster) ([]mapiv1beta1.LoadBalancerReference, field.ErrorList) {
+func convertAWSClusterLoadBalancersToMAPI(fldPath *field.Path, machine *clusterv1.Machine, awsCluster *awsv1.AWSCluster) ([]mapiv1beta1.LoadBalancerReference, field.ErrorList) {
 	var loadBalancers []mapiv1beta1.LoadBalancerReference
 
 	errs := field.ErrorList{}
 
-	if !capiutilfork.IsControlPlaneMachine(machine) {
+	if !capiutil.IsControlPlaneMachine(machine) {
 		// No loadbalancer on non-control plane machines.
 		return nil, nil
 	}

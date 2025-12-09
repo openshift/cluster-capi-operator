@@ -57,7 +57,7 @@ data:
       failurePolicy: Fail
     
       paramKind:
-        apiVersion: cluster.x-k8s.io/v1beta1
+        apiVersion: cluster.x-k8s.io/v1beta2
         kind: Machine
     
       matchConstraints:
@@ -189,7 +189,7 @@ data:
       matchConstraints:
         resourceRules:
         - apiGroups:   ["cluster.x-k8s.io"]
-          apiVersions: ["v1beta1"]
+          apiVersions: ["v1beta2"]
           operations:  ["UPDATE"]
           resources:   ["machines"]
     
@@ -276,7 +276,7 @@ data:
       matchConstraints:
         resourceRules:
           - apiGroups: ["cluster.x-k8s.io"]
-            apiVersions: ["*"]
+            apiVersions: ["v1beta2"]
             operations: ["CREATE", "UPDATE"]
             resources: ["machines", "machinesets"]
       variables:
@@ -311,7 +311,7 @@ data:
       failurePolicy: Fail
       
       paramKind:
-        apiVersion: cluster.x-k8s.io/v1beta1
+        apiVersion: cluster.x-k8s.io/v1beta2
         kind: Machine
 
       matchConstraints:
@@ -359,7 +359,7 @@ data:
     spec:
       failurePolicy: Fail
       paramKind:
-        apiVersion: cluster.x-k8s.io/v1beta1
+        apiVersion: cluster.x-k8s.io/v1beta2
         kind: MachineSet
       matchConstraints:
         resourceRules:
@@ -508,7 +508,7 @@ data:
       failurePolicy: Fail
 
       paramKind:
-        apiVersion: cluster.x-k8s.io/v1beta1
+        apiVersion: cluster.x-k8s.io/v1beta2
         kind: Machine
 
       matchConstraints:
@@ -533,19 +533,19 @@ data:
         - name: authAPIChanged
           expression: oldObject.spec.authoritativeAPI != object.spec.authoritativeAPI
 
-        - name: capiInfraReady
-          expression: params.?status.?infrastructureReady.orValue(false)
+        - name: capiInfraProvisioned
+          expression: params.?status.?initialization.?infrastructureProvisioned.orValue(false)
 
         - name: capiDeleting
           expression: has(params.metadata.deletionTimestamp)
 
       # All validations must evaluate to TRUE
       validations:
-        # Don't allow changing the AuthoritativeAPI if the CAPI Machine mirror infrastructureReady is not true
-        - name: block-when-not-infraReady
+        # Don't allow changing the AuthoritativeAPI if the CAPI Machine mirror infrastructureProvisioned is not true
+        - name: block-when-not-infraProvisioned
           expression: >
-            !(variables.authAPIChanged && !variables.capiInfraReady)
-          message: "spec.authoritativeAPI may only be updated when the Cluster API Machine's status.infrastructureReady is true."
+            !(variables.authAPIChanged && !variables.capiInfraProvisioned)
+          message: "spec.authoritativeAPI may only be updated when the Cluster API Machine's status.initialization.infrastructureProvisioned is true."
 
         # Don't allow changing the AuthoritativeAPI if the CAPI Machine mirror is deleting
         - name: block-when-capi-deleting
