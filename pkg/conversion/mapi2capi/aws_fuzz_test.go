@@ -139,7 +139,6 @@ func (f *awsProviderFuzzer) fuzzProviderConfig(ps *mapiv1beta1.AWSMachineProvide
 	ps.ObjectMeta = metav1.ObjectMeta{}
 
 	// Conversion not yet implemented
-	ps.HostPlacement = nil
 	ps.CPUOptions = nil
 
 	// At least one device mapping must have no device name.
@@ -150,6 +149,11 @@ func (f *awsProviderFuzzer) fuzzProviderConfig(ps *mapiv1beta1.AWSMachineProvide
 			rootFound = true
 			break
 		}
+	}
+
+	for i := range ps.BlockDevices {
+		// Not implemented yet
+		ps.BlockDevices[i].EBS.ThroughputMib = nil
 	}
 
 	if !rootFound && len(ps.BlockDevices) > 0 {
@@ -165,6 +169,44 @@ func (f *awsProviderFuzzer) fuzzProviderConfig(ps *mapiv1beta1.AWSMachineProvide
 	f.MAPIMachineFuzzer.InstanceType = ps.InstanceType
 	f.MAPIMachineFuzzer.Region = ps.Placement.Region
 	f.MAPIMachineFuzzer.Zone = ps.Placement.AvailabilityZone
+}
+
+func (f *awsProviderFuzzer) fuzzPlacement(placement *mapiv1beta1.Placement, c randfill.Continue) {
+	c.FillNoCustom(placement)
+
+	switch c.Int31n(6) {
+	case 0:
+		placement.Tenancy = mapiv1beta1.DefaultTenancy
+		placement.Host = nil
+	case 1:
+		placement.Tenancy = mapiv1beta1.DedicatedTenancy
+		placement.Host = nil
+	case 2:
+		placement.Tenancy = mapiv1beta1.HostTenancy
+		placement.Host = &mapiv1beta1.HostPlacement{
+			Affinity:      ptr.To(mapiv1beta1.HostAffinityAnyAvailable),
+			DedicatedHost: nil,
+		}
+	case 3:
+		placement.Tenancy = mapiv1beta1.HostTenancy
+		placement.Host = &mapiv1beta1.HostPlacement{
+			Affinity: ptr.To(mapiv1beta1.HostAffinityAnyAvailable),
+			DedicatedHost: &mapiv1beta1.DedicatedHost{
+				ID: "h-0123456789abcdef0",
+			},
+		}
+	case 4:
+		placement.Tenancy = mapiv1beta1.HostTenancy
+		placement.Host = &mapiv1beta1.HostPlacement{
+			Affinity: ptr.To(mapiv1beta1.HostAffinityDedicatedHost),
+			DedicatedHost: &mapiv1beta1.DedicatedHost{
+				ID: "h-0123456789abcdef0",
+			},
+		}
+	case 5:
+		placement.Tenancy = ""
+		placement.Host = nil
+	}
 }
 
 //nolint:funlen
@@ -224,18 +266,6 @@ func (f *awsProviderFuzzer) FuzzerFuncsMachineSet(codecs runtimeserializer.Codec
 				ebs.Iops = nil
 			}
 		},
-		func(tenancy *mapiv1beta1.InstanceTenancy, c randfill.Continue) {
-			switch c.Int31n(4) {
-			case 0:
-				*tenancy = mapiv1beta1.DefaultTenancy
-			case 1:
-				*tenancy = mapiv1beta1.DedicatedTenancy
-			case 2:
-				*tenancy = mapiv1beta1.HostTenancy
-			case 3:
-				*tenancy = ""
-			}
-		},
 		func(marketType *mapiv1beta1.MarketType, c randfill.Continue) {
 			switch c.Int31n(4) {
 			case 0:
@@ -261,6 +291,7 @@ func (f *awsProviderFuzzer) FuzzerFuncsMachineSet(codecs runtimeserializer.Codec
 				// resulting in a documented lossy rountrip conversion, which would make the test to fail.
 			}
 		},
+		f.fuzzPlacement,
 		f.fuzzProviderConfig,
 	}
 }
