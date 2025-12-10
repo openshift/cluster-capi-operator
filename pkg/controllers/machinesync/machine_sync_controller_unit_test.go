@@ -23,7 +23,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
@@ -31,15 +31,15 @@ import (
 // Unit tests for fetchCAPIInfraResources because reconciling deletion depends on it.
 var _ = Describe("Unit tests for fetchCAPIInfraResources", func() {
 	var reconciler *MachineSyncReconciler
-	var capiMachine *clusterv1.Machine
+	var capiMachine *clusterv1beta1.Machine
 
 	BeforeEach(func() {
-		capiMachine = &clusterv1.Machine{
+		capiMachine = &clusterv1beta1.Machine{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-machine",
 				Namespace: "test-namespace",
 			},
-			Spec: clusterv1.MachineSpec{
+			Spec: clusterv1beta1.MachineSpec{
 				ClusterName: "test-cluster",
 				InfrastructureRef: corev1.ObjectReference{
 					Kind:      "AWSMachine",

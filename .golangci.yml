@@ -86,7 +86,7 @@ linters-settings:
       limitations under the License.
   importas:
     alias:
-      - pkg: "sigs.k8s.io/cluster-api/api/v1beta1"
+      - pkg: "sigs.k8s.io/cluster-api/api/core/v1beta1"
         alias: clusterv1beta1
       - pkg: "sigs.k8s.io/cluster-api/util/conditions" 
         #pkg: "sigs.k8s.io/cluster-api/util/deprecated/v1beta1/conditions"

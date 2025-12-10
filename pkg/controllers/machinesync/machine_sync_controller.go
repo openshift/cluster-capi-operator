@@ -1059,7 +1059,7 @@ func (r *MachineSyncReconciler) fetchCAPIInfraMachine(ctx context.Context, name,
 }
 
 // doesCAPIInfraMachineExist checks if the Cluster API Infrastructure Machine exists. It uses the infrastructureRef of the Cluster API Machine with fallback to the name of the MAPI Machine.
-func (r *MachineSyncReconciler) doesCAPIInfraMachineExist(ctx context.Context, capiMachine *clusterv1.Machine, mapiMachine *mapiv1beta1.Machine) (bool, error) {
+func (r *MachineSyncReconciler) doesCAPIInfraMachineExist(ctx context.Context, capiMachine *clusterv1beta1.Machine, mapiMachine *mapiv1beta1.Machine) (bool, error) {
 	namespace := r.CAPINamespace
 	name := mapiMachine.Name
 
