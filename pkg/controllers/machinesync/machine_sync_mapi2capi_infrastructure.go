@@ -354,7 +354,7 @@ func setChangedCAPIInfraMachineStatusFields(platform configv1.PlatformType, exis
 			return errAssertingCAPIAWSMachine
 		}
 
-		util.EnsureCAPIConditions(existing, converted)
+		util.EnsureCAPIV1Beta1Conditions(existing, converted)
 
 		// No need to merge v1beta2 conditions because they don't exist for AWSMachine's.
 
@@ -373,7 +373,7 @@ func setChangedCAPIInfraMachineStatusFields(platform configv1.PlatformType, exis
 			return errAssertingCAPIOpenStackMachine
 		}
 
-		util.EnsureCAPIConditions(existing, converted)
+		util.EnsureCAPIV1Beta1Conditions(existing, converted)
 
 		// No need to merge v1beta2 conditions because they don't exist for OpenstackMachine's.
 
@@ -392,7 +392,7 @@ func setChangedCAPIInfraMachineStatusFields(platform configv1.PlatformType, exis
 			return errAssertingCAPIIBMPowerVSMachine
 		}
 
-		util.EnsureCAPIConditions(existing, converted)
+		util.EnsureCAPIV1Beta1Conditions(existing, converted)
 
 		// Merge the v1beta2 conditions.
 		util.EnsureCAPIV1Beta2Conditions(existing, converted)

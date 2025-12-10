@@ -17,14 +17,13 @@ limitations under the License.
 package mapi2capi
 
 import (
-	"time"
-
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/utils/ptr"
 	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	capierrors "sigs.k8s.io/cluster-api/errors"
 )
 
@@ -33,7 +32,7 @@ const (
 )
 
 // fromMAPIMachineToCAPIMachine translates a MAPI Machine to its Core CAPI Machine correspondent.
-func fromMAPIMachineToCAPIMachine(mapiMachine *mapiv1beta1.Machine, apiVersion, kind string) (*clusterv1beta1.Machine, field.ErrorList) {
+func fromMAPIMachineToCAPIMachine(mapiMachine *mapiv1beta1.Machine, apiGroup, kind string) (*clusterv1.Machine, field.ErrorList) {
 	var errs field.ErrorList
 
 	capiMachineStatus, capiMachineStatusErrs := convertMAPIMachineToCAPIMachineStatus(mapiMachine)
@@ -41,23 +40,22 @@ func fromMAPIMachineToCAPIMachine(mapiMachine *mapiv1beta1.Machine, apiVersion, 
 		errs = append(errs, capiMachineStatusErrs...)
 	}
 
-	capiMachine := &clusterv1beta1.Machine{
+	capiMachine := &clusterv1.Machine{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            mapiMachine.Name,
 			Namespace:       capiNamespace,
 			Labels:          convertMAPILabelsToCAPI(mapiMachine.Labels),
 			Annotations:     convertMAPIAnnotationsToCAPI(mapiMachine.Annotations),
-			Finalizers:      []string{clusterv1beta1.MachineFinalizer},
+			Finalizers:      []string{clusterv1.MachineFinalizer},
 			OwnerReferences: nil, // OwnerReferences not populated here. They are added later by the machineSync controller.
 		},
-		Spec: clusterv1beta1.MachineSpec{
-			InfrastructureRef: corev1.ObjectReference{
-				APIVersion: apiVersion,
-				Kind:       kind,
-				Name:       mapiMachine.Name,
-				Namespace:  capiNamespace,
+		Spec: clusterv1.MachineSpec{
+			InfrastructureRef: clusterv1.ContractVersionedObjectReference{
+				APIGroup: apiGroup,
+				Kind:     kind,
+				Name:     mapiMachine.Name,
 			},
-			ProviderID: mapiMachine.Spec.ProviderID,
+			ProviderID: ptr.Deref(mapiMachine.Spec.ProviderID, ""),
 			// ClusterName: // ClusterName not populated here. It is added by higher level functions.
 			// AuthoritativeAPI: // AuthoritativeAPI not populated here. Ignore as this is part of the conversion mechanism.
 
@@ -66,7 +64,9 @@ func fromMAPIMachineToCAPIMachine(mapiMachine *mapiv1beta1.Machine, apiVersion, 
 			// NodeDrainTimeout:        // TODO(OCPCLOUD-2715): not present on the MAPI API, we should implement them for feature parity.
 			// NodeVolumeDetachTimeout: // TODO(OCPCLOUD-2715): not present on the MAPI API, we should implement them for feature parity.
 			// NodeDeletionTimeout:     // TODO(OCPCLOUD-2715): not present on the MAPI API, we should implement them for feature parity.
-			NodeDeletionTimeout: &metav1.Duration{Duration: time.Second * 10}, // Hardcode it to the CAPI default value until this is implemented in MAPI.
+			Deletion: clusterv1.MachineDeletionSpec{
+				NodeDeletionTimeoutSeconds: ptr.To[int32](10), // Hardcode it to the CAPI default value until this is implemented in MAPI.
+			},
 		},
 		Status: capiMachineStatus,
 	}
@@ -89,7 +89,7 @@ func fromMAPIMachineToCAPIMachine(mapiMachine *mapiv1beta1.Machine, apiVersion, 
 }
 
 // convertMAPIMachineToCAPIMachineStatus converts a MAPI Machine to CAPI MachineStatus.
-func convertMAPIMachineToCAPIMachineStatus(mapiMachine *mapiv1beta1.Machine) (clusterv1beta1.MachineStatus, field.ErrorList) {
+func convertMAPIMachineToCAPIMachineStatus(mapiMachine *mapiv1beta1.Machine) (clusterv1.MachineStatus, field.ErrorList) {
 	var errs field.ErrorList
 
 	addresses, addressesErr := convertMAPIMachineAddressesToCAPI(mapiMachine.Status.Addresses)
@@ -97,17 +97,28 @@ func convertMAPIMachineToCAPIMachineStatus(mapiMachine *mapiv1beta1.Machine) (cl
 		errs = append(errs, addressesErr...)
 	}
 
-	capiStatus := clusterv1beta1.MachineStatus{
-		NodeRef:             mapiMachine.Status.NodeRef,
-		LastUpdated:         mapiMachine.Status.LastUpdated,
-		Addresses:           addresses,
-		Phase:               convertMAPIMachinePhaseToCAPI(mapiMachine.Status.Phase),
-		Conditions:          convertMAPIMachineConditionsToCAPIMachineConditions(mapiMachine),
-		V1Beta2:             convertMAPIMachineStatusToCAPIMachineV1Beta2Status(mapiMachine),
-		FailureReason:       convertMAPIMachineErrorReasonToCAPIFailureReason(mapiMachine.Status.ErrorReason),
-		FailureMessage:      convertMAPIMachineErrorMessageToCAPIFailureMessage(mapiMachine.Status.ErrorMessage),
-		InfrastructureReady: deriveCAPIInfrastructureReadyFromMAPI(mapiMachine),
-		BootstrapReady:      deriveCAPIBootstrapReadyFromMAPI(mapiMachine),
+	var nodeRef clusterv1.MachineNodeReference
+	if mapiMachine.Status.NodeRef != nil {
+		nodeRef.Name = mapiMachine.Status.NodeRef.Name
+	}
+
+	capiStatus := clusterv1.MachineStatus{
+		NodeRef:     nodeRef,
+		LastUpdated: ptr.Deref(mapiMachine.Status.LastUpdated, metav1.Time{}),
+		Addresses:   addresses,
+		Phase:       convertMAPIMachinePhaseToCAPI(mapiMachine.Status.Phase),
+		Deprecated: &clusterv1.MachineDeprecatedStatus{
+			V1Beta1: &clusterv1.MachineV1Beta1DeprecatedStatus{
+				Conditions:     convertMAPIMachineConditionsToCAPIMachineConditions(mapiMachine),
+				FailureReason:  convertMAPIMachineErrorReasonToCAPIFailureReason(mapiMachine.Status.ErrorReason),
+				FailureMessage: convertMAPIMachineErrorMessageToCAPIFailureMessage(mapiMachine.Status.ErrorMessage),
+			},
+		},
+		Initialization: clusterv1.MachineInitializationStatus{
+			InfrastructureProvisioned:  ptr.To(deriveCAPIInfrastructureProvisionedFromMAPI(mapiMachine)),
+			BootstrapDataSecretCreated: ptr.To(deriveCAPIBootstrapDataSecretCreatedFromMAPI(mapiMachine)),
+		},
+		Conditions: convertMAPIMachineConditionsToCAPIMachineV1Beta2StatusConditions(mapiMachine),
 
 		// MAPI doesn't provide node system info, so we return nil
 		// This field is typically populated by the node controller in CAPI
@@ -130,21 +141,14 @@ func convertMAPIMachineToCAPIMachineStatus(mapiMachine *mapiv1beta1.Machine) (cl
 	return capiStatus, errs
 }
 
-// convertMAPIMachineStatusToCAPIMachineV1Beta2Status converts a MAPI Machine to CAPI MachineV1Beta2Status.
-func convertMAPIMachineStatusToCAPIMachineV1Beta2Status(mapiMachine *mapiv1beta1.Machine) *clusterv1beta1.MachineV1Beta2Status {
-	return &clusterv1beta1.MachineV1Beta2Status{
-		Conditions: convertMAPIMachineConditionsToCAPIMachineV1Beta2StatusConditions(mapiMachine),
-	}
-}
-
 // convertMAPIMachineConditionsToCAPIMachineConditions converts MAPI conditions to CAPI v1beta1 conditions.
 //
 //nolint:funlen
-func convertMAPIMachineConditionsToCAPIMachineConditions(mapiMachine *mapiv1beta1.Machine) clusterv1beta1.Conditions {
+func convertMAPIMachineConditionsToCAPIMachineConditions(mapiMachine *mapiv1beta1.Machine) clusterv1.Conditions {
 	// According to CAPI v1beta1 machine conditions, there are three main conditions:
 	// Ready, BootstrapReady, InfrastructureReady
-	readyCondition := clusterv1beta1.Condition{
-		Type: clusterv1beta1.ReadyCondition,
+	readyCondition := clusterv1.Condition{
+		Type: clusterv1.ReadyV1Beta1Condition,
 		Status: func() corev1.ConditionStatus {
 			if mapiMachine.Status.Phase != nil && *mapiMachine.Status.Phase == mapiv1beta1.PhaseRunning {
 				return corev1.ConditionTrue
@@ -152,62 +156,62 @@ func convertMAPIMachineConditionsToCAPIMachineConditions(mapiMachine *mapiv1beta
 
 			return corev1.ConditionFalse
 		}(),
-		Severity: func() clusterv1beta1.ConditionSeverity {
+		Severity: func() clusterv1.ConditionSeverity {
 			if mapiMachine.Status.Phase != nil && *mapiMachine.Status.Phase == mapiv1beta1.PhaseRunning {
-				return clusterv1beta1.ConditionSeverityNone
+				return clusterv1.ConditionSeverityNone
 			}
 
-			return clusterv1beta1.ConditionSeverityError
+			return clusterv1.ConditionSeverityError
 		}(),
 		// LastTransitionTime will be set by the condition utilities.
 	}
 
-	bootstrapReadyCondition := clusterv1beta1.Condition{
-		Type: clusterv1beta1.BootstrapReadyCondition,
+	bootstrapReadyCondition := clusterv1.Condition{
+		Type: clusterv1.BootstrapReadyV1Beta1Condition,
 		Status: func() corev1.ConditionStatus {
-			if deriveCAPIBootstrapReadyFromMAPI(mapiMachine) {
+			if deriveCAPIBootstrapDataSecretCreatedFromMAPI(mapiMachine) {
 				return corev1.ConditionTrue
 			}
 
 			return corev1.ConditionFalse
 		}(),
-		Severity: func() clusterv1beta1.ConditionSeverity {
-			if !deriveCAPIBootstrapReadyFromMAPI(mapiMachine) {
-				return clusterv1beta1.ConditionSeverityInfo
+		Severity: func() clusterv1.ConditionSeverity {
+			if !deriveCAPIBootstrapDataSecretCreatedFromMAPI(mapiMachine) {
+				return clusterv1.ConditionSeverityInfo
 			}
 
-			return clusterv1beta1.ConditionSeverityNone
+			return clusterv1.ConditionSeverityNone
 		}(),
 		// LastTransitionTime will be set by the condition utilities.
 	}
 
-	infrastructureReadyCondition := clusterv1beta1.Condition{
-		Type: clusterv1beta1.InfrastructureReadyCondition,
+	infrastructureReadyCondition := clusterv1.Condition{
+		Type: clusterv1.InfrastructureReadyV1Beta1Condition,
 		Status: func() corev1.ConditionStatus {
-			if deriveCAPIInfrastructureReadyFromMAPI(mapiMachine) {
+			if deriveCAPIInfrastructureProvisionedFromMAPI(mapiMachine) {
 				return corev1.ConditionTrue
 			}
 
 			return corev1.ConditionFalse
 		}(),
 		Reason: func() string {
-			if !deriveCAPIInfrastructureReadyFromMAPI(mapiMachine) {
-				return clusterv1beta1.WaitingForInfrastructureFallbackReason
+			if !deriveCAPIInfrastructureProvisionedFromMAPI(mapiMachine) {
+				return clusterv1.WaitingForInfrastructureFallbackV1Beta1Reason
 			}
 
 			return ""
 		}(),
-		Severity: func() clusterv1beta1.ConditionSeverity {
-			if !deriveCAPIInfrastructureReadyFromMAPI(mapiMachine) {
-				return clusterv1beta1.ConditionSeverityInfo
+		Severity: func() clusterv1.ConditionSeverity {
+			if !deriveCAPIInfrastructureProvisionedFromMAPI(mapiMachine) {
+				return clusterv1.ConditionSeverityInfo
 			}
 
-			return clusterv1beta1.ConditionSeverityNone
+			return clusterv1.ConditionSeverityNone
 		}(),
 		// LastTransitionTime will be set by the condition utilities.
 	}
 
-	return []clusterv1beta1.Condition{readyCondition, bootstrapReadyCondition, infrastructureReadyCondition}
+	return []clusterv1.Condition{readyCondition, bootstrapReadyCondition, infrastructureReadyCondition}
 }
 
 // convertMAPIMachineConditionsToCAPIMachineV1Beta2StatusConditions converts MAPI conditions to CAPI v1beta2 conditions.
@@ -263,14 +267,14 @@ func convertMAPIMachineConditionsToCAPIMachineV1Beta2StatusConditions(mapiMachin
 	bootstrapConfigReadyCondition := metav1.Condition{
 		Type: clusterv1beta1.MachineBootstrapConfigReadyV1Beta2Condition,
 		Status: func() metav1.ConditionStatus {
-			if deriveCAPIBootstrapReadyFromMAPI(mapiMachine) {
+			if deriveCAPIBootstrapDataSecretCreatedFromMAPI(mapiMachine) {
 				return metav1.ConditionTrue
 			}
 
 			return metav1.ConditionFalse
 		}(),
 		Reason: func() string {
-			if deriveCAPIBootstrapReadyFromMAPI(mapiMachine) {
+			if deriveCAPIBootstrapDataSecretCreatedFromMAPI(mapiMachine) {
 				return clusterv1beta1.MachineBootstrapConfigReadyV1Beta2Reason
 			}
 
@@ -283,14 +287,14 @@ func convertMAPIMachineConditionsToCAPIMachineV1Beta2StatusConditions(mapiMachin
 	infrastructureReadyCondition := metav1.Condition{
 		Type: clusterv1beta1.MachineInfrastructureReadyV1Beta2Condition,
 		Status: func() metav1.ConditionStatus {
-			if deriveCAPIInfrastructureReadyFromMAPI(mapiMachine) {
+			if deriveCAPIInfrastructureProvisionedFromMAPI(mapiMachine) {
 				return metav1.ConditionTrue
 			}
 
 			return metav1.ConditionFalse
 		}(),
 		Reason: func() string {
-			if deriveCAPIInfrastructureReadyFromMAPI(mapiMachine) {
+			if deriveCAPIInfrastructureProvisionedFromMAPI(mapiMachine) {
 				return clusterv1beta1.MachineInfrastructureReadyV1Beta2Reason
 			}
 
@@ -349,32 +353,32 @@ func convertMAPIMachineConditionsToCAPIMachineV1Beta2StatusConditions(mapiMachin
 }
 
 // convertMAPIMachineAddressesToCAPI converts MAPI machine addresses to CAPI format.
-func convertMAPIMachineAddressesToCAPI(mapiAddresses []corev1.NodeAddress) (clusterv1beta1.MachineAddresses, field.ErrorList) {
+func convertMAPIMachineAddressesToCAPI(mapiAddresses []corev1.NodeAddress) (clusterv1.MachineAddresses, field.ErrorList) {
 	if mapiAddresses == nil {
 		return nil, nil
 	}
 
 	errs := field.ErrorList{}
-	capiAddresses := make(clusterv1beta1.MachineAddresses, 0, len(mapiAddresses))
+	capiAddresses := make(clusterv1.MachineAddresses, 0, len(mapiAddresses))
 
 	// Addresses are slightly different between MAPI/CAPI.
 	// In CAPI the address type can be: Hostname, ExternalIP, InternalIP, ExternalDNS or InternalDNS
 	// In MAPI the address type can be: Hostname, ExternalIP, InternalIP (missing ExternalDNS and InternalDNS)
 	// This is fine when going from MAPI to CAPI, but needs to be handled when going from CAPI to MAPI.
 	for _, addr := range mapiAddresses {
-		var t clusterv1beta1.MachineAddressType
+		var t clusterv1.MachineAddressType
 
 		switch addr.Type {
 		case corev1.NodeHostName:
-			t = clusterv1beta1.MachineHostName
+			t = clusterv1.MachineHostName
 		case corev1.NodeExternalIP:
-			t = clusterv1beta1.MachineExternalIP
+			t = clusterv1.MachineExternalIP
 		case corev1.NodeInternalIP:
-			t = clusterv1beta1.MachineInternalIP
+			t = clusterv1.MachineInternalIP
 		case corev1.NodeExternalDNS:
-			t = clusterv1beta1.MachineExternalDNS
+			t = clusterv1.MachineExternalDNS
 		case corev1.NodeInternalDNS:
-			t = clusterv1beta1.MachineInternalDNS
+			t = clusterv1.MachineInternalDNS
 		default:
 			errs = append(errs, field.Invalid(field.NewPath("status", "addresses"), string(addr.Type), string(addr.Type)+" unrecognized address type"))
 
@@ -382,13 +386,31 @@ func convertMAPIMachineAddressesToCAPI(mapiAddresses []corev1.NodeAddress) (clus
 			continue
 		}
 
-		capiAddresses = append(capiAddresses, clusterv1beta1.MachineAddress{
+		capiAddresses = append(capiAddresses, clusterv1.MachineAddress{
 			Type:    t,
 			Address: addr.Address,
 		})
 	}
 
 	return capiAddresses, errs
+}
+
+// convertMAPIMachineAddressesToCAPIV1Beta1 converts MAPI machine addresses to CAPI v1beta1 format.
+func convertMAPIMachineAddressesToCAPIV1Beta1(mapiAddresses []corev1.NodeAddress) (clusterv1beta1.MachineAddresses, field.ErrorList) {
+	v1beta2addresses, errs := convertMAPIMachineAddressesToCAPI(mapiAddresses)
+	if len(errs) > 0 {
+		return nil, errs
+	}
+
+	addresses := make(clusterv1beta1.MachineAddresses, 0, len(v1beta2addresses))
+	for _, v1beta2addr := range v1beta2addresses {
+		addresses = append(addresses, clusterv1beta1.MachineAddress{
+			Type:    clusterv1beta1.MachineAddressType(v1beta2addr.Type),
+			Address: v1beta2addr.Address,
+		})
+	}
+
+	return addresses, nil
 }
 
 // convertMAPIMachinePhaseToCAPI converts MAPI machine phase to CAPI format.
@@ -415,8 +437,8 @@ func convertMAPIMachineErrorMessageToCAPIFailureMessage(mapiErrorMessage *string
 	return mapiErrorMessage
 }
 
-// deriveCAPIBootstrapReadyFromMAPI derives the CAPI BootstrapReady field from MAPI machine state.
-func deriveCAPIBootstrapReadyFromMAPI(mapiMachine *mapiv1beta1.Machine) bool {
+// deriveCAPIBootstrapDataSecretCreatedFromMAPI derives the CAPI BootstrapReady field from MAPI machine state.
+func deriveCAPIBootstrapDataSecretCreatedFromMAPI(mapiMachine *mapiv1beta1.Machine) bool {
 	// Bootstrap is considered ready if the machine is in Running, Deleting phases
 	if mapiMachine.Status.Phase != nil {
 		phase := *mapiMachine.Status.Phase
@@ -427,8 +449,8 @@ func deriveCAPIBootstrapReadyFromMAPI(mapiMachine *mapiv1beta1.Machine) bool {
 	return false
 }
 
-// deriveCAPIInfrastructureReadyFromMAPI derives the CAPI InfrastructureReady field from MAPI machine state.
-func deriveCAPIInfrastructureReadyFromMAPI(mapiMachine *mapiv1beta1.Machine) bool {
+// deriveCAPIInfrastructureProvisionedFromMAPI derives the CAPI InfrastructureReady field from MAPI machine state.
+func deriveCAPIInfrastructureProvisionedFromMAPI(mapiMachine *mapiv1beta1.Machine) bool {
 	// Infrastructure is considered ready if the machine is in Provisioned, Running, Deleting phases
 	if mapiMachine.Status.Phase != nil {
 		phase := *mapiMachine.Status.Phase

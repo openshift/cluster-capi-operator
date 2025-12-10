@@ -24,7 +24,7 @@ import (
 	runtimeserializer "k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/utils/ptr"
 	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
-	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/randfill"
 
@@ -51,7 +51,7 @@ var _ = Describe("OpenStack Fuzz (capi2mapi)", func() {
 	}
 
 	Context("OpenStackMachine Conversion", func() {
-		fromMachineAndOpenStackMachineAndOpenStackCluster := func(machine *clusterv1beta1.Machine, infraMachine client.Object, infraCluster client.Object) capi2mapi.MachineAndInfrastructureMachine {
+		fromMachineAndOpenStackMachineAndOpenStackCluster := func(machine *clusterv1.Machine, infraMachine client.Object, infraCluster client.Object) capi2mapi.MachineAndInfrastructureMachine {
 			openstackMachine, ok := infraMachine.(*openstackv1.OpenStackMachine)
 			Expect(ok).To(BeTrue(), "input infra machine should be of type %T, got %T", &openstackv1.OpenStackMachine{}, infraMachine)
 
@@ -69,13 +69,13 @@ var _ = Describe("OpenStack Fuzz (capi2mapi)", func() {
 			mapi2capi.FromOpenStackMachineAndInfra,
 			fromMachineAndOpenStackMachineAndOpenStackCluster,
 			conversiontest.ObjectMetaFuzzerFuncs(capiNamespace),
-			conversiontest.CAPIMachineFuzzerFuncs(openstackProviderIDFuzzer, openstackMachineKind, openstackv1.SchemeGroupVersion.String(), infra.Status.InfrastructureName),
+			conversiontest.CAPIMachineFuzzerFuncs(openstackProviderIDFuzzer, openstackMachineKind, openstackv1.SchemeGroupVersion.Group, infra.Status.InfrastructureName),
 			openstackMachineFuzzerFuncs,
 		)
 	})
 
 	Context("OpenStackMachineSet Conversion", func() {
-		fromMachineSetAndOpenStackMachineTemplateAndOpenStackCluster := func(machineSet *clusterv1beta1.MachineSet, infraMachineTemplate client.Object, infraCluster client.Object) capi2mapi.MachineSetAndMachineTemplate {
+		fromMachineSetAndOpenStackMachineTemplateAndOpenStackCluster := func(machineSet *clusterv1.MachineSet, infraMachineTemplate client.Object, infraCluster client.Object) capi2mapi.MachineSetAndMachineTemplate {
 			openstackMachineTemplate, ok := infraMachineTemplate.(*openstackv1.OpenStackMachineTemplate)
 			Expect(ok).To(BeTrue(), "input infra machine template should be of type %T, got %T", &openstackv1.OpenStackMachineTemplate{}, infraMachineTemplate)
 
@@ -93,8 +93,8 @@ var _ = Describe("OpenStack Fuzz (capi2mapi)", func() {
 			mapi2capi.FromOpenStackMachineSetAndInfra,
 			fromMachineSetAndOpenStackMachineTemplateAndOpenStackCluster,
 			conversiontest.ObjectMetaFuzzerFuncs(capiNamespace),
-			conversiontest.CAPIMachineFuzzerFuncs(openstackProviderIDFuzzer, openstackTemplateKind, openstackv1.SchemeGroupVersion.String(), infra.Status.InfrastructureName),
-			conversiontest.CAPIMachineSetFuzzerFuncs(openstackTemplateKind, openstackv1.SchemeGroupVersion.String(), infra.Status.InfrastructureName),
+			conversiontest.CAPIMachineFuzzerFuncs(openstackProviderIDFuzzer, openstackTemplateKind, openstackv1.SchemeGroupVersion.Group, infra.Status.InfrastructureName),
+			conversiontest.CAPIMachineSetFuzzerFuncs(openstackTemplateKind, openstackv1.SchemeGroupVersion.Group, infra.Status.InfrastructureName),
 			openstackMachineFuzzerFuncs,
 			openstackMachineTemplateFuzzerFuncs,
 		)

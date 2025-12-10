@@ -33,7 +33,7 @@ import (
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	"github.com/openshift/cluster-api-actuator-pkg/testutils"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
-	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 	"sigs.k8s.io/kube-storage-version-migrator/pkg/clients/clientset/scheme"
@@ -46,7 +46,7 @@ var _ = Describe("MachineSet VAP Tests", func() {
 	var capiNamespace *corev1.Namespace
 	var mapiNamespace *corev1.Namespace
 
-	var capiMachineSet *clusterv1beta1.MachineSet
+	var capiMachineSet *clusterv1.MachineSet
 	var policyBinding *admissionregistrationv1.ValidatingAdmissionPolicyBinding
 	var machineSetVap *admissionregistrationv1.ValidatingAdmissionPolicy
 
@@ -86,12 +86,12 @@ var _ = Describe("MachineSet VAP Tests", func() {
 
 		capaMachineTemplate := capaMachineTemplateBuilder.Build()
 
-		capiMachineTemplate := clusterv1beta1.MachineTemplateSpec{
-			Spec: clusterv1beta1.MachineSpec{
-				InfrastructureRef: corev1.ObjectReference{
-					Kind:      capaMachineTemplate.Kind,
-					Name:      capaMachineTemplate.GetName(),
-					Namespace: capaMachineTemplate.GetNamespace(),
+		capiMachineTemplate := clusterv1.MachineTemplateSpec{
+			Spec: clusterv1.MachineSpec{
+				InfrastructureRef: clusterv1.ContractVersionedObjectReference{
+					Kind:     capaMachineTemplate.Kind,
+					Name:     capaMachineTemplate.GetName(),
+					APIGroup: awsv1.GroupVersion.Group,
 				},
 			},
 		}
@@ -145,8 +145,8 @@ var _ = Describe("MachineSet VAP Tests", func() {
 
 		By("Cleaning up CAPI test resources")
 		testutils.CleanupResources(Default, ctx, cfg, k8sClient, capiNamespace.GetName(),
-			&clusterv1beta1.Machine{},
-			&clusterv1beta1.MachineSet{},
+			&clusterv1.Machine{},
+			&clusterv1.MachineSet{},
 			&awsv1.AWSCluster{},
 			&awsv1.AWSMachineTemplate{},
 		)
@@ -207,7 +207,7 @@ var _ = Describe("MachineSet VAP Tests", func() {
 
 		It("should deny creating a MachineSet with spec.template.spec.version", func() {
 			testVersion := "1"
-			capiMachineSet.Spec.Template.Spec.Version = &testVersion
+			capiMachineSet.Spec.Template.Spec.Version = testVersion
 
 			Eventually(k8sClient.Create(ctx, capiMachineSet), timeout).Should(MatchError(ContainSubstring(".version is a forbidden field")))
 		})
@@ -217,12 +217,12 @@ var _ = Describe("MachineSet VAP Tests", func() {
 
 			Eventually(k.Update(capiMachineSet, func() {
 				testVersion := "1"
-				capiMachineSet.Spec.Template.Spec.Version = &testVersion
+				capiMachineSet.Spec.Template.Spec.Version = testVersion
 			}), timeout).Should(MatchError(ContainSubstring(".version is a forbidden field")))
 		})
 
 		It("should deny creating a MachineSet with spec.template.spec.readinessGates", func() {
-			capiMachineSet.Spec.Template.Spec.ReadinessGates = []clusterv1beta1.MachineReadinessGate{{ConditionType: "foo"}}
+			capiMachineSet.Spec.Template.Spec.ReadinessGates = []clusterv1.MachineReadinessGate{{ConditionType: "foo"}}
 
 			Eventually(k8sClient.Create(ctx, capiMachineSet), timeout).Should(MatchError(ContainSubstring(".readinessGates is a forbidden field")))
 		})
@@ -231,7 +231,7 @@ var _ = Describe("MachineSet VAP Tests", func() {
 			Eventually(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
 
 			Eventually(k.Update(capiMachineSet, func() {
-				capiMachineSet.Spec.Template.Spec.ReadinessGates = []clusterv1beta1.MachineReadinessGate{{ConditionType: "foo"}}
+				capiMachineSet.Spec.Template.Spec.ReadinessGates = []clusterv1.MachineReadinessGate{{ConditionType: "foo"}}
 			}), timeout).Should(MatchError(ContainSubstring(".readinessGates is a forbidden field")))
 		})
 	})

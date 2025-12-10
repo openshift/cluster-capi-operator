@@ -29,6 +29,7 @@ import (
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 
 	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 
 	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/cluster-api-actuator-pkg/testutils"
@@ -53,12 +54,12 @@ var _ = Describe("With a running MachineMigration controller", func() {
 		mapiMachineBuilder machinev1resourcebuilder.MachineBuilder
 		mapiMachine        *mapiv1beta1.Machine
 		capiMachineBuilder capiv1resourcebuilder.MachineBuilder
-		capiMachine        *clusterv1beta1.Machine
+		capiMachine        *clusterv1.Machine
 		capaMachine        *awsv1.AWSMachine
 		capaMachineBuilder capav1builder.AWSMachineBuilder
 		capaClusterBuilder capav1builder.AWSClusterBuilder
 		capiClusterBuilder capiv1resourcebuilder.ClusterBuilder
-		capiCluster        *clusterv1beta1.Cluster
+		capiCluster        *clusterv1.Cluster
 	)
 
 	BeforeEach(func() {
@@ -91,7 +92,7 @@ var _ = Describe("With a running MachineMigration controller", func() {
 			WithName(infrastructureName)
 		Expect(k8sClient.Create(ctx, capiClusterBuilder.Build())).To(Succeed(), "CAPI cluster should be able to be created")
 
-		capiCluster = &clusterv1beta1.Cluster{}
+		capiCluster = &clusterv1.Cluster{}
 		Expect(k8sClient.Get(ctx, client.ObjectKey{Name: infrastructureName, Namespace: capiNamespace.GetName()}, capiCluster)).To(Succeed())
 
 		capaMachineBuilder = capav1builder.AWSMachine().
@@ -100,11 +101,10 @@ var _ = Describe("With a running MachineMigration controller", func() {
 
 		capaMachine = capaMachineBuilder.Build()
 
-		capaMachineRef := corev1.ObjectReference{
-			APIVersion: capaMachine.APIVersion,
-			Kind:       capaMachine.Kind,
-			Name:       capaMachine.GetName(),
-			Namespace:  capaMachine.GetNamespace(),
+		capaMachineRef := clusterv1.ContractVersionedObjectReference{
+			APIGroup: awsv1.GroupVersion.Group,
+			Kind:     capaMachine.Kind,
+			Name:     capaMachine.GetName(),
 		}
 
 		capiMachineBuilder = capiv1resourcebuilder.Machine().
@@ -446,13 +446,11 @@ var _ = Describe("With a running MachineMigration controller", func() {
 						By("Setting the CAPI machine status condition to 'Paused'")
 						Eventually(k.UpdateStatus(capiMachine, func() {
 							updatedCAPIMachine := capiMachineBuilder.Build()
-							updatedCAPIMachine.Status.V1Beta2 = &clusterv1beta1.MachineV1Beta2Status{
-								Conditions: []metav1.Condition{{
-									Type:               clusterv1beta1.PausedV1Beta2Condition,
-									Status:             metav1.ConditionTrue,
-									LastTransitionTime: metav1.Now(),
-								}},
-							}
+							updatedCAPIMachine.Status.Conditions = []metav1.Condition{{
+								Type:               clusterv1beta1.PausedV1Beta2Condition,
+								Status:             metav1.ConditionTrue,
+								LastTransitionTime: metav1.Now(),
+							}}
 							capiMachine.Status = updatedCAPIMachine.Status
 						})).Should(Succeed())
 
@@ -638,13 +636,11 @@ var _ = Describe("With a running MachineMigration controller", func() {
 					By("Setting the CAPI machine status condition to 'Paused'")
 					Eventually(k.UpdateStatus(capiMachine, func() {
 						updatedCAPIMachine := capiMachineBuilder.Build()
-						updatedCAPIMachine.Status.V1Beta2 = &clusterv1beta1.MachineV1Beta2Status{
-							Conditions: []metav1.Condition{{
-								Type:               clusterv1beta1.PausedV1Beta2Condition,
-								Status:             metav1.ConditionTrue,
-								LastTransitionTime: metav1.Now(),
-							}},
-						}
+						updatedCAPIMachine.Status.Conditions = []metav1.Condition{{
+							Type:               clusterv1beta1.PausedV1Beta2Condition,
+							Status:             metav1.ConditionTrue,
+							LastTransitionTime: metav1.Now(),
+						}}
 						capiMachine.Status = updatedCAPIMachine.Status
 					})).Should(Succeed())
 
@@ -712,13 +708,11 @@ var _ = Describe("With a running MachineMigration controller", func() {
 					By("Setting the CAPI machine status condition to 'Paused'")
 					Eventually(k.UpdateStatus(capiMachine, func() {
 						updatedCAPIMachine := capiMachineBuilder.Build()
-						updatedCAPIMachine.Status.V1Beta2 = &clusterv1beta1.MachineV1Beta2Status{
-							Conditions: []metav1.Condition{{
-								Type:               clusterv1beta1.PausedV1Beta2Condition,
-								Status:             metav1.ConditionTrue,
-								LastTransitionTime: metav1.Now(),
-							}},
-						}
+						updatedCAPIMachine.Status.Conditions = []metav1.Condition{{
+							Type:               clusterv1beta1.PausedV1Beta2Condition,
+							Status:             metav1.ConditionTrue,
+							LastTransitionTime: metav1.Now(),
+						}}
 						capiMachine.Status = updatedCAPIMachine.Status
 					})).Should(Succeed())
 

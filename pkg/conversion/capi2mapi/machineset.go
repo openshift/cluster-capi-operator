@@ -20,12 +20,13 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation/field"
-	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	"k8s.io/utils/ptr"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	capierrors "sigs.k8s.io/cluster-api/errors"
 )
 
 // fromCAPIMachineSetToMAPIMachineSet takes a CAPI MachineSet and returns a converted MAPI MachineSet.
-func fromCAPIMachineSetToMAPIMachineSet(capiMachineSet *clusterv1beta1.MachineSet) (*mapiv1beta1.MachineSet, error) {
+func fromCAPIMachineSetToMAPIMachineSet(capiMachineSet *clusterv1.MachineSet) (*mapiv1beta1.MachineSet, error) {
 	errs := field.ErrorList{}
 
 	mapiMachineSet := &mapiv1beta1.MachineSet{
@@ -40,8 +41,8 @@ func fromCAPIMachineSetToMAPIMachineSet(capiMachineSet *clusterv1beta1.MachineSe
 		Spec: mapiv1beta1.MachineSetSpec{
 			Selector:        convertCAPIMachineSetSelectorToMAPI(capiMachineSet.Spec.Selector),
 			Replicas:        capiMachineSet.Spec.Replicas,
-			MinReadySeconds: capiMachineSet.Spec.MinReadySeconds,
-			DeletePolicy:    capiMachineSet.Spec.DeletePolicy,
+			MinReadySeconds: *capiMachineSet.Spec.Template.Spec.MinReadySeconds,
+			DeletePolicy:    string(capiMachineSet.Spec.Deletion.Order),
 			Template: mapiv1beta1.MachineTemplateSpec{
 				ObjectMeta: mapiv1beta1.ObjectMeta{
 					Labels:      convertCAPILabelsToMAPILabels(capiMachineSet.Spec.Template.Labels, nil),
@@ -67,12 +68,12 @@ func fromCAPIMachineSetToMAPIMachineSet(capiMachineSet *clusterv1beta1.MachineSe
 }
 
 // convertCAPIMachineSetStatusToMAPI converts a CAPI MachineSetStatus to MAPI format.
-func convertCAPIMachineSetStatusToMAPI(capiStatus clusterv1beta1.MachineSetStatus) mapiv1beta1.MachineSetStatus {
+func convertCAPIMachineSetStatusToMAPI(capiStatus clusterv1.MachineSetStatus) mapiv1beta1.MachineSetStatus {
 	mapiStatus := mapiv1beta1.MachineSetStatus{
-		Replicas:             capiStatus.Replicas,
-		FullyLabeledReplicas: capiStatus.FullyLabeledReplicas,
-		ReadyReplicas:        capiStatus.ReadyReplicas,
-		AvailableReplicas:    capiStatus.AvailableReplicas,
+		Replicas:             ptr.Deref(capiStatus.Replicas, 0),
+		FullyLabeledReplicas: capiStatus.Deprecated.V1Beta1.FullyLabeledReplicas,
+		ReadyReplicas:        capiStatus.Deprecated.V1Beta1.ReadyReplicas,
+		AvailableReplicas:    capiStatus.Deprecated.V1Beta1.AvailableReplicas,
 		// ObservedGeneration: // We don't set the observed generation at this stage as it is handled by the machineSetSync controller.
 		// AuthoritativeAPI: // Ignore, this field as it is not present in CAPI.
 		// SynchronizedGeneration: // Ignore, this field as it is not present in CAPI.
@@ -83,12 +84,12 @@ func convertCAPIMachineSetStatusToMAPI(capiStatus clusterv1beta1.MachineSetStatu
 	}
 
 	// Convert FailureReason/FailureMessage to ErrorReason/ErrorMessage
-	if capiStatus.FailureReason != nil {
-		mapiStatus.ErrorReason = convertCAPIFailureReasonToMAPIErrorReason(*capiStatus.FailureReason)
+	if capiStatus.Deprecated.V1Beta1.FailureReason != nil {
+		mapiStatus.ErrorReason = convertCAPIFailureReasonToMAPIErrorReason(*capiStatus.Deprecated.V1Beta1.FailureReason)
 	}
 
-	if capiStatus.FailureMessage != nil {
-		mapiStatus.ErrorMessage = capiStatus.FailureMessage
+	if capiStatus.Deprecated.V1Beta1.FailureMessage != nil {
+		mapiStatus.ErrorMessage = capiStatus.Deprecated.V1Beta1.FailureMessage
 	}
 
 	// unused fields from CAPI MachineSetStatus

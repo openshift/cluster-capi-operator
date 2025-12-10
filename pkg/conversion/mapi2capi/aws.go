@@ -84,7 +84,7 @@ func FromAWSMachineSetAndInfra(m *mapiv1beta1.MachineSet, i *configv1.Infrastruc
 
 // ToMachineAndInfrastructureMachine is used to generate a CAPI Machine and the corresponding InfrastructureMachine
 // from the stored MAPI Machine and Infrastructure objects.
-func (m *awsMachineAndInfra) ToMachineAndInfrastructureMachine() (*clusterv1beta1.Machine, client.Object, []string, error) {
+func (m *awsMachineAndInfra) ToMachineAndInfrastructureMachine() (*clusterv1.Machine, client.Object, []string, error) {
 	capiMachine, capaMachine, warnings, errs := m.toMachineAndInfrastructureMachine()
 
 	if len(errs) > 0 {
@@ -94,7 +94,7 @@ func (m *awsMachineAndInfra) ToMachineAndInfrastructureMachine() (*clusterv1beta
 	return capiMachine, capaMachine, warnings, nil
 }
 
-func (m *awsMachineAndInfra) toMachineAndInfrastructureMachine() (*clusterv1beta1.Machine, client.Object, []string, field.ErrorList) {
+func (m *awsMachineAndInfra) toMachineAndInfrastructureMachine() (*clusterv1.Machine, client.Object, []string, field.ErrorList) {
 	var (
 		errs     field.ErrorList
 		warnings []string
@@ -112,29 +112,29 @@ func (m *awsMachineAndInfra) toMachineAndInfrastructureMachine() (*clusterv1beta
 
 	warnings = append(warnings, warn...)
 
-	capiMachine, machineErrs := fromMAPIMachineToCAPIMachine(m.machine, awsv1.GroupVersion.String(), awsMachineKind)
+	capiMachine, machineErrs := fromMAPIMachineToCAPIMachine(m.machine, awsv1.GroupVersion.Group, awsMachineKind)
 	if machineErrs != nil {
 		errs = append(errs, machineErrs...)
 	}
 
 	// Extract and plug InstanceID and ProviderID on CAPA, if the providerID is present on CAPI (instance has been provisioned).
-	if capiMachine.Spec.ProviderID != nil {
-		instanceID := instanceIDFromProviderID(*capiMachine.Spec.ProviderID)
+	if capiMachine.Spec.ProviderID != "" {
+		instanceID := instanceIDFromProviderID(capiMachine.Spec.ProviderID)
 		if instanceID == "" {
 			errs = append(errs, field.Invalid(field.NewPath("spec", "providerID"), capiMachine.Spec.ProviderID, "unable to find InstanceID in ProviderID"))
 		} else {
 			capaMachine.Spec.InstanceID = ptr.To(instanceID)
-			capaMachine.Spec.ProviderID = capiMachine.Spec.ProviderID
+			capaMachine.Spec.ProviderID = ptr.To(capiMachine.Spec.ProviderID)
 		}
 	}
 
 	// Plug into Core CAPI Machine fields that come from the MAPI ProviderConfig which belong here instead of the CAPI AWSMachineTemplate.
 	if awsProviderConfig.Placement.AvailabilityZone != "" {
-		capiMachine.Spec.FailureDomain = ptr.To(awsProviderConfig.Placement.AvailabilityZone)
+		capiMachine.Spec.FailureDomain = awsProviderConfig.Placement.AvailabilityZone
 	}
 
 	if awsProviderConfig.UserDataSecret != nil && awsProviderConfig.UserDataSecret.Name != "" {
-		capiMachine.Spec.Bootstrap = clusterv1beta1.Bootstrap{
+		capiMachine.Spec.Bootstrap = clusterv1.Bootstrap{
 			DataSecretName: &awsProviderConfig.UserDataSecret.Name,
 		}
 	}
@@ -165,7 +165,7 @@ func (m *awsMachineAndInfra) toMachineAndInfrastructureMachine() (*clusterv1beta
 // ToMachineSetAndMachineTemplate converts a mapi2capi AWSMachineSetAndInfra into a CAPI MachineSet and CAPA AWSMachineTemplate.
 //
 //nolint:dupl
-func (m *awsMachineSetAndInfra) ToMachineSetAndMachineTemplate() (*clusterv1beta1.MachineSet, client.Object, []string, error) {
+func (m *awsMachineSetAndInfra) ToMachineSetAndMachineTemplate() (*clusterv1.MachineSet, client.Object, []string, error) {
 	var (
 		errs     []error
 		warnings []string
@@ -370,7 +370,7 @@ func convertMAPIMachineStatusToAWSMachineStatus(mapiMachine *mapiv1beta1.Machine
 		return awsv1.AWSMachineStatus{}, append(errs, field.InternalError(field.NewPath("spec", "providerSpec"), err))
 	}
 
-	addresses, addressesErr := convertMAPIMachineAddressesToCAPI(mapiMachine.Status.Addresses)
+	addresses, addressesErr := convertMAPIMachineAddressesToCAPIV1Beta1(mapiMachine.Status.Addresses)
 	if len(addressesErr) > 0 {
 		errs = append(errs, addressesErr...)
 	}

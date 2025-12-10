@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"math/rand"
 	"regexp"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -53,12 +52,12 @@ const powerVSMachineKind = "IBMPowerVSMachine"
 // CAPI2MAPIMachineConverterConstructor is a function that constructs a CAPI to MAPI Machine converter.
 // Since the CAPI to MAPI conversion relies on different types, it is expected that the constructor is wrapped in a closure
 // that handles type assertions to fit the interface.
-type CAPI2MAPIMachineConverterConstructor func(*clusterv1beta1.Machine, client.Object, client.Object) capi2mapi.MachineAndInfrastructureMachine
+type CAPI2MAPIMachineConverterConstructor func(*clusterv1.Machine, client.Object, client.Object) capi2mapi.MachineAndInfrastructureMachine
 
 // CAPI2MAPIMachineSetConverterConstructor is a function that constructs a CAPI to MAPI MachineSet converter.
 // Since the CAPI to MAPI conversion relies on different types, it is expected that the constructor is wrapped in a closure
 // that handles type assertions to fit the interface.
-type CAPI2MAPIMachineSetConverterConstructor func(*clusterv1beta1.MachineSet, client.Object, client.Object) capi2mapi.MachineSetAndMachineTemplate
+type CAPI2MAPIMachineSetConverterConstructor func(*clusterv1.MachineSet, client.Object, client.Object) capi2mapi.MachineSetAndMachineTemplate
 
 // MAPI2CAPIMachineConverterConstructor is a function that constructs a MAPI to CAPI Machine converter.
 type MAPI2CAPIMachineConverterConstructor func(*mapiv1beta1.Machine, *configv1.Infrastructure) mapi2capi.Machine
@@ -71,7 +70,7 @@ type StringFuzzer func(randfill.Continue) string
 
 // capiToMapiMachineFuzzInput is a struct that holds the input for the CAPI to MAPI fuzz test.
 type capiToMapiMachineFuzzInput struct {
-	machine                  *clusterv1beta1.Machine
+	machine                  *clusterv1.Machine
 	infra                    *configv1.Infrastructure
 	infraMachine             client.Object
 	infraCluster             client.Object
@@ -88,7 +87,7 @@ func CAPI2MAPIMachineRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv1.I
 	fz := getFuzzer(scheme, fuzzerFuncs...)
 
 	for i := 0; i < 1000; i++ {
-		m := &clusterv1beta1.Machine{}
+		m := &clusterv1.Machine{}
 		fz.Fill(m)
 		fz.Fill(infraMachine)
 
@@ -127,12 +126,12 @@ func CAPI2MAPIMachineRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv1.I
 		// Break down the comparison to make it easier to debug sections that are failing conversion.
 
 		// Status comparison
-		capiMachine.Status.Conditions = nil         // This is not a 1:1 mapping conversion between CAPI and MAPI.
-		capiMachine.Status.V1Beta2.Conditions = nil // This is not a 1:1 mapping conversion between CAPI and MAPI.
+		capiMachine.Status.Conditions = nil // This is not a 1:1 mapping conversion between CAPI and MAPI.
+		capiMachine.Status.Conditions = nil // This is not a 1:1 mapping conversion between CAPI and MAPI.
 
-		capiMachine.Status.CertificatesExpiryDate = nil // This is not present on the MAPI Machine status.
-		capiMachine.Status.Deletion = nil               // This is not present on the MAPI Machine status.
-		capiMachine.Status.NodeInfo = nil               // This is not present on the MAPI Machine status.
+		capiMachine.Status.CertificatesExpiryDate = metav1.Time{} // This is not present on the MAPI Machine status.
+		capiMachine.Status.Deletion = nil                         // This is not present on the MAPI Machine status.
+		capiMachine.Status.NodeInfo = nil                         // This is not present on the MAPI Machine status.
 
 		Expect(capiMachine.Status).To(Equal(in.machine.Status))
 
@@ -159,7 +158,7 @@ func CAPI2MAPIMachineRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv1.I
 
 // capiToMapiMachineSetFuzzInput is a struct that holds the input for the CAPI to MAPI fuzz test.
 type capiToMapiMachineSetFuzzInput struct {
-	machineSet               *clusterv1beta1.MachineSet
+	machineSet               *clusterv1.MachineSet
 	infra                    *configv1.Infrastructure
 	infraMachineTemplate     client.Object
 	infraCluster             client.Object
@@ -178,7 +177,7 @@ func CAPI2MAPIMachineSetRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv
 	fz := getFuzzer(scheme, fuzzerFuncs...)
 
 	for i := 0; i < 1000; i++ {
-		m := &clusterv1beta1.MachineSet{}
+		m := &clusterv1.MachineSet{}
 		fz.Fill(m)
 		fz.Fill(infraMachineTemplate)
 
@@ -229,7 +228,7 @@ func CAPI2MAPIMachineSetRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv
 		// The conditions are not a 1:1 mapping conversion between CAPI and MAPI.
 		// So null them out to match the original nil fuzzing.
 		capiMachineSet.Status.Conditions = nil
-		capiMachineSet.Status.V1Beta2.Conditions = nil
+		capiMachineSet.Status.Conditions = nil
 
 		// The status selector is computed based on the spec selector of the same object,
 		// so we don't want to compare it with the original object's status selector.
@@ -448,7 +447,7 @@ func ObjectMetaFuzzerFuncs(namespace string) fuzzer.FuzzerFuncs {
 }
 
 // CAPIMachineFuzzerFuncs returns a set of fuzzer functions that can be used to fuzz MachineSpec objects.
-func CAPIMachineFuzzerFuncs(providerIDFuzz StringFuzzer, infraKind, infraAPIVersion, clusterName string) fuzzer.FuzzerFuncs {
+func CAPIMachineFuzzerFuncs(providerIDFuzz StringFuzzer, infraKind, infraAPIGroup, clusterName string) fuzzer.FuzzerFuncs {
 	return func(codecs runtimeserializer.CodecFactory) []interface{} {
 		return []interface{}{
 			func(b *clusterv1beta1.Bootstrap, c randfill.Continue) {
@@ -462,31 +461,27 @@ func CAPIMachineFuzzerFuncs(providerIDFuzz StringFuzzer, infraKind, infraAPIVers
 					b.DataSecretName = nil
 				}
 			},
-			func(m *clusterv1beta1.MachineSpec, c randfill.Continue) {
+			func(m *clusterv1.MachineSpec, c randfill.Continue) {
 				c.FillNoCustom(m)
 
 				m.ClusterName = clusterName
-				m.ProviderID = ptr.To(providerIDFuzz(c))
+				m.ProviderID = providerIDFuzz(c)
 
 				// Clear fields that are not supported in the machine spec.
-				m.Version = nil
+				m.Version = ""
 				m.ReadinessGates = nil
 				// Clear fields that are not yet supported in the conversion.
 				// TODO(OCPCLOUD-2715): Implement support for node draining options in MAPI.
-				m.NodeDrainTimeout = nil
-				m.NodeVolumeDetachTimeout = nil
-				m.NodeDeletionTimeout = &metav1.Duration{Duration: time.Second * 10} // This is defaulted to 10s by default in CAPI.
+				m.Deletion.NodeDrainTimeoutSeconds = nil
+				m.Deletion.NodeVolumeDetachTimeoutSeconds = nil
+				m.Deletion.NodeDeletionTimeoutSeconds = ptr.To(int32(10)) // This is defaulted to 10s by default in CAPI.
 
-				// Clear fields that are zero valued.
-				if m.FailureDomain != nil && *m.FailureDomain == "" {
-					m.FailureDomain = nil
-				}
 				// Power VS does not support failure domain
 				if infraKind == powerVSMachineKind {
-					m.FailureDomain = nil
+					m.FailureDomain = ""
 				}
 			},
-			func(m *clusterv1beta1.Machine, c randfill.Continue) {
+			func(m *clusterv1.Machine, c randfill.Continue) {
 				c.FillNoCustom(m)
 
 				if m.Labels == nil {
@@ -499,41 +494,36 @@ func CAPIMachineFuzzerFuncs(providerIDFuzz StringFuzzer, infraKind, infraAPIVers
 				// The kind and APIVersion should be set to the InfraMachine's kind and APIVersion.
 				// This is fixed in the conversion so we fix it here.
 				// Other fields are not required for conversion.
-				m.Spec.InfrastructureRef = corev1.ObjectReference{
-					APIVersion: infraAPIVersion,
-					Kind:       infraKind,
-					Name:       m.Name,
-					Namespace:  m.Namespace,
+				m.Spec.InfrastructureRef = clusterv1.ContractVersionedObjectReference{
+					APIGroup: infraAPIGroup,
+					Kind:     infraKind,
+					Name:     m.Name,
 				}
 			},
-			func(m *clusterv1beta1.MachineStatus, c randfill.Continue) {
+			func(m *clusterv1.MachineStatus, c randfill.Continue) {
 				c.FillNoCustom(m)
 
 				fuzzCAPIMachineStatusAddresses(&m.Addresses, c)
 				fuzzCAPIMachineStatusPhase(&m.Phase, c)
 
-				m.ObservedGeneration = 0       // Ignore, this field as it shouldn't match between CAPI and MAPI.
-				m.Conditions = nil             // Ignore, this field as it is not a 1:1 mapping between CAPI and MAPI but rather a recomputation of the conditions based on other fields.
-				m.CertificatesExpiryDate = nil // Ignore, this field as it is not present in MAPI.
-				m.Deletion = nil               // Ignore, this field as it is not present in MAPI.
+				m.ObservedGeneration = 0                 // Ignore, this field as it shouldn't match between CAPI and MAPI.
+				m.Conditions = nil                       // Ignore, this field as it is not a 1:1 mapping between CAPI and MAPI but rather a recomputation of the conditions based on other fields.
+				m.CertificatesExpiryDate = metav1.Time{} // Ignore, this field as it is not present in MAPI.
+				m.Deletion = nil                         // Ignore, this field as it is not present in MAPI.
 			},
-			func(m *clusterv1beta1.MachineStatus, c randfill.Continue) {
-				// Deal with the V1Beta2 status field.
-				if m.V1Beta2 == nil {
-					m.V1Beta2 = &clusterv1beta1.MachineV1Beta2Status{}
-				}
-
-				m.V1Beta2.Conditions = nil
+			func(m *clusterv1.MachineStatus, c randfill.Continue) {
+				// Deal with the V1Beta2 conditions.
+				m.Conditions = nil
 			},
 		}
 	}
 }
 
 // CAPIMachineSetFuzzerFuncs returns a set of fuzzer functions that can be used to fuzz MachineSetSpec objects.
-func CAPIMachineSetFuzzerFuncs(infraTemplateKind, infraAPIVersion, clusterName string) fuzzer.FuzzerFuncs {
+func CAPIMachineSetFuzzerFuncs(infraTemplateKind, infraAPIGroup, clusterName string) fuzzer.FuzzerFuncs {
 	return func(codecs runtimeserializer.CodecFactory) []interface{} {
 		return []interface{}{
-			func(t *clusterv1beta1.MachineTemplateSpec, c randfill.Continue) {
+			func(t *clusterv1.MachineTemplateSpec, c randfill.Continue) {
 				c.FillNoCustom(t)
 
 				if len(t.Annotations) == 0 {
@@ -545,7 +535,7 @@ func CAPIMachineSetFuzzerFuncs(infraTemplateKind, infraAPIVersion, clusterName s
 				}
 				t.Labels[clusterv1.ClusterNameLabel] = clusterName
 			},
-			func(m *clusterv1beta1.MachineSetSpec, c randfill.Continue) {
+			func(m *clusterv1.MachineSetSpec, c randfill.Continue) {
 				c.FillNoCustom(m)
 
 				m.ClusterName = clusterName
@@ -554,28 +544,23 @@ func CAPIMachineSetFuzzerFuncs(infraTemplateKind, infraAPIVersion, clusterName s
 					m.Selector.MatchLabels = map[string]string{}
 				}
 
-				// Clear MachineNamingStrategy as it is not supported in MAPI conversion.
+				// Clear MachineNaming.Template as it is not supported in MAPI conversion.
 				// This field does not have an equivalent in MAPI MachineSet and would be lost
 				// during CAPI->MAPI->CAPI roundtrip conversion.
-				m.MachineNamingStrategy = nil
+				m.MachineNaming.Template = ""
 
-				fuzzCAPIMachineSetSpecDeletePolicy(&m.DeletePolicy, c)
+				fuzzCAPIMachineSetSpecDeletionOrder(&m.Deletion.Order, c)
 			},
-			func(m *clusterv1beta1.MachineSetStatus, c randfill.Continue) {
+			func(m *clusterv1.MachineSetStatus, c randfill.Continue) {
 				c.FillNoCustom(m)
 				m.Selector = ""          // Ignore, this field as it is not present in MAPI.
 				m.ObservedGeneration = 0 // Ignore, this field as it shouldn't match between CAPI and MAPI.
 				m.Conditions = nil       // Ignore, this field as it is not a 1:1 mapping between CAPI and MAPI but rather a recomputation of the conditions based on other fields.
 			},
-			func(m *clusterv1beta1.MachineSetStatus, c randfill.Continue) {
-				// Deal with the V1Beta2 status field.
-				if m.V1Beta2 == nil {
-					m.V1Beta2 = &clusterv1beta1.MachineSetV1Beta2Status{}
-				}
-
-				m.V1Beta2.Conditions = nil
-				m.V1Beta2.ReadyReplicas = ptr.To(m.ReadyReplicas)
-				m.V1Beta2.AvailableReplicas = ptr.To(m.AvailableReplicas)
+			func(m *clusterv1.MachineSetStatus, c randfill.Continue) {
+				m.Conditions = nil
+				m.ReadyReplicas = ptr.To(m.Deprecated.V1Beta1.ReadyReplicas)
+				m.AvailableReplicas = ptr.To(m.Deprecated.V1Beta1.AvailableReplicas)
 				// If the current MachineSet is a stand-alone MachineSet, the MachineSet controller does not set an up-to-date condition
 				// on its child Machines, allowing tools managing higher level abstractions to set this condition.
 				// This is also consistent with the fact that the MachineSet controller primarily takes care of the number of Machine
@@ -587,9 +572,9 @@ func CAPIMachineSetFuzzerFuncs(infraTemplateKind, infraAPIVersion, clusterName s
 				// We always want to set this to zero on conversion.
 				// ref:
 				// https://github.com/kubernetes-sigs/cluster-api/blob/9c2eb0a04d5a03e18f2d557f1297391fb635f88d/internal/controllers/machineset/machineset_controller.go#L610-L618
-				m.V1Beta2.UpToDateReplicas = ptr.To(int32(0))
+				m.UpToDateReplicas = ptr.To(int32(0))
 			},
-			func(m *clusterv1beta1.MachineSet, c randfill.Continue) {
+			func(m *clusterv1.MachineSet, c randfill.Continue) {
 				c.FillNoCustom(m)
 
 				if m.Labels == nil {
@@ -602,11 +587,10 @@ func CAPIMachineSetFuzzerFuncs(infraTemplateKind, infraAPIVersion, clusterName s
 				// The kind and APIVersion should be set to the InfraMachineTemplate's kind and APIVersion.
 				// This is fixed in the conversion so we fix it here.
 				// Other fields are not required for conversion.
-				m.Spec.Template.Spec.InfrastructureRef = corev1.ObjectReference{
-					APIVersion: infraAPIVersion,
-					Kind:       infraTemplateKind,
-					Name:       m.Name,
-					Namespace:  m.Namespace,
+				m.Spec.Template.Spec.InfrastructureRef = clusterv1.ContractVersionedObjectReference{
+					APIGroup: infraAPIGroup,
+					Kind:     infraTemplateKind,
+					Name:     m.Name,
 				}
 			},
 		}
@@ -805,15 +789,15 @@ func fuzzMAPIMachineSetSpecDeletePolicy(deletePolicy *string, c randfill.Continu
 	} //nolint:wsl
 }
 
-// fuzzCAPIMachineSetSpecDeletePolicy fuzzes a single CAPI MachineSetDeletePolicy with valid values.
-func fuzzCAPIMachineSetSpecDeletePolicy(deletePolicy *string, c randfill.Continue) {
+// fuzzCAPIMachineSetSpecDeletionOrder fuzzes a single CAPI MachineSetDeletePolicy with valid values.
+func fuzzCAPIMachineSetSpecDeletionOrder(deletePolicy *clusterv1.MachineSetDeletionOrder, c randfill.Continue) {
 	switch c.Int31n(3) {
 	case 0:
-		*deletePolicy = string(clusterv1beta1.RandomMachineSetDeletePolicy)
+		*deletePolicy = clusterv1.RandomMachineSetDeletionOrder
 	case 1:
-		*deletePolicy = string(clusterv1beta1.NewestMachineSetDeletePolicy)
+		*deletePolicy = clusterv1.NewestMachineSetDeletionOrder
 	case 2:
-		*deletePolicy = string(clusterv1beta1.OldestMachineSetDeletePolicy)
+		*deletePolicy = clusterv1.OldestMachineSetDeletionOrder
 		// case 3:
 		// 	*deletePolicy = "" // Do not fuzz CAPI MachineSetDeletePolicy to the empty value.
 		// It will otherwise get converted to CAPI RandomMachineSetDeletePolicy (default in CAPI) which
@@ -903,10 +887,10 @@ func fuzzMAPIMachineStatusPhase(phase *string, c randfill.Continue) {
 }
 
 // fuzzCAPIMachineStatusAddresses fuzzes a slice of CAPI machine status addresses with randomized count and content.
-func fuzzCAPIMachineStatusAddresses(addresses *clusterv1beta1.MachineAddresses, c randfill.Continue) {
+func fuzzCAPIMachineStatusAddresses(addresses *clusterv1.MachineAddresses, c randfill.Continue) {
 	// Randomize the number of addresses (0-3 addresses)
 	count := c.Int31n(4)
-	*addresses = make(clusterv1beta1.MachineAddresses, count)
+	*addresses = make(clusterv1.MachineAddresses, count)
 
 	// Fuzz each address
 	for i := range *addresses {
@@ -922,38 +906,38 @@ func fuzzCAPIMachineStatusPhase(phase *string, c randfill.Continue) {
 
 	switch c.Int31n(8) {
 	case 0:
-		*phase = string(clusterv1beta1.MachinePhasePending)
+		*phase = string(clusterv1.MachinePhasePending)
 	case 1:
-		*phase = string(clusterv1beta1.MachinePhaseRunning)
+		*phase = string(clusterv1.MachinePhaseRunning)
 	case 2:
-		*phase = string(clusterv1beta1.MachinePhaseProvisioning)
+		*phase = string(clusterv1.MachinePhaseProvisioning)
 	case 3:
-		*phase = string(clusterv1beta1.MachinePhaseProvisioned)
+		*phase = string(clusterv1.MachinePhaseProvisioned)
 	case 4:
-		*phase = string(clusterv1beta1.MachinePhaseDeleting)
+		*phase = string(clusterv1.MachinePhaseDeleting)
 	case 5:
-		*phase = string(clusterv1beta1.MachinePhaseFailed)
+		*phase = string(clusterv1.MachinePhaseFailed)
 	case 6:
-		*phase = string(clusterv1beta1.MachinePhaseDeleted)
+		*phase = string(clusterv1.MachinePhaseDeleted)
 	case 7:
-		*phase = string(clusterv1beta1.MachinePhaseUnknown)
+		*phase = string(clusterv1.MachinePhaseUnknown)
 	}
 }
 
 // fuzzCAPIMachineStatusAddress fuzzes a single CAPI machine status address with valid address types and randomized IP addresses.
 //
 //nolint:dupl
-func fuzzCAPIMachineStatusAddress(address *clusterv1beta1.MachineAddress, c randfill.Continue) {
+func fuzzCAPIMachineStatusAddress(address *clusterv1.MachineAddress, c randfill.Continue) {
 	// Fuzz the address type to one of the valid types for CAPI machines
 	// Based on the conversion code, CAPI supports: Hostname, ExternalIP, InternalIP
 	// (ExternalDNS and InternalDNS are not supported in CAPI conversion)
 	switch c.Int31n(5) {
 	case 0:
-		address.Type = clusterv1beta1.MachineHostName
+		address.Type = clusterv1.MachineHostName
 		// Generate a random hostname
 		address.Address = fmt.Sprintf("node-%d.example.com", c.Int31n(1000))
 	case 1:
-		address.Type = clusterv1beta1.MachineExternalIP
+		address.Type = clusterv1.MachineExternalIP
 		// Generate a random external IP address (public IP range)
 		address.Address = fmt.Sprintf("%d.%d.%d.%d",
 			c.Int31n(223)+1, // 1-223 (avoid 0.x.x.x and 224+ multicast)
@@ -961,7 +945,7 @@ func fuzzCAPIMachineStatusAddress(address *clusterv1beta1.MachineAddress, c rand
 			c.Int31n(256),   // 0-255
 			c.Int31n(254)+1) // 1-254 (avoid .0 and .255)
 	case 2:
-		address.Type = clusterv1beta1.MachineInternalIP
+		address.Type = clusterv1.MachineInternalIP
 		// Generate a random internal IP address (private IP ranges)
 		switch c.Int31n(3) {
 		case 0:
@@ -978,11 +962,11 @@ func fuzzCAPIMachineStatusAddress(address *clusterv1beta1.MachineAddress, c rand
 				c.Int31n(256), c.Int31n(254)+1)
 		}
 	case 3:
-		address.Type = clusterv1beta1.MachineExternalDNS
+		address.Type = clusterv1.MachineExternalDNS
 		// Generate a random external DNS address
 		address.Address = fmt.Sprintf("node-%d.example.com", c.Int31n(1000))
 	case 4:
-		address.Type = clusterv1beta1.MachineInternalDNS
+		address.Type = clusterv1.MachineInternalDNS
 		// Generate a random internal DNS address
 		address.Address = fmt.Sprintf("node-%d.example.com", c.Int31n(1000))
 	}
