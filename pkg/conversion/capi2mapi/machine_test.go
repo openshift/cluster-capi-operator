@@ -21,7 +21,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
-	capibuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/cluster-api/core/v1beta1"
+	capibuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/cluster-api/core/v1beta2"
 	capabuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/cluster-api/infrastructure/v1beta2"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/test/matchers"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
@@ -73,17 +73,17 @@ var _ = Describe("capi2mapi Machine conversion", func() {
 			expectedWarnings: []string{},
 		}),
 		Entry("With unsupported NodeDrainTimeout", capi2MAPIMachineConversionInput{
-			machineBuilder:   capiMachineBase.WithNodeDrainTimeout(ptr.To[int32](1)),
+			machineBuilder:   capiMachineBase.WithNodeDrainTimeoutSeconds(1),
 			expectedErrors:   []string{"spec.nodeDrainTimeout: Invalid value: \"1s\": nodeDrainTimeout is not supported"},
 			expectedWarnings: []string{},
 		}),
 		Entry("With unsupported NodeVolumeDetachTimeout", capi2MAPIMachineConversionInput{
-			machineBuilder:   capiMachineBase.WithNodeVolumeDetachTimeout(ptr.To[int32](1)),
+			machineBuilder:   capiMachineBase.WithNodeVolumeDetachTimeoutSeconds(1),
 			expectedErrors:   []string{"spec.nodeVolumeDetachTimeout: Invalid value: \"1s\": nodeVolumeDetachTimeout is not supported"},
 			expectedWarnings: []string{},
 		}),
 		Entry("With unsupported NodeDeletionTimeout", capi2MAPIMachineConversionInput{
-			machineBuilder:   capiMachineBase.WithNodeDeletionTimeout(ptr.To[int32](1)),
+			machineBuilder:   capiMachineBase.WithNodeDeletionTimeoutSeconds(1),
 			expectedErrors:   []string{"spec.nodeDeletionTimeout: Invalid value: \"1s\": nodeDeletionTimeout is not supported"},
 			expectedWarnings: []string{},
 		}),
@@ -125,7 +125,7 @@ var _ = Describe("capi2mapi Machine Status Conversion", func() {
 				WithPhase("Running").
 				WithFailureReason(ptr.To(capierrors.MachineStatusError("InvalidConfiguration"))).
 				WithFailureMessage(ptr.To(string("Test failure message"))).
-				WithConditions([]clusterv1.Condition{condition}).
+				WithV1Beta1Conditions([]clusterv1.Condition{condition}).
 				Build()
 
 			mapiStatus, errs := convertCAPIMachineStatusToMAPI(capiMachine.Status)

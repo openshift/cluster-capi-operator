@@ -18,12 +18,11 @@ package capi2mapi
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	capibuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/cluster-api/core/v1beta1"
+	capibuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/cluster-api/core/v1beta2"
 	capabuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/cluster-api/infrastructure/v1beta2"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/test/matchers"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/ptr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	capierrors "sigs.k8s.io/cluster-api/errors"
 )
@@ -69,11 +68,11 @@ var _ = Describe("capi2mapi MachineSet Status Conversion", func() {
 					MatchLabels: map[string]string{"app": "test"},
 				}).
 				WithReplicas(5).
-				WithStatusReplicas(ptr.To[int32](5)).
+				WithStatusReplicas(5).
 				WithStatusV1Beta1FullyLabeledReplicas(5).
 				WithStatusV1Beta1ReadyReplicas(4).
 				WithStatusV1Beta1AvailableReplicas(3).
-				WithStatusV1Beta1FailureReason(ptr.To(capierrors.MachineSetStatusError("InvalidConfiguration"))).
+				WithStatusV1Beta1FailureReason(capierrors.MachineSetStatusError("InvalidConfiguration")).
 				WithStatusV1Beta1FailureMessage("Test failure message").
 				WithStatusV1Beta1Conditions([]clusterv1.Condition{
 					{

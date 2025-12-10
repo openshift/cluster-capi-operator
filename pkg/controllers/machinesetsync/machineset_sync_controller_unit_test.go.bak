@@ -1,0 +1,330 @@
+/*
+Copyright 2025 Red Hat, Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+	http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+package machinesetsync
+
+import (
+	"time"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
+
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+)
+
+var _ = Describe("Unit tests for CAPIMachineSetStatusEqual", func() {
+	now := metav1.Now()
+	later := metav1.NewTime(now.Add(1 * time.Hour))
+
+	type testInput struct {
+		a           clusterv1beta1.MachineSetStatus
+		b           clusterv1beta1.MachineSetStatus
+		want        string
+		wantChanges bool
+	}
+
+	DescribeTable("when comparing Cluster API MachineSets",
+		func(tt testInput) {
+			a := &clusterv1beta1.MachineSet{
+				Status: tt.a,
+			}
+			b := &clusterv1beta1.MachineSet{
+				Status: tt.b,
+			}
+
+			got, err := compareCAPIMachineSets(a, b)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(got.HasChanges()).To(Equal(tt.wantChanges))
+
+			if tt.wantChanges {
+				Expect(got.String()).To(Equal(tt.want))
+			}
+		},
+		Entry("no diff", testInput{
+			a:           clusterv1beta1.MachineSetStatus{},
+			b:           clusterv1beta1.MachineSetStatus{},
+			want:        "",
+			wantChanges: false,
+		}),
+		Entry("diff in ReadyReplicas", testInput{
+			a: clusterv1beta1.MachineSetStatus{
+				ReadyReplicas: 3,
+			},
+			b: clusterv1beta1.MachineSetStatus{
+				ReadyReplicas: 5,
+			},
+			want:        ".[status].[readyReplicas]: 3 != 5",
+			wantChanges: true,
+		}),
+		Entry("diff in AvailableReplicas", testInput{
+			a: clusterv1beta1.MachineSetStatus{
+				AvailableReplicas: 2,
+			},
+			b: clusterv1beta1.MachineSetStatus{
+				AvailableReplicas: 4,
+			},
+			want:        ".[status].[availableReplicas]: 2 != 4",
+			wantChanges: true,
+		}),
+		Entry("diff in ReadyReplicas and AvailableReplicas", testInput{
+			a: clusterv1beta1.MachineSetStatus{
+				ReadyReplicas:     3,
+				AvailableReplicas: 2,
+			},
+			b: clusterv1beta1.MachineSetStatus{
+				ReadyReplicas:     5,
+				AvailableReplicas: 4,
+			},
+			want:        ".[status].[availableReplicas]: 2 != 4, .[status].[readyReplicas]: 3 != 5",
+			wantChanges: true,
+		}),
+		Entry("same v1beta1 conditions", testInput{
+			a: clusterv1beta1.MachineSetStatus{
+				Conditions: []clusterv1beta1.Condition{
+					{
+						Type:               clusterv1beta1.ReadyCondition,
+						Status:             corev1.ConditionTrue,
+						LastTransitionTime: now,
+					},
+				},
+			},
+			b: clusterv1beta1.MachineSetStatus{
+				Conditions: []clusterv1beta1.Condition{
+					{
+						Type:               clusterv1beta1.ReadyCondition,
+						Status:             corev1.ConditionTrue,
+						LastTransitionTime: now,
+					},
+				},
+			},
+			want:        "",
+			wantChanges: false,
+		}),
+		Entry("changed v1beta1 condition Status", testInput{
+			a: clusterv1beta1.MachineSetStatus{
+				Conditions: []clusterv1beta1.Condition{
+					{
+						Type:               clusterv1beta1.ReadyCondition,
+						Status:             corev1.ConditionTrue,
+						LastTransitionTime: now,
+					},
+				},
+			},
+			b: clusterv1beta1.MachineSetStatus{
+				Conditions: []clusterv1beta1.Condition{
+					{
+						Type:               clusterv1beta1.ReadyCondition,
+						Status:             corev1.ConditionFalse,
+						LastTransitionTime: now,
+					},
+				},
+			},
+			want:        ".[status].[conditions].[type=Ready].[status]: True != False",
+			wantChanges: true,
+		}),
+		Entry("v1beta1 condition LastTransitionTime ignored", testInput{
+			a: clusterv1beta1.MachineSetStatus{
+				Conditions: []clusterv1beta1.Condition{
+					{
+						Type:               clusterv1beta1.ReadyCondition,
+						Status:             corev1.ConditionTrue,
+						LastTransitionTime: now,
+					},
+				},
+			},
+			b: clusterv1beta1.MachineSetStatus{
+				Conditions: []clusterv1beta1.Condition{
+					{
+						Type:               clusterv1beta1.ReadyCondition,
+						Status:             corev1.ConditionTrue,
+						LastTransitionTime: later,
+					},
+				},
+			},
+			want:        "",
+			wantChanges: false,
+		}),
+		Entry("multiple v1beta1 conditions with one changed", testInput{
+			a: clusterv1beta1.MachineSetStatus{
+				Conditions: []clusterv1beta1.Condition{
+					{
+						Type:               clusterv1beta1.ReadyCondition,
+						Status:             corev1.ConditionTrue,
+						LastTransitionTime: now,
+					},
+					{
+						Type:               clusterv1beta1.MachinesReadyCondition,
+						Status:             corev1.ConditionTrue,
+						LastTransitionTime: now,
+					},
+				},
+			},
+			b: clusterv1beta1.MachineSetStatus{
+				Conditions: []clusterv1beta1.Condition{
+					{
+						Type:               clusterv1beta1.ReadyCondition,
+						Status:             corev1.ConditionTrue,
+						LastTransitionTime: now,
+					},
+					{
+						Type:               clusterv1beta1.MachinesReadyCondition,
+						Status:             corev1.ConditionFalse,
+						LastTransitionTime: now,
+					},
+				},
+			},
+			want:        ".[status].[conditions].[type=MachinesReady].[status]: True != False",
+			wantChanges: true,
+		}),
+		Entry("same v1beta2 conditions", testInput{
+			a: clusterv1beta1.MachineSetStatus{
+				V1Beta2: &clusterv1beta1.MachineSetV1Beta2Status{
+					Conditions: []metav1.Condition{
+						{
+							Type:               "Ready",
+							Status:             metav1.ConditionTrue,
+							LastTransitionTime: now,
+							Reason:             "AllReady",
+							Message:            "All machines are ready",
+						},
+					},
+				},
+			},
+			b: clusterv1beta1.MachineSetStatus{
+				V1Beta2: &clusterv1beta1.MachineSetV1Beta2Status{
+					Conditions: []metav1.Condition{
+						{
+							Type:               "Ready",
+							Status:             metav1.ConditionTrue,
+							LastTransitionTime: now,
+							Reason:             "AllReady",
+							Message:            "All machines are ready",
+						},
+					},
+				},
+			},
+			want:        "",
+			wantChanges: false,
+		}),
+		Entry("changed v1beta2 condition Status", testInput{
+			a: clusterv1beta1.MachineSetStatus{
+				V1Beta2: &clusterv1beta1.MachineSetV1Beta2Status{
+					Conditions: []metav1.Condition{
+						{
+							Type:               "Ready",
+							Status:             metav1.ConditionTrue,
+							LastTransitionTime: now,
+						},
+					},
+				},
+			},
+			b: clusterv1beta1.MachineSetStatus{
+				V1Beta2: &clusterv1beta1.MachineSetV1Beta2Status{
+					Conditions: []metav1.Condition{
+						{
+							Type:               "Ready",
+							Status:             metav1.ConditionFalse,
+							LastTransitionTime: now,
+						},
+					},
+				},
+			},
+			want:        ".[status].[v1beta2].[conditions].[type=Ready].[status]: True != False",
+			wantChanges: true,
+		}),
+		Entry("v1beta2 condition LastTransitionTime ignored", testInput{
+			a: clusterv1beta1.MachineSetStatus{
+				V1Beta2: &clusterv1beta1.MachineSetV1Beta2Status{
+					Conditions: []metav1.Condition{
+						{
+							Type:               "Ready",
+							Status:             metav1.ConditionTrue,
+							LastTransitionTime: now,
+							Reason:             "AllReady",
+							Message:            "All machines are ready",
+						},
+					},
+				},
+			},
+			b: clusterv1beta1.MachineSetStatus{
+				V1Beta2: &clusterv1beta1.MachineSetV1Beta2Status{
+					Conditions: []metav1.Condition{
+						{
+							Type:               "Ready",
+							Status:             metav1.ConditionTrue,
+							LastTransitionTime: later,
+							Reason:             "AllReady",
+							Message:            "All machines are ready",
+						},
+					},
+				},
+			},
+			want:        "",
+			wantChanges: false,
+		}),
+		Entry("multiple v1beta2 conditions with one changed", testInput{
+			a: clusterv1beta1.MachineSetStatus{
+				V1Beta2: &clusterv1beta1.MachineSetV1Beta2Status{
+					Conditions: []metav1.Condition{
+						{
+							Type:               "Ready",
+							Status:             metav1.ConditionTrue,
+							LastTransitionTime: now,
+						},
+						{
+							Type:               "Available",
+							Status:             metav1.ConditionTrue,
+							LastTransitionTime: now,
+						},
+					},
+				},
+			},
+			b: clusterv1beta1.MachineSetStatus{
+				V1Beta2: &clusterv1beta1.MachineSetV1Beta2Status{
+					Conditions: []metav1.Condition{
+						{
+							Type:               "Ready",
+							Status:             metav1.ConditionTrue,
+							LastTransitionTime: now,
+						},
+						{
+							Type:               "Available",
+							Status:             metav1.ConditionFalse,
+							LastTransitionTime: now,
+						},
+					},
+				},
+			},
+			want:        ".[status].[v1beta2].[conditions].[type=Available].[status]: True != False",
+			wantChanges: true,
+		}),
+		Entry("v1beta2 nil vs non-nil", testInput{
+			a: clusterv1beta1.MachineSetStatus{
+				V1Beta2: nil,
+			},
+			b: clusterv1beta1.MachineSetStatus{
+				V1Beta2: &clusterv1beta1.MachineSetV1Beta2Status{
+					ReadyReplicas: ptr.To[int32](3),
+				},
+			},
+			want:        ".[status].[v1beta2]: <does not have key> != [readyReplicas:3]",
+			wantChanges: true,
+		}),
+	)
+})
