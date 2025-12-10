@@ -41,11 +41,11 @@ func applyCustomResourceDefinitionV1Improved(ctx context.Context, client apiextc
 			ctx, resourcemerge.WithCleanLabelsAndAnnotations(requiredCopy).(*apiextensionsv1.CustomResourceDefinition), metav1.CreateOptions{})
 		resourcehelper.ReportCreateEvent(recorder, required, err)
 
-		return actual, true, fmt.Errorf("error creating CustomResourceDefinition %q: %w", required.Name, err)
+		return actual, true, err //nolint:wrapcheck
 	}
 
 	if err != nil {
-		return nil, false, fmt.Errorf("error getting CustomResourceDefinition %q: %w", required.Name, err)
+		return nil, false, err //nolint:wrapcheck
 	}
 
 	modified := false
