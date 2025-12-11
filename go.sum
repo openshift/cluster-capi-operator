@@ -118,8 +118,8 @@ github.com/charithe/durationcheck v0.0.10 h1:wgw73BiocdBDQPik+zcEoBG/ob8uyBHf2iy
 github.com/charithe/durationcheck v0.0.10/go.mod h1:bCWXb7gYRysD1CU3C+u4ceO49LoGOY1C1L6uouGNreQ=
 github.com/chavacava/garif v0.1.0 h1:2JHa3hbYf5D9dsgseMKAmc/MZ109otzgNFk5s87H9Pc=
 github.com/chavacava/garif v0.1.0/go.mod h1:XMyYCkEL58DF0oyW4qDjjnPWONs2HBqYKI+UIPD+Gww=
-github.com/chrischdi/cluster-api-actuator-pkg/testutils v0.0.0-20251210143414-5e2a15ce59a4 h1:CUpVgXQp32ZN8ij6GvgFiCIjXjGZdZehQUNoodjBk6E=
-github.com/chrischdi/cluster-api-actuator-pkg/testutils v0.0.0-20251210143414-5e2a15ce59a4/go.mod h1:Ahm3XvgKKIyKKYCG3oX2w7bE7twCT2kG71ykwwxUh18=
+github.com/chrischdi/cluster-api-actuator-pkg/testutils v0.0.0-20251211141525-c707612472dc h1:Y9FjRm7lYrFpo2tZ8+IoD71anCZPumyF/M/xogxtGo8=
+github.com/chrischdi/cluster-api-actuator-pkg/testutils v0.0.0-20251211141525-c707612472dc/go.mod h1:Ahm3XvgKKIyKKYCG3oX2w7bE7twCT2kG71ykwwxUh18=
 github.com/ckaznocha/intrange v0.3.0 h1:VqnxtK32pxgkhJgYQEeOArVidIPg+ahLP7WBOXZd5ZY=
 github.com/ckaznocha/intrange v0.3.0/go.mod h1:+I/o2d2A1FBHgGELbGxzIcyd3/9l9DuwjM8FsbSS3Lo=
 github.com/cpuguy83/go-md2man/v2 v2.0.6/go.mod h1:oOW0eioCTA6cOiMLiUPZOpcVxMig6NIQQ7OS05n1F4g=

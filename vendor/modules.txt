@@ -1144,11 +1144,11 @@ github.com/openshift/client-go/machine/applyconfigurations/internal
 github.com/openshift/client-go/machine/applyconfigurations/machine/v1beta1
 github.com/openshift/client-go/operator/applyconfigurations/internal
 github.com/openshift/client-go/operator/applyconfigurations/operator/v1
-# github.com/openshift/cluster-api-actuator-pkg v0.0.0-20251203134942-d9bd7b8593f3 => github.com/chrischdi/cluster-api-actuator-pkg v0.0.0-20251203131133-74d90ddd23c9
+# github.com/openshift/cluster-api-actuator-pkg v0.0.0-20251203134942-d9bd7b8593f3 => github.com/chrischdi/cluster-api-actuator-pkg v0.0.0-20251211141525-c707612472dc
 ## explicit; go 1.24.0
 github.com/openshift/cluster-api-actuator-pkg/pkg/framework
 github.com/openshift/cluster-api-actuator-pkg/pkg/framework/gatherer
-# github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0 => github.com/chrischdi/cluster-api-actuator-pkg/testutils v0.0.0-20251210143414-5e2a15ce59a4
+# github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0 => github.com/chrischdi/cluster-api-actuator-pkg/testutils v0.0.0-20251211141525-c707612472dc
 ## explicit; go 1.24.0
 github.com/openshift/cluster-api-actuator-pkg/testutils
 github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder
@@ -3003,7 +3003,7 @@ sigs.k8s.io/structured-merge-diff/v6/value
 sigs.k8s.io/yaml
 sigs.k8s.io/yaml/goyaml.v2
 # github.com/metal3-io/baremetal-operator => github.com/metal3-io/baremetal-operator v0.5.1
-# github.com/openshift/cluster-api-actuator-pkg => github.com/chrischdi/cluster-api-actuator-pkg v0.0.0-20251203131133-74d90ddd23c9
-# github.com/openshift/cluster-api-actuator-pkg/testutils => github.com/chrischdi/cluster-api-actuator-pkg/testutils v0.0.0-20251210143414-5e2a15ce59a4
+# github.com/openshift/cluster-api-actuator-pkg => github.com/chrischdi/cluster-api-actuator-pkg v0.0.0-20251211141525-c707612472dc
+# github.com/openshift/cluster-api-actuator-pkg/testutils => github.com/chrischdi/cluster-api-actuator-pkg/testutils v0.0.0-20251211141525-c707612472dc
 # sigs.k8s.io/cluster-api => sigs.k8s.io/cluster-api v1.11.3
 # sigs.k8s.io/cluster-api-provider-azure => github.com/damdo/cluster-api-provider-azure v0.0.0-20251202084521-c2e0e38d1e0e
