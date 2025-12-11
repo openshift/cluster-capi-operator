@@ -93,8 +93,6 @@ var _ = Describe("MachineSyncReconciler", func() {
 				Expect(reconciler.Client.Get(ctx, client.ObjectKey{Namespace: tc.convertedCapiMachine.Namespace, Name: tc.convertedCapiMachine.Name}, gotCAPIMachine)).To(Succeed())
 
 				tc.expectedCAPIMachine.ResourceVersion = gotCAPIMachine.ResourceVersion
-				// TODO(chrischdi): check
-				// gotCAPIMachine.Status.V1Beta2 = nil
 
 				Expect(gotCAPIMachine).To(Equal(tc.expectedCAPIMachine), cmp.Diff(gotCAPIMachine, tc.expectedCAPIMachine))
 			}
