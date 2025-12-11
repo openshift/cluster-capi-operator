@@ -123,19 +123,37 @@ func (r *MachineSetMigrationReconciler) Reconcile(ctx context.Context, req recon
 		return ctrl.Result{}, nil
 	}
 
-	// If authoritativeAPI status is empty, it means it is the first time we see this resource.
-	// Set the status.authoritativeAPI to match the spec.authoritativeAPI.
-	//
 	// N.B. Very similar logic is also present in the Machine API machine/machineset controllers
 	// to cover for the cases when the migration controller is not running (e.g. on not yet supported platforms),
 	// as such if any change is done to this logic, please consider changing it also there. See:
 	// https://github.com/openshift/machine-api-operator/pull/1386/files#diff-3a93acbdaa255c0afa7f52535fc7df9c3890d6403035dd4c3bd47b0092eb3a37R177-R194
-	if mapiMachineSet.Status.AuthoritativeAPI == "" {
-		if err := r.applyStatusAuthoritativeAPIWithPatch(ctx, mapiMachineSet, mapiMachineSet.Spec.AuthoritativeAPI); err != nil {
-			return ctrl.Result{}, fmt.Errorf("unable to apply authoritativeAPI to status with patch: %w", err)
+	// Handle the cases where AuthoritativeAPI or SynchronizedAPI status fields are empty.
+	if result, err := r.handleMigrationStatusInitialization(ctx, mapiMachineSet); err != nil {
+		return ctrl.Result{}, err
+	} else if result != nil {
+		return *result, nil
+	}
+
+	// Abort migration if the user wants to return to the last successfully synchronized state.
+	if synccommon.IsMigrationCancellationRequested(mapiMachineSet.Spec.AuthoritativeAPI, mapiMachineSet.Status.AuthoritativeAPI, mapiMachineSet.Status.SynchronizedAPI) {
+		logger.Info("Detected migration cancellation request for machine set, user wants to return to last synchronized state",
+			"synchronizedAPI", mapiMachineSet.Status.SynchronizedAPI)
+
+		// Make sure the new authoritative resource (the one we are rolling back to) has been requested to unpause.
+		// We cannot assume it is unpaused if we are cancelling midway through a migration where we might have already
+		// paused the old authority.
+		if err := r.ensureUnpauseRequestedOnNewAuthoritativeResource(ctx, mapiMachineSet); err != nil {
+			return ctrl.Result{}, fmt.Errorf("unable to ensure the rollback AuthoritativeAPI has been un-paused: %w", err)
 		}
 
-		// Wait for the patching to take effect.
+		// Directly transition back to the synchronized API.
+		// The resources are already in the correct pause state from the stuck migration.
+		if err := synccommon.ApplyMigrationStatus[*machinev1applyconfigs.MachineSetStatusApplyConfiguration](ctx, r.Client, controllerName, machinev1applyconfigs.MachineSet, mapiMachineSet, mapiMachineSet.Spec.AuthoritativeAPI, mapiMachineSet.Status.SynchronizedAPI); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to apply authoritativeAPI for migration cancellation: %w", err)
+		}
+
+		logger.Info("Machine set migration cancelled successfully, returned to previous synchronized state")
+
 		return ctrl.Result{}, nil
 	}
 
@@ -157,8 +175,10 @@ func (r *MachineSetMigrationReconciler) Reconcile(ctx context.Context, req recon
 	if mapiMachineSet.Status.AuthoritativeAPI != mapiv1beta1.MachineAuthorityMigrating {
 		logger.Info("Detected migration request for machine set")
 
-		if err := r.applyStatusAuthoritativeAPIWithPatch(ctx, mapiMachineSet, mapiv1beta1.MachineAuthorityMigrating); err != nil {
-			return ctrl.Result{}, fmt.Errorf("unable to set authoritativeAPI %q to status: %w", mapiv1beta1.MachineAuthorityMigrating, err)
+		// Before transitioning to Migrating, capture the current authoritativeAPI as synchronizedAPI.
+		synchronizedAPI := synccommon.AuthoritativeAPIToSynchronizedAPI(mapiMachineSet.Status.AuthoritativeAPI)
+		if err := r.applyMigrationStatusWithPatch(ctx, mapiMachineSet, mapiv1beta1.MachineAuthorityMigrating, synchronizedAPI); err != nil {
+			return ctrl.Result{}, fmt.Errorf("unable to set authoritativeAPI to Migrating and synchronizedAPI: %w", err)
 		}
 
 		logger.Info("Acknowledged migration request for machine set")
@@ -192,15 +212,66 @@ func (r *MachineSetMigrationReconciler) Reconcile(ctx context.Context, req recon
 		return ctrl.Result{}, fmt.Errorf("unable to ensure the new AuthoritativeAPI has been un-paused: %w", err)
 	}
 
-	// Set the actual AuthoritativeAPI to the desired one, reset the synchronized generation and condition.
-	if err := synccommon.ApplyAuthoritativeAPIAndResetSyncStatus[*machinev1applyconfigs.MachineSetStatusApplyConfiguration](ctx, r.Client, controllerName, machinev1applyconfigs.MachineSet, mapiMachineSet, mapiMachineSet.Spec.AuthoritativeAPI); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to apply authoritativeAPI and reset sync status: %w", err)
+	// Set the actual AuthoritativeAPI to the desired one, update synchronizedAPI, reset the synchronized generation and condition.
+	newSynchronizedAPI := synccommon.AuthoritativeAPIToSynchronizedAPI(mapiMachineSet.Spec.AuthoritativeAPI)
+
+	if err := r.applyMigrationStatusAndResetSyncStatusWithPatch(ctx, mapiMachineSet, mapiMachineSet.Spec.AuthoritativeAPI, newSynchronizedAPI); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to apply authoritativeAPI, synchronizedAPI and reset sync status: %w", err)
 	}
 
-	logger.Info("Machine set authority switch has now been completed and the resource unpaused")
+	logger.Info("Machine set authority switch has now been completed and the resource unpaused", "authoritativeAPI", mapiMachineSet.Spec.AuthoritativeAPI, "synchronizedAPI", newSynchronizedAPI)
 	logger.Info("Machine set migrated successfully")
 
 	return ctrl.Result{}, nil
+}
+
+// handleMigrationStatusInitialization handles the initialization of the migration status.
+// It guarantees that both authoritativeAPI and SynchronizedAPI have valid values.
+func (r *MachineSetMigrationReconciler) handleMigrationStatusInitialization(ctx context.Context, mapiMachineSet *mapiv1beta1.MachineSet) (*ctrl.Result, error) {
+	if mapiMachineSet.Status.AuthoritativeAPI == "" && mapiMachineSet.Status.SynchronizedAPI == "" {
+		// If authoritativeAPI status or synchronizedAPI is empty, it means it is the first time we see this resource.
+		// Set the status.authoritativeAPI and status.synchronizedAPI to match the spec.authoritativeAPI.
+		synchronizedAPI := synccommon.AuthoritativeAPIToSynchronizedAPI(mapiMachineSet.Spec.AuthoritativeAPI)
+		if err := r.applyMigrationStatusWithPatch(ctx, mapiMachineSet, mapiMachineSet.Spec.AuthoritativeAPI, synchronizedAPI); err != nil {
+			return &ctrl.Result{}, fmt.Errorf("unable to apply authoritativeAPI to status with patch: %w", err)
+		}
+
+		return &ctrl.Result{}, nil
+	}
+
+	if mapiMachineSet.Status.AuthoritativeAPI == "" {
+		// We assume the AuthoritativeAPI matches the last SynchronizedAPI.
+		if err := r.applyMigrationStatusWithPatch(ctx, mapiMachineSet, mapiv1beta1.MachineAuthority(mapiMachineSet.Status.SynchronizedAPI), mapiMachineSet.Status.SynchronizedAPI); err != nil {
+			return &ctrl.Result{}, fmt.Errorf("unable to apply authoritativeAPI to status with patch: %w", err)
+		}
+
+		return &ctrl.Result{}, nil
+	}
+
+	if mapiMachineSet.Status.SynchronizedAPI == "" {
+		// We are in a migration (Status.AuthoritativeAPI is Migrating) but we don't have SynchronizedAPI.
+		// Assuming this is a standard forward migration (not a cancellation), the Spec tells us the Target.
+		// Therefore, the Source (SynchronizedAPI) must be the opposite of the Spec.
+		targetAPI := mapiMachineSet.Spec.AuthoritativeAPI
+
+		var synchronizedAPI mapiv1beta1.SynchronizedAPI
+
+		if targetAPI == mapiv1beta1.MachineAuthorityMachineAPI {
+			synchronizedAPI = mapiv1beta1.ClusterAPISynchronized
+		} else {
+			synchronizedAPI = mapiv1beta1.MachineAPISynchronized
+		}
+
+		if err := r.applyMigrationStatusWithPatch(ctx, mapiMachineSet, mapiMachineSet.Status.AuthoritativeAPI, synchronizedAPI); err != nil {
+			return &ctrl.Result{}, fmt.Errorf("unable to apply synchronizedAPI to status with patch: %w", err)
+		}
+
+		// Wait for the patching to take effect.
+		return &ctrl.Result{}, nil
+	}
+
+	//nolint:nilnil
+	return nil, nil
 }
 
 // isOldAuthoritativeResourcePaused checks whether the old authoritative resource is paused.
@@ -349,7 +420,12 @@ func (r *MachineSetMigrationReconciler) isSynchronized(ctx context.Context, mapi
 	return false, fmt.Errorf("%w: %s", controllers.ErrInvalidSpecAuthoritativeAPI, mapiMachineSet.Spec.AuthoritativeAPI)
 }
 
-// applyStatusAuthoritativeAPIWithPatch updates the resource status.authoritativeAPI using a server-side apply patch.
-func (r *MachineSetMigrationReconciler) applyStatusAuthoritativeAPIWithPatch(ctx context.Context, ms *mapiv1beta1.MachineSet, authority mapiv1beta1.MachineAuthority) error {
-	return synccommon.ApplyAuthoritativeAPI[*machinev1applyconfigs.MachineSetStatusApplyConfiguration](ctx, r.Client, controllerName, machinev1applyconfigs.MachineSet, ms, authority)
+// applyMigrationStatusWithPatch updates the migration controller status fields using a server-side apply patch.
+func (r *MachineSetMigrationReconciler) applyMigrationStatusWithPatch(ctx context.Context, ms *mapiv1beta1.MachineSet, authority mapiv1beta1.MachineAuthority, synchronizedAPI mapiv1beta1.SynchronizedAPI) error {
+	return synccommon.ApplyMigrationStatus[*machinev1applyconfigs.MachineSetStatusApplyConfiguration](ctx, r.Client, controllerName, machinev1applyconfigs.MachineSet, ms, authority, synchronizedAPI)
+}
+
+// applyMigrationStatusAndResetSyncStatusWithPatch updates the migration controller status and resets sync status.
+func (r *MachineSetMigrationReconciler) applyMigrationStatusAndResetSyncStatusWithPatch(ctx context.Context, ms *mapiv1beta1.MachineSet, authority mapiv1beta1.MachineAuthority, synchronizedAPI mapiv1beta1.SynchronizedAPI) error {
+	return synccommon.ApplyMigrationStatusAndResetSyncStatus[*machinev1applyconfigs.MachineSetStatusApplyConfiguration](ctx, r.Client, controllerName, machinev1applyconfigs.MachineSet, ms, authority, synchronizedAPI)
 }

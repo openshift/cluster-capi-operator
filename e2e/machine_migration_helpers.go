@@ -160,6 +160,16 @@ func verifyMachineAuthoritative(mapiMachine *mapiv1beta1.Machine, authority mapi
 	)
 }
 
+// verifyMachineMigrating verifies that the MAPI Machine is in Migrating state with the expected synchronizedAPI.
+// The synchronizedAPI indicates the source API that the migration is coming from.
+func verifyMachineMigrating(mapiMachine *mapiv1beta1.Machine, expectedSynchronizedAPI mapiv1beta1.SynchronizedAPI) {
+	By(fmt.Sprintf("Verify the Machine is in Migrating state with SynchronizedAPI: %s", expectedSynchronizedAPI))
+	Eventually(komega.Object(mapiMachine), capiframework.WaitMedium, capiframework.RetryMedium).Should(SatisfyAll(
+		HaveField("Status.AuthoritativeAPI", Equal(mapiv1beta1.MachineAuthorityMigrating)),
+		HaveField("Status.SynchronizedAPI", Equal(expectedSynchronizedAPI)),
+	), fmt.Sprintf("Should have found Machine with status.AuthoritativeAPI:Migrating and status.SynchronizedAPI:%s", expectedSynchronizedAPI))
+}
+
 func verifyMAPIMachineSynchronizedCondition(mapiMachine *mapiv1beta1.Machine, authority mapiv1beta1.MachineAuthority) {
 	By("Verify the MAPI Machine synchronized condition is True")
 	var expectedMessage string
@@ -322,5 +332,14 @@ func verifyMachineSynchronizedGeneration(cl client.Client, mapiMachine *mapiv1be
 	Eventually(komega.Object(mapiMachine), capiframework.WaitMedium, capiframework.RetryMedium).Should(
 		HaveField("Status.SynchronizedGeneration", Equal(expectedGeneration)),
 		fmt.Sprintf("MAPI Machine SynchronizedGeneration should equal %s Machine Generation (%d)", authoritativeMachineType, expectedGeneration),
+	)
+}
+
+// verifyMachineSynchronizedAPI verifies that the MAPI Machine's status.synchronizedAPI matches the expected value.
+func verifyMachineSynchronizedAPI(mapiMachine *mapiv1beta1.Machine, expectedSynchronizedAPI mapiv1beta1.SynchronizedAPI) {
+	By(fmt.Sprintf("Verifying MAPI Machine SynchronizedAPI is %s", expectedSynchronizedAPI))
+	Eventually(komega.Object(mapiMachine), capiframework.WaitMedium, capiframework.RetryMedium).Should(
+		HaveField("Status.SynchronizedAPI", Equal(expectedSynchronizedAPI)),
+		fmt.Sprintf("MAPI Machine SynchronizedAPI should be %s", expectedSynchronizedAPI),
 	)
 }

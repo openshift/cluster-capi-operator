@@ -4,6 +4,8 @@ go 1.24.0
 
 // TODO: these replaces should be removed when corresponding PRs are merged
 replace (
+	github.com/openshift/api => github.com/radekmanak/api v0.0.0-20251204123453-af93e51a025c
+	github.com/openshift/client-go => github.com/radekmanak/client-go v0.0.0-20251205110917-7a3c951f9e15
 	github.com/openshift/cluster-api-actuator-pkg/testutils => github.com/chrischdi/cluster-api-actuator-pkg/testutils v0.0.0-20251203134942-d9bd7b8593f3
 	sigs.k8s.io/cluster-api-provider-azure => github.com/damdo/cluster-api-provider-azure v0.0.0-20251202084521-c2e0e38d1e0e
 )
@@ -21,7 +23,7 @@ require (
 	github.com/metal3-io/cluster-api-provider-metal3/api v1.11.2
 	github.com/onsi/ginkgo/v2 v2.27.2
 	github.com/onsi/gomega v1.38.2
-	github.com/openshift/api v0.0.0-20251111193948-50e2ece149d7
+	github.com/openshift/api v0.0.0-20251202143230-02f6733e651c
 	github.com/openshift/client-go v0.0.0-20251015124057-db0dee36e235
 	github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0
 	github.com/openshift/library-go v0.0.0-20251112091634-ab97ebb73f0f
