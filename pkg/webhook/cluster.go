@@ -95,7 +95,7 @@ func (r *ClusterWebhook) validateClusterName(ctx context.Context, cluster *clust
 func (r *ClusterWebhook) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
 	cluster, ok := obj.(*clusterv1.Cluster)
 	if !ok {
-		panic("expected to get an of object of type v1beta1.Cluster")
+		panic("expected to get an object of type v1beta2.Cluster")
 	}
 
 	errs := []error{}
@@ -125,12 +125,12 @@ func (r *ClusterWebhook) ValidateCreate(ctx context.Context, obj runtime.Object)
 func (r *ClusterWebhook) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
 	_, ok := oldObj.(*clusterv1.Cluster)
 	if !ok {
-		panic("expected to get an of object of type v1beta1.Cluster")
+		panic("expected to get an object of type v1beta2.Cluster")
 	}
 
 	newCluster, ok := newObj.(*clusterv1.Cluster)
 	if !ok {
-		panic("expected to get an of object of type v1beta1.Cluster")
+		panic("expected to get an object of type v1beta2.Cluster")
 	}
 
 	infrastructureRefPath := field.NewPath("spec", "infrastructureRef")
@@ -151,7 +151,7 @@ func (r *ClusterWebhook) ValidateUpdate(ctx context.Context, oldObj, newObj runt
 func (r *ClusterWebhook) ValidateDelete(_ context.Context, obj runtime.Object) (admission.Warnings, error) {
 	cluster, ok := obj.(*clusterv1.Cluster)
 	if !ok {
-		panic("expected to get an of object of type v1beta1.Cluster")
+		panic("expected to get an object of type v1beta2.Cluster")
 	}
 
 	if cluster.Namespace == openshiftCAPINamespace {

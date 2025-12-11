@@ -142,19 +142,19 @@ func CAPIMachineSetStatusEqual(a, b clusterv1.MachineSetStatus) map[string]any {
 	}
 
 	if diffFullyLabeledReplicas := deep.Equal(a.Deprecated.V1Beta1.FullyLabeledReplicas, b.Deprecated.V1Beta1.FullyLabeledReplicas); len(diffFullyLabeledReplicas) > 0 {
-		diff[".deprecated.v1Beta2.fullyLabeledReplicas"] = diffFullyLabeledReplicas
+		diff[".deprecated.v1Beta1.fullyLabeledReplicas"] = diffFullyLabeledReplicas
 	}
 
 	if diffFailureReason := deep.Equal(a.Deprecated.V1Beta1.FailureReason, b.Deprecated.V1Beta1.FailureReason); len(diffFailureReason) > 0 {
-		diff[".deprecated.v1Beta2.failureReason"] = diffFailureReason
+		diff[".deprecated.v1Beta1.failureReason"] = diffFailureReason
 	}
 
 	if diffFailureMessage := deep.Equal(a.Deprecated.V1Beta1.FailureMessage, b.Deprecated.V1Beta1.FailureMessage); len(diffFailureMessage) > 0 {
-		diff[".deprecated.v1Beta2.failureMessage"] = diffFailureMessage
+		diff[".deprecated.v1Beta1.failureMessage"] = diffFailureMessage
 	}
 
 	if diffConditions := compareCAPIV1Beta1Conditions(a.Deprecated.V1Beta1.Conditions, b.Deprecated.V1Beta1.Conditions); len(diffConditions) > 0 {
-		diff[".deprecated.v1Beta2.conditions"] = diffConditions
+		diff[".deprecated.v1Beta1.conditions"] = diffConditions
 	}
 
 	if diffUpToDateReplicas := deep.Equal(a.UpToDateReplicas, b.UpToDateReplicas); len(diffUpToDateReplicas) > 0 {
@@ -200,11 +200,11 @@ func CAPIMachineStatusEqual(a, b clusterv1.MachineStatus) map[string]any {
 	}
 
 	if diffFailureReason := deep.Equal(a.Deprecated.V1Beta1.FailureReason, b.Deprecated.V1Beta1.FailureReason); len(diffFailureReason) > 0 {
-		diff[".deprecated.v1Beta2.failureReason"] = diffFailureReason
+		diff[".deprecated.v1Beta1.failureReason"] = diffFailureReason
 	}
 
 	if diffFailureMessage := deep.Equal(a.Deprecated.V1Beta1.FailureMessage, b.Deprecated.V1Beta1.FailureMessage); len(diffFailureMessage) > 0 {
-		diff[".deprecated.v1Beta2.failureMessage"] = diffFailureMessage
+		diff[".deprecated.v1Beta1.failureMessage"] = diffFailureMessage
 	}
 
 	if diffLastUpdated := deep.Equal(a.LastUpdated, b.LastUpdated); len(diffLastUpdated) > 0 {
