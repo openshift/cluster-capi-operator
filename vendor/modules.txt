@@ -2741,20 +2741,26 @@ sigs.k8s.io/cluster-api/cmd/clusterctl/client/yamlprocessor
 sigs.k8s.io/cluster-api/cmd/clusterctl/internal/scheme
 sigs.k8s.io/cluster-api/cmd/clusterctl/internal/util
 sigs.k8s.io/cluster-api/cmd/clusterctl/log
+sigs.k8s.io/cluster-api/controllers/external
 sigs.k8s.io/cluster-api/errors
 sigs.k8s.io/cluster-api/feature
+sigs.k8s.io/cluster-api/internal/contract
 sigs.k8s.io/cluster-api/internal/goproxy
 sigs.k8s.io/cluster-api/util
 sigs.k8s.io/cluster-api/util/annotations
 sigs.k8s.io/cluster-api/util/conditions
 sigs.k8s.io/cluster-api/util/conditions/deprecated/v1beta1
 sigs.k8s.io/cluster-api/util/container
+sigs.k8s.io/cluster-api/util/contract
 sigs.k8s.io/cluster-api/util/conversion
 sigs.k8s.io/cluster-api/util/deprecated/v1beta1/conditions
 sigs.k8s.io/cluster-api/util/deprecated/v1beta1/conditions/v1beta2
 sigs.k8s.io/cluster-api/util/flags
+sigs.k8s.io/cluster-api/util/labels
 sigs.k8s.io/cluster-api/util/labels/format
+sigs.k8s.io/cluster-api/util/predicates
 sigs.k8s.io/cluster-api/util/topology
+sigs.k8s.io/cluster-api/util/version
 sigs.k8s.io/cluster-api/util/yaml
 # sigs.k8s.io/cluster-api-provider-aws/v2 v2.10.0
 ## explicit; go 1.24.0
