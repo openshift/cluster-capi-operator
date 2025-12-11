@@ -115,8 +115,8 @@ func convertMAPIMachineToCAPIMachineStatus(mapiMachine *mapiv1beta1.Machine) (cl
 			},
 		},
 		Initialization: clusterv1.MachineInitializationStatus{
-			InfrastructureProvisioned:  ptr.To(deriveCAPIInfrastructureProvisionedFromMAPI(mapiMachine)),
-			BootstrapDataSecretCreated: ptr.To(deriveCAPIBootstrapDataSecretCreatedFromMAPI(mapiMachine)),
+			InfrastructureProvisioned:  deriveCAPIInfrastructureProvisionedFromMAPI(mapiMachine),
+			BootstrapDataSecretCreated: deriveCAPIBootstrapDataSecretCreatedFromMAPI(mapiMachine),
 		},
 		Conditions: convertMAPIMachineConditionsToCAPIMachineV1Beta2StatusConditions(mapiMachine),
 
@@ -129,6 +129,13 @@ func convertMAPIMachineToCAPIMachineStatus(mapiMachine *mapiv1beta1.Machine) (cl
 		// DO NOT SET HERE:
 		// CertificatesExpiryDate: // not present on the MAPI Machine status. (This value is only set for control plane machines, not necessary for worker machines conversion)
 		// ObservedGeneration: // We don't set the observed generation at this stage as it is handled by the machineSync controller.
+	}
+
+	// Set Deprecated to nil if the values are zero
+	if capiStatus.Deprecated.V1Beta1.FailureReason == nil &&
+		capiStatus.Deprecated.V1Beta1.FailureMessage == nil &&
+		len(capiStatus.Deprecated.V1Beta1.Conditions) == 0 {
+		capiStatus.Deprecated = nil
 	}
 
 	// unused fields from MAPI MachineStatus
@@ -169,14 +176,14 @@ func convertMAPIMachineConditionsToCAPIMachineConditions(mapiMachine *mapiv1beta
 	bootstrapReadyCondition := clusterv1.Condition{
 		Type: clusterv1.BootstrapReadyV1Beta1Condition,
 		Status: func() corev1.ConditionStatus {
-			if deriveCAPIBootstrapDataSecretCreatedFromMAPI(mapiMachine) {
+			if ptr.Deref(deriveCAPIBootstrapDataSecretCreatedFromMAPI(mapiMachine), false) {
 				return corev1.ConditionTrue
 			}
 
 			return corev1.ConditionFalse
 		}(),
 		Severity: func() clusterv1.ConditionSeverity {
-			if !deriveCAPIBootstrapDataSecretCreatedFromMAPI(mapiMachine) {
+			if !ptr.Deref(deriveCAPIBootstrapDataSecretCreatedFromMAPI(mapiMachine), false) {
 				return clusterv1.ConditionSeverityInfo
 			}
 
@@ -188,21 +195,21 @@ func convertMAPIMachineConditionsToCAPIMachineConditions(mapiMachine *mapiv1beta
 	infrastructureReadyCondition := clusterv1.Condition{
 		Type: clusterv1.InfrastructureReadyV1Beta1Condition,
 		Status: func() corev1.ConditionStatus {
-			if deriveCAPIInfrastructureProvisionedFromMAPI(mapiMachine) {
+			if ptr.Deref(deriveCAPIInfrastructureProvisionedFromMAPI(mapiMachine), false) {
 				return corev1.ConditionTrue
 			}
 
 			return corev1.ConditionFalse
 		}(),
 		Reason: func() string {
-			if !deriveCAPIInfrastructureProvisionedFromMAPI(mapiMachine) {
+			if !ptr.Deref(deriveCAPIInfrastructureProvisionedFromMAPI(mapiMachine), false) {
 				return clusterv1.WaitingForInfrastructureFallbackV1Beta1Reason
 			}
 
 			return ""
 		}(),
 		Severity: func() clusterv1.ConditionSeverity {
-			if !deriveCAPIInfrastructureProvisionedFromMAPI(mapiMachine) {
+			if !ptr.Deref(deriveCAPIInfrastructureProvisionedFromMAPI(mapiMachine), false) {
 				return clusterv1.ConditionSeverityInfo
 			}
 
@@ -267,14 +274,14 @@ func convertMAPIMachineConditionsToCAPIMachineV1Beta2StatusConditions(mapiMachin
 	bootstrapConfigReadyCondition := metav1.Condition{
 		Type: clusterv1.MachineBootstrapConfigReadyCondition,
 		Status: func() metav1.ConditionStatus {
-			if deriveCAPIBootstrapDataSecretCreatedFromMAPI(mapiMachine) {
+			if ptr.Deref(deriveCAPIBootstrapDataSecretCreatedFromMAPI(mapiMachine), false) {
 				return metav1.ConditionTrue
 			}
 
 			return metav1.ConditionFalse
 		}(),
 		Reason: func() string {
-			if deriveCAPIBootstrapDataSecretCreatedFromMAPI(mapiMachine) {
+			if ptr.Deref(deriveCAPIBootstrapDataSecretCreatedFromMAPI(mapiMachine), false) {
 				return clusterv1.MachineBootstrapConfigReadyReason
 			}
 
@@ -287,14 +294,14 @@ func convertMAPIMachineConditionsToCAPIMachineV1Beta2StatusConditions(mapiMachin
 	infrastructureReadyCondition := metav1.Condition{
 		Type: clusterv1.MachineInfrastructureReadyCondition,
 		Status: func() metav1.ConditionStatus {
-			if deriveCAPIInfrastructureProvisionedFromMAPI(mapiMachine) {
+			if ptr.Deref(deriveCAPIInfrastructureProvisionedFromMAPI(mapiMachine), false) {
 				return metav1.ConditionTrue
 			}
 
 			return metav1.ConditionFalse
 		}(),
 		Reason: func() string {
-			if deriveCAPIInfrastructureProvisionedFromMAPI(mapiMachine) {
+			if ptr.Deref(deriveCAPIInfrastructureProvisionedFromMAPI(mapiMachine), false) {
 				return clusterv1.MachineInfrastructureReadyReason
 			}
 
@@ -438,26 +445,26 @@ func convertMAPIMachineErrorMessageToCAPIFailureMessage(mapiErrorMessage *string
 }
 
 // deriveCAPIBootstrapDataSecretCreatedFromMAPI derives the CAPI BootstrapReady field from MAPI machine state.
-func deriveCAPIBootstrapDataSecretCreatedFromMAPI(mapiMachine *mapiv1beta1.Machine) bool {
+func deriveCAPIBootstrapDataSecretCreatedFromMAPI(mapiMachine *mapiv1beta1.Machine) *bool {
 	// Bootstrap is considered ready if the machine is in Running, Deleting phases
 	if mapiMachine.Status.Phase != nil {
 		phase := *mapiMachine.Status.Phase
 
-		return phase == mapiv1beta1.PhaseRunning || phase == mapiv1beta1.PhaseDeleting
+		return ptr.To(phase == mapiv1beta1.PhaseRunning || phase == mapiv1beta1.PhaseDeleting)
 	}
 
-	return false
+	return nil
 }
 
 // deriveCAPIInfrastructureProvisionedFromMAPI derives the CAPI InfrastructureReady field from MAPI machine state.
-func deriveCAPIInfrastructureProvisionedFromMAPI(mapiMachine *mapiv1beta1.Machine) bool {
+func deriveCAPIInfrastructureProvisionedFromMAPI(mapiMachine *mapiv1beta1.Machine) *bool {
 	// Infrastructure is considered ready if the machine is in Provisioned, Running, Deleting phases
 	if mapiMachine.Status.Phase != nil {
 		phase := *mapiMachine.Status.Phase
-		return phase == mapiv1beta1.PhaseProvisioned || phase == mapiv1beta1.PhaseRunning || phase == mapiv1beta1.PhaseDeleting
+		return ptr.To(phase == mapiv1beta1.PhaseProvisioned || phase == mapiv1beta1.PhaseRunning || phase == mapiv1beta1.PhaseDeleting)
 	}
 
-	return false
+	return nil
 }
 
 // hasRunningPhase checks if the machine is in the Running phase.

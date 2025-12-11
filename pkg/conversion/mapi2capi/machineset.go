@@ -59,7 +59,7 @@ func fromMAPIMachineSetToCAPIMachineSet(mapiMachineSet *mapiv1beta1.MachineSet) 
 				},
 				Spec: clusterv1.MachineSpec{
 					// Further Spec is not populated here. It is added later by higher level functions.
-					MinReadySeconds: ptr.To(mapiMachineSet.Spec.MinReadySeconds),
+					MinReadySeconds: nilIfZero(mapiMachineSet.Spec.MinReadySeconds),
 				},
 			},
 			// MachineNamingStrategy: // Not supported in MAPI, remains nil. No equivalent field in MAPI MachineSet.
@@ -73,6 +73,14 @@ func fromMAPIMachineSetToCAPIMachineSet(mapiMachineSet *mapiv1beta1.MachineSet) 
 	return capiMachineSet, errs.ToAggregate()
 }
 
+func nilIfZero(i int32) *int32 {
+	if i == 0 {
+		return nil
+	}
+
+	return ptr.To(i)
+}
+
 // convertMAPIMachineSetToCAPIMachineSetStatus converts a MAPI MachineSet to CAPI MachineSetStatus.
 func convertMAPIMachineSetToCAPIMachineSetStatus(mapiMachineSet *mapiv1beta1.MachineSet, specSelector metav1.LabelSelector) clusterv1.MachineSetStatus {
 	capiStatus := clusterv1.MachineSetStatus{
@@ -84,10 +92,10 @@ func convertMAPIMachineSetToCAPIMachineSetStatus(mapiMachineSet *mapiv1beta1.Mac
 				Conditions:           convertMAPIMachineSetConditionsToCAPIMachineSetConditions(mapiMachineSet),
 			},
 		},
-		Replicas: ptr.To(mapiMachineSet.Status.Replicas),
+		Replicas: nilIfZero(mapiMachineSet.Status.Replicas),
 		// ObservedGeneration: // We don't set the observed generation at this stage as it is handled by the machineSetSync controller.
-		ReadyReplicas:     ptr.To(mapiMachineSet.Status.ReadyReplicas),
-		AvailableReplicas: ptr.To(mapiMachineSet.Status.AvailableReplicas),
+		ReadyReplicas:     nilIfZero(mapiMachineSet.Status.ReadyReplicas),
+		AvailableReplicas: nilIfZero(mapiMachineSet.Status.AvailableReplicas),
 		Conditions:        convertMAPIMachineSetConditionsToCAPIMachineSetV1Beta2StatusConditions(mapiMachineSet),
 		// If the current MachineSet is a stand-alone MachineSet, the MachineSet controller does not set an up-to-date condition
 		// on its child Machines, allowing tools managing higher level abstractions to set this condition.
@@ -110,6 +118,16 @@ func convertMAPIMachineSetToCAPIMachineSetStatus(mapiMachineSet *mapiv1beta1.Mac
 
 	if mapiMachineSet.Status.ErrorMessage != nil {
 		capiStatus.Deprecated.V1Beta1.FailureMessage = mapiMachineSet.Status.ErrorMessage
+	}
+
+	// Set Deprecated to nil if the values are zero
+	if capiStatus.Deprecated.V1Beta1.FullyLabeledReplicas == 0 &&
+		capiStatus.Deprecated.V1Beta1.ReadyReplicas == 0 &&
+		capiStatus.Deprecated.V1Beta1.AvailableReplicas == 0 &&
+		capiStatus.Deprecated.V1Beta1.FailureReason == nil &&
+		capiStatus.Deprecated.V1Beta1.FailureMessage == nil &&
+		len(capiStatus.Deprecated.V1Beta1.Conditions) == 0 {
+		capiStatus.Deprecated = nil
 	}
 
 	// Copy the CAPI MachineSet .spec.Selector (label selector) to its status.Selector counterpart in string format.

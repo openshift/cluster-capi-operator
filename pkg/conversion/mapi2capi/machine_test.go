@@ -153,6 +153,9 @@ var _ = Describe("mapi2capi Machine Status Conversion", func() {
 				Name:      "test-node",
 				Namespace: "",
 			}
+			capiNodeRef := clusterv1.MachineNodeReference{
+				Name: nodeRef.Name,
+			}
 			lastUpdated := metav1.Time{Time: time.Now()}
 			condition := mapiv1beta1.Condition{
 				Type:     "Available",
@@ -183,7 +186,7 @@ var _ = Describe("mapi2capi Machine Status Conversion", func() {
 			Expect(errs).To(BeEmpty())
 
 			// Check CAPI Machine status fields are matching the expected values.
-			Expect(capiStatus.NodeRef).To(HaveValue(Equal(nodeRef)))
+			Expect(capiStatus.NodeRef).To(HaveValue(Equal(capiNodeRef)))
 			Expect(capiStatus.LastUpdated).To(HaveValue(Equal(lastUpdated)))
 			Expect(capiStatus.Addresses).To(SatisfyAll(
 				HaveLen(2),

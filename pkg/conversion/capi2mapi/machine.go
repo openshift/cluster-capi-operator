@@ -25,7 +25,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/utils/ptr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
-	capierrors "sigs.k8s.io/cluster-api/errors"
 )
 
 const (
@@ -130,12 +129,17 @@ func convertCAPIMachineStatusToMAPI(capiStatus clusterv1.MachineStatus) (mapiv1b
 		}
 	}
 
+	var lastUpdated *metav1.Time
+	if !capiStatus.LastUpdated.Equal(&metav1.Time{}) {
+		lastUpdated = ptr.To(capiStatus.LastUpdated)
+	}
+
 	mapiStatus := mapiv1beta1.MachineStatus{
 		NodeRef:     nodeRef,
-		LastUpdated: ptr.To(capiStatus.LastUpdated),
+		LastUpdated: lastUpdated,
 		// Conditions:   // TODO(OCPCLOUD-3193): Add MAPI conditions when they are implemented.
-		ErrorReason:  convertCAPIMachineFailureReasonToMAPIErrorReason(capiStatus.Deprecated.V1Beta1.FailureReason),
-		ErrorMessage: convertCAPIMachineFailureMessageToMAPIErrorMessage(capiStatus.Deprecated.V1Beta1.FailureMessage),
+		ErrorReason:  convertCAPIMachineFailureReasonToMAPIErrorReason(capiStatus.Deprecated),
+		ErrorMessage: convertCAPIMachineFailureMessageToMAPIErrorMessage(capiStatus.Deprecated),
 		Phase:        convertCAPIMachinePhaseToMAPI(capiStatus.Phase),
 		Addresses:    addresses,
 
@@ -208,23 +212,23 @@ func convertCAPIMachinePhaseToMAPI(capiPhase string) *string {
 }
 
 // convertCAPIMachineFailureReasonToMAPIErrorReason converts CAPI MachineStatusError to MAPI MachineStatusError.
-func convertCAPIMachineFailureReasonToMAPIErrorReason(capiFailureReason *capierrors.MachineStatusError) *mapiv1beta1.MachineStatusError {
-	if capiFailureReason == nil {
+func convertCAPIMachineFailureReasonToMAPIErrorReason(capiDeprecatedStatus *clusterv1.MachineDeprecatedStatus) *mapiv1beta1.MachineStatusError {
+	if capiDeprecatedStatus == nil || capiDeprecatedStatus.V1Beta1 == nil || capiDeprecatedStatus.V1Beta1.FailureReason == nil {
 		return nil
 	}
 
-	mapiErrorReason := mapiv1beta1.MachineStatusError(*capiFailureReason)
+	mapiErrorReason := mapiv1beta1.MachineStatusError(*capiDeprecatedStatus.V1Beta1.FailureReason)
 
 	return &mapiErrorReason
 }
 
 // convertCAPIMachineFailureMessageToMAPIErrorMessage converts CAPI MachineStatusError to MAPI MachineStatusError.
-func convertCAPIMachineFailureMessageToMAPIErrorMessage(capiFailureMessage *string) *string {
-	if capiFailureMessage == nil {
+func convertCAPIMachineFailureMessageToMAPIErrorMessage(capiDeprecatedStatus *clusterv1.MachineDeprecatedStatus) *string {
+	if capiDeprecatedStatus == nil || capiDeprecatedStatus.V1Beta1 == nil || capiDeprecatedStatus.V1Beta1.FailureMessage == nil {
 		return nil
 	}
 
-	mapiErrorMessage := *capiFailureMessage
+	mapiErrorMessage := *capiDeprecatedStatus.V1Beta1.FailureMessage
 
 	return &mapiErrorMessage
 }

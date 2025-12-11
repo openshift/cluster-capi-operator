@@ -169,6 +169,10 @@ func (m *openstackMachineSetAndInfra) ToMachineSetAndMachineTemplate() (*cluster
 		errors = append(errors, machineSetErrs.Errors()...)
 	}
 
+	if capiMachine.Spec.MinReadySeconds == nil {
+		capiMachine.Spec.MinReadySeconds = capiMachineSet.Spec.Template.Spec.MinReadySeconds
+	}
+
 	capiMachineSet.Spec.Template.Spec = capiMachine.Spec
 
 	// We have to merge these two maps so that labels and annotations added to the template objectmeta are persisted

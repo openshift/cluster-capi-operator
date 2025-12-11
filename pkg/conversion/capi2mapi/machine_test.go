@@ -74,17 +74,17 @@ var _ = Describe("capi2mapi Machine conversion", func() {
 		}),
 		Entry("With unsupported NodeDrainTimeout", capi2MAPIMachineConversionInput{
 			machineBuilder:   capiMachineBase.WithNodeDrainTimeoutSeconds(1),
-			expectedErrors:   []string{"spec.nodeDrainTimeout: Invalid value: \"1s\": nodeDrainTimeout is not supported"},
+			expectedErrors:   []string{"spec.deletion.nodeDrainTimeoutSeconds: Invalid value: 1: nodeDrainTimeoutSeconds is not"},
 			expectedWarnings: []string{},
 		}),
 		Entry("With unsupported NodeVolumeDetachTimeout", capi2MAPIMachineConversionInput{
 			machineBuilder:   capiMachineBase.WithNodeVolumeDetachTimeoutSeconds(1),
-			expectedErrors:   []string{"spec.nodeVolumeDetachTimeout: Invalid value: \"1s\": nodeVolumeDetachTimeout is not supported"},
+			expectedErrors:   []string{"spec.deletion.nodeVolumeDetachTimeoutSeconds: Invalid value: 1: nodeVolumeDetachTimeoutSeconds is not supported"},
 			expectedWarnings: []string{},
 		}),
 		Entry("With unsupported NodeDeletionTimeout", capi2MAPIMachineConversionInput{
 			machineBuilder:   capiMachineBase.WithNodeDeletionTimeoutSeconds(1),
-			expectedErrors:   []string{"spec.nodeDeletionTimeout: Invalid value: \"1s\": nodeDeletionTimeout is not supported"},
+			expectedErrors:   []string{"spec.deletion.nodeDeletionTimeoutSeconds: Invalid value: 1: nodeDeletionTimeoutSeconds is not supported"},
 			expectedWarnings: []string{},
 		}),
 		Entry("With delete-machine annotation", capi2MAPIMachineConversionInput{
@@ -105,6 +105,11 @@ var _ = Describe("capi2mapi Machine Status Conversion", func() {
 			// Set CAPI machine status fields
 			nodeRef := clusterv1.MachineNodeReference{
 				Name: "test-node",
+			}
+			mapiNodeRef := &corev1.ObjectReference{
+				Kind:       "Node",
+				Name:       nodeRef.Name,
+				APIVersion: "v1",
 			}
 			lastUpdated := metav1.Time{Time: time.Now()}
 			condition := clusterv1.Condition{
@@ -131,8 +136,8 @@ var _ = Describe("capi2mapi Machine Status Conversion", func() {
 			mapiStatus, errs := convertCAPIMachineStatusToMAPI(capiMachine.Status)
 			Expect(errs).To(BeEmpty())
 
-			Expect(mapiStatus.NodeRef).To(Equal(nodeRef))
-			Expect(mapiStatus.LastUpdated).To(Equal(lastUpdated))
+			Expect(mapiStatus.NodeRef).To(Equal(mapiNodeRef))
+			Expect(mapiStatus.LastUpdated).To(Equal(&lastUpdated))
 			Expect(mapiStatus.Addresses).To(ConsistOf(
 				SatisfyAll(HaveField("Type", corev1.NodeInternalIP), HaveField("Address", "10.0.0.1")),
 				SatisfyAll(HaveField("Type", corev1.NodeExternalIP), HaveField("Address", "203.0.113.1")),

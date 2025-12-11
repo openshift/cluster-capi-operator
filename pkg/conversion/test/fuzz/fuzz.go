@@ -46,6 +46,8 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 )
 
+const fuzzIterations = 1000
+
 const powerVSMachineKind = "IBMPowerVSMachine"
 
 // CAPI2MAPIMachineConverterConstructor is a function that constructs a CAPI to MAPI Machine converter.
@@ -81,11 +83,13 @@ type capiToMapiMachineFuzzInput struct {
 // It leverages fuzz testing to generate random CAPI objects and then converts them to MAPI objects and back to CAPI objects.
 // The test then compares the original CAPI object with the final CAPI object to ensure that the conversion is lossless.
 // Any lossy conversions must be accounted for within the fuzz functions passed in.
+//
+//nolint:funlen
 func CAPI2MAPIMachineRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv1.Infrastructure, infraCluster, infraMachine client.Object, mapiConverter MAPI2CAPIMachineConverterConstructor, capiConverter CAPI2MAPIMachineConverterConstructor, fuzzerFuncs ...fuzzer.FuzzerFuncs) {
 	machineFuzzInputs := []TableEntry{}
 	fz := getFuzzer(scheme, fuzzerFuncs...)
 
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < fuzzIterations; i++ {
 		m := &clusterv1.Machine{}
 		fz.Fill(m)
 		fz.Fill(infraMachine)
@@ -125,12 +129,19 @@ func CAPI2MAPIMachineRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv1.I
 		// Break down the comparison to make it easier to debug sections that are failing conversion.
 
 		// Status comparison
-		capiMachine.Status.Conditions = nil // This is not a 1:1 mapping conversion between CAPI and MAPI.
-		capiMachine.Status.Conditions = nil // This is not a 1:1 mapping conversion between CAPI and MAPI.
+		capiMachine.Status.Deprecated.V1Beta1.Conditions = nil // This is not a 1:1 mapping conversion between CAPI and MAPI.
+		capiMachine.Status.Conditions = nil                    // This is not a 1:1 mapping conversion between CAPI and MAPI.
 
 		capiMachine.Status.CertificatesExpiryDate = metav1.Time{} // This is not present on the MAPI Machine status.
 		capiMachine.Status.Deletion = nil                         // This is not present on the MAPI Machine status.
 		capiMachine.Status.NodeInfo = nil                         // This is not present on the MAPI Machine status.
+
+		// Set Deprecated to nil if the values are zero
+		if capiMachine.Status.Deprecated.V1Beta1.FailureReason == nil &&
+			capiMachine.Status.Deprecated.V1Beta1.FailureMessage == nil &&
+			len(capiMachine.Status.Deprecated.V1Beta1.Conditions) == 0 {
+			capiMachine.Status.Deprecated = nil
+		}
 
 		Expect(capiMachine.Status).To(Equal(in.machine.Status))
 
@@ -175,7 +186,7 @@ func CAPI2MAPIMachineSetRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv
 	machineFuzzInputs := []TableEntry{}
 	fz := getFuzzer(scheme, fuzzerFuncs...)
 
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < fuzzIterations; i++ {
 		m := &clusterv1.MachineSet{}
 		fz.Fill(m)
 		fz.Fill(infraMachineTemplate)
@@ -226,7 +237,17 @@ func CAPI2MAPIMachineSetRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv
 
 		// The conditions are not a 1:1 mapping conversion between CAPI and MAPI.
 		// So null them out to match the original nil fuzzing.
-		capiMachineSet.Status.Conditions = nil
+		capiMachineSet.Status.Deprecated.V1Beta1.Conditions = nil
+		// Set Deprecated to nil if the values are zero
+		if capiMachineSet.Status.Deprecated.V1Beta1.FullyLabeledReplicas == 0 &&
+			capiMachineSet.Status.Deprecated.V1Beta1.ReadyReplicas == 0 &&
+			capiMachineSet.Status.Deprecated.V1Beta1.AvailableReplicas == 0 &&
+			capiMachineSet.Status.Deprecated.V1Beta1.FailureReason == nil &&
+			capiMachineSet.Status.Deprecated.V1Beta1.FailureMessage == nil &&
+			len(capiMachineSet.Status.Deprecated.V1Beta1.Conditions) == 0 {
+			capiMachineSet.Status.Deprecated = nil
+		}
+
 		capiMachineSet.Status.Conditions = nil
 
 		// The status selector is computed based on the spec selector of the same object,
@@ -265,7 +286,7 @@ func MAPI2CAPIMachineRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv1.I
 	machineFuzzInputs := []TableEntry{}
 	fz := getFuzzer(scheme, fuzzerFuncs...)
 
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < fuzzIterations; i++ {
 		m := &mapiv1beta1.Machine{}
 		fz.Fill(m)
 
@@ -328,7 +349,7 @@ func MAPI2CAPIMachineSetRoundTripFuzzTest(scheme *runtime.Scheme, infra *configv
 	machineFuzzInputs := []TableEntry{}
 	fz := getFuzzer(scheme, fuzzerFuncs...)
 
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < fuzzIterations; i++ {
 		m := &mapiv1beta1.MachineSet{}
 		fz.Fill(m)
 
@@ -469,6 +490,7 @@ func CAPIMachineFuzzerFuncs(providerIDFuzz StringFuzzer, infraKind, infraAPIGrou
 				// Clear fields that are not supported in the machine spec.
 				m.Version = ""
 				m.ReadinessGates = nil
+				m.MinReadySeconds = nil
 				// Clear fields that are not yet supported in the conversion.
 				// TODO(OCPCLOUD-2715): Implement support for node draining options in MAPI.
 				m.Deletion.NodeDrainTimeoutSeconds = nil
@@ -558,8 +580,10 @@ func CAPIMachineSetFuzzerFuncs(infraTemplateKind, infraAPIGroup, clusterName str
 			},
 			func(m *clusterv1.MachineSetStatus, c randfill.Continue) {
 				m.Conditions = nil
-				m.ReadyReplicas = ptr.To(m.Deprecated.V1Beta1.ReadyReplicas)
-				m.AvailableReplicas = ptr.To(m.Deprecated.V1Beta1.AvailableReplicas)
+				if m.Deprecated != nil && m.Deprecated.V1Beta1 != nil {
+					m.ReadyReplicas = ptr.To(m.Deprecated.V1Beta1.ReadyReplicas)
+					m.AvailableReplicas = ptr.To(m.Deprecated.V1Beta1.AvailableReplicas)
+				}
 				// If the current MachineSet is a stand-alone MachineSet, the MachineSet controller does not set an up-to-date condition
 				// on its child Machines, allowing tools managing higher level abstractions to set this condition.
 				// This is also consistent with the fact that the MachineSet controller primarily takes care of the number of Machine
@@ -653,6 +677,8 @@ func (f *MAPIMachineFuzzer) FuzzMachine(m *mapiv1beta1.Machine, c randfill.Conti
 // The providerSpec should be a pointer to a providerSpec type for the platform being tested.
 // This will be fuzzed and then injected into the MachineSpec as a RawExtension.
 // The providerIDFuzz function should be a function that returns a valid providerID for the platform being tested.
+//
+//nolint:funlen
 func MAPIMachineFuzzerFuncs(providerSpec runtime.Object, providerStatus interface{}, providerIDFuzz StringFuzzer) fuzzer.FuzzerFuncs {
 	return func(codecs runtimeserializer.CodecFactory) []interface{} {
 		return []interface{}{
@@ -713,6 +739,19 @@ func MAPIMachineFuzzerFuncs(providerSpec runtime.Object, providerStatus interfac
 				// Set the bytes field on the RawExtension
 				m.ProviderStatus = &runtime.RawExtension{
 					Raw: bytes,
+				}
+
+				// The only valid node reference is of kind Node and APIVersion v1.
+				if m.NodeRef != nil {
+					m.NodeRef = &corev1.ObjectReference{
+						Kind:       "Node",
+						Name:       m.NodeRef.Name,
+						APIVersion: "v1",
+					}
+				}
+				// Otherwise set it to nil.
+				if m.NodeRef != nil && m.NodeRef.Name == "" {
+					m.NodeRef = nil
 				}
 
 				m.LastOperation = nil        // Ignore, this field as it is not present in CAPI.

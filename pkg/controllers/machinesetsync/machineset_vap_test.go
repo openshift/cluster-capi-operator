@@ -186,6 +186,11 @@ var _ = Describe("MachineSet VAP Tests", func() {
 			sentinelMachineSet := clusterv1resourcebuilder.MachineSet().
 				WithName("sentinel-machineset").
 				WithNamespace(capiNamespace.Name).
+				WithTemplate(clusterv1.MachineTemplateSpec{
+					Spec: clusterv1.MachineSpec{
+						ProviderID: "force-having-a-spec",
+					},
+				}).
 				Build()
 			Eventually(k8sClient.Create(ctx, sentinelMachineSet)).Should(Succeed(), "sentinel machineset should be able to be created")
 
@@ -293,6 +298,11 @@ var _ = Describe("MachineSet VAP Tests", func() {
 			capiSentinelMachineSet := clusterv1resourcebuilder.MachineSet().
 				WithName("sentinel-machineset").
 				WithNamespace(capiNamespace.Name).
+				WithTemplate(clusterv1.MachineTemplateSpec{
+					Spec: clusterv1.MachineSpec{
+						ProviderID: "force-having-a-spec",
+					},
+				}).
 				Build()
 			Eventually(k8sClient.Create(ctx, capiSentinelMachineSet)).Should(Succeed())
 

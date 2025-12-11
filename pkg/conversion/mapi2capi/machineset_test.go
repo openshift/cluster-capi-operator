@@ -27,6 +27,7 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/test/matchers"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 )
 
@@ -119,10 +120,10 @@ var _ = Describe("mapi2capi MachineSet Status Conversion", func() {
 
 			capiStatus := convertMAPIMachineSetToCAPIMachineSetStatus(mapiMachineSet, metav1.LabelSelector{})
 
-			Expect(capiStatus.Replicas).To(Equal(int32(5)))
+			Expect(capiStatus.Replicas).To(Equal(ptr.To(int32(5))))
 			Expect(capiStatus.Deprecated.V1Beta1.FullyLabeledReplicas).To(Equal(int32(5)))
-			Expect(capiStatus.ReadyReplicas).To(Equal(int32(4)))
-			Expect(capiStatus.AvailableReplicas).To(Equal(int32(3)))
+			Expect(ptr.Deref(capiStatus.ReadyReplicas, 0)).To(Equal(int32(4)))
+			Expect(ptr.Deref(capiStatus.AvailableReplicas, 0)).To(Equal(int32(3)))
 			Expect(capiStatus.Deprecated.V1Beta1.FailureReason).To(HaveValue(BeEquivalentTo(mapiv1beta1.MachineSetStatusError("InvalidConfiguration"))))
 			Expect(capiStatus.Deprecated.V1Beta1.FailureMessage).To(HaveValue(BeEquivalentTo("Test error message")))
 			Expect(capiStatus.Deprecated.V1Beta1.Conditions).To(SatisfyAll(
@@ -205,10 +206,10 @@ var _ = Describe("mapi2capi MachineSet Status Conversion", func() {
 
 			capiStatus := convertMAPIMachineSetToCAPIMachineSetStatus(mapiMachineSet, metav1.LabelSelector{})
 
-			Expect(capiStatus.Replicas).To(Equal(int32(0)))
+			Expect(capiStatus.Replicas).To(BeNil())
 			Expect(capiStatus.Deprecated.V1Beta1.FullyLabeledReplicas).To(Equal(int32(0)))
-			Expect(capiStatus.ReadyReplicas).To(Equal(int32(0)))
-			Expect(capiStatus.AvailableReplicas).To(Equal(int32(0)))
+			Expect(capiStatus.ReadyReplicas).To(BeNil())
+			Expect(capiStatus.AvailableReplicas).To(BeNil())
 			Expect(capiStatus.ObservedGeneration).To(Equal(int64(0)))
 			Expect(capiStatus.Deprecated.V1Beta1.FailureReason).To(BeNil())
 			Expect(capiStatus.Deprecated.V1Beta1.FailureMessage).To(BeNil())
@@ -250,8 +251,8 @@ var _ = Describe("mapi2capi MachineSet Status Conversion", func() {
 
 			capiStatus := convertMAPIMachineSetToCAPIMachineSetStatus(mapiMachineSet, metav1.LabelSelector{})
 
-			Expect(capiStatus.ReadyReplicas).To(Equal(int32(3)))
-			Expect(capiStatus.Replicas).To(Equal(int32(3)))
+			Expect(capiStatus.ReadyReplicas).To(Equal(ptr.To(int32(3))))
+			Expect(ptr.Deref(capiStatus.Replicas, 0)).To(Equal(int32(3)))
 			Expect(capiStatus.Deprecated.V1Beta1.Conditions).To(ContainElement(matchers.MatchCAPICondition(clusterv1.Condition{
 				// The Ready condition is computed based on the ReadyReplicas and the Replicas.
 				// In this case they are equal, so the condition is true.
@@ -278,7 +279,7 @@ var _ = Describe("mapi2capi MachineSet Status Conversion", func() {
 
 			capiStatus := convertMAPIMachineSetToCAPIMachineSetStatus(mapiMachineSet, metav1.LabelSelector{})
 
-			Expect(capiStatus.Replicas).To(Equal(int32(1)))
+			Expect(capiStatus.Replicas).To(Equal(ptr.To(int32(1))))
 			Expect(capiStatus.Deprecated.V1Beta1.Conditions).To(ContainElement(matchers.MatchCAPICondition(clusterv1.Condition{
 				// The Resized condition is computed based on the .Spec.Replicas vs .Status.Replicas.
 				// In this case they are not equal, so the condition is false.

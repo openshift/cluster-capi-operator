@@ -161,6 +161,10 @@ func (m *powerVSMachineSetAndInfra) ToMachineSetAndMachineTemplate() (*clusterv1
 		errs = append(errs, machineSetErrs.Errors()...)
 	}
 
+	if capiMachine.Spec.MinReadySeconds == nil {
+		capiMachine.Spec.MinReadySeconds = powerVSMachineSet.Spec.Template.Spec.MinReadySeconds
+	}
+
 	powerVSMachineSet.Spec.Template.Spec = capiMachine.Spec
 
 	// We have to merge these two maps so that labels and annotations added to the template objectmeta are persisted

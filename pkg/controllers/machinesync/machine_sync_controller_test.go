@@ -1549,7 +1549,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 					),
 				)
 
-				sentinelMachine := clusterv1resourcebuilder.Machine().WithName("sentinel-machine").WithNamespace(capiNamespace.Name).Build()
+				sentinelMachine := clusterv1resourcebuilder.Machine().WithName("sentinel-machine").WithNamespace(capiNamespace.Name).WithProviderID("force-having-a-spec").Build()
 				Eventually(k8sClient.Create(ctx, sentinelMachine)).Should(Succeed())
 
 				// Continually try to update the capiMachine to a forbidden field until the VAP blocks it
@@ -1611,7 +1611,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 				sentinelMachine := mapiMachineBuilder.WithName("sentinel-machine").WithAuthoritativeAPI(mapiv1beta1.MachineAuthorityClusterAPI).Build()
 				Eventually(k8sClient.Create(ctx, sentinelMachine), timeout).Should(Succeed())
 
-				capiSentinelMachine := clusterv1resourcebuilder.Machine().WithName("sentinel-machine").WithNamespace(capiNamespace.Name).Build()
+				capiSentinelMachine := clusterv1resourcebuilder.Machine().WithName("sentinel-machine").WithNamespace(capiNamespace.Name).WithProviderID("force-having-a-spec").Build()
 				Eventually(k8sClient.Create(ctx, capiSentinelMachine)).Should(Succeed())
 
 				Eventually(k.Get(capiSentinelMachine)).Should(Succeed())
@@ -1677,7 +1677,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 				sentinelMachine := mapiMachineBuilder.WithName("sentinel-machine").WithAuthoritativeAPI(mapiv1beta1.MachineAuthorityClusterAPI).Build()
 				Eventually(k8sClient.Create(ctx, sentinelMachine), timeout).Should(Succeed())
 
-				capiSentinelMachine := clusterv1resourcebuilder.Machine().WithName("sentinel-machine").WithNamespace(capiNamespace.Name).Build()
+				capiSentinelMachine := clusterv1resourcebuilder.Machine().WithName("sentinel-machine").WithNamespace(capiNamespace.Name).WithProviderID("force-having-a-spec").Build()
 				Expect(k8sClient.Create(ctx, capiSentinelMachine)).To(Succeed())
 
 				Eventually(k.Get(capiSentinelMachine)).Should(Succeed())

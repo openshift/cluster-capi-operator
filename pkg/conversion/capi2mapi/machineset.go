@@ -41,7 +41,7 @@ func fromCAPIMachineSetToMAPIMachineSet(capiMachineSet *clusterv1.MachineSet) (*
 		Spec: mapiv1beta1.MachineSetSpec{
 			Selector:        convertCAPIMachineSetSelectorToMAPI(capiMachineSet.Spec.Selector),
 			Replicas:        capiMachineSet.Spec.Replicas,
-			MinReadySeconds: *capiMachineSet.Spec.Template.Spec.MinReadySeconds,
+			MinReadySeconds: ptr.Deref(capiMachineSet.Spec.Template.Spec.MinReadySeconds, 0),
 			DeletePolicy:    string(capiMachineSet.Spec.Deletion.Order),
 			Template: mapiv1beta1.MachineTemplateSpec{
 				ObjectMeta: mapiv1beta1.ObjectMeta{
@@ -69,11 +69,13 @@ func fromCAPIMachineSetToMAPIMachineSet(capiMachineSet *clusterv1.MachineSet) (*
 
 // convertCAPIMachineSetStatusToMAPI converts a CAPI MachineSetStatus to MAPI format.
 func convertCAPIMachineSetStatusToMAPI(capiStatus clusterv1.MachineSetStatus) mapiv1beta1.MachineSetStatus {
+	deprecatedStatus := ptr.Deref(capiStatus.Deprecated, clusterv1.MachineSetDeprecatedStatus{})
+	v1beta1Status := ptr.Deref(deprecatedStatus.V1Beta1, clusterv1.MachineSetV1Beta1DeprecatedStatus{})
 	mapiStatus := mapiv1beta1.MachineSetStatus{
 		Replicas:             ptr.Deref(capiStatus.Replicas, 0),
-		FullyLabeledReplicas: capiStatus.Deprecated.V1Beta1.FullyLabeledReplicas,
-		ReadyReplicas:        capiStatus.Deprecated.V1Beta1.ReadyReplicas,
-		AvailableReplicas:    capiStatus.Deprecated.V1Beta1.AvailableReplicas,
+		FullyLabeledReplicas: v1beta1Status.FullyLabeledReplicas,
+		ReadyReplicas:        v1beta1Status.ReadyReplicas,
+		AvailableReplicas:    v1beta1Status.AvailableReplicas,
 		// ObservedGeneration: // We don't set the observed generation at this stage as it is handled by the machineSetSync controller.
 		// AuthoritativeAPI: // Ignore, this field as it is not present in CAPI.
 		// SynchronizedGeneration: // Ignore, this field as it is not present in CAPI.
@@ -84,12 +86,12 @@ func convertCAPIMachineSetStatusToMAPI(capiStatus clusterv1.MachineSetStatus) ma
 	}
 
 	// Convert FailureReason/FailureMessage to ErrorReason/ErrorMessage
-	if capiStatus.Deprecated.V1Beta1.FailureReason != nil {
-		mapiStatus.ErrorReason = convertCAPIFailureReasonToMAPIErrorReason(*capiStatus.Deprecated.V1Beta1.FailureReason)
+	if v1beta1Status.FailureReason != nil {
+		mapiStatus.ErrorReason = convertCAPIFailureReasonToMAPIErrorReason(*v1beta1Status.FailureReason)
 	}
 
-	if capiStatus.Deprecated.V1Beta1.FailureMessage != nil {
-		mapiStatus.ErrorMessage = capiStatus.Deprecated.V1Beta1.FailureMessage
+	if v1beta1Status.FailureMessage != nil {
+		mapiStatus.ErrorMessage = v1beta1Status.FailureMessage
 	}
 
 	// unused fields from CAPI MachineSetStatus

@@ -404,8 +404,12 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 				})
 
 				It("should sync the status of the machine sets (updating the CAPI machine set status replicas)", func() {
+					var expectedValue *int32
+					if mapiMachineSet.Status.Replicas != 0 {
+						expectedValue = ptr.To(mapiMachineSet.Status.Replicas)
+					}
 					Eventually(k.Object(capiMachineSet), timeout).Should(
-						HaveField("Status.Replicas", BeEquivalentTo(mapiMachineSet.Status.Replicas)),
+						HaveField("Status.Replicas", BeEquivalentTo(expectedValue)),
 					)
 				})
 			})
@@ -420,7 +424,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 
 				It("should sync the status of the machine sets (updating the CAPI machine set status ready replicas)", func() {
 					Eventually(k.Object(capiMachineSet), timeout).Should(
-						HaveField("Status.ReadyReplicas", BeEquivalentTo(mapiMachineSet.Status.ReadyReplicas)),
+						HaveField("Status.Deprecated.V1Beta1.ReadyReplicas", BeEquivalentTo(mapiMachineSet.Status.ReadyReplicas)),
 					)
 				})
 			})
@@ -556,7 +560,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 
 			It("should sync the status of the machine sets (updating the MAPI machine set status replicas)", func() {
 				Eventually(k.Object(mapiMachineSet), timeout).Should(
-					HaveField("Status.Replicas", BeEquivalentTo(capiMachineSet.Status.Replicas)),
+					HaveField("Status.Replicas", BeEquivalentTo(ptr.Deref(capiMachineSet.Status.Replicas, 0))),
 				)
 			})
 		})
@@ -671,9 +675,9 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 			It("should sync the status of the machine sets (updating the MAPI machine set status ready replicas)", func() {
 				Eventually(k.Object(mapiMachineSet), timeout).Should(
 					SatisfyAll(
-						HaveField("Status.Replicas", BeEquivalentTo(capiMachineSet.Status.Replicas)),
-						HaveField("Status.ReadyReplicas", BeEquivalentTo(capiMachineSet.Status.ReadyReplicas)),
-						HaveField("Status.AvailableReplicas", BeEquivalentTo(capiMachineSet.Status.AvailableReplicas)),
+						HaveField("Status.Replicas", BeEquivalentTo(*capiMachineSet.Status.Replicas)),
+						HaveField("Status.AvailableReplicas", BeEquivalentTo(capiMachineSet.Status.Deprecated.V1Beta1.AvailableReplicas)),
+						HaveField("Status.ReadyReplicas", BeEquivalentTo(capiMachineSet.Status.Deprecated.V1Beta1.ReadyReplicas)),
 						HaveField("Status.ErrorMessage", BeEquivalentTo(capiMachineSet.Status.Deprecated.V1Beta1.FailureMessage)),
 						HaveField("Status.ErrorReason", BeEquivalentTo(capiMachineSet.Status.Deprecated.V1Beta1.FailureReason)),
 						// Status.Conditions // Conditions are not a 1:1 matching and are computed separately, so don't check them here. We have a separate test for this.
