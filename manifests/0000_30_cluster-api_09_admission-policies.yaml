@@ -57,7 +57,7 @@ data:
       failurePolicy: Fail
     
       paramKind:
-        apiVersion: cluster.x-k8s.io/v1beta1
+        apiVersion: cluster.x-k8s.io/v1beta2
         kind: Machine
     
       matchConstraints:
@@ -189,7 +189,7 @@ data:
       matchConstraints:
         resourceRules:
         - apiGroups:   ["cluster.x-k8s.io"]
-          apiVersions: ["v1beta1"]
+          apiVersions: ["v1beta2"]
           operations:  ["UPDATE"]
           resources:   ["machines"]
     
@@ -311,7 +311,7 @@ data:
       failurePolicy: Fail
       
       paramKind:
-        apiVersion: cluster.x-k8s.io/v1beta1
+        apiVersion: cluster.x-k8s.io/v1beta2
         kind: Machine
 
       matchConstraints:
@@ -359,7 +359,7 @@ data:
     spec:
       failurePolicy: Fail
       paramKind:
-        apiVersion: cluster.x-k8s.io/v1beta1
+        apiVersion: cluster.x-k8s.io/v1beta2
         kind: MachineSet
       matchConstraints:
         resourceRules:
@@ -508,7 +508,7 @@ data:
       failurePolicy: Fail
 
       paramKind:
-        apiVersion: cluster.x-k8s.io/v1beta1
+        apiVersion: cluster.x-k8s.io/v1beta2
         kind: Machine
 
       matchConstraints:

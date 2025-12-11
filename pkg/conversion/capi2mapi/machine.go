@@ -24,7 +24,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/utils/ptr"
-	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	capierrors "sigs.k8s.io/cluster-api/errors"
 )
@@ -232,8 +231,8 @@ func convertCAPIMachineFailureMessageToMAPIErrorMessage(capiFailureMessage *stri
 
 const (
 	// Note the trailing slash here is important when we are trimming the prefix.
-	capiPreDrainAnnotationPrefix     = clusterv1beta1.PreDrainDeleteHookAnnotationPrefix + "/"
-	capiPreTerminateAnnotationPrefix = clusterv1beta1.PreTerminateDeleteHookAnnotationPrefix + "/"
+	capiPreDrainAnnotationPrefix     = clusterv1.PreDrainDeleteHookAnnotationPrefix + "/"
+	capiPreTerminateAnnotationPrefix = clusterv1.PreTerminateDeleteHookAnnotationPrefix + "/"
 )
 
 // convertCAPILifecycleHookAnnotationsToMAPILifecycleHooksAndAnnotations extracts the lifecycle hooks from the CAPI Machine annotations.

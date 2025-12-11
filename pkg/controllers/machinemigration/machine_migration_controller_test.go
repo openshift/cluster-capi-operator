@@ -131,8 +131,8 @@ var _ = Describe("With a running MachineMigration controller", func() {
 			&configv1.Infrastructure{},
 		)
 		testutils.CleanupResources(Default, ctx, cfg, k8sClient, capiNamespace.GetName(),
-			&clusterv1beta1.Machine{},
-			&clusterv1beta1.MachineSet{},
+			&clusterv1.Machine{},
+			&clusterv1.MachineSet{},
 			&awsv1.AWSCluster{},
 			&awsv1.AWSMachineTemplate{},
 			&awsv1.AWSMachine{},
@@ -344,13 +344,13 @@ var _ = Describe("With a running MachineMigration controller", func() {
 					Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(mapiMachine), updatedM)).To(Succeed())
 					Expect(updatedM.Status.AuthoritativeAPI).To(Equal(mapiv1beta1.MachineAuthorityMigrating))
 
-					updatedCAPIM := &clusterv1beta1.Machine{}
+					updatedCAPIM := &clusterv1.Machine{}
 					Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(capiMachine), updatedCAPIM)).To(Succeed())
-					Expect(updatedCAPIM.Annotations).To(HaveKeyWithValue(clusterv1beta1.PausedAnnotation, ""))
+					Expect(updatedCAPIM.Annotations).To(HaveKeyWithValue(clusterv1.PausedAnnotation, ""))
 
 					updatedCAPIInfraMachine := &awsv1.AWSMachine{}
 					Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(capaMachine), updatedCAPIInfraMachine)).To(Succeed())
-					Expect(updatedCAPIInfraMachine.Annotations).To(HaveKeyWithValue(clusterv1beta1.PausedAnnotation, ""))
+					Expect(updatedCAPIInfraMachine.Annotations).To(HaveKeyWithValue(clusterv1.PausedAnnotation, ""))
 				})
 			})
 		})
@@ -447,7 +447,7 @@ var _ = Describe("With a running MachineMigration controller", func() {
 						Eventually(k.UpdateStatus(capiMachine, func() {
 							updatedCAPIMachine := capiMachineBuilder.Build()
 							updatedCAPIMachine.Status.Conditions = []metav1.Condition{{
-								Type:               clusterv1beta1.PausedV1Beta2Condition,
+								Type:               clusterv1.PausedCondition,
 								Status:             metav1.ConditionTrue,
 								LastTransitionTime: metav1.Now(),
 							}}
@@ -475,10 +475,10 @@ var _ = Describe("With a running MachineMigration controller", func() {
 						Expect(err).NotTo(HaveOccurred())
 
 						Eventually(komega.Object(capiMachine)).Should(
-							HaveField("Status.V1Beta2.Conditions", SatisfyAll(
+							HaveField("Status.Conditions", SatisfyAll(
 								Not(BeEmpty()),
 								ContainElement(SatisfyAll(
-									HaveField("Type", Equal(clusterv1beta1.PausedV1Beta2Condition)),
+									HaveField("Type", Equal(clusterv1.PausedCondition)),
 									HaveField("Status", Equal(metav1.ConditionTrue)),
 								)),
 							)),
@@ -620,15 +620,15 @@ var _ = Describe("With a running MachineMigration controller", func() {
 					By("Creating a mirror CAPI machine")
 					capiMachine = capiMachineBuilder.
 						WithAnnotations(map[string]string{
-							clusterv1beta1.PausedAnnotation: "",
+							clusterv1.PausedAnnotation: "",
 						}).
 						Build()
-					capiMachine.Finalizers = append(capiMachine.Finalizers, clusterv1beta1.MachineFinalizer)
+					capiMachine.Finalizers = append(capiMachine.Finalizers, clusterv1.MachineFinalizer)
 					Eventually(k8sClient.Create(ctx, capiMachine)).Should(Succeed())
 
 					capaMachine = capaMachineBuilder.
 						WithAnnotations(map[string]string{
-							clusterv1beta1.PausedAnnotation: "",
+							clusterv1.PausedAnnotation: "",
 						}).
 						Build()
 					Eventually(k8sClient.Create(ctx, capaMachine)).Should(Succeed())
@@ -637,7 +637,7 @@ var _ = Describe("With a running MachineMigration controller", func() {
 					Eventually(k.UpdateStatus(capiMachine, func() {
 						updatedCAPIMachine := capiMachineBuilder.Build()
 						updatedCAPIMachine.Status.Conditions = []metav1.Condition{{
-							Type:               clusterv1beta1.PausedV1Beta2Condition,
+							Type:               clusterv1.PausedCondition,
 							Status:             metav1.ConditionTrue,
 							LastTransitionTime: metav1.Now(),
 						}}
@@ -658,7 +658,7 @@ var _ = Describe("With a running MachineMigration controller", func() {
 					))
 
 					Eventually(komega.Object(capiMachine)).ShouldNot(
-						HaveField("ObjectMeta.Annotations", ContainElement(HaveKeyWithValue(clusterv1beta1.PausedAnnotation, ""))))
+						HaveField("ObjectMeta.Annotations", ContainElement(HaveKeyWithValue(clusterv1.PausedAnnotation, ""))))
 				})
 			})
 			Context("when migrating from ClusterAPI to MachineAPI", func() {
@@ -672,13 +672,13 @@ var _ = Describe("With a running MachineMigration controller", func() {
 					By("Creating a mirror CAPI machine")
 					capiMachine = capiMachineBuilder.
 						WithAnnotations(map[string]string{
-							clusterv1beta1.PausedAnnotation: "",
+							clusterv1.PausedAnnotation: "",
 						}).
 						Build()
 					Eventually(k8sClient.Create(ctx, capiMachine)).Should(Succeed())
 					capaMachine = capaMachineBuilder.
 						WithAnnotations(map[string]string{
-							clusterv1beta1.PausedAnnotation: "",
+							clusterv1.PausedAnnotation: "",
 						}).
 						Build()
 					Eventually(k8sClient.Create(ctx, capaMachine)).Should(Succeed())
@@ -709,7 +709,7 @@ var _ = Describe("With a running MachineMigration controller", func() {
 					Eventually(k.UpdateStatus(capiMachine, func() {
 						updatedCAPIMachine := capiMachineBuilder.Build()
 						updatedCAPIMachine.Status.Conditions = []metav1.Condition{{
-							Type:               clusterv1beta1.PausedV1Beta2Condition,
+							Type:               clusterv1.PausedCondition,
 							Status:             metav1.ConditionTrue,
 							LastTransitionTime: metav1.Now(),
 						}}
@@ -718,7 +718,7 @@ var _ = Describe("With a running MachineMigration controller", func() {
 
 					By("Setting the CAPI infra machine status condition to 'Paused'")
 					Eventually(k.UpdateStatus(capaMachine, func() {
-						updatedCAPIInfraMachine := capaMachineBuilder.WithAnnotations(map[string]string{clusterv1beta1.PausedAnnotation: ""}).Build()
+						updatedCAPIInfraMachine := capaMachineBuilder.WithAnnotations(map[string]string{clusterv1.PausedAnnotation: ""}).Build()
 						updatedCAPIInfraMachine.Status.Conditions = clusterv1beta1.Conditions{
 							{
 								Type:               clusterv1beta1.PausedV1Beta2Condition,

@@ -26,7 +26,6 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	ptr "k8s.io/utils/ptr"
-	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	capierrors "sigs.k8s.io/cluster-api/errors"
 )
@@ -229,45 +228,45 @@ func convertMAPIMachineSetConditionsToCAPIMachineSetV1Beta2StatusConditions(mapi
 	// Deleting If the MachineSet is deleted, this condition surfaces details about ongoing deletion of the controlled machines
 	isDeleting := mapiMachineSet.DeletionTimestamp != nil && !mapiMachineSet.DeletionTimestamp.IsZero()
 	deletingCondition := metav1.Condition{
-		Type:   clusterv1beta1.MachineSetDeletingV1Beta2Condition,
+		Type:   clusterv1.MachineSetDeletingCondition,
 		Status: map[bool]metav1.ConditionStatus{true: metav1.ConditionTrue, false: metav1.ConditionFalse}[isDeleting],
-		Reason: map[bool]string{true: clusterv1beta1.MachineSetDeletingV1Beta2Reason, false: clusterv1beta1.MachineSetNotDeletingV1Beta2Reason}[isDeleting],
+		Reason: map[bool]string{true: clusterv1.MachineSetDeletingReason, false: clusterv1.MachineSetNotDeletingReason}[isDeleting],
 		// LastTransitionTime will be set by the condition utilities.
 	}
 
 	// ScalingUp If the MachineSet is scaling up, this condition surfaces details about ongoing scaling up of the controlled machines
 	isScalingUp := ptr.Deref(mapiMachineSet.Spec.Replicas, 1) > mapiMachineSet.Status.Replicas
 	scalingUpCondition := metav1.Condition{
-		Type:   clusterv1beta1.MachineSetScalingUpV1Beta2Condition,
+		Type:   clusterv1.MachineSetScalingUpCondition,
 		Status: map[bool]metav1.ConditionStatus{true: metav1.ConditionTrue, false: metav1.ConditionFalse}[isScalingUp],
-		Reason: map[bool]string{true: clusterv1beta1.MachineSetScalingUpV1Beta2Reason, false: clusterv1beta1.MachineSetNotScalingUpV1Beta2Reason}[isScalingUp],
+		Reason: map[bool]string{true: clusterv1.MachineSetScalingUpReason, false: clusterv1.MachineSetNotScalingUpReason}[isScalingUp],
 		// LastTransitionTime will be set by the condition utilities.
 	}
 
 	// ScalingDown If the MachineSet is scaling down, this condition surfaces details about ongoing scaling down of the controlled machines
 	isScalingDown := ptr.Deref(mapiMachineSet.Spec.Replicas, 1) < mapiMachineSet.Status.Replicas
 	scalingDownCondition := metav1.Condition{
-		Type:   clusterv1beta1.MachineSetScalingDownV1Beta2Condition,
+		Type:   clusterv1.MachineSetScalingDownCondition,
 		Status: map[bool]metav1.ConditionStatus{true: metav1.ConditionTrue, false: metav1.ConditionFalse}[isScalingDown],
-		Reason: map[bool]string{true: clusterv1beta1.MachineSetScalingDownV1Beta2Reason, false: clusterv1beta1.MachineSetNotScalingDownV1Beta2Reason}[isScalingDown],
+		Reason: map[bool]string{true: clusterv1.MachineSetScalingDownReason, false: clusterv1.MachineSetNotScalingDownReason}[isScalingDown],
 		// LastTransitionTime will be set by the condition utilities.
 	}
 
 	// MachinesReady If the MachineSet is ready, This condition surfaces detail of issues on the controlled machines, if any
 	isMachinesReady := mapiMachineSet.Status.ReadyReplicas == ptr.Deref(mapiMachineSet.Spec.Replicas, 1)
 	machinesReadyCondition := metav1.Condition{
-		Type:   clusterv1beta1.MachineSetMachinesReadyV1Beta2Condition,
+		Type:   clusterv1.MachineSetMachinesReadyCondition,
 		Status: map[bool]metav1.ConditionStatus{true: metav1.ConditionTrue, false: metav1.ConditionFalse}[isMachinesReady],
-		Reason: map[bool]string{true: clusterv1beta1.MachineSetMachinesReadyV1Beta2Reason, false: clusterv1beta1.MachineSetMachinesNotReadyV1Beta2Reason}[isMachinesReady],
+		Reason: map[bool]string{true: clusterv1.MachineSetMachinesReadyReason, false: clusterv1.MachineSetMachinesNotReadyReason}[isMachinesReady],
 		// LastTransitionTime will be set by the condition utilities.
 	}
 
 	// MachinesUpToDate If the MachineSet is up to date, this condition surfaces details about the status of the controlled machines
 	isMachinesUpToDate := mapiMachineSet.Status.FullyLabeledReplicas == ptr.Deref(mapiMachineSet.Spec.Replicas, 1)
 	machinesUpToDateCondition := metav1.Condition{
-		Type:   clusterv1beta1.MachineSetMachinesUpToDateV1Beta2Condition,
+		Type:   clusterv1.MachineSetMachinesUpToDateCondition,
 		Status: map[bool]metav1.ConditionStatus{true: metav1.ConditionTrue, false: metav1.ConditionFalse}[isMachinesUpToDate],
-		Reason: map[bool]string{true: clusterv1beta1.MachineSetMachinesUpToDateV1Beta2Reason, false: clusterv1beta1.MachineSetMachinesNotUpToDateV1Beta2Reason}[isMachinesUpToDate],
+		Reason: map[bool]string{true: clusterv1.MachineSetMachinesUpToDateReason, false: clusterv1.MachineSetMachinesNotUpToDateReason}[isMachinesUpToDate],
 		// LastTransitionTime will be set by the condition utilities.
 	}
 

@@ -23,7 +23,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/utils/ptr"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
-	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -229,10 +228,10 @@ var _ = Describe("Reconcile Core cluster", func() {
 					testCoreCluster := clusterv1resourcebuilder.Cluster().WithName(testInfraName).WithNamespace(testNamespaceName).Build()
 					Eventually(komega.Get(testCoreCluster)).Should(Succeed(), "should have been able to successfully get the core cluster")
 					Eventually(komega.Object(testCoreCluster)).Should(
-						HaveField("Status.Conditions", SatisfyAll(
+						HaveField("Status.Deprecated.V1Beta1.Conditions", SatisfyAll(
 							Not(BeEmpty()),
 							ContainElement(SatisfyAll(
-								HaveField("Type", Equal(clusterv1beta1.ControlPlaneInitializedCondition)),
+								HaveField("Type", Equal(clusterv1.ControlPlaneInitializedV1Beta1Condition)),
 								HaveField("Status", Equal(corev1.ConditionTrue)),
 							)),
 						)),

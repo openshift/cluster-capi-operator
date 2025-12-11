@@ -23,7 +23,6 @@ import (
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	machinev1applyconfigs "github.com/openshift/client-go/machine/applyconfigurations/machine/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -65,8 +64,8 @@ func normalizeOwnerReferences(refs []metav1.OwnerReference) []metav1.OwnerRefere
 		normalized[i] = ref
 		// Normalize Cluster API group versions to v1beta1 for comparison purposes.
 		// The server might store and return v1beta2 while our client uses v1beta1.
-		if strings.HasPrefix(ref.APIVersion, clusterv1beta1.GroupVersion.Group+"/") {
-			normalized[i].APIVersion = clusterv1beta1.GroupVersion.String()
+		if strings.HasPrefix(ref.APIVersion, clusterv1.GroupVersion.Group+"/") {
+			normalized[i].APIVersion = clusterv1.GroupVersion.String()
 		}
 	}
 

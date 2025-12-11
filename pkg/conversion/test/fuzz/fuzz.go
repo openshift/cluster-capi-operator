@@ -43,7 +43,6 @@ import (
 	runtimeserializer "k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/utils/ptr"
 
-	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 )
 
@@ -450,11 +449,11 @@ func ObjectMetaFuzzerFuncs(namespace string) fuzzer.FuzzerFuncs {
 func CAPIMachineFuzzerFuncs(providerIDFuzz StringFuzzer, infraKind, infraAPIGroup, clusterName string) fuzzer.FuzzerFuncs {
 	return func(codecs runtimeserializer.CodecFactory) []interface{} {
 		return []interface{}{
-			func(b *clusterv1beta1.Bootstrap, c randfill.Continue) {
+			func(b *clusterv1.Bootstrap, c randfill.Continue) {
 				c.FillNoCustom(b)
 
 				// Clear fields that are not supported in the bootstrap spec.
-				b.ConfigRef = nil
+				b.ConfigRef = clusterv1.ContractVersionedObjectReference{}
 
 				// If we fuzzed an empty string, nil it out to match the behaviour of the converter.
 				if b.DataSecretName != nil && *b.DataSecretName == "" {

@@ -28,7 +28,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 
-	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 
 	configv1 "github.com/openshift/api/config/v1"
@@ -340,7 +339,7 @@ var _ = Describe("With a running MachineSetMigration controller", func() {
 
 					updatedCAPIMS := &clusterv1.MachineSet{}
 					Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(capiMachineSet), updatedCAPIMS)).To(Succeed())
-					Expect(updatedCAPIMS.Annotations).To(HaveKeyWithValue(clusterv1beta1.PausedAnnotation, ""))
+					Expect(updatedCAPIMS.Annotations).To(HaveKeyWithValue(clusterv1.PausedAnnotation, ""))
 				})
 			})
 		})
@@ -433,7 +432,7 @@ var _ = Describe("With a running MachineSetMigration controller", func() {
 						Eventually(k.UpdateStatus(capiMachineSet, func() {
 							updatedCAPIMachineSet := capiMachineSetBuilder.Build()
 							updatedCAPIMachineSet.Status.Conditions = []metav1.Condition{{
-								Type:               clusterv1beta1.PausedV1Beta2Condition,
+								Type:               clusterv1.PausedCondition,
 								Status:             metav1.ConditionTrue,
 								LastTransitionTime: metav1.Now(),
 							}}
@@ -448,10 +447,10 @@ var _ = Describe("With a running MachineSetMigration controller", func() {
 						Expect(err).NotTo(HaveOccurred())
 
 						Eventually(komega.Object(capiMachineSet)).Should(
-							HaveField("Status.V1Beta2.Conditions", SatisfyAll(
+							HaveField("Status.Conditions", SatisfyAll(
 								Not(BeEmpty()),
 								ContainElement(SatisfyAll(
-									HaveField("Type", Equal(clusterv1beta1.PausedV1Beta2Condition)),
+									HaveField("Type", Equal(clusterv1.PausedCondition)),
 									HaveField("Status", Equal(metav1.ConditionTrue)),
 								)),
 							)),
@@ -583,7 +582,7 @@ var _ = Describe("With a running MachineSetMigration controller", func() {
 					By("Creating a mirror CAPI machine set")
 					capiMachineSet = capiMachineSetBuilder.
 						WithAnnotations(map[string]string{
-							clusterv1beta1.PausedAnnotation: "",
+							clusterv1.PausedAnnotation: "",
 						}).
 						Build()
 					capiMachineSet.Finalizers = append(capiMachineSet.Finalizers, clusterv1.MachineSetFinalizer)
@@ -593,7 +592,7 @@ var _ = Describe("With a running MachineSetMigration controller", func() {
 					Eventually(k.UpdateStatus(capiMachineSet, func() {
 						updatedCAPIMachineSet := capiMachineSetBuilder.Build()
 						updatedCAPIMachineSet.Status.Conditions = []metav1.Condition{{
-							Type:               clusterv1beta1.PausedV1Beta2Condition,
+							Type:               clusterv1.PausedCondition,
 							Status:             metav1.ConditionTrue,
 							LastTransitionTime: metav1.Now(),
 						}}
@@ -614,7 +613,7 @@ var _ = Describe("With a running MachineSetMigration controller", func() {
 					))
 
 					Eventually(komega.Object(capiMachineSet)).ShouldNot(
-						HaveField("ObjectMeta.Annotations", ContainElement(HaveKeyWithValue(clusterv1beta1.PausedAnnotation, ""))))
+						HaveField("ObjectMeta.Annotations", ContainElement(HaveKeyWithValue(clusterv1.PausedAnnotation, ""))))
 				})
 			})
 			Context("when migrating from ClusterAPI to MachineAPI", func() {
@@ -628,7 +627,7 @@ var _ = Describe("With a running MachineSetMigration controller", func() {
 					By("Creating a mirror CAPI machine set")
 					capiMachineSet = capiMachineSetBuilder.
 						WithAnnotations(map[string]string{
-							clusterv1beta1.PausedAnnotation: "",
+							clusterv1.PausedAnnotation: "",
 						}).
 						Build()
 					Eventually(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
@@ -660,7 +659,7 @@ var _ = Describe("With a running MachineSetMigration controller", func() {
 					Eventually(k.UpdateStatus(capiMachineSet, func() {
 						updatedCAPIMachineSet := capiMachineSetBuilder.Build()
 						updatedCAPIMachineSet.Status.Conditions = []metav1.Condition{{
-							Type:               clusterv1beta1.PausedV1Beta2Condition,
+							Type:               clusterv1.PausedCondition,
 							Status:             metav1.ConditionTrue,
 							LastTransitionTime: metav1.Now(),
 						}}

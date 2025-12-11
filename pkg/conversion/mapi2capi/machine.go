@@ -225,7 +225,7 @@ func convertMAPIMachineConditionsToCAPIMachineV1Beta2StatusConditions(mapiMachin
 
 	// Available condition - indicates if the machine is available for use
 	availableCondition := metav1.Condition{
-		Type: clusterv1beta1.AvailableV1Beta2Condition,
+		Type: clusterv1.AvailableCondition,
 		Status: func() metav1.ConditionStatus {
 			if hasRunningPhase(mapiMachine) {
 				return metav1.ConditionTrue
@@ -235,17 +235,17 @@ func convertMAPIMachineConditionsToCAPIMachineV1Beta2StatusConditions(mapiMachin
 		}(),
 		Reason: func() string {
 			if hasRunningPhase(mapiMachine) {
-				return clusterv1beta1.MachineAvailableV1Beta2Reason // This is "Available"
+				return clusterv1.MachineAvailableReason // This is "Available"
 			}
 
-			return clusterv1beta1.NotAvailableV1Beta2Reason // This is "NotAvailable"
+			return clusterv1.NotAvailableReason // This is "NotAvailable"
 		}(),
 		// LastTransitionTime will be set by the condition utilities.
 	}
 
 	// Ready condition
 	readyCondition := metav1.Condition{
-		Type: clusterv1beta1.ReadyV1Beta2Condition,
+		Type: clusterv1.ReadyCondition,
 		Status: func() metav1.ConditionStatus {
 			if mapiMachine.Status.Phase != nil && *mapiMachine.Status.Phase == mapiv1beta1.PhaseRunning {
 				return metav1.ConditionTrue
@@ -255,17 +255,17 @@ func convertMAPIMachineConditionsToCAPIMachineV1Beta2StatusConditions(mapiMachin
 		}(),
 		Reason: func() string {
 			if mapiMachine.Status.Phase != nil && *mapiMachine.Status.Phase == mapiv1beta1.PhaseRunning {
-				return clusterv1beta1.MachineReadyV1Beta2Reason
+				return clusterv1.MachineReadyReason
 			}
 
-			return clusterv1beta1.MachineNotReadyV1Beta2Reason
+			return clusterv1.MachineNotReadyReason
 		}(),
 		// LastTransitionTime will be set by the condition utilities.
 	}
 
 	// BootstrapConfigReady condition
 	bootstrapConfigReadyCondition := metav1.Condition{
-		Type: clusterv1beta1.MachineBootstrapConfigReadyV1Beta2Condition,
+		Type: clusterv1.MachineBootstrapConfigReadyCondition,
 		Status: func() metav1.ConditionStatus {
 			if deriveCAPIBootstrapDataSecretCreatedFromMAPI(mapiMachine) {
 				return metav1.ConditionTrue
@@ -275,17 +275,17 @@ func convertMAPIMachineConditionsToCAPIMachineV1Beta2StatusConditions(mapiMachin
 		}(),
 		Reason: func() string {
 			if deriveCAPIBootstrapDataSecretCreatedFromMAPI(mapiMachine) {
-				return clusterv1beta1.MachineBootstrapConfigReadyV1Beta2Reason
+				return clusterv1.MachineBootstrapConfigReadyReason
 			}
 
-			return clusterv1beta1.MachineBootstrapConfigNotReadyV1Beta2Reason
+			return clusterv1.MachineBootstrapConfigNotReadyReason
 		}(),
 		// LastTransitionTime will be set by the condition utilities.
 	}
 
 	// InfrastructureReady condition
 	infrastructureReadyCondition := metav1.Condition{
-		Type: clusterv1beta1.MachineInfrastructureReadyV1Beta2Condition,
+		Type: clusterv1.MachineInfrastructureReadyCondition,
 		Status: func() metav1.ConditionStatus {
 			if deriveCAPIInfrastructureProvisionedFromMAPI(mapiMachine) {
 				return metav1.ConditionTrue
@@ -295,10 +295,10 @@ func convertMAPIMachineConditionsToCAPIMachineV1Beta2StatusConditions(mapiMachin
 		}(),
 		Reason: func() string {
 			if deriveCAPIInfrastructureProvisionedFromMAPI(mapiMachine) {
-				return clusterv1beta1.MachineInfrastructureReadyV1Beta2Reason
+				return clusterv1.MachineInfrastructureReadyReason
 			}
 
-			return clusterv1beta1.MachineInfrastructureNotReadyV1Beta2Reason
+			return clusterv1.MachineInfrastructureNotReadyReason
 		}(),
 		// LastTransitionTime will be set by the condition utilities.
 	}
@@ -307,7 +307,7 @@ func convertMAPIMachineConditionsToCAPIMachineV1Beta2StatusConditions(mapiMachin
 	// For now use the machine phase to determine the status of the node ready condition.
 	// TODO: update this if we change our mind for the nodehealthy condition below.
 	nodeReadyCondition := metav1.Condition{
-		Type: clusterv1beta1.MachineNodeReadyV1Beta2Condition,
+		Type: clusterv1.MachineNodeReadyCondition,
 		Status: func() metav1.ConditionStatus {
 			if mapiMachine.Status.Phase != nil && (*mapiMachine.Status.Phase == mapiv1beta1.PhaseRunning || *mapiMachine.Status.Phase == mapiv1beta1.PhaseDeleting) && mapiMachine.Status.NodeRef != nil {
 				return metav1.ConditionTrue
@@ -317,10 +317,10 @@ func convertMAPIMachineConditionsToCAPIMachineV1Beta2StatusConditions(mapiMachin
 		}(),
 		Reason: func() string {
 			if mapiMachine.Status.Phase != nil && (*mapiMachine.Status.Phase == mapiv1beta1.PhaseRunning || *mapiMachine.Status.Phase == mapiv1beta1.PhaseDeleting) && mapiMachine.Status.NodeRef != nil {
-				return clusterv1beta1.MachineNodeReadyV1Beta2Reason
+				return clusterv1.MachineNodeReadyReason
 			}
 
-			return clusterv1beta1.MachineNodeNotReadyV1Beta2Reason
+			return clusterv1.MachineNodeNotReadyReason
 		}(),
 		// LastTransitionTime will be set by the condition utilities.
 	}
@@ -341,9 +341,9 @@ func convertMAPIMachineConditionsToCAPIMachineV1Beta2StatusConditions(mapiMachin
 	// Deleting condition
 	isDeleting := mapiMachine.DeletionTimestamp != nil && !mapiMachine.DeletionTimestamp.IsZero()
 	deletingCondition := metav1.Condition{
-		Type:   clusterv1beta1.MachineDeletingV1Beta2Condition,
+		Type:   clusterv1.MachineDeletingCondition,
 		Status: map[bool]metav1.ConditionStatus{true: metav1.ConditionTrue, false: metav1.ConditionFalse}[isDeleting],
-		Reason: map[bool]string{true: clusterv1beta1.MachineDeletingV1Beta2Reason, false: clusterv1beta1.MachineNotDeletingV1Beta2Reason}[isDeleting],
+		Reason: map[bool]string{true: clusterv1.MachineDeletingReason, false: clusterv1.MachineNotDeletingReason}[isDeleting],
 		// LastTransitionTime will be set by the condition utilities.
 	}
 

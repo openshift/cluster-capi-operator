@@ -41,7 +41,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/validation/field"
@@ -49,7 +48,6 @@ import (
 	"k8s.io/utils/ptr"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
-	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/cluster-api/util/annotations"
 	"sigs.k8s.io/cluster-api/util/labels/format"
@@ -541,7 +539,7 @@ func (r *MachineSyncReconciler) reconcileMAPIMachinetoCAPIMachine(ctx context.Co
 		// For the other case instead (authoritativeAPI == mapiv1beta1.MachineAuthorityClusterAPI),
 		// when the new CAPI Machine that is being created is also expected to be the authority
 		// (i.e. in cases where the MAPI Machine is created as .spec.authoritativeAPI: ClusterAPI), we do not want to create it paused.
-		annotations.AddAnnotations(convertedCAPIMachine, map[string]string{clusterv1beta1.PausedAnnotation: ""})
+		annotations.AddAnnotations(convertedCAPIMachine, map[string]string{clusterv1.PausedAnnotation: ""})
 	}
 
 	if !util.IsNilObject(existingInfraMachine) {
@@ -567,7 +565,7 @@ func (r *MachineSyncReconciler) reconcileMAPIMachinetoCAPIMachine(ctx context.Co
 		// For the other case instead (authoritativeAPI == mapiv1beta1.MachineAuthorityClusterAPI),
 		// when the new CAPI Infra Machine that is being created is also expected to be the authority
 		// (i.e. in cases where the MAPI Machine is created as .spec.authoritativeAPI: ClusterAPI), we do not want to create it paused.
-		annotations.AddAnnotations(convertedCAPIInfraMachine, map[string]string{clusterv1beta1.PausedAnnotation: ""})
+		annotations.AddAnnotations(convertedCAPIInfraMachine, map[string]string{clusterv1.PausedAnnotation: ""})
 	}
 
 	// Create or update the CAPI machine.
@@ -577,7 +575,7 @@ func (r *MachineSyncReconciler) reconcileMAPIMachinetoCAPIMachine(ctx context.Co
 	}
 
 	convertedCAPIInfraMachine.SetOwnerReferences([]metav1.OwnerReference{{
-		APIVersion:         clusterv1beta1.GroupVersion.String(),
+		APIVersion:         clusterv1.GroupVersion.String(),
 		Kind:               machineKind,
 		Name:               existingCAPIMachine.Name,
 		UID:                existingCAPIMachine.UID,
@@ -822,7 +820,7 @@ func (r *MachineSyncReconciler) shouldMirrorCAPIMachineToMAPIMachine(ctx context
 
 	// Check if the CAPI machine has an ownerReference that points to a CAPI machineset.
 	for _, ref := range machine.ObjectMeta.OwnerReferences {
-		if ref.Kind != machineSetKind || (ref.APIVersion != clusterv1beta1.GroupVersion.String() && ref.APIVersion != (schema.GroupVersion{Group: clusterv1beta1.GroupVersion.Group, Version: "v1beta2"}).String()) {
+		if ref.Kind != machineSetKind || ref.APIVersion != clusterv1.GroupVersion.String() {
 			continue
 		}
 
@@ -858,7 +856,7 @@ func (r *MachineSyncReconciler) convertMAPIMachineOwnerReferencesToCAPI(ctx cont
 	capiOwnerReferences := []metav1.OwnerReference{}
 
 	if len(mapiMachine.OwnerReferences) == 0 {
-		clusterObject := &clusterv1beta1.Cluster{}
+		clusterObject := &clusterv1.Cluster{}
 		if err := r.Get(ctx, client.ObjectKey{Namespace: r.CAPINamespace, Name: r.Infra.Status.InfrastructureName}, clusterObject); err != nil {
 			return nil, fmt.Errorf("failed to get Cluster API cluster: %w", err)
 		}
@@ -936,7 +934,7 @@ func (r *MachineSyncReconciler) convertCAPIMachineOwnerReferencesToMAPI(ctx cont
 	capiOwnerReference := capiMachine.OwnerReferences[0]
 	switch capiOwnerReference.Kind {
 	case machineSetKind:
-		if capiOwnerReference.APIVersion != clusterv1beta1.GroupVersion.String() && capiOwnerReference.APIVersion != (schema.GroupVersion{Group: clusterv1beta1.GroupVersion.Group, Version: "v1beta2"}).String() {
+		if capiOwnerReference.APIVersion != clusterv1.GroupVersion.String() {
 			return nil, field.Invalid(field.NewPath("metadata", "ownerReferences"), capiMachine.OwnerReferences, errUnsuportedOwnerKindForConversion.Error())
 		}
 
@@ -966,8 +964,8 @@ func (r *MachineSyncReconciler) convertCAPIMachineOwnerReferencesToMAPI(ctx cont
 
 		mapiOwnerReferences = append(mapiOwnerReferences, mapiOwnerReference)
 
-	case clusterv1beta1.ClusterKind:
-		if capiOwnerReference.APIVersion != clusterv1beta1.GroupVersion.String() && capiOwnerReference.APIVersion != (schema.GroupVersion{Group: clusterv1beta1.GroupVersion.Group, Version: "v1beta2"}).String() {
+	case clusterv1.ClusterKind:
+		if capiOwnerReference.APIVersion != clusterv1.GroupVersion.String() {
 			return nil, field.Invalid(field.NewPath("metadata", "ownerReferences"), capiMachine.OwnerReferences, errUnsuportedOwnerKindForConversion.Error())
 		}
 

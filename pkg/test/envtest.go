@@ -34,7 +34,7 @@ import (
 	azurev1 "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
 	gcpv1 "sigs.k8s.io/cluster-api-provider-gcp/api/v1beta1"
 	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
-	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 
@@ -53,7 +53,7 @@ func init() {
 	utilruntime.Must(azurev1.AddToScheme(scheme.Scheme))
 	utilruntime.Must(gcpv1.AddToScheme(scheme.Scheme))
 	utilruntime.Must(openstackv1.AddToScheme(scheme.Scheme))
-	utilruntime.Must(clusterv1beta1.AddToScheme(scheme.Scheme))
+	utilruntime.Must(clusterv1.AddToScheme(scheme.Scheme))
 }
 
 // StartEnvTest starts a new test environment and returns a client and config.

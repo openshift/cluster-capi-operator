@@ -37,7 +37,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 
 	"github.com/go-test/deep"
@@ -50,7 +49,6 @@ import (
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	ibmpowervsv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
 	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
-	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/cluster-api/util/annotations"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -554,7 +552,7 @@ func (r *MachineSetSyncReconciler) ensureCAPIInfraMachineTemplate(ctx context.Co
 		// as we want the new CAPI InfraMachineTemplate to be initially paused when the MAPI MachineSet is the authoritative one.
 		// For the other case instead, when the new CAPI InfraMachineTemplate that is being created, is also expected to be the authority
 		// (i.e. in cases where the MAPI MachineSet is created as .spec.authoritativeAPI: ClusterAPI), we do not want to create it paused.
-		annotations.AddAnnotations(convertedCAPIInfraMachineTemplate, map[string]string{clusterv1beta1.PausedAnnotation: ""})
+		annotations.AddAnnotations(convertedCAPIInfraMachineTemplate, map[string]string{clusterv1.PausedAnnotation: ""})
 	}
 
 	convertedCAPIInfraMachineTemplate.SetLabels(map[string]string{controllers.MachineSetOpenshiftLabelKey: sourceMAPIMachineSet.Name})
@@ -645,7 +643,7 @@ func (r *MachineSetSyncReconciler) reconcileCAPIMachineSetToMAPIMachineSet(ctx c
 // fetchCAPIClusterOwnerReference fetches the OpenShift cluster object instance and returns owner reference to it.
 // The OwnerReference has Controller set to false and BlockOwnerDeletion set to true.
 func (r *MachineSetSyncReconciler) fetchCAPIClusterOwnerReference(ctx context.Context) (metav1.OwnerReference, error) {
-	cluster := &clusterv1beta1.Cluster{}
+	cluster := &clusterv1.Cluster{}
 	if err := r.Get(ctx, client.ObjectKey{Namespace: r.CAPINamespace, Name: r.Infra.Status.InfrastructureName}, cluster); err != nil {
 		return metav1.OwnerReference{}, fmt.Errorf("failed to get CAPI cluster: %w", err)
 	}
@@ -676,7 +674,7 @@ func (r *MachineSetSyncReconciler) validateCAPIMachineSetOwnerReferences(capiMac
 	} else if len(capiMachineSet.OwnerReferences) == 1 {
 		// Only reference to the Cluster is allowed.
 		ownerRef := capiMachineSet.OwnerReferences[0]
-		if ownerRef.Kind != clusterv1beta1.ClusterKind || (ownerRef.APIVersion != clusterv1beta1.GroupVersion.String() && ownerRef.APIVersion != (schema.GroupVersion{Group: clusterv1beta1.GroupVersion.Group, Version: "v1beta2"}).String()) {
+		if ownerRef.Kind != clusterv1.ClusterKind || ownerRef.APIVersion != clusterv1.GroupVersion.String() {
 			return field.Invalid(field.NewPath("metadata", "ownerReferences"), capiMachineSet.OwnerReferences, errUnsuportedOwnerKindForConversion.Error())
 		}
 	}
@@ -1539,7 +1537,7 @@ func restoreCAPIFields(existingCAPIMachineSet, convertedCAPIMachineSet *clusterv
 		// For the other case instead (authoritativeAPI == machinev1beta1.MachineAuthorityClusterAPI),
 		// when the new CAPI MachineSet that is being created is also expected to be the authority
 		// (i.e. in cases where the MAPI MachineSet is created as .spec.authoritativeAPI: ClusterAPI), we do not want to create it paused.
-		annotations.AddAnnotations(convertedCAPIMachineSet, map[string]string{clusterv1beta1.PausedAnnotation: ""})
+		annotations.AddAnnotations(convertedCAPIMachineSet, map[string]string{clusterv1.PausedAnnotation: ""})
 	}
 }
 

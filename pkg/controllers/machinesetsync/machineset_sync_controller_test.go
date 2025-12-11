@@ -37,7 +37,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 
-	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	capierrors "sigs.k8s.io/cluster-api/errors"
 
@@ -159,7 +158,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 		capiCluster = &clusterv1.Cluster{}
 		Expect(k8sClient.Get(ctx, client.ObjectKey{Name: infrastructureName, Namespace: capiNamespace.GetName()}, capiCluster)).To(Succeed())
 		capiClusterOwnerReference = []metav1.OwnerReference{{
-			APIVersion:         clusterv1beta1.GroupVersion.String(),
+			APIVersion:         clusterv1.GroupVersion.String(),
 			Kind:               clusterv1.ClusterKind,
 			Name:               capiCluster.GetName(),
 			UID:                capiCluster.GetUID(),
