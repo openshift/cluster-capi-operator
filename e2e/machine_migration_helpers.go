@@ -260,7 +260,7 @@ func verifyMachinePausedCondition(machine client.Object, authority mapiv1beta1.M
 		}
 
 		Eventually(komega.Object(m), capiframework.WaitMedium, capiframework.RetryMedium).Should(
-			HaveField("Status.V1Beta2.Conditions", ContainElement(conditionMatcher)),
+			HaveField("Status.Conditions", ContainElement(conditionMatcher)),
 			fmt.Sprintf("Should have found the expected Paused condition for CAPI Machine %s with authority: %s", m.Name, authority),
 		)
 
