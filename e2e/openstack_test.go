@@ -8,10 +8,9 @@ import (
 	mapiv1alpha1 "github.com/openshift/api/machine/v1alpha1"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	"github.com/openshift/cluster-capi-operator/e2e/framework"
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
-	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	yaml "sigs.k8s.io/yaml"
 
@@ -27,7 +26,7 @@ const (
 
 var _ = Describe("Cluster API OpenStack MachineSet", Ordered, func() {
 	var (
-		machineSet               *clusterv1beta1.MachineSet
+		machineSet               *clusterv1.MachineSet
 		mapiMachineSpec          *mapiv1alpha1.OpenstackProviderSpec
 		openStackMachineTemplate *openstackv1.OpenStackMachineTemplate
 	)
@@ -59,10 +58,10 @@ var _ = Describe("Cluster API OpenStack MachineSet", Ordered, func() {
 			clusterName,
 			"",
 			1,
-			corev1.ObjectReference{
-				Kind:       "OpenStackMachineTemplate",
-				APIVersion: infraAPIVersion,
-				Name:       openStackMachineTemplate.Name,
+			clusterv1.ContractVersionedObjectReference{
+				Kind:     "OpenStackMachineTemplate",
+				APIGroup: infraAPIGroup,
+				Name:     openStackMachineTemplate.Name,
 			},
 			"worker-user-data",
 		))

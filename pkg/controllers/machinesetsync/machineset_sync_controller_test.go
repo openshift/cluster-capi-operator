@@ -27,7 +27,7 @@ import (
 	configv1 "github.com/openshift/api/config/v1"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 
-	capiv1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/cluster-api/core/v1beta1"
+	capiv1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/cluster-api/core/v1beta2"
 	capav1builder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/cluster-api/infrastructure/v1beta2"
 	configv1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/config/v1"
 	corev1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/core/v1"
@@ -37,7 +37,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 
-	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	capierrors "sigs.k8s.io/cluster-api/errors"
 
 	"github.com/openshift/cluster-api-actuator-pkg/testutils"
@@ -75,7 +75,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 	var mapiMachineSet *mapiv1beta1.MachineSet
 
 	var capiMachineSetBuilder capiv1resourcebuilder.MachineSetBuilder
-	var capiMachineSet *clusterv1beta1.MachineSet
+	var capiMachineSet *clusterv1.MachineSet
 
 	var capaMachineTemplateBuilder capav1builder.AWSMachineTemplateBuilder
 	var capaMachineTemplate *awsv1.AWSMachineTemplate
@@ -83,7 +83,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 	var capaClusterBuilder capav1builder.AWSClusterBuilder
 
 	var capiClusterBuilder capiv1resourcebuilder.ClusterBuilder
-	var capiCluster *clusterv1beta1.Cluster
+	var capiCluster *clusterv1.Cluster
 	var capiClusterOwnerReference []metav1.OwnerReference
 
 	eventuallyCAPIMachineSetShouldHaveValidAWSMachineTemplateRefWithMachineSetLabel := func() {
@@ -155,11 +155,11 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 		capiClusterBuilder = capiv1resourcebuilder.Cluster().WithNamespace(capiNamespace.GetName()).WithName(infrastructureName)
 		Expect(k8sClient.Create(ctx, capiClusterBuilder.Build())).To(Succeed(), "capi cluster should be able to be created")
 
-		capiCluster = &clusterv1beta1.Cluster{}
+		capiCluster = &clusterv1.Cluster{}
 		Expect(k8sClient.Get(ctx, client.ObjectKey{Name: infrastructureName, Namespace: capiNamespace.GetName()}, capiCluster)).To(Succeed())
 		capiClusterOwnerReference = []metav1.OwnerReference{{
-			APIVersion:         clusterv1beta1.GroupVersion.String(),
-			Kind:               clusterv1beta1.ClusterKind,
+			APIVersion:         clusterv1.GroupVersion.String(),
+			Kind:               clusterv1.ClusterKind,
 			Name:               capiCluster.GetName(),
 			UID:                capiCluster.GetUID(),
 			Controller:         ptr.To(false),
@@ -174,12 +174,12 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 
 		capaMachineTemplate = capaMachineTemplateBuilder.Build()
 
-		capiMachineTemplate := clusterv1beta1.MachineTemplateSpec{
-			Spec: clusterv1beta1.MachineSpec{
-				InfrastructureRef: corev1.ObjectReference{
-					Kind:      capaMachineTemplate.Kind,
-					Name:      capaMachineTemplate.GetName(),
-					Namespace: capaMachineTemplate.GetNamespace(),
+		capiMachineTemplate := clusterv1.MachineTemplateSpec{
+			Spec: clusterv1.MachineSpec{
+				InfrastructureRef: clusterv1.ContractVersionedObjectReference{
+					Kind:     capaMachineTemplate.Kind,
+					Name:     capaMachineTemplate.GetName(),
+					APIGroup: awsv1.GroupVersion.Group,
 				},
 			},
 		}
@@ -230,8 +230,8 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 		)
 
 		testutils.CleanupResources(Default, ctx, cfg, k8sClient, capiNamespace.GetName(),
-			&clusterv1beta1.Machine{},
-			&clusterv1beta1.MachineSet{},
+			&clusterv1.Machine{},
+			&clusterv1.MachineSet{},
 			&awsv1.AWSCluster{},
 			&awsv1.AWSMachineTemplate{},
 		)
@@ -334,7 +334,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 		Context("when the CAPI machine set does exist", func() {
 			BeforeEach(func() {
 				capiMachineSet = capiMachineSetBuilder.Build()
-				capiMachineSet.SetFinalizers([]string{clusterv1beta1.MachineSetFinalizer})
+				capiMachineSet.SetFinalizers([]string{clusterv1.MachineSetFinalizer})
 				Expect(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
 			})
 
@@ -404,8 +404,12 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 				})
 
 				It("should sync the status of the machine sets (updating the CAPI machine set status replicas)", func() {
+					var expectedValue *int32
+					if mapiMachineSet.Status.Replicas != 0 {
+						expectedValue = ptr.To(mapiMachineSet.Status.Replicas)
+					}
 					Eventually(k.Object(capiMachineSet), timeout).Should(
-						HaveField("Status.Replicas", BeEquivalentTo(mapiMachineSet.Status.Replicas)),
+						HaveField("Status.Replicas", BeEquivalentTo(expectedValue)),
 					)
 				})
 			})
@@ -414,13 +418,13 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 				BeforeEach(func() {
 					By("Updating the CAPI machine set with a differing status from the MAPI machine set")
 					Eventually(k.UpdateStatus(capiMachineSet, func() {
-						capiMachineSet.Status.ReadyReplicas = 2
+						capiMachineSet.Status.ReadyReplicas = ptr.To(int32(2))
 					})).Should(Succeed())
 				})
 
 				It("should sync the status of the machine sets (updating the CAPI machine set status ready replicas)", func() {
 					Eventually(k.Object(capiMachineSet), timeout).Should(
-						HaveField("Status.ReadyReplicas", BeEquivalentTo(mapiMachineSet.Status.ReadyReplicas)),
+						HaveField("Status.Deprecated.V1Beta1.ReadyReplicas", BeEquivalentTo(mapiMachineSet.Status.ReadyReplicas)),
 					)
 				})
 			})
@@ -433,7 +437,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 					Eventually(k.Object(capiMachineSet), timeout).Should(
 						SatisfyAll(
 							HaveField("ObjectMeta.Finalizers", ContainElement(machinesync.SyncFinalizer)),
-							HaveField("ObjectMeta.Finalizers", ContainElement(clusterv1beta1.MachineSetFinalizer)),
+							HaveField("ObjectMeta.Finalizers", ContainElement(clusterv1.MachineSetFinalizer)),
 						),
 					)
 					By("waiting for CAPA template to be created", eventuallyCAPIMachineSetShouldHaveValidAWSMachineTemplateRefWithMachineSetLabel)
@@ -556,7 +560,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 
 			It("should sync the status of the machine sets (updating the MAPI machine set status replicas)", func() {
 				Eventually(k.Object(mapiMachineSet), timeout).Should(
-					HaveField("Status.Replicas", BeEquivalentTo(capiMachineSet.Status.Replicas)),
+					HaveField("Status.Replicas", BeEquivalentTo(ptr.Deref(capiMachineSet.Status.Replicas, 0))),
 				)
 			})
 		})
@@ -649,11 +653,17 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 
 				By("Updating the CAPI machine set with a differing status")
 				Eventually(k.UpdateStatus(capiMachineSet, func() {
-					capiMachineSet.Status.ReadyReplicas = 2
-					capiMachineSet.Status.Replicas = 3
-					capiMachineSet.Status.AvailableReplicas = 2
-					capiMachineSet.Status.FailureMessage = ptr.To("test failure message")
-					capiMachineSet.Status.FailureReason = ptr.To(capierrors.MachineSetStatusError("test failure reason"))
+					capiMachineSet.Status.ReadyReplicas = ptr.To[int32](2)
+					capiMachineSet.Status.Replicas = ptr.To[int32](3)
+					capiMachineSet.Status.AvailableReplicas = ptr.To[int32](2)
+					if capiMachineSet.Status.Deprecated == nil {
+						capiMachineSet.Status.Deprecated = &clusterv1.MachineSetDeprecatedStatus{}
+					}
+					if capiMachineSet.Status.Deprecated.V1Beta1 == nil {
+						capiMachineSet.Status.Deprecated.V1Beta1 = &clusterv1.MachineSetV1Beta1DeprecatedStatus{}
+					}
+					capiMachineSet.Status.Deprecated.V1Beta1.FailureMessage = ptr.To("test failure message")
+					capiMachineSet.Status.Deprecated.V1Beta1.FailureReason = ptr.To(capierrors.MachineSetStatusError("test failure reason"))
 					// We need to set the observed generation to the metadata generation
 					// to ensure the status is updated as that's a prerequisite for the status to be updated by the machinesetsync controller.
 					By("Setting the CAPI machine set observed generation to its metadata generation")
@@ -665,11 +675,11 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 			It("should sync the status of the machine sets (updating the MAPI machine set status ready replicas)", func() {
 				Eventually(k.Object(mapiMachineSet), timeout).Should(
 					SatisfyAll(
-						HaveField("Status.Replicas", BeEquivalentTo(capiMachineSet.Status.Replicas)),
-						HaveField("Status.ReadyReplicas", BeEquivalentTo(capiMachineSet.Status.ReadyReplicas)),
-						HaveField("Status.AvailableReplicas", BeEquivalentTo(capiMachineSet.Status.AvailableReplicas)),
-						HaveField("Status.ErrorMessage", BeEquivalentTo(capiMachineSet.Status.FailureMessage)),
-						HaveField("Status.ErrorReason", BeEquivalentTo(capiMachineSet.Status.FailureReason)),
+						HaveField("Status.Replicas", BeEquivalentTo(*capiMachineSet.Status.Replicas)),
+						HaveField("Status.AvailableReplicas", BeEquivalentTo(capiMachineSet.Status.Deprecated.V1Beta1.AvailableReplicas)),
+						HaveField("Status.ReadyReplicas", BeEquivalentTo(capiMachineSet.Status.Deprecated.V1Beta1.ReadyReplicas)),
+						HaveField("Status.ErrorMessage", BeEquivalentTo(capiMachineSet.Status.Deprecated.V1Beta1.FailureMessage)),
+						HaveField("Status.ErrorReason", BeEquivalentTo(capiMachineSet.Status.Deprecated.V1Beta1.FailureReason)),
 						// Status.Conditions // Conditions are not a 1:1 matching and are computed separately, so don't check them here. We have a separate test for this.
 					))
 			})
@@ -816,7 +826,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 				Expect(k8sClient.Create(ctx, capaMachineTemplate)).To(Succeed(), "capa machine template should be able to be created")
 
 				capiMachineSet = capiMachineSetBuilder.Build()
-				capiMachineSet.SetFinalizers([]string{clusterv1beta1.MachineSetFinalizer})
+				capiMachineSet.SetFinalizers([]string{clusterv1.MachineSetFinalizer})
 				Expect(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
 
 				// Expect to see the finalizers, so they're in place before
@@ -826,7 +836,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 				)
 				Eventually(k.Object(capiMachineSet), timeout).Should(SatisfyAll(
 					HaveField("ObjectMeta.Finalizers", ContainElement(machinesync.SyncFinalizer)),
-					HaveField("ObjectMeta.Finalizers", ContainElement(clusterv1beta1.MachineSetFinalizer)),
+					HaveField("ObjectMeta.Finalizers", ContainElement(clusterv1.MachineSetFinalizer)),
 				),
 				)
 				Expect(k8sClient.Delete(ctx, capiMachineSet)).To(Succeed())

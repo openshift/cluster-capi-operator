@@ -30,7 +30,7 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	ibmpowervsv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
-	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 )
@@ -74,7 +74,7 @@ func FromPowerVSMachineSetAndInfra(m *mapiv1beta1.MachineSet, i *configv1.Infras
 
 // ToMachineAndInfrastructureMachine is used to generate a CAPI Machine and the corresponding InfrastructureMachine
 // from the stored MAPI Machine and Infrastructure objects.
-func (m *powerVSMachineAndInfra) ToMachineAndInfrastructureMachine() (*clusterv1beta1.Machine, client.Object, []string, error) {
+func (m *powerVSMachineAndInfra) ToMachineAndInfrastructureMachine() (*clusterv1.Machine, client.Object, []string, error) {
 	capiMachine, powerVSMachine, warnings, errs := m.toMachineAndInfrastructureMachine()
 
 	if len(errs) > 0 {
@@ -84,7 +84,7 @@ func (m *powerVSMachineAndInfra) ToMachineAndInfrastructureMachine() (*clusterv1
 	return capiMachine, powerVSMachine, warnings, nil
 }
 
-func (m *powerVSMachineAndInfra) toMachineAndInfrastructureMachine() (*clusterv1beta1.Machine, client.Object, []string, field.ErrorList) {
+func (m *powerVSMachineAndInfra) toMachineAndInfrastructureMachine() (*clusterv1.Machine, client.Object, []string, field.ErrorList) {
 	var (
 		errs     field.ErrorList
 		warnings []string
@@ -100,26 +100,26 @@ func (m *powerVSMachineAndInfra) toMachineAndInfrastructureMachine() (*clusterv1
 		errs = append(errs, machineErrs...)
 	}
 
-	capiMachine, machineErrs := fromMAPIMachineToCAPIMachine(m.machine, ibmpowervsv1.GroupVersion.String(), ibmPowerVSMachineKind)
+	capiMachine, machineErrs := fromMAPIMachineToCAPIMachine(m.machine, ibmpowervsv1.GroupVersion.Group, ibmPowerVSMachineKind)
 	if machineErrs != nil {
 		errs = append(errs, machineErrs...)
 	}
 
 	if powerVSProviderConfig.UserDataSecret != nil && powerVSProviderConfig.UserDataSecret.Name != "" {
-		capiMachine.Spec.Bootstrap = clusterv1beta1.Bootstrap{
+		capiMachine.Spec.Bootstrap = clusterv1.Bootstrap{
 			DataSecretName: &powerVSProviderConfig.UserDataSecret.Name,
 		}
 	}
 
 	// Power VS does not support failure domains
-	capiMachine.Spec.FailureDomain = nil
+	capiMachine.Spec.FailureDomain = ""
 
 	// Populate the CAPI Machine ClusterName from the OCP Infrastructure object.
 	if m.infrastructure == nil || m.infrastructure.Status.InfrastructureName == "" {
 		errs = append(errs, field.Invalid(field.NewPath("infrastructure", "status", "infrastructureName"), m.infrastructure.Status.InfrastructureName, "infrastructure cannot be nil and infrastructure.Status.InfrastructureName cannot be empty"))
 	} else {
 		capiMachine.Spec.ClusterName = m.infrastructure.Status.InfrastructureName
-		capiMachine.Labels[clusterv1beta1.ClusterNameLabel] = m.infrastructure.Status.InfrastructureName
+		capiMachine.Labels[clusterv1.ClusterNameLabel] = m.infrastructure.Status.InfrastructureName
 	}
 
 	// The InfraMachine should always have the same labels and annotations as the Machine.
@@ -133,7 +133,7 @@ func (m *powerVSMachineAndInfra) toMachineAndInfrastructureMachine() (*clusterv1
 // ToMachineSetAndMachineTemplate converts a mapi2capi PowerVSMachineSetAndInfra into a CAPI MachineSet and CAPIBM IBMPowerVSMachineTemplate.
 //
 //nolint:dupl
-func (m *powerVSMachineSetAndInfra) ToMachineSetAndMachineTemplate() (*clusterv1beta1.MachineSet, client.Object, []string, error) {
+func (m *powerVSMachineSetAndInfra) ToMachineSetAndMachineTemplate() (*clusterv1.MachineSet, client.Object, []string, error) {
 	var (
 		errs     []error
 		warnings []string
@@ -161,6 +161,10 @@ func (m *powerVSMachineSetAndInfra) ToMachineSetAndMachineTemplate() (*clusterv1
 		errs = append(errs, machineSetErrs.Errors()...)
 	}
 
+	if capiMachine.Spec.MinReadySeconds == nil {
+		capiMachine.Spec.MinReadySeconds = powerVSMachineSet.Spec.Template.Spec.MinReadySeconds
+	}
+
 	powerVSMachineSet.Spec.Template.Spec = capiMachine.Spec
 
 	// We have to merge these two maps so that labels and annotations added to the template objectmeta are persisted
@@ -177,7 +181,7 @@ func (m *powerVSMachineSetAndInfra) ToMachineSetAndMachineTemplate() (*clusterv1
 	} else {
 		powerVSMachineSet.Spec.Template.Spec.ClusterName = m.infrastructure.Status.InfrastructureName
 		powerVSMachineSet.Spec.ClusterName = m.infrastructure.Status.InfrastructureName
-		powerVSMachineSet.Labels[clusterv1beta1.ClusterNameLabel] = m.infrastructure.Status.InfrastructureName
+		powerVSMachineSet.Labels[clusterv1.ClusterNameLabel] = m.infrastructure.Status.InfrastructureName
 	}
 
 	if len(errs) > 0 {

@@ -30,6 +30,7 @@ import (
 	"k8s.io/klog/v2"
 	ibmpowervsv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
 	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	mapiv1 "github.com/openshift/api/machine/v1"
@@ -99,7 +100,7 @@ func (r *InfraClusterController) ensureIBMPowerVSCluster(ctx context.Context, lo
 			// The ManagedBy Annotation is set so CAPI infra providers ignore the InfraCluster object,
 			// as that's managed externally, in this case by this controller.
 			Annotations: map[string]string{
-				clusterv1beta1.ManagedByAnnotation: managedByAnnotationValueClusterCAPIOperatorInfraClusterController,
+				clusterv1.ManagedByAnnotation: managedByAnnotationValueClusterCAPIOperatorInfraClusterController,
 			},
 		},
 		Spec: ibmpowervsv1.IBMPowerVSClusterSpec{

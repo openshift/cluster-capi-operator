@@ -28,9 +28,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/validation/field"
-	"k8s.io/utils/ptr"
 	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
-	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 )
@@ -74,7 +73,7 @@ func FromOpenStackMachineSetAndInfra(m *mapiv1beta1.MachineSet, i *configv1.Infr
 
 // ToMachineAndInfrastructureMachine is used to generate a CAPI Machine and the corresponding InfrastructureMachine
 // from the stored MAPI Machine and Infrastructure objects.
-func (m *openstackMachineAndInfra) ToMachineAndInfrastructureMachine() (*clusterv1beta1.Machine, client.Object, []string, error) {
+func (m *openstackMachineAndInfra) ToMachineAndInfrastructureMachine() (*clusterv1.Machine, client.Object, []string, error) {
 	capiMachine, capoMachine, warnings, errors := m.toMachineAndInfrastructureMachine()
 
 	if len(errors) > 0 {
@@ -84,7 +83,7 @@ func (m *openstackMachineAndInfra) ToMachineAndInfrastructureMachine() (*cluster
 	return capiMachine, capoMachine, warnings, nil
 }
 
-func (m *openstackMachineAndInfra) toMachineAndInfrastructureMachine() (*clusterv1beta1.Machine, client.Object, []string, field.ErrorList) {
+func (m *openstackMachineAndInfra) toMachineAndInfrastructureMachine() (*clusterv1.Machine, client.Object, []string, field.ErrorList) {
 	var (
 		errors   field.ErrorList
 		warnings []string
@@ -102,18 +101,18 @@ func (m *openstackMachineAndInfra) toMachineAndInfrastructureMachine() (*cluster
 
 	warnings = append(warnings, warns...)
 
-	capiMachine, errs := fromMAPIMachineToCAPIMachine(m.machine, openstackv1.SchemeGroupVersion.String(), openstackMachineKind)
+	capiMachine, errs := fromMAPIMachineToCAPIMachine(m.machine, openstackv1.SchemeGroupVersion.Group, openstackMachineKind)
 	if errs != nil {
 		errors = append(errors, errs...)
 	}
 
 	// Plug into Core CAPI Machine fields that come from the MAPI ProviderConfig which belong here instead of the CAPI OpenStackMachineTemplate.
 	if openstackProviderConfig.AvailabilityZone != "" {
-		capiMachine.Spec.FailureDomain = ptr.To(openstackProviderConfig.AvailabilityZone)
+		capiMachine.Spec.FailureDomain = openstackProviderConfig.AvailabilityZone
 	}
 
 	if openstackProviderConfig.UserDataSecret != nil && openstackProviderConfig.UserDataSecret.Name != "" {
-		capiMachine.Spec.Bootstrap = clusterv1beta1.Bootstrap{
+		capiMachine.Spec.Bootstrap = clusterv1.Bootstrap{
 			DataSecretName: &openstackProviderConfig.UserDataSecret.Name,
 		}
 	}
@@ -123,7 +122,7 @@ func (m *openstackMachineAndInfra) toMachineAndInfrastructureMachine() (*cluster
 		errors = append(errors, field.Invalid(field.NewPath("infrastructure", "status", "infrastructureName"), m.infrastructure.Status.InfrastructureName, "infrastructure cannot be nil and infrastructure.Status.InfrastructureName cannot be empty"))
 	} else {
 		capiMachine.Spec.ClusterName = m.infrastructure.Status.InfrastructureName
-		capiMachine.Labels[clusterv1beta1.ClusterNameLabel] = m.infrastructure.Status.InfrastructureName
+		capiMachine.Labels[clusterv1.ClusterNameLabel] = m.infrastructure.Status.InfrastructureName
 	}
 
 	// The InfraMachine should always have the same labels and annotations as the Machine.
@@ -142,7 +141,7 @@ func (m *openstackMachineAndInfra) toMachineAndInfrastructureMachine() (*cluster
 }
 
 // ToMachineSetAndMachineTemplate converts a mapi2capi OpenStackMachineSetAndInfra into a CAPI MachineSet and CAPO OpenStackMachineTemplate.
-func (m *openstackMachineSetAndInfra) ToMachineSetAndMachineTemplate() (*clusterv1beta1.MachineSet, client.Object, []string, error) { //nolint:dupl
+func (m *openstackMachineSetAndInfra) ToMachineSetAndMachineTemplate() (*clusterv1.MachineSet, client.Object, []string, error) { //nolint:dupl
 	var (
 		errors   []error
 		warnings []string
@@ -170,6 +169,10 @@ func (m *openstackMachineSetAndInfra) ToMachineSetAndMachineTemplate() (*cluster
 		errors = append(errors, machineSetErrs.Errors()...)
 	}
 
+	if capiMachine.Spec.MinReadySeconds == nil {
+		capiMachine.Spec.MinReadySeconds = capiMachineSet.Spec.Template.Spec.MinReadySeconds
+	}
+
 	capiMachineSet.Spec.Template.Spec = capiMachine.Spec
 
 	// We have to merge these two maps so that labels and annotations added to the template objectmeta are persisted
@@ -186,7 +189,7 @@ func (m *openstackMachineSetAndInfra) ToMachineSetAndMachineTemplate() (*cluster
 	} else {
 		capiMachineSet.Spec.Template.Spec.ClusterName = m.infrastructure.Status.InfrastructureName
 		capiMachineSet.Spec.ClusterName = m.infrastructure.Status.InfrastructureName
-		capiMachineSet.Labels[clusterv1beta1.ClusterNameLabel] = m.infrastructure.Status.InfrastructureName
+		capiMachineSet.Labels[clusterv1.ClusterNameLabel] = m.infrastructure.Status.InfrastructureName
 	}
 
 	if len(errors) > 0 {

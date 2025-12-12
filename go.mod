@@ -4,7 +4,7 @@ go 1.24.0
 
 // TODO: these replaces should be removed when corresponding PRs are merged
 replace (
-	github.com/openshift/cluster-api-actuator-pkg/testutils => github.com/chrischdi/cluster-api-actuator-pkg/testutils v0.0.0-20251203134942-d9bd7b8593f3
+	github.com/openshift/cluster-api-actuator-pkg/testutils => github.com/chrischdi/cluster-api-actuator-pkg/testutils v0.0.0-20251211141525-c707612472dc
 	sigs.k8s.io/cluster-api-provider-azure => github.com/damdo/cluster-api-provider-azure v0.0.0-20251202084521-c2e0e38d1e0e
 )
 

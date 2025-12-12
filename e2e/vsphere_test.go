@@ -11,7 +11,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	vspherev1 "sigs.k8s.io/cluster-api-provider-vsphere/apis/v1beta1"
-	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	yaml "sigs.k8s.io/yaml"
 
@@ -28,7 +28,7 @@ const (
 
 var _ = Describe("Cluster API vSphere MachineSet", Ordered, func() {
 	var vSphereMachineTemplate *vspherev1.VSphereMachineTemplate
-	var machineSet *clusterv1beta1.MachineSet
+	var machineSet *clusterv1.MachineSet
 	var mapiMachineSpec *mapiv1beta1.VSphereMachineProviderSpec
 
 	BeforeAll(func() {
@@ -58,10 +58,10 @@ var _ = Describe("Cluster API vSphere MachineSet", Ordered, func() {
 			clusterName,
 			"",
 			1,
-			corev1.ObjectReference{
-				Kind:       "VSphereMachineTemplate",
-				APIVersion: infraAPIVersion,
-				Name:       vSphereMachineTemplateName,
+			clusterv1.ContractVersionedObjectReference{
+				Kind:     "VSphereMachineTemplate",
+				APIGroup: infraAPIGroup,
+				Name:     vSphereMachineTemplateName,
 			},
 			"worker-user-data",
 		))
@@ -140,7 +140,7 @@ func createVSphereCluster(ctx context.Context, cl client.Client, mapiProviderSpe
 			// The ManagedBy Annotation is set so CAPI infra providers ignore the InfraCluster object,
 			// as that's managed externally, in this case by the cluster-capi-operator's infracluster controller.
 			Annotations: map[string]string{
-				clusterv1beta1.ManagedByAnnotation: managedByAnnotationValueClusterCAPIOperatorInfraClusterController,
+				clusterv1.ManagedByAnnotation: managedByAnnotationValueClusterCAPIOperatorInfraClusterController,
 			},
 		},
 		Spec: vspherev1.VSphereClusterSpec{
@@ -171,7 +171,7 @@ func createVSphereCluster(ctx context.Context, cl client.Client, mapiProviderSpe
 			return false, nil
 		}
 
-		if _, ok := patchedVSphereCluster.Annotations[clusterv1beta1.ManagedByAnnotation]; !ok {
+		if _, ok := patchedVSphereCluster.Annotations[clusterv1.ManagedByAnnotation]; !ok {
 			return false, nil
 		}
 
