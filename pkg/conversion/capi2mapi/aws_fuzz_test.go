@@ -29,6 +29,7 @@ import (
 	conversiontest "github.com/openshift/cluster-capi-operator/pkg/conversion/test/fuzz"
 
 	runtimeserializer "k8s.io/apimachinery/pkg/runtime/serializer"
+	"k8s.io/utils/ptr"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -156,7 +157,7 @@ func awsMachineFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interface{} 
 		func(spec *awsv1.AWSMachineSpec, c randfill.Continue) {
 			c.FillNoCustom(spec)
 
-			fuzzAWSMachineSpecTenancy(&spec.Tenancy, c)
+			fuzzAWSMachineSpecTenancy(spec, c)
 			fuzzAWSMachineSpecMarketType(&spec.MarketType, c)
 
 			// Fields not required for our use case can be ignored.
@@ -171,8 +172,6 @@ func awsMachineFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interface{} 
 			spec.SecurityGroupOverrides = nil
 
 			// Conversion not yet implemented
-			spec.HostAffinity = nil
-			spec.HostID = nil
 			spec.CPUOptions.ConfidentialCompute = ""
 		},
 		func(m *awsv1.AWSMachine, c randfill.Continue) {
@@ -185,16 +184,32 @@ func awsMachineFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interface{} 
 	}
 }
 
-func fuzzAWSMachineSpecTenancy(tenancy *string, c randfill.Continue) {
-	switch c.Int31n(4) {
+func fuzzAWSMachineSpecTenancy(spec *awsv1.AWSMachineSpec, c randfill.Continue) {
+	switch c.Int31n(6) {
 	case 0:
-		*tenancy = "default"
+		spec.Tenancy = capi2mapi.TenancyDefault
+		spec.HostAffinity = nil
+		spec.HostID = nil
 	case 1:
-		*tenancy = "dedicated"
+		spec.Tenancy = capi2mapi.TenancyDedicated
+		spec.HostAffinity = nil
+		spec.HostID = nil
 	case 2:
-		*tenancy = "host"
+		spec.Tenancy = capi2mapi.TenancyHost
+		spec.HostAffinity = ptr.To("default")
+		spec.HostID = nil
 	case 3:
-		*tenancy = ""
+		spec.Tenancy = capi2mapi.TenancyHost
+		spec.HostAffinity = ptr.To("default")
+		spec.HostID = ptr.To("h-0123456789abcdef0")
+	case 4:
+		spec.Tenancy = capi2mapi.TenancyHost
+		spec.HostAffinity = ptr.To("host")
+		spec.HostID = ptr.To("h-0123456789abcdef0")
+	case 5:
+		spec.Tenancy = ""
+		spec.HostAffinity = nil
+		spec.HostID = nil
 	}
 }
 

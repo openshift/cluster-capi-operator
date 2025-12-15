@@ -69,6 +69,33 @@ var _ = Describe("capi2mapi AWS conversion", func() {
 			expectedErrors:    []string{},
 			expectedWarnings:  []string{},
 		}),
+		Entry("With HostAffinity default", awsCAPI2MAPIMachineConversionInput{
+			awsClusterBuilder: awsCAPIAWSClusterBase,
+			awsMachineBuilder: awsCAPIAWSMachineBase.
+				WithHostAffinity(ptr.To("default")),
+			machineBuilder:   awsCAPIMachineBase,
+			expectedErrors:   []string{},
+			expectedWarnings: []string{},
+		}),
+		Entry("With HostAffinity host and HostID", awsCAPI2MAPIMachineConversionInput{
+			awsClusterBuilder: awsCAPIAWSClusterBase,
+			awsMachineBuilder: awsCAPIAWSMachineBase.
+				WithHostAffinity(ptr.To("host")).
+				WithHostID(ptr.To("h-1234567890abcdef0")),
+			machineBuilder:   awsCAPIMachineBase,
+			expectedErrors:   []string{},
+			expectedWarnings: []string{},
+		}),
+		Entry("With unsupported HostAffinity", awsCAPI2MAPIMachineConversionInput{
+			awsClusterBuilder: awsCAPIAWSClusterBase,
+			awsMachineBuilder: awsCAPIAWSMachineBase.
+				WithHostAffinity(ptr.To("unsupported")),
+			machineBuilder: awsCAPIMachineBase,
+			expectedErrors: []string{
+				"spec.hostAffinity: Invalid value: \"unsupported\": unable to convert hostAffinity, unknown value",
+			},
+			expectedWarnings: []string{},
+		}),
 		Entry("With unsupported EKSOptimizedLookupType", awsCAPI2MAPIMachineConversionInput{
 			awsClusterBuilder: awsCAPIAWSClusterBase,
 			awsMachineBuilder: capabuilder.AWSMachine().
