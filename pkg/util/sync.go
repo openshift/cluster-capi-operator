@@ -206,6 +206,10 @@ func CAPIMachineStatusEqual(a, b clusterv1beta1.MachineStatus) map[string]any {
 		diff[".nodeInfo"] = diffNodeInfo
 	}
 
+	if diffNodeRef := deep.Equal(a.NodeRef, b.NodeRef); len(diffNodeRef) > 0 {
+		diff[".nodeRef"] = diffNodeRef
+	}
+
 	if diffConditions := compareCAPIV1Beta1Conditions(a.Conditions, b.Conditions); len(diffConditions) > 0 {
 		diff[".conditions"] = diffConditions
 	}
