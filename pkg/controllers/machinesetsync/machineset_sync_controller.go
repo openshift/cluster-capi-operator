@@ -1098,9 +1098,10 @@ func setChangedMAPIMachineSetStatusFields(existingMAPIMachineSet, convertedMAPIM
 	// Copy them back to the convertedMAPIMachineSet.
 	convertedMAPIMachineSet.Status.Conditions = existingMAPIMachineSet.Status.Conditions
 
-	// Keep the current SynchronizedGeneration and AuthorativeAPI. They get handled separately in `applySynchronizedConditionWithPatch`
+	// Keep the current SynchronizedGeneration, AuthoritativeAPI, and SynchronizedAPI. They get handled separately in `applySynchronizedConditionWithPatch`
 	convertedMAPIMachineSet.Status.SynchronizedGeneration = existingMAPIMachineSet.Status.SynchronizedGeneration
 	convertedMAPIMachineSet.Status.AuthoritativeAPI = existingMAPIMachineSet.Status.AuthoritativeAPI
+	convertedMAPIMachineSet.Status.SynchronizedAPI = existingMAPIMachineSet.Status.SynchronizedAPI
 
 	// Finally overwrite the entire existingMAPIMachineSet status with the convertedMAPIMachineSet status.
 	existingMAPIMachineSet.Status = convertedMAPIMachineSet.Status

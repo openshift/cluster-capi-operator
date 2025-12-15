@@ -1544,6 +1544,7 @@ func setChangedMAPIMachineStatusFields(existingMAPIMachine, convertedMAPIMachine
 	// Copy the other fields that are not present in the convertedMAPIMachine from the existingMAPIMachine.
 	convertedMAPIMachine.Status.AuthoritativeAPI = existingMAPIMachine.Status.AuthoritativeAPI
 	convertedMAPIMachine.Status.SynchronizedGeneration = existingMAPIMachine.Status.SynchronizedGeneration
+	convertedMAPIMachine.Status.SynchronizedAPI = existingMAPIMachine.Status.SynchronizedAPI
 	convertedMAPIMachine.Status.LastOperation = existingMAPIMachine.Status.LastOperation
 	convertedMAPIMachine.Status.ProviderStatus = existingMAPIMachine.Status.ProviderStatus
 
