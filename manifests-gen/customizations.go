@@ -55,9 +55,11 @@ func processObjects(objs []unstructured.Unstructured, providerName string) []uns
 			providerConfigMapObjs = append(providerConfigMapObjs, obj)
 		case "MutatingWebhookConfiguration":
 			replaceCertManagerAnnotations(&obj)
+			setMutatingWebhookFailurePolicyIgnoreForIPAM(&obj)
 			providerConfigMapObjs = append(providerConfigMapObjs, obj)
 		case "ValidatingWebhookConfiguration":
 			replaceCertManagerAnnotations(&obj)
+			setValidatingWebhookFailurePolicyIgnoreForIPAM(&obj)
 			providerConfigMapObjs = append(providerConfigMapObjs, obj)
 		case "CustomResourceDefinition":
 			replaceCertManagerAnnotations(&obj)
@@ -245,6 +247,72 @@ func replaceCertMangerServiceSecret(obj *unstructured.Unstructured, serviceSecre
 		anns["service.beta.openshift.io/serving-cert-secret-name"] = name
 		obj.SetAnnotations(anns)
 	}
+}
+
+// setMutatingWebhookFailurePolicyIgnoreForIPAM sets failurePolicy to Ignore for mutating webhooks handling IPAM resources.
+//
+// During bootstrap, the bootstrap node's Kube API Server receives IPAM create requests but is unable
+// to reach the webhooks in the Cluster API namespace. This is because the bootstrap node doesn't have
+// a route to the pods as it doesn't have access to the pod networks. If failurePolicy is set to Fail,
+// the KAS cannot reach the webhook endpoints and the request fails, preventing creation of IPAddress
+// and IPAddressClaim resources. This causes a chicken-and-egg problem as it prevents IPAM provisioning
+// for the workers which won't start without their IP addresses being allocated.
+//
+// Setting failurePolicy to Ignore allows the resources to be created even when the webhooks are
+// unreachable during bootstrap, matching what Machine API also does.
+//
+// More context: https://redhat-internal.slack.com/archives/C0A2M43S199/p1765540108488539
+func setMutatingWebhookFailurePolicyIgnoreForIPAM(obj *unstructured.Unstructured) {
+	mwc := &admissionregistration.MutatingWebhookConfiguration{}
+	if err := scheme.Convert(obj, mwc, nil); err != nil {
+		panic(err)
+	}
+
+	for i := range mwc.Webhooks {
+		if webhookRulesHandleIPAMResources(mwc.Webhooks[i].Rules) {
+			ignore := admissionregistration.Ignore
+			mwc.Webhooks[i].FailurePolicy = &ignore
+		}
+	}
+
+	if err := scheme.Convert(mwc, obj, nil); err != nil {
+		panic(err)
+	}
+}
+
+// setValidatingWebhookFailurePolicyIgnoreForIPAM sets failurePolicy to Ignore for validating webhooks handling IPAM resources.
+// See rationale for this in setMutatingWebhookFailurePolicyIgnoreForIPAM function.
+func setValidatingWebhookFailurePolicyIgnoreForIPAM(obj *unstructured.Unstructured) {
+	vwc := &admissionregistration.ValidatingWebhookConfiguration{}
+	if err := scheme.Convert(obj, vwc, nil); err != nil {
+		panic(err)
+	}
+
+	for i := range vwc.Webhooks {
+		if webhookRulesHandleIPAMResources(vwc.Webhooks[i].Rules) {
+			ignore := admissionregistration.Ignore
+			vwc.Webhooks[i].FailurePolicy = &ignore
+		}
+	}
+
+	if err := scheme.Convert(vwc, obj, nil); err != nil {
+		panic(err)
+	}
+}
+
+// webhookRulesHandleIPAMResources returns true if any of the webhook rules handle IPAM resources.
+func webhookRulesHandleIPAMResources(rules []admissionregistration.RuleWithOperations) bool {
+	const ipamAPIGroup = "ipam.cluster.x-k8s.io"
+
+	for _, rule := range rules {
+		for _, group := range rule.APIGroups {
+			if group == ipamAPIGroup {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 // isCRDGroup checks whether the object provided is a CRD for the specified API group.
