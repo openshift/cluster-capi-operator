@@ -233,7 +233,9 @@ func cmGenerator(basename string) func(bytes.Buffer) *corev1.ConfigMap {
 	index := 0
 
 	return func(data bytes.Buffer) *corev1.ConfigMap {
-		name := fmt.Sprintf(basename+"-"+releaseVersionSubstitution+"-%d", index)
+		// NOTE: It might look tider to use '-' as the index separator, but this
+		// breaks the release version substitution.
+		name := fmt.Sprintf(basename+"-"+releaseVersionSubstitution+".%d", index)
 		index++
 
 		return &corev1.ConfigMap{
