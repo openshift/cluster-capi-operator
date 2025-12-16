@@ -52,6 +52,8 @@ github.com/blang/semver/v4 v4.0.0 h1:1PFHFE6yCCTv8C1TeyNNarDzntLi7wMI5i/pzqYIsAM
 github.com/blang/semver/v4 v4.0.0/go.mod h1:IbckMUScFkM3pff0VJDNKRiT6TG/YpiHIM2yvyW5YoQ=
 github.com/cespare/xxhash/v2 v2.3.0 h1:UL815xU9SqsFlibzuggzjXhog7bL6oX9BbNZnL2UFvs=
 github.com/cespare/xxhash/v2 v2.3.0/go.mod h1:VGX0DQ3Q6kWi7AoAeZDth3/j3BFtOZR5XLFGgcrjCOs=
+github.com/chrischdi/openshift-api v0.0.0-20251216151131-93185f4149ff h1:NQsxsAy5o0QSuMpg0XrZnixi9+YYYff4x2hqYhVmayw=
+github.com/chrischdi/openshift-api v0.0.0-20251216151131-93185f4149ff/go.mod h1:d5uzF0YN2nQQFA0jIEWzzOZ+edmo6wzlGLvx5Fhz4uY=
 github.com/damdo/cluster-api-provider-azure v0.0.0-20251202084521-c2e0e38d1e0e h1:V1CUMVwXlDegOsJk4CYS3W9aMi81PKZ9teK/SBxl0xA=
 github.com/damdo/cluster-api-provider-azure v0.0.0-20251202084521-c2e0e38d1e0e/go.mod h1:x9y164Y8abORQEN+K/pz9w8oO4HNjp+trFKAOFmaYVM=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
@@ -200,8 +202,6 @@ github.com/onsi/ginkgo/v2 v2.27.2 h1:LzwLj0b89qtIy6SSASkzlNvX6WktqurSHwkk2ipF/Ns
 github.com/onsi/ginkgo/v2 v2.27.2/go.mod h1:ArE1D/XhNXBXCBkKOLkbsb2c81dQHCRcF5zwn/ykDRo=
 github.com/onsi/gomega v1.38.2 h1:eZCjf2xjZAqe+LeWvKb5weQ+NcPwX84kqJ0cZNxok2A=
 github.com/onsi/gomega v1.38.2/go.mod h1:W2MJcYxRGV63b418Ai34Ud0hEdTVXq9NW9+Sx6uXf3k=
-github.com/openshift/api v0.0.0-20251111193948-50e2ece149d7 h1:MemawsK6SpxEaE5y0NqO5sIX3yTLIIyP89w6DGKukAk=
-github.com/openshift/api v0.0.0-20251111193948-50e2ece149d7/go.mod h1:d5uzF0YN2nQQFA0jIEWzzOZ+edmo6wzlGLvx5Fhz4uY=
 github.com/openshift/client-go v0.0.0-20251015124057-db0dee36e235 h1:9JBeIXmnHlpXTQPi7LPmu1jdxznBhAE7bb1K+3D8gxY=
 github.com/openshift/client-go v0.0.0-20251015124057-db0dee36e235/go.mod h1:L49W6pfrZkfOE5iC1PqEkuLkXG4W0BX4w8b+L2Bv7fM=
 github.com/openshift/cluster-api-actuator-pkg v0.0.0-20251203134942-d9bd7b8593f3 h1:hrMexZRXjVmqIXk+cuHhDA78UZDelEBMRpBRQij1uyY=
