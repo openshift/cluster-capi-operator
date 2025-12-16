@@ -365,3 +365,53 @@ func cleanupMachineSetTestResources(ctx context.Context, cl client.Client, capiM
 		capiframework.DeleteAWSMachineTemplates(ctx, cl, template)
 	}
 }
+
+// createMAPIMachineSetWithProviderSpecUpdates creates a MAPI MachineSet with custom AWS provider spec updates.
+// The updateFunc allows callers to customize any field in the AWS provider spec.
+func createMAPIMachineSetWithProviderSpecUpdates(
+	ctx context.Context,
+	cl client.Client,
+	replicas int,
+	machineSetName string,
+	updateFunc func(*mapiv1beta1.AWSMachineProviderConfig),
+) *mapiv1beta1.MachineSet {
+	By(fmt.Sprintf("Creating MAPI MachineSet %s with custom provider spec", machineSetName))
+
+	// Build base MachineSet params
+	machineSetParams := mapiframework.BuildMachineSetParams(ctx, cl, replicas)
+	machineSetParams.Name = machineSetName
+	machineSetParams.Labels[mapiframework.MachineSetKey] = machineSetName
+	machineSetParams.MachinesetAuthoritativeAPI = mapiv1beta1.MachineAuthorityMachineAPI
+	machineSetParams.MachineAuthoritativeAPI = mapiv1beta1.MachineAuthorityMachineAPI
+	machineSetParams.Taints = []corev1.Taint{}
+
+	// Get and update the provider spec
+	providerSpec := &mapiv1beta1.AWSMachineProviderConfig{}
+	Expect(yaml.Unmarshal(machineSetParams.ProviderSpec.Value.Raw, providerSpec)).To(Succeed())
+
+	// Apply custom updates to the provider spec
+	if updateFunc != nil {
+		updateFunc(providerSpec)
+	}
+
+	// Marshal the updated provider spec back
+	rawProviderSpec, err := json.Marshal(providerSpec)
+	Expect(err).ToNot(HaveOccurred(), "failed to marshal updated provider spec")
+	machineSetParams.ProviderSpec.Value.Raw = rawProviderSpec
+
+	// Create the MachineSet
+	mapiMachineSet, err := mapiframework.CreateMachineSet(cl, machineSetParams)
+	Expect(err).ToNot(HaveOccurred(), "MAPI MachineSet %s creation should succeed", machineSetName)
+
+	// Wait for CAPI mirror to be created
+	capiMachineSet := &clusterv1beta1.MachineSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      machineSetName,
+			Namespace: capiframework.CAPINamespace,
+		},
+	}
+	Eventually(komega.Get(capiMachineSet), capiframework.WaitShort, capiframework.RetryShort).Should(
+		Succeed(), "Should have mirror CAPI MachineSet created")
+
+	return mapiMachineSet
+}
