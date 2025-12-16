@@ -39,6 +39,9 @@ const (
 
 	// configMapDataLimit is the size limit for data in a configMap.
 	configMapDataLimit = 1024 * 1000 // 1MB - some headroom for the rest of the configMap
+
+	// capiNamespace is the namespace where transport configmaps are created
+	capiNamespace = "openshift-cluster-api"
 )
 
 func generateManifestBundle(opts cmdlineOptions) error {
@@ -244,7 +247,8 @@ func cmGenerator(basename string) func(bytes.Buffer) *corev1.ConfigMap {
 				Kind:       "ConfigMap",
 			},
 			ObjectMeta: metav1.ObjectMeta{
-				Name: name,
+				Name:      name,
+				Namespace: capiNamespace,
 			},
 			Data: map[string]string{
 				"components": data.String(),
