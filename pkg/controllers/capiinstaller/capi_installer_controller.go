@@ -35,6 +35,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/utils/clock"
+	"k8s.io/utils/strings/slices"
 
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -150,7 +151,7 @@ func (r *CapiInstallerController) reconcile(ctx context.Context, log logr.Logger
 				return fmt.Errorf("failed to set conditions for CAPI Installer controller: %w", err)
 			}
 
-			return fmt.Errorf("unable to list CAPI provider %q ConfigMaps: %w", name, err)
+			return fmt.Errorf("unable to list CAPI provider %s ConfigMaps: %w", name, err)
 		}
 
 		// Extract the provider manifests stored each of the matching ConfigMaps.
@@ -166,7 +167,7 @@ func (r *CapiInstallerController) reconcile(ctx context.Context, log logr.Logger
 					return fmt.Errorf("failed to set conditions for CAPI Installer controller: %w", err)
 				}
 
-				return fmt.Errorf("error extracting CAPI provider components from ConfigMap %q/%q: %w", cm.Namespace, cm.Name, err)
+				return fmt.Errorf("error extracting CAPI provider components from ConfigMap %s/%s: %w", cm.Namespace, cm.Name, err)
 			}
 
 			providerComponents = append(providerComponents, partialComponents...)
@@ -460,6 +461,11 @@ func extractManifests(cm corev1.ConfigMap) ([]string, error) {
 
 	// Split multi-document YAML into single manifests.
 	yamlManifests := regexp.MustCompile("(?m)^---$").Split(components, -1)
+
+	// Filter out empty manifests, e.g. when a bundle starts with '---'
+	yamlManifests = slices.Filter(nil, yamlManifests, func(m string) bool {
+		return strings.TrimSpace(m) != ""
+	})
 
 	return yamlManifests, nil
 }
