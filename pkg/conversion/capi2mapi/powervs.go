@@ -30,7 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/utils/ptr"
 	ibmpowervsv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
-	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 )
 
 var (
@@ -40,7 +40,7 @@ var (
 
 // machineAndPowerVSMachineAndPowerVSCluster stores the details of a Cluster API Machine and PowerVSMachine and PowerVSCluster.
 type machineAndPowerVSMachineAndPowerVSCluster struct {
-	machine                               *clusterv1beta1.Machine
+	machine                               *clusterv1.Machine
 	powerVSMachine                        *ibmpowervsv1.IBMPowerVSMachine
 	powerVSCluster                        *ibmpowervsv1.IBMPowerVSCluster
 	excludeMachineAPILabelsAndAnnotations bool
@@ -48,25 +48,25 @@ type machineAndPowerVSMachineAndPowerVSCluster struct {
 
 // machineSetAndPowerVSMachineTemplateAndPowerVSCluster stores the details of a Cluster API MachineSet and PowerVSMachineTemplate and AWSCluster.
 type machineSetAndPowerVSMachineTemplateAndPowerVSCluster struct {
-	machineSet     *clusterv1beta1.MachineSet
+	machineSet     *clusterv1.MachineSet
 	template       *ibmpowervsv1.IBMPowerVSMachineTemplate
 	powerVSCluster *ibmpowervsv1.IBMPowerVSCluster
 	*machineAndPowerVSMachineAndPowerVSCluster
 }
 
 // FromMachineAndPowerVSMachineAndPowerVSCluster wraps a CAPI Machine and CAPIBM PowerVSMachine and CAPIBM PowerVSCluster into a capi2mapi MachineAndInfrastructureMachine.
-func FromMachineAndPowerVSMachineAndPowerVSCluster(m *clusterv1beta1.Machine, pm *ibmpowervsv1.IBMPowerVSMachine, pc *ibmpowervsv1.IBMPowerVSCluster) MachineAndInfrastructureMachine {
+func FromMachineAndPowerVSMachineAndPowerVSCluster(m *clusterv1.Machine, pm *ibmpowervsv1.IBMPowerVSMachine, pc *ibmpowervsv1.IBMPowerVSCluster) MachineAndInfrastructureMachine {
 	return &machineAndPowerVSMachineAndPowerVSCluster{machine: m, powerVSMachine: pm, powerVSCluster: pc}
 }
 
 // FromMachineSetAndPowerVSMachineTemplateAndPowerVSCluster wraps a CAPI MachineSet and CAPIBM PowerVSMachineTemplate and CAPIBM PowerVSCluster into a capi2mapi MachineSetAndAWSMachineTemplateAndAWSCluster.
-func FromMachineSetAndPowerVSMachineTemplateAndPowerVSCluster(ms *clusterv1beta1.MachineSet, mts *ibmpowervsv1.IBMPowerVSMachineTemplate, pc *ibmpowervsv1.IBMPowerVSCluster) MachineSetAndMachineTemplate {
+func FromMachineSetAndPowerVSMachineTemplateAndPowerVSCluster(ms *clusterv1.MachineSet, mts *ibmpowervsv1.IBMPowerVSMachineTemplate, pc *ibmpowervsv1.IBMPowerVSCluster) MachineSetAndMachineTemplate {
 	return machineSetAndPowerVSMachineTemplateAndPowerVSCluster{
 		machineSet:     ms,
 		template:       mts,
 		powerVSCluster: pc,
 		machineAndPowerVSMachineAndPowerVSCluster: &machineAndPowerVSMachineAndPowerVSCluster{
-			machine: &clusterv1beta1.Machine{
+			machine: &clusterv1.Machine{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels:      ms.Spec.Template.ObjectMeta.Labels,
 					Annotations: ms.Spec.Template.ObjectMeta.Annotations,
@@ -108,7 +108,7 @@ func (m machineAndPowerVSMachineAndPowerVSCluster) ToMachine() (*mapiv1beta1.Mac
 		additionalMachineAPIMetadataLabels = map[string]string{
 			consts.MAPIMachineMetadataLabelInstanceType: m.powerVSMachine.Spec.SystemType,
 			consts.MAPIMachineMetadataLabelRegion:       ptr.Deref(m.powerVSMachine.Status.Region, ""),
-			consts.MAPIMachineMetadataLabelZone:         ptr.Deref(m.machine.Spec.FailureDomain, ""),
+			consts.MAPIMachineMetadataLabelZone:         m.machine.Spec.FailureDomain,
 		}
 
 		additionalMachineAPIMetadataAnnotations = map[string]string{

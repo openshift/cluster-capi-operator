@@ -44,30 +44,7 @@ func TestNormalizeOwnerReferences(t *testing.T) {
 			expected: []metav1.OwnerReference{},
 		},
 		{
-			name: "v1beta1 remains v1beta1",
-			input: []metav1.OwnerReference{
-				{
-					APIVersion:         "cluster.x-k8s.io/v1beta1",
-					Kind:               "MachineSet",
-					Name:               "test-machineset",
-					UID:                testUID,
-					Controller:         ptr.To(true),
-					BlockOwnerDeletion: ptr.To(true),
-				},
-			},
-			expected: []metav1.OwnerReference{
-				{
-					APIVersion:         "cluster.x-k8s.io/v1beta1",
-					Kind:               "MachineSet",
-					Name:               "test-machineset",
-					UID:                testUID,
-					Controller:         ptr.To(true),
-					BlockOwnerDeletion: ptr.To(true),
-				},
-			},
-		},
-		{
-			name: "v1beta2 normalized to v1beta1",
+			name: "v1beta2 remains v1beta2",
 			input: []metav1.OwnerReference{
 				{
 					APIVersion:         "cluster.x-k8s.io/v1beta2",
@@ -80,7 +57,30 @@ func TestNormalizeOwnerReferences(t *testing.T) {
 			},
 			expected: []metav1.OwnerReference{
 				{
+					APIVersion:         "cluster.x-k8s.io/v1beta2",
+					Kind:               "MachineSet",
+					Name:               "test-machineset",
+					UID:                testUID,
+					Controller:         ptr.To(true),
+					BlockOwnerDeletion: ptr.To(true),
+				},
+			},
+		},
+		{
+			name: "v1beta1 normalized to v1beta2",
+			input: []metav1.OwnerReference{
+				{
 					APIVersion:         "cluster.x-k8s.io/v1beta1",
+					Kind:               "MachineSet",
+					Name:               "test-machineset",
+					UID:                testUID,
+					Controller:         ptr.To(true),
+					BlockOwnerDeletion: ptr.To(true),
+				},
+			},
+			expected: []metav1.OwnerReference{
+				{
+					APIVersion:         "cluster.x-k8s.io/v1beta2",
 					Kind:               "MachineSet",
 					Name:               "test-machineset",
 					UID:                testUID,
@@ -136,13 +136,13 @@ func TestNormalizeOwnerReferences(t *testing.T) {
 			},
 			expected: []metav1.OwnerReference{
 				{
-					APIVersion: "cluster.x-k8s.io/v1beta1",
+					APIVersion: "cluster.x-k8s.io/v1beta2",
 					Kind:       "MachineSet",
 					Name:       "test-machineset",
 					UID:        testUID,
 				},
 				{
-					APIVersion: "cluster.x-k8s.io/v1beta1",
+					APIVersion: "cluster.x-k8s.io/v1beta2",
 					Kind:       "Cluster",
 					Name:       "test-cluster",
 					UID:        types.UID("cluster-uid"),

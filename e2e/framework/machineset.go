@@ -7,11 +7,10 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
-	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 )
@@ -21,17 +20,17 @@ type machineSetParams struct {
 	clusterName       string
 	failureDomain     string
 	replicas          int32
-	infrastructureRef corev1.ObjectReference
+	infrastructureRef clusterv1.ContractVersionedObjectReference
 	userDataSecret    string
 }
 
 const machineSetOpenshiftLabelKey = "machine.openshift.io/cluster-api-machineset"
 
 // NewMachineSetParams returns a new machineSetParams object.
-func NewMachineSetParams(msName, clusterName, failureDomain string, replicas int32, infrastructureRef corev1.ObjectReference, userDataSecretName string) machineSetParams {
+func NewMachineSetParams(msName, clusterName, failureDomain string, replicas int32, infrastructureRef clusterv1.ContractVersionedObjectReference, userDataSecretName string) machineSetParams {
 	Expect(msName).ToNot(BeEmpty())
 	Expect(clusterName).ToNot(BeEmpty())
-	Expect(infrastructureRef.APIVersion).ToNot(BeEmpty())
+	Expect(infrastructureRef.APIGroup).ToNot(BeEmpty())
 	Expect(infrastructureRef.Kind).ToNot(BeEmpty())
 	Expect(infrastructureRef.Name).ToNot(BeEmpty())
 
@@ -46,10 +45,10 @@ func NewMachineSetParams(msName, clusterName, failureDomain string, replicas int
 }
 
 // CreateMachineSet creates a new CAPI MachineSet resource.
-func CreateMachineSet(ctx context.Context, cl client.Client, params machineSetParams) *clusterv1beta1.MachineSet {
+func CreateMachineSet(ctx context.Context, cl client.Client, params machineSetParams) *clusterv1.MachineSet {
 	By(fmt.Sprintf("Creating MachineSet %q", params.msName))
 
-	ms := &clusterv1beta1.MachineSet{
+	ms := &clusterv1.MachineSet{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "MachineSet",
 			APIVersion: "cluster.x-k8s.io/v1beta1",
@@ -58,7 +57,7 @@ func CreateMachineSet(ctx context.Context, cl client.Client, params machineSetPa
 			Name:      params.msName,
 			Namespace: CAPINamespace,
 		},
-		Spec: clusterv1beta1.MachineSetSpec{
+		Spec: clusterv1.MachineSetSpec{
 			Replicas:    &params.replicas,
 			ClusterName: params.clusterName,
 			Selector: metav1.LabelSelector{
@@ -67,15 +66,15 @@ func CreateMachineSet(ctx context.Context, cl client.Client, params machineSetPa
 					machineSetOpenshiftLabelKey:                params.msName,
 				},
 			},
-			Template: clusterv1beta1.MachineTemplateSpec{
-				ObjectMeta: clusterv1beta1.ObjectMeta{
+			Template: clusterv1.MachineTemplateSpec{
+				ObjectMeta: clusterv1.ObjectMeta{
 					Labels: map[string]string{
 						"machine.openshift.io/cluster-api-cluster": params.clusterName,
 						machineSetOpenshiftLabelKey:                params.msName,
 					},
 				},
-				Spec: clusterv1beta1.MachineSpec{
-					Bootstrap: clusterv1beta1.Bootstrap{
+				Spec: clusterv1.MachineSpec{
+					Bootstrap: clusterv1.Bootstrap{
 						DataSecretName: &params.userDataSecret,
 					},
 					ClusterName:       params.clusterName,
@@ -86,7 +85,7 @@ func CreateMachineSet(ctx context.Context, cl client.Client, params machineSetPa
 	}
 
 	if params.failureDomain != "" {
-		ms.Spec.Template.Spec.FailureDomain = &params.failureDomain
+		ms.Spec.Template.Spec.FailureDomain = params.failureDomain
 	}
 
 	Expect(cl.Create(ctx, ms)).To(Succeed(), "Should have successfully created the CAPI MachineSet")
@@ -95,7 +94,7 @@ func CreateMachineSet(ctx context.Context, cl client.Client, params machineSetPa
 
 // WaitForMachineSetsDeleted polls until the given MachineSets are not found, and
 // there are zero Machines found matching the MachineSet's label selector.
-func WaitForMachineSetsDeleted(cl client.Client, machineSets ...*clusterv1beta1.MachineSet) {
+func WaitForMachineSetsDeleted(cl client.Client, machineSets ...*clusterv1.MachineSet) {
 	for _, ms := range machineSets {
 		By(fmt.Sprintf("Waiting for MachineSet %q to be deleted", ms.GetName()))
 
@@ -107,7 +106,7 @@ func WaitForMachineSetsDeleted(cl client.Client, machineSets ...*clusterv1beta1.
 		}, WaitLong, RetryMedium).Should(BeZero(), "Should have deleted all MachineSet's machines")
 
 		// Wait for MachineSet to be deleted
-		Eventually(komega.Get(&clusterv1beta1.MachineSet{
+		Eventually(komega.Get(&clusterv1.MachineSet{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      ms.GetName(),
 				Namespace: ms.GetNamespace(),
@@ -116,7 +115,7 @@ func WaitForMachineSetsDeleted(cl client.Client, machineSets ...*clusterv1beta1.
 	}
 }
 
-func DeleteMachineSets(ctx context.Context, cl client.Client, machineSets ...*clusterv1beta1.MachineSet) {
+func DeleteMachineSets(ctx context.Context, cl client.Client, machineSets ...*clusterv1.MachineSet) {
 	for _, ms := range machineSets {
 		if ms == nil {
 			continue
@@ -174,8 +173,8 @@ func WaitForMachineSet(cl client.Client, name string, namespace string) {
 }
 
 // GetMachineSet gets a machineset by its name.
-func GetMachineSet(cl client.Client, name string, namespace string) *clusterv1beta1.MachineSet {
-	machineSet := &clusterv1beta1.MachineSet{
+func GetMachineSet(cl client.Client, name string, namespace string) *clusterv1.MachineSet {
+	machineSet := &clusterv1.MachineSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
@@ -188,10 +187,10 @@ func GetMachineSet(cl client.Client, name string, namespace string) *clusterv1be
 }
 
 // GetMachinesFromMachineSet returns an array of machines owned by a given machineSet
-func GetMachinesFromMachineSet(cl client.Client, machineSet *clusterv1beta1.MachineSet) []*clusterv1beta1.Machine {
+func GetMachinesFromMachineSet(cl client.Client, machineSet *clusterv1.MachineSet) []*clusterv1.Machine {
 	machines := GetMachines(cl)
 
-	var machinesForSet []*clusterv1beta1.Machine
+	var machinesForSet []*clusterv1.Machine
 	for key := range machines {
 		if metav1.IsControlledBy(machines[key], machineSet) {
 			machinesForSet = append(machinesForSet, machines[key])
@@ -202,11 +201,11 @@ func GetMachinesFromMachineSet(cl client.Client, machineSet *clusterv1beta1.Mach
 }
 
 // GetNewestMachineFromMachineSet returns the new created machine by a given machineSet.
-func GetNewestMachineFromMachineSet(cl client.Client, machineSet *clusterv1beta1.MachineSet) *clusterv1beta1.Machine {
+func GetNewestMachineFromMachineSet(cl client.Client, machineSet *clusterv1.MachineSet) *clusterv1.Machine {
 	machines := GetMachinesFromMachineSet(cl, machineSet)
 	Expect(machines).ToNot(BeEmpty(), "Should have found machines for MachineSet %s/%s", machineSet.Namespace, machineSet.Name)
 
-	var machine *clusterv1beta1.Machine
+	var machine *clusterv1.Machine
 
 	t := time.Date(0001, 01, 01, 00, 00, 00, 00, time.UTC)
 
@@ -223,7 +222,7 @@ func GetNewestMachineFromMachineSet(cl client.Client, machineSet *clusterv1beta1
 
 // ScaleCAPIMachineSet scales a machineSet with a given name to the given number of replicas.
 func ScaleCAPIMachineSet(name string, replicas int32, namespace string) {
-	machineSet := &clusterv1beta1.MachineSet{
+	machineSet := &clusterv1.MachineSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,

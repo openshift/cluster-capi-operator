@@ -16,18 +16,18 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
-	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 )
 
-func createCAPIMachine(ctx context.Context, cl client.Client, machineName string) *clusterv1beta1.Machine {
+func createCAPIMachine(ctx context.Context, cl client.Client, machineName string) *clusterv1.Machine {
 	Expect(machineName).NotTo(BeEmpty(), "Machine name cannot be empty")
 
 	workerLabelSelector := metav1.LabelSelector{
 		MatchExpressions: []metav1.LabelSelectorRequirement{
 			{
-				Key:      clusterv1beta1.MachineControlPlaneLabel,
+				Key:      clusterv1.MachineControlPlaneLabel,
 				Operator: metav1.LabelSelectorOpDoesNotExist,
 			},
 		},
@@ -42,10 +42,10 @@ func createCAPIMachine(ctx context.Context, cl client.Client, machineName string
 	By(fmt.Sprintf("Using CAPI machine %s as a reference", referenceCapiMachine.Name))
 
 	// Define the new machine based on the reference.
-	newCapiMachine := &clusterv1beta1.Machine{
+	newCapiMachine := &clusterv1.Machine{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Machine",
-			APIVersion: clusterv1beta1.GroupVersion.String(),
+			APIVersion: clusterv1.GroupVersion.String(),
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      machineName,
@@ -55,10 +55,10 @@ func createCAPIMachine(ctx context.Context, cl client.Client, machineName string
 	}
 
 	// Clear status and other instance-specific fields that should not be copied.
-	newCapiMachine.Spec.ProviderID = nil
+	newCapiMachine.Spec.ProviderID = ""
 	newCapiMachine.Spec.InfrastructureRef.Name = machineName
 	newCapiMachine.ObjectMeta.Labels = nil
-	newCapiMachine.Status = clusterv1beta1.MachineStatus{}
+	newCapiMachine.Status = clusterv1.MachineStatus{}
 
 	By(fmt.Sprintf("Creating a new CAPI machine in namespace: %s", newCapiMachine.Namespace))
 	Eventually(func() error {
@@ -142,18 +142,17 @@ func createMAPIMachineWithAuthority(ctx context.Context, cl client.Client, machi
 func verifyMachineRunning(cl client.Client, machine client.Object) {
 	Expect(machine).NotTo(BeNil(), "Machine parameter cannot be nil")
 	Expect(machine.GetName()).NotTo(BeEmpty(), "Machine name cannot be empty")
-	Eventually(func() string {
+	Eventually(func(g Gomega) string {
 		switch m := machine.(type) {
-		case *clusterv1beta1.Machine:
+		case *clusterv1.Machine:
 			By("Verify the CAPI Machine is Running")
-			capiMachine := capiframework.GetMachine(cl, m.GetName(), m.GetNamespace())
+			capiMachine, err := capiframework.GetMachineWithError(cl, m.GetName(), m.GetNamespace())
+			g.Expect(err).ToNot(HaveOccurred())
 			return string(capiMachine.Status.Phase)
 		case *mapiv1beta1.Machine:
 			By("Verify the MAPI Machine is Running")
 			mapiMachine, err := mapiframework.GetMachine(cl, m.GetName())
-			if err != nil {
-				return ""
-			}
+			g.Expect(err).ToNot(HaveOccurred())
 			return ptr.Deref(mapiMachine.Status.Phase, "")
 		default:
 			Fail(fmt.Sprintf("unknown machine type: %T", machine))
@@ -248,7 +247,7 @@ func verifyMachinePausedCondition(machine client.Object, authority mapiv1beta1.M
 			fmt.Sprintf("Should have found the expected Paused condition for MAPI Machine %s with authority: %s", m.Name, authority),
 		)
 
-	case *clusterv1beta1.Machine:
+	case *clusterv1.Machine:
 		// This is a CAPI Machine
 		switch authority {
 		case mapiv1beta1.MachineAuthorityClusterAPI:
@@ -270,7 +269,7 @@ func verifyMachinePausedCondition(machine client.Object, authority mapiv1beta1.M
 		}
 
 		Eventually(komega.Object(m), capiframework.WaitMedium, capiframework.RetryMedium).Should(
-			HaveField("Status.V1Beta2.Conditions", ContainElement(conditionMatcher)),
+			HaveField("Status.Conditions", ContainElement(conditionMatcher)),
 			fmt.Sprintf("Should have found the expected Paused condition for CAPI Machine %s with authority: %s", m.Name, authority),
 		)
 
@@ -279,7 +278,7 @@ func verifyMachinePausedCondition(machine client.Object, authority mapiv1beta1.M
 	}
 }
 
-func cleanupMachineResources(ctx context.Context, cl client.Client, capiMachines []*clusterv1beta1.Machine, mapiMachines []*mapiv1beta1.Machine) {
+func cleanupMachineResources(ctx context.Context, cl client.Client, capiMachines []*clusterv1.Machine, mapiMachines []*mapiv1beta1.Machine) {
 	for _, m := range capiMachines {
 		if m == nil {
 			continue

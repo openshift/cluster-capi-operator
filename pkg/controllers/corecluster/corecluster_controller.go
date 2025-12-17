@@ -24,13 +24,12 @@ import (
 
 	"github.com/go-logr/logr"
 	configv1 "github.com/openshift/api/config/v1"
-	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
-	v1beta1conditions "sigs.k8s.io/cluster-api/util/deprecated/v1beta1/conditions"
-	v1beta2conditions "sigs.k8s.io/cluster-api/util/deprecated/v1beta1/conditions/v1beta2"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
+	"sigs.k8s.io/cluster-api/util/conditions"
+	deprecatedv1beta1conditions "sigs.k8s.io/cluster-api/util/conditions/deprecated/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -46,6 +45,7 @@ const (
 	controllerName                    = "CoreClusterController"
 	capiInfraClusterAPIVersionV1Beta1 = "infrastructure.cluster.x-k8s.io/v1beta1"
 	capiInfraClusterAPIVersionV1Beta2 = "infrastructure.cluster.x-k8s.io/v1beta2"
+	capiInfraClusterAPIGroup          = "infrastructure.cluster.x-k8s.io"
 	clusterOperatorName               = "cluster-api"
 )
 
@@ -59,7 +59,7 @@ var (
 // CoreClusterController reconciles a Cluster object.
 type CoreClusterController struct {
 	operatorstatus.ClusterOperatorStatusClient
-	Cluster  *clusterv1beta1.Cluster
+	Cluster  *clusterv1.Cluster
 	Infra    *configv1.Infrastructure
 	Platform configv1.PlatformType
 }
@@ -70,7 +70,7 @@ func (r *CoreClusterController) SetupWithManager(mgr ctrl.Manager) error {
 		Named(controllerName).
 		For(&configv1.ClusterOperator{}, builder.WithPredicates(clusterOperatorPredicates())).
 		Watches(
-			&clusterv1beta1.Cluster{},
+			&clusterv1.Cluster{},
 			handler.EnqueueRequestsFromMapFunc(toClusterOperator),
 			builder.WithPredicates(coreClusterPredicate(r.ManagedNamespace)),
 		).
@@ -117,8 +117,8 @@ func (r *CoreClusterController) Reconcile(ctx context.Context, req reconcile.Req
 }
 
 // ensureCoreCluster creates a cluster with the given name and returns the cluster object.
-func (r *CoreClusterController) ensureCoreCluster(ctx context.Context, clusterObjectKey client.ObjectKey, logger logr.Logger) (*clusterv1beta1.Cluster, error) {
-	cluster := &clusterv1beta1.Cluster{}
+func (r *CoreClusterController) ensureCoreCluster(ctx context.Context, clusterObjectKey client.ObjectKey, logger logr.Logger) (*clusterv1.Cluster, error) {
+	cluster := &clusterv1.Cluster{}
 	if err := r.Client.Get(ctx, clusterObjectKey, cluster); err != nil && !kerrors.IsNotFound(err) {
 		return nil, fmt.Errorf("failed to get core cluster %s/%s: %w", clusterObjectKey.Namespace, clusterObjectKey.Name, err)
 	} else if err == nil {
@@ -129,7 +129,7 @@ func (r *CoreClusterController) ensureCoreCluster(ctx context.Context, clusterOb
 		return nil, errPlatformStatusShouldNotBeNil
 	}
 
-	infraClusterKind, infraClusterAPIVersion, err := mapOCPPlatformToInfraClusterKindAndVersion(r.Platform)
+	infraClusterKind, infraClusterAPIVersion, infraClusterAPIGroup, err := mapOCPPlatformToInfraClusterKindAndVersionAndGroup(r.Platform)
 	if err != nil {
 		return nil, fmt.Errorf("unable to map infrastucture resource platform type to infrastructure cluster kind: %w", err)
 	}
@@ -144,7 +144,7 @@ func (r *CoreClusterController) ensureCoreCluster(ctx context.Context, clusterOb
 
 	logger.Info(fmt.Sprintf("Core cluster %s/%s does not exist, creating it", clusterObjectKey.Namespace, clusterObjectKey.Name))
 
-	cluster, err = r.generateCoreClusterObject(ctx, clusterObjectKey, infraClusterAPIVersion, infraClusterKind)
+	cluster, err = r.generateCoreClusterObject(ctx, clusterObjectKey, infraClusterAPIGroup, infraClusterKind)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate core cluster object: %w", err)
 	}
@@ -159,7 +159,7 @@ func (r *CoreClusterController) ensureCoreCluster(ctx context.Context, clusterOb
 }
 
 // generateCoreClusterObject generates a new core cluster object to be created.
-func (r *CoreClusterController) generateCoreClusterObject(_ context.Context, clusterObjectKey client.ObjectKey, infraClusterAPIVersion, infraClusterKind string) (*clusterv1beta1.Cluster, error) {
+func (r *CoreClusterController) generateCoreClusterObject(_ context.Context, clusterObjectKey client.ObjectKey, infraClusterAPIGroup, infraClusterKind string) (*clusterv1.Cluster, error) {
 	apiURL, err := url.Parse(r.Infra.Status.APIServerInternalURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse apiURL: %w", err)
@@ -170,19 +170,18 @@ func (r *CoreClusterController) generateCoreClusterObject(_ context.Context, clu
 		return nil, fmt.Errorf("failed to parse apiURL port: %w", err)
 	}
 
-	return &clusterv1beta1.Cluster{
+	return &clusterv1.Cluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      clusterObjectKey.Name,
 			Namespace: clusterObjectKey.Namespace,
 		},
-		Spec: clusterv1beta1.ClusterSpec{
-			InfrastructureRef: &corev1.ObjectReference{
-				APIVersion: infraClusterAPIVersion,
-				Kind:       infraClusterKind,
-				Name:       clusterObjectKey.Name,
-				Namespace:  clusterObjectKey.Namespace,
+		Spec: clusterv1.ClusterSpec{
+			InfrastructureRef: clusterv1.ContractVersionedObjectReference{
+				APIGroup: infraClusterAPIGroup,
+				Kind:     infraClusterKind,
+				Name:     clusterObjectKey.Name,
 			},
-			ControlPlaneEndpoint: clusterv1beta1.APIEndpoint{
+			ControlPlaneEndpoint: clusterv1.APIEndpoint{
 				Host: apiURL.Hostname(),
 				Port: int32(port),
 			},
@@ -191,18 +190,18 @@ func (r *CoreClusterController) generateCoreClusterObject(_ context.Context, clu
 }
 
 // ensureCoreClusterControlPlaneInitializedCondition makes sure the ControlPlaneInitializedCondition condition on the cluster.
-func (r *CoreClusterController) ensureCoreClusterControlPlaneInitializedCondition(ctx context.Context, cluster *clusterv1beta1.Cluster) error {
-	if v1beta1conditions.Get(cluster, clusterv1beta1.ControlPlaneInitializedCondition) != nil {
+func (r *CoreClusterController) ensureCoreClusterControlPlaneInitializedCondition(ctx context.Context, cluster *clusterv1.Cluster) error {
+	if deprecatedv1beta1conditions.Get(cluster, clusterv1.ControlPlaneInitializedV1Beta1Condition) != nil {
 		return nil
 	}
 
 	clusterCopy := cluster.DeepCopy()
 
-	v1beta1conditions.MarkTrue(cluster, clusterv1beta1.ControlPlaneInitializedCondition)
+	deprecatedv1beta1conditions.MarkTrue(cluster, clusterv1.ControlPlaneInitializedV1Beta1Condition)
 
-	v1beta2conditions.Set(cluster, metav1.Condition{
-		Type:   clusterv1beta1.ClusterControlPlaneInitializedV1Beta2Condition,
-		Reason: clusterv1beta1.ClusterControlPlaneInitializedV1Beta2Reason,
+	conditions.Set(cluster, metav1.Condition{
+		Type:   clusterv1.ClusterControlPlaneInitializedCondition,
+		Reason: clusterv1.ClusterControlPlaneInitializedReason,
 		Status: metav1.ConditionTrue,
 	})
 
@@ -223,20 +222,20 @@ func (r *CoreClusterController) ensureCoreClusterControlPlaneInitializedConditio
 }
 
 // mapOCPPlatformToInfraClusterKindAndVersion maps an OCP Infrastructure PlatformType to a CAPI InfraCluster Kind and APIVersion.
-func mapOCPPlatformToInfraClusterKindAndVersion(platform configv1.PlatformType) (string, string, error) {
+func mapOCPPlatformToInfraClusterKindAndVersionAndGroup(platform configv1.PlatformType) (string, string, string, error) {
 	switch platform {
 	case configv1.AWSPlatformType:
-		return fmt.Sprintf("%sCluster", platform), capiInfraClusterAPIVersionV1Beta2, nil
+		return fmt.Sprintf("%sCluster", platform), capiInfraClusterAPIVersionV1Beta2, capiInfraClusterAPIGroup, nil
 	case configv1.AzurePlatformType, configv1.GCPPlatformType,
 		configv1.VSpherePlatformType, configv1.OpenStackPlatformType:
-		return fmt.Sprintf("%sCluster", platform), capiInfraClusterAPIVersionV1Beta1, nil
+		return fmt.Sprintf("%sCluster", platform), capiInfraClusterAPIVersionV1Beta1, capiInfraClusterAPIGroup, nil
 	// The CAPI corresponding CRD name is IBMPowerVSCluster https://github.com/kubernetes-sigs/cluster-api-provider-ibmcloud/blob/main/api/v1beta2/ibmpowervscluster_types.go#L247
 	case configv1.PowerVSPlatformType:
-		return "ibmpowervscluster", capiInfraClusterAPIVersionV1Beta1, nil
+		return "ibmpowervscluster", capiInfraClusterAPIVersionV1Beta1, capiInfraClusterAPIGroup, nil
 	case configv1.BareMetalPlatformType:
-		return "Metal3Cluster", capiInfraClusterAPIVersionV1Beta1, nil
+		return "Metal3Cluster", capiInfraClusterAPIVersionV1Beta1, capiInfraClusterAPIGroup, nil
 	default:
-		return "", "", fmt.Errorf("%w: %q", errUnsupportedPlatformType, platform)
+		return "", "", "", fmt.Errorf("%w: %q", errUnsupportedPlatformType, platform)
 	}
 }
 
