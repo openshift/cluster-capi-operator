@@ -23,7 +23,17 @@ import (
 
 func createCAPIMachine(ctx context.Context, cl client.Client, machineName string) *clusterv1beta1.Machine {
 	Expect(machineName).NotTo(BeEmpty(), "Machine name cannot be empty")
-	capiMachineList := capiframework.GetMachines(cl)
+
+	workerLabelSelector := metav1.LabelSelector{
+		MatchExpressions: []metav1.LabelSelectorRequirement{
+			{
+				Key:      clusterv1beta1.MachineControlPlaneLabel,
+				Operator: metav1.LabelSelectorOpDoesNotExist,
+			},
+		},
+	}
+
+	capiMachineList := capiframework.GetMachines(cl, &workerLabelSelector)
 	// The test requires at least one existing CAPI machine to act as a reference for creating a new one.
 	Expect(capiMachineList).NotTo(BeEmpty(), "Should have found CAPI machines in the openshift-cluster-api namespace to use as a reference for creating a new one")
 

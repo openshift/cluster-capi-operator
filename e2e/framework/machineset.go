@@ -136,7 +136,7 @@ func DeleteMachineSets(ctx context.Context, cl client.Client, machineSets ...*cl
 // MachineSet to enter the "Running" phase, and for all nodes belonging to those
 // Machines to be ready.
 func WaitForMachineSet(cl client.Client, name string, namespace string) {
-	By(fmt.Sprintf("Waiting for MachineSet machines %q to enter Running phase", name))
+	By(fmt.Sprintf("Waiting for CAPI MachineSet machines %q to enter Running phase", name))
 
 	machineSet := GetMachineSet(cl, name, namespace)
 

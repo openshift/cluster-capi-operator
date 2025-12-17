@@ -195,7 +195,6 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 			It("should succeed scaling down CAPI MachineSet to 1, after the switch of AuthoritativeAPI to ClusterAPI", func() {
 				By("Scaling down CAPI MachineSet to 1")
 				capiframework.ScaleCAPIMachineSet(mapiMSAuthMAPIName, 1, capiframework.CAPINamespace)
-				capiframework.WaitForMachineSet(cl, mapiMSAuthMAPIName, capiframework.CAPINamespace)
 
 				By("Verifying both CAPI MachineSet and its MAPI MachineSet mirror are scaled down to 1")
 				verifyMachinesetReplicas(capiMachineSet, 1)
