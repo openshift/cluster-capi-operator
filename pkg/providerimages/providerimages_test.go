@@ -46,12 +46,15 @@ func (f *fakeImageFetcher) Fetch(ctx context.Context, ref name.Reference) (v1.Im
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
+
 	if err, ok := f.errors[ref.String()]; ok {
 		return nil, err
 	}
+
 	if img, ok := f.images[ref.String()]; ok {
 		return img, nil
 	}
+
 	return nil, fmt.Errorf("image not found: %s", ref.String())
 }
 
@@ -66,9 +69,11 @@ func createTarLayer(files map[string]string) (v1.Layer, error) {
 			Mode: 0644,
 			Size: int64(len(content)),
 		}
+
 		if err := tw.WriteHeader(hdr); err != nil {
 			return nil, err
 		}
+
 		if _, err := tw.Write([]byte(content)); err != nil {
 			return nil, err
 		}
@@ -92,6 +97,7 @@ func createTestImage(files map[string]string) (v1.Image, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return mutate.AppendLayers(empty.Image, layer)
 }
 
@@ -99,16 +105,19 @@ func createTestImage(files map[string]string) (v1.Image, error) {
 // Each element in the layers slice represents the files for one layer.
 func createTestImageWithLayers(layers []map[string]string) (v1.Image, error) {
 	img := empty.Image
+
 	for _, files := range layers {
 		layer, err := createTarLayer(files)
 		if err != nil {
 			return nil, err
 		}
+
 		img, err = mutate.AppendLayers(img, layer)
 		if err != nil {
 			return nil, err
 		}
 	}
+
 	return img, nil
 }
 
@@ -129,13 +138,15 @@ func createCapiManifestsImage(metadataContent, manifestsContent string) (v1.Imag
 
 // createCapiManifestsImageWithLayers creates a test image with multiple layers containing capi-operator-manifests.
 func createCapiManifestsImageWithLayers(layers []struct{ metadata, manifests string }) (v1.Image, error) {
-	var fileLayers []map[string]string
+	fileLayers := make([]map[string]string, 0, len(layers))
+
 	for _, l := range layers {
 		fileLayers = append(fileLayers, map[string]string{
 			testMetadataPath:  l.metadata,
 			testManifestsPath: l.manifests,
 		})
 	}
+
 	return createTestImageWithLayers(fileLayers)
 }
 
@@ -149,13 +160,13 @@ manifestImageName: %s
 `, providerName, providerType, version, ocpPlatform, manifestImageName)
 }
 
-//nolint:gocognit
+//nolint:gocognit,funlen
 func Test_readProviderImages(t *testing.T) {
 	tests := []struct {
 		name            string
 		containerImages map[string]string
 		setupFetcher    func(t *testing.T) *fakeImageFetcher
-		setupContext    func() (context.Context, context.CancelFunc)
+		setupContext    func(parent context.Context) (context.Context, context.CancelFunc)
 		validate        func(t *testing.T, g Gomega, result []ProviderImageManifests, outputDir string)
 		wantErr         bool
 		errContains     string
@@ -174,6 +185,7 @@ func Test_readProviderImages(t *testing.T) {
 				if err != nil {
 					t.Fatalf("failed to create test image: %v", err)
 				}
+
 				return &fakeImageFetcher{
 					images: map[string]v1.Image{
 						"registry.example.com/capi-aws:v1.0.0": img,
@@ -215,6 +227,7 @@ func Test_readProviderImages(t *testing.T) {
 				if err != nil {
 					t.Fatalf("failed to create test image: %v", err)
 				}
+
 				return &fakeImageFetcher{
 					images: map[string]v1.Image{
 						"registry.example.com/no-capi:v1.0.0": img,
@@ -239,6 +252,7 @@ func Test_readProviderImages(t *testing.T) {
 				if err != nil {
 					t.Fatalf("failed to create test image: %v", err)
 				}
+
 				return &fakeImageFetcher{
 					images: map[string]v1.Image{
 						"registry.example.com/missing-metadata:v1.0.0": img,
@@ -261,6 +275,7 @@ func Test_readProviderImages(t *testing.T) {
 				if err != nil {
 					t.Fatalf("failed to create test image: %v", err)
 				}
+
 				return &fakeImageFetcher{
 					images: map[string]v1.Image{
 						"registry.example.com/missing-manifests:v1.0.0": img,
@@ -284,6 +299,7 @@ func Test_readProviderImages(t *testing.T) {
 				if err != nil {
 					t.Fatalf("failed to create test image: %v", err)
 				}
+
 				return &fakeImageFetcher{
 					images: map[string]v1.Image{
 						"registry.example.com/invalid-metadata:v1.0.0": img,
@@ -335,6 +351,7 @@ func Test_readProviderImages(t *testing.T) {
 				if err != nil {
 					t.Fatalf("failed to create test image: %v", err)
 				}
+
 				return &fakeImageFetcher{
 					images: map[string]v1.Image{
 						"registry.example.com/capi-aws:v1.0.0": img,
@@ -365,6 +382,7 @@ func Test_readProviderImages(t *testing.T) {
 				if err != nil {
 					t.Fatalf("failed to create test image: %v", err)
 				}
+
 				return &fakeImageFetcher{
 					images: map[string]v1.Image{
 						"registry.example.com/capi-aws:v1.0.0": img,
@@ -400,6 +418,7 @@ contentID: id
 				if err != nil {
 					t.Fatalf("failed to create test image: %v", err)
 				}
+
 				return &fakeImageFetcher{
 					images: map[string]v1.Image{
 						"registry.example.com/capi-aws:v1.0.0": img,
@@ -438,9 +457,10 @@ contentID: id
 			containerImages: map[string]string{
 				"aws": "registry.example.com/capi-aws:v1.0.0",
 			},
-			setupContext: func() (context.Context, context.CancelFunc) {
-				ctx, cancel := context.WithCancel(context.Background())
+			setupContext: func(parent context.Context) (context.Context, context.CancelFunc) {
+				ctx, cancel := context.WithCancel(parent)
 				cancel() // Cancel immediately
+
 				return ctx, cancel
 			},
 			setupFetcher: func(t *testing.T) *fakeImageFetcher {
@@ -452,6 +472,7 @@ contentID: id
 				if err != nil {
 					t.Fatalf("failed to create test image: %v", err)
 				}
+
 				return &fakeImageFetcher{
 					images: map[string]v1.Image{
 						"registry.example.com/capi-aws:v1.0.0": img,
@@ -484,6 +505,7 @@ contentID: id
 				if err != nil {
 					t.Fatalf("failed to create test image: %v", err)
 				}
+
 				return &fakeImageFetcher{
 					images: map[string]v1.Image{
 						"registry.example.com/layered:v1.0.0": img,
@@ -513,10 +535,12 @@ contentID: id
 			tmpDir := t.TempDir()
 			fetcher := tt.setupFetcher(t)
 
-			ctx := context.Background()
+			ctx := t.Context()
+
 			if tt.setupContext != nil {
 				var cancel context.CancelFunc
-				ctx, cancel = tt.setupContext()
+				ctx, cancel = tt.setupContext(ctx)
+
 				defer cancel()
 			}
 
@@ -524,11 +548,14 @@ contentID: id
 
 			if tt.wantErr {
 				g.Expect(err).To(HaveOccurred())
+
 				if tt.errContains != "" {
 					g.Expect(err.Error()).To(ContainSubstring(tt.errContains))
 				}
+
 				return
 			}
+
 			g.Expect(err).NotTo(HaveOccurred())
 
 			// Verify output directory structure for all successful results
@@ -547,6 +574,7 @@ contentID: id
 						t.Fatalf("unexpected provider %s in result", manifest.Name)
 					}
 				}
+
 				sanitizedRef := sanitizeImageRef(imageRef)
 				expectedDir := filepath.Join(tmpDir, sanitizedRef)
 

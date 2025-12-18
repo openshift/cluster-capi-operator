@@ -1,3 +1,18 @@
+/*
+Copyright 2024 Red Hat, Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+	http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 package providerimages
 
 import (
@@ -35,7 +50,7 @@ type ProviderImageManifests struct {
 	Type          string `json:"type"`
 	Version       string `json:"version"`
 	OCPPlatform   string `json:"ocpPlatform"`
-	ContentID     string `json:"contentID"`
+	ContentID     string `json:"contentID"` //nolint:tagliatelle
 	ManifestsPath string `json:"manifestsPath"`
 }
 
@@ -60,7 +75,12 @@ type remoteImageFetcher struct {
 
 // Fetch fetches an image from a remote registry.
 func (r remoteImageFetcher) Fetch(ctx context.Context, ref name.Reference) (v1.Image, error) {
-	return remote.Image(ref, remote.WithAuthFromKeychain(r.keychain), remote.WithContext(ctx))
+	img, err := remote.Image(ref, remote.WithAuthFromKeychain(r.keychain), remote.WithContext(ctx))
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch remote image: %w", err)
+	}
+
+	return img, nil
 }
 
 // ReadProviderImages returns a list of ProviderImageManifests read directly
@@ -80,7 +100,7 @@ func (r remoteImageFetcher) Fetch(ctx context.Context, ref name.Reference) (v1.I
 // providerImageDir. Manifests are written to a subdirectory named after the
 // image reference.
 //
-// When writing manifests to the cache, any occurences of `manifestImageName` as
+// When writing manifests to the cache, any occurrences of `manifestImageName` as
 // specified in the provider's metadata.yaml are replaced with the image
 // reference.
 func ReadProviderImages(ctx context.Context, containerImages map[string]string, providerImageDir string, pullSecret []byte) ([]ProviderImageManifests, error) {
@@ -88,6 +108,7 @@ func ReadProviderImages(ctx context.Context, containerImages map[string]string, 
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse pull secret: %w", err)
 	}
+
 	return readProviderImages(ctx, containerImages, providerImageDir, remoteImageFetcher{keychain: keychain})
 }
 
@@ -99,8 +120,8 @@ type providerImageResult struct {
 
 func readProviderImages(ctx context.Context, containerImages map[string]string, providerImageDir string, fetcher imageFetcher) ([]ProviderImageManifests, error) {
 	results := make(chan providerImageResult, len(containerImages))
-
 	g, ctx := errgroup.WithContext(ctx)
+
 	g.SetLimit(5) // Limit to 5 concurrent fetches
 
 	for imageRef := range maps.Values(containerImages) {
@@ -117,10 +138,13 @@ func readProviderImages(ctx context.Context, containerImages map[string]string, 
 	}
 
 	_ = g.Wait() // We're not actually returning errors directly
+
 	close(results)
 
 	var providerImages []ProviderImageManifests
+
 	var err error
+
 	for result := range results {
 		if result.err != nil {
 			err = errors.Join(err, fmt.Errorf("fetching provider from image %s: %w", result.imageRef, result.err))
@@ -132,6 +156,7 @@ func readProviderImages(ctx context.Context, containerImages map[string]string, 
 	if err != nil {
 		return nil, err
 	}
+
 	return providerImages, nil
 }
 
@@ -151,8 +176,9 @@ func processProviderImage(ctx context.Context, imageRef, providerImageDir string
 	if err != nil {
 		if errors.Is(err, errNoCapiManifests) {
 			// Image doesn't contain /capi-manifests, skip it
-			return nil, nil
+			return nil, nil //nolint:nilnil // intentional: nil manifest with no error means skip this image
 		}
+
 		return nil, err
 	}
 
@@ -160,12 +186,14 @@ func processProviderImage(ctx context.Context, imageRef, providerImageDir string
 	// Use a sanitized version of the image reference as the subdirectory name
 	sanitizedRef := sanitizeImageRef(imageRef)
 	outputDir := filepath.Join(providerImageDir, sanitizedRef)
+
 	if err := os.MkdirAll(outputDir, 0750); err != nil {
 		return nil, fmt.Errorf("failed to create output directory: %w", err)
 	}
 
 	// Write manifests to the cache directory, performing image substitution and hash calculation
 	manifestsPath := filepath.Join(outputDir, manifestsFile)
+
 	contentID, err := writeManifestsWithHash(manifestsPath, manifestsContent, metadata.ManifestImageName, imageRef)
 	if err != nil {
 		return nil, err
@@ -181,7 +209,11 @@ func processProviderImage(ctx context.Context, imageRef, providerImageDir string
 	}, nil
 }
 
-var errNoCapiManifests = errors.New("no capi-manifests directory found")
+var (
+	errNoCapiManifests  = errors.New("no capi-manifests directory found")
+	errMissingMetadata  = errors.New("missing metadata.yaml in /capi-operator-manifests")
+	errMissingManifests = errors.New("missing manifests.yaml in /capi-operator-manifests")
+)
 
 func extractCapiManifests(img v1.Image) (*ProviderMetadata, string, error) {
 	layers, err := img.Layers()
@@ -198,12 +230,14 @@ func extractCapiManifests(img v1.Image) (*ProviderMetadata, string, error) {
 	// overwrite files from lower layers in OCI images
 	for i := len(layers) - 1; i >= 0; i-- {
 		layer := layers[i]
+
 		rc, err := layer.Uncompressed()
 		if err != nil {
 			return nil, "", fmt.Errorf("failed to uncompress layer: %w", err)
 		}
 
 		found, err := extractFilesFromTar(rc, metadataPath, manifestsPath)
+
 		err = errors.Join(err, rc.Close())
 		if err != nil {
 			return nil, "", err
@@ -212,6 +246,7 @@ func extractCapiManifests(img v1.Image) (*ProviderMetadata, string, error) {
 		if content, ok := found[metadataPath]; ok {
 			metadataContent = content
 		}
+
 		if content, ok := found[manifestsPath]; ok {
 			manifestsContent = content
 		}
@@ -227,10 +262,11 @@ func extractCapiManifests(img v1.Image) (*ProviderMetadata, string, error) {
 	}
 
 	if metadataContent == "" {
-		return nil, "", fmt.Errorf("missing %s in %s", metadataFile, capiManifestsDir)
+		return nil, "", errMissingMetadata
 	}
+
 	if manifestsContent == "" {
-		return nil, "", fmt.Errorf("missing %s in %s", manifestsFile, capiManifestsDir)
+		return nil, "", errMissingManifests
 	}
 
 	var metadata ProviderMetadata
@@ -244,6 +280,7 @@ func extractCapiManifests(img v1.Image) (*ProviderMetadata, string, error) {
 func extractFilesFromTar(r io.Reader, paths ...string) (map[string]string, error) {
 	tr := tar.NewReader(r)
 	results := make(map[string]string)
+
 	pathSet := make(map[string]struct{}, len(paths))
 	for _, p := range paths {
 		pathSet[p] = struct{}{}
@@ -254,6 +291,7 @@ func extractFilesFromTar(r io.Reader, paths ...string) (map[string]string, error
 		if err == io.EOF {
 			break
 		}
+
 		if err != nil {
 			return nil, fmt.Errorf("failed to read tar: %w", err)
 		}
@@ -267,6 +305,7 @@ func extractFilesFromTar(r io.Reader, paths ...string) (map[string]string, error
 			if err != nil {
 				return nil, fmt.Errorf("failed to read file %s: %w", normalized, err)
 			}
+
 			results[normalized] = string(content)
 
 			// Early exit if all files found
@@ -286,6 +325,7 @@ func sanitizeImageRef(imageRef string) string {
 		":", "_",
 		"@", "_",
 	)
+
 	return replacer.Replace(imageRef)
 }
 
@@ -297,6 +337,7 @@ func writeManifestsWithHash(path, content, manifestImageName, imageRef string) (
 	if err != nil {
 		return "", fmt.Errorf("failed to create manifests file: %w", err)
 	}
+
 	defer func() {
 		err = errors.Join(err, f.Close())
 	}()

@@ -210,6 +210,8 @@ func (r *CapiInstallerController) reconcileProviderImages(ctx context.Context, l
 	}
 
 	for providerImage := range providerImages {
+		log.Info("reconciling CAPI provider", "name", providerImage.Name)
+
 		reader, err := providerManifestReader(providerImage)
 		if err != nil {
 			return fmt.Errorf("failed to create provider manifest reader: %w", err)
@@ -223,6 +225,8 @@ func (r *CapiInstallerController) reconcileProviderImages(ctx context.Context, l
 		if err := r.applyProviderComponents(ctx, yamlManifests); err != nil {
 			return fmt.Errorf("failed to apply provider components: %w", err)
 		}
+
+		log.Info("finished reconciling CAPI provider", "name", providerImage.Name)
 	}
 
 	return nil
@@ -483,14 +487,24 @@ func configMapReader(cm corev1.ConfigMap) (io.Reader, error) {
 	}
 
 	if binaryData, ok := cm.BinaryData["components-zstd"]; ok {
-		return zstd.NewReader(bytes.NewReader(binaryData))
+		reader, err := zstd.NewReader(bytes.NewReader(binaryData))
+		if err != nil {
+			return nil, fmt.Errorf("failed to create zstd reader: %w", err)
+		}
+
+		return reader, nil
 	}
 
 	return nil, errEmptyProviderConfigMap
 }
 
 func providerManifestReader(providerImage providerimages.ProviderImageManifests) (io.Reader, error) {
-	return os.Open(providerImage.ManifestsPath)
+	reader, err := os.Open(providerImage.ManifestsPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open provider manifest: %w", err)
+	}
+
+	return reader, nil
 }
 
 // extractManifests extracts and processes component manifests from given ConfigMap.
