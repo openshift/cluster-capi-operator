@@ -36,7 +36,7 @@ spec:
         - name: RELEASE_VERSION
           value: "0.0.1-snapshot"
         - name: PULL_SECRET_PATH
-          value: "/var/run/secrets/pull-secret/config.json"
+          value: "/var/run/secrets/pull-secret.json"
         - name: PROVIDER_IMAGE_DIR
           value: "/var/lib/provider-images"
         ports:
@@ -58,7 +58,7 @@ spec:
           mountPath: /tmp/k8s-webhook-server/serving-certs
           readOnly: true
         - name: pull-secret
-          mountPath: /var/run/secrets/pull-secret
+          mountPath: /var/run/secrets/pull-secret.json
           readOnly: true
         - name: provider-images
           mountPath: /var/lib/provider-images
