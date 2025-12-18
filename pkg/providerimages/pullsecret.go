@@ -29,6 +29,7 @@ type configFileKeychain struct {
 	cf *configfile.ConfigFile
 }
 
+// Resolve resolves the authentication credentials for a given resource.
 func (k *configFileKeychain) Resolve(resource authn.Resource) (authn.Authenticator, error) {
 	// Try to get auth config for the registry
 	key := resource.RegistryStr()

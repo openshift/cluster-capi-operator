@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"maps"
 	"os"
 	"regexp"
 	"strings"
@@ -93,7 +92,7 @@ type CapiInstallerController struct {
 	Platform            configv1.PlatformType
 	ApplyClient         *kubernetes.Clientset
 	APIExtensionsClient *apiextensionsclient.Clientset
-	ProviderImages      map[string]providerimages.ProviderImageManifests
+	ProviderImages      []providerimages.ProviderImageManifests
 }
 
 // Reconcile reconciles the cluster-api ClusterOperator object.
@@ -190,8 +189,12 @@ func (r *CapiInstallerController) reconcile(ctx context.Context, log logr.Logger
 		log.Info("finished reconciling CAPI provider", "name", name)
 	}
 
+	return r.reconcileProviderImages(ctx, log)
+}
+
+func (r *CapiInstallerController) reconcileProviderImages(ctx context.Context, log logr.Logger) error {
 	providerImages := func(yield func(providerImage providerimages.ProviderImageManifests) bool) {
-		for providerImage := range maps.Values(r.ProviderImages) {
+		for _, providerImage := range r.ProviderImages {
 			if providerImage.Type == "core" {
 				if !yield(providerImage) {
 					return

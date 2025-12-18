@@ -149,14 +149,14 @@ manifestImageName: %s
 `, providerName, providerType, version, ocpPlatform, manifestImageName)
 }
 
-//nolint:funlen
+//nolint:gocognit
 func Test_readProviderImages(t *testing.T) {
 	tests := []struct {
 		name            string
 		containerImages map[string]string
 		setupFetcher    func(t *testing.T) *fakeImageFetcher
 		setupContext    func() (context.Context, context.CancelFunc)
-		validate        func(t *testing.T, g Gomega, result map[string]ProviderImageManifests, outputDir string)
+		validate        func(t *testing.T, g Gomega, result []ProviderImageManifests, outputDir string)
 		wantErr         bool
 		errContains     string
 	}{
@@ -180,12 +180,11 @@ func Test_readProviderImages(t *testing.T) {
 					},
 				}
 			},
-			validate: func(t *testing.T, g Gomega, result map[string]ProviderImageManifests, outputDir string) {
+			validate: func(t *testing.T, g Gomega, result []ProviderImageManifests, outputDir string) {
 				t.Helper()
 				g.Expect(result).To(HaveLen(1))
-				g.Expect(result).To(HaveKey("aws"))
 
-				manifest := result["aws"]
+				manifest := result[0]
 				g.Expect(manifest.Name).To(Equal("aws"))
 				g.Expect(manifest.Type).To(Equal("infrastructure"))
 				g.Expect(manifest.Version).To(Equal("v1.0.0"))
@@ -222,7 +221,7 @@ func Test_readProviderImages(t *testing.T) {
 					},
 				}
 			},
-			validate: func(t *testing.T, g Gomega, result map[string]ProviderImageManifests, outputDir string) {
+			validate: func(t *testing.T, g Gomega, result []ProviderImageManifests, outputDir string) {
 				t.Helper()
 				g.Expect(result).To(BeEmpty())
 			},
@@ -342,11 +341,11 @@ func Test_readProviderImages(t *testing.T) {
 					},
 				}
 			},
-			validate: func(t *testing.T, g Gomega, result map[string]ProviderImageManifests, outputDir string) {
+			validate: func(t *testing.T, g Gomega, result []ProviderImageManifests, outputDir string) {
 				t.Helper()
 				g.Expect(result).To(HaveLen(1))
 
-				content, err := os.ReadFile(result["aws"].ManifestsPath)
+				content, err := os.ReadFile(result[0].ManifestsPath)
 				g.Expect(err).NotTo(HaveOccurred())
 				g.Expect(string(content)).To(Equal("image: registry.example.com/capi-aws:v1.0.0\nanotherImage: registry.example.com/capi-aws:v1.0.0\n"))
 				g.Expect(string(content)).NotTo(ContainSubstring("PLACEHOLDER_IMAGE"))
@@ -372,11 +371,11 @@ func Test_readProviderImages(t *testing.T) {
 					},
 				}
 			},
-			validate: func(t *testing.T, g Gomega, result map[string]ProviderImageManifests, outputDir string) {
+			validate: func(t *testing.T, g Gomega, result []ProviderImageManifests, outputDir string) {
 				t.Helper()
 				g.Expect(result).To(HaveLen(1))
 
-				content, err := os.ReadFile(result["aws"].ManifestsPath)
+				content, err := os.ReadFile(result[0].ManifestsPath)
 				g.Expect(err).NotTo(HaveOccurred())
 				g.Expect(string(content)).To(Equal("image: some-other-image:latest\n"))
 			},
@@ -407,11 +406,11 @@ contentID: id
 					},
 				}
 			},
-			validate: func(t *testing.T, g Gomega, result map[string]ProviderImageManifests, outputDir string) {
+			validate: func(t *testing.T, g Gomega, result []ProviderImageManifests, outputDir string) {
 				t.Helper()
 				g.Expect(result).To(HaveLen(1))
 
-				content, err := os.ReadFile(result["aws"].ManifestsPath)
+				content, err := os.ReadFile(result[0].ManifestsPath)
 				g.Expect(err).NotTo(HaveOccurred())
 				g.Expect(string(content)).To(Equal("image: some-other-image:latest\n"))
 			},
@@ -491,12 +490,12 @@ contentID: id
 					},
 				}
 			},
-			validate: func(t *testing.T, g Gomega, result map[string]ProviderImageManifests, outputDir string) {
+			validate: func(t *testing.T, g Gomega, result []ProviderImageManifests, outputDir string) {
 				t.Helper()
 				g.Expect(result).To(HaveLen(1))
 
 				// Higher layer values should be used
-				manifest := result["aws"]
+				manifest := result[0]
 				g.Expect(manifest.Name).To(Equal("aws-new"))
 				g.Expect(manifest.Type).To(Equal("NewType"))
 				g.Expect(manifest.Version).To(Equal("v2.0.0"))
@@ -533,14 +532,27 @@ contentID: id
 			g.Expect(err).NotTo(HaveOccurred())
 
 			// Verify output directory structure for all successful results
-			for providerKey, manifest := range result {
-				imageRef := tt.containerImages[providerKey]
+			for _, manifest := range result {
+				// Look up imageRef by manifest.Name. If not found and there's only one
+				// containerImage, use that (covers tests where metadata providerName differs
+				// from the containerImages key, e.g., layer ordering tests).
+				imageRef, ok := tt.containerImages[manifest.Name]
+				if !ok {
+					if len(tt.containerImages) == 1 {
+						for _, ref := range tt.containerImages {
+							imageRef = ref
+							break
+						}
+					} else {
+						t.Fatalf("unexpected provider %s in result", manifest.Name)
+					}
+				}
 				sanitizedRef := sanitizeImageRef(imageRef)
 				expectedDir := filepath.Join(tmpDir, sanitizedRef)
 
 				// Check that sanitized directory was created
 				info, err := os.Stat(expectedDir)
-				g.Expect(err).NotTo(HaveOccurred(), "expected directory %s to exist for provider %s", expectedDir, providerKey)
+				g.Expect(err).NotTo(HaveOccurred(), "expected directory %s to exist for provider %s", expectedDir, manifest.Name)
 				g.Expect(info.IsDir()).To(BeTrue(), "expected %s to be a directory", expectedDir)
 
 				// Check manifests file is in the sanitized directory

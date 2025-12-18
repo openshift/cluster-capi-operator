@@ -74,7 +74,7 @@ const (
 	defaultMachineAPINamespace = "openshift-machine-api"
 
 	pullSecretPathEnvVar        = "PULL_SECRET_PATH"
-	defaultPullSecretPath       = "/var/run/secrets/pull-secret/config.json"
+	defaultPullSecretPath       = "/var/run/secrets/pull-secret/config.json" //nolint:gosec
 	providerImageDirEnvVar      = "PROVIDER_IMAGE_DIR"
 	defaultProviderImageDirPath = "/var/lib/provider-images"
 )
@@ -225,7 +225,7 @@ func main() {
 		providerImageDir = defaultProviderImageDirPath
 	}
 
-	pullSecret, err := os.ReadFile(pullSecretPath)
+	pullSecret, err := os.ReadFile(pullSecretPath) //nolint:gosec
 	if err != nil {
 		klog.Error(err, "unable to read pull secret", "path", pullSecretPath)
 		os.Exit(1)
@@ -281,7 +281,7 @@ func getClusterOperatorStatusClient(mgr manager.Manager, controller string, plat
 	}
 }
 
-func setupPlatformReconcilers(mgr manager.Manager, infra *configv1.Infrastructure, platform configv1.PlatformType, containerImages map[string]string, providerImages map[string]providerimages.ProviderImageManifests, applyClient *kubernetes.Clientset, apiextensionsClient *apiextensionsclient.Clientset, managedNamespace string) {
+func setupPlatformReconcilers(mgr manager.Manager, infra *configv1.Infrastructure, platform configv1.PlatformType, containerImages map[string]string, providerImages []providerimages.ProviderImageManifests, applyClient *kubernetes.Clientset, apiextensionsClient *apiextensionsclient.Clientset, managedNamespace string) {
 	// Only setup reconcile controllers and webhooks when the platform is supported.
 	// This avoids unnecessary CAPI providers discovery, installs and reconciles when the platform is not supported.
 	isUnsupportedPlatform := false
@@ -326,7 +326,7 @@ func setupPlatformReconcilers(mgr manager.Manager, infra *configv1.Infrastructur
 	setupClusterOperatorController(mgr, platform, managedNamespace, isUnsupportedPlatform)
 }
 
-func setupReconcilers(mgr manager.Manager, infra *configv1.Infrastructure, platform configv1.PlatformType, infraClusterObject client.Object, containerImages map[string]string, providerImages map[string]providerimages.ProviderImageManifests, applyClient *kubernetes.Clientset, apiextensionsClient *apiextensionsclient.Clientset, managedNamespace string) {
+func setupReconcilers(mgr manager.Manager, infra *configv1.Infrastructure, platform configv1.PlatformType, infraClusterObject client.Object, containerImages map[string]string, providerImages []providerimages.ProviderImageManifests, applyClient *kubernetes.Clientset, apiextensionsClient *apiextensionsclient.Clientset, managedNamespace string) {
 	if err := (&corecluster.CoreClusterController{
 		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-cluster-resource-controller", platform, managedNamespace),
 		Cluster:                     &clusterv1.Cluster{},

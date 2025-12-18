@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path"
 	"path/filepath"
@@ -28,6 +29,7 @@ const (
 	manifestsFile        = "manifests.yaml"
 )
 
+// ProviderImageManifests represents metadata and manifests read from a provider image.
 type ProviderImageManifests struct {
 	Name          string `json:"name"`
 	Type          string `json:"type"`
@@ -37,6 +39,7 @@ type ProviderImageManifests struct {
 	ManifestsPath string `json:"manifestsPath"`
 }
 
+// ProviderMetadata is metadata about a provider image provided in the metadata.yaml file.
 type ProviderMetadata struct {
 	ProviderName      string `json:"providerName"`
 	ProviderType      string `json:"providerType"`
@@ -55,10 +58,14 @@ type remoteImageFetcher struct {
 	keychain authn.Keychain
 }
 
+// Fetch fetches an image from a remote registry.
 func (r remoteImageFetcher) Fetch(ctx context.Context, ref name.Reference) (v1.Image, error) {
 	return remote.Image(ref, remote.WithAuthFromKeychain(r.keychain), remote.WithContext(ctx))
 }
 
+// ReadProviderImages returns a list of ProviderImageManifests read directly
+// from operand container images.
+//
 // containerImages is a map of provider names to provider image references
 //
 // A provider image may contain a /capi-manifests directory containing the following 2 files:
@@ -76,10 +83,7 @@ func (r remoteImageFetcher) Fetch(ctx context.Context, ref name.Reference) (v1.I
 // When writing manifests to the cache, any occurences of `manifestImageName` as
 // specified in the provider's metadata.yaml are replaced with the image
 // reference.
-//
-// ReadProviderImages returns a map of provider names to ProviderImageManifests.
-
-func ReadProviderImages(ctx context.Context, containerImages map[string]string, providerImageDir string, pullSecret []byte) (map[string]ProviderImageManifests, error) {
+func ReadProviderImages(ctx context.Context, containerImages map[string]string, providerImageDir string, pullSecret []byte) ([]ProviderImageManifests, error) {
 	keychain, err := parseDockerConfig(pullSecret)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse pull secret: %w", err)
@@ -88,25 +92,24 @@ func ReadProviderImages(ctx context.Context, containerImages map[string]string, 
 }
 
 type providerImageResult struct {
-	providerName string
-	manifests    *ProviderImageManifests
-	err          error
+	imageRef  string
+	manifests *ProviderImageManifests
+	err       error
 }
 
-func readProviderImages(ctx context.Context, containerImages map[string]string, providerImageDir string, fetcher imageFetcher) (map[string]ProviderImageManifests, error) {
+func readProviderImages(ctx context.Context, containerImages map[string]string, providerImageDir string, fetcher imageFetcher) ([]ProviderImageManifests, error) {
 	results := make(chan providerImageResult, len(containerImages))
 
 	g, ctx := errgroup.WithContext(ctx)
 	g.SetLimit(5) // Limit to 5 concurrent fetches
 
-	for providerName, imageRef := range containerImages {
-		providerName, imageRef := providerName, imageRef // capture loop variables
+	for imageRef := range maps.Values(containerImages) {
 		g.Go(func() error {
 			manifests, err := processProviderImage(ctx, imageRef, providerImageDir, fetcher)
 			results <- providerImageResult{
-				providerName: providerName,
-				manifests:    manifests,
-				err:          err,
+				imageRef:  imageRef,
+				manifests: manifests,
+				err:       err,
 			}
 
 			return nil // we're returning
@@ -116,20 +119,20 @@ func readProviderImages(ctx context.Context, containerImages map[string]string, 
 	_ = g.Wait() // We're not actually returning errors directly
 	close(results)
 
-	ret := make(map[string]ProviderImageManifests)
+	var providerImages []ProviderImageManifests
 	var err error
 	for result := range results {
 		if result.err != nil {
-			err = errors.Join(err, fmt.Errorf("fetching provider %s: %w", result.providerName, result.err))
+			err = errors.Join(err, fmt.Errorf("fetching provider from image %s: %w", result.imageRef, result.err))
 		} else if result.manifests != nil {
-			ret[result.providerName] = *result.manifests
+			providerImages = append(providerImages, *result.manifests)
 		}
 	}
 
 	if err != nil {
 		return nil, err
 	}
-	return ret, nil
+	return providerImages, nil
 }
 
 func processProviderImage(ctx context.Context, imageRef, providerImageDir string, fetcher imageFetcher) (*ProviderImageManifests, error) {
@@ -157,7 +160,7 @@ func processProviderImage(ctx context.Context, imageRef, providerImageDir string
 	// Use a sanitized version of the image reference as the subdirectory name
 	sanitizedRef := sanitizeImageRef(imageRef)
 	outputDir := filepath.Join(providerImageDir, sanitizedRef)
-	if err := os.MkdirAll(outputDir, 0755); err != nil {
+	if err := os.MkdirAll(outputDir, 0750); err != nil {
 		return nil, fmt.Errorf("failed to create output directory: %w", err)
 	}
 
@@ -201,7 +204,7 @@ func extractCapiManifests(img v1.Image) (*ProviderMetadata, string, error) {
 		}
 
 		found, err := extractFilesFromTar(rc, metadataPath, manifestsPath)
-		rc.Close()
+		err = errors.Join(err, rc.Close())
 		if err != nil {
 			return nil, "", err
 		}
@@ -289,12 +292,14 @@ func sanitizeImageRef(imageRef string) string {
 // writeManifestsWithHash writes manifest content to a file while calculating its hash.
 // If manifestImageName is non-empty, it replaces occurrences with imageRef during streaming.
 // Returns the sha256 hex-encoded hash of the final content.
-func writeManifestsWithHash(path, content, manifestImageName, imageRef string) (string, error) {
-	f, err := os.Create(path)
+func writeManifestsWithHash(path, content, manifestImageName, imageRef string) (_ string, err error) {
+	f, err := os.Create(path) //nolint:gosec
 	if err != nil {
 		return "", fmt.Errorf("failed to create manifests file: %w", err)
 	}
-	defer f.Close()
+	defer func() {
+		err = errors.Join(err, f.Close())
+	}()
 
 	hash := sha256.New()
 	mw := io.MultiWriter(f, hash)
