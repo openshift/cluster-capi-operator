@@ -17,7 +17,7 @@ require (
 	github.com/google/go-cmp v0.7.0
 	github.com/google/uuid v1.6.0
 	github.com/gophercloud/gophercloud/v2 v2.9.0
-	github.com/klauspost/compress v1.18.0
+	github.com/klauspost/compress v1.18.1
 	github.com/metal3-io/cluster-api-provider-metal3/api v1.11.2
 	github.com/onsi/ginkgo/v2 v2.27.2
 	github.com/onsi/gomega v1.38.2
@@ -27,7 +27,7 @@ require (
 	github.com/openshift/library-go v0.0.0-20251112091634-ab97ebb73f0f
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/pflag v1.0.10
-	golang.org/x/tools v0.38.0
+	golang.org/x/tools v0.39.0
 	gopkg.in/yaml.v2 v2.4.0
 	k8s.io/api v0.34.1
 	k8s.io/apiextensions-apiserver v0.34.1
@@ -154,6 +154,7 @@ require (
 	github.com/google/btree v1.1.3 // indirect
 	github.com/google/cel-go v0.26.0 // indirect
 	github.com/google/gnostic-models v0.7.0 // indirect
+	github.com/google/go-containerregistry v0.20.7 // indirect
 	github.com/google/pprof v0.0.0-20250820193118-f64d9cf942d6 // indirect
 	github.com/gophercloud/utils/v2 v2.0.0-20241220104409-2e0af06694a1 // indirect
 	github.com/gordonklaus/ineffassign v0.1.0 // indirect
@@ -291,7 +292,7 @@ require (
 	golang.org/x/exp/typeparams v0.0.0-20250210185358-939b2ce775ac // indirect
 	golang.org/x/mod v0.30.0 // indirect
 	golang.org/x/net v0.47.0 // indirect
-	golang.org/x/oauth2 v0.32.0 // indirect
+	golang.org/x/oauth2 v0.33.0 // indirect
 	golang.org/x/sync v0.18.0 // indirect
 	golang.org/x/sys v0.38.0 // indirect
 	golang.org/x/term v0.37.0 // indirect
