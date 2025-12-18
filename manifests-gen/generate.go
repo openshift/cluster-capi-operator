@@ -54,12 +54,7 @@ func generateManifestBundle(opts cmdlineOptions) error {
 	}
 
 	// Perform all manifest transformations
-	resources = processObjects(resources, opts.name)
-
-	// Generate InfraCluster protection policy if an infrastructure cluster resource name is provided
-	if opts.infraClusterResource != "" {
-		resources = append(resources, generateInfraClusterProtectionPolicy(opts.infraClusterResource)...)
-	}
+	resources = processObjects(resources, opts)
 
 	hasher := sha256.New()
 

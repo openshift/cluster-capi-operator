@@ -26,13 +26,15 @@ var (
 	}
 )
 
-func processObjects(objs []client.Object, providerName string) []client.Object {
+func processObjects(objs []client.Object, opts cmdlineOptions) []client.Object {
 	providerConfigMapObjs := make([]client.Object, 0, len(objs))
 
 	serviceSecretNames := findWebhookServiceSecretName(objs)
 
+	var extraObjects []client.Object
+
 	for _, obj := range objs {
-		obj = providerCustomizations(obj, providerName)
+		obj = providerCustomizations(obj, opts.name)
 
 		switch getGroup(obj) {
 		case "admissionregistration.k8s.io":
@@ -45,6 +47,17 @@ func processObjects(objs []client.Object, providerName string) []client.Object {
 			switch getKind(obj) {
 			case "CustomResourceDefinition":
 				replaceCertManagerAnnotations(obj)
+
+				// Generate a protection policy for an InfraCluster
+				// If the user provided a specific InfraCluster resource name, match it exactly.
+				// Otherwise, match any CRD in the 'infrastructure.cluster.x-k8s.io' group that ends in 'clusters'.
+				crd := &apiextensionsv1.CustomResourceDefinition{}
+				mustConvert(obj, crd)
+				if (opts.infraClusterResource != "" && crd.Spec.Names.Singular == opts.infraClusterResource) ||
+					(opts.infraClusterResource == "" && crd.Spec.Group == "infrastructure.cluster.x-k8s.io" && strings.HasSuffix(crd.Spec.Names.Plural, "clusters")) {
+					protectionPolicy := generateInfraClusterProtectionPolicy(crd)
+					extraObjects = append(extraObjects, protectionPolicy...)
+				}
 			}
 
 		case "": // core API group
@@ -72,6 +85,8 @@ func processObjects(objs []client.Object, providerName string) []client.Object {
 
 		providerConfigMapObjs = append(providerConfigMapObjs, obj)
 	}
+
+	providerConfigMapObjs = append(providerConfigMapObjs, extraObjects...)
 
 	return providerConfigMapObjs
 }
@@ -217,10 +232,10 @@ func mergeMaps[K comparable, V any](maps ...map[K]V) map[K]V {
 
 // generateInfraClusterProtectionPolicy generates a Validating Admission Policy and Binding for protecting
 // InfraClusters created by the cluster-capi-operator from deletion and editing.
-func generateInfraClusterProtectionPolicy(infraClusterResourceName string) []client.Object {
+func generateInfraClusterProtectionPolicy(crd *apiextensionsv1.CustomResourceDefinition) []client.Object {
 	var policy client.Object = &admissionregistration.ValidatingAdmissionPolicy{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "openshift-cluster-api-protect-" + infraClusterResourceName,
+			Name: "openshift-cluster-api-protect-" + crd.Spec.Names.Singular,
 		},
 		Spec: admissionregistration.ValidatingAdmissionPolicySpec{
 			FailurePolicy: ptr.To(admissionregistration.Fail),
@@ -236,7 +251,7 @@ func generateInfraClusterProtectionPolicy(infraClusterResourceName string) []cli
 							Rule: admissionregistration.Rule{
 								APIGroups:   []string{"infrastructure.cluster.x-k8s.io"},
 								APIVersions: []string{"*"},
-								Resources:   []string{infraClusterResourceName + "s"},
+								Resources:   []string{crd.Spec.Names.Plural},
 							},
 						},
 					},
@@ -265,7 +280,7 @@ func generateInfraClusterProtectionPolicy(infraClusterResourceName string) []cli
 			MatchResources: &admissionregistration.MatchResources{
 				NamespaceSelector: &metav1.LabelSelector{
 					MatchLabels: map[string]string{
-						"kubernetes.io/metadata.name": "openshift-cluster-api",
+						"kubernetes.io/metadata.name": capiNamespace,
 					},
 				},
 			},

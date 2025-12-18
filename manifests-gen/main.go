@@ -69,14 +69,16 @@ type cmdlineOptions struct {
 
 func main() {
 	var (
-		basePath             = flag.String("base-path", "", "path to the root of the provider's repository")
-		manifestsPath        = flag.String("manifests-path", "", "path to the desired directory where to output the generated manifests")
-		kustomizeDir         = flag.String("kustomize-dir", defaultKustomizeComponentsPath, "directory to search for kustomization.yaml file, relative to the base-path (default: ./config/default)")
-		providerName         = flag.String("provider-name", "", "name of the provider")
-		providerType         = flag.String("provider-type", "", "type of the provider: core or infrastructure")
-		providerVersion      = flag.String("provider-version", "", "version of the provider")
-		platform             = flag.String("platform", "", "platform of the provider")
-		infraClusterResource = flag.String("infracluster-resource", "", "name of the infrastructure cluster resource, e.g. 'awscluster'")
+		basePath      = flag.String("base-path", "", "Path to the root of the provider's repository. Required.")
+		manifestsPath = flag.String("manifests-path", "", "Path to the desired directory where to output the generated manifests. Required.")
+		kustomizeDir  = flag.String("kustomize-dir", defaultKustomizeComponentsPath, "Directory containing kustomization.yaml file used to generate the base resources, relative to the base-path (default: ./config/default)")
+
+		providerName    = flag.String("provider-name", "", "Name of the provider, e.g. 'cluster-api-provider-aws'. Required.")
+		providerType    = flag.String("provider-type", "", "Type of the provider: core or infrastructure. Optional.")
+		providerVersion = flag.String("provider-version", "", "Version of the provider. If provided, must be a valid semantic version. Optional.")
+
+		platform             = flag.String("platform", "", "OpenShift platform type (i.e. the same value found in the Infrastructure object). Optional.")
+		infraClusterResource = flag.String("infracluster-resource", "", "Name of the infrastructure cluster resource, e.g. 'awscluster'. If provided and the manifests contain a CRD for this resource, a protection policy will be generated for it. If not provided, a protection policy will be generated for any CRD in the 'infrastructure.cluster.x-k8s.io' group that ends in 'clusters'. Optional.")
 	)
 
 	flag.Parse()
