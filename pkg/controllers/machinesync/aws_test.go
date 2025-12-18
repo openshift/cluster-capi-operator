@@ -24,7 +24,7 @@ import (
 
 	configv1 "github.com/openshift/api/config/v1"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
-	clusterv1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/cluster-api/core/v1beta1"
+	clusterv1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/cluster-api/core/v1beta2"
 	awsv1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/cluster-api/infrastructure/v1beta2"
 	configv1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/config/v1"
 	corev1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/core/v1"
@@ -37,7 +37,7 @@ import (
 
 	"k8s.io/utils/ptr"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
-	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/config"
@@ -94,11 +94,10 @@ var _ = Describe("AWS load balancer validation during MAPI->CAPI conversion", fu
 		awsClusterBuilder = awsv1resourcebuilder.AWSCluster().WithNamespace(capiNamespace.GetName()).WithName(infrastructureName)
 
 		// Create CAPI Cluster that all tests will use
-		capiCluster := clusterv1resourcebuilder.Cluster().WithNamespace(capiNamespace.GetName()).WithName(infrastructureName).WithInfrastructureRef(&corev1.ObjectReference{
-			APIVersion: "infrastructure.cluster.x-k8s.io/v1beta2",
-			Kind:       "AWSCluster",
-			Name:       infrastructureName,
-			Namespace:  capiNamespace.GetName(),
+		capiCluster := clusterv1resourcebuilder.Cluster().WithNamespace(capiNamespace.GetName()).WithName(infrastructureName).WithInfrastructureRef(clusterv1.ContractVersionedObjectReference{
+			APIGroup: "infrastructure.cluster.x-k8s.io",
+			Kind:     "AWSCluster",
+			Name:     infrastructureName,
 		}).Build()
 		Expect(k8sClient.Create(ctx, capiCluster)).To(Succeed())
 
@@ -135,10 +134,10 @@ var _ = Describe("AWS load balancer validation during MAPI->CAPI conversion", fu
 		stopManager()
 
 		// Cleanup created resources in test namespaces
-		Expect(k8sClient.DeleteAllOf(ctx, &clusterv1beta1.Machine{}, client.InNamespace(capiNamespace.GetName()))).To(Succeed())
+		Expect(k8sClient.DeleteAllOf(ctx, &clusterv1.Machine{}, client.InNamespace(capiNamespace.GetName()))).To(Succeed())
 		Expect(k8sClient.DeleteAllOf(ctx, &awsv1.AWSMachine{}, client.InNamespace(capiNamespace.GetName()))).To(Succeed())
 		Expect(k8sClient.DeleteAllOf(ctx, &awsv1.AWSCluster{}, client.InNamespace(capiNamespace.GetName()))).To(Succeed())
-		Expect(k8sClient.DeleteAllOf(ctx, &clusterv1beta1.Cluster{}, client.InNamespace(capiNamespace.GetName()))).To(Succeed())
+		Expect(k8sClient.DeleteAllOf(ctx, &clusterv1.Cluster{}, client.InNamespace(capiNamespace.GetName()))).To(Succeed())
 		Expect(k8sClient.Delete(ctx, mapiNamespace)).To(Succeed())
 		Expect(k8sClient.Delete(ctx, capiNamespace)).To(Succeed())
 	})

@@ -31,7 +31,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/utils/ptr"
-	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 )
 
 var _ = Describe("mapi2capi Machine conversion", func() {
@@ -137,7 +137,7 @@ var _ = Describe("mapi2capi Machine conversion", func() {
 			expectedErrors:   []string{},
 			expectedWarnings: []string{},
 			assertion: func(machine *mapiv1beta1.Machine) {
-				Expect(machine.Annotations).To(HaveKeyWithValue(clusterv1beta1.DeleteMachineAnnotation, "true"))
+				Expect(machine.Annotations).To(HaveKeyWithValue(clusterv1.DeleteMachineAnnotation, "true"))
 				Expect(machine.Annotations).ToNot(HaveKey(util.MapiDeleteMachineAnnotation))
 			},
 		}),
@@ -152,6 +152,9 @@ var _ = Describe("mapi2capi Machine Status Conversion", func() {
 				Kind:      "Node",
 				Name:      "test-node",
 				Namespace: "",
+			}
+			capiNodeRef := clusterv1.MachineNodeReference{
+				Name: nodeRef.Name,
 			}
 			lastUpdated := metav1.Time{Time: time.Now()}
 			condition := mapiv1beta1.Condition{
@@ -183,77 +186,77 @@ var _ = Describe("mapi2capi Machine Status Conversion", func() {
 			Expect(errs).To(BeEmpty())
 
 			// Check CAPI Machine status fields are matching the expected values.
-			Expect(capiStatus.NodeRef).To(HaveValue(Equal(nodeRef)))
+			Expect(capiStatus.NodeRef).To(HaveValue(Equal(capiNodeRef)))
 			Expect(capiStatus.LastUpdated).To(HaveValue(Equal(lastUpdated)))
 			Expect(capiStatus.Addresses).To(SatisfyAll(
 				HaveLen(2),
 				ContainElement(SatisfyAll(HaveField("Type", BeEquivalentTo(corev1.NodeInternalIP)), HaveField("Address", Equal("10.0.0.1")))),
 				ContainElement(SatisfyAll(HaveField("Type", BeEquivalentTo(corev1.NodeExternalIP)), HaveField("Address", Equal("203.0.113.1")))),
 			))
-			Expect(capiStatus.Phase).To(BeEquivalentTo(clusterv1beta1.MachinePhaseRunning))
-			Expect(capiStatus.FailureReason).To(HaveValue(BeEquivalentTo(mapiv1beta1.MachineStatusError("InvalidConfiguration"))))
-			Expect(capiStatus.FailureMessage).To(HaveValue(BeEquivalentTo("Test error message")))
-			Expect(capiStatus.Conditions).To(SatisfyAll(
-				ContainElement(matchers.MatchCAPICondition(clusterv1beta1.Condition{
+			Expect(capiStatus.Phase).To(BeEquivalentTo(clusterv1.MachinePhaseRunning))
+			Expect(capiStatus.Deprecated.V1Beta1.FailureReason).To(HaveValue(BeEquivalentTo(mapiv1beta1.MachineStatusError("InvalidConfiguration"))))
+			Expect(capiStatus.Deprecated.V1Beta1.FailureMessage).To(HaveValue(BeEquivalentTo("Test error message")))
+			Expect(capiStatus.Deprecated.V1Beta1.Conditions).To(SatisfyAll(
+				ContainElement(matchers.MatchCAPICondition(clusterv1.Condition{
 					// The Ready condition is computed based on the phase.
 					// In this case they are equal, so the condition is true.
-					Type:   clusterv1beta1.ReadyCondition,
+					Type:   clusterv1.ReadyV1Beta1Condition,
 					Status: corev1.ConditionTrue,
 				})),
-				ContainElement(matchers.MatchCAPICondition(clusterv1beta1.Condition{
+				ContainElement(matchers.MatchCAPICondition(clusterv1.Condition{
 					// The BootstrapReady condition is computed based on the phase.
 					// In this case they are equal, so the condition is true.
-					Type:   clusterv1beta1.BootstrapReadyCondition,
+					Type:   clusterv1.BootstrapReadyV1Beta1Condition,
 					Status: corev1.ConditionTrue,
 				})),
-				ContainElement(matchers.MatchCAPICondition(clusterv1beta1.Condition{
+				ContainElement(matchers.MatchCAPICondition(clusterv1.Condition{
 					// The InfrastructureReady condition is computed based on the phase.
 					// In this case they are equal, so the condition is true.
-					Type:   clusterv1beta1.InfrastructureReadyCondition,
+					Type:   clusterv1.InfrastructureReadyV1Beta1Condition,
 					Status: corev1.ConditionTrue,
 				})),
-				Not(ContainElement(matchers.MatchCAPICondition(clusterv1beta1.Condition{
+				Not(ContainElement(matchers.MatchCAPICondition(clusterv1.Condition{
 					// The Available condition is not copied from MAPI.
 					Type:   "Available",
 					Status: corev1.ConditionTrue,
 				}))),
 			))
-			Expect(capiStatus.V1Beta2.Conditions).To(SatisfyAll(
+			Expect(capiStatus.Conditions).To(SatisfyAll(
 				ContainElement(testutils.MatchCondition(metav1.Condition{
 					// The Available condition is not copied from MAPI.
-					Type:   clusterv1beta1.AvailableV1Beta2Condition,
+					Type:   clusterv1.MachineAvailableCondition,
 					Status: metav1.ConditionTrue,
-					Reason: clusterv1beta1.MachineAvailableV1Beta2Reason,
+					Reason: clusterv1.MachineAvailableReason,
 				})),
 				ContainElement(testutils.MatchCondition(metav1.Condition{
 					// The Ready condition is computed based on the phase.
-					Type:   clusterv1beta1.ReadyV1Beta2Condition,
+					Type:   clusterv1.MachineReadyCondition,
 					Status: metav1.ConditionTrue,
-					Reason: clusterv1beta1.MachineReadyV1Beta2Reason,
+					Reason: clusterv1.MachineReadyReason,
 				})),
 				ContainElement(testutils.MatchCondition(metav1.Condition{
 					// The BootstrapConfigReady condition is computed based on the phase.
-					Type:   clusterv1beta1.BootstrapConfigReadyV1Beta2Condition,
+					Type:   clusterv1.BootstrapConfigReadyCondition,
 					Status: metav1.ConditionTrue,
-					Reason: clusterv1beta1.MachineBootstrapConfigReadyV1Beta2Reason,
+					Reason: clusterv1.MachineBootstrapConfigReadyReason,
 				})),
 				ContainElement(testutils.MatchCondition(metav1.Condition{
 					// The InfrastructureReady condition is computed based on the phase.
-					Type:   clusterv1beta1.InfrastructureReadyV1Beta2Condition,
+					Type:   clusterv1.InfrastructureReadyCondition,
 					Status: metav1.ConditionTrue,
-					Reason: clusterv1beta1.MachineInfrastructureReadyV1Beta2Reason,
+					Reason: clusterv1.MachineInfrastructureReadyReason,
 				})),
 				ContainElement(testutils.MatchCondition(metav1.Condition{
 					// The NodeReady condition is computed based on the phase.
-					Type:   clusterv1beta1.MachineNodeReadyV1Beta2Condition,
+					Type:   clusterv1.MachineNodeReadyCondition,
 					Status: metav1.ConditionTrue,
-					Reason: clusterv1beta1.MachineNodeReadyV1Beta2Reason,
+					Reason: clusterv1.MachineNodeReadyReason,
 				})),
 				ContainElement(testutils.MatchCondition(metav1.Condition{
 					// The Deleting condition is computed based on the phase.
-					Type:   clusterv1beta1.MachineDeletingV1Beta2Condition,
+					Type:   clusterv1.MachineDeletingCondition,
 					Status: metav1.ConditionFalse,
-					Reason: clusterv1beta1.MachineNotDeletingV1Beta2Reason,
+					Reason: clusterv1.MachineNotDeletingReason,
 				})),
 			))
 		})
@@ -267,8 +270,8 @@ var _ = Describe("mapi2capi Machine Status Conversion", func() {
 
 			capiStatus, errs := convertMAPIMachineToCAPIMachineStatus(mapiMachine)
 			Expect(errs).To(BeEmpty())
-			Expect(capiStatus.Conditions).To(ContainElement(matchers.MatchCAPICondition(clusterv1beta1.Condition{
-				Type:   clusterv1beta1.ReadyCondition,
+			Expect(capiStatus.Deprecated.V1Beta1.Conditions).To(ContainElement(matchers.MatchCAPICondition(clusterv1.Condition{
+				Type:   clusterv1.ReadyV1Beta1Condition,
 				Status: corev1.ConditionTrue,
 			})))
 		})
@@ -280,8 +283,8 @@ var _ = Describe("mapi2capi Machine Status Conversion", func() {
 
 			capiStatus, errs := convertMAPIMachineToCAPIMachineStatus(mapiMachine)
 			Expect(errs).To(BeEmpty())
-			Expect(capiStatus.Conditions).To(ContainElement(matchers.MatchCAPICondition(clusterv1beta1.Condition{
-				Type:   clusterv1beta1.ReadyCondition,
+			Expect(capiStatus.Deprecated.V1Beta1.Conditions).To(ContainElement(matchers.MatchCAPICondition(clusterv1.Condition{
+				Type:   clusterv1.ReadyV1Beta1Condition,
 				Status: corev1.ConditionFalse,
 			})))
 		})
@@ -293,8 +296,8 @@ var _ = Describe("mapi2capi Machine Status Conversion", func() {
 
 			capiStatus, errs := convertMAPIMachineToCAPIMachineStatus(mapiMachine)
 			Expect(errs).To(BeEmpty())
-			Expect(capiStatus.Conditions).To(ContainElement(matchers.MatchCAPICondition(clusterv1beta1.Condition{
-				Type:   clusterv1beta1.BootstrapReadyCondition,
+			Expect(capiStatus.Deprecated.V1Beta1.Conditions).To(ContainElement(matchers.MatchCAPICondition(clusterv1.Condition{
+				Type:   clusterv1.BootstrapReadyV1Beta1Condition,
 				Status: corev1.ConditionTrue,
 			})))
 		})
@@ -306,8 +309,8 @@ var _ = Describe("mapi2capi Machine Status Conversion", func() {
 
 			capiStatus, errs := convertMAPIMachineToCAPIMachineStatus(mapiMachine)
 			Expect(errs).To(BeEmpty())
-			Expect(capiStatus.Conditions).To(ContainElement(matchers.MatchCAPICondition(clusterv1beta1.Condition{
-				Type:   clusterv1beta1.BootstrapReadyCondition,
+			Expect(capiStatus.Deprecated.V1Beta1.Conditions).To(ContainElement(matchers.MatchCAPICondition(clusterv1.Condition{
+				Type:   clusterv1.BootstrapReadyV1Beta1Condition,
 				Status: corev1.ConditionFalse,
 			})))
 		})
@@ -319,8 +322,8 @@ var _ = Describe("mapi2capi Machine Status Conversion", func() {
 
 			capiStatus, errs := convertMAPIMachineToCAPIMachineStatus(mapiMachine)
 			Expect(errs).To(BeEmpty())
-			Expect(capiStatus.Conditions).To(ContainElement(matchers.MatchCAPICondition(clusterv1beta1.Condition{
-				Type:   clusterv1beta1.InfrastructureReadyCondition,
+			Expect(capiStatus.Deprecated.V1Beta1.Conditions).To(ContainElement(matchers.MatchCAPICondition(clusterv1.Condition{
+				Type:   clusterv1.InfrastructureReadyV1Beta1Condition,
 				Status: corev1.ConditionTrue,
 			})))
 		})
@@ -332,11 +335,11 @@ var _ = Describe("mapi2capi Machine Status Conversion", func() {
 
 			capiStatus, errs := convertMAPIMachineToCAPIMachineStatus(mapiMachine)
 			Expect(errs).To(BeEmpty())
-			Expect(capiStatus.Conditions).To(ContainElement(matchers.MatchCAPICondition(clusterv1beta1.Condition{
-				Type:     clusterv1beta1.InfrastructureReadyCondition,
-				Reason:   clusterv1beta1.WaitingForInfrastructureFallbackReason,
+			Expect(capiStatus.Deprecated.V1Beta1.Conditions).To(ContainElement(matchers.MatchCAPICondition(clusterv1.Condition{
+				Type:     clusterv1.InfrastructureReadyV1Beta1Condition,
+				Reason:   clusterv1.WaitingForInfrastructureFallbackV1Beta1Reason,
 				Status:   corev1.ConditionFalse,
-				Severity: clusterv1beta1.ConditionSeverityInfo,
+				Severity: clusterv1.ConditionSeverityInfo,
 			})))
 		})
 
@@ -349,10 +352,10 @@ var _ = Describe("mapi2capi Machine Status Conversion", func() {
 
 			capiStatus, errs := convertMAPIMachineToCAPIMachineStatus(mapiMachine)
 			Expect(errs).To(BeEmpty())
-			Expect(capiStatus.V1Beta2.Conditions).To(ContainElement(testutils.MatchCondition(metav1.Condition{
-				Type:   clusterv1beta1.AvailableV1Beta2Condition,
+			Expect(capiStatus.Conditions).To(ContainElement(testutils.MatchCondition(metav1.Condition{
+				Type:   clusterv1.MachineAvailableCondition,
 				Status: metav1.ConditionFalse,
-				Reason: clusterv1beta1.NotAvailableV1Beta2Reason,
+				Reason: clusterv1.NotAvailableReason,
 			})))
 		})
 
@@ -363,10 +366,10 @@ var _ = Describe("mapi2capi Machine Status Conversion", func() {
 
 			capiStatus, errs := convertMAPIMachineToCAPIMachineStatus(mapiMachine)
 			Expect(errs).To(BeEmpty())
-			Expect(capiStatus.V1Beta2.Conditions).To(ContainElement(testutils.MatchCondition(metav1.Condition{
-				Type:   clusterv1beta1.AvailableV1Beta2Condition,
+			Expect(capiStatus.Conditions).To(ContainElement(testutils.MatchCondition(metav1.Condition{
+				Type:   clusterv1.MachineAvailableCondition,
 				Status: metav1.ConditionTrue,
-				Reason: clusterv1beta1.MachineAvailableV1Beta2Reason,
+				Reason: clusterv1.MachineAvailableReason,
 			})))
 		})
 
@@ -377,10 +380,10 @@ var _ = Describe("mapi2capi Machine Status Conversion", func() {
 
 			capiStatus, errs := convertMAPIMachineToCAPIMachineStatus(mapiMachine)
 			Expect(errs).To(BeEmpty())
-			Expect(capiStatus.V1Beta2.Conditions).To(ContainElement(testutils.MatchCondition(metav1.Condition{
-				Type:   clusterv1beta1.ReadyV1Beta2Condition,
+			Expect(capiStatus.Conditions).To(ContainElement(testutils.MatchCondition(metav1.Condition{
+				Type:   clusterv1.MachineReadyCondition,
 				Status: metav1.ConditionFalse,
-				Reason: clusterv1beta1.MachineNotReadyV1Beta2Reason,
+				Reason: clusterv1.MachineNotReadyReason,
 			})))
 		})
 
@@ -391,10 +394,10 @@ var _ = Describe("mapi2capi Machine Status Conversion", func() {
 
 			capiStatus, errs := convertMAPIMachineToCAPIMachineStatus(mapiMachine)
 			Expect(errs).To(BeEmpty())
-			Expect(capiStatus.V1Beta2.Conditions).To(ContainElement(testutils.MatchCondition(metav1.Condition{
-				Type:   clusterv1beta1.ReadyV1Beta2Condition,
+			Expect(capiStatus.Conditions).To(ContainElement(testutils.MatchCondition(metav1.Condition{
+				Type:   clusterv1.MachineReadyCondition,
 				Status: metav1.ConditionTrue,
-				Reason: clusterv1beta1.MachineReadyV1Beta2Reason,
+				Reason: clusterv1.MachineReadyReason,
 			})))
 		})
 
@@ -405,10 +408,10 @@ var _ = Describe("mapi2capi Machine Status Conversion", func() {
 
 			capiStatus, errs := convertMAPIMachineToCAPIMachineStatus(mapiMachine)
 			Expect(errs).To(BeEmpty())
-			Expect(capiStatus.V1Beta2.Conditions).To(ContainElement(testutils.MatchCondition(metav1.Condition{
-				Type:   clusterv1beta1.BootstrapConfigReadyV1Beta2Condition,
+			Expect(capiStatus.Conditions).To(ContainElement(testutils.MatchCondition(metav1.Condition{
+				Type:   clusterv1.BootstrapConfigReadyCondition,
 				Status: metav1.ConditionTrue,
-				Reason: clusterv1beta1.MachineBootstrapConfigReadyV1Beta2Reason,
+				Reason: clusterv1.MachineBootstrapConfigReadyReason,
 			})))
 		})
 
@@ -419,10 +422,10 @@ var _ = Describe("mapi2capi Machine Status Conversion", func() {
 
 			capiStatus, errs := convertMAPIMachineToCAPIMachineStatus(mapiMachine)
 			Expect(errs).To(BeEmpty())
-			Expect(capiStatus.V1Beta2.Conditions).To(ContainElement(testutils.MatchCondition(metav1.Condition{
-				Type:   clusterv1beta1.BootstrapConfigReadyV1Beta2Condition,
+			Expect(capiStatus.Conditions).To(ContainElement(testutils.MatchCondition(metav1.Condition{
+				Type:   clusterv1.BootstrapConfigReadyCondition,
 				Status: metav1.ConditionFalse,
-				Reason: clusterv1beta1.MachineBootstrapConfigNotReadyV1Beta2Reason,
+				Reason: clusterv1.MachineBootstrapConfigNotReadyReason,
 			})))
 		})
 
@@ -433,10 +436,10 @@ var _ = Describe("mapi2capi Machine Status Conversion", func() {
 
 			capiStatus, errs := convertMAPIMachineToCAPIMachineStatus(mapiMachine)
 			Expect(errs).To(BeEmpty())
-			Expect(capiStatus.V1Beta2.Conditions).To(ContainElement(testutils.MatchCondition(metav1.Condition{
-				Type:   clusterv1beta1.InfrastructureReadyV1Beta2Condition,
+			Expect(capiStatus.Conditions).To(ContainElement(testutils.MatchCondition(metav1.Condition{
+				Type:   clusterv1.InfrastructureReadyCondition,
 				Status: metav1.ConditionTrue,
-				Reason: clusterv1beta1.MachineInfrastructureReadyV1Beta2Reason,
+				Reason: clusterv1.MachineInfrastructureReadyReason,
 			})))
 		})
 
@@ -447,10 +450,10 @@ var _ = Describe("mapi2capi Machine Status Conversion", func() {
 
 			capiStatus, errs := convertMAPIMachineToCAPIMachineStatus(mapiMachine)
 			Expect(errs).To(BeEmpty())
-			Expect(capiStatus.V1Beta2.Conditions).To(ContainElement(testutils.MatchCondition(metav1.Condition{
-				Type:   clusterv1beta1.InfrastructureReadyV1Beta2Condition,
+			Expect(capiStatus.Conditions).To(ContainElement(testutils.MatchCondition(metav1.Condition{
+				Type:   clusterv1.InfrastructureReadyCondition,
 				Status: metav1.ConditionFalse,
-				Reason: clusterv1beta1.MachineInfrastructureNotReadyV1Beta2Reason,
+				Reason: clusterv1.MachineInfrastructureNotReadyReason,
 			})))
 		})
 
@@ -468,10 +471,10 @@ var _ = Describe("mapi2capi Machine Status Conversion", func() {
 
 			capiStatus, errs := convertMAPIMachineToCAPIMachineStatus(mapiMachine)
 			Expect(errs).To(BeEmpty())
-			Expect(capiStatus.V1Beta2.Conditions).To(ContainElement(testutils.MatchCondition(metav1.Condition{
-				Type:   clusterv1beta1.MachineNodeReadyV1Beta2Condition,
+			Expect(capiStatus.Conditions).To(ContainElement(testutils.MatchCondition(metav1.Condition{
+				Type:   clusterv1.MachineNodeReadyCondition,
 				Status: metav1.ConditionTrue,
-				Reason: clusterv1beta1.MachineNodeReadyV1Beta2Reason,
+				Reason: clusterv1.MachineNodeReadyReason,
 			})))
 		})
 
@@ -482,10 +485,10 @@ var _ = Describe("mapi2capi Machine Status Conversion", func() {
 
 			capiStatus, errs := convertMAPIMachineToCAPIMachineStatus(mapiMachine)
 			Expect(errs).To(BeEmpty())
-			Expect(capiStatus.V1Beta2.Conditions).To(ContainElement(testutils.MatchCondition(metav1.Condition{
-				Type:   clusterv1beta1.MachineNodeReadyV1Beta2Condition,
+			Expect(capiStatus.Conditions).To(ContainElement(testutils.MatchCondition(metav1.Condition{
+				Type:   clusterv1.MachineNodeReadyCondition,
 				Status: metav1.ConditionFalse,
-				Reason: clusterv1beta1.MachineNodeNotReadyV1Beta2Reason,
+				Reason: clusterv1.MachineNodeNotReadyReason,
 			})))
 		})
 
@@ -496,10 +499,10 @@ var _ = Describe("mapi2capi Machine Status Conversion", func() {
 
 			capiStatus, errs := convertMAPIMachineToCAPIMachineStatus(mapiMachine)
 			Expect(errs).To(BeEmpty())
-			Expect(capiStatus.V1Beta2.Conditions).To(ContainElement(testutils.MatchCondition(metav1.Condition{
-				Type:   clusterv1beta1.MachineNodeReadyV1Beta2Condition,
+			Expect(capiStatus.Conditions).To(ContainElement(testutils.MatchCondition(metav1.Condition{
+				Type:   clusterv1.MachineNodeReadyCondition,
 				Status: metav1.ConditionFalse,
-				Reason: clusterv1beta1.MachineNodeNotReadyV1Beta2Reason,
+				Reason: clusterv1.MachineNodeNotReadyReason,
 			})))
 		})
 
@@ -511,10 +514,10 @@ var _ = Describe("mapi2capi Machine Status Conversion", func() {
 
 			capiStatus, errs := convertMAPIMachineToCAPIMachineStatus(mapiMachine)
 			Expect(errs).To(BeEmpty())
-			Expect(capiStatus.V1Beta2.Conditions).To(ContainElement(testutils.MatchCondition(metav1.Condition{
-				Type:   clusterv1beta1.MachineDeletingV1Beta2Condition,
+			Expect(capiStatus.Conditions).To(ContainElement(testutils.MatchCondition(metav1.Condition{
+				Type:   clusterv1.MachineDeletingCondition,
 				Status: metav1.ConditionTrue,
-				Reason: clusterv1beta1.MachineDeletingV1Beta2Reason,
+				Reason: clusterv1.MachineDeletingReason,
 			})))
 		})
 
@@ -525,10 +528,10 @@ var _ = Describe("mapi2capi Machine Status Conversion", func() {
 
 			capiStatus, errs := convertMAPIMachineToCAPIMachineStatus(mapiMachine)
 			Expect(errs).To(BeEmpty())
-			Expect(capiStatus.V1Beta2.Conditions).To(ContainElement(testutils.MatchCondition(metav1.Condition{
-				Type:   clusterv1beta1.MachineDeletingV1Beta2Condition,
+			Expect(capiStatus.Conditions).To(ContainElement(testutils.MatchCondition(metav1.Condition{
+				Type:   clusterv1.MachineDeletingCondition,
 				Status: metav1.ConditionFalse,
-				Reason: clusterv1beta1.MachineNotDeletingV1Beta2Reason,
+				Reason: clusterv1.MachineNotDeletingReason,
 			})))
 		})
 
@@ -557,8 +560,8 @@ var _ = Describe("mapi2capi Machine Status Conversion", func() {
 			// Should only contain the valid addresses (ignoring the unrecognized one)
 			Expect(capiStatus.Addresses).To(SatisfyAll(
 				HaveLen(2),
-				ContainElement(SatisfyAll(HaveField("Type", BeEquivalentTo(clusterv1beta1.MachineInternalIP)), HaveField("Address", Equal("10.0.0.1")))),
-				ContainElement(SatisfyAll(HaveField("Type", BeEquivalentTo(clusterv1beta1.MachineExternalIP)), HaveField("Address", Equal("203.0.113.1")))),
+				ContainElement(SatisfyAll(HaveField("Type", BeEquivalentTo(clusterv1.MachineInternalIP)), HaveField("Address", Equal("10.0.0.1")))),
+				ContainElement(SatisfyAll(HaveField("Type", BeEquivalentTo(clusterv1.MachineExternalIP)), HaveField("Address", Equal("203.0.113.1")))),
 				Not(ContainElement(HaveField("Address", Equal("192.168.1.1")))),
 			))
 		})

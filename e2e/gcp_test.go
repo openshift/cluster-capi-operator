@@ -6,11 +6,10 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gcpv1 "sigs.k8s.io/cluster-api-provider-gcp/api/v1beta1"
-	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	yaml "sigs.k8s.io/yaml"
 
@@ -25,7 +24,7 @@ const (
 
 var _ = Describe("Cluster API GCP MachineSet", Ordered, func() {
 	var gcpMachineTemplate *gcpv1.GCPMachineTemplate
-	var machineSet *clusterv1beta1.MachineSet
+	var machineSet *clusterv1.MachineSet
 	var mapiMachineSpec *mapiv1beta1.GCPMachineProviderSpec
 
 	BeforeAll(func() {
@@ -54,10 +53,10 @@ var _ = Describe("Cluster API GCP MachineSet", Ordered, func() {
 			clusterName,
 			mapiMachineSpec.Zone,
 			1,
-			corev1.ObjectReference{
-				Kind:       "GCPMachineTemplate",
-				APIVersion: infraAPIVersion,
-				Name:       gcpMachineTemplateName,
+			clusterv1.ContractVersionedObjectReference{
+				Kind:     "GCPMachineTemplate",
+				APIGroup: infraAPIGroup,
+				Name:     gcpMachineTemplateName,
 			},
 			"worker-user-data",
 		))

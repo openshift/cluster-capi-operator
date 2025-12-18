@@ -19,7 +19,7 @@ package v1beta1
 import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	capiv1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 
 	//nolint:staticcheck // Ignore SA1019 (deprecation) until v1beta2.
 	capierrors "sigs.k8s.io/cluster-api/errors"
@@ -43,7 +43,7 @@ type MachineBuilder struct {
 	ownerReferences   []metav1.OwnerReference
 
 	// Spec fields.
-	bootstrap               capiv1.Bootstrap
+	bootstrap               clusterv1beta1.Bootstrap
 	clusterName             string
 	failureDomain           *string
 	infrastructureRef       corev1.ObjectReference
@@ -51,13 +51,15 @@ type MachineBuilder struct {
 	nodeDrainTimeout        *metav1.Duration
 	nodeVolumeDetachTimeout *metav1.Duration
 	providerID              *string
+	readinessGates          []clusterv1beta1.MachineReadinessGate
 	version                 *string
 
 	// Status fields.
-	addresses              capiv1.MachineAddresses
+	addresses              clusterv1beta1.MachineAddresses
 	bootstrapReady         bool
 	certificatesExpiryDate *metav1.Time
-	conditions             capiv1.Conditions
+	conditions             clusterv1beta1.Conditions
+	deletion               *clusterv1beta1.MachineDeletionStatus
 	failureMessage         *string
 	failureReason          *capierrors.MachineStatusError
 	infrastructureReady    bool
@@ -65,12 +67,13 @@ type MachineBuilder struct {
 	nodeInfo               *corev1.NodeSystemInfo
 	nodeRef                *corev1.ObjectReference
 	observedGeneration     int64
-	phase                  capiv1.MachinePhase
+	phase                  clusterv1beta1.MachinePhase
+	v1Beta2                *clusterv1beta1.MachineV1Beta2Status
 }
 
 // Build builds a new Machine based on the configuration provided.
-func (m MachineBuilder) Build() *capiv1.Machine {
-	machine := &capiv1.Machine{
+func (m MachineBuilder) Build() *clusterv1beta1.Machine {
+	machine := &clusterv1beta1.Machine{
 		ObjectMeta: metav1.ObjectMeta{
 			Annotations:       m.annotations,
 			CreationTimestamp: m.creationTimestamp,
@@ -81,7 +84,7 @@ func (m MachineBuilder) Build() *capiv1.Machine {
 			Namespace:         m.namespace,
 			OwnerReferences:   m.ownerReferences,
 		},
-		Spec: capiv1.MachineSpec{
+		Spec: clusterv1beta1.MachineSpec{
 			Bootstrap:               m.bootstrap,
 			ClusterName:             m.clusterName,
 			FailureDomain:           m.failureDomain,
@@ -90,13 +93,15 @@ func (m MachineBuilder) Build() *capiv1.Machine {
 			NodeDrainTimeout:        m.nodeDrainTimeout,
 			NodeVolumeDetachTimeout: m.nodeVolumeDetachTimeout,
 			ProviderID:              m.providerID,
+			ReadinessGates:          m.readinessGates,
 			Version:                 m.version,
 		},
-		Status: capiv1.MachineStatus{
+		Status: clusterv1beta1.MachineStatus{
 			Addresses:              m.addresses,
 			BootstrapReady:         m.bootstrapReady,
 			CertificatesExpiryDate: m.certificatesExpiryDate,
 			Conditions:             m.conditions,
+			Deletion:               m.deletion,
 			FailureMessage:         m.failureMessage,
 			FailureReason:          m.failureReason,
 			InfrastructureReady:    m.infrastructureReady,
@@ -105,6 +110,7 @@ func (m MachineBuilder) Build() *capiv1.Machine {
 			NodeRef:                m.nodeRef,
 			ObservedGeneration:     m.observedGeneration,
 			Phase:                  string(m.phase),
+			V1Beta2:                m.v1Beta2,
 		},
 	}
 
@@ -164,7 +170,7 @@ func (m MachineBuilder) WithOwnerReferences(ownerRefs []metav1.OwnerReference) M
 // Spec fields.
 
 // WithBootstrap sets the Bootstrap for the machine builder.
-func (m MachineBuilder) WithBootstrap(bootstrap capiv1.Bootstrap) MachineBuilder {
+func (m MachineBuilder) WithBootstrap(bootstrap clusterv1beta1.Bootstrap) MachineBuilder {
 	m.bootstrap = bootstrap
 	return m
 }
@@ -217,6 +223,12 @@ func (m MachineBuilder) WithProviderID(providerID *string) MachineBuilder {
 	return m
 }
 
+// WithReadinessGates sets the ReadinessGates for the machine builder.
+func (m MachineBuilder) WithReadinessGates(gates []clusterv1beta1.MachineReadinessGate) MachineBuilder {
+	m.readinessGates = gates
+	return m
+}
+
 // WithVersion sets the Version for the machine builder.
 func (m MachineBuilder) WithVersion(version *string) MachineBuilder {
 	m.version = version
@@ -226,7 +238,7 @@ func (m MachineBuilder) WithVersion(version *string) MachineBuilder {
 // Status Fields.
 
 // WithAddresses sets the Addresses for the machine builder.
-func (m MachineBuilder) WithAddresses(addresses capiv1.MachineAddresses) MachineBuilder {
+func (m MachineBuilder) WithAddresses(addresses clusterv1beta1.MachineAddresses) MachineBuilder {
 	m.addresses = addresses
 	return m
 }
@@ -244,7 +256,7 @@ func (m MachineBuilder) WithCertificatesExpiryDate(expiryDate *metav1.Time) Mach
 }
 
 // WithConditions sets the Conditions for the machine builder.
-func (m MachineBuilder) WithConditions(conditions capiv1.Conditions) MachineBuilder {
+func (m MachineBuilder) WithConditions(conditions clusterv1beta1.Conditions) MachineBuilder {
 	m.conditions = conditions
 	return m
 }
@@ -286,7 +298,19 @@ func (m MachineBuilder) WithObservedGeneration(generation int64) MachineBuilder 
 }
 
 // WithPhase sets the Phase for the machine builder.
-func (m MachineBuilder) WithPhase(phase capiv1.MachinePhase) MachineBuilder {
+func (m MachineBuilder) WithPhase(phase clusterv1beta1.MachinePhase) MachineBuilder {
 	m.phase = phase
+	return m
+}
+
+// WithDeletion sets the Deletion status for the machine builder.
+func (m MachineBuilder) WithDeletion(deletion *clusterv1beta1.MachineDeletionStatus) MachineBuilder {
+	m.deletion = deletion
+	return m
+}
+
+// WithV1Beta2Status sets the v1beta2 status for the machine builder.
+func (m MachineBuilder) WithV1Beta2Status(v1Beta2 *clusterv1beta1.MachineV1Beta2Status) MachineBuilder {
+	m.v1Beta2 = v1Beta2
 	return m
 }

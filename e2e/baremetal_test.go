@@ -7,10 +7,9 @@ import (
 	metal3v1 "github.com/metal3-io/cluster-api-provider-metal3/api/v1beta1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	yaml "sigs.k8s.io/yaml"
 
@@ -26,7 +25,7 @@ const (
 
 var _ = Describe("Cluster API Baremetal MachineSet", Ordered, func() {
 	var baremetalMachineTemplate *metal3v1.Metal3MachineTemplate
-	var machineSet *clusterv1beta1.MachineSet
+	var machineSet *clusterv1.MachineSet
 	var mapiMachineSpec *bmv1alpha1.BareMetalMachineProviderSpec
 
 	BeforeAll(func() {
@@ -62,10 +61,10 @@ var _ = Describe("Cluster API Baremetal MachineSet", Ordered, func() {
 			clusterName,
 			"", // mapiMachineSpec.Zone,
 			1,
-			corev1.ObjectReference{
-				Kind:       "Metal3MachineTemplate",
-				APIVersion: infraAPIVersion,
-				Name:       baremetalMachineTemplateName,
+			clusterv1.ContractVersionedObjectReference{
+				Kind:     "Metal3MachineTemplate",
+				APIGroup: infraAPIGroup,
+				Name:     baremetalMachineTemplateName,
 			},
 			"worker-user-data-managed",
 		))

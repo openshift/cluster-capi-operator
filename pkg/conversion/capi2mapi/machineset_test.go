@@ -18,12 +18,12 @@ package capi2mapi
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	capibuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/cluster-api/core/v1beta1"
+	capibuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/cluster-api/core/v1beta2"
 	capabuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/cluster-api/infrastructure/v1beta2"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/test/matchers"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	capierrors "sigs.k8s.io/cluster-api/errors"
 )
 
@@ -69,16 +69,16 @@ var _ = Describe("capi2mapi MachineSet Status Conversion", func() {
 				}).
 				WithReplicas(5).
 				WithStatusReplicas(5).
-				WithStatusFullyLabeledReplicas(5).
-				WithStatusReadyReplicas(4).
-				WithStatusAvailableReplicas(3).
-				WithStatusFailureReason(capierrors.MachineSetStatusError("InvalidConfiguration")).
-				WithStatusFailureMessage("Test failure message").
-				WithStatusConditions([]clusterv1beta1.Condition{
+				WithStatusV1Beta1FullyLabeledReplicas(5).
+				WithStatusV1Beta1ReadyReplicas(4).
+				WithStatusV1Beta1AvailableReplicas(3).
+				WithStatusV1Beta1FailureReason(capierrors.MachineSetStatusError("InvalidConfiguration")).
+				WithStatusV1Beta1FailureMessage("Test failure message").
+				WithStatusV1Beta1Conditions([]clusterv1.Condition{
 					{
 						Type:     "Available",
 						Status:   corev1.ConditionTrue,
-						Severity: clusterv1beta1.ConditionSeverityNone,
+						Severity: clusterv1.ConditionSeverityNone,
 						Reason:   "MachineSetAvailable",
 						Message:  "MachineSet is available",
 					},
@@ -101,7 +101,7 @@ var _ = Describe("capi2mapi MachineSet Status Conversion", func() {
 		})
 
 		It("should set all MAPI MachineSet status fields and conditions to empty when CAPI MachineSetStatus is empty", func() {
-			capiStatus := clusterv1beta1.MachineSetStatus{}
+			capiStatus := clusterv1.MachineSetStatus{}
 
 			mapiStatus := convertCAPIMachineSetStatusToMAPI(capiStatus)
 

@@ -27,7 +27,7 @@ import (
 
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
-	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 )
 
 var scheme *runtime.Scheme
@@ -36,7 +36,7 @@ func init() {
 	// Register the scheme for the test.
 	// This must be done before the tests are run as the fuzzer is needed before the test tree is compiled.
 	scheme = kubescheme.Scheme
-	if err := clusterv1beta1.AddToScheme(scheme); err != nil {
+	if err := clusterv1.AddToScheme(scheme); err != nil {
 		panic(fmt.Sprintf("failed to add cluster API scheme: %v", err))
 	}
 
