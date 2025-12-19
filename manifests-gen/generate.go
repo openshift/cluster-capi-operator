@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 
+	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -130,11 +131,11 @@ func writeMetadata(opts cmdlineOptions) (err error) {
 	}()
 
 	metadata := providerimages.ProviderMetadata{
-		ProviderName:      opts.name,
-		ProviderType:      opts.providerType,
-		ProviderVersion:   opts.version,
-		OCPPlatform:       opts.platform,
-		ManifestImageName: opts.manifestImageName,
+		ProviderName:     opts.name,
+		ProviderType:     opts.providerType,
+		ProviderVersion:  opts.version,
+		OCPPlatform:      configv1.PlatformType(opts.platform),
+		ProviderImageRef: opts.providerImageRef,
 	}
 
 	data, err := yaml.Marshal(metadata)
