@@ -178,21 +178,29 @@ func (r *CapiInstallerController) reconcile(ctx context.Context, log logr.Logger
 		log.Info("finished reconciling CAPI provider", "name", providerConfigMapLabelNameVal)
 	}
 
+	if err := r.reconcileProviderImages(ctx, log); err != nil {
+		return ctrl.Result{}, fmt.Errorf("error reconciling CAPI provider images: %w", err)
+	}
+
 	return ctrl.Result{}, nil
 }
 
 func (r *CapiInstallerController) reconcileProviderImages(ctx context.Context, log logr.Logger) error {
+	// Filter out provider images with a platform which doesn't match the current platform.
 	var providerImages []providerimages.ProviderImageManifests
-	for _, providerImage := range r.ProviderImages {
-		if providerImage.Type == "core" {
-			providerImages = append(providerImages, providerImage)
-		}
 
-		if providerImage.Type == "infrastructure" && providerImage.OCPPlatform == string(r.Platform) {
+	for _, providerImage := range r.ProviderImages {
+		switch providerImage.OCPPlatform {
+		// Include platform not provided, or matches the current platform.
+		case "", string(r.Platform):
 			providerImages = append(providerImages, providerImage)
+
+		default:
+			continue
 		}
 	}
 
+	// Sort providers by type
 	getTypePriority := func(providerImage providerimages.ProviderImageManifests) int {
 		switch providerImage.Type {
 		case "core":
@@ -211,9 +219,11 @@ func (r *CapiInstallerController) reconcileProviderImages(ctx context.Context, l
 		if prioA == prioB {
 			return strings.Compare(a.Name, b.Name)
 		}
+
 		return cmp.Compare(prioA, prioB)
 	})
 
+	// Apply the provider manifests
 	for _, providerImage := range providerImages {
 		log.Info("reconciling CAPI provider", "name", providerImage.Name)
 

@@ -66,8 +66,8 @@ type ProviderMetadata struct {
 	ProviderName      string `json:"providerName"`
 	ProviderType      string `json:"providerType"`
 	ProviderVersion   string `json:"providerVersion"`
-	OCPPlatform       string `json:"ocpPlatform"`
-	ManifestImageName string `json:"manifestImageName"`
+	OCPPlatform       string `json:"ocpPlatform,omitempty"`
+	ManifestImageName string `json:"manifestImageName,omitempty"`
 }
 
 // imageFetcher abstracts fetching container images for testability.

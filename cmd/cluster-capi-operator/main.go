@@ -221,6 +221,7 @@ func main() {
 	}
 
 	containerImageRefs := slices.Collect(maps.Values(containerImages))
+
 	providerImages, err := providerimages.ReadProviderImages(context.Background(), mgr.GetAPIReader(), mgr.GetLogger(), containerImageRefs, providerImageDir)
 	if err != nil {
 		klog.Error(err, "unable to get provider image metadata")
