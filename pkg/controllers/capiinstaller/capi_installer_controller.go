@@ -191,8 +191,8 @@ func (r *CapiInstallerController) reconcileProviderImages(ctx context.Context, l
 
 	for _, providerImage := range r.ProviderImages {
 		switch providerImage.OCPPlatform {
-		// Include platform not provided, or matches the current platform.
-		case "", string(r.Platform):
+		// Platform not provided, or matches the current platform.
+		case "", r.Platform:
 			providerImages = append(providerImages, providerImage)
 
 		default:

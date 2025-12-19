@@ -33,6 +33,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
+	configv1 "github.com/openshift/api/config/v1"
 	"golang.org/x/sync/errgroup"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -53,21 +54,21 @@ const (
 
 // ProviderImageManifests represents metadata and manifests read from a provider image.
 type ProviderImageManifests struct {
-	Name          string `json:"name"`
-	Type          string `json:"type"`
-	Version       string `json:"version"`
-	OCPPlatform   string `json:"ocpPlatform"`
-	ContentID     string `json:"contentID"` //nolint:tagliatelle
-	ManifestsPath string `json:"manifestsPath"`
+	Name          string
+	Type          string
+	Version       string
+	OCPPlatform   configv1.PlatformType
+	ContentID     string
+	ManifestsPath string
 }
 
 // ProviderMetadata is metadata about a provider image provided in the metadata.yaml file.
 type ProviderMetadata struct {
-	ProviderName      string `json:"providerName"`
-	ProviderType      string `json:"providerType"`
-	ProviderVersion   string `json:"providerVersion"`
-	OCPPlatform       string `json:"ocpPlatform,omitempty"`
-	ManifestImageName string `json:"manifestImageName,omitempty"`
+	ProviderName     string                `json:"providerName"`
+	ProviderType     string                `json:"providerType"`
+	ProviderVersion  string                `json:"providerVersion"`
+	OCPPlatform      configv1.PlatformType `json:"ocpPlatform,omitempty"`
+	ProviderImageRef string                `json:"providerImageRef,omitempty"`
 }
 
 // imageFetcher abstracts fetching container images for testability.
@@ -221,7 +222,7 @@ func processProviderImage(ctx context.Context, imageRef, providerImageDir string
 	// Write manifests to the cache directory, performing image substitution and hash calculation
 	manifestsPath := filepath.Join(outputDir, manifestsFile)
 
-	contentID, err := writeManifestsWithHash(manifestsPath, manifestsContent, metadata.ManifestImageName, imageRef)
+	contentID, err := writeManifestsWithHash(manifestsPath, manifestsContent, metadata.ProviderImageRef, imageRef)
 	if err != nil {
 		return nil, err
 	}
