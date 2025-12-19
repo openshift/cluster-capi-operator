@@ -27,6 +27,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/go-logr/logr"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/empty"
@@ -164,7 +165,7 @@ manifestImageName: %s
 func Test_readProviderImages(t *testing.T) {
 	tests := []struct {
 		name            string
-		containerImages map[string]string
+		containerImages []string
 		setupFetcher    func(t *testing.T) *fakeImageFetcher
 		setupContext    func(parent context.Context) (context.Context, context.CancelFunc)
 		validate        func(t *testing.T, g Gomega, result []ProviderImageManifests, outputDir string)
@@ -173,8 +174,8 @@ func Test_readProviderImages(t *testing.T) {
 	}{
 		{
 			name: "single valid provider image",
-			containerImages: map[string]string{
-				"aws": "registry.example.com/capi-aws:v1.0.0",
+			containerImages: []string{
+				"registry.example.com/capi-aws:v1.0.0",
 			},
 			setupFetcher: func(t *testing.T) *fakeImageFetcher {
 				t.Helper()
@@ -216,8 +217,8 @@ func Test_readProviderImages(t *testing.T) {
 		},
 		{
 			name: "image without capi-manifests directory",
-			containerImages: map[string]string{
-				"someimage": "registry.example.com/no-capi:v1.0.0",
+			containerImages: []string{
+				"registry.example.com/no-capi:v1.0.0",
 			},
 			setupFetcher: func(t *testing.T) *fakeImageFetcher {
 				t.Helper()
@@ -241,8 +242,8 @@ func Test_readProviderImages(t *testing.T) {
 		},
 		{
 			name: "missing metadata.yaml",
-			containerImages: map[string]string{
-				"aws": "registry.example.com/missing-metadata:v1.0.0",
+			containerImages: []string{
+				"registry.example.com/missing-metadata:v1.0.0",
 			},
 			setupFetcher: func(t *testing.T) *fakeImageFetcher {
 				t.Helper()
@@ -264,8 +265,8 @@ func Test_readProviderImages(t *testing.T) {
 		},
 		{
 			name: "missing manifests.yaml",
-			containerImages: map[string]string{
-				"aws": "registry.example.com/missing-manifests:v1.0.0",
+			containerImages: []string{
+				"registry.example.com/missing-manifests:v1.0.0",
 			},
 			setupFetcher: func(t *testing.T) *fakeImageFetcher {
 				t.Helper()
@@ -287,8 +288,8 @@ func Test_readProviderImages(t *testing.T) {
 		},
 		{
 			name: "invalid metadata.yaml",
-			containerImages: map[string]string{
-				"aws": "registry.example.com/invalid-metadata:v1.0.0",
+			containerImages: []string{
+				"registry.example.com/invalid-metadata:v1.0.0",
 			},
 			setupFetcher: func(t *testing.T) *fakeImageFetcher {
 				t.Helper()
@@ -311,8 +312,8 @@ func Test_readProviderImages(t *testing.T) {
 		},
 		{
 			name: "invalid image reference",
-			containerImages: map[string]string{
-				"aws": "not a valid image reference!!!",
+			containerImages: []string{
+				"not a valid image reference!!!",
 			},
 			setupFetcher: func(t *testing.T) *fakeImageFetcher {
 				t.Helper()
@@ -323,8 +324,8 @@ func Test_readProviderImages(t *testing.T) {
 		},
 		{
 			name: "image fetch failure",
-			containerImages: map[string]string{
-				"aws": "registry.example.com/fetch-fail:v1.0.0",
+			containerImages: []string{
+				"registry.example.com/fetch-fail:v1.0.0",
 			},
 			setupFetcher: func(t *testing.T) *fakeImageFetcher {
 				t.Helper()
@@ -339,8 +340,8 @@ func Test_readProviderImages(t *testing.T) {
 		},
 		{
 			name: "manifest image name replacement",
-			containerImages: map[string]string{
-				"aws": "registry.example.com/capi-aws:v1.0.0",
+			containerImages: []string{
+				"registry.example.com/capi-aws:v1.0.0",
 			},
 			setupFetcher: func(t *testing.T) *fakeImageFetcher {
 				t.Helper()
@@ -370,8 +371,8 @@ func Test_readProviderImages(t *testing.T) {
 		},
 		{
 			name: "empty manifest image name",
-			containerImages: map[string]string{
-				"aws": "registry.example.com/capi-aws:v1.0.0",
+			containerImages: []string{
+				"registry.example.com/capi-aws:v1.0.0",
 			},
 			setupFetcher: func(t *testing.T) *fakeImageFetcher {
 				t.Helper()
@@ -400,8 +401,8 @@ func Test_readProviderImages(t *testing.T) {
 		},
 		{
 			name: "missing manifest image name",
-			containerImages: map[string]string{
-				"aws": "registry.example.com/capi-aws:v1.0.0",
+			containerImages: []string{
+				"registry.example.com/capi-aws:v1.0.0",
 			},
 			setupFetcher: func(t *testing.T) *fakeImageFetcher {
 				t.Helper()
@@ -436,9 +437,9 @@ contentID: id
 		},
 		{
 			name: "multiple errors aggregated",
-			containerImages: map[string]string{
-				"aws":   "registry.example.com/fail-aws:v1.0.0",
-				"azure": "registry.example.com/fail-azure:v1.0.0",
+			containerImages: []string{
+				"registry.example.com/fail-aws:v1.0.0",
+				"registry.example.com/fail-azure:v1.0.0",
 			},
 			setupFetcher: func(t *testing.T) *fakeImageFetcher {
 				t.Helper()
@@ -454,8 +455,8 @@ contentID: id
 		},
 		{
 			name: "context cancellation",
-			containerImages: map[string]string{
-				"aws": "registry.example.com/capi-aws:v1.0.0",
+			containerImages: []string{
+				"registry.example.com/capi-aws:v1.0.0",
 			},
 			setupContext: func(parent context.Context) (context.Context, context.CancelFunc) {
 				ctx, cancel := context.WithCancel(parent)
@@ -484,8 +485,8 @@ contentID: id
 		},
 		{
 			name: "layers processed in correct order",
-			containerImages: map[string]string{
-				"aws": "registry.example.com/layered:v1.0.0",
+			containerImages: []string{
+				"registry.example.com/layered:v1.0.0",
 			},
 			setupFetcher: func(t *testing.T) *fakeImageFetcher {
 				t.Helper()
@@ -544,7 +545,7 @@ contentID: id
 				defer cancel()
 			}
 
-			result, err := readProviderImages(ctx, tt.containerImages, tmpDir, fetcher)
+			result, err := readProviderImages(ctx, logr.Discard(), tt.containerImages, tmpDir, fetcher)
 
 			if tt.wantErr {
 				g.Expect(err).To(HaveOccurred())
@@ -559,37 +560,34 @@ contentID: id
 			g.Expect(err).NotTo(HaveOccurred())
 
 			// Verify output directory structure for all successful results
+			// 1. Each manifest's directory should correspond to a containerImage
+			usedDirs := make(map[string]bool)
+
 			for _, manifest := range result {
-				// Look up imageRef by manifest.Name. If not found and there's only one
-				// containerImage, use that (covers tests where metadata providerName differs
-				// from the containerImages key, e.g., layer ordering tests).
-				imageRef, ok := tt.containerImages[manifest.Name]
-				if !ok {
-					if len(tt.containerImages) == 1 {
-						for _, ref := range tt.containerImages {
-							imageRef = ref
-							break
-						}
-					} else {
-						t.Fatalf("unexpected provider %s in result", manifest.Name)
+				manifestDir := filepath.Dir(manifest.ManifestsPath)
+
+				// Find a containerImage that would produce this directory
+				found := false
+
+				for _, imageRef := range tt.containerImages {
+					expectedDir := filepath.Join(tmpDir, sanitizeImageRef(imageRef))
+					if manifestDir == expectedDir {
+						// Ensure we don't have duplicate directories (each image produces unique output)
+						g.Expect(usedDirs[expectedDir]).To(BeFalse(),
+							"directory %s was used by multiple manifests", expectedDir)
+
+						usedDirs[expectedDir] = true
+						found = true
+
+						break
 					}
 				}
 
-				sanitizedRef := sanitizeImageRef(imageRef)
-				expectedDir := filepath.Join(tmpDir, sanitizedRef)
+				g.Expect(found).To(BeTrue(),
+					"manifest directory %s does not correspond to any containerImage", manifestDir)
 
-				// Check that sanitized directory was created
-				info, err := os.Stat(expectedDir)
-				g.Expect(err).NotTo(HaveOccurred(), "expected directory %s to exist for provider %s", expectedDir, manifest.Name)
-				g.Expect(info.IsDir()).To(BeTrue(), "expected %s to be a directory", expectedDir)
-
-				// Check manifests file is in the sanitized directory
-				expectedPath := filepath.Join(expectedDir, "manifests.yaml")
-				g.Expect(manifest.ManifestsPath).To(Equal(expectedPath),
-					"expected ManifestsPath to be %s, got %s", expectedPath, manifest.ManifestsPath)
-
-				// Verify the file exists and is readable
-				_, err = os.Stat(manifest.ManifestsPath)
+				// 2. Verify the manifest file exists and is readable
+				_, err := os.Stat(manifest.ManifestsPath)
 				g.Expect(err).NotTo(HaveOccurred(), "expected manifest file %s to exist", manifest.ManifestsPath)
 			}
 

@@ -23,12 +23,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"maps"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
 
+	"github.com/go-logr/logr"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
@@ -113,7 +113,7 @@ func (r remoteImageFetcher) Fetch(ctx context.Context, ref name.Reference) (v1.I
 //
 // The pull secret is fetched from the "pull-secret" Secret in the "openshift-config"
 // namespace using the provided client.Reader.
-func ReadProviderImages(ctx context.Context, k8sClient client.Reader, containerImages map[string]string, providerImageDir string) ([]ProviderImageManifests, error) {
+func ReadProviderImages(ctx context.Context, k8sClient client.Reader, log logr.Logger, containerImages []string, providerImageDir string) ([]ProviderImageManifests, error) {
 	var secret corev1.Secret
 	if err := k8sClient.Get(ctx, types.NamespacedName{Name: pullSecretName, Namespace: pullSecretNamespace}, &secret); err != nil {
 		return nil, fmt.Errorf("failed to get pull secret: %w", err)
@@ -126,7 +126,7 @@ func ReadProviderImages(ctx context.Context, k8sClient client.Reader, containerI
 		return nil, fmt.Errorf("failed to parse pull secret: %w", err)
 	}
 
-	return readProviderImages(ctx, containerImages, providerImageDir, remoteImageFetcher{keychain: keychain})
+	return readProviderImages(ctx, log, containerImages, providerImageDir, remoteImageFetcher{keychain: keychain})
 }
 
 type providerImageResult struct {
@@ -135,13 +135,15 @@ type providerImageResult struct {
 	err       error
 }
 
-func readProviderImages(ctx context.Context, containerImages map[string]string, providerImageDir string, fetcher imageFetcher) ([]ProviderImageManifests, error) {
+func readProviderImages(ctx context.Context, log logr.Logger, containerImages []string, providerImageDir string, fetcher imageFetcher) ([]ProviderImageManifests, error) {
+	log.Info("looking for provider manifests in container images")
+
 	results := make(chan providerImageResult, len(containerImages))
 	g, ctx := errgroup.WithContext(ctx)
 
 	g.SetLimit(5) // Limit to 5 concurrent fetches
 
-	for imageRef := range maps.Values(containerImages) {
+	for _, imageRef := range containerImages {
 		g.Go(func() error {
 			manifests, err := processProviderImage(ctx, imageRef, providerImageDir, fetcher)
 			results <- providerImageResult{
@@ -166,9 +168,17 @@ func readProviderImages(ctx context.Context, containerImages map[string]string, 
 		if result.err != nil {
 			err = errors.Join(err, fmt.Errorf("fetching provider from image %s: %w", result.imageRef, result.err))
 		} else if result.manifests != nil {
+			log.Info("found provider manifests in container image", "image", result.imageRef,
+				"provider", result.manifests.Name,
+				"type", result.manifests.Type,
+				"version", result.manifests.Version,
+				"ocpPlatform", result.manifests.OCPPlatform)
+
 			providerImages = append(providerImages, *result.manifests)
 		}
 	}
+
+	log.Info("finished looking for provider manifests in container images")
 
 	if err != nil {
 		return nil, err

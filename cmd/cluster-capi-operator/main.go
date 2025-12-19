@@ -17,7 +17,9 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"maps"
 	"os"
+	"slices"
 	"time"
 
 	metal3v1 "github.com/metal3-io/cluster-api-provider-metal3/api/v1beta1"
@@ -218,7 +220,8 @@ func main() {
 		providerImageDir = defaultProviderImageDirPath
 	}
 
-	providerImages, err := providerimages.ReadProviderImages(context.Background(), mgr.GetAPIReader(), containerImages, providerImageDir)
+	containerImageRefs := slices.Collect(maps.Values(containerImages))
+	providerImages, err := providerimages.ReadProviderImages(context.Background(), mgr.GetAPIReader(), mgr.GetLogger(), containerImageRefs, providerImageDir)
 	if err != nil {
 		klog.Error(err, "unable to get provider image metadata")
 		os.Exit(1)

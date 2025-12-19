@@ -17,12 +17,14 @@ package capiinstaller
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/drone/envsubst/v2"
@@ -193,23 +195,39 @@ func (r *CapiInstallerController) reconcile(ctx context.Context, log logr.Logger
 }
 
 func (r *CapiInstallerController) reconcileProviderImages(ctx context.Context, log logr.Logger) error {
-	providerImages := func(yield func(providerImage providerimages.ProviderImageManifests) bool) {
-		for _, providerImage := range r.ProviderImages {
-			if providerImage.Type == "core" {
-				if !yield(providerImage) {
-					return
-				}
-			}
+	var providerImages []providerimages.ProviderImageManifests
+	for _, providerImage := range r.ProviderImages {
+		if providerImage.Type == "core" {
+			providerImages = append(providerImages, providerImage)
+		}
 
-			if providerImage.Type == "infrastructure" && providerImage.OCPPlatform == string(r.Platform) {
-				if !yield(providerImage) {
-					return
-				}
-			}
+		if providerImage.Type == "infrastructure" && providerImage.OCPPlatform == string(r.Platform) {
+			providerImages = append(providerImages, providerImage)
 		}
 	}
 
-	for providerImage := range providerImages {
+	getTypePriority := func(providerImage providerimages.ProviderImageManifests) int {
+		switch providerImage.Type {
+		case "core":
+			return 0
+		case "infrastructure":
+			return 1
+		default:
+			return 2
+		}
+	}
+
+	slices.SortStableFunc(providerImages, func(a, b providerimages.ProviderImageManifests) int {
+		prioA := getTypePriority(a)
+		prioB := getTypePriority(b)
+
+		if prioA == prioB {
+			return strings.Compare(a.Name, b.Name)
+		}
+		return cmp.Compare(prioA, prioB)
+	})
+
+	for _, providerImage := range providerImages {
 		log.Info("reconciling CAPI provider", "name", providerImage.Name)
 
 		reader, err := providerManifestReader(providerImage)
