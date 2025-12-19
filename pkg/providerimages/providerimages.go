@@ -34,6 +34,9 @@ import (
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"golang.org/x/sync/errgroup"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 )
 
@@ -42,6 +45,10 @@ const (
 	capiManifestsDir     = "/" + capiManifestsDirName
 	metadataFile         = "metadata.yaml"
 	manifestsFile        = "manifests.yaml"
+
+	pullSecretName      = "pull-secret"
+	pullSecretNamespace = "openshift-config"  //nolint:gosec // Not a credential, just a namespace name
+	pullSecretKey       = ".dockerconfigjson" //nolint:gosec // Not a credential, just a key name
 )
 
 // ProviderImageManifests represents metadata and manifests read from a provider image.
@@ -103,7 +110,17 @@ func (r remoteImageFetcher) Fetch(ctx context.Context, ref name.Reference) (v1.I
 // When writing manifests to the cache, any occurrences of `manifestImageName` as
 // specified in the provider's metadata.yaml are replaced with the image
 // reference.
-func ReadProviderImages(ctx context.Context, containerImages map[string]string, providerImageDir string, pullSecret []byte) ([]ProviderImageManifests, error) {
+//
+// The pull secret is fetched from the "pull-secret" Secret in the "openshift-config"
+// namespace using the provided client.Reader.
+func ReadProviderImages(ctx context.Context, k8sClient client.Reader, containerImages map[string]string, providerImageDir string) ([]ProviderImageManifests, error) {
+	var secret corev1.Secret
+	if err := k8sClient.Get(ctx, types.NamespacedName{Name: pullSecretName, Namespace: pullSecretNamespace}, &secret); err != nil {
+		return nil, fmt.Errorf("failed to get pull secret: %w", err)
+	}
+
+	pullSecret := secret.Data[pullSecretKey]
+
 	keychain, err := parseDockerConfig(pullSecret)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse pull secret: %w", err)

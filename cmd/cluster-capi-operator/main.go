@@ -73,8 +73,6 @@ const (
 
 	defaultMachineAPINamespace = "openshift-machine-api"
 
-	pullSecretPathEnvVar        = "PULL_SECRET_PATH"
-	defaultPullSecretPath       = "/var/run/secrets/pull-secret/config.json" //nolint:gosec
 	providerImageDirEnvVar      = "PROVIDER_IMAGE_DIR"
 	defaultProviderImageDirPath = "/var/lib/provider-images"
 )
@@ -215,23 +213,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	pullSecretPath := os.Getenv(pullSecretPathEnvVar)
-	if pullSecretPath == "" {
-		pullSecretPath = defaultPullSecretPath
-	}
-
 	providerImageDir := os.Getenv(providerImageDirEnvVar)
 	if providerImageDir == "" {
 		providerImageDir = defaultProviderImageDirPath
 	}
 
-	pullSecret, err := os.ReadFile(pullSecretPath) //nolint:gosec
-	if err != nil {
-		klog.Error(err, "unable to read pull secret", "path", pullSecretPath)
-		os.Exit(1)
-	}
-
-	providerImages, err := providerimages.ReadProviderImages(context.Background(), containerImages, providerImageDir, pullSecret)
+	providerImages, err := providerimages.ReadProviderImages(context.Background(), mgr.GetAPIReader(), containerImages, providerImageDir)
 	if err != nil {
 		klog.Error(err, "unable to get provider image metadata")
 		os.Exit(1)
