@@ -49,7 +49,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 
 	configv1 "github.com/openshift/api/config/v1"
-	"github.com/openshift/cluster-capi-operator/pkg/metadata"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
 	"github.com/openshift/library-go/pkg/operator/events"
@@ -127,10 +126,6 @@ func (r *CapiInstallerController) reconcile(ctx context.Context, log logr.Logger
 		"openshift-cluster-api":                                                          "core",
 		platformToProviderConfigMapLabelNameValue(r.Platform):                            "infrastructure",
 		"openshift-cluster-api-" + platformToProviderConfigMapLabelNameValue(r.Platform): "infrastructure",
-
-		// For compatibility with new manifests-gen
-		metadata.CAPIOperatorProviderTypeKey: "core",
-		metadata.CAPIOperatorPlatformKey:     string(r.Platform),
 	}
 
 	// Process each one of the desired providers.
