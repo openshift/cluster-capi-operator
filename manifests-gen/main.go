@@ -57,15 +57,15 @@ func init() {
 }
 
 type cmdlineOptions struct {
-	basePath             string
-	manifestsPath        string
-	kustomizeDir         string
-	name                 string
-	providerType         string
-	version              string
-	platform             string
-	infraClusterResource string
-	providerImageRef     string
+	basePath               string
+	manifestsPath          string
+	kustomizeDir           string
+	name                   string
+	providerType           string
+	version                string
+	platform               string
+	protectClusterResource string
+	providerImageRef       string
 }
 
 func main() {
@@ -86,15 +86,15 @@ func main() {
 	flag.Parse()
 
 	opts := cmdlineOptions{
-		basePath:             *basePath,
-		manifestsPath:        *manifestsPath,
-		kustomizeDir:         *kustomizeDir,
-		name:                 *providerName,
-		providerType:         *providerType,
-		version:              *providerVersion,
-		platform:             *platform,
-		infraClusterResource: *protectClusterResource,
-		providerImageRef:     *providerImageRef,
+		basePath:               *basePath,
+		manifestsPath:          *manifestsPath,
+		kustomizeDir:           *kustomizeDir,
+		name:                   *providerName,
+		providerType:           *providerType,
+		version:                *providerVersion,
+		platform:               *platform,
+		protectClusterResource: *protectClusterResource,
+		providerImageRef:       *providerImageRef,
 	}
 
 	if err := validateFlags(opts); err != nil {

@@ -53,8 +53,8 @@ func processObjects(objs []client.Object, opts cmdlineOptions) []client.Object {
 				// Otherwise, match any CRD in the 'infrastructure.cluster.x-k8s.io' group that ends in 'clusters'.
 				crd := &apiextensionsv1.CustomResourceDefinition{}
 				mustConvert(obj, crd)
-				if (opts.infraClusterResource != "" && crd.Spec.Names.Singular == opts.infraClusterResource) ||
-					(opts.infraClusterResource == "" && crd.Spec.Group == "infrastructure.cluster.x-k8s.io" && strings.HasSuffix(crd.Spec.Names.Plural, "clusters")) {
+				if (opts.protectClusterResource != "" && crd.Spec.Names.Singular == opts.protectClusterResource) ||
+					(opts.protectClusterResource == "" && crd.Spec.Group == "infrastructure.cluster.x-k8s.io" && strings.HasSuffix(crd.Spec.Names.Plural, "clusters")) {
 					protectionPolicy := generateInfraClusterProtectionPolicy(crd)
 					extraObjects = append(extraObjects, protectionPolicy...)
 				}
