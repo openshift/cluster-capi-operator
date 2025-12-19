@@ -249,7 +249,7 @@ func generateInfraClusterProtectionPolicy(crd *apiextensionsv1.CustomResourceDef
 						RuleWithOperations: admissionregistration.RuleWithOperations{
 							Operations: []admissionregistration.OperationType{admissionregistration.Delete},
 							Rule: admissionregistration.Rule{
-								APIGroups:   []string{"infrastructure.cluster.x-k8s.io"},
+								APIGroups:   []string{crd.Spec.Group},
 								APIVersions: []string{"*"},
 								Resources:   []string{crd.Spec.Names.Plural},
 							},

@@ -78,9 +78,9 @@ func main() {
 		providerType    = flag.String("provider-type", "", "Type of the provider: core or infrastructure. Optional.")
 		providerVersion = flag.String("provider-version", "", "Version of the provider. If provided, must be a valid semantic version. Optional.")
 
-		platform             = flag.String("platform", "", "OpenShift platform type (i.e. the same value found in the Infrastructure object). Optional.")
-		infraClusterResource = flag.String("infracluster-resource", "", "Name of the infrastructure cluster resource, e.g. 'awscluster'. If provided and the manifests contain a CRD for this resource, a protection policy will be generated for it. If not provided, a protection policy will be generated for any CRD in the 'infrastructure.cluster.x-k8s.io' group that ends in 'clusters'. Optional.")
-		providerImageRef     = flag.String("provider-image-ref", "", "Image reference of the provider in generated manifests, e.g. registry.ci.openshift.org/openshift:aws-cluster-api-controllers. If specified, this string will be substituted with the provider's release image when the manifests are installed. Optional.")
+		platform               = flag.String("platform", "", "OpenShift platform type (i.e. the same value found in the Infrastructure object). Optional.")
+		protectClusterResource = flag.String("protect-cluster-resource", "", "Singular name of a cluster resource, e.g. 'awscluster'. Generates a ValidatingAdmissionPolicy which prevents modification of cluster resources created by the CAPI Operator. If provided matches any CRD in the manifests with this name. If not provided, matches any CRD in the manifests in the 'infrastructure.cluster.x-k8s.io' group whose plural name ends in 'clusters'. Optional.")
+		providerImageRef       = flag.String("provider-image-ref", "", "Image reference of the provider in generated manifests, e.g. registry.ci.openshift.org/openshift:aws-cluster-api-controllers. If specified, this string will be substituted with the provider's release image when the manifests are installed. Optional.")
 	)
 
 	flag.Parse()
@@ -93,7 +93,7 @@ func main() {
 		providerType:         *providerType,
 		version:              *providerVersion,
 		platform:             *platform,
-		infraClusterResource: *infraClusterResource,
+		infraClusterResource: *protectClusterResource,
 		providerImageRef:     *providerImageRef,
 	}
 
