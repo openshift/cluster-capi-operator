@@ -65,6 +65,7 @@ type cmdlineOptions struct {
 	version              string
 	platform             string
 	infraClusterResource string
+	manifestImageName    string
 }
 
 func main() {
@@ -79,6 +80,7 @@ func main() {
 
 		platform             = flag.String("platform", "", "OpenShift platform type (i.e. the same value found in the Infrastructure object). Optional.")
 		infraClusterResource = flag.String("infracluster-resource", "", "Name of the infrastructure cluster resource, e.g. 'awscluster'. If provided and the manifests contain a CRD for this resource, a protection policy will be generated for it. If not provided, a protection policy will be generated for any CRD in the 'infrastructure.cluster.x-k8s.io' group that ends in 'clusters'. Optional.")
+		manifestImageName    = flag.String("manifest-image-name", "", "Image reference of the provider in generated manifests, e.g. registry.ci.openshift.org/openshift:aws-cluster-api-controllers. If specified, this string will be substituted with the release image when the manifests are installed. Optional.")
 	)
 
 	flag.Parse()
@@ -92,6 +94,7 @@ func main() {
 		version:              *providerVersion,
 		platform:             *platform,
 		infraClusterResource: *infraClusterResource,
+		manifestImageName:    *manifestImageName,
 	}
 
 	if err := validateFlags(opts); err != nil {
@@ -99,7 +102,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := generateManifestBundle(opts); err != nil {
+	if err := generateManifests(opts); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}

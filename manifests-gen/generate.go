@@ -2,19 +2,13 @@ package main
 
 import (
 	"bufio"
-	"bytes"
-	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"hash"
-	"maps"
 	"os"
 	"path"
 
-	"github.com/openshift/cluster-capi-operator/pkg/metadata"
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/kustomize/api/krusty"
@@ -22,29 +16,18 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-var errObjectTooLarge = errors.New("single object exceeds configMap size limit")
-
 const (
-	// customizedComponentsFilename is a name for file containing customized infrastructure components.
-	// This file helps with code review as it is always uncompressed unlike the components configMap.
-	customizedComponentsFilename = "infrastructure-components-openshift.yaml"
+	// manifestsFilename is the name of the file containing the generated manifests.
+	manifestsFilename = "manifests.yaml"
 
-	// manifestPrefix is the prefix for the generated manifest file
-	manifestPrefix = "0000_30_cluster-api_"
+	// metadataFilename is the name of the file containing provider metadata.
+	metadataFilename = "metadata.yaml"
 
-	// releaseVersionSubstitution is a magic string that `oc adm release new`
-	// substitutes in the release image when it copies manifests from component
-	// images.
-	releaseVersionSubstitution = "0.0.1-snapshot"
-
-	// configMapDataLimit is the size limit for data in a configMap.
-	configMapDataLimit = 1024 * 1000 // 1MB - some headroom for the rest of the configMap
-
-	// capiNamespace is the namespace where transport configmaps are created
+	// capiNamespace is the namespace where capi components are created
 	capiNamespace = "openshift-cluster-api"
 )
 
-func generateManifestBundle(opts cmdlineOptions) error {
+func generateManifests(opts cmdlineOptions) error {
 	fmt.Printf("Processing provider %s\n", opts.name)
 
 	kustomizeDir := path.Join(opts.basePath, opts.kustomizeDir)
@@ -56,18 +39,14 @@ func generateManifestBundle(opts cmdlineOptions) error {
 	// Perform all manifest transformations
 	resources = processObjects(resources, opts)
 
-	hasher := sha256.New()
-
-	// Generate ConfigMaps
-	// generateConfigMaps also writes the infrastructure components file as a side effect
-	configMaps, err := generateConfigMaps(opts, hasher, resources)
-	if err != nil {
-		return fmt.Errorf("error generating config maps: %w", err)
+	// Write the manifest file
+	if err := writeManifests(opts, resources); err != nil {
+		return fmt.Errorf("error writing manifests: %w", err)
 	}
 
-	// Write the transport ConfigMaps to a manifest file for CVO
-	if err := writeConfigmaps(opts, hasher, configMaps); err != nil {
-		return fmt.Errorf("error writing provider ConfigMap: %w", err)
+	// Write the metadata file
+	if err := writeMetadata(opts); err != nil {
+		return fmt.Errorf("error writing metadata: %w", err)
 	}
 
 	return nil
@@ -109,157 +88,62 @@ func generateKustomizeResources(kustomizeDir string) ([]client.Object, error) {
 	return resources, nil
 }
 
-// writeConfigmaps writes the transport ConfigMaps to the given fileName. It
-// adds all necessary annotations and labels.
-func writeConfigmaps(opts cmdlineOptions, hasher hash.Hash, configMaps []*corev1.ConfigMap) (err error) {
-	hashValue := fmt.Sprintf("%x", hasher.Sum(nil))
+func writeManifests(opts cmdlineOptions, resources []client.Object) (err error) {
+	manifestsPathname := path.Join(opts.manifestsPath, manifestsFilename)
 
-	annotations := map[string]string{
-		metadata.CAPIOperatorProviderNameKey:    opts.name,
-		metadata.CAPIOperatorProviderVersionKey: opts.version,
-		metadata.CAPIOperatorContentIDKey:       hashValue,
-
-		metadata.CAPIOperatorBundleSizeKey: fmt.Sprintf("%d", len(configMaps)),
-
-		// CVO annotations
-		"exclude.release.openshift.io/internal-openshift-hosted":      "true",
-		"include.release.openshift.io/self-managed-high-availability": "true",
-		"include.release.openshift.io/single-node-developer":          "true",
-
-		// The feature set annotation is indicates to CVO when this configmap should be installed.
-		"release.openshift.io/feature-set": "CustomNoUpgrade,TechPreviewNoUpgrade",
-	}
-
-	labels := map[string]string{
-		metadata.CAPIOperatorProviderTypeKey: opts.providerType,
-		metadata.CAPIOperatorPlatformKey:     opts.platform,
-
-		// The release annotation is used to identify which release generated the manifests.
-		metadata.CAPIOperatorOpenshiftReleaseKey: releaseVersionSubstitution,
-	}
-
-	// Don't write empty labels or annotations
-	maps.DeleteFunc(annotations, emptyValue)
-	maps.DeleteFunc(labels, emptyValue)
-
-	cmFileName := fmt.Sprintf("%s04_cm.%s-%s.yaml", manifestPrefix, opts.providerType, opts.name)
-	cmFile, err := os.OpenFile(path.Join(opts.manifestsPath, cmFileName), os.O_CREATE|os.O_WRONLY|os.O_TRUNC|os.O_APPEND, 0600)
+	manifestsFile, err := os.OpenFile(manifestsPathname, os.O_CREATE|os.O_TRUNC|os.O_WRONLY|os.O_APPEND, 0600)
 	if err != nil {
-		return fmt.Errorf("error opening output file %s: %w", cmFileName, err)
+		return fmt.Errorf("error opening manifests file %s: %w", manifestsPathname, err)
 	}
 
-	writer := bufio.NewWriter(cmFile)
+	writer := bufio.NewWriter(manifestsFile)
 	defer func() {
 		err = errors.Join(err,
 			writer.Flush(),
-			cmFile.Close(),
-		)
+			manifestsFile.Close())
 	}()
 
-	for i, cm := range configMaps {
-		cm.SetAnnotations(maps.Clone(annotations))
-		cm.SetLabels(labels)
+	for i, resource := range resources {
+		if i > 0 {
+			writer.Write([]byte("---\n"))
+		}
 
-		cm.Annotations["cluster-api.openshift.io/bundle-index"] = fmt.Sprintf("%d", i)
-
-		data, err := yaml.Marshal(cm)
+		data, err := yaml.Marshal(resource)
 		if err != nil {
-			return fmt.Errorf("error marshalling ConfigMap to YAML: %w", err)
+			return fmt.Errorf("error marshalling object to YAML: %w", err)
 		}
-
-		for _, v := range yamlSeparated(i, data) {
-			_, err := writer.Write(v)
-			if err != nil {
-				return fmt.Errorf("error writing ConfigMap to file: %w", err)
-			}
-		}
+		writer.Write(data)
 	}
 
 	return nil
 }
 
-func generateConfigMaps(opts cmdlineOptions, hasher hash.Hash, resources []client.Object) (_ []*corev1.ConfigMap, errRet error) {
-	infraComponentsPathname := path.Join(opts.basePath, "openshift", customizedComponentsFilename)
-	infraComponentsFile, err := os.OpenFile(infraComponentsPathname, os.O_CREATE|os.O_TRUNC|os.O_WRONLY|os.O_APPEND, 0600)
+func writeMetadata(opts cmdlineOptions) (err error) {
+	metadataPathname := path.Join(opts.manifestsPath, metadataFilename)
+
+	metadataFile, err := os.OpenFile(metadataPathname, os.O_CREATE|os.O_TRUNC|os.O_WRONLY|os.O_APPEND, 0600)
 	if err != nil {
-		return nil, fmt.Errorf("error opening infrastructure components file %s: %w", infraComponentsPathname, err)
+		return fmt.Errorf("error opening metadata file %s: %w", metadataPathname, err)
 	}
 	defer func() {
-		errRet = errors.Join(errRet, infraComponentsFile.Close())
+		err = errors.Join(err, metadataFile.Close())
 	}()
 
-	generateCM := cmGenerator(opts.name)
-	var cmBuffer bytes.Buffer
-	var configMaps []*corev1.ConfigMap
-
-	for _, resource := range resources {
-		data, err := yaml.Marshal(resource)
-		if err != nil {
-			return nil, fmt.Errorf("error marshalling object to YAML: %w", err)
-		}
-
-		var objBuffer bytes.Buffer
-		objBuffer.WriteString("---\n")
-		objBuffer.Write(data)
-
-		if objBuffer.Len() > configMapDataLimit {
-			return nil, errObjectTooLarge
-		}
-
-		hasher.Write(objBuffer.Bytes())
-
-		if _, err := infraComponentsFile.Write(objBuffer.Bytes()); err != nil {
-			return nil, fmt.Errorf("error writing object to file: %w", err)
-		}
-
-		if cmBuffer.Len()+objBuffer.Len() > configMapDataLimit {
-			configMaps = append(configMaps, generateCM(cmBuffer))
-			cmBuffer.Reset()
-		}
-
-		cmBuffer.Write(objBuffer.Bytes())
+	metadata := providerimages.ProviderMetadata{
+		ProviderName:      opts.name,
+		ProviderType:      opts.providerType,
+		ProviderVersion:   opts.version,
+		OCPPlatform:       opts.platform,
+		ManifestImageName: opts.manifestImageName,
 	}
 
-	if cmBuffer.Len() > 0 {
-		configMaps = append(configMaps, generateCM(cmBuffer))
+	data, err := yaml.Marshal(metadata)
+	if err != nil {
+		return fmt.Errorf("error marshalling metadata to YAML: %w", err)
 	}
-
-	return configMaps, nil
-}
-
-func cmGenerator(basename string) func(bytes.Buffer) *corev1.ConfigMap {
-	index := 0
-
-	return func(data bytes.Buffer) *corev1.ConfigMap {
-		// NOTE: It might look tider to use '-' as the index separator, but this
-		// breaks the release version substitution.
-		name := fmt.Sprintf(basename+"-"+releaseVersionSubstitution+".%d", index)
-		index++
-
-		return &corev1.ConfigMap{
-			TypeMeta: metav1.TypeMeta{
-				APIVersion: "v1",
-				Kind:       "ConfigMap",
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      name,
-				Namespace: capiNamespace,
-			},
-			Data: map[string]string{
-				"components": data.String(),
-			},
-		}
+	_, err = metadataFile.Write(data)
+	if err != nil {
+		return fmt.Errorf("error writing metadata to file: %w", err)
 	}
-}
-
-func emptyValue[K any](_ K, v string) bool {
-	return v == ""
-}
-
-func yamlSeparated(i int, data []byte) [][]byte {
-	if i == 0 {
-		return [][]byte{data}
-	} else {
-		return [][]byte{[]byte("---\n"), data}
-	}
+	return nil
 }
