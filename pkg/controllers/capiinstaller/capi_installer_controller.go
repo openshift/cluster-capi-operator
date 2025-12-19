@@ -101,7 +101,7 @@ type CapiInstallerController struct {
 func (r *CapiInstallerController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := ctrl.LoggerFrom(ctx).WithName(controllerName)
 
-	err := r.reconcile(ctx, log)
+	res, err := r.reconcile(ctx, log)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("error during reconcile: %w", err)
 	}
@@ -110,7 +110,7 @@ func (r *CapiInstallerController) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{}, fmt.Errorf("failed to set conditions for CAPI Installer Controller: %w", err)
 	}
 
-	return ctrl.Result{}, nil
+	return res, nil
 }
 
 // reconcile performs the main business logic for installing Cluster API components in the cluster.
@@ -118,46 +118,38 @@ func (r *CapiInstallerController) Reconcile(ctx context.Context, req ctrl.Reques
 // it extracts from those ConfigMaps the embedded CAPI providers manifests for the components
 // and it applies them to the cluster.
 //
-//nolint:funlen
-func (r *CapiInstallerController) reconcile(ctx context.Context, log logr.Logger) error {
-	providerLabelName := platformToProviderConfigMapLabelNameValue(r.Platform)
-	legacyMatchLabels := func(nameVal, typeVal string) client.ListOption {
-		return client.MatchingLabels{
-			providerConfigMapLabelNameKey: nameVal,
-			providerConfigMapLabelTypeKey: typeVal,
-		}
-	}
-
+//nolint:unparam
+func (r *CapiInstallerController) reconcile(ctx context.Context, log logr.Logger) (ctrl.Result, error) {
 	// Define the desired providers to be installed for this cluster. We always want to install the core provider, which in our case is the default cluster-api core provider.
 	// We also want to install the infrastructure provider that matches the currently detected platform the cluster is running on.
+	providerConfigMapLabels := map[string]string{
+		defaultCoreProviderComponentName:                                                 "core",
+		"openshift-cluster-api":                                                          "core",
+		platformToProviderConfigMapLabelNameValue(r.Platform):                            "infrastructure",
+		"openshift-cluster-api-" + platformToProviderConfigMapLabelNameValue(r.Platform): "infrastructure",
+
+		// For compatibility with new manifests-gen
+		metadata.CAPIOperatorProviderTypeKey: "core",
+		metadata.CAPIOperatorPlatformKey:     string(r.Platform),
+	}
 
 	// Process each one of the desired providers.
-	for name, listOpts := range map[string]client.ListOption{
-		// Legacy manifests-gen
-		defaultCoreProviderComponentName:             legacyMatchLabels(defaultCoreProviderComponentName, "core"),
-		"openshift-cluster-api":                      legacyMatchLabels("openshift-cluster-api", "core"),
-		providerLabelName:                            legacyMatchLabels(providerLabelName, "infrastructure"),
-		"openshift-cluster-api-" + providerLabelName: legacyMatchLabels("openshift-cluster-api-"+providerLabelName, "infrastructure"),
-
-		// New manifests-gen
-		"core": client.MatchingLabels{
-			metadata.CAPIOperatorProviderTypeKey: "core",
-		},
-		"infrastructure": client.MatchingLabels{
-			metadata.CAPIOperatorProviderTypeKey: "infrastructure",
-			metadata.CAPIOperatorPlatformKey:     string(r.Platform),
-		},
-	} {
-		log.Info("reconciling CAPI provider", "name", name)
+	for providerConfigMapLabelNameVal, providerConfigMapLabelTypeVal := range providerConfigMapLabels {
+		log.Info("reconciling CAPI provider", "name", providerConfigMapLabelNameVal)
 
 		// Get a List all the ConfigMaps matching the desired provider labels.
 		configMapList := &corev1.ConfigMapList{}
-		if err := r.List(ctx, configMapList, client.InNamespace(defaultCAPINamespace), listOpts); err != nil {
+		if err := r.List(ctx, configMapList, client.InNamespace(defaultCAPINamespace),
+			client.MatchingLabels{
+				providerConfigMapLabelNameKey: providerConfigMapLabelNameVal,
+				providerConfigMapLabelTypeKey: providerConfigMapLabelTypeVal,
+			},
+		); err != nil {
 			if err := r.setDegradedCondition(ctx, log); err != nil {
-				return fmt.Errorf("failed to set conditions for CAPI Installer controller: %w", err)
+				return ctrl.Result{}, fmt.Errorf("failed to set conditions for CAPI Installer controller: %w", err)
 			}
 
-			return fmt.Errorf("unable to list CAPI provider %s ConfigMaps: %w", name, err)
+			return ctrl.Result{}, fmt.Errorf("unable to list CAPI provider %q ConfigMaps: %w", providerConfigMapLabelNameVal, err)
 		}
 
 		// Extract the provider manifests stored each of the matching ConfigMaps.
@@ -170,10 +162,10 @@ func (r *CapiInstallerController) reconcile(ctx context.Context, log logr.Logger
 			partialComponents, err := r.extractProviderComponents(cm)
 			if err != nil {
 				if err := r.setDegradedCondition(ctx, log); err != nil {
-					return fmt.Errorf("failed to set conditions for CAPI Installer controller: %w", err)
+					return ctrl.Result{}, fmt.Errorf("failed to set conditions for CAPI Installer controller: %w", err)
 				}
 
-				return fmt.Errorf("error extracting CAPI provider components from ConfigMap %s/%s: %w", cm.Namespace, cm.Name, err)
+				return ctrl.Result{}, fmt.Errorf("error extracting CAPI provider components from ConfigMap %q/%q: %w", cm.Namespace, cm.Name, err)
 			}
 
 			providerComponents = append(providerComponents, partialComponents...)
@@ -182,16 +174,16 @@ func (r *CapiInstallerController) reconcile(ctx context.Context, log logr.Logger
 		// Apply all the collected provider components manifests.
 		if err := r.applyProviderComponents(ctx, providerComponents); err != nil {
 			if err := r.setDegradedCondition(ctx, log); err != nil {
-				return fmt.Errorf("failed to set conditions for CAPI Installer controller: %w", err)
+				return ctrl.Result{}, fmt.Errorf("failed to set conditions for CAPI Installer controller: %w", err)
 			}
 
-			return fmt.Errorf("error applying CAPI provider %q components: %w", name, err)
+			return ctrl.Result{}, fmt.Errorf("error applying CAPI provider %q components: %w", providerConfigMapLabelNameVal, err)
 		}
 
-		log.Info("finished reconciling CAPI provider", "name", name)
+		log.Info("finished reconciling CAPI provider", "name", providerConfigMapLabelNameVal)
 	}
 
-	return r.reconcileProviderImages(ctx, log)
+	return ctrl.Result{}, nil
 }
 
 func (r *CapiInstallerController) reconcileProviderImages(ctx context.Context, log logr.Logger) error {
