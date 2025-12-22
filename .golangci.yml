@@ -110,6 +110,10 @@ linters-settings:
         alias: "mapiv1alpha1"
       - pkg: "sigs.k8s.io/controller-runtime/pkg/log"
         alias: "logf"
+      - pkg: "github.com/openshift/api/apiextensions/v1alpha1"
+        alias: "apiextensionsv1alpha1"
+      - pkg: "github.com/openshift/client-go/apiextensions/applyconfigurations/apiextensions/v1alpha1"
+        alias: "apiextensionsapplyconfig"
     no-unaliased: true
   nlreturn:
     block-size: 2

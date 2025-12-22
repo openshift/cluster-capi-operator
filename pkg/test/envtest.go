@@ -23,6 +23,7 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/go-logr/logr/funcr"
+	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
 	mapiv1 "github.com/openshift/api/machine/v1"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	"golang.org/x/tools/go/packages"
@@ -54,6 +55,7 @@ func init() {
 	utilruntime.Must(gcpv1.AddToScheme(scheme.Scheme))
 	utilruntime.Must(openstackv1.AddToScheme(scheme.Scheme))
 	utilruntime.Must(clusterv1.AddToScheme(scheme.Scheme))
+	utilruntime.Must(apiextensionsv1alpha1.Install(scheme.Scheme))
 }
 
 // StartEnvTest starts a new test environment and returns a client and config.
@@ -91,6 +93,7 @@ func StartEnvTest(testEnv *envtest.Environment) (*rest.Config, client.Client, er
 			path.Join(openshiftAPIPath, "machine", "v1beta1", "zz_generated.crd-manifests", "0000_10_machine-api_01_machinesets-CustomNoUpgrade.crd.yaml"),
 			path.Join(openshiftAPIPath, "machine", "v1beta1", "zz_generated.crd-manifests", "0000_10_machine-api_01_machines-CustomNoUpgrade.crd.yaml"),
 			path.Join(openshiftAPIPath, "config", "v1", "zz_generated.crd-manifests", "0000_00_cluster-version-operator_01_clusteroperators.crd.yaml"),
+			path.Join(openshiftAPIPath, "apiextensions", "v1alpha1", "zz_generated.crd-manifests", "0000_20_crd-compatibility-checker_01_compatibilityrequirements.crd.yaml"),
 		},
 		ErrorIfPathMissing: true,
 	}
@@ -119,7 +122,7 @@ func StopEnvTest(testEnv *envtest.Environment) error {
 
 func getPackageDir(ctx context.Context, pkgName string) (string, error) {
 	cfg := &packages.Config{
-		Mode:    packages.NeedFiles,
+		Mode:    packages.NeedFiles | packages.NeedModule,
 		Context: ctx,
 	}
 
@@ -136,7 +139,23 @@ func getPackageDir(ctx context.Context, pkgName string) (string, error) {
 		return "", fmt.Errorf("multiple packages found for %s", pkgName)
 	}
 
-	return pkgs[0].Dir, nil
+	// Follow the chain of module replacements to find the actual module
+	module := pkgs[0].Module
+	for module != nil && module.Dir == "" && module.Replace != nil {
+		module = module.Replace
+	}
+
+	if module == nil {
+		return "", fmt.Errorf("module not found for %s", pkgName)
+	}
+
+	// Fallback to the package dir if nothing else is found.
+	// This can be the case when using vendoring with a remote replacement.
+	if module.Dir == "" && pkgs[0].Dir != "" {
+		return pkgs[0].Dir, nil
+	}
+
+	return module.Dir, nil
 }
 
 // NewVerboseGinkgoLogger sets up a new logr.Logger that writes to GinkoWriter, and uses the passed verbosity

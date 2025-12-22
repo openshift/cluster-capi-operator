@@ -280,6 +280,8 @@ func (m *awsMachineAndInfra) toAWSMachine(providerSpec mapiv1beta1.AWSMachinePro
 		NetworkInterfaceType:    convertNetworkInterfaceType(providerSpec.NetworkInterfaceType),
 		InstanceMetadataOptions: instanceMetadataOptions,
 		InstanceType:            providerSpec.InstanceType,
+		// TODO: Bump CAPA and convert.
+		// CPUOptions:              convertAWSCPUOptionsToCAPI(providerSpec.CPUOptions),
 		NonRootVolumes:          nonRootVolumes,
 		PlacementGroupName:      providerSpec.PlacementGroupName,
 		PlacementGroupPartition: int64(ptr.Deref(providerSpec.PlacementGroupPartition, 0)),

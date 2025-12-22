@@ -29,7 +29,7 @@ verify: fmt lint ## Run formatting and linting checks
 
 test: verify unit ## Run verification and unit tests
 
-build: operator migration manifests-gen ## Build all binaries
+build: operator migration crd-compatibility-checker manifests-gen ## Build all binaries
 
 # Ensure bin directory exists for build outputs
 bin/:
@@ -43,6 +43,10 @@ operator: | bin/ ## Build cluster-capi-operator binary
 
 migration: | bin/ ## Build machine-api-migration binary
 	go build -o bin/machine-api-migration cmd/machine-api-migration/main.go
+
+crd-compatibility-checker:
+	# building crd-compatibility-checker
+	go build -o bin/crd-compatibility-checker cmd/crd-compatibility-checker/main.go
 
 .PHONY: localtestenv
 localtestenv: .localtestenv
@@ -77,6 +81,12 @@ image: ## Build the Docker image
 
 push: ## Push the Docker image
 	docker push ${IMG}
+
+.PHONY: crds-sync
+api_module_dir ?= $(shell go list -f '{{.Dir}}' github.com/openshift/api)
+crds := apiextensions/v1alpha1/zz_generated.crd-manifests/0000_20_crd-compatibility-checker_01_compatibilityrequirements.crd.yaml
+crds-sync: $(crds:%=$(api_module_dir)/%)
+	cp $? ./manifests/
 
 aws-cluster: ## Create an AWS cluster for testing
 	./hack/clusters/create-aws.sh
