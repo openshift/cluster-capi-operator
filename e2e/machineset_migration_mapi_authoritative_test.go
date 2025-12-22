@@ -55,10 +55,18 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				})
 			})
 
-			// https://issues.redhat.com/browse/OCPCLOUD-3188
-			PIt("should reject creation of MAPI MachineSet with same name as existing CAPI MachineSet", func() {
-				By("Creating a same name MAPI MachineSet")
-				createMAPIMachineSetWithAuthoritativeAPI(ctx, cl, 0, existingCAPIMSAuthorityMAPIName, mapiv1beta1.MachineAuthorityMachineAPI, mapiv1beta1.MachineAuthorityMachineAPI)
+			It("should reject creation of MAPI MachineSet with same name as existing CAPI MachineSet", func() {
+				By("Attempting to create a MAPI MachineSet with the same name as existing CAPI MachineSet")
+				machineSetParams := mapiframework.BuildMachineSetParams(ctx, cl, 0)
+				machineSetParams.Name = existingCAPIMSAuthorityMAPIName
+				machineSetParams.Labels[mapiframework.MachineSetKey] = existingCAPIMSAuthorityMAPIName
+				machineSetParams.MachinesetAuthoritativeAPI = mapiv1beta1.MachineAuthorityMachineAPI
+				machineSetParams.MachineAuthoritativeAPI = mapiv1beta1.MachineAuthorityMachineAPI
+
+				By("Verifying creation is rejected by ValidatingAdmissionPolicy")
+				_, err := mapiframework.CreateMachineSet(cl, machineSetParams)
+				Expect(err).To(HaveOccurred(), "MAPI MachineSet creation should be rejected when CAPI MachineSet with same name exists")
+				Expect(err.Error()).To(ContainSubstring("openshift-prevent-authoritative-mapi-machineset-create-when-capi-exists"))
 			})
 		})
 
