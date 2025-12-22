@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"reflect"
 	"regexp"
+	"sort"
 	"strings"
 
 	configv1 "github.com/openshift/api/config/v1"
@@ -444,6 +445,13 @@ func AWSProviderSpecFromRawExtension(rawExtension *runtime.RawExtension) (mapiv1
 	if err := yaml.Unmarshal(rawExtension.Raw, &spec); err != nil {
 		return mapiv1beta1.AWSMachineProviderConfig{}, fmt.Errorf("error unmarshalling providerSpec: %w", err)
 	}
+
+	// Sort the tags by name to ensure consistent ordering.
+	// On the Cluster API side these tags are in a map,
+	// so the order is not guaranteed when converting back from a Cluster API map to a Machine API slice.
+	sort.Slice(spec.Tags, func(i, j int) bool {
+		return spec.Tags[i].Name < spec.Tags[j].Name
+	})
 
 	return spec, nil
 }

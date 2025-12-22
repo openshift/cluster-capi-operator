@@ -17,16 +17,36 @@ limitations under the License.
 package mapi2capi
 
 import (
+	"errors"
 	"fmt"
 
+	configv1 "github.com/openshift/api/config/v1"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/consts"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 )
+
+var errUnsupportedPlatform = errors.New("unsupported platform")
+
+// ProviderSpecFromRawExtension converts a Machine API providerSpec to a Cluster API providerSpec.
+func ProviderSpecFromRawExtension(platform configv1.PlatformType, rawExtension *runtime.RawExtension) (any, error) {
+	switch platform {
+	case configv1.AWSPlatformType:
+		providerConfig, err := AWSProviderSpecFromRawExtension(rawExtension)
+		if err != nil {
+			return nil, fmt.Errorf("unable to parse AWS providerSpec: %w", err)
+		}
+
+		return providerConfig, nil
+	default:
+		return nil, fmt.Errorf("%w: %s", errUnsupportedPlatform, platform)
+	}
+}
 
 func convertMAPIMachineSetSelectorToCAPI(mapiSelector metav1.LabelSelector) metav1.LabelSelector {
 	capiSelector := mapiSelector.DeepCopy()

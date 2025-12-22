@@ -17,6 +17,7 @@ package mapi2capi
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	configv1 "github.com/openshift/api/config/v1"
@@ -796,6 +797,10 @@ func convertMAPOServerMetadataToCAPO(mapoServerMetadata map[string]string) []ope
 	for k, v := range mapoServerMetadata {
 		capoServerMetadata = append(capoServerMetadata, openstackv1.ServerMetadata{Key: k, Value: v})
 	}
+
+	sort.SliceStable(capoServerMetadata, func(i, j int) bool {
+		return capoServerMetadata[i].Key < capoServerMetadata[j].Key
+	})
 
 	return capoServerMetadata
 }
