@@ -29,6 +29,7 @@ import (
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	"github.com/openshift/cluster-api-actuator-pkg/testutils"
@@ -343,6 +344,152 @@ var _ = Describe("MachineSet VAP Tests", func() {
 				WithAuthoritativeAPI(mapiv1beta1.MachineAuthorityMachineAPI).
 				Build()
 			Eventually(k8sClient.Create(ctx, newMapiMachineSet), timeout).Should(Succeed())
+		})
+	})
+
+	Context("Validate creation of CAPI machine sets", func() {
+		var vapName = "openshift-validate-capi-machine-set-creation"
+		var mapiMachineSetBuilder machinev1resourcebuilder.MachineSetBuilder
+
+		BeforeEach(func() {
+			By("Waiting for VAP to be ready")
+			machineSetVap = &admissionregistrationv1.ValidatingAdmissionPolicy{}
+			Eventually(k8sClient.Get(ctx, client.ObjectKey{Name: vapName}, machineSetVap), timeout).Should(Succeed())
+			resourceRules := machineSetVap.Spec.MatchConstraints.ResourceRules
+			Expect(resourceRules).To(HaveLen(1))
+			resourceRules[0].Operations = append(resourceRules[0].Operations, admissionregistrationv1.Update)
+			Eventually(k.Update(machineSetVap, func() {
+				admissiontestutils.AddSentinelValidation(machineSetVap)
+				// Updating the VAP so that it functions on "UPDATE" as well as "CREATE" only in this test suite to make it easier to test the functionality
+				machineSetVap.Spec.MatchConstraints.ResourceRules = resourceRules
+
+			})).Should(Succeed())
+
+			Eventually(k.Object(machineSetVap), timeout).Should(
+				HaveField("Status.ObservedGeneration", BeNumerically(">=", 2)),
+			)
+
+			By("Updating the VAP binding")
+			policyBinding = &admissionregistrationv1.ValidatingAdmissionPolicyBinding{}
+			Eventually(k8sClient.Get(ctx, client.ObjectKey{
+				Name: vapName}, policyBinding), timeout).Should(Succeed())
+
+			Eventually(k.Update(policyBinding, func() {
+				admissiontestutils.UpdateVAPBindingNamespaces(policyBinding, mapiNamespace.GetName(), capiNamespace.GetName())
+			}), timeout).Should(Succeed())
+
+			// Wait until the binding shows the patched values
+			Eventually(k.Object(policyBinding), timeout).Should(
+				SatisfyAll(
+					HaveField("Spec.MatchResources.NamespaceSelector.MatchLabels",
+						HaveKeyWithValue("kubernetes.io/metadata.name",
+							capiNamespace.GetName())),
+				),
+			)
+
+			By("Configuring the MAPI MachineSet Builder")
+			mapiMachineSetBuilder = machinev1resourcebuilder.MachineSet().WithNamespace(mapiNamespace.Name)
+
+			By("Creating a throwaway MAPI machine set")
+			sentinelMachineSet := mapiMachineSetBuilder.WithName("sentinel-machineset").WithAuthoritativeAPI(mapiv1beta1.MachineAuthorityClusterAPI).Build()
+			Eventually(k8sClient.Create(ctx, sentinelMachineSet), timeout).Should(Succeed())
+
+			capiSentinelMachine := clusterv1resourcebuilder.MachineSet().WithName("sentinel-machineset").WithNamespace(capiNamespace.Name).Build()
+			Eventually(k8sClient.Create(ctx, capiSentinelMachine)).Should(Succeed())
+
+			Eventually(k.Get(capiSentinelMachine)).Should(Succeed())
+
+			admissiontestutils.VerifySentinelValidation(k, capiSentinelMachine, timeout)
+		})
+
+		Context("when no MAPI machineset exists with the same name", func() {
+			It("allows CAPI machineset creation (parameterNotFoundAction=Allow)", func() {
+				By("Creating a CAPI machineset without a corresponding MAPI machineset")
+				newCapiMachineSet := clusterv1resourcebuilder.MachineSet().
+					WithName("no-mapi-counterpart").
+					WithNamespace(capiNamespace.Name).
+					Build()
+				Eventually(k8sClient.Create(ctx, newCapiMachineSet)).Should(Succeed())
+			})
+		})
+
+		Context("when MAPI machineset has status.authoritativeAPI=MachineAPI", func() {
+			BeforeEach(func() {
+				By("Creating MAPI machineset with authoritativeAPI=MachineAPI")
+				mapiMachineSet := mapiMachineSetBuilder.WithName("validation-machineset").Build()
+				Eventually(k8sClient.Create(ctx, mapiMachineSet)).Should(Succeed())
+
+				Eventually(k.UpdateStatus(mapiMachineSet, func() {
+					mapiMachineSet.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityMachineAPI
+				})).Should(Succeed())
+			})
+
+			It("denies creating unpaused CAPI machineset", func() {
+				By("Attempting to create CAPI machineset without pause annotation or condition")
+				newCapiMachineSet := clusterv1resourcebuilder.MachineSet().
+					WithName("validation-machineset").
+					WithNamespace(capiNamespace.Name).
+					Build()
+
+				Eventually(k8sClient.Create(ctx, newCapiMachineSet), timeout).Should(
+					MatchError(ContainSubstring("in an un-paused state")))
+			})
+
+			It("allows creating CAPI machineset with paused annotation", func() {
+				By("Creating CAPI machineset with paused annotation")
+				newCapiMachineSet := clusterv1resourcebuilder.MachineSet().
+					WithName("validation-machineset").
+					WithNamespace(capiNamespace.Name).
+					WithAnnotations(map[string]string{
+						clusterv1.PausedAnnotation: "",
+					}).
+					Build()
+
+				Eventually(k8sClient.Create(ctx, newCapiMachineSet)).Should(Succeed())
+			})
+		})
+
+		Context("when MAPI machineset has status.authoritativeAPI=ClusterAPI", func() {
+			var mapiMachineSet *mapiv1beta1.MachineSet
+			BeforeEach(func() {
+				By("Creating MAPI machineset with authoritativeAPI=ClusterAPI")
+				mapiMachineSet = mapiMachineSetBuilder.WithName("validation-machineset").Build()
+				Eventually(k8sClient.Create(ctx, mapiMachineSet)).Should(Succeed())
+
+				Eventually(k.UpdateStatus(mapiMachineSet, func() {
+					mapiMachineSet.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityClusterAPI
+				})).Should(Succeed())
+			})
+
+			It("denies creation when MAPI machineset is not paused", func() {
+				By("Attempting to create CAPI machineset when MAPI machineset has no Paused condition")
+				newCapiMachineSet := clusterv1resourcebuilder.MachineSet().
+					WithName("validation-machineset").
+					WithNamespace(capiNamespace.Name).
+					Build()
+
+				Eventually(k8sClient.Create(ctx, newCapiMachineSet), timeout).Should(
+					MatchError(ContainSubstring("already exists and is not paused")))
+			})
+
+			It("allows creation when MAPI machineset has Paused condition", func() {
+				By("Setting Paused condition on the MAPI machineset")
+				Eventually(k.UpdateStatus(mapiMachineSet, func() {
+					mapiMachineSet.Status.Conditions = []mapiv1beta1.Condition{{
+						Type:               "Paused",
+						Status:             corev1.ConditionTrue,
+						LastTransitionTime: metav1.Now(),
+					}}
+				})).Should(Succeed())
+
+				By("Creating CAPI machineset")
+				newCapiMachineSet := clusterv1resourcebuilder.MachineSet().
+					WithName("validation-machineset").
+					WithNamespace(capiNamespace.Name).
+					Build()
+
+				Eventually(k8sClient.Create(ctx, newCapiMachineSet)).Should(Succeed())
+			})
 		})
 	})
 })
