@@ -17,7 +17,9 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"maps"
 	"os"
+	"slices"
 	"time"
 
 	metal3v1 "github.com/metal3-io/cluster-api-provider-metal3/api/v1beta1"
@@ -63,13 +65,18 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/kubeconfig"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/secretsync"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
+	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 	"github.com/openshift/cluster-capi-operator/pkg/webhook"
 )
 
 const (
-	defaultImagesLocation      = "./dev-images.json"
+	defaultImagesLocation = "./dev-images.json"
+
 	defaultMachineAPINamespace = "openshift-machine-api"
+
+	providerImageDirEnvVar      = "PROVIDER_IMAGE_DIR"
+	defaultProviderImageDirPath = "/var/lib/provider-images"
 )
 
 func initScheme(scheme *runtime.Scheme) {
@@ -208,6 +215,19 @@ func main() {
 		os.Exit(1)
 	}
 
+	providerImageDir := os.Getenv(providerImageDirEnvVar)
+	if providerImageDir == "" {
+		providerImageDir = defaultProviderImageDirPath
+	}
+
+	containerImageRefs := slices.Collect(maps.Values(containerImages))
+
+	providerImages, err := providerimages.ReadProviderImages(context.Background(), mgr.GetAPIReader(), mgr.GetLogger(), containerImageRefs, providerImageDir)
+	if err != nil {
+		klog.Error(err, "unable to get provider image metadata")
+		os.Exit(1)
+	}
+
 	infra, err := util.GetInfra(context.Background(), mgr.GetAPIReader())
 	if err != nil {
 		klog.Error(err, "unable to get infrastructure object")
@@ -220,7 +240,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	setupPlatformReconcilers(mgr, infra, platform, containerImages, applyClient, apiextensionsClient, *managedNamespace)
+	setupPlatformReconcilers(mgr, infra, platform, containerImages, providerImages, applyClient, apiextensionsClient, *managedNamespace)
 
 	// +kubebuilder:scaffold:builder
 
@@ -252,17 +272,17 @@ func getClusterOperatorStatusClient(mgr manager.Manager, controller string, plat
 	}
 }
 
-func setupPlatformReconcilers(mgr manager.Manager, infra *configv1.Infrastructure, platform configv1.PlatformType, containerImages map[string]string, applyClient *kubernetes.Clientset, apiextensionsClient *apiextensionsclient.Clientset, managedNamespace string) {
+func setupPlatformReconcilers(mgr manager.Manager, infra *configv1.Infrastructure, platform configv1.PlatformType, containerImages map[string]string, providerImages []providerimages.ProviderImageManifests, applyClient *kubernetes.Clientset, apiextensionsClient *apiextensionsclient.Clientset, managedNamespace string) {
 	// Only setup reconcile controllers and webhooks when the platform is supported.
 	// This avoids unnecessary CAPI providers discovery, installs and reconciles when the platform is not supported.
 	isUnsupportedPlatform := false
 
 	switch platform {
 	case configv1.AWSPlatformType:
-		setupReconcilers(mgr, infra, platform, &awsv1.AWSCluster{}, containerImages, applyClient, apiextensionsClient, managedNamespace)
+		setupReconcilers(mgr, infra, platform, &awsv1.AWSCluster{}, containerImages, providerImages, applyClient, apiextensionsClient, managedNamespace)
 		setupWebhooks(mgr)
 	case configv1.GCPPlatformType:
-		setupReconcilers(mgr, infra, platform, &gcpv1.GCPCluster{}, containerImages, applyClient, apiextensionsClient, managedNamespace)
+		setupReconcilers(mgr, infra, platform, &gcpv1.GCPCluster{}, containerImages, providerImages, applyClient, apiextensionsClient, managedNamespace)
 		setupWebhooks(mgr)
 	case configv1.AzurePlatformType:
 		azureCloudEnvironment := getAzureCloudEnvironment(infra.Status.PlatformStatus)
@@ -272,20 +292,20 @@ func setupPlatformReconcilers(mgr manager.Manager, infra *configv1.Infrastructur
 			isUnsupportedPlatform = true
 		} else {
 			// The ClusterOperator Controller must run in all cases.
-			setupReconcilers(mgr, infra, platform, &azurev1.AzureCluster{}, containerImages, applyClient, apiextensionsClient, managedNamespace)
+			setupReconcilers(mgr, infra, platform, &azurev1.AzureCluster{}, containerImages, providerImages, applyClient, apiextensionsClient, managedNamespace)
 			setupWebhooks(mgr)
 		}
 	case configv1.PowerVSPlatformType:
-		setupReconcilers(mgr, infra, platform, &ibmpowervsv1.IBMPowerVSCluster{}, containerImages, applyClient, apiextensionsClient, managedNamespace)
+		setupReconcilers(mgr, infra, platform, &ibmpowervsv1.IBMPowerVSCluster{}, containerImages, providerImages, applyClient, apiextensionsClient, managedNamespace)
 		setupWebhooks(mgr)
 	case configv1.VSpherePlatformType:
-		setupReconcilers(mgr, infra, platform, &vspherev1.VSphereCluster{}, containerImages, applyClient, apiextensionsClient, managedNamespace)
+		setupReconcilers(mgr, infra, platform, &vspherev1.VSphereCluster{}, containerImages, providerImages, applyClient, apiextensionsClient, managedNamespace)
 		setupWebhooks(mgr)
 	case configv1.OpenStackPlatformType:
-		setupReconcilers(mgr, infra, platform, &openstackv1.OpenStackCluster{}, containerImages, applyClient, apiextensionsClient, managedNamespace)
+		setupReconcilers(mgr, infra, platform, &openstackv1.OpenStackCluster{}, containerImages, providerImages, applyClient, apiextensionsClient, managedNamespace)
 		setupWebhooks(mgr)
 	case configv1.BareMetalPlatformType:
-		setupReconcilers(mgr, infra, platform, &metal3v1.Metal3Cluster{}, containerImages, applyClient, apiextensionsClient, managedNamespace)
+		setupReconcilers(mgr, infra, platform, &metal3v1.Metal3Cluster{}, containerImages, providerImages, applyClient, apiextensionsClient, managedNamespace)
 		setupWebhooks(mgr)
 	default:
 		klog.Infof("Detected platform %q is not supported, skipping capi controllers setup", platform)
@@ -297,7 +317,7 @@ func setupPlatformReconcilers(mgr manager.Manager, infra *configv1.Infrastructur
 	setupClusterOperatorController(mgr, platform, managedNamespace, isUnsupportedPlatform)
 }
 
-func setupReconcilers(mgr manager.Manager, infra *configv1.Infrastructure, platform configv1.PlatformType, infraClusterObject client.Object, containerImages map[string]string, applyClient *kubernetes.Clientset, apiextensionsClient *apiextensionsclient.Clientset, managedNamespace string) {
+func setupReconcilers(mgr manager.Manager, infra *configv1.Infrastructure, platform configv1.PlatformType, infraClusterObject client.Object, containerImages map[string]string, providerImages []providerimages.ProviderImageManifests, applyClient *kubernetes.Clientset, apiextensionsClient *apiextensionsclient.Clientset, managedNamespace string) {
 	if err := (&corecluster.CoreClusterController{
 		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-cluster-resource-controller", platform, managedNamespace),
 		Cluster:                     &clusterv1.Cluster{},
@@ -333,6 +353,7 @@ func setupReconcilers(mgr manager.Manager, infra *configv1.Infrastructure, platf
 		Platform:                    platform,
 		ApplyClient:                 applyClient,
 		APIExtensionsClient:         apiextensionsClient,
+		ProviderImages:              providerImages,
 	}).SetupWithManager(mgr); err != nil {
 		klog.Error(err, "unable to create capi installer controller", "controller", "CAPIInstaller")
 		os.Exit(1)

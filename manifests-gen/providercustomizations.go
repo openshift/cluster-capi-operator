@@ -2,27 +2,25 @@ package main
 
 import (
 	appsv1 "k8s.io/api/apps/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func providerCustomizations(obj *unstructured.Unstructured, providerName string) {
+func providerCustomizations(obj client.Object, providerName string) client.Object {
 	switch providerName {
 	case "azure":
-		azureCustomizations(obj)
+		return azureCustomizations(obj)
 	case "gcp":
-		gcpCustomizations(obj)
-	case powerVSProvider:
-		powerVSCustomizations(obj)
+		return gcpCustomizations(obj)
 	}
+
+	return obj
 }
 
-func azureCustomizations(obj *unstructured.Unstructured) {
-	switch obj.GetKind() {
+func azureCustomizations(obj client.Object) client.Object {
+	switch getKind(obj) {
 	case "Deployment":
 		deployment := &appsv1.Deployment{}
-		if err := scheme.Convert(obj, deployment, nil); err != nil {
-			panic(err)
-		}
+		mustConvert(obj, deployment)
 
 		// Modify bootstrap secret keys as they don't match with what is created by CCO.
 		for i := range deployment.Spec.Template.Spec.Containers {
@@ -44,19 +42,17 @@ func azureCustomizations(obj *unstructured.Unstructured) {
 			}
 		}
 
-		if err := scheme.Convert(deployment, obj, nil); err != nil {
-			panic(err)
-		}
+		return deployment
 	}
+
+	return obj
 }
 
-func gcpCustomizations(obj *unstructured.Unstructured) {
-	switch obj.GetKind() {
+func gcpCustomizations(obj client.Object) client.Object {
+	switch getKind(obj) {
 	case "Deployment":
 		deployment := &appsv1.Deployment{}
-		if err := scheme.Convert(obj, deployment, nil); err != nil {
-			panic(err)
-		}
+		mustConvert(obj, deployment)
 
 		// Modify bootstrap secret keys as they don't match with what is created by CCO.
 		for i := range deployment.Spec.Template.Spec.Containers {
@@ -72,33 +68,8 @@ func gcpCustomizations(obj *unstructured.Unstructured) {
 			}
 		}
 
-		if err := scheme.Convert(deployment, obj, nil); err != nil {
-			panic(err)
-		}
+		return deployment
 	}
-}
 
-func powerVSCustomizations(obj *unstructured.Unstructured) {
-	switch obj.GetKind() {
-	case "Deployment":
-		deployment := &appsv1.Deployment{}
-		if err := scheme.Convert(obj, deployment, nil); err != nil {
-			panic(err)
-		}
-
-		for i := range deployment.Spec.Template.Spec.Containers {
-			container := &deployment.Spec.Template.Spec.Containers[i]
-			if container.Name == "manager" {
-				for j := range container.Args {
-					arg := &container.Args[j]
-					if *arg == "--provider-id-fmt=${PROVIDER_ID_FORMAT:=v1}" {
-						container.Args[j] = "--provider-id-fmt=v2"
-					}
-				}
-			}
-		}
-		if err := scheme.Convert(deployment, obj, nil); err != nil {
-			panic(err)
-		}
-	}
+	return obj
 }
