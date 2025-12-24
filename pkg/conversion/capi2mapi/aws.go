@@ -141,6 +141,7 @@ func (m machineAndAWSMachineAndAWSCluster) toProviderSpec() (*mapiv1beta1.AWSMac
 			ID: m.awsMachine.Spec.AMI.ID,
 		},
 		InstanceType: m.awsMachine.Spec.InstanceType,
+		CPUOptions:   ConvertAWSCPUOptionsToMAPI(m.awsMachine.Spec.CPUOptions),
 		Tags:         convertAWSTagsToMAPI(m.awsMachine.Spec.AdditionalTags),
 		IAMInstanceProfile: &mapiv1beta1.AWSResourceReference{
 			ID: &m.awsMachine.Spec.IAMInstanceProfile,
@@ -712,4 +713,22 @@ func ConvertAWSLoadBalancerToMAPI(loadBalancer *awsv1.AWSLoadBalancerSpec) (mapi
 	default:
 		return mapiv1beta1.LoadBalancerReference{}, errUnsupportedLoadBalancerType
 	}
+}
+
+// ConvertAWSCPUOptionsToMAPI converts CAPI CPUOptions to MAPI CPUOptions.
+func ConvertAWSCPUOptionsToMAPI(cpuOptions awsv1.CPUOptions) *mapiv1beta1.CPUOptions {
+	mapiCPUOptions := &mapiv1beta1.CPUOptions{}
+
+	switch cpuOptions.ConfidentialCompute {
+	case awsv1.AWSConfidentialComputePolicyDisabled:
+		mapiCPUOptions.ConfidentialCompute = ptr.To(mapiv1beta1.AWSConfidentialComputePolicyDisabled)
+	case awsv1.AWSConfidentialComputePolicySEVSNP:
+		mapiCPUOptions.ConfidentialCompute = ptr.To(mapiv1beta1.AWSConfidentialComputePolicySEVSNP)
+	}
+
+	if *mapiCPUOptions == (mapiv1beta1.CPUOptions{}) {
+		return nil
+	}
+
+	return mapiCPUOptions
 }

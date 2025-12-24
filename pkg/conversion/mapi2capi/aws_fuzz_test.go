@@ -139,7 +139,6 @@ func (f *awsProviderFuzzer) fuzzProviderConfig(ps *mapiv1beta1.AWSMachineProvide
 	ps.ObjectMeta = metav1.ObjectMeta{}
 
 	// Conversion not yet implemented
-	ps.CPUOptions = nil
 	ps.Placement.Host = nil
 
 	// At least one device mapping must have no device name.
@@ -161,10 +160,31 @@ func (f *awsProviderFuzzer) fuzzProviderConfig(ps *mapiv1beta1.AWSMachineProvide
 		ps.UserDataSecret = nil
 	}
 
+	if ps.CPUOptions != nil && *ps.CPUOptions == (mapiv1beta1.CPUOptions{}) {
+		ps.CPUOptions = nil
+	}
+
 	// Copy instance-type, region and zone to the struct so they can be set at the machine labels too.
 	f.MAPIMachineFuzzer.InstanceType = ps.InstanceType
 	f.MAPIMachineFuzzer.Region = ps.Placement.Region
 	f.MAPIMachineFuzzer.Zone = ps.Placement.AvailabilityZone
+}
+
+func (f *awsProviderFuzzer) fuzzAWSMachineSpecCPUOptions(cpuOpts *mapiv1beta1.CPUOptions, c randfill.Continue) {
+	c.FillNoCustom(cpuOpts)
+
+	if cpuOpts.ConfidentialCompute != nil {
+		fuzzAWSMachineSpecConfidentialComputePolicy(cpuOpts.ConfidentialCompute, c)
+	}
+}
+
+func fuzzAWSMachineSpecConfidentialComputePolicy(ccp *mapiv1beta1.AWSConfidentialComputePolicy, c randfill.Continue) {
+	switch c.Int31n(2) {
+	case 0:
+		*ccp = mapiv1beta1.AWSConfidentialComputePolicyDisabled
+	case 1:
+		*ccp = mapiv1beta1.AWSConfidentialComputePolicySEVSNP
+	}
 }
 
 //nolint:funlen
@@ -262,6 +282,7 @@ func (f *awsProviderFuzzer) FuzzerFuncsMachineSet(codecs runtimeserializer.Codec
 			}
 		},
 		f.fuzzProviderConfig,
+		f.fuzzAWSMachineSpecCPUOptions,
 	}
 }
 

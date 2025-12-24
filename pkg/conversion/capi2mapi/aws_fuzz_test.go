@@ -158,6 +158,7 @@ func awsMachineFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interface{} 
 
 			fuzzAWSMachineSpecTenancy(&spec.Tenancy, c)
 			fuzzAWSMachineSpecMarketType(&spec.MarketType, c)
+			fuzzAWSMachineSpecCPUOptions(&spec.CPUOptions, c)
 
 			// Fields not required for our use case can be ignored.
 			spec.ImageLookupFormat = ""
@@ -214,6 +215,23 @@ func fuzzAWSMachineSpecMarketType(marketType *awsv1.MarketType, c randfill.Conti
 		*marketType = awsv1.MarketTypeCapacityBlock
 	case 3:
 		*marketType = ""
+	}
+}
+
+func fuzzAWSMachineSpecCPUOptions(cpuOpts *awsv1.CPUOptions, c randfill.Continue) {
+	c.FillNoCustom(cpuOpts)
+
+	fuzzAWSMachineSpecConfidentialComputePolicy(&cpuOpts.ConfidentialCompute, c)
+}
+
+func fuzzAWSMachineSpecConfidentialComputePolicy(ccp *awsv1.AWSConfidentialComputePolicy, c randfill.Continue) {
+	switch c.Int31n(3) {
+	case 0:
+		*ccp = awsv1.AWSConfidentialComputePolicyDisabled
+	case 1:
+		*ccp = awsv1.AWSConfidentialComputePolicySEVSNP
+	case 2:
+		*ccp = ""
 	}
 }
 
