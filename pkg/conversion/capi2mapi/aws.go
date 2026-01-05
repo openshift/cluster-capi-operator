@@ -502,6 +502,12 @@ func convertAWSVolumeToMAPI(volume awsv1.Volume) mapiv1beta1.BlockDeviceMappingS
 		bdm.EBS.Iops = ptr.To(volume.IOPS)
 	}
 
+	if volume.Throughput != nil {
+		// AWS EBS throughput limits are well within int32 range (max 4000 MiB/s). Ignore gosec.
+		//nolint:gosec
+		bdm.EBS.ThroughputMib = ptr.To(int32(*volume.Throughput))
+	}
+
 	return bdm
 }
 

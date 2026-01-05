@@ -662,11 +662,18 @@ func blockDeviceMappingSpecToVolume(fldPath *field.Path, bdm mapiv1beta1.BlockDe
 		return awsv1.Volume{}, warnings, errs
 	}
 
+	// Convert throughput from int32 to int64 if present.
+	var throughput *int64
+	if bdm.EBS.ThroughputMib != nil {
+		throughput = ptr.To(int64(*bdm.EBS.ThroughputMib))
+	}
+
 	return awsv1.Volume{
 		DeviceName:    ptr.Deref(bdm.DeviceName, ""),
 		Size:          ptr.Deref(bdm.EBS.VolumeSize, 120), // The installer uses 120GiB by default as of 4.19.
 		Type:          awsv1.VolumeType(ptr.Deref(bdm.EBS.VolumeType, "")),
 		IOPS:          ptr.Deref(bdm.EBS.Iops, 0),
+		Throughput:    throughput,
 		Encrypted:     bdm.EBS.Encrypted,
 		EncryptionKey: capiKMSKey,
 	}, warnings, nil
