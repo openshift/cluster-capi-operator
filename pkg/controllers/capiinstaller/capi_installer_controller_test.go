@@ -93,7 +93,13 @@ var _ = Describe("extractManifests", func() {
 
 	for _, tc := range testCases {
 		It(tc.name, func() {
-			manifests, err := extractManifests(tc.configMap)
+			reader, err := configMapReader(tc.configMap)
+			if err != nil {
+				Expect(err).To(MatchError(errEmptyProviderConfigMap))
+				return
+			}
+
+			manifests, err := extractManifests(reader)
 
 			if tc.expectedError != nil {
 				Expect(err).To(MatchError(tc.expectedError))

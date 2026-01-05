@@ -16,10 +16,15 @@ limitations under the License.
 package capiinstaller
 
 import (
+	"bytes"
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"os"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/drone/envsubst/v2"
@@ -46,6 +51,7 @@ import (
 
 	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
+	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
 	"github.com/openshift/library-go/pkg/operator/events"
 	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
 	"github.com/openshift/library-go/pkg/operator/resource/resourcemerge"
@@ -86,6 +92,7 @@ type CapiInstallerController struct {
 	Platform            configv1.PlatformType
 	ApplyClient         *kubernetes.Clientset
 	APIExtensionsClient *apiextensionsclient.Clientset
+	ProviderImages      []providerimages.ProviderImageManifests
 }
 
 // Reconcile reconciles the cluster-api ClusterOperator object.
@@ -170,7 +177,87 @@ func (r *CapiInstallerController) reconcile(ctx context.Context, log logr.Logger
 		log.Info("finished reconciling CAPI provider", "name", providerConfigMapLabelNameVal)
 	}
 
+	if err := r.reconcileProviderImages(ctx, log); err != nil {
+		return ctrl.Result{}, fmt.Errorf("error reconciling CAPI provider images: %w", err)
+	}
+
 	return ctrl.Result{}, nil
+}
+
+func (r *CapiInstallerController) reconcileProviderImages(ctx context.Context, log logr.Logger) (err error) {
+	// Filter out provider images with a platform which doesn't match the current platform.
+	var providerImages []providerimages.ProviderImageManifests
+
+	for _, providerImage := range r.ProviderImages {
+		switch providerImage.OCPPlatform {
+		// Platform not provided, or matches the current platform.
+		case "", r.Platform:
+			providerImages = append(providerImages, providerImage)
+
+		default:
+			log.Info("skipping provider image", "name", providerImage.Name)
+			continue
+		}
+	}
+
+	// Sort providers by type
+	getTypePriority := func(providerImage providerimages.ProviderImageManifests) int {
+		switch providerImage.Type {
+		case "core":
+			return 0
+		case "infrastructure":
+			return 1
+		default:
+			return 2
+		}
+	}
+
+	slices.SortStableFunc(providerImages, func(a, b providerimages.ProviderImageManifests) int {
+		prioA := getTypePriority(a)
+		prioB := getTypePriority(b)
+
+		if prioA == prioB {
+			return strings.Compare(a.Name, b.Name)
+		}
+
+		return cmp.Compare(prioA, prioB)
+	})
+
+	// Apply the provider manifests
+	for _, providerImage := range providerImages {
+		if err := r.applyProviderImage(ctx, log, providerImage); err != nil {
+			return fmt.Errorf("failed to apply provider image %s: %w", providerImage.Name, err)
+		}
+	}
+
+	return nil
+}
+
+// applyProviderImage extracts provider manifests for a single provider image and applies them to the cluster.
+func (r *CapiInstallerController) applyProviderImage(ctx context.Context, log logr.Logger, providerImage providerimages.ProviderImageManifests) error {
+	log.Info("reconciling CAPI provider", "name", providerImage.Name)
+
+	reader, err := providerManifestReader(providerImage)
+	if err != nil {
+		return fmt.Errorf("failed to create provider manifest reader: %w", err)
+	}
+
+	defer func() {
+		err = errors.Join(err, reader.Close())
+	}()
+
+	yamlManifests, err := extractManifests(reader)
+	if err != nil {
+		return fmt.Errorf("failed to extract manifests from provider manifest: %w", err)
+	}
+
+	if err := r.applyProviderComponents(ctx, yamlManifests); err != nil {
+		return fmt.Errorf("failed to apply provider components: %w", err)
+	}
+
+	log.Info("finished reconciling CAPI provider", "name", providerImage.Name)
+
+	return nil
 }
 
 // applyProviderComponents applies the provider components to the cluster.
@@ -268,6 +355,11 @@ func getProviderComponents(components []string) ([]string, map[string]string, []
 	customResourceDefinitionAssets := make(map[string]string)
 
 	for i, m := range components {
+		// Skip empty manifests.
+		if strings.TrimSpace(m) == "" {
+			continue
+		}
+
 		// Parse the YAML manifests into unstructure objects.
 		u, err := yamlToUnstructured(m)
 		if err != nil {
@@ -393,8 +485,17 @@ func (r *CapiInstallerController) SetupWithManager(mgr ctrl.Manager) error {
 // The format of the ConfigMap is well known and follows the upstream CAPI's
 // clusterctl Provider Contract - Components YAML file contract defined at:
 // https://github.com/kubernetes-sigs/cluster-api/blob/a36712e28bf5d54e398ea84cb3e20102c0499426/docs/book/src/clusterctl/provider-contract.md?plain=1#L157-L162
-func (r *CapiInstallerController) extractProviderComponents(cm corev1.ConfigMap) ([]string, error) {
-	yamlManifests, err := extractManifests(cm)
+func (r *CapiInstallerController) extractProviderComponents(cm corev1.ConfigMap) (_ []string, err error) {
+	reader, err := configMapReader(cm)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create config map reader: %w", err)
+	}
+
+	defer func() {
+		err = errors.Join(err, reader.Close())
+	}()
+
+	yamlManifests, err := extractManifests(reader)
 	if err != nil {
 		return nil, fmt.Errorf("failed to extract manifests from configMap: %w", err)
 	}
@@ -412,34 +513,44 @@ func (r *CapiInstallerController) extractProviderComponents(cm corev1.ConfigMap)
 	return replacedYamlManifests, nil
 }
 
-// extractManifests extracts and processes component manifests from given ConfigMap.
-// If the data is in compressed binary form, it decompresses them.
-func extractManifests(cm corev1.ConfigMap) ([]string, error) {
-	data, hasData := cm.Data["components"]
-	binaryData, hasBinary := cm.BinaryData["components-zstd"]
-
-	if !(hasBinary || hasData) {
-		return nil, errEmptyProviderConfigMap
+func configMapReader(cm corev1.ConfigMap) (io.ReadCloser, error) {
+	if data, ok := cm.Data["components"]; ok {
+		return io.NopCloser(strings.NewReader(data)), nil
 	}
 
-	if hasBinary {
-		decoder, err := zstd.NewReader(nil)
+	if binaryData, ok := cm.BinaryData["components-zstd"]; ok {
+		reader, err := zstd.NewReader(bytes.NewReader(binaryData))
 		if err != nil {
 			return nil, fmt.Errorf("failed to create zstd reader: %w", err)
 		}
 
-		decoded, err := decoder.DecodeAll(binaryData, []byte{})
-		if err != nil {
-			return nil, fmt.Errorf("failed to decompress components: %w", err)
-		}
+		return reader.IOReadCloser(), nil
+	}
 
-		data = string(decoded)
+	return nil, errEmptyProviderConfigMap
+}
+
+func providerManifestReader(providerImage providerimages.ProviderImageManifests) (io.ReadCloser, error) {
+	reader, err := os.Open(providerImage.ManifestsPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open provider manifest: %w", err)
+	}
+
+	return reader, nil
+}
+
+// extractManifests extracts and processes component manifests from given ConfigMap.
+// If the data is in compressed binary form, it decompresses them.
+func extractManifests(reader io.Reader) ([]string, error) {
+	data, err := io.ReadAll(reader)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read components: %w", err)
 	}
 
 	// Certain provider components have drone/envsubst environment variables interpolated within the manifest.
 	// Substitute them with the value defined in the environment variable (see setFeatureGatesEnvVars()).
 	// If that's not set, fallback to the default value defined in the template.
-	components, err := envsubst.EvalEnv(data)
+	components, err := envsubst.EvalEnv(string(data))
 	if err != nil {
 		return nil, fmt.Errorf("failed to substitute environment variables in component manifests: %w", err)
 	}
