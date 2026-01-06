@@ -1188,7 +1188,7 @@ github.com/openshift/library-go/pkg/operator/resource/resourcemerge
 github.com/openshift/library-go/pkg/operator/resource/resourceread
 github.com/openshift/library-go/pkg/operator/resourcesynccontroller
 github.com/openshift/library-go/pkg/operator/v1helpers
-# github.com/openshift/machine-api-operator v0.2.1-0.20251121134325-1d78f2ebcae5
+# github.com/openshift/machine-api-operator v0.2.1-0.20251221113137-33dd26d37dd9
 ## explicit; go 1.24.0
 github.com/openshift/machine-api-operator/pkg/util/lifecyclehooks
 github.com/openshift/machine-api-operator/pkg/webhooks

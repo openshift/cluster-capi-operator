@@ -214,8 +214,8 @@ github.com/openshift/cluster-autoscaler-operator v0.0.1-0.20250702183526-4eb64d5
 github.com/openshift/cluster-autoscaler-operator v0.0.1-0.20250702183526-4eb64d553940/go.mod h1:zCklcJwbnaNx46KvR38Rh86uZdow5gvub4ATcNDopTM=
 github.com/openshift/library-go v0.0.0-20251222131241-289839b3ffe8 h1:TWqbSjaYbZGgB6EmnEN6Hc8lQYYCgju2qORBX7Ix1LI=
 github.com/openshift/library-go v0.0.0-20251222131241-289839b3ffe8/go.mod h1:nIzWQQE49XbiKizVnVOip9CEB7HJ0hoJwNi3g3YKnKc=
-github.com/openshift/machine-api-operator v0.2.1-0.20251121134325-1d78f2ebcae5 h1:TgkkGQc2ZCjTFVVmii8o72XEs4lDOpG2aKhxkSCJuqw=
-github.com/openshift/machine-api-operator v0.2.1-0.20251121134325-1d78f2ebcae5/go.mod h1:OStLZl5CE/RQyGzPBA8Cro+Kmck2G2n4c1rw6TpYT5w=
+github.com/openshift/machine-api-operator v0.2.1-0.20251221113137-33dd26d37dd9 h1:X7RYTK4cKIiKKgzaZ0Af3nGe68QvXecnZUli4Q5ntq0=
+github.com/openshift/machine-api-operator v0.2.1-0.20251221113137-33dd26d37dd9/go.mod h1:tsuCCKc4wi1SxbEKruIWXvk3Yn3LHptXiphp0SoK2fw=
 github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c h1:+mdjkGKdHQG3305AYmdv1U2eRNDiU2ErMBj1gwrq8eQ=
 github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c/go.mod h1:7rwL4CYBLnjLxUqIJNnCWiEdr3bn6IUYi15bNlnbCCU=
 github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=

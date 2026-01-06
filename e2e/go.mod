@@ -90,7 +90,7 @@ require (
 	github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0 // indirect
 	github.com/openshift/cluster-autoscaler-operator v0.0.1-0.20250702183526-4eb64d553940 // indirect
 	github.com/openshift/library-go v0.0.0-20251222131241-289839b3ffe8 // indirect
-	github.com/openshift/machine-api-operator v0.2.1-0.20251121134325-1d78f2ebcae5 // indirect
+	github.com/openshift/machine-api-operator v0.2.1-0.20251221113137-33dd26d37dd9 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/prometheus/client_golang v1.23.2 // indirect
