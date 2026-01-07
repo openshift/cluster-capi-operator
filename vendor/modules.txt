@@ -1043,10 +1043,12 @@ github.com/onsi/gomega/types
 # github.com/opencontainers/go-digest v1.0.0
 ## explicit; go 1.13
 github.com/opencontainers/go-digest
-# github.com/openshift/api v0.0.0-20251111193948-50e2ece149d7
+# github.com/openshift/api v0.0.0-20260105114749-aae5635a71a7
 ## explicit; go 1.24.0
 github.com/openshift/api
 github.com/openshift/api/annotations
+github.com/openshift/api/apiextensions
+github.com/openshift/api/apiextensions/v1alpha1
 github.com/openshift/api/apiserver
 github.com/openshift/api/apiserver/v1
 github.com/openshift/api/apps
@@ -1120,7 +1122,7 @@ github.com/openshift/api/template
 github.com/openshift/api/template/v1
 github.com/openshift/api/user
 github.com/openshift/api/user/v1
-# github.com/openshift/client-go v0.0.0-20251015124057-db0dee36e235
+# github.com/openshift/client-go v0.0.0-20260105124352-f93a4291f9ae
 ## explicit; go 1.24.0
 github.com/openshift/client-go/config/applyconfigurations/config/v1
 github.com/openshift/client-go/config/applyconfigurations/config/v1alpha1
@@ -1167,7 +1169,7 @@ github.com/openshift/cluster-api-provider-baremetal/pkg/apis/baremetal/v1alpha1
 # github.com/openshift/cluster-autoscaler-operator v0.0.1-0.20250702183526-4eb64d553940
 ## explicit; go 1.23.0
 github.com/openshift/cluster-autoscaler-operator/pkg/apis/autoscaling/v1
-# github.com/openshift/library-go v0.0.0-20251112091634-ab97ebb73f0f
+# github.com/openshift/library-go v0.0.0-20251222131241-289839b3ffe8
 ## explicit; go 1.24.0
 github.com/openshift/library-go/pkg/apiserver/jsonpatch
 github.com/openshift/library-go/pkg/certs
@@ -1186,7 +1188,7 @@ github.com/openshift/library-go/pkg/operator/resource/resourcemerge
 github.com/openshift/library-go/pkg/operator/resource/resourceread
 github.com/openshift/library-go/pkg/operator/resourcesynccontroller
 github.com/openshift/library-go/pkg/operator/v1helpers
-# github.com/openshift/machine-api-operator v0.2.1-0.20251121134325-1d78f2ebcae5
+# github.com/openshift/machine-api-operator v0.2.1-0.20251221113137-33dd26d37dd9
 ## explicit; go 1.24.0
 github.com/openshift/machine-api-operator/pkg/util/lifecyclehooks
 github.com/openshift/machine-api-operator/pkg/webhooks

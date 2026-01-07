@@ -291,7 +291,7 @@ func WithIgnoreConditionsLastTransitionTime() DiffOption {
 // WithConditionsAsMap ensures the conditions are converted to maps for comparison.
 func WithConditionsAsMap() DiffOption {
 	return func(d *differ) {
-		d.modifyFuncs["ConditionsAsMap"] = func(a map[string]interface{}) error {
+		d.lateModifyFuncs["ConditionsAsMap"] = func(a map[string]interface{}) error {
 			conditionPaths := [][]string{
 				{"status", "conditions"},
 				{"status", "v1beta2", "conditions"},
@@ -410,7 +410,8 @@ type DiffOption func(*differ)
 
 func newDiffer(opts ...DiffOption) *differ {
 	d := &differ{
-		modifyFuncs: map[string]func(obj map[string]interface{}) error{},
+		modifyFuncs:     map[string]func(obj map[string]interface{}) error{},
+		lateModifyFuncs: map[string]func(obj map[string]interface{}) error{},
 	}
 	for _, opt := range opts {
 		opt(d)

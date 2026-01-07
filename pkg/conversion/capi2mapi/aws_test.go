@@ -16,6 +16,8 @@ limitations under the License.
 package capi2mapi
 
 import (
+	"math"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	capibuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/cluster-api/core/v1beta2"
@@ -300,6 +302,31 @@ var _ = Describe("capi2mapi AWS conversion", func() {
 				"node-role.kubernetes.io/master": "",
 			}),
 			expectedErrors:   []string{},
+			expectedWarnings: []string{},
+		}),
+
+		Entry("With root volume throughput exceeding int32 max", awsCAPI2MAPIMachineConversionInput{
+			awsClusterBuilder: awsCAPIAWSClusterBase,
+			awsMachineBuilder: awsCAPIAWSMachineBase.WithRootVolume(&awsv1.Volume{
+				Throughput: ptr.To(int64(math.MaxInt32) + 1),
+				Size:       100,
+			}),
+			machineBuilder:   awsCAPIMachineBase,
+			expectedErrors:   []string{"spec.rootVolume.throughput: Invalid value: 2147483648: throughput exceeds maximum int32 value"},
+			expectedWarnings: []string{},
+		}),
+
+		Entry("With non-root volume throughput exceeding int32 max", awsCAPI2MAPIMachineConversionInput{
+			awsClusterBuilder: awsCAPIAWSClusterBase,
+			awsMachineBuilder: awsCAPIAWSMachineBase.WithNonRootVolumes([]awsv1.Volume{
+				{
+					Throughput: ptr.To(int64(math.MaxInt32) + 1),
+					Size:       100,
+					DeviceName: "/dev/sdb",
+				},
+			}),
+			machineBuilder:   awsCAPIMachineBase,
+			expectedErrors:   []string{"spec.nonRootVolumes[0].throughput: Invalid value: 2147483648: throughput exceeds maximum int32 value"},
 			expectedWarnings: []string{},
 		}),
 	)

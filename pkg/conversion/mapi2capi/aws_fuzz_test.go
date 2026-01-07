@@ -139,8 +139,8 @@ func (f *awsProviderFuzzer) fuzzProviderConfig(ps *mapiv1beta1.AWSMachineProvide
 	ps.ObjectMeta = metav1.ObjectMeta{}
 
 	// Conversion not yet implemented
-	ps.HostPlacement = nil
 	ps.CPUOptions = nil
+	ps.Placement.Host = nil
 
 	// At least one device mapping must have no device name.
 	rootFound := false

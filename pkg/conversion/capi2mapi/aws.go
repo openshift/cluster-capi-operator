@@ -18,6 +18,7 @@ package capi2mapi
 import (
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
@@ -158,8 +159,8 @@ func (m machineAndAWSMachineAndAWSCluster) toProviderSpec() (*mapiv1beta1.AWSMac
 			Region:           m.awsCluster.Spec.Region,
 		},
 		// HostPlacement: TODO: add conversion from CAPA HostAffinity and HostID to MAPI HostPlacement when the MAPI API is finalized.
-		LoadBalancers:           mapiLoadBalancers,
-		BlockDevices:            convertAWSVolumesToMAPI(m.awsMachine.Spec.RootVolume, m.awsMachine.Spec.NonRootVolumes),
+		LoadBalancers: mapiLoadBalancers,
+		// BlockDevices - Populated below.
 		SpotMarketOptions:       convertAWSSpotMarketOptionsToMAPI(m.awsMachine.Spec.SpotMarketOptions),
 		MetadataServiceOptions:  mapiAWSMetadataOptions,
 		PlacementGroupName:      m.awsMachine.Spec.PlacementGroupName,
@@ -181,6 +182,11 @@ func (m machineAndAWSMachineAndAWSCluster) toProviderSpec() (*mapiv1beta1.AWSMac
 		mapaProviderConfig.UserDataSecret = &corev1.LocalObjectReference{
 			Name: userDataSecretName,
 		}
+	}
+
+	mapaProviderConfig.BlockDevices, errs = convertAWSVolumesToMAPI(fldPath, m.awsMachine.Spec.RootVolume, m.awsMachine.Spec.NonRootVolumes)
+	if len(errs) > 0 {
+		errors = append(errors, errs...)
 	}
 
 	// Below this line are fields not used from the CAPI AWSMachine.
@@ -467,21 +473,34 @@ func convertAWSMarketTypeToMAPI(fldPath *field.Path, marketType awsv1.MarketType
 	}
 }
 
-func convertAWSVolumesToMAPI(rootVolume *awsv1.Volume, nonRootVolumes []awsv1.Volume) []mapiv1beta1.BlockDeviceMappingSpec {
-	blockDeviceMapping := []mapiv1beta1.BlockDeviceMappingSpec{}
+func convertAWSVolumesToMAPI(fldPath *field.Path, rootVolume *awsv1.Volume, nonRootVolumes []awsv1.Volume) ([]mapiv1beta1.BlockDeviceMappingSpec, field.ErrorList) {
+	var (
+		blockDeviceMapping []mapiv1beta1.BlockDeviceMappingSpec
+		errors             field.ErrorList
+	)
 
 	if rootVolume != nil && *rootVolume != (awsv1.Volume{}) {
-		blockDeviceMapping = append(blockDeviceMapping, convertAWSVolumeToMAPI(*rootVolume))
+		bdm, err := convertAWSVolumeToMAPI(fldPath.Child("rootVolume"), *rootVolume)
+		if err != nil {
+			errors = append(errors, err)
+		} else {
+			blockDeviceMapping = append(blockDeviceMapping, bdm)
+		}
 	}
 
-	for _, volume := range nonRootVolumes {
-		blockDeviceMapping = append(blockDeviceMapping, convertAWSVolumeToMAPI(volume))
+	for i, volume := range nonRootVolumes {
+		bdm, err := convertAWSVolumeToMAPI(fldPath.Child("nonRootVolumes").Index(i), volume)
+		if err != nil {
+			errors = append(errors, err)
+		} else {
+			blockDeviceMapping = append(blockDeviceMapping, bdm)
+		}
 	}
 
-	return blockDeviceMapping
+	return blockDeviceMapping, errors
 }
 
-func convertAWSVolumeToMAPI(volume awsv1.Volume) mapiv1beta1.BlockDeviceMappingSpec {
+func convertAWSVolumeToMAPI(fldPath *field.Path, volume awsv1.Volume) (mapiv1beta1.BlockDeviceMappingSpec, *field.Error) {
 	bdm := mapiv1beta1.BlockDeviceMappingSpec{
 		EBS: &mapiv1beta1.EBSBlockDeviceSpec{
 			VolumeSize: ptr.To(volume.Size),
@@ -502,7 +521,15 @@ func convertAWSVolumeToMAPI(volume awsv1.Volume) mapiv1beta1.BlockDeviceMappingS
 		bdm.EBS.Iops = ptr.To(volume.IOPS)
 	}
 
-	return bdm
+	if volume.Throughput != nil {
+		if *volume.Throughput > math.MaxInt32 {
+			return mapiv1beta1.BlockDeviceMappingSpec{}, field.Invalid(fldPath.Child("throughput"), *volume.Throughput, "throughput exceeds maximum int32 value")
+		}
+		//nolint:gosec
+		bdm.EBS.ThroughputMib = ptr.To(int32(*volume.Throughput))
+	}
+
+	return bdm, nil
 }
 
 func convertAWSKMSKeyToMAPI(kmsKey string) mapiv1beta1.AWSResourceReference {
