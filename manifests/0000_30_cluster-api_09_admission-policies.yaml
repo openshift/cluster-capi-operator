@@ -204,7 +204,7 @@ data:
         - name: check-param-match
           expression: 'object.metadata.name == params.metadata.name'
         - name: check-authoritativeAPI-machineapi
-          expression: "params.?status.?authoritativeAPI.orValue(\"\") == \"MachineAPI\""
+          expression: "params.?status.authoritativeAPI.orValue(\"\") == \"MachineAPI\""
       variables:
         # label maps
         - name: newLabels
@@ -444,11 +444,11 @@ data:
       variables:
         # Returns true if AuthoritativeAPI is MachineAPI
         - name: authoritativeAPIMAPI
-          expression: "params.?status.?authoritativeAPI.orValue(\"\") == \"MachineAPI\""
+          expression: "params.?status.authoritativeAPI.orValue(\"\") == \"MachineAPI\""
 
         # Returns true if AuthoritativeAPI is ClusterAPI
         - name: authoritativeAPICAPI
-          expression: "params.?status.?authoritativeAPI.orValue(\"\") == \"ClusterAPI\""
+          expression: "params.?status.authoritativeAPI.orValue(\"\") == \"ClusterAPI\""
 
         # True when the **parameter Machine (MAPI)** is already paused
         - name: mapiPaused
@@ -474,7 +474,85 @@ data:
 
       # If ClusterAPI is authoritative, deny unless the MAPI Machine is paused
       - expression: 'variables.authoritativeAPICAPI ? variables.mapiPaused : true'
-        messageExpression: "'Can\\'t create Cluster API Machine ' + object.metadata.name + ' as a Machine API Machine with status.authoritativeAPI: ' + params.?status.?authoritativeAPI.orValue('<unset>') + ' already exists and is not paused. '"
+        messageExpression: "'Can\\'t create Cluster API Machine ' + object.metadata.name + ' as a Machine API Machine with status.authoritativeAPI: ' + params.?status.authoritativeAPI.orValue('<unset>') + ' already exists and is not paused. '"
+
+    ---
+    apiVersion: admissionregistration.k8s.io/v1
+    kind: ValidatingAdmissionPolicyBinding
+    metadata:
+      name: openshift-validate-capi-machine-set-creation
+    spec:
+      matchResources:
+        namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: openshift-cluster-api
+      paramRef:
+        namespace: openshift-machine-api
+        parameterNotFoundAction: Allow
+        selector: {}
+      policyName: openshift-validate-capi-machine-set-creation
+      validationActions:
+          - Deny
+    ---
+    apiVersion: admissionregistration.k8s.io/v1
+    kind: ValidatingAdmissionPolicy
+    metadata:
+      name: openshift-validate-capi-machine-set-creation 
+    spec:
+      failurePolicy: Fail
+      paramKind:
+        apiVersion: machine.openshift.io/v1beta1
+        kind: MachineSet
+      matchConstraints:
+        resourceRules:
+        - apiGroups:   ["cluster.x-k8s.io"]
+          apiVersions: ["v1beta2"]
+          operations:  ["CREATE"]
+          resources:   ["machinesets"]
+      # Requests must satisfy every matchCondition to reach the validations
+      matchConditions:
+        - name: check-only-non-service-account-requests
+          expression: >-
+            !(request.userInfo.username in [
+                "system:serviceaccount:openshift-machine-api:machine-api-controllers",
+                "system:serviceaccount:openshift-cluster-api:cluster-capi-operator"
+            ])
+        - name: check-param-match
+          expression: 'object.metadata.name == params.metadata.name'
+      variables:
+        # Returns true if AuthoritativeAPI is MachineAPI
+        - name: authoritativeAPIMAPI
+          expression: "params.?status.authoritativeAPI.orValue(\"\") == \"MachineAPI\""
+
+        # Returns true if AuthoritativeAPI is ClusterAPI
+        - name: authoritativeAPICAPI
+          expression: "params.?status.authoritativeAPI.orValue(\"\") == \"ClusterAPI\""
+
+        # True when the **parameter Machine (MAPI)** is already paused
+        - name: mapiPaused
+          expression: >
+            has(params.status.conditions) &&
+            params.status.conditions.exists(c,
+              c.type == 'Paused' && c.status == 'True')
+
+        # True when the **CAPI MachineSet under admission** is paused
+        - name: capiPaused
+          expression: >
+            (has(object.metadata.annotations) &&
+            'cluster.x-k8s.io/paused' in object.metadata.annotations) ||
+            (has(object.status) && has(object.status.conditions) &&
+             object.status.conditions.exists(c,
+               c.type == 'Paused' && c.status == 'True'))
+
+      # All validations must evaluate to true
+      validations:
+      # If MachineAPI is authoritative, the new CAPI machine set *must* be paused
+      - expression: 'variables.authoritativeAPIMAPI ? variables.capiPaused : true'
+        messageExpression: "'Can\\'t create Cluster API machine set ' + object.metadata.name + ' in an un-paused state. Either pause the machine set, or change the authoritative API of the MAPI machine set: ' + object.metadata.name +'.'"
+
+      # If ClusterAPI is authoritative, deny unless the MAPI machine set is paused
+      - expression: 'variables.authoritativeAPICAPI ? variables.mapiPaused : true'
+        messageExpression: "'Can\\'t create Cluster API machine set ' + object.metadata.name + ' as a Machine API machine set with status.authoritativeAPI: ' + params.?status.authoritativeAPI.orValue('<unset>') + ' already exists and is not paused. '"
 
     ---
     apiVersion: admissionregistration.k8s.io/v1
