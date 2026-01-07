@@ -12,7 +12,7 @@ import (
 	capiframework "github.com/openshift/cluster-capi-operator/e2e/framework"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 )
 
@@ -33,6 +33,9 @@ const (
 	vapSpecLockedMessage          = "You may only modify spec.authoritativeAPI. Any other change inside .spec is not allowed. This is because status.authoritativeAPI is set to Cluster API."
 	vapProtectedLabelMessage      = "Cannot add, modify or delete any machine.openshift.io/* or kubernetes.io/* label. This is because status.authoritativeAPI is set to Cluster API."
 	vapProtectedAnnotationMessage = "Cannot add, modify or delete any machine.openshift.io/* annotation. This is because status.authoritativeAPI is set to Cluster API."
+
+	// CAPI Machine VAP error messages - from openshift-cluster-api-prevent-setting-of-capi-fields-unsupported-by-mapi
+	vapCAPIForbiddenFieldMessage = "spec.%s is a forbidden field"
 )
 
 var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] MAPI Machine VAP Tests", Ordered, func() {
@@ -209,6 +212,60 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] MA
 			})
 		})
 	})
+
+	var _ = Describe("CAPI Machine VAP: openshift-cluster-api-prevent-setting-of-capi-fields-unsupported-by-mapi enforcement", Ordered, func() {
+		var testMachineName = "machine-vap-test-capi-forbidden-fields"
+		var testMAPIMachine *mapiv1beta1.Machine
+		var testCAPIMachine *clusterv1.Machine
+
+		BeforeAll(func() {
+			// Create a MAPI machine with ClusterAPI authority to trigger CAPI machine creation
+			testMAPIMachine = createMAPIMachineWithAuthority(ctx, cl, testMachineName, mapiv1beta1.MachineAuthorityClusterAPI)
+
+			// Get the corresponding CAPI machine from openshift-cluster-api namespace
+			testCAPIMachine = capiframework.GetMachine(cl, testMachineName, capiframework.CAPINamespace)
+
+			// Wait until VAP match conditions are met
+			Eventually(komega.Object(testMAPIMachine), capiframework.WaitMedium, capiframework.RetryMedium).Should(
+				WithTransform(func(m *mapiv1beta1.Machine) mapiv1beta1.MachineAuthority {
+					return m.Status.AuthoritativeAPI
+				}, Equal(mapiv1beta1.MachineAuthorityClusterAPI)),
+				"VAP requires status.authoritativeAPI=Cluster API before enforcement",
+			)
+
+			DeferCleanup(func() {
+				By("Cleaning up machine resources")
+				cleanupMachineResources(
+					ctx,
+					cl,
+					[]*clusterv1.Machine{testCAPIMachine},
+					[]*mapiv1beta1.Machine{testMAPIMachine},
+				)
+			})
+		})
+
+		Context("forbidden CAPI field restrictions", func() {
+			It("should prevent updating spec.version", func() {
+				verifyCAPIUpdatePrevented(testCAPIMachine, func() {
+					testCAPIMachine.Spec.Version = "v1"
+				}, fmt.Sprintf(vapCAPIForbiddenFieldMessage, "version"))
+			})
+
+			It("should prevent updating spec.readinessGates[0].conditionType", func() {
+				verifyCAPIUpdatePrevented(testCAPIMachine, func() {
+					if len(testCAPIMachine.Spec.ReadinessGates) > 0 {
+						// Try to modify existing readinessGates[0].conditionType
+						testCAPIMachine.Spec.ReadinessGates[0].ConditionType = "test-condition"
+					} else {
+						// If readinessGates doesn't exist or is empty, try to add one
+						testCAPIMachine.Spec.ReadinessGates = []clusterv1.MachineReadinessGate{{
+							ConditionType: "test-condition",
+						}}
+					}
+				}, fmt.Sprintf(vapCAPIForbiddenFieldMessage, "readinessGates"))
+			})
+		})
+	})
 })
 
 // verifyUpdatePrevented verifies that a machine update is prevented by VAP
@@ -226,6 +283,15 @@ func verifyUpdateAllowed(machine *mapiv1beta1.Machine, updateFunc func()) {
 
 	Eventually(komega.Update(machine, updateFunc), capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(),
 		"Expected machine update to succeed")
+}
+
+// verifyCAPIUpdatePrevented verifies that a CAPI machine update is prevented by VAP
+func verifyCAPIUpdatePrevented(machine *clusterv1.Machine, updateFunc func(), expectedError string) {
+	By("Verifying that CAPI machine update is prevented by VAP")
+
+	Eventually(komega.Update(machine, updateFunc), capiframework.WaitMedium, capiframework.RetryMedium).Should(
+		MatchError(ContainSubstring(expectedError)),
+		"Expected CAPI machine update to be blocked by VAP")
 }
 
 // updateAWSMachineProviderSpec updates an AWS machine's provider spec using the provided update function
