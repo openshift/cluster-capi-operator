@@ -159,6 +159,129 @@ data:
     apiVersion: admissionregistration.k8s.io/v1
     kind: ValidatingAdmissionPolicyBinding
     metadata:
+      name: machine-api-machine-set-vap
+    spec:
+      matchResources:
+        namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: openshift-machine-api
+      paramRef:
+        namespace: openshift-cluster-api
+        # We 'Allow' here as we don't want to block MAPI Machine Set 
+        # functionality when no CAPI machine set (param) exists. 
+        # This might happen when the synchronisation controller first
+        # is installed or when an unmigrateable machine set is encountered.
+        parameterNotFoundAction: Allow
+        selector: {}
+      policyName: machine-api-machine-set-vap
+      validationActions: [Deny]
+    ---
+    apiVersion: admissionregistration.k8s.io/v1
+    kind: ValidatingAdmissionPolicy
+    metadata:
+      name: machine-api-machine-set-vap
+    spec:
+      failurePolicy: Fail
+    
+      paramKind:
+        apiVersion: cluster.x-k8s.io/v1beta2
+        kind: MachineSet
+    
+      matchConstraints:
+        resourceRules:
+        - apiGroups:   ["machine.openshift.io"]
+          apiVersions: ["v1beta1"]
+          operations:  ["UPDATE"]
+          resources:   ["machinesets"]
+    
+      # Requests must satisfy every matchCondition to reach the validations
+      matchConditions:
+        - name: check-only-non-service-account-requests
+          expression: >-
+            !(request.userInfo.username in [
+                "system:serviceaccount:openshift-machine-api:machine-api-controllers",
+                "system:serviceaccount:openshift-cluster-api:cluster-capi-operator"
+            ])
+        - name: check-authoritativeAPI-clusterapi
+          expression: 'object.status.authoritativeAPI == "ClusterAPI"'
+        - name: check-param-match
+          expression: 'object.metadata.name == params.metadata.name'
+    
+      variables:
+        # label maps
+        - name: newLabels
+          expression: "object.metadata.?labels.orValue({})"
+        - name: oldLabels
+          expression: "oldObject.metadata.?labels.orValue({})"
+        - name: paramLabels
+          expression: "params.metadata.?labels.orValue({})"
+    
+        # annotation maps
+        - name: newAnn
+          expression: "object.metadata.?annotations.orValue({})"
+        - name: oldAnn
+          expression: "oldObject.metadata.?annotations.orValue({})"
+    
+        - name: specLockedExceptAuthoritativeAPI
+          expression: >
+            [
+              [object.spec.?deletePolicy,    oldObject.spec.?deletePolicy],
+              [object.spec.?minReadySeconds, oldObject.spec.?minReadySeconds],
+              [object.spec.?replicas,        oldObject.spec.?replicas],
+              [object.spec.?selector,        oldObject.spec.?selector],
+              [object.spec.?template,        oldObject.spec.?template],
+            ].all(p,
+              p[0].hasValue()
+                ? p[1].hasValue() && p[0].value() == p[1].value()
+                : !p[1].hasValue()
+            )
+
+      # All validations must evaluate to TRUE
+      validations:
+        # Only spec.authoritativeAPI may change
+        - expression: "variables.specLockedExceptAuthoritativeAPI"
+          message:  "You may only modify spec.authoritativeAPI. Any other change inside .spec is not allowed. This is because status.authoritativeAPI is set to Cluster API."
+    
+        # Guard machine.openshift.io/*, kubernetes.io/* and cluster.x-k8s.io labels
+        - expression: >
+            !(
+              variables.newLabels.exists(k,
+                  (k.startsWith('machine.openshift.io') || k.startsWith('kubernetes.io') || k.contains('cluster.x-k8s.io/')) &&
+                  (variables.oldLabels[?k].orValue(null) != variables.newLabels[k])
+              ) ||
+              variables.oldLabels.exists(k,
+                  (k.startsWith('machine.openshift.io') || k.startsWith('kubernetes.io') || k.contains('cluster.x-k8s.io/')) &&
+                  !(k in variables.newLabels)
+              )
+            )
+          message: "Cannot add, modify or delete any machine.openshift.io/* or kubernetes.io/* label. This is because status.authoritativeAPI is set to Cluster API."
+    
+        # Guard machine.openshift.io/* and cluster(s).x-k8s.io annotations
+        - expression: >
+            !(
+              variables.newAnn.exists(k,
+                  (k.startsWith('machine.openshift.io') || k.contains('cluster.x-k8s.io') || k.contains('clusters.x-k8s.io')) &&
+                  (variables.oldAnn[?k].orValue(null) != variables.newAnn[k])
+              ) ||
+              variables.oldAnn.exists(k,
+                  (k.startsWith('machine.openshift.io') || k.contains('cluster.x-k8s.io') || k.contains('clusters.x-k8s.io')) &&
+                  !(k in variables.newAnn)
+              )
+            )
+          message: "Cannot add, modify or delete any machine.openshift.io/* annotation. This is because status.authoritativeAPI is set to Cluster API."
+    
+        # Param-controlled labels (labels on the CAPI machine) may change only to match the value on the CAPI Machine
+        - expression: >
+            variables.paramLabels.all(
+              k,
+              variables.newLabels[?k].orValue(null) == variables.oldLabels[?k].orValue(null) ||
+              variables.newLabels[?k].orValue(null) == variables.paramLabels[k]
+            )
+          message: "Cannot modify a Cluster API controlled label except to match the Cluster API mirrored machine. This is because status.authoritativeAPI is set to Cluster API."
+    ---
+    apiVersion: admissionregistration.k8s.io/v1
+    kind: ValidatingAdmissionPolicyBinding
+    metadata:
       name: cluster-api-machine-vap
     spec:
       matchResources:
