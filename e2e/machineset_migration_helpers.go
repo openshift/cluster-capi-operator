@@ -23,6 +23,7 @@ import (
 
 // createCAPIMachineSet creates a CAPI MachineSet with an AWSMachineTemplate and waits for it to be ready.
 func createCAPIMachineSet(ctx context.Context, cl client.Client, replicas int32, machineSetName string, instanceType string) *clusterv1.MachineSet {
+	GinkgoHelper()
 	By(fmt.Sprintf("Creating CAPI MachineSet %s with %d replicas", machineSetName, replicas))
 	_, mapiDefaultProviderSpec := getDefaultAWSMAPIProviderSpec()
 	createAWSClient(mapiDefaultProviderSpec.Placement.Region)
@@ -53,6 +54,7 @@ func createCAPIMachineSet(ctx context.Context, cl client.Client, replicas int32,
 
 // createMAPIMachineSetWithAuthoritativeAPI creates a MAPI MachineSet with specified authoritativeAPI and waits for the CAPI mirror to be created.
 func createMAPIMachineSetWithAuthoritativeAPI(ctx context.Context, cl client.Client, replicas int, machineSetName string, machineSetAuthority mapiv1beta1.MachineAuthority, machineAuthority mapiv1beta1.MachineAuthority) *mapiv1beta1.MachineSet {
+	GinkgoHelper()
 	By(fmt.Sprintf("Creating MAPI MachineSet with spec.authoritativeAPI: %s, spec.template.spec.authoritativeAPI: %s, replicas=%d", machineSetAuthority, machineAuthority, replicas))
 	machineSetParams := mapiframework.BuildMachineSetParams(ctx, cl, replicas)
 	machineSetParams.Name = machineSetName
@@ -84,6 +86,7 @@ func createMAPIMachineSetWithAuthoritativeAPI(ctx context.Context, cl client.Cli
 
 // switchMachineSetAuthoritativeAPI updates the authoritativeAPI fields of a MAPI MachineSet and its template.
 func switchMachineSetAuthoritativeAPI(mapiMachineSet *mapiv1beta1.MachineSet, machineSetAuthority mapiv1beta1.MachineAuthority, machineAuthority mapiv1beta1.MachineAuthority) {
+	GinkgoHelper()
 	By(fmt.Sprintf("Switching MachineSet %s AuthoritativeAPI to spec.authoritativeAPI: %s, spec.template.spec.authoritativeAPI: %s", mapiMachineSet.Name, machineSetAuthority, machineAuthority))
 	Eventually(komega.Update(mapiMachineSet, func() {
 		mapiMachineSet.Spec.AuthoritativeAPI = machineSetAuthority
@@ -93,6 +96,7 @@ func switchMachineSetAuthoritativeAPI(mapiMachineSet *mapiv1beta1.MachineSet, ma
 
 // verifyMachineSetAuthoritative verifies that a MAPI MachineSet's status.authoritativeAPI matches the expected authority.
 func verifyMachineSetAuthoritative(mapiMachineSet *mapiv1beta1.MachineSet, authority mapiv1beta1.MachineAuthority) {
+	GinkgoHelper()
 	By(fmt.Sprintf("Verifying the MachineSet authoritative is %s", authority))
 	Eventually(komega.Object(mapiMachineSet), capiframework.WaitMedium, capiframework.RetryMedium).Should(
 		HaveField("Status.AuthoritativeAPI", Equal(authority)),
@@ -102,6 +106,7 @@ func verifyMachineSetAuthoritative(mapiMachineSet *mapiv1beta1.MachineSet, autho
 
 // verifyMachineSetPausedCondition verifies the Paused condition of a MachineSet (MAPI or CAPI) based on its authoritative API.
 func verifyMachineSetPausedCondition(machineSet client.Object, authority mapiv1beta1.MachineAuthority) {
+	GinkgoHelper()
 	Expect(machineSet).NotTo(BeNil(), "MachineSet parameter cannot be nil")
 	Expect(machineSet.GetName()).NotTo(BeEmpty(), "MachineSet name cannot be empty")
 	var conditionMatcher types.GomegaMatcher
@@ -168,6 +173,7 @@ func verifyMachineSetPausedCondition(machineSet client.Object, authority mapiv1b
 
 // verifyMachinesetReplicas verifies that a MachineSet (MAPI or CAPI) has the expected number of replicas in its status.
 func verifyMachinesetReplicas(machineSet client.Object, replicas int) {
+	GinkgoHelper()
 	Expect(machineSet).NotTo(BeNil(), "Machine parameter cannot be nil")
 	Expect(machineSet.GetName()).NotTo(BeEmpty(), "Machine name cannot be empty")
 	switch ms := machineSet.(type) {
@@ -188,6 +194,7 @@ func verifyMachinesetReplicas(machineSet client.Object, replicas int) {
 
 // verifyMAPIMachineSetSynchronizedCondition verifies that a MAPI MachineSet has the Synchronized condition set to True with the correct message.
 func verifyMAPIMachineSetSynchronizedCondition(mapiMachineSet *mapiv1beta1.MachineSet, authority mapiv1beta1.MachineAuthority) {
+	GinkgoHelper()
 	By("Verifying the MAPI MachineSet Synchronized condition is True")
 	var expectedMessage string
 
@@ -220,6 +227,7 @@ func verifyMAPIMachineSetSynchronizedCondition(mapiMachineSet *mapiv1beta1.Machi
 
 // verifyMAPIMachineSetProviderSpec verifies that a MAPI MachineSet's providerSpec matches the given Gomega matcher.
 func verifyMAPIMachineSetProviderSpec(mapiMachineSet *mapiv1beta1.MachineSet, matcher types.GomegaMatcher) {
+	GinkgoHelper()
 	By(fmt.Sprintf("Verifying MAPI MachineSet %s ProviderSpec", mapiMachineSet.Name))
 	Eventually(komega.Object(mapiMachineSet), capiframework.WaitMedium, capiframework.RetryShort).Should(
 		WithTransform(getAWSProviderSpecFromMachineSet, matcher),
@@ -228,6 +236,7 @@ func verifyMAPIMachineSetProviderSpec(mapiMachineSet *mapiv1beta1.MachineSet, ma
 
 // getAWSProviderSpecFromMachineSet extracts and unmarshals the AWSMachineProviderConfig from a MAPI MachineSet.
 func getAWSProviderSpecFromMachineSet(mapiMachineSet *mapiv1beta1.MachineSet) *mapiv1beta1.AWSMachineProviderConfig {
+	GinkgoHelper()
 	Expect(mapiMachineSet.Spec.Template.Spec.ProviderSpec.Value).ToNot(BeNil())
 
 	providerSpec := &mapiv1beta1.AWSMachineProviderConfig{}
@@ -238,6 +247,7 @@ func getAWSProviderSpecFromMachineSet(mapiMachineSet *mapiv1beta1.MachineSet) *m
 
 // updateAWSMachineSetProviderSpec updates a MAPI MachineSet's AWS providerSpec using the provided update function.
 func updateAWSMachineSetProviderSpec(ctx context.Context, cl client.Client, mapiMachineSet *mapiv1beta1.MachineSet, updateFunc func(*mapiv1beta1.AWSMachineProviderConfig)) {
+	GinkgoHelper()
 	By(fmt.Sprintf("Updating MachineSet %s providerSpec", mapiMachineSet.Name))
 	providerSpec := getAWSProviderSpecFromMachineSet(mapiMachineSet)
 
@@ -255,6 +265,7 @@ func updateAWSMachineSetProviderSpec(ctx context.Context, cl client.Client, mapi
 
 // waitForMAPIMachineSetMirrors waits for the corresponding CAPI MachineSet and AWSMachineTemplate mirrors to be created for a MAPI MachineSet.
 func waitForMAPIMachineSetMirrors(cl client.Client, machineSetNameMAPI string) (*clusterv1.MachineSet, *awsv1.AWSMachineTemplate) {
+	GinkgoHelper()
 	By(fmt.Sprintf("Verifying there is a CAPI MachineSet mirror and AWSMachineTemplate for MAPI MachineSet %s", machineSetNameMAPI))
 	var err error
 	var capiMachineSet *clusterv1.MachineSet
@@ -278,6 +289,7 @@ func waitForMAPIMachineSetMirrors(cl client.Client, machineSetNameMAPI string) (
 
 // waitForCAPIMachineSetMirror waits for a CAPI MachineSet mirror to be created for a MAPI MachineSet.
 func waitForCAPIMachineSetMirror(cl client.Client, machineName string) *clusterv1.MachineSet {
+	GinkgoHelper()
 	By(fmt.Sprintf("Verifying there is a CAPI MachineSet mirror for MAPI MachineSet %s", machineName))
 	var capiMachineSet *clusterv1.MachineSet
 	Eventually(func() error {
@@ -292,6 +304,7 @@ func waitForCAPIMachineSetMirror(cl client.Client, machineName string) *clusterv
 
 // waitForAWSMachineTemplate waits for an AWSMachineTemplate with the specified name prefix to be created.
 func waitForAWSMachineTemplate(cl client.Client, prefix string) *awsv1.AWSMachineTemplate {
+	GinkgoHelper()
 	By(fmt.Sprintf("Verifying there is an AWSMachineTemplate with prefix %s", prefix))
 	var awsMachineTemplate *awsv1.AWSMachineTemplate
 	Eventually(func() error {
@@ -308,6 +321,7 @@ func waitForAWSMachineTemplate(cl client.Client, prefix string) *awsv1.AWSMachin
 
 // createAWSMachineTemplate creates a new AWSMachineTemplate with an optional update function to modify the spec.
 func createAWSMachineTemplate(ctx context.Context, cl client.Client, originalName string, updateFunc func(*awsv1.AWSMachineSpec)) *awsv1.AWSMachineTemplate {
+	GinkgoHelper()
 	By("Creating a new awsMachineTemplate")
 	_, mapiDefaultProviderSpec := getDefaultAWSMAPIProviderSpec()
 	createAWSClient(mapiDefaultProviderSpec.Placement.Region)
@@ -327,6 +341,7 @@ func createAWSMachineTemplate(ctx context.Context, cl client.Client, originalNam
 
 // updateCAPIMachineSetInfraTemplate updates a CAPI MachineSet's infrastructureRef to point to a new template.
 func updateCAPIMachineSetInfraTemplate(capiMachineSet *clusterv1.MachineSet, newInfraTemplateName string) {
+	GinkgoHelper()
 	By(fmt.Sprintf("Updating CAPI MachineSet %s to point to new InfraTemplate %s", capiMachineSet.Name, newInfraTemplateName))
 	Eventually(komega.Update(capiMachineSet, func() {
 		capiMachineSet.Spec.Template.Spec.InfrastructureRef.Name = newInfraTemplateName
