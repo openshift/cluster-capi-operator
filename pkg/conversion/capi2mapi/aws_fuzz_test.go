@@ -170,6 +170,17 @@ func awsMachineFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interface{} 
 			// We don't support this field since the externally managed annotation is added, so it's best to keep this nil.
 			spec.SecurityGroupOverrides = nil
 		},
+		func(v *awsv1.Volume, c randfill.Continue) {
+			c.FillNoCustom(v)
+
+			// Override Throughput with a valid int32 value to avoid validation errors during conversion to MAPI.
+			// MAPI's ThroughputMib field is *int32, while CAPI's Throughput is *int64.
+			// The conversion validates and rejects values that exceed int32 range.
+			// Note: We have dedicated tests for this validation (see "should fail to convert when throughput exceeds int32 max").
+			if v.Throughput != nil {
+				*v.Throughput = int64(c.Int31())
+			}
+		},
 		func(m *awsv1.AWSMachine, c randfill.Continue) {
 			c.FillNoCustom(m)
 
