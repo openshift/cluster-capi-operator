@@ -353,8 +353,10 @@ var _ = Describe("MachineSet VAP Tests", func() {
 		var mapiMachineSet *mapiv1beta1.MachineSet
 
 		const (
-			vapName        string = "machine-api-machine-set-vap"
-			testLabelValue string = "test-value"
+			vapName                    string = "machine-api-machine-set-vap"
+			testLabelValue             string = "test-value"
+			errMsgProtectedLabels      string = "Cannot add, modify or delete any machine.openshift.io/*, kubernetes.io/* or cluster.x-k8s.io/* label"
+			errMsgProtectedAnnotations string = "Cannot add, modify or delete any machine.openshift.io/* or cluster.x-k8s.io/* or clusters.x-k8s.io/* annotation"
 		)
 
 		BeforeEach(func() {
@@ -418,7 +420,7 @@ var _ = Describe("MachineSet VAP Tests", func() {
 
 			Eventually(k.Get(capiSentinelMachineSet)).Should(Succeed())
 
-			admissiontestutils.VerifySentinelValidation(k, sentinelMachineSet, 2*timeout)
+			admissiontestutils.VerifySentinelValidation(k, sentinelMachineSet, timeout)
 
 			By("Creating a shared machineset pair to be used across the tests")
 			mapiMachineSetBuilder = machinev1resourcebuilder.MachineSet().
@@ -501,31 +503,31 @@ var _ = Describe("MachineSet VAP Tests", func() {
 				It("rejects modification of the protected machine.openshift.io label", func() {
 					Eventually(k.Update(mapiMachineSet, func() {
 						mapiMachineSet.Labels["machine.openshift.io/cluster-api-cluster"] = testLabelValue
-					}), timeout).Should(MatchError(ContainSubstring("Cannot add, modify or delete any machine.openshift.io/* or kubernetes.io/* label")))
+					}), timeout).Should(MatchError(ContainSubstring(errMsgProtectedLabels)))
 				})
 
 				It("rejects deletion of the protected machine.openshift.io label", func() {
 					Eventually(k.Update(mapiMachineSet, func() {
 						delete(mapiMachineSet.Labels, "machine.openshift.io/cluster-api-cluster")
-					}), timeout).Should(MatchError(ContainSubstring("Cannot add, modify or delete any machine.openshift.io/* or kubernetes.io/* label")))
+					}), timeout).Should(MatchError(ContainSubstring(errMsgProtectedLabels)))
 				})
 
 				It("rejects setting of the protected machine.openshift.io label to the empty string ''", func() {
 					Eventually(k.Update(mapiMachineSet, func() {
 						mapiMachineSet.Labels["machine.openshift.io/cluster-api-cluster"] = ""
-					}), timeout).Should(MatchError(ContainSubstring("Cannot add, modify or delete any machine.openshift.io/* or kubernetes.io/* label")))
+					}), timeout).Should(MatchError(ContainSubstring(errMsgProtectedLabels)))
 				})
 
 				It("rejects adding a new machine.openshift.io label", func() {
 					Eventually(k.Update(mapiMachineSet, func() {
 						mapiMachineSet.Labels["machine.openshift.io/foo"] = testLabelValue
-					}), timeout).Should(MatchError(ContainSubstring("Cannot add, modify or delete any machine.openshift.io/* or kubernetes.io/* label")))
+					}), timeout).Should(MatchError(ContainSubstring(errMsgProtectedLabels)))
 				})
 
 				It("rejects adding a new machine.openshift.io label with an empty string value", func() {
 					Eventually(k.Update(mapiMachineSet, func() {
 						mapiMachineSet.Labels["machine.openshift.io/foo"] = ""
-					}), timeout).Should(MatchError(ContainSubstring("Cannot add, modify or delete any machine.openshift.io/* or kubernetes.io/* label")))
+					}), timeout).Should(MatchError(ContainSubstring(errMsgProtectedLabels)))
 				})
 
 				It("allows modification of a non-protected label", func() {
@@ -539,31 +541,31 @@ var _ = Describe("MachineSet VAP Tests", func() {
 				It("rejects modification of a protected machine.openshift.io annotation", func() {
 					Eventually(k.Update(mapiMachineSet, func() {
 						mapiMachineSet.Annotations["machine.openshift.io/vCPU"] = testLabelValue
-					}), timeout).Should(MatchError(ContainSubstring("Cannot add, modify or delete any machine.openshift.io/* annotation")))
+					}), timeout).Should(MatchError(ContainSubstring(errMsgProtectedAnnotations)))
 				})
 
 				It("rejects deletion of a protected machine.openshift.io annotation", func() {
 					Eventually(k.Update(mapiMachineSet, func() {
 						delete(mapiMachineSet.Annotations, "machine.openshift.io/vCPU")
-					}), timeout).Should(MatchError(ContainSubstring("Cannot add, modify or delete any machine.openshift.io/* annotation")))
+					}), timeout).Should(MatchError(ContainSubstring(errMsgProtectedAnnotations)))
 				})
 
 				It("rejects modification of a protected machine.openshift.io annotation to the empty string ''", func() {
 					Eventually(k.Update(mapiMachineSet, func() {
 						mapiMachineSet.Annotations["machine.openshift.io/vCPU"] = ""
-					}), timeout).Should(MatchError(ContainSubstring("Cannot add, modify or delete any machine.openshift.io/* annotation")))
+					}), timeout).Should(MatchError(ContainSubstring(errMsgProtectedAnnotations)))
 				})
 
 				It("rejects adding a new protected machine.openshift.io annotation", func() {
 					Eventually(k.Update(mapiMachineSet, func() {
 						mapiMachineSet.Annotations["machine.openshift.io/foo"] = testLabelValue
-					}), timeout).Should(MatchError(ContainSubstring("Cannot add, modify or delete any machine.openshift.io/* annotation")))
+					}), timeout).Should(MatchError(ContainSubstring(errMsgProtectedAnnotations)))
 				})
 
 				It("rejects adding a new protected machine.openshift.io annotation with an empty string value", func() {
 					Eventually(k.Update(mapiMachineSet, func() {
 						mapiMachineSet.Annotations["machine.openshift.io/foo"] = ""
-					}), timeout).Should(MatchError(ContainSubstring("Cannot add, modify or delete any machine.openshift.io/* annotation")))
+					}), timeout).Should(MatchError(ContainSubstring(errMsgProtectedAnnotations)))
 				})
 
 				It("allows modification of a non-protected annotation", func() {
@@ -586,7 +588,7 @@ var _ = Describe("MachineSet VAP Tests", func() {
 				It("rejects changing a label to differ from the param machine", func() {
 					Eventually(k.Update(mapiMachineSet, func() {
 						mapiMachineSet.Labels["capi-param-controlled-label"] = "foo"
-					}), timeout).Should(MatchError(ContainSubstring("Cannot modify a Cluster API controlled label except to match the Cluster API mirrored machine")))
+					}), timeout).Should(MatchError(ContainSubstring("Cannot modify a Cluster API controlled label except to match the Cluster API mirrored MachineSet")))
 				})
 			})
 
@@ -743,6 +745,243 @@ var _ = Describe("MachineSet VAP Tests", func() {
 					Build()
 
 				Eventually(k8sClient.Create(ctx, newCapiMachineSet)).Should(Succeed())
+			})
+		})
+	})
+
+	Context("Prevent changes to non-authoritative CAPI MachineSets except from sync controller", func() {
+		var mapiMachineSetBuilder machinev1resourcebuilder.MachineSetBuilder
+		var mapiMachineSet *mapiv1beta1.MachineSet
+
+		const (
+			vapName                    string = "cluster-api-machine-set-vap"
+			testLabelValue             string = "test-value"
+			errMsgProtectedLabels      string = "Cannot add, modify or delete any machine.openshift.io/*, kubernetes.io/* or cluster.x-k8s.io/* label"
+			errMsgProtectedAnnotations string = "Cannot add, modify or delete any machine.openshift.io/* or cluster.x-k8s.io/* or clusters.x-k8s.io/* annotation"
+		)
+
+		BeforeEach(func() {
+			By("Waiting for VAP to be ready")
+			machineSetVap = &admissionregistrationv1.ValidatingAdmissionPolicy{}
+			Eventually(k8sClient.Get(ctx, client.ObjectKey{Name: vapName}, machineSetVap), timeout).Should(Succeed())
+
+			Eventually(k.Update(machineSetVap, func() {
+				admissiontestutils.AddSentinelValidation(machineSetVap)
+			})).Should(Succeed())
+
+			Eventually(k.Object(machineSetVap), timeout).Should(
+				HaveField("Status.ObservedGeneration", BeNumerically(">=", 2)),
+			)
+
+			By("Updating the VAP binding")
+			policyBinding = &admissionregistrationv1.ValidatingAdmissionPolicyBinding{}
+			Eventually(k8sClient.Get(ctx, client.ObjectKey{
+				Name: vapName}, policyBinding), timeout).Should(Succeed())
+
+			Eventually(k.Update(policyBinding, func() {
+				// paramNamespace=mapiNamespace (MAPI resources are params)
+				// targetNamespace=capiNamespace (CAPI resources are validated)
+				admissiontestutils.UpdateVAPBindingNamespaces(policyBinding, mapiNamespace.GetName(), capiNamespace.GetName())
+			}), timeout).Should(Succeed())
+
+			// Wait until the binding shows the patched values
+			Eventually(k.Object(policyBinding), timeout).Should(
+				SatisfyAll(
+					HaveField("Spec.MatchResources.NamespaceSelector.MatchLabels",
+						HaveKeyWithValue("kubernetes.io/metadata.name",
+							capiNamespace.GetName())),
+				),
+			)
+
+			By("Creating throwaway MachineSet pair for sentinel validation")
+			sentinelMachineSet := machinev1resourcebuilder.MachineSet().
+				WithNamespace(mapiNamespace.Name).
+				WithName("sentinel-machineset").
+				WithAuthoritativeAPI(mapiv1beta1.MachineAuthorityMachineAPI).
+				Build()
+			Eventually(k8sClient.Create(ctx, sentinelMachineSet), timeout).Should(Succeed())
+
+			Eventually(k.UpdateStatus(sentinelMachineSet, func() {
+				sentinelMachineSet.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityMachineAPI
+			})).Should(Succeed())
+
+			Eventually(k.Object(sentinelMachineSet), timeout).Should(
+				HaveField("Status.AuthoritativeAPI", Equal(mapiv1beta1.MachineAuthorityMachineAPI)))
+
+			capiSentinelMachineSet := clusterv1resourcebuilder.MachineSet().
+				WithName("sentinel-machineset").
+				WithNamespace(capiNamespace.Name).
+				WithTemplate(clusterv1.MachineTemplateSpec{
+					Spec: clusterv1.MachineSpec{
+						ProviderID: "force-having-a-spec",
+					},
+				}).
+				Build()
+			Eventually(k8sClient.Create(ctx, capiSentinelMachineSet)).Should(Succeed())
+
+			Eventually(k.Get(capiSentinelMachineSet)).Should(Succeed())
+
+			admissiontestutils.VerifySentinelValidation(k, capiSentinelMachineSet, timeout)
+
+			By("Creating a shared machineset pair to be used across the tests")
+			mapiMachineSetBuilder = machinev1resourcebuilder.MachineSet().
+				WithNamespace(mapiNamespace.Name).
+				WithName(capiMachineSet.Name).
+				WithProviderSpecBuilder(machinev1resourcebuilder.AWSProviderSpec().WithLoadBalancers(nil)).
+				WithLabels(map[string]string{
+					"machine.openshift.io/cluster-api-cluster": "ci-op-gs2k97d6-c9e33-2smph",
+					"mapi-param-controlled-label":              "param-controlled-key",
+				}).WithAnnotations(map[string]string{
+				"capacity.cluster-autoscaler.kubernetes.io/labels": "kubernetes.io/arch=amd64",
+				"machine.openshift.io/GPU":                         "0",
+				"machine.openshift.io/memoryMb":                    "16384",
+				"machine.openshift.io/vCPU":                        "4",
+			})
+			mapiMachineSet = mapiMachineSetBuilder.Build()
+			Eventually(k8sClient.Create(ctx, mapiMachineSet), timeout).Should(Succeed())
+
+			capiMachineSet = capiMachineSetBuilder.WithLabels(map[string]string{
+				"machine.openshift.io/cluster-api-cluster": "ci-op-gs2k97d6-c9e33-2smph",
+				"cluster.x-k8s.io/cluster-name":            "ci-op-gs2k97d6-c9e33-2smph",
+
+				"capi-param-controlled-label": "param-controlled-key",
+			}).WithAnnotations(map[string]string{
+				"capacity.cluster-autoscaler.kubernetes.io/labels": "kubernetes.io/arch=amd64",
+				"machine.openshift.io/GPU":                         "0",
+				"machine.openshift.io/memoryMb":                    "16384",
+				"machine.openshift.io/vCPU":                        "4",
+			}).Build()
+
+			Eventually(k8sClient.Create(ctx, capiMachineSet), timeout).Should(Succeed())
+
+		})
+		Context("with status.authoritativeAPI: Machine API (on MAPI MachineSet)", func() {
+			BeforeEach(func() {
+				By("Setting the MAPI MachineSet AuthoritativeAPI to Machine API")
+				Eventually(k.UpdateStatus(mapiMachineSet, func() {
+					mapiMachineSet.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityMachineAPI
+				})).Should(Succeed())
+
+				Eventually(k.Object(mapiMachineSet), timeout).Should(
+					HaveField("Status.AuthoritativeAPI", Equal(mapiv1beta1.MachineAuthorityMachineAPI)))
+			})
+
+			It("updating the spec should be prevented", func() {
+				Eventually(k.Update(capiMachineSet, func() {
+					replicas := int32(5)
+					capiMachineSet.Spec.Replicas = &replicas
+				}), timeout).Should(MatchError(ContainSubstring("Changing .spec is not allowed")))
+			})
+
+			It("updating the spec.AuthoritativeAPI (on the MAPI MachineSet) should be allowed", func() {
+				Eventually(k.Update(mapiMachineSet, func() {
+					mapiMachineSet.Spec.AuthoritativeAPI = mapiv1beta1.MachineAuthorityClusterAPI
+				}), timeout).Should(Succeed())
+			})
+
+			Context("when trying to update metadata.labels", func() {
+				It("rejects modification of the protected machine.openshift.io label", func() {
+					Eventually(k.Update(capiMachineSet, func() {
+						capiMachineSet.Labels["machine.openshift.io/cluster-api-cluster"] = "different-cluster"
+					}), timeout).Should(MatchError(ContainSubstring(errMsgProtectedLabels)))
+				})
+
+				It("rejects deletion of the protected machine.openshift.io label", func() {
+					Eventually(k.Update(capiMachineSet, func() {
+						delete(capiMachineSet.Labels, "machine.openshift.io/cluster-api-cluster")
+					}), timeout).Should(MatchError(ContainSubstring(errMsgProtectedLabels)))
+				})
+
+				It("rejects setting of the protected machine.openshift.io label to the empty string ''", func() {
+					Eventually(k.Update(capiMachineSet, func() {
+						capiMachineSet.Labels["machine.openshift.io/cluster-api-cluster"] = ""
+					}), timeout).Should(MatchError(ContainSubstring(errMsgProtectedLabels)))
+				})
+
+				It("rejects adding a new machine.openshift.io label", func() {
+					Eventually(k.Update(capiMachineSet, func() {
+						capiMachineSet.Labels["machine.openshift.io/foo"] = testLabelValue
+					}), timeout).Should(MatchError(ContainSubstring(errMsgProtectedLabels)))
+				})
+
+				It("rejects adding a new machine.openshift.io label with an empty string value", func() {
+					Eventually(k.Update(capiMachineSet, func() {
+						capiMachineSet.Labels["machine.openshift.io/foo"] = ""
+					}), timeout).Should(MatchError(ContainSubstring(errMsgProtectedLabels)))
+				})
+
+				It("rejects modification of the protected cluster.x-k8s.io label", func() {
+					Eventually(k.Update(capiMachineSet, func() {
+						capiMachineSet.Labels["cluster.x-k8s.io/cluster-name"] = "different-cluster"
+					}), timeout).Should(MatchError(ContainSubstring(errMsgProtectedLabels)))
+				})
+
+				It("rejects deletion of the protected cluster.x-k8s.io label", func() {
+					Eventually(k.Update(capiMachineSet, func() {
+						delete(capiMachineSet.Labels, "cluster.x-k8s.io/cluster-name")
+					}), timeout).Should(MatchError(ContainSubstring(errMsgProtectedLabels)))
+				})
+
+				It("allows modification of a non-protected label", func() {
+					Eventually(k.Update(capiMachineSet, func() {
+						capiMachineSet.Labels["test"] = "val"
+					}), timeout).Should(Succeed(), "expected success when modifying unrelated labels")
+				})
+			})
+
+			Context("when trying to update metadata.Annotations", func() {
+				It("rejects modification of a protected machine.openshift.io annotation", func() {
+					Eventually(k.Update(capiMachineSet, func() {
+						capiMachineSet.Annotations["machine.openshift.io/vCPU"] = "8"
+					}), timeout).Should(MatchError(ContainSubstring(errMsgProtectedAnnotations)))
+				})
+
+				It("rejects deletion of a protected machine.openshift.io annotation", func() {
+					Eventually(k.Update(capiMachineSet, func() {
+						delete(capiMachineSet.Annotations, "machine.openshift.io/vCPU")
+					}), timeout).Should(MatchError(ContainSubstring(errMsgProtectedAnnotations)))
+				})
+
+				It("rejects modification of a protected machine.openshift.io annotation to the empty string ''", func() {
+					Eventually(k.Update(capiMachineSet, func() {
+						capiMachineSet.Annotations["machine.openshift.io/vCPU"] = ""
+					}), timeout).Should(MatchError(ContainSubstring(errMsgProtectedAnnotations)))
+				})
+
+				It("rejects adding a new protected machine.openshift.io annotation", func() {
+					Eventually(k.Update(capiMachineSet, func() {
+						capiMachineSet.Annotations["machine.openshift.io/foo"] = testLabelValue
+					}), timeout).Should(MatchError(ContainSubstring(errMsgProtectedAnnotations)))
+				})
+
+				It("rejects adding a new protected machine.openshift.io annotation with an empty string value", func() {
+					Eventually(k.Update(capiMachineSet, func() {
+						capiMachineSet.Annotations["machine.openshift.io/foo"] = ""
+					}), timeout).Should(MatchError(ContainSubstring(errMsgProtectedAnnotations)))
+				})
+
+				It("allows modification of a non-protected annotation", func() {
+					Eventually(k.Update(capiMachineSet, func() {
+						capiMachineSet.Annotations["bar"] = "baz"
+					}), timeout).Should(Succeed(), "expected success when modifying unrelated annotations")
+				})
+			})
+
+			Context("when trying to update Machine API owned metadata.labels", func() {
+				It("allows changing a metadata label to match the param MachineSet", func() {
+					Eventually(k.Object(mapiMachineSet), timeout).Should(
+						HaveField("Labels", HaveKeyWithValue("mapi-param-controlled-label", "param-controlled-key")))
+
+					Eventually(k.Update(capiMachineSet, func() {
+						capiMachineSet.Labels["mapi-param-controlled-label"] = "param-controlled-key"
+					}), timeout).Should(Succeed(), "expected success when updating label to match MAPI MachineSet")
+				})
+
+				It("rejects changing a label to differ from the param MachineSet", func() {
+					Eventually(k.Update(capiMachineSet, func() {
+						capiMachineSet.Labels["mapi-param-controlled-label"] = testLabelValue
+					}), timeout).Should(MatchError(ContainSubstring("Cannot modify a Machine API controlled label except to match the Machine API mirrored MachineSet")))
+				})
 			})
 		})
 	})
