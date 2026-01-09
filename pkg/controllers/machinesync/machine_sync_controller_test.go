@@ -1054,6 +1054,9 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 			testLabelValue           = "test-value"
 			machineAPIMachineVAPName = "machine-api-machine-vap"
 			clusterAPIMachineVAPName = "cluster-api-machine-vap"
+
+			errMsgProtectedLabels      = "Cannot add, modify or delete any machine.openshift.io/*, kubernetes.io/* or cluster.x-k8s.io/* label"
+			errMsgProtectedAnnotations = "Cannot add, modify or delete any machine.openshift.io/* or cluster.x-k8s.io/* or clusters.x-k8s.io/* annotation"
 		)
 
 		var (
@@ -1232,31 +1235,31 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 					It("rejects modification of the protected machine.openshift.io label", func() {
 						Eventually(k.Update(mapiMachine, func() {
 							mapiMachine.Labels["machine.openshift.io/instance-type"] = "m5.large"
-						}), timeout).Should(MatchError(ContainSubstring("Cannot add, modify or delete any machine.openshift.io/* or kubernetes.io/* label")))
+						}), timeout).Should(MatchError(ContainSubstring(errMsgProtectedLabels)))
 					})
 
 					It("rejects deletion of the protected machine.openshift.io label", func() {
 						Eventually(k.Update(mapiMachine, func() {
 							delete(mapiMachine.Labels, "machine.openshift.io/instance-type")
-						}), timeout).Should(MatchError(ContainSubstring("Cannot add, modify or delete any machine.openshift.io/* or kubernetes.io/* label")))
+						}), timeout).Should(MatchError(ContainSubstring(errMsgProtectedLabels)))
 					})
 
 					It("rejects setting of the protected machine.openshift.io label to the empty string ''", func() {
 						Eventually(k.Update(mapiMachine, func() {
 							mapiMachine.Labels["machine.openshift.io/instance-type"] = ""
-						}), timeout).Should(MatchError(ContainSubstring("Cannot add, modify or delete any machine.openshift.io/* or kubernetes.io/* label")))
+						}), timeout).Should(MatchError(ContainSubstring(errMsgProtectedLabels)))
 					})
 
 					It("rejects adding a new machine.openshift.io label", func() {
 						Eventually(k.Update(mapiMachine, func() {
 							mapiMachine.Labels["machine.openshift.io/foo"] = testLabelValue
-						}), timeout).Should(MatchError(ContainSubstring("Cannot add, modify or delete any machine.openshift.io/* or kubernetes.io/* label")))
+						}), timeout).Should(MatchError(ContainSubstring(errMsgProtectedLabels)))
 					})
 
 					It("rejects adding a new machine.openshift.io label with an empty string value", func() {
 						Eventually(k.Update(mapiMachine, func() {
 							mapiMachine.Labels["machine.openshift.io/foo"] = ""
-						}), timeout).Should(MatchError(ContainSubstring("Cannot add, modify or delete any machine.openshift.io/* or kubernetes.io/* label")))
+						}), timeout).Should(MatchError(ContainSubstring(errMsgProtectedLabels)))
 					})
 
 					It("rejects adding a new the 'machine-template-hash' label", func() {
@@ -1276,31 +1279,31 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 					It("rejects modification of a protected machine.openshift.io annotation", func() {
 						Eventually(k.Update(mapiMachine, func() {
 							mapiMachine.Annotations["machine.openshift.io/instance-state"] = "stopped"
-						}), timeout).Should(MatchError(ContainSubstring("Cannot add, modify or delete any machine.openshift.io/* annotation")))
+						}), timeout).Should(MatchError(ContainSubstring(errMsgProtectedAnnotations)))
 					})
 
 					It("rejects deletion of a protected machine.openshift.io annotation", func() {
 						Eventually(k.Update(mapiMachine, func() {
 							delete(mapiMachine.Annotations, "machine.openshift.io/instance-state")
-						}), timeout).Should(MatchError(ContainSubstring("Cannot add, modify or delete any machine.openshift.io/* annotation")))
+						}), timeout).Should(MatchError(ContainSubstring(errMsgProtectedAnnotations)))
 					})
 
 					It("rejects modification of a protected machine.openshift.io annotation to the empty string ''", func() {
 						Eventually(k.Update(mapiMachine, func() {
 							mapiMachine.Annotations["machine.openshift.io/instance-state"] = ""
-						}), timeout).Should(MatchError(ContainSubstring("Cannot add, modify or delete any machine.openshift.io/* annotation")))
+						}), timeout).Should(MatchError(ContainSubstring(errMsgProtectedAnnotations)))
 					})
 
 					It("rejects adding a new protected machine.openshift.io annotation", func() {
 						Eventually(k.Update(mapiMachine, func() {
 							mapiMachine.Annotations["machine.openshift.io/foo"] = testLabelValue
-						}), timeout).Should(MatchError(ContainSubstring("Cannot add, modify or delete any machine.openshift.io/* annotation")))
+						}), timeout).Should(MatchError(ContainSubstring(errMsgProtectedAnnotations)))
 					})
 
 					It("rejects adding a new protected machine.openshift.io annotation with an empty string value", func() {
 						Eventually(k.Update(mapiMachine, func() {
 							mapiMachine.Annotations["machine.openshift.io/foo"] = ""
-						}), timeout).Should(MatchError(ContainSubstring("Cannot add, modify or delete any machine.openshift.io/* annotation")))
+						}), timeout).Should(MatchError(ContainSubstring(errMsgProtectedAnnotations)))
 					})
 
 					It("allows modification of a non-protected annotation", func() {
@@ -1454,43 +1457,43 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 					It("rejects modification of the protected machine.openshift.io label", func() {
 						Eventually(k.Update(capiMachine, func() {
 							capiMachine.Labels["machine.openshift.io/instance-type"] = "m5.large"
-						}), timeout).Should(MatchError(ContainSubstring("Cannot add, modify or delete any machine.openshift.io/*, kubernetes.io/* or cluster.x-k8s.io/* label")))
+						}), timeout).Should(MatchError(ContainSubstring(errMsgProtectedLabels)))
 					})
 
 					It("rejects deletion of the protected machine.openshift.io label", func() {
 						Eventually(k.Update(capiMachine, func() {
 							delete(capiMachine.Labels, "machine.openshift.io/instance-type")
-						}), timeout).Should(MatchError(ContainSubstring("Cannot add, modify or delete any machine.openshift.io/*, kubernetes.io/* or cluster.x-k8s.io/* label")))
+						}), timeout).Should(MatchError(ContainSubstring(errMsgProtectedLabels)))
 					})
 
 					It("rejects setting of the protected machine.openshift.io label to the empty string ''", func() {
 						Eventually(k.Update(capiMachine, func() {
 							capiMachine.Labels["machine.openshift.io/instance-type"] = ""
-						}), timeout).Should(MatchError(ContainSubstring("Cannot add, modify or delete any machine.openshift.io/*, kubernetes.io/* or cluster.x-k8s.io/* label")))
+						}), timeout).Should(MatchError(ContainSubstring(errMsgProtectedLabels)))
 					})
 
 					It("rejects adding a new machine.openshift.io label", func() {
 						Eventually(k.Update(capiMachine, func() {
 							capiMachine.Labels["machine.openshift.io/foo"] = testLabelValue
-						}), timeout).Should(MatchError(ContainSubstring("Cannot add, modify or delete any machine.openshift.io/*, kubernetes.io/* or cluster.x-k8s.io/* label")))
+						}), timeout).Should(MatchError(ContainSubstring(errMsgProtectedLabels)))
 					})
 
 					It("rejects adding a new machine.openshift.io label with an empty string value", func() {
 						Eventually(k.Update(capiMachine, func() {
 							capiMachine.Labels["machine.openshift.io/foo"] = ""
-						}), timeout).Should(MatchError(ContainSubstring("Cannot add, modify or delete any machine.openshift.io/*, kubernetes.io/* or cluster.x-k8s.io/* label")))
+						}), timeout).Should(MatchError(ContainSubstring(errMsgProtectedLabels)))
 					})
 
 					It("rejects modification of the protected cluster.x-k8s.io label", func() {
 						Eventually(k.Update(capiMachine, func() {
 							capiMachine.Labels["cluster.x-k8s.io/cluster-name"] = "different-cluster"
-						}), timeout).Should(MatchError(ContainSubstring("Cannot add, modify or delete any machine.openshift.io/*, kubernetes.io/* or cluster.x-k8s.io/* label")))
+						}), timeout).Should(MatchError(ContainSubstring(errMsgProtectedLabels)))
 					})
 
 					It("rejects deletion of the protected cluster.x-k8s.io label", func() {
 						Eventually(k.Update(capiMachine, func() {
 							delete(capiMachine.Labels, "cluster.x-k8s.io/cluster-name")
-						}), timeout).Should(MatchError(ContainSubstring("Cannot add, modify or delete any machine.openshift.io/*, kubernetes.io/* or cluster.x-k8s.io/* label")))
+						}), timeout).Should(MatchError(ContainSubstring(errMsgProtectedLabels)))
 					})
 
 					It("rejects adding a new the 'machine-template-hash' label", func() {
@@ -1510,31 +1513,31 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 					It("rejects modification of a protected machine.openshift.io annotation", func() {
 						Eventually(k.Update(capiMachine, func() {
 							capiMachine.Annotations["machine.openshift.io/instance-state"] = "stopped"
-						}), timeout).Should(MatchError(ContainSubstring("Cannot add, modify or delete any machine.openshift.io/* or cluster.x-k8s.io or clusters.x-k8s.io annotation")))
+						}), timeout).Should(MatchError(ContainSubstring(errMsgProtectedAnnotations)))
 					})
 
 					It("rejects deletion of a protected machine.openshift.io annotation", func() {
 						Eventually(k.Update(capiMachine, func() {
 							delete(capiMachine.Annotations, "machine.openshift.io/instance-state")
-						}), timeout).Should(MatchError(ContainSubstring("Cannot add, modify or delete any machine.openshift.io/* or cluster.x-k8s.io or clusters.x-k8s.io annotation")))
+						}), timeout).Should(MatchError(ContainSubstring(errMsgProtectedAnnotations)))
 					})
 
 					It("rejects modification of a protected machine.openshift.io annotation to the empty string ''", func() {
 						Eventually(k.Update(capiMachine, func() {
 							capiMachine.Annotations["machine.openshift.io/instance-state"] = ""
-						}), timeout).Should(MatchError(ContainSubstring("Cannot add, modify or delete any machine.openshift.io/* or cluster.x-k8s.io or clusters.x-k8s.io annotation")))
+						}), timeout).Should(MatchError(ContainSubstring(errMsgProtectedAnnotations)))
 					})
 
 					It("rejects adding a new protected machine.openshift.io annotation", func() {
 						Eventually(k.Update(capiMachine, func() {
 							capiMachine.Annotations["machine.openshift.io/foo"] = testLabelValue
-						}), timeout).Should(MatchError(ContainSubstring("Cannot add, modify or delete any machine.openshift.io/* or cluster.x-k8s.io or clusters.x-k8s.io annotation")))
+						}), timeout).Should(MatchError(ContainSubstring(errMsgProtectedAnnotations)))
 					})
 
 					It("rejects adding a new protected machine.openshift.io annotation with an empty string value", func() {
 						Eventually(k.Update(capiMachine, func() {
 							capiMachine.Annotations["machine.openshift.io/foo"] = ""
-						}), timeout).Should(MatchError(ContainSubstring("Cannot add, modify or delete any machine.openshift.io/* or cluster.x-k8s.io or clusters.x-k8s.io annotation")))
+						}), timeout).Should(MatchError(ContainSubstring(errMsgProtectedAnnotations)))
 					})
 
 					It("allows modification of a non-protected annotation", func() {

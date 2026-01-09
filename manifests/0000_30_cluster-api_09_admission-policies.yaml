@@ -127,8 +127,8 @@ data:
                   !(k in variables.newLabels)
               )
             )
-          message: "Cannot add, modify or delete any machine.openshift.io/* or kubernetes.io/* label. This is because status.authoritativeAPI is set to Cluster API."
-    
+          message: "Cannot add, modify or delete any machine.openshift.io/*, kubernetes.io/* or cluster.x-k8s.io/* label. This is because status.authoritativeAPI is set to Cluster API."
+
         # Guard machine.openshift.io/* and cluster(s).x-k8s.io annotations
         - expression: >
             !(
@@ -141,7 +141,7 @@ data:
                   !(k in variables.newAnn)
               )
             )
-          message: "Cannot add, modify or delete any machine.openshift.io/* annotation. This is because status.authoritativeAPI is set to Cluster API."
+          message: "Cannot add, modify or delete any machine.openshift.io/* or cluster.x-k8s.io/* or clusters.x-k8s.io/* annotation. This is because status.authoritativeAPI is set to Cluster API."
     
         # Param-controlled labels (labels on the CAPI machine) may change only to match the value on the CAPI Machine
         - expression: >
