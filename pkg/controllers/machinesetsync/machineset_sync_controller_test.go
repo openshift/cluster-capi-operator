@@ -1179,7 +1179,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 								HaveField("Type", Equal(consts.SynchronizedCondition)),
 								HaveField("Status", Equal(corev1.ConditionTrue)),
 								HaveField("Reason", Equal("ResourceSynchronized")),
-								HaveField("Message", Equal("Successfully synchronized MAPI MachineSet to CAPI")),
+								HaveField("Message", Equal("Successfully synchronized CAPI MachineSet to MAPI")),
 							))),
 					)
 				})
