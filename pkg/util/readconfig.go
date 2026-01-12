@@ -36,3 +36,18 @@ func ReadImagesFile(imagesFile string) (map[string]string, error) {
 
 	return containerImages, nil
 }
+
+// ReadImagesListFile reads the images file and returns a list of container image references.
+func ReadImagesListFile(imagesFile string) ([]string, error) {
+	jsonData, err := os.ReadFile(filepath.Clean(imagesFile))
+	if err != nil {
+		return nil, fmt.Errorf("unable to read file %s: %w", imagesFile, err)
+	}
+
+	var containerImages []string
+	if err := json.Unmarshal(jsonData, &containerImages); err != nil {
+		return nil, fmt.Errorf("unable to unmarshal image names from file %s: %w", imagesFile, err)
+	}
+
+	return containerImages, nil
+}

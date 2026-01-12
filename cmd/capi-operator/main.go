@@ -42,6 +42,7 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/capiinstaller"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/clusteroperator"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/revision"
 	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 )
@@ -185,6 +186,15 @@ func setupCapiInstallerController(mgr ctrl.Manager, opts *util.CommonOptions, pl
 
 	if err := setFeatureGatesEnvVars(); err != nil {
 		return fmt.Errorf("unable to set feature gates environment variables: %w", err)
+	}
+
+	if err := (&revision.RevisionController{
+		Client:           mgr.GetClient(),
+		ProviderProfiles: providerProfiles,
+		ReleaseVersion:   util.GetReleaseVersion(),
+	}).SetupWithManager(mgr); err != nil {
+		klog.Error(err, "unable to create revision controller", "controller", "RevisionController")
+		os.Exit(1)
 	}
 
 	if err := (&capiinstaller.CapiInstallerController{
