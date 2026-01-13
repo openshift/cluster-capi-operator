@@ -200,8 +200,8 @@ github.com/onsi/ginkgo/v2 v2.27.2 h1:LzwLj0b89qtIy6SSASkzlNvX6WktqurSHwkk2ipF/Ns
 github.com/onsi/ginkgo/v2 v2.27.2/go.mod h1:ArE1D/XhNXBXCBkKOLkbsb2c81dQHCRcF5zwn/ykDRo=
 github.com/onsi/gomega v1.38.2 h1:eZCjf2xjZAqe+LeWvKb5weQ+NcPwX84kqJ0cZNxok2A=
 github.com/onsi/gomega v1.38.2/go.mod h1:W2MJcYxRGV63b418Ai34Ud0hEdTVXq9NW9+Sx6uXf3k=
-github.com/openshift/api v0.0.0-20260205045418-81371d13d1fc h1:Crx99bQsvRhRMOMLssfVChaOItelVQhsv3esIFpcszc=
-github.com/openshift/api v0.0.0-20260205045418-81371d13d1fc/go.mod h1:d5uzF0YN2nQQFA0jIEWzzOZ+edmo6wzlGLvx5Fhz4uY=
+github.com/openshift/api v0.0.0-20260213204242-d34f11c515b3 h1:SZ8+jxtkMvpb4HDTjSAbaOyhFsw5PiWhjBog+XLY7jc=
+github.com/openshift/api v0.0.0-20260213204242-d34f11c515b3/go.mod h1:d5uzF0YN2nQQFA0jIEWzzOZ+edmo6wzlGLvx5Fhz4uY=
 github.com/openshift/client-go v0.0.0-20260108185524-48f4ccfc4e13 h1:6rd4zSo2UaWQcAPZfHK9yzKVqH0BnMv1hqMzqXZyTds=
 github.com/openshift/client-go v0.0.0-20260108185524-48f4ccfc4e13/go.mod h1:YvOmPmV7wcJxpfhTDuFqqs2Xpb3M3ovsM6Qs/i2ptq4=
 github.com/openshift/cluster-api-actuator-pkg v0.0.0-20251203134942-d9bd7b8593f3 h1:hrMexZRXjVmqIXk+cuHhDA78UZDelEBMRpBRQij1uyY=
@@ -381,8 +381,8 @@ k8s.io/utils v0.0.0-20251002143259-bc988d571ff4 h1:SjGebBtkBqHFOli+05xYbK8YF1Dzk
 k8s.io/utils v0.0.0-20251002143259-bc988d571ff4/go.mod h1:OLgZIPagt7ERELqWJFomSt595RzquPNLL48iOWgYOg0=
 sigs.k8s.io/cluster-api v1.11.3 h1:apxfugbP1X8AG7THCM74CTarCOW4H2oOc6hlbm1hY80=
 sigs.k8s.io/cluster-api v1.11.3/go.mod h1:CA471SACi81M8DzRKTlWpHV33G0cfWEj7sC4fALFVok=
-sigs.k8s.io/cluster-api-provider-aws/v2 v2.10.0 h1:E28NopVRAtnenHsfh54VwS2uEpGAkW0bv6Y19bqAwCg=
-sigs.k8s.io/cluster-api-provider-aws/v2 v2.10.0/go.mod h1:cuuFljMXGat8qW+lvSdYEWReR0DSauv19/rh+bpobl4=
+sigs.k8s.io/cluster-api-provider-aws/v2 v2.10.1-0.20260119154115-ea252592b45d h1:gju5r5lvfLVLhhhQE937XB0uJmi6JBXLzwQP4wXGcE8=
+sigs.k8s.io/cluster-api-provider-aws/v2 v2.10.1-0.20260119154115-ea252592b45d/go.mod h1:cuuFljMXGat8qW+lvSdYEWReR0DSauv19/rh+bpobl4=
 sigs.k8s.io/cluster-api-provider-gcp v1.11.0-beta.0 h1:PedFCYmcZRGa+0x8jDw6DYpm1rikyzP8CTQNHvydWtw=
 sigs.k8s.io/cluster-api-provider-gcp v1.11.0-beta.0/go.mod h1:BR9XUljy5o4V6MNTZva4XFh7Gj++4d5G8AnKa6iB6Tc=
 sigs.k8s.io/cluster-api-provider-ibmcloud v0.12.0 h1:0+jfWLg+UmnGOdHZ9SrEpnUJgQPyyXpcjXGdkN5E5M4=
