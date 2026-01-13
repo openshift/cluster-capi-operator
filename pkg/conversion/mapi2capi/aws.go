@@ -293,6 +293,7 @@ func (m *awsMachineAndInfra) toAWSMachine(providerSpec mapiv1beta1.AWSMachinePro
 		Tenancy:           string(providerSpec.Placement.Tenancy),
 		// UncompressedUserData: Not used in OpenShift.
 		MarketType: capiAWSMarketType,
+		CPUOptions: convertAWSCPUOptionsToCAPI(providerSpec.CPUOptions),
 	}
 
 	if providerSpec.CapacityReservationID != "" {
@@ -727,4 +728,23 @@ func instanceIDFromProviderID(s string) string {
 	lastPart := parts[len(parts)-1]
 
 	return regexp.MustCompile(`i-.*$`).FindString(lastPart)
+}
+
+func convertAWSCPUOptionsToCAPI(cpuOptions *mapiv1beta1.CPUOptions) awsv1.CPUOptions {
+	capiCPUOpts := awsv1.CPUOptions{}
+
+	if cpuOptions == nil {
+		return capiCPUOpts
+	}
+
+	if cpuOptions.ConfidentialCompute != nil {
+		switch *cpuOptions.ConfidentialCompute {
+		case mapiv1beta1.AWSConfidentialComputePolicyDisabled:
+			capiCPUOpts.ConfidentialCompute = awsv1.AWSConfidentialComputePolicyDisabled
+		case mapiv1beta1.AWSConfidentialComputePolicySEVSNP:
+			capiCPUOpts.ConfidentialCompute = awsv1.AWSConfidentialComputePolicySEVSNP
+		}
+	}
+
+	return capiCPUOpts
 }
