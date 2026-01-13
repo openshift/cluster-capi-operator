@@ -187,6 +187,44 @@ func fuzzAWSMachineSpecConfidentialComputePolicy(ccp *mapiv1beta1.AWSConfidentia
 	}
 }
 
+func (f *awsProviderFuzzer) fuzzPlacement(placement *mapiv1beta1.Placement, c randfill.Continue) {
+	c.FillNoCustom(placement)
+
+	switch c.Int31n(6) {
+	case 0:
+		placement.Tenancy = mapiv1beta1.DefaultTenancy
+		placement.Host = nil
+	case 1:
+		placement.Tenancy = mapiv1beta1.DedicatedTenancy
+		placement.Host = nil
+	case 2:
+		placement.Tenancy = mapiv1beta1.HostTenancy
+		placement.Host = &mapiv1beta1.HostPlacement{
+			Affinity:      ptr.To(mapiv1beta1.HostAffinityAnyAvailable),
+			DedicatedHost: nil,
+		}
+	case 3:
+		placement.Tenancy = mapiv1beta1.HostTenancy
+		placement.Host = &mapiv1beta1.HostPlacement{
+			Affinity: ptr.To(mapiv1beta1.HostAffinityAnyAvailable),
+			DedicatedHost: &mapiv1beta1.DedicatedHost{
+				ID: "h-0123456789abcdef0",
+			},
+		}
+	case 4:
+		placement.Tenancy = mapiv1beta1.HostTenancy
+		placement.Host = &mapiv1beta1.HostPlacement{
+			Affinity: ptr.To(mapiv1beta1.HostAffinityDedicatedHost),
+			DedicatedHost: &mapiv1beta1.DedicatedHost{
+				ID: "h-0123456789abcdef0",
+			},
+		}
+	case 5:
+		placement.Tenancy = ""
+		placement.Host = nil
+	}
+}
+
 func (f *awsProviderFuzzer) FuzzerFuncsMachineSet(codecs runtimeserializer.CodecFactory) []interface{} {
 	return []interface{}{
 		func(nit *mapiv1beta1.AWSNetworkInterfaceType, c randfill.Continue) {
@@ -243,18 +281,6 @@ func (f *awsProviderFuzzer) FuzzerFuncsMachineSet(codecs runtimeserializer.Codec
 				ebs.Iops = nil
 			}
 		},
-		func(tenancy *mapiv1beta1.InstanceTenancy, c randfill.Continue) {
-			switch c.Int31n(4) {
-			case 0:
-				*tenancy = mapiv1beta1.DefaultTenancy
-			case 1:
-				*tenancy = mapiv1beta1.DedicatedTenancy
-			case 2:
-				*tenancy = mapiv1beta1.HostTenancy
-			case 3:
-				*tenancy = ""
-			}
-		},
 		func(marketType *mapiv1beta1.MarketType, c randfill.Continue) {
 			switch c.Int31n(4) {
 			case 0:
@@ -280,6 +306,7 @@ func (f *awsProviderFuzzer) FuzzerFuncsMachineSet(codecs runtimeserializer.Codec
 				// resulting in a documented lossy rountrip conversion, which would make the test to fail.
 			}
 		},
+		f.fuzzPlacement,
 		f.fuzzProviderConfig,
 		f.fuzzAWSMachineSpecCPUOptions,
 	}
