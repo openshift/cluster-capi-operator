@@ -252,15 +252,6 @@ func compareCAPIInfraMachines(platform configv1.PlatformType, infraMachine1, inf
 	// Make per provider adjustments to the differ.
 	switch platform {
 	case configv1.AWSPlatformType:
-		// Ignore HostAffinity and HostID fields to prevent conversion loops.
-		// CAPA defaults HostAffinity to "host" when not set, which would cause
-		// continuous drift detection.
-		// TODO: These fields will be properly converted
-		// when MAPI HostPlacement feature is stable.
-		diffOpts = append(diffOpts,
-			util.WithIgnoreField("spec", "hostID"),
-			util.WithIgnoreField("spec", "hostAffinity"),
-		)
 	case configv1.OpenStackPlatformType:
 	case configv1.PowerVSPlatformType:
 	default:
