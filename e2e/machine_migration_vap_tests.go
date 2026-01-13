@@ -285,12 +285,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] MA
 			testCAPIMachine = capiframework.GetMachine(cl, testMachineName, capiframework.CAPINamespace)
 
 			// Wait until VAP match conditions are met
-			Eventually(komega.Object(testMAPIMachine), capiframework.WaitMedium, capiframework.RetryMedium).Should(
-				WithTransform(func(m *mapiv1beta1.Machine) mapiv1beta1.MachineAuthority {
-					return m.Status.AuthoritativeAPI
-				}, Equal(mapiv1beta1.MachineAuthorityMachineAPI)),
-				"VAP requires status.authoritativeAPI=Machine API before enforcement",
-			)
+			verifyMachineAuthoritative(testMAPIMachine, mapiv1beta1.MachineAuthorityMachineAPI)
 
 			DeferCleanup(func() {
 				By("Cleaning up machine resources")
