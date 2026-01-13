@@ -2804,7 +2804,7 @@ sigs.k8s.io/cluster-api/util/labels/format
 sigs.k8s.io/cluster-api/util/predicates
 sigs.k8s.io/cluster-api/util/topology
 sigs.k8s.io/cluster-api/util/version
-# sigs.k8s.io/cluster-api-provider-aws/v2 v2.10.0
+# sigs.k8s.io/cluster-api-provider-aws/v2 v2.10.1-0.20260119154115-ea252592b45d
 ## explicit; go 1.24.0
 sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2
 sigs.k8s.io/cluster-api-provider-aws/v2/feature
