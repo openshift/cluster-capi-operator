@@ -125,11 +125,12 @@ func createTestImageWithLayers(layers []map[string]string) (v1.Image, error) {
 // Test path constants derived from production constants.
 // Tar paths don't use leading slashes, so we use capiManifestsDirName directly.
 const (
-	testMetadataPath  = capiManifestsDirName + "/" + metadataFile
-	testManifestsPath = capiManifestsDirName + "/" + manifestsFile
+	testDefaultProfile = "default"
+	testMetadataPath   = capiManifestsDirName + "/" + testDefaultProfile + "/" + metadataFile
+	testManifestsPath  = capiManifestsDirName + "/" + testDefaultProfile + "/" + manifestsFile
 )
 
-// createCapiManifestsImage creates a test image with metadata and manifests in the capi-operator-manifests directory.
+// createCapiManifestsImage creates a test image with metadata and manifests in a profile subdirectory.
 func createCapiManifestsImage(metadataContent, manifestsContent string) (v1.Image, error) {
 	return createTestImage(map[string]string{
 		testMetadataPath:  metadataContent,
@@ -161,7 +162,7 @@ providerImageRef: %s
 `, providerName, providerType, version, ocpPlatform, providerImageRef)
 }
 
-//nolint:gocognit,funlen
+//nolint:gocognit,funlen,cyclop
 func Test_readProviderImages(t *testing.T) {
 	tests := []struct {
 		name            string
@@ -198,12 +199,14 @@ func Test_readProviderImages(t *testing.T) {
 				g.Expect(result).To(HaveLen(1))
 
 				manifest := result[0]
-				g.Expect(manifest.Name).To(Equal("aws"))
-				g.Expect(manifest.Type).To(Equal("infrastructure"))
-				g.Expect(manifest.Version).To(Equal("v1.0.0"))
+				g.Expect(manifest.ProviderName).To(Equal("aws"))
+				g.Expect(manifest.ProviderType).To(Equal("infrastructure"))
+				g.Expect(manifest.ProviderVersion).To(Equal("v1.0.0"))
 				g.Expect(manifest.OCPPlatform).To(BeEquivalentTo("aws"))
+				g.Expect(manifest.Profile).To(Equal(testDefaultProfile))
+				g.Expect(manifest.ImageRef).To(Equal("registry.example.com/capi-aws:v1.0.0"))
 				g.Expect(manifest.ContentID).To(HaveLen(64)) // sha256 hex string
-				g.Expect(manifest.ManifestsPath).To(ContainSubstring("manifests.yaml"))
+				g.Expect(manifest.ManifestsPath).To(ContainSubstring(testDefaultProfile + "/" + manifestsFile))
 
 				// Verify file was written
 				content, err := os.ReadFile(manifest.ManifestsPath)
@@ -519,13 +522,87 @@ contentID: id
 
 				// Higher layer values should be used
 				manifest := result[0]
-				g.Expect(manifest.Name).To(Equal("aws-new"))
-				g.Expect(manifest.Type).To(Equal("NewType"))
-				g.Expect(manifest.Version).To(Equal("v2.0.0"))
+				g.Expect(manifest.ProviderName).To(Equal("aws-new"))
+				g.Expect(manifest.ProviderType).To(Equal("NewType"))
+				g.Expect(manifest.ProviderVersion).To(Equal("v2.0.0"))
 
 				content, err := os.ReadFile(manifest.ManifestsPath)
 				g.Expect(err).NotTo(HaveOccurred())
 				g.Expect(string(content)).To(Equal("content: from-higher-layer\n"))
+			},
+		},
+		{
+			name: "multiple profiles in one image",
+			containerImages: []string{
+				"registry.example.com/multi-profile:v1.0.0",
+			},
+			setupFetcher: func(t *testing.T) *fakeImageFetcher {
+				t.Helper()
+				img, err := createTestImage(map[string]string{
+					capiManifestsDirName + "/default/metadata.yaml":      createMetadataYAML("aws", "infrastructure", "v1.0.0", "aws", ""),
+					capiManifestsDirName + "/default/manifests.yaml":     "kind: ConfigMap\nname: default-config\n",
+					capiManifestsDirName + "/techpreview/metadata.yaml":  createMetadataYAML("aws", "infrastructure", "v1.0.0-techpreview", "aws", ""),
+					capiManifestsDirName + "/techpreview/manifests.yaml": "kind: ConfigMap\nname: techpreview-config\n",
+				})
+				if err != nil {
+					t.Fatalf("failed to create test image: %v", err)
+				}
+
+				return &fakeImageFetcher{
+					images: map[string]v1.Image{
+						"registry.example.com/multi-profile:v1.0.0": img,
+					},
+				}
+			},
+			validate: func(t *testing.T, g Gomega, result []ProviderImageManifests, outputDir string) {
+				t.Helper()
+				g.Expect(result).To(HaveLen(2))
+
+				profiles := make(map[string]ProviderImageManifests)
+				for _, m := range result {
+					profiles[m.Profile] = m
+				}
+
+				g.Expect(profiles).To(HaveKey("default"))
+				g.Expect(profiles).To(HaveKey("techpreview"))
+				g.Expect(profiles["default"].ProviderVersion).To(Equal("v1.0.0"))
+				g.Expect(profiles["techpreview"].ProviderVersion).To(Equal("v1.0.0-techpreview"))
+
+				defaultContent, err := os.ReadFile(profiles["default"].ManifestsPath)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(string(defaultContent)).To(ContainSubstring("default-config"))
+
+				techpreviewContent, err := os.ReadFile(profiles["techpreview"].ManifestsPath)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(string(techpreviewContent)).To(ContainSubstring("techpreview-config"))
+			},
+		},
+		{
+			name: "non-profile subdirectory skipped",
+			containerImages: []string{
+				"registry.example.com/with-random-subdir:v1.0.0",
+			},
+			setupFetcher: func(t *testing.T) *fakeImageFetcher {
+				t.Helper()
+				img, err := createTestImage(map[string]string{
+					capiManifestsDirName + "/default/metadata.yaml":  createMetadataYAML("aws", "infrastructure", "v1.0.0", "aws", ""),
+					capiManifestsDirName + "/default/manifests.yaml": "kind: ConfigMap\n",
+					capiManifestsDirName + "/randomdir/somefile.txt": "this is not a profile",
+				})
+				if err != nil {
+					t.Fatalf("failed to create test image: %v", err)
+				}
+
+				return &fakeImageFetcher{
+					images: map[string]v1.Image{
+						"registry.example.com/with-random-subdir:v1.0.0": img,
+					},
+				}
+			},
+			validate: func(t *testing.T, g Gomega, result []ProviderImageManifests, outputDir string) {
+				t.Helper()
+				g.Expect(result).To(HaveLen(1))
+				g.Expect(result[0].Profile).To(Equal("default"))
 			},
 		},
 	}
@@ -560,23 +637,26 @@ contentID: id
 			g.Expect(err).NotTo(HaveOccurred())
 
 			// Verify output directory structure for all successful results
-			// 1. Each manifest's directory should correspond to a containerImage
-			usedDirs := make(map[string]bool)
+			// 1. Each manifest's profile directory should correspond to a containerImage + profile
+			usedProfileDirs := make(map[string]bool)
 
 			for _, manifest := range result {
-				manifestDir := filepath.Dir(manifest.ManifestsPath)
+				// ManifestsPath is now outputDir/imageRef/profile/manifests.yaml
+				profileDir := filepath.Dir(manifest.ManifestsPath)
+				imageDir := filepath.Dir(profileDir)
 
 				// Find a containerImage that would produce this directory
 				found := false
 
 				for _, imageRef := range tt.containerImages {
 					expectedDir := filepath.Join(tmpDir, sanitizeImageRef(imageRef))
-					if manifestDir == expectedDir {
-						// Ensure we don't have duplicate directories (each image produces unique output)
-						g.Expect(usedDirs[expectedDir]).To(BeFalse(),
-							"directory %s was used by multiple manifests", expectedDir)
+					if imageDir == expectedDir {
+						// Ensure we don't have duplicate profile directories
+						// (each image+profile combination produces unique output)
+						g.Expect(usedProfileDirs[profileDir]).To(BeFalse(),
+							"profile directory %s was used by multiple manifests", profileDir)
 
-						usedDirs[expectedDir] = true
+						usedProfileDirs[profileDir] = true
 						found = true
 
 						break
@@ -584,7 +664,7 @@ contentID: id
 				}
 
 				g.Expect(found).To(BeTrue(),
-					"manifest directory %s does not correspond to any containerImage", manifestDir)
+					"manifest directory %s does not correspond to any containerImage", imageDir)
 
 				// 2. Verify the manifest file exists and is readable
 				_, err := os.Stat(manifest.ManifestsPath)

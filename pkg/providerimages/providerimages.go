@@ -54,10 +54,11 @@ const (
 
 // ProviderImageManifests represents metadata and manifests read from a provider image.
 type ProviderImageManifests struct {
-	Name          string
-	Type          string
-	Version       string
-	OCPPlatform   configv1.PlatformType
+	ProviderMetadata
+
+	ImageRef string
+	Profile  string
+
 	ContentID     string
 	ManifestsPath string
 }
@@ -132,7 +133,7 @@ func ReadProviderImages(ctx context.Context, k8sClient client.Reader, log logr.L
 
 type providerImageResult struct {
 	imageRef  string
-	manifests *ProviderImageManifests
+	manifests []ProviderImageManifests
 	err       error
 }
 
@@ -168,14 +169,17 @@ func readProviderImages(ctx context.Context, log logr.Logger, containerImages []
 	for result := range results {
 		if result.err != nil {
 			err = errors.Join(err, fmt.Errorf("fetching provider from image %s: %w", result.imageRef, result.err))
-		} else if result.manifests != nil {
-			log.Info("found provider manifests in container image", "image", result.imageRef,
-				"provider", result.manifests.Name,
-				"type", result.manifests.Type,
-				"version", result.manifests.Version,
-				"ocpPlatform", result.manifests.OCPPlatform)
+		} else {
+			for _, manifest := range result.manifests {
+				log.Info("found provider manifests in container image", "image", result.imageRef,
+					"provider", manifest.ProviderName,
+					"type", manifest.ProviderType,
+					"version", manifest.ProviderVersion,
+					"profile", manifest.Profile,
+					"ocpPlatform", manifest.OCPPlatform)
 
-			providerImages = append(providerImages, *result.manifests)
+				providerImages = append(providerImages, manifest)
+			}
 		}
 	}
 
@@ -188,7 +192,7 @@ func readProviderImages(ctx context.Context, log logr.Logger, containerImages []
 	return providerImages, nil
 }
 
-func processProviderImage(ctx context.Context, imageRef, providerImageDir string, fetcher imageFetcher) (*ProviderImageManifests, error) {
+func processProviderImage(ctx context.Context, imageRef, providerImageDir string, fetcher imageFetcher) ([]ProviderImageManifests, error) {
 	ref, err := name.ParseReference(imageRef)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse image reference %s: %w", imageRef, err)
@@ -199,19 +203,7 @@ func processProviderImage(ctx context.Context, imageRef, providerImageDir string
 		return nil, fmt.Errorf("failed to fetch image %s: %w", imageRef, err)
 	}
 
-	// Extract files from the image
-	metadata, manifestsContent, err := extractCapiManifests(img)
-	if err != nil {
-		if errors.Is(err, errNoCapiManifests) {
-			// Image doesn't contain /capi-manifests, skip it
-			return nil, nil //nolint:nilnil // intentional: nil manifest with no error means skip this image
-		}
-
-		return nil, err
-	}
-
-	// Create output directory for this provider
-	// Use a sanitized version of the image reference as the subdirectory name
+	// Create output directory for this provider image
 	sanitizedRef := sanitizeImageRef(imageRef)
 	outputDir := filepath.Join(providerImageDir, sanitizedRef)
 
@@ -219,22 +211,44 @@ func processProviderImage(ctx context.Context, imageRef, providerImageDir string
 		return nil, fmt.Errorf("failed to create output directory: %w", err)
 	}
 
-	// Write manifests to the cache directory, performing image substitution and hash calculation
-	manifestsPath := filepath.Join(outputDir, manifestsFile)
-
-	contentID, err := writeManifestsWithHash(manifestsPath, manifestsContent, metadata.ProviderImageRef, imageRef)
-	if err != nil {
+	// Extract files from the image to disk
+	if err := extractCapiManifestsToDir(img, outputDir); err != nil {
 		return nil, err
 	}
 
-	return &ProviderImageManifests{
-		Name:          metadata.ProviderName,
-		Type:          metadata.ProviderType,
-		Version:       metadata.ProviderVersion,
-		OCPPlatform:   metadata.OCPPlatform,
-		ContentID:     contentID,
-		ManifestsPath: manifestsPath,
-	}, nil
+	// Discover profiles from extracted files
+	profiles, err := discoverProfiles(outputDir)
+	if err != nil {
+		if errors.Is(err, errNoCapiManifests) {
+			// Image doesn't contain /capi-operator-manifests, skip it
+			return nil, nil
+		}
+
+		return nil, err
+	}
+
+	// Process each profile
+	results := make([]ProviderImageManifests, 0, len(profiles))
+
+	for _, profile := range profiles {
+		profileDir := filepath.Join(outputDir, profile.Profile)
+		manifestsPath := filepath.Join(profileDir, manifestsFile)
+
+		contentID, err := writeManifestsWithHash(manifestsPath, profile.Manifests, profile.Metadata.ProviderImageRef, imageRef)
+		if err != nil {
+			return nil, err
+		}
+
+		results = append(results, ProviderImageManifests{
+			ProviderMetadata: *profile.Metadata,
+			ImageRef:         imageRef,
+			Profile:          profile.Profile,
+			ContentID:        contentID,
+			ManifestsPath:    manifestsPath,
+		})
+	}
+
+	return results, nil
 }
 
 var (
@@ -243,76 +257,138 @@ var (
 	errMissingManifests = errors.New("missing manifests.yaml in /capi-operator-manifests")
 )
 
-func extractCapiManifests(img v1.Image) (*ProviderMetadata, string, error) {
-	layers, err := img.Layers()
+// profileManifests holds parsed metadata and manifest content for a single profile.
+type profileManifests struct {
+	Profile   string
+	Metadata  *ProviderMetadata
+	Manifests string
+}
+
+// discoverProfiles scans a directory for valid profiles.
+// Each subdirectory must contain both metadata.yaml and manifests.yaml.
+// Returns an error if no profiles are found or if any profile is incomplete.
+func discoverProfiles(dir string) ([]profileManifests, error) {
+	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to get image layers: %w", err)
+		if os.IsNotExist(err) {
+			return nil, errNoCapiManifests
+		}
+
+		return nil, fmt.Errorf("failed to read directory %s: %w", dir, err)
 	}
 
-	var metadataContent, manifestsContent string
-	// Use path (not filepath) since tar always uses forward slashes
-	metadataPath := path.Join(capiManifestsDir, metadataFile)
-	manifestsPath := path.Join(capiManifestsDir, manifestsFile)
+	var profiles []profileManifests
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+
+		profileName := entry.Name()
+		profileDir := filepath.Join(dir, profileName)
+
+		profile, isProfile, err := loadProfile(profileName, profileDir)
+		if err != nil {
+			return nil, err
+		}
+
+		if isProfile {
+			profiles = append(profiles, *profile)
+		}
+	}
+
+	if len(profiles) == 0 {
+		return nil, errNoCapiManifests
+	}
+
+	return profiles, nil
+}
+
+// loadProfile loads a single profile from a directory.
+// Returns isProfile=false if the directory is not a profile (no metadata.yaml or manifests.yaml).
+// Returns an error if the profile is incomplete (has one file but not the other).
+func loadProfile(profileName, profileDir string) (profile *profileManifests, isProfile bool, err error) {
+	metadataPath := filepath.Join(profileDir, metadataFile)
+	manifestsPath := filepath.Join(profileDir, manifestsFile)
+
+	metadataInfo, metadataErr := os.Stat(metadataPath)
+	manifestsInfo, manifestsErr := os.Stat(manifestsPath)
+
+	metadataExists := metadataErr == nil && !metadataInfo.IsDir()
+	manifestsExists := manifestsErr == nil && !manifestsInfo.IsDir()
+
+	if !metadataExists && !manifestsExists {
+		return nil, false, nil
+	}
+
+	if !metadataExists {
+		return nil, false, fmt.Errorf("profile %s: %w", profileName, errMissingMetadata)
+	}
+
+	if !manifestsExists {
+		return nil, false, fmt.Errorf("profile %s: %w", profileName, errMissingManifests)
+	}
+
+	metadataContent, err := os.ReadFile(metadataPath) //nolint:gosec // path constructed from trusted input
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to read metadata for profile %s: %w", profileName, err)
+	}
+
+	manifestsContent, err := os.ReadFile(manifestsPath) //nolint:gosec // path constructed from trusted input
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to read manifests for profile %s: %w", profileName, err)
+	}
+
+	var metadata ProviderMetadata
+	if err := yaml.Unmarshal(metadataContent, &metadata); err != nil {
+		return nil, false, fmt.Errorf("failed to parse metadata.yaml for profile %s: %w", profileName, err)
+	}
+
+	return &profileManifests{
+		Profile:   profileName,
+		Metadata:  &metadata,
+		Manifests: string(manifestsContent),
+	}, true, nil
+}
+
+// extractCapiManifestsToDir extracts all files under /capi-operator-manifests from the
+// image to destDir. Iterates layers top to bottom so higher layers take precedence.
+func extractCapiManifestsToDir(img v1.Image, destDir string) error {
+	layers, err := img.Layers()
+	if err != nil {
+		return fmt.Errorf("failed to get image layers: %w", err)
+	}
 
 	// Iterate layers in reverse order (top to bottom) since higher layers
-	// overwrite files from lower layers in OCI images
+	// take precedence. extractFilesToDir skips files that already exist.
 	for i := len(layers) - 1; i >= 0; i-- {
 		layer := layers[i]
 
 		rc, err := layer.Uncompressed()
 		if err != nil {
-			return nil, "", fmt.Errorf("failed to uncompress layer: %w", err)
+			return fmt.Errorf("failed to uncompress layer: %w", err)
 		}
 
-		found, err := extractFilesFromTar(rc, metadataPath, manifestsPath)
+		err = extractFilesToDir(rc, capiManifestsDir, destDir)
 
 		err = errors.Join(err, rc.Close())
 		if err != nil {
-			return nil, "", err
-		}
-
-		if content, ok := found[metadataPath]; ok {
-			metadataContent = content
-		}
-
-		if content, ok := found[manifestsPath]; ok {
-			manifestsContent = content
-		}
-
-		// Early exit once both files are found
-		if metadataContent != "" && manifestsContent != "" {
-			break
+			return err
 		}
 	}
 
-	if metadataContent == "" && manifestsContent == "" {
-		return nil, "", errNoCapiManifests
-	}
-
-	if metadataContent == "" {
-		return nil, "", errMissingMetadata
-	}
-
-	if manifestsContent == "" {
-		return nil, "", errMissingManifests
-	}
-
-	var metadata ProviderMetadata
-	if err := yaml.Unmarshal([]byte(metadataContent), &metadata); err != nil {
-		return nil, "", fmt.Errorf("failed to parse metadata.yaml: %w", err)
-	}
-
-	return &metadata, manifestsContent, nil
+	return nil
 }
 
-func extractFilesFromTar(r io.Reader, paths ...string) (map[string]string, error) {
+// extractFilesToDir extracts all files under prefix from a tar stream to destDir.
+// Files are written preserving their relative path under the prefix.
+// e.g., prefix="/capi-operator-manifests", file="/capi-operator-manifests/default/foo.yaml"
+// → written to destDir/default/foo.yaml
+// Files that already exist are skipped (caller iterates layers top to bottom).
+func extractFilesToDir(r io.Reader, prefix, destDir string) error {
 	tr := tar.NewReader(r)
-	results := make(map[string]string)
-
-	pathSet := make(map[string]struct{}, len(paths))
-	for _, p := range paths {
-		pathSet[p] = struct{}{}
-	}
+	// Ensure prefix has leading slash and no trailing slash for consistent matching
+	prefix = path.Clean("/" + prefix)
 
 	for {
 		header, err := tr.Next()
@@ -321,29 +397,62 @@ func extractFilesFromTar(r io.Reader, paths ...string) (map[string]string, error
 		}
 
 		if err != nil {
-			return nil, fmt.Errorf("failed to read tar: %w", err)
+			return fmt.Errorf("failed to read tar: %w", err)
+		}
+
+		// Directory entries in tar are just markers with no content.
+		// We create directories on-demand when writing files.
+		if header.Typeflag == tar.TypeDir {
+			continue
 		}
 
 		// Normalize the path (remove leading ./ or /)
 		// Use path (not filepath) since tar always uses forward slashes
 		normalized := path.Clean("/" + header.Name)
 
-		if _, want := pathSet[normalized]; want {
-			content, err := io.ReadAll(tr)
-			if err != nil {
-				return nil, fmt.Errorf("failed to read file %s: %w", normalized, err)
-			}
+		// Check if file is under our prefix
+		if !strings.HasPrefix(normalized, prefix+"/") {
+			continue
+		}
 
-			results[normalized] = string(content)
+		// Get relative path under prefix
+		relPath := strings.TrimPrefix(normalized, prefix+"/")
 
-			// Early exit if all files found
-			if len(results) == len(paths) {
-				break
-			}
+		// Write file to destination
+		destPath := filepath.Join(destDir, relPath)
+
+		// Skip if file already exists (higher layer already wrote it)
+		if _, err := os.Stat(destPath); err == nil {
+			continue
+		}
+
+		if err := os.MkdirAll(filepath.Dir(destPath), 0750); err != nil {
+			return fmt.Errorf("failed to create directory for %s: %w", destPath, err)
+		}
+
+		if err := writeFileFromTar(tr, destPath); err != nil {
+			return fmt.Errorf("failed to write %s: %w", destPath, err)
 		}
 	}
 
-	return results, nil
+	return nil
+}
+
+func writeFileFromTar(tr *tar.Reader, destPath string) (err error) {
+	f, err := os.Create(destPath) //nolint:gosec // path is constructed internally
+	if err != nil {
+		return fmt.Errorf("failed to create file: %w", err)
+	}
+
+	defer func() {
+		err = errors.Join(err, f.Close())
+	}()
+
+	if _, err := io.Copy(f, tr); err != nil {
+		return fmt.Errorf("failed to write file: %w", err)
+	}
+
+	return nil
 }
 
 func sanitizeImageRef(imageRef string) string {

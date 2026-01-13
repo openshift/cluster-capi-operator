@@ -195,14 +195,14 @@ func (r *CapiInstallerController) reconcileProviderImages(ctx context.Context, l
 			providerImages = append(providerImages, providerImage)
 
 		default:
-			log.Info("skipping provider image", "name", providerImage.Name)
+			log.Info("skipping provider image", "name", providerImage.ProviderName)
 			continue
 		}
 	}
 
 	// Sort providers by type
 	getTypePriority := func(providerImage providerimages.ProviderImageManifests) int {
-		switch providerImage.Type {
+		switch providerImage.ProviderType {
 		case "core":
 			return 0
 		case "infrastructure":
@@ -217,7 +217,7 @@ func (r *CapiInstallerController) reconcileProviderImages(ctx context.Context, l
 		prioB := getTypePriority(b)
 
 		if prioA == prioB {
-			return strings.Compare(a.Name, b.Name)
+			return strings.Compare(a.ProviderName, b.ProviderName)
 		}
 
 		return cmp.Compare(prioA, prioB)
@@ -226,7 +226,7 @@ func (r *CapiInstallerController) reconcileProviderImages(ctx context.Context, l
 	// Apply the provider manifests
 	for _, providerImage := range providerImages {
 		if err := r.applyProviderImage(ctx, log, providerImage); err != nil {
-			return fmt.Errorf("failed to apply provider image %s: %w", providerImage.Name, err)
+			return fmt.Errorf("failed to apply provider image %s: %w", providerImage.ProviderName, err)
 		}
 	}
 
@@ -235,7 +235,7 @@ func (r *CapiInstallerController) reconcileProviderImages(ctx context.Context, l
 
 // applyProviderImage extracts provider manifests for a single provider image and applies them to the cluster.
 func (r *CapiInstallerController) applyProviderImage(ctx context.Context, log logr.Logger, providerImage providerimages.ProviderImageManifests) error {
-	log.Info("reconciling CAPI provider", "name", providerImage.Name)
+	log.Info("reconciling CAPI provider", "name", providerImage.ProviderName)
 
 	reader, err := providerManifestReader(providerImage)
 	if err != nil {
@@ -255,7 +255,7 @@ func (r *CapiInstallerController) applyProviderImage(ctx context.Context, log lo
 		return fmt.Errorf("failed to apply provider components: %w", err)
 	}
 
-	log.Info("finished reconciling CAPI provider", "name", providerImage.Name)
+	log.Info("finished reconciling CAPI provider", "name", providerImage.ProviderName)
 
 	return nil
 }

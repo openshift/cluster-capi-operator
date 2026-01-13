@@ -37,7 +37,13 @@ func generateManifests(opts cmdlineOptions) error {
 	}
 
 	if err != nil {
-		return fmt.Errorf("failed to genereate kustomize resources: %w", err)
+		return fmt.Errorf("failed to generate kustomize resources: %w", err)
+	}
+
+	// Create output directory for profile
+	profileDir := path.Join(opts.manifestsPath, opts.profileName)
+	if err := os.MkdirAll(profileDir, os.ModeDir|0755); err != nil {
+		return fmt.Errorf("error creating profile directory %s: %w", profileDir, err)
 	}
 
 	// Perform all manifest transformations
@@ -96,14 +102,7 @@ func generateKustomizeResources(kustomizeDir string) ([]client.Object, error) {
 }
 
 func writeManifests(opts cmdlineOptions, resources []client.Object) (err error) {
-	manifestsDir := path.Join(opts.manifestsPath, opts.profileName)
-
-	err = os.MkdirAll(manifestsDir, os.ModeDir|0755)
-	if err != nil {
-		return fmt.Errorf("error creating metadata directory %s: %w", manifestsDir, err)
-	}
-
-	manifestsPathname := path.Join(manifestsDir, manifestsFilename)
+	manifestsPathname := path.Join(opts.manifestsPath, opts.profileName, manifestsFilename)
 
 	manifestsFile, err := os.OpenFile(manifestsPathname, os.O_CREATE|os.O_TRUNC|os.O_WRONLY|os.O_APPEND, 0600)
 	if err != nil {
@@ -138,14 +137,7 @@ func writeManifests(opts cmdlineOptions, resources []client.Object) (err error) 
 }
 
 func writeMetadata(opts cmdlineOptions) (err error) {
-	metadataDir := path.Join(opts.manifestsPath, opts.profileName)
-
-	err = os.MkdirAll(metadataDir, os.ModeDir|0755)
-	if err != nil {
-		return fmt.Errorf("error creating metadata directory %s: %w", metadataDir, err)
-	}
-
-	metadataPathname := path.Join(metadataDir, metadataFilename)
+	metadataPathname := path.Join(opts.manifestsPath, opts.profileName, metadataFilename)
 
 	metadataFile, err := os.OpenFile(metadataPathname, os.O_CREATE|os.O_TRUNC|os.O_WRONLY|os.O_APPEND, 0600)
 	if err != nil {
