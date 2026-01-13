@@ -71,6 +71,147 @@ var _ = Describe("capi2mapi AWS conversion", func() {
 			expectedErrors:    []string{},
 			expectedWarnings:  []string{},
 		}),
+		Entry("With HostAffinity default", awsCAPI2MAPIMachineConversionInput{
+			awsClusterBuilder: awsCAPIAWSClusterBase,
+			awsMachineBuilder: awsCAPIAWSMachineBase.
+				WithHostAffinity(ptr.To("default")),
+			machineBuilder:   awsCAPIMachineBase,
+			expectedErrors:   []string{},
+			expectedWarnings: []string{},
+		}),
+		Entry("With HostAffinity host and HostID (17 characters)", awsCAPI2MAPIMachineConversionInput{
+			awsClusterBuilder: awsCAPIAWSClusterBase,
+			awsMachineBuilder: awsCAPIAWSMachineBase.
+				WithHostAffinity(ptr.To("host")).
+				WithHostID(ptr.To("h-1234567890abcdef0")),
+			machineBuilder:   awsCAPIMachineBase,
+			expectedErrors:   []string{},
+			expectedWarnings: []string{},
+		}),
+		Entry("With HostAffinity host and HostID (8 characters)", awsCAPI2MAPIMachineConversionInput{
+			awsClusterBuilder: awsCAPIAWSClusterBase,
+			awsMachineBuilder: awsCAPIAWSMachineBase.
+				WithHostAffinity(ptr.To("host")).
+				WithHostID(ptr.To("h-12345678")),
+			machineBuilder:   awsCAPIMachineBase,
+			expectedErrors:   []string{},
+			expectedWarnings: []string{},
+		}),
+		Entry("With HostAffinity default and HostID (8 characters)", awsCAPI2MAPIMachineConversionInput{
+			awsClusterBuilder: awsCAPIAWSClusterBase,
+			awsMachineBuilder: awsCAPIAWSMachineBase.
+				WithHostAffinity(ptr.To("default")).
+				WithHostID(ptr.To("h-abcdef12")),
+			machineBuilder:   awsCAPIMachineBase,
+			expectedErrors:   []string{},
+			expectedWarnings: []string{},
+		}),
+		Entry("With HostAffinity default and HostID (17 characters)", awsCAPI2MAPIMachineConversionInput{
+			awsClusterBuilder: awsCAPIAWSClusterBase,
+			awsMachineBuilder: awsCAPIAWSMachineBase.
+				WithHostAffinity(ptr.To("default")).
+				WithHostID(ptr.To("h-fedcba9876543210f")),
+			machineBuilder:   awsCAPIMachineBase,
+			expectedErrors:   []string{},
+			expectedWarnings: []string{},
+		}),
+		Entry("With HostAffinity host and invalid HostID (too short)", awsCAPI2MAPIMachineConversionInput{
+			awsClusterBuilder: awsCAPIAWSClusterBase,
+			awsMachineBuilder: awsCAPIAWSMachineBase.
+				WithHostAffinity(ptr.To("host")).
+				WithHostID(ptr.To("h-1234567")),
+			machineBuilder: awsCAPIMachineBase,
+			expectedErrors: []string{
+				"spec.dedicatedHost.id: Invalid value: \"h-1234567\": id is required and must start with 'h-' followed by 8 or 17 lowercase hexadecimal characters (0-9 and a-f)",
+			},
+			expectedWarnings: []string{},
+		}),
+		Entry("With HostAffinity host and invalid HostID (wrong length - 9 characters)", awsCAPI2MAPIMachineConversionInput{
+			awsClusterBuilder: awsCAPIAWSClusterBase,
+			awsMachineBuilder: awsCAPIAWSMachineBase.
+				WithHostAffinity(ptr.To("host")).
+				WithHostID(ptr.To("h-123456789")),
+			machineBuilder: awsCAPIMachineBase,
+			expectedErrors: []string{
+				"spec.dedicatedHost.id: Invalid value: \"h-123456789\": id is required and must start with 'h-' followed by 8 or 17 lowercase hexadecimal characters (0-9 and a-f)",
+			},
+			expectedWarnings: []string{},
+		}),
+		Entry("With HostAffinity host and invalid HostID (wrong length - 16 characters)", awsCAPI2MAPIMachineConversionInput{
+			awsClusterBuilder: awsCAPIAWSClusterBase,
+			awsMachineBuilder: awsCAPIAWSMachineBase.
+				WithHostAffinity(ptr.To("host")).
+				WithHostID(ptr.To("h-1234567890abcdef")),
+			machineBuilder: awsCAPIMachineBase,
+			expectedErrors: []string{
+				"spec.dedicatedHost.id: Invalid value: \"h-1234567890abcdef\": id is required and must start with 'h-' followed by 8 or 17 lowercase hexadecimal characters (0-9 and a-f)",
+			},
+			expectedWarnings: []string{},
+		}),
+		Entry("With HostAffinity host and invalid HostID (uppercase characters)", awsCAPI2MAPIMachineConversionInput{
+			awsClusterBuilder: awsCAPIAWSClusterBase,
+			awsMachineBuilder: awsCAPIAWSMachineBase.
+				WithHostAffinity(ptr.To("host")).
+				WithHostID(ptr.To("h-1234567890ABCDEF0")),
+			machineBuilder: awsCAPIMachineBase,
+			expectedErrors: []string{
+				"spec.dedicatedHost.id: Invalid value: \"h-1234567890ABCDEF0\": id is required and must start with 'h-' followed by 8 or 17 lowercase hexadecimal characters (0-9 and a-f)",
+			},
+			expectedWarnings: []string{},
+		}),
+		Entry("With HostAffinity host and invalid HostID (missing h- prefix)", awsCAPI2MAPIMachineConversionInput{
+			awsClusterBuilder: awsCAPIAWSClusterBase,
+			awsMachineBuilder: awsCAPIAWSMachineBase.
+				WithHostAffinity(ptr.To("host")).
+				WithHostID(ptr.To("12345678")),
+			machineBuilder: awsCAPIMachineBase,
+			expectedErrors: []string{
+				"spec.dedicatedHost.id: Invalid value: \"12345678\": id is required and must start with 'h-' followed by 8 or 17 lowercase hexadecimal characters (0-9 and a-f)",
+			},
+			expectedWarnings: []string{},
+		}),
+		Entry("With HostAffinity host and invalid HostID (non-hex characters)", awsCAPI2MAPIMachineConversionInput{
+			awsClusterBuilder: awsCAPIAWSClusterBase,
+			awsMachineBuilder: awsCAPIAWSMachineBase.
+				WithHostAffinity(ptr.To("host")).
+				WithHostID(ptr.To("h-1234567g")),
+			machineBuilder: awsCAPIMachineBase,
+			expectedErrors: []string{
+				"spec.dedicatedHost.id: Invalid value: \"h-1234567g\": id is required and must start with 'h-' followed by 8 or 17 lowercase hexadecimal characters (0-9 and a-f)",
+			},
+			expectedWarnings: []string{},
+		}),
+		Entry("With HostAffinity host but missing HostID", awsCAPI2MAPIMachineConversionInput{
+			awsClusterBuilder: awsCAPIAWSClusterBase,
+			awsMachineBuilder: awsCAPIAWSMachineBase.
+				WithHostAffinity(ptr.To("host")),
+			machineBuilder: awsCAPIMachineBase,
+			expectedErrors: []string{
+				"spec.dedicatedHost.id: Required value: id is required and must start with 'h-' followed by 8 or 17 lowercase hexadecimal characters (0-9 and a-f)",
+			},
+			expectedWarnings: []string{},
+		}),
+		Entry("With HostAffinity default and invalid HostID format", awsCAPI2MAPIMachineConversionInput{
+			awsClusterBuilder: awsCAPIAWSClusterBase,
+			awsMachineBuilder: awsCAPIAWSMachineBase.
+				WithHostAffinity(ptr.To("default")).
+				WithHostID(ptr.To("h-invalid")),
+			machineBuilder: awsCAPIMachineBase,
+			expectedErrors: []string{
+				"spec.dedicatedHost.id: Invalid value: \"h-invalid\": id must start with 'h-' followed by 8 or 17 lowercase hexadecimal characters (0-9 and a-f)",
+			},
+			expectedWarnings: []string{},
+		}),
+		Entry("With unsupported HostAffinity", awsCAPI2MAPIMachineConversionInput{
+			awsClusterBuilder: awsCAPIAWSClusterBase,
+			awsMachineBuilder: awsCAPIAWSMachineBase.
+				WithHostAffinity(ptr.To("unsupported")),
+			machineBuilder: awsCAPIMachineBase,
+			expectedErrors: []string{
+				"spec.hostAffinity: Invalid value: \"unsupported\": unable to convert hostAffinity, unknown value",
+			},
+			expectedWarnings: []string{},
+		}),
 		Entry("With unsupported EKSOptimizedLookupType", awsCAPI2MAPIMachineConversionInput{
 			awsClusterBuilder: awsCAPIAWSClusterBase,
 			awsMachineBuilder: capabuilder.AWSMachine().
