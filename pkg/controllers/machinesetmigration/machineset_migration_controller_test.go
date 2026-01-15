@@ -19,6 +19,7 @@ package machinesetmigration
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	ctrl "sigs.k8s.io/controller-runtime"
 
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	clusterv1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/cluster-api/core/v1beta2"
@@ -196,7 +197,7 @@ var _ = Describe("With a running MachineSetMigration controller", func() {
 					Build()
 				Eventually(k8sClient.Create(ctx, mapiMachineSet)).Should(Succeed())
 
-				By("Setting the MAPI machine set status AuthoritativeAPI to MachineAPI")
+				By("Setting the MAPI machine set status AuthoritativeAPI and SynchronizedAPI to MachineAPI")
 				Eventually(k.UpdateStatus(mapiMachineSet, func() {
 					updatedMAPIMachineSet := mapiMachineSetBuilder.
 						WithAuthoritativeAPIStatus(mapiv1beta1.MachineAuthorityMachineAPI).
@@ -206,6 +207,7 @@ var _ = Describe("With a running MachineSetMigration controller", func() {
 							Status:             corev1.ConditionFalse}}).
 						Build()
 					mapiMachineSet.Status.AuthoritativeAPI = updatedMAPIMachineSet.Status.AuthoritativeAPI
+					mapiMachineSet.Status.SynchronizedAPI = mapiv1beta1.MachineAPISynchronized
 					mapiMachineSet.Status.Conditions = updatedMAPIMachineSet.Status.Conditions
 				})).Should(Succeed())
 
@@ -242,6 +244,7 @@ var _ = Describe("With a running MachineSetMigration controller", func() {
 							Status:             corev1.ConditionTrue}}).
 						Build()
 					mapiMachineSet.Status.AuthoritativeAPI = updatedMAPIMachineSet.Status.AuthoritativeAPI
+					mapiMachineSet.Status.SynchronizedAPI = mapiv1beta1.MachineAPISynchronized
 					mapiMachineSet.Status.Conditions = updatedMAPIMachineSet.Status.Conditions
 					mapiMachineSet.Status.SynchronizedGeneration = capiMachineSet.Generation
 				})).Should(Succeed())
@@ -268,8 +271,12 @@ var _ = Describe("With a running MachineSetMigration controller", func() {
 						Build()
 					Eventually(k8sClient.Create(ctx, mapiMachineSet)).Should(Succeed())
 
-					By("Creating a mirror CAPI machine set")
-					capiMachineSet = capiMachineSetBuilder.Build()
+					By("Creating a mirror CAPI machine set with paused annotation")
+					capiMachineSet = capiMachineSetBuilder.
+						WithAnnotations(map[string]string{
+							clusterv1.PausedAnnotation: "",
+						}).
+						Build()
 					Eventually(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
 
 					By("Setting the MAPI machine set status AuthoritativeAPI to 'Migrating'")
@@ -282,6 +289,7 @@ var _ = Describe("With a running MachineSetMigration controller", func() {
 								Status:             corev1.ConditionTrue}}).
 							Build()
 						mapiMachineSet.Status.AuthoritativeAPI = updatedMAPIMachineSet.Status.AuthoritativeAPI
+						mapiMachineSet.Status.SynchronizedAPI = mapiv1beta1.MachineAPISynchronized
 						mapiMachineSet.Status.Conditions = updatedMAPIMachineSet.Status.Conditions
 						mapiMachineSet.Status.SynchronizedGeneration = capiMachineSet.Generation
 					})).Should(Succeed())
@@ -316,12 +324,14 @@ var _ = Describe("With a running MachineSetMigration controller", func() {
 					Eventually(k.UpdateStatus(mapiMachineSet, func() {
 						updatedMAPIMachineSet := mapiMachineSetBuilder.
 							WithAuthoritativeAPIStatus(mapiv1beta1.MachineAuthorityMigrating).
+							WithSynchronizedAPIStatus(mapiv1beta1.ClusterAPISynchronized).
 							WithConditions([]mapiv1beta1.Condition{{
 								Type:               consts.SynchronizedCondition,
 								LastTransitionTime: metav1.Now(),
 								Status:             corev1.ConditionTrue}}).
 							Build()
 						mapiMachineSet.Status.AuthoritativeAPI = updatedMAPIMachineSet.Status.AuthoritativeAPI
+						mapiMachineSet.Status.SynchronizedAPI = updatedMAPIMachineSet.Status.SynchronizedAPI
 						mapiMachineSet.Status.Conditions = updatedMAPIMachineSet.Status.Conditions
 						mapiMachineSet.Status.SynchronizedGeneration = mapiMachineSet.Generation
 					})).Should(Succeed())
@@ -365,6 +375,7 @@ var _ = Describe("With a running MachineSetMigration controller", func() {
 						Eventually(k.UpdateStatus(mapiMachineSet, func() {
 							updatedMAPIMachineSet := mapiMachineSetBuilder.
 								WithAuthoritativeAPIStatus(mapiv1beta1.MachineAuthorityMigrating).
+								WithSynchronizedAPIStatus(mapiv1beta1.MachineAPISynchronized).
 								WithConditions([]mapiv1beta1.Condition{
 									{
 										Type:               consts.SynchronizedCondition,
@@ -379,6 +390,7 @@ var _ = Describe("With a running MachineSetMigration controller", func() {
 								}).
 								Build()
 							mapiMachineSet.Status.AuthoritativeAPI = updatedMAPIMachineSet.Status.AuthoritativeAPI
+							mapiMachineSet.Status.SynchronizedAPI = updatedMAPIMachineSet.Status.SynchronizedAPI
 							mapiMachineSet.Status.Conditions = updatedMAPIMachineSet.Status.Conditions
 							mapiMachineSet.Status.SynchronizedGeneration = capiMachineSet.Generation
 						})).Should(Succeed())
@@ -419,12 +431,14 @@ var _ = Describe("With a running MachineSetMigration controller", func() {
 						Eventually(k.UpdateStatus(mapiMachineSet, func() {
 							updatedMAPIMachineSet := mapiMachineSetBuilder.
 								WithAuthoritativeAPIStatus(mapiv1beta1.MachineAuthorityMigrating).
+								WithSynchronizedAPIStatus(mapiv1beta1.ClusterAPISynchronized).
 								WithConditions([]mapiv1beta1.Condition{{
 									Type:               consts.SynchronizedCondition,
 									LastTransitionTime: metav1.Now(),
 									Status:             corev1.ConditionTrue}}).
 								Build()
 							mapiMachineSet.Status.AuthoritativeAPI = updatedMAPIMachineSet.Status.AuthoritativeAPI
+							mapiMachineSet.Status.SynchronizedAPI = updatedMAPIMachineSet.Status.SynchronizedAPI
 							mapiMachineSet.Status.Conditions = updatedMAPIMachineSet.Status.Conditions
 						})).Should(Succeed())
 
@@ -481,6 +495,7 @@ var _ = Describe("With a running MachineSetMigration controller", func() {
 						Eventually(k.UpdateStatus(mapiMachineSet, func() {
 							updatedMAPIMachineSet := mapiMachineSetBuilder.
 								WithAuthoritativeAPIStatus(mapiv1beta1.MachineAuthorityMigrating).
+								WithSynchronizedAPIStatus(mapiv1beta1.MachineAPISynchronized).
 								WithSynchronizedGeneration(9999). // Do not match .metadata.generation field.
 								WithConditions([]mapiv1beta1.Condition{{
 									Type:               consts.SynchronizedCondition,
@@ -488,6 +503,7 @@ var _ = Describe("With a running MachineSetMigration controller", func() {
 									Status:             corev1.ConditionTrue}}).
 								Build()
 							mapiMachineSet.Status.AuthoritativeAPI = updatedMAPIMachineSet.Status.AuthoritativeAPI
+							mapiMachineSet.Status.SynchronizedAPI = updatedMAPIMachineSet.Status.SynchronizedAPI
 							mapiMachineSet.Status.SynchronizedGeneration = updatedMAPIMachineSet.Status.SynchronizedGeneration
 							mapiMachineSet.Status.Conditions = updatedMAPIMachineSet.Status.Conditions
 						})).Should(Succeed())
@@ -520,6 +536,7 @@ var _ = Describe("With a running MachineSetMigration controller", func() {
 						Eventually(k.UpdateStatus(mapiMachineSet, func() {
 							updatedMAPIMachineSet := mapiMachineSetBuilder.
 								WithAuthoritativeAPIStatus(mapiv1beta1.MachineAuthorityMigrating).
+								WithSynchronizedAPIStatus(mapiv1beta1.ClusterAPISynchronized).
 								WithSynchronizedGeneration(9999). // Do not match .metadata.generation field.
 								WithConditions([]mapiv1beta1.Condition{{
 									Type:               consts.SynchronizedCondition,
@@ -527,6 +544,7 @@ var _ = Describe("With a running MachineSetMigration controller", func() {
 									Status:             corev1.ConditionTrue}}).
 								Build()
 							mapiMachineSet.Status.AuthoritativeAPI = updatedMAPIMachineSet.Status.AuthoritativeAPI
+							mapiMachineSet.Status.SynchronizedAPI = updatedMAPIMachineSet.Status.SynchronizedAPI
 							mapiMachineSet.Status.SynchronizedGeneration = updatedMAPIMachineSet.Status.SynchronizedGeneration
 							mapiMachineSet.Status.Conditions = updatedMAPIMachineSet.Status.Conditions
 						})).Should(Succeed())
@@ -544,23 +562,25 @@ var _ = Describe("With a running MachineSetMigration controller", func() {
 			})
 		})
 
-		Context("when all the prerequisites for switching the authoritative API are satisfied", func() {
+		Context("when the new authoritative resource is still paused", func() {
 			Context("when migrating from MachineAPI to ClusterAPI", func() {
 				BeforeEach(func() {
 					By("Setting the MAPI machine set spec AuthoritativeAPI to ClusterAPI")
 					mapiMachineSet = mapiMachineSetBuilder.
-						// Set desired authoritative API in spec to ClusterAPI.
-						// To check for requesting pausing on the the MAPI resource it is sufficient
-						// see that the spec.AuthoritativeAPI field is set to ClusterAPI.
 						WithAuthoritativeAPI(mapiv1beta1.MachineAuthorityClusterAPI).
 						Build()
 					Eventually(k8sClient.Create(ctx, mapiMachineSet)).Should(Succeed())
 
-					By("Setting the MAPI machine set status AuthoritativeAPI to 'Migrating'")
+					By("Creating a mirror CAPI machine set")
+					capiMachineSet = capiMachineSetBuilder.Build()
+					Eventually(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
+
+					By("Setting the MAPI machine set status AuthoritativeAPI to 'Migrating' with Paused=True (not yet unpaused)")
 					Eventually(k.UpdateStatus(mapiMachineSet, func() {
 						updatedMAPIMachineSet := mapiMachineSetBuilder.
 							WithAuthoritativeAPIStatus(mapiv1beta1.MachineAuthorityMigrating).
-							WithSynchronizedGeneration(mapiMachineSet.Generation). // Match the MAPI .metadata.generation field.
+							WithSynchronizedAPIStatus(mapiv1beta1.MachineAPISynchronized).
+							WithSynchronizedGeneration(mapiMachineSet.Generation).
 							WithConditions([]mapiv1beta1.Condition{
 								{
 									Type:               consts.SynchronizedCondition,
@@ -575,20 +595,12 @@ var _ = Describe("With a running MachineSetMigration controller", func() {
 							}).
 							Build()
 						mapiMachineSet.Status.AuthoritativeAPI = updatedMAPIMachineSet.Status.AuthoritativeAPI
+						mapiMachineSet.Status.SynchronizedAPI = updatedMAPIMachineSet.Status.SynchronizedAPI
 						mapiMachineSet.Status.SynchronizedGeneration = updatedMAPIMachineSet.Status.SynchronizedGeneration
 						mapiMachineSet.Status.Conditions = updatedMAPIMachineSet.Status.Conditions
 					})).Should(Succeed())
 
-					By("Creating a mirror CAPI machine set")
-					capiMachineSet = capiMachineSetBuilder.
-						WithAnnotations(map[string]string{
-							clusterv1.PausedAnnotation: "",
-						}).
-						Build()
-					capiMachineSet.Finalizers = append(capiMachineSet.Finalizers, clusterv1.MachineSetFinalizer)
-					Eventually(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
-
-					By("Setting the CAPI machine set status condition to 'Paused'")
+					By("Setting the CAPI machine set status condition to 'Paused' (not yet unpaused)")
 					Eventually(k.UpdateStatus(capiMachineSet, func() {
 						updatedCAPIMachineSet := capiMachineSetBuilder.Build()
 						updatedCAPIMachineSet.Status.Conditions = []metav1.Condition{{
@@ -602,20 +614,40 @@ var _ = Describe("With a running MachineSetMigration controller", func() {
 					req = reconcile.Request{NamespacedName: client.ObjectKeyFromObject(mapiMachineSet)}
 				})
 
-				It("should set the new to-be authoritative resource (CAPI) to actually be authoritative and unpause it", func() {
+				It("should wait in Migrating until unpaused, then complete migration", func() {
 					result, err := reconciler.Reconcile(ctx, req)
 					Expect(err).NotTo(HaveOccurred())
-					Expect(result.Requeue).To(BeFalse())
+					Expect(result).To(Equal(ctrl.Result{}))
+
+					Eventually(komega.Object(mapiMachineSet)).Should(
+						HaveField("Status.AuthoritativeAPI", Equal(mapiv1beta1.MachineAuthorityMigrating)),
+					)
+					Eventually(komega.Object(capiMachineSet)).ShouldNot(
+						HaveField("ObjectMeta.Annotations", HaveKey(clusterv1.PausedAnnotation)),
+					)
+
+					By("Unpausing the CAPI machine set")
+					Eventually(k.UpdateStatus(capiMachineSet, func() {
+						updatedCAPIMachineSet := capiMachineSetBuilder.Build()
+						updatedCAPIMachineSet.Status.Conditions = []metav1.Condition{{
+							Type:               clusterv1.PausedCondition,
+							Status:             metav1.ConditionFalse,
+							LastTransitionTime: metav1.Now(),
+						}}
+						capiMachineSet.Status = updatedCAPIMachineSet.Status
+					})).Should(Succeed())
+
+					result, err = reconciler.Reconcile(ctx, req)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(result).To(Equal(ctrl.Result{}))
 
 					Eventually(komega.Object(mapiMachineSet)).Should(SatisfyAll(
 						HaveField("Status.AuthoritativeAPI", Equal(mapiv1beta1.MachineAuthorityClusterAPI)),
 						HaveField("Status.SynchronizedGeneration", BeZero()),
 					))
-
-					Eventually(komega.Object(capiMachineSet)).ShouldNot(
-						HaveField("ObjectMeta.Annotations", ContainElement(HaveKeyWithValue(clusterv1.PausedAnnotation, ""))))
 				})
 			})
+
 			Context("when migrating from ClusterAPI to MachineAPI", func() {
 				BeforeEach(func() {
 					By("Setting the MAPI machine set spec AuthoritativeAPI to MachineAPI")
@@ -624,7 +656,7 @@ var _ = Describe("With a running MachineSetMigration controller", func() {
 						Build()
 					Eventually(k8sClient.Create(ctx, mapiMachineSet)).Should(Succeed())
 
-					By("Creating a mirror CAPI machine set")
+					By("Creating a mirror CAPI machine set with paused annotation")
 					capiMachineSet = capiMachineSetBuilder.
 						WithAnnotations(map[string]string{
 							clusterv1.PausedAnnotation: "",
@@ -632,11 +664,12 @@ var _ = Describe("With a running MachineSetMigration controller", func() {
 						Build()
 					Eventually(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
 
-					By("Setting the MAPI machine set status AuthoritativeAPI to 'Migrating'")
+					By("Setting the MAPI machine set status AuthoritativeAPI to 'Migrating' with Paused=True (not yet unpaused)")
 					Eventually(k.UpdateStatus(mapiMachineSet, func() {
 						updatedMAPIMachineSet := mapiMachineSetBuilder.
 							WithAuthoritativeAPIStatus(mapiv1beta1.MachineAuthorityMigrating).
-							WithSynchronizedGeneration(capiMachineSet.Generation). // Match the CAPI .metadata.generation field.
+							WithSynchronizedAPIStatus(mapiv1beta1.ClusterAPISynchronized).
+							WithSynchronizedGeneration(capiMachineSet.Generation).
 							WithConditions([]mapiv1beta1.Condition{
 								{
 									Type:               consts.SynchronizedCondition,
@@ -651,6 +684,7 @@ var _ = Describe("With a running MachineSetMigration controller", func() {
 							}).
 							Build()
 						mapiMachineSet.Status.AuthoritativeAPI = updatedMAPIMachineSet.Status.AuthoritativeAPI
+						mapiMachineSet.Status.SynchronizedAPI = updatedMAPIMachineSet.Status.SynchronizedAPI
 						mapiMachineSet.Status.SynchronizedGeneration = updatedMAPIMachineSet.Status.SynchronizedGeneration
 						mapiMachineSet.Status.Conditions = updatedMAPIMachineSet.Status.Conditions
 					})).Should(Succeed())
@@ -669,15 +703,171 @@ var _ = Describe("With a running MachineSetMigration controller", func() {
 					req = reconcile.Request{NamespacedName: client.ObjectKeyFromObject(mapiMachineSet)}
 				})
 
-				It("should set the new to-be authoritative resource (MAPI) to actually be authoritative and requeue to unpause it", func() {
+				It("should wait in Migrating until unpaused, then complete migration", func() {
 					result, err := reconciler.Reconcile(ctx, req)
 					Expect(err).NotTo(HaveOccurred())
-					Expect(result.Requeue).To(BeFalse())
+					Expect(result).To(Equal(ctrl.Result{}))
+
+					Eventually(komega.Object(mapiMachineSet)).Should(
+						HaveField("Status.AuthoritativeAPI", Equal(mapiv1beta1.MachineAuthorityMigrating)),
+					)
+
+					By("Unpausing the MAPI machine set")
+					Eventually(k.UpdateStatus(mapiMachineSet, func() {
+						updatedMAPIMachineSet := mapiMachineSetBuilder.
+							WithAuthoritativeAPIStatus(mapiv1beta1.MachineAuthorityMigrating).
+							WithSynchronizedAPIStatus(mapiv1beta1.ClusterAPISynchronized).
+							WithSynchronizedGeneration(capiMachineSet.Generation).
+							WithConditions([]mapiv1beta1.Condition{
+								{
+									Type:               consts.SynchronizedCondition,
+									LastTransitionTime: metav1.Now(),
+									Status:             corev1.ConditionTrue,
+								},
+								{
+									Type:               "Paused",
+									LastTransitionTime: metav1.Now(),
+									Status:             corev1.ConditionFalse,
+								},
+							}).
+							Build()
+						mapiMachineSet.Status.AuthoritativeAPI = updatedMAPIMachineSet.Status.AuthoritativeAPI
+						mapiMachineSet.Status.SynchronizedAPI = updatedMAPIMachineSet.Status.SynchronizedAPI
+						mapiMachineSet.Status.SynchronizedGeneration = updatedMAPIMachineSet.Status.SynchronizedGeneration
+						mapiMachineSet.Status.Conditions = updatedMAPIMachineSet.Status.Conditions
+					})).Should(Succeed())
+
+					result, err = reconciler.Reconcile(ctx, req)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(result).To(Equal(ctrl.Result{}))
 
 					Eventually(komega.Object(mapiMachineSet)).Should(SatisfyAll(
 						HaveField("Status.AuthoritativeAPI", Equal(mapiv1beta1.MachineAuthorityMachineAPI)),
 						HaveField("Status.SynchronizedGeneration", BeZero()),
 					))
+				})
+			})
+		})
+
+		Context("when transitioning from stable state to Migrating", func() {
+			BeforeEach(func() {
+				By("Setting the MAPI machine set spec AuthoritativeAPI to MachineAPI (target)")
+				mapiMachineSet = mapiMachineSetBuilder.
+					WithAuthoritativeAPI(mapiv1beta1.MachineAuthorityMachineAPI).
+					Build()
+				Eventually(k8sClient.Create(ctx, mapiMachineSet)).Should(Succeed())
+
+				By("Creating mirror CAPI machine set")
+				capiMachineSet = capiMachineSetBuilder.Build()
+				Eventually(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
+
+				By("Setting current authority to ClusterAPI with proper sync status")
+				Eventually(k.UpdateStatus(mapiMachineSet, func() {
+					mapiMachineSet.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityClusterAPI
+					mapiMachineSet.Status.SynchronizedAPI = mapiv1beta1.ClusterAPISynchronized
+					mapiMachineSet.Status.SynchronizedGeneration = capiMachineSet.Generation
+					mapiMachineSet.Status.Conditions = []mapiv1beta1.Condition{{
+						Type:               consts.SynchronizedCondition,
+						LastTransitionTime: metav1.Now(),
+						Status:             corev1.ConditionTrue,
+					}}
+				})).Should(Succeed())
+
+				req = reconcile.Request{NamespacedName: client.ObjectKeyFromObject(mapiMachineSet)}
+			})
+
+			It("should preserve SynchronizedAPI as ClusterAPI when transitioning to Migrating", func() {
+				_, err := reconciler.Reconcile(ctx, req)
+				Expect(err).NotTo(HaveOccurred())
+
+				Eventually(k.Object(mapiMachineSet)).Should(SatisfyAll(
+					HaveField("Status.AuthoritativeAPI", Equal(mapiv1beta1.MachineAuthorityMigrating)),
+					HaveField("Status.SynchronizedAPI", Equal(mapiv1beta1.ClusterAPISynchronized)),
+				))
+			})
+		})
+
+		Context("when migration is cancelled during Migrating state", func() {
+			Context("when cancelling MAPI->CAPI migration back to MAPI", func() {
+				BeforeEach(func() {
+					By("Setting the MAPI machine set spec AuthoritativeAPI to MachineAPI (cancellation)")
+					mapiMachineSet = mapiMachineSetBuilder.
+						WithAuthoritativeAPI(mapiv1beta1.MachineAuthorityMachineAPI).
+						Build()
+					Eventually(k8sClient.Create(ctx, mapiMachineSet)).Should(Succeed())
+
+					By("Creating mirror CAPI machine set")
+					capiMachineSet = capiMachineSetBuilder.Build()
+					Eventually(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
+
+					By("Setting status to Migrating with SynchronizedAPI=MachineAPISynchronized (was migrating from MAPI)")
+					Eventually(k.UpdateStatus(mapiMachineSet, func() {
+						mapiMachineSet.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityMigrating
+						mapiMachineSet.Status.SynchronizedAPI = mapiv1beta1.MachineAPISynchronized
+						mapiMachineSet.Status.SynchronizedGeneration = mapiMachineSet.Generation
+						mapiMachineSet.Status.Conditions = []mapiv1beta1.Condition{{
+							Type:               consts.SynchronizedCondition,
+							LastTransitionTime: metav1.Now(),
+							Status:             corev1.ConditionTrue,
+						}}
+					})).Should(Succeed())
+
+					req = reconcile.Request{NamespacedName: client.ObjectKeyFromObject(mapiMachineSet)}
+				})
+
+				It("should rollback to MachineAPI and reset sync status", func() {
+					_, err := reconciler.Reconcile(ctx, req)
+					Expect(err).NotTo(HaveOccurred())
+
+					Eventually(k.Object(mapiMachineSet)).Should(SatisfyAll(
+						HaveField("Status.AuthoritativeAPI", Equal(mapiv1beta1.MachineAuthorityMachineAPI)),
+						HaveField("Status.SynchronizedGeneration", BeZero()),
+					))
+				})
+			})
+
+			Context("when cancelling CAPI->MAPI migration back to CAPI", func() {
+				BeforeEach(func() {
+					By("Setting the MAPI machine set spec AuthoritativeAPI to ClusterAPI (cancellation)")
+					mapiMachineSet = mapiMachineSetBuilder.
+						WithAuthoritativeAPI(mapiv1beta1.MachineAuthorityClusterAPI).
+						Build()
+					Eventually(k8sClient.Create(ctx, mapiMachineSet)).Should(Succeed())
+
+					By("Creating mirror CAPI machine set with paused annotation")
+					capiMachineSet = capiMachineSetBuilder.
+						WithAnnotations(map[string]string{
+							clusterv1.PausedAnnotation: "",
+						}).
+						Build()
+					Eventually(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
+
+					By("Setting status to Migrating with SynchronizedAPI=ClusterAPISynchronized (was migrating from CAPI)")
+					Eventually(k.UpdateStatus(mapiMachineSet, func() {
+						mapiMachineSet.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityMigrating
+						mapiMachineSet.Status.SynchronizedAPI = mapiv1beta1.ClusterAPISynchronized
+						mapiMachineSet.Status.SynchronizedGeneration = capiMachineSet.Generation
+						mapiMachineSet.Status.Conditions = []mapiv1beta1.Condition{{
+							Type:               consts.SynchronizedCondition,
+							LastTransitionTime: metav1.Now(),
+							Status:             corev1.ConditionTrue,
+						}}
+					})).Should(Succeed())
+
+					req = reconcile.Request{NamespacedName: client.ObjectKeyFromObject(mapiMachineSet)}
+				})
+
+				It("should rollback to ClusterAPI, reset sync status, and remove paused annotation from CAPI resources", func() {
+					_, err := reconciler.Reconcile(ctx, req)
+					Expect(err).NotTo(HaveOccurred())
+
+					Eventually(k.Object(mapiMachineSet)).Should(SatisfyAll(
+						HaveField("Status.AuthoritativeAPI", Equal(mapiv1beta1.MachineAuthorityClusterAPI)),
+						HaveField("Status.SynchronizedGeneration", BeZero()),
+					))
+
+					Eventually(k.Object(capiMachineSet)).ShouldNot(
+						HaveField("ObjectMeta.Annotations", HaveKey(clusterv1.PausedAnnotation)))
 				})
 			})
 		})

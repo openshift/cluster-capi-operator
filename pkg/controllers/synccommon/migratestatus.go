@@ -30,14 +30,16 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// ApplyAuthoritativeAPIAndResetSyncStatus writes the status of the migration
-// controller, and also resets the status written by the sync controller. It
-// does this in a single operation, using the field owner of the migration
-// controller.
+// ApplyMigrationStatusAndResetSyncStatus writes the migration controller status fields
+// and resets the sync controller status (sets Synchronized condition to Unknown and
+// synchronizedGeneration to 0).
+//
+// This is used when completing a migration to signal the sync controller that
+// it needs to re-synchronize from the new authoritative API.
 //
 // Due to the potential for racing with the sync controller, it sets
 // ResourceVersion in the operation.
-func ApplyAuthoritativeAPIAndResetSyncStatus[
+func ApplyMigrationStatusAndResetSyncStatus[
 	statusPT syncStatusApplyConfigurationP[statusT, statusPT],
 	objPT syncObjApplyConfigurationP[objT, objPT, statusPT],
 	statusT, objT any,
@@ -47,7 +49,8 @@ func ApplyAuthoritativeAPIAndResetSyncStatus[
 	authority mapiv1beta1.MachineAuthority,
 ) error {
 	objAC, statusAC, err := newSyncStatusApplyConfiguration(newApplyConfig, mapiObj,
-		corev1.ConditionUnknown, controllers.ReasonAuthoritativeAPIChanged, "Waiting for resync after change of AuthoritativeAPI", ptr.To(int64(0)))
+		corev1.ConditionUnknown, controllers.ReasonAuthoritativeAPIChanged, "Waiting for resync after change of AuthoritativeAPI", ptr.To(int64(0)),
+		nil)
 	if err != nil {
 		return err
 	}
@@ -55,9 +58,8 @@ func ApplyAuthoritativeAPIAndResetSyncStatus[
 	return applyAuthoritativeAPI(ctx, k8sClient, controllerName, mapiObj, authority, objAC, statusAC)
 }
 
-// ApplyAuthoritativeAPI writes the status of the migration controller to a MAPI
-// object.
-func ApplyAuthoritativeAPI[
+// ApplyMigrationStatus writes the migration controller status fields to a MAPI object.
+func ApplyMigrationStatus[
 	statusPT syncStatusApplyConfigurationP[statusT, statusPT],
 	objPT syncObjApplyConfigurationP[objT, objPT, statusPT],
 	statusT, objT any,
@@ -95,13 +97,12 @@ func applyAuthoritativeAPI[
 	// Note that we are writing fields owned by the synchronization controller
 	// and forcing ownership to the AuthoritativeAPI. The synchronization
 	// controller will force ownership of its own fields back again the next
-	// time it modifies them. We think this is probably going to work out ok.
-	// Apologies to future self if it didn't.
+	// time it modifies them.
 	//
 	// We need to do this due to a validation rule which prevents resetting
 	// synchronizedGeneration unless also changing authoritativeAPI. Given that
-	// these fields are owned by different controllers, some fudging is
-	// required.
+	// these fields are owned by different controllers, explicit field ownership
+	// management is required.
 	if err := k8sClient.Status().Patch(ctx, mapiObj, util.ApplyConfigPatch(objAC), client.ForceOwnership, client.FieldOwner(controllerName+"-AuthoritativeAPI")); err != nil {
 		return fmt.Errorf("failed to patch Machine API object set status with authoritativeAPI %q: %w", authority, err)
 	}

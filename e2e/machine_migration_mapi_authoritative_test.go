@@ -24,7 +24,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 		}
 	})
 
-	var _ = Describe("Create standalone MAPI Machine", Ordered, func() {
+	Context("Create standalone MAPI Machine", Ordered, func() {
 		var mapiMachineAuthMAPIName = "machine-authoritativeapi-mapi"
 		var newCapiMachine *clusterv1.Machine
 		var newMapiMachine *mapiv1beta1.Machine
@@ -62,7 +62,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 		})
 	})
 
-	var _ = Describe("Deleting MAPI Machines", Ordered, func() {
+	Context("Deleting MAPI Machines", Ordered, func() {
 		var mapiMachineAuthMAPINameDeleteMAPIMachine = "machine-authoritativeapi-mapi-delete-mapi"
 		var mapiMachineAuthMAPINameDeleteCAPIMachine = "machine-authoritativeapi-mapi-delete-capi"
 		var newCapiMachine *clusterv1.Machine
@@ -133,7 +133,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 		})
 	})
 
-	var _ = Describe("Machine Migration Round Trip Tests", Ordered, func() {
+	Context("Machine Migration Round Trip Tests", Ordered, func() {
 		var mapiCapiMapiRoundTripName = "machine-mapi-capi-mapi-roundtrip"
 		var newMapiMachine *mapiv1beta1.Machine
 		var newCapiMachine *clusterv1.Machine
@@ -163,6 +163,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				verifyMachineAuthoritative(newMapiMachine, mapiv1beta1.MachineAuthorityMachineAPI)
 				verifyMAPIMachineSynchronizedCondition(newMapiMachine, mapiv1beta1.MachineAuthorityMachineAPI)
 				verifyMachineSynchronizedGeneration(cl, newMapiMachine, mapiv1beta1.MachineAuthorityMachineAPI)
+				verifyMachineSynchronizedAPI(newMapiMachine, mapiv1beta1.MachineAPISynchronized)
 				verifyMachinePausedCondition(newMapiMachine, mapiv1beta1.MachineAuthorityMachineAPI)
 				verifyMachinePausedCondition(newCapiMachine, mapiv1beta1.MachineAuthorityMachineAPI)
 			})
@@ -174,6 +175,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				verifyMachineAuthoritative(newMapiMachine, mapiv1beta1.MachineAuthorityClusterAPI)
 				verifyMAPIMachineSynchronizedCondition(newMapiMachine, mapiv1beta1.MachineAuthorityClusterAPI)
 				verifyMachineSynchronizedGeneration(cl, newMapiMachine, mapiv1beta1.MachineAuthorityClusterAPI)
+				verifyMachineSynchronizedAPI(newMapiMachine, mapiv1beta1.ClusterAPISynchronized)
 				verifyMachinePausedCondition(newMapiMachine, mapiv1beta1.MachineAuthorityClusterAPI)
 				verifyMachinePausedCondition(newCapiMachine, mapiv1beta1.MachineAuthorityClusterAPI)
 			})
@@ -185,6 +187,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				verifyMachineAuthoritative(newMapiMachine, mapiv1beta1.MachineAuthorityMachineAPI)
 				verifyMAPIMachineSynchronizedCondition(newMapiMachine, mapiv1beta1.MachineAuthorityMachineAPI)
 				verifyMachineSynchronizedGeneration(cl, newMapiMachine, mapiv1beta1.MachineAuthorityMachineAPI)
+				verifyMachineSynchronizedAPI(newMapiMachine, mapiv1beta1.MachineAPISynchronized)
 				verifyMachinePausedCondition(newMapiMachine, mapiv1beta1.MachineAuthorityMachineAPI)
 				verifyMachinePausedCondition(newCapiMachine, mapiv1beta1.MachineAuthorityMachineAPI)
 			})
