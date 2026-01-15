@@ -1,0 +1,144 @@
+package e2e
+
+import (
+	"context"
+	"fmt"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	gcpv1 "sigs.k8s.io/cluster-api-provider-gcp/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	yaml "sigs.k8s.io/yaml"
+
+	configv1 "github.com/openshift/api/config/v1"
+	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
+	"github.com/openshift/cluster-capi-operator/e2e/framework"
+)
+
+const (
+	gcpMachineTemplateName = "gcp-machine-template"
+)
+
+var _ = Describe("[sig-cluster-lifecycle][Feature:ClusterAPI][platform:gcp][Disruptive] Cluster API GCP MachineSet", Ordered, Label("Conformance"), Label("Serial"), func() {
+	var gcpMachineTemplate *gcpv1.GCPMachineTemplate
+	var machineSet *clusterv1.MachineSet
+	var mapiMachineSpec *mapiv1beta1.GCPMachineProviderSpec
+
+	BeforeAll(func() {
+		InitCommonVariables()
+		if platform != configv1.GCPPlatformType {
+			Skip("Skipping GCP E2E tests")
+		}
+		mapiMachineSpec = getGCPMAPIProviderSpec(ctx, cl)
+	})
+
+	AfterEach(func() {
+		if platform != configv1.GCPPlatformType {
+			// Because AfterEach always runs, even when tests are skipped, we have to
+			// explicitly skip it here for other platforms.
+			Skip("Skipping GCP E2E tests")
+		}
+		framework.DeleteMachineSets(ctx, cl, machineSet)
+		framework.WaitForMachineSetsDeleted(cl, machineSet)
+		framework.DeleteObjects(ctx, cl, gcpMachineTemplate)
+	})
+
+	It("should be able to run a machine", func() {
+		gcpMachineTemplate = createGCPMachineTemplate(ctx, cl, mapiMachineSpec)
+
+		machineSet = framework.CreateMachineSet(ctx, cl, framework.NewMachineSetParams(
+			"gcp-machineset",
+			clusterName,
+			mapiMachineSpec.Zone,
+			1,
+			clusterv1.ContractVersionedObjectReference{
+				Kind:     "GCPMachineTemplate",
+				APIGroup: infraAPIGroup,
+				Name:     gcpMachineTemplateName,
+			},
+			"worker-user-data",
+		))
+
+		framework.WaitForMachineSet(cl, machineSet.Name, machineSet.Namespace)
+	})
+})
+
+func getGCPMAPIProviderSpec(ctx context.Context, cl client.Client) *mapiv1beta1.GCPMachineProviderSpec {
+	machineSetList := &mapiv1beta1.MachineSetList{}
+	Expect(cl.List(ctx, machineSetList, client.InNamespace(framework.MAPINamespace))).To(Succeed())
+
+	Expect(machineSetList.Items).ToNot(HaveLen(0))
+	machineSet := machineSetList.Items[0]
+	Expect(machineSet.Spec.Template.Spec.ProviderSpec.Value).ToNot(BeNil())
+
+	providerSpec := &mapiv1beta1.GCPMachineProviderSpec{}
+	Expect(yaml.Unmarshal(machineSet.Spec.Template.Spec.ProviderSpec.Value.Raw, providerSpec)).To(Succeed())
+
+	return providerSpec
+}
+
+func createGCPMachineTemplate(ctx context.Context, cl client.Client, mapiProviderSpec *mapiv1beta1.GCPMachineProviderSpec) *gcpv1.GCPMachineTemplate {
+	By("Creating GCP machine template")
+
+	Expect(mapiProviderSpec).ToNot(BeNil())
+	Expect(mapiProviderSpec.Disks).ToNot(BeNil())
+	Expect(len(mapiProviderSpec.Disks)).To(BeNumerically(">", 0))
+	Expect(mapiProviderSpec.Disks[0].Type).ToNot(BeEmpty())
+	Expect(mapiProviderSpec.MachineType).ToNot(BeEmpty())
+	Expect(mapiProviderSpec.NetworkInterfaces).ToNot(BeNil())
+	Expect(len(mapiProviderSpec.NetworkInterfaces)).To(BeNumerically(">", 0))
+	Expect(mapiProviderSpec.NetworkInterfaces[0].Subnetwork).ToNot(BeEmpty())
+	Expect(mapiProviderSpec.ServiceAccounts).ToNot(BeNil())
+	Expect(len(mapiProviderSpec.ServiceAccounts)).To(BeNumerically(">", 0))
+	Expect(mapiProviderSpec.ServiceAccounts[0].Email).ToNot(BeEmpty())
+	Expect(mapiProviderSpec.ServiceAccounts[0].Scopes).ToNot(BeNil())
+	Expect(mapiProviderSpec.Tags).ToNot(BeNil())
+	Expect(len(mapiProviderSpec.Tags)).To(BeNumerically(">", 0))
+
+	var rootDeviceType gcpv1.DiskType
+	switch mapiProviderSpec.Disks[0].Type {
+	case "pd-standard":
+		rootDeviceType = gcpv1.PdStandardDiskType
+	case "pd-ssd":
+		rootDeviceType = gcpv1.PdSsdDiskType
+	case "local-ssd":
+		rootDeviceType = gcpv1.LocalSsdDiskType
+	}
+
+	ipForwardingDisabled := gcpv1.IPForwardingDisabled
+	gcpMachineSpec := gcpv1.GCPMachineSpec{
+		RootDeviceType: &rootDeviceType,
+		RootDeviceSize: mapiProviderSpec.Disks[0].SizeGB,
+		InstanceType:   mapiProviderSpec.MachineType,
+		Image:          &mapiProviderSpec.Disks[0].Image,
+		Subnet:         &mapiProviderSpec.NetworkInterfaces[0].Subnetwork,
+		ServiceAccount: &gcpv1.ServiceAccount{
+			Email:  mapiProviderSpec.ServiceAccounts[0].Email,
+			Scopes: mapiProviderSpec.ServiceAccounts[0].Scopes,
+		},
+		AdditionalNetworkTags: mapiProviderSpec.Tags,
+		AdditionalLabels:      gcpv1.Labels{fmt.Sprintf("kubernetes-io-cluster-%s", clusterName): "owned"},
+		IPForwarding:          &ipForwardingDisabled,
+	}
+
+	gcpMachineTemplate := &gcpv1.GCPMachineTemplate{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      gcpMachineTemplateName,
+			Namespace: framework.CAPINamespace,
+		},
+		Spec: gcpv1.GCPMachineTemplateSpec{
+			Template: gcpv1.GCPMachineTemplateResource{
+				Spec: gcpMachineSpec,
+			},
+		},
+	}
+
+	if err := cl.Create(ctx, gcpMachineTemplate); err != nil && !apierrors.IsAlreadyExists(err) {
+		Expect(err).ToNot(HaveOccurred())
+	}
+
+	return gcpMachineTemplate
+}
