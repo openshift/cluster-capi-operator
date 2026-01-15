@@ -763,11 +763,11 @@ func MAPIMachineFuzzerFuncs(providerSpec runtime.Object, providerStatus interfac
 					m.NodeRef = nil
 				}
 
-				m.LastOperation = nil        // Ignore, this field as it is not present in CAPI.
-				m.AuthoritativeAPI = ""      // Ignore, this field as it is not present in CAPI.
-				m.SynchronizedGeneration = 0 // Ignore, this field as it is not present in CAPI.
-				m.SynchronizedAPI = ""       // Ignore, this field as it is not present in CAPI.
-				m.Conditions = nil           // Ignore, this field as it is not a 1:1 mapping between CAPI and MAPI but rather a recomputation of the conditions based on other fields.
+				m.LastOperation = nil        // Ignore; this field is not present in CAPI.
+				m.AuthoritativeAPI = ""      // Ignore; this field is not present in CAPI.
+				m.SynchronizedAPI = ""       // Ignore; this field is not present in CAPI.
+				m.SynchronizedGeneration = 0 // Ignore; this field is not present in CAPI.
+				m.Conditions = nil           // Ignore; this field is not a 1:1 mapping between CAPI and MAPI, but rather a recomputation of the conditions based on other fields.
 			},
 		}
 	}
@@ -810,11 +810,11 @@ func MAPIMachineSetFuzzerFuncs() fuzzer.FuzzerFuncs {
 			func(m *mapiv1beta1.MachineSetStatus, c randfill.Continue) {
 				c.FillNoCustom(m)
 
-				m.ObservedGeneration = 0     // Ignore, this field as it shouldn't match between CAPI and MAPI.
-				m.AuthoritativeAPI = ""      // Ignore, this field as it is not present in CAPI.
-				m.SynchronizedGeneration = 0 // Ignore, this field as it is not present in CAPI.
-				m.SynchronizedAPI = ""       // Ignore, this field as it is not present in CAPI.
-				m.Conditions = nil           // Ignore, this field as it is not a 1:1 mapping between CAPI and MAPI but rather a recomputation of the conditions based on other fields.
+				m.ObservedGeneration = 0     // Ignore; this field should not match between CAPI and MAPI.
+				m.AuthoritativeAPI = ""      // Ignore; this field is not present in CAPI.
+				m.SynchronizedAPI = ""       // Ignore; this field is not present in CAPI.
+				m.SynchronizedGeneration = 0 // Ignore; this field is not present in CAPI.
+				m.Conditions = nil           // Ignore; this field is not a 1:1 mapping between CAPI and MAPI, but rather a recomputation of the conditions based on other fields.
 			},
 		}
 	}

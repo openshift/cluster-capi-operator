@@ -21,36 +21,40 @@ import (
 	machinev1applyconfigs "github.com/openshift/client-go/machine/applyconfigurations/machine/v1beta1"
 )
 
-// syncObjApplyConfiguration is an apply configuration for objects managed by
-// the sync controller. This is currently MAPI Machine and MachineSet.
-type syncObjApplyConfiguration[objPT any, statusPT syncStatusApplyConfiguration[statusPT]] interface {
+// ObjApplyConfiguration is an apply configuration for objects managed by the
+// sync and migration controllers. This is currently MAPI Machine and
+// MachineSet.
+type ObjApplyConfiguration[objPT any, statusPT StatusApplyConfiguration[statusPT]] interface {
 	WithStatus(statusPT) objPT
 	WithResourceVersion(string) objPT
 }
 
-// syncObjApplyConfigurationP asserts that a syncObjApplyConfiguration is a pointer to a specific concrete type.
-type syncObjApplyConfigurationP[objT any, objPT *objT, statusPT syncStatusApplyConfiguration[statusPT]] interface {
+// ObjApplyConfigurationP asserts that an ObjApplyConfiguration is a pointer to
+// a specific concrete type.
+type ObjApplyConfigurationP[objT any, objPT *objT, statusPT StatusApplyConfiguration[statusPT]] interface {
 	*objT
-	syncObjApplyConfiguration[objPT, statusPT]
+	ObjApplyConfiguration[objPT, statusPT]
 }
 
-// syncStatusApplyConfiguration is an apply configuration for the status of
-// objects managed by the sync controller. This is currently MAPI Machine and
-// MachineSet.
-type syncStatusApplyConfiguration[statusPT any] interface {
+// StatusApplyConfiguration is an apply configuration for the status of objects
+// managed by the sync and migration controllers. This is currently MAPI
+// Machine and MachineSet.
+type StatusApplyConfiguration[statusPT any] interface {
 	WithConditions(...*machinev1applyconfigs.ConditionApplyConfiguration) statusPT
 	WithSynchronizedGeneration(int64) statusPT
 	WithAuthoritativeAPI(mapiv1beta1.MachineAuthority) statusPT
+	WithSynchronizedAPI(mapiv1beta1.SynchronizedAPI) statusPT
 }
 
-// syncStatusApplyConfigurationP asserts that a syncStatusApplyConfiguration is a pointer to a specific concrete type.
-type syncStatusApplyConfigurationP[statusT any, statusPT any] interface {
+// StatusApplyConfigurationP asserts that a StatusApplyConfiguration is a
+// pointer to a specific concrete type.
+type StatusApplyConfigurationP[statusT any, statusPT any] interface {
 	*statusT
-	syncStatusApplyConfiguration[statusPT]
+	StatusApplyConfiguration[statusPT]
 }
 
-// syncObjApplyConfigurationConstructor is a constructor for
-// SyncObjApplyConfigurations. It takes a name and namespace and returns an
-// apply configuration. This constructor will have been generated automatically by
+// ObjApplyConfigurationConstructor is a constructor for
+// ObjApplyConfigurations. It takes a name and namespace and returns an apply
+// configuration. This constructor will have been generated automatically by
 // the applyconfig generator.
-type syncObjApplyConfigurationConstructor[objPT syncObjApplyConfiguration[objPT, statusPT], statusPT syncStatusApplyConfiguration[statusPT]] func(string, string) objPT
+type ObjApplyConfigurationConstructor[objPT ObjApplyConfiguration[objPT, statusPT], statusPT StatusApplyConfiguration[statusPT]] func(string, string) objPT

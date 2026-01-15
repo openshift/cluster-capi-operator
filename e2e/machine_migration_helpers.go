@@ -478,3 +478,14 @@ func verifyMachineSynchronizedGeneration(mapiMachine *mapiv1beta1.Machine, autho
 		Fail(fmt.Sprintf("unknown authoritativeAPI type: %v", authority))
 	}
 }
+
+// verifyMachineSynchronizedAPI verifies that the MAPI Machine's status.synchronizedAPI matches the expected value.
+func verifyMachineSynchronizedAPI(mapiMachine *mapiv1beta1.Machine, expectedSynchronizedAPI mapiv1beta1.SynchronizedAPI) {
+	GinkgoHelper()
+
+	By(fmt.Sprintf("Verifying MAPI Machine SynchronizedAPI is %s", expectedSynchronizedAPI))
+	Eventually(komega.Object(mapiMachine), capiframework.WaitMedium, capiframework.RetryMedium).Should(
+		HaveField("Status.SynchronizedAPI", Equal(expectedSynchronizedAPI)),
+		fmt.Sprintf("MAPI Machine SynchronizedAPI should be %s", expectedSynchronizedAPI),
+	)
+}
