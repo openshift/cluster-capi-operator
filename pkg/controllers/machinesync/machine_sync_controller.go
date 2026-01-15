@@ -1505,6 +1505,7 @@ func setChangedMAPIMachineStatusFields(existingMAPIMachine, convertedMAPIMachine
 	// Copy the other fields that are not present in the convertedMAPIMachine from the existingMAPIMachine.
 	convertedMAPIMachine.Status.AuthoritativeAPI = existingMAPIMachine.Status.AuthoritativeAPI
 	convertedMAPIMachine.Status.SynchronizedGeneration = existingMAPIMachine.Status.SynchronizedGeneration
+	convertedMAPIMachine.Status.SynchronizedAPI = existingMAPIMachine.Status.SynchronizedAPI
 	convertedMAPIMachine.Status.LastOperation = existingMAPIMachine.Status.LastOperation
 	// ProviderStatus is handled separately by setChangedMAPIMachineProviderStatusFields
 
@@ -1512,14 +1513,12 @@ func setChangedMAPIMachineStatusFields(existingMAPIMachine, convertedMAPIMachine
 	existingMAPIMachine.Status = convertedMAPIMachine.Status
 }
 
-// applySynchronizedConditionWithPatch updates the synchronized condition
-// using a server side apply patch. We do this to force ownership of the
-// 'Synchronized' condition and 'SynchronizedGeneration'.
 func (r *MachineSyncReconciler) applySynchronizedConditionWithPatch(ctx context.Context, mapiMachine *mapiv1beta1.Machine, status corev1.ConditionStatus, reason, message string, generation *int64) error {
 	return synccommon.ApplySyncStatus[*machinev1applyconfigs.MachineStatusApplyConfiguration](
 		ctx, r.Client, controllerName,
 		machinev1applyconfigs.Machine, mapiMachine,
-		status, reason, message, generation)
+		status, reason, message, generation,
+		synccommon.AuthoritativeAPIToSynchronizedAPI(mapiMachine.Status.AuthoritativeAPI))
 }
 
 // isTerminalConfigurationError returns true if the provided error is
