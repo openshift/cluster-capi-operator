@@ -226,6 +226,27 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 		<-mgrDone
 	}
 
+	appendIfMissing := func(finalizers []string, finalizer string) []string {
+		for _, existing := range finalizers {
+			if existing == finalizer {
+				return finalizers
+			}
+		}
+
+		return append(finalizers, finalizer)
+	}
+
+	removeFinalizer := func(finalizers []string, finalizer string) []string {
+		filtered := make([]string, 0, len(finalizers))
+		for _, existing := range finalizers {
+			if existing != finalizer {
+				filtered = append(filtered, existing)
+			}
+		}
+
+		return filtered
+	}
+
 	BeforeEach(func() {
 		By("Setting up a namespaces for the test")
 
@@ -1138,6 +1159,100 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 					})
 				})
 			})
+		})
+	})
+
+	Context("when a synchronized MAPI-authoritative machine is deleted", func() {
+		It("should delete the mirrored Cluster API resources only after the Machine API finalizer is cleared", func() {
+			By("Creating the MAPI machine")
+
+			mapiMachine = mapiMachineBuilder.Build()
+			Eventually(k8sClient.Create(ctx, mapiMachine)).Should(Succeed(), "mapi machine should be able to be created")
+
+			By("Setting the MAPI machine AuthoritativeAPI to MachineAPI")
+			Eventually(k.UpdateStatus(mapiMachine, func() {
+				mapiMachine.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityMachineAPI
+			})).Should(Succeed())
+
+			By("Waiting for the mirrored Cluster API resources and sync finalizers")
+
+			capiMachine = clusterv1resourcebuilder.Machine().WithName(mapiMachine.Name).WithNamespace(capiNamespace.Name).Build()
+			capaMachine = awsv1resourcebuilder.AWSMachine().WithName(mapiMachine.Name).WithNamespace(capiNamespace.Name).Build()
+
+			Eventually(k.Object(mapiMachine), timeout).Should(
+				HaveField("ObjectMeta.Finalizers", ContainElement(SyncFinalizer)),
+			)
+			Eventually(k.Object(capiMachine), timeout).Should(
+				HaveField("ObjectMeta.Finalizers", ContainElement(SyncFinalizer)),
+			)
+			Eventually(k.Object(capaMachine), timeout).Should(
+				HaveField("ObjectMeta.Finalizers", ContainElement(SyncFinalizer)),
+			)
+
+			By("Adding finalizers that force the deletion choreography through its ordered cleanup path")
+			Eventually(k.Update(mapiMachine, func() {
+				mapiMachine.Finalizers = appendIfMissing(mapiMachine.Finalizers, mapiv1beta1.MachineFinalizer)
+			})).Should(Succeed())
+			Eventually(k.Update(capiMachine, func() {
+				capiMachine.Finalizers = appendIfMissing(capiMachine.Finalizers, clusterv1.MachineFinalizer)
+			})).Should(Succeed())
+			Eventually(k.Update(capaMachine, func() {
+				capaMachine.Finalizers = appendIfMissing(capaMachine.Finalizers, "awsmachine.infrastructure.cluster.x-k8s.io")
+			})).Should(Succeed())
+
+			By("Deleting the authoritative Machine API machine")
+			Eventually(func() error {
+				return k8sClient.Delete(ctx, mapiMachine)
+			}).Should(Succeed(), "mapi machine should be able to be deleted")
+
+			By("Checking that the mirrored Cluster API resources are deleting but still blocked on their finalizers")
+			Eventually(k.Object(mapiMachine), timeout).Should(
+				HaveField("ObjectMeta.DeletionTimestamp", Not(BeNil())),
+			)
+			Eventually(k.Object(capiMachine), timeout).Should(
+				SatisfyAll(
+					HaveField("ObjectMeta.DeletionTimestamp", Not(BeNil())),
+					HaveField("ObjectMeta.Finalizers", ContainElement(clusterv1.MachineFinalizer)),
+					HaveField("ObjectMeta.Finalizers", ContainElement(SyncFinalizer)),
+				),
+			)
+			Eventually(k.Object(capaMachine), timeout).Should(
+				SatisfyAll(
+					HaveField("ObjectMeta.DeletionTimestamp", Not(BeNil())),
+					HaveField("ObjectMeta.Finalizers", ContainElement("awsmachine.infrastructure.cluster.x-k8s.io")),
+					HaveField("ObjectMeta.Finalizers", ContainElement(SyncFinalizer)),
+				),
+			)
+			Consistently(k.Object(capiMachine), consistentlyTimeout).Should(
+				HaveField("ObjectMeta.Finalizers", ContainElement(clusterv1.MachineFinalizer)),
+			)
+
+			By("Removing the Machine API finalizer so the controller can finish cleanup")
+			Eventually(k.Update(mapiMachine, func() {
+				mapiMachine.Finalizers = removeFinalizer(mapiMachine.Finalizers, mapiv1beta1.MachineFinalizer)
+			})).Should(Succeed())
+
+			By("Simulating the CAPI and infrastructure controllers clearing their own finalizers")
+			Eventually(k.Update(capiMachine, func() {
+				capiMachine.Finalizers = removeFinalizer(capiMachine.Finalizers, clusterv1.MachineFinalizer)
+			})).Should(Succeed())
+			Eventually(k.Update(capaMachine, func() {
+				capaMachine.Finalizers = removeFinalizer(capaMachine.Finalizers, "awsmachine.infrastructure.cluster.x-k8s.io")
+			})).Should(Succeed())
+
+			By("Checking that all mirrored resources are eventually deleted")
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, client.ObjectKey{Name: mapiMachine.Name, Namespace: mapiNamespace.Name}, &mapiv1beta1.Machine{})
+				return apierrors.IsNotFound(err)
+			}, timeout).Should(BeTrue(), "mapi machine should eventually be deleted")
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, client.ObjectKey{Name: capiMachine.Name, Namespace: capiNamespace.Name}, &clusterv1.Machine{})
+				return apierrors.IsNotFound(err)
+			}, timeout).Should(BeTrue(), "capi machine should eventually be deleted")
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, client.ObjectKey{Name: capaMachine.Name, Namespace: capiNamespace.Name}, &awsv1.AWSMachine{})
+				return apierrors.IsNotFound(err)
+			}, timeout).Should(BeTrue(), "capi infra machine should eventually be deleted")
 		})
 	})
 
@@ -2607,6 +2722,12 @@ var _ = Describe("applySynchronizedConditionWithPatch", func() {
 				HaveField("Status.SynchronizedGeneration", Equal(int64(22))),
 			)
 		})
+
+		It("should leave SynchronizedAPI unchanged when there is no successful sync generation", func() {
+			Eventually(k.Object(mapiMachine), timeout).Should(
+				HaveField("Status.SynchronizedAPI", BeEmpty()),
+			)
+		})
 	})
 
 	Context("when condition status is Unknown", func() {
@@ -2633,10 +2754,16 @@ var _ = Describe("applySynchronizedConditionWithPatch", func() {
 				HaveField("Status.SynchronizedGeneration", Equal(int64(22))),
 			)
 		})
+
+		It("should leave SynchronizedAPI unchanged when there is no successful sync generation", func() {
+			Eventually(k.Object(mapiMachine), timeout).Should(
+				HaveField("Status.SynchronizedAPI", BeEmpty()),
+			)
+		})
 	})
 
 	Context("when condition status is True", func() {
-		BeforeEach(func() {
+		JustBeforeEach(func() {
 			err := reconciler.applySynchronizedConditionWithPatch(ctx, mapiMachine, corev1.ConditionTrue, consts.ReasonResourceSynchronized, messageSuccessfullySynchronizedMAPItoCAPI, &mapiMachine.Generation)
 			Expect(err).NotTo(HaveOccurred())
 		})
@@ -2658,6 +2785,34 @@ var _ = Describe("applySynchronizedConditionWithPatch", func() {
 			Eventually(k.Object(mapiMachine), timeout).Should(
 				HaveField("Status.SynchronizedGeneration", Equal(int64(23))),
 			)
+		})
+
+		Context("when AuthoritativeAPI is MachineAPI", func() {
+			It("should set SynchronizedAPI to MachineAPISynchronized", func() {
+				Eventually(k.Object(mapiMachine), timeout).Should(
+					HaveField("Status.SynchronizedAPI", Equal(mapiv1beta1.MachineAPISynchronized)),
+				)
+			})
+		})
+
+		Context("when AuthoritativeAPI is ClusterAPI", func() {
+			BeforeEach(func() {
+				By("Set the status of the MAPI Machine with ClusterAPI authority")
+				Eventually(k.UpdateStatus(mapiMachine, func() {
+					mapiMachine.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityMigrating
+				})).Should(Succeed())
+				Eventually(k.UpdateStatus(mapiMachine, func() {
+					mapiMachine.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityClusterAPI
+				})).Should(Succeed())
+				// Restore the artificial generation after UpdateStatus refreshes the object.
+				mapiMachine.Generation = int64(23)
+			})
+
+			It("should set SynchronizedAPI to ClusterAPISynchronized", func() {
+				Eventually(k.Object(mapiMachine), timeout).Should(
+					HaveField("Status.SynchronizedAPI", Equal(mapiv1beta1.ClusterAPISynchronized)),
+				)
+			})
 		})
 	})
 })
