@@ -51,7 +51,7 @@ var _ = Describe("Reconcile kubeconfig secret", func() {
 			tokenSecret = &corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      tokenSecretName,
-					Namespace: controllers.DefaultManagedNamespace,
+					Namespace: controllers.DefaultCAPINamespace,
 				},
 				Data: map[string][]byte{
 					"token":  []byte("dGVzdA=="),
@@ -72,7 +72,7 @@ var _ = Describe("Reconcile kubeconfig secret", func() {
 
 			Expect(cl.Get(ctx, client.ObjectKey{
 				Name:      fmt.Sprintf("%s-kubeconfig", r.clusterName),
-				Namespace: controllers.DefaultManagedNamespace,
+				Namespace: controllers.DefaultCAPINamespace,
 			}, kubeconfigSecret)).To(Succeed())
 			Expect(kubeconfigSecret.Data).To(HaveKey("value")) // kubeconfig content is tested separately
 		})
@@ -85,7 +85,7 @@ var _ = Describe("Reconcile kubeconfig secret", func() {
 
 			Expect(cl.Get(ctx, client.ObjectKey{
 				Name:      fmt.Sprintf("%s-kubeconfig", r.clusterName),
-				Namespace: controllers.DefaultManagedNamespace,
+				Namespace: controllers.DefaultCAPINamespace,
 			}, kubeconfigSecret)).To(Succeed())
 			Expect(kubeconfigSecret.Data).To(HaveKey("value")) // kubeconfig content is tested separately
 		})

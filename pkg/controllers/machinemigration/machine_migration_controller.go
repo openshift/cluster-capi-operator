@@ -70,11 +70,11 @@ func (r *MachineMigrationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// Allow the namespaces to be set externally for test purposes, when not set,
 	// default to the production namespaces.
 	if r.CAPINamespace == "" {
-		r.CAPINamespace = controllers.DefaultManagedNamespace
+		r.CAPINamespace = controllers.DefaultCAPINamespace
 	}
 
 	if r.MAPINamespace == "" {
-		r.MAPINamespace = controllers.DefaultMAPIManagedNamespace
+		r.MAPINamespace = controllers.DefaultMAPINamespace
 	}
 
 	if err := ctrl.NewControllerManagedBy(mgr).

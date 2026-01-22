@@ -53,10 +53,11 @@ const (
 // ClusterOperatorStatusClient is a client for managing the status of the ClusterOperator object.
 type ClusterOperatorStatusClient struct {
 	client.Client
-	Recorder         record.EventRecorder
-	ManagedNamespace string
-	ReleaseVersion   string
-	Platform         configv1.PlatformType
+	Recorder          record.EventRecorder
+	ManagedNamespace  string
+	OperatorNamespace string
+	ReleaseVersion    string
+	Platform          configv1.PlatformType
 }
 
 // SetStatusAvailable sets the Available condition to True, with the given reason
@@ -200,17 +201,33 @@ func platformToInfraPrefix(platform configv1.PlatformType) string {
 
 // RelatedObjects returns the related objects for the ClusterOperator.
 func (r *ClusterOperatorStatusClient) RelatedObjects() []configv1.ObjectReference {
+	// TODO: this data is passed in every call to SyncStatus by every
+	// controller. Ideally this data would be owned by a single controller and
+	// never referenced by any other controller.
 	references := []configv1.ObjectReference{
-		{Group: "", Resource: "namespaces", Name: r.ManagedNamespace},
-		{Group: "", Resource: "serviceaccounts", Name: "cluster-capi-operator", Namespace: controllers.DefaultManagedNamespace},
-		{Group: "", Resource: "configmaps", Name: "cluster-capi-operator-images", Namespace: controllers.DefaultManagedNamespace},
-		{Group: "apps", Resource: "deployments", Name: "cluster-capi-operator", Namespace: controllers.DefaultManagedNamespace},
+		// ClusterOperator resource
 		{Group: configv1.GroupName, Resource: "clusteroperators", Name: controllers.ClusterOperatorName},
+
+		// Operator resources in the managed namespace
+		{Group: "", Resource: "namespaces", Name: r.ManagedNamespace},
+		{Group: "", Resource: "serviceaccounts", Name: "cluster-capi-operator", Namespace: r.ManagedNamespace},
+		{Group: "apps", Resource: "deployments", Name: "cluster-capi-operator", Namespace: r.ManagedNamespace},
+
+		// Operator resources in the operator namespace
+		{Group: "", Resource: "namespaces", Name: r.OperatorNamespace},
+		{Group: "", Resource: "serviceaccounts", Name: "cluster-capi-installer", Namespace: r.OperatorNamespace},
+		{Group: "", Resource: "configmaps", Name: "cluster-capi-operator-images", Namespace: r.OperatorNamespace},
+		{Group: "apps", Resource: "deployments", Name: "cluster-capi-installer", Namespace: r.OperatorNamespace},
+
+		// Cluster-scoped operator resources
+		{Group: "admissionregistration.k8s.io", Resource: "validatingadmissionpolicy", Name: "machine-api-machine-vap"},
+		{Group: "admissionregistration.k8s.io", Resource: "validatingadmissionpolicybinding", Name: "machine-api-machine-vap"},
+
+		// Operand owned resources
+		// TODO: these would ideally be generated dynamically by the installer
 		{Group: "cluster.x-k8s.io", Resource: "clusters", Namespace: r.ManagedNamespace},
 		{Group: "cluster.x-k8s.io", Resource: "machines", Namespace: r.ManagedNamespace},
 		{Group: "cluster.x-k8s.io", Resource: "machinesets", Namespace: r.ManagedNamespace},
-		{Group: "admissionregistration", Resource: "validatingadmissionpolicy", Name: "machine-api-machine-vap"},
-		{Group: "admissionregistration", Resource: "validatingadmissionpolicybinding", Name: "machine-api-machine-vap"},
 	}
 
 	platformPrefix := platformToInfraPrefix(r.Platform)

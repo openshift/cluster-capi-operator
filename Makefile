@@ -29,7 +29,7 @@ verify: fmt lint ## Run formatting and linting checks
 
 test: verify unit ## Run verification and unit tests
 
-build: operator migration manifests-gen ## Build all binaries
+build: operator migration installer manifests-gen ## Build all binaries
 
 # Ensure bin directory exists for build outputs
 bin/:
@@ -43,6 +43,9 @@ operator: | bin/ ## Build cluster-capi-operator binary
 
 migration: | bin/ ## Build machine-api-migration binary
 	go build -o bin/machine-api-migration cmd/machine-api-migration/main.go
+
+installer: | bin/ ## Build installer binary
+	go build -o bin/installer cmd/installer/main.go
 
 .PHONY: localtestenv
 localtestenv: .localtestenv

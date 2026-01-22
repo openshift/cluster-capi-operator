@@ -34,8 +34,23 @@ var (
 	errNoPlatformStatus  = errors.New("error getting PlatformStatus, field not set")
 )
 
-// GetPlatform returns the platform type from the infrastructure resource.
-func GetPlatform(ctx context.Context, infra *configv1.Infrastructure) (configv1.PlatformType, error) {
+// GetPlatform returns the platform type and the infrastructure resource.
+func GetPlatform(ctx context.Context, cl client.Reader) (configv1.PlatformType, *configv1.Infrastructure, error) {
+	infra, err := GetInfra(ctx, cl)
+	if err != nil {
+		return "", nil, err
+	}
+
+	platform, err := GetPlatformFromInfra(infra)
+	if err != nil {
+		return "", nil, err
+	}
+
+	return platform, infra, nil
+}
+
+// GetPlatformFromInfra returns the platform type from the infrastructure resource.
+func GetPlatformFromInfra(infra *configv1.Infrastructure) (configv1.PlatformType, error) {
 	if infra == nil {
 		return "", errNilInfrastructure
 	}

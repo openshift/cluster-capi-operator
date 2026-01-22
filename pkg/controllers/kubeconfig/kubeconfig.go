@@ -130,7 +130,7 @@ func (r *KubeconfigReconciler) reconcileKubeconfig(ctx context.Context, log logr
 	tokenSecret := &corev1.Secret{}
 	tokenSecretKey := client.ObjectKey{
 		Name:      tokenSecretName,
-		Namespace: controllers.DefaultManagedNamespace,
+		Namespace: controllers.DefaultCAPINamespace,
 	}
 
 	if err := r.Get(ctx, tokenSecretKey, tokenSecret); err != nil {
@@ -202,7 +202,7 @@ func newKubeConfigSecret(clusterName string, data []byte) *corev1.Secret {
 	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("%s-kubeconfig", clusterName),
-			Namespace: controllers.DefaultManagedNamespace,
+			Namespace: controllers.DefaultCAPINamespace,
 			Labels: map[string]string{
 				clusterv1.ClusterNameLabel: clusterName,
 			},

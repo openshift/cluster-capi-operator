@@ -74,7 +74,6 @@ var (
 type InfraClusterController struct {
 	operatorstatus.ClusterOperatorStatusClient
 	Scheme        *runtime.Scheme
-	Images        map[string]string
 	RestCfg       *rest.Config
 	Platform      configv1.PlatformType
 	Infra         *configv1.Infrastructure

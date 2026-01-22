@@ -14,27 +14,19 @@
 package main
 
 import (
-	"context"
 	"flag"
-	"fmt"
 	"os"
 	"time"
 
 	metal3v1 "github.com/metal3-io/cluster-api-provider-metal3/api/v1beta1"
-	"github.com/spf13/pflag"
 
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/component-base/config"
-	"k8s.io/component-base/config/options"
 	klog "k8s.io/klog/v2"
-	"k8s.io/klog/v2/textlogger"
 
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	azurev1 "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
@@ -44,11 +36,9 @@ import (
 	vspherev1 "sigs.k8s.io/cluster-api-provider-vsphere/apis/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	clusterctlv1 "sigs.k8s.io/cluster-api/cmd/clusterctl/api/v1alpha3"
-	capiflags "sigs.k8s.io/cluster-api/util/flags"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	crwebhook "sigs.k8s.io/controller-runtime/pkg/webhook"
 
@@ -56,19 +46,18 @@ import (
 	mapiv1 "github.com/openshift/api/machine/v1"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
-	"github.com/openshift/cluster-capi-operator/pkg/controllers/capiinstaller"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/clusteroperator"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/corecluster"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/infracluster"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/kubeconfig"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/secretsync"
-	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 	"github.com/openshift/cluster-capi-operator/pkg/webhook"
 )
 
 const (
-	defaultImagesLocation      = "./dev-images.json"
+	managerName = "cluster-capi-operator"
+
 	defaultMachineAPINamespace = "openshift-machine-api"
 )
 
@@ -90,36 +79,12 @@ func initScheme(scheme *runtime.Scheme) {
 	utilruntime.Must(metal3v1.AddToScheme(scheme))
 }
 
-//nolint:funlen
 func main() {
 	scheme := runtime.NewScheme()
 	initScheme(scheme)
 
-	leaderElectionConfig := config.LeaderElectionConfiguration{
-		LeaderElect:       true,
-		LeaseDuration:     util.LeaseDuration,
-		RenewDeadline:     util.RenewDeadline,
-		RetryPeriod:       util.RetryPeriod,
-		ResourceName:      "cluster-capi-operator-leader",
-		ResourceNamespace: "openshift-cluster-api",
-	}
-	capiManagerOptions := capiflags.ManagerOptions{}
+	opts := util.InitCommonOptions(managerName, controllers.DefaultCAPINamespace)
 
-	healthAddr := flag.String(
-		"health-addr",
-		":9440",
-		"The address for health checking.",
-	)
-	managedNamespace := flag.String(
-		"namespace",
-		controllers.DefaultManagedNamespace,
-		"The namespace where CAPI components will run.",
-	)
-	imagesFile := flag.String(
-		"images-json",
-		defaultImagesLocation,
-		"The location of images file to use by operator for managed CAPI binaries.",
-	)
 	webhookPort := flag.Int(
 		"webhook-port",
 		9443,
@@ -131,138 +96,60 @@ func main() {
 		"Webhook cert dir, only used when webhook-port is specified.",
 	)
 
-	logToStderr := flag.Bool(
-		"logtostderr",
-		true,
-		"log to standard error instead of files",
-	)
+	opts.Parse()
 
-	textLoggerConfig := textlogger.NewConfig()
-	textLoggerConfig.AddFlags(flag.CommandLine)
-	ctrl.SetLogger(textlogger.NewLogger(textLoggerConfig))
-
-	// Once all the flags are regitered, switch to pflag
-	// to allow leader lection flags to be bound
-	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
-	options.BindLeaderElectionFlags(&leaderElectionConfig, pflag.CommandLine)
-	capiflags.AddManagerOptions(pflag.CommandLine, &capiManagerOptions)
-	pflag.Parse()
-
-	if err := setFeatureGatesEnvVars(); err != nil {
-		klog.Error(err, "unable to set feature gates environment variables")
-		os.Exit(1)
-	}
-
-	if logToStderr != nil {
-		klog.LogToStderr(*logToStderr)
-	}
-
-	_, diagnosticsOpts, err := capiflags.GetManagerOptions(capiManagerOptions)
-	if err != nil {
-		klog.Error(err, "unable to get manager options")
-		os.Exit(1)
-	}
-
-	syncPeriod := 10 * time.Minute
-
-	cacheOpts := getDefaultCacheOptions(*managedNamespace, syncPeriod)
+	cacheOpts := getDefaultCacheOptions(*opts.CAPINamespace, 10*time.Minute)
 
 	cfg := ctrl.GetConfigOrDie()
+	ctx := ctrl.SetupSignalHandler()
 
-	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
-		Scheme:                  scheme,
-		Metrics:                 *diagnosticsOpts,
-		HealthProbeBindAddress:  *healthAddr,
-		LeaderElectionNamespace: leaderElectionConfig.ResourceNamespace,
-		LeaderElection:          leaderElectionConfig.LeaderElect,
-		LeaseDuration:           &leaderElectionConfig.LeaseDuration.Duration,
-		LeaderElectionID:        leaderElectionConfig.ResourceName,
-		RetryPeriod:             &leaderElectionConfig.RetryPeriod.Duration,
-		RenewDeadline:           &leaderElectionConfig.RenewDeadline.Duration,
-		Cache:                   cacheOpts,
-		WebhookServer: crwebhook.NewServer(crwebhook.Options{
-			Port:    *webhookPort,
-			CertDir: *webhookCertDir,
-		}),
+	mgrOpts, tlsOptions := opts.GetCommonManagerOptions()
+	mgrOpts.Cache = cacheOpts
+	mgrOpts.Scheme = scheme
+	mgrOpts.WebhookServer = crwebhook.NewServer(crwebhook.Options{
+		Port:    *webhookPort,
+		CertDir: *webhookCertDir,
+		TLSOpts: tlsOptions,
 	})
+
+	mgr, err := ctrl.NewManager(cfg, mgrOpts)
 	if err != nil {
 		klog.Error(err, "unable to start manager")
 		os.Exit(1)
 	}
 
-	applyClient, err := kubernetes.NewForConfig(cfg)
+	if err := util.AddCommonChecks(mgr); err != nil {
+		klog.Error(err, "unable to add common checks")
+		os.Exit(1)
+	}
+
+	platform, infra, err := util.GetPlatform(ctx, mgr.GetAPIReader())
 	if err != nil {
-		klog.Error(err, "unable to set up apply client")
+		klog.Error(err, "unable to get platform")
 		os.Exit(1)
 	}
 
-	apiextensionsClient, err := apiextensionsclient.NewForConfig(cfg)
-	if err != nil {
-		klog.Error(err, "unable to set up apply client")
-		os.Exit(1)
-	}
-
-	containerImages, err := util.ReadImagesFile(*imagesFile)
-	if err != nil {
-		klog.Error(err, "unable to get images from file", "name", *imagesFile)
-		os.Exit(1)
-	}
-
-	infra, err := util.GetInfra(context.Background(), mgr.GetAPIReader())
-	if err != nil {
-		klog.Error(err, "unable to get infrastructure object")
-		os.Exit(1)
-	}
-
-	platform, err := util.GetPlatform(context.Background(), infra)
-	if err != nil {
-		klog.Error(err, "unable to get platform from infrastructure object")
-		os.Exit(1)
-	}
-
-	setupPlatformReconcilers(mgr, infra, platform, containerImages, applyClient, apiextensionsClient, *managedNamespace)
-
-	// +kubebuilder:scaffold:builder
-
-	if err := mgr.AddHealthzCheck("health", healthz.Ping); err != nil {
-		klog.Error(err, "unable to set up health check")
-		os.Exit(1)
-	}
-
-	if err := mgr.AddReadyzCheck("check", healthz.Ping); err != nil {
-		klog.Error(err, "unable to set up ready check")
-		os.Exit(1)
-	}
+	setupPlatformReconcilers(mgr, opts, infra, platform)
 
 	klog.Info("Starting manager")
 
-	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+	if err := mgr.Start(ctx); err != nil {
 		klog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
 }
 
-func getClusterOperatorStatusClient(mgr manager.Manager, controller string, platform configv1.PlatformType, managedNamespace string) operatorstatus.ClusterOperatorStatusClient {
-	return operatorstatus.ClusterOperatorStatusClient{
-		Client:           mgr.GetClient(),
-		Recorder:         mgr.GetEventRecorderFor(controller),
-		ReleaseVersion:   util.GetReleaseVersion(),
-		ManagedNamespace: managedNamespace,
-		Platform:         platform,
-	}
-}
-
-func setupPlatformReconcilers(mgr manager.Manager, infra *configv1.Infrastructure, platform configv1.PlatformType, containerImages map[string]string, applyClient *kubernetes.Clientset, apiextensionsClient *apiextensionsclient.Clientset, managedNamespace string) {
+func setupPlatformReconcilers(mgr manager.Manager, opts *util.CommonOptions, infra *configv1.Infrastructure, platform configv1.PlatformType) {
 	// Only setup reconcile controllers and webhooks when the platform is supported.
 	// This avoids unnecessary CAPI providers discovery, installs and reconciles when the platform is not supported.
 	isUnsupportedPlatform := false
 
 	switch platform {
 	case configv1.AWSPlatformType:
-		setupReconcilers(mgr, infra, platform, &awsv1.AWSCluster{}, containerImages, applyClient, apiextensionsClient, managedNamespace)
+		setupReconcilers(mgr, opts, infra, platform, &awsv1.AWSCluster{})
 		setupWebhooks(mgr)
 	case configv1.GCPPlatformType:
-		setupReconcilers(mgr, infra, platform, &gcpv1.GCPCluster{}, containerImages, applyClient, apiextensionsClient, managedNamespace)
+		setupReconcilers(mgr, opts, infra, platform, &gcpv1.GCPCluster{})
 		setupWebhooks(mgr)
 	case configv1.AzurePlatformType:
 		azureCloudEnvironment := getAzureCloudEnvironment(infra.Status.PlatformStatus)
@@ -272,20 +159,20 @@ func setupPlatformReconcilers(mgr manager.Manager, infra *configv1.Infrastructur
 			isUnsupportedPlatform = true
 		} else {
 			// The ClusterOperator Controller must run in all cases.
-			setupReconcilers(mgr, infra, platform, &azurev1.AzureCluster{}, containerImages, applyClient, apiextensionsClient, managedNamespace)
+			setupReconcilers(mgr, opts, infra, platform, &azurev1.AzureCluster{})
 			setupWebhooks(mgr)
 		}
 	case configv1.PowerVSPlatformType:
-		setupReconcilers(mgr, infra, platform, &ibmpowervsv1.IBMPowerVSCluster{}, containerImages, applyClient, apiextensionsClient, managedNamespace)
+		setupReconcilers(mgr, opts, infra, platform, &ibmpowervsv1.IBMPowerVSCluster{})
 		setupWebhooks(mgr)
 	case configv1.VSpherePlatformType:
-		setupReconcilers(mgr, infra, platform, &vspherev1.VSphereCluster{}, containerImages, applyClient, apiextensionsClient, managedNamespace)
+		setupReconcilers(mgr, opts, infra, platform, &vspherev1.VSphereCluster{})
 		setupWebhooks(mgr)
 	case configv1.OpenStackPlatformType:
-		setupReconcilers(mgr, infra, platform, &openstackv1.OpenStackCluster{}, containerImages, applyClient, apiextensionsClient, managedNamespace)
+		setupReconcilers(mgr, opts, infra, platform, &openstackv1.OpenStackCluster{})
 		setupWebhooks(mgr)
 	case configv1.BareMetalPlatformType:
-		setupReconcilers(mgr, infra, platform, &metal3v1.Metal3Cluster{}, containerImages, applyClient, apiextensionsClient, managedNamespace)
+		setupReconcilers(mgr, opts, infra, platform, &metal3v1.Metal3Cluster{})
 		setupWebhooks(mgr)
 	default:
 		klog.Infof("Detected platform %q is not supported, skipping capi controllers setup", platform)
@@ -294,12 +181,12 @@ func setupPlatformReconcilers(mgr manager.Manager, infra *configv1.Infrastructur
 	}
 
 	// The ClusterOperator Controller must run under all circumstances as it manages the ClusterOperator object for this operator.
-	setupClusterOperatorController(mgr, platform, managedNamespace, isUnsupportedPlatform)
+	setupClusterOperatorController(mgr, opts, platform, isUnsupportedPlatform)
 }
 
-func setupReconcilers(mgr manager.Manager, infra *configv1.Infrastructure, platform configv1.PlatformType, infraClusterObject client.Object, containerImages map[string]string, applyClient *kubernetes.Clientset, apiextensionsClient *apiextensionsclient.Clientset, managedNamespace string) {
+func setupReconcilers(mgr manager.Manager, opts *util.CommonOptions, infra *configv1.Infrastructure, platform configv1.PlatformType, infraClusterObject client.Object) {
 	if err := (&corecluster.CoreClusterController{
-		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-cluster-resource-controller", platform, managedNamespace),
+		ClusterOperatorStatusClient: opts.GetClusterOperatorStatusClient(mgr, platform, "cluster-resource"),
 		Cluster:                     &clusterv1.Cluster{},
 		Platform:                    platform,
 		Infra:                       infra,
@@ -309,7 +196,7 @@ func setupReconcilers(mgr manager.Manager, infra *configv1.Infrastructure, platf
 	}
 
 	if err := (&secretsync.UserDataSecretController{
-		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-user-data-secret-controller", platform, managedNamespace),
+		ClusterOperatorStatusClient: opts.GetClusterOperatorStatusClient(mgr, platform, "user-data-secret"),
 		Scheme:                      mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		klog.Error(err, "unable to create user-data-secret controller", "controller", "UserDataSecret")
@@ -317,7 +204,7 @@ func setupReconcilers(mgr manager.Manager, infra *configv1.Infrastructure, platf
 	}
 
 	if err := (&kubeconfig.KubeconfigReconciler{
-		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-kubeconfig-controller", platform, managedNamespace),
+		ClusterOperatorStatusClient: opts.GetClusterOperatorStatusClient(mgr, platform, "kubeconfig"),
 		Scheme:                      mgr.GetScheme(),
 		RestCfg:                     mgr.GetConfig(),
 	}).SetupWithManager(mgr); err != nil {
@@ -325,23 +212,9 @@ func setupReconcilers(mgr manager.Manager, infra *configv1.Infrastructure, platf
 		os.Exit(1)
 	}
 
-	if err := (&capiinstaller.CapiInstallerController{
-		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-capi-installer-controller", platform, managedNamespace),
-		Scheme:                      mgr.GetScheme(),
-		Images:                      containerImages,
-		RestCfg:                     mgr.GetConfig(),
-		Platform:                    platform,
-		ApplyClient:                 applyClient,
-		APIExtensionsClient:         apiextensionsClient,
-	}).SetupWithManager(mgr); err != nil {
-		klog.Error(err, "unable to create capi installer controller", "controller", "CAPIInstaller")
-		os.Exit(1)
-	}
-
 	if err := (&infracluster.InfraClusterController{
-		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-infracluster-controller", platform, managedNamespace),
+		ClusterOperatorStatusClient: opts.GetClusterOperatorStatusClient(mgr, platform, "infracluster"),
 		Scheme:                      mgr.GetScheme(),
-		Images:                      containerImages,
 		RestCfg:                     mgr.GetConfig(),
 		Platform:                    platform,
 		Infra:                       infra,
@@ -358,22 +231,6 @@ func setupWebhooks(mgr ctrl.Manager) {
 	}
 }
 
-// setFeatureGatesEnvVars sets the explicit values for the listed feature gates in the environment.
-// These will then be loaded by envsubst and templated into the applied CAPI manifests.
-func setFeatureGatesEnvVars() error {
-	featureGates := map[string]string{
-		"EXP_BOOTSTRAP_FORMAT_IGNITION": "true",
-	}
-
-	for k, v := range featureGates {
-		if err := os.Setenv(k, v); err != nil {
-			return fmt.Errorf("error setting environment variable: %s: %w", k, err)
-		}
-	}
-
-	return nil
-}
-
 // getAzureCloudEnvironment returns the current AzureCloudEnvironment.
 func getAzureCloudEnvironment(ps *configv1.PlatformStatus) configv1.AzureCloudEnvironment {
 	if ps == nil || ps.Azure == nil {
@@ -383,10 +240,10 @@ func getAzureCloudEnvironment(ps *configv1.PlatformStatus) configv1.AzureCloudEn
 	return ps.Azure.CloudName
 }
 
-func setupClusterOperatorController(mgr manager.Manager, platform configv1.PlatformType, ns string, isUnsupportedPlatform bool) {
+func setupClusterOperatorController(mgr manager.Manager, opts *util.CommonOptions, platform configv1.PlatformType, isUnsupportedPlatform bool) {
 	// ClusterOperator watches and keeps the cluster-api ClusterObject up to date.
 	if err := (&clusteroperator.ClusterOperatorController{
-		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-clusteroperator-controller", platform, ns),
+		ClusterOperatorStatusClient: opts.GetClusterOperatorStatusClient(mgr, platform, "clusteroperator"),
 		Scheme:                      mgr.GetScheme(),
 		IsUnsupportedPlatform:       isUnsupportedPlatform,
 	}).SetupWithManager(mgr); err != nil {
