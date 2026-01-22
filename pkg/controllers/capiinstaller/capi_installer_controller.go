@@ -35,6 +35,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/utils/clock"
+	"sigs.k8s.io/yaml"
 
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -178,7 +179,7 @@ func (r *CapiInstallerController) reconcile(ctx context.Context, log logr.Logger
 //
 //nolint:funlen
 func (r *CapiInstallerController) applyProviderComponents(ctx context.Context, components []string) error {
-	componentsFilenames, componentsAssets, deploymentsFilenames, deploymentsAssets, customResourceDefinitionFilenames, customResourceDefinitionAssets, err := getProviderComponents(r.Scheme, components)
+	componentsFilenames, componentsAssets, deploymentsFilenames, deploymentsAssets, customResourceDefinitionFilenames, customResourceDefinitionAssets, err := getProviderComponents(components)
 	if err != nil {
 		return fmt.Errorf("error getting provider components: %w", err)
 	}
@@ -257,7 +258,7 @@ func (r *CapiInstallerController) applyProviderComponents(ctx context.Context, c
 
 // getProviderComponents parses the provided list of components into a map of filenames and assets.
 // Deployments are handled separately so are returned in a separate map.
-func getProviderComponents(scheme *runtime.Scheme, components []string) ([]string, map[string]string, []string, map[string]string, []string, map[string]string, error) {
+func getProviderComponents(components []string) ([]string, map[string]string, []string, map[string]string, []string, map[string]string, error) {
 	componentsFilenames := []string{}
 	componentsAssets := make(map[string]string)
 
@@ -269,7 +270,7 @@ func getProviderComponents(scheme *runtime.Scheme, components []string) ([]strin
 
 	for i, m := range components {
 		// Parse the YAML manifests into unstructure objects.
-		u, err := yamlToUnstructured(scheme, m)
+		u, err := yamlToUnstructured(m)
 		if err != nil {
 			return nil, nil, nil, nil, nil, nil, fmt.Errorf("error parsing provider component at position %d to unstructured: %w", i, err)
 		}
@@ -512,20 +513,20 @@ func yamlToRuntimeObject(sch *runtime.Scheme, m string) (runtime.Object, error) 
 	return obj, nil
 }
 
-// yamlToRuntimeObject parses a YAML manifest into an *unstructured.Unstructured object.
-func yamlToUnstructured(sch *runtime.Scheme, m string) (*unstructured.Unstructured, error) {
-	obj, err := yamlToRuntimeObject(sch, m)
+// yamlToUnstructured parses a YAML manifest into an *unstructured.Unstructured object.
+func yamlToUnstructured(m string) (*unstructured.Unstructured, error) {
+	// Convert YAML to JSON first
+	jsonData, err := yaml.YAMLToJSON([]byte(m))
 	if err != nil {
-		return nil, fmt.Errorf("error while decoding YAML to runtime object: %w", err)
+		return nil, fmt.Errorf("error while converting YAML to JSON: %w", err)
 	}
 
-	unstructuredObj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
+	obj := &unstructured.Unstructured{}
+	_, _, err = unstructured.UnstructuredJSONScheme.Decode(jsonData, nil, obj)
+
 	if err != nil {
-		return nil, fmt.Errorf("error converting runtime.Object to unstructured: %w", err)
+		return nil, fmt.Errorf("error while decoding JSON to unstructured: %w", err)
 	}
 
-	u := &unstructured.Unstructured{}
-	u.Object = unstructuredObj
-
-	return u, nil
+	return obj, nil
 }
