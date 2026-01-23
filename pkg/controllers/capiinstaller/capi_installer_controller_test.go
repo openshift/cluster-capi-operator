@@ -19,10 +19,57 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
 	corev1 "k8s.io/api/core/v1"
 )
 
 var _ = Describe("CAPI installer", func() {
+	Describe("sortProvidersByInstallOrder", func() {
+		It("should sort providers by InstallOrder ascending, then by Name", func() {
+			providers := []providerimages.ProviderImageManifests{
+				{ProviderMetadata: providerimages.ProviderMetadata{Name: "aws", InstallOrder: 20}},
+				{ProviderMetadata: providerimages.ProviderMetadata{Name: "core", InstallOrder: 10}},
+				{ProviderMetadata: providerimages.ProviderMetadata{Name: "azure", InstallOrder: 20}},
+				{ProviderMetadata: providerimages.ProviderMetadata{Name: "bootstrap", InstallOrder: 30}},
+			}
+
+			sortProvidersByInstallOrder(providers)
+
+			// Expected order: core (10), aws (20), azure (20), bootstrap (30)
+			Expect(providers[0].Name).To(Equal("core"))
+			Expect(providers[1].Name).To(Equal("aws"))
+			Expect(providers[2].Name).To(Equal("azure"))
+			Expect(providers[3].Name).To(Equal("bootstrap"))
+		})
+
+		It("should handle empty slice", func() {
+			providers := []providerimages.ProviderImageManifests{}
+			sortProvidersByInstallOrder(providers)
+			Expect(providers).To(BeEmpty())
+		})
+
+		It("should handle single element", func() {
+			providers := []providerimages.ProviderImageManifests{
+				{ProviderMetadata: providerimages.ProviderMetadata{Name: "core", InstallOrder: 10}},
+			}
+			sortProvidersByInstallOrder(providers)
+			Expect(providers[0].Name).To(Equal("core"))
+		})
+
+		It("should use Name as tiebreaker when InstallOrder is equal", func() {
+			providers := []providerimages.ProviderImageManifests{
+				{ProviderMetadata: providerimages.ProviderMetadata{Name: "zebra", InstallOrder: 20}},
+				{ProviderMetadata: providerimages.ProviderMetadata{Name: "alpha", InstallOrder: 20}},
+				{ProviderMetadata: providerimages.ProviderMetadata{Name: "beta", InstallOrder: 20}},
+			}
+
+			sortProvidersByInstallOrder(providers)
+
+			Expect(providers[0].Name).To(Equal("alpha"))
+			Expect(providers[1].Name).To(Equal("beta"))
+			Expect(providers[2].Name).To(Equal("zebra"))
+		})
+	})
 })
 
 var testManifest = `apiVersion: apps/v1

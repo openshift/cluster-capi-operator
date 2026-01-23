@@ -65,11 +65,11 @@ type ProviderImageManifests struct {
 
 // ProviderMetadata is metadata about a provider image provided in the metadata.yaml file.
 type ProviderMetadata struct {
-	ProviderName     string                `json:"providerName"`
-	ProviderType     string                `json:"providerType"`
-	ProviderVersion  string                `json:"providerVersion"`
-	OCPPlatform      configv1.PlatformType `json:"ocpPlatform,omitempty"`
-	ProviderImageRef string                `json:"providerImageRef,omitempty"`
+	Name         string                `json:"name"`
+	Attributes   map[string]string     `json:"attributes,omitempty"`
+	OCPPlatform  configv1.PlatformType `json:"ocpPlatform,omitempty"`
+	SelfImageRef string                `json:"selfImageRef,omitempty"`
+	InstallOrder int                   `json:"installOrder,omitempty"`
 }
 
 // imageFetcher abstracts fetching container images for testability.
@@ -172,9 +172,9 @@ func readProviderImages(ctx context.Context, log logr.Logger, containerImages []
 		} else {
 			for _, manifest := range result.manifests {
 				log.Info("found provider manifests in container image", "image", result.imageRef,
-					"provider", manifest.ProviderName,
-					"type", manifest.ProviderType,
-					"version", manifest.ProviderVersion,
+					"provider", manifest.Name,
+					"type", manifest.Attributes["type"],
+					"version", manifest.Attributes["version"],
 					"profile", manifest.Profile,
 					"ocpPlatform", manifest.OCPPlatform)
 
@@ -234,7 +234,7 @@ func processProviderImage(ctx context.Context, imageRef, providerImageDir string
 		profileDir := filepath.Join(outputDir, profile.Profile)
 		manifestsPath := filepath.Join(profileDir, manifestsFile)
 
-		contentID, err := writeManifestsWithHash(manifestsPath, profile.Manifests, profile.Metadata.ProviderImageRef, imageRef)
+		contentID, err := writeManifestsWithHash(manifestsPath, profile.Manifests, profile.Metadata.SelfImageRef, imageRef)
 		if err != nil {
 			return nil, err
 		}

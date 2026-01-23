@@ -148,11 +148,11 @@ func writeMetadata(opts cmdlineOptions) (err error) {
 	}()
 
 	metadata := providerimages.ProviderMetadata{
-		ProviderName:     opts.name,
-		ProviderType:     opts.providerType,
-		ProviderVersion:  opts.version,
-		OCPPlatform:      configv1.PlatformType(opts.platform),
-		ProviderImageRef: opts.providerImageRef,
+		Name:         opts.name,
+		SelfImageRef: opts.selfImageRef,
+		OCPPlatform:  configv1.PlatformType(opts.platform),
+		InstallOrder: opts.installOrder,
+		Attributes:   opts.attributes,
 	}
 
 	data, err := yaml.Marshal(metadata)

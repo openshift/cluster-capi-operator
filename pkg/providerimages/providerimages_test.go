@@ -153,13 +153,15 @@ func createCapiManifestsImageWithLayers(layers []struct{ metadata, manifests str
 }
 
 // createMetadataYAML generates valid metadata.yaml content.
-func createMetadataYAML(providerName, providerType, version, ocpPlatform, providerImageRef string) string {
-	return fmt.Sprintf(`providerName: %s
-providerType: %s
-providerVersion: %s
+func createMetadataYAML(name, providerType, version, ocpPlatform, selfImageRef string, installOrder int) string {
+	return fmt.Sprintf(`name: %s
+selfImageRef: %s
 ocpPlatform: %s
-providerImageRef: %s
-`, providerName, providerType, version, ocpPlatform, providerImageRef)
+installOrder: %d
+attributes:
+  type: %s
+  version: %s
+`, name, selfImageRef, ocpPlatform, installOrder, providerType, version)
 }
 
 //nolint:gocognit,funlen,cyclop
@@ -181,7 +183,7 @@ func Test_readProviderImages(t *testing.T) {
 			setupFetcher: func(t *testing.T) *fakeImageFetcher {
 				t.Helper()
 				img, err := createCapiManifestsImage(
-					createMetadataYAML("aws", "infrastructure", "v1.0.0", "aws", "PLACEHOLDER_IMAGE"),
+					createMetadataYAML("aws", "infrastructure", "v1.0.0", "aws", "PLACEHOLDER_IMAGE", 20),
 					"apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: test\n",
 				)
 				if err != nil {
@@ -199,9 +201,10 @@ func Test_readProviderImages(t *testing.T) {
 				g.Expect(result).To(HaveLen(1))
 
 				manifest := result[0]
-				g.Expect(manifest.ProviderName).To(Equal("aws"))
-				g.Expect(manifest.ProviderType).To(Equal("infrastructure"))
-				g.Expect(manifest.ProviderVersion).To(Equal("v1.0.0"))
+				g.Expect(manifest.Name).To(Equal("aws"))
+				g.Expect(manifest.Attributes["type"]).To(Equal("infrastructure"))
+				g.Expect(manifest.Attributes["version"]).To(Equal("v1.0.0"))
+				g.Expect(manifest.InstallOrder).To(Equal(20))
 				g.Expect(manifest.OCPPlatform).To(BeEquivalentTo("aws"))
 				g.Expect(manifest.Profile).To(Equal(testDefaultProfile))
 				g.Expect(manifest.ImageRef).To(Equal("registry.example.com/capi-aws:v1.0.0"))
@@ -274,7 +277,7 @@ func Test_readProviderImages(t *testing.T) {
 			setupFetcher: func(t *testing.T) *fakeImageFetcher {
 				t.Helper()
 				img, err := createTestImage(map[string]string{
-					testMetadataPath: createMetadataYAML("aws", "infrastructure", "v1.0.0", "aws", ""),
+					testMetadataPath: createMetadataYAML("aws", "infrastructure", "v1.0.0", "aws", "", 20),
 				})
 				if err != nil {
 					t.Fatalf("failed to create test image: %v", err)
@@ -349,7 +352,7 @@ func Test_readProviderImages(t *testing.T) {
 			setupFetcher: func(t *testing.T) *fakeImageFetcher {
 				t.Helper()
 				img, err := createCapiManifestsImage(
-					createMetadataYAML("aws", "infrastructure", "v1.0.0", "aws", "PLACEHOLDER_IMAGE"),
+					createMetadataYAML("aws", "infrastructure", "v1.0.0", "aws", "PLACEHOLDER_IMAGE", 20),
 					"image: PLACEHOLDER_IMAGE\nanotherImage: PLACEHOLDER_IMAGE\n",
 				)
 				if err != nil {
@@ -380,7 +383,7 @@ func Test_readProviderImages(t *testing.T) {
 			setupFetcher: func(t *testing.T) *fakeImageFetcher {
 				t.Helper()
 				img, err := createCapiManifestsImage(
-					createMetadataYAML("aws", "infrastructure", "v1.0.0", "aws", ""),
+					createMetadataYAML("aws", "infrastructure", "v1.0.0", "aws", "", 20),
 					"image: some-other-image:latest\n",
 				)
 				if err != nil {
@@ -470,7 +473,7 @@ contentID: id
 			setupFetcher: func(t *testing.T) *fakeImageFetcher {
 				t.Helper()
 				img, err := createCapiManifestsImage(
-					createMetadataYAML("aws", "infrastructure", "v1.0.0", "aws", ""),
+					createMetadataYAML("aws", "infrastructure", "v1.0.0", "aws", "", 20),
 					"apiVersion: v1\n",
 				)
 				if err != nil {
@@ -497,12 +500,12 @@ contentID: id
 				img, err := createCapiManifestsImageWithLayers([]struct{ metadata, manifests string }{
 					// Lower layer (added first)
 					{
-						metadata:  createMetadataYAML("aws-old", "OldType", "v0.0.1", "old", ""),
+						metadata:  createMetadataYAML("aws-old", "OldType", "v0.0.1", "old", "", 10),
 						manifests: "content: from-lower-layer\n",
 					},
 					// Higher layer (added second, should win)
 					{
-						metadata:  createMetadataYAML("aws-new", "NewType", "v2.0.0", "new", ""),
+						metadata:  createMetadataYAML("aws-new", "NewType", "v2.0.0", "new", "", 20),
 						manifests: "content: from-higher-layer\n",
 					},
 				})
@@ -522,9 +525,10 @@ contentID: id
 
 				// Higher layer values should be used
 				manifest := result[0]
-				g.Expect(manifest.ProviderName).To(Equal("aws-new"))
-				g.Expect(manifest.ProviderType).To(Equal("NewType"))
-				g.Expect(manifest.ProviderVersion).To(Equal("v2.0.0"))
+				g.Expect(manifest.Name).To(Equal("aws-new"))
+				g.Expect(manifest.Attributes["type"]).To(Equal("NewType"))
+				g.Expect(manifest.Attributes["version"]).To(Equal("v2.0.0"))
+				g.Expect(manifest.InstallOrder).To(Equal(20))
 
 				content, err := os.ReadFile(manifest.ManifestsPath)
 				g.Expect(err).NotTo(HaveOccurred())
@@ -539,9 +543,9 @@ contentID: id
 			setupFetcher: func(t *testing.T) *fakeImageFetcher {
 				t.Helper()
 				img, err := createTestImage(map[string]string{
-					capiManifestsDirName + "/default/metadata.yaml":      createMetadataYAML("aws", "infrastructure", "v1.0.0", "aws", ""),
+					capiManifestsDirName + "/default/metadata.yaml":      createMetadataYAML("aws", "infrastructure", "v1.0.0", "aws", "", 20),
 					capiManifestsDirName + "/default/manifests.yaml":     "kind: ConfigMap\nname: default-config\n",
-					capiManifestsDirName + "/techpreview/metadata.yaml":  createMetadataYAML("aws", "infrastructure", "v1.0.0-techpreview", "aws", ""),
+					capiManifestsDirName + "/techpreview/metadata.yaml":  createMetadataYAML("aws", "infrastructure", "v1.0.0-techpreview", "aws", "", 20),
 					capiManifestsDirName + "/techpreview/manifests.yaml": "kind: ConfigMap\nname: techpreview-config\n",
 				})
 				if err != nil {
@@ -565,8 +569,8 @@ contentID: id
 
 				g.Expect(profiles).To(HaveKey("default"))
 				g.Expect(profiles).To(HaveKey("techpreview"))
-				g.Expect(profiles["default"].ProviderVersion).To(Equal("v1.0.0"))
-				g.Expect(profiles["techpreview"].ProviderVersion).To(Equal("v1.0.0-techpreview"))
+				g.Expect(profiles["default"].Attributes["version"]).To(Equal("v1.0.0"))
+				g.Expect(profiles["techpreview"].Attributes["version"]).To(Equal("v1.0.0-techpreview"))
 
 				defaultContent, err := os.ReadFile(profiles["default"].ManifestsPath)
 				g.Expect(err).NotTo(HaveOccurred())
@@ -585,7 +589,7 @@ contentID: id
 			setupFetcher: func(t *testing.T) *fakeImageFetcher {
 				t.Helper()
 				img, err := createTestImage(map[string]string{
-					capiManifestsDirName + "/default/metadata.yaml":  createMetadataYAML("aws", "infrastructure", "v1.0.0", "aws", ""),
+					capiManifestsDirName + "/default/metadata.yaml":  createMetadataYAML("aws", "infrastructure", "v1.0.0", "aws", "", 20),
 					capiManifestsDirName + "/default/manifests.yaml": "kind: ConfigMap\n",
 					capiManifestsDirName + "/randomdir/somefile.txt": "this is not a profile",
 				})

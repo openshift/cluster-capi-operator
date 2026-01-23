@@ -195,47 +195,38 @@ func (r *CapiInstallerController) reconcileProviderImages(ctx context.Context, l
 			providerImages = append(providerImages, providerImage)
 
 		default:
-			log.Info("skipping provider image", "name", providerImage.ProviderName)
+			log.Info("skipping provider image", "name", providerImage.Name)
 			continue
 		}
 	}
 
-	// Sort providers by type
-	getTypePriority := func(providerImage providerimages.ProviderImageManifests) int {
-		switch providerImage.ProviderType {
-		case "core":
-			return 0
-		case "infrastructure":
-			return 1
-		default:
-			return 2
-		}
-	}
-
-	slices.SortStableFunc(providerImages, func(a, b providerimages.ProviderImageManifests) int {
-		prioA := getTypePriority(a)
-		prioB := getTypePriority(b)
-
-		if prioA == prioB {
-			return strings.Compare(a.ProviderName, b.ProviderName)
-		}
-
-		return cmp.Compare(prioA, prioB)
-	})
+	// Sort providers by InstallOrder (ascending), then by Name for stability
+	sortProvidersByInstallOrder(providerImages)
 
 	// Apply the provider manifests
 	for _, providerImage := range providerImages {
 		if err := r.applyProviderImage(ctx, log, providerImage); err != nil {
-			return fmt.Errorf("failed to apply provider image %s: %w", providerImage.ProviderName, err)
+			return fmt.Errorf("failed to apply provider image %s: %w", providerImage.Name, err)
 		}
 	}
 
 	return nil
 }
 
+// sortProvidersByInstallOrder sorts providers by InstallOrder ascending, then by Name for stability.
+func sortProvidersByInstallOrder(providers []providerimages.ProviderImageManifests) {
+	slices.SortStableFunc(providers, func(a, b providerimages.ProviderImageManifests) int {
+		if a.InstallOrder != b.InstallOrder {
+			return cmp.Compare(a.InstallOrder, b.InstallOrder)
+		}
+
+		return strings.Compare(a.Name, b.Name)
+	})
+}
+
 // applyProviderImage extracts provider manifests for a single provider image and applies them to the cluster.
 func (r *CapiInstallerController) applyProviderImage(ctx context.Context, log logr.Logger, providerImage providerimages.ProviderImageManifests) error {
-	log.Info("reconciling CAPI provider", "name", providerImage.ProviderName)
+	log.Info("reconciling CAPI provider", "name", providerImage.Name)
 
 	reader, err := providerManifestReader(providerImage)
 	if err != nil {
@@ -255,7 +246,7 @@ func (r *CapiInstallerController) applyProviderImage(ctx context.Context, log lo
 		return fmt.Errorf("failed to apply provider components: %w", err)
 	}
 
-	log.Info("finished reconciling CAPI provider", "name", providerImage.ProviderName)
+	log.Info("finished reconciling CAPI provider", "name", providerImage.Name)
 
 	return nil
 }

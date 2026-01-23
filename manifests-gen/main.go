@@ -14,14 +14,9 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	"k8s.io/apimachinery/pkg/util/version"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 )
 
-const (
-	providerTypeCore           = "core"
-	providerTypeInfrastructure = "infrastructure"
-)
 
 var (
 	allowedPlatformTypes = []string{
@@ -59,11 +54,29 @@ type cmdlineOptions struct {
 	profileName            string
 	kustomizeDir           string
 	name                   string
-	providerType           string
-	version                string
 	platform               string
 	protectClusterResource string
-	providerImageRef       string
+	selfImageRef           string
+	installOrder           int
+	attributes             map[string]string
+}
+
+// attributeFlags allows collecting multiple --attribute flags.
+type attributeFlags map[string]string
+
+func (a attributeFlags) String() string {
+	return fmt.Sprintf("%v", map[string]string(a))
+}
+
+func (a attributeFlags) Set(value string) error {
+	parts := strings.SplitN(value, "=", 2)
+	if len(parts) != 2 {
+		return fmt.Errorf("attribute must be in key=value format: %s", value)
+	}
+
+	a[parts[0]] = parts[1]
+
+	return nil
 }
 
 func main() {
@@ -72,14 +85,16 @@ func main() {
 		profileName   = flag.String("profile-name", "default", "Name of the profile, e.g 'featuregate-foo' (default: 'default'.'")
 		kustomizeDir  = flag.String("kustomize-dir", "", "Directory containing kustomization.yaml file used to generate the base resources, relative to the current working directory. Required.")
 
-		providerName    = flag.String("provider-name", "", "Name of the provider, e.g. 'cluster-api-provider-aws'. Required.")
-		providerType    = flag.String("provider-type", "", "Type of the provider: core or infrastructure. Optional.")
-		providerVersion = flag.String("provider-version", "", "Version of the provider. If provided, must be a valid semantic version. Optional.")
+		name = flag.String("name", "", "Name of the provider, e.g. 'cluster-api-provider-aws'. Required.")
 
 		platform               = flag.String("platform", "", "OpenShift platform type (i.e. the same value found in the Infrastructure object). Optional.")
 		protectClusterResource = flag.String("protect-cluster-resource", "", "Singular name of a cluster resource, e.g. 'awscluster'. Generates a ValidatingAdmissionPolicy which prevents modification of cluster resources created by the CAPI Operator. If provided matches any CRD in the manifests with this name. If not provided, matches any CRD in the manifests in the 'infrastructure.cluster.x-k8s.io' group whose plural name ends in 'clusters'. Optional.")
-		providerImageRef       = flag.String("provider-image-ref", "", "Image reference of the provider in generated manifests, e.g. registry.ci.openshift.org/openshift:aws-cluster-api-controllers. If specified, this string will be substituted with the provider's release image when the manifests are installed. Optional.")
+		selfImageRef           = flag.String("self-image-ref", "", "Image reference of the provider in generated manifests, e.g. registry.ci.openshift.org/openshift:aws-cluster-api-controllers. If specified, this string will be substituted with the provider's release image when the manifests are installed. Optional.")
+		installOrder           = flag.Int("install-order", 0, "Order in which providers are installed. Lower values are installed first. Optional.")
 	)
+
+	attributes := make(attributeFlags)
+	flag.Var(attributes, "attribute", "Provider attribute in key=value format. Can be specified multiple times. Optional.")
 
 	flag.Parse()
 
@@ -87,12 +102,12 @@ func main() {
 		manifestsPath:          *manifestsPath,
 		profileName:            *profileName,
 		kustomizeDir:           *kustomizeDir,
-		name:                   *providerName,
-		providerType:           *providerType,
-		version:                *providerVersion,
+		name:                   *name,
 		platform:               *platform,
 		protectClusterResource: *protectClusterResource,
-		providerImageRef:       *providerImageRef,
+		selfImageRef:           *selfImageRef,
+		installOrder:           *installOrder,
+		attributes:             attributes,
 	}
 
 	if err := validateFlags(opts); err != nil {
@@ -110,27 +125,7 @@ func validateFlags(opts cmdlineOptions) error {
 	return errors.Join(
 		hasValue("kustomize directory", opts.kustomizeDir),
 		hasValue("manifests path", opts.manifestsPath),
-		hasValue("provider name", opts.name),
-
-		func() error {
-			// If set, provider type must be valid
-			if opts.providerType != "" {
-				if opts.providerType != providerTypeCore && opts.providerType != providerTypeInfrastructure {
-					return fmt.Errorf("valid provider types are %s or %s, invalid provider type: %s", providerTypeCore, providerTypeInfrastructure, opts.providerType)
-				}
-			}
-			return nil
-		}(),
-
-		func() error {
-			// If set, provider version must be valid
-			if opts.version != "" {
-				if _, err := version.ParseSemantic(opts.version); err != nil {
-					return fmt.Errorf("invalid version %s for provider %s", opts.version, opts.name)
-				}
-			}
-			return nil
-		}(),
+		hasValue("name", opts.name),
 
 		func() error {
 			// If set, platform must be an allowed platform type
