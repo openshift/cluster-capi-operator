@@ -2,7 +2,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: cluster-capi-operator
+  name: capi-controllers
   namespace: openshift-cluster-api
   annotations:
     include.release.openshift.io/self-managed-high-availability: "true"
@@ -10,25 +10,26 @@ metadata:
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     release.openshift.io/feature-set: "CustomNoUpgrade,TechPreviewNoUpgrade"
   labels:
-    k8s-app: cluster-capi-operator
+    k8s-app: capi-controllers
 spec:
   selector:
     matchLabels:
-      k8s-app: cluster-capi-operator
+      k8s-app: capi-controllers
   replicas: 1
   template:
     metadata:
       annotations:
         target.workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
+        openshift.io/required-scc: restricted-v2
       labels:
-        k8s-app: cluster-capi-operator
+        k8s-app: capi-controllers
     spec:
-      serviceAccountName: cluster-capi-operator
+      serviceAccountName: capi-controllers
       containers:
-      - name: cluster-capi-operator
+      - name: capi-controllers
         image: registry.ci.openshift.org/openshift:cluster-capi-operator
         command:
-        - /cluster-capi-operator
+        - /capi-controllers
         args:
           - --diagnostics-address=:8443
         env:
@@ -83,8 +84,11 @@ spec:
       - key: "node-role.kubernetes.io/master"
         operator: "Exists"
         effect: "NoSchedule"
+      - key: "node-role.kubernetes.io/control-plane"
+        operator: "Exists"
+        effect: "NoSchedule"
       volumes:
       - name: cert
         secret:
           defaultMode: 420
-          secretName: cluster-capi-operator-webhook-service-cert
+          secretName: capi-controllers-webhook-service-cert

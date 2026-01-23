@@ -29,23 +29,18 @@ verify: fmt lint ## Run formatting and linting checks
 
 test: verify unit ## Run verification and unit tests
 
-build: operator migration installer manifests-gen ## Build all binaries
+build: bin/capi-operator bin/capi-controllers bin/machine-api-migration manifests-gen ## Build all binaries
 
 # Ensure bin directory exists for build outputs
 bin/:
 	mkdir -p bin
 
+.PHONY: manifests-gen
 manifests-gen: | bin/ ## Build manifests-gen binary
 	cd manifests-gen && go build -o ../bin/manifests-gen && cd ..
 
-operator: | bin/ ## Build cluster-capi-operator binary
-	go build -o bin/cluster-capi-operator cmd/cluster-capi-operator/main.go
-
-migration: | bin/ ## Build machine-api-migration binary
-	go build -o bin/machine-api-migration cmd/machine-api-migration/main.go
-
-installer: | bin/ ## Build installer binary
-	go build -o bin/installer cmd/installer/main.go
+bin/%: | bin/ FORCE
+	go build -o "$@" "./cmd/$*"
 
 .PHONY: localtestenv
 localtestenv: .localtestenv
@@ -103,3 +98,6 @@ define ensure-home
 	fi; \
 	$(1)
 endef
+
+.PHONY: FORCE
+FORCE:

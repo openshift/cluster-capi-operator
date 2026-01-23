@@ -284,7 +284,7 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 		var controllerCfg *rest.Config
 
 		controllerCfg, err = testEnv.ControlPlane.APIServer.SecureServing.AddUser(envtest.User{
-			Name:   "system:serviceaccount:openshift-cluster-api:cluster-capi-operator",
+			Name:   "system:serviceaccount:openshift-cluster-api:capi-controllers",
 			Groups: []string{"system:masters", "system:authenticated"},
 		}, cfg)
 		Expect(err).ToNot(HaveOccurred(), "User be able to be created")

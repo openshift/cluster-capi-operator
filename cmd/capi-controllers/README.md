@@ -1,0 +1,1 @@
+The capi-controllers manager contains controllers responsible for configuring cluster-owned CAPI resources in an OpenShift cluster.

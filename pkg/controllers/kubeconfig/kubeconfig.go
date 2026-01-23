@@ -44,7 +44,7 @@ import (
 
 const (
 	controllerName  = "KubeconfigController"
-	tokenSecretName = "cluster-capi-operator-secret" //nolint
+	tokenSecretName = "capi-controllers-token"
 )
 
 // KubeconfigReconciler reconciles a ClusterOperator object.
