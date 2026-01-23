@@ -17,6 +17,7 @@ package capiinstaller
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"regexp"
@@ -24,6 +25,8 @@ import (
 
 	"github.com/drone/envsubst/v2"
 	"github.com/go-logr/logr"
+
+	openshiftcrypto "github.com/openshift/library-go/pkg/crypto"
 
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
@@ -87,6 +90,7 @@ type CapiInstallerController struct {
 	Platform            configv1.PlatformType
 	ApplyClient         *kubernetes.Clientset
 	APIExtensionsClient *apiextensionsclient.Clientset
+	TLSOpts             []func(config *tls.Config)
 }
 
 // Reconcile reconciles the cluster-api ClusterOperator object.
@@ -233,6 +237,8 @@ func (r *CapiInstallerController) applyProviderComponents(ctx context.Context, c
 		if !ok {
 			return fmt.Errorf("error casting object to Deployment: %w", err)
 		}
+
+		injectTLSConfigIntoDeployment(deployment, r.TLSOpts)
 
 		if _, _, err := resourceapply.ApplyDeployment(
 			ctx,
@@ -529,4 +535,29 @@ func yamlToUnstructured(sch *runtime.Scheme, m string) (*unstructured.Unstructur
 	u.Object = unstructuredObj
 
 	return u, nil
+}
+
+// injectTLSConfigIntoDeployment injects TLS configuration into the deployment spec,
+// setting --tls-min-version and --tls-cipher-suites on the container named "manager"
+// as described in https://github.com/kubernetes-sigs/cluster-api/blob/55e16f424c0ed8d3739070125d4c32a036997465/util/flags/manager.go#L59-L71.
+func injectTLSConfigIntoDeployment(deployment *appsv1.Deployment, tlsOpts []func(*tls.Config)) {
+	tlsConfig := &tls.Config{}
+	for _, tlsOpt := range tlsOpts {
+		tlsOpt(tlsConfig)
+	}
+
+	for i := range deployment.Spec.Template.Spec.Containers {
+		if deployment.Spec.Template.Spec.Containers[i].Name == "manager" {
+			deployment.Spec.Template.Spec.Containers[i].Args = append(
+				deployment.Spec.Template.Spec.Containers[i].Args,
+				fmt.Sprintf("--tls-min-version=%s", openshiftcrypto.TLSVersionToNameOrDie(tlsConfig.MinVersion)),
+			)
+			if len(tlsConfig.CipherSuites) > 0 {
+				deployment.Spec.Template.Spec.Containers[i].Args = append(
+					deployment.Spec.Template.Spec.Containers[i].Args,
+					fmt.Sprintf("--tls-cipher-suites=%s", strings.Join(openshiftcrypto.CipherSuitesToNamesOrDie(tlsConfig.CipherSuites), ",")),
+				)
+			}
+		}
+	}
 }

@@ -125,7 +125,7 @@ func main() {
 		klog.LogToStderr(*logToStderr)
 	}
 
-	_, diagnosticsOpts, err := capiflags.GetManagerOptions(capiManagerOptions)
+	_, metricsOpts, err := capiflags.GetManagerOptions(capiManagerOptions)
 	if err != nil {
 		klog.Error(err, "unable to get manager options")
 		os.Exit(1)
@@ -139,15 +139,17 @@ func main() {
 
 	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
 		Scheme:                  scheme,
-		Metrics:                 *diagnosticsOpts,
+		Metrics:                 *metricsOpts,
 		HealthProbeBindAddress:  *healthAddr,
 		LeaderElectionNamespace: leaderElectionConfig.ResourceNamespace,
 		LeaderElection:          leaderElectionConfig.LeaderElect,
 		LeaseDuration:           &leaderElectionConfig.LeaseDuration.Duration,
 		LeaderElectionID:        leaderElectionConfig.ResourceName,
-		RetryPeriod:             &leaderElectionConfig.RetryPeriod.Duration,
-		RenewDeadline:           &leaderElectionConfig.RenewDeadline.Duration,
-		Cache:                   cacheOpts,
+		// Release the leader election when the context is cancelled, to recover quicker on restarts.
+		LeaderElectionReleaseOnCancel: true,
+		RetryPeriod:                   &leaderElectionConfig.RetryPeriod.Duration,
+		RenewDeadline:                 &leaderElectionConfig.RenewDeadline.Duration,
+		Cache:                         cacheOpts,
 	})
 	if err != nil {
 		klog.Error(err, "unable to create manager")
