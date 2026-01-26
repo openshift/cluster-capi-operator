@@ -200,11 +200,16 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 		})
 		Expect(err).ToNot(HaveOccurred(), "Manager should be able to be created")
 
+		infra := configv1resourcebuilder.Infrastructure().
+			AsAWS("cluster", "us-east-1").WithInfrastructureName(infrastructureName).Build()
+		infraTypes, _, err := util.GetCAPITypesForInfrastructure(infra)
+		Expect(err).ToNot(HaveOccurred(), "InfraTypes should be able to be created")
+
 		reconciler = &MachineSetSyncReconciler{
-			Client: mgr.GetClient(),
-			Infra: configv1resourcebuilder.Infrastructure().
-				AsAWS("cluster", "us-east-1").WithInfrastructureName(infrastructureName).Build(),
+			Client:        mgr.GetClient(),
+			Infra:         infra,
 			Platform:      configv1.AWSPlatformType,
+			InfraTypes:    infraTypes,
 			CAPINamespace: capiNamespace.GetName(),
 			MAPINamespace: mapiNamespace.GetName(),
 		}

@@ -36,6 +36,7 @@ import (
 	admissiontestutils "github.com/openshift/cluster-capi-operator/pkg/admissionpolicy/testutils"
 	consts "github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/mapi2capi"
+	"github.com/openshift/cluster-capi-operator/pkg/util"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -298,11 +299,16 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 		})
 		Expect(err).ToNot(HaveOccurred(), "Manager should be able to be created")
 
+		infra := configv1resourcebuilder.Infrastructure().
+			AsAWS("cluster", "us-east-1").WithInfrastructureName(infrastructureName).Build()
+		infraTypes, _, err := util.GetCAPITypesForInfrastructure(infra)
+		Expect(err).ToNot(HaveOccurred(), "InfraTypes should be able to be created")
+
 		reconciler = &MachineSyncReconciler{
-			Client: mgr.GetClient(),
-			Infra: configv1resourcebuilder.Infrastructure().
-				AsAWS("cluster", "us-east-1").WithInfrastructureName(infrastructureName).Build(),
+			Client:        mgr.GetClient(),
+			Infra:         infra,
 			Platform:      configv1.AWSPlatformType,
+			InfraTypes:    infraTypes,
 			CAPINamespace: capiNamespace.GetName(),
 			MAPINamespace: mapiNamespace.GetName(),
 		}

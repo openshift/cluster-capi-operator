@@ -14,6 +14,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"os"
 	"time"
@@ -34,6 +35,7 @@ import (
 	ibmpowervsv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
 	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
 	vspherev1 "sigs.k8s.io/cluster-api-provider-vsphere/apis/v1beta1"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	clusterctlv1 "sigs.k8s.io/cluster-api/cmd/clusterctl/api/v1alpha3"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -46,7 +48,6 @@ import (
 	mapiv1 "github.com/openshift/api/machine/v1"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
-	"github.com/openshift/cluster-capi-operator/pkg/controllers/clusteroperator"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/corecluster"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/infracluster"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/kubeconfig"
@@ -63,9 +64,10 @@ const (
 
 func initScheme(scheme *runtime.Scheme) {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-	utilruntime.Must(configv1.AddToScheme(scheme))
 	utilruntime.Must(apiextensionsv1.AddToScheme(scheme))
 	utilruntime.Must(admissionregistrationv1.AddToScheme(scheme))
+
+	// CAPI provider API types.
 	utilruntime.Must(awsv1.AddToScheme(scheme))
 	utilruntime.Must(azurev1.AddToScheme(scheme))
 	utilruntime.Must(gcpv1.AddToScheme(scheme))
@@ -74,9 +76,13 @@ func initScheme(scheme *runtime.Scheme) {
 	utilruntime.Must(ibmpowervsv1.AddToScheme(scheme))
 	utilruntime.Must(openstackv1.AddToScheme(scheme))
 	utilruntime.Must(vspherev1.AddToScheme(scheme))
+	utilruntime.Must(metal3v1.AddToScheme(scheme))
+	utilruntime.Must(clusterv1beta1.AddToScheme(scheme))
+
+	// OpenShift API types.
+	utilruntime.Must(configv1.AddToScheme(scheme))
 	utilruntime.Must(mapiv1.AddToScheme(scheme))
 	utilruntime.Must(mapiv1beta1.AddToScheme(scheme))
-	utilruntime.Must(metal3v1.AddToScheme(scheme))
 }
 
 func main() {
@@ -142,46 +148,19 @@ func main() {
 func setupPlatformReconcilers(mgr manager.Manager, opts *util.CommonOptions, infra *configv1.Infrastructure, platform configv1.PlatformType) {
 	// Only setup reconcile controllers and webhooks when the platform is supported.
 	// This avoids unnecessary CAPI providers discovery, installs and reconciles when the platform is not supported.
-	isUnsupportedPlatform := false
-
-	switch platform {
-	case configv1.AWSPlatformType:
-		setupReconcilers(mgr, opts, infra, platform, &awsv1.AWSCluster{})
-		setupWebhooks(mgr)
-	case configv1.GCPPlatformType:
-		setupReconcilers(mgr, opts, infra, platform, &gcpv1.GCPCluster{})
-		setupWebhooks(mgr)
-	case configv1.AzurePlatformType:
-		azureCloudEnvironment := getAzureCloudEnvironment(infra.Status.PlatformStatus)
-		if azureCloudEnvironment == configv1.AzureStackCloud {
-			klog.Infof("Detected Azure Cloud Environment %q on platform %q is not supported, skipping capi controllers setup", azureCloudEnvironment, platform)
-
-			isUnsupportedPlatform = true
-		} else {
-			// The ClusterOperator Controller must run in all cases.
-			setupReconcilers(mgr, opts, infra, platform, &azurev1.AzureCluster{})
-			setupWebhooks(mgr)
+	infraTypes, _, err := util.GetCAPITypesForInfrastructure(infra)
+	if err != nil {
+		if errors.Is(err, util.ErrUnsupportedPlatform) {
+			klog.Infof("Detected platform %q is not supported, skipping capi controllers setup", platform)
+			return
 		}
-	case configv1.PowerVSPlatformType:
-		setupReconcilers(mgr, opts, infra, platform, &ibmpowervsv1.IBMPowerVSCluster{})
-		setupWebhooks(mgr)
-	case configv1.VSpherePlatformType:
-		setupReconcilers(mgr, opts, infra, platform, &vspherev1.VSphereCluster{})
-		setupWebhooks(mgr)
-	case configv1.OpenStackPlatformType:
-		setupReconcilers(mgr, opts, infra, platform, &openstackv1.OpenStackCluster{})
-		setupWebhooks(mgr)
-	case configv1.BareMetalPlatformType:
-		setupReconcilers(mgr, opts, infra, platform, &metal3v1.Metal3Cluster{})
-		setupWebhooks(mgr)
-	default:
-		klog.Infof("Detected platform %q is not supported, skipping capi controllers setup", platform)
 
-		isUnsupportedPlatform = true
+		klog.Error(err, "unable to get infrastructure objects")
+		os.Exit(1)
 	}
 
-	// The ClusterOperator Controller must run under all circumstances as it manages the ClusterOperator object for this operator.
-	setupClusterOperatorController(mgr, opts, platform, isUnsupportedPlatform)
+	setupReconcilers(mgr, opts, infra, platform, infraTypes.Cluster())
+	setupWebhooks(mgr)
 }
 
 func setupReconcilers(mgr manager.Manager, opts *util.CommonOptions, infra *configv1.Infrastructure, platform configv1.PlatformType, infraClusterObject client.Object) {
@@ -227,27 +206,6 @@ func setupReconcilers(mgr manager.Manager, opts *util.CommonOptions, infra *conf
 func setupWebhooks(mgr ctrl.Manager) {
 	if err := (&webhook.ClusterWebhook{}).SetupWebhookWithManager(mgr); err != nil {
 		klog.Error(err, "unable to create webhook", "webhook", "Cluster")
-		os.Exit(1)
-	}
-}
-
-// getAzureCloudEnvironment returns the current AzureCloudEnvironment.
-func getAzureCloudEnvironment(ps *configv1.PlatformStatus) configv1.AzureCloudEnvironment {
-	if ps == nil || ps.Azure == nil {
-		return ""
-	}
-
-	return ps.Azure.CloudName
-}
-
-func setupClusterOperatorController(mgr manager.Manager, opts *util.CommonOptions, platform configv1.PlatformType, isUnsupportedPlatform bool) {
-	// ClusterOperator watches and keeps the cluster-api ClusterObject up to date.
-	if err := (&clusteroperator.ClusterOperatorController{
-		ClusterOperatorStatusClient: opts.GetClusterOperatorStatusClient(mgr, platform, "clusteroperator"),
-		Scheme:                      mgr.GetScheme(),
-		IsUnsupportedPlatform:       isUnsupportedPlatform,
-	}).SetupWithManager(mgr); err != nil {
-		klog.Error(err, "unable to create clusteroperator controller", "controller", "ClusterOperator")
 		os.Exit(1)
 	}
 }

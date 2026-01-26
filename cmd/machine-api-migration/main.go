@@ -94,23 +94,26 @@ func main() {
 	ctx := ctrl.SetupSignalHandler()
 	checkFeatureGates(ctx, mgr)
 
-	platform, infra, err := util.GetPlatform(ctx, mgr.GetAPIReader())
+	infra, err := util.GetInfra(ctx, mgr.GetAPIReader())
 	if err != nil {
-		klog.Error(err, "unable to get platform")
+		klog.Error(err, "unable to get infrastructure")
 		os.Exit(1)
 	}
 
-	// Currently we only plan to support AWS, so all others are a noop until they're implemented.
-	switch platform {
-	case configv1.AWSPlatformType, configv1.OpenStackPlatformType:
-		klog.Infof("MachineAPIMigration: starting %s controllers", platform)
+	infraTypes, platform, err := util.GetCAPITypesForInfrastructure(infra)
+	if err != nil {
+		if errors.Is(err, util.ErrUnsupportedPlatform) {
+			klog.Info(fmt.Sprintf("MachineAPIMigration not implemented for platform %s, nothing to do. Waiting for termination signal.", platform))
+			exitAfterTerminationSignal(ctx)
+		}
 
-	default:
-		klog.Infof("MachineAPIMigration not implemented for platform %s, nothing to do. Waiting for termination signal.", platform)
-		exitAfterTerminationSignal(ctx)
+		klog.Error(err, "unable to get infrastructure types")
+		os.Exit(1)
 	}
 
-	for name, controller := range getControllers(opts, platform, infra) {
+	checkPlatformSupported(ctx, platform)
+
+	for name, controller := range getControllers(opts, platform, infra, infraTypes) {
 		if err := controller.SetupWithManager(mgr); err != nil {
 			klog.Error(err, fmt.Sprintf("failed to set up %s reconciler with manager", name))
 			os.Exit(1)
@@ -144,36 +147,51 @@ func checkFeatureGates(ctx context.Context, mgr ctrl.Manager) {
 	}
 }
 
+func checkPlatformSupported(ctx context.Context, platform configv1.PlatformType) {
+	switch platform {
+	case configv1.AWSPlatformType, configv1.OpenStackPlatformType:
+		klog.Infof("MachineAPIMigration: starting %s controllers", platform)
+
+	default:
+		klog.Infof("MachineAPIMigration not implemented for platform %s, nothing to do. Waiting for termination signal.", platform)
+		exitAfterTerminationSignal(ctx)
+	}
+}
+
 type controller interface {
 	SetupWithManager(mgr ctrl.Manager) error
 }
 
-func getControllers(opts *util.CommonOptions, platform configv1.PlatformType, infra *configv1.Infrastructure) map[string]controller {
+func getControllers(opts *util.CommonOptions, platform configv1.PlatformType, infra *configv1.Infrastructure, infraTypes util.InfraTypes) map[string]controller {
 	return map[string]controller{
 		"machine sync": &machinesync.MachineSyncReconciler{
-			Infra:    infra,
-			Platform: platform,
+			Infra:      infra,
+			Platform:   platform,
+			InfraTypes: infraTypes,
 
 			MAPINamespace: *opts.MAPINamespace,
 			CAPINamespace: *opts.CAPINamespace,
 		},
 		"machineset sync": &machinesetsync.MachineSetSyncReconciler{
-			Platform: platform,
-			Infra:    infra,
+			Platform:   platform,
+			Infra:      infra,
+			InfraTypes: infraTypes,
 
 			MAPINamespace: *opts.MAPINamespace,
 			CAPINamespace: *opts.CAPINamespace,
 		},
 		"machine migration": &machinemigration.MachineMigrationReconciler{
-			Platform: platform,
-			Infra:    infra,
+			Platform:   platform,
+			Infra:      infra,
+			InfraTypes: infraTypes,
 
 			MAPINamespace: *opts.MAPINamespace,
 			CAPINamespace: *opts.CAPINamespace,
 		},
 		"machineset migration": &machinesetmigration.MachineSetMigrationReconciler{
-			Platform: platform,
-			Infra:    infra,
+			Platform:   platform,
+			Infra:      infra,
+			InfraTypes: infraTypes,
 
 			MAPINamespace: *opts.MAPINamespace,
 			CAPINamespace: *opts.CAPINamespace,

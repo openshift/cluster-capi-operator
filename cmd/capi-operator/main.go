@@ -15,6 +15,8 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -37,6 +39,7 @@ import (
 
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/capiinstaller"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/clusteroperator"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 )
 
@@ -93,13 +96,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	platform, _, err := util.GetPlatform(ctx, mgr.GetAPIReader())
-	if err != nil {
-		klog.Error(err, "unable to get platform")
-		os.Exit(1)
-	}
-
-	if err := setupControllers(mgr, opts, platform, *imagesFile); err != nil {
+	if err := setupControllers(ctx, mgr, opts, *imagesFile); err != nil {
 		klog.Error(err, "unable to setup controllers")
 		os.Exit(1)
 	}
@@ -112,9 +109,22 @@ func main() {
 	}
 }
 
-func setupControllers(mgr ctrl.Manager, opts *util.CommonOptions, platform configv1.PlatformType, imagesFile string) error {
-	if err := setFeatureGatesEnvVars(); err != nil {
-		return fmt.Errorf("unable to set feature gates environment variables: %w", err)
+func setupControllers(ctx context.Context, mgr ctrl.Manager, opts *util.CommonOptions, imagesFile string) error {
+	infra, err := util.GetInfra(ctx, mgr.GetAPIReader())
+	if err != nil {
+		klog.Error(err, "unable to get infrastructure")
+		os.Exit(1)
+	}
+
+	isUnsupportedPlatform := false
+
+	_, platform, err := util.GetCAPITypesForInfrastructure(infra)
+	if err != nil {
+		if errors.Is(err, util.ErrUnsupportedPlatform) {
+			isUnsupportedPlatform = true
+		} else {
+			return fmt.Errorf("unable to get infrastructure types: %w", err)
+		}
 	}
 
 	containerImages, err := util.ReadImagesFile(imagesFile)
@@ -132,6 +142,10 @@ func setupControllers(mgr ctrl.Manager, opts *util.CommonOptions, platform confi
 		return fmt.Errorf("unable to set up api extensions client: %w", err)
 	}
 
+	if err := setFeatureGatesEnvVars(); err != nil {
+		return fmt.Errorf("unable to set feature gates environment variables: %w", err)
+	}
+
 	if err := (&capiinstaller.CapiInstallerController{
 		ClusterOperatorStatusClient: opts.GetClusterOperatorStatusClient(mgr, platform, "installer"),
 		Scheme:                      mgr.GetScheme(),
@@ -142,6 +156,16 @@ func setupControllers(mgr ctrl.Manager, opts *util.CommonOptions, platform confi
 		APIExtensionsClient:         apiextensionsClient,
 	}).SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("unable to create capi installer controller: %w", err)
+	}
+
+	// ClusterOperator watches and keeps the cluster-api ClusterObject up to date.
+	if err := (&clusteroperator.ClusterOperatorController{
+		ClusterOperatorStatusClient: opts.GetClusterOperatorStatusClient(mgr, platform, "clusteroperator"),
+		Scheme:                      mgr.GetScheme(),
+		IsUnsupportedPlatform:       isUnsupportedPlatform,
+	}).SetupWithManager(mgr); err != nil {
+		klog.Error(err, "unable to create clusteroperator controller", "controller", "ClusterOperator")
+		os.Exit(1)
 	}
 
 	return nil

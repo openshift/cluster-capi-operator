@@ -15,7 +15,11 @@ limitations under the License.
 */
 package controllers
 
-import mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
+import (
+	"errors"
+
+	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
+)
 
 const (
 	// DefaultCAPINamespace is the default namespace for CAPI resources.
@@ -50,4 +54,9 @@ const (
 
 	// MachineSetOpenshiftLabelKey is the key for label referring to a Machine API MachineSet.
 	MachineSetOpenshiftLabelKey = "machine.openshift.io/cluster-api-machineset"
+)
+
+var (
+	// ErrInvalidSpecAuthoritativeAPI is returned when spec.authoritativeAPI has a value which is not permitted.
+	ErrInvalidSpecAuthoritativeAPI = errors.New("invalid spec.authoritativeAPI")
 )

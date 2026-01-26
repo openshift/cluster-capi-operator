@@ -56,17 +56,13 @@ type MachineMigrationReconciler struct {
 
 	Infra         *configv1.Infrastructure
 	Platform      configv1.PlatformType
+	InfraTypes    util.InfraTypes
 	CAPINamespace string
 	MAPINamespace string
 }
 
 // SetupWithManager sets up the MachineMigration controller.
 func (r *MachineMigrationReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	infraMachine, _, err := controllers.InitInfraMachineAndInfraClusterFromProvider(r.Platform)
-	if err != nil {
-		return fmt.Errorf("failed to get infrastructure machine from Provider: %w", err)
-	}
-
 	// Allow the namespaces to be set externally for test purposes, when not set,
 	// default to the production namespaces.
 	if r.CAPINamespace == "" {
@@ -86,7 +82,7 @@ func (r *MachineMigrationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			builder.WithPredicates(util.FilterNamespace(r.CAPINamespace)),
 		).
 		Watches(
-			infraMachine,
+			r.InfraTypes.Machine(),
 			handler.EnqueueRequestsFromMapFunc(util.RewriteNamespace(r.MAPINamespace)),
 			builder.WithPredicates(util.FilterNamespace(r.CAPINamespace)),
 		).
