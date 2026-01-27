@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math"
 	"regexp"
+	"sort"
 	"strings"
 
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
@@ -236,7 +237,124 @@ func (m machineAndAWSMachineAndAWSCluster) toProviderStatus() *mapiv1beta1.AWSMa
 		Conditions:    convertCAPAMachineConditionsToMAPIMachineAWSProviderConditions(m.awsMachine),
 	}
 
+	// Convert DedicatedHost status if present
+	if m.awsMachine.Status.DedicatedHost != nil && m.awsMachine.Status.DedicatedHost.ID != nil {
+		s.DedicatedHost = &mapiv1beta1.DedicatedHostStatus{
+			ID: ptr.Deref(m.awsMachine.Status.DedicatedHost.ID, ""),
+		}
+	}
+
 	return s
+}
+
+func convertDynamicHostAllocationTags(dynamicHostAllocation *awsv1.DynamicHostAllocationSpec) *mapiv1beta1.DynamicHostAllocationSpec {
+	if dynamicHostAllocation == nil || dynamicHostAllocation.Tags == nil {
+		return nil
+	}
+
+	// Collect keys first to ensure deterministic ordering
+	keys := make([]string, 0, len(dynamicHostAllocation.Tags))
+	for key := range dynamicHostAllocation.Tags {
+		keys = append(keys, key)
+	}
+
+	sort.Strings(keys)
+
+	// Build tags slice in sorted order
+	tags := make([]mapiv1beta1.TagSpecification, 0, len(keys))
+	for _, key := range keys {
+		tags = append(tags, mapiv1beta1.TagSpecification{
+			Name:  key,
+			Value: dynamicHostAllocation.Tags[key],
+		})
+	}
+
+	// Only create DynamicHostAllocationSpec if there are tags.
+	// The MAPI API has MinProperties=1 validation, so an empty struct is invalid.
+	if len(tags) == 0 {
+		return nil
+	}
+
+	return &mapiv1beta1.DynamicHostAllocationSpec{
+		Tags: &tags,
+	}
+}
+
+func convertHostAffinityHost(spec awsv1.AWSMachineSpec, fldPath *field.Path) (*mapiv1beta1.HostPlacement, field.ErrorList) {
+	var errorList field.ErrorList
+
+	hasDynamicHostAllocation := spec.DynamicHostAllocation != nil
+	hasHostID := spec.HostID != nil
+
+	// For "host" affinity, either HostID (user-provided) or DynamicHostAllocation must be set
+	if !hasHostID && !hasDynamicHostAllocation {
+		errorList = append(errorList, field.Required(fldPath.Child("dedicatedHost"), "either id or dynamicHostAllocation is required when hostAffinity is host"))
+		return nil, errorList
+	}
+
+	if hasHostID && hasDynamicHostAllocation {
+		errorList = append(errorList, field.Invalid(fldPath.Child("dedicatedHost"), spec.HostID, "id and dynamicHostAllocation are mutually exclusive"))
+		return nil, errorList
+	}
+
+	if hasHostID {
+		// User-provided host ID
+		if !awsDedicatedHostNamePattern.MatchString(*spec.HostID) {
+			errorList = append(errorList, field.Invalid(fldPath.Child("dedicatedHost").Child("id"), *spec.HostID, errHostIDInvalidFormat))
+			return nil, errorList
+		}
+
+		return &mapiv1beta1.HostPlacement{
+			Affinity: ptr.To(mapiv1beta1.HostAffinityDedicatedHost),
+			DedicatedHost: &mapiv1beta1.DedicatedHost{
+				AllocationStrategy: ptr.To(mapiv1beta1.AllocationStrategyUserProvided),
+				ID:                 *spec.HostID,
+			},
+		}, nil
+	}
+
+	// Dynamic host allocation
+	dynamicAlloc := convertDynamicHostAllocationTags(spec.DynamicHostAllocation)
+
+	return &mapiv1beta1.HostPlacement{
+		Affinity: ptr.To(mapiv1beta1.HostAffinityDedicatedHost),
+		DedicatedHost: &mapiv1beta1.DedicatedHost{
+			AllocationStrategy:    ptr.To(mapiv1beta1.AllocationStrategyDynamic),
+			DynamicHostAllocation: dynamicAlloc,
+		},
+	}, nil
+}
+
+func convertHostAffinityDefault(spec awsv1.AWSMachineSpec, fldPath *field.Path) (*mapiv1beta1.HostPlacement, field.ErrorList) {
+	var errorList field.ErrorList
+
+	host := &mapiv1beta1.HostPlacement{
+		Affinity: ptr.To(mapiv1beta1.HostAffinityAnyAvailable),
+	}
+
+	hasDynamicHostAllocation := spec.DynamicHostAllocation != nil
+	hasHostID := spec.HostID != nil
+
+	// For "default", host ID is optional
+	if hasHostID {
+		if !awsDedicatedHostNamePattern.MatchString(*spec.HostID) {
+			errorList = append(errorList, field.Invalid(fldPath.Child("dedicatedHost").Child("id"), *spec.HostID, errHostIDInvalidFormat))
+			return nil, errorList
+		}
+
+		host.DedicatedHost = &mapiv1beta1.DedicatedHost{
+			AllocationStrategy: ptr.To(mapiv1beta1.AllocationStrategyUserProvided),
+			ID:                 *spec.HostID,
+		}
+	}
+
+	// DynamicHostAllocation is not allowed with "default" affinity
+	if hasDynamicHostAllocation {
+		errorList = append(errorList, field.Invalid(fldPath.Child("dynamicHostAllocation"), spec.DynamicHostAllocation, "dynamicHostAllocation is only allowed when hostAffinity is host"))
+		return nil, errorList
+	}
+
+	return host, errorList
 }
 
 func convertAWSDedicatedHostToMAPI(spec awsv1.AWSMachineSpec, fldPath *field.Path) (*mapiv1beta1.HostPlacement, field.ErrorList) {
@@ -251,37 +369,9 @@ func convertAWSDedicatedHostToMAPI(spec awsv1.AWSMachineSpec, fldPath *field.Pat
 
 	switch *spec.HostAffinity {
 	case "host":
-		// For "host", host id is required in mapi.  Let's make sure it is set and id is valid
-		if spec.HostID == nil {
-			errorList = append(errorList, field.Required(fldPath.Child("dedicatedHost").Child("id"), errHostIDRequired))
-			break
-		} else if !awsDedicatedHostNamePattern.MatchString(*spec.HostID) {
-			errorList = append(errorList, field.Invalid(fldPath.Child("dedicatedHost").Child("id"), *spec.HostID, errHostIDRequired))
-			break
-		}
-
-		host = &mapiv1beta1.HostPlacement{
-			Affinity: ptr.To(mapiv1beta1.HostAffinityDedicatedHost),
-			DedicatedHost: &mapiv1beta1.DedicatedHost{
-				ID: *spec.HostID,
-			},
-		}
+		host, errorList = convertHostAffinityHost(spec, fldPath)
 	case "default":
-		host = &mapiv1beta1.HostPlacement{
-			Affinity: ptr.To(mapiv1beta1.HostAffinityAnyAvailable),
-		}
-
-		// For "default", host ID is optional, and in MAPI we treat host as option in relation to this.  If it is set, lets validate it.
-		if spec.HostID != nil {
-			if !awsDedicatedHostNamePattern.MatchString(*spec.HostID) {
-				errorList = append(errorList, field.Invalid(fldPath.Child("dedicatedHost").Child("id"), *spec.HostID, errHostIDInvalidFormat))
-				break
-			}
-
-			host.DedicatedHost = &mapiv1beta1.DedicatedHost{
-				ID: *spec.HostID,
-			}
-		}
+		host, errorList = convertHostAffinityDefault(spec, fldPath)
 	default:
 		errorList = append(errorList, field.Invalid(fldPath.Child("hostAffinity"), spec.HostAffinity, errUnsupportedHostAffinityType))
 	}
@@ -481,11 +571,24 @@ func convertAWSFiltersToMAPI(capiFilters []awsv1.Filter) []mapiv1beta1.Filter {
 }
 
 func convertAWSTagsToMAPI(capiTags awsv1.Tags) []mapiv1beta1.TagSpecification {
-	mapiTags := []mapiv1beta1.TagSpecification{}
-	for key, value := range capiTags {
+	if len(capiTags) == 0 {
+		return []mapiv1beta1.TagSpecification{}
+	}
+
+	// Collect keys first to ensure deterministic ordering
+	keys := make([]string, 0, len(capiTags))
+	for key := range capiTags {
+		keys = append(keys, key)
+	}
+
+	sort.Strings(keys)
+
+	// Build tags slice in sorted order
+	mapiTags := make([]mapiv1beta1.TagSpecification, 0, len(capiTags))
+	for _, key := range keys {
 		mapiTags = append(mapiTags, mapiv1beta1.TagSpecification{
 			Name:  key,
-			Value: value,
+			Value: capiTags[key],
 		})
 	}
 
