@@ -31,6 +31,7 @@ import (
 	configv1 "github.com/openshift/api/config/v1"
 	configbuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/config/v1"
 	machinebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/machine/v1beta1"
+	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 )
 
 var _ = Describe("mapi2capi AWS conversion", func() {
@@ -425,4 +426,151 @@ var _ = Describe("mapi2capi AWS conversion", func() {
 			expectedWarnings:  []string{},
 		}),
 	)
+
+	Context("DedicatedHost Status Conversion", func() {
+		Context("When converting MAPI Machine with DedicatedHost status", func() {
+			It("should populate DedicatedHost status in CAPA Machine", func() {
+				// Create provider status with DedicatedHost
+				mapiProviderStatus := &mapiv1beta1.AWSMachineProviderStatus{
+					InstanceState: ptr.To("running"),
+					DedicatedHost: &mapiv1beta1.DedicatedHostStatus{
+						ID: "h-0123456789abcdef0",
+					},
+				}
+
+				statusBytes, err := json.Marshal(mapiProviderStatus)
+				Expect(err).ToNot(HaveOccurred())
+
+				// Create a base provider spec
+				mapiProviderSpec := &mapiv1beta1.AWSMachineProviderConfig{
+					AMI: mapiv1beta1.AWSResourceReference{
+						ID: ptr.To("ami-12345"),
+					},
+					InstanceType: "m5.large",
+					Placement: mapiv1beta1.Placement{
+						AvailabilityZone: "us-east-1a",
+						Host: &mapiv1beta1.HostPlacement{
+							Affinity: ptr.To(mapiv1beta1.HostAffinityDedicatedHost),
+							DedicatedHost: &mapiv1beta1.DedicatedHost{
+								AllocationStrategy: ptr.To(mapiv1beta1.AllocationStrategyDynamic),
+							},
+						},
+					},
+				}
+
+				specBytes, err := json.Marshal(mapiProviderSpec)
+				Expect(err).ToNot(HaveOccurred())
+
+				// Build MAPI Machine with status
+				mapiMachine := machinebuilder.Machine().
+					WithName("test-machine").
+					WithNamespace("openshift-machine-api").
+					WithProviderSpec(mapiv1beta1.ProviderSpec{
+						Value: &runtime.RawExtension{Raw: specBytes},
+					}).
+					WithProviderStatus(runtime.RawExtension{Raw: statusBytes}).
+					Build()
+
+				// Convert to CAPI
+				_, capaObj, warnings, err := FromAWSMachineAndInfra(mapiMachine, infra).ToMachineAndInfrastructureMachine()
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(warnings).To(BeEmpty())
+				Expect(capaObj).ToNot(BeNil())
+
+				// Verify CAPA Machine has DedicatedHost status
+				capaMachine, ok := capaObj.(*awsv1.AWSMachine)
+				Expect(ok).To(BeTrue(), "converted object should be an AWSMachine")
+
+				Expect(capaMachine.Status.DedicatedHost).ToNot(BeNil(), "DedicatedHost status should not be nil")
+				Expect(capaMachine.Status.DedicatedHost.ID).ToNot(BeNil(), "DedicatedHost ID should not be nil")
+				Expect(*capaMachine.Status.DedicatedHost.ID).To(Equal("h-0123456789abcdef0"), "DedicatedHost ID should match")
+			})
+
+			It("should handle nil DedicatedHost status", func() {
+				// Create provider status without DedicatedHost
+				mapiProviderStatus := &mapiv1beta1.AWSMachineProviderStatus{
+					InstanceState: ptr.To("running"),
+				}
+
+				statusBytes, err := json.Marshal(mapiProviderStatus)
+				Expect(err).ToNot(HaveOccurred())
+
+				mapiProviderSpec := &mapiv1beta1.AWSMachineProviderConfig{
+					AMI: mapiv1beta1.AWSResourceReference{
+						ID: ptr.To("ami-12345"),
+					},
+					InstanceType: "m5.large",
+				}
+
+				specBytes, err := json.Marshal(mapiProviderSpec)
+				Expect(err).ToNot(HaveOccurred())
+
+				mapiMachine := machinebuilder.Machine().
+					WithName("test-machine").
+					WithNamespace("openshift-machine-api").
+					WithProviderSpec(mapiv1beta1.ProviderSpec{
+						Value: &runtime.RawExtension{Raw: specBytes},
+					}).
+					WithProviderStatus(runtime.RawExtension{Raw: statusBytes}).
+					Build()
+
+				// Convert to CAPI
+				_, capaObj, warnings, err := FromAWSMachineAndInfra(mapiMachine, infra).ToMachineAndInfrastructureMachine()
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(warnings).To(BeEmpty())
+				Expect(capaObj).ToNot(BeNil())
+
+				capaMachine, ok := capaObj.(*awsv1.AWSMachine)
+				Expect(ok).To(BeTrue())
+
+				Expect(capaMachine.Status.DedicatedHost).To(BeNil(), "DedicatedHost status should be nil when not present in MAPI")
+			})
+
+			It("should handle empty DedicatedHost ID", func() {
+				// Create provider status with DedicatedHost but empty ID
+				mapiProviderStatus := &mapiv1beta1.AWSMachineProviderStatus{
+					InstanceState: ptr.To("running"),
+					DedicatedHost: &mapiv1beta1.DedicatedHostStatus{
+						ID: "",
+					},
+				}
+
+				statusBytes, err := json.Marshal(mapiProviderStatus)
+				Expect(err).ToNot(HaveOccurred())
+
+				mapiProviderSpec := &mapiv1beta1.AWSMachineProviderConfig{
+					AMI: mapiv1beta1.AWSResourceReference{
+						ID: ptr.To("ami-12345"),
+					},
+					InstanceType: "m5.large",
+				}
+
+				specBytes, err := json.Marshal(mapiProviderSpec)
+				Expect(err).ToNot(HaveOccurred())
+
+				mapiMachine := machinebuilder.Machine().
+					WithName("test-machine").
+					WithNamespace("openshift-machine-api").
+					WithProviderSpec(mapiv1beta1.ProviderSpec{
+						Value: &runtime.RawExtension{Raw: specBytes},
+					}).
+					WithProviderStatus(runtime.RawExtension{Raw: statusBytes}).
+					Build()
+
+				// Convert to CAPI
+				_, capaObj, warnings, err := FromAWSMachineAndInfra(mapiMachine, infra).ToMachineAndInfrastructureMachine()
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(warnings).To(BeEmpty())
+				Expect(capaObj).ToNot(BeNil())
+
+				capaMachine, ok := capaObj.(*awsv1.AWSMachine)
+				Expect(ok).To(BeTrue())
+
+				Expect(capaMachine.Status.DedicatedHost).To(BeNil(), "DedicatedHost status should be nil when ID is empty")
+			})
+		})
+	})
 })
