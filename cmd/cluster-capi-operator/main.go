@@ -15,6 +15,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"flag"
 	"fmt"
 	"os"
@@ -65,6 +66,7 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 	"github.com/openshift/cluster-capi-operator/pkg/webhook"
+	utiltls "github.com/openshift/library-go/pkg/controllerruntime/tls"
 )
 
 const (
@@ -94,6 +96,11 @@ func initScheme(scheme *runtime.Scheme) {
 func main() {
 	scheme := runtime.NewScheme()
 	initScheme(scheme)
+
+	// Create a context that can be cancelled when there is a need to shut down the manager	.
+	ctx, cancel := context.WithCancel(ctrl.SetupSignalHandler())
+	// Ensure the context is cancelled when the program exits.
+	defer cancel()
 
 	leaderElectionConfig := config.LeaderElectionConfiguration{
 		LeaderElect:       true,
@@ -148,6 +155,29 @@ func main() {
 	capiflags.AddManagerOptions(pflag.CommandLine, &capiManagerOptions)
 	pflag.Parse()
 
+	cfg := ctrl.GetConfigOrDie()
+
+	k8sClient, err := client.New(cfg, client.Options{Scheme: scheme})
+	if err != nil {
+		klog.Error(err, "unable to create Kubernetes client")
+		os.Exit(1)
+	}
+
+	// Fetch the TLS profile from the APIServer resource.
+	tlsSecurityProfileSpec, err := utiltls.FetchAPIServerTLSProfile(ctx, k8sClient)
+	if err != nil {
+		klog.Error(err, "unable to get TLS profile from API server")
+		os.Exit(1)
+	}
+
+	// Create the TLS configuration function for the server endpoints.
+	tlsConfig, unsupportedCiphers := utiltls.NewTLSConfigFromProfile(tlsSecurityProfileSpec)
+	if len(unsupportedCiphers) > 0 {
+		klog.Info("TLS configuration contains unsupported ciphers that will be ignored",
+			"unsupportedCiphers", unsupportedCiphers,
+		)
+	}
+
 	if err := setFeatureGatesEnvVars(); err != nil {
 		klog.Error(err, "unable to set feature gates environment variables")
 		os.Exit(1)
@@ -157,32 +187,37 @@ func main() {
 		klog.LogToStderr(*logToStderr)
 	}
 
-	_, diagnosticsOpts, err := capiflags.GetManagerOptions(capiManagerOptions)
+	_, metricsOptions, err := capiflags.GetManagerOptions(capiManagerOptions)
 	if err != nil {
 		klog.Error(err, "unable to get manager options")
 		os.Exit(1)
 	}
 
+	// Override the TLS options for the metrics server with the ones specified centrally in the APIServer resource.
+	tlsOptions := []func(config *tls.Config){tlsConfig}
+	metricsOptions.TLSOpts = tlsOptions
+
 	syncPeriod := 10 * time.Minute
 
 	cacheOpts := getDefaultCacheOptions(*managedNamespace, syncPeriod)
 
-	cfg := ctrl.GetConfigOrDie()
-
 	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
 		Scheme:                  scheme,
-		Metrics:                 *diagnosticsOpts,
+		Metrics:                 *metricsOptions,
 		HealthProbeBindAddress:  *healthAddr,
 		LeaderElectionNamespace: leaderElectionConfig.ResourceNamespace,
 		LeaderElection:          leaderElectionConfig.LeaderElect,
 		LeaseDuration:           &leaderElectionConfig.LeaseDuration.Duration,
 		LeaderElectionID:        leaderElectionConfig.ResourceName,
-		RetryPeriod:             &leaderElectionConfig.RetryPeriod.Duration,
-		RenewDeadline:           &leaderElectionConfig.RenewDeadline.Duration,
-		Cache:                   cacheOpts,
+		// Release the leader election when the context is cancelled, to recover quicker on restarts.
+		LeaderElectionReleaseOnCancel: true,
+		RetryPeriod:                   &leaderElectionConfig.RetryPeriod.Duration,
+		RenewDeadline:                 &leaderElectionConfig.RenewDeadline.Duration,
+		Cache:                         cacheOpts,
 		WebhookServer: crwebhook.NewServer(crwebhook.Options{
 			Port:    *webhookPort,
 			CertDir: *webhookCertDir,
+			TLSOpts: tlsOptions,
 		}),
 	})
 	if err != nil {
@@ -220,7 +255,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	setupPlatformReconcilers(mgr, infra, platform, containerImages, applyClient, apiextensionsClient, *managedNamespace)
+	setupPlatformReconcilers(mgr, infra, platform, containerImages, applyClient, apiextensionsClient, *managedNamespace, tlsOptions, tlsSecurityProfileSpec, cancel)
 
 	// +kubebuilder:scaffold:builder
 
@@ -236,7 +271,7 @@ func main() {
 
 	klog.Info("Starting manager")
 
-	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+	if err := mgr.Start(ctx); err != nil {
 		klog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
@@ -252,17 +287,17 @@ func getClusterOperatorStatusClient(mgr manager.Manager, controller string, plat
 	}
 }
 
-func setupPlatformReconcilers(mgr manager.Manager, infra *configv1.Infrastructure, platform configv1.PlatformType, containerImages map[string]string, applyClient *kubernetes.Clientset, apiextensionsClient *apiextensionsclient.Clientset, managedNamespace string) {
+func setupPlatformReconcilers(mgr manager.Manager, infra *configv1.Infrastructure, platform configv1.PlatformType, containerImages map[string]string, applyClient *kubernetes.Clientset, apiextensionsClient *apiextensionsclient.Clientset, managedNamespace string, tlsOptions []func(config *tls.Config), tlsSecurityProfileSpec configv1.TLSProfileSpec, cancel context.CancelFunc) {
 	// Only setup reconcile controllers and webhooks when the platform is supported.
 	// This avoids unnecessary CAPI providers discovery, installs and reconciles when the platform is not supported.
 	isUnsupportedPlatform := false
 
 	switch platform {
 	case configv1.AWSPlatformType:
-		setupReconcilers(mgr, infra, platform, &awsv1.AWSCluster{}, containerImages, applyClient, apiextensionsClient, managedNamespace)
+		setupReconcilers(mgr, infra, platform, &awsv1.AWSCluster{}, containerImages, applyClient, apiextensionsClient, managedNamespace, tlsOptions, tlsSecurityProfileSpec, cancel)
 		setupWebhooks(mgr)
 	case configv1.GCPPlatformType:
-		setupReconcilers(mgr, infra, platform, &gcpv1.GCPCluster{}, containerImages, applyClient, apiextensionsClient, managedNamespace)
+		setupReconcilers(mgr, infra, platform, &gcpv1.GCPCluster{}, containerImages, applyClient, apiextensionsClient, managedNamespace, tlsOptions, tlsSecurityProfileSpec, cancel)
 		setupWebhooks(mgr)
 	case configv1.AzurePlatformType:
 		azureCloudEnvironment := getAzureCloudEnvironment(infra.Status.PlatformStatus)
@@ -272,20 +307,20 @@ func setupPlatformReconcilers(mgr manager.Manager, infra *configv1.Infrastructur
 			isUnsupportedPlatform = true
 		} else {
 			// The ClusterOperator Controller must run in all cases.
-			setupReconcilers(mgr, infra, platform, &azurev1.AzureCluster{}, containerImages, applyClient, apiextensionsClient, managedNamespace)
+			setupReconcilers(mgr, infra, platform, &azurev1.AzureCluster{}, containerImages, applyClient, apiextensionsClient, managedNamespace, tlsOptions, tlsSecurityProfileSpec, cancel)
 			setupWebhooks(mgr)
 		}
 	case configv1.PowerVSPlatformType:
-		setupReconcilers(mgr, infra, platform, &ibmpowervsv1.IBMPowerVSCluster{}, containerImages, applyClient, apiextensionsClient, managedNamespace)
+		setupReconcilers(mgr, infra, platform, &ibmpowervsv1.IBMPowerVSCluster{}, containerImages, applyClient, apiextensionsClient, managedNamespace, tlsOptions, tlsSecurityProfileSpec, cancel)
 		setupWebhooks(mgr)
 	case configv1.VSpherePlatformType:
-		setupReconcilers(mgr, infra, platform, &vspherev1.VSphereCluster{}, containerImages, applyClient, apiextensionsClient, managedNamespace)
+		setupReconcilers(mgr, infra, platform, &vspherev1.VSphereCluster{}, containerImages, applyClient, apiextensionsClient, managedNamespace, tlsOptions, tlsSecurityProfileSpec, cancel)
 		setupWebhooks(mgr)
 	case configv1.OpenStackPlatformType:
-		setupReconcilers(mgr, infra, platform, &openstackv1.OpenStackCluster{}, containerImages, applyClient, apiextensionsClient, managedNamespace)
+		setupReconcilers(mgr, infra, platform, &openstackv1.OpenStackCluster{}, containerImages, applyClient, apiextensionsClient, managedNamespace, tlsOptions, tlsSecurityProfileSpec, cancel)
 		setupWebhooks(mgr)
 	case configv1.BareMetalPlatformType:
-		setupReconcilers(mgr, infra, platform, &metal3v1.Metal3Cluster{}, containerImages, applyClient, apiextensionsClient, managedNamespace)
+		setupReconcilers(mgr, infra, platform, &metal3v1.Metal3Cluster{}, containerImages, applyClient, apiextensionsClient, managedNamespace, tlsOptions, tlsSecurityProfileSpec, cancel)
 		setupWebhooks(mgr)
 	default:
 		klog.Infof("Detected platform %q is not supported, skipping capi controllers setup", platform)
@@ -297,7 +332,7 @@ func setupPlatformReconcilers(mgr manager.Manager, infra *configv1.Infrastructur
 	setupClusterOperatorController(mgr, platform, managedNamespace, isUnsupportedPlatform)
 }
 
-func setupReconcilers(mgr manager.Manager, infra *configv1.Infrastructure, platform configv1.PlatformType, infraClusterObject client.Object, containerImages map[string]string, applyClient *kubernetes.Clientset, apiextensionsClient *apiextensionsclient.Clientset, managedNamespace string) {
+func setupReconcilers(mgr manager.Manager, infra *configv1.Infrastructure, platform configv1.PlatformType, infraClusterObject client.Object, containerImages map[string]string, applyClient *kubernetes.Clientset, apiextensionsClient *apiextensionsclient.Clientset, managedNamespace string, tlsOptions []func(config *tls.Config), tlsSecurityProfileSpec configv1.TLSProfileSpec, cancel context.CancelFunc) {
 	if err := (&corecluster.CoreClusterController{
 		ClusterOperatorStatusClient: getClusterOperatorStatusClient(mgr, "cluster-capi-operator-cluster-resource-controller", platform, managedNamespace),
 		Cluster:                     &clusterv1.Cluster{},
@@ -333,6 +368,7 @@ func setupReconcilers(mgr manager.Manager, infra *configv1.Infrastructure, platf
 		Platform:                    platform,
 		ApplyClient:                 applyClient,
 		APIExtensionsClient:         apiextensionsClient,
+		TLSOpts:                     tlsOptions,
 	}).SetupWithManager(mgr); err != nil {
 		klog.Error(err, "unable to create capi installer controller", "controller", "CAPIInstaller")
 		os.Exit(1)
@@ -347,6 +383,17 @@ func setupReconcilers(mgr manager.Manager, infra *configv1.Infrastructure, platf
 		Infra:                       infra,
 	}).SetupWithManager(mgr, infraClusterObject); err != nil {
 		klog.Error(err, "unable to create infracluster controller", "controller", "InfraCluster")
+		os.Exit(1)
+	}
+
+	// Set up the TLS security profile watcher controller.
+	// This will trigger a graceful shutdown when the TLS profile changes.
+	if err := (&utiltls.TLSSecurityProfileWatcher{
+		Client:                mgr.GetClient(),
+		InitialTLSProfileSpec: tlsSecurityProfileSpec,
+		Shutdown:              cancel,
+	}).SetupWithManager(mgr); err != nil {
+		klog.Error(err, "unable to create controller", "controller", "TLSSecurityProfileWatcher")
 		os.Exit(1)
 	}
 }

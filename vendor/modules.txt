@@ -1169,12 +1169,13 @@ github.com/openshift/cluster-api-provider-baremetal/pkg/apis/baremetal/v1alpha1
 # github.com/openshift/cluster-autoscaler-operator v0.0.1-0.20250702183526-4eb64d553940
 ## explicit; go 1.23.0
 github.com/openshift/cluster-autoscaler-operator/pkg/apis/autoscaling/v1
-# github.com/openshift/library-go v0.0.0-20251222131241-289839b3ffe8
+# github.com/openshift/library-go v0.0.0-20251222131241-289839b3ffe8 => github.com/damdo/library-go v0.0.0-20260120133104-12bddc18ba38
 ## explicit; go 1.24.0
 github.com/openshift/library-go/pkg/apiserver/jsonpatch
 github.com/openshift/library-go/pkg/certs
 github.com/openshift/library-go/pkg/config/clusteroperator/v1helpers
 github.com/openshift/library-go/pkg/controller/factory
+github.com/openshift/library-go/pkg/controllerruntime/tls
 github.com/openshift/library-go/pkg/crypto
 github.com/openshift/library-go/pkg/operator/certrotation
 github.com/openshift/library-go/pkg/operator/condition
@@ -2052,7 +2053,7 @@ honnef.co/go/tools/stylecheck/st1021
 honnef.co/go/tools/stylecheck/st1022
 honnef.co/go/tools/stylecheck/st1023
 honnef.co/go/tools/unused
-# k8s.io/api v0.34.1
+# k8s.io/api v0.34.3
 ## explicit; go 1.24.0
 k8s.io/api/admission/v1
 k8s.io/api/admission/v1beta1
@@ -2114,7 +2115,7 @@ k8s.io/api/storage/v1
 k8s.io/api/storage/v1alpha1
 k8s.io/api/storage/v1beta1
 k8s.io/api/storagemigration/v1alpha1
-# k8s.io/apiextensions-apiserver v0.34.1
+# k8s.io/apiextensions-apiserver v0.34.3
 ## explicit; go 1.24.0
 k8s.io/apiextensions-apiserver/pkg/apis/apiextensions
 k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1
@@ -2125,7 +2126,7 @@ k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset
 k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/scheme
 k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/typed/apiextensions/v1
 k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/typed/apiextensions/v1beta1
-# k8s.io/apimachinery v0.34.1
+# k8s.io/apimachinery v0.34.3
 ## explicit; go 1.24.0
 k8s.io/apimachinery/pkg/api/apitesting
 k8s.io/apimachinery/pkg/api/apitesting/fuzzer
@@ -2196,7 +2197,7 @@ k8s.io/apimachinery/pkg/version
 k8s.io/apimachinery/pkg/watch
 k8s.io/apimachinery/third_party/forked/golang/json
 k8s.io/apimachinery/third_party/forked/golang/reflect
-# k8s.io/apiserver v0.34.1
+# k8s.io/apiserver v0.34.3
 ## explicit; go 1.24.0
 k8s.io/apiserver/pkg/admission
 k8s.io/apiserver/pkg/admission/initializer
@@ -2285,7 +2286,7 @@ k8s.io/apiserver/pkg/warning
 k8s.io/apiserver/plugin/pkg/authenticator/token/webhook
 k8s.io/apiserver/plugin/pkg/authorizer/webhook
 k8s.io/apiserver/plugin/pkg/authorizer/webhook/metrics
-# k8s.io/client-go v0.34.1
+# k8s.io/client-go v0.34.3
 ## explicit; go 1.24.0
 k8s.io/client-go/applyconfigurations
 k8s.io/client-go/applyconfigurations/admissionregistration/v1
@@ -2636,7 +2637,7 @@ k8s.io/client-go/util/workqueue
 ## explicit; go 1.24.0
 k8s.io/cluster-bootstrap/token/api
 k8s.io/cluster-bootstrap/token/util
-# k8s.io/component-base v0.34.1
+# k8s.io/component-base v0.34.3
 ## explicit; go 1.24.0
 k8s.io/component-base/cli/flag
 k8s.io/component-base/compatibility
@@ -2796,7 +2797,7 @@ sigs.k8s.io/cluster-api-provider-openstack/version
 # sigs.k8s.io/cluster-api-provider-vsphere v1.14.0
 ## explicit; go 1.24.0
 sigs.k8s.io/cluster-api-provider-vsphere/apis/v1beta1
-# sigs.k8s.io/controller-runtime v0.22.4
+# sigs.k8s.io/controller-runtime v0.22.5
 ## explicit; go 1.24.0
 sigs.k8s.io/controller-runtime
 sigs.k8s.io/controller-runtime/pkg/builder
@@ -3009,3 +3010,4 @@ sigs.k8s.io/yaml/goyaml.v2
 # github.com/openshift/cluster-api-actuator-pkg/testutils => github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20251212150432-4a60119d9691
 # sigs.k8s.io/cluster-api => sigs.k8s.io/cluster-api v1.11.3
 # sigs.k8s.io/cluster-api-provider-azure => github.com/openshift/cluster-api-provider-azure v0.0.0-20251202084521-c2e0e38d1e0e
+# github.com/openshift/library-go => github.com/damdo/library-go v0.0.0-20260120133104-12bddc18ba38

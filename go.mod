@@ -5,6 +5,7 @@ go 1.24.0
 // TODO: these replaces should be removed when corresponding PRs are merged
 replace (
 	github.com/openshift/cluster-api-actuator-pkg/testutils => github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20251211141525-c707612472dc
+	github.com/openshift/library-go => github.com/damdo/library-go v0.0.0-20260120133104-12bddc18ba38
 	sigs.k8s.io/cluster-api-provider-azure => github.com/openshift/cluster-api-provider-azure v0.0.0-20251202084521-c2e0e38d1e0e
 )
 
@@ -29,12 +30,12 @@ require (
 	github.com/spf13/pflag v1.0.10
 	golang.org/x/tools v0.38.0
 	gopkg.in/yaml.v2 v2.4.0
-	k8s.io/api v0.34.1
-	k8s.io/apiextensions-apiserver v0.34.1
-	k8s.io/apimachinery v0.34.1
-	k8s.io/apiserver v0.34.1
-	k8s.io/client-go v0.34.1
-	k8s.io/component-base v0.34.1
+	k8s.io/api v0.34.3
+	k8s.io/apiextensions-apiserver v0.34.3
+	k8s.io/apimachinery v0.34.3
+	k8s.io/apiserver v0.34.3
+	k8s.io/client-go v0.34.3
+	k8s.io/component-base v0.34.3
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/utils v0.0.0-20250820121507-0af2bda4dd1d
 	sigs.k8s.io/cluster-api v1.11.3
@@ -44,7 +45,7 @@ require (
 	sigs.k8s.io/cluster-api-provider-ibmcloud v0.12.0
 	sigs.k8s.io/cluster-api-provider-openstack v0.13.1
 	sigs.k8s.io/cluster-api-provider-vsphere v1.14.0
-	sigs.k8s.io/controller-runtime v0.22.4
+	sigs.k8s.io/controller-runtime v0.22.5
 	sigs.k8s.io/controller-runtime/tools/setup-envtest v0.0.0-20240927101401-4381fa0aeee4
 	sigs.k8s.io/kube-storage-version-migrator v0.0.6-0.20230721195810-5c8923c5ff96
 	sigs.k8s.io/randfill v1.0.0
