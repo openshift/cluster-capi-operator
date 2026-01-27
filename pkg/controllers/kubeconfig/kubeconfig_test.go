@@ -101,7 +101,7 @@ var _ = Describe("Reconcile kubeconfig secret", func() {
 			Expect(res.RequeueAfter).To(Equal(1 * time.Minute))
 		})
 
-		It("should delete token secret if its old and requeue", func() {
+		It("should clear token secret data if its old and requeue", func() {
 			// Use fake client because it's not possible to update creation timestamp in envtest
 			fakeClient := fake.NewClientBuilder().WithScheme(testEnv.Scheme).WithRuntimeObjects(tokenSecret).Build()
 			r.Client = fakeClient
@@ -109,11 +109,15 @@ var _ = Describe("Reconcile kubeconfig secret", func() {
 			Expect(fakeClient.Update(ctx, tokenSecret)).To(Succeed())
 			res, err := r.reconcileKubeconfig(ctx, log)
 			Expect(err).To(Succeed())
+			Expect(res).To(Equal(ctrl.Result{}))
 
-			Expect(res.RequeueAfter).To(Equal(1 * time.Minute))
-			Eventually(func() error {
-				return fakeClient.Get(ctx, client.ObjectKeyFromObject(tokenSecret), tokenSecret)
-			}, timeout).Should(Not(Succeed()))
+			// Verify the secret still exists but data was cleared
+			updatedSecret := &corev1.Secret{}
+			Expect(fakeClient.Get(ctx, client.ObjectKeyFromObject(tokenSecret), updatedSecret)).To(Succeed())
+			Expect(updatedSecret.Data).To(BeNil())
+
+			// Verify the refresh annotation was set
+			Expect(updatedSecret.Annotations).To(HaveKey(tokenRefreshAnnotationKey))
 		})
 	})
 })
