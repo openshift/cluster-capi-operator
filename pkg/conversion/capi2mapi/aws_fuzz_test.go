@@ -192,33 +192,32 @@ func awsMachineFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interface{} 
 	}
 }
 
+type awsTenancyConfig struct {
+	tenancy               string
+	hostAffinity          *string
+	hostID                *string
+	dynamicHostAllocation *awsv1.DynamicHostAllocationSpec
+}
+
 func fuzzAWSMachineSpecTenancy(spec *awsv1.AWSMachineSpec, c randfill.Continue) {
-	switch c.Int31n(6) {
-	case 0:
-		spec.Tenancy = capi2mapi.TenancyDefault
-		spec.HostAffinity = nil
-		spec.HostID = nil
-	case 1:
-		spec.Tenancy = capi2mapi.TenancyDedicated
-		spec.HostAffinity = nil
-		spec.HostID = nil
-	case 2:
-		spec.Tenancy = capi2mapi.TenancyHost
-		spec.HostAffinity = ptr.To("default")
-		spec.HostID = nil
-	case 3:
-		spec.Tenancy = capi2mapi.TenancyHost
-		spec.HostAffinity = ptr.To("default")
-		spec.HostID = ptr.To("h-0123456789abcdef0")
-	case 4:
-		spec.Tenancy = capi2mapi.TenancyHost
-		spec.HostAffinity = ptr.To("host")
-		spec.HostID = ptr.To("h-0123456789abcdef0")
-	case 5:
-		spec.Tenancy = ""
-		spec.HostAffinity = nil
-		spec.HostID = nil
+	configs := []awsTenancyConfig{
+		{tenancy: capi2mapi.TenancyDefault},
+		{tenancy: capi2mapi.TenancyDedicated},
+		{tenancy: capi2mapi.TenancyHost, hostAffinity: ptr.To("default")},
+		{tenancy: capi2mapi.TenancyHost, hostAffinity: ptr.To("default"), hostID: ptr.To("h-0123456789abcdef0")},
+		{tenancy: capi2mapi.TenancyHost, hostAffinity: ptr.To("host"), hostID: ptr.To("h-0123456789abcdef0")},
+		{tenancy: ""},
+		{tenancy: capi2mapi.TenancyHost, hostAffinity: ptr.To("host"), dynamicHostAllocation: &awsv1.DynamicHostAllocationSpec{}},
+		{tenancy: capi2mapi.TenancyHost, hostAffinity: ptr.To("host"), dynamicHostAllocation: &awsv1.DynamicHostAllocationSpec{
+			Tags: map[string]string{"test-key-1": "test-value-1", "test-key-2": "test-value-2"},
+		}},
 	}
+
+	cfg := configs[c.Int31n(int32(len(configs)))]
+	spec.Tenancy = cfg.tenancy
+	spec.HostAffinity = cfg.hostAffinity
+	spec.HostID = cfg.hostID
+	spec.DynamicHostAllocation = cfg.dynamicHostAllocation
 }
 
 func fuzzAWSMachineSpecMarketType(marketType *awsv1.MarketType, c randfill.Continue) {
