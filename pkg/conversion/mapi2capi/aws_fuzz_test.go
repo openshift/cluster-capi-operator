@@ -138,9 +138,6 @@ func (f *awsProviderFuzzer) fuzzProviderConfig(ps *mapiv1beta1.AWSMachineProvide
 	ps.LoadBalancers = nil
 	ps.ObjectMeta = metav1.ObjectMeta{}
 
-	// Conversion not yet implemented
-	ps.Placement.Host = nil
-
 	// At least one device mapping must have no device name.
 	rootFound := false
 
@@ -190,7 +187,7 @@ func fuzzAWSMachineSpecConfidentialComputePolicy(ccp *mapiv1beta1.AWSConfidentia
 func (f *awsProviderFuzzer) fuzzPlacement(placement *mapiv1beta1.Placement, c randfill.Continue) {
 	c.FillNoCustom(placement)
 
-	switch c.Int31n(6) {
+	switch c.Int31n(8) {
 	case 0:
 		placement.Tenancy = mapiv1beta1.DefaultTenancy
 		placement.Host = nil
@@ -204,24 +201,53 @@ func (f *awsProviderFuzzer) fuzzPlacement(placement *mapiv1beta1.Placement, c ra
 			DedicatedHost: nil,
 		}
 	case 3:
+		// User-provided host with AllocationStrategy (AnyAvailable affinity)
 		placement.Tenancy = mapiv1beta1.HostTenancy
 		placement.Host = &mapiv1beta1.HostPlacement{
 			Affinity: ptr.To(mapiv1beta1.HostAffinityAnyAvailable),
 			DedicatedHost: &mapiv1beta1.DedicatedHost{
-				ID: "h-0123456789abcdef0",
+				AllocationStrategy: ptr.To(mapiv1beta1.AllocationStrategyUserProvided),
+				ID:                 "h-0123456789abcdef0",
 			},
 		}
 	case 4:
+		// User-provided host with AllocationStrategy (DedicatedHost affinity)
 		placement.Tenancy = mapiv1beta1.HostTenancy
 		placement.Host = &mapiv1beta1.HostPlacement{
 			Affinity: ptr.To(mapiv1beta1.HostAffinityDedicatedHost),
 			DedicatedHost: &mapiv1beta1.DedicatedHost{
-				ID: "h-0123456789abcdef0",
+				AllocationStrategy: ptr.To(mapiv1beta1.AllocationStrategyUserProvided),
+				ID:                 "h-0123456789abcdef0",
 			},
 		}
 	case 5:
 		placement.Tenancy = ""
 		placement.Host = nil
+	case 6:
+		// Dynamic host allocation without tags (DynamicHostAllocation is nil)
+		placement.Tenancy = mapiv1beta1.HostTenancy
+		placement.Host = &mapiv1beta1.HostPlacement{
+			Affinity: ptr.To(mapiv1beta1.HostAffinityDedicatedHost),
+			DedicatedHost: &mapiv1beta1.DedicatedHost{
+				AllocationStrategy:    ptr.To(mapiv1beta1.AllocationStrategyDynamic),
+				DynamicHostAllocation: nil,
+			},
+		}
+	case 7:
+		// Dynamic host allocation with tags (tags must be sorted by name for consistent roundtrip)
+		placement.Tenancy = mapiv1beta1.HostTenancy
+		placement.Host = &mapiv1beta1.HostPlacement{
+			Affinity: ptr.To(mapiv1beta1.HostAffinityDedicatedHost),
+			DedicatedHost: &mapiv1beta1.DedicatedHost{
+				AllocationStrategy: ptr.To(mapiv1beta1.AllocationStrategyDynamic),
+				DynamicHostAllocation: &mapiv1beta1.DynamicHostAllocationSpec{
+					Tags: &[]mapiv1beta1.TagSpecification{
+						{Name: "test-key-1", Value: "test-value-1"},
+						{Name: "test-key-2", Value: "test-value-2"},
+					},
+				},
+			},
+		}
 	}
 }
 
