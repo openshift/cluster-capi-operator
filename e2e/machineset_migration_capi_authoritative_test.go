@@ -250,6 +250,12 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				By("Switching AuthoritativeAPI to ClusterAPI")
 				switchMachineSetAuthoritativeAPI(mapiMachineSet, mapiv1beta1.MachineAuthorityClusterAPI, mapiv1beta1.MachineAuthorityClusterAPI)
 
+				// TODO(OCPBUGS-74571): this extra verification step is a workaround as a stop-gap until
+				// remove this once https://issues.redhat.com/browse/OCPBUGS-74571 is fixed.
+				By("Verifying MAPI MachineSet is paused and CAPI MachineSet is unpaused after switch")
+				verifyMachineSetPausedCondition(mapiMachineSet, mapiv1beta1.MachineAuthorityClusterAPI)
+				verifyMachineSetPausedCondition(capiMachineSet, mapiv1beta1.MachineAuthorityClusterAPI)
+
 				By("Scaling up CAPI MachineSet to 2 replicas")
 				capiframework.ScaleCAPIMachineSet(mapiMachineSet.GetName(), 2, capiframework.CAPINamespace)
 
