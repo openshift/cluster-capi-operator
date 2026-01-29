@@ -54,7 +54,6 @@ const (
 	defaultCAPINamespace = "openshift-cluster-api"
 	defaultMAPINamespace = "openshift-machine-api"
 	controllerName       = "InfraClusterController"
-	clusterOperatorName  = "cluster-api"
 	// This is the managedByAnnotation value that this controller sets by default when it creates an InfraCluster object.
 	// If the managedByAnnotation key is set, and it has this as the value, it means this controller is managing the InfraCluster.
 	managedByAnnotationValueClusterCAPIOperatorInfraClusterController = "cluster-capi-operator-infracluster-controller"
@@ -253,7 +252,7 @@ func (r *InfraClusterController) setAvailableCondition(ctx context.Context, log 
 
 	log.V(2).Info("InfraCluster Controller is Available")
 
-	if err := r.SyncStatus(ctx, co, conds, r.OperandVersions(), r.RelatedObjects()); err != nil {
+	if err := r.SyncStatus(ctx, co, operatorstatus.WithConditions(conds)); err != nil {
 		return fmt.Errorf("failed to sync status: %w", err)
 	}
 
@@ -274,24 +273,24 @@ func (r *InfraClusterController) SetupWithManager(mgr ctrl.Manager, watchedObjec
 
 	if err := ctrl.NewControllerManagedBy(mgr).
 		Named(controllerName).
-		For(&configv1.ClusterOperator{}, builder.WithPredicates(clusterOperatorPredicates())).
+		For(&configv1.ClusterOperator{}, builder.WithPredicates(operatorstatus.ClusterOperatorOnceOnly())).
 		// Watch the provider-specific InfraCluster object.
 		Watches(
 			watchedObject,
-			handler.EnqueueRequestsFromMapFunc(toClusterOperator),
+			handler.EnqueueRequestsFromMapFunc(operatorstatus.ToClusterOperator),
 			builder.WithPredicates(infraClusterPredicate(r.ManagedNamespace)),
 		).
 		// Watch CPMS as the primary source for deriving a provider spec during InfraCluster
 		// generation. CPMS events should retrigger reconciliation so we re-evaluate InfraCluster creation and CO status.
 		Watches(
 			&mapiv1.ControlPlaneMachineSet{},
-			handler.EnqueueRequestsFromMapFunc(toClusterOperator),
+			handler.EnqueueRequestsFromMapFunc(operatorstatus.ToClusterOperator),
 			builder.WithPredicates(util.FilterNamespace(r.MAPINamespace)),
 		).
 		// Watch control plane Machines as a fallback provider spec source when CPMS is absent or inactive.
 		Watches(
 			&mapiv1beta1.Machine{},
-			handler.EnqueueRequestsFromMapFunc(toClusterOperator),
+			handler.EnqueueRequestsFromMapFunc(operatorstatus.ToClusterOperator),
 			builder.WithPredicates(util.FilterNamespace(r.MAPINamespace)),
 		).
 		Complete(r); err != nil {

@@ -36,6 +36,7 @@ import (
 	awsv1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/cluster-api/infrastructure/v1beta2"
 	configv1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/config/v1"
 	corev1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/core/v1"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 )
 
@@ -104,7 +105,7 @@ var _ = Describe("Reconcile Core cluster", func() {
 		testNamespaceName = namespace.Name
 
 		By("Creating the testing ClusterOperator object")
-		cO := configv1resourcebuilder.ClusterOperator().WithName(clusterOperatorName).Build()
+		cO := configv1resourcebuilder.ClusterOperator().WithName(controllers.ClusterOperatorName).Build()
 		Expect(cl.Create(ctx, cO)).To(Succeed())
 	})
 
@@ -179,7 +180,7 @@ var _ = Describe("Reconcile Core cluster", func() {
 
 				Context("With a ClusterOperator", func() {
 					It("should update the ClusterOperator status to be available, upgradeable, non-progressing, non-degraded", func() {
-						co := komega.Object(configv1resourcebuilder.ClusterOperator().WithName(clusterOperatorName).Build())
+						co := komega.Object(configv1resourcebuilder.ClusterOperator().WithName(controllers.ClusterOperatorName).Build())
 						Eventually(co).Should(
 							HaveField("Status.Conditions", SatisfyAll(
 								ContainElement(And(HaveField("Type", Equal(configv1.OperatorAvailable)), HaveField("Status", Equal(configv1.ConditionTrue)))),
@@ -187,16 +188,6 @@ var _ = Describe("Reconcile Core cluster", func() {
 								ContainElement(And(HaveField("Type", Equal(configv1.OperatorDegraded)), HaveField("Status", Equal(configv1.ConditionFalse)))),
 								ContainElement(And(HaveField("Type", Equal(configv1.OperatorUpgradeable)), HaveField("Status", Equal(configv1.ConditionTrue)))),
 							)),
-						)
-					})
-
-					It("should update the ClusterOperator status version to the desired one", func() {
-						co := komega.Object(configv1resourcebuilder.ClusterOperator().WithName(clusterOperatorName).Build())
-						Eventually(co).Should(
-							HaveField("Status.Versions", ContainElement(SatisfyAll(
-								HaveField("Name", Equal("operator")),
-								HaveField("Version", Equal(desiredOperatorReleaseVersion)),
-							))),
 						)
 					})
 				})

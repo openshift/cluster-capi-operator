@@ -66,7 +66,6 @@ const (
 	ownedProviderComponentName       = "cluster.x-k8s.io/provider"
 	imagePlaceholder                 = "to.be/replaced:v99"
 	notNamespaced                    = ""
-	clusterOperatorName              = "cluster-api"
 	defaultCoreProviderComponentName = "cluster-api"
 	powerVSIBMCloudProvider          = "ibmcloud"
 	baremetalProvider                = "metal3"
@@ -315,7 +314,7 @@ func (r *CapiInstallerController) setAvailableCondition(ctx context.Context, log
 
 	log.V(2).Info("CAPI Installer Controller is Available")
 
-	if err := r.SyncStatus(ctx, co, conds, r.OperandVersions(), r.RelatedObjects()); err != nil {
+	if err := r.SyncStatus(ctx, co, operatorstatus.WithConditions(conds)); err != nil {
 		return fmt.Errorf("failed to sync status: %w", err)
 	}
 
@@ -338,7 +337,7 @@ func (r *CapiInstallerController) setDegradedCondition(ctx context.Context, log 
 
 	log.Info("CAPI Installer Controller is Degraded")
 
-	if err := r.SyncStatus(ctx, co, conds, r.OperandVersions(), r.RelatedObjects()); err != nil {
+	if err := r.SyncStatus(ctx, co, operatorstatus.WithConditions(conds)); err != nil {
 		return fmt.Errorf("failed to sync status: %w", err)
 	}
 
@@ -349,10 +348,10 @@ func (r *CapiInstallerController) setDegradedCondition(ctx context.Context, log 
 func (r *CapiInstallerController) SetupWithManager(mgr ctrl.Manager) error {
 	build := ctrl.NewControllerManagedBy(mgr).
 		Named(controllerName).
-		For(&configv1.ClusterOperator{}, builder.WithPredicates(clusterOperatorPredicates())).
+		For(&configv1.ClusterOperator{}, builder.WithPredicates(operatorstatus.ClusterOperatorOnceOnly())).
 		Watches(
 			&corev1.ConfigMap{},
-			handler.EnqueueRequestsFromMapFunc(toClusterOperator),
+			handler.EnqueueRequestsFromMapFunc(operatorstatus.ToClusterOperator),
 			builder.WithPredicates(configMapPredicate(r.ManagedNamespace, r.Platform)),
 		)
 
@@ -378,7 +377,7 @@ func (r *CapiInstallerController) SetupWithManager(mgr ctrl.Manager) error {
 	for _, w := range watches {
 		build = build.Watches(
 			w.obj,
-			handler.EnqueueRequestsFromMapFunc(toClusterOperator),
+			handler.EnqueueRequestsFromMapFunc(operatorstatus.ToClusterOperator),
 			builder.WithPredicates(ownedPlatformLabelPredicate(w.namespace, r.Platform)),
 		)
 	}

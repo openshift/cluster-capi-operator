@@ -47,16 +47,20 @@ func (r *ClusterOperatorController) Reconcile(ctx context.Context, req ctrl.Requ
 	log := ctrl.LoggerFrom(ctx).WithName(controllerName)
 	log.Info(fmt.Sprintf("Reconciling %q ClusterObject", controllers.ClusterOperatorName))
 
-	if r.IsUnsupportedPlatform {
-		if err := r.ClusterOperatorStatusClient.SetStatusAvailable(ctx, capiUnsupportedPlatformMsg); err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to set conditions for %q ClusterObject: %w", controllers.ClusterOperatorName, err)
+	message := func() string {
+		if r.IsUnsupportedPlatform {
+			return capiUnsupportedPlatformMsg
 		}
-	} else {
-		// TODO: wrap this into status aggregation logic to get these conditions conform,
-		// to the meaningful aggregation of all the other controllers ones.
-		if err := r.ClusterOperatorStatusClient.SetStatusAvailable(ctx, ""); err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to set conditions for %q ClusterObject: %w", controllers.ClusterOperatorName, err)
-		}
+
+		return ""
+	}()
+
+	// TODO: wrap this into status aggregation logic to get these conditions to
+	// represent the meaningful aggregation of all other controller statuses.
+	// We should also only update the version after the aggregator confirms
+	// all controllers have succeeded in the new version.
+	if err := r.ClusterOperatorStatusClient.SetStatusAvailable(ctx, message, operatorstatus.WithVersions(r.OperandVersions())); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to set conditions for %q ClusterObject: %w", controllers.ClusterOperatorName, err)
 	}
 
 	return ctrl.Result{}, nil
@@ -66,7 +70,7 @@ func (r *ClusterOperatorController) Reconcile(ctx context.Context, req ctrl.Requ
 func (r *ClusterOperatorController) SetupWithManager(mgr ctrl.Manager) error {
 	if err := ctrl.NewControllerManagedBy(mgr).
 		Named(controllerName).
-		For(&configv1.ClusterOperator{}, builder.WithPredicates(clusterOperatorPredicates())).
+		For(&configv1.ClusterOperator{}, builder.WithPredicates(operatorstatus.ClusterOperatorOnceOnly())).
 		Complete(r); err != nil {
 		return fmt.Errorf("failed to create controller: %w", err)
 	}

@@ -24,6 +24,7 @@ import (
 
 	configv1 "github.com/openshift/api/config/v1"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 
 	"github.com/openshift/cluster-api-actuator-pkg/testutils"
@@ -86,7 +87,7 @@ var _ = Describe("InfraCluster", func() {
 
 	BeforeEach(func() {
 		// Create ClusterOperator.
-		Expect(cl.Create(ctx, configv1resourcebuilder.ClusterOperator().WithName(clusterOperatorName).Build())).To(Succeed())
+		Expect(cl.Create(ctx, configv1resourcebuilder.ClusterOperator().WithName(controllers.ClusterOperatorName).Build())).To(Succeed())
 
 		// Create MAPI and CAPI namespaces for the test.
 		mapiNamespace = corev1resourcebuilder.Namespace().
