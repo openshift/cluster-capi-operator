@@ -46,7 +46,6 @@ const (
 	capiInfraClusterAPIVersionV1Beta1 = "infrastructure.cluster.x-k8s.io/v1beta1"
 	capiInfraClusterAPIVersionV1Beta2 = "infrastructure.cluster.x-k8s.io/v1beta2"
 	capiInfraClusterAPIGroup          = "infrastructure.cluster.x-k8s.io"
-	clusterOperatorName               = "cluster-api"
 )
 
 var (
@@ -68,10 +67,10 @@ type CoreClusterController struct {
 func (r *CoreClusterController) SetupWithManager(mgr ctrl.Manager) error {
 	if err := ctrl.NewControllerManagedBy(mgr).
 		Named(controllerName).
-		For(&configv1.ClusterOperator{}, builder.WithPredicates(clusterOperatorPredicates())).
+		For(&configv1.ClusterOperator{}, builder.WithPredicates(operatorstatus.ClusterOperatorOnceOnly())).
 		Watches(
 			&clusterv1.Cluster{},
-			handler.EnqueueRequestsFromMapFunc(toClusterOperator),
+			handler.EnqueueRequestsFromMapFunc(operatorstatus.ToClusterOperator),
 			builder.WithPredicates(coreClusterPredicate(r.ManagedNamespace)),
 		).
 		Complete(r); err != nil {
@@ -109,7 +108,16 @@ func (r *CoreClusterController) Reconcile(ctx context.Context, req reconcile.Req
 		return ctrl.Result{}, fmt.Errorf("failed to ensure core cluster has the ControlPlaneInitializedCondition: %w", err)
 	}
 
-	if err := r.SetStatusAvailable(ctx, ""); err != nil {
+	// FIXME: We also set related objects here. THIS IS ARBITRARY AND TEMPORARY!
+	// The only requirements are:
+	// * only one controller should set related objects
+	// * that controller must have a scheme containing all possible provider types
+	// The latter requirement is because of the current implementation of RelatedObjects().
+	// RelatedObjects should move to the installer controller, and should set
+	// only objects which were actually installed. We can't do this immediately
+	// because the installer controller doesn't have a scheme containing all
+	// possible provider types.
+	if err := r.SetStatusAvailable(ctx, "", operatorstatus.WithRelatedObjects(r.RelatedObjects())); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to set status available: %w", err)
 	}
 

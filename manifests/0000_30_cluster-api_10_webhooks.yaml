@@ -8,14 +8,14 @@ metadata:
     include.release.openshift.io/single-node-developer: "true"
     release.openshift.io/feature-set: "CustomNoUpgrade,TechPreviewNoUpgrade"
     service.beta.openshift.io/inject-cabundle: "true"
-  name: cluster-capi-operator
+  name: openshift-capi-controllers
 webhooks:
   - admissionReviewVersions:
       - v1
       - v1alpha1
     clientConfig:
       service:
-        name: cluster-capi-operator-webhook-service
+        name: capi-controllers-webhook-service
         namespace: openshift-cluster-api
         path: /validate-operator-cluster-x-k8s-io-v1alpha2-coreprovider
         port: 9443
@@ -38,7 +38,7 @@ webhooks:
       - v1alpha1
     clientConfig:
       service:
-        name: cluster-capi-operator-webhook-service
+        name: capi-controllers-webhook-service
         namespace: openshift-cluster-api
         path: /validate-operator-cluster-x-k8s-io-v1alpha2-infrastructureprovider
         port: 9443
@@ -61,7 +61,7 @@ webhooks:
       - v1beta1
     clientConfig:
       service:
-        name: cluster-capi-operator-webhook-service
+        name: capi-controllers-webhook-service
         namespace: openshift-cluster-api
         path: /validate-cluster-x-k8s-io-v1beta2-cluster
         port: 9443
@@ -84,7 +84,7 @@ webhooks:
       - v1alpha1
     clientConfig:
       service:
-        name: cluster-capi-operator-webhook-service
+        name: capi-controllers-webhook-service
         namespace: openshift-cluster-api
         path: /validate-clusterctl-cluster-x-k8s-io-v1alpha3-provider
         port: 9443

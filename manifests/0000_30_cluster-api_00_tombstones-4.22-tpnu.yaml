@@ -1,0 +1,120 @@
+# Tombstones for TPNU objects that were removed or renamed during the 4.22
+# development cycle. This is only relevant to TPNU clusters which are upgraded
+# despite the 'NU' in TPNU meaning 'No Upgrade'. Yeah.
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cluster-capi-operator
+  namespace: openshift-cluster-api
+  annotations:
+    release.openshift.io/delete: "true"
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/feature-set: "CustomNoUpgrade,TechPreviewNoUpgrade"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: cluster-capi-operator-secret
+  namespace: openshift-cluster-api
+  annotations:
+    release.openshift.io/delete: "true"
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/feature-set: "CustomNoUpgrade,TechPreviewNoUpgrade"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cluster-capi-operator-images
+  namespace: openshift-cluster-api
+  annotations:
+    release.openshift.io/delete: "true"
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/feature-set: "CustomNoUpgrade,TechPreviewNoUpgrade"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cluster-capi-operator
+  annotations:
+    release.openshift.io/delete: "true"
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/feature-set: "CustomNoUpgrade,TechPreviewNoUpgrade"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cluster-capi-operator
+  namespace: openshift-cluster-api
+  annotations:
+    release.openshift.io/delete: "true"
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/feature-set: "CustomNoUpgrade,TechPreviewNoUpgrade"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: cluster-capi-operator
+  annotations:
+    release.openshift.io/delete: "true"
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/feature-set: "CustomNoUpgrade,TechPreviewNoUpgrade"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cluster-capi-operator
+  namespace: openshift-cluster-api
+  annotations:
+    release.openshift.io/delete: "true"
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/feature-set: "CustomNoUpgrade,TechPreviewNoUpgrade"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cluster-capi-operator
+  namespace: openshift-cluster-api
+  annotations:
+    release.openshift.io/delete: "true"
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/feature-set: "CustomNoUpgrade,TechPreviewNoUpgrade"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: cluster-capi-operator
+  annotations:
+    release.openshift.io/delete: "true"
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/feature-set: "CustomNoUpgrade,TechPreviewNoUpgrade"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    release.openshift.io/delete: "true"
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/feature-set: "CustomNoUpgrade,TechPreviewNoUpgrade"
+  name: cluster-capi-operator-webhook-service
+  namespace: openshift-cluster-api

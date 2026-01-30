@@ -35,6 +35,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/utils/clock"
+	"sigs.k8s.io/yaml"
 
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -57,19 +58,17 @@ const (
 	capiInstallerControllerAvailableCondition = "CapiInstallerControllerAvailable"
 	capiInstallerControllerDegradedCondition  = "CapiInstallerControllerDegraded"
 
-	controllerName                    = "CapiInstallerController"
-	defaultCAPINamespace              = "openshift-cluster-api"
-	providerConfigMapLabelVersionKey  = "provider.cluster.x-k8s.io/version"
-	providerConfigMapLabelTypeKey     = "provider.cluster.x-k8s.io/type"
-	providerConfigMapLabelNameKey     = "provider.cluster.x-k8s.io/name"
-	ownedProviderComponentName        = "cluster.x-k8s.io/provider"
-	imagePlaceholder                  = "to.be/replaced:v99"
-	openshiftInfrastructureObjectName = "cluster"
-	notNamespaced                     = ""
-	clusterOperatorName               = "cluster-api"
-	defaultCoreProviderComponentName  = "cluster-api"
-	powerVSIBMCloudProvider           = "ibmcloud"
-	baremetalProvider                 = "metal3"
+	controllerName                   = "CapiInstallerController"
+	defaultCAPINamespace             = "openshift-cluster-api"
+	providerConfigMapLabelVersionKey = "provider.cluster.x-k8s.io/version"
+	providerConfigMapLabelTypeKey    = "provider.cluster.x-k8s.io/type"
+	providerConfigMapLabelNameKey    = "provider.cluster.x-k8s.io/name"
+	ownedProviderComponentName       = "cluster.x-k8s.io/provider"
+	imagePlaceholder                 = "to.be/replaced:v99"
+	notNamespaced                    = ""
+	defaultCoreProviderComponentName = "cluster-api"
+	powerVSIBMCloudProvider          = "ibmcloud"
+	baremetalProvider                = "metal3"
 )
 
 var (
@@ -179,7 +178,7 @@ func (r *CapiInstallerController) reconcile(ctx context.Context, log logr.Logger
 //
 //nolint:funlen
 func (r *CapiInstallerController) applyProviderComponents(ctx context.Context, components []string) error {
-	componentsFilenames, componentsAssets, deploymentsFilenames, deploymentsAssets, customResourceDefinitionFilenames, customResourceDefinitionAssets, err := getProviderComponents(r.Scheme, components)
+	componentsFilenames, componentsAssets, deploymentsFilenames, deploymentsAssets, customResourceDefinitionFilenames, customResourceDefinitionAssets, err := getProviderComponents(components)
 	if err != nil {
 		return fmt.Errorf("error getting provider components: %w", err)
 	}
@@ -258,7 +257,7 @@ func (r *CapiInstallerController) applyProviderComponents(ctx context.Context, c
 
 // getProviderComponents parses the provided list of components into a map of filenames and assets.
 // Deployments are handled separately so are returned in a separate map.
-func getProviderComponents(scheme *runtime.Scheme, components []string) ([]string, map[string]string, []string, map[string]string, []string, map[string]string, error) {
+func getProviderComponents(components []string) ([]string, map[string]string, []string, map[string]string, []string, map[string]string, error) {
 	componentsFilenames := []string{}
 	componentsAssets := make(map[string]string)
 
@@ -270,7 +269,7 @@ func getProviderComponents(scheme *runtime.Scheme, components []string) ([]strin
 
 	for i, m := range components {
 		// Parse the YAML manifests into unstructure objects.
-		u, err := yamlToUnstructured(scheme, m)
+		u, err := yamlToUnstructured(m)
 		if err != nil {
 			return nil, nil, nil, nil, nil, nil, fmt.Errorf("error parsing provider component at position %d to unstructured: %w", i, err)
 		}
@@ -315,7 +314,7 @@ func (r *CapiInstallerController) setAvailableCondition(ctx context.Context, log
 
 	log.V(2).Info("CAPI Installer Controller is Available")
 
-	if err := r.SyncStatus(ctx, co, conds, r.OperandVersions(), r.RelatedObjects()); err != nil {
+	if err := r.SyncStatus(ctx, co, operatorstatus.WithConditions(conds)); err != nil {
 		return fmt.Errorf("failed to sync status: %w", err)
 	}
 
@@ -338,7 +337,7 @@ func (r *CapiInstallerController) setDegradedCondition(ctx context.Context, log 
 
 	log.Info("CAPI Installer Controller is Degraded")
 
-	if err := r.SyncStatus(ctx, co, conds, r.OperandVersions(), r.RelatedObjects()); err != nil {
+	if err := r.SyncStatus(ctx, co, operatorstatus.WithConditions(conds)); err != nil {
 		return fmt.Errorf("failed to sync status: %w", err)
 	}
 
@@ -349,10 +348,10 @@ func (r *CapiInstallerController) setDegradedCondition(ctx context.Context, log 
 func (r *CapiInstallerController) SetupWithManager(mgr ctrl.Manager) error {
 	build := ctrl.NewControllerManagedBy(mgr).
 		Named(controllerName).
-		For(&configv1.ClusterOperator{}, builder.WithPredicates(clusterOperatorPredicates())).
+		For(&configv1.ClusterOperator{}, builder.WithPredicates(operatorstatus.ClusterOperatorOnceOnly())).
 		Watches(
 			&corev1.ConfigMap{},
-			handler.EnqueueRequestsFromMapFunc(toClusterOperator),
+			handler.EnqueueRequestsFromMapFunc(operatorstatus.ToClusterOperator),
 			builder.WithPredicates(configMapPredicate(r.ManagedNamespace, r.Platform)),
 		)
 
@@ -378,7 +377,7 @@ func (r *CapiInstallerController) SetupWithManager(mgr ctrl.Manager) error {
 	for _, w := range watches {
 		build = build.Watches(
 			w.obj,
-			handler.EnqueueRequestsFromMapFunc(toClusterOperator),
+			handler.EnqueueRequestsFromMapFunc(operatorstatus.ToClusterOperator),
 			builder.WithPredicates(ownedPlatformLabelPredicate(w.namespace, r.Platform)),
 		)
 	}
@@ -513,20 +512,20 @@ func yamlToRuntimeObject(sch *runtime.Scheme, m string) (runtime.Object, error) 
 	return obj, nil
 }
 
-// yamlToRuntimeObject parses a YAML manifest into an *unstructured.Unstructured object.
-func yamlToUnstructured(sch *runtime.Scheme, m string) (*unstructured.Unstructured, error) {
-	obj, err := yamlToRuntimeObject(sch, m)
+// yamlToUnstructured parses a YAML manifest into an *unstructured.Unstructured object.
+func yamlToUnstructured(m string) (*unstructured.Unstructured, error) {
+	// Convert YAML to JSON first
+	jsonData, err := yaml.YAMLToJSON([]byte(m))
 	if err != nil {
-		return nil, fmt.Errorf("error while decoding YAML to runtime object: %w", err)
+		return nil, fmt.Errorf("error while converting YAML to JSON: %w", err)
 	}
 
-	unstructuredObj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
+	obj := &unstructured.Unstructured{}
+	_, _, err = unstructured.UnstructuredJSONScheme.Decode(jsonData, nil, obj)
+
 	if err != nil {
-		return nil, fmt.Errorf("error converting runtime.Object to unstructured: %w", err)
+		return nil, fmt.Errorf("error while decoding JSON to unstructured: %w", err)
 	}
 
-	u := &unstructured.Unstructured{}
-	u.Object = unstructuredObj
-
-	return u, nil
+	return obj, nil
 }

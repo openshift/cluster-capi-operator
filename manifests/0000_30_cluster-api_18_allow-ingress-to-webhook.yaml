@@ -7,7 +7,7 @@
 # - Provider-specific webhook validation (AWS, vSphere, etc.)
 #
 # The policy applies to all webhook services in the namespace:
-# - cluster-capi-operator-webhook-service (port 9443)
+# - capi-controllers-webhook-service (port 9443)
 # - capi-webhook-service (port 443)
 # - capa-webhook-service (port 443)
 # - capv-webhook-service (port 443)
@@ -30,7 +30,7 @@ spec:
     - namespaceSelector: {} # Allow from any namespace (API server, other components)
     - podSelector: {} # Allow from any pod
     ports:
-    - port: 9443 # cluster-capi-operator-webhook-service port
+    - port: 9443 # capi-controllers-webhook-service port
       protocol: TCP
     - port: 443 # Provider webhook services port (capi, capa, capv)
       protocol: TCP

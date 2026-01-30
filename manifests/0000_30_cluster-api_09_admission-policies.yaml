@@ -73,7 +73,7 @@ data:
           expression: >-
             !(request.userInfo.username in [
                 "system:serviceaccount:openshift-machine-api:machine-api-controllers",
-                "system:serviceaccount:openshift-cluster-api:cluster-capi-operator"
+                "system:serviceaccount:openshift-cluster-api:capi-controllers"
             ])
         - name: check-authoritativeAPI-clusterapi
           expression: 'object.status.authoritativeAPI == "ClusterAPI"'
@@ -199,7 +199,7 @@ data:
           expression: >-
             !(request.userInfo.username in [
                 "system:serviceaccount:openshift-machine-api:machine-api-controllers",
-                "system:serviceaccount:openshift-cluster-api:cluster-capi-operator"
+                "system:serviceaccount:openshift-cluster-api:capi-controllers"
             ])
         - name: check-param-match
           expression: 'object.metadata.name == params.metadata.name'
@@ -437,7 +437,7 @@ data:
           expression: >-
             !(request.userInfo.username in [
                 "system:serviceaccount:openshift-machine-api:machine-api-controllers",
-                "system:serviceaccount:openshift-cluster-api:cluster-capi-operator"
+                "system:serviceaccount:openshift-cluster-api:capi-controllers"
             ])
         - name: check-param-match
           expression: 'object.metadata.name == params.metadata.name'
@@ -515,7 +515,7 @@ data:
           expression: >-
             !(request.userInfo.username in [
                 "system:serviceaccount:openshift-machine-api:machine-api-controllers",
-                "system:serviceaccount:openshift-cluster-api:cluster-capi-operator"
+                "system:serviceaccount:openshift-cluster-api:capi-controllers"
             ])
         - name: check-param-match
           expression: 'object.metadata.name == params.metadata.name'
@@ -680,7 +680,7 @@ data:
           expression: >-
             !(request.userInfo.username in [
                 "system:serviceaccount:openshift-machine-api:machine-api-controllers",
-                "system:serviceaccount:openshift-cluster-api:cluster-capi-operator"
+                "system:serviceaccount:openshift-cluster-api:capi-controllers"
             ])
         - name: check-param-match
           expression: 'object.metadata.name == params.metadata.name'

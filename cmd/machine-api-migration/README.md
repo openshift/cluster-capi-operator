@@ -1,0 +1,1 @@
+The machine-api-migration manager contains controllers responsible for migrating resources between MAPI and CAPI.

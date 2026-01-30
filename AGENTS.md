@@ -17,29 +17,31 @@ make fmt            # Format code
 
 The Cluster CAPI Operator manages the installation and lifecycle of Cluster API components on OpenShift clusters. It serves as a bridge between OpenShift's Machine API (MAPI) and the upstream Cluster API (CAPI), providing forward compatibility and migration capabilities.
 
-### Architecture 
+### Architecture
 
-The operator consists of two main binaries:
+The operator consists of three main binaries:
 
-1. **cluster-capi-operator** - Main operator that manages CAPI component installation and lifecycle
-2. **machine-api-migration** - Handles migration between MAPI and CAPI resources
+1. **capi-operator** (`cmd/capi-operator/`) - Manages installation of Cluster API components and providers
+2. **capi-controllers** (`cmd/capi-controllers/`) - Main controllers managing CAPI component lifecycle, cluster resources, and synchronization
+3. **machine-api-migration** (`cmd/machine-api-migration/`) - Handles migration between Machine API and Cluster API resources
 
 The repository also includes:
 
-3. **manifests-gen** (`manifests-gen/`) - Standalone tool that transforms upstream Cluster API provider manifests into OpenShift-compatible format, applying OpenShift-specific annotations, replacing cert-manager with service-ca, and generating provider ConfigMaps with compressed components
+4. **manifests-gen** (`manifests-gen/`) - Standalone tool that transforms upstream Cluster API provider manifests into OpenShift-compatible format, applying OpenShift-specific annotations, replacing cert-manager with service-ca, and generating provider ConfigMaps with compressed components
 
 ### Key Controllers
 
-#### Core Controllers
+#### capi-operator Controllers
+- **CAPI Installer Controller** (`pkg/controllers/capiinstaller/`) - Handles installation of CAPI components and providers
+
+#### capi-controllers Controllers
 - **ClusterOperator Controller** (`pkg/controllers/clusteroperator/`) - Manages the operator's status in the cluster
-- **CAPI Installer Controller** (`pkg/controllers/capiinstaller/`) - Handles installation of CAPI components
 - **Core Cluster Controller** (`pkg/controllers/corecluster/`) - Manages CAPI Cluster resources representing the OpenShift cluster
 - **Infra Cluster Controller** (`pkg/controllers/infracluster/`) - Manages infrastructure-specific cluster resources (AWS, Azure, GCP, etc.)
 - **Secret Sync Controller** (`pkg/controllers/secretsync/`) - Synchronizes secrets between MAPI and CAPI namespaces
 - **Kubeconfig Controller** (`pkg/controllers/kubeconfig/`) - Manages kubeconfig secrets for cluster access
 
-
-#### Migration Controllers
+#### machine-api-migration Controllers
 - **Machine Migration Controller** (`pkg/controllers/machinemigration/`) - Handles handover of AuthoritativeAPI and object pausing for machine migration
 - **MachineSet Migration Controller** (`pkg/controllers/machinesetmigration/`) - Handles handover of AuthoritativeAPI and object pausing for machineset migration
 - **Machine Sync Controller** (`pkg/controllers/machinesync/`) - Synchronizes individual machine related resources between APIs

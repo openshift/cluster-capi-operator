@@ -1,8 +1,9 @@
-# This NetworkPolicy allows egress traffic required for the cluster-capi-operator.
+# This NetworkPolicy allows egress traffic required for the capi-controllers
+# deployment.
 # The operator needs broad internet access for cluster management operations,
 # cloud provider API calls, and communication with various services.
 #
-# This policy allows all egress traffic from the cluster-capi-operator pod, which is
+# This policy allows all egress traffic from the capi-controllers pod, which is
 # necessary because the operator needs to communicate with:
 # - Kubernetes API server for cluster management operations
 # - Cloud provider APIs for infrastructure management
@@ -31,6 +32,6 @@ spec:
     - key: k8s-app
       operator: In
       values:
-      - cluster-capi-operator
+      - capi-controllers
   policyTypes:
   - Egress

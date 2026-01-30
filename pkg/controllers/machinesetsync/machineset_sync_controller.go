@@ -111,25 +111,21 @@ type MachineSetSyncReconciler struct {
 
 	Infra         *configv1.Infrastructure
 	Platform      configv1.PlatformType
+	InfraTypes    util.InfraTypes
 	CAPINamespace string
 	MAPINamespace string
 }
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *MachineSetSyncReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	infraMachineTemplate, _, err := controllers.InitInfraMachineTemplateAndInfraClusterFromProvider(r.Platform)
-	if err != nil {
-		return fmt.Errorf("failed to get infrastructure machine template from Provider: %w", err)
-	}
-
 	// Allow the namespaces to be set externally for test purposes, when not set,
 	// default to the production namespaces.
 	if r.CAPINamespace == "" {
-		r.CAPINamespace = controllers.DefaultManagedNamespace
+		r.CAPINamespace = controllers.DefaultCAPINamespace
 	}
 
 	if r.MAPINamespace == "" {
-		r.MAPINamespace = controllers.DefaultMAPIManagedNamespace
+		r.MAPINamespace = controllers.DefaultMAPINamespace
 	}
 
 	if err := ctrl.NewControllerManagedBy(mgr).
@@ -141,7 +137,7 @@ func (r *MachineSetSyncReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			builder.WithPredicates(util.FilterNamespace(r.CAPINamespace)),
 		).
 		Watches(
-			infraMachineTemplate,
+			r.InfraTypes.Template(),
 			handler.EnqueueRequestsFromMapFunc(util.ResolveCAPIMachineSetFromInfraMachineTemplate(r.MAPINamespace)),
 			builder.WithPredicates(util.FilterNamespace(r.CAPINamespace)),
 		).
@@ -243,10 +239,8 @@ func (r *MachineSetSyncReconciler) fetchCAPIInfraResources(ctx context.Context, 
 			capiMachineSet.Namespace, capiMachineSet.Name, errInvalidInfraMachineTemplateReference)
 	}
 
-	infraMachineTemplate, infraCluster, err := controllers.InitInfraMachineTemplateAndInfraClusterFromProvider(r.Platform)
-	if err != nil {
-		return nil, nil, fmt.Errorf("unable to devise CAPI infra resources: %w", err)
-	}
+	infraMachineTemplate = r.InfraTypes.Template()
+	infraCluster = r.InfraTypes.Cluster()
 
 	if err := r.Get(ctx, infraClusterKey, infraCluster); err != nil {
 		return nil, nil, fmt.Errorf("failed to get CAPI infrastructure cluster: %w", err)
@@ -495,12 +489,7 @@ func (r *MachineSetSyncReconciler) deleteAllOutdatedCAPIInfraMachineTemplates(ct
 		client.MatchingLabelsSelector{Selector: machineSetMAPILabelSelector},
 	}
 
-	infraMachineTemplate, _, err := controllers.InitInfraMachineTemplateAndInfraClusterFromProvider(r.Platform)
-	if err != nil {
-		return fmt.Errorf("failed to get infrastructure machine template from Platform: %w", err)
-	}
-
-	if err := r.DeleteAllOf(ctx, infraMachineTemplate, deleteAllOption...); err != nil {
+	if err := r.DeleteAllOf(ctx, r.InfraTypes.Template(), deleteAllOption...); err != nil {
 		logger.Error(err, "Failed to delete outdated Cluster API infrastructure machine templates")
 
 		updateErr := fmt.Errorf("failed to delete outdated Cluster API infrastructure machine templates: %w", err)

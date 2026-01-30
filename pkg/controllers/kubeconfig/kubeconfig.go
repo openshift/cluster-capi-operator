@@ -43,8 +43,10 @@ import (
 )
 
 const (
-	controllerName  = "KubeconfigController"
-	tokenSecretName = "cluster-capi-operator-secret" //nolint
+	controllerName            = "KubeconfigController"
+	tokenSecretName           = "capi-controllers-token"
+	tokenRefreshAnnotationKey = "cluster-api.openshift.io/last-token-refresh"
+	tokenMaxAge               = 30 * time.Minute
 )
 
 // KubeconfigReconciler reconciles a ClusterOperator object.
@@ -130,7 +132,7 @@ func (r *KubeconfigReconciler) reconcileKubeconfig(ctx context.Context, log logr
 	tokenSecret := &corev1.Secret{}
 	tokenSecretKey := client.ObjectKey{
 		Name:      tokenSecretName,
-		Namespace: controllers.DefaultManagedNamespace,
+		Namespace: controllers.DefaultCAPINamespace,
 	}
 
 	if err := r.Get(ctx, tokenSecretKey, tokenSecret); err != nil {
@@ -143,15 +145,34 @@ func (r *KubeconfigReconciler) reconcileKubeconfig(ctx context.Context, log logr
 		return ctrl.Result{}, fmt.Errorf("unable to retrieve Secret object: %w", err)
 	}
 
-	if time.Since(tokenSecret.CreationTimestamp.Time) >= 30*time.Minute {
-		log.Info("Token secret is older than 30 minutes. Recreating it...")
+	// Determine the token age from the refresh annotation, or fall back to CreationTimestamp.
+	tokenTime := tokenSecret.CreationTimestamp.Time
 
-		// The token secret is managed by the CVO, it should be recreated shortly after deletion.
-		if err := r.Delete(ctx, tokenSecret); err != nil {
-			return ctrl.Result{}, fmt.Errorf("unable to delete Secret object: %w", err)
+	if refreshAnnotation, ok := tokenSecret.Annotations[tokenRefreshAnnotationKey]; ok {
+		if parsedTime, err := time.Parse(time.RFC3339, refreshAnnotation); err == nil {
+			tokenTime = parsedTime
+		} else {
+			// Continue with the creation timestamp as fallback.
+			log.Error(err, "Failed to parse refresh annotation", "annotation", refreshAnnotation)
+		}
+	}
+
+	if time.Since(tokenTime) >= tokenMaxAge {
+		log.Info("Token secret is older than 30 minutes. Clearing data to trigger refresh...")
+
+		// Clear the secret data to trigger the Token Controller to repopulate it.
+		tokenSecret.Data = nil
+		if tokenSecret.Annotations == nil {
+			tokenSecret.Annotations = make(map[string]string)
 		}
 
-		return ctrl.Result{RequeueAfter: 1 * time.Minute}, nil
+		tokenSecret.Annotations[tokenRefreshAnnotationKey] = time.Now().UTC().Format(time.RFC3339)
+
+		if err := r.Update(ctx, tokenSecret); err != nil {
+			return ctrl.Result{}, fmt.Errorf("unable to clear token secret data: %w", err)
+		}
+
+		return ctrl.Result{}, nil
 	}
 
 	kubeconfigOptions := kubeconfigOptions{
@@ -202,7 +223,7 @@ func newKubeConfigSecret(clusterName string, data []byte) *corev1.Secret {
 	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("%s-kubeconfig", clusterName),
-			Namespace: controllers.DefaultManagedNamespace,
+			Namespace: controllers.DefaultCAPINamespace,
 			Labels: map[string]string{
 				clusterv1.ClusterNameLabel: clusterName,
 			},

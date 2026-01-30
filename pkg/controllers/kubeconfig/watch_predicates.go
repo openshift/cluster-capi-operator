@@ -31,7 +31,7 @@ import (
 
 func toTokenSecret(ctx context.Context, o client.Object) []reconcile.Request {
 	return []reconcile.Request{{
-		NamespacedName: client.ObjectKey{Name: tokenSecretName, Namespace: controllers.DefaultManagedNamespace},
+		NamespacedName: client.ObjectKey{Name: tokenSecretName, Namespace: controllers.DefaultCAPINamespace},
 	}}
 }
 
@@ -42,7 +42,7 @@ func tokenSecretPredicate() predicate.Funcs {
 			panic("expected to get an of object of type corev1.Secret")
 		}
 
-		return secret.GetNamespace() == controllers.DefaultManagedNamespace && secret.GetName() == tokenSecretName
+		return secret.GetNamespace() == controllers.DefaultCAPINamespace && secret.GetName() == tokenSecretName
 	}
 
 	return predicate.Funcs{
@@ -60,7 +60,7 @@ func kubeconfigSecretPredicate() predicate.Funcs {
 			panic("expected to get an of object of type corev1.Secret")
 		}
 
-		return secret.GetNamespace() == controllers.DefaultManagedNamespace && strings.HasSuffix(secret.GetName(), "-kubeconfig")
+		return secret.GetNamespace() == controllers.DefaultCAPINamespace && strings.HasSuffix(secret.GetName(), "-kubeconfig")
 	}
 
 	return predicate.Funcs{

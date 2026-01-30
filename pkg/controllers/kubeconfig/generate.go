@@ -70,7 +70,7 @@ func generateKubeconfig(options kubeconfigOptions) *api.Config {
 			options.clusterName: {
 				Cluster:   options.clusterName,
 				AuthInfo:  userName,
-				Namespace: controllers.DefaultManagedNamespace,
+				Namespace: controllers.DefaultCAPINamespace,
 			},
 		},
 		AuthInfos: map[string]*api.AuthInfo{

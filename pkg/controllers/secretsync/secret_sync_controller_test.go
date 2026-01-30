@@ -92,7 +92,7 @@ var _ = Describe("User Data Secret controller", func() {
 
 	var reconciler *UserDataSecretController
 
-	syncedSecretKey := client.ObjectKey{Namespace: controllers.DefaultManagedNamespace, Name: managedUserDataSecretName}
+	syncedSecretKey := client.ObjectKey{Namespace: controllers.DefaultCAPINamespace, Name: managedUserDataSecretName}
 
 	BeforeEach(func() {
 		By("Setting up a manager and controller")
@@ -109,7 +109,7 @@ var _ = Describe("User Data Secret controller", func() {
 			ClusterOperatorStatusClient: operatorstatus.ClusterOperatorStatusClient{
 				Client:           cl,
 				Recorder:         rec,
-				ManagedNamespace: controllers.DefaultManagedNamespace,
+				ManagedNamespace: controllers.DefaultCAPINamespace,
 			},
 
 			Scheme: scheme.Scheme,

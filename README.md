@@ -38,16 +38,28 @@ Downscale cluster version operator deployment;
 kubectl scale deployment cluster-version-operator -nopenshift-cluster-version --replicas=0
 ```
 
-Downscale cluster CAPI operator deployment:
+Downscale capi-operator deployment:
 
 ```sh
-kubectl scale deployment cluster-capi-operator -nopenshift-cluster-api --replicas=0
+kubectl scale deployment capi-operator -n openshift-cluster-api-operator --replicas=0
+```
+
+Downscale capi-controllers deployment:
+
+```sh
+kubectl scale deployment capi-controllers -n openshift-cluster-api --replicas=0
 ```
 
 Compile and run operator:
 
 ```sh
-make build && ./bin/cluster-capi-operator
+make build && ./bin/capi-operator
+```
+
+Or run the controllers:
+
+```sh
+make build && ./bin/capi-controllers
 ```
 
 ## Unit tests

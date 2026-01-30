@@ -30,6 +30,7 @@ import (
 	corev1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/core/v1"
 	machinev1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/machine/v1beta1"
 	consts "github.com/openshift/cluster-capi-operator/pkg/controllers"
+	"github.com/openshift/cluster-capi-operator/pkg/util"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/validation/field"
@@ -118,10 +119,15 @@ var _ = Describe("AWS load balancer validation during MAPI->CAPI conversion", fu
 		})
 		Expect(err).ToNot(HaveOccurred())
 
+		infra := configv1resourcebuilder.Infrastructure().AsAWS("cluster", "us-east-1").WithInfrastructureName(infrastructureName).Build()
+		infraTypes, _, err := util.GetCAPITypesForInfrastructure(infra)
+		Expect(err).ToNot(HaveOccurred(), "InfraTypes should be able to be created")
+
 		reconciler = &MachineSyncReconciler{
 			Client:        mgr.GetClient(),
-			Infra:         configv1resourcebuilder.Infrastructure().AsAWS("cluster", "us-east-1").WithInfrastructureName(infrastructureName).Build(),
+			Infra:         infra,
 			Platform:      configv1.AWSPlatformType,
+			InfraTypes:    infraTypes,
 			CAPINamespace: capiNamespace.GetName(),
 			MAPINamespace: mapiNamespace.GetName(),
 		}

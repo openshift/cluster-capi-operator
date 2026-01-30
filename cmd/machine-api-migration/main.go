@@ -16,7 +16,6 @@ package main
 import (
 	"context"
 	"errors"
-	"flag"
 	"fmt"
 	"os"
 	"time"
@@ -40,26 +39,21 @@ import (
 	"github.com/openshift/api/features"
 	featuregates "github.com/openshift/library-go/pkg/operator/configobserver/featuregates"
 	"github.com/openshift/library-go/pkg/operator/events"
-	"github.com/spf13/pflag"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	"k8s.io/component-base/config"
-	"k8s.io/component-base/config/options"
 	klog "k8s.io/klog/v2"
-	"k8s.io/klog/v2/textlogger"
-	capiflags "sigs.k8s.io/cluster-api/util/flags"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/healthz"
+)
+
+const (
+	managerName = "machine-api-migration"
 )
 
 var (
 	// errTimedOutWaitingForFeatureGates is returned when the feature gates are not initialized within the timeout.
 	errTimedOutWaitingForFeatureGates = errors.New("timed out waiting for feature gates to be initialized")
-
-	// errPlatformNotFound is returned when there is no platform set on the infrastructure object.
-	errPlatformNotFound = errors.New("no platform provider found on install config")
 )
 
 func initScheme(scheme *runtime.Scheme) {
@@ -72,93 +66,70 @@ func initScheme(scheme *runtime.Scheme) {
 	utilruntime.Must(clusterv1.AddToScheme(scheme))
 }
 
-//nolint:funlen
 func main() {
 	scheme := runtime.NewScheme()
 	initScheme(scheme)
 
-	leaderElectionConfig := config.LeaderElectionConfiguration{
-		LeaderElect:       true,
-		LeaseDuration:     util.LeaseDuration,
-		RenewDeadline:     util.RenewDeadline,
-		RetryPeriod:       util.RetryPeriod,
-		ResourceName:      "machine-api-migration-leader",
-		ResourceNamespace: "openshift-cluster-api",
-	}
+	opts := util.InitCommonOptions(managerName, controllers.DefaultCAPINamespace)
 
-	healthAddr := flag.String(
-		"health-addr",
-		":9441",
-		"The address for health checking.",
-	)
-	capiManagedNamespace := flag.String(
-		"capi-namespace",
-		controllers.DefaultManagedNamespace,
-		"The namespace where CAPI components will run.",
-	)
-	mapiManagedNamespace := flag.String(
-		"mapi-namespace",
-		controllers.DefaultMAPIManagedNamespace,
-		"The namespace to watch for MAPI resources.",
-	)
-
-	logToStderr := flag.Bool(
-		"logtostderr",
-		true,
-		"log to standard error instead of files",
-	)
-
-	textLoggerConfig := textlogger.NewConfig()
-	textLoggerConfig.AddFlags(flag.CommandLine)
-	ctrl.SetLogger(textlogger.NewLogger(textLoggerConfig))
-
-	capiManagerOptions := capiflags.ManagerOptions{}
-
-	// Once all the flags are registered, switch to pflag
-	// to allow leader lection flags to be bound.
-	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
-	options.BindLeaderElectionFlags(&leaderElectionConfig, pflag.CommandLine)
-	capiflags.AddManagerOptions(pflag.CommandLine, &capiManagerOptions)
-	pflag.Parse()
-
-	if logToStderr != nil {
-		klog.LogToStderr(*logToStderr)
-	}
-
-	_, diagnosticsOpts, err := capiflags.GetManagerOptions(capiManagerOptions)
-	if err != nil {
-		klog.Error(err, "unable to get manager options")
-		os.Exit(1)
-	}
-
-	syncPeriod := 10 * time.Minute
-
-	cacheOpts := getDefaultCacheOptions(*capiManagedNamespace, *mapiManagedNamespace, syncPeriod)
+	opts.Parse()
 
 	cfg := ctrl.GetConfigOrDie()
 
-	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
-		Scheme:                  scheme,
-		Metrics:                 *diagnosticsOpts,
-		HealthProbeBindAddress:  *healthAddr,
-		LeaderElectionNamespace: leaderElectionConfig.ResourceNamespace,
-		LeaderElection:          leaderElectionConfig.LeaderElect,
-		LeaseDuration:           &leaderElectionConfig.LeaseDuration.Duration,
-		LeaderElectionID:        leaderElectionConfig.ResourceName,
-		RetryPeriod:             &leaderElectionConfig.RetryPeriod.Duration,
-		RenewDeadline:           &leaderElectionConfig.RenewDeadline.Duration,
-		Cache:                   cacheOpts,
-	})
+	mgrOpts, _ := opts.GetCommonManagerOptions()
+	mgrOpts.Scheme = scheme
+	mgrOpts.Cache = getDefaultCacheOptions(*opts.CAPINamespace, *opts.MAPINamespace, 10*time.Minute)
+
+	mgr, err := ctrl.NewManager(cfg, mgrOpts)
 	if err != nil {
 		klog.Error(err, "unable to create manager")
 		os.Exit(1)
 	}
 
-	// This will catch signals from the OS and shutdown the manager gracefully.
-	// Set it up here as we may need to branch early if the feature gate is not enabled.
-	stop := ctrl.SetupSignalHandler()
+	if err := util.AddCommonChecks(mgr); err != nil {
+		klog.Error(err, "unable to add common checks")
+		os.Exit(1)
+	}
 
-	featureGateAccessor, err := getFeatureGates(mgr)
+	ctx := ctrl.SetupSignalHandler()
+	checkFeatureGates(ctx, mgr)
+
+	infra, err := util.GetInfra(ctx, mgr.GetAPIReader())
+	if err != nil {
+		klog.Error(err, "unable to get infrastructure")
+		os.Exit(1)
+	}
+
+	infraTypes, platform, err := util.GetCAPITypesForInfrastructure(infra)
+	if err != nil {
+		if errors.Is(err, util.ErrUnsupportedPlatform) {
+			klog.Info(fmt.Sprintf("MachineAPIMigration not implemented for platform %s, nothing to do. Waiting for termination signal.", platform))
+			exitAfterTerminationSignal(ctx)
+		}
+
+		klog.Error(err, "unable to get infrastructure types")
+		os.Exit(1)
+	}
+
+	checkPlatformSupported(ctx, platform)
+
+	for name, controller := range getControllers(opts, platform, infra, infraTypes) {
+		if err := controller.SetupWithManager(mgr); err != nil {
+			klog.Error(err, fmt.Sprintf("failed to set up %s reconciler with manager", name))
+			os.Exit(1)
+		}
+	}
+
+	klog.Info("Starting manager")
+
+	if err := mgr.Start(ctx); err != nil {
+		klog.Error(err, "problem running manager")
+		os.Exit(1)
+	}
+}
+
+func checkFeatureGates(ctx context.Context, mgr ctrl.Manager) {
+	featureGateAccessor, err := getFeatureGates(ctx, mgr)
 	if err != nil {
 		klog.Error(err, "unable to get feature gates")
 		os.Exit(1)
@@ -172,114 +143,75 @@ func main() {
 
 	if !currentFeatureGates.Enabled(features.FeatureGateMachineAPIMigration) {
 		klog.Info("MachineAPIMigration feature gate is not enabled, nothing to do. Waiting for termination signal.")
-		<-stop.Done()
-		os.Exit(0)
+		exitAfterTerminationSignal(ctx)
 	}
+}
 
-	infraClient, err := client.New(cfg, client.Options{Scheme: scheme})
-	if err != nil {
-		klog.Error(err, "unable to set up infra client")
-		os.Exit(1)
-	}
-
-	infra := &configv1.Infrastructure{}
-	if err := infraClient.Get(stop, client.ObjectKey{Name: controllers.InfrastructureResourceName}, infra); err != nil {
-		klog.Errorf("failed to fetch infrastructure: %s", err)
-		os.Exit(1)
-	}
-
-	provider, err := getProviderFromInfrastructure(infra)
-	if err != nil {
-		klog.Errorf("failed to fetch infrastructure: %s", err)
-		os.Exit(1)
-	}
-
-	// Currently we only plan to support AWS, so all others are a noop until they're implemented.
-	switch provider {
+func checkPlatformSupported(ctx context.Context, platform configv1.PlatformType) {
+	switch platform {
 	case configv1.AWSPlatformType, configv1.OpenStackPlatformType:
-		klog.Infof("MachineAPIMigration: starting %s controllers", provider)
+		klog.Infof("MachineAPIMigration: starting %s controllers", platform)
 
 	default:
-		klog.Infof("MachineAPIMigration not implemented for platform %s, nothing to do. Waiting for termination signal.", provider)
-		<-stop.Done()
-		os.Exit(0)
+		klog.Infof("MachineAPIMigration not implemented for platform %s, nothing to do. Waiting for termination signal.", platform)
+		exitAfterTerminationSignal(ctx)
 	}
+}
 
-	// +kubebuilder:scaffold:builder
+type controller interface {
+	SetupWithManager(mgr ctrl.Manager) error
+}
 
-	if err := mgr.AddHealthzCheck("health", healthz.Ping); err != nil {
-		klog.Error(err, "unable to set up health check")
-		os.Exit(1)
+func getControllers(opts *util.CommonOptions, platform configv1.PlatformType, infra *configv1.Infrastructure, infraTypes util.InfraTypes) map[string]controller {
+	return map[string]controller{
+		"machine sync": &machinesync.MachineSyncReconciler{
+			Infra:      infra,
+			Platform:   platform,
+			InfraTypes: infraTypes,
+
+			MAPINamespace: *opts.MAPINamespace,
+			CAPINamespace: *opts.CAPINamespace,
+		},
+		"machineset sync": &machinesetsync.MachineSetSyncReconciler{
+			Platform:   platform,
+			Infra:      infra,
+			InfraTypes: infraTypes,
+
+			MAPINamespace: *opts.MAPINamespace,
+			CAPINamespace: *opts.CAPINamespace,
+		},
+		"machine migration": &machinemigration.MachineMigrationReconciler{
+			Platform:   platform,
+			Infra:      infra,
+			InfraTypes: infraTypes,
+
+			MAPINamespace: *opts.MAPINamespace,
+			CAPINamespace: *opts.CAPINamespace,
+		},
+		"machineset migration": &machinesetmigration.MachineSetMigrationReconciler{
+			Platform:   platform,
+			Infra:      infra,
+			InfraTypes: infraTypes,
+
+			MAPINamespace: *opts.MAPINamespace,
+			CAPINamespace: *opts.CAPINamespace,
+		},
 	}
+}
 
-	if err := mgr.AddReadyzCheck("check", healthz.Ping); err != nil {
-		klog.Error(err, "unable to set up ready check")
-		os.Exit(1)
-	}
-
-	machineSyncReconciler := machinesync.MachineSyncReconciler{
-		Infra:    infra,
-		Platform: provider,
-
-		MAPINamespace: *mapiManagedNamespace,
-		CAPINamespace: *capiManagedNamespace,
-	}
-
-	if err := machineSyncReconciler.SetupWithManager(mgr); err != nil {
-		klog.Error(err, "failed to set up machine sync reconciler with manager")
-		os.Exit(1)
-	}
-
-	machineSetSyncReconciler := machinesetsync.MachineSetSyncReconciler{
-		Platform: provider,
-		Infra:    infra,
-
-		MAPINamespace: *mapiManagedNamespace,
-		CAPINamespace: *capiManagedNamespace,
-	}
-
-	if err := machineSetSyncReconciler.SetupWithManager(mgr); err != nil {
-		klog.Error(err, "failed to set up machineset sync reconciler with manager")
-		os.Exit(1)
-	}
-
-	machineMigrationReconciler := machinemigration.MachineMigrationReconciler{
-		Platform: provider,
-		Infra:    infra,
-
-		MAPINamespace: *mapiManagedNamespace,
-		CAPINamespace: *capiManagedNamespace,
-	}
-
-	if err := machineMigrationReconciler.SetupWithManager(mgr); err != nil {
-		klog.Error(err, "failed to set up machine migration reconciler with manager")
-		os.Exit(1)
-	}
-
-	machineSetMigrationReconciler := machinesetmigration.MachineSetMigrationReconciler{
-		Platform: provider,
-		Infra:    infra,
-
-		MAPINamespace: *mapiManagedNamespace,
-		CAPINamespace: *capiManagedNamespace,
-	}
-
-	if err := machineSetMigrationReconciler.SetupWithManager(mgr); err != nil {
-		klog.Error(err, "failed to set up machineset migration reconciler with manager")
-		os.Exit(1)
-	}
-
-	klog.Info("Starting manager")
-
-	if err := mgr.Start(stop); err != nil {
-		klog.Error(err, "problem running manager")
-		os.Exit(1)
-	}
+// exitAfterTerminationSignal waits until our process receives a termination
+// signal, then exits without an error.
+// It is used when we are running on a cluster where this manager is not
+// required. We don't want to exit immediately because we would be restarted,
+// which is not required.
+func exitAfterTerminationSignal(ctx context.Context) {
+	<-ctx.Done()
+	os.Exit(0)
 }
 
 // getFeatureGates is used to fetch the current feature gates from the cluster.
 // We use this to check if the machine api migration is actually enabled or not.
-func getFeatureGates(mgr ctrl.Manager) (featuregates.FeatureGateAccess, error) {
+func getFeatureGates(ctx context.Context, mgr ctrl.Manager) (featuregates.FeatureGateAccess, error) {
 	desiredVersion := util.GetReleaseVersion()
 	missingVersion := "0.0.1-snapshot"
 
@@ -297,8 +229,8 @@ func getFeatureGates(mgr ctrl.Manager) (featuregates.FeatureGateAccess, error) {
 		configInformers.Config().V1().FeatureGates(),
 		events.NewLoggingEventRecorder("machineapimigration", clock.RealClock{}),
 	)
-	go featureGateAccessor.Run(context.Background())
-	go configInformers.Start(context.Background().Done())
+	go featureGateAccessor.Run(ctx)
+	go configInformers.Start(ctx.Done())
 
 	select {
 	case <-featureGateAccessor.InitialFeatureGatesObserved():
@@ -309,15 +241,6 @@ func getFeatureGates(mgr ctrl.Manager) (featuregates.FeatureGateAccess, error) {
 	}
 
 	return featureGateAccessor, nil
-}
-
-// getProviderFromInfrastructure returns the PlatformType from the Infrastructure object.
-func getProviderFromInfrastructure(infra *configv1.Infrastructure) (configv1.PlatformType, error) {
-	if infra.Status.PlatformStatus != nil && infra.Status.PlatformStatus.Type != "" {
-		return infra.Status.PlatformStatus.Type, nil
-	}
-
-	return "", errPlatformNotFound
 }
 
 func getDefaultCacheOptions(capiNamespace, mapiNamespace string, sync time.Duration) cache.Options {

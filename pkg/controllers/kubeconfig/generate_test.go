@@ -49,7 +49,7 @@ var _ = Describe("Generate kubeconfig", func() {
 		Expect(kubeconfig.Contexts).To(HaveKey(options.clusterName))
 		Expect(kubeconfig.Contexts[options.clusterName].Cluster).To(Equal(options.clusterName))
 		Expect(kubeconfig.Contexts[options.clusterName].AuthInfo).To(Equal("cluster-capi-operator"))
-		Expect(kubeconfig.Contexts[options.clusterName].Namespace).To(Equal(controllers.DefaultManagedNamespace))
+		Expect(kubeconfig.Contexts[options.clusterName].Namespace).To(Equal(controllers.DefaultCAPINamespace))
 
 		Expect(kubeconfig.AuthInfos).To(HaveKey("cluster-capi-operator"))
 		Expect(kubeconfig.AuthInfos["cluster-capi-operator"].Token).To(Equal(testBase64Text))

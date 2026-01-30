@@ -15,16 +15,21 @@ limitations under the License.
 */
 package controllers
 
-import mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
+import (
+	"errors"
+
+	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
+)
 
 const (
-	// DefaultManagedNamespace is the default namespace where the operator
-	// manages CAPI resources.
-	DefaultManagedNamespace = "openshift-cluster-api"
+	// DefaultCAPINamespace is the default namespace for CAPI resources.
+	DefaultCAPINamespace = "openshift-cluster-api"
 
-	// DefaultMAPIManagedNamespace the default namespace where the operator
-	// manages MAPI resources.
-	DefaultMAPIManagedNamespace = "openshift-machine-api"
+	// DefaultMAPINamespace the default namespace for MAPI resources.
+	DefaultMAPINamespace = "openshift-machine-api"
+
+	// DefaultOperatorNamespace is the default namespace used for operator resources.
+	DefaultOperatorNamespace = "openshift-cluster-api-operator"
 
 	// OperatorVersionKey is the key used to store the operator version in the ClusterOperator status.
 	OperatorVersionKey = "operator"
@@ -49,4 +54,9 @@ const (
 
 	// MachineSetOpenshiftLabelKey is the key for label referring to a Machine API MachineSet.
 	MachineSetOpenshiftLabelKey = "machine.openshift.io/cluster-api-machineset"
+)
+
+var (
+	// ErrInvalidSpecAuthoritativeAPI is returned when spec.authoritativeAPI has a value which is not permitted.
+	ErrInvalidSpecAuthoritativeAPI = errors.New("invalid spec.authoritativeAPI")
 )

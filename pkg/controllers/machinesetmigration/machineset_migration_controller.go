@@ -55,25 +55,21 @@ type MachineSetMigrationReconciler struct {
 
 	Infra         *configv1.Infrastructure
 	Platform      configv1.PlatformType
+	InfraTypes    util.InfraTypes
 	CAPINamespace string
 	MAPINamespace string
 }
 
 // SetupWithManager sets up the MachineSetMigration controller.
 func (r *MachineSetMigrationReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	infraMachineTemplate, _, err := controllers.InitInfraMachineTemplateAndInfraClusterFromProvider(r.Platform)
-	if err != nil {
-		return fmt.Errorf("failed to get infrastructure machine template from Provider: %w", err)
-	}
-
 	// Allow the namespaces to be set externally for test purposes, when not set,
 	// default to the production namespaces.
 	if r.CAPINamespace == "" {
-		r.CAPINamespace = controllers.DefaultManagedNamespace
+		r.CAPINamespace = controllers.DefaultCAPINamespace
 	}
 
 	if r.MAPINamespace == "" {
-		r.MAPINamespace = controllers.DefaultMAPIManagedNamespace
+		r.MAPINamespace = controllers.DefaultMAPINamespace
 	}
 
 	if err := ctrl.NewControllerManagedBy(mgr).
@@ -85,7 +81,7 @@ func (r *MachineSetMigrationReconciler) SetupWithManager(mgr ctrl.Manager) error
 			builder.WithPredicates(util.FilterNamespace(r.CAPINamespace)),
 		).
 		Watches(
-			infraMachineTemplate,
+			r.InfraTypes.Template(),
 			handler.EnqueueRequestsFromMapFunc(util.RewriteNamespace(r.MAPINamespace)),
 			builder.WithPredicates(util.FilterNamespace(r.CAPINamespace)),
 		).

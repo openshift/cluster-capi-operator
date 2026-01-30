@@ -56,7 +56,7 @@ var _ = BeforeSuite(func() {
 	Expect(cl).NotTo(BeNil())
 
 	managedNamespace := &corev1.Namespace{}
-	managedNamespace.SetName(controllers.DefaultManagedNamespace)
+	managedNamespace.SetName(controllers.DefaultCAPINamespace)
 	Expect(cl.Create(context.Background(), managedNamespace)).To(Succeed())
 	ocpConfigNamespace := &corev1.Namespace{}
 	ocpConfigNamespace.SetName(SecretSourceNamespace)

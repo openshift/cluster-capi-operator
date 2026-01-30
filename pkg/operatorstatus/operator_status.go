@@ -16,10 +16,10 @@ limitations under the License.
 package operatorstatus
 
 import (
+	"cmp"
 	"context"
 	"fmt"
-	"reflect"
-	"sort"
+	"slices"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
@@ -53,15 +53,16 @@ const (
 // ClusterOperatorStatusClient is a client for managing the status of the ClusterOperator object.
 type ClusterOperatorStatusClient struct {
 	client.Client
-	Recorder         record.EventRecorder
-	ManagedNamespace string
-	ReleaseVersion   string
-	Platform         configv1.PlatformType
+	Recorder          record.EventRecorder
+	ManagedNamespace  string
+	OperatorNamespace string
+	ReleaseVersion    string
+	Platform          configv1.PlatformType
 }
 
 // SetStatusAvailable sets the Available condition to True, with the given reason
 // and message, and sets both the Progressing and Degraded conditions to False.
-func (r *ClusterOperatorStatusClient) SetStatusAvailable(ctx context.Context, availableConditionMsg string) error {
+func (r *ClusterOperatorStatusClient) SetStatusAvailable(ctx context.Context, availableConditionMsg string, opts ...SyncStatusOption) error {
 	log := ctrl.LoggerFrom(ctx)
 
 	co, err := r.GetOrCreateClusterOperator(ctx)
@@ -83,13 +84,13 @@ func (r *ClusterOperatorStatusClient) SetStatusAvailable(ctx context.Context, av
 
 	log.Info("syncing status: available")
 
-	return r.SyncStatus(ctx, co, conds, r.OperandVersions(), r.RelatedObjects())
+	return r.SyncStatus(ctx, co, append(opts, WithConditions(conds))...)
 }
 
 // SetStatusDegraded sets the Degraded condition to True, with the given reason and
 // message, and sets the upgradeable condition.  It does not modify any existing
 // Available or Progressing conditions.
-func (r *ClusterOperatorStatusClient) SetStatusDegraded(ctx context.Context, reconcileErr error) error {
+func (r *ClusterOperatorStatusClient) SetStatusDegraded(ctx context.Context, reconcileErr error, opts ...SyncStatusOption) error {
 	log := ctrl.LoggerFrom(ctx)
 
 	co, err := r.GetOrCreateClusterOperator(ctx)
@@ -98,15 +99,7 @@ func (r *ClusterOperatorStatusClient) SetStatusDegraded(ctx context.Context, rec
 		return err
 	}
 
-	desiredVersions := r.OperandVersions()
-	currentVersions := co.Status.Versions
-
-	var message string
-	if !reflect.DeepEqual(desiredVersions, currentVersions) {
-		message = fmt.Sprintf("Failed when progressing towards %s because %e", printOperandVersions(desiredVersions), reconcileErr)
-	} else {
-		message = fmt.Sprintf("Failed to resync for %s because %e", printOperandVersions(desiredVersions), reconcileErr)
-	}
+	message := fmt.Sprintf("Failed to resync because %v", reconcileErr)
 
 	conds := []configv1.ClusterOperatorStatusCondition{
 		NewClusterOperatorStatusCondition(configv1.OperatorDegraded, configv1.ConditionTrue,
@@ -117,9 +110,7 @@ func (r *ClusterOperatorStatusClient) SetStatusDegraded(ctx context.Context, rec
 	r.Recorder.Eventf(co, corev1.EventTypeWarning, "Status degraded", reconcileErr.Error())
 	log.Info("syncing status: degraded", "message", message)
 
-	// We pass in currentVersion and not desiredVersion because we are degraded
-	// and as such we are still progressing towards the desired version.
-	return r.SyncStatus(ctx, co, conds, currentVersions, r.RelatedObjects())
+	return r.SyncStatus(ctx, co, append(opts, WithConditions(conds))...)
 }
 
 // GetOrCreateClusterOperator is responsible for fetching the cluster operator should it exist,
@@ -152,15 +143,51 @@ func (r *ClusterOperatorStatusClient) GetOrCreateClusterOperator(ctx context.Con
 	return co, nil
 }
 
+type syncStatusOptions struct {
+	conditions     []configv1.ClusterOperatorStatusCondition
+	versions       []configv1.OperandVersion
+	relatedObjects []configv1.ObjectReference
+}
+
+// SyncStatusOption sets an option for the SyncStatus operation.
+type SyncStatusOption func(*syncStatusOptions)
+
+// WithConditions sets conditions for a SyncStatus operation.
+func WithConditions(conditions []configv1.ClusterOperatorStatusCondition) SyncStatusOption {
+	return func(o *syncStatusOptions) {
+		o.conditions = conditions
+	}
+}
+
+// WithVersions sets versions for a SyncStatus operation.
+func WithVersions(versions []configv1.OperandVersion) SyncStatusOption {
+	return func(o *syncStatusOptions) {
+		o.versions = versions
+	}
+}
+
+// WithRelatedObjects sets related objects for a SyncStatus operation.
+func WithRelatedObjects(relatedObjects []configv1.ObjectReference) SyncStatusOption {
+	return func(o *syncStatusOptions) {
+		o.relatedObjects = relatedObjects
+	}
+}
+
 // SyncStatus performs a full sync of the ClusterOperator object if any of the
 // conditions, versions, or related objects have changed.
-func (r *ClusterOperatorStatusClient) SyncStatus(ctx context.Context, co *configv1.ClusterOperator, desiredConditions []configv1.ClusterOperatorStatusCondition, desiredVersions []configv1.OperandVersion, desiredRelatedObjects []configv1.ObjectReference) error {
+func (r *ClusterOperatorStatusClient) SyncStatus(ctx context.Context, co *configv1.ClusterOperator, opts ...SyncStatusOption) error {
+	syncOptions := syncStatusOptions{}
+
+	for _, opt := range opts {
+		opt(&syncOptions)
+	}
+
 	log := ctrl.LoggerFrom(ctx)
 	patchBase := client.MergeFrom(co.DeepCopy())
 
 	shouldUpdate := false
 
-	for _, cond := range desiredConditions {
+	for _, cond := range syncOptions.conditions {
 		if !isStatusConditionPresentAndEqual(co.Status.Conditions, cond) {
 			v1helpers.SetStatusCondition(&co.Status.Conditions, cond, clock.RealClock{})
 
@@ -168,13 +195,13 @@ func (r *ClusterOperatorStatusClient) SyncStatus(ctx context.Context, co *config
 		}
 	}
 
-	if !equality.Semantic.DeepEqual(co.Status.Versions, desiredVersions) {
-		co.Status.Versions = desiredVersions
+	if syncOptions.versions != nil && !equality.Semantic.DeepEqual(co.Status.Versions, syncOptions.versions) {
+		co.Status.Versions = syncOptions.versions
 		shouldUpdate = true
 	}
 
-	if !isRelatedObjectsDeepEqual(co.Status.RelatedObjects, desiredRelatedObjects) {
-		co.Status.RelatedObjects = desiredRelatedObjects
+	if syncOptions.relatedObjects != nil && !equality.Semantic.DeepEqual(co.Status.RelatedObjects, syncOptions.relatedObjects) {
+		co.Status.RelatedObjects = syncOptions.relatedObjects
 		shouldUpdate = true
 	}
 
@@ -199,18 +226,32 @@ func platformToInfraPrefix(platform configv1.PlatformType) string {
 }
 
 // RelatedObjects returns the related objects for the ClusterOperator.
+// This data is currently arbitrarily written by the corecluster controller.
 func (r *ClusterOperatorStatusClient) RelatedObjects() []configv1.ObjectReference {
 	references := []configv1.ObjectReference{
-		{Group: "", Resource: "namespaces", Name: r.ManagedNamespace},
-		{Group: "", Resource: "serviceaccounts", Name: "cluster-capi-operator", Namespace: controllers.DefaultManagedNamespace},
-		{Group: "", Resource: "configmaps", Name: "cluster-capi-operator-images", Namespace: controllers.DefaultManagedNamespace},
-		{Group: "apps", Resource: "deployments", Name: "cluster-capi-operator", Namespace: controllers.DefaultManagedNamespace},
+		// ClusterOperator resource
 		{Group: configv1.GroupName, Resource: "clusteroperators", Name: controllers.ClusterOperatorName},
+
+		// Operator resources in the managed namespace
+		{Group: "", Resource: "namespaces", Name: r.ManagedNamespace},
+		{Group: "", Resource: "serviceaccounts", Name: "cluster-capi-operator", Namespace: r.ManagedNamespace},
+		{Group: "apps", Resource: "deployments", Name: "cluster-capi-operator", Namespace: r.ManagedNamespace},
+
+		// Operator resources in the operator namespace
+		{Group: "", Resource: "namespaces", Name: r.OperatorNamespace},
+		{Group: "", Resource: "serviceaccounts", Name: "cluster-capi-installer", Namespace: r.OperatorNamespace},
+		{Group: "", Resource: "configmaps", Name: "cluster-capi-operator-images", Namespace: r.OperatorNamespace},
+		{Group: "apps", Resource: "deployments", Name: "cluster-capi-installer", Namespace: r.OperatorNamespace},
+
+		// Cluster-scoped operator resources
+		{Group: "admissionregistration.k8s.io", Resource: "validatingadmissionpolicy", Name: "machine-api-machine-vap"},
+		{Group: "admissionregistration.k8s.io", Resource: "validatingadmissionpolicybinding", Name: "machine-api-machine-vap"},
+
+		// Operand owned resources
+		// TODO: these would ideally be generated dynamically by the installer
 		{Group: "cluster.x-k8s.io", Resource: "clusters", Namespace: r.ManagedNamespace},
 		{Group: "cluster.x-k8s.io", Resource: "machines", Namespace: r.ManagedNamespace},
 		{Group: "cluster.x-k8s.io", Resource: "machinesets", Namespace: r.ManagedNamespace},
-		{Group: "admissionregistration", Resource: "validatingadmissionpolicy", Name: "machine-api-machine-vap"},
-		{Group: "admissionregistration", Resource: "validatingadmissionpolicybinding", Name: "machine-api-machine-vap"},
 	}
 
 	platformPrefix := platformToInfraPrefix(r.Platform)
@@ -234,6 +275,9 @@ func (r *ClusterOperatorStatusClient) RelatedObjects() []configv1.ObjectReferenc
 		}
 	}
 
+	// Sort references before writing for consistency and so they can be easily compared.
+	sortRelatedObjects(references)
+
 	return references
 }
 
@@ -255,34 +299,6 @@ func NewClusterOperatorStatusCondition(conditionType configv1.ClusterStatusCondi
 	}
 }
 
-func printOperandVersions(versions []configv1.OperandVersion) string {
-	versionsOutput := []string{}
-	for _, operand := range versions {
-		versionsOutput = append(versionsOutput, fmt.Sprintf("%s: %s", operand.Name, operand.Version))
-	}
-
-	return strings.Join(versionsOutput, ", ")
-}
-
-// isRelatedObjectsDeepEqual compares two slices of ObjectReference and returns true if they are equal.
-// Slices that have the same elements but different ordering are still considered equal.
-func isRelatedObjectsDeepEqual(currentRelatedObjects, desiredRelatedObjects []configv1.ObjectReference) bool {
-	// Deep copy current related objects to avoid modifying the original slice.
-	currentRelatedObjectsCopy := make([]configv1.ObjectReference, len(currentRelatedObjects))
-	copy(currentRelatedObjectsCopy, currentRelatedObjects)
-
-	// Deep copy desired related objects to avoid modifying the original slice.
-	desiredRelatedObjectsCopy := make([]configv1.ObjectReference, len(desiredRelatedObjects))
-	copy(desiredRelatedObjectsCopy, desiredRelatedObjects)
-
-	// Sort current and desired related objects to make a consistent comparison.
-	// This is necessary because the related objects are not sorted by default.
-	sortRelatedObjects(currentRelatedObjectsCopy)
-	sortRelatedObjects(desiredRelatedObjectsCopy)
-
-	return equality.Semantic.DeepEqual(currentRelatedObjectsCopy, desiredRelatedObjectsCopy)
-}
-
 // isStatusConditionPresentAndEqual returns true when cond is present and equal.
 func isStatusConditionPresentAndEqual(conditions []configv1.ClusterOperatorStatusCondition, cond configv1.ClusterOperatorStatusCondition) bool {
 	for _, condition := range conditions {
@@ -294,19 +310,22 @@ func isStatusConditionPresentAndEqual(conditions []configv1.ClusterOperatorStatu
 	return false
 }
 
-// sortRelatedObjects sorts the related objects by group and then by resource.
+// sortRelatedObjects sorts a slice of related objects by group, resource,
+// namespace, and name, in that order.
 func sortRelatedObjects(relatedObjects []configv1.ObjectReference) {
-	sort.Slice(relatedObjects, func(i, j int) bool {
-		a, b := relatedObjects[i], relatedObjects[j]
+	slices.SortFunc(relatedObjects, func(a, b configv1.ObjectReference) int {
 		if a.Group != b.Group {
-			return a.Group < b.Group
+			return cmp.Compare(a.Group, b.Group)
 		}
-		if a.Resource != b.Resource { //nolint:wsl
-			return a.Resource < b.Resource
+
+		if a.Resource != b.Resource {
+			return cmp.Compare(a.Resource, b.Resource)
 		}
-		if a.Namespace != b.Namespace { //nolint:wsl
-			return a.Namespace < b.Namespace
+
+		if a.Namespace != b.Namespace {
+			return cmp.Compare(a.Namespace, b.Namespace)
 		}
-		return a.Name < b.Name //nolint:wsl,nlreturn
+
+		return cmp.Compare(a.Name, b.Name)
 	})
 }
