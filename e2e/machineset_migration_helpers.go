@@ -82,13 +82,20 @@ func createMAPIMachineSetWithAuthoritativeAPI(ctx context.Context, cl client.Cli
 	return mapiMachineSet
 }
 
-// switchMachineSetAuthoritativeAPI updates the authoritativeAPI fields of a MAPI MachineSet and its template.
-func switchMachineSetAuthoritativeAPI(mapiMachineSet *mapiv1beta1.MachineSet, machineSetAuthority mapiv1beta1.MachineAuthority, machineAuthority mapiv1beta1.MachineAuthority) {
-	By(fmt.Sprintf("Switching MachineSet %s AuthoritativeAPI to spec.authoritativeAPI: %s, spec.template.spec.authoritativeAPI: %s", mapiMachineSet.Name, machineSetAuthority, machineAuthority))
+// switchMachineSetAuthoritativeAPI updates the authoritativeAPI fields of a MAPI MachineSet.
+func switchMachineSetAuthoritativeAPI(mapiMachineSet *mapiv1beta1.MachineSet, machineSetAuthority mapiv1beta1.MachineAuthority) {
+	By(fmt.Sprintf("Switching MachineSet %s AuthoritativeAPI to spec.authoritativeAPI: %s", mapiMachineSet.Name, machineSetAuthority))
 	Eventually(komega.Update(mapiMachineSet, func() {
 		mapiMachineSet.Spec.AuthoritativeAPI = machineSetAuthority
-		mapiMachineSet.Spec.Template.Spec.AuthoritativeAPI = machineAuthority
 	}), capiframework.WaitShort, capiframework.RetryShort).Should(Succeed(), "Failed to update MachineSet %s AuthoritativeAPI", mapiMachineSet.Name)
+}
+
+// switchMachineSetTemplateAuthoritativeAPI updates the authoritativeAPI fields of a MAPI MachineSet's template.
+func switchMachineSetTemplateAuthoritativeAPI(mapiMachineSet *mapiv1beta1.MachineSet, machineAuthority mapiv1beta1.MachineAuthority) {
+	By(fmt.Sprintf("Switching MachineSet %s spec.template.spec.authoritativeAPI: %s", mapiMachineSet.Name, machineAuthority))
+	Eventually(komega.Update(mapiMachineSet, func() {
+		mapiMachineSet.Spec.Template.Spec.AuthoritativeAPI = machineAuthority
+	}), capiframework.WaitShort, capiframework.RetryShort).Should(Succeed(), "Failed to update MachineSet %s template AuthoritativeAPI", mapiMachineSet.Name)
 }
 
 // verifyMachineSetAuthoritative verifies that a MAPI MachineSet's status.authoritativeAPI matches the expected authority.
