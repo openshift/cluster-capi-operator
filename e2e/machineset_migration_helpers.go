@@ -23,6 +23,13 @@ import (
 
 // createCAPIMachineSet creates a CAPI MachineSet with an AWSMachineTemplate and waits for it to be ready.
 func createCAPIMachineSet(ctx context.Context, cl client.Client, replicas int32, machineSetName string, instanceType string) *clusterv1.MachineSet {
+	return createCAPIMachineSetSkipWait(ctx, cl, replicas, machineSetName, instanceType, false)
+}
+
+// createCAPIMachineSetSkipWait creates a CAPI MachineSet with an AWSMachineTemplate.
+// If skipWait is true, it skips waiting for the MachineSet to be ready.
+// This allows for parallel creation of multiple MachineSets to reduce total test time.
+func createCAPIMachineSetSkipWait(ctx context.Context, cl client.Client, replicas int32, machineSetName string, instanceType string, skipWait bool) *clusterv1.MachineSet {
 	GinkgoHelper()
 	By(fmt.Sprintf("Creating CAPI MachineSet %s with %d replicas", machineSetName, replicas))
 	_, mapiDefaultProviderSpec := getDefaultAWSMAPIProviderSpec()
@@ -48,12 +55,21 @@ func createCAPIMachineSet(ctx context.Context, cl client.Client, replicas int32,
 		"worker-user-data",
 	))
 
-	capiframework.WaitForMachineSet(cl, machineSet.Name, machineSet.Namespace)
+	if !skipWait {
+		capiframework.WaitForMachineSet(cl, machineSet.Name, machineSet.Namespace)
+	}
 	return machineSet
 }
 
 // createMAPIMachineSetWithAuthoritativeAPI creates a MAPI MachineSet with specified authoritativeAPI and waits for the CAPI mirror to be created.
 func createMAPIMachineSetWithAuthoritativeAPI(ctx context.Context, cl client.Client, replicas int, machineSetName string, machineSetAuthority mapiv1beta1.MachineAuthority, machineAuthority mapiv1beta1.MachineAuthority) *mapiv1beta1.MachineSet {
+	return createMAPIMachineSetWithAuthoritativeAPISkipWait(ctx, cl, replicas, machineSetName, machineSetAuthority, machineAuthority, false)
+}
+
+// createMAPIMachineSetWithAuthoritativeAPISkipWait creates a MAPI MachineSet with specified authoritativeAPI.
+// If skipWait is true, it skips waiting for the CAPI mirror creation and Machine running state.
+// This allows for parallel creation of multiple MachineSets to reduce total test time.
+func createMAPIMachineSetWithAuthoritativeAPISkipWait(ctx context.Context, cl client.Client, replicas int, machineSetName string, machineSetAuthority mapiv1beta1.MachineAuthority, machineAuthority mapiv1beta1.MachineAuthority, skipWait bool) *mapiv1beta1.MachineSet {
 	GinkgoHelper()
 	By(fmt.Sprintf("Creating MAPI MachineSet with spec.authoritativeAPI: %s, spec.template.spec.authoritativeAPI: %s, replicas=%d", machineSetAuthority, machineAuthority, replicas))
 	machineSetParams := mapiframework.BuildMachineSetParams(ctx, cl, replicas)
@@ -65,6 +81,10 @@ func createMAPIMachineSetWithAuthoritativeAPI(ctx context.Context, cl client.Cli
 	machineSetParams.Taints = []corev1.Taint{}
 	mapiMachineSet, err := mapiframework.CreateMachineSet(cl, machineSetParams)
 	Expect(err).ToNot(HaveOccurred(), "MAPI MachineSet %s creation should succeed", machineSetName)
+
+	if skipWait {
+		return mapiMachineSet
+	}
 
 	capiMachineSet := &clusterv1.MachineSet{
 		ObjectMeta: metav1.ObjectMeta{
@@ -82,6 +102,28 @@ func createMAPIMachineSetWithAuthoritativeAPI(ctx context.Context, cl client.Cli
 		capiframework.WaitForMachineSet(cl, machineSetName, capiframework.CAPINamespace)
 	}
 	return mapiMachineSet
+}
+
+// waitForMAPIMachineSetReady waits for a MAPI MachineSet's CAPI mirror and Machines to be ready.
+func waitForMAPIMachineSetReady(ctx context.Context, cl client.Client, machineSetName string, machineAuthority mapiv1beta1.MachineAuthority) {
+	GinkgoHelper()
+	By(fmt.Sprintf("Waiting for MachineSet %s to be ready", machineSetName))
+
+	capiMachineSet := &clusterv1.MachineSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      machineSetName,
+			Namespace: capiframework.CAPINamespace,
+		},
+	}
+	Eventually(komega.Get(capiMachineSet), capiframework.WaitShort, capiframework.RetryShort).Should(
+		Succeed(), "Should have mirror CAPI MachineSet created within 1 minute")
+
+	switch machineAuthority {
+	case mapiv1beta1.MachineAuthorityMachineAPI:
+		mapiframework.WaitForMachineSet(ctx, cl, machineSetName)
+	case mapiv1beta1.MachineAuthorityClusterAPI:
+		capiframework.WaitForMachineSet(cl, machineSetName, capiframework.CAPINamespace)
+	}
 }
 
 // switchMachineSetAuthoritativeAPI updates the authoritativeAPI fields of a MAPI MachineSet and its template.
