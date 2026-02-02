@@ -162,7 +162,8 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 			})
 
 			It("should succeed switching MAPI MachineSet AuthoritativeAPI to ClusterAPI", func() {
-				switchMachineSetAuthoritativeAPI(mapiMachineSet, mapiv1beta1.MachineAuthorityClusterAPI, mapiv1beta1.MachineAuthorityClusterAPI)
+				switchMachineSetTemplateAuthoritativeAPI(mapiMachineSet, mapiv1beta1.MachineAuthorityClusterAPI)
+				switchMachineSetAuthoritativeAPI(mapiMachineSet, mapiv1beta1.MachineAuthorityClusterAPI)
 				verifyMachineSetPausedCondition(mapiMachineSet, mapiv1beta1.MachineAuthorityClusterAPI)
 				verifyMachineSetPausedCondition(capiMachineSet, mapiv1beta1.MachineAuthorityClusterAPI)
 				verifyMAPIMachineSetSynchronizedCondition(mapiMachineSet, mapiv1beta1.MachineAuthorityClusterAPI)
@@ -202,7 +203,9 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 			})
 
 			It("should succeed in switching back the AuthoritativeAPI to MachineAPI after the initial switch to ClusterAPI", func() {
-				switchMachineSetAuthoritativeAPI(mapiMachineSet, mapiv1beta1.MachineAuthorityMachineAPI, mapiv1beta1.MachineAuthorityMachineAPI)
+				switchMachineSetAuthoritativeAPI(mapiMachineSet, mapiv1beta1.MachineAuthorityMachineAPI)
+				verifyMachineSetAuthoritative(mapiMachineSet, mapiv1beta1.MachineAuthorityMachineAPI)
+				switchMachineSetTemplateAuthoritativeAPI(mapiMachineSet, mapiv1beta1.MachineAuthorityMachineAPI)
 				verifyMachineSetPausedCondition(mapiMachineSet, mapiv1beta1.MachineAuthorityMachineAPI)
 				verifyMachineSetPausedCondition(capiMachineSet, mapiv1beta1.MachineAuthorityMachineAPI)
 				verifyMAPIMachineSetSynchronizedCondition(mapiMachineSet, mapiv1beta1.MachineAuthorityMachineAPI)
@@ -286,31 +289,35 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 
 		Context("when MAPI MachineSet with spec.authoritativeAPI: MachineAPI and replicas 0", Ordered, func() {
 			It("should reject update when attempting scaling of the CAPI MachineSet mirror", func() {
-				By("Scaling up CAPI MachineSet to 1 should be rejected")
-				capiframework.ScaleCAPIMachineSet(mapiMSAuthMAPIName, 1, capiframework.CAPINamespace)
+				By("Scaling up CAPI MachineSet to 1 should be rejected by VAP")
+				replicas := int32(1)
+				Eventually(func() error {
+					return k.Update(capiMachineSet, func() {
+						capiMachineSet.Spec.Replicas = &replicas
+					})()
+				}, capiframework.WaitShort, capiframework.RetryShort).Should(MatchError(ContainSubstring("Changing .spec is not allowed")))
+
 				capiMachineSet = capiframework.GetMachineSet(cl, mapiMSAuthMAPIName, capiframework.CAPINamespace)
 				verifyMachinesetReplicas(capiMachineSet, 0)
 			})
 
 			It("should reject update when attempting to change the spec of the CAPI MachineSet mirror", func() {
-				By("Updating CAPI mirror spec (such as Deletion.Order)")
-				Eventually(k.Update(capiMachineSet, func() {
-					capiMachineSet.Spec.Deletion = clusterv1.MachineSetDeletionSpec{
-						Order: clusterv1.OldestMachineSetDeletionOrder,
-					}
-				}), capiframework.WaitMedium, capiframework.RetryShort).Should(Succeed(), "Failed to update CAPI MachineSet Deletion.Order")
-
-				By("Verifying both MAPI and CAPI MachineSet spec value are restored to original value")
-				Eventually(k.Object(mapiMachineSet), capiframework.WaitShort, capiframework.RetryShort).Should(HaveField("Spec.DeletePolicy", SatisfyAny(BeEmpty(), Equal("Random"))), "Should have DeletePolicy be either empty or 'Random'")
-				Eventually(k.Object(capiMachineSet), capiframework.WaitShort, capiframework.RetryShort).Should(HaveField("Spec.Deletion.Order", Equal(clusterv1.RandomMachineSetDeletionOrder)), "Should have Deletion.Order be 'Random'")
+				By("Updating CAPI mirror spec (such as Deletion.Order) should be rejected by VAP")
+				Eventually(func() error {
+					return k.Update(capiMachineSet, func() {
+						capiMachineSet.Spec.Deletion = clusterv1.MachineSetDeletionSpec{
+							Order: clusterv1.OldestMachineSetDeletionOrder,
+						}
+					})()
+				}, capiframework.WaitShort, capiframework.RetryShort).Should(MatchError(ContainSubstring("Changing .spec is not allowed")))
 			})
 
 			It("should create a new InfraTemplate when update MAPI MachineSet providerSpec", func() {
 				By("Updating MAPI MachineSet providerSpec InstanceType to m5.large")
 				newInstanceType := "m5.large"
-				updateAWSMachineSetProviderSpec(ctx, cl, mapiMachineSet, func(providerSpec *mapiv1beta1.AWSMachineProviderConfig) {
+				Expect(updateAWSMachineSetProviderSpec(ctx, cl, mapiMachineSet, func(providerSpec *mapiv1beta1.AWSMachineProviderConfig) {
 					providerSpec.InstanceType = newInstanceType
-				})
+				})).To(Succeed(), "failed to patch MachineSet provider spec")
 
 				By("Waiting for new InfraTemplate to be created")
 				originalAWSMachineTemplateName := capiMachineSet.Spec.Template.Spec.InfrastructureRef.Name
@@ -330,30 +337,28 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 
 		Context("when switching MAPI MachineSet spec.authoritativeAPI to ClusterAPI", Ordered, func() {
 			BeforeAll(func() {
-				switchMachineSetAuthoritativeAPI(mapiMachineSet, mapiv1beta1.MachineAuthorityClusterAPI, mapiv1beta1.MachineAuthorityClusterAPI)
+				switchMachineSetTemplateAuthoritativeAPI(mapiMachineSet, mapiv1beta1.MachineAuthorityClusterAPI)
+				switchMachineSetAuthoritativeAPI(mapiMachineSet, mapiv1beta1.MachineAuthorityClusterAPI)
 				verifyMAPIMachineSetSynchronizedCondition(mapiMachineSet, mapiv1beta1.MachineAuthorityClusterAPI)
 			})
 
 			It("should be rejected when scaling MAPI MachineSet", func() {
-				By("Scaling up MAPI MachineSet to 1")
-				Expect(mapiframework.ScaleMachineSet(mapiMSAuthMAPIName, 1)).To(Succeed(), "should allow scaling MAPI MachineSet")
-
-				By("Verifying MAPI MachineSet replicas is restored to original value 0")
-				verifyMachinesetReplicas(mapiMachineSet, 0)
-				verifyMachinesetReplicas(capiMachineSet, 0)
+				By("Scaling up MAPI MachineSet to 1 should be rejected by VAP")
+				replicas := int32(1)
+				Eventually(func() error {
+					return k.Update(mapiMachineSet, func() {
+						mapiMachineSet.Spec.Replicas = &replicas
+					})()
+				}, capiframework.WaitShort, capiframework.RetryShort).Should(MatchError(ContainSubstring("Any other change inside .spec is not allowed")))
 			})
 
-			It("should be rejected when when updating providerSpec of MAPI MachineSet", func() {
-				By("Getting the current MAPI MachineSet providerSpec InstanceType")
-				originalSpec := getAWSProviderSpecFromMachineSet(mapiMachineSet)
-
-				By("Updating the MAPI MachineSet providerSpec InstanceType")
-				updateAWSMachineSetProviderSpec(ctx, cl, mapiMachineSet, func(providerSpec *mapiv1beta1.AWSMachineProviderConfig) {
-					providerSpec.InstanceType = "m5.xlarge"
-				})
-
-				By("Verifying MAPI MachineSet instanceType is restored to original value")
-				verifyMAPIMachineSetProviderSpec(mapiMachineSet, HaveField("InstanceType", Equal(originalSpec.InstanceType)))
+			It("should be rejected when updating providerSpec of MAPI MachineSet", func() {
+				By("Updating the MAPI MachineSet providerSpec InstanceType should be rejected by VAP")
+				Eventually(func() error {
+					return updateAWSMachineSetProviderSpec(ctx, cl, mapiMachineSet, func(providerSpec *mapiv1beta1.AWSMachineProviderConfig) {
+						providerSpec.InstanceType = "m5.xlarge"
+					})
+				}, capiframework.WaitShort, capiframework.RetryShort).Should(MatchError(ContainSubstring("Any other change inside .spec is not allowed")))
 			})
 
 			It("should update MAPI MachineSet and remove old InfraTemplate when CAPI MachineSet points to new InfraTemplate", func() {
