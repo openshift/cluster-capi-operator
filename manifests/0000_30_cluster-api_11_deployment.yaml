@@ -95,6 +95,6 @@ spec:
       - name: cert
         secret:
           defaultMode: 420
-          secretName: cluster-capi-operator-webhook-service-cert
+          secretName: capi-controllers-webhook-service-cert
       - name: provider-images
         emptyDir: {}

@@ -19,7 +19,9 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"maps"
 	"os"
+	"slices"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -40,13 +42,16 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/capiinstaller"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/clusteroperator"
+	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 )
 
 const (
 	managerName = "cluster-capi-installer"
 
-	defaultImagesLocation = "./dev-images.json"
+	defaultImagesLocation       = "./dev-images.json"
+	providerImageDirEnvVar      = "PROVIDER_IMAGE_DIR"
+	defaultProviderImageDirPath = "/var/lib/provider-images"
 )
 
 func initScheme(scheme *runtime.Scheme) {
@@ -132,6 +137,19 @@ func setupControllers(ctx context.Context, mgr ctrl.Manager, opts *util.CommonOp
 		return fmt.Errorf("unable to get images from file: %w", err)
 	}
 
+	providerImageDir := os.Getenv(providerImageDirEnvVar)
+	if providerImageDir == "" {
+		providerImageDir = defaultProviderImageDirPath
+	}
+
+	containerImageRefs := slices.Collect(maps.Values(containerImages))
+
+	providerProfiles, err := providerimages.ReadProviderImages(ctx, mgr.GetAPIReader(), mgr.GetLogger(), containerImageRefs, providerImageDir)
+	if err != nil {
+		klog.Error(err, "unable to get provider image metadata")
+		os.Exit(1)
+	}
+
 	applyClient, err := kubernetes.NewForConfig(mgr.GetConfig())
 	if err != nil {
 		return fmt.Errorf("unable to set up apply client: %w", err)
@@ -150,6 +168,7 @@ func setupControllers(ctx context.Context, mgr ctrl.Manager, opts *util.CommonOp
 		ClusterOperatorStatusClient: opts.GetClusterOperatorStatusClient(mgr, platform, "installer"),
 		Scheme:                      mgr.GetScheme(),
 		Images:                      containerImages,
+		ProviderImages:              providerProfiles,
 		RestCfg:                     mgr.GetConfig(),
 		Platform:                    platform,
 		ApplyClient:                 applyClient,
