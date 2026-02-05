@@ -234,18 +234,18 @@ func (r *ClusterOperatorStatusClient) RelatedObjects() []configv1.ObjectReferenc
 
 		// Operator resources in the managed namespace
 		{Group: "", Resource: "namespaces", Name: r.ManagedNamespace},
-		{Group: "", Resource: "serviceaccounts", Name: "cluster-capi-operator", Namespace: r.ManagedNamespace},
-		{Group: "apps", Resource: "deployments", Name: "cluster-capi-operator", Namespace: r.ManagedNamespace},
+		{Group: "", Resource: "serviceaccounts", Name: "capi-controllers", Namespace: r.ManagedNamespace},
+		{Group: "apps", Resource: "deployments", Name: "capi-controllers", Namespace: r.ManagedNamespace},
 
 		// Operator resources in the operator namespace
 		{Group: "", Resource: "namespaces", Name: r.OperatorNamespace},
-		{Group: "", Resource: "serviceaccounts", Name: "cluster-capi-installer", Namespace: r.OperatorNamespace},
+		{Group: "", Resource: "serviceaccounts", Name: "capi-operator", Namespace: r.OperatorNamespace},
 		{Group: "", Resource: "configmaps", Name: "cluster-capi-operator-images", Namespace: r.OperatorNamespace},
-		{Group: "apps", Resource: "deployments", Name: "cluster-capi-installer", Namespace: r.OperatorNamespace},
+		{Group: "apps", Resource: "deployments", Name: "capi-operator", Namespace: r.OperatorNamespace},
 
 		// Cluster-scoped operator resources
-		{Group: "admissionregistration.k8s.io", Resource: "validatingadmissionpolicy", Name: "machine-api-machine-vap"},
-		{Group: "admissionregistration.k8s.io", Resource: "validatingadmissionpolicybinding", Name: "machine-api-machine-vap"},
+		{Group: "admissionregistration.k8s.io", Resource: "validatingadmissionpolicies", Name: "machine-api-machine-vap"},
+		{Group: "admissionregistration.k8s.io", Resource: "validatingadmissionpolicybindings", Name: "machine-api-machine-vap"},
 
 		// Operand owned resources
 		// TODO: these would ideally be generated dynamically by the installer

@@ -12,3 +12,33 @@ status:
   versions:
   - name: operator
     version: "0.0.1-snapshot"
+  relatedObjects:
+  - group: config.openshift.io
+    name: cluster-api
+    resource: clusteroperators
+  - group: ""
+    name: openshift-cluster-api
+    resource: namespaces
+  - group: ""
+    name: openshift-cluster-api-operator
+    resource: namespaces
+  - group: ""
+    name: capi-controllers
+    namespace: openshift-cluster-api
+    resource: serviceaccounts
+  - group: ""
+    name: capi-operator
+    namespace: openshift-cluster-api-operator
+    resource: serviceaccounts
+  - group: ""
+    name: cluster-capi-operator-images
+    namespace: openshift-cluster-api-operator
+    resource: configmaps
+  - group: "apps"
+    name: capi-operator
+    namespace: openshift-cluster-api-operator
+    resource: deployments
+  - group: "apps"
+    name: capi-controllers
+    namespace: openshift-cluster-api
+    resource: deployments
