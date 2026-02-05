@@ -232,7 +232,7 @@ func (r *MachineMigrationReconciler) isOldAuthoritativeResourcePaused(ctx contex
 		return false, fmt.Errorf("failed to get Cluster API infra machine: %w", err)
 	}
 
-	infraMachinePausedConditionStatus, err := util.GetConditionStatus(infraMachine, clusterv1.PausedCondition)
+	infraMachinePausedConditionStatus, err := util.GetConditionStatusFromInfraObject(infraMachine, clusterv1.PausedCondition)
 	if err != nil {
 		return false, fmt.Errorf("unable to get paused condition for %s/%s: %w", infraMachine.GetNamespace(), infraMachine.GetName(), err)
 	}
