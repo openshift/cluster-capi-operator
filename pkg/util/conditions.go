@@ -33,20 +33,20 @@ import (
 )
 
 var (
-	errStatusNotMap                 = errors.New("unable to assert status structure to map")
-	errStatusConditionsNotInterface = errors.New("unable to assert status.condition structure to interface")
+	errStatusNotMap                        = errors.New("unable to assert status structure to map")
+	errStatusConditionsNotInterface        = errors.New("unable to assert status.condition structure to interface")
+	errStatusV1Beta2NotFound               = errors.New("unable to find status.v1beta2 field")
+	errStatusV1Beta2ConditionsNotInterface = errors.New("unable to assert status.v1beta2.conditions structure to interface")
 )
 
 // GetCondition retrieves a specific condition from a client.Object.
 func GetCondition(obj client.Object, conditionType string) (*metav1.Condition, error) {
-	// Convert client.Object to unstructured.Unstructured
 	unstructuredMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert object to unstructured: %w", err)
 	}
 
 	unstructuredObj := &unstructured.Unstructured{Object: unstructuredMap}
-
 	data := unstructuredObj.UnstructuredContent()
 
 	status, ok := data["status"].(map[string]interface{})
@@ -59,6 +59,40 @@ func GetCondition(obj client.Object, conditionType string) (*metav1.Condition, e
 		return nil, errStatusConditionsNotInterface
 	}
 
+	return getConditionFromList(conditions, conditionType)
+}
+
+// GetV1Beta2Condition retrieves a specific v1beta2 condition from a client.Object.
+// V1Beta2 conditions are stored at status.v1beta2.conditions instead of status.conditions.
+func GetV1Beta2Condition(obj client.Object, conditionType string) (*metav1.Condition, error) {
+	unstructuredMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert object to unstructured: %w", err)
+	}
+
+	unstructuredObj := &unstructured.Unstructured{Object: unstructuredMap}
+	data := unstructuredObj.UnstructuredContent()
+
+	status, ok := data["status"].(map[string]interface{})
+	if !ok {
+		return nil, errStatusNotMap
+	}
+
+	v1beta2, ok := status["v1beta2"].(map[string]interface{})
+	if !ok {
+		return nil, errStatusV1Beta2NotFound
+	}
+
+	conditions, ok := v1beta2["conditions"].([]interface{})
+	if !ok {
+		return nil, errStatusV1Beta2ConditionsNotInterface
+	}
+
+	return getConditionFromList(conditions, conditionType)
+}
+
+// getConditionFromList finds a specific condition in a conditions list.
+func getConditionFromList(conditions []interface{}, conditionType string) (*metav1.Condition, error) {
 	for _, c := range conditions {
 		condMap, ok := c.(map[string]interface{})
 		if !ok {
@@ -96,6 +130,50 @@ func GetConditionStatus(obj client.Object, conditionType string) (corev1.Conditi
 	}
 
 	return corev1.ConditionStatus(cond.Status), nil
+}
+
+// GetV1Beta2ConditionStatus returns the status for the v1beta2 condition.
+func GetV1Beta2ConditionStatus(obj client.Object, conditionType string) (corev1.ConditionStatus, error) {
+	cond, err := GetV1Beta2Condition(obj, conditionType)
+	if err != nil {
+		return corev1.ConditionUnknown, fmt.Errorf("unable to get v1beta2 condition %q for the object: %w", conditionType, err)
+	}
+
+	if cond == nil {
+		return corev1.ConditionUnknown, nil
+	}
+
+	return corev1.ConditionStatus(cond.Status), nil
+}
+
+// GetConditionStatusFromInfraObject tries to get condition status from either v1beta2 or v1beta1 conditions.
+// It first tries v1beta1 (for AWS, Azure, GCP, etc.) then falls back to v1beta2 (for providers like vSphere).
+// This is useful for infrastructure provider objects where the condition location varies by provider.
+// If the condition is not found in either location, it returns ConditionUnknown instead of an error.
+func GetConditionStatusFromInfraObject(obj client.Object, conditionType string) (corev1.ConditionStatus, error) {
+	// Try v1beta1 first (AWS, Azure, GCP, etc.)
+	status, err := GetConditionStatus(obj, conditionType)
+	if status != corev1.ConditionUnknown {
+		return status, err
+	}
+
+	if err != nil && !errors.Is(err, errStatusConditionsNotInterface) {
+		return status, err
+	}
+
+	status, err = GetV1Beta2ConditionStatus(obj, conditionType)
+	if status != corev1.ConditionUnknown {
+		return status, err
+	}
+
+	// Both returned Unknown. If the errors are expected (missing fields), return Unknown with no error
+	// to avoid reconcile failures for providers that simply omit the condition.
+	// Otherwise, return the real error.
+	if err != nil && !errors.Is(err, errStatusV1Beta2NotFound) {
+		return corev1.ConditionUnknown, err
+	}
+
+	return corev1.ConditionUnknown, nil
 }
 
 func getString(data map[string]interface{}, key string) string {
