@@ -18,7 +18,7 @@ require (
 
 require (
 	github.com/google/go-containerregistry v0.20.7
-	github.com/openshift/api v0.0.0-20251214014457-bfa868a22401
+	github.com/openshift/api v0.0.0-20260105114749-aae5635a71a7
 	github.com/openshift/cluster-capi-operator v0.0.0-00010101000000-000000000000
 	k8s.io/utils v0.0.0-20250820121507-0af2bda4dd1d
 	sigs.k8s.io/controller-runtime v0.22.4
@@ -28,7 +28,7 @@ require (
 	github.com/blang/semver/v4 v4.0.0 // indirect
 	github.com/containerd/stargz-snapshotter/estargz v0.18.1 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
-	github.com/docker/cli v29.0.3+incompatible // indirect
+	github.com/docker/cli v29.2.1+incompatible // indirect
 	github.com/docker/distribution v2.8.3+incompatible // indirect
 	github.com/docker/docker-credential-helpers v0.9.3 // indirect
 	github.com/emicklei/go-restful/v3 v3.12.2 // indirect
