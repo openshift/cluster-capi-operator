@@ -1,0 +1,22 @@
+  apiVersion: networking.k8s.io/v1                                                                                                                                                                                   
+  kind: NetworkPolicy
+  metadata:                                                                                                                                                                                                          
+      name: allow-egress-capi-operator                                                                                                                                                                             
+      namespace: openshift-cluster-api-operator
+  spec:
+      # Select pods with the label k8s-app=capi-operator
+      # This policy will apply only to pods matching these labels
+      podSelector:
+        matchLabels:
+          k8s-app: capi-operator
+
+      # Define that this policy controls egress (outbound) traffic
+      # Without this, the policy would also deny all egress by default
+      policyTypes:
+      - Egress
+
+      # Egress rules - define what outbound traffic is allowed
+      egress:
+      - {}  # Empty rule allows ALL egress traffic to any destination
+            # This permits the capi-operator pods to make outbound connections
+            # to any IP address on any port and protocol
