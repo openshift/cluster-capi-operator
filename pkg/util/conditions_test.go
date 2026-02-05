@@ -536,6 +536,42 @@ func TestGetConditionStatusFromInfraObject(t *testing.T) {
 			wantStatus: corev1.ConditionTrue,
 		},
 		{
+			name: "falls back when versioned conditions omit Paused",
+			obj: &unstructured.Unstructured{Object: map[string]interface{}{
+				"status": map[string]interface{}{
+					"v1beta2": map[string]interface{}{"conditions": []interface{}{
+						map[string]interface{}{"type": "Ready", "status": "True"},
+					}},
+					"conditions": []interface{}{map[string]interface{}{"type": "Paused", "status": "True"}},
+				},
+			}},
+			condType: "Paused", wantStatus: corev1.ConditionTrue,
+		},
+		{
+			name: "falls back when versioned Paused is Unknown",
+			obj: &unstructured.Unstructured{Object: map[string]interface{}{
+				"status": map[string]interface{}{
+					"v1beta2": map[string]interface{}{"conditions": []interface{}{
+						map[string]interface{}{"type": "Paused", "status": "Unknown"},
+					}},
+					"conditions": []interface{}{map[string]interface{}{"type": "Paused", "status": "True"}},
+				},
+			}},
+			condType: "Paused", wantStatus: corev1.ConditionTrue,
+		},
+		{
+			name: "versioned False takes precedence over root True",
+			obj: &unstructured.Unstructured{Object: map[string]interface{}{
+				"status": map[string]interface{}{
+					"v1beta2": map[string]interface{}{"conditions": []interface{}{
+						map[string]interface{}{"type": "Paused", "status": "False"},
+					}},
+					"conditions": []interface{}{map[string]interface{}{"type": "Paused", "status": "True"}},
+				},
+			}},
+			condType: "Paused", wantStatus: corev1.ConditionFalse,
+		},
+		{
 			name: "empty status returns Unknown",
 			obj: &unstructured.Unstructured{
 				Object: map[string]interface{}{

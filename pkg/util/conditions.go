@@ -125,7 +125,10 @@ func GetConditionStatusFromInfraObject(obj client.Object, conditionType string) 
 	}
 
 	if version := findVersionedConditionPath(statusMap); version != "" {
-		return GetConditionStatus(obj, conditionType, version)
+		status, err := GetConditionStatus(obj, conditionType, version)
+		if err != nil || status != corev1.ConditionUnknown {
+			return status, err
+		}
 	}
 
 	status, err := GetConditionStatus(obj, conditionType)
