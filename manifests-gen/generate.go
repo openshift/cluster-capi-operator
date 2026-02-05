@@ -36,10 +36,6 @@ func generateManifests(opts cmdlineOptions) error {
 		return fmt.Errorf("failed to generate kustomize resources: %w", err)
 	}
 
-	if err != nil {
-		return fmt.Errorf("failed to generate kustomize resources: %w", err)
-	}
-
 	// Create output directory for profile
 	profileDir := path.Join(opts.manifestsPath, opts.profileName)
 	if err := os.MkdirAll(profileDir, os.ModeDir|0755); err != nil {
@@ -90,8 +86,7 @@ func generateKustomizeResources(kustomizeDir string) ([]client.Object, error) {
 		}
 
 		var unstructured unstructured.Unstructured
-		err = json.Unmarshal(data, &unstructured)
-		if err != nil {
+		if err := json.Unmarshal(data, &unstructured); err != nil {
 			return nil, fmt.Errorf("error unmarshalling resource to unstructured: %w", err)
 		}
 
@@ -159,8 +154,7 @@ func writeMetadata(opts cmdlineOptions) (err error) {
 	if err != nil {
 		return fmt.Errorf("error marshalling metadata to YAML: %w", err)
 	}
-	_, err = metadataFile.Write(data)
-	if err != nil {
+	if _, err := metadataFile.Write(data); err != nil {
 		return fmt.Errorf("error writing metadata to file: %w", err)
 	}
 	return nil

@@ -50,6 +50,11 @@ const (
 	pullSecretName      = "pull-secret"
 	pullSecretNamespace = "openshift-config"  //nolint:gosec // Not a credential, just a namespace name
 	pullSecretKey       = ".dockerconfigjson" //nolint:gosec // Not a credential, just a key name
+
+	// AttributeKeyType is the key for the provider type attribute.
+	AttributeKeyType = "type"
+	// AttributeKeyVersion is the key for the provider version attribute.
+	AttributeKeyVersion = "version"
 )
 
 // ProviderImageManifests represents metadata and manifests read from a provider image.
@@ -70,6 +75,13 @@ type ProviderMetadata struct {
 	OCPPlatform  configv1.PlatformType `json:"ocpPlatform,omitempty"`
 	SelfImageRef string                `json:"selfImageRef,omitempty"`
 	InstallOrder int                   `json:"installOrder,omitempty"`
+}
+
+// MatchesPlatform reports whether this profile should be installed on the
+// given cluster platform. Profiles with no OCPPlatform set (empty string)
+// are platform-independent and match every cluster.
+func (m ProviderMetadata) MatchesPlatform(clusterPlatform configv1.PlatformType) bool {
+	return m.OCPPlatform == "" || m.OCPPlatform == clusterPlatform
 }
 
 // imageFetcher abstracts fetching container images for testability.
@@ -167,14 +179,18 @@ func readProviderImages(ctx context.Context, log logr.Logger, containerImages []
 	var err error
 
 	for result := range results {
-		if result.err != nil {
+		switch {
+		case result.err != nil:
+			log.Error(result.err, "failed to process provider image", "image", result.imageRef)
 			err = errors.Join(err, fmt.Errorf("fetching provider from image %s: %w", result.imageRef, result.err))
-		} else {
+		case len(result.manifests) == 0:
+			log.Info("no provider manifests found in container image", "image", result.imageRef)
+		default:
 			for _, manifest := range result.manifests {
 				log.Info("found provider manifests in container image", "image", result.imageRef,
 					"provider", manifest.Name,
-					"type", manifest.Attributes["type"],
-					"version", manifest.Attributes["version"],
+					"type", manifest.Attributes[AttributeKeyType],
+					"version", manifest.Attributes[AttributeKeyVersion],
 					"profile", manifest.Profile,
 					"ocpPlatform", manifest.OCPPlatform)
 
@@ -213,7 +229,7 @@ func processProviderImage(ctx context.Context, imageRef, providerImageDir string
 
 	// Extract files from the image to disk
 	if err := extractCapiManifestsToDir(img, outputDir); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to extract manifests from image to %s: %w", outputDir, err)
 	}
 
 	// Discover profiles from extracted files
@@ -224,7 +240,7 @@ func processProviderImage(ctx context.Context, imageRef, providerImageDir string
 			return nil, nil
 		}
 
-		return nil, err
+		return nil, fmt.Errorf("failed to discover profiles in %s: %w", outputDir, err)
 	}
 
 	// Process each profile
@@ -236,7 +252,7 @@ func processProviderImage(ctx context.Context, imageRef, providerImageDir string
 
 		contentID, err := writeManifestsWithHash(manifestsPath, profile.Manifests, profile.Metadata.SelfImageRef, imageRef)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to write manifests for profile %s: %w", profile.Profile, err)
 		}
 
 		results = append(results, ProviderImageManifests{

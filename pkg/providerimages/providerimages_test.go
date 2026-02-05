@@ -202,8 +202,8 @@ func Test_readProviderImages(t *testing.T) {
 
 				manifest := result[0]
 				g.Expect(manifest.Name).To(Equal("aws"))
-				g.Expect(manifest.Attributes["type"]).To(Equal("infrastructure"))
-				g.Expect(manifest.Attributes["version"]).To(Equal("v1.0.0"))
+				g.Expect(manifest.Attributes[AttributeKeyType]).To(Equal("infrastructure"))
+				g.Expect(manifest.Attributes[AttributeKeyVersion]).To(Equal("v1.0.0"))
 				g.Expect(manifest.InstallOrder).To(Equal(20))
 				g.Expect(manifest.OCPPlatform).To(BeEquivalentTo("aws"))
 				g.Expect(manifest.Profile).To(Equal(testDefaultProfile))
@@ -526,8 +526,8 @@ contentID: id
 				// Higher layer values should be used
 				manifest := result[0]
 				g.Expect(manifest.Name).To(Equal("aws-new"))
-				g.Expect(manifest.Attributes["type"]).To(Equal("NewType"))
-				g.Expect(manifest.Attributes["version"]).To(Equal("v2.0.0"))
+				g.Expect(manifest.Attributes[AttributeKeyType]).To(Equal("NewType"))
+				g.Expect(manifest.Attributes[AttributeKeyVersion]).To(Equal("v2.0.0"))
 				g.Expect(manifest.InstallOrder).To(Equal(20))
 
 				content, err := os.ReadFile(manifest.ManifestsPath)
@@ -569,8 +569,8 @@ contentID: id
 
 				g.Expect(profiles).To(HaveKey("default"))
 				g.Expect(profiles).To(HaveKey("techpreview"))
-				g.Expect(profiles["default"].Attributes["version"]).To(Equal("v1.0.0"))
-				g.Expect(profiles["techpreview"].Attributes["version"]).To(Equal("v1.0.0-techpreview"))
+				g.Expect(profiles["default"].Attributes[AttributeKeyVersion]).To(Equal("v1.0.0"))
+				g.Expect(profiles["techpreview"].Attributes[AttributeKeyVersion]).To(Equal("v1.0.0-techpreview"))
 
 				defaultContent, err := os.ReadFile(profiles["default"].ManifestsPath)
 				g.Expect(err).NotTo(HaveOccurred())
@@ -579,6 +579,60 @@ contentID: id
 				techpreviewContent, err := os.ReadFile(profiles["techpreview"].ManifestsPath)
 				g.Expect(err).NotTo(HaveOccurred())
 				g.Expect(string(techpreviewContent)).To(ContainSubstring("techpreview-config"))
+			},
+		},
+		{
+			name: "platform-specific profiles filtered by OCPPlatform",
+			containerImages: []string{
+				"registry.example.com/ccapio:v1.0.0",
+			},
+			setupFetcher: func(t *testing.T) *fakeImageFetcher {
+				t.Helper()
+				img, err := createTestImage(map[string]string{
+					capiManifestsDirName + "/default/metadata.yaml":  createMetadataYAML("core-vaps", "core", "v1.0.0", "", "", 10),
+					capiManifestsDirName + "/default/manifests.yaml": "kind: ValidatingAdmissionPolicy\nmetadata:\n  name: core-vap\n",
+					capiManifestsDirName + "/aws/metadata.yaml":      createMetadataYAML("aws-vaps", "infrastructure", "v1.0.0", "AWS", "", 20),
+					capiManifestsDirName + "/aws/manifests.yaml":     "kind: ValidatingAdmissionPolicy\nmetadata:\n  name: aws-vap\n",
+					capiManifestsDirName + "/gcp/metadata.yaml":      createMetadataYAML("gcp-vaps", "infrastructure", "v1.0.0", "GCP", "", 20),
+					capiManifestsDirName + "/gcp/manifests.yaml":     "kind: ValidatingAdmissionPolicy\nmetadata:\n  name: gcp-vap\n",
+				})
+				if err != nil {
+					t.Fatalf("failed to create test image: %v", err)
+				}
+
+				return &fakeImageFetcher{
+					images: map[string]v1.Image{
+						"registry.example.com/ccapio:v1.0.0": img,
+					},
+				}
+			},
+			validate: func(t *testing.T, g Gomega, result []ProviderImageManifests, outputDir string) {
+				t.Helper()
+				g.Expect(result).To(HaveLen(3))
+
+				profiles := make(map[string]ProviderImageManifests)
+				for _, m := range result {
+					profiles[m.Profile] = m
+				}
+
+				g.Expect(profiles).To(HaveKey("default"))
+				g.Expect(profiles).To(HaveKey("aws"))
+				g.Expect(profiles).To(HaveKey("gcp"))
+
+				// Platform-independent profile matches everything
+				g.Expect(profiles["default"].OCPPlatform).To(BeEquivalentTo(""))
+				g.Expect(profiles["default"].MatchesPlatform("AWS")).To(BeTrue())
+				g.Expect(profiles["default"].MatchesPlatform("GCP")).To(BeTrue())
+
+				// AWS profile matches only AWS
+				g.Expect(profiles["aws"].OCPPlatform).To(BeEquivalentTo("AWS"))
+				g.Expect(profiles["aws"].MatchesPlatform("AWS")).To(BeTrue())
+				g.Expect(profiles["aws"].MatchesPlatform("GCP")).To(BeFalse())
+
+				// GCP profile matches only GCP
+				g.Expect(profiles["gcp"].OCPPlatform).To(BeEquivalentTo("GCP"))
+				g.Expect(profiles["gcp"].MatchesPlatform("GCP")).To(BeTrue())
+				g.Expect(profiles["gcp"].MatchesPlatform("AWS")).To(BeFalse())
 			},
 		},
 		{

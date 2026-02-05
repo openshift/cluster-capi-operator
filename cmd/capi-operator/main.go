@@ -117,8 +117,7 @@ func main() {
 func setupControllers(ctx context.Context, mgr ctrl.Manager, opts *util.CommonOptions, imagesFile string) error {
 	infra, err := util.GetInfra(ctx, mgr.GetAPIReader())
 	if err != nil {
-		klog.Error(err, "unable to get infrastructure")
-		os.Exit(1)
+		return fmt.Errorf("unable to get infrastructure: %w", err)
 	}
 
 	isUnsupportedPlatform := false
@@ -132,9 +131,30 @@ func setupControllers(ctx context.Context, mgr ctrl.Manager, opts *util.CommonOp
 		}
 	}
 
+	containerImages, providerProfiles, err := loadProviderImages(ctx, mgr, imagesFile)
+	if err != nil {
+		return err
+	}
+
+	if err := setupCapiInstallerController(mgr, opts, platform, containerImages, providerProfiles); err != nil {
+		return err
+	}
+
+	if err := (&clusteroperator.ClusterOperatorController{
+		ClusterOperatorStatusClient: opts.GetClusterOperatorStatusClient(mgr, platform, "clusteroperator"),
+		Scheme:                      mgr.GetScheme(),
+		IsUnsupportedPlatform:       isUnsupportedPlatform,
+	}).SetupWithManager(mgr); err != nil {
+		return fmt.Errorf("unable to create clusteroperator controller: %w", err)
+	}
+
+	return nil
+}
+
+func loadProviderImages(ctx context.Context, mgr ctrl.Manager, imagesFile string) (map[string]string, []providerimages.ProviderImageManifests, error) {
 	containerImages, err := util.ReadImagesFile(imagesFile)
 	if err != nil {
-		return fmt.Errorf("unable to get images from file: %w", err)
+		return nil, nil, fmt.Errorf("unable to get images from file: %w", err)
 	}
 
 	providerImageDir := os.Getenv(providerImageDirEnvVar)
@@ -146,10 +166,13 @@ func setupControllers(ctx context.Context, mgr ctrl.Manager, opts *util.CommonOp
 
 	providerProfiles, err := providerimages.ReadProviderImages(ctx, mgr.GetAPIReader(), mgr.GetLogger(), containerImageRefs, providerImageDir)
 	if err != nil {
-		klog.Error(err, "unable to get provider image metadata")
-		os.Exit(1)
+		return nil, nil, fmt.Errorf("unable to get provider image metadata: %w", err)
 	}
 
+	return containerImages, providerProfiles, nil
+}
+
+func setupCapiInstallerController(mgr ctrl.Manager, opts *util.CommonOptions, platform configv1.PlatformType, containerImages map[string]string, providerProfiles []providerimages.ProviderImageManifests) error {
 	applyClient, err := kubernetes.NewForConfig(mgr.GetConfig())
 	if err != nil {
 		return fmt.Errorf("unable to set up apply client: %w", err)
@@ -175,16 +198,6 @@ func setupControllers(ctx context.Context, mgr ctrl.Manager, opts *util.CommonOp
 		APIExtensionsClient:         apiextensionsClient,
 	}).SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("unable to create capi installer controller: %w", err)
-	}
-
-	// ClusterOperator watches and keeps the cluster-api ClusterObject up to date.
-	if err := (&clusteroperator.ClusterOperatorController{
-		ClusterOperatorStatusClient: opts.GetClusterOperatorStatusClient(mgr, platform, "clusteroperator"),
-		Scheme:                      mgr.GetScheme(),
-		IsUnsupportedPlatform:       isUnsupportedPlatform,
-	}).SetupWithManager(mgr); err != nil {
-		klog.Error(err, "unable to create clusteroperator controller", "controller", "ClusterOperator")
-		os.Exit(1)
 	}
 
 	return nil

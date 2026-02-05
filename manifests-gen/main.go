@@ -17,11 +17,9 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 )
 
-
 var (
 	allowedPlatformTypes = []string{
 		string(configv1.AWSPlatformType),
-		string(configv1.AlibabaCloudPlatformType),
 		string(configv1.AzurePlatformType),
 		string(configv1.BareMetalPlatformType),
 		string(configv1.EquinixMetalPlatformType),
@@ -33,7 +31,6 @@ var (
 		string(configv1.NonePlatformType),
 		string(configv1.NutanixPlatformType),
 		string(configv1.OpenStackPlatformType),
-		string(configv1.OvirtPlatformType),
 		string(configv1.PowerVSPlatformType),
 		string(configv1.VSpherePlatformType),
 	}
