@@ -172,8 +172,10 @@ func GenerateCRD(gvk schema.GroupVersionKind, additionalVersions ...string) *api
 			Group: gvk.Group,
 			Scope: apiextensionsv1.NamespaceScoped,
 			Names: apiextensionsv1.CustomResourceDefinitionNames{
-				Kind:   gvk.Kind,
-				Plural: flect.Pluralize(strings.ToLower(gvk.Kind)),
+				Kind:     gvk.Kind,
+				Plural:   flect.Pluralize(strings.ToLower(gvk.Kind)),
+				Singular: strings.ToLower(gvk.Kind),
+				ListKind: fmt.Sprintf("%sList", gvk.Kind),
 			},
 			Versions: append(util.SliceMap(additionalVersions, generateVersion), generateVersion(gvk.Version)),
 		},
