@@ -1045,6 +1045,7 @@ github.com/openshift/api
 github.com/openshift/api/annotations
 github.com/openshift/api/apiextensions
 github.com/openshift/api/apiextensions/v1alpha1
+github.com/openshift/api/apiextensions/v1alpha1/zz_generated.crd-manifests
 github.com/openshift/api/apiserver
 github.com/openshift/api/apiserver/v1
 github.com/openshift/api/apps
