@@ -89,7 +89,7 @@ var _ = Describe("CRD Compatibility Checker", func() {
 				},
 			)
 
-			Expect(errors).NotTo(BeEmpty(), "should contain an error")
+			Expect(errors).To(ConsistOf(Equal("removed field : v1.^.spec")), "should contain an error")
 		})
 
 		It("should permit an optional field to be added", func() {
@@ -108,30 +108,7 @@ var _ = Describe("CRD Compatibility Checker", func() {
 			Expect(warnings).To(BeEmpty(), "should have no warnings")
 		})
 
-		It("should not permit a required field to be added", func() {
-			Skip("This behavior is not yet implemented") // TODO: Implement this
-
-			errors, _ := runTest(
-				func(target *apiextensionsv1.CustomResourceDefinition) *apiextensionsv1.CustomResourceDefinition {
-					crdSchema := target.Spec.Versions[0].Schema.OpenAPIV3Schema
-
-					spec := crdSchema.Properties["spec"]
-					spec.Properties["field4"] = apiextensionsv1.JSONSchemaProps{
-						Type: "string",
-					}
-					spec.Required = append(spec.Required, "field4")
-					crdSchema.Properties["spec"] = spec
-
-					return target
-				},
-			)
-
-			Expect(errors).NotTo(BeEmpty(), "should contain an error")
-		})
-
 		It("should not permit a served version to be removed", func() {
-			Skip("This behavior is not yet implemented") // TODO: Implement this
-
 			errors, _ := runTest(
 				func(target *apiextensionsv1.CustomResourceDefinition) *apiextensionsv1.CustomResourceDefinition {
 					target.Spec.Versions = target.Spec.Versions[1:]
@@ -139,7 +116,7 @@ var _ = Describe("CRD Compatibility Checker", func() {
 				},
 			)
 
-			Expect(errors).NotTo(BeEmpty(), "should contain an error")
+			Expect(errors).To(ConsistOf(Equal("served versions removed : v1beta1")), "should contain an error")
 		})
 	})
 })
