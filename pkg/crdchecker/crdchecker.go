@@ -22,6 +22,8 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"sigs.k8s.io/crdify/pkg/config"
 	"sigs.k8s.io/crdify/pkg/runner"
+	"sigs.k8s.io/crdify/pkg/validations"
+	"sigs.k8s.io/crdify/pkg/validations/crd/existingfieldremoval"
 )
 
 // CheckCompatibilityRequirement checks if the target CRD is compatible with the requirement CRD.
@@ -32,7 +34,12 @@ import (
 func CheckCompatibilityRequirement(requirement, target *apiextensionsv1.CustomResourceDefinition) ([]string, []string, error) {
 	cfg := &config.Config{}
 
-	run, err := runner.New(cfg, runner.DefaultRegistry())
+	// Build our own registry so that we can curate which validations are run.
+	registry := validations.NewRegistry()
+	existingfieldremoval.Register(registry)
+	registry.Register(servedVersionComparatorName, servedVersionComparatorFactory)
+
+	run, err := runner.New(cfg, registry)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create crdify runner: %w", err)
 	}
