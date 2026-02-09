@@ -34,7 +34,7 @@ const (
 	capiControllersLabel = "k8s-app"
 	capiControllersValue = "capi-controllers"
 	capiOperatorLabel    = "k8s-app"
-	capiOperatorValue    = "cluster-capi-operator"
+	capiOperatorValue    = "capi-operator"
 
 	// Namespaces
 	capiNamespace         = "openshift-cluster-api"
