@@ -36,6 +36,11 @@ const (
 
 	// CAPI Machine VAP error messages - from openshift-cluster-api-prevent-setting-of-capi-fields-unsupported-by-mapi
 	vapCAPIForbiddenFieldMessage = "spec.%s is a forbidden field"
+
+	// CAPI Machine VAP error messages - from cluster-api-machine-vap when authoritativeAPI is MachineAPI
+	vapCAPISpecLockedMessage          = "Changing .spec is not allowed. This is because status.authoritativeAPI is set to Machine API."
+	vapCAPIProtectedLabelMessage      = "Cannot add, modify or delete any machine.openshift.io/*, kubernetes.io/* or cluster.x-k8s.io/* label. This is because status.authoritativeAPI is set to Machine API."
+	vapCAPIProtectedAnnotationMessage = "Cannot add, modify or delete any machine.openshift.io/* or cluster.x-k8s.io or clusters.x-k8s.io annotation. This is because status.authoritativeAPI is set to Machine API."
 )
 
 var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] MAPI Machine VAP Tests", Ordered, func() {
@@ -266,6 +271,123 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] MA
 			})
 		})
 	})
+
+	var _ = Describe("VAP: cluster-api-machine-vap enforcement when MAPI is authoritative", Ordered, func() {
+		var testMachineName = "machine-vap-test-mapi-auth"
+		var testMAPIMachine *mapiv1beta1.Machine
+		var testCAPIMachine *clusterv1.Machine
+
+		BeforeAll(func() {
+			// Create a MAPI machine with MachineAPI authority
+			testMAPIMachine = createMAPIMachineWithAuthority(ctx, cl, testMachineName, mapiv1beta1.MachineAuthorityMachineAPI)
+
+			// Get the corresponding CAPI machine from openshift-cluster-api namespace
+			testCAPIMachine = capiframework.GetMachine(cl, testMachineName, capiframework.CAPINamespace)
+
+			// Wait until VAP match conditions are met
+			verifyMachineAuthoritative(testMAPIMachine, mapiv1beta1.MachineAuthorityMachineAPI)
+
+			DeferCleanup(func() {
+				By("Cleaning up machine resources")
+				cleanupMachineResources(
+					ctx,
+					cl,
+					[]*clusterv1.Machine{testCAPIMachine},
+					[]*mapiv1beta1.Machine{testMAPIMachine},
+				)
+			})
+		})
+
+		Context("spec field restrictions on CAPI machine", func() {
+			It("should prevent updating spec.infrastructureRef", func() {
+				verifyCAPIUpdatePrevented(testCAPIMachine, func() {
+					testCAPIMachine.Spec.InfrastructureRef.Name = "new-infra-ref"
+				}, vapCAPISpecLockedMessage)
+			})
+
+			It("should prevent updating spec.providerID", func() {
+				verifyCAPIUpdatePrevented(testCAPIMachine, func() {
+					testCAPIMachine.Spec.ProviderID = testProviderID
+				}, vapCAPISpecLockedMessage)
+			})
+		})
+
+		Context("protected label restrictions on CAPI machine", func() {
+			It("should prevent modifying machine.openshift.io/* labels", func() {
+				verifyCAPIUpdatePrevented(testCAPIMachine, func() {
+					if testCAPIMachine.Labels == nil {
+						testCAPIMachine.Labels = make(map[string]string)
+					}
+					testCAPIMachine.Labels["machine.openshift.io/test-label"] = testLabelValue
+				}, vapCAPIProtectedLabelMessage)
+			})
+
+			It("should prevent modifying kubernetes.io/* labels", func() {
+				verifyCAPIUpdatePrevented(testCAPIMachine, func() {
+					if testCAPIMachine.Labels == nil {
+						testCAPIMachine.Labels = make(map[string]string)
+					}
+					testCAPIMachine.Labels["kubernetes.io/test-label"] = testLabelValue
+				}, vapCAPIProtectedLabelMessage)
+			})
+
+			It("should prevent modifying cluster.x-k8s.io/* labels", func() {
+				verifyCAPIUpdatePrevented(testCAPIMachine, func() {
+					if testCAPIMachine.Labels == nil {
+						testCAPIMachine.Labels = make(map[string]string)
+					}
+					testCAPIMachine.Labels["cluster.x-k8s.io/test-label"] = testLabelValue
+				}, vapCAPIProtectedLabelMessage)
+			})
+
+			It("should allow modifying non-protected labels", func() {
+				verifyUpdateAllowed(testCAPIMachine, func() {
+					if testCAPIMachine.Labels == nil {
+						testCAPIMachine.Labels = make(map[string]string)
+					}
+					testCAPIMachine.Labels["test-label"] = "allowed-value"
+				})
+			})
+		})
+
+		Context("protected annotation restrictions on CAPI machine", func() {
+			It("should prevent modifying machine.openshift.io/* annotations", func() {
+				verifyCAPIUpdatePrevented(testCAPIMachine, func() {
+					if testCAPIMachine.Annotations == nil {
+						testCAPIMachine.Annotations = make(map[string]string)
+					}
+					testCAPIMachine.Annotations["machine.openshift.io/test-annotation"] = "test-value"
+				}, vapCAPIProtectedAnnotationMessage)
+			})
+
+			It("should prevent modifying cluster.x-k8s.io/* annotations", func() {
+				verifyCAPIUpdatePrevented(testCAPIMachine, func() {
+					if testCAPIMachine.Annotations == nil {
+						testCAPIMachine.Annotations = make(map[string]string)
+					}
+					testCAPIMachine.Annotations["cluster.x-k8s.io/test-annotation"] = "test-value"
+				}, vapCAPIProtectedAnnotationMessage)
+			})
+
+			It("should prevent modifying clusters.x-k8s.io/* annotations", func() {
+				verifyCAPIUpdatePrevented(testCAPIMachine, func() {
+					if testCAPIMachine.Annotations == nil {
+						testCAPIMachine.Annotations = make(map[string]string)
+					}
+					testCAPIMachine.Annotations["clusters.x-k8s.io/test-annotation"] = "test-value"
+				}, vapCAPIProtectedAnnotationMessage)
+			})
+
+			It("should allow modifying non-protected annotations", func() {
+				verifyUpdateAllowed(testCAPIMachine, func() {
+					if testCAPIMachine.Annotations == nil {
+						testCAPIMachine.Annotations = make(map[string]string)
+					}
+					testCAPIMachine.Annotations["test-annotation"] = "allowed-value"
+				})
+			})
+		})
+	})
 })
 
 // verifyUpdatePrevented verifies that a machine update is prevented by VAP
@@ -278,11 +400,19 @@ func verifyUpdatePrevented(machine *mapiv1beta1.Machine, updateFunc func(), expe
 }
 
 // verifyUpdateAllowed verifies that a machine update is allowed (not blocked by VAP)
-func verifyUpdateAllowed(machine *mapiv1beta1.Machine, updateFunc func()) {
+func verifyUpdateAllowed(machine interface{}, updateFunc func()) {
 	By("Verifying that machine update is allowed")
 
-	Eventually(komega.Update(machine, updateFunc), capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(),
-		"Expected machine update to succeed")
+	switch m := machine.(type) {
+	case *mapiv1beta1.Machine:
+		Eventually(komega.Update(m, updateFunc), capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(),
+			"Expected MAPI machine update to succeed")
+	case *clusterv1.Machine:
+		Eventually(komega.Update(m, updateFunc), capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(),
+			"Expected CAPI machine update to succeed")
+	default:
+		Fail(fmt.Sprintf("unknown machine type: %T", machine))
+	}
 }
 
 // verifyCAPIUpdatePrevented verifies that a CAPI machine update is prevented by VAP
