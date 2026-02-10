@@ -24,8 +24,10 @@ import (
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility/crdvalidation"
 	"github.com/openshift/cluster-capi-operator/pkg/test"
 )
 
@@ -199,8 +201,7 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 				))
 			})
 
-			// This test is pending as it relies on CRD validation which is not yet implemented.
-			PIt("Should not permit the CRD to be updated if it would remain incompatible", func(ctx context.Context) {
+			It("Should not permit the CRD to be updated if it would remain incompatible", func(ctx context.Context) {
 				By("Checking that the CompatibilityRequirement is not compatible")
 				Eventually(kWithCtx(ctx).Object(requirement)).Should(SatisfyAll(
 					test.HaveCondition("Progressing", metav1.ConditionFalse, test.WithConditionReason(apiextensionsv1alpha1.CompatibilityRequirementUpToDateReason)),
@@ -213,5 +214,139 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 			})
 		})
 
+	})
+
+	Context("When creating or modifying a CRD", func() {
+		testIncompatibleCRD := func(ctx context.Context, testCRD *apiextensionsv1.CustomResourceDefinition, requirement *apiextensionsv1alpha1.CompatibilityRequirement, createOrUpdateCRD func(context.Context, client.Object, func()) func() error) {
+			// Create a working copy of the CRD so we maintain a clean version
+			// without runtime metadata
+			testCRDWorking := testCRD.DeepCopy()
+
+			By("Attempting to make an invalid modification by removing a field")
+			expectedError := "admission webhook \"compatibilityrequirement.operator.openshift.io\" denied the request: CRD is not compatible with CompatibilityRequirements: This requirement was added by CompatibilityRequirement " + requirement.Name + ": removed field : v1.^.status"
+			updateCRD := createOrUpdateCRD(ctx, testCRDWorking, func() {
+				delete(testCRDWorking.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties, "status")
+			})
+			Eventually(updateCRD).Should(MatchError(expectedError))
+		}
+
+		testCompatibleCRD := func(ctx context.Context, testCRD *apiextensionsv1.CustomResourceDefinition, createOrUpdateCRD func(context.Context, client.Object, func()) func() error) {
+			// Create a working copy of the CRD so we maintain a clean version
+			// without runtime metadata
+			testCRDWorking := testCRD.DeepCopy()
+
+			By("Attempting to make a valid modification by adding a field")
+			updateCRD := createOrUpdateCRD(ctx, testCRDWorking, func() {
+				testCRDWorking.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["foo"] = apiextensionsv1.JSONSchemaProps{
+					Type: "string",
+				}
+			})
+			Eventually(updateCRD).Should(Succeed(), "The test CRD should be modified")
+		}
+
+		Context("When modifying a CRD with a requirement", func() {
+			var (
+				requirement *apiextensionsv1alpha1.CompatibilityRequirement
+			)
+
+			BeforeEach(func(ctx context.Context) {
+				createTestObject(ctx, testCRDWorking, "CRD")
+
+				requirement = test.GenerateTestCompatibilityRequirement(testCRDClean)
+				createTestObject(ctx, requirement, "CompatibilityRequirement")
+				waitForAdmitted(ctx, requirement)
+			})
+
+			It("Should not permit a CRD with requirements to be deleted", func(ctx context.Context) {
+				By("Attempting to delete CRD " + testCRDClean.Name)
+				Eventually(tryDelete(ctx, testCRDClean)).Should(MatchError(ContainSubstring(crdvalidation.ErrCRDHasRequirements.Error())), "The test CRD should not be deleted")
+			})
+
+			updateCRD := func(ctx context.Context, obj client.Object, updateFn func()) func() error {
+				return kWithCtx(ctx).Update(obj, updateFn)
+			}
+
+			It("Should not permit an incompatible CRD modification", func(ctx context.Context) {
+				testIncompatibleCRD(ctx, testCRDClean, requirement, updateCRD)
+			})
+
+			It("Should permit a compatible CRD modification", func(ctx context.Context) {
+				testCompatibleCRD(ctx, testCRDClean, updateCRD)
+			})
+		})
+
+		Context("When creating a CRD with a requirement", func() {
+			var (
+				requirement *apiextensionsv1alpha1.CompatibilityRequirement
+			)
+
+			BeforeEach(func(ctx context.Context) {
+				testCRDWorking = test.GenerateTestCRD()
+
+				// We need to register this before the requirement is created so
+				// it will be deleted after the requirement is deleted
+				deferCleanupTestObject(testCRDWorking, "CRD")
+
+				requirement = test.GenerateTestCompatibilityRequirement(testCRDWorking)
+				createTestObject(ctx, requirement, "CompatibilityRequirement")
+				waitForAdmitted(ctx, requirement)
+			})
+
+			createCRD := func(ctx context.Context, obj client.Object, updateFn func()) func() error {
+				return func() error {
+					By("Creating test CRD " + obj.GetName())
+
+					updateFn()
+
+					return cl.Create(ctx, obj)
+				}
+			}
+
+			It("Should not permit an incompatible CRD to be created", func(ctx context.Context) {
+				testIncompatibleCRD(ctx, testCRDWorking, requirement, createCRD)
+			})
+
+			It("Should permit a compatible CRD to be created", func(ctx context.Context) {
+				testCompatibleCRD(ctx, testCRDWorking, createCRD)
+			})
+		})
+
+		Context("When creating a CRD with a requirement which has no CustomResourceDefinitionSchemaValidation", func() {
+			var (
+				requirement *apiextensionsv1alpha1.CompatibilityRequirement
+			)
+
+			BeforeEach(func(ctx context.Context) {
+				testCRDWorking = test.GenerateTestCRD()
+				deferCleanupTestObject(testCRDWorking, "CRD")
+
+				requirement = test.GenerateTestCompatibilityRequirement(testCRDWorking)
+				requirement.Spec.CustomResourceDefinitionSchemaValidation = (apiextensionsv1alpha1.CustomResourceDefinitionSchemaValidation{})
+
+				createTestObject(ctx, requirement, "CompatibilityRequirement")
+				waitForAdmitted(ctx, requirement)
+			})
+
+			createCRD := func(ctx context.Context, obj client.Object, updateFn func()) func() error {
+				return func() error {
+					By("Creating test CRD " + obj.GetName())
+
+					updateFn()
+
+					return cl.Create(ctx, obj)
+				}
+			}
+
+			It("Should permit a compatible CRD to be created", func(ctx context.Context) {
+				testCompatibleCRD(ctx, testCRDWorking, createCRD)
+			})
+
+			It("Should permit an incompatible CRD to be created", func(ctx context.Context) {
+				updateCRD := createCRD(ctx, testCRDWorking, func() {
+					delete(testCRDWorking.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties, "status")
+				})
+				Eventually(updateCRD).Should(Succeed(), "The test CRD should be modified")
+			})
+		})
 	})
 })

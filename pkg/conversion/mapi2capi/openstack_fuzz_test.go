@@ -165,7 +165,6 @@ func (f *openstackProviderFuzzer) fuzzProviderSpec(providerSpec *mapiv1alpha1.Op
 	f.MAPIMachineFuzzer.Zone = providerSpec.AvailabilityZone
 }
 
-//nolint:funlen
 func (f *openstackProviderFuzzer) FuzzerFuncsMachineSet(codecs runtimeserializer.CodecFactory) []any {
 	return []any{
 		func(bdm *mapiv1alpha1.BlockDeviceStorage, c randfill.Continue) {

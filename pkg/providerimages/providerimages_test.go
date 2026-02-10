@@ -164,7 +164,7 @@ attributes:
 `, name, selfImageRef, ocpPlatform, installOrder, providerType, version)
 }
 
-//nolint:gocognit,funlen,cyclop
+//nolint:gocognit,cyclop
 func Test_readProviderImages(t *testing.T) {
 	tests := []struct {
 		name            string

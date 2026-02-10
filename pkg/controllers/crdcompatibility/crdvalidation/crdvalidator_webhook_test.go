@@ -30,7 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
-func Test_crdValidator_validateCreateOrUpdate(t *testing.T) { //nolint:funlen
+func Test_crdValidator_validateCreateOrUpdate(t *testing.T) {
 	RegisterTestingT(t)
 
 	ctx := t.Context()
