@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 
 	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
 	apiextensionshelpers "k8s.io/apiextensions-apiserver/pkg/apihelpers"
@@ -33,6 +34,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apiserver/pkg/registry/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -54,18 +56,29 @@ var (
 
 var _ admission.Handler = &validator{}
 
+type validationStrategyCacheKey struct {
+	uid                          types.UID
+	compatibilityRequirementName string
+	version                      string
+	generation                   int64
+}
+
 // validator implements the admission.Handler to have a custom Handle function which is able to
 // validate arbitrary objects against CompatibilityRequirements by leveraging unstructured.
 type validator struct {
 	client  client.Reader
 	decoder admission.Decoder
+
+	validationStrategyCacheLock sync.RWMutex
+	validationStrategyCache     map[validationStrategyCacheKey]rest.RESTCreateUpdateStrategy
 }
 
 // NewValidator returns a partially initialized ObjectValidator.
 func NewValidator() *validator {
 	return &validator{
 		// This decoder is only used to decode to unstructured and for CompatibilityRequirements.
-		decoder: admission.NewDecoder(runtime.NewScheme()),
+		decoder:                 admission.NewDecoder(runtime.NewScheme()),
+		validationStrategyCache: make(map[validationStrategyCacheKey]rest.RESTCreateUpdateStrategy),
 	}
 }
 
@@ -88,9 +101,9 @@ func (v *validator) SetupWithManager(ctx context.Context, mgr ctrl.Manager, opts
 
 // ValidateCreate validates the creation of an object.
 func (v *validator) ValidateCreate(ctx context.Context, compatibilityRequirementName string, obj *unstructured.Unstructured) (admission.Warnings, error) {
-	strategy, err := v.createVersionedStrategy(ctx, compatibilityRequirementName, obj.GroupVersionKind().Version)
+	strategy, err := v.getValidationStrategy(ctx, compatibilityRequirementName, obj.GroupVersionKind().Version)
 	if err != nil {
-		return nil, fmt.Errorf("failed to validate: %w", err)
+		return nil, fmt.Errorf("failed to get validation strategy: %w", err)
 	}
 
 	errs := strategy.Validate(ctx, obj)
@@ -105,9 +118,9 @@ func (v *validator) ValidateCreate(ctx context.Context, compatibilityRequirement
 
 // ValidateUpdate validates the update of an object.
 func (v *validator) ValidateUpdate(ctx context.Context, compatibilityRequirementName string, oldObj, obj *unstructured.Unstructured) (admission.Warnings, error) {
-	strategy, err := v.createVersionedStrategy(ctx, compatibilityRequirementName, obj.GroupVersionKind().Version)
+	strategy, err := v.getValidationStrategy(ctx, compatibilityRequirementName, obj.GroupVersionKind().Version)
 	if err != nil {
-		return nil, fmt.Errorf("failed to validate: %w", err)
+		return nil, fmt.Errorf("failed to get validation strategy: %w", err)
 	}
 
 	errs := strategy.ValidateUpdate(ctx, obj, oldObj)
@@ -123,6 +136,68 @@ func (v *validator) ValidateUpdate(ctx context.Context, compatibilityRequirement
 // ValidateDelete validates the deletion of an object.
 func (v *validator) ValidateDelete(ctx context.Context, compatibilityRequirementName string, obj *unstructured.Unstructured) (warnings admission.Warnings, err error) {
 	return nil, nil
+}
+
+func (v *validator) getValidationStrategy(ctx context.Context, compatibilityRequirementName string, version string) (rest.RESTCreateUpdateStrategy, error) {
+	compatibilityRequirement := &apiextensionsv1alpha1.CompatibilityRequirement{}
+	if err := v.client.Get(ctx, client.ObjectKey{Name: compatibilityRequirementName}, compatibilityRequirement); err != nil {
+		return nil, fmt.Errorf("failed to get CompatibilityRequirement %q: %w", compatibilityRequirementName, err)
+	}
+
+	strategy, ok := v.getValidationStrategyFromCache(compatibilityRequirement, version)
+	if ok {
+		return strategy, nil
+	}
+
+	v.validationStrategyCacheLock.Lock()
+	defer v.validationStrategyCacheLock.Unlock()
+
+	strategy, err := v.createVersionedStrategy(ctx, compatibilityRequirementName, version)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get validation strategy: %w", err)
+	}
+
+	v.storeValidationStrategyInCache(compatibilityRequirement, version, strategy)
+	v.pruneOldValidationStrategies(compatibilityRequirement, version)
+
+	return strategy, nil
+}
+
+func getValidationStrategyCacheKey(compatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement, version string) validationStrategyCacheKey {
+	return validationStrategyCacheKey{
+		uid:                          compatibilityRequirement.UID,
+		compatibilityRequirementName: compatibilityRequirement.Name,
+		version:                      version,
+		generation:                   compatibilityRequirement.Generation,
+	}
+}
+
+func (v *validator) getValidationStrategyFromCache(compatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement, version string) (rest.RESTCreateUpdateStrategy, bool) {
+	v.validationStrategyCacheLock.RLock()
+	defer v.validationStrategyCacheLock.RUnlock()
+
+	strategy, ok := v.validationStrategyCache[getValidationStrategyCacheKey(compatibilityRequirement, version)]
+
+	return strategy, ok
+}
+
+func (v *validator) storeValidationStrategyInCache(compatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement, version string, strategy rest.RESTCreateUpdateStrategy) {
+	// No locking here as we take the lock when constructing the new strategy.
+	v.validationStrategyCache[getValidationStrategyCacheKey(compatibilityRequirement, version)] = strategy
+}
+
+func (v *validator) pruneOldValidationStrategies(compatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement, version string) {
+	currentKey := getValidationStrategyCacheKey(compatibilityRequirement, version)
+
+	// Delete all strategies that are for the same compatibility requirement but have an older generation.
+	for key := range v.validationStrategyCache {
+		if key.uid == currentKey.uid &&
+			key.compatibilityRequirementName == currentKey.compatibilityRequirementName &&
+			key.version == currentKey.version &&
+			key.generation < currentKey.generation {
+			delete(v.validationStrategyCache, key)
+		}
+	}
 }
 
 // https://github.com/kubernetes/kubernetes/blob/ebc1ccc491c944fa0633f147698e0dc02675051d/staging/src/k8s.io/apiextensions-apiserver/pkg/registry/customresource/strategy.go#L76
