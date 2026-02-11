@@ -1,0 +1,17 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+namespace: openshift-cluster-api
+
+patches:
+
+# Retain Secrets internally for reference tracking, but don't emit them
+- target:
+    kind: Secret
+  patch: |
+    apiVersion: v1
+    kind: Secret
+    metadata:
+      name: __ignored__
+      annotations:
+        config.kubernetes.io/local-config: "true"

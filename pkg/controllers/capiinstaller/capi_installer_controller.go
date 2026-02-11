@@ -16,10 +16,15 @@ limitations under the License.
 package capiinstaller
 
 import (
+	"bytes"
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"os"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/drone/envsubst/v2"
@@ -46,6 +51,7 @@ import (
 
 	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
+	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
 	"github.com/openshift/library-go/pkg/operator/events"
 	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
 	"github.com/openshift/library-go/pkg/operator/resource/resourcemerge"
@@ -74,6 +80,7 @@ const (
 var (
 	errEmptyProviderConfigMap = errors.New("provider configmap has no components data")
 	errResourceNotFound       = errors.New("resource not found")
+	errUnexpectedResourceType = errors.New("unexpected resource type")
 )
 
 // CapiInstallerController reconciles a ClusterOperator object.
@@ -86,6 +93,7 @@ type CapiInstallerController struct {
 	Platform            configv1.PlatformType
 	ApplyClient         *kubernetes.Clientset
 	APIExtensionsClient *apiextensionsclient.Clientset
+	ProviderImages      []providerimages.ProviderImageManifests
 }
 
 // Reconcile reconciles the cluster-api ClusterOperator object.
@@ -132,8 +140,8 @@ func (r *CapiInstallerController) reconcile(ctx context.Context, log logr.Logger
 				providerConfigMapLabelTypeKey: providerConfigMapLabelTypeVal,
 			},
 		); err != nil {
-			if err := r.setDegradedCondition(ctx, log); err != nil {
-				return ctrl.Result{}, fmt.Errorf("failed to set conditions for CAPI Installer controller: %w", err)
+			if setCondErr := r.setDegradedCondition(ctx, log, err); setCondErr != nil {
+				return ctrl.Result{}, fmt.Errorf("failed to set conditions for CAPI Installer controller: %w", setCondErr)
 			}
 
 			return ctrl.Result{}, fmt.Errorf("unable to list CAPI provider %q ConfigMaps: %w", providerConfigMapLabelNameVal, err)
@@ -148,8 +156,8 @@ func (r *CapiInstallerController) reconcile(ctx context.Context, log logr.Logger
 
 			partialComponents, err := r.extractProviderComponents(cm)
 			if err != nil {
-				if err := r.setDegradedCondition(ctx, log); err != nil {
-					return ctrl.Result{}, fmt.Errorf("failed to set conditions for CAPI Installer controller: %w", err)
+				if setCondErr := r.setDegradedCondition(ctx, log, err); setCondErr != nil {
+					return ctrl.Result{}, fmt.Errorf("failed to set conditions for CAPI Installer controller: %w", setCondErr)
 				}
 
 				return ctrl.Result{}, fmt.Errorf("error extracting CAPI provider components from ConfigMap %q/%q: %w", cm.Namespace, cm.Name, err)
@@ -159,9 +167,9 @@ func (r *CapiInstallerController) reconcile(ctx context.Context, log logr.Logger
 		}
 
 		// Apply all the collected provider components manifests.
-		if err := r.applyProviderComponents(ctx, providerComponents); err != nil {
-			if err := r.setDegradedCondition(ctx, log); err != nil {
-				return ctrl.Result{}, fmt.Errorf("failed to set conditions for CAPI Installer controller: %w", err)
+		if err := r.applyProviderComponents(ctx, log, providerComponents); err != nil {
+			if setCondErr := r.setDegradedCondition(ctx, log, err); setCondErr != nil {
+				return ctrl.Result{}, fmt.Errorf("failed to set conditions for CAPI Installer controller: %w", setCondErr)
 			}
 
 			return ctrl.Result{}, fmt.Errorf("error applying CAPI provider %q components: %w", providerConfigMapLabelNameVal, err)
@@ -170,24 +178,112 @@ func (r *CapiInstallerController) reconcile(ctx context.Context, log logr.Logger
 		log.Info("finished reconciling CAPI provider", "name", providerConfigMapLabelNameVal)
 	}
 
+	if err := r.reconcileProviderImages(ctx, log); err != nil {
+		return ctrl.Result{}, fmt.Errorf("error reconciling CAPI provider images: %w", err)
+	}
+
 	return ctrl.Result{}, nil
+}
+
+func (r *CapiInstallerController) reconcileProviderImages(ctx context.Context, log logr.Logger) (err error) {
+	// Filter out provider images with a platform which doesn't match the current platform.
+	providerImages := make([]providerimages.ProviderImageManifests, 0, len(r.ProviderImages))
+
+	for _, providerImage := range r.ProviderImages {
+		if !providerImage.MatchesPlatform(r.Platform) {
+			log.Info("skipping provider image, platform does not match",
+				"name", providerImage.Name,
+				"imagePlatform", providerImage.OCPPlatform,
+				"clusterPlatform", r.Platform)
+
+			continue
+		}
+
+		providerImages = append(providerImages, providerImage)
+	}
+
+	// Sort providers by InstallOrder (ascending), then by Name for stability
+	sortProvidersByInstallOrder(providerImages)
+
+	// Apply the provider manifests
+	for _, providerImage := range providerImages {
+		if err := r.applyProviderImage(ctx, log, providerImage); err != nil {
+			return fmt.Errorf("failed to apply provider image %s: %w", providerImage.Name, err)
+		}
+	}
+
+	return nil
+}
+
+// sortProvidersByInstallOrder sorts providers by InstallOrder ascending, then by Name for stability.
+func sortProvidersByInstallOrder(providers []providerimages.ProviderImageManifests) {
+	slices.SortStableFunc(providers, func(a, b providerimages.ProviderImageManifests) int {
+		if a.InstallOrder != b.InstallOrder {
+			return cmp.Compare(a.InstallOrder, b.InstallOrder)
+		}
+
+		return strings.Compare(a.Name, b.Name)
+	})
+}
+
+// applyProviderImage extracts provider manifests for a single provider image and applies them to the cluster.
+func (r *CapiInstallerController) applyProviderImage(ctx context.Context, log logr.Logger, providerImage providerimages.ProviderImageManifests) (err error) {
+	log.Info("reconciling CAPI provider from image",
+		"name", providerImage.Name,
+		"manifestsPath", providerImage.ManifestsPath,
+		"providerType", providerImage.Attributes[providerimages.AttributeKeyType],
+		"version", providerImage.Attributes[providerimages.AttributeKeyVersion],
+		"profile", providerImage.Profile,
+		"ocpPlatform", providerImage.OCPPlatform)
+
+	reader, err := providerManifestReader(providerImage)
+	if err != nil {
+		return fmt.Errorf("failed to create provider manifest reader: %w", err)
+	}
+
+	defer func() {
+		err = errors.Join(err, reader.Close())
+	}()
+
+	yamlManifests, err := extractManifests(reader)
+	if err != nil {
+		return fmt.Errorf("failed to extract manifests from provider manifest: %w", err)
+	}
+
+	log.Info("extracted manifests from provider image",
+		"name", providerImage.Name,
+		"manifestCount", len(yamlManifests))
+
+	if err := r.applyProviderComponents(ctx, log, yamlManifests); err != nil {
+		return fmt.Errorf("failed to apply provider components: %w", err)
+	}
+
+	log.Info("finished reconciling CAPI provider", "name", providerImage.Name)
+
+	return nil
 }
 
 // applyProviderComponents applies the provider components to the cluster.
 // It does so by differentiating between static components and dynamic components (i.e. Deployments).
 //
 //nolint:funlen
-func (r *CapiInstallerController) applyProviderComponents(ctx context.Context, components []string) error {
+func (r *CapiInstallerController) applyProviderComponents(ctx context.Context, log logr.Logger, components []string) error {
 	componentsFilenames, componentsAssets, deploymentsFilenames, deploymentsAssets, customResourceDefinitionFilenames, customResourceDefinitionAssets, err := getProviderComponents(components)
 	if err != nil {
 		return fmt.Errorf("error getting provider components: %w", err)
 	}
 
+	log.Info("applying provider components",
+		"totalComponents", len(components),
+		"staticComponents", len(componentsFilenames),
+		"deployments", len(deploymentsFilenames),
+		"crds", len(customResourceDefinitionFilenames))
+
 	// For each of the CRD components perform a CRD-specific apply.
 	for _, c := range customResourceDefinitionFilenames {
 		customResourceDefinitionManifest, ok := customResourceDefinitionAssets[c]
 		if !ok {
-			panic("error finding custom resource definition manifest")
+			return fmt.Errorf("CRD manifest %q not found in assets map: %w", c, errResourceNotFound)
 		}
 
 		obj, err := yamlToRuntimeObject(r.Scheme, customResourceDefinitionManifest)
@@ -197,15 +293,19 @@ func (r *CapiInstallerController) applyProviderComponents(ctx context.Context, c
 
 		crd, ok := obj.(*apiextensionsv1.CustomResourceDefinition)
 		if !ok {
-			return fmt.Errorf("error casting object to CustomResourceDefinition: %w", err)
+			return fmt.Errorf("expected CustomResourceDefinition but got %T: %w", obj, errUnexpectedResourceType)
 		}
 
 		if _, _, err := applyCustomResourceDefinitionV1Improved(ctx, r.APIExtensionsClient.ApiextensionsV1(), events.NewInMemoryRecorder("cluster-capi-operator-capi-installer-apply-client", clock.RealClock{}), crd); err != nil {
 			return fmt.Errorf("error applying CAPI provider CRD %q: %w", crd.Name, err)
 		}
+
+		log.Info("applied CRD", "crdName", crd.Name)
 	}
 
 	// Perform a Direct apply of the static components.
+	log.Info("applying static components", "count", len(componentsFilenames))
+
 	res := resourceapply.ApplyDirectly(
 		ctx,
 		resourceapply.NewKubeClientHolder(r.ApplyClient).WithAPIExtensionsClient(r.APIExtensionsClient),
@@ -215,22 +315,26 @@ func (r *CapiInstallerController) applyProviderComponents(ctx context.Context, c
 		componentsFilenames...,
 	)
 
+	log.Info("finished applying static components", "count", len(componentsFilenames), "results", len(res))
+
 	// For each of the Deployment components perform a Deployment-specific apply.
+	log.Info("applying deployments", "count", len(deploymentsFilenames))
+
 	for _, d := range deploymentsFilenames {
 		deploymentManifest, ok := deploymentsAssets[d]
 		if !ok {
-			panic("error finding deployment manifest")
+			return fmt.Errorf("deployment manifest %q not found in assets map: %w", d, errResourceNotFound)
 		}
 
 		obj, err := yamlToRuntimeObject(r.Scheme, deploymentManifest)
 		if err != nil {
-			return fmt.Errorf("error parsing CAPI provider deployment manifets %q: %w", d, err)
+			return fmt.Errorf("error parsing CAPI provider deployment manifest %q: %w", d, err)
 		}
 
 		// TODO: Deployments State/Conditions should influence the overall ClusterOperator Status.
 		deployment, ok := obj.(*appsv1.Deployment)
 		if !ok {
-			return fmt.Errorf("error casting object to Deployment: %w", err)
+			return fmt.Errorf("expected Deployment but got %T: %w", obj, errUnexpectedResourceType)
 		}
 
 		if _, _, err := resourceapply.ApplyDeployment(
@@ -242,6 +346,8 @@ func (r *CapiInstallerController) applyProviderComponents(ctx context.Context, c
 		); err != nil {
 			return fmt.Errorf("error applying CAPI provider deployment %q: %w", deployment.Name, err)
 		}
+
+		log.Info("applied deployment", "name", deployment.Name, "namespace", deployment.Namespace)
 	}
 
 	var errs error
@@ -268,6 +374,11 @@ func getProviderComponents(components []string) ([]string, map[string]string, []
 	customResourceDefinitionAssets := make(map[string]string)
 
 	for i, m := range components {
+		// Skip empty manifests.
+		if strings.TrimSpace(m) == "" {
+			continue
+		}
+
 		// Parse the YAML manifests into unstructure objects.
 		u, err := yamlToUnstructured(m)
 		if err != nil {
@@ -321,21 +432,23 @@ func (r *CapiInstallerController) setAvailableCondition(ctx context.Context, log
 	return nil
 }
 
-// setAvailableCondition sets the ClusterOperator status condition to Degraded.
-func (r *CapiInstallerController) setDegradedCondition(ctx context.Context, log logr.Logger) error {
+// setDegradedCondition sets the ClusterOperator status condition to Degraded.
+func (r *CapiInstallerController) setDegradedCondition(ctx context.Context, log logr.Logger, degradedErr error) error {
 	co, err := r.GetOrCreateClusterOperator(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to get cluster operator: %w", err)
 	}
 
+	message := fmt.Sprintf("CAPI Installer Controller failed: %v", degradedErr)
+
 	conds := []configv1.ClusterOperatorStatusCondition{
 		operatorstatus.NewClusterOperatorStatusCondition(capiInstallerControllerAvailableCondition, configv1.ConditionFalse, operatorstatus.ReasonSyncFailed,
-			"CAPI Installer Controller failed install"),
+			message),
 		operatorstatus.NewClusterOperatorStatusCondition(capiInstallerControllerDegradedCondition, configv1.ConditionTrue, operatorstatus.ReasonSyncFailed,
-			"CAPI Installer Controller failed install"),
+			message),
 	}
 
-	log.Info("CAPI Installer Controller is Degraded")
+	log.Error(degradedErr, "CAPI Installer Controller is Degraded")
 
 	if err := r.SyncStatus(ctx, co, operatorstatus.WithConditions(conds)); err != nil {
 		return fmt.Errorf("failed to sync status: %w", err)
@@ -393,8 +506,17 @@ func (r *CapiInstallerController) SetupWithManager(mgr ctrl.Manager) error {
 // The format of the ConfigMap is well known and follows the upstream CAPI's
 // clusterctl Provider Contract - Components YAML file contract defined at:
 // https://github.com/kubernetes-sigs/cluster-api/blob/a36712e28bf5d54e398ea84cb3e20102c0499426/docs/book/src/clusterctl/provider-contract.md?plain=1#L157-L162
-func (r *CapiInstallerController) extractProviderComponents(cm corev1.ConfigMap) ([]string, error) {
-	yamlManifests, err := extractManifests(cm)
+func (r *CapiInstallerController) extractProviderComponents(cm corev1.ConfigMap) (_ []string, err error) {
+	reader, err := configMapReader(cm)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create config map reader: %w", err)
+	}
+
+	defer func() {
+		err = errors.Join(err, reader.Close())
+	}()
+
+	yamlManifests, err := extractManifests(reader)
 	if err != nil {
 		return nil, fmt.Errorf("failed to extract manifests from configMap: %w", err)
 	}
@@ -412,34 +534,44 @@ func (r *CapiInstallerController) extractProviderComponents(cm corev1.ConfigMap)
 	return replacedYamlManifests, nil
 }
 
-// extractManifests extracts and processes component manifests from given ConfigMap.
-// If the data is in compressed binary form, it decompresses them.
-func extractManifests(cm corev1.ConfigMap) ([]string, error) {
-	data, hasData := cm.Data["components"]
-	binaryData, hasBinary := cm.BinaryData["components-zstd"]
-
-	if !(hasBinary || hasData) {
-		return nil, errEmptyProviderConfigMap
+func configMapReader(cm corev1.ConfigMap) (io.ReadCloser, error) {
+	if data, ok := cm.Data["components"]; ok {
+		return io.NopCloser(strings.NewReader(data)), nil
 	}
 
-	if hasBinary {
-		decoder, err := zstd.NewReader(nil)
+	if binaryData, ok := cm.BinaryData["components-zstd"]; ok {
+		reader, err := zstd.NewReader(bytes.NewReader(binaryData))
 		if err != nil {
 			return nil, fmt.Errorf("failed to create zstd reader: %w", err)
 		}
 
-		decoded, err := decoder.DecodeAll(binaryData, []byte{})
-		if err != nil {
-			return nil, fmt.Errorf("failed to decompress components: %w", err)
-		}
+		return reader.IOReadCloser(), nil
+	}
 
-		data = string(decoded)
+	return nil, errEmptyProviderConfigMap
+}
+
+func providerManifestReader(providerImage providerimages.ProviderImageManifests) (io.ReadCloser, error) {
+	reader, err := os.Open(providerImage.ManifestsPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open provider manifest: %w", err)
+	}
+
+	return reader, nil
+}
+
+// extractManifests extracts and processes component manifests from given ConfigMap.
+// If the data is in compressed binary form, it decompresses them.
+func extractManifests(reader io.Reader) ([]string, error) {
+	data, err := io.ReadAll(reader)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read components: %w", err)
 	}
 
 	// Certain provider components have drone/envsubst environment variables interpolated within the manifest.
 	// Substitute them with the value defined in the environment variable (see setFeatureGatesEnvVars()).
 	// If that's not set, fallback to the default value defined in the template.
-	components, err := envsubst.EvalEnv(data)
+	components, err := envsubst.EvalEnv(string(data))
 	if err != nil {
 		return nil, fmt.Errorf("failed to substitute environment variables in component manifests: %w", err)
 	}

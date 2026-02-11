@@ -35,6 +35,8 @@ spec:
         env:
         - name: RELEASE_VERSION
           value: "0.0.1-snapshot"
+        - name: PROVIDER_IMAGE_DIR
+          value: "/var/lib/provider-images"
         ports:
         - containerPort: 9443
           name: webhook-server
@@ -54,6 +56,8 @@ spec:
         - name: cert
           mountPath: /tmp/k8s-webhook-server/serving-certs
           readOnly: true
+        - name: provider-images
+          mountPath: /var/lib/provider-images
       - name: machine-api-migration
         image: registry.ci.openshift.org/openshift:cluster-capi-operator
         command:
@@ -92,3 +96,5 @@ spec:
         secret:
           defaultMode: 420
           secretName: capi-controllers-webhook-service-cert
+      - name: provider-images
+        emptyDir: {}

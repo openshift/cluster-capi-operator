@@ -526,7 +526,7 @@ func convertAWSVolumeToMAPI(fldPath *field.Path, volume awsv1.Volume) (mapiv1bet
 		if *volume.Throughput > math.MaxInt32 {
 			return mapiv1beta1.BlockDeviceMappingSpec{}, field.Invalid(fldPath.Child("throughput"), *volume.Throughput, "throughput exceeds maximum int32 value")
 		}
-		//nolint:gosec
+
 		bdm.EBS.ThroughputMib = ptr.To(int32(*volume.Throughput))
 	}
 
@@ -549,8 +549,7 @@ func convertAWSPlacementGroupPartition(in int64) *int32 {
 	if in == 0 {
 		return nil
 	}
-	// We know the value is between 0 and 7 based on API validation. Ignore gosec.
-	//nolint:gosec
+
 	return ptr.To(int32(in))
 }
 
