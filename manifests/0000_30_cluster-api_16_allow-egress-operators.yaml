@@ -1,5 +1,5 @@
-# This NetworkPolicy allows egress traffic required for the capi-controllers
-# deployment.
+# These NetworkPolicies allows egress traffic required for the CAPI operator
+# deployments.
 # The operator needs broad internet access for cluster management operations,
 # cloud provider API calls, and communication with various services.
 #
@@ -7,8 +7,6 @@
 # necessary because the operator needs to communicate with:
 # - Kubernetes API server for cluster management operations
 # - Cloud provider APIs for infrastructure management
-# - External services for health checks and monitoring
-# - Webhook services for validation
 # - Container registries and other external services
 #
 # This approach is more practical than overly granular rules since the operator
@@ -33,5 +31,28 @@ spec:
       operator: In
       values:
       - capi-controllers
+  policyTypes:
+  - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  annotations:
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/feature-set: CustomNoUpgrade,TechPreviewNoUpgrade
+  name: allow-egress-operators
+  namespace: openshift-cluster-api-operator
+spec:
+  egress:
+  # Allow all egress traffic - operator needs broad access
+  - {} # Empty rule allows all egress
+  podSelector:
+    matchExpressions:
+    - key: k8s-app
+      operator: In
+      values:
+      - capi-operator
   policyTypes:
   - Egress
