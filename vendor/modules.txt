@@ -1152,7 +1152,7 @@ github.com/openshift/client-go/operator/applyconfigurations/operator/v1
 ## explicit; go 1.24.0
 github.com/openshift/cluster-api-actuator-pkg/pkg/framework
 github.com/openshift/cluster-api-actuator-pkg/pkg/framework/gatherer
-# github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0 => github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20251212150432-4a60119d9691
+# github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0 => github.com/radekmanak/cluster-api-actuator-pkg/testutils v0.0.0-20260204135636-0341bab0647e
 ## explicit; go 1.24.0
 github.com/openshift/cluster-api-actuator-pkg/testutils
 github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder
@@ -3008,6 +3008,6 @@ sigs.k8s.io/yaml
 sigs.k8s.io/yaml/goyaml.v2
 # github.com/metal3-io/baremetal-operator => github.com/metal3-io/baremetal-operator v0.5.1
 # github.com/openshift/cluster-api-actuator-pkg => github.com/openshift/cluster-api-actuator-pkg v0.0.0-20251212150432-4a60119d9691
-# github.com/openshift/cluster-api-actuator-pkg/testutils => github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20251212150432-4a60119d9691
+# github.com/openshift/cluster-api-actuator-pkg/testutils => github.com/radekmanak/cluster-api-actuator-pkg/testutils v0.0.0-20260204135636-0341bab0647e
 # sigs.k8s.io/cluster-api => sigs.k8s.io/cluster-api v1.11.3
 # sigs.k8s.io/cluster-api-provider-azure => github.com/openshift/cluster-api-provider-azure v0.0.0-20251202084521-c2e0e38d1e0e
