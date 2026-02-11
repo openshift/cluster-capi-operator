@@ -39,7 +39,7 @@ bin/:
 manifests-gen: | bin/ ## Build manifests-gen binary
 	cd manifests-gen && go build -o ../bin/manifests-gen && cd ..
 
-bin/%: | bin/ FORCE
+bin/%: FORCE | bin/
 	go build -o "$@" "./cmd/$*"
 
 .PHONY: localtestenv

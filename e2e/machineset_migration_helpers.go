@@ -218,6 +218,15 @@ func verifyMAPIMachineSetSynchronizedCondition(mapiMachineSet *mapiv1beta1.Machi
 	)
 }
 
+// verifyMachineSetSynchronizedAPI verifies that the MAPI MachineSet's status.synchronizedAPI matches the expected value.
+func verifyMachineSetSynchronizedAPI(mapiMachineSet *mapiv1beta1.MachineSet, expectedSynchronizedAPI mapiv1beta1.SynchronizedAPI) {
+	By(fmt.Sprintf("Verifying MAPI MachineSet SynchronizedAPI is %s", expectedSynchronizedAPI))
+	Eventually(komega.Object(mapiMachineSet), capiframework.WaitMedium, capiframework.RetryMedium).Should(
+		HaveField("Status.SynchronizedAPI", Equal(expectedSynchronizedAPI)),
+		fmt.Sprintf("MAPI MachineSet SynchronizedAPI should be %s", expectedSynchronizedAPI),
+	)
+}
+
 // verifyMAPIMachineSetProviderSpec verifies that a MAPI MachineSet's providerSpec matches the given Gomega matcher.
 func verifyMAPIMachineSetProviderSpec(mapiMachineSet *mapiv1beta1.MachineSet, matcher types.GomegaMatcher) {
 	By(fmt.Sprintf("Verifying MAPI MachineSet %s ProviderSpec", mapiMachineSet.Name))

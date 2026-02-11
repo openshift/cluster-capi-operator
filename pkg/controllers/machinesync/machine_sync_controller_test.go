@@ -2471,6 +2471,12 @@ var _ = Describe("applySynchronizedConditionWithPatch", func() {
 				HaveField("Status.SynchronizedGeneration", Equal(int64(22))),
 			)
 		})
+
+		It("should set SynchronizedAPI to MachineAPISynchronized", func() {
+			Eventually(k.Object(mapiMachine), timeout).Should(
+				HaveField("Status.SynchronizedAPI", Equal(mapiv1beta1.MachineAPISynchronized)),
+			)
+		})
 	})
 
 	Context("when condition status is Unknown", func() {
@@ -2497,10 +2503,16 @@ var _ = Describe("applySynchronizedConditionWithPatch", func() {
 				HaveField("Status.SynchronizedGeneration", Equal(int64(22))),
 			)
 		})
+
+		It("should set SynchronizedAPI to MachineAPISynchronized", func() {
+			Eventually(k.Object(mapiMachine), timeout).Should(
+				HaveField("Status.SynchronizedAPI", Equal(mapiv1beta1.MachineAPISynchronized)),
+			)
+		})
 	})
 
 	Context("when condition status is True", func() {
-		BeforeEach(func() {
+		JustBeforeEach(func() {
 			err := reconciler.applySynchronizedConditionWithPatch(ctx, mapiMachine, corev1.ConditionTrue, consts.ReasonResourceSynchronized, messageSuccessfullySynchronizedMAPItoCAPI, &mapiMachine.Generation)
 			Expect(err).NotTo(HaveOccurred())
 		})
@@ -2522,6 +2534,34 @@ var _ = Describe("applySynchronizedConditionWithPatch", func() {
 			Eventually(k.Object(mapiMachine), timeout).Should(
 				HaveField("Status.SynchronizedGeneration", Equal(int64(23))),
 			)
+		})
+
+		Context("when AuthoritativeAPI is MachineAPI", func() {
+			It("should set SynchronizedAPI to MachineAPISynchronized", func() {
+				Eventually(k.Object(mapiMachine), timeout).Should(
+					HaveField("Status.SynchronizedAPI", Equal(mapiv1beta1.MachineAPISynchronized)),
+				)
+			})
+		})
+
+		Context("when AuthoritativeAPI is ClusterAPI", func() {
+			BeforeEach(func() {
+				By("Set the status of the MAPI Machine with ClusterAPI authority")
+				Eventually(k.UpdateStatus(mapiMachine, func() {
+					mapiMachine.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityMigrating
+				})).Should(Succeed())
+				Eventually(k.UpdateStatus(mapiMachine, func() {
+					mapiMachine.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityClusterAPI
+				})).Should(Succeed())
+				// Restore the artificial generation after UpdateStatus refreshes the object.
+				mapiMachine.Generation = int64(23)
+			})
+
+			It("should set SynchronizedAPI to ClusterAPISynchronized", func() {
+				Eventually(k.Object(mapiMachine), timeout).Should(
+					HaveField("Status.SynchronizedAPI", Equal(mapiv1beta1.ClusterAPISynchronized)),
+				)
+			})
 		})
 	})
 

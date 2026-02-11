@@ -333,3 +333,12 @@ func verifyMachineSynchronizedGeneration(cl client.Client, mapiMachine *mapiv1be
 		fmt.Sprintf("MAPI Machine SynchronizedGeneration should equal %s Machine Generation (%d)", authoritativeMachineType, expectedGeneration),
 	)
 }
+
+// verifyMachineSynchronizedAPI verifies that the MAPI Machine's status.synchronizedAPI matches the expected value.
+func verifyMachineSynchronizedAPI(mapiMachine *mapiv1beta1.Machine, expectedSynchronizedAPI mapiv1beta1.SynchronizedAPI) {
+	By(fmt.Sprintf("Verifying MAPI Machine SynchronizedAPI is %s", expectedSynchronizedAPI))
+	Eventually(komega.Object(mapiMachine), capiframework.WaitMedium, capiframework.RetryMedium).Should(
+		HaveField("Status.SynchronizedAPI", Equal(expectedSynchronizedAPI)),
+		fmt.Sprintf("MAPI Machine SynchronizedAPI should be %s", expectedSynchronizedAPI),
+	)
+}

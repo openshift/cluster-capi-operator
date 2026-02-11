@@ -726,12 +726,13 @@ func (r *MachineSetSyncReconciler) convertMAPIToCAPIMachineSet(mapiMachineSet *m
 
 // applySynchronizedConditionWithPatch updates the synchronized condition
 // using a server side apply patch. We do this to force ownership of the
-// 'Synchronized' condition and 'SynchronizedGeneration'.
+// 'Synchronized' condition, 'SynchronizedGeneration', and 'SynchronizedAPI'.
 func (r *MachineSetSyncReconciler) applySynchronizedConditionWithPatch(ctx context.Context, mapiMachineSet *mapiv1beta1.MachineSet, status corev1.ConditionStatus, reason, message string, generation *int64) error {
 	return synccommon.ApplySyncStatus[*machinev1applyconfigs.MachineSetStatusApplyConfiguration](
 		ctx, r.Client, controllerName,
 		machinev1applyconfigs.MachineSet, mapiMachineSet,
-		status, reason, message, generation)
+		status, reason, message, generation,
+		synccommon.AuthoritativeAPIToSynchronizedAPI(mapiMachineSet.Status.AuthoritativeAPI))
 }
 
 // createOrUpdateCAPIInfraMachineTemplate creates a CAPI infra machine template from a MAPI machine set, or updates if it exists and it is out of date.
@@ -1078,9 +1079,10 @@ func setChangedMAPIMachineSetStatusFields(existingMAPIMachineSet, convertedMAPIM
 	// Copy them back to the convertedMAPIMachineSet.
 	convertedMAPIMachineSet.Status.Conditions = existingMAPIMachineSet.Status.Conditions
 
-	// Keep the current SynchronizedGeneration and AuthorativeAPI. They get handled separately in `applySynchronizedConditionWithPatch`
+	// Keep the current SynchronizedGeneration, AuthoritativeAPI, and SynchronizedAPI. They get handled separately in `applySynchronizedConditionWithPatch`
 	convertedMAPIMachineSet.Status.SynchronizedGeneration = existingMAPIMachineSet.Status.SynchronizedGeneration
 	convertedMAPIMachineSet.Status.AuthoritativeAPI = existingMAPIMachineSet.Status.AuthoritativeAPI
+	convertedMAPIMachineSet.Status.SynchronizedAPI = existingMAPIMachineSet.Status.SynchronizedAPI
 
 	// Finally overwrite the entire existingMAPIMachineSet status with the convertedMAPIMachineSet status.
 	existingMAPIMachineSet.Status = convertedMAPIMachineSet.Status

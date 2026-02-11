@@ -25,6 +25,7 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/utils/ptr"
 
 	machinev1applyconfigs "github.com/openshift/client-go/machine/applyconfigurations/machine/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -52,8 +53,9 @@ func ApplySyncStatus[
 	ctx context.Context, k8sClient client.Client, controllerName string,
 	applyConfigConstructor syncObjApplyConfigurationConstructor[objPT, statusPT], mapiObj client.Object,
 	status corev1.ConditionStatus, reason, message string, generation *int64,
+	synchronizedAPI *mapiv1beta1.SynchronizedAPI,
 ) error {
-	objAC, _, err := newSyncStatusApplyConfiguration(applyConfigConstructor, mapiObj, status, reason, message, generation)
+	objAC, _, err := newSyncStatusApplyConfiguration(applyConfigConstructor, mapiObj, status, reason, message, generation, synchronizedAPI)
 	if err != nil {
 		return err
 	}
@@ -81,6 +83,7 @@ func newSyncStatusApplyConfiguration[
 ](
 	applyConfigConstructor syncObjApplyConfigurationConstructor[objPT, statusPT], mapiObj client.Object,
 	status corev1.ConditionStatus, reason, message string, generation *int64,
+	synchronizedAPI *mapiv1beta1.SynchronizedAPI,
 ) (objPT, statusPT, error) {
 	var (
 		severity               mapiv1beta1.ConditionSeverity
@@ -124,11 +127,55 @@ func newSyncStatusApplyConfiguration[
 		WithConditions(conditionAC).
 		WithSynchronizedGeneration(synchronizedGeneration)
 
+	// Set SynchronizedAPI to define deterministically which object's generation
+	// the SynchronizedGeneration refers to.
+	if synchronizedAPI != nil {
+		statusAC.WithSynchronizedAPI(*synchronizedAPI)
+	}
+
 	objAC := applyConfigConstructor(mapiObj.GetName(), mapiObj.GetNamespace()).
 		WithResourceVersion(mapiObj.GetResourceVersion()).
 		WithStatus(statusAC)
 
 	return objAC, statusAC, nil
+}
+
+// AuthoritativeAPIToSynchronizedAPI converts a MachineAuthority to its corresponding SynchronizedAPI value.
+// Returns nil for values that don't have a direct mapping.
+func AuthoritativeAPIToSynchronizedAPI(authority mapiv1beta1.MachineAuthority) *mapiv1beta1.SynchronizedAPI {
+	switch authority {
+	case mapiv1beta1.MachineAuthorityMachineAPI:
+		return ptr.To(mapiv1beta1.MachineAPISynchronized)
+	case mapiv1beta1.MachineAuthorityClusterAPI:
+		return ptr.To(mapiv1beta1.ClusterAPISynchronized)
+	}
+
+	return nil
+}
+
+// SynchronizedAPIToAuthoritativeAPI converts a SynchronizedAPI to its corresponding MachineAuthority.
+// Returns an empty value for values that don't have a direct mapping.
+func SynchronizedAPIToAuthoritativeAPI(synchronizedAPI mapiv1beta1.SynchronizedAPI) mapiv1beta1.MachineAuthority {
+	switch synchronizedAPI {
+	case mapiv1beta1.MachineAPISynchronized:
+		return mapiv1beta1.MachineAuthorityMachineAPI
+	case mapiv1beta1.ClusterAPISynchronized:
+		return mapiv1beta1.MachineAuthorityClusterAPI
+	}
+
+	return ""
+}
+
+// MigrationDirection determines the current and desired authorities for a migration.
+// When statusAuthority is Migrating, it uses SynchronizedAPI to infer the current authority.
+func MigrationDirection(statusAuthority mapiv1beta1.MachineAuthority, synchronizedAPI mapiv1beta1.SynchronizedAPI, specAuthority mapiv1beta1.MachineAuthority) (mapiv1beta1.MachineAuthority, mapiv1beta1.MachineAuthority, bool) {
+	desiredAuthority := specAuthority
+	if statusAuthority != mapiv1beta1.MachineAuthorityMigrating {
+		return statusAuthority, desiredAuthority, false
+	}
+
+	currentAuthority := SynchronizedAPIToAuthoritativeAPI(synchronizedAPI)
+	return currentAuthority, desiredAuthority, true
 }
 
 func getPreviousSyncStatus(mapiObj interface{}) (int64, []mapiv1beta1.Condition, error) {
