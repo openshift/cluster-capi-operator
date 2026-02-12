@@ -144,6 +144,7 @@ func convertMAPIMachineToCAPIMachineStatus(mapiMachine *mapiv1beta1.Machine) (cl
 	// - LastOperation: this is MAPI-specific and not used in CAPI.
 	// - AuthoritativeAPI: this is part of the conversion mechanism, it is not used in CAPI.
 	// - SynchronizedGeneration: this is part of the conversion mechanism, it is not used in CAPI.
+	// - SynchronizedAPI: this is part of the conversion mechanism, it is not used in CAPI.
 
 	return capiStatus, errs
 }

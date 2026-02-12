@@ -18,7 +18,7 @@ require (
 
 require (
 	github.com/google/go-containerregistry v0.20.7
-	github.com/openshift/api v0.0.0-20260105114749-aae5635a71a7
+	github.com/openshift/api v0.0.0-20260205045418-81371d13d1fc
 	github.com/openshift/cluster-capi-operator v0.0.0-00010101000000-000000000000
 	k8s.io/utils v0.0.0-20250820121507-0af2bda4dd1d
 	sigs.k8s.io/controller-runtime v0.22.4
@@ -54,7 +54,7 @@ require (
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
-	github.com/sergi/go-diff v1.3.1 // indirect
+	github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/vbatts/tar-split v0.12.2 // indirect
 	github.com/x448/float16 v0.8.4 // indirect

@@ -1,0 +1,96 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: compatibility-requirements-controllers
+  namespace: openshift-compatibility-requirements-operator
+  annotations:
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+    release.openshift.io/feature-gate: "CRDCompatibilityRequirementOperator"
+  labels:
+    k8s-app: compatibility-requirements-controllers
+spec:
+  selector:
+    matchLabels:
+      k8s-app: compatibility-requirements-controllers
+  replicas: 2
+  template:
+    metadata:
+      annotations:
+        target.workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
+        openshift.io/required-scc: restricted-v3
+      labels:
+        k8s-app: compatibility-requirements-controllers
+    spec:
+      serviceAccountName: compatibility-requirements-controllers
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  k8s-app: compatibility-requirements-controllers
+              topologyKey: kubernetes.io/hostname
+      containers:
+      - name: compatibility-requirements-controllers
+        image: registry.ci.openshift.org/openshift:cluster-capi-operator
+        command:
+        - ./crd-compatibility-checker
+        args:
+          - --diagnostics-address=:8443
+        env:
+        - name: RELEASE_VERSION
+          value: "0.0.1-snapshot"
+        readinessProbe:
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+          successThreshold: 1
+          initialDelaySeconds: 0
+          httpGet:
+            path: /readyz
+            port: healthz
+        livenessProbe:
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+          successThreshold: 1
+          initialDelaySeconds: 0
+          httpGet:
+            path: /healthz
+            port: healthz
+        ports:
+        - containerPort: 9443
+          name: webhook-server
+          protocol: TCP
+        - containerPort: 9441
+          name: healthz
+          protocol: TCP
+        - containerPort: 8443
+          name: diagnostics
+          protocol: TCP
+        resources:
+          requests:
+            cpu: 10m
+            memory: 50Mi
+        terminationMessagePolicy: FallbackToLogsOnError
+        volumeMounts:
+        - name: cert
+          mountPath: /tmp/k8s-webhook-server/serving-certs
+          readOnly: true
+      nodeSelector:
+        node-role.kubernetes.io/master: ""
+      priorityClassName: system-cluster-critical
+      restartPolicy: Always
+      tolerations:
+      - key: "node-role.kubernetes.io/master"
+        operator: "Exists"
+        effect: "NoSchedule"
+      volumes:
+      - name: cert
+        secret:
+          defaultMode: 420
+          secretName: compatibility-requirements-controllers-webhook-service-cert

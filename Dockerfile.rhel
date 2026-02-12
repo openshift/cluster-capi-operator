@@ -7,6 +7,8 @@ FROM registry.ci.openshift.org/ocp/4.22:base-rhel9
 COPY --from=builder /go/src/github.com/openshift/cluster-capi-operator/bin/capi-operator .
 COPY --from=builder /go/src/github.com/openshift/cluster-capi-operator/bin/capi-controllers .
 COPY --from=builder /go/src/github.com/openshift/cluster-capi-operator/bin/machine-api-migration .
+COPY --from=builder /go/src/github.com/openshift/cluster-capi-operator/bin/crd-compatibility-checker .
+
 COPY ./manifests /manifests
 
 LABEL io.openshift.release.operator true

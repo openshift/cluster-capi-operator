@@ -2,7 +2,6 @@ module github.com/openshift/cluster-capi-operator/e2e
 
 go 1.24.0
 
-// TODO: these replaces should be removed when corresponding PRs are merged
 replace (
 	github.com/openshift/cluster-api-actuator-pkg => github.com/openshift/cluster-api-actuator-pkg v0.0.0-20251203134942-d9bd7b8593f3
 	github.com/openshift/cluster-api-actuator-pkg/testutils => github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20251203134942-d9bd7b8593f3
@@ -16,7 +15,7 @@ require (
 	github.com/metal3-io/cluster-api-provider-metal3/api v1.11.2
 	github.com/onsi/ginkgo/v2 v2.27.2
 	github.com/onsi/gomega v1.38.2
-	github.com/openshift/api v0.0.0-20260105114749-aae5635a71a7
+	github.com/openshift/api v0.0.0-20260205045418-81371d13d1fc
 	github.com/openshift/cluster-api-actuator-pkg v0.0.0-20251203134942-d9bd7b8593f3
 	github.com/openshift/cluster-api-provider-baremetal v0.0.0-20250619124612-fb678fec5f7e
 	k8s.io/api v0.34.1
@@ -87,7 +86,7 @@ require (
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/oklog/ulid v1.3.1 // indirect
-	github.com/openshift/client-go v0.0.0-20260105124352-f93a4291f9ae // indirect
+	github.com/openshift/client-go v0.0.0-20260108185524-48f4ccfc4e13 // indirect
 	github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0 // indirect
 	github.com/openshift/cluster-autoscaler-operator v0.0.1-0.20250702183526-4eb64d553940 // indirect
 	github.com/openshift/library-go v0.0.0-20251222131241-289839b3ffe8 // indirect
