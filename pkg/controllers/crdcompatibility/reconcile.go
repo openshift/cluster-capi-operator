@@ -23,14 +23,18 @@ import (
 	"slices"
 
 	"github.com/go-logr/logr"
+	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/yaml"
 
 	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility/objectvalidation"
 	"github.com/openshift/cluster-capi-operator/pkg/crdchecker"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 )
@@ -153,6 +157,7 @@ func (r *reconcileState) reconcileCreateOrUpdate(ctx context.Context, obj *apiex
 		r.parseCompatibilityCRD(obj),
 		r.fetchCurrentCRD(ctx, logger),
 		r.checkCompatibilityRequirement(),
+		r.ensureObjectValidationWebhook(ctx, obj),
 	)
 
 	if err != nil {
@@ -167,9 +172,115 @@ func (r *reconcileState) reconcileDelete(ctx context.Context, obj *apiextensions
 
 	logger.Info("Reconciling CompatibilityRequirement deletion")
 
-	if err := clearFinalizer(ctx, r.client, obj); err != nil {
+	err := errors.Join(
+		clearFinalizer(ctx, r.client, obj),
+		r.removeObjectValidationWebhook(ctx, obj),
+	)
+
+	if err != nil {
 		return ctrl.Result{}, err
 	}
 
 	return ctrl.Result{}, nil
+}
+
+func (r *reconcileState) ensureObjectValidationWebhook(ctx context.Context, obj *apiextensionsv1alpha1.CompatibilityRequirement) error {
+	if isObjectValidationWebhookEnabled(obj) {
+		return nil
+	}
+
+	webhookConfig := validatingWebhookConfigurationFor(obj, r.compatibilityCRD)
+	if err := r.client.Get(ctx, types.NamespacedName{Name: webhookConfig.Name}, webhookConfig); err != nil {
+		if apierrors.IsNotFound(err) {
+			return r.client.Create(ctx, webhookConfig)
+		}
+
+		return err
+	}
+
+	return r.client.Update(ctx, webhookConfig)
+}
+
+func (r *reconcileState) removeObjectValidationWebhook(ctx context.Context, obj *apiextensionsv1alpha1.CompatibilityRequirement) error {
+	webhookConfig := &admissionregistrationv1.ValidatingWebhookConfiguration{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: obj.Name,
+		},
+	}
+
+	if err := r.client.Get(ctx, types.NamespacedName{Name: webhookConfig.Name}, webhookConfig); err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		return err
+	}
+
+	return r.client.Delete(ctx, webhookConfig)
+}
+
+func isObjectValidationWebhookEnabled(obj *apiextensionsv1alpha1.CompatibilityRequirement) bool {
+	osv := obj.Spec.ObjectSchemaValidation
+	return osv.Action == "" && osv.MatchConditions == nil && labelSelectorIsEmpty(osv.NamespaceSelector) && labelSelectorIsEmpty(osv.ObjectSelector)
+}
+
+func labelSelectorIsEmpty(ls metav1.LabelSelector) bool {
+	return len(ls.MatchLabels) == 0 && len(ls.MatchExpressions) == 0
+}
+
+func validatingWebhookConfigurationFor(obj *apiextensionsv1alpha1.CompatibilityRequirement, crd *apiextensionsv1.CustomResourceDefinition) *admissionregistrationv1.ValidatingWebhookConfiguration {
+	vwc := &admissionregistrationv1.ValidatingWebhookConfiguration{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "ValidatingWebhookConfiguration",
+			APIVersion: "admissionregistration.k8s.io/v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: obj.Name,
+			Annotations: map[string]string{
+				"service.beta.openshift.io/inject-cabundle": "true",
+			},
+		},
+		Webhooks: []admissionregistrationv1.ValidatingWebhook{
+			{
+				AdmissionReviewVersions: []string{"v1"},
+				ClientConfig: admissionregistrationv1.WebhookClientConfig{
+					Service: &admissionregistrationv1.ServiceReference{
+						Name:      "compatibility-requirements-controllers-validation-webhook-service",
+						Namespace: "openshift-compatibility-requirements-operator",
+						Path:      ptr.To(fmt.Sprintf("%s%s", objectvalidation.WebhookPrefix, obj.Name)),
+					},
+				},
+				SideEffects:   ptr.To(admissionregistrationv1.SideEffectClassNone),
+				FailurePolicy: ptr.To(admissionregistrationv1.Fail),
+				MatchPolicy:   ptr.To(admissionregistrationv1.Exact),
+				Name:          "compatibilityrequirement.operator.openshift.io",
+				Rules: []admissionregistrationv1.RuleWithOperations{
+					{
+						Rule: admissionregistrationv1.Rule{
+							APIGroups:   []string{crd.Spec.Group},
+							APIVersions: util.SliceMap(crd.Spec.Versions, func(version apiextensionsv1.CustomResourceDefinitionVersion) string { return version.Name }),
+							Resources:   []string{crd.Spec.Names.Plural},
+							Scope:       ptr.To(admissionregistrationv1.ScopeType(crd.Spec.Scope)),
+						},
+						Operations: []admissionregistrationv1.OperationType{"CREATE", "UPDATE"},
+					},
+				},
+			},
+		},
+	}
+
+	var hasStatus, hasScale bool
+	for _, version := range crd.Spec.Versions {
+		if version.Subresources != nil {
+			if version.Subresources.Status != nil && !hasStatus {
+				hasStatus = true
+				vwc.Webhooks[0].Rules[0].Rule.Resources = append(vwc.Webhooks[0].Rules[0].Rule.Resources, crd.Spec.Names.Plural+"/status")
+			}
+			if version.Subresources.Scale != nil && !hasScale {
+				hasScale = true
+				vwc.Webhooks[0].Rules[0].Rule.Resources = append(vwc.Webhooks[0].Rules[0].Rule.Resources, crd.Spec.Names.Plural+"/scale")
+			}
+		}
+	}
+
+	return vwc
 }

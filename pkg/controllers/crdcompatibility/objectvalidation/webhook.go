@@ -44,10 +44,10 @@ import (
 )
 
 const (
-	// webhookPrefix is the static path prefix of our object admission endpoint.
+	// WebhookPrefix is the static path prefix of our object admission endpoint.
 	// Requests will be sent to a sub-path with the next component of the path
 	// as a compatibility requirement name.
-	webhookPrefix = "/compatibility-requirement-object-admission/"
+	WebhookPrefix = "/compatibility-requirement-object-admission/"
 )
 
 var (
@@ -91,7 +91,7 @@ func (v *validator) SetupWithManager(ctx context.Context, mgr ctrl.Manager, opts
 	// Register a webhook on a path with a dynamic component for the compatibility requirement name.
 	// we will extract this component into the context so that the handler can identify which compatibility
 	// requirement the request was intended to validate against.
-	mgr.GetWebhookServer().Register(webhookPrefix+"{CompatibilityRequirement}", &admission.Webhook{
+	mgr.GetWebhookServer().Register(WebhookPrefix+"{CompatibilityRequirement}", &admission.Webhook{
 		Handler:         v,
 		WithContextFunc: compatibilityRequrementIntoContext,
 	})
