@@ -41,7 +41,7 @@ import (
 
 // createValidatingWebhookConfig creates a ValidatingWebhookConfiguration for end-to-end testing.
 func createValidatingWebhookConfig(crd *apiextensionsv1.CustomResourceDefinition, compatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement) *admissionv1.ValidatingWebhookConfiguration {
-	webhookPath := fmt.Sprintf("%s%s", webhookPrefix, compatibilityRequirement.Name)
+	webhookPath := fmt.Sprintf("%s%s", WebhookPrefix, compatibilityRequirement.Name)
 
 	// Get webhook server configuration from test environment
 	hostPort := fmt.Sprintf("%s:%d", testEnv.WebhookInstallOptions.LocalServingHost, testEnv.WebhookInstallOptions.LocalServingPort)
@@ -478,7 +478,7 @@ func TestCompatibilityRequirementContext(t *testing.T) {
 	ctx := t.Context()
 
 	g := NewWithT(t)
-	testPath := fmt.Sprintf("%s%s", webhookPrefix, "test-requirement")
+	testPath := fmt.Sprintf("%s%s", WebhookPrefix, "test-requirement")
 	req := &http.Request{}
 	req.URL = &url.URL{Path: testPath}
 

@@ -18,17 +18,20 @@ package crdcompatibility
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility/crdvalidation"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility/objectvalidation"
 	"github.com/openshift/cluster-capi-operator/pkg/test"
 )
 
@@ -253,6 +256,73 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 			}, defaultNodeTimeout)
 		})
 
+	})
+
+	Context("When creating a CompatibilityRequirement with configured object schema validation", Ordered, func() {
+		var webhookConfig *admissionregistrationv1.ValidatingWebhookConfiguration
+		var requirement *apiextensionsv1alpha1.CompatibilityRequirement
+
+		BeforeAll(func(ctx context.Context) {
+			requirement = test.GenerateTestCompatibilityRequirement(testCRDClean)
+			requirement.Spec.ObjectSchemaValidation = apiextensionsv1alpha1.ObjectSchemaValidation{
+				Action: apiextensionsv1alpha1.CRDAdmitActionDeny,
+				NamespaceSelector: metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"test": "test",
+					},
+				},
+				ObjectSelector: metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"test": "test",
+					},
+				},
+				MatchConditions: []admissionregistrationv1.MatchCondition{
+					{
+						Name:       "test",
+						Expression: "true",
+					},
+				},
+			}
+
+			createTestObject(ctx, requirement, "CompatibilityRequirement")
+
+			webhookConfig = &admissionregistrationv1.ValidatingWebhookConfiguration{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: requirement.Name,
+				},
+			}
+		})
+
+		It("Should create a validating webhook configuration to implement the compatibility requirement", func(ctx context.Context) {
+			Eventually(kWithCtx(ctx).Object(webhookConfig)).Should(SatisfyAll(
+				HaveField("ObjectMeta.Name", BeEquivalentTo(requirement.Name)),
+				HaveField("ObjectMeta.Annotations", HaveKey("service.beta.openshift.io/inject-cabundle")),
+				HaveField("Webhooks", ConsistOf(SatisfyAll(
+					HaveField("Name", BeEquivalentTo("compatibilityrequirement.operator.openshift.io")),
+					HaveField("ClientConfig.Service.Name", BeEquivalentTo("compatibility-requirements-controllers-validation-webhook-service")),
+					HaveField("ClientConfig.Service.Namespace", BeEquivalentTo("openshift-compatibility-requirements-operator")),
+					HaveField("ClientConfig.Service.Path", HaveValue(BeEquivalentTo(fmt.Sprintf("%s%s", objectvalidation.WebhookPrefix, requirement.Name)))),
+					HaveField("SideEffects", HaveValue(BeEquivalentTo(admissionregistrationv1.SideEffectClassNone))),
+					HaveField("FailurePolicy", HaveValue(BeEquivalentTo(admissionregistrationv1.Fail))),
+					HaveField("MatchPolicy", HaveValue(BeEquivalentTo(admissionregistrationv1.Exact))),
+					HaveField("Rules", ConsistOf(SatisfyAll(
+						HaveField("APIGroups", BeEquivalentTo([]string{testCRDClean.Spec.Group})),
+						HaveField("APIVersions", BeEquivalentTo([]string{testCRDClean.Spec.Versions[0].Name})),
+						HaveField("Resources", BeEquivalentTo([]string{testCRDClean.Spec.Names.Plural, testCRDClean.Spec.Names.Plural + "/status"})),
+						HaveField("Scope", HaveValue(BeEquivalentTo(admissionregistrationv1.ScopeType(testCRDClean.Spec.Scope)))),
+						HaveField("Operations", ConsistOf(
+							BeEquivalentTo("CREATE"),
+							BeEquivalentTo("UPDATE"),
+						)),
+					))),
+				))),
+			))
+		})
+
+		It("Should delete the validating webhook configuration when the CompatibilityRequirement is deleted", func(ctx context.Context) {
+			Expect(cl.Delete(ctx, requirement)).To(Succeed())
+			Eventually(kWithCtx(ctx).Get(webhookConfig)).Should(test.BeK8SNotFound())
+		})
 	})
 
 	Context("When creating or modifying a CRD", func() {

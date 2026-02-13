@@ -52,7 +52,7 @@ func compatibilityRequrementFromContext(ctx context.Context) string {
 // of the CompatibilityRequirement from it and adds it to the context so it can later
 // be read inside the Handle functions.
 func compatibilityRequrementIntoContext(ctx context.Context, r *http.Request) context.Context {
-	compatibilityRequirementName := strings.TrimPrefix(r.URL.Path, webhookPrefix)
+	compatibilityRequirementName := strings.TrimPrefix(r.URL.Path, WebhookPrefix)
 	return context.WithValue(ctx, compatibilityRequirementContextKey{}, compatibilityRequirementName)
 }
 
