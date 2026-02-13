@@ -23,6 +23,7 @@ import (
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -34,6 +35,7 @@ import (
 
 	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility/index"
+	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
 )
 
 const (
@@ -48,19 +50,30 @@ const (
 // NewCompatibilityRequirementReconciler returns a partially initialised CompatibilityRequirementReconciler.
 func NewCompatibilityRequirementReconciler(client client.Client) *CompatibilityRequirementReconciler {
 	return &CompatibilityRequirementReconciler{
-		client: client,
+		client:        client,
+		resourceCache: resourceapply.NewResourceCache(),
 	}
 }
 
 // CompatibilityRequirementReconciler reconciles CompatibilityRequirement resources.
 type CompatibilityRequirementReconciler struct {
 	client client.Client
+
+	kubeClient    kubernetes.Interface
+	resourceCache resourceapply.ResourceCache
 }
 
 type controllerOption func(*builder.Builder) *builder.Builder
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *CompatibilityRequirementReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager, opts ...controllerOption) error {
+	var err error
+
+	r.kubeClient, err = kubernetes.NewForConfig(mgr.GetConfig())
+	if err != nil {
+		return fmt.Errorf("failed to create kube client: %w", err)
+	}
+
 	crdRequirementValidatorBuilder := ctrl.NewWebhookManagedBy(mgr).
 		For(&apiextensionsv1alpha1.CompatibilityRequirement{}).
 		WithValidator(&crdRequirementValidator{})
