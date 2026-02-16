@@ -26,7 +26,6 @@ import (
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -274,7 +273,7 @@ var _ = Describe("Object Pruning Integration", func() {
 	})
 
 	Context("error scenarios", func() {
-		It("should handle webhook when CompatibilityRequirement does not exist", func(ctx context.Context) {
+		BeforeEach(func(ctx context.Context) {
 			By("Creating a live CRD with permissive schema")
 			liveCRD = createEmptyPropertiesCRDSchema()
 			Expect(cl.Create(ctx, liveCRD)).To(Succeed())
@@ -286,6 +285,12 @@ var _ = Describe("Object Pruning Integration", func() {
 					HaveField("Status", BeEquivalentTo(metav1.ConditionTrue)),
 				))))
 
+			DeferCleanup(func(ctx context.Context) {
+				Expect(test.CleanupAndWait(ctx, cl, liveCRD)).To(Succeed())
+			})
+		}, defaultNodeTimeout)
+
+		It("should handle webhook when CompatibilityRequirement does not exist", func(ctx context.Context) {
 			By("Creating MutatingWebhookConfiguration with non-existent CompatibilityRequirement")
 			webhookConfig := createMutatingWebhookConfig(liveCRD, &apiextensionsv1alpha1.CompatibilityRequirement{
 				ObjectMeta: metav1.ObjectMeta{Name: "non-existent-compat-req"},
@@ -313,8 +318,7 @@ var _ = Describe("Object Pruning Integration", func() {
 
 			By("Verifying error response")
 			err := cl.Create(ctx, testObj)
-			Expect(err).To(HaveOccurred())
-			Expect(apierrors.IsInternalError(err) || apierrors.IsBadRequest(err)).To(BeTrue())
+			Expect(err).To(MatchError(ContainSubstring("CompatibilityRequirement.apiextensions.openshift.io \"non-existent-compat-req\" not found")))
 		}, defaultNodeTimeout)
 	})
 })

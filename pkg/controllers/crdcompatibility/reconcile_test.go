@@ -31,6 +31,7 @@ import (
 
 	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility/crdvalidation"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility/objectpruning"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility/objectvalidation"
 	"github.com/openshift/cluster-capi-operator/pkg/test"
 )
@@ -52,7 +53,7 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 		testCRDClean, testCRDWorking *apiextensionsv1.CustomResourceDefinition
 	)
 
-	BeforeEach(func(ctx context.Context) {
+	BeforeEach(func() {
 		testCRDClean = test.GenerateTestCRD()
 		testCRDWorking = testCRDClean.DeepCopy()
 	})
@@ -60,7 +61,7 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 	Context("When creating a CompatibilityRequirement", func() {
 		BeforeEach(func(ctx context.Context) {
 			createTestObject(ctx, testCRDWorking, "CRD")
-		})
+		}, defaultNodeTimeout)
 
 		It("Should set all conditions and observed CRD", func(ctx context.Context) {
 			requirement := test.GenerateTestCompatibilityRequirement(testCRDClean)
@@ -259,10 +260,9 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 	})
 
 	Context("When creating a CompatibilityRequirement with configured object schema validation", Ordered, func() {
-		var webhookConfig *admissionregistrationv1.ValidatingWebhookConfiguration
 		var requirement *apiextensionsv1alpha1.CompatibilityRequirement
 
-		BeforeAll(func(ctx context.Context) {
+		BeforeEach(func(ctx context.Context) {
 			requirement = test.GenerateTestCompatibilityRequirement(testCRDClean)
 			requirement.Spec.ObjectSchemaValidation = apiextensionsv1alpha1.ObjectSchemaValidation{
 				Action: apiextensionsv1alpha1.CRDAdmitActionDeny,
@@ -285,16 +285,16 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 			}
 
 			createTestObject(ctx, requirement, "CompatibilityRequirement")
+		})
 
-			webhookConfig = &admissionregistrationv1.ValidatingWebhookConfiguration{
+		It("Should create a validating webhook configuration to implement the compatibility requirement", func(ctx context.Context) {
+			validatingWebhookConfig := &admissionregistrationv1.ValidatingWebhookConfiguration{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: requirement.Name,
 				},
 			}
-		})
 
-		It("Should create a validating webhook configuration to implement the compatibility requirement", func(ctx context.Context) {
-			Eventually(kWithCtx(ctx).Object(webhookConfig)).Should(SatisfyAll(
+			Eventually(kWithCtx(ctx).Object(validatingWebhookConfig)).Should(SatisfyAll(
 				HaveField("ObjectMeta.Name", BeEquivalentTo(requirement.Name)),
 				HaveField("ObjectMeta.Annotations", HaveKey("service.beta.openshift.io/inject-cabundle")),
 				HaveField("Webhooks", ConsistOf(SatisfyAll(
@@ -319,9 +319,58 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 			))
 		})
 
+		It("Should create a mutating webhook configuration to implement the compatibility requirement", func(ctx context.Context) {
+			mutatingWebhookConfig := &admissionregistrationv1.MutatingWebhookConfiguration{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: requirement.Name,
+				},
+			}
+
+			Eventually(kWithCtx(ctx).Object(mutatingWebhookConfig)).Should(SatisfyAll(
+				HaveField("ObjectMeta.Name", BeEquivalentTo(requirement.Name)),
+				HaveField("ObjectMeta.Annotations", HaveKey("service.beta.openshift.io/inject-cabundle")),
+				HaveField("Webhooks", ConsistOf(SatisfyAll(
+					HaveField("Name", BeEquivalentTo("compatibilityrequirement.operator.openshift.io")),
+					HaveField("ClientConfig.Service.Name", BeEquivalentTo("compatibility-requirements-controllers-webhook-service")),
+					HaveField("ClientConfig.Service.Namespace", BeEquivalentTo("openshift-compatibility-requirements-operator")),
+					HaveField("ClientConfig.Service.Path", HaveValue(BeEquivalentTo(fmt.Sprintf("%s%s", objectpruning.WebhookPrefix, requirement.Name)))),
+					HaveField("SideEffects", HaveValue(BeEquivalentTo(admissionregistrationv1.SideEffectClassNone))),
+					HaveField("FailurePolicy", HaveValue(BeEquivalentTo(admissionregistrationv1.Fail))),
+					HaveField("MatchPolicy", HaveValue(BeEquivalentTo(admissionregistrationv1.Exact))),
+					HaveField("Rules", ConsistOf(SatisfyAll(
+						HaveField("APIGroups", BeEquivalentTo([]string{testCRDClean.Spec.Group})),
+						HaveField("APIVersions", BeEquivalentTo([]string{testCRDClean.Spec.Versions[0].Name})),
+						HaveField("Resources", BeEquivalentTo([]string{testCRDClean.Spec.Names.Plural, testCRDClean.Spec.Names.Plural + "/status"})),
+						HaveField("Scope", HaveValue(BeEquivalentTo(admissionregistrationv1.ScopeType(testCRDClean.Spec.Scope)))),
+						HaveField("Operations", ConsistOf(
+							BeEquivalentTo("CREATE"),
+							BeEquivalentTo("UPDATE"),
+						)),
+					))),
+				))),
+			))
+		})
+
 		It("Should delete the validating webhook configuration when the CompatibilityRequirement is deleted", func(ctx context.Context) {
+			validatingWebhookConfig := &admissionregistrationv1.ValidatingWebhookConfiguration{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: requirement.Name,
+				},
+			}
+
 			Expect(cl.Delete(ctx, requirement)).To(Succeed())
-			Eventually(kWithCtx(ctx).Get(webhookConfig)).Should(test.BeK8SNotFound())
+			Eventually(kWithCtx(ctx).Get(validatingWebhookConfig)).Should(test.BeK8SNotFound())
+		})
+
+		It("Should delete the mutating webhook configuration when the CompatibilityRequirement is deleted", func(ctx context.Context) {
+			mutatingWebhookConfig := &admissionregistrationv1.MutatingWebhookConfiguration{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: requirement.Name,
+				},
+			}
+
+			// No need to delete as we are in an ordered context and the previous test removes the compatibility requirement.
+			Eventually(kWithCtx(ctx).Get(mutatingWebhookConfig)).Should(test.BeK8SNotFound())
 		})
 	})
 
@@ -364,7 +413,7 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 				requirement = test.GenerateTestCompatibilityRequirement(testCRDClean)
 				createTestObject(ctx, requirement, "CompatibilityRequirement")
 				waitForAdmitted(ctx, requirement)
-			})
+			}, defaultNodeTimeout)
 
 			It("Should not permit a CRD with requirements to be deleted", func(ctx context.Context) {
 				By("Attempting to delete CRD " + testCRDClean.Name)
@@ -399,7 +448,7 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 				requirement = test.GenerateTestCompatibilityRequirement(testCRDWorking)
 				createTestObject(ctx, requirement, "CompatibilityRequirement")
 				waitForAdmitted(ctx, requirement)
-			})
+			}, defaultNodeTimeout)
 
 			createCRD := func(ctx context.Context, obj client.Object, updateFn func()) func() error {
 				return func() error {
@@ -434,7 +483,7 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 
 				createTestObject(ctx, requirement, "CompatibilityRequirement")
 				waitForAdmitted(ctx, requirement)
-			})
+			}, defaultNodeTimeout)
 
 			createCRD := func(ctx context.Context, obj client.Object, updateFn func()) func() error {
 				return func() error {
