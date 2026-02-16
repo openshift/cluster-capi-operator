@@ -140,9 +140,19 @@ func ReadProviderImages(ctx context.Context, k8sClient client.Reader, log logr.L
 		return nil, fmt.Errorf("failed to parse pull secret: %w", err)
 	}
 
-	mirrors, err := getImageRegistryMirrors(ctx, k8sClient, log)
+	mirrors, skippedWildcards, err := getImageRegistryMirrors(ctx, k8sClient)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get image registry mirrors: %w", err)
+	}
+
+	for _, source := range skippedWildcards {
+		log.Info("ignoring unsupported wildcard mirror source", "source", source)
+	}
+
+	if len(mirrors) > 0 {
+		log.Info("found image registry mirrors", "sourceCount", len(mirrors))
+	} else {
+		log.Info("no image registry mirrors found")
 	}
 
 	resolvedImages := make([]string, len(containerImages))

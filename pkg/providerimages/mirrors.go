@@ -1,3 +1,18 @@
+/*
+Copyright 2026 Red Hat, Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+	http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 package providerimages
 
 import (
@@ -5,7 +20,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/go-logr/logr"
 	configv1 "github.com/openshift/api/config/v1"
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -13,44 +27,39 @@ import (
 )
 
 // getImageRegistryMirrors lists IDMS and ICSP resources from the cluster and
-// builds a map of source registries/repos to their mirror equivalents.
-// If a CRD is not installed on the cluster, it is silently skipped.
-func getImageRegistryMirrors(ctx context.Context, c client.Reader, log logr.Logger) (map[string][]string, error) {
-	mirrors := make(map[string][]string)
+// builds a map of source registries/repos to their mirror equivalents. If a
+// CRD is not installed on the cluster, it is silently skipped. Unsupported
+// wildcard sources (e.g. *.redhat.io) are removed from the map and returned
+// separately so the caller can log them.
+func getImageRegistryMirrors(ctx context.Context, c client.Reader) (mirrors map[string][]string, skippedWildcards []string, err error) {
+	mirrors = make(map[string][]string)
 
 	idmsMirrors, err := getIDMSMirrors(ctx, c)
 	if err != nil && !meta.IsNoMatchError(err) {
-		return nil, err
+		return nil, nil, err
 	}
+
 	for k, v := range idmsMirrors {
 		mirrors[k] = append(mirrors[k], v...)
 	}
 
 	icspMirrors, err := getICSPMirrors(ctx, c)
 	if err != nil && !meta.IsNoMatchError(err) {
-		return nil, err
+		return nil, nil, err
 	}
+
 	for k, v := range icspMirrors {
 		mirrors[k] = append(mirrors[k], v...)
 	}
 
-	// Wildcard IDMS sources (e.g. *.redhat.io) are not supported for
-	// provider image resolution. Warn and remove so they don't silently
-	// fail to match.
 	for source := range mirrors {
 		if strings.HasPrefix(source, "*.") {
-			log.Info("ignoring unsupported wildcard mirror source", "source", source)
+			skippedWildcards = append(skippedWildcards, source)
 			delete(mirrors, source)
 		}
 	}
 
-	if len(mirrors) > 0 {
-		log.Info("found image registry mirrors", "sourceCount", len(mirrors))
-	} else {
-		log.Info("no image registry mirrors found")
-	}
-
-	return mirrors, nil
+	return mirrors, skippedWildcards, nil
 }
 
 // getIDMSMirrors lists ImageDigestMirrorSet resources and returns a map of
@@ -58,10 +67,11 @@ func getImageRegistryMirrors(ctx context.Context, c client.Reader, log logr.Logg
 func getIDMSMirrors(ctx context.Context, c client.Reader) (map[string][]string, error) {
 	var list configv1.ImageDigestMirrorSetList
 	if err := c.List(ctx, &list); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to list ImageDigestMirrorSets: %w", err)
 	}
 
 	mirrors := make(map[string][]string)
+
 	for _, idms := range list.Items {
 		for _, mirror := range idms.Spec.ImageDigestMirrors {
 			for _, m := range mirror.Mirrors {
@@ -78,10 +88,11 @@ func getIDMSMirrors(ctx context.Context, c client.Reader) (map[string][]string, 
 func getICSPMirrors(ctx context.Context, c client.Reader) (map[string][]string, error) {
 	var list operatorv1alpha1.ImageContentSourcePolicyList
 	if err := c.List(ctx, &list); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to list ImageContentSourcePolicies: %w", err)
 	}
 
 	mirrors := make(map[string][]string)
+
 	for _, icsp := range list.Items {
 		for _, rdm := range icsp.Spec.RepositoryDigestMirrors {
 			mirrors[rdm.Source] = append(mirrors[rdm.Source], rdm.Mirrors...)
@@ -111,6 +122,7 @@ func sourceMatchesRef(ref, source string) bool {
 
 	nextChar := ref[len(source)]
 
+	// This is the boundary check. We must match on / or @
 	return nextChar == '/' || nextChar == '@'
 }
 
@@ -123,10 +135,12 @@ func resolveImageRef(imageRef string, mirrors map[string][]string) string {
 	}
 
 	var bestSource string
+
 	for source := range mirrors {
 		if !sourceMatchesRef(imageRef, source) {
 			continue
 		}
+
 		if len(source) > len(bestSource) {
 			bestSource = source
 		}
@@ -137,5 +151,10 @@ func resolveImageRef(imageRef string, mirrors map[string][]string) string {
 	}
 
 	suffix := strings.TrimPrefix(imageRef, bestSource)
+
+	// We can support falling back e.g "quay.io/openshift" => mirrors:
+	// ["mirror-b.local/openshift", "mirror-c.local/openshift"] ut here we're
+	// assuming mirrors are correctly configured, so for simplicity's
+	// sake we're only taking the first.
 	return mirrors[bestSource][0] + suffix
 }
