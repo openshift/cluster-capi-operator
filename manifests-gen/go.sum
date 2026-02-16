@@ -92,6 +92,8 @@ github.com/opencontainers/image-spec v1.1.1 h1:y0fUlFfIZhPF1W537XOLg0/fcx6zcHCJw
 github.com/opencontainers/image-spec v1.1.1/go.mod h1:qpqAh3Dmcf36wStyyWU+kCeDgrGnAve2nCC8+7h8Q0M=
 github.com/openshift/api v0.0.0-20260205045418-81371d13d1fc h1:Crx99bQsvRhRMOMLssfVChaOItelVQhsv3esIFpcszc=
 github.com/openshift/api v0.0.0-20260205045418-81371d13d1fc/go.mod h1:d5uzF0YN2nQQFA0jIEWzzOZ+edmo6wzlGLvx5Fhz4uY=
+github.com/openshift/cluster-capi-operator v0.0.0-20260212142421-599f7fc1eb9f h1:ZE6AqnnRcJufyY0wyzY2SGFZ+IU2jWJX4LmwRLDrQjU=
+github.com/openshift/cluster-capi-operator v0.0.0-20260212142421-599f7fc1eb9f/go.mod h1:2R1aARTzVcwlsyIpfNMIS38HmcanJEABru8WAtlaKLg=
 github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=
 github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=

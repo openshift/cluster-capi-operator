@@ -19,7 +19,7 @@ require (
 require (
 	github.com/google/go-containerregistry v0.20.7
 	github.com/openshift/api v0.0.0-20260205045418-81371d13d1fc
-	github.com/openshift/cluster-capi-operator v0.0.0-00010101000000-000000000000
+	github.com/openshift/cluster-capi-operator v0.0.0-20260212142421-599f7fc1eb9f
 	k8s.io/utils v0.0.0-20250820121507-0af2bda4dd1d
 	sigs.k8s.io/controller-runtime v0.22.4
 )
@@ -79,5 +79,3 @@ require (
 	sigs.k8s.io/randfill v1.0.0 // indirect
 	sigs.k8s.io/structured-merge-diff/v6 v6.3.0 // indirect
 )
-
-replace github.com/openshift/cluster-capi-operator => ..
