@@ -396,7 +396,6 @@ func createStrictCRDSchema() *apiextensionsv1.CustomResourceDefinition {
 			},
 		},
 	}
-	crd.Spec.Versions[0].Schema.OpenAPIV3Schema.XPreserveUnknownFields = ptr.To(false)
 
 	return crd
 }
