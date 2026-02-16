@@ -27,3 +27,13 @@ import (
 func BeK8SNotFound() types.GomegaMatcher {
 	return gomega.WithTransform(apierrors.IsNotFound, gomega.BeTrue())
 }
+
+// IgnoreFields is a gomega matcher that ignores the specified fields in the object.
+func IgnoreFields(fields []string, matcher types.GomegaMatcher) types.GomegaMatcher {
+	return gomega.WithTransform(func(obj map[string]interface{}) map[string]interface{} {
+		for _, field := range fields {
+			delete(obj, field)
+		}
+		return obj
+	}, matcher)
+}
