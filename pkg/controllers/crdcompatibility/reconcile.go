@@ -36,6 +36,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility/objectpruning"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility/objectvalidation"
 	"github.com/openshift/cluster-capi-operator/pkg/crdchecker"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
@@ -162,6 +163,7 @@ func (r *reconcileState) reconcileCreateOrUpdate(ctx context.Context, obj *apiex
 		r.fetchCurrentCRD(ctx, logger),
 		r.checkCompatibilityRequirement(),
 		r.ensureObjectValidationWebhook(ctx, obj),
+		r.ensureObjectPruningWebhook(ctx, obj),
 	)
 
 	if err != nil {
@@ -176,7 +178,11 @@ func (r *reconcileState) reconcileDelete(ctx context.Context, obj *apiextensions
 
 	logger.Info("Reconciling CompatibilityRequirement deletion")
 
-	if err := r.removeObjectValidationWebhook(ctx, obj); err != nil {
+	err := errors.Join(
+		r.removeObjectValidationWebhook(ctx, obj),
+		r.removeObjectPruningWebhook(ctx, obj),
+	)
+	if err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -231,6 +237,40 @@ func (r *reconcileState) removeObjectValidationWebhook(ctx context.Context, obj 
 	}
 
 	return nil
+}
+
+func (r *reconcileState) ensureObjectPruningWebhook(ctx context.Context, obj *apiextensionsv1alpha1.CompatibilityRequirement) error {
+	if isObjectValidationWebhookEnabled(obj) {
+		return nil
+	}
+
+	webhookConfig := mutatingWebhookConfigurationFor(obj, r.compatibilityCRD)
+	if err := r.client.Get(ctx, types.NamespacedName{Name: webhookConfig.Name}, webhookConfig); err != nil {
+		if apierrors.IsNotFound(err) {
+			return r.client.Create(ctx, webhookConfig)
+		}
+
+		return err
+	}
+
+	return r.client.Update(ctx, webhookConfig)
+}
+
+func (r *reconcileState) removeObjectPruningWebhook(ctx context.Context, obj *apiextensionsv1alpha1.CompatibilityRequirement) error {
+	webhookConfig := &admissionregistrationv1.MutatingWebhookConfiguration{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: obj.Name,
+		},
+	}
+
+	if err := r.client.Get(ctx, types.NamespacedName{Name: webhookConfig.Name}, webhookConfig); err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		return err
+	}
+
+	return r.client.Delete(ctx, webhookConfig)
 }
 
 func isObjectValidationWebhookEnabled(obj *apiextensionsv1alpha1.CompatibilityRequirement) bool {
@@ -300,6 +340,64 @@ func validatingWebhookConfigurationFor(obj *apiextensionsv1alpha1.CompatibilityR
 			if version.Subresources.Scale != nil && !hasScale {
 				hasScale = true
 
+				vwc.Webhooks[0].Rules[0].Rule.Resources = append(vwc.Webhooks[0].Rules[0].Rule.Resources, crd.Spec.Names.Plural+"/scale")
+			}
+		}
+	}
+
+	return vwc
+}
+
+func mutatingWebhookConfigurationFor(obj *apiextensionsv1alpha1.CompatibilityRequirement, crd *apiextensionsv1.CustomResourceDefinition) *admissionregistrationv1.MutatingWebhookConfiguration {
+	vwc := &admissionregistrationv1.MutatingWebhookConfiguration{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "MutatingWebhookConfiguration",
+			APIVersion: "admissionregistration.k8s.io/v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: obj.Name,
+			Annotations: map[string]string{
+				"service.beta.openshift.io/inject-cabundle": "true",
+			},
+		},
+		Webhooks: []admissionregistrationv1.MutatingWebhook{
+			{
+				AdmissionReviewVersions: []string{"v1"},
+				ClientConfig: admissionregistrationv1.WebhookClientConfig{
+					Service: &admissionregistrationv1.ServiceReference{
+						Name:      "compatibility-requirements-controllers-validation-webhook-service",
+						Namespace: "openshift-compatibility-requirements-operator",
+						Path:      ptr.To(fmt.Sprintf("%s%s", objectpruning.WebhookPrefix, obj.Name)),
+					},
+				},
+				SideEffects:   ptr.To(admissionregistrationv1.SideEffectClassNone),
+				FailurePolicy: ptr.To(admissionregistrationv1.Fail),
+				MatchPolicy:   ptr.To(admissionregistrationv1.Exact),
+				Name:          "compatibilityrequirement.operator.openshift.io",
+				Rules: []admissionregistrationv1.RuleWithOperations{
+					{
+						Rule: admissionregistrationv1.Rule{
+							APIGroups:   []string{crd.Spec.Group},
+							APIVersions: util.SliceMap(crd.Spec.Versions, func(version apiextensionsv1.CustomResourceDefinitionVersion) string { return version.Name }),
+							Resources:   []string{crd.Spec.Names.Plural},
+							Scope:       ptr.To(admissionregistrationv1.ScopeType(crd.Spec.Scope)),
+						},
+						Operations: []admissionregistrationv1.OperationType{"CREATE", "UPDATE"},
+					},
+				},
+			},
+		},
+	}
+
+	var hasStatus, hasScale bool
+	for _, version := range crd.Spec.Versions {
+		if version.Subresources != nil {
+			if version.Subresources.Status != nil && !hasStatus {
+				hasStatus = true
+				vwc.Webhooks[0].Rules[0].Rule.Resources = append(vwc.Webhooks[0].Rules[0].Rule.Resources, crd.Spec.Names.Plural+"/status")
+			}
+			if version.Subresources.Scale != nil && !hasScale {
+				hasScale = true
 				vwc.Webhooks[0].Rules[0].Rule.Resources = append(vwc.Webhooks[0].Rules[0].Rule.Resources, crd.Spec.Names.Plural+"/scale")
 			}
 		}
