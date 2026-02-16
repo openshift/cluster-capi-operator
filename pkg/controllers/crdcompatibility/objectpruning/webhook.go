@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 
 	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
 	apiextensionshelpers "k8s.io/apiextensions-apiserver/pkg/apihelpers"
@@ -28,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -46,19 +48,40 @@ const (
 	WebhookPrefix = "/compatibility-requirement-object-mutation/"
 )
 
+type structuralSchemaCacheKey struct {
+	// The name of the CompatibilityRequirement.
+	compatibilityRequirementName string
+	// The API version of the schema we are caching.
+	version string
+}
+
+type structuralSchemaCacheValue struct {
+	schema *structuralschema.Structural
+
+	// The UID of the CompatibilityRequirement.
+	uid types.UID
+
+	// The generation of the CompatibilityRequirement.
+	generation int64
+}
+
 // validator implements the admission.Handler to have a custom Handle function which is able to
 // validate arbitrary objects against CompatibilityRequirements by leveraging unstructured.
 type validator struct {
 	client                client.Reader
 	decoder               admission.Decoder
 	universalDeserializer runtime.Decoder
+
+	structuralSchemaCacheLock sync.RWMutex
+	structuralSchemaCache     map[structuralSchemaCacheKey]structuralSchemaCacheValue
 }
 
 // NewValidator returns a partially initialized ObjectValidator.
 func NewValidator() *validator {
 	return &validator{
 		// This decoder is only used to decode to unstructured and for CompatibilityRequirements.
-		decoder: admission.NewDecoder(runtime.NewScheme()),
+		decoder:               admission.NewDecoder(runtime.NewScheme()),
+		structuralSchemaCache: make(map[structuralSchemaCacheKey]structuralSchemaCacheValue),
 	}
 }
 
@@ -84,7 +107,7 @@ func (v *validator) SetupWithManager(ctx context.Context, mgr ctrl.Manager, opts
 
 // handleObjectPruning handles the pruning of an object.
 func (v *validator) handleObjectPruning(ctx context.Context, compatibilityRequirementName string, obj *unstructured.Unstructured) error {
-	schema, err := v.getCopmatibilityRequirementStructuralSchema(ctx, compatibilityRequirementName, obj.GroupVersionKind().Version)
+	schema, err := v.getStructuralSchema(ctx, compatibilityRequirementName, obj.GroupVersionKind().Version)
 	if err != nil {
 		return fmt.Errorf("failed to get schema for CompatibilityRequirement %q: %w", compatibilityRequirementName, err)
 	}
@@ -94,12 +117,72 @@ func (v *validator) handleObjectPruning(ctx context.Context, compatibilityRequir
 	return nil
 }
 
-func (v *validator) getCopmatibilityRequirementStructuralSchema(ctx context.Context, compatibilityRequirementName string, version string) (*structuralschema.Structural, error) {
+func (v *validator) getStructuralSchema(ctx context.Context, compatibilityRequirementName string, version string) (*structuralschema.Structural, error) {
 	compatibilityRequirement := &apiextensionsv1alpha1.CompatibilityRequirement{}
 	if err := v.client.Get(ctx, client.ObjectKey{Name: compatibilityRequirementName}, compatibilityRequirement); err != nil {
 		return nil, fmt.Errorf("failed to get CompatibilityRequirement %q: %w", compatibilityRequirementName, err)
 	}
 
+	cacheKey := getStructuralSchemaCacheKey(compatibilityRequirement, version)
+
+	schema, ok := v.getStructuralSchemaFromCache(compatibilityRequirement, cacheKey)
+	if ok {
+		return schema, nil
+	}
+
+	v.structuralSchemaCacheLock.Lock()
+	defer v.structuralSchemaCacheLock.Unlock()
+
+	// Check the cache again under the write lock in case another thread populated the cache
+	// while we were waiting for the write lock.
+	schemaValue, ok := v.structuralSchemaCache[cacheKey]
+	if ok && isCacheEntryValid(compatibilityRequirement, schemaValue) {
+		return schemaValue.schema, nil
+	}
+
+	schema, err := v.getCompatibilityRequirementStructuralSchema(compatibilityRequirement, version)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get structural schema: %w", err)
+	}
+
+	v.storeStructuralSchemaInCache(compatibilityRequirement, cacheKey, schema)
+
+	return schema, nil
+}
+
+func getStructuralSchemaCacheKey(compatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement, version string) structuralSchemaCacheKey {
+	return structuralSchemaCacheKey{
+		compatibilityRequirementName: compatibilityRequirement.Name,
+		version:                      version,
+	}
+}
+
+func isCacheEntryValid(compatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement, schema structuralSchemaCacheValue) bool {
+	return compatibilityRequirement.Generation == schema.generation && compatibilityRequirement.UID == schema.uid
+}
+
+func (v *validator) getStructuralSchemaFromCache(compatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement, cacheKey structuralSchemaCacheKey) (*structuralschema.Structural, bool) {
+	v.structuralSchemaCacheLock.RLock()
+	defer v.structuralSchemaCacheLock.RUnlock()
+
+	schema, ok := v.structuralSchemaCache[cacheKey]
+	if !ok || !isCacheEntryValid(compatibilityRequirement, schema) {
+		return nil, false
+	}
+
+	return schema.schema, true
+}
+
+func (v *validator) storeStructuralSchemaInCache(compatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement, cacheKey structuralSchemaCacheKey, schema *structuralschema.Structural) {
+	// No locking here as we take the lock when constructing the new schema.
+	v.structuralSchemaCache[cacheKey] = structuralSchemaCacheValue{
+		schema:     schema,
+		uid:        compatibilityRequirement.UID,
+		generation: compatibilityRequirement.Generation,
+	}
+}
+
+func (v *validator) getCompatibilityRequirementStructuralSchema(compatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement, version string) (*structuralschema.Structural, error) {
 	// Extract the CRD so we can use the schema.
 	// Use a universal deserializer as it correctly handles YAML and JSON decoding based on the expected key formatting for CRDs.
 	// N.B. DO NOT switch this to a YAML library - they do not correctly handle the OpenAPIV3Schema casing within the CRD version schema.
