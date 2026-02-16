@@ -140,7 +140,20 @@ func ReadProviderImages(ctx context.Context, k8sClient client.Reader, log logr.L
 		return nil, fmt.Errorf("failed to parse pull secret: %w", err)
 	}
 
-	return readProviderImages(ctx, log, containerImages, providerImageDir, remoteImageFetcher{keychain: keychain})
+	mirrors, err := getImageRegistryMirrors(ctx, k8sClient, log)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get image registry mirrors: %w", err)
+	}
+
+	resolvedImages := make([]string, len(containerImages))
+	for i, img := range containerImages {
+		resolvedImages[i] = resolveImageRef(img, mirrors)
+		if resolvedImages[i] != img {
+			log.Info("image ref resolved through mirror", "original", img, "resolved", resolvedImages[i])
+		}
+	}
+
+	return readProviderImages(ctx, log, resolvedImages, providerImageDir, remoteImageFetcher{keychain: keychain})
 }
 
 type providerImageResult struct {
