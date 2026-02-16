@@ -26,7 +26,6 @@ import (
 	"iter"
 	"slices"
 	"strings"
-	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -71,9 +70,6 @@ const (
 	conditionReasonNonRetryableError = "NonRetryableError"
 	conditionReasonPersistentError   = "PersistentError"
 	conditionReasonProgressing       = "Progressing"
-
-	// degradedThreshold is the duration after which ephemeral errors trigger the Degraded condition.
-	degradedThreshold = 5 * time.Minute
 )
 
 type reconcileResult struct {
@@ -368,21 +364,42 @@ func (r *RevisionController) updateClusterOperatorConditions(ctx context.Context
 	}
 
 	// Build conditions based on reconcile result
-	conditions := r.buildConditions(result, co.Status.Conditions)
+	conditions := buildConditions(result)
+	needsUpdate, logConditions := mergeConditions(conditions, co.Status.Conditions)
 
+	if !needsUpdate {
+		return nil
+	}
+
+	log.Info("Updating conditions", logConditions...)
+
+	clusterOperatorApplyConfig := configv1apply.ClusterOperator(clusterOperatorName).
+		WithStatus(configv1apply.ClusterOperatorStatus().
+			WithConditions(conditions...),
+		)
+
+	patch := util.ApplyConfigPatch(clusterOperatorApplyConfig)
+	if err := r.Status().Patch(ctx, co, patch, client.FieldOwner(ssaFieldOwner), client.ForceOwnership); err != nil {
+		return fmt.Errorf("failed to patch ClusterOperator status: %w", err)
+	}
+
+	return nil
+}
+
+func mergeConditions(newConditions []*configv1apply.ClusterOperatorStatusConditionApplyConfiguration, existingConditions []configv1.ClusterOperatorStatusCondition) (bool, []any) {
 	now := metav1.Now()
 
 	// Check if any conditions changed
 	needsUpdate := false
-	logConditions := make([]any, 0, len(conditions)*2)
+	logConditions := make([]any, 0, len(newConditions)*2)
 
-	for _, cond := range conditions {
+	for _, cond := range newConditions {
 		if cond.Type == nil || cond.Status == nil || cond.Reason == nil || cond.Message == nil {
 			// Programming error - should never happen
 			panic(fmt.Sprintf("condition is missing required fields: %+v", cond))
 		}
 
-		existing := findClusterOperatorCondition(co.Status.Conditions, *cond.Type)
+		existing := findClusterOperatorCondition(existingConditions, *cond.Type)
 
 		switch {
 		case existing == nil:
@@ -407,92 +424,56 @@ func (r *RevisionController) updateClusterOperatorConditions(ctx context.Context
 		logConditions = append(logConditions, *cond.Type, *cond.Status)
 	}
 
-	if !needsUpdate {
-		return nil
-	}
-
-	clusterOperatorApplyConfig := configv1apply.ClusterOperator(clusterOperatorName).
-		WithStatus(configv1apply.ClusterOperatorStatus().
-			WithConditions(conditions...),
-		)
-
-	log.Info("Updating ClusterOperator conditions", logConditions...)
-
-	patch := util.ApplyConfigPatch(clusterOperatorApplyConfig)
-	if err := r.Status().Patch(ctx, co, patch, client.FieldOwner(ssaFieldOwner), client.ForceOwnership); err != nil {
-		return fmt.Errorf("failed to patch ClusterOperator status: %w", err)
-	}
-
-	return nil
+	return needsUpdate, logConditions
 }
 
 // buildConditions builds the Progressing and Degraded conditions based on the reconcile error.
-func (r *RevisionController) buildConditions(result reconcileResult, existing []configv1.ClusterOperatorStatusCondition) []*configv1apply.ClusterOperatorStatusConditionApplyConfiguration {
-	if result.progressingReason == "" && result.error == nil {
-		// Success - not progressing, not degraded
-		return []*configv1apply.ClusterOperatorStatusConditionApplyConfiguration{
-			configv1apply.ClusterOperatorStatusCondition().
-				WithType(conditionTypeProgressing).
-				WithStatus(configv1.ConditionFalse).
-				WithReason(conditionReasonSuccess).
-				WithMessage("Revision is current"),
+func buildConditions(result reconcileResult) []*configv1apply.ClusterOperatorStatusConditionApplyConfiguration {
+	progressing := configv1apply.ClusterOperatorStatusCondition().WithType(conditionTypeProgressing)
+	degraded := configv1apply.ClusterOperatorStatusCondition().WithType(conditionTypeDegraded)
 
-			configv1apply.ClusterOperatorStatusCondition().
-				WithType(conditionTypeDegraded).
-				WithStatus(configv1.ConditionFalse).
-				WithReason(conditionReasonSuccess).
-				WithMessage("Not degraded"),
-		}
-	}
+	switch {
+	// Success - not progressing, not degraded
+	case result.progressingReason == "" && result.error == nil:
+		progressing.
+			WithStatus(configv1.ConditionFalse).
+			WithReason(conditionReasonSuccess).
+			WithMessage("Revision is current")
 
-	// Check if error is non-retryable
-	if result.progressingReason == conditionReasonNonRetryableError {
-		// Permanent error - not progressing (can't make progress), degraded
-		return []*configv1apply.ClusterOperatorStatusConditionApplyConfiguration{
-			configv1apply.ClusterOperatorStatusCondition().
-				WithType(conditionTypeProgressing).
-				WithStatus(configv1.ConditionFalse).
-				WithReason(result.progressingReason).
-				WithMessage(result.error.Error()),
+		degraded.
+			WithStatus(configv1.ConditionFalse).
+			WithReason(conditionReasonSuccess).
+			WithMessage("Not degraded")
 
-			configv1apply.ClusterOperatorStatusCondition().
-				WithType(conditionTypeDegraded).
-				WithStatus(configv1.ConditionTrue).
-				WithReason(result.progressingReason).
-				WithMessage(result.error.Error()),
-		}
-	}
+	// Permanent error - not progressing (can't make progress), degraded
+	case result.progressingReason == conditionReasonNonRetryableError:
+		progressing.
+			WithStatus(configv1.ConditionFalse).
+			WithReason(result.progressingReason).
+			WithMessage(result.error.Error())
 
-	reason := result.progressingReason
-	if reason == "" {
-		reason = conditionReasonEphemeralError
-	}
-
-	message := result.message
-	if message == "" && result.error != nil {
-		message = result.error.Error()
-	}
-
-	// Ephemeral error - progressing (will retry), potentially degraded
-	progressing := configv1apply.ClusterOperatorStatusCondition().
-		WithType(conditionTypeProgressing).
-		WithStatus(configv1.ConditionTrue).
-		WithReason(reason).
-		WithMessage(message)
-
-	// Calculate if degraded threshold exceeded
-	degraded := configv1apply.ClusterOperatorStatusCondition().
-		WithType(conditionTypeDegraded)
-
-	// Use the progressing condition's timestamp to determine if we've exceeded the threshold.
-	// If we preserved the timestamp above, check against that; otherwise it's a new error.
-	existingProgressing := findClusterOperatorCondition(existing, conditionTypeProgressing)
-	if existingProgressing != nil && time.Since(existingProgressing.LastTransitionTime.Time) > degradedThreshold {
 		degraded.
 			WithStatus(configv1.ConditionTrue).
-			WithReason(conditionReasonPersistentError).
-			WithMessage(fmt.Sprintf("Ephemeral error persisting for > %v", degradedThreshold))
-	} else {
+			WithReason(result.progressingReason).
+			WithMessage(result.error.Error())
+
+	// Progressing, possibly with ephemeral error
+	default:
+		reason := result.progressingReason
+		if reason == "" {
+			reason = conditionReasonEphemeralError
+		}
+
+		message := result.message
+		if message == "" && result.error != nil {
+			message = result.error.Error()
+		}
+
+		progressing.
+			WithStatus(configv1.ConditionTrue).
+			WithReason(reason).
+			WithMessage(message)
+
 		degraded.
 			WithStatus(configv1.ConditionFalse).
 			WithReason(conditionReasonProgressing).

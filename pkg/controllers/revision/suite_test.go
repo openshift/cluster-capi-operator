@@ -401,40 +401,4 @@ var _ = Describe("RevisionController direct reconcile", Serial, func() {
 			// LastTransitionTime should be the same since status didn't change
 			WithLastTransitionTime(WithTransform(func(t metav1.Time) time.Time { return t.Time }, BeTemporally("~", pastTime.Time, time.Second))))
 	}, defaultNodeTimeout)
-
-	It("sets Degraded=True with PersistentError when ephemeral errors exceed threshold", func(ctx context.Context) {
-		// Set up initial Progressing condition with EphemeralError from beyond the threshold
-		pastTime := metav1.NewTime(time.Now().Add(-10 * time.Minute)) // Beyond 5-minute threshold
-		clusterOperator.Status.Conditions = []configv1.ClusterOperatorStatusCondition{
-			{
-				Type:               conditionTypeProgressing,
-				Status:             configv1.ConditionTrue,
-				Reason:             conditionReasonEphemeralError,
-				Message:            "previous error",
-				LastTransitionTime: pastTime,
-			},
-			{
-				Type:               conditionTypeDegraded,
-				Status:             configv1.ConditionFalse,
-				Reason:             conditionReasonEphemeralError,
-				LastTransitionTime: pastTime,
-			},
-		}
-		Expect(cl.Status().Update(ctx, clusterOperator)).To(Succeed())
-
-		req := reconcile.Request{NamespacedName: client.ObjectKey{Name: "cluster"}}
-		_, err := r.Reconcile(ctx, req)
-		Expect(err).To(HaveOccurred())
-
-		// Verify Degraded is now True with PersistentError
-		co := &configv1.ClusterOperator{}
-		Expect(cl.Get(ctx, client.ObjectKey{Name: "cluster-api"}, co)).To(Succeed())
-
-		Expect(co.Status.Conditions).To(testmatchers.HaveCondition(conditionTypeProgressing).
-			WithStatus(configv1.ConditionTrue).
-			WithReason(conditionReasonEphemeralError))
-		Expect(co.Status.Conditions).To(testmatchers.HaveCondition(conditionTypeDegraded).
-			WithStatus(configv1.ConditionTrue).
-			WithReason(conditionReasonPersistentError))
-	}, defaultNodeTimeout)
 })

@@ -303,33 +303,7 @@ func TestBuildConditions(t *testing.T) {
 			expectedDegradedReason:    conditionReasonProgressing,
 		},
 		{
-			name:                      "waiting on external",
-			result:                    reconcileResult{progressingReason: conditionReasonWaitingOnExternal, message: "Infrastructure not found"},
-			expectedProgressingStatus: configv1.ConditionTrue,
-			expectedProgressingReason: conditionReasonWaitingOnExternal,
-			expectedProgressingMsg:    "Infrastructure not found",
-			expectedDegradedStatus:    configv1.ConditionFalse,
-			expectedDegradedReason:    conditionReasonProgressing,
-		},
-		{
-			name:   "ephemeral error exceeds degraded threshold",
-			result: reconcileResult{progressingReason: conditionReasonEphemeralError, error: errors.New("connection refused")},
-			existingConditions: []configv1.ClusterOperatorStatusCondition{
-				{
-					Type:               conditionTypeProgressing,
-					Status:             configv1.ConditionTrue,
-					Reason:             conditionReasonEphemeralError,
-					Message:            "connection refused",
-					LastTransitionTime: metav1.NewTime(time.Now().Add(-10 * time.Minute)),
-				},
-			},
-			expectedProgressingStatus: configv1.ConditionTrue,
-			expectedProgressingReason: conditionReasonEphemeralError,
-			expectedDegradedStatus:    configv1.ConditionTrue,
-			expectedDegradedReason:    conditionReasonPersistentError,
-		},
-		{
-			name:   "ephemeral error within degraded threshold",
+			name:   "ephemeral error (existing)",
 			result: reconcileResult{progressingReason: conditionReasonEphemeralError, error: errors.New("connection refused")},
 			existingConditions: []configv1.ClusterOperatorStatusCondition{
 				{
@@ -345,14 +319,22 @@ func TestBuildConditions(t *testing.T) {
 			expectedDegradedStatus:    configv1.ConditionFalse,
 			expectedDegradedReason:    conditionReasonProgressing,
 		},
+		{
+			name:                      "waiting on external",
+			result:                    reconcileResult{progressingReason: conditionReasonWaitingOnExternal, message: "Infrastructure not found"},
+			expectedProgressingStatus: configv1.ConditionTrue,
+			expectedProgressingReason: conditionReasonWaitingOnExternal,
+			expectedProgressingMsg:    "Infrastructure not found",
+			expectedDegradedStatus:    configv1.ConditionFalse,
+			expectedDegradedReason:    conditionReasonProgressing,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			g := NewWithT(t)
 
-			r := &RevisionController{}
-			conditions := r.buildConditions(tt.result, tt.existingConditions)
+			conditions := buildConditions(tt.result)
 
 			g.Expect(conditions).To(HaveLen(2))
 
