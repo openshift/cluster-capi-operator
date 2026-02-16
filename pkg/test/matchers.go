@@ -21,6 +21,7 @@ import (
 	"github.com/onsi/gomega/types"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 // BeK8SNotFound is a gomega matcher that checks if an error is a NotFound error
@@ -35,4 +36,22 @@ func MatchViaDiff(expected any) types.GomegaMatcher {
 	return gomega.WithTransform(func(actual any) string {
 		return cmp.Diff(expected, actual)
 	}, gomega.BeEmpty())
+}
+
+// IgnoreFields is a gomega matcher that ignores the specified fields in the object.
+func IgnoreFields(fields []string, matcher types.GomegaMatcher) types.GomegaMatcher {
+	return gomega.WithTransform(func(obj map[string]interface{}) map[string]interface{} {
+		fieldSet := sets.New(fields...)
+
+		newObj := map[string]interface{}{}
+
+		// Copy across all fields that are not ignored so that we don't mutate the original object.
+		for k, v := range obj {
+			if !fieldSet.Has(k) {
+				newObj[k] = v
+			}
+		}
+
+		return newObj
+	}, matcher)
 }
