@@ -16,18 +16,26 @@ package objectpruning
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
 	"go.yaml.in/yaml/v2"
 	apiextensionshelpers "k8s.io/apiextensions-apiserver/pkg/apihelpers"
+	apiextensionsinternal "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	structuralschema "k8s.io/apiextensions-apiserver/pkg/apiserver/schema"
+	"k8s.io/apiextensions-apiserver/pkg/apiserver/schema/pruning"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
+)
+
+var (
+	errObjectValidator = errors.New("failed to create the object schema")
 )
 
 const (
@@ -71,34 +79,17 @@ func (v *validator) SetupWithManager(ctx context.Context, mgr ctrl.Manager, opts
 
 // handleObjectPruning handles the pruning of an object.
 func (v *validator) handleObjectPruning(ctx context.Context, compatibilityRequirementName string, obj *unstructured.Unstructured) error {
-	schema, err := v.getCopmatibilityRequirementCRDSchema(ctx, compatibilityRequirementName, obj.GroupVersionKind().Version)
+	schema, err := v.getCopmatibilityRequirementStructuralSchema(ctx, compatibilityRequirementName, obj.GroupVersionKind().Version)
 	if err != nil {
 		return fmt.Errorf("failed to get schema for CompatibilityRequirement %q: %w", compatibilityRequirementName, err)
 	}
 
-	if schema.OpenAPIV3Schema == nil {
-		return fmt.Errorf("schema for CompatibilityRequirement %q is not valid", compatibilityRequirementName)
-	}
+	pruning.Prune(obj.Object, schema, true)
 
-	prunedObject := runtime.DeepCopyJSONValue(obj.Object).(map[string]interface{})
-	
-	// Ignore these fields. While they are part of the schema we aren't interested in pruning them.
-	delete(prunedObject, "apiVersion")
-	delete(prunedObject, "kind")
-	delete(prunedObject, "metadata")
-
-	walkUnstructuredObject(prunedObject, *schema.OpenAPIV3Schema)
-
-	// Restore the fields that were deleted.
-	prunedObject["apiVersion"] = obj.GetAPIVersion()
-	prunedObject["kind"] = obj.GetKind()
-	prunedObject["metadata"] = obj.Object["metadata"]
-
-	obj.Object = prunedObject
 	return nil
 }
 
-func (v *validator) getCopmatibilityRequirementCRDSchema(ctx context.Context, compatibilityRequirementName string, version string) (*apiextensionsv1.CustomResourceValidation, error) {
+func (v *validator) getCopmatibilityRequirementStructuralSchema(ctx context.Context, compatibilityRequirementName string, version string) (*structuralschema.Structural, error) {
 	compatibilityRequirement := &apiextensionsv1alpha1.CompatibilityRequirement{}
 	if err := v.client.Get(ctx, client.ObjectKey{Name: compatibilityRequirementName}, compatibilityRequirement); err != nil {
 		return nil, fmt.Errorf("failed to get CompatibilityRequirement %q: %w", compatibilityRequirementName, err)
@@ -109,10 +100,23 @@ func (v *validator) getCopmatibilityRequirementCRDSchema(ctx context.Context, co
 		return nil, fmt.Errorf("failed to parse compatibility schema data for CompatibilityRequirement %q: %w", compatibilityRequirement.Name, err)
 	}
 
-	schema, err := apiextensionshelpers.GetSchemaForVersion(compatibilityCRD, version)
+	// Adapted from k8s.io/apiextensions-apiserver/pkg/apiserver/customresource_handler.go getOrCreateServingInfoFor.
+	validationSchema, err := apiextensionshelpers.GetSchemaForVersion(compatibilityCRD, version)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get schema for CompatibilityRequirement %q: %w", compatibilityRequirementName, err)
+		return nil, fmt.Errorf("the server could not properly serve the CR schema: %w", err)
+	} else if validationSchema == nil {
+		return nil, fmt.Errorf("%w: validationSchema can't be nil", errObjectValidator)
 	}
 
-	return schema, nil
+	internalValidationSchema := &apiextensionsinternal.CustomResourceValidation{}
+	if err := apiextensionsv1.Convert_v1_CustomResourceValidation_To_apiextensions_CustomResourceValidation(validationSchema, internalValidationSchema, nil); err != nil {
+		return nil, fmt.Errorf("failed to convert CRD validation to internal version: %w", err)
+	}
+
+	structuralSchema, err := structuralschema.NewStructural(internalValidationSchema.OpenAPIV3Schema)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert CRD validation to internal version: %w", err)
+	}
+
+	return structuralSchema, nil
 }
