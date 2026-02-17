@@ -31,7 +31,7 @@ require (
 	github.com/metal3-io/cluster-api-provider-metal3/api v1.11.2
 	github.com/onsi/ginkgo/v2 v2.27.2
 	github.com/onsi/gomega v1.38.2
-	github.com/openshift/api v0.0.0-20260205045418-81371d13d1fc
+	github.com/openshift/api v0.0.0-20260213204242-d34f11c515b3
 	github.com/openshift/client-go v0.0.0-20260108185524-48f4ccfc4e13
 	github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0
 	github.com/openshift/library-go v0.0.0-20251222131241-289839b3ffe8
@@ -48,7 +48,7 @@ require (
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/utils v0.0.0-20250820121507-0af2bda4dd1d
 	sigs.k8s.io/cluster-api v1.11.3
-	sigs.k8s.io/cluster-api-provider-aws/v2 v2.10.0
+	sigs.k8s.io/cluster-api-provider-aws/v2 v2.10.1-0.20260119154115-ea252592b45d
 	sigs.k8s.io/cluster-api-provider-azure v0.0.0-20251202084521-c2e0e38d1e0e
 	sigs.k8s.io/cluster-api-provider-gcp v1.11.0-beta.0
 	sigs.k8s.io/cluster-api-provider-ibmcloud v0.12.0
