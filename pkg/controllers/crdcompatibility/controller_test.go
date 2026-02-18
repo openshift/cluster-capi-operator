@@ -24,6 +24,7 @@ import (
 	. "github.com/onsi/gomega"
 	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
 	"github.com/openshift/cluster-capi-operator/pkg/test"
+	"github.com/openshift/cluster-capi-operator/pkg/util"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -114,7 +115,7 @@ var _ = Describe("CRDCompatibilityReconciler Controller Setup", func() {
 						NamespacedName: types.NamespacedName{
 							Name: requirement.Name,
 						},
-					}); err != nil {
+					}); err != nil && !util.IsTerminalWithReasonError(err) {
 						return nil, err
 					}
 

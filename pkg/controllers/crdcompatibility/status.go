@@ -86,11 +86,11 @@ func (r *reconcileState) getProgressingCondition(reconcileErr error) *metav1appl
 	progressingCondition := metav1applyconfig.Condition().WithType(apiextensionsv1alpha1.CompatibilityRequirementProgressing)
 
 	if reconcileErr != nil {
-		if noRequeueError := util.AsNoRequeueError(reconcileErr); noRequeueError != nil {
+		if terminalError := util.AsTerminalWithReasonError(reconcileErr); terminalError != nil {
 			progressingCondition.
 				WithStatus(metav1.ConditionFalse).
-				WithReason(noRequeueError.Reason).
-				WithMessage(noRequeueError.Error())
+				WithReason(terminalError.Reason).
+				WithMessage(terminalError.Error())
 		} else {
 			progressingCondition.
 				WithStatus(metav1.ConditionTrue).

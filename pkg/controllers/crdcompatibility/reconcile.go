@@ -36,7 +36,7 @@ import (
 )
 
 const (
-	noRequeueErrorReasonConfigurationError string = "ConfigurationError"
+	terminalErrorReasonConfigurationError string = "ConfigurationError"
 )
 
 type reconcileState struct {
@@ -68,12 +68,10 @@ func (r *CompatibilityRequirementReconciler) Reconcile(ctx context.Context, req 
 	state := &reconcileState{CompatibilityRequirementReconciler: r, requirement: obj}
 
 	result, reconcileErr := state.reconcile(ctx, obj)
-	if err := state.writeStatus(ctx, obj, reconcileErr); err != nil {
-		return ctrl.Result{}, err
-	}
+	err := state.writeStatus(ctx, obj, reconcileErr)
 
-	if reconcileErr != nil {
-		return ctrl.Result{}, util.LogNoRequeueError(reconcileErr, logger) //nolint:wrapcheck
+	if errors.Join(reconcileErr, err) != nil {
+		return ctrl.Result{}, errors.Join(reconcileErr, err)
 	}
 
 	return result, nil
@@ -91,7 +89,7 @@ func (r *reconcileState) parseCompatibilityCRD(compatibilityRequirement *apiexte
 	// Parse the CRD in compatibilityCRD into a CRD object
 	compatibilityCRD := &apiextensionsv1.CustomResourceDefinition{}
 	if err := yaml.Unmarshal([]byte(compatibilityRequirement.Spec.CompatibilitySchema.CustomResourceDefinition.Data), compatibilityCRD); err != nil {
-		return util.NoRequeueError(fmt.Errorf("failed to parse compatibilityCRD: %w", err), noRequeueErrorReasonConfigurationError) //nolint:wrapcheck
+		return util.TerminalWithReasonError(fmt.Errorf("failed to parse compatibilityCRD: %w", err), terminalErrorReasonConfigurationError) //nolint:wrapcheck
 	}
 
 	r.compatibilityCRD = compatibilityCRD
