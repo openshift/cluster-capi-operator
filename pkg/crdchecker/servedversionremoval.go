@@ -26,6 +26,20 @@ import (
 	"sigs.k8s.io/crdify/pkg/validations"
 )
 
+/*
+This validation extends crdify functionality to allow it to check for the removal of _served_ versions.
+
+Traditionally, crdify wouldn't care about the removal of served versions, this is a normal part of the lifecycle of a CRD.
+
+Over time, as APIs evolve, it's expected that new versions are introduced, eventually switch to storage, and that the old
+versions are removed. There is nothing wrong with removing a version while it was served provided it was not the storage version.
+Therefore in most use cases where crdify is expected to pickup breaking changes, a removed served version is not a breaking change.
+
+But for us, we need to be able to assert against all possible served versions that are being specified in the CompatibilityRequirement.
+This is configurable by end users whether they want AllServed, StorageOnly or some combination of Storage and additional versions.
+So this copies the version that checks for storage versions being removed in crdify core and adapts it to our needs.
+*/
+
 var (
 	_ validations.Validation                                           = (*servedVersionRemoval)(nil)
 	_ validations.Comparator[apiextensionsv1.CustomResourceDefinition] = (*servedVersionRemoval)(nil)
