@@ -39,7 +39,7 @@ func createRequirementWithCleanup(ctx context.Context, requirement *apiextension
 		By("Removing finalizer from " + requirement.Name)
 		Eventually(kWithCtx(ctx).Update(requirement, func() {
 			requirement.SetFinalizers(nil)
-		})).Should(Succeed())
+		})).Should(SatisfyAny(Succeed(), test.BeK8SNotFound())) // If a test case deletes the object, this will return a not found error.
 	})
 }
 
@@ -156,6 +156,26 @@ var _ = Describe("CRDCompatibilityReconciler Controller Setup", func() {
 					HaveField("Type", BeEquivalentTo(apiextensionsv1alpha1.CompatibilityRequirementAdmitted)),
 					HaveField("LastTransitionTime", BeEquivalentTo(originalTransitionTime)),
 				))))
+			}
+		})
+
+		It("should remove the objects finalizer when the requirement is deleted", func(ctx context.Context) {
+			for _, requirement := range admittedRequirements {
+				Expect(kWithCtx(ctx).Object(requirement)()).To(HaveField("ObjectMeta.Finalizers", Not(BeEmpty())))
+
+				Expect(cl.Delete(ctx, requirement)).To(Succeed())
+
+				Eventually(func() error {
+					if _, err := reconciler.Reconcile(ctx, ctrl.Request{
+						NamespacedName: types.NamespacedName{
+							Name: requirement.Name,
+						},
+					}); err != nil {
+						return err
+					}
+
+					return cl.Get(ctx, types.NamespacedName{Name: requirement.Name}, requirement)
+				}).Should(test.BeK8SNotFound())
 			}
 		})
 	})
