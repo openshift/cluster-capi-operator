@@ -50,11 +50,15 @@ func SetLastTransitionTime(condType mapiv1beta1.ConditionType, conditions []mapi
 // condition if it exists and matches new status, reason, and message values.
 // If it does not exist, it sets the last transition time to the current time.
 func SetLastTransitionTimeMetaV1(now metav1.Time, currentConditions []metav1.Condition, conditionAC *metav1applyconfig.ConditionApplyConfiguration) *metav1applyconfig.ConditionApplyConfiguration {
+	if !conditionHasRequiredFields(conditionAC) {
+		panic("conditionAC must set type, status, reason, and message")
+	}
+
 	matchingCondition := func(condition *metav1.Condition, conditionAC *metav1applyconfig.ConditionApplyConfiguration) bool {
-		return (conditionAC.Status == nil || condition.Status == *conditionAC.Status) &&
-			(conditionAC.Reason == nil || condition.Reason == *conditionAC.Reason) &&
-			(conditionAC.Message == nil || condition.Message == *conditionAC.Message) &&
-			(conditionAC.ObservedGeneration == nil || condition.ObservedGeneration == *conditionAC.ObservedGeneration)
+		return (condition.Status == *conditionAC.Status) &&
+			(condition.Reason == *conditionAC.Reason) &&
+			(condition.Message == *conditionAC.Message) &&
+			(conditionAC.ObservedGeneration == nil || condition.ObservedGeneration == *conditionAC.ObservedGeneration) // ObservedGeneration is optional so check it's not nil
 	}
 
 	for _, condition := range currentConditions {
@@ -71,6 +75,12 @@ func SetLastTransitionTimeMetaV1(now metav1.Time, currentConditions []metav1.Con
 
 	// Condition was not previously set, set the last transition time to the current time
 	return conditionAC.WithLastTransitionTime(now)
+}
+
+// type, status, reason, and message are required fields for a condition apply configuration.
+// If any of these are empty this is a programming error.
+func conditionHasRequiredFields(conditionAC *metav1applyconfig.ConditionApplyConfiguration) bool {
+	return conditionAC.Type != nil && conditionAC.Status != nil && conditionAC.Reason != nil && conditionAC.Message != nil
 }
 
 // HasSameState returns true if a condition has the same state as a condition
