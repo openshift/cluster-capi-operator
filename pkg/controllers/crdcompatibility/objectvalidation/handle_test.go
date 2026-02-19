@@ -99,7 +99,7 @@ var _ = Describe("End-to-End Admission Webhook Integration", Ordered, ContinueOn
 		namespace = "default"
 
 		// Create base CRD with test fields and install it
-		baseCRD = NewCRDSchemaBuilder().
+		baseCRD = test.NewCRDSchemaBuilder().
 			WithStringProperty("testField").
 			WithRequiredStringProperty("requiredField").
 			WithIntegerProperty("optionalNumber").
@@ -148,7 +148,7 @@ var _ = Describe("End-to-End Admission Webhook Integration", Ordered, ContinueOn
 					Kind:    baseCRD.Spec.Names.Kind,
 				}
 
-				validObj := NewTestObject(gvk).
+				validObj := test.NewTestObject(gvk).
 					WithNamespace(namespace).
 					WithField("requiredField", "valid-value").
 					WithField("testField", "test-value").
@@ -173,7 +173,7 @@ var _ = Describe("End-to-End Admission Webhook Integration", Ordered, ContinueOn
 					Kind:    baseCRD.Spec.Names.Kind,
 				}
 
-				invalidObj := NewTestObject(gvk).
+				invalidObj := test.NewTestObject(gvk).
 					WithNamespace(namespace).
 					WithField("testField", "value").
 					// Missing requiredField - should be rejected
@@ -197,7 +197,7 @@ var _ = Describe("End-to-End Admission Webhook Integration", Ordered, ContinueOn
 
 			BeforeEach(func() {
 				// Create a CRD with tighter validation (more required fields)
-				tighterCRD = FromCRD(compatibilityCRD.DeepCopy()).
+				tighterCRD = test.FromCRD(compatibilityCRD.DeepCopy()).
 					WithRequiredField("testField").      // Make optional field required
 					WithRequiredField("optionalNumber"). // Make optional field required
 					Build()
@@ -224,7 +224,7 @@ var _ = Describe("End-to-End Admission Webhook Integration", Ordered, ContinueOn
 					Kind:    baseCRD.Spec.Names.Kind,
 				}
 
-				objMissingField := NewTestObject(gvk).
+				objMissingField := test.NewTestObject(gvk).
 					WithNamespace(namespace).
 					WithField("requiredField", "value").
 					// Missing testField which is now required in tighter compatibility requirement
@@ -244,7 +244,7 @@ var _ = Describe("End-to-End Admission Webhook Integration", Ordered, ContinueOn
 					Kind:    baseCRD.Spec.Names.Kind,
 				}
 
-				completeObj := NewTestObject(gvk).
+				completeObj := test.NewTestObject(gvk).
 					WithNamespace(namespace).
 					WithField("requiredField", "value").
 					WithField("testField", "test-value").
@@ -272,7 +272,7 @@ var _ = Describe("End-to-End Admission Webhook Integration", Ordered, ContinueOn
 
 			BeforeEach(func() {
 				// Create a CRD with looser validation (fewer required fields)
-				looserCRD = FromCRD(compatibilityCRD.DeepCopy()).
+				looserCRD = test.FromCRD(compatibilityCRD.DeepCopy()).
 					RemoveRequiredField("requiredField").
 					Build()
 
@@ -298,7 +298,7 @@ var _ = Describe("End-to-End Admission Webhook Integration", Ordered, ContinueOn
 					Kind:    baseCRD.Spec.Names.Kind,
 				}
 
-				objWithExtraProperty := NewTestObject(gvk).
+				objWithExtraProperty := test.NewTestObject(gvk).
 					WithNamespace(namespace).
 					WithField("requiredField", "value").
 					Build()
@@ -319,7 +319,7 @@ var _ = Describe("End-to-End Admission Webhook Integration", Ordered, ContinueOn
 					Kind:    baseCRD.Spec.Names.Kind,
 				}
 
-				objMissingFormerlyRequired := NewTestObject(gvk).
+				objMissingFormerlyRequired := test.NewTestObject(gvk).
 					WithNamespace(namespace).
 					WithField("testField", "value").
 					// Missing requiredField which is no longer required in looser compatibility requirement
@@ -344,7 +344,7 @@ var _ = Describe("End-to-End Admission Webhook Integration", Ordered, ContinueOn
 				Kind:    baseCRD.Spec.Names.Kind,
 			}
 
-			existingObj = NewTestObject(gvk).
+			existingObj = test.NewTestObject(gvk).
 				WithNamespace(namespace).
 				WithField("requiredField", "initial-value").
 				WithField("testField", "initial-test").
@@ -395,7 +395,7 @@ var _ = Describe("End-to-End Admission Webhook Integration", Ordered, ContinueOn
 
 			BeforeEach(func() {
 				// Create a CRD with tighter validation (more required fields)
-				tighterCRD = FromCRD(compatibilityCRD.DeepCopy()).
+				tighterCRD = test.FromCRD(compatibilityCRD.DeepCopy()).
 					WithRequiredField("testField").
 					WithRequiredField("optionalNumber").
 					Build()
@@ -450,7 +450,7 @@ var _ = Describe("End-to-End Admission Webhook Integration", Ordered, ContinueOn
 				Kind:    baseCRD.Spec.Names.Kind,
 			}
 
-			objToDelete := NewTestObject(gvk).
+			objToDelete := test.NewTestObject(gvk).
 				WithNamespace(namespace).
 				WithField("requiredField", "value").
 				Build()

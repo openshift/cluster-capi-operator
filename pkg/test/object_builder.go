@@ -14,14 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package objectvalidation
+package test
 
 import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-
-	"github.com/openshift/cluster-capi-operator/pkg/test"
 )
 
 // unstructuredBuilder provides a fluent interface for building test objects
@@ -108,7 +106,7 @@ type CRDSchemaBuilder struct {
 
 // NewCRDSchemaBuilder creates a builder for CRD schema manipulation.
 func NewCRDSchemaBuilder() *CRDSchemaBuilder {
-	baseCRD := test.GenerateTestCRD()
+	baseCRD := GenerateTestCRD()
 	return &CRDSchemaBuilder{crd: baseCRD}
 }
 

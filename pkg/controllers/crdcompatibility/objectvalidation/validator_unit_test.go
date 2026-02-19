@@ -42,7 +42,7 @@ var _ = Describe("validator", func() {
 		ctx = context.Background()
 
 		// Create a test CRD with some properties for testing
-		testCRD = NewCRDSchemaBuilder().
+		testCRD = test.NewCRDSchemaBuilder().
 			WithStringProperty("testField").
 			WithRequiredStringProperty("requiredField").
 			WithIntegerProperty("optionalNumber").
