@@ -28,3 +28,16 @@ func SliceMap[A, B any](source []A, fn func(A) B) []B {
 
 	return result
 }
+
+// SliceFilter applies a filter function to each element of a slice and returns a new slice.
+func SliceFilter[A any](source []A, fn func(A) bool) []A {
+	result := []A{}
+
+	for _, a := range source {
+		if fn(a) {
+			result = append(result, a)
+		}
+	}
+
+	return result
+}
