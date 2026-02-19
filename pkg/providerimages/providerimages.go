@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path"
 	"path/filepath"
@@ -47,9 +48,8 @@ const (
 	metadataFile         = "metadata.yaml"
 	manifestsFile        = "manifests.yaml"
 
-	pullSecretName      = "pull-secret"
-	pullSecretNamespace = "openshift-config"  //nolint:gosec // Not a credential, just a namespace name
-	pullSecretKey       = ".dockerconfigjson" //nolint:gosec // Not a credential, just a key name
+	pullSecretName = "pull-secret"
+	pullSecretKey  = ".dockerconfigjson" //nolint:gosec // Not a credential, just a key name
 
 	// AttributeKeyType is the key for the provider type attribute.
 	AttributeKeyType = "type"
@@ -91,12 +91,19 @@ type imageFetcher interface {
 
 // remoteImageFetcher fetches images from a remote registry.
 type remoteImageFetcher struct {
-	keychain authn.Keychain
+	keychain  authn.Keychain
+	transport http.RoundTripper
 }
 
 // Fetch fetches an image from a remote registry.
 func (r remoteImageFetcher) Fetch(ctx context.Context, ref name.Reference) (v1.Image, error) {
-	img, err := remote.Image(ref, remote.WithAuthFromKeychain(r.keychain), remote.WithContext(ctx))
+	opts := []remote.Option{
+		remote.WithAuthFromKeychain(r.keychain),
+		remote.WithContext(ctx),
+		remote.WithTransport(r.transport),
+	}
+
+	img, err := remote.Image(ref, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch remote image: %w", err)
 	}
@@ -129,7 +136,7 @@ func (r remoteImageFetcher) Fetch(ctx context.Context, ref name.Reference) (v1.I
 // namespace using the provided client.Reader.
 func ReadProviderImages(ctx context.Context, k8sClient client.Reader, log logr.Logger, containerImages []string, providerImageDir string) ([]ProviderImageManifests, error) {
 	var secret corev1.Secret
-	if err := k8sClient.Get(ctx, types.NamespacedName{Name: pullSecretName, Namespace: pullSecretNamespace}, &secret); err != nil {
+	if err := k8sClient.Get(ctx, types.NamespacedName{Name: pullSecretName, Namespace: openshiftConfigNamespace}, &secret); err != nil {
 		return nil, fmt.Errorf("failed to get pull secret: %w", err)
 	}
 
@@ -140,7 +147,35 @@ func ReadProviderImages(ctx context.Context, k8sClient client.Reader, log logr.L
 		return nil, fmt.Errorf("failed to parse pull secret: %w", err)
 	}
 
-	return readProviderImages(ctx, log, containerImages, providerImageDir, remoteImageFetcher{keychain: keychain})
+	mirrors, skippedWildcards, err := getImageRegistryMirrors(ctx, k8sClient)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get image registry mirrors: %w", err)
+	}
+
+	for _, source := range skippedWildcards {
+		log.Info("ignoring unsupported wildcard mirror source", "source", source)
+	}
+
+	if len(mirrors) > 0 {
+		log.Info("found image registry mirrors", "sourceCount", len(mirrors))
+	} else {
+		log.Info("no image registry mirrors found")
+	}
+
+	resolvedImages := make([]string, len(containerImages))
+	for i, img := range containerImages {
+		resolvedImages[i] = resolveImageRef(img, mirrors)
+		if resolvedImages[i] != img {
+			log.Info("image ref resolved through mirror", "original", img, "resolved", resolvedImages[i])
+		}
+	}
+
+	transport, err := getTrustedCATransport(ctx, k8sClient, log)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get additional trusted CA transport: %w", err)
+	}
+
+	return readProviderImages(ctx, log, resolvedImages, providerImageDir, remoteImageFetcher{keychain: keychain, transport: transport})
 }
 
 type providerImageResult struct {
@@ -223,7 +258,7 @@ func processProviderImage(ctx context.Context, imageRef, providerImageDir string
 	sanitizedRef := sanitizeImageRef(imageRef)
 	outputDir := filepath.Join(providerImageDir, sanitizedRef)
 
-	if err := os.MkdirAll(outputDir, 0750); err != nil {
+	if err := os.MkdirAll(outputDir, 0o750); err != nil {
 		return nil, fmt.Errorf("failed to create output directory: %w", err)
 	}
 
@@ -442,7 +477,7 @@ func extractFilesToDir(r io.Reader, prefix, destDir string) error {
 			continue
 		}
 
-		if err := os.MkdirAll(filepath.Dir(destPath), 0750); err != nil {
+		if err := os.MkdirAll(filepath.Dir(destPath), 0o750); err != nil {
 			return fmt.Errorf("failed to create directory for %s: %w", destPath, err)
 		}
 
