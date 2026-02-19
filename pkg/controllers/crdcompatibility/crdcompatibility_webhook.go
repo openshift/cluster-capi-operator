@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
@@ -27,6 +28,7 @@ import (
 	apiextensionsvalidation "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/validation"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/kubernetes/pkg/apis/admissionregistration"
 	admissionregistrationvalidation "k8s.io/kubernetes/pkg/apis/admissionregistration/validation"
 	"k8s.io/utils/ptr"
@@ -39,6 +41,7 @@ import (
 var (
 	errExpectedCompatibilityRequirement = errors.New("expected a CompatibilityRequirement")
 	errInvalidCompatibilityCRD          = errors.New("expected a valid CustomResourceDefinition in YAML format")
+	errPathNotFound                     = errors.New("path not found in schema")
 )
 
 type crdRequirementValidator struct{}
@@ -80,8 +83,10 @@ func (v *crdRequirementValidator) validateCreateOrUpdate(ctx context.Context, ob
 
 	// Validate that the CRD we have been given is a complete, and valid CRD.
 	errs := apiextensionsvalidation.ValidateCustomResourceDefinition(ctx, internalCRD)
+	errs = append(errs, validateExcludedFields(field.NewPath("spec").Child("compatibilitySchema").Child("excludedFields"), compatibilityCRD, compatibilityRequirement.Spec.CompatibilitySchema.ExcludedFields)...)
+
 	if len(errs) > 0 {
-		return nil, fmt.Errorf("compatibilityCRD is not valid: %w", errs.ToAggregate())
+		return nil, errs.ToAggregate()
 	}
 
 	// Generate and then validate the expected ValidatingWebhookConfiguration from the CompatibilityRequirement object validation specification.
@@ -156,4 +161,91 @@ func convertToInternalCRD(compatibilityCRD *apiextensionsv1.CustomResourceDefini
 	}
 
 	return crd, nil
+}
+
+func validateExcludedFields(fldPath *field.Path, compatibilityCRD *apiextensionsv1.CustomResourceDefinition, excludedFields []apiextensionsv1alpha1.APIExcludedField) field.ErrorList {
+	errs := field.ErrorList{}
+
+	for i, excludedField := range excludedFields {
+		errs = append(errs, validateExcludedField(fldPath.Index(i), compatibilityCRD, excludedField)...)
+	}
+
+	return errs
+}
+
+func validateExcludedField(fldPath *field.Path, compatibilityCRD *apiextensionsv1.CustomResourceDefinition, excludedField apiextensionsv1alpha1.APIExcludedField) field.ErrorList {
+	errs := field.ErrorList{}
+
+	if len(excludedField.Versions) == 0 {
+		for _, schema := range compatibilityCRD.Spec.Versions {
+			err := validatePathExists(schema.Schema.OpenAPIV3Schema, strings.Split(excludedField.Path, "."))
+			if err != nil {
+				errs = append(errs, field.Invalid(fldPath.Child("path"), excludedField.Path, err.Error()))
+			}
+		}
+
+		return errs
+	}
+
+	for i, version := range excludedField.Versions {
+		found := false
+
+		for _, schema := range compatibilityCRD.Spec.Versions {
+			if schema.Name == string(version) {
+				if schema.Schema == nil || schema.Schema.OpenAPIV3Schema == nil {
+					// This can only happen if the CRD sets PreserveUnknownFields to true at the top spec level.
+					errs = append(errs, field.Invalid(fldPath.Child("versions").Index(i), version, fmt.Sprintf("version %s does not have a schema", version)))
+					continue
+				}
+
+				if err := validatePathExists(schema.Schema.OpenAPIV3Schema, strings.Split(excludedField.Path, ".")); err != nil {
+					errs = append(errs, field.Invalid(fldPath.Child("path"), excludedField.Path, err.Error()))
+				}
+
+				found = true
+			}
+		}
+
+		if !found {
+			errs = append(errs, field.Invalid(fldPath.Child("versions").Index(i), version, fmt.Sprintf("version %s not found in compatibility schema", version)))
+		}
+	}
+
+	return errs
+}
+
+func validatePathExists(schema *apiextensionsv1.JSONSchemaProps, path []string) error {
+	desiredPath := field.NewPath("^", path...)
+	currentPath := field.NewPath("^")
+
+	for i, key := range path {
+		parentPath := currentPath.String()
+		currentPath = currentPath.Child(key)
+
+		// We should always be looking at an object.
+		// If we find an array, we extract the object schema for the next loop.
+		// If we find a scalar and have not reached the end of the path, we return an error.
+		propSchema, ok := schema.Properties[key]
+		if !ok {
+			return fmt.Errorf("%w: desired path %s, path %s is missing child %s", errPathNotFound, desiredPath, parentPath, key)
+		}
+
+		switch {
+		case i == len(path)-1:
+			// This is the last key in the path, so we found the path.
+			return nil
+		case propSchema.Type == "object":
+			schema = &propSchema
+		case propSchema.Type == "array":
+			if propSchema.Items == nil || propSchema.Items.Schema == nil {
+				return fmt.Errorf("%w: desired path %s, path %s is an array but does not have an items schema", errPathNotFound, desiredPath, currentPath)
+			}
+
+			schema = propSchema.Items.Schema
+		default:
+			return fmt.Errorf("%w: desired path %s, path %s is not an object", errPathNotFound, desiredPath, currentPath)
+		}
+	}
+
+	return fmt.Errorf("%w: desired path %s", errPathNotFound, desiredPath)
 }
