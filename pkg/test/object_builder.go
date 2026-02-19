@@ -115,6 +115,17 @@ func FromCRD(crd *apiextensionsv1.CustomResourceDefinition) *CRDSchemaBuilder {
 	return &CRDSchemaBuilder{crd: crd.DeepCopy()}
 }
 
+// WithSchema replaces the entire OpenAPIV3Schema with the provided schema.
+func (b *CRDSchemaBuilder) WithSchema(schema *apiextensionsv1.JSONSchemaProps) *CRDSchemaBuilder {
+	b.crd.Spec.Versions[0].Schema.OpenAPIV3Schema = schema
+	return b
+}
+
+// WithSchemaBuilder replaces the entire OpenAPIV3Schema with a schema built from JSONSchemaPropsBuilder.
+func (b *CRDSchemaBuilder) WithSchemaBuilder(schemaBuilder *JSONSchemaPropsBuilder) *CRDSchemaBuilder {
+	return b.WithSchema(schemaBuilder.Build())
+}
+
 // WithProperty adds a property to the CRD's schema.
 func (b *CRDSchemaBuilder) WithProperty(name string, propSchema apiextensionsv1.JSONSchemaProps) *CRDSchemaBuilder {
 	schema := b.crd.Spec.Versions[0].Schema.OpenAPIV3Schema
