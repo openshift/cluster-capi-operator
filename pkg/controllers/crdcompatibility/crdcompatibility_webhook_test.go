@@ -106,7 +106,7 @@ func TestCRDRequirementValidator_ValidateCreate(t *testing.T) {
 
 				return req
 			}(),
-			wantErr: MatchError(ContainSubstring("compatibilityCRD is not valid")),
+			wantErr: MatchError(ContainSubstring("spec.group: Required value, spec.scope: Required value, spec.versions: Invalid value: null: must have exactly one version marked as storage version, spec.names.plural: Required value, spec.names.singular: Required value, spec.names.kind: Required value, spec.names.listKind: Required value, status.storedVersions: Invalid value: null: must have at least one stored version")),
 		},
 	}
 
@@ -190,6 +190,117 @@ func TestCRDRequirementValidator_ValidateUpdate(t *testing.T) {
 				g.Expect(gotWarnings).To(ConsistOf(tt.wantWarnings))
 			} else {
 				g.Expect(gotWarnings).To(BeNil())
+			}
+		})
+	}
+}
+
+func TestExcludedFieldsValidation(t *testing.T) {
+	RegisterTestingT(t)
+
+	validator := &crdRequirementValidator{}
+	ctx := t.Context()
+
+	// Create a complex schema for testing
+	complexSchema := test.NewObjectSchema().
+		WithObjectProperty("spec", test.NewObjectSchema().
+			WithStringProperty("name").
+			WithIntegerProperty("replicas").
+			WithObjectProperty("template", test.NewObjectSchema().
+				WithObjectProperty("spec", test.NewObjectSchema().
+					WithStringProperty("image").
+					WithArrayProperty("ports", test.SimpleArraySchema(
+						test.NewObjectSchema().
+							WithStringProperty("name").
+							WithIntegerProperty("port"),
+						nil, nil, false)))).
+			WithArrayProperty("volumes", test.SimpleArraySchema(
+				test.NewObjectSchema().
+					WithStringProperty("name").
+					WithStringProperty("mountPath"),
+				nil, nil, false))).
+		WithObjectProperty("status", test.NewObjectSchema().
+			WithStringProperty("phase"))
+
+	testCRD := test.NewCRDSchemaBuilder().
+		WithSchema(complexSchema.Build()).
+		Build()
+
+	// Add a second version for multi-version testing
+	v2Version := testCRD.Spec.Versions[0].DeepCopy()
+	v2Version.Name = "v2"
+	v2Version.Storage = false
+	testCRD.Spec.Versions = append(testCRD.Spec.Versions, *v2Version)
+
+	tests := []struct {
+		name           string
+		excludedFields []apiextensionsv1alpha1.APIExcludedField
+		wantErr        OmegaMatcher
+	}{
+		{
+			name: "should accept valid simple field path",
+			excludedFields: []apiextensionsv1alpha1.APIExcludedField{
+				{Path: "spec.name"},
+			},
+			wantErr: BeNil(),
+		},
+		{
+			name: "should accept valid nested field path",
+			excludedFields: []apiextensionsv1alpha1.APIExcludedField{
+				{Path: "spec.template.spec.image"},
+			},
+			wantErr: BeNil(),
+		},
+		{
+			name: "should accept valid array field path",
+			excludedFields: []apiextensionsv1alpha1.APIExcludedField{
+				{Path: "spec.volumes.name"},
+			},
+			wantErr: BeNil(),
+		},
+		{
+			name: "should accept valid field path with specific version",
+			excludedFields: []apiextensionsv1alpha1.APIExcludedField{
+				{
+					Path:     "spec.name",
+					Versions: []apiextensionsv1alpha1.APIVersionString{"v1"},
+				},
+			},
+			wantErr: BeNil(),
+		},
+		{
+			name: "should reject non-existent field path",
+			excludedFields: []apiextensionsv1alpha1.APIExcludedField{
+				{Path: "spec.nonExistentField"},
+			},
+			wantErr: MatchError("spec.compatibilitySchema.excludedFields[0].path: Invalid value: \"spec.nonExistentField\": path not found in schema: desired path ^.spec.nonExistentField, path ^.spec is missing child nonExistentField"),
+		},
+		{
+			name: "should reject non-existent version",
+			excludedFields: []apiextensionsv1alpha1.APIExcludedField{
+				{
+					Path:     "spec.name",
+					Versions: []apiextensionsv1alpha1.APIVersionString{"v3"},
+				},
+			},
+			wantErr: MatchError("spec.compatibilitySchema.excludedFields[0].versions[0]: Invalid value: \"v3\": version v3 not found in compatibility schema"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := NewWithT(t)
+
+			req := test.GenerateTestCompatibilityRequirement(testCRD)
+			req.SetName("test-requirement")
+			req.Spec.CompatibilitySchema.ExcludedFields = tt.excludedFields
+
+			_, gotErr := validator.ValidateCreate(ctx, req)
+
+			if tt.wantErr != nil {
+				g.Expect(gotErr).To(tt.wantErr)
+			} else {
+				g.Expect(gotErr).ToNot(HaveOccurred())
 			}
 		})
 	}
