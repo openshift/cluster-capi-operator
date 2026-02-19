@@ -19,9 +19,11 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
+	yaml "sigs.k8s.io/yaml"
 )
 
 func createCAPIMachine(ctx context.Context, cl client.Client, machineName string) *clusterv1.Machine {
+	GinkgoHelper()
 	Expect(machineName).NotTo(BeEmpty(), "Machine name cannot be empty")
 
 	workerLabelSelector := metav1.LabelSelector{
@@ -96,6 +98,7 @@ func createCAPIMachine(ctx context.Context, cl client.Client, machineName string
 }
 
 func createMAPIMachineWithAuthority(ctx context.Context, cl client.Client, machineName string, authority mapiv1beta1.MachineAuthority) *mapiv1beta1.Machine {
+	GinkgoHelper()
 	Expect(machineName).NotTo(BeEmpty(), "Machine name cannot be empty")
 	workerLabelSelector := metav1.LabelSelector{
 		MatchLabels: map[string]string{
@@ -140,6 +143,7 @@ func createMAPIMachineWithAuthority(ctx context.Context, cl client.Client, machi
 
 // verifyMachineRunning verifies that a machine reaches Running state using the machine object directly.
 func verifyMachineRunning(cl client.Client, machine client.Object) {
+	GinkgoHelper()
 	Expect(machine).NotTo(BeNil(), "Machine parameter cannot be nil")
 	Expect(machine.GetName()).NotTo(BeEmpty(), "Machine name cannot be empty")
 	Eventually(func(g Gomega) string {
@@ -162,6 +166,7 @@ func verifyMachineRunning(cl client.Client, machine client.Object) {
 }
 
 func verifyMachineAuthoritative(mapiMachine *mapiv1beta1.Machine, authority mapiv1beta1.MachineAuthority) {
+	GinkgoHelper()
 	By(fmt.Sprintf("Verify the Machine authority is %s", authority))
 	Eventually(komega.Object(mapiMachine), capiframework.WaitMedium, capiframework.RetryMedium).Should(
 		HaveField("Status.AuthoritativeAPI", Equal(authority)),
@@ -170,6 +175,7 @@ func verifyMachineAuthoritative(mapiMachine *mapiv1beta1.Machine, authority mapi
 }
 
 func verifyMAPIMachineSynchronizedCondition(mapiMachine *mapiv1beta1.Machine, authority mapiv1beta1.MachineAuthority) {
+	GinkgoHelper()
 	By("Verify the MAPI Machine synchronized condition is True")
 	var expectedMessage string
 	switch authority {
@@ -202,6 +208,7 @@ func verifyMAPIMachineSynchronizedCondition(mapiMachine *mapiv1beta1.Machine, au
 // verifyResourceRemoved verifies that a resource has been removed.
 // This is a generic function that works with any client.Object type.
 func verifyResourceRemoved(resource client.Object) {
+	GinkgoHelper()
 	Expect(resource).NotTo(BeNil(), "Resource parameter cannot be nil")
 	Expect(resource.GetName()).NotTo(BeEmpty(), "Resource name cannot be empty")
 	gvk := resource.GetObjectKind().GroupVersionKind()
@@ -214,6 +221,7 @@ func verifyResourceRemoved(resource client.Object) {
 // verifyMachinePausedCondition verifies the Paused condition for either MAPI or CAPI machines.
 // This unified function determines the machine type and expected pause state based on the authority.
 func verifyMachinePausedCondition(machine client.Object, authority mapiv1beta1.MachineAuthority) {
+	GinkgoHelper()
 	Expect(machine).NotTo(BeNil(), "Machine parameter cannot be nil")
 	Expect(machine.GetName()).NotTo(BeEmpty(), "Machine name cannot be empty")
 	var conditionMatcher types.GomegaMatcher
@@ -298,12 +306,14 @@ func cleanupMachineResources(ctx context.Context, cl client.Client, capiMachines
 }
 
 func updateMachineAuthoritativeAPI(mapiMachine *mapiv1beta1.Machine, newAuthority mapiv1beta1.MachineAuthority) {
+	GinkgoHelper()
 	Eventually(komega.Update(mapiMachine, func() {
 		mapiMachine.Spec.AuthoritativeAPI = newAuthority
 	}), capiframework.WaitShort, capiframework.RetryShort).Should(Succeed(), "Failed to update MAPI Machine AuthoritativeAPI to %s", newAuthority)
 }
 
 func verifyMachineSynchronizedGeneration(cl client.Client, mapiMachine *mapiv1beta1.Machine, authority mapiv1beta1.MachineAuthority) {
+	GinkgoHelper()
 	Eventually(komega.Object(mapiMachine), capiframework.WaitMedium, capiframework.RetryMedium).Should(
 		HaveField("Status.SynchronizedGeneration", Not(BeZero())),
 		"MAPI Machine SynchronizedGeneration should not be zero",
@@ -332,4 +342,23 @@ func verifyMachineSynchronizedGeneration(cl client.Client, mapiMachine *mapiv1be
 		HaveField("Status.SynchronizedGeneration", Equal(expectedGeneration)),
 		fmt.Sprintf("MAPI Machine SynchronizedGeneration should equal %s Machine Generation (%d)", authoritativeMachineType, expectedGeneration),
 	)
+}
+
+// verifyMAPIMachineProviderStatus verifies that a MAPI Machine's providerStatus matches the given Gomega matcher.
+func verifyMAPIMachineProviderStatus(mapiMachine *mapiv1beta1.Machine, matcher types.GomegaMatcher) {
+	GinkgoHelper()
+	By(fmt.Sprintf("Verifying MAPI Machine %s providerStatus matches AWSMachine status", mapiMachine.Name))
+	Eventually(komega.Object(mapiMachine), capiframework.WaitMedium, capiframework.RetryMedium).Should(
+		WithTransform(getAWSProviderStatusFromMachine, matcher),
+	)
+}
+
+// getAWSProviderStatusFromMachine extracts and unmarshals the AWSMachineProviderStatus from a MAPI Machine.
+func getAWSProviderStatusFromMachine(mapiMachine *mapiv1beta1.Machine) *mapiv1beta1.AWSMachineProviderStatus {
+	Expect(mapiMachine.Status.ProviderStatus.Raw).ToNot(BeNil())
+
+	providerStatus := &mapiv1beta1.AWSMachineProviderStatus{}
+	Expect(yaml.Unmarshal(mapiMachine.Status.ProviderStatus.Raw, providerStatus)).To(Succeed())
+
+	return providerStatus
 }
