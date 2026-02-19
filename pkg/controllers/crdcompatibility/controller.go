@@ -83,7 +83,7 @@ func (r *CompatibilityRequirementReconciler) SetupWithManager(ctx context.Contex
 		controllerBuilder = opt(controllerBuilder)
 	}
 
-	if err := mgr.GetFieldIndexer().IndexField(ctx, &apiextensionsv1alpha1.CompatibilityRequirement{}, index.FieldCRDByName, index.CRDByName); err != nil {
+	if err := index.AddIndexThreadSafe(ctx, mgr, &apiextensionsv1alpha1.CompatibilityRequirement{}, index.FieldCRDByName, index.CRDByName); err != nil {
 		return fmt.Errorf("failed to add index to CompatibilityRequirements: %w", err)
 	}
 
