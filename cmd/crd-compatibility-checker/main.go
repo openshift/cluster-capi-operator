@@ -28,6 +28,9 @@ import (
 	klog "k8s.io/klog/v2"
 
 	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility/crdvalidation"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility/objectvalidation"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 
 	capiflags "sigs.k8s.io/cluster-api/util/flags"
@@ -119,6 +122,27 @@ func main() {
 	}
 
 	ctx := ctrl.SetupSignalHandler()
+
+	compatibilityRequirementReconciler := crdcompatibility.NewCompatibilityRequirementReconciler(mgr.GetClient())
+	// Setup the CRD compatibility controller
+	if err := compatibilityRequirementReconciler.SetupWithManager(ctx, mgr); err != nil {
+		klog.Error(err, "unable to create controller", "controller", "CompatibilityRequirement")
+		os.Exit(1)
+	}
+
+	// Setup the validator for CustomResourceDefinition Create/Update/Delete events.
+	crdValidator := crdvalidation.NewValidator(mgr.GetClient())
+	if err := crdValidator.SetupWithManager(ctx, mgr); err != nil {
+		klog.Error(err, "unable to create controller", "controller", "CRDValidator")
+		os.Exit(1)
+	}
+
+	objectValidator := objectvalidation.NewValidator()
+	// Setup the objectvalidation controller and webhook
+	if err := objectValidator.SetupWithManager(ctx, mgr); err != nil {
+		klog.Error(err, "unable to create controller", "controller", "ObjectValidator")
+		os.Exit(1)
+	}
 
 	if err := mgr.AddHealthzCheck("health", healthz.Ping); err != nil {
 		klog.Error(err, "unable to set up health check")
