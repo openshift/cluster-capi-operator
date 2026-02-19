@@ -18,7 +18,7 @@ rules:
   - list
   - watch
 - apiGroups:
-  - operator.openshift.io
+  - apiextensions.openshift.io
   resources:
   - compatibilityrequirements
   - compatibilityrequirements/finalizers
@@ -29,6 +29,19 @@ rules:
   - watch
   - patch
   - update
+- apiGroups:
+  - admissionregistration.k8s.io
+  resources:
+  - validatingwebhookconfigurations
+  - mutatingwebhookconfigurations
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
 ---
 # permissions to do leader election and create events.
 apiVersion: rbac.authorization.k8s.io/v1
