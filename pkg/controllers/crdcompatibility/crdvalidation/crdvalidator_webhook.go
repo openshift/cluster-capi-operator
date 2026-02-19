@@ -25,6 +25,8 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -105,7 +107,12 @@ func (v *Validator) validateCreateOrUpdate(ctx context.Context, obj runtime.Obje
 			return nil, fmt.Errorf("failed to parse compatibilityCRD for CompatibilityRequirement %q: %w", compatibilityRequirement.Name, err)
 		}
 
-		reqErrors, reqWarnings, err := crdchecker.CheckCompatibilityRequirement(compatibilityCRD, crd)
+		prunedCRD, err := pruneExludedFields(compatibilityCRD, compatibilityRequirement.Spec.CompatibilitySchema.ExcludedFields)
+		if err != nil {
+			return nil, fmt.Errorf("failed to prune excluded fields for CompatibilityRequirement %q: %w", compatibilityRequirement.Name, err)
+		}
+
+		reqErrors, reqWarnings, err := crdchecker.CheckCompatibilityRequirement(prunedCRD, crd)
 		if err != nil {
 			return nil, fmt.Errorf("failed to check CRD compatibility: %w", err)
 		}
@@ -166,4 +173,93 @@ func (v *Validator) ValidateDelete(ctx context.Context, obj runtime.Object) (adm
 	}
 
 	return nil, nil
+}
+
+func pruneExludedFields(crd *apiextensionsv1.CustomResourceDefinition, excludedFields []apiextensionsv1alpha1.APIExcludedField) (*apiextensionsv1.CustomResourceDefinition, error) {
+	pathsByVersion := make(map[string][][]string)
+
+	// First split all paths into their components and group them by version.
+	for _, excludedField := range excludedFields {
+		paths := strings.Split(excludedField.Path, ".")
+
+		// Apply to all versions if no version is specified.
+		// Use `""` to denote all versions since this is not a valid version string.
+		if len(excludedField.Versions) == 0 {
+			pathsByVersion[""] = append(pathsByVersion[""], paths)
+		} else {
+			for _, version := range excludedField.Versions {
+				pathsByVersion[string(version)] = append(pathsByVersion[string(version)], paths)
+			}
+		}
+	}
+
+	prunedCRD := crd.DeepCopy()
+
+	var errs []error
+
+	for _, schema := range prunedCRD.Spec.Versions {
+		rootSchema := schema.Schema.OpenAPIV3Schema
+
+		// Combination of the specific version and paths that prune all versions.
+		pathsToPrune := append(pathsByVersion[""], pathsByVersion[schema.Name]...)
+		for _, path := range pathsToPrune {
+			err := prunePath(rootSchema, path)
+			if err != nil {
+				errs = append(errs, err)
+			}
+		}
+	}
+
+	if len(errs) > 0 {
+		return nil, fmt.Errorf("failed to prune excluded fields: %w", utilerrors.NewAggregate(errs))
+	}
+
+	return prunedCRD, nil
+}
+
+func prunePath(schema *apiextensionsv1.JSONSchemaProps, path []string) error {
+	desiredPath := field.NewPath("^", path...)
+	currentPath := field.NewPath("^")
+
+	for i, key := range path {
+		parentPath := currentPath.String()
+		currentPath = currentPath.Child(key)
+
+		// We should always be looking at an object.
+		// If we find an array, we extract the object schema for the next loop.
+		// If we find a scalar and have not reached the end of the path, we return an error.
+		propSchema, ok := schema.Properties[key]
+		if !ok {
+			return fmt.Errorf("path %s not found in schema, path %s is missing child %s", desiredPath, parentPath, key)
+		}
+
+		switch {
+		case i == len(path)-1:
+			// This is the last key in the path so we prune the property.
+			delete(schema.Properties, key)
+			schema.Required = removeRequiredField(schema.Required, key)
+		case propSchema.Type == "object":
+			schema = &propSchema
+		case propSchema.Type == "array":
+			if propSchema.Items == nil || propSchema.Items.Schema == nil {
+				return fmt.Errorf("path %s not found in schema, path %s is an array but does not have an items schema", desiredPath, currentPath)
+			}
+
+			schema = propSchema.Items.Schema
+		default:
+			return fmt.Errorf("path %s not found in schema, path %s is not an object", desiredPath, currentPath)
+		}
+	}
+
+	return nil
+}
+
+func removeRequiredField(required []string, field string) []string {
+	newRequired := []string{}
+	for _, f := range required {
+		if f != field {
+			newRequired = append(newRequired, f)
+		}
+	}
+	return newRequired
 }
