@@ -16,14 +16,22 @@ limitations under the License.
 package test
 
 import (
+	"crypto/rand"
 	"fmt"
+	"math/big"
 	"strings"
+	"unicode"
 
 	"github.com/gobuffalo/flect"
+	"github.com/onsi/gomega"
+	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
+	"github.com/openshift/cluster-capi-operator/pkg/util"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/utils/ptr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
+	"sigs.k8s.io/yaml"
 )
 
 var (
@@ -33,13 +41,13 @@ var (
 	// fakeCoreProviderKind is the Kind for the CoreProvider.
 	fakeCoreProviderKind = "CoreProvider"
 	// fakeCoreProviderCRD is a fake CoreProvider CRD.
-	fakeCoreProviderCRD = generateCRD(operatorGroupVersion.WithKind(fakeCoreProviderKind))
+	fakeCoreProviderCRD = GenerateCRD(operatorGroupVersion.WithKind(fakeCoreProviderKind))
 
 	// fakeInfrastructureProviderKind is the Kind for the CoreProvider.
 	fakeInfrastructureProviderKind = "InfrastructureProvider"
 
 	// fakeInfrastructureProviderCRD is a fake CoreProvider CRD.
-	fakeInfrastructureProviderCRD = generateCRD(operatorGroupVersion.WithKind(fakeInfrastructureProviderKind))
+	fakeInfrastructureProviderCRD = GenerateCRD(operatorGroupVersion.WithKind(fakeInfrastructureProviderKind))
 
 	// clusterGroupVersion is group version used for cluster objects.
 	clusterGroupVersion = schema.GroupVersion{Group: "cluster.x-k8s.io", Version: "v1beta2"}
@@ -48,19 +56,19 @@ var (
 	fakeClusterKind = "Cluster"
 
 	// fakeClusterCRD is a fake Cluster CRD.
-	fakeClusterCRD = generateCRD(clusterGroupVersion.WithKind(fakeClusterKind))
+	fakeClusterCRD = GenerateCRD(clusterGroupVersion.WithKind(fakeClusterKind))
 
 	// fakeMachineKind is the Kind for the Machine.
 	fakeMachineKind = "Machine"
 
 	// fakeMachineCRD is a fake Machine CRD.
-	fakeMachineCRD = generateCRD(clusterGroupVersion.WithKind(fakeMachineKind))
+	fakeMachineCRD = GenerateCRD(clusterGroupVersion.WithKind(fakeMachineKind))
 
 	// fakeMachineSetKind is the kind for the MachineSet.
 	fakeMachineSetKind = "MachineSet"
 
 	// fakeMachineSetCRD is a fake MachineSet CRD.
-	fakeMachineSetCRD = generateCRD(clusterGroupVersion.WithKind(fakeMachineSetKind))
+	fakeMachineSetCRD = GenerateCRD(clusterGroupVersion.WithKind(fakeMachineSetKind))
 
 	// v1beta1InfrastructureGroupVersion is a v1beta1 group version used for infrastructure objects.
 	v1beta1InfrastructureGroupVersion = schema.GroupVersion{Group: "infrastructure.cluster.x-k8s.io", Version: "v1beta1"}
@@ -69,13 +77,13 @@ var (
 	fakeOpenStackClusterKind = "OpenStackCluster"
 
 	// fakeOpenStackClusterCRD is a fake OpenStackCluster CRD.
-	fakeOpenStackClusterCRD = generateCRD(v1beta1InfrastructureGroupVersion.WithKind(fakeOpenStackClusterKind))
+	fakeOpenStackClusterCRD = GenerateCRD(v1beta1InfrastructureGroupVersion.WithKind(fakeOpenStackClusterKind))
 
 	// fakeOpenStackMachineTemplateKind is the kind for the OpenStackMachineTemplate.
 	fakeOpenStackMachineTemplateKind = "OpenStackMachineTemplate"
 
 	// fakeOpenStackMachineTemplateCRD is a fake OpenStackMachineTemplate CRD.
-	fakeOpenStackMachineTemplateCRD = generateCRD(v1beta1InfrastructureGroupVersion.WithKind(fakeOpenStackMachineTemplateKind))
+	fakeOpenStackMachineTemplateCRD = GenerateCRD(v1beta1InfrastructureGroupVersion.WithKind(fakeOpenStackMachineTemplateKind))
 
 	// mapiv1GroupVersion is group version used for MAPI v1 objects.
 	mapiv1GroupVersion = schema.GroupVersion{Group: "machine.openshift.io", Version: "v1"}
@@ -84,7 +92,7 @@ var (
 	fakeControlPlaneMachineSetKind = "ControlPlaneMachineSet"
 
 	// fakeControlPlaneMachineSetCRD is a fake ControlPlaneMachineSet CRD.
-	fakeControlPlaneMachineSetCRD = generateCRD(mapiv1GroupVersion.WithKind(fakeControlPlaneMachineSetKind))
+	fakeControlPlaneMachineSetCRD = GenerateCRD(mapiv1GroupVersion.WithKind(fakeControlPlaneMachineSetKind))
 
 	// v1beta2InfrastructureGroupVersion is a v1beta2 group version used for infrastructure objects.
 	v1beta2InfrastructureGroupVersion = schema.GroupVersion{Group: "infrastructure.cluster.x-k8s.io", Version: "v1beta2"}
@@ -120,8 +128,37 @@ var (
 	fakeGCPClusterCRD = generateProviderCRD(v1beta2InfrastructureGroupVersion.WithKind(fakeGCPClusterKind))
 )
 
-func generateCRD(gvk schema.GroupVersionKind) *apiextensionsv1.CustomResourceDefinition {
-	shouldPreserveUnknownFields := true
+// GenerateCRD generates a fake CustomResourceDefinition for a given
+// GroupVersionKind for use in tests. It may optionally be given a set of
+// additional versions to include in the CRD. The additional versions will be
+// added before the primary version. Only the primary version will be marked as
+// a storage version.
+func GenerateCRD(gvk schema.GroupVersionKind, additionalVersions ...string) *apiextensionsv1.CustomResourceDefinition {
+	generateVersion := func(version string) apiextensionsv1.CustomResourceDefinitionVersion {
+		return apiextensionsv1.CustomResourceDefinitionVersion{
+			Name:    version,
+			Served:  true,
+			Storage: version == gvk.Version,
+			Subresources: &apiextensionsv1.CustomResourceSubresources{
+				Status: &apiextensionsv1.CustomResourceSubresourceStatus{},
+			},
+			Schema: &apiextensionsv1.CustomResourceValidation{
+				OpenAPIV3Schema: &apiextensionsv1.JSONSchemaProps{
+					Type: "object",
+					Properties: map[string]apiextensionsv1.JSONSchemaProps{
+						"spec": {
+							Type:                   "object",
+							XPreserveUnknownFields: ptr.To(true),
+						},
+						"status": {
+							Type:                   "object",
+							XPreserveUnknownFields: ptr.To(true),
+						},
+					},
+				},
+			},
+		}
+	}
 
 	return &apiextensionsv1.CustomResourceDefinition{
 		TypeMeta: metav1.TypeMeta{
@@ -135,40 +172,72 @@ func generateCRD(gvk schema.GroupVersionKind) *apiextensionsv1.CustomResourceDef
 			Group: gvk.Group,
 			Scope: apiextensionsv1.NamespaceScoped,
 			Names: apiextensionsv1.CustomResourceDefinitionNames{
-				Kind:   gvk.Kind,
-				Plural: flect.Pluralize(strings.ToLower(gvk.Kind)),
+				Kind:     gvk.Kind,
+				Plural:   flect.Pluralize(strings.ToLower(gvk.Kind)),
+				Singular: strings.ToLower(gvk.Kind),
+				ListKind: fmt.Sprintf("%sList", gvk.Kind),
 			},
-			Versions: []apiextensionsv1.CustomResourceDefinitionVersion{
-				{
-					Name:    gvk.Version,
-					Served:  true,
-					Storage: true,
-					Subresources: &apiextensionsv1.CustomResourceSubresources{
-						Status: &apiextensionsv1.CustomResourceSubresourceStatus{},
-					},
-					Schema: &apiextensionsv1.CustomResourceValidation{
-						OpenAPIV3Schema: &apiextensionsv1.JSONSchemaProps{
-							Type: "object",
-							Properties: map[string]apiextensionsv1.JSONSchemaProps{
-								"spec": {
-									Type:                   "object",
-									XPreserveUnknownFields: &shouldPreserveUnknownFields,
-								},
-								"status": {
-									Type:                   "object",
-									XPreserveUnknownFields: &shouldPreserveUnknownFields,
-								},
-							},
-						},
-					},
+			Versions: append(util.SliceMap(additionalVersions, generateVersion), generateVersion(gvk.Version)),
+		},
+	}
+}
+
+// GenerateTestCRD generates a simple CRD with a randomly generated Kind.
+// Version is always v1.
+// Group is always example.com.
+func GenerateTestCRD() *apiextensionsv1.CustomResourceDefinition {
+	const validChars = "abcdefghijklmnopqrstuvwxyz"
+
+	randBytes := make([]byte, 10)
+
+	for i := range randBytes {
+		randInt, err := rand.Int(rand.Reader, big.NewInt(int64(len(validChars))))
+		gomega.Expect(err).To(gomega.Succeed())
+
+		randBytes[i] = validChars[randInt.Int64()]
+	}
+
+	gvk := schema.GroupVersionKind{
+		Group:   "example.com",
+		Version: "v1",
+		Kind:    string(unicode.ToUpper(rune(randBytes[0]))) + string(randBytes[1:]),
+	}
+
+	return GenerateCRD(gvk)
+}
+
+// GenerateTestCompatibilityRequirement generates a simple CompatibilityRequirement using the given CRD as the CompatibilityCRD.
+// The generated requirement uses GenerateName, so it will not have a valid Name until it is created.
+func GenerateTestCompatibilityRequirement(testCRD *apiextensionsv1.CustomResourceDefinition) *apiextensionsv1alpha1.CompatibilityRequirement {
+	yaml, err := yaml.Marshal(testCRD)
+	gomega.Expect(err).To(gomega.Succeed())
+
+	return &apiextensionsv1alpha1.CompatibilityRequirement{
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: "test-requirement-",
+		},
+		Spec: apiextensionsv1alpha1.CompatibilityRequirementSpec{
+			CompatibilitySchema: apiextensionsv1alpha1.CompatibilitySchema{
+				CustomResourceDefinition: apiextensionsv1alpha1.CRDData{
+					Type: apiextensionsv1alpha1.CRDDataTypeYAML,
+					Data: string(yaml),
+				},
+				RequiredVersions: apiextensionsv1alpha1.APIVersions{
+					DefaultSelection: apiextensionsv1alpha1.APIVersionSetTypeAllServed,
 				},
 			},
+			CustomResourceDefinitionSchemaValidation: apiextensionsv1alpha1.CustomResourceDefinitionSchemaValidation{
+				Action: apiextensionsv1alpha1.CRDAdmitActionDeny,
+			},
+		},
+		Status: apiextensionsv1alpha1.CompatibilityRequirementStatus{
+			CRDName: testCRD.GetName(),
 		},
 	}
 }
 
 func generateProviderCRD(gvk schema.GroupVersionKind) *apiextensionsv1.CustomResourceDefinition {
-	crd := generateCRD(gvk)
+	crd := GenerateCRD(gvk)
 
 	if crd.ObjectMeta.Labels == nil {
 		crd.ObjectMeta.Labels = make(map[string]string)
