@@ -17,17 +17,29 @@ limitations under the License.
 package revision
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
 
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	configv1 "github.com/openshift/api/config/v1"
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
-	configv1apply "github.com/openshift/client-go/config/applyconfigurations/config/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+
+	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
+	"github.com/openshift/cluster-capi-operator/pkg/test"
+	testmatchers "github.com/openshift/cluster-capi-operator/pkg/test/matchers"
+)
+
+const (
+	conditionTypeProgressing = "RevisionControllerProgressing"
+	conditionTypeDegraded    = "RevisionControllerDegraded"
 )
 
 func TestBuildComponentList(t *testing.T) {
@@ -81,129 +93,6 @@ func TestBuildComponentList(t *testing.T) {
 	}
 }
 
-func TestCalculateContentID_Determinism(t *testing.T) {
-	g := NewWithT(t)
-
-	providers := []providerimages.ProviderImageManifests{
-		{ProviderMetadata: providerimages.ProviderMetadata{Name: "core", InstallOrder: 10}, ContentID: "abc123"},
-		{ProviderMetadata: providerimages.ProviderMetadata{Name: "infra", InstallOrder: 20}, ContentID: "def456"},
-	}
-
-	// Same providers should produce same hash
-	contentID1 := calculateContentID(providers)
-	contentID2 := calculateContentID(providers)
-
-	g.Expect(contentID1).To(Equal(contentID2))
-	g.Expect(contentID1).ToNot(BeEmpty())
-}
-
-func TestCalculateContentID_DifferentOrder(t *testing.T) {
-	g := NewWithT(t)
-
-	providers1 := []providerimages.ProviderImageManifests{
-		{ProviderMetadata: providerimages.ProviderMetadata{Name: "core", InstallOrder: 10}, ContentID: "abc123"},
-		{ProviderMetadata: providerimages.ProviderMetadata{Name: "infra", InstallOrder: 20}, ContentID: "def456"},
-	}
-
-	providers2 := []providerimages.ProviderImageManifests{
-		{ProviderMetadata: providerimages.ProviderMetadata{Name: "infra", InstallOrder: 20}, ContentID: "def456"},
-		{ProviderMetadata: providerimages.ProviderMetadata{Name: "core", InstallOrder: 10}, ContentID: "abc123"},
-	}
-
-	// Different order should produce different hash
-	contentID1 := calculateContentID(providers1)
-	contentID2 := calculateContentID(providers2)
-
-	g.Expect(contentID1).ToNot(Equal(contentID2))
-}
-
-func TestFindLatestRevision(t *testing.T) {
-	tests := []struct {
-		name              string
-		revisions         []operatorv1alpha1.ClusterAPIInstallerRevision
-		desiredRevision   string
-		expectNil         bool
-		expectedRevision  int64
-		expectedContentID string
-	}{
-		{
-			name:      "returns nil for empty revisions",
-			revisions: nil,
-			expectNil: true,
-		},
-		{
-			name: "returns single revision",
-			revisions: []operatorv1alpha1.ClusterAPIInstallerRevision{
-				{Name: "rev-1", Revision: 1, ContentID: "content-id-1"},
-			},
-			desiredRevision:   "rev-1",
-			expectedRevision:  1,
-			expectedContentID: "content-id-1",
-		},
-		{
-			name: "returns highest revision number when out of order",
-			revisions: []operatorv1alpha1.ClusterAPIInstallerRevision{
-				{Name: "rev-1", Revision: 1, ContentID: "c1"},
-				{Name: "rev-3", Revision: 3, ContentID: "c3"},
-				{Name: "rev-2", Revision: 2, ContentID: "c2"},
-			},
-			desiredRevision:   "rev-3",
-			expectedRevision:  3,
-			expectedContentID: "c3",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			g := NewWithT(t)
-
-			clusterAPI := &operatorv1alpha1.ClusterAPI{}
-			if tt.revisions != nil {
-				clusterAPI.Status = operatorv1alpha1.ClusterAPIStatus{
-					Revisions:       tt.revisions,
-					DesiredRevision: operatorv1alpha1.RevisionName(tt.desiredRevision),
-				}
-			}
-
-			latest := findLatestRevision(clusterAPI)
-
-			if tt.expectNil {
-				g.Expect(latest).To(BeNil())
-			} else {
-				g.Expect(latest).ToNot(BeNil())
-				g.Expect(latest.Revision).To(Equal(tt.expectedRevision))
-				g.Expect(latest.ContentID).To(Equal(tt.expectedContentID))
-			}
-		})
-	}
-}
-
-func TestBuildRevisionName_Format(t *testing.T) {
-	g := NewWithT(t)
-
-	r := &RevisionController{}
-
-	name := r.buildRevisionName("4.18.0", "abcdef1234567890", 1)
-
-	g.Expect(name).To(Equal("4.18.0-abcdef12-1"))
-}
-
-func TestBuildRevisionName_Truncation(t *testing.T) {
-	g := NewWithT(t)
-
-	r := &RevisionController{}
-
-	// Create a very long version string
-	longVersion := ""
-	for i := 0; i < 300; i++ {
-		longVersion += "x"
-	}
-
-	name := r.buildRevisionName(longVersion, "abcdef1234567890", 1)
-
-	g.Expect(len(name)).To(BeNumerically("<=", maxRevisionNameLen))
-}
-
 func TestBuildComponentList_StableOrdering(t *testing.T) {
 	g := NewWithT(t)
 
@@ -227,156 +116,305 @@ func TestBuildComponentList_StableOrdering(t *testing.T) {
 	}))
 }
 
-func TestToAPIComponents(t *testing.T) {
-	g := NewWithT(t)
+var _ = Describe("RevisionController", Serial, func() {
+	var (
+		mgr *managerWrapper
+	)
 
-	providers := []providerimages.ProviderImageManifests{
-		{
-			ProviderMetadata: providerimages.ProviderMetadata{Name: "core", InstallOrder: 10},
-			ImageRef:         "quay.io/openshift/core@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-			Profile:          "default",
-			ContentID:        "core-content-id",
-		},
-		{
-			ProviderMetadata: providerimages.ProviderMetadata{Name: "infra", InstallOrder: 10},
-			ImageRef:         "quay.io/openshift/infra@sha256:fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
-			Profile:          "default",
-			ContentID:        "infra-content-id",
-		},
-	}
+	BeforeEach(func(ctx context.Context) {
+		createFixtures(ctx)
 
-	apiComponents := toAPIComponents(providers)
+		// Create manager and controller
+		mgr = newManagerWrapper(defaultProviderImgs)
+		DeferCleanup(func(ctx context.Context) {
+			mgr.stop()
+		})
 
-	g.Expect(apiComponents).To(HaveLen(2))
-	g.Expect(string(apiComponents[0].Image.Ref)).To(Equal("quay.io/openshift/core@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"))
-	g.Expect(apiComponents[0].Image.Profile).To(Equal("default"))
-	g.Expect(string(apiComponents[1].Image.Ref)).To(Equal("quay.io/openshift/infra@sha256:fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"))
-	g.Expect(apiComponents[1].Image.Profile).To(Equal("default"))
-}
+		waitForProgressingFalse(ctx)
+	}, defaultNodeTimeout)
 
-// findConditionApplyConfig finds a condition by type in a slice of apply configurations.
-func findConditionApplyConfig(conditions []*configv1apply.ClusterOperatorStatusConditionApplyConfiguration, condType configv1.ClusterStatusConditionType) *configv1apply.ClusterOperatorStatusConditionApplyConfiguration {
-	for _, cond := range conditions {
-		if cond.Type != nil && *cond.Type == condType {
-			return cond
-		}
-	}
+	It("creates first revision on empty ClusterAPI", func(ctx context.Context) {
+		updatedClusterAPI := &operatorv1alpha1.ClusterAPI{}
+		Expect(cl.Get(ctx, client.ObjectKey{Name: "cluster"}, updatedClusterAPI)).To(Succeed())
+		Expect(updatedClusterAPI.Status.Revisions).To(HaveLen(1))
+		Expect(updatedClusterAPI.Status.Revisions[0].Revision).To(Equal(int64(1)))
+		Expect(updatedClusterAPI.Status.DesiredRevision).ToNot(BeEmpty())
+		// Should have 2 components: core (global) and infra-aws
+		Expect(updatedClusterAPI.Status.Revisions[0].Components).To(HaveLen(2))
 
-	return nil
-}
+		// Verify the revision contents match the default provider images
+		rev := updatedClusterAPI.Status.Revisions[0]
+		Expect(rev.ContentID).NotTo(BeEmpty())
+		Expect(rev.Components[0].Image.Ref).To(Equal(operatorv1alpha1.ImageDigestFormat(defaultProviderImgs[0].ImageRef)))
+		Expect(rev.Components[1].Image.Ref).To(Equal(operatorv1alpha1.ImageDigestFormat(defaultProviderImgs[1].ImageRef)))
+	}, defaultNodeTimeout)
 
-//nolint:funlen
-func TestBuildConditions(t *testing.T) {
-	tests := []struct {
-		name                      string
-		result                    reconcileResult
-		existingConditions        []configv1.ClusterOperatorStatusCondition
-		expectedProgressingStatus configv1.ConditionStatus
-		expectedProgressingReason string
-		expectedProgressingMsg    string // empty means don't check
-		expectedDegradedStatus    configv1.ConditionStatus
-		expectedDegradedReason    string
-	}{
-		{
-			name:                      "success",
-			result:                    reconcileResult{},
-			expectedProgressingStatus: configv1.ConditionFalse,
-			expectedProgressingReason: conditionReasonSuccess,
-			expectedProgressingMsg:    "Revision is current",
-			expectedDegradedStatus:    configv1.ConditionFalse,
-			expectedDegradedReason:    conditionReasonSuccess,
-		},
-		{
-			name:                      "non-retryable error",
-			result:                    reconcileResult{progressingReason: conditionReasonNonRetryableError, error: errMaxRevisionsAllowed},
-			expectedProgressingStatus: configv1.ConditionFalse,
-			expectedProgressingReason: conditionReasonNonRetryableError,
-			expectedDegradedStatus:    configv1.ConditionTrue,
-			expectedDegradedReason:    conditionReasonNonRetryableError,
-		},
-		{
-			name:                      "ephemeral error (new)",
-			result:                    reconcileResult{progressingReason: conditionReasonEphemeralError, error: errors.New("connection refused")},
-			expectedProgressingStatus: configv1.ConditionTrue,
-			expectedProgressingReason: conditionReasonEphemeralError,
-			expectedDegradedStatus:    configv1.ConditionFalse,
-			expectedDegradedReason:    conditionReasonProgressing,
-		},
-		{
-			name:   "ephemeral error (existing)",
-			result: reconcileResult{progressingReason: conditionReasonEphemeralError, error: errors.New("connection refused")},
-			existingConditions: []configv1.ClusterOperatorStatusCondition{
-				{
-					Type:               conditionTypeProgressing,
-					Status:             configv1.ConditionTrue,
-					Reason:             conditionReasonEphemeralError,
-					Message:            "connection refused",
-					LastTransitionTime: metav1.NewTime(time.Now().Add(-3 * time.Minute)),
+	It("creates additional revision when contentID changes", func(ctx context.Context) {
+		// Stop first manager
+		mgr.stop()
+
+		// Capture the first revision
+		initialClusterAPI := &operatorv1alpha1.ClusterAPI{}
+		Expect(cl.Get(ctx, client.ObjectKey{Name: "cluster"}, initialClusterAPI)).To(Succeed())
+		Expect(initialClusterAPI.Status.Revisions).To(HaveLen(1))
+		originalRev1 := initialClusterAPI.Status.Revisions[0]
+
+		// Start second manager with updated provider images (different contentID)
+		updatedProviderImgs := []providerimages.ProviderImageManifests{
+			{
+				ProviderMetadata: providerimages.ProviderMetadata{
+					Name:         "core",
+					InstallOrder: 10,
 				},
+				ContentID: "core-content-id-2",
+				ImageRef:  "registry.example.com/core@sha256:1111111111111111111111111111111111111111111111111111111111111111",
+				Profile:   "default",
 			},
-			expectedProgressingStatus: configv1.ConditionTrue,
-			expectedProgressingReason: conditionReasonEphemeralError,
-			expectedDegradedStatus:    configv1.ConditionFalse,
-			expectedDegradedReason:    conditionReasonProgressing,
-		},
-		{
-			name:                      "waiting on external",
-			result:                    reconcileResult{progressingReason: conditionReasonWaitingOnExternal, message: "Infrastructure not found"},
-			expectedProgressingStatus: configv1.ConditionTrue,
-			expectedProgressingReason: conditionReasonWaitingOnExternal,
-			expectedProgressingMsg:    "Infrastructure not found",
-			expectedDegradedStatus:    configv1.ConditionFalse,
-			expectedDegradedReason:    conditionReasonProgressing,
-		},
-	}
+			{
+				ProviderMetadata: providerimages.ProviderMetadata{
+					Name:         "infra-aws",
+					InstallOrder: 20,
+					OCPPlatform:  configv1.AWSPlatformType,
+				},
+				ContentID: "infra-aws-content-id-2",
+				ImageRef:  "registry.example.com/infra-aws@sha256:2222222222222222222222222222222222222222222222222222222222222222",
+				Profile:   "default",
+			},
+		}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			g := NewWithT(t)
+		mgr = newManagerWrapper(updatedProviderImgs)
 
-			conditions := buildConditions(tt.result)
+		Eventually(func(g Gomega) {
+			updatedClusterAPI := &operatorv1alpha1.ClusterAPI{}
+			g.Expect(cl.Get(ctx, client.ObjectKey{Name: "cluster"}, updatedClusterAPI)).To(Succeed())
+			g.Expect(updatedClusterAPI.Status.Revisions).To(HaveLen(2))
+			g.Expect(updatedClusterAPI.Status.Revisions[1].Revision).To(Equal(int64(2)))
+		}).WithContext(ctx).Should(Succeed())
 
-			g.Expect(conditions).To(HaveLen(2))
+		// Verify both revisions have the expected contents
+		updatedClusterAPI := &operatorv1alpha1.ClusterAPI{}
+		Expect(cl.Get(ctx, client.ObjectKey{Name: "cluster"}, updatedClusterAPI)).To(Succeed())
 
-			progressing := findConditionApplyConfig(conditions, conditionTypeProgressing)
-			g.Expect(progressing).ToNot(BeNil())
-			g.Expect(*progressing.Status).To(Equal(tt.expectedProgressingStatus))
-			g.Expect(*progressing.Reason).To(Equal(tt.expectedProgressingReason))
+		// First revision should be completely unchanged
+		Expect(updatedClusterAPI.Status.Revisions[0]).To(Equal(originalRev1))
 
-			if tt.expectedProgressingMsg != "" {
-				g.Expect(*progressing.Message).To(Equal(tt.expectedProgressingMsg))
+		// Second revision should have the updated provider images
+		rev2 := updatedClusterAPI.Status.Revisions[1]
+		Expect(rev2.ContentID).NotTo(Equal(originalRev1.ContentID))
+		Expect(rev2.Components[0].Image.Ref).To(Equal(operatorv1alpha1.ImageDigestFormat(updatedProviderImgs[0].ImageRef)))
+		Expect(rev2.Components[1].Image.Ref).To(Equal(operatorv1alpha1.ImageDigestFormat(updatedProviderImgs[1].ImageRef)))
+	}, defaultNodeTimeout)
+
+	It("sets Degraded=True with NonRetryableError when max revisions reached", func(ctx context.Context) {
+		// Refresh the clusterAPI object before updating the revisions
+		Expect(cl.Get(ctx, client.ObjectKey{Name: "cluster"}, clusterAPI)).To(Succeed())
+
+		// Add more revisions until we have 16
+		for {
+			i := len(clusterAPI.Status.Revisions)
+			if i >= 16 {
+				break
 			}
 
-			degraded := findConditionApplyConfig(conditions, conditionTypeDegraded)
-			g.Expect(degraded).ToNot(BeNil())
-			g.Expect(*degraded.Status).To(Equal(tt.expectedDegradedStatus))
-			g.Expect(*degraded.Reason).To(Equal(tt.expectedDegradedReason))
+			// Create a valid 64-character hex digest that varies by index
+			hexDigit := string("0123456789abcdef"[i])
+			digest := hexDigit + "123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+			clusterAPI.Status.Revisions = append(clusterAPI.Status.Revisions, operatorv1alpha1.ClusterAPIInstallerRevision{
+				Name:      operatorv1alpha1.RevisionName("rev-" + string(rune('a'+i))),
+				Revision:  int64(i + 1),
+				ContentID: "content-id-" + string(rune('a'+i)),
+				Components: []operatorv1alpha1.ClusterAPIInstallerComponent{
+					{
+						Type: operatorv1alpha1.InstallerComponentTypeImage,
+						Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
+							Ref:     operatorv1alpha1.ImageDigestFormat("quay.io/openshift/cluster-capi-operator@sha256:" + digest),
+							Profile: "default",
+						},
+					},
+				},
+			})
+		}
+
+		clusterAPI.Status.DesiredRevision = clusterAPI.Status.Revisions[len(clusterAPI.Status.Revisions)-1].Name
+		Expect(cl.Status().Update(ctx, clusterAPI)).To(Succeed())
+
+		waitForConditions(ctx,
+			testmatchers.HaveCondition(conditionTypeProgressing).
+				WithStatus(configv1.ConditionFalse).
+				WithReason(operatorstatus.ReasonNonRetryableError),
+			testmatchers.HaveCondition(conditionTypeDegraded).
+				WithStatus(configv1.ConditionTrue).
+				WithReason(operatorstatus.ReasonNonRetryableError),
+		)
+
+		// Revisions should still be 16 (no new revision created)
+		updatedClusterAPI := &operatorv1alpha1.ClusterAPI{}
+		Expect(cl.Get(ctx, client.ObjectKey{Name: "cluster"}, updatedClusterAPI)).To(Succeed())
+		Expect(updatedClusterAPI.Status.Revisions).To(HaveLen(16))
+
+	}, defaultNodeTimeout)
+})
+
+var _ = Describe("RevisionController waiting states", Serial, func() {
+	Context("when Infrastructure PlatformStatus is nil", func() {
+		BeforeEach(func(ctx context.Context) {
+			createFixtures(ctx, withoutInfraStatus)
+
+			mgr := newManagerWrapper(defaultProviderImgs)
+			DeferCleanup(func(ctx context.Context) {
+				mgr.stop()
+			})
+
+			waitForConditions(ctx,
+				testmatchers.HaveCondition(conditionTypeProgressing).
+					WithStatus(configv1.ConditionTrue).
+					WithReason(operatorstatus.ReasonWaitingOnExternal),
+			)
+		}, defaultNodeTimeout)
+
+		It("sets Progressing=True with WaitingOnExternal reason", func(ctx context.Context) {
+			Eventually(func(g Gomega) {
+				// No revisions should be created
+				updatedClusterAPI := &operatorv1alpha1.ClusterAPI{}
+				g.Expect(cl.Get(ctx, client.ObjectKey{Name: "cluster"}, updatedClusterAPI)).To(Succeed())
+				g.Expect(updatedClusterAPI.Status.Revisions).To(BeEmpty())
+			}).WithContext(ctx).Should(Succeed())
+		}, defaultNodeTimeout)
+
+		It("creates revision after Infrastructure gets PlatformStatus", func(ctx context.Context) {
+			// Now update Infrastructure with PlatformStatus
+			Expect(cl.Get(ctx, client.ObjectKey{Name: "cluster"}, infra)).To(Succeed())
+			infraFixtureAddStatus(infra)
+			Expect(cl.Status().Update(ctx, infra)).To(Succeed())
+
+			waitForProgressingFalse(ctx)
+
+			// Should have created a revision
+			updatedClusterAPI := &operatorv1alpha1.ClusterAPI{}
+			Expect(cl.Get(ctx, client.ObjectKey{Name: "cluster"}, updatedClusterAPI)).To(Succeed())
+			Expect(updatedClusterAPI.Status.Revisions).To(HaveLen(1))
+		}, defaultNodeTimeout)
+	})
+
+	Context("when ClusterAPI does not exist", func() {
+		BeforeEach(func(ctx context.Context) {
+			createFixtures(ctx, withoutClusterAPI)
+
+			mgr := newManagerWrapper(defaultProviderImgs)
+			DeferCleanup(func(ctx context.Context) {
+				mgr.stop()
+			})
+		}, defaultNodeTimeout)
+
+		It("creates revision after ClusterAPI is created", func(ctx context.Context) {
+			// Wait for WaitingOnExternal state
+			waitForConditions(ctx,
+				testmatchers.HaveCondition(conditionTypeProgressing).
+					WithStatus(configv1.ConditionTrue).
+					WithReason(operatorstatus.ReasonWaitingOnExternal),
+			)
+
+			// Create ClusterAPI
+			clusterAPI = &operatorv1alpha1.ClusterAPI{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cluster",
+				},
+				Spec: &operatorv1alpha1.ClusterAPISpec{},
+			}
+			Expect(cl.Create(ctx, clusterAPI)).To(Succeed())
+			DeferCleanup(func(ctx context.Context) {
+				By("Deleting ClusterAPI")
+				Expect(test.CleanupAndWait(ctx, cl, clusterAPI)).To(Succeed())
+			})
+
+			waitForProgressingFalse(ctx)
+
+			// Should have created a revision
+			updatedClusterAPI := &operatorv1alpha1.ClusterAPI{}
+			Expect(cl.Get(ctx, client.ObjectKey{Name: "cluster"}, updatedClusterAPI)).To(Succeed())
+			Expect(updatedClusterAPI.Status.Revisions).To(HaveLen(1))
+		}, defaultNodeTimeout)
+	})
+})
+
+var _ = Describe("RevisionController direct reconcile", Serial, func() {
+	var (
+		testErr = errors.New("simulated status update error")
+
+		interceptorCl client.Client
+		r             *RevisionController
+	)
+
+	BeforeEach(func(ctx context.Context) {
+		createFixtures(ctx)
+
+		interceptorCl = interceptor.NewClient(cl, interceptor.Funcs{
+			SubResourceUpdate: func(ctx context.Context, c client.Client, subResourceName string, obj client.Object, opts ...client.SubResourceUpdateOption) error {
+				if _, ok := obj.(*operatorv1alpha1.ClusterAPI); ok && subResourceName == subResourceStatus {
+					return testErr
+				}
+
+				return c.SubResource(subResourceName).Update(ctx, obj, opts...)
+			},
 		})
-	}
-}
 
-func TestFindClusterOperatorCondition(t *testing.T) {
-	g := NewWithT(t)
+		r = &RevisionController{
+			Client:           interceptorCl,
+			ProviderProfiles: defaultProviderImgs,
+			ReleaseVersion:   "4.18.0",
+		}
+	}, defaultNodeTimeout)
 
-	conditions := []configv1.ClusterOperatorStatusCondition{
-		{
-			Type:   conditionTypeProgressing,
-			Status: configv1.ConditionTrue,
-			Reason: "Testing",
-		},
-		{
-			Type:   conditionTypeDegraded,
-			Status: configv1.ConditionFalse,
-			Reason: "Success",
-		},
-	}
+	It("sets Progressing=True with EphemeralError on client status update error", func(ctx context.Context) {
+		req := reconcile.Request{NamespacedName: client.ObjectKey{Name: "cluster"}}
+		_, err := r.Reconcile(ctx, req)
+		Expect(err).To(HaveOccurred())
 
-	// Find existing condition
-	found := findClusterOperatorCondition(conditions, conditionTypeProgressing)
-	g.Expect(found).ToNot(BeNil())
-	g.Expect(found.Reason).To(Equal("Testing"))
+		// Verify conditions show ephemeral error
+		co := &configv1.ClusterOperator{}
+		Expect(cl.Get(ctx, client.ObjectKey{Name: "cluster-api"}, co)).To(Succeed())
 
-	// Find non-existing condition
-	notFound := findClusterOperatorCondition(conditions, "NonExistent")
-	g.Expect(notFound).To(BeNil())
-}
+		Expect(co.Status.Conditions).To(testmatchers.HaveCondition(conditionTypeProgressing).
+			WithStatus(configv1.ConditionTrue).
+			WithReason(operatorstatus.ReasonEphemeralError).
+			WithMessage(ContainSubstring(testErr.Error())))
+		Expect(co.Status.Conditions).To(testmatchers.HaveCondition(conditionTypeDegraded).
+			WithStatus(configv1.ConditionFalse).
+			WithReason(operatorstatus.ReasonProgressing))
+	}, defaultNodeTimeout)
+
+	It("preserves Progressing LastTransitionTime on subsequent ephemeral errors", func(ctx context.Context) {
+		// Set up initial Progressing condition with EphemeralError from the past
+		pastTime := metav1.NewTime(time.Now().Add(-3 * time.Minute))
+		clusterOperator.Status.Conditions = []configv1.ClusterOperatorStatusCondition{
+			{
+				Type:               conditionTypeProgressing,
+				Status:             configv1.ConditionTrue,
+				Reason:             operatorstatus.ReasonEphemeralError,
+				Message:            "previous error",
+				LastTransitionTime: pastTime,
+			},
+			{
+				Type:               conditionTypeDegraded,
+				Status:             configv1.ConditionFalse,
+				Reason:             operatorstatus.ReasonEphemeralError,
+				LastTransitionTime: pastTime,
+			},
+		}
+		Expect(cl.Status().Update(ctx, clusterOperator)).To(Succeed())
+
+		req := reconcile.Request{NamespacedName: client.ObjectKey{Name: "cluster"}}
+		_, err := r.Reconcile(ctx, req)
+		Expect(err).To(HaveOccurred())
+
+		// Verify LastTransitionTime is preserved (not updated)
+		co := &configv1.ClusterOperator{}
+		Expect(cl.Get(ctx, client.ObjectKey{Name: "cluster-api"}, co)).To(Succeed())
+
+		Expect(co.Status.Conditions).To(testmatchers.HaveCondition(conditionTypeProgressing).
+			WithStatus(configv1.ConditionTrue).
+			WithReason(operatorstatus.ReasonEphemeralError).
+			// LastTransitionTime should be the same since status didn't change
+			WithLastTransitionTime(WithTransform(func(t metav1.Time) time.Time { return t.Time }, BeTemporally("~", pastTime.Time, time.Second))))
+	}, defaultNodeTimeout)
+})
