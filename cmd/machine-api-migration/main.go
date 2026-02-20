@@ -25,12 +25,6 @@ import (
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	configv1client "github.com/openshift/client-go/config/clientset/versioned"
 	configinformers "github.com/openshift/client-go/config/informers/externalversions"
-	"github.com/openshift/cluster-capi-operator/pkg/controllers"
-	"github.com/openshift/cluster-capi-operator/pkg/controllers/machinemigration"
-	"github.com/openshift/cluster-capi-operator/pkg/controllers/machinesetmigration"
-	"github.com/openshift/cluster-capi-operator/pkg/controllers/machinesetsync"
-	"github.com/openshift/cluster-capi-operator/pkg/controllers/machinesync"
-	"github.com/openshift/cluster-capi-operator/pkg/util"
 	"k8s.io/utils/clock"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
@@ -45,6 +39,14 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/openshift/cluster-capi-operator/pkg/commoncmdoptions"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/machinemigration"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/machinesetmigration"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/machinesetsync"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/machinesync"
+	"github.com/openshift/cluster-capi-operator/pkg/util"
 )
 
 const (
@@ -70,7 +72,7 @@ func main() {
 	scheme := runtime.NewScheme()
 	initScheme(scheme)
 
-	opts := util.InitCommonOptions(managerName, controllers.DefaultCAPINamespace)
+	opts := commoncmdoptions.InitCommonOptions(managerName, controllers.DefaultCAPINamespace)
 
 	opts.Parse()
 
@@ -86,7 +88,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := util.AddCommonChecks(mgr); err != nil {
+	if err := commoncmdoptions.AddCommonChecks(mgr); err != nil {
 		klog.Error(err, "unable to add common checks")
 		os.Exit(1)
 	}
@@ -162,7 +164,7 @@ type controller interface {
 	SetupWithManager(mgr ctrl.Manager) error
 }
 
-func getControllers(opts *util.CommonOptions, platform configv1.PlatformType, infra *configv1.Infrastructure, infraTypes util.InfraTypes) map[string]controller {
+func getControllers(opts *commoncmdoptions.CommonOptions, platform configv1.PlatformType, infra *configv1.Infrastructure, infraTypes util.InfraTypes) map[string]controller {
 	return map[string]controller{
 		"machine sync": &machinesync.MachineSyncReconciler{
 			Infra:      infra,
