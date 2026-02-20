@@ -51,24 +51,29 @@ var _ RenderedRevision = &renderedRevision{}
 
 func NewRenderedRevision(profiles []providerimages.ProviderImageManifests) (RenderedRevision, error) {
 	components := make([]*renderedComponent, len(profiles))
+
 	for i, profile := range profiles {
 		component, err := newRenderedComponent(&profile)
 		if err != nil {
 			return nil, err
 		}
+
 		components[i] = component
 	}
+
 	return &renderedRevision{components: components}, nil
 }
 
 func (r *renderedRevision) ContentID() (string, error) {
 	if r.contentID == "" {
 		h := sha256.New()
+
 		for _, component := range r.components {
 			contentID, err := component.contentID()
 			if err != nil {
 				return "", fmt.Errorf("error getting content ID: %w", err)
 			}
+
 			h.Write([]byte(contentID))
 		}
 
@@ -101,7 +106,6 @@ func (r *renderedRevision) ToAPIRevision(releaseVersion string, revisionIndex in
 		ContentID:  contentID,
 		Components: apiComponents,
 	}, nil
-
 }
 
 // buildRevisionName constructs a revision name from version, contentID, and revision index.
@@ -166,12 +170,15 @@ func newRenderedComponent(providerProfile *providerimages.ProviderImageManifests
 
 func (c *renderedComponent) contentID() (string, error) {
 	h := sha256.New()
+
 	for _, obj := range slices.Concat(c.crds, c.objects) {
 		data, err := json.Marshal(obj.Object)
 		if err != nil {
 			return "", fmt.Errorf("error marshalling object: %w", err)
 		}
+
 		h.Write(data)
 	}
+
 	return hex.EncodeToString(h.Sum(nil)), nil
 }

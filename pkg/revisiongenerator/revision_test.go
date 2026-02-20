@@ -36,6 +36,7 @@ func writeManifestFile(t *testing.T, content string) string {
 	path := filepath.Join(dir, "manifests.yaml")
 	g := NewWithT(t)
 	g.Expect(os.WriteFile(path, []byte(content), 0644)).To(Succeed())
+
 	return path
 }
 
