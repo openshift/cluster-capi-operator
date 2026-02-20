@@ -195,6 +195,7 @@ func (m *ConditionMatcher) Match(actual interface{}) (bool, error) {
 		}
 
 		var found bool
+
 		var err error
 
 		condition, found, err = findCondition(actualValue, m.conditionType)

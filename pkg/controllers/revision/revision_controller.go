@@ -44,12 +44,10 @@ import (
 const (
 	controllerName = "RevisionController"
 
-	clusterAPIName       = "cluster"
-	infrastructureName   = "cluster"
-	clusterOperatorName  = "cluster-api"
-	maxRevisionNameLen   = 255
-	revisionContentIDLen = 8
-	maxRevisionsAllowed  = 16
+	clusterAPIName      = "cluster"
+	infrastructureName  = "cluster"
+	clusterOperatorName = "cluster-api"
+	maxRevisionsAllowed = 16
 
 	// ssaFieldOwner is the field manager name for Server-Side Apply patches to ClusterOperator conditions.
 	ssaFieldOwner = "capi-operator.openshift.io/revision-controller"
