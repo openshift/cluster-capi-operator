@@ -179,7 +179,7 @@ func (c *ControllerResultGenerator) degradedCondition(status configv1.ConditionS
 }
 
 // updateClusterOperatorConditions updates the RevisionController conditions on the ClusterOperator.
-func (result *ReconcileResult) WriteConditions(ctx context.Context, log logr.Logger, k8sclient client.Client) error {
+func (result *ReconcileResult) WriteClusterOperatorConditions(ctx context.Context, log logr.Logger, k8sclient client.Client) error {
 	// Get the ClusterOperator
 	co := &configv1.ClusterOperator{}
 	if err := k8sclient.Get(ctx, client.ObjectKey{Name: clusterOperatorName}, co); err != nil {
