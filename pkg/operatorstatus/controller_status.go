@@ -145,19 +145,20 @@ func (c *ControllerResultGenerator) Error(err error, opts ...ReconcileResultOpti
 
 func (c *ControllerResultGenerator) NonRetryableError(err error, opts ...ReconcileResultOption) ReconcileResult {
 	// Wrap the error in a terminal error if it's not already a terminal error
-	if !errors.Is(err, reconcile.TerminalError(nil)) {
-		err = reconcile.TerminalError(err)
+	termErr := err
+	if !errors.Is(termErr, reconcile.TerminalError(nil)) {
+		termErr = reconcile.TerminalError(err)
 	}
 
-	return c.nonRetryableError(err, opts...)
+	return c.nonRetryableError(termErr, opts...)
 }
 
-func (c *ControllerResultGenerator) nonRetryableError(err error, opts ...ReconcileResultOption) ReconcileResult {
+func (c *ControllerResultGenerator) nonRetryableError(termErr error, opts ...ReconcileResultOption) ReconcileResult {
 	return resultWithOptions(ReconcileResult{
 		ControllerResultGenerator: c,
-		progressing:               c.progressingCondition(configv1.ConditionFalse, ReasonNonRetryableError, err.Error()),
-		degraded:                  c.degradedCondition(configv1.ConditionTrue, ReasonNonRetryableError, err.Error()),
-		err:                       reconcile.TerminalError(err),
+		progressing:               c.progressingCondition(configv1.ConditionFalse, ReasonNonRetryableError, termErr.Error()),
+		degraded:                  c.degradedCondition(configv1.ConditionTrue, ReasonNonRetryableError, termErr.Error()),
+		err:                       termErr,
 	}, opts...)
 }
 
