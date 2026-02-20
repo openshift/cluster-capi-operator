@@ -215,6 +215,11 @@ func setupCapiInstallerController(mgr ctrl.Manager, opts *util.CommonOptions, pl
 
 // setFeatureGatesEnvVars sets the explicit values for the listed feature gates in the environment.
 // These will then be loaded by envsubst and templated into the applied CAPI manifests.
+//
+// XXX: This function is unrelated to feature gates. It sets a single
+// environment variable which applies only to the AWS provider. It is replaced
+// by logic in revisiongenerator, and can be removed when the capiinstaller
+// controller is removed.
 func setFeatureGatesEnvVars() error {
 	featureGates := map[string]string{
 		"EXP_BOOTSTRAP_FORMAT_IGNITION": "true",

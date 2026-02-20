@@ -19,17 +19,18 @@ package revision
 import (
 	"cmp"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"iter"
 	"slices"
 	"strings"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
+	"github.com/go-logr/logr"
+	configv1 "github.com/openshift/api/config/v1"
+	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
+	configv1apply "github.com/openshift/client-go/config/applyconfigurations/config/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -38,11 +39,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	"github.com/go-logr/logr"
-	configv1 "github.com/openshift/api/config/v1"
-	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
-	configv1apply "github.com/openshift/client-go/config/applyconfigurations/config/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
+	"github.com/openshift/cluster-capi-operator/pkg/revisiongenerator"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 )
 
@@ -91,7 +89,7 @@ type RevisionController struct {
 }
 
 // Reconcile handles creating revisions in the ClusterAPI singleton status.
-func (r *RevisionController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *RevisionController) Reconcile(ctx context.Context, _ ctrl.Request) (ctrl.Result, error) {
 	log := ctrl.LoggerFrom(ctx).WithName(controllerName)
 	log.Info("Reconciling ClusterAPI revisions")
 
@@ -111,19 +109,32 @@ func (r *RevisionController) Reconcile(ctx context.Context, req ctrl.Request) (c
 }
 
 func (r *RevisionController) reconcile(ctx context.Context, log logr.Logger) reconcileResult {
-	// Get current platform from Infrastructure singleton
-	infra := &configv1.Infrastructure{}
-	if err := r.Get(ctx, client.ObjectKey{Name: infrastructureName}, infra); err != nil {
-		if apierrors.IsNotFound(err) {
-			return reconcileResult{progressingReason: conditionReasonWaitingOnExternal, message: "Infrastructure not found"}
-		}
-
-		return reconcileResult{progressingReason: conditionReasonEphemeralError, error: fmt.Errorf("fetching infrastructure: %w", err)}
+	platform, err := r.getPlatform(ctx)
+	if err != nil {
+		return reconcileResult{progressingReason: conditionReasonEphemeralError, error: fmt.Errorf("getting platform: %w", err)}
 	}
 
-	if infra.Status.PlatformStatus == nil {
-		log.Info("Infrastructure PlatformStatus is nil, requeuing")
+	if platform == "" {
 		return reconcileResult{progressingReason: conditionReasonWaitingOnExternal, message: "Waiting for Infrastructure PlatformStatus"}
+	}
+
+	// Build ordered component list from provider metadata
+	providerComponents := r.buildComponentList(platform)
+	if len(providerComponents) == 0 {
+		log.Info("No components for current platform", "platform", platform)
+		return reconcileResult{}
+	}
+
+	// Build a rendered revision from the current provider components for
+	// comparison against the latest revision.
+	revision, err := revisiongenerator.NewRenderedRevision(providerComponents)
+	if err != nil {
+		return reconcileResult{progressingReason: conditionReasonEphemeralError, error: fmt.Errorf("error creating rendered revision: %w", err)}
+	}
+
+	contentID, err := revision.ContentID()
+	if err != nil {
+		return reconcileResult{progressingReason: conditionReasonEphemeralError, error: fmt.Errorf("error getting content ID: %w", err)}
 	}
 
 	// Get ClusterAPI singleton
@@ -136,29 +147,9 @@ func (r *RevisionController) reconcile(ctx context.Context, log logr.Logger) rec
 		return reconcileResult{progressingReason: conditionReasonEphemeralError, error: fmt.Errorf("fetching ClusterAPI: %w", err)}
 	}
 
-	sortedRevisions := slices.SortedStableFunc(slices.Values(clusterAPI.Status.Revisions), func(a, b operatorv1alpha1.ClusterAPIInstallerRevision) int {
-		return cmp.Compare(a.Revision, b.Revision)
-	})
-
-	var latestRevision *operatorv1alpha1.ClusterAPIInstallerRevision
-	if len(sortedRevisions) > 0 {
-		latestRevision = &sortedRevisions[len(sortedRevisions)-1]
-	}
-
-	platform := infra.Status.PlatformStatus.Type
-
-	// Build ordered component list from provider metadata
-	providerComponents := r.buildComponentList(platform)
-	if len(providerComponents) == 0 {
-		log.Info("No components for current platform", "platform", platform)
-		return reconcileResult{}
-	}
-
-	// Calculate contentID = SHA256(component1.contentID + component2.contentID + ...)
-	contentID := calculateContentID(providerComponents)
-
 	// We need a new revision if the latest revision has a different contentID
-	if latestRevision != nil && latestRevision.ContentID == contentID {
+	latestAPIRevision := getLatestRevision(clusterAPI.Status.Revisions)
+	if latestAPIRevision != nil && latestAPIRevision.ContentID == contentID {
 		log.Info("No new revision needed", "contentID", contentID)
 		return reconcileResult{}
 	}
@@ -173,53 +164,84 @@ func (r *RevisionController) reconcile(ctx context.Context, log logr.Logger) rec
 		return reconcileResult{progressingReason: conditionReasonNonRetryableError, error: errMaxRevisionsAllowed}
 	}
 
-	// Build revision name: <version>-<contentID[:8]>-<revisionNumber>
-	var revisionNumber int64 = 1
-	if latestRevision != nil {
-		revisionNumber = latestRevision.Revision + 1
-	}
-
-	revisionName := r.buildRevisionName(r.ReleaseVersion, contentID, revisionNumber)
-
-	// Convert provider components to API format
-	apiComponents := toAPIComponents(providerComponents)
-
-	// Create revision
-	newRevision := operatorv1alpha1.ClusterAPIInstallerRevision{
-		Name:       operatorv1alpha1.RevisionName(revisionName),
-		Revision:   revisionNumber,
-		ContentID:  contentID,
-		Components: apiComponents,
-	}
-
-	clusterAPI.Status.Revisions = append(clusterAPI.Status.Revisions, newRevision)
-	clusterAPI.Status.DesiredRevision = operatorv1alpha1.RevisionName(revisionName)
-
-	if err := r.Status().Update(ctx, clusterAPI); err != nil {
-		return reconcileResult{progressingReason: conditionReasonEphemeralError, error: fmt.Errorf("updating ClusterAPI status: %w", err)}
+	newRevision, err := r.writeNewRevision(ctx, clusterAPI, latestAPIRevision, revision)
+	if err != nil {
+		return reconcileResult{progressingReason: conditionReasonEphemeralError, error: fmt.Errorf("writing new revision: %w", err)}
 	}
 
 	log.Info("Created new revision",
-		"revisionName", revisionName,
-		"revisionNumber", revisionNumber,
+		"revisionName", newRevision.Name,
+		"revisionIndex", newRevision.Revision,
 		"contentID", contentID)
 
 	return reconcileResult{}
+}
+
+func (r *RevisionController) writeNewRevision(ctx context.Context, clusterAPI *operatorv1alpha1.ClusterAPI, latestAPIRevision *operatorv1alpha1.ClusterAPIInstallerRevision, revision revisiongenerator.RenderedRevision) (*operatorv1alpha1.ClusterAPIInstallerRevision, error) {
+	// Calculate the next revision number.
+	var nextRevisionIndex int64 = 1
+	if latestAPIRevision != nil {
+		nextRevisionIndex = latestAPIRevision.Revision + 1
+	}
+
+	newRevision, err := revision.ToAPIRevision(r.ReleaseVersion, nextRevisionIndex)
+	if err != nil {
+		return nil, fmt.Errorf("error converting rendered revision to API revision: %w", err)
+	}
+
+	// XXX: This is wrong, because it will conflict with the installer
+	// controller. The resourceVersion will prevent incorrect behaviour, but we
+	// should convert this to SSA.
+	clusterAPI.Status.Revisions = append(clusterAPI.Status.Revisions, newRevision)
+	clusterAPI.Status.DesiredRevision = newRevision.Name
+	if err := r.Status().Update(ctx, clusterAPI); err != nil {
+		return nil, fmt.Errorf("updating ClusterAPI status: %w", err)
+	}
+
+	return &newRevision, nil
+}
+
+func (r *RevisionController) getPlatform(ctx context.Context) (configv1.PlatformType, error) {
+	infra := &configv1.Infrastructure{}
+	if err := r.Get(ctx, client.ObjectKey{Name: infrastructureName}, infra); err != nil {
+		return "", fmt.Errorf("fetching infrastructure: %w", err)
+	}
+
+	if infra.Status.PlatformStatus == nil {
+		return "", nil
+	}
+
+	return infra.Status.PlatformStatus.Type, nil
+}
+
+func getLatestRevision(revisions []operatorv1alpha1.ClusterAPIInstallerRevision) *operatorv1alpha1.ClusterAPIInstallerRevision {
+	var latest *operatorv1alpha1.ClusterAPIInstallerRevision
+	for i := range revisions {
+		rev := &revisions[i]
+		if latest == nil || rev.Revision > latest.Revision {
+			latest = rev
+		}
+	}
+
+	return latest
 }
 
 // buildComponentList builds an ordered list of provider components for the given platform.
 // Components are ordered by: core+global, core+platform, infra+global, infra+platform
 // Providers that don't match the current platform are filtered out.
 func (r *RevisionController) buildComponentList(platform configv1.PlatformType) []providerimages.ProviderImageManifests {
+	// Select only proviers that have either no platform restriction, or match the current platform.
 	componentsByPlatform := filterComponentsByPlatform(r.ProviderProfiles, platform)
 
+	// Sort components by install order, then platform, then name.
 	return slices.SortedStableFunc(componentsByPlatform, func(a, b providerimages.ProviderImageManifests) int {
 		// Sort by install order
 		if c := cmp.Compare(a.InstallOrder, b.InstallOrder); c != 0 {
 			return c
 		}
 
-		// Sort no platform before platform-specific when install order is the same
+		// Sort by platform within the same install order. This intentionally
+		// puts components with no platform before platform-specific components.
 		if c := cmp.Compare(a.OCPPlatform, b.OCPPlatform); c != 0 {
 			return c
 		}
@@ -257,17 +279,6 @@ func filterComponentsByPlatform(providers []providerimages.ProviderImageManifest
 			}
 		}
 	}
-}
-
-// calculateContentID calculates a SHA256 hash of all provider ContentID fields.
-func calculateContentID(providers []providerimages.ProviderImageManifests) string {
-	h := sha256.New()
-
-	for _, p := range providers {
-		h.Write([]byte(p.ContentID))
-	}
-
-	return hex.EncodeToString(h.Sum(nil))
 }
 
 // findLatestRevision returns the revision with the highest revision number, or nil if none exist.
