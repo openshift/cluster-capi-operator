@@ -28,47 +28,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
-	configv1 "github.com/openshift/api/config/v1"
-	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
-	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
 	"github.com/openshift/cluster-capi-operator/pkg/test"
-)
-
-const (
-	subResourceStatus = "status"
 )
 
 var (
 	testEnv *envtest.Environment
 	cfg     *rest.Config
 	cl      client.WithWatch
-
-	// Test fixtures - set by createFixtures.
-	infra           *configv1.Infrastructure
-	clusterAPI      *operatorv1alpha1.ClusterAPI
-	clusterOperator *configv1.ClusterOperator
-
-	defaultProviderImgs []providerimages.ProviderImageManifests = []providerimages.ProviderImageManifests{
-		{
-			ProviderMetadata: providerimages.ProviderMetadata{
-				Name:         "core",
-				InstallOrder: 10,
-			},
-			ContentID: "core-content-id",
-			ImageRef:  "registry.example.com/core@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-			Profile:   "default",
-		},
-		{
-			ProviderMetadata: providerimages.ProviderMetadata{
-				Name:         "infra-aws",
-				InstallOrder: 20,
-				OCPPlatform:  configv1.AWSPlatformType,
-			},
-			ContentID: "infra-aws-content-id",
-			ImageRef:  "registry.example.com/infra-aws@sha256:fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
-			Profile:   "default",
-		},
-	}
 )
 
 var defaultNodeTimeout = NodeTimeout(10 * time.Second)

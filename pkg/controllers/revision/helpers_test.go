@@ -18,6 +18,9 @@ package revision
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"path/filepath"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -152,6 +155,21 @@ func createFixtures(ctx context.Context, opts ...fixturesOption) {
 	}
 	Expect(cl.Create(ctx, clusterOperator)).To(Succeed())
 	cleanupObjs = append(cleanupObjs, clusterOperator)
+
+	By("creating manifest files for default provider images")
+	manifestDir, err := os.MkdirTemp("", "revision-test-manifests")
+	Expect(err).NotTo(HaveOccurred())
+	DeferCleanup(func() {
+		os.RemoveAll(manifestDir)
+	})
+
+	coreManifestPath := filepath.Join(manifestDir, "core-manifests.yaml")
+	Expect(os.WriteFile(coreManifestPath, []byte(configMapYAML("core-config")), 0644)).To(Succeed())
+	defaultProviderImgs[0].ManifestsPath = coreManifestPath
+
+	infraManifestPath := filepath.Join(manifestDir, "infra-aws-manifests.yaml")
+	Expect(os.WriteFile(infraManifestPath, []byte(configMapYAML("infra-config")), 0644)).To(Succeed())
+	defaultProviderImgs[1].ManifestsPath = infraManifestPath
 }
 
 func infraFixtureAddStatus(infra *configv1.Infrastructure) {
@@ -162,4 +180,23 @@ func infraFixtureAddStatus(infra *configv1.Infrastructure) {
 			Type: configv1.AWSPlatformType,
 		},
 	}
+}
+
+// configMapYAML returns a minimal valid ConfigMap YAML document.
+func configMapYAML(name string) string {
+	return fmt.Sprintf(`apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: %s
+  namespace: default
+data:
+  key: value`, name)
+}
+
+// writeTestManifestFile writes content to a file in dir and returns the path.
+func writeTestManifestFile(dir, filename, content string) string {
+	path := filepath.Join(dir, filename)
+	ExpectWithOffset(1, os.WriteFile(path, []byte(content), 0644)).To(Succeed())
+
+	return path
 }

@@ -75,7 +75,7 @@ func (r *RevisionController) Reconcile(ctx context.Context, _ ctrl.Request) (ctr
 
 	reconcileResult := r.reconcile(ctx, log)
 
-	if err := reconcileResult.WriteConditions(ctx, log, r.Client); err != nil {
+	if err := reconcileResult.WriteClusterOperatorConditions(ctx, log, r.Client); err != nil {
 		return ctrl.Result{}, errors.Join(reconcileResult.Error(), fmt.Errorf("failed to write conditions: %w", err))
 	}
 
