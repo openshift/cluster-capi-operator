@@ -39,6 +39,7 @@ import (
 
 	configv1 "github.com/openshift/api/config/v1"
 
+	"github.com/openshift/cluster-capi-operator/pkg/commoncmdoptions"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/capiinstaller"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/clusteroperator"
@@ -66,7 +67,7 @@ func main() {
 	scheme := runtime.NewScheme()
 	initScheme(scheme)
 
-	opts := util.InitCommonOptions(managerName, controllers.DefaultOperatorNamespace)
+	opts := commoncmdoptions.InitCommonOptions(managerName, controllers.DefaultOperatorNamespace)
 
 	imagesFile := flag.String(
 		"images-json",
@@ -97,7 +98,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := util.AddCommonChecks(mgr); err != nil {
+	if err := commoncmdoptions.AddCommonChecks(mgr); err != nil {
 		klog.Error(err, "unable to add common checks")
 		os.Exit(1)
 	}
@@ -115,7 +116,7 @@ func main() {
 	}
 }
 
-func setupControllers(ctx context.Context, mgr ctrl.Manager, opts *util.CommonOptions, imagesFile string) error {
+func setupControllers(ctx context.Context, mgr ctrl.Manager, opts *commoncmdoptions.CommonOptions, imagesFile string) error {
 	infra, err := util.GetInfra(ctx, mgr.GetAPIReader())
 	if err != nil {
 		return fmt.Errorf("unable to get infrastructure: %w", err)
@@ -173,7 +174,7 @@ func loadProviderImages(ctx context.Context, mgr ctrl.Manager, imagesFile string
 	return containerImages, providerProfiles, nil
 }
 
-func setupCapiInstallerController(mgr ctrl.Manager, opts *util.CommonOptions, platform configv1.PlatformType, containerImages map[string]string, providerProfiles []providerimages.ProviderImageManifests) error {
+func setupCapiInstallerController(mgr ctrl.Manager, opts *commoncmdoptions.CommonOptions, platform configv1.PlatformType, containerImages map[string]string, providerProfiles []providerimages.ProviderImageManifests) error {
 	applyClient, err := kubernetes.NewForConfig(mgr.GetConfig())
 	if err != nil {
 		return fmt.Errorf("unable to set up apply client: %w", err)
