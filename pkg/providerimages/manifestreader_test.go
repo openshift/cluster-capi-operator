@@ -81,8 +81,10 @@ func TestManifests(t *testing.T) {
 			}
 
 			var got []string
+
 			for doc, err := range p.Manifests() {
 				g.Expect(err).NotTo(HaveOccurred())
+
 				got = append(got, doc)
 			}
 
@@ -99,6 +101,7 @@ func TestManifests_FileNotFound(t *testing.T) {
 	}
 
 	var gotErr error
+
 	for _, err := range p.Manifests() {
 		if err != nil {
 			gotErr = err

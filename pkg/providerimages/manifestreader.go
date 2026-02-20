@@ -39,13 +39,16 @@ func (p *ProviderImageManifests) Manifests() iter.Seq2[string, error] {
 		defer f.Close()
 
 		reader := utilyaml.NewYAMLReader(bufio.NewReader(f))
+
 		for {
 			docBytes, err := reader.Read()
 			if err != nil {
 				if err == io.EOF {
 					return
 				}
+
 				yield("", err)
+
 				return
 			}
 
