@@ -54,6 +54,28 @@ func HaveCondition[T ~string](conditionType T) *ConditionMatcher {
 	}
 }
 
+// BeCondition returns a matcher that checks if a single condition struct has
+// the specified type. It shares all WithX methods with HaveCondition but
+// operates on a single condition rather than a slice.
+//
+// Supported condition types include:
+//   - configv1.ClusterOperatorStatusCondition
+//   - configv1apply.ClusterOperatorStatusConditionApplyConfiguration (or pointer)
+//   - metav1.Condition
+//   - Any struct with Type, Status, Reason, Message fields
+//
+// Usage:
+//
+//	Expect(cond).To(BeCondition("Progressing").
+//	    WithStatus(configv1.ConditionTrue).
+//	    WithReason("EphemeralError"))
+func BeCondition[T ~string](conditionType T) *ConditionMatcher {
+	return &ConditionMatcher{
+		conditionType: string(conditionType),
+		singleElement: true,
+	}
+}
+
 const (
 	conditionFieldType               = "Type"
 	conditionFieldStatus             = "Status"
@@ -62,10 +84,12 @@ const (
 	conditionFieldLastTransitionTime = "LastTransitionTime"
 )
 
-// ConditionMatcher is a Gomega matcher for condition slices.
+// ConditionMatcher is a Gomega matcher for condition structs.
 // It uses reflection to work with any condition-like struct.
+// Use HaveCondition to match within a slice, or BeCondition to match a single element.
 type ConditionMatcher struct {
 	conditionType          string
+	singleElement          bool
 	statusMatcher          types.GomegaMatcher
 	reasonMatcher          types.GomegaMatcher
 	messageMatcher         types.GomegaMatcher
@@ -144,24 +168,54 @@ func findCondition(conditionSlice reflect.Value, conditionType string) (reflect.
 
 // Match implements types.GomegaMatcher.
 func (m *ConditionMatcher) Match(actual interface{}) (bool, error) {
-	// Verify actual is a slice
 	actualValue := reflect.ValueOf(actual)
-	if actualValue.Kind() != reflect.Slice {
-		return false, fmt.Errorf("HaveCondition expects a slice of conditions, got %T", actual)
+
+	var condition reflect.Value
+
+	if m.singleElement {
+		condition = derefValue(actualValue)
+		if condition.Kind() != reflect.Struct {
+			return false, fmt.Errorf("BeCondition expects a condition struct, got %T", actual)
+		}
+
+		typeField := condition.FieldByName(conditionFieldType)
+		if !typeField.IsValid() {
+			return false, fmt.Errorf("value does not have a %s field", conditionFieldType)
+		}
+
+		if getStringValue(typeField) != m.conditionType {
+			m.failureField = conditionFieldType
+			m.failureActual = getStringValue(typeField)
+
+			return false, nil
+		}
+	} else {
+		if actualValue.Kind() != reflect.Slice {
+			return false, fmt.Errorf("HaveCondition expects a slice of conditions, got %T", actual)
+		}
+
+		var found bool
+		var err error
+
+		condition, found, err = findCondition(actualValue, m.conditionType)
+		if err != nil {
+			return false, err
+		}
+
+		if !found {
+			m.failureField = conditionFieldType
+			m.failureActual = nil
+
+			return false, nil
+		}
 	}
 
-	condition, found, err := findCondition(actualValue, m.conditionType)
-	if err != nil {
-		return false, err
-	}
+	return m.matchFields(condition)
+}
 
-	if !found {
-		m.failureField = conditionFieldType
-		m.failureActual = nil
-
-		return false, nil
-	}
-
+// matchFields checks the Status, Reason, Message, and LastTransitionTime fields
+// of a resolved condition struct against any configured sub-matchers.
+func (m *ConditionMatcher) matchFields(condition reflect.Value) (bool, error) {
 	for _, matchField := range []struct {
 		matcher types.GomegaMatcher
 		name    string
@@ -205,29 +259,39 @@ func (m *ConditionMatcher) Match(actual interface{}) (bool, error) {
 // FailureMessage implements types.GomegaMatcher.
 func (m *ConditionMatcher) FailureMessage(actual interface{}) string {
 	if m.failureField == conditionFieldType {
+		if m.singleElement {
+			return fmt.Sprintf("Expected condition to have Type %q, but got %q.\nCondition: %s",
+				m.conditionType, m.failureActual, format.Object(actual, 1))
+		}
+
 		return fmt.Sprintf("Expected conditions to contain a condition with Type %q, but it was not found.\nConditions: %s",
 			m.conditionType, format.Object(actual, 1))
 	}
 
-	return fmt.Sprintf("Conditions: %s\nCondition %q field %s mismatch:\n%s",
-		format.Object(actual, 1),
+	return fmt.Sprintf("Condition %q field %s mismatch:\n%s\nCondition: %s",
 		m.conditionType,
 		m.failureField,
-		m.failureExpectedMatcher.FailureMessage(m.failureActual))
+		m.failureExpectedMatcher.FailureMessage(m.failureActual),
+		format.Object(actual, 1))
 }
 
 // NegatedFailureMessage implements types.GomegaMatcher.
 func (m *ConditionMatcher) NegatedFailureMessage(actual interface{}) string {
 	if m.failureField == conditionFieldType {
+		if m.singleElement {
+			return fmt.Sprintf("Expected condition to NOT have Type %q, but it does.\nCondition: %s",
+				m.conditionType, format.Object(actual, 1))
+		}
+
 		return fmt.Sprintf("Expected conditions to NOT contain a condition with Type %q, but it was found.\nConditions: %s",
 			m.conditionType, format.Object(actual, 1))
 	}
 
-	return fmt.Sprintf("Conditions: %s\nCondition %q field %s matched when it should not have:\n%s",
-		format.Object(actual, 1),
+	return fmt.Sprintf("Condition %q field %s matched when it should not have:\n%s\nCondition: %s",
 		m.conditionType,
 		m.failureField,
-		m.failureExpectedMatcher.NegatedFailureMessage(m.failureActual))
+		m.failureExpectedMatcher.NegatedFailureMessage(m.failureActual),
+		format.Object(actual, 1))
 }
 
 // toMatcher converts a value to a GomegaMatcher.

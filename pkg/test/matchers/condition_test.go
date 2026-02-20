@@ -297,3 +297,90 @@ func TestHaveCondition_ApplyConfiguration(t *testing.T) {
 		WithReason("AsExpected").
 		WithMessage("Success"))
 }
+
+func TestBeCondition_SingleElement(t *testing.T) {
+	g := NewWithT(t)
+
+	cond := configv1.ClusterOperatorStatusCondition{
+		Type:    "Progressing",
+		Status:  configv1.ConditionTrue,
+		Reason:  "EphemeralError",
+		Message: "connection refused",
+	}
+
+	// Match by type
+	g.Expect(cond).To(BeCondition("Progressing"))
+	g.Expect(cond).ToNot(BeCondition("Degraded"))
+
+	// With status
+	g.Expect(cond).To(BeCondition("Progressing").WithStatus(configv1.ConditionTrue))
+	g.Expect(cond).ToNot(BeCondition("Progressing").WithStatus(configv1.ConditionFalse))
+
+	// With reason
+	g.Expect(cond).To(BeCondition("Progressing").WithReason("EphemeralError"))
+	g.Expect(cond).ToNot(BeCondition("Progressing").WithReason("AsExpected"))
+
+	// With message
+	g.Expect(cond).To(BeCondition("Progressing").WithMessage("connection refused"))
+	g.Expect(cond).To(BeCondition("Progressing").WithMessage(ContainSubstring("connection")))
+
+	// Chained
+	g.Expect(cond).To(BeCondition("Progressing").
+		WithStatus(configv1.ConditionTrue).
+		WithReason("EphemeralError").
+		WithMessage("connection refused"))
+}
+
+func TestBeCondition_ApplyConfiguration(t *testing.T) {
+	g := NewWithT(t)
+
+	now := metav1.Now()
+	cond := configv1apply.ClusterOperatorStatusCondition().
+		WithType("Degraded").
+		WithStatus(configv1.ConditionFalse).
+		WithReason("AsExpected").
+		WithMessage("Success").
+		WithLastTransitionTime(now)
+
+	g.Expect(cond).To(BeCondition("Degraded").
+		WithStatus(configv1.ConditionFalse).
+		WithReason("AsExpected").
+		WithMessage("Success").
+		WithLastTransitionTime(Equal(now)))
+
+	g.Expect(cond).ToNot(BeCondition("Progressing"))
+}
+
+func TestBeCondition_FailureMessages(t *testing.T) {
+	g := NewWithT(t)
+
+	cond := configv1.ClusterOperatorStatusCondition{
+		Type:   "Progressing",
+		Status: configv1.ConditionTrue,
+		Reason: "Working",
+	}
+
+	// Type mismatch
+	matcher := BeCondition("Degraded")
+	success, err := matcher.Match(cond)
+	g.Expect(err).ToNot(HaveOccurred())
+	g.Expect(success).To(BeFalse())
+	g.Expect(matcher.FailureMessage(cond)).To(ContainSubstring("Expected condition to have Type"))
+	g.Expect(matcher.FailureMessage(cond)).To(ContainSubstring("Degraded"))
+
+	// Status mismatch
+	matcher = BeCondition("Progressing").WithStatus(configv1.ConditionFalse)
+	success, err = matcher.Match(cond)
+	g.Expect(err).ToNot(HaveOccurred())
+	g.Expect(success).To(BeFalse())
+	g.Expect(matcher.FailureMessage(cond)).To(ContainSubstring("Status"))
+}
+
+func TestBeCondition_WrongType(t *testing.T) {
+	g := NewWithT(t)
+
+	matcher := BeCondition("Progressing")
+	_, err := matcher.Match("not a struct")
+	g.Expect(err).To(HaveOccurred())
+	g.Expect(err.Error()).To(ContainSubstring("BeCondition expects"))
+}
