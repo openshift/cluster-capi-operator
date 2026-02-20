@@ -103,12 +103,28 @@ func (m *ConditionMatcher) WithLastTransitionTime(expected interface{}) *Conditi
 	return m
 }
 
+// derefValue dereferences pointer and interface reflect.Values to reach the
+// underlying value. Returns the value unchanged if it is not a pointer or
+// interface. Returns an invalid reflect.Value if a nil pointer is encountered.
+func derefValue(v reflect.Value) reflect.Value {
+	for v.Kind() == reflect.Pointer || v.Kind() == reflect.Interface {
+		if v.IsNil() {
+			return reflect.Value{}
+		}
+
+		v = v.Elem()
+	}
+
+	return v
+}
+
 // findCondition searches for a condition with the given type in the slice.
 // Returns the condition's reflect.Value and true if found, or an invalid Value and false if not found.
 // Returns an error if the slice elements are not valid condition structs.
+// Slice elements may be structs or pointers to structs.
 func findCondition(conditionSlice reflect.Value, conditionType string) (reflect.Value, bool, error) {
 	for i := 0; i < conditionSlice.Len(); i++ {
-		elem := conditionSlice.Index(i)
+		elem := derefValue(conditionSlice.Index(i))
 		if elem.Kind() != reflect.Struct {
 			return reflect.Value{}, false, fmt.Errorf("condition element at index %d is not a struct", i)
 		}
@@ -161,7 +177,12 @@ func (m *ConditionMatcher) Match(actual interface{}) (bool, error) {
 				return false, fmt.Errorf("condition does not have a %s field", matchField.name)
 			}
 
-			fieldValue := field.Interface()
+			fieldVal := derefValue(field)
+			if !fieldVal.IsValid() {
+				return false, fmt.Errorf("condition field %s is nil", matchField.name)
+			}
+
+			fieldValue := fieldVal.Interface()
 
 			ok, err := matchField.matcher.Match(fieldValue)
 			if err != nil {
@@ -221,8 +242,11 @@ func toMatcher(v interface{}) types.GomegaMatcher {
 }
 
 // getStringValue converts a reflect.Value to its string representation.
-// This handles both plain strings and string-based types (like configv1.ClusterStatusConditionType).
+// This handles plain strings, string-based types (like configv1.ClusterStatusConditionType),
+// and pointers to these types.
 func getStringValue(v reflect.Value) string {
+	v = derefValue(v)
+
 	if v.Kind() == reflect.String {
 		return v.String()
 	}

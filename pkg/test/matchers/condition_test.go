@@ -21,9 +21,9 @@ import (
 	"time"
 
 	. "github.com/onsi/gomega"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	configv1 "github.com/openshift/api/config/v1"
+	configv1apply "github.com/openshift/client-go/config/applyconfigurations/config/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestHaveCondition_FindsByType(t *testing.T) {
@@ -246,4 +246,54 @@ func TestHaveCondition_Metav1Condition_WithLastTransitionTime(t *testing.T) {
 	// With transform for BeTemporally
 	g.Expect(conditions).To(HaveCondition("Ready").
 		WithLastTransitionTime(WithTransform(func(t metav1.Time) time.Time { return t.Time }, BeTemporally("~", now.Time, time.Second))))
+}
+
+// Tests for ClusterOperatorStatusConditionApplyConfiguration to verify matching
+// works with pointer slice elements and pointer struct fields.
+func TestHaveCondition_ApplyConfiguration(t *testing.T) {
+	g := NewWithT(t)
+
+	now := metav1.Now()
+	conditions := []*configv1apply.ClusterOperatorStatusConditionApplyConfiguration{
+		configv1apply.ClusterOperatorStatusCondition().
+			WithType("Progressing").
+			WithStatus(configv1.ConditionTrue).
+			WithReason("EphemeralError").
+			WithMessage("connection refused").
+			WithLastTransitionTime(now),
+		configv1apply.ClusterOperatorStatusCondition().
+			WithType("Degraded").
+			WithStatus(configv1.ConditionFalse).
+			WithReason("AsExpected").
+			WithMessage("Success"),
+	}
+
+	// Find by type
+	g.Expect(conditions).To(HaveCondition("Progressing"))
+	g.Expect(conditions).To(HaveCondition("Degraded"))
+	g.Expect(conditions).ToNot(HaveCondition("Available"))
+
+	// With status
+	g.Expect(conditions).To(HaveCondition("Progressing").WithStatus(configv1.ConditionTrue))
+	g.Expect(conditions).ToNot(HaveCondition("Progressing").WithStatus(configv1.ConditionFalse))
+
+	// With reason
+	g.Expect(conditions).To(HaveCondition("Progressing").WithReason("EphemeralError"))
+
+	// With message
+	g.Expect(conditions).To(HaveCondition("Progressing").WithMessage(ContainSubstring("connection")))
+
+	// With LastTransitionTime
+	g.Expect(conditions).To(HaveCondition("Progressing").WithLastTransitionTime(Equal(now)))
+
+	// Chained matchers
+	g.Expect(conditions).To(HaveCondition("Progressing").
+		WithStatus(configv1.ConditionTrue).
+		WithReason("EphemeralError").
+		WithMessage("connection refused"))
+
+	g.Expect(conditions).To(HaveCondition("Degraded").
+		WithStatus(configv1.ConditionFalse).
+		WithReason("AsExpected").
+		WithMessage("Success"))
 }
