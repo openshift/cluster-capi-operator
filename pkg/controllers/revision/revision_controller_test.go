@@ -309,18 +309,18 @@ var _ = Describe("RevisionController", Serial, func() {
 		Expect(initialClusterAPI.Status.Revisions).To(HaveLen(1))
 		originalRev1 := initialClusterAPI.Status.Revisions[0]
 
-		// Create manifest files with different content to produce a different contentID
-		manifestDir := GinkgoT().TempDir()
+		// Updated providers with different ContentIDs produce different manifest
+		// files (and thus a different revision contentID) automatically via
+		// newManagerWrapper -> ensureManifestPaths.
 		updatedProviderImgs := []providerimages.ProviderImageManifests{
 			{
 				ProviderMetadata: providerimages.ProviderMetadata{
 					Name:         "core",
 					InstallOrder: 10,
 				},
-				ContentID:     "core-content-id-2",
-				ImageRef:      "registry.example.com/core@sha256:1111111111111111111111111111111111111111111111111111111111111111",
-				Profile:       "default",
-				ManifestsPath: writeTestManifestFile(manifestDir, "core-manifests.yaml", configMapYAML("core-config-updated")),
+				ContentID: "core-content-id-2",
+				ImageRef:  "registry.example.com/core@sha256:1111111111111111111111111111111111111111111111111111111111111111",
+				Profile:   "default",
 			},
 			{
 				ProviderMetadata: providerimages.ProviderMetadata{
@@ -328,10 +328,9 @@ var _ = Describe("RevisionController", Serial, func() {
 					InstallOrder: 20,
 					OCPPlatform:  configv1.AWSPlatformType,
 				},
-				ContentID:     "infra-aws-content-id-2",
-				ImageRef:      "registry.example.com/infra-aws@sha256:2222222222222222222222222222222222222222222222222222222222222222",
-				Profile:       "default",
-				ManifestsPath: writeTestManifestFile(manifestDir, "infra-aws-manifests.yaml", configMapYAML("infra-config-updated")),
+				ContentID: "infra-aws-content-id-2",
+				ImageRef:  "registry.example.com/infra-aws@sha256:2222222222222222222222222222222222222222222222222222222222222222",
+				Profile:   "default",
 			},
 		}
 
@@ -504,6 +503,11 @@ var _ = Describe("RevisionController error handling", Serial, func() {
 	BeforeEach(func(ctx context.Context) {
 		createFixtures(ctx)
 
+		// Clone provider images and ensure manifest paths for direct reconcile use.
+		providerImgs := make([]providerimages.ProviderImageManifests, len(defaultProviderImgs))
+		copy(providerImgs, defaultProviderImgs)
+		ensureManifestPaths(providerImgs)
+
 		interceptorCl = interceptor.NewClient(cl, interceptor.Funcs{
 			SubResourceUpdate: func(ctx context.Context, c client.Client, subResourceName string, obj client.Object, opts ...client.SubResourceUpdateOption) error {
 				if _, ok := obj.(*operatorv1alpha1.ClusterAPI); ok && subResourceName == subResourceStatus {
@@ -516,7 +520,7 @@ var _ = Describe("RevisionController error handling", Serial, func() {
 
 		r = &RevisionController{
 			Client:           interceptorCl,
-			ProviderProfiles: defaultProviderImgs,
+			ProviderProfiles: providerImgs,
 			ReleaseVersion:   "4.18.0",
 		}
 	}, defaultNodeTimeout)

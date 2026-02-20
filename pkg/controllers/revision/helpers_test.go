@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -50,6 +51,10 @@ func newManagerWrapper(providerImgs []providerimages.ProviderImageManifests) *ma
 	// Don't use the BeforeEach context because it will be cancelled before the test starts.
 	ctx := context.Background()
 
+	// Clone so callers' slices are not mutated.
+	imgs := slices.Clone(providerImgs)
+	ensureManifestPaths(imgs)
+
 	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
 		Scheme: cl.Scheme(),
 		Controller: ctrlconfig.Controller{
@@ -60,7 +65,7 @@ func newManagerWrapper(providerImgs []providerimages.ProviderImageManifests) *ma
 
 	err = (&RevisionController{
 		Client:           mgr.GetClient(),
-		ProviderProfiles: providerImgs,
+		ProviderProfiles: imgs,
 		ReleaseVersion:   "4.18.0",
 	}).SetupWithManager(mgr)
 	Expect(err).NotTo(HaveOccurred())
@@ -155,21 +160,6 @@ func createFixtures(ctx context.Context, opts ...fixturesOption) {
 	}
 	Expect(cl.Create(ctx, clusterOperator)).To(Succeed())
 	cleanupObjs = append(cleanupObjs, clusterOperator)
-
-	By("creating manifest files for default provider images")
-	manifestDir, err := os.MkdirTemp("", "revision-test-manifests")
-	Expect(err).NotTo(HaveOccurred())
-	DeferCleanup(func() {
-		os.RemoveAll(manifestDir)
-	})
-
-	coreManifestPath := filepath.Join(manifestDir, "core-manifests.yaml")
-	Expect(os.WriteFile(coreManifestPath, []byte(configMapYAML("core-config")), 0644)).To(Succeed())
-	defaultProviderImgs[0].ManifestsPath = coreManifestPath
-
-	infraManifestPath := filepath.Join(manifestDir, "infra-aws-manifests.yaml")
-	Expect(os.WriteFile(infraManifestPath, []byte(configMapYAML("infra-config")), 0644)).To(Succeed())
-	defaultProviderImgs[1].ManifestsPath = infraManifestPath
 }
 
 func infraFixtureAddStatus(infra *configv1.Infrastructure) {
@@ -193,10 +183,19 @@ data:
   key: value`, name)
 }
 
-// writeTestManifestFile writes content to a file in dir and returns the path.
-func writeTestManifestFile(dir, filename, content string) string {
-	path := filepath.Join(dir, filename)
-	ExpectWithOffset(1, os.WriteFile(path, []byte(content), 0644)).To(Succeed())
+// ensureManifestPaths creates manifest files for providers that don't already
+// have a ManifestsPath set. Each provider's ContentID is used as the ConfigMap
+// name so that different providers produce different revision contentIDs.
+func ensureManifestPaths(providerImgs []providerimages.ProviderImageManifests) {
+	manifestDir, err := os.MkdirTemp("", "revision-test-manifests")
+	Expect(err).NotTo(HaveOccurred())
+	DeferCleanup(func() { os.RemoveAll(manifestDir) })
 
-	return path
+	for i := range providerImgs {
+		if providerImgs[i].ManifestsPath == "" {
+			path := filepath.Join(manifestDir, providerImgs[i].Name+"-manifests.yaml")
+			Expect(os.WriteFile(path, []byte(configMapYAML(providerImgs[i].ContentID)), 0644)).To(Succeed())
+			providerImgs[i].ManifestsPath = path
+		}
+	}
 }
