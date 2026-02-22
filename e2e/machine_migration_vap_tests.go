@@ -31,8 +31,8 @@ const (
 
 	// VAP error messages - from actual VAP policy
 	vapSpecLockedMessage          = "You may only modify spec.authoritativeAPI. Any other change inside .spec is not allowed. This is because status.authoritativeAPI is set to Cluster API."
-	vapProtectedLabelMessage      = "Cannot add, modify or delete any machine.openshift.io/* or kubernetes.io/* label. This is because status.authoritativeAPI is set to Cluster API."
-	vapProtectedAnnotationMessage = "Cannot add, modify or delete any machine.openshift.io/* annotation. This is because status.authoritativeAPI is set to Cluster API."
+	vapProtectedLabelMessage      = "Cannot add, modify or delete any machine.openshift.io/*, kubernetes.io/* or cluster.x-k8s.io/* label. This is because status.authoritativeAPI is set to Cluster API."
+	vapProtectedAnnotationMessage = "Cannot add, modify or delete any machine.openshift.io/* or cluster.x-k8s.io/* or clusters.x-k8s.io/* annotation. This is because status.authoritativeAPI is set to Cluster API."
 
 	// CAPI Machine VAP error messages - from openshift-cluster-api-prevent-setting-of-capi-fields-unsupported-by-mapi
 	vapCAPIForbiddenFieldMessage = "spec.%s is a forbidden field"
