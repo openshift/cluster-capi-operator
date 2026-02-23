@@ -59,7 +59,7 @@ func main() {
 		RenewDeadline:     util.RenewDeadline,
 		RetryPeriod:       util.RetryPeriod,
 		ResourceName:      "crd-compatibility-checker-leader",
-		ResourceNamespace: "openshift-cluster-api",
+		ResourceNamespace: "openshift-compatibility-requirements-operator",
 	}
 
 	healthAddr := flag.String(
