@@ -138,6 +138,10 @@ linters-settings:
     dot-import-whitelist:
       - "github.com/onsi/ginkgo/v2"
       - "github.com/onsi/gomega"
+  wrapcheck:
+    ignorePackageGlobs:
+    # return values from operatorstatus are intended to be used without wrapping
+    - "github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 issues:
   exclude:
     # Not all platforms are supported by this operator, those which aren't

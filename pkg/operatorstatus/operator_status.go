@@ -37,15 +37,6 @@ import (
 )
 
 const (
-	// ReasonAsExpected is the reason for the condition when the operator is in a normal state.
-	ReasonAsExpected = "AsExpected"
-
-	// ReasonInitializing is the reason for the condition when the operator is initializing.
-	ReasonInitializing = "Initializing"
-
-	// ReasonSyncing is the reason for the condition when the operator is syncing resources.
-	ReasonSyncing = "SyncingResources"
-
 	// ReasonSyncFailed is the reason for the condition when the operator failed to sync resources.
 	ReasonSyncFailed = "SyncingFailed"
 )
