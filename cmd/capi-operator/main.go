@@ -43,6 +43,7 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/capiinstaller"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/clusteroperator"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/revision"
 	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 )
@@ -158,7 +159,7 @@ func setupControllers(ctx context.Context, log logr.Logger, mgr ctrl.Manager, op
 		return err
 	}
 
-	if err := setupCapiInstallerController(mgr, opts, platform, containerImages, providerProfiles); err != nil {
+	if err := setupCapiInstallerController(mgr, log, opts, platform, containerImages, providerProfiles); err != nil {
 		return err
 	}
 
@@ -186,7 +187,7 @@ func loadProviderImages(ctx context.Context, mgr ctrl.Manager, imagesFile string
 	return containerImages, providerProfiles, nil
 }
 
-func setupCapiInstallerController(mgr ctrl.Manager, opts *commoncmdoptions.CommonOptions, platform configv1.PlatformType, containerImages map[string]string, providerProfiles []providerimages.ProviderImageManifests) error {
+func setupCapiInstallerController(mgr ctrl.Manager, log logr.Logger, opts *commoncmdoptions.CommonOptions, platform configv1.PlatformType, containerImages map[string]string, providerProfiles []providerimages.ProviderImageManifests) error {
 	applyClient, err := kubernetes.NewForConfig(mgr.GetConfig())
 	if err != nil {
 		return fmt.Errorf("unable to set up apply client: %w", err)
@@ -199,6 +200,15 @@ func setupCapiInstallerController(mgr ctrl.Manager, opts *commoncmdoptions.Commo
 
 	if err := setFeatureGatesEnvVars(); err != nil {
 		return fmt.Errorf("unable to set feature gates environment variables: %w", err)
+	}
+
+	if err := (&revision.RevisionController{
+		Client:           mgr.GetClient(),
+		ProviderProfiles: providerProfiles,
+		ReleaseVersion:   util.GetReleaseVersion(),
+	}).SetupWithManager(mgr); err != nil {
+		log.Error(err, "unable to create revision controller", "controller", "RevisionController")
+		return fmt.Errorf("unable to create revision controller: %w", err)
 	}
 
 	if err := (&capiinstaller.CapiInstallerController{
@@ -219,6 +229,11 @@ func setupCapiInstallerController(mgr ctrl.Manager, opts *commoncmdoptions.Commo
 
 // setFeatureGatesEnvVars sets the explicit values for the listed feature gates in the environment.
 // These will then be loaded by envsubst and templated into the applied CAPI manifests.
+//
+// XXX: This function is unrelated to feature gates. It sets a single
+// environment variable which applies only to the AWS provider. It is replaced
+// by logic in revisiongenerator, and can be removed when the capiinstaller
+// controller is removed.
 func setFeatureGatesEnvVars() error {
 	featureGates := map[string]string{
 		"EXP_BOOTSTRAP_FORMAT_IGNITION": "true",
