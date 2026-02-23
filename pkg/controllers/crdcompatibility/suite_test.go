@@ -153,7 +153,8 @@ func startManager(ctx context.Context, mgr ctrl.Manager) {
 	By("Registering webhooks")
 
 	for hook, err := range readWebhookManifests(
-		filepath.Join("..", "..", "..", "manifests", "0000_20_crd-compatibility-checker_06_webhooks.yaml"),
+		filepath.Join("bindata", "assets", "compatibility-requirements-compatibility-requirement-webhook.yaml"),
+		filepath.Join("bindata", "assets", "compatibility-requirements-custom-resource-definition-webhook.yaml"),
 	) {
 		Expect(err).NotTo(HaveOccurred(), "reading webhook manifests")
 		createTestObject(ctx, hook, "webhook "+hook.GetName())

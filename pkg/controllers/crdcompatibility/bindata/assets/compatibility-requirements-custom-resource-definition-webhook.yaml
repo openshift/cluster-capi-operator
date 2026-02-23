@@ -1,0 +1,34 @@
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: openshift-compatibility-requirements-apiextensions-k8s-io-v1-customresourcedefinition-validation
+  annotations:
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/feature-gate: "CRDCompatibilityRequirementOperator"
+    service.beta.openshift.io/inject-cabundle: "true"
+webhooks:
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: compatibility-requirements-controllers-validation-webhook-service
+      namespace: openshift-compatibility-requirements-operator
+      path: /validate-apiextensions-k8s-io-v1-customresourcedefinition
+  failurePolicy: Fail
+  matchPolicy: Equivalent
+  name: compatibilityrequirement.operator.openshift.io
+  rules:
+  - apiGroups:
+    - apiextensions.k8s.io
+    apiVersions:
+    - v1
+    operations:
+    - CREATE
+    - UPDATE
+    - DELETE
+    resources:
+    - customresourcedefinitions
+  sideEffects: None
