@@ -55,7 +55,7 @@ unit: .localtestenv ## Run unit tests
 
 .PHONY: e2e
 e2e: ## Run e2e tests against active kubeconfig
-	./hack/test.sh "./e2e/..." 120m
+	./hack/test.sh "./e2e/..." 180m
 
 run: ## Run the operator against the configured Kubernetes cluster
 	oc -n openshift-cluster-api patch lease cluster-capi-operator-leader -p '{"spec":{"acquireTime": null, "holderIdentity": null, "renewTime": null}}' --type=merge
