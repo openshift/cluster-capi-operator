@@ -44,6 +44,7 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/capiinstaller"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/clusteroperator"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/revision"
 	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 )
@@ -190,6 +191,15 @@ func setupCapiInstallerController(mgr ctrl.Manager, opts *commoncmdoptions.Commo
 		return fmt.Errorf("unable to set feature gates environment variables: %w", err)
 	}
 
+	if err := (&revision.RevisionController{
+		Client:           mgr.GetClient(),
+		ProviderProfiles: providerProfiles,
+		ReleaseVersion:   util.GetReleaseVersion(),
+	}).SetupWithManager(mgr); err != nil {
+		klog.Error(err, "unable to create revision controller", "controller", "RevisionController")
+		return fmt.Errorf("unable to create revision controller: %w", err)
+	}
+
 	if err := (&capiinstaller.CapiInstallerController{
 		ClusterOperatorStatusClient: opts.GetClusterOperatorStatusClient(mgr, platform, "installer"),
 		Scheme:                      mgr.GetScheme(),
@@ -208,6 +218,11 @@ func setupCapiInstallerController(mgr ctrl.Manager, opts *commoncmdoptions.Commo
 
 // setFeatureGatesEnvVars sets the explicit values for the listed feature gates in the environment.
 // These will then be loaded by envsubst and templated into the applied CAPI manifests.
+//
+// XXX: This function is unrelated to feature gates. It sets a single
+// environment variable which applies only to the AWS provider. It is replaced
+// by logic in revisiongenerator, and can be removed when the capiinstaller
+// controller is removed.
 func setFeatureGatesEnvVars() error {
 	featureGates := map[string]string{
 		"EXP_BOOTSTRAP_FORMAT_IGNITION": "true",

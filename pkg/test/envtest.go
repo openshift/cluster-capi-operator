@@ -42,10 +42,12 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	configv1 "github.com/openshift/api/config/v1"
 	clusteroperatorv1 "github.com/openshift/api/operator/v1"
+	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 )
 
 func init() {
 	utilruntime.Must(configv1.Install(scheme.Scheme))
+	utilruntime.Must(operatorv1alpha1.Install(scheme.Scheme))
 	utilruntime.Must(mapiv1.Install(scheme.Scheme))
 	utilruntime.Must(mapiv1beta1.Install(scheme.Scheme))
 	utilruntime.Must(clusteroperatorv1.Install(scheme.Scheme))
@@ -59,7 +61,8 @@ func init() {
 }
 
 // StartEnvTest starts a new test environment and returns a client and config.
-func StartEnvTest(testEnv *envtest.Environment) (*rest.Config, client.Client, error) {
+// The returned client implements client.WithWatch for use with interceptor clients.
+func StartEnvTest(testEnv *envtest.Environment) (*rest.Config, client.WithWatch, error) {
 	// Get the directory containing the openshift/api package.
 	openshiftAPIPath, err := getPackageDir(context.TODO(), "github.com/openshift/api")
 	if err != nil {
@@ -93,7 +96,8 @@ func StartEnvTest(testEnv *envtest.Environment) (*rest.Config, client.Client, er
 			path.Join(openshiftAPIPath, "machine", "v1beta1", "zz_generated.crd-manifests", "0000_10_machine-api_01_machinesets-CustomNoUpgrade.crd.yaml"),
 			path.Join(openshiftAPIPath, "machine", "v1beta1", "zz_generated.crd-manifests", "0000_10_machine-api_01_machines-CustomNoUpgrade.crd.yaml"),
 			path.Join(openshiftAPIPath, "config", "v1", "zz_generated.crd-manifests", "0000_00_cluster-version-operator_01_clusteroperators.crd.yaml"),
-			path.Join(openshiftAPIPath, "apiextensions", "v1alpha1", "zz_generated.crd-manifests", "0000_20_crd-compatibility-checker_01_compatibilityrequirements-CustomNoUpgrade.crd.yaml"),
+			path.Join(openshiftAPIPath, "apiextensions", "v1alpha1", "zz_generated.crd-manifests", "0000_20_crd-compatibility-checker_01_compatibilityrequirements.crd.yaml"),
+			path.Join(openshiftAPIPath, "operator", "v1alpha1", "zz_generated.crd-manifests", "0000_30_cluster-api_01_clusterapis.crd.yaml"),
 		},
 		ErrorIfPathMissing: true,
 	}
@@ -107,7 +111,7 @@ func StartEnvTest(testEnv *envtest.Environment) (*rest.Config, client.Client, er
 		return nil, nil, errors.New("envtest.Environment.Start() returned nil config")
 	}
 
-	cl, err := client.New(cfg, client.Options{Scheme: scheme.Scheme})
+	cl, err := client.NewWithWatch(cfg, client.Options{Scheme: scheme.Scheme})
 	if err != nil {
 		return nil, nil, err
 	}
