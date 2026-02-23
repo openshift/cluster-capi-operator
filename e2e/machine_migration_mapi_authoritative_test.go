@@ -29,6 +29,26 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 		var newCapiMachine *clusterv1.Machine
 		var newMapiMachine *mapiv1beta1.Machine
 
+		Context("With spec.authoritativeAPI: MachineAPI and existing CAPI Machine with that name", func() {
+			BeforeAll(func() {
+				newCapiMachine = createCAPIMachine(ctx, cl, mapiMachineAuthMAPIName)
+
+				DeferCleanup(func() {
+					By("Cleaning up machine resources")
+					cleanupMachineResources(
+						ctx,
+						cl,
+						[]*clusterv1.Machine{newCapiMachine},
+						[]*mapiv1beta1.Machine{},
+					)
+				})
+			})
+
+			It("should reject creation of MAPI Machine with same name as existing CAPI Machine", func() {
+				createSameNameMachineBlockedByVAPAuthMapi(ctx, cl, mapiMachineAuthMAPIName, mapiv1beta1.MachineAuthorityMachineAPI, "a Cluster API Machine with the same name already exists")
+			})
+		})
+
 		Context("With spec.authoritativeAPI: MachineAPI and no existing CAPI Machine with that name", func() {
 			BeforeAll(func() {
 				newMapiMachine = createMAPIMachineWithAuthority(ctx, cl, mapiMachineAuthMAPIName, mapiv1beta1.MachineAuthorityMachineAPI)
