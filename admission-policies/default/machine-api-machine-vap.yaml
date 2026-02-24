@@ -123,4 +123,4 @@ spec:
     
     # Don't allow setting the 'machine-template-hash' label. It should only be set by the CAPI controllers.
     - expression: "variables.newLabels[?'machine-template-hash'].orValue(null) == variables.oldLabels[?'machine-template-hash'].orValue(null)"
-      message: "Setting the 'machine-template-hash' label is forbidden.'"
+      message: "Setting the 'machine-template-hash' label is forbidden."

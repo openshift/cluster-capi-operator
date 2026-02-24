@@ -1,9 +1,14 @@
-FILE_DIFF=$(git ls-files -o --exclude-standard)
+rc=0
 
-if [ "$FILE_DIFF" != "" ]; then
+UNTRACKED=$(git ls-files -o --exclude-standard)
+if [ -n "$UNTRACKED" ]; then
   echo "Found untracked files:"
-  echo $FILE_DIFF
-  exit 1
+  echo "$UNTRACKED"
+  rc=1
 fi
 
-git diff --exit-code
+if ! git diff --exit-code; then
+  rc=1
+fi
+
+exit $rc

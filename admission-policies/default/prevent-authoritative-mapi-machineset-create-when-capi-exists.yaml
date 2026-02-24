@@ -19,10 +19,10 @@ spec:
       expression: 'object.metadata.name == params.metadata.name'
   # All validations must evaluate to true
   validations:
-   # Only allow creation of a Machine API MachineSet with the same name as an
-   # existing CAPI one if spec.authoritativeAPI == ClusterAPI
-  - expression: 'object.spec.authoritativeAPI == "ClusterAPI"'
-    messageExpression: "'Can\\'t create Machine API MachineSet ' + object.metadata.name + ' with spec.authoritativeAPI: ' + object.spec.?authoritativeAPI.orValue('<unset>') + ' because a Cluster API MachineSet with the same name already exists.'"
+    # Only allow creation of a Machine API MachineSet with the same name as an
+    # existing CAPI one if spec.authoritativeAPI == ClusterAPI
+    - expression: 'object.spec.authoritativeAPI == "ClusterAPI"'
+      messageExpression: "'Can\\'t create Machine API MachineSet ' + object.metadata.name + ' with spec.authoritativeAPI: ' + object.spec.?authoritativeAPI.orValue('<unset>') + ' because a Cluster API MachineSet with the same name already exists.'"
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding

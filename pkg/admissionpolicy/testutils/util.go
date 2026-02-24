@@ -23,11 +23,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
-
-	corev1 "k8s.io/api/core/v1"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -93,14 +90,11 @@ import (
 // ]
 
 const (
-	// ClusterAPIAdmissionPolicies is the name of the ClusterAPIAdmissionPolicies transport config map.
-	ClusterAPIAdmissionPolicies string = "cluster-api-admission-policies"
+	// DefaultProfile is the profile name for core/shared admission policies.
+	DefaultProfile = "default"
 
-	// ClusterAPICustomAdmissionPolicies is the name of the ClusterAPICustomAdmissionPolicies transport config map.
-	ClusterAPICustomAdmissionPolicies string = "cluster-api-custom-admission-policies"
-
-	// ClusterAPIAWSAdmissionPolicies is the name of the ClusterAPIAWSAdmissionPolicies transport config map.
-	ClusterAPIAWSAdmissionPolicies string = "cluster-api-aws-admission-policies"
+	// AWSProfile is the profile name for AWS-specific admission policies.
+	AWSProfile = "aws"
 
 	yamlChunk = 4096
 )
@@ -238,96 +232,57 @@ func UpdateVAPBindingNamespaces(binding *admissionregistrationv1.ValidatingAdmis
 	}
 }
 
-// LoadTransportConfigMaps loads admission policies from the transport config maps in
-// `manifests`, providing a map of []client.Object, one per transport config map.
+// LoadAdmissionPolicyProfiles loads admission policies from the generated
+// manifests.yaml files under capi-operator-manifests/, returning a map of
+// []client.Object keyed by profile name.
 //
 // This is intended to allow for loading the admission policies into envtest,
 // therefore it doesn't return errors, but Expects() them not to happen.
-//
-//nolint:gocognit,funlen
-func LoadTransportConfigMaps() map[string][]client.Object {
-	By("Unmarshalling the admission policy transport configmaps")
+func LoadAdmissionPolicyProfiles() map[string][]client.Object {
+	By("Loading admission policy profiles")
 
-	configMaps, err := os.Open("../../../manifests/0000_30_cluster-api_09_admission-policies.yaml")
-	Expect(err).WithOffset(1).ToNot(HaveOccurred())
-	DeferCleanup(func() {
-		Expect(configMaps.Close()).WithOffset(1).To(Succeed())
-	})
+	profiles := []string{DefaultProfile, AWSProfile}
+	result := map[string][]client.Object{}
 
-	decoder := yaml.NewYAMLOrJSONDecoder(configMaps, yamlChunk)
+	for _, profile := range profiles {
+		manifestPath := filepath.Join("..", "..", "..", "capi-operator-manifests", profile, "manifests.yaml")
 
-	// When we add more provider specific admission policies, we'll need to update this list.
-	// e.g for clusterAPI<Provider>AdmissionPolicies
+		data, err := os.Open(manifestPath) //nolint:gosec // path is constructed from known profile constants
+		Expect(err).WithOffset(1).ToNot(HaveOccurred(), "failed to open manifests.yaml for profile %q", profile)
+		DeferCleanup(func() {
+			Expect(data.Close()).To(Succeed())
+		})
 
-	// ClusterAPIAdmissionPolicies and ClusterAPIAWSAdmissionPolicies exist commented out in
-	// the admission policies manifest.
-	configMapByName := map[string]*corev1.ConfigMap{
-		// ClusterAPIAdmissionPolicies:       nil,
-		ClusterAPICustomAdmissionPolicies: nil,
-		ClusterAPIAWSAdmissionPolicies:    nil,
-	}
+		decoder := yaml.NewYAMLOrJSONDecoder(data, yamlChunk)
 
-	for {
-		var cm corev1.ConfigMap
-		if err := decoder.Decode(&cm); err != nil {
-			if errors.Is(err, io.EOF) {
-				break
-			}
+		var objs []client.Object
 
-			Expect(err).WithOffset(1).NotTo(HaveOccurred())
-		}
-
-		if _, want := configMapByName[cm.Name]; want {
-			configMapByName[cm.Name] = cm.DeepCopy()
-		}
-	}
-
-	// Assert we found everything we care about.
-	for name, cm := range configMapByName {
-		Expect(cm).WithOffset(1).NotTo(BeNil(), "expected ConfigMap %q in manifest", name)
-	}
-
-	By("Unmarshalling the admission policies in each configmap")
-
-	// each ConfigMap produces a list of client.Objects obtained from that configMap
-	mapObjs := map[string][]client.Object{}
-
-	for _, configMap := range configMapByName {
-		objs := []client.Object{}
-
-		if components, ok := configMap.Data["components"]; ok && len(components) > 0 { //nolint: nestif
-			policyDecoder := yaml.NewYAMLOrJSONDecoder(strings.NewReader(components), yamlChunk)
-
-			for {
-				var r runtime.RawExtension
-				if err := policyDecoder.Decode(&r); err != nil {
-					if errors.Is(err, io.EOF) {
-						break
-					}
-
-					Expect(err).WithOffset(1).NotTo(HaveOccurred())
+		for {
+			var r runtime.RawExtension
+			if err := decoder.Decode(&r); err != nil {
+				if errors.Is(err, io.EOF) {
+					break
 				}
-
-				if len(r.Raw) == 0 {
-					continue
-				}
-
-				o, _, err := scheme.Codecs.UniversalDeserializer().Decode(r.Raw, nil, nil)
 
 				Expect(err).WithOffset(1).NotTo(HaveOccurred())
+			}
 
-				// only keep objects that implement client.Object
-				if co, ok := o.(client.Object); ok {
-					objs = append(objs, co)
-				}
+			if len(r.Raw) == 0 {
+				continue
+			}
+
+			o, _, err := scheme.Codecs.UniversalDeserializer().Decode(r.Raw, nil, nil)
+			Expect(err).WithOffset(1).NotTo(HaveOccurred())
+
+			if co, ok := o.(client.Object); ok {
+				objs = append(objs, co)
 			}
 		}
 
-		// sets the client.Objects we've just extracted
-		mapObjs[configMap.GetName()] = objs
+		result[profile] = objs
 	}
 
-	return mapObjs
+	return result
 }
 
 // WarningCollector is to provide a way to collect

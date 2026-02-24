@@ -91,7 +91,7 @@ spec:
       API mirrored machine. This is because status.authoritativeAPI is set to Cluster
       API.
   - expression: variables.newLabels[?'machine-template-hash'].orValue(null) == variables.oldLabels[?'machine-template-hash'].orValue(null)
-    message: Setting the 'machine-template-hash' label is forbidden.'
+    message: Setting the 'machine-template-hash' label is forbidden.
   variables:
   - expression: object.metadata.?labels.orValue({})
     name: newLabels
@@ -331,7 +331,7 @@ spec:
       API mirrored machine. This is because status.authoritativeAPI is set to Machine
       API.
   - expression: variables.newLabels[?'machine-template-hash'].orValue(null) == variables.oldLabels[?'machine-template-hash'].orValue(null)
-    message: Setting the 'machine-template-hash' label is forbidden.'
+    message: Setting the 'machine-template-hash' label is forbidden.
   variables:
   - expression: object.metadata.?labels.orValue({})
     name: newLabels

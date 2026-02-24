@@ -108,11 +108,11 @@ var _ = Describe("MachineSet VAP Tests", func() {
 
 		capiMachineSet = capiMachineSetBuilder.Build()
 
-		By("Loading the transport config maps")
-		transportConfigMaps := admissiontestutils.LoadTransportConfigMaps()
+		By("Loading admission policy profiles")
+		admissionPolicies := admissiontestutils.LoadAdmissionPolicyProfiles()
 
-		By("Applying the objects found in clusterAPICustomAdmissionPolicies")
-		for _, obj := range transportConfigMaps[admissiontestutils.ClusterAPICustomAdmissionPolicies] {
+		By("Applying the default admission policies")
+		for _, obj := range admissionPolicies[admissiontestutils.DefaultProfile] {
 			newObj, ok := obj.DeepCopyObject().(client.Object)
 			Expect(ok).To(BeTrue())
 
