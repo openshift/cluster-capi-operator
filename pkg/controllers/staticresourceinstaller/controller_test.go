@@ -61,7 +61,7 @@ var _ = Describe("StaticResourceInstaller Controller", Ordered, ContinueOnFailur
 
 		It("should install webhook configurations when reconciled", func() {
 			By("Verifying that ValidatingWebhookConfigurations are created")
-			Eventually(kWithCtx(ctx).ObjectList(&admissionregistrationv1.ValidatingWebhookConfigurationList{}), 10*time.Second).Should(HaveField("Items", SatisfyAll(
+			Eventually(kWithCtx(ctx).ObjectList(&admissionregistrationv1.ValidatingWebhookConfigurationList{}), 10*time.Second).WithContext(ctx).Should(HaveField("Items", SatisfyAll(
 				ContainElement(HaveField("ObjectMeta.Name", Equal("openshift-compatibility-requirements-apiextensions-openshift-io-v1alpha1-compatibilityrequirement-validation"))),
 				ContainElement(HaveField("ObjectMeta.Name", Equal("openshift-compatibility-requirements-apiextensions-k8s-io-v1-customresourcedefinition-validation"))),
 			)))
@@ -78,10 +78,10 @@ var _ = Describe("StaticResourceInstaller Controller", Ordered, ContinueOnFailur
 
 			Eventually(kWithCtx(ctx).Update(vwc, func() {
 				vwc.Webhooks[0].ClientConfig.Service.Name = "test"
-			})).Should(Succeed())
+			})).WithContext(ctx).Should(Succeed())
 
 			By("Verifying that the resource is reset")
-			Eventually(kWithCtx(ctx).Object(vwc), 10*time.Second).Should(HaveField("Webhooks", ConsistOf(HaveField("ClientConfig.Service.Name", Not(Equal("test"))))))
+			Eventually(kWithCtx(ctx).Object(vwc), 10*time.Second).WithContext(ctx).Should(HaveField("Webhooks", ConsistOf(HaveField("ClientConfig.Service.Name", Not(Equal("test"))))))
 		})
 
 		It("should recreate the resource when it is deleted", func() {
@@ -98,7 +98,7 @@ var _ = Describe("StaticResourceInstaller Controller", Ordered, ContinueOnFailur
 			Expect(cl.Delete(ctx, vwc)).To(Succeed())
 
 			By("Verifying that the resource is recreated")
-			Eventually(kWithCtx(ctx).Object(vwc), 10*time.Second).Should(HaveField("ObjectMeta.UID", Not(Equal(originalUID))))
+			Eventually(kWithCtx(ctx).Object(vwc), 10*time.Second).WithContext(ctx).Should(HaveField("ObjectMeta.UID", Not(Equal(originalUID))))
 		})
 	})
 })

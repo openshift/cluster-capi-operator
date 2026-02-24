@@ -32,7 +32,7 @@ import (
 func waitForAdmitted(ctx context.Context, requirement *apiextensionsv1alpha1.CompatibilityRequirement) {
 	GinkgoHelper()
 	By("Waiting for the CompatibilityRequirement to be admitted")
-	Eventually(kWithCtx(ctx).Object(requirement)).Should(SatisfyAll(
+	Eventually(kWithCtx(ctx).Object(requirement)).WithContext(ctx).Should(SatisfyAll(
 		test.HaveCondition("Admitted", metav1.ConditionTrue),
 	))
 }
@@ -41,7 +41,7 @@ func waitForAdmitted(ctx context.Context, requirement *apiextensionsv1alpha1.Com
 func createTestObject(ctx context.Context, obj client.Object, desc string) {
 	GinkgoHelper()
 	By("Creating test " + desc)
-	Eventually(func() error { return cl.Create(ctx, obj) }).Should(Succeed())
+	Eventually(func() error { return cl.Create(ctx, obj) }).WithContext(ctx).Should(Succeed())
 	GinkgoWriter.Println("Created " + desc + " " + obj.GetName())
 
 	deferCleanupTestObject(obj, desc)
@@ -51,7 +51,7 @@ func createTestObject(ctx context.Context, obj client.Object, desc string) {
 func deferCleanupTestObject(testObject client.Object, desc string) {
 	DeferCleanup(func(ctx context.Context) {
 		By("Deleting test " + desc + " " + testObject.GetName())
-		Eventually(tryDelete(ctx, testObject)).Should(test.BeK8SNotFound())
+		Eventually(tryDelete(ctx, testObject)).WithContext(ctx).Should(test.BeK8SNotFound())
 	})
 }
 
