@@ -1,0 +1,110 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: cluster-api-machine-vap
+spec:
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: openshift-cluster-api
+  paramRef:
+    namespace: openshift-machine-api
+    # We 'Allow' here as we don't want to block CAPI Machine functionality
+    # when no MAPI machine (param) exists. This might happen when a user
+    # wants to not use MAPI, or is migrating.
+    parameterNotFoundAction: Allow
+    selector: {}
+  policyName: cluster-api-machine-vap
+  validationActions: [Deny]
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: cluster-api-machine-vap
+spec:
+  failurePolicy: Fail
+
+  paramKind:
+    apiVersion: machine.openshift.io/v1beta1
+    kind: Machine
+
+  matchConstraints:
+    resourceRules:
+    - apiGroups:   ["cluster.x-k8s.io"]
+      apiVersions: ["v1beta2"]
+      operations:  ["UPDATE"]
+      resources:   ["machines"]
+
+  # Requests must satisfy every matchCondition to reach the validations
+  matchConditions:
+    - name: check-only-non-service-account-requests
+      expression: >-
+        !(request.userInfo.username in [
+            "system:serviceaccount:openshift-machine-api:machine-api-controllers",
+            "system:serviceaccount:openshift-cluster-api:capi-controllers"
+        ])
+    - name: check-param-match
+      expression: 'object.metadata.name == params.metadata.name'
+    - name: check-authoritativeAPI-machineapi
+      expression: "params.?status.authoritativeAPI.orValue(\"\") == \"MachineAPI\""
+  variables:
+    # label maps
+    - name: newLabels
+      expression: "object.metadata.?labels.orValue({})"
+    - name: oldLabels
+      expression: "oldObject.metadata.?labels.orValue({})"
+    - name: paramLabels
+      expression: "params.metadata.?labels.orValue({})"
+
+    # annotation maps
+    - name: newAnn
+      expression: "object.metadata.?annotations.orValue({})"
+    - name: oldAnn
+      expression: "oldObject.metadata.?annotations.orValue({})"
+
+  # All validations must evaluate to TRUE
+  validations:
+    # Only spec.authoritativeAPI may change
+    - expression: "object.spec == oldObject.spec"
+      message:  "Changing .spec is not allowed. This is because status.authoritativeAPI is set to Machine API."
+
+    # Guard machine.openshift.io/* and kubernetes.io/*  and cluster.x-k8s.io/* labels
+    - expression: >
+        !(
+          variables.newLabels.exists(k,
+              (k.startsWith('machine.openshift.io') || k.startsWith('kubernetes.io') || k.contains('cluster.x-k8s.io/')) &&
+              (variables.oldLabels[?k].orValue(null) != variables.newLabels[k])
+          ) ||
+          variables.oldLabels.exists(k,
+              (k.startsWith('machine.openshift.io') || k.startsWith('kubernetes.io') || k.contains('cluster.x-k8s.io/')) &&
+              !(k in variables.newLabels)
+          )
+        )
+      message: "Cannot add, modify or delete any machine.openshift.io/*, kubernetes.io/* or cluster.x-k8s.io/* label. This is because status.authoritativeAPI is set to Machine API."
+
+    # Guard machine.openshift.io/* and cluster.x-k8s.io/* and clusters.x-k8s.io/* annotations
+    - expression: >
+        !(
+          variables.newAnn.exists(k,
+              (k.startsWith('machine.openshift.io') || k.contains('cluster.x-k8s.io') || k.contains('clusters.x-k8s.io')) &&
+              (variables.oldAnn[?k].orValue(null) != variables.newAnn[k])
+          ) ||
+          variables.oldAnn.exists(k,
+              (k.startsWith('machine.openshift.io') || k.contains('cluster.x-k8s.io') || k.contains('clusters.x-k8s.io')) &&
+              !(k in variables.newAnn)
+          )
+        )
+      message: "Cannot add, modify or delete any machine.openshift.io/* or cluster.x-k8s.io/* or clusters.x-k8s.io/* annotation. This is because status.authoritativeAPI is set to Machine API."
+
+    # Param-controlled labels (labels on the MAPI machine) may change only to match the value on the MAPI Machine
+    - expression: >
+        variables.paramLabels.all(
+          k,
+          variables.newLabels[?k].orValue(null) == variables.oldLabels[?k].orValue(null) ||
+          variables.newLabels[?k].orValue(null) == variables.paramLabels[k]
+        )
+      message: "Cannot modify a Machine API controlled label except to match the Machine API mirrored machine. This is because status.authoritativeAPI is set to Machine API."
+    
+    # Don't allow setting the 'machine-template-hash' label. It should only be set by the CAPI controllers.
+    - expression: "variables.newLabels[?'machine-template-hash'].orValue(null) == variables.oldLabels[?'machine-template-hash'].orValue(null)"
+      message: "Setting the 'machine-template-hash' label is forbidden.'"

@@ -12,7 +12,7 @@ ifeq ($(HOME), /)
 HOME = /tmp/kubebuilder-testing
 endif
 
-.PHONY: help all verify test build operator migration manifests-gen unit e2e run fmt vet lint vendor image push aws-cluster azure-cluster gcp-cluster powervs-cluster vsphere-cluster
+.PHONY: help all verify test build operator migration manifests-gen ocp-manifests unit e2e run fmt vet lint vendor image push aws-cluster azure-cluster gcp-cluster powervs-cluster vsphere-cluster
 .DEFAULT_GOAL := build
 
 help: ## Display this help message
@@ -25,7 +25,7 @@ verify-%:
 	make $*
 	./hack/verify-diff.sh
 
-verify: fmt lint ## Run formatting and linting checks
+verify: fmt lint verify-ocp-manifests ## Run formatting and linting checks
 
 test: verify unit ## Run verification and unit tests
 
@@ -38,6 +38,21 @@ bin/:
 .PHONY: manifests-gen
 manifests-gen: | bin/ ## Build manifests-gen binary
 	cd manifests-gen && go build -o ../bin/manifests-gen && cd ..
+
+ocp-manifests: manifests-gen ## Generate admission policy profiles for image embedding
+	./bin/manifests-gen \
+		--manifests-path ./capi-operator-manifests \
+		--profile-name default \
+		--kustomize-dir ./admission-policies/default \
+		--name cluster-capi-operator \
+		--install-order 30
+	./bin/manifests-gen \
+		--manifests-path ./capi-operator-manifests \
+		--profile-name aws \
+		--kustomize-dir ./admission-policies/aws \
+		--name cluster-capi-operator \
+		--platform AWS \
+		--install-order 30
 
 bin/%: | bin/ FORCE
 	go build -o "$@" "./cmd/$*"

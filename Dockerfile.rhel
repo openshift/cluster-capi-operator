@@ -10,5 +10,6 @@ COPY --from=builder /go/src/github.com/openshift/cluster-capi-operator/bin/machi
 COPY --from=builder /go/src/github.com/openshift/cluster-capi-operator/bin/crd-compatibility-checker .
 
 COPY ./manifests /manifests
+COPY ./capi-operator-manifests /capi-operator-manifests
 
 LABEL io.openshift.release.operator true

@@ -1,0 +1,3 @@
+installOrder: 30
+name: cluster-capi-operator
+ocpPlatform: AWS

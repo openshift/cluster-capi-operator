@@ -1,0 +1,72 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: openshift-mapi-authoritative-api-transition-requires-capi-infrastructure-ready-and-not-deleting
+spec:
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: openshift-machine-api
+  paramRef:
+    namespace: openshift-cluster-api
+    # We 'Allow' here as we don't want to block MAPI Machine
+    # functionality when no CAPI machine (param) exists.
+    # This might happen when the synchronisation controller first
+    # is installed or when an unmigrateable machine is encountered.
+    parameterNotFoundAction: Allow
+    selector: {}
+  policyName: openshift-mapi-authoritative-api-transition-requires-capi-infrastructure-ready-and-not-deleting
+  validationActions: [Deny]
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: openshift-mapi-authoritative-api-transition-requires-capi-infrastructure-ready-and-not-deleting
+spec:
+  failurePolicy: Fail
+
+  paramKind:
+    apiVersion: cluster.x-k8s.io/v1beta2
+    kind: Machine
+
+  matchConstraints:
+    resourceRules:
+    - apiGroups:   ["machine.openshift.io"]
+      apiVersions: ["v1beta1"]
+      operations:  ["UPDATE"]
+      resources:   ["machines"]
+
+  # Requests must satisfy every matchCondition to reach the validations
+  matchConditions:
+    - name: check-only-non-service-account-requests
+      expression: >-
+        !(request.userInfo.username in [
+            "system:serviceaccount:openshift-machine-api:machine-api-controllers",
+            "system:serviceaccount:openshift-cluster-api:capi-controllers"
+        ])
+    - name: check-param-match
+      expression: 'object.metadata.name == params.metadata.name'
+
+  variables:
+    - name: authAPIChanged
+      expression: oldObject.spec.authoritativeAPI != object.spec.authoritativeAPI
+
+    - name: capiInfraProvisioned
+      expression: params.?status.?initialization.?infrastructureProvisioned.orValue(false)
+
+    - name: capiDeleting
+      expression: has(params.metadata.deletionTimestamp)
+
+  # All validations must evaluate to TRUE
+  validations:
+    # Don't allow changing the AuthoritativeAPI if the CAPI Machine mirror infrastructureProvisioned is not true
+    - name: block-when-not-infraProvisioned
+      expression: >
+        !(variables.authAPIChanged && !variables.capiInfraProvisioned)
+      message: "spec.authoritativeAPI may only be updated when the Cluster API Machine's status.initialization.infrastructureProvisioned is true."
+
+    # Don't allow changing the AuthoritativeAPI if the CAPI Machine mirror is deleting
+    - name: block-when-capi-deleting
+      expression: >
+        !(variables.authAPIChanged && variables.capiDeleting)
+      message: "spec.authoritativeAPI cannot be modified while the corresponding CAPI Machine is being deleted (metadata.deletionTimestamp is set)."
