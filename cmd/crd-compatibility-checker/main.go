@@ -19,6 +19,7 @@ import (
 
 	"github.com/spf13/pflag"
 
+	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -28,7 +29,11 @@ import (
 	klog "k8s.io/klog/v2"
 
 	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
+	operatorv1 "github.com/openshift/api/operator/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility"
+	crdcompatibilitybindata "github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility/bindata"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility/crdvalidation"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/staticresourceinstaller"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 
 	capiflags "sigs.k8s.io/cluster-api/util/flags"
@@ -39,8 +44,10 @@ import (
 
 func initScheme(scheme *runtime.Scheme) {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
+	utilruntime.Must(admissionregistrationv1.AddToScheme(scheme))
 	utilruntime.Must(apiextensionsv1.AddToScheme(scheme))
 	utilruntime.Must(apiextensionsv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(operatorv1.AddToScheme(scheme))
 }
 
 //nolint:funlen
@@ -54,7 +61,7 @@ func main() {
 		RenewDeadline:     util.RenewDeadline,
 		RetryPeriod:       util.RetryPeriod,
 		ResourceName:      "crd-compatibility-checker-leader",
-		ResourceNamespace: "openshift-cluster-api",
+		ResourceNamespace: "openshift-compatibility-requirements-operator",
 	}
 
 	healthAddr := flag.String(
@@ -125,6 +132,19 @@ func main() {
 	// Setup the CRD compatibility controller
 	if err := compatibilityRequirementReconciler.SetupWithManager(ctx, mgr); err != nil {
 		klog.Error(err, "unable to create controller", "controller", "CompatibilityRequirement")
+		os.Exit(1)
+	}
+
+	// Setup the validator for CustomResourceDefinition Create/Update/Delete events.
+	crdValidator := crdvalidation.NewValidator(mgr.GetClient())
+	if err := crdValidator.SetupWithManager(ctx, mgr); err != nil {
+		klog.Error(err, "unable to create controller", "controller", "CRDValidator")
+		os.Exit(1)
+	}
+
+	staticResourceInstaller := staticresourceinstaller.NewStaticResourceInstallerController(crdcompatibilitybindata.Assets)
+	if err := staticResourceInstaller.SetupWithManager(ctx, mgr); err != nil {
+		klog.Error(err, "unable to create controller", "controller", "StaticResourceInstaller")
 		os.Exit(1)
 	}
 

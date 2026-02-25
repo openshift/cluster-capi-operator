@@ -108,7 +108,6 @@ func awsProviderIDFuzzer(c randfill.Continue) string {
 	return "aws:///us-west-2a/i-" + strings.ReplaceAll(c.String(0), "/", "")
 }
 
-//nolint:funlen
 func awsMachineFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interface{} {
 	return []interface{}{
 		func(nit *awsv1.NetworkInterfaceType, c randfill.Continue) {

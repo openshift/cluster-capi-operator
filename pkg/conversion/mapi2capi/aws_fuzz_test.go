@@ -187,7 +187,6 @@ func fuzzAWSMachineSpecConfidentialComputePolicy(ccp *mapiv1beta1.AWSConfidentia
 	}
 }
 
-//nolint:funlen
 func (f *awsProviderFuzzer) FuzzerFuncsMachineSet(codecs runtimeserializer.CodecFactory) []interface{} {
 	return []interface{}{
 		func(nit *mapiv1beta1.AWSNetworkInterfaceType, c randfill.Continue) {

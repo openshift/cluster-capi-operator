@@ -21,16 +21,27 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
 	"github.com/openshift/cluster-capi-operator/pkg/test"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+// waitForAdmitted waits until a CompatibilityRequirement has the Admitted condition set to True.
+func waitForAdmitted(ctx context.Context, requirement *apiextensionsv1alpha1.CompatibilityRequirement) {
+	GinkgoHelper()
+	By("Waiting for the CompatibilityRequirement to be admitted")
+	Eventually(kWithCtx(ctx).Object(requirement)).WithContext(ctx).Should(SatisfyAll(
+		test.HaveCondition("Admitted", metav1.ConditionTrue),
+	))
+}
 
 // createTestObject creates a test object and defers its deletion.
 func createTestObject(ctx context.Context, obj client.Object, desc string) {
 	GinkgoHelper()
 	By("Creating test " + desc)
-	Eventually(func() error { return cl.Create(ctx, obj) }).Should(Succeed())
+	Eventually(func() error { return cl.Create(ctx, obj) }).WithContext(ctx).Should(Succeed())
 	GinkgoWriter.Println("Created " + desc + " " + obj.GetName())
 
 	deferCleanupTestObject(obj, desc)
@@ -40,7 +51,7 @@ func createTestObject(ctx context.Context, obj client.Object, desc string) {
 func deferCleanupTestObject(testObject client.Object, desc string) {
 	DeferCleanup(func(ctx context.Context) {
 		By("Deleting test " + desc + " " + testObject.GetName())
-		Eventually(tryDelete(ctx, testObject)).Should(test.BeK8SNotFound())
+		Eventually(tryDelete(ctx, testObject)).WithContext(ctx).Should(test.BeK8SNotFound())
 	})
 }
 

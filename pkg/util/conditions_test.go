@@ -26,7 +26,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-//nolint:funlen
 func TestSetMAPICondition(t *testing.T) {
 	t1 := time.Now().UTC().Truncate(time.Second).Add(-1 * time.Hour)
 
@@ -250,7 +249,6 @@ func TestSetMAPICondition(t *testing.T) {
 	}
 }
 
-//nolint:funlen
 func TestSetMAPIProviderCondition(t *testing.T) {
 	t1 := time.Now().UTC().Truncate(time.Second).Add(-1 * time.Hour)
 

@@ -49,6 +49,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/yaml"
 
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility/crdvalidation"
 	"github.com/openshift/cluster-capi-operator/pkg/test"
 )
 
@@ -120,6 +121,7 @@ func initManager(ctx context.Context, cfg *rest.Config, scheme *runtime.Scheme, 
 	Expect(err).ToNot(HaveOccurred(), "Manager should be created")
 
 	compatibilityRequirementReconciler := NewCompatibilityRequirementReconciler(mgr.GetClient())
+	crdValidator := crdvalidation.NewValidator(mgr.GetClient())
 
 	// controller-runtime stores controller names in a global which we can't
 	// clear between test runs. This causes name validation to fail every time
@@ -131,6 +133,7 @@ func initManager(ctx context.Context, cfg *rest.Config, scheme *runtime.Scheme, 
 	}
 
 	Expect(compatibilityRequirementReconciler.SetupWithManager(ctx, mgr, skipNameValidation)).To(Succeed(), "Reconciler should be setup with manager")
+	Expect(crdValidator.SetupWithManager(ctx, mgr, skipNameValidation)).To(Succeed(), "CRD Validator should be setup with manager")
 
 	return compatibilityRequirementReconciler, func() {
 		startManager(ctx, mgr)
@@ -150,7 +153,8 @@ func startManager(ctx context.Context, mgr ctrl.Manager) {
 	By("Registering webhooks")
 
 	for hook, err := range readWebhookManifests(
-		filepath.Join("..", "..", "..", "manifests", "0000_20_crd-compatibility-checker_06_webhooks.yaml"),
+		filepath.Join("bindata", "assets", "compatibility-requirements-compatibility-requirement-webhook.yaml"),
+		filepath.Join("bindata", "assets", "compatibility-requirements-custom-resource-definition-webhook.yaml"),
 	) {
 		Expect(err).NotTo(HaveOccurred(), "reading webhook manifests")
 		createTestObject(ctx, hook, "webhook "+hook.GetName())

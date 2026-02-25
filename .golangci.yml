@@ -148,9 +148,12 @@ issues:
     # Exclude some linters from running on tests files.
     - path: _test\.go|pkg/test/*
       linters:
-        - gocyclo
         - dupl
-        - gosec
-        - gochecknoglobals
         - err113
+        - forcetypeassert
+        - funlen
+        - gochecknoglobals
+        - gocyclo
+        - gosec
         - wrapcheck
+
