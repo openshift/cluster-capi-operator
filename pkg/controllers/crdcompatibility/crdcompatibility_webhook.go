@@ -192,17 +192,6 @@ func validateExcludedFields(fldPath *field.Path, compatibilityCRD *apiextensions
 func validateExcludedField(fldPath *field.Path, compatibilityCRD *apiextensionsv1.CustomResourceDefinition, excludedField apiextensionsv1alpha1.APIExcludedField) field.ErrorList {
 	errs := field.ErrorList{}
 
-	if len(excludedField.Versions) == 0 {
-		for _, schema := range compatibilityCRD.Spec.Versions {
-			err := validatePathExists(schema.Schema.OpenAPIV3Schema, strings.Split(excludedField.Path, "."))
-			if err != nil {
-				errs = append(errs, field.Invalid(fldPath.Child("path"), excludedField.Path, err.Error()))
-			}
-		}
-
-		return errs
-	}
-
 	for i, version := range excludedField.Versions {
 		found := false
 
