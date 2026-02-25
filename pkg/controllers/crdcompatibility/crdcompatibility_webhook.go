@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
@@ -28,6 +29,7 @@ import (
 	apiextensionsvalidation "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/validation"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/kubernetes/pkg/apis/admissionregistration"
 	admissionregistrationvalidation "k8s.io/kubernetes/pkg/apis/admissionregistration/validation"
@@ -36,6 +38,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
+	"github.com/openshift/cluster-capi-operator/pkg/util"
 )
 
 var (
@@ -151,7 +154,10 @@ func validateCompatibilitySchema(ctx context.Context, fldPath *field.Path, compa
 		return errs
 	}
 
-	errs = append(errs, validateExcludedFields(fldPath.Child("excludedFields"), compatibilityCRD, compatibilitySchema.ExcludedFields)...)
+	prunedCRDVersions := pruneSchemaVersions(compatibilityCRD, compatibilitySchema.RequiredVersions)
+
+	errs = append(errs, validateRequiredVersions(fldPath.Child("requiredVersions"), compatibilityCRD, compatibilitySchema.RequiredVersions)...)
+	errs = append(errs, validateExcludedFields(fldPath.Child("excludedFields"), compatibilityCRD, compatibilitySchema.ExcludedFields, prunedCRDVersions)...)
 
 	return errs
 }
@@ -179,17 +185,17 @@ func validateCompatibilitySchemaCustomResourceDefinition(ctx context.Context, fl
 	return compatibilityCRD, errs
 }
 
-func validateExcludedFields(fldPath *field.Path, compatibilityCRD *apiextensionsv1.CustomResourceDefinition, excludedFields []apiextensionsv1alpha1.APIExcludedField) field.ErrorList {
+func validateExcludedFields(fldPath *field.Path, compatibilityCRD *apiextensionsv1.CustomResourceDefinition, excludedFields []apiextensionsv1alpha1.APIExcludedField, prunedCRDVersions sets.Set[string]) field.ErrorList {
 	errs := field.ErrorList{}
 
 	for i, excludedField := range excludedFields {
-		errs = append(errs, validateExcludedField(fldPath.Index(i), compatibilityCRD, excludedField)...)
+		errs = append(errs, validateExcludedField(fldPath.Index(i), compatibilityCRD, excludedField, prunedCRDVersions)...)
 	}
 
 	return errs
 }
 
-func validateExcludedField(fldPath *field.Path, compatibilityCRD *apiextensionsv1.CustomResourceDefinition, excludedField apiextensionsv1alpha1.APIExcludedField) field.ErrorList {
+func validateExcludedField(fldPath *field.Path, compatibilityCRD *apiextensionsv1.CustomResourceDefinition, excludedField apiextensionsv1alpha1.APIExcludedField, prunedCRDVersions sets.Set[string]) field.ErrorList {
 	errs := field.ErrorList{}
 
 	for i, version := range excludedField.Versions {
@@ -213,6 +219,8 @@ func validateExcludedField(fldPath *field.Path, compatibilityCRD *apiextensionsv
 
 		if !found {
 			errs = append(errs, field.Invalid(fldPath.Child("versions").Index(i), version, fmt.Sprintf("version %s not found in compatibility schema", version)))
+		} else if !prunedCRDVersions.Has(string(version)) {
+			errs = append(errs, field.Invalid(fldPath.Child("versions").Index(i), version, fmt.Sprintf("version %s is pruned from the compatibility schema, should not be specified in excludedFields", version)))
 		}
 	}
 
@@ -253,4 +261,43 @@ func validatePathExists(schema *apiextensionsv1.JSONSchemaProps, path []string) 
 	}
 
 	return fmt.Errorf("%w: desired path %s", errPathNotFound, desiredPath)
+}
+
+func validateRequiredVersions(fldPath *field.Path, compatibilityCRD *apiextensionsv1.CustomResourceDefinition, requiredVersions apiextensionsv1alpha1.APIVersions) field.ErrorList {
+	errs := field.ErrorList{}
+
+	crdVersions := util.SliceMap(compatibilityCRD.Spec.Versions, func(v apiextensionsv1.CustomResourceDefinitionVersion) string { return v.Name })
+
+	for i, version := range requiredVersions.AdditionalVersions {
+		if !slices.Contains(crdVersions, string(version)) {
+			errs = append(errs, field.Invalid(fldPath.Child("additionalVersions").Index(i), version, fmt.Sprintf("version %s not found in compatibility schema", version)))
+		}
+	}
+
+	return errs
+}
+
+// pruneSchemaVersions returns a list of versions from the CRD schema that will be compared for compatibility.
+// This means any unserved versions (or served but not storage in the case of StorageOnly) will be removed from the list
+// unless they are explicitly listed in the additionalVersions list.
+func pruneSchemaVersions(compatibilityCRD *apiextensionsv1.CustomResourceDefinition, requiredVersions apiextensionsv1alpha1.APIVersions) sets.Set[string] {
+	prunedVersions := sets.New(util.SliceMap(requiredVersions.AdditionalVersions, func(v apiextensionsv1alpha1.APIVersionString) string { return string(v) })...)
+
+	for _, version := range compatibilityCRD.Spec.Versions {
+		switch requiredVersions.DefaultSelection {
+		case apiextensionsv1alpha1.APIVersionSetTypeStorageOnly:
+			if version.Storage {
+				prunedVersions.Insert(version.Name)
+			}
+		case apiextensionsv1alpha1.APIVersionSetTypeAllServed:
+			if version.Served {
+				prunedVersions.Insert(version.Name)
+			}
+		default:
+			// The API schema prevents anything other than StorageOnly or AllServed.
+			panic(fmt.Sprintf("unknown APIVersionSelectionType: %s", requiredVersions.DefaultSelection))
+		}
+	}
+
+	return prunedVersions
 }
