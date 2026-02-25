@@ -1,8 +1,23 @@
+// Copyright 2026 Red Hat, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package e2e
 
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -22,6 +37,8 @@ import (
 )
 
 func createCAPIMachine(ctx context.Context, cl client.Client, machineName string) *clusterv1.Machine {
+	GinkgoHelper()
+
 	Expect(machineName).NotTo(BeEmpty(), "Machine name cannot be empty")
 
 	workerLabelSelector := metav1.LabelSelector{
@@ -33,7 +50,7 @@ func createCAPIMachine(ctx context.Context, cl client.Client, machineName string
 		},
 	}
 
-	capiMachineList := capiframework.GetMachines(cl, &workerLabelSelector)
+	capiMachineList := capiframework.GetMachines(&workerLabelSelector)
 	// The test requires at least one existing CAPI machine to act as a reference for creating a new one.
 	Expect(capiMachineList).NotTo(BeEmpty(), "Should have found CAPI machines in the openshift-cluster-api namespace to use as a reference for creating a new one")
 
@@ -65,7 +82,7 @@ func createCAPIMachine(ctx context.Context, cl client.Client, machineName string
 		return cl.Create(ctx, newCapiMachine)
 	}, capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(), "Should have successfully created CAPI machine %s/%s", newCapiMachine.Namespace, newCapiMachine.Name)
 
-	referenceAWSMachine := capiframework.GetAWSMachine(cl, referenceCapiMachine.Name, capiframework.CAPINamespace)
+	referenceAWSMachine := capiframework.GetAWSMachine(referenceCapiMachine.Name, capiframework.CAPINamespace)
 	// Define the new awsmachine based on the reference.
 	newAWSMachine := &awsv1.AWSMachine{
 		TypeMeta: metav1.TypeMeta{
@@ -96,7 +113,10 @@ func createCAPIMachine(ctx context.Context, cl client.Client, machineName string
 }
 
 func createMAPIMachineWithAuthority(ctx context.Context, cl client.Client, machineName string, authority mapiv1beta1.MachineAuthority) *mapiv1beta1.Machine {
+	GinkgoHelper()
+
 	Expect(machineName).NotTo(BeEmpty(), "Machine name cannot be empty")
+
 	workerLabelSelector := metav1.LabelSelector{
 		MatchLabels: map[string]string{
 			"machine.openshift.io/cluster-api-machine-role": "worker",
@@ -140,28 +160,51 @@ func createMAPIMachineWithAuthority(ctx context.Context, cl client.Client, machi
 
 // verifyMachineRunning verifies that a machine reaches Running state using the machine object directly.
 func verifyMachineRunning(cl client.Client, machine client.Object) {
+	GinkgoHelper()
+
 	Expect(machine).NotTo(BeNil(), "Machine parameter cannot be nil")
 	Expect(machine.GetName()).NotTo(BeEmpty(), "Machine name cannot be empty")
-	Eventually(func(g Gomega) string {
+
+	switch machine.(type) {
+	case *clusterv1.Machine:
+		By(fmt.Sprintf("Verifying CAPI Machine %s reaches Running phase", machine.GetName()))
+	case *mapiv1beta1.Machine:
+		By(fmt.Sprintf("Verifying MAPI Machine %s reaches Running phase", machine.GetName()))
+	default:
+		Fail(fmt.Sprintf("unknown machine type: %T", machine))
+	}
+
+	Eventually(func() error {
 		switch m := machine.(type) {
 		case *clusterv1.Machine:
-			By("Verify the CAPI Machine is Running")
-			capiMachine, err := capiframework.GetMachineWithError(cl, m.GetName(), m.GetNamespace())
-			g.Expect(err).ToNot(HaveOccurred())
-			return string(capiMachine.Status.Phase)
+			capiMachine, err := capiframework.GetMachineWithError(m.GetName(), m.GetNamespace())
+			if err != nil {
+				return fmt.Errorf("get CAPI Machine %s: %w", m.GetName(), err)
+			}
+			if capiMachine.Status.Phase != string(clusterv1.MachinePhaseRunning) {
+				return fmt.Errorf("CAPI Machine %s: phase %q, want Running (conditions: %v)",
+					m.GetName(), capiMachine.Status.Phase, summarizeV1Beta2Conditions(capiMachine.Status.Conditions))
+			}
 		case *mapiv1beta1.Machine:
-			By("Verify the MAPI Machine is Running")
 			mapiMachine, err := mapiframework.GetMachine(cl, m.GetName())
-			g.Expect(err).ToNot(HaveOccurred())
-			return ptr.Deref(mapiMachine.Status.Phase, "")
-		default:
-			Fail(fmt.Sprintf("unknown machine type: %T", machine))
-			return ""
+			if err != nil {
+				return fmt.Errorf("get MAPI Machine %s: %w", m.GetName(), err)
+			}
+			phase := ptr.Deref(mapiMachine.Status.Phase, "")
+			if phase != "Running" {
+				return fmt.Errorf("MAPI Machine %s: phase %q, want Running (conditions: %v)",
+					m.GetName(), phase, summarizeMAPIConditions(mapiMachine.Status.Conditions))
+			}
 		}
-	}, capiframework.WaitLong, capiframework.RetryLong).Should(Equal("Running"), "Should have machine %s reach Running state", machine.GetName())
+
+		return nil
+	}, capiframework.WaitLong, capiframework.RetryLong).Should(Succeed(),
+		"Machine %s should reach Running state", machine.GetName())
 }
 
 func verifyMachineAuthoritative(mapiMachine *mapiv1beta1.Machine, authority mapiv1beta1.MachineAuthority) {
+	GinkgoHelper()
+
 	By(fmt.Sprintf("Verify the Machine authority is %s", authority))
 	Eventually(komega.Object(mapiMachine), capiframework.WaitMedium, capiframework.RetryMedium).Should(
 		HaveField("Status.AuthoritativeAPI", Equal(authority)),
@@ -170,7 +213,10 @@ func verifyMachineAuthoritative(mapiMachine *mapiv1beta1.Machine, authority mapi
 }
 
 func verifyMAPIMachineSynchronizedCondition(mapiMachine *mapiv1beta1.Machine, authority mapiv1beta1.MachineAuthority) {
+	GinkgoHelper()
+
 	By("Verify the MAPI Machine synchronized condition is True")
+
 	var expectedMessage string
 	switch authority {
 	case mapiv1beta1.MachineAuthorityMachineAPI:
@@ -202,20 +248,23 @@ func verifyMAPIMachineSynchronizedCondition(mapiMachine *mapiv1beta1.Machine, au
 // verifyResourceRemoved verifies that a resource has been removed.
 // This is a generic function that works with any client.Object type.
 func verifyResourceRemoved(resource client.Object) {
+	GinkgoHelper()
+
 	Expect(resource).NotTo(BeNil(), "Resource parameter cannot be nil")
 	Expect(resource.GetName()).NotTo(BeEmpty(), "Resource name cannot be empty")
-	gvk := resource.GetObjectKind().GroupVersionKind()
-	resourceType := gvk.Kind
 
-	By(fmt.Sprintf("Verifying the %s %s is removed", resourceType, resource.GetName()))
-	Eventually(komega.Get(resource), capiframework.WaitShort, capiframework.RetryShort).Should(WithTransform(apierrors.IsNotFound, BeTrue()), "Should have successfully removed %s %s", resourceType, resource.GetName())
+	By(fmt.Sprintf("Verifying the %T %s is removed", resource, resource.GetName()))
+	Eventually(komega.Get(resource), capiframework.WaitShort, capiframework.RetryShort).Should(WithTransform(apierrors.IsNotFound, BeTrue()), "Should have successfully removed %T %s", resource, resource.GetName())
 }
 
 // verifyMachinePausedCondition verifies the Paused condition for either MAPI or CAPI machines.
 // This unified function determines the machine type and expected pause state based on the authority.
 func verifyMachinePausedCondition(machine client.Object, authority mapiv1beta1.MachineAuthority) {
+	GinkgoHelper()
+
 	Expect(machine).NotTo(BeNil(), "Machine parameter cannot be nil")
 	Expect(machine.GetName()).NotTo(BeEmpty(), "Machine name cannot be empty")
+
 	var conditionMatcher types.GomegaMatcher
 
 	switch m := machine.(type) {
@@ -224,6 +273,7 @@ func verifyMachinePausedCondition(machine client.Object, authority mapiv1beta1.M
 		switch authority {
 		case mapiv1beta1.MachineAuthorityMachineAPI:
 			By("Verify the MAPI Machine is Unpaused")
+
 			conditionMatcher = SatisfyAll(
 				HaveField("Type", Equal(MAPIPausedCondition)),
 				HaveField("Status", Equal(corev1.ConditionFalse)),
@@ -232,6 +282,7 @@ func verifyMachinePausedCondition(machine client.Object, authority mapiv1beta1.M
 			)
 		case mapiv1beta1.MachineAuthorityClusterAPI:
 			By("Verify the MAPI Machine is Paused")
+
 			conditionMatcher = SatisfyAll(
 				HaveField("Type", Equal(MAPIPausedCondition)),
 				HaveField("Status", Equal(corev1.ConditionTrue)),
@@ -252,6 +303,7 @@ func verifyMachinePausedCondition(machine client.Object, authority mapiv1beta1.M
 		switch authority {
 		case mapiv1beta1.MachineAuthorityClusterAPI:
 			By("Verify the CAPI Machine is Unpaused")
+
 			conditionMatcher = SatisfyAll(
 				HaveField("Type", Equal(CAPIPausedCondition)),
 				HaveField("Status", Equal(metav1.ConditionFalse)),
@@ -259,6 +311,7 @@ func verifyMachinePausedCondition(machine client.Object, authority mapiv1beta1.M
 			)
 		case mapiv1beta1.MachineAuthorityMachineAPI:
 			By("Verify the CAPI Machine is Paused")
+
 			conditionMatcher = SatisfyAll(
 				HaveField("Type", Equal(CAPIPausedCondition)),
 				HaveField("Status", Equal(metav1.ConditionTrue)),
@@ -279,10 +332,13 @@ func verifyMachinePausedCondition(machine client.Object, authority mapiv1beta1.M
 }
 
 func cleanupMachineResources(ctx context.Context, cl client.Client, capiMachines []*clusterv1.Machine, mapiMachines []*mapiv1beta1.Machine) {
+	GinkgoHelper()
+
 	for _, m := range capiMachines {
 		if m == nil {
 			continue
 		}
+
 		By(fmt.Sprintf("Deleting CAPI Machine %s", m.Name))
 		capiframework.DeleteMachines(ctx, cl, capiframework.CAPINamespace, m)
 	}
@@ -291,45 +347,73 @@ func cleanupMachineResources(ctx context.Context, cl client.Client, capiMachines
 		if m == nil {
 			continue
 		}
+
 		By(fmt.Sprintf("Deleting MAPI Machine %s", m.Name))
-		mapiframework.DeleteMachines(ctx, cl, m)
+		Expect(mapiframework.DeleteMachines(ctx, cl, m)).To(Succeed())
 		mapiframework.WaitForMachinesDeleted(cl, m)
 	}
 }
 
 func updateMachineAuthoritativeAPI(mapiMachine *mapiv1beta1.Machine, newAuthority mapiv1beta1.MachineAuthority) {
+	GinkgoHelper()
+
 	Eventually(komega.Update(mapiMachine, func() {
 		mapiMachine.Spec.AuthoritativeAPI = newAuthority
 	}), capiframework.WaitShort, capiframework.RetryShort).Should(Succeed(), "Failed to update MAPI Machine AuthoritativeAPI to %s", newAuthority)
 }
 
-func verifyMachineSynchronizedGeneration(cl client.Client, mapiMachine *mapiv1beta1.Machine, authority mapiv1beta1.MachineAuthority) {
-	Eventually(komega.Object(mapiMachine), capiframework.WaitMedium, capiframework.RetryMedium).Should(
-		HaveField("Status.SynchronizedGeneration", Not(BeZero())),
-		"MAPI Machine SynchronizedGeneration should not be zero",
-	)
+func summarizeV1Beta2Conditions(conditions []metav1.Condition) string {
+	if len(conditions) == 0 {
+		return "none"
+	}
 
-	var expectedGeneration int64
-	var authoritativeMachineType string
+	var parts []string
+	for _, c := range conditions {
+		parts = append(parts, fmt.Sprintf("%s=%s", c.Type, c.Status))
+	}
+
+	return fmt.Sprintf("[%s]", strings.Join(parts, ", "))
+}
+
+func summarizeMAPIConditions(conditions []mapiv1beta1.Condition) string {
+	if len(conditions) == 0 {
+		return "none"
+	}
+
+	var parts []string
+	for _, c := range conditions {
+		parts = append(parts, fmt.Sprintf("%s=%s", c.Type, c.Status))
+	}
+
+	return fmt.Sprintf("[%s]", strings.Join(parts, ", "))
+}
+
+func verifyMachineSynchronizedGeneration(mapiMachine *mapiv1beta1.Machine, authority mapiv1beta1.MachineAuthority) {
+	GinkgoHelper()
 
 	switch authority {
 	case mapiv1beta1.MachineAuthorityMachineAPI:
-		authoritativeMachineType = "MAPI"
-		expectedGeneration = mapiMachine.Generation
+		Eventually(func(g Gomega) {
+			g.Expect(komega.Get(mapiMachine)()).To(Succeed())
+			g.Expect(mapiMachine.Status.SynchronizedGeneration).NotTo(BeZero())
+			g.Expect(mapiMachine.Status.SynchronizedGeneration).To(Equal(mapiMachine.Generation),
+				"MAPI SynchronizedGeneration (%d) should equal MAPI Generation (%d)",
+				mapiMachine.Status.SynchronizedGeneration, mapiMachine.Generation)
+		}, capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed())
 	case mapiv1beta1.MachineAuthorityClusterAPI:
-		authoritativeMachineType = "CAPI"
-		capiMachine := capiframework.GetMachine(cl, mapiMachine.Name, capiframework.CAPINamespace)
-		Eventually(komega.Object(capiMachine)).Should(HaveField("Generation", Not(BeZero())))
-		expectedGeneration = capiMachine.Generation
+		capiMachine := &clusterv1.Machine{
+			ObjectMeta: metav1.ObjectMeta{Name: mapiMachine.Name, Namespace: capiframework.CAPINamespace},
+		}
+
+		Eventually(func(g Gomega) {
+			g.Expect(komega.Get(mapiMachine)()).To(Succeed())
+			g.Expect(komega.Get(capiMachine)()).To(Succeed())
+			g.Expect(mapiMachine.Status.SynchronizedGeneration).NotTo(BeZero())
+			g.Expect(mapiMachine.Status.SynchronizedGeneration).To(Equal(capiMachine.Generation),
+				"MAPI SynchronizedGeneration (%d) should equal CAPI Generation (%d)",
+				mapiMachine.Status.SynchronizedGeneration, capiMachine.Generation)
+		}, capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed())
 	default:
 		Fail(fmt.Sprintf("unknown authoritativeAPI type: %v", authority))
 	}
-
-	By(fmt.Sprintf("Verifying MAPI Machine SynchronizedGeneration (%d) equals %s Machine Generation (%d)",
-		mapiMachine.Status.SynchronizedGeneration, authoritativeMachineType, expectedGeneration))
-
-	Eventually(komega.Object(mapiMachine), capiframework.WaitMedium, capiframework.RetryMedium).Should(
-		HaveField("Status.SynchronizedGeneration", Equal(expectedGeneration)),
-		fmt.Sprintf("MAPI Machine SynchronizedGeneration should equal %s Machine Generation (%d)", authoritativeMachineType, expectedGeneration),
-	)
 }

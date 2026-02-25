@@ -1,3 +1,17 @@
+// Copyright 2026 Red Hat, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package e2e
 
 import (
@@ -11,10 +25,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	yaml "sigs.k8s.io/yaml"
 
 	configv1 "github.com/openshift/api/config/v1"
-	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	bmv1alpha1 "github.com/openshift/cluster-api-provider-baremetal/pkg/apis/baremetal/v1alpha1"
 	"github.com/openshift/cluster-capi-operator/e2e/framework"
 )
@@ -32,7 +44,7 @@ var _ = Describe("Cluster API Baremetal MachineSet", Ordered, func() {
 		if platform != configv1.BareMetalPlatformType {
 			Skip("Skipping Baremetal E2E tests")
 		}
-		mapiMachineSpec = getBaremetalMAPIProviderSpec(cl)
+		mapiMachineSpec = framework.GetMAPIProviderSpec[bmv1alpha1.BareMetalMachineProviderSpec](ctx, cl)
 	})
 
 	AfterEach(func() {
@@ -42,7 +54,7 @@ var _ = Describe("Cluster API Baremetal MachineSet", Ordered, func() {
 			Skip("Skipping Baremetal E2E tests")
 		}
 		framework.DeleteMachineSets(ctx, cl, machineSet)
-		framework.WaitForMachineSetsDeleted(cl, machineSet)
+		framework.WaitForMachineSetsDeleted(machineSet)
 		framework.DeleteObjects(ctx, cl, baremetalMachineTemplate)
 	})
 
@@ -69,11 +81,12 @@ var _ = Describe("Cluster API Baremetal MachineSet", Ordered, func() {
 			"worker-user-data-managed",
 		))
 
-		framework.WaitForMachineSet(cl, machineSet.Name, machineSet.Namespace)
+		framework.WaitForMachineSet(ctx, cl, machineSet.Name, machineSet.Namespace)
 	})
 })
 
 func waitForBaremetalHostState(cl client.Client, key client.ObjectKey, state bmov1alpha1.ProvisioningState) {
+	GinkgoHelper()
 	By(fmt.Sprintf("waiting for baremetal host to become %s", state))
 
 	Eventually(func() error {
@@ -90,24 +103,10 @@ func waitForBaremetalHostState(cl client.Client, key client.ObjectKey, state bmo
 
 		return nil
 	}, framework.WaitOverLong, framework.RetryLong).Should(Succeed())
-
-}
-
-func getBaremetalMAPIProviderSpec(cl client.Client) *bmv1alpha1.BareMetalMachineProviderSpec {
-	machineSetList := &mapiv1beta1.MachineSetList{}
-	Expect(cl.List(ctx, machineSetList, client.InNamespace(framework.MAPINamespace))).To(Succeed())
-
-	Expect(machineSetList.Items).ToNot(HaveLen(0))
-	machineSet := machineSetList.Items[0]
-	Expect(machineSet.Spec.Template.Spec.ProviderSpec.Value).ToNot(BeNil())
-
-	providerSpec := &bmv1alpha1.BareMetalMachineProviderSpec{}
-	Expect(yaml.Unmarshal(machineSet.Spec.Template.Spec.ProviderSpec.Value.Raw, providerSpec)).To(Succeed())
-
-	return providerSpec
 }
 
 func createBaremetalMachineTemplate(cl client.Client, mapiProviderSpec *bmv1alpha1.BareMetalMachineProviderSpec) *metal3v1.Metal3MachineTemplate {
+	GinkgoHelper()
 	By("Creating Baremetal machine template")
 
 	baremetalMachineSpec := metal3v1.Metal3MachineSpec{
@@ -130,7 +129,7 @@ func createBaremetalMachineTemplate(cl client.Client, mapiProviderSpec *bmv1alph
 	}
 
 	if err := cl.Create(ctx, baremetalMachineTemplate); err != nil && !apierrors.IsAlreadyExists(err) {
-		Expect(err).ToNot(HaveOccurred())
+		Expect(err).ToNot(HaveOccurred(), "should not fail creating baremetal machine template")
 	}
 
 	return baremetalMachineTemplate

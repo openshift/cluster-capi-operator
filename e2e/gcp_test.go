@@ -1,3 +1,17 @@
+// Copyright 2026 Red Hat, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package e2e
 
 import (
@@ -11,7 +25,6 @@ import (
 	gcpv1 "sigs.k8s.io/cluster-api-provider-gcp/api/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	yaml "sigs.k8s.io/yaml"
 
 	configv1 "github.com/openshift/api/config/v1"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
@@ -31,7 +44,7 @@ var _ = Describe("Cluster API GCP MachineSet", Ordered, func() {
 		if platform != configv1.GCPPlatformType {
 			Skip("Skipping GCP E2E tests")
 		}
-		mapiMachineSpec = getGCPMAPIProviderSpec(ctx, cl)
+		mapiMachineSpec = framework.GetMAPIProviderSpec[mapiv1beta1.GCPMachineProviderSpec](ctx, cl)
 	})
 
 	AfterEach(func() {
@@ -41,7 +54,7 @@ var _ = Describe("Cluster API GCP MachineSet", Ordered, func() {
 			Skip("Skipping GCP E2E tests")
 		}
 		framework.DeleteMachineSets(ctx, cl, machineSet)
-		framework.WaitForMachineSetsDeleted(cl, machineSet)
+		framework.WaitForMachineSetsDeleted(machineSet)
 		framework.DeleteObjects(ctx, cl, gcpMachineTemplate)
 	})
 
@@ -61,43 +74,31 @@ var _ = Describe("Cluster API GCP MachineSet", Ordered, func() {
 			"worker-user-data",
 		))
 
-		framework.WaitForMachineSet(cl, machineSet.Name, machineSet.Namespace)
+		framework.WaitForMachineSet(ctx, cl, machineSet.Name, machineSet.Namespace, framework.WaitLong)
 	})
 })
 
-func getGCPMAPIProviderSpec(ctx context.Context, cl client.Client) *mapiv1beta1.GCPMachineProviderSpec {
-	machineSetList := &mapiv1beta1.MachineSetList{}
-	Expect(cl.List(ctx, machineSetList, client.InNamespace(framework.MAPINamespace))).To(Succeed())
-
-	Expect(machineSetList.Items).ToNot(HaveLen(0))
-	machineSet := machineSetList.Items[0]
-	Expect(machineSet.Spec.Template.Spec.ProviderSpec.Value).ToNot(BeNil())
-
-	providerSpec := &mapiv1beta1.GCPMachineProviderSpec{}
-	Expect(yaml.Unmarshal(machineSet.Spec.Template.Spec.ProviderSpec.Value.Raw, providerSpec)).To(Succeed())
-
-	return providerSpec
-}
-
 func createGCPMachineTemplate(ctx context.Context, cl client.Client, mapiProviderSpec *mapiv1beta1.GCPMachineProviderSpec) *gcpv1.GCPMachineTemplate {
+	GinkgoHelper()
 	By("Creating GCP machine template")
 
-	Expect(mapiProviderSpec).ToNot(BeNil())
-	Expect(mapiProviderSpec.Disks).ToNot(BeNil())
-	Expect(len(mapiProviderSpec.Disks)).To(BeNumerically(">", 0))
-	Expect(mapiProviderSpec.Disks[0].Type).ToNot(BeEmpty())
-	Expect(mapiProviderSpec.MachineType).ToNot(BeEmpty())
-	Expect(mapiProviderSpec.NetworkInterfaces).ToNot(BeNil())
-	Expect(len(mapiProviderSpec.NetworkInterfaces)).To(BeNumerically(">", 0))
-	Expect(mapiProviderSpec.NetworkInterfaces[0].Subnetwork).ToNot(BeEmpty())
-	Expect(mapiProviderSpec.ServiceAccounts).ToNot(BeNil())
-	Expect(mapiProviderSpec.ServiceAccounts[0].Email).ToNot(BeEmpty())
-	Expect(mapiProviderSpec.ServiceAccounts[0].Scopes).ToNot(BeNil())
-	Expect(len(mapiProviderSpec.ServiceAccounts)).To(BeNumerically(">", 0))
-	Expect(mapiProviderSpec.Tags).ToNot(BeNil())
-	Expect(len(mapiProviderSpec.Tags)).To(BeNumerically(">", 0))
+	Expect(mapiProviderSpec).ToNot(BeNil(), "expected MAPI ProviderSpec to not be nil")
+	Expect(mapiProviderSpec.Disks).ToNot(BeNil(), "expected MAPI ProviderSpec Disks to not be nil")
+	Expect(len(mapiProviderSpec.Disks)).To(BeNumerically(">", 0), "expected at least one disk")
+	Expect(mapiProviderSpec.Disks[0].Type).ToNot(BeEmpty(), "expected disk type to not be empty")
+	Expect(mapiProviderSpec.MachineType).ToNot(BeEmpty(), "expected MachineType to not be empty")
+	Expect(mapiProviderSpec.NetworkInterfaces).ToNot(BeNil(), "expected NetworkInterfaces to not be nil")
+	Expect(len(mapiProviderSpec.NetworkInterfaces)).To(BeNumerically(">", 0), "expected at least one network interface")
+	Expect(mapiProviderSpec.NetworkInterfaces[0].Subnetwork).ToNot(BeEmpty(), "expected Subnetwork to not be empty")
+	Expect(mapiProviderSpec.ServiceAccounts).ToNot(BeNil(), "expected ServiceAccounts to not be nil")
+	Expect(mapiProviderSpec.ServiceAccounts[0].Email).ToNot(BeEmpty(), "expected ServiceAccount email to not be empty")
+	Expect(mapiProviderSpec.ServiceAccounts[0].Scopes).ToNot(BeNil(), "expected ServiceAccount scopes to not be nil")
+	Expect(len(mapiProviderSpec.ServiceAccounts)).To(BeNumerically(">", 0), "expected at least one ServiceAccount")
+	Expect(mapiProviderSpec.Tags).ToNot(BeNil(), "expected Tags to not be nil")
+	Expect(len(mapiProviderSpec.Tags)).To(BeNumerically(">", 0), "expected at least one tag")
 
 	var rootDeviceType gcpv1.DiskType
+
 	switch mapiProviderSpec.Disks[0].Type {
 	case "pd-standard":
 		rootDeviceType = gcpv1.PdStandardDiskType
@@ -136,7 +137,7 @@ func createGCPMachineTemplate(ctx context.Context, cl client.Client, mapiProvide
 	}
 
 	if err := cl.Create(ctx, gcpMachineTemplate); err != nil && !apierrors.IsAlreadyExists(err) {
-		Expect(err).ToNot(HaveOccurred())
+		Expect(err).ToNot(HaveOccurred(), "should not fail creating GCP machine template")
 	}
 
 	return gcpMachineTemplate

@@ -1,3 +1,17 @@
+// Copyright 2026 Red Hat, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package e2e
 
 import (
@@ -18,12 +32,10 @@ import (
 	azurev1 "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	yaml "sigs.k8s.io/yaml"
 )
 
 const (
 	azureMachineTemplateName        = "azure-machine-template"
-	clusterSecretName               = "capz-manager-cluster-credential"
 	capzManagerBootstrapCredentials = "capz-manager-bootstrap-credentials"
 )
 
@@ -36,7 +48,7 @@ var _ = Describe("Cluster API Azure MachineSet", Ordered, func() {
 		if platform != configv1.AzurePlatformType {
 			Skip("Skipping Azure E2E tests")
 		}
-		mapiMachineSpec = getAzureMAPIProviderSpec(ctx, cl)
+		mapiMachineSpec = framework.GetMAPIProviderSpec[mapiv1beta1.AzureMachineProviderSpec](ctx, cl)
 	})
 
 	AfterEach(func() {
@@ -46,7 +58,7 @@ var _ = Describe("Cluster API Azure MachineSet", Ordered, func() {
 			Skip("Skipping Azure E2E tests")
 		}
 		framework.DeleteMachineSets(ctx, cl, machineSet)
-		framework.WaitForMachineSetsDeleted(cl, machineSet)
+		framework.WaitForMachineSetsDeleted(machineSet)
 		framework.DeleteObjects(ctx, cl, azureMachineTemplate)
 	})
 
@@ -66,48 +78,36 @@ var _ = Describe("Cluster API Azure MachineSet", Ordered, func() {
 			"worker-user-data",
 		))
 
-		framework.WaitForMachineSet(cl, machineSet.Name, machineSet.Namespace)
+		framework.WaitForMachineSet(ctx, cl, machineSet.Name, machineSet.Namespace, framework.WaitLong)
 	})
 
 })
 
-func getAzureMAPIProviderSpec(ctx context.Context, cl client.Client) *mapiv1beta1.AzureMachineProviderSpec {
-	machineSetList := &mapiv1beta1.MachineSetList{}
-	Expect(cl.List(ctx, machineSetList, client.InNamespace(framework.MAPINamespace))).To(Succeed())
-
-	Expect(machineSetList.Items).ToNot(HaveLen(0))
-	machineSet := machineSetList.Items[0]
-	Expect(machineSet.Spec.Template.Spec.ProviderSpec.Value).ToNot(BeNil())
-
-	providerSpec := &mapiv1beta1.AzureMachineProviderSpec{}
-	Expect(yaml.Unmarshal(machineSet.Spec.Template.Spec.ProviderSpec.Value.Raw, providerSpec)).To(Succeed())
-
-	return providerSpec
-}
-
 func createAzureMachineTemplate(ctx context.Context, cl client.Client, mapiProviderSpec *mapiv1beta1.AzureMachineProviderSpec) *azurev1.AzureMachineTemplate {
+	GinkgoHelper()
 	By("Creating Azure machine template")
 
-	Expect(mapiProviderSpec).ToNot(BeNil())
-	Expect(mapiProviderSpec.Subnet).ToNot(BeEmpty())
-	Expect(mapiProviderSpec.AcceleratedNetworking).ToNot(BeNil())
-	Expect(mapiProviderSpec.OSDisk.ManagedDisk.StorageAccountType).ToNot(BeEmpty())
-	Expect(mapiProviderSpec.OSDisk.DiskSizeGB).To(BeNumerically(">", 0))
-	Expect(mapiProviderSpec.OSDisk.OSType).ToNot(BeEmpty())
-	Expect(mapiProviderSpec.VMSize).ToNot(BeEmpty())
+	Expect(mapiProviderSpec).ToNot(BeNil(), "expected MAPI ProviderSpec to not be nil")
+	Expect(mapiProviderSpec.Subnet).ToNot(BeEmpty(), "expected Subnet to not be empty")
+	Expect(mapiProviderSpec.AcceleratedNetworking).ToNot(BeNil(), "expected AcceleratedNetworking to not be nil")
+	Expect(mapiProviderSpec.OSDisk.ManagedDisk.StorageAccountType).ToNot(BeEmpty(), "expected StorageAccountType to not be empty")
+	Expect(mapiProviderSpec.OSDisk.DiskSizeGB).To(BeNumerically(">", 0), "expected DiskSizeGB to be greater than 0")
+	Expect(mapiProviderSpec.OSDisk.OSType).ToNot(BeEmpty(), "expected OSType to not be empty")
+	Expect(mapiProviderSpec.VMSize).ToNot(BeEmpty(), "expected VMSize to not be empty")
 
 	// Get Azure credentials secret
-	azure_credentials_secret := corev1.Secret{}
-	azure_credentials_secret_key := types.NamespacedName{Name: "capz-manager-bootstrap-credentials", Namespace: "openshift-cluster-api"}
-	err := cl.Get(ctx, azure_credentials_secret_key, &azure_credentials_secret)
+	credentialsSecret := corev1.Secret{}
+	credentialsSecretKey := types.NamespacedName{Name: capzManagerBootstrapCredentials, Namespace: framework.CAPINamespace}
+	err := cl.Get(ctx, credentialsSecretKey, &credentialsSecret)
 	Expect(err).To(BeNil(), "capz-manager-bootstrap-credentials secret should exist")
-	subscriptionID := azure_credentials_secret.Data["azure_subscription_id"]
+
+	subscriptionID := credentialsSecret.Data["azure_subscription_id"]
 
 	// Convert MAPI Image to CAPI Image
 	azureImage := convertMAPIImageToCAPIImage(&mapiProviderSpec.Image, subscriptionID)
 
 	var (
-		identity               azurev1.VMIdentity = azurev1.VMIdentityNone
+		identity               = azurev1.VMIdentityNone
 		userAssignedIdentities []azurev1.UserAssignedIdentity
 	)
 
@@ -116,6 +116,7 @@ func createAzureMachineTemplate(ctx context.Context, cl client.Client, mapiProvi
 		if !strings.HasPrefix(mi, "/subscriptions/") {
 			providerID = fmt.Sprintf("azure:///subscriptions/%s/resourcegroups/%s/providers/Microsoft.ManagedIdentity/userAssignedIdentities/%s", subscriptionID, mapiProviderSpec.ResourceGroup, mi)
 		}
+
 		userAssignedIdentities = []azurev1.UserAssignedIdentity{{ProviderID: providerID}}
 		identity = azurev1.VMIdentityUserAssigned
 	}
@@ -157,13 +158,13 @@ func createAzureMachineTemplate(ctx context.Context, cl client.Client, mapiProvi
 	}
 
 	if err := cl.Create(ctx, azureMachineTemplate); err != nil && !apierrors.IsAlreadyExists(err) {
-		Expect(err).ToNot(HaveOccurred())
+		Expect(err).ToNot(HaveOccurred(), "should not fail creating Azure machine template")
 	}
 
 	return azureMachineTemplate
 }
 
-// convertMAPIImageToCAPIImage converts a MAPI Azure Image to a CAPI Azure Image
+// convertMAPIImageToCAPIImage converts a MAPI Azure Image to a CAPI Azure Image.
 func convertMAPIImageToCAPIImage(mapiImage *mapiv1beta1.Image, subscriptionID []byte) *azurev1.Image {
 	if mapiImage.ResourceID != "" {
 		// Use ResourceID with provided subscription ID

@@ -1,19 +1,30 @@
+// Copyright 2026 Red Hat, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package e2e
 
 import (
 	"context"
-	"fmt"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ibmpowervsv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/yaml"
 
 	configv1 "github.com/openshift/api/config/v1"
 	mapiv1 "github.com/openshift/api/machine/v1"
-	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	"github.com/openshift/cluster-capi-operator/e2e/framework"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -21,8 +32,7 @@ import (
 )
 
 const (
-	powerVSMachineTemplateName    = "powervs-machine-template"
-	powerVSMachineTemplateVersion = "infrastructure.cluster.x-k8s.io/v1beta2"
+	powerVSMachineTemplateName = "powervs-machine-template"
 )
 
 var _ = Describe("Cluster API IBMPowerVS MachineSet", Ordered, func() {
@@ -34,7 +44,7 @@ var _ = Describe("Cluster API IBMPowerVS MachineSet", Ordered, func() {
 		if platform != configv1.PowerVSPlatformType {
 			Skip("Skipping PowerVS E2E tests")
 		}
-		mapiMachineSpec = getPowerVSMAPIProviderSpec(ctx, cl)
+		mapiMachineSpec = framework.GetMAPIProviderSpec[mapiv1.PowerVSMachineProviderConfig](ctx, cl)
 	})
 
 	AfterEach(func() {
@@ -44,7 +54,7 @@ var _ = Describe("Cluster API IBMPowerVS MachineSet", Ordered, func() {
 			Skip("Skipping PowerVS E2E tests")
 		}
 		framework.DeleteMachineSets(ctx, cl, machineSet)
-		framework.WaitForMachineSetsDeleted(cl, machineSet)
+		framework.WaitForMachineSetsDeleted(machineSet)
 		framework.DeleteObjects(ctx, cl, powerVSMachineTemplate)
 	})
 
@@ -63,34 +73,21 @@ var _ = Describe("Cluster API IBMPowerVS MachineSet", Ordered, func() {
 			},
 			"worker-user-data",
 		))
-		framework.WaitForMachineSet(cl, machineSet.Name, machineSet.Namespace)
+		framework.WaitForMachineSet(ctx, cl, machineSet.Name, machineSet.Namespace, framework.WaitLong)
 	})
 
 })
 
-func getPowerVSMAPIProviderSpec(ctx context.Context, cl client.Client) *mapiv1.PowerVSMachineProviderConfig {
-	machineSetList := &mapiv1beta1.MachineSetList{}
-	Expect(cl.List(ctx, machineSetList, client.InNamespace(framework.MAPINamespace))).To(Succeed())
-
-	Expect(machineSetList.Items).ToNot(HaveLen(0))
-	machineSet := machineSetList.Items[0]
-	Expect(machineSet.Spec.Template.Spec.ProviderSpec.Value).ToNot(BeNil())
-
-	providerSpec := &mapiv1.PowerVSMachineProviderConfig{}
-	Expect(yaml.Unmarshal(machineSet.Spec.Template.Spec.ProviderSpec.Value.Raw, providerSpec)).To(Succeed())
-
-	return providerSpec
-}
-
 func createIBMPowerVSMachineTemplate(ctx context.Context, cl client.Client, mapiProviderSpec *mapiv1.PowerVSMachineProviderConfig) *ibmpowervsv1.IBMPowerVSMachineTemplate {
+	GinkgoHelper()
 	By("Creating IBMPowerVS machine template")
 
-	Expect(mapiProviderSpec).ToNot(BeNil())
-	Expect(mapiProviderSpec.ServiceInstance).ToNot(BeNil())
-	Expect(mapiProviderSpec.KeyPairName).ToNot(BeEmpty())
-	Expect(mapiProviderSpec.Image).ToNot(BeNil())
-	Expect(mapiProviderSpec.SystemType).ToNot(BeEmpty())
-	Expect(mapiProviderSpec.ProcessorType).ToNot(BeEmpty())
+	Expect(mapiProviderSpec).ToNot(BeNil(), "expected MAPI ProviderSpec to not be nil")
+	Expect(mapiProviderSpec.ServiceInstance).ToNot(BeNil(), "expected ServiceInstance to not be nil")
+	Expect(mapiProviderSpec.KeyPairName).ToNot(BeEmpty(), "expected KeyPairName to not be empty")
+	Expect(mapiProviderSpec.Image).ToNot(BeNil(), "expected Image to not be nil")
+	Expect(mapiProviderSpec.SystemType).ToNot(BeEmpty(), "expected SystemType to not be empty")
+	Expect(mapiProviderSpec.ProcessorType).ToNot(BeEmpty(), "expected ProcessorType to not be empty")
 
 	ibmPowerVSMachineSpec := ibmpowervsv1.IBMPowerVSMachineSpec{
 		ServiceInstance: getServiceInstance(mapiProviderSpec.ServiceInstance),
@@ -118,42 +115,50 @@ func createIBMPowerVSMachineTemplate(ctx context.Context, cl client.Client, mapi
 	}
 
 	if err := cl.Create(ctx, ibmPowerVSMachineTemplate); err != nil && !apierrors.IsAlreadyExists(err) {
-		fmt.Println(err)
-		Expect(err).ToNot(HaveOccurred())
+		Expect(err).ToNot(HaveOccurred(), "should not fail creating IBMPowerVS machine template")
 	}
 
 	return ibmPowerVSMachineTemplate
 }
 
 func getNetworkResourceReference(networkResource mapiv1.PowerVSResource) ibmpowervsv1.IBMPowerVSResourceReference {
+	GinkgoHelper()
+
 	switch networkResource.Type {
 	case mapiv1.PowerVSResourceTypeID:
 		if networkResource.ID == nil {
-			panic("networkResource reference is specified as ID but it is nil")
+			Fail("networkResource reference is specified as ID but it is nil")
 		}
+
 		return ibmpowervsv1.IBMPowerVSResourceReference{
 			ID: networkResource.ID,
 		}
 	case mapiv1.PowerVSResourceTypeName:
 		if networkResource.Name == nil {
-			panic("networkResource reference is specified as Name but it is nil")
+			Fail("networkResource reference is specified as Name but it is nil")
 		}
+
 		return ibmpowervsv1.IBMPowerVSResourceReference{
 			Name: networkResource.Name,
 		}
 	case mapiv1.PowerVSResourceTypeRegEx:
 		if networkResource.RegEx == nil {
-			panic("networkResource reference is specified as RegEx but it is nil")
+			Fail("networkResource reference is specified as RegEx but it is nil")
 		}
+
 		return ibmpowervsv1.IBMPowerVSResourceReference{
 			RegEx: networkResource.RegEx,
 		}
 	default:
-		panic("networkResource reference is not specified")
+		Fail("networkResource reference is not specified")
 	}
+
+	return ibmpowervsv1.IBMPowerVSResourceReference{}
 }
 
 func getServiceInstance(serviceInstance mapiv1.PowerVSResource) *ibmpowervsv1.IBMPowerVSResourceReference {
+	GinkgoHelper()
+
 	switch serviceInstance.Type {
 	case mapiv1.PowerVSResourceTypeID:
 		return &ibmpowervsv1.IBMPowerVSResourceReference{ID: serviceInstance.ID}
@@ -162,6 +167,8 @@ func getServiceInstance(serviceInstance mapiv1.PowerVSResource) *ibmpowervsv1.IB
 	case mapiv1.PowerVSResourceTypeRegEx:
 		return &ibmpowervsv1.IBMPowerVSResourceReference{RegEx: serviceInstance.RegEx}
 	default:
-		panic("unknown type for service instance")
+		Fail("unknown type for service instance")
 	}
+
+	return nil
 }

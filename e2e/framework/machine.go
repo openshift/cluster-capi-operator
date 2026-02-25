@@ -1,9 +1,24 @@
+// Copyright 2026 Red Hat, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package framework
 
 import (
 	"context"
 	"time"
 
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -15,7 +30,9 @@ import (
 
 // GetMachines gets a list of machines from the default cluster API namespace.
 // Optionally, labels may be used to constrain listed machines.
-func GetMachines(cl client.Client, selectors ...*metav1.LabelSelector) []*clusterv1.Machine {
+func GetMachines(selectors ...*metav1.LabelSelector) []*clusterv1.Machine {
+	GinkgoHelper()
+
 	machineList := &clusterv1.MachineList{}
 
 	listOpts := append([]client.ListOption{},
@@ -43,22 +60,10 @@ func GetMachines(cl client.Client, selectors ...*metav1.LabelSelector) []*cluste
 	return machines
 }
 
-// FilterRunningMachines returns a slice of only those Machines in the input
-// that are in the "Running" phase.
-func FilterRunningMachines(machines []*clusterv1.Machine) []*clusterv1.Machine {
-	var result []*clusterv1.Machine
-
-	for _, m := range machines {
-		if m.Status.Phase == string(clusterv1.MachinePhaseRunning) {
-			result = append(result, m)
-		}
-	}
-
-	return result
-}
-
 // GetAWSMachine gets an AWSMachine by its name.
-func GetAWSMachine(cl client.Client, name string, namespace string) *awsv1.AWSMachine {
+func GetAWSMachine(name string, namespace string) *awsv1.AWSMachine {
+	GinkgoHelper()
+
 	machine := &awsv1.AWSMachine{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -72,7 +77,9 @@ func GetAWSMachine(cl client.Client, name string, namespace string) *awsv1.AWSMa
 }
 
 // GetMachine gets a machine by its name. This function uses eventually to do retries.
-func GetMachine(cl client.Client, name string, namespace string) *clusterv1.Machine {
+func GetMachine(name string, namespace string) *clusterv1.Machine {
+	GinkgoHelper()
+
 	machine := &clusterv1.Machine{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -86,7 +93,7 @@ func GetMachine(cl client.Client, name string, namespace string) *clusterv1.Mach
 }
 
 // GetMachineWithError gets a machine by its name.
-func GetMachineWithError(cl client.Client, name string, namespace string) (*clusterv1.Machine, error) {
+func GetMachineWithError(name string, namespace string) (*clusterv1.Machine, error) {
 	machine := &clusterv1.Machine{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -103,11 +110,14 @@ func GetMachineWithError(cl client.Client, name string, namespace string) (*clus
 
 // DeleteMachines deletes the specified machines.
 func DeleteMachines(ctx context.Context, cl client.Client, namespace string, machines ...*clusterv1.Machine) {
+	GinkgoHelper()
+
 	// 1. delete all machines
 	for _, machine := range machines {
 		if machine == nil {
 			continue
 		}
+
 		Eventually(func() error {
 			return cl.Delete(ctx, machine)
 		}, time.Minute, RetryShort).Should(SatisfyAny(
@@ -119,7 +129,12 @@ func DeleteMachines(ctx context.Context, cl client.Client, namespace string, mac
 
 	// 2. waiting for all machines to be deleted
 	machineNames := []string{}
+
 	for _, machine := range machines {
+		if machine == nil {
+			continue
+		}
+
 		machineNames = append(machineNames, machine.Name)
 	}
 
