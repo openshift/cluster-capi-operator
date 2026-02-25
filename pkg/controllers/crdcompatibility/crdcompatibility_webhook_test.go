@@ -240,27 +240,6 @@ func TestExcludedFieldsValidation(t *testing.T) {
 		{
 			name: "should accept valid simple field path",
 			excludedFields: []apiextensionsv1alpha1.APIExcludedField{
-				{Path: "spec.name"},
-			},
-			wantErr: BeNil(),
-		},
-		{
-			name: "should accept valid nested field path",
-			excludedFields: []apiextensionsv1alpha1.APIExcludedField{
-				{Path: "spec.template.spec.image"},
-			},
-			wantErr: BeNil(),
-		},
-		{
-			name: "should accept valid array field path",
-			excludedFields: []apiextensionsv1alpha1.APIExcludedField{
-				{Path: "spec.volumes.name"},
-			},
-			wantErr: BeNil(),
-		},
-		{
-			name: "should accept valid field path with specific version",
-			excludedFields: []apiextensionsv1alpha1.APIExcludedField{
 				{
 					Path:     "spec.name",
 					Versions: []apiextensionsv1alpha1.APIVersionString{"v1"},
@@ -269,9 +248,32 @@ func TestExcludedFieldsValidation(t *testing.T) {
 			wantErr: BeNil(),
 		},
 		{
+			name: "should accept valid nested field path",
+			excludedFields: []apiextensionsv1alpha1.APIExcludedField{
+				{
+					Path:     "spec.template.spec.image",
+					Versions: []apiextensionsv1alpha1.APIVersionString{"v1"},
+				},
+			},
+			wantErr: BeNil(),
+		},
+		{
+			name: "should accept valid array field path",
+			excludedFields: []apiextensionsv1alpha1.APIExcludedField{
+				{
+					Path:     "spec.volumes.name",
+					Versions: []apiextensionsv1alpha1.APIVersionString{"v1"},
+				},
+			},
+			wantErr: BeNil(),
+		},
+		{
 			name: "should reject non-existent field path",
 			excludedFields: []apiextensionsv1alpha1.APIExcludedField{
-				{Path: "spec.nonExistentField"},
+				{
+					Path:     "spec.nonExistentField",
+					Versions: []apiextensionsv1alpha1.APIVersionString{"v1"},
+				},
 			},
 			wantErr: MatchError("spec.compatibilitySchema.excludedFields[0].path: Invalid value: \"spec.nonExistentField\": path not found in schema: desired path ^.spec.nonExistentField, path ^.spec is missing child nonExistentField"),
 		},

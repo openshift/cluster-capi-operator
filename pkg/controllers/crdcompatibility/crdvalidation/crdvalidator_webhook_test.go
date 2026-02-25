@@ -316,34 +316,6 @@ func Test_pruneExludedFields(t *testing.T) {
 			}(),
 		},
 		{
-			name: "With multiple schema versions, should prune from all versions when no version is specified",
-			crd: func() *apiextensionsv1.CustomResourceDefinition {
-				crd := complexCRDSchema()
-				crd.Spec.Versions = append(crd.Spec.Versions, *crd.Spec.Versions[0].DeepCopy())
-				crd.Spec.Versions[1].Name = "v2"
-
-				return crd
-			}(),
-			excludedFields: []apiextensionsv1alpha1.APIExcludedField{
-				{Path: "spec.name", Versions: []apiextensionsv1alpha1.APIVersionString{}},
-			},
-			wantCRD: func() *apiextensionsv1.CustomResourceDefinition {
-				crd := complexCRDSchema()
-				crd.Spec.Versions = append(crd.Spec.Versions, *crd.Spec.Versions[0].DeepCopy())
-				crd.Spec.Versions[1].Name = "v2"
-
-				specSchema := crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["spec"]
-				delete(specSchema.Properties, "name")
-				specSchema.Required = []string{"metadata"}
-
-				specSchema = crd.Spec.Versions[1].Schema.OpenAPIV3Schema.Properties["spec"]
-				delete(specSchema.Properties, "name")
-				specSchema.Required = []string{"metadata"}
-
-				return crd
-			}(),
-		},
-		{
 			name: "With multiple schema versions, should prune from multiple prescribed versions",
 			crd: func() *apiextensionsv1.CustomResourceDefinition {
 				crd := complexCRDSchema()

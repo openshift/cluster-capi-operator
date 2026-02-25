@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"slices"
 	"strings"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -184,15 +183,8 @@ func pruneExcludedFields(crd *apiextensionsv1.CustomResourceDefinition, excluded
 	// First split all paths into their components and group them by version.
 	for _, excludedField := range excludedFields {
 		paths := strings.Split(excludedField.Path, ".")
-
-		// Apply to all versions if no version is specified.
-		// Use `""` to denote all versions since this is not a valid version string.
-		if len(excludedField.Versions) == 0 {
-			pathsByVersion[""] = append(pathsByVersion[""], paths)
-		} else {
-			for _, version := range excludedField.Versions {
-				pathsByVersion[string(version)] = append(pathsByVersion[string(version)], paths)
-			}
+		for _, version := range excludedField.Versions {
+			pathsByVersion[string(version)] = append(pathsByVersion[string(version)], paths)
 		}
 	}
 
@@ -201,7 +193,7 @@ func pruneExcludedFields(crd *apiextensionsv1.CustomResourceDefinition, excluded
 	var errs []error
 
 	for _, schema := range prunedCRD.Spec.Versions {
-		paths := slices.Concat(pathsByVersion[""], pathsByVersion[schema.Name])
+		paths := pathsByVersion[schema.Name]
 		if len(paths) == 0 {
 			continue
 		}
