@@ -65,25 +65,7 @@ func (v *crdRequirementValidator) validateCreateOrUpdate(ctx context.Context, ob
 		return nil, fmt.Errorf("%w: got %T", errExpectedCompatibilityRequirement, obj)
 	}
 
-	// Parse the CRD in compatibilityCRD into a CRD object.
-	compatibilityCRD := &apiextensionsv1.CustomResourceDefinition{}
-	if err := yaml.Unmarshal([]byte(compatibilityRequirement.Spec.CompatibilitySchema.CustomResourceDefinition.Data), &compatibilityCRD); err != nil {
-		return nil, fmt.Errorf("%w: %w", errInvalidCompatibilityCRD, err)
-	}
-
-	if compatibilityCRD.APIVersion != "apiextensions.k8s.io/v1" || compatibilityCRD.Kind != "CustomResourceDefinition" {
-		return nil, fmt.Errorf("%w: expected APIVersion to be apiextensions.k8s.io/v1 and Kind to be CustomResourceDefinition, got %s/%s", errInvalidCompatibilityCRD, compatibilityCRD.APIVersion, compatibilityCRD.Kind)
-	}
-
-	// Convert the CRD to the internal type so that we can validate it.
-	internalCRD, err := convertToInternalCRD(compatibilityCRD)
-	if err != nil {
-		return nil, fmt.Errorf("failed to convert CRD to internal CRD: %w", err)
-	}
-
-	// Validate that the CRD we have been given is a complete, and valid CRD.
-	errs := apiextensionsvalidation.ValidateCustomResourceDefinition(ctx, internalCRD)
-	errs = append(errs, validateExcludedFields(field.NewPath("spec").Child("compatibilitySchema").Child("excludedFields"), compatibilityCRD, compatibilityRequirement.Spec.CompatibilitySchema.ExcludedFields)...)
+	errs := validateCompatibilitySchema(ctx, field.NewPath("spec").Child("compatibilitySchema"), compatibilityRequirement.Spec.CompatibilitySchema)
 
 	if len(errs) > 0 {
 		return nil, errs.ToAggregate()
@@ -161,6 +143,40 @@ func convertToInternalCRD(compatibilityCRD *apiextensionsv1.CustomResourceDefini
 	}
 
 	return crd, nil
+}
+
+func validateCompatibilitySchema(ctx context.Context, fldPath *field.Path, compatibilitySchema apiextensionsv1alpha1.CompatibilitySchema) field.ErrorList {
+	compatibilityCRD, errs := validateCompatibilitySchemaCustomResourceDefinition(ctx, fldPath.Child("customResourceDefinition"), compatibilitySchema)
+	if len(errs) > 0 {
+		return errs
+	}
+
+	errs = append(errs, validateExcludedFields(fldPath.Child("excludedFields"), compatibilityCRD, compatibilitySchema.ExcludedFields)...)
+
+	return errs
+}
+
+func validateCompatibilitySchemaCustomResourceDefinition(ctx context.Context, fldPath *field.Path, compatibilitySchema apiextensionsv1alpha1.CompatibilitySchema) (*apiextensionsv1.CustomResourceDefinition, field.ErrorList) {
+	// Parse the CRD in compatibilityCRD into a CRD object.
+	compatibilityCRD := &apiextensionsv1.CustomResourceDefinition{}
+	if err := yaml.Unmarshal([]byte(compatibilitySchema.CustomResourceDefinition.Data), &compatibilityCRD); err != nil {
+		return nil, field.ErrorList{field.Invalid(fldPath.Child("data"), compatibilitySchema.CustomResourceDefinition.Data, fmt.Errorf("%w: %w", errInvalidCompatibilityCRD, err).Error())}
+	}
+
+	if compatibilityCRD.APIVersion != "apiextensions.k8s.io/v1" || compatibilityCRD.Kind != "CustomResourceDefinition" {
+		return nil, field.ErrorList{field.Invalid(fldPath.Child("data"), compatibilityCRD.APIVersion, fmt.Errorf("%w: expected APIVersion to be apiextensions.k8s.io/v1 and Kind to be CustomResourceDefinition, got %s/%s", errInvalidCompatibilityCRD, compatibilityCRD.APIVersion, compatibilityCRD.Kind).Error())}
+	}
+
+	// Convert the CRD to the internal type so that we can validate it.
+	internalCRD, err := convertToInternalCRD(compatibilityCRD)
+	if err != nil {
+		return nil, field.ErrorList{field.Invalid(fldPath.Child("customResourceDefinition"), compatibilitySchema.CustomResourceDefinition.Data, fmt.Errorf("failed to convert CRD to internal CRD: %w", err).Error())}
+	}
+
+	// Validate that the CRD we have been given is a complete, and valid CRD.
+	errs := apiextensionsvalidation.ValidateCustomResourceDefinition(ctx, internalCRD)
+
+	return compatibilityCRD, errs
 }
 
 func validateExcludedFields(fldPath *field.Path, compatibilityCRD *apiextensionsv1.CustomResourceDefinition, excludedFields []apiextensionsv1alpha1.APIExcludedField) field.ErrorList {
