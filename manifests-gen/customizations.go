@@ -50,6 +50,7 @@ func processObjects(objs []client.Object, opts cmdlineOptions) ([]client.Object,
 			switch getKind(obj) {
 			case "CustomResourceDefinition":
 				replaceCertManagerAnnotations(obj)
+				addFeatureGateAnnotation(obj)
 
 				// Generate a protection policy for an InfraCluster
 				// If the user provided a specific InfraCluster resource name, match it exactly.
@@ -214,6 +215,15 @@ func replaceCertManagerAnnotations(obj client.Object) {
 		delete(anns, "cert-manager.io/inject-ca-from")
 		obj.SetAnnotations(anns)
 	}
+}
+
+func addFeatureGateAnnotation(obj client.Object) {
+	anns := obj.GetAnnotations()
+	if anns == nil {
+		anns = map[string]string{}
+	}
+	anns["release.openshift.io/feature-gate"] = "ClusterAPIMachineManagement"
+	obj.SetAnnotations(anns)
 }
 
 func replaceCertMangerServiceSecret(obj client.Object, serviceSecretNames map[string]string) {
