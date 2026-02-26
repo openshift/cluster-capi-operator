@@ -3,3 +3,9 @@ reviews:
   path_filters:
     - "!**/vendor/**"
     - "!vendor/**"
+  path_instructions:
+    - path: "**/*.go"
+      instructions: |
+        This project tends to use an up to date version of Go. Check the
+        version of Go in go.mod before warning about limitations in older
+        versions, such as closure capturing of loop variables.
