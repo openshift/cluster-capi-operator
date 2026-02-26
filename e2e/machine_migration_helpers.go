@@ -207,9 +207,10 @@ func verifyMachineAuthoritative(mapiMachine *mapiv1beta1.Machine, authority mapi
 	GinkgoHelper()
 
 	By(fmt.Sprintf("Verify the Machine authority is %s", authority))
+
 	Eventually(komega.Object(mapiMachine), capiframework.WaitMedium, capiframework.RetryMedium).Should(
 		HaveField("Status.AuthoritativeAPI", Equal(authority)),
-		fmt.Sprintf("Should have found Machine with status.AuthoritativeAPI:%s", authority),
+		"Machine %s: wanted AuthoritativeAPI %s", mapiMachine.Name, authority,
 	)
 }
 
@@ -228,22 +229,19 @@ func verifyMAPIMachineSynchronizedCondition(mapiMachine *mapiv1beta1.Machine, au
 		Fail(fmt.Sprintf("unknown authoritativeAPI type: %v", authority))
 	}
 
-	Eventually(komega.Object(mapiMachine), capiframework.WaitMedium, capiframework.RetryMedium).Should(
-		WithTransform(
-			func(m *mapiv1beta1.Machine) []mapiv1beta1.Condition {
-				return m.Status.Conditions
-			},
-			ContainElement(
-				SatisfyAll(
-					HaveField("Type", Equal(SynchronizedCondition)),
-					HaveField("Status", Equal(corev1.ConditionTrue)),
-					HaveField("Reason", Equal("ResourceSynchronized")),
-					HaveField("Message", Equal(expectedMessage)),
-				),
-			),
-		),
-		fmt.Sprintf("Should have found the expected Synchronized condition for MAPI Machine %s with authority: %s", mapiMachine.Name, authority),
-	)
+	Eventually(func(g Gomega) {
+		g.Expect(komega.Get(mapiMachine)()).To(Succeed())
+		g.Expect(mapiMachine.Status.Conditions).To(
+			ContainElement(SatisfyAll(
+				HaveField("Type", Equal(SynchronizedCondition)),
+				HaveField("Status", Equal(corev1.ConditionTrue)),
+				HaveField("Reason", Equal("ResourceSynchronized")),
+				HaveField("Message", Equal(expectedMessage)),
+			)),
+			"Machine %s: wanted Synchronized condition for authority %s, got conditions: %s",
+			mapiMachine.Name, authority, summarizeMAPIConditions(mapiMachine.Status.Conditions),
+		)
+	}, capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed())
 }
 
 // verifyResourceRemoved verifies that a resource has been removed.
@@ -294,10 +292,12 @@ func verifyMachinePausedCondition(machine client.Object, authority mapiv1beta1.M
 			Fail(fmt.Sprintf("unknown authoritativeAPI type: %v", authority))
 		}
 
-		Eventually(komega.Object(m), capiframework.WaitMedium, capiframework.RetryMedium).Should(
-			HaveField("Status.Conditions", ContainElement(conditionMatcher)),
-			fmt.Sprintf("Should have found the expected Paused condition for MAPI Machine %s with authority: %s", m.Name, authority),
-		)
+		Eventually(func(g Gomega) {
+			g.Expect(komega.Get(m)()).To(Succeed())
+			g.Expect(m.Status.Conditions).To(ContainElement(conditionMatcher),
+				"MAPI Machine %s: wanted Paused condition for authority %s, got conditions: %s",
+				m.Name, authority, summarizeMAPIConditions(m.Status.Conditions))
+		}, capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed())
 
 	case *clusterv1.Machine:
 		// This is a CAPI Machine
@@ -322,10 +322,12 @@ func verifyMachinePausedCondition(machine client.Object, authority mapiv1beta1.M
 			Fail(fmt.Sprintf("unknown authoritativeAPI type: %v", authority))
 		}
 
-		Eventually(komega.Object(m), capiframework.WaitMedium, capiframework.RetryMedium).Should(
-			HaveField("Status.Conditions", ContainElement(conditionMatcher)),
-			fmt.Sprintf("Should have found the expected Paused condition for CAPI Machine %s with authority: %s", m.Name, authority),
-		)
+		Eventually(func(g Gomega) {
+			g.Expect(komega.Get(m)()).To(Succeed())
+			g.Expect(m.Status.Conditions).To(ContainElement(conditionMatcher),
+				"CAPI Machine %s: wanted Paused condition for authority %s, got conditions: %s",
+				m.Name, authority, summarizeV1Beta2Conditions(m.Status.Conditions))
+		}, capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed())
 
 	default:
 		Fail(fmt.Sprintf("unknown machine type: %T", machine))
