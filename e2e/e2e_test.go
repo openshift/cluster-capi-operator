@@ -29,3 +29,11 @@ func TestAPIs(t *testing.T) {
 var _ = BeforeSuite(func() {
 	InitCommonVariables()
 })
+
+var _ = ReportAfterEach(func(report SpecReport) {
+	if !report.Failed() {
+		return
+	}
+
+	dumpClusterState()
+})
