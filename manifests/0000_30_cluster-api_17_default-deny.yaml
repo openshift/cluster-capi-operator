@@ -23,7 +23,7 @@ metadata:
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
     exclude.release.openshift.io/internal-openshift-hosted: "true"
-    release.openshift.io/feature-set: "CustomNoUpgrade,TechPreviewNoUpgrade"
+    release.openshift.io/feature-gate: "ClusterAPIMachineManagement"
 spec:
   # Exclude CAPI pods that need network access: This is done by the other policies
   # - control-plane: CAPI controller manager pods (capg, capi, capa, capz, etc.)
@@ -45,7 +45,7 @@ metadata:
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
     exclude.release.openshift.io/internal-openshift-hosted: "true"
-    release.openshift.io/feature-set: "CustomNoUpgrade,TechPreviewNoUpgrade"
+    release.openshift.io/feature-gate: "ClusterAPIMachineManagement"
 spec:
   # Exclude CAPI pods that need network access: This is done by the other policies
   # - control-plane: CAPI controller manager pods (capg, capi, capa, capz, etc.)
