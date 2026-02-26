@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -27,6 +28,7 @@ import (
 	mapiframework "github.com/openshift/cluster-api-actuator-pkg/pkg/framework"
 	capiframework "github.com/openshift/cluster-capi-operator/e2e/framework"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
@@ -422,13 +424,16 @@ func updateCAPIMachineSetInfraTemplate(capiMachineSet *clusterv1.MachineSet, new
 func cleanupMachineSetTestResources(ctx context.Context, cl client.Client, capiMachineSets []*clusterv1.MachineSet, awsMachineTemplates []*awsv1.AWSMachineTemplate, mapiMachineSets []*mapiv1beta1.MachineSet) {
 	GinkgoHelper()
 
+	cleanupCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+	defer cancel()
+
 	for _, ms := range capiMachineSets {
 		if ms == nil {
 			continue
 		}
 
 		By(fmt.Sprintf("Deleting CAPI MachineSet %s", ms.Name))
-		capiframework.DeleteMachineSets(ctx, cl, ms)
+		capiframework.DeleteMachineSets(cleanupCtx, cl, ms)
 		capiframework.WaitForMachineSetsDeleted(ms)
 	}
 
@@ -438,8 +443,23 @@ func cleanupMachineSetTestResources(ctx context.Context, cl client.Client, capiM
 		}
 
 		By(fmt.Sprintf("Deleting MAPI MachineSet %s", ms.Name))
-		Expect(mapiframework.DeleteMachineSets(cl, ms)).To(Succeed())
-		mapiframework.WaitForMachineSetsDeleted(ctx, cl, ms)
+
+		var notFound bool
+
+		Eventually(func() error {
+			err := cl.Delete(cleanupCtx, ms)
+			if apierrors.IsNotFound(err) {
+				notFound = true
+				return nil
+			}
+
+			return err
+		}, time.Minute, capiframework.RetryShort).Should(Succeed(),
+			"cleanup: delete MAPI MachineSet %s", ms.Name)
+
+		if !notFound {
+			mapiframework.WaitForMachineSetsDeleted(cleanupCtx, cl, ms)
+		}
 	}
 
 	for _, template := range awsMachineTemplates {
@@ -448,6 +468,6 @@ func cleanupMachineSetTestResources(ctx context.Context, cl client.Client, capiM
 		}
 
 		By(fmt.Sprintf("Deleting awsMachineTemplate %s", template.Name))
-		deleteAWSMachineTemplates(ctx, cl, template)
+		deleteAWSMachineTemplates(cleanupCtx, cl, template)
 	}
 }

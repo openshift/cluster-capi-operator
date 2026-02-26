@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -334,13 +335,16 @@ func verifyMachinePausedCondition(machine client.Object, authority mapiv1beta1.M
 func cleanupMachineResources(ctx context.Context, cl client.Client, capiMachines []*clusterv1.Machine, mapiMachines []*mapiv1beta1.Machine) {
 	GinkgoHelper()
 
+	cleanupCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+	defer cancel()
+
 	for _, m := range capiMachines {
 		if m == nil {
 			continue
 		}
 
 		By(fmt.Sprintf("Deleting CAPI Machine %s", m.Name))
-		capiframework.DeleteMachines(ctx, cl, capiframework.CAPINamespace, m)
+		capiframework.DeleteMachines(cleanupCtx, cl, capiframework.CAPINamespace, m)
 	}
 
 	for _, m := range mapiMachines {
@@ -349,8 +353,23 @@ func cleanupMachineResources(ctx context.Context, cl client.Client, capiMachines
 		}
 
 		By(fmt.Sprintf("Deleting MAPI Machine %s", m.Name))
-		Expect(mapiframework.DeleteMachines(ctx, cl, m)).To(Succeed())
-		mapiframework.WaitForMachinesDeleted(cl, m)
+
+		var notFound bool
+
+		Eventually(func() error {
+			err := cl.Delete(cleanupCtx, m)
+			if apierrors.IsNotFound(err) {
+				notFound = true
+				return nil
+			}
+
+			return err
+		}, time.Minute, capiframework.RetryShort).Should(Succeed(),
+			"cleanup: delete MAPI Machine %s", m.Name)
+
+		if !notFound {
+			mapiframework.WaitForMachinesDeleted(cl, m)
+		}
 	}
 }
 
