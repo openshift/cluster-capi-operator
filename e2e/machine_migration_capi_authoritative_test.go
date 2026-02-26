@@ -98,7 +98,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 
 			It("should create a CAPI mirror and set conditions correctly", func() {
 				By("Verifying CAPI Machine gets created and becomes Running")
-				newCapiMachine = capiframework.GetMachine(newMapiMachine.Name, capiframework.CAPINamespace)
+				newCapiMachine = capiframework.GetMachineWithRetry(newMapiMachine.Name, capiframework.CAPINamespace)
 				verifyMachineRunning(cl, newCapiMachine)
 
 				By("Verifying MAPI Machine .status.authoritativeAPI equals ClusterAPI")
@@ -111,7 +111,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				verifyMachinePausedCondition(newMapiMachine, mapiv1beta1.MachineAuthorityClusterAPI)
 
 				By("Verifying that the non-authoritative MAPI Machine has an authoritative CAPI Machine mirror")
-				newCapiMachine = capiframework.GetMachine(mapiMachineAuthCAPIName, capiframework.CAPINamespace)
+				newCapiMachine = capiframework.GetMachineWithRetry(mapiMachineAuthCAPIName, capiframework.CAPINamespace)
 
 				By("Verifying CAPI Machine Paused condition is False")
 				verifyMachinePausedCondition(newCapiMachine, mapiv1beta1.MachineAuthorityClusterAPI)
@@ -129,7 +129,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				BeforeAll(func() {
 					mapiMachineAuthCAPINameDeletion = generateName("machine-auth-capi-del-")
 					newMapiMachine = createMAPIMachineWithAuthority(ctx, cl, mapiMachineAuthCAPINameDeletion, mapiv1beta1.MachineAuthorityClusterAPI)
-					newCapiMachine = capiframework.GetMachine(newMapiMachine.Name, capiframework.CAPINamespace)
+					newCapiMachine = capiframework.GetMachineWithRetry(newMapiMachine.Name, capiframework.CAPINamespace)
 					verifyMachineRunning(cl, newCapiMachine)
 
 					DeferCleanup(func() {
@@ -162,7 +162,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				BeforeAll(func() {
 					mapiMachineAuthCAPINameDeletion = generateName("machine-auth-capi-del-")
 					newMapiMachine = createMAPIMachineWithAuthority(ctx, cl, mapiMachineAuthCAPINameDeletion, mapiv1beta1.MachineAuthorityClusterAPI)
-					newCapiMachine = capiframework.GetMachine(newMapiMachine.Name, capiframework.CAPINamespace)
+					newCapiMachine = capiframework.GetMachineWithRetry(newMapiMachine.Name, capiframework.CAPINamespace)
 					verifyMachineRunning(cl, newCapiMachine)
 
 					DeferCleanup(func() {
@@ -216,7 +216,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 
 			It("should complete CAPI -> MAPI -> CAPI round trip successfully", func() {
 				By("Verifying a CAPI mirror machine is created")
-				newCapiMachine = capiframework.GetMachine(capiMapiCapiRoundTripName, capiframework.CAPINamespace)
+				newCapiMachine = capiframework.GetMachineWithRetry(capiMapiCapiRoundTripName, capiframework.CAPINamespace)
 				verifyMachineRunning(cl, newCapiMachine)
 
 				By("Verifying paused conditions and synchronised generation are set correctly")

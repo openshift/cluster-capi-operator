@@ -162,7 +162,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				verifyMachinesetReplicas(mapiMachineSet, 2)
 
 				By("Verifying a new CAPI Machine is created and Paused condition is False")
-				capiMachineSet = capiframework.GetMachineSet(mapiMSAuthCAPIName, capiframework.CAPINamespace)
+				capiMachineSet = capiframework.GetMachineSetWithRetry(mapiMSAuthCAPIName, capiframework.CAPINamespace)
 				capiMachine := capiframework.GetNewestMachineFromMachineSet(capiMachineSet)
 				verifyMachineRunning(cl, capiMachine)
 				verifyMachinePausedCondition(capiMachine, mapiv1beta1.MachineAuthorityClusterAPI)
@@ -293,7 +293,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 
 				By("Verifying CAPI MachineSet not removed, both MAPI Machines and Mirrors remain")
 				// TODO: Add full verification once OCPBUGS-56897 is fixed
-				capiMachineSet = capiframework.GetMachineSet(mapiMSAuthMAPIName, capiframework.CAPINamespace)
+				capiMachineSet = capiframework.GetMachineSetWithRetry(mapiMSAuthMAPIName, capiframework.CAPINamespace)
 				Expect(capiMachineSet).ToNot(BeNil(), "CAPI MachineSet should still exist after deleting non-authoritative MAPI MachineSet")
 				Expect(capiMachineSet.DeletionTimestamp.IsZero()).To(BeTrue(), "CAPI MachineSet should not be marked for deletion")
 			})

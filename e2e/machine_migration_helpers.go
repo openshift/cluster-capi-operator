@@ -82,7 +82,7 @@ func createCAPIMachine(ctx context.Context, cl client.Client, machineName string
 		return cl.Create(ctx, newCapiMachine)
 	}, capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(), "Should have successfully created CAPI machine %s/%s", newCapiMachine.Namespace, newCapiMachine.Name)
 
-	referenceAWSMachine := capiframework.GetAWSMachine(referenceCapiMachine.Name, capiframework.CAPINamespace)
+	referenceAWSMachine := capiframework.GetAWSMachineWithRetry(referenceCapiMachine.Name, capiframework.CAPINamespace)
 	// Define the new awsmachine based on the reference.
 	newAWSMachine := &awsv1.AWSMachine{
 		TypeMeta: metav1.TypeMeta{
@@ -177,7 +177,7 @@ func verifyMachineRunning(cl client.Client, machine client.Object) {
 	Eventually(func() error {
 		switch m := machine.(type) {
 		case *clusterv1.Machine:
-			capiMachine, err := capiframework.GetMachineWithError(m.GetName(), m.GetNamespace())
+			capiMachine, err := capiframework.GetMachine(m.GetName(), m.GetNamespace())
 			if err != nil {
 				return fmt.Errorf("get CAPI Machine %s: %w", m.GetName(), err)
 			}

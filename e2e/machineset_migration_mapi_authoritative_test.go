@@ -305,7 +305,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 					})()
 				}, capiframework.WaitShort, capiframework.RetryShort).Should(MatchError(ContainSubstring("Changing .spec is not allowed")))
 
-				capiMachineSet = capiframework.GetMachineSet(mapiMSAuthMAPIName, capiframework.CAPINamespace)
+				capiMachineSet = capiframework.GetMachineSetWithRetry(mapiMSAuthMAPIName, capiframework.CAPINamespace)
 				verifyMachinesetReplicas(capiMachineSet, 0)
 
 				By("Updating CAPI mirror spec (such as Deletion.Order) should be rejected by VAP")
@@ -325,7 +325,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 
 				By("Waiting for new InfraTemplate to be created")
 				originalAWSMachineTemplateName := capiMachineSet.Spec.Template.Spec.InfrastructureRef.Name
-				capiMachineSet = capiframework.GetMachineSet(mapiMSAuthMAPIName, capiframework.CAPINamespace)
+				capiMachineSet = capiframework.GetMachineSetWithRetry(mapiMSAuthMAPIName, capiframework.CAPINamespace)
 				Eventually(k.Object(capiMachineSet), capiframework.WaitMedium, capiframework.RetryMedium).Should(HaveField("Spec.Template.Spec.InfrastructureRef.Name", Not(Equal(originalAWSMachineTemplateName))), "Should have InfraTemplate name changed")
 
 				By("Verifying new InfraTemplate has the updated InstanceType")

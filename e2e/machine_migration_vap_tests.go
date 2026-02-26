@@ -74,7 +74,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] MA
 			testMAPIMachine = createMAPIMachineWithAuthority(ctx, cl, testMachineName, mapiv1beta1.MachineAuthorityClusterAPI)
 
 			// The VAP requires a matching CAPI machine as parameter
-			testCAPIMachine = capiframework.GetMachine(testMachineName, capiframework.CAPINamespace)
+			testCAPIMachine = capiframework.GetMachineWithRetry(testMachineName, capiframework.CAPINamespace)
 
 			// Wait until VAP match conditions are met
 			Eventually(komega.Object(testMAPIMachine), capiframework.WaitMedium, capiframework.RetryMedium).Should(
@@ -239,7 +239,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] MA
 			testMAPIMachine = createMAPIMachineWithAuthority(ctx, cl, testMachineName, mapiv1beta1.MachineAuthorityClusterAPI)
 
 			// Get the corresponding CAPI machine from openshift-cluster-api namespace
-			testCAPIMachine = capiframework.GetMachine(testMachineName, capiframework.CAPINamespace)
+			testCAPIMachine = capiframework.GetMachineWithRetry(testMachineName, capiframework.CAPINamespace)
 
 			// Wait until VAP match conditions are met
 			Eventually(komega.Object(testMAPIMachine), capiframework.WaitMedium, capiframework.RetryMedium).Should(

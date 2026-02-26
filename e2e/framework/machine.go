@@ -60,8 +60,8 @@ func GetMachines(selectors ...*metav1.LabelSelector) []*clusterv1.Machine {
 	return machines
 }
 
-// GetAWSMachine gets an AWSMachine by its name.
-func GetAWSMachine(name string, namespace string) *awsv1.AWSMachine {
+// GetAWSMachineWithRetry gets an AWSMachine by its name, retrying until found or timeout.
+func GetAWSMachineWithRetry(name string, namespace string) *awsv1.AWSMachine {
 	GinkgoHelper()
 
 	machine := &awsv1.AWSMachine{
@@ -76,8 +76,24 @@ func GetAWSMachine(name string, namespace string) *awsv1.AWSMachine {
 	return machine
 }
 
-// GetMachine gets a machine by its name. This function uses eventually to do retries.
-func GetMachine(name string, namespace string) *clusterv1.Machine {
+// GetAWSMachine gets an AWSMachine by its name.
+func GetAWSMachine(name string, namespace string) (*awsv1.AWSMachine, error) {
+	machine := &awsv1.AWSMachine{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+	}
+
+	if err := komega.Get(machine)(); err != nil {
+		return nil, err
+	}
+
+	return machine, nil
+}
+
+// GetMachineWithRetry gets a machine by its name, retrying until found or timeout.
+func GetMachineWithRetry(name string, namespace string) *clusterv1.Machine {
 	GinkgoHelper()
 
 	machine := &clusterv1.Machine{
@@ -92,8 +108,8 @@ func GetMachine(name string, namespace string) *clusterv1.Machine {
 	return machine
 }
 
-// GetMachineWithError gets a machine by its name.
-func GetMachineWithError(name string, namespace string) (*clusterv1.Machine, error) {
+// GetMachine gets a machine by its name.
+func GetMachine(name string, namespace string) (*clusterv1.Machine, error) {
 	machine := &clusterv1.Machine{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,

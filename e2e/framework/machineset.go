@@ -222,8 +222,8 @@ func WaitForMachineSet(ctx context.Context, cl client.Client, name string, names
 		"MachineSet %q machines should be Running with ready nodes", name)
 }
 
-// GetMachineSet gets a machineset by its name.
-func GetMachineSet(name string, namespace string) *clusterv1.MachineSet {
+// GetMachineSetWithRetry gets a machineset by its name, retrying until found or timeout.
+func GetMachineSetWithRetry(name string, namespace string) *clusterv1.MachineSet {
 	GinkgoHelper()
 
 	machineSet := &clusterv1.MachineSet{
@@ -236,6 +236,22 @@ func GetMachineSet(name string, namespace string) *clusterv1.MachineSet {
 	Eventually(komega.Get(machineSet), time.Minute, RetryShort).Should(Succeed(), "Should have successfully retrieved machineset %s/%s.", machineSet.Namespace, machineSet.Name)
 
 	return machineSet
+}
+
+// GetMachineSet gets a machineset by its name.
+func GetMachineSet(name string, namespace string) (*clusterv1.MachineSet, error) {
+	machineSet := &clusterv1.MachineSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+	}
+
+	if err := komega.Get(machineSet)(); err != nil {
+		return nil, err
+	}
+
+	return machineSet, nil
 }
 
 // GetMachinesFromMachineSet returns an array of machines owned by a given machineSet.
@@ -255,7 +271,7 @@ func GetMachinesFromMachineSet(machineSet *clusterv1.MachineSet) []*clusterv1.Ma
 	return machinesForSet
 }
 
-// GetNewestMachineFromMachineSet returns the new created machine by a given machineSet.
+// GetNewestMachineFromMachineSet returns the newest machine created by a given machineSet.
 func GetNewestMachineFromMachineSet(machineSet *clusterv1.MachineSet) *clusterv1.Machine {
 	GinkgoHelper()
 
