@@ -20,7 +20,7 @@ metadata:
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
-    release.openshift.io/feature-set: CustomNoUpgrade,TechPreviewNoUpgrade
+    release.openshift.io/feature-gate: "ClusterAPIMachineManagement"
   name: allow-ingress-to-metrics-operators
   namespace: openshift-cluster-api-operator
 spec:
@@ -47,7 +47,7 @@ metadata:
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
-    release.openshift.io/feature-set: CustomNoUpgrade,TechPreviewNoUpgrade
+    release.openshift.io/feature-gate: "ClusterAPIMachineManagement"
   name: allow-ingress-to-metrics-operators
   namespace: openshift-cluster-api
 spec:
