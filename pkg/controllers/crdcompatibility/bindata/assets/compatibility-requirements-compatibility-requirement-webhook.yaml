@@ -17,7 +17,9 @@ webhooks:
       name: compatibility-requirements-controllers-webhook-service
       namespace: openshift-compatibility-requirements-operator
       path: /validate-apiextensions-openshift-io-v1alpha1-compatibilityrequirement
-  failurePolicy: Fail
+  # XXX: This is Ignore so that we don't block cluster bootstrap.
+  # Long term we want to make this Fail, but first we need to resolve https://github.com/openshift/enhancements/pull/1941.
+  failurePolicy: Ignore
   matchPolicy: Equivalent
   name: compatibilityrequirement.operator.openshift.io
   rules:
