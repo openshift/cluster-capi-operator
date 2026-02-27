@@ -32,6 +32,8 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/test"
 )
 
+var defaultNodeTimeout = NodeTimeout(10 * time.Second)
+
 var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() {
 	// Starting and stopping the manager is quite expensive, so we share one amongst all the tests.
 	// Unfortunately ginkgo forces us to use Ordered when doing this.
@@ -62,20 +64,25 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 			createTestObject(ctx, requirement, "CompatibilityRequirement")
 
 			By("Waiting for the CompatibilityRequirement to have the expected status")
-			Eventually(kWithCtx(ctx).Object(requirement), 10*time.Second).WithContext(ctx).Should(SatisfyAll(
-				test.HaveCondition("Progressing", metav1.ConditionFalse,
-					test.WithConditionReason(apiextensionsv1alpha1.CompatibilityRequirementUpToDateReason),
-					test.WithConditionMessage("The CompatibilityRequirement is up to date")),
-				test.HaveCondition("Admitted", metav1.ConditionTrue,
-					test.WithConditionReason(apiextensionsv1alpha1.CompatibilityRequirementAdmittedReason),
-					test.WithConditionMessage("The CompatibilityRequirement has been admitted")),
-				test.HaveCondition("Compatible", metav1.ConditionTrue,
-					test.WithConditionReason(apiextensionsv1alpha1.CompatibilityRequirementCompatibleReason),
-					test.WithConditionMessage("The CRD is compatible with this requirement")),
+			Eventually(kWithCtx(ctx).Object(requirement)).WithContext(ctx).Should(SatisfyAll(
+				HaveField("Status.Conditions", SatisfyAll(
+					test.HaveCondition("Progressing").
+						WithStatus(metav1.ConditionFalse).
+						WithReason(apiextensionsv1alpha1.CompatibilityRequirementUpToDateReason).
+						WithMessage("The CompatibilityRequirement is up to date"),
+					test.HaveCondition("Admitted").
+						WithStatus(metav1.ConditionTrue).
+						WithReason(apiextensionsv1alpha1.CompatibilityRequirementAdmittedReason).
+						WithMessage("The CompatibilityRequirement has been admitted"),
+					test.HaveCondition("Compatible").
+						WithStatus(metav1.ConditionTrue).
+						WithReason(apiextensionsv1alpha1.CompatibilityRequirementCompatibleReason).
+						WithMessage("The CRD is compatible with this requirement"),
+				)),
 				HaveField("Status.ObservedCRD.UID", BeEquivalentTo(testCRDWorking.UID)),
 				HaveField("Status.ObservedCRD.Generation", BeEquivalentTo(testCRDWorking.Generation)),
 			))
-		})
+		}, defaultNodeTimeout)
 
 		It("Should correctly update observed generation on conditions", func(ctx context.Context) {
 			requirement := test.GenerateTestCompatibilityRequirement(testCRDClean)
@@ -83,23 +90,25 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 
 			generation := requirement.GetGeneration()
 			checkForStatusWithGeneration := func(generation int64) {
-				Eventually(kWithCtx(ctx).Object(requirement), 10*time.Second).WithContext(ctx).Should(SatisfyAll(
-					test.HaveCondition("Progressing", metav1.ConditionFalse,
-						test.WithConditionReason(apiextensionsv1alpha1.CompatibilityRequirementUpToDateReason),
-						test.WithConditionMessage("The CompatibilityRequirement is up to date"),
-						test.WithConditionObservedGeneration(generation),
-					),
-					test.HaveCondition("Admitted", metav1.ConditionTrue,
-						test.WithConditionReason(apiextensionsv1alpha1.CompatibilityRequirementAdmittedReason),
-						test.WithConditionMessage("The CompatibilityRequirement has been admitted"),
-						test.WithConditionObservedGeneration(generation),
-					),
-					test.HaveCondition("Compatible", metav1.ConditionTrue,
-						test.WithConditionReason(apiextensionsv1alpha1.CompatibilityRequirementCompatibleReason),
-						test.WithConditionMessage("The CRD is compatible with this requirement"),
-						test.WithConditionObservedGeneration(generation),
-					),
-				))
+				Eventually(kWithCtx(ctx).Object(requirement)).WithContext(ctx).Should(
+					HaveField("Status.Conditions", SatisfyAll(
+						test.HaveCondition("Progressing").
+							WithStatus(metav1.ConditionFalse).
+							WithReason(apiextensionsv1alpha1.CompatibilityRequirementUpToDateReason).
+							WithMessage("The CompatibilityRequirement is up to date").
+							WithObservedGeneration(generation),
+						test.HaveCondition("Admitted").
+							WithStatus(metav1.ConditionTrue).
+							WithReason(apiextensionsv1alpha1.CompatibilityRequirementAdmittedReason).
+							WithMessage("The CompatibilityRequirement has been admitted").
+							WithObservedGeneration(generation),
+						test.HaveCondition("Compatible").
+							WithStatus(metav1.ConditionTrue).
+							WithReason(apiextensionsv1alpha1.CompatibilityRequirementCompatibleReason).
+							WithMessage("The CRD is compatible with this requirement").
+							WithObservedGeneration(generation),
+					)),
+				)
 			}
 
 			By("Waiting for the CompatibilityRequirement to have the expected status with observed generation 1")
@@ -116,7 +125,7 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 
 			By("Waiting for the CompatibilityRequirement to have the expected status with observed generation 2")
 			checkForStatusWithGeneration(generation)
-		})
+		}, defaultNodeTimeout)
 
 		It("Should not admit a CompatibilityRequirement if the CompatibilitySchema.CRDYAML does not parse", func(ctx context.Context) {
 			requirement := test.GenerateTestCompatibilityRequirement(testCRDClean)
@@ -124,8 +133,8 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 
 			By("Attempting to create invalid CompatibilityRequirement " + requirement.Name)
 			expectedError := "admission webhook \"compatibilityrequirement.operator.openshift.io\" denied the request: expected a valid CustomResourceDefinition in YAML format: error unmarshaling JSON: while decoding JSON: json: cannot unmarshal string into Go value of type v1.CustomResourceDefinition"
-			Eventually(tryCreate(ctx, requirement), 10*time.Second).WithContext(ctx).Should(MatchError(expectedError))
-		})
+			Eventually(tryCreate(ctx, requirement)).WithContext(ctx).Should(MatchError(expectedError))
+		}, defaultNodeTimeout)
 
 		It("Should not admit a CompatibilityRequirement if the CompatibilitySchema.CRDYAML parses but is not a CRD", func(ctx context.Context) {
 			requirement := test.GenerateTestCompatibilityRequirement(testCRDClean)
@@ -133,8 +142,8 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 
 			By("Attempting to create invalid CompatibilityRequirement " + requirement.Name)
 			expectedError := "admission webhook \"compatibilityrequirement.operator.openshift.io\" denied the request: expected a valid CustomResourceDefinition in YAML format: expected APIVersion to be apiextensions.k8s.io/v1 and Kind to be CustomResourceDefinition, got /"
-			Eventually(tryCreate(ctx, requirement), 10*time.Second).WithContext(ctx).Should(MatchError(expectedError))
-		})
+			Eventually(tryCreate(ctx, requirement)).WithContext(ctx).Should(MatchError(expectedError))
+		}, defaultNodeTimeout)
 
 		It("Should not set an error when the CRD is not found", func(ctx context.Context) {
 			differentCRD := test.GenerateTestCRD()
@@ -143,14 +152,17 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 			createTestObject(ctx, requirement, "CompatibilityRequirement")
 
 			By("Waiting for the CompatibilityRequirement to have the expected status")
-			Eventually(kWithCtx(ctx).Object(requirement), 10*time.Second).WithContext(ctx).Should(SatisfyAll(
-				test.HaveCondition("Progressing", metav1.ConditionFalse, test.WithConditionReason(apiextensionsv1alpha1.CompatibilityRequirementUpToDateReason), test.WithConditionMessage("The CompatibilityRequirement is up to date")),
+			Eventually(kWithCtx(ctx).Object(requirement)).WithContext(ctx).Should(SatisfyAll(
+				HaveField("Status.Conditions", test.HaveCondition("Progressing").
+					WithStatus(metav1.ConditionFalse).
+					WithReason(apiextensionsv1alpha1.CompatibilityRequirementUpToDateReason).
+					WithMessage("The CompatibilityRequirement is up to date")),
 
 				// observed CRD should be empty
 				HaveField("Status.ObservedCRD.UID", BeZero()),
 				HaveField("Status.ObservedCRD.Generation", BeZero()),
 			))
-		})
+		}, defaultNodeTimeout)
 
 		Context("When creating a CompatibilityRequirement which is not compatible with the current CRD", func() {
 			addProperty := func(crd *apiextensionsv1.CustomResourceDefinition, prop string) func() {
@@ -178,41 +190,67 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 
 			It("Should set not Compatible", func(ctx context.Context) {
 				By("Checking that the CompatibilityRequirement is admitted but not compatible")
-				Eventually(kWithCtx(ctx).Object(requirement), 10*time.Second).WithContext(ctx).Should(SatisfyAll(
-					test.HaveCondition("Progressing", metav1.ConditionFalse, test.WithConditionReason(apiextensionsv1alpha1.CompatibilityRequirementUpToDateReason)),
-					test.HaveCondition("Admitted", metav1.ConditionTrue, test.WithConditionReason(apiextensionsv1alpha1.CompatibilityRequirementAdmittedReason)),
-					test.HaveCondition("Compatible", metav1.ConditionFalse, test.WithConditionReason(apiextensionsv1alpha1.CompatibilityRequirementRequirementsNotMetReason)),
-				))
-			})
+				Eventually(kWithCtx(ctx).Object(requirement)).WithContext(ctx).Should(
+					HaveField("Status.Conditions", SatisfyAll(
+						test.HaveCondition("Progressing").
+							WithStatus(metav1.ConditionFalse).
+							WithReason(apiextensionsv1alpha1.CompatibilityRequirementUpToDateReason),
+						test.HaveCondition("Admitted").
+							WithStatus(metav1.ConditionTrue).
+							WithReason(apiextensionsv1alpha1.CompatibilityRequirementAdmittedReason),
+						test.HaveCondition("Compatible").
+							WithStatus(metav1.ConditionFalse).
+							WithReason(apiextensionsv1alpha1.CompatibilityRequirementRequirementsNotMetReason),
+					)),
+				)
+			}, defaultNodeTimeout)
 
 			It("Should permit the CRD to be updated to be compatible", func(ctx context.Context) {
 				By("Checking that the CompatibilityRequirement is not compatible")
-				Eventually(kWithCtx(ctx).Object(requirement), 10*time.Second).WithContext(ctx).Should(SatisfyAll(
-					test.HaveCondition("Progressing", metav1.ConditionFalse, test.WithConditionReason(apiextensionsv1alpha1.CompatibilityRequirementUpToDateReason)),
-					test.HaveCondition("Compatible", metav1.ConditionFalse, test.WithConditionReason(apiextensionsv1alpha1.CompatibilityRequirementRequirementsNotMetReason)),
-				))
+				Eventually(kWithCtx(ctx).Object(requirement)).WithContext(ctx).Should(
+					HaveField("Status.Conditions", SatisfyAll(
+						test.HaveCondition("Progressing").
+							WithStatus(metav1.ConditionFalse).
+							WithReason(apiextensionsv1alpha1.CompatibilityRequirementUpToDateReason),
+						test.HaveCondition("Compatible").
+							WithStatus(metav1.ConditionFalse).
+							WithReason(apiextensionsv1alpha1.CompatibilityRequirementRequirementsNotMetReason),
+					)),
+				)
 
 				By("Updating the CRD to add the extra field")
 				Eventually(kWithCtx(ctx).Update(testCRDWorking, addProperty(testCRDWorking, "extra"))).WithContext(ctx).Should(Succeed())
 
 				By("Checking that the CompatibilityRequirement becomes compatible")
-				Eventually(kWithCtx(ctx).Object(requirement), 10*time.Second).WithContext(ctx).Should(SatisfyAll(
-					test.HaveCondition("Progressing", metav1.ConditionFalse, test.WithConditionReason(apiextensionsv1alpha1.CompatibilityRequirementUpToDateReason)),
-					test.HaveCondition("Compatible", metav1.ConditionTrue, test.WithConditionReason(apiextensionsv1alpha1.CompatibilityRequirementCompatibleReason)),
-				))
-			})
+				Eventually(kWithCtx(ctx).Object(requirement)).WithContext(ctx).Should(
+					HaveField("Status.Conditions", SatisfyAll(
+						test.HaveCondition("Progressing").
+							WithStatus(metav1.ConditionFalse).
+							WithReason(apiextensionsv1alpha1.CompatibilityRequirementUpToDateReason),
+						test.HaveCondition("Compatible").
+							WithStatus(metav1.ConditionTrue).
+							WithReason(apiextensionsv1alpha1.CompatibilityRequirementCompatibleReason),
+					)),
+				)
+			}, defaultNodeTimeout)
 
 			It("Should not permit the CRD to be updated if it would remain incompatible", func(ctx context.Context) {
 				By("Checking that the CompatibilityRequirement is not compatible")
-				Eventually(kWithCtx(ctx).Object(requirement), 10*time.Second).WithContext(ctx).Should(SatisfyAll(
-					test.HaveCondition("Progressing", metav1.ConditionFalse, test.WithConditionReason(apiextensionsv1alpha1.CompatibilityRequirementUpToDateReason)),
-					test.HaveCondition("Compatible", metav1.ConditionFalse, test.WithConditionReason(apiextensionsv1alpha1.CompatibilityRequirementRequirementsNotMetReason)),
-				))
+				Eventually(kWithCtx(ctx).Object(requirement)).WithContext(ctx).Should(
+					HaveField("Status.Conditions", SatisfyAll(
+						test.HaveCondition("Progressing").
+							WithStatus(metav1.ConditionFalse).
+							WithReason(apiextensionsv1alpha1.CompatibilityRequirementUpToDateReason),
+						test.HaveCondition("Compatible").
+							WithStatus(metav1.ConditionFalse).
+							WithReason(apiextensionsv1alpha1.CompatibilityRequirementRequirementsNotMetReason),
+					)),
+				)
 
 				By("Attempt to update the CRD to add a different extra field")
 				expectedError := "admission webhook \"compatibilityrequirement.operator.openshift.io\" denied the request: CRD is not compatible with CompatibilityRequirements: This requirement was added by CompatibilityRequirement " + requirement.Name + ": removed field : v1.^.extra"
 				Eventually(kWithCtx(ctx).Update(testCRDWorking, addProperty(testCRDWorking, "extra2"))).WithContext(ctx).Should(MatchError(expectedError))
-			})
+			}, defaultNodeTimeout)
 		})
 
 	})
@@ -228,7 +266,7 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 			updateCRD := createOrUpdateCRD(ctx, testCRDWorking, func() {
 				delete(testCRDWorking.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties, "status")
 			})
-			Eventually(updateCRD, 10*time.Second).WithContext(ctx).Should(MatchError(expectedError))
+			Eventually(updateCRD).WithContext(ctx).Should(MatchError(expectedError))
 		}
 
 		testCompatibleCRD := func(ctx context.Context, testCRD *apiextensionsv1.CustomResourceDefinition, createOrUpdateCRD func(context.Context, client.Object, func()) func() error) {
@@ -242,7 +280,7 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 					Type: "string",
 				}
 			})
-			Eventually(updateCRD, 10*time.Second).WithContext(ctx).Should(Succeed(), "The test CRD should be modified")
+			Eventually(updateCRD).WithContext(ctx).Should(Succeed(), "The test CRD should be modified")
 		}
 
 		Context("When modifying a CRD with a requirement", func() {
@@ -261,7 +299,7 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 			It("Should not permit a CRD with requirements to be deleted", func(ctx context.Context) {
 				By("Attempting to delete CRD " + testCRDClean.Name)
 				Eventually(tryDelete(ctx, testCRDClean)).WithContext(ctx).Should(MatchError(ContainSubstring(crdvalidation.ErrCRDHasRequirements.Error())), "The test CRD should not be deleted")
-			})
+			}, defaultNodeTimeout)
 
 			updateCRD := func(ctx context.Context, obj client.Object, updateFn func()) func() error {
 				return kWithCtx(ctx).Update(obj, updateFn)
@@ -269,11 +307,11 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 
 			It("Should not permit an incompatible CRD modification", func(ctx context.Context) {
 				testIncompatibleCRD(ctx, testCRDClean, requirement, updateCRD)
-			})
+			}, defaultNodeTimeout)
 
 			It("Should permit a compatible CRD modification", func(ctx context.Context) {
 				testCompatibleCRD(ctx, testCRDClean, updateCRD)
-			})
+			}, defaultNodeTimeout)
 		})
 
 		Context("When creating a CRD with a requirement", func() {
@@ -305,11 +343,11 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 
 			It("Should not permit an incompatible CRD to be created", func(ctx context.Context) {
 				testIncompatibleCRD(ctx, testCRDWorking, requirement, createCRD)
-			})
+			}, defaultNodeTimeout)
 
 			It("Should permit a compatible CRD to be created", func(ctx context.Context) {
 				testCompatibleCRD(ctx, testCRDWorking, createCRD)
-			})
+			}, defaultNodeTimeout)
 		})
 
 		Context("When creating a CRD with a requirement which has no CustomResourceDefinitionSchemaValidation", func() {
@@ -340,14 +378,14 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 
 			It("Should permit a compatible CRD to be created", func(ctx context.Context) {
 				testCompatibleCRD(ctx, testCRDWorking, createCRD)
-			})
+			}, defaultNodeTimeout)
 
 			It("Should permit an incompatible CRD to be created", func(ctx context.Context) {
 				updateCRD := createCRD(ctx, testCRDWorking, func() {
 					delete(testCRDWorking.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties, "status")
 				})
-				Eventually(updateCRD, 10*time.Second).WithContext(ctx).Should(Succeed(), "The test CRD should be modified")
-			})
+				Eventually(updateCRD).WithContext(ctx).Should(Succeed(), "The test CRD should be modified")
+			}, defaultNodeTimeout)
 		})
 	})
 })

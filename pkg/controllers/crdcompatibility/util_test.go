@@ -18,7 +18,6 @@ package crdcompatibility
 
 import (
 	"context"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -33,9 +32,9 @@ import (
 func waitForAdmitted(ctx context.Context, requirement *apiextensionsv1alpha1.CompatibilityRequirement) {
 	GinkgoHelper()
 	By("Waiting for the CompatibilityRequirement to be admitted")
-	Eventually(kWithCtx(ctx).Object(requirement), 10*time.Second).WithContext(ctx).Should(SatisfyAll(
-		test.HaveCondition("Admitted", metav1.ConditionTrue),
-	))
+	Eventually(kWithCtx(ctx).Object(requirement)).WithContext(ctx).Should(
+		HaveField("Status.Conditions", test.HaveCondition("Admitted").WithStatus(metav1.ConditionTrue)),
+	)
 }
 
 // createTestObject creates a test object and defers its deletion.
