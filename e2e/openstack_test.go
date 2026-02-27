@@ -1,3 +1,17 @@
+// Copyright 2026 Red Hat, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package e2e
 
 import (
@@ -6,13 +20,11 @@ import (
 	"github.com/onsi/gomega/format"
 	configv1 "github.com/openshift/api/config/v1"
 	mapiv1alpha1 "github.com/openshift/api/machine/v1alpha1"
-	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	"github.com/openshift/cluster-capi-operator/e2e/framework"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	yaml "sigs.k8s.io/yaml"
 
 	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
 
@@ -35,7 +47,7 @@ var _ = Describe("Cluster API OpenStack MachineSet", Ordered, func() {
 		if platform != configv1.OpenStackPlatformType {
 			Skip("Skipping OpenStack E2E tests")
 		}
-		mapiMachineSpec = getOpenStackMAPIProviderSpec(cl)
+		mapiMachineSpec = framework.GetMAPIProviderSpec[mapiv1alpha1.OpenstackProviderSpec](ctx, cl)
 	})
 
 	AfterEach(func() {
@@ -46,7 +58,7 @@ var _ = Describe("Cluster API OpenStack MachineSet", Ordered, func() {
 		}
 
 		framework.DeleteMachineSets(ctx, cl, machineSet)
-		framework.WaitForMachineSetsDeleted(cl, machineSet)
+		framework.WaitForMachineSetsDeleted(machineSet)
 		framework.DeleteObjects(ctx, cl, openStackMachineTemplate)
 	})
 
@@ -66,44 +78,32 @@ var _ = Describe("Cluster API OpenStack MachineSet", Ordered, func() {
 			"worker-user-data",
 		))
 
-		framework.WaitForMachineSet(cl, machineSet.Name, machineSet.Namespace)
+		framework.WaitForMachineSet(ctx, cl, machineSet.Name, machineSet.Namespace, framework.WaitLong)
 	})
 })
 
-func getOpenStackMAPIProviderSpec(cl client.Client) *mapiv1alpha1.OpenstackProviderSpec {
-	machineSetList := &mapiv1beta1.MachineSetList{}
-	Eventually(cl.List(ctx, machineSetList, client.InNamespace(framework.MAPINamespace))).Should(Succeed())
-
-	Expect(machineSetList.Items).ToNot(HaveLen(0), "No MachineSets found in namespace %s", framework.MAPINamespace)
-	machineSet := machineSetList.Items[0]
-	Expect(machineSet.Spec.Template.Spec.ProviderSpec.Value).ToNot(BeNil())
-
-	providerSpec := &mapiv1alpha1.OpenstackProviderSpec{}
-	Expect(yaml.Unmarshal(machineSet.Spec.Template.Spec.ProviderSpec.Value.Raw, providerSpec)).To(Succeed())
-
-	return providerSpec
-}
-
 func createOpenStackMachineTemplate(ctx context.Context, cl client.Client, mapiProviderSpec *mapiv1alpha1.OpenstackProviderSpec) *openstackv1.OpenStackMachineTemplate {
+	GinkgoHelper()
 	By("Creating OpenStack machine template")
 
-	Expect(mapiProviderSpec).ToNot(BeNil())
-	Expect(mapiProviderSpec.Flavor).ToNot(BeEmpty())
+	Expect(mapiProviderSpec).ToNot(BeNil(), "expected MAPI ProviderSpec to not be nil")
+	Expect(mapiProviderSpec.Flavor).ToNot(BeEmpty(), "expected Flavor to not be empty")
 	// NOTE(stephenfin): Installer does not populate ps.Image when ps.RootVolume is set and will
 	// instead populate ps.RootVolume.SourceUUID. Moreover, according to the ClusterOSImage option
 	// definition this is always the name of the image and never the UUID. We should allow UUID
 	// at some point and this will need an update.
 	if mapiProviderSpec.RootVolume != nil {
-		Expect(mapiProviderSpec.RootVolume.SourceUUID).ToNot(BeEmpty())
+		Expect(mapiProviderSpec.RootVolume.SourceUUID).ToNot(BeEmpty(), "expected RootVolume SourceUUID to not be empty")
 	} else {
-		Expect(mapiProviderSpec.Image).ToNot(BeEmpty())
+		Expect(mapiProviderSpec.Image).ToNot(BeEmpty(), "expected Image to not be empty")
 	}
-	Expect(len(mapiProviderSpec.Networks)).To(BeNumerically(">", 0))
-	Expect(len(mapiProviderSpec.Networks[0].Subnets)).To(BeNumerically(">", 0))
-	Expect(mapiProviderSpec.Tags).ToNot(BeNil())
-	Expect(len(mapiProviderSpec.Tags)).To(BeNumerically(">", 0))
+
+	Expect(mapiProviderSpec.Networks).ToNot(BeEmpty(), "expected at least one Network")
+	Expect(mapiProviderSpec.Networks[0].Subnets).ToNot(BeEmpty(), "expected at least one Subnet")
+	Expect(mapiProviderSpec.Tags).ToNot(BeEmpty(), "expected at least one Tag")
 
 	var image openstackv1.ImageParam
+
 	var rootVolume *openstackv1.RootVolume
 
 	if mapiProviderSpec.RootVolume != nil {
@@ -124,13 +124,16 @@ func createOpenStackMachineTemplate(ctx context.Context, cl client.Client, mapiP
 
 	// NOTE(stephenfin): We intentionally ignore additional security for now.
 	var securityGroupParam openstackv1.SecurityGroupParam
-	Expect(len(mapiProviderSpec.SecurityGroups)).To(BeNumerically(">", 0))
+
+	Expect(mapiProviderSpec.SecurityGroups).ToNot(BeEmpty(), "expected at least one SecurityGroup")
+
 	securityGroup := mapiProviderSpec.SecurityGroups[0]
 	if securityGroup.UUID != "" {
 		securityGroupParam = openstackv1.SecurityGroupParam{ID: &securityGroup.UUID}
 	} else {
 		securityGroupParam = openstackv1.SecurityGroupParam{Filter: &openstackv1.SecurityGroupFilter{Name: securityGroup.Name}}
 	}
+
 	securityGroups := []openstackv1.SecurityGroupParam{
 		securityGroupParam,
 	}

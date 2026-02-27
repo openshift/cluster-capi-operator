@@ -1,3 +1,17 @@
+// Copyright 2026 Red Hat, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package e2e
 
 import (
@@ -20,14 +34,14 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 			Skip(fmt.Sprintf("Skipping tests on %s, this is only supported on AWS", platform))
 		}
 
-		if !capiframework.IsMachineAPIMigrationEnabled(ctx, cl) {
+		if !capiframework.IsMachineAPIMigrationEnabled(ctx) {
 			Skip("Skipping, this feature is only supported on MachineAPIMigration enabled clusters")
 		}
 	})
 
-	var _ = Describe("Create MAPI MachineSets", Ordered, func() {
-		var mapiMSAuthCAPIName = "ms-authoritativeapi-capi"
-		var existingCAPIMSAuthorityCAPIName = "capi-machineset-authoritativeapi-capi"
+	Describe("Create MAPI MachineSets", Ordered, func() {
+		var mapiMSAuthCAPIName string
+		var existingCAPIMSAuthorityCAPIName string
 
 		var awsMachineTemplate *awsv1.AWSMachineTemplate
 		var capiMachineSet *clusterv1.MachineSet
@@ -36,11 +50,12 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 
 		Context("with spec.authoritativeAPI: ClusterAPI and existing CAPI MachineSet with same name", func() {
 			BeforeAll(func() {
+				existingCAPIMSAuthorityCAPIName = generateName("capi-ms-auth-capi-")
 				capiMachineSet = createCAPIMachineSet(ctx, cl, 0, existingCAPIMSAuthorityCAPIName, instanceType)
 
 				By("Creating a same name MAPI MachineSet")
 				mapiMachineSet = createMAPIMachineSetWithAuthoritativeAPI(ctx, cl, 0, existingCAPIMSAuthorityCAPIName, mapiv1beta1.MachineAuthorityClusterAPI, mapiv1beta1.MachineAuthorityClusterAPI)
-				awsMachineTemplate = waitForAWSMachineTemplate(cl, existingCAPIMSAuthorityCAPIName)
+				awsMachineTemplate = waitForAWSMachineTemplate(existingCAPIMSAuthorityCAPIName)
 
 				DeferCleanup(func() {
 					By("Cleaning up Context 'with spec.authoritativeAPI: ClusterAPI and existing CAPI MachineSet with same name' resources")
@@ -66,9 +81,10 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 
 		Context("with spec.authoritativeAPI: ClusterAPI and no existing CAPI MachineSet with same name", func() {
 			BeforeAll(func() {
+				mapiMSAuthCAPIName = generateName("ms-auth-capi-")
 				mapiMachineSet = createMAPIMachineSetWithAuthoritativeAPI(ctx, cl, 0, mapiMSAuthCAPIName, mapiv1beta1.MachineAuthorityClusterAPI, mapiv1beta1.MachineAuthorityClusterAPI)
-				capiMachineSet = waitForCAPIMachineSetMirror(cl, mapiMSAuthCAPIName)
-				awsMachineTemplate = waitForAWSMachineTemplate(cl, mapiMSAuthCAPIName)
+				capiMachineSet = waitForCAPIMachineSetMirror(mapiMSAuthCAPIName)
+				awsMachineTemplate = waitForAWSMachineTemplate(mapiMSAuthCAPIName)
 
 				DeferCleanup(func() {
 					By("Cleaning up Context 'with spec.authoritativeAPI: ClusterAPI and no existing CAPI MachineSet with same name' resources")
@@ -82,30 +98,27 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				})
 			})
 
-			It("should find MAPI MachineSet .status.authoritativeAPI to equal CAPI", func() {
+			It("should create a CAPI mirror and set conditions correctly", func() {
+				By("Verifying MAPI MachineSet .status.authoritativeAPI equals ClusterAPI")
 				verifyMachineSetAuthoritative(mapiMachineSet, mapiv1beta1.MachineAuthorityClusterAPI)
-			})
 
-			It("should verify that MAPI MachineSet Paused condition is True", func() {
+				By("Verifying that MAPI MachineSet Paused condition is True")
 				verifyMachineSetPausedCondition(mapiMachineSet, mapiv1beta1.MachineAuthorityClusterAPI)
-			})
 
-			It("should verify that MAPI MachineSet Synchronized condition is True", func() {
+				By("Verifying that MAPI MachineSet Synchronized condition is True")
 				verifyMAPIMachineSetSynchronizedCondition(mapiMachineSet, mapiv1beta1.MachineAuthorityClusterAPI)
-			})
 
-			It("should verify that the non-authoritative MAPI MachineSet has an authoritative CAPI MachineSet mirror", func() {
-				waitForCAPIMachineSetMirror(cl, mapiMSAuthCAPIName)
-			})
+				By("Verifying that the non-authoritative MAPI MachineSet has an authoritative CAPI MachineSet mirror")
+				waitForCAPIMachineSetMirror(mapiMSAuthCAPIName)
 
-			It("should verify that CAPI MachineSet has Paused condition False", func() {
+				By("Verifying that CAPI MachineSet has Paused condition False")
 				verifyMachineSetPausedCondition(capiMachineSet, mapiv1beta1.MachineAuthorityClusterAPI)
 			})
 		})
 	})
 
-	var _ = Describe("Scale MAPI MachineSets", Ordered, func() {
-		var mapiMSAuthCAPIName = "ms-authoritativeapi-capi"
+	Describe("Scale MAPI MachineSets", Ordered, func() {
+		var mapiMSAuthCAPIName string
 
 		var awsMachineTemplate *awsv1.AWSMachineTemplate
 		var capiMachineSet *clusterv1.MachineSet
@@ -115,14 +128,15 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 
 		Context("with spec.authoritativeAPI: ClusterAPI", Ordered, func() {
 			BeforeAll(func() {
+				mapiMSAuthCAPIName = generateName("ms-auth-capi-")
 				mapiMachineSet = createMAPIMachineSetWithAuthoritativeAPI(ctx, cl, 1, mapiMSAuthCAPIName, mapiv1beta1.MachineAuthorityClusterAPI, mapiv1beta1.MachineAuthorityClusterAPI)
-				capiMachineSet, awsMachineTemplate = waitForMAPIMachineSetMirrors(cl, mapiMSAuthCAPIName)
+				capiMachineSet, awsMachineTemplate = waitForMAPIMachineSetMirrors(mapiMSAuthCAPIName)
 
 				mapiMachines, err := mapiframework.GetMachinesFromMachineSet(ctx, cl, mapiMachineSet)
 				Expect(err).ToNot(HaveOccurred(), "failed to get MAPI Machines from MachineSet")
 				Expect(mapiMachines).ToNot(BeEmpty(), "no MAPI Machines found")
 
-				capiMachines := capiframework.GetMachinesFromMachineSet(cl, capiMachineSet)
+				capiMachines := capiframework.GetMachinesFromMachineSet(capiMachineSet)
 				Expect(capiMachines).ToNot(BeEmpty(), "no CAPI Machines found")
 				Expect(capiMachines[0].Name).To(Equal(mapiMachines[0].Name))
 				firstMAPIMachine = mapiMachines[0]
@@ -139,7 +153,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				})
 			})
 
-			It("should succeed scaling CAPI MachineSet to 2 replicas", func() {
+			It("should scale, switch authority, and clean up successfully", func() {
 				By("Scaling up CAPI MachineSet to 2 replicas")
 				capiframework.ScaleCAPIMachineSet(mapiMSAuthCAPIName, 2, capiframework.CAPINamespace)
 
@@ -148,8 +162,8 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				verifyMachinesetReplicas(mapiMachineSet, 2)
 
 				By("Verifying a new CAPI Machine is created and Paused condition is False")
-				capiMachineSet = capiframework.GetMachineSet(cl, mapiMSAuthCAPIName, capiframework.CAPINamespace)
-				capiMachine := capiframework.GetNewestMachineFromMachineSet(cl, capiMachineSet)
+				capiMachineSet = capiframework.GetMachineSetWithRetry(mapiMSAuthCAPIName, capiframework.CAPINamespace)
+				capiMachine := capiframework.GetNewestMachineFromMachineSet(capiMachineSet)
 				verifyMachineRunning(cl, capiMachine)
 				verifyMachinePausedCondition(capiMachine, mapiv1beta1.MachineAuthorityClusterAPI)
 
@@ -159,18 +173,15 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				Expect(err).ToNot(HaveOccurred(), "failed to get MAPI Machines from MachineSet")
 				verifyMachineAuthoritative(secondMAPIMachine, mapiv1beta1.MachineAuthorityClusterAPI)
 				verifyMachinePausedCondition(secondMAPIMachine, mapiv1beta1.MachineAuthorityClusterAPI)
-			})
 
-			It("should succeed switching MachineSet's AuthoritativeAPI to MachineAPI", func() {
+				By("Switching MachineSet's AuthoritativeAPI to MachineAPI")
 				switchMachineSetAuthoritativeAPI(mapiMachineSet, mapiv1beta1.MachineAuthorityMachineAPI)
 				verifyMachineSetAuthoritative(mapiMachineSet, mapiv1beta1.MachineAuthorityMachineAPI)
 				switchMachineSetTemplateAuthoritativeAPI(mapiMachineSet, mapiv1beta1.MachineAuthorityMachineAPI)
 				verifyMachineSetPausedCondition(mapiMachineSet, mapiv1beta1.MachineAuthorityMachineAPI)
 				verifyMachineSetPausedCondition(capiMachineSet, mapiv1beta1.MachineAuthorityMachineAPI)
 				verifyMAPIMachineSetSynchronizedCondition(mapiMachineSet, mapiv1beta1.MachineAuthorityMachineAPI)
-			})
 
-			It("should succeed scaling up MAPI MachineSet to 3, after switching AuthoritativeAPI to MachineAPI", func() {
 				By("Scaling up MAPI MachineSet to 3 replicas")
 				Expect(mapiframework.ScaleMachineSet(mapiMSAuthCAPIName, 3)).To(Succeed(), "should be able to scale up MAPI MachineSet")
 
@@ -186,54 +197,51 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				verifyMachinePausedCondition(mapiMachine, mapiv1beta1.MachineAuthorityMachineAPI)
 
 				By("Verifying there is a non-authoritative, paused CAPI Machine mirror for the new MAPI Machine")
-				capiMachine := capiframework.GetNewestMachineFromMachineSet(cl, capiMachineSet)
+				capiMachine = capiframework.GetNewestMachineFromMachineSet(capiMachineSet)
 				verifyMachinePausedCondition(capiMachine, mapiv1beta1.MachineAuthorityMachineAPI)
 
 				By("Verifying old Machines still exist and authority on them is still ClusterAPI")
 				verifyMachineAuthoritative(firstMAPIMachine, mapiv1beta1.MachineAuthorityClusterAPI)
 				verifyMachineAuthoritative(secondMAPIMachine, mapiv1beta1.MachineAuthorityClusterAPI)
-			})
 
-			It("should succeed scaling down MAPI MachineSet to 1, after the switch of AuthoritativeAPI to MachineAPI", func() {
 				By("Scaling down MAPI MachineSet to 1 replicas")
 				Expect(mapiframework.ScaleMachineSet(mapiMSAuthCAPIName, 1)).To(Succeed(), "should be able to scale down MAPI MachineSet")
 				verifyMachinesetReplicas(mapiMachineSet, 1)
 				verifyMachinesetReplicas(capiMachineSet, 1)
-			})
 
-			It("should succeed switching back MachineSet's AuthoritativeAPI to ClusterAPI, after the initial switch to AuthoritativeAPI: MachineAPI", func() {
+				By("Switching back MachineSet's AuthoritativeAPI to ClusterAPI")
 				switchMachineSetTemplateAuthoritativeAPI(mapiMachineSet, mapiv1beta1.MachineAuthorityClusterAPI)
 				switchMachineSetAuthoritativeAPI(mapiMachineSet, mapiv1beta1.MachineAuthorityClusterAPI)
 				verifyMachineSetPausedCondition(mapiMachineSet, mapiv1beta1.MachineAuthorityClusterAPI)
 				verifyMachineSetPausedCondition(capiMachineSet, mapiv1beta1.MachineAuthorityClusterAPI)
 				verifyMAPIMachineSetSynchronizedCondition(mapiMachineSet, mapiv1beta1.MachineAuthorityClusterAPI)
-			})
 
-			It("should delete both MAPI and CAPI MachineSets/Machines and InfraMachineTemplate when deleting CAPI MachineSet", func() {
+				By("Deleting CAPI MachineSet and verifying mirrors are removed")
 				capiframework.DeleteMachineSets(ctx, cl, capiMachineSet)
 				mapiframework.WaitForMachineSetsDeleted(ctx, cl, mapiMachineSet)
-				capiframework.WaitForMachineSetsDeleted(cl, capiMachineSet)
+				capiframework.WaitForMachineSetsDeleted(capiMachineSet)
 				verifyResourceRemoved(awsMachineTemplate)
 			})
 		})
 	})
 
-	var _ = Describe("Delete MachineSets", Ordered, func() {
-		var mapiMSAuthMAPIName = "ms-authoritativeapi-mapi"
+	Describe("Delete MachineSets", Ordered, func() {
+		var mapiMSAuthMAPIName string
 		var mapiMachineSet *mapiv1beta1.MachineSet
 		var capiMachineSet *clusterv1.MachineSet
 		var awsMachineTemplate *awsv1.AWSMachineTemplate
 
 		Context("when removing non-authoritative MAPI MachineSet", Ordered, func() {
 			BeforeAll(func() {
+				mapiMSAuthMAPIName = generateName("ms-auth-mapi-del-")
 				mapiMachineSet = createMAPIMachineSetWithAuthoritativeAPI(ctx, cl, 1, mapiMSAuthMAPIName, mapiv1beta1.MachineAuthorityMachineAPI, mapiv1beta1.MachineAuthorityMachineAPI)
-				capiMachineSet, awsMachineTemplate = waitForMAPIMachineSetMirrors(cl, mapiMSAuthMAPIName)
+				capiMachineSet, awsMachineTemplate = waitForMAPIMachineSetMirrors(mapiMSAuthMAPIName)
 
 				mapiMachines, err := mapiframework.GetMachinesFromMachineSet(ctx, cl, mapiMachineSet)
 				Expect(mapiMachines).ToNot(BeEmpty(), "no MAPI Machines found")
 				Expect(err).ToNot(HaveOccurred(), "failed to get MAPI Machines from MachineSet")
 
-				capiMachines := capiframework.GetMachinesFromMachineSet(cl, capiMachineSet)
+				capiMachines := capiframework.GetMachinesFromMachineSet(capiMachineSet)
 				Expect(capiMachines).ToNot(BeEmpty(), "no CAPI Machines found")
 				Expect(capiMachines[0].Name).To(Equal(mapiMachines[0].Name))
 
@@ -268,7 +276,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				verifyMachinesetReplicas(mapiMachineSet, 2)
 
 				By("Verifying new CAPI Machine is running")
-				capiMachine := capiframework.GetNewestMachineFromMachineSet(cl, capiMachineSet)
+				capiMachine := capiframework.GetNewestMachineFromMachineSet(capiMachineSet)
 				verifyMachineRunning(cl, capiMachine)
 				verifyMachinePausedCondition(capiMachine, mapiv1beta1.MachineAuthorityClusterAPI)
 
@@ -281,11 +289,11 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				By("Deleting non-authoritative MAPI MachineSet")
 				mapiMachineSet, err = mapiframework.GetMachineSet(ctx, cl, mapiMSAuthMAPIName)
 				Expect(err).ToNot(HaveOccurred(), "failed to get mapiMachineSet")
-				mapiframework.DeleteMachineSets(cl, mapiMachineSet)
+				Expect(mapiframework.DeleteMachineSets(cl, mapiMachineSet)).To(Succeed())
 
 				By("Verifying CAPI MachineSet not removed, both MAPI Machines and Mirrors remain")
 				// TODO: Add full verification once OCPBUGS-56897 is fixed
-				capiMachineSet = capiframework.GetMachineSet(cl, mapiMSAuthMAPIName, capiframework.CAPINamespace)
+				capiMachineSet = capiframework.GetMachineSetWithRetry(mapiMSAuthMAPIName, capiframework.CAPINamespace)
 				Expect(capiMachineSet).ToNot(BeNil(), "CAPI MachineSet should still exist after deleting non-authoritative MAPI MachineSet")
 				Expect(capiMachineSet.DeletionTimestamp.IsZero()).To(BeTrue(), "CAPI MachineSet should not be marked for deletion")
 			})
