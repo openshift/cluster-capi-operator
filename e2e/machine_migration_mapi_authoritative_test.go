@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 	configv1 "github.com/openshift/api/config/v1"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	mapiframework "github.com/openshift/cluster-api-actuator-pkg/pkg/framework"
@@ -11,6 +12,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
+	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 )
 
 var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Machine Migration MAPI Authoritative Tests", Ordered, func() {
@@ -199,6 +201,130 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 					TypeMeta:   metav1.TypeMeta{Kind: "AWSMachine", APIVersion: awsv1.GroupVersion.String()},
 					ObjectMeta: metav1.ObjectMeta{Name: mapiCapiMapiRoundTripName, Namespace: capiframework.CAPINamespace},
 				})
+			})
+		})
+	})
+
+	var _ = Describe("Update MAPI Machine", Ordered, func() {
+		var mapiUpdateTestName = "machine-update-mapi-test"
+		var newMapiMachine *mapiv1beta1.Machine
+		var newCapiMachine *clusterv1.Machine
+		var previousState *MachineState
+		Context("with spec.authoritativeAPI: MachineAPI (both MAPI and CAPI machine exist)", func() {
+			BeforeAll(func() {
+				newMapiMachine = createMAPIMachineWithAuthority(ctx, cl, mapiUpdateTestName, mapiv1beta1.MachineAuthorityMachineAPI)
+				verifyMachineRunning(cl, newMapiMachine)
+				newCapiMachine = capiframework.GetMachine(cl, newMapiMachine.Name, capiframework.CAPINamespace)
+
+				DeferCleanup(func() {
+					By("Cleaning up machine resources")
+					cleanupMachineResources(
+						ctx,
+						cl,
+						[]*clusterv1.Machine{newCapiMachine},
+						[]*mapiv1beta1.Machine{newMapiMachine},
+					)
+				})
+			})
+
+			It("should add labels/annotations on MAPI machine", func() {
+				// Capture state before the update
+				previousState = captureMachineStateBeforeUpdate(cl, newMapiMachine)
+
+				Eventually(komega.Update(newMapiMachine, func() {
+					if newMapiMachine.Labels == nil {
+						newMapiMachine.Labels = make(map[string]string)
+					}
+					if newMapiMachine.Annotations == nil {
+						newMapiMachine.Annotations = make(map[string]string)
+					}
+					newMapiMachine.Labels["test-mapi-label"] = "test-mapi-label-value"
+					newMapiMachine.Annotations["test-mapi-annotation"] = "test-mapi-annotation-value"
+				}), capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(), "Failed to add MAPI Machine labels/annotations")
+			})
+
+			It("should synchronize added labels/annotations to CAPI", func() {
+				Eventually(komega.Object(newCapiMachine), capiframework.WaitMedium, capiframework.RetryMedium).Should(
+					SatisfyAll(
+						WithTransform(func(m *clusterv1.Machine) string {
+							return m.Labels["test-mapi-label"]
+						}, Equal("test-mapi-label-value")),
+						WithTransform(func(m *clusterv1.Machine) string {
+							return m.Annotations["test-mapi-annotation"]
+						}, Equal("test-mapi-annotation-value")),
+					),
+					"Added labels/annotations should be synchronized to CAPI Machine",
+				)
+			})
+
+			It("should not update synchronized conditions and generation after adding labels/annotations", func() {
+				Eventually(komega.Get(newMapiMachine), capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(), "Failed to get updated MAPI Machine")
+
+				verifyMachineStateUnchanged(cl, newMapiMachine, previousState, mapiv1beta1.MachineAuthorityMachineAPI, "adding labels/annotations")
+			})
+
+			It("should modify existing labels/annotations on MAPI machine", func() {
+				// Capture state before the update
+				previousState = captureMachineStateBeforeUpdate(cl, newMapiMachine)
+
+				Eventually(komega.Update(newMapiMachine, func() {
+					newMapiMachine.Labels["test-mapi-label"] = "modified-mapi-label-value"
+					newMapiMachine.Annotations["test-mapi-annotation"] = "modified-mapi-annotation-value"
+				}), capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(), "Failed to modify MAPI Machine labels/annotations")
+			})
+
+			It("should synchronize modified labels/annotations to CAPI", func() {
+				Eventually(komega.Object(newCapiMachine), capiframework.WaitMedium, capiframework.RetryMedium).Should(
+					SatisfyAll(
+						WithTransform(func(m *clusterv1.Machine) string {
+							return m.Labels["test-mapi-label"]
+						}, Equal("modified-mapi-label-value")),
+						WithTransform(func(m *clusterv1.Machine) string {
+							return m.Annotations["test-mapi-annotation"]
+						}, Equal("modified-mapi-annotation-value")),
+					),
+					"Modified labels/annotations should be synchronized to CAPI Machine",
+				)
+			})
+
+			It("should not update synchronized conditions and generation after modifying labels/annotations", func() {
+				Eventually(komega.Get(newMapiMachine), capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(), "Failed to get updated MAPI Machine")
+
+				verifyMachineStateUnchanged(cl, newMapiMachine, previousState, mapiv1beta1.MachineAuthorityMachineAPI, "modifying labels/annotations")
+			})
+
+			It("should delete labels/annotations on MAPI machine", func() {
+				// Capture state before the update
+				previousState = captureMachineStateBeforeUpdate(cl, newMapiMachine)
+
+				Eventually(komega.Update(newMapiMachine, func() {
+					delete(newMapiMachine.Labels, "test-mapi-label")
+					delete(newMapiMachine.Annotations, "test-mapi-annotation")
+				}), capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(), "Failed to delete MAPI Machine labels/annotations")
+			})
+
+			// It didn't sync to CAPI for deleting labels/annotations
+			// https://issues.redhat.com/browse/OCPBUGS-61596
+			PIt("should synchronize label/annotation deletion to CAPI", func() {
+				Eventually(komega.Object(newCapiMachine), capiframework.WaitMedium, capiframework.RetryMedium).Should(
+					SatisfyAll(
+						WithTransform(func(m *clusterv1.Machine) bool {
+							_, exists := m.Labels["test-mapi-label"]
+							return exists
+						}, BeFalse()),
+						WithTransform(func(m *clusterv1.Machine) bool {
+							_, exists := m.Annotations["test-mapi-annotation"]
+							return exists
+						}, BeFalse()),
+					),
+					"Deleted labels/annotations should be synchronized to CAPI Machine",
+				)
+			})
+
+			It("should not update synchronized conditions and generation after deleting labels/annotations", func() {
+				Eventually(komega.Get(newMapiMachine), capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(), "Failed to get updated MAPI Machine")
+
+				verifyMachineStateUnchanged(cl, newMapiMachine, previousState, mapiv1beta1.MachineAuthorityMachineAPI, "deleting labels/annotations")
 			})
 		})
 	})
