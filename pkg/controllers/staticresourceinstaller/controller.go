@@ -20,11 +20,14 @@ import (
 	"io/fs"
 	"path/filepath"
 
+	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	v1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	k8serrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/utils/clock"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -39,6 +42,7 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 	"github.com/openshift/library-go/pkg/operator/events"
 	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
+	"github.com/openshift/library-go/pkg/operator/resource/resourceread"
 )
 
 // Assets is an interface that can be used to read assets from a filesystem.
@@ -48,8 +52,10 @@ type Assets interface {
 }
 
 type staticResourceInstallerController struct {
-	assetNames []string // The names of the assets to install.
-	kubeClient kubernetes.Interface
+	assetNames                          []string // The names of the assets to install.
+	client                              client.Client
+	kubeClient                          kubernetes.Interface
+	initialClusterOperatorsBootstrapped bool
 
 	assets        Assets
 	resourceCache resourceapply.ResourceCache
@@ -65,6 +71,8 @@ func NewStaticResourceInstallerController(assets Assets) *staticResourceInstalle
 
 // SetupWithManager sets up the static resource installer controller with the given manager.
 func (c *staticResourceInstallerController) SetupWithManager(ctx context.Context, mgr ctrl.Manager) error {
+	c.client = mgr.GetClient()
+
 	// The assets are an embedded filesystem and won't change over time.
 	assets, err := c.assets.ReadAssets()
 	if err != nil {
@@ -82,11 +90,11 @@ func (c *staticResourceInstallerController) SetupWithManager(ctx context.Context
 
 	build := ctrl.NewControllerManagedBy(mgr).
 		Named("static-resource-installer").
-		// We only want to reconcile an initial time when the cluster operator is created
-		// in the cache, later reconciles will happen based on watches for individual assets.
+		// We only want to reconcile updates until we have observed that the cluster operators are all bootstrapped.
+		// This allows us to inject FailurePolicy: Ignore for webhooks during cluster bootstrap.
 		For(&configv1.ClusterOperator{}, builder.WithPredicates(predicate.Funcs{
 			CreateFunc:  func(e event.CreateEvent) bool { return e.Object.GetName() == controllers.ClusterOperatorName },
-			UpdateFunc:  func(e event.UpdateEvent) bool { return false },
+			UpdateFunc:  func(e event.UpdateEvent) bool { return !c.initialClusterOperatorsBootstrapped },
 			DeleteFunc:  func(e event.DeleteEvent) bool { return false },
 			GenericFunc: func(e event.GenericEvent) bool { return false },
 		}))
@@ -124,7 +132,7 @@ func (c *staticResourceInstallerController) Reconcile(ctx context.Context, req c
 			Name: "cluster-api",
 		}, clock.RealClock{}),
 		c.resourceCache,
-		c.assets.Asset,
+		c.mutateAsset(ctx),
 		c.assetNames...,
 	)
 
@@ -161,4 +169,219 @@ func objectNamePredicate(name string) predicate.Predicate {
 	return predicate.NewPredicateFuncs(func(obj client.Object) bool {
 		return obj.GetName() == name
 	})
+}
+
+func (c *staticResourceInstallerController) mutateAsset(ctx context.Context) func(string) ([]byte, error) {
+	return func(name string) ([]byte, error) {
+		raw, err := c.assets.Asset(name)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read asset %s: %w", name, err)
+		}
+
+		requiredObj, err := resourceread.ReadGenericWithUnstructured(raw)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode asset %s: %w", name, err)
+		}
+
+		switch t := requiredObj.(type) {
+		case *admissionregistrationv1.ValidatingWebhookConfiguration:
+			return c.mutateValidatingWebhookConfiguration(ctx, raw, t)
+		case *admissionregistrationv1.MutatingWebhookConfiguration:
+			return c.mutateMutatingWebhookConfiguration(ctx, raw, t)
+		}
+
+		return raw, nil
+	}
+}
+
+type webhookPolicy struct {
+	Name          string
+	FailurePolicy *admissionregistrationv1.FailurePolicyType
+}
+
+func (c *staticResourceInstallerController) mutateValidatingWebhookConfiguration(ctx context.Context, raw []byte, obj *admissionregistrationv1.ValidatingWebhookConfiguration) ([]byte, error) {
+	currentObj := &admissionregistrationv1.ValidatingWebhookConfiguration{}
+
+	if err := c.client.Get(ctx, client.ObjectKey{Name: obj.Name}, currentObj); err != nil && !apierrors.IsNotFound(err) {
+		return nil, fmt.Errorf("failed to get validating webhook configuration %s: %w", obj.Name, err)
+	} else if err != nil && apierrors.IsNotFound(err) {
+		// If the object doesn't currently exist, apply it initially with the failure policy set to ignore
+		// so that we don't block cluster operators during cluster bootstrap.
+		for i := range obj.Webhooks {
+			obj.Webhooks[i].FailurePolicy = ptr.To(admissionregistrationv1.Ignore)
+		}
+
+		data, err := k8syaml.Marshal(obj)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal object: %w", err)
+		}
+
+		return data, nil
+	}
+
+	clusterBootstrapped, err := c.clusterBootstrapped(ctx,
+		util.SliceMap(obj.Webhooks, func(webhook admissionregistrationv1.ValidatingWebhook) webhookPolicy {
+			return webhookPolicy{
+				Name:          webhook.Name,
+				FailurePolicy: webhook.FailurePolicy,
+			}
+		}),
+		util.SliceMap(currentObj.Webhooks, func(webhook admissionregistrationv1.ValidatingWebhook) webhookPolicy {
+			return webhookPolicy{
+				Name:          webhook.Name,
+				FailurePolicy: webhook.FailurePolicy,
+			}
+		}))
+	if err != nil {
+		return nil, fmt.Errorf("failed to check if cluster is bootstrapped: %w", err)
+	}
+
+	if clusterBootstrapped {
+		return raw, nil
+	}
+
+	// Cluster isn't yet bootstrapped, force all webhooks to ignore failures so that we don't block cluster operators during cluster bootstrap.
+	for i := range obj.Webhooks {
+		obj.Webhooks[i].FailurePolicy = ptr.To(admissionregistrationv1.Ignore)
+	}
+
+	data, err := k8syaml.Marshal(obj)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal object: %w", err)
+	}
+
+	return data, nil
+}
+
+func (c *staticResourceInstallerController) mutateMutatingWebhookConfiguration(ctx context.Context, raw []byte, obj *admissionregistrationv1.MutatingWebhookConfiguration) ([]byte, error) {
+	currentObj := &admissionregistrationv1.MutatingWebhookConfiguration{}
+
+	if err := c.client.Get(ctx, client.ObjectKey{Name: obj.Name}, currentObj); err != nil && !apierrors.IsNotFound(err) {
+		return nil, fmt.Errorf("failed to get validating webhook configuration %s: %w", obj.Name, err)
+	} else if err != nil && apierrors.IsNotFound(err) {
+		// If the object doesn't currently exist, apply it initially with the failure policy set to ignore
+		// so that we don't block cluster operators during cluster bootstrap.
+		for i := range obj.Webhooks {
+			obj.Webhooks[i].FailurePolicy = ptr.To(admissionregistrationv1.Ignore)
+		}
+
+		data, err := k8syaml.Marshal(obj)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal object: %w", err)
+		}
+
+		return data, nil
+	}
+
+	clusterBootstrapped, err := c.clusterBootstrapped(ctx,
+		util.SliceMap(obj.Webhooks, func(webhook admissionregistrationv1.MutatingWebhook) webhookPolicy {
+			return webhookPolicy{
+				Name:          webhook.Name,
+				FailurePolicy: webhook.FailurePolicy,
+			}
+		}),
+		util.SliceMap(currentObj.Webhooks, func(webhook admissionregistrationv1.MutatingWebhook) webhookPolicy {
+			return webhookPolicy{
+				Name:          webhook.Name,
+				FailurePolicy: webhook.FailurePolicy,
+			}
+		}),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check if cluster is bootstrapped: %w", err)
+	}
+
+	if clusterBootstrapped {
+		return raw, nil
+	}
+
+	// Cluster isn't yet bootstrapped, force all webhooks to ignore failures so that we don't block cluster operators during cluster bootstrap.
+	for i := range obj.Webhooks {
+		obj.Webhooks[i].FailurePolicy = ptr.To(admissionregistrationv1.Ignore)
+	}
+
+	data, err := k8syaml.Marshal(obj)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal object: %w", err)
+	}
+
+	return data, nil
+}
+
+func (c *staticResourceInstallerController) clusterBootstrapped(ctx context.Context, webhooks, currentWebhooks []webhookPolicy) (bool, error) {
+	// First check if the existing policies match the desired policies.
+	// This means we already applied the manifest as it comes from the assets directly
+	// without any mutation. To do that, the cluster must already have been bootstrapped.
+	policiesMatch := true
+
+	for _, webhook := range webhooks {
+		for _, currentWebhook := range currentWebhooks {
+			if webhook.Name == currentWebhook.Name {
+				policiesMatch = policiesMatch && webhook.FailurePolicy != nil && currentWebhook.FailurePolicy != nil && *webhook.FailurePolicy == *currentWebhook.FailurePolicy
+			}
+		}
+	}
+
+	if policiesMatch {
+		return true, nil
+	}
+
+	return c.clusterOperatorsBootstrapped(ctx)
+}
+
+func (c *staticResourceInstallerController) clusterOperatorsBootstrapped(ctx context.Context) (bool, error) {
+	if c.initialClusterOperatorsBootstrapped {
+		// We have previously seen all cluster operators bootstrapped since we started the controller.
+		return true, nil
+	}
+
+	// Check all cluster operators and wait for them all to be bootstrapped.
+	// Once they are bootstrapped, we can apply the manifest directly
+	// as it is within the assets folder.
+	clusterOperators := &configv1.ClusterOperatorList{}
+	if err := c.client.List(ctx, clusterOperators); err != nil {
+		return false, fmt.Errorf("failed to list cluster operators: %w", err)
+	}
+
+	for _, clusterOperator := range clusterOperators.Items {
+		if !clusterOperatorBootstrapped(clusterOperator) {
+			return false, nil
+		}
+	}
+
+	c.initialClusterOperatorsBootstrapped = true
+
+	return true, nil
+}
+
+func clusterOperatorBootstrapped(clusterOperator configv1.ClusterOperator) bool {
+	conditions := clusterOperator.Status.Conditions
+
+	available, ok := clusterOperatorCondition(conditions, configv1.OperatorAvailable)
+	if !ok {
+		return false
+	}
+
+	progressing, ok := clusterOperatorCondition(conditions, configv1.OperatorProgressing)
+	if !ok {
+		return false
+	}
+
+	degraded, ok := clusterOperatorCondition(conditions, configv1.OperatorDegraded)
+	if !ok {
+		return false
+	}
+
+	return available.Status == configv1.ConditionTrue &&
+		progressing.Status == configv1.ConditionFalse &&
+		degraded.Status == configv1.ConditionFalse
+}
+
+func clusterOperatorCondition(conditions []configv1.ClusterOperatorStatusCondition, conditionType configv1.ClusterStatusConditionType) (configv1.ClusterOperatorStatusCondition, bool) {
+	for _, condition := range conditions {
+		if condition.Type == conditionType {
+			return condition, true
+		}
+	}
+	return configv1.ClusterOperatorStatusCondition{}, false
 }
