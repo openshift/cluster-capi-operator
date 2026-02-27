@@ -293,6 +293,26 @@ var _ = Describe("RevisionController", Serial, func() {
 		Expect(clusterAPI.Status.DesiredRevision).To(Equal(newRev.Name))
 	}, defaultNodeTimeout)
 
+	It("creates revision with empty components when no providers match the platform", func(ctx context.Context) {
+		// Stop manager with default (matching) providers
+		mgr.stop()
+
+		// Restart with only GCP providers on an AWS cluster — no providers match
+		mgr = newManagerWrapper(nonMatchingProviderImgs)
+
+		// Wait for the controller to create the second revision
+		Eventually(kWithCtx(ctx).Object(clusterAPI)).
+			WithContext(ctx).
+			Should(HaveField("Status.Revisions", HaveLen(2)))
+
+		// The new revision should have empty components
+		newRev := latestRevision(clusterAPI.Status.Revisions)
+		Expect(newRev.Components).To(BeEmpty())
+
+		// DesiredRevision should point to the new revision
+		Expect(clusterAPI.Status.DesiredRevision).To(Equal(newRev.Name))
+	}, defaultNodeTimeout)
+
 	It("trims old revisions when current matches latest", func(ctx context.Context) {
 		// BeforeEach created rev1 from defaultProviderImgs.
 		mgr.stop()
@@ -393,32 +413,6 @@ var _ = Describe("RevisionController", Serial, func() {
 		updatedClusterAPI := &operatorv1alpha1.ClusterAPI{}
 		Expect(cl.Get(ctx, client.ObjectKey{Name: "cluster"}, updatedClusterAPI)).To(Succeed())
 		Expect(updatedClusterAPI.Status.Revisions).To(HaveLen(16))
-	}, defaultNodeTimeout)
-})
-
-// XXX: This is wrong! The API should not reject an empty revision.
-// Fix this when https://github.com/openshift/api/pull/2728 merges.
-var _ = Describe("RevisionController empty revision", Serial, func() {
-	It("reports error when no profiles match the platform", func(ctx context.Context) {
-		createFixtures(ctx)
-
-		// Only GCP providers on an AWS cluster — buildComponentList returns empty.
-		mgr := newManagerWrapper(nonMatchingProviderImgs)
-		DeferCleanup(func() {
-			mgr.stop()
-		})
-
-		// The controller will attempt to write a revision with zero components,
-		// which violates the Components MinItems=1 API constraint.
-		waitForConditions(ctx,
-			test.HaveCondition(conditionTypeProgressing).
-				WithStatus(configv1.ConditionTrue),
-		)
-
-		// No revisions should have been persisted.
-		ca := &operatorv1alpha1.ClusterAPI{}
-		Expect(cl.Get(ctx, client.ObjectKey{Name: "cluster"}, ca)).To(Succeed())
-		Expect(ca.Status.Revisions).To(BeEmpty())
 	}, defaultNodeTimeout)
 })
 
