@@ -300,7 +300,7 @@ func validatingWebhookConfigurationFor(obj *apiextensionsv1alpha1.CompatibilityR
 				AdmissionReviewVersions: []string{"v1"},
 				ClientConfig: admissionregistrationv1.WebhookClientConfig{
 					Service: &admissionregistrationv1.ServiceReference{
-						Name:      "compatibility-requirements-controllers-validation-webhook-service",
+						Name:      "compatibility-requirements-controllers-webhook-service",
 						Namespace: "openshift-compatibility-requirements-operator",
 						Path:      ptr.To(fmt.Sprintf("%s%s", objectvalidation.WebhookPrefix, obj.Name)),
 					},
@@ -365,7 +365,7 @@ func mutatingWebhookConfigurationFor(obj *apiextensionsv1alpha1.CompatibilityReq
 				AdmissionReviewVersions: []string{"v1"},
 				ClientConfig: admissionregistrationv1.WebhookClientConfig{
 					Service: &admissionregistrationv1.ServiceReference{
-						Name:      "compatibility-requirements-controllers-validation-webhook-service",
+						Name:      "compatibility-requirements-controllers-webhook-service",
 						Namespace: "openshift-compatibility-requirements-operator",
 						Path:      ptr.To(fmt.Sprintf("%s%s", objectpruning.WebhookPrefix, obj.Name)),
 					},
