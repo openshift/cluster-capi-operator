@@ -106,7 +106,7 @@ var _ = Describe("CRDCompatibilityReconciler Controller Setup", func() {
 					}
 
 					return requirement, nil
-				}).Should(test.HaveCondition("Admitted", metav1.ConditionTrue))
+				}).Should(HaveField("Status.Conditions", test.HaveCondition("Admitted").WithStatus(metav1.ConditionTrue)))
 			}
 
 			for _, requirement := range nonAdmittedRequirements {
@@ -124,7 +124,7 @@ var _ = Describe("CRDCompatibilityReconciler Controller Setup", func() {
 					}
 
 					return requirement, nil
-				}).Should(test.HaveCondition("Admitted", metav1.ConditionFalse))
+				}).Should(HaveField("Status.Conditions", test.HaveCondition("Admitted").WithStatus(metav1.ConditionFalse)))
 			}
 		})
 
@@ -158,7 +158,7 @@ var _ = Describe("CRDCompatibilityReconciler Controller Setup", func() {
 					HaveField("LastTransitionTime", BeEquivalentTo(originalTransitionTime)),
 				))))
 			}
-		})
+		}, defaultNodeTimeout)
 
 		It("should remove the objects finalizer when the requirement is deleted", func(ctx context.Context) {
 			for _, requirement := range admittedRequirements {
@@ -178,6 +178,6 @@ var _ = Describe("CRDCompatibilityReconciler Controller Setup", func() {
 					return cl.Get(ctx, types.NamespacedName{Name: requirement.Name}, requirement)
 				}).Should(test.BeK8SNotFound())
 			}
-		})
+		}, defaultNodeTimeout)
 	})
 })
