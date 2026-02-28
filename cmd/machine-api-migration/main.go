@@ -34,6 +34,7 @@ import (
 	"k8s.io/utils/clock"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
+	vspherev1 "sigs.k8s.io/cluster-api-provider-vsphere/apis/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 
 	"github.com/openshift/api/features"
@@ -63,6 +64,7 @@ func initScheme(scheme *runtime.Scheme) {
 	utilruntime.Must(configv1.Install(scheme))
 	utilruntime.Must(awsv1.AddToScheme(scheme))
 	utilruntime.Must(openstackv1.AddToScheme(scheme))
+	utilruntime.Must(vspherev1.AddToScheme(scheme))
 	utilruntime.Must(clusterv1.AddToScheme(scheme))
 }
 
@@ -92,7 +94,7 @@ func main() {
 	}
 
 	ctx := ctrl.SetupSignalHandler()
-	checkFeatureGates(ctx, mgr)
+	featureGateAccessor := checkFeatureGates(ctx, mgr)
 
 	infra, err := util.GetInfra(ctx, mgr.GetAPIReader())
 	if err != nil {
@@ -111,7 +113,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	checkPlatformSupported(ctx, platform)
+	checkPlatformSupported(ctx, platform, featureGateAccessor)
 
 	for name, controller := range getControllers(opts, platform, infra, infraTypes) {
 		if err := controller.SetupWithManager(mgr); err != nil {
@@ -128,7 +130,7 @@ func main() {
 	}
 }
 
-func checkFeatureGates(ctx context.Context, mgr ctrl.Manager) {
+func checkFeatureGates(ctx context.Context, mgr ctrl.Manager) featuregates.FeatureGateAccess {
 	featureGateAccessor, err := getFeatureGates(ctx, mgr)
 	if err != nil {
 		klog.Error(err, "unable to get feature gates")
@@ -145,13 +147,27 @@ func checkFeatureGates(ctx context.Context, mgr ctrl.Manager) {
 		klog.Info("MachineAPIMigration feature gate is not enabled, nothing to do. Waiting for termination signal.")
 		exitAfterTerminationSignal(ctx)
 	}
+
+	return featureGateAccessor
 }
 
-func checkPlatformSupported(ctx context.Context, platform configv1.PlatformType) {
+func checkPlatformSupported(ctx context.Context, platform configv1.PlatformType, featureGateAccessor featuregates.FeatureGateAccess) {
 	switch platform {
 	case configv1.AWSPlatformType, configv1.OpenStackPlatformType:
 		klog.Infof("MachineAPIMigration: starting %s controllers", platform)
+	case configv1.VSpherePlatformType:
+		currentFeatureGates, err := featureGateAccessor.CurrentFeatureGates()
+		if err != nil {
+			klog.Error(err, "unable to get current feature gates")
+			os.Exit(1)
+		}
 
+		if !currentFeatureGates.Enabled(features.FeatureGateClusterAPIMachineManagementVSphere) {
+			klog.Info("ClusterAPIMachineManagementVSphere feature gate is not enabled for vSphere platform. Waiting for termination signal.")
+			exitAfterTerminationSignal(ctx)
+		}
+
+		klog.Infof("MachineAPIMigration: starting %s controllers", platform)
 	default:
 		klog.Infof("MachineAPIMigration not implemented for platform %s, nothing to do. Waiting for termination signal.", platform)
 		exitAfterTerminationSignal(ctx)
