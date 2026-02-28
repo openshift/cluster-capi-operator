@@ -1065,11 +1065,11 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 		)
 
 		BeforeEach(func() {
-			By("Loading the transport config maps")
-			transportConfigMaps := admissiontestutils.LoadTransportConfigMaps()
+			By("Loading admission policy profiles")
+			admissionPolicies := admissiontestutils.LoadAdmissionPolicyProfiles()
 
-			By("Applying the objects found in clusterAPICustomAdmissionPolicies")
-			for _, obj := range transportConfigMaps[admissiontestutils.ClusterAPICustomAdmissionPolicies] {
+			By("Applying the default admission policies")
+			for _, obj := range admissionPolicies[admissiontestutils.DefaultProfile] {
 				// Deep‑copy so the loop variable isn’t mutated by the client
 				newObj, ok := obj.DeepCopyObject().(client.Object)
 				Expect(ok).To(BeTrue())
@@ -2555,15 +2555,15 @@ var _ = Describe("Unsupported AWS fields validating admission policy", Ordered, 
 	BeforeAll(func() {
 		k = komega.New(k8sClient)
 
-		By("Loading the transport config maps")
-		transportConfigMaps := admissiontestutils.LoadTransportConfigMaps()
+		By("Loading admission policy profiles")
+		admissionPolicies := admissiontestutils.LoadAdmissionPolicyProfiles()
 
 		By("creating a namespace for the test")
 		namespace = corev1resourcebuilder.Namespace().WithGenerateName("unsupported-aws-fields-").Build()
 		Eventually(k8sClient.Create(ctx, namespace)).Should(Succeed(), "namespace should be able to be created")
 
-		By("Applying the objects found in clusterAPIAWSAdmissionPolicies for the test namespace")
-		for _, obj := range transportConfigMaps[admissiontestutils.ClusterAPIAWSAdmissionPolicies] {
+		By("Applying the AWS admission policies for the test namespace")
+		for _, obj := range admissionPolicies[admissiontestutils.AWSProfile] {
 			newObj, ok := obj.DeepCopyObject().(client.Object)
 			Expect(ok).To(BeTrue())
 

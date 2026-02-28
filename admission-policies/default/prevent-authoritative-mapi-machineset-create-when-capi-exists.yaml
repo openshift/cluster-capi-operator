@@ -1,0 +1,46 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: openshift-prevent-authoritative-mapi-machineset-create-when-capi-exists 
+spec:
+  failurePolicy: Fail
+  paramKind:
+    apiVersion: cluster.x-k8s.io/v1beta2
+    kind: MachineSet
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["machine.openshift.io"]
+        apiVersions: ["*"]
+        operations: ["CREATE"]
+        resources: ["machinesets"]
+  # Requests must satisfy every matchCondition to reach the validations
+  matchConditions:
+    - name: check-param-match
+      expression: 'object.metadata.name == params.metadata.name'
+  # All validations must evaluate to true
+  validations:
+    # Only allow creation of a Machine API MachineSet with the same name as an
+    # existing CAPI one if spec.authoritativeAPI == ClusterAPI
+    - expression: 'object.spec.authoritativeAPI == "ClusterAPI"'
+      messageExpression: "'Can\\'t create Machine API MachineSet ' + object.metadata.name + ' with spec.authoritativeAPI: ' + object.spec.?authoritativeAPI.orValue('<unset>') + ' because a Cluster API MachineSet with the same name already exists.'"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: openshift-prevent-authoritative-mapi-machineset-create-when-capi-exists
+spec:
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: openshift-machine-api
+  paramRef:
+    namespace: openshift-cluster-api
+    # We 'Allow' here as we don't want to block MAPI MachineSet
+    # functionality when no CAPI machineset (param) exists.
+    # This might happen when the synchronisation controller first
+    # is installed or when an unmigrateable machineset is encountered.
+    parameterNotFoundAction: Allow
+    selector: {}
+  policyName: openshift-prevent-authoritative-mapi-machineset-create-when-capi-exists
+  validationActions:
+      - Deny
