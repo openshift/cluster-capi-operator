@@ -16,6 +16,7 @@ limitations under the License.
 package test
 
 import (
+	"github.com/google/go-cmp/cmp"
 	"github.com/onsi/gomega"
 	"github.com/onsi/gomega/types"
 
@@ -26,4 +27,22 @@ import (
 // returned by the Kubernetes API.
 func BeK8SNotFound() types.GomegaMatcher {
 	return gomega.WithTransform(apierrors.IsNotFound, gomega.BeTrue())
+}
+
+// MatchViaDiff is a gomega matcher that checks if the actual object is equal to the expected object by using cmp.Diff.
+// This is useful for complex objects where you want to focus on a small subset of the object when there is a difference.
+func MatchViaDiff(expected any) types.GomegaMatcher {
+	return gomega.WithTransform(func(actual any) string {
+		return cmp.Diff(expected, actual)
+	}, gomega.BeEmpty())
+}
+
+// IgnoreFields is a gomega matcher that ignores the specified fields in the object.
+func IgnoreFields(fields []string, matcher types.GomegaMatcher) types.GomegaMatcher {
+	return gomega.WithTransform(func(obj map[string]interface{}) map[string]interface{} {
+		for _, field := range fields {
+			delete(obj, field)
+		}
+		return obj
+	}, matcher)
 }

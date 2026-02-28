@@ -33,6 +33,8 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility"
 	crdcompatibilitybindata "github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility/bindata"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility/crdvalidation"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility/objectpruning"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility/objectvalidation"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/staticresourceinstaller"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 
@@ -145,6 +147,20 @@ func main() {
 	staticResourceInstaller := staticresourceinstaller.NewStaticResourceInstallerController(crdcompatibilitybindata.Assets)
 	if err := staticResourceInstaller.SetupWithManager(ctx, mgr); err != nil {
 		klog.Error(err, "unable to create controller", "controller", "StaticResourceInstaller")
+		os.Exit(1)
+	}
+
+	objectValidator := objectvalidation.NewValidator()
+	// Setup the objectvalidation controller and webhook
+	if err := objectValidator.SetupWithManager(ctx, mgr); err != nil {
+		klog.Error(err, "unable to create controller", "controller", "ObjectValidator")
+		os.Exit(1)
+	}
+
+	objectPruner := objectpruning.NewValidator()
+	// Setup the objectpruning controller and webhook
+	if err := objectPruner.SetupWithManager(ctx, mgr); err != nil {
+		klog.Error(err, "unable to create controller", "controller", "ObjectPruner")
 		os.Exit(1)
 	}
 
