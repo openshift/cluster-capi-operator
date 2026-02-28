@@ -123,7 +123,7 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 			requirement.Spec.CompatibilitySchema.CustomResourceDefinition.Data = "not YAML"
 
 			By("Attempting to create invalid CompatibilityRequirement " + requirement.Name)
-			expectedError := "admission webhook \"compatibilityrequirement.operator.openshift.io\" denied the request: expected a valid CustomResourceDefinition in YAML format: error unmarshaling JSON: while decoding JSON: json: cannot unmarshal string into Go value of type v1.CustomResourceDefinition"
+			expectedError := "admission webhook \"compatibilityrequirement.operator.openshift.io\" denied the request: spec.compatibilitySchema.customResourceDefinition.data: Invalid value: \"not YAML\": expected a valid CustomResourceDefinition in YAML format: error unmarshaling JSON: while decoding JSON: json: cannot unmarshal string into Go value of type v1.CustomResourceDefinition"
 			Eventually(tryCreate(ctx, requirement), 10*time.Second).WithContext(ctx).Should(MatchError(expectedError))
 		})
 
@@ -132,7 +132,7 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 			requirement.Spec.CompatibilitySchema.CustomResourceDefinition.Data = "{}"
 
 			By("Attempting to create invalid CompatibilityRequirement " + requirement.Name)
-			expectedError := "admission webhook \"compatibilityrequirement.operator.openshift.io\" denied the request: expected a valid CustomResourceDefinition in YAML format: expected APIVersion to be apiextensions.k8s.io/v1 and Kind to be CustomResourceDefinition, got /"
+			expectedError := "admission webhook \"compatibilityrequirement.operator.openshift.io\" denied the request: spec.compatibilitySchema.customResourceDefinition.data: Invalid value: \"\": expected a valid CustomResourceDefinition in YAML format: expected APIVersion to be apiextensions.k8s.io/v1 and Kind to be CustomResourceDefinition, got /"
 			Eventually(tryCreate(ctx, requirement), 10*time.Second).WithContext(ctx).Should(MatchError(expectedError))
 		})
 
