@@ -16,7 +16,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"fmt"
 	"maps"
@@ -31,12 +30,12 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	klog "k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 
+	"github.com/go-logr/logr"
 	configv1 "github.com/openshift/api/config/v1"
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 
@@ -48,7 +47,7 @@ import (
 )
 
 const (
-	managerName = "cluster-capi-installer"
+	managerName = "capi-operator"
 
 	defaultImagesLocation       = "./dev-images.json"
 	providerImageDirEnvVar      = "PROVIDER_IMAGE_DIR"
@@ -77,6 +76,8 @@ func main() {
 
 	opts.Parse()
 
+	log := ctrl.Log.WithName("capi-operator")
+
 	cacheOpts := cache.Options{
 		DefaultNamespaces: map[string]cache.Config{
 			*opts.CAPINamespace:     {},
@@ -88,49 +89,67 @@ func main() {
 	mgrOpts, _ := opts.GetCommonManagerOptions()
 	mgrOpts.Cache = cacheOpts
 	mgrOpts.Scheme = scheme
+	mgrOpts.Logger = log
 
 	cfg := ctrl.GetConfigOrDie()
-	ctx := ctrl.SetupSignalHandler()
+	ctx, cancel := context.WithCancel(ctrl.SetupSignalHandler())
 
 	mgr, err := ctrl.NewManager(cfg, mgrOpts)
 	if err != nil {
-		klog.Error(err, "unable to create manager")
+		log.Error(err, "unable to create manager")
 		os.Exit(1)
 	}
 
 	if err := util.AddCommonChecks(mgr); err != nil {
-		klog.Error(err, "unable to add common checks")
+		log.Error(err, "unable to add common checks")
 		os.Exit(1)
 	}
 
-	if err := setupControllers(ctx, mgr, opts, *imagesFile); err != nil {
-		klog.Error(err, "unable to setup controllers")
+	if err := setupControllers(ctx, log, mgr, opts, *imagesFile, cancel); err != nil {
+		log.Error(err, "unable to setup controllers")
 		os.Exit(1)
 	}
 
-	klog.Info("Starting cluster-capi-installer manager")
+	log.Info("Starting " + managerName + " manager")
 
 	if err := mgr.Start(ctx); err != nil {
-		klog.Error(err)
+		log.Error(err, "problem running manager")
 		os.Exit(1)
 	}
 }
 
-func setupControllers(ctx context.Context, mgr ctrl.Manager, opts *util.CommonOptions, imagesFile string) error {
+func setupControllers(ctx context.Context, log logr.Logger, mgr ctrl.Manager, opts *util.CommonOptions, imagesFile string, cancel context.CancelFunc) error {
 	infra, err := util.GetInfra(ctx, mgr.GetAPIReader())
 	if err != nil {
 		return fmt.Errorf("unable to get infrastructure: %w", err)
 	}
 
-	isUnsupportedPlatform := false
-
-	_, platform, err := util.GetCAPITypesForInfrastructure(infra)
+	platform, err := util.GetPlatformFromInfra(infra)
 	if err != nil {
-		if errors.Is(err, util.ErrUnsupportedPlatform) {
-			isUnsupportedPlatform = true
-		} else {
-			return fmt.Errorf("unable to get infrastructure types: %w", err)
-		}
+		return fmt.Errorf("unable to get platform: %w", err)
+	}
+
+	featureGates, err := util.GetFeatureGates(ctx, log, managerName, mgr.GetConfig(), cancel)
+	if err != nil {
+		return fmt.Errorf("unable to get feature gates: %w", err)
+	}
+
+	supportedPlatform := util.IsCAPIEnabledForPlatform(featureGates, infra.Status.PlatformStatus.Type)
+
+	if err := (&clusteroperator.ClusterOperatorController{
+		ClusterOperatorStatusClient: opts.GetClusterOperatorStatusClient(mgr, platform, "clusteroperator"),
+		Scheme:                      mgr.GetScheme(),
+		IsUnsupportedPlatform:       !supportedPlatform,
+	}).SetupWithManager(mgr); err != nil {
+		return fmt.Errorf("unable to create clusteroperator controller: %w", err)
+	}
+
+	// The ClusterOperatorController MUST run if we were installed, otherwise
+	// our ClusterOperator will not be reconciled and installation will not
+	// progress. We don't run any other controllers if the current platform is
+	// not supported.
+	if !supportedPlatform {
+		return nil
 	}
 
 	containerImages, providerProfiles, err := loadProviderImages(ctx, mgr, imagesFile)
@@ -140,14 +159,6 @@ func setupControllers(ctx context.Context, mgr ctrl.Manager, opts *util.CommonOp
 
 	if err := setupCapiInstallerController(mgr, opts, platform, containerImages, providerProfiles); err != nil {
 		return err
-	}
-
-	if err := (&clusteroperator.ClusterOperatorController{
-		ClusterOperatorStatusClient: opts.GetClusterOperatorStatusClient(mgr, platform, "clusteroperator"),
-		Scheme:                      mgr.GetScheme(),
-		IsUnsupportedPlatform:       isUnsupportedPlatform,
-	}).SetupWithManager(mgr); err != nil {
-		return fmt.Errorf("unable to create clusteroperator controller: %w", err)
 	}
 
 	return nil
