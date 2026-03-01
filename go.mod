@@ -9,6 +9,7 @@ tool (
 	github.com/openshift/api/config/v1/zz_generated.crd-manifests
 	github.com/openshift/api/machine/v1beta1/zz_generated.crd-manifests
 	github.com/openshift/api/operator/v1/zz_generated.crd-manifests
+	github.com/openshift/api/operator/v1alpha1/zz_generated.crd-manifests
 	sigs.k8s.io/controller-runtime/tools/setup-envtest
 )
 
@@ -42,8 +43,8 @@ require (
 	github.com/metal3-io/cluster-api-provider-metal3/api v1.11.2
 	github.com/onsi/ginkgo/v2 v2.27.2
 	github.com/onsi/gomega v1.38.2
-	github.com/openshift/api v0.0.0-20260205045418-81371d13d1fc
-	github.com/openshift/client-go v0.0.0-20260108185524-48f4ccfc4e13
+	github.com/openshift/api v0.0.0-20260227165130-5a7add616a90
+	github.com/openshift/client-go v0.0.0-20260219131751-7e63ce155298
 	github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0
 	github.com/openshift/library-go v0.0.0-20251222131241-289839b3ffe8
 	github.com/pkg/errors v0.9.1

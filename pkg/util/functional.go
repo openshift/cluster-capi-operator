@@ -15,6 +15,10 @@ limitations under the License.
 */
 package util
 
+import (
+	"iter"
+)
+
 // SliceMap applies a map function to each element of a slice and returns a new slice.
 func SliceMap[A, B any](source []A, fn func(A) B) []B {
 	if len(source) == 0 {
@@ -27,4 +31,17 @@ func SliceMap[A, B any](source []A, fn func(A) B) []B {
 	}
 
 	return result
+}
+
+// IterFilter returns a new iterator that applies a filter to the input iterator.
+func IterFilter[T any](i iter.Seq[T], filter func(T) bool) iter.Seq[T] {
+	return func(yield func(T) bool) {
+		for item := range i {
+			if filter(item) {
+				if !yield(item) {
+					return
+				}
+			}
+		}
+	}
 }
