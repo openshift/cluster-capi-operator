@@ -41,7 +41,7 @@ func waitForAdmitted(ctx context.Context, requirement *apiextensionsv1alpha1.Com
 func createTestObject(ctx context.Context, obj client.Object, desc string) {
 	GinkgoHelper()
 	By("Creating test " + desc)
-	Eventually(func() error { return cl.Create(ctx, obj) }).WithContext(ctx).Should(Succeed())
+	Eventually(func() error { return cl.Create(ctx, obj) }, 10*time.Second).WithContext(ctx).Should(Succeed())
 	GinkgoWriter.Println("Created " + desc + " " + obj.GetName())
 
 	deferCleanupTestObject(obj, desc)

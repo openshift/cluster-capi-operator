@@ -29,7 +29,6 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/utils/ptr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/yaml"
 )
@@ -147,12 +146,10 @@ func GenerateCRD(gvk schema.GroupVersionKind, additionalVersions ...string) *api
 					Type: "object",
 					Properties: map[string]apiextensionsv1.JSONSchemaProps{
 						"spec": {
-							Type:                   "object",
-							XPreserveUnknownFields: ptr.To(true),
+							Type: "object",
 						},
 						"status": {
-							Type:                   "object",
-							XPreserveUnknownFields: ptr.To(true),
+							Type: "object",
 						},
 					},
 				},
