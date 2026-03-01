@@ -25,6 +25,8 @@ import (
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	configv1 "github.com/openshift/api/config/v1"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility/bindata"
 )
 
@@ -99,6 +101,54 @@ var _ = Describe("StaticResourceInstaller Controller", Ordered, ContinueOnFailur
 
 			By("Verifying that the resource is recreated")
 			Eventually(kWithCtx(ctx).Object(vwc), 10*time.Second).WithContext(ctx).Should(HaveField("ObjectMeta.UID", Not(Equal(originalUID))))
+		})
+
+		It("should set the failure policy to ignore for webhooks when the cluster is not bootstrapped", func() {
+			// Check initially that the clusteroperator isn't reporting that it is bootstrapped.
+			co := &configv1.ClusterOperator{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: controllers.ClusterOperatorName,
+				},
+			}
+			Eventually(kWithCtx(ctx).Object(co), 10*time.Second).WithContext(ctx).Should(HaveField("Status.Conditions", BeEmpty()))
+
+			By("Verifying that the failure policy is set to ignore")
+			Eventually(kWithCtx(ctx).ObjectList(&admissionregistrationv1.ValidatingWebhookConfigurationList{}), 10*time.Second).WithContext(ctx).Should(HaveField("Items", HaveEach(
+				HaveField("Webhooks", ConsistOf(HaveField("FailurePolicy", HaveValue(Equal(admissionregistrationv1.Ignore))))),
+			)))
+		})
+
+		It("should set the failure policy to fail once the cluster is bootstrapped", func() {
+			// Update the conditions on the cluster operator to report that it is bootstrapped.
+			co := &configv1.ClusterOperator{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: controllers.ClusterOperatorName,
+				},
+			}
+			Eventually(kWithCtx(ctx).UpdateStatus(co, func() {
+				co.Status.Conditions = []configv1.ClusterOperatorStatusCondition{
+					{
+						Type:               configv1.OperatorAvailable,
+						Status:             configv1.ConditionTrue,
+						LastTransitionTime: metav1.NewTime(time.Now()),
+					},
+					{
+						Type:               configv1.OperatorProgressing,
+						Status:             configv1.ConditionFalse,
+						LastTransitionTime: metav1.NewTime(time.Now()),
+					},
+					{
+						Type:               configv1.OperatorDegraded,
+						Status:             configv1.ConditionFalse,
+						LastTransitionTime: metav1.NewTime(time.Now()),
+					},
+				}
+			}), 10*time.Second).WithContext(ctx).Should(Succeed())
+
+			By("Verifying that the failure policy is set to fail")
+			Eventually(kWithCtx(ctx).ObjectList(&admissionregistrationv1.ValidatingWebhookConfigurationList{}), 10*time.Second).WithContext(ctx).Should(HaveField("Items", HaveEach(
+				HaveField("Webhooks", ConsistOf(HaveField("FailurePolicy", HaveValue(Equal(admissionregistrationv1.Fail))))),
+			)))
 		})
 	})
 })
