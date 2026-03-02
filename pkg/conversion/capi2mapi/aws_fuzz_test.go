@@ -29,6 +29,7 @@ import (
 	conversiontest "github.com/openshift/cluster-capi-operator/pkg/conversion/test/fuzz"
 
 	runtimeserializer "k8s.io/apimachinery/pkg/runtime/serializer"
+	"k8s.io/utils/ptr"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -155,7 +156,7 @@ func awsMachineFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interface{} 
 		func(spec *awsv1.AWSMachineSpec, c randfill.Continue) {
 			c.FillNoCustom(spec)
 
-			fuzzAWSMachineSpecTenancy(&spec.Tenancy, c)
+			fuzzAWSMachineSpecTenancy(spec, c)
 			fuzzAWSMachineSpecMarketType(&spec.MarketType, c)
 			fuzzAWSMachineSpecCPUOptions(&spec.CPUOptions, c)
 
@@ -191,17 +192,32 @@ func awsMachineFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interface{} 
 	}
 }
 
-func fuzzAWSMachineSpecTenancy(tenancy *string, c randfill.Continue) {
-	switch c.Int31n(4) {
-	case 0:
-		*tenancy = "default"
-	case 1:
-		*tenancy = "dedicated"
-	case 2:
-		*tenancy = "host"
-	case 3:
-		*tenancy = ""
+type awsTenancyConfig struct {
+	tenancy               string
+	hostAffinity          *string
+	hostID                *string
+	dynamicHostAllocation *awsv1.DynamicHostAllocationSpec
+}
+
+func fuzzAWSMachineSpecTenancy(spec *awsv1.AWSMachineSpec, c randfill.Continue) {
+	configs := []awsTenancyConfig{
+		{tenancy: capi2mapi.TenancyDefault},
+		{tenancy: capi2mapi.TenancyDedicated},
+		{tenancy: capi2mapi.TenancyHost, hostAffinity: ptr.To("default")},
+		{tenancy: capi2mapi.TenancyHost, hostAffinity: ptr.To("default"), hostID: ptr.To("h-0123456789abcdef0")},
+		{tenancy: capi2mapi.TenancyHost, hostAffinity: ptr.To("host"), hostID: ptr.To("h-0123456789abcdef0")},
+		{tenancy: ""},
+		{tenancy: capi2mapi.TenancyHost, hostAffinity: ptr.To("host"), dynamicHostAllocation: &awsv1.DynamicHostAllocationSpec{}},
+		{tenancy: capi2mapi.TenancyHost, hostAffinity: ptr.To("host"), dynamicHostAllocation: &awsv1.DynamicHostAllocationSpec{
+			Tags: map[string]string{"test-key-1": "test-value-1", "test-key-2": "test-value-2"},
+		}},
 	}
+
+	cfg := configs[c.Int31n(int32(len(configs)))]
+	spec.Tenancy = cfg.tenancy
+	spec.HostAffinity = cfg.hostAffinity
+	spec.HostID = cfg.hostID
+	spec.DynamicHostAllocation = cfg.dynamicHostAllocation
 }
 
 func fuzzAWSMachineSpecMarketType(marketType *awsv1.MarketType, c randfill.Continue) {

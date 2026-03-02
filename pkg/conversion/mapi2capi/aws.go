@@ -273,10 +273,6 @@ func (m *awsMachineAndInfra) toAWSMachine(providerSpec mapiv1beta1.AWSMachinePro
 		// ImageLookupOrg. Not used in OpenShift.
 		// NetworkInterfaces. Not used in OpenShift.
 
-		// TODO: add conversion from MAPI HostPlacement to CAPA HostAffinity and HostID when the MAPA API is finalized.
-		// HostAffinity: not set yet as they are not stable in MAPI yet.
-		// HostID: not set yet as they are not stable in MAPI yet.
-
 		NetworkInterfaceType:    convertNetworkInterfaceType(providerSpec.NetworkInterfaceType),
 		InstanceMetadataOptions: instanceMetadataOptions,
 		InstanceType:            providerSpec.InstanceType,
@@ -285,12 +281,15 @@ func (m *awsMachineAndInfra) toAWSMachine(providerSpec mapiv1beta1.AWSMachinePro
 		PlacementGroupPartition: int64(ptr.Deref(providerSpec.PlacementGroupPartition, 0)),
 		// ProviderID. This is populated when this is called in higher level funcs (ToMachine(), ToMachineSet()).
 		// InstanceID. This is populated when this is called in higher level funcs (ToMachine(), ToMachineSet()).
-		PublicIP:          providerSpec.PublicIP,
-		RootVolume:        rootVolume,
-		SSHKeyName:        providerSpec.KeyName,
-		SpotMarketOptions: convertAWSSpotMarketOptionsToCAPI(providerSpec.SpotMarketOptions),
-		Subnet:            convertAWSResourceReferenceToCAPI(providerSpec.Subnet),
-		Tenancy:           string(providerSpec.Placement.Tenancy),
+		PublicIP:              providerSpec.PublicIP,
+		RootVolume:            rootVolume,
+		SSHKeyName:            providerSpec.KeyName,
+		SpotMarketOptions:     convertAWSSpotMarketOptionsToCAPI(providerSpec.SpotMarketOptions),
+		Subnet:                convertAWSResourceReferenceToCAPI(providerSpec.Subnet),
+		Tenancy:               string(providerSpec.Placement.Tenancy),
+		HostAffinity:          convertAWSHostAffinityToCAPI(providerSpec.Placement.Host),
+		HostID:                convertAWSHostIDToCAPI(providerSpec.Placement.Host),
+		DynamicHostAllocation: convertAWSDynamicHostAllocationToCAPI(providerSpec.Placement.Host),
 		// UncompressedUserData: Not used in OpenShift.
 		MarketType: capiAWSMarketType,
 		CPUOptions: convertAWSCPUOptionsToCAPI(providerSpec.CPUOptions),
@@ -394,6 +393,13 @@ func convertMAPIMachineStatusToAWSMachineStatus(mapiMachine *mapiv1beta1.Machine
 		// FailureMessage: // Not set here because we already set it on the Cluster API Machine form .Status.ErrMessage
 	}
 
+	// Convert DedicatedHost status if present
+	if mapiProviderStatus.DedicatedHost != nil && mapiProviderStatus.DedicatedHost.ID != "" {
+		s.DedicatedHost = &awsv1.DedicatedHostStatus{
+			ID: ptr.To(mapiProviderStatus.DedicatedHost.ID),
+		}
+	}
+
 	return s, errs
 }
 
@@ -454,6 +460,14 @@ func AWSProviderSpecFromRawExtension(rawExtension *runtime.RawExtension) (mapiv1
 		return spec.Tags[i].Name < spec.Tags[j].Name
 	})
 
+	placement := spec.Placement
+	if placement.Host != nil && placement.Host.DedicatedHost != nil && placement.Host.DedicatedHost.DynamicHostAllocation != nil && placement.Host.DedicatedHost.DynamicHostAllocation.Tags != nil {
+		tags := *spec.Placement.Host.DedicatedHost.DynamicHostAllocation.Tags
+		sort.Slice(tags, func(i, j int) bool {
+			return tags[i].Name < tags[j].Name
+		})
+	}
+
 	return spec, nil
 }
 
@@ -495,6 +509,76 @@ func awsMachineToAWSMachineTemplate(awsMachine *awsv1.AWSMachine, name string, n
 }
 
 //////// Conversion helpers
+
+func convertAWSHostAffinityToCAPI(placement *mapiv1beta1.HostPlacement) *string {
+	// Affinity is a ptr.  Even though field is required, API decided to allow it for webhook to be able to have different result message.
+	// We need to make sure placement AND affinity are not nil in order to process.
+	if placement != nil && placement.Affinity != nil {
+		switch *placement.Affinity {
+		case mapiv1beta1.HostAffinityAnyAvailable:
+			return ptr.To("default")
+		case mapiv1beta1.HostAffinityDedicatedHost:
+			return ptr.To("host")
+		default:
+			return nil
+		}
+	}
+
+	return nil
+}
+
+func convertAWSHostIDToCAPI(placement *mapiv1beta1.HostPlacement) *string {
+	if placement == nil || placement.Affinity == nil {
+		return nil
+	}
+
+	if placement.DedicatedHost == nil {
+		return nil
+	}
+
+	affinity := *placement.Affinity
+	if affinity != mapiv1beta1.HostAffinityAnyAvailable && affinity != mapiv1beta1.HostAffinityDedicatedHost {
+		return nil
+	}
+
+	// If AllocationStrategy is nil or UserProvided, use the ID field
+	// AllocationStrategy defaults to UserProvided, so nil means UserProvided
+	isUserProvided := placement.DedicatedHost.AllocationStrategy == nil ||
+		*placement.DedicatedHost.AllocationStrategy == mapiv1beta1.AllocationStrategyUserProvided
+
+	if !isUserProvided {
+		return nil
+	}
+
+	if placement.DedicatedHost.ID == "" {
+		return nil
+	}
+
+	return ptr.To(placement.DedicatedHost.ID)
+}
+
+func convertAWSDynamicHostAllocationToCAPI(placement *mapiv1beta1.HostPlacement) *awsv1.DynamicHostAllocationSpec {
+	if placement != nil && placement.DedicatedHost != nil &&
+		placement.DedicatedHost.AllocationStrategy != nil &&
+		*placement.DedicatedHost.AllocationStrategy == mapiv1beta1.AllocationStrategyDynamic {
+		if placement.DedicatedHost.DynamicHostAllocation != nil && placement.DedicatedHost.DynamicHostAllocation.Tags != nil {
+			// Convert the tag slice to a map
+			tags := make(map[string]string)
+			for _, tag := range *placement.DedicatedHost.DynamicHostAllocation.Tags {
+				tags[tag.Name] = tag.Value
+			}
+
+			return &awsv1.DynamicHostAllocationSpec{
+				Tags: tags,
+			}
+		}
+
+		// Return an empty spec if DynamicHostAllocation is not set but AllocationStrategy is Dynamic
+		return &awsv1.DynamicHostAllocationSpec{}
+	}
+
+	return nil
+}
 
 func convertAWSAMIResourceReferenceToCAPI(fldPath *field.Path, amiRef mapiv1beta1.AWSResourceReference) (awsv1.AMIReference, *field.Error) {
 	if amiRef.ARN != nil {
