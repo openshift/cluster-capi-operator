@@ -1,15 +1,19 @@
 FROM registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.24-openshift-4.22 AS builder
 WORKDIR /go/src/github.com/openshift/cluster-capi-operator
 COPY . .
-RUN make build
+RUN make build && \
+    gzip bin/cluster-capi-operator-ext
 
 FROM registry.ci.openshift.org/ocp/4.22:base-rhel9
 COPY --from=builder /go/src/github.com/openshift/cluster-capi-operator/bin/capi-operator .
 COPY --from=builder /go/src/github.com/openshift/cluster-capi-operator/bin/capi-controllers .
 COPY --from=builder /go/src/github.com/openshift/cluster-capi-operator/bin/machine-api-migration .
 COPY --from=builder /go/src/github.com/openshift/cluster-capi-operator/bin/crd-compatibility-checker .
+COPY --from=builder /go/src/github.com/openshift/cluster-capi-operator/bin/cluster-capi-operator-ext.gz .
 
 COPY ./manifests /manifests
 COPY ./capi-operator-manifests /capi-operator-manifests
 
-LABEL io.openshift.release.operator true
+LABEL io.k8s.display-name="OpenShift Cluster CAPI Operator" \
+    io.openshift.release.operator=true \
+    io.openshift.tags="openshift,tests,e2e,e2e-extension"
