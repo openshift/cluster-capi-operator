@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package util
+package commoncmdoptions
 
 import (
 	"crypto/tls"
@@ -29,6 +29,7 @@ import (
 	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
+	"github.com/openshift/cluster-capi-operator/pkg/util"
 	"github.com/spf13/pflag"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/component-base/config"
@@ -139,7 +140,7 @@ func (opts *CommonOptions) GetClusterOperatorStatusClient(mgr ctrl.Manager, plat
 	return operatorstatus.ClusterOperatorStatusClient{
 		Client:            mgr.GetClient(),
 		Recorder:          mgr.GetEventRecorderFor(opts.managerName + "-" + controllerName),
-		ReleaseVersion:    GetReleaseVersion(),
+		ReleaseVersion:    util.GetReleaseVersion(),
 		ManagedNamespace:  *opts.CAPINamespace,
 		OperatorNamespace: *opts.OperatorNamespace,
 		Platform:          platform,

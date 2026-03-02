@@ -34,12 +34,13 @@ import (
 	crdcompatibilitybindata "github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility/bindata"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility/crdvalidation"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/staticresourceinstaller"
-	"github.com/openshift/cluster-capi-operator/pkg/util"
 
 	capiflags "sigs.k8s.io/cluster-api/util/flags"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	crwebhook "sigs.k8s.io/controller-runtime/pkg/webhook"
+
+	"github.com/openshift/cluster-capi-operator/pkg/commoncmdoptions"
 )
 
 func initScheme(scheme *runtime.Scheme) {
@@ -57,9 +58,9 @@ func main() {
 
 	leaderElectionConfig := config.LeaderElectionConfiguration{
 		LeaderElect:       true,
-		LeaseDuration:     util.LeaseDuration,
-		RenewDeadline:     util.RenewDeadline,
-		RetryPeriod:       util.RetryPeriod,
+		LeaseDuration:     commoncmdoptions.LeaseDuration,
+		RenewDeadline:     commoncmdoptions.RenewDeadline,
+		RetryPeriod:       commoncmdoptions.RetryPeriod,
 		ResourceName:      "crd-compatibility-checker-leader",
 		ResourceNamespace: "openshift-compatibility-requirements-operator",
 	}

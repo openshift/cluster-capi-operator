@@ -16,7 +16,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"fmt"
 	"maps"
@@ -31,24 +30,26 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	klog "k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 
+	"github.com/go-logr/logr"
 	configv1 "github.com/openshift/api/config/v1"
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 
+	"github.com/openshift/cluster-capi-operator/pkg/commoncmdoptions"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/capiinstaller"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/clusteroperator"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/revision"
 	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 )
 
 const (
-	managerName = "cluster-capi-installer"
+	managerName = "capi-operator"
 
 	defaultImagesLocation       = "./dev-images.json"
 	providerImageDirEnvVar      = "PROVIDER_IMAGE_DIR"
@@ -67,7 +68,7 @@ func main() {
 	scheme := runtime.NewScheme()
 	initScheme(scheme)
 
-	opts := util.InitCommonOptions(managerName, controllers.DefaultOperatorNamespace)
+	opts := commoncmdoptions.InitCommonOptions(managerName, controllers.DefaultOperatorNamespace)
 
 	imagesFile := flag.String(
 		"images-json",
@@ -76,6 +77,8 @@ func main() {
 	)
 
 	opts.Parse()
+
+	log := ctrl.Log.WithName("capi-operator")
 
 	cacheOpts := cache.Options{
 		DefaultNamespaces: map[string]cache.Config{
@@ -88,49 +91,67 @@ func main() {
 	mgrOpts, _ := opts.GetCommonManagerOptions()
 	mgrOpts.Cache = cacheOpts
 	mgrOpts.Scheme = scheme
+	mgrOpts.Logger = log
 
 	cfg := ctrl.GetConfigOrDie()
-	ctx := ctrl.SetupSignalHandler()
+	ctx, cancel := context.WithCancel(ctrl.SetupSignalHandler())
 
 	mgr, err := ctrl.NewManager(cfg, mgrOpts)
 	if err != nil {
-		klog.Error(err, "unable to create manager")
+		log.Error(err, "unable to create manager")
 		os.Exit(1)
 	}
 
-	if err := util.AddCommonChecks(mgr); err != nil {
-		klog.Error(err, "unable to add common checks")
+	if err := commoncmdoptions.AddCommonChecks(mgr); err != nil {
+		log.Error(err, "unable to add common checks")
 		os.Exit(1)
 	}
 
-	if err := setupControllers(ctx, mgr, opts, *imagesFile); err != nil {
-		klog.Error(err, "unable to setup controllers")
+	if err := setupControllers(ctx, log, mgr, opts, *imagesFile, cancel); err != nil {
+		log.Error(err, "unable to setup controllers")
 		os.Exit(1)
 	}
 
-	klog.Info("Starting cluster-capi-installer manager")
+	log.Info("Starting " + managerName + " manager")
 
 	if err := mgr.Start(ctx); err != nil {
-		klog.Error(err)
+		log.Error(err, "problem running manager")
 		os.Exit(1)
 	}
 }
 
-func setupControllers(ctx context.Context, mgr ctrl.Manager, opts *util.CommonOptions, imagesFile string) error {
+func setupControllers(ctx context.Context, log logr.Logger, mgr ctrl.Manager, opts *commoncmdoptions.CommonOptions, imagesFile string, cancel context.CancelFunc) error {
 	infra, err := util.GetInfra(ctx, mgr.GetAPIReader())
 	if err != nil {
 		return fmt.Errorf("unable to get infrastructure: %w", err)
 	}
 
-	isUnsupportedPlatform := false
-
-	_, platform, err := util.GetCAPITypesForInfrastructure(infra)
+	platform, err := util.GetPlatformFromInfra(infra)
 	if err != nil {
-		if errors.Is(err, util.ErrUnsupportedPlatform) {
-			isUnsupportedPlatform = true
-		} else {
-			return fmt.Errorf("unable to get infrastructure types: %w", err)
-		}
+		return fmt.Errorf("unable to get platform: %w", err)
+	}
+
+	featureGates, err := util.GetFeatureGates(ctx, log, managerName, mgr.GetConfig(), cancel)
+	if err != nil {
+		return fmt.Errorf("unable to get feature gates: %w", err)
+	}
+
+	supportedPlatform := util.IsCAPIEnabledForPlatform(featureGates, infra.Status.PlatformStatus.Type)
+
+	if err := (&clusteroperator.ClusterOperatorController{
+		ClusterOperatorStatusClient: opts.GetClusterOperatorStatusClient(mgr, platform, "clusteroperator"),
+		Scheme:                      mgr.GetScheme(),
+		IsUnsupportedPlatform:       !supportedPlatform,
+	}).SetupWithManager(mgr); err != nil {
+		return fmt.Errorf("unable to create clusteroperator controller: %w", err)
+	}
+
+	// The ClusterOperatorController MUST run if we were installed, otherwise
+	// our ClusterOperator will not be reconciled and installation will not
+	// progress. We don't run any other controllers if the current platform is
+	// not supported.
+	if !supportedPlatform {
+		return nil
 	}
 
 	containerImages, providerProfiles, err := loadProviderImages(ctx, mgr, imagesFile)
@@ -138,16 +159,8 @@ func setupControllers(ctx context.Context, mgr ctrl.Manager, opts *util.CommonOp
 		return err
 	}
 
-	if err := setupCapiInstallerController(mgr, opts, platform, containerImages, providerProfiles); err != nil {
+	if err := setupCapiInstallerController(mgr, log, opts, platform, containerImages, providerProfiles); err != nil {
 		return err
-	}
-
-	if err := (&clusteroperator.ClusterOperatorController{
-		ClusterOperatorStatusClient: opts.GetClusterOperatorStatusClient(mgr, platform, "clusteroperator"),
-		Scheme:                      mgr.GetScheme(),
-		IsUnsupportedPlatform:       isUnsupportedPlatform,
-	}).SetupWithManager(mgr); err != nil {
-		return fmt.Errorf("unable to create clusteroperator controller: %w", err)
 	}
 
 	return nil
@@ -174,7 +187,7 @@ func loadProviderImages(ctx context.Context, mgr ctrl.Manager, imagesFile string
 	return containerImages, providerProfiles, nil
 }
 
-func setupCapiInstallerController(mgr ctrl.Manager, opts *util.CommonOptions, platform configv1.PlatformType, containerImages map[string]string, providerProfiles []providerimages.ProviderImageManifests) error {
+func setupCapiInstallerController(mgr ctrl.Manager, log logr.Logger, opts *commoncmdoptions.CommonOptions, platform configv1.PlatformType, containerImages map[string]string, providerProfiles []providerimages.ProviderImageManifests) error {
 	applyClient, err := kubernetes.NewForConfig(mgr.GetConfig())
 	if err != nil {
 		return fmt.Errorf("unable to set up apply client: %w", err)
@@ -187,6 +200,15 @@ func setupCapiInstallerController(mgr ctrl.Manager, opts *util.CommonOptions, pl
 
 	if err := setFeatureGatesEnvVars(); err != nil {
 		return fmt.Errorf("unable to set feature gates environment variables: %w", err)
+	}
+
+	if err := (&revision.RevisionController{
+		Client:           mgr.GetClient(),
+		ProviderProfiles: providerProfiles,
+		ReleaseVersion:   util.GetReleaseVersion(),
+	}).SetupWithManager(mgr); err != nil {
+		log.Error(err, "unable to create revision controller", "controller", "RevisionController")
+		return fmt.Errorf("unable to create revision controller: %w", err)
 	}
 
 	if err := (&capiinstaller.CapiInstallerController{
@@ -207,6 +229,11 @@ func setupCapiInstallerController(mgr ctrl.Manager, opts *util.CommonOptions, pl
 
 // setFeatureGatesEnvVars sets the explicit values for the listed feature gates in the environment.
 // These will then be loaded by envsubst and templated into the applied CAPI manifests.
+//
+// XXX: This function is unrelated to feature gates. It sets a single
+// environment variable which applies only to the AWS provider. It is replaced
+// by logic in revisiongenerator, and can be removed when the capiinstaller
+// controller is removed.
 func setFeatureGatesEnvVars() error {
 	featureGates := map[string]string{
 		"EXP_BOOTSTRAP_FORMAT_IGNITION": "true",

@@ -47,6 +47,7 @@ import (
 	configv1 "github.com/openshift/api/config/v1"
 	mapiv1 "github.com/openshift/api/machine/v1"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
+	"github.com/openshift/cluster-capi-operator/pkg/commoncmdoptions"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/corecluster"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/infracluster"
@@ -89,7 +90,7 @@ func main() {
 	scheme := runtime.NewScheme()
 	initScheme(scheme)
 
-	opts := util.InitCommonOptions(managerName, controllers.DefaultCAPINamespace)
+	opts := commoncmdoptions.InitCommonOptions(managerName, controllers.DefaultCAPINamespace)
 
 	webhookPort := flag.Int(
 		"webhook-port",
@@ -124,7 +125,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := util.AddCommonChecks(mgr); err != nil {
+	if err := commoncmdoptions.AddCommonChecks(mgr); err != nil {
 		klog.Error(err, "unable to add common checks")
 		os.Exit(1)
 	}
@@ -145,7 +146,7 @@ func main() {
 	}
 }
 
-func setupPlatformReconcilers(mgr manager.Manager, opts *util.CommonOptions, infra *configv1.Infrastructure, platform configv1.PlatformType) {
+func setupPlatformReconcilers(mgr manager.Manager, opts *commoncmdoptions.CommonOptions, infra *configv1.Infrastructure, platform configv1.PlatformType) {
 	// Only setup reconcile controllers and webhooks when the platform is supported.
 	// This avoids unnecessary CAPI providers discovery, installs and reconciles when the platform is not supported.
 	infraTypes, _, err := util.GetCAPITypesForInfrastructure(infra)
@@ -163,7 +164,7 @@ func setupPlatformReconcilers(mgr manager.Manager, opts *util.CommonOptions, inf
 	setupWebhooks(mgr)
 }
 
-func setupReconcilers(mgr manager.Manager, opts *util.CommonOptions, infra *configv1.Infrastructure, platform configv1.PlatformType, infraClusterObject client.Object) {
+func setupReconcilers(mgr manager.Manager, opts *commoncmdoptions.CommonOptions, infra *configv1.Infrastructure, platform configv1.PlatformType, infraClusterObject client.Object) {
 	if err := (&corecluster.CoreClusterController{
 		ClusterOperatorStatusClient: opts.GetClusterOperatorStatusClient(mgr, platform, "cluster-resource"),
 		Cluster:                     &clusterv1.Cluster{},
