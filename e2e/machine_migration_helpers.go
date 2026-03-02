@@ -108,6 +108,16 @@ func createCAPIMachine(ctx context.Context, cl client.Client, machineName string
 		return cl.Create(ctx, newAWSMachine)
 	}, capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(), "Should have successfully created AWSmachine %s/%s", newAWSMachine.Namespace, newAWSMachine.Name)
 
+	trackResource(newCapiMachine)
+	trackResource(newAWSMachine)
+	// The sync controller will create a mirrored MAPI Machine with the same name.
+	trackResource(&mapiv1beta1.Machine{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      machineName,
+			Namespace: capiframework.MAPINamespace,
+		},
+	})
+
 	verifyMachineRunning(cl, newCapiMachine)
 
 	return newCapiMachine
@@ -155,6 +165,15 @@ func createMAPIMachineWithAuthority(ctx context.Context, cl client.Client, machi
 	Eventually(func() error {
 		return cl.Create(ctx, newMachine)
 	}, capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(), "Should have successfully created MAPI machine %s with AuthoritativeAPI: %s", newMachine.Name, authority)
+
+	trackResource(newMachine)
+	// The sync controller will create a mirrored CAPI Machine with the same name.
+	trackResource(&clusterv1.Machine{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      machineName,
+			Namespace: capiframework.CAPINamespace,
+		},
+	})
 
 	return newMachine
 }
