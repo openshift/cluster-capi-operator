@@ -25,6 +25,8 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -43,6 +45,8 @@ var (
 	errExpectedCRD           = errors.New("expected a CustomResourceDefinition")
 	errCRDNotCompatible      = errors.New("CRD is not compatible with CompatibilityRequirements")
 	errUnknownCRDAdmitAction = errors.New("unknown value for CompatibilityRequirement.spec.customResourceDefinitionSchemaValidation.action")
+	errPathNotFound          = errors.New("path not found in schema")
+	errVersionNoSchema       = errors.New("version does not have a schema")
 )
 
 // NewValidator returns a partially initialised Validator.
@@ -105,7 +109,12 @@ func (v *Validator) validateCreateOrUpdate(ctx context.Context, obj runtime.Obje
 			return nil, fmt.Errorf("failed to parse compatibilityCRD for CompatibilityRequirement %q: %w", compatibilityRequirement.Name, err)
 		}
 
-		reqErrors, reqWarnings, err := crdchecker.CheckCompatibilityRequirement(compatibilityCRD, crd)
+		prunedCRD, err := pruneExcludedFields(compatibilityCRD, compatibilityRequirement.Spec.CompatibilitySchema.ExcludedFields)
+		if err != nil {
+			return nil, fmt.Errorf("failed to prune excluded fields for CompatibilityRequirement %q: %w", compatibilityRequirement.Name, err)
+		}
+
+		reqErrors, reqWarnings, err := crdchecker.CheckCompatibilityRequirement(prunedCRD, crd)
 		if err != nil {
 			return nil, fmt.Errorf("failed to check CRD compatibility: %w", err)
 		}
@@ -166,4 +175,91 @@ func (v *Validator) ValidateDelete(ctx context.Context, obj runtime.Object) (adm
 	}
 
 	return nil, nil
+}
+
+func pruneExcludedFields(crd *apiextensionsv1.CustomResourceDefinition, excludedFields []apiextensionsv1alpha1.APIExcludedField) (*apiextensionsv1.CustomResourceDefinition, error) {
+	pathsByVersion := make(map[string][][]string)
+
+	// First split all paths into their components and group them by version.
+	for _, excludedField := range excludedFields {
+		paths := strings.Split(excludedField.Path, ".")
+		for _, version := range excludedField.Versions {
+			pathsByVersion[string(version)] = append(pathsByVersion[string(version)], paths)
+		}
+	}
+
+	prunedCRD := crd.DeepCopy()
+
+	var errs []error
+
+	for _, schema := range prunedCRD.Spec.Versions {
+		paths := pathsByVersion[schema.Name]
+		if len(paths) == 0 {
+			continue
+		}
+
+		if schema.Schema == nil || schema.Schema.OpenAPIV3Schema == nil {
+			errs = append(errs, fmt.Errorf("%w: version %s does not have a schema", errVersionNoSchema, schema.Name))
+			continue
+		}
+
+		rootSchema := schema.Schema.OpenAPIV3Schema
+
+		for _, path := range paths {
+			err := prunePath(rootSchema, field.NewPath("^", path...), field.NewPath("^"), path)
+			if err != nil {
+				errs = append(errs, err)
+			}
+		}
+	}
+
+	if len(errs) > 0 {
+		return nil, fmt.Errorf("failed to prune excluded fields: %w", utilerrors.NewAggregate(errs))
+	}
+
+	return prunedCRD, nil
+}
+
+func prunePath(schema *apiextensionsv1.JSONSchemaProps, desiredPath *field.Path, currentPath *field.Path, pathSegments []string) error {
+	key := pathSegments[0]
+
+	parentPath := currentPath.String()
+	currentPath = currentPath.Child(key)
+
+	// We should always be looking at an object.
+	// If we find an array, we extract the object schema for the next loop.
+	// If we find a scalar and have not reached the end of the path, we return an error.
+	propSchema, ok := schema.Properties[key]
+	if !ok {
+		return fmt.Errorf("%w: desired path %s, path %s is missing child %s", errPathNotFound, desiredPath, parentPath, key)
+	}
+
+	switch {
+	case len(pathSegments) == 1:
+		// This is the last key in the path so we prune the property.
+		delete(schema.Properties, key)
+		schema.Required = util.SliceFilter(schema.Required, func(f string) bool { return f != key })
+	case propSchema.Type == "object":
+		if err := prunePath(&propSchema, desiredPath, currentPath, pathSegments[1:]); err != nil {
+			return err
+		}
+
+		// Update the properties map as we have a modified copy of the child schema.
+		schema.Properties[key] = propSchema
+	case propSchema.Type == "array":
+		if propSchema.Items == nil || propSchema.Items.Schema == nil {
+			return fmt.Errorf("%w: desired path %s, path %s is an array but does not have an items schema", errPathNotFound, desiredPath, currentPath)
+		}
+
+		if err := prunePath(propSchema.Items.Schema, desiredPath, currentPath, pathSegments[1:]); err != nil {
+			return err
+		}
+
+		// Update the properties map as we have a modified copy of the child schema.
+		schema.Properties[key] = propSchema
+	default:
+		return fmt.Errorf("%w: desired path %s, path %s is not an object", errPathNotFound, desiredPath, currentPath)
+	}
+
+	return nil
 }
