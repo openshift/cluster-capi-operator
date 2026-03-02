@@ -9,6 +9,7 @@ tool (
 	github.com/openshift/api/config/v1/zz_generated.crd-manifests
 	github.com/openshift/api/machine/v1beta1/zz_generated.crd-manifests
 	github.com/openshift/api/operator/v1/zz_generated.crd-manifests
+	github.com/openshift/api/operator/v1alpha1/zz_generated.crd-manifests
 	sigs.k8s.io/controller-runtime/tools/setup-envtest
 )
 
