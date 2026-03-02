@@ -462,8 +462,8 @@ github.com/opencontainers/image-spec v1.1.1 h1:y0fUlFfIZhPF1W537XOLg0/fcx6zcHCJw
 github.com/opencontainers/image-spec v1.1.1/go.mod h1:qpqAh3Dmcf36wStyyWU+kCeDgrGnAve2nCC8+7h8Q0M=
 github.com/openshift/api v0.0.0-20260228183123-9b2ee997d297 h1:QoHTB3QS859LUGE6NUTg98XiMz6Kzm3svQmo4tmgmlg=
 github.com/openshift/api v0.0.0-20260228183123-9b2ee997d297/go.mod h1:ZYAxo9t1AALeEotN07tNzIvqqqWSxcZIqMUKnY/xCeQ=
-github.com/openshift/client-go v0.0.0-20260108185524-48f4ccfc4e13 h1:6rd4zSo2UaWQcAPZfHK9yzKVqH0BnMv1hqMzqXZyTds=
-github.com/openshift/client-go v0.0.0-20260108185524-48f4ccfc4e13/go.mod h1:YvOmPmV7wcJxpfhTDuFqqs2Xpb3M3ovsM6Qs/i2ptq4=
+github.com/openshift/client-go v0.0.0-20260226152647-d8b2196ff0d9 h1:5gHG1T3PUm5Ly7vILl9+byccl9eAUiV2RZuWXVVNnB4=
+github.com/openshift/client-go v0.0.0-20260226152647-d8b2196ff0d9/go.mod h1:TeUQXSUW0UPXSmEtMZLfTYIE3MajxnziS3lbdH0WSwk=
 github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20251211141525-c707612472dc h1:aoEt01DcIODnDwmc7oTqWInTMytifc3QbBkLp2RKDOU=
 github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20251211141525-c707612472dc/go.mod h1:Ahm3XvgKKIyKKYCG3oX2w7bE7twCT2kG71ykwwxUh18=
 github.com/openshift/cluster-api-provider-azure v0.0.0-20251202084521-c2e0e38d1e0e h1:yP0NOooxbZNQVd0zZQ/k2gy9T7vE7QfxmuaS8Q+oZD8=
