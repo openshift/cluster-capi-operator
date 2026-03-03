@@ -26,7 +26,6 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility/index"
 	"github.com/openshift/cluster-capi-operator/pkg/test"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	"k8s.io/apiserver/pkg/registry/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
@@ -93,6 +92,21 @@ var _ = Describe("validator", func() {
 				// This uses reflect.DeepEqual to compare the two strategies.
 				Expect(strategy1).To(Equal(strategy2))
 			})
+
+			It("should invalidate cache when generation changes", func() {
+				// First call
+				strategy1, err1 := validator.getValidationStrategy(ctx, compatibilityRequirement.Name, "v1")
+				Expect(err1).NotTo(HaveOccurred())
+
+				compatibilityRequirement.Generation++
+				validator.client = createValidatorWithFakeClient([]client.Object{compatibilityRequirement}).client
+
+				// Second call should return the same strategy instance
+				strategy2, err2 := validator.getValidationStrategy(ctx, compatibilityRequirement.Name, "v1")
+				Expect(err2).NotTo(HaveOccurred())
+
+				Expect(strategy1).NotTo(Equal(strategy2))
+			})
 		})
 
 		Context("when CompatibilityRequirement does not exist", func() {
@@ -114,7 +128,7 @@ var _ = Describe("validator", func() {
 
 				_, err := validator.getValidationStrategy(ctx, brokenCompatibilityRequirement.Name, "v1")
 
-				Expect(err).To(MatchError("failed to get validation strategy: failed to parse compatibility schema data for CompatibilityRequirement \"\": error converting YAML to JSON: yaml: mapping values are not allowed in this context"))
+				Expect(err).To(MatchError("failed to create validation strategy: failed to parse compatibility schema data for CompatibilityRequirement \"\": error converting YAML to JSON: yaml: mapping values are not allowed in this context"))
 			})
 		})
 	})
@@ -124,111 +138,8 @@ var _ = Describe("validator", func() {
 			It("should create cache key from UID, name, version, and generation", func() {
 				key := getValidationStrategyCacheKey(compatibilityRequirement, "v1")
 
-				Expect(key.uid).To(Equal(compatibilityRequirement.UID))
 				Expect(key.compatibilityRequirementName).To(Equal(compatibilityRequirement.Name))
 				Expect(key.version).To(Equal("v1"))
-				Expect(key.generation).To(Equal(compatibilityRequirement.Generation))
-			})
-		})
-
-		Context("cache invalidation", func() {
-			var validator *validator
-
-			BeforeEach(func() {
-				validator = createValidatorWithFakeClient([]client.Object{})
-			})
-
-			It("should prune old strategies when generation changes", func() {
-				// Create a compatibility requirement with generation 1
-				oldReq := compatibilityRequirement.DeepCopy()
-				oldReq.Generation = 1
-
-				// Create a newer version with generation 2
-				newReq := compatibilityRequirement.DeepCopy()
-				newReq.Generation = 2
-
-				// Manually populate cache with old strategy
-				oldKey := getValidationStrategyCacheKey(oldReq, "v1")
-				newKey := getValidationStrategyCacheKey(newReq, "v1")
-
-				validator.validationStrategyCacheLock.Lock()
-				validator.validationStrategyCache[oldKey] = nil // Mock strategy
-				validator.validationStrategyCacheLock.Unlock()
-
-				// Call pruneOldValidationStrategies with the new requirement
-				validator.validationStrategyCacheLock.Lock()
-				validator.pruneOldValidationStrategies(newReq, "v1")
-				validator.validationStrategyCacheLock.Unlock()
-
-				// Old strategy should be removed from cache
-				validator.validationStrategyCacheLock.RLock()
-				_, oldExists := validator.validationStrategyCache[oldKey]
-				_, newExists := validator.validationStrategyCache[newKey]
-				validator.validationStrategyCacheLock.RUnlock()
-
-				Expect(oldExists).To(BeFalse(), "Old strategy should be pruned")
-				Expect(newExists).To(BeFalse(), "New strategy not added yet")
-			})
-
-			It("should not prune strategies for different requirements", func() {
-				// Create two different compatibility requirements
-				req1 := compatibilityRequirement.DeepCopy()
-				req1.Name = "requirement-1"
-				req1.UID = "uid-1"
-
-				req2 := compatibilityRequirement.DeepCopy()
-				req2.Name = "requirement-2"
-				req2.UID = "uid-2"
-
-				// Add strategies for both to cache
-				key1 := getValidationStrategyCacheKey(req1, "v1")
-				key2 := getValidationStrategyCacheKey(req2, "v1")
-
-				validator.validationStrategyCacheLock.Lock()
-				validator.validationStrategyCache[key1] = nil
-				validator.validationStrategyCache[key2] = nil
-				validator.validationStrategyCacheLock.Unlock()
-
-				// Prune for req1 should not affect req2
-				validator.validationStrategyCacheLock.Lock()
-				validator.pruneOldValidationStrategies(req1, "v1")
-				validator.validationStrategyCacheLock.Unlock()
-
-				// Both should still exist (no pruning occurred since generations are same)
-				validator.validationStrategyCacheLock.RLock()
-				_, exists1 := validator.validationStrategyCache[key1]
-				_, exists2 := validator.validationStrategyCache[key2]
-				validator.validationStrategyCacheLock.RUnlock()
-
-				Expect(exists1).To(BeTrue(), "Strategy for req1 should remain")
-				Expect(exists2).To(BeTrue(), "Strategy for req2 should remain")
-			})
-
-			It("should not prune strategies for different versions", func() {
-				req := compatibilityRequirement.DeepCopy()
-
-				// Add strategies for different versions
-				keyV1 := getValidationStrategyCacheKey(req, "v1")
-				keyV2 := getValidationStrategyCacheKey(req, "v2")
-
-				validator.validationStrategyCacheLock.Lock()
-				validator.validationStrategyCache[keyV1] = nil
-				validator.validationStrategyCache[keyV2] = nil
-				validator.validationStrategyCacheLock.Unlock()
-
-				// Prune for v1 should not affect v2
-				validator.validationStrategyCacheLock.Lock()
-				validator.pruneOldValidationStrategies(req, "v1")
-				validator.validationStrategyCacheLock.Unlock()
-
-				// Both should still exist
-				validator.validationStrategyCacheLock.RLock()
-				_, existsV1 := validator.validationStrategyCache[keyV1]
-				_, existsV2 := validator.validationStrategyCache[keyV2]
-				validator.validationStrategyCacheLock.RUnlock()
-
-				Expect(existsV1).To(BeTrue(), "Strategy for v1 should remain")
-				Expect(existsV2).To(BeTrue(), "Strategy for v2 should remain")
 			})
 		})
 	})
@@ -243,6 +154,6 @@ func createValidatorWithFakeClient(objects []client.Object) *validator {
 				index.FieldCRDByName,
 				index.CRDByName).
 			Build(),
-		validationStrategyCache: make(map[validationStrategyCacheKey]rest.RESTCreateUpdateStrategy),
+		validationStrategyCache: make(map[validationStrategyCacheKey]validationStrategyCacheValue),
 	}
 }
