@@ -57,12 +57,18 @@ var (
 var _ admission.Handler = &validator{}
 
 type validationStrategyCacheKey struct {
-	// The UID of the CompatibilityRequirement.
-	uid types.UID
 	// The name of the CompatibilityRequirement.
 	compatibilityRequirementName string
 	// The API version of the schema we are caching.
 	version string
+}
+
+type validationStrategyCacheValue struct {
+	strategy rest.RESTCreateUpdateStrategy
+
+	// The UID of the CompatibilityRequirement.
+	uid types.UID
+
 	// The generation of the CompatibilityRequirement.
 	generation int64
 }
@@ -74,7 +80,7 @@ type validator struct {
 	decoder admission.Decoder
 
 	validationStrategyCacheLock sync.RWMutex
-	validationStrategyCache     map[validationStrategyCacheKey]rest.RESTCreateUpdateStrategy
+	validationStrategyCache     map[validationStrategyCacheKey]validationStrategyCacheValue
 }
 
 // NewValidator returns a partially initialized ObjectValidator.
@@ -82,7 +88,7 @@ func NewValidator() *validator {
 	return &validator{
 		// This decoder is only used to decode to unstructured and for CompatibilityRequirements.
 		decoder:                 admission.NewDecoder(runtime.NewScheme()),
-		validationStrategyCache: make(map[validationStrategyCacheKey]rest.RESTCreateUpdateStrategy),
+		validationStrategyCache: make(map[validationStrategyCacheKey]validationStrategyCacheValue),
 	}
 }
 
@@ -148,7 +154,9 @@ func (v *validator) getValidationStrategy(ctx context.Context, compatibilityRequ
 		return nil, fmt.Errorf("failed to get CompatibilityRequirement %q: %w", compatibilityRequirementName, err)
 	}
 
-	strategy, ok := v.getValidationStrategyFromCache(compatibilityRequirement, version)
+	cacheKey := getValidationStrategyCacheKey(compatibilityRequirement, version)
+
+	strategy, ok := v.getValidationStrategyFromCache(compatibilityRequirement, cacheKey)
 	if ok {
 		return strategy, nil
 	}
@@ -158,69 +166,57 @@ func (v *validator) getValidationStrategy(ctx context.Context, compatibilityRequ
 
 	// Check the cache again under the write lock in case another thread populated the cache
 	// while we were waiting for the write lock.
-	strategy, ok = v.validationStrategyCache[getValidationStrategyCacheKey(compatibilityRequirement, version)]
-	if ok {
-		return strategy, nil
+	strategyValue, ok := v.validationStrategyCache[cacheKey]
+	if ok && isCacheEntryValid(compatibilityRequirement, strategyValue) {
+		return strategyValue.strategy, nil
 	}
 
-	strategy, err := v.createVersionedStrategy(ctx, compatibilityRequirementName, version)
+	strategy, err := v.createVersionedStrategy(compatibilityRequirement, version)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get validation strategy: %w", err)
+		return nil, fmt.Errorf("failed to create validation strategy: %w", err)
 	}
 
-	v.storeValidationStrategyInCache(compatibilityRequirement, version, strategy)
-	v.pruneOldValidationStrategies(compatibilityRequirement, version)
+	v.storeValidationStrategyInCache(compatibilityRequirement, cacheKey, strategy)
 
 	return strategy, nil
 }
 
 func getValidationStrategyCacheKey(compatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement, version string) validationStrategyCacheKey {
 	return validationStrategyCacheKey{
-		uid:                          compatibilityRequirement.UID,
 		compatibilityRequirementName: compatibilityRequirement.Name,
 		version:                      version,
-		generation:                   compatibilityRequirement.Generation,
 	}
 }
 
-func (v *validator) getValidationStrategyFromCache(compatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement, version string) (rest.RESTCreateUpdateStrategy, bool) {
+func isCacheEntryValid(compatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement, strategy validationStrategyCacheValue) bool {
+	return compatibilityRequirement.Generation == strategy.generation && compatibilityRequirement.UID == strategy.uid
+}
+
+func (v *validator) getValidationStrategyFromCache(compatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement, cacheKey validationStrategyCacheKey) (rest.RESTCreateUpdateStrategy, bool) {
 	v.validationStrategyCacheLock.RLock()
 	defer v.validationStrategyCacheLock.RUnlock()
 
-	strategy, ok := v.validationStrategyCache[getValidationStrategyCacheKey(compatibilityRequirement, version)]
+	strategy, ok := v.validationStrategyCache[cacheKey]
+	if !ok || !isCacheEntryValid(compatibilityRequirement, strategy) {
+		return nil, false
+	}
 
-	return strategy, ok
+	return strategy.strategy, ok
 }
 
-func (v *validator) storeValidationStrategyInCache(compatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement, version string, strategy rest.RESTCreateUpdateStrategy) {
+func (v *validator) storeValidationStrategyInCache(compatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement, cacheKey validationStrategyCacheKey, strategy rest.RESTCreateUpdateStrategy) {
 	// No locking here as we take the lock when constructing the new strategy.
-	v.validationStrategyCache[getValidationStrategyCacheKey(compatibilityRequirement, version)] = strategy
-}
-
-func (v *validator) pruneOldValidationStrategies(compatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement, version string) {
-	currentKey := getValidationStrategyCacheKey(compatibilityRequirement, version)
-
-	// Delete all strategies that are for the same compatibility requirement but have an older generation.
-	for key := range v.validationStrategyCache {
-		if key.uid == currentKey.uid &&
-			key.compatibilityRequirementName == currentKey.compatibilityRequirementName &&
-			key.version == currentKey.version &&
-			key.generation < currentKey.generation {
-			delete(v.validationStrategyCache, key)
-		}
+	v.validationStrategyCache[cacheKey] = validationStrategyCacheValue{
+		strategy:   strategy,
+		uid:        compatibilityRequirement.UID,
+		generation: compatibilityRequirement.Generation,
 	}
 }
 
 // https://github.com/kubernetes/kubernetes/blob/ebc1ccc491c944fa0633f147698e0dc02675051d/staging/src/k8s.io/apiextensions-apiserver/pkg/registry/customresource/strategy.go#L76
 //
 //nolint:cyclop,funlen // This is copied so ignore linting issues
-func (v *validator) createVersionedStrategy(ctx context.Context, compatibilityRequirementName string, version string) (rest.RESTCreateUpdateStrategy, error) {
-	// Get the CompatibilityRequirement
-	compatibilityRequirement := &apiextensionsv1alpha1.CompatibilityRequirement{}
-	if err := v.client.Get(ctx, client.ObjectKey{Name: compatibilityRequirementName}, compatibilityRequirement); err != nil {
-		return nil, fmt.Errorf("failed to get CompatibilityRequirement %q: %w", compatibilityRequirementName, err)
-	}
-
+func (v *validator) createVersionedStrategy(compatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement, version string) (rest.RESTCreateUpdateStrategy, error) {
 	// Extract the CRD so we can use the schema.
 	compatibilityCRD := &apiextensionsv1.CustomResourceDefinition{}
 	if err := yaml.Unmarshal([]byte(compatibilityRequirement.Spec.CompatibilitySchema.CustomResourceDefinition.Data), &compatibilityCRD); err != nil {
