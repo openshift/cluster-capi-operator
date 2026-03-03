@@ -26,6 +26,8 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility/index"
 	"github.com/openshift/cluster-capi-operator/pkg/test"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
@@ -128,7 +130,7 @@ var _ = Describe("validator", func() {
 
 				_, err := validator.getValidationStrategy(ctx, brokenCompatibilityRequirement.Name, "v1")
 
-				Expect(err).To(MatchError("failed to create validation strategy: failed to parse compatibility schema data for CompatibilityRequirement \"\": error converting YAML to JSON: yaml: mapping values are not allowed in this context"))
+				Expect(err).To(MatchError("failed to create validation strategy: failed to decode compatibility schema data for CompatibilityRequirement \"\": yaml: mapping values are not allowed in this context"))
 			})
 		})
 	})
@@ -147,7 +149,12 @@ var _ = Describe("validator", func() {
 
 // Helper function to create a validator with fake client for testing.
 func createValidatorWithFakeClient(objects []client.Object) *validator {
+	scheme := runtime.NewScheme()
+	scheme.AddKnownTypes(apiextensionsv1alpha1.SchemeGroupVersion, &apiextensionsv1alpha1.CompatibilityRequirement{})
+	scheme.AddKnownTypes(apiextensionsv1.SchemeGroupVersion, &apiextensionsv1.CustomResourceDefinition{})
+
 	return &validator{
+		universalDeserializer: serializer.NewCodecFactory(scheme).UniversalDeserializer(),
 		client: fake.NewClientBuilder().
 			WithObjects(objects...).
 			WithIndex(&apiextensionsv1alpha1.CompatibilityRequirement{},
