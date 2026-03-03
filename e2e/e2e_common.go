@@ -17,17 +17,19 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
+	"sigs.k8s.io/yaml"
 
 	bmov1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	metal3v1 "github.com/metal3-io/cluster-api-provider-metal3/api/v1beta1"
@@ -42,10 +44,9 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
-	capiframework "github.com/openshift/cluster-capi-operator/e2e/framework"
-
 	configv1 "github.com/openshift/api/config/v1"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
+	capiframework "github.com/openshift/cluster-capi-operator/e2e/framework"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 )
 
@@ -59,6 +60,12 @@ var (
 	ctx         = context.Background()
 	platform    configv1.PlatformType
 	clusterName string
+
+	// resourcesUnderTest tracks objects created by the current test for focused
+	// diagnostics on failure. Helpers call trackResource after creating objects;
+	// ReportAfterEach dumps detailed state for each tracked resource then clears
+	// the list.
+	resourcesUnderTest []client.Object
 )
 
 func init() {
@@ -99,148 +106,140 @@ func InitCommonVariables() {
 	komega.SetContext(ctx)
 }
 
-// dumpClusterState logs Machines, MachineSets, and Events from both MAPI and CAPI
-// namespaces. Called on test failure to capture resource state before cleanup removes them.
-func dumpClusterState() {
-	namespaces := []string{capiframework.MAPINamespace, capiframework.CAPINamespace}
+// trackResource registers a resource for focused diagnostics on test failure.
+// The object must have Name and Namespace set. The object's type is used to
+// determine how to fetch and format it in the failure dump.
+func trackResource(obj client.Object) {
+	resourcesUnderTest = append(resourcesUnderTest, obj)
+}
+
+// dumpTrackedResources writes detailed diagnostics for each tracked resource
+// to GinkgoWriter. For each resource it fetches current state, marshals it as
+// YAML, and lists events specific to that object. It also dumps all
+// AWSMachineTemplates (on AWS) and all events in both namespaces.
+// Best-effort: panics are recovered and individual errors are logged without
+// aborting the dump.
+func dumpTrackedResources() {
+	defer func() {
+		if r := recover(); r != nil {
+			GinkgoWriter.Printf("WARNING: dumpTrackedResources panicked: %v\n", r)
+		}
+	}()
 
 	var buf strings.Builder
-	buf.WriteString("\n=== Cluster State Dump (test failure) ===\n")
+	buf.WriteString("\n=== Test Failure Diagnostics ===\n")
 
-	for _, ns := range namespaces {
-		dumpMAPIMachines(&buf, ns)
-		dumpCAPIMachines(&buf, ns)
-		dumpMAPIMachineSets(&buf, ns)
-		dumpCAPIMachineSets(&buf, ns)
-		dumpEvents(&buf, ns)
+	for _, obj := range resourcesUnderTest {
+		dumpSingleResource(&buf, obj)
 	}
 
 	if platform == configv1.AWSPlatformType {
-		for _, ns := range namespaces {
-			dumpAWSMachines(&buf, ns)
-			dumpAWSMachineTemplates(&buf, ns)
+		dumpAllAWSMachineTemplates(&buf)
+	}
+	dumpNamespaceEvents(&buf, capiframework.CAPINamespace)
+	dumpNamespaceEvents(&buf, capiframework.MAPINamespace)
+
+	buf.WriteString("\n=== End Test Failure Diagnostics ===\n")
+
+	GinkgoWriter.Print(buf.String())
+}
+
+func dumpSingleResource(buf *strings.Builder, obj client.Object) {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Fprintf(buf, "\n--- (panic dumping %T): %v ---\n", obj, r)
+		}
+	}()
+
+	key := client.ObjectKeyFromObject(obj)
+	typeName := reflect.TypeOf(obj).Elem().Name()
+
+	// Create a fresh instance of the same type to Get into.
+	fresh := reflect.New(reflect.TypeOf(obj).Elem()).Interface().(client.Object)
+
+	if err := cl.Get(ctx, key, fresh); err != nil {
+		if apierrors.IsNotFound(err) {
+			fmt.Fprintf(buf, "\n--- %s %s/%s: not found (deleted) ---\n", typeName, key.Namespace, key.Name)
+		} else {
+			fmt.Fprintf(buf, "\n--- %s %s/%s: error fetching: %v ---\n", typeName, key.Namespace, key.Name, err)
+		}
+
+		return
+	}
+
+	fmt.Fprintf(buf, "\n--- %s %s/%s ---\n", typeName, key.Namespace, key.Name)
+	describeObject(buf, fresh)
+	describeObjectEvents(buf, key)
+}
+
+func describeObject(buf *strings.Builder, obj client.Object) {
+	obj.SetManagedFields(nil)
+
+	annotations := obj.GetAnnotations()
+	if annotations != nil {
+		delete(annotations, "kubectl.kubernetes.io/last-applied-configuration")
+		obj.SetAnnotations(annotations)
+	}
+
+	out, err := yaml.Marshal(obj)
+	if err != nil {
+		fmt.Fprintf(buf, "  (failed to marshal %T: %v)\n", obj, err)
+		return
+	}
+
+	buf.Write(out)
+}
+
+// describeObjectEvents lists events for the given object. Matching is by name
+// only; events for different resource kinds with the same name in the same
+// namespace will be included.
+func describeObjectEvents(buf *strings.Builder, key client.ObjectKey) {
+	list := &corev1.EventList{}
+	if err := cl.List(ctx, list, client.InNamespace(key.Namespace)); err != nil {
+		fmt.Fprintf(buf, "  Events: error listing: %v\n", err)
+		return
+	}
+
+	var matching []corev1.Event
+
+	for i := range list.Items {
+		if list.Items[i].InvolvedObject.Name == key.Name {
+			matching = append(matching, list.Items[i])
 		}
 	}
 
-	buf.WriteString("=== End Cluster State Dump ===\n")
-
-	GinkgoWriter.Print(buf.String())
-	AddReportEntry("cluster-state-dump", buf.String())
-}
-
-func dumpMAPIMachines(buf *strings.Builder, namespace string) {
-	list := &mapiv1beta1.MachineList{}
-	if err := cl.List(ctx, list, client.InNamespace(namespace)); err != nil {
-		fmt.Fprintf(buf, "\n[%s] MAPI Machines: error listing: %v\n", namespace, err)
+	if len(matching) == 0 {
+		fmt.Fprintf(buf, "  Events: none\n")
 		return
 	}
 
-	if len(list.Items) == 0 {
-		return
-	}
+	fmt.Fprintf(buf, "  Events:\n")
 
-	fmt.Fprintf(buf, "\n[%s] MAPI Machines (%d):\n", namespace, len(list.Items))
+	for i := range matching {
+		e := &matching[i]
+		ts := e.LastTimestamp.Time
+		if ts.IsZero() {
+			ts = e.EventTime.Time
+		}
 
-	for i := range list.Items {
-		m := &list.Items[i]
-		phase := ptr.Deref(m.Status.Phase, "")
-		fmt.Fprintf(buf, "  %-50s phase=%-12s authAPI=%-12s conditions=%s created=%s\n",
-			m.Name, phase, m.Status.AuthoritativeAPI,
-			summarizeMAPIConditions(m.Status.Conditions), m.CreationTimestamp.Format(time.RFC3339))
+		fmt.Fprintf(buf, "    %s %-8s %-25s %s\n",
+			ts.Format(time.RFC3339), e.Type, e.Reason, e.Message)
 	}
 }
 
-func dumpCAPIMachines(buf *strings.Builder, namespace string) {
-	list := &clusterv1.MachineList{}
-	if err := cl.List(ctx, list, client.InNamespace(namespace)); err != nil {
-		fmt.Fprintf(buf, "\n[%s] CAPI Machines: error listing: %v\n", namespace, err)
-		return
-	}
+// dumpAllAWSMachineTemplates lists all AWSMachineTemplates in the CAPI namespace
+// and describes each one. Templates use generated names so we list rather than
+// trying to predict names.
+func dumpAllAWSMachineTemplates(buf *strings.Builder) {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Fprintf(buf, "\n--- (panic dumping AWSMachineTemplates): %v ---\n", r)
+		}
+	}()
 
-	if len(list.Items) == 0 {
-		return
-	}
-
-	fmt.Fprintf(buf, "\n[%s] CAPI Machines (%d):\n", namespace, len(list.Items))
-
-	for i := range list.Items {
-		m := &list.Items[i]
-		fmt.Fprintf(buf, "  %-50s phase=%-12s conditions=%s created=%s\n",
-			m.Name, m.Status.Phase,
-			summarizeV1Beta2Conditions(m.Status.Conditions), m.CreationTimestamp.Format(time.RFC3339))
-	}
-}
-
-func dumpMAPIMachineSets(buf *strings.Builder, namespace string) {
-	list := &mapiv1beta1.MachineSetList{}
-	if err := cl.List(ctx, list, client.InNamespace(namespace)); err != nil {
-		fmt.Fprintf(buf, "\n[%s] MAPI MachineSets: error listing: %v\n", namespace, err)
-		return
-	}
-
-	if len(list.Items) == 0 {
-		return
-	}
-
-	fmt.Fprintf(buf, "\n[%s] MAPI MachineSets (%d):\n", namespace, len(list.Items))
-
-	for i := range list.Items {
-		ms := &list.Items[i]
-		replicas := ptr.Deref(ms.Spec.Replicas, 0)
-		fmt.Fprintf(buf, "  %-50s replicas=%d/%d authAPI=%-12s conditions=%s\n",
-			ms.Name, ms.Status.ReadyReplicas, replicas, ms.Status.AuthoritativeAPI,
-			summarizeMAPIConditions(ms.Status.Conditions))
-	}
-}
-
-func dumpCAPIMachineSets(buf *strings.Builder, namespace string) {
-	list := &clusterv1.MachineSetList{}
-	if err := cl.List(ctx, list, client.InNamespace(namespace)); err != nil {
-		fmt.Fprintf(buf, "\n[%s] CAPI MachineSets: error listing: %v\n", namespace, err)
-		return
-	}
-
-	if len(list.Items) == 0 {
-		return
-	}
-
-	fmt.Fprintf(buf, "\n[%s] CAPI MachineSets (%d):\n", namespace, len(list.Items))
-
-	for i := range list.Items {
-		ms := &list.Items[i]
-		replicas := ptr.Deref(ms.Spec.Replicas, 0)
-		fmt.Fprintf(buf, "  %-50s replicas=%d/%d conditions=%s\n",
-			ms.Name, ptr.Deref(ms.Status.ReadyReplicas, 0), replicas,
-			summarizeV1Beta2Conditions(ms.Status.Conditions))
-	}
-}
-
-func dumpAWSMachines(buf *strings.Builder, namespace string) {
-	list := &awsv1.AWSMachineList{}
-	if err := cl.List(ctx, list, client.InNamespace(namespace)); err != nil {
-		fmt.Fprintf(buf, "\n[%s] AWSMachines: error listing: %v\n", namespace, err)
-		return
-	}
-
-	if len(list.Items) == 0 {
-		return
-	}
-
-	fmt.Fprintf(buf, "\n[%s] AWSMachines (%d):\n", namespace, len(list.Items))
-
-	for i := range list.Items {
-		m := &list.Items[i]
-		providerID := ptr.Deref(m.Spec.ProviderID, "")
-		instanceID := ptr.Deref(m.Spec.InstanceID, "")
-		fmt.Fprintf(buf, "  %-50s instanceType=%-12s instanceID=%-22s providerID=%s created=%s\n",
-			m.Name, m.Spec.InstanceType, instanceID, providerID, m.CreationTimestamp.Format(time.RFC3339))
-	}
-}
-
-func dumpAWSMachineTemplates(buf *strings.Builder, namespace string) {
 	list := &awsv1.AWSMachineTemplateList{}
-	if err := cl.List(ctx, list, client.InNamespace(namespace)); err != nil {
-		fmt.Fprintf(buf, "\n[%s] AWSMachineTemplates: error listing: %v\n", namespace, err)
+	if err := cl.List(ctx, list, client.InNamespace(capiframework.CAPINamespace)); err != nil {
+		fmt.Fprintf(buf, "\n--- AWSMachineTemplates: error listing: %v ---\n", err)
 		return
 	}
 
@@ -248,25 +247,37 @@ func dumpAWSMachineTemplates(buf *strings.Builder, namespace string) {
 		return
 	}
 
-	fmt.Fprintf(buf, "\n[%s] AWSMachineTemplates (%d):\n", namespace, len(list.Items))
+	fmt.Fprintf(buf, "\n--- AWSMachineTemplates in %s (%d) ---\n", capiframework.CAPINamespace, len(list.Items))
 
 	for i := range list.Items {
 		t := &list.Items[i]
-		fmt.Fprintf(buf, "  %-50s instanceType=%-12s created=%s\n",
-			t.Name, t.Spec.Template.Spec.InstanceType, t.CreationTimestamp.Format(time.RFC3339))
+		key := client.ObjectKeyFromObject(t)
+		fmt.Fprintf(buf, "\n  %s:\n", t.Name)
+		describeObject(buf, t)
+		describeObjectEvents(buf, key)
 	}
 }
 
-func dumpEvents(buf *strings.Builder, namespace string) {
-	cutoff := time.Now().Add(-10 * time.Minute)
+// dumpNamespaceEvents lists all events in a namespace. This catches events not
+// associated with tracked resources (e.g. from controllers acting on other objects).
+func dumpNamespaceEvents(buf *strings.Builder, namespace string) {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Fprintf(buf, "\n--- (panic dumping events in %s): %v ---\n", namespace, r)
+		}
+	}()
 
 	list := &corev1.EventList{}
 	if err := cl.List(ctx, list, client.InNamespace(namespace)); err != nil {
-		fmt.Fprintf(buf, "\n[%s] Events: error listing: %v\n", namespace, err)
+		fmt.Fprintf(buf, "\n--- Events in %s: error listing: %v ---\n", namespace, err)
 		return
 	}
 
-	var recent []corev1.Event
+	if len(list.Items) == 0 {
+		return
+	}
+
+	fmt.Fprintf(buf, "\n--- Events in %s (%d) ---\n", namespace, len(list.Items))
 
 	for i := range list.Items {
 		e := &list.Items[i]
@@ -275,36 +286,9 @@ func dumpEvents(buf *strings.Builder, namespace string) {
 			ts = e.EventTime.Time
 		}
 
-		if ts.After(cutoff) {
-			recent = append(recent, *e)
-		}
-	}
-
-	if len(recent) == 0 {
-		return
-	}
-
-	fmt.Fprintf(buf, "\n[%s] Events (last 10min, %d):\n", namespace, len(recent))
-
-	for i := range recent {
-		e := &recent[i]
-		ts := e.LastTimestamp.Time
-		if ts.IsZero() {
-			ts = e.EventTime.Time
-		}
-
-		fmt.Fprintf(buf, "  %s %s/%s %-8s %-20s %s\n",
-			ts.Format(time.RFC3339),
+		fmt.Fprintf(buf, "  %s %-8s %s/%-30s %-25s %s\n",
+			ts.Format(time.RFC3339), e.Type,
 			e.InvolvedObject.Kind, e.InvolvedObject.Name,
-			e.Type, e.Reason, truncate(e.Message, 120))
+			e.Reason, e.Message)
 	}
 }
-
-func truncate(s string, max int) string {
-	if len(s) <= max {
-		return s
-	}
-
-	return s[:max-3] + "..."
-}
-

@@ -69,6 +69,16 @@ func createCAPIMachineSet(ctx context.Context, cl client.Client, replicas int32,
 		"worker-user-data",
 	))
 
+	trackResource(awsMachineTemplate)
+	trackResource(machineSet)
+	// The sync controller will create a mirrored MAPI MachineSet with the same name.
+	trackResource(&mapiv1beta1.MachineSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      machineSetName,
+			Namespace: capiframework.MAPINamespace,
+		},
+	})
+
 	capiframework.WaitForMachineSet(ctx, cl, machineSet.Name, machineSet.Namespace, capiframework.WaitLong)
 
 	return machineSet
@@ -89,6 +99,8 @@ func createMAPIMachineSetWithAuthoritativeAPI(ctx context.Context, cl client.Cli
 	mapiMachineSet, err := mapiframework.CreateMachineSet(cl, machineSetParams)
 	Expect(err).ToNot(HaveOccurred(), "MAPI MachineSet %s creation should succeed", machineSetName)
 
+	trackResource(mapiMachineSet)
+
 	capiMachineSet := &clusterv1.MachineSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      machineSetName,
@@ -97,6 +109,8 @@ func createMAPIMachineSetWithAuthoritativeAPI(ctx context.Context, cl client.Cli
 	}
 	Eventually(komega.Get(capiMachineSet), capiframework.WaitShort, capiframework.RetryShort).Should(
 		Succeed(), "Should have mirror CAPI MachineSet created within 1 minute")
+
+	trackResource(capiMachineSet)
 
 	switch machineAuthority {
 	case mapiv1beta1.MachineAuthorityMachineAPI:
@@ -404,6 +418,8 @@ func createAWSMachineTemplate(ctx context.Context, cl client.Client, originalNam
 
 	Eventually(cl.Create(ctx, newTemplate), capiframework.WaitMedium, capiframework.RetryMedium).Should(
 		Succeed(), "Failed to create a new awsMachineTemplate %s", newTemplate.Name)
+
+	trackResource(newTemplate)
 
 	return newTemplate
 }

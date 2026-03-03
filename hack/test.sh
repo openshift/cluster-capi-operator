@@ -30,7 +30,13 @@ if [ $HOME == "/" ]; then
 fi
 
 if [ "$OPENSHIFT_CI" == "true" ] && [ -n "$ARTIFACT_DIR" ] && [ -d "$ARTIFACT_DIR" ]; then # detect ci environment there
-  GINKGO_ARGS="${GINKGO_ARGS} --junit-report=junit_cluster_capi_operator.xml --cover --coverprofile=test-unit-coverage.out --output-dir=${ARTIFACT_DIR}"
+  GINKGO_ARGS="${GINKGO_ARGS} --cover --coverprofile=test-unit-coverage.out --output-dir=${ARTIFACT_DIR}"
+  # e2e tests use a custom ReportAfterSuite that appends resource diagnostics
+  # to the JUnit failure message for Spyglass. Other suites use ginkgo's
+  # built-in JUnit reporter.
+  if [[ "${TEST_DIRS}" != *"e2e"* ]]; then
+    GINKGO_ARGS="${GINKGO_ARGS} --junit-report=junit_cluster_capi_operator.xml"
+  fi
 fi
 
 # Print the command we are going to run as Make would.
