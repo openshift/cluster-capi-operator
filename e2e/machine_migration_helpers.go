@@ -45,16 +45,17 @@ func createCAPIMachine(ctx context.Context, cl client.Client, machineName string
 	workerLabelSelector := metav1.LabelSelector{
 		MatchExpressions: []metav1.LabelSelectorRequirement{
 			{
-				Key:      clusterv1.MachineControlPlaneLabel,
-				Operator: metav1.LabelSelectorOpDoesNotExist,
+				Key:      clusterv1.NodeRoleLabelPrefix + "/worker",
+				Operator: metav1.LabelSelectorOpExists,
 			},
 		},
 	}
 
 	capiMachineList := capiframework.GetMachines(&workerLabelSelector)
-	// The test requires at least one existing CAPI machine to act as a reference for creating a new one.
-	Expect(capiMachineList).NotTo(BeEmpty(), "Should have found CAPI machines in the openshift-cluster-api namespace to use as a reference for creating a new one")
-
+	// Skip test if no worker CAPI machines exist to use as reference
+	if len(capiMachineList) == 0 {
+		Skip("No worker CAPI machines found in cluster. This test requires at least one existing worker CAPI machine as a reference.")
+	}
 	// Select the first machine from the list as our reference.
 	referenceCapiMachine := capiMachineList[0]
 	By(fmt.Sprintf("Using CAPI machine %s as a reference", referenceCapiMachine.Name))
@@ -75,6 +76,7 @@ func createCAPIMachine(ctx context.Context, cl client.Client, machineName string
 	// Clear status and other instance-specific fields that should not be copied.
 	newCapiMachine.Spec.ProviderID = ""
 	newCapiMachine.Spec.InfrastructureRef.Name = machineName
+	newCapiMachine.Spec.Bootstrap.DataSecretName = ptr.To("worker-user-data")
 	newCapiMachine.ObjectMeta.Labels = nil
 	newCapiMachine.Status = clusterv1.MachineStatus{}
 
