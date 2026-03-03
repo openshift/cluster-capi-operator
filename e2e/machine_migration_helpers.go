@@ -164,6 +164,12 @@ func createMAPIMachineWithAuthority(ctx context.Context, cl client.Client, machi
 	// Clear status and other instance-specific fields that should not be copied.
 	newMachine.Spec.ProviderID = nil
 	newMachine.ObjectMeta.Labels = nil
+	// Clear spec.metadata.labels to avoid MachineSet adoption via spec labels
+	if newMachine.Spec.ObjectMeta.Labels != nil {
+		// Remove machineset-related labels from spec.metadata
+		delete(newMachine.Spec.ObjectMeta.Labels, "machine.openshift.io/cluster-api-machineset")
+		delete(newMachine.Spec.ObjectMeta.Labels, "cluster.x-k8s.io/set-name")
+	}
 	newMachine.Status = mapiv1beta1.MachineStatus{}
 	newMachine.Spec.AuthoritativeAPI = authority
 	By(fmt.Sprintf("Creating a new MAPI machine with AuthoritativeAPI: %s in namespace: %s", authority, newMachine.Namespace))
