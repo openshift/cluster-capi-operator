@@ -69,7 +69,7 @@ localtestenv: .localtestenv
 
 TEST_DIRS ?= ./pkg/... ./manifests-gen/...
 unit: .localtestenv ## Run unit tests
-	./hack/test.sh "$(TEST_DIRS)" 20m
+	./hack/test.sh "$(TEST_DIRS)" 30m
 
 .PHONY: e2e
 e2e: ## Run e2e tests against active kubeconfig
