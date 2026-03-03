@@ -34,13 +34,13 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apiserver/pkg/registry/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
-	"sigs.k8s.io/yaml"
 )
 
 const (
@@ -76,8 +76,9 @@ type validationStrategyCacheValue struct {
 // validator implements the admission.Handler to have a custom Handle function which is able to
 // validate arbitrary objects against CompatibilityRequirements by leveraging unstructured.
 type validator struct {
-	client  client.Reader
-	decoder admission.Decoder
+	client                client.Reader
+	decoder               admission.Decoder
+	universalDeserializer runtime.Decoder
 
 	validationStrategyCacheLock sync.RWMutex
 	validationStrategyCache     map[validationStrategyCacheKey]validationStrategyCacheValue
@@ -97,6 +98,9 @@ type controllerOption func(*builder.Builder) *builder.Builder
 // SetupWithManager registers the objectValidator webhook with an manager.
 func (v *validator) SetupWithManager(ctx context.Context, mgr ctrl.Manager, opts ...controllerOption) error {
 	v.client = mgr.GetClient()
+
+	serializer := serializer.NewCodecFactory(mgr.GetScheme())
+	v.universalDeserializer = serializer.UniversalDeserializer()
 
 	// Register a webhook on a path with a dynamic component for the compatibility requirement name.
 	// we will extract this component into the context so that the handler can identify which compatibility
@@ -218,9 +222,16 @@ func (v *validator) storeValidationStrategyInCache(compatibilityRequirement *api
 //nolint:cyclop,funlen // This is copied so ignore linting issues
 func (v *validator) createVersionedStrategy(compatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement, version string) (rest.RESTCreateUpdateStrategy, error) {
 	// Extract the CRD so we can use the schema.
-	compatibilityCRD := &apiextensionsv1.CustomResourceDefinition{}
-	if err := yaml.Unmarshal([]byte(compatibilityRequirement.Spec.CompatibilitySchema.CustomResourceDefinition.Data), &compatibilityCRD); err != nil {
-		return nil, fmt.Errorf("failed to parse compatibility schema data for CompatibilityRequirement %q: %w", compatibilityRequirement.Name, err)
+	// Use a universal deserializer as it correctly handles YAML and JSON decoding based on the expected key formatting for CRDs.
+	// N.B. DO NOT switch this to a YAML library - they do not correctly handle the OpenAPIV3Schema casing within the CRD version schema.
+	obj, _, err := v.universalDeserializer.Decode([]byte(compatibilityRequirement.Spec.CompatibilitySchema.CustomResourceDefinition.Data), nil, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode compatibility schema data for CompatibilityRequirement %q: %w", compatibilityRequirement.Name, err)
+	}
+
+	compatibilityCRD, ok := obj.(*apiextensionsv1.CustomResourceDefinition)
+	if !ok {
+		return nil, fmt.Errorf("failed to decode compatibility schema data for CompatibilityRequirement %q: %w", compatibilityRequirement.Name, err)
 	}
 
 	// This should be validated by the CompatibilityRequirement admission webhook.
