@@ -152,6 +152,7 @@ issues:
         - err113
         - forcetypeassert
         - funlen
+        - goconst
         - gochecknoglobals
         - gocyclo
         - gosec
