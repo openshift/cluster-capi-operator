@@ -65,7 +65,7 @@ func createValidatingWebhookConfig(crd *apiextensionsv1.CustomResourceDefinition
 						Rule: admissionv1.Rule{
 							APIGroups:   []string{crd.Spec.Group},
 							APIVersions: []string{crd.Spec.Versions[0].Name},
-							Resources:   []string{crd.Spec.Names.Plural},
+							Resources:   []string{crd.Spec.Names.Plural, crd.Spec.Names.Plural + "/status", crd.Spec.Names.Plural + "/scale"},
 						},
 					},
 				},
@@ -95,15 +95,59 @@ var _ = Describe("End-to-End Admission Webhook Integration", Ordered, ContinueOn
 	BeforeEach(func(ctx context.Context) {
 		namespace = "default"
 
-		// Create base CRD with test fields and install it
-		baseCRD = test.NewCRDSchemaBuilder().
+		// Create base CRD with test fields and subresources and install it
+		specReplicasPath := ".spec.replicas"
+		statusReplicasPath := ".status.readyReplicas"
+		labelSelectorPath := ".status.selector"
+
+		// Define status properties using schema builder pattern
+		statusProperties := map[string]apiextensionsv1.JSONSchemaProps{
+			"phase": *test.NewStringSchema().
+				WithStringEnum("Ready", "Pending", "Failed").
+				Build(),
+			"readyReplicas": *test.NewIntegerSchema().
+				WithMinimum(0).
+				Build(),
+			"selector": *test.NewStringSchema().
+				Build(),
+			"conditions": *test.NewArraySchema().
+				WithObjectItems(
+					test.NewObjectSchema().
+						WithRequiredStringProperty("type").
+						WithRequiredStringProperty("status"),
+				).
+				Build(),
+		}
+
+		// Define spec properties using schema builder pattern
+		specProperties := map[string]apiextensionsv1.JSONSchemaProps{
+			"replicas": *test.NewIntegerSchema().
+				WithMinimum(0).
+				WithMaximum(100).
+				Build(),
+			"selector": *test.NewObjectSchema().
+				WithObjectProperty("matchLabels",
+					test.NewObjectSchema().
+						WithAdditionalPropertiesSchema(test.NewStringSchema()),
+				).
+				Build(),
+		}
+
+		compatibilityCRD = test.NewCRDSchemaBuilder().
 			WithStringProperty("testField").
 			WithRequiredStringProperty("requiredField").
 			WithIntegerProperty("optionalNumber").
+			WithStatusSubresource(statusProperties).
+			WithScaleSubresource(&specReplicasPath, &statusReplicasPath, &labelSelectorPath).
+			WithObjectProperty("spec", specProperties).
+			WithObjectProperty("status", statusProperties).
 			Build()
 
 		// Deepcopy here as when we use the baseCRD for create/read it wipes the type meta.
-		compatibilityCRD = baseCRD.DeepCopy()
+		// Set spec and status to empty schemas with preserve unknown fields so that the only validation applied is the compatibility requirement.
+		baseCRD = compatibilityCRD.DeepCopy()
+		baseCRD.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["spec"] = *test.NewObjectSchema().WithXPreserveUnknownFields(true).Build()
+		baseCRD.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["status"] = *test.NewObjectSchema().WithXPreserveUnknownFields(true).Build()
 
 		// Install the CRD in the test environment
 		Expect(cl.Create(ctx, baseCRD.DeepCopy())).To(Succeed())
@@ -460,6 +504,359 @@ var _ = Describe("End-to-End Admission Webhook Integration", Ordered, ContinueOn
 
 			Eventually(kWithCtx(ctx).Get(objToDelete)).WithContext(ctx).Should(MatchError(ContainSubstring("not found")))
 		}, defaultNodeTimeout)
+	})
+
+	Describe("Status Subresource Validation", func() {
+		Context("when status subresource validation is enabled", func() {
+			var (
+				statusCompatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement
+			)
+
+			BeforeEach(func(ctx context.Context) {
+				liveCRD := compatibilityCRD.DeepCopy()
+				Eventually(kWithCtx(ctx).Update(liveCRD, func() {
+					liveCRD.Spec.Versions[0].Subresources.Scale = nil
+				})).WithContext(ctx).Should(Succeed())
+
+				statusCRD := compatibilityCRD.DeepCopy()
+				// Disable the scale subresource for these test cases
+				statusCRD.Spec.Versions[0].Subresources.Scale = nil
+
+				// The baseCRD already has status subresource, so we can create a compatibility requirement directly
+				statusCompatibilityRequirement = test.GenerateTestCompatibilityRequirement(statusCRD)
+				statusCompatibilityRequirement.Name = fmt.Sprintf("status-%s", baseCRD.Name)
+				Expect(cl.Create(ctx, statusCompatibilityRequirement)).To(Succeed())
+
+				// Create ValidatingWebhookConfiguration for the compatibility requirement
+				statusWebhookConfig := createValidatingWebhookConfig(baseCRD, statusCompatibilityRequirement)
+				statusWebhookConfig.ObjectMeta.Name = fmt.Sprintf("test-status-validation-%s", statusCompatibilityRequirement.Name)
+				Expect(cl.Create(ctx, statusWebhookConfig)).To(Succeed())
+
+				DeferCleanup(func(ctx context.Context) {
+					Expect(test.CleanupAndWait(ctx, cl, statusWebhookConfig, statusCompatibilityRequirement)).To(Succeed())
+				})
+			}, defaultNodeTimeout)
+
+			It("should allow valid status updates when status validation is enabled", func(ctx context.Context) {
+				gvk := schema.GroupVersionKind{
+					Group:   baseCRD.Spec.Group,
+					Version: baseCRD.Spec.Versions[0].Name,
+					Kind:    baseCRD.Spec.Names.Kind,
+				}
+
+				// First create the object without status
+				baseObj := test.NewTestObject(gvk).
+					WithNamespace(namespace).
+					WithField("requiredField", "value").
+					WithField("testField", "test-value").
+					Build()
+
+				Expect(cl.Create(ctx, baseObj)).To(Succeed())
+
+				DeferCleanup(func(ctx context.Context) {
+					Expect(test.CleanupAndWait(ctx, cl, baseObj)).To(Succeed())
+				})
+
+				// Wait for object to be created
+				Eventually(kWithCtx(ctx).Get(baseObj)).WithContext(ctx).Should(Succeed())
+
+				// Now update status with valid data
+				statusUpdate := baseObj.DeepCopy()
+				statusUpdate.Object["status"] = map[string]interface{}{
+					"phase":         "Ready",
+					"readyReplicas": int64(3),
+					"conditions": []interface{}{
+						map[string]interface{}{
+							"type":   "Available",
+							"status": "True",
+						},
+					},
+				}
+
+				Expect(cl.Status().Update(ctx, statusUpdate)).To(Succeed())
+
+				// Verify status was updated
+				Eventually(kWithCtx(ctx).Object(baseObj)).WithContext(ctx).Should(
+					HaveField("Object", HaveKeyWithValue("status", HaveKeyWithValue("phase", "Ready"))),
+				)
+			}, defaultNodeTimeout)
+
+			It("should reject status updates with invalid enum values when status validation is enabled", func(ctx context.Context) {
+				gvk := schema.GroupVersionKind{
+					Group:   baseCRD.Spec.Group,
+					Version: baseCRD.Spec.Versions[0].Name,
+					Kind:    baseCRD.Spec.Names.Kind,
+				}
+
+				// First create the object without status
+				baseObj := test.NewTestObject(gvk).
+					WithNamespace(namespace).
+					WithField("requiredField", "value").
+					WithField("testField", "test-value").
+					Build()
+
+				Expect(cl.Create(ctx, baseObj)).To(Succeed())
+
+				DeferCleanup(func(ctx context.Context) {
+					Expect(test.CleanupAndWait(ctx, cl, baseObj)).To(Succeed())
+				})
+
+				// Wait for object to be created
+				Eventually(kWithCtx(ctx).Get(baseObj)).WithContext(ctx).Should(Succeed())
+
+				// Now try to update status with invalid enum value
+				statusUpdate := baseObj.DeepCopy()
+				statusUpdate.Object["status"] = map[string]interface{}{
+					"phase": "InvalidPhase", // Not in allowed enum values
+				}
+
+				err := cl.Status().Update(ctx, statusUpdate)
+				Expect(err).To(MatchError(ContainSubstring("\"test-object\" is invalid: status.phase: Unsupported value: \"InvalidPhase\": supported values: \"Ready\", \"Pending\", \"Failed\"")))
+			}, defaultNodeTimeout)
+
+			It("should reject status updates with invalid nested structure when status validation is enabled", func(ctx context.Context) {
+				gvk := schema.GroupVersionKind{
+					Group:   baseCRD.Spec.Group,
+					Version: baseCRD.Spec.Versions[0].Name,
+					Kind:    baseCRD.Spec.Names.Kind,
+				}
+
+				// First create the object without status
+				baseObj := test.NewTestObject(gvk).
+					WithNamespace(namespace).
+					WithField("requiredField", "value").
+					WithField("testField", "test-value").
+					Build()
+
+				Expect(cl.Create(ctx, baseObj)).To(Succeed())
+
+				DeferCleanup(func(ctx context.Context) {
+					Expect(test.CleanupAndWait(ctx, cl, baseObj)).To(Succeed())
+				})
+
+				// Wait for object to be created
+				Eventually(kWithCtx(ctx).Get(baseObj)).WithContext(ctx).Should(Succeed())
+
+				// Now try to update status with invalid nested structure
+				statusUpdate := baseObj.DeepCopy()
+				statusUpdate.Object["status"] = map[string]interface{}{
+					"phase": "Ready",
+					"conditions": []interface{}{
+						map[string]interface{}{
+							"type": "Available",
+							// Missing required "status" field in condition
+						},
+					},
+				}
+
+				err := cl.Status().Update(ctx, statusUpdate)
+				Expect(err).To(MatchError(ContainSubstring("\"test-object\" is invalid: status.conditions[0].status: Required value")))
+			}, defaultNodeTimeout)
+
+			It("should reject status updates with negative readyReplicas when status validation is enabled", func(ctx context.Context) {
+				gvk := schema.GroupVersionKind{
+					Group:   baseCRD.Spec.Group,
+					Version: baseCRD.Spec.Versions[0].Name,
+					Kind:    baseCRD.Spec.Names.Kind,
+				}
+
+				// First create the object without status
+				baseObj := test.NewTestObject(gvk).
+					WithNamespace(namespace).
+					WithField("requiredField", "value").
+					WithField("testField", "test-value").
+					Build()
+
+				Expect(cl.Create(ctx, baseObj)).To(Succeed())
+
+				DeferCleanup(func(ctx context.Context) {
+					Expect(test.CleanupAndWait(ctx, cl, baseObj)).To(Succeed())
+				})
+
+				// Wait for object to be created
+				Eventually(kWithCtx(ctx).Get(baseObj)).WithContext(ctx).Should(Succeed())
+
+				// Now try to update status with negative readyReplicas
+				statusUpdate := baseObj.DeepCopy()
+				statusUpdate.Object["status"] = map[string]interface{}{
+					"phase":         "Ready",
+					"readyReplicas": int64(-1), // Below minimum value
+				}
+
+				err := cl.Status().Update(ctx, statusUpdate)
+				Expect(err).To(MatchError(ContainSubstring("\"test-object\" is invalid: status.readyReplicas: Invalid value: -1: status.readyReplicas in body should be greater than or equal to 0")))
+			}, defaultNodeTimeout)
+		})
+	})
+
+	Describe("Scale Subresource Validation", func() {
+		Context("when scale subresource validation is enabled", func() {
+			var (
+				scaleCompatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement
+			)
+
+			BeforeEach(func(ctx context.Context) {
+				liveCRD := compatibilityCRD.DeepCopy()
+				Eventually(kWithCtx(ctx).Update(liveCRD, func() {
+					// Disable the scale subresource for these test cases
+					// This means the scale validation is being implemented by the compatibility requirement,
+					// rather than the live CRD.
+					liveCRD.Spec.Versions[0].Subresources.Scale = nil
+				})).WithContext(ctx).Should(Succeed())
+
+				scaleCRD := compatibilityCRD.DeepCopy()
+				// Disable the status subresource for these test cases
+				scaleCRD.Spec.Versions[0].Subresources.Status = nil
+
+				// The baseCRD already has scale subresource, so we can create a compatibility requirement directly
+				scaleCompatibilityRequirement = test.GenerateTestCompatibilityRequirement(scaleCRD)
+				scaleCompatibilityRequirement.Name = fmt.Sprintf("scale-%s", baseCRD.Name)
+				Expect(cl.Create(ctx, scaleCompatibilityRequirement)).To(Succeed())
+
+				// Create ValidatingWebhookConfiguration for the compatibility requirement
+				scaleWebhookConfig := createValidatingWebhookConfig(baseCRD, scaleCompatibilityRequirement)
+				scaleWebhookConfig.ObjectMeta.Name = fmt.Sprintf("test-scale-validation-%s", scaleCompatibilityRequirement.Name)
+				Expect(cl.Create(ctx, scaleWebhookConfig)).To(Succeed())
+
+				DeferCleanup(func(ctx context.Context) {
+					Expect(test.CleanupAndWait(ctx, cl, scaleWebhookConfig, scaleCompatibilityRequirement)).To(Succeed())
+				})
+			}, defaultNodeTimeout)
+
+			It("should allow objects with valid scale-related fields when scale validation is enabled", func(ctx context.Context) {
+				gvk := schema.GroupVersionKind{
+					Group:   baseCRD.Spec.Group,
+					Version: baseCRD.Spec.Versions[0].Name,
+					Kind:    baseCRD.Spec.Names.Kind,
+				}
+
+				validScaledObj := test.NewTestObject(gvk).
+					WithNamespace(namespace).
+					WithField("requiredField", "value").
+					WithField("testField", "test-value").
+					WithField("spec", map[string]interface{}{
+						"replicas": int64(5),
+						"selector": map[string]interface{}{
+							"matchLabels": map[string]interface{}{
+								"app": "test-app",
+							},
+						},
+					}).
+					Build()
+
+				Expect(cl.Create(ctx, validScaledObj)).To(Succeed())
+
+				DeferCleanup(func(ctx context.Context) {
+					Expect(test.CleanupAndWait(ctx, cl, validScaledObj)).To(Succeed())
+				})
+
+				Eventually(kWithCtx(ctx).Get(validScaledObj)).WithContext(ctx).Should(Succeed())
+
+				// Update status with valid readyReplicas using status subclient
+				statusUpdate := validScaledObj.DeepCopy()
+				statusUpdate.Object["status"] = map[string]interface{}{
+					"readyReplicas": int64(3),
+				}
+
+				Expect(cl.Status().Update(ctx, statusUpdate)).To(Succeed())
+
+				// Verify status was updated
+				Eventually(kWithCtx(ctx).Object(validScaledObj)).WithContext(ctx).Should(
+					HaveField("Object", HaveKeyWithValue("status", HaveKeyWithValue("readyReplicas", int64(3)))),
+				)
+			}, defaultNodeTimeout)
+
+			It("should reject objects with replica count above maximum when scale validation is enabled", func(ctx context.Context) {
+				gvk := schema.GroupVersionKind{
+					Group:   baseCRD.Spec.Group,
+					Version: baseCRD.Spec.Versions[0].Name,
+					Kind:    baseCRD.Spec.Names.Kind,
+				}
+
+				objWithTooManyReplicas := test.NewTestObject(gvk).
+					WithNamespace(namespace).
+					WithField("requiredField", "value").
+					WithField("testField", "test-value").
+					WithField("spec", map[string]interface{}{
+						"replicas": int64(150), // Above maximum of 100
+						"selector": map[string]interface{}{
+							"matchLabels": map[string]interface{}{
+								"app": "test-app",
+							},
+						},
+					}).
+					Build()
+
+				err := cl.Create(ctx, objWithTooManyReplicas)
+				Expect(err).To(MatchError(ContainSubstring("\"test-object\" is invalid: spec.replicas: Invalid value: 150: spec.replicas in body should be less than or equal to 100")))
+			}, defaultNodeTimeout)
+
+			It("should reject objects with negative replica count when scale validation is enabled", func(ctx context.Context) {
+				gvk := schema.GroupVersionKind{
+					Group:   baseCRD.Spec.Group,
+					Version: baseCRD.Spec.Versions[0].Name,
+					Kind:    baseCRD.Spec.Names.Kind,
+				}
+
+				objWithNegativeReplicas := test.NewTestObject(gvk).
+					WithNamespace(namespace).
+					WithField("requiredField", "value").
+					WithField("testField", "test-value").
+					WithField("spec", map[string]interface{}{
+						"replicas": int64(-1), // Below minimum of 0
+						"selector": map[string]interface{}{
+							"matchLabels": map[string]interface{}{
+								"app": "test-app",
+							},
+						},
+					}).
+					Build()
+
+				err := cl.Create(ctx, objWithNegativeReplicas)
+				Expect(err).To(MatchError(ContainSubstring("\"test-object\" is invalid: [spec.replicas: Invalid value: -1: spec.replicas in body should be greater than or equal to 0, .spec.replicas: Invalid value: -1: should be a non-negative integer]")))
+			}, defaultNodeTimeout)
+
+			It("should reject status updates with negative readyReplicas when scale validation is enabled", func(ctx context.Context) {
+				gvk := schema.GroupVersionKind{
+					Group:   baseCRD.Spec.Group,
+					Version: baseCRD.Spec.Versions[0].Name,
+					Kind:    baseCRD.Spec.Names.Kind,
+				}
+
+				// First create the object with valid spec
+				baseObj := test.NewTestObject(gvk).
+					WithNamespace(namespace).
+					WithField("requiredField", "value").
+					WithField("testField", "test-value").
+					WithField("spec", map[string]interface{}{
+						"replicas": int64(3),
+						"selector": map[string]interface{}{
+							"matchLabels": map[string]interface{}{
+								"app": "test-app",
+							},
+						},
+					}).
+					Build()
+
+				Expect(cl.Create(ctx, baseObj)).To(Succeed())
+
+				DeferCleanup(func(ctx context.Context) {
+					Expect(test.CleanupAndWait(ctx, cl, baseObj)).To(Succeed())
+				})
+
+				// Wait for object to be created
+				Eventually(kWithCtx(ctx).Get(baseObj)).WithContext(ctx).Should(Succeed())
+
+				// Now try to update status with negative readyReplicas
+				statusUpdate := baseObj.DeepCopy()
+				statusUpdate.Object["status"] = map[string]interface{}{
+					"readyReplicas": int64(-1), // Below minimum of 0
+				}
+
+				err := cl.Status().Update(ctx, statusUpdate)
+				Expect(err).To(MatchError(ContainSubstring("\"test-object\" is invalid: [status.readyReplicas: Invalid value: -1: status.readyReplicas in body should be greater than or equal to 0, .status.readyReplicas: Invalid value: -1: should be a non-negative integer]")))
+			}, defaultNodeTimeout)
+		})
 	})
 })
 
