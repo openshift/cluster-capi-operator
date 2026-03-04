@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	"k8s.io/utils/ptr"
 )
 
 // JSONSchemaPropsBuilder provides a fluent interface for building JSONSchemaProps
@@ -343,6 +344,13 @@ func (b *JSONSchemaPropsBuilder) WithDescription(description string) *JSONSchema
 // WithTitle sets the title field.
 func (b *JSONSchemaPropsBuilder) WithTitle(title string) *JSONSchemaPropsBuilder {
 	b.schema.Title = title
+
+	return b
+}
+
+// WithXPreserveUnknownFields sets the x-preserve-unknown-fields field.
+func (b *JSONSchemaPropsBuilder) WithXPreserveUnknownFields(preserveUnknownFields bool) *JSONSchemaPropsBuilder {
+	b.schema.XPreserveUnknownFields = ptr.To(preserveUnknownFields)
 
 	return b
 }
