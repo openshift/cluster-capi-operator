@@ -54,8 +54,13 @@ var ctx = context.Background()
 var vapCleanup func()
 
 const (
-	timeout = time.Second * 10
+	timeout              = 10 * time.Second
+	consistentlyTimeout  = 2 * time.Second
+	setupTimeout         = 1 * time.Minute
+	consecutiveFailLimit = 8
 )
+
+var controllerCfg *rest.Config
 
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -100,6 +105,14 @@ var _ = BeforeSuite(func() {
 
 	komega.SetClient(k8sClient)
 	komega.SetContext(ctx)
+	SetDefaultEventuallyTimeout(timeout)
+
+	By("Creating controller API server user")
+	controllerCfg, err = testEnv.ControlPlane.APIServer.SecureServing.AddUser(envtest.User{
+		Name:   "system:serviceaccount:openshift-cluster-api:capi-controllers",
+		Groups: []string{"system:masters", "system:authenticated"},
+	}, cfg)
+	Expect(err).ToNot(HaveOccurred(), "Controller user should be able to be created")
 })
 
 var _ = AfterSuite(
@@ -113,5 +126,5 @@ var _ = AfterSuite(
 		err := testEnv.Stop()
 		Expect(err).NotTo(HaveOccurred())
 	},
-	NodeTimeout(timeout),
+	NodeTimeout(setupTimeout),
 )

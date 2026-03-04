@@ -45,6 +45,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 )
 
 var _ = Describe("AWS load balancer validation during MAPI->CAPI conversion", func() {
@@ -112,7 +113,8 @@ var _ = Describe("AWS load balancer validation during MAPI->CAPI conversion", fu
 		Expect(err).ToNot(HaveOccurred())
 
 		mgr, err = ctrl.NewManager(controllerCfg, ctrl.Options{
-			Scheme: testScheme,
+			Scheme:  testScheme,
+			Metrics: server.Options{BindAddress: "0"},
 			Controller: config.Controller{
 				SkipNameValidation: ptr.To(true),
 			},

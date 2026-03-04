@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"sync"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -59,6 +60,19 @@ var (
 	// errCAPIMachineTemplateDoesNotHaveExpectedMachineSetLabel is the error message for the error returned when the CAPI machine template does not have the expected MachineSet label.
 	errCAPIMachineTemplateDoesNotHaveExpectedMachineSetLabel = errors.New("cluster API machine template does not have the expected MachineSet label")
 )
+
+var consecutiveFailures int
+
+var _ = JustAfterEach(func() {
+	if CurrentSpecReport().Failed() {
+		consecutiveFailures++
+		if consecutiveFailures >= consecutiveFailLimit {
+			AbortSuite("Aborting: too many consecutive failures suggest environment issues, not test bugs")
+		}
+	} else {
+		consecutiveFailures = 0
+	}
+})
 
 var _ = Describe("With a running MachineSetSync controller", func() {
 	var mgrCancel context.CancelFunc
@@ -228,18 +242,31 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 		stopManager()
 		Eventually(mgrDone, timeout).Should(BeClosed())
 
-		By("Cleaning up MAPI test resources")
-		testutils.CleanupResources(Default, ctx, cfg, k8sClient, mapiNamespace.GetName(),
-			&mapiv1beta1.Machine{},
-			&mapiv1beta1.MachineSet{},
-		)
+		By("Cleaning up test resources")
+		var wg sync.WaitGroup
+		wg.Add(2)
 
-		testutils.CleanupResources(Default, ctx, cfg, k8sClient, capiNamespace.GetName(),
-			&clusterv1.Machine{},
-			&clusterv1.MachineSet{},
-			&awsv1.AWSCluster{},
-			&awsv1.AWSMachineTemplate{},
-		)
+		go func() {
+			defer GinkgoRecover()
+			defer wg.Done()
+			testutils.CleanupResources(Default, ctx, cfg, k8sClient, mapiNamespace.GetName(),
+				&mapiv1beta1.Machine{},
+				&mapiv1beta1.MachineSet{},
+			)
+		}()
+
+		go func() {
+			defer GinkgoRecover()
+			defer wg.Done()
+			testutils.CleanupResources(Default, ctx, cfg, k8sClient, capiNamespace.GetName(),
+				&clusterv1.Machine{},
+				&clusterv1.MachineSet{},
+				&awsv1.AWSCluster{},
+				&awsv1.AWSMachineTemplate{},
+			)
+		}()
+
+		wg.Wait()
 	})
 
 	Context("when the MAPI machine set has MachineAuthority set to Machine API", func() {
