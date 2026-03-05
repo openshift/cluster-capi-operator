@@ -38,6 +38,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -54,8 +55,9 @@ const (
 )
 
 var (
-	errObjectValidator      = errors.New("failed to create the object validator")
-	errUnexpectedObjectType = errors.New("unexpected object type")
+	errObjectValidator       = errors.New("failed to create the object validator")
+	errUnexpectedObjectType  = errors.New("unexpected object type")
+	errUnknownCRDAdmitAction = errors.New("unknown CRD admit action")
 )
 
 var _ admission.Handler = &validator{}
@@ -119,7 +121,18 @@ func (v *validator) SetupWithManager(ctx context.Context, mgr ctrl.Manager, opts
 
 // ValidateCreate validates the creation of an object.
 func (v *validator) ValidateCreate(ctx context.Context, compatibilityRequirementName string, obj *unstructured.Unstructured) (admission.Warnings, error) {
-	strategy, err := v.getValidationStrategy(ctx, compatibilityRequirementName, obj.GroupVersionKind().Version)
+	compatibilityRequirement := &apiextensionsv1alpha1.CompatibilityRequirement{}
+	if err := v.client.Get(ctx, client.ObjectKey{Name: compatibilityRequirementName}, compatibilityRequirement); err != nil {
+		return nil, fmt.Errorf("failed to get CompatibilityRequirement %q: %w", compatibilityRequirementName, err)
+	}
+
+	if !isObjectValidationWebhookEnabled(compatibilityRequirement) {
+		// The webhook should not be configured, so the controller should remove the VWC and we should no longer
+		// receive requests. Before it gets there, ignore any requests we do receive.
+		return nil, nil
+	}
+
+	strategy, err := v.getValidationStrategy(compatibilityRequirement, obj.GroupVersionKind().Version)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get validation strategy: %w", err)
 	}
@@ -127,16 +140,37 @@ func (v *validator) ValidateCreate(ctx context.Context, compatibilityRequirement
 	errs := strategy.Validate(ctx, obj)
 	warnings := strategy.WarningsOnCreate(ctx, obj)
 
-	if len(errs) > 0 {
-		return warnings, apierrors.NewInvalid(obj.GroupVersionKind().GroupKind(), obj.GetName(), errs)
-	}
+	switch compatibilityRequirement.Spec.ObjectSchemaValidation.Action {
+	case apiextensionsv1alpha1.CRDAdmitActionWarn:
+		warnings = append(warnings, util.SliceMap(errs, errorToString)...)
 
-	return warnings, nil
+		return warnings, nil
+	case apiextensionsv1alpha1.CRDAdmitActionDeny:
+		if len(errs) > 0 {
+			return warnings, apierrors.NewInvalid(obj.GroupVersionKind().GroupKind(), obj.GetName(), errs)
+		}
+
+		return warnings, nil
+	default:
+		// This should be impossible as validation on the action is enforced by openapi as an enum.
+		return nil, fmt.Errorf("%w: %q", errUnknownCRDAdmitAction, compatibilityRequirement.Spec.ObjectSchemaValidation.Action)
+	}
 }
 
 // ValidateUpdate validates the update of an object.
 func (v *validator) ValidateUpdate(ctx context.Context, compatibilityRequirementName string, oldObj, obj *unstructured.Unstructured) (admission.Warnings, error) {
-	strategy, err := v.getValidationStrategy(ctx, compatibilityRequirementName, obj.GroupVersionKind().Version)
+	compatibilityRequirement := &apiextensionsv1alpha1.CompatibilityRequirement{}
+	if err := v.client.Get(ctx, client.ObjectKey{Name: compatibilityRequirementName}, compatibilityRequirement); err != nil {
+		return nil, fmt.Errorf("failed to get CompatibilityRequirement %q: %w", compatibilityRequirementName, err)
+	}
+
+	if !isObjectValidationWebhookEnabled(compatibilityRequirement) {
+		// The webhook should not be configured, so the controller should remove the VWC and we should no longer
+		// receive requests. Before it gets there, ignore any requests we do receive.
+		return nil, nil
+	}
+
+	strategy, err := v.getValidationStrategy(compatibilityRequirement, obj.GroupVersionKind().Version)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get validation strategy: %w", err)
 	}
@@ -144,11 +178,21 @@ func (v *validator) ValidateUpdate(ctx context.Context, compatibilityRequirement
 	errs := strategy.ValidateUpdate(ctx, obj, oldObj)
 	warnings := strategy.WarningsOnUpdate(ctx, obj, oldObj)
 
-	if len(errs) > 0 {
-		return warnings, apierrors.NewInvalid(obj.GroupVersionKind().GroupKind(), obj.GetName(), errs)
-	}
+	switch compatibilityRequirement.Spec.ObjectSchemaValidation.Action {
+	case apiextensionsv1alpha1.CRDAdmitActionWarn:
+		warnings = append(warnings, util.SliceMap(errs, errorToString)...)
 
-	return warnings, nil
+		return warnings, nil
+	case apiextensionsv1alpha1.CRDAdmitActionDeny:
+		if len(errs) > 0 {
+			return warnings, apierrors.NewInvalid(obj.GroupVersionKind().GroupKind(), obj.GetName(), errs)
+		}
+
+		return warnings, nil
+	default:
+		// This should be impossible as validation on the action is enforced by openapi as an enum.
+		return nil, fmt.Errorf("%w: %q", errUnknownCRDAdmitAction, compatibilityRequirement.Spec.ObjectSchemaValidation.Action)
+	}
 }
 
 // ValidateDelete validates the deletion of an object.
@@ -156,12 +200,7 @@ func (v *validator) ValidateDelete(ctx context.Context, compatibilityRequirement
 	return nil, nil
 }
 
-func (v *validator) getValidationStrategy(ctx context.Context, compatibilityRequirementName string, version string) (rest.RESTCreateUpdateStrategy, error) {
-	compatibilityRequirement := &apiextensionsv1alpha1.CompatibilityRequirement{}
-	if err := v.client.Get(ctx, client.ObjectKey{Name: compatibilityRequirementName}, compatibilityRequirement); err != nil {
-		return nil, fmt.Errorf("failed to get CompatibilityRequirement %q: %w", compatibilityRequirementName, err)
-	}
-
+func (v *validator) getValidationStrategy(compatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement, version string) (rest.RESTCreateUpdateStrategy, error) {
 	cacheKey := getValidationStrategyCacheKey(compatibilityRequirement, version)
 
 	strategy, ok := v.getValidationStrategyFromCache(compatibilityRequirement, cacheKey)
@@ -411,4 +450,17 @@ func ValidatingWebhookConfigurationFor(obj *apiextensionsv1alpha1.CompatibilityR
 	}
 
 	return vwc
+}
+
+func errorToString(err *field.Error) string {
+	return err.Error()
+}
+
+func isObjectValidationWebhookEnabled(obj *apiextensionsv1alpha1.CompatibilityRequirement) bool {
+	osv := obj.Spec.ObjectSchemaValidation
+	return osv.Action != "" || len(osv.MatchConditions) > 0 || !labelSelectorIsEmpty(osv.NamespaceSelector) || !labelSelectorIsEmpty(osv.ObjectSelector)
+}
+
+func labelSelectorIsEmpty(ls metav1.LabelSelector) bool {
+	return len(ls.MatchLabels) == 0 && len(ls.MatchExpressions) == 0
 }

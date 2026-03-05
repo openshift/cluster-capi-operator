@@ -31,6 +31,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	"github.com/openshift/cluster-capi-operator/pkg/test"
@@ -97,6 +98,7 @@ func initValidator(ctx context.Context, cfg *rest.Config, scheme *runtime.Scheme
 			Port:    testEnv.WebhookInstallOptions.LocalServingPort,
 			Host:    testEnv.WebhookInstallOptions.LocalServingHost,
 		}),
+		Metrics: metricsserver.Options{BindAddress: "0"},
 	})
 	Expect(err).ToNot(HaveOccurred(), "Manager should be created")
 
