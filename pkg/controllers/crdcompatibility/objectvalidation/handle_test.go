@@ -26,6 +26,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
 	"github.com/openshift/cluster-capi-operator/pkg/test"
@@ -50,6 +51,16 @@ func createValidatingWebhookConfig(compatibilityRequirement *apiextensionsv1alph
 	}
 
 	return validatingWebhookConfig
+}
+
+// createWarningCompatibilityRequirement creates a CompatibilityRequirement with Warn action
+// and minimal configuration to avoid selector validation issues.
+func createWarningCompatibilityRequirement(crd *apiextensionsv1.CustomResourceDefinition) *apiextensionsv1alpha1.CompatibilityRequirement {
+	compatibilityRequirement := test.GenerateTestCompatibilityRequirement(crd)
+	compatibilityRequirement.Spec.CustomResourceDefinitionSchemaValidation.Action = apiextensionsv1alpha1.CRDAdmitActionWarn
+	compatibilityRequirement.Spec.ObjectSchemaValidation.Action = apiextensionsv1alpha1.CRDAdmitActionWarn
+
+	return compatibilityRequirement
 }
 
 var _ = Describe("End-to-End Admission Webhook Integration", Ordered, ContinueOnFailure, func() {
@@ -830,6 +841,411 @@ var _ = Describe("End-to-End Admission Webhook Integration", Ordered, ContinueOn
 
 				err := cl.Status().Update(ctx, statusUpdate)
 				Expect(err).To(MatchError(ContainSubstring("\"test-object\" is invalid: [status.readyReplicas: Invalid value: -1: status.readyReplicas in body should be greater than or equal to 0, .status.readyReplicas: Invalid value: -1: should be a non-negative integer]")))
+			}, defaultNodeTimeout)
+		})
+	})
+
+	Describe("Warning Mode Validation", func() {
+		var (
+			warningHandler *test.WarningHandler
+		)
+
+		BeforeEach(func() {
+			// Create a new client that collects warnings in the test warning handler.
+			var err error
+			warningHandler = test.NewTestWarningHandler()
+			warningConfig := *cfg
+			warningConfig.WarningHandlerWithContext = warningHandler
+			cl, err = client.New(&warningConfig, client.Options{})
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		Context("when ObjectSchemaValidation Action is set to Warn", func() {
+			var (
+				warningCompatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement
+			)
+
+			BeforeEach(func(ctx context.Context) {
+				// Create a CompatibilityRequirement with Warn action using utility function
+				warningCompatibilityRequirement = createWarningCompatibilityRequirement(compatibilityCRD.DeepCopy())
+
+				Expect(cl.Create(ctx, warningCompatibilityRequirement)).To(Succeed())
+
+				// Create ValidatingWebhookConfiguration for the warning requirement
+				warningWebhookConfig := createValidatingWebhookConfig(warningCompatibilityRequirement, baseCRD)
+				warningWebhookConfig.ObjectMeta.Name = fmt.Sprintf("test-warning-validation-%s", warningCompatibilityRequirement.Name)
+				Expect(cl.Create(ctx, warningWebhookConfig)).To(Succeed())
+
+				DeferCleanup(func(ctx context.Context) {
+					Expect(test.CleanupAndWait(ctx, cl, warningWebhookConfig, warningCompatibilityRequirement)).To(Succeed())
+				})
+			}, defaultNodeTimeout)
+
+			It("should allow objects missing required fields but generate warnings", func(ctx context.Context) {
+				gvk := schema.GroupVersionKind{
+					Group:   baseCRD.Spec.Group,
+					Version: baseCRD.Spec.Versions[0].Name,
+					Kind:    baseCRD.Spec.Names.Kind,
+				}
+
+				invalidObj := test.NewTestObject(gvk).
+					WithNamespace(namespace).
+					WithField("requiredField", "value").
+					WithNestedField("spec.replicas", int64(150)). // Above maximum of 100
+					Build()
+
+				// This should succeed despite validation failure, with warnings
+				err := cl.Create(ctx, invalidObj)
+				Expect(err).ToNot(HaveOccurred())
+
+				DeferCleanup(func(ctx context.Context) {
+					Expect(test.CleanupAndWait(ctx, cl, invalidObj)).To(Succeed())
+				})
+
+				// Verify object was created successfully
+				Eventually(kWithCtx(ctx).Get(invalidObj)).WithContext(ctx).Should(Succeed())
+
+				Expect(warningHandler.Messages()).To(ConsistOf(ContainSubstring("Warning: spec.replicas: Invalid value: 150: spec.replicas in body should be less than or equal to 100")))
+			}, defaultNodeTimeout)
+
+			It("should allow updates changing a field to be invalid but generate warnings", func(ctx context.Context) {
+				gvk := schema.GroupVersionKind{
+					Group:   baseCRD.Spec.Group,
+					Version: baseCRD.Spec.Versions[0].Name,
+					Kind:    baseCRD.Spec.Names.Kind,
+				}
+
+				// First create a valid object
+				validObj := test.NewTestObject(gvk).
+					WithNamespace(namespace).
+					WithField("requiredField", "value").
+					WithNestedField("spec.replicas", int64(100)). // At maximum of 100
+					Build()
+
+				Expect(cl.Create(ctx, validObj)).To(Succeed())
+
+				DeferCleanup(func(ctx context.Context) {
+					Expect(test.CleanupAndWait(ctx, cl, validObj)).To(Succeed())
+				})
+
+				// Wait for object to be created
+				Eventually(kWithCtx(ctx).Get(validObj)).WithContext(ctx).Should(Succeed())
+				Expect(warningHandler.Messages()).To(BeEmpty())
+
+				// Update to remove required field - should generate warning but succeed
+				invalidUpdate := validObj.DeepCopy()
+				Expect(unstructured.SetNestedField(invalidUpdate.Object, int64(150), "spec", "replicas")).To(Succeed())
+
+				Expect(cl.Update(ctx, invalidUpdate)).To(Succeed())
+
+				// Verify update was applied
+				Eventually(kWithCtx(ctx).Object(validObj)).WithContext(ctx).Should(
+					HaveField("Object", HaveKeyWithValue("spec", HaveKeyWithValue("replicas", int64(150)))),
+				)
+				Expect(warningHandler.Messages()).To(ConsistOf(ContainSubstring("Warning: spec.replicas: Invalid value: 150: spec.replicas in body should be less than or equal to 100")))
+			}, defaultNodeTimeout)
+		})
+
+		Context("when ObjectSchemaValidation Action is Warn for status subresource", func() {
+			var (
+				warningStatusCompatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement
+			)
+
+			BeforeEach(func(ctx context.Context) {
+				liveCRD := compatibilityCRD.DeepCopy()
+				Eventually(kWithCtx(ctx).Update(liveCRD, func() {
+					liveCRD.Spec.Versions[0].Subresources.Scale = nil
+				})).Should(Succeed())
+
+				statusCRD := compatibilityCRD.DeepCopy()
+				// Disable the scale subresource for these test cases
+				statusCRD.Spec.Versions[0].Subresources.Scale = nil
+
+				// Create a CompatibilityRequirement with Warn action using utility function
+				warningStatusCompatibilityRequirement = createWarningCompatibilityRequirement(statusCRD)
+				Expect(cl.Create(ctx, warningStatusCompatibilityRequirement)).To(Succeed())
+
+				// Create ValidatingWebhookConfiguration for the warning requirement
+				warningStatusWebhookConfig := createValidatingWebhookConfig(warningStatusCompatibilityRequirement, baseCRD)
+				warningStatusWebhookConfig.ObjectMeta.Name = fmt.Sprintf("test-warning-status-validation-%s", warningStatusCompatibilityRequirement.Name)
+				Expect(cl.Create(ctx, warningStatusWebhookConfig)).To(Succeed())
+
+				DeferCleanup(func(ctx context.Context) {
+					Expect(test.CleanupAndWait(ctx, cl, warningStatusWebhookConfig, warningStatusCompatibilityRequirement)).To(Succeed())
+				})
+			}, defaultNodeTimeout)
+
+			It("should allow status updates with invalid enum values but generate warnings", func(ctx context.Context) {
+				gvk := schema.GroupVersionKind{
+					Group:   baseCRD.Spec.Group,
+					Version: baseCRD.Spec.Versions[0].Name,
+					Kind:    baseCRD.Spec.Names.Kind,
+				}
+
+				// First create the object without status
+				baseObj := test.NewTestObject(gvk).
+					WithNamespace(namespace).
+					WithField("requiredField", "value").
+					WithField("testField", "test-value").
+					Build()
+
+				Expect(cl.Create(ctx, baseObj)).To(Succeed())
+
+				DeferCleanup(func(ctx context.Context) {
+					Expect(test.CleanupAndWait(ctx, cl, baseObj)).To(Succeed())
+				}, defaultNodeTimeout)
+
+				// Wait for object to be created
+				Eventually(kWithCtx(ctx).Get(baseObj)).WithContext(ctx).Should(Succeed())
+
+				// Update status with invalid enum value - should generate warning but succeed
+				statusUpdate := baseObj.DeepCopy()
+				statusUpdate.Object["status"] = map[string]interface{}{
+					"phase": "InvalidPhase", // Not in allowed enum values
+				}
+
+				err := cl.Status().Update(ctx, statusUpdate)
+				Expect(err).ToNot(HaveOccurred()) // Should succeed despite validation failure
+
+				// Verify status was updated despite being invalid
+				Eventually(kWithCtx(ctx).Object(baseObj)).WithContext(ctx).Should(
+					HaveField("Object", HaveKeyWithValue("status", HaveKeyWithValue("phase", "InvalidPhase"))),
+				)
+				Expect(warningHandler.Messages()).To(ConsistOf(ContainSubstring("Warning: status.phase: Unsupported value: \"InvalidPhase\": supported values: \"Ready\", \"Pending\", \"Failed\"")))
+			}, defaultNodeTimeout)
+
+			It("should allow status updates with invalid nested structures but generate warnings", func(ctx context.Context) {
+				gvk := schema.GroupVersionKind{
+					Group:   baseCRD.Spec.Group,
+					Version: baseCRD.Spec.Versions[0].Name,
+					Kind:    baseCRD.Spec.Names.Kind,
+				}
+
+				// First create the object without status
+				baseObj := test.NewTestObject(gvk).
+					WithNamespace(namespace).
+					WithField("requiredField", "value").
+					WithField("testField", "test-value").
+					Build()
+
+				Expect(cl.Create(ctx, baseObj)).To(Succeed())
+
+				DeferCleanup(func(ctx context.Context) {
+					Expect(test.CleanupAndWait(ctx, cl, baseObj)).To(Succeed())
+				}, defaultNodeTimeout)
+
+				// Wait for object to be created
+				Eventually(kWithCtx(ctx).Get(baseObj)).WithContext(ctx).Should(Succeed())
+
+				// Update status with invalid nested structure - should generate warning but succeed
+				statusUpdate := baseObj.DeepCopy()
+				statusUpdate.Object["status"] = map[string]interface{}{
+					"phase": "Ready",
+					"conditions": []interface{}{
+						map[string]interface{}{
+							"type": "Available",
+							// Missing required "status" field in condition
+						},
+					},
+				}
+
+				err := cl.Status().Update(ctx, statusUpdate)
+				Expect(err).ToNot(HaveOccurred()) // Should succeed despite validation failure
+
+				// Verify status was updated despite being invalid
+				Eventually(kWithCtx(ctx).Object(baseObj)).WithContext(ctx).Should(
+					HaveField("Object", HaveKeyWithValue("status", HaveKeyWithValue("phase", "Ready"))),
+				)
+				Expect(warningHandler.Messages()).To(ConsistOf(ContainSubstring("Warning: status.conditions[0].status: Required value")))
+			}, defaultNodeTimeout)
+
+			It("should allow status updates with negative readyReplicas but generate warnings", func(ctx context.Context) {
+				gvk := schema.GroupVersionKind{
+					Group:   baseCRD.Spec.Group,
+					Version: baseCRD.Spec.Versions[0].Name,
+					Kind:    baseCRD.Spec.Names.Kind,
+				}
+
+				// First create the object without status
+				baseObj := test.NewTestObject(gvk).
+					WithNamespace(namespace).
+					WithField("requiredField", "value").
+					WithField("testField", "test-value").
+					Build()
+
+				Expect(cl.Create(ctx, baseObj)).To(Succeed())
+
+				DeferCleanup(func(ctx context.Context) {
+					Expect(test.CleanupAndWait(ctx, cl, baseObj)).To(Succeed())
+				})
+
+				// Wait for object to be created
+				Eventually(kWithCtx(ctx).Get(baseObj)).WithContext(ctx).Should(Succeed())
+
+				// Update status with negative readyReplicas - should generate warning but succeed
+				statusUpdate := baseObj.DeepCopy()
+				statusUpdate.Object["status"] = map[string]interface{}{
+					"phase":         "Ready",
+					"readyReplicas": int64(-1), // Below minimum value
+				}
+
+				err := cl.Status().Update(ctx, statusUpdate)
+				Expect(err).ToNot(HaveOccurred()) // Should succeed despite validation failure
+
+				// Verify status was updated despite being invalid
+				Eventually(kWithCtx(ctx).Object(baseObj)).WithContext(ctx).Should(
+					HaveField("Object", HaveKeyWithValue("status", HaveKeyWithValue("readyReplicas", int64(-1)))),
+				)
+				Expect(warningHandler.Messages()).To(ConsistOf(ContainSubstring("Warning: status.readyReplicas: Invalid value: -1: status.readyReplicas in body should be greater than or equal to 0")))
+			}, defaultNodeTimeout)
+		})
+
+		Context("when ObjectSchemaValidation Action is Warn for scale subresource", func() {
+			var (
+				warningScaleCompatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement
+			)
+
+			BeforeEach(func(ctx context.Context) {
+				liveCRD := compatibilityCRD.DeepCopy()
+				Eventually(kWithCtx(ctx).Update(liveCRD, func() {
+					// Disable the live CRD scale subresource else the objects will be rejected
+					// and we won't be able to check the warnings.
+					liveCRD.Spec.Versions[0].Subresources.Scale = nil
+				})).WithContext(ctx).Should(Succeed())
+
+				scaleCRD := compatibilityCRD.DeepCopy()
+
+				// Create a CompatibilityRequirement with Warn action using utility function
+				warningScaleCompatibilityRequirement = createWarningCompatibilityRequirement(scaleCRD)
+				Expect(cl.Create(ctx, warningScaleCompatibilityRequirement)).To(Succeed())
+
+				// Create ValidatingWebhookConfiguration for the warning requirement
+				warningScaleWebhookConfig := createValidatingWebhookConfig(warningScaleCompatibilityRequirement, baseCRD)
+				warningScaleWebhookConfig.ObjectMeta.Name = fmt.Sprintf("test-warning-scale-validation-%s", warningScaleCompatibilityRequirement.Name)
+				Expect(cl.Create(ctx, warningScaleWebhookConfig)).To(Succeed())
+
+				DeferCleanup(func(ctx context.Context) {
+					Expect(test.CleanupAndWait(ctx, cl, warningScaleWebhookConfig, warningScaleCompatibilityRequirement)).To(Succeed())
+				})
+			}, defaultNodeTimeout)
+
+			It("should allow objects with replica count above maximum but generate warnings", func(ctx context.Context) {
+				gvk := schema.GroupVersionKind{
+					Group:   baseCRD.Spec.Group,
+					Version: baseCRD.Spec.Versions[0].Name,
+					Kind:    baseCRD.Spec.Names.Kind,
+				}
+
+				objWithTooManyReplicas := test.NewTestObject(gvk).
+					WithNamespace(namespace).
+					WithField("requiredField", "value").
+					WithField("testField", "test-value").
+					WithField("spec", map[string]interface{}{
+						"replicas": int64(150), // Above maximum of 100
+						"selector": map[string]interface{}{
+							"matchLabels": map[string]interface{}{
+								"app": "test-app",
+							},
+						},
+					}).
+					Build()
+
+				err := cl.Create(ctx, objWithTooManyReplicas)
+				Expect(err).ToNot(HaveOccurred()) // Should succeed despite validation failure
+
+				DeferCleanup(func(ctx context.Context) {
+					Expect(test.CleanupAndWait(ctx, cl, objWithTooManyReplicas)).To(Succeed())
+				})
+
+				// Verify object was created despite being invalid
+				Eventually(kWithCtx(ctx).Get(objWithTooManyReplicas)).WithContext(ctx).Should(Succeed())
+				Expect(warningHandler.Messages()).To(ConsistOf(ContainSubstring("Warning: spec.replicas: Invalid value: 150: spec.replicas in body should be less than or equal to 100")))
+			}, defaultNodeTimeout)
+
+			It("should allow objects with negative replica count but generate warnings", func(ctx context.Context) {
+				gvk := schema.GroupVersionKind{
+					Group:   baseCRD.Spec.Group,
+					Version: baseCRD.Spec.Versions[0].Name,
+					Kind:    baseCRD.Spec.Names.Kind,
+				}
+
+				objWithNegativeReplicas := test.NewTestObject(gvk).
+					WithNamespace(namespace).
+					WithField("requiredField", "value").
+					WithField("testField", "test-value").
+					WithField("spec", map[string]interface{}{
+						"replicas": int64(-1), // Below minimum of 0
+						"selector": map[string]interface{}{
+							"matchLabels": map[string]interface{}{
+								"app": "test-app",
+							},
+						},
+					}).
+					Build()
+
+				err := cl.Create(ctx, objWithNegativeReplicas)
+				Expect(err).ToNot(HaveOccurred()) // Should succeed despite validation failure
+
+				DeferCleanup(func(ctx context.Context) {
+					Expect(test.CleanupAndWait(ctx, cl, objWithNegativeReplicas)).To(Succeed())
+				})
+
+				// Verify object was created despite being invalid
+				Eventually(kWithCtx(ctx).Get(objWithNegativeReplicas)).WithContext(ctx).Should(Succeed())
+				Expect(warningHandler.Messages()).To(ConsistOf(
+					ContainSubstring("Warning: spec.replicas: Invalid value: -1: spec.replicas in body should be greater than or equal to 0"), // Minimum validation
+					ContainSubstring("Warning: .spec.replicas: Invalid value: -1: should be a non-negative integer"),                          // Scale subresource validation
+				))
+			}, defaultNodeTimeout)
+
+			It("should allow status updates with negative readyReplicas but generate warnings", func(ctx context.Context) {
+				gvk := schema.GroupVersionKind{
+					Group:   baseCRD.Spec.Group,
+					Version: baseCRD.Spec.Versions[0].Name,
+					Kind:    baseCRD.Spec.Names.Kind,
+				}
+
+				// First create the object with valid spec
+				baseObj := test.NewTestObject(gvk).
+					WithNamespace(namespace).
+					WithField("requiredField", "value").
+					WithField("testField", "test-value").
+					WithField("spec", map[string]interface{}{
+						"replicas": int64(3),
+						"selector": map[string]interface{}{
+							"matchLabels": map[string]interface{}{
+								"app": "test-app",
+							},
+						},
+					}).
+					Build()
+
+				Expect(cl.Create(ctx, baseObj)).To(Succeed())
+
+				DeferCleanup(func(ctx context.Context) {
+					Expect(test.CleanupAndWait(ctx, cl, baseObj)).To(Succeed())
+				})
+
+				// Wait for object to be created
+				Eventually(kWithCtx(ctx).Get(baseObj)).WithContext(ctx).Should(Succeed())
+
+				// Update status with negative readyReplicas - should generate warning but succeed
+				statusUpdate := baseObj.DeepCopy()
+				statusUpdate.Object["status"] = map[string]interface{}{
+					"readyReplicas": int64(-1), // Below minimum of 0
+				}
+
+				err := cl.Status().Update(ctx, statusUpdate)
+				Expect(err).ToNot(HaveOccurred()) // Should succeed despite validation failure
+
+				// Verify status was updated despite being invalid
+				Eventually(kWithCtx(ctx).Object(baseObj)).WithContext(ctx).Should(
+					HaveField("Object", HaveKeyWithValue("status", HaveKeyWithValue("readyReplicas", int64(-1)))),
+				)
+				Expect(warningHandler.Messages()).To(ConsistOf(
+					ContainSubstring("Warning: status.readyReplicas: Invalid value: -1: status.readyReplicas in body should be greater than or equal to 0"), // Minimum validation
+					ContainSubstring("Warning: .status.readyReplicas: Invalid value: -1: should be a non-negative integer"),                                 // Scale subresource validation
+				))
 			}, defaultNodeTimeout)
 		})
 	})
