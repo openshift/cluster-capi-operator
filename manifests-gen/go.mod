@@ -1,13 +1,13 @@
 module github.com/openshift/cluster-capi-operator/manifests-gen
 
-go 1.24.0
+go 1.25.0
 
 require (
 	github.com/cert-manager/cert-manager v1.18.2
-	k8s.io/api v0.34.1
+	k8s.io/api v0.35.2
 	k8s.io/apiextensions-apiserver v0.34.1
-	k8s.io/apimachinery v0.34.1
-	k8s.io/client-go v0.34.1
+	k8s.io/apimachinery v0.35.2
+	k8s.io/client-go v0.35.2
 	// Update kustomize when updating k8s
 	sigs.k8s.io/kustomize/api v0.20.1
 	sigs.k8s.io/kustomize/kyaml v0.20.1
@@ -16,7 +16,7 @@ require (
 
 require (
 	github.com/google/go-containerregistry v0.20.7
-	github.com/openshift/api v0.0.0-20260228183123-9b2ee997d297
+	github.com/openshift/api v0.0.0-20260305092140-ea051a3c05a2
 	github.com/openshift/cluster-capi-operator v0.0.0-00010101000000-000000000000
 	k8s.io/utils v0.0.0-20251002143259-bc988d571ff4
 	sigs.k8s.io/controller-runtime v0.22.4

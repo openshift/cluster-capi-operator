@@ -1,6 +1,6 @@
 module github.com/openshift/cluster-capi-operator/e2e
 
-go 1.24.0
+go 1.25.0
 
 replace (
 	github.com/openshift/cluster-api-actuator-pkg => github.com/openshift/cluster-api-actuator-pkg v0.0.0-20251203134942-d9bd7b8593f3
@@ -15,12 +15,12 @@ require (
 	github.com/metal3-io/cluster-api-provider-metal3/api v1.11.2
 	github.com/onsi/ginkgo/v2 v2.27.2
 	github.com/onsi/gomega v1.38.2
-	github.com/openshift/api v0.0.0-20260228183123-9b2ee997d297
+	github.com/openshift/api v0.0.0-20260305092140-ea051a3c05a2
 	github.com/openshift/cluster-api-actuator-pkg v0.0.0-20251203134942-d9bd7b8593f3
 	github.com/openshift/cluster-api-provider-baremetal v0.0.0-20250619124612-fb678fec5f7e
-	k8s.io/api v0.34.1
-	k8s.io/apimachinery v0.34.1
-	k8s.io/client-go v0.34.1
+	k8s.io/api v0.35.2
+	k8s.io/apimachinery v0.35.2
+	k8s.io/client-go v0.35.2
 	k8s.io/utils v0.0.0-20251002143259-bc988d571ff4
 	sigs.k8s.io/cluster-api v1.11.3
 	sigs.k8s.io/cluster-api-provider-aws/v2 v2.10.0
@@ -124,7 +124,8 @@ require (
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/apiextensions-apiserver v0.34.1 // indirect
-	k8s.io/component-base v0.34.1 // indirect
+	k8s.io/apiserver v0.35.2 // indirect
+	k8s.io/component-base v0.35.2 // indirect
 	k8s.io/klog v1.0.0 // indirect
 	k8s.io/klog/v2 v2.130.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20250910181357-589584f1c912 // indirect
