@@ -19,11 +19,14 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/ginkgo/v2/reporters"
 )
+
+const diagnosticsEntryName = "diagnostics"
 
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -34,48 +37,67 @@ var _ = BeforeSuite(func() {
 	InitCommonVariables()
 })
 
-var _ = ReportAfterEach(func(report SpecReport) {
+// JustAfterEach runs before AfterEach/DeferCleanup, so tracked resources are
+// still present when we collect diagnostics for spec-body failures.
+var _ = JustAfterEach(func(ctx SpecContext) {
+	if CurrentSpecReport().Failed() {
+		AddReportEntry(diagnosticsEntryName,
+			collectTrackedResourceDiagnostics(ctx),
+			ReportEntryVisibilityNever)
+	}
+}, NodeTimeout(5*time.Minute))
+
+// ReportAfterEach catches cleanup flakes (e.g. a rogue finalizer preventing
+// deletion). Tracked resources may still exist since cleanup failed to remove
+// them.
+var _ = ReportAfterEach(func(ctx SpecContext, report SpecReport) {
 	if report.Failed() {
-		dumpTrackedResources()
+		if _, found := diagnosticsFromReport(report); !found {
+			AddReportEntry(diagnosticsEntryName,
+				collectTrackedResourceDiagnostics(ctx),
+				ReportEntryVisibilityNever)
+		}
 	}
 
 	resourcesUnderTest = nil
-})
+}, NodeTimeout(5*time.Minute))
 
 // ReportAfterSuite generates a JUnit XML report with tracked resource
 // diagnostics appended to the failure description. This replaces the
 // --junit-report ginkgo flag so that Spyglass renders diagnostics inline
 // with the failure instead of hiding them behind "open stderr".
 var _ = ReportAfterSuite("junit with diagnostics", func(report Report) {
-	defer func() {
-		if r := recover(); r != nil {
-			fmt.Fprintf(os.Stderr, "WARNING: ReportAfterSuite panicked: %v\n", r)
-		}
-	}()
-
 	artifactDir := os.Getenv("ARTIFACT_DIR")
 	if artifactDir == "" {
 		return
 	}
 
-	// Append GinkgoWriter output (which contains our tracked resource dump)
-	// to the failure description so it appears in the <failure> element of
-	// the JUnit XML, which is what Spyglass renders by default.
 	for i := range report.SpecReports {
 		sr := &report.SpecReports[i]
 		if !sr.Failed() {
 			continue
 		}
 
-		if sr.CapturedGinkgoWriterOutput == "" {
-			continue
+		if diag, found := diagnosticsFromReport(*sr); found {
+			sr.Failure.Message += "\n\n" + diag
 		}
-
-		sr.Failure.Message += "\n\n" + sr.CapturedGinkgoWriterOutput
 	}
 
 	dst := filepath.Join(artifactDir, "junit_cluster_capi_operator.xml")
-	if err := reporters.GenerateJUnitReport(report, dst); err != nil {
+	cfg := reporters.JunitReportConfig{OmitFailureMessageAttr: true}
+	if err := reporters.GenerateJUnitReportWithConfig(report, dst, cfg); err != nil {
 		fmt.Fprintf(os.Stderr, "WARNING: failed to write JUnit report to %s: %v\n", dst, err)
 	}
 })
+
+// diagnosticsFromReport extracts the diagnostics string from a SpecReport's
+// report entries. Returns the diagnostics and true if found.
+func diagnosticsFromReport(sr SpecReport) (string, bool) {
+	for _, entry := range sr.ReportEntries {
+		if entry.Name == diagnosticsEntryName {
+			return entry.StringRepresentation(), true
+		}
+	}
+
+	return "", false
+}
