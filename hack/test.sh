@@ -18,7 +18,11 @@ TIMEOUT=${2:-"5m"}
 OPENSHIFT_CI=${OPENSHIFT_CI:-""}
 ARTIFACT_DIR=${ARTIFACT_DIR:-""}
 GINKGO=${GINKGO:-"go run -mod=vendor ${REPO_ROOT}/vendor/github.com/onsi/ginkgo/v2/ginkgo"}
-GINKGO_ARGS=${GINKGO_ARGS:-"-r -v --randomize-all --randomize-suites --keep-going --race --trace --timeout=${TIMEOUT}"}
+PARALLEL_FLAG="-p"
+if [ "${OPENSHIFT_CI:-}" == "true" ]; then
+  PARALLEL_FLAG="--procs=4"
+fi
+GINKGO_ARGS=${GINKGO_ARGS:-"-r -v ${PARALLEL_FLAG} --randomize-all --randomize-suites --keep-going --race --trace --timeout=${TIMEOUT}"}
 GINKGO_EXTRA_ARGS=${GINKGO_EXTRA_ARGS:-""}
 SHARD_ARGS=${SHARD_ARGS:-""}
 

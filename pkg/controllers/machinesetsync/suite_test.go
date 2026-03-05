@@ -43,7 +43,9 @@ import (
 )
 
 const (
-	timeout = time.Second * 2
+	timeout              = 2 * time.Second
+	setupTimeout         = 1 * time.Minute
+	consecutiveFailLimit = 8
 )
 
 var cfg *rest.Config
@@ -90,10 +92,14 @@ var _ = BeforeSuite(func() {
 
 	komega.SetClient(k8sClient)
 	komega.SetContext(ctx)
+	SetDefaultEventuallyTimeout(timeout)
 })
 
-var _ = AfterSuite(func() {
-	By("tearing down the test environment")
-	err := testEnv.Stop()
-	Expect(err).NotTo(HaveOccurred())
-})
+var _ = AfterSuite(
+	func(ctx SpecContext) {
+		By("tearing down the test environment")
+		err := testEnv.Stop()
+		Expect(err).NotTo(HaveOccurred())
+	},
+	NodeTimeout(setupTimeout),
+)
