@@ -74,7 +74,7 @@ e2e: extension ## Run e2e tests against active kubeconfig
 
 .PHONY: extension
 extension: | bin/ ## Build OTE extension binary
-	cd e2e && GOWORK=off go build -o ../bin/extension ./cmd/extension
+	cd e2e && GOWORK=off go build -mod=readonly -o ../bin/extension ./cmd/extension
 
 .PHONY: ote-test
 ote-test: extension ## Run OTE tests
