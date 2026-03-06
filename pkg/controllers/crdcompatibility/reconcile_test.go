@@ -18,6 +18,7 @@ package crdcompatibility
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -343,6 +344,60 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 
 			// No need to delete as we are in an ordered context and the previous test removes the compatibility requirement.
 			Eventually(kWithCtx(ctx).Get(mutatingWebhookConfig)).WithContext(ctx).Should(test.BeK8SNotFound())
+		}, defaultNodeTimeout)
+
+		It("Should only have webhook configurations when the compatibility requirement sets object schema validation", func(ctx context.Context) {
+			Expect(requirement.Spec.ObjectSchemaValidation).ToNot(BeZero(), "Later test setup relies on this being non-zero")
+
+			By("Creating a CompatibilityRequirement without object schema validation")
+			requirementWithoutObjectSchemaValidation := test.GenerateTestCompatibilityRequirement(testCRDClean)
+			requirementWithoutObjectSchemaValidation.Spec.ObjectSchemaValidation = (apiextensionsv1alpha1.ObjectSchemaValidation{})
+
+			createTestObject(ctx, requirementWithoutObjectSchemaValidation, "CompatibilityRequirement")
+
+			By(fmt.Sprintf("Compatibility requirement %s created", requirementWithoutObjectSchemaValidation.Name))
+			// Check that the CompatibilityRequirement is admitted
+			Eventually(kWithCtx(ctx).Object(requirementWithoutObjectSchemaValidation)).WithContext(ctx).Should(HaveField("Status.Conditions", SatisfyAll(
+				test.HaveCondition("Progressing").
+					WithStatus(metav1.ConditionFalse).
+					WithReason(apiextensionsv1alpha1.CompatibilityRequirementUpToDateReason),
+				test.HaveCondition("Admitted").
+					WithStatus(metav1.ConditionTrue).
+					WithReason(apiextensionsv1alpha1.CompatibilityRequirementAdmittedReason),
+			)))
+
+			noObjectSchemaValidatingWebhook := &admissionregistrationv1.ValidatingWebhookConfiguration{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: requirementWithoutObjectSchemaValidation.Name,
+				},
+			}
+			noObjectSchemaMutatingWebhook := &admissionregistrationv1.MutatingWebhookConfiguration{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: requirementWithoutObjectSchemaValidation.Name,
+				},
+			}
+
+			By("Checking that the webhook configurations are not present")
+			Expect(kWithCtx(ctx).Get(noObjectSchemaValidatingWebhook)()).To(MatchError(ContainSubstring("not found")))
+			Expect(kWithCtx(ctx).Get(noObjectSchemaMutatingWebhook)()).To(MatchError(ContainSubstring("not found")))
+
+			By("Adding object schema validation back to the CompatibilityRequirement")
+			Eventually(kWithCtx(ctx).Update(requirementWithoutObjectSchemaValidation, func() {
+				requirementWithoutObjectSchemaValidation.Spec.ObjectSchemaValidation = requirement.Spec.ObjectSchemaValidation
+			})).WithContext(ctx).Should(Succeed())
+
+			By("Checking that the webhook configurations are now present")
+			Eventually(kWithCtx(ctx).Get(noObjectSchemaValidatingWebhook)).WithContext(ctx).Should(Succeed(), "The validating webhook configuration should be created")
+			Eventually(kWithCtx(ctx).Get(noObjectSchemaMutatingWebhook)).WithContext(ctx).Should(Succeed(), "The mutating webhook configuration should be created")
+
+			By("Removing the object schema validation from the CompatibilityRequirement")
+			Eventually(kWithCtx(ctx).Update(requirementWithoutObjectSchemaValidation, func() {
+				requirementWithoutObjectSchemaValidation.Spec.ObjectSchemaValidation = (apiextensionsv1alpha1.ObjectSchemaValidation{})
+			})).WithContext(ctx).Should(Succeed())
+
+			By("Checking that the webhook configurations are now removed")
+			Eventually(kWithCtx(ctx).Get(noObjectSchemaValidatingWebhook)).WithContext(ctx).Should(MatchError(ContainSubstring("not found")))
+			Eventually(kWithCtx(ctx).Get(noObjectSchemaMutatingWebhook)).WithContext(ctx).Should(MatchError(ContainSubstring("not found")))
 		}, defaultNodeTimeout)
 	})
 
