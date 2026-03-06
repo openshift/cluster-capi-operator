@@ -25,7 +25,7 @@ import (
 
 	configv1 "github.com/openshift/api/config/v1"
 	mapiv1 "github.com/openshift/api/machine/v1"
-	"github.com/openshift/cluster-capi-operator/test/e2e/framework"
+	"github.com/openshift/cluster-capi-operator/e2e/framework"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"

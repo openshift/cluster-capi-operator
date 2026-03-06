@@ -69,8 +69,8 @@ unit: .localtestenv ## Run unit tests
 	./hack/test.sh "$(TEST_DIRS)" 20m
 
 .PHONY: e2e
-e2e: ## Run e2e tests against active kubeconfig
-	./hack/test.sh "./e2e/..." 120m
+e2e: extension ## Run e2e tests against active kubeconfig
+	./bin/extension --ginkgo.timeout=120m
 
 .PHONY: extension
 extension: | bin/ ## Build OTE extension binary

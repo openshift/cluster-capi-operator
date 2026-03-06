@@ -23,7 +23,7 @@ import (
 	configv1 "github.com/openshift/api/config/v1"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	mapiframework "github.com/openshift/cluster-api-actuator-pkg/pkg/framework"
-	capiframework "github.com/openshift/cluster-capi-operator/test/e2e/framework"
+	capiframework "github.com/openshift/cluster-capi-operator/e2e/framework"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"

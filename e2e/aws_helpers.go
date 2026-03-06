@@ -29,7 +29,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
-	"github.com/openshift/cluster-capi-operator/test/e2e/framework"
+	"github.com/openshift/cluster-capi-operator/e2e/framework"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

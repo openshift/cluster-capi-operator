@@ -8,7 +8,7 @@ import (
 	"github.com/onsi/gomega"
 
 	// Import test packages to register tests
-	_ "github.com/openshift/cluster-capi-operator/test/e2e"
+	_ "github.com/openshift/cluster-capi-operator/e2e"
 )
 
 func main() {
