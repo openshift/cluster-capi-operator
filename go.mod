@@ -61,7 +61,7 @@ require (
 	k8s.io/utils v0.0.0-20251002143259-bc988d571ff4
 	sigs.k8s.io/cluster-api v1.11.3
 	sigs.k8s.io/cluster-api-provider-aws/v2 v2.10.0
-	sigs.k8s.io/cluster-api-provider-azure v0.0.0-20251202084521-c2e0e38d1e0e
+	sigs.k8s.io/cluster-api-provider-azure v1.20.2
 	sigs.k8s.io/cluster-api-provider-gcp v1.11.0-beta.0
 	sigs.k8s.io/cluster-api-provider-ibmcloud v0.12.0
 	sigs.k8s.io/cluster-api-provider-openstack v0.13.1
@@ -336,9 +336,10 @@ require (
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
+	gotest.tools/v3 v3.4.0 // indirect
 	honnef.co/go/tools v0.6.1 // indirect
 	k8s.io/component-helpers v0.34.1 // indirect
-	k8s.io/controller-manager v0.32.1 // indirect
+	k8s.io/controller-manager v0.32.2 // indirect
 	k8s.io/kube-aggregator v0.34.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20250910181357-589584f1c912 // indirect
 	k8s.io/kubelet v0.34.1 // indirect
