@@ -242,6 +242,54 @@ func (b *CRDSchemaBuilder) RemoveRequiredField(fieldName string) *CRDSchemaBuild
 	return b
 }
 
+// WithStatusSubresource adds a status subresource with optional custom status schema properties.
+func (b *CRDSchemaBuilder) WithStatusSubresource(statusProperties map[string]apiextensionsv1.JSONSchemaProps) *CRDSchemaBuilder {
+	if b.crd.Spec.Versions[0].Subresources == nil {
+		b.crd.Spec.Versions[0].Subresources = &apiextensionsv1.CustomResourceSubresources{}
+	}
+
+	b.crd.Spec.Versions[0].Subresources.Status = &apiextensionsv1.CustomResourceSubresourceStatus{}
+
+	// Add status schema if provided
+	if len(statusProperties) > 0 {
+		schema := b.crd.Spec.Versions[0].Schema.OpenAPIV3Schema
+		if schema.Properties == nil {
+			schema.Properties = make(map[string]apiextensionsv1.JSONSchemaProps)
+		}
+
+		schema.Properties["status"] = apiextensionsv1.JSONSchemaProps{
+			Type:       "object",
+			Properties: statusProperties,
+		}
+	}
+
+	return b
+}
+
+// WithScaleSubresource adds a scale subresource with the given configuration.
+func (b *CRDSchemaBuilder) WithScaleSubresource(specReplicasPath, statusReplicasPath, labelSelectorPath *string) *CRDSchemaBuilder {
+	if b.crd.Spec.Versions[0].Subresources == nil {
+		b.crd.Spec.Versions[0].Subresources = &apiextensionsv1.CustomResourceSubresources{}
+	}
+
+	scale := &apiextensionsv1.CustomResourceSubresourceScale{}
+	if specReplicasPath != nil {
+		scale.SpecReplicasPath = *specReplicasPath
+	}
+
+	if statusReplicasPath != nil {
+		scale.StatusReplicasPath = *statusReplicasPath
+	}
+
+	if labelSelectorPath != nil {
+		scale.LabelSelectorPath = labelSelectorPath
+	}
+
+	b.crd.Spec.Versions[0].Subresources.Scale = scale
+
+	return b
+}
+
 // Build returns a deep copy of the constructed CRD.
 func (b *CRDSchemaBuilder) Build() *apiextensionsv1.CustomResourceDefinition {
 	return b.crd.DeepCopy()
