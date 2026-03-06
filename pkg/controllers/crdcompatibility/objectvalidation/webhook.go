@@ -398,6 +398,7 @@ func ValidatingWebhookConfigurationFor(obj *apiextensionsv1alpha1.CompatibilityR
 			Annotations: map[string]string{
 				"service.beta.openshift.io/inject-cabundle": "true",
 			},
+			OwnerReferences: []metav1.OwnerReference{*metav1.NewControllerRef(obj, apiextensionsv1alpha1.GroupVersion.WithKind("CompatibilityRequirement"))},
 		},
 		Webhooks: []admissionregistrationv1.ValidatingWebhook{
 			{
