@@ -111,7 +111,17 @@ func (v *validator) SetupWithManager(ctx context.Context, mgr ctrl.Manager, opts
 
 // handleObjectPruning handles the pruning of an object.
 func (v *validator) handleObjectPruning(ctx context.Context, compatibilityRequirementName string, obj *unstructured.Unstructured) error {
-	schema, err := v.getStructuralSchema(ctx, compatibilityRequirementName, obj.GroupVersionKind().Version)
+	compatibilityRequirement := &apiextensionsv1alpha1.CompatibilityRequirement{}
+	if err := v.client.Get(ctx, client.ObjectKey{Name: compatibilityRequirementName}, compatibilityRequirement); err != nil {
+		return fmt.Errorf("failed to get CompatibilityRequirement %q: %w", compatibilityRequirementName, err)
+	}
+
+	if compatibilityRequirement.Spec.ObjectSchemaValidation.Action == apiextensionsv1alpha1.CRDAdmitActionWarn {
+		// When set to warn, we do not expect to mutate the object, so we return early without pruning.
+		return nil
+	}
+
+	schema, err := v.getStructuralSchema(compatibilityRequirement, obj.GroupVersionKind().Version)
 	if err != nil {
 		return fmt.Errorf("failed to get schema for CompatibilityRequirement %q: %w", compatibilityRequirementName, err)
 	}
@@ -121,12 +131,7 @@ func (v *validator) handleObjectPruning(ctx context.Context, compatibilityRequir
 	return nil
 }
 
-func (v *validator) getStructuralSchema(ctx context.Context, compatibilityRequirementName string, version string) (*structuralschema.Structural, error) {
-	compatibilityRequirement := &apiextensionsv1alpha1.CompatibilityRequirement{}
-	if err := v.client.Get(ctx, client.ObjectKey{Name: compatibilityRequirementName}, compatibilityRequirement); err != nil {
-		return nil, fmt.Errorf("failed to get CompatibilityRequirement %q: %w", compatibilityRequirementName, err)
-	}
-
+func (v *validator) getStructuralSchema(compatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement, version string) (*structuralschema.Structural, error) {
 	cacheKey := getStructuralSchemaCacheKey(compatibilityRequirement, version)
 
 	schema, ok := v.getStructuralSchemaFromCache(compatibilityRequirement, cacheKey)
