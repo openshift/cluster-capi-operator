@@ -46,7 +46,7 @@ import (
 
 	configv1 "github.com/openshift/api/config/v1"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
-	capiframework "github.com/openshift/cluster-capi-operator/e2e/framework"
+	capiframework "github.com/openshift/cluster-capi-operator/test/e2e/framework"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 )
 

@@ -20,7 +20,7 @@ import (
 	. "github.com/onsi/gomega"
 	configv1 "github.com/openshift/api/config/v1"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
-	"github.com/openshift/cluster-capi-operator/e2e/framework"
+	"github.com/openshift/cluster-capi-operator/test/e2e/framework"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"

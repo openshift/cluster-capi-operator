@@ -1,4 +1,4 @@
-module github.com/openshift/cluster-capi-operator/e2e
+module github.com/openshift/cluster-capi-operator/test/e2e
 
 go 1.24.0
 

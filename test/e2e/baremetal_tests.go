@@ -28,7 +28,7 @@ import (
 
 	configv1 "github.com/openshift/api/config/v1"
 	bmv1alpha1 "github.com/openshift/cluster-api-provider-baremetal/pkg/apis/baremetal/v1alpha1"
-	"github.com/openshift/cluster-capi-operator/e2e/framework"
+	"github.com/openshift/cluster-capi-operator/test/e2e/framework"
 )
 
 const (
