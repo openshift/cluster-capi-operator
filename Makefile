@@ -70,11 +70,11 @@ unit: .localtestenv ## Run unit tests
 
 .PHONY: e2e
 e2e: ## Run e2e tests against active kubeconfig
-	./hack/test.sh "./test/e2e/..." 120m
+	./hack/test.sh "./e2e/..." 120m
 
 .PHONY: extension
 extension: | bin/ ## Build OTE extension binary
-	cd test/e2e && GOWORK=off go build -o ../../bin/extension ./cmd/extension
+	cd e2e && GOWORK=off go build -o ../bin/extension ./cmd/extension
 
 .PHONY: ote-test
 ote-test: extension ## Run OTE tests

@@ -17,7 +17,18 @@ TIMEOUT=${2:-"5m"}
 
 OPENSHIFT_CI=${OPENSHIFT_CI:-""}
 ARTIFACT_DIR=${ARTIFACT_DIR:-""}
-GINKGO=${GINKGO:-"go run -mod=vendor ${REPO_ROOT}/vendor/github.com/onsi/ginkgo/v2/ginkgo"}
+
+# For e2e, detect if we need to run from the e2e module directory
+E2E_MODE=false
+if [[ "${TEST_DIRS}" == *"e2e"* ]]; then
+  E2E_MODE=true
+  GINKGO="GOWORK=off go run github.com/onsi/ginkgo/v2/ginkgo"
+  # Adjust TEST_DIRS to be relative to e2e
+  TEST_DIRS="."
+else
+  GINKGO=${GINKGO:-"go run -mod=vendor ${REPO_ROOT}/vendor/github.com/onsi/ginkgo/v2/ginkgo"}
+fi
+
 PARALLEL_FLAG="-p"
 if [ "${OPENSHIFT_CI:-}" == "true" ]; then
   PARALLEL_FLAG="--procs=4"
@@ -34,18 +45,29 @@ if [ $HOME == "/" ]; then
 fi
 
 if [ "$OPENSHIFT_CI" == "true" ] && [ -n "$ARTIFACT_DIR" ] && [ -d "$ARTIFACT_DIR" ]; then # detect ci environment there
-  GINKGO_ARGS="${GINKGO_ARGS} --cover --coverprofile=test-unit-coverage.out --output-dir=${ARTIFACT_DIR}"
+  # For e2e mode, artifact dir needs to be relative to e2e or absolute
+  if [ "$E2E_MODE" = true ]; then
+    ARTIFACT_DIR_ARG="${ARTIFACT_DIR}"
+  else
+    ARTIFACT_DIR_ARG="${ARTIFACT_DIR}"
+  fi
+  GINKGO_ARGS="${GINKGO_ARGS} --cover --coverprofile=test-unit-coverage.out --output-dir=${ARTIFACT_DIR_ARG}"
   # e2e tests use a custom ReportAfterSuite that appends resource diagnostics
   # to the JUnit failure message for Spyglass. Other suites use ginkgo's
   # built-in JUnit reporter.
-  if [[ "${TEST_DIRS}" != *"e2e"* ]]; then
+  if [ "$E2E_MODE" = false ]; then
     GINKGO_ARGS="${GINKGO_ARGS} --junit-report=junit_cluster_capi_operator.xml"
   fi
 fi
 
 # Print the command we are going to run as Make would.
-echo ${GINKGO} ${GINKGO_ARGS} ${SHARD_ARGS} ${GINKGO_EXTRA_ARGS} ${TEST_DIRS}
-eval "${GINKGO} ${GINKGO_ARGS} ${SHARD_ARGS} ${GINKGO_EXTRA_ARGS} ${TEST_DIRS}"
+if [ "$E2E_MODE" = true ]; then
+  echo "(cd ${REPO_ROOT}/e2e && ${GINKGO} ${GINKGO_ARGS} ${SHARD_ARGS} ${GINKGO_EXTRA_ARGS} ${TEST_DIRS})"
+  (cd "${REPO_ROOT}/e2e" && eval "${GINKGO} ${GINKGO_ARGS} ${SHARD_ARGS} ${GINKGO_EXTRA_ARGS} ${TEST_DIRS}")
+else
+  echo ${GINKGO} ${GINKGO_ARGS} ${SHARD_ARGS} ${GINKGO_EXTRA_ARGS} ${TEST_DIRS}
+  eval "${GINKGO} ${GINKGO_ARGS} ${SHARD_ARGS} ${GINKGO_EXTRA_ARGS} ${TEST_DIRS}"
+fi
 # Capture the test result to exit on error after coverage.
 TEST_RESULT=$?
 
