@@ -1,6 +1,6 @@
 module github.com/openshift/cluster-capi-operator
 
-go 1.24.0
+go 1.25.0
 
 tool (
 	github.com/golangci/golangci-lint/cmd/golangci-lint
@@ -43,20 +43,20 @@ require (
 	github.com/metal3-io/cluster-api-provider-metal3/api v1.11.2
 	github.com/onsi/ginkgo/v2 v2.27.2
 	github.com/onsi/gomega v1.38.2
-	github.com/openshift/api v0.0.0-20260228183123-9b2ee997d297
-	github.com/openshift/client-go v0.0.0-20260226152647-d8b2196ff0d9
+	github.com/openshift/api v0.0.0-20260306141135-f595753a3e66
+	github.com/openshift/client-go v0.0.0-20260306160707-3935d929fc7d
 	github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0
-	github.com/openshift/library-go v0.0.0-20251222131241-289839b3ffe8
+	github.com/openshift/library-go v0.0.0-20260303171201-5d9eb6295ff6
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/pflag v1.0.10
 	golang.org/x/sync v0.18.0
 	golang.org/x/tools v0.39.0
-	k8s.io/api v0.34.1
-	k8s.io/apiextensions-apiserver v0.34.1
-	k8s.io/apimachinery v0.34.1
-	k8s.io/apiserver v0.34.1
-	k8s.io/client-go v0.34.1
-	k8s.io/component-base v0.34.1
+	k8s.io/api v0.35.1
+	k8s.io/apiextensions-apiserver v0.35.1
+	k8s.io/apimachinery v0.35.1
+	k8s.io/apiserver v0.35.1
+	k8s.io/client-go v0.35.1
+	k8s.io/component-base v0.35.1
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/kubernetes v1.34.1
 	k8s.io/utils v0.0.0-20251002143259-bc988d571ff4
@@ -348,7 +348,7 @@ require (
 	honnef.co/go/tools v0.6.1 // indirect
 	k8s.io/component-helpers v0.34.1 // indirect
 	k8s.io/controller-manager v0.32.1 // indirect
-	k8s.io/kube-aggregator v0.34.1 // indirect
+	k8s.io/kube-aggregator v0.35.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20250910181357-589584f1c912 // indirect
 	k8s.io/kubelet v0.34.1 // indirect
 	mvdan.cc/gofumpt v0.7.0 // indirect
