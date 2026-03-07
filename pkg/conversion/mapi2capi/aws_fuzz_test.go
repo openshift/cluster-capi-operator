@@ -138,9 +138,6 @@ func (f *awsProviderFuzzer) fuzzProviderConfig(ps *mapiv1beta1.AWSMachineProvide
 	ps.LoadBalancers = nil
 	ps.ObjectMeta = metav1.ObjectMeta{}
 
-	// Conversion not yet implemented
-	ps.Placement.Host = nil
-
 	// At least one device mapping must have no device name.
 	rootFound := false
 
@@ -184,6 +181,73 @@ func fuzzAWSMachineSpecConfidentialComputePolicy(ccp *mapiv1beta1.AWSConfidentia
 		*ccp = mapiv1beta1.AWSConfidentialComputePolicyDisabled
 	case 1:
 		*ccp = mapiv1beta1.AWSConfidentialComputePolicySEVSNP
+	}
+}
+
+func (f *awsProviderFuzzer) fuzzPlacement(placement *mapiv1beta1.Placement, c randfill.Continue) {
+	c.FillNoCustom(placement)
+
+	switch c.Int31n(8) {
+	case 0:
+		placement.Tenancy = mapiv1beta1.DefaultTenancy
+		placement.Host = nil
+	case 1:
+		placement.Tenancy = mapiv1beta1.DedicatedTenancy
+		placement.Host = nil
+	case 2:
+		placement.Tenancy = mapiv1beta1.HostTenancy
+		placement.Host = &mapiv1beta1.HostPlacement{
+			Affinity:      ptr.To(mapiv1beta1.HostAffinityAnyAvailable),
+			DedicatedHost: nil,
+		}
+	case 3:
+		// User-provided host with AllocationStrategy (AnyAvailable affinity)
+		placement.Tenancy = mapiv1beta1.HostTenancy
+		placement.Host = &mapiv1beta1.HostPlacement{
+			Affinity: ptr.To(mapiv1beta1.HostAffinityAnyAvailable),
+			DedicatedHost: &mapiv1beta1.DedicatedHost{
+				AllocationStrategy: ptr.To(mapiv1beta1.AllocationStrategyUserProvided),
+				ID:                 "h-0123456789abcdef0",
+			},
+		}
+	case 4:
+		// User-provided host with AllocationStrategy (DedicatedHost affinity)
+		placement.Tenancy = mapiv1beta1.HostTenancy
+		placement.Host = &mapiv1beta1.HostPlacement{
+			Affinity: ptr.To(mapiv1beta1.HostAffinityDedicatedHost),
+			DedicatedHost: &mapiv1beta1.DedicatedHost{
+				AllocationStrategy: ptr.To(mapiv1beta1.AllocationStrategyUserProvided),
+				ID:                 "h-0123456789abcdef0",
+			},
+		}
+	case 5:
+		placement.Tenancy = ""
+		placement.Host = nil
+	case 6:
+		// Dynamic host allocation without tags (DynamicHostAllocation is nil)
+		placement.Tenancy = mapiv1beta1.HostTenancy
+		placement.Host = &mapiv1beta1.HostPlacement{
+			Affinity: ptr.To(mapiv1beta1.HostAffinityDedicatedHost),
+			DedicatedHost: &mapiv1beta1.DedicatedHost{
+				AllocationStrategy:    ptr.To(mapiv1beta1.AllocationStrategyDynamic),
+				DynamicHostAllocation: nil,
+			},
+		}
+	case 7:
+		// Dynamic host allocation with tags (tags must be sorted by name for consistent roundtrip)
+		placement.Tenancy = mapiv1beta1.HostTenancy
+		placement.Host = &mapiv1beta1.HostPlacement{
+			Affinity: ptr.To(mapiv1beta1.HostAffinityDedicatedHost),
+			DedicatedHost: &mapiv1beta1.DedicatedHost{
+				AllocationStrategy: ptr.To(mapiv1beta1.AllocationStrategyDynamic),
+				DynamicHostAllocation: &mapiv1beta1.DynamicHostAllocationSpec{
+					Tags: &[]mapiv1beta1.TagSpecification{
+						{Name: "test-key-1", Value: "test-value-1"},
+						{Name: "test-key-2", Value: "test-value-2"},
+					},
+				},
+			},
+		}
 	}
 }
 
@@ -243,18 +307,6 @@ func (f *awsProviderFuzzer) FuzzerFuncsMachineSet(codecs runtimeserializer.Codec
 				ebs.Iops = nil
 			}
 		},
-		func(tenancy *mapiv1beta1.InstanceTenancy, c randfill.Continue) {
-			switch c.Int31n(4) {
-			case 0:
-				*tenancy = mapiv1beta1.DefaultTenancy
-			case 1:
-				*tenancy = mapiv1beta1.DedicatedTenancy
-			case 2:
-				*tenancy = mapiv1beta1.HostTenancy
-			case 3:
-				*tenancy = ""
-			}
-		},
 		func(marketType *mapiv1beta1.MarketType, c randfill.Continue) {
 			switch c.Int31n(4) {
 			case 0:
@@ -280,6 +332,7 @@ func (f *awsProviderFuzzer) FuzzerFuncsMachineSet(codecs runtimeserializer.Codec
 				// resulting in a documented lossy rountrip conversion, which would make the test to fail.
 			}
 		},
+		f.fuzzPlacement,
 		f.fuzzProviderConfig,
 		f.fuzzAWSMachineSpecCPUOptions,
 	}
