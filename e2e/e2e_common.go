@@ -17,6 +17,7 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"os"
 	"reflect"
 	"strings"
 	"time"
@@ -66,6 +67,11 @@ var (
 	// ReportAfterEach dumps detailed state for each tracked resource then clears
 	// the list.
 	resourcesUnderTest []client.Object
+
+	// specDiagnostics stores per-spec diagnostic output keyed by spec text.
+	// ReportAfterEach populates it on failure; ReportAfterSuite reads it to
+	// append diagnostics to the JUnit failure message.
+	specDiagnostics = map[string]string{}
 )
 
 func init() {
@@ -113,16 +119,16 @@ func trackResource(obj client.Object) {
 	resourcesUnderTest = append(resourcesUnderTest, obj)
 }
 
-// dumpTrackedResources writes detailed diagnostics for each tracked resource
-// to GinkgoWriter. For each resource it fetches current state, marshals it as
+// collectTrackedResourceDiagnostics builds a diagnostics string for each
+// tracked resource. For each resource it fetches current state, marshals it as
 // YAML, and lists events specific to that object. It also dumps all
 // AWSMachineTemplates (on AWS) and all events in both namespaces.
 // Best-effort: panics are recovered and individual errors are logged without
 // aborting the dump.
-func dumpTrackedResources() {
+func collectTrackedResourceDiagnostics() string {
 	defer func() {
 		if r := recover(); r != nil {
-			GinkgoWriter.Printf("WARNING: dumpTrackedResources panicked: %v\n", r)
+			fmt.Fprintf(os.Stderr, "WARNING: collectTrackedResourceDiagnostics panicked: %v\n", r)
 		}
 	}()
 
@@ -141,7 +147,7 @@ func dumpTrackedResources() {
 
 	buf.WriteString("\n=== End Test Failure Diagnostics ===\n")
 
-	GinkgoWriter.Print(buf.String())
+	return buf.String()
 }
 
 func dumpSingleResource(buf *strings.Builder, obj client.Object) {

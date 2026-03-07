@@ -36,7 +36,8 @@ var _ = BeforeSuite(func() {
 
 var _ = ReportAfterEach(func(report SpecReport) {
 	if report.Failed() {
-		dumpTrackedResources()
+		diag := collectTrackedResourceDiagnostics()
+		specDiagnostics[report.LeafNodeLocation.String()] = diag
 	}
 
 	resourcesUnderTest = nil
@@ -58,20 +59,15 @@ var _ = ReportAfterSuite("junit with diagnostics", func(report Report) {
 		return
 	}
 
-	// Append GinkgoWriter output (which contains our tracked resource dump)
-	// to the failure description so it appears in the <failure> element of
-	// the JUnit XML, which is what Spyglass renders by default.
 	for i := range report.SpecReports {
 		sr := &report.SpecReports[i]
 		if !sr.Failed() {
 			continue
 		}
 
-		if sr.CapturedGinkgoWriterOutput == "" {
-			continue
+		if diag, ok := specDiagnostics[sr.LeafNodeLocation.String()]; ok {
+			sr.Failure.Message += "\n\n" + diag
 		}
-
-		sr.Failure.Message += "\n\n" + sr.CapturedGinkgoWriterOutput
 	}
 
 	dst := filepath.Join(artifactDir, "junit_cluster_capi_operator.xml")
