@@ -31,6 +31,9 @@ test: verify unit ## Run verification and unit tests
 
 build: bin/capi-operator bin/capi-controllers bin/machine-api-migration bin/crd-compatibility-checker manifests-gen ## Build all binaries
 
+clean:
+	rm -rf bin/*
+
 # Ensure bin directory exists for build outputs
 bin/:
 	mkdir -p bin
