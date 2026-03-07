@@ -3,7 +3,7 @@ module github.com/openshift/cluster-capi-operator
 go 1.25.0
 
 tool (
-	github.com/golangci/golangci-lint/cmd/golangci-lint
+	github.com/golangci/golangci-lint/v2/cmd/golangci-lint
 	github.com/onsi/ginkgo/v2/ginkgo
 	github.com/openshift/api/apiextensions/v1alpha1/zz_generated.crd-manifests
 	github.com/openshift/api/config/v1/zz_generated.crd-manifests
