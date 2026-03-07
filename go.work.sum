@@ -712,7 +712,6 @@ github.com/onsi/gomega v1.37.0/go.mod h1:8D9+Txp43QWKhM24yyOBEdpkzN8FvJyAwecBgsU
 github.com/opencontainers/cgroups v0.0.1/go.mod h1:s8lktyhlGUqM7OSRL5P7eAW6Wb+kWPNvt4qvVfzA5vs=
 github.com/opencontainers/image-spec v1.0.2/go.mod h1:BtxoFyWECRxE4U/7sNtV5W15zMzWCbyJoFRP3s7yZA0=
 github.com/opencontainers/image-spec v1.1.0-rc5/go.mod h1:X4pATf0uXsnn3g5aiGIsVnJBR4mxhKzfwmvK/B2NTm8=
-github.com/opencontainers/image-spec v1.1.1/go.mod h1:qpqAh3Dmcf36wStyyWU+kCeDgrGnAve2nCC8+7h8Q0M=
 github.com/opencontainers/runc v1.1.13/go.mod h1:R016aXacfp/gwQBYw2FDGa9m+n6atbLWrYY8hNMT/sA=
 github.com/opencontainers/runc v1.2.5/go.mod h1:dOQeFo29xZKBNeRBI0B19mJtfHv68YgCTh1X+YphA+4=
 github.com/opencontainers/runtime-spec v1.2.0/go.mod h1:jwyrGlmzljRJv/Fgzds9SsS/C5hL+LL3ko9hs6T5lQ0=
@@ -1300,6 +1299,7 @@ google.golang.org/genproto v0.0.0-20241118233622-e639e219e697/go.mod h1:JJrvXBWR
 google.golang.org/genproto v0.0.0-20250106144421-5f5ef82da422/go.mod h1:1NPAxoesyw/SgLPqaUp9u1f9PWCLAk/jVmhx7gJZStg=
 google.golang.org/genproto v0.0.0-20250303144028-a0af3efb3deb/go.mod h1:sAo5UzpjUwgFBCzupwhcLcxHVDK7vG5IqI30YnwX2eE=
 google.golang.org/genproto v0.0.0-20250505200425-f936aa4a68b2/go.mod h1:49MsLSx0oWMOZqcpB3uL8ZOkAh1+TndpJ8ONoCBWiZk=
+google.golang.org/genproto v0.0.0-20250603155806-513f23925822 h1:rHWScKit0gvAPuOnu87KpaYtjK5zBMLcULh7gxkCXu4=
 google.golang.org/genproto/googleapis/api v0.0.0-20230822172742-b8732ec3820d/go.mod h1:KjSP20unUpOx5kyQUFa7k4OJg0qeJ7DEZflGDu2p6Bk=
 google.golang.org/genproto/googleapis/api v0.0.0-20240429193739-8cf5692501f6/go.mod h1:10yRODfgim2/T8csjQsMPgZOMvtytXKTDRzH6HRGzRw=
 google.golang.org/genproto/googleapis/api v0.0.0-20240814211410-ddb44dafa142/go.mod h1:d6be+8HhtEtucleCbxpPW9PA9XwISACu8nvpPqF0BVo=
@@ -1429,7 +1429,6 @@ k8s.io/code-generator v0.33.3/go.mod h1:6Y02+HQJYgNphv9z3wJB5w+sjYDIEBQW7sh62Pku
 k8s.io/component-base v0.32.3/go.mod h1:LWi9cR+yPAv7cu2X9rZanTiFKB2kHA+JjmhkKjCZRpI=
 k8s.io/component-base v0.33.2/go.mod h1:/41uw9wKzuelhN+u+/C59ixxf4tYQKW7p32ddkYNe2k=
 k8s.io/component-helpers v0.33.3/go.mod h1:7iwv+Y9Guw6X4RrnNQOyQlXcvJrVjPveHVqUA5dm31c=
-k8s.io/component-helpers v0.34.1/go.mod h1:4VgnUH7UA/shuBur+OWoQC0xfb69sy/93ss0ybZqm3c=
 k8s.io/controller-manager v0.32.1/go.mod h1:dVA1UZPbqHH4hEhrrnLvQ4d5qVQCklNB8GEzYV59v/4=
 k8s.io/cri-api v0.33.3/go.mod h1:OLQvT45OpIA+tv91ZrpuFIGY+Y2Ho23poS7n115Aocs=
 k8s.io/cri-client v0.33.3/go.mod h1:r1p300+uHBQ5VLvycKb73KI/XdQzECkLsNM/0Ly6oXE=
@@ -1438,6 +1437,7 @@ k8s.io/dynamic-resource-allocation v0.33.3/go.mod h1:YU6axYSVf1vC2OnPB8PjG5Kipqo
 k8s.io/gengo v0.0.0-20230829151522-9cce18d56c01/go.mod h1:FiNAH4ZV3gBg2Kwh89tzAEV2be7d5xI0vBa/VySYy3E=
 k8s.io/gengo/v2 v2.0.0-20240826214909-a7b603a56eb7/go.mod h1:EJykeLsmFC60UQbYJezXkEsG2FLrt0GPNkU5iK5GWxU=
 k8s.io/gengo/v2 v2.0.0-20250207200755-1244d31929d7/go.mod h1:EJykeLsmFC60UQbYJezXkEsG2FLrt0GPNkU5iK5GWxU=
+k8s.io/klog v0.2.0 h1:0ElL0OHzF3N+OhoJTL0uca20SxtYt4X4+bzHeqrB83c=
 k8s.io/klog/v2 v2.0.0/go.mod h1:PBfzABfn139FHAV07az/IF9Wp1bkk3vpT2XSJ76fSDE=
 k8s.io/klog/v2 v2.2.0/go.mod h1:Od+F08eJP+W3HUb4pSrPpgp9DGU4GzlpG/TmITuYh/Y=
 k8s.io/klog/v2 v2.80.1/go.mod h1:y1WjHnz7Dj687irZUWR/WLkLc5N1YHtjLdmgWjndZn0=

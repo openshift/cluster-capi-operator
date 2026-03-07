@@ -12,7 +12,7 @@ ifeq ($(HOME), /)
 HOME = /tmp/kubebuilder-testing
 endif
 
-.PHONY: help all verify test build operator migration manifests-gen ocp-manifests unit e2e run fmt vet lint vendor image push aws-cluster azure-cluster gcp-cluster powervs-cluster vsphere-cluster
+.PHONY: help all verify test build operator migration manifests-gen ocp-manifests unit e2e run fmt vet lint vendor image push aws-cluster azure-cluster gcp-cluster powervs-cluster vsphere-cluster extension ote-test
 .DEFAULT_GOAL := build
 
 help: ## Display this help message
@@ -29,7 +29,7 @@ verify: fmt lint verify-ocp-manifests ## Run formatting and linting checks
 
 test: verify unit ## Run verification and unit tests
 
-build: bin/capi-operator bin/capi-controllers bin/machine-api-migration bin/crd-compatibility-checker manifests-gen ## Build all binaries
+build: bin/capi-operator bin/capi-controllers bin/machine-api-migration bin/crd-compatibility-checker manifests-gen extension ## Build all binaries
 
 # Ensure bin directory exists for build outputs
 bin/:
@@ -69,8 +69,20 @@ unit: .localtestenv ## Run unit tests
 	./hack/test.sh "$(TEST_DIRS)" 20m
 
 .PHONY: e2e
-e2e: ## Run e2e tests against active kubeconfig
-	./hack/test.sh "./e2e/..." 120m
+e2e: extension ## Run e2e tests against active kubeconfig
+	./bin/extension --ginkgo.timeout=120m
+
+.PHONY: extension
+extension: | bin/ ## Build OTE extension binary
+	cd e2e && GOWORK=off go build -mod=readonly -o ../bin/extension ./cmd/extension
+
+.PHONY: ote-test
+ote-test: extension ## Run OTE tests
+	./bin/extension
+
+.PHONY: ote-test-dry-run
+ote-test-dry-run: extension ## List OTE tests without running
+	./bin/extension --ginkgo.dry-run --ginkgo.v
 
 run: ## Run the operator against the configured Kubernetes cluster
 	oc -n openshift-cluster-api patch lease cluster-capi-operator-leader -p '{"spec":{"acquireTime": null, "holderIdentity": null, "renewTime": null}}' --type=merge
