@@ -150,6 +150,7 @@ linters:
       - path: (.+)\.go$
         text: 'missing cases in switch of type v1.PlatformType: (\.*)'
     paths:
+      - ^third_party/
       - third_party$
       - builtin$
       - examples$
@@ -160,6 +161,7 @@ formatters:
   exclusions:
     generated: lax
     paths:
+      - ^third_party/
       - third_party$
       - builtin$
       - examples$
