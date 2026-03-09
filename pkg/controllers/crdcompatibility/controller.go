@@ -76,8 +76,7 @@ func (r *CompatibilityRequirementReconciler) SetupWithManager(ctx context.Contex
 		return fmt.Errorf("failed to create kube client: %w", err)
 	}
 
-	crdRequirementValidatorBuilder := ctrl.NewWebhookManagedBy(mgr).
-		For(&apiextensionsv1alpha1.CompatibilityRequirement{}).
+	crdRequirementValidatorBuilder := ctrl.NewWebhookManagedBy(mgr, &apiextensionsv1alpha1.CompatibilityRequirement{}).
 		WithValidator(&crdRequirementValidator{})
 
 	controllerBuilder := ctrl.NewControllerManagedBy(mgr).
