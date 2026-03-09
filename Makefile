@@ -57,7 +57,7 @@ ocp-manifests: manifests-gen ## Generate admission policy profiles for image emb
 		--platform AWS \
 		--install-order 30
 
-bin/%: | bin/ FORCE
+bin/%: FORCE | bin/
 	go build -o "$@" "./cmd/$*"
 
 .PHONY: localtestenv
