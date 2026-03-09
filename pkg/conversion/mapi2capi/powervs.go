@@ -134,17 +134,12 @@ func (m *powerVSMachineAndInfra) toMachineAndInfrastructureMachine() (*clusterv1
 //
 //nolint:dupl
 func (m *powerVSMachineSetAndInfra) ToMachineSetAndMachineTemplate() (*clusterv1.MachineSet, client.Object, []string, error) {
-	var (
-		errs     []error
-		warnings []string
-	)
+	var errs []error
 
-	capiMachine, powerVSMachineObj, warn, errList := m.toMachineAndInfrastructureMachine()
+	capiMachine, powerVSMachineObj, warnings, errList := m.toMachineAndInfrastructureMachine()
 	if errList != nil {
 		errs = append(errs, errList.ToAggregate().Errors()...)
 	}
-
-	warnings = append(warnings, warn...)
 
 	powerVSMachine, ok := powerVSMachineObj.(*ibmpowervsv1.IBMPowerVSMachine)
 	if !ok {

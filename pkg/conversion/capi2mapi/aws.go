@@ -23,6 +23,7 @@ import (
 
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/consts"
+	"github.com/openshift/cluster-capi-operator/pkg/util"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -97,10 +98,7 @@ func FromMachineSetAndAWSMachineTemplateAndAWSCluster(ms *clusterv1.MachineSet, 
 //
 //nolint:funlen
 func (m machineAndAWSMachineAndAWSCluster) toProviderSpec() (*mapiv1beta1.AWSMachineProviderConfig, []string, field.ErrorList) {
-	var (
-		warnings []string
-		errors   field.ErrorList
-	)
+	var errors field.ErrorList
 
 	fldPath := field.NewPath("spec")
 
@@ -109,7 +107,7 @@ func (m machineAndAWSMachineAndAWSCluster) toProviderSpec() (*mapiv1beta1.AWSMac
 		errors = append(errors, err)
 	}
 
-	mapiAWSMetadataOptions, warn, errs := convertAWSMetadataOptionsToMAPI(fldPath.Child("instanceMetadataOptions"), m.awsMachine.Spec.InstanceMetadataOptions)
+	mapiAWSMetadataOptions, warnings, errs := convertAWSMetadataOptionsToMAPI(fldPath.Child("instanceMetadataOptions"), m.awsMachine.Spec.InstanceMetadataOptions)
 	if errs != nil {
 		errors = append(errors, errs...)
 	}
@@ -123,8 +121,6 @@ func (m machineAndAWSMachineAndAWSCluster) toProviderSpec() (*mapiv1beta1.AWSMac
 	if len(lbErrs) > 0 {
 		errors = append(errors, lbErrs...)
 	}
-
-	warnings = append(warnings, warn...)
 
 	mapaProviderConfig := mapiv1beta1.AWSMachineProviderConfig{
 		TypeMeta: metav1.TypeMeta{
@@ -247,12 +243,9 @@ func (m machineAndAWSMachineAndAWSCluster) ToMachine() (*mapiv1beta1.Machine, []
 		return nil, nil, errCAPIMachineAWSMachineAWSClusterCannotBeNil
 	}
 
-	var (
-		errors   field.ErrorList
-		warnings []string
-	)
+	var errors field.ErrorList
 
-	mapaSpec, warn, err := m.toProviderSpec()
+	mapaSpec, warnings, err := m.toProviderSpec()
 	if err != nil {
 		errors = append(errors, err...)
 	}
@@ -266,8 +259,6 @@ func (m machineAndAWSMachineAndAWSCluster) ToMachine() (*mapiv1beta1.Machine, []
 	if errRaw != nil {
 		return nil, nil, fmt.Errorf("unable to convert AWS providerStatus to raw extension: %w", errRaw)
 	}
-
-	warnings = append(warnings, warn...)
 
 	var additionalMachineAPIMetadataLabels, additionalMachineAPIMetadataAnnotations map[string]string
 	if !m.excludeMachineAPILabelsAndAnnotations {
@@ -298,24 +289,19 @@ func (m machineAndAWSMachineAndAWSCluster) ToMachine() (*mapiv1beta1.Machine, []
 }
 
 // ToMachineSet converts a capi2mapi MachineAndAWSMachineTemplate into a MAPI MachineSet.
-func (m machineSetAndAWSMachineTemplateAndAWSCluster) ToMachineSet() (*mapiv1beta1.MachineSet, []string, error) { //nolint:dupl
+func (m machineSetAndAWSMachineTemplateAndAWSCluster) ToMachineSet() (*mapiv1beta1.MachineSet, []string, error) {
 	if m.machineSet == nil || m.template == nil || m.awsCluster == nil || m.machineAndAWSMachineAndAWSCluster == nil {
 		return nil, nil, errCAPIMachineSetAWSMachineTemplateAWSClusterCannotBeNil
 	}
 
-	var (
-		errors   []error
-		warnings []string
-	)
+	var errors []error
 
 	// Run the full ToMachine conversion so that we can check for
 	// any Machine level conversion errors in the spec translation.
-	mapiMachine, warn, err := m.ToMachine()
+	mapiMachine, warnings, err := m.ToMachine()
 	if err != nil {
 		errors = append(errors, err)
 	}
-
-	warnings = append(warnings, warn...)
 
 	mapiMachineSet, err := fromCAPIMachineSetToMAPIMachineSet(m.machineSet)
 	if err != nil {
@@ -336,12 +322,10 @@ func (m machineSetAndAWSMachineTemplateAndAWSCluster) ToMachineSet() (*mapiv1bet
 }
 
 // Conversion helpers.
-
+//
+//nolint:unparam // Return empty warnings for consistency
 func convertAWSMetadataOptionsToMAPI(fldPath *field.Path, capiMetadataOpts *awsv1.InstanceMetadataOptions) (mapiv1beta1.MetadataServiceOptions, []string, field.ErrorList) {
-	var (
-		errors   field.ErrorList
-		warnings []string
-	)
+	var errors field.ErrorList
 
 	if capiMetadataOpts == nil {
 		return mapiv1beta1.MetadataServiceOptions{}, nil, nil
@@ -383,10 +367,10 @@ func convertAWSMetadataOptionsToMAPI(fldPath *field.Path, capiMetadataOpts *awsv
 	}
 
 	if len(errors) > 0 {
-		return mapiv1beta1.MetadataServiceOptions{}, warnings, errors
+		return mapiv1beta1.MetadataServiceOptions{}, nil, errors
 	}
 
-	return metadataOpts, warnings, nil
+	return metadataOpts, nil, nil
 }
 
 func convertAWSResourceReferenceToMAPI(capiReference awsv1.AWSResourceReference) mapiv1beta1.AWSResourceReference {
@@ -399,19 +383,16 @@ func convertAWSResourceReferenceToMAPI(capiReference awsv1.AWSResourceReference)
 }
 
 func convertAWSFiltersToMAPI(capiFilters []awsv1.Filter) []mapiv1beta1.Filter {
-	mapiFilters := []mapiv1beta1.Filter{}
-	for _, filter := range capiFilters {
-		mapiFilters = append(mapiFilters, mapiv1beta1.Filter{
+	return util.SliceMap(capiFilters, func(filter awsv1.Filter) mapiv1beta1.Filter {
+		return mapiv1beta1.Filter{
 			Name:   filter.Name,
 			Values: filter.Values,
-		})
-	}
-
-	return mapiFilters
+		}
+	})
 }
 
 func convertAWSTagsToMAPI(capiTags awsv1.Tags) []mapiv1beta1.TagSpecification {
-	mapiTags := []mapiv1beta1.TagSpecification{}
+	mapiTags := make([]mapiv1beta1.TagSpecification, 0, len(capiTags))
 	for key, value := range capiTags {
 		mapiTags = append(mapiTags, mapiv1beta1.TagSpecification{
 			Name:  key,
@@ -423,15 +404,7 @@ func convertAWSTagsToMAPI(capiTags awsv1.Tags) []mapiv1beta1.TagSpecification {
 }
 
 func convertAWSSecurityGroupstoMAPI(sgs []awsv1.AWSResourceReference) []mapiv1beta1.AWSResourceReference {
-	mapiSGs := []mapiv1beta1.AWSResourceReference{}
-
-	for _, sg := range sgs {
-		mapiAWSResourceRef := convertAWSResourceReferenceToMAPI(sg)
-
-		mapiSGs = append(mapiSGs, mapiAWSResourceRef)
-	}
-
-	return mapiSGs
+	return util.SliceMap(sgs, convertAWSResourceReferenceToMAPI)
 }
 
 func convertAWSSpotMarketOptionsToMAPI(capiSpotMarketOptions *awsv1.SpotMarketOptions) *mapiv1beta1.SpotMarketOptions {

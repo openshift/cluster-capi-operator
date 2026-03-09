@@ -32,8 +32,6 @@ import (
 
 // fromMAPIMachineSetToCAPIMachineSet takes a MAPI MachineSet and returns a converted CAPI MachineSet.
 func fromMAPIMachineSetToCAPIMachineSet(mapiMachineSet *mapiv1beta1.MachineSet) (*clusterv1.MachineSet, utilerrors.Aggregate) {
-	var errs field.ErrorList
-
 	specSelector := convertMAPIMachineSetSelectorToCAPI(mapiMachineSet.Spec.Selector)
 
 	capiMachineSet := &clusterv1.MachineSet{
@@ -68,7 +66,7 @@ func fromMAPIMachineSetToCAPIMachineSet(mapiMachineSet *mapiv1beta1.MachineSet) 
 		Status: convertMAPIMachineSetToCAPIMachineSetStatus(mapiMachineSet, specSelector),
 	}
 
-	errs = append(errs, handleUnsupportedMAPIObjectMetaFields(field.NewPath("spec", "template", "metadata"), mapiMachineSet.Spec.Template.ObjectMeta)...)
+	errs := handleUnsupportedMAPIObjectMetaFields(field.NewPath("spec", "template", "metadata"), mapiMachineSet.Spec.Template.ObjectMeta)
 
 	return capiMachineSet, errs.ToAggregate()
 }
@@ -153,8 +151,6 @@ func convertMAPIErrorReasonToCAPIFailureReason(mapiErrorReason mapiv1beta1.Machi
 
 // convertMAPIMachineSetConditionsToCAPIMachineSetConditions converts MAPI conditions to CAPI conditions.
 func convertMAPIMachineSetConditionsToCAPIMachineSetConditions(mapiMachineSet *mapiv1beta1.MachineSet) clusterv1.Conditions {
-	capiConditions := []clusterv1.Condition{}
-
 	// According to https://github.com/kubernetes-sigs/cluster-api/blob/a5e21a3f92b863f65668d2140632a73003b4d76b/docs/proposals/20240916-improve-status-in-CAPI-resources.md#machineset-newconditions
 	// these are the conditions that are supported by CAPI in the v1beta1 status:
 	// Ready, MachinesCreated, Resized, MachinesReady.
@@ -220,7 +216,7 @@ func convertMAPIMachineSetConditionsToCAPIMachineSetConditions(mapiMachineSet *m
 		// LastTransitionTime will be set by the condition utilities.
 	}
 
-	capiConditions = append(capiConditions, readyCondition, resizedCondition, machinesCreatedCondition, machinesReadyCondition)
+	capiConditions := []clusterv1.Condition{readyCondition, resizedCondition, machinesCreatedCondition, machinesReadyCondition}
 
 	// Sort the CAPI conditions by type, as CAPI ensures specific order of conditions.
 	sort.SliceStable(capiConditions, func(i, j int) bool {
@@ -232,8 +228,6 @@ func convertMAPIMachineSetConditionsToCAPIMachineSetConditions(mapiMachineSet *m
 
 // convertMAPIMachineSetConditionsToCAPIMachineSetV1Beta2StatusConditions converts MAPI conditions to CAPI v1beta2 conditions.
 func convertMAPIMachineSetConditionsToCAPIMachineSetV1Beta2StatusConditions(mapiMachineSet *mapiv1beta1.MachineSet) []metav1.Condition {
-	capiConditions := []metav1.Condition{}
-
 	// According to https://github.com/kubernetes-sigs/cluster-api/blob/a5e21a3f92b863f65668d2140632a73003b4d76b/docs/proposals/20240916-improve-status-in-CAPI-resources.md#machineset-newconditions
 	// these are the conditions that are supported by CAPI in the v1beta2 status:
 	// MachinesReady, MachinesUpToDate, ScalingUp, ScalingDown, Remediating, Deleting, Paused
@@ -289,7 +283,7 @@ func convertMAPIMachineSetConditionsToCAPIMachineSetV1Beta2StatusConditions(mapi
 		// LastTransitionTime will be set by the condition utilities.
 	}
 
-	capiConditions = append(capiConditions, deletingCondition, scalingUpCondition, scalingDownCondition, machinesReadyCondition, machinesUpToDateCondition)
+	capiConditions := []metav1.Condition{deletingCondition, scalingUpCondition, scalingDownCondition, machinesReadyCondition, machinesUpToDateCondition}
 
 	// Sort the CAPI conditions by type, as CAPI ensures specific order of conditions.
 	sort.SliceStable(capiConditions, func(i, j int) bool {

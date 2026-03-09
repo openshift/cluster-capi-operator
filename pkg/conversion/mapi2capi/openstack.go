@@ -85,22 +85,17 @@ func (m *openstackMachineAndInfra) ToMachineAndInfrastructureMachine() (*cluster
 }
 
 func (m *openstackMachineAndInfra) toMachineAndInfrastructureMachine() (*clusterv1.Machine, client.Object, []string, field.ErrorList) {
-	var (
-		errors   field.ErrorList
-		warnings []string
-	)
+	var errors field.ErrorList
 
 	openstackProviderConfig, err := openstackProviderSpecFromRawExtension(m.machine.Spec.ProviderSpec.Value)
 	if err != nil {
 		return nil, nil, nil, field.ErrorList{field.Invalid(field.NewPath("spec", "providerSpec", "value"), m.machine.Spec.ProviderSpec.Value, err.Error())}
 	}
 
-	capoMachine, warns, errs := m.toOpenStackMachine(openstackProviderConfig)
+	capoMachine, warnings, errs := m.toOpenStackMachine(openstackProviderConfig)
 	if errs != nil {
 		errors = append(errors, errs...)
 	}
-
-	warnings = append(warnings, warns...)
 
 	capiMachine, errs := fromMAPIMachineToCAPIMachine(m.machine, openstackv1.SchemeGroupVersion.Group, openstackMachineKind)
 	if errs != nil {
@@ -143,17 +138,12 @@ func (m *openstackMachineAndInfra) toMachineAndInfrastructureMachine() (*cluster
 
 // ToMachineSetAndMachineTemplate converts a mapi2capi OpenStackMachineSetAndInfra into a CAPI MachineSet and CAPO OpenStackMachineTemplate.
 func (m *openstackMachineSetAndInfra) ToMachineSetAndMachineTemplate() (*clusterv1.MachineSet, client.Object, []string, error) { //nolint:dupl
-	var (
-		errors   []error
-		warnings []string
-	)
+	var errors []error
 
-	capiMachine, capoMachineObj, warns, machineErrs := m.toMachineAndInfrastructureMachine()
+	capiMachine, capoMachineObj, warnings, machineErrs := m.toMachineAndInfrastructureMachine()
 	if machineErrs != nil {
 		errors = append(errors, machineErrs.ToAggregate().Errors()...)
 	}
-
-	warnings = append(warnings, warns...)
 
 	capoMachine, ok := capoMachineObj.(*openstackv1.OpenStackMachine)
 	if !ok {
@@ -202,12 +192,10 @@ func (m *openstackMachineSetAndInfra) ToMachineSetAndMachineTemplate() (*cluster
 
 // toOpenStackMachine implements the ProviderSpec conversion interface for the OpenStack provider,
 // it converts OpenstackProviderSpec to OpenStackMachine.
-//
-//nolint:funlen
 func (m *openstackMachineAndInfra) toOpenStackMachine(providerSpec mapiv1alpha1.OpenstackProviderSpec) (*openstackv1.OpenStackMachine, []string, field.ErrorList) {
 	var (
 		errors   field.ErrorList
-		warnings []string
+		warnings []string //nolint:prealloc // accumulated from multiple sources
 	)
 
 	fldPath := field.NewPath("spec", "providerSpec", "value")
@@ -584,7 +572,7 @@ func convertMAPONetworksToCAPO(fldPath *field.Path, mapoNetworks []mapiv1alpha1.
 func convertMAPOPortsToCAPO(fldPath *field.Path, mapoPorts []mapiv1alpha1.PortOpts) ([]openstackv1.PortOpts, []string, field.ErrorList) {
 	errors := field.ErrorList{}
 	warnings := []string{}
-	capoPorts := []openstackv1.PortOpts{}
+	capoPorts := make([]openstackv1.PortOpts, 0, len(mapoPorts))
 
 	for i, mapoPort := range mapoPorts {
 		var macAddress *string
@@ -745,9 +733,7 @@ func convertMAPORootVolumeToCAPO(fldPath *field.Path, mapoRootVolume *mapiv1alph
 }
 
 func convertMAPOSecurityGroupsToCAPO(mapoSecurityGroups []mapiv1alpha1.SecurityGroupParam) []openstackv1.SecurityGroupParam {
-	capoSecurityGroups := []openstackv1.SecurityGroupParam{}
-
-	for _, mapoSecurityGroup := range mapoSecurityGroups {
+	return util.SliceMap(mapoSecurityGroups, func(mapoSecurityGroup mapiv1alpha1.SecurityGroupParam) openstackv1.SecurityGroupParam {
 		capoSecurityGroup := openstackv1.SecurityGroupParam{}
 
 		if mapoSecurityGroup.UUID != "" {
@@ -771,10 +757,8 @@ func convertMAPOSecurityGroupsToCAPO(mapoSecurityGroups []mapiv1alpha1.SecurityG
 			}
 		}
 
-		capoSecurityGroups = append(capoSecurityGroups, capoSecurityGroup)
-	}
-
-	return capoSecurityGroups
+		return capoSecurityGroup
+	})
 }
 
 func convertMAPOServerGroupToCAPO(mapoServerGroupID, mapoServerGroupName string) *openstackv1.ServerGroupParam {
@@ -793,7 +777,7 @@ func convertMAPOServerGroupToCAPO(mapoServerGroupID, mapoServerGroupName string)
 }
 
 func convertMAPOServerMetadataToCAPO(mapoServerMetadata map[string]string) []openstackv1.ServerMetadata {
-	capoServerMetadata := []openstackv1.ServerMetadata{}
+	capoServerMetadata := make([]openstackv1.ServerMetadata, 0, len(mapoServerMetadata))
 	for k, v := range mapoServerMetadata {
 		capoServerMetadata = append(capoServerMetadata, openstackv1.ServerMetadata{Key: k, Value: v})
 	}

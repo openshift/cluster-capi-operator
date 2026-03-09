@@ -103,7 +103,7 @@ var (
 	// errCAPIMachineNotFound is returned when the AuthoritativeAPI is set to CAPI on the MAPI machine,
 	// but we can't find the CAPI machine.
 	//lint:ignore ST1005 Cluster API is a name.
-	//nolint:stylecheck
+	//nolint:staticcheck
 	errCAPIMachineNotFound = errors.New("Cluster API machine not found")
 
 	// errPlatformNotSupported is returned when the platform is not supported.

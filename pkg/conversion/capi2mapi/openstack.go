@@ -88,7 +88,7 @@ func FromMachineSetAndOpenStackMachineTemplateAndOpenStackCluster(ms *clusterv1.
 //nolint:funlen
 func (m machineAndOpenStackMachineAndOpenStackCluster) toProviderSpec() (*mapiv1alpha1.OpenstackProviderSpec, []string, field.ErrorList) {
 	var (
-		warnings []string
+		warnings []string //nolint:prealloc // accumulated from multiple sources
 		errors   field.ErrorList
 	)
 
@@ -183,12 +183,9 @@ func (m machineAndOpenStackMachineAndOpenStackCluster) ToMachine() (*mapiv1beta1
 		return nil, nil, errCAPIMachineOpenStackMachineOpenStackClusterCannotBeNil
 	}
 
-	var (
-		errors   field.ErrorList
-		warnings []string
-	)
+	var errors field.ErrorList
 
-	mapoSpec, warns, errs := m.toProviderSpec()
+	mapoSpec, warnings, errs := m.toProviderSpec()
 	if errs != nil {
 		errors = append(errors, errs...)
 	}
@@ -197,8 +194,6 @@ func (m machineAndOpenStackMachineAndOpenStackCluster) ToMachine() (*mapiv1beta1
 	if errRaw != nil {
 		return nil, nil, fmt.Errorf("unable to convert OpenStack providerSpec to raw extension: %w", errRaw)
 	}
-
-	warnings = append(warnings, warns...)
 
 	var additionalMachineAPIMetadataLabels, additionalMachineAPIMetadataAnnotations map[string]string
 	if !m.excludeMachineAPILabelsAndAnnotations {
@@ -246,24 +241,19 @@ func openstackRawExtensionFromProviderSpec(spec *mapiv1alpha1.OpenstackProviderS
 }
 
 // ToMachineSet converts a capi2mapi MachineAndOpenStackMachineTemplate into a MAPI MachineSet.
-func (m machineSetAndOpenStackMachineTemplateAndOpenStackCluster) ToMachineSet() (*mapiv1beta1.MachineSet, []string, error) { //nolint:dupl
+func (m machineSetAndOpenStackMachineTemplateAndOpenStackCluster) ToMachineSet() (*mapiv1beta1.MachineSet, []string, error) {
 	if m.machineSet == nil || m.template == nil || m.openstackCluster == nil || m.machineAndOpenStackMachineAndOpenStackCluster == nil {
 		return nil, nil, errCAPIMachineSetOpenStackMachineTemplateOpenStackClusterCannotBeNil
 	}
 
-	var (
-		errors   []error
-		warnings []string
-	)
+	var errors []error
 
 	// Run the full ToMachine conversion so that we can check for
 	// any Machine level conversion errors in the spec translation.
-	mapiMachine, warns, err := m.ToMachine()
+	mapiMachine, warnings, err := m.ToMachine()
 	if err != nil {
 		errors = append(errors, err)
 	}
-
-	warnings = append(warnings, warns...)
 
 	mapiMachineSet, err := fromCAPIMachineSetToMAPIMachineSet(m.machineSet)
 	if err != nil {
@@ -286,7 +276,7 @@ func (m machineSetAndOpenStackMachineTemplateAndOpenStackCluster) ToMachineSet()
 // Conversion helpers.
 
 func convertCAPOAdditionalBlockDevicesToMAPO(fldPath *field.Path, capoAdditionalBlockDevices []openstackv1.AdditionalBlockDevice) ([]mapiv1alpha1.AdditionalBlockDevice, field.ErrorList) {
-	mapoAdditionalBlockDevices := []mapiv1alpha1.AdditionalBlockDevice{}
+	mapoAdditionalBlockDevices := make([]mapiv1alpha1.AdditionalBlockDevice, 0, len(capoAdditionalBlockDevices))
 	errors := field.ErrorList{}
 
 	for i, capoAdditionalBlockDevice := range capoAdditionalBlockDevices {
@@ -689,23 +679,19 @@ func convertCAPOSecurityGroupstoMAPO(fldPath *field.Path, capoSecurityGroups []o
 }
 
 func convertCAPOServerGroupsToMAPO(fldPath *field.Path, capoServerGroup *openstackv1.ServerGroupParam) (string, string, field.ErrorList) {
-	errors := field.ErrorList{}
-
 	if capoServerGroup == nil {
-		return "", "", errors
+		return "", "", nil
 	}
 
 	if capoServerGroup.ID != nil {
-		return *capoServerGroup.ID, "", errors
+		return *capoServerGroup.ID, "", nil
 	}
 
 	if capoServerGroup.Filter != nil && capoServerGroup.Filter.Name != nil {
-		return "", *capoServerGroup.Filter.Name, errors
+		return "", *capoServerGroup.Filter.Name, nil
 	}
 
-	errors = append(errors, field.Invalid(fldPath, capoServerGroup, "A server group must be referenced by a UUID or filter"))
-
-	return "", "", errors
+	return "", "", field.ErrorList{field.Invalid(fldPath, capoServerGroup, "A server group must be referenced by a UUID or filter")}
 }
 
 func convertCAPOServerMetadataToMAPO(capoServerMeta []openstackv1.ServerMetadata) map[string]string {

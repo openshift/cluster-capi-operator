@@ -96,22 +96,17 @@ func (m *awsMachineAndInfra) ToMachineAndInfrastructureMachine() (*clusterv1.Mac
 }
 
 func (m *awsMachineAndInfra) toMachineAndInfrastructureMachine() (*clusterv1.Machine, client.Object, []string, field.ErrorList) {
-	var (
-		errs     field.ErrorList
-		warnings []string
-	)
+	var errs field.ErrorList
 
 	awsProviderConfig, err := AWSProviderSpecFromRawExtension(m.machine.Spec.ProviderSpec.Value)
 	if err != nil {
 		return nil, nil, nil, field.ErrorList{field.Invalid(field.NewPath("spec", "providerSpec", "value"), m.machine.Spec.ProviderSpec.Value, err.Error())}
 	}
 
-	capaMachine, warn, machineErrs := m.toAWSMachine(awsProviderConfig)
+	capaMachine, warnings, machineErrs := m.toAWSMachine(awsProviderConfig)
 	if machineErrs != nil {
 		errs = append(errs, machineErrs...)
 	}
-
-	warnings = append(warnings, warn...)
 
 	capiMachine, machineErrs := fromMAPIMachineToCAPIMachine(m.machine, awsv1.GroupVersion.Group, awsMachineKind)
 	if machineErrs != nil {
@@ -167,17 +162,12 @@ func (m *awsMachineAndInfra) toMachineAndInfrastructureMachine() (*clusterv1.Mac
 //
 //nolint:dupl
 func (m *awsMachineSetAndInfra) ToMachineSetAndMachineTemplate() (*clusterv1.MachineSet, client.Object, []string, error) {
-	var (
-		errs     []error
-		warnings []string
-	)
+	var errs []error
 
-	capiMachine, capaMachineObj, warn, errList := m.toMachineAndInfrastructureMachine()
+	capiMachine, capaMachineObj, warnings, errList := m.toMachineAndInfrastructureMachine()
 	if errList != nil {
 		errs = append(errs, errList.ToAggregate().Errors()...)
 	}
-
-	warnings = append(warnings, warn...)
 
 	capaMachine, ok := capaMachineObj.(*awsv1.AWSMachine)
 	if !ok {
@@ -231,17 +221,12 @@ func (m *awsMachineSetAndInfra) ToMachineSetAndMachineTemplate() (*clusterv1.Mac
 func (m *awsMachineAndInfra) toAWSMachine(providerSpec mapiv1beta1.AWSMachineProviderConfig) (*awsv1.AWSMachine, []string, field.ErrorList) {
 	fldPath := field.NewPath("spec", "providerSpec", "value")
 
-	var (
-		errs     field.ErrorList
-		warnings []string
-	)
+	var errs field.ErrorList
 
-	rootVolume, nonRootVolumes, warn, blockErrs := convertAWSBlockDeviceMappingSpecToCAPI(fldPath.Child("blockDevices"), providerSpec.BlockDevices)
+	rootVolume, nonRootVolumes, warnings, blockErrs := convertAWSBlockDeviceMappingSpecToCAPI(fldPath.Child("blockDevices"), providerSpec.BlockDevices)
 	if blockErrs != nil {
 		errs = append(errs, blockErrs...)
 	}
-
-	warnings = append(warnings, warn...)
 
 	capiAWSAMIReference, err := convertAWSAMIResourceReferenceToCAPI(fldPath.Child("ami"), providerSpec.AMI)
 	if err != nil {
@@ -398,12 +383,12 @@ func convertMAPIMachineStatusToAWSMachineStatus(mapiMachine *mapiv1beta1.Machine
 }
 
 func convertMAPIMachineAWSProviderConditionsToAWSMachineConditions(mapiProviderStatus *mapiv1beta1.AWSMachineProviderStatus) clusterv1beta1.Conditions {
-	capaMachineConditions := []clusterv1beta1.Condition{}
+	capaMachineConditions := make([]clusterv1beta1.Condition, 2)
 	instanceRunning := ptr.Deref(mapiProviderStatus.InstanceState, "") == string(awsv1.InstanceStateRunning)
 
 	// Best effort assertion for Ready and InstanceReady condition. Refer to Machine API machine in case of non-happy path.
-	for _, conditionType := range []clusterv1beta1.ConditionType{clusterv1beta1.ReadyCondition, awsv1.InstanceReadyCondition} {
-		c := clusterv1beta1.Condition{
+	for i, conditionType := range []clusterv1beta1.ConditionType{clusterv1beta1.ReadyCondition, awsv1.InstanceReadyCondition} {
+		capaMachineConditions[i] = clusterv1beta1.Condition{
 			Type: conditionType,
 			Status: func() corev1.ConditionStatus {
 				if instanceRunning {
@@ -428,7 +413,6 @@ func convertMAPIMachineAWSProviderConditionsToAWSMachineConditions(mapiProviderS
 			}(),
 			// LastTransitionTime will be set by the condition utilities.
 		}
-		capaMachineConditions = append(capaMachineConditions, c)
 	}
 
 	// awsv1.SecurityGroupsReadyCondition: there is no equivalent in Machine API.
@@ -584,15 +568,9 @@ func convertAWSSpotMarketOptionsToCAPI(mapiSpotMarketOptions *mapiv1beta1.SpotMa
 }
 
 func convertAWSSecurityGroupstoCAPI(sgs []mapiv1beta1.AWSResourceReference) []awsv1.AWSResourceReference {
-	capiSGs := []awsv1.AWSResourceReference{}
-
-	for _, sg := range sgs {
-		ref := convertAWSResourceReferenceToCAPI(sg)
-
-		capiSGs = append(capiSGs, *ref)
-	}
-
-	return capiSGs
+	return util.SliceMap(sgs, func(sg mapiv1beta1.AWSResourceReference) awsv1.AWSResourceReference {
+		return *convertAWSResourceReferenceToCAPI(sg)
+	})
 }
 
 func convertAWSBlockDeviceMappingSpecToCAPI(fldPath *field.Path, mapiBlockDeviceMapping []mapiv1beta1.BlockDeviceMappingSpec) (*awsv1.Volume, []awsv1.Volume, []string, field.ErrorList) {
@@ -700,15 +678,12 @@ func convertAWSResourceReferenceToCAPI(mapiReference mapiv1beta1.AWSResourceRefe
 }
 
 func convertAWSFiltersToCAPI(mapiFilters []mapiv1beta1.Filter) []awsv1.Filter {
-	capiFilters := []awsv1.Filter{}
-	for _, filter := range mapiFilters {
-		capiFilters = append(capiFilters, awsv1.Filter{
+	return util.SliceMap(mapiFilters, func(filter mapiv1beta1.Filter) awsv1.Filter {
+		return awsv1.Filter{
 			Name:   filter.Name,
 			Values: filter.Values,
-		})
-	}
-
-	return capiFilters
+		}
+	})
 }
 
 func convertNetworkInterfaceType(networkInterfaceType mapiv1beta1.AWSNetworkInterfaceType) awsv1.NetworkInterfaceType {

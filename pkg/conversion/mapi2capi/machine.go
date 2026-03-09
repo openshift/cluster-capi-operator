@@ -226,8 +226,6 @@ func convertMAPIMachineConditionsToCAPIMachineConditions(mapiMachine *mapiv1beta
 //
 //nolint:funlen
 func convertMAPIMachineConditionsToCAPIMachineV1Beta2StatusConditions(mapiMachine *mapiv1beta1.Machine) []metav1.Condition {
-	capiConditions := []metav1.Condition{}
-
 	// According to CAPI v1beta2 machine conditions, there are 9 main conditions:
 	// Available, Ready, UpToDate, BootstrapConfigReady, InfrastructureReady, NodeReady, NodeHealthy, Deleting, Paused
 
@@ -355,9 +353,7 @@ func convertMAPIMachineConditionsToCAPIMachineV1Beta2StatusConditions(mapiMachin
 		// LastTransitionTime will be set by the condition utilities.
 	}
 
-	capiConditions = append(capiConditions, availableCondition, readyCondition, bootstrapConfigReadyCondition, infrastructureReadyCondition, deletingCondition, nodeReadyCondition)
-
-	return capiConditions
+	return []metav1.Condition{availableCondition, readyCondition, bootstrapConfigReadyCondition, infrastructureReadyCondition, deletingCondition, nodeReadyCondition}
 }
 
 // convertMAPIMachineAddressesToCAPI converts MAPI machine addresses to CAPI format.
