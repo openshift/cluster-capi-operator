@@ -213,10 +213,12 @@ func (r *InfraClusterController) ensureAzureInfraCluster(ctx context.Context, ta
 		return fmt.Errorf("failed to parse apiUrl: %w", err)
 	}
 
-	port, err := strconv.ParseInt(apiURL.Port(), 10, 32)
+	port64, err := strconv.ParseInt(apiURL.Port(), 10, 32)
 	if err != nil {
 		return fmt.Errorf("failed to parse apiUrl port: %w", err)
 	}
+
+	port := int32(port64)
 
 	providerSpec, err := r.getAzureMAPIProviderSpec(ctx, r.Client)
 	if err != nil {
@@ -239,7 +241,7 @@ func (r *InfraClusterController) ensureAzureInfraCluster(ctx context.Context, ta
 }
 
 // createNewAzureCluster creates a new Azure Infra Cluster.
-func (r *InfraClusterController) newAzureCluster(providerSpec *mapiv1beta1.AzureMachineProviderSpec, apiURL *url.URL, port int64, location string) *azurev1.AzureCluster {
+func (r *InfraClusterController) newAzureCluster(providerSpec *mapiv1beta1.AzureMachineProviderSpec, apiURL *url.URL, port int32, location string) *azurev1.AzureCluster {
 	return &azurev1.AzureCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      r.Infra.Status.InfrastructureName,
@@ -276,7 +278,7 @@ func (r *InfraClusterController) newAzureCluster(providerSpec *mapiv1beta1.Azure
 			ResourceGroup: providerSpec.ResourceGroup,
 			ControlPlaneEndpoint: clusterv1beta1.APIEndpoint{
 				Host: apiURL.Hostname(),
-				Port: int32(port),
+				Port: port,
 			},
 		},
 	}

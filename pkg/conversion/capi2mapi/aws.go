@@ -122,6 +122,14 @@ func (m machineAndAWSMachineAndAWSCluster) toProviderSpec() (*mapiv1beta1.AWSMac
 		errors = append(errors, lbErrs...)
 	}
 
+	var placementGroupPartition *int32
+
+	if converted, ok := int64ToInt32(m.awsMachine.Spec.PlacementGroupPartition); !ok {
+		errors = append(errors, field.Invalid(fldPath.Child("placementGroupPartition"), m.awsMachine.Spec.PlacementGroupPartition, "placementGroupPartition exceeds maximum int32 value"))
+	} else if converted > 0 {
+		placementGroupPartition = &converted
+	}
+
 	mapaProviderConfig := mapiv1beta1.AWSMachineProviderConfig{
 		TypeMeta: metav1.TypeMeta{
 			Kind: "AWSMachineProviderConfig",
@@ -161,7 +169,7 @@ func (m machineAndAWSMachineAndAWSCluster) toProviderSpec() (*mapiv1beta1.AWSMac
 		SpotMarketOptions:       convertAWSSpotMarketOptionsToMAPI(m.awsMachine.Spec.SpotMarketOptions),
 		MetadataServiceOptions:  mapiAWSMetadataOptions,
 		PlacementGroupName:      m.awsMachine.Spec.PlacementGroupName,
-		PlacementGroupPartition: convertAWSPlacementGroupPartition(m.awsMachine.Spec.PlacementGroupPartition),
+		PlacementGroupPartition: placementGroupPartition,
 		CapacityReservationID:   ptr.Deref(m.awsMachine.Spec.CapacityReservationID, ""),
 		MarketType:              mapiAWSMarketType,
 	}
@@ -496,11 +504,12 @@ func convertAWSVolumeToMAPI(fldPath *field.Path, volume awsv1.Volume) (mapiv1bet
 	}
 
 	if volume.Throughput != nil {
-		if *volume.Throughput > math.MaxInt32 {
+		throughput, ok := int64ToInt32(*volume.Throughput)
+		if !ok {
 			return mapiv1beta1.BlockDeviceMappingSpec{}, field.Invalid(fldPath.Child("throughput"), *volume.Throughput, "throughput exceeds maximum int32 value")
 		}
 
-		bdm.EBS.ThroughputMib = ptr.To(int32(*volume.Throughput))
+		bdm.EBS.ThroughputMib = ptr.To(throughput)
 	}
 
 	return bdm, nil
@@ -518,12 +527,13 @@ func convertAWSKMSKeyToMAPI(kmsKey string) mapiv1beta1.AWSResourceReference {
 	}
 }
 
-func convertAWSPlacementGroupPartition(in int64) *int32 {
-	if in == 0 {
-		return nil
+// int64ToInt32 converts an int64 to an int32 if it is within the int32 range.
+func int64ToInt32(in int64) (int32, bool) {
+	if in > math.MaxInt32 || in < math.MinInt32 {
+		return 0, false
 	}
 
-	return ptr.To(int32(in))
+	return int32(in), true
 }
 
 func convertAWSNetworkInterfaceTypeToMAPI(networkInterfaceType awsv1.NetworkInterfaceType) mapiv1beta1.AWSNetworkInterfaceType {
