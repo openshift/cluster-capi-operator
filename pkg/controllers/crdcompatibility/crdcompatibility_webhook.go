@@ -90,8 +90,8 @@ func (v *crdRequirementValidator) validateCreateOrUpdate(ctx context.Context, ob
 
 				// These we actually care about validating.
 				MatchConditions:   convertToMatchConditions(compatibilityRequirement.Spec.ObjectSchemaValidation.MatchConditions),
-				NamespaceSelector: compatibilityRequirement.Spec.ObjectSchemaValidation.NamespaceSelector.DeepCopy(),
-				ObjectSelector:    compatibilityRequirement.Spec.ObjectSchemaValidation.ObjectSelector.DeepCopy(),
+				NamespaceSelector: deepCopyLabelSelector(compatibilityRequirement.Spec.ObjectSchemaValidation.NamespaceSelector),
+				ObjectSelector:    deepCopyLabelSelector(compatibilityRequirement.Spec.ObjectSchemaValidation.ObjectSelector),
 			},
 		},
 	}
@@ -120,6 +120,16 @@ func convertToMatchConditions(matchConditions []admissionregistrationv1.MatchCon
 	}
 
 	return out
+}
+
+func deepCopyLabelSelector(labelSelector metav1.LabelSelector) *metav1.LabelSelector {
+	// When there are no labels or expressions, we don't want to init an empty pointer
+	// as this will cause a validation failure for a "zero" object.
+	if len(labelSelector.MatchLabels) == 0 && len(labelSelector.MatchExpressions) == 0 {
+		return nil
+	}
+
+	return labelSelector.DeepCopy()
 }
 
 func convertToInternalCRD(compatibilityCRD *apiextensionsv1.CustomResourceDefinition) (*apiextensions.CustomResourceDefinition, error) {

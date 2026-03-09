@@ -41,13 +41,13 @@ var (
 	// fakeCoreProviderKind is the Kind for the CoreProvider.
 	fakeCoreProviderKind = "CoreProvider"
 	// fakeCoreProviderCRD is a fake CoreProvider CRD.
-	fakeCoreProviderCRD = GenerateCRD(operatorGroupVersion.WithKind(fakeCoreProviderKind))
+	fakeCoreProviderCRD = GenerateSchemalessSpecStatusCRD(operatorGroupVersion.WithKind(fakeCoreProviderKind))
 
 	// fakeInfrastructureProviderKind is the Kind for the CoreProvider.
 	fakeInfrastructureProviderKind = "InfrastructureProvider"
 
 	// fakeInfrastructureProviderCRD is a fake CoreProvider CRD.
-	fakeInfrastructureProviderCRD = GenerateCRD(operatorGroupVersion.WithKind(fakeInfrastructureProviderKind))
+	fakeInfrastructureProviderCRD = GenerateSchemalessSpecStatusCRD(operatorGroupVersion.WithKind(fakeInfrastructureProviderKind))
 
 	// clusterGroupVersion is group version used for cluster objects.
 	clusterGroupVersion = schema.GroupVersion{Group: "cluster.x-k8s.io", Version: "v1beta2"}
@@ -56,19 +56,19 @@ var (
 	fakeClusterKind = "Cluster"
 
 	// fakeClusterCRD is a fake Cluster CRD.
-	fakeClusterCRD = GenerateCRD(clusterGroupVersion.WithKind(fakeClusterKind))
+	fakeClusterCRD = GenerateSchemalessSpecStatusCRD(clusterGroupVersion.WithKind(fakeClusterKind))
 
 	// fakeMachineKind is the Kind for the Machine.
 	fakeMachineKind = "Machine"
 
 	// fakeMachineCRD is a fake Machine CRD.
-	fakeMachineCRD = GenerateCRD(clusterGroupVersion.WithKind(fakeMachineKind))
+	fakeMachineCRD = GenerateSchemalessSpecStatusCRD(clusterGroupVersion.WithKind(fakeMachineKind))
 
 	// fakeMachineSetKind is the kind for the MachineSet.
 	fakeMachineSetKind = "MachineSet"
 
 	// fakeMachineSetCRD is a fake MachineSet CRD.
-	fakeMachineSetCRD = GenerateCRD(clusterGroupVersion.WithKind(fakeMachineSetKind))
+	fakeMachineSetCRD = GenerateSchemalessSpecStatusCRD(clusterGroupVersion.WithKind(fakeMachineSetKind))
 
 	// v1beta1InfrastructureGroupVersion is a v1beta1 group version used for infrastructure objects.
 	v1beta1InfrastructureGroupVersion = schema.GroupVersion{Group: "infrastructure.cluster.x-k8s.io", Version: "v1beta1"}
@@ -77,13 +77,13 @@ var (
 	fakeOpenStackClusterKind = "OpenStackCluster"
 
 	// fakeOpenStackClusterCRD is a fake OpenStackCluster CRD.
-	fakeOpenStackClusterCRD = GenerateCRD(v1beta1InfrastructureGroupVersion.WithKind(fakeOpenStackClusterKind))
+	fakeOpenStackClusterCRD = GenerateSchemalessSpecStatusCRD(v1beta1InfrastructureGroupVersion.WithKind(fakeOpenStackClusterKind))
 
 	// fakeOpenStackMachineTemplateKind is the kind for the OpenStackMachineTemplate.
 	fakeOpenStackMachineTemplateKind = "OpenStackMachineTemplate"
 
 	// fakeOpenStackMachineTemplateCRD is a fake OpenStackMachineTemplate CRD.
-	fakeOpenStackMachineTemplateCRD = GenerateCRD(v1beta1InfrastructureGroupVersion.WithKind(fakeOpenStackMachineTemplateKind))
+	fakeOpenStackMachineTemplateCRD = GenerateSchemalessSpecStatusCRD(v1beta1InfrastructureGroupVersion.WithKind(fakeOpenStackMachineTemplateKind))
 
 	// mapiv1GroupVersion is group version used for MAPI v1 objects.
 	mapiv1GroupVersion = schema.GroupVersion{Group: "machine.openshift.io", Version: "v1"}
@@ -92,7 +92,7 @@ var (
 	fakeControlPlaneMachineSetKind = "ControlPlaneMachineSet"
 
 	// fakeControlPlaneMachineSetCRD is a fake ControlPlaneMachineSet CRD.
-	fakeControlPlaneMachineSetCRD = GenerateCRD(mapiv1GroupVersion.WithKind(fakeControlPlaneMachineSetKind))
+	fakeControlPlaneMachineSetCRD = GenerateSchemalessSpecStatusCRD(mapiv1GroupVersion.WithKind(fakeControlPlaneMachineSetKind))
 
 	// v1beta2InfrastructureGroupVersion is a v1beta2 group version used for infrastructure objects.
 	v1beta2InfrastructureGroupVersion = schema.GroupVersion{Group: "infrastructure.cluster.x-k8s.io", Version: "v1beta2"}
@@ -147,12 +147,10 @@ func GenerateCRD(gvk schema.GroupVersionKind, additionalVersions ...string) *api
 					Type: "object",
 					Properties: map[string]apiextensionsv1.JSONSchemaProps{
 						"spec": {
-							Type:                   "object",
-							XPreserveUnknownFields: ptr.To(true),
+							Type: "object",
 						},
 						"status": {
-							Type:                   "object",
-							XPreserveUnknownFields: ptr.To(true),
+							Type: "object",
 						},
 					},
 				},
@@ -180,6 +178,24 @@ func GenerateCRD(gvk schema.GroupVersionKind, additionalVersions ...string) *api
 			Versions: append(util.SliceMap(additionalVersions, generateVersion), generateVersion(gvk.Version)),
 		},
 	}
+}
+
+// GenerateSchemalessSpecStatusCRD generates a simple CRD with a spec and status schema that
+// accepts all values in spec and status using XPreserveUnknownFields.
+func GenerateSchemalessSpecStatusCRD(gvk schema.GroupVersionKind, additionalVersions ...string) *apiextensionsv1.CustomResourceDefinition {
+	crd := GenerateCRD(gvk, additionalVersions...)
+
+	crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["spec"] = apiextensionsv1.JSONSchemaProps{
+		Type:                   "object",
+		XPreserveUnknownFields: ptr.To(true),
+	}
+
+	crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["status"] = apiextensionsv1.JSONSchemaProps{
+		Type:                   "object",
+		XPreserveUnknownFields: ptr.To(true),
+	}
+
+	return crd
 }
 
 // GenerateTestCRD generates a simple CRD with a randomly generated Kind.
@@ -237,7 +253,7 @@ func GenerateTestCompatibilityRequirement(testCRD *apiextensionsv1.CustomResourc
 }
 
 func generateProviderCRD(gvk schema.GroupVersionKind) *apiextensionsv1.CustomResourceDefinition {
-	crd := GenerateCRD(gvk)
+	crd := GenerateSchemalessSpecStatusCRD(gvk)
 
 	if crd.ObjectMeta.Labels == nil {
 		crd.ObjectMeta.Labels = make(map[string]string)
