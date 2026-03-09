@@ -3,9 +3,11 @@ module github.com/openshift/cluster-capi-operator/e2e
 go 1.24.0
 
 replace (
-	github.com/openshift/cluster-api-actuator-pkg => github.com/openshift/cluster-api-actuator-pkg v0.0.0-20251203134942-d9bd7b8593f3
-	github.com/openshift/cluster-api-actuator-pkg/testutils => github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20251203134942-d9bd7b8593f3
-	sigs.k8s.io/cluster-api-provider-azure => github.com/damdo/cluster-api-provider-azure v0.0.0-20251202084521-c2e0e38d1e0e
+	// cluster-api-provider-baremetal uses a placeholder for baremetal-operator
+	github.com/metal3-io/baremetal-operator => github.com/metal3-io/baremetal-operator v0.5.1
+
+	//cluster-api-actuator-pkg uses a placeholder for cluster-api-actuator-pkg/testutils
+	github.com/openshift/cluster-api-actuator-pkg/testutils => github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20260310144400-bec013a007a8
 )
 
 require (
@@ -16,7 +18,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.27.2
 	github.com/onsi/gomega v1.38.2
 	github.com/openshift/api v0.0.0-20260228183123-9b2ee997d297
-	github.com/openshift/cluster-api-actuator-pkg v0.0.0-20251203134942-d9bd7b8593f3
+	github.com/openshift/cluster-api-actuator-pkg v0.0.0-20260310144400-bec013a007a8
 	github.com/openshift/cluster-api-provider-baremetal v0.0.0-20250619124612-fb678fec5f7e
 	k8s.io/api v0.34.1
 	k8s.io/apimachinery v0.34.1
@@ -24,7 +26,7 @@ require (
 	k8s.io/utils v0.0.0-20251002143259-bc988d571ff4
 	sigs.k8s.io/cluster-api v1.11.3
 	sigs.k8s.io/cluster-api-provider-aws/v2 v2.10.0
-	sigs.k8s.io/cluster-api-provider-azure v0.0.0-20251202084521-c2e0e38d1e0e
+	sigs.k8s.io/cluster-api-provider-azure v1.22.0
 	sigs.k8s.io/cluster-api-provider-gcp v1.11.0-beta.0
 	sigs.k8s.io/cluster-api-provider-ibmcloud v0.12.0
 	sigs.k8s.io/cluster-api-provider-openstack v0.13.1

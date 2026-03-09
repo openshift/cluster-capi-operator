@@ -13,9 +13,11 @@ tool (
 	sigs.k8s.io/controller-runtime/tools/setup-envtest
 )
 
-// All k8s.io packages are pinned as replacements as a side effect of importing K/K which imports v0.0.0 of each version.
 replace (
-	github.com/openshift/cluster-api-actuator-pkg/testutils => github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20251211141525-c707612472dc
+	// cluster-api-actuator-pkg uses a placeholder for cluster-api-actuator-pkg/testutils
+	github.com/openshift/cluster-api-actuator-pkg/testutils => github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20260310144400-bec013a007a8
+
+	// All k8s.io packages are pinned as replacements as a side effect of importing K/K which imports v0.0.0 of each version.
 	k8s.io/api => k8s.io/api v0.35.1
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.35.1
 	k8s.io/apimachinery => k8s.io/apimachinery v0.35.1
@@ -49,7 +51,9 @@ replace (
 	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.35.1
 	k8s.io/sample-cli-plugin => k8s.io/sample-cli-plugin v0.35.1
 	k8s.io/sample-controller => k8s.io/sample-controller v0.35.1
-	sigs.k8s.io/cluster-api-provider-azure => github.com/openshift/cluster-api-provider-azure v0.0.0-20251202084521-c2e0e38d1e0e
+
+	// cluster-api-provider-vsphere v1.14.0 dependends on a cluster-api placeholder
+	sigs.k8s.io/cluster-api => sigs.k8s.io/cluster-api v1.11.5
 )
 
 require (
@@ -85,7 +89,7 @@ require (
 	k8s.io/utils v0.0.0-20251002143259-bc988d571ff4
 	sigs.k8s.io/cluster-api v1.11.3
 	sigs.k8s.io/cluster-api-provider-aws/v2 v2.10.0
-	sigs.k8s.io/cluster-api-provider-azure v0.0.0-20251202084521-c2e0e38d1e0e
+	sigs.k8s.io/cluster-api-provider-azure v1.22.0
 	sigs.k8s.io/cluster-api-provider-gcp v1.11.0-beta.0
 	sigs.k8s.io/cluster-api-provider-ibmcloud v0.12.0
 	sigs.k8s.io/cluster-api-provider-openstack v0.13.1
@@ -292,6 +296,7 @@ require (
 	github.com/oklog/ulid v1.3.1 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
+	github.com/openshift/cluster-api-actuator-pkg v0.0.0-20260309164138-2ac2e653ccb9 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/prometheus/client_golang v1.23.2 // indirect
