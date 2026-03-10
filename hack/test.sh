@@ -45,7 +45,7 @@ fi
 
 # Print the command we are going to run as Make would.
 echo ${GINKGO} ${GINKGO_ARGS} ${SHARD_ARGS} ${GINKGO_EXTRA_ARGS} ${TEST_DIRS}
-eval "${GINKGO} ${GINKGO_ARGS} ${SHARD_ARGS} ${GINKGO_EXTRA_ARGS} ${TEST_DIRS}"
+GOGC=50 eval "${GINKGO} ${GINKGO_ARGS} ${SHARD_ARGS} ${GINKGO_EXTRA_ARGS} ${TEST_DIRS}"
 # Capture the test result to exit on error after coverage.
 TEST_RESULT=$?
 
