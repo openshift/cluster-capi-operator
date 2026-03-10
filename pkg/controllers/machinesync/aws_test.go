@@ -185,7 +185,8 @@ var _ = Describe("AWS load balancer validation during MAPI->CAPI conversion", fu
 		)
 	})
 
-	It("rejects control-plane machines missing required control-plane LB", func() {
+	// TODO(OCPCLOUD-2115): Re-enable once control plane machine conversion is enabled.
+	XIt("rejects control-plane machines missing required control-plane LB", func() {
 		loadBalancerSpec := &awsv1.AWSLoadBalancerSpec{
 			Name:             ptr.To("cluster-int"),
 			LoadBalancerType: awsv1.LoadBalancerTypeNLB,
@@ -214,7 +215,8 @@ var _ = Describe("AWS load balancer validation during MAPI->CAPI conversion", fu
 		)
 	})
 
-	It("rejects control-plane machines with wrong LB type", func() {
+	// TODO(OCPCLOUD-2115): Re-enable once control plane machine conversion is enabled.
+	XIt("rejects control-plane machines with wrong LB type", func() {
 		loadBalancerSpec := &awsv1.AWSLoadBalancerSpec{
 			Name:             ptr.To("cluster-int"),
 			LoadBalancerType: awsv1.LoadBalancerTypeNLB,
@@ -257,7 +259,8 @@ var _ = Describe("AWS load balancer validation during MAPI->CAPI conversion", fu
 		)
 	})
 
-	It("accepts control-plane machines with matching LB names and types", func() {
+	// TODO(OCPCLOUD-2115): Re-enable once control plane machine conversion is enabled.
+	XIt("accepts control-plane machines with matching LB names and types", func() {
 		loadBalancerSpec := &awsv1.AWSLoadBalancerSpec{
 			Name:             ptr.To("cluster-int"),
 			LoadBalancerType: awsv1.LoadBalancerTypeNLB,
@@ -300,7 +303,8 @@ var _ = Describe("AWS load balancer validation during MAPI->CAPI conversion", fu
 		Eventually(k8sClient.Get(ctx, client.ObjectKeyFromObject(capiMachine), capiMachine), timeout).Should(Succeed())
 	})
 
-	It("should preserve load balancers when toggling authoritativeAPI MAPI -> CAPI -> MAPI", func() {
+	// TODO(OCPCLOUD-2115): Re-enable once control plane machine conversion is enabled.
+	XIt("should preserve load balancers when toggling authoritativeAPI MAPI -> CAPI -> MAPI", func() {
 		By("Creating AWSCluster with load balancers")
 		loadBalancerSpec := &awsv1.AWSLoadBalancerSpec{
 			Name:             ptr.To("cluster-int"),
