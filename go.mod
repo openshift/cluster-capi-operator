@@ -88,9 +88,9 @@ require (
 	k8s.io/kubernetes v1.35.1
 	k8s.io/utils v0.0.0-20251002143259-bc988d571ff4
 	sigs.k8s.io/cluster-api v1.12.3
-	sigs.k8s.io/cluster-api-provider-aws/v2 v2.10.2
-	sigs.k8s.io/cluster-api-provider-azure v1.22.1
-	sigs.k8s.io/cluster-api-provider-gcp v1.11.1
+	sigs.k8s.io/cluster-api-provider-aws/v2 v2.10.1-0.20260311200936-f3440f3ea2f2
+	sigs.k8s.io/cluster-api-provider-azure v1.22.1-0.20260313010140-0c77ca282778
+	sigs.k8s.io/cluster-api-provider-gcp v1.11.0-beta.0.0.20260312083137-58abcdcc039b
 	sigs.k8s.io/cluster-api-provider-ibmcloud v0.13.1
 	sigs.k8s.io/cluster-api-provider-openstack v0.14.1
 	sigs.k8s.io/cluster-api-provider-vsphere v1.15.2
