@@ -158,19 +158,21 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 	BeforeEach(func() {
 		var err error
 
+		k = komega.New(k8sClient)
+
 		By("Setting up a namespaces for the test")
 
 		syncControllerNamespace = corev1resourcebuilder.Namespace().
 			WithGenerateName("machineset-sync-controller-").Build()
-		Expect(k8sClient.Create(ctx, syncControllerNamespace)).To(Succeed(), "sync controller namespace should be able to be created")
+		Eventually(kCreate(ctx, syncControllerNamespace)).Should(Succeed(), "sync controller namespace should be able to be created")
 
 		mapiNamespace = corev1resourcebuilder.Namespace().
 			WithGenerateName("openshift-machine-api-").Build()
-		Expect(k8sClient.Create(ctx, mapiNamespace)).To(Succeed(), "mapi namespace should be able to be created")
+		Eventually(kCreate(ctx, mapiNamespace)).Should(Succeed(), "mapi namespace should be able to be created")
 
 		capiNamespace = corev1resourcebuilder.Namespace().
 			WithGenerateName("openshift-cluster-api-").Build()
-		Expect(k8sClient.Create(ctx, capiNamespace)).To(Succeed(), "capi namespace should be able to be created")
+		Eventually(kCreate(ctx, capiNamespace)).Should(Succeed(), "capi namespace should be able to be created")
 
 		mapiMachineSetBuilder = machinev1resourcebuilder.MachineSet().
 			WithNamespace(mapiNamespace.GetName()).
@@ -181,13 +183,13 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 		capaClusterBuilder = capav1builder.AWSCluster().
 			WithNamespace(capiNamespace.GetName()).
 			WithName(infrastructureName)
-		Expect(k8sClient.Create(ctx, capaClusterBuilder.Build())).To(Succeed(), "capa cluster should be able to be created")
+		Eventually(kCreate(ctx, capaClusterBuilder.Build())).Should(Succeed(), "capa cluster should be able to be created")
 
 		capiClusterBuilder = capiv1resourcebuilder.Cluster().WithNamespace(capiNamespace.GetName()).WithName(infrastructureName)
-		Expect(k8sClient.Create(ctx, capiClusterBuilder.Build())).To(Succeed(), "capi cluster should be able to be created")
+		Eventually(kCreate(ctx, capiClusterBuilder.Build())).Should(Succeed(), "capi cluster should be able to be created")
 
-		capiCluster = &clusterv1.Cluster{}
-		Expect(k8sClient.Get(ctx, client.ObjectKey{Name: infrastructureName, Namespace: capiNamespace.GetName()}, capiCluster)).To(Succeed())
+		capiCluster = capiv1resourcebuilder.Cluster().WithName(infrastructureName).WithNamespace(capiNamespace.GetName()).Build()
+		Eventually(k.Get(capiCluster)).Should(Succeed())
 		capiClusterOwnerReference = []metav1.OwnerReference{{
 			APIVersion:         clusterv1.GroupVersion.String(),
 			Kind:               clusterv1.ClusterKind,
@@ -248,8 +250,6 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 		Expect(reconciler.SetupWithManager(mgr)).To(Succeed(),
 			"Reconciler should be able to setup with manager")
 
-		k = komega.New(k8sClient)
-
 		By("Starting the manager")
 
 		mgrCancel, mgrDone = startManager(&mgr)
@@ -296,7 +296,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 			By("Creating the MAPI machine set")
 
 			mapiMachineSet = mapiMachineSetBuilder.Build()
-			Expect(k8sClient.Create(ctx, mapiMachineSet)).Should(Succeed())
+			Eventually(kCreate(ctx, mapiMachineSet)).Should(Succeed())
 
 			By("Setting the MAPI machine set AuthoritativeAPI to MachineAPI")
 			Eventually(k.UpdateStatus(mapiMachineSet, func() {
@@ -360,7 +360,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 				BeforeEach(func() {
 					By("Creating the CAPI infra machine template")
 					// Create an unlabelled CAPI infra machine template before creating the MAPI machine set
-					Expect(k8sClient.Create(ctx, capaMachineTemplate)).To(Succeed(), "capa machine template should be able to be created")
+					Eventually(kCreate(ctx, capaMachineTemplate)).Should(Succeed(), "capa machine template should be able to be created")
 				})
 
 				It("should not delete the old CAPI infra machine template without MAPI machine set label", func() {
@@ -370,13 +370,13 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 					)
 
 					By("Checking the CAPI infra machine template is not deleted")
-					Expect(k.Get(capaMachineTemplate)()).Should(Succeed())
+					Eventually(k.Get(capaMachineTemplate)).Should(Succeed())
 				})
 			})
 
 			Context("when the MAPI machine set is deleted", func() {
 				JustBeforeEach(func() {
-					Expect(k8sClient.Delete(ctx, mapiMachineSet)).To(Succeed())
+					Eventually(kDelete(ctx, mapiMachineSet)).Should(Succeed())
 				})
 
 				It("should cleanup the CAPI resources", func() {
@@ -400,7 +400,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 			BeforeEach(func() {
 				capiMachineSet = capiMachineSetBuilder.Build()
 				capiMachineSet.SetFinalizers([]string{clusterv1.MachineSetFinalizer})
-				Expect(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
+				Eventually(kCreate(ctx, capiMachineSet)).Should(Succeed())
 			})
 
 			It("should update MachineSet and InfraMachineTemplate with CAPI Cluster OwnerReference", func() {
@@ -509,12 +509,12 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 					By("waiting for CAPA template to be created", eventuallyCAPIMachineSetShouldHaveValidAWSMachineTemplateRefWithMachineSetLabel)
 
 					By("Deleting the MAPI machine set")
-					Expect(k8sClient.Delete(ctx, mapiMachineSet)).To(Succeed())
+					Eventually(kDelete(ctx, mapiMachineSet)).Should(Succeed())
 					Eventually(k.Get(mapiMachineSet)).ShouldNot(Succeed())
 				})
 
 				It("should have deleted all associated CAPI resources", func() {
-					Expect(k.Get(capiMachineSet)()).Should(WithTransform(apierrors.IsNotFound, BeTrue()), "capiMachineSet should not be found")
+					Eventually(k.Get(capiMachineSet)).Should(WithTransform(apierrors.IsNotFound, BeTrue()), "capiMachineSet should not be found")
 
 					templateList := &awsv1.AWSMachineTemplateList{}
 					listOptions := []client.ListOption{
@@ -522,7 +522,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 						client.MatchingLabels(map[string]string{consts.MachineSetOpenshiftLabelKey: mapiMachineSet.Name}),
 					}
 
-					Expect(k8sClient.List(ctx, templateList, listOptions...)).Should(Succeed())
+					Eventually(k.List(templateList, listOptions...)).Should(Succeed())
 					Expect(templateList.Items).Should(BeEmpty(), "all associated AWS machine templates should be deleted")
 				})
 			})
@@ -535,7 +535,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 					Eventually(k.Object(capiMachineSet), timeout).Should(
 						HaveField("ObjectMeta.Finalizers", ContainElement(machinesync.SyncFinalizer)),
 					)
-					Expect(k8sClient.Delete(ctx, capiMachineSet)).To(Succeed())
+					Eventually(kDelete(ctx, capiMachineSet)).Should(Succeed())
 				})
 
 				It("should delete the MAPI machine set", func() {
@@ -550,7 +550,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 			By("Creating the MAPI machine set")
 
 			mapiMachineSet = mapiMachineSetBuilder.Build()
-			Expect(k8sClient.Create(ctx, mapiMachineSet)).Should(Succeed())
+			Eventually(kCreate(ctx, mapiMachineSet)).Should(Succeed())
 
 			By("Setting the MAPI machine set AuthoritativeAPI to ClusterAPI")
 			Eventually(k.UpdateStatus(mapiMachineSet, func() {
@@ -569,12 +569,12 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 			BeforeEach(func() {
 				// We expect to run a sync, so require the template.
 				By("Creating the CAPI infra machine template")
-				Expect(k8sClient.Create(ctx, capaMachineTemplate)).To(Succeed(), "capa machine template should be able to be created")
+				Eventually(kCreate(ctx, capaMachineTemplate)).Should(Succeed(), "capa machine template should be able to be created")
 
 				By("Creating the CAPI machine set with a differing spec")
 
 				capiMachineSet = capiMachineSetBuilder.WithReplicas(int32(4)).Build()
-				Expect(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
+				Eventually(kCreate(ctx, capiMachineSet)).Should(Succeed())
 
 				// We need to set the observed generation to the metadata generation
 				// to ensure the status is updated as that's a prerequisite for the status to be updated by the machinesetsync controller.
@@ -625,14 +625,14 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 			BeforeEach(func() {
 				// We expect a sync, so we require the infra template
 				By("Creating the CAPI infra machine template")
-				Expect(k8sClient.Create(ctx, capaMachineTemplate)).To(Succeed(), "capa machine template should be able to be created")
+				Eventually(kCreate(ctx, capaMachineTemplate)).Should(Succeed(), "capa machine template should be able to be created")
 			})
 			Context("where the field is meant to be copied", func() {
 				BeforeEach(func() {
 					By("Creating the MAPI machine set with differing object meta in relevant field")
 
 					capiMachineSet = capiMachineSetBuilder.WithLabels(map[string]string{"foo": "bar"}).Build()
-					Expect(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
+					Eventually(kCreate(ctx, capiMachineSet)).Should(Succeed())
 
 					// We need to set the observed generation to the metadata generation
 					// to ensure the status is updated as that's a prerequisite for the status to be updated by the machinesetsync controller.
@@ -667,7 +667,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 
 					capiMachineSet = capiMachineSetBuilder.Build()
 					capiMachineSet.Finalizers = []string{"foo", "bar"}
-					Expect(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
+					Eventually(kCreate(ctx, capiMachineSet)).Should(Succeed())
 
 					// We need to set the observed generation to the metadata generation
 					// to ensure the status is updated as that's a prerequisite for the status to be updated by the machinesetsync controller.
@@ -701,12 +701,12 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 			BeforeEach(func() {
 				// We expect a sync, so we require the infra template
 				By("Creating the CAPI infra machine template")
-				Expect(k8sClient.Create(ctx, capaMachineTemplate)).To(Succeed(), "capa machine template should be able to be created")
+				Eventually(kCreate(ctx, capaMachineTemplate)).To(Succeed(), "capa machine template should be able to be created")
 
 				By("Creating the CAPI machine set")
 
 				capiMachineSet = capiMachineSetBuilder.WithReplicas(int32(3)).Build()
-				Expect(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
+				Eventually(kCreate(ctx, capiMachineSet)).Should(Succeed())
 
 				By("Updating the CAPI machine set with a differing status")
 				Eventually(k.UpdateStatus(capiMachineSet, func() {
@@ -754,7 +754,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 					[]metav1.OwnerReference{
 						{APIVersion: "FooAPIVersion", Kind: "FooKind", Name: "FooName", UID: "123"},
 					}).Build()
-				Expect(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
+				Eventually(kCreate(ctx, capiMachineSet)).Should(Succeed())
 
 				// We need to set the observed generation to the metadata generation
 				// to ensure the status is updated as that's a prerequisite for the status to be updated by the machinesetsync controller.
@@ -807,7 +807,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 					WithName("new-machine-template").
 					WithInstanceType("m5.xlarge").
 					Build()
-				Expect(k8sClient.Create(ctx, newCapaMachineTemplate)).Should(Succeed())
+				Eventually(kCreate(ctx, newCapaMachineTemplate)).Should(Succeed())
 
 				By("Updating the CAPI machine set to reference the new template")
 				Eventually(k.Update(capiMachineSet, func() {
@@ -886,11 +886,11 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 			BeforeEach(func() {
 				// We expect deletion logic to intract with the template, so create it here
 				By("Creating the CAPI infra machine template")
-				Expect(k8sClient.Create(ctx, capaMachineTemplate)).To(Succeed(), "capa machine template should be able to be created")
+				Eventually(kCreate(ctx, capaMachineTemplate)).To(Succeed(), "capa machine template should be able to be created")
 
 				capiMachineSet = capiMachineSetBuilder.Build()
 				capiMachineSet.SetFinalizers([]string{clusterv1.MachineSetFinalizer})
-				Expect(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
+				Eventually(kCreate(ctx, capiMachineSet)).Should(Succeed())
 
 				// Expect to see the finalizers, so they're in place before
 				//  we Expect logic that relies on them to work
@@ -902,7 +902,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 					HaveField("ObjectMeta.Finalizers", ContainElement(clusterv1.MachineSetFinalizer)),
 				),
 				)
-				Expect(k8sClient.Delete(ctx, capiMachineSet)).To(Succeed())
+				Eventually(kDelete(ctx, capiMachineSet)).To(Succeed())
 			})
 
 			Context("when the CAPI finalizer is removed", func() {
@@ -934,7 +934,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 					Eventually(k.Get(capiMachineSet), timeout).Should(WithTransform(apierrors.IsNotFound, BeTrue()), "eventually capiMachineSet should not be found")
 
 					// The CAPA machine template should still exist after the MAPI and CAPI machine sets are deleted
-					Expect(k.Object(capaMachineTemplate)()).To(SatisfyAll(
+					Eventually(k.Object(capaMachineTemplate)).To(SatisfyAll(
 						HaveField("ObjectMeta.UID", Equal(uid)),
 						HaveField("ObjectMeta.DeletionTimestamp", BeNil()),
 					))
@@ -977,14 +977,14 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 		Context("when the non-authoritative MAPI machine set has a non-zero deletion timestamp", func() {
 			BeforeEach(func() {
 				capiMachineSet = capiMachineSetBuilder.Build()
-				Expect(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
+				Eventually(kCreate(ctx, capiMachineSet)).Should(Succeed())
 				Eventually(k.Object(mapiMachineSet), timeout).Should(
 					HaveField("ObjectMeta.Finalizers", ContainElement(machinesync.SyncFinalizer)),
 				)
 				Eventually(k.Object(capiMachineSet), timeout).Should(
 					HaveField("ObjectMeta.Finalizers", ContainElement(machinesync.SyncFinalizer)),
 				)
-				Expect(k8sClient.Delete(ctx, mapiMachineSet)).To(Succeed())
+				Eventually(kDelete(ctx, mapiMachineSet)).To(Succeed())
 			})
 
 			It("should remove the machinesync finalizer from the CAPI machine set", func() {
@@ -1013,8 +1013,8 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 			mapiMachineSet = mapiMachineSetBuilder.WithReplicas(6).Build()
 			capiMachineSet = capiMachineSetBuilder.WithReplicas(9).Build()
 
-			Expect(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
-			Expect(k8sClient.Create(ctx, mapiMachineSet)).Should(Succeed())
+			Eventually(kCreate(ctx, capiMachineSet)).Should(Succeed())
+			Eventually(kCreate(ctx, mapiMachineSet)).Should(Succeed())
 
 			By("Setting the AuthoritativeAPI to Migrating")
 			Eventually(k.UpdateStatus(mapiMachineSet, func() {
@@ -1028,6 +1028,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 			mapiResourceVersion := mapiMachineSet.GetResourceVersion()
 			capiResourceVersion := capiMachineSet.GetResourceVersion()
 
+			// XXX: Consistentlys are bad, but these also run consecutively
 			Consistently(k.Object(mapiMachineSet), timeout).Should(
 				HaveField("ResourceVersion", Equal(mapiResourceVersion)),
 			)
@@ -1044,8 +1045,8 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 			mapiMachineSet = mapiMachineSetBuilder.Build()
 			capiMachineSet = capiMachineSetBuilder.Build()
 
-			Expect(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
-			Expect(k8sClient.Create(ctx, mapiMachineSet)).Should(Succeed())
+			Eventually(kCreate(ctx, capiMachineSet)).Should(Succeed())
+			Eventually(kCreate(ctx, mapiMachineSet)).Should(Succeed())
 
 			By("Setting the AuthoritativeAPI to Migrating")
 			Eventually(k.UpdateStatus(mapiMachineSet, func() {
@@ -1067,7 +1068,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 
 			capiMachineSet = capiMachineSetBuilder.Build()
 
-			Expect(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
+			Eventually(kCreate(ctx, capiMachineSet)).Should(Succeed())
 		})
 
 		It("should not make any changes to the CAPI machine set", func() {
@@ -1091,7 +1092,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 
 				mapiMachineSet = mapiMachineSetBuilder.Build()
 
-				Expect(k8sClient.Create(ctx, mapiMachineSet)).Should(Succeed())
+				Eventually(kCreate(ctx, mapiMachineSet)).Should(Succeed())
 
 				By("Setting the AuthoritativeAPI to MachineAPI")
 				Eventually(k.UpdateStatus(mapiMachineSet, func() {
@@ -1179,7 +1180,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 			Context("when the CAPI machine set does exist", func() {
 				BeforeEach(func() {
 					capiMachineSet = capiMachineSetBuilder.Build()
-					Expect(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
+					Eventually(kCreate(ctx, capiMachineSet)).Should(Succeed())
 				})
 
 				It("should create the CAPI infra machine template", eventuallyCAPIMachineSetShouldHaveValidAWSMachineTemplateRefWithMachineSetLabel)
@@ -1203,7 +1204,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 				By("Creating MAPI machine set")
 
 				mapiMachineSet = mapiMachineSetBuilder.Build()
-				Expect(k8sClient.Create(ctx, mapiMachineSet)).Should(Succeed())
+				Eventually(kCreate(ctx, mapiMachineSet)).Should(Succeed())
 
 				By("Setting the AuthoritativeAPI to ClusterAPI")
 				Eventually(k.UpdateStatus(mapiMachineSet, func() {
@@ -1214,7 +1215,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 			Context("when the CAPI machine set does exist", func() {
 				BeforeEach(func() {
 					capiMachineSet = capiMachineSetBuilder.Build()
-					Expect(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
+					Eventually(kCreate(ctx, capiMachineSet)).Should(Succeed())
 				})
 
 				It("should update the synchronized condition on the MAPI machine set to False", func() {
@@ -1233,7 +1234,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 			Context("when the CAPI machine set does not exist", func() {
 				It("should create the CAPI machine set", func() {
 					capiMachineSet = capiv1resourcebuilder.MachineSet().WithName(mapiMachineSet.Name).WithNamespace(capiNamespace.Name).Build()
-					Expect(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
+					Eventually(kCreate(ctx, capiMachineSet)).Should(Succeed())
 				})
 
 				It("should create the CAPI infra machine template", eventuallyCAPIMachineSetShouldHaveValidAWSMachineTemplateRefWithMachineSetLabel)
@@ -1303,7 +1304,7 @@ var _ = Describe("applySynchronizedConditionWithPatch", func() {
 
 		mapiNamespace = corev1resourcebuilder.Namespace().
 			WithGenerateName("openshift-machine-api-").Build()
-		Expect(k8sClient.Create(ctx, mapiNamespace)).To(Succeed(), "mapi namespace should be able to be created")
+		Eventually(kCreate(ctx, mapiNamespace)).Should(Succeed(), "mapi namespace should be able to be created")
 
 		By("Setting up the reconciler")
 
@@ -1319,7 +1320,7 @@ var _ = Describe("applySynchronizedConditionWithPatch", func() {
 
 		mapiMachineSet = mapiMachineSetBuilder.Build()
 		mapiMachineSet.Spec.AuthoritativeAPI = mapiv1beta1.MachineAuthorityMachineAPI
-		Expect(k8sClient.Create(ctx, mapiMachineSet))
+		Eventually(kCreate(ctx, mapiMachineSet)).Should(Succeed())
 
 		By("Set the initial status of the MAPI Machine")
 		Eventually(k.UpdateStatus(mapiMachineSet, func() {
@@ -1330,7 +1331,7 @@ var _ = Describe("applySynchronizedConditionWithPatch", func() {
 		By("Get the MAPI Machine from the API Server")
 
 		mapiMachineSet = mapiMachineSetBuilder.Build()
-		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(mapiMachineSet), mapiMachineSet)).Should(Succeed())
+		Eventually(k.Get(mapiMachineSet)).Should(Succeed())
 
 		// Artificially set the Generation to a made up number
 		// as that can't be written directly to the API Server as it is read-only.
@@ -1423,3 +1424,17 @@ var _ = Describe("applySynchronizedConditionWithPatch", func() {
 		})
 	})
 })
+
+// kCreate is a komega equivalent for create.
+func kCreate(ctx context.Context, obj client.Object) func() error {
+	return func() error {
+		return k8sClient.Create(ctx, obj)
+	}
+}
+
+// kDelete is a komega equivalent for delete.
+func kDelete(ctx context.Context, obj client.Object) func() error {
+	return func() error {
+		return k8sClient.Delete(ctx, obj)
+	}
+}
