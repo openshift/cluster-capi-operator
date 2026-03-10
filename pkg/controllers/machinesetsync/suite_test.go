@@ -44,6 +44,7 @@ import (
 
 const (
 	timeout              = 2 * time.Second
+	longerTimeout        = 10 * time.Second
 	setupTimeout         = 1 * time.Minute
 	consecutiveFailLimit = 8
 )

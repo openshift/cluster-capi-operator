@@ -761,7 +761,12 @@ var _ = Describe("MachineSet VAP Tests", func() {
 					WithNamespace(capiNamespace.Name).
 					Build()
 
-				Eventually(k8sClient.Create(ctx, newCapiMachineSet), timeout).Should(
+				// Give this eventually extra timeout to allow the VAP to catch
+				// up with the cross-object reference.
+				// Use DryRunAll to ensure the object is never actually
+				// persisted. This means we can test again if it initially
+				// succeeds
+				Eventually(func() error { return k8sClient.Create(ctx, newCapiMachineSet, client.DryRunAll) }, longerTimeout).Should(
 					MatchError(ContainSubstring("already exists and is not paused")))
 			})
 
@@ -782,7 +787,8 @@ var _ = Describe("MachineSet VAP Tests", func() {
 					WithNamespace(capiNamespace.Name).
 					Build()
 
-				Eventually(k8sClient.Create(ctx, newCapiMachineSet)).Should(Succeed())
+				// Give this eventually extra timeout to allow the VAP to catch up with the cross-object reference
+				Eventually(func() error { return k8sClient.Create(ctx, newCapiMachineSet) }, longerTimeout).Should(Succeed())
 			})
 		})
 	})

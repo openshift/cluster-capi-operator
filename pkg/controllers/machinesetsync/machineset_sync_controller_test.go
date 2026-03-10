@@ -386,6 +386,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 					), timeout).Should(Not(Succeed()))
 
 					By("Checking the CAPI infra machine template is deleted")
+
 					capaMachineTemplate = capav1builder.AWSMachineTemplate().WithName(capiMachineSet.Spec.Template.Spec.InfrastructureRef.Name).WithNamespace(capiNamespace.Name).Build()
 					Eventually(k.Get(capaMachineTemplate)).ShouldNot(Succeed())
 
