@@ -30,7 +30,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/clock"
-	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/yaml"
@@ -199,7 +198,7 @@ func (r *reconcileState) ensureObjectValidationWebhook(ctx context.Context, obj 
 		return nil
 	}
 
-	webhookConfig := validatingWebhookConfigurationFor(obj, r.compatibilityCRD)
+	webhookConfig := objectvalidation.ValidatingWebhookConfigurationFor(obj, r.compatibilityCRD)
 
 	if _, _, err := resourceapply.ApplyValidatingWebhookConfigurationImproved(
 		ctx,
@@ -291,70 +290,4 @@ func isObjectValidationWebhookEnabled(obj *apiextensionsv1alpha1.CompatibilityRe
 
 func labelSelectorIsEmpty(ls metav1.LabelSelector) bool {
 	return len(ls.MatchLabels) == 0 && len(ls.MatchExpressions) == 0
-}
-
-//nolint:funlen,dupl // This and the mutatingWebhookConfigurationFor function look very similar, but are populating different objects.
-func validatingWebhookConfigurationFor(obj *apiextensionsv1alpha1.CompatibilityRequirement, crd *apiextensionsv1.CustomResourceDefinition) *admissionregistrationv1.ValidatingWebhookConfiguration {
-	vwc := &admissionregistrationv1.ValidatingWebhookConfiguration{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "ValidatingWebhookConfiguration",
-			APIVersion: "admissionregistration.k8s.io/v1",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name: obj.Name,
-			Annotations: map[string]string{
-				"service.beta.openshift.io/inject-cabundle": "true",
-			},
-		},
-		Webhooks: []admissionregistrationv1.ValidatingWebhook{
-			{
-				AdmissionReviewVersions: []string{"v1"},
-				ClientConfig: admissionregistrationv1.WebhookClientConfig{
-					Service: &admissionregistrationv1.ServiceReference{
-						Name:      "compatibility-requirements-controllers-webhook-service",
-						Namespace: "openshift-compatibility-requirements-operator",
-						Path:      ptr.To(fmt.Sprintf("%s%s", objectvalidation.WebhookPrefix, obj.Name)),
-					},
-				},
-				SideEffects:   ptr.To(admissionregistrationv1.SideEffectClassNone),
-				FailurePolicy: ptr.To(admissionregistrationv1.Fail),
-				MatchPolicy:   ptr.To(admissionregistrationv1.Exact),
-				Name:          "compatibilityrequirement.operator.openshift.io",
-				Rules: []admissionregistrationv1.RuleWithOperations{
-					{
-						Rule: admissionregistrationv1.Rule{
-							APIGroups:   []string{crd.Spec.Group},
-							APIVersions: util.SliceMap(crd.Spec.Versions, func(version apiextensionsv1.CustomResourceDefinitionVersion) string { return version.Name }),
-							Resources:   []string{crd.Spec.Names.Plural},
-							Scope:       ptr.To(admissionregistrationv1.ScopeType(crd.Spec.Scope)),
-						},
-						Operations: []admissionregistrationv1.OperationType{"CREATE", "UPDATE"},
-					},
-				},
-				MatchConditions:   obj.Spec.ObjectSchemaValidation.MatchConditions,
-				NamespaceSelector: &obj.Spec.ObjectSchemaValidation.NamespaceSelector,
-				ObjectSelector:    &obj.Spec.ObjectSchemaValidation.ObjectSelector,
-			},
-		},
-	}
-
-	var hasStatus, hasScale bool
-
-	for _, version := range crd.Spec.Versions {
-		if version.Subresources != nil {
-			if version.Subresources.Status != nil && !hasStatus {
-				hasStatus = true
-
-				vwc.Webhooks[0].Rules[0].Rule.Resources = append(vwc.Webhooks[0].Rules[0].Rule.Resources, crd.Spec.Names.Plural+"/status")
-			}
-
-			if version.Subresources.Scale != nil && !hasScale {
-				hasScale = true
-
-				vwc.Webhooks[0].Rules[0].Rule.Resources = append(vwc.Webhooks[0].Rules[0].Rule.Resources, crd.Spec.Names.Plural+"/scale")
-			}
-		}
-	}
-
-	return vwc
 }

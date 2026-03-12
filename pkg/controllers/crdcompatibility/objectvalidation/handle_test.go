@@ -31,50 +31,25 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/test"
 	admissionv1 "k8s.io/api/admissionregistration/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/utils/ptr"
 )
 
 // createValidatingWebhookConfig creates a ValidatingWebhookConfiguration for end-to-end testing.
-func createValidatingWebhookConfig(crd *apiextensionsv1.CustomResourceDefinition, compatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement) *admissionv1.ValidatingWebhookConfiguration {
-	webhookPath := fmt.Sprintf("%s%s", WebhookPrefix, compatibilityRequirement.Name)
-
-	// Get webhook server configuration from test environment
+func createValidatingWebhookConfig(compatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement, crd *apiextensionsv1.CustomResourceDefinition) *admissionv1.ValidatingWebhookConfiguration {
+	webhookPath := fmt.Sprintf("%s%s", webhookPrefix, compatibilityRequirement.Name)
 	hostPort := fmt.Sprintf("%s:%d", testEnv.WebhookInstallOptions.LocalServingHost, testEnv.WebhookInstallOptions.LocalServingPort)
 	webhookURL := fmt.Sprintf("https://%s%s", hostPort, webhookPath)
 
-	return &admissionv1.ValidatingWebhookConfiguration{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf("test-object-validation-%s", compatibilityRequirement.Name),
-		},
-		Webhooks: []admissionv1.ValidatingWebhook{
-			{
-				Name: fmt.Sprintf("object-validation.%s.test", compatibilityRequirement.Name),
-				ClientConfig: admissionv1.WebhookClientConfig{
-					URL:      ptr.To(webhookURL),
-					CABundle: testEnv.WebhookInstallOptions.LocalServingCAData,
-				},
-				Rules: []admissionv1.RuleWithOperations{
-					{
-						Operations: []admissionv1.OperationType{
-							admissionv1.Create,
-							admissionv1.Update,
-						},
-						Rule: admissionv1.Rule{
-							APIGroups:   []string{crd.Spec.Group},
-							APIVersions: []string{crd.Spec.Versions[0].Name},
-							Resources:   []string{crd.Spec.Names.Plural, crd.Spec.Names.Plural + "/status", crd.Spec.Names.Plural + "/scale"},
-						},
-					},
-				},
-				AdmissionReviewVersions: []string{"v1", "v1beta1"},
-				SideEffects:             ptr.To(admissionv1.SideEffectClassNone),
-				FailurePolicy:           ptr.To(admissionv1.Fail),
-			},
-		},
+	validatingWebhookConfig := ValidatingWebhookConfigurationFor(compatibilityRequirement, crd)
+
+	validatingWebhookConfig.Webhooks[0].ClientConfig = admissionv1.WebhookClientConfig{
+		URL:      ptr.To(webhookURL),
+		CABundle: testEnv.WebhookInstallOptions.LocalServingCAData,
 	}
+
+	return validatingWebhookConfig
 }
 
 var _ = Describe("End-to-End Admission Webhook Integration", Ordered, ContinueOnFailure, func() {
@@ -169,7 +144,7 @@ var _ = Describe("End-to-End Admission Webhook Integration", Ordered, ContinueOn
 				Expect(cl.Create(ctx, compatibilityRequirement)).To(Succeed())
 
 				// Create ValidatingWebhookConfiguration to enable end-to-end testing
-				webhookConfig := createValidatingWebhookConfig(baseCRD, compatibilityRequirement)
+				webhookConfig := createValidatingWebhookConfig(compatibilityRequirement, baseCRD)
 				Expect(cl.Create(ctx, webhookConfig)).To(Succeed())
 
 				DeferCleanup(func(ctx context.Context) {
@@ -245,7 +220,7 @@ var _ = Describe("End-to-End Admission Webhook Integration", Ordered, ContinueOn
 				Expect(cl.Create(ctx, tighterCompatibilityRequirement)).To(Succeed())
 
 				// Create ValidatingWebhookConfiguration to enable end-to-end testing
-				webhookConfig := createValidatingWebhookConfig(tighterCRD, tighterCompatibilityRequirement)
+				webhookConfig := createValidatingWebhookConfig(tighterCompatibilityRequirement, tighterCRD)
 				Expect(cl.Create(ctx, webhookConfig)).To(Succeed())
 
 				DeferCleanup(func(ctx context.Context) {
@@ -319,7 +294,7 @@ var _ = Describe("End-to-End Admission Webhook Integration", Ordered, ContinueOn
 				Expect(cl.Create(ctx, looserCompatibilityRequirement)).To(Succeed())
 
 				// Create ValidatingWebhookConfiguration to enable end-to-end testing
-				webhookConfig := createValidatingWebhookConfig(looserCRD, looserCompatibilityRequirement)
+				webhookConfig := createValidatingWebhookConfig(looserCompatibilityRequirement, looserCRD)
 				Expect(cl.Create(ctx, webhookConfig)).To(Succeed())
 
 				DeferCleanup(func(ctx context.Context) {
@@ -444,7 +419,7 @@ var _ = Describe("End-to-End Admission Webhook Integration", Ordered, ContinueOn
 				Expect(cl.Create(ctx, tighterCompatibilityRequirement)).To(Succeed())
 
 				// Create separate webhook config for tighter validation
-				tighterWebhookConfig = createValidatingWebhookConfig(baseCRD, tighterCompatibilityRequirement)
+				tighterWebhookConfig = createValidatingWebhookConfig(tighterCompatibilityRequirement, baseCRD)
 				tighterWebhookConfig.ObjectMeta.Name = fmt.Sprintf("test-tighter-validation-%s", tighterCompatibilityRequirement.Name)
 				Expect(cl.Create(ctx, tighterWebhookConfig)).To(Succeed())
 
@@ -528,7 +503,7 @@ var _ = Describe("End-to-End Admission Webhook Integration", Ordered, ContinueOn
 				Expect(cl.Create(ctx, statusCompatibilityRequirement)).To(Succeed())
 
 				// Create ValidatingWebhookConfiguration for the compatibility requirement
-				statusWebhookConfig := createValidatingWebhookConfig(baseCRD, statusCompatibilityRequirement)
+				statusWebhookConfig := createValidatingWebhookConfig(statusCompatibilityRequirement, baseCRD)
 				statusWebhookConfig.ObjectMeta.Name = fmt.Sprintf("test-status-validation-%s", statusCompatibilityRequirement.Name)
 				Expect(cl.Create(ctx, statusWebhookConfig)).To(Succeed())
 
@@ -714,7 +689,7 @@ var _ = Describe("End-to-End Admission Webhook Integration", Ordered, ContinueOn
 				Expect(cl.Create(ctx, scaleCompatibilityRequirement)).To(Succeed())
 
 				// Create ValidatingWebhookConfiguration for the compatibility requirement
-				scaleWebhookConfig := createValidatingWebhookConfig(baseCRD, scaleCompatibilityRequirement)
+				scaleWebhookConfig := createValidatingWebhookConfig(scaleCompatibilityRequirement, baseCRD)
 				scaleWebhookConfig.ObjectMeta.Name = fmt.Sprintf("test-scale-validation-%s", scaleCompatibilityRequirement.Name)
 				Expect(cl.Create(ctx, scaleWebhookConfig)).To(Succeed())
 
@@ -864,7 +839,7 @@ func TestCompatibilityRequirementContext(t *testing.T) {
 	ctx := t.Context()
 
 	g := NewWithT(t)
-	testPath := fmt.Sprintf("%s%s", WebhookPrefix, "test-requirement")
+	testPath := fmt.Sprintf("%s%s", webhookPrefix, "test-requirement")
 	req := &http.Request{}
 	req.URL = &url.URL{Path: testPath}
 

@@ -18,7 +18,6 @@ package crdcompatibility
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -31,7 +30,6 @@ import (
 
 	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility/crdvalidation"
-	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility/objectvalidation"
 	"github.com/openshift/cluster-capi-operator/pkg/test"
 )
 
@@ -293,27 +291,14 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 				},
 			}
 
+			// We leverage a function in the objectvalidation package to create the validating webhook configuration.
+			// Smoke test here that the right name and service details are used, the full spec is tested with the objectvalidation package.
 			Eventually(kWithCtx(ctx).Object(validatingWebhookConfig)).Should(SatisfyAll(
 				HaveField("ObjectMeta.Name", BeEquivalentTo(requirement.Name)),
-				HaveField("ObjectMeta.Annotations", HaveKey("service.beta.openshift.io/inject-cabundle")),
 				HaveField("Webhooks", ConsistOf(SatisfyAll(
 					HaveField("Name", BeEquivalentTo("compatibilityrequirement.operator.openshift.io")),
 					HaveField("ClientConfig.Service.Name", BeEquivalentTo("compatibility-requirements-controllers-webhook-service")),
 					HaveField("ClientConfig.Service.Namespace", BeEquivalentTo("openshift-compatibility-requirements-operator")),
-					HaveField("ClientConfig.Service.Path", HaveValue(BeEquivalentTo(fmt.Sprintf("%s%s", objectvalidation.WebhookPrefix, requirement.Name)))),
-					HaveField("SideEffects", HaveValue(BeEquivalentTo(admissionregistrationv1.SideEffectClassNone))),
-					HaveField("FailurePolicy", HaveValue(BeEquivalentTo(admissionregistrationv1.Fail))),
-					HaveField("MatchPolicy", HaveValue(BeEquivalentTo(admissionregistrationv1.Exact))),
-					HaveField("Rules", ConsistOf(SatisfyAll(
-						HaveField("APIGroups", BeEquivalentTo([]string{testCRDClean.Spec.Group})),
-						HaveField("APIVersions", BeEquivalentTo([]string{testCRDClean.Spec.Versions[0].Name})),
-						HaveField("Resources", BeEquivalentTo([]string{testCRDClean.Spec.Names.Plural, testCRDClean.Spec.Names.Plural + "/status"})),
-						HaveField("Scope", HaveValue(BeEquivalentTo(admissionregistrationv1.ScopeType(testCRDClean.Spec.Scope)))),
-						HaveField("Operations", ConsistOf(
-							BeEquivalentTo("CREATE"),
-							BeEquivalentTo("UPDATE"),
-						)),
-					))),
 				))),
 			))
 		})
