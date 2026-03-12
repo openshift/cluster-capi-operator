@@ -9,13 +9,287 @@ metadata:
     release.openshift.io/feature-gate: "ClusterAPIMachineManagement"
   name: openshift-capi-controllers
 rules:
+# Authentication and authorization (webhook framework requirements)
 - apiGroups:
-  - '*'
+  - authentication.k8s.io
   resources:
-  - '*'
+  - tokenreviews
   verbs:
-  - '*'
+  - create
+- apiGroups:
+  - authorization.k8s.io
+  resources:
+  - subjectaccessreviews
+  verbs:
+  - create
+
+# Core resources (cluster-wide read-only, write access via namespace-scoped Roles)
+- apiGroups:
+  - ""
+  resources:
+  - namespaces
+  verbs:
+  - get
+  - list
+  - watch
+
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  - configmaps
+  - services
+  - serviceaccounts
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+
+# CAPI core resources (no delete on clusters - prevents cluster self-destruction)
+- apiGroups:
+  - cluster.x-k8s.io
+  resources:
+  - clusters
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+- apiGroups:
+  - cluster.x-k8s.io
+  resources:
+  - machines
+  - machinesets
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - cluster.x-k8s.io
+  resources:
+  - clusters/status
+  - machines/status
+  - machinesets/status
+  verbs:
+  - get
+  - update
+  - patch
+
+# CAPI infrastructure providers (no delete on clusters - prevents cluster self-destruction)
+- apiGroups:
+  - infrastructure.cluster.x-k8s.io
+  resources:
+  - awsclusters
+  - azureclusters
+  - gcpclusters
+  - vsphereclusters
+  - metal3clusters
+  - ibmpowervsclusters
+  - openstackclusters
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+- apiGroups:
+  - infrastructure.cluster.x-k8s.io
+  resources:
+  - awsmachines
+  - awsmachinetemplates
+  - azuremachines
+  - azuremachinetemplates
+  - gcpmachines
+  - gcpmachinetemplates
+  - vspheremachines
+  - vspheremachinetemplates
+  - metal3machines
+  - metal3machinetemplates
+  - ibmpowervsmachines
+  - ibmpowervsmachinetemplates
+  - openstackmachines
+  - openstackmachinetemplates
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - infrastructure.cluster.x-k8s.io
+  resources:
+  - awsclusters/status
+  - awsmachines/status
+  - azureclusters/status
+  - azuremachines/status
+  - gcpclusters/status
+  - gcpmachines/status
+  - vsphereclusters/status
+  - vspheremachines/status
+  - metal3clusters/status
+  - metal3machines/status
+  - ibmpowervsclusters/status
+  - ibmpowervsmachines/status
+  - openstackclusters/status
+  - openstackmachines/status
+  verbs:
+  - get
+  - update
+  - patch
+
+# OpenShift Machine API (MAPI ↔ CAPI bidirectional sync)
+- apiGroups:
+  - machine.openshift.io
+  resources:
+  - machines
+  - machinesets
+  - controlplanemachinesets
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - machine.openshift.io
+  resources:
+  - machines/status
+  - machinesets/status
+  - controlplanemachinesets/status
+  verbs:
+  - get
+  - update
+  - patch
+
+# OpenShift cluster configuration
+- apiGroups:
+  - config.openshift.io
+  resources:
+  - infrastructures
+  - clusterversions
+  - featuregates
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - config.openshift.io
+  resources:
+  - clusteroperators
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+- apiGroups:
+  - config.openshift.io
+  resources:
+  - clusteroperators/status
+  verbs:
+  - get
+  - update
+  - patch
+
+# CRDs and Webhooks (dynamic provider installation at runtime)
+# SECURITY NOTE: These permissions grant create/update/delete on all CRDs and webhook
+# configurations cluster-wide without resourceNames restrictions. This is required by
+# the dynamic CAPI provider architecture where the operator installs multiple providers
+# (core, AWS, Azure, GCP, vSphere, Metal3, etc.) at runtime, each defining its own CRDs
+# and webhooks. The set of resource names cannot be known or restricted upfront.
+# Only trusted provider manifests should be deployed.
+- apiGroups:
+  - apiextensions.k8s.io
+  resources:
+  - customresourcedefinitions
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - delete
+
+- apiGroups:
+  - admissionregistration.k8s.io
+  resources:
+  - validatingwebhookconfigurations
+  - mutatingwebhookconfigurations
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - delete
+
+# Apps resources (cluster-wide read-only)
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  - replicasets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - apps
+  resources:
+  - deployments/status
+  verbs:
+  - get
+
+# MachineConfiguration (for baremetal and rendered ignition configs)
+- apiGroups:
+  - machineconfiguration.openshift.io
+  resources:
+  - machineconfigs
+  - machineconfigpools
+  verbs:
+  - get
+  - list
+  - watch
+
+# Metal3 (baremetal infrastructure - read-only)
+- apiGroups:
+  - metal3.io
+  resources:
+  - baremetalhosts
+  verbs:
+  - get
+  - list
+  - watch
+  - update
+  - patch
+- apiGroups:
+  - metal3.io
+  resources:
+  - baremetalhosts/status
+  - baremetalhosts/finalizers
+  verbs:
+  - update
+
 ---
+# Namespace-scoped Role for openshift-cluster-api namespace
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -27,13 +301,77 @@ metadata:
   name: capi-controllers
   namespace: openshift-cluster-api
 rules:
+# Core resources (full access in openshift-cluster-api namespace)
 - apiGroups:
-  - '*'
+  - ""
   resources:
-  - '*'
+  - secrets
+  - configmaps
+  - services
+  - serviceaccounts
+  - events
   verbs:
-  - '*'
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+
+# Leader election
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+
+# Provider deployments (namespace-scoped)
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - apps
+  resources:
+  - replicasets
+  verbs:
+  - get
+  - list
+  - watch
+
+# Provider RBAC (namespace-scoped, prevents privilege escalation)
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - roles
+  - rolebindings
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+
 ---
+# Role for accessing pull-secret in openshift-config namespace
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -53,3 +391,59 @@ rules:
   - pull-secret
   verbs:
   - get
+
+---
+# ClusterRole that aggregates to cluster-reader (read-only access to CAPI resources)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cluster-capi-operator:cluster-reader
+  labels:
+    rbac.authorization.k8s.io/aggregate-to-cluster-reader: "true"
+  annotations:
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/feature-gate: "ClusterAPIMachineManagement"
+rules:
+# CAPI core resources
+- apiGroups:
+  - cluster.x-k8s.io
+  resources:
+  - clusters
+  - machines
+  - machinesets
+  verbs:
+  - get
+  - list
+  - watch
+
+# CAPI infrastructure providers
+- apiGroups:
+  - infrastructure.cluster.x-k8s.io
+  resources:
+  - awsclusters
+  - awsmachines
+  - awsmachinetemplates
+  - azureclusters
+  - azuremachines
+  - azuremachinetemplates
+  - gcpclusters
+  - gcpmachines
+  - gcpmachinetemplates
+  - vsphereclusters
+  - vspheremachines
+  - vspheremachinetemplates
+  - metal3clusters
+  - metal3machines
+  - metal3machinetemplates
+  - ibmpowervsclusters
+  - ibmpowervsmachines
+  - ibmpowervsmachinetemplates
+  - openstackclusters
+  - openstackmachines
+  - openstackmachinetemplates
+  verbs:
+  - get
+  - list
+  - watch
