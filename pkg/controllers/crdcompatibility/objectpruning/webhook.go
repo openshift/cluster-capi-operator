@@ -21,15 +21,19 @@ import (
 	"sync"
 
 	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
+	"github.com/openshift/cluster-capi-operator/pkg/util"
+	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	apiextensionshelpers "k8s.io/apiextensions-apiserver/pkg/apihelpers"
 	apiextensionsinternal "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	structuralschema "k8s.io/apiextensions-apiserver/pkg/apiserver/schema"
 	"k8s.io/apiextensions-apiserver/pkg/apiserver/schema/pruning"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -42,10 +46,10 @@ var (
 )
 
 const (
-	// WebhookPrefix is the static path prefix of our object admission endpoint.
+	// webhookPrefix is the static path prefix of our object admission endpoint.
 	// Requests will be sent to a sub-path with the next component of the path
 	// as a compatibility requirement name.
-	WebhookPrefix = "/compatibility-requirement-object-mutation/"
+	webhookPrefix = "/compatibility-requirement-object-mutation/"
 )
 
 type structuralSchemaCacheKey struct {
@@ -97,7 +101,7 @@ func (v *validator) SetupWithManager(ctx context.Context, mgr ctrl.Manager, opts
 	// Register a webhook on a path with a dynamic component for the compatibility requirement name.
 	// we will extract this component into the context so that the handler can identify which compatibility
 	// requirement the request was intended to validate against.
-	mgr.GetWebhookServer().Register(WebhookPrefix+"{CompatibilityRequirement}", &admission.Webhook{
+	mgr.GetWebhookServer().Register(webhookPrefix+"{CompatibilityRequirement}", &admission.Webhook{
 		Handler:         v,
 		WithContextFunc: compatibilityRequrementIntoContext,
 	})
@@ -215,4 +219,72 @@ func (v *validator) getCompatibilityRequirementStructuralSchema(compatibilityReq
 	}
 
 	return structuralSchema, nil
+}
+
+// MutatingWebhookConfigurationFor returns a MutatingWebhookConfiguration for a CompatibilityRequirement and the CRD to which it is associated.
+//
+//nolint:funlen
+func MutatingWebhookConfigurationFor(obj *apiextensionsv1alpha1.CompatibilityRequirement, crd *apiextensionsv1.CustomResourceDefinition) *admissionregistrationv1.MutatingWebhookConfiguration {
+	vwc := &admissionregistrationv1.MutatingWebhookConfiguration{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "MutatingWebhookConfiguration",
+			APIVersion: "admissionregistration.k8s.io/v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: obj.Name,
+			Annotations: map[string]string{
+				"service.beta.openshift.io/inject-cabundle": "true",
+			},
+		},
+		Webhooks: []admissionregistrationv1.MutatingWebhook{
+			{
+				AdmissionReviewVersions: []string{"v1"},
+				ClientConfig: admissionregistrationv1.WebhookClientConfig{
+					Service: &admissionregistrationv1.ServiceReference{
+						Name:      "compatibility-requirements-controllers-webhook-service",
+						Namespace: "openshift-compatibility-requirements-operator",
+						Path:      ptr.To(fmt.Sprintf("%s%s", webhookPrefix, obj.Name)),
+					},
+				},
+				SideEffects:   ptr.To(admissionregistrationv1.SideEffectClassNone),
+				FailurePolicy: ptr.To(admissionregistrationv1.Fail),
+				MatchPolicy:   ptr.To(admissionregistrationv1.Exact),
+				Name:          "compatibilityrequirement.operator.openshift.io",
+				Rules: []admissionregistrationv1.RuleWithOperations{
+					{
+						Rule: admissionregistrationv1.Rule{
+							APIGroups:   []string{crd.Spec.Group},
+							APIVersions: util.SliceMap(crd.Spec.Versions, func(version apiextensionsv1.CustomResourceDefinitionVersion) string { return version.Name }),
+							Resources:   []string{crd.Spec.Names.Plural},
+							Scope:       ptr.To(admissionregistrationv1.ScopeType(crd.Spec.Scope)),
+						},
+						Operations: []admissionregistrationv1.OperationType{"CREATE", "UPDATE"},
+					},
+				},
+				MatchConditions:   obj.Spec.ObjectSchemaValidation.MatchConditions,
+				NamespaceSelector: &obj.Spec.ObjectSchemaValidation.NamespaceSelector,
+				ObjectSelector:    &obj.Spec.ObjectSchemaValidation.ObjectSelector,
+			},
+		},
+	}
+
+	var hasStatus, hasScale bool
+
+	for _, version := range crd.Spec.Versions {
+		if version.Subresources != nil {
+			if version.Subresources.Status != nil && !hasStatus {
+				hasStatus = true
+
+				vwc.Webhooks[0].Rules[0].Rule.Resources = append(vwc.Webhooks[0].Rules[0].Rule.Resources, crd.Spec.Names.Plural+"/status")
+			}
+
+			if version.Subresources.Scale != nil && !hasScale {
+				hasScale = true
+
+				vwc.Webhooks[0].Rules[0].Rule.Resources = append(vwc.Webhooks[0].Rules[0].Rule.Resources, crd.Spec.Names.Plural+"/scale")
+			}
+		}
+	}
+
+	return vwc
 }

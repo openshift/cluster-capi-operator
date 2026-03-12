@@ -87,7 +87,7 @@ var _ = Describe("Object Pruning Integration", func() {
 				Expect(cl.Create(ctx, scenario.CompatibilityRequirement)).To(Succeed())
 
 				By("Creating MutatingWebhookConfiguration")
-				webhookConfig := createMutatingWebhookConfig(liveCRD, scenario.CompatibilityRequirement)
+				webhookConfig := createMutatingWebhookConfig(scenario.CompatibilityRequirement, liveCRD)
 				Expect(cl.Create(ctx, webhookConfig)).To(Succeed())
 
 				By("Creating object through API server (should be pruned by webhook)")
@@ -292,9 +292,9 @@ var _ = Describe("Object Pruning Integration", func() {
 
 		It("should handle webhook when CompatibilityRequirement does not exist", func(ctx context.Context) {
 			By("Creating MutatingWebhookConfiguration with non-existent CompatibilityRequirement")
-			webhookConfig := createMutatingWebhookConfig(liveCRD, &apiextensionsv1alpha1.CompatibilityRequirement{
+			webhookConfig := createMutatingWebhookConfig(&apiextensionsv1alpha1.CompatibilityRequirement{
 				ObjectMeta: metav1.ObjectMeta{Name: "non-existent-compat-req"},
-			})
+			}, liveCRD)
 			Expect(cl.Create(ctx, webhookConfig)).To(Succeed())
 
 			DeferCleanup(func(ctx context.Context) {
@@ -324,49 +324,18 @@ var _ = Describe("Object Pruning Integration", func() {
 })
 
 // createMutatingWebhookConfig creates a MutatingWebhookConfiguration for testing.
-func createMutatingWebhookConfig(crd *apiextensionsv1.CustomResourceDefinition, compatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement) *admissionregistrationv1.MutatingWebhookConfiguration {
-	webhookPath := fmt.Sprintf("%s%s", WebhookPrefix, compatibilityRequirement.Name)
+func createMutatingWebhookConfig(compatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement, crd *apiextensionsv1.CustomResourceDefinition) *admissionregistrationv1.MutatingWebhookConfiguration {
+	webhookPath := fmt.Sprintf("%s%s", webhookPrefix, compatibilityRequirement.Name)
 	hostPort := fmt.Sprintf("%s:%d", testEnv.WebhookInstallOptions.LocalServingHost, testEnv.WebhookInstallOptions.LocalServingPort)
 	webhookURL := fmt.Sprintf("https://%s%s", hostPort, webhookPath)
 
-	return &admissionregistrationv1.MutatingWebhookConfiguration{
-		ObjectMeta: metav1.ObjectMeta{
-			GenerateName: "test-object-pruning-",
-			Labels: map[string]string{
-				"test-webhook": "true",
-			},
-		},
-		Webhooks: []admissionregistrationv1.MutatingWebhook{
-			{
-				Name: fmt.Sprintf("object-pruning.test.%s", crd.Spec.Group),
-				ClientConfig: admissionregistrationv1.WebhookClientConfig{
-					URL:      &webhookURL,
-					CABundle: testEnv.WebhookInstallOptions.LocalServingCAData,
-				},
-				Rules: []admissionregistrationv1.RuleWithOperations{
-					{
-						Operations: []admissionregistrationv1.OperationType{
-							admissionregistrationv1.Create,
-							admissionregistrationv1.Update,
-						},
-						Rule: admissionregistrationv1.Rule{
-							APIGroups:   []string{crd.Spec.Group},
-							APIVersions: []string{crd.Spec.Versions[0].Name},
-							Resources:   []string{crd.Spec.Names.Plural, crd.Spec.Names.Plural + "/status"},
-						},
-					},
-				},
-				FailurePolicy:           ptr.To(admissionregistrationv1.Fail),
-				SideEffects:             ptr.To(admissionregistrationv1.SideEffectClassNone),
-				AdmissionReviewVersions: []string{"v1", "v1beta1"},
-				TimeoutSeconds:          ptr.To(int32(10)),
-				ReinvocationPolicy:      ptr.To(admissionregistrationv1.NeverReinvocationPolicy),
-				MatchPolicy:             ptr.To(admissionregistrationv1.Equivalent),
-				ObjectSelector:          &metav1.LabelSelector{},
-				NamespaceSelector:       &metav1.LabelSelector{},
-			},
-		},
+	mutatingWebhookConfig := MutatingWebhookConfigurationFor(compatibilityRequirement, crd)
+	mutatingWebhookConfig.Webhooks[0].ClientConfig = admissionregistrationv1.WebhookClientConfig{
+		URL:      &webhookURL,
+		CABundle: testEnv.WebhookInstallOptions.LocalServingCAData,
 	}
+
+	return mutatingWebhookConfig
 }
 
 // Helper functions to create different CRD schemas for testing
