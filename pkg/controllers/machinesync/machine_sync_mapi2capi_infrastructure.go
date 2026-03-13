@@ -158,7 +158,7 @@ func (r *MachineSyncReconciler) ensureCAPIInfraMachineStatusUpdated(ctx context.
 	// If the source API object (MAPI Machine) status.synchronizedGeneration does not match the objectmeta.generation
 	// it means the source API object status has not yet caught up with the desired spec,
 	// so we don't want to update the Cluster API Infrastructure machine status until that has happened.
-	if mapiMachine.Status.SynchronizedGeneration != mapiMachine.ObjectMeta.Generation {
+	if mapiMachine.Status.SynchronizedGeneration != mapiMachine.Generation {
 		logger.Info("Changes detected for Cluster API Infrastructure machine status, but the MAPI machine spec has not been observed yet, skipping status update")
 
 		return false, nil

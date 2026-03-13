@@ -399,13 +399,13 @@ func ValidatingWebhookConfigurationFor(obj *apiextensionsv1alpha1.CompatibilityR
 			if version.Subresources.Status != nil && !hasStatus {
 				hasStatus = true
 
-				vwc.Webhooks[0].Rules[0].Rule.Resources = append(vwc.Webhooks[0].Rules[0].Rule.Resources, crd.Spec.Names.Plural+"/status")
+				vwc.Webhooks[0].Rules[0].Resources = append(vwc.Webhooks[0].Rules[0].Resources, crd.Spec.Names.Plural+"/status")
 			}
 
 			if version.Subresources.Scale != nil && !hasScale {
 				hasScale = true
 
-				vwc.Webhooks[0].Rules[0].Rule.Resources = append(vwc.Webhooks[0].Rules[0].Rule.Resources, crd.Spec.Names.Plural+"/scale")
+				vwc.Webhooks[0].Rules[0].Resources = append(vwc.Webhooks[0].Rules[0].Resources, crd.Spec.Names.Plural+"/scale")
 			}
 		}
 	}

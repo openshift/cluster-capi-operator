@@ -48,11 +48,15 @@ var (
 
 var _ = Describe("ClusterOperator controller", func() {
 	ctx := context.Background()
-	var capiClusterOperator *configv1.ClusterOperator
-	var testNamespaceName string
+
+	var (
+		capiClusterOperator *configv1.ClusterOperator
+		testNamespaceName   string
+	)
 
 	BeforeEach(func() {
 		By("Creating the cluster-api ClusterOperator")
+
 		capiClusterOperator = &configv1.ClusterOperator{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "cluster-api",
@@ -61,6 +65,7 @@ var _ = Describe("ClusterOperator controller", func() {
 		Expect(cl.Create(ctx, capiClusterOperator)).To(Succeed(), "should be able to create the 'cluster-api' ClusterOperator object")
 
 		By("Creating the testing namespace")
+
 		namespace := corev1resourcebuilder.Namespace().WithGenerateName("test-capi-corecluster-").Build()
 		Expect(cl.Create(ctx, namespace)).To(Succeed())
 		testNamespaceName = namespace.Name
@@ -90,7 +95,6 @@ var _ = Describe("ClusterOperator controller", func() {
 					ContainElement(And(HaveField("Type", Equal(configv1.OperatorUpgradeable)), HaveField("Status", Equal(configv1.ConditionTrue)))),
 				),
 			), "should match the expected ClusterOperator status conditions")
-
 		})
 
 		It("should update the ClusterOperator status version to the desired one", func() {
@@ -104,6 +108,7 @@ var _ = Describe("ClusterOperator controller", func() {
 
 		It("should update the ClusterOperator status version to the desired one when an incorrect one is present", func() {
 			By("setting the ClusterOperator status version to an incorrect one")
+
 			patchBase := client.MergeFrom(capiClusterOperator.DeepCopy())
 			capiClusterOperator.Status.Versions = []configv1.OperandVersion{{Name: "operator", Version: "incorrect"}}
 			Expect(cl.Status().Patch(ctx, capiClusterOperator, patchBase)).To(Succeed())
@@ -148,6 +153,7 @@ var _ = Describe("ClusterOperator controller", func() {
 
 		It("should update the ClusterOperator status version to the desired one when an incorrect one is present", func() {
 			By("Setting the ClusterOperator status version to an incorrect one")
+
 			patchBase := client.MergeFrom(capiClusterOperator.DeepCopy())
 			capiClusterOperator.Status.Versions = []configv1.OperandVersion{{Name: "operator", Version: "incorrect"}}
 			Expect(cl.Status().Patch(ctx, capiClusterOperator, patchBase)).To(Succeed())

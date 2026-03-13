@@ -84,7 +84,7 @@ func (r *ClusterWebhook) validateClusterName(ctx context.Context, cluster *clust
 	}
 
 	infrastructureName := infrastructureObject.Status.InfrastructureName
-	if cluster.ObjectMeta.Name != infrastructureName {
+	if cluster.Name != infrastructureName {
 		return fmt.Errorf("%w: cluster name must be %s in %s namespace", errUnexpectedClusterName, infrastructureName, openshiftCAPINamespace)
 	}
 

@@ -48,6 +48,7 @@ var _ = Describe("mapi2capi Machine conversion", func() {
 		expectedWarnings []string
 		assertion        func(machine *mapiv1beta1.Machine)
 	}
+
 	var _ = DescribeTable("mapi2capi convert MAPI Machine to a CAPI Machine",
 		func(in mapi2CAPIMachineConversionInput) {
 			_, _, warns, err := FromAWSMachineAndInfra(

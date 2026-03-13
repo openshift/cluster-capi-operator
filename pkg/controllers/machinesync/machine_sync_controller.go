@@ -378,7 +378,7 @@ func (r *MachineSyncReconciler) reconcileCAPIMachinetoMAPIMachine(ctx context.Co
 		// Restore authoritativeness to the current one.
 		convertedMAPIMachine.Spec.AuthoritativeAPI = existingMAPIMachine.Spec.AuthoritativeAPI
 		// Restore finalizers to the current one.
-		convertedMAPIMachine.ObjectMeta.Finalizers = existingMAPIMachine.Finalizers
+		convertedMAPIMachine.Finalizers = existingMAPIMachine.Finalizers
 	} else {
 		// If there is no existing MAPI machine it means we are creating a MAPI machine
 		// from scratch from CAPI one, hence set the authoritativeness for it to Cluster API.
@@ -675,7 +675,7 @@ func (r *MachineSyncReconciler) ensureCAPIMachineSpecUpdated(ctx context.Context
 	logger := logf.FromContext(ctx)
 
 	// If there are no spec changes, return early.
-	if !(capiMachinesDiff.HasMetadataChanges() || capiMachinesDiff.HasSpecChanges()) {
+	if !capiMachinesDiff.HasMetadataChanges() && !capiMachinesDiff.HasSpecChanges() {
 		return false, nil, nil
 	}
 
@@ -816,7 +816,7 @@ func (r *MachineSyncReconciler) shouldMirrorCAPIMachineToMAPIMachine(ctx context
 	}
 
 	// Check if the CAPI machine has an ownerReference that points to a CAPI machineset.
-	for _, ref := range machine.ObjectMeta.OwnerReferences {
+	for _, ref := range machine.OwnerReferences {
 		if ref.Kind != machineSetKind || ref.APIVersion != clusterv1.GroupVersion.String() {
 			continue
 		}
@@ -1036,7 +1036,7 @@ func (r *MachineSyncReconciler) reconcileMAPItoCAPIMachineDeletion(ctx context.C
 
 		// The MAPI authoritative machine is not being deleted, but the CAPI non-authoritative one is.
 		// Issue a deletion also to the MAPI authoritative machine.
-		if err := r.Client.Delete(ctx, mapiMachine); err != nil {
+		if err := r.Delete(ctx, mapiMachine); err != nil {
 			return false, fmt.Errorf("failed to delete Machine API machine: %w", err)
 		}
 
@@ -1057,7 +1057,7 @@ func (r *MachineSyncReconciler) reconcileMAPItoCAPIMachineDeletion(ctx context.C
 	if capiMachine.DeletionTimestamp.IsZero() {
 		logger.Info("Machine API machine is being deleted, issuing deletion to corresponding Cluster API machine")
 
-		if err := r.Client.Delete(ctx, capiMachine); err != nil {
+		if err := r.Delete(ctx, capiMachine); err != nil {
 			return false, fmt.Errorf("failed delete Cluster API machine: %w", err)
 		}
 	}
@@ -1066,7 +1066,7 @@ func (r *MachineSyncReconciler) reconcileMAPItoCAPIMachineDeletion(ctx context.C
 		if infraMachine.GetDeletionTimestamp().IsZero() {
 			logger.Info("Machine API machine is being deleted, issuing deletion to corresponding Cluster API infra machine")
 
-			if err := r.Client.Delete(ctx, infraMachine); err != nil {
+			if err := r.Delete(ctx, infraMachine); err != nil {
 				return false, fmt.Errorf("failed to remove finalizer: %w", err)
 			}
 		}
@@ -1157,7 +1157,7 @@ func (r *MachineSyncReconciler) reconcileCAPItoMAPIMachineDeletion(ctx context.C
 
 		// The CAPI authoritative machine is not being deleted, but the MAPI non-authoritative one is
 		// Issue a deletion also to the CAPI authoritative machine.
-		if err := r.Client.Delete(ctx, capiMachine); err != nil {
+		if err := r.Delete(ctx, capiMachine); err != nil {
 			return false, fmt.Errorf("failed to delete Cluster API machine: %w", err)
 		}
 
@@ -1177,7 +1177,7 @@ func (r *MachineSyncReconciler) reconcileCAPItoMAPIMachineDeletion(ctx context.C
 	if mapiMachine.DeletionTimestamp.IsZero() {
 		logger.Info("Cluster API machine is being deleted, issuing deletion to corresponding Machine API machine")
 
-		if err := r.Client.Delete(ctx, mapiMachine); err != nil {
+		if err := r.Delete(ctx, mapiMachine); err != nil {
 			return false, fmt.Errorf("failed to delete Machine API machine: %w", err)
 		}
 	}
@@ -1317,7 +1317,6 @@ func compareMAPIMachines(platform configv1.PlatformType, a, b *mapiv1beta1.Machi
 		// MAPI Machine conditions are not converted yet, TODO(OCPCLOUD-3193): Add condition types to ignore when conversion is implemented
 		util.WithIgnoreField("status", "conditions"),
 	).Diff(a, b)
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to compare Machine API machines: %w", err)
 	}
@@ -1339,7 +1338,7 @@ func (r *MachineSyncReconciler) ensureCAPIMachineStatusUpdated(ctx context.Conte
 	// If the source API object (MAPI Machine) status.synchronizedGeneration does not match the objectmeta.generation
 	// it means the source API object status has not yet caught up with the desired spec,
 	// so we don't want to update the CAPI machine status until that has happened.
-	if mapiMachine.Status.SynchronizedGeneration != mapiMachine.ObjectMeta.Generation {
+	if mapiMachine.Status.SynchronizedGeneration != mapiMachine.Generation {
 		logger.Info("Changes detected for Cluster API machine status, but the MAPI machine spec has not been observed yet, skipping status update")
 
 		return false, nil
@@ -1349,7 +1348,7 @@ func (r *MachineSyncReconciler) ensureCAPIMachineStatusUpdated(ctx context.Conte
 	setChangedCAPIMachineStatusFields(existingCAPIMachine, convertedCAPIMachine)
 
 	// Update the observed generation to match the updated source API object generation.
-	existingCAPIMachine.Status.ObservedGeneration = existingCAPIMachine.ObjectMeta.Generation
+	existingCAPIMachine.Status.ObservedGeneration = existingCAPIMachine.Generation
 
 	isPatchRequired, err := util.IsPatchRequired(existingCAPIMachine, patchBase)
 	if err != nil {
@@ -1459,7 +1458,7 @@ func (r *MachineSyncReconciler) ensureMAPIMachineSpecUpdated(ctx context.Context
 	logger := logf.FromContext(ctx)
 
 	// If there are no spec changes, return early.
-	if !(mapiMachinesDiff.HasMetadataChanges() || mapiMachinesDiff.HasSpecChanges() || mapiMachinesDiff.HasProviderSpecChanges()) {
+	if !mapiMachinesDiff.HasMetadataChanges() && !mapiMachinesDiff.HasSpecChanges() && !mapiMachinesDiff.HasProviderSpecChanges() {
 		return false, nil
 	}
 

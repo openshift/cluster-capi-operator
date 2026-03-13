@@ -68,8 +68,8 @@ func FromMachineSetAndPowerVSMachineTemplateAndPowerVSCluster(ms *clusterv1.Mach
 		machineAndPowerVSMachineAndPowerVSCluster: &machineAndPowerVSMachineAndPowerVSCluster{
 			machine: &clusterv1.Machine{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels:      ms.Spec.Template.ObjectMeta.Labels,
-					Annotations: ms.Spec.Template.ObjectMeta.Annotations,
+					Labels:      ms.Spec.Template.Labels,
+					Annotations: ms.Spec.Template.Annotations,
 				},
 				Spec: ms.Spec.Template.Spec,
 			},
@@ -157,8 +157,8 @@ func (m machineSetAndPowerVSMachineTemplateAndPowerVSCluster) ToMachineSet() (*m
 	mapiMachineSet.Spec.Template.Spec = mapiPowerVSMachine.Spec
 
 	// Copy the labels and annotations from the Machine to the template.
-	mapiMachineSet.Spec.Template.ObjectMeta.Annotations = mapiPowerVSMachine.ObjectMeta.Annotations
-	mapiMachineSet.Spec.Template.ObjectMeta.Labels = mapiPowerVSMachine.ObjectMeta.Labels
+	mapiMachineSet.Spec.Template.Annotations = mapiPowerVSMachine.Annotations
+	mapiMachineSet.Spec.Template.Labels = mapiPowerVSMachine.Labels
 
 	return mapiMachineSet, warnings, nil
 }

@@ -72,10 +72,12 @@ var _ = Describe("CRDCompatibilityReconciler Controller Setup", func() {
 
 		BeforeEach(func(ctx context.Context) {
 			By("Creating 2 admitted and 2 non-admitted requirements")
+
 			admittedRequirements = []*apiextensionsv1alpha1.CompatibilityRequirement{
 				test.GenerateTestCompatibilityRequirement(testCRD),
 				test.GenerateTestCompatibilityRequirement(testCRD),
 			}
+
 			nonAdmittedRequirements = []*apiextensionsv1alpha1.CompatibilityRequirement{
 				test.GenerateTestCompatibilityRequirement(testCRD),
 				test.GenerateTestCompatibilityRequirement(testCRD),
@@ -131,12 +133,14 @@ var _ = Describe("CRDCompatibilityReconciler Controller Setup", func() {
 		It("should not adjust the transition timestamp of conditions that have not changed", func(ctx context.Context) {
 			for _, requirement := range admittedRequirements {
 				var originalTransitionTime metav1.Time
+
 				for _, condition := range requirement.Status.Conditions {
 					if condition.Type == apiextensionsv1alpha1.CompatibilityRequirementAdmitted {
 						originalTransitionTime = condition.LastTransitionTime
 						break
 					}
 				}
+
 				Expect(originalTransitionTime).NotTo(BeZero())
 
 				Eventually(func() (*apiextensionsv1alpha1.CompatibilityRequirement, error) {

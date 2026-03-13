@@ -463,6 +463,7 @@ func ObjectMetaFuzzerFuncs(namespace string) fuzzer.FuzzerFuncs {
 				if len(o.Annotations) == 0 {
 					o.Annotations = nil
 				}
+
 				if len(o.Labels) == 0 {
 					o.Labels = nil
 				}
@@ -513,6 +514,7 @@ func CAPIMachineFuzzerFuncs(providerIDFuzz StringFuzzer, infraKind, infraAPIGrou
 				if m.Labels == nil {
 					m.Labels = make(map[string]string)
 				}
+
 				m.Labels[clusterv1.ClusterNameLabel] = clusterName
 
 				// The reference from a Machine to the InfraMachine should
@@ -559,6 +561,7 @@ func CAPIMachineSetFuzzerFuncs(infraTemplateKind, infraAPIGroup, clusterName str
 				if t.Labels == nil {
 					t.Labels = make(map[string]string)
 				}
+
 				t.Labels[clusterv1.ClusterNameLabel] = clusterName
 			},
 			func(m *clusterv1.MachineSetSpec, c randfill.Continue) {
@@ -608,6 +611,7 @@ func CAPIMachineSetFuzzerFuncs(infraTemplateKind, infraAPIGroup, clusterName str
 				if m.Labels == nil {
 					m.Labels = make(map[string]string)
 				}
+
 				m.Labels[clusterv1.ClusterNameLabel] = clusterName
 
 				// The reference from a MachineSet to the InfraMachine should
@@ -674,8 +678,8 @@ func (f *MAPIMachineFuzzer) FuzzMachine(m *mapiv1beta1.Machine, c randfill.Conti
 	// MAPI machine.spec.metadata.labels and MAPI machine.metadata.labels.
 	// So these should match when we generate the initial MAPI machine
 	// so we get the same MAPI machine after the roundtrip.
-	m.Spec.ObjectMeta.Annotations = util.DeepCopyMapStringString(m.Annotations)
-	m.Spec.ObjectMeta.Labels = util.DeepCopyMapStringString(m.Labels)
+	m.Spec.Annotations = util.DeepCopyMapStringString(m.Annotations)
+	m.Spec.Labels = util.DeepCopyMapStringString(m.Labels)
 }
 
 // MAPIMachineFuzzerFuncs returns a set of fuzzer functions that can be used to fuzz MachineSpec objects.
@@ -704,10 +708,10 @@ func MAPIMachineFuzzerFuncs(providerSpec runtime.Object, providerStatus interfac
 				}
 
 				// Clear fields that are not supported in the machine spec.
-				m.ObjectMeta.Name = ""
-				m.ObjectMeta.GenerateName = ""
-				m.ObjectMeta.Namespace = ""
-				m.ObjectMeta.OwnerReferences = nil
+				m.Name = ""
+				m.GenerateName = ""
+				m.Namespace = ""
+				m.OwnerReferences = nil
 				m.AuthoritativeAPI = ""
 
 				// Clear fields that are not yet supported in the conversion.
@@ -779,10 +783,10 @@ func MAPIMachineSetFuzzerFuncs() fuzzer.FuzzerFuncs {
 				c.FillNoCustom(m)
 
 				// Clear fields that are not supported in the machine template objectmeta.
-				m.Template.ObjectMeta.Name = ""
-				m.Template.ObjectMeta.GenerateName = ""
-				m.Template.ObjectMeta.Namespace = ""
-				m.Template.ObjectMeta.OwnerReferences = nil
+				m.Template.Name = ""
+				m.Template.GenerateName = ""
+				m.Template.Namespace = ""
+				m.Template.OwnerReferences = nil
 				// The conversion library while converting
 				// machineSet.template labels/annotations from MAPI->CAPI
 				// merges MAPI machineSet.template.spec.metadata.labels/annotations
@@ -795,8 +799,8 @@ func MAPIMachineSetFuzzerFuncs() fuzzer.FuzzerFuncs {
 				// MAPI machineSet.template.metadata.labels/annotations
 				// So these should match when we generate the initial MAPI MachineSet
 				// so we get the same MAPI MachineSet back after the roundtrip.
-				m.Template.Spec.ObjectMeta.Labels = util.DeepCopyMapStringString(m.Template.ObjectMeta.Labels)
-				m.Template.Spec.ObjectMeta.Annotations = util.DeepCopyMapStringString(m.Template.ObjectMeta.Annotations)
+				m.Template.Spec.Labels = util.DeepCopyMapStringString(m.Template.Labels)
+				m.Template.Spec.Annotations = util.DeepCopyMapStringString(m.Template.Annotations)
 
 				fuzzMAPIMachineSetSpecDeletePolicy(&m.DeletePolicy, c)
 

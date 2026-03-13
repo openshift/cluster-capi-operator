@@ -64,9 +64,9 @@ var _ = Describe("Object Pruning Integration", func() {
 	}, defaultNodeTimeout)
 
 	Context("admission pruning scenarios", func() {
-
 		BeforeEach(func(ctx context.Context) {
 			By("Creating the live CRD with permissive schema")
+
 			liveCRD = createPermissivePropertiesCRDSchema()
 			Expect(cl.Create(ctx, liveCRD)).To(Succeed())
 
@@ -83,10 +83,12 @@ var _ = Describe("Object Pruning Integration", func() {
 		DescribeTable("object pruning scenarios through API server",
 			func(ctx context.Context, scenario pruningTestScenario) {
 				By("Creating the CompatibilityRequirement")
+
 				scenario.CompatibilityRequirement.Name = fmt.Sprintf("test-compat-req-%d", seed)
 				Expect(cl.Create(ctx, scenario.CompatibilityRequirement)).To(Succeed())
 
 				By("Creating MutatingWebhookConfiguration")
+
 				webhookConfig := createMutatingWebhookConfig(scenario.CompatibilityRequirement, liveCRD)
 				Expect(cl.Create(ctx, webhookConfig)).To(Succeed())
 
@@ -125,6 +127,7 @@ var _ = Describe("Object Pruning Integration", func() {
 				}
 
 				By("Verifying the object was pruned correctly")
+
 				retrievedObj := &unstructured.Unstructured{}
 				retrievedObj.SetGroupVersionKind(inputObject.GroupVersionKind())
 				retrievedObj.SetName(inputObject.GetName())
@@ -275,6 +278,7 @@ var _ = Describe("Object Pruning Integration", func() {
 	Context("error scenarios", func() {
 		BeforeEach(func(ctx context.Context) {
 			By("Creating a live CRD with permissive schema")
+
 			liveCRD = createEmptyPropertiesCRDSchema()
 			Expect(cl.Create(ctx, liveCRD)).To(Succeed())
 
@@ -292,6 +296,7 @@ var _ = Describe("Object Pruning Integration", func() {
 
 		It("should handle webhook when CompatibilityRequirement does not exist", func(ctx context.Context) {
 			By("Creating MutatingWebhookConfiguration with non-existent CompatibilityRequirement")
+
 			webhookConfig := createMutatingWebhookConfig(&apiextensionsv1alpha1.CompatibilityRequirement{
 				ObjectMeta: metav1.ObjectMeta{Name: "non-existent-compat-req"},
 			}, liveCRD)
@@ -302,6 +307,7 @@ var _ = Describe("Object Pruning Integration", func() {
 			}, defaultNodeTimeout)
 
 			By("Attempting to create object through API server")
+
 			testObj := &unstructured.Unstructured{
 				Object: map[string]interface{}{
 					"apiVersion": fmt.Sprintf("%s/%s", liveCRD.Spec.Group, liveCRD.Spec.Versions[0].Name),
@@ -317,6 +323,7 @@ var _ = Describe("Object Pruning Integration", func() {
 			}
 
 			By("Verifying error response")
+
 			err := cl.Create(ctx, testObj)
 			Expect(err).To(MatchError(ContainSubstring("CompatibilityRequirement.apiextensions.openshift.io \"non-existent-compat-req\" not found")))
 		}, defaultNodeTimeout)
@@ -348,7 +355,7 @@ func createStrictCRDSchema() *apiextensionsv1.CustomResourceDefinition {
 	}
 
 	crd := test.GenerateCRD(gvk)
-	crd.ObjectMeta.Labels = map[string]string{"test-crd": "true"}
+	crd.Labels = map[string]string{"test-crd": "true"}
 
 	// Add strict schema with specific properties
 	crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties = map[string]apiextensionsv1.JSONSchemaProps{
@@ -377,7 +384,7 @@ func createPermissiveCRDSchema() *apiextensionsv1.CustomResourceDefinition {
 	}
 
 	crd := test.GenerateCRD(gvk)
-	crd.ObjectMeta.Labels = map[string]string{"test-crd": "true"}
+	crd.Labels = map[string]string{"test-crd": "true"}
 
 	// Add permissive schema that preserves unknown fields
 	crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties = map[string]apiextensionsv1.JSONSchemaProps{
@@ -402,7 +409,7 @@ func createNestedCRDSchema() *apiextensionsv1.CustomResourceDefinition {
 	}
 
 	crd := test.GenerateCRD(gvk)
-	crd.ObjectMeta.Labels = map[string]string{"test-crd": "true"}
+	crd.Labels = map[string]string{"test-crd": "true"}
 
 	// Add nested schema with mixed preservation rules
 	crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties = map[string]apiextensionsv1.JSONSchemaProps{
@@ -445,7 +452,7 @@ func createArrayCRDSchema() *apiextensionsv1.CustomResourceDefinition {
 	}
 
 	crd := test.GenerateCRD(gvk)
-	crd.ObjectMeta.Labels = map[string]string{"test-crd": "true"}
+	crd.Labels = map[string]string{"test-crd": "true"}
 
 	// Add schema with array containing objects
 	crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties = map[string]apiextensionsv1.JSONSchemaProps{
@@ -479,7 +486,7 @@ func createEmptyPropertiesCRDSchema() *apiextensionsv1.CustomResourceDefinition 
 	}
 
 	crd := test.GenerateCRD(gvk)
-	crd.ObjectMeta.Labels = map[string]string{"test-crd": "true"}
+	crd.Labels = map[string]string{"test-crd": "true"}
 
 	return crd
 }
@@ -492,7 +499,7 @@ func createPermissivePropertiesCRDSchema() *apiextensionsv1.CustomResourceDefini
 	}
 
 	crd := test.GenerateCRD(gvk)
-	crd.ObjectMeta.Labels = map[string]string{"test-crd": "true"}
+	crd.Labels = map[string]string{"test-crd": "true"}
 
 	// Remove the schema and set XPreserveUnknownFields to true to allow unknown fields.
 	crd.Spec.Versions[0].Schema.OpenAPIV3Schema.XPreserveUnknownFields = ptr.To(true)

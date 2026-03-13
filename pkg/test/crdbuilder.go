@@ -255,11 +255,11 @@ func GenerateTestCompatibilityRequirement(testCRD *apiextensionsv1.CustomResourc
 func generateProviderCRD(gvk schema.GroupVersionKind) *apiextensionsv1.CustomResourceDefinition {
 	crd := GenerateSchemalessSpecStatusCRD(gvk)
 
-	if crd.ObjectMeta.Labels == nil {
-		crd.ObjectMeta.Labels = make(map[string]string)
+	if crd.Labels == nil {
+		crd.Labels = make(map[string]string)
 	}
 
-	crd.ObjectMeta.Labels[fmt.Sprintf("%s/%s", clusterv1.GroupVersion.Group, clusterv1.GroupVersion.Version)] = gvk.GroupVersion().Version
+	crd.Labels[fmt.Sprintf("%s/%s", clusterv1.GroupVersion.Group, clusterv1.GroupVersion.Version)] = gvk.GroupVersion().Version
 
 	return crd
 }

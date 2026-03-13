@@ -73,11 +73,11 @@ func fromMAPIMachineToCAPIMachine(mapiMachine *mapiv1beta1.Machine, apiGroup, ki
 
 	// Node labels in MAPI are stored under .spec.metadata.labels and then propagated down to the node,
 	// whereas in CAPI they are stored in the top level .labels and later propagated down to the node.
-	setMAPINodeLabelsToCAPINodeLabels(mapiMachine.Spec.ObjectMeta.Labels, capiMachine)
+	setMAPINodeLabelsToCAPINodeLabels(mapiMachine.Spec.Labels, capiMachine)
 
 	// Node annotations in MAPI are stored under .spec.metadata.annotations and then propagated down to the node,
 	// whereas in CAPI they are stored in the top level .annotations and later propagated down to the node.
-	setMAPINodeAnnotationsToCAPINodeAnnotations(mapiMachine.Spec.ObjectMeta.Annotations, capiMachine)
+	setMAPINodeAnnotationsToCAPINodeAnnotations(mapiMachine.Spec.Annotations, capiMachine)
 
 	// LifecycleHooks in MAPI are a special field (.spec.lifecycleHooks),
 	// whereas in CAPI they are defined via special annotations.

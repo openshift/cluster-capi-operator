@@ -137,7 +137,6 @@ var _ = Describe("End-to-End Admission Webhook Integration", Ordered, ContinueOn
 
 	Describe("Schema Matching Scenarios", func() {
 		Context("when schemas match exactly", func() {
-
 			BeforeEach(func(ctx context.Context) {
 				// Create and store the compatibility requirement
 				compatibilityRequirement = test.GenerateTestCompatibilityRequirement(compatibilityCRD.DeepCopy())
@@ -420,7 +419,7 @@ var _ = Describe("End-to-End Admission Webhook Integration", Ordered, ContinueOn
 
 				// Create separate webhook config for tighter validation
 				tighterWebhookConfig = createValidatingWebhookConfig(tighterCompatibilityRequirement, baseCRD)
-				tighterWebhookConfig.ObjectMeta.Name = fmt.Sprintf("test-tighter-validation-%s", tighterCompatibilityRequirement.Name)
+				tighterWebhookConfig.Name = fmt.Sprintf("test-tighter-validation-%s", tighterCompatibilityRequirement.Name)
 				Expect(cl.Create(ctx, tighterWebhookConfig)).To(Succeed())
 
 				DeferCleanup(func(ctx context.Context) {
@@ -504,7 +503,7 @@ var _ = Describe("End-to-End Admission Webhook Integration", Ordered, ContinueOn
 
 				// Create ValidatingWebhookConfiguration for the compatibility requirement
 				statusWebhookConfig := createValidatingWebhookConfig(statusCompatibilityRequirement, baseCRD)
-				statusWebhookConfig.ObjectMeta.Name = fmt.Sprintf("test-status-validation-%s", statusCompatibilityRequirement.Name)
+				statusWebhookConfig.Name = fmt.Sprintf("test-status-validation-%s", statusCompatibilityRequirement.Name)
 				Expect(cl.Create(ctx, statusWebhookConfig)).To(Succeed())
 
 				DeferCleanup(func(ctx context.Context) {
@@ -690,7 +689,7 @@ var _ = Describe("End-to-End Admission Webhook Integration", Ordered, ContinueOn
 
 				// Create ValidatingWebhookConfiguration for the compatibility requirement
 				scaleWebhookConfig := createValidatingWebhookConfig(scaleCompatibilityRequirement, baseCRD)
-				scaleWebhookConfig.ObjectMeta.Name = fmt.Sprintf("test-scale-validation-%s", scaleCompatibilityRequirement.Name)
+				scaleWebhookConfig.Name = fmt.Sprintf("test-scale-validation-%s", scaleCompatibilityRequirement.Name)
 				Expect(cl.Create(ctx, scaleWebhookConfig)).To(Succeed())
 
 				DeferCleanup(func(ctx context.Context) {

@@ -60,7 +60,9 @@ var _ = BeforeSuite(func() {
 	logf.SetLogger(klog.Background())
 
 	By("bootstrapping test environment")
+
 	var err error
+
 	testEnv = &envtest.Environment{}
 	cfg, cl, err = test.StartEnvTest(testEnv)
 

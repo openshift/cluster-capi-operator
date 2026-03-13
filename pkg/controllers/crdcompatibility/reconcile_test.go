@@ -133,6 +133,7 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 			requirement.Spec.CompatibilitySchema.CustomResourceDefinition.Data = "not YAML"
 
 			By("Attempting to create invalid CompatibilityRequirement " + requirement.Name)
+
 			expectedError := "admission webhook \"compatibilityrequirement.operator.openshift.io\" denied the request: spec.compatibilitySchema.customResourceDefinition.data: Invalid value: \"not YAML\": expected a valid CustomResourceDefinition in YAML format: error unmarshaling JSON: while decoding JSON: json: cannot unmarshal string into Go value of type v1.CustomResourceDefinition"
 			Eventually(tryCreate(ctx, requirement)).WithContext(ctx).Should(MatchError(expectedError))
 		}, defaultNodeTimeout)
@@ -142,6 +143,7 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 			requirement.Spec.CompatibilitySchema.CustomResourceDefinition.Data = "{}"
 
 			By("Attempting to create invalid CompatibilityRequirement " + requirement.Name)
+
 			expectedError := "admission webhook \"compatibilityrequirement.operator.openshift.io\" denied the request: spec.compatibilitySchema.customResourceDefinition.data: Invalid value: \"\": expected a valid CustomResourceDefinition in YAML format: expected APIVersion to be apiextensions.k8s.io/v1 and Kind to be CustomResourceDefinition, got /"
 			Eventually(tryCreate(ctx, requirement)).WithContext(ctx).Should(MatchError(expectedError))
 		}, defaultNodeTimeout)
@@ -185,6 +187,7 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 				addProperty(incompatibleCRD, "extra")()
 
 				By("Creating a new CompatibilityRequirement with a compatibility CRD which requires an extra field")
+
 				requirement = test.GenerateTestCompatibilityRequirement(incompatibleCRD)
 				createTestObject(ctx, requirement, "CompatibilityRequirement")
 			})
@@ -249,11 +252,11 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 				)
 
 				By("Attempt to update the CRD to add a different extra field")
+
 				expectedError := "admission webhook \"compatibilityrequirement.operator.openshift.io\" denied the request: CRD is not compatible with CompatibilityRequirements: This requirement was added by CompatibilityRequirement " + requirement.Name + ": removed field : v1.^.extra"
 				Eventually(kWithCtx(ctx).Update(testCRDWorking, addProperty(testCRDWorking, "extra2"))).WithContext(ctx).Should(MatchError(expectedError))
 			}, defaultNodeTimeout)
 		})
-
 	})
 
 	Context("When creating a CompatibilityRequirement with configured object schema validation", Ordered, func() {
@@ -352,6 +355,7 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 			testCRDWorking := testCRD.DeepCopy()
 
 			By("Attempting to make an invalid modification by removing a field")
+
 			expectedError := "admission webhook \"compatibilityrequirement.operator.openshift.io\" denied the request: CRD is not compatible with CompatibilityRequirements: This requirement was added by CompatibilityRequirement " + requirement.Name + ": removed field : v1.^.status"
 			updateCRD := createOrUpdateCRD(ctx, testCRDWorking, func() {
 				delete(testCRDWorking.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties, "status")
@@ -365,6 +369,7 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 			testCRDWorking := testCRD.DeepCopy()
 
 			By("Attempting to make a valid modification by adding a field")
+
 			updateCRD := createOrUpdateCRD(ctx, testCRDWorking, func() {
 				testCRDWorking.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["foo"] = apiextensionsv1.JSONSchemaProps{
 					Type: "string",

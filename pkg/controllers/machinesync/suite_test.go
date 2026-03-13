@@ -78,7 +78,9 @@ var _ = BeforeSuite(func() {
 	ctx = logf.IntoContext(ctx, testLogger)
 
 	By("bootstrapping test environment")
+
 	var err error
+
 	testEnv = &envtest.Environment{}
 	cfg, k8sClient, err = test.StartEnvTest(testEnv)
 
@@ -90,6 +92,7 @@ var _ = BeforeSuite(func() {
 
 	// Start VAP Status Controller
 	By("Starting the ValidatingAdmissionPolicy status controller")
+
 	vapCleanup, err = admissiontestutils.StartVAPStatusController(ctx, cfg, testScheme)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -108,7 +111,8 @@ var _ = BeforeSuite(func() {
 	SetDefaultEventuallyTimeout(timeout)
 
 	By("Creating controller API server user")
-	controllerCfg, err = testEnv.ControlPlane.APIServer.SecureServing.AddUser(envtest.User{
+
+	controllerCfg, err = testEnv.ControlPlane.APIServer.AddUser(envtest.User{
 		Name:   "system:serviceaccount:openshift-cluster-api:capi-controllers",
 		Groups: []string{"system:masters", "system:authenticated"},
 	}, cfg)
@@ -118,11 +122,13 @@ var _ = BeforeSuite(func() {
 var _ = AfterSuite(
 	func(ctx SpecContext) {
 		By("stopping VAP status controller")
+
 		if vapCleanup != nil {
 			vapCleanup()
 		}
 
 		By("tearing down the test environment")
+
 		err := testEnv.Stop()
 		Expect(err).NotTo(HaveOccurred())
 	},

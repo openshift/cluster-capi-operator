@@ -192,8 +192,8 @@ func (m *awsMachineSetAndInfra) ToMachineSetAndMachineTemplate() (*clusterv1.Mac
 
 	// We have to merge these two maps so that labels and annotations added to the template objectmeta are persisted
 	// along with the labels and annotations from the machine objectmeta.
-	capiMachineSet.Spec.Template.ObjectMeta.Labels = util.MergeMaps(capiMachineSet.Spec.Template.ObjectMeta.Labels, capiMachine.Labels)
-	capiMachineSet.Spec.Template.ObjectMeta.Annotations = util.MergeMaps(capiMachineSet.Spec.Template.ObjectMeta.Annotations, capiMachine.Annotations)
+	capiMachineSet.Spec.Template.Labels = util.MergeMaps(capiMachineSet.Spec.Template.Labels, capiMachine.Labels)
+	capiMachineSet.Spec.Template.Annotations = util.MergeMaps(capiMachineSet.Spec.Template.Annotations, capiMachine.Annotations)
 
 	// Override the reference so that it matches the AWSMachineTemplate.
 	capiMachineSet.Spec.Template.Spec.InfrastructureRef.Kind = awsMachineTemplateKind
@@ -575,7 +575,6 @@ func convertAWSSecurityGroupstoCAPI(sgs []mapiv1beta1.AWSResourceReference) []aw
 
 func convertAWSBlockDeviceMappingSpecToCAPI(fldPath *field.Path, mapiBlockDeviceMapping []mapiv1beta1.BlockDeviceMappingSpec) (*awsv1.Volume, []awsv1.Volume, []string, field.ErrorList) {
 	// We do not want to preallocate this as we need it nil if no elements are added.
-	//nolint:prealloc
 	var nonRootVolumes []awsv1.Volume
 
 	rootVolume := &awsv1.Volume{}

@@ -115,11 +115,11 @@ func (r *ClusterOperatorStatusClient) GetOrCreateClusterOperator(ctx context.Con
 		},
 	}
 
-	err := r.Client.Get(ctx, client.ObjectKey{Name: controllers.ClusterOperatorName}, co)
+	err := r.Get(ctx, client.ObjectKey{Name: controllers.ClusterOperatorName}, co)
 	if errors.IsNotFound(err) {
 		log.Info("ClusterOperator does not exist, creating a new one.")
 
-		err = r.Client.Create(ctx, co)
+		err = r.Create(ctx, co)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create cluster operator: %w", err)
 		}

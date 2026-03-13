@@ -23,7 +23,6 @@ import (
 )
 
 var _ = Describe("Unit test Diff", func() {
-
 	Describe("error cases", func() {
 		It("should return an error if the objects are not of the same type", func() {
 			a := &mapiv1beta1.MachineSet{}

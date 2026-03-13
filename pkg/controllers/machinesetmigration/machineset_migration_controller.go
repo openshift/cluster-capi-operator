@@ -284,6 +284,7 @@ func (r *MachineSetMigrationReconciler) requestOldAuthoritativeResourcePaused(ct
 		if !annotations.HasPaused(capiMachineSet) {
 			capiMachineSetCopy := capiMachineSet.DeepCopy()
 			annotations.AddAnnotations(capiMachineSet, map[string]string{clusterv1.PausedAnnotation: ""})
+
 			if err := r.Patch(ctx, capiMachineSet, client.MergeFrom(capiMachineSetCopy)); err != nil {
 				return false, fmt.Errorf("failed to patch Cluster API machine set: %w", err)
 			}

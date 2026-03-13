@@ -78,6 +78,7 @@ var _ = Describe("getTrustedCATransport", func() {
 		scheme = runtime.NewScheme()
 		Expect(configv1.AddToScheme(scheme)).To(Succeed())
 		Expect(corev1.AddToScheme(scheme)).To(Succeed())
+
 		testCAPEM = generateTestCACertPEM()
 	})
 

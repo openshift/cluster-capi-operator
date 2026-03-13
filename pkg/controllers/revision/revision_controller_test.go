@@ -182,6 +182,7 @@ var _ = Describe("RevisionController", Serial, func() {
 
 		// Create manager and controller
 		mgr = newManagerWrapper(defaultProviderImgs)
+
 		DeferCleanup(func(ctx context.Context) {
 			mgr.stop()
 		})
@@ -272,6 +273,7 @@ var _ = Describe("RevisionController", Serial, func() {
 
 		// Find old and new revisions
 		var oldRev, newRev operatorv1alpha1.ClusterAPIInstallerRevision
+
 		for _, rev := range clusterAPI.Status.Revisions {
 			if rev.Name == originalRev1.Name {
 				oldRev = rev
@@ -422,6 +424,7 @@ var _ = Describe("RevisionController waiting states", Serial, func() {
 			createFixtures(ctx, withoutInfraStatus)
 
 			mgr := newManagerWrapper(defaultProviderImgs)
+
 			DeferCleanup(func(ctx context.Context) {
 				mgr.stop()
 			})
@@ -471,6 +474,7 @@ var _ = Describe("RevisionController waiting states", Serial, func() {
 			createFixtures(ctx, withoutClusterAPI)
 
 			mgr := newManagerWrapper(defaultProviderImgs)
+
 			DeferCleanup(func(ctx context.Context) {
 				mgr.stop()
 			})

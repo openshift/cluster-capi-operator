@@ -89,6 +89,7 @@ var _ = Describe("AWS load balancer validation during MAPI->CAPI conversion", fu
 
 		mapiNamespace = corev1resourcebuilder.Namespace().WithGenerateName("openshift-machine-api-").Build()
 		capiNamespace = corev1resourcebuilder.Namespace().WithGenerateName("openshift-cluster-api-").Build()
+
 		Expect(k8sClient.Create(ctx, mapiNamespace)).To(Succeed())
 		Expect(k8sClient.Create(ctx, capiNamespace)).To(Succeed())
 
@@ -103,9 +104,12 @@ var _ = Describe("AWS load balancer validation during MAPI->CAPI conversion", fu
 		}).Build()
 		Expect(k8sClient.Create(ctx, capiCluster)).To(Succeed())
 
-		var err error
-		var controllerCfg *rest.Config
-		controllerCfg, err = testEnv.ControlPlane.APIServer.SecureServing.AddUser(
+		var (
+			err           error
+			controllerCfg *rest.Config
+		)
+
+		controllerCfg, err = testEnv.ControlPlane.APIServer.AddUser(
 			envtest.User{
 				Name:   "system:serviceaccount:openshift-cluster-api:cluster-capi-operator",
 				Groups: []string{"system:masters", "system:authenticated"},
@@ -321,6 +325,7 @@ var _ = Describe("validateLoadBalancerReferencesAgainstExpected", func() {
 
 			if len(in.expectedErrorMessages) > 0 {
 				Expect(err).ToNot(BeNil())
+
 				for _, expectedMsg := range in.expectedErrorMessages {
 					Expect(err.Error()).To(ContainSubstring(expectedMsg))
 				}

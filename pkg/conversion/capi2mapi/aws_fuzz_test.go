@@ -185,8 +185,8 @@ func awsMachineFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interface{} 
 			c.FillNoCustom(m)
 
 			// Ensure the type meta is set correctly.
-			m.TypeMeta.APIVersion = awsv1.GroupVersion.String()
-			m.TypeMeta.Kind = awsMachineKind
+			m.APIVersion = awsv1.GroupVersion.String()
+			m.Kind = awsMachineKind
 		},
 	}
 }
@@ -240,8 +240,8 @@ func awsMachineTemplateFuzzerFuncs(codecs runtimeserializer.CodecFactory) []inte
 			c.FillNoCustom(m)
 
 			// Ensure the type meta is set correctly.
-			m.TypeMeta.APIVersion = awsv1.GroupVersion.String()
-			m.TypeMeta.Kind = awsTemplateKind
+			m.APIVersion = awsv1.GroupVersion.String()
+			m.Kind = awsTemplateKind
 		},
 	}
 }

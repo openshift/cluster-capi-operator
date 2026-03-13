@@ -168,8 +168,8 @@ func (m *openstackMachineSetAndInfra) ToMachineSetAndMachineTemplate() (*cluster
 
 	// We have to merge these two maps so that labels and annotations added to the template objectmeta are persisted
 	// along with the labels and annotations from the machine objectmeta.
-	capiMachineSet.Spec.Template.ObjectMeta.Labels = util.MergeMaps(capiMachineSet.Spec.Template.ObjectMeta.Labels, capiMachine.Labels)
-	capiMachineSet.Spec.Template.ObjectMeta.Annotations = util.MergeMaps(capiMachineSet.Spec.Template.ObjectMeta.Annotations, capiMachine.Annotations)
+	capiMachineSet.Spec.Template.Labels = util.MergeMaps(capiMachineSet.Spec.Template.Labels, capiMachine.Labels)
+	capiMachineSet.Spec.Template.Annotations = util.MergeMaps(capiMachineSet.Spec.Template.Annotations, capiMachine.Annotations)
 
 	// Override the reference so that it matches the OpenStackMachineTemplate.
 	capiMachineSet.Spec.Template.Spec.InfrastructureRef.Kind = openstackMachineTemplateKind

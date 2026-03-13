@@ -41,20 +41,27 @@ import (
 )
 
 var _ = Describe("Reconcile Core cluster", func() {
-	var coreCluster *clusterv1.Cluster
-	var testNamespaceName string
+	var (
+		coreCluster       *clusterv1.Cluster
+		testNamespaceName string
+	)
+
 	testInfraName := "test-ocp-infrastructure-name"
 	testRegionName := "eu-west-2"
 	desiredOperatorReleaseVersion := "this-is-the-desired-release-version"
-	var infra *configv1.Infrastructure
-	var mgrCancel context.CancelFunc
-	var mgrDone chan struct{}
+
+	var (
+		infra     *configv1.Infrastructure
+		mgrCancel context.CancelFunc
+		mgrDone   chan struct{}
+	)
 
 	startManager := func(infra *configv1.Infrastructure) (context.CancelFunc, chan struct{}) {
 		mgrCtx, mgrCancel := context.WithCancel(context.Background())
 		mgrDone := make(chan struct{})
 
 		By("Setting up a manager and controller")
+
 		mgr, err := ctrl.NewManager(cfg, ctrl.Options{
 			Scheme: testScheme,
 			Metrics: server.Options{
@@ -79,6 +86,7 @@ var _ = Describe("Reconcile Core cluster", func() {
 		Expect(r.SetupWithManager(mgr)).To(Succeed(), "Reconciler should be able to setup with manager")
 
 		By("Starting the manager")
+
 		go func() {
 			defer GinkgoRecover()
 			defer close(mgrDone)
@@ -100,11 +108,13 @@ var _ = Describe("Reconcile Core cluster", func() {
 
 	BeforeEach(func() {
 		By("Creating the testing namespace")
+
 		namespace := corev1resourcebuilder.Namespace().WithGenerateName("test-capi-corecluster-").Build()
 		Expect(cl.Create(ctx, namespace)).To(Succeed())
 		testNamespaceName = namespace.Name
 
 		By("Creating the testing ClusterOperator object")
+
 		cO := configv1resourcebuilder.ClusterOperator().WithName(controllers.ClusterOperatorName).Build()
 		Expect(cl.Create(ctx, cO)).To(Succeed())
 	})
@@ -118,10 +128,12 @@ var _ = Describe("Reconcile Core cluster", func() {
 	Context("With a supported platform", func() {
 		BeforeEach(func() {
 			By("Creating the testing infrastructure for AWS")
+
 			openshiftInfrastructure := configv1resourcebuilder.Infrastructure().AsAWS(testInfraName, testRegionName).Build()
 			Expect(cl.Create(ctx, openshiftInfrastructure)).To(Succeed())
 
 			By("Patching the testing infrastructure status for AWS")
+
 			infra = openshiftInfrastructure.DeepCopy()
 			infra.Status = configv1.InfrastructureStatus{
 				APIServerInternalURL: "https://test:8081",
@@ -148,7 +160,6 @@ var _ = Describe("Reconcile Core cluster", func() {
 		Context("When there is no core cluster", func() {
 			Context("When there is no infra cluster", func() {
 				It("should not create core or infra cluster", func() {
-
 					testInfraCluster := awsv1resourcebuilder.AWSCluster().WithName(testInfraName).WithNamespace(testNamespaceName).Build()
 					Consistently(komega.Get(testInfraCluster)).Should(MatchError("awsclusters.infrastructure.cluster.x-k8s.io \"test-ocp-infrastructure-name\" not found"))
 
@@ -160,6 +171,7 @@ var _ = Describe("Reconcile Core cluster", func() {
 			Context("When there is an infra cluster", func() {
 				BeforeEach(func() {
 					By("Creating a testing infra cluster")
+
 					infraCluster := awsv1resourcebuilder.AWSCluster().WithName(testInfraName).WithNamespace(testNamespaceName).Build()
 					Eventually(cl.Create(ctx, infraCluster)).Should(Succeed())
 				})
@@ -197,6 +209,7 @@ var _ = Describe("Reconcile Core cluster", func() {
 		Context("When there is an existing core cluster", func() {
 			BeforeEach(func() {
 				By("Creating a testing core cluster object")
+
 				coreCluster = clusterv1resourcebuilder.Cluster().WithNamespace(testNamespaceName).WithName(testInfraName).Build()
 				Eventually(cl.Create(ctx, coreCluster)).Should(Succeed())
 			})
@@ -211,6 +224,7 @@ var _ = Describe("Reconcile Core cluster", func() {
 			Context("When there is an infra cluster", func() {
 				BeforeEach(func() {
 					By("Creating a testing infra cluster")
+
 					infraCluster := awsv1resourcebuilder.AWSCluster().WithName(testInfraName).WithNamespace(testNamespaceName).Build()
 					Eventually(cl.Create(ctx, infraCluster)).Should(Succeed())
 				})
@@ -235,10 +249,12 @@ var _ = Describe("Reconcile Core cluster", func() {
 	Context("With an unsupported platform", func() {
 		BeforeEach(func() {
 			By("Creating the testing infrastructure for NonePlatform")
+
 			noneInfra := configv1resourcebuilder.Infrastructure().WithName(testInfraName).Build()
 			Expect(cl.Create(ctx, noneInfra)).To(Succeed())
 
 			By("Patching the testing infrastructure status for NonePlatform ")
+
 			infra = noneInfra.DeepCopy()
 			infra.Status = configv1.InfrastructureStatus{
 				APIServerInternalURL: "https://test:8081",

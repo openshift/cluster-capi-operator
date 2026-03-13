@@ -72,7 +72,9 @@ var _ = BeforeSuite(func() {
 	ctx = logf.IntoContext(ctx, testLogger)
 
 	By("bootstrapping test environment")
+
 	var err error
+
 	testEnv = &envtest.Environment{}
 	cfg, k8sClient, err = test.StartEnvTest(testEnv)
 
@@ -98,6 +100,7 @@ var _ = BeforeSuite(func() {
 var _ = AfterSuite(
 	func(ctx SpecContext) {
 		By("tearing down the test environment")
+
 		err := testEnv.Stop()
 		Expect(err).NotTo(HaveOccurred())
 	},

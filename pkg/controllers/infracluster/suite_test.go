@@ -53,7 +53,9 @@ var _ = BeforeSuite(func() {
 	logf.SetLogger(textlogger.NewLogger(textlogger.NewConfig()))
 
 	By("bootstrapping test environment")
+
 	var err error
+
 	testEnv = &envtest.Environment{}
 	cfg, cl, err = test.StartEnvTest(testEnv)
 	Expect(err).NotTo(HaveOccurred())

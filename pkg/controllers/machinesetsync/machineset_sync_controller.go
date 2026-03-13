@@ -857,7 +857,7 @@ func (r *MachineSetSyncReconciler) ensureCAPIMachineSetSpecUpdated(ctx context.C
 	logger := logf.FromContext(ctx)
 
 	// If there are no spec changes, return early.
-	if !(capiMachineSetsDiff.HasMetadataChanges() || capiMachineSetsDiff.HasSpecChanges() || capiMachineSetsDiff.HasProviderSpecChanges()) {
+	if !capiMachineSetsDiff.HasMetadataChanges() && !capiMachineSetsDiff.HasSpecChanges() && !capiMachineSetsDiff.HasProviderSpecChanges() {
 		return false, nil
 	}
 
@@ -890,7 +890,7 @@ func (r *MachineSetSyncReconciler) ensureCAPIMachineSetStatusUpdated(ctx context
 	// If the source API object (MAPI MachineSet) status.observedGeneration does not match the objectmeta.generation
 	// it means the source API object status has not yet caught up with the desired spec,
 	// so we don't want to update the CAPI machine set status until that has happened.
-	if mapiMachineSet.Status.ObservedGeneration != mapiMachineSet.ObjectMeta.Generation {
+	if mapiMachineSet.Status.ObservedGeneration != mapiMachineSet.Generation {
 		logger.Info("Changes detected for CAPI machine set status, but the MAPI machine spec has not been observed yet, skipping status update")
 
 		return false, nil
@@ -902,7 +902,7 @@ func (r *MachineSetSyncReconciler) ensureCAPIMachineSetStatusUpdated(ctx context
 	setChangedCAPIMachineSetStatusFields(existingCAPIMachineSet, convertedCAPIMachineSet)
 
 	// Update the observed generation to match the updated source API object generation.
-	existingCAPIMachineSet.Status.ObservedGeneration = updatedOrCreatedCAPIMachineSet.ObjectMeta.Generation
+	existingCAPIMachineSet.Status.ObservedGeneration = updatedOrCreatedCAPIMachineSet.Generation
 
 	isPatchRequired, err := util.IsPatchRequired(existingCAPIMachineSet, patchBase)
 	if err != nil {
@@ -934,7 +934,7 @@ func (r *MachineSetSyncReconciler) ensureMAPIMachineSetSpecUpdated(ctx context.C
 	logger := logf.FromContext(ctx)
 
 	// If there are no spec changes, return early.
-	if !(mapiMachineSetsDiff.HasMetadataChanges() || mapiMachineSetsDiff.HasSpecChanges() || mapiMachineSetsDiff.HasProviderSpecChanges()) {
+	if !mapiMachineSetsDiff.HasMetadataChanges() && !mapiMachineSetsDiff.HasSpecChanges() && !mapiMachineSetsDiff.HasProviderSpecChanges() {
 		return false, nil
 	}
 
@@ -968,7 +968,7 @@ func (r *MachineSetSyncReconciler) ensureMAPIMachineSetStatusUpdated(ctx context
 	// If the source API object (CAPI MachineSet) status.observedGeneration does not match the objectmeta.generation
 	// it means the source API object status has not yet caught up with the desired spec,
 	// so we don't want to update the MAPI machine set status until that has happened.
-	if sourceCAPIMachineSet.Status.ObservedGeneration != sourceCAPIMachineSet.ObjectMeta.Generation {
+	if sourceCAPIMachineSet.Status.ObservedGeneration != sourceCAPIMachineSet.Generation {
 		logger.Info("Changes detected for MAPI machine set status, but the CAPI machine spec has not been observed yet, skipping status update")
 		return false, nil
 	}
@@ -981,7 +981,7 @@ func (r *MachineSetSyncReconciler) ensureMAPIMachineSetStatusUpdated(ctx context
 	setChangedMAPIMachineSetStatusFields(existingMAPIMachineSet, convertedMAPIMachineSet)
 
 	// Update the observed generation to match the updated source API object generation.
-	existingMAPIMachineSet.Status.ObservedGeneration = updatedMAPIMachineSet.ObjectMeta.Generation
+	existingMAPIMachineSet.Status.ObservedGeneration = updatedMAPIMachineSet.Generation
 
 	isPatchRequired, err := util.IsPatchRequired(existingMAPIMachineSet, patchBase)
 	if err != nil {
@@ -1146,7 +1146,7 @@ func (r *MachineSetSyncReconciler) reconcileMAPItoCAPIMachineSetDeletionMAPINotD
 	// Issue a deletion also to the MAPI authoritative machine set.
 	logger.Info("The non-authoritative Cluster API machine set is being deleted, issuing deletion to the corresponding Machine API machine set")
 
-	if err := r.Client.Delete(ctx, mapiMachineSet); err != nil {
+	if err := r.Delete(ctx, mapiMachineSet); err != nil {
 		return false, fmt.Errorf("failed to delete Machine API machine set: %w", err)
 	}
 
@@ -1188,7 +1188,7 @@ func (r *MachineSetSyncReconciler) reconcileMAPItoCAPIMachineSetDeletionNormal(c
 	if capiMachineSet.DeletionTimestamp.IsZero() {
 		logger.Info("Machine API machine set is being deleted, issuing deletion to corresponding Cluster API machine set")
 
-		if err := r.Client.Delete(ctx, capiMachineSet); err != nil {
+		if err := r.Delete(ctx, capiMachineSet); err != nil {
 			return true, fmt.Errorf("failed delete Cluster API machine set: %w", err)
 		}
 	}
@@ -1275,7 +1275,7 @@ func (r *MachineSetSyncReconciler) reconcileCAPItoMAPIMachineSetDeletionNormal(c
 	if mapiMachineSet.DeletionTimestamp.IsZero() {
 		logger.Info("Cluster API machine set is being deleted, issuing deletion to corresponding Machine API machine set")
 
-		if err := r.Client.Delete(ctx, mapiMachineSet); err != nil {
+		if err := r.Delete(ctx, mapiMachineSet); err != nil {
 			return true, fmt.Errorf("failed delete Machine API machine set: %w", err)
 		}
 
@@ -1377,7 +1377,6 @@ func compareMAPIMachineSets(platform configv1.PlatformType, a, b *mapiv1beta1.Ma
 		// We do not convert these conditions to MAPI conditions as they are managed directly by the machineSet sync and migration controllers.
 		util.WithIgnoreField("status", "conditions"),
 	).Diff(a, b)
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to compare Machine API machinesets: %w", err)
 	}
@@ -1424,8 +1423,8 @@ func restoreMAPIFields(existingMAPIMachineSet, convertedMAPIMachineSet *mapiv1be
 	convertedMAPIMachineSet.SetResourceVersion(util.GetResourceVersion(client.Object(existingMAPIMachineSet)))
 	convertedMAPIMachineSet.SetNamespace(existingMAPIMachineSet.GetNamespace())
 	// Restore the MAPI machine set template labels.
-	convertedMAPIMachineSet.Spec.Template.ObjectMeta.Labels = util.MergeMaps(existingMAPIMachineSet.Spec.Template.ObjectMeta.Labels, convertedMAPIMachineSet.Spec.Template.ObjectMeta.Labels)
-	convertedMAPIMachineSet.Spec.Template.Spec.ObjectMeta.Labels = util.MergeMaps(existingMAPIMachineSet.Spec.Template.Spec.ObjectMeta.Labels, convertedMAPIMachineSet.Spec.Template.Spec.ObjectMeta.Labels)
+	convertedMAPIMachineSet.Spec.Template.Labels = util.MergeMaps(existingMAPIMachineSet.Spec.Template.Labels, convertedMAPIMachineSet.Spec.Template.Labels)
+	convertedMAPIMachineSet.Spec.Template.Spec.Labels = util.MergeMaps(existingMAPIMachineSet.Spec.Template.Spec.Labels, convertedMAPIMachineSet.Spec.Template.Spec.Labels)
 	// Restore API authoritativeness, as it gets lost in MAPI->CAPI->MAPI translation.
 	convertedMAPIMachineSet.Spec.AuthoritativeAPI = existingMAPIMachineSet.Spec.AuthoritativeAPI
 	convertedMAPIMachineSet.Spec.Template.Spec.AuthoritativeAPI = existingMAPIMachineSet.Spec.Template.Spec.AuthoritativeAPI

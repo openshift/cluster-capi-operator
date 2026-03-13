@@ -63,6 +63,7 @@ var _ = Describe("With a running MachineSetMigration controller", func() {
 
 	BeforeEach(func() {
 		By("Setting up namespaces for the test")
+
 		migrationControllerNamespace = corev1resourcebuilder.Namespace().
 			WithGenerateName("machineset-migration-controller-").Build()
 		Expect(k8sClient.Create(ctx, migrationControllerNamespace)).To(Succeed(), "migration controller namespace should be able to be created")
@@ -144,6 +145,7 @@ var _ = Describe("With a running MachineSetMigration controller", func() {
 		Context("when no migration is requested (status equals spec)", func() {
 			BeforeEach(func() {
 				By("Setting the MAPI machine set spec AuthoritativeAPI to MachineAPI")
+
 				mapiMachineSet = mapiMachineSetBuilder.
 					WithAuthoritativeAPI(mapiv1beta1.MachineAuthorityMachineAPI).
 					Build()
@@ -168,6 +170,7 @@ var _ = Describe("With a running MachineSetMigration controller", func() {
 		Context("when status.AuthoritativeAPI is empty (first observation)", func() {
 			BeforeEach(func() {
 				By("Setting the MAPI machine set spec AuthoritativeAPI to MachineAPI")
+
 				mapiMachineSet = mapiMachineSetBuilder.
 					WithAuthoritativeAPI(mapiv1beta1.MachineAuthorityMachineAPI).
 					Build()
@@ -180,8 +183,10 @@ var _ = Describe("With a running MachineSetMigration controller", func() {
 
 			It("should patch the status to match spec and requeue", func() {
 				By("Running one reconciliation")
+
 				_, err := reconciler.Reconcile(ctx, req)
 				Expect(err).NotTo(HaveOccurred(), "reconciler should not have errored")
+
 				updatedMS := &mapiv1beta1.MachineSet{}
 				Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(mapiMachineSet), updatedMS)).To(Succeed())
 				Expect(updatedMS.Status.AuthoritativeAPI).To(Equal(updatedMS.Spec.AuthoritativeAPI))
@@ -191,6 +196,7 @@ var _ = Describe("With a running MachineSetMigration controller", func() {
 		Context("when the Synchronized condition is not True", func() {
 			BeforeEach(func() {
 				By("Setting the MAPI machine set spec AuthoritativeAPI to ClusterAPI")
+
 				mapiMachineSet = mapiMachineSetBuilder.
 					WithAuthoritativeAPI(mapiv1beta1.MachineAuthorityClusterAPI).
 					Build()
@@ -223,12 +229,14 @@ var _ = Describe("With a running MachineSetMigration controller", func() {
 		Context("when a migration request is first detected", func() {
 			BeforeEach(func() {
 				By("Setting the MAPI machine set spec AuthoritativeAPI to ClusterAPI")
+
 				mapiMachineSet = mapiMachineSetBuilder.
 					WithAuthoritativeAPI(mapiv1beta1.MachineAuthorityClusterAPI).
 					Build()
 				Eventually(k8sClient.Create(ctx, mapiMachineSet)).Should(Succeed())
 
 				By("Creating a mirror CAPI machine set")
+
 				capiMachineSet = capiMachineSetBuilder.Build()
 				Eventually(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
 
@@ -263,12 +271,14 @@ var _ = Describe("With a running MachineSetMigration controller", func() {
 			Context("when migrating from MachineAPI to ClusterAPI", func() {
 				BeforeEach(func() {
 					By("Setting the MAPI machine set spec AuthoritativeAPI to ClusterAPI")
+
 					mapiMachineSet = mapiMachineSetBuilder.
 						WithAuthoritativeAPI(mapiv1beta1.MachineAuthorityClusterAPI).
 						Build()
 					Eventually(k8sClient.Create(ctx, mapiMachineSet)).Should(Succeed())
 
 					By("Creating a mirror CAPI machine set")
+
 					capiMachineSet = capiMachineSetBuilder.Build()
 					Eventually(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
 
@@ -305,10 +315,12 @@ var _ = Describe("With a running MachineSetMigration controller", func() {
 			Context("when migrating from ClusterAPI to MachineAPI", func() {
 				BeforeEach(func() {
 					By("Setting the MAPI machine set spec AuthoritativeAPI to MachineAPI")
+
 					mapiMachineSet = mapiMachineSetBuilder.WithAuthoritativeAPI(mapiv1beta1.MachineAuthorityMachineAPI).Build()
 					Eventually(k8sClient.Create(ctx, mapiMachineSet)).Should(Succeed())
 
 					By("Creating a mirror CAPI machine set")
+
 					capiMachineSet = capiMachineSetBuilder.Build()
 					Eventually(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
 
@@ -349,6 +361,7 @@ var _ = Describe("With a running MachineSetMigration controller", func() {
 				Context("when status is not paused for the old authoritative resource (MAPI)", func() {
 					BeforeEach(func() {
 						By("Setting the MAPI machine set spec AuthoritativeAPI to ClusterAPI")
+
 						mapiMachineSet = mapiMachineSetBuilder.
 							// Set desired authoritative API in spec to ClusterAPI.
 							// To check for requesting pausing on the the MAPI resource it is sufficient
@@ -358,6 +371,7 @@ var _ = Describe("With a running MachineSetMigration controller", func() {
 						Eventually(k8sClient.Create(ctx, mapiMachineSet)).Should(Succeed())
 
 						By("Creating a mirror CAPI machine set")
+
 						capiMachineSet = capiMachineSetBuilder.Build()
 						Eventually(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
 
@@ -406,12 +420,14 @@ var _ = Describe("With a running MachineSetMigration controller", func() {
 				Context("when status is not paused for the old authoritative resource (CAPI)", func() {
 					BeforeEach(func() {
 						By("Setting the MAPI machine set spec AuthoritativeAPI to MachineAPI")
+
 						mapiMachineSet = mapiMachineSetBuilder.
 							WithAuthoritativeAPI(mapiv1beta1.MachineAuthorityMachineAPI).
 							Build()
 						Eventually(k8sClient.Create(ctx, mapiMachineSet)).Should(Succeed())
 
 						By("Creating a mirror CAPI machine set")
+
 						capiMachineSet = capiMachineSetBuilder.Build()
 						Eventually(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
 
@@ -465,6 +481,7 @@ var _ = Describe("With a running MachineSetMigration controller", func() {
 				Context("when status synchronizedGeneration is not matching the old authoritativeAPI generation (MAPI)", func() {
 					BeforeEach(func() {
 						By("Setting the MAPI machine set spec AuthoritativeAPI to ClusterAPI")
+
 						mapiMachineSet = mapiMachineSetBuilder.
 							// Set desired authoritative API in spec to ClusterAPI.
 							// To check for requesting pausing on the the MAPI resource it is sufficient
@@ -474,6 +491,7 @@ var _ = Describe("With a running MachineSetMigration controller", func() {
 						Eventually(k8sClient.Create(ctx, mapiMachineSet)).Should(Succeed())
 
 						By("Creating a mirror CAPI machine set")
+
 						capiMachineSet = capiMachineSetBuilder.Build()
 						Eventually(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
 
@@ -507,12 +525,14 @@ var _ = Describe("With a running MachineSetMigration controller", func() {
 				Context("when status synchronizedGeneration is not matching the old authoritativeAPI generation (CAPI)", func() {
 					BeforeEach(func() {
 						By("Setting the MAPI machine set spec AuthoritativeAPI to MachineAPI")
+
 						mapiMachineSet = mapiMachineSetBuilder.
 							WithAuthoritativeAPI(mapiv1beta1.MachineAuthorityMachineAPI).
 							Build()
 						Eventually(k8sClient.Create(ctx, mapiMachineSet)).Should(Succeed())
 
 						By("Creating a mirror CAPI machine set")
+
 						capiMachineSet = capiMachineSetBuilder.Build()
 						Eventually(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
 
@@ -548,6 +568,7 @@ var _ = Describe("With a running MachineSetMigration controller", func() {
 			Context("when migrating from MachineAPI to ClusterAPI", func() {
 				BeforeEach(func() {
 					By("Setting the MAPI machine set spec AuthoritativeAPI to ClusterAPI")
+
 					mapiMachineSet = mapiMachineSetBuilder.
 						// Set desired authoritative API in spec to ClusterAPI.
 						// To check for requesting pausing on the the MAPI resource it is sufficient
@@ -580,6 +601,7 @@ var _ = Describe("With a running MachineSetMigration controller", func() {
 					})).Should(Succeed())
 
 					By("Creating a mirror CAPI machine set")
+
 					capiMachineSet = capiMachineSetBuilder.
 						WithAnnotations(map[string]string{
 							clusterv1.PausedAnnotation: "",
@@ -619,12 +641,14 @@ var _ = Describe("With a running MachineSetMigration controller", func() {
 			Context("when migrating from ClusterAPI to MachineAPI", func() {
 				BeforeEach(func() {
 					By("Setting the MAPI machine set spec AuthoritativeAPI to MachineAPI")
+
 					mapiMachineSet = mapiMachineSetBuilder.
 						WithAuthoritativeAPI(mapiv1beta1.MachineAuthorityMachineAPI).
 						Build()
 					Eventually(k8sClient.Create(ctx, mapiMachineSet)).Should(Succeed())
 
 					By("Creating a mirror CAPI machine set")
+
 					capiMachineSet = capiMachineSetBuilder.
 						WithAnnotations(map[string]string{
 							clusterv1.PausedAnnotation: "",

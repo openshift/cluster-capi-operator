@@ -83,6 +83,7 @@ func (r *CoreClusterController) SetupWithManager(mgr ctrl.Manager) error {
 // Reconcile reconciles the core cluster object for the openshift-cluster-api namespace.
 func (r *CoreClusterController) Reconcile(ctx context.Context, req reconcile.Request) (ctrl.Result, error) {
 	logger := logf.FromContext(ctx).WithName(controllerName)
+
 	logger.Info("Reconciling core cluster")
 	defer logger.Info("Finished reconciling core cluster")
 
@@ -127,7 +128,7 @@ func (r *CoreClusterController) Reconcile(ctx context.Context, req reconcile.Req
 // ensureCoreCluster creates a cluster with the given name and returns the cluster object.
 func (r *CoreClusterController) ensureCoreCluster(ctx context.Context, clusterObjectKey client.ObjectKey, logger logr.Logger) (*clusterv1.Cluster, error) {
 	cluster := &clusterv1.Cluster{}
-	if err := r.Client.Get(ctx, clusterObjectKey, cluster); err != nil && !kerrors.IsNotFound(err) {
+	if err := r.Get(ctx, clusterObjectKey, cluster); err != nil && !kerrors.IsNotFound(err) {
 		return nil, fmt.Errorf("failed to get core cluster %s/%s: %w", clusterObjectKey.Namespace, clusterObjectKey.Name, err)
 	} else if err == nil {
 		return cluster, nil
@@ -146,7 +147,7 @@ func (r *CoreClusterController) ensureCoreCluster(ctx context.Context, clusterOb
 	infraCluster.SetKind(infraClusterKind)
 	infraCluster.SetAPIVersion(infraClusterAPIVersion)
 
-	if err := r.Client.Get(ctx, clusterObjectKey, infraCluster); err != nil {
+	if err := r.Get(ctx, clusterObjectKey, infraCluster); err != nil {
 		return nil, fmt.Errorf("failed to get infra cluster %s/%s: %w", clusterObjectKey.Namespace, clusterObjectKey.Name, err)
 	}
 

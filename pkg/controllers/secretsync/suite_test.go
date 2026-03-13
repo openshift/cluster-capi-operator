@@ -48,7 +48,9 @@ var _ = BeforeSuite(func() {
 	logf.SetLogger(klog.Background())
 
 	By("bootstrapping test environment")
+
 	var err error
+
 	testEnv = &envtest.Environment{}
 	cfg, cl, err = test.StartEnvTest(testEnv)
 	Expect(err).NotTo(HaveOccurred())
@@ -58,6 +60,7 @@ var _ = BeforeSuite(func() {
 	managedNamespace := &corev1.Namespace{}
 	managedNamespace.SetName(controllers.DefaultCAPINamespace)
 	Expect(cl.Create(context.Background(), managedNamespace)).To(Succeed())
+
 	ocpConfigNamespace := &corev1.Namespace{}
 	ocpConfigNamespace.SetName(SecretSourceNamespace)
 	Expect(cl.Create(context.Background(), ocpConfigNamespace)).To(Succeed())

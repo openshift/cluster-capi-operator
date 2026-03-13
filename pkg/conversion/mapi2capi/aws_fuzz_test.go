@@ -165,9 +165,9 @@ func (f *awsProviderFuzzer) fuzzProviderConfig(ps *mapiv1beta1.AWSMachineProvide
 	}
 
 	// Copy instance-type, region and zone to the struct so they can be set at the machine labels too.
-	f.MAPIMachineFuzzer.InstanceType = ps.InstanceType
-	f.MAPIMachineFuzzer.Region = ps.Placement.Region
-	f.MAPIMachineFuzzer.Zone = ps.Placement.AvailabilityZone
+	f.InstanceType = ps.InstanceType
+	f.Region = ps.Placement.Region
+	f.Zone = ps.Placement.AvailabilityZone
 }
 
 func (f *awsProviderFuzzer) fuzzAWSMachineSpecCPUOptions(cpuOpts *mapiv1beta1.CPUOptions, c randfill.Continue) {
@@ -239,6 +239,7 @@ func (f *awsProviderFuzzer) FuzzerFuncsMachineSet(codecs runtimeserializer.Codec
 			if ebs.VolumeType != nil && *ebs.VolumeType == "" {
 				ebs.VolumeType = nil
 			}
+
 			if ebs.Iops != nil && *ebs.Iops == 0 {
 				ebs.Iops = nil
 			}

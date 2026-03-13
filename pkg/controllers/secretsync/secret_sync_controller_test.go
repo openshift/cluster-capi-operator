@@ -59,8 +59,10 @@ func makeUserDataSecret() *corev1.Secret {
 var _ = Describe("areSecretsEqual reconciler method", func() {
 	reconciler := &UserDataSecretController{}
 
-	var sourceUserDataSecret *corev1.Secret
-	var targetUserDataSecret *corev1.Secret
+	var (
+		sourceUserDataSecret *corev1.Secret
+		targetUserDataSecret *corev1.Secret
+	)
 
 	BeforeEach(func() {
 		sourceUserDataSecret = makeUserDataSecret()
@@ -84,8 +86,11 @@ var _ = Describe("areSecretsEqual reconciler method", func() {
 var _ = Describe("User Data Secret controller", func() {
 	var rec *record.FakeRecorder
 
-	var mgrCtxCancel context.CancelFunc
-	var mgrStopped chan struct{}
+	var (
+		mgrCtxCancel context.CancelFunc
+		mgrStopped   chan struct{}
+	)
+
 	ctx := context.Background()
 
 	var sourceSecret *corev1.Secret
@@ -96,7 +101,9 @@ var _ = Describe("User Data Secret controller", func() {
 
 	BeforeEach(func() {
 		By("Setting up a manager and controller")
+
 		var err error
+
 		mgr, err := ctrl.NewManager(cfg, ctrl.Options{
 			Metrics: server.Options{BindAddress: "0"},
 			Controller: config.Controller{
@@ -117,14 +124,17 @@ var _ = Describe("User Data Secret controller", func() {
 		Expect(reconciler.SetupWithManager(mgr)).To(Succeed())
 
 		By("Creating needed Secret")
+
 		sourceSecret = makeUserDataSecret()
 		Expect(cl.Create(ctx, sourceSecret)).To(Succeed())
 
 		var mgrCtx context.Context
+
 		mgrCtx, mgrCtxCancel = context.WithCancel(ctx)
 		mgrStopped = make(chan struct{})
 
 		By("Starting the manager")
+
 		go func() {
 			defer GinkgoRecover()
 			defer close(mgrStopped)
@@ -146,8 +156,10 @@ var _ = Describe("User Data Secret controller", func() {
 		Expect(test.CleanupAndWait(ctx, cl, co))
 
 		By("Cleanup resources")
+
 		allSecrets := &corev1.SecretList{}
 		Expect(cl.List(ctx, allSecrets)).To(Succeed())
+
 		for _, cm := range allSecrets.Items {
 			Expect(test.CleanupAndWait(ctx, cl, cm.DeepCopy())).To(Succeed())
 		}
@@ -163,6 +175,7 @@ var _ = Describe("User Data Secret controller", func() {
 	It("secret should be synced up after first reconcile", func() {
 		Eventually(func() (bool, error) {
 			syncedUserDataSecret := &corev1.Secret{}
+
 			err := cl.Get(ctx, syncedSecretKey, syncedUserDataSecret)
 			if err != nil {
 				return false, err
@@ -172,6 +185,7 @@ var _ = Describe("User Data Secret controller", func() {
 			if !ok {
 				return false, errMissingFormatKey
 			}
+
 			Expect(string(formatValue)).Should(Equal("ignition"))
 
 			return bytes.Equal(syncedUserDataSecret.Data[capiUserDataKey], []byte(defaultSecretValue)), nil
@@ -185,6 +199,7 @@ var _ = Describe("User Data Secret controller", func() {
 
 		Eventually(func() (bool, error) {
 			syncedUserDataSecret := &corev1.Secret{}
+
 			err := cl.Get(ctx, syncedSecretKey, syncedUserDataSecret)
 			if err != nil {
 				return false, err
@@ -194,6 +209,7 @@ var _ = Describe("User Data Secret controller", func() {
 			if !ok {
 				return false, errMissingFormatKey
 			}
+
 			Expect(string(formatValue)).Should(Equal("ignition"))
 
 			return bytes.Equal(syncedUserDataSecret.Data[capiUserDataKey], []byte("managed one changed")), nil
@@ -202,6 +218,7 @@ var _ = Describe("User Data Secret controller", func() {
 
 	It("secret should be synced up if owned user data secret is deleted or changed", func() {
 		syncedUserDataSecret := &corev1.Secret{}
+
 		Eventually(func() error {
 			return cl.Get(ctx, syncedSecretKey, syncedUserDataSecret)
 		}, timeout).Should(Succeed())
@@ -218,6 +235,7 @@ var _ = Describe("User Data Secret controller", func() {
 			if !ok {
 				return false, errMissingFormatKey
 			}
+
 			Expect(string(formatValue)).Should(Equal("ignition"))
 
 			return bytes.Equal(syncedUserDataSecret.Data[capiUserDataKey], []byte(defaultSecretValue)), nil
@@ -228,9 +246,11 @@ var _ = Describe("User Data Secret controller", func() {
 
 	It("secret not be updated if source and target secret contents are identical", func() {
 		syncedUserDataSecret := &corev1.Secret{}
+
 		Eventually(func() error {
 			return cl.Get(ctx, syncedSecretKey, syncedUserDataSecret)
 		}, timeout).Should(Succeed())
+
 		initialSecretresourceVersion := syncedUserDataSecret.ResourceVersion
 
 		Expect(cl.Get(ctx, syncedSecretKey, syncedUserDataSecret)).Should(Succeed())

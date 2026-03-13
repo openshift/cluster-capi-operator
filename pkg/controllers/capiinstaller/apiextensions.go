@@ -78,7 +78,7 @@ const injectCABundleAnnotation = "service.beta.openshift.io/inject-cabundle"
 // the service-ca controller is responsible for the field.
 // Note: this is the same way as CVO does it https://github.com/openshift/cluster-version-operator/blob/0e6c916f99e05983190202575bb530200560acb9/lib/resourcemerge/apiext.go#L34
 func ensureCustomResourceDefinitionV1CaBundle(required *apiextensionsv1.CustomResourceDefinition, existing apiextensionsv1.CustomResourceDefinition) {
-	if val, ok := existing.ObjectMeta.Annotations[injectCABundleAnnotation]; !ok || val != "true" {
+	if val, ok := existing.Annotations[injectCABundleAnnotation]; !ok || val != "true" {
 		return
 	}
 

@@ -56,6 +56,7 @@ var _ = Describe("capi2mapi Machine conversion", func() {
 				"should match expected errors while converting CAPI resources to MAPI Machine")
 			Expect(warns).To(matchers.ConsistOfSubstrings(in.expectedWarnings),
 				"should match expected warnings while converting CAPI resources to MAPI Machine")
+
 			if in.assertion != nil {
 				in.assertion(machine)
 			}
