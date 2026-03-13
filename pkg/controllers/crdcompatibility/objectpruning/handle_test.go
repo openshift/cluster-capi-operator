@@ -347,7 +347,10 @@ var _ = Describe("Object Pruning Integration", func() {
 			By("Creating MutatingWebhookConfiguration with non-existent CompatibilityRequirement")
 
 			webhookConfig := createMutatingWebhookConfig(&apiextensionsv1alpha1.CompatibilityRequirement{
-				ObjectMeta: metav1.ObjectMeta{Name: "non-existent-compat-req"},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "non-existent-compat-req",
+					UID:  "non-existent-compat-req-uid",
+				},
 			}, liveCRD)
 			Expect(cl.Create(ctx, webhookConfig)).To(Succeed())
 
