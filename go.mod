@@ -94,7 +94,7 @@ require (
 	sigs.k8s.io/cluster-api-provider-ibmcloud v0.13.1
 	sigs.k8s.io/cluster-api-provider-openstack v0.14.1
 	sigs.k8s.io/cluster-api-provider-vsphere v1.15.2
-	sigs.k8s.io/controller-runtime v0.22.5
+	sigs.k8s.io/controller-runtime v0.23.3
 	sigs.k8s.io/crdify v0.5.0
 	sigs.k8s.io/kube-storage-version-migrator v0.0.6-0.20230721195810-5c8923c5ff96
 	sigs.k8s.io/randfill v1.0.0
