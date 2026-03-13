@@ -24,6 +24,8 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -38,9 +40,11 @@ import (
 )
 
 var (
-	testEnv *envtest.Environment
-	cfg     *rest.Config
-	cl      client.Client
+	testEnv            *envtest.Environment
+	cfg                *rest.Config
+	cl                 client.Client
+	permissiveSuiteCRD func() *apiextensionsv1.CustomResourceDefinition
+	emptySuiteCRD      func() *apiextensionsv1.CustomResourceDefinition
 )
 
 var defaultNodeTimeout = NodeTimeout(10 * time.Second)
@@ -77,6 +81,8 @@ var _ = BeforeSuite(func(ctx context.Context) {
 	// Initialize validator and webhook server
 	_, startWebhookServer := initValidator(ctx, cfg, cl.Scheme(), testEnv)
 	startWebhookServer()
+
+	permissiveSuiteCRD, emptySuiteCRD = createSuiteCRDs(ctx)
 }, NodeTimeout(30*time.Second))
 
 func initValidator(ctx context.Context, cfg *rest.Config, scheme *runtime.Scheme, testEnv *envtest.Environment) (*validator, func()) {
@@ -153,4 +159,45 @@ func stopWebhookServer(ctx context.Context, mgrCancel context.CancelFunc, mgrDon
 
 func kWithCtx(ctx context.Context) komega.Komega {
 	return komega.New(cl).WithContext(ctx)
+}
+
+func createSuiteCRDs(ctx context.Context) (func() *apiextensionsv1.CustomResourceDefinition, func() *apiextensionsv1.CustomResourceDefinition) {
+	permissiveCRD := createPermissivePropertiesCRDSchema()
+	createCRD(ctx, permissiveCRD.DeepCopy())
+
+	emptyCRD := createEmptyPropertiesCRDSchema()
+	createCRD(ctx, emptyCRD.DeepCopy())
+
+	return func() *apiextensionsv1.CustomResourceDefinition {
+			return permissiveCRD.DeepCopy()
+		}, func() *apiextensionsv1.CustomResourceDefinition {
+			return emptyCRD.DeepCopy()
+		}
+}
+
+func createCRD(ctx context.Context, crd *apiextensionsv1.CustomResourceDefinition) {
+	GinkgoHelper()
+
+	By("Creating CRD "+crd.GetName(), func() {
+		// Install the CRD in the test environment
+		Expect(cl.Create(ctx, crd)).To(Succeed())
+	})
+
+	DeferCleanup(func(ctx context.Context) {
+		Expect(test.CleanupAndWait(ctx, cl, crd)).To(Succeed())
+	})
+
+	By("Waiting for CRD to have been established for at least 2 seconds", func() {
+		// Because the API server is programmed not to accept a response before then.
+		// See: https://github.com/kubernetes/kubernetes/blob/18dd17f7ce05bd79e21245278a4e88f901d2ebd6/staging/src/k8s.io/apiextensions-apiserver/pkg/apiserver/customresource_handler.go#L381-L394
+		Eventually(kWithCtx(ctx).Object(crd)).WithContext(ctx).Should(HaveField("Status.Conditions",
+			test.HaveCondition("Established").
+				WithStatus(apiextensionsv1.ConditionTrue).
+				WithLastTransitionTime(WithTransform(timeSince, BeNumerically(">", 2*time.Second))),
+		))
+	})
+}
+
+func timeSince(t metav1.Time) time.Duration {
+	return time.Since(t.Time)
 }

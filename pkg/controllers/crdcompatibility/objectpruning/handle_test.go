@@ -65,19 +65,7 @@ var _ = Describe("Object Pruning Integration", func() {
 
 	Context("admission pruning scenarios", func() {
 		BeforeEach(func(ctx context.Context) {
-			By("Creating the live CRD with permissive schema")
-
-			liveCRD = createPermissivePropertiesCRDSchema()
-			Expect(cl.Create(ctx, liveCRD)).To(Succeed())
-
-			DeferCleanup(func(ctx context.Context) {
-				Expect(test.CleanupAndWait(ctx, cl, liveCRD)).To(Succeed())
-			}, defaultNodeTimeout)
-
-			By("Waiting for CRD to be established")
-			Eventually(kWithCtx(ctx).Object(liveCRD)).WithContext(ctx).Should(
-				HaveField("Status.Conditions", test.HaveCondition("Established").WithStatus(apiextensionsv1.ConditionTrue)),
-			)
+			liveCRD = permissiveSuiteCRD()
 		}, defaultNodeTimeout)
 
 		DescribeTable("object pruning scenarios through API server",
@@ -326,21 +314,7 @@ var _ = Describe("Object Pruning Integration", func() {
 
 	Context("error scenarios", func() {
 		BeforeEach(func(ctx context.Context) {
-			By("Creating a live CRD with permissive schema")
-
-			liveCRD = createEmptyPropertiesCRDSchema()
-			Expect(cl.Create(ctx, liveCRD)).To(Succeed())
-
-			By("Waiting for CRD to be established")
-			Eventually(kWithCtx(ctx).Object(liveCRD)).WithContext(ctx).Should(
-				HaveField("Status.Conditions", ContainElement(And(
-					HaveField("Type", BeEquivalentTo("Established")),
-					HaveField("Status", BeEquivalentTo(metav1.ConditionTrue)),
-				))))
-
-			DeferCleanup(func(ctx context.Context) {
-				Expect(test.CleanupAndWait(ctx, cl, liveCRD)).To(Succeed())
-			})
+			liveCRD = emptySuiteCRD()
 		}, defaultNodeTimeout)
 
 		It("should handle webhook when CompatibilityRequirement does not exist", func(ctx context.Context) {
@@ -534,7 +508,7 @@ func createEmptyPropertiesCRDSchema() *apiextensionsv1.CustomResourceDefinition 
 	gvk := schema.GroupVersionKind{
 		Group:   "test.example.com",
 		Version: "v1",
-		Kind:    "TestResource",
+		Kind:    "TestEmptyResource",
 	}
 
 	crd := test.GenerateCRD(gvk)
