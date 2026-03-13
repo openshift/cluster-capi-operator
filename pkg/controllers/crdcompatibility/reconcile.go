@@ -47,6 +47,10 @@ const (
 	terminalErrorReasonConfigurationError string = "ConfigurationError"
 )
 
+var (
+	errWebhookConfigNotControlledByCompatibilityRequirement = errors.New("webhook config is not controlled by CompatibilityRequirement")
+)
+
 type reconcileState struct {
 	*CompatibilityRequirementReconciler
 
@@ -193,12 +197,21 @@ func (r *reconcileState) reconcileDelete(ctx context.Context, obj *apiextensions
 	return ctrl.Result{}, nil
 }
 
+//nolint:dupl // This and the ensureObjectPruningWebhook function look very similar, but are populating different objects.
 func (r *reconcileState) ensureObjectValidationWebhook(ctx context.Context, obj *apiextensionsv1alpha1.CompatibilityRequirement) error {
-	if isObjectValidationWebhookEnabled(obj) || r.compatibilityCRD == nil {
-		return nil
+	if !isObjectValidationWebhookEnabled(obj) || r.compatibilityCRD == nil {
+		// Ensure that the webhook is removed in case we previously created it.
+		return r.removeObjectValidationWebhook(ctx, obj)
 	}
 
 	webhookConfig := objectvalidation.ValidatingWebhookConfigurationFor(obj, r.compatibilityCRD)
+
+	existingWebhookConfig := &admissionregistrationv1.ValidatingWebhookConfiguration{}
+	if err := r.client.Get(ctx, types.NamespacedName{Name: webhookConfig.Name}, existingWebhookConfig); err != nil && !apierrors.IsNotFound(err) {
+		return fmt.Errorf("failed to get ValidatingWebhookConfiguration %s: %w", webhookConfig.Name, err)
+	} else if err == nil && !metav1.IsControlledBy(existingWebhookConfig, obj) {
+		return fmt.Errorf("%w: %s", errWebhookConfigNotControlledByCompatibilityRequirement, webhookConfig.Name)
+	}
 
 	if _, _, err := resourceapply.ApplyValidatingWebhookConfigurationImproved(
 		ctx,
@@ -238,13 +251,23 @@ func (r *reconcileState) removeObjectValidationWebhook(ctx context.Context, obj 
 	return nil
 }
 
+//nolint:dupl // This and the ensureObjectValidationWebhook function look very similar, but are populating different objects.
 func (r *reconcileState) ensureObjectPruningWebhook(ctx context.Context, obj *apiextensionsv1alpha1.CompatibilityRequirement) error {
-	if isObjectValidationWebhookEnabled(obj) || r.compatibilityCRD == nil {
-		return nil
+	if !isObjectValidationWebhookEnabled(obj) || r.compatibilityCRD == nil {
+		// Ensure that the webhook is removed in case we previously created it.
+		return r.removeObjectPruningWebhook(ctx, obj)
 	}
 
 	webhookConfig := objectpruning.MutatingWebhookConfigurationFor(obj, r.compatibilityCRD)
 
+	existingWebhookConfig := &admissionregistrationv1.MutatingWebhookConfiguration{}
+	if err := r.client.Get(ctx, types.NamespacedName{Name: webhookConfig.Name}, existingWebhookConfig); err != nil && !apierrors.IsNotFound(err) {
+		return fmt.Errorf("failed to get MutatingWebhookConfiguration %s: %w", webhookConfig.Name, err)
+	} else if err == nil && !metav1.IsControlledBy(existingWebhookConfig, obj) {
+		return fmt.Errorf("%w: %s", errWebhookConfigNotControlledByCompatibilityRequirement, webhookConfig.Name)
+	}
+
+	// If we don't own the webhook config, we should not be overwriting it.
 	if _, _, err := resourceapply.ApplyMutatingWebhookConfigurationImproved(
 		ctx,
 		r.kubeClient.AdmissionregistrationV1(),
@@ -276,6 +299,11 @@ func (r *reconcileState) removeObjectPruningWebhook(ctx context.Context, obj *ap
 		return fmt.Errorf("failed to get MutatingWebhookConfiguration %s: %w", webhookConfig.Name, err)
 	}
 
+	// If we don't own the webhook config, we should not be deleting it.
+	if !metav1.IsControlledBy(webhookConfig, obj) {
+		return nil
+	}
+
 	if err := r.client.Delete(ctx, webhookConfig); err != nil {
 		return fmt.Errorf("failed to delete MutatingWebhookConfiguration %s: %w", webhookConfig.Name, err)
 	}
@@ -285,7 +313,7 @@ func (r *reconcileState) removeObjectPruningWebhook(ctx context.Context, obj *ap
 
 func isObjectValidationWebhookEnabled(obj *apiextensionsv1alpha1.CompatibilityRequirement) bool {
 	osv := obj.Spec.ObjectSchemaValidation
-	return osv.Action == "" && osv.MatchConditions == nil && labelSelectorIsEmpty(osv.NamespaceSelector) && labelSelectorIsEmpty(osv.ObjectSelector)
+	return osv.Action != "" || osv.MatchConditions != nil || !labelSelectorIsEmpty(osv.NamespaceSelector) || !labelSelectorIsEmpty(osv.ObjectSelector)
 }
 
 func labelSelectorIsEmpty(ls metav1.LabelSelector) bool {

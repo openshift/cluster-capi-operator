@@ -93,9 +93,9 @@ var _ = Describe("Object Pruning Integration", func() {
 				By("Creating object through API server (should be pruned by webhook)")
 				// Set the namespace and ensure object matches the CRD GVK
 				gvk := liveCRD.Spec.Versions[0].Name
-				inputObject := &unstructured.Unstructured{
+				inputObject := (&unstructured.Unstructured{
 					Object: scenario.InputObject,
-				}
+				}).DeepCopy()
 				inputObject.SetAPIVersion(fmt.Sprintf("%s/%s", liveCRD.Spec.Group, gvk))
 				inputObject.SetKind(liveCRD.Spec.Names.Kind)
 				inputObject.SetNamespace(namespace)
@@ -124,15 +124,63 @@ var _ = Describe("Object Pruning Integration", func() {
 					Expect(cl.Status().Update(ctx, inputObject)).To(Succeed())
 				}
 
-				By("Verifying the object was pruned correctly")
-				retrievedObj := &unstructured.Unstructured{}
-				retrievedObj.SetGroupVersionKind(inputObject.GroupVersionKind())
-				retrievedObj.SetName(inputObject.GetName())
-				retrievedObj.SetNamespace(inputObject.GetNamespace())
+				By("Verifying the object was pruned correctly", func() {
+					retrievedObj := &unstructured.Unstructured{}
+					retrievedObj.SetGroupVersionKind(inputObject.GroupVersionKind())
+					retrievedObj.SetName(inputObject.GetName())
+					retrievedObj.SetNamespace(inputObject.GetNamespace())
 
-				Eventually(kWithCtx(ctx).Get(retrievedObj)).WithContext(ctx).Should(Succeed())
+					Eventually(kWithCtx(ctx).Get(retrievedObj)).WithContext(ctx).Should(Succeed())
 
-				Expect(retrievedObj.Object).To(test.IgnoreFields([]string{"apiVersion", "kind", "metadata"}, Equal(scenario.ExpectedObject)))
+					Expect(retrievedObj.Object).To(test.IgnoreFields([]string{"apiVersion", "kind", "metadata"}, Equal(scenario.ExpectedObject)), "Expected object to be pruned correctly")
+				})
+
+				By("Attempting to update the object, should prune the object again")
+				inputObject.Object["spec"] = scenario.InputObject["spec"]
+				Expect(cl.Update(ctx, inputObject)).To(Succeed())
+
+				// Write the status through the status subresource.
+				if hasStatus {
+					inputObject.Object["status"] = status
+					Expect(cl.Status().Update(ctx, inputObject)).To(Succeed())
+				}
+
+				By("Verifying the object was pruned correctly", func() {
+					retrievedObj := &unstructured.Unstructured{}
+					retrievedObj.SetGroupVersionKind(inputObject.GroupVersionKind())
+					retrievedObj.SetName(inputObject.GetName())
+					retrievedObj.SetNamespace(inputObject.GetNamespace())
+
+					Eventually(kWithCtx(ctx).Get(retrievedObj)).WithContext(ctx).Should(Succeed())
+
+					Expect(retrievedObj.Object).To(test.IgnoreFields([]string{"apiVersion", "kind", "metadata"}, Equal(scenario.ExpectedObject)), "Expected object to be pruned correctly")
+				})
+
+				By("Updating the compatibility requirement to warn action")
+				Eventually(kWithCtx(ctx).Update(scenario.CompatibilityRequirement, func() {
+					scenario.CompatibilityRequirement.Spec.ObjectSchemaValidation.Action = apiextensionsv1alpha1.CRDAdmitActionWarn
+				})).WithContext(ctx).Should(Succeed())
+
+				By("Updating the object again, should not be pruned")
+				inputObject.Object["spec"] = scenario.InputObject["spec"]
+				Expect(cl.Update(ctx, inputObject)).To(Succeed())
+
+				// Write the status through the status subresource.
+				if hasStatus {
+					inputObject.Object["status"] = status
+					Expect(cl.Status().Update(ctx, inputObject)).To(Succeed())
+				}
+
+				By("Verifying the object was not pruned", func() {
+					retrievedObj := &unstructured.Unstructured{}
+					retrievedObj.SetGroupVersionKind(inputObject.GroupVersionKind())
+					retrievedObj.SetName(inputObject.GetName())
+					retrievedObj.SetNamespace(inputObject.GetNamespace())
+
+					Eventually(kWithCtx(ctx).Get(retrievedObj)).WithContext(ctx).Should(Succeed())
+
+					Expect(retrievedObj.Object).To(test.IgnoreFields([]string{"apiVersion", "kind", "metadata"}, Equal(scenario.InputObject)), "Expected object to be not pruned")
+				})
 			},
 
 			Entry("object with unknown fields pruned by strict compatibility requirement", pruningTestScenario{
@@ -258,7 +306,7 @@ var _ = Describe("Object Pruning Integration", func() {
 					"spec": map[string]interface{}{
 						"field1": "removeThis",
 						"field2": "alsoRemove",
-						"field3": 42,
+						"field3": int64(42),
 					},
 					"status": map[string]interface{}{
 						"phase": "Running",
