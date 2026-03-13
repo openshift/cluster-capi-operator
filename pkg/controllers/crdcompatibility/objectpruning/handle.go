@@ -1,4 +1,4 @@
-// Copyright 2025 Red Hat, Inc.
+// Copyright 2026 Red Hat, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,10 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package objectvalidation
+package objectpruning
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -26,10 +27,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
-)
-
-var (
-	errUnknownOperation = errors.New("unknown operation")
 )
 
 type compatibilityRequirementContextKey struct{}
@@ -58,78 +55,57 @@ func compatibilityRequrementIntoContext(ctx context.Context, r *http.Request) co
 
 // Handle handles admission requests.
 //
-// Note: This function is adapted from sigs.k8s.io/controller-runtime/pkg/webhook/admission/validator_custom.go validatorForType.Handle
+// Note: This function is adapted from sigs.k8s.io/controller-runtime/pkg/webhook/admission/defaulter_custom.go defaulterForType.Handle
 // and be compared to that.
 func (v *validator) Handle(ctx context.Context, req admission.Request) admission.Response {
 	if v.decoder == nil {
 		panic("decoder should never be nil")
 	}
 
-	ctx = admission.NewContextWithRequest(ctx, req)
+	// Always skip when a DELETE operation received in custom mutation handler.
+	if req.Operation == admissionv1.Delete {
+		return admission.Response{AdmissionResponse: admissionv1.AdmissionResponse{
+			Allowed: true,
+			Result: &metav1.Status{
+				Code: http.StatusOK,
+			},
+		}}
+	}
 
+	ctx = admission.NewContextWithRequest(ctx, req)
 	compatibilityRequirementName := compatibilityRequrementFromContext(ctx)
 
 	// Get the object in the request
 	obj := &unstructured.Unstructured{}
-
-	var err error
-
-	var warnings []string
-
-	switch req.Operation {
-	case admissionv1.Connect:
-		// No validation for connect requests.
-	case admissionv1.Create:
-		if err := v.decoder.Decode(req, obj); err != nil {
-			return admission.Errored(http.StatusBadRequest, err)
-		}
-
-		warnings, err = v.ValidateCreate(ctx, compatibilityRequirementName, obj)
-	case admissionv1.Update:
-		oldObj := &unstructured.Unstructured{}
-
-		if err := v.decoder.DecodeRaw(req.Object, obj); err != nil {
-			return admission.Errored(http.StatusBadRequest, err)
-		}
-
-		if err := v.decoder.DecodeRaw(req.OldObject, oldObj); err != nil {
-			return admission.Errored(http.StatusBadRequest, err)
-		}
-
-		warnings, err = v.ValidateUpdate(ctx, compatibilityRequirementName, oldObj, obj)
-	case admissionv1.Delete:
-		// In reference to PR: https://github.com/kubernetes/kubernetes/pull/76346
-		// OldObject contains the object being deleted
-		if err := v.decoder.DecodeRaw(req.OldObject, obj); err != nil {
-			return admission.Errored(http.StatusBadRequest, err)
-		}
-
-		warnings, err = v.ValidateDelete(ctx, compatibilityRequirementName, obj)
-	default:
-		return admission.Errored(http.StatusBadRequest, fmt.Errorf("%w: %q", errUnknownOperation, req.Operation))
+	if err := v.decoder.Decode(req, obj); err != nil {
+		return admission.Errored(http.StatusBadRequest, err)
 	}
 
-	// Check the error message first.
-	if err != nil {
+	if err := v.handleObjectPruning(ctx, compatibilityRequirementName, obj); err != nil {
 		var apiStatus apierrors.APIStatus
 		if errors.As(err, &apiStatus) {
-			return validationResponseFromStatus(false, apiStatus.Status()).WithWarnings(warnings...)
+			return validationResponseFromStatus(false, apiStatus.Status())
 		}
 
-		return admission.Denied(err.Error()).WithWarnings(warnings...)
+		return admission.Denied(err.Error())
 	}
 
-	// Return allowed if everything succeeded.
-	return admission.Allowed("").WithWarnings(warnings...)
+	// Create the patch
+	marshalled, err := json.Marshal(obj)
+	if err != nil {
+		return admission.Errored(http.StatusInternalServerError, err)
+	}
+
+	handlerResponse := admission.PatchResponseFromRaw(req.Object.Raw, marshalled)
+
+	return handlerResponse
 }
 
 func validationResponseFromStatus(allowed bool, status metav1.Status) admission.Response {
-	resp := admission.Response{
+	return admission.Response{
 		AdmissionResponse: admissionv1.AdmissionResponse{
 			Allowed: allowed,
 			Result:  &status,
 		},
 	}
-
-	return resp
 }

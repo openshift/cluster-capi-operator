@@ -21,7 +21,9 @@ import (
 	"errors"
 	"fmt"
 
+	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -90,6 +92,14 @@ func (r *CompatibilityRequirementReconciler) SetupWithManager(ctx context.Contex
 		Watches(
 			&apiextensionsv1.CustomResourceDefinition{},
 			handler.EnqueueRequestsFromMapFunc(r.findCompatibilityRequirementsForCRD),
+		).
+		Watches(
+			&admissionregistrationv1.ValidatingWebhookConfiguration{},
+			handler.EnqueueRequestsFromMapFunc(r.findCompatibilityRequirementsForWebhookConfig),
+		).
+		Watches(
+			&admissionregistrationv1.MutatingWebhookConfiguration{},
+			handler.EnqueueRequestsFromMapFunc(r.findCompatibilityRequirementsForWebhookConfig),
 		)
 
 	for _, opt := range opts {
@@ -130,4 +140,26 @@ func (r *CompatibilityRequirementReconciler) findCompatibilityRequirementsForCRD
 	}
 
 	return requests
+}
+
+// findCompatibilityRequirementsForWebhookConfig finds a compatibility requirement matching the name of the webhook configuration
+// and returns a reconcile request if a matching requirement is found.
+func (r *CompatibilityRequirementReconciler) findCompatibilityRequirementsForWebhookConfig(ctx context.Context, obj client.Object) []reconcile.Request {
+	compatibilityRequirement := &apiextensionsv1alpha1.CompatibilityRequirement{}
+
+	if err := r.client.Get(ctx, types.NamespacedName{Name: obj.GetName()}, compatibilityRequirement); err != nil && !apierrors.IsNotFound(err) {
+		logf.FromContext(ctx).Error(err, "failed to get CompatibilityRequirement for webhook configuration", "webhookConfigName", obj.GetName())
+
+		return nil
+	} else if apierrors.IsNotFound(err) {
+		return nil
+	}
+
+	return []reconcile.Request{
+		{
+			NamespacedName: types.NamespacedName{
+				Name: obj.GetName(),
+			},
+		},
+	}
 }
