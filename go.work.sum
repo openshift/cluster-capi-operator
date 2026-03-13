@@ -1296,6 +1296,7 @@ google.golang.org/genproto v0.0.0-20241118233622-e639e219e697/go.mod h1:JJrvXBWR
 google.golang.org/genproto v0.0.0-20250106144421-5f5ef82da422/go.mod h1:1NPAxoesyw/SgLPqaUp9u1f9PWCLAk/jVmhx7gJZStg=
 google.golang.org/genproto v0.0.0-20250303144028-a0af3efb3deb/go.mod h1:sAo5UzpjUwgFBCzupwhcLcxHVDK7vG5IqI30YnwX2eE=
 google.golang.org/genproto v0.0.0-20250505200425-f936aa4a68b2/go.mod h1:49MsLSx0oWMOZqcpB3uL8ZOkAh1+TndpJ8ONoCBWiZk=
+google.golang.org/genproto v0.0.0-20260128011058-8636f8732409 h1:VQZ/yAbAtjkHgH80teYd2em3xtIkkHd7ZhqfH2N9CsM=
 google.golang.org/genproto/googleapis/api v0.0.0-20230822172742-b8732ec3820d/go.mod h1:KjSP20unUpOx5kyQUFa7k4OJg0qeJ7DEZflGDu2p6Bk=
 google.golang.org/genproto/googleapis/api v0.0.0-20240429193739-8cf5692501f6/go.mod h1:10yRODfgim2/T8csjQsMPgZOMvtytXKTDRzH6HRGzRw=
 google.golang.org/genproto/googleapis/api v0.0.0-20240814211410-ddb44dafa142/go.mod h1:d6be+8HhtEtucleCbxpPW9PA9XwISACu8nvpPqF0BVo=
@@ -1460,6 +1461,12 @@ sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.5.9/go.mod h1:wlb5KMXferSuS9asj
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.4.1/go.mod h1:rEQnoF3pmD1kmAFQCwA/SqHiiftLFeMwdQt0gsuKWbM=
 sigs.k8s.io/cluster-api v1.10.2/go.mod h1:/b9Un5Imprib6S7ZOcJitC2ep/5wN72b0pXpMQFfbTw=
 sigs.k8s.io/cluster-api-provider-aws/v2 v2.8.4/go.mod h1:ubZXYyieYt+I4jQFJ47J9Hq4W3zPernTWXlIfIZnB3Y=
+sigs.k8s.io/cluster-api-provider-aws/v2 v2.10.1-0.20260311200936-f3440f3ea2f2 h1:lzlMuS1F9qub8hw+fm2oo8UzJmUGZ8t9lwf4m8So93E=
+sigs.k8s.io/cluster-api-provider-aws/v2 v2.10.1-0.20260311200936-f3440f3ea2f2/go.mod h1:vbVa187QP4/y7/03JqhYBmou4xabCRnuRoHwhE2BgE8=
+sigs.k8s.io/cluster-api-provider-azure v1.22.1-0.20260313010140-0c77ca282778 h1:Tsa7Ri57Dy6Vs2TzxMpsePVnuX4891qohIThG8nZIII=
+sigs.k8s.io/cluster-api-provider-azure v1.22.1-0.20260313010140-0c77ca282778/go.mod h1:dvNfDpOIceSc9N5/JW2d/icG4ekcJIKzvNijzKddzwA=
+sigs.k8s.io/cluster-api-provider-gcp v1.11.0-beta.0.0.20260312083137-58abcdcc039b h1:G6oVcq6B1S5yW+jmGW85MIIynJN6gk/rqCVaSna25us=
+sigs.k8s.io/cluster-api-provider-gcp v1.11.0-beta.0.0.20260312083137-58abcdcc039b/go.mod h1:CP9W/87uRfAoOnWnsjrv9dzWwwirNR1u5I4CiZvsNiY=
 sigs.k8s.io/cluster-api/test v1.10.2/go.mod h1:KLeRjNtQS8k5jIPvQF0QxOti/ATu5euwSusb6iFBga8=
 sigs.k8s.io/cluster-api/test v1.10.4/go.mod h1:n2LsLQxc4RSLDjUXhgzquSTagZTJpUcY7uwtQtCRmaY=
 sigs.k8s.io/controller-tools v0.16.3/go.mod h1:AEj6k+w1kYpLZv2einOH3mj52ips4W/6FUjnB5tkJGs=
