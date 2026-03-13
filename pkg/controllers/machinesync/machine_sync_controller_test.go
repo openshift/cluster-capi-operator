@@ -608,8 +608,8 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 					SatisfyAll(
 						HaveField("Type", Equal(consts.SynchronizedCondition)),
 						HaveField("Status", Equal(corev1.ConditionFalse)),
-						HaveField("Reason", Equal("FailedToConvertMAPIMachineToCAPI")),
-						HaveField("Message", Equal("conversion of control plane machines owned by control plane machine set is currently not supported")),
+						HaveField("Reason", Equal("UnsupportedControlPlaneMachineConversion")),
+						HaveField("Message", Equal("conversion of control plane machines is currently not supported")),
 					))),
 			)
 		})
