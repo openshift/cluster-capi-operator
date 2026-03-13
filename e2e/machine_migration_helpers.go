@@ -37,24 +37,38 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 )
 
+// getWorkerCAPIMachines returns all worker CAPI machines in the cluster.
+func getWorkerCAPIMachines() []*clusterv1.Machine {
+	workerLabelSelector := metav1.LabelSelector{
+		MatchExpressions: []metav1.LabelSelectorRequirement{
+			{
+				Key:      clusterv1.NodeRoleLabelPrefix + "/worker",
+				Operator: metav1.LabelSelectorOpExists,
+			},
+		},
+	}
+
+	return capiframework.GetMachines(&workerLabelSelector)
+}
+
+// skipIfNoWorkerCAPIMachines skips the test if no worker CAPI machines exist in the cluster.
+func skipIfNoWorkerCAPIMachines() {
+	GinkgoHelper()
+
+	capiMachineList := getWorkerCAPIMachines()
+	if len(capiMachineList) == 0 {
+		Skip("No worker CAPI machines found in cluster. This test requires at least one existing worker CAPI machine as a reference.")
+	}
+}
+
 func createCAPIMachine(ctx context.Context, cl client.Client, machineName string) *clusterv1.Machine {
 	GinkgoHelper()
 
 	Expect(machineName).NotTo(BeEmpty(), "Machine name cannot be empty")
 
-	workerLabelSelector := metav1.LabelSelector{
-		MatchExpressions: []metav1.LabelSelectorRequirement{
-			{
-				Key:      clusterv1.MachineControlPlaneLabel,
-				Operator: metav1.LabelSelectorOpDoesNotExist,
-			},
-		},
-	}
-
-	capiMachineList := capiframework.GetMachines(&workerLabelSelector)
-	// The test requires at least one existing CAPI machine to act as a reference for creating a new one.
-	Expect(capiMachineList).NotTo(BeEmpty(), "Should have found CAPI machines in the openshift-cluster-api namespace to use as a reference for creating a new one")
-
+	capiMachineList := getWorkerCAPIMachines()
+	Expect(capiMachineList).NotTo(BeEmpty(),
+		"Should have found at least one worker CAPI machine to use as reference for creating new machine")
 	// Select the first machine from the list as our reference.
 	referenceCapiMachine := capiMachineList[0]
 	By(fmt.Sprintf("Using CAPI machine %s as a reference", referenceCapiMachine.Name))
@@ -75,6 +89,7 @@ func createCAPIMachine(ctx context.Context, cl client.Client, machineName string
 	// Clear status and other instance-specific fields that should not be copied.
 	newCapiMachine.Spec.ProviderID = ""
 	newCapiMachine.Spec.InfrastructureRef.Name = machineName
+	newCapiMachine.Spec.Bootstrap.DataSecretName = ptr.To("worker-user-data")
 	newCapiMachine.ObjectMeta.Labels = nil
 	newCapiMachine.Status = clusterv1.MachineStatus{}
 
@@ -159,6 +174,12 @@ func createMAPIMachineWithAuthority(ctx context.Context, cl client.Client, machi
 	// Clear status and other instance-specific fields that should not be copied.
 	newMachine.Spec.ProviderID = nil
 	newMachine.ObjectMeta.Labels = nil
+	// Clear spec.metadata.labels to avoid MachineSet adoption via spec labels
+	if newMachine.Spec.ObjectMeta.Labels != nil {
+		// Remove machineset-related labels from spec.metadata
+		delete(newMachine.Spec.ObjectMeta.Labels, "machine.openshift.io/cluster-api-machineset")
+		delete(newMachine.Spec.ObjectMeta.Labels, "cluster.x-k8s.io/set-name")
+	}
 	newMachine.Status = mapiv1beta1.MachineStatus{}
 	newMachine.Spec.AuthoritativeAPI = authority
 	By(fmt.Sprintf("Creating a new MAPI machine with AuthoritativeAPI: %s in namespace: %s", authority, newMachine.Namespace))
