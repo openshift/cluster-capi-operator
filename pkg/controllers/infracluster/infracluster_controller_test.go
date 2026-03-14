@@ -47,12 +47,14 @@ import (
 const awsTestRegion = "us-east-1"
 
 var _ = Describe("InfraCluster", func() {
-	var mgrCtx context.Context
-	var mgrCancel context.CancelFunc
-	var mgrDone chan struct{}
-	var bareInfraCluster *awsv1.AWSCluster
-	var capiNamespace *corev1.Namespace
-	var mapiNamespace *corev1.Namespace
+	var (
+		mgrCtx           context.Context
+		mgrCancel        context.CancelFunc
+		mgrDone          chan struct{}
+		bareInfraCluster *awsv1.AWSCluster
+		capiNamespace    *corev1.Namespace
+		mapiNamespace    *corev1.Namespace
+	)
 
 	ocpInfraClusterName := "test-infra-cluster-name"
 	ocpInfraAWS := configv1resourcebuilder.Infrastructure().AsAWS(ocpInfraClusterName, awsTestRegion).Build()
@@ -160,10 +162,12 @@ var _ = Describe("InfraCluster", func() {
 		Context("When there are Control Plane Machines but no ControlPlaneMachineSet", func() {
 			youngLoadBalancers := []mapiv1beta1.LoadBalancerReference{{Name: "young-int", Type: mapiv1beta1.NetworkLoadBalancerType}}
 			oldLoadBalancers := []mapiv1beta1.LoadBalancerReference{{Name: "old-int", Type: mapiv1beta1.NetworkLoadBalancerType}}
+
 			BeforeEach(func() {
 				machine1 := mapiv1beta1resourcebuilder.Machine().AsMaster().WithNamespace(mapiNamespace.Name).WithName("master-1").WithProviderSpecBuilder(mapiv1beta1resourcebuilder.AWSProviderSpec().WithLoadBalancers(oldLoadBalancers)).Build()
 				machine2 := mapiv1beta1resourcebuilder.Machine().AsMaster().WithNamespace(mapiNamespace.Name).WithName("master-2").WithProviderSpecBuilder(mapiv1beta1resourcebuilder.AWSProviderSpec().WithLoadBalancers(youngLoadBalancers)).Build()
 				machine3 := mapiv1beta1resourcebuilder.Machine().AsMaster().WithNamespace(mapiNamespace.Name).WithName("master-3").WithProviderSpecBuilder(mapiv1beta1resourcebuilder.AWSProviderSpec().WithLoadBalancers(oldLoadBalancers)).Build()
+
 				Expect(cl.Create(ctx, machine1)).To(Succeed())
 				Expect(cl.Create(ctx, machine3)).To(Succeed())
 
@@ -195,9 +199,7 @@ var _ = Describe("InfraCluster", func() {
 					HaveField("Spec.SecondaryControlPlaneLoadBalancer", BeNil()),
 				))
 			})
-
 		})
-
 	})
 
 	Context("When there is an InfraCluster with no externally ManagedBy Annotation", func() {
@@ -285,7 +287,6 @@ var _ = Describe("InfraCluster", func() {
 			})
 		})
 	})
-
 })
 
 func mustPatchAWSInfraClusterReadiness(awsInfraCluster *awsv1.AWSCluster, readiness bool) {
@@ -298,6 +299,7 @@ func startManager(mgrCtx context.Context, mgrDone chan struct{}, ocpInfra *confi
 	By("Setting up a manager and controller")
 
 	var mgr ctrl.Manager
+
 	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
 		Metrics: server.Options{
 			BindAddress: "0",

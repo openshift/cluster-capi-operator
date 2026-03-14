@@ -166,8 +166,8 @@ func openstackMachineFuzzerFuncs(codecs runtimeserializer.CodecFactory) []any {
 			c.FillNoCustom(m)
 
 			// Ensure the type meta is set correctly.
-			m.TypeMeta.APIVersion = openstackv1.SchemeGroupVersion.String()
-			m.TypeMeta.Kind = openstackMachineKind
+			m.APIVersion = openstackv1.SchemeGroupVersion.String()
+			m.Kind = openstackMachineKind
 		},
 	}
 }
@@ -178,8 +178,8 @@ func openstackMachineTemplateFuzzerFuncs(codecs runtimeserializer.CodecFactory) 
 			c.FillNoCustom(m)
 
 			// Ensure the type meta is set correctly.
-			m.TypeMeta.APIVersion = openstackv1.SchemeGroupVersion.String()
-			m.TypeMeta.Kind = openstackTemplateKind
+			m.APIVersion = openstackv1.SchemeGroupVersion.String()
+			m.Kind = openstackTemplateKind
 		},
 	}
 }

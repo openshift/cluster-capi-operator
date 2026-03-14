@@ -161,8 +161,8 @@ func (f *openstackProviderFuzzer) fuzzProviderSpec(providerSpec *mapiv1alpha1.Op
 	}
 
 	// Copy instance-type, region and zone to the struct so they can be set at the machine labels too.
-	f.MAPIMachineFuzzer.InstanceType = providerSpec.Flavor
-	f.MAPIMachineFuzzer.Zone = providerSpec.AvailabilityZone
+	f.InstanceType = providerSpec.Flavor
+	f.Zone = providerSpec.AvailabilityZone
 }
 
 func (f *openstackProviderFuzzer) FuzzerFuncsMachineSet(codecs runtimeserializer.CodecFactory) []any {

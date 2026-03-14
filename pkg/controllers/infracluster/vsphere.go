@@ -126,7 +126,7 @@ func (r *InfraClusterController) ensureVSphereSecret(ctx context.Context, vspher
 		},
 	}
 
-	if err := r.Client.Get(ctx, client.ObjectKeyFromObject(vSphereSecret), vSphereSecret); err != nil && !cerrors.IsNotFound(err) {
+	if err := r.Get(ctx, client.ObjectKeyFromObject(vSphereSecret), vSphereSecret); err != nil && !cerrors.IsNotFound(err) {
 		return fmt.Errorf("failed to get CAPI VSphere credentials secret: %w", err)
 	} else if err == nil {
 		// The secret already exists.
@@ -143,7 +143,7 @@ func (r *InfraClusterController) ensureVSphereSecret(ctx context.Context, vspher
 		"password": password,
 	}
 
-	if err := r.Client.Create(ctx, vSphereSecret); err != nil && !cerrors.IsAlreadyExists(err) {
+	if err := r.Create(ctx, vSphereSecret); err != nil && !cerrors.IsAlreadyExists(err) {
 		return fmt.Errorf("unable to create CAPI VSphere credentials secret: %w", err)
 	}
 
@@ -153,7 +153,7 @@ func (r *InfraClusterController) ensureVSphereSecret(ctx context.Context, vspher
 // getVSphereCredentials obtains the VSphere credentials from the well-known credentials secret.
 func (r *InfraClusterController) getVSphereCredentials(ctx context.Context, vsphereServerAddr string) (string, string, error) {
 	vSphereCredentialsSecret := &corev1.Secret{}
-	if err := r.Client.Get(ctx, types.NamespacedName{
+	if err := r.Get(ctx, types.NamespacedName{
 		Namespace: kubeSystemNamespace,
 		Name:      vSphereCredentialsName,
 	}, vSphereCredentialsSecret); err != nil {

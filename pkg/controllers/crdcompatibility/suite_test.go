@@ -86,7 +86,9 @@ var _ = BeforeSuite(func(ctx context.Context) {
 	logf.SetLogger(GinkgoLogr)
 
 	By("bootstrapping test environment")
+
 	var err error
+
 	testEnv = &envtest.Environment{
 		// This struct intentionally left blank
 		// We do this in startManager instead

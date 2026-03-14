@@ -73,11 +73,11 @@ func fromMAPIMachineToCAPIMachine(mapiMachine *mapiv1beta1.Machine, apiGroup, ki
 
 	// Node labels in MAPI are stored under .spec.metadata.labels and then propagated down to the node,
 	// whereas in CAPI they are stored in the top level .labels and later propagated down to the node.
-	setMAPINodeLabelsToCAPINodeLabels(mapiMachine.Spec.ObjectMeta.Labels, capiMachine)
+	setMAPINodeLabelsToCAPINodeLabels(mapiMachine.Spec.Labels, capiMachine)
 
 	// Node annotations in MAPI are stored under .spec.metadata.annotations and then propagated down to the node,
 	// whereas in CAPI they are stored in the top level .annotations and later propagated down to the node.
-	setMAPINodeAnnotationsToCAPINodeAnnotations(mapiMachine.Spec.ObjectMeta.Annotations, capiMachine)
+	setMAPINodeAnnotationsToCAPINodeAnnotations(mapiMachine.Spec.Annotations, capiMachine)
 
 	// LifecycleHooks in MAPI are a special field (.spec.lifecycleHooks),
 	// whereas in CAPI they are defined via special annotations.
@@ -226,8 +226,6 @@ func convertMAPIMachineConditionsToCAPIMachineConditions(mapiMachine *mapiv1beta
 //
 //nolint:funlen
 func convertMAPIMachineConditionsToCAPIMachineV1Beta2StatusConditions(mapiMachine *mapiv1beta1.Machine) []metav1.Condition {
-	capiConditions := []metav1.Condition{}
-
 	// According to CAPI v1beta2 machine conditions, there are 9 main conditions:
 	// Available, Ready, UpToDate, BootstrapConfigReady, InfrastructureReady, NodeReady, NodeHealthy, Deleting, Paused
 
@@ -355,9 +353,7 @@ func convertMAPIMachineConditionsToCAPIMachineV1Beta2StatusConditions(mapiMachin
 		// LastTransitionTime will be set by the condition utilities.
 	}
 
-	capiConditions = append(capiConditions, availableCondition, readyCondition, bootstrapConfigReadyCondition, infrastructureReadyCondition, deletingCondition, nodeReadyCondition)
-
-	return capiConditions
+	return []metav1.Condition{availableCondition, readyCondition, bootstrapConfigReadyCondition, infrastructureReadyCondition, deletingCondition, nodeReadyCondition}
 }
 
 // convertMAPIMachineAddressesToCAPI converts MAPI machine addresses to CAPI format.

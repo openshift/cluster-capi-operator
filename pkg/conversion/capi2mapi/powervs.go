@@ -68,8 +68,8 @@ func FromMachineSetAndPowerVSMachineTemplateAndPowerVSCluster(ms *clusterv1.Mach
 		machineAndPowerVSMachineAndPowerVSCluster: &machineAndPowerVSMachineAndPowerVSCluster{
 			machine: &clusterv1.Machine{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels:      ms.Spec.Template.ObjectMeta.Labels,
-					Annotations: ms.Spec.Template.ObjectMeta.Annotations,
+					Labels:      ms.Spec.Template.Labels,
+					Annotations: ms.Spec.Template.Annotations,
 				},
 				Spec: ms.Spec.Template.Spec,
 			},
@@ -131,24 +131,19 @@ func (m machineAndPowerVSMachineAndPowerVSCluster) ToMachine() (*mapiv1beta1.Mac
 }
 
 // ToMachineSet converts a capi2mapi MachineAndPowerVSMachineTemplate into a MAPI MachineSet.
-func (m machineSetAndPowerVSMachineTemplateAndPowerVSCluster) ToMachineSet() (*mapiv1beta1.MachineSet, []string, error) { //nolint:dupl
+func (m machineSetAndPowerVSMachineTemplateAndPowerVSCluster) ToMachineSet() (*mapiv1beta1.MachineSet, []string, error) {
 	if m.machineSet == nil || m.template == nil || m.powerVSCluster == nil || m.machineAndPowerVSMachineAndPowerVSCluster == nil {
 		return nil, nil, errCAPIMachineSetPowerVSMachineTemplatePowerVSClusterCannotBeNil
 	}
 
-	var (
-		errs     []error
-		warnings []string
-	)
+	var errs []error
 
 	// Run the full ToMachine conversion so that we can check for
 	// any Machine level conversion errors in the spec translation.
-	mapiPowerVSMachine, warn, err := m.ToMachine()
+	mapiPowerVSMachine, warnings, err := m.ToMachine()
 	if err != nil {
 		errs = append(errs, err)
 	}
-
-	warnings = append(warnings, warn...)
 
 	mapiMachineSet, err := fromCAPIMachineSetToMAPIMachineSet(m.machineSet)
 	if err != nil {
@@ -162,8 +157,8 @@ func (m machineSetAndPowerVSMachineTemplateAndPowerVSCluster) ToMachineSet() (*m
 	mapiMachineSet.Spec.Template.Spec = mapiPowerVSMachine.Spec
 
 	// Copy the labels and annotations from the Machine to the template.
-	mapiMachineSet.Spec.Template.ObjectMeta.Annotations = mapiPowerVSMachine.ObjectMeta.Annotations
-	mapiMachineSet.Spec.Template.ObjectMeta.Labels = mapiPowerVSMachine.ObjectMeta.Labels
+	mapiMachineSet.Spec.Template.Annotations = mapiPowerVSMachine.Annotations
+	mapiMachineSet.Spec.Template.Labels = mapiPowerVSMachine.Labels
 
 	return mapiMachineSet, warnings, nil
 }

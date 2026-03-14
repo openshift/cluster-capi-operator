@@ -81,7 +81,6 @@ var _ = Describe("PowerVS Fuzz (capi2mapi)", func() {
 	})
 
 	Context("PowerVSMachineSet Conversion", func() {
-
 		fromMachineSetAndPowerVSMachineTemplateAndPowerVSCluster := func(machineSet *clusterv1.MachineSet, infraMachineTemplate client.Object, infraCluster client.Object) capi2mapi.MachineSetAndMachineTemplate {
 			powerVSMachineTemplate, ok := infraMachineTemplate.(*ibmpowervsv1.IBMPowerVSMachineTemplate)
 			Expect(ok).To(BeTrue(), "input infra machine template should be of type %T, got %T", &ibmpowervsv1.IBMPowerVSMachineTemplate{}, infraMachineTemplate)
@@ -155,8 +154,8 @@ func powerVSMachineFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interfac
 			c.FillNoCustom(m)
 
 			// Ensure the type meta is set correctly.
-			m.TypeMeta.APIVersion = ibmpowervsv1.GroupVersion.String()
-			m.TypeMeta.Kind = powerVSMachineKind
+			m.APIVersion = ibmpowervsv1.GroupVersion.String()
+			m.Kind = powerVSMachineKind
 		},
 	}
 }
@@ -167,8 +166,8 @@ func powerVSMachineTemplateFuzzerFuncs(codecs runtimeserializer.CodecFactory) []
 			c.FillNoCustom(m)
 
 			// Ensure the type meta is set correctly.
-			m.TypeMeta.APIVersion = ibmpowervsv1.GroupVersion.String()
-			m.TypeMeta.Kind = powerVSTemplateKind
+			m.APIVersion = ibmpowervsv1.GroupVersion.String()
+			m.Kind = powerVSTemplateKind
 		},
 	}
 }

@@ -273,6 +273,7 @@ func (r *MachineMigrationReconciler) ensureUnpauseRequestedOnNewAuthoritativeRes
 			if !ok {
 				return fmt.Errorf("unable to assert Cluster API infra machine as client.Object: %w", err)
 			}
+
 			util.RemoveAnnotation(infraMachine, clusterv1.PausedAnnotation)
 
 			if err := r.Patch(ctx, infraMachine, client.MergeFrom(infraMachineCopy)); err != nil {
@@ -317,6 +318,7 @@ func (r *MachineMigrationReconciler) requestOldAuthoritativeResourcePaused(ctx c
 		if !annotations.HasPaused(capiMachine) {
 			capiMachineCopy := capiMachine.DeepCopy()
 			annotations.AddAnnotations(capiMachine, map[string]string{clusterv1.PausedAnnotation: ""})
+
 			if err := r.Patch(ctx, capiMachine, client.MergeFrom(capiMachineCopy)); err != nil {
 				return false, fmt.Errorf("failed to patch Cluster API machine: %w", err)
 			}
@@ -329,7 +331,9 @@ func (r *MachineMigrationReconciler) requestOldAuthoritativeResourcePaused(ctx c
 			if !ok {
 				return false, fmt.Errorf("unable to assert Cluster API infra machine as client.Object: %w", err)
 			}
+
 			annotations.AddAnnotations(infraMachine, map[string]string{clusterv1.PausedAnnotation: ""})
+
 			if err := r.Patch(ctx, infraMachine, client.MergeFrom(infraMachineCopy)); err != nil {
 				return false, fmt.Errorf("failed to patch Cluster API infra machine: %w", err)
 			}

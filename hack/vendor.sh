@@ -4,9 +4,23 @@ set -e
 
 echo "Updating dependencies for Cluster CAPI Operator workspace"
 
-# Tidy all modules in the workspace
-echo "Running go mod tidy for all modules..."
 go work use -r .
+
+# Pass 1: tidy all modules
+echo "Running go mod tidy for all modules (pass 1)..."
+for module in . e2e manifests-gen hack/tools; do
+  if [ -f "$module/go.mod" ]; then
+    echo "Tidying $module"
+    (cd "$module" && go mod tidy)
+  fi
+done
+
+# Sync: propagate highest require versions across all modules
+echo "Syncing Go workspace..."
+go work sync
+
+# Pass 2: re-tidy after sync may have bumped versions
+echo "Running go mod tidy for all modules (pass 2)..."
 for module in . e2e manifests-gen hack/tools; do
   if [ -f "$module/go.mod" ]; then
     echo "Tidying $module"
@@ -22,15 +36,6 @@ for module in . e2e manifests-gen hack/tools; do
     (cd "$module" && go mod verify)
   fi
 done
-
-# Sync workspace
-echo "Syncing Go workspace..."
-go work sync && sync_exit_code=$? || sync_exit_code=$?
-
-if [ $sync_exit_code -ne 0 ]; then
-  echo "Warning: go work sync failed due to dependency conflicts. This is expected with the current vsphere provider dependency."
-  echo "The workspace structure is in place for future use."
-fi
 
 # Create unified vendor directory
 echo "Creating unified vendor directory..."

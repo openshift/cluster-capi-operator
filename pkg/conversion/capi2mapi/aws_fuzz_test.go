@@ -169,6 +169,12 @@ func awsMachineFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interface{} 
 			spec.PrivateDNSName = nil
 			// We don't support this field since the externally managed annotation is added, so it's best to keep this nil.
 			spec.SecurityGroupOverrides = nil
+
+			// Override PlacementGroupPartition with a valid int32 value to avoid validation errors
+			// during conversion to MAPI. MAPI's PlacementGroupPartition is *int32, while CAPI's is int64.
+			// The conversion validates and rejects values that exceed int32 range.
+			// Note: We have dedicated tests for this validation (see "should fail to convert when throughput exceeds int32 max").
+			spec.PlacementGroupPartition = int64(c.Int31())
 		},
 		func(v *awsv1.Volume, c randfill.Continue) {
 			c.FillNoCustom(v)
@@ -185,8 +191,8 @@ func awsMachineFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interface{} 
 			c.FillNoCustom(m)
 
 			// Ensure the type meta is set correctly.
-			m.TypeMeta.APIVersion = awsv1.GroupVersion.String()
-			m.TypeMeta.Kind = awsMachineKind
+			m.APIVersion = awsv1.GroupVersion.String()
+			m.Kind = awsMachineKind
 		},
 	}
 }
@@ -240,8 +246,8 @@ func awsMachineTemplateFuzzerFuncs(codecs runtimeserializer.CodecFactory) []inte
 			c.FillNoCustom(m)
 
 			// Ensure the type meta is set correctly.
-			m.TypeMeta.APIVersion = awsv1.GroupVersion.String()
-			m.TypeMeta.Kind = awsTemplateKind
+			m.APIVersion = awsv1.GroupVersion.String()
+			m.Kind = awsTemplateKind
 		},
 	}
 }

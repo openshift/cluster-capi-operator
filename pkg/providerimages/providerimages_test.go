@@ -62,6 +62,7 @@ func (f *fakeImageFetcher) Fetch(ctx context.Context, ref name.Reference) (v1.Im
 // createTarLayer creates a v1.Layer from a map of file paths to content.
 func createTarLayer(files map[string]string) (v1.Layer, error) {
 	var buf bytes.Buffer
+
 	tw := tar.NewWriter(&buf)
 
 	for path, content := range files {
@@ -182,6 +183,7 @@ func Test_readProviderImages(t *testing.T) {
 			},
 			setupFetcher: func(t *testing.T) *fakeImageFetcher {
 				t.Helper()
+
 				img, err := createCapiManifestsImage(
 					createMetadataYAML("aws", "infrastructure", "v1.0.0", "aws", "PLACEHOLDER_IMAGE", 20),
 					"apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: test\n",
@@ -228,6 +230,7 @@ func Test_readProviderImages(t *testing.T) {
 			},
 			setupFetcher: func(t *testing.T) *fakeImageFetcher {
 				t.Helper()
+
 				img, err := createTestImage(map[string]string{
 					"some-other-file.txt": "hello world",
 				})
@@ -253,6 +256,7 @@ func Test_readProviderImages(t *testing.T) {
 			},
 			setupFetcher: func(t *testing.T) *fakeImageFetcher {
 				t.Helper()
+
 				img, err := createTestImage(map[string]string{
 					testManifestsPath: "apiVersion: v1\nkind: ConfigMap\n",
 				})
@@ -276,6 +280,7 @@ func Test_readProviderImages(t *testing.T) {
 			},
 			setupFetcher: func(t *testing.T) *fakeImageFetcher {
 				t.Helper()
+
 				img, err := createTestImage(map[string]string{
 					testMetadataPath: createMetadataYAML("aws", "infrastructure", "v1.0.0", "aws", "", 20),
 				})
@@ -299,6 +304,7 @@ func Test_readProviderImages(t *testing.T) {
 			},
 			setupFetcher: func(t *testing.T) *fakeImageFetcher {
 				t.Helper()
+
 				img, err := createCapiManifestsImage(
 					"not: valid: yaml: content: [[[",
 					"apiVersion: v1\nkind: ConfigMap\n",
@@ -335,6 +341,7 @@ func Test_readProviderImages(t *testing.T) {
 			},
 			setupFetcher: func(t *testing.T) *fakeImageFetcher {
 				t.Helper()
+
 				return &fakeImageFetcher{
 					errors: map[string]error{
 						"registry.example.com/fetch-fail:v1.0.0": fmt.Errorf("network error: connection refused"),
@@ -351,6 +358,7 @@ func Test_readProviderImages(t *testing.T) {
 			},
 			setupFetcher: func(t *testing.T) *fakeImageFetcher {
 				t.Helper()
+
 				img, err := createCapiManifestsImage(
 					createMetadataYAML("aws", "infrastructure", "v1.0.0", "aws", "PLACEHOLDER_IMAGE", 20),
 					"image: PLACEHOLDER_IMAGE\nanotherImage: PLACEHOLDER_IMAGE\n",
@@ -382,6 +390,7 @@ func Test_readProviderImages(t *testing.T) {
 			},
 			setupFetcher: func(t *testing.T) *fakeImageFetcher {
 				t.Helper()
+
 				img, err := createCapiManifestsImage(
 					createMetadataYAML("aws", "infrastructure", "v1.0.0", "aws", "", 20),
 					"image: some-other-image:latest\n",
@@ -449,6 +458,7 @@ contentID: id
 			},
 			setupFetcher: func(t *testing.T) *fakeImageFetcher {
 				t.Helper()
+
 				return &fakeImageFetcher{
 					errors: map[string]error{
 						"registry.example.com/fail-aws:v1.0.0":   fmt.Errorf("aws fetch error"),
@@ -472,6 +482,7 @@ contentID: id
 			},
 			setupFetcher: func(t *testing.T) *fakeImageFetcher {
 				t.Helper()
+
 				img, err := createCapiManifestsImage(
 					createMetadataYAML("aws", "infrastructure", "v1.0.0", "aws", "", 20),
 					"apiVersion: v1\n",
@@ -542,6 +553,7 @@ contentID: id
 			},
 			setupFetcher: func(t *testing.T) *fakeImageFetcher {
 				t.Helper()
+
 				img, err := createTestImage(map[string]string{
 					capiManifestsDirName + "/default/metadata.yaml":      createMetadataYAML("aws", "infrastructure", "v1.0.0", "aws", "", 20),
 					capiManifestsDirName + "/default/manifests.yaml":     "kind: ConfigMap\nname: default-config\n",
@@ -588,6 +600,7 @@ contentID: id
 			},
 			setupFetcher: func(t *testing.T) *fakeImageFetcher {
 				t.Helper()
+
 				img, err := createTestImage(map[string]string{
 					capiManifestsDirName + "/default/metadata.yaml":  createMetadataYAML("core-vaps", "core", "v1.0.0", "", "", 10),
 					capiManifestsDirName + "/default/manifests.yaml": "kind: ValidatingAdmissionPolicy\nmetadata:\n  name: core-vap\n",
@@ -642,6 +655,7 @@ contentID: id
 			},
 			setupFetcher: func(t *testing.T) *fakeImageFetcher {
 				t.Helper()
+
 				img, err := createTestImage(map[string]string{
 					capiManifestsDirName + "/default/metadata.yaml":  createMetadataYAML("aws", "infrastructure", "v1.0.0", "aws", "", 20),
 					capiManifestsDirName + "/default/manifests.yaml": "kind: ConfigMap\n",
@@ -675,6 +689,7 @@ contentID: id
 
 			if tt.setupContext != nil {
 				var cancel context.CancelFunc
+
 				ctx, cancel = tt.setupContext(ctx)
 
 				defer cancel()

@@ -75,6 +75,7 @@ func newManagerWrapper(providerImgs []providerimages.ProviderImageManifests) *ma
 	go func() {
 		defer GinkgoRecover()
 		defer close(mgrDone)
+
 		Expect(mgr.Start(mgrCtx)).To(Succeed())
 	}()
 

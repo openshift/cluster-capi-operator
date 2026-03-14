@@ -196,5 +196,4 @@ var _ = Describe("mapi2capi OpenStack conversion", func() {
 			expectedWarnings:  []string{},
 		}),
 	)
-
 })

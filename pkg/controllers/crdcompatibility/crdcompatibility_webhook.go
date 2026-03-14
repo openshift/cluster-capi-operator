@@ -196,7 +196,7 @@ func validateCompatibilitySchemaCustomResourceDefinition(ctx context.Context, fl
 }
 
 func validateExcludedFields(fldPath *field.Path, compatibilityCRD *apiextensionsv1.CustomResourceDefinition, excludedFields []apiextensionsv1alpha1.APIExcludedField, prunedCRDVersions sets.Set[string]) field.ErrorList {
-	errs := field.ErrorList{}
+	errs := field.ErrorList{} //nolint:prealloc
 
 	for i, excludedField := range excludedFields {
 		errs = append(errs, validateExcludedField(fldPath.Index(i), compatibilityCRD, excludedField, prunedCRDVersions)...)

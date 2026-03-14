@@ -45,6 +45,7 @@ var _ = Describe("StaticResourceInstaller Controller", Ordered, ContinueOnFailur
 			Expect(controller.assetNames).NotTo(BeEmpty(), "Controller should have loaded asset names")
 
 			By("Verifying expected assets are loaded")
+
 			expectedAssets := []string{
 				"assets/compatibility-requirements-compatibility-requirement-webhook.yaml",
 				"assets/compatibility-requirements-custom-resource-definition-webhook.yaml",

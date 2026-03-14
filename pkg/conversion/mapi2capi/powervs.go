@@ -134,17 +134,12 @@ func (m *powerVSMachineAndInfra) toMachineAndInfrastructureMachine() (*clusterv1
 //
 //nolint:dupl
 func (m *powerVSMachineSetAndInfra) ToMachineSetAndMachineTemplate() (*clusterv1.MachineSet, client.Object, []string, error) {
-	var (
-		errs     []error
-		warnings []string
-	)
+	var errs []error
 
-	capiMachine, powerVSMachineObj, warn, errList := m.toMachineAndInfrastructureMachine()
+	capiMachine, powerVSMachineObj, warnings, errList := m.toMachineAndInfrastructureMachine()
 	if errList != nil {
 		errs = append(errs, errList.ToAggregate().Errors()...)
 	}
-
-	warnings = append(warnings, warn...)
 
 	powerVSMachine, ok := powerVSMachineObj.(*ibmpowervsv1.IBMPowerVSMachine)
 	if !ok {
@@ -169,8 +164,8 @@ func (m *powerVSMachineSetAndInfra) ToMachineSetAndMachineTemplate() (*clusterv1
 
 	// We have to merge these two maps so that labels and annotations added to the template objectmeta are persisted
 	// along with the labels and annotations from the machine objectmeta.
-	powerVSMachineSet.Spec.Template.ObjectMeta.Labels = util.MergeMaps(powerVSMachineSet.Spec.Template.ObjectMeta.Labels, capiMachine.Labels)
-	powerVSMachineSet.Spec.Template.ObjectMeta.Annotations = util.MergeMaps(powerVSMachineSet.Spec.Template.ObjectMeta.Annotations, capiMachine.Annotations)
+	powerVSMachineSet.Spec.Template.Labels = util.MergeMaps(powerVSMachineSet.Spec.Template.Labels, capiMachine.Labels)
+	powerVSMachineSet.Spec.Template.Annotations = util.MergeMaps(powerVSMachineSet.Spec.Template.Annotations, capiMachine.Annotations)
 
 	// Override the reference so that it matches the AWSMachineTemplate.
 	powerVSMachineSet.Spec.Template.Spec.InfrastructureRef.Kind = ibmPowerVSTemplateKind

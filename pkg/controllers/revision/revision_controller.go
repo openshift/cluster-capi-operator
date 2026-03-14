@@ -302,7 +302,6 @@ func (r *RevisionController) SetupWithManager(mgr ctrl.Manager) error {
 			}),
 		).
 		Complete(r)
-
 	if err != nil {
 		return fmt.Errorf("failed to create controller: %w", err)
 	}

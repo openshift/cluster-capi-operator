@@ -59,7 +59,7 @@ func (r *ClusterOperatorController) Reconcile(ctx context.Context, req ctrl.Requ
 	// represent the meaningful aggregation of all other controller statuses.
 	// We should also only update the version after the aggregator confirms
 	// all controllers have succeeded in the new version.
-	if err := r.ClusterOperatorStatusClient.SetStatusAvailable(ctx, message, operatorstatus.WithVersions(r.OperandVersions())); err != nil {
+	if err := r.SetStatusAvailable(ctx, message, operatorstatus.WithVersions(r.OperandVersions())); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to set conditions for %q ClusterObject: %w", controllers.ClusterOperatorName, err)
 	}
 

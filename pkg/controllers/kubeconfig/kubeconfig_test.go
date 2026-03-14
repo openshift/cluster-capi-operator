@@ -34,8 +34,11 @@ import (
 
 var _ = Describe("Reconcile kubeconfig secret", func() {
 	Context("create or update kubeconfig secret", func() {
-		var r *KubeconfigReconciler
-		var tokenSecret *corev1.Secret
+		var (
+			r           *KubeconfigReconciler
+			tokenSecret *corev1.Secret
+		)
+
 		kubeconfigSecret := &corev1.Secret{}
 		log := ctrl.LoggerFrom(ctx).WithName("KubeconfigController")
 
@@ -105,6 +108,7 @@ var _ = Describe("Reconcile kubeconfig secret", func() {
 			// Use fake client because it's not possible to update creation timestamp in envtest
 			fakeClient := fake.NewClientBuilder().WithScheme(testEnv.Scheme).WithRuntimeObjects(tokenSecret).Build()
 			r.Client = fakeClient
+
 			tokenSecret.SetCreationTimestamp(metav1.Time{Time: time.Now().Add(-1 * time.Hour)})
 			Expect(fakeClient.Update(ctx, tokenSecret)).To(Succeed())
 			res, err := r.reconcileKubeconfig(ctx, log)

@@ -24,6 +24,7 @@ import (
 
 var _ = Describe("Generate kubeconfig", func() {
 	var options *kubeconfigOptions
+
 	testBase64Text := "dGVzdA=="
 
 	BeforeEach(func() {

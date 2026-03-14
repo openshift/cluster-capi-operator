@@ -5,7 +5,7 @@ PROJECT_DIR := $(shell dirname $(abspath $(lastword $(MAKEFILE_LIST))))
 ENVTEST_K8S_VERSION = 1.33.2
 
 ENVTEST = go run -mod=vendor ${PROJECT_DIR}/vendor/sigs.k8s.io/controller-runtime/tools/setup-envtest
-GOLANGCI_LINT = go run -mod=vendor ${PROJECT_DIR}/vendor/github.com/golangci/golangci-lint/cmd/golangci-lint
+GOLANGCI_LINT = go run -mod=vendor ${PROJECT_DIR}/vendor/github.com/golangci/golangci-lint/v2/cmd/golangci-lint
 
 HOME ?= /tmp/kubebuilder-testing
 ifeq ($(HOME), /)
@@ -57,7 +57,7 @@ ocp-manifests: manifests-gen ## Generate admission policy profiles for image emb
 		--platform AWS \
 		--install-order 30
 
-bin/%: | bin/ FORCE
+bin/%: FORCE | bin/
 	go build -o "$@" "./cmd/$*"
 
 .PHONY: localtestenv

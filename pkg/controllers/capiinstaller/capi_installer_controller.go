@@ -653,8 +653,8 @@ func yamlToUnstructured(m string) (*unstructured.Unstructured, error) {
 	}
 
 	obj := &unstructured.Unstructured{}
-	_, _, err = unstructured.UnstructuredJSONScheme.Decode(jsonData, nil, obj)
 
+	_, _, err = unstructured.UnstructuredJSONScheme.Decode(jsonData, nil, obj)
 	if err != nil {
 		return nil, fmt.Errorf("error while decoding JSON to unstructured: %w", err)
 	}

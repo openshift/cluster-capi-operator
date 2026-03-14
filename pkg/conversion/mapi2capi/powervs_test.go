@@ -34,7 +34,6 @@ import (
 )
 
 var _ = Describe("mapi2capi PowerVS conversion", func() {
-
 	var (
 		powerVSBaseProviderSpec   = powervsbuilder.PowerVSProviderSpec().WithLoadBalancers(nil)
 		powerVSMAPIMachineBase    = machinebuilder.Machine().WithProviderSpecBuilder(powerVSBaseProviderSpec)
@@ -78,7 +77,6 @@ var _ = Describe("mapi2capi PowerVS conversion", func() {
 			_, _, _, err := FromPowerVSMachineAndInfra(in.machineBuilder.Build(), in.infra).ToMachineAndInfrastructureMachine()
 			fmt.Println(err)
 			Expect(err).To(matchers.ConsistOfMatchErrorSubstrings(in.expectedErrors), "should match expected errors while converting an PowerVS MAPI Machine to CAPI")
-
 		},
 
 		// Base Case.

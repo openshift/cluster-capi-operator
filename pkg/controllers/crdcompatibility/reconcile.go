@@ -136,8 +136,8 @@ func (r *reconcileState) checkCompatibilityRequirement() error {
 	}
 
 	var err error
-	r.compatibilityErrors, r.compatibilityWarnings, err = crdchecker.CheckCompatibilityRequirement(r.compatibilityCRD, r.currentCRD)
 
+	r.compatibilityErrors, r.compatibilityWarnings, err = crdchecker.CheckCompatibilityRequirement(r.compatibilityCRD, r.currentCRD)
 	if err != nil {
 		return fmt.Errorf("failed to check CRD compatibility: %w", err)
 	}
@@ -164,7 +164,6 @@ func (r *reconcileState) reconcileCreateOrUpdate(ctx context.Context, obj *apiex
 		r.ensureObjectValidationWebhook(ctx, obj),
 		r.ensureObjectPruningWebhook(ctx, obj),
 	)
-
 	if err != nil {
 		return ctrl.Result{}, err
 	}
