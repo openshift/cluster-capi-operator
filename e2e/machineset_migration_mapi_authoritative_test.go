@@ -19,6 +19,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"k8s.io/utils/ptr"
 
 	configv1 "github.com/openshift/api/config/v1"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
@@ -379,6 +380,139 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				Eventually(k.Object(mapiMachineSet), capiframework.WaitMedium, capiframework.RetryMedium).Should(
 					HaveField("Spec.Template.Spec.ProviderSpec.Value.Raw", ContainSubstring(newInstanceType)),
 					"Should have MAPI MachineSet providerSpec updated to reflect the new InfraTemplate with InstanceType %s", newInstanceType,
+				)
+			})
+		})
+	})
+
+	var _ = Describe("Convert MAPI MachineSets with AWS special fields", Ordered, func() {
+		var mapiMSSpecialFieldsName = "ms-with-aws-special-fields"
+		var mapiMachineSet *mapiv1beta1.MachineSet
+		var capiMachineSet *clusterv1beta1.MachineSet
+		var awsMachineTemplate *awsv1.AWSMachineTemplate
+
+		Context("with networkInterfaceType ENA and blockDevices without volumeSize", Ordered, func() {
+			BeforeAll(func() {
+				By("Creating MAPI MachineSet with networkInterfaceType: ENA and blockDevices without volumeSize")
+
+				// Use the extensible helper function with a custom update function
+				mapiMachineSet = createMAPIMachineSetWithProviderSpecUpdates(ctx, cl, 1, mapiMSSpecialFieldsName,
+					func(providerSpec *mapiv1beta1.AWSMachineProviderConfig) {
+						// Set networkInterfaceType to ENA
+						providerSpec.NetworkInterfaceType = "ENA"
+
+						// Set blockDevices with encrypted=true, volumeType=gp3, but NO volumeSize
+						providerSpec.BlockDevices = []mapiv1beta1.BlockDeviceMappingSpec{
+							{
+								EBS: &mapiv1beta1.EBSBlockDeviceSpec{
+									Encrypted:  ptr.To(true),
+									Iops:       ptr.To[int64](0),
+									VolumeType: ptr.To("gp3"),
+									KMSKey: mapiv1beta1.AWSResourceReference{
+										ARN: ptr.To(""),
+									},
+									// Intentionally omit VolumeSize to test conversion
+								},
+							},
+						}
+					},
+				)
+
+				capiMachineSet, awsMachineTemplate = waitForMAPIMachineSetMirrors(cl, mapiMSSpecialFieldsName)
+
+				DeferCleanup(func() {
+					By("Cleaning up Context 'with networkInterfaceType ENA and blockDevices without volumeSize' resources")
+					cleanupMachineSetTestResources(
+						ctx,
+						cl,
+						[]*clusterv1beta1.MachineSet{capiMachineSet},
+						[]*awsv1.AWSMachineTemplate{awsMachineTemplate},
+						[]*mapiv1beta1.MachineSet{mapiMachineSet},
+					)
+				})
+			})
+
+			It("should find MAPI MachineSet .status.authoritativeAPI to equal MachineAPI", func() {
+				verifyMachineSetAuthoritative(mapiMachineSet, mapiv1beta1.MachineAuthorityMachineAPI)
+			})
+
+			It("should verify MAPI MachineSet Synchronized condition is True", func() {
+				verifyMAPIMachineSetSynchronizedCondition(mapiMachineSet, mapiv1beta1.MachineAuthorityMachineAPI)
+			})
+
+			It("should verify networkInterfaceType: ENA is preserved in MAPI MachineSet", func() {
+				freshMAPIMS, err := mapiframework.GetMachineSet(ctx, cl, mapiMSSpecialFieldsName)
+				Expect(err).ToNot(HaveOccurred())
+				providerSpec := getAWSProviderSpecFromMachineSet(freshMAPIMS)
+				Expect(string(providerSpec.NetworkInterfaceType)).To(Equal("ENA"))
+			})
+
+			It("should verify blockDevices without volumeSize are preserved in MAPI MachineSet", func() {
+				freshMAPIMS, err := mapiframework.GetMachineSet(ctx, cl, mapiMSSpecialFieldsName)
+				Expect(err).ToNot(HaveOccurred())
+				providerSpec := getAWSProviderSpecFromMachineSet(freshMAPIMS)
+
+				Expect(providerSpec.BlockDevices).To(HaveLen(1), "Should have one block device")
+				Expect(providerSpec.BlockDevices[0].EBS).NotTo(BeNil(), "Block device should have EBS config")
+				Expect(*providerSpec.BlockDevices[0].EBS.Encrypted).To(BeTrue(), "Should be encrypted")
+				Expect(*providerSpec.BlockDevices[0].EBS.VolumeType).To(Equal("gp3"), "Should have volumeType gp3")
+				Expect(providerSpec.BlockDevices[0].EBS.VolumeSize).To(BeNil(), "VolumeSize should be nil")
+				Expect(*providerSpec.BlockDevices[0].EBS.Iops).To(BeZero(), "IOPS should be zero")
+				Expect(*providerSpec.BlockDevices[0].EBS.KMSKey.ARN).To(BeEmpty(), "KMS ARN should be empty")
+			})
+
+			It("should verify AWS special fields are converted to CAPI AWSMachineTemplate", func() {
+				freshAWSMachineTemplate, err := capiframework.GetAWSMachineTemplateByName(cl, awsMachineTemplate.Name, capiframework.CAPINamespace)
+				Expect(err).ToNot(HaveOccurred())
+
+				By("Verifying networkInterfaceType: ENA is converted")
+				Expect(freshAWSMachineTemplate.Spec.Template.Spec.NetworkInterfaceType).To(Equal(awsv1.NetworkInterfaceTypeENI))
+
+				By("Verifying blockDevices volumeSize are defaulted to 120")
+				Expect(freshAWSMachineTemplate.Spec.Template.Spec.RootVolume).NotTo(BeNil())
+				Expect(*freshAWSMachineTemplate.Spec.Template.Spec.RootVolume.Encrypted).To(BeTrue())
+				Expect(freshAWSMachineTemplate.Spec.Template.Spec.RootVolume.Type).To(Equal(awsv1.VolumeTypeGP3))
+				Expect(freshAWSMachineTemplate.Spec.Template.Spec.RootVolume.Size).To(BeNumerically("==", 120))
+			})
+
+			It("should create a Machine with AWS special fields converted correctly", func() {
+				mapiframework.WaitForMachineSet(ctx, cl, mapiMSSpecialFieldsName)
+				verifyMachinesetReplicas(mapiMachineSet, 1)
+				verifyMachinesetReplicas(capiMachineSet, 1)
+
+				By("Getting the created MAPI Machine")
+				mapiMachine, err := mapiframework.GetLatestMachineFromMachineSet(ctx, cl, mapiMachineSet)
+				Expect(err).ToNot(HaveOccurred())
+				verifyMachineRunning(cl, mapiMachine)
+
+				By("Getting the CAPI Machine mirror and AWSMachine")
+				capiMachine := capiframework.GetNewestMachineFromMachineSet(cl, capiMachineSet)
+				awsMachine := capiframework.GetAWSMachine(cl, capiMachine.Name, capiframework.CAPINamespace)
+
+				By("Verifying AWSMachine has networkInterfaceType: ENA")
+				Eventually(k.Object(awsMachine), capiframework.WaitMedium, capiframework.RetryMedium).Should(
+					HaveField("Spec.NetworkInterfaceType", Equal(awsv1.NetworkInterfaceTypeENI)),
+					"AWSMachine should have networkInterfaceType set to ENA",
+				)
+
+				By("Verifying AWSMachine has correct blockDevice configuration")
+				Eventually(func() bool {
+					freshAWSMachine := capiframework.GetAWSMachine(cl, awsMachine.Name, capiframework.CAPINamespace)
+					if freshAWSMachine.Spec.RootVolume == nil {
+						return false
+					}
+					if freshAWSMachine.Spec.RootVolume.Encrypted == nil || !*freshAWSMachine.Spec.RootVolume.Encrypted {
+						return false
+					}
+					if freshAWSMachine.Spec.RootVolume.Type != awsv1.VolumeTypeGP3 {
+						return false
+					}
+					if freshAWSMachine.Spec.RootVolume.Size != int64(120) {
+						return false
+					}
+					return true
+				}, capiframework.WaitMedium, capiframework.RetryMedium).Should(BeTrue(),
+					"AWSMachine should have blockDevice configuration from MAPI MachineSet",
 				)
 			})
 		})
