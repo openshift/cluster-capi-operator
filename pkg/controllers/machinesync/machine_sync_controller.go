@@ -184,14 +184,14 @@ func (r *MachineSyncReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 // Reconcile reconciles CAPI and MAPI machines for their respective namespaces.
 //
-//nolint:funlen
+//nolint:funlen,cyclop
 func (r *MachineSyncReconciler) Reconcile(ctx context.Context, req reconcile.Request) (ctrl.Result, error) {
 	logger := logf.FromContext(ctx, "namespace", req.Namespace, "name", req.Name)
 
 	logger.V(1).Info("Reconciling machine")
 	defer logger.V(1).Info("Finished reconciling machine")
 
-	var mapiMachineNotFound, capiMachineNotFound bool
+	var mapiMachineNotFound, capiMachineNotFound, capiInfraMachineExists bool
 
 	// Get the MAPI Machine.
 	mapiMachine := &mapiv1beta1.Machine{}
@@ -247,12 +247,25 @@ func (r *MachineSyncReconciler) Reconcile(ctx context.Context, req reconcile.Req
 		return ctrl.Result{}, nil
 	}
 
+	// Check for existence of the Cluster API Infrastructure Machine or if it needs to get created from MAPI first.
+	capiInfraMachineExists, err := r.doesCAPIInfraMachineExist(ctx, capiMachine, mapiMachine)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to check for existence of Cluster API infrastructure machine: %w", err)
+	}
+
 	authoritativeAPI := mapiMachine.Status.AuthoritativeAPI
 
 	switch {
 	case authoritativeAPI == mapiv1beta1.MachineAuthorityMachineAPI:
 		return r.reconcileMAPIMachinetoCAPIMachine(ctx, mapiMachine, capiMachine)
 	case authoritativeAPI == mapiv1beta1.MachineAuthorityClusterAPI && !capiMachineNotFound:
+		// Create Cluster API Infrastructure Machine from MAPI if it doesn't exist and no deletion is in progress.
+		// the CAPI machine is not marked for deletion and the MAPI machine was created before the Cluster API machine.
+		if capiMachine.DeletionTimestamp.IsZero() && mapiMachine.DeletionTimestamp.IsZero() &&
+			!capiInfraMachineExists && !mapiMachine.CreationTimestamp.After(capiMachine.CreationTimestamp.Time) {
+			return r.reconcileMAPIMachinetoCAPIMachine(ctx, mapiMachine, capiMachine)
+		}
+
 		return r.reconcileCAPIMachinetoMAPIMachine(ctx, capiMachine, mapiMachine)
 	case authoritativeAPI == mapiv1beta1.MachineAuthorityClusterAPI && capiMachineNotFound:
 		return r.reconcileMAPIMachinetoCAPIMachine(ctx, mapiMachine, capiMachine)
@@ -982,7 +995,7 @@ func (r *MachineSyncReconciler) fetchCAPIInfraResources(ctx context.Context, cap
 		return nil, nil, nil
 	}
 
-	var infraCluster, infraMachine client.Object
+	var infraCluster client.Object
 
 	infraClusterKey := client.ObjectKey{
 		Namespace: capiMachine.Namespace,
@@ -990,10 +1003,6 @@ func (r *MachineSyncReconciler) fetchCAPIInfraResources(ctx context.Context, cap
 	}
 
 	infraMachineRef := capiMachine.Spec.InfrastructureRef
-	infraMachineKey := client.ObjectKey{
-		Namespace: capiMachine.Namespace,
-		Name:      infraMachineRef.Name,
-	}
 
 	// Validate that required references are not empty to avoid nil pointer issues later.
 	// These are terminal configuration errors that require user intervention.
@@ -1007,20 +1016,53 @@ func (r *MachineSyncReconciler) fetchCAPIInfraResources(ctx context.Context, cap
 			capiMachine.Namespace, capiMachine.Name, errInvalidInfraMachineReference)
 	}
 
-	infraMachine = r.InfraTypes.Machine()
 	infraCluster = r.InfraTypes.Cluster()
 
 	if err := r.Get(ctx, infraClusterKey, infraCluster); err != nil {
 		return nil, nil, fmt.Errorf("failed to get Cluster API infrastructure cluster: %w", err)
 	}
 
+	infraMachine, err := r.fetchCAPIInfraMachine(ctx, infraMachineRef.Name, capiMachine.Namespace)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to fetch Cluster API infrastructure machine: %w", err)
+	}
+
+	return infraCluster, infraMachine, nil
+}
+
+func (r *MachineSyncReconciler) fetchCAPIInfraMachine(ctx context.Context, name, namespace string) (client.Object, error) {
+	infraMachine := r.InfraTypes.Machine()
+
+	infraMachineKey := client.ObjectKey{
+		Namespace: namespace,
+		Name:      name,
+	}
+
 	if err := r.Get(ctx, infraMachineKey, infraMachine); err != nil && !apierrors.IsNotFound(err) {
-		return nil, nil, fmt.Errorf("failed to get Cluster API infrastructure machine: %w", err)
+		return nil, fmt.Errorf("failed to get: %w", err)
 	} else if apierrors.IsNotFound(err) {
 		infraMachine = nil
 	}
 
-	return infraCluster, infraMachine, nil
+	return infraMachine, nil
+}
+
+// doesCAPIInfraMachineExist checks if the Cluster API Infrastructure Machine exists. It uses the infrastructureRef of the Cluster API Machine with fallback to the name of the MAPI Machine.
+func (r *MachineSyncReconciler) doesCAPIInfraMachineExist(ctx context.Context, capiMachine *clusterv1.Machine, mapiMachine *mapiv1beta1.Machine) (bool, error) {
+	namespace := r.CAPINamespace
+	name := mapiMachine.Name
+
+	if capiMachine != nil {
+		name = capiMachine.Spec.InfrastructureRef.Name
+		namespace = capiMachine.Namespace
+	}
+
+	infraMachine, err := r.fetchCAPIInfraMachine(ctx, name, namespace)
+	if err != nil {
+		return false, fmt.Errorf("checking existence: %w", err)
+	}
+
+	return infraMachine != nil, nil
 }
 
 //nolint:funlen,gocognit,cyclop
