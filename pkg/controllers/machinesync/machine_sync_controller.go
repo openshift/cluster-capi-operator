@@ -1506,7 +1506,7 @@ func setChangedMAPIMachineStatusFields(existingMAPIMachine, convertedMAPIMachine
 	convertedMAPIMachine.Status.AuthoritativeAPI = existingMAPIMachine.Status.AuthoritativeAPI
 	convertedMAPIMachine.Status.SynchronizedGeneration = existingMAPIMachine.Status.SynchronizedGeneration
 	convertedMAPIMachine.Status.LastOperation = existingMAPIMachine.Status.LastOperation
-	convertedMAPIMachine.Status.ProviderStatus = existingMAPIMachine.Status.ProviderStatus
+	// ProviderStatus is handled separately by setChangedMAPIMachineProviderStatusFields
 
 	// Finally overwrite the entire existingMAPIMachine status with the convertedMAPIMachine status.
 	existingMAPIMachine.Status = convertedMAPIMachine.Status
