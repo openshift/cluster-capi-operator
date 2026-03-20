@@ -41,62 +41,10 @@ var (
 	clusterAPI      *operatorv1alpha1.ClusterAPI
 	clusterOperator *configv1.ClusterOperator
 
-	defaultProviderImgs = []providerimages.ProviderImageManifests{
-		{
-			ProviderMetadata: providerimages.ProviderMetadata{
-				Name:         "core",
-				InstallOrder: 10,
-			},
-			ContentID: "core-content-id",
-			ImageRef:  "registry.example.com/core@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-			Profile:   "default",
-		},
-		{
-			ProviderMetadata: providerimages.ProviderMetadata{
-				Name:         "infra-aws",
-				InstallOrder: 20,
-				OCPPlatform:  configv1.AWSPlatformType,
-			},
-			ContentID: "infra-aws-content-id",
-			ImageRef:  "registry.example.com/infra-aws@sha256:fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
-			Profile:   "default",
-		},
-	}
-
-	updatedProviderImgs = []providerimages.ProviderImageManifests{
-		{
-			ProviderMetadata: providerimages.ProviderMetadata{
-				Name:         "core",
-				InstallOrder: 10,
-			},
-			ContentID: "core-content-id-2",
-			ImageRef:  "registry.example.com/core@sha256:1111111111111111111111111111111111111111111111111111111111111111",
-			Profile:   "default",
-		},
-		{
-			ProviderMetadata: providerimages.ProviderMetadata{
-				Name:         "infra-aws",
-				InstallOrder: 20,
-				OCPPlatform:  configv1.AWSPlatformType,
-			},
-			ContentID: "infra-aws-content-id-2",
-			ImageRef:  "registry.example.com/infra-aws@sha256:2222222222222222222222222222222222222222222222222222222222222222",
-			Profile:   "default",
-		},
-	}
-
-	nonMatchingProviderImgs = []providerimages.ProviderImageManifests{
-		{
-			ProviderMetadata: providerimages.ProviderMetadata{
-				Name:         "infra-gcp",
-				InstallOrder: 20,
-				OCPPlatform:  configv1.GCPPlatformType,
-			},
-			ContentID: "infra-gcp-content-id",
-			ImageRef:  "registry.example.com/infra-gcp@sha256:3333333333333333333333333333333333333333333333333333333333333333",
-			Profile:   "default",
-		},
-	}
+	// Provider image fixtures - set by setupProviderFixtures in BeforeSuite.
+	defaultProviderImgs     []providerimages.ProviderImageManifests
+	updatedProviderImgs     []providerimages.ProviderImageManifests
+	nonMatchingProviderImgs []providerimages.ProviderImageManifests
 )
 
 const (
@@ -522,10 +470,9 @@ var _ = Describe("RevisionController error handling", Serial, func() {
 	BeforeEach(func(ctx context.Context) {
 		createFixtures(ctx)
 
-		// Clone provider images and ensure manifest paths for direct reconcile use.
+		// Clone provider images for direct reconcile use.
 		providerImgs := make([]providerimages.ProviderImageManifests, len(defaultProviderImgs))
 		copy(providerImgs, defaultProviderImgs)
-		ensureManifestPaths(providerImgs)
 
 		interceptorCl = interceptor.NewClient(cl, interceptor.Funcs{
 			SubResourcePatch: func(ctx context.Context, c client.Client, subResourceName string, obj client.Object, patch client.Patch, opts ...client.SubResourcePatchOption) error {
