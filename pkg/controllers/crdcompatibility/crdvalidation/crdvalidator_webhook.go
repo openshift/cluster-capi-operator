@@ -24,7 +24,6 @@ import (
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/fields"
-	"k8s.io/apimachinery/pkg/runtime"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -42,7 +41,6 @@ import (
 var (
 	// ErrCRDHasRequirements is the error which signals a deletion of a CRD is disallowed.
 	ErrCRDHasRequirements    = errors.New("cannot delete CRD because it has CompatibilityRequirements")
-	errExpectedCRD           = errors.New("expected a CustomResourceDefinition")
 	errCRDNotCompatible      = errors.New("CRD is not compatible with CompatibilityRequirements")
 	errUnknownCRDAdmitAction = errors.New("unknown value for CompatibilityRequirement.spec.customResourceDefinitionSchemaValidation.action")
 	errPathNotFound          = errors.New("path not found in schema")
@@ -65,8 +63,7 @@ func (v *Validator) SetupWithManager(ctx context.Context, mgr ctrl.Manager, opts
 		return fmt.Errorf("failed to add index to CompatibilityRequirements: %w", err)
 	}
 
-	err := ctrl.NewWebhookManagedBy(mgr).
-		For(&apiextensionsv1.CustomResourceDefinition{}).
+	err := ctrl.NewWebhookManagedBy(mgr, &apiextensionsv1.CustomResourceDefinition{}).
 		WithValidator(v).Complete()
 	if err != nil {
 		return fmt.Errorf("failed to create controller: %w", err)
@@ -80,14 +77,9 @@ type Validator struct {
 	client client.Reader
 }
 
-var _ admission.CustomValidator = &Validator{}
+var _ admission.Validator[*apiextensionsv1.CustomResourceDefinition] = &Validator{}
 
-func (v *Validator) validateCreateOrUpdate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	crd, ok := obj.(*apiextensionsv1.CustomResourceDefinition)
-	if !ok {
-		return nil, fmt.Errorf("%w: got %T", errExpectedCRD, obj)
-	}
-
+func (v *Validator) validateCreateOrUpdate(ctx context.Context, crd *apiextensionsv1.CustomResourceDefinition) (admission.Warnings, error) {
 	compatibilityRequirements := apiextensionsv1alpha1.CompatibilityRequirementList{}
 	if err := v.client.List(ctx, &compatibilityRequirements, &client.ListOptions{FieldSelector: fields.SelectorFromSet(fields.Set{index.FieldCRDByName: crd.GetName()})}); err != nil {
 		return nil, fmt.Errorf("failed to list CompatibilityRequirements: %w for CRD %q", err, crd.GetName())
@@ -144,22 +136,17 @@ func (v *Validator) validateCreateOrUpdate(ctx context.Context, obj runtime.Obje
 }
 
 // ValidateCreate validates a Create event for a CustomResourceDefinition.
-func (v *Validator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	return v.validateCreateOrUpdate(ctx, obj)
+func (v *Validator) ValidateCreate(ctx context.Context, crd *apiextensionsv1.CustomResourceDefinition) (admission.Warnings, error) {
+	return v.validateCreateOrUpdate(ctx, crd)
 }
 
 // ValidateUpdate validates an Update event for a CustomResourceDefinition.
-func (v *Validator) ValidateUpdate(ctx context.Context, _, newObj runtime.Object) (admission.Warnings, error) {
+func (v *Validator) ValidateUpdate(ctx context.Context, _, newObj *apiextensionsv1.CustomResourceDefinition) (admission.Warnings, error) {
 	return v.validateCreateOrUpdate(ctx, newObj)
 }
 
 // ValidateDelete validates a Delete event for a CustomResourceDefinition.
-func (v *Validator) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	crd, ok := obj.(*apiextensionsv1.CustomResourceDefinition)
-	if !ok {
-		return nil, fmt.Errorf("%w: got %T", errExpectedCRD, obj)
-	}
-
+func (v *Validator) ValidateDelete(ctx context.Context, crd *apiextensionsv1.CustomResourceDefinition) (admission.Warnings, error) {
 	compatibilityRequirements := apiextensionsv1alpha1.CompatibilityRequirementList{}
 	if err := v.client.List(ctx, &compatibilityRequirements, &client.ListOptions{FieldSelector: fields.SelectorFromSet(fields.Set{index.FieldCRDByName: crd.GetName()})}); err != nil {
 		return nil, fmt.Errorf("failed to list CompatibilityRequirements: %w for CRD %q", err, crd.GetName())

@@ -27,7 +27,6 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility/index"
 	"github.com/openshift/cluster-capi-operator/pkg/test"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 )
 
 func Test_crdValidator_validateCreateOrUpdate(t *testing.T) {
@@ -51,7 +50,7 @@ func Test_crdValidator_validateCreateOrUpdate(t *testing.T) {
 
 	tests := []struct {
 		name         string
-		obj          runtime.Object
+		obj          *apiextensionsv1.CustomResourceDefinition
 		requirements []client.Object
 		wantWarnings OmegaMatcher
 		wantErr      OmegaMatcher

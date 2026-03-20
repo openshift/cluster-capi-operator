@@ -18,13 +18,11 @@ import (
 	"errors"
 	"fmt"
 
-	"k8s.io/apimachinery/pkg/runtime"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	configv1 "github.com/openshift/api/config/v1"
@@ -48,9 +46,8 @@ type ClusterWebhook struct {
 func (r *ClusterWebhook) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	r.client = mgr.GetClient()
 
-	if err := ctrl.NewWebhookManagedBy(mgr).
+	if err := ctrl.NewWebhookManagedBy(mgr, &clusterv1.Cluster{}).
 		WithValidator(r).
-		For(&clusterv1.Cluster{}).
 		Complete(); err != nil {
 		return fmt.Errorf("failed to create webhook: %w", err)
 	}
@@ -58,7 +55,7 @@ func (r *ClusterWebhook) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	return nil
 }
 
-var _ webhook.CustomValidator = &ClusterWebhook{}
+var _ admission.Validator[*clusterv1.Cluster] = &ClusterWebhook{}
 
 // fetchInfrastructureObject fetches the Infrastructure object from the cluster.
 func (r *ClusterWebhook) fetchInfrastructureObject(ctx context.Context) (*configv1.Infrastructure, error) {
@@ -92,12 +89,7 @@ func (r *ClusterWebhook) validateClusterName(ctx context.Context, cluster *clust
 }
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type.
-func (r *ClusterWebhook) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	cluster, ok := obj.(*clusterv1.Cluster)
-	if !ok {
-		panic("expected to get an object of type v1beta2.Cluster")
-	}
-
+func (r *ClusterWebhook) ValidateCreate(ctx context.Context, cluster *clusterv1.Cluster) (admission.Warnings, error) {
 	errs := []error{}
 
 	infrastructureRefPath := field.NewPath("spec", "infrastructureRef")
@@ -122,38 +114,23 @@ func (r *ClusterWebhook) ValidateCreate(ctx context.Context, obj runtime.Object)
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type.
-func (r *ClusterWebhook) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
-	_, ok := oldObj.(*clusterv1.Cluster)
-	if !ok {
-		panic("expected to get an object of type v1beta2.Cluster")
-	}
-
-	newCluster, ok := newObj.(*clusterv1.Cluster)
-	if !ok {
-		panic("expected to get an object of type v1beta2.Cluster")
-	}
-
+func (r *ClusterWebhook) ValidateUpdate(ctx context.Context, _, newObj *clusterv1.Cluster) (admission.Warnings, error) {
 	infrastructureRefPath := field.NewPath("spec", "infrastructureRef")
-	if !newCluster.Spec.InfrastructureRef.IsDefined() {
+	if !newObj.Spec.InfrastructureRef.IsDefined() {
 		return nil, field.Required(infrastructureRefPath, "infrastructureRef is required")
 	}
 
-	switch newCluster.Spec.InfrastructureRef.Kind {
+	switch newObj.Spec.InfrastructureRef.Kind {
 	case "AWSCluster", "AzureCluster", "GCPCluster", "IBMPowerVSCluster", "OpenStackCluster", "VSphereCluster", "Metal3Cluster":
 	default:
-		return nil, field.NotSupported(field.NewPath("spec", "infrastructureRef", "kind"), newCluster.Spec.InfrastructureRef.Kind, []string{"AWSCluster", "AzureCluster", "GCPCluster", "IBMPowerVSCluster", "OpenStackCluster", "VSphereCluster", "Metal3Cluster"})
+		return nil, field.NotSupported(field.NewPath("spec", "infrastructureRef", "kind"), newObj.Spec.InfrastructureRef.Kind, []string{"AWSCluster", "AzureCluster", "GCPCluster", "IBMPowerVSCluster", "OpenStackCluster", "VSphereCluster", "Metal3Cluster"})
 	}
 
 	return nil, nil
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type.
-func (r *ClusterWebhook) ValidateDelete(_ context.Context, obj runtime.Object) (admission.Warnings, error) {
-	cluster, ok := obj.(*clusterv1.Cluster)
-	if !ok {
-		panic("expected to get an object of type v1beta2.Cluster")
-	}
-
+func (r *ClusterWebhook) ValidateDelete(_ context.Context, cluster *clusterv1.Cluster) (admission.Warnings, error) {
 	if cluster.Namespace == openshiftCAPINamespace {
 		return nil, errNamespaceDeletionNotAllowed
 	}

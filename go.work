@@ -1,8 +1,19 @@
-go 1.25.0
+go 1.25.3
 
 use (
 	.
 	./e2e
 	./hack/tools
 	./manifests-gen
+)
+
+replace (
+	// This is required to resolve a placeholder dep in CAPV
+	sigs.k8s.io/cluster-api => sigs.k8s.io/cluster-api v1.11.5
+
+	// Pin these specific provider commits until they are included in
+	// releases
+	sigs.k8s.io/cluster-api-provider-aws/v2 => sigs.k8s.io/cluster-api-provider-aws/v2 v2.10.1-0.20260311200936-f3440f3ea2f2
+	sigs.k8s.io/cluster-api-provider-azure => sigs.k8s.io/cluster-api-provider-azure v1.22.1-0.20260313010140-0c77ca282778
+	sigs.k8s.io/cluster-api-provider-gcp => sigs.k8s.io/cluster-api-provider-gcp v1.11.0-beta.0.0.20260312083137-58abcdcc039b
 )

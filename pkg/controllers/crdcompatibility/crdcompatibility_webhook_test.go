@@ -23,7 +23,6 @@ import (
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/yaml"
 
 	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
@@ -44,7 +43,7 @@ func TestCRDRequirementValidator_ValidateCreate(t *testing.T) {
 
 	tests := []struct {
 		name         string
-		obj          runtime.Object
+		obj          *apiextensionsv1alpha1.CompatibilityRequirement
 		wantWarnings []string
 		wantErr      OmegaMatcher
 	}{
@@ -52,11 +51,6 @@ func TestCRDRequirementValidator_ValidateCreate(t *testing.T) {
 			name:    "should validate a valid CompatibilityRequirement",
 			obj:     test.GenerateTestCompatibilityRequirement(testCRD),
 			wantErr: BeNil(),
-		},
-		{
-			name:    "should reject non-CompatibilityRequirement objects",
-			obj:     &apiextensionsv1.CustomResourceDefinition{},
-			wantErr: MatchError(ContainSubstring("expected a CompatibilityRequirement")),
 		},
 		{
 			name: "should reject CompatibilityRequirement with invalid YAML",
@@ -114,10 +108,8 @@ func TestCRDRequirementValidator_ValidateCreate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			g := NewWithT(t)
 
-			compatibilityRequirement := tt.obj.(metav1.Object)
-			compatibilityRequirement.SetName("test-requirement")
-
-			gotWarnings, gotErr := validator.ValidateCreate(ctx, compatibilityRequirement.(runtime.Object))
+			tt.obj.SetName("test-requirement")
+			gotWarnings, gotErr := validator.ValidateCreate(ctx, tt.obj)
 
 			if tt.wantErr != nil {
 				g.Expect(gotErr).To(tt.wantErr)
@@ -145,26 +137,18 @@ func TestCRDRequirementValidator_ValidateUpdate(t *testing.T) {
 		WithRequiredStringProperty("requiredField").
 		Build()
 
-	validReq := test.GenerateTestCompatibilityRequirement(testCRD)
-
 	tests := []struct {
 		name         string
-		oldObj       runtime.Object
-		newObj       runtime.Object
+		oldObj       *apiextensionsv1alpha1.CompatibilityRequirement
+		newObj       *apiextensionsv1alpha1.CompatibilityRequirement
 		wantWarnings []string
 		wantErr      OmegaMatcher
 	}{
 		{
 			name:    "should validate update from valid to valid CompatibilityRequirement",
-			oldObj:  validReq,
-			newObj:  validReq.DeepCopy(),
+			oldObj:  test.GenerateTestCompatibilityRequirement(testCRD),
+			newObj:  test.GenerateTestCompatibilityRequirement(testCRD),
 			wantErr: BeNil(),
-		},
-		{
-			name:    "should reject update to invalid CompatibilityRequirement",
-			oldObj:  validReq,
-			newObj:  &apiextensionsv1.CustomResourceDefinition{},
-			wantErr: MatchError(ContainSubstring("expected a CompatibilityRequirement")),
 		},
 	}
 
@@ -172,13 +156,10 @@ func TestCRDRequirementValidator_ValidateUpdate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			g := NewWithT(t)
 
-			oldObj := tt.oldObj.(metav1.Object)
-			oldObj.SetName("test-requirement")
+			tt.oldObj.SetName("test-requirement")
+			tt.newObj.SetName("test-requirement")
 
-			newObj := tt.newObj.(metav1.Object)
-			newObj.SetName("test-requirement")
-
-			gotWarnings, gotErr := validator.ValidateUpdate(ctx, oldObj.(runtime.Object), newObj.(runtime.Object))
+			gotWarnings, gotErr := validator.ValidateUpdate(ctx, tt.oldObj, tt.newObj)
 
 			if tt.wantErr != nil {
 				g.Expect(gotErr).To(tt.wantErr)

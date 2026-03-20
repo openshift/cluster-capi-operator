@@ -28,7 +28,6 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apiextensionsvalidation "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/validation"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/kubernetes/pkg/apis/admissionregistration"
@@ -42,32 +41,27 @@ import (
 )
 
 var (
-	errExpectedCompatibilityRequirement = errors.New("expected a CompatibilityRequirement")
-	errInvalidCompatibilityCRD          = errors.New("expected a valid CustomResourceDefinition in YAML format")
-	errPathNotFound                     = errors.New("path not found in schema")
+	errInvalidCompatibilityCRD = errors.New("expected a valid CustomResourceDefinition in YAML format")
+	errPathNotFound            = errors.New("path not found in schema")
 )
 
 type crdRequirementValidator struct{}
 
-var _ admission.CustomValidator = &crdRequirementValidator{}
+var _ admission.Validator[*apiextensionsv1alpha1.CompatibilityRequirement] = &crdRequirementValidator{}
 
 // ValidateCreate validates a Create event for a CompatibilityRequirement.
-func (v *crdRequirementValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	return v.validateCreateOrUpdate(ctx, obj)
+func (v *crdRequirementValidator) ValidateCreate(ctx context.Context, compatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement) (admission.Warnings, error) {
+	// validateCreateOrUpdate ensures that the compatibility CRD is valid YAML.
+	return v.validateCreateOrUpdate(ctx, compatibilityRequirement)
 }
 
 // ValidateUpdate validates an Update event for a CompatibilityRequirement.
-func (v *crdRequirementValidator) ValidateUpdate(ctx context.Context, _, newObj runtime.Object) (admission.Warnings, error) {
+func (v *crdRequirementValidator) ValidateUpdate(ctx context.Context, _, newObj *apiextensionsv1alpha1.CompatibilityRequirement) (admission.Warnings, error) {
 	return v.validateCreateOrUpdate(ctx, newObj)
 }
 
 // validateCreateOrUpdate ensures that the compatibility CRD is valid YAML.
-func (v *crdRequirementValidator) validateCreateOrUpdate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	compatibilityRequirement, ok := obj.(*apiextensionsv1alpha1.CompatibilityRequirement)
-	if !ok {
-		return nil, fmt.Errorf("%w: got %T", errExpectedCompatibilityRequirement, obj)
-	}
-
+func (v *crdRequirementValidator) validateCreateOrUpdate(ctx context.Context, compatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement) (admission.Warnings, error) {
 	errs := validateCompatibilitySchema(ctx, field.NewPath("spec").Child("compatibilitySchema"), compatibilityRequirement.Spec.CompatibilitySchema)
 
 	if len(errs) > 0 {
@@ -105,7 +99,7 @@ func (v *crdRequirementValidator) validateCreateOrUpdate(ctx context.Context, ob
 }
 
 // ValidateDelete validates a Delete event for a CompatibilityRequirement.
-func (v *crdRequirementValidator) ValidateDelete(context.Context, runtime.Object) (admission.Warnings, error) {
+func (v *crdRequirementValidator) ValidateDelete(ctx context.Context, compatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement) (admission.Warnings, error) {
 	// We have no validation requirements for deletion.
 	return nil, nil
 }
