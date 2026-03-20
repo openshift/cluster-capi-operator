@@ -72,10 +72,27 @@ The repository also includes:
 ## Testing
 
 ### Running Tests
+
+**Do not use `go test` or `ginkgo` directly.** Tests use `envtest` which requires `KUBEBUILDER_ASSETS`
+to point at downloaded API server and etcd binaries. The Makefile handles this: `make unit` depends on
+the `.localtestenv` target (which runs `setup-envtest` to download binaries and writes their path to
+`.localtestenv`), and `hack/test.sh` sources that file before invoking ginkgo. Running `go test`
+directly will fail because the envtest `Environment` cannot locate the binaries.
+
 ```bash
-make unit                                    # All unit tests
-make unit TEST_DIRS="./pkg/controllers/machinesync/..."  # Specific package directories/dirs
-./hack/test.sh "./pkg/..." 10m             # With timeout
+make unit                                                # All unit tests
+make unit TEST_DIRS="./pkg/controllers/installer/..."    # Specific package
+make unit TEST_DIRS="./pkg/controllers/machinesync/..."  # Another specific package
+```
+
+**Important:** Ginkgo functional tests are slow and produce verbose output that will exceed
+context limits. Always redirect output to a log file and use multi-pass processing:
+```bash
+make unit TEST_DIRS="./pkg/..." 2>&1 | tee /tmp/test-output.log
+# Then check results:
+tail -20 /tmp/test-output.log        # Summary
+grep -E 'FAIL|PASSED' /tmp/test-output.log  # Pass/fail status
+grep 'FAIL' /tmp/test-output.log     # Find failures
 ```
 #### Default ginkgo arguments
 - `GINKGO_ARGS="-r -v --randomize-all --randomize-suites --keep-going --race --trace --timeout=10m"`
@@ -162,6 +179,6 @@ FContext("context name", func() { /* tests */ })
 ```
 
 ### Test Environment
-- Tests MUST use `make unit` (requires kubebuilder assets)
-- Each controller has `suite_test.go`
+- Each controller has a `suite_test.go` that bootstraps an `envtest.Environment`
+- See "Running Tests" above for why `make unit` is required
 
