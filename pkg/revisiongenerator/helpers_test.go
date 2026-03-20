@@ -17,14 +17,12 @@ limitations under the License.
 package revisiongenerator
 
 import (
-	"os"
-	"path/filepath"
-	"strings"
 	"testing"
 
 	. "github.com/onsi/gomega"
 
 	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
+	"github.com/openshift/cluster-capi-operator/pkg/test"
 )
 
 func must[T any](value T, err error) func(g *WithT) T {
@@ -36,28 +34,16 @@ func must[T any](value T, err error) func(g *WithT) T {
 	}
 }
 
-// writeManifestFile writes YAML content to a temp file and returns the path.
-func writeManifestFile(t *testing.T, content string) string {
-	t.Helper()
-	dir := t.TempDir()
-	path := filepath.Join(dir, "manifests.yaml")
-	g := NewWithT(t)
-	g.Expect(os.WriteFile(path, []byte(content), 0644)).To(Succeed())
-
-	return path
-}
-
 // profile creates a ProviderImageManifests with the given fields and manifest
 // content written to a temp file.
 func profile(t *testing.T, name, imageRef, profileName, manifestContent string) providerimages.ProviderImageManifests {
 	t.Helper()
 
-	return providerimages.ProviderImageManifests{
-		ProviderMetadata: providerimages.ProviderMetadata{Name: name},
-		ImageRef:         imageRef,
-		Profile:          profileName,
-		ManifestsPath:    writeManifestFile(t, manifestContent),
-	}
+	return test.NewTestProvider(t, name,
+		test.WithImageRef(imageRef),
+		test.WithProfile(profileName),
+		test.WithManifests(manifestContent),
+	)
 }
 
 // contentIDForProfiles computes the contentID for a set of profiles.
@@ -76,5 +62,5 @@ func forInstall(g *WithT, rev RenderedRevision, releaseVersion string, revisionI
 
 // multiDoc joins YAML documents with the standard separator.
 func multiDoc(docs ...string) string {
-	return strings.Join(docs, "\n---\n")
+	return test.MultiDoc(docs...)
 }

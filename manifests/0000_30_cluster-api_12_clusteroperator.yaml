@@ -13,9 +13,10 @@ status:
   - name: operator
     version: "0.0.1-snapshot"
   relatedObjects:
-  - group: config.openshift.io
-    name: cluster-api
-    resource: clusteroperators
+  # must-gather already fetches all ClusterOperators and CRDs (but not instances of those CRDs)
+
+  # Listing namespaces causes must-gather to collect most standard resources
+  # from those namespaces.
   - group: ""
     name: openshift-cluster-api
     resource: namespaces
@@ -23,22 +24,19 @@ status:
     name: openshift-cluster-api-operator
     resource: namespaces
   - group: ""
-    name: capi-controllers
-    namespace: openshift-cluster-api
-    resource: serviceaccounts
-  - group: ""
-    name: capi-operator
-    namespace: openshift-cluster-api-operator
-    resource: serviceaccounts
-  - group: ""
-    name: cluster-capi-operator-images
-    namespace: openshift-cluster-api-operator
-    resource: configmaps
-  - group: "apps"
-    name: capi-operator
-    namespace: openshift-cluster-api-operator
-    resource: deployments
-  - group: "apps"
-    name: capi-controllers
-    namespace: openshift-cluster-api
-    resource: deployments
+    name: openshift-compatibility-requirements-operator
+    resource: namespaces
+
+  # CVO-managed admission policies
+  # FIXME: We fetch all admission policies because we have too many to list
+  # individually. This is probably something kube-apiserver should be doing.
+  - group: admissionregistration.k8s.io
+    resource: validatingadmissionpolicies
+  - group: admissionregistration.k8s.io
+    resource: validatingadmissionpolicybindings
+
+  # Collect all CompatibilityRequirement objects
+  - group: apiextensions.openshift.io
+    resource: compatibilityrequirements
+
+  # the installer controller dynamically adds entries for CAPI providers it installs
