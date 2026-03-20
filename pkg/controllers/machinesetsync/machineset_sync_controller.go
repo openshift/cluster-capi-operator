@@ -1332,10 +1332,6 @@ func compareCAPIInfraMachineTemplates(platform configv1.PlatformType, infraMachi
 
 	switch platform {
 	case configv1.AWSPlatformType:
-		diffOpts = append(diffOpts,
-			util.WithIgnoreField("spec", "template", "spec", "hostID"),
-			util.WithIgnoreField("spec", "template", "spec", "hostAffinity"),
-		)
 	case configv1.OpenStackPlatformType:
 	case configv1.PowerVSPlatformType:
 	default:
