@@ -95,15 +95,22 @@ type renderedRevision struct {
 var _ RenderedRevision = &renderedRevision{}
 
 // NewRenderedRevision creates a new RenderedRevision from a list of provider image manifests.
-func NewRenderedRevision(profiles []providerimages.ProviderImageManifests) (RenderedRevision, error) {
-	return newRenderedRevision(profiles)
+func NewRenderedRevision(profiles []providerimages.ProviderImageManifests, opts ...revisionRenderOption) (RenderedRevision, error) {
+	return newRenderedRevision(profiles, opts...)
 }
 
-func newRenderedRevision(profiles []providerimages.ProviderImageManifests) (*renderedRevision, error) {
+// newRenderedRevision implements NewRenderedRevision. It exists to return a
+// concrete type for internal use.
+func newRenderedRevision(profiles []providerimages.ProviderImageManifests, opts ...revisionRenderOption) (*renderedRevision, error) {
+	cfg := &revisionRenderConfig{}
+	for _, opt := range opts {
+		opt(cfg)
+	}
+
 	components := make([]*renderedComponent, len(profiles))
 
 	for i, profile := range profiles {
-		component, err := newRenderedComponent(&profile)
+		component, err := newRenderedComponent(&profile, cfg)
 		if err != nil {
 			return nil, err
 		}
@@ -231,16 +238,34 @@ func buildRevisionName(releaseVersion, contentID string, index int64) operatorv1
 	return operatorv1alpha1.RevisionName(name)
 }
 
+type revisionRenderConfig struct {
+	objectCollectors []RevisionObjectCollector
+}
+
+type revisionRenderOption func(*revisionRenderConfig)
+
+// RevisionObjectCollector is a function that will be called for each object in
+// the rendered revision.
+type RevisionObjectCollector func(obj unstructured.Unstructured)
+
+// WithObjectCollectors adds object collectors to the revision render config.
+func WithObjectCollectors(collectors ...RevisionObjectCollector) revisionRenderOption {
+	return func(opts *revisionRenderConfig) {
+		opts.objectCollectors = append(opts.objectCollectors, collectors...)
+	}
+}
+
 // NewInstallerRevisionFromAPI creates an InstallerRevision by matching the
 // components in an API revision against the provided provider profiles and
 // rendering the matched manifests. The revision name and index are taken
-// directly from the API revision (not recomputed). Components are matched by
-// Image.Ref and Image.Profile. An error is returned if any component cannot
-// be found in the provided profiles, or if the rendered content ID does not
-// match the content ID recorded in the API revision.
+// directly from the API revision. Components are matched by Image.Ref and
+// Image.Profile. An error is returned if any component cannot be found in the
+// provided profiles, or if the rendered content ID does not match the content
+// ID recorded in the API revision.
 func NewInstallerRevisionFromAPI(
 	apiRev operatorv1alpha1.ClusterAPIInstallerRevision,
 	providerProfiles []providerimages.ProviderImageManifests,
+	opts ...revisionRenderOption,
 ) (InstallerRevision, error) {
 	matched := make([]providerimages.ProviderImageManifests, len(apiRev.Components))
 
@@ -263,7 +288,7 @@ func NewInstallerRevisionFromAPI(
 		}
 	}
 
-	rendered, err := newRenderedRevision(matched)
+	rendered, err := newRenderedRevision(matched, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -292,7 +317,7 @@ type renderedComponent struct {
 	objects []unstructured.Unstructured
 }
 
-func newRenderedComponent(providerProfile *providerimages.ProviderImageManifests) (*renderedComponent, error) {
+func newRenderedComponent(providerProfile *providerimages.ProviderImageManifests, cfg *revisionRenderConfig) (*renderedComponent, error) {
 	component := &renderedComponent{
 		name:     providerProfile.Name,
 		imageRef: providerProfile.ImageRef,
@@ -314,7 +339,13 @@ func newRenderedComponent(providerProfile *providerimages.ProviderImageManifests
 			return nil, fmt.Errorf("error unmarshalling transformed manifest: %w", err)
 		}
 
-		switch unstructured.GroupVersionKind().GroupKind() {
+		for _, collector := range cfg.objectCollectors {
+			collector(unstructured)
+		}
+
+		gvk := unstructured.GroupVersionKind()
+
+		switch gvk.GroupKind() {
 		case schema.GroupKind{Group: "apiextensions.k8s.io", Kind: "CustomResourceDefinition"}:
 			component.crds = append(component.crds, unstructured)
 		default:
