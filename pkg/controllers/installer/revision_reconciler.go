@@ -132,6 +132,7 @@ func (r *revisionReconciler) reconcileRevision(ctx context.Context, apiRevision 
 		}
 
 		err = fmt.Errorf("reconciling revision %s: %w", revision.RevisionName(), err)
+
 		return false, err.Error(), err
 	}
 
