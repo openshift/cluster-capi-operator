@@ -336,12 +336,6 @@ func (e *ObjectEngine) objectUpdateHandling(
 		), nil
 	}
 
-	// Use optimistic locking to ensure that object will only
-	// be overridden when previous state is known to us.
-	// This prevents re-adoption of orphaned objects where we
-	// haven't observed the orphaning yet.
-	desiredObject.SetResourceVersion(actualObject.GetResourceVersion())
-
 	switch ctrlSit {
 	case ctrlSituationIsController:
 		modified := compareRes.Comparison != nil &&
@@ -358,7 +352,7 @@ func (e *ObjectEngine) objectUpdateHandling(
 		if !compareRes.IsConflict() && modified {
 			// No conflict with another controller, but modifications needed.
 			err := e.apply(
-				ctx, desiredObject,
+				ctx, desiredObject, actualObject,
 				options,
 			)
 			if err != nil {
@@ -391,7 +385,7 @@ func (e *ObjectEngine) objectUpdateHandling(
 		// Having two ownerRefs set to controller is rejected by the kube-apiserver.
 		// Even though we force FIELD-level ownership in the call below.
 		err := e.apply(
-			ctx, desiredObject,
+			ctx, desiredObject, actualObject,
 			options,
 			client.ForceOwnership,
 		)
@@ -464,7 +458,7 @@ func (e *ObjectEngine) objectUpdateHandling(
 
 	// Write changes.
 	err = e.apply(
-		ctx, desiredObject,
+		ctx, desiredObject, actualObject,
 		options,
 		client.ForceOwnership,
 	)
@@ -512,7 +506,8 @@ func (e *ObjectEngine) create(
 
 func (e *ObjectEngine) apply(
 	ctx context.Context,
-	obj Object,
+	desiredObject Object,
+	actualObject Object,
 	options types.ObjectReconcileOptions,
 	opts ...client.ApplyOption,
 ) error {
@@ -520,9 +515,17 @@ func (e *ObjectEngine) apply(
 		return nil
 	}
 
-	if err := e.migrateFieldManagersToSSA(ctx, obj); err != nil {
+	if err := e.migrateFieldManagersToSSA(ctx, actualObject); err != nil {
 		return err
 	}
+
+	// Use optimistic locking to ensure that object will only
+	// be overridden when previous state is known to us.
+	// This prevents re-adoption of orphaned objects where we
+	// haven't observed the orphaning yet.
+	// We need to do this after migrateFieldManagersToSSA, which may update the
+	// resourceVersion.
+	desiredObject.SetResourceVersion(actualObject.GetResourceVersion())
 
 	o := make([]client.ApplyOption, 0, len(opts)+1)
 	o = append(o, client.FieldOwner(e.fieldOwner))
@@ -530,7 +533,7 @@ func (e *ObjectEngine) apply(
 
 	var ac runtime.ApplyConfiguration
 
-	switch v := obj.(type) {
+	switch v := desiredObject.(type) {
 	case runtime.ApplyConfiguration:
 		ac = v
 
@@ -538,7 +541,7 @@ func (e *ObjectEngine) apply(
 		ac = client.ApplyConfigurationFromUnstructured(v)
 
 	default:
-		return NewUnsupportedApplyConfigurationError(obj)
+		return NewUnsupportedApplyConfigurationError(desiredObject)
 	}
 
 	return e.writer.Apply(ctx, ac, o...)
