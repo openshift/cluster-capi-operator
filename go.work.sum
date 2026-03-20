@@ -721,6 +721,8 @@ github.com/opencontainers/selinux v1.11.0/go.mod h1:E5dMC3VPuVvVHDYmi78qvhJp8+M5
 github.com/opencontainers/selinux v1.11.1/go.mod h1:E5dMC3VPuVvVHDYmi78qvhJp8+M586T4DlDRYpFkyec=
 github.com/openshift-cloud-team/boxcutter v0.0.0-20260318154832-c0d5c889bc4c h1:2WyBZ8gNkDeHrCWbpA4njK1YMmCk+5zd/ylS/zdICCQ=
 github.com/openshift-cloud-team/boxcutter v0.0.0-20260318154832-c0d5c889bc4c/go.mod h1:jlf0dD/1EjWId+fo0rX4BgV3W+JR5my5D3oF34Z8uHc=
+github.com/openshift-cloud-team/boxcutter v0.0.0-20260320154605-876fe9f8e3d0 h1:YkwSuheKAa01U2IcQcaftj0R0AnaiKkTnFoRPvuhd6s=
+github.com/openshift-cloud-team/boxcutter v0.0.0-20260320154605-876fe9f8e3d0/go.mod h1:jlf0dD/1EjWId+fo0rX4BgV3W+JR5my5D3oF34Z8uHc=
 github.com/openshift-eng/openshift-tests-extension v0.0.0-20250711173707-dc2a20e5a5f8/go.mod h1:6gkP5f2HL0meusT0Aim8icAspcD1cG055xxBZ9yC68M=
 github.com/openshift-online/ocm-common v0.0.29/go.mod h1:VEkuZp9aqbXtetZ5ycND6QpvhykvTuBF3oPsVM1X3vI=
 github.com/openshift-online/ocm-sdk-go v0.1.465/go.mod h1:EOkylgH0bafd+SlU9YvMrIIxHJw0Hk1EnC7W1VZeW8I=

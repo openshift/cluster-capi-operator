@@ -3070,7 +3070,7 @@ mvdan.cc/gofumpt/internal/version
 # mvdan.cc/unparam v0.0.0-20251027182757-5beb8c8f8f15
 ## explicit; go 1.24.0
 mvdan.cc/unparam/check
-# pkg.package-operator.run/boxcutter v0.11.0 => /home/mbooth/src/openshift/boxcutter
+# pkg.package-operator.run/boxcutter v0.11.0 => github.com/openshift-cloud-team/boxcutter v0.0.0-20260320154605-876fe9f8e3d0
 ## explicit; go 1.25.3
 pkg.package-operator.run/boxcutter
 pkg.package-operator.run/boxcutter/machinery
@@ -3356,7 +3356,7 @@ sigs.k8s.io/structured-merge-diff/v6/value
 ## explicit; go 1.22
 sigs.k8s.io/yaml
 sigs.k8s.io/yaml/goyaml.v2
-# pkg.package-operator.run/boxcutter => /home/mbooth/src/openshift/boxcutter
+# pkg.package-operator.run/boxcutter => github.com/openshift-cloud-team/boxcutter v0.0.0-20260320154605-876fe9f8e3d0
 # sigs.k8s.io/cluster-api => sigs.k8s.io/cluster-api v1.11.5
 # sigs.k8s.io/cluster-api-provider-aws/v2 => sigs.k8s.io/cluster-api-provider-aws/v2 v2.10.1-0.20260311200936-f3440f3ea2f2
 # sigs.k8s.io/cluster-api-provider-azure => sigs.k8s.io/cluster-api-provider-azure v1.22.1-0.20260313010140-0c77ca282778
