@@ -23,6 +23,8 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	configv1 "github.com/openshift/api/config/v1"
+	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -62,7 +64,56 @@ var _ = BeforeSuite(func() {
 		By("tearing down the test environment")
 		Expect(test.StopEnvTest(testEnv)).To(Succeed())
 	})
+
+	By("setting up provider image fixtures")
+	setupProviderFixtures()
 })
+
+func setupProviderFixtures() {
+	tb := GinkgoTB()
+
+	// Each provider uses its ContentID as the ConfigMap name so that
+	// different provider sets produce different revision contentIDs.
+	defaultProviderImgs = []providerimages.ProviderImageManifests{
+		test.NewTestProvider(tb, "core",
+			test.WithContentID("core-content-id"),
+			test.WithImageRef("registry.example.com/core@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"),
+			test.WithManifests(test.ConfigMapYAML("core-content-id")),
+		),
+		test.NewTestProvider(tb, "infra-aws",
+			test.WithInstallOrder(20),
+			test.WithPlatform(configv1.AWSPlatformType),
+			test.WithContentID("infra-aws-content-id"),
+			test.WithImageRef("registry.example.com/infra-aws@sha256:fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"),
+			test.WithManifests(test.ConfigMapYAML("infra-aws-content-id")),
+		),
+	}
+
+	updatedProviderImgs = []providerimages.ProviderImageManifests{
+		test.NewTestProvider(tb, "core",
+			test.WithContentID("core-content-id-2"),
+			test.WithImageRef("registry.example.com/core@sha256:1111111111111111111111111111111111111111111111111111111111111111"),
+			test.WithManifests(test.ConfigMapYAML("core-content-id-2")),
+		),
+		test.NewTestProvider(tb, "infra-aws",
+			test.WithInstallOrder(20),
+			test.WithPlatform(configv1.AWSPlatformType),
+			test.WithContentID("infra-aws-content-id-2"),
+			test.WithImageRef("registry.example.com/infra-aws@sha256:2222222222222222222222222222222222222222222222222222222222222222"),
+			test.WithManifests(test.ConfigMapYAML("infra-aws-content-id-2")),
+		),
+	}
+
+	nonMatchingProviderImgs = []providerimages.ProviderImageManifests{
+		test.NewTestProvider(tb, "infra-gcp",
+			test.WithInstallOrder(20),
+			test.WithPlatform(configv1.GCPPlatformType),
+			test.WithContentID("infra-gcp-content-id"),
+			test.WithImageRef("registry.example.com/infra-gcp@sha256:3333333333333333333333333333333333333333333333333333333333333333"),
+			test.WithManifests(test.ConfigMapYAML("infra-gcp-content-id")),
+		),
+	}
+}
 
 func kWithCtx(ctx context.Context) komega.Komega {
 	return komega.New(cl).WithContext(ctx)
