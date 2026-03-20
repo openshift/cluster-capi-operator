@@ -109,16 +109,7 @@ func (r *CoreClusterController) Reconcile(ctx context.Context, req reconcile.Req
 		return ctrl.Result{}, fmt.Errorf("failed to ensure core cluster has the ControlPlaneInitializedCondition: %w", err)
 	}
 
-	// FIXME: We also set related objects here. THIS IS ARBITRARY AND TEMPORARY!
-	// The only requirements are:
-	// * only one controller should set related objects
-	// * that controller must have a scheme containing all possible provider types
-	// The latter requirement is because of the current implementation of RelatedObjects().
-	// RelatedObjects should move to the installer controller, and should set
-	// only objects which were actually installed. We can't do this immediately
-	// because the installer controller doesn't have a scheme containing all
-	// possible provider types.
-	if err := r.SetStatusAvailable(ctx, "", operatorstatus.WithRelatedObjects(r.RelatedObjects())); err != nil {
+	if err := r.SetStatusAvailable(ctx, ""); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to set status available: %w", err)
 	}
 

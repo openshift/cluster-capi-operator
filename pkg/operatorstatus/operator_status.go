@@ -16,11 +16,8 @@ limitations under the License.
 package operatorstatus
 
 import (
-	"cmp"
 	"context"
 	"fmt"
-	"slices"
-	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -135,9 +132,8 @@ func (r *ClusterOperatorStatusClient) GetOrCreateClusterOperator(ctx context.Con
 }
 
 type syncStatusOptions struct {
-	conditions     []configv1.ClusterOperatorStatusCondition
-	versions       []configv1.OperandVersion
-	relatedObjects []configv1.ObjectReference
+	conditions []configv1.ClusterOperatorStatusCondition
+	versions   []configv1.OperandVersion
 }
 
 // SyncStatusOption sets an option for the SyncStatus operation.
@@ -154,13 +150,6 @@ func WithConditions(conditions []configv1.ClusterOperatorStatusCondition) SyncSt
 func WithVersions(versions []configv1.OperandVersion) SyncStatusOption {
 	return func(o *syncStatusOptions) {
 		o.versions = versions
-	}
-}
-
-// WithRelatedObjects sets related objects for a SyncStatus operation.
-func WithRelatedObjects(relatedObjects []configv1.ObjectReference) SyncStatusOption {
-	return func(o *syncStatusOptions) {
-		o.relatedObjects = relatedObjects
 	}
 }
 
@@ -191,11 +180,6 @@ func (r *ClusterOperatorStatusClient) SyncStatus(ctx context.Context, co *config
 		shouldUpdate = true
 	}
 
-	if syncOptions.relatedObjects != nil && !equality.Semantic.DeepEqual(co.Status.RelatedObjects, syncOptions.relatedObjects) {
-		co.Status.RelatedObjects = syncOptions.relatedObjects
-		shouldUpdate = true
-	}
-
 	if shouldUpdate {
 		log.Info("syncing status", "message", v1helpers.GetStatusDiff(co.Status, co.Status))
 
@@ -205,71 +189,6 @@ func (r *ClusterOperatorStatusClient) SyncStatus(ctx context.Context, co *config
 	}
 
 	return nil
-}
-
-func platformToInfraPrefix(platform configv1.PlatformType) string {
-	switch platform {
-	case configv1.BareMetalPlatformType:
-		return "Metal3"
-	default:
-		return string(platform)
-	}
-}
-
-// RelatedObjects returns the related objects for the ClusterOperator.
-// This data is currently arbitrarily written by the corecluster controller.
-func (r *ClusterOperatorStatusClient) RelatedObjects() []configv1.ObjectReference {
-	references := []configv1.ObjectReference{
-		// ClusterOperator resource
-		{Group: configv1.GroupName, Resource: "clusteroperators", Name: controllers.ClusterOperatorName},
-
-		// Operator resources in the managed namespace
-		{Group: "", Resource: "namespaces", Name: r.ManagedNamespace},
-		{Group: "", Resource: "serviceaccounts", Name: "capi-controllers", Namespace: r.ManagedNamespace},
-		{Group: "apps", Resource: "deployments", Name: "capi-controllers", Namespace: r.ManagedNamespace},
-
-		// Operator resources in the operator namespace
-		{Group: "", Resource: "namespaces", Name: r.OperatorNamespace},
-		{Group: "", Resource: "serviceaccounts", Name: "capi-operator", Namespace: r.OperatorNamespace},
-		{Group: "", Resource: "configmaps", Name: "cluster-capi-operator-images", Namespace: r.OperatorNamespace},
-		{Group: "apps", Resource: "deployments", Name: "capi-operator", Namespace: r.OperatorNamespace},
-
-		// Cluster-scoped operator resources
-		{Group: "admissionregistration.k8s.io", Resource: "validatingadmissionpolicies", Name: "machine-api-machine-vap"},
-		{Group: "admissionregistration.k8s.io", Resource: "validatingadmissionpolicybindings", Name: "machine-api-machine-vap"},
-
-		// Operand owned resources
-		// TODO: these would ideally be generated dynamically by the installer
-		{Group: "cluster.x-k8s.io", Resource: "clusters", Namespace: r.ManagedNamespace},
-		{Group: "cluster.x-k8s.io", Resource: "machines", Namespace: r.ManagedNamespace},
-		{Group: "cluster.x-k8s.io", Resource: "machinesets", Namespace: r.ManagedNamespace},
-	}
-
-	platformPrefix := platformToInfraPrefix(r.Platform)
-
-	for groupVersionKind, t := range r.Scheme().AllKnownTypes() {
-		if strings.HasSuffix(groupVersionKind.Group, "cluster.x-k8s.io") {
-			// Ignore lists
-			if _, found := t.FieldByName("ObjectMeta"); !found {
-				continue
-			}
-
-			if strings.HasPrefix(t.Name(), platformPrefix) {
-				ref := configv1.ObjectReference{
-					Group:     groupVersionKind.Group,
-					Resource:  strings.ToLower(t.Name()),
-					Namespace: r.ManagedNamespace,
-				}
-
-				references = append(references, ref)
-			}
-		}
-	}
-
-	// Sort references before writing for consistency and so they can be easily compared.
-	sortRelatedObjects(references)
-
-	return references
 }
 
 // OperandVersions returns the operand versions for the ClusterOperator.
@@ -299,24 +218,4 @@ func isStatusConditionPresentAndEqual(conditions []configv1.ClusterOperatorStatu
 	}
 
 	return false
-}
-
-// sortRelatedObjects sorts a slice of related objects by group, resource,
-// namespace, and name, in that order.
-func sortRelatedObjects(relatedObjects []configv1.ObjectReference) {
-	slices.SortFunc(relatedObjects, func(a, b configv1.ObjectReference) int {
-		if a.Group != b.Group {
-			return cmp.Compare(a.Group, b.Group)
-		}
-
-		if a.Resource != b.Resource {
-			return cmp.Compare(a.Resource, b.Resource)
-		}
-
-		if a.Namespace != b.Namespace {
-			return cmp.Compare(a.Namespace, b.Namespace)
-		}
-
-		return cmp.Compare(a.Name, b.Name)
-	})
 }
