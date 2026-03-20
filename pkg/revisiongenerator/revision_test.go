@@ -25,6 +25,7 @@ import (
 
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
+	"github.com/openshift/cluster-capi-operator/pkg/test"
 )
 
 // Reusable YAML manifest fixtures.
@@ -357,28 +358,25 @@ func TestNewRenderedRevision(t *testing.T) {
 
 		// Manifest with envsubst variable; revision built from this should
 		// produce the same contentID as one built from the expanded form.
-		pathWithVar := writeManifestFile(t, `apiVersion: v1
+		provWithVar := test.NewTestProvider(t, "p1",
+			test.WithImageRef("img1"),
+			test.WithManifests(`apiVersion: v1
 kind: ConfigMap
 metadata:
   name: cm
 data:
-  v: "${EXP_BOOTSTRAP_FORMAT_IGNITION}"`)
-		pathExpanded := writeManifestFile(t, `apiVersion: v1
+  v: "${EXP_BOOTSTRAP_FORMAT_IGNITION}"`))
+		provExpanded := test.NewTestProvider(t, "p1",
+			test.WithImageRef("img1"),
+			test.WithManifests(`apiVersion: v1
 kind: ConfigMap
 metadata:
   name: cm
 data:
-  v: "true"`)
+  v: "true"`))
 
-		p := providerimages.ProviderImageManifests{
-			ProviderMetadata: providerimages.ProviderMetadata{Name: "p1"}, ImageRef: "img1", Profile: "default",
-		}
-
-		p.ManifestsPath = pathWithVar
-		rev1 := must(NewRenderedRevision([]providerimages.ProviderImageManifests{p}))(g)
-
-		p.ManifestsPath = pathExpanded
-		rev2 := must(NewRenderedRevision([]providerimages.ProviderImageManifests{p}))(g)
+		rev1 := must(NewRenderedRevision([]providerimages.ProviderImageManifests{provWithVar}))(g)
+		rev2 := must(NewRenderedRevision([]providerimages.ProviderImageManifests{provExpanded}))(g)
 
 		id1 := must(rev1.ContentID())(g)
 		id2 := must(rev2.ContentID())(g)

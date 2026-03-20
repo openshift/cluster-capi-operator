@@ -168,7 +168,7 @@ func TestNonRetryableError(t *testing.T) {
 func TestWithRequeueAfter(t *testing.T) {
 	t.Run("on Success", func(t *testing.T) {
 		g := NewWithT(t)
-		result := testResultGenerator.Success(WithRequeueAfter(5 * time.Second))
+		result := testResultGenerator.Success().WithRequeueAfter(5 * time.Second)
 
 		g.Expect(result.requeueAfter).To(Equal(5 * time.Second))
 
@@ -179,7 +179,7 @@ func TestWithRequeueAfter(t *testing.T) {
 
 	t.Run("on Progressing", func(t *testing.T) {
 		g := NewWithT(t)
-		result := testResultGenerator.Progressing("working", WithRequeueAfter(10*time.Second))
+		result := testResultGenerator.Progressing("working").WithRequeueAfter(10 * time.Second)
 
 		g.Expect(result.requeueAfter).To(Equal(10 * time.Second))
 	})
@@ -197,7 +197,7 @@ func TestWithRequeueAfter(t *testing.T) {
 	t.Run("on Error", func(t *testing.T) {
 		g := NewWithT(t)
 		testErr := fmt.Errorf("transient")
-		result := testResultGenerator.Error(testErr, WithRequeueAfter(15*time.Second))
+		result := testResultGenerator.Error(testErr).WithRequeueAfter(15 * time.Second)
 
 		assertRequeueAfterWithError(g, result, testErr)
 	})
@@ -205,7 +205,7 @@ func TestWithRequeueAfter(t *testing.T) {
 	t.Run("on NonRetryableError", func(t *testing.T) {
 		g := NewWithT(t)
 		testErr := fmt.Errorf("non-retryable")
-		result := testResultGenerator.NonRetryableError(testErr, WithRequeueAfter(15*time.Second))
+		result := testResultGenerator.NonRetryableError(testErr).WithRequeueAfter(15 * time.Second)
 
 		assertRequeueAfterWithError(g, result, testErr)
 	})
@@ -235,35 +235,30 @@ func TestMergeConditions(t *testing.T) {
 		name         string
 		existing     condFields
 		new          condFields
-		wantUpdate   bool
 		wantTimeSame bool
 	}{
 		{
 			name:         "existing matches same Status Reason and Message",
 			existing:     condFields{"Progressing", configv1.ConditionFalse, "AsExpected", "Success"},
 			new:          condFields{"Progressing", configv1.ConditionFalse, "AsExpected", "Success"},
-			wantUpdate:   false,
 			wantTimeSame: true,
 		},
 		{
 			name:         "different Message",
 			existing:     condFields{"Progressing", configv1.ConditionTrue, "Working", "old message"},
 			new:          condFields{"Progressing", configv1.ConditionTrue, "Working", "new message"},
-			wantUpdate:   true,
 			wantTimeSame: false,
 		},
 		{
 			name:         "different Status",
 			existing:     condFields{"Progressing", configv1.ConditionTrue, "Working", "busy"},
 			new:          condFields{"Progressing", configv1.ConditionFalse, "Working", "done"},
-			wantUpdate:   true,
 			wantTimeSame: false,
 		},
 		{
 			name:         "different Reason",
 			existing:     condFields{"Degraded", configv1.ConditionTrue, "OldReason", "error"},
 			new:          condFields{"Degraded", configv1.ConditionTrue, "NewReason", "error"},
-			wantUpdate:   true,
 			wantTimeSame: false,
 		},
 	} {
@@ -280,12 +275,10 @@ func TestMergeConditions(t *testing.T) {
 			}
 
 			cond := applyCondition(tc.new.condType, tc.new.status, tc.new.reason, tc.new.message)
-			needsUpdate, _ := mergeConditions(
+			mergeLastTransitionTime(
 				[]*configv1apply.ClusterOperatorStatusConditionApplyConfiguration{cond},
 				existing,
 			)
-
-			g.Expect(needsUpdate).To(Equal(tc.wantUpdate))
 
 			if tc.wantTimeSame {
 				g.Expect(*cond.LastTransitionTime).To(Equal(existingTime))
@@ -301,16 +294,12 @@ func TestMergeConditions(t *testing.T) {
 		cond := applyCondition("Progressing", configv1.ConditionFalse, "AsExpected", "Success")
 		g.Expect(cond.LastTransitionTime).To(BeNil())
 
-		needsUpdate, logConds := mergeConditions(
+		mergeLastTransitionTime(
 			[]*configv1apply.ClusterOperatorStatusConditionApplyConfiguration{cond},
 			nil,
 		)
 
-		g.Expect(needsUpdate).To(BeTrue())
 		g.Expect(cond.LastTransitionTime).ToNot(BeNil())
-		g.Expect(logConds).To(HaveLen(2))
-		g.Expect(logConds[0]).To(Equal(configv1.ClusterStatusConditionType("Progressing")))
-		g.Expect(logConds[1]).To(Equal(configv1.ConditionFalse))
 	})
 
 	t.Run("multiple conditions mixed", func(t *testing.T) {
@@ -329,13 +318,11 @@ func TestMergeConditions(t *testing.T) {
 		unchangedCond := applyCondition("Progressing", configv1.ConditionFalse, "AsExpected", "Success")
 		newCond := applyCondition("Degraded", configv1.ConditionFalse, "AsExpected", "Success")
 
-		needsUpdate, logConds := mergeConditions(
+		mergeLastTransitionTime(
 			[]*configv1apply.ClusterOperatorStatusConditionApplyConfiguration{unchangedCond, newCond},
 			existing,
 		)
 
-		g.Expect(needsUpdate).To(BeTrue())
-		g.Expect(logConds).To(HaveLen(4))
 		// Unchanged condition preserves its LastTransitionTime
 		g.Expect(*unchangedCond.LastTransitionTime).To(Equal(existingTime))
 		// New condition gets a LastTransitionTime set

@@ -8,6 +8,9 @@ use (
 )
 
 replace (
+	// Temporarily use unmerged aggregate-phase-errors branch
+	pkg.package-operator.run/boxcutter => github.com/openshift-cloud-team/boxcutter v0.0.0-20260320154605-876fe9f8e3d0
+
 	// This is required to resolve a placeholder dep in CAPV
 	sigs.k8s.io/cluster-api => sigs.k8s.io/cluster-api v1.11.5
 

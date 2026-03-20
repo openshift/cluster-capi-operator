@@ -1,0 +1,33 @@
+exclude: |
+  (?x)(
+    (^vendor/)|
+    (^.vscode/)|
+    (.deepcopy.go$)|
+    (machinery/testdata/schemas.json)
+  )
+repos:
+- repo: https://github.com/pre-commit/pre-commit-hooks
+  rev: v4.5.0
+  hooks:
+  - id: check-added-large-files
+
+  - id: check-case-conflict
+  - id: check-json
+  - id: check-merge-conflict
+  - id: check-symlinks
+  - id: detect-private-key
+  - id: end-of-file-fixer
+    exclude: ".test-fixtures\/.*"
+  - id: pretty-format-json
+    args:
+    - --autofix
+  - id: trailing-whitespace
+
+- repo: local
+  hooks:
+  - id: lint
+    name: lint
+    entry: ./do Dev:PreCommit
+    language: system
+    exclude: ".*"
+    always_run: true

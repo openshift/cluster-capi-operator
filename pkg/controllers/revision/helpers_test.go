@@ -18,9 +18,6 @@ package revision
 
 import (
 	"context"
-	"fmt"
-	"os"
-	"path/filepath"
 	"slices"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -52,7 +49,6 @@ func newManagerWrapper(providerImgs []providerimages.ProviderImageManifests) *ma
 
 	// Clone so callers' slices are not mutated.
 	imgs := slices.Clone(providerImgs)
-	ensureManifestPaths(imgs)
 
 	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
 		Scheme: cl.Scheme(),
@@ -184,36 +180,4 @@ func latestRevision(revisions []operatorv1alpha1.ClusterAPIInstallerRevision) op
 	}
 
 	return latest
-}
-
-// configMapYAML returns a minimal valid ConfigMap YAML document.
-func configMapYAML(name string) string {
-	return fmt.Sprintf(`apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: %s
-  namespace: default
-data:
-  key: value`, name)
-}
-
-// ensureManifestPaths creates manifest files for providers that don't already
-// have a ManifestsPath set. Each provider's ContentID is used as the ConfigMap
-// name so that different providers produce different revision contentIDs.
-func ensureManifestPaths(providerImgs []providerimages.ProviderImageManifests) {
-	GinkgoHelper()
-
-	manifestDir, err := os.MkdirTemp("", "revision-test-manifests")
-	Expect(err).NotTo(HaveOccurred())
-	DeferCleanup(func() {
-		Expect(os.RemoveAll(manifestDir)).To(Succeed())
-	})
-
-	for i := range providerImgs {
-		if providerImgs[i].ManifestsPath == "" {
-			path := filepath.Join(manifestDir, providerImgs[i].Name+"-manifests.yaml")
-			Expect(os.WriteFile(path, []byte(configMapYAML(providerImgs[i].ContentID)), 0644)).To(Succeed())
-			providerImgs[i].ManifestsPath = path
-		}
-	}
 }

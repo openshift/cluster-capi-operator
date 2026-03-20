@@ -862,12 +862,10 @@ spec:
       !(variables.authAPIChanged && !variables.capiInfraProvisioned)
     message: spec.authoritativeAPI may only be updated when the Cluster API Machine's
       status.initialization.infrastructureProvisioned is true.
-    name: block-when-not-infraProvisioned
   - expression: |
       !(variables.authAPIChanged && variables.capiDeleting)
     message: spec.authoritativeAPI cannot be modified while the corresponding CAPI
       Machine is being deleted (metadata.deletionTimestamp is set).
-    name: block-when-capi-deleting
   variables:
   - expression: oldObject.spec.authoritativeAPI != object.spec.authoritativeAPI
     name: authAPIChanged
