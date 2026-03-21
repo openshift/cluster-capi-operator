@@ -527,6 +527,70 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 				})
 			})
 
+			// This test suite only runs the MachineSet sync controller, so we create and
+			// delete the CAPI Machine manually to simulate the end state of that chain.
+			Context("when the MAPI machine set is deleted and CAPI machines still exist", func() {
+				var capiMachine *clusterv1.Machine
+
+				JustBeforeEach(func() {
+					Eventually(k.Object(mapiMachineSet), timeout).Should(
+						HaveField("ObjectMeta.Finalizers", ContainElement(machinesync.SyncFinalizer)),
+					)
+					Eventually(k.Object(capiMachineSet), timeout).Should(
+						SatisfyAll(
+							HaveField("ObjectMeta.Finalizers", ContainElement(machinesync.SyncFinalizer)),
+							HaveField("ObjectMeta.Finalizers", ContainElement(clusterv1.MachineSetFinalizer)),
+						),
+					)
+					By("waiting for CAPA template to be created", eventuallyCAPIMachineSetShouldHaveValidAWSMachineTemplateRefWithMachineSetLabel)
+
+					By("Creating a CAPI machine owned by the CAPI machine set")
+					Eventually(k.Get(capiMachineSet)).Should(Succeed())
+					capiMachine = capiv1resourcebuilder.Machine().
+						WithName("foo-machine-1").
+						WithNamespace(capiNamespace.Name).
+						WithLabels(map[string]string{
+							clusterv1.MachineSetNameLabel: capiMachineSet.Name,
+						}).
+						WithOwnerReferences([]metav1.OwnerReference{{
+							APIVersion: clusterv1.GroupVersion.String(),
+							Kind:       "MachineSet",
+							Name:       capiMachineSet.Name,
+							UID:        capiMachineSet.UID,
+						}}).
+						Build()
+					capiMachine.SetFinalizers([]string{"test.openshift.io/block-deletion"})
+					Eventually(kCreate(ctx, capiMachine)).Should(Succeed())
+
+					By("Deleting the MAPI machine set")
+					Eventually(kDelete(ctx, mapiMachineSet)).Should(Succeed())
+				})
+
+				It("should not remove the CAPI MachineSet finalizer while machines exist", func() {
+					By("Verifying the controller processed the deletion but kept the finalizer")
+					Eventually(k.Object(capiMachineSet), longerTimeout).Should(SatisfyAll(
+						HaveField("ObjectMeta.DeletionTimestamp", Not(BeNil())),
+						HaveField("ObjectMeta.Finalizers", ContainElement(clusterv1.MachineSetFinalizer)),
+					), "CAPI MachineSet should be marked for deletion but retain its finalizer while owned machines exist")
+
+					By("Deleting the CAPI machine by removing its finalizer and deleting it")
+					Eventually(k.Update(capiMachine, func() {
+						capiMachine.SetFinalizers(nil)
+					})).Should(Succeed())
+					Eventually(kDelete(ctx, capiMachine)).Should(Succeed())
+					Eventually(k.Get(capiMachine)).Should(WithTransform(apierrors.IsNotFound, BeTrue()),
+						"CAPI machine should be fully deleted")
+
+					By("Verifying the CAPI MachineSet is now cleaned up")
+					Eventually(k.Get(capiMachineSet), longerTimeout).Should(WithTransform(apierrors.IsNotFound, BeTrue()),
+						"CAPI MachineSet should be deleted after all owned machines are gone")
+
+					By("Verifying the MAPI MachineSet is also cleaned up")
+					Eventually(k.Get(mapiMachineSet), longerTimeout).Should(WithTransform(apierrors.IsNotFound, BeTrue()),
+						"MAPI MachineSet should be deleted")
+				})
+			})
+
 			Context("when the CAPI machine set has a non-zero deletion timestamp", func() {
 				JustBeforeEach(func() {
 					Eventually(k.Object(mapiMachineSet), timeout).Should(
