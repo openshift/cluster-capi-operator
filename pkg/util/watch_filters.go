@@ -24,6 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -81,6 +82,39 @@ func ResolveCAPIMachineSetFromInfraMachineTemplate(namespace string) func(contex
 	}
 }
 
+// ResolveMachineSetFromCAPIMachine resolves the owning MachineSet from a CAPI Machine using owner
+// references. When a CAPI Machine changes (e.g. is deleted), this triggers reconciliation of the
+// mirror MAPI MachineSet so that MachineSet deletion can proceed once all owned Machines are gone.
+func ResolveMachineSetFromCAPIMachine(namespace string) func(context.Context, client.Object) []reconcile.Request {
+	return func(ctx context.Context, obj client.Object) []reconcile.Request {
+		logger := logf.FromContext(ctx).WithValues(
+			"objectType", fmt.Sprintf("%T", obj),
+			"namespace", obj.GetNamespace(),
+			"name", obj.GetName(),
+		)
+		logger.V(4).Info("reconcile triggered")
+
+		for _, ref := range obj.GetOwnerReferences() {
+			gv, err := schema.ParseGroupVersion(ref.APIVersion)
+			if err != nil {
+				logger.Error(err, "Failed to parse GroupVersion", "APIVersion", ref.APIVersion)
+				continue
+			}
+
+			if ref.Kind == machineSetKind && gv.Group == clusterv1.GroupVersion.Group {
+				logger.V(4).Info("CAPI Machine has MachineSet owner, enqueueing MachineSet reconcile",
+					"machine", obj.GetName(), machineSetKind, ref.Name)
+
+				return []reconcile.Request{{
+					NamespacedName: client.ObjectKey{Namespace: namespace, Name: ref.Name},
+				}}
+			}
+		}
+
+		return nil
+	}
+}
+
 // ResolveCAPIMachineFromInfraMachine resolves a CAPI Machine from an InfraMachine. It takes client.Object,
 // and uses owner references to determine the owning CAPI machine. If one is found, it returns a reconcile.Request
 // for the corresponding MAPI Machine in the MAPI namespace to trigger reconciliation of the mirror MAPI Machine.
@@ -110,6 +144,18 @@ func ResolveCAPIMachineFromInfraMachine(namespace string) func(context.Context, 
 		}
 
 		return requests
+	}
+}
+
+// FilterDeleteOnly restricts a watch to only process delete events, ignoring
+// creates, updates, and generic events. Useful when a controller only needs to
+// react to resource removal (e.g. waiting for child objects to be fully deleted).
+func FilterDeleteOnly() predicate.Funcs {
+	return predicate.Funcs{
+		CreateFunc:  func(event.CreateEvent) bool { return false },
+		UpdateFunc:  func(event.UpdateEvent) bool { return false },
+		DeleteFunc:  func(event.DeleteEvent) bool { return true },
+		GenericFunc: func(event.GenericEvent) bool { return false },
 	}
 }
 

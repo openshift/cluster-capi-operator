@@ -49,6 +49,7 @@ import (
 	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/cluster-api/util/annotations"
+	"sigs.k8s.io/cluster-api/util/labels/format"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -140,6 +141,11 @@ func (r *MachineSetSyncReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			r.InfraTypes.Template(),
 			handler.EnqueueRequestsFromMapFunc(util.ResolveCAPIMachineSetFromInfraMachineTemplate(r.MAPINamespace)),
 			builder.WithPredicates(util.FilterNamespace(r.CAPINamespace)),
+		).
+		Watches(
+			&clusterv1.Machine{},
+			handler.EnqueueRequestsFromMapFunc(util.ResolveMachineSetFromCAPIMachine(r.MAPINamespace)),
+			builder.WithPredicates(util.FilterNamespace(r.CAPINamespace), util.FilterDeleteOnly()),
 		).
 		Complete(r); err != nil {
 		return fmt.Errorf("failed to create controller: %w", err)
@@ -1203,6 +1209,25 @@ func (r *MachineSetSyncReconciler) reconcileMAPItoCAPIMachineSetDeletionNormal(c
 		return true, nil
 	}
 
+	// Wait until all CAPI Machines owned by this MachineSet are fully deleted
+	// before removing the MachineSet finalizer. The CAPI MachineSet is paused so
+	// the upstream MachineSet controller won't process its children. If we remove
+	// the MachineSetFinalizer while Machines still exist, the MachineSet object
+	// disappears and the upstream Machine controller fails on getOwnerMachineSet
+	// (NotFound), leaving Machines stuck indefinitely.
+	// See: https://github.com/kubernetes-sigs/cluster-api/issues/13405
+	remainingMachines, err := r.countCAPIMachinesForMachineSet(ctx, capiMachineSet.Name)
+	if err != nil {
+		return true, fmt.Errorf("failed to list Cluster API machines for machine set %s: %w", capiMachineSet.Name, err)
+	}
+
+	if remainingMachines > 0 {
+		logger.Info("Cannot remove Cluster API MachineSet finalizer: waiting for owned Machines to be deleted",
+			"remainingMachines", remainingMachines)
+
+		return true, nil
+	}
+
 	// Because the CAPI machineset is paused we must remove the CAPI finalizer manually.
 	if _, err := util.RemoveFinalizer(ctx, r.Client, capiMachineSet, clusterv1.MachineSetFinalizer); err != nil {
 		return true, fmt.Errorf("failed to remove finalizer from Cluster API machine set: %w", err)
@@ -1309,6 +1334,20 @@ func (r *MachineSetSyncReconciler) reconcileCAPItoMAPIMachineSetDeletionNormal(c
 	}
 
 	return true, nil
+}
+
+// countCAPIMachinesForMachineSet returns the number of CAPI Machines that are
+// labeled as belonging to the given MachineSet.
+func (r *MachineSetSyncReconciler) countCAPIMachinesForMachineSet(ctx context.Context, machineSetName string) (int, error) {
+	capiMachines := &clusterv1.MachineList{}
+	if err := r.List(ctx, capiMachines,
+		client.InNamespace(r.CAPINamespace),
+		client.MatchingLabels{clusterv1.MachineSetNameLabel: format.MustFormatValue(machineSetName)},
+	); err != nil {
+		return 0, fmt.Errorf("failed to list Cluster API machines: %w", err)
+	}
+
+	return len(capiMachines.Items), nil
 }
 
 // initInfraMachineTemplateListAndInfraClusterListFromProvider returns the correct InfraMachineTemplateList and InfraClusterList implementation
