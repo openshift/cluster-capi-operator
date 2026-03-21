@@ -29,6 +29,7 @@ import (
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	ibmpowervsv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
 	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
+	vspherev1 "sigs.k8s.io/cluster-api-provider-vsphere/apis/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -263,6 +264,7 @@ func compareCAPIInfraMachines(platform configv1.PlatformType, infraMachine1, inf
 		)
 	case configv1.OpenStackPlatformType:
 	case configv1.PowerVSPlatformType:
+	case configv1.VSpherePlatformType:
 	default:
 		return nil, fmt.Errorf("%w: %s", errPlatformNotSupported, platform)
 	}
@@ -281,6 +283,8 @@ func compareCAPIInfraMachines(platform configv1.PlatformType, infraMachine1, inf
 }
 
 // setChangedCAPIInfraMachineStatusFields sets the updated fields in the Cluster API Infrastructure machine status.
+//
+//nolint:funlen
 func setChangedCAPIInfraMachineStatusFields(platform configv1.PlatformType, existingCAPIInfraMachine, convertedCAPIInfraMachine client.Object) error {
 	switch platform {
 	case configv1.AWSPlatformType:
@@ -330,6 +334,26 @@ func setChangedCAPIInfraMachineStatusFields(platform configv1.PlatformType, exis
 		converted, ok := convertedCAPIInfraMachine.(*ibmpowervsv1.IBMPowerVSMachine)
 		if !ok {
 			return errAssertingCAPIIBMPowerVSMachine
+		}
+
+		util.EnsureCAPIV1Beta1Conditions(existing, converted)
+
+		// Merge the v1beta2 conditions.
+		util.EnsureCAPIV1Beta2Conditions(existing, converted)
+
+		// Finally overwrite the entire existing status with the convertedCAPIMachine status.
+		existing.Status = converted.Status
+
+		return nil
+	case configv1.VSpherePlatformType:
+		existing, ok := existingCAPIInfraMachine.(*vspherev1.VSphereMachine)
+		if !ok {
+			return errAssertingCAPIVSphereMachine
+		}
+
+		converted, ok := convertedCAPIInfraMachine.(*vspherev1.VSphereMachine)
+		if !ok {
+			return errAssertingCAPIVSphereMachine
 		}
 
 		util.EnsureCAPIV1Beta1Conditions(existing, converted)
