@@ -24,6 +24,8 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -31,15 +33,17 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	"github.com/openshift/cluster-capi-operator/pkg/test"
 )
 
 var (
-	testEnv *envtest.Environment
-	cfg     *rest.Config
-	cl      client.Client
+	testEnv               *envtest.Environment
+	cfg                   *rest.Config
+	cl                    client.Client
+	suiteCompatibilityCRD func() *apiextensionsv1.CustomResourceDefinition
 )
 
 var defaultNodeTimeout = NodeTimeout(10 * time.Second)
@@ -85,6 +89,8 @@ var _ = BeforeSuite(func(ctx context.Context) {
 	InitValidator = func(ctx context.Context) (*validator, func()) {
 		return initValidator(ctx, cfg, cl.Scheme(), testEnv)
 	}
+
+	suiteCompatibilityCRD = createSuiteCRDs(ctx)
 }, NodeTimeout(30*time.Second))
 
 func initValidator(ctx context.Context, cfg *rest.Config, scheme *runtime.Scheme, testEnv *envtest.Environment) (*validator, func()) {
@@ -97,6 +103,7 @@ func initValidator(ctx context.Context, cfg *rest.Config, scheme *runtime.Scheme
 			Port:    testEnv.WebhookInstallOptions.LocalServingPort,
 			Host:    testEnv.WebhookInstallOptions.LocalServingHost,
 		}),
+		Metrics: metricsserver.Options{BindAddress: "0"},
 	})
 	Expect(err).ToNot(HaveOccurred(), "Manager should be created")
 
@@ -160,4 +167,93 @@ func stopWebhookServer(ctx context.Context, mgrCancel context.CancelFunc, mgrDon
 
 func kWithCtx(ctx context.Context) komega.Komega {
 	return komega.New(cl).WithContext(ctx)
+}
+
+func createSuiteCRDs(ctx context.Context) func() *apiextensionsv1.CustomResourceDefinition {
+	// Create base CRD with test fields and subresources and install it
+	specReplicasPath := ".spec.replicas"
+	statusReplicasPath := ".status.readyReplicas"
+	labelSelectorPath := ".status.selector"
+
+	// Define status properties using schema builder pattern
+	statusProperties := map[string]apiextensionsv1.JSONSchemaProps{
+		"phase": *test.NewStringSchema().
+			WithStringEnum("Ready", "Pending", "Failed").
+			Build(),
+		"readyReplicas": *test.NewIntegerSchema().
+			WithMinimum(0).
+			Build(),
+		"selector": *test.NewStringSchema().
+			Build(),
+		"conditions": *test.NewArraySchema().
+			WithObjectItems(
+				test.NewObjectSchema().
+					WithRequiredStringProperty("type").
+					WithRequiredStringProperty("status"),
+			).
+			Build(),
+	}
+
+	// Define spec properties using schema builder pattern
+	specProperties := map[string]apiextensionsv1.JSONSchemaProps{
+		"replicas": *test.NewIntegerSchema().
+			WithMinimum(0).
+			WithMaximum(100).
+			Build(),
+		"selector": *test.NewObjectSchema().
+			WithObjectProperty("matchLabels",
+				test.NewObjectSchema().
+					WithAdditionalPropertiesSchema(test.NewStringSchema()),
+			).
+			Build(),
+	}
+
+	compatibilityCRD := test.NewCRDSchemaBuilder().
+		WithStringProperty("testField").
+		WithRequiredStringProperty("requiredField").
+		WithIntegerProperty("optionalNumber").
+		WithStatusSubresource(statusProperties).
+		WithScaleSubresource(&specReplicasPath, &statusReplicasPath, &labelSelectorPath).
+		WithObjectProperty("spec", specProperties).
+		WithObjectProperty("status", statusProperties).
+		Build()
+
+	// Deepcopy here as when we use the baseCRD for create/read it wipes the type meta.
+	// Set spec and status to empty schemas with preserve unknown fields so that the only validation applied is the compatibility requirement.
+	baseCRD := compatibilityCRD.DeepCopy()
+	baseCRD.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["spec"] = *test.NewObjectSchema().WithXPreserveUnknownFields(true).Build()
+	baseCRD.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["status"] = *test.NewObjectSchema().WithXPreserveUnknownFields(true).Build()
+
+	createCRD(ctx, baseCRD)
+
+	return func() *apiextensionsv1.CustomResourceDefinition {
+		return compatibilityCRD.DeepCopy()
+	}
+}
+
+func createCRD(ctx context.Context, crd *apiextensionsv1.CustomResourceDefinition) {
+	GinkgoHelper()
+
+	By("Creating CRD "+crd.GetName(), func() {
+		// Install the CRD in the test environment
+		Expect(cl.Create(ctx, crd)).To(Succeed())
+	})
+
+	DeferCleanup(func(ctx context.Context) {
+		Expect(test.CleanupAndWait(ctx, cl, crd)).To(Succeed())
+	})
+
+	By("Waiting for CRD to have been established for at least 2 seconds", func() {
+		// Because the API server is programmed not to accept a response before then.
+		// See: https://github.com/kubernetes/kubernetes/blob/18dd17f7ce05bd79e21245278a4e88f901d2ebd6/staging/src/k8s.io/apiextensions-apiserver/pkg/apiserver/customresource_handler.go#L381-L394
+		Eventually(kWithCtx(ctx).Object(crd)).WithContext(ctx).Should(HaveField("Status.Conditions",
+			test.HaveCondition("Established").
+				WithStatus(apiextensionsv1.ConditionTrue).
+				WithLastTransitionTime(WithTransform(timeSince, BeNumerically(">", 2*time.Second))),
+		))
+	})
+}
+
+func timeSince(t metav1.Time) time.Duration {
+	return time.Since(t.Time)
 }

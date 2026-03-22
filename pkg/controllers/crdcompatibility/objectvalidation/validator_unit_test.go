@@ -17,8 +17,6 @@ limitations under the License.
 package objectvalidation
 
 import (
-	"context"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -34,14 +32,11 @@ import (
 
 var _ = Describe("validator", func() {
 	var (
-		ctx                      context.Context
 		testCRD                  *apiextensionsv1.CustomResourceDefinition
 		compatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement
 	)
 
 	BeforeEach(func() {
-		ctx = context.Background()
-
 		// Create a test CRD with some properties for testing
 		testCRD = test.NewCRDSchemaBuilder().
 			WithStringProperty("testField").
@@ -62,7 +57,7 @@ var _ = Describe("validator", func() {
 			})
 
 			It("should return validation strategy", func() {
-				strategy, err := validator.getValidationStrategy(ctx, compatibilityRequirement.Name, "v1")
+				strategy, err := validator.getValidationStrategy(compatibilityRequirement, "v1")
 
 				Expect(err).NotTo(HaveOccurred())
 				Expect(strategy).NotTo(BeNil())
@@ -70,7 +65,7 @@ var _ = Describe("validator", func() {
 
 			It("should cache validation strategy", func() {
 				// First call should create and cache the strategy
-				_, err := validator.getValidationStrategy(ctx, compatibilityRequirement.Name, "v1")
+				_, err := validator.getValidationStrategy(compatibilityRequirement, "v1")
 				Expect(err).NotTo(HaveOccurred())
 
 				// Check that cache now contains an entry
@@ -83,11 +78,11 @@ var _ = Describe("validator", func() {
 
 			It("should use cached strategy on subsequent calls", func() {
 				// First call
-				strategy1, err1 := validator.getValidationStrategy(ctx, compatibilityRequirement.Name, "v1")
+				strategy1, err1 := validator.getValidationStrategy(compatibilityRequirement, "v1")
 				Expect(err1).NotTo(HaveOccurred())
 
 				// Second call should return the same strategy instance
-				strategy2, err2 := validator.getValidationStrategy(ctx, compatibilityRequirement.Name, "v1")
+				strategy2, err2 := validator.getValidationStrategy(compatibilityRequirement, "v1")
 				Expect(err2).NotTo(HaveOccurred())
 
 				// Should be the exact same object (cached)
@@ -97,27 +92,17 @@ var _ = Describe("validator", func() {
 
 			It("should invalidate cache when generation changes", func() {
 				// First call
-				strategy1, err1 := validator.getValidationStrategy(ctx, compatibilityRequirement.Name, "v1")
+				strategy1, err1 := validator.getValidationStrategy(compatibilityRequirement, "v1")
 				Expect(err1).NotTo(HaveOccurred())
 
 				compatibilityRequirement.Generation++
 				validator.client = createValidatorWithFakeClient([]client.Object{compatibilityRequirement}).client
 
 				// Second call should return the same strategy instance
-				strategy2, err2 := validator.getValidationStrategy(ctx, compatibilityRequirement.Name, "v1")
+				strategy2, err2 := validator.getValidationStrategy(compatibilityRequirement, "v1")
 				Expect(err2).NotTo(HaveOccurred())
 
 				Expect(strategy1).NotTo(Equal(strategy2))
-			})
-		})
-
-		Context("when CompatibilityRequirement does not exist", func() {
-			It("should return error", func() {
-				validator := createValidatorWithFakeClient([]client.Object{}) // No objects
-
-				_, err := validator.getValidationStrategy(ctx, "non-existent", "v1")
-
-				Expect(err).To(MatchError("failed to get CompatibilityRequirement \"non-existent\": compatibilityrequirements.apiextensions.openshift.io \"non-existent\" not found"))
 			})
 		})
 
@@ -128,7 +113,7 @@ var _ = Describe("validator", func() {
 
 				validator := createValidatorWithFakeClient([]client.Object{brokenCompatibilityRequirement})
 
-				_, err := validator.getValidationStrategy(ctx, brokenCompatibilityRequirement.Name, "v1")
+				_, err := validator.getValidationStrategy(brokenCompatibilityRequirement, "v1")
 
 				Expect(err).To(MatchError("failed to create validation strategy: failed to decode compatibility schema data for CompatibilityRequirement \"\": yaml: mapping values are not allowed in this context"))
 			})
