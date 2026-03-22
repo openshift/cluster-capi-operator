@@ -35,7 +35,9 @@ import (
 
 const (
 	clusterOperatorName = "cluster-api"
-	ssaFieldOwnerDomain = "capi-operator.openshift.io"
+	// CAPIOperatorIdentifierDomain is the domain used as the field owner prefix for
+	// server-side apply operations by the CAPI operator.
+	CAPIOperatorIdentifierDomain = "capi-operator.openshift.io"
 
 	// ReasonAsExpected is the reason for the condition when the operator is in a normal state.
 	ReasonAsExpected = "AsExpected"
@@ -61,7 +63,7 @@ const (
 // The qualifier should identify the writer in the context of the CAPI operator,
 // for example a controller name.
 func CAPIFieldOwner[S ~string](qualifier S) client.FieldOwner {
-	return client.FieldOwner(ssaFieldOwnerDomain + "/" + qualifier)
+	return client.FieldOwner(CAPIOperatorIdentifierDomain + "/" + qualifier)
 }
 
 // ReconcileResult represents the result of a controller's reconciliation.
