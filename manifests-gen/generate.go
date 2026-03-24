@@ -9,7 +9,7 @@ import (
 	"path"
 
 	configv1 "github.com/openshift/api/config/v1"
-	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
+	"github.com/openshift/cluster-capi-operator/manifests-gen/providermetadata"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/kustomize/api/krusty"
@@ -142,7 +142,7 @@ func writeMetadata(opts cmdlineOptions) (err error) {
 		err = errors.Join(err, metadataFile.Close())
 	}()
 
-	metadata := providerimages.ProviderMetadata{
+	metadata := providermetadata.ProviderMetadata{
 		Name:         opts.name,
 		SelfImageRef: opts.selfImageRef,
 		OCPPlatform:  configv1.PlatformType(opts.platform),

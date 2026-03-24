@@ -73,6 +73,7 @@ require (
 	github.com/openshift/api v0.0.0-20260306141135-f595753a3e66
 	github.com/openshift/client-go v0.0.0-20260306160707-3935d929fc7d
 	github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0
+	github.com/openshift/cluster-capi-operator/manifests-gen v0.0.0-00010101000000-000000000000
 	github.com/openshift/library-go v0.0.0-20260303171201-5d9eb6295ff6
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/pflag v1.0.10
@@ -407,3 +408,5 @@ require (
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect
 	sigs.k8s.io/structured-merge-diff/v6 v6.3.2 // indirect
 )
+
+replace github.com/openshift/cluster-capi-operator/manifests-gen => ./manifests-gen
