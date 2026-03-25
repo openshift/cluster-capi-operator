@@ -46,6 +46,7 @@ import (
 
 const (
 	terminalErrorReasonConfigurationError string = "ConfigurationError"
+	terminalErrorReasonOwnershipConflict  string = "OwnershipConflict"
 )
 
 var (
@@ -210,7 +211,7 @@ func (r *reconcileState) ensureObjectValidationWebhook(ctx context.Context, obj 
 	if err := r.client.Get(ctx, types.NamespacedName{Name: webhookConfig.Name}, existingWebhookConfig); err != nil && !apierrors.IsNotFound(err) {
 		return fmt.Errorf("failed to get ValidatingWebhookConfiguration %s: %w", webhookConfig.Name, err)
 	} else if err == nil && !metav1.IsControlledBy(existingWebhookConfig, obj) {
-		return fmt.Errorf("%w: %s", errWebhookConfigNotControlledByCompatibilityRequirement, webhookConfig.Name)
+		return util.TerminalWithReasonError(fmt.Errorf("%w: %s", errWebhookConfigNotControlledByCompatibilityRequirement, webhookConfig.Name), terminalErrorReasonOwnershipConflict) //nolint:wrapcheck
 	}
 
 	if _, _, err := resourceapply.ApplyValidatingWebhookConfigurationImproved(
@@ -269,7 +270,7 @@ func (r *reconcileState) ensureObjectPruningWebhook(ctx context.Context, obj *ap
 	if err := r.client.Get(ctx, types.NamespacedName{Name: webhookConfig.Name}, existingWebhookConfig); err != nil && !apierrors.IsNotFound(err) {
 		return fmt.Errorf("failed to get MutatingWebhookConfiguration %s: %w", webhookConfig.Name, err)
 	} else if err == nil && !metav1.IsControlledBy(existingWebhookConfig, obj) {
-		return fmt.Errorf("%w: %s", errWebhookConfigNotControlledByCompatibilityRequirement, webhookConfig.Name)
+		return util.TerminalWithReasonError(fmt.Errorf("%w: %s", errWebhookConfigNotControlledByCompatibilityRequirement, webhookConfig.Name), terminalErrorReasonOwnershipConflict) //nolint:wrapcheck
 	}
 
 	// If we don't own the webhook config, we should not be overwriting it.

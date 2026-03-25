@@ -27,10 +27,14 @@ import (
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility/crdvalidation"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility/objectpruning"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility/objectvalidation"
 	"github.com/openshift/cluster-capi-operator/pkg/test"
 )
 
@@ -300,6 +304,14 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 			// Smoke test here that the right name and service details are used, the full spec is tested with the objectvalidation package.
 			Eventually(kWithCtx(ctx).Object(validatingWebhookConfig)).WithContext(ctx).Should(SatisfyAll(
 				HaveField("ObjectMeta.Name", BeEquivalentTo(requirement.Name)),
+				HaveField("ObjectMeta.OwnerReferences", ContainElement(SatisfyAll(
+					HaveField("APIVersion", Equal("apiextensions.openshift.io/v1alpha1")),
+					HaveField("Kind", Equal("CompatibilityRequirement")),
+					HaveField("Name", Equal(requirement.Name)),
+					HaveField("UID", Equal(requirement.UID)),
+					HaveField("Controller", HaveValue(Equal(true))),
+					HaveField("BlockOwnerDeletion", HaveValue(Equal(true))),
+				))),
 				HaveField("Webhooks", ConsistOf(SatisfyAll(
 					HaveField("Name", BeEquivalentTo("compatibilityrequirement.operator.openshift.io")),
 					HaveField("ClientConfig.Service.Name", BeEquivalentTo("compatibility-requirements-controllers-webhook-service")),
@@ -319,6 +331,14 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 			// Smoke test here that the right name and service details are used, the full spec is tested with the objectpruning package.
 			Eventually(kWithCtx(ctx).Object(mutatingWebhookConfig)).WithContext(ctx).Should(SatisfyAll(
 				HaveField("ObjectMeta.Name", BeEquivalentTo(requirement.Name)),
+				HaveField("ObjectMeta.OwnerReferences", ContainElement(SatisfyAll(
+					HaveField("APIVersion", Equal("apiextensions.openshift.io/v1alpha1")),
+					HaveField("Kind", Equal("CompatibilityRequirement")),
+					HaveField("Name", Equal(requirement.Name)),
+					HaveField("UID", Equal(requirement.UID)),
+					HaveField("Controller", HaveValue(Equal(true))),
+					HaveField("BlockOwnerDeletion", HaveValue(Equal(true))),
+				))),
 				HaveField("Webhooks", ConsistOf(SatisfyAll(
 					HaveField("Name", BeEquivalentTo("compatibilityrequirement.operator.openshift.io")),
 					HaveField("ClientConfig.Service.Name", BeEquivalentTo("compatibility-requirements-controllers-webhook-service")),
@@ -402,6 +422,226 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 			By("Checking that the webhook configurations are now removed")
 			Eventually(kWithCtx(ctx).Get(noObjectSchemaValidatingWebhook)).WithContext(ctx).Should(MatchError(ContainSubstring("not found")))
 			Eventually(kWithCtx(ctx).Get(noObjectSchemaMutatingWebhook)).WithContext(ctx).Should(MatchError(ContainSubstring("not found")))
+		}, defaultNodeTimeout)
+	})
+
+	Context("When managing webhooks with ownership conflicts", func() {
+		var (
+			requirement *apiextensionsv1alpha1.CompatibilityRequirement
+			manualVWC   *admissionregistrationv1.ValidatingWebhookConfiguration
+			manualMWC   *admissionregistrationv1.MutatingWebhookConfiguration
+		)
+
+		BeforeEach(func(ctx context.Context) {
+			testCRDWorking = testCRDClean.DeepCopy()
+			createTestObject(ctx, testCRDWorking, "CRD")
+
+			// Create a requirement with a fixed name for testing
+			requirement = test.GenerateTestCompatibilityRequirement(testCRDClean)
+			requirement.Name = "test-requirement-with-conflict"
+			requirement.GenerateName = ""
+			requirement.Spec.ObjectSchemaValidation.Action = apiextensionsv1alpha1.CRDAdmitActionDeny
+
+			// Create webhook manually with different owner using factory functions
+			fakeOwner := metav1.OwnerReference{
+				APIVersion: "apiextensions.openshift.io/v1alpha1",
+				Kind:       "CompatibilityRequirement",
+				Name:       "different-owner",
+				UID:        types.UID("fake-uid-12345"),
+				Controller: ptr.To(true),
+			}
+
+			manualVWC = objectvalidation.ValidatingWebhookConfigurationFor(requirement, testCRDClean)
+			manualVWC.OwnerReferences = []metav1.OwnerReference{fakeOwner}
+			createTestObject(ctx, manualVWC, "Manual ValidatingWebhookConfiguration")
+
+			manualMWC = objectpruning.MutatingWebhookConfigurationFor(requirement, testCRDClean)
+			manualMWC.OwnerReferences = []metav1.OwnerReference{fakeOwner}
+			createTestObject(ctx, manualMWC, "Manual MutatingWebhookConfiguration")
+		}, defaultNodeTimeout)
+
+		It("Should return error when validating webhook is owned by different resource", func(ctx context.Context) {
+			By("Creating the CompatibilityRequirement")
+			createTestObject(ctx, requirement, "CompatibilityRequirement")
+
+			By("Verifying status reflects the ownership conflict terminal error")
+			Eventually(kWithCtx(ctx).Object(requirement)).WithContext(ctx).Should(SatisfyAll(
+				HaveField("Status.Conditions", ContainElement(SatisfyAll(
+					HaveField("Type", Equal(apiextensionsv1alpha1.CompatibilityRequirementProgressing)),
+					HaveField("Status", Equal(metav1.ConditionFalse)),
+					HaveField("Reason", Equal("OwnershipConflict")),
+					HaveField("Message", ContainSubstring("webhook config is not controlled by CompatibilityRequirement")),
+					HaveField("ObservedGeneration", Equal(requirement.Generation)),
+				))),
+				HaveField("Status.Conditions", ContainElement(SatisfyAll(
+					HaveField("Type", Equal(apiextensionsv1alpha1.CompatibilityRequirementAdmitted)),
+					HaveField("Status", Equal(metav1.ConditionTrue)),
+					HaveField("ObservedGeneration", Equal(requirement.Generation)),
+				))),
+			))
+
+			By("Verifying webhook remains unchanged with original owner")
+
+			vwc := &admissionregistrationv1.ValidatingWebhookConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: manualVWC.Name},
+			}
+			Expect(kWithCtx(ctx).Object(vwc)()).To(
+				HaveField("ObjectMeta.OwnerReferences", ContainElement(SatisfyAll(
+					HaveField("Name", Equal("different-owner")),
+					HaveField("UID", Equal(types.UID("fake-uid-12345"))),
+				))),
+			)
+		}, defaultNodeTimeout)
+
+		It("Should return error when mutating webhook is owned by different resource", func(ctx context.Context) {
+			By("Creating the CompatibilityRequirement")
+			createTestObject(ctx, requirement, "CompatibilityRequirement")
+
+			By("Verifying status reflects the ownership conflict terminal error")
+			Eventually(kWithCtx(ctx).Object(requirement)).WithContext(ctx).Should(
+				HaveField("Status.Conditions", ContainElement(SatisfyAll(
+					HaveField("Type", Equal(apiextensionsv1alpha1.CompatibilityRequirementProgressing)),
+					HaveField("Status", Equal(metav1.ConditionFalse)),
+					HaveField("Reason", Equal("OwnershipConflict")),
+					HaveField("ObservedGeneration", Equal(requirement.Generation)),
+				))),
+			)
+
+			By("Verifying mutating webhook remains unchanged with original owner")
+
+			mwc := &admissionregistrationv1.MutatingWebhookConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: manualMWC.Name},
+			}
+			Expect(kWithCtx(ctx).Object(mwc)()).To(
+				HaveField("ObjectMeta.OwnerReferences", ContainElement(SatisfyAll(
+					HaveField("Name", Equal("different-owner")),
+					HaveField("UID", Equal(types.UID("fake-uid-12345"))),
+				))),
+			)
+		}, defaultNodeTimeout)
+	})
+
+	Context("When deleting a CompatibilityRequirement that doesn't own webhooks", func() {
+		var (
+			requirement *apiextensionsv1alpha1.CompatibilityRequirement
+			manualVWC   *admissionregistrationv1.ValidatingWebhookConfiguration
+			manualMWC   *admissionregistrationv1.MutatingWebhookConfiguration
+		)
+
+		BeforeEach(func(ctx context.Context) {
+			testCRDWorking = testCRDClean.DeepCopy()
+			createTestObject(ctx, testCRDWorking, "CRD")
+
+			// Create a requirement with a fixed name for testing
+			requirement = test.GenerateTestCompatibilityRequirement(testCRDClean)
+			requirement.Name = "test-requirement-no-owner"
+			requirement.GenerateName = ""
+			requirement.Spec.ObjectSchemaValidation.Action = apiextensionsv1alpha1.CRDAdmitActionDeny
+
+			// Create webhook configurations WITHOUT owner references using factory functions
+			manualVWC = objectvalidation.ValidatingWebhookConfigurationFor(requirement, testCRDClean)
+			manualVWC.OwnerReferences = nil // No owner
+			createTestObject(ctx, manualVWC, "Manual ValidatingWebhookConfiguration")
+
+			manualMWC = objectpruning.MutatingWebhookConfigurationFor(requirement, testCRDClean)
+			manualMWC.OwnerReferences = nil
+			createTestObject(ctx, manualMWC, "Manual MutatingWebhookConfiguration")
+
+			// Create requirement - it will see webhooks exist but can't own them
+			createTestObject(ctx, requirement, "CompatibilityRequirement")
+		}, defaultNodeTimeout)
+
+		It("Should not delete validating webhook without owner reference", func(ctx context.Context) {
+			By("Deleting the CompatibilityRequirement")
+			Expect(cl.Delete(ctx, requirement)).To(Succeed())
+
+			By("Verifying the CompatibilityRequirement is deleted")
+			Eventually(kWithCtx(ctx).Get(requirement)).WithContext(ctx).Should(test.BeK8SNotFound())
+
+			By("Verifying the validating webhook still exists")
+
+			vwc := &admissionregistrationv1.ValidatingWebhookConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: manualVWC.Name},
+			}
+			Expect(kWithCtx(ctx).Object(vwc)()).To(
+				HaveField("ObjectMeta.UID", Equal(manualVWC.UID)),
+			)
+		}, defaultNodeTimeout)
+
+		It("Should not delete mutating webhook without owner reference", func(ctx context.Context) {
+			By("Deleting the CompatibilityRequirement")
+			Expect(cl.Delete(ctx, requirement)).To(Succeed())
+
+			By("Verifying the CompatibilityRequirement is deleted")
+			Eventually(kWithCtx(ctx).Get(requirement)).WithContext(ctx).Should(test.BeK8SNotFound())
+
+			By("Verifying the mutating webhook still exists")
+
+			mwc := &admissionregistrationv1.MutatingWebhookConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: manualMWC.Name},
+			}
+			Expect(kWithCtx(ctx).Object(mwc)()).To(
+				HaveField("ObjectMeta.UID", Equal(manualMWC.UID)),
+			)
+		}, defaultNodeTimeout)
+	})
+
+	Context("When deleting a CompatibilityRequirement with ownership conflict", func() {
+		var (
+			requirement *apiextensionsv1alpha1.CompatibilityRequirement
+			conflictVWC *admissionregistrationv1.ValidatingWebhookConfiguration
+		)
+
+		BeforeEach(func(ctx context.Context) {
+			testCRDWorking = testCRDClean.DeepCopy()
+			createTestObject(ctx, testCRDWorking, "CRD")
+
+			requirement = test.GenerateTestCompatibilityRequirement(testCRDClean)
+			requirement.Name = "requirement-with-conflict"
+			requirement.GenerateName = ""
+			requirement.Spec.ObjectSchemaValidation.Action = apiextensionsv1alpha1.CRDAdmitActionDeny
+
+			// Create webhooks with the requirement's name but owned by a different requirement
+			conflictVWC = objectvalidation.ValidatingWebhookConfigurationFor(requirement, testCRDClean)
+			conflictVWC.OwnerReferences = []metav1.OwnerReference{{
+				APIVersion: "apiextensions.openshift.io/v1alpha1",
+				Kind:       "CompatibilityRequirement",
+				Name:       "different-owner",
+				UID:        types.UID("different-uid"),
+				Controller: ptr.To(true),
+			}}
+			createTestObject(ctx, conflictVWC, "Conflicting ValidatingWebhookConfiguration")
+
+			createTestObject(ctx, requirement, "CompatibilityRequirement")
+
+			By("Waiting for the requirement to detect ownership conflict")
+			Eventually(kWithCtx(ctx).Object(requirement)).WithContext(ctx).Should(
+				HaveField("Status.Conditions", ContainElement(SatisfyAll(
+					HaveField("Type", Equal(apiextensionsv1alpha1.CompatibilityRequirementProgressing)),
+					HaveField("Status", Equal(metav1.ConditionFalse)),
+					HaveField("Reason", Equal("OwnershipConflict")),
+					HaveField("ObservedGeneration", Equal(requirement.Generation)),
+				))),
+			)
+		}, defaultNodeTimeout)
+
+		It("Should not delete webhook owned by different CompatibilityRequirement", func(ctx context.Context) {
+			By("Deleting the CompatibilityRequirement")
+			Expect(cl.Delete(ctx, requirement)).To(Succeed())
+
+			By("Verifying the CompatibilityRequirement is deleted")
+			Eventually(kWithCtx(ctx).Get(requirement)).WithContext(ctx).Should(test.BeK8SNotFound())
+
+			By("Verifying webhook still exists with original owner reference")
+
+			vwc := &admissionregistrationv1.ValidatingWebhookConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: conflictVWC.Name},
+			}
+			Expect(kWithCtx(ctx).Object(vwc)()).To(
+				HaveField("ObjectMeta.OwnerReferences", ContainElement(
+					HaveField("Name", Equal("different-owner")),
+				)),
+			)
 		}, defaultNodeTimeout)
 	})
 
