@@ -1,6 +1,6 @@
 module github.com/openshift/cluster-capi-operator
 
-go 1.25.0
+go 1.25.3
 
 tool (
 	github.com/golangci/golangci-lint/v2/cmd/golangci-lint

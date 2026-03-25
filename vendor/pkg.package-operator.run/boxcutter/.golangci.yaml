@@ -1,0 +1,162 @@
+version: "2"
+run:
+  build-tags:
+    - integration
+linters:
+  # One can't use disable and disable-all. disable-all is preferred to avoid lint failing when golangci gets updated and linters are added.
+  # at the same time but it is nice to explicitly state which linters we do not want.
+  #disable:
+  #- containedctx     # Context.Context within a struct (as opposed to a func parameter) is nasty for many reasons, but actually sometimes useful.
+  #- cyclop           # Cyclo complexity already calculated by other linters.
+  #- depguard         # We do not restrict imports.
+  # - err113          # Not that useful/false positives.
+  #- exhaustive       # Not that useful/false positives.
+  #- exhaustruct      # Not that useful/false positives.
+  #- forcetypeassert  # We want a panic in situations when a type is asserted.
+  #- funcorder        # Not that useful/false positives.
+  #- funlen           # We really like long functions.
+  #- gochecknoglobals # We need globals.
+  #- gochecknoinits   # We have a lot of those.
+  #- gocognit         # Not that useful/false positives.
+  #- godox            # Not that useful/false positives.
+  #- inamedparam      # Not that useful.
+  #- ireturn          # Not that useful/false positives.
+  #- mnd              # The annoy is strong.
+  #- nonamedreturns   # Named return good return.
+  #- testpackage      # Could be nice in the future.
+  #- varnamelen       # Not that useful/false positives.
+  #- wrapcheck        # Not that useful/false positives.
+  default: none
+  enable:
+    - asasalint
+    - asciicheck
+    - bidichk
+    - bodyclose
+    - canonicalheader
+    - contextcheck
+    - copyloopvar
+    - decorder
+    - dogsled
+    - dupl
+    - dupword
+    - durationcheck
+    - errcheck
+    - errchkjson
+    - errname
+    - errorlint
+    - exptostd
+    - fatcontext
+    - forbidigo
+    - ginkgolinter
+    - gocheckcompilerdirectives
+    - gochecksumtype
+    - goconst
+    - gocritic
+    - gocyclo
+    - godot
+    - goheader
+    - gomoddirectives
+    - gomodguard
+    - goprintffuncname
+    - gosec
+    - gosmopolitan
+    - govet
+    - grouper
+    - iface
+    - importas
+    - ineffassign
+    - interfacebloat
+    - intrange
+    - lll
+    - loggercheck
+    - maintidx
+    - makezero
+    - mirror
+    - misspell
+    - musttag
+    - nakedret
+    - nestif
+    - nilerr
+    - nilnesserr
+    - nilnil
+    - nlreturn
+    - noctx
+    - nolintlint
+    - nosprintfhostport
+    - paralleltest
+    - perfsprint
+    - prealloc
+    - predeclared
+    - promlinter
+    - protogetter
+    - reassign
+    - recvcheck
+    - rowserrcheck
+    - sloglint
+    - spancheck
+    - sqlclosecheck
+    - staticcheck
+    - tagalign
+    - tagliatelle
+    - testableexamples
+    - testifylint
+    - thelper
+    - tparallel
+    - unconvert
+    - unparam
+    - unused
+    - usestdlibvars
+    - usetesting
+    - wastedassign
+    - whitespace
+    - wsl_v5
+    - zerologlint
+  settings:
+    wsl_v5:
+      allow-first-in-block: true
+      allow-whole-block: false
+      branch-max-lines: 2
+    gosec:
+      excludes:
+        - G301
+        - G302
+        - G306
+        - G601
+        - G602
+  exclusions:
+    generated: lax
+    rules:
+      - linters:
+          - paralleltest
+        path: test\/.+\.go
+      - linters:
+          - lll
+        path: \.go$
+      - path: internal/
+        text: ((comment on exported (method|function|type|const)|should have( a package)? comment|comment should be of the form)|exported (.+) should have comment( \(or a comment on this block\))? or be unexported|package comment should be of the form "(.+)...|comment on exported (.+) should be of the form "(.+)..."|should have a package comment)
+      - path: cmd/
+        text: ((comment on exported (method|function|type|const)|should have( a package)? comment|comment should be of the form)|exported (.+) should have comment( \(or a comment on this block\))? or be unexported|package comment should be of the form "(.+)...|comment on exported (.+) should be of the form "(.+)..."|should have a package comment)
+      - path: integration/
+        text: ((comment on exported (method|function|type|const)|should have( a package)? comment|comment should be of the form)|exported (.+) should have comment( \(or a comment on this block\))? or be unexported|package comment should be of the form "(.+)...|comment on exported (.+) should be of the form "(.+)..."|should have a package comment)
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+formatters:
+  enable:
+    - gofmt
+    - gofumpt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - pkg.package-operator.run/boxcutter
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
