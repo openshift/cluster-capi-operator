@@ -72,7 +72,7 @@ func (r *RevisionController) Reconcile(ctx context.Context, _ ctrl.Request) (ctr
 
 	reconcileResult := r.reconcile(ctx, log)
 
-	if err := reconcileResult.WriteClusterOperatorConditions(ctx, log, r.Client); err != nil {
+	if err := reconcileResult.WriteClusterOperatorStatus(ctx, log, r.Client); err != nil {
 		// We deliberately do not return the reconcile error here. This error is
 		// guaranteed to force a requeue, which we want because we need to write
 		// our status. However, if the reconcile error contained a terminal
