@@ -16,16 +16,23 @@ limitations under the License.
 package operatorstatus
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"testing"
 	"time"
 
+	"github.com/go-logr/logr"
 	. "github.com/onsi/gomega"
 	configv1 "github.com/openshift/api/config/v1"
 	configv1apply "github.com/openshift/client-go/config/applyconfigurations/config/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/openshift/cluster-capi-operator/pkg/test"
@@ -168,7 +175,7 @@ func TestNonRetryableError(t *testing.T) {
 func TestWithRequeueAfter(t *testing.T) {
 	t.Run("on Success", func(t *testing.T) {
 		g := NewWithT(t)
-		result := testResultGenerator.Success(WithRequeueAfter(5 * time.Second))
+		result := testResultGenerator.Success().WithRequeueAfter(5 * time.Second)
 
 		g.Expect(result.requeueAfter).To(Equal(5 * time.Second))
 
@@ -179,7 +186,7 @@ func TestWithRequeueAfter(t *testing.T) {
 
 	t.Run("on Progressing", func(t *testing.T) {
 		g := NewWithT(t)
-		result := testResultGenerator.Progressing("working", WithRequeueAfter(10*time.Second))
+		result := testResultGenerator.Progressing("working").WithRequeueAfter(10 * time.Second)
 
 		g.Expect(result.requeueAfter).To(Equal(10 * time.Second))
 	})
@@ -197,7 +204,7 @@ func TestWithRequeueAfter(t *testing.T) {
 	t.Run("on Error", func(t *testing.T) {
 		g := NewWithT(t)
 		testErr := fmt.Errorf("transient")
-		result := testResultGenerator.Error(testErr, WithRequeueAfter(15*time.Second))
+		result := testResultGenerator.Error(testErr).WithRequeueAfter(15 * time.Second)
 
 		assertRequeueAfterWithError(g, result, testErr)
 	})
@@ -205,7 +212,7 @@ func TestWithRequeueAfter(t *testing.T) {
 	t.Run("on NonRetryableError", func(t *testing.T) {
 		g := NewWithT(t)
 		testErr := fmt.Errorf("non-retryable")
-		result := testResultGenerator.NonRetryableError(testErr, WithRequeueAfter(15*time.Second))
+		result := testResultGenerator.NonRetryableError(testErr).WithRequeueAfter(15 * time.Second)
 
 		assertRequeueAfterWithError(g, result, testErr)
 	})
@@ -235,36 +242,36 @@ func TestMergeConditions(t *testing.T) {
 		name         string
 		existing     condFields
 		new          condFields
-		wantUpdate   bool
 		wantTimeSame bool
+		wantUpdated  bool
 	}{
 		{
 			name:         "existing matches same Status Reason and Message",
 			existing:     condFields{"Progressing", configv1.ConditionFalse, "AsExpected", "Success"},
 			new:          condFields{"Progressing", configv1.ConditionFalse, "AsExpected", "Success"},
-			wantUpdate:   false,
 			wantTimeSame: true,
+			wantUpdated:  false,
 		},
 		{
 			name:         "different Message",
 			existing:     condFields{"Progressing", configv1.ConditionTrue, "Working", "old message"},
 			new:          condFields{"Progressing", configv1.ConditionTrue, "Working", "new message"},
-			wantUpdate:   true,
 			wantTimeSame: false,
+			wantUpdated:  true,
 		},
 		{
 			name:         "different Status",
 			existing:     condFields{"Progressing", configv1.ConditionTrue, "Working", "busy"},
 			new:          condFields{"Progressing", configv1.ConditionFalse, "Working", "done"},
-			wantUpdate:   true,
 			wantTimeSame: false,
+			wantUpdated:  true,
 		},
 		{
 			name:         "different Reason",
 			existing:     condFields{"Degraded", configv1.ConditionTrue, "OldReason", "error"},
 			new:          condFields{"Degraded", configv1.ConditionTrue, "NewReason", "error"},
-			wantUpdate:   true,
 			wantTimeSame: false,
+			wantUpdated:  true,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -280,12 +287,12 @@ func TestMergeConditions(t *testing.T) {
 			}
 
 			cond := applyCondition(tc.new.condType, tc.new.status, tc.new.reason, tc.new.message)
-			needsUpdate, _ := mergeConditions(
+			updated := mergeConditions(
 				[]*configv1apply.ClusterOperatorStatusConditionApplyConfiguration{cond},
 				existing,
 			)
 
-			g.Expect(needsUpdate).To(Equal(tc.wantUpdate))
+			g.Expect(updated).To(Equal(tc.wantUpdated))
 
 			if tc.wantTimeSame {
 				g.Expect(*cond.LastTransitionTime).To(Equal(existingTime))
@@ -301,16 +308,13 @@ func TestMergeConditions(t *testing.T) {
 		cond := applyCondition("Progressing", configv1.ConditionFalse, "AsExpected", "Success")
 		g.Expect(cond.LastTransitionTime).To(BeNil())
 
-		needsUpdate, logConds := mergeConditions(
+		updated := mergeConditions(
 			[]*configv1apply.ClusterOperatorStatusConditionApplyConfiguration{cond},
 			nil,
 		)
 
-		g.Expect(needsUpdate).To(BeTrue())
+		g.Expect(updated).To(BeTrue())
 		g.Expect(cond.LastTransitionTime).ToNot(BeNil())
-		g.Expect(logConds).To(HaveLen(2))
-		g.Expect(logConds[0]).To(Equal(configv1.ClusterStatusConditionType("Progressing")))
-		g.Expect(logConds[1]).To(Equal(configv1.ConditionFalse))
 	})
 
 	t.Run("multiple conditions mixed", func(t *testing.T) {
@@ -329,16 +333,151 @@ func TestMergeConditions(t *testing.T) {
 		unchangedCond := applyCondition("Progressing", configv1.ConditionFalse, "AsExpected", "Success")
 		newCond := applyCondition("Degraded", configv1.ConditionFalse, "AsExpected", "Success")
 
-		needsUpdate, logConds := mergeConditions(
+		updated := mergeConditions(
 			[]*configv1apply.ClusterOperatorStatusConditionApplyConfiguration{unchangedCond, newCond},
 			existing,
 		)
 
-		g.Expect(needsUpdate).To(BeTrue())
-		g.Expect(logConds).To(HaveLen(4))
+		g.Expect(updated).To(BeTrue())
 		// Unchanged condition preserves its LastTransitionTime
 		g.Expect(*unchangedCond.LastTransitionTime).To(Equal(existingTime))
 		// New condition gets a LastTransitionTime set
 		g.Expect(newCond.LastTransitionTime).ToNot(BeNil())
+	})
+
+	t.Run("all conditions unchanged", func(t *testing.T) {
+		g := NewWithT(t)
+
+		existing := []configv1.ClusterOperatorStatusCondition{
+			{
+				Type:               "Progressing",
+				Status:             configv1.ConditionFalse,
+				Reason:             "AsExpected",
+				Message:            "Success",
+				LastTransitionTime: existingTime,
+			},
+			{
+				Type:               "Degraded",
+				Status:             configv1.ConditionFalse,
+				Reason:             "AsExpected",
+				Message:            "Success",
+				LastTransitionTime: existingTime,
+			},
+		}
+
+		cond1 := applyCondition("Progressing", configv1.ConditionFalse, "AsExpected", "Success")
+		cond2 := applyCondition("Degraded", configv1.ConditionFalse, "AsExpected", "Success")
+
+		updated := mergeConditions(
+			[]*configv1apply.ClusterOperatorStatusConditionApplyConfiguration{cond1, cond2},
+			existing,
+		)
+
+		g.Expect(updated).To(BeFalse())
+		g.Expect(*cond1.LastTransitionTime).To(Equal(existingTime))
+		g.Expect(*cond2.LastTransitionTime).To(Equal(existingTime))
+	})
+}
+
+func newFakeClient(objs ...client.Object) client.WithWatch {
+	scheme := runtime.NewScheme()
+	if err := configv1.AddToScheme(scheme); err != nil {
+		panic(err)
+	}
+
+	return fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(objs...).
+		WithStatusSubresource(&configv1.ClusterOperator{}).
+		Build()
+}
+
+func TestWriteClusterOperatorStatus(t *testing.T) {
+	log := logr.Discard()
+
+	for _, tc := range []struct {
+		name            string
+		conditions      []configv1.ClusterOperatorStatusCondition
+		wantPatchCalled bool
+	}{
+		{
+			name: "skips patch when conditions unchanged",
+			conditions: []configv1.ClusterOperatorStatusCondition{
+				{
+					Type:               "TestProgressing",
+					Status:             configv1.ConditionFalse,
+					Reason:             ReasonAsExpected,
+					Message:            "Success",
+					LastTransitionTime: metav1.Now(),
+				},
+				{
+					Type:               "TestDegraded",
+					Status:             configv1.ConditionFalse,
+					Reason:             ReasonAsExpected,
+					Message:            "Success",
+					LastTransitionTime: metav1.Now(),
+				},
+			},
+			wantPatchCalled: false,
+		},
+		{
+			name: "patches when conditions changed",
+			conditions: []configv1.ClusterOperatorStatusCondition{
+				{
+					Type:               "TestProgressing",
+					Status:             configv1.ConditionTrue,
+					Reason:             ReasonProgressing,
+					Message:            "installing components",
+					LastTransitionTime: metav1.Now(),
+				},
+				{
+					Type:               "TestDegraded",
+					Status:             configv1.ConditionFalse,
+					Reason:             ReasonProgressing,
+					Message:            "installing components",
+					LastTransitionTime: metav1.Now(),
+				},
+			},
+			wantPatchCalled: true,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			g := NewWithT(t)
+
+			co := &configv1.ClusterOperator{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterOperatorName,
+					UID:  types.UID("test-uid"),
+				},
+				Status: configv1.ClusterOperatorStatus{
+					Conditions: tc.conditions,
+				},
+			}
+
+			patchCalled := false
+			cl := interceptor.NewClient(newFakeClient(co), interceptor.Funcs{
+				SubResourcePatch: func(ctx context.Context, c client.Client, subResourceName string, obj client.Object, patch client.Patch, opts ...client.SubResourcePatchOption) error {
+					patchCalled = true
+					return c.SubResource(subResourceName).Patch(ctx, obj, patch, opts...)
+				},
+			})
+
+			result := testResultGenerator.Success()
+			err := result.WriteClusterOperatorStatus(t.Context(), log, cl)
+			g.Expect(err).ToNot(HaveOccurred())
+			g.Expect(patchCalled).To(Equal(tc.wantPatchCalled))
+		})
+	}
+
+	t.Run("returns error when ClusterOperator not found", func(t *testing.T) {
+		g := NewWithT(t)
+
+		// No ClusterOperator seeded
+		cl := newFakeClient()
+
+		result := testResultGenerator.Success()
+		err := result.WriteClusterOperatorStatus(t.Context(), log, cl)
+		g.Expect(err).To(HaveOccurred())
+		g.Expect(err.Error()).To(ContainSubstring("failed to get ClusterOperator"))
 	})
 }
