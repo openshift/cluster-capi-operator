@@ -40,6 +40,19 @@ import (
 
 var defaultNodeTimeout = NodeTimeout(10 * time.Second)
 
+func waitForReconcileComplete(ctx context.Context, requirement *apiextensionsv1alpha1.CompatibilityRequirement) {
+	GinkgoHelper()
+
+	By("Waiting for CompatibilityRequirement reconciliation to complete", func() {
+		Eventually(kWithCtx(ctx).Object(requirement)).WithContext(ctx).Should(HaveField("Status.Conditions", SatisfyAll(
+			test.HaveCondition("Progressing").
+				WithStatus(metav1.ConditionFalse).
+				WithReason(apiextensionsv1alpha1.CompatibilityRequirementUpToDateReason).
+				WithObservedGeneration(requirement.GetGeneration()),
+		)))
+	})
+}
+
 var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() {
 	// Starting and stopping the manager is quite expensive, so we share one amongst all the tests.
 	// Unfortunately ginkgo forces us to use Ordered when doing this.
@@ -380,14 +393,14 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 			createTestObject(ctx, requirementWithoutObjectSchemaValidation, "CompatibilityRequirement")
 
 			By(fmt.Sprintf("Compatibility requirement %s created", requirementWithoutObjectSchemaValidation.Name))
+
 			// Check that the CompatibilityRequirement is admitted
-			Eventually(kWithCtx(ctx).Object(requirementWithoutObjectSchemaValidation)).WithContext(ctx).Should(HaveField("Status.Conditions", SatisfyAll(
-				test.HaveCondition("Progressing").
-					WithStatus(metav1.ConditionFalse).
-					WithReason(apiextensionsv1alpha1.CompatibilityRequirementUpToDateReason),
+			waitForReconcileComplete(ctx, requirementWithoutObjectSchemaValidation)
+			Expect(kWithCtx(ctx).Object(requirementWithoutObjectSchemaValidation)()).To(HaveField("Status.Conditions", SatisfyAll(
 				test.HaveCondition("Admitted").
 					WithStatus(metav1.ConditionTrue).
-					WithReason(apiextensionsv1alpha1.CompatibilityRequirementAdmittedReason),
+					WithReason(apiextensionsv1alpha1.CompatibilityRequirementAdmittedReason).
+					WithObservedGeneration(requirementWithoutObjectSchemaValidation.Generation),
 			)))
 
 			noObjectSchemaValidatingWebhook := &admissionregistrationv1.ValidatingWebhookConfiguration{
@@ -410,18 +423,22 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 				requirementWithoutObjectSchemaValidation.Spec.ObjectSchemaValidation = requirement.Spec.ObjectSchemaValidation
 			})).WithContext(ctx).Should(Succeed())
 
+			waitForReconcileComplete(ctx, requirementWithoutObjectSchemaValidation)
+
 			By("Checking that the webhook configurations are now present")
-			Eventually(kWithCtx(ctx).Get(noObjectSchemaValidatingWebhook)).WithContext(ctx).Should(Succeed(), "The validating webhook configuration should be created")
-			Eventually(kWithCtx(ctx).Get(noObjectSchemaMutatingWebhook)).WithContext(ctx).Should(Succeed(), "The mutating webhook configuration should be created")
+			Expect(kWithCtx(ctx).Get(noObjectSchemaValidatingWebhook)()).To(Succeed(), "The validating webhook configuration should be created")
+			Expect(kWithCtx(ctx).Get(noObjectSchemaMutatingWebhook)()).To(Succeed(), "The mutating webhook configuration should be created")
 
 			By("Removing the object schema validation from the CompatibilityRequirement")
 			Eventually(kWithCtx(ctx).Update(requirementWithoutObjectSchemaValidation, func() {
 				requirementWithoutObjectSchemaValidation.Spec.ObjectSchemaValidation = (apiextensionsv1alpha1.ObjectSchemaValidation{})
 			})).WithContext(ctx).Should(Succeed())
 
+			waitForReconcileComplete(ctx, requirementWithoutObjectSchemaValidation)
+
 			By("Checking that the webhook configurations are now removed")
-			Eventually(kWithCtx(ctx).Get(noObjectSchemaValidatingWebhook)).WithContext(ctx).Should(MatchError(ContainSubstring("not found")))
-			Eventually(kWithCtx(ctx).Get(noObjectSchemaMutatingWebhook)).WithContext(ctx).Should(MatchError(ContainSubstring("not found")))
+			Expect(kWithCtx(ctx).Get(noObjectSchemaValidatingWebhook)()).To(MatchError(ContainSubstring("not found")))
+			Expect(kWithCtx(ctx).Get(noObjectSchemaMutatingWebhook)()).To(MatchError(ContainSubstring("not found")))
 		}, defaultNodeTimeout)
 	})
 

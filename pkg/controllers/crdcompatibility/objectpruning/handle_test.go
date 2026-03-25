@@ -28,6 +28,7 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/utils/ptr"
 	k8syaml "sigs.k8s.io/yaml"
@@ -83,9 +84,9 @@ var _ = Describe("Object Pruning Integration", func() {
 				By("Creating object through API server (should be pruned by webhook)")
 				// Set the namespace and ensure object matches the CRD GVK
 				gvk := liveCRD.Spec.Versions[0].Name
-				inputObject := (&unstructured.Unstructured{
-					Object: scenario.InputObject,
-				}).DeepCopy()
+				inputObject := &unstructured.Unstructured{
+					Object: runtime.DeepCopyJSON(scenario.InputObject),
+				}
 				inputObject.SetAPIVersion(fmt.Sprintf("%s/%s", liveCRD.Spec.Group, gvk))
 				inputObject.SetKind(liveCRD.Spec.Names.Kind)
 				inputObject.SetNamespace(namespace)
@@ -126,7 +127,7 @@ var _ = Describe("Object Pruning Integration", func() {
 				})
 
 				By("Attempting to update the object, should prune the object again", func() {
-					inputObject.Object["spec"] = scenario.InputObject["spec"]
+					inputObject.Object["spec"] = runtime.DeepCopyJSONValue(scenario.InputObject["spec"])
 					Expect(cl.Update(ctx, inputObject)).To(Succeed())
 				})
 

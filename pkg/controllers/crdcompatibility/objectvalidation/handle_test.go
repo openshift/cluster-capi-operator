@@ -828,7 +828,7 @@ var _ = Describe("End-to-End Admission Webhook Integration", Ordered, ContinueOn
 				})
 			}, defaultNodeTimeout)
 
-			It("should allow objects missing required fields but generate warnings", func(ctx context.Context) {
+			It("should allow objects with which violate numeric bounds but generate warnings", func(ctx context.Context) {
 				gvk := schema.GroupVersionKind{
 					Group:   compatibilityCRD.Spec.Group,
 					Version: compatibilityCRD.Spec.Versions[0].Name,
