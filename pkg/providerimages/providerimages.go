@@ -34,7 +34,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
-	configv1 "github.com/openshift/api/config/v1"
+	"github.com/openshift/cluster-capi-operator/manifests-gen/providermetadata"
 	"golang.org/x/sync/errgroup"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -52,9 +52,9 @@ const (
 	pullSecretKey  = ".dockerconfigjson" //nolint:gosec // Not a credential, just a key name
 
 	// AttributeKeyType is the key for the provider type attribute.
-	AttributeKeyType = "type"
+	AttributeKeyType = providermetadata.AttributeKeyType
 	// AttributeKeyVersion is the key for the provider version attribute.
-	AttributeKeyVersion = "version"
+	AttributeKeyVersion = providermetadata.AttributeKeyVersion
 )
 
 // ProviderImageManifests represents metadata and manifests read from a provider image.
@@ -69,20 +69,7 @@ type ProviderImageManifests struct {
 }
 
 // ProviderMetadata is metadata about a provider image provided in the metadata.yaml file.
-type ProviderMetadata struct {
-	Name         string                `json:"name"`
-	Attributes   map[string]string     `json:"attributes,omitempty"`
-	OCPPlatform  configv1.PlatformType `json:"ocpPlatform,omitempty"`
-	SelfImageRef string                `json:"selfImageRef,omitempty"`
-	InstallOrder int                   `json:"installOrder,omitempty"`
-}
-
-// MatchesPlatform reports whether this profile should be installed on the
-// given cluster platform. Profiles with no OCPPlatform set (empty string)
-// are platform-independent and match every cluster.
-func (m ProviderMetadata) MatchesPlatform(clusterPlatform configv1.PlatformType) bool {
-	return m.OCPPlatform == "" || m.OCPPlatform == clusterPlatform
-}
+type ProviderMetadata = providermetadata.ProviderMetadata
 
 // imageFetcher abstracts fetching container images for testability.
 type imageFetcher interface {
