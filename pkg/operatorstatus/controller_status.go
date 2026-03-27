@@ -34,8 +34,12 @@ import (
 )
 
 const (
-	clusterOperatorName = "cluster-api"
-	ssaFieldOwnerDomain = "capi-operator.openshift.io"
+	// ClusterOperatorName is the name of the ClusterOperator resource managed
+	// by the CAPI operator.
+	ClusterOperatorName = "cluster-api"
+	// CAPIOperatorIdentifierDomain is the domain used as the field owner prefix for
+	// server-side apply operations by the CAPI operator.
+	CAPIOperatorIdentifierDomain = "capi-operator.openshift.io"
 
 	// ReasonAsExpected is the reason for the condition when the operator is in a normal state.
 	ReasonAsExpected = "AsExpected"
@@ -61,7 +65,7 @@ const (
 // The qualifier should identify the writer in the context of the CAPI operator,
 // for example a controller name.
 func CAPIFieldOwner[S ~string](qualifier S) client.FieldOwner {
-	return client.FieldOwner(ssaFieldOwnerDomain + "/" + qualifier)
+	return client.FieldOwner(CAPIOperatorIdentifierDomain + "/" + qualifier)
 }
 
 // ReconcileResult represents the result of a controller's reconciliation.
@@ -221,7 +225,7 @@ func (c ControllerResultGenerator) degradedCondition(status configv1.ConditionSt
 func (r *ReconcileResult) WriteClusterOperatorStatus(ctx context.Context, log logr.Logger, k8sclient client.Client) error {
 	// Get the ClusterOperator
 	co := &configv1.ClusterOperator{}
-	if err := k8sclient.Get(ctx, client.ObjectKey{Name: clusterOperatorName}, co); err != nil {
+	if err := k8sclient.Get(ctx, client.ObjectKey{Name: ClusterOperatorName}, co); err != nil {
 		return fmt.Errorf("failed to get ClusterOperator: %w", err)
 	}
 
@@ -236,7 +240,7 @@ func (r *ReconcileResult) WriteClusterOperatorStatus(ctx context.Context, log lo
 		return nil
 	}
 
-	clusterOperatorApplyConfig := configv1apply.ClusterOperator(clusterOperatorName).
+	clusterOperatorApplyConfig := configv1apply.ClusterOperator(ClusterOperatorName).
 		WithUID(co.UID).
 		WithStatus(configv1apply.ClusterOperatorStatus().
 			WithConditions(conditions...))

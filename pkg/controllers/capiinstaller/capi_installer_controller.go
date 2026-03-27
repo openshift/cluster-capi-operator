@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"regexp"
 	"slices"
 	"strings"
@@ -178,41 +177,7 @@ func (r *CapiInstallerController) reconcile(ctx context.Context, log logr.Logger
 		log.Info("finished reconciling CAPI provider", "name", providerConfigMapLabelNameVal)
 	}
 
-	if err := r.reconcileProviderImages(ctx, log); err != nil {
-		return ctrl.Result{}, fmt.Errorf("error reconciling CAPI provider images: %w", err)
-	}
-
 	return ctrl.Result{}, nil
-}
-
-func (r *CapiInstallerController) reconcileProviderImages(ctx context.Context, log logr.Logger) (err error) {
-	// Filter out provider images with a platform which doesn't match the current platform.
-	providerImages := make([]providerimages.ProviderImageManifests, 0, len(r.ProviderImages))
-
-	for _, providerImage := range r.ProviderImages {
-		if !providerImage.MatchesPlatform(r.Platform) {
-			log.Info("skipping provider image, platform does not match",
-				"name", providerImage.Name,
-				"imagePlatform", providerImage.OCPPlatform,
-				"clusterPlatform", r.Platform)
-
-			continue
-		}
-
-		providerImages = append(providerImages, providerImage)
-	}
-
-	// Sort providers by InstallOrder (ascending), then by Name for stability
-	sortProvidersByInstallOrder(providerImages)
-
-	// Apply the provider manifests
-	for _, providerImage := range providerImages {
-		if err := r.applyProviderImage(ctx, log, providerImage); err != nil {
-			return fmt.Errorf("failed to apply provider image %s: %w", providerImage.Name, err)
-		}
-	}
-
-	return nil
 }
 
 // sortProvidersByInstallOrder sorts providers by InstallOrder ascending, then by Name for stability.
@@ -224,43 +189,6 @@ func sortProvidersByInstallOrder(providers []providerimages.ProviderImageManifes
 
 		return strings.Compare(a.Name, b.Name)
 	})
-}
-
-// applyProviderImage extracts provider manifests for a single provider image and applies them to the cluster.
-func (r *CapiInstallerController) applyProviderImage(ctx context.Context, log logr.Logger, providerImage providerimages.ProviderImageManifests) (err error) {
-	log.Info("reconciling CAPI provider from image",
-		"name", providerImage.Name,
-		"manifestsPath", providerImage.ManifestsPath,
-		"providerType", providerImage.Attributes[providerimages.AttributeKeyType],
-		"version", providerImage.Attributes[providerimages.AttributeKeyVersion],
-		"profile", providerImage.Profile,
-		"ocpPlatform", providerImage.OCPPlatform)
-
-	reader, err := providerManifestReader(providerImage)
-	if err != nil {
-		return fmt.Errorf("failed to create provider manifest reader: %w", err)
-	}
-
-	defer func() {
-		err = errors.Join(err, reader.Close())
-	}()
-
-	yamlManifests, err := extractManifests(reader)
-	if err != nil {
-		return fmt.Errorf("failed to extract manifests from provider manifest: %w", err)
-	}
-
-	log.Info("extracted manifests from provider image",
-		"name", providerImage.Name,
-		"manifestCount", len(yamlManifests))
-
-	if err := r.applyProviderComponents(ctx, log, yamlManifests); err != nil {
-		return fmt.Errorf("failed to apply provider components: %w", err)
-	}
-
-	log.Info("finished reconciling CAPI provider", "name", providerImage.Name)
-
-	return nil
 }
 
 // applyProviderComponents applies the provider components to the cluster.
@@ -549,15 +477,6 @@ func configMapReader(cm corev1.ConfigMap) (io.ReadCloser, error) {
 	}
 
 	return nil, errEmptyProviderConfigMap
-}
-
-func providerManifestReader(providerImage providerimages.ProviderImageManifests) (io.ReadCloser, error) {
-	reader, err := os.Open(providerImage.ManifestsPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open provider manifest: %w", err)
-	}
-
-	return reader, nil
 }
 
 // extractManifests extracts and processes component manifests from given ConfigMap.

@@ -43,6 +43,7 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/capiinstaller"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/clusteroperator"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/installer"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/revision"
 	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
@@ -209,6 +210,10 @@ func setupCapiInstallerController(mgr ctrl.Manager, log logr.Logger, opts *commo
 	}).SetupWithManager(mgr); err != nil {
 		log.Error(err, "unable to create revision controller", "controller", "RevisionController")
 		return fmt.Errorf("unable to create revision controller: %w", err)
+	}
+
+	if err := installer.SetupWithManager(mgr, providerProfiles); err != nil {
+		return fmt.Errorf("unable to create installer controller: %w", err)
 	}
 
 	if err := (&capiinstaller.CapiInstallerController{

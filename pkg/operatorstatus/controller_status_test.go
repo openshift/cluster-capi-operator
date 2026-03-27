@@ -446,7 +446,7 @@ func TestWriteClusterOperatorStatus(t *testing.T) {
 
 			co := &configv1.ClusterOperator{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: clusterOperatorName,
+					Name: ClusterOperatorName,
 					UID:  types.UID("test-uid"),
 				},
 				Status: configv1.ClusterOperatorStatus{
