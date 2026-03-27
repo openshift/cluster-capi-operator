@@ -11,14 +11,15 @@ metadata:
 data:
   images.json: >
     {
-      "cluster-capi-operator": "registry.ci.openshift.org/openshift:cluster-capi-operator",
-      "cluster-capi-controllers": "registry.ci.openshift.org/openshift:cluster-capi-controllers",
       "aws-cluster-api-controllers": "registry.ci.openshift.org/openshift:aws-cluster-api-controllers",
       "azure-cluster-api-controllers": "registry.ci.openshift.org/openshift:azure-cluster-api-controllers",
+      "baremetal-cluster-api-controllers": "registry.ci.openshift.org/openshift:baremetal-cluster-api-controllers",
+      "cluster-capi-controllers": "registry.ci.openshift.org/openshift:cluster-capi-controllers",
+      "cluster-capi-operator": "registry.ci.openshift.org/openshift:cluster-capi-operator",
       "gcp-cluster-api-controllers": "registry.ci.openshift.org/openshift:gcp-cluster-api-controllers",
       "ibmcloud-cluster-api-controllers": "registry.ci.openshift.org/openshift:ibmcloud-cluster-api-controllers",
+      "kube-rbac-proxy": "registry.ci.openshift.org/openshift:kube-rbac-proxy",
       "openstack-cluster-api-controllers": "registry.ci.openshift.org/openshift:openstack-cluster-api-controllers",
-      "vsphere-cluster-api-controllers": "registry.ci.openshift.org/openshift:vsphere-cluster-api-controllers",
-      "baremetal-cluster-api-controllers": "registry.ci.openshift.org/openshift:baremetal-cluster-api-controllers",
-      "kube-rbac-proxy": "registry.ci.openshift.org/openshift:kube-rbac-proxy"
+      "openstack-resource-controller": "registry.ci.openshift.org/openshift:openstack-resource-controller",
+      "vsphere-cluster-api-controllers": "registry.ci.openshift.org/openshift:vsphere-cluster-api-controllers"
     }
