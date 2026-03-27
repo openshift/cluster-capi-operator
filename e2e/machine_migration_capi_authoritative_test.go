@@ -48,6 +48,8 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 			var mapiMachineAuthCAPIName string
 
 			BeforeAll(func() {
+				skipIfNoWorkerCAPIMachines()
+
 				mapiMachineAuthCAPIName = generateName("machine-auth-capi-")
 				newCapiMachine = createCAPIMachine(ctx, cl, mapiMachineAuthCAPIName)
 				newMapiMachine = createMAPIMachineWithAuthority(ctx, cl, mapiMachineAuthCAPIName, mapiv1beta1.MachineAuthorityClusterAPI)
