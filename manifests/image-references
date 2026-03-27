@@ -2,18 +2,6 @@ kind: ImageStream
 apiVersion: image.openshift.io/v1
 spec:
   tags:
-  - name: cluster-capi-operator
-    from:
-      kind: DockerImage
-      name: registry.ci.openshift.org/openshift:cluster-capi-operator
-  - name: kube-rbac-proxy
-    from:
-      kind: DockerImage
-      name: registry.ci.openshift.org/openshift:kube-rbac-proxy
-  - name: cluster-capi-controllers
-    from:
-      kind: DockerImage
-      name: registry.ci.openshift.org/openshift:cluster-capi-controllers
   - name: aws-cluster-api-controllers
     from:
       kind: DockerImage
@@ -26,6 +14,18 @@ spec:
     from:
       kind: DockerImage
       name: registry.ci.openshift.org/openshift:azure-service-operator
+  - name: baremetal-cluster-api-controllers
+    from:
+      kind: DockerImage
+      name: registry.ci.openshift.org/openshift:baremetal-cluster-api-controllers
+  - name: cluster-capi-controllers
+    from:
+      kind: DockerImage
+      name: registry.ci.openshift.org/openshift:cluster-capi-controllers
+  - name: cluster-capi-operator
+    from:
+      kind: DockerImage
+      name: registry.ci.openshift.org/openshift:cluster-capi-operator
   - name: gcp-cluster-api-controllers
     from:
       kind: DockerImage
@@ -34,15 +34,19 @@ spec:
     from:
       kind: DockerImage
       name: registry.ci.openshift.org/openshift:ibmcloud-cluster-api-controllers
+  - name: kube-rbac-proxy
+    from:
+      kind: DockerImage
+      name: registry.ci.openshift.org/openshift:kube-rbac-proxy
   - name: openstack-cluster-api-controllers
     from:
       kind: DockerImage
       name: registry.ci.openshift.org/openshift:openstack-cluster-api-controllers
+  - name: openstack-resource-controller
+    from:
+      kind: DockerImage
+      name: registry.ci.openshift.org/openshift:openstack-resource-controller
   - name: vsphere-cluster-api-controllers
     from:
       kind: DockerImage
       name: registry.ci.openshift.org/openshift:vsphere-cluster-api-controllers
-  - name: baremetal-cluster-api-controllers
-    from:
-      kind: DockerImage
-      name: registry.ci.openshift.org/openshift:baremetal-cluster-api-controllers
