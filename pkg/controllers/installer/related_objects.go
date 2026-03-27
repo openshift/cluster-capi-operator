@@ -45,6 +45,7 @@ func staticRelatedObjects() []configv1.ObjectReference {
 		{Group: "admissionregistration.k8s.io", Resource: "validatingadmissionpolicies"},
 		{Group: "admissionregistration.k8s.io", Resource: "validatingadmissionpolicybindings"},
 		{Group: "apiextensions.openshift.io", Resource: "compatibilityrequirements"},
+		{Group: "operator.openshift.io", Resource: "clusterapis", Name: "cluster"},
 	}
 }
 
