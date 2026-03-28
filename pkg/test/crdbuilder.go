@@ -245,6 +245,9 @@ func GenerateTestCompatibilityRequirement(testCRD *apiextensionsv1.CustomResourc
 			CustomResourceDefinitionSchemaValidation: apiextensionsv1alpha1.CustomResourceDefinitionSchemaValidation{
 				Action: apiextensionsv1alpha1.CRDAdmitActionDeny,
 			},
+			ObjectSchemaValidation: apiextensionsv1alpha1.ObjectSchemaValidation{
+				Action: apiextensionsv1alpha1.CRDAdmitActionDeny,
+			},
 		},
 		Status: apiextensionsv1alpha1.CompatibilityRequirementStatus{
 			CRDName: testCRD.GetName(),

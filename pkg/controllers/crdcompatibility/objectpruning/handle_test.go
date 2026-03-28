@@ -28,6 +28,7 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/utils/ptr"
 	k8syaml "sigs.k8s.io/yaml"
@@ -65,19 +66,7 @@ var _ = Describe("Object Pruning Integration", func() {
 
 	Context("admission pruning scenarios", func() {
 		BeforeEach(func(ctx context.Context) {
-			By("Creating the live CRD with permissive schema")
-
-			liveCRD = createPermissivePropertiesCRDSchema()
-			Expect(cl.Create(ctx, liveCRD)).To(Succeed())
-
-			DeferCleanup(func(ctx context.Context) {
-				Expect(test.CleanupAndWait(ctx, cl, liveCRD)).To(Succeed())
-			}, defaultNodeTimeout)
-
-			By("Waiting for CRD to be established")
-			Eventually(kWithCtx(ctx).Object(liveCRD)).WithContext(ctx).Should(
-				HaveField("Status.Conditions", test.HaveCondition("Established").WithStatus(apiextensionsv1.ConditionTrue)),
-			)
+			liveCRD = permissiveSuiteCRD()
 		}, defaultNodeTimeout)
 
 		DescribeTable("object pruning scenarios through API server",
@@ -96,7 +85,7 @@ var _ = Describe("Object Pruning Integration", func() {
 				// Set the namespace and ensure object matches the CRD GVK
 				gvk := liveCRD.Spec.Versions[0].Name
 				inputObject := &unstructured.Unstructured{
-					Object: scenario.InputObject,
+					Object: runtime.DeepCopyJSON(scenario.InputObject),
 				}
 				inputObject.SetAPIVersion(fmt.Sprintf("%s/%s", liveCRD.Spec.Group, gvk))
 				inputObject.SetKind(liveCRD.Spec.Names.Kind)
@@ -126,16 +115,65 @@ var _ = Describe("Object Pruning Integration", func() {
 					Expect(cl.Status().Update(ctx, inputObject)).To(Succeed())
 				}
 
-				By("Verifying the object was pruned correctly")
+				By("Verifying the object was pruned correctly", func() {
+					retrievedObj := &unstructured.Unstructured{}
+					retrievedObj.SetGroupVersionKind(inputObject.GroupVersionKind())
+					retrievedObj.SetName(inputObject.GetName())
+					retrievedObj.SetNamespace(inputObject.GetNamespace())
 
-				retrievedObj := &unstructured.Unstructured{}
-				retrievedObj.SetGroupVersionKind(inputObject.GroupVersionKind())
-				retrievedObj.SetName(inputObject.GetName())
-				retrievedObj.SetNamespace(inputObject.GetNamespace())
+					Eventually(kWithCtx(ctx).Get(retrievedObj)).WithContext(ctx).Should(Succeed())
 
-				Eventually(kWithCtx(ctx).Get(retrievedObj)).WithContext(ctx).Should(Succeed())
+					Expect(retrievedObj.Object).To(test.IgnoreFields([]string{"apiVersion", "kind", "metadata"}, Equal(scenario.ExpectedObject)), "Expected object to be pruned correctly")
+				})
 
-				Expect(retrievedObj.Object).To(test.IgnoreFields([]string{"apiVersion", "kind", "metadata"}, Equal(scenario.ExpectedObject)))
+				By("Attempting to update the object, should prune the object again", func() {
+					inputObject.Object["spec"] = runtime.DeepCopyJSONValue(scenario.InputObject["spec"])
+					Expect(cl.Update(ctx, inputObject)).To(Succeed())
+				})
+
+				// Write the status through the status subresource.
+				if hasStatus {
+					inputObject.Object["status"] = status
+					Expect(cl.Status().Update(ctx, inputObject)).To(Succeed())
+				}
+
+				By("Verifying the object was pruned correctly", func() {
+					retrievedObj := &unstructured.Unstructured{}
+					retrievedObj.SetGroupVersionKind(inputObject.GroupVersionKind())
+					retrievedObj.SetName(inputObject.GetName())
+					retrievedObj.SetNamespace(inputObject.GetNamespace())
+
+					Eventually(kWithCtx(ctx).Get(retrievedObj)).WithContext(ctx).Should(Succeed())
+
+					Expect(retrievedObj.Object).To(test.IgnoreFields([]string{"apiVersion", "kind", "metadata"}, Equal(scenario.ExpectedObject)), "Expected object to be pruned correctly")
+				})
+
+				By("Updating the compatibility requirement to warn action")
+				Eventually(kWithCtx(ctx).Update(scenario.CompatibilityRequirement, func() {
+					scenario.CompatibilityRequirement.Spec.ObjectSchemaValidation.Action = apiextensionsv1alpha1.CRDAdmitActionWarn
+				})).WithContext(ctx).Should(Succeed())
+
+				By("Updating the object again, should not be pruned", func() {
+					inputObject.Object["spec"] = scenario.InputObject["spec"]
+					Expect(cl.Update(ctx, inputObject)).To(Succeed())
+				})
+
+				// Write the status through the status subresource.
+				if hasStatus {
+					inputObject.Object["status"] = status
+					Expect(cl.Status().Update(ctx, inputObject)).To(Succeed())
+				}
+
+				By("Verifying the object was not pruned", func() {
+					retrievedObj := &unstructured.Unstructured{}
+					retrievedObj.SetGroupVersionKind(inputObject.GroupVersionKind())
+					retrievedObj.SetName(inputObject.GetName())
+					retrievedObj.SetNamespace(inputObject.GetNamespace())
+
+					Eventually(kWithCtx(ctx).Get(retrievedObj)).WithContext(ctx).Should(Succeed())
+
+					Expect(retrievedObj.Object).To(test.IgnoreFields([]string{"apiVersion", "kind", "metadata"}, Equal(scenario.InputObject)), "Expected object to be not pruned")
+				})
 			},
 
 			Entry("object with unknown fields pruned by strict compatibility requirement", pruningTestScenario{
@@ -261,7 +299,7 @@ var _ = Describe("Object Pruning Integration", func() {
 					"spec": map[string]interface{}{
 						"field1": "removeThis",
 						"field2": "alsoRemove",
-						"field3": 42,
+						"field3": int64(42),
 					},
 					"status": map[string]interface{}{
 						"phase": "Running",
@@ -277,28 +315,17 @@ var _ = Describe("Object Pruning Integration", func() {
 
 	Context("error scenarios", func() {
 		BeforeEach(func(ctx context.Context) {
-			By("Creating a live CRD with permissive schema")
-
-			liveCRD = createEmptyPropertiesCRDSchema()
-			Expect(cl.Create(ctx, liveCRD)).To(Succeed())
-
-			By("Waiting for CRD to be established")
-			Eventually(kWithCtx(ctx).Object(liveCRD)).WithContext(ctx).Should(
-				HaveField("Status.Conditions", ContainElement(And(
-					HaveField("Type", BeEquivalentTo("Established")),
-					HaveField("Status", BeEquivalentTo(metav1.ConditionTrue)),
-				))))
-
-			DeferCleanup(func(ctx context.Context) {
-				Expect(test.CleanupAndWait(ctx, cl, liveCRD)).To(Succeed())
-			})
+			liveCRD = emptySuiteCRD()
 		}, defaultNodeTimeout)
 
 		It("should handle webhook when CompatibilityRequirement does not exist", func(ctx context.Context) {
 			By("Creating MutatingWebhookConfiguration with non-existent CompatibilityRequirement")
 
 			webhookConfig := createMutatingWebhookConfig(&apiextensionsv1alpha1.CompatibilityRequirement{
-				ObjectMeta: metav1.ObjectMeta{Name: "non-existent-compat-req"},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "non-existent-compat-req",
+					UID:  "non-existent-compat-req-uid",
+				},
 			}, liveCRD)
 			Expect(cl.Create(ctx, webhookConfig)).To(Succeed())
 
@@ -482,7 +509,7 @@ func createEmptyPropertiesCRDSchema() *apiextensionsv1.CustomResourceDefinition 
 	gvk := schema.GroupVersionKind{
 		Group:   "test.example.com",
 		Version: "v1",
-		Kind:    "TestResource",
+		Kind:    "TestEmptyResource",
 	}
 
 	crd := test.GenerateCRD(gvk)
@@ -525,6 +552,9 @@ func createCompatibilityRequirement(crd *apiextensionsv1.CustomResourceDefinitio
 				RequiredVersions: apiextensionsv1alpha1.APIVersions{
 					DefaultSelection: apiextensionsv1alpha1.APIVersionSetTypeAllServed,
 				},
+			},
+			ObjectSchemaValidation: apiextensionsv1alpha1.ObjectSchemaValidation{
+				Action: apiextensionsv1alpha1.CRDAdmitActionDeny,
 			},
 		},
 	}

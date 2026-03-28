@@ -17,8 +17,6 @@ limitations under the License.
 package objectpruning
 
 import (
-	"context"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -33,14 +31,11 @@ import (
 
 var _ = Describe("validator", func() {
 	var (
-		ctx                      context.Context
 		testCRD                  *apiextensionsv1.CustomResourceDefinition
 		compatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement
 	)
 
 	BeforeEach(func() {
-		ctx = context.Background()
-
 		// Create a test CRD with some properties for testing
 		testCRD = createStrictCRDSchema()
 
@@ -57,7 +52,7 @@ var _ = Describe("validator", func() {
 			})
 
 			It("should return structural schema", func() {
-				schema, err := validator.getStructuralSchema(ctx, compatibilityRequirement.Name, "v1")
+				schema, err := validator.getStructuralSchema(compatibilityRequirement, "v1")
 
 				Expect(err).NotTo(HaveOccurred())
 				Expect(schema).NotTo(BeNil())
@@ -65,7 +60,7 @@ var _ = Describe("validator", func() {
 
 			It("should cache structural schema", func() {
 				// First call should create and cache the schema
-				_, err := validator.getStructuralSchema(ctx, compatibilityRequirement.Name, "v1")
+				_, err := validator.getStructuralSchema(compatibilityRequirement, "v1")
 				Expect(err).NotTo(HaveOccurred())
 
 				// Check that cache now contains an entry
@@ -78,26 +73,16 @@ var _ = Describe("validator", func() {
 
 			It("should use cached schema on subsequent calls", func() {
 				// First call
-				schema1, err1 := validator.getStructuralSchema(ctx, compatibilityRequirement.Name, "v1")
+				schema1, err1 := validator.getStructuralSchema(compatibilityRequirement, "v1")
 				Expect(err1).NotTo(HaveOccurred())
 
 				// Second call should return the same schema instance
-				schema2, err2 := validator.getStructuralSchema(ctx, compatibilityRequirement.Name, "v1")
+				schema2, err2 := validator.getStructuralSchema(compatibilityRequirement, "v1")
 				Expect(err2).NotTo(HaveOccurred())
 
 				// Should be the exact same object (cached)
 				// This uses reflect.DeepEqual to compare the two schemas.
 				Expect(schema1).To(Equal(schema2))
-			})
-		})
-
-		Context("when CompatibilityRequirement does not exist", func() {
-			It("should return error", func() {
-				validator := createValidatorWithFakeClient([]client.Object{}) // No objects
-
-				_, err := validator.getStructuralSchema(ctx, "non-existent", "v1")
-
-				Expect(err).To(MatchError("failed to get CompatibilityRequirement \"non-existent\": compatibilityrequirements.apiextensions.openshift.io \"non-existent\" not found"))
 			})
 		})
 
@@ -108,7 +93,7 @@ var _ = Describe("validator", func() {
 
 				validator := createValidatorWithFakeClient([]client.Object{brokenCompatibilityRequirement})
 
-				_, err := validator.getStructuralSchema(ctx, brokenCompatibilityRequirement.Name, "v1")
+				_, err := validator.getStructuralSchema(brokenCompatibilityRequirement, "v1")
 
 				Expect(err).To(MatchError(ContainSubstring("failed to get structural schema: failed to decode compatibility schema data for CompatibilityRequirement \"\": yaml: mapping values are not allowed in this context")))
 			})
