@@ -85,17 +85,16 @@ func StartEnvTest(testEnv *envtest.Environment) (*rest.Config, client.WithWatch,
 		fakeOpenStackMachineTemplateCRD,
 	}
 
-	testEnv.CRDDirectoryPaths = []string{
-		path.Join(openshiftAPIPath, "config", "v1", "zz_generated.crd-manifests"),
-		path.Join(openshiftAPIPath, "operator", "v1", "zz_generated.crd-manifests", "0000_10_config-operator_01_configs.crd.yaml"),
-	}
 	testEnv.ErrorIfCRDPathMissing = true
 
 	testEnv.CRDInstallOptions = envtest.CRDInstallOptions{
 		Paths: []string{
+			path.Join(openshiftAPIPath, "operator", "v1", "zz_generated.crd-manifests", "0000_10_config-operator_01_configs.crd.yaml"),
 			path.Join(openshiftAPIPath, "machine", "v1beta1", "zz_generated.crd-manifests", "0000_10_machine-api_01_machinesets-CustomNoUpgrade.crd.yaml"),
 			path.Join(openshiftAPIPath, "machine", "v1beta1", "zz_generated.crd-manifests", "0000_10_machine-api_01_machines-CustomNoUpgrade.crd.yaml"),
 			path.Join(openshiftAPIPath, "config", "v1", "zz_generated.crd-manifests", "0000_00_cluster-version-operator_01_clusteroperators.crd.yaml"),
+			path.Join(openshiftAPIPath, "config", "v1", "zz_generated.crd-manifests", "0000_00_cluster-version-operator_01_clusterversions-TechPreviewNoUpgrade.crd.yaml"),
+			path.Join(openshiftAPIPath, "config", "v1", "zz_generated.crd-manifests", "0000_10_config-operator_01_infrastructures-TechPreviewNoUpgrade.crd.yaml"),
 			path.Join(openshiftAPIPath, "apiextensions", "v1alpha1", "zz_generated.crd-manifests", "0000_20_crd-compatibility-checker_01_compatibilityrequirements.crd.yaml"),
 			path.Join(openshiftAPIPath, "operator", "v1alpha1", "zz_generated.crd-manifests", "0000_30_cluster-api_01_clusterapis.crd.yaml"),
 		},
