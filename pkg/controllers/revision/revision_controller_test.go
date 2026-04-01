@@ -42,9 +42,10 @@ var (
 	clusterOperator *configv1.ClusterOperator
 
 	// Provider image fixtures - set by setupProviderFixtures in BeforeSuite.
-	defaultProviderImgs     []providerimages.ProviderImageManifests
-	updatedProviderImgs     []providerimages.ProviderImageManifests
-	nonMatchingProviderImgs []providerimages.ProviderImageManifests
+	defaultProviderImgs           []providerimages.ProviderImageManifests
+	updatedProviderImgs           []providerimages.ProviderImageManifests
+	nonMatchingProviderImgs       []providerimages.ProviderImageManifests
+	invalidAnnotationProviderImgs []providerimages.ProviderImageManifests
 )
 
 const (
@@ -363,6 +364,29 @@ var _ = Describe("RevisionController", Serial, func() {
 		updatedClusterAPI := &operatorv1alpha1.ClusterAPI{}
 		Expect(cl.Get(ctx, client.ObjectKey{Name: "cluster"}, updatedClusterAPI)).To(Succeed())
 		Expect(updatedClusterAPI.Status.Revisions).To(HaveLen(16))
+	}, defaultNodeTimeout)
+
+	It("sets Degraded=True with NonRetryableError when manifest has invalid adopt-existing annotation", func(ctx context.Context) {
+		// Stop first manager (created by BeforeEach with valid providers)
+		mgr.stop()
+
+		// Restart with providers that have an invalid adopt-existing annotation value
+		mgr = newManagerWrapper(invalidAnnotationProviderImgs)
+
+		waitForConditions(ctx,
+			test.HaveCondition(conditionTypeProgressing).
+				WithStatus(configv1.ConditionFalse).
+				WithReason(operatorstatus.ReasonNonRetryableError),
+			test.HaveCondition(conditionTypeDegraded).
+				WithStatus(configv1.ConditionTrue).
+				WithReason(operatorstatus.ReasonNonRetryableError).
+				WithMessage(ContainSubstring("invalid")),
+		)
+
+		// Verify the original revision is preserved and no new revision was created
+		updatedClusterAPI := &operatorv1alpha1.ClusterAPI{}
+		Expect(cl.Get(ctx, client.ObjectKey{Name: "cluster"}, updatedClusterAPI)).To(Succeed())
+		Expect(updatedClusterAPI.Status.Revisions).To(HaveLen(1))
 	}, defaultNodeTimeout)
 })
 

@@ -32,6 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
+	"github.com/openshift/cluster-capi-operator/pkg/revisiongenerator"
 	"github.com/openshift/cluster-capi-operator/pkg/test"
 )
 
@@ -111,6 +112,17 @@ func setupProviderFixtures() {
 			WithContentID("infra-gcp-content-id").
 			WithImageRef("registry.example.com/infra-gcp@sha256:3333333333333333333333333333333333333333333333333333333333333333").
 			WithManifests(test.ConfigMapYAML("infra-gcp-content-id")).
+			Build(),
+	}
+
+	invalidAnnotationProviderImgs = []providerimages.ProviderImageManifests{
+		test.NewProviderImageManifests(tb, "invalid-annotation").
+			WithContentID("invalid-annotation-content-id").
+			WithImageRef("registry.example.com/invalid-annotation@sha256:4444444444444444444444444444444444444444444444444444444444444444").
+			WithManifests(test.ConfigMapWithAnnotationsYAML("invalid-annotation-content-id",
+				map[string]string{revisiongenerator.AdoptExistingAnnotation: "invalid-value"},
+				map[string]string{"version": "v1"},
+			)).
 			Build(),
 	}
 }

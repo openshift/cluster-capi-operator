@@ -193,6 +193,7 @@ func (r *revisionReconciler) reconcileRevision(ctx context.Context, conv convert
 	}
 
 	revision := conv.revision
+
 	bcRevision := toBoxcutterRevision(revision)
 	phases := bcRevision.GetPhases()
 
@@ -359,6 +360,7 @@ func (r *revisionReconciler) teardownRevision(ctx context.Context, conv converte
 
 	revision := conv.revision
 	revisionName := revision.RevisionName()
+
 	bcRevision := toBoxcutterRevision(revision)
 	phases := bcRevision.GetPhases()
 

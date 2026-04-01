@@ -66,6 +66,16 @@ spec:
     kind: Widget
   scope: Namespaced`
 
+	configMapAWithAnnotation = `apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: config-a
+  namespace: default
+  annotations:
+    capi-operator.openshift.io/adopt-existing: "always"
+data:
+  key: value-a`
+
 	crdB = `apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -172,6 +182,12 @@ func TestContentID(t *testing.T) {
 			name:      "adding an object to a component changes contentID",
 			profilesA: []providerimages.ProviderImageManifests{profile(t, "p1", "img1", "default", configMapA)},
 			profilesB: []providerimages.ProviderImageManifests{profile(t, "p1", "img1", "default", multiDoc(configMapA, configMapB))},
+			wantEqual: false,
+		},
+		{
+			name:      "adding an annotation to an object changes contentID",
+			profilesA: []providerimages.ProviderImageManifests{profile(t, "p1", "img1", "default", configMapA)},
+			profilesB: []providerimages.ProviderImageManifests{profile(t, "p1", "img1", "default", configMapAWithAnnotation)},
 			wantEqual: false,
 		},
 	} {

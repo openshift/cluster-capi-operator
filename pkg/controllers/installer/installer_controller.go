@@ -161,13 +161,14 @@ func setupRevisionEngine(mgr ctrl.Manager, trackingCache managedcache.TrackingCa
 	}
 
 	revisionEngine, err := boxcutter.NewRevisionEngine(boxcutter.RevisionEngineOptions{
-		Scheme:          mgr.GetScheme(),
-		FieldOwner:      string(operatorstatus.CAPIFieldOwner(controllerName)),
-		SystemPrefix:    operatorstatus.CAPIOperatorIdentifierDomain,
-		DiscoveryClient: discoveryClient,
-		RestMapper:      mgr.GetRESTMapper(),
-		Writer:          mgr.GetClient(),
-		Reader:          trackingCache,
+		Scheme:           mgr.GetScheme(),
+		FieldOwner:       string(operatorstatus.CAPIFieldOwner(controllerName)),
+		SystemPrefix:     operatorstatus.CAPIOperatorIdentifierDomain,
+		DiscoveryClient:  discoveryClient,
+		RestMapper:       mgr.GetRESTMapper(),
+		Writer:           mgr.GetClient(),
+		Reader:           trackingCache,
+		UnfilteredReader: mgr.GetAPIReader(),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("unable to create revision engine: %w", err)

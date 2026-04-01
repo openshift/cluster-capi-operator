@@ -165,6 +165,25 @@ data:
 %s`, name, strings.TrimRight(pairs.String(), "\n"))
 }
 
+// ConfigMapWithAnnotationsYAML returns a ConfigMap YAML document with the given annotations and data.
+func ConfigMapWithAnnotationsYAML(name string, annotations map[string]string, data map[string]string) string {
+	var annPairs strings.Builder
+	for k, v := range annotations {
+		fmt.Fprintf(&annPairs, "    %s: %q\n", k, v)
+	}
+
+	var dataPairs strings.Builder
+	for k, v := range data {
+		fmt.Fprintf(&dataPairs, "  %s: %s\n", k, v)
+	}
+
+	return fmt.Sprintf("apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: %s\n  namespace: default\n  annotations:\n%s\ndata:\n%s",
+		name,
+		strings.TrimRight(annPairs.String(), "\n"),
+		strings.TrimRight(dataPairs.String(), "\n"),
+	)
+}
+
 // ClusterRoleYAML returns a minimal ClusterRole YAML document.
 func ClusterRoleYAML(name string) string {
 	return fmt.Sprintf(`apiVersion: rbac.authorization.k8s.io/v1

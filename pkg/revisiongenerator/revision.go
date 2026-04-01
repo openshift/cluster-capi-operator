@@ -118,7 +118,13 @@ func newRenderedRevision(profiles []providerimages.ProviderImageManifests, opts 
 		components[i] = component
 	}
 
-	return &renderedRevision{components: components}, nil
+	rev := &renderedRevision{components: components}
+
+	if err := validateRenderedRevision(rev); err != nil {
+		return nil, err
+	}
+
+	return rev, nil
 }
 
 // ContentID returns a unique identifier for the revision's content.

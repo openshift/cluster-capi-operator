@@ -55,8 +55,11 @@ const (
 	providerDeployment     = "deployment-provider"
 	providerVAP            = "vap-provider"
 	providerIrregularCRD   = "irregular-resource-crd"
+	providerAdoptExisting  = "adopt-existing"
+	providerAdoptInvalid   = "adopt-invalid"
 
 	coreCMName                = "test-cm-core"
+	adoptCMName               = "test-cm-adopt"
 	infraCMName               = "test-cm-infra"
 	addonCMName               = "test-cm-addon"
 	deploymentName            = "test-deployment"
@@ -207,11 +210,28 @@ func setupProviderProfiles() {
 		WithManifests(test.CRDToYAML(irregularCRD)).
 		Build()
 
+	// Provider "adopt-existing": ConfigMap with adopt-existing annotation
+	adoptExisting := test.NewProviderImageManifests(tb, providerAdoptExisting).
+		WithManifests(test.ConfigMapWithAnnotationsYAML(adoptCMName,
+			map[string]string{revisiongenerator.AdoptExistingAnnotation: revisiongenerator.AdoptExistingAlways},
+			map[string]string{"version": "v1"},
+		)).
+		Build()
+
+	// Provider "adopt-invalid": ConfigMap with invalid adopt-existing annotation value
+	adoptInvalid := test.NewProviderImageManifests(tb, providerAdoptInvalid).
+		WithManifests(test.ConfigMapWithAnnotationsYAML(adoptCMName,
+			map[string]string{revisiongenerator.AdoptExistingAnnotation: "invalid"},
+			map[string]string{"version": "v1"},
+		)).
+		Build()
+
 	allProviderProfiles = []providerimages.ProviderImageManifests{
 		core, infra, addon, coreV2, dupObj,
 		clusterScoped, clusterScoped2, crdProvider, nsProvider,
 		deploymentProvider, mixed, manyClusterScoped,
 		vapProvider, irregularCRDProvider,
+		adoptExisting, adoptInvalid,
 	}
 
 	providersByName = make(map[string]providerimages.ProviderImageManifests, len(allProviderProfiles))
