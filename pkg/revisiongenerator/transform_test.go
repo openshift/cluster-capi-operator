@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
 )
@@ -124,6 +125,42 @@ func TestTransformYaml(t *testing.T) {
 			result, err := transformYaml(&tt.profile, tt.yaml)
 			g.Expect(err).NotTo(HaveOccurred())
 			g.Expect(result).To(Equal(tt.expected))
+		})
+	}
+}
+
+func TestTransformObject(t *testing.T) {
+	tests := []struct {
+		name          string
+		labels        map[string]string
+		componentName string
+	}{
+		{
+			name:          "adds managed label to object with no labels",
+			labels:        nil,
+			componentName: "core",
+		},
+		{
+			name:          "preserves existing labels",
+			labels:        map[string]string{"existing-key": "existing-value"},
+			componentName: "infra",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := NewWithT(t)
+
+			obj := unstructured.Unstructured{}
+			obj.SetLabels(tt.labels)
+
+			result := transformObject(obj, tt.componentName)
+
+			g.Expect(result.GetLabels()).To(HaveKeyWithValue(ManagedLabelKey, tt.componentName))
+
+			for k, v := range tt.labels {
+				g.Expect(result.GetLabels()).To(HaveKeyWithValue(k, v))
+			}
 		})
 	}
 }

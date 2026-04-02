@@ -345,6 +345,8 @@ func newRenderedComponent(providerProfile *providerimages.ProviderImageManifests
 			return nil, fmt.Errorf("error unmarshalling transformed manifest: %w", err)
 		}
 
+		unstructured = transformObject(unstructured, component.name)
+
 		for _, collector := range cfg.objectCollectors {
 			collector(unstructured)
 		}

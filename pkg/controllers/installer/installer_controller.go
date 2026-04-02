@@ -29,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/discovery"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -45,6 +46,7 @@ import (
 
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
+	"github.com/openshift/cluster-capi-operator/pkg/revisiongenerator"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 )
 
@@ -133,14 +135,19 @@ func SetupWithManager(mgr ctrl.Manager, providerProfiles []providerimages.Provid
 }
 
 func setupTrackingCache(mgr ctrl.Manager) (managedcache.TrackingCache, error) {
+	// Configure cache to watch only objects with our label. The label is
+	// applied by the revision generator.
+	managedByReq, err := labels.NewRequirement(revisiongenerator.ManagedLabelKey, selection.Exists, nil)
+	if err != nil {
+		return nil, fmt.Errorf("creating managed-by label requirement: %w", err)
+	}
+
 	trackingCache, err := managedcache.NewTrackingCache(
 		mgr.GetLogger(),
 		mgr.GetConfig(),
 		cache.Options{
-			Scheme: mgr.GetScheme(),
-			DefaultLabelSelector: labels.SelectorFromSet(labels.Set{
-				"app.kubernetes.io/managed-by": "boxcutter",
-			}),
+			Scheme:               mgr.GetScheme(),
+			DefaultLabelSelector: labels.NewSelector().Add(*managedByReq),
 		},
 	)
 	if err != nil {
