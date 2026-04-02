@@ -39,4 +39,9 @@ status:
   - group: apiextensions.openshift.io
     resource: compatibilityrequirements
 
+  # ClusterAPI singleton resource
+  - group: operator.openshift.io
+    name: cluster
+    resource: clusterapis
+
   # the installer controller dynamically adds entries for CAPI providers it installs
