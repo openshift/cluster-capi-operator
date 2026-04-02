@@ -29,6 +29,14 @@ type ObjectEngine struct {
 
 	fieldOwner   string
 	systemPrefix string
+
+	// unfilteredReader is a client.Reader which is not subject to filtering
+	// which may have been applied to cache. unfilteredReader MUST ONLY be used
+	// in cases where we need to read an object that may have been subject to
+	// filtering by the cache. Consequently it will usually also be uncached,
+	// but it explicitly MUST NOT be used to read objects which will eventually
+	// be available in the cache.
+	unfilteredReader client.Reader // may be nil
 }
 
 // NewObjectEngine returns a new Engine instance.
@@ -40,12 +48,15 @@ func NewObjectEngine(
 
 	fieldOwner string,
 	systemPrefix string,
+
+	unfilteredReader client.Reader, // may be nil
 ) *ObjectEngine {
 	return &ObjectEngine{
-		scheme:     scheme,
-		cache:      cache,
-		writer:     writer,
-		comparator: comparator,
+		scheme:           scheme,
+		cache:            cache,
+		writer:           writer,
+		unfilteredReader: unfilteredReader,
+		comparator:       comparator,
 
 		fieldOwner:   fieldOwner,
 		systemPrefix: systemPrefix,
@@ -239,9 +250,26 @@ func (e *ObjectEngine) Reconcile(
 		err := e.create(
 			ctx, desiredObject, options, client.FieldOwner(e.fieldOwner))
 		if errors.IsAlreadyExists(err) {
-			// Might be a slow cache or an object created by a different actor
-			// but excluded by the cache selector.
-			return nil, NewCreateCollisionError(desiredObject, err.Error())
+			if e.unfilteredReader == nil {
+				return nil, NewCreateCollisionError(desiredObject, err.Error())
+			}
+
+			// Object exists but was not found in the cache. This may be due to
+			// a slow cache or a race, but it can also happen deterministically
+			// if label selectors excluded it from the cache.  Read it directly
+			// and delegate to the update path, which evaluates
+			// CollisionProtection settings.
+			actualObject := desiredObject.DeepCopyObject().(Object)
+			if err := e.unfilteredReader.Get(
+				ctx, client.ObjectKeyFromObject(desiredObject), actualObject,
+			); err != nil {
+				return nil, fmt.Errorf("getting object after create collision: %w", err)
+			}
+
+			return e.objectUpdateHandling(
+				ctx, revision, desiredObject,
+				actualObject, options,
+			)
 		}
 
 		if err != nil {
@@ -322,22 +350,27 @@ func (e *ObjectEngine) objectUpdateHandling(
 		return nil, err
 	}
 
-	// Ensure revision linearity.
+	// Get actual revision to ensure revision linearity
 	actualObjectRevision, err := e.getObjectRevision(actualObject)
 	if err != nil {
 		return nil, fmt.Errorf("getting revision of object: %w", err)
 	}
 
-	if actualObjectRevision > revision {
-		// Leave object alone.
-		// It's already owned by a later revision.
-		return newObjectResultProgressed(
-			actualObject, compareRes, options,
-		), nil
-	}
-
 	switch ctrlSit {
 	case ctrlSituationIsController:
+		// Ensure revision linearity.
+		// Only skip reconciliation for a newer revision when we are
+		// already the controller or a previous owner is the controller.
+		// For unknown or absent controllers, collision protection must
+		// be evaluated first.
+		if actualObjectRevision > revision {
+			// Leave object alone.
+			// It's already owned by a later revision.
+			return newObjectResultProgressed(
+				actualObject, compareRes, options,
+			), nil
+		}
+
 		modified := compareRes.Comparison != nil &&
 			(!compareRes.Comparison.Modified.Empty() ||
 				!compareRes.Comparison.Removed.Empty())
@@ -439,6 +472,13 @@ func (e *ObjectEngine) objectUpdateHandling(
 	// This means we want to take control, but
 	// retain older revisions ownerReferences,
 	// so they can still react to events.
+
+	// Ensure revision linearity
+	if actualObjectRevision > revision {
+		return newObjectResultProgressed(
+			actualObject, compareRes, options,
+		), nil
+	}
 
 	// TODO:
 	// ObjectResult ModifiedFields does not contain ownerReference changes
