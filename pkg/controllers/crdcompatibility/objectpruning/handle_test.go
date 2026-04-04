@@ -31,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	k8syaml "sigs.k8s.io/yaml"
 
 	"github.com/openshift/cluster-capi-operator/pkg/test"
@@ -152,6 +153,16 @@ var _ = Describe("Object Pruning Integration", func() {
 				Eventually(kWithCtx(ctx).Update(scenario.CompatibilityRequirement, func() {
 					scenario.CompatibilityRequirement.Spec.ObjectSchemaValidation.Action = apiextensionsv1alpha1.CRDAdmitActionWarn
 				})).WithContext(ctx).Should(Succeed())
+
+				By("Waiting for the webhook handler's informer cache to observe the action change", func() {
+					// Note that we can't use kWithCtx here because it doesn't use the manager client.
+					Eventually(func(g Gomega) *apiextensionsv1alpha1.CompatibilityRequirement {
+						cachedCompatReq := &apiextensionsv1alpha1.CompatibilityRequirement{}
+						g.Expect(managerClient.Get(ctx, client.ObjectKeyFromObject(scenario.CompatibilityRequirement), cachedCompatReq)).To(Succeed())
+
+						return cachedCompatReq
+					}).WithContext(ctx).Should(HaveField("Spec.ObjectSchemaValidation.Action", Equal(apiextensionsv1alpha1.CRDAdmitActionWarn)))
+				})
 
 				By("Updating the object again, should not be pruned", func() {
 					inputObject.Object["spec"] = scenario.InputObject["spec"]

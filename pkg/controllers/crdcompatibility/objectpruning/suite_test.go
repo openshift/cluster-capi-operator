@@ -43,6 +43,7 @@ var (
 	testEnv            *envtest.Environment
 	cfg                *rest.Config
 	cl                 client.Client
+	managerClient      client.Reader
 	permissiveSuiteCRD func() *apiextensionsv1.CustomResourceDefinition
 	emptySuiteCRD      func() *apiextensionsv1.CustomResourceDefinition
 )
@@ -79,13 +80,15 @@ var _ = BeforeSuite(func(ctx context.Context) {
 	komega.SetClient(cl)
 
 	// Initialize validator and webhook server
-	_, startWebhookServer := initValidator(ctx, cfg, cl.Scheme(), testEnv)
+	var startWebhookServer func()
+
+	_, managerClient, startWebhookServer = initValidator(ctx, cfg, cl.Scheme(), testEnv)
 	startWebhookServer()
 
 	permissiveSuiteCRD, emptySuiteCRD = createSuiteCRDs(ctx)
 }, NodeTimeout(30*time.Second))
 
-func initValidator(ctx context.Context, cfg *rest.Config, scheme *runtime.Scheme, testEnv *envtest.Environment) (*validator, func()) {
+func initValidator(ctx context.Context, cfg *rest.Config, scheme *runtime.Scheme, testEnv *envtest.Environment) (*validator, client.Reader, func()) {
 	By("Setting up an object validator with webhook server")
 
 	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
@@ -103,7 +106,7 @@ func initValidator(ctx context.Context, cfg *rest.Config, scheme *runtime.Scheme
 	err = objectValidator.SetupWithManager(ctx, mgr)
 	Expect(err).ToNot(HaveOccurred(), "Object Validator should be setup with manager")
 
-	return objectValidator, func() {
+	return objectValidator, mgr.GetClient(), func() {
 		startWebhookServer(ctx, mgr)
 	}
 }
