@@ -26,12 +26,14 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtimeserializer "k8s.io/apimachinery/pkg/runtime/serializer"
+	"k8s.io/utils/ptr"
 	vspherev1 "sigs.k8s.io/cluster-api-provider-vsphere/apis/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/randfill"
 
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/capi2mapi"
+	"github.com/openshift/cluster-capi-operator/pkg/conversion/consts"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/mapi2capi"
 	conversiontest "github.com/openshift/cluster-capi-operator/pkg/conversion/test/fuzz"
 )
@@ -72,7 +74,7 @@ var _ = Describe("vSphere Fuzz (mapi2capi)", func() {
 			mapi2capi.FromVSphereMachineAndInfra,
 			fromMachineAndVSphereMachineAndVSphereCluster,
 			conversiontest.ObjectMetaFuzzerFuncs(mapiNamespace),
-			conversiontest.MAPIMachineFuzzerFuncs(&mapiv1beta1.VSphereMachineProviderSpec{}, nil, vsphereProviderIDFuzzer),
+			conversiontest.MAPIMachineFuzzerFuncs(&mapiv1beta1.VSphereMachineProviderSpec{}, &mapiv1beta1.VSphereMachineProviderStatus{}, vsphereProviderIDFuzzer),
 			f.FuzzerFuncsMachine,
 		)
 	})
@@ -97,7 +99,7 @@ var _ = Describe("vSphere Fuzz (mapi2capi)", func() {
 			mapi2capi.FromVSphereMachineSetAndInfra,
 			fromMachineSetAndVSphereMachineTemplateAndVSphereCluster,
 			conversiontest.ObjectMetaFuzzerFuncs(mapiNamespace),
-			conversiontest.MAPIMachineFuzzerFuncs(&mapiv1beta1.VSphereMachineProviderSpec{}, nil, vsphereProviderIDFuzzer),
+			conversiontest.MAPIMachineFuzzerFuncs(&mapiv1beta1.VSphereMachineProviderSpec{}, &mapiv1beta1.VSphereMachineProviderStatus{}, vsphereProviderIDFuzzer),
 			conversiontest.MAPIMachineSetFuzzerFuncs(),
 			f.FuzzerFuncsMachineSet,
 		)
@@ -110,6 +112,7 @@ func vsphereProviderIDFuzzer(c randfill.Continue) string {
 
 type vsphereProviderFuzzer struct {
 	conversiontest.MAPIMachineFuzzer
+	InstanceState string
 }
 
 func (f *vsphereProviderFuzzer) fuzzProviderSpec(providerSpec *mapiv1beta1.VSphereMachineProviderSpec, c randfill.Continue) {
@@ -153,6 +156,41 @@ func (f *vsphereProviderFuzzer) fuzzProviderSpec(providerSpec *mapiv1beta1.VSphe
 	}
 }
 
+func (f *vsphereProviderFuzzer) fuzzProviderStatus(providerStatus *mapiv1beta1.VSphereMachineProviderStatus, c randfill.Continue) {
+	c.FillNoCustom(providerStatus)
+
+	// InstanceState can only be "ready" or empty to match getInstanceState() logic.
+	// This matches how CAPV VSphereMachine.Status.Ready is a simple boolean.
+	// Save the value so FuzzMachine can sync it to annotations.
+	switch c.Int31n(2) {
+	case 0:
+		f.InstanceState = "ready"
+	case 1:
+		f.InstanceState = ""
+	}
+
+	if f.InstanceState != "" {
+		providerStatus.InstanceState = ptr.To(f.InstanceState)
+	} else {
+		providerStatus.InstanceState = nil
+	}
+}
+
+func (f *vsphereProviderFuzzer) FuzzMachine(m *mapiv1beta1.Machine, c randfill.Continue) {
+	// Call parent fuzzer first
+	f.MAPIMachineFuzzer.FuzzMachine(m, c)
+
+	// Sync ProviderStatus.InstanceState to annotation for roundtrip fidelity.
+	// In production, these are always in sync (controllers set both).
+	if f.InstanceState != "" {
+		if m.Annotations == nil {
+			m.Annotations = map[string]string{}
+		}
+
+		m.Annotations[consts.MAPIMachineMetadataAnnotationInstanceState] = f.InstanceState
+	}
+}
+
 func (f *vsphereProviderFuzzer) FuzzerFuncsMachineSet(codecs runtimeserializer.CodecFactory) []interface{} {
 	return []interface{}{
 		func(cloneMode *mapiv1beta1.CloneMode, c randfill.Continue) {
@@ -180,6 +218,25 @@ func (f *vsphereProviderFuzzer) FuzzerFuncsMachineSet(codecs runtimeserializer.C
 				*provisioningMode = ""
 			}
 		},
+		func(pool *mapiv1beta1.AddressesFromPool, c randfill.Continue) {
+			c.FillNoCustom(pool)
+
+			// Constrain IPAM group and resource to known valid values to avoid warnings.
+			// The conversion code only recognizes "ipam.cluster.x-k8s.io" or empty.
+			// Resource names are lowercase plural (e.g., "inclusterippools"), not Kind names.
+			switch c.Int31n(3) {
+			case 0:
+				pool.Group = "ipam.cluster.x-k8s.io"
+				pool.Resource = "inclusterippools"
+			case 1:
+				pool.Group = "ipam.cluster.x-k8s.io"
+				pool.Resource = "globalinclusterippools"
+			case 2:
+				// Empty group - no conversion, no warning
+				pool.Group = ""
+				pool.Resource = ""
+			}
+		},
 		f.fuzzProviderSpec,
 	}
 }
@@ -187,6 +244,7 @@ func (f *vsphereProviderFuzzer) FuzzerFuncsMachineSet(codecs runtimeserializer.C
 func (f *vsphereProviderFuzzer) FuzzerFuncsMachine(codecs runtimeserializer.CodecFactory) []interface{} {
 	return append(
 		f.FuzzerFuncsMachineSet(codecs),
+		f.fuzzProviderStatus,
 		f.FuzzMachine,
 	)
 }
