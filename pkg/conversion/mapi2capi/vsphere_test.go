@@ -102,9 +102,11 @@ var _ = Describe("mapi2capi VSphere conversion", func() {
 			machineBuilder: vsphereMAPIMachineBase.WithProviderSpecBuilder(
 				vsphereBaseProviderSpec.WithIPPool(),
 			),
-			infra:            infra,
-			expectedErrors:   []string{},
-			expectedWarnings: []string{},
+			infra:          infra,
+			expectedErrors: []string{},
+			expectedWarnings: []string{
+				"Unknown IPAM group \"test\" - using resource name \"IPpool\" as Kind",
+			},
 		}),
 
 		// Error Cases.
@@ -363,6 +365,66 @@ var _ = Describe("mapi2capi VSphere conversion", func() {
 			infra:            infra,
 			expectedErrors:   []string{},
 			expectedWarnings: []string{},
+		}),
+
+		Entry("With AddressesFromPools (known IPAM)", vsphereMAPI2CAPIConversionInput{
+			machineBuilder: machinebuilder.Machine().WithProviderSpec(mapiv1beta1.ProviderSpec{
+				Value: mustConvertVSphereProviderSpecToRawExtension(&mapiv1beta1.VSphereMachineProviderSpec{
+					Template: "test-template",
+					Workspace: &mapiv1beta1.Workspace{
+						Server:     "vcenter.example.com",
+						Datacenter: "dc1",
+					},
+					Network: mapiv1beta1.NetworkSpec{
+						Devices: []mapiv1beta1.NetworkDeviceSpec{
+							{
+								NetworkName: "network1",
+								AddressesFromPools: []mapiv1beta1.AddressesFromPool{
+									{
+										Group:    "ipam.cluster.x-k8s.io",
+										Resource: "inclusterippools",
+										Name:     "test-pool",
+									},
+								},
+							},
+						},
+					},
+				}),
+			}),
+			infra:            infra,
+			expectedErrors:   []string{},
+			expectedWarnings: []string{},
+		}),
+
+		Entry("With AddressesFromPools (unknown IPAM group)", vsphereMAPI2CAPIConversionInput{
+			machineBuilder: machinebuilder.Machine().WithProviderSpec(mapiv1beta1.ProviderSpec{
+				Value: mustConvertVSphereProviderSpecToRawExtension(&mapiv1beta1.VSphereMachineProviderSpec{
+					Template: "test-template",
+					Workspace: &mapiv1beta1.Workspace{
+						Server:     "vcenter.example.com",
+						Datacenter: "dc1",
+					},
+					Network: mapiv1beta1.NetworkSpec{
+						Devices: []mapiv1beta1.NetworkDeviceSpec{
+							{
+								NetworkName: "network1",
+								AddressesFromPools: []mapiv1beta1.AddressesFromPool{
+									{
+										Group:    "custom.ipam.io",
+										Resource: "custompools",
+										Name:     "my-pool",
+									},
+								},
+							},
+						},
+					},
+				}),
+			}),
+			infra:          infra,
+			expectedErrors: []string{},
+			expectedWarnings: []string{
+				"Unknown IPAM group \"custom.ipam.io\" - using resource name \"custompools\" as Kind",
+			},
 		}),
 
 		// Comprehensive Test.
