@@ -321,6 +321,20 @@ func vSphereProviderSpecFromRawExtension(rawExtension *runtime.RawExtension) (ma
 	return spec, nil
 }
 
+// VSphereProviderStatusFromRawExtension unmarshals a raw extension into a VSphereMachineProviderStatus.
+func VSphereProviderStatusFromRawExtension(rawExtension *runtime.RawExtension) (mapiv1beta1.VSphereMachineProviderStatus, error) {
+	if rawExtension == nil {
+		return mapiv1beta1.VSphereMachineProviderStatus{}, nil
+	}
+
+	status := mapiv1beta1.VSphereMachineProviderStatus{}
+	if err := yaml.Unmarshal(rawExtension.Raw, &status); err != nil {
+		return mapiv1beta1.VSphereMachineProviderStatus{}, fmt.Errorf("error unmarshalling providerStatus %q: %w", string(rawExtension.Raw), err)
+	}
+
+	return status, nil
+}
+
 // vSphereMachineToVSphereMachineTemplate converts a VSphereMachine to a VSphereMachineTemplate.
 func vSphereMachineToVSphereMachineTemplate(vSphereMachine *vspherev1.VSphereMachine, name string, namespace string) (*vspherev1.VSphereMachineTemplate, error) {
 	nameWithHash, err := util.GenerateInfraMachineTemplateNameWithSpecHash(name, vSphereMachine.Spec)

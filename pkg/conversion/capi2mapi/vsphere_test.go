@@ -16,11 +16,15 @@ limitations under the License.
 package capi2mapi
 
 import (
+	"encoding/json"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/test/matchers"
 	"k8s.io/utils/ptr"
 	vspherev1 "sigs.k8s.io/cluster-api-provider-vsphere/apis/v1beta1"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -396,5 +400,142 @@ var _ = Describe("capi2mapi vSphere conversion", func() {
 			expectedErrors:   []string{},
 			expectedWarnings: []string{},
 		}),
+	)
+
+	// ProviderStatus on the MAPI Machine is populated during CAPI→MAPI conversion (see ToMachine / toProviderStatus).
+	// Full infra status round-trip requires MAPI→CAPI to read ProviderStatus into VSphereMachine.Status (AWS does this;
+	// vSphere does not yet). These tests lock in the CAPI→MAPI propagation contract.
+	DescribeTable("ToMachine sets status.providerStatus from VSphereMachine.Status",
+		func(vmStatus vspherev1.VSphereMachineStatus, wantInstanceState string, wantCreationStatus metav1.ConditionStatus, wantMessage string) {
+			vm := vsphereCAPIVSphereMachineBase.DeepCopy()
+			vm.Status = vmStatus
+
+			mapiMachine, warns, err := FromMachineAndVSphereMachineAndVSphereCluster(vsphereCAPIMachineBase, vm, vsphereCAPIVSphereClusterBase).ToMachine()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(warns).To(BeEmpty())
+			Expect(mapiMachine.Status.ProviderStatus).NotTo(BeNil())
+
+			var got mapiv1beta1.VSphereMachineProviderStatus
+			Expect(json.Unmarshal(mapiMachine.Status.ProviderStatus.Raw, &got)).To(Succeed())
+			Expect(ptr.Deref(got.InstanceState, "<nil>")).To(Equal(wantInstanceState))
+			Expect(got.Conditions).To(HaveLen(1))
+			Expect(got.Conditions[0].Type).To(Equal(string(mapiv1beta1.MachineCreation)))
+			Expect(got.Conditions[0].Status).To(Equal(wantCreationStatus))
+			Expect(got.Conditions[0].Message).To(Equal(wantMessage))
+
+			if wantCreationStatus == metav1.ConditionTrue {
+				Expect(got.Conditions[0].Reason).To(Equal(mapiv1beta1.MachineCreationSucceededConditionReason))
+			} else {
+				Expect(got.Conditions[0].Reason).To(Equal(mapiv1beta1.MachineCreationFailedConditionReason))
+			}
+		},
+		Entry("no addresses: empty instance state, creation not succeeded",
+			vspherev1.VSphereMachineStatus{Ready: false, Addresses: nil},
+			"",
+			metav1.ConditionFalse,
+			"See VSphereMachine conditions.",
+		),
+		Entry("provisioned but not ready: not-ready, creation not succeeded",
+			vspherev1.VSphereMachineStatus{
+				Ready: false,
+				Addresses: []clusterv1beta1.MachineAddress{
+					{Type: clusterv1beta1.MachineHostName, Address: "vm-1"},
+				},
+			},
+			"not-ready",
+			metav1.ConditionFalse,
+			"See VSphereMachine conditions.",
+		),
+		Entry("provisioned and ready: ready, creation succeeded",
+			vspherev1.VSphereMachineStatus{
+				Ready: true,
+				Addresses: []clusterv1beta1.MachineAddress{
+					{Type: clusterv1beta1.MachineInternalIP, Address: "10.0.0.1"},
+				},
+			},
+			"ready",
+			metav1.ConditionTrue,
+			"Machine successfully created",
+		),
+		Entry("ready with v1beta2 VirtualMachineProvisioned message",
+			vspherev1.VSphereMachineStatus{
+				Ready: true,
+				Addresses: []clusterv1beta1.MachineAddress{
+					{Type: clusterv1beta1.MachineInternalIP, Address: "10.0.0.1"},
+				},
+				V1Beta2: &vspherev1.VSphereMachineV1Beta2Status{
+					Conditions: []metav1.Condition{
+						{
+							Type:    vspherev1.VSphereMachineVirtualMachineProvisionedV1Beta2Condition,
+							Status:  metav1.ConditionTrue,
+							Message: "Virtual machine is provisioned",
+						},
+					},
+				},
+			},
+			"ready",
+			metav1.ConditionTrue,
+			"Virtual machine is provisioned",
+		),
+		Entry("ready with v1beta2 Ready message (VirtualMachineProvisioned fallback)",
+			vspherev1.VSphereMachineStatus{
+				Ready: true,
+				Addresses: []clusterv1beta1.MachineAddress{
+					{Type: clusterv1beta1.MachineInternalIP, Address: "10.0.0.1"},
+				},
+				V1Beta2: &vspherev1.VSphereMachineV1Beta2Status{
+					Conditions: []metav1.Condition{
+						{
+							Type:    vspherev1.VSphereMachineReadyV1Beta2Condition,
+							Status:  metav1.ConditionTrue,
+							Message: "Machine is ready",
+						},
+					},
+				},
+			},
+			"ready",
+			metav1.ConditionTrue,
+			"Machine is ready",
+		),
+		Entry("not ready with v1beta2 VirtualMachineProvisioned error message",
+			vspherev1.VSphereMachineStatus{
+				Ready: false,
+				Addresses: []clusterv1beta1.MachineAddress{
+					{Type: clusterv1beta1.MachineHostName, Address: "vm-1"},
+				},
+				V1Beta2: &vspherev1.VSphereMachineV1Beta2Status{
+					Conditions: []metav1.Condition{
+						{
+							Type:    vspherev1.VSphereMachineVirtualMachineProvisionedV1Beta2Condition,
+							Status:  metav1.ConditionFalse,
+							Message: "VM configuration failed: network error",
+						},
+					},
+				},
+			},
+			"not-ready",
+			metav1.ConditionFalse,
+			"VM configuration failed: network error",
+		),
+		Entry("not ready with v1beta2 Ready error message (fallback)",
+			vspherev1.VSphereMachineStatus{
+				Ready: false,
+				Addresses: []clusterv1beta1.MachineAddress{
+					{Type: clusterv1beta1.MachineHostName, Address: "vm-1"},
+				},
+				V1Beta2: &vspherev1.VSphereMachineV1Beta2Status{
+					Conditions: []metav1.Condition{
+						{
+							Type:    vspherev1.VSphereMachineReadyV1Beta2Condition,
+							Status:  metav1.ConditionFalse,
+							Message: "Waiting for cluster infrastructure",
+						},
+					},
+				},
+			},
+			"not-ready",
+			metav1.ConditionFalse,
+			"Waiting for cluster infrastructure",
+		),
 	)
 })

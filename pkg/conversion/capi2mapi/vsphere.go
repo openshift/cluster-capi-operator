@@ -24,6 +24,7 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/consts"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/validation/field"
@@ -115,16 +116,26 @@ func (m machineAndVSphereMachineAndVSphereCluster) ToMachine() (*mapiv1beta1.Mac
 	}
 
 	mapiMachine.Spec.ProviderSpec.Value = vsphereSpecRawExt
-	// Note: ProviderStatus is not set during conversion, similar to OpenStack and PowerVS providers.
-	// During the migration period when MAPI is authoritative, the MAPI controller manages the status.
-	// When CAPI becomes authoritative, the ProviderStatus will remain stale but unused, as status
-	// will be tracked in the CAPI VSphereMachine status instead.
+
+	vsphereStatusRawExt, errRaw := RawExtensionFromInterface(m.toProviderStatus())
+	if errRaw != nil {
+		return nil, nil, fmt.Errorf("unable to convert vSphere providerStatus to raw extension: %w", errRaw)
+	}
+
+	mapiMachine.Status.ProviderStatus = vsphereStatusRawExt
 
 	if len(errs) > 0 {
 		return nil, warning, errs.ToAggregate()
 	}
 
 	return mapiMachine, warning, nil
+}
+
+func (m machineAndVSphereMachineAndVSphereCluster) toProviderStatus() *mapiv1beta1.VSphereMachineProviderStatus {
+	return &mapiv1beta1.VSphereMachineProviderStatus{
+		InstanceState: ptr.To(m.getInstanceState()),
+		Conditions:    convertCAPVMachineConditionsToMAPIVSphereMachineProviderConditions(m.vSphereMachine),
+	}
 }
 
 // ToMachineSet converts a capi2mapi MachineSetAndVSphereMachineTemplate into a MAPI MachineSet.
@@ -387,6 +398,49 @@ func (m machineAndVSphereMachineAndVSphereCluster) getInstanceState() string {
 	}
 
 	return "not-ready"
+}
+
+func convertCAPVMachineConditionsToMAPIVSphereMachineProviderConditions(vSphereMachine *vspherev1.VSphereMachine) []metav1.Condition {
+	message := ""
+
+	// Try to extract a meaningful message from v1beta2 conditions
+	if vSphereMachine.Status.V1Beta2 != nil {
+		// Prefer VirtualMachineProvisioned condition as it has more detailed status
+		if cond := meta.FindStatusCondition(vSphereMachine.Status.V1Beta2.Conditions, vspherev1.VSphereMachineVirtualMachineProvisionedV1Beta2Condition); cond != nil && cond.Message != "" {
+			message = cond.Message
+		} else if cond := meta.FindStatusCondition(vSphereMachine.Status.V1Beta2.Conditions, vspherev1.VSphereMachineReadyV1Beta2Condition); cond != nil && cond.Message != "" {
+			// Fall back to Ready condition if VirtualMachineProvisioned doesn't have a message
+			message = cond.Message
+		}
+	}
+
+	if vSphereMachine.Status.Ready {
+		// Set conditionSuccess
+		if message == "" {
+			message = "Machine successfully created"
+		}
+
+		return []metav1.Condition{{
+			Type:    string(mapiv1beta1.MachineCreation),
+			Status:  metav1.ConditionTrue,
+			Reason:  mapiv1beta1.MachineCreationSucceededConditionReason,
+			Message: message,
+			// LastTransitionTime will be set by the condition utilities.
+		}}
+	}
+
+	// Set conditionFailed
+	if message == "" {
+		message = "See VSphereMachine conditions."
+	}
+
+	return []metav1.Condition{{
+		Type:    string(mapiv1beta1.MachineCreation),
+		Status:  metav1.ConditionFalse,
+		Reason:  mapiv1beta1.MachineCreationFailedConditionReason,
+		Message: message,
+		// LastTransitionTime will be set by the condition utilities.
+	}}
 }
 
 // convertCAPVCloneModeToMAPI converts CAPV CloneMode to MAPI CloneMode.
