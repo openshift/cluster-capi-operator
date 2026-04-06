@@ -1533,10 +1533,12 @@ func setChangedMAPIMachineStatusFields(existingMAPIMachine, convertedMAPIMachine
 	convertedMAPIMachine.Status.AuthoritativeAPI = existingMAPIMachine.Status.AuthoritativeAPI
 	convertedMAPIMachine.Status.SynchronizedGeneration = existingMAPIMachine.Status.SynchronizedGeneration
 	convertedMAPIMachine.Status.LastOperation = existingMAPIMachine.Status.LastOperation
-	// ProviderStatus is handled separately by setChangedMAPIMachineProviderStatusFields
+	// ProviderStatus is handled separately by setChangedMAPIMachineProviderStatusFields.
+	providerStatus := existingMAPIMachine.Status.ProviderStatus
 
 	// Finally overwrite the entire existingMAPIMachine status with the convertedMAPIMachine status.
 	existingMAPIMachine.Status = convertedMAPIMachine.Status
+	existingMAPIMachine.Status.ProviderStatus = providerStatus
 }
 
 // applySynchronizedConditionWithPatch updates the synchronized condition
