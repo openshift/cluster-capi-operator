@@ -26,6 +26,8 @@ import (
 	"github.com/onsi/gomega/types"
 	configv1 "github.com/openshift/api/config/v1"
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -244,6 +246,13 @@ func setupProviderProfiles() {
 // It uses revisiongenerator to compute the content ID, then writes via status update.
 func addRevision(ctx context.Context, providerNames ...string) operatorv1alpha1.ClusterAPIInstallerRevision {
 	GinkgoHelper()
+	return addRevisionWithOpts(ctx, nil, providerNames...)
+}
+
+// addRevisionWithOpts is like addRevision but accepts render options (e.g. WithProxyConfig)
+// so the content ID matches what the controller computes.
+func addRevisionWithOpts(ctx context.Context, opts []revisiongenerator.RevisionRenderOption, providerNames ...string) operatorv1alpha1.ClusterAPIInstallerRevision {
+	GinkgoHelper()
 
 	// Get current ClusterAPI to determine revision index.
 	clusterAPI := &operatorv1alpha1.ClusterAPI{}
@@ -255,7 +264,7 @@ func addRevision(ctx context.Context, providerNames ...string) operatorv1alpha1.
 		profiles := lookupProfiles(providerNames...)
 
 		// Render the revision to compute the correct content ID.
-		rendered, err := revisiongenerator.NewRenderedRevision(profiles)
+		rendered, err := revisiongenerator.NewRenderedRevision(profiles, opts...)
 		Expect(err).NotTo(HaveOccurred())
 
 		revisionIndex := int64(len(clusterAPI.Status.Revisions) + 1)
@@ -304,7 +313,7 @@ func lookupProfiles(names ...string) []providerimages.ProviderImageManifests {
 	return profiles
 }
 
-// createFixtures creates ClusterAPI and ClusterOperator singletons.
+// createFixtures creates ClusterAPI, ClusterOperator, and Proxy singletons.
 func createFixtures(ctx context.Context) {
 	GinkgoHelper()
 
@@ -321,6 +330,12 @@ func createFixtures(ctx context.Context) {
 	Expect(cl.Create(ctx, clusterAPIObj)).To(Succeed())
 	cleanupObjs = append(cleanupObjs, clusterAPIObj)
 
+	proxyObj := &configv1.Proxy{
+		ObjectMeta: metav1.ObjectMeta{Name: "cluster"},
+	}
+	Expect(cl.Create(ctx, proxyObj)).To(Succeed())
+	cleanupObjs = append(cleanupObjs, proxyObj)
+
 	clusterOperatorObj := &configv1.ClusterOperator{
 		ObjectMeta: metav1.ObjectMeta{Name: "cluster-api"},
 	}
@@ -328,9 +343,14 @@ func createFixtures(ctx context.Context) {
 	cleanupObjs = append(cleanupObjs, clusterOperatorObj)
 }
 
-// createFixturesWithoutClusterAPI creates only the ClusterOperator (not ClusterAPI).
+// createFixturesWithoutClusterAPI creates only the ClusterOperator and Proxy (not ClusterAPI).
 func createFixturesWithoutClusterAPI(ctx context.Context) {
 	GinkgoHelper()
+
+	proxyObj := &configv1.Proxy{
+		ObjectMeta: metav1.ObjectMeta{Name: "cluster"},
+	}
+	Expect(cl.Create(ctx, proxyObj)).To(Succeed())
 
 	clusterOperatorObj := &configv1.ClusterOperator{
 		ObjectMeta: metav1.ObjectMeta{Name: "cluster-api"},
@@ -338,7 +358,7 @@ func createFixturesWithoutClusterAPI(ctx context.Context) {
 	Expect(cl.Create(ctx, clusterOperatorObj)).To(Succeed())
 
 	DeferCleanup(func(ctx context.Context) {
-		deleteAndWait(ctx, clusterOperatorObj)
+		deleteAndWait(ctx, proxyObj, clusterOperatorObj)
 	})
 }
 
@@ -406,6 +426,37 @@ func getRelatedObjects(ctx context.Context) []configv1.ObjectReference {
 	Expect(cl.Get(ctx, client.ObjectKey{Name: "cluster-api"}, co)).To(Succeed())
 
 	return co.Status.RelatedObjects
+}
+
+// makeDeploymentAvailable waits for the named Deployment to exist and then
+// sets its Available condition to True. This is a common pattern when a test
+// revision includes a Deployment that the controller probes.
+func makeDeploymentAvailable(ctx context.Context, name, namespace string) {
+	GinkgoHelper()
+
+	deploy := &appsv1.Deployment{}
+	deploy.SetName(name)
+	deploy.SetNamespace(namespace)
+
+	Eventually(func() error {
+		return cl.Get(ctx, client.ObjectKeyFromObject(deploy), deploy)
+	}).
+		WithContext(ctx).
+		WithTimeout(defaultEventuallyTimeout).
+		Should(Succeed())
+
+	Eventually(kWithCtx(ctx).UpdateStatus(deploy, func() {
+		deploy.Status.Conditions = []appsv1.DeploymentCondition{
+			{
+				Type:   appsv1.DeploymentAvailable,
+				Status: corev1.ConditionTrue,
+				Reason: "MinimumReplicasAvailable",
+			},
+		}
+	})).
+		WithContext(ctx).
+		WithTimeout(defaultEventuallyTimeout).
+		Should(Succeed())
 }
 
 // waitForRevision waits for the given revision to be applied and the controller

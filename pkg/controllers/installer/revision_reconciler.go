@@ -109,9 +109,10 @@ type revisionReconciler struct {
 	collectedNonNSObjects sets.Set[collectedObjectRef]       // intermediate storage
 	crdGKResourceMapping  map[schema.GroupKind]string        // CRD GK → resource
 	relatedObjects        sets.Set[configv1.ObjectReference] // kept for backward compatibility
+	renderOpts            []revisiongenerator.RevisionRenderOption
 }
 
-func newRevisionReconciler(installerController *InstallerController, log logr.Logger) *revisionReconciler {
+func newRevisionReconciler(installerController *InstallerController, log logr.Logger, renderOpts ...revisiongenerator.RevisionRenderOption) *revisionReconciler {
 	return &revisionReconciler{
 		InstallerController:   installerController,
 		log:                   log,
@@ -119,6 +120,7 @@ func newRevisionReconciler(installerController *InstallerController, log logr.Lo
 		collectedNonNSObjects: sets.New[collectedObjectRef](),
 		crdGKResourceMapping:  make(map[schema.GroupKind]string),
 		relatedObjects:        sets.New[configv1.ObjectReference](),
+		renderOpts:            renderOpts,
 	}
 }
 
@@ -136,8 +138,12 @@ func (r *revisionReconciler) reconcile(ctx context.Context, revisions []operator
 
 	// Convert all API revisions upfront so that collectObjects (and thus
 	// relatedObjects) is fully populated before reconciliation begins.
+	opts := make([]revisiongenerator.RevisionRenderOption, 0, 1+len(r.renderOpts))
+	opts = append(opts, revisiongenerator.WithObjectCollectors(r.collectObjects))
+	opts = append(opts, r.renderOpts...)
+
 	converted := util.SliceMap(revisions, func(apiRev operatorv1alpha1.ClusterAPIInstallerRevision) convertedRevision {
-		rev, err := revisiongenerator.NewInstallerRevisionFromAPI(apiRev, r.providerProfiles, revisiongenerator.WithObjectCollectors(r.collectObjects))
+		rev, err := revisiongenerator.NewInstallerRevisionFromAPI(apiRev, r.providerProfiles, opts...)
 		if err != nil {
 			err = fmt.Errorf("error creating installer revision from API revision %s: %w", apiRev.Name, reconcile.TerminalError(err))
 		}

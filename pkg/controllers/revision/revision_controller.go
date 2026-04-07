@@ -142,7 +142,22 @@ func (r *RevisionController) generateDesiredRevision(ctx context.Context) (revis
 	// Build ordered component list from provider metadata
 	providerComponents := r.buildComponentList(infra.Status.PlatformStatus.Type)
 
-	revision, err := revisiongenerator.NewRenderedRevision(providerComponents)
+	// Read cluster-wide proxy configuration
+	var opts []revisiongenerator.RevisionRenderOption
+
+	proxy, err := util.GetProxy(ctx, r.Client)
+	if err != nil {
+		return nil, opresult.ErrorP(fmt.Errorf("fetching proxy: %w", err))
+	}
+
+	if envVars := util.ProxyEnvVars(proxy); len(envVars) > 0 {
+		ctrl.LoggerFrom(ctx).Info("Injecting proxy configuration into provider manifests",
+			"httpProxy", proxy.Status.HTTPProxy, "httpsProxy", proxy.Status.HTTPSProxy, "noProxy", proxy.Status.NoProxy)
+
+		opts = append(opts, revisiongenerator.WithProxyConfig(envVars))
+	}
+
+	revision, err := revisiongenerator.NewRenderedRevision(providerComponents, opts...)
 	if err != nil {
 		return nil, opresult.ErrorP(fmt.Errorf("error creating rendered revision: %w", err))
 	}
@@ -300,6 +315,9 @@ func (r *RevisionController) SetupWithManager(mgr ctrl.Manager) error {
 					return isInfrastructureReady(e.ObjectNew) && !isInfrastructureReady(e.ObjectOld)
 				},
 			}),
+		).
+		Watches(&configv1.Proxy{},
+			handler.EnqueueRequestsFromMapFunc(toClusterAPI),
 		).
 		Complete(r)
 	if err != nil {
