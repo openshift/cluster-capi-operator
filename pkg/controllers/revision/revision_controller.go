@@ -222,6 +222,7 @@ func (r *RevisionController) writeRevisions(ctx context.Context, log logr.Logger
 
 	applyConfig := operatorv1alpha1ac.ClusterAPI(clusterAPI.Name).
 		WithStatus(operatorv1alpha1ac.ClusterAPIStatus().
+			WithObservedRevisionGeneration(clusterAPI.Generation).
 			WithDesiredRevision(apiRevisions[0].Name).
 			WithRevisions(revisionACPtrs...))
 
