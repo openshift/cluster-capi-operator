@@ -25,10 +25,8 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/utils/ptr"
 
@@ -41,7 +39,6 @@ import (
 
 	"github.com/openshift/cluster-capi-operator/pkg/commoncmdoptions"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
-	"github.com/openshift/cluster-capi-operator/pkg/controllers/capiinstaller"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/clusteroperator"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/installer"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/revision"
@@ -155,22 +152,22 @@ func setupControllers(ctx context.Context, log logr.Logger, mgr ctrl.Manager, op
 		return nil
 	}
 
-	containerImages, providerProfiles, err := loadProviderImages(ctx, mgr, imagesFile)
+	providerProfiles, err := loadProviderImages(ctx, mgr, imagesFile)
 	if err != nil {
 		return err
 	}
 
-	if err := setupCapiInstallerController(mgr, log, opts, platform, containerImages, providerProfiles); err != nil {
+	if err := setupCapiInstallerController(mgr, log, providerProfiles); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func loadProviderImages(ctx context.Context, mgr ctrl.Manager, imagesFile string) (map[string]string, []providerimages.ProviderImageManifests, error) {
+func loadProviderImages(ctx context.Context, mgr ctrl.Manager, imagesFile string) ([]providerimages.ProviderImageManifests, error) {
 	containerImages, err := util.ReadImagesFile(imagesFile)
 	if err != nil {
-		return nil, nil, fmt.Errorf("unable to get images from file: %w", err)
+		return nil, fmt.Errorf("unable to get images from file: %w", err)
 	}
 
 	providerImageDir := os.Getenv(providerImageDirEnvVar)
@@ -182,27 +179,13 @@ func loadProviderImages(ctx context.Context, mgr ctrl.Manager, imagesFile string
 
 	providerProfiles, err := providerimages.ReadProviderImages(ctx, mgr.GetAPIReader(), mgr.GetLogger(), containerImageRefs, providerImageDir)
 	if err != nil {
-		return nil, nil, fmt.Errorf("unable to get provider image metadata: %w", err)
+		return nil, fmt.Errorf("unable to get provider image metadata: %w", err)
 	}
 
-	return containerImages, providerProfiles, nil
+	return providerProfiles, nil
 }
 
-func setupCapiInstallerController(mgr ctrl.Manager, log logr.Logger, opts *commoncmdoptions.CommonOptions, platform configv1.PlatformType, containerImages map[string]string, providerProfiles []providerimages.ProviderImageManifests) error {
-	applyClient, err := kubernetes.NewForConfig(mgr.GetConfig())
-	if err != nil {
-		return fmt.Errorf("unable to set up apply client: %w", err)
-	}
-
-	apiextensionsClient, err := apiextensionsclient.NewForConfig(mgr.GetConfig())
-	if err != nil {
-		return fmt.Errorf("unable to set up api extensions client: %w", err)
-	}
-
-	if err := setFeatureGatesEnvVars(); err != nil {
-		return fmt.Errorf("unable to set feature gates environment variables: %w", err)
-	}
-
+func setupCapiInstallerController(mgr ctrl.Manager, log logr.Logger, providerProfiles []providerimages.ProviderImageManifests) error {
 	if err := (&revision.RevisionController{
 		Client:           mgr.GetClient(),
 		ProviderProfiles: providerProfiles,
@@ -214,40 +197,6 @@ func setupCapiInstallerController(mgr ctrl.Manager, log logr.Logger, opts *commo
 
 	if err := installer.SetupWithManager(mgr, providerProfiles); err != nil {
 		return fmt.Errorf("unable to create installer controller: %w", err)
-	}
-
-	if err := (&capiinstaller.CapiInstallerController{
-		ClusterOperatorStatusClient: opts.GetClusterOperatorStatusClient(mgr, platform, "installer"),
-		Scheme:                      mgr.GetScheme(),
-		Images:                      containerImages,
-		ProviderImages:              providerProfiles,
-		RestCfg:                     mgr.GetConfig(),
-		Platform:                    platform,
-		ApplyClient:                 applyClient,
-		APIExtensionsClient:         apiextensionsClient,
-	}).SetupWithManager(mgr); err != nil {
-		return fmt.Errorf("unable to create capi installer controller: %w", err)
-	}
-
-	return nil
-}
-
-// setFeatureGatesEnvVars sets the explicit values for the listed feature gates in the environment.
-// These will then be loaded by envsubst and templated into the applied CAPI manifests.
-//
-// XXX: This function is unrelated to feature gates. It sets a single
-// environment variable which applies only to the AWS provider. It is replaced
-// by logic in revisiongenerator, and can be removed when the capiinstaller
-// controller is removed.
-func setFeatureGatesEnvVars() error {
-	featureGates := map[string]string{
-		"EXP_BOOTSTRAP_FORMAT_IGNITION": "true",
-	}
-
-	for k, v := range featureGates {
-		if err := os.Setenv(k, v); err != nil {
-			return fmt.Errorf("error setting environment variable: %s: %w", k, err)
-		}
 	}
 
 	return nil
