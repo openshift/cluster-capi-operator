@@ -137,7 +137,14 @@ type RevisionEngineOptions struct {
 
 	// Optional
 
-	PhaseValidator *validation.PhaseValidator
+	// UnfilteredReader is a client.Reader which is not subject to filtering
+	// which may be applied to Reader if it is cached using object selectors.
+	// UnfilteredReader is used rarely in edge cases that do not persist, so it
+	// is safe that it should not be cached. It is additionally recommended that
+	// it should not be cached, as caching it would negate the benefits of cache
+	// filtering.
+	UnfilteredReader client.Reader
+	PhaseValidator   *validation.PhaseValidator
 }
 
 // NewPhaseEngine  returns a new PhaseEngine instance.
@@ -156,6 +163,7 @@ func NewPhaseEngine(opts RevisionEngineOptions) (*machinery.PhaseEngine, error) 
 	oe := machinery.NewObjectEngine(
 		opts.Scheme, opts.Reader, opts.Writer,
 		comp, opts.FieldOwner, opts.SystemPrefix,
+		opts.UnfilteredReader,
 	)
 
 	return machinery.NewPhaseEngine(oe, opts.PhaseValidator), nil
@@ -176,6 +184,7 @@ func NewRevisionEngine(opts RevisionEngineOptions) (*RevisionEngine, error) {
 	oe := machinery.NewObjectEngine(
 		opts.Scheme, opts.Reader, opts.Writer,
 		comp, opts.FieldOwner, opts.SystemPrefix,
+		opts.UnfilteredReader,
 	)
 	pe := machinery.NewPhaseEngine(oe, pval)
 

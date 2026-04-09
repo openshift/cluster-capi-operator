@@ -21,9 +21,14 @@ import (
 	"strings"
 
 	"github.com/drone/envsubst/v2"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
+	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
 )
+
+// ManagedLabelKey is a label key used to identify objects managed by the CAPI operator.
+const ManagedLabelKey = operatorstatus.CAPIOperatorIdentifierDomain + "/managed-by"
 
 func envSubstSubstitutions(key string) string {
 	switch key {
@@ -36,6 +41,13 @@ func envSubstSubstitutions(key string) string {
 	}
 }
 
+// IMPORTANT NOTE: changes to transformYaml or transformObject which are not
+// dependent on a change in the API revision are breaking changes: it will
+// update the revision's content ID without the revision having been updated.
+// The controller will recover when a new revision is created, but it will no
+// longer be able to reconcile the old revision. This should be done with care.
+
+// transformYaml applies transformations to an object's YAML before it is unmarshalled.
 func transformYaml(providerProfile *providerimages.ProviderImageManifests, yaml string) (string, error) {
 	// Expand envsubst variables
 	yaml, err := envsubst.Eval(yaml, envSubstSubstitutions)
@@ -49,4 +61,18 @@ func transformYaml(providerProfile *providerimages.ProviderImageManifests, yaml 
 	}
 
 	return yaml, nil
+}
+
+// transformObject applies transformations to an object after it is
+// unmarshalled.
+func transformObject(obj unstructured.Unstructured, componentName string) unstructured.Unstructured {
+	labels := obj.GetLabels()
+	if labels == nil {
+		labels = map[string]string{}
+	}
+
+	labels[ManagedLabelKey] = componentName
+	obj.SetLabels(labels)
+
+	return obj
 }

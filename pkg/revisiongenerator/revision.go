@@ -118,7 +118,13 @@ func newRenderedRevision(profiles []providerimages.ProviderImageManifests, opts 
 		components[i] = component
 	}
 
-	return &renderedRevision{components: components}, nil
+	rev := &renderedRevision{components: components}
+
+	if err := validateRenderedRevision(rev); err != nil {
+		return nil, err
+	}
+
+	return rev, nil
 }
 
 // ContentID returns a unique identifier for the revision's content.
@@ -338,6 +344,8 @@ func newRenderedComponent(providerProfile *providerimages.ProviderImageManifests
 		if err := k8syaml.Unmarshal([]byte(yaml), &unstructured); err != nil {
 			return nil, fmt.Errorf("error unmarshalling transformed manifest: %w", err)
 		}
+
+		unstructured = transformObject(unstructured, component.name)
 
 		for _, collector := range cfg.objectCollectors {
 			collector(unstructured)

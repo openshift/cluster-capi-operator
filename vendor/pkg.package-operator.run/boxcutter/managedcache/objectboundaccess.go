@@ -62,6 +62,13 @@ type ObjectsPerOwnerPerGVK map[AccessManagerKey]map[schema.GroupVersionKind]int
 type Accessor interface {
 	client.Writer
 	TrackingCache
+
+	// UnfilteredReader returns a client.Reader with the same permissions as the
+	// TrackingCache client, but which is not subject to filtering which has
+	// been applied to the cache. UnfilteredReader is also usually uncached, so
+	// it should be used carefully and only in cases where the object will never
+	// be available in the cache.
+	UnfilteredReader() client.Reader
 }
 
 // NewObjectBoundAccessManager returns a new ObjectBoundAccessManager for T.
@@ -152,6 +159,11 @@ type cacheDone struct {
 type accessor struct {
 	TrackingCache
 	client.Writer
+	unfilteredReader client.Reader
+}
+
+func (a *accessor) UnfilteredReader() client.Reader {
+	return a.unfilteredReader
 }
 
 func (m *objectBoundAccessManagerImpl[T]) Source(
@@ -314,8 +326,9 @@ func (m *objectBoundAccessManagerImpl[T]) handleAccessorRequest(
 	// start cache
 	ctx, cancel := context.WithCancel(ctx)
 	a := &accessor{
-		TrackingCache: ctrlcache,
-		Writer:        client,
+		TrackingCache:    ctrlcache,
+		Writer:           client,
+		unfilteredReader: client,
 	}
 
 	entry = accessorEntry{

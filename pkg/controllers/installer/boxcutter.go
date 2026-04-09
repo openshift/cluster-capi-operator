@@ -26,9 +26,7 @@ import (
 )
 
 func toBoxcutterRevision(installerRevision revisiongenerator.InstallerRevision) boxcutter.Revision {
-	return boxcutterRevision{
-		revision: installerRevision,
-	}
+	return boxcutterRevision{revision: installerRevision}
 }
 
 // boxcutterRevision wraps an InstallerRevision and provides a boxcutter.Revision implementation.
@@ -58,23 +56,61 @@ func (r boxcutterRevision) GetPhases() []boxcutter.Phase {
 
 	for _, component := range r.revision.Components() {
 		if crds := component.CRDs(); len(crds) > 0 {
+			objects, adoptOpts := processAdoptExistingAnnotations(crds)
 			phases = append(phases, boxcutterPhase{
 				name:             component.Name() + "-crds",
-				objects:          crds,
-				reconcileOptions: probeOpts,
+				objects:          objects,
+				reconcileOptions: append(probeOpts, adoptOpts...),
 			})
 		}
 
 		if objects := component.Objects(); len(objects) > 0 {
+			objects, adoptOpts := processAdoptExistingAnnotations(objects)
 			phases = append(phases, boxcutterPhase{
 				name:             component.Name(),
 				objects:          objects,
-				reconcileOptions: probeOpts,
+				reconcileOptions: append(probeOpts, adoptOpts...),
 			})
 		}
 	}
 
 	return phases
+}
+
+// processAdoptExistingAnnotations processes the adopt-existing annotation on
+// each object. Objects with the annotation are deep copied and the annotation
+// is stripped from the copy. Objects with "always" get a per-object
+// CollisionProtectionIfNoController option. Objects without the annotation are
+// returned unchanged.
+//
+// This function assumes that annotation values have already been validated
+// during revision creation.
+func processAdoptExistingAnnotations(objects []client.Object) ([]client.Object, []boxcutter.PhaseReconcileOption) {
+	var reconcileOpts []boxcutter.PhaseReconcileOption
+
+	return util.SliceMap(objects, func(obj client.Object) client.Object {
+		annotations := obj.GetAnnotations()
+		value, hasAnnotation := annotations[revisiongenerator.AdoptExistingAnnotation]
+
+		if hasAnnotation {
+			// Disable collision protection if the annotation is set to "always"
+			if value == revisiongenerator.AdoptExistingAlways {
+				reconcileOpts = append(reconcileOpts,
+					boxcutter.WithObjectReconcileOptions(obj,
+						boxcutter.WithCollisionProtection(boxcutter.CollisionProtectionNone),
+					),
+				)
+			}
+
+			// Strip the annotation from the object before returning it
+			obj = obj.DeepCopyObject().(client.Object) //nolint:forcetypeassert // This is guaranteed to be client.Object because obj is client.Object
+			annotationsCopy := obj.GetAnnotations()
+			delete(annotationsCopy, revisiongenerator.AdoptExistingAnnotation)
+			obj.SetAnnotations(annotationsCopy)
+		}
+
+		return obj
+	}), reconcileOpts
 }
 
 // GetReconcileOptions returns the reconcile options of the revision.

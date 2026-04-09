@@ -34,6 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
+	"github.com/openshift/cluster-capi-operator/pkg/revisiongenerator"
 	"github.com/openshift/cluster-capi-operator/pkg/test"
 )
 
@@ -256,6 +257,68 @@ var _ = Describe("InstallerController", Serial, func() {
 				test.HaveCondition(conditionTypeDegraded).
 					WithStatus(configv1.ConditionTrue),
 			))
+		}, defaultNodeTimeout)
+
+		It("adopts a pre-existing object when the adopt-existing annotation is set to always", func(ctx context.Context) {
+			// Pre-create the ConfigMap that providerAdoptExisting will try to manage.
+			cm := &corev1.ConfigMap{}
+			cm.SetName(adoptCMName)
+			cm.SetNamespace("default")
+			cm.Data = map[string]string{"pre-existing": "true"}
+			Expect(cl.Create(ctx, cm)).To(Succeed())
+
+			DeferCleanup(func(ctx context.Context) {
+				deleteAndWait(ctx, cm)
+			})
+
+			// With adopt-existing: always, the controller should adopt the
+			// pre-existing object instead of reporting a collision.
+			addRevisionAndWaitForSuccess(ctx, providerAdoptExisting)
+
+			// Verify the object was adopted and updated to match the manifest.
+			// Note: SSA only manages fields it declares; pre-existing fields
+			// owned by other field managers are not removed.
+			adopted, err := getConfigMap(ctx, adoptCMName)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(adopted.Data).To(HaveKeyWithValue("version", "v1"))
+
+			// Verify the adopt-existing annotation was stripped from the cluster object.
+			Expect(adopted.GetAnnotations()).NotTo(HaveKey(revisiongenerator.AdoptExistingAnnotation))
+		}, defaultNodeTimeout)
+
+		It("reports NonRetryableError when adopt-existing annotation has an invalid value", func(ctx context.Context) {
+			// The revision generator won't allow us to create a revision with
+			// an invalid adopt-existing annotation, so we have to create it
+			// manually. This ensures that the controller can recover from
+			// shenanigans.
+			profile := providersByName[providerAdoptInvalid]
+			clusterAPI := &operatorv1alpha1.ClusterAPI{}
+			Expect(cl.Get(ctx, client.ObjectKey{Name: clusterAPIName}, clusterAPI)).To(Succeed())
+			apiRev := operatorv1alpha1.ClusterAPIInstallerRevision{
+				Name:      "invalid-annotation-1",
+				Revision:  int64(len(clusterAPI.Status.Revisions) + 1),
+				ContentID: "placeholder",
+				Components: []operatorv1alpha1.ClusterAPIInstallerComponent{{
+					Type: operatorv1alpha1.InstallerComponentTypeImage,
+					Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
+						Ref:     operatorv1alpha1.ImageDigestFormat(profile.ImageRef),
+						Profile: profile.Profile,
+					},
+				}},
+			}
+			clusterAPI.Status.Revisions = append(clusterAPI.Status.Revisions, apiRev)
+			clusterAPI.Status.DesiredRevision = apiRev.Name
+			Expect(cl.Status().Update(ctx, clusterAPI)).To(Succeed())
+
+			waitForConditions(ctx,
+				test.HaveCondition(conditionTypeProgressing).
+					WithStatus(configv1.ConditionFalse).
+					WithReason(operatorstatus.ReasonNonRetryableError),
+				test.HaveCondition(conditionTypeDegraded).
+					WithStatus(configv1.ConditionTrue).
+					WithReason(operatorstatus.ReasonNonRetryableError).
+					WithMessage(ContainSubstring("invalid")),
+			)
 		}, defaultNodeTimeout)
 
 		It("reports NonRetryableError when a collision occurs with an existing object", func(ctx context.Context) {
