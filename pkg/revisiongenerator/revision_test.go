@@ -288,6 +288,7 @@ func TestToAPIRevision(t *testing.T) {
 		g.Expect(apiRev.Revision).To(Equal(int64(1)))
 		g.Expect(apiRev.ContentID).NotTo(BeEmpty())
 		g.Expect(apiRev.Components).To(HaveLen(1))
+		g.Expect(apiRev.Components[0].Name).To(Equal("core"))
 		g.Expect(apiRev.Components[0].Type).To(Equal(operatorv1alpha1.InstallerComponentTypeImage))
 		g.Expect(string(apiRev.Components[0].Image.Ref)).To(Equal("quay.io/openshift/core@sha256:abcd"))
 		g.Expect(apiRev.Components[0].Image.Profile).To(Equal("default"))
@@ -304,10 +305,25 @@ func TestToAPIRevision(t *testing.T) {
 		apiRev := must(forInstall(g, rev, "4.18.0", 1).ToAPIRevision())(g)
 
 		g.Expect(apiRev.Components).To(HaveLen(2))
+		g.Expect(apiRev.Components[0].Name).To(Equal("core"))
 		g.Expect(string(apiRev.Components[0].Image.Ref)).To(Equal("img-core"))
 		g.Expect(apiRev.Components[0].Image.Profile).To(Equal("default"))
+		g.Expect(apiRev.Components[1].Name).To(Equal("infra"))
 		g.Expect(string(apiRev.Components[1].Image.Ref)).To(Equal("img-infra"))
 		g.Expect(apiRev.Components[1].Image.Profile).To(Equal("aws"))
+	})
+
+	t.Run("component with empty name", func(t *testing.T) {
+		g := NewWithT(t)
+
+		unnamed := profile(t, "placeholder", "img1", "default", configMapA)
+		unnamed.Name = ""
+
+		rev := must(NewRenderedRevision([]providerimages.ProviderImageManifests{unnamed}))(g)
+		apiRev := must(forInstall(g, rev, "4.18.0", 1).ToAPIRevision())(g)
+
+		g.Expect(apiRev.Components).To(HaveLen(1))
+		g.Expect(apiRev.Components[0].Name).To(BeEmpty())
 	})
 
 	t.Run("name format", func(t *testing.T) {
