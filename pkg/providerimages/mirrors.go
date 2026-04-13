@@ -28,15 +28,15 @@ import (
 
 // getImageRegistryMirrors lists IDMS and ICSP resources from the cluster and
 // builds a map of source registries/repos to their mirror equivalents. If a
-// CRD is not installed on the cluster, it is silently skipped. Unsupported
-// wildcard sources (e.g. *.redhat.io) are removed from the map and returned
-// separately so the caller can log them.
-func getImageRegistryMirrors(ctx context.Context, c client.Reader) (mirrors map[string][]string, skippedWildcards []string, err error) {
-	mirrors = make(map[string][]string)
+// CRD is not installed on the cluster, it is silently skipped. Wildcard
+// sources (e.g. *.redhat.io) are included in the map and handled by
+// resolveImageRef.
+func getImageRegistryMirrors(ctx context.Context, c client.Reader) (map[string][]string, error) {
+	mirrors := make(map[string][]string)
 
 	idmsMirrors, err := getIDMSMirrors(ctx, c)
 	if err != nil && !meta.IsNoMatchError(err) {
-		return nil, nil, err
+		return nil, err
 	}
 
 	for k, v := range idmsMirrors {
@@ -45,21 +45,14 @@ func getImageRegistryMirrors(ctx context.Context, c client.Reader) (mirrors map[
 
 	icspMirrors, err := getICSPMirrors(ctx, c)
 	if err != nil && !meta.IsNoMatchError(err) {
-		return nil, nil, err
+		return nil, err
 	}
 
 	for k, v := range icspMirrors {
 		mirrors[k] = append(mirrors[k], v...)
 	}
 
-	for source := range mirrors {
-		if strings.HasPrefix(source, "*.") {
-			skippedWildcards = append(skippedWildcards, source)
-			delete(mirrors, source)
-		}
-	}
-
-	return mirrors, skippedWildcards, nil
+	return mirrors, nil
 }
 
 // getIDMSMirrors lists ImageDigestMirrorSet resources and returns a map of
@@ -126,17 +119,59 @@ func sourceMatchesRef(ref, source string) bool {
 	return nextChar == '/' || nextChar == '@'
 }
 
-// resolveImageRef rewrites an image reference using the first matching mirror.
-// Uses longest-prefix matching to find the most specific source.
-// Returns the rewritten ref if a mirror matches, or the original ref unchanged.
-func resolveImageRef(imageRef string, mirrors map[string][]string) string {
-	if len(mirrors) == 0 {
-		return imageRef
+// extractHostname splits an image reference into the registry hostname (with
+// port, if present) and the remainder (path and digest/tag).
+func extractHostname(ref string) (hostname, remainder string) {
+	slashIdx := strings.Index(ref, "/")
+	if slashIdx == -1 {
+		return ref, ""
 	}
 
+	return ref[:slashIdx], ref[slashIdx:]
+}
+
+// hostnameWithoutPort strips the port from a registry hostname.
+func hostnameWithoutPort(hostname string) string {
+	colonIdx := strings.LastIndex(hostname, ":")
+	if colonIdx == -1 {
+		return hostname
+	}
+
+	return hostname[:colonIdx]
+}
+
+// wildcardMatchesRef reports whether a wildcard source (e.g. *.redhat.io)
+// matches the hostname of an image reference. The wildcard requires at least
+// one subdomain — *.redhat.io matches registry.redhat.io but not redhat.io.
+// Ports in the ref's hostname are stripped before matching.
+func wildcardMatchesRef(ref, wildcardSource string) bool {
+	suffix := strings.TrimPrefix(wildcardSource, "*")
+
+	hostname, _ := extractHostname(ref)
+	domain := hostnameWithoutPort(hostname)
+
+	return strings.HasSuffix(domain, suffix)
+}
+
+// resolveImageRef rewrites an image reference using the first matching mirror.
+// Literal prefix matches are tried first (longest wins). If no literal match
+// is found, wildcard sources (*.domain) are tried (longest wins). Wildcard
+// replacement swaps the ref's hostname with the mirror, preserving the path.
+// Returns the rewritten ref and the matched source, or the original ref with
+// an empty source if no mirror matches.
+func resolveImageRef(imageRef string, mirrors map[string][]string) (resolved string, matchedSource string) {
+	if len(mirrors) == 0 {
+		return imageRef, ""
+	}
+
+	// Literal prefix matching (most specific wins).
 	var bestSource string
 
 	for source := range mirrors {
+		if strings.HasPrefix(source, "*.") {
+			continue
+		}
+
 		if !sourceMatchesRef(imageRef, source) {
 			continue
 		}
@@ -146,15 +181,32 @@ func resolveImageRef(imageRef string, mirrors map[string][]string) string {
 		}
 	}
 
-	if bestSource == "" || len(mirrors[bestSource]) == 0 {
-		return imageRef
+	if bestSource != "" && len(mirrors[bestSource]) > 0 {
+		suffix := strings.TrimPrefix(imageRef, bestSource)
+		return mirrors[bestSource][0] + suffix, bestSource
 	}
 
-	suffix := strings.TrimPrefix(imageRef, bestSource)
+	// Wildcard matching (longest wildcard wins).
+	var bestWildcard string
 
-	// We can support falling back e.g "quay.io/openshift" => mirrors:
-	// ["mirror-b.local/openshift", "mirror-c.local/openshift"] ut here we're
-	// assuming mirrors are correctly configured, so for simplicity's
-	// sake we're only taking the first.
-	return mirrors[bestSource][0] + suffix
+	for source := range mirrors {
+		if !strings.HasPrefix(source, "*.") {
+			continue
+		}
+
+		if !wildcardMatchesRef(imageRef, source) {
+			continue
+		}
+
+		if len(source) > len(bestWildcard) {
+			bestWildcard = source
+		}
+	}
+
+	if bestWildcard != "" && len(mirrors[bestWildcard]) > 0 {
+		_, remainder := extractHostname(imageRef)
+		return mirrors[bestWildcard][0] + remainder, bestWildcard
+	}
+
+	return imageRef, ""
 }
