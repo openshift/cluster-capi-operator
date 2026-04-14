@@ -81,6 +81,9 @@ spec:
         - name: cert
           mountPath: /tmp/k8s-webhook-server/serving-certs
           readOnly: true
+        - name: metrics-cert
+          mountPath: /tmp/k8s-metrics-server/serving-certs
+          readOnly: true
       nodeSelector:
         node-role.kubernetes.io/master: ""
       priorityClassName: system-cluster-critical
@@ -94,3 +97,7 @@ spec:
         secret:
           defaultMode: 420
           secretName: compatibility-requirements-controllers-webhook-service-cert
+      - name: metrics-cert
+        secret:
+          defaultMode: 420
+          secretName: compatibility-requirements-controllers-metrics-tls

@@ -53,6 +53,9 @@ spec:
         - name: images
           mountPath: /etc/cluster-api-config-images
           readOnly: true
+        - name: metrics-cert
+          mountPath: /tmp/k8s-metrics-server/serving-certs
+          readOnly: true
         livenessProbe:
           httpGet:
             path: /healthz
@@ -81,3 +84,7 @@ spec:
         configMap:
           defaultMode: 420
           name: cluster-capi-operator-images
+      - name: metrics-cert
+        secret:
+          defaultMode: 420
+          secretName: capi-operator-metrics-tls

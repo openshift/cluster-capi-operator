@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/feature-gate: "ClusterAPIMachineManagement"
+    service.beta.openshift.io/serving-cert-secret-name: capi-controllers-metrics-tls
+  name: capi-controllers-metrics
+  namespace: openshift-cluster-api
+spec:
+  ports:
+  - name: capi-controllers-metrics
+    port: 8443
+    targetPort: diagnostics-o
+  - name: machine-api-migration-metrics
+    port: 8442
+    targetPort: diagnostics-m
+  selector:
+    k8s-app: capi-controllers
+  type: ClusterIP
+  clusterIP: None
+  sessionAffinity: None
