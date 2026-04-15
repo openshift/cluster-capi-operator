@@ -201,10 +201,12 @@ func (r *installerRevision) ToAPIRevision() (operatorv1alpha1.ClusterAPIInstalle
 	apiComponents := make([]operatorv1alpha1.ClusterAPIInstallerComponent, len(r.components))
 	for i, component := range r.components {
 		apiComponents[i] = operatorv1alpha1.ClusterAPIInstallerComponent{
-			Type: operatorv1alpha1.InstallerComponentTypeImage,
-			Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
-				Ref:     operatorv1alpha1.ImageDigestFormat(component.imageRef),
-				Profile: component.profile,
+			ClusterAPIInstallerComponentSource: operatorv1alpha1.ClusterAPIInstallerComponentSource{
+				Type: operatorv1alpha1.InstallerComponentTypeImage,
+				Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
+					Ref:     operatorv1alpha1.ImageDigestFormat(component.imageRef),
+					Profile: component.profile,
+				},
 			},
 		}
 	}

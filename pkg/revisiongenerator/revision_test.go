@@ -511,12 +511,16 @@ func TestNewInstallerRevisionFromAPI(t *testing.T) {
 		apiRev := operatorv1alpha1.ClusterAPIInstallerRevision{
 			ContentID: contentIDForProfiles(g, profiles[0], profiles[1]),
 			Components: []operatorv1alpha1.ClusterAPIInstallerComponent{
-				{Type: operatorv1alpha1.InstallerComponentTypeImage, Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
-					Ref: "quay.io/openshift/core@sha256:aaaa", Profile: "default",
-				}},
-				{Type: operatorv1alpha1.InstallerComponentTypeImage, Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
-					Ref: "quay.io/openshift/aws@sha256:bbbb", Profile: "aws",
-				}},
+				{ClusterAPIInstallerComponentSource: operatorv1alpha1.ClusterAPIInstallerComponentSource{
+					Type: operatorv1alpha1.InstallerComponentTypeImage, Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
+						Ref: "quay.io/openshift/core@sha256:aaaa", Profile: "default",
+					}},
+				},
+				{ClusterAPIInstallerComponentSource: operatorv1alpha1.ClusterAPIInstallerComponentSource{
+					Type: operatorv1alpha1.InstallerComponentTypeImage, Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
+						Ref: "quay.io/openshift/aws@sha256:bbbb", Profile: "aws",
+					}},
+				},
 			},
 		}
 
@@ -537,9 +541,11 @@ func TestNewInstallerRevisionFromAPI(t *testing.T) {
 			Revision:  3,
 			ContentID: contentIDForProfiles(g, profiles[0]),
 			Components: []operatorv1alpha1.ClusterAPIInstallerComponent{
-				{Type: operatorv1alpha1.InstallerComponentTypeImage, Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
-					Ref: "quay.io/openshift/core@sha256:aaaa", Profile: "default",
-				}},
+				{ClusterAPIInstallerComponentSource: operatorv1alpha1.ClusterAPIInstallerComponentSource{
+					Type: operatorv1alpha1.InstallerComponentTypeImage, Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
+						Ref: "quay.io/openshift/core@sha256:aaaa", Profile: "default",
+					}},
+				},
 			},
 		}
 
@@ -556,12 +562,16 @@ func TestNewInstallerRevisionFromAPI(t *testing.T) {
 		apiRev := operatorv1alpha1.ClusterAPIInstallerRevision{
 			ContentID: contentIDForProfiles(g, profiles[2], profiles[0]),
 			Components: []operatorv1alpha1.ClusterAPIInstallerComponent{
-				{Type: operatorv1alpha1.InstallerComponentTypeImage, Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
-					Ref: "quay.io/openshift/azure@sha256:cccc", Profile: "azure",
-				}},
-				{Type: operatorv1alpha1.InstallerComponentTypeImage, Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
-					Ref: "quay.io/openshift/core@sha256:aaaa", Profile: "default",
-				}},
+				{ClusterAPIInstallerComponentSource: operatorv1alpha1.ClusterAPIInstallerComponentSource{
+					Type: operatorv1alpha1.InstallerComponentTypeImage, Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
+						Ref: "quay.io/openshift/azure@sha256:cccc", Profile: "azure",
+					}},
+				},
+				{ClusterAPIInstallerComponentSource: operatorv1alpha1.ClusterAPIInstallerComponentSource{
+					Type: operatorv1alpha1.InstallerComponentTypeImage, Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
+						Ref: "quay.io/openshift/core@sha256:aaaa", Profile: "default",
+					}},
+				},
 			},
 		}
 
@@ -580,9 +590,11 @@ func TestNewInstallerRevisionFromAPI(t *testing.T) {
 		apiRev := operatorv1alpha1.ClusterAPIInstallerRevision{
 			ContentID: contentIDForProfiles(g, profiles[2]),
 			Components: []operatorv1alpha1.ClusterAPIInstallerComponent{
-				{Type: operatorv1alpha1.InstallerComponentTypeImage, Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
-					Ref: "quay.io/openshift/azure@sha256:cccc", Profile: "azure",
-				}},
+				{ClusterAPIInstallerComponentSource: operatorv1alpha1.ClusterAPIInstallerComponentSource{
+					Type: operatorv1alpha1.InstallerComponentTypeImage, Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
+						Ref: "quay.io/openshift/azure@sha256:cccc", Profile: "azure",
+					}},
+				},
 			},
 		}
 
@@ -598,9 +610,11 @@ func TestNewInstallerRevisionFromAPI(t *testing.T) {
 
 		apiRev := operatorv1alpha1.ClusterAPIInstallerRevision{
 			Components: []operatorv1alpha1.ClusterAPIInstallerComponent{
-				{Type: operatorv1alpha1.InstallerComponentTypeImage, Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
-					Ref: "quay.io/openshift/nonexistent@sha256:ffff", Profile: "default",
-				}},
+				{ClusterAPIInstallerComponentSource: operatorv1alpha1.ClusterAPIInstallerComponentSource{
+					Type: operatorv1alpha1.InstallerComponentTypeImage, Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
+						Ref: "quay.io/openshift/nonexistent@sha256:ffff", Profile: "default",
+					}},
+				},
 			},
 		}
 
@@ -615,9 +629,11 @@ func TestNewInstallerRevisionFromAPI(t *testing.T) {
 
 		apiRev := operatorv1alpha1.ClusterAPIInstallerRevision{
 			Components: []operatorv1alpha1.ClusterAPIInstallerComponent{
-				{Type: operatorv1alpha1.InstallerComponentTypeImage, Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
-					Ref: "quay.io/openshift/core@sha256:aaaa", Profile: "wrong-profile",
-				}},
+				{ClusterAPIInstallerComponentSource: operatorv1alpha1.ClusterAPIInstallerComponentSource{
+					Type: operatorv1alpha1.InstallerComponentTypeImage, Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
+						Ref: "quay.io/openshift/core@sha256:aaaa", Profile: "wrong-profile",
+					}},
+				},
 			},
 		}
 
@@ -646,12 +662,16 @@ func TestNewInstallerRevisionFromAPI(t *testing.T) {
 		apiRev := operatorv1alpha1.ClusterAPIInstallerRevision{
 			ContentID: expectedContentID,
 			Components: []operatorv1alpha1.ClusterAPIInstallerComponent{
-				{Type: operatorv1alpha1.InstallerComponentTypeImage, Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
-					Ref: "quay.io/openshift/core@sha256:aaaa", Profile: "default",
-				}},
-				{Type: operatorv1alpha1.InstallerComponentTypeImage, Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
-					Ref: "quay.io/openshift/aws@sha256:bbbb", Profile: "aws",
-				}},
+				{ClusterAPIInstallerComponentSource: operatorv1alpha1.ClusterAPIInstallerComponentSource{
+					Type: operatorv1alpha1.InstallerComponentTypeImage, Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
+						Ref: "quay.io/openshift/core@sha256:aaaa", Profile: "default",
+					}},
+				},
+				{ClusterAPIInstallerComponentSource: operatorv1alpha1.ClusterAPIInstallerComponentSource{
+					Type: operatorv1alpha1.InstallerComponentTypeImage, Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
+						Ref: "quay.io/openshift/aws@sha256:bbbb", Profile: "aws",
+					}},
+				},
 			},
 		}
 
@@ -665,9 +685,11 @@ func TestNewInstallerRevisionFromAPI(t *testing.T) {
 		apiRev := operatorv1alpha1.ClusterAPIInstallerRevision{
 			ContentID: "does-not-match-any-rendered-content",
 			Components: []operatorv1alpha1.ClusterAPIInstallerComponent{
-				{Type: operatorv1alpha1.InstallerComponentTypeImage, Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
-					Ref: "quay.io/openshift/core@sha256:aaaa", Profile: "default",
-				}},
+				{ClusterAPIInstallerComponentSource: operatorv1alpha1.ClusterAPIInstallerComponentSource{
+					Type: operatorv1alpha1.InstallerComponentTypeImage, Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
+						Ref: "quay.io/openshift/core@sha256:aaaa", Profile: "default",
+					}},
+				},
 			},
 		}
 
@@ -687,13 +709,13 @@ func TestRevisionsToApplyConfig(t *testing.T) {
 				Revision:  1,
 				ContentID: "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
 				Components: []operatorv1alpha1.ClusterAPIInstallerComponent{
-					{
+					{ClusterAPIInstallerComponentSource: operatorv1alpha1.ClusterAPIInstallerComponentSource{
 						Type: operatorv1alpha1.InstallerComponentTypeImage,
 						Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
 							Ref:     "quay.io/openshift/core@sha256:aaaa",
 							Profile: "default",
 						},
-					},
+					}},
 				},
 			},
 		}
@@ -727,9 +749,11 @@ func TestRevisionsToApplyConfig(t *testing.T) {
 				Revision:  1,
 				ContentID: "id1",
 				Components: []operatorv1alpha1.ClusterAPIInstallerComponent{
-					{Type: operatorv1alpha1.InstallerComponentTypeImage, Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
-						Ref: "img-a", Profile: "default",
-					}},
+					{ClusterAPIInstallerComponentSource: operatorv1alpha1.ClusterAPIInstallerComponentSource{
+						Type: operatorv1alpha1.InstallerComponentTypeImage, Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
+							Ref: "img-a", Profile: "default",
+						}},
+					},
 				},
 			},
 			{
@@ -737,12 +761,16 @@ func TestRevisionsToApplyConfig(t *testing.T) {
 				Revision:  2,
 				ContentID: "id2",
 				Components: []operatorv1alpha1.ClusterAPIInstallerComponent{
-					{Type: operatorv1alpha1.InstallerComponentTypeImage, Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
-						Ref: "img-b", Profile: "aws",
-					}},
-					{Type: operatorv1alpha1.InstallerComponentTypeImage, Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
-						Ref: "img-c", Profile: "default",
-					}},
+					{ClusterAPIInstallerComponentSource: operatorv1alpha1.ClusterAPIInstallerComponentSource{
+						Type: operatorv1alpha1.InstallerComponentTypeImage, Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
+							Ref: "img-b", Profile: "aws",
+						}},
+					},
+					{ClusterAPIInstallerComponentSource: operatorv1alpha1.ClusterAPIInstallerComponentSource{
+						Type: operatorv1alpha1.InstallerComponentTypeImage, Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
+							Ref: "img-c", Profile: "default",
+						}},
+					},
 				},
 			},
 		}
@@ -778,9 +806,11 @@ func TestRevisionsToApplyConfig(t *testing.T) {
 				ContentID:                          "id1",
 				UnmanagedCustomResourceDefinitions: []string{"widgets.example.com", "gadgets.example.com"},
 				Components: []operatorv1alpha1.ClusterAPIInstallerComponent{
-					{Type: operatorv1alpha1.InstallerComponentTypeImage, Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
-						Ref: "img-a", Profile: "default",
-					}},
+					{ClusterAPIInstallerComponentSource: operatorv1alpha1.ClusterAPIInstallerComponentSource{
+						Type: operatorv1alpha1.InstallerComponentTypeImage, Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
+							Ref: "img-a", Profile: "default",
+						}},
+					},
 				},
 			},
 		}

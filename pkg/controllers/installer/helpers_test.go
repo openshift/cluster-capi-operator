@@ -17,8 +17,10 @@ limitations under the License.
 package installer
 
 import (
+	"cmp"
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -240,6 +242,12 @@ func setupProviderProfiles() {
 	}
 }
 
+func latestRevision(revisions []operatorv1alpha1.ClusterAPIInstallerRevision) operatorv1alpha1.ClusterAPIInstallerRevision {
+	return slices.MaxFunc(revisions, func(a, b operatorv1alpha1.ClusterAPIInstallerRevision) int {
+		return cmp.Compare(a.Revision, b.Revision)
+	})
+}
+
 // addRevision appends a new revision to ClusterAPI.Status.Revisions.
 // It uses revisiongenerator to compute the content ID, then writes via status update.
 func addRevision(ctx context.Context, providerNames ...string) operatorv1alpha1.ClusterAPIInstallerRevision {
@@ -258,7 +266,12 @@ func addRevision(ctx context.Context, providerNames ...string) operatorv1alpha1.
 		rendered, err := revisiongenerator.NewRenderedRevision(profiles)
 		Expect(err).NotTo(HaveOccurred())
 
-		revisionIndex := int64(len(clusterAPI.Status.Revisions) + 1)
+		var revisionIndex int64
+		if len(clusterAPI.Status.Revisions) == 0 {
+			revisionIndex = 1
+		} else {
+			revisionIndex = latestRevision(clusterAPI.Status.Revisions).Revision + 1
+		}
 
 		installerRev, err := rendered.ForInstall("4.18.0-test", revisionIndex)
 		Expect(err).NotTo(HaveOccurred())
