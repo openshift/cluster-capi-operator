@@ -20,11 +20,13 @@ import (
 	"os"
 	"time"
 
+	"github.com/go-logr/logr"
 	configv1 "github.com/openshift/api/config/v1"
 	mapiv1alpha1 "github.com/openshift/api/machine/v1alpha1"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	configv1client "github.com/openshift/client-go/config/clientset/versioned"
 	configinformers "github.com/openshift/client-go/config/informers/externalversions"
+	"k8s.io/klog"
 	"k8s.io/utils/clock"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
@@ -35,7 +37,6 @@ import (
 	"github.com/openshift/library-go/pkg/operator/events"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	klog "k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -69,93 +70,92 @@ func initScheme(scheme *runtime.Scheme) {
 }
 
 func main() {
+	cfg := ctrl.GetConfigOrDie()
+	ctx := ctrl.SetupSignalHandler()
 	scheme := runtime.NewScheme()
 	initScheme(scheme)
 
-	opts := commoncmdoptions.InitCommonOptions(managerName, controllers.DefaultCAPINamespace)
-
-	opts.Parse()
-
-	cfg := ctrl.GetConfigOrDie()
-
-	mgrOpts, _ := opts.GetCommonManagerOptions()
-	mgrOpts.Scheme = scheme
-	mgrOpts.Cache = getDefaultCacheOptions(*opts.CAPINamespace, *opts.MAPINamespace, 10*time.Minute)
-
-	mgr, err := ctrl.NewManager(cfg, mgrOpts)
+	log, operatorConfig, mgrOpts, initManager, err := commoncmdoptions.InitOperatorConfig(ctx, cfg, scheme, managerName, controllers.DefaultCAPINamespace, nil)
 	if err != nil {
-		klog.Error(err, "unable to create manager")
+		log.Error(err, "unable to initialize operator config")
 		os.Exit(1)
 	}
 
-	if err := commoncmdoptions.AddCommonChecks(mgr); err != nil {
-		klog.Error(err, "unable to add common checks")
+	mgrOpts.Cache = getDefaultCacheOptions(*operatorConfig.CAPINamespace, *operatorConfig.MAPINamespace, 10*time.Minute)
+
+	ctx, cancel := context.WithCancel(ctx)
+
+	mgr, err := initManager(ctx, cancel, mgrOpts)
+	if err != nil {
+		log.Error(err, "unable to initialize manager")
 		os.Exit(1)
 	}
 
-	ctx := ctrl.SetupSignalHandler()
-	checkFeatureGates(ctx, mgr)
+	if err := checkFeatureGates(ctx, log, mgr); err != nil {
+		log.Error(err, "unable to check feature gates")
+		os.Exit(1)
+	}
 
 	infra, err := util.GetInfra(ctx, mgr.GetAPIReader())
 	if err != nil {
-		klog.Error(err, "unable to get infrastructure")
+		log.Error(err, "unable to get infrastructure")
 		os.Exit(1)
 	}
 
 	infraTypes, platform, err := util.GetCAPITypesForInfrastructure(infra)
 	if err != nil {
 		if errors.Is(err, util.ErrUnsupportedPlatform) {
-			klog.Info(fmt.Sprintf("MachineAPIMigration not implemented for platform %s, nothing to do. Waiting for termination signal.", platform))
+			log.Info("MachineAPIMigration not implemented for platform, nothing to do. Waiting for termination signal.", "platform", platform)
 			exitAfterTerminationSignal(ctx)
 		}
 
-		klog.Error(err, "unable to get infrastructure types")
+		log.Error(err, "unable to get infrastructure types")
 		os.Exit(1)
 	}
 
-	checkPlatformSupported(ctx, platform)
+	checkPlatformSupported(ctx, log, platform)
 
-	for name, controller := range getControllers(opts, platform, infra, infraTypes) {
+	for name, controller := range getControllers(operatorConfig, platform, infra, infraTypes) {
 		if err := controller.SetupWithManager(mgr); err != nil {
-			klog.Error(err, fmt.Sprintf("failed to set up %s reconciler with manager", name))
+			log.Error(err, "failed to set up reconciler with manager", "reconciler", name)
 			os.Exit(1)
 		}
 	}
 
-	klog.Info("Starting manager")
+	log.Info("Starting manager")
 
 	if err := mgr.Start(ctx); err != nil {
-		klog.Error(err, "problem running manager")
+		log.Error(err, "problem running manager")
 		os.Exit(1)
 	}
 }
 
-func checkFeatureGates(ctx context.Context, mgr ctrl.Manager) {
+func checkFeatureGates(ctx context.Context, log logr.Logger, mgr ctrl.Manager) error {
 	featureGateAccessor, err := getFeatureGates(ctx, mgr)
 	if err != nil {
-		klog.Error(err, "unable to get feature gates")
-		os.Exit(1)
+		return fmt.Errorf("unable to get feature gates: %w", err)
 	}
 
 	currentFeatureGates, err := featureGateAccessor.CurrentFeatureGates()
 	if err != nil {
-		klog.Error(err, "unable to get current feature gates")
-		os.Exit(1)
+		return fmt.Errorf("unable to get current feature gates: %w", err)
 	}
 
 	if !currentFeatureGates.Enabled(features.FeatureGateMachineAPIMigration) {
-		klog.Info("MachineAPIMigration feature gate is not enabled, nothing to do. Waiting for termination signal.")
+		log.Info("MachineAPIMigration feature gate is not enabled, nothing to do. Waiting for termination signal.")
 		exitAfterTerminationSignal(ctx)
 	}
+
+	return nil
 }
 
-func checkPlatformSupported(ctx context.Context, platform configv1.PlatformType) {
+func checkPlatformSupported(ctx context.Context, log logr.Logger, platform configv1.PlatformType) {
 	switch platform {
 	case configv1.AWSPlatformType, configv1.OpenStackPlatformType:
-		klog.Infof("MachineAPIMigration: starting %s controllers", platform)
+		log.Info("starting controllers", "platform", platform)
 
 	default:
-		klog.Infof("MachineAPIMigration not implemented for platform %s, nothing to do. Waiting for termination signal.", platform)
+		log.Info("MachineAPIMigration not implemented for platform, nothing to do. Waiting for termination signal.", "platform", platform)
 		exitAfterTerminationSignal(ctx)
 	}
 }
@@ -164,7 +164,7 @@ type controller interface {
 	SetupWithManager(mgr ctrl.Manager) error
 }
 
-func getControllers(opts *commoncmdoptions.CommonOptions, platform configv1.PlatformType, infra *configv1.Infrastructure, infraTypes util.InfraTypes) map[string]controller {
+func getControllers(opts commoncmdoptions.OperatorConfig, platform configv1.PlatformType, infra *configv1.Infrastructure, infraTypes util.InfraTypes) map[string]controller {
 	return map[string]controller{
 		"machine sync": &machinesync.MachineSyncReconciler{
 			Infra:      infra,

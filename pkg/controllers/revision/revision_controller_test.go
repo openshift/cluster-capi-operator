@@ -18,6 +18,7 @@ package revision
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"testing"
 
@@ -495,6 +496,36 @@ var _ = Describe("RevisionController waiting states", Serial, func() {
 			Expect(updatedClusterAPI.Status.ObservedRevisionGeneration).To(Equal(updatedClusterAPI.Generation))
 		}, defaultNodeTimeout)
 	})
+})
+
+var _ = Describe("RevisionController manifest substitutions", Serial, func() {
+	BeforeEach(func(ctx context.Context) {
+		createFixtures(ctx)
+	}, defaultNodeTimeout)
+
+	It("includes substitutions in created revision", func(ctx context.Context) {
+		mgr := newManagerWrapper(defaultProviderImgs, func(config *tls.Config) {
+			config.CipherSuites = []uint16{tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256}
+			config.MinVersion = tls.VersionTLS12
+		})
+
+		DeferCleanup(func(ctx context.Context) {
+			mgr.stop()
+		})
+
+		waitForProgressingFalse(ctx)
+
+		updatedClusterAPI := &operatorv1alpha1.ClusterAPI{}
+		Expect(cl.Get(ctx, client.ObjectKey{Name: "cluster"}, updatedClusterAPI)).To(Succeed())
+		Expect(updatedClusterAPI.Status.Revisions).To(HaveLen(1))
+
+		rev := updatedClusterAPI.Status.Revisions[0]
+		Expect(rev.ManifestSubstitutions).To(HaveLen(2))
+		Expect(rev.ManifestSubstitutions[0].Key).To(Equal("TLS_CIPHER_SUITES"))
+		Expect(*rev.ManifestSubstitutions[0].Value).To(Equal("TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"))
+		Expect(rev.ManifestSubstitutions[1].Key).To(Equal("TLS_MIN_VERSION"))
+		Expect(*rev.ManifestSubstitutions[1].Value).To(Equal("VersionTLS12"))
+	}, defaultNodeTimeout)
 })
 
 var _ = Describe("RevisionController error handling", Serial, func() {
