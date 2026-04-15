@@ -8,6 +8,9 @@ replace (
 
 	//cluster-api-actuator-pkg uses a placeholder for cluster-api-actuator-pkg/testutils
 	github.com/openshift/cluster-api-actuator-pkg/testutils => github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20260310144400-bec013a007a8
+
+	// manifests-gen is a local module in this repo
+	github.com/openshift/cluster-capi-operator/manifests-gen => ../manifests-gen
 )
 
 require (

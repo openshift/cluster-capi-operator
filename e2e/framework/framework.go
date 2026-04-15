@@ -26,8 +26,10 @@ import (
 )
 
 const (
-	CAPINamespace = "openshift-cluster-api"
-	MAPINamespace = "openshift-machine-api"
+	CAPINamespace                      = "openshift-cluster-api"
+	CAPIOperatorNamespace              = "openshift-cluster-api-operator"
+	CompatibilityRequirementsNamespace = "openshift-compatibility-requirements-operator"
+	MAPINamespace                      = "openshift-machine-api"
 
 	RetryShort  = 1 * time.Second
 	RetryMedium = 5 * time.Second
