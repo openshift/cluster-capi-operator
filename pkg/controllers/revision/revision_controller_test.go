@@ -347,13 +347,15 @@ var _ = Describe("RevisionController", Serial, func() {
 				Revision:  int64(i + 1),
 				ContentID: "content-id-" + string(rune('a'+i)),
 				Components: []operatorv1alpha1.ClusterAPIInstallerComponent{
-					{ClusterAPIInstallerComponentSource: operatorv1alpha1.ClusterAPIInstallerComponentSource{
-						Type: operatorv1alpha1.InstallerComponentTypeImage,
-						Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
-							Ref:     operatorv1alpha1.ImageDigestFormat("quay.io/openshift/cluster-capi-operator@sha256:" + digest),
-							Profile: "default",
+					{
+						ClusterAPIInstallerComponentSource: operatorv1alpha1.ClusterAPIInstallerComponentSource{
+							Type: operatorv1alpha1.InstallerComponentTypeImage,
+							Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
+								Ref:     operatorv1alpha1.ImageDigestFormat("quay.io/openshift/cluster-capi-operator@sha256:" + digest),
+								Profile: "default",
+							},
 						},
-					}},
+					},
 				},
 			})
 		}

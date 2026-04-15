@@ -220,13 +220,15 @@ var _ = Describe("InstallerController", Serial, func() {
 					Revision:  1,
 					ContentID: "bogus-content-id",
 					Components: []operatorv1alpha1.ClusterAPIInstallerComponent{
-						{ClusterAPIInstallerComponentSource: operatorv1alpha1.ClusterAPIInstallerComponentSource{
-							Type: operatorv1alpha1.InstallerComponentTypeImage,
-							Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
-								Ref:     "registry.example.com/nonexistent@sha256:0000000000000000000000000000000000000000000000000000000000000000",
-								Profile: "default",
+						{
+							ClusterAPIInstallerComponentSource: operatorv1alpha1.ClusterAPIInstallerComponentSource{
+								Type: operatorv1alpha1.InstallerComponentTypeImage,
+								Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
+									Ref:     "registry.example.com/nonexistent@sha256:0000000000000000000000000000000000000000000000000000000000000000",
+									Profile: "default",
+								},
 							},
-						}},
+						},
 					},
 				},
 			}
@@ -366,13 +368,15 @@ var _ = Describe("InstallerController", Serial, func() {
 					Revision:  int64(len(clusterAPI.Status.Revisions) + 1),
 					ContentID: "invalid-content-id",
 					Components: []operatorv1alpha1.ClusterAPIInstallerComponent{
-						{ClusterAPIInstallerComponentSource: operatorv1alpha1.ClusterAPIInstallerComponentSource{
-							Type: operatorv1alpha1.InstallerComponentTypeImage,
-							Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
-								Ref:     "registry.example.com/nonexistent@sha256:0000000000000000000000000000000000000000000000000000000000000000",
-								Profile: "default",
+						{
+							ClusterAPIInstallerComponentSource: operatorv1alpha1.ClusterAPIInstallerComponentSource{
+								Type: operatorv1alpha1.InstallerComponentTypeImage,
+								Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
+									Ref:     "registry.example.com/nonexistent@sha256:0000000000000000000000000000000000000000000000000000000000000000",
+									Profile: "default",
+								},
 							},
-						}},
+						},
 					},
 				})
 			clusterAPI.Status.DesiredRevision = "invalid-revision-2"

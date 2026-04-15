@@ -27,10 +27,11 @@ import (
 
 func TestTransformYaml(t *testing.T) {
 	tests := []struct {
-		name     string
-		yaml     string
-		profile  providerimages.ProviderImageManifests
-		expected string
+		name          string
+		yaml          string
+		profile       providerimages.ProviderImageManifests
+		substitutions map[string]string
+		expected      string
 	}{
 		{
 			name: "known envsubst variable replaced",
@@ -116,13 +117,52 @@ func TestTransformYaml(t *testing.T) {
 			},
 			expected: "",
 		},
+		{
+			name: "user substitution applied",
+			yaml: "version: ${TLS_MIN_VERSION}",
+			profile: providerimages.ProviderImageManifests{
+				ImageRef: "example.com/img@sha256:abc",
+			},
+			substitutions: map[string]string{"TLS_MIN_VERSION": "VersionTLS12"},
+			expected:      "version: VersionTLS12",
+		},
+		{
+			name: "user substitution overrides hardcoded",
+			yaml: "bootstrap: ${EXP_BOOTSTRAP_FORMAT_IGNITION}",
+			profile: providerimages.ProviderImageManifests{
+				ImageRef: "example.com/img@sha256:abc",
+			},
+			substitutions: map[string]string{"EXP_BOOTSTRAP_FORMAT_IGNITION": "false"},
+			expected:      "bootstrap: false",
+		},
+		{
+			name: "unknown var with no user substitution still empty",
+			yaml: "value: ${UNKNOWN_VAR}",
+			profile: providerimages.ProviderImageManifests{
+				ImageRef: "example.com/img@sha256:abc",
+			},
+			substitutions: map[string]string{"OTHER_VAR": "something"},
+			expected:      "value: ",
+		},
+		{
+			name: "multiple substitutions applied",
+			yaml: "version: ${TLS_MIN_VERSION}\nciphers: ${TLS_CIPHER_SUITES}",
+			profile: providerimages.ProviderImageManifests{
+				ImageRef: "example.com/img@sha256:abc",
+			},
+			substitutions: map[string]string{
+				"TLS_MIN_VERSION":   "VersionTLS12",
+				"TLS_CIPHER_SUITES": "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384",
+			},
+			expected: "version: VersionTLS12\nciphers: TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			g := NewWithT(t)
 
-			result, err := transformYaml(&tt.profile, tt.yaml)
+			result, err := transformYaml(&tt.profile, tt.yaml, tt.substitutions)
 			g.Expect(err).NotTo(HaveOccurred())
 			g.Expect(result).To(Equal(tt.expected))
 		})

@@ -63,6 +63,9 @@ type RevisionController struct {
 	client.Client
 	ProviderProfiles []providerimages.ProviderImageManifests
 	ReleaseVersion   string
+
+	// manifestSubstitutions is derived from TLSProfileSpec during SetupWithManager.
+	manifestSubstitutions map[string]string
 }
 
 // Reconcile handles creating revisions in the ClusterAPI singleton status.
@@ -142,7 +145,7 @@ func (r *RevisionController) generateDesiredRevision(ctx context.Context) (revis
 	// Build ordered component list from provider metadata
 	providerComponents := r.buildComponentList(infra.Status.PlatformStatus.Type)
 
-	revision, err := revisiongenerator.NewRenderedRevision(providerComponents)
+	revision, err := revisiongenerator.NewRenderedRevision(providerComponents, revisiongenerator.WithManifestSubstitutions(r.manifestSubstitutions))
 	if err != nil {
 		return nil, opresult.ErrorP(fmt.Errorf("error creating rendered revision: %w", err))
 	}

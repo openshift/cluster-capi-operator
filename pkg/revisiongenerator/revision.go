@@ -17,11 +17,13 @@ limitations under the License.
 package revisiongenerator
 
 import (
+	"cmp"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
@@ -88,8 +90,9 @@ type RenderedComponent interface {
 }
 
 type renderedRevision struct {
-	components []*renderedComponent
-	contentID  string
+	components    []*renderedComponent
+	contentID     string
+	substitutions []operatorv1alpha1.ClusterAPIInstallerRevisionManifestSubstitution
 }
 
 var _ RenderedRevision = &renderedRevision{}
@@ -118,7 +121,10 @@ func newRenderedRevision(profiles []providerimages.ProviderImageManifests, opts 
 		components[i] = component
 	}
 
-	rev := &renderedRevision{components: components}
+	rev := &renderedRevision{
+		components:    components,
+		substitutions: substitutionsFromMap(cfg.substitutions),
+	}
 
 	if err := validateRenderedRevision(rev); err != nil {
 		return nil, err
@@ -127,9 +133,30 @@ func newRenderedRevision(profiles []providerimages.ProviderImageManifests, opts 
 	return rev, nil
 }
 
+// substitutionsFromMap converts a map to a sorted slice of API substitutions.
+func substitutionsFromMap(m map[string]string) []operatorv1alpha1.ClusterAPIInstallerRevisionManifestSubstitution {
+	if len(m) == 0 {
+		return nil
+	}
+
+	subs := make([]operatorv1alpha1.ClusterAPIInstallerRevisionManifestSubstitution, 0, len(m))
+	for k, v := range m {
+		subs = append(subs, operatorv1alpha1.ClusterAPIInstallerRevisionManifestSubstitution{
+			Key:   k,
+			Value: &v,
+		})
+	}
+
+	slices.SortFunc(subs, func(a, b operatorv1alpha1.ClusterAPIInstallerRevisionManifestSubstitution) int {
+		return cmp.Compare(a.Key, b.Key)
+	})
+
+	return subs
+}
+
 // ContentID returns a unique identifier for the revision's content.
-// Specifically it returns a SHA256 over all manifests, but callers MUST NOT
-// assume this.
+// Specifically it returns a SHA256 over all manifests and substitutions,
+// but callers MUST NOT assume this.
 func (r *renderedRevision) ContentID() (string, error) {
 	if r.contentID == "" {
 		h := sha256.New()
@@ -141,6 +168,17 @@ func (r *renderedRevision) ContentID() (string, error) {
 			}
 
 			h.Write([]byte(contentID))
+		}
+
+		// Include substitutions in the hash so that different substitutions
+		// always produce a different content ID and therefore trigger a new
+		// revision, even if they were not used. This is not strictly necessary,
+		// but it should reduce operator confusion if old but unused
+		// substitutions continued to be listed in the current revision.
+		if data, err := json.Marshal(r.substitutions); err == nil {
+			h.Write(data)
+		} else {
+			return "", fmt.Errorf("error marshalling substitutions: %w", err)
 		}
 
 		r.contentID = hex.EncodeToString(h.Sum(nil))
@@ -218,10 +256,11 @@ func (r *installerRevision) ToAPIRevision() (operatorv1alpha1.ClusterAPIInstalle
 	}
 
 	return operatorv1alpha1.ClusterAPIInstallerRevision{
-		Name:       r.revisionName,
-		Revision:   r.revisionIndex,
-		ContentID:  contentID,
-		Components: apiComponents,
+		Name:                  r.revisionName,
+		Revision:              r.revisionIndex,
+		ContentID:             contentID,
+		ManifestSubstitutions: slices.Clone(r.substitutions),
+		Components:            apiComponents,
 	}, nil
 }
 
@@ -249,6 +288,7 @@ func buildRevisionName(releaseVersion, contentID string, index int64) operatorv1
 
 type revisionRenderConfig struct {
 	objectCollectors []RevisionObjectCollector
+	substitutions    map[string]string
 }
 
 type revisionRenderOption func(*revisionRenderConfig)
@@ -261,6 +301,19 @@ type RevisionObjectCollector func(obj unstructured.Unstructured)
 func WithObjectCollectors(collectors ...RevisionObjectCollector) revisionRenderOption {
 	return func(opts *revisionRenderConfig) {
 		opts.objectCollectors = append(opts.objectCollectors, collectors...)
+	}
+}
+
+// WithManifestSubstitutions adds envsubst-style substitutions that will be
+// applied to manifests during rendering and recorded on the revision. When
+// called multiple times, later values merge with and override earlier ones.
+func WithManifestSubstitutions(subs map[string]string) revisionRenderOption {
+	return func(opts *revisionRenderConfig) {
+		if opts.substitutions == nil {
+			opts.substitutions = make(map[string]string, len(subs))
+		}
+
+		maps.Copy(opts.substitutions, subs)
 	}
 }
 
@@ -296,6 +349,18 @@ func NewInstallerRevisionFromAPI(
 				errProviderProfileNotFound, i, component.Image.Ref, component.Image.Profile)
 		}
 	}
+
+	// Prepend substitutions from the API revision so they are applied during
+	// rendering and included in the content ID for validation. Later options
+	// merge with and override these values.
+	apiSubs := make(map[string]string, len(apiRev.ManifestSubstitutions))
+	for _, s := range apiRev.ManifestSubstitutions {
+		if s.Value != nil {
+			apiSubs[s.Key] = *s.Value
+		}
+	}
+
+	opts = append([]revisionRenderOption{WithManifestSubstitutions(apiSubs)}, opts...)
 
 	rendered, err := newRenderedRevision(matched, opts...)
 	if err != nil {
@@ -338,7 +403,7 @@ func newRenderedComponent(providerProfile *providerimages.ProviderImageManifests
 			return nil, fmt.Errorf("error reading manifests: %w", err)
 		}
 
-		yaml, err = transformYaml(providerProfile, yaml)
+		yaml, err = transformYaml(providerProfile, yaml, cfg.substitutions)
 		if err != nil {
 			return nil, fmt.Errorf("error transforming manifest yaml: %w", err)
 		}
