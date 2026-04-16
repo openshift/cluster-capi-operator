@@ -88,7 +88,7 @@ require (
 	k8s.io/klog v1.0.0
 	k8s.io/klog/v2 v2.140.0
 	k8s.io/kubernetes v1.35.1
-	k8s.io/utils v0.0.0-20260108192941-914a6e750570
+	k8s.io/utils v0.0.0-20260210185600-b8788abfbbc2
 	pkg.package-operator.run/boxcutter v0.13.1
 	sigs.k8s.io/cluster-api v1.12.3
 	sigs.k8s.io/cluster-api-provider-aws/v2 v2.10.2
