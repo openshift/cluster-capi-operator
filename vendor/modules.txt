@@ -1184,7 +1184,7 @@ github.com/opencontainers/go-digest
 ## explicit; go 1.18
 github.com/opencontainers/image-spec/specs-go
 github.com/opencontainers/image-spec/specs-go/v1
-# github.com/openshift/api v0.0.0-20260306141135-f595753a3e66
+# github.com/openshift/api v0.0.0-20260416105050-3c6b218b8a80
 ## explicit; go 1.25.0
 github.com/openshift/api
 github.com/openshift/api/annotations
@@ -1209,6 +1209,7 @@ github.com/openshift/api/config/v1alpha2
 github.com/openshift/api/console
 github.com/openshift/api/console/v1
 github.com/openshift/api/etcd
+github.com/openshift/api/etcd/v1
 github.com/openshift/api/etcd/v1alpha1
 github.com/openshift/api/features
 github.com/openshift/api/helm
@@ -1267,7 +1268,7 @@ github.com/openshift/api/template
 github.com/openshift/api/template/v1
 github.com/openshift/api/user
 github.com/openshift/api/user/v1
-# github.com/openshift/client-go v0.0.0-20260306160707-3935d929fc7d
+# github.com/openshift/client-go v0.0.0-20260416131737-a19e91702ab5
 ## explicit; go 1.25.0
 github.com/openshift/client-go/apiextensions/applyconfigurations/apiextensions/v1alpha1
 github.com/openshift/client-go/apiextensions/applyconfigurations/internal
@@ -1319,7 +1320,7 @@ github.com/openshift/cluster-api-provider-baremetal/pkg/apis/baremetal/v1alpha1
 github.com/openshift/cluster-autoscaler-operator/pkg/apis/autoscaling/v1
 # github.com/openshift/cluster-capi-operator/manifests-gen v0.0.0-00010101000000-000000000000 => ./manifests-gen
 ## explicit; go 1.25.0
-# github.com/openshift/library-go v0.0.0-20260303171201-5d9eb6295ff6
+# github.com/openshift/library-go v0.0.0-20260413093329-d2db42c961e1
 ## explicit; go 1.25.0
 github.com/openshift/library-go/pkg/apiserver/jsonpatch
 github.com/openshift/library-go/pkg/certs
@@ -1338,6 +1339,7 @@ github.com/openshift/library-go/pkg/operator/resource/resourcemerge
 github.com/openshift/library-go/pkg/operator/resource/resourceread
 github.com/openshift/library-go/pkg/operator/resourcesynccontroller
 github.com/openshift/library-go/pkg/operator/v1helpers
+github.com/openshift/library-go/pkg/pki
 # github.com/openshift/machine-api-operator v0.2.1-0.20260226113419-88465550a74b
 ## explicit; go 1.24.0
 github.com/openshift/machine-api-operator/pkg/util/lifecyclehooks
