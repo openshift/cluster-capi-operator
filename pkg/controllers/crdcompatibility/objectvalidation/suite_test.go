@@ -24,6 +24,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -43,19 +44,24 @@ var (
 	testEnv               *envtest.Environment
 	cfg                   *rest.Config
 	cl                    client.Client
+	managerClient         client.Reader
 	suiteCompatibilityCRD func() *apiextensionsv1.CustomResourceDefinition
 )
 
-var defaultNodeTimeout = NodeTimeout(10 * time.Second)
+var (
+	defaultNodeTimeout       = NodeTimeout(10 * time.Second)
+	defaultEventuallyTimeout = 2 * time.Second
+)
 
 // InitValidator initializes an object validator for testing.
-// It returns the validator and a function to start the webhook server.
+// It returns the validator, the manager client (informer-backed, used by the webhook handler),
+// and a function to start the webhook server.
 //
 // startWebhookServer blocks until the server has started and is ready to be used,
 // which must happen before the context passed to InitValidator is cancelled. It
 // uses DeferCleanup to ensure that the webhook server will be stopped at the
 // appropriate time.
-var InitValidator func(context.Context) (*validator, func())
+var InitValidator func(context.Context) (*validator, client.Reader, func())
 
 func TestObjectValidation(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -86,14 +92,14 @@ var _ = BeforeSuite(func(ctx context.Context) {
 	// Set up komega with the client
 	komega.SetClient(cl)
 
-	InitValidator = func(ctx context.Context) (*validator, func()) {
+	InitValidator = func(ctx context.Context) (*validator, client.Reader, func()) {
 		return initValidator(ctx, cfg, cl.Scheme(), testEnv)
 	}
 
 	suiteCompatibilityCRD = createSuiteCRDs(ctx)
 }, NodeTimeout(30*time.Second))
 
-func initValidator(ctx context.Context, cfg *rest.Config, scheme *runtime.Scheme, testEnv *envtest.Environment) (*validator, func()) {
+func initValidator(ctx context.Context, cfg *rest.Config, scheme *runtime.Scheme, testEnv *envtest.Environment) (*validator, client.Reader, func()) {
 	By("Setting up an object validator with webhook server")
 
 	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
@@ -111,9 +117,19 @@ func initValidator(ctx context.Context, cfg *rest.Config, scheme *runtime.Scheme
 	err = objectValidator.SetupWithManager(ctx, mgr)
 	Expect(err).ToNot(HaveOccurred(), "Object Validator should be setup with manager")
 
-	return objectValidator, func() {
+	return objectValidator, mgr.GetClient(), func() {
 		startWebhookServer(ctx, mgr)
 	}
+}
+
+// waitForCompatibilityRequirementInWebhookManagerCache waits until the validating webhook's
+// manager client can read the CompatibilityRequirement from its informer cache. Admission uses mgr.GetClient().
+func waitForCompatibilityRequirementInWebhookManagerCache(ctx context.Context, cr *apiextensionsv1alpha1.CompatibilityRequirement) {
+	GinkgoHelper()
+	Eventually(func(g Gomega) {
+		cached := &apiextensionsv1alpha1.CompatibilityRequirement{}
+		g.Expect(managerClient.Get(ctx, client.ObjectKeyFromObject(cr), cached)).To(Succeed())
+	}).WithContext(ctx).WithTimeout(10 * time.Second).Should(Succeed())
 }
 
 // startWebhookServer starts the webhook server and waits for it to be ready.

@@ -73,7 +73,7 @@ var _ = Describe("End-to-End Admission Webhook Integration", Ordered, ContinueOn
 
 	BeforeAll(func() {
 		// Initialize validator and webhook server for all tests
-		_, startWebhookServer = InitValidator(context.Background())
+		_, managerClient, startWebhookServer = InitValidator(context.Background())
 		startWebhookServer()
 	})
 
@@ -91,6 +91,7 @@ var _ = Describe("End-to-End Admission Webhook Integration", Ordered, ContinueOn
 				// Create ValidatingWebhookConfiguration to enable end-to-end testing
 				webhookConfig := createValidatingWebhookConfig(compatibilityRequirement, compatibilityCRD)
 				Expect(cl.Create(ctx, webhookConfig)).To(Succeed())
+				waitForCompatibilityRequirementInWebhookManagerCache(ctx, compatibilityRequirement)
 
 				DeferCleanup(func(ctx context.Context) {
 					Expect(test.CleanupAndWait(ctx, cl,
@@ -138,11 +139,7 @@ var _ = Describe("End-to-End Admission Webhook Integration", Ordered, ContinueOn
 					// Missing requiredField - should be rejected
 					Build()
 
-				// This should fail due to validation webhook
-				err := cl.Create(ctx, invalidObj)
-				Expect(err).To(HaveOccurred())
-				Expect(apierrors.IsInvalid(err)).To(BeTrue())
-				Expect(err).To(MatchError(ContainSubstring("requiredField: Required value")))
+				expectInvalidCreateEventually(ctx, cl, invalidObj, "requiredField: Required value")
 			}, defaultNodeTimeout)
 		})
 	})
@@ -167,6 +164,7 @@ var _ = Describe("End-to-End Admission Webhook Integration", Ordered, ContinueOn
 				// Create ValidatingWebhookConfiguration to enable end-to-end testing
 				webhookConfig := createValidatingWebhookConfig(tighterCompatibilityRequirement, tighterCRD)
 				Expect(cl.Create(ctx, webhookConfig)).To(Succeed())
+				waitForCompatibilityRequirementInWebhookManagerCache(ctx, tighterCompatibilityRequirement)
 
 				DeferCleanup(func(ctx context.Context) {
 					Expect(test.CleanupAndWait(ctx, cl,
@@ -189,11 +187,7 @@ var _ = Describe("End-to-End Admission Webhook Integration", Ordered, ContinueOn
 					// Missing testField which is now required in tighter compatibility requirement
 					Build()
 
-				// Configure webhook to use the tighter compatibility requirement
-				err := cl.Create(ctx, objMissingField)
-				Expect(err).To(HaveOccurred())
-				Expect(apierrors.IsInvalid(err)).To(BeTrue())
-				Expect(err).To(MatchError(ContainSubstring("testField: Required value, optionalNumber: Required value")))
+				expectInvalidCreateEventually(ctx, cl, objMissingField, "testField: Required value, optionalNumber: Required value")
 			}, defaultNodeTimeout)
 
 			It("should allow objects with all required fields through API server", func(ctx context.Context) {
@@ -241,6 +235,7 @@ var _ = Describe("End-to-End Admission Webhook Integration", Ordered, ContinueOn
 				// Create ValidatingWebhookConfiguration to enable end-to-end testing
 				webhookConfig := createValidatingWebhookConfig(looserCompatibilityRequirement, looserCRD)
 				Expect(cl.Create(ctx, webhookConfig)).To(Succeed())
+				waitForCompatibilityRequirementInWebhookManagerCache(ctx, looserCompatibilityRequirement)
 
 				DeferCleanup(func(ctx context.Context) {
 					Expect(test.CleanupAndWait(ctx, cl,
@@ -284,11 +279,7 @@ var _ = Describe("End-to-End Admission Webhook Integration", Ordered, ContinueOn
 					// Missing requiredField which is no longer required in looser compatibility requirement
 					Build()
 
-				// This should fail as the field is still required in the live CRD.
-				err := cl.Create(ctx, objMissingFormerlyRequired)
-				Expect(err).To(HaveOccurred())
-				Expect(apierrors.IsInvalid(err)).To(BeTrue())
-				Expect(err).To(MatchError(ContainSubstring("requiredField: Required value")))
+				expectInvalidCreateEventually(ctx, cl, objMissingFormerlyRequired, "requiredField: Required value")
 			}, defaultNodeTimeout)
 		})
 	})
@@ -355,21 +346,24 @@ var _ = Describe("End-to-End Admission Webhook Integration", Ordered, ContinueOn
 					Expect(cl.Create(ctx, tighterWebhookConfig)).To(Succeed())
 				})
 
+				waitForCompatibilityRequirementInWebhookManagerCache(ctx, tighterCompatibilityRequirement)
+
 				DeferCleanup(func(ctx context.Context) {
 					Expect(test.CleanupAndWait(ctx, cl, tighterWebhookConfig, tighterCompatibilityRequirement)).To(Succeed())
 				})
 			}, defaultNodeTimeout)
 
 			It("should reject updates that remove newly required fields", func(ctx context.Context) {
-				// Try to update by removing a field that's required in the tighter compatibility requirement
-				updateMissingField := existingObj.DeepCopy()
-				delete(updateMissingField.Object, "testField") // Remove field required by tighter validation
-				// Optional number was also changed to required but wasn't present originally, so will flag.
+				Eventually(func(g Gomega) {
+					g.Expect(cl.Get(ctx, client.ObjectKeyFromObject(existingObj), existingObj)).To(Succeed())
+					updateMissingField := existingObj.DeepCopy()
+					delete(updateMissingField.Object, "testField") // Remove field required by tighter validation
 
-				err := cl.Update(ctx, updateMissingField)
-				Expect(err).To(HaveOccurred())
-				Expect(apierrors.IsInvalid(err)).To(BeTrue())
-				Expect(err).To(MatchError(ContainSubstring("testField: Required value, optionalNumber: Required value")))
+					err := cl.Update(ctx, updateMissingField)
+					g.Expect(err).To(HaveOccurred())
+					g.Expect(apierrors.IsInvalid(err)).To(BeTrue())
+					g.Expect(err).To(MatchError(ContainSubstring("testField: Required value, optionalNumber: Required value")))
+				}).WithContext(ctx).WithTimeout(defaultEventuallyTimeout).Should(Succeed())
 			}, defaultNodeTimeout)
 
 			It("should allow updates that include all newly required fields", func(ctx context.Context) {
@@ -450,6 +444,7 @@ var _ = Describe("End-to-End Admission Webhook Integration", Ordered, ContinueOn
 				statusWebhookConfig := createValidatingWebhookConfig(statusCompatibilityRequirement, compatibilityCRD)
 				statusWebhookConfig.Name = fmt.Sprintf("test-status-validation-%s", statusCompatibilityRequirement.Name)
 				Expect(cl.Create(ctx, statusWebhookConfig)).To(Succeed())
+				waitForCompatibilityRequirementInWebhookManagerCache(ctx, statusCompatibilityRequirement)
 
 				DeferCleanup(func(ctx context.Context) {
 					Expect(test.CleanupAndWait(ctx, cl, statusWebhookConfig, statusCompatibilityRequirement)).To(Succeed())
@@ -520,17 +515,9 @@ var _ = Describe("End-to-End Admission Webhook Integration", Ordered, ContinueOn
 					Expect(test.CleanupAndWait(ctx, cl, baseObj)).To(Succeed())
 				})
 
-				// Wait for object to be created
-				Eventually(kWithCtx(ctx).Get(baseObj)).WithContext(ctx).Should(Succeed())
-
-				// Now try to update status with invalid enum value
-				statusUpdate := baseObj.DeepCopy()
-				statusUpdate.Object["status"] = map[string]interface{}{
+				expectStatusUpdateMatchErrorEventually(ctx, baseObj, map[string]interface{}{
 					"phase": "InvalidPhase", // Not in allowed enum values
-				}
-
-				err := cl.Status().Update(ctx, statusUpdate)
-				Expect(err).To(MatchError(ContainSubstring("\"test-object\" is invalid: status.phase: Unsupported value: \"InvalidPhase\": supported values: \"Ready\", \"Pending\", \"Failed\"")))
+				}, "\"test-object\" is invalid: status.phase: Unsupported value: \"InvalidPhase\": supported values: \"Ready\", \"Pending\", \"Failed\"")
 			}, defaultNodeTimeout)
 
 			It("should reject status updates with invalid nested structure when status validation is enabled", func(ctx context.Context) {
@@ -553,12 +540,7 @@ var _ = Describe("End-to-End Admission Webhook Integration", Ordered, ContinueOn
 					Expect(test.CleanupAndWait(ctx, cl, baseObj)).To(Succeed())
 				})
 
-				// Wait for object to be created
-				Eventually(kWithCtx(ctx).Get(baseObj)).WithContext(ctx).Should(Succeed())
-
-				// Now try to update status with invalid nested structure
-				statusUpdate := baseObj.DeepCopy()
-				statusUpdate.Object["status"] = map[string]interface{}{
+				expectStatusUpdateMatchErrorEventually(ctx, baseObj, map[string]interface{}{
 					"phase": "Ready",
 					"conditions": []interface{}{
 						map[string]interface{}{
@@ -566,10 +548,7 @@ var _ = Describe("End-to-End Admission Webhook Integration", Ordered, ContinueOn
 							// Missing required "status" field in condition
 						},
 					},
-				}
-
-				err := cl.Status().Update(ctx, statusUpdate)
-				Expect(err).To(MatchError(ContainSubstring("\"test-object\" is invalid: status.conditions[0].status: Required value")))
+				}, "\"test-object\" is invalid: status.conditions[0].status: Required value")
 			}, defaultNodeTimeout)
 
 			It("should reject status updates with negative readyReplicas when status validation is enabled", func(ctx context.Context) {
@@ -592,18 +571,10 @@ var _ = Describe("End-to-End Admission Webhook Integration", Ordered, ContinueOn
 					Expect(test.CleanupAndWait(ctx, cl, baseObj)).To(Succeed())
 				})
 
-				// Wait for object to be created
-				Eventually(kWithCtx(ctx).Get(baseObj)).WithContext(ctx).Should(Succeed())
-
-				// Now try to update status with negative readyReplicas
-				statusUpdate := baseObj.DeepCopy()
-				statusUpdate.Object["status"] = map[string]interface{}{
+				expectStatusUpdateMatchErrorEventually(ctx, baseObj, map[string]interface{}{
 					"phase":         "Ready",
 					"readyReplicas": int64(-1), // Below minimum value
-				}
-
-				err := cl.Status().Update(ctx, statusUpdate)
-				Expect(err).To(MatchError(ContainSubstring("\"test-object\" is invalid: status.readyReplicas: Invalid value: -1: status.readyReplicas in body should be greater than or equal to 0")))
+				}, "\"test-object\" is invalid: status.readyReplicas: Invalid value: -1: status.readyReplicas in body should be greater than or equal to 0")
 			}, defaultNodeTimeout)
 		})
 	})
@@ -648,6 +619,7 @@ var _ = Describe("End-to-End Admission Webhook Integration", Ordered, ContinueOn
 				scaleWebhookConfig := createValidatingWebhookConfig(scaleCompatibilityRequirement, compatibilityCRD)
 				scaleWebhookConfig.Name = fmt.Sprintf("test-scale-validation-%s", scaleCompatibilityRequirement.Name)
 				Expect(cl.Create(ctx, scaleWebhookConfig)).To(Succeed())
+				waitForCompatibilityRequirementInWebhookManagerCache(ctx, scaleCompatibilityRequirement)
 
 				DeferCleanup(func(ctx context.Context) {
 					Expect(test.CleanupAndWait(ctx, cl, scaleWebhookConfig, scaleCompatibilityRequirement)).To(Succeed())
@@ -718,8 +690,7 @@ var _ = Describe("End-to-End Admission Webhook Integration", Ordered, ContinueOn
 					}).
 					Build()
 
-				err := cl.Create(ctx, objWithTooManyReplicas)
-				Expect(err).To(MatchError(ContainSubstring("\"test-object\" is invalid: spec.replicas: Invalid value: 150: spec.replicas in body should be less than or equal to 100")))
+				expectInvalidCreateEventually(ctx, cl, objWithTooManyReplicas, "\"test-object\" is invalid: spec.replicas: Invalid value: 150: spec.replicas in body should be less than or equal to 100")
 			}, defaultNodeTimeout)
 
 			It("should reject objects with negative replica count when scale validation is enabled", func(ctx context.Context) {
@@ -743,8 +714,7 @@ var _ = Describe("End-to-End Admission Webhook Integration", Ordered, ContinueOn
 					}).
 					Build()
 
-				err := cl.Create(ctx, objWithNegativeReplicas)
-				Expect(err).To(MatchError(ContainSubstring("\"test-object\" is invalid: [spec.replicas: Invalid value: -1: spec.replicas in body should be greater than or equal to 0, .spec.replicas: Invalid value: -1: should be a non-negative integer]")))
+				expectInvalidCreateEventually(ctx, cl, objWithNegativeReplicas, "\"test-object\" is invalid: [spec.replicas: Invalid value: -1: spec.replicas in body should be greater than or equal to 0, .spec.replicas: Invalid value: -1: should be a non-negative integer]")
 			}, defaultNodeTimeout)
 
 			It("should reject status updates with negative readyReplicas when scale validation is enabled", func(ctx context.Context) {
@@ -775,17 +745,9 @@ var _ = Describe("End-to-End Admission Webhook Integration", Ordered, ContinueOn
 					Expect(test.CleanupAndWait(ctx, cl, baseObj)).To(Succeed())
 				})
 
-				// Wait for object to be created
-				Eventually(kWithCtx(ctx).Get(baseObj)).WithContext(ctx).Should(Succeed())
-
-				// Now try to update status with negative readyReplicas
-				statusUpdate := baseObj.DeepCopy()
-				statusUpdate.Object["status"] = map[string]interface{}{
+				expectStatusUpdateMatchErrorEventually(ctx, baseObj, map[string]interface{}{
 					"readyReplicas": int64(-1), // Below minimum of 0
-				}
-
-				err := cl.Status().Update(ctx, statusUpdate)
-				Expect(err).To(MatchError(ContainSubstring("\"test-object\" is invalid: [status.readyReplicas: Invalid value: -1: status.readyReplicas in body should be greater than or equal to 0, .status.readyReplicas: Invalid value: -1: should be a non-negative integer]")))
+				}, "\"test-object\" is invalid: [status.readyReplicas: Invalid value: -1: status.readyReplicas in body should be greater than or equal to 0, .status.readyReplicas: Invalid value: -1: should be a non-negative integer]")
 			}, defaultNodeTimeout)
 		})
 	})
@@ -822,6 +784,7 @@ var _ = Describe("End-to-End Admission Webhook Integration", Ordered, ContinueOn
 				warningWebhookConfig := createValidatingWebhookConfig(warningCompatibilityRequirement, compatibilityCRD)
 				warningWebhookConfig.Name = fmt.Sprintf("test-warning-validation-%s", warningCompatibilityRequirement.Name)
 				Expect(warningClient.Create(ctx, warningWebhookConfig)).To(Succeed())
+				waitForCompatibilityRequirementInWebhookManagerCache(ctx, warningCompatibilityRequirement)
 
 				DeferCleanup(func(ctx context.Context) {
 					Expect(test.CleanupAndWait(ctx, warningClient, warningWebhookConfig, warningCompatibilityRequirement)).To(Succeed())
@@ -928,6 +891,7 @@ var _ = Describe("End-to-End Admission Webhook Integration", Ordered, ContinueOn
 				warningStatusWebhookConfig := createValidatingWebhookConfig(warningStatusCompatibilityRequirement, compatibilityCRD)
 				warningStatusWebhookConfig.Name = fmt.Sprintf("test-warning-status-validation-%s", warningStatusCompatibilityRequirement.Name)
 				Expect(warningClient.Create(ctx, warningStatusWebhookConfig)).To(Succeed())
+				waitForCompatibilityRequirementInWebhookManagerCache(ctx, warningStatusCompatibilityRequirement)
 
 				DeferCleanup(func(ctx context.Context) {
 					Expect(test.CleanupAndWait(ctx, warningClient, warningStatusWebhookConfig, warningStatusCompatibilityRequirement)).To(Succeed())
@@ -1094,6 +1058,7 @@ var _ = Describe("End-to-End Admission Webhook Integration", Ordered, ContinueOn
 				warningScaleWebhookConfig := createValidatingWebhookConfig(warningScaleCompatibilityRequirement, compatibilityCRD)
 				warningScaleWebhookConfig.Name = fmt.Sprintf("test-warning-scale-validation-%s", warningScaleCompatibilityRequirement.Name)
 				Expect(warningClient.Create(ctx, warningScaleWebhookConfig)).To(Succeed())
+				waitForCompatibilityRequirementInWebhookManagerCache(ctx, warningScaleCompatibilityRequirement)
 
 				DeferCleanup(func(ctx context.Context) {
 					Expect(test.CleanupAndWait(ctx, cl, warningScaleWebhookConfig, warningScaleCompatibilityRequirement)).To(Succeed())
@@ -1221,6 +1186,39 @@ var _ = Describe("End-to-End Admission Webhook Integration", Ordered, ContinueOn
 		})
 	})
 })
+
+// expectInvalidCreateEventually is like expectCreateMatchErrorEventually but requires apierrors.IsInvalid.
+func expectInvalidCreateEventually(ctx context.Context, c client.Client, obj *unstructured.Unstructured, substr string) {
+	GinkgoHelper()
+
+	Eventually(func(g Gomega) error {
+		g.Expect(client.IgnoreNotFound(c.Delete(ctx, obj))).To(Succeed())
+
+		err := c.Create(ctx, obj)
+		if err == nil {
+			g.Expect(c.Delete(ctx, obj)).To(Succeed())
+		}
+
+		return err
+	}).WithContext(ctx).WithTimeout(defaultEventuallyTimeout).
+		Should(SatisfyAll(
+			MatchError(apierrors.IsInvalid, "IsInvalid"),
+			MatchError(ContainSubstring(substr)),
+		))
+}
+
+// expectStatusUpdateMatchErrorEventually retries status updates until the apiserver returns an error whose message contains substr.
+func expectStatusUpdateMatchErrorEventually(ctx context.Context, baseObj *unstructured.Unstructured, status map[string]interface{}, substr string) {
+	GinkgoHelper()
+	Eventually(func(g Gomega) {
+		g.Expect(cl.Get(ctx, client.ObjectKeyFromObject(baseObj), baseObj)).To(Succeed())
+		statusUpdate := baseObj.DeepCopy()
+		statusUpdate.Object["status"] = status
+		err := cl.Status().Update(ctx, statusUpdate)
+		g.Expect(err).To(HaveOccurred())
+		g.Expect(err).To(MatchError(ContainSubstring(substr)))
+	}).WithContext(ctx).WithTimeout(defaultEventuallyTimeout).Should(Succeed())
+}
 
 func TestCompatibilityRequirementContext(t *testing.T) {
 	ctx := t.Context()
