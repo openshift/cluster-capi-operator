@@ -176,7 +176,10 @@ func customizeDeployment(obj client.Object) (client.Object, error) {
 
 	deployment.Spec.Template.Spec.PriorityClassName = "system-cluster-critical"
 
-	deployment.Spec.Template.Annotations = mergeMaps(deployment.Spec.Template.Annotations, openshiftWorkloadAnnotation)
+	deployment.Spec.Template.Annotations = mergeMaps(
+		deployment.Spec.Template.Annotations,
+		openshiftWorkloadAnnotation,
+	)
 
 	for i := range deployment.Spec.Template.Spec.Containers {
 		container := &deployment.Spec.Template.Spec.Containers[i]

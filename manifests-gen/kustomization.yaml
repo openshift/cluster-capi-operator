@@ -15,3 +15,19 @@ patches:
       name: __ignored__
       annotations:
         config.kubernetes.io/local-config: "true"
+
+# Set the required SCC annotation on all Deployments' pod templates.
+# Default to the most restrictive SCC, this can be overridden by the providers upon manifest generation.
+# See: https://github.com/openshift/enhancements/blob/master/enhancements/authentication/custom-scc-preemption-prevention.md
+- target:
+    kind: Deployment
+  patch: |
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: __ignored__
+    spec:
+      template:
+        metadata:
+          annotations:
+            openshift.io/required-scc: "restricted-v2"
