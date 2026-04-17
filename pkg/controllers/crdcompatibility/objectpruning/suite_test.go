@@ -48,7 +48,10 @@ var (
 	emptySuiteCRD      func() *apiextensionsv1.CustomResourceDefinition
 )
 
-var defaultNodeTimeout = NodeTimeout(10 * time.Second)
+var (
+	defaultNodeTimeout       = NodeTimeout(10 * time.Second)
+	defaultEventuallyTimeout = 2 * time.Second
+)
 
 func TestObjectPruning(t *testing.T) {
 	RegisterFailHandler(Fail)

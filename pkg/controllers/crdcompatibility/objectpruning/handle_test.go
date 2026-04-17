@@ -82,9 +82,19 @@ var _ = Describe("Object Pruning Integration", func() {
 				webhookConfig := createMutatingWebhookConfig(scenario.CompatibilityRequirement, liveCRD)
 				Expect(cl.Create(ctx, webhookConfig)).To(Succeed())
 
+				By("Waiting for the webhook manager cache to observe the CompatibilityRequirement", func() {
+					// The admission handler uses mgr.GetClient(), which reads from the informer cache first.
+					Eventually(func(g Gomega) {
+						cached := &apiextensionsv1alpha1.CompatibilityRequirement{}
+						g.Expect(managerClient.Get(ctx, client.ObjectKeyFromObject(scenario.CompatibilityRequirement), cached)).To(Succeed())
+					}).WithContext(ctx).WithTimeout(defaultEventuallyTimeout).Should(Succeed())
+				})
+
 				By("Creating object through API server (should be pruned by webhook)")
 				// Set the namespace and ensure object matches the CRD GVK
 				gvk := liveCRD.Spec.Versions[0].Name
+
+				// Hydrate scenario.InputObject into an unstructured object.
 				inputObject := &unstructured.Unstructured{
 					Object: runtime.DeepCopyJSON(scenario.InputObject),
 				}
@@ -93,11 +103,7 @@ var _ = Describe("Object Pruning Integration", func() {
 				inputObject.SetNamespace(namespace)
 				inputObject.SetName(fmt.Sprintf("test-pruning-%d", GinkgoRandomSeed()))
 
-				// Status must be handled separately because it's a subresource.
 				status, hasStatus, _ := unstructured.NestedMap(inputObject.Object, "status")
-				if hasStatus {
-					delete(inputObject.Object, "status")
-				}
 
 				DeferCleanup(func(ctx context.Context) {
 					Expect(test.CleanupAndWait(ctx, cl,
@@ -107,45 +113,43 @@ var _ = Describe("Object Pruning Integration", func() {
 					)).To(Succeed())
 				})
 
-				// Create object through API server - webhook should prune it
-				Expect(cl.Create(ctx, inputObject)).To(Succeed())
+				// Create may succeed before the apiserver starts invoking the new MutatingWebhookConfiguration,
+				// leaving an unpruned object in etcd. Retry delete+create until pruning matches.
+				Eventually(func(g Gomega) {
+					retrievedObject := inputObject.DeepCopy()
 
-				// Write the status through the status subresource.
-				if hasStatus {
-					inputObject.Object["status"] = status
-					Expect(cl.Status().Update(ctx, inputObject)).To(Succeed())
-				}
+					// Status must be handled separately because it's a subresource.
+					if hasStatus {
+						delete(retrievedObject.Object, "status")
+					}
 
-				By("Verifying the object was pruned correctly", func() {
-					retrievedObj := &unstructured.Unstructured{}
-					retrievedObj.SetGroupVersionKind(inputObject.GroupVersionKind())
-					retrievedObj.SetName(inputObject.GetName())
-					retrievedObj.SetNamespace(inputObject.GetNamespace())
+					// If a previous loop raced and successfully created the object we need to delete it first.
+					g.Expect(client.IgnoreNotFound(cl.Delete(ctx, retrievedObject))).To(Succeed())
+					g.Expect(cl.Create(ctx, retrievedObject)).To(Succeed())
 
-					Eventually(kWithCtx(ctx).Get(retrievedObj)).WithContext(ctx).Should(Succeed())
+					if hasStatus {
+						retrievedObject.Object["status"] = status
+						g.Expect(cl.Status().Update(ctx, retrievedObject)).To(Succeed())
+					}
 
-					Expect(retrievedObj.Object).To(test.IgnoreFields([]string{"apiVersion", "kind", "metadata"}, Equal(scenario.ExpectedObject)), "Expected object to be pruned correctly")
-				})
+					g.Expect(retrievedObject.Object).To(test.IgnoreFields([]string{"apiVersion", "kind", "metadata"}, Equal(scenario.ExpectedObject)), "Expected object to be pruned correctly")
+				}).WithContext(ctx).WithTimeout(defaultEventuallyTimeout).Should(Succeed())
+
+				retrievedObj := inputObject.DeepCopy()
+				Expect(cl.Get(ctx, client.ObjectKeyFromObject(retrievedObj), retrievedObj)).To(Succeed())
 
 				By("Attempting to update the object, should prune the object again", func() {
-					inputObject.Object["spec"] = runtime.DeepCopyJSONValue(scenario.InputObject["spec"])
-					Expect(cl.Update(ctx, inputObject)).To(Succeed())
+					retrievedObj.Object["spec"] = runtime.DeepCopyJSONValue(scenario.InputObject["spec"])
+					Expect(cl.Update(ctx, retrievedObj)).To(Succeed())
 				})
 
 				// Write the status through the status subresource.
 				if hasStatus {
-					inputObject.Object["status"] = status
-					Expect(cl.Status().Update(ctx, inputObject)).To(Succeed())
+					retrievedObj.Object["status"] = status
+					Expect(cl.Status().Update(ctx, retrievedObj)).To(Succeed())
 				}
 
 				By("Verifying the object was pruned correctly", func() {
-					retrievedObj := &unstructured.Unstructured{}
-					retrievedObj.SetGroupVersionKind(inputObject.GroupVersionKind())
-					retrievedObj.SetName(inputObject.GetName())
-					retrievedObj.SetNamespace(inputObject.GetNamespace())
-
-					Eventually(kWithCtx(ctx).Get(retrievedObj)).WithContext(ctx).Should(Succeed())
-
 					Expect(retrievedObj.Object).To(test.IgnoreFields([]string{"apiVersion", "kind", "metadata"}, Equal(scenario.ExpectedObject)), "Expected object to be pruned correctly")
 				})
 
@@ -165,24 +169,17 @@ var _ = Describe("Object Pruning Integration", func() {
 				})
 
 				By("Updating the object again, should not be pruned", func() {
-					inputObject.Object["spec"] = scenario.InputObject["spec"]
-					Expect(cl.Update(ctx, inputObject)).To(Succeed())
+					retrievedObj.Object["spec"] = scenario.InputObject["spec"]
+					Expect(cl.Update(ctx, retrievedObj)).To(Succeed())
 				})
 
 				// Write the status through the status subresource.
 				if hasStatus {
-					inputObject.Object["status"] = status
-					Expect(cl.Status().Update(ctx, inputObject)).To(Succeed())
+					retrievedObj.Object["status"] = status
+					Expect(cl.Status().Update(ctx, retrievedObj)).To(Succeed())
 				}
 
 				By("Verifying the object was not pruned", func() {
-					retrievedObj := &unstructured.Unstructured{}
-					retrievedObj.SetGroupVersionKind(inputObject.GroupVersionKind())
-					retrievedObj.SetName(inputObject.GetName())
-					retrievedObj.SetNamespace(inputObject.GetNamespace())
-
-					Eventually(kWithCtx(ctx).Get(retrievedObj)).WithContext(ctx).Should(Succeed())
-
 					Expect(retrievedObj.Object).To(test.IgnoreFields([]string{"apiVersion", "kind", "metadata"}, Equal(scenario.InputObject)), "Expected object to be not pruned")
 				})
 			},
@@ -362,8 +359,16 @@ var _ = Describe("Object Pruning Integration", func() {
 
 			By("Verifying error response")
 
-			err := cl.Create(ctx, testObj)
-			Expect(err).To(MatchError(ContainSubstring("CompatibilityRequirement.apiextensions.openshift.io \"non-existent-compat-req\" not found")))
+			Eventually(func(g Gomega) {
+				g.Expect(client.IgnoreNotFound(cl.Delete(ctx, testObj))).To(Succeed())
+
+				err := cl.Create(ctx, testObj)
+				if err == nil {
+					g.Expect(cl.Delete(ctx, testObj)).To(Succeed())
+				}
+
+				g.Expect(err).To(MatchError(ContainSubstring("CompatibilityRequirement.apiextensions.openshift.io \"non-existent-compat-req\" not found")))
+			}).WithContext(ctx).WithTimeout(defaultEventuallyTimeout).Should(Succeed())
 		}, defaultNodeTimeout)
 	})
 })
