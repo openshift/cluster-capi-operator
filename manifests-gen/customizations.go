@@ -27,6 +27,14 @@ var (
 		"target.workload.openshift.io/management": `{"effect": "PreferredDuringScheduling"}`,
 	}
 
+	// The SCC annotation is used by the SCC admission webhook to pin the SCC to the pod.
+	// See for more info:
+	// https://github.com/openshift/enhancements/blob/master/enhancements/authentication/custom-scc-preemption-prevention.md
+	openshiftRequiredSCCAnnotation = map[string]string{
+		// Default to the most restrictive SCC, this can be overridden by the providers upon manifest generation.
+		"openshift.io/required-scc": "restricted-v2",
+	}
+
 	// The expected registry for images used by the cluster-capi-operator.
 	expectedRegistry = "registry.ci.openshift.org"
 )
@@ -176,7 +184,11 @@ func customizeDeployment(obj client.Object) (client.Object, error) {
 
 	deployment.Spec.Template.Spec.PriorityClassName = "system-cluster-critical"
 
-	deployment.Spec.Template.Annotations = mergeMaps(deployment.Spec.Template.Annotations, openshiftWorkloadAnnotation)
+	deployment.Spec.Template.Annotations = mergeMaps(
+		deployment.Spec.Template.Annotations,
+		openshiftWorkloadAnnotation,
+		openshiftRequiredSCCAnnotation,
+	)
 
 	for i := range deployment.Spec.Template.Spec.Containers {
 		container := &deployment.Spec.Template.Spec.Containers[i]
