@@ -42,8 +42,19 @@ const (
 	errUnsupportedCAPVProvisioningMode = "unable to convert provisioning mode, unknown value"
 	errUnsupportedCAPVCloneMode        = "unable to convert clone mode, unknown value"
 	vsphereCredentialsSecretName       = "vsphere-cloud-credentials" //#nosec G101 -- False positive, not actually a credential.
-
 )
+
+// ipamKindToResource maps IPAM API group and Kind names (singular) to resource names (plural).
+// This is the reverse mapping of ipamResourceToKind (from mapi2capi), used for CAPI→MAPI conversion.
+//
+//nolint:gochecknoglobals // Lookup table for IPAM Kind name to resource name conversion
+var ipamKindToResource = map[string]map[string]string{
+	"ipam.cluster.x-k8s.io": {
+		"InClusterIPPool":       "inclusterippools",
+		"GlobalInClusterIPPool": "globalinclusterippools",
+	},
+	// Additional IPAM providers can be added here as needed
+}
 
 // machineAndVSphereMachineAndVSphereCluster stores the details of a Cluster API Machine and VSphereMachine and VSphereCluster.
 type machineAndVSphereMachineAndVSphereCluster struct {
@@ -108,7 +119,6 @@ func (m machineAndVSphereMachineAndVSphereCluster) ToMachine() (*mapiv1beta1.Mac
 	}
 
 	additionalMachineAPIMetadataLabels, additionalMachineAPIMetadataAnnotations := m.buildAdditionalMetadata()
-
 	mapiMachine, err := fromCAPIMachineToMAPIMachine(m.machine, additionalMachineAPIMetadataLabels, additionalMachineAPIMetadataAnnotations)
 
 	if err != nil {
@@ -148,13 +158,10 @@ func (m machineSetAndVSphereMachineTemplateAndVSphereCluster) ToMachineSet() (*m
 
 	// Run the full ToMachine conversion so that we can check for
 	// any Machine level conversion errs in the spec translation.
-	mapiMachine, warn, err := m.ToMachine()
+	mapiMachine, warning, err := m.ToMachine()
 	if err != nil {
 		errs = append(errs, err)
 	}
-
-	warnings := make([]string, 0, len(warn))
-	warnings = append(warnings, warn...)
 
 	mapiMachineSet, err := fromCAPIMachineSetToMAPIMachineSet(m.machineSet)
 	if err != nil {
@@ -162,7 +169,7 @@ func (m machineSetAndVSphereMachineTemplateAndVSphereCluster) ToMachineSet() (*m
 	}
 
 	if len(errs) > 0 {
-		return nil, warnings, utilerrors.NewAggregate(errs)
+		return nil, warning, utilerrors.NewAggregate(errs)
 	}
 
 	mapiMachineSet.Spec.Template.Spec = mapiMachine.Spec
@@ -174,7 +181,7 @@ func (m machineSetAndVSphereMachineTemplateAndVSphereCluster) ToMachineSet() (*m
 	mapiMachineSet.Spec.Template.ObjectMeta.Annotations = mapiMachine.ObjectMeta.Annotations //nolint:staticcheck // ObjectMeta is a field, not embedded
 	mapiMachineSet.Spec.Template.ObjectMeta.Labels = mapiMachine.ObjectMeta.Labels           //nolint:staticcheck // ObjectMeta is a field, not embedded
 
-	return mapiMachineSet, warnings, nil
+	return mapiMachineSet, warning, nil
 }
 
 // toProviderSpec converts a capi2mapi MachineAndVSphereMachineTemplateAndVSphereCluster into a MAPI VSphereMachineProviderSpec.
@@ -198,7 +205,7 @@ func (m machineAndVSphereMachineAndVSphereCluster) toProviderSpec() (*mapiv1beta
 	}
 
 	// Convert data disks
-	// AdditionalDisksGiB is deprecated in CAPV in favor of DataDisks.
+	// AdditionalDisksGiB is deprecated in CoAPV in favor of DataDisks.
 	// If AdditionalDisksGiB is set, convert it to DataDisks format first.
 	allDataDisks := m.vSphereMachine.Spec.DataDisks
 	if len(m.vSphereMachine.Spec.AdditionalDisksGiB) > 0 {
@@ -364,17 +371,27 @@ func (m machineAndVSphereMachineAndVSphereCluster) buildAdditionalMetadata() (ma
 		}
 	}
 
+	//nolint:nestif // Nested logic is acceptable for conditionally building metadata maps
 	if !m.excludeMachineAPILabelsAndAnnotations {
-		if additionalMachineAPIMetadataLabels == nil {
-			additionalMachineAPIMetadataLabels = make(map[string]string)
-		}
 		// For vSphere, we use template name as instance type and datacenter as region
-		additionalMachineAPIMetadataLabels[consts.MAPIMachineMetadataLabelInstanceType] = m.vSphereMachine.Spec.Template
-		additionalMachineAPIMetadataLabels[consts.MAPIMachineMetadataLabelRegion] = m.vSphereMachine.Spec.Datacenter
+		// Only add these labels if they have non-empty values
+		if m.vSphereMachine.Spec.Template != "" || m.vSphereMachine.Spec.Datacenter != "" {
+			if additionalMachineAPIMetadataLabels == nil {
+				additionalMachineAPIMetadataLabels = make(map[string]string)
+			}
 
-		// Get instance state from VM status - use empty string if VM is not yet provisioned
+			if m.vSphereMachine.Spec.Template != "" {
+				additionalMachineAPIMetadataLabels[consts.MAPIMachineMetadataLabelInstanceType] = m.vSphereMachine.Spec.Template
+			}
+
+			if m.vSphereMachine.Spec.Datacenter != "" {
+				additionalMachineAPIMetadataLabels[consts.MAPIMachineMetadataLabelRegion] = m.vSphereMachine.Spec.Datacenter
+			}
+		}
+
+		// Get instance state from VM status and set annotation.
+		// Always set the annotation to match AWS behavior.
 		instanceState := m.getInstanceState()
-
 		additionalMachineAPIMetadataAnnotations = map[string]string{
 			consts.MAPIMachineMetadataAnnotationInstanceState: instanceState,
 		}
@@ -384,20 +401,14 @@ func (m machineAndVSphereMachineAndVSphereCluster) buildAdditionalMetadata() (ma
 }
 
 // getInstanceState determines the instance state from the VSphereMachine status.
-// Returns empty string if VM is not yet provisioned, "ready" if provisioned and ready,
-// or "not-ready" if provisioned but not ready.
-// This matches behavior of other providers (AWS, OpenStack, PowerVS).
+// Returns "ready" if Ready is true, otherwise empty string.
+// This matches AWS's pattern where instance state is derived from a single boolean field.
 func (m machineAndVSphereMachineAndVSphereCluster) getInstanceState() string {
-	// We check if addresses are set to determine if the VM has been provisioned
-	if len(m.vSphereMachine.Status.Addresses) == 0 {
-		return ""
-	}
-
 	if m.vSphereMachine.Status.Ready {
-		return "ready"
+		return consts.VSphereInstanceStateReady
 	}
 
-	return "not-ready"
+	return ""
 }
 
 func convertCAPVMachineConditionsToMAPIVSphereMachineProviderConditions(vSphereMachine *vspherev1.VSphereMachine) []metav1.Condition {
@@ -472,40 +483,65 @@ func convertCAPVNetworkSpecToMAPI(_ *field.Path, capvNetwork vspherev1.NetworkSp
 	if len(capvNetwork.Devices) > 0 {
 		devices = make([]mapiv1beta1.NetworkDeviceSpec, len(capvNetwork.Devices))
 		for i, device := range capvNetwork.Devices {
-			devices[i] = mapiv1beta1.NetworkDeviceSpec{
-				NetworkName: device.NetworkName,
-				Gateway:     device.Gateway4, // Map IPv4 gateway
-				IPAddrs:     device.IPAddrs,
-				Nameservers: device.Nameservers,
-			}
-
-			// Convert AddressesFromPools
-			if len(device.AddressesFromPools) > 0 {
-				addressesFromPools := make([]mapiv1beta1.AddressesFromPool, len(device.AddressesFromPools))
-				for j, pool := range device.AddressesFromPools {
-					addressesFromPools[j] = mapiv1beta1.AddressesFromPool{
-						Group:    ptr.Deref(pool.APIGroup, ""),
-						Resource: pool.Kind, // This might need adjustment based on actual mapping
-						Name:     pool.Name,
-					}
-				}
-
-				devices[i].AddressesFromPools = addressesFromPools
-			}
-
-			// Note: DHCP settings are not directly represented in MAPI NetworkDeviceSpec
-			// The presence of DHCP4/DHCP6 in CAPV is inferred from the absence of static IPs
-			if device.DHCP4 || device.DHCP6 {
-				if len(device.IPAddrs) > 0 {
-					warnings = append(warnings, fmt.Sprintf("device %d has both DHCP and static IPs configured, MAPI will use static IPs", i))
-				}
-			}
+			devices[i], warnings = convertCAPVNetworkDevice(device, i, warnings)
 		}
 	}
 
 	return mapiv1beta1.NetworkSpec{
 		Devices: devices,
 	}, warnings, errs
+}
+
+// convertCAPVNetworkDevice converts a single CAPV NetworkDeviceSpec to MAPI.
+func convertCAPVNetworkDevice(device vspherev1.NetworkDeviceSpec, index int, warnings []string) (mapiv1beta1.NetworkDeviceSpec, []string) {
+	mapiDevice := mapiv1beta1.NetworkDeviceSpec{
+		NetworkName: device.NetworkName,
+		Gateway:     device.Gateway4, // Map IPv4 gateway
+		IPAddrs:     device.IPAddrs,
+		Nameservers: device.Nameservers,
+	}
+
+	mapiDevice.AddressesFromPools = convertCAPVAddressesFromPools(device.AddressesFromPools)
+
+	// Note: DHCP settings are not directly represented in MAPI NetworkDeviceSpec
+	// The presence of DHCP4/DHCP6 in CAPV is inferred from the absence of static IPs
+	if device.DHCP4 || device.DHCP6 {
+		if len(device.IPAddrs) > 0 {
+			warnings = append(warnings, fmt.Sprintf("device %d has both DHCP and static IPs configured, MAPI will use static IPs", index))
+		}
+	}
+
+	return mapiDevice, warnings
+}
+
+// convertCAPVAddressesFromPools converts CAPV AddressesFromPools to MAPI.
+func convertCAPVAddressesFromPools(capvPools []corev1.TypedLocalObjectReference) []mapiv1beta1.AddressesFromPool {
+	if len(capvPools) == 0 {
+		return nil
+	}
+
+	mapiPools := make([]mapiv1beta1.AddressesFromPool, len(capvPools))
+	for i, pool := range capvPools {
+		group := ptr.Deref(pool.APIGroup, "")
+		resource := pool.Kind // default to Kind if no mapping found
+
+		// Convert Kind name to resource name (e.g., "InClusterIPPool" → "inclusterippools")
+		if group != "" {
+			if groupMappings, ok := ipamKindToResource[group]; ok {
+				if mappedResource, ok := groupMappings[pool.Kind]; ok {
+					resource = mappedResource
+				}
+			}
+		}
+
+		mapiPools[i] = mapiv1beta1.AddressesFromPool{
+			Group:    group,
+			Resource: resource,
+			Name:     pool.Name,
+		}
+	}
+
+	return mapiPools
 }
 
 // convertCAPVDataDisksToMAPI converts CAPV DataDisks to MAPI DataDisks.
