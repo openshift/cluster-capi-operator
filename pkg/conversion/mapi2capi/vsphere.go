@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/validation/field"
+	"k8s.io/utils/ptr"
 	vspherev1 "sigs.k8s.io/cluster-api-provider-vsphere/apis/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -41,6 +42,18 @@ const (
 	vSphereMachineKind         = "VSphereMachine"
 	vSphereMachineTemplateKind = "VSphereMachineTemplate"
 )
+
+// ipamResourceToKind maps IPAM API group and resource names (plural) to Kind names (singular).
+// MAPI uses resource names while CAPI requires Kind names.
+//
+//nolint:gochecknoglobals // Lookup table for IPAM resource name to Kind name conversion
+var ipamResourceToKind = map[string]map[string]string{
+	"ipam.cluster.x-k8s.io": {
+		"inclusterippools":       "InClusterIPPool",
+		"globalinclusterippools": "GlobalInClusterIPPool",
+	},
+	// Additional IPAM providers can be added here as needed
+}
 
 // vSphereMachineAndInfra stores the details of a Machine API VSphereMachine and Infra.
 type vSphereMachineAndInfra struct {
@@ -254,33 +267,22 @@ func (v *vSphereMachineAndInfra) toVSphereMachine(providerSpec mapiv1beta1.VSphe
 		},
 		// ProviderID - Set at a higher level in ToMachine().
 		// FailureDomain - Set at a higher level from machine.Spec.FailureDomain.
-		// PowerOffMode - Not set; CAPV defaults to "hard" which matches MAPI behavior. MAPI has no PowerOffMode field.
+		// PowerOffMode must be set explicitly to match CAPV's default behavior. If not set, CAPV's webhook
+		// defaults it to "hard", causing the differ to detect a spec change and trigger an infinite
+		// delete/recreate loop. MAPI has no PowerOffMode field, so "hard" matches MAPI's power-off behavior.
+		PowerOffMode: vspherev1.VirtualMachinePowerOpModeHard,
 		// GuestSoftPowerOffTimeout - Not supported in MAPI.
 		// NamingStrategy - Not supported in MAPI.
 	}
 
 	// Set workspace fields if available
 	if providerSpec.Workspace != nil {
-		// Validate that workspace has required fields populated.
-		// CPMS-style empty workspace (for failure domain-based topology) is not yet implemented.
-		// Implementation would require creating VSphereDeploymentZone resources from Infrastructure.FailureDomains.
-		// For now, machines must have workspace.server and workspace.datacenter populated.
-		if providerSpec.Workspace.Server == "" {
-			errs = append(errs, field.Required(fldPath.Child("workspace", "server"), "workspace.server is required. Control Plane Machine Set (CPMS) with failure domain-based topology is not yet implemented for vSphere"))
-		}
-		if providerSpec.Workspace.Datacenter == "" {
-			errs = append(errs, field.Required(fldPath.Child("workspace", "datacenter"), "workspace.datacenter is required. Control Plane Machine Set (CPMS) with failure domain-based topology is not yet implemented for vSphere"))
-		}
-
 		spec.Server = providerSpec.Workspace.Server
 		spec.Datacenter = providerSpec.Workspace.Datacenter
 		spec.Folder = providerSpec.Workspace.Folder
 		spec.Datastore = providerSpec.Workspace.Datastore
 		spec.ResourcePool = providerSpec.Workspace.ResourcePool
 		// VMGroup - MAPI-specific field for vm-host group based zoning, not supported in CAPV.
-	} else {
-		// Workspace is nil - this pattern is used by CPMS with failure domains, which is not yet implemented.
-		errs = append(errs, field.Required(fldPath.Child("workspace"), "workspace is required. Control Plane Machine Set (CPMS) with failure domain-based topology is not yet implemented for vSphere"))
 	}
 
 	// Unused fields - Below this line are fields not used from the MAPI VSphereMachineProviderSpec.
@@ -307,6 +309,11 @@ func (v *vSphereMachineAndInfra) toVSphereMachine(providerSpec mapiv1beta1.VSphe
 		errs = append(errs, field.Invalid(fldPath.Child("workspace", "vmGroup"), providerSpec.Workspace.VMGroup, "vmGroup is not supported in Cluster API"))
 	}
 
+	capvMachineStatus, statusErrs := convertMAPIMachineStatusToVSphereMachineStatus(v.machine)
+	if len(statusErrs) > 0 {
+		errs = append(errs, statusErrs...)
+	}
+
 	return &vspherev1.VSphereMachine{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: vspherev1.GroupVersion.String(),
@@ -316,7 +323,8 @@ func (v *vSphereMachineAndInfra) toVSphereMachine(providerSpec mapiv1beta1.VSphe
 			Name:      v.machine.Name,
 			Namespace: capiNamespace,
 		},
-		Spec: spec,
+		Spec:   spec,
+		Status: capvMachineStatus,
 	}, warnings, errs
 }
 
@@ -397,13 +405,38 @@ func convertVSphereNetworkSpecMAPIToCAPI(fldPath *field.Path, mapiNetwork mapiv1
 			Nameservers: device.Nameservers,
 		}
 
-		// Convert AddressesFromPools
+		// Convert AddressesFromPools: MAPI uses plural resource names, CAPI uses singular Kind names
+		//nolint:nestif // Nested complexity is acceptable for IPAM resource name mapping logic
 		if len(device.AddressesFromPools) > 0 {
 			addressesFromPools := make([]corev1.TypedLocalObjectReference, len(device.AddressesFromPools))
 			for j, pool := range device.AddressesFromPools {
+				kind := pool.Resource // fallback to resource name if mapping not found
+
+				// Skip empty APIGroup
+				if pool.Group == "" {
+					kind = pool.Resource
+				} else if groupMappings, ok := ipamResourceToKind[pool.Group]; ok {
+					// Known IPAM group - look up the Kind
+					if mappedKind, ok := groupMappings[pool.Resource]; ok {
+						kind = mappedKind
+					} else {
+						// Known IPAM group but unknown resource - warn but continue
+						warnings = append(warnings,
+							fmt.Sprintf("Unknown IPAM resource %q for group %q - using %q as Kind. "+
+								"This may not work. If you need this resource, please report it.",
+								pool.Resource, pool.Group, pool.Resource))
+					}
+				} else {
+					// Unknown IPAM group - warn but continue with resource name as Kind
+					warnings = append(warnings,
+						fmt.Sprintf("Unknown IPAM group %q - using resource name %q as Kind. "+
+							"This may not work correctly. Known IPAM groups: ipam.cluster.x-k8s.io",
+							pool.Group, pool.Resource))
+				}
+
 				addressesFromPools[j] = corev1.TypedLocalObjectReference{
 					APIGroup: &pool.Group,
-					Kind:     pool.Resource, // This might need adjustment based on actual mapping
+					Kind:     kind,
 					Name:     pool.Name,
 				}
 			}
@@ -469,4 +502,35 @@ func convertVSphereCloneModeMAPIToCAPI(mapiMode mapiv1beta1.CloneMode) vspherev1
 		// Unknown value - default to FullClone to match MAPI's default
 		return vspherev1.FullClone
 	}
+}
+
+// convertMAPIMachineStatusToVSphereMachineStatus converts MAPI Machine status to CAPV VSphereMachine status.
+func convertMAPIMachineStatusToVSphereMachineStatus(mapiMachine *mapiv1beta1.Machine) (vspherev1.VSphereMachineStatus, field.ErrorList) {
+	var errs field.ErrorList
+
+	mapiProviderStatus, err := VSphereProviderStatusFromRawExtension(mapiMachine.Status.ProviderStatus)
+	if err != nil {
+		return vspherev1.VSphereMachineStatus{}, append(errs, field.InternalError(field.NewPath("status", "providerStatus"), err))
+	}
+
+	addresses, addressesErr := convertMAPIMachineAddressesToCAPIV1Beta1(mapiMachine.Status.Addresses)
+	if len(addressesErr) > 0 {
+		errs = append(errs, addressesErr...)
+	}
+
+	// CAPV sets Ready to true if InstanceState is "ready". Otherwise false.
+	// This matches AWS's pattern of using ProviderStatus.InstanceState as the source of truth.
+	ready := ptr.Deref(mapiProviderStatus.InstanceState, "") == consts.VSphereInstanceStateReady
+
+	s := vspherev1.VSphereMachineStatus{
+		Ready:     ready,
+		Addresses: addresses,
+		// Network: MAPI doesn't track network status, CAPV controller will populate this.
+		// Conditions are not directly convertible - MAPI uses metav1.Condition while CAPV uses clusterv1beta1.Conditions.
+		// The CAPV controller will recreate conditions based on the machine state.
+		// FailureReason: Not set here because we already set it on the Cluster API Machine from .Status.ErrorReason
+		// FailureMessage: Not set here because we already set it on the Cluster API Machine from .Status.ErrorMessage
+	}
+
+	return s, errs
 }
