@@ -219,7 +219,22 @@ func (c *InstallerController) reconcile(ctx context.Context, log logr.Logger) op
 		return opresult.WaitingOnExternal("ClusterAPI revisions")
 	}
 
-	revisionReconciler := newRevisionReconciler(c, log)
+	// Read cluster-wide proxy configuration
+	var renderOpts []revisiongenerator.RevisionRenderOption
+
+	proxy, err := util.GetProxy(ctx, c.client)
+	if err != nil {
+		return opresult.Error(fmt.Errorf("fetching proxy: %w", err))
+	}
+
+	if envVars := util.ProxyEnvVars(proxy); len(envVars) > 0 {
+		log.Info("Injecting proxy configuration into provider manifests",
+			"httpProxy", proxy.Status.HTTPProxy, "httpsProxy", proxy.Status.HTTPSProxy, "noProxy", proxy.Status.NoProxy)
+
+		renderOpts = append(renderOpts, revisiongenerator.WithProxyConfig(envVars))
+	}
+
+	revisionReconciler := newRevisionReconciler(c, log, renderOpts...)
 	reconciledRevision, messages, errs := revisionReconciler.reconcile(ctx, clusterAPI.Status.Revisions)
 
 	// Write relatedObjects via non-SSA merge patch so the SSA conditions

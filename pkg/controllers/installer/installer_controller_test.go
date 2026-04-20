@@ -36,6 +36,7 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 	"github.com/openshift/cluster-capi-operator/pkg/revisiongenerator"
 	"github.com/openshift/cluster-capi-operator/pkg/test"
+	"github.com/openshift/cluster-capi-operator/pkg/util"
 )
 
 func getConfigMap(ctx context.Context, name string) (*corev1.ConfigMap, error) {
@@ -647,6 +648,76 @@ var _ = Describe("InstallerController", Serial, func() {
 			)
 		}, defaultNodeTimeout)
 	})
+})
+
+var _ = Describe("InstallerController proxy", Serial, func() {
+	BeforeEach(func(ctx context.Context) {
+		createFixtures(ctx)
+	}, defaultNodeTimeout)
+
+	AfterEach(func(ctx context.Context) {
+		emptyRevision := addEmptyRevision(ctx)
+		waitForRevision(ctx, emptyRevision.Name)
+	}, defaultNodeTimeout)
+
+	It("injects proxy env vars into deployed Deployments", func(ctx context.Context) {
+		// Configure proxy before adding revision.
+		proxy := &configv1.Proxy{}
+		Expect(cl.Get(ctx, client.ObjectKey{Name: "cluster"}, proxy)).To(Succeed())
+		proxy.Status = configv1.ProxyStatus{
+			HTTPProxy:  "http://proxy:3128",
+			HTTPSProxy: "https://proxy:3129",
+			NoProxy:    ".cluster.local",
+		}
+		Expect(cl.Status().Update(ctx, proxy)).To(Succeed())
+
+		// The revision content ID must match what the controller computes,
+		// which includes proxy injection into Deployment manifests.
+		proxyEnvVars := util.ProxyEnvVars(proxy)
+		renderOpts := []revisiongenerator.RevisionRenderOption{
+			revisiongenerator.WithProxyConfig(proxyEnvVars),
+		}
+
+		revision := addRevisionWithOpts(ctx, renderOpts, providerDeployment)
+		makeDeploymentAvailable(ctx, deploymentName, "default")
+		waitForRevision(ctx, revision.Name)
+
+		// Re-read the Deployment and verify proxy env vars.
+		deploy := &appsv1.Deployment{}
+		deploy.SetName(deploymentName)
+		deploy.SetNamespace("default")
+		Expect(cl.Get(ctx, client.ObjectKeyFromObject(deploy), deploy)).To(Succeed())
+
+		env := deploy.Spec.Template.Spec.Containers[0].Env
+		Expect(env).To(ContainElement(SatisfyAll(
+			HaveField("Name", "HTTP_PROXY"),
+			HaveField("Value", "http://proxy:3128"),
+		)))
+		Expect(env).To(ContainElement(SatisfyAll(
+			HaveField("Name", "HTTPS_PROXY"),
+			HaveField("Value", "https://proxy:3129"),
+		)))
+		Expect(env).To(ContainElement(SatisfyAll(
+			HaveField("Name", "NO_PROXY"),
+			HaveField("Value", ".cluster.local"),
+		)))
+	}, defaultNodeTimeout)
+
+	It("does not inject proxy env vars when proxy is empty", func(ctx context.Context) {
+		// Proxy is created with empty status by createFixtures.
+		revision := addRevision(ctx, providerDeployment)
+		makeDeploymentAvailable(ctx, deploymentName, "default")
+		waitForRevision(ctx, revision.Name)
+
+		deploy := &appsv1.Deployment{}
+		deploy.SetName(deploymentName)
+		deploy.SetNamespace("default")
+		Expect(cl.Get(ctx, client.ObjectKeyFromObject(deploy), deploy)).To(Succeed())
+
+		for _, ev := range deploy.Spec.Template.Spec.Containers[0].Env {
+			Expect(ev.Name).NotTo(BeElementOf("HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY"))
+		}
+	}, defaultNodeTimeout)
 })
 
 var _ = Describe("InstallerController without ClusterAPI", Serial, func() {

@@ -26,6 +26,7 @@ import (
 
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	operatorv1alpha1ac "github.com/openshift/client-go/operator/applyconfigurations/operator/v1alpha1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -95,13 +96,13 @@ type renderedRevision struct {
 var _ RenderedRevision = &renderedRevision{}
 
 // NewRenderedRevision creates a new RenderedRevision from a list of provider image manifests.
-func NewRenderedRevision(profiles []providerimages.ProviderImageManifests, opts ...revisionRenderOption) (RenderedRevision, error) {
+func NewRenderedRevision(profiles []providerimages.ProviderImageManifests, opts ...RevisionRenderOption) (RenderedRevision, error) {
 	return newRenderedRevision(profiles, opts...)
 }
 
 // newRenderedRevision implements NewRenderedRevision. It exists to return a
 // concrete type for internal use.
-func newRenderedRevision(profiles []providerimages.ProviderImageManifests, opts ...revisionRenderOption) (*renderedRevision, error) {
+func newRenderedRevision(profiles []providerimages.ProviderImageManifests, opts ...RevisionRenderOption) (*renderedRevision, error) {
 	cfg := &revisionRenderConfig{}
 	for _, opt := range opts {
 		opt(cfg)
@@ -246,18 +247,28 @@ func buildRevisionName(releaseVersion, contentID string, index int64) operatorv1
 
 type revisionRenderConfig struct {
 	objectCollectors []RevisionObjectCollector
+	proxyEnvVars     []corev1.EnvVar
 }
 
-type revisionRenderOption func(*revisionRenderConfig)
+// RevisionRenderOption configures how a revision is rendered.
+type RevisionRenderOption func(*revisionRenderConfig)
 
 // RevisionObjectCollector is a function that will be called for each object in
 // the rendered revision.
 type RevisionObjectCollector func(obj unstructured.Unstructured)
 
 // WithObjectCollectors adds object collectors to the revision render config.
-func WithObjectCollectors(collectors ...RevisionObjectCollector) revisionRenderOption {
+func WithObjectCollectors(collectors ...RevisionObjectCollector) RevisionRenderOption {
 	return func(opts *revisionRenderConfig) {
 		opts.objectCollectors = append(opts.objectCollectors, collectors...)
+	}
+}
+
+// WithProxyConfig adds proxy environment variables to inject into Deployment
+// containers during revision rendering.
+func WithProxyConfig(envVars []corev1.EnvVar) RevisionRenderOption {
+	return func(opts *revisionRenderConfig) {
+		opts.proxyEnvVars = envVars
 	}
 }
 
@@ -271,7 +282,7 @@ func WithObjectCollectors(collectors ...RevisionObjectCollector) revisionRenderO
 func NewInstallerRevisionFromAPI(
 	apiRev operatorv1alpha1.ClusterAPIInstallerRevision,
 	providerProfiles []providerimages.ProviderImageManifests,
-	opts ...revisionRenderOption,
+	opts ...RevisionRenderOption,
 ) (InstallerRevision, error) {
 	matched := make([]providerimages.ProviderImageManifests, len(apiRev.Components))
 
@@ -346,6 +357,12 @@ func newRenderedComponent(providerProfile *providerimages.ProviderImageManifests
 		}
 
 		unstructured = transformObject(unstructured, component.name)
+
+		if len(cfg.proxyEnvVars) > 0 {
+			if err := util.InjectProxyEnvVarsIntoUnstructured(&unstructured, cfg.proxyEnvVars); err != nil {
+				return nil, fmt.Errorf("error injecting proxy env vars: %w", err)
+			}
+		}
 
 		for _, collector := range cfg.objectCollectors {
 			collector(unstructured)

@@ -152,6 +152,13 @@ func createFixtures(ctx context.Context, opts ...fixturesOption) {
 		cleanupObjs = append(cleanupObjs, clusterAPI)
 	}
 
+	// Create Proxy singleton
+	proxyObj := &configv1.Proxy{
+		ObjectMeta: metav1.ObjectMeta{Name: "cluster"},
+	}
+	Expect(cl.Create(ctx, proxyObj)).To(Succeed())
+	cleanupObjs = append(cleanupObjs, proxyObj)
+
 	// Create ClusterOperator singleton
 	clusterOperator = &configv1.ClusterOperator{
 		ObjectMeta: metav1.ObjectMeta{Name: "cluster-api"},

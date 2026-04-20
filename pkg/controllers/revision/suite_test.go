@@ -125,6 +125,15 @@ func setupProviderFixtures() {
 			)).
 			Build(),
 	}
+
+	// Provider images that include a Deployment manifest, used for proxy injection tests.
+	deploymentProviderImgs = []providerimages.ProviderImageManifests{
+		test.NewProviderImageManifests(tb, "core").
+			WithContentID("core-deploy-content-id").
+			WithImageRef("registry.example.com/core@sha256:5555555555555555555555555555555555555555555555555555555555555555").
+			WithManifests(test.DeploymentYAML("core-deploy")).
+			Build(),
+	}
 }
 
 func kWithCtx(ctx context.Context) komega.Komega {

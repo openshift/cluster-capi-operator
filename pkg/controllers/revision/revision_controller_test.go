@@ -46,6 +46,7 @@ var (
 	updatedProviderImgs           []providerimages.ProviderImageManifests
 	nonMatchingProviderImgs       []providerimages.ProviderImageManifests
 	invalidAnnotationProviderImgs []providerimages.ProviderImageManifests
+	deploymentProviderImgs        []providerimages.ProviderImageManifests
 )
 
 const (
@@ -387,6 +388,89 @@ var _ = Describe("RevisionController", Serial, func() {
 		updatedClusterAPI := &operatorv1alpha1.ClusterAPI{}
 		Expect(cl.Get(ctx, client.ObjectKey{Name: "cluster"}, updatedClusterAPI)).To(Succeed())
 		Expect(updatedClusterAPI.Status.Revisions).To(HaveLen(1))
+	}, defaultNodeTimeout)
+})
+
+var _ = Describe("RevisionController proxy", Serial, func() {
+	var (
+		mgr *managerWrapper
+	)
+
+	BeforeEach(func(ctx context.Context) {
+		createFixtures(ctx)
+
+		// Use provider images with Deployment manifests so proxy injection
+		// changes the content ID (proxy env vars are only injected into
+		// Deployments/DaemonSets, not ConfigMaps).
+		mgr = newManagerWrapper(deploymentProviderImgs)
+
+		DeferCleanup(func(ctx context.Context) {
+			mgr.stop()
+		})
+
+		waitForProgressingFalse(ctx)
+	}, defaultNodeTimeout)
+
+	It("creates a new revision when proxy configuration is added", func(ctx context.Context) {
+		// Capture the initial revision (created with no proxy).
+		initialClusterAPI := &operatorv1alpha1.ClusterAPI{}
+		Expect(cl.Get(ctx, client.ObjectKey{Name: "cluster"}, initialClusterAPI)).To(Succeed())
+		Expect(initialClusterAPI.Status.Revisions).To(HaveLen(1))
+		originalContentID := initialClusterAPI.Status.Revisions[0].ContentID
+
+		// Update the Proxy status to inject proxy env vars.
+		proxy := &configv1.Proxy{}
+		Expect(cl.Get(ctx, client.ObjectKey{Name: "cluster"}, proxy)).To(Succeed())
+		proxy.Status = configv1.ProxyStatus{
+			HTTPProxy:  "http://proxy:3128",
+			HTTPSProxy: "https://proxy:3129",
+			NoProxy:    ".cluster.local",
+		}
+		Expect(cl.Status().Update(ctx, proxy)).To(Succeed())
+
+		// Wait for a second revision to appear.
+		Eventually(kWithCtx(ctx).Object(clusterAPI)).
+			WithContext(ctx).
+			Should(HaveField("Status.Revisions", HaveLen(2)))
+
+		// The new revision should have a different contentID.
+		newRev := latestRevision(clusterAPI.Status.Revisions)
+		Expect(newRev.ContentID).NotTo(Equal(originalContentID))
+		Expect(newRev.Revision).To(Equal(int64(2)))
+	}, defaultNodeTimeout)
+
+	It("creates a new revision when proxy configuration is removed", func(ctx context.Context) {
+		// First, set a proxy so the initial revision includes proxy env vars.
+		proxy := &configv1.Proxy{}
+		Expect(cl.Get(ctx, client.ObjectKey{Name: "cluster"}, proxy)).To(Succeed())
+		proxy.Status = configv1.ProxyStatus{
+			HTTPProxy:  "http://proxy:3128",
+			HTTPSProxy: "https://proxy:3129",
+			NoProxy:    ".cluster.local",
+		}
+		Expect(cl.Status().Update(ctx, proxy)).To(Succeed())
+
+		// Wait for the proxy-aware revision (revision 2).
+		Eventually(kWithCtx(ctx).Object(clusterAPI)).
+			WithContext(ctx).
+			Should(HaveField("Status.Revisions", HaveLen(2)))
+
+		proxyContentID := latestRevision(clusterAPI.Status.Revisions).ContentID
+
+		// Remove the proxy configuration.
+		Expect(cl.Get(ctx, client.ObjectKey{Name: "cluster"}, proxy)).To(Succeed())
+		proxy.Status = configv1.ProxyStatus{}
+		Expect(cl.Status().Update(ctx, proxy)).To(Succeed())
+
+		// Wait for a third revision to appear.
+		Eventually(kWithCtx(ctx).Object(clusterAPI)).
+			WithContext(ctx).
+			Should(HaveField("Status.Revisions", HaveLen(3)))
+
+		// The new revision should have a different contentID from the proxy revision.
+		newRev := latestRevision(clusterAPI.Status.Revisions)
+		Expect(newRev.ContentID).NotTo(Equal(proxyContentID))
+		Expect(newRev.Revision).To(Equal(int64(3)))
 	}, defaultNodeTimeout)
 })
 

@@ -24,6 +24,9 @@ import (
 	. "github.com/onsi/gomega"
 
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+
 	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
 	"github.com/openshift/cluster-capi-operator/pkg/test"
 )
@@ -400,6 +403,50 @@ data:
 		id2 := must(rev2.ContentID())(g)
 
 		g.Expect(id1).To(Equal(id2))
+	})
+}
+
+func TestWithProxyConfig(t *testing.T) {
+	proxyEnvVars := []corev1.EnvVar{
+		{Name: "HTTP_PROXY", Value: "http://proxy:3128"},
+		{Name: "HTTPS_PROXY", Value: "https://proxy:3129"},
+		{Name: "NO_PROXY", Value: ".cluster.local"},
+	}
+
+	t.Run("proxy config changes contentID", func(t *testing.T) {
+		g := NewWithT(t)
+
+		deployYAML := test.DeploymentYAML("mgr")
+		idWithout := contentIDForProfiles(g, profile(t, "p1", "img1", "default", deployYAML))
+
+		rev := must(NewRenderedRevision(
+			[]providerimages.ProviderImageManifests{profile(t, "p1", "img1", "default", deployYAML)},
+			WithProxyConfig(proxyEnvVars),
+		))(g)
+		idWith := must(rev.ContentID())(g)
+
+		g.Expect(idWith).NotTo(Equal(idWithout))
+	})
+
+	t.Run("proxy env vars injected into Deployment objects", func(t *testing.T) {
+		g := NewWithT(t)
+
+		deployYAML := test.DeploymentYAML("mgr")
+		rev := must(NewRenderedRevision(
+			[]providerimages.ProviderImageManifests{profile(t, "p1", "img1", "default", deployYAML)},
+			WithProxyConfig(proxyEnvVars),
+		))(g)
+
+		objs := rev.Components()[0].Objects()
+		g.Expect(objs).To(HaveLen(1))
+
+		u := objs[0].(*unstructured.Unstructured)
+		containers, _, _ := unstructured.NestedSlice(u.Object, "spec", "template", "spec", "containers")
+		g.Expect(containers).To(HaveLen(1))
+
+		container := containers[0].(map[string]interface{})
+		env, _, _ := unstructured.NestedSlice(container, "env")
+		g.Expect(env).To(HaveLen(3))
 	})
 }
 
