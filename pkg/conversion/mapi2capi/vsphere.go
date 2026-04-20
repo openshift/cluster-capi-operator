@@ -227,7 +227,6 @@ func (v *vSphereMachineAndInfra) toVSphereMachine(providerSpec mapiv1beta1.VSphe
 	capiCloneMode := convertVSphereCloneModeMAPIToCAPI(providerSpec.CloneMode)
 
 	spec := vspherev1.VSphereMachineSpec{
-		PowerOffMode: vspherev1.VirtualMachinePowerOpModeHard,
 		VirtualMachineCloneSpec: vspherev1.VirtualMachineCloneSpec{
 			Template:          providerSpec.Template,
 			CloneMode:         capiCloneMode,
@@ -239,11 +238,11 @@ func (v *vSphereMachineAndInfra) toVSphereMachine(providerSpec mapiv1beta1.VSphe
 			TagIDs:            providerSpec.TagIDs,
 			Network:           capiNetworkSpec,
 			DataDisks:         capiDataDisks,
-			// Server - Set below from Workspace.
-			// Datacenter - Set below from Workspace.
-			// Folder - Set below from Workspace.
-			// Datastore - Set below from Workspace.
-			// ResourcePool - Set below from Workspace.
+			// Server - Set below from Workspace if present; otherwise inherited from cluster-level VSphereCluster or failure domain.
+			// Datacenter - Set below from Workspace if present; otherwise inherited from failure domain.
+			// Folder - Set below from Workspace if present; otherwise inherited from failure domain.
+			// Datastore - Set below from Workspace if present; otherwise inherited from failure domain.
+			// ResourcePool - Set below from Workspace if present; otherwise inherited from failure domain.
 			// Thumbprint - Not supported in MAPI.
 			// StoragePolicyName - Not supported in MAPI.
 			// Resources - Not supported in MAPI.
@@ -255,18 +254,33 @@ func (v *vSphereMachineAndInfra) toVSphereMachine(providerSpec mapiv1beta1.VSphe
 		},
 		// ProviderID - Set at a higher level in ToMachine().
 		// FailureDomain - Set at a higher level from machine.Spec.FailureDomain.
+		// PowerOffMode - Not set; CAPV defaults to "hard" which matches MAPI behavior. MAPI has no PowerOffMode field.
 		// GuestSoftPowerOffTimeout - Not supported in MAPI.
 		// NamingStrategy - Not supported in MAPI.
 	}
 
 	// Set workspace fields if available
 	if providerSpec.Workspace != nil {
+		// Validate that workspace has required fields populated.
+		// CPMS-style empty workspace (for failure domain-based topology) is not yet implemented.
+		// Implementation would require creating VSphereDeploymentZone resources from Infrastructure.FailureDomains.
+		// For now, machines must have workspace.server and workspace.datacenter populated.
+		if providerSpec.Workspace.Server == "" {
+			errs = append(errs, field.Required(fldPath.Child("workspace", "server"), "workspace.server is required. Control Plane Machine Set (CPMS) with failure domain-based topology is not yet implemented for vSphere"))
+		}
+		if providerSpec.Workspace.Datacenter == "" {
+			errs = append(errs, field.Required(fldPath.Child("workspace", "datacenter"), "workspace.datacenter is required. Control Plane Machine Set (CPMS) with failure domain-based topology is not yet implemented for vSphere"))
+		}
+
 		spec.Server = providerSpec.Workspace.Server
 		spec.Datacenter = providerSpec.Workspace.Datacenter
 		spec.Folder = providerSpec.Workspace.Folder
 		spec.Datastore = providerSpec.Workspace.Datastore
 		spec.ResourcePool = providerSpec.Workspace.ResourcePool
 		// VMGroup - MAPI-specific field for vm-host group based zoning, not supported in CAPV.
+	} else {
+		// Workspace is nil - this pattern is used by CPMS with failure domains, which is not yet implemented.
+		errs = append(errs, field.Required(fldPath.Child("workspace"), "workspace is required. Control Plane Machine Set (CPMS) with failure domain-based topology is not yet implemented for vSphere"))
 	}
 
 	// Unused fields - Below this line are fields not used from the MAPI VSphereMachineProviderSpec.
@@ -283,7 +297,6 @@ func (v *vSphereMachineAndInfra) toVSphereMachine(providerSpec mapiv1beta1.VSphe
 	// Only take action when a non-default credentials secret is being used in MAPI.
 	// If the user is using the default, then their CAPV secret will already be configured and no action is necessary.
 	if providerSpec.CredentialsSecret != nil &&
-		providerSpec.CredentialsSecret.Name != "" &&
 		providerSpec.CredentialsSecret.Name != DefaultVSphereCredentialsSecretName {
 		// Not convertable; need custom credential configuration
 		errs = append(errs, field.Invalid(fldPath.Child("credentialsSecret"), providerSpec.CredentialsSecret.Name, fmt.Sprintf("credentialsSecret does not match the default of %q, credentials must be configured at the cluster level", DefaultVSphereCredentialsSecretName)))
