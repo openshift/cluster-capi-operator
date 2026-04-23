@@ -8,6 +8,9 @@ replace (
 
 	//cluster-api-actuator-pkg uses a placeholder for cluster-api-actuator-pkg/testutils
 	github.com/openshift/cluster-api-actuator-pkg/testutils => github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20260310144400-bec013a007a8
+
+	// manifests-gen is a local module in this repo
+	github.com/openshift/cluster-capi-operator/manifests-gen => ../manifests-gen
 )
 
 require (
@@ -17,13 +20,13 @@ require (
 	github.com/metal3-io/cluster-api-provider-metal3/api v1.11.2
 	github.com/onsi/ginkgo/v2 v2.28.1
 	github.com/onsi/gomega v1.39.1
-	github.com/openshift/api v0.0.0-20260306141135-f595753a3e66
+	github.com/openshift/api v0.0.0-20260416105050-3c6b218b8a80
 	github.com/openshift/cluster-api-actuator-pkg v0.0.0-20260310144400-bec013a007a8
 	github.com/openshift/cluster-api-provider-baremetal v0.0.0-20250619124612-fb678fec5f7e
 	k8s.io/api v0.35.3
 	k8s.io/apimachinery v0.35.3
 	k8s.io/client-go v0.35.3
-	k8s.io/utils v0.0.0-20260108192941-914a6e750570
+	k8s.io/utils v0.0.0-20260210185600-b8788abfbbc2
 	sigs.k8s.io/cluster-api v1.12.3
 	sigs.k8s.io/cluster-api-provider-aws/v2 v2.10.2
 	sigs.k8s.io/cluster-api-provider-azure v1.22.1
@@ -97,10 +100,10 @@ require (
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/oklog/ulid v1.3.1 // indirect
-	github.com/openshift/client-go v0.0.0-20260306160707-3935d929fc7d // indirect
+	github.com/openshift/client-go v0.0.0-20260416131737-a19e91702ab5 // indirect
 	github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0 // indirect
 	github.com/openshift/cluster-autoscaler-operator v0.0.1-0.20250702183526-4eb64d553940 // indirect
-	github.com/openshift/library-go v0.0.0-20260303171201-5d9eb6295ff6 // indirect
+	github.com/openshift/library-go v0.0.0-20260413093329-d2db42c961e1 // indirect
 	github.com/openshift/machine-api-operator v0.2.1-0.20260226113419-88465550a74b // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect

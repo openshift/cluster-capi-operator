@@ -56,6 +56,9 @@ spec:
         - name: cert
           mountPath: /tmp/k8s-webhook-server/serving-certs
           readOnly: true
+        - name: metrics-cert
+          mountPath: /tmp/k8s-metrics-server/serving-certs
+          readOnly: true
         - name: provider-images
           mountPath: /var/lib/provider-images
       - name: machine-api-migration
@@ -80,6 +83,10 @@ spec:
             cpu: 10m
             memory: 50Mi
         terminationMessagePolicy: FallbackToLogsOnError
+        volumeMounts:
+        - name: metrics-cert
+          mountPath: /tmp/k8s-metrics-server/serving-certs
+          readOnly: true
       nodeSelector:
         node-role.kubernetes.io/control-plane: ""
       priorityClassName: system-node-critical
@@ -96,5 +103,9 @@ spec:
         secret:
           defaultMode: 420
           secretName: capi-controllers-webhook-service-cert
+      - name: metrics-cert
+        secret:
+          defaultMode: 420
+          secretName: capi-controllers-metrics-tls
       - name: provider-images
         emptyDir: {}

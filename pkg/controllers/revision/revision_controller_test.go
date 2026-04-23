@@ -18,6 +18,7 @@ package revision
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"testing"
 
@@ -156,6 +157,9 @@ var _ = Describe("RevisionController", Serial, func() {
 		// DesiredRevision should point to the created revision
 		Expect(updatedClusterAPI.Status.DesiredRevision).To(Equal(rev.Name))
 
+		// ObservedRevisionGeneration should match the ClusterAPI generation
+		Expect(updatedClusterAPI.Status.ObservedRevisionGeneration).To(Equal(updatedClusterAPI.Generation))
+
 		// Conditions should indicate success
 		co := &configv1.ClusterOperator{}
 		Expect(cl.Get(ctx, client.ObjectKey{Name: "cluster-api"}, co)).To(Succeed())
@@ -200,6 +204,7 @@ var _ = Describe("RevisionController", Serial, func() {
 		Expect(cl.Get(ctx, client.ObjectKey{Name: "cluster"}, updatedClusterAPI)).To(Succeed())
 		Expect(updatedClusterAPI.Status.Revisions).To(Equal(originalRevisions))
 		Expect(updatedClusterAPI.Status.DesiredRevision).To(Equal(originalDesiredRevision))
+		Expect(updatedClusterAPI.Status.ObservedRevisionGeneration).To(Equal(updatedClusterAPI.Generation))
 	}, defaultNodeTimeout)
 
 	It("creates additional revision when contentID changes", func(ctx context.Context) {
@@ -242,6 +247,9 @@ var _ = Describe("RevisionController", Serial, func() {
 
 		// DesiredRevision should point to the new revision
 		Expect(clusterAPI.Status.DesiredRevision).To(Equal(newRev.Name))
+
+		// ObservedRevisionGeneration should match the ClusterAPI generation
+		Expect(clusterAPI.Status.ObservedRevisionGeneration).To(Equal(clusterAPI.Generation))
 	}, defaultNodeTimeout)
 
 	It("creates revision with empty components when no providers match the platform", func(ctx context.Context) {
@@ -262,6 +270,7 @@ var _ = Describe("RevisionController", Serial, func() {
 
 		// DesiredRevision should point to the new revision
 		Expect(clusterAPI.Status.DesiredRevision).To(Equal(newRev.Name))
+		Expect(clusterAPI.Status.ObservedRevisionGeneration).To(Equal(clusterAPI.Generation))
 	}, defaultNodeTimeout)
 
 	It("trims old revisions when current matches latest", func(ctx context.Context) {
@@ -291,6 +300,7 @@ var _ = Describe("RevisionController", Serial, func() {
 		// Verify the remaining revision is the latest.
 		Expect(clusterAPI.Status.Revisions[0].Name).To(Equal(latest.Name))
 		Expect(clusterAPI.Status.DesiredRevision).To(Equal(latest.Name))
+		Expect(clusterAPI.Status.ObservedRevisionGeneration).To(Equal(clusterAPI.Generation))
 	}, defaultNodeTimeout)
 
 	It("preserves all revisions when content changes and current is set", func(ctx context.Context) {
@@ -316,6 +326,7 @@ var _ = Describe("RevisionController", Serial, func() {
 		// CurrentRevision (rev1) != newest revision (rev2).
 		Expect(clusterAPI.Status.DesiredRevision).NotTo(Equal(rev1Name))
 		Expect(clusterAPI.Status.CurrentRevision).To(Equal(rev1Name))
+		Expect(clusterAPI.Status.ObservedRevisionGeneration).To(Equal(clusterAPI.Generation))
 	}, defaultNodeTimeout)
 
 	It("sets Degraded=True with NonRetryableError when max revisions reached", func(ctx context.Context) {
@@ -338,10 +349,12 @@ var _ = Describe("RevisionController", Serial, func() {
 				ContentID: "content-id-" + string(rune('a'+i)),
 				Components: []operatorv1alpha1.ClusterAPIInstallerComponent{
 					{
-						Type: operatorv1alpha1.InstallerComponentTypeImage,
-						Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
-							Ref:     operatorv1alpha1.ImageDigestFormat("quay.io/openshift/cluster-capi-operator@sha256:" + digest),
-							Profile: "default",
+						ClusterAPIInstallerComponentSource: operatorv1alpha1.ClusterAPIInstallerComponentSource{
+							Type: operatorv1alpha1.InstallerComponentTypeImage,
+							Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
+								Ref:     operatorv1alpha1.ImageDigestFormat("quay.io/openshift/cluster-capi-operator@sha256:" + digest),
+								Profile: "default",
+							},
 						},
 					},
 				},
@@ -438,6 +451,7 @@ var _ = Describe("RevisionController waiting states", Serial, func() {
 			updatedClusterAPI := &operatorv1alpha1.ClusterAPI{}
 			Expect(cl.Get(ctx, client.ObjectKey{Name: "cluster"}, updatedClusterAPI)).To(Succeed())
 			Expect(updatedClusterAPI.Status.Revisions).To(HaveLen(1))
+			Expect(updatedClusterAPI.Status.ObservedRevisionGeneration).To(Equal(updatedClusterAPI.Generation))
 		}, defaultNodeTimeout)
 	})
 
@@ -479,8 +493,39 @@ var _ = Describe("RevisionController waiting states", Serial, func() {
 			updatedClusterAPI := &operatorv1alpha1.ClusterAPI{}
 			Expect(cl.Get(ctx, client.ObjectKey{Name: "cluster"}, updatedClusterAPI)).To(Succeed())
 			Expect(updatedClusterAPI.Status.Revisions).To(HaveLen(1))
+			Expect(updatedClusterAPI.Status.ObservedRevisionGeneration).To(Equal(updatedClusterAPI.Generation))
 		}, defaultNodeTimeout)
 	})
+})
+
+var _ = Describe("RevisionController manifest substitutions", Serial, func() {
+	BeforeEach(func(ctx context.Context) {
+		createFixtures(ctx)
+	}, defaultNodeTimeout)
+
+	It("includes substitutions in created revision", func(ctx context.Context) {
+		mgr := newManagerWrapper(defaultProviderImgs, func(config *tls.Config) {
+			config.CipherSuites = []uint16{tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256}
+			config.MinVersion = tls.VersionTLS12
+		})
+
+		DeferCleanup(func(ctx context.Context) {
+			mgr.stop()
+		})
+
+		waitForProgressingFalse(ctx)
+
+		updatedClusterAPI := &operatorv1alpha1.ClusterAPI{}
+		Expect(cl.Get(ctx, client.ObjectKey{Name: "cluster"}, updatedClusterAPI)).To(Succeed())
+		Expect(updatedClusterAPI.Status.Revisions).To(HaveLen(1))
+
+		rev := updatedClusterAPI.Status.Revisions[0]
+		Expect(rev.ManifestSubstitutions).To(HaveLen(2))
+		Expect(rev.ManifestSubstitutions[0].Key).To(Equal("TLS_CIPHER_SUITES"))
+		Expect(*rev.ManifestSubstitutions[0].Value).To(Equal("TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"))
+		Expect(rev.ManifestSubstitutions[1].Key).To(Equal("TLS_MIN_VERSION"))
+		Expect(*rev.ManifestSubstitutions[1].Value).To(Equal("VersionTLS12"))
+	}, defaultNodeTimeout)
 })
 
 var _ = Describe("RevisionController error handling", Serial, func() {

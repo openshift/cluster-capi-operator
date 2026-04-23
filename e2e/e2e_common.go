@@ -27,6 +27,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/yaml"
@@ -57,6 +58,7 @@ const (
 
 var (
 	cl          client.Client
+	restConfig  *rest.Config
 	ctx         = context.Background()
 	platform    configv1.PlatformType
 	clusterName string
@@ -89,6 +91,8 @@ func InitCommonVariables() {
 
 	cfg, err := config.GetConfig()
 	Expect(err).ToNot(HaveOccurred())
+
+	restConfig = cfg
 
 	cl, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
 	Expect(err).ToNot(HaveOccurred())
@@ -291,4 +295,8 @@ func dumpNamespaceEvents(buf *strings.Builder, namespace string) {
 			e.InvolvedObject.Kind, e.InvolvedObject.Name,
 			e.Reason, e.Message)
 	}
+}
+
+func kWithCtx(ctx context.Context) komega.Komega {
+	return komega.New(cl).WithContext(ctx)
 }

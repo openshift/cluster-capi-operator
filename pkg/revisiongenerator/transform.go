@@ -48,9 +48,15 @@ func envSubstSubstitutions(key string) string {
 // longer be able to reconcile the old revision. This should be done with care.
 
 // transformYaml applies transformations to an object's YAML before it is unmarshalled.
-func transformYaml(providerProfile *providerimages.ProviderImageManifests, yaml string) (string, error) {
-	// Expand envsubst variables
-	yaml, err := envsubst.Eval(yaml, envSubstSubstitutions)
+func transformYaml(providerProfile *providerimages.ProviderImageManifests, yaml string, substitutions map[string]string) (string, error) {
+	// Expand envsubst variables, checking user-provided substitutions first.
+	yaml, err := envsubst.Eval(yaml, func(key string) string {
+		if v, ok := substitutions[key]; ok {
+			return v
+		}
+
+		return envSubstSubstitutions(key)
+	})
 	if err != nil {
 		return "", fmt.Errorf("failed to substitute variables: %w", err)
 	}

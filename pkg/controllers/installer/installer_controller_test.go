@@ -221,10 +221,12 @@ var _ = Describe("InstallerController", Serial, func() {
 					ContentID: "bogus-content-id",
 					Components: []operatorv1alpha1.ClusterAPIInstallerComponent{
 						{
-							Type: operatorv1alpha1.InstallerComponentTypeImage,
-							Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
-								Ref:     "registry.example.com/nonexistent@sha256:0000000000000000000000000000000000000000000000000000000000000000",
-								Profile: "default",
+							ClusterAPIInstallerComponentSource: operatorv1alpha1.ClusterAPIInstallerComponentSource{
+								Type: operatorv1alpha1.InstallerComponentTypeImage,
+								Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
+									Ref:     "registry.example.com/nonexistent@sha256:0000000000000000000000000000000000000000000000000000000000000000",
+									Profile: "default",
+								},
 							},
 						},
 					},
@@ -299,10 +301,12 @@ var _ = Describe("InstallerController", Serial, func() {
 				Revision:  int64(len(clusterAPI.Status.Revisions) + 1),
 				ContentID: "placeholder",
 				Components: []operatorv1alpha1.ClusterAPIInstallerComponent{{
-					Type: operatorv1alpha1.InstallerComponentTypeImage,
-					Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
-						Ref:     operatorv1alpha1.ImageDigestFormat(profile.ImageRef),
-						Profile: profile.Profile,
+					ClusterAPIInstallerComponentSource: operatorv1alpha1.ClusterAPIInstallerComponentSource{
+						Type: operatorv1alpha1.InstallerComponentTypeImage,
+						Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
+							Ref:     operatorv1alpha1.ImageDigestFormat(profile.ImageRef),
+							Profile: profile.Profile,
+						},
 					},
 				}},
 			}
@@ -365,10 +369,12 @@ var _ = Describe("InstallerController", Serial, func() {
 					ContentID: "invalid-content-id",
 					Components: []operatorv1alpha1.ClusterAPIInstallerComponent{
 						{
-							Type: operatorv1alpha1.InstallerComponentTypeImage,
-							Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
-								Ref:     "registry.example.com/nonexistent@sha256:0000000000000000000000000000000000000000000000000000000000000000",
-								Profile: "default",
+							ClusterAPIInstallerComponentSource: operatorv1alpha1.ClusterAPIInstallerComponentSource{
+								Type: operatorv1alpha1.InstallerComponentTypeImage,
+								Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
+									Ref:     "registry.example.com/nonexistent@sha256:0000000000000000000000000000000000000000000000000000000000000000",
+									Profile: "default",
+								},
 							},
 						},
 					},
@@ -536,8 +542,10 @@ var _ = Describe("InstallerController", Serial, func() {
 			// Add an empty revision. The old revision remains in the
 			// revision list being torn down, so its objects should still
 			// appear in relatedObjects for must-gather.
+			var emptyRevision operatorv1alpha1.ClusterAPIInstallerRevision
+
 			By("adding an empty revision", func() {
-				emptyRevision := addEmptyRevision(ctx)
+				emptyRevision = addEmptyRevision(ctx)
 				waitForRevision(ctx, emptyRevision.Name)
 			})
 
@@ -550,9 +558,9 @@ var _ = Describe("InstallerController", Serial, func() {
 				clusterAPI := &operatorv1alpha1.ClusterAPI{}
 				Expect(cl.Get(ctx, client.ObjectKey{Name: clusterAPIName}, clusterAPI)).To(Succeed())
 
-				clusterAPI.Status.Revisions = nil
-				clusterAPI.Status.DesiredRevision = ""
-				clusterAPI.Status.CurrentRevision = ""
+				clusterAPI.Status.Revisions = []operatorv1alpha1.ClusterAPIInstallerRevision{emptyRevision}
+				clusterAPI.Status.DesiredRevision = emptyRevision.Name
+				clusterAPI.Status.CurrentRevision = emptyRevision.Name
 				Expect(cl.Status().Update(ctx, clusterAPI)).To(Succeed())
 			})
 

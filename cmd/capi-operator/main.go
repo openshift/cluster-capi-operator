@@ -63,49 +63,40 @@ func initScheme(scheme *runtime.Scheme) {
 }
 
 func main() {
+	ctx, cancel := context.WithCancel(ctrl.SetupSignalHandler())
+	cfg := ctrl.GetConfigOrDie()
+
 	scheme := runtime.NewScheme()
 	initScheme(scheme)
 
-	opts := commoncmdoptions.InitCommonOptions(managerName, controllers.DefaultOperatorNamespace)
-
-	imagesFile := flag.String(
+	extraflags := flag.NewFlagSet("", flag.ContinueOnError)
+	imagesFile := extraflags.String(
 		"images-json",
 		defaultImagesLocation,
 		"The location of images file to use by operator for managed CAPI binaries.",
 	)
 
-	opts.Parse()
+	log, operatorConfig, mgrOpts, initManager, err := commoncmdoptions.InitOperatorConfig(ctx, cfg, scheme, managerName, controllers.DefaultOperatorNamespace, extraflags)
+	if err != nil {
+		log.Error(err, "unable to initialize operator config")
+		os.Exit(1)
+	}
 
-	log := ctrl.Log.WithName("capi-operator")
-
-	cacheOpts := cache.Options{
+	mgrOpts.Cache = cache.Options{
 		DefaultNamespaces: map[string]cache.Config{
-			*opts.CAPINamespace:     {},
-			*opts.OperatorNamespace: {},
+			*operatorConfig.CAPINamespace:     {},
+			*operatorConfig.OperatorNamespace: {},
 		},
 		SyncPeriod: ptr.To(10 * time.Minute),
 	}
 
-	mgrOpts, _ := opts.GetCommonManagerOptions()
-	mgrOpts.Cache = cacheOpts
-	mgrOpts.Scheme = scheme
-	mgrOpts.Logger = log
-
-	cfg := ctrl.GetConfigOrDie()
-	ctx, cancel := context.WithCancel(ctrl.SetupSignalHandler())
-
-	mgr, err := ctrl.NewManager(cfg, mgrOpts)
+	mgr, err := initManager(ctx, cancel, mgrOpts)
 	if err != nil {
-		log.Error(err, "unable to create manager")
+		log.Error(err, "unable to initialize manager")
 		os.Exit(1)
 	}
 
-	if err := commoncmdoptions.AddCommonChecks(mgr); err != nil {
-		log.Error(err, "unable to add common checks")
-		os.Exit(1)
-	}
-
-	if err := setupControllers(ctx, log, mgr, opts, *imagesFile, cancel); err != nil {
+	if err := setupControllers(ctx, log, mgr, operatorConfig, *imagesFile, cancel); err != nil {
 		log.Error(err, "unable to setup controllers")
 		os.Exit(1)
 	}
@@ -118,7 +109,7 @@ func main() {
 	}
 }
 
-func setupControllers(ctx context.Context, log logr.Logger, mgr ctrl.Manager, opts *commoncmdoptions.CommonOptions, imagesFile string, cancel context.CancelFunc) error {
+func setupControllers(ctx context.Context, log logr.Logger, mgr ctrl.Manager, operatorConfig commoncmdoptions.OperatorConfig, imagesFile string, cancel context.CancelFunc) error {
 	infra, err := util.GetInfra(ctx, mgr.GetAPIReader())
 	if err != nil {
 		return fmt.Errorf("unable to get infrastructure: %w", err)
@@ -137,7 +128,7 @@ func setupControllers(ctx context.Context, log logr.Logger, mgr ctrl.Manager, op
 	supportedPlatform := util.IsCAPIEnabledForPlatform(featureGates, infra.Status.PlatformStatus.Type)
 
 	if err := (&clusteroperator.ClusterOperatorController{
-		ClusterOperatorStatusClient: opts.GetClusterOperatorStatusClient(mgr, platform, "clusteroperator"),
+		ClusterOperatorStatusClient: operatorConfig.GetClusterOperatorStatusClient(mgr, platform, "clusteroperator"),
 		Scheme:                      mgr.GetScheme(),
 		IsUnsupportedPlatform:       !supportedPlatform,
 	}).SetupWithManager(mgr); err != nil {
@@ -157,8 +148,17 @@ func setupControllers(ctx context.Context, log logr.Logger, mgr ctrl.Manager, op
 		return err
 	}
 
-	if err := setupCapiInstallerController(mgr, log, providerProfiles); err != nil {
-		return err
+	if err := (&revision.RevisionController{
+		Client:           mgr.GetClient(),
+		ProviderProfiles: providerProfiles,
+		ReleaseVersion:   util.GetReleaseVersion(),
+	}).SetupWithManager(mgr, operatorConfig.TLSOptions); err != nil {
+		log.Error(err, "unable to create revision controller", "controller", "RevisionController")
+		return fmt.Errorf("unable to create revision controller: %w", err)
+	}
+
+	if err := installer.SetupWithManager(mgr, providerProfiles); err != nil {
+		return fmt.Errorf("unable to create installer controller: %w", err)
 	}
 
 	return nil
@@ -183,21 +183,4 @@ func loadProviderImages(ctx context.Context, mgr ctrl.Manager, imagesFile string
 	}
 
 	return providerProfiles, nil
-}
-
-func setupCapiInstallerController(mgr ctrl.Manager, log logr.Logger, providerProfiles []providerimages.ProviderImageManifests) error {
-	if err := (&revision.RevisionController{
-		Client:           mgr.GetClient(),
-		ProviderProfiles: providerProfiles,
-		ReleaseVersion:   util.GetReleaseVersion(),
-	}).SetupWithManager(mgr); err != nil {
-		log.Error(err, "unable to create revision controller", "controller", "RevisionController")
-		return fmt.Errorf("unable to create revision controller: %w", err)
-	}
-
-	if err := installer.SetupWithManager(mgr, providerProfiles); err != nil {
-		return fmt.Errorf("unable to create installer controller: %w", err)
-	}
-
-	return nil
 }

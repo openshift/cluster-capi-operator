@@ -69,11 +69,12 @@ require (
 	github.com/metal3-io/cluster-api-provider-metal3/api v1.11.2
 	github.com/onsi/ginkgo/v2 v2.28.1
 	github.com/onsi/gomega v1.39.1
-	github.com/openshift/api v0.0.0-20260306141135-f595753a3e66
-	github.com/openshift/client-go v0.0.0-20260306160707-3935d929fc7d
+	github.com/openshift/api v0.0.0-20260416105050-3c6b218b8a80
+	github.com/openshift/client-go v0.0.0-20260416131737-a19e91702ab5
 	github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0
 	github.com/openshift/cluster-capi-operator/manifests-gen v0.0.0-00010101000000-000000000000
-	github.com/openshift/library-go v0.0.0-20260303171201-5d9eb6295ff6
+	github.com/openshift/controller-runtime-common v0.0.0-20260318085703-1812aed6dbd2
+	github.com/openshift/library-go v0.0.0-20260413093329-d2db42c961e1
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/pflag v1.0.10
 	golang.org/x/sync v0.20.0
@@ -84,9 +85,10 @@ require (
 	k8s.io/apiserver v0.35.3
 	k8s.io/client-go v0.35.3
 	k8s.io/component-base v0.35.3
+	k8s.io/klog v1.0.0
 	k8s.io/klog/v2 v2.140.0
 	k8s.io/kubernetes v1.35.1
-	k8s.io/utils v0.0.0-20260108192941-914a6e750570
+	k8s.io/utils v0.0.0-20260210185600-b8788abfbbc2
 	pkg.package-operator.run/boxcutter v0.13.1
 	sigs.k8s.io/cluster-api v1.12.3
 	sigs.k8s.io/cluster-api-provider-aws/v2 v2.10.2

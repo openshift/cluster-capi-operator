@@ -14,11 +14,14 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"os"
 	"time"
 
+	"github.com/go-logr/logr"
 	metal3v1 "github.com/metal3-io/cluster-api-provider-metal3/api/v1beta1"
 
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
@@ -27,7 +30,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	klog "k8s.io/klog/v2"
 
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	azurev1 "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
@@ -87,128 +89,131 @@ func initScheme(scheme *runtime.Scheme) {
 }
 
 func main() {
+	cfg := ctrl.GetConfigOrDie()
+	ctx := ctrl.SetupSignalHandler()
 	scheme := runtime.NewScheme()
 	initScheme(scheme)
 
-	opts := commoncmdoptions.InitCommonOptions(managerName, controllers.DefaultCAPINamespace)
-
-	webhookPort := flag.Int(
+	extraflags := flag.NewFlagSet("", flag.ContinueOnError)
+	webhookPort := extraflags.Int(
 		"webhook-port",
 		9443,
 		"The port for the webhook server to listen on.",
 	)
-	webhookCertDir := flag.String(
+	webhookCertDir := extraflags.String(
 		"webhook-cert-dir",
 		"/tmp/k8s-webhook-server/serving-certs/",
 		"Webhook cert dir, only used when webhook-port is specified.",
 	)
 
-	opts.Parse()
-
-	cacheOpts := getDefaultCacheOptions(*opts.CAPINamespace, 10*time.Minute)
-
-	cfg := ctrl.GetConfigOrDie()
-	ctx := ctrl.SetupSignalHandler()
-
-	mgrOpts, tlsOptions := opts.GetCommonManagerOptions()
-	mgrOpts.Cache = cacheOpts
-	mgrOpts.Scheme = scheme
-	mgrOpts.WebhookServer = crwebhook.NewServer(crwebhook.Options{
-		Port:    *webhookPort,
-		CertDir: *webhookCertDir,
-		TLSOpts: tlsOptions,
-	})
-
-	mgr, err := ctrl.NewManager(cfg, mgrOpts)
+	log, operatorConfig, mgrOpts, initManager, err := commoncmdoptions.InitOperatorConfig(ctx, cfg, scheme, managerName, controllers.DefaultCAPINamespace, extraflags)
 	if err != nil {
-		klog.Error(err, "unable to start manager")
+		log.Error(err, "unable to initialize operator config")
 		os.Exit(1)
 	}
 
-	if err := commoncmdoptions.AddCommonChecks(mgr); err != nil {
-		klog.Error(err, "unable to add common checks")
+	mgrOpts.Cache = getDefaultCacheOptions(*operatorConfig.CAPINamespace, 10*time.Minute)
+	mgrOpts.WebhookServer = crwebhook.NewServer(crwebhook.Options{
+		Port:    *webhookPort,
+		CertDir: *webhookCertDir,
+		TLSOpts: operatorConfig.TLSOptions,
+	})
+
+	ctx, cancel := context.WithCancel(ctx)
+
+	mgr, err := initManager(ctx, cancel, mgrOpts)
+	if err != nil {
+		log.Error(err, "unable to initialize manager")
 		os.Exit(1)
 	}
 
 	platform, infra, err := util.GetPlatform(ctx, mgr.GetAPIReader())
 	if err != nil {
-		klog.Error(err, "unable to get platform")
+		log.Error(err, "unable to get platform")
 		os.Exit(1)
 	}
 
-	setupPlatformReconcilers(mgr, opts, infra, platform)
+	if err := setupPlatformReconcilers(log, mgr, operatorConfig, infra, platform); err != nil {
+		log.Error(err, "unable to setup platform reconcilers")
+		os.Exit(1)
+	}
 
-	klog.Info("Starting manager")
+	log.Info("Starting manager")
 
 	if err := mgr.Start(ctx); err != nil {
-		klog.Error(err, "problem running manager")
+		log.Error(err, "problem running manager")
 		os.Exit(1)
 	}
 }
 
-func setupPlatformReconcilers(mgr manager.Manager, opts *commoncmdoptions.CommonOptions, infra *configv1.Infrastructure, platform configv1.PlatformType) {
+func setupPlatformReconcilers(log logr.Logger, mgr manager.Manager, operatorConfig commoncmdoptions.OperatorConfig, infra *configv1.Infrastructure, platform configv1.PlatformType) error {
 	// Only setup reconcile controllers and webhooks when the platform is supported.
 	// This avoids unnecessary CAPI providers discovery, installs and reconciles when the platform is not supported.
 	infraTypes, _, err := util.GetCAPITypesForInfrastructure(infra)
 	if err != nil {
 		if errors.Is(err, util.ErrUnsupportedPlatform) {
-			klog.Infof("Detected platform %q is not supported, skipping capi controllers setup", platform)
-			return
+			log.Info("Detected platform is not supported, skipping capi controllers setup", "platform", platform)
+			return nil
 		}
 
-		klog.Error(err, "unable to get infrastructure objects")
-		os.Exit(1)
+		return fmt.Errorf("unable to get infrastructure objects: %w", err)
 	}
 
-	setupReconcilers(mgr, opts, infra, platform, infraTypes.Cluster())
-	setupWebhooks(mgr)
+	if err := setupReconcilers(mgr, operatorConfig, infra, platform, infraTypes.Cluster()); err != nil {
+		return fmt.Errorf("unable to setup reconcilers: %w", err)
+	}
+
+	if err := setupWebhooks(mgr); err != nil {
+		return fmt.Errorf("unable to setup webhooks: %w", err)
+	}
+
+	return nil
 }
 
-func setupReconcilers(mgr manager.Manager, opts *commoncmdoptions.CommonOptions, infra *configv1.Infrastructure, platform configv1.PlatformType, infraClusterObject client.Object) {
+func setupReconcilers(mgr manager.Manager, operatorConfig commoncmdoptions.OperatorConfig, infra *configv1.Infrastructure, platform configv1.PlatformType, infraClusterObject client.Object) error {
 	if err := (&corecluster.CoreClusterController{
-		ClusterOperatorStatusClient: opts.GetClusterOperatorStatusClient(mgr, platform, "cluster-resource"),
+		ClusterOperatorStatusClient: operatorConfig.GetClusterOperatorStatusClient(mgr, platform, "cluster-resource"),
 		Cluster:                     &clusterv1.Cluster{},
 		Platform:                    platform,
 		Infra:                       infra,
 	}).SetupWithManager(mgr); err != nil {
-		klog.Error(err, "unable to create controller", "controller", "CoreCluster")
-		os.Exit(1)
+		return fmt.Errorf("unable to create corecluster controller: %w", err)
 	}
 
 	if err := (&secretsync.UserDataSecretController{
-		ClusterOperatorStatusClient: opts.GetClusterOperatorStatusClient(mgr, platform, "user-data-secret"),
+		ClusterOperatorStatusClient: operatorConfig.GetClusterOperatorStatusClient(mgr, platform, "user-data-secret"),
 		Scheme:                      mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
-		klog.Error(err, "unable to create user-data-secret controller", "controller", "UserDataSecret")
-		os.Exit(1)
+		return fmt.Errorf("unable to create user-data-secret controller: %w", err)
 	}
 
 	if err := (&kubeconfig.KubeconfigReconciler{
-		ClusterOperatorStatusClient: opts.GetClusterOperatorStatusClient(mgr, platform, "kubeconfig"),
+		ClusterOperatorStatusClient: operatorConfig.GetClusterOperatorStatusClient(mgr, platform, "kubeconfig"),
 		Scheme:                      mgr.GetScheme(),
 		RestCfg:                     mgr.GetConfig(),
 	}).SetupWithManager(mgr); err != nil {
-		klog.Error(err, "unable to create controller", "controller", "Kubeconfig")
-		os.Exit(1)
+		return fmt.Errorf("unable to create kubeconfig controller: %w", err)
 	}
 
 	if err := (&infracluster.InfraClusterController{
-		ClusterOperatorStatusClient: opts.GetClusterOperatorStatusClient(mgr, platform, "infracluster"),
+		ClusterOperatorStatusClient: operatorConfig.GetClusterOperatorStatusClient(mgr, platform, "infracluster"),
 		Scheme:                      mgr.GetScheme(),
 		RestCfg:                     mgr.GetConfig(),
 		Platform:                    platform,
 		Infra:                       infra,
 	}).SetupWithManager(mgr, infraClusterObject); err != nil {
-		klog.Error(err, "unable to create infracluster controller", "controller", "InfraCluster")
-		os.Exit(1)
+		return fmt.Errorf("unable to create infracluster controller: %w", err)
 	}
+
+	return nil
 }
 
-func setupWebhooks(mgr ctrl.Manager) {
+func setupWebhooks(mgr ctrl.Manager) error {
 	if err := (&webhook.ClusterWebhook{}).SetupWebhookWithManager(mgr); err != nil {
-		klog.Error(err, "unable to create webhook", "webhook", "Cluster")
-		os.Exit(1)
+		return fmt.Errorf("unable to create webhook: %w", err)
 	}
+
+	return nil
 }
 
 func getDefaultCacheOptions(capiNamespace string, sync time.Duration) cache.Options {
