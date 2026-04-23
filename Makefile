@@ -71,9 +71,15 @@ TEST_DIRS ?= ./pkg/... ./manifests-gen/...
 unit: .localtestenv ## Run unit tests
 	./hack/test.sh "$(TEST_DIRS)" 20m
 
+.PHONY: test-e2e-diagnostics
+test-e2e-diagnostics: ## Run e2e diagnostics unit tests (no cluster required)
+	go test -count=1 -race -run TestDiagnostics ./e2e/...
+
 .PHONY: e2e
 e2e: ## Run e2e tests against active kubeconfig
-	./hack/test.sh "./e2e/..." 120m
+	# --tags=e2e excludes e2e_diagnostics_test.go (//go:build !e2e) which
+	# runs separately via test-e2e-diagnostics without a cluster.
+	GINKGO_EXTRA_ARGS="--tags=e2e $(GINKGO_EXTRA_ARGS)" ./hack/test.sh "./e2e/..." 120m
 
 run: ## Run the operator against the configured Kubernetes cluster
 	oc -n openshift-cluster-api patch lease cluster-capi-operator-leader -p '{"spec":{"acquireTime": null, "holderIdentity": null, "renewTime": null}}' --type=merge

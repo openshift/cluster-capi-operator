@@ -117,44 +117,40 @@ func trackResource(obj client.Object) {
 	resourcesUnderTest = append(resourcesUnderTest, obj)
 }
 
-// dumpTrackedResources writes detailed diagnostics for each tracked resource
-// to GinkgoWriter. For each resource it fetches current state, marshals it as
+// collectTrackedResourceDiagnostics builds a diagnostics string for each
+// tracked resource. For each resource it fetches current state, marshals it as
 // YAML, and lists events specific to that object. It also dumps all
 // AWSMachineTemplates (on AWS) and all events in both namespaces.
-// Best-effort: panics are recovered and individual errors are logged without
-// aborting the dump.
-func dumpTrackedResources() {
+func collectTrackedResourceDiagnostics(parentCtx context.Context) (result string) {
+	var buf strings.Builder
 	defer func() {
 		if r := recover(); r != nil {
-			GinkgoWriter.Printf("WARNING: dumpTrackedResources panicked: %v\n", r)
+			fmt.Fprintf(&buf, "\n--- diagnostics collection panicked: %v ---\n", r)
 		}
+
+		buf.WriteString("\n=== End Test Failure Diagnostics ===\n")
+		result = buf.String()
 	}()
 
-	var buf strings.Builder
+	diagCtx, cancel := context.WithTimeout(parentCtx, 5*time.Minute)
+	defer cancel()
+
 	buf.WriteString("\n=== Test Failure Diagnostics ===\n")
 
 	for _, obj := range resourcesUnderTest {
-		dumpSingleResource(&buf, obj)
+		dumpSingleResource(diagCtx, &buf, obj)
 	}
 
 	if platform == configv1.AWSPlatformType {
-		dumpAllAWSMachineTemplates(&buf)
+		dumpAllAWSMachineTemplates(diagCtx, &buf)
 	}
-	dumpNamespaceEvents(&buf, capiframework.CAPINamespace)
-	dumpNamespaceEvents(&buf, capiframework.MAPINamespace)
+	dumpNamespaceEvents(diagCtx, &buf, capiframework.CAPINamespace)
+	dumpNamespaceEvents(diagCtx, &buf, capiframework.MAPINamespace)
 
-	buf.WriteString("\n=== End Test Failure Diagnostics ===\n")
-
-	GinkgoWriter.Print(buf.String())
+	return buf.String()
 }
 
-func dumpSingleResource(buf *strings.Builder, obj client.Object) {
-	defer func() {
-		if r := recover(); r != nil {
-			fmt.Fprintf(buf, "\n--- (panic dumping %T): %v ---\n", obj, r)
-		}
-	}()
-
+func dumpSingleResource(ctx context.Context, buf *strings.Builder, obj client.Object) {
 	key := client.ObjectKeyFromObject(obj)
 	typeName := reflect.TypeOf(obj).Elem().Name()
 
@@ -173,7 +169,7 @@ func dumpSingleResource(buf *strings.Builder, obj client.Object) {
 
 	fmt.Fprintf(buf, "\n--- %s %s/%s ---\n", typeName, key.Namespace, key.Name)
 	describeObject(buf, fresh)
-	describeObjectEvents(buf, key)
+	describeObjectEvents(ctx, buf, key)
 }
 
 func describeObject(buf *strings.Builder, obj client.Object) {
@@ -197,7 +193,7 @@ func describeObject(buf *strings.Builder, obj client.Object) {
 // describeObjectEvents lists events for the given object. Matching is by name
 // only; events for different resource kinds with the same name in the same
 // namespace will be included.
-func describeObjectEvents(buf *strings.Builder, key client.ObjectKey) {
+func describeObjectEvents(ctx context.Context, buf *strings.Builder, key client.ObjectKey) {
 	list := &corev1.EventList{}
 	if err := cl.List(ctx, list, client.InNamespace(key.Namespace)); err != nil {
 		fmt.Fprintf(buf, "  Events: error listing: %v\n", err)
@@ -234,13 +230,7 @@ func describeObjectEvents(buf *strings.Builder, key client.ObjectKey) {
 // dumpAllAWSMachineTemplates lists all AWSMachineTemplates in the CAPI namespace
 // and describes each one. Templates use generated names so we list rather than
 // trying to predict names.
-func dumpAllAWSMachineTemplates(buf *strings.Builder) {
-	defer func() {
-		if r := recover(); r != nil {
-			fmt.Fprintf(buf, "\n--- (panic dumping AWSMachineTemplates): %v ---\n", r)
-		}
-	}()
-
+func dumpAllAWSMachineTemplates(ctx context.Context, buf *strings.Builder) {
 	list := &awsv1.AWSMachineTemplateList{}
 	if err := cl.List(ctx, list, client.InNamespace(capiframework.CAPINamespace)); err != nil {
 		fmt.Fprintf(buf, "\n--- AWSMachineTemplates: error listing: %v ---\n", err)
@@ -258,19 +248,13 @@ func dumpAllAWSMachineTemplates(buf *strings.Builder) {
 		key := client.ObjectKeyFromObject(t)
 		fmt.Fprintf(buf, "\n  %s:\n", t.Name)
 		describeObject(buf, t)
-		describeObjectEvents(buf, key)
+		describeObjectEvents(ctx, buf, key)
 	}
 }
 
 // dumpNamespaceEvents lists all events in a namespace. This catches events not
 // associated with tracked resources (e.g. from controllers acting on other objects).
-func dumpNamespaceEvents(buf *strings.Builder, namespace string) {
-	defer func() {
-		if r := recover(); r != nil {
-			fmt.Fprintf(buf, "\n--- (panic dumping events in %s): %v ---\n", namespace, r)
-		}
-	}()
-
+func dumpNamespaceEvents(ctx context.Context, buf *strings.Builder, namespace string) {
 	list := &corev1.EventList{}
 	if err := cl.List(ctx, list, client.InNamespace(namespace)); err != nil {
 		fmt.Fprintf(buf, "\n--- Events in %s: error listing: %v ---\n", namespace, err)
