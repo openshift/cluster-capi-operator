@@ -38,7 +38,6 @@ const (
 	testLabelValue            = "test-label-value"
 	testInstanceType          = "m5.xlarge"
 	testAMIID                 = "ami-test123456"
-	testAvailabilityZone      = "us-west-2b"
 	testSubnetID              = "subnet-test123456"
 	testSecurityGroupID       = "sg-test123456"
 	testCapacityReservationID = "cr-test123456"
@@ -183,7 +182,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] MA
 
 			It("should prevent updating providerSpec.availabilityZone", func() {
 				verifyAWSProviderSpecUpdatePrevented(testMAPIMachine, "availabilityZone", func(providerSpec *mapiv1beta1.AWSMachineProviderConfig) {
-					providerSpec.Placement.AvailabilityZone = testAvailabilityZone
+					providerSpec.Placement.AvailabilityZone = providerSpec.Placement.AvailabilityZone + "-changed"
 				}, vapSpecLockedMessage)
 			})
 
