@@ -25,6 +25,7 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	ibmpowervsv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
@@ -209,7 +210,7 @@ func (r *MachineSyncReconciler) ensureCAPIInfraMachineDeleted(ctx context.Contex
 	logger := logf.FromContext(ctx)
 
 	// Trigger deletion
-	if err := r.Delete(ctx, existingCAPIInfraMachine); err != nil {
+	if err := r.Delete(ctx, existingCAPIInfraMachine); err != nil && !apierrors.IsNotFound(err) {
 		logger.Error(err, "Failed to delete Cluster API Infrastructure machine")
 
 		deleteErr := fmt.Errorf("failed to delete Cluster API Infrastructure machine: %w", err)
@@ -225,7 +226,7 @@ func (r *MachineSyncReconciler) ensureCAPIInfraMachineDeleted(ctx context.Contex
 	// Remove finalizers from the deleting Cluster API infraMachine, it is not authoritative.
 	existingCAPIInfraMachine.SetFinalizers(nil)
 
-	if err := r.Update(ctx, existingCAPIInfraMachine); err != nil {
+	if err := r.Update(ctx, existingCAPIInfraMachine); err != nil && !apierrors.IsNotFound(err) {
 		logger.Error(err, "Failed to remove finalizer for deleting Cluster API Infrastructure machine")
 
 		deleteErr := fmt.Errorf("failed to remove finalizer for deleting Cluster API Infrastructure machine: %w", err)
