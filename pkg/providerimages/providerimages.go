@@ -16,26 +16,13 @@ limitations under the License.
 package providerimages
 
 import (
-	"archive/tar"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
-	"path"
 	"path/filepath"
-	"strings"
 
-	"github.com/go-logr/logr"
-	"github.com/google/go-containerregistry/pkg/authn"
-	"github.com/google/go-containerregistry/pkg/name"
-	v1 "github.com/google/go-containerregistry/pkg/v1"
-	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/openshift/cluster-capi-operator/manifests-gen/providermetadata"
-	"golang.org/x/sync/errgroup"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -43,13 +30,8 @@ import (
 )
 
 const (
-	capiManifestsDirName = "capi-operator-manifests"
-	capiManifestsDir     = "/" + capiManifestsDirName
-	metadataFile         = "metadata.yaml"
-	manifestsFile        = "manifests.yaml"
-
-	pullSecretName = "pull-secret"
-	pullSecretKey  = ".dockerconfigjson" //nolint:gosec // Not a credential, just a key name
+	metadataFile  = "metadata.yaml"
+	manifestsFile = "manifests.yaml"
 
 	// AttributeKeyType is the key for the provider type attribute.
 	AttributeKeyType = providermetadata.AttributeKeyType
@@ -64,236 +46,98 @@ type ProviderImageManifests struct {
 	ImageRef string
 	Profile  string
 
-	ContentID     string
 	ManifestsPath string
 }
 
 // ProviderMetadata is metadata about a provider image provided in the metadata.yaml file.
 type ProviderMetadata = providermetadata.ProviderMetadata
 
-// imageFetcher abstracts fetching container images for testability.
-type imageFetcher interface {
-	Fetch(ctx context.Context, ref name.Reference) (v1.Image, error)
-}
-
-// remoteImageFetcher fetches images from a remote registry.
-type remoteImageFetcher struct {
-	keychain  authn.Keychain
-	transport http.RoundTripper
-}
-
-// Fetch fetches an image from a remote registry.
-func (r remoteImageFetcher) Fetch(ctx context.Context, ref name.Reference) (v1.Image, error) {
-	opts := []remote.Option{
-		remote.WithAuthFromKeychain(r.keychain),
-		remote.WithContext(ctx),
-		remote.WithTransport(r.transport),
-	}
-
-	img, err := remote.Image(ref, opts...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch remote image: %w", err)
-	}
-
-	return img, nil
-}
-
-// ReadProviderImages returns a list of ProviderImageManifests read directly
-// from operand container images.
-//
-// containerImages is a map of provider names to provider image references
-//
-// A provider image may contain a /capi-operator-manifests directory containing the following 2 files:
-// - metadata.yaml: a YAML file whose contents are a ProviderMetadata struct
-// - manifests.yaml: a KRM containing the provider manifests
-//
-// If a provider image does not contain a /capi-operator-manifests directory, it is ignored.
-// If a provider image contains /capi-operator-manifests but one of the required files is missing, an error is returned.
-//
-// ReadProviderImages fetches each provider image. If it contains valid CAPI Operator
-// manifests, the contents are stored in a local cache directory specified by
-// providerImageDir. Manifests are written to a subdirectory named after the
-// image reference.
-//
-// When writing manifests to the cache, any occurrences of `manifestImageName` as
-// specified in the provider's metadata.yaml are replaced with the image
-// reference.
-//
-// The pull secret is fetched from the "pull-secret" Secret in the "openshift-config"
-// namespace using the provided client.Reader.
-func ReadProviderImages(ctx context.Context, k8sClient client.Reader, log logr.Logger, containerImages []string, providerImageDir string) ([]ProviderImageManifests, error) {
-	var secret corev1.Secret
-	if err := k8sClient.Get(ctx, types.NamespacedName{Name: pullSecretName, Namespace: openshiftConfigNamespace}, &secret); err != nil {
-		return nil, fmt.Errorf("failed to get pull secret: %w", err)
-	}
-
-	pullSecret := secret.Data[pullSecretKey]
-
-	keychain, err := parseDockerConfig(pullSecret)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse pull secret: %w", err)
-	}
-
-	mirrors, skippedWildcards, err := getImageRegistryMirrors(ctx, k8sClient)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get image registry mirrors: %w", err)
-	}
-
-	for _, source := range skippedWildcards {
-		log.Info("ignoring unsupported wildcard mirror source", "source", source)
-	}
-
-	if len(mirrors) > 0 {
-		log.Info("found image registry mirrors", "sourceCount", len(mirrors))
-	} else {
-		log.Info("no image registry mirrors found")
-	}
-
-	resolvedImages := make([]string, len(containerImages))
-	for i, img := range containerImages {
-		resolvedImages[i] = resolveImageRef(img, mirrors)
-		if resolvedImages[i] != img {
-			log.Info("image ref resolved through mirror", "original", img, "resolved", resolvedImages[i])
-		}
-	}
-
-	transport, err := getTrustedCATransport(ctx, k8sClient, log)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get additional trusted CA transport: %w", err)
-	}
-
-	return readProviderImages(ctx, log, resolvedImages, providerImageDir, remoteImageFetcher{keychain: keychain, transport: transport})
-}
-
-type providerImageResult struct {
-	imageRef  string
-	manifests []ProviderImageManifests
-	err       error
-}
-
-func readProviderImages(ctx context.Context, log logr.Logger, containerImages []string, providerImageDir string, fetcher imageFetcher) ([]ProviderImageManifests, error) {
-	log.Info("looking for provider manifests in container images")
-
-	results := make(chan providerImageResult, len(containerImages))
-	g, ctx := errgroup.WithContext(ctx)
-
-	g.SetLimit(5) // Limit to 5 concurrent fetches
-
-	for _, imageRef := range containerImages {
-		g.Go(func() error {
-			manifests, err := processProviderImage(ctx, imageRef, providerImageDir, fetcher)
-			results <- providerImageResult{
-				imageRef:  imageRef,
-				manifests: manifests,
-				err:       err,
-			}
-
-			return nil // we're returning
-		})
-	}
-
-	_ = g.Wait() // We're not actually returning errors directly
-
-	close(results)
-
-	var providerImages []ProviderImageManifests
-
-	var err error
-
-	for result := range results {
-		switch {
-		case result.err != nil:
-			log.Error(result.err, "failed to process provider image", "image", result.imageRef)
-			err = errors.Join(err, fmt.Errorf("fetching provider from image %s: %w", result.imageRef, result.err))
-		case len(result.manifests) == 0:
-			log.Info("no provider manifests found in container image", "image", result.imageRef)
-		default:
-			for _, manifest := range result.manifests {
-				log.Info("found provider manifests in container image", "image", result.imageRef,
-					"provider", manifest.Name,
-					"type", manifest.Attributes[AttributeKeyType],
-					"version", manifest.Attributes[AttributeKeyVersion],
-					"profile", manifest.Profile,
-					"ocpPlatform", manifest.OCPPlatform)
-
-				providerImages = append(providerImages, manifest)
-			}
-		}
-	}
-
-	log.Info("finished looking for provider manifests in container images")
-
-	if err != nil {
-		return nil, err
-	}
-
-	return providerImages, nil
-}
-
-func processProviderImage(ctx context.Context, imageRef, providerImageDir string, fetcher imageFetcher) ([]ProviderImageManifests, error) {
-	ref, err := name.ParseReference(imageRef)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse image reference %s: %w", imageRef, err)
-	}
-
-	img, err := fetcher.Fetch(ctx, ref)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch image %s: %w", imageRef, err)
-	}
-
-	// Create output directory for this provider image
-	sanitizedRef := sanitizeImageRef(imageRef)
-	outputDir := filepath.Join(providerImageDir, sanitizedRef)
-
-	if err := os.MkdirAll(outputDir, 0o750); err != nil {
-		return nil, fmt.Errorf("failed to create output directory: %w", err)
-	}
-
-	// Extract files from the image to disk
-	if err := extractCapiManifestsToDir(img, outputDir); err != nil {
-		return nil, fmt.Errorf("failed to extract manifests from image to %s: %w", outputDir, err)
-	}
-
-	// Discover profiles from extracted files
-	profiles, err := discoverProfiles(outputDir)
-	if err != nil {
-		if errors.Is(err, errNoCapiManifests) {
-			// Image doesn't contain /capi-operator-manifests, skip it
-			return nil, nil
-		}
-
-		return nil, fmt.Errorf("failed to discover profiles in %s: %w", outputDir, err)
-	}
-
-	// Process each profile
-	results := make([]ProviderImageManifests, 0, len(profiles))
-
-	for _, profile := range profiles {
-		profileDir := filepath.Join(outputDir, profile.Profile)
-		manifestsPath := filepath.Join(profileDir, manifestsFile)
-
-		contentID, err := writeManifestsWithHash(manifestsPath, profile.Manifests, profile.Metadata.SelfImageRef, imageRef)
-		if err != nil {
-			return nil, fmt.Errorf("failed to write manifests for profile %s: %w", profile.Profile, err)
-		}
-
-		results = append(results, ProviderImageManifests{
-			ProviderMetadata: *profile.Metadata,
-			ImageRef:         imageRef,
-			Profile:          profile.Profile,
-			ContentID:        contentID,
-			ManifestsPath:    manifestsPath,
-		})
-	}
-
-	return results, nil
-}
-
 var (
 	errNoCapiManifests  = errors.New("no capi-manifests directory found")
 	errMissingMetadata  = errors.New("missing metadata.yaml in /capi-operator-manifests")
 	errMissingManifests = errors.New("missing manifests.yaml in /capi-operator-manifests")
 )
+
+// ScanProviderImages scans providerImageDir for subdirectories containing
+// provider profiles (metadata.yaml + manifests.yaml). imageRefMap maps
+// subdirectory names to image references (built from the pod spec).
+func ScanProviderImages(providerImageDir string, imageRefMap map[string]string) ([]ProviderImageManifests, error) {
+	entries, err := os.ReadDir(providerImageDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read provider image directory %s: %w", providerImageDir, err)
+	}
+
+	var result []ProviderImageManifests
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+
+		subdir := entry.Name()
+		subdirPath := filepath.Join(providerImageDir, subdir)
+
+		profiles, err := discoverProfiles(subdirPath)
+		if err != nil {
+			if errors.Is(err, errNoCapiManifests) {
+				continue
+			}
+
+			return nil, fmt.Errorf("failed to discover profiles in %s: %w", subdirPath, err)
+		}
+
+		imageRef := imageRefMap[subdir]
+
+		for _, profile := range profiles {
+			manifestsPath := filepath.Join(subdirPath, profile.Profile, manifestsFile)
+
+			result = append(result, ProviderImageManifests{
+				ProviderMetadata: *profile.Metadata,
+				ImageRef:         imageRef,
+				Profile:          profile.Profile,
+				ManifestsPath:    manifestsPath,
+			})
+		}
+	}
+
+	return result, nil
+}
+
+// BuildImageRefMapFromPod reads the given pod's spec to build a mapping
+// from mount subdirectory names to image references. It correlates image
+// volumes with their volume mounts to determine which image is mounted where.
+func BuildImageRefMapFromPod(ctx context.Context, k8sClient client.Reader, podName, podNamespace string) (map[string]string, error) {
+	var pod corev1.Pod
+	if err := k8sClient.Get(ctx, types.NamespacedName{Name: podName, Namespace: podNamespace}, &pod); err != nil {
+		return nil, fmt.Errorf("failed to get pod %s/%s: %w", podNamespace, podName, err)
+	}
+
+	// Build volume name → image reference map
+	volumeImageRefs := make(map[string]string)
+
+	for i := range pod.Spec.Volumes {
+		v := &pod.Spec.Volumes[i]
+		if v.Image != nil && v.Image.Reference != "" {
+			volumeImageRefs[v.Name] = v.Image.Reference
+		}
+	}
+
+	// Correlate volume mounts with image references
+	imageRefMap := make(map[string]string)
+
+	for i := range pod.Spec.Containers {
+		c := &pod.Spec.Containers[i]
+		for j := range c.VolumeMounts {
+			vm := &c.VolumeMounts[j]
+			if imageRef, ok := volumeImageRefs[vm.Name]; ok {
+				subdirName := filepath.Base(vm.MountPath)
+				imageRefMap[subdirName] = imageRef
+			}
+		}
+	}
+
+	return imageRefMap, nil
+}
 
 // profileManifests holds parsed metadata and manifest content for a single profile.
 type profileManifests struct {
@@ -387,149 +231,4 @@ func loadProfile(profileName, profileDir string) (profile *profileManifests, isP
 		Metadata:  &metadata,
 		Manifests: string(manifestsContent),
 	}, true, nil
-}
-
-// extractCapiManifestsToDir extracts all files under /capi-operator-manifests from the
-// image to destDir. Iterates layers top to bottom so higher layers take precedence.
-func extractCapiManifestsToDir(img v1.Image, destDir string) error {
-	layers, err := img.Layers()
-	if err != nil {
-		return fmt.Errorf("failed to get image layers: %w", err)
-	}
-
-	// Iterate layers in reverse order (top to bottom) since higher layers
-	// take precedence. extractFilesToDir skips files that already exist.
-	for i := len(layers) - 1; i >= 0; i-- {
-		layer := layers[i]
-
-		rc, err := layer.Uncompressed()
-		if err != nil {
-			return fmt.Errorf("failed to uncompress layer: %w", err)
-		}
-
-		err = extractFilesToDir(rc, capiManifestsDir, destDir)
-
-		err = errors.Join(err, rc.Close())
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// extractFilesToDir extracts all files under prefix from a tar stream to destDir.
-// Files are written preserving their relative path under the prefix.
-// e.g., prefix="/capi-operator-manifests", file="/capi-operator-manifests/default/foo.yaml"
-// → written to destDir/default/foo.yaml
-// Files that already exist are skipped (caller iterates layers top to bottom).
-func extractFilesToDir(r io.Reader, prefix, destDir string) error {
-	tr := tar.NewReader(r)
-	// Ensure prefix has leading slash and no trailing slash for consistent matching
-	prefix = path.Clean("/" + prefix)
-
-	for {
-		header, err := tr.Next()
-		if err == io.EOF {
-			break
-		}
-
-		if err != nil {
-			return fmt.Errorf("failed to read tar: %w", err)
-		}
-
-		// Directory entries in tar are just markers with no content.
-		// We create directories on-demand when writing files.
-		if header.Typeflag == tar.TypeDir {
-			continue
-		}
-
-		// Normalize the path (remove leading ./ or /)
-		// Use path (not filepath) since tar always uses forward slashes
-		normalized := path.Clean("/" + header.Name)
-
-		// Check if file is under our prefix
-		if !strings.HasPrefix(normalized, prefix+"/") {
-			continue
-		}
-
-		// Get relative path under prefix
-		relPath := strings.TrimPrefix(normalized, prefix+"/")
-
-		// Write file to destination
-		destPath := filepath.Join(destDir, relPath)
-
-		// Skip if file already exists (higher layer already wrote it)
-		if _, err := os.Stat(destPath); err == nil {
-			continue
-		}
-
-		if err := os.MkdirAll(filepath.Dir(destPath), 0o750); err != nil {
-			return fmt.Errorf("failed to create directory for %s: %w", destPath, err)
-		}
-
-		if err := writeFileFromTar(tr, destPath); err != nil {
-			return fmt.Errorf("failed to write %s: %w", destPath, err)
-		}
-	}
-
-	return nil
-}
-
-func writeFileFromTar(tr *tar.Reader, destPath string) (err error) {
-	f, err := os.Create(destPath) //nolint:gosec // path is constructed internally
-	if err != nil {
-		return fmt.Errorf("failed to create file: %w", err)
-	}
-
-	defer func() {
-		err = errors.Join(err, f.Close())
-	}()
-
-	if _, err := io.Copy(f, tr); err != nil {
-		return fmt.Errorf("failed to write file: %w", err)
-	}
-
-	return nil
-}
-
-func sanitizeImageRef(imageRef string) string {
-	// Replace characters that aren't valid in directory names
-	replacer := strings.NewReplacer(
-		"/", "_",
-		":", "_",
-		"@", "_",
-	)
-
-	return replacer.Replace(imageRef)
-}
-
-// writeManifestsWithHash writes manifest content to a file while calculating its hash.
-// If manifestImageName is non-empty, it replaces occurrences with imageRef during streaming.
-// Returns the sha256 hex-encoded hash of the final content.
-func writeManifestsWithHash(path, content, manifestImageName, imageRef string) (_ string, err error) {
-	f, err := os.Create(path) //nolint:gosec
-	if err != nil {
-		return "", fmt.Errorf("failed to create manifests file: %w", err)
-	}
-
-	defer func() {
-		err = errors.Join(err, f.Close())
-	}()
-
-	hash := sha256.New()
-	mw := io.MultiWriter(f, hash)
-
-	if manifestImageName != "" {
-		replacer := strings.NewReplacer(manifestImageName, imageRef)
-		if _, err := replacer.WriteString(mw, content); err != nil {
-			return "", fmt.Errorf("failed to write manifests: %w", err)
-		}
-	} else {
-		if _, err := io.WriteString(mw, content); err != nil {
-			return "", fmt.Errorf("failed to write manifests: %w", err)
-		}
-	}
-
-	return hex.EncodeToString(hash.Sum(nil)), nil
 }
