@@ -525,6 +525,58 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 					)
 				})
 			})
+
+			Context("when the CAPI infra machine is deleted and the MAPI machine providerSpec gets updated", func() {
+				BeforeEach(func() {
+					By("Waiting for initial synchronization to complete")
+					Eventually(k.Object(mapiMachine), timeout).Should(
+						HaveField("Status.Conditions", ContainElement(
+							SatisfyAll(
+								HaveField("Type", Equal(consts.SynchronizedCondition)),
+								HaveField("Status", Equal(corev1.ConditionTrue)),
+							))),
+					)
+
+					By("Removing finalizers and deleting the CAPI infra machine out-of-band")
+					Eventually(k.Update(capaMachine, func() {
+						capaMachine.SetFinalizers(nil)
+					})).Should(Succeed())
+					Expect(k8sClient.Delete(ctx, capaMachine)).To(Succeed())
+
+					By("Updating the MAPI machine providerSpec")
+
+					modifiedMAPIMachineBuilder := machinev1resourcebuilder.Machine().
+						WithNamespace(mapiNamespace.GetName()).
+						WithName(mapiMachine.Name).
+						WithProviderSpecBuilder(machinev1resourcebuilder.AWSProviderSpec().WithLoadBalancers(nil).WithInstanceType("m6i.2xlarge")).Build()
+
+					Eventually(k.Update(mapiMachine, func() {
+						mapiMachine.Spec.ProviderSpec = modifiedMAPIMachineBuilder.Spec.ProviderSpec
+					})).Should(Succeed(), "mapi machine providerSpec should be able to be updated")
+				})
+
+				It("should recreate the CAPI infra machine with updated spec", func() {
+					capiInfraMachine := awsv1resourcebuilder.AWSMachine().
+						WithNamespace(capiNamespace.GetName()).
+						WithName(mapiMachine.Name).Build()
+
+					Eventually(k.Object(capiInfraMachine), timeout).Should(
+						HaveField("Spec.InstanceType", Equal("m6i.2xlarge")),
+					)
+				})
+
+				It("should update the synchronized condition on the MAPI machine to True", func() {
+					Eventually(k.Object(mapiMachine), timeout).Should(
+						HaveField("Status.Conditions", ContainElement(
+							SatisfyAll(
+								HaveField("Type", Equal(consts.SynchronizedCondition)),
+								HaveField("Status", Equal(corev1.ConditionTrue)),
+								HaveField("Reason", Equal("ResourceSynchronized")),
+								HaveField("Message", Equal("Successfully synchronized MAPI Machine to CAPI")),
+							))),
+					)
+				})
+			})
 		})
 	})
 
