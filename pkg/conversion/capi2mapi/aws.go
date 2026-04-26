@@ -540,6 +540,12 @@ func convertAWSMetadataOptionsToMAPI(fldPath *field.Path, capiMetadataOpts *awsv
 		errors = append(errors, field.Invalid(fldPath.Child("httpPutResponseHopLimit"), capiMetadataOpts.HTTPPutResponseHopLimit, "httpPutResponseHopLimit values other than 1 are not supported"))
 	}
 
+	if capiMetadataOpts.HTTPProtocolIPv6 != "" && capiMetadataOpts.HTTPProtocolIPv6 != awsv1.InstanceMetadataEndpointStateDisabled {
+		// This defaults to "disabled" in CAPI and on the AWS side, so if it's not "disabled", the user explicitly chose another option.
+		// TODO(OCPCLOUD-2710): We should implement this within MAPI to create feature parity.
+		errors = append(errors, field.Invalid(fldPath.Child("httpProtocolIpv6"), capiMetadataOpts.HTTPProtocolIPv6, fmt.Sprintf("httpProtocolIpv6 values other than %q are not supported", awsv1.InstanceMetadataEndpointStateDisabled)))
+	}
+
 	if capiMetadataOpts.InstanceMetadataTags != "" && capiMetadataOpts.InstanceMetadataTags != awsv1.InstanceMetadataEndpointStateDisabled {
 		// This defaults to "disabled" in CAPI and on the AWS side, so if it's not "disabled", the user explicitly chose another option.
 		// TODO(OCPCLOUD-2710): We should implement this within MAPI to create feature parity.
