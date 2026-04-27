@@ -1318,6 +1318,8 @@ github.com/openshift/cluster-api-provider-baremetal/pkg/apis/baremetal/v1alpha1
 # github.com/openshift/cluster-autoscaler-operator v0.0.1-0.20250702183526-4eb64d553940
 ## explicit; go 1.23.0
 github.com/openshift/cluster-autoscaler-operator/pkg/apis/autoscaling/v1
+# github.com/openshift/cluster-capi-operator v0.0.0-20260425200736-89a8af46df2a
+## explicit; go 1.25.3
 # github.com/openshift/cluster-capi-operator/manifests-gen v0.0.0-00010101000000-000000000000 => ./manifests-gen
 ## explicit; go 1.25.0
 # github.com/openshift/controller-runtime-common v0.0.0-20260318085703-1812aed6dbd2

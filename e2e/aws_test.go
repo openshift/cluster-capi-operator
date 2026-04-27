@@ -21,34 +21,29 @@ import (
 	configv1 "github.com/openshift/api/config/v1"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	"github.com/openshift/cluster-capi-operator/e2e/framework"
+	"github.com/openshift/cluster-capi-operator/pkg/conversion/mapi2capi"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 var _ = Describe("Cluster API AWS MachineSet", Ordered, func() {
 	var (
-		awsMachineTemplate      *awsv1.AWSMachineTemplate
-		machineSet              *clusterv1.MachineSet
-		mapiDefaultMSName       string
-		mapiDefaultProviderSpec *mapiv1beta1.AWSMachineProviderConfig
-		awsClient               *ec2.EC2
+		awsMachineTemplate  *awsv1.AWSMachineTemplate
+		machineSet          *clusterv1.MachineSet
+		mapiDefaultMS       *mapiv1beta1.MachineSet
+		awsClient           *ec2.EC2
 	)
 
 	BeforeAll(func() {
 		if platform != configv1.AWSPlatformType {
 			Skip("Skipping AWS E2E tests")
 		}
-		mapiDefaultProviderSpec = framework.GetMAPIProviderSpec[mapiv1beta1.AWSMachineProviderConfig](ctx, cl)
+		mapiDefaultMS = framework.GetFirstMAPIMachineSet(ctx, cl)
 
-		machineSetList := &mapiv1beta1.MachineSetList{}
-		Expect(cl.List(ctx, machineSetList, client.InNamespace(framework.MAPINamespace))).To(Succeed(),
-			"should not fail listing MAPI MachineSets")
-		framework.SortListByName(machineSetList)
-		mapiDefaultMSName = machineSetList.Items[0].Name
-
-		awsClient = createAWSClient(mapiDefaultProviderSpec.Placement.Region)
+		mapiProviderSpec, err := mapi2capi.AWSProviderSpecFromRawExtension(mapiDefaultMS.Spec.Template.Spec.ProviderSpec.Value)
+		Expect(err).ToNot(HaveOccurred(), "should not fail decoding MAPI provider spec")
+		awsClient = createAWSClient(mapiProviderSpec.Placement.Region)
 	})
 
 	AfterEach(func() {
@@ -63,7 +58,7 @@ var _ = Describe("Cluster API AWS MachineSet", Ordered, func() {
 	})
 
 	It("should be able to run a machine with a default provider spec", func() {
-		awsMachineTemplate = newAWSMachineTemplate(mapiDefaultProviderSpec)
+		awsMachineTemplate = newAWSMachineTemplate(mapiDefaultMS, infra)
 		if err := cl.Create(ctx, awsMachineTemplate); err != nil && !apierrors.IsAlreadyExists(err) {
 			Expect(err).ToNot(HaveOccurred(), "should not fail creating AWS machine template")
 		}
@@ -76,13 +71,13 @@ var _ = Describe("Cluster API AWS MachineSet", Ordered, func() {
 			clusterv1.ContractVersionedObjectReference{
 				Kind:     "AWSMachineTemplate",
 				APIGroup: infraAPIGroup,
-				Name:     awsMachineTemplateName,
+				Name:     awsMachineTemplate.Name,
 			},
 			"worker-user-data",
 		))
 
 		framework.WaitForMachineSet(ctx, cl, machineSet.Name, machineSet.Namespace, framework.WaitLong)
 
-		compareInstances(awsClient, mapiDefaultMSName, "aws-machineset")
+		compareInstances(awsClient, mapiDefaultMS.Name, "aws-machineset")
 	})
 })

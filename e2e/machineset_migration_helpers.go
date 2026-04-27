@@ -27,6 +27,7 @@ import (
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	mapiframework "github.com/openshift/cluster-api-actuator-pkg/pkg/framework"
 	capiframework "github.com/openshift/cluster-capi-operator/e2e/framework"
+	"github.com/openshift/cluster-capi-operator/pkg/conversion/mapi2capi"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -43,9 +44,11 @@ func createCAPIMachineSet(ctx context.Context, cl client.Client, replicas int32,
 
 	By(fmt.Sprintf("Creating CAPI MachineSet %s with %d replicas", machineSetName, replicas))
 
-	mapiDefaultProviderSpec := capiframework.GetMAPIProviderSpec[mapiv1beta1.AWSMachineProviderConfig](ctx, cl)
-	createAWSClient(mapiDefaultProviderSpec.Placement.Region)
-	awsMachineTemplate := newAWSMachineTemplate(mapiDefaultProviderSpec)
+	mapiMS := capiframework.GetFirstMAPIMachineSet(ctx, cl)
+	mapiProviderSpec, err := mapi2capi.AWSProviderSpecFromRawExtension(mapiMS.Spec.Template.Spec.ProviderSpec.Value)
+	Expect(err).ToNot(HaveOccurred(), "should not fail decoding MAPI provider spec")
+	createAWSClient(mapiProviderSpec.Placement.Region)
+	awsMachineTemplate := newAWSMachineTemplate(mapiMS, infra)
 	awsMachineTemplate.Name = machineSetName
 
 	if instanceType != "" {
@@ -406,10 +409,12 @@ func createAWSMachineTemplate(ctx context.Context, cl client.Client, originalNam
 
 	By("Creating a new awsMachineTemplate")
 
-	mapiDefaultProviderSpec := capiframework.GetMAPIProviderSpec[mapiv1beta1.AWSMachineProviderConfig](ctx, cl)
-	createAWSClient(mapiDefaultProviderSpec.Placement.Region)
+	mapiMS := capiframework.GetFirstMAPIMachineSet(ctx, cl)
+	mapiProviderSpec, err := mapi2capi.AWSProviderSpecFromRawExtension(mapiMS.Spec.Template.Spec.ProviderSpec.Value)
+	Expect(err).ToNot(HaveOccurred(), "should not fail decoding MAPI provider spec")
+	createAWSClient(mapiProviderSpec.Placement.Region)
 
-	newTemplate := newAWSMachineTemplate(mapiDefaultProviderSpec)
+	newTemplate := newAWSMachineTemplate(mapiMS, infra)
 	newTemplate.Name = "new-" + originalName
 
 	if updateFunc != nil {

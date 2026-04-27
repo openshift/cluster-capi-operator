@@ -62,6 +62,7 @@ var (
 	ctx         = context.Background()
 	platform    configv1.PlatformType
 	clusterName string
+	infra       *configv1.Infrastructure
 
 	// resourcesUnderTest tracks objects created by the current test for focused
 	// diagnostics on failure. Helpers call trackResource after creating objects;
@@ -97,7 +98,7 @@ func InitCommonVariables() {
 	cl, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
 	Expect(err).ToNot(HaveOccurred())
 
-	infra := &configv1.Infrastructure{}
+	infra = &configv1.Infrastructure{}
 	infraName := client.ObjectKey{
 		Name: infrastructureName,
 	}
