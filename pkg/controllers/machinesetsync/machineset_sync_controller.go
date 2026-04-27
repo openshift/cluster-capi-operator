@@ -1332,6 +1332,8 @@ func compareCAPIInfraMachineTemplates(platform configv1.PlatformType, infraMachi
 
 	switch platform {
 	case configv1.AWSPlatformType:
+		// TODO(OCPCLOUD-2710): httpProtocolIpv6 is not yet supported by MAPI, ignore it until the CAPA CRD includes the field.
+		diffOpts = append(diffOpts, util.WithIgnoreField("spec", "template", "spec", "instanceMetadataOptions", "httpProtocolIpv6"))
 	case configv1.OpenStackPlatformType:
 	case configv1.PowerVSPlatformType:
 	default:

@@ -126,6 +126,7 @@ func awsMachineFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interface{} 
 
 			// TODO(OCPCLOUD-2710): Fields not yet supported by MAPI.
 			imdo.HTTPEndpoint = awsv1.InstanceMetadataEndpointStateEnabled
+			imdo.HTTPProtocolIPv6 = ""
 			imdo.HTTPPutResponseHopLimit = 0
 			imdo.InstanceMetadataTags = awsv1.InstanceMetadataEndpointStateDisabled
 		},
