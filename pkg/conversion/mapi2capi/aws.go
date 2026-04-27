@@ -625,7 +625,6 @@ func convertMetadataServiceOptionstoCAPI(fldPath *field.Path, metad mapiv1beta1.
 
 	capiMetadataOpts := &awsv1.InstanceMetadataOptions{
 		HTTPEndpoint:            awsv1.InstanceMetadataEndpointStateEnabled,  // not present in MAPI, fallback to CAPI default.
-		HTTPProtocolIPv6:        awsv1.InstanceMetadataEndpointStateDisabled, // not present in MAPI, fallback to CAPI default.
 		InstanceMetadataTags:    awsv1.InstanceMetadataEndpointStateDisabled, // not present in MAPI, fallback to CAPI default.
 		HTTPTokens:              httpTokens,
 		HTTPPutResponseHopLimit: 1, // TODO(docs): CAPA defaults to 1 (in the openAPI spec validation) if the field is empty, lossy translation to document.
