@@ -24,9 +24,8 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-// GetMAPIProviderSpec lists MAPI MachineSets, sorts by name, and unmarshals
-// the first MachineSet's ProviderSpec into the given type T.
-func GetMAPIProviderSpec[T any](ctx context.Context, cl client.Client) *T {
+// GetFirstMAPIMachineSet lists MAPI MachineSets, sorts by name, and returns the first one.
+func GetFirstMAPIMachineSet(ctx context.Context, cl client.Client) *mapiv1beta1.MachineSet {
 	GinkgoHelper()
 
 	machineSetList := &mapiv1beta1.MachineSetList{}
@@ -35,7 +34,16 @@ func GetMAPIProviderSpec[T any](ctx context.Context, cl client.Client) *T {
 	Expect(machineSetList.Items).ToNot(BeEmpty(), "expected to have at least a MachineSet")
 
 	SortListByName(machineSetList)
-	machineSet := machineSetList.Items[0]
+
+	return &machineSetList.Items[0]
+}
+
+// GetMAPIProviderSpec lists MAPI MachineSets, sorts by name, and unmarshals
+// the first MachineSet's ProviderSpec into the given type T.
+func GetMAPIProviderSpec[T any](ctx context.Context, cl client.Client) *T {
+	GinkgoHelper()
+
+	machineSet := GetFirstMAPIMachineSet(ctx, cl)
 	Expect(machineSet.Spec.Template.Spec.ProviderSpec.Value).ToNot(BeNil(),
 		"expected MAPI MachineSet ProviderSpec to not be nil")
 

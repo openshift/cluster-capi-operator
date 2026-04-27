@@ -28,8 +28,10 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	configv1 "github.com/openshift/api/config/v1"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	"github.com/openshift/cluster-capi-operator/e2e/framework"
+	"github.com/openshift/cluster-capi-operator/pkg/conversion/mapi2capi"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -40,67 +42,22 @@ import (
 )
 
 const (
-	awsMachineTemplateName      = "aws-machine-template"
 	machineSetOpenshiftLabelKey = "machine.openshift.io/cluster-api-machineset"
 )
 
-// newAWSMachineTemplate creates an AWSMachineTemplate from a MAPI AWS providerSpec by converting relevant fields.
-func newAWSMachineTemplate(mapiProviderSpec *mapiv1beta1.AWSMachineProviderConfig) *awsv1.AWSMachineTemplate {
+// newAWSMachineTemplate creates an AWSMachineTemplate from a MAPI MachineSet
+// using the production mapi2capi conversion code.
+func newAWSMachineTemplate(mapiMachineSet *mapiv1beta1.MachineSet, infraObj *configv1.Infrastructure) *awsv1.AWSMachineTemplate {
 	GinkgoHelper()
 	By("Creating AWS machine template")
 
-	Expect(mapiProviderSpec).ToNot(BeNil(), "expected MAPI ProviderSpec to not be nil")
-	Expect(mapiProviderSpec.IAMInstanceProfile).ToNot(BeNil(), "expected IAMInstanceProfile to not be nil")
-	Expect(mapiProviderSpec.IAMInstanceProfile.ID).ToNot(BeNil(), "expected IAMInstanceProfile ID to not be nil")
-	Expect(mapiProviderSpec.InstanceType).ToNot(BeEmpty(), "expected InstanceType to not be empty")
-	Expect(mapiProviderSpec.Placement.AvailabilityZone).ToNot(BeEmpty(), "expected AvailabilityZone to not be empty")
-	Expect(mapiProviderSpec.AMI.ID).ToNot(BeNil(), "expected AMI ID to not be nil")
-	Expect(mapiProviderSpec.Subnet.Filters).ToNot(BeEmpty(), "expected Subnet Filters to not be empty")
-	Expect(mapiProviderSpec.Subnet.Filters[0].Values).ToNot(BeEmpty(), "expected Subnet Filter values to not be empty")
-	Expect(mapiProviderSpec.SecurityGroups).ToNot(BeEmpty(), "expected SecurityGroups to not be empty")
-	Expect(mapiProviderSpec.SecurityGroups[0].Filters).ToNot(BeEmpty(), "expected SecurityGroup Filters to not be empty")
-	Expect(mapiProviderSpec.SecurityGroups[0].Filters[0].Values).ToNot(BeEmpty(), "expected SecurityGroup Filter values to not be empty")
+	_, templateObj, _, err := mapi2capi.FromAWSMachineSetAndInfra(mapiMachineSet, infraObj).ToMachineSetAndMachineTemplate()
+	Expect(err).ToNot(HaveOccurred(), "should not fail converting MAPI MachineSet to CAPI AWSMachineTemplate")
 
-	awsMachineSpec := awsv1.AWSMachineSpec{
-		IAMInstanceProfile: *mapiProviderSpec.IAMInstanceProfile.ID,
-		InstanceType:       mapiProviderSpec.InstanceType,
-		AMI: awsv1.AMIReference{
-			ID: mapiProviderSpec.AMI.ID,
-		},
-		Ignition: &awsv1.Ignition{
-			StorageType: awsv1.IgnitionStorageTypeOptionUnencryptedUserData,
-		},
-		Subnet: &awsv1.AWSResourceReference{
-			Filters: []awsv1.Filter{
-				{
-					Name:   "tag:Name",
-					Values: mapiProviderSpec.Subnet.Filters[0].Values,
-				},
-			},
-		},
-		AdditionalSecurityGroups: []awsv1.AWSResourceReference{
-			{
-				Filters: []awsv1.Filter{
-					{
-						Name:   "tag:Name",
-						Values: mapiProviderSpec.SecurityGroups[0].Filters[0].Values,
-					},
-				},
-			},
-		},
-	}
+	awsMachineTemplate, ok := templateObj.(*awsv1.AWSMachineTemplate)
+	Expect(ok).To(BeTrue(), "expected template to be *awsv1.AWSMachineTemplate, got %T", templateObj)
 
-	awsMachineTemplate := &awsv1.AWSMachineTemplate{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      awsMachineTemplateName,
-			Namespace: framework.CAPINamespace,
-		},
-		Spec: awsv1.AWSMachineTemplateSpec{
-			Template: awsv1.AWSMachineTemplateResource{
-				Spec: awsMachineSpec,
-			},
-		},
-	}
+	awsMachineTemplate.Namespace = framework.CAPINamespace
 
 	return awsMachineTemplate
 }
