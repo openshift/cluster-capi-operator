@@ -52,17 +52,40 @@ var _ = Describe("sourceMatchesRef", func() {
 	)
 })
 
+var _ = Describe("wildcardMatchesRef", func() {
+	DescribeTable("should match wildcard sources against hostnames",
+		func(ref, wildcardSource string, expected bool) {
+			Expect(wildcardMatchesRef(ref, wildcardSource)).To(Equal(expected))
+		},
+		Entry("single subdomain matches",
+			"registry.redhat.io/product/repo@sha256:abc", "*.redhat.io", true),
+		Entry("multi-level subdomain matches",
+			"sub.domain.redhat.io/product/repo@sha256:abc", "*.redhat.io", true),
+		Entry("bare domain does not match",
+			"redhat.io/product/repo@sha256:abc", "*.redhat.io", false),
+		Entry("unrelated domain does not match",
+			"registry.example.com/product/repo@sha256:abc", "*.redhat.io", false),
+		Entry("hostname with port matches",
+			"registry.redhat.io:5000/product/repo@sha256:abc", "*.redhat.io", true),
+	)
+})
+
 var _ = Describe("resolveImageRef", func() {
 	type testInput struct {
-		imageRef string
-		mirrors  map[string][]string
-		expected string
+		imageRef       string
+		mirrors        map[string][]string
+		expected       string
+		expectedSource string
 	}
 
 	DescribeTable("should resolve image references through mirrors",
 		func(tt testInput) {
-			result := resolveImageRef(tt.imageRef, tt.mirrors)
-			Expect(result).To(Equal(tt.expected))
+			resolved, matchedSource := resolveImageRef(tt.imageRef, tt.mirrors)
+			Expect(resolved).To(Equal(tt.expected))
+
+			if tt.expectedSource != "" {
+				Expect(matchedSource).To(Equal(tt.expectedSource))
+			}
 		},
 		Entry("nil mirrors returns original ref", testInput{
 			imageRef: "registry.ci.openshift.org/openshift/aws-cluster-api-controllers@sha256:aabbccdd",
@@ -81,7 +104,8 @@ var _ = Describe("resolveImageRef", func() {
 					"virthost.ostest.test.metalkube.org:5000/localimages/aws-cluster-api-controllers",
 				},
 			},
-			expected: "virthost.ostest.test.metalkube.org:5000/localimages/aws-cluster-api-controllers@sha256:aabbccdd",
+			expected:       "virthost.ostest.test.metalkube.org:5000/localimages/aws-cluster-api-controllers@sha256:aabbccdd",
+			expectedSource: "registry.ci.openshift.org/openshift/aws-cluster-api-controllers",
 		}),
 		Entry("prefix match rewrites with suffix preserved", testInput{
 			imageRef: "registry.ci.openshift.org/openshift/aws-cluster-api-controllers@sha256:aabbccdd",
@@ -102,7 +126,8 @@ var _ = Describe("resolveImageRef", func() {
 					"virthost.ostest.test.metalkube.org:5000/localimages/local-release-image",
 				},
 			},
-			expected: "virthost.ostest.test.metalkube.org:5000/localimages/local-release-image/aws-cluster-api-controllers@sha256:aabbccdd",
+			expected:       "virthost.ostest.test.metalkube.org:5000/localimages/local-release-image/aws-cluster-api-controllers@sha256:aabbccdd",
+			expectedSource: "quay-proxy.ci.openshift.org/openshift/ci",
 		}),
 		Entry("multiple mirrors for one source uses first", testInput{
 			imageRef: "registry.ci.openshift.org/openshift/aws-cluster-api-controllers@sha256:aabbccdd",
@@ -143,6 +168,64 @@ var _ = Describe("resolveImageRef", func() {
 				},
 			},
 			expected: "mirror.local/capi@sha256:aabbccdd",
+		}),
+		Entry("wildcard match rewrites hostname and preserves path", testInput{
+			imageRef: "registry.redhat.io/product/repo@sha256:aabbccdd",
+			mirrors: map[string][]string{
+				"*.redhat.io": {"mirror.local/redhat"},
+			},
+			expected:       "mirror.local/redhat/product/repo@sha256:aabbccdd",
+			expectedSource: "*.redhat.io",
+		}),
+		Entry("literal match takes precedence over wildcard", testInput{
+			imageRef: "registry.redhat.io/product/repo@sha256:aabbccdd",
+			mirrors: map[string][]string{
+				"*.redhat.io":                     {"mirror.local/redhat"},
+				"registry.redhat.io/product/repo": {"mirror.local/specific"},
+			},
+			expected:       "mirror.local/specific@sha256:aabbccdd",
+			expectedSource: "registry.redhat.io/product/repo",
+		}),
+		Entry("hostname-only literal takes precedence over wildcard", testInput{
+			imageRef: "registry.redhat.io/product/repo@sha256:aabbccdd",
+			mirrors: map[string][]string{
+				"*.redhat.io":        {"mirror.local/redhat"},
+				"registry.redhat.io": {"mirror.local/specific"},
+			},
+			expected:       "mirror.local/specific/product/repo@sha256:aabbccdd",
+			expectedSource: "registry.redhat.io",
+		}),
+		Entry("longest wildcard wins", testInput{
+			imageRef: "sub.registry.redhat.io/product/repo@sha256:aabbccdd",
+			mirrors: map[string][]string{
+				"*.redhat.io":          {"mirror.local/redhat"},
+				"*.registry.redhat.io": {"mirror.local/registry"},
+			},
+			expected:       "mirror.local/registry/product/repo@sha256:aabbccdd",
+			expectedSource: "*.registry.redhat.io",
+		}),
+		Entry("wildcard matches ref with port in hostname", testInput{
+			imageRef: "registry.redhat.io:5000/product/repo@sha256:aabbccdd",
+			mirrors: map[string][]string{
+				"*.redhat.io": {"mirror.local/redhat"},
+			},
+			expected: "mirror.local/redhat/product/repo@sha256:aabbccdd",
+		}),
+		Entry("literal with empty mirrors falls through to wildcard", testInput{
+			imageRef: "registry.redhat.io/product/repo@sha256:aabbccdd",
+			mirrors: map[string][]string{
+				"registry.redhat.io/product/repo": {},
+				"*.redhat.io":                     {"mirror.local/redhat"},
+			},
+			expected:       "mirror.local/redhat/product/repo@sha256:aabbccdd",
+			expectedSource: "*.redhat.io",
+		}),
+		Entry("wildcard with empty mirrors slice returns original ref", testInput{
+			imageRef: "registry.redhat.io/product/repo@sha256:aabbccdd",
+			mirrors: map[string][]string{
+				"*.redhat.io": {},
+			},
+			expected: "registry.redhat.io/product/repo@sha256:aabbccdd",
 		}),
 	)
 })
@@ -186,14 +269,15 @@ var _ = Describe("getImageRegistryMirrors", func() {
 			},
 		).Build()
 
-		mirrors, skippedWildcards, err := getImageRegistryMirrors(ctx, c)
+		mirrors, err := getImageRegistryMirrors(ctx, c)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(skippedWildcards).To(BeEmpty())
-		Expect(mirrors).To(HaveLen(2))
-		Expect(mirrors).To(HaveKeyWithValue("registry.ci.openshift.org/openshift",
-			[]string{"virthost.ostest.test.metalkube.org:5000/localimages/local-release-image"}))
-		Expect(mirrors).To(HaveKeyWithValue("quay-proxy.ci.openshift.org/openshift/ci",
-			[]string{"virthost.ostest.test.metalkube.org:5000/localimages/ci"}))
+		Expect(mirrors).To(SatisfyAll(
+			HaveLen(2),
+			HaveKeyWithValue("registry.ci.openshift.org/openshift",
+				[]string{"virthost.ostest.test.metalkube.org:5000/localimages/local-release-image"}),
+			HaveKeyWithValue("quay-proxy.ci.openshift.org/openshift/ci",
+				[]string{"virthost.ostest.test.metalkube.org:5000/localimages/ci"}),
+		))
 	})
 
 	It("should return IDMS results only when ICSP CRD is not installed", func() {
@@ -219,9 +303,8 @@ var _ = Describe("getImageRegistryMirrors", func() {
 			},
 		}).Build()
 
-		mirrors, skippedWildcards, err := getImageRegistryMirrors(ctx, c)
+		mirrors, err := getImageRegistryMirrors(ctx, c)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(skippedWildcards).To(BeEmpty())
 		Expect(mirrors).To(SatisfyAll(
 			HaveLen(1),
 			HaveKeyWithValue("registry.ci.openshift.org/openshift",
@@ -236,13 +319,12 @@ var _ = Describe("getImageRegistryMirrors", func() {
 			},
 		}).Build()
 
-		mirrors, skippedWildcards, err := getImageRegistryMirrors(ctx, c)
+		mirrors, err := getImageRegistryMirrors(ctx, c)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(skippedWildcards).To(BeEmpty())
 		Expect(mirrors).To(BeEmpty())
 	})
 
-	It("should filter out wildcard sources", func() {
+	It("should include wildcard sources in the map", func() {
 		c := fake.NewClientBuilder().WithScheme(fullScheme).WithObjects(
 			&configv1.ImageDigestMirrorSet{
 				ObjectMeta: metav1.ObjectMeta{Name: "idms-wildcard"},
@@ -261,12 +343,45 @@ var _ = Describe("getImageRegistryMirrors", func() {
 			},
 		).Build()
 
-		mirrors, skippedWildcards, err := getImageRegistryMirrors(ctx, c)
+		mirrors, err := getImageRegistryMirrors(ctx, c)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(skippedWildcards).To(ConsistOf("*.redhat.io"))
-		Expect(mirrors).To(HaveLen(1))
-		Expect(mirrors).NotTo(HaveKey("*.redhat.io"))
-		Expect(mirrors).To(HaveKey("registry.ci.openshift.org"))
+		Expect(mirrors).To(SatisfyAll(
+			HaveLen(2),
+			HaveKeyWithValue("*.redhat.io", []string{"mirror.local/redhat"}),
+			HaveKeyWithValue("registry.ci.openshift.org", []string{"mirror.local/openshift"}),
+		))
+	})
+
+	It("should merge wildcard mirrors from both IDMS and ICSP", func() {
+		c := fake.NewClientBuilder().WithScheme(fullScheme).WithObjects(
+			&configv1.ImageDigestMirrorSet{
+				ObjectMeta: metav1.ObjectMeta{Name: "idms-wildcard"},
+				Spec: configv1.ImageDigestMirrorSetSpec{
+					ImageDigestMirrors: []configv1.ImageDigestMirrors{
+						{
+							Source:  "*.redhat.io",
+							Mirrors: []configv1.ImageMirror{"mirror-a.local/redhat"},
+						},
+					},
+				},
+			},
+			&operatorv1alpha1.ImageContentSourcePolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "icsp-wildcard"},
+				Spec: operatorv1alpha1.ImageContentSourcePolicySpec{
+					RepositoryDigestMirrors: []operatorv1alpha1.RepositoryDigestMirrors{
+						{
+							Source:  "*.redhat.io",
+							Mirrors: []string{"mirror-b.local/redhat"},
+						},
+					},
+				},
+			},
+		).Build()
+
+		mirrors, err := getImageRegistryMirrors(ctx, c)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(mirrors).To(HaveKeyWithValue("*.redhat.io",
+			[]string{"mirror-a.local/redhat", "mirror-b.local/redhat"}))
 	})
 
 	It("should propagate real API errors", func() {
@@ -277,7 +392,7 @@ var _ = Describe("getImageRegistryMirrors", func() {
 			},
 		}).Build()
 
-		_, _, err := getImageRegistryMirrors(ctx, c)
+		_, err := getImageRegistryMirrors(ctx, c)
 		Expect(err).To(MatchError(expectedErr))
 	})
 })
