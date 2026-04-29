@@ -15,6 +15,22 @@ Current branch: !`git branch --show-current`
 Recent commits on this branch:
 !`git log --oneline -20`
 
+## Pre-flight: Gemini availability
+
+Before launching any agents, verify Gemini is available by running this smoke test using the Bash tool:
+
+```
+echo "Reply with exactly: OK" | gemini -p - 2>&1
+```
+
+If the command fails for any reason — binary not found, authentication error, configuration issue, network error, or unexpected output — Gemini is not available. In that case:
+
+1. **Print this message verbatim before any other output:**
+
+> **NOTE: Gemini is not available** — the `gemini` CLI is not working (not installed, not authenticated, or misconfigured). The Gemini review passes (agents 2 and 3) will be skipped. This review will use Claude-only analysis. Fix the `gemini` CLI setup to enable multi-model review.
+
+2. Skip agents 2 and 3 below. Continue with the rest of the review.
+
 ## Pass 1: Parallel analysis
 
 Before launching agents, assess the scope. If the changeset is large or spans distinct areas (e.g., framework code, platform-specific tests, migration logic), split the work across multiple agents by area rather than sending everything to one. Each agent should review a coherent subset.
