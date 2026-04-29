@@ -15,3 +15,22 @@ patches:
       name: __ignored__
       annotations:
         config.kubernetes.io/local-config: "true"
+
+# Set OpenShift pod annotations on all Deployments' pod templates.
+# - required-scc: pins the SCC (default restricted-v2, providers can override).
+#   See: https://github.com/openshift/enhancements/blob/master/enhancements/authentication/custom-scc-preemption-prevention.md
+# - workload management: enables workload partitioning scheduling.
+#   See: https://github.com/openshift/enhancements/blob/master/enhancements/workload-partitioning/wide-availability-workload-partitioning.md
+- target:
+    kind: Deployment
+  patch: |
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: __ignored__
+    spec:
+      template:
+        metadata:
+          annotations:
+            openshift.io/required-scc: "restricted-v2"
+            target.workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
