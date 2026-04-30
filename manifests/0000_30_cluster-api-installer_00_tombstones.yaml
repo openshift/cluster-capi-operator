@@ -1,0 +1,13 @@
+# Tombstones for objects that were removed during the 4.19 development cycle.
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cluster-capi-operator-images
+  namespace: openshift-cluster-api-operator
+  annotations:
+    release.openshift.io/delete: "true"
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/feature-gate: "ClusterAPIMachineManagement"
