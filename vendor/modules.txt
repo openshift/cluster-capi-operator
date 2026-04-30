@@ -1322,7 +1322,7 @@ github.com/openshift/cluster-autoscaler-operator/pkg/apis/autoscaling/v1
 ## explicit; go 1.25.3
 # github.com/openshift/cluster-capi-operator/manifests-gen v0.0.0-00010101000000-000000000000 => ./manifests-gen
 ## explicit; go 1.25.0
-# github.com/openshift/controller-runtime-common v0.0.0-20260318085703-1812aed6dbd2
+# github.com/openshift/controller-runtime-common v0.0.0-20260428152732-64ee174f5e2e
 ## explicit; go 1.25.0
 github.com/openshift/controller-runtime-common/pkg/tls
 # github.com/openshift/library-go v0.0.0-20260413093329-d2db42c961e1
