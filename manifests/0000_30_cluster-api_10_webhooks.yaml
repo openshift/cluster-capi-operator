@@ -12,52 +12,6 @@ metadata:
 webhooks:
   - admissionReviewVersions:
       - v1
-      - v1alpha1
-    clientConfig:
-      service:
-        name: capi-controllers-webhook-service
-        namespace: openshift-cluster-api
-        path: /validate-operator-cluster-x-k8s-io-v1alpha2-coreprovider
-        port: 9443
-    failurePolicy: Fail
-    name: vcoreprovider.operator.cluster.x-k8s.io
-    rules:
-      - apiGroups:
-          - operator.cluster.x-k8s.io
-        apiVersions:
-          - v1alpha2
-        operations:
-          - CREATE
-          - UPDATE
-          - DELETE
-        resources:
-          - coreproviders
-    sideEffects: None
-  - admissionReviewVersions:
-      - v1
-      - v1alpha1
-    clientConfig:
-      service:
-        name: capi-controllers-webhook-service
-        namespace: openshift-cluster-api
-        path: /validate-operator-cluster-x-k8s-io-v1alpha2-infrastructureprovider
-        port: 9443
-    failurePolicy: Fail
-    name: vinfrastructureprovider.operator.cluster.x-k8s.io
-    rules:
-      - apiGroups:
-          - operator.cluster.x-k8s.io
-        apiVersions:
-          - v1alpha2
-        operations:
-          - CREATE
-          - UPDATE
-          - DELETE
-        resources:
-          - infrastructureproviders
-    sideEffects: None
-  - admissionReviewVersions:
-      - v1
       - v1beta1
     clientConfig:
       service:
@@ -67,6 +21,9 @@ webhooks:
         port: 9443
     failurePolicy: Fail
     name: validation.cluster.cluster.x-k8s.io
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: openshift-cluster-api
     rules:
       - apiGroups:
           - cluster.x-k8s.io
@@ -78,25 +35,4 @@ webhooks:
           - DELETE
         resources:
           - clusters
-    sideEffects: None
-  - admissionReviewVersions:
-      - v1
-      - v1alpha1
-    clientConfig:
-      service:
-        name: capi-controllers-webhook-service
-        namespace: openshift-cluster-api
-        path: /validate-clusterctl-cluster-x-k8s-io-v1alpha3-provider
-        port: 9443
-    failurePolicy: Fail
-    name: validation.clusterctl.cluster.x-k8s.io
-    rules:
-      - apiGroups:
-          - clusterctl.cluster.x-k8s.io
-        apiVersions:
-          - v1alpha3
-        operations:
-          - DELETE
-        resources:
-          - providers
     sideEffects: None
