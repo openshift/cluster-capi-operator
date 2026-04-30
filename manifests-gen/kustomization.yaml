@@ -3,6 +3,31 @@ kind: Component
 
 namespace: openshift-cluster-api
 
+resources:
+  - webhook-namespace-selector.yaml
+
+# Scope all provider webhooks to the openshift-cluster-api namespace.
+# This prevents webhooks from intercepting requests in other namespaces,
+# which would fail on unsupported platforms where the webhook server is not running.
+replacements:
+  - source:
+      kind: ConfigMap
+      name: webhook-namespace-selector
+      fieldPath: data.namespace
+    targets:
+      - select:
+          kind: ValidatingWebhookConfiguration
+        fieldPaths:
+          - webhooks.*.namespaceSelector.matchLabels.kubernetes\.io/metadata\.name
+        options:
+          create: true
+      - select:
+          kind: MutatingWebhookConfiguration
+        fieldPaths:
+          - webhooks.*.namespaceSelector.matchLabels.kubernetes\.io/metadata\.name
+        options:
+          create: true
+
 patches:
 
 # Retain Secrets internally for reference tracking, but don't emit them
@@ -14,6 +39,7 @@ patches:
     metadata:
       name: __ignored__
       annotations:
+        # Marks this resource as local-only so kustomize excludes it from the final output.
         config.kubernetes.io/local-config: "true"
 
 # Set OpenShift pod annotations on all Deployments' pod templates.
