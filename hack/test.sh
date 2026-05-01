@@ -12,8 +12,8 @@ fi
 
 # Use existing value of TEST_DIRS, or $1 if not set. Makes it easier to target suites.
 TEST_DIRS=${TEST_DIRS:-$1}
-# Use 2nd arg, or 5m.
-TIMEOUT=${2:-"5m"}
+# Use existing value of $2, otherwise TIMEOUT env, otherwise 5m.
+TIMEOUT=${2:-${TIMEOUT:-"5m"}}
 
 OPENSHIFT_CI=${OPENSHIFT_CI:-""}
 ARTIFACT_DIR=${ARTIFACT_DIR:-""}
