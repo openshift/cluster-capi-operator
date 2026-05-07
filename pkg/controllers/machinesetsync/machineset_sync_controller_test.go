@@ -42,6 +42,7 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	capierrors "sigs.k8s.io/cluster-api/errors"
 
+	gomegatypes "github.com/onsi/gomega/types"
 	"github.com/openshift/cluster-api-actuator-pkg/testutils"
 	consts "github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/machinesync"
@@ -154,6 +155,19 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 		mgrCancel()
 		// Wait for the mgrDone to be closed, which will happen once the mgr has stopped
 		<-mgrDone
+	}
+
+	// eventuallyManagerInformerCache is a helper function to wait for the
+	// manager's informer cache to observe an object in a particular state. This
+	// prevents a class of race condition where the test is trying to assert
+	// behaviour of the controller in the presence of existing state. We need to
+	// ensure that the controller has had a chance to observe the state the test
+	// just created first.
+	eventuallyManagerInformerCache := func(obj client.Object) gomegatypes.AsyncAssertion {
+		return Eventually(func(g Gomega) client.Object {
+			g.Expect(mgr.GetClient().Get(ctx, client.ObjectKeyFromObject(obj), obj)).To(Succeed())
+			return obj
+		})
 	}
 
 	BeforeEach(func() {
@@ -547,23 +561,44 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 	})
 
 	Context("when the MAPI machine set has MachineAuthority set to Cluster API", func() {
+		// afterMAPIUpdate can be set in a sub-context's BeforeEach to register
+		// initialisation to happen after the MAPI machine set is updated.
+		//
+		// NOTE: This is a workaround for the deeply nested test structure
+		// which makes it difficult to control the order of setup operations.
+		// Do not copy this pattern to new tests or extend its usage. New
+		// tests should be structured so that this kind of deferred setup is
+		// not necessary.
+		var afterMAPIUpdate func()
+
 		BeforeEach(func() {
 			By("Creating the MAPI machine set")
 
 			mapiMachineSet = mapiMachineSetBuilder.Build()
 			Eventually(kCreate(ctx, mapiMachineSet)).Should(Succeed())
+		})
 
+		// This triggers reconciliation, so we do it in JustBeforeEach to allow
+		// sub-contexts to make additional changes first without racing.
+		JustBeforeEach(func() {
 			By("Setting the MAPI machine set AuthoritativeAPI to ClusterAPI")
 			Eventually(k.UpdateStatus(mapiMachineSet, func() {
 				mapiMachineSet.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityClusterAPI
-			})).Should(Succeed())
 
-			// We need to set the observed generation to the metadata generation
-			// to ensure the status is updated as that's a prerequisite for the status to be updated by the machinesetsync controller.
-			By("Setting the MAPI machine set observed generation to its metadata generation")
-			Eventually(k.UpdateStatus(mapiMachineSet, func() {
+				// We need to set the observed generation to the metadata
+				// generation to ensure the status is updated as that's a
+				// prerequisite for the status to be updated by the
+				// machinesetsync controller.
 				mapiMachineSet.Status.ObservedGeneration = mapiMachineSet.Generation
 			})).Should(Succeed())
+
+			if afterMAPIUpdate != nil {
+				afterMAPIUpdate()
+
+				// afterMAPIUpdate is not reinitialised between tests in this
+				// context, so we must clear it after use.
+				afterMAPIUpdate = nil
+			}
 		})
 
 		Context("when the CAPI machine set exists and the spec differs (replica count)", func() {
@@ -583,6 +618,12 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 				Eventually(k.UpdateStatus(capiMachineSet, func() {
 					capiMachineSet.Status.ObservedGeneration = capiMachineSet.Generation
 				})).Should(Succeed())
+
+				By("Waiting for the manager's informer cache to observe the CAPI machine set", func() {
+					eventuallyManagerInformerCache(capiMachineSet).Should(
+						HaveField("Status.ObservedGeneration", Equal(capiMachineSet.Generation)),
+					)
+				})
 			})
 
 			It("should set the sync finalizer on both the mapi and capi machine sets", func() {
@@ -627,7 +668,12 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 				// We expect a sync, so we require the infra template
 				By("Creating the CAPI infra machine template")
 				Eventually(kCreate(ctx, capaMachineTemplate)).Should(Succeed(), "capa machine template should be able to be created")
+
+				By("Waiting for the manager's informer cache to observe the CAPA machine template", func() {
+					eventuallyManagerInformerCache(capaMachineTemplate).ShouldNot(BeNil())
+				})
 			})
+
 			Context("where the field is meant to be copied", func() {
 				BeforeEach(func() {
 					By("Creating the MAPI machine set with differing object meta in relevant field")
@@ -641,6 +687,12 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 					Eventually(k.UpdateStatus(capiMachineSet, func() {
 						capiMachineSet.Status.ObservedGeneration = capiMachineSet.Generation
 					})).Should(Succeed())
+
+					By("Waiting for the manager's informer cache to observe the CAPI machine set", func() {
+						eventuallyManagerInformerCache(capiMachineSet).Should(
+							HaveField("Status.ObservedGeneration", Equal(capiMachineSet.Generation)),
+						)
+					})
 				})
 
 				It("should update the synchronized condition on the MAPI machine set to True", func() {
@@ -676,6 +728,12 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 					Eventually(k.UpdateStatus(capiMachineSet, func() {
 						capiMachineSet.Status.ObservedGeneration = capiMachineSet.Generation
 					})).Should(Succeed())
+
+					By("Waiting for the manager's informer cache to observe the CAPI machine set", func() {
+						eventuallyManagerInformerCache(capiMachineSet).Should(
+							HaveField("Status.ObservedGeneration", Equal(capiMachineSet.Generation)),
+						)
+					})
 				})
 
 				It("should update the synchronized condition on the MAPI machine set to True", func() {
@@ -788,19 +846,6 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 			var newCapaMachineTemplate *awsv1.AWSMachineTemplate
 
 			BeforeEach(func() {
-				capiMachineSet = capiMachineSetBuilder.Build()
-
-				By("Waiting for initial synchronization")
-				Eventually(k.Object(mapiMachineSet), timeout).Should(
-					HaveField("Status.Conditions", ContainElement(
-						SatisfyAll(
-							HaveField("Type", Equal(consts.SynchronizedCondition)),
-							HaveField("Status", Equal(corev1.ConditionTrue)),
-							HaveField("Reason", Equal("ResourceSynchronized")),
-							HaveField("Message", Equal("Successfully synchronized CAPI MachineSet to MAPI")),
-						))),
-				)
-
 				By("Creating a new CAPA machine template with different instanceType")
 
 				newCapaMachineTemplate = capav1builder.AWSMachineTemplate().
@@ -810,24 +855,41 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 					Build()
 				Eventually(kCreate(ctx, newCapaMachineTemplate)).Should(Succeed())
 
-				By("Updating the CAPI machine set to reference the new template")
-				Eventually(k.Update(capiMachineSet, func() {
-					capiMachineSet.Spec.Template.Spec.InfrastructureRef.Name = newCapaMachineTemplate.Name
-				})).Should(Succeed())
+				By("Waiting for the manager's informer cache to observe the CAPA machine template", func() {
+					eventuallyManagerInformerCache(newCapaMachineTemplate).ShouldNot(BeNil())
+				})
 
-				// We need to set the observed generation to the metadata generation
-				// to ensure the status is updated as that's a prerequisite for the status to be updated by the machinesetsync controller.
-				By("Setting the CAPI machine set observed generation to its metadata generation")
-				Eventually(k.UpdateStatus(capiMachineSet, func() {
-					capiMachineSet.Status.ObservedGeneration = capiMachineSet.Generation
-				})).Should(Succeed())
+				afterMAPIUpdate = func() {
+					capiMachineSet = capiMachineSetBuilder.Build()
+
+					By("Waiting for initial synchronization")
+					Eventually(k.Object(mapiMachineSet), timeout).Should(
+						HaveField("Status.Conditions", ContainElement(
+							SatisfyAll(
+								HaveField("Type", Equal(consts.SynchronizedCondition)),
+								HaveField("Status", Equal(corev1.ConditionTrue)),
+								HaveField("Reason", Equal("ResourceSynchronized")),
+								HaveField("Message", Equal("Successfully synchronized CAPI MachineSet to MAPI")),
+							))),
+					)
+
+					By("Updating the CAPI machine set to reference the new template")
+					Eventually(k.Update(capiMachineSet, func() {
+						capiMachineSet.Spec.Template.Spec.InfrastructureRef.Name = newCapaMachineTemplate.Name
+					})).Should(Succeed())
+
+					// We need to set the observed generation to the metadata generation
+					// to ensure the status is updated as that's a prerequisite for the status to be updated by the machinesetsync controller.
+					By("Setting the CAPI machine set observed generation to its metadata generation")
+					Eventually(k.UpdateStatus(capiMachineSet, func() {
+						capiMachineSet.Status.ObservedGeneration = capiMachineSet.Generation
+					})).Should(Succeed())
+				}
 			})
 
 			It("should update the MAPI machine set instanceType to match the new template", func() {
-				Eventually(func() (string, error) {
-					if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(mapiMachineSet), mapiMachineSet); err != nil {
-						return "", err
-					}
+				Eventually(func(g Gomega) (string, error) {
+					g.Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(mapiMachineSet), mapiMachineSet)).To(Succeed())
 
 					providerSpec, err := mapi2capi.AWSProviderSpecFromRawExtension(mapiMachineSet.Spec.Template.Spec.ProviderSpec.Value)
 					if err != nil {
@@ -893,16 +955,19 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 				capiMachineSet.SetFinalizers([]string{clusterv1.MachineSetFinalizer})
 				Eventually(kCreate(ctx, capiMachineSet)).Should(Succeed())
 
-				// Expect to see the finalizers, so they're in place before
-				//  we Expect logic that relies on them to work
-				Eventually(k.Object(mapiMachineSet), timeout).Should(
-					HaveField("ObjectMeta.Finalizers", ContainElement(machinesync.SyncFinalizer)),
-				)
-				Eventually(k.Object(capiMachineSet), timeout).Should(SatisfyAll(
-					HaveField("ObjectMeta.Finalizers", ContainElement(machinesync.SyncFinalizer)),
-					HaveField("ObjectMeta.Finalizers", ContainElement(clusterv1.MachineSetFinalizer)),
-				),
-				)
+				afterMAPIUpdate = func() {
+					// Expect to see the finalizers, so they're in place before
+					// we Expect logic that relies on them to work
+					Eventually(k.Object(mapiMachineSet), timeout).Should(
+						HaveField("ObjectMeta.Finalizers", ContainElement(machinesync.SyncFinalizer)),
+					)
+					Eventually(k.Object(capiMachineSet), timeout).Should(
+						HaveField("ObjectMeta.Finalizers", SatisfyAll(
+							ContainElement(machinesync.SyncFinalizer),
+							ContainElement(clusterv1.MachineSetFinalizer),
+						)),
+					)
+				}
 			})
 
 			// Do the actual deletion in JustBeforeEach so sub-contexts can
@@ -963,12 +1028,9 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 					// manager's informer cache has observed this change before
 					// we do the delete.
 					By("Waiting for the manager's informer to observe the updated finalizers", func() {
-						Eventually(func(g Gomega) *awsv1.AWSMachineTemplate {
-							template := &awsv1.AWSMachineTemplate{}
-							g.Expect(mgr.GetClient().Get(ctx, client.ObjectKeyFromObject(capaMachineTemplate), template)).To(Succeed())
-
-							return template
-						}, timeout).Should(HaveField("Labels", HaveKeyWithValue(consts.MachineSetOpenshiftLabelKey, mapiMachineSet.Name)))
+						eventuallyManagerInformerCache(capaMachineTemplate).Should(
+							HaveField("ObjectMeta.Labels", HaveKeyWithValue(consts.MachineSetOpenshiftLabelKey, mapiMachineSet.Name)),
+						)
 					})
 				})
 
@@ -998,13 +1060,16 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 			BeforeEach(func() {
 				capiMachineSet = capiMachineSetBuilder.Build()
 				Eventually(kCreate(ctx, capiMachineSet)).Should(Succeed())
-				Eventually(k.Object(mapiMachineSet), timeout).Should(
-					HaveField("ObjectMeta.Finalizers", ContainElement(machinesync.SyncFinalizer)),
-				)
-				Eventually(k.Object(capiMachineSet), timeout).Should(
-					HaveField("ObjectMeta.Finalizers", ContainElement(machinesync.SyncFinalizer)),
-				)
-				Eventually(kDelete(ctx, mapiMachineSet)).To(Succeed())
+
+				afterMAPIUpdate = func() {
+					Eventually(k.Object(mapiMachineSet), timeout).Should(
+						HaveField("ObjectMeta.Finalizers", ContainElement(machinesync.SyncFinalizer)),
+					)
+					Eventually(k.Object(capiMachineSet), timeout).Should(
+						HaveField("ObjectMeta.Finalizers", ContainElement(machinesync.SyncFinalizer)),
+					)
+					Eventually(kDelete(ctx, mapiMachineSet)).To(Succeed())
+				}
 			})
 
 			It("should remove the machinesync finalizer from the CAPI machine set", func() {
