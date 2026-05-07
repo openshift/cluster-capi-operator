@@ -147,12 +147,9 @@ func setupControllers(ctx context.Context, log logr.Logger, mgr ctrl.Manager, op
 		return err
 	}
 
-	var logProviderProfiles []any
 	for _, profile := range providerProfiles {
-		logProviderProfiles = append(logProviderProfiles, profile.Name, fmt.Sprintf("%s/%s", profile.ImageRef, profile.Profile))
+		log.Info("loaded provider profile", "name", profile.Name, "imageRef", profile.ImageRef, "profile", profile.Profile)
 	}
-
-	log.Info("Loaded provider profiles", logProviderProfiles...)
 
 	if err := (&revision.RevisionController{
 		Client:           mgr.GetClient(),
@@ -178,12 +175,14 @@ func loadProviderImages(ctx context.Context, mgr ctrl.Manager, providerImageDir 
 		return nil, errPodIdentityNotSet
 	}
 
-	imageRefMap, err := providerimages.BuildImageRefMapFromPod(ctx, mgr.GetAPIReader(), podName, podNamespace)
+	imageRefMap, err := providerimages.BuildImageRefMapFromPod(ctx, mgr.GetAPIReader(), podName, podNamespace, managerName)
 	if err != nil {
 		return nil, fmt.Errorf("unable to build image ref map from pod spec: %w", err)
 	}
 
-	providerProfiles, err := providerimages.ScanProviderImages(providerImageDir, imageRefMap)
+	log := ctrl.LoggerFrom(ctx)
+
+	providerProfiles, err := providerimages.ScanProviderImages(log, providerImageDir, imageRefMap)
 	if err != nil {
 		return nil, fmt.Errorf("unable to scan provider images: %w", err)
 	}

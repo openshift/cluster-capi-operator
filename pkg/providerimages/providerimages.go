@@ -22,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/go-logr/logr"
 	"github.com/openshift/cluster-capi-operator/manifests-gen/providermetadata"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -62,7 +63,7 @@ var (
 // ScanProviderImages scans providerImageDir for subdirectories containing
 // provider profiles (metadata.yaml + manifests.yaml). imageRefMap maps
 // subdirectory names to image references (built from the pod spec).
-func ScanProviderImages(providerImageDir string, imageRefMap map[string]string) ([]ProviderImageManifests, error) {
+func ScanProviderImages(logger logr.Logger, providerImageDir string, imageRefMap map[string]string) ([]ProviderImageManifests, error) {
 	entries, err := os.ReadDir(providerImageDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read provider image directory %s: %w", providerImageDir, err)
@@ -81,6 +82,7 @@ func ScanProviderImages(providerImageDir string, imageRefMap map[string]string) 
 		profiles, err := discoverProfiles(subdirPath)
 		if err != nil {
 			if errors.Is(err, errNoCapiManifests) {
+				logger.Info("Skipping provider directory: no valid profiles found", "directory", subdir)
 				continue
 			}
 
@@ -112,8 +114,9 @@ func ScanProviderImages(providerImageDir string, imageRefMap map[string]string) 
 
 // BuildImageRefMapFromPod reads the given pod's spec to build a mapping
 // from mount subdirectory names to image references. It correlates image
-// volumes with their volume mounts to determine which image is mounted where.
-func BuildImageRefMapFromPod(ctx context.Context, k8sClient client.Reader, podName, podNamespace string) (map[string]string, error) {
+// volumes with their volume mounts for the named container to determine
+// which image is mounted where.
+func BuildImageRefMapFromPod(ctx context.Context, k8sClient client.Reader, podName, podNamespace, containerName string) (map[string]string, error) {
 	var pod corev1.Pod
 	if err := k8sClient.Get(ctx, types.NamespacedName{Name: podName, Namespace: podNamespace}, &pod); err != nil {
 		return nil, fmt.Errorf("failed to get pod %s/%s: %w", podNamespace, podName, err)
@@ -129,11 +132,15 @@ func BuildImageRefMapFromPod(ctx context.Context, k8sClient client.Reader, podNa
 		}
 	}
 
-	// Correlate volume mounts with image references
+	// Find the named container and correlate its volume mounts with image references
 	imageRefMap := make(map[string]string)
 
 	for i := range pod.Spec.Containers {
 		c := &pod.Spec.Containers[i]
+		if c.Name != containerName {
+			continue
+		}
+
 		for j := range c.VolumeMounts {
 			vm := &c.VolumeMounts[j]
 			if imageRef, ok := volumeImageRefs[vm.Name]; ok {
@@ -141,9 +148,11 @@ func BuildImageRefMapFromPod(ctx context.Context, k8sClient client.Reader, podNa
 				imageRefMap[subdirName] = imageRef
 			}
 		}
+
+		return imageRefMap, nil
 	}
 
-	return imageRefMap, nil
+	return nil, fmt.Errorf("container %q not found in pod %s/%s", containerName, podNamespace, podName)
 }
 
 // profileManifests holds parsed metadata and manifest content for a single profile.

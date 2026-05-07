@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/go-logr/logr/testr"
 	. "github.com/onsi/gomega"
 )
 
@@ -308,7 +309,7 @@ func Test_ScanProviderImages(t *testing.T) {
 
 			tt.setup(t, tmpDir)
 
-			result, err := ScanProviderImages(tmpDir, tt.imageRefMap)
+			result, err := ScanProviderImages(testr.New(t), tmpDir, tt.imageRefMap)
 
 			if tt.wantErr {
 				g.Expect(err).To(HaveOccurred())
