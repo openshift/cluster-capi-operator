@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"sync"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -882,7 +883,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 			})
 		})
 
-		Context("when the CAPI machine set has a non-zero deletion timestamp", func() {
+		Context("when the CAPI machine set is deleted", func() {
 			BeforeEach(func() {
 				// We expect deletion logic to intract with the template, so create it here
 				By("Creating the CAPI infra machine template")
@@ -902,74 +903,93 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 					HaveField("ObjectMeta.Finalizers", ContainElement(clusterv1.MachineSetFinalizer)),
 				),
 				)
-				Eventually(kDelete(ctx, capiMachineSet)).To(Succeed())
 			})
 
-			Context("when the CAPI finalizer is removed", func() {
+			// Do the actual deletion in JustBeforeEach so sub-contexts can
+			// further modify capiMachineSet before deletion.
+			JustBeforeEach(func() {
+				Eventually(kDelete(ctx, capiMachineSet)).To(Succeed())
+
 				// Mock the CAPI machine set controller removing the
 				// finalizer that goes once all machines have been deleted.
-				BeforeEach(func() {
-					Eventually(k.Update(capiMachineSet, func() {
-						capiMachineSet.SetFinalizers([]string{machinesync.SyncFinalizer})
+				Eventually(k.Update(capiMachineSet, func() {
+					filteredFinalizers := slices.DeleteFunc(capiMachineSet.GetFinalizers(), func(finalizer string) bool {
+						return finalizer == clusterv1.MachineSetFinalizer
+					})
+					capiMachineSet.SetFinalizers(filteredFinalizers)
+				})).Should(Succeed())
+			})
+
+			It("should delete the MAPI machine set", func() {
+				Eventually(k.Get(mapiMachineSet), timeout).Should(WithTransform(apierrors.IsNotFound, BeTrue()), "eventually mapiMachineSet should not be found")
+
+				// We don't want to re-create the machineset just deleted
+				Consistently(k.Get(mapiMachineSet), timeout).Should(WithTransform(apierrors.IsNotFound, BeTrue()), "the mapiMachineSet should not be recreated")
+			})
+
+			It("should delete the CAPI machine set", func() {
+				Eventually(k.Get(capiMachineSet), timeout).Should(WithTransform(apierrors.IsNotFound, BeTrue()), "eventually capiMachineSet should not be found")
+				// We don't want to re-create the machineset just deleted
+				Consistently(k.Get(capiMachineSet), timeout).Should(WithTransform(apierrors.IsNotFound, BeTrue()), "the capiMachineSet should not be recreated")
+			})
+
+			It("should not delete the CAPA machine template because it does not have MachineSet label", func() {
+				uid := capaMachineTemplate.GetUID()
+				// Both the MAPI and CAPI machine sets should be deleted
+				Eventually(k.Get(mapiMachineSet), timeout).Should(WithTransform(apierrors.IsNotFound, BeTrue()), "eventually mapiMachineSet should not be found")
+				Eventually(k.Get(capiMachineSet), timeout).Should(WithTransform(apierrors.IsNotFound, BeTrue()), "eventually capiMachineSet should not be found")
+
+				// The CAPA machine template should still exist after the MAPI and CAPI machine sets are deleted
+				Eventually(k.Object(capaMachineTemplate)).To(SatisfyAll(
+					HaveField("ObjectMeta.UID", Equal(uid)),
+					HaveField("ObjectMeta.DeletionTimestamp", BeNil()),
+				))
+			})
+
+			Context("when the CAPA machine template has the machine set label", func() {
+				BeforeEach(func(ctx context.Context) {
+					Eventually(k.Update(capaMachineTemplate, func() {
+						if capaMachineTemplate.Labels == nil {
+							capaMachineTemplate.Labels = make(map[string]string)
+						}
+
+						capaMachineTemplate.Labels[consts.MachineSetOpenshiftLabelKey] = mapiMachineSet.Name
 					})).Should(Succeed())
-				})
 
-				It("should delete the MAPI machine set", func() {
-					Eventually(k.Get(mapiMachineSet), timeout).Should(WithTransform(apierrors.IsNotFound, BeTrue()), "eventually mapiMachineSet should not be found")
+					// Because this is a change to capaMachineTemplate but the
+					// reconcile is triggered by deletion of capiMachineSet
+					// (i.e. this is change to a different object in a different
+					// cache), to avoid a race we need to ensure that the
+					// manager's informer cache has observed this change before
+					// we do the delete.
+					By("Waiting for the manager's informer to observe the updated finalizers", func() {
+						Eventually(func(g Gomega) *awsv1.AWSMachineTemplate {
+							template := &awsv1.AWSMachineTemplate{}
+							g.Expect(mgr.GetClient().Get(ctx, client.ObjectKeyFromObject(capaMachineTemplate), template)).To(Succeed())
 
-					// We don't want to re-create the machineset just deleted
-					Consistently(k.Get(mapiMachineSet), timeout).Should(WithTransform(apierrors.IsNotFound, BeTrue()), "the mapiMachineSet should not be recreated")
-				})
-
-				It("should delete the CAPI machine set", func() {
-					Eventually(k.Get(capiMachineSet), timeout).Should(WithTransform(apierrors.IsNotFound, BeTrue()), "eventually capiMachineSet should not be found")
-					// We don't want to re-create the machineset just deleted
-					Consistently(k.Get(capiMachineSet), timeout).Should(WithTransform(apierrors.IsNotFound, BeTrue()), "the capiMachineSet should not be recreated")
-				})
-
-				It("should not delete the CAPA machine template because it does not have MachineSet label", func() {
-					uid := capaMachineTemplate.GetUID()
-					// Both the MAPI and CAPI machine sets should be deleted
-					Eventually(k.Get(mapiMachineSet), timeout).Should(WithTransform(apierrors.IsNotFound, BeTrue()), "eventually mapiMachineSet should not be found")
-					Eventually(k.Get(capiMachineSet), timeout).Should(WithTransform(apierrors.IsNotFound, BeTrue()), "eventually capiMachineSet should not be found")
-
-					// The CAPA machine template should still exist after the MAPI and CAPI machine sets are deleted
-					Eventually(k.Object(capaMachineTemplate)).To(SatisfyAll(
-						HaveField("ObjectMeta.UID", Equal(uid)),
-						HaveField("ObjectMeta.DeletionTimestamp", BeNil()),
-					))
-				})
-
-				Context("when the CAPA machine template is updated to contain the machine set label", func() {
-					BeforeEach(func() {
-						Eventually(k.Update(capaMachineTemplate, func() {
-							if capaMachineTemplate.Labels == nil {
-								capaMachineTemplate.Labels = make(map[string]string)
-							}
-
-							capaMachineTemplate.Labels[consts.MachineSetOpenshiftLabelKey] = mapiMachineSet.Name
-						})).Should(Succeed())
+							return template
+						}, timeout).Should(HaveField("Labels", HaveKeyWithValue(consts.MachineSetOpenshiftLabelKey, mapiMachineSet.Name)))
 					})
+				})
 
-					It("should delete the CAPA machine template", func() {
-						By("checking that there are no templates with the machine set label")
-						Eventually(func() []awsv1.AWSMachineTemplate {
-							templateList := &awsv1.AWSMachineTemplateList{}
-							listOptions := []client.ListOption{
-								client.InNamespace(capiNamespace.Name),
-								client.MatchingLabels(map[string]string{consts.MachineSetOpenshiftLabelKey: mapiMachineSet.Name}),
-							}
+				It("should delete the CAPA machine template", func() {
+					By("checking that there are no templates with the machine set label")
+					Eventually(func() []awsv1.AWSMachineTemplate {
+						templateList := &awsv1.AWSMachineTemplateList{}
+						listOptions := []client.ListOption{
+							client.InNamespace(capiNamespace.Name),
+							client.MatchingLabels(map[string]string{consts.MachineSetOpenshiftLabelKey: mapiMachineSet.Name}),
+						}
 
-							if err := k8sClient.List(ctx, templateList, listOptions...); err != nil {
-								return nil
-							}
+						if err := k8sClient.List(ctx, templateList, listOptions...); err != nil {
+							return nil
+						}
 
-							return templateList.Items
-						}, timeout).Should(BeEmpty(), "all associated AWS machine templates should be deleted")
+						return templateList.Items
+					}, timeout).Should(BeEmpty(), "all associated AWS machine templates should be deleted")
 
-						By("checking that the CAPA machine template is deleted")
-						Eventually(k.Get(capaMachineTemplate), timeout).Should(WithTransform(apierrors.IsNotFound, BeTrue()), "eventually CAPA machine template should not be found")
-					})
+					By("checking that the CAPA machine template is deleted")
+					Eventually(k.Get(capaMachineTemplate), timeout).Should(WithTransform(apierrors.IsNotFound, BeTrue()), "eventually CAPA machine template should not be found")
 				})
 			})
 		})
