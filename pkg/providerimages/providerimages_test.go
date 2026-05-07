@@ -23,6 +23,9 @@ import (
 
 	"github.com/go-logr/logr/testr"
 	. "github.com/onsi/gomega"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	"sigs.k8s.io/yaml"
 )
 
 // createMetadataYAML generates valid metadata.yaml content.
@@ -57,6 +60,157 @@ func writeProfile(t *testing.T, baseDir, provider, profile, metadata, manifests 
 			t.Fatalf("failed to write manifests.yaml: %v", err)
 		}
 	}
+}
+
+func Test_BuildImageRefMap(t *testing.T) {
+	tests := []struct {
+		name          string
+		podSpec       corev1.PodSpec
+		containerName string
+		expected      map[string]string
+		wantErr       bool
+		errContains   string
+	}{
+		{
+			name: "mixed volume types excludes non-image volumes",
+			podSpec: corev1.PodSpec{
+				Containers: []corev1.Container{{
+					Name: "my-container",
+					VolumeMounts: []corev1.VolumeMount{
+						{Name: "certs", MountPath: "/etc/certs"},
+						{Name: "provider-aws", MountPath: "/var/lib/provider-images/aws-cluster-api-controllers"},
+					},
+				}},
+				Volumes: []corev1.Volume{
+					{
+						Name: "certs",
+						VolumeSource: corev1.VolumeSource{
+							Secret: &corev1.SecretVolumeSource{SecretName: "my-secret"},
+						},
+					},
+					{
+						Name: "provider-aws",
+						VolumeSource: corev1.VolumeSource{
+							Image: &corev1.ImageVolumeSource{
+								Reference: "registry.example.com/aws:v1",
+							},
+						},
+					},
+				},
+			},
+			containerName: "my-container",
+			expected: map[string]string{
+				"aws-cluster-api-controllers": "registry.example.com/aws:v1",
+			},
+		},
+		{
+			name: "multiple image volumes",
+			podSpec: corev1.PodSpec{
+				Containers: []corev1.Container{{
+					Name: "my-container",
+					VolumeMounts: []corev1.VolumeMount{
+						{Name: "provider-aws", MountPath: "/images/aws-controllers"},
+						{Name: "provider-gcp", MountPath: "/images/gcp-controllers"},
+						{Name: "provider-azure", MountPath: "/images/azure-controllers"},
+					},
+				}},
+				Volumes: []corev1.Volume{
+					{
+						Name: "provider-aws",
+						VolumeSource: corev1.VolumeSource{
+							Image: &corev1.ImageVolumeSource{Reference: "registry.example.com/aws:v1"},
+						},
+					},
+					{
+						Name: "provider-gcp",
+						VolumeSource: corev1.VolumeSource{
+							Image: &corev1.ImageVolumeSource{Reference: "registry.example.com/gcp:v1"},
+						},
+					},
+					{
+						Name: "provider-azure",
+						VolumeSource: corev1.VolumeSource{
+							Image: &corev1.ImageVolumeSource{Reference: "registry.example.com/azure:v1"},
+						},
+					},
+				},
+			},
+			containerName: "my-container",
+			expected: map[string]string{
+				"aws-controllers":   "registry.example.com/aws:v1",
+				"gcp-controllers":   "registry.example.com/gcp:v1",
+				"azure-controllers": "registry.example.com/azure:v1",
+			},
+		},
+		{
+			name: "no image volumes returns empty map",
+			podSpec: corev1.PodSpec{
+				Containers: []corev1.Container{{
+					Name: "my-container",
+					VolumeMounts: []corev1.VolumeMount{
+						{Name: "certs", MountPath: "/etc/certs"},
+					},
+				}},
+				Volumes: []corev1.Volume{
+					{
+						Name: "certs",
+						VolumeSource: corev1.VolumeSource{
+							Secret: &corev1.SecretVolumeSource{SecretName: "my-secret"},
+						},
+					},
+				},
+			},
+			containerName: "my-container",
+			expected:      map[string]string{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := NewWithT(t)
+
+			result, err := BuildImageRefMap(tt.podSpec, tt.containerName)
+
+			if tt.wantErr {
+				g.Expect(err).To(HaveOccurred())
+
+				if tt.errContains != "" {
+					g.Expect(err.Error()).To(ContainSubstring(tt.errContains))
+				}
+
+				return
+			}
+
+			g.Expect(err).NotTo(HaveOccurred())
+			g.Expect(result).To(Equal(tt.expected))
+		})
+	}
+}
+
+func Test_BuildImageRefMap_DeploymentManifest(t *testing.T) {
+	g := NewWithT(t)
+
+	data, err := os.ReadFile("../../manifests/0000_30_cluster-api-installer_05_deployment.yaml")
+	g.Expect(err).NotTo(HaveOccurred())
+
+	var deployment appsv1.Deployment
+	g.Expect(yaml.Unmarshal(data, &deployment)).To(Succeed())
+
+	imageRefMap, err := BuildImageRefMap(deployment.Spec.Template.Spec, "capi-operator")
+	g.Expect(err).NotTo(HaveOccurred())
+
+	g.Expect(imageRefMap).To(Equal(map[string]string{
+		"aws-cluster-api-controllers":       "registry.ci.openshift.org/openshift:aws-cluster-api-controllers",
+		"azure-cluster-api-controllers":     "registry.ci.openshift.org/openshift:azure-cluster-api-controllers",
+		"baremetal-cluster-api-controllers": "registry.ci.openshift.org/openshift:baremetal-cluster-api-controllers",
+		"cluster-capi-controllers":          "registry.ci.openshift.org/openshift:cluster-capi-controllers",
+		"cluster-capi-operator":             "registry.ci.openshift.org/openshift:cluster-capi-operator",
+		"gcp-cluster-api-controllers":       "registry.ci.openshift.org/openshift:gcp-cluster-api-controllers",
+		"ibmcloud-cluster-api-controllers":  "registry.ci.openshift.org/openshift:ibmcloud-cluster-api-controllers",
+		"openstack-cluster-api-controllers": "registry.ci.openshift.org/openshift:openstack-cluster-api-controllers",
+		"openstack-resource-controller":     "registry.ci.openshift.org/openshift:openstack-resource-controller",
+		"vsphere-cluster-api-controllers":   "registry.ci.openshift.org/openshift:vsphere-cluster-api-controllers",
+	}))
 }
 
 func Test_ScanProviderImages(t *testing.T) {

@@ -23,8 +23,10 @@ import (
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/utils/ptr"
@@ -175,7 +177,12 @@ func loadProviderImages(ctx context.Context, mgr ctrl.Manager, providerImageDir 
 		return nil, errPodIdentityNotSet
 	}
 
-	imageRefMap, err := providerimages.BuildImageRefMapFromPod(ctx, mgr.GetAPIReader(), podName, podNamespace, managerName)
+	var pod corev1.Pod
+	if err := mgr.GetAPIReader().Get(ctx, types.NamespacedName{Name: podName, Namespace: podNamespace}, &pod); err != nil {
+		return nil, fmt.Errorf("unable to get pod %s/%s: %w", podNamespace, podName, err)
+	}
+
+	imageRefMap, err := providerimages.BuildImageRefMap(pod.Spec, managerName)
 	if err != nil {
 		return nil, fmt.Errorf("unable to build image ref map from pod spec: %w", err)
 	}
