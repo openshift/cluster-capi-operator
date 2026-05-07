@@ -1446,9 +1446,9 @@ var _ = Describe("applySynchronizedConditionWithPatch", func() {
 })
 
 // kCreate is a komega equivalent for create.
-func kCreate(ctx context.Context, obj client.Object) func() error {
+func kCreate(ctx context.Context, obj client.Object, opts ...client.CreateOption) func() error {
 	return func() error {
-		return k8sClient.Create(ctx, obj)
+		return k8sClient.Create(ctx, obj, opts...)
 	}
 }
 

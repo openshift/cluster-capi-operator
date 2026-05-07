@@ -28,7 +28,6 @@ import (
 
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
@@ -72,11 +71,11 @@ var _ = Describe("MachineSet VAP Tests", func() {
 
 		mapiNamespace = corev1resourcebuilder.Namespace().
 			WithGenerateName("openshift-machine-api-").Build()
-		Eventually(k8sClient.Create(ctx, mapiNamespace)).Should(Succeed(), "mapi namespace should be able to be created")
+		Eventually(kCreate(ctx, mapiNamespace)).Should(Succeed(), "mapi namespace should be able to be created")
 
 		capiNamespace = corev1resourcebuilder.Namespace().
 			WithGenerateName("openshift-cluster-api-").Build()
-		Eventually(k8sClient.Create(ctx, capiNamespace)).Should(Succeed(), "capi namespace should be able to be created")
+		Eventually(kCreate(ctx, capiNamespace)).Should(Succeed(), "capi namespace should be able to be created")
 
 		infrastructureName := "cluster-foo"
 
@@ -85,12 +84,12 @@ var _ = Describe("MachineSet VAP Tests", func() {
 		capaClusterBuilder := awsv1resourcebuilder.AWSCluster().
 			WithNamespace(capiNamespace.GetName()).
 			WithName(infrastructureName)
-		Eventually(k8sClient.Create(ctx, capaClusterBuilder.Build())).Should(Succeed(), "capa cluster should be able to be created")
+		Eventually(kCreate(ctx, capaClusterBuilder.Build())).Should(Succeed(), "capa cluster should be able to be created")
 
 		capiClusterBuilder := clusterv1resourcebuilder.Cluster().
 			WithNamespace(capiNamespace.GetName()).
 			WithName(infrastructureName)
-		Eventually(k8sClient.Create(ctx, capiClusterBuilder.Build())).Should(Succeed(), "capi cluster should be able to be created")
+		Eventually(kCreate(ctx, capiClusterBuilder.Build())).Should(Succeed(), "capi cluster should be able to be created")
 
 		capaMachineTemplateBuilder := awsv1resourcebuilder.AWSMachineTemplate().
 			WithNamespace(capiNamespace.GetName()).
@@ -108,7 +107,7 @@ var _ = Describe("MachineSet VAP Tests", func() {
 			},
 		}
 
-		Eventually(k8sClient.Create(ctx, capaMachineTemplate)).Should(Succeed(), "capa machine template should be able to be created")
+		Eventually(kCreate(ctx, capaMachineTemplate)).Should(Succeed(), "capa machine template should be able to be created")
 
 		capiMachineSetBuilder = clusterv1resourcebuilder.MachineSet().
 			WithNamespace(capiNamespace.GetName()).
@@ -128,14 +127,7 @@ var _ = Describe("MachineSet VAP Tests", func() {
 			newObj, ok := obj.DeepCopyObject().(client.Object)
 			Expect(ok).To(BeTrue())
 
-			Eventually(func() error {
-				err := k8sClient.Create(ctx, newObj)
-				if err != nil && !apierrors.IsAlreadyExists(err) {
-					return err
-				}
-
-				return nil
-			}, timeout).Should(Succeed())
+			Eventually(kCreate(ctx, newObj), timeout).Should(WithTransform(client.IgnoreAlreadyExists, Succeed()))
 		}
 	})
 
@@ -210,17 +202,17 @@ var _ = Describe("MachineSet VAP Tests", func() {
 					},
 				}).
 				Build()
-			Eventually(k8sClient.Create(ctx, sentinelMachineSet)).Should(Succeed(), "sentinel machineset should be able to be created")
+			Eventually(kCreate(ctx, sentinelMachineSet)).Should(Succeed(), "sentinel machineset should be able to be created")
 
 			admissiontestutils.VerifySentinelValidation(k, sentinelMachineSet, setupTimeout)
 		})
 
 		It("should allow creating a MachineSet without forbidden fields", func() {
-			Eventually(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
+			Eventually(kCreate(ctx, capiMachineSet)).Should(Succeed())
 		})
 
 		It("should allow updating a MachineSet without changing forbidden fields", func() {
-			Eventually(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
+			Eventually(kCreate(ctx, capiMachineSet)).Should(Succeed())
 
 			Eventually(k.Update(capiMachineSet, func() {
 				replicas := int32(3)
@@ -232,11 +224,11 @@ var _ = Describe("MachineSet VAP Tests", func() {
 			testVersion := "1"
 			capiMachineSet.Spec.Template.Spec.Version = testVersion
 
-			Eventually(k8sClient.Create(ctx, capiMachineSet), timeout).Should(MatchError(ContainSubstring(".version is a forbidden field")))
+			Eventually(kCreate(ctx, capiMachineSet, client.DryRunAll), timeout).Should(MatchError(ContainSubstring(".version is a forbidden field")))
 		})
 
 		It("should deny updating spec.template.spec.version on an existing MachineSet", func() {
-			Eventually(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
+			Eventually(kCreate(ctx, capiMachineSet)).Should(Succeed())
 
 			Eventually(k.Update(capiMachineSet, func() {
 				testVersion := "1"
@@ -247,11 +239,11 @@ var _ = Describe("MachineSet VAP Tests", func() {
 		It("should deny creating a MachineSet with spec.template.spec.readinessGates", func() {
 			capiMachineSet.Spec.Template.Spec.ReadinessGates = []clusterv1.MachineReadinessGate{{ConditionType: "foo"}}
 
-			Eventually(k8sClient.Create(ctx, capiMachineSet), timeout).Should(MatchError(ContainSubstring(".readinessGates is a forbidden field")))
+			Eventually(kCreate(ctx, capiMachineSet, client.DryRunAll), timeout).Should(MatchError(ContainSubstring(".readinessGates is a forbidden field")))
 		})
 
 		It("should deny updating spec.template.spec.readinessGates on an existing MachineSet", func() {
-			Eventually(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
+			Eventually(kCreate(ctx, capiMachineSet)).Should(Succeed())
 
 			Eventually(k.Update(capiMachineSet, func() {
 				capiMachineSet.Spec.Template.Spec.ReadinessGates = []clusterv1.MachineReadinessGate{{ConditionType: "foo"}}
@@ -315,7 +307,7 @@ var _ = Describe("MachineSet VAP Tests", func() {
 				WithName("sentinel-machineset").
 				WithAuthoritativeAPI(mapiv1beta1.MachineAuthorityClusterAPI).
 				Build()
-			Eventually(k8sClient.Create(ctx, sentinelMachineSet), setupTimeout).Should(Succeed())
+			Eventually(kCreate(ctx, sentinelMachineSet), setupTimeout).Should(Succeed())
 
 			capiSentinelMachineSet := clusterv1resourcebuilder.MachineSet().
 				WithName("sentinel-machineset").
@@ -326,7 +318,7 @@ var _ = Describe("MachineSet VAP Tests", func() {
 					},
 				}).
 				Build()
-			Eventually(k8sClient.Create(ctx, capiSentinelMachineSet)).Should(Succeed())
+			Eventually(kCreate(ctx, capiSentinelMachineSet)).Should(Succeed())
 
 			Eventually(k.Get(capiSentinelMachineSet)).Should(Succeed())
 
@@ -335,7 +327,7 @@ var _ = Describe("MachineSet VAP Tests", func() {
 
 		It("Does not allow creation of a MAPI MachineSet with spec.authoritativeAPI: MachineAPI and the same name", func() {
 			By("Create the CAPI MachineSet")
-			Eventually(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
+			Eventually(kCreate(ctx, capiMachineSet)).Should(Succeed())
 
 			By("Create the MAPI MachineSet")
 
@@ -343,13 +335,13 @@ var _ = Describe("MachineSet VAP Tests", func() {
 				WithName("test-machineset").
 				WithAuthoritativeAPI(mapiv1beta1.MachineAuthorityMachineAPI).
 				Build()
-			Eventually(k8sClient.Create(ctx, newMapiMachineSet), timeout).Should(
+			Eventually(kCreate(ctx, newMapiMachineSet, client.DryRunAll), timeout).Should(
 				MatchError(ContainSubstring("with spec.authoritativeAPI: MachineAPI because a Cluster API MachineSet with the same name already exists.")))
 		})
 
 		It("Does allow creation of a MAPI machineset with authoritative API ClusterAPI and the same name", func() {
 			By("Create the CAPI MachineSet")
-			Eventually(k8sClient.Create(ctx, capiMachineSet)).Should(Succeed())
+			Eventually(kCreate(ctx, capiMachineSet)).Should(Succeed())
 
 			By("Create the MAPI MachineSet")
 
@@ -357,7 +349,7 @@ var _ = Describe("MachineSet VAP Tests", func() {
 				WithName("test-machineset").
 				WithAuthoritativeAPI(mapiv1beta1.MachineAuthorityClusterAPI).
 				Build()
-			Eventually(k8sClient.Create(ctx, newMapiMachineSet), timeout).Should(Succeed())
+			Eventually(kCreate(ctx, newMapiMachineSet), timeout).Should(Succeed())
 		})
 
 		It("Does allow creation of a MAPI MachineSet when no matching CAPI MachineSet exists (parameterNotFoundAction)", func() {
@@ -367,7 +359,7 @@ var _ = Describe("MachineSet VAP Tests", func() {
 				WithName("no-capi-equivalent").
 				WithAuthoritativeAPI(mapiv1beta1.MachineAuthorityMachineAPI).
 				Build()
-			Eventually(k8sClient.Create(ctx, newMapiMachineSet), timeout).Should(Succeed())
+			Eventually(kCreate(ctx, newMapiMachineSet), timeout).Should(Succeed())
 		})
 	})
 
@@ -426,7 +418,7 @@ var _ = Describe("MachineSet VAP Tests", func() {
 				WithName("sentinel-machineset").
 				WithAuthoritativeAPI(mapiv1beta1.MachineAuthorityClusterAPI).
 				Build()
-			Eventually(k8sClient.Create(ctx, sentinelMachineSet), setupTimeout).Should(Succeed())
+			Eventually(kCreate(ctx, sentinelMachineSet), setupTimeout).Should(Succeed())
 
 			Eventually(k.UpdateStatus(sentinelMachineSet, func() {
 				sentinelMachineSet.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityClusterAPI
@@ -444,7 +436,7 @@ var _ = Describe("MachineSet VAP Tests", func() {
 					},
 				}).
 				Build()
-			Eventually(k8sClient.Create(ctx, capiSentinelMachineSet)).Should(Succeed())
+			Eventually(kCreate(ctx, capiSentinelMachineSet)).Should(Succeed())
 
 			Eventually(k.Get(capiSentinelMachineSet)).Should(Succeed())
 
@@ -466,7 +458,7 @@ var _ = Describe("MachineSet VAP Tests", func() {
 				"machine.openshift.io/vCPU":                        "4",
 			})
 			mapiMachineSet = mapiMachineSetBuilder.Build()
-			Eventually(k8sClient.Create(ctx, mapiMachineSet), setupTimeout).Should(Succeed())
+			Eventually(kCreate(ctx, mapiMachineSet), setupTimeout).Should(Succeed())
 
 			capiMachineSet = capiMachineSetBuilder.WithLabels(map[string]string{
 				"machine.openshift.io/cluster-api-cluster": "ci-op-gs2k97d6-c9e33-2smph",
@@ -476,7 +468,7 @@ var _ = Describe("MachineSet VAP Tests", func() {
 				"capacity.cluster-autoscaler.kubernetes.io/labels": "kubernetes.io/arch=amd64",
 			}).Build()
 
-			Eventually(k8sClient.Create(ctx, capiMachineSet), setupTimeout).Should(Succeed())
+			Eventually(kCreate(ctx, capiMachineSet), setupTimeout).Should(Succeed())
 		})
 
 		Context("with status.AuthoritativeAPI: Machine API", func() {
@@ -678,10 +670,10 @@ var _ = Describe("MachineSet VAP Tests", func() {
 			By("Creating a throwaway MAPI machine set")
 
 			sentinelMachineSet := mapiMachineSetBuilder.WithName("sentinel-machineset").WithAuthoritativeAPI(mapiv1beta1.MachineAuthorityClusterAPI).Build()
-			Eventually(k8sClient.Create(ctx, sentinelMachineSet), setupTimeout).Should(Succeed())
+			Eventually(kCreate(ctx, sentinelMachineSet), setupTimeout).Should(Succeed())
 
 			capiSentinelMachine := clusterv1resourcebuilder.MachineSet().WithName("sentinel-machineset").WithNamespace(capiNamespace.Name).Build()
-			Eventually(k8sClient.Create(ctx, capiSentinelMachine)).Should(Succeed())
+			Eventually(kCreate(ctx, capiSentinelMachine)).Should(Succeed())
 
 			Eventually(k.Get(capiSentinelMachine)).Should(Succeed())
 
@@ -696,7 +688,7 @@ var _ = Describe("MachineSet VAP Tests", func() {
 					WithName("no-mapi-counterpart").
 					WithNamespace(capiNamespace.Name).
 					Build()
-				Eventually(k8sClient.Create(ctx, newCapiMachineSet)).Should(Succeed())
+				Eventually(kCreate(ctx, newCapiMachineSet)).Should(Succeed())
 			})
 		})
 
@@ -705,7 +697,7 @@ var _ = Describe("MachineSet VAP Tests", func() {
 				By("Creating MAPI machineset with authoritativeAPI=MachineAPI")
 
 				mapiMachineSet := mapiMachineSetBuilder.WithName("validation-machineset").Build()
-				Eventually(k8sClient.Create(ctx, mapiMachineSet)).Should(Succeed())
+				Eventually(kCreate(ctx, mapiMachineSet)).Should(Succeed())
 
 				Eventually(k.UpdateStatus(mapiMachineSet, func() {
 					mapiMachineSet.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityMachineAPI
@@ -720,7 +712,7 @@ var _ = Describe("MachineSet VAP Tests", func() {
 					WithNamespace(capiNamespace.Name).
 					Build()
 
-				Eventually(k8sClient.Create(ctx, newCapiMachineSet), timeout).Should(
+				Eventually(kCreate(ctx, newCapiMachineSet, client.DryRunAll), timeout).Should(
 					MatchError(ContainSubstring("in an un-paused state")))
 			})
 
@@ -735,7 +727,7 @@ var _ = Describe("MachineSet VAP Tests", func() {
 					}).
 					Build()
 
-				Eventually(k8sClient.Create(ctx, newCapiMachineSet)).Should(Succeed())
+				Eventually(kCreate(ctx, newCapiMachineSet)).Should(Succeed())
 			})
 		})
 
@@ -746,7 +738,7 @@ var _ = Describe("MachineSet VAP Tests", func() {
 				By("Creating MAPI machineset with authoritativeAPI=ClusterAPI")
 
 				mapiMachineSet = mapiMachineSetBuilder.WithName("validation-machineset").Build()
-				Eventually(k8sClient.Create(ctx, mapiMachineSet)).Should(Succeed())
+				Eventually(kCreate(ctx, mapiMachineSet)).Should(Succeed())
 
 				Eventually(k.UpdateStatus(mapiMachineSet, func() {
 					mapiMachineSet.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityClusterAPI
@@ -766,7 +758,7 @@ var _ = Describe("MachineSet VAP Tests", func() {
 				// Use DryRunAll to ensure the object is never actually
 				// persisted. This means we can test again if it initially
 				// succeeds
-				Eventually(func() error { return k8sClient.Create(ctx, newCapiMachineSet, client.DryRunAll) }, longerTimeout).Should(
+				Eventually(kCreate(ctx, newCapiMachineSet, client.DryRunAll), longerTimeout).Should(
 					MatchError(ContainSubstring("already exists and is not paused")))
 			})
 
@@ -788,7 +780,7 @@ var _ = Describe("MachineSet VAP Tests", func() {
 					Build()
 
 				// Give this eventually extra timeout to allow the VAP to catch up with the cross-object reference
-				Eventually(func() error { return k8sClient.Create(ctx, newCapiMachineSet) }, longerTimeout).Should(Succeed())
+				Eventually(kCreate(ctx, newCapiMachineSet), longerTimeout).Should(Succeed())
 			})
 		})
 	})
@@ -848,7 +840,7 @@ var _ = Describe("MachineSet VAP Tests", func() {
 				WithName("sentinel-machineset").
 				WithAuthoritativeAPI(mapiv1beta1.MachineAuthorityMachineAPI).
 				Build()
-			Eventually(k8sClient.Create(ctx, sentinelMachineSet), setupTimeout).Should(Succeed())
+			Eventually(kCreate(ctx, sentinelMachineSet), setupTimeout).Should(Succeed())
 
 			Eventually(k.UpdateStatus(sentinelMachineSet, func() {
 				sentinelMachineSet.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityMachineAPI
@@ -866,7 +858,7 @@ var _ = Describe("MachineSet VAP Tests", func() {
 					},
 				}).
 				Build()
-			Eventually(k8sClient.Create(ctx, capiSentinelMachineSet)).Should(Succeed())
+			Eventually(kCreate(ctx, capiSentinelMachineSet)).Should(Succeed())
 
 			Eventually(k.Get(capiSentinelMachineSet)).Should(Succeed())
 
@@ -888,7 +880,7 @@ var _ = Describe("MachineSet VAP Tests", func() {
 				"machine.openshift.io/vCPU":                        "4",
 			})
 			mapiMachineSet = mapiMachineSetBuilder.Build()
-			Eventually(k8sClient.Create(ctx, mapiMachineSet), setupTimeout).Should(Succeed())
+			Eventually(kCreate(ctx, mapiMachineSet), setupTimeout).Should(Succeed())
 
 			capiMachineSet = capiMachineSetBuilder.WithLabels(map[string]string{
 				"machine.openshift.io/cluster-api-cluster": "ci-op-gs2k97d6-c9e33-2smph",
@@ -902,7 +894,7 @@ var _ = Describe("MachineSet VAP Tests", func() {
 				"machine.openshift.io/vCPU":                        "4",
 			}).Build()
 
-			Eventually(k8sClient.Create(ctx, capiMachineSet), setupTimeout).Should(Succeed())
+			Eventually(kCreate(ctx, capiMachineSet), setupTimeout).Should(Succeed())
 		})
 		Context("with status.authoritativeAPI: Machine API (on MAPI MachineSet)", func() {
 			BeforeEach(func() {
