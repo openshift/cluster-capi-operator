@@ -59,6 +59,14 @@ const (
 
 	// ReasonNonRetryableError indicates that the controller encountered a non-retryable error.
 	ReasonNonRetryableError = "NonRetryableError"
+
+	// ConditionAvailableSuffix is the suffix added to a controller prefix to
+	// form the controller's available condition type.
+	ConditionAvailableSuffix = "Available"
+
+	// ConditionProgressingSuffix is the suffix added to a controller prefix to
+	// form the controller's progressing condition type.
+	ConditionProgressingSuffix = "Progressing"
 )
 
 // CAPIFieldOwner returns a qualifiedclient.FieldOwner for the given qualifier.
@@ -68,16 +76,46 @@ func CAPIFieldOwner[S ~string](qualifier S) client.FieldOwner {
 	return client.FieldOwner(CAPIOperatorIdentifierDomain + "/" + qualifier)
 }
 
+type partialCondition struct {
+	status  configv1.ConditionStatus
+	reason  string
+	message string
+}
+
 // ReconcileResult represents the result of a controller's reconciliation.
 // As well as returning a reconcile.Result to controller-runtime, it can also
 // write the result as conditions on the ClusterOperator.
 type ReconcileResult struct {
 	ControllerResultGenerator
 
-	progressing  *configv1apply.ClusterOperatorStatusConditionApplyConfiguration
-	degraded     *configv1apply.ClusterOperatorStatusConditionApplyConfiguration
+	// a ReconcileResult must always have an explicit progressing condition
+	progressing partialCondition
+
+	// the available condition is optional, and will be maintained from the
+	// current state if not set explicitly
+	available *partialCondition
+
 	err          error
 	requeueAfter time.Duration
+}
+
+// Internal constructors for ReconcileResult. Callers do not set these properties directly.
+
+func newReconcileResult(controllerResultGenerator ControllerResultGenerator, progressingStatus configv1.ConditionStatus, reason, message string) ReconcileResult {
+	return ReconcileResult{
+		ControllerResultGenerator: controllerResultGenerator,
+		progressing:               partialCondition{progressingStatus, reason, message},
+	}
+}
+
+func (r ReconcileResult) withAvailable(status configv1.ConditionStatus, reason, message string) ReconcileResult {
+	r.available = &partialCondition{status, reason, message}
+	return r
+}
+
+func (r ReconcileResult) withError(err error) ReconcileResult {
+	r.err = err
+	return r
 }
 
 // Result returns a reconcile.Result for controller-runtime.
@@ -107,12 +145,8 @@ type ControllerResultGenerator string
 // Success returns a ReconcileResult indicating that the controller has succeeded.
 // Returning this result will not requeue the controller.
 func (c ControllerResultGenerator) Success() ReconcileResult {
-	return ReconcileResult{
-		ControllerResultGenerator: c,
-		progressing:               c.progressingCondition(configv1.ConditionFalse, ReasonAsExpected, "Success"),
-		degraded:                  c.degradedCondition(configv1.ConditionFalse, ReasonAsExpected, "Success"),
-		err:                       nil,
-	}
+	return newReconcileResult(c, configv1.ConditionFalse, ReasonAsExpected, "Success").
+		withAvailable(configv1.ConditionTrue, ReasonAsExpected, "Success")
 }
 
 // SuccessP is a convenience wrapper around Success that returns a pointer to the ReconcileResult.
@@ -125,12 +159,7 @@ func (c ControllerResultGenerator) SuccessP() *ReconcileResult {
 // immediately, for example after writing status to a watched resource.
 // Returning this result will not requeue the controller directly.
 func (c ControllerResultGenerator) Progressing(message string) ReconcileResult {
-	return ReconcileResult{
-		ControllerResultGenerator: c,
-		progressing:               c.progressingCondition(configv1.ConditionTrue, ReasonProgressing, message),
-		degraded:                  c.degradedCondition(configv1.ConditionFalse, ReasonProgressing, message),
-		err:                       nil,
-	}
+	return newReconcileResult(c, configv1.ConditionTrue, ReasonProgressing, message)
 }
 
 // ProgressingP is a convenience wrapper around Progressing that returns a pointer to the ReconcileResult.
@@ -145,12 +174,7 @@ func (c ControllerResultGenerator) ProgressingP(message string) *ReconcileResult
 func (c ControllerResultGenerator) WaitingOnExternal(waitDescription string) ReconcileResult {
 	message := fmt.Sprintf("Waiting on %s", waitDescription)
 
-	return ReconcileResult{
-		ControllerResultGenerator: c,
-		progressing:               c.progressingCondition(configv1.ConditionTrue, ReasonWaitingOnExternal, message),
-		degraded:                  c.degradedCondition(configv1.ConditionFalse, ReasonWaitingOnExternal, message),
-		err:                       nil,
-	}
+	return newReconcileResult(c, configv1.ConditionTrue, ReasonWaitingOnExternal, message)
 }
 
 // WaitingOnExternalP is a convenience wrapper around WaitingOnExternal that returns a pointer to the ReconcileResult.
@@ -166,12 +190,8 @@ func (c ControllerResultGenerator) Error(err error) ReconcileResult {
 		return c.nonRetryableError(err)
 	}
 
-	return ReconcileResult{
-		ControllerResultGenerator: c,
-		progressing:               c.progressingCondition(configv1.ConditionTrue, ReasonEphemeralError, err.Error()),
-		degraded:                  c.degradedCondition(configv1.ConditionFalse, ReasonProgressing, "Controller encountered a retryable error"),
-		err:                       err,
-	}
+	return newReconcileResult(c, configv1.ConditionTrue, ReasonEphemeralError, err.Error()).
+		withError(err)
 }
 
 // ErrorP is a convenience wrapper around Error that returns a pointer to the ReconcileResult.
@@ -196,29 +216,22 @@ func (c ControllerResultGenerator) NonRetryableErrorP(err error) *ReconcileResul
 	return ptr.To(c.NonRetryableError(err))
 }
 
-func (c ControllerResultGenerator) nonRetryableError(termErr error) ReconcileResult {
-	return ReconcileResult{
-		ControllerResultGenerator: c,
-		progressing:               c.progressingCondition(configv1.ConditionFalse, ReasonNonRetryableError, termErr.Error()),
-		degraded:                  c.degradedCondition(configv1.ConditionTrue, ReasonNonRetryableError, termErr.Error()),
-		err:                       termErr,
-	}
+func (c ControllerResultGenerator) nonRetryableError(terminalErr error) ReconcileResult {
+	return newReconcileResult(c, configv1.ConditionFalse, ReasonNonRetryableError, terminalErr.Error()).
+		withAvailable(configv1.ConditionFalse, ReasonNonRetryableError, terminalErr.Error()).
+		withError(terminalErr)
 }
 
-func (c ControllerResultGenerator) condition(condType configv1.ClusterStatusConditionType, status configv1.ConditionStatus, reason, message string) *configv1apply.ClusterOperatorStatusConditionApplyConfiguration {
+func (c ControllerResultGenerator) condition(condType string, status configv1.ConditionStatus, reason, message string) *configv1apply.ClusterOperatorStatusConditionApplyConfiguration {
 	return configv1apply.ClusterOperatorStatusCondition().
-		WithType(condType).
+		WithType(c.conditionType(condType)).
 		WithStatus(status).
 		WithReason(reason).
 		WithMessage(message)
 }
 
-func (c ControllerResultGenerator) progressingCondition(status configv1.ConditionStatus, reason, message string) *configv1apply.ClusterOperatorStatusConditionApplyConfiguration {
-	return c.condition(configv1.ClusterStatusConditionType(c+"Progressing"), status, reason, message)
-}
-
-func (c ControllerResultGenerator) degradedCondition(status configv1.ConditionStatus, reason, message string) *configv1apply.ClusterOperatorStatusConditionApplyConfiguration {
-	return c.condition(configv1.ClusterStatusConditionType(c+"Degraded"), status, reason, message)
+func (c ControllerResultGenerator) conditionType(condType string) configv1.ClusterStatusConditionType {
+	return configv1.ClusterStatusConditionType(string(c) + condType)
 }
 
 // WriteClusterOperatorStatus writes the reconcile result as conditions on the ClusterOperator.
@@ -229,10 +242,43 @@ func (r *ReconcileResult) WriteClusterOperatorStatus(ctx context.Context, log lo
 		return fmt.Errorf("failed to get ClusterOperator: %w", err)
 	}
 
-	// Build conditions based on reconcile result
+	// The following behaviours are intended to implement the semantics of
+	// - configv1.ClusterOperatorStatusAvailable
+	// - configv1.ClusterOperatorStatusProgressing
+	// as described in the godoc of those constants.
+	//
+	// ReconcileResult always contains an explicit Progressing condition, so we
+	// we use that directly.
+	//
+	// Where an explicit Available condition is set, we use that directly.
+	// Otherwise, we calculate it based on existing state and the Progressing
+	// condition.
+	//
+	// During installation, we don't want to declare Available=True until the
+	// first time we have successfully reconciled. We achieve this by initially
+	// not setting the Available condition at all. The condition aggregator will
+	// interpret this correctly.
+	//
+	// After we have become Available for the first time, we don't want to
+	// declare Available=False except for conditions which require an
+	// administrator's intervention. Currently we set it for non-retryable
+	// errors. Otherwise we copy the previous state of the Available condition
+	// if it exists.
+
 	conditions := []*configv1apply.ClusterOperatorStatusConditionApplyConfiguration{
-		r.progressing,
-		r.degraded,
+		r.condition(ConditionProgressingSuffix, r.progressing.status, r.progressing.reason, r.progressing.message),
+	}
+
+	if r.available != nil {
+		// Explicitly set Available condition
+		conditions = append(conditions, r.condition(ConditionAvailableSuffix, r.available.status, r.available.reason, r.available.message))
+	} else {
+		// Infer Available condition from existing state, don't write if not
+		// already present
+		currentAvailable := findClusterOperatorCondition(r.conditionType(ConditionAvailableSuffix), co.Status.Conditions)
+		if currentAvailable != nil {
+			conditions = append(conditions, r.condition(ConditionAvailableSuffix, currentAvailable.Status, currentAvailable.Reason, currentAvailable.Message))
+		}
 	}
 
 	updated := mergeConditions(conditions, co.Status.Conditions)
@@ -253,21 +299,21 @@ func (r *ReconcileResult) WriteClusterOperatorStatus(ctx context.Context, log lo
 	return nil
 }
 
+func findClusterOperatorCondition(condType configv1.ClusterStatusConditionType, conditions []configv1.ClusterOperatorStatusCondition) *configv1.ClusterOperatorStatusCondition {
+	for i := range conditions {
+		if conditions[i].Type == condType {
+			return &conditions[i]
+		}
+	}
+
+	return nil
+}
+
 // mergeConditions sets LastTransitionTime on each new condition based on the
 // existing conditions. If a condition's Status/Reason/Message are unchanged,
 // LastTransitionTime is preserved from the existing condition.
 func mergeConditions(newConditions []*configv1apply.ClusterOperatorStatusConditionApplyConfiguration, existingConditions []configv1.ClusterOperatorStatusCondition) bool {
 	now := metav1.Now()
-
-	findClusterOperatorCondition := func(condType configv1.ClusterStatusConditionType) *configv1.ClusterOperatorStatusCondition {
-		for i := range existingConditions {
-			if existingConditions[i].Type == condType {
-				return &existingConditions[i]
-			}
-		}
-
-		return nil
-	}
 
 	updated := false
 
@@ -277,7 +323,7 @@ func mergeConditions(newConditions []*configv1apply.ClusterOperatorStatusConditi
 			panic(fmt.Sprintf("condition is missing required fields: %+v", cond))
 		}
 
-		existing := findClusterOperatorCondition(*cond.Type)
+		existing := findClusterOperatorCondition(*cond.Type, existingConditions)
 
 		switch {
 		case existing == nil:

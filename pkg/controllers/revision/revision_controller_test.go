@@ -51,7 +51,7 @@ var (
 
 const (
 	conditionTypeProgressing = "RevisionControllerProgressing"
-	conditionTypeDegraded    = "RevisionControllerDegraded"
+	conditionTypeAvailable   = "RevisionControllerAvailable"
 
 	subResourceStatus = "status"
 )
@@ -166,8 +166,8 @@ var _ = Describe("RevisionController", Serial, func() {
 		Expect(co.Status.Conditions).To(test.HaveCondition(conditionTypeProgressing).
 			WithStatus(configv1.ConditionFalse).
 			WithReason(operatorstatus.ReasonAsExpected))
-		Expect(co.Status.Conditions).To(test.HaveCondition(conditionTypeDegraded).
-			WithStatus(configv1.ConditionFalse).
+		Expect(co.Status.Conditions).To(test.HaveCondition(conditionTypeAvailable).
+			WithStatus(configv1.ConditionTrue).
 			WithReason(operatorstatus.ReasonAsExpected))
 	}, defaultNodeTimeout)
 
@@ -194,8 +194,8 @@ var _ = Describe("RevisionController", Serial, func() {
 			test.HaveCondition(conditionTypeProgressing).
 				WithStatus(configv1.ConditionFalse).
 				WithReason(operatorstatus.ReasonAsExpected),
-			test.HaveCondition(conditionTypeDegraded).
-				WithStatus(configv1.ConditionFalse).
+			test.HaveCondition(conditionTypeAvailable).
+				WithStatus(configv1.ConditionTrue).
 				WithReason(operatorstatus.ReasonAsExpected),
 		)
 
@@ -329,7 +329,7 @@ var _ = Describe("RevisionController", Serial, func() {
 		Expect(clusterAPI.Status.ObservedRevisionGeneration).To(Equal(clusterAPI.Generation))
 	}, defaultNodeTimeout)
 
-	It("sets Degraded=True with NonRetryableError when max revisions reached", func(ctx context.Context) {
+	It("sets Available=False with NonRetryableError when max revisions reached", func(ctx context.Context) {
 		// Refresh the clusterAPI object before updating the revisions
 		Expect(kWithCtx(ctx).Get(clusterAPI)()).To(Succeed())
 
@@ -368,8 +368,8 @@ var _ = Describe("RevisionController", Serial, func() {
 			test.HaveCondition(conditionTypeProgressing).
 				WithStatus(configv1.ConditionFalse).
 				WithReason(operatorstatus.ReasonNonRetryableError),
-			test.HaveCondition(conditionTypeDegraded).
-				WithStatus(configv1.ConditionTrue).
+			test.HaveCondition(conditionTypeAvailable).
+				WithStatus(configv1.ConditionFalse).
 				WithReason(operatorstatus.ReasonNonRetryableError),
 		)
 
@@ -379,7 +379,7 @@ var _ = Describe("RevisionController", Serial, func() {
 		Expect(updatedClusterAPI.Status.Revisions).To(HaveLen(16))
 	}, defaultNodeTimeout)
 
-	It("sets Degraded=True with NonRetryableError when manifest has invalid adopt-existing annotation", func(ctx context.Context) {
+	It("sets Available=False with NonRetryableError when manifest has invalid adopt-existing annotation", func(ctx context.Context) {
 		// Stop first manager (created by BeforeEach with valid providers)
 		mgr.stop()
 
@@ -390,8 +390,8 @@ var _ = Describe("RevisionController", Serial, func() {
 			test.HaveCondition(conditionTypeProgressing).
 				WithStatus(configv1.ConditionFalse).
 				WithReason(operatorstatus.ReasonNonRetryableError),
-			test.HaveCondition(conditionTypeDegraded).
-				WithStatus(configv1.ConditionTrue).
+			test.HaveCondition(conditionTypeAvailable).
+				WithStatus(configv1.ConditionFalse).
 				WithReason(operatorstatus.ReasonNonRetryableError).
 				WithMessage(ContainSubstring("invalid")),
 		)
@@ -573,8 +573,5 @@ var _ = Describe("RevisionController error handling", Serial, func() {
 			WithStatus(configv1.ConditionTrue).
 			WithReason(operatorstatus.ReasonEphemeralError).
 			WithMessage(ContainSubstring(testErr.Error())))
-		Expect(co.Status.Conditions).To(test.HaveCondition(conditionTypeDegraded).
-			WithStatus(configv1.ConditionFalse).
-			WithReason(operatorstatus.ReasonProgressing))
 	}, defaultNodeTimeout)
 })

@@ -40,7 +40,7 @@ import (
 
 const (
 	conditionTypeProgressing = "InstallerControllerProgressing"
-	conditionTypeDegraded    = "InstallerControllerDegraded"
+	conditionTypeAvailable   = "InstallerControllerAvailable"
 )
 
 // Provider profile names used across tests.

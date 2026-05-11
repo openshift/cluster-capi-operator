@@ -239,8 +239,8 @@ var _ = Describe("InstallerController", Serial, func() {
 				test.HaveCondition(conditionTypeProgressing).
 					WithStatus(configv1.ConditionFalse).
 					WithReason(operatorstatus.ReasonNonRetryableError),
-				test.HaveCondition(conditionTypeDegraded).
-					WithStatus(configv1.ConditionTrue).
+				test.HaveCondition(conditionTypeAvailable).
+					WithStatus(configv1.ConditionFalse).
 					WithReason(operatorstatus.ReasonNonRetryableError),
 			)
 		}, defaultNodeTimeout)
@@ -256,8 +256,8 @@ var _ = Describe("InstallerController", Serial, func() {
 					WithStatus(configv1.ConditionFalse).
 					WithReason(operatorstatus.ReasonNonRetryableError).
 					WithMessage(ContainSubstring("duplicate object found in phases")),
-				test.HaveCondition(conditionTypeDegraded).
-					WithStatus(configv1.ConditionTrue),
+				test.HaveCondition(conditionTypeAvailable).
+					WithStatus(configv1.ConditionFalse),
 			))
 		}, defaultNodeTimeout)
 
@@ -318,8 +318,8 @@ var _ = Describe("InstallerController", Serial, func() {
 				test.HaveCondition(conditionTypeProgressing).
 					WithStatus(configv1.ConditionFalse).
 					WithReason(operatorstatus.ReasonNonRetryableError),
-				test.HaveCondition(conditionTypeDegraded).
-					WithStatus(configv1.ConditionTrue).
+				test.HaveCondition(conditionTypeAvailable).
+					WithStatus(configv1.ConditionFalse).
 					WithReason(operatorstatus.ReasonNonRetryableError).
 					WithMessage(ContainSubstring("invalid")),
 			)
@@ -345,8 +345,8 @@ var _ = Describe("InstallerController", Serial, func() {
 				test.HaveCondition(conditionTypeProgressing).
 					WithStatus(configv1.ConditionFalse).
 					WithReason(operatorstatus.ReasonNonRetryableError),
-				test.HaveCondition(conditionTypeDegraded).
-					WithStatus(configv1.ConditionTrue).
+				test.HaveCondition(conditionTypeAvailable).
+					WithStatus(configv1.ConditionFalse).
 					WithReason(operatorstatus.ReasonNonRetryableError).
 					WithMessage(ContainSubstring("collision")),
 			)
@@ -383,13 +383,13 @@ var _ = Describe("InstallerController", Serial, func() {
 			Expect(cl.Status().Update(ctx, clusterAPI)).To(Succeed())
 
 			// The head revision is invalid so isComplete=false with a terminal error.
-			// The controller reports NonRetryableError: Progressing=False, Degraded=True.
+			// The controller reports NonRetryableError: Progressing=False, Available=False.
 			waitForConditions(ctx,
 				test.HaveCondition(conditionTypeProgressing).
 					WithStatus(configv1.ConditionFalse).
 					WithReason(operatorstatus.ReasonNonRetryableError),
-				test.HaveCondition(conditionTypeDegraded).
-					WithStatus(configv1.ConditionTrue).
+				test.HaveCondition(conditionTypeAvailable).
+					WithStatus(configv1.ConditionFalse).
 					WithReason(operatorstatus.ReasonNonRetryableError),
 			)
 
