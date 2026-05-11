@@ -276,8 +276,8 @@ func (r *InfraClusterController) newAzureCluster(providerSpec *mapiv1beta1.Azure
 			ResourceGroup: providerSpec.ResourceGroup,
 			ControlPlaneEndpoint: clusterv1beta1.APIEndpoint{
 				Host: apiURL.Hostname(),
-				// Port numbers are less than 65536, ignore gosec.
-				Port: int32(port), //nolint:gosec
+				// Port numbers are less than 65536.
+				Port: int32(port),
 			},
 		},
 	}

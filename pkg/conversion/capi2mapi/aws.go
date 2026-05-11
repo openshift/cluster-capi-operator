@@ -521,8 +521,7 @@ func convertAWSPlacementGroupPartition(in int64) *int32 {
 	if in == 0 {
 		return nil
 	}
-	// We know the value is between 0 and 7 based on API validation. Ignore gosec.
-	//nolint:gosec
+	// We know the value is between 0 and 7 based on API validation.
 	return ptr.To(int32(in))
 }
 
