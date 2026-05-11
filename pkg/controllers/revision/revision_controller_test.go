@@ -58,48 +58,48 @@ const (
 
 func TestBuildComponentList(t *testing.T) {
 	tests := []struct {
-		name               string
-		providers          []providerimages.ProviderImageManifests
-		platform           configv1.PlatformType
-		expectedContentIDs []string
+		name          string
+		providers     []providerimages.ProviderImageManifests
+		platform      configv1.PlatformType
+		expectedNames []string
 	}{
 		{
 			name: "orders components by type and platform scope",
 			providers: []providerimages.ProviderImageManifests{
-				{ProviderMetadata: providerimages.ProviderMetadata{Name: "infra-aws", InstallOrder: 20, OCPPlatform: configv1.AWSPlatformType}, ContentID: "infra-aws-content"},
-				{ProviderMetadata: providerimages.ProviderMetadata{Name: "core", InstallOrder: 10}, ContentID: "core-content"},
-				{ProviderMetadata: providerimages.ProviderMetadata{Name: "infra-global", InstallOrder: 20}, ContentID: "infra-global-content"},
-				{ProviderMetadata: providerimages.ProviderMetadata{Name: "core-aws", InstallOrder: 10, OCPPlatform: configv1.AWSPlatformType}, ContentID: "core-aws-content"},
+				{ProviderMetadata: providerimages.ProviderMetadata{Name: "infra-aws", InstallOrder: 20, OCPPlatform: configv1.AWSPlatformType}},
+				{ProviderMetadata: providerimages.ProviderMetadata{Name: "core", InstallOrder: 10}},
+				{ProviderMetadata: providerimages.ProviderMetadata{Name: "infra-global", InstallOrder: 20}},
+				{ProviderMetadata: providerimages.ProviderMetadata{Name: "core-aws", InstallOrder: 10, OCPPlatform: configv1.AWSPlatformType}},
 			},
 			platform: configv1.AWSPlatformType,
 			// Expected order: core+global, core+platform, infra+global, infra+platform
-			expectedContentIDs: []string{"core-content", "core-aws-content", "infra-global-content", "infra-aws-content"},
+			expectedNames: []string{"core", "core-aws", "infra-global", "infra-aws"},
 		},
 		{
 			name: "filters out providers for other platforms",
 			providers: []providerimages.ProviderImageManifests{
-				{ProviderMetadata: providerimages.ProviderMetadata{Name: "infra-aws", InstallOrder: 20, OCPPlatform: configv1.AWSPlatformType}, ContentID: "infra-aws-content"},
-				{ProviderMetadata: providerimages.ProviderMetadata{Name: "core", InstallOrder: 10}, ContentID: "core-content"},
-				{ProviderMetadata: providerimages.ProviderMetadata{Name: "infra-gcp", InstallOrder: 20, OCPPlatform: configv1.GCPPlatformType}, ContentID: "infra-gcp-content"},
-				{ProviderMetadata: providerimages.ProviderMetadata{Name: "infra-azure", InstallOrder: 20, OCPPlatform: configv1.AzurePlatformType}, ContentID: "infra-azure-content"},
+				{ProviderMetadata: providerimages.ProviderMetadata{Name: "infra-aws", InstallOrder: 20, OCPPlatform: configv1.AWSPlatformType}},
+				{ProviderMetadata: providerimages.ProviderMetadata{Name: "core", InstallOrder: 10}},
+				{ProviderMetadata: providerimages.ProviderMetadata{Name: "infra-gcp", InstallOrder: 20, OCPPlatform: configv1.GCPPlatformType}},
+				{ProviderMetadata: providerimages.ProviderMetadata{Name: "infra-azure", InstallOrder: 20, OCPPlatform: configv1.AzurePlatformType}},
 			},
-			platform:           configv1.AWSPlatformType,
-			expectedContentIDs: []string{"core-content", "infra-aws-content"},
+			platform:      configv1.AWSPlatformType,
+			expectedNames: []string{"core", "infra-aws"},
 		},
 		{
-			name:               "returns empty list when no providers",
-			providers:          []providerimages.ProviderImageManifests{},
-			platform:           configv1.AWSPlatformType,
-			expectedContentIDs: []string{},
+			name:          "returns empty list when no providers",
+			providers:     []providerimages.ProviderImageManifests{},
+			platform:      configv1.AWSPlatformType,
+			expectedNames: []string{},
 		},
 		{
 			name: "includes all global providers regardless of platform",
 			providers: []providerimages.ProviderImageManifests{
-				{ProviderMetadata: providerimages.ProviderMetadata{Name: "core", InstallOrder: 10}, ContentID: "core-content"},
-				{ProviderMetadata: providerimages.ProviderMetadata{Name: "addon", InstallOrder: 20}, ContentID: "addon-content"},
+				{ProviderMetadata: providerimages.ProviderMetadata{Name: "core", InstallOrder: 10}},
+				{ProviderMetadata: providerimages.ProviderMetadata{Name: "addon", InstallOrder: 20}},
 			},
-			platform:           configv1.GCPPlatformType,
-			expectedContentIDs: []string{"core-content", "addon-content"},
+			platform:      configv1.GCPPlatformType,
+			expectedNames: []string{"core", "addon"},
 		},
 	}
 
@@ -113,10 +113,10 @@ func TestBuildComponentList(t *testing.T) {
 
 			components := r.buildComponentList(tt.platform)
 
-			g.Expect(components).To(HaveLen(len(tt.expectedContentIDs)))
+			g.Expect(components).To(HaveLen(len(tt.expectedNames)))
 
-			for i, expectedID := range tt.expectedContentIDs {
-				g.Expect(components[i].ContentID).To(Equal(expectedID))
+			for i, expectedName := range tt.expectedNames {
+				g.Expect(components[i].Name).To(Equal(expectedName))
 			}
 		})
 	}

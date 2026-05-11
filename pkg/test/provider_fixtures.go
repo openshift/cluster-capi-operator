@@ -37,7 +37,6 @@ type ProviderImageManifestsBuilder struct {
 	name         string
 	imageRef     string
 	profile      string
-	contentID    string
 	installOrder int
 	platform     configv1.PlatformType
 	attributes   map[string]string
@@ -52,7 +51,6 @@ func NewProviderImageManifests(tb testing.TB, name string) *ProviderImageManifes
 		name:         name,
 		imageRef:     fmt.Sprintf("registry.example.com/%s@sha256:%s", name, SHA256Pad(name)),
 		profile:      "default",
-		contentID:    fmt.Sprintf("%s-content-id", name),
 		installOrder: 10,
 	}
 }
@@ -66,12 +64,6 @@ func (b *ProviderImageManifestsBuilder) WithImageRef(ref string) *ProviderImageM
 // WithProfile sets a custom profile name.
 func (b *ProviderImageManifestsBuilder) WithProfile(profile string) *ProviderImageManifestsBuilder {
 	b.profile = profile
-	return b
-}
-
-// WithContentID sets a custom content ID.
-func (b *ProviderImageManifestsBuilder) WithContentID(id string) *ProviderImageManifestsBuilder {
-	b.contentID = id
 	return b
 }
 
@@ -122,9 +114,8 @@ func (b *ProviderImageManifestsBuilder) Build() providerimages.ProviderImageMani
 			Attributes:   b.attributes,
 			SelfImageRef: b.selfImageRef,
 		},
-		ContentID: b.contentID,
-		ImageRef:  b.imageRef,
-		Profile:   b.profile,
+		ImageRef: b.imageRef,
+		Profile:  b.profile,
 	}
 
 	if len(b.manifests) > 0 {

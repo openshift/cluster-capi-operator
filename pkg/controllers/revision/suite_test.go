@@ -73,35 +73,29 @@ var _ = BeforeSuite(func() {
 func setupProviderFixtures() {
 	tb := GinkgoTB()
 
-	// Each provider uses its ContentID as the ConfigMap name so that
-	// different provider sets produce different revision contentIDs.
 	defaultProviderImgs = []providerimages.ProviderImageManifests{
 		test.NewProviderImageManifests(tb, "core").
-			WithContentID("core-content-id").
 			WithImageRef("registry.example.com/core@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef").
-			WithManifests(test.ConfigMapYAML("core-content-id")).
+			WithManifests(test.ConfigMapYAML("core-cm")).
 			Build(),
 		test.NewProviderImageManifests(tb, "infra-aws").
 			WithInstallOrder(20).
 			WithPlatform(configv1.AWSPlatformType).
-			WithContentID("infra-aws-content-id").
 			WithImageRef("registry.example.com/infra-aws@sha256:fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210").
-			WithManifests(test.ConfigMapYAML("infra-aws-content-id")).
+			WithManifests(test.ConfigMapYAML("infra-aws-cm")).
 			Build(),
 	}
 
 	updatedProviderImgs = []providerimages.ProviderImageManifests{
 		test.NewProviderImageManifests(tb, "core").
-			WithContentID("core-content-id-2").
 			WithImageRef("registry.example.com/core@sha256:1111111111111111111111111111111111111111111111111111111111111111").
-			WithManifests(test.ConfigMapYAML("core-content-id-2")).
+			WithManifests(test.ConfigMapYAML("core-cm-2")).
 			Build(),
 		test.NewProviderImageManifests(tb, "infra-aws").
 			WithInstallOrder(20).
 			WithPlatform(configv1.AWSPlatformType).
-			WithContentID("infra-aws-content-id-2").
 			WithImageRef("registry.example.com/infra-aws@sha256:2222222222222222222222222222222222222222222222222222222222222222").
-			WithManifests(test.ConfigMapYAML("infra-aws-content-id-2")).
+			WithManifests(test.ConfigMapYAML("infra-aws-cm-2")).
 			Build(),
 	}
 
@@ -109,17 +103,15 @@ func setupProviderFixtures() {
 		test.NewProviderImageManifests(tb, "infra-gcp").
 			WithInstallOrder(20).
 			WithPlatform(configv1.GCPPlatformType).
-			WithContentID("infra-gcp-content-id").
 			WithImageRef("registry.example.com/infra-gcp@sha256:3333333333333333333333333333333333333333333333333333333333333333").
-			WithManifests(test.ConfigMapYAML("infra-gcp-content-id")).
+			WithManifests(test.ConfigMapYAML("infra-gcp-cm")).
 			Build(),
 	}
 
 	invalidAnnotationProviderImgs = []providerimages.ProviderImageManifests{
 		test.NewProviderImageManifests(tb, "invalid-annotation").
-			WithContentID("invalid-annotation-content-id").
 			WithImageRef("registry.example.com/invalid-annotation@sha256:4444444444444444444444444444444444444444444444444444444444444444").
-			WithManifests(test.ConfigMapWithAnnotationsYAML("invalid-annotation-content-id",
+			WithManifests(test.ConfigMapWithAnnotationsYAML("invalid-annotation-cm",
 				map[string]string{revisiongenerator.AdoptExistingAnnotation: "invalid-value"},
 				map[string]string{"version": "v1"},
 			)).

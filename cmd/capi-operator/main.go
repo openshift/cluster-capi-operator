@@ -16,16 +16,17 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
-	"maps"
 	"os"
-	"slices"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/utils/ptr"
@@ -46,11 +47,11 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 )
 
+var errPodIdentityNotSet = errors.New("POD_NAME and POD_NAMESPACE must be set")
+
 const (
 	managerName = "capi-operator"
 
-	defaultImagesLocation       = "./dev-images.json"
-	providerImageDirEnvVar      = "PROVIDER_IMAGE_DIR"
 	defaultProviderImageDirPath = "/var/lib/provider-images"
 )
 
@@ -70,10 +71,10 @@ func main() {
 	initScheme(scheme)
 
 	extraflags := flag.NewFlagSet("", flag.ContinueOnError)
-	imagesFile := extraflags.String(
-		"images-json",
-		defaultImagesLocation,
-		"The location of images file to use by operator for managed CAPI binaries.",
+	providerImageDir := extraflags.String(
+		"provider-image-dir",
+		defaultProviderImageDirPath,
+		"Directory containing provider image manifests. In dev mode, set to a local directory to skip pod spec reading.",
 	)
 
 	log, operatorConfig, mgrOpts, initManager, err := commoncmdoptions.InitOperatorConfig(ctx, cfg, scheme, managerName, controllers.DefaultOperatorNamespace, extraflags)
@@ -96,7 +97,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := setupControllers(ctx, log, mgr, operatorConfig, *imagesFile, cancel); err != nil {
+	if err := setupControllers(ctx, log, mgr, operatorConfig, *providerImageDir, cancel); err != nil {
 		log.Error(err, "unable to setup controllers")
 		os.Exit(1)
 	}
@@ -109,7 +110,7 @@ func main() {
 	}
 }
 
-func setupControllers(ctx context.Context, log logr.Logger, mgr ctrl.Manager, operatorConfig commoncmdoptions.OperatorConfig, imagesFile string, cancel context.CancelFunc) error {
+func setupControllers(ctx context.Context, log logr.Logger, mgr ctrl.Manager, operatorConfig commoncmdoptions.OperatorConfig, providerImageDir string, cancel context.CancelFunc) error {
 	infra, err := util.GetInfra(ctx, mgr.GetAPIReader())
 	if err != nil {
 		return fmt.Errorf("unable to get infrastructure: %w", err)
@@ -143,9 +144,13 @@ func setupControllers(ctx context.Context, log logr.Logger, mgr ctrl.Manager, op
 		return nil
 	}
 
-	providerProfiles, err := loadProviderImages(ctx, mgr, imagesFile)
+	providerProfiles, err := loadProviderImages(ctx, mgr, providerImageDir)
 	if err != nil {
 		return err
+	}
+
+	for _, profile := range providerProfiles {
+		log.Info("loaded provider profile", "name", profile.Name, "imageRef", profile.ImageRef, "profile", profile.Profile)
 	}
 
 	if err := (&revision.RevisionController{
@@ -164,22 +169,29 @@ func setupControllers(ctx context.Context, log logr.Logger, mgr ctrl.Manager, op
 	return nil
 }
 
-func loadProviderImages(ctx context.Context, mgr ctrl.Manager, imagesFile string) ([]providerimages.ProviderImageManifests, error) {
-	containerImages, err := util.ReadImagesFile(imagesFile)
-	if err != nil {
-		return nil, fmt.Errorf("unable to get images from file: %w", err)
+func loadProviderImages(ctx context.Context, mgr ctrl.Manager, providerImageDir string) ([]providerimages.ProviderImageManifests, error) {
+	podName := os.Getenv("POD_NAME")
+
+	podNamespace := os.Getenv("POD_NAMESPACE")
+	if podName == "" || podNamespace == "" {
+		return nil, errPodIdentityNotSet
 	}
 
-	providerImageDir := os.Getenv(providerImageDirEnvVar)
-	if providerImageDir == "" {
-		providerImageDir = defaultProviderImageDirPath
+	var pod corev1.Pod
+	if err := mgr.GetAPIReader().Get(ctx, types.NamespacedName{Name: podName, Namespace: podNamespace}, &pod); err != nil {
+		return nil, fmt.Errorf("unable to get pod %s/%s: %w", podNamespace, podName, err)
 	}
 
-	containerImageRefs := slices.Collect(maps.Values(containerImages))
-
-	providerProfiles, err := providerimages.ReadProviderImages(ctx, mgr.GetAPIReader(), mgr.GetLogger(), containerImageRefs, providerImageDir)
+	imageRefMap, err := providerimages.BuildImageRefMap(pod.Spec, managerName)
 	if err != nil {
-		return nil, fmt.Errorf("unable to get provider image metadata: %w", err)
+		return nil, fmt.Errorf("unable to build image ref map from pod spec: %w", err)
+	}
+
+	log := ctrl.LoggerFrom(ctx)
+
+	providerProfiles, err := providerimages.ScanProviderImages(log, providerImageDir, imageRefMap)
+	if err != nil {
+		return nil, fmt.Errorf("unable to scan provider images: %w", err)
 	}
 
 	return providerProfiles, nil
