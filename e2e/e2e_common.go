@@ -25,6 +25,7 @@ import (
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -60,6 +61,7 @@ var (
 	ctx         = context.Background()
 	platform    configv1.PlatformType
 	clusterName string
+	infra       *configv1.Infrastructure
 
 	// resourcesUnderTest tracks objects created by the current test for focused
 	// diagnostics on failure. Helpers call trackResource after creating objects;
@@ -70,6 +72,7 @@ var (
 
 func init() {
 	utilruntime.Must(configv1.Install(scheme.Scheme))
+	utilruntime.Must(apiextensionsv1.AddToScheme(scheme.Scheme))
 	utilruntime.Must(awsv1.AddToScheme(scheme.Scheme))
 	utilruntime.Must(gcpv1.AddToScheme(scheme.Scheme))
 	utilruntime.Must(azurev1.AddToScheme(scheme.Scheme))
@@ -93,7 +96,7 @@ func InitCommonVariables() {
 	cl, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
 	Expect(err).ToNot(HaveOccurred())
 
-	infra := &configv1.Infrastructure{}
+	infra = &configv1.Infrastructure{}
 	infraName := client.ObjectKey{
 		Name: infrastructureName,
 	}
