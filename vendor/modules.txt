@@ -288,6 +288,8 @@ github.com/charmbracelet/x/term
 # github.com/ckaznocha/intrange v0.3.1
 ## explicit; go 1.23.0
 github.com/ckaznocha/intrange
+# github.com/containerd/stargz-snapshotter/estargz v0.18.1
+## explicit; go 1.24.0
 # github.com/coreos/go-semver v0.3.1
 ## explicit; go 1.8
 github.com/coreos/go-semver/semver
@@ -331,6 +333,12 @@ github.com/distribution/reference
 ## explicit; go 1.13
 github.com/dlclark/regexp2
 github.com/dlclark/regexp2/syntax
+# github.com/docker/cli v29.2.1+incompatible
+## explicit
+# github.com/docker/distribution v2.8.3+incompatible
+## explicit
+# github.com/docker/docker-credential-helpers v0.9.3
+## explicit; go 1.21
 # github.com/drone/envsubst/v2 v2.0.0-20210730161058-179042472c46
 ## explicit; go 1.13
 github.com/drone/envsubst/v2
@@ -1133,6 +1141,8 @@ github.com/onsi/gomega/types
 # github.com/opencontainers/go-digest v1.0.0
 ## explicit; go 1.13
 github.com/opencontainers/go-digest
+# github.com/opencontainers/image-spec v1.1.1
+## explicit; go 1.18
 # github.com/openshift/api v0.0.0-20260416105050-3c6b218b8a80
 ## explicit; go 1.25.0
 github.com/openshift/api
@@ -1526,6 +1536,8 @@ github.com/uudashr/iface/internal/directive
 github.com/uudashr/iface/opaque
 github.com/uudashr/iface/unexported
 github.com/uudashr/iface/unused
+# github.com/vbatts/tar-split v0.12.2
+## explicit; go 1.17
 # github.com/x448/float16 v0.8.4
 ## explicit; go 1.11
 github.com/x448/float16
