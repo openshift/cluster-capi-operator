@@ -22,7 +22,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-logr/logr"
+	"github.com/go-logr/logr/testr"
 	. "github.com/onsi/gomega"
 	configv1 "github.com/openshift/api/config/v1"
 	configv1apply "github.com/openshift/client-go/config/applyconfigurations/config/v1"
@@ -34,8 +34,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-
-	"github.com/openshift/cluster-capi-operator/pkg/test"
 )
 
 const testResultGenerator ControllerResultGenerator = "Test"
@@ -44,15 +42,17 @@ func TestSuccess(t *testing.T) {
 	g := NewWithT(t)
 	result := testResultGenerator.Success()
 
-	g.Expect(result.progressing).To(test.BeCondition("TestProgressing").
-		WithStatus(configv1.ConditionFalse).
-		WithReason(ReasonAsExpected).
-		WithMessage("Success"))
+	g.Expect(result.progressing).To(Equal(partialCondition{
+		status:  configv1.ConditionFalse,
+		reason:  ReasonAsExpected,
+		message: "Success",
+	}))
 
-	g.Expect(result.degraded).To(test.BeCondition("TestDegraded").
-		WithStatus(configv1.ConditionFalse).
-		WithReason(ReasonAsExpected).
-		WithMessage("Success"))
+	g.Expect(result.available).To(HaveValue(Equal(partialCondition{
+		status:  configv1.ConditionTrue,
+		reason:  ReasonAsExpected,
+		message: "Success",
+	})))
 
 	g.Expect(result.err).To(BeNil())
 
@@ -65,15 +65,13 @@ func TestProgressing(t *testing.T) {
 	g := NewWithT(t)
 	result := testResultGenerator.Progressing("installing components")
 
-	g.Expect(result.progressing).To(test.BeCondition("TestProgressing").
-		WithStatus(configv1.ConditionTrue).
-		WithReason(ReasonProgressing).
-		WithMessage("installing components"))
+	g.Expect(result.progressing).To(Equal(partialCondition{
+		status:  configv1.ConditionTrue,
+		reason:  ReasonProgressing,
+		message: "installing components",
+	}))
 
-	g.Expect(result.degraded).To(test.BeCondition("TestDegraded").
-		WithStatus(configv1.ConditionFalse).
-		WithReason(ReasonProgressing).
-		WithMessage("installing components"))
+	g.Expect(result.available).To(BeNil())
 
 	g.Expect(result.err).To(BeNil())
 }
@@ -82,15 +80,13 @@ func TestWaitingOnExternal(t *testing.T) {
 	g := NewWithT(t)
 	result := testResultGenerator.WaitingOnExternal("infrastructure")
 
-	g.Expect(result.progressing).To(test.BeCondition("TestProgressing").
-		WithStatus(configv1.ConditionTrue).
-		WithReason(ReasonWaitingOnExternal).
-		WithMessage("Waiting on infrastructure"))
+	g.Expect(result.progressing).To(Equal(partialCondition{
+		status:  configv1.ConditionTrue,
+		reason:  ReasonWaitingOnExternal,
+		message: "Waiting on infrastructure",
+	}))
 
-	g.Expect(result.degraded).To(test.BeCondition("TestDegraded").
-		WithStatus(configv1.ConditionFalse).
-		WithReason(ReasonWaitingOnExternal).
-		WithMessage("Waiting on infrastructure"))
+	g.Expect(result.available).To(BeNil())
 
 	g.Expect(result.err).To(BeNil())
 }
@@ -101,15 +97,13 @@ func TestError(t *testing.T) {
 		testErr := fmt.Errorf("connection refused")
 		result := testResultGenerator.Error(testErr)
 
-		g.Expect(result.progressing).To(test.BeCondition("TestProgressing").
-			WithStatus(configv1.ConditionTrue).
-			WithReason(ReasonEphemeralError).
-			WithMessage("connection refused"))
+		g.Expect(result.progressing).To(Equal(partialCondition{
+			status:  configv1.ConditionTrue,
+			reason:  ReasonEphemeralError,
+			message: "connection refused",
+		}))
 
-		g.Expect(result.degraded).To(test.BeCondition("TestDegraded").
-			WithStatus(configv1.ConditionFalse).
-			WithReason(ReasonProgressing).
-			WithMessage("Controller encountered a retryable error"))
+		g.Expect(result.available).To(BeNil())
 
 		g.Expect(result.err).To(Equal(testErr))
 		g.Expect(errors.Is(result.err, reconcile.TerminalError(nil))).To(BeFalse())
@@ -121,15 +115,17 @@ func TestError(t *testing.T) {
 		termErr := reconcile.TerminalError(innerErr)
 		result := testResultGenerator.Error(termErr)
 
-		g.Expect(result.progressing).To(test.BeCondition("TestProgressing").
-			WithStatus(configv1.ConditionFalse).
-			WithReason(ReasonNonRetryableError).
-			WithMessage(termErr.Error()))
+		g.Expect(result.progressing).To(Equal(partialCondition{
+			status:  configv1.ConditionFalse,
+			reason:  ReasonNonRetryableError,
+			message: termErr.Error(),
+		}))
 
-		g.Expect(result.degraded).To(test.BeCondition("TestDegraded").
-			WithStatus(configv1.ConditionTrue).
-			WithReason(ReasonNonRetryableError).
-			WithMessage(termErr.Error()))
+		g.Expect(result.available).To(HaveValue(Equal(partialCondition{
+			status:  configv1.ConditionFalse,
+			reason:  ReasonNonRetryableError,
+			message: termErr.Error(),
+		})))
 
 		g.Expect(errors.Is(result.err, reconcile.TerminalError(nil))).To(BeTrue())
 	})
@@ -141,15 +137,17 @@ func TestNonRetryableError(t *testing.T) {
 		testErr := fmt.Errorf("bad config")
 		result := testResultGenerator.NonRetryableError(testErr)
 
-		g.Expect(result.progressing).To(test.BeCondition("TestProgressing").
-			WithStatus(configv1.ConditionFalse).
-			WithReason(ReasonNonRetryableError).
-			WithMessage("terminal error: bad config"))
+		g.Expect(result.progressing).To(Equal(partialCondition{
+			status:  configv1.ConditionFalse,
+			reason:  ReasonNonRetryableError,
+			message: "terminal error: bad config",
+		}))
 
-		g.Expect(result.degraded).To(test.BeCondition("TestDegraded").
-			WithStatus(configv1.ConditionTrue).
-			WithReason(ReasonNonRetryableError).
-			WithMessage("terminal error: bad config"))
+		g.Expect(result.available).To(HaveValue(Equal(partialCondition{
+			status:  configv1.ConditionFalse,
+			reason:  ReasonNonRetryableError,
+			message: "terminal error: bad config",
+		})))
 
 		g.Expect(errors.Is(result.err, reconcile.TerminalError(nil))).To(BeTrue())
 	})
@@ -160,11 +158,17 @@ func TestNonRetryableError(t *testing.T) {
 		termErr := reconcile.TerminalError(innerErr)
 		result := testResultGenerator.NonRetryableError(termErr)
 
-		g.Expect(result.progressing).To(test.BeCondition("TestProgressing").
-			WithMessage("terminal error: already wrapped"))
+		g.Expect(result.progressing).To(Equal(partialCondition{
+			status:  configv1.ConditionFalse,
+			reason:  ReasonNonRetryableError,
+			message: "terminal error: already wrapped",
+		}))
 
-		g.Expect(result.degraded).To(test.BeCondition("TestDegraded").
-			WithMessage("terminal error: already wrapped"))
+		g.Expect(result.available).To(HaveValue(Equal(partialCondition{
+			status:  configv1.ConditionFalse,
+			reason:  ReasonNonRetryableError,
+			message: "terminal error: already wrapped",
+		})))
 
 		g.Expect(errors.Is(result.err, reconcile.TerminalError(nil))).To(BeTrue())
 		// The error should not be re-wrapped: result.err should be the same terminal error
@@ -393,52 +397,70 @@ func newFakeClient(objs ...client.Object) client.WithWatch {
 }
 
 func TestWriteClusterOperatorStatus(t *testing.T) {
-	log := logr.Discard()
+	log := testr.New(t)
+
+	type expectedCondition struct {
+		status  configv1.ConditionStatus
+		reason  string
+		message string
+	}
+
+	existingAvailable := []configv1.ClusterOperatorStatusCondition{
+		{
+			Type:               "TestAvailable",
+			Status:             configv1.ConditionTrue,
+			Reason:             ReasonAsExpected,
+			Message:            "Success",
+			LastTransitionTime: metav1.Now(),
+		},
+	}
 
 	for _, tc := range []struct {
-		name            string
-		conditions      []configv1.ClusterOperatorStatusCondition
-		wantPatchCalled bool
+		name               string
+		existingConditions []configv1.ClusterOperatorStatusCondition
+		result             ReconcileResult
+		wantProgressing    expectedCondition
+		wantAvailable      *expectedCondition
 	}{
 		{
-			name: "skips patch when conditions unchanged",
-			conditions: []configv1.ClusterOperatorStatusCondition{
-				{
-					Type:               "TestProgressing",
-					Status:             configv1.ConditionFalse,
-					Reason:             ReasonAsExpected,
-					Message:            "Success",
-					LastTransitionTime: metav1.Now(),
-				},
-				{
-					Type:               "TestDegraded",
-					Status:             configv1.ConditionFalse,
-					Reason:             ReasonAsExpected,
-					Message:            "Success",
-					LastTransitionTime: metav1.Now(),
-				},
-			},
-			wantPatchCalled: false,
+			name:            "Success writes Progressing and Available conditions",
+			result:          testResultGenerator.Success(),
+			wantProgressing: expectedCondition{configv1.ConditionFalse, ReasonAsExpected, "Success"},
+			wantAvailable:   &expectedCondition{configv1.ConditionTrue, ReasonAsExpected, "Success"},
 		},
 		{
-			name: "patches when conditions changed",
-			conditions: []configv1.ClusterOperatorStatusCondition{
-				{
-					Type:               "TestProgressing",
-					Status:             configv1.ConditionTrue,
-					Reason:             ReasonProgressing,
-					Message:            "installing components",
-					LastTransitionTime: metav1.Now(),
-				},
-				{
-					Type:               "TestDegraded",
-					Status:             configv1.ConditionFalse,
-					Reason:             ReasonProgressing,
-					Message:            "installing components",
-					LastTransitionTime: metav1.Now(),
-				},
-			},
-			wantPatchCalled: true,
+			name:            "Progressing without existing Available does not write Available",
+			result:          testResultGenerator.Progressing("installing components"),
+			wantProgressing: expectedCondition{configv1.ConditionTrue, ReasonProgressing, "installing components"},
+			wantAvailable:   nil,
+		},
+		{
+			name:               "Progressing with existing Available preserves Available",
+			existingConditions: existingAvailable,
+			result:             testResultGenerator.Progressing("installing components"),
+			wantProgressing:    expectedCondition{configv1.ConditionTrue, ReasonProgressing, "installing components"},
+			wantAvailable:      &expectedCondition{configv1.ConditionTrue, ReasonAsExpected, "Success"},
+		},
+		{
+			name:               "Error with existing Available preserves Available",
+			existingConditions: existingAvailable,
+			result:             testResultGenerator.Error(fmt.Errorf("connection refused")),
+			wantProgressing:    expectedCondition{configv1.ConditionTrue, ReasonEphemeralError, "connection refused"},
+			wantAvailable:      &expectedCondition{configv1.ConditionTrue, ReasonAsExpected, "Success"},
+		},
+		{
+			name:               "WaitingOnExternal with existing Available preserves Available",
+			existingConditions: existingAvailable,
+			result:             testResultGenerator.WaitingOnExternal("infrastructure"),
+			wantProgressing:    expectedCondition{configv1.ConditionTrue, ReasonWaitingOnExternal, "Waiting on infrastructure"},
+			wantAvailable:      &expectedCondition{configv1.ConditionTrue, ReasonAsExpected, "Success"},
+		},
+		{
+			name:               "NonRetryableError explicitly sets Available=False",
+			existingConditions: existingAvailable,
+			result:             testResultGenerator.NonRetryableError(fmt.Errorf("bad config")),
+			wantProgressing:    expectedCondition{configv1.ConditionFalse, ReasonNonRetryableError, "terminal error: bad config"},
+			wantAvailable:      &expectedCondition{configv1.ConditionFalse, ReasonNonRetryableError, "terminal error: bad config"},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -450,24 +472,119 @@ func TestWriteClusterOperatorStatus(t *testing.T) {
 					UID:  types.UID("test-uid"),
 				},
 				Status: configv1.ClusterOperatorStatus{
-					Conditions: tc.conditions,
+					Conditions: tc.existingConditions,
 				},
 			}
 
-			patchCalled := false
-			cl := interceptor.NewClient(newFakeClient(co), interceptor.Funcs{
-				SubResourcePatch: func(ctx context.Context, c client.Client, subResourceName string, obj client.Object, patch client.Patch, opts ...client.SubResourcePatchOption) error {
-					patchCalled = true
-					return c.SubResource(subResourceName).Patch(ctx, obj, patch, opts...)
-				},
-			})
+			cl := newFakeClient(co)
 
-			result := testResultGenerator.Success()
+			result := tc.result
 			err := result.WriteClusterOperatorStatus(t.Context(), log, cl)
 			g.Expect(err).ToNot(HaveOccurred())
-			g.Expect(patchCalled).To(Equal(tc.wantPatchCalled))
+
+			g.Expect(cl.Get(t.Context(), client.ObjectKeyFromObject(co), co)).To(Succeed())
+
+			progressing := findClusterOperatorCondition("TestProgressing", co.Status.Conditions)
+			g.Expect(progressing).ToNot(BeNil())
+			g.Expect(progressing.Status).To(Equal(tc.wantProgressing.status))
+			g.Expect(progressing.Reason).To(Equal(tc.wantProgressing.reason))
+			g.Expect(progressing.Message).To(Equal(tc.wantProgressing.message))
+
+			available := findClusterOperatorCondition("TestAvailable", co.Status.Conditions)
+			if tc.wantAvailable == nil {
+				g.Expect(available).To(BeNil())
+			} else {
+				g.Expect(available).ToNot(BeNil())
+				g.Expect(available.Status).To(Equal(tc.wantAvailable.status))
+				g.Expect(available.Reason).To(Equal(tc.wantAvailable.reason))
+				g.Expect(available.Message).To(Equal(tc.wantAvailable.message))
+			}
 		})
 	}
+
+	t.Run("skips patch when conditions unchanged", func(t *testing.T) {
+		g := NewWithT(t)
+
+		co := &configv1.ClusterOperator{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: ClusterOperatorName,
+				UID:  types.UID("test-uid"),
+			},
+			Status: configv1.ClusterOperatorStatus{
+				Conditions: []configv1.ClusterOperatorStatusCondition{
+					{
+						Type:               "TestProgressing",
+						Status:             configv1.ConditionFalse,
+						Reason:             ReasonAsExpected,
+						Message:            "Success",
+						LastTransitionTime: metav1.Now(),
+					},
+					{
+						Type:               "TestAvailable",
+						Status:             configv1.ConditionTrue,
+						Reason:             ReasonAsExpected,
+						Message:            "Success",
+						LastTransitionTime: metav1.Now(),
+					},
+				},
+			},
+		}
+
+		patchCalled := false
+		cl := interceptor.NewClient(newFakeClient(co), interceptor.Funcs{
+			SubResourcePatch: func(ctx context.Context, c client.Client, subResourceName string, obj client.Object, patch client.Patch, opts ...client.SubResourcePatchOption) error {
+				patchCalled = true
+				return c.SubResource(subResourceName).Patch(ctx, obj, patch, opts...)
+			},
+		})
+
+		result := testResultGenerator.Success()
+		err := result.WriteClusterOperatorStatus(t.Context(), log, cl)
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(patchCalled).To(BeFalse())
+	})
+
+	t.Run("patches when conditions changed", func(t *testing.T) {
+		g := NewWithT(t)
+
+		co := &configv1.ClusterOperator{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: ClusterOperatorName,
+				UID:  types.UID("test-uid"),
+			},
+			Status: configv1.ClusterOperatorStatus{
+				Conditions: []configv1.ClusterOperatorStatusCondition{
+					{
+						Type:               "TestProgressing",
+						Status:             configv1.ConditionTrue,
+						Reason:             ReasonProgressing,
+						Message:            "installing components",
+						LastTransitionTime: metav1.Now(),
+					},
+					{
+						Type:               "TestAvailable",
+						Status:             configv1.ConditionTrue,
+						Reason:             ReasonAsExpected,
+						Message:            "Success",
+						LastTransitionTime: metav1.Now(),
+					},
+				},
+			},
+		}
+
+		patchCalled := false
+		cl := interceptor.NewClient(newFakeClient(co), interceptor.Funcs{
+			SubResourcePatch: func(ctx context.Context, c client.Client, subResourceName string, obj client.Object, patch client.Patch, opts ...client.SubResourcePatchOption) error {
+				patchCalled = true
+				return c.SubResource(subResourceName).Patch(ctx, obj, patch, opts...)
+			},
+		})
+
+		result := testResultGenerator.Success()
+		err := result.WriteClusterOperatorStatus(t.Context(), log, cl)
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(patchCalled).To(BeTrue())
+	})
 
 	t.Run("returns error when ClusterOperator not found", func(t *testing.T) {
 		g := NewWithT(t)
@@ -479,5 +596,39 @@ func TestWriteClusterOperatorStatus(t *testing.T) {
 		err := result.WriteClusterOperatorStatus(t.Context(), log, cl)
 		g.Expect(err).To(HaveOccurred())
 		g.Expect(err.Error()).To(ContainSubstring("failed to get ClusterOperator"))
+	})
+}
+
+func TestFindClusterOperatorCondition(t *testing.T) {
+	t.Run("returns matching condition", func(t *testing.T) {
+		g := NewWithT(t)
+
+		conditions := []configv1.ClusterOperatorStatusCondition{
+			{Type: "TestProgressing", Status: configv1.ConditionFalse},
+			{Type: "TestAvailable", Status: configv1.ConditionTrue},
+		}
+
+		result := findClusterOperatorCondition("TestAvailable", conditions)
+		g.Expect(result).ToNot(BeNil())
+		g.Expect(result.Type).To(Equal(configv1.ClusterStatusConditionType("TestAvailable")))
+		g.Expect(result.Status).To(Equal(configv1.ConditionTrue))
+	})
+
+	t.Run("returns nil when not found", func(t *testing.T) {
+		g := NewWithT(t)
+
+		conditions := []configv1.ClusterOperatorStatusCondition{
+			{Type: "TestProgressing", Status: configv1.ConditionFalse},
+		}
+
+		result := findClusterOperatorCondition("TestAvailable", conditions)
+		g.Expect(result).To(BeNil())
+	})
+
+	t.Run("returns nil for empty slice", func(t *testing.T) {
+		g := NewWithT(t)
+
+		g.Expect(findClusterOperatorCondition("TestAvailable", nil)).To(BeNil())
+		g.Expect(findClusterOperatorCondition("TestAvailable", []configv1.ClusterOperatorStatusCondition{})).To(BeNil())
 	})
 }
