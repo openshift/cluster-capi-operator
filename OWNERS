@@ -1,9 +1,25 @@
 approvers:
-  - JoelSpeed
-  - Fedosin
-  - elmiko
-  - lobziik
-  - alexander-demichev
+- cluster-api-approvers
+reviewers:
+- cluster-api-reviewers
+component: Cloud Compute
+subcomponent: Cluster API Providers
 
-component: "Cloud Compute"
-subcomponent: "Cluster API"
+# File-specific ownership patterns
+filters:
+  # Dependency files at any level - require different approval
+  "(^|.*/)go\\.(mod|sum|work|work.sum)$":
+    reviewers:
+      - sustaining-reviewers
+    approvers:
+      - sustaining-approvers
+      - cluster-api-approvers
+
+  # Vendor directory changes at any level
+  "(^|.*/)vendor/.*":
+    reviewers:
+      - sustaining-reviewers
+    approvers:
+      - sustaining-approvers
+      - cluster-api-approvers
+
