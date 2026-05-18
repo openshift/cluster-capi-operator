@@ -1,0 +1,41 @@
+# OWNERS_ALIASES for openshift/cluster-capi-operator
+# See the OWNERS docs: https://git.k8s.io/community/contributors/guide/owners.md
+
+aliases:
+  # Default Cluster API maintainers
+  cluster-api-approvers:
+    - JoelSpeed
+    - RadekManak
+    - damdo
+    - mdbooth
+    - nrb
+    - racheljpg
+    - stephenfin
+    - theobarberbany
+  cluster-api-reviewers:
+    - RadekManak
+    - damdo
+    - mdbooth
+    - nrb
+    - racheljpg
+    - theobarberbany
+
+  # Allow sustaining engineering to approve dependency changes
+  sustaining-approvers:
+    - sghai
+    - shannon
+    - jkaurredhat
+    - san7ket
+    - germanparente
+    - prabhapa
+    - ppostler
+
+  sustaining-reviewers:
+    - sghai
+    - shannon
+    - jkaurredhat
+    - san7ket
+    - germanparente
+    - prabhapa
+    - ppostler
+
