@@ -19,6 +19,7 @@ package machinesetmigration
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
@@ -98,18 +99,22 @@ func (r *MachineSetMigrationReconciler) SetupWithManager(mgr ctrl.Manager) error
 
 // Reconcile performs the reconciliation for a MachineSet.
 //
-//nolint:funlen
+//nolint:funlen,cyclop
 func (r *MachineSetMigrationReconciler) Reconcile(ctx context.Context, req reconcile.Request) (ctrl.Result, error) {
 	logger := logf.FromContext(ctx).WithValues("namespace", req.Namespace, "name", req.Name)
 	ctx = logr.NewContext(ctx, logger)
 
+	// Keep the initial status.AuthoritativeAPI defaulting aligned with the
+	// Machine API controllers so migration still works before this controller runs.
 	logger.V(1).Info("Reconciling machine set")
 	defer logger.V(1).Info("Finished reconciling machine set")
 
-	mapiMachineSet := &mapiv1beta1.MachineSet{}
-	if err := r.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: req.Name}, mapiMachineSet); err != nil && !apierrors.IsNotFound(err) {
-		return ctrl.Result{}, fmt.Errorf("failed to get MAPI machine set: %w", err)
-	} else if apierrors.IsNotFound(err) {
+	mapiMachineSet, found, err := r.getMAPIMachineSet(ctx, req)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	if !found {
 		logger.Info("MachineSet has been deleted. Migration not required")
 		return ctrl.Result{}, nil
 	}
@@ -119,20 +124,30 @@ func (r *MachineSetMigrationReconciler) Reconcile(ctx context.Context, req recon
 		return ctrl.Result{}, nil
 	}
 
-	// If authoritativeAPI status is empty, it means it is the first time we see this resource.
-	// Set the status.authoritativeAPI to match the spec.authoritativeAPI.
-	//
-	// N.B. Very similar logic is also present in the Machine API machine/machineset controllers
-	// to cover for the cases when the migration controller is not running (e.g. on not yet supported platforms),
-	// as such if any change is done to this logic, please consider changing it also there. See:
-	// https://github.com/openshift/machine-api-operator/pull/1386/files#diff-3a93acbdaa255c0afa7f52535fc7df9c3890d6403035dd4c3bd47b0092eb3a37R177-R194
+	// Initialize status.authoritativeAPI on the first reconciliation.
 	if mapiMachineSet.Status.AuthoritativeAPI == "" {
-		if err := r.applyStatusAuthoritativeAPIWithPatch(ctx, mapiMachineSet, mapiMachineSet.Spec.AuthoritativeAPI); err != nil {
-			return ctrl.Result{}, fmt.Errorf("unable to apply authoritativeAPI to status with patch: %w", err)
+		if err := r.applyMigrationStatusWithPatch(ctx, mapiMachineSet, mapiMachineSet.Spec.AuthoritativeAPI); err != nil {
+			return ctrl.Result{}, fmt.Errorf("unable to apply authoritativeAPI to status: %w", err)
 		}
 
-		// Wait for the patching to take effect.
 		return ctrl.Result{}, nil
+	}
+
+	currentAuthority, desiredAuthority, isMigrating, err := synccommon.MigrationDirection(
+		mapiMachineSet.Status.AuthoritativeAPI,
+		mapiMachineSet.Status.SynchronizedAPI,
+		mapiMachineSet.Spec.AuthoritativeAPI,
+	)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("unable to determine current authority while migrating: %w", err)
+	}
+
+	// If the resource is already Migrating and spec switches back to the source
+	// authority, treat it as a cancellation request.
+	if result, handled, err := r.handleMigrationCancellation(ctx, logger, mapiMachineSet, currentAuthority, desiredAuthority, isMigrating); err != nil {
+		return result, err
+	} else if handled {
+		return result, nil
 	}
 
 	// Check that the resource is synchronized and up-to-date.
@@ -150,11 +165,11 @@ func (r *MachineSetMigrationReconciler) Reconcile(ctx context.Context, req recon
 	}
 
 	// Make sure the authoritativeAPI resource status is set to migrating.
-	if mapiMachineSet.Status.AuthoritativeAPI != mapiv1beta1.MachineAuthorityMigrating {
+	if !isMigrating {
 		logger.Info("Detected migration request for machine set")
 
-		if err := r.applyStatusAuthoritativeAPIWithPatch(ctx, mapiMachineSet, mapiv1beta1.MachineAuthorityMigrating); err != nil {
-			return ctrl.Result{}, fmt.Errorf("unable to set authoritativeAPI %q to status: %w", mapiv1beta1.MachineAuthorityMigrating, err)
+		if err := r.applyMigrationStatusWithPatch(ctx, mapiMachineSet, mapiv1beta1.MachineAuthorityMigrating); err != nil {
+			return ctrl.Result{}, fmt.Errorf("unable to set authoritativeAPI to Migrating: %w", err)
 		}
 
 		logger.Info("Acknowledged migration request for machine set")
@@ -164,7 +179,7 @@ func (r *MachineSetMigrationReconciler) Reconcile(ctx context.Context, req recon
 	}
 
 	// Request pausing on the authoritative resource.
-	if updated, err := r.requestOldAuthoritativeResourcePaused(ctx, mapiMachineSet); err != nil {
+	if updated, err := r.requestOldAuthoritativeResourcePaused(ctx, mapiMachineSet, currentAuthority); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to request pause on authoritative machine set: %w", err)
 	} else if updated {
 		logger.Info("Requested pausing for authoritative machine set")
@@ -174,7 +189,7 @@ func (r *MachineSetMigrationReconciler) Reconcile(ctx context.Context, req recon
 	}
 
 	// Check that the old authoritative resource is paused.
-	if paused, err := r.isOldAuthoritativeResourcePaused(ctx, mapiMachineSet); err != nil {
+	if paused, err := r.isOldAuthoritativeResourcePaused(ctx, mapiMachineSet, currentAuthority); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to check paused on old authoritative machine set: %w", err)
 	} else if !paused {
 		// The Authoritative API resource is not paused yet, requeue to check later.
@@ -183,25 +198,163 @@ func (r *MachineSetMigrationReconciler) Reconcile(ctx context.Context, req recon
 		return ctrl.Result{}, nil
 	}
 
-	// Make sure the new authoritative resource has been requested to unpause.
-	if err := r.ensureUnpauseRequestedOnNewAuthoritativeResource(ctx, mapiMachineSet); err != nil {
-		return ctrl.Result{}, fmt.Errorf("unable to ensure the new AuthoritativeAPI has been un-paused: %w", err)
+	// Only Cluster API exposes a target unpause signal before completing migration.
+	// Machine API only clears Paused after status.AuthoritativeAPI leaves Migrating.
+	if desiredAuthority == mapiv1beta1.MachineAuthorityClusterAPI {
+		if unpaused, err := r.ensureClusterAPITargetUnpaused(ctx, mapiMachineSet); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to ensure the Cluster API target is unpaused: %w", err)
+		} else if !unpaused {
+			logger.Info("New authoritative machine set is not unpaused yet, waiting for target controller")
+
+			return ctrl.Result{}, nil
+		}
 	}
 
-	// Set the actual AuthoritativeAPI to the desired one, reset the synchronized generation and condition.
-	if err := synccommon.ApplyAuthoritativeAPIAndResetSyncStatus[*machinev1applyconfigs.MachineSetStatusApplyConfiguration](ctx, r.Client, controllerName, machinev1applyconfigs.MachineSet, mapiMachineSet, mapiMachineSet.Spec.AuthoritativeAPI); err != nil {
+	// Set the actual AuthoritativeAPI to the desired one and reset the synchronized generation and condition.
+	// SynchronizedAPI will be updated by the sync controller after resync.
+	if err := r.applyMigrationStatusAndResetSyncStatusWithPatch(ctx, mapiMachineSet, mapiMachineSet.Spec.AuthoritativeAPI); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to apply authoritativeAPI and reset sync status: %w", err)
 	}
 
-	logger.Info("Machine set authority switch has now been completed and the resource unpaused")
+	logger.Info("Machine set authority switch has now been completed", "authoritativeAPI", mapiMachineSet.Spec.AuthoritativeAPI)
 	logger.Info("Machine set migrated successfully")
 
 	return ctrl.Result{}, nil
 }
 
+func (r *MachineSetMigrationReconciler) getMAPIMachineSet(ctx context.Context, req reconcile.Request) (*mapiv1beta1.MachineSet, bool, error) {
+	mapiMachineSet := &mapiv1beta1.MachineSet{}
+	if err := r.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: req.Name}, mapiMachineSet); err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil, false, nil
+		}
+
+		return nil, false, fmt.Errorf("failed to get MAPI machine set: %w", err)
+	}
+
+	return mapiMachineSet, true, nil
+}
+
+func (r *MachineSetMigrationReconciler) handleMigrationCancellation(
+	ctx context.Context,
+	logger logr.Logger,
+	mapiMachineSet *mapiv1beta1.MachineSet,
+	currentAuthority, desiredAuthority mapiv1beta1.MachineAuthority,
+	isMigrating bool,
+) (ctrl.Result, bool, error) {
+	if !isMigrating || currentAuthority == "" || desiredAuthority != currentAuthority {
+		return ctrl.Result{}, false, nil
+	}
+
+	logger.Info("Migration cancellation detected, rolling back to source authority",
+		"sourceAuthority", currentAuthority)
+
+	switch currentAuthority {
+	case mapiv1beta1.MachineAuthorityMachineAPI:
+		readyToRollback, result, err := r.ensureRollbackToMachineAPIReady(ctx, logger, mapiMachineSet)
+		if err != nil {
+			return ctrl.Result{}, true, err
+		}
+
+		if !readyToRollback {
+			return result, true, nil
+		}
+	case mapiv1beta1.MachineAuthorityClusterAPI:
+		readyToRollback, result, err := r.ensureRollbackToClusterAPIReady(ctx, logger, mapiMachineSet)
+		if err != nil {
+			return ctrl.Result{}, true, err
+		}
+
+		if !readyToRollback {
+			return result, true, nil
+		}
+	case mapiv1beta1.MachineAuthorityMigrating:
+		return ctrl.Result{}, true, fmt.Errorf("%w", synccommon.UnexpectedCurrentAuthorityDuringCancellationError(currentAuthority))
+	default:
+		return ctrl.Result{}, true, fmt.Errorf("%w", synccommon.UnexpectedCurrentAuthorityDuringCancellationError(currentAuthority))
+	}
+
+	// Reset status back to source authority and reset sync status.
+	if err := r.applyMigrationStatusAndResetSyncStatusWithPatch(ctx, mapiMachineSet, currentAuthority); err != nil {
+		return ctrl.Result{}, true, fmt.Errorf("failed to rollback migration: %w", err)
+	}
+
+	logger.Info("Migration cancelled and rolled back successfully")
+
+	return ctrl.Result{}, true, nil
+}
+
+func (r *MachineSetMigrationReconciler) ensureRollbackToMachineAPIReady(ctx context.Context, logger logr.Logger, mapiMachineSet *mapiv1beta1.MachineSet) (bool, ctrl.Result, error) {
+	rollbackObserved, err := r.isClusterAPIResourcesInRollbackState(ctx, mapiMachineSet, true)
+	if err != nil {
+		return false, ctrl.Result{}, fmt.Errorf("failed to observe re-paused Cluster API resources after cancellation: %w", err)
+	}
+
+	if rollbackObserved {
+		return true, ctrl.Result{}, nil
+	}
+
+	// Rolling back to Machine API means Cluster API was the target. Re-pause it
+	// so the cluster returns to a single authoritative API before status is reset.
+	if _, err := r.requestClusterAPIResourcesPausedForRollback(ctx, mapiMachineSet); err != nil {
+		return false, ctrl.Result{}, fmt.Errorf("failed to re-pause Cluster API resources after cancellation: %w", err)
+	}
+
+	logger.Info("Waiting for Cluster API rollback target to pause before resetting migration status")
+
+	return false, ctrl.Result{RequeueAfter: time.Second}, nil
+}
+
+func (r *MachineSetMigrationReconciler) ensureRollbackToClusterAPIReady(ctx context.Context, logger logr.Logger, mapiMachineSet *mapiv1beta1.MachineSet) (bool, ctrl.Result, error) {
+	rollbackObserved, err := r.isClusterAPIResourcesInRollbackState(ctx, mapiMachineSet, false)
+	if err != nil {
+		return false, ctrl.Result{}, fmt.Errorf("failed to observe unpaused Cluster API resources after cancellation: %w", err)
+	}
+
+	if rollbackObserved {
+		return true, ctrl.Result{}, nil
+	}
+
+	// Rolling back to Cluster API means Cluster API was the source and may have
+	// been paused during the migration attempt. Unpause it before resetting status.
+	if err := r.ensureUnpauseAfterCancellation(ctx, mapiMachineSet); err != nil {
+		return false, ctrl.Result{}, fmt.Errorf("failed to unpause after cancellation: %w", err)
+	}
+
+	logger.Info("Waiting for Cluster API rollback source to unpause before resetting migration status")
+
+	return false, ctrl.Result{RequeueAfter: time.Second}, nil
+}
+
+func (r *MachineSetMigrationReconciler) isClusterAPIResourcesInRollbackState(ctx context.Context, ms *mapiv1beta1.MachineSet, wantPaused bool) (bool, error) {
+	capiMachineSet := &clusterv1.MachineSet{}
+	if err := r.Get(ctx, client.ObjectKey{Namespace: r.CAPINamespace, Name: ms.Name}, capiMachineSet); err != nil {
+		if apierrors.IsNotFound(err) {
+			return true, nil
+		}
+
+		return false, fmt.Errorf("failed to get Cluster API machine set: %w", err)
+	}
+
+	if annotations.HasPaused(capiMachineSet) != wantPaused {
+		return false, nil
+	}
+
+	machineSetPausedCondition := conditions.Get(capiMachineSet, clusterv1.PausedCondition)
+	if wantPaused {
+		return machineSetPausedCondition != nil && machineSetPausedCondition.Status == metav1.ConditionTrue, nil
+	}
+
+	if machineSetPausedCondition != nil && machineSetPausedCondition.Status == metav1.ConditionTrue {
+		return false, nil
+	}
+
+	return true, nil
+}
+
 // isOldAuthoritativeResourcePaused checks whether the old authoritative resource is paused.
-func (r *MachineSetMigrationReconciler) isOldAuthoritativeResourcePaused(ctx context.Context, ms *mapiv1beta1.MachineSet) (bool, error) {
-	if ms.Spec.AuthoritativeAPI == mapiv1beta1.MachineAuthorityClusterAPI {
+func (r *MachineSetMigrationReconciler) isOldAuthoritativeResourcePaused(ctx context.Context, ms *mapiv1beta1.MachineSet, sourceAuthority mapiv1beta1.MachineAuthority) (bool, error) {
+	if sourceAuthority == mapiv1beta1.MachineAuthorityMachineAPI {
 		cond, err := util.GetConditionStatus(ms, "Paused")
 		if err != nil {
 			return false, fmt.Errorf("unable to get paused condition for %s/%s: %w", ms.Namespace, ms.Name, err)
@@ -210,7 +363,7 @@ func (r *MachineSetMigrationReconciler) isOldAuthoritativeResourcePaused(ctx con
 		return cond == corev1.ConditionTrue, nil
 	}
 
-	// For MachineAuthorityMachineAPI, check the corresponding CAPI resource.
+	// For MachineAuthorityClusterAPI, check the corresponding CAPI resource.
 	capiMachineSet := &clusterv1.MachineSet{}
 	if err := r.Get(ctx, client.ObjectKey{Namespace: r.CAPINamespace, Name: ms.Name}, capiMachineSet); err != nil {
 		return false, fmt.Errorf("failed to get Cluster API machine set: %w", err)
@@ -221,81 +374,100 @@ func (r *MachineSetMigrationReconciler) isOldAuthoritativeResourcePaused(ctx con
 		return false, nil
 	}
 
-	// InfraMachineTemplate doesn't have a reconciler and thus it doesn't need pausing.
-	// The only provider we are interested in, that reconciles the inframachinetemplate, is ibmcloud/powervs
-	// which only updates its status
-	// see: https://github.com/kubernetes-sigs/cluster-api-provider-ibmcloud/blob/main/controllers/ibmpowervsmachinetemplate_controller.go
+	// InfraMachineTemplate doesn't have a reconciler, so it does not need pausing.
+	// The only relevant provider that reconciles the infra machine template is
+	// IBM Cloud, PowerVS, and it only updates status.
+	// See: https://github.com/kubernetes-sigs/cluster-api-provider-ibmcloud/blob/main/controllers/ibmpowervsmachinetemplate_controller.go
 	return (machinePausedCondition.Status == metav1.ConditionTrue), nil
 }
 
-func (r *MachineSetMigrationReconciler) ensureUnpauseRequestedOnNewAuthoritativeResource(ctx context.Context, mapiMachineSet *mapiv1beta1.MachineSet) error {
-	// Request that the new authoritative resource reconciliation is un-paused.
-	//nolint:wsl
-	switch mapiMachineSet.Spec.AuthoritativeAPI {
-	case mapiv1beta1.MachineAuthorityClusterAPI:
-		// For requesting unpausing of a CAPI resource, remove the paused annotation on it.
-		// So check if the ClusterAPI resource has the paused annotation and if so remove it.
-		capiMachineSet := &clusterv1.MachineSet{}
-		if err := r.Get(ctx, client.ObjectKey{Namespace: r.CAPINamespace, Name: mapiMachineSet.Name}, capiMachineSet); err != nil {
-			return fmt.Errorf("failed to get Cluster API machine set: %w", err)
-		}
-
-		if annotations.HasPaused(capiMachineSet) {
-			capiMachineSetCopy := capiMachineSet.DeepCopy()
-			delete(capiMachineSet.Annotations, clusterv1.PausedAnnotation)
-
-			if err := r.Patch(ctx, capiMachineSet, client.MergeFrom(capiMachineSetCopy)); err != nil {
-				return fmt.Errorf("failed to patch Cluster API machine set: %w", err)
-			}
-		}
-
-		// InfraMachineTemplate doesn't have a reconciler and thus it doesn't need pausing.
-		// The only provider we are interested in, that reconciles the inframachinetemplate, is ibmcloud/powervs
-		// which only updates its status
-		// see: https://github.com/kubernetes-sigs/cluster-api-provider-ibmcloud/blob/main/controllers/ibmpowervsmachinetemplate_controller.go
-	case mapiv1beta1.MachineAuthorityMachineAPI:
-		// For requesting unpausing of a MAPI resource, it is sufficient to switch the spec.AuthoritativeAPI field on the MAPI resource.
-		// which is already done before this code runs in this controller. Nothing to do here.
-	case mapiv1beta1.MachineAuthorityMigrating:
-		// Value is disallowed by the openAPI schema validation.
+// ensureClusterAPITargetUnpaused requests unpause on the Cluster API target
+// resources and reports whether they currently appear unpaused.
+func (r *MachineSetMigrationReconciler) ensureClusterAPITargetUnpaused(ctx context.Context, ms *mapiv1beta1.MachineSet) (bool, error) {
+	capiMachineSet := &clusterv1.MachineSet{}
+	if err := r.Get(ctx, client.ObjectKey{Namespace: r.CAPINamespace, Name: ms.Name}, capiMachineSet); err != nil {
+		return false, fmt.Errorf("failed to get Cluster API machine set: %w", err)
 	}
 
-	return nil
+	if annotations.HasPaused(capiMachineSet) {
+		capiMachineSetCopy := capiMachineSet.DeepCopy()
+		delete(capiMachineSet.Annotations, clusterv1.PausedAnnotation)
+
+		if err := r.Patch(ctx, capiMachineSet, client.MergeFrom(capiMachineSetCopy)); err != nil {
+			return false, fmt.Errorf("failed to patch Cluster API machine set: %w", err)
+		}
+	}
+
+	machinePausedCondition := conditions.Get(capiMachineSet, clusterv1.PausedCondition)
+	// Only consider the target unpaused once Cluster API has acknowledged the
+	// change by setting PausedCondition to False. A nil condition means the
+	// target MachineSet has not been reconciled yet, so migration must wait.
+	if machinePausedCondition == nil || machinePausedCondition.Status == metav1.ConditionTrue {
+		return false, nil
+	}
+
+	// InfraMachineTemplate doesn't have its own reconciler, so the MachineSet
+	// paused condition is the only readiness signal that matters here.
+	return true, nil
 }
 
-// requestOldAuthoritativeResourcePaused requests the old authoritative resource is paused.
-func (r *MachineSetMigrationReconciler) requestOldAuthoritativeResourcePaused(ctx context.Context, ms *mapiv1beta1.MachineSet) (bool, error) {
-	// Request that the old authoritative resource reconciliation is paused.
+func (r *MachineSetMigrationReconciler) requestClusterAPIResourcesPaused(ctx context.Context, ms *mapiv1beta1.MachineSet) (bool, error) {
+	capiMachineSet := &clusterv1.MachineSet{}
+	if err := r.Get(ctx, client.ObjectKey{Namespace: r.CAPINamespace, Name: ms.Name}, capiMachineSet); err != nil {
+		return false, fmt.Errorf("failed to get Cluster API machine set: %w", err)
+	}
+
+	updated := false
+
+	if !annotations.HasPaused(capiMachineSet) {
+		capiMachineSetCopy := capiMachineSet.DeepCopy()
+		annotations.AddAnnotations(capiMachineSet, map[string]string{clusterv1.PausedAnnotation: ""})
+
+		if err := r.Patch(ctx, capiMachineSet, client.MergeFrom(capiMachineSetCopy)); err != nil {
+			return false, fmt.Errorf("failed to patch Cluster API machine set: %w", err)
+		}
+
+		updated = true
+	}
+
+	return updated, nil
+}
+
+func (r *MachineSetMigrationReconciler) requestClusterAPIResourcesPausedForRollback(ctx context.Context, ms *mapiv1beta1.MachineSet) (bool, error) {
+	capiMachineSet := &clusterv1.MachineSet{}
+	if err := r.Get(ctx, client.ObjectKey{Namespace: r.CAPINamespace, Name: ms.Name}, capiMachineSet); err != nil {
+		if apierrors.IsNotFound(err) {
+			return false, nil
+		}
+
+		return false, fmt.Errorf("failed to get Cluster API machine set: %w", err)
+	}
+
+	updated := false
+
+	if !annotations.HasPaused(capiMachineSet) {
+		capiMachineSetCopy := capiMachineSet.DeepCopy()
+		annotations.AddAnnotations(capiMachineSet, map[string]string{clusterv1.PausedAnnotation: ""})
+
+		if err := r.Patch(ctx, capiMachineSet, client.MergeFrom(capiMachineSetCopy)); err != nil {
+			return false, fmt.Errorf("failed to patch Cluster API machine set: %w", err)
+		}
+
+		updated = true
+	}
+
+	return updated, nil
+}
+
+// requestOldAuthoritativeResourcePaused requests that the old authoritative resource be paused.
+func (r *MachineSetMigrationReconciler) requestOldAuthoritativeResourcePaused(ctx context.Context, ms *mapiv1beta1.MachineSet, sourceAuthority mapiv1beta1.MachineAuthority) (bool, error) {
 	updated := false
 	//nolint:wsl
-	switch ms.Spec.AuthoritativeAPI {
-	case mapiv1beta1.MachineAuthorityClusterAPI:
-		// For requesting pausing of a MAPI resource, it is sufficient to switch the spec.AuthoritativeAPI field on the MAPI resource.
-		// which is already done before this code runs in this controller.
+	switch sourceAuthority {
 	case mapiv1beta1.MachineAuthorityMachineAPI:
-		// For requesting pausing of a CAPI resource, set the paused annotation on it.
-		// The spec.AuthoritativeAPI is set to MachineAPI, meaning that the old authoritativeAPI was ClusterAPI.
-		// So Check if the ClusterAPI resource has the paused annotation, otherwise set it.
-		capiMachineSet := &clusterv1.MachineSet{}
-		if err := r.Get(ctx, client.ObjectKey{Namespace: r.CAPINamespace, Name: ms.Name}, capiMachineSet); err != nil {
-			return false, fmt.Errorf("failed to get Cluster API machine set: %w", err)
-		}
-
-		if !annotations.HasPaused(capiMachineSet) {
-			capiMachineSetCopy := capiMachineSet.DeepCopy()
-			annotations.AddAnnotations(capiMachineSet, map[string]string{clusterv1.PausedAnnotation: ""})
-
-			if err := r.Patch(ctx, capiMachineSet, client.MergeFrom(capiMachineSetCopy)); err != nil {
-				return false, fmt.Errorf("failed to patch Cluster API machine set: %w", err)
-			}
-
-			updated = true
-		}
-
-		// InfraMachineTemplate doesn't have a reconciler and thus it doesn't need pausing.
-		// The only provider we are interested in, that reconciles the inframachinetemplate, is ibmcloud/powervs
-		// which only updates its status
-		// see: https://github.com/kubernetes-sigs/cluster-api-provider-ibmcloud/blob/main/controllers/ibmpowervsmachinetemplate_controller.go
+		// Switching spec.AuthoritativeAPI already requests pause on the MAPI resource.
+	case mapiv1beta1.MachineAuthorityClusterAPI:
+		return r.requestClusterAPIResourcesPaused(ctx, ms)
 	case mapiv1beta1.MachineAuthorityMigrating:
 		// Value is disallowed by the openAPI schema validation.
 	}
@@ -312,41 +484,58 @@ func (r *MachineSetMigrationReconciler) isSynchronized(ctx context.Context, mapi
 		return false, nil
 	}
 
-	// Because we are in a migration (spec.authoritativeAPI !=
-	// status.authoritativeAPI), we assume that spec.authoritativeAPI is
-	// currently the migration target, not the migration source. So:
-	//
-	// target: spec.authoritativeAPI
-	// source: opposite of target
-	//
-	// We want to assert that source has been synched to target, so we need to
-	// treat spec.AuthoritativeAPI as the opposite of the direction we want to
-	// check.
-	//
-	// We may revisit this, as this assumption is not safe if a user aborts an
-	// in-progress migration by resetting spec.authoritativeAPI to its original
-	// value.
-
-	switch mapiMachineSet.Spec.AuthoritativeAPI {
-	case mapiv1beta1.MachineAuthorityClusterAPI:
+	// Use SynchronizedAPI to deterministically know which object's generation
+	// the SynchronizedGeneration refers to. This avoids the previous heuristic
+	// which was not safe when a user aborts an in-progress migration.
+	switch mapiMachineSet.Status.SynchronizedAPI {
+	case mapiv1beta1.MachineAPISynchronized:
 		return mapiMachineSet.Status.SynchronizedGeneration == mapiMachineSet.Generation, nil
-	case mapiv1beta1.MachineAuthorityMachineAPI:
+	case mapiv1beta1.ClusterAPISynchronized:
 		capiMachineSet := &clusterv1.MachineSet{}
 		if err := r.Get(ctx, client.ObjectKey{Namespace: r.CAPINamespace, Name: mapiMachineSet.Name}, capiMachineSet); err != nil {
 			return false, fmt.Errorf("failed to get Cluster API machine set: %w", err)
 		}
 
-		// Given the CAPI infra machine template is immutable
-		// we do not check for its generation to be synced up with the generation of the MAPI machine set.
-		return (mapiMachineSet.Status.SynchronizedGeneration == capiMachineSet.Generation), nil
-	case mapiv1beta1.MachineAuthorityMigrating:
+		return mapiMachineSet.Status.SynchronizedGeneration == capiMachineSet.Generation, nil
+	case "":
+		// SynchronizedAPI not yet set by sync controller - not synchronized
+		return false, nil
+	default:
+		return false, fmt.Errorf("unable to determine synchronization source: %w", synccommon.InvalidSynchronizedAPIError(mapiMachineSet.Status.SynchronizedAPI))
 	}
-
-	// Should have been prevented by validation
-	return false, fmt.Errorf("%w: %s", controllers.ErrInvalidSpecAuthoritativeAPI, mapiMachineSet.Spec.AuthoritativeAPI)
 }
 
-// applyStatusAuthoritativeAPIWithPatch updates the resource status.authoritativeAPI using a server-side apply patch.
-func (r *MachineSetMigrationReconciler) applyStatusAuthoritativeAPIWithPatch(ctx context.Context, ms *mapiv1beta1.MachineSet, authority mapiv1beta1.MachineAuthority) error {
-	return synccommon.ApplyAuthoritativeAPI[*machinev1applyconfigs.MachineSetStatusApplyConfiguration](ctx, r.Client, controllerName, machinev1applyconfigs.MachineSet, ms, authority)
+func (r *MachineSetMigrationReconciler) applyMigrationStatusWithPatch(ctx context.Context, ms *mapiv1beta1.MachineSet, authority mapiv1beta1.MachineAuthority) error {
+	return synccommon.ApplyMigrationStatus[*machinev1applyconfigs.MachineSetStatusApplyConfiguration](ctx, r.Client, controllerName, machinev1applyconfigs.MachineSet, ms, authority)
+}
+
+func (r *MachineSetMigrationReconciler) applyMigrationStatusAndResetSyncStatusWithPatch(ctx context.Context, ms *mapiv1beta1.MachineSet, authority mapiv1beta1.MachineAuthority) error {
+	return synccommon.ApplyMigrationStatusAndResetSyncStatus[*machinev1applyconfigs.MachineSetStatusApplyConfiguration](ctx, r.Client, controllerName, machinev1applyconfigs.MachineSet, ms, authority)
+}
+
+// ensureUnpauseAfterCancellation ensures CAPI resources are unpaused after migration cancellation.
+// When cancelling a migration, any CAPI resources that may have been paused should be unpaused.
+// InfraMachineTemplate doesn't have a reconciler and thus doesn't need unpausing.
+func (r *MachineSetMigrationReconciler) ensureUnpauseAfterCancellation(ctx context.Context, mapiMachineSet *mapiv1beta1.MachineSet) error {
+	capiMachineSet := &clusterv1.MachineSet{}
+	if err := r.Get(ctx, client.ObjectKey{Namespace: r.CAPINamespace, Name: mapiMachineSet.Name}, capiMachineSet); err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+
+		return fmt.Errorf("failed to get Cluster API machine set: %w", err)
+	}
+
+	if !annotations.HasPaused(capiMachineSet) {
+		return nil
+	}
+
+	capiMachineSetCopy := capiMachineSet.DeepCopy()
+	delete(capiMachineSet.Annotations, clusterv1.PausedAnnotation)
+
+	if err := r.Patch(ctx, capiMachineSet, client.MergeFrom(capiMachineSetCopy)); err != nil {
+		return fmt.Errorf("failed to remove paused annotation from Cluster API machine set: %w", err)
+	}
+
+	return nil
 }
