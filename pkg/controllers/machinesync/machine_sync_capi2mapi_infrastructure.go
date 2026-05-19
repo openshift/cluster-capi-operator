@@ -24,9 +24,12 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/capi2mapi"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/mapi2capi"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
+	"k8s.io/utils/ptr"
 )
 
 // setChangedMAPIMachineProviderStatusFields unmarshals the existing and converted ProviderStatus, copies over the fields and marshals it back to the existingMAPIMachine.
+//
+//nolint:funlen
 func setChangedMAPIMachineProviderStatusFields(platform configv1.PlatformType, existingMAPIMachine, convertedMAPIMachine *mapiv1beta1.Machine) error {
 	var newProviderStatus interface{}
 
@@ -47,6 +50,33 @@ func setChangedMAPIMachineProviderStatusFields(platform configv1.PlatformType, e
 		}
 
 		convertedStatus.Conditions = existingStatus.Conditions
+
+		newProviderStatus = convertedStatus
+	case configv1.VSpherePlatformType:
+		existingStatus, err := mapi2capi.VSphereProviderStatusFromRawExtension(existingMAPIMachine.Status.ProviderStatus)
+		if err != nil {
+			return fmt.Errorf("unable to convert RawExtension to VSphere ProviderStatus: %w", err)
+		}
+
+		convertedStatus, err := mapi2capi.VSphereProviderStatusFromRawExtension(convertedMAPIMachine.Status.ProviderStatus)
+		if err != nil {
+			return fmt.Errorf("unable to convert RawExtension to VSphere ProviderStatus: %w", err)
+		}
+
+		for i := range convertedStatus.Conditions {
+			existingStatus.Conditions = util.SetMAPIProviderCondition(existingStatus.Conditions, &convertedStatus.Conditions[i])
+		}
+
+		convertedStatus.Conditions = existingStatus.Conditions
+
+		// CAPI→MAPI conversion does not set instanceId or taskRef; preserve actuator-populated values.
+		if ptr.Deref(convertedStatus.InstanceID, "") == "" {
+			convertedStatus.InstanceID = existingStatus.InstanceID
+		}
+
+		if convertedStatus.TaskRef == "" {
+			convertedStatus.TaskRef = existingStatus.TaskRef
+		}
 
 		newProviderStatus = convertedStatus
 	case configv1.OpenStackPlatformType:

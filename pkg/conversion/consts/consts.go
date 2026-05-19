@@ -27,4 +27,7 @@ const (
 
 	// MAPIMachineMetadataAnnotationInstanceState is the annotation for the instance state of the machine is used as column for kubectl.
 	MAPIMachineMetadataAnnotationInstanceState = "machine.openshift.io/instance-state"
+
+	// VSphereInstanceStateReady indicates the vSphere instance is ready.
+	VSphereInstanceStateReady = "ready"
 )

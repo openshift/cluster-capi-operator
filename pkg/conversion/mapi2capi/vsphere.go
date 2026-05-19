@@ -1,0 +1,536 @@
+/*
+Copyright 2024 Red Hat, Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+	http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+package mapi2capi
+
+import (
+	"fmt"
+	"reflect"
+
+	configv1 "github.com/openshift/api/config/v1"
+	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
+	"github.com/openshift/cluster-capi-operator/pkg/conversion/consts"
+	"github.com/openshift/cluster-capi-operator/pkg/util"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/validation/field"
+	"k8s.io/utils/ptr"
+	vspherev1 "sigs.k8s.io/cluster-api-provider-vsphere/apis/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/yaml"
+)
+
+const (
+	// DefaultVSphereCredentialsSecretName is the name of the default secret containing vSphere cloud credentials.
+	DefaultVSphereCredentialsSecretName = "vsphere-cloud-credentials" //#nosec G101 -- This is a false positive.
+
+	vSphereMachineKind         = "VSphereMachine"
+	vSphereMachineTemplateKind = "VSphereMachineTemplate"
+)
+
+// ipamResourceToKind maps IPAM API group and resource names (plural) to Kind names (singular).
+// MAPI uses resource names while CAPI requires Kind names.
+//
+//nolint:gochecknoglobals // Lookup table for IPAM resource name to Kind name conversion
+var ipamResourceToKind = map[string]map[string]string{
+	"ipam.cluster.x-k8s.io": {
+		"inclusterippools":       "InClusterIPPool",
+		"globalinclusterippools": "GlobalInClusterIPPool",
+	},
+	// Additional IPAM providers can be added here as needed
+}
+
+// vSphereMachineAndInfra stores the details of a Machine API VSphereMachine and Infra.
+type vSphereMachineAndInfra struct {
+	machine        *mapiv1beta1.Machine
+	infrastructure *configv1.Infrastructure
+}
+
+// vSphereMachineSetAndInfra stores the details of a Machine API VSphereMachineSet and Infra.
+type vSphereMachineSetAndInfra struct {
+	machineSet     *mapiv1beta1.MachineSet
+	infrastructure *configv1.Infrastructure
+	*vSphereMachineAndInfra
+}
+
+// FromVSphereMachineAndInfra wraps a Machine API Machine for vSphere and the OCP Infrastructure object into a mapi2capi VSphereMachine.
+func FromVSphereMachineAndInfra(m *mapiv1beta1.Machine, i *configv1.Infrastructure) Machine {
+	return &vSphereMachineAndInfra{machine: m, infrastructure: i}
+}
+
+// FromVSphereMachineSetAndInfra wraps a Machine API MachineSet for vSphere and the OCP Infrastructure object into a mapi2capi VSphereMachineSet.
+func FromVSphereMachineSetAndInfra(m *mapiv1beta1.MachineSet, i *configv1.Infrastructure) MachineSet {
+	return &vSphereMachineSetAndInfra{
+		machineSet:     m,
+		infrastructure: i,
+		vSphereMachineAndInfra: &vSphereMachineAndInfra{
+			machine: &mapiv1beta1.Machine{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels:      m.Spec.Template.ObjectMeta.Labels,      //nolint:staticcheck // ObjectMeta is a field, not embedded
+					Annotations: m.Spec.Template.ObjectMeta.Annotations, //nolint:staticcheck // ObjectMeta is a field, not embedded
+				},
+				Spec: m.Spec.Template.Spec,
+			},
+			infrastructure: i,
+		},
+	}
+}
+
+// ToMachineAndInfrastructureMachine converts a MAPI Machine to a CAPI Machine and VSphereMachine.
+func (v *vSphereMachineAndInfra) ToMachineAndInfrastructureMachine() (*clusterv1.Machine, client.Object, []string, error) {
+	machine, infraMachine, warnings, errs := v.toMachineAndInfrastructureMachine()
+	if len(errs) > 0 {
+		return nil, nil, warnings, errs.ToAggregate()
+	}
+
+	return machine, infraMachine, warnings, nil
+}
+
+// toMachineAndInfrastructureMachine is the internal implementation of the conversion.
+func (v *vSphereMachineAndInfra) toMachineAndInfrastructureMachine() (*clusterv1.Machine, client.Object, []string, field.ErrorList) {
+	var errs field.ErrorList
+
+	vSphereProviderConfig, err := vSphereProviderSpecFromRawExtension(v.machine.Spec.ProviderSpec.Value)
+	if err != nil {
+		return nil, nil, nil, field.ErrorList{field.Invalid(field.NewPath("spec", "providerSpec", "value"), v.machine.Spec.ProviderSpec.Value, err.Error())}
+	}
+
+	capvMachine, warnings, machineErrs := v.toVSphereMachine(vSphereProviderConfig)
+	if machineErrs != nil {
+		errs = append(errs, machineErrs...)
+	}
+
+	capiMachine, machineErrs := fromMAPIMachineToCAPIMachine(v.machine, vspherev1.GroupVersion.Group, vSphereMachineKind)
+	if machineErrs != nil {
+		errs = append(errs, machineErrs...)
+	}
+
+	// Set ProviderID if available
+	if v.machine.Spec.ProviderID != nil {
+		capvMachine.Spec.ProviderID = v.machine.Spec.ProviderID
+	}
+
+	// Set FailureDomain from MAPI machine zone label
+	// vSphere doesn't have a FailureDomain field in the provider spec, so it's stored in metadata
+	if zone, ok := v.machine.Labels[consts.MAPIMachineMetadataLabelZone]; ok && zone != "" {
+		capiMachine.Spec.FailureDomain = zone
+	}
+
+	// Plug into Core CAPI Machine fields that come from the MAPI ProviderConfig which belong here instead of the CAPI VSphereMachineTemplate.
+	if vSphereProviderConfig.UserDataSecret != nil && vSphereProviderConfig.UserDataSecret.Name != "" {
+		capiMachine.Spec.Bootstrap = clusterv1.Bootstrap{
+			DataSecretName: &vSphereProviderConfig.UserDataSecret.Name,
+		}
+	}
+
+	// Populate the CAPI Machine ClusterName from the OCP Infrastructure object
+	if v.infrastructure == nil || v.infrastructure.Status.InfrastructureName == "" {
+		errs = append(errs, field.Invalid(field.NewPath("infrastructure", "status", "infrastructureName"), v.infrastructure.Status.InfrastructureName, "infrastructure cannot be nil and infrastructure.Status.InfrastructureName cannot be empty"))
+	} else {
+		capiMachine.Spec.ClusterName = v.infrastructure.Status.InfrastructureName
+		capiMachine.Labels[clusterv1.ClusterNameLabel] = v.infrastructure.Status.InfrastructureName
+	}
+
+	// The InfraMachine should always have the same labels and annotations as the Machine.
+	// See https://github.com/kubernetes-sigs/cluster-api/blob/f88d7ae5155700c2cc367b31ddcc151c9ad579e4/internal/controllers/machineset/machineset_controller.go#L578-L579
+	capiMachineAnnotations := capiMachine.GetAnnotations()
+	if len(capiMachineAnnotations) > 0 {
+		capvMachine.SetAnnotations(capiMachineAnnotations)
+	}
+
+	capiMachineLabels := capiMachine.GetLabels()
+	if len(capiMachineLabels) > 0 {
+		capvMachine.SetLabels(capiMachineLabels)
+	}
+
+	return capiMachine, capvMachine, warnings, errs
+}
+
+// ToMachineSetAndMachineTemplate converts a mapi2capi vSphereMachineSetAndInfra into a CAPI MachineSet and CAPV vSphereMachineTemplate.
+func (v *vSphereMachineSetAndInfra) ToMachineSetAndMachineTemplate() (*clusterv1.MachineSet, client.Object, []string, error) {
+	var errors []error
+
+	// Run the full ToMachine conversion to check for errors
+	capiMachine, capvMachineObj, warning, machineErrs := v.toMachineAndInfrastructureMachine()
+	if machineErrs != nil {
+		errors = append(errors, machineErrs.ToAggregate().Errors()...)
+	}
+
+	capvMachine, ok := capvMachineObj.(*vspherev1.VSphereMachine)
+	if !ok {
+		panic(fmt.Errorf("%w: %T", errUnexpectedObjectTypeForMachine, capvMachineObj))
+	}
+
+	capvMachineTemplate, err := vSphereMachineToVSphereMachineTemplate(capvMachine, v.machineSet.Name, capiNamespace)
+	if err != nil {
+		errors = append(errors, err)
+	}
+
+	capiMachineSet, machineSetErrs := fromMAPIMachineSetToCAPIMachineSet(v.machineSet)
+	if machineSetErrs != nil {
+		errors = append(errors, machineSetErrs.Errors()...)
+	}
+
+	if capiMachine.Spec.MinReadySeconds == nil {
+		capiMachine.Spec.MinReadySeconds = capiMachineSet.Spec.Template.Spec.MinReadySeconds
+	}
+
+	capiMachineSet.Spec.Template.Spec = capiMachine.Spec
+
+	// We have to merge these two maps so that labels and annotations added to the template objectmeta are persisted
+	// along with the labels and annotations from the machine objectmeta.
+	capiMachineSet.Spec.Template.ObjectMeta.Labels = util.MergeMaps(capiMachineSet.Spec.Template.ObjectMeta.Labels, capiMachine.Labels)                //nolint:staticcheck // ObjectMeta is a field, not embedded
+	capiMachineSet.Spec.Template.ObjectMeta.Annotations = util.MergeMaps(capiMachineSet.Spec.Template.ObjectMeta.Annotations, capiMachine.Annotations) //nolint:staticcheck // ObjectMeta is a field, not embedded
+
+	// Override the reference so that it matches the VSphereMachineTemplate.
+	capiMachineSet.Spec.Template.Spec.InfrastructureRef.Kind = vSphereMachineTemplateKind
+	capiMachineSet.Spec.Template.Spec.InfrastructureRef.Name = capvMachineTemplate.Name
+
+	if v.infrastructure == nil || v.infrastructure.Status.InfrastructureName == "" {
+		errors = append(errors, field.Invalid(field.NewPath("infrastructure", "status", "infrastructureName"), v.infrastructure.Status.InfrastructureName, "infrastructure cannot be nil and infrastructure.Status.InfrastructureName cannot be empty"))
+	} else {
+		capiMachineSet.Spec.Template.Spec.ClusterName = v.infrastructure.Status.InfrastructureName
+		capiMachineSet.Spec.ClusterName = v.infrastructure.Status.InfrastructureName
+		capiMachineSet.Labels[clusterv1.ClusterNameLabel] = v.infrastructure.Status.InfrastructureName
+	}
+
+	if len(errors) > 0 {
+		return nil, nil, warning, utilerrors.NewAggregate(errors)
+	}
+
+	return capiMachineSet, capvMachineTemplate, warning, nil
+}
+
+// toVSphereMachine converts a MAPI VSphereMachineProviderConfig to a CAPI VSphereMachine.
+//
+//nolint:funlen
+func (v *vSphereMachineAndInfra) toVSphereMachine(providerSpec mapiv1beta1.VSphereMachineProviderSpec) (*vspherev1.VSphereMachine, []string, field.ErrorList) {
+	var errs field.ErrorList
+
+	fldPath := field.NewPath("spec", "providerSpec", "value")
+
+	// Convert network configuration
+	capiNetworkSpec, warnings, networkErrs := convertVSphereNetworkSpecMAPIToCAPI(fldPath.Child("network"), providerSpec.Network)
+	if len(networkErrs) > 0 {
+		errs = append(errs, networkErrs...)
+	}
+
+	// Convert data disks
+	capiDataDisks, diskErrs := convertVSphereDataDisksMAPIToCAPI(fldPath.Child("dataDisks"), providerSpec.DataDisks)
+	if len(diskErrs) > 0 {
+		errs = append(errs, diskErrs...)
+	}
+
+	// Convert clone mode
+	capiCloneMode := convertVSphereCloneModeMAPIToCAPI(providerSpec.CloneMode)
+
+	spec := vspherev1.VSphereMachineSpec{
+		VirtualMachineCloneSpec: vspherev1.VirtualMachineCloneSpec{
+			Template:          providerSpec.Template,
+			CloneMode:         capiCloneMode,
+			Snapshot:          providerSpec.Snapshot,
+			NumCPUs:           providerSpec.NumCPUs,
+			NumCoresPerSocket: providerSpec.NumCoresPerSocket,
+			MemoryMiB:         providerSpec.MemoryMiB,
+			DiskGiB:           providerSpec.DiskGiB,
+			TagIDs:            providerSpec.TagIDs,
+			Network:           capiNetworkSpec,
+			DataDisks:         capiDataDisks,
+			// Server - Set below from Workspace if present; otherwise inherited from cluster-level VSphereCluster or failure domain.
+			// Datacenter - Set below from Workspace if present; otherwise inherited from failure domain.
+			// Folder - Set below from Workspace if present; otherwise inherited from failure domain.
+			// Datastore - Set below from Workspace if present; otherwise inherited from failure domain.
+			// ResourcePool - Set below from Workspace if present; otherwise inherited from failure domain.
+			// Thumbprint - Not supported in MAPI.
+			// StoragePolicyName - Not supported in MAPI.
+			// Resources - Not supported in MAPI.
+			// AdditionalDisksGiB - Deprecated in CAPV, using DataDisks instead.
+			// CustomVMXKeys - Not supported in MAPI.
+			// PciDevices - Not supported in MAPI.
+			// OS - Not supported in MAPI.
+			// HardwareVersion - Not supported in MAPI.
+		},
+		// ProviderID - Set at a higher level in ToMachine().
+		// FailureDomain - Set at a higher level from machine.Spec.FailureDomain.
+		// PowerOffMode must be set explicitly to match CAPV's default behavior. If not set, CAPV's webhook
+		// defaults it to "hard", causing the differ to detect a spec change and trigger an infinite
+		// delete/recreate loop. MAPI has no PowerOffMode field, so "hard" matches MAPI's power-off behavior.
+		PowerOffMode: vspherev1.VirtualMachinePowerOpModeHard,
+		// GuestSoftPowerOffTimeout - Not supported in MAPI.
+		// NamingStrategy - Not supported in MAPI.
+	}
+
+	// Set workspace fields if available
+	if providerSpec.Workspace != nil {
+		spec.Server = providerSpec.Workspace.Server
+		spec.Datacenter = providerSpec.Workspace.Datacenter
+		spec.Folder = providerSpec.Workspace.Folder
+		spec.Datastore = providerSpec.Workspace.Datastore
+		spec.ResourcePool = providerSpec.Workspace.ResourcePool
+		// VMGroup - MAPI-specific field for vm-host group based zoning, not supported in CAPV.
+	}
+
+	// Unused fields - Below this line are fields not used from the MAPI VSphereMachineProviderSpec.
+
+	// TypeMeta - Only for the purpose of the raw extension, not used for any functionality.
+	// UserDataSecret - Handled at a higher level in fromMAPIMachineToCAPIMachine.
+
+	if !reflect.DeepEqual(providerSpec.ObjectMeta, metav1.ObjectMeta{}) {
+		// We don't support setting the object metadata in the provider spec.
+		// It's only present for the purpose of the raw extension and doesn't have any functionality.
+		errs = append(errs, field.Invalid(fldPath.Child("metadata"), providerSpec.ObjectMeta, "metadata is not supported"))
+	}
+
+	// Only take action when a non-default credentials secret is being used in MAPI.
+	// If the user is using the default, then their CAPV secret will already be configured and no action is necessary.
+	if providerSpec.CredentialsSecret != nil &&
+		providerSpec.CredentialsSecret.Name != DefaultVSphereCredentialsSecretName {
+		// Not convertable; need custom credential configuration
+		errs = append(errs, field.Invalid(fldPath.Child("credentialsSecret"), providerSpec.CredentialsSecret.Name, fmt.Sprintf("credentialsSecret does not match the default of %q, credentials must be configured at the cluster level", DefaultVSphereCredentialsSecretName)))
+	}
+
+	if providerSpec.Workspace != nil && providerSpec.Workspace.VMGroup != "" {
+		// VMGroup is a MAPI-specific field for vm-host group based zoning that doesn't exist in CAPV.
+		errs = append(errs, field.Invalid(fldPath.Child("workspace", "vmGroup"), providerSpec.Workspace.VMGroup, "vmGroup is not supported in Cluster API"))
+	}
+
+	capvMachineStatus, statusErrs := convertMAPIMachineStatusToVSphereMachineStatus(v.machine)
+	if len(statusErrs) > 0 {
+		errs = append(errs, statusErrs...)
+	}
+
+	return &vspherev1.VSphereMachine{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: vspherev1.GroupVersion.String(),
+			Kind:       vSphereMachineKind,
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      v.machine.Name,
+			Namespace: capiNamespace,
+		},
+		Spec:   spec,
+		Status: capvMachineStatus,
+	}, warnings, errs
+}
+
+// vSphereProviderSpecFromRawExtension unmarshals a raw extension into a VSphereMachineProviderSpec type.
+func vSphereProviderSpecFromRawExtension(rawExtension *runtime.RawExtension) (mapiv1beta1.VSphereMachineProviderSpec, error) {
+	if rawExtension == nil {
+		return mapiv1beta1.VSphereMachineProviderSpec{}, nil
+	}
+
+	spec := mapiv1beta1.VSphereMachineProviderSpec{}
+	if err := yaml.Unmarshal(rawExtension.Raw, &spec); err != nil {
+		return mapiv1beta1.VSphereMachineProviderSpec{}, fmt.Errorf("error unmarshalling providerSpec: %w", err)
+	}
+
+	return spec, nil
+}
+
+// VSphereProviderStatusFromRawExtension unmarshals a raw extension into a VSphereMachineProviderStatus.
+func VSphereProviderStatusFromRawExtension(rawExtension *runtime.RawExtension) (mapiv1beta1.VSphereMachineProviderStatus, error) {
+	if rawExtension == nil {
+		return mapiv1beta1.VSphereMachineProviderStatus{}, nil
+	}
+
+	status := mapiv1beta1.VSphereMachineProviderStatus{}
+	if err := yaml.Unmarshal(rawExtension.Raw, &status); err != nil {
+		return mapiv1beta1.VSphereMachineProviderStatus{}, fmt.Errorf("error unmarshalling providerStatus %q: %w", string(rawExtension.Raw), err)
+	}
+
+	return status, nil
+}
+
+// vSphereMachineToVSphereMachineTemplate converts a VSphereMachine to a VSphereMachineTemplate.
+func vSphereMachineToVSphereMachineTemplate(vSphereMachine *vspherev1.VSphereMachine, name string, namespace string) (*vspherev1.VSphereMachineTemplate, error) {
+	nameWithHash, err := util.GenerateInfraMachineTemplateNameWithSpecHash(name, vSphereMachine.Spec)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate infrastructure machine template name with spec hash: %w", err)
+	}
+
+	return &vspherev1.VSphereMachineTemplate{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: vspherev1.GroupVersion.String(),
+			Kind:       vSphereMachineTemplateKind,
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      nameWithHash,
+			Namespace: namespace,
+		},
+		Spec: vspherev1.VSphereMachineTemplateSpec{
+			Template: vspherev1.VSphereMachineTemplateResource{
+				Spec: vSphereMachine.Spec,
+			},
+		},
+	}, nil
+}
+
+//////// Conversion helpers
+
+// convertMAPINetworkSpecToCAPI converts MAPI NetworkSpec to CAPI NetworkSpec.
+func convertVSphereNetworkSpecMAPIToCAPI(fldPath *field.Path, mapiNetwork mapiv1beta1.NetworkSpec) (vspherev1.NetworkSpec, []string, field.ErrorList) { //nolint:unparam
+	var (
+		errs     field.ErrorList
+		warnings []string
+	)
+
+	if len(mapiNetwork.Devices) == 0 {
+		return vspherev1.NetworkSpec{
+			Devices: nil,
+		}, warnings, errs
+	}
+
+	devices := make([]vspherev1.NetworkDeviceSpec, len(mapiNetwork.Devices))
+	for i, device := range mapiNetwork.Devices {
+		devices[i] = vspherev1.NetworkDeviceSpec{
+			NetworkName: device.NetworkName,
+			DHCP4:       len(device.IPAddrs) == 0 && len(device.AddressesFromPools) == 0, // Use DHCP if no static IPs
+			Gateway4:    device.Gateway,
+			IPAddrs:     device.IPAddrs,
+			Nameservers: device.Nameservers,
+		}
+
+		// Convert AddressesFromPools: MAPI uses plural resource names, CAPI uses singular Kind names
+		//nolint:nestif // Nested complexity is acceptable for IPAM resource name mapping logic
+		if len(device.AddressesFromPools) > 0 {
+			addressesFromPools := make([]corev1.TypedLocalObjectReference, len(device.AddressesFromPools))
+			for j, pool := range device.AddressesFromPools {
+				kind := pool.Resource // fallback to resource name if mapping not found
+
+				// Skip empty APIGroup
+				if pool.Group == "" {
+					kind = pool.Resource
+				} else if groupMappings, ok := ipamResourceToKind[pool.Group]; ok {
+					// Known IPAM group - look up the Kind
+					if mappedKind, ok := groupMappings[pool.Resource]; ok {
+						kind = mappedKind
+					} else {
+						// Known IPAM group but unknown resource - warn but continue
+						warnings = append(warnings,
+							fmt.Sprintf("Unknown IPAM resource %q for group %q - using %q as Kind. "+
+								"This may not work. If you need this resource, please report it.",
+								pool.Resource, pool.Group, pool.Resource))
+					}
+				} else {
+					// Unknown IPAM group - warn but continue with resource name as Kind
+					warnings = append(warnings,
+						fmt.Sprintf("Unknown IPAM group %q - using resource name %q as Kind. "+
+							"This may not work correctly. Known IPAM groups: ipam.cluster.x-k8s.io",
+							pool.Group, pool.Resource))
+				}
+
+				addressesFromPools[j] = corev1.TypedLocalObjectReference{
+					APIGroup: &pool.Group,
+					Kind:     kind,
+					Name:     pool.Name,
+				}
+			}
+
+			devices[i].AddressesFromPools = addressesFromPools
+		}
+	}
+
+	return vspherev1.NetworkSpec{
+		Devices: devices,
+	}, warnings, errs
+}
+
+// convertMAPIDataDisksToCAPI converts MAPI DataDisks to CAPI DataDisks.
+func convertVSphereDataDisksMAPIToCAPI(fldPath *field.Path, mapiDisks []mapiv1beta1.VSphereDisk) ([]vspherev1.VSphereDisk, field.ErrorList) {
+	var (
+		errs field.ErrorList
+	)
+
+	// Return nil disks slice if empty to ensure roundtrip consistency
+	// (MAPI nil -> CAPI nil -> MAPI nil)
+	if len(mapiDisks) == 0 {
+		return nil, errs
+	}
+
+	capiDisks := make([]vspherev1.VSphereDisk, len(mapiDisks))
+	for i, disk := range mapiDisks {
+		capiDisks[i] = vspherev1.VSphereDisk{
+			Name:    disk.Name,
+			SizeGiB: disk.SizeGiB,
+		}
+
+		// Convert provisioning mode
+		switch disk.ProvisioningMode {
+		case mapiv1beta1.ProvisioningModeThin:
+			capiDisks[i].ProvisioningMode = vspherev1.ThinProvisioningMode
+		case mapiv1beta1.ProvisioningModeThick:
+			capiDisks[i].ProvisioningMode = vspherev1.ThickProvisioningMode
+		case mapiv1beta1.ProvisioningModeEagerlyZeroed:
+			capiDisks[i].ProvisioningMode = vspherev1.EagerlyZeroedProvisioningMode
+		case "":
+			// Default - no setting
+		default:
+			errs = append(errs, field.Invalid(fldPath.Index(i).Child("provisioningMode"), disk.ProvisioningMode, "unsupported provisioning mode"))
+		}
+	}
+
+	return capiDisks, errs
+}
+
+// convertVSphereCloneModeMAPIToCAPI converts MAPI vSphere CloneMode to CAPI vSphere CloneMode.
+func convertVSphereCloneModeMAPIToCAPI(mapiMode mapiv1beta1.CloneMode) vspherev1.CloneMode {
+	switch mapiMode {
+	case mapiv1beta1.FullClone:
+		return vspherev1.FullClone
+	case mapiv1beta1.LinkedClone:
+		return vspherev1.LinkedClone
+	case "":
+		// MAPI defaults to FullClone when empty, but CAPV defaults to LinkedClone.
+		// Explicitly set FullClone to match MAPI's default behavior.
+		return vspherev1.FullClone
+	default:
+		// Unknown value - default to FullClone to match MAPI's default
+		return vspherev1.FullClone
+	}
+}
+
+// convertMAPIMachineStatusToVSphereMachineStatus converts MAPI Machine status to CAPV VSphereMachine status.
+func convertMAPIMachineStatusToVSphereMachineStatus(mapiMachine *mapiv1beta1.Machine) (vspherev1.VSphereMachineStatus, field.ErrorList) {
+	var errs field.ErrorList
+
+	mapiProviderStatus, err := VSphereProviderStatusFromRawExtension(mapiMachine.Status.ProviderStatus)
+	if err != nil {
+		return vspherev1.VSphereMachineStatus{}, append(errs, field.InternalError(field.NewPath("status", "providerStatus"), err))
+	}
+
+	addresses, addressesErr := convertMAPIMachineAddressesToCAPIV1Beta1(mapiMachine.Status.Addresses)
+	if len(addressesErr) > 0 {
+		errs = append(errs, addressesErr...)
+	}
+
+	// CAPV sets Ready to true if InstanceState is "ready". Otherwise false.
+	// This matches AWS's pattern of using ProviderStatus.InstanceState as the source of truth.
+	ready := ptr.Deref(mapiProviderStatus.InstanceState, "") == consts.VSphereInstanceStateReady
+
+	s := vspherev1.VSphereMachineStatus{
+		Ready:     ready,
+		Addresses: addresses,
+		// Network: MAPI doesn't track network status, CAPV controller will populate this.
+		// Conditions are not directly convertible - MAPI uses metav1.Condition while CAPV uses clusterv1beta1.Conditions.
+		// The CAPV controller will recreate conditions based on the machine state.
+		// FailureReason: Not set here because we already set it on the Cluster API Machine from .Status.ErrorReason
+		// FailureMessage: Not set here because we already set it on the Cluster API Machine from .Status.ErrorMessage
+	}
+
+	return s, errs
+}
