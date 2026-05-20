@@ -51,9 +51,6 @@ replace (
 	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.35.3
 	k8s.io/sample-cli-plugin => k8s.io/sample-cli-plugin v0.35.3
 	k8s.io/sample-controller => k8s.io/sample-controller v0.35.3
-
-	// cluster-api-provider-vsphere v1.14.0 dependends on a cluster-api placeholder
-	sigs.k8s.io/cluster-api => sigs.k8s.io/cluster-api v1.11.5
 )
 
 require (

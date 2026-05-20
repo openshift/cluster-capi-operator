@@ -950,8 +950,8 @@ pkg.package-operator.run/boxcutter v0.13.1 h1:FvrSBnHWuf6Co+HPyxRSw2Y5mHSkUtteW8
 pkg.package-operator.run/boxcutter v0.13.1/go.mod h1:rR2jd32uNt2eml7UvlYNCpCAYIpTALDzHxaftMfgkZo=
 sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.33.0 h1:qPrZsv1cwQiFeieFlRqT627fVZ+tyfou/+S5S0H5ua0=
 sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.33.0/go.mod h1:Ve9uj1L+deCXFrPOk1LpFXqTg7LCFzFso6PA48q/XZw=
-sigs.k8s.io/cluster-api v1.11.5 h1:mKQAfB8+6l2uxtEvQ6Z5EIcTObdPNs3TL4DcJScchGo=
-sigs.k8s.io/cluster-api v1.11.5/go.mod h1:n0d6BAo8s9+KRap8Wv/IllfmwnSN5XFTWNJuq2gKNlg=
+sigs.k8s.io/cluster-api v1.12.3 h1:cuOl3fWXhlXFuQcyIH4C8i3ns8rLhtcnK+x00MVdKBs=
+sigs.k8s.io/cluster-api v1.12.3/go.mod h1:EAiTJtf/8M5eBetPwumi6t8DJJ55Ln6Fkvh2OAa7PD4=
 sigs.k8s.io/cluster-api-provider-aws/v2 v2.10.2 h1:jg4R4FGVWLU/oHMsFPoYQHCxyykvixWKKU3k+OuknlE=
 sigs.k8s.io/cluster-api-provider-aws/v2 v2.10.2/go.mod h1:pHOUXfzTJ4G5xbvEaal6tK4KqGBI/Ij2Xug4hAR1LGE=
 sigs.k8s.io/cluster-api-provider-azure v1.22.1 h1:BAzjKZR6Fzwu4oq0AwAeILT/FoyEzS/uw+tnAxoOpMo=

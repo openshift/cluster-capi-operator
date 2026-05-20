@@ -8,9 +8,6 @@ use (
 )
 
 replace (
-	// This is required to resolve a placeholder dep in CAPV
-	sigs.k8s.io/cluster-api => sigs.k8s.io/cluster-api v1.11.5
-
 	// Pin these specific provider commits until they are included in
 	// releases
 	sigs.k8s.io/cluster-api-provider-aws/v2 => sigs.k8s.io/cluster-api-provider-aws/v2 v2.10.1-0.20260311200936-f3440f3ea2f2
