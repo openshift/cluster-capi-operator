@@ -67,6 +67,7 @@ func fromMAPIMachineToCAPIMachine(mapiMachine *mapiv1beta1.Machine, apiGroup, ki
 			Deletion: clusterv1.MachineDeletionSpec{
 				NodeDeletionTimeoutSeconds: ptr.To[int32](10), // Hardcode it to the CAPI default value until this is implemented in MAPI.
 			},
+			Taints: convertMAPITaintsToCAPITaints(mapiMachine.Spec.Taints),
 		},
 		Status: capiMachineStatus,
 	}

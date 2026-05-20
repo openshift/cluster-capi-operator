@@ -24,6 +24,7 @@ import (
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/consts"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -149,6 +150,26 @@ func setMAPINodeLabelsToCAPINodeLabels(mapiNodeLabels map[string]string, capiMac
 	}
 }
 
+func convertMAPITaintsToCAPITaints(mapiTaints []corev1.Taint) []clusterv1.MachineTaint {
+	if len(mapiTaints) == 0 {
+		return nil
+	}
+
+	capiTaints := make([]clusterv1.MachineTaint, len(mapiTaints))
+
+	for i, t := range mapiTaints {
+		capiTaints[i] = clusterv1.MachineTaint{
+			Key:    t.Key,
+			Value:  t.Value,
+			Effect: t.Effect,
+			// MAPI taints are actively reconciled, which maps to Always propagation in CAPI.
+			Propagation: clusterv1.MachineTaintPropagationAlways,
+		}
+	}
+
+	return capiTaints
+}
+
 // setCAPILifecycleHookAnnotations sets the annotations that should be added to a CAPI Machine to represent the lifecycle hooks.
 func setCAPILifecycleHookAnnotations(hooks mapiv1beta1.LifecycleHooks, capiMachine *clusterv1.Machine) {
 	lifecycleAnnotations := make(map[string]string)
@@ -172,18 +193,7 @@ func setCAPILifecycleHookAnnotations(hooks mapiv1beta1.LifecycleHooks, capiMachi
 
 // handleUnsupportedMachineFields checks for fields that are not supported by CAPI and returns a list of errors.
 func handleUnsupportedMachineFields(spec mapiv1beta1.MachineSpec) field.ErrorList {
-	var errs field.ErrorList
-
-	fldPath := field.NewPath("spec")
-
-	errs = append(errs, handleUnsupportedMAPIObjectMetaFields(fldPath.Child("metadata"), spec.ObjectMeta)...)
-
-	// TODO(OCPCLOUD-2861/2899): Taints are not supported by CAPI. add support for them via CAPI BootstrapConfig + minimal bootstrap controller.
-	if len(spec.Taints) > 0 {
-		errs = append(errs, field.Invalid(fldPath.Child("taints"), spec.Taints, "taints are not currently supported"))
-	}
-
-	return errs
+	return handleUnsupportedMAPIObjectMetaFields(field.NewPath("spec").Child("metadata"), spec.ObjectMeta)
 }
 
 // handleUnsupportedMAPIObjectMetaFields checks for unsupported MAPI metadta fields and returns a list of errors
