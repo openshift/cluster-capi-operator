@@ -97,7 +97,59 @@ var _ = Describe("capi2mapi Machine conversion", func() {
 				Expect(machine.Annotations).ToNot(HaveKey(clusterv1.DeleteMachineAnnotation))
 			},
 		}),
+
+		Entry("With no taints on MAPI Machine converted from CAPI", capi2MAPIMachineConversionInput{
+			machineBuilder:   capiMachineBase,
+			expectedErrors:   []string{},
+			expectedWarnings: []string{},
+			assertion: func(machine *mapiv1beta1.Machine) {
+				Expect(machine.Spec.Taints).To(BeEmpty())
+			},
+		}),
 	)
+
+	Context("when the CAPI Machine has taints", func() {
+		It("should convert CAPI Machine taints to MAPI Machine taints", func() {
+			capiMachine := capiMachineBase.Build()
+			capiMachine.Spec.Taints = []clusterv1.MachineTaint{{
+				Key:         "key1",
+				Value:       "value1",
+				Effect:      corev1.TaintEffectNoSchedule,
+				Propagation: clusterv1.MachineTaintPropagationAlways,
+			}}
+			machine, warns, err := FromMachineAndAWSMachineAndAWSCluster(
+				capiMachine,
+				capabuilder.AWSMachine().Build(),
+				capabuilder.AWSCluster().Build(),
+			).ToMachine()
+			Expect(err).To(BeNil())
+			Expect(warns).To(BeEmpty())
+			Expect(machine.Spec.Taints).To(ConsistOf(corev1.Taint{
+				Key:    "key1",
+				Value:  "value1",
+				Effect: corev1.TaintEffectNoSchedule,
+			}))
+		})
+
+		It("should convert multiple CAPI Machine taints to MAPI Machine taints, dropping propagation", func() {
+			capiMachine := capiMachineBase.Build()
+			capiMachine.Spec.Taints = []clusterv1.MachineTaint{
+				{Key: "key1", Value: "value1", Effect: corev1.TaintEffectNoSchedule, Propagation: clusterv1.MachineTaintPropagationAlways},
+				{Key: "key2", Value: "value2", Effect: corev1.TaintEffectNoExecute, Propagation: clusterv1.MachineTaintPropagationOnInitialization},
+			}
+			machine, warns, err := FromMachineAndAWSMachineAndAWSCluster(
+				capiMachine,
+				capabuilder.AWSMachine().Build(),
+				capabuilder.AWSCluster().Build(),
+			).ToMachine()
+			Expect(err).To(BeNil())
+			Expect(warns).To(BeEmpty())
+			Expect(machine.Spec.Taints).To(ConsistOf(
+				corev1.Taint{Key: "key1", Value: "value1", Effect: corev1.TaintEffectNoSchedule},
+				corev1.Taint{Key: "key2", Value: "value2", Effect: corev1.TaintEffectNoExecute},
+			))
+		})
+	})
 })
 
 var _ = Describe("capi2mapi Machine Status Conversion", func() {
