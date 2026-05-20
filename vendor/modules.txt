@@ -3035,7 +3035,7 @@ sigs.k8s.io/apiserver-network-proxy/konnectivity-client/pkg/client
 sigs.k8s.io/apiserver-network-proxy/konnectivity-client/pkg/client/metrics
 sigs.k8s.io/apiserver-network-proxy/konnectivity-client/pkg/common/metrics
 sigs.k8s.io/apiserver-network-proxy/konnectivity-client/proto/client
-# sigs.k8s.io/cluster-api v1.12.3 => sigs.k8s.io/cluster-api v1.11.5
+# sigs.k8s.io/cluster-api v1.12.3
 ## explicit; go 1.24.0
 sigs.k8s.io/cluster-api/api/core/v1beta1
 sigs.k8s.io/cluster-api/api/core/v1beta2
@@ -3307,7 +3307,6 @@ sigs.k8s.io/structured-merge-diff/v6/value
 ## explicit; go 1.22
 sigs.k8s.io/yaml
 sigs.k8s.io/yaml/goyaml.v2
-# sigs.k8s.io/cluster-api => sigs.k8s.io/cluster-api v1.11.5
 # sigs.k8s.io/cluster-api-provider-aws/v2 => sigs.k8s.io/cluster-api-provider-aws/v2 v2.10.1-0.20260311200936-f3440f3ea2f2
 # sigs.k8s.io/cluster-api-provider-azure => sigs.k8s.io/cluster-api-provider-azure v1.22.1-0.20260313010140-0c77ca282778
 # sigs.k8s.io/cluster-api-provider-gcp => sigs.k8s.io/cluster-api-provider-gcp v1.11.0-beta.0.0.20260312083137-58abcdcc039b
