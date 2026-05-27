@@ -28,8 +28,9 @@ import (
 )
 
 const (
-	metadataFile  = "metadata.yaml"
-	manifestsFile = "manifests.yaml"
+	metadataFile             = "metadata.yaml"
+	manifestsFile            = "manifests.yaml"
+	capiOperatorManifestsDir = "capi-operator-manifests"
 
 	// AttributeKeyType is the key for the provider type attribute.
 	AttributeKeyType = providermetadata.AttributeKeyType
@@ -96,7 +97,7 @@ func ScanProviderImages(logger logr.Logger, providerImageDir string, imageRefMap
 				return nil, fmt.Errorf("%w: %s", errImageRefNotFound, subdir)
 			}
 
-			manifestsPath := filepath.Join(subdirPath, profile.Profile, manifestsFile)
+			manifestsPath := filepath.Join(subdirPath, capiOperatorManifestsDir, profile.Profile, manifestsFile)
 
 			result = append(result, ProviderImageManifests{
 				ProviderMetadata: *profile.Metadata,
@@ -156,7 +157,7 @@ type profileManifests struct {
 // Each subdirectory must contain both metadata.yaml and manifests.yaml.
 // Returns an error if no profiles are found or if any profile is incomplete.
 func discoverProfiles(dir string) ([]profileManifests, error) {
-	entries, err := os.ReadDir(dir)
+	entries, err := os.ReadDir(filepath.Join(dir, capiOperatorManifestsDir))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, errNoCapiManifests
@@ -173,7 +174,7 @@ func discoverProfiles(dir string) ([]profileManifests, error) {
 		}
 
 		profileName := entry.Name()
-		profileDir := filepath.Join(dir, profileName)
+		profileDir := filepath.Join(dir, capiOperatorManifestsDir, profileName)
 
 		profile, isProfile, err := loadProfile(profileName, profileDir)
 		if err != nil {
