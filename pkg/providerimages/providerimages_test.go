@@ -44,7 +44,7 @@ attributes:
 func writeProfile(t *testing.T, baseDir, provider, profile, metadata, manifests string) {
 	t.Helper()
 
-	profileDir := filepath.Join(baseDir, provider, profile)
+	profileDir := filepath.Join(baseDir, provider, capiOperatorManifestsDir, profile)
 	if err := os.MkdirAll(profileDir, 0o750); err != nil {
 		t.Fatalf("failed to create profile directory: %v", err)
 	}
@@ -246,7 +246,7 @@ func Test_ScanProviderImages(t *testing.T) {
 				g.Expect(manifest.OCPPlatform).To(BeEquivalentTo("aws"))
 				g.Expect(manifest.Profile).To(Equal("default"))
 				g.Expect(manifest.ImageRef).To(Equal("registry.example.com/capi-aws:v1.0.0"))
-				g.Expect(manifest.ManifestsPath).To(ContainSubstring("default/" + manifestsFile))
+				g.Expect(manifest.ManifestsPath).To(ContainSubstring(capiOperatorManifestsDir + "/default/" + manifestsFile))
 
 				content, err := os.ReadFile(manifest.ManifestsPath)
 				g.Expect(err).NotTo(HaveOccurred())
@@ -260,6 +260,29 @@ func Test_ScanProviderImages(t *testing.T) {
 
 				if err := os.MkdirAll(filepath.Join(dir, "empty-provider"), 0o750); err != nil {
 					t.Fatalf("failed to create directory: %v", err)
+				}
+			},
+			imageRefMap: map[string]string{},
+			validate: func(t *testing.T, g Gomega, result []ProviderImageManifests) {
+				t.Helper()
+				g.Expect(result).To(BeEmpty())
+			},
+		},
+		{
+			// This test covers OCPBUGS-85530, where a provider image is
+			// actually a placeholder because the provider is not built for the
+			// current architecture.
+			name: "provider without capi-operator-manifests directory is skipped",
+			setup: func(t *testing.T, dir string) {
+				t.Helper()
+
+				providerDir := filepath.Join(dir, "no-manifests-provider")
+				if err := os.MkdirAll(filepath.Join(providerDir, "some-other-dir"), 0o750); err != nil {
+					t.Fatalf("failed to create directory: %v", err)
+				}
+
+				if err := os.WriteFile(filepath.Join(providerDir, "some-file.txt"), []byte("not capi manifests"), 0o640); err != nil {
+					t.Fatalf("failed to write file: %v", err)
 				}
 			},
 			imageRefMap: map[string]string{},
@@ -393,7 +416,7 @@ func Test_ScanProviderImages(t *testing.T) {
 					"kind: ConfigMap\n",
 				)
 				// Create a non-profile subdirectory (has a file but not metadata.yaml/manifests.yaml)
-				randomDir := filepath.Join(dir, "with-random-subdir", "randomdir")
+				randomDir := filepath.Join(dir, "with-random-subdir", capiOperatorManifestsDir, "randomdir")
 				if err := os.MkdirAll(randomDir, 0o750); err != nil {
 					t.Fatalf("failed to create directory: %v", err)
 				}

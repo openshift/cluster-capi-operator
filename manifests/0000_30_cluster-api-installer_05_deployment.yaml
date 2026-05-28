@@ -62,43 +62,33 @@ spec:
           readOnly: true
         - name: provider-aws
           mountPath: /var/lib/provider-images/aws-cluster-api-controllers
-          subPath: capi-operator-manifests
           readOnly: true
         - name: provider-azure
           mountPath: /var/lib/provider-images/azure-cluster-api-controllers
-          subPath: capi-operator-manifests
           readOnly: true
         - name: provider-baremetal
           mountPath: /var/lib/provider-images/baremetal-cluster-api-controllers
-          subPath: capi-operator-manifests
           readOnly: true
         - name: provider-cluster-capi-controllers
           mountPath: /var/lib/provider-images/cluster-capi-controllers
-          subPath: capi-operator-manifests
           readOnly: true
         - name: provider-cluster-capi-operator
           mountPath: /var/lib/provider-images/cluster-capi-operator
-          subPath: capi-operator-manifests
           readOnly: true
         - name: provider-gcp
           mountPath: /var/lib/provider-images/gcp-cluster-api-controllers
-          subPath: capi-operator-manifests
           readOnly: true
         - name: provider-ibmcloud
           mountPath: /var/lib/provider-images/ibmcloud-cluster-api-controllers
-          subPath: capi-operator-manifests
           readOnly: true
         - name: provider-openstack
           mountPath: /var/lib/provider-images/openstack-cluster-api-controllers
-          subPath: capi-operator-manifests
           readOnly: true
         - name: provider-openstack-resource-controller
           mountPath: /var/lib/provider-images/openstack-resource-controller
-          subPath: capi-operator-manifests
           readOnly: true
         - name: provider-vsphere
           mountPath: /var/lib/provider-images/vsphere-cluster-api-controllers
-          subPath: capi-operator-manifests
           readOnly: true
         livenessProbe:
           httpGet:
