@@ -117,7 +117,7 @@ vsphere-cluster: ## Create a vSphere cluster for testing
 
 define ensure-home
 	@ export HOME=$${HOME:=/tmp/kubebuilder-testing}; \
-	if [ $${HOME} == "/" ]; then \
+	if [ "$${HOME}" = "/" ]; then \
 	  export HOME=/tmp/kubebuilder-testing; \
 	fi; \
 	$(1)
