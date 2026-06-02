@@ -304,7 +304,7 @@ func TestWithRequeueAfter(t *testing.T) {
 }
 
 // applyCondition builds a ClusterOperatorStatusConditionApplyConfiguration for
-// use in mergeConditions tests.
+// use in MergeConditions tests.
 func applyCondition(condType configv1.ClusterStatusConditionType, status configv1.ConditionStatus, reason, message string) *configv1apply.ClusterOperatorStatusConditionApplyConfiguration {
 	return configv1apply.ClusterOperatorStatusCondition().
 		WithType(condType).
@@ -372,7 +372,7 @@ func TestMergeConditions(t *testing.T) {
 			}
 
 			cond := applyCondition(tc.new.condType, tc.new.status, tc.new.reason, tc.new.message)
-			updated := mergeConditions(
+			updated := MergeConditions(
 				[]*configv1apply.ClusterOperatorStatusConditionApplyConfiguration{cond},
 				existing,
 			)
@@ -393,7 +393,7 @@ func TestMergeConditions(t *testing.T) {
 		cond := applyCondition("Progressing", configv1.ConditionFalse, "AsExpected", "Success")
 		g.Expect(cond.LastTransitionTime).To(BeNil())
 
-		updated := mergeConditions(
+		updated := MergeConditions(
 			[]*configv1apply.ClusterOperatorStatusConditionApplyConfiguration{cond},
 			nil,
 		)
@@ -418,7 +418,7 @@ func TestMergeConditions(t *testing.T) {
 		unchangedCond := applyCondition("Progressing", configv1.ConditionFalse, "AsExpected", "Success")
 		newCond := applyCondition("Degraded", configv1.ConditionFalse, "AsExpected", "Success")
 
-		updated := mergeConditions(
+		updated := MergeConditions(
 			[]*configv1apply.ClusterOperatorStatusConditionApplyConfiguration{unchangedCond, newCond},
 			existing,
 		)
@@ -453,7 +453,7 @@ func TestMergeConditions(t *testing.T) {
 		cond1 := applyCondition("Progressing", configv1.ConditionFalse, "AsExpected", "Success")
 		cond2 := applyCondition("Degraded", configv1.ConditionFalse, "AsExpected", "Success")
 
-		updated := mergeConditions(
+		updated := MergeConditions(
 			[]*configv1apply.ClusterOperatorStatusConditionApplyConfiguration{cond1, cond2},
 			existing,
 		)
