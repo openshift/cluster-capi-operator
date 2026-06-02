@@ -122,8 +122,10 @@ func (r *RevisionController) reconcile(ctx context.Context, log logr.Logger) ope
 		return opresult.NonRetryableError(errMaxRevisionsAllowed)
 	}
 
+	upToDate := clusterAPI.Status.CurrentRevision == apiRevisions[0].Name
+
 	// Trim old revisions if the current revision is up to date
-	if len(apiRevisions) > 0 && clusterAPI.Status.CurrentRevision == apiRevisions[0].Name {
+	if len(apiRevisions) > 0 && upToDate {
 		apiRevisions = apiRevisions[:1]
 	}
 
@@ -131,7 +133,12 @@ func (r *RevisionController) reconcile(ctx context.Context, log logr.Logger) ope
 		return opresult.Error(fmt.Errorf("writing new revision: %w", err))
 	}
 
-	return opresult.Success()
+	reconcileResult := opresult.Success()
+	if upToDate {
+		reconcileResult = reconcileResult.WithUpdateOperatorVersion(r.ReleaseVersion)
+	}
+
+	return reconcileResult
 }
 
 func (r *RevisionController) generateDesiredRevision(ctx context.Context) (revisiongenerator.RenderedRevision, *operatorstatus.ReconcileResult) {
