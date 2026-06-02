@@ -125,13 +125,13 @@ func TestSuccess(t *testing.T) {
 
 	g.Expect(result.progressing).To(Equal(partialCondition{
 		status:  configv1.ConditionFalse,
-		reason:  ReasonAsExpected,
+		reason:  ReasonAsExpected.String(),
 		message: "Success",
 	}))
 
 	g.Expect(result.available).To(HaveValue(Equal(partialCondition{
 		status:  configv1.ConditionTrue,
-		reason:  ReasonAsExpected,
+		reason:  ReasonAsExpected.String(),
 		message: "Success",
 	})))
 
@@ -148,7 +148,7 @@ func TestProgressing(t *testing.T) {
 
 	g.Expect(result.progressing).To(Equal(partialCondition{
 		status:  configv1.ConditionTrue,
-		reason:  ReasonProgressing,
+		reason:  ReasonProgressing.String(),
 		message: "installing components",
 	}))
 
@@ -163,7 +163,7 @@ func TestWaitingOnExternal(t *testing.T) {
 
 	g.Expect(result.progressing).To(Equal(partialCondition{
 		status:  configv1.ConditionTrue,
-		reason:  ReasonWaitingOnExternal,
+		reason:  ReasonWaitingOnExternal.String(),
 		message: "Waiting on infrastructure",
 	}))
 
@@ -180,7 +180,7 @@ func TestError(t *testing.T) {
 
 		g.Expect(result.progressing).To(Equal(partialCondition{
 			status:  configv1.ConditionTrue,
-			reason:  ReasonEphemeralError,
+			reason:  ReasonEphemeralError.String(),
 			message: "connection refused",
 		}))
 
@@ -198,13 +198,13 @@ func TestError(t *testing.T) {
 
 		g.Expect(result.progressing).To(Equal(partialCondition{
 			status:  configv1.ConditionFalse,
-			reason:  ReasonNonRetryableError,
+			reason:  ReasonNonRetryableError.String(),
 			message: termErr.Error(),
 		}))
 
 		g.Expect(result.available).To(HaveValue(Equal(partialCondition{
 			status:  configv1.ConditionFalse,
-			reason:  ReasonNonRetryableError,
+			reason:  ReasonNonRetryableError.String(),
 			message: termErr.Error(),
 		})))
 
@@ -220,13 +220,13 @@ func TestNonRetryableError(t *testing.T) {
 
 		g.Expect(result.progressing).To(Equal(partialCondition{
 			status:  configv1.ConditionFalse,
-			reason:  ReasonNonRetryableError,
+			reason:  ReasonNonRetryableError.String(),
 			message: "terminal error: bad config",
 		}))
 
 		g.Expect(result.available).To(HaveValue(Equal(partialCondition{
 			status:  configv1.ConditionFalse,
-			reason:  ReasonNonRetryableError,
+			reason:  ReasonNonRetryableError.String(),
 			message: "terminal error: bad config",
 		})))
 
@@ -241,13 +241,13 @@ func TestNonRetryableError(t *testing.T) {
 
 		g.Expect(result.progressing).To(Equal(partialCondition{
 			status:  configv1.ConditionFalse,
-			reason:  ReasonNonRetryableError,
+			reason:  ReasonNonRetryableError.String(),
 			message: "terminal error: already wrapped",
 		}))
 
 		g.Expect(result.available).To(HaveValue(Equal(partialCondition{
 			status:  configv1.ConditionFalse,
-			reason:  ReasonNonRetryableError,
+			reason:  ReasonNonRetryableError.String(),
 			message: "terminal error: already wrapped",
 		})))
 
@@ -477,7 +477,7 @@ func TestWriteClusterOperatorStatus(t *testing.T) {
 		{
 			Type:               "TestAvailable",
 			Status:             configv1.ConditionTrue,
-			Reason:             ReasonAsExpected,
+			Reason:             ReasonAsExpected.String(),
 			Message:            "Success",
 			LastTransitionTime: metav1.Now(),
 		},
@@ -493,42 +493,42 @@ func TestWriteClusterOperatorStatus(t *testing.T) {
 		{
 			name:            "Success writes Progressing and Available conditions",
 			result:          testResultGenerator.Success(),
-			wantProgressing: expectedCondition{configv1.ConditionFalse, ReasonAsExpected, "Success"},
-			wantAvailable:   &expectedCondition{configv1.ConditionTrue, ReasonAsExpected, "Success"},
+			wantProgressing: expectedCondition{configv1.ConditionFalse, ReasonAsExpected.String(), "Success"},
+			wantAvailable:   &expectedCondition{configv1.ConditionTrue, ReasonAsExpected.String(), "Success"},
 		},
 		{
 			name:            "Progressing without existing Available does not write Available",
 			result:          testResultGenerator.Progressing("installing components"),
-			wantProgressing: expectedCondition{configv1.ConditionTrue, ReasonProgressing, "installing components"},
+			wantProgressing: expectedCondition{configv1.ConditionTrue, ReasonProgressing.String(), "installing components"},
 			wantAvailable:   nil,
 		},
 		{
 			name:               "Progressing with existing Available preserves Available",
 			existingConditions: existingAvailable,
 			result:             testResultGenerator.Progressing("installing components"),
-			wantProgressing:    expectedCondition{configv1.ConditionTrue, ReasonProgressing, "installing components"},
-			wantAvailable:      &expectedCondition{configv1.ConditionTrue, ReasonAsExpected, "Success"},
+			wantProgressing:    expectedCondition{configv1.ConditionTrue, ReasonProgressing.String(), "installing components"},
+			wantAvailable:      &expectedCondition{configv1.ConditionTrue, ReasonAsExpected.String(), "Success"},
 		},
 		{
 			name:               "Error with existing Available preserves Available",
 			existingConditions: existingAvailable,
 			result:             testResultGenerator.Error(fmt.Errorf("connection refused")),
-			wantProgressing:    expectedCondition{configv1.ConditionTrue, ReasonEphemeralError, "connection refused"},
-			wantAvailable:      &expectedCondition{configv1.ConditionTrue, ReasonAsExpected, "Success"},
+			wantProgressing:    expectedCondition{configv1.ConditionTrue, ReasonEphemeralError.String(), "connection refused"},
+			wantAvailable:      &expectedCondition{configv1.ConditionTrue, ReasonAsExpected.String(), "Success"},
 		},
 		{
 			name:               "WaitingOnExternal with existing Available preserves Available",
 			existingConditions: existingAvailable,
 			result:             testResultGenerator.WaitingOnExternal("infrastructure"),
-			wantProgressing:    expectedCondition{configv1.ConditionTrue, ReasonWaitingOnExternal, "Waiting on infrastructure"},
-			wantAvailable:      &expectedCondition{configv1.ConditionTrue, ReasonAsExpected, "Success"},
+			wantProgressing:    expectedCondition{configv1.ConditionTrue, ReasonWaitingOnExternal.String(), "Waiting on infrastructure"},
+			wantAvailable:      &expectedCondition{configv1.ConditionTrue, ReasonAsExpected.String(), "Success"},
 		},
 		{
 			name:               "NonRetryableError explicitly sets Available=False",
 			existingConditions: existingAvailable,
 			result:             testResultGenerator.NonRetryableError(fmt.Errorf("bad config")),
-			wantProgressing:    expectedCondition{configv1.ConditionFalse, ReasonNonRetryableError, "terminal error: bad config"},
-			wantAvailable:      &expectedCondition{configv1.ConditionFalse, ReasonNonRetryableError, "terminal error: bad config"},
+			wantProgressing:    expectedCondition{configv1.ConditionFalse, ReasonNonRetryableError.String(), "terminal error: bad config"},
+			wantAvailable:      &expectedCondition{configv1.ConditionFalse, ReasonNonRetryableError.String(), "terminal error: bad config"},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -567,14 +567,14 @@ func TestWriteClusterOperatorStatus(t *testing.T) {
 			{
 				Type:               "TestProgressing",
 				Status:             configv1.ConditionFalse,
-				Reason:             ReasonAsExpected,
+				Reason:             ReasonAsExpected.String(),
 				Message:            "Success",
 				LastTransitionTime: metav1.Now(),
 			},
 			{
 				Type:               "TestAvailable",
 				Status:             configv1.ConditionTrue,
-				Reason:             ReasonAsExpected,
+				Reason:             ReasonAsExpected.String(),
 				Message:            "Success",
 				LastTransitionTime: metav1.Now(),
 			},
@@ -601,14 +601,14 @@ func TestWriteClusterOperatorStatus(t *testing.T) {
 			{
 				Type:               "TestProgressing",
 				Status:             configv1.ConditionTrue,
-				Reason:             ReasonProgressing,
+				Reason:             ReasonProgressing.String(),
 				Message:            "installing components",
 				LastTransitionTime: metav1.Now(),
 			},
 			{
 				Type:               "TestAvailable",
 				Status:             configv1.ConditionTrue,
-				Reason:             ReasonAsExpected,
+				Reason:             ReasonAsExpected.String(),
 				Message:            "Success",
 				LastTransitionTime: metav1.Now(),
 			},
