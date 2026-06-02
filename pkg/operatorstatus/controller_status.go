@@ -48,26 +48,66 @@ const (
 	// ConditionProgressingSuffix is the suffix added to a controller prefix to
 	// form the controller's progressing condition type.
 	ConditionProgressingSuffix = "Progressing"
+)
+
+//go:generate go run golang.org/x/tools/cmd/stringer -type=Reason -trimprefix=Reason
+
+// Reason is a type that represents the reason for a condition.
+type Reason int
+
+// Reasons are ordered by severity from least to most severe. When aggregating
+// reasons, only the most severe reason will be reported.
+const (
+	// ReasonUnknown is the default reason for a condition when the reason is not known.
+	// Nothing should use this.
+	ReasonUnknown Reason = iota
 
 	// ReasonAsExpected is the reason for the condition when the operator is in a normal state.
-	ReasonAsExpected = "AsExpected"
+	ReasonAsExpected
+
+	// ReasonUninitialized is the reason for the condition when the controller has not yet been initialized.
+	// This is used to indicate that the controller is not yet available.
+	ReasonUninitialized
 
 	// ReasonProgressing indicates that the controller is progressing normally.
 	// An observer should continue to wait.
-	ReasonProgressing = "Progressing"
+	ReasonProgressing
 
 	// ReasonWaitingOnExternal indicates that the controller is waiting on an external event.
 	// An observer should continue to wait.
-	ReasonWaitingOnExternal = "WaitingOnExternal"
+	ReasonWaitingOnExternal
 
 	// ReasonEphemeralError indicates that the controller encountered an ephemeral error.
 	// An observer should continue to wait.
 	// If this condition persists, the ClusterOperator will eventually enter a degraded state.
-	ReasonEphemeralError = "EphemeralError"
+	ReasonEphemeralError
 
 	// ReasonNonRetryableError indicates that the controller encountered a non-retryable error.
-	ReasonNonRetryableError = "NonRetryableError"
+	ReasonNonRetryableError
 )
+
+// ReasonFromString returns a Reason enum value from a string. It returns
+// ReasonUnknown if the string is not a valid Reason.
+func ReasonFromString(reason string) Reason {
+	switch reason {
+	case ReasonUnknown.String():
+		return ReasonUnknown
+	case ReasonAsExpected.String():
+		return ReasonAsExpected
+	case ReasonUninitialized.String():
+		return ReasonUninitialized
+	case ReasonProgressing.String():
+		return ReasonProgressing
+	case ReasonWaitingOnExternal.String():
+		return ReasonWaitingOnExternal
+	case ReasonEphemeralError.String():
+		return ReasonEphemeralError
+	case ReasonNonRetryableError.String():
+		return ReasonNonRetryableError
+	default:
+		return ReasonUnknown
+	}
+}
 
 const (
 	// OperatorVersionKey is the key used to store the operator version in the ClusterOperator status.
@@ -161,8 +201,8 @@ type ControllerResultGenerator string
 // Success returns a ReconcileResult indicating that the controller has succeeded.
 // Returning this result will not requeue the controller.
 func (c ControllerResultGenerator) Success() ReconcileResult {
-	return newReconcileResult(c, configv1.ConditionFalse, ReasonAsExpected, "Success").
-		withAvailable(configv1.ConditionTrue, ReasonAsExpected, "Success")
+	return newReconcileResult(c, configv1.ConditionFalse, ReasonAsExpected.String(), "Success").
+		withAvailable(configv1.ConditionTrue, ReasonAsExpected.String(), "Success")
 }
 
 // SuccessP is a convenience wrapper around Success that returns a pointer to the ReconcileResult.
@@ -175,7 +215,7 @@ func (c ControllerResultGenerator) SuccessP() *ReconcileResult {
 // immediately, for example after writing status to a watched resource.
 // Returning this result will not requeue the controller directly.
 func (c ControllerResultGenerator) Progressing(message string) ReconcileResult {
-	return newReconcileResult(c, configv1.ConditionTrue, ReasonProgressing, message)
+	return newReconcileResult(c, configv1.ConditionTrue, ReasonProgressing.String(), message)
 }
 
 // ProgressingP is a convenience wrapper around Progressing that returns a pointer to the ReconcileResult.
@@ -190,7 +230,7 @@ func (c ControllerResultGenerator) ProgressingP(message string) *ReconcileResult
 func (c ControllerResultGenerator) WaitingOnExternal(waitDescription string) ReconcileResult {
 	message := fmt.Sprintf("Waiting on %s", waitDescription)
 
-	return newReconcileResult(c, configv1.ConditionTrue, ReasonWaitingOnExternal, message)
+	return newReconcileResult(c, configv1.ConditionTrue, ReasonWaitingOnExternal.String(), message)
 }
 
 // WaitingOnExternalP is a convenience wrapper around WaitingOnExternal that returns a pointer to the ReconcileResult.
@@ -206,7 +246,7 @@ func (c ControllerResultGenerator) Error(err error) ReconcileResult {
 		return c.nonRetryableError(err)
 	}
 
-	return newReconcileResult(c, configv1.ConditionTrue, ReasonEphemeralError, err.Error()).
+	return newReconcileResult(c, configv1.ConditionTrue, ReasonEphemeralError.String(), err.Error()).
 		withError(err)
 }
 
@@ -233,8 +273,8 @@ func (c ControllerResultGenerator) NonRetryableErrorP(err error) *ReconcileResul
 }
 
 func (c ControllerResultGenerator) nonRetryableError(terminalErr error) ReconcileResult {
-	return newReconcileResult(c, configv1.ConditionFalse, ReasonNonRetryableError, terminalErr.Error()).
-		withAvailable(configv1.ConditionFalse, ReasonNonRetryableError, terminalErr.Error()).
+	return newReconcileResult(c, configv1.ConditionFalse, ReasonNonRetryableError.String(), terminalErr.Error()).
+		withAvailable(configv1.ConditionFalse, ReasonNonRetryableError.String(), terminalErr.Error()).
 		withError(terminalErr)
 }
 
