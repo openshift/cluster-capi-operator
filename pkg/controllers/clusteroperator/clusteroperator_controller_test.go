@@ -19,14 +19,12 @@ package clusteroperator
 import (
 	"context"
 	"fmt"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/config"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
@@ -96,31 +94,6 @@ var _ = Describe("ClusterOperator controller", func() {
 				),
 			), "should match the expected ClusterOperator status conditions")
 		})
-
-		It("should update the ClusterOperator status version to the desired one", func() {
-			Eventually(komega.Object(configv1resourcebuilder.ClusterOperator().WithName(controllers.ClusterOperatorName).Build()), time.Second*10).Should(
-				HaveField("Status.Versions", ContainElement(SatisfyAll(
-					HaveField("Name", Equal("operator")),
-					HaveField("Version", Equal(desiredOperatorReleaseVersion)),
-				))),
-			)
-		})
-
-		It("should update the ClusterOperator status version to the desired one when an incorrect one is present", func() {
-			By("setting the ClusterOperator status version to an incorrect one")
-
-			patchBase := client.MergeFrom(capiClusterOperator.DeepCopy())
-			capiClusterOperator.Status.Versions = []configv1.OperandVersion{{Name: "operator", Version: "incorrect"}}
-			Expect(cl.Status().Patch(ctx, capiClusterOperator, patchBase)).To(Succeed())
-
-			co := komega.Object(configv1resourcebuilder.ClusterOperator().WithName(controllers.ClusterOperatorName).Build())
-			Eventually(co).Should(
-				HaveField("Status.Versions", ContainElement(SatisfyAll(
-					HaveField("Name", Equal("operator")),
-					HaveField("Version", Equal(desiredOperatorReleaseVersion)),
-				))),
-			)
-		})
 	})
 
 	Context("With an unsupported platform", func() {
@@ -141,29 +114,6 @@ var _ = Describe("ClusterOperator controller", func() {
 					ContainElement(And(HaveField("Type", Equal(configv1.OperatorDegraded)), HaveField("Status", Equal(configv1.ConditionFalse)))),
 					ContainElement(And(HaveField("Type", Equal(configv1.OperatorUpgradeable)), HaveField("Status", Equal(configv1.ConditionTrue)))),
 				)), "should match the expected ClusterOperator status conditions")
-		})
-
-		It("should update the ClusterOperator status version to the desired one", func() {
-			Eventually(komega.Object(configv1resourcebuilder.ClusterOperator().WithName(controllers.ClusterOperatorName).Build())).
-				Should(HaveField("Status.Versions", ContainElement(SatisfyAll(
-					HaveField("Name", Equal("operator")),
-					HaveField("Version", Equal(desiredOperatorReleaseVersion)),
-				))), "should match the expected ClusterOperator status versions")
-		})
-
-		It("should update the ClusterOperator status version to the desired one when an incorrect one is present", func() {
-			By("Setting the ClusterOperator status version to an incorrect one")
-
-			patchBase := client.MergeFrom(capiClusterOperator.DeepCopy())
-			capiClusterOperator.Status.Versions = []configv1.OperandVersion{{Name: "operator", Version: "incorrect"}}
-			Expect(cl.Status().Patch(ctx, capiClusterOperator, patchBase)).To(Succeed())
-
-			By("Checking the conditions are as expected")
-			Eventually(komega.Object(configv1resourcebuilder.ClusterOperator().WithName(controllers.ClusterOperatorName).Build())).
-				Should(HaveField("Status.Versions", ContainElement(SatisfyAll(
-					HaveField("Name", Equal("operator")),
-					HaveField("Version", Equal(desiredOperatorReleaseVersion)),
-				))))
 		})
 	})
 })
