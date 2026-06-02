@@ -25,11 +25,15 @@ verify-%:
 	make $*
 	./hack/verify-diff.sh
 
-verify: fmt lint verify-ocp-manifests ## Run formatting and linting checks
+verify: generate fmt lint verify-ocp-manifests ## Run formatting and linting checks
 
 test: verify unit ## Run verification and unit tests
 
-build: bin/capi-operator bin/capi-controllers bin/machine-api-migration bin/crd-compatibility-checker manifests-gen ## Build all binaries
+.PHONY: generate
+generate:
+	go generate ./...
+
+build: generate bin/capi-operator bin/capi-controllers bin/machine-api-migration bin/crd-compatibility-checker manifests-gen ## Build all binaries
 
 clean:
 	rm -rf bin/*
