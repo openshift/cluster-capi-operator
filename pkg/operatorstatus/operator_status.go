@@ -174,7 +174,7 @@ func (r *ClusterOperatorStatusClient) SyncStatus(ctx context.Context, co *config
 
 // OperandVersions returns the operand versions for the ClusterOperator.
 func (r *ClusterOperatorStatusClient) OperandVersions() []configv1.OperandVersion {
-	return []configv1.OperandVersion{{Name: controllers.OperatorVersionKey, Version: r.ReleaseVersion}}
+	return []configv1.OperandVersion{{Name: OperatorVersionKey, Version: r.ReleaseVersion}}
 }
 
 // NewClusterOperatorStatusCondition creates a new ClusterOperatorStatusCondition.
