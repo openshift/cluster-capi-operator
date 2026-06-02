@@ -50,6 +50,11 @@ const (
 	ConditionProgressingSuffix = "Progressing"
 )
 
+const (
+	// OperatorVersionKey is the key used to store the operator version in the ClusterOperator status.
+	OperatorVersionKey = "operator"
+)
+
 //go:generate go run golang.org/x/tools/cmd/stringer -type=Reason -trimprefix=Reason
 
 // Reason is a type that represents the reason for a condition.
@@ -108,11 +113,6 @@ func ReasonFromString(reason string) Reason {
 		return ReasonUnknown
 	}
 }
-
-const (
-	// OperatorVersionKey is the key used to store the operator version in the ClusterOperator status.
-	OperatorVersionKey = "operator"
-)
 
 // CAPIFieldOwner returns a qualifiedclient.FieldOwner for the given qualifier.
 // The qualifier should identify the writer in the context of the CAPI operator,
@@ -280,13 +280,14 @@ func (c ControllerResultGenerator) nonRetryableError(terminalErr error) Reconcil
 
 func (c ControllerResultGenerator) condition(condType string, status configv1.ConditionStatus, reason, message string) *configv1apply.ClusterOperatorStatusConditionApplyConfiguration {
 	return configv1apply.ClusterOperatorStatusCondition().
-		WithType(c.conditionType(condType)).
+		WithType(c.SubConditionType(condType)).
 		WithStatus(status).
 		WithReason(reason).
 		WithMessage(message)
 }
 
-func (c ControllerResultGenerator) conditionType(condType string) configv1.ClusterStatusConditionType {
+// SubConditionType returns the ClusterStatusConditionType for the given condition type.
+func (c ControllerResultGenerator) SubConditionType(condType string) configv1.ClusterStatusConditionType {
 	return configv1.ClusterStatusConditionType(string(c) + condType)
 }
 
@@ -307,7 +308,7 @@ func (r *ReconcileResult) WriteClusterOperatorStatus(ctx context.Context, log lo
 	clusterOperatorApplyConfig = clusterOperatorApplyConfig.WithUID(co.UID)
 
 	conditions := r.constructPartialConditions(co)
-	conditionsUpdated := mergeConditions(conditions, co.Status.Conditions)
+	conditionsUpdated := MergeConditions(conditions, co.Status.Conditions)
 
 	releaseVersionNeedsUpdate := false
 	if r.operatorVersion != "" {
@@ -389,7 +390,7 @@ func (r *ReconcileResult) constructPartialConditions(co *configv1.ClusterOperato
 	} else {
 		// Infer Available condition from existing state, don't write if not
 		// already present
-		currentAvailable := findClusterOperatorCondition(r.conditionType(ConditionAvailableSuffix), co.Status.Conditions)
+		currentAvailable := findClusterOperatorCondition(r.SubConditionType(ConditionAvailableSuffix), co.Status.Conditions)
 		if currentAvailable != nil {
 			conditions = append(conditions, r.condition(ConditionAvailableSuffix, currentAvailable.Status, currentAvailable.Reason, currentAvailable.Message))
 		}
@@ -408,10 +409,10 @@ func findClusterOperatorCondition(condType configv1.ClusterStatusConditionType, 
 	return nil
 }
 
-// mergeConditions sets LastTransitionTime on each new condition based on the
+// MergeConditions sets LastTransitionTime on each new condition based on the
 // existing conditions. If a condition's Status/Reason/Message are unchanged,
 // LastTransitionTime is preserved from the existing condition.
-func mergeConditions(newConditions []*configv1apply.ClusterOperatorStatusConditionApplyConfiguration, existingConditions []configv1.ClusterOperatorStatusCondition) bool {
+func MergeConditions(newConditions []*configv1apply.ClusterOperatorStatusConditionApplyConfiguration, existingConditions []configv1.ClusterOperatorStatusCondition) bool {
 	now := metav1.Now()
 
 	updated := false
