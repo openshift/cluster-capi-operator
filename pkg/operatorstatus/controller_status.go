@@ -41,6 +41,14 @@ const (
 	// server-side apply operations by the CAPI operator.
 	CAPIOperatorIdentifierDomain = "capi-operator.openshift.io"
 
+	// ConditionAvailableSuffix is the suffix added to a controller prefix to
+	// form the controller's available condition type.
+	ConditionAvailableSuffix = "Available"
+
+	// ConditionProgressingSuffix is the suffix added to a controller prefix to
+	// form the controller's progressing condition type.
+	ConditionProgressingSuffix = "Progressing"
+
 	// ReasonAsExpected is the reason for the condition when the operator is in a normal state.
 	ReasonAsExpected = "AsExpected"
 
@@ -59,14 +67,11 @@ const (
 
 	// ReasonNonRetryableError indicates that the controller encountered a non-retryable error.
 	ReasonNonRetryableError = "NonRetryableError"
+)
 
-	// ConditionAvailableSuffix is the suffix added to a controller prefix to
-	// form the controller's available condition type.
-	ConditionAvailableSuffix = "Available"
-
-	// ConditionProgressingSuffix is the suffix added to a controller prefix to
-	// form the controller's progressing condition type.
-	ConditionProgressingSuffix = "Progressing"
+const (
+	// OperatorVersionKey is the key used to store the operator version in the ClusterOperator status.
+	OperatorVersionKey = "operator"
 )
 
 // CAPIFieldOwner returns a qualifiedclient.FieldOwner for the given qualifier.
@@ -95,6 +100,10 @@ type ReconcileResult struct {
 	// current state if not set explicitly
 	available *partialCondition
 
+	// if operatorVersion is set, we will update the ClusterOperator operator
+	// version to this value when writing status
+	operatorVersion string
+
 	err          error
 	requeueAfter time.Duration
 }
@@ -115,6 +124,13 @@ func (r ReconcileResult) withAvailable(status configv1.ConditionStatus, reason, 
 
 func (r ReconcileResult) withError(err error) ReconcileResult {
 	r.err = err
+	return r
+}
+
+// WithUpdateOperatorVersion causes the reconcile result to also update the
+// operator version when writing status to the ClusterOperator.
+func (r ReconcileResult) WithUpdateOperatorVersion(operatorVersion string) ReconcileResult {
+	r.operatorVersion = operatorVersion
 	return r
 }
 
@@ -242,6 +258,65 @@ func (r *ReconcileResult) WriteClusterOperatorStatus(ctx context.Context, log lo
 		return fmt.Errorf("failed to get ClusterOperator: %w", err)
 	}
 
+	// Extract currently managed fields. This ensures that we preserve operator version if we're not updating it.
+	clusterOperatorApplyConfig, err := configv1apply.ExtractClusterOperatorStatus(co, string(CAPIFieldOwner(r.ControllerResultGenerator)))
+	if err != nil {
+		return fmt.Errorf("failed to extract ClusterOperator apply configuration: %w", err)
+	}
+
+	clusterOperatorApplyConfig = clusterOperatorApplyConfig.WithUID(co.UID)
+
+	conditions := r.constructPartialConditions(co)
+	conditionsUpdated := mergeConditions(conditions, co.Status.Conditions)
+
+	releaseVersionNeedsUpdate := false
+	if r.operatorVersion != "" {
+		releaseVersionNeedsUpdate = func() bool {
+			for _, version := range co.Status.Versions {
+				if version.Name == OperatorVersionKey {
+					return version.Version != r.operatorVersion
+				}
+			}
+
+			return true
+		}()
+	}
+
+	if !conditionsUpdated && !releaseVersionNeedsUpdate {
+		return nil
+	}
+
+	status := clusterOperatorApplyConfig.Status
+	if status == nil {
+		status = configv1apply.ClusterOperatorStatus()
+	}
+
+	// Clear previously extracted conditions to avoid duplicates, as
+	// WithConditions appends to the existing slice.
+	status.Conditions = nil
+
+	status = status.WithConditions(conditions...)
+	if r.operatorVersion != "" {
+		// Clear previously extracted versions to avoid duplicates, as
+		// WithVersions appends to the existing slice.
+		status.Versions = nil
+		status = status.WithVersions(
+			configv1apply.OperandVersion().
+				WithName(OperatorVersionKey).
+				WithVersion(r.operatorVersion))
+	}
+
+	patch := util.ApplyConfigPatch(clusterOperatorApplyConfig.WithStatus(status))
+	if err := k8sclient.Status().Patch(ctx, co, patch, CAPIFieldOwner(r.ControllerResultGenerator), client.ForceOwnership); err != nil {
+		return fmt.Errorf("failed to patch ClusterOperator status: %w", err)
+	}
+
+	return nil
+}
+
+// constructPartialConditions returns a set of condition apply configurations
+// for the ReconcileResult. They do not yet have LastTransitionTime set.
+func (r *ReconcileResult) constructPartialConditions(co *configv1.ClusterOperator) []*configv1apply.ClusterOperatorStatusConditionApplyConfiguration {
 	// The following behaviours are intended to implement the semantics of
 	// - configv1.ClusterOperatorStatusAvailable
 	// - configv1.ClusterOperatorStatusProgressing
@@ -264,7 +339,6 @@ func (r *ReconcileResult) WriteClusterOperatorStatus(ctx context.Context, log lo
 	// administrator's intervention. Currently we set it for non-retryable
 	// errors. Otherwise we copy the previous state of the Available condition
 	// if it exists.
-
 	conditions := []*configv1apply.ClusterOperatorStatusConditionApplyConfiguration{
 		r.condition(ConditionProgressingSuffix, r.progressing.status, r.progressing.reason, r.progressing.message),
 	}
@@ -281,22 +355,7 @@ func (r *ReconcileResult) WriteClusterOperatorStatus(ctx context.Context, log lo
 		}
 	}
 
-	updated := mergeConditions(conditions, co.Status.Conditions)
-	if !updated {
-		return nil
-	}
-
-	clusterOperatorApplyConfig := configv1apply.ClusterOperator(ClusterOperatorName).
-		WithUID(co.UID).
-		WithStatus(configv1apply.ClusterOperatorStatus().
-			WithConditions(conditions...))
-
-	patch := util.ApplyConfigPatch(clusterOperatorApplyConfig)
-	if err := k8sclient.Status().Patch(ctx, co, patch, CAPIFieldOwner(r.ControllerResultGenerator), client.ForceOwnership); err != nil {
-		return fmt.Errorf("failed to patch ClusterOperator status: %w", err)
-	}
-
-	return nil
+	return conditions
 }
 
 func findClusterOperatorCondition(condType configv1.ClusterStatusConditionType, conditions []configv1.ClusterOperatorStatusCondition) *configv1.ClusterOperatorStatusCondition {

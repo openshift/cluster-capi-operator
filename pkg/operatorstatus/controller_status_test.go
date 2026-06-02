@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
@@ -27,16 +28,96 @@ import (
 	configv1 "github.com/openshift/api/config/v1"
 	configv1apply "github.com/openshift/client-go/config/applyconfigurations/config/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
+	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+
+	"github.com/openshift/cluster-capi-operator/pkg/test"
+	"github.com/openshift/cluster-capi-operator/pkg/util"
+)
+
+var (
+	testEnv *envtest.Environment
+	cl      client.WithWatch
 )
 
 const testResultGenerator ControllerResultGenerator = "Test"
+const defaultReleaseVersion = "1.0.0"
+
+func TestMain(m *testing.M) {
+	code, err := runTests(m)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
+	}
+
+	os.Exit(code)
+}
+
+func runTests(m *testing.M) (_ int, err error) {
+	testEnv = &envtest.Environment{}
+
+	_, cl, err = test.StartEnvTest(testEnv)
+	if err != nil {
+		return 1, fmt.Errorf("failed to start envtest: %w", err)
+	}
+
+	defer func() { err = errors.Join(err, testEnv.Stop()) }()
+
+	return m.Run(), nil
+}
+
+// createClusterOperator creates a ClusterOperator in the envtest API server
+// and optionally sets initial status conditions via a status update. It
+// registers a cleanup function to delete the object when the test completes.
+func createClusterOperator(t *testing.T, conditions []configv1.ClusterOperatorStatusCondition) *configv1.ClusterOperator {
+	t.Helper()
+	g := NewWithT(t)
+
+	co := &configv1.ClusterOperator{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: ClusterOperatorName,
+		},
+	}
+
+	g.Expect(cl.Create(t.Context(), co)).To(Succeed())
+	t.Cleanup(func() {
+		g.Expect(client.IgnoreNotFound(cl.Delete(context.Background(), co))).To(Succeed())
+	})
+
+	if len(conditions) > 0 {
+		co.Status.Conditions = conditions
+		g.Expect(cl.Status().Update(t.Context(), co)).To(Succeed())
+	}
+
+	return co
+}
+
+// seedOperatorVersion performs an SSA status patch to set status.versions on
+// the ClusterOperator under the given field owner. This establishes field
+// ownership naturally through the API server's managed fields tracker.
+func seedOperatorVersion(ctx context.Context, k8sClient client.Client, fieldOwner client.FieldOwner) error {
+	co := &configv1.ClusterOperator{}
+	if err := k8sClient.Get(ctx, client.ObjectKey{Name: ClusterOperatorName}, co); err != nil {
+		return err
+	}
+
+	applyConfig := configv1apply.ClusterOperator(ClusterOperatorName).
+		WithUID(co.UID).
+		WithStatus(configv1apply.ClusterOperatorStatus().
+			WithVersions(
+				configv1apply.OperandVersion().
+					WithName(OperatorVersionKey).
+					WithVersion(defaultReleaseVersion),
+			),
+		)
+
+	patch := util.ApplyConfigPatch(applyConfig)
+
+	return k8sClient.Status().Patch(ctx, co, patch, fieldOwner, client.ForceOwnership)
+}
 
 func TestSuccess(t *testing.T) {
 	g := NewWithT(t)
@@ -383,19 +464,6 @@ func TestMergeConditions(t *testing.T) {
 	})
 }
 
-func newFakeClient(objs ...client.Object) client.WithWatch {
-	scheme := runtime.NewScheme()
-	if err := configv1.AddToScheme(scheme); err != nil {
-		panic(err)
-	}
-
-	return fake.NewClientBuilder().
-		WithScheme(scheme).
-		WithObjects(objs...).
-		WithStatusSubresource(&configv1.ClusterOperator{}).
-		Build()
-}
-
 func TestWriteClusterOperatorStatus(t *testing.T) {
 	log := testr.New(t)
 
@@ -466,17 +534,7 @@ func TestWriteClusterOperatorStatus(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			g := NewWithT(t)
 
-			co := &configv1.ClusterOperator{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: ClusterOperatorName,
-					UID:  types.UID("test-uid"),
-				},
-				Status: configv1.ClusterOperatorStatus{
-					Conditions: tc.existingConditions,
-				},
-			}
-
-			cl := newFakeClient(co)
+			co := createClusterOperator(t, tc.existingConditions)
 
 			result := tc.result
 			err := result.WriteClusterOperatorStatus(t.Context(), log, cl)
@@ -505,33 +563,25 @@ func TestWriteClusterOperatorStatus(t *testing.T) {
 	t.Run("skips patch when conditions unchanged", func(t *testing.T) {
 		g := NewWithT(t)
 
-		co := &configv1.ClusterOperator{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: ClusterOperatorName,
-				UID:  types.UID("test-uid"),
+		createClusterOperator(t, []configv1.ClusterOperatorStatusCondition{
+			{
+				Type:               "TestProgressing",
+				Status:             configv1.ConditionFalse,
+				Reason:             ReasonAsExpected,
+				Message:            "Success",
+				LastTransitionTime: metav1.Now(),
 			},
-			Status: configv1.ClusterOperatorStatus{
-				Conditions: []configv1.ClusterOperatorStatusCondition{
-					{
-						Type:               "TestProgressing",
-						Status:             configv1.ConditionFalse,
-						Reason:             ReasonAsExpected,
-						Message:            "Success",
-						LastTransitionTime: metav1.Now(),
-					},
-					{
-						Type:               "TestAvailable",
-						Status:             configv1.ConditionTrue,
-						Reason:             ReasonAsExpected,
-						Message:            "Success",
-						LastTransitionTime: metav1.Now(),
-					},
-				},
+			{
+				Type:               "TestAvailable",
+				Status:             configv1.ConditionTrue,
+				Reason:             ReasonAsExpected,
+				Message:            "Success",
+				LastTransitionTime: metav1.Now(),
 			},
-		}
+		})
 
 		patchCalled := false
-		cl := interceptor.NewClient(newFakeClient(co), interceptor.Funcs{
+		interceptCl := interceptor.NewClient(cl, interceptor.Funcs{
 			SubResourcePatch: func(ctx context.Context, c client.Client, subResourceName string, obj client.Object, patch client.Patch, opts ...client.SubResourcePatchOption) error {
 				patchCalled = true
 				return c.SubResource(subResourceName).Patch(ctx, obj, patch, opts...)
@@ -539,7 +589,7 @@ func TestWriteClusterOperatorStatus(t *testing.T) {
 		})
 
 		result := testResultGenerator.Success()
-		err := result.WriteClusterOperatorStatus(t.Context(), log, cl)
+		err := result.WriteClusterOperatorStatus(t.Context(), log, interceptCl)
 		g.Expect(err).ToNot(HaveOccurred())
 		g.Expect(patchCalled).To(BeFalse())
 	})
@@ -547,33 +597,25 @@ func TestWriteClusterOperatorStatus(t *testing.T) {
 	t.Run("patches when conditions changed", func(t *testing.T) {
 		g := NewWithT(t)
 
-		co := &configv1.ClusterOperator{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: ClusterOperatorName,
-				UID:  types.UID("test-uid"),
+		createClusterOperator(t, []configv1.ClusterOperatorStatusCondition{
+			{
+				Type:               "TestProgressing",
+				Status:             configv1.ConditionTrue,
+				Reason:             ReasonProgressing,
+				Message:            "installing components",
+				LastTransitionTime: metav1.Now(),
 			},
-			Status: configv1.ClusterOperatorStatus{
-				Conditions: []configv1.ClusterOperatorStatusCondition{
-					{
-						Type:               "TestProgressing",
-						Status:             configv1.ConditionTrue,
-						Reason:             ReasonProgressing,
-						Message:            "installing components",
-						LastTransitionTime: metav1.Now(),
-					},
-					{
-						Type:               "TestAvailable",
-						Status:             configv1.ConditionTrue,
-						Reason:             ReasonAsExpected,
-						Message:            "Success",
-						LastTransitionTime: metav1.Now(),
-					},
-				},
+			{
+				Type:               "TestAvailable",
+				Status:             configv1.ConditionTrue,
+				Reason:             ReasonAsExpected,
+				Message:            "Success",
+				LastTransitionTime: metav1.Now(),
 			},
-		}
+		})
 
 		patchCalled := false
-		cl := interceptor.NewClient(newFakeClient(co), interceptor.Funcs{
+		interceptCl := interceptor.NewClient(cl, interceptor.Funcs{
 			SubResourcePatch: func(ctx context.Context, c client.Client, subResourceName string, obj client.Object, patch client.Patch, opts ...client.SubResourcePatchOption) error {
 				patchCalled = true
 				return c.SubResource(subResourceName).Patch(ctx, obj, patch, opts...)
@@ -581,7 +623,7 @@ func TestWriteClusterOperatorStatus(t *testing.T) {
 		})
 
 		result := testResultGenerator.Success()
-		err := result.WriteClusterOperatorStatus(t.Context(), log, cl)
+		err := result.WriteClusterOperatorStatus(t.Context(), log, interceptCl)
 		g.Expect(err).ToNot(HaveOccurred())
 		g.Expect(patchCalled).To(BeTrue())
 	})
@@ -589,13 +631,87 @@ func TestWriteClusterOperatorStatus(t *testing.T) {
 	t.Run("returns error when ClusterOperator not found", func(t *testing.T) {
 		g := NewWithT(t)
 
-		// No ClusterOperator seeded
-		cl := newFakeClient()
-
+		// No ClusterOperator created.
 		result := testResultGenerator.Success()
 		err := result.WriteClusterOperatorStatus(t.Context(), log, cl)
 		g.Expect(err).To(HaveOccurred())
 		g.Expect(err.Error()).To(ContainSubstring("failed to get ClusterOperator"))
+	})
+
+	t.Run("does not update versions with a different field owner when WithUpdateOperatorVersion is not set", func(t *testing.T) {
+		g := NewWithT(t)
+
+		co := createClusterOperator(t, nil)
+
+		// Seed a version under a different field owner.
+		g.Expect(seedOperatorVersion(t.Context(), cl, client.FieldOwner("other-owner"))).To(Succeed())
+
+		// Write status without WithUpdateOperatorVersion.
+		result := testResultGenerator.Success()
+		g.Expect(result.WriteClusterOperatorStatus(t.Context(), log, cl)).To(Succeed())
+
+		g.Expect(cl.Get(t.Context(), client.ObjectKeyFromObject(co), co)).To(Succeed())
+		g.Expect(co.Status.Versions).To(ContainElement(SatisfyAll(
+			HaveField("Name", Equal(OperatorVersionKey)),
+			HaveField("Version", Equal(defaultReleaseVersion)),
+		)))
+	})
+
+	t.Run("does not update versions with same field owner when WithUpdateOperatorVersion is not set", func(t *testing.T) {
+		g := NewWithT(t)
+
+		co := createClusterOperator(t, nil)
+
+		// Seed a version under the same field owner as the code under test.
+		g.Expect(seedOperatorVersion(t.Context(), cl, CAPIFieldOwner(testResultGenerator))).To(Succeed())
+
+		// Write status without WithUpdateOperatorVersion.
+		result := testResultGenerator.Success()
+		g.Expect(result.WriteClusterOperatorStatus(t.Context(), log, cl)).To(Succeed())
+
+		g.Expect(cl.Get(t.Context(), client.ObjectKeyFromObject(co), co)).To(Succeed())
+		g.Expect(co.Status.Versions).To(ContainElement(SatisfyAll(
+			HaveField("Name", Equal(OperatorVersionKey)),
+			HaveField("Version", Equal(defaultReleaseVersion)),
+		)))
+	})
+
+	t.Run("overwrites versions with a different field owner when WithUpdateOperatorVersion is set", func(t *testing.T) {
+		g := NewWithT(t)
+
+		co := createClusterOperator(t, nil)
+
+		// Seed a version under a different field owner.
+		g.Expect(seedOperatorVersion(t.Context(), cl, client.FieldOwner("other-owner"))).To(Succeed())
+
+		// Write status with WithUpdateOperatorVersion to a new version.
+		result := testResultGenerator.Success().WithUpdateOperatorVersion("2.0.0")
+		g.Expect(result.WriteClusterOperatorStatus(t.Context(), log, cl)).To(Succeed())
+
+		g.Expect(cl.Get(t.Context(), client.ObjectKeyFromObject(co), co)).To(Succeed())
+		g.Expect(co.Status.Versions).To(ContainElement(SatisfyAll(
+			HaveField("Name", Equal(OperatorVersionKey)),
+			HaveField("Version", Equal("2.0.0")),
+		)))
+	})
+
+	t.Run("overwrites versions with same field owner when WithUpdateOperatorVersion is set", func(t *testing.T) {
+		g := NewWithT(t)
+
+		co := createClusterOperator(t, nil)
+
+		// Seed a version under the same field owner as the code under test.
+		g.Expect(seedOperatorVersion(t.Context(), cl, CAPIFieldOwner(testResultGenerator))).To(Succeed())
+
+		// Write status with WithUpdateOperatorVersion to a new version.
+		result := testResultGenerator.Success().WithUpdateOperatorVersion("2.0.0")
+		g.Expect(result.WriteClusterOperatorStatus(t.Context(), log, cl)).To(Succeed())
+
+		g.Expect(cl.Get(t.Context(), client.ObjectKeyFromObject(co), co)).To(Succeed())
+		g.Expect(co.Status.Versions).To(ConsistOf(SatisfyAll(
+			HaveField("Name", Equal(OperatorVersionKey)),
+			HaveField("Version", Equal("2.0.0")),
+		)))
 	})
 }
 
