@@ -31,9 +31,6 @@ const (
 	// DefaultOperatorNamespace is the default namespace used for operator resources.
 	DefaultOperatorNamespace = "openshift-cluster-api-operator"
 
-	// OperatorVersionKey is the key used to store the operator version in the ClusterOperator status.
-	OperatorVersionKey = "operator"
-
 	// ClusterOperatorName is the name of the ClusterOperator resource.
 	ClusterOperatorName = "cluster-api"
 
