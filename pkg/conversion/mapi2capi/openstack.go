@@ -344,6 +344,7 @@ func convertMAPOCloudNameSecretToCAPO(mapoCloudName string, mapoCloudSecret *cor
 	}
 
 	capoCloudSecret := &openstackv1.OpenStackIdentityReference{
+		Type:      "Secret",
 		Name:      mapoCloudSecret.Name,
 		CloudName: mapoCloudName,
 	}
