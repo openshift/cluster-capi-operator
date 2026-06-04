@@ -1,0 +1,80 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: capi-installer
+  annotations:
+    config.openshift.io/inject-proxy: capi-installer
+  labels:
+    k8s-app: capi-installer
+spec:
+  selector:
+    matchLabels:
+      k8s-app: capi-installer
+  replicas: 1
+  template:
+    metadata:
+      annotations:
+        target.workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
+        openshift.io/required-scc: restricted-v2
+      labels:
+        k8s-app: capi-installer
+    spec:
+      serviceAccountName: capi-installer
+      containers:
+      - name: capi-installer
+        command:
+        - /capi-installer
+        args:
+        - --diagnostics-address=:8443
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        ports:
+        - containerPort: 9440
+          name: health
+          protocol: TCP
+        - containerPort: 8443
+          name: diagnostics
+          protocol: TCP
+        resources:
+          requests:
+            cpu: 10m
+            memory: 50Mi
+        terminationMessagePolicy: FallbackToLogsOnError
+        volumeMounts:
+        - name: metrics-cert
+          mountPath: /tmp/k8s-metrics-server/serving-certs
+          readOnly: true
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 9440
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 9440
+          initialDelaySeconds: 5
+          periodSeconds: 10
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: ""
+      restartPolicy: Always
+      tolerations:
+      - key: "node-role.kubernetes.io/master"
+        operator: "Exists"
+        effect: "NoSchedule"
+      - key: "node-role.kubernetes.io/control-plane"
+        operator: "Exists"
+        effect: "NoSchedule"
+      volumes:
+      - name: metrics-cert
+        secret:
+          defaultMode: 420
+          secretName: capi-installer-metrics-tls

@@ -28,7 +28,7 @@ import (
 func TestStaticRelatedObjectsMatchManifest(t *testing.T) {
 	// This test ensures that staticRelatedObjects() and the ClusterOperator
 	// manifest do not drift.
-	data, err := os.ReadFile("../../../manifests/0000_30_cluster-api_12_clusteroperator.yaml")
+	data, err := os.ReadFile("../../../manifests/0000_30_cluster-api-operator_08_clusteroperator.yaml")
 	if err != nil {
 		t.Fatalf("reading ClusterOperator manifest: %v", err)
 	}

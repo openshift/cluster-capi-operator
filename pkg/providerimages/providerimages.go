@@ -16,14 +16,18 @@ limitations under the License.
 package providerimages
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/go-logr/logr"
 	"github.com/openshift/cluster-capi-operator/manifests-gen/providermetadata"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/yaml"
 )
 
@@ -31,6 +35,8 @@ const (
 	metadataFile             = "metadata.yaml"
 	manifestsFile            = "manifests.yaml"
 	capiOperatorManifestsDir = "capi-operator-manifests"
+	// ProviderImageMountBase is the base path where provider image volumes are mounted.
+	ProviderImageMountBase = "/var/lib/provider-images"
 
 	// AttributeKeyType is the key for the provider type attribute.
 	AttributeKeyType = providermetadata.AttributeKeyType
@@ -55,28 +61,32 @@ var (
 	errNoCapiManifests   = errors.New("no capi-manifests directory found")
 	errMissingMetadata   = errors.New("missing metadata.yaml in /capi-operator-manifests")
 	errMissingManifests  = errors.New("missing manifests.yaml in /capi-operator-manifests")
-	errImageRefNotFound  = errors.New("image ref not found for provider")
 	errContainerNotFound = errors.New("container not found in pod spec")
 )
 
 // ScanProviderImages scans providerImageDir for subdirectories containing
 // provider profiles (metadata.yaml + manifests.yaml). imageRefMap maps
-// subdirectory names to image references (built from the pod spec).
+// expected subdirectory names to image references.
 func ScanProviderImages(logger logr.Logger, providerImageDir string, imageRefMap map[string]string) ([]ProviderImageManifests, error) {
-	entries, err := os.ReadDir(providerImageDir)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read provider image directory %s: %w", providerImageDir, err)
-	}
-
 	var result []ProviderImageManifests
 
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
+	for _, subdir := range sets.List(sets.KeySet(imageRefMap)) {
+		subdirPath := filepath.Join(providerImageDir, subdir)
+
+		info, err := os.Stat(subdirPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				logger.Info("Skipping provider directory: expected directory does not exist", "directory", subdir)
+				continue
+			}
+
+			return nil, fmt.Errorf("failed to stat provider image directory %s: %w", subdirPath, err)
 		}
 
-		subdir := entry.Name()
-		subdirPath := filepath.Join(providerImageDir, subdir)
+		if !info.IsDir() {
+			logger.Info("Skipping provider directory: expected path is not a directory", "directory", subdir)
+			continue
+		}
 
 		profiles, err := discoverProfiles(subdirPath)
 		if err != nil {
@@ -91,12 +101,6 @@ func ScanProviderImages(logger logr.Logger, providerImageDir string, imageRefMap
 		imageRef := imageRefMap[subdir]
 
 		for _, profile := range profiles {
-			// If the provider has profiles but no image ref, return an error
-			// instead of a provider with an empty image ref.
-			if imageRef == "" {
-				return nil, fmt.Errorf("%w: %s", errImageRefNotFound, subdir)
-			}
-
 			manifestsPath := filepath.Join(subdirPath, capiOperatorManifestsDir, profile.Profile, manifestsFile)
 
 			result = append(result, ProviderImageManifests{
@@ -109,6 +113,18 @@ func ScanProviderImages(logger logr.Logger, providerImageDir string, imageRefMap
 	}
 
 	return result, nil
+}
+
+// BuildImageRefMapFromRefs builds a mapping from expected mount subdirectory
+// names to image references.
+func BuildImageRefMapFromRefs(imageRefs sets.Set[string]) map[string]string {
+	imageRefMap := make(map[string]string, imageRefs.Len())
+
+	for _, imageRef := range sets.List(imageRefs) {
+		imageRefMap[VolumeNameForImageRef(imageRef)] = imageRef
+	}
+
+	return imageRefMap
 }
 
 // BuildImageRefMap builds a mapping from mount subdirectory names to image
@@ -144,6 +160,39 @@ func BuildImageRefMap(podSpec corev1.PodSpec, containerName string) (map[string]
 	}
 
 	return nil, fmt.Errorf("container %q: %w", containerName, errContainerNotFound)
+}
+
+// VolumeNameForImageRef generates a deterministic, DNS-label-safe volume name
+// from an image reference. The volume name consists of a prefix derived from
+// the image name and a short hash of the full image reference.
+func VolumeNameForImageRef(imageRef string) string {
+	parts := strings.Split(imageRef, "@")
+	if len(parts) == 0 {
+		parts = []string{imageRef}
+	}
+
+	pathParts := strings.Split(parts[0], "/")
+	imageName := pathParts[len(pathParts)-1]
+
+	imageName = strings.ToLower(imageName)
+	imageName = strings.Map(func(r rune) rune {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' {
+			return r
+		}
+
+		return '-'
+	}, imageName)
+
+	hash := sha256.Sum256([]byte(imageRef))
+	shortHash := hex.EncodeToString(hash[:])[:8]
+
+	volumeName := fmt.Sprintf("%s-%s", imageName, shortHash)
+
+	if len(volumeName) > 0 && (volumeName[0] < 'a' || volumeName[0] > 'z') && (volumeName[0] < '0' || volumeName[0] > '9') {
+		volumeName = "img-" + volumeName
+	}
+
+	return volumeName
 }
 
 // profileManifests holds parsed metadata and manifest content for a single profile.
