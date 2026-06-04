@@ -85,7 +85,7 @@ spec:
           readOnly: true
       nodeSelector:
         node-role.kubernetes.io/control-plane: ""
-      priorityClassName: system-node-critical
+      priorityClassName: system-cluster-critical
       restartPolicy: Always
       tolerations:
       - key: "node-role.kubernetes.io/master"

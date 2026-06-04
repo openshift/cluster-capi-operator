@@ -23,9 +23,8 @@ import (
 
 	"github.com/go-logr/logr/testr"
 	. "github.com/onsi/gomega"
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"sigs.k8s.io/yaml"
+	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 // createMetadataYAML generates valid metadata.yaml content.
@@ -163,6 +162,17 @@ func Test_BuildImageRefMap(t *testing.T) {
 			containerName: "my-container",
 			expected:      map[string]string{},
 		},
+		{
+			name: "missing container returns error",
+			podSpec: corev1.PodSpec{
+				Containers: []corev1.Container{{
+					Name: "different-container",
+				}},
+			},
+			containerName: "my-container",
+			wantErr:       true,
+			errContains:   `container "my-container": container not found in pod spec`,
+		},
 	}
 
 	for _, tt := range tests {
@@ -173,10 +183,7 @@ func Test_BuildImageRefMap(t *testing.T) {
 
 			if tt.wantErr {
 				g.Expect(err).To(HaveOccurred())
-
-				if tt.errContains != "" {
-					g.Expect(err.Error()).To(ContainSubstring(tt.errContains))
-				}
+				g.Expect(err.Error()).To(ContainSubstring(tt.errContains))
 
 				return
 			}
@@ -187,29 +194,34 @@ func Test_BuildImageRefMap(t *testing.T) {
 	}
 }
 
-func Test_BuildImageRefMap_DeploymentManifest(t *testing.T) {
+func Test_VolumeNameForImageRef(t *testing.T) {
 	g := NewWithT(t)
 
-	data, err := os.ReadFile("../../manifests/0000_30_cluster-api-installer_05_deployment.yaml")
-	g.Expect(err).NotTo(HaveOccurred())
+	name := VolumeNameForImageRef("registry.example.com/My.Provider_AWS@sha256:abc123")
+	g.Expect(name).To(MatchRegexp(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`), "expected a DNS-label-safe volume name")
 
-	var deployment appsv1.Deployment
-	g.Expect(yaml.Unmarshal(data, &deployment)).To(Succeed())
+	g.Expect(VolumeNameForImageRef("registry.example.com/core@sha256:def456")).To(
+		Equal(VolumeNameForImageRef("registry.example.com/core@sha256:def456")),
+		"expected the same image ref to always generate the same volume name",
+	)
 
-	imageRefMap, err := BuildImageRefMap(deployment.Spec.Template.Spec, "capi-operator")
-	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(VolumeNameForImageRef("registry.example.com/aws@sha256:abc")).NotTo(
+		Equal(VolumeNameForImageRef("registry.example.com/gcp@sha256:def")),
+		"expected different image refs to generate different volume names",
+	)
+}
 
-	g.Expect(imageRefMap).To(Equal(map[string]string{
-		"aws-cluster-api-controllers":       "registry.ci.openshift.org/openshift:aws-cluster-api-controllers",
-		"azure-cluster-api-controllers":     "registry.ci.openshift.org/openshift:azure-cluster-api-controllers",
-		"baremetal-cluster-api-controllers": "registry.ci.openshift.org/openshift:baremetal-cluster-api-controllers",
-		"cluster-capi-controllers":          "registry.ci.openshift.org/openshift:cluster-capi-controllers",
-		"cluster-capi-operator":             "registry.ci.openshift.org/openshift:cluster-capi-operator",
-		"gcp-cluster-api-controllers":       "registry.ci.openshift.org/openshift:gcp-cluster-api-controllers",
-		"ibmcloud-cluster-api-controllers":  "registry.ci.openshift.org/openshift:ibmcloud-cluster-api-controllers",
-		"openstack-cluster-api-controllers": "registry.ci.openshift.org/openshift:openstack-cluster-api-controllers",
-		"openstack-resource-controller":     "registry.ci.openshift.org/openshift:openstack-resource-controller",
-		"vsphere-cluster-api-controllers":   "registry.ci.openshift.org/openshift:vsphere-cluster-api-controllers",
+func Test_BuildImageRefMapFromRefs(t *testing.T) {
+	g := NewWithT(t)
+
+	imageRefs := sets.New(
+		"registry.example.com/aws@sha256:abc",
+		"registry.example.com/gcp@sha256:def",
+	)
+
+	g.Expect(BuildImageRefMapFromRefs(imageRefs)).To(Equal(map[string]string{
+		VolumeNameForImageRef("registry.example.com/aws@sha256:abc"): "registry.example.com/aws@sha256:abc",
+		VolumeNameForImageRef("registry.example.com/gcp@sha256:def"): "registry.example.com/gcp@sha256:def",
 	}))
 }
 
@@ -262,7 +274,9 @@ func Test_ScanProviderImages(t *testing.T) {
 					t.Fatalf("failed to create directory: %v", err)
 				}
 			},
-			imageRefMap: map[string]string{},
+			imageRefMap: map[string]string{
+				"empty-provider": "registry.example.com/empty-provider:v1.0.0",
+			},
 			validate: func(t *testing.T, g Gomega, result []ProviderImageManifests) {
 				t.Helper()
 				g.Expect(result).To(BeEmpty())
@@ -285,7 +299,9 @@ func Test_ScanProviderImages(t *testing.T) {
 					t.Fatalf("failed to write file: %v", err)
 				}
 			},
-			imageRefMap: map[string]string{},
+			imageRefMap: map[string]string{
+				"no-manifests-provider": "registry.example.com/no-manifests-provider:v1.0.0",
+			},
 			validate: func(t *testing.T, g Gomega, result []ProviderImageManifests) {
 				t.Helper()
 				g.Expect(result).To(BeEmpty())
@@ -300,7 +316,9 @@ func Test_ScanProviderImages(t *testing.T) {
 					"apiVersion: v1\nkind: ConfigMap\n",
 				)
 			},
-			imageRefMap: map[string]string{},
+			imageRefMap: map[string]string{
+				"bad-provider": "registry.example.com/bad-provider:v1.0.0",
+			},
 			wantErr:     true,
 			errContains: "missing metadata.yaml",
 		},
@@ -313,7 +331,9 @@ func Test_ScanProviderImages(t *testing.T) {
 					"", // no manifests
 				)
 			},
-			imageRefMap: map[string]string{},
+			imageRefMap: map[string]string{
+				"bad-provider": "registry.example.com/bad-provider:v1.0.0",
+			},
 			wantErr:     true,
 			errContains: "missing manifests.yaml",
 		},
@@ -326,7 +346,9 @@ func Test_ScanProviderImages(t *testing.T) {
 					"apiVersion: v1\nkind: ConfigMap\n",
 				)
 			},
-			imageRefMap: map[string]string{},
+			imageRefMap: map[string]string{
+				"bad-provider": "registry.example.com/bad-provider:v1.0.0",
+			},
 			wantErr:     true,
 			errContains: "failed to parse metadata.yaml",
 		},
@@ -465,7 +487,7 @@ func Test_ScanProviderImages(t *testing.T) {
 			},
 		},
 		{
-			name: "missing image ref in map returns error",
+			name: "extra directories on disk not in map are ignored",
 			setup: func(t *testing.T, dir string) {
 				t.Helper()
 				writeProfile(t, dir, "unknown-provider", "default",
@@ -474,8 +496,23 @@ func Test_ScanProviderImages(t *testing.T) {
 				)
 			},
 			imageRefMap: map[string]string{},
-			wantErr:     true,
-			errContains: "image ref not found for provider: unknown-provider",
+			validate: func(t *testing.T, g Gomega, result []ProviderImageManifests) {
+				t.Helper()
+				g.Expect(result).To(BeEmpty())
+			},
+		},
+		{
+			name: "directory in map that does not exist on disk is skipped",
+			setup: func(t *testing.T, dir string) {
+				t.Helper()
+			},
+			imageRefMap: map[string]string{
+				"missing-provider": "registry.example.com/missing-provider:v1.0.0",
+			},
+			validate: func(t *testing.T, g Gomega, result []ProviderImageManifests) {
+				t.Helper()
+				g.Expect(result).To(BeEmpty())
+			},
 		},
 	}
 
