@@ -2,7 +2,7 @@ IMG ?= controller:latest
 PROJECT_DIR := $(shell dirname $(abspath $(lastword $(MAKEFILE_LIST))))
 
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
-ENVTEST_K8S_VERSION = 1.33.2
+ENVTEST_K8S_VERSION = 1.35.1
 
 ENVTEST = go run -mod=vendor ${PROJECT_DIR}/vendor/sigs.k8s.io/controller-runtime/tools/setup-envtest
 GOLANGCI_LINT = go run -mod=vendor ${PROJECT_DIR}/vendor/github.com/golangci/golangci-lint/v2/cmd/golangci-lint
