@@ -171,8 +171,14 @@ var _ = Describe("InfraCluster", func() {
 				Expect(cl.Create(ctx, machine1)).To(Succeed())
 				Expect(cl.Create(ctx, machine3)).To(Succeed())
 
-				// Create machine2 after machine3 with a delay to ensure machine2 is the youngest machine.
-				time.Sleep(1 * time.Second)
+				// Wait for the InfraCluster to be created.
+				Eventually(komega.Get(bareInfraCluster)).Should(Succeed())
+
+				// Ensure at least 1 second has elapsed since machine3 was created so machine2 will be the youngest.
+				if elapsed := time.Since(machine3.CreationTimestamp.Time); elapsed < time.Second {
+					time.Sleep(time.Second - elapsed)
+				}
+
 				Expect(cl.Create(ctx, machine2)).To(Succeed())
 
 				// Validate the creationtimestamp of the machines
