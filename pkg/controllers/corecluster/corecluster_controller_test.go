@@ -38,6 +38,7 @@ import (
 	corev1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/core/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
+	"github.com/openshift/cluster-capi-operator/pkg/test"
 )
 
 var _ = Describe("Reconcile Core cluster", func() {
@@ -48,7 +49,6 @@ var _ = Describe("Reconcile Core cluster", func() {
 
 	testInfraName := "test-ocp-infrastructure-name"
 	testRegionName := "eu-west-2"
-	desiredOperatorReleaseVersion := "this-is-the-desired-release-version"
 
 	var (
 		infra     *configv1.Infrastructure
@@ -74,14 +74,11 @@ var _ = Describe("Reconcile Core cluster", func() {
 		Expect(err).ToNot(HaveOccurred(), "Manager should be able to be created")
 
 		r := &CoreClusterController{
-			ClusterOperatorStatusClient: operatorstatus.ClusterOperatorStatusClient{
-				Client:           cl,
-				ManagedNamespace: testNamespaceName,
-				ReleaseVersion:   desiredOperatorReleaseVersion,
-			},
-			Cluster:  &clusterv1.Cluster{},
-			Infra:    infra.DeepCopy(),
-			Platform: infra.Status.PlatformStatus.Type,
+			Client:           cl,
+			ManagedNamespace: testNamespaceName,
+			Cluster:          &clusterv1.Cluster{},
+			Infra:            infra.DeepCopy(),
+			Platform:         infra.Status.PlatformStatus.Type,
 		}
 		Expect(r.SetupWithManager(mgr)).To(Succeed(), "Reconciler should be able to setup with manager")
 
@@ -166,6 +163,17 @@ var _ = Describe("Reconcile Core cluster", func() {
 					testCoreCluster := clusterv1resourcebuilder.Cluster().WithName(testInfraName).WithNamespace(testNamespaceName).Build()
 					Consistently(komega.Get(testCoreCluster)).Should(MatchError("clusters.cluster.x-k8s.io \"test-ocp-infrastructure-name\" not found"))
 				})
+
+				It("should set Progressing=True with EphemeralError on the ClusterOperator", func() {
+					co := configv1resourcebuilder.ClusterOperator().WithName(controllers.ClusterOperatorName).Build()
+					Eventually(komega.Object(co)).Should(
+						HaveField("Status.Conditions", SatisfyAll(
+							test.HaveCondition(ResultGenerator.SubConditionType("Progressing")).
+								WithStatus(configv1.ConditionTrue).
+								WithReason(operatorstatus.ReasonEphemeralError),
+						)),
+					)
+				})
 			})
 
 			Context("When there is an infra cluster", func() {
@@ -191,14 +199,16 @@ var _ = Describe("Reconcile Core cluster", func() {
 				})
 
 				Context("With a ClusterOperator", func() {
-					It("should update the ClusterOperator status to be available, upgradeable, non-progressing, non-degraded", func() {
-						co := komega.Object(configv1resourcebuilder.ClusterOperator().WithName(controllers.ClusterOperatorName).Build())
-						Eventually(co).Should(
+					It("should set Available=True and Progressing=False on success", func() {
+						co := configv1resourcebuilder.ClusterOperator().WithName(controllers.ClusterOperatorName).Build()
+						Eventually(komega.Object(co)).Should(
 							HaveField("Status.Conditions", SatisfyAll(
-								ContainElement(And(HaveField("Type", Equal(configv1.OperatorAvailable)), HaveField("Status", Equal(configv1.ConditionTrue)))),
-								ContainElement(And(HaveField("Type", Equal(configv1.OperatorProgressing)), HaveField("Status", Equal(configv1.ConditionFalse)))),
-								ContainElement(And(HaveField("Type", Equal(configv1.OperatorDegraded)), HaveField("Status", Equal(configv1.ConditionFalse)))),
-								ContainElement(And(HaveField("Type", Equal(configv1.OperatorUpgradeable)), HaveField("Status", Equal(configv1.ConditionTrue)))),
+								test.HaveCondition(ResultGenerator.SubConditionType("Available")).
+									WithStatus(configv1.ConditionTrue).
+									WithReason(operatorstatus.ReasonAsExpected),
+								test.HaveCondition(ResultGenerator.SubConditionType("Progressing")).
+									WithStatus(configv1.ConditionFalse).
+									WithReason(operatorstatus.ReasonAsExpected),
 							)),
 						)
 					})
@@ -239,6 +249,21 @@ var _ = Describe("Reconcile Core cluster", func() {
 								HaveField("Type", Equal(clusterv1.ControlPlaneInitializedV1Beta1Condition)),
 								HaveField("Status", Equal(corev1.ConditionTrue)),
 							)),
+						)),
+					)
+				})
+
+				It("should set Available=True and Progressing=False on the ClusterOperator", func() {
+					co := configv1resourcebuilder.ClusterOperator().WithName(controllers.ClusterOperatorName).Build()
+
+					Eventually(komega.Object(co)).Should(
+						HaveField("Status.Conditions", SatisfyAll(
+							test.HaveCondition(ResultGenerator.SubConditionType("Available")).
+								WithStatus(configv1.ConditionTrue).
+								WithReason(operatorstatus.ReasonAsExpected),
+							test.HaveCondition(ResultGenerator.SubConditionType("Progressing")).
+								WithStatus(configv1.ConditionFalse).
+								WithReason(operatorstatus.ReasonAsExpected),
 						)),
 					)
 				})

@@ -43,14 +43,6 @@ import (
 )
 
 const (
-	// Controller conditions for the Cluster Operator resource.
-
-	// InfraClusterControllerAvailableCondition is the condition type that indicates the InfraCluster controller is available.
-	InfraClusterControllerAvailableCondition = "InfraClusterControllerAvailable"
-
-	// InfraClusterControllerDegradedCondition is the condition type that indicates the InfraCluster controller is degraded.
-	InfraClusterControllerDegradedCondition = "InfraClusterControllerDegraded"
-
 	defaultCAPINamespace = "openshift-cluster-api"
 	defaultMAPINamespace = "openshift-machine-api"
 	controllerName       = "InfraClusterController"
@@ -60,6 +52,9 @@ const (
 
 	kubeSystemNamespace    = "kube-system"
 	vSphereCredentialsName = "vsphere-creds" //nolint:gosec
+
+	// ResultGenerator is the controller result generator for the InfraClusterController.
+	ResultGenerator = operatorstatus.ControllerResultGenerator(controllerName)
 )
 
 var (
@@ -71,7 +66,7 @@ var (
 
 // InfraClusterController is a controller that manages infrastructure cluster objects.
 type InfraClusterController struct {
-	operatorstatus.ClusterOperatorStatusClient
+	client.Client
 	Scheme        *runtime.Scheme
 	RestCfg       *rest.Config
 	Platform      configv1.PlatformType
@@ -81,40 +76,40 @@ type InfraClusterController struct {
 }
 
 // Reconcile reconciles the cluster-api ClusterOperator object.
-func (r *InfraClusterController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *InfraClusterController) Reconcile(ctx context.Context, _ ctrl.Request) (ctrl.Result, error) {
 	log := ctrl.LoggerFrom(ctx).WithName(controllerName)
-
 	log.Info("Reconciling InfraCluster")
 
-	res, err := r.reconcile(ctx, log)
-	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("error during reconcile: %w", err)
+	reconcileResult := r.reconcile(ctx, log)
+
+	if err := reconcileResult.WriteClusterOperatorStatus(ctx, log, r.Client); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to write conditions: %w", err)
 	}
 
-	if err := r.setAvailableCondition(ctx, log); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to set conditions for InfraCluster controller: %w", err)
-	}
-
-	return res, nil
+	return reconcileResult.Result()
 }
 
-func (r *InfraClusterController) reconcile(ctx context.Context, log logr.Logger) (ctrl.Result, error) {
+func (r *InfraClusterController) reconcile(ctx context.Context, log logr.Logger) operatorstatus.ReconcileResult {
 	infraCluster, err := r.ensureInfraCluster(ctx, log)
 	if err != nil && errors.Is(err, errPlatformNotSupported) {
 		log.Info("Could not find or create an InfraCluster on this platform as it is not yet supported.")
-		return ctrl.Result{}, nil
+		return ResultGenerator.Success()
 	} else if err != nil {
-		return ctrl.Result{}, fmt.Errorf("unable to ensure InfraCluster: %w", err)
+		return ResultGenerator.Error(fmt.Errorf("unable to ensure InfraCluster: %w", err))
 	}
 
 	// At this point, the InfraCluster exists.
 	// Check if it has the managedByAnnotation.
-	return r.reconcileInfraCluster(ctx, log, infraCluster)
+	if err := r.reconcileInfraCluster(ctx, log, infraCluster); err != nil {
+		return ResultGenerator.Error(err)
+	}
+
+	return ResultGenerator.Success()
 }
 
 // reconcileInfraCluster reconciles the InfraCluster object.
 // It first determines if the infra cluster should be managed before setting the infra cluster ready.
-func (r *InfraClusterController) reconcileInfraCluster(ctx context.Context, log logr.Logger, infraCluster client.Object) (ctrl.Result, error) {
+func (r *InfraClusterController) reconcileInfraCluster(ctx context.Context, log logr.Logger, infraCluster client.Object) error {
 	managedByAnnotationVal, foundAnnotation := infraCluster.GetAnnotations()[clusterv1.ManagedByAnnotation]
 
 	switch {
@@ -126,7 +121,7 @@ func (r *InfraClusterController) reconcileInfraCluster(ctx context.Context, log 
 			" - skipping as this is managed directly by the CAPI infrastructure provider",
 			infraCluster.GetNamespace(), infraCluster.GetName()))
 
-		return ctrl.Result{}, nil
+		return nil
 	case managedByAnnotationVal != managedByAnnotationValueClusterCAPIOperatorInfraClusterController:
 		// At this point it is not this controller's responsibility to manage this InfraCluster object, nor it is
 		// the CAPI infra providers responsbility to do so. This means this object was created outside of these two entities - thus
@@ -135,37 +130,37 @@ func (r *InfraClusterController) reconcileInfraCluster(ctx context.Context, log 
 			" - skipping as it is not managed by this controller",
 			infraCluster.GetNamespace(), infraCluster.GetName(), managedByAnnotationVal))
 
-		return ctrl.Result{}, nil
+		return nil
 	}
 
 	// At this point it is this controller's responsibility to manage this InfraCluster object.
 	isReady, err := getReadiness(infraCluster)
 	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("unable to get readiness for InfraCluster: %w", err)
+		return fmt.Errorf("unable to get readiness for InfraCluster: %w", err)
 	}
 
 	if isReady {
 		// The Infrastructure for this CAPI Cluster is already ready - nothing to do.
-		return ctrl.Result{}, nil
+		return nil
 	}
 
 	infraClusterPatchCopy, ok := infraCluster.DeepCopyObject().(client.Object)
 	if !ok {
-		return ctrl.Result{}, errCouldNotDeepCopyInfraObject
+		return errCouldNotDeepCopyInfraObject
 	}
 
 	// Set Status.Ready=true to indicate that cluster's infrastructure ready.
 	if err := setReadiness(infraCluster, true); err != nil {
-		return ctrl.Result{}, fmt.Errorf("unable to set readiness for InfraCluster: %w", err)
+		return fmt.Errorf("unable to set readiness for InfraCluster: %w", err)
 	}
 
 	if err := r.Client.Status().Patch(ctx, infraCluster, client.MergeFrom(infraClusterPatchCopy)); err != nil {
-		return ctrl.Result{}, fmt.Errorf("unable to patch InfraCluster: %w", err)
+		return fmt.Errorf("unable to patch InfraCluster: %w", err)
 	}
 
 	log.Info(fmt.Sprintf("InfraCluster '%s/%s' successfully set to Ready", infraCluster.GetNamespace(), infraCluster.GetName()))
 
-	return ctrl.Result{}, nil
+	return nil
 }
 
 // ensureInfraCluster ensures an InfraCluster object exists in the cluster.
@@ -236,29 +231,6 @@ func (r *InfraClusterController) ensureInfraCluster(ctx context.Context, log log
 	return infraCluster, nil
 }
 
-// setAvailableCondition sets the ClusterOperator status condition to Available.
-func (r *InfraClusterController) setAvailableCondition(ctx context.Context, log logr.Logger) error {
-	co, err := r.GetOrCreateClusterOperator(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get cluster operator: %w", err)
-	}
-
-	conds := []configv1.ClusterOperatorStatusCondition{
-		operatorstatus.NewClusterOperatorStatusCondition(InfraClusterControllerAvailableCondition, configv1.ConditionTrue, operatorstatus.ReasonAsExpected,
-			"InfraCluster Controller works as expected"),
-		operatorstatus.NewClusterOperatorStatusCondition(InfraClusterControllerDegradedCondition, configv1.ConditionFalse, operatorstatus.ReasonAsExpected,
-			"InfraCluster Controller works as expected"),
-	}
-
-	log.V(2).Info("InfraCluster Controller is Available")
-
-	if err := r.SyncStatus(ctx, co, operatorstatus.WithConditions(conds)); err != nil {
-		return fmt.Errorf("failed to sync status: %w", err)
-	}
-
-	return nil
-}
-
 // SetupWithManager sets up the controller with the Manager.
 func (r *InfraClusterController) SetupWithManager(mgr ctrl.Manager, watchedObject client.Object) error {
 	// Allow the namespaces to be set externally for test purposes, when not set,
@@ -278,7 +250,7 @@ func (r *InfraClusterController) SetupWithManager(mgr ctrl.Manager, watchedObjec
 		Watches(
 			watchedObject,
 			handler.EnqueueRequestsFromMapFunc(operatorstatus.ToClusterOperator),
-			builder.WithPredicates(infraClusterPredicate(r.ManagedNamespace)),
+			builder.WithPredicates(infraClusterPredicate(r.CAPINamespace)),
 		).
 		// Watch CPMS as the primary source for deriving a provider spec during InfraCluster
 		// generation. CPMS events should retrigger reconciliation so we re-evaluate InfraCluster creation and CO status.

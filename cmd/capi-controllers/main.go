@@ -172,35 +172,37 @@ func setupPlatformReconcilers(log logr.Logger, mgr manager.Manager, operatorConf
 
 func setupReconcilers(mgr manager.Manager, operatorConfig commoncmdoptions.OperatorConfig, infra *configv1.Infrastructure, platform configv1.PlatformType, infraClusterObject client.Object) error {
 	if err := (&corecluster.CoreClusterController{
-		ClusterOperatorStatusClient: operatorConfig.GetClusterOperatorStatusClient(mgr, platform, "cluster-resource"),
-		Cluster:                     &clusterv1.Cluster{},
-		Platform:                    platform,
-		Infra:                       infra,
+		Client:           mgr.GetClient(),
+		ManagedNamespace: *operatorConfig.CAPINamespace,
+		Cluster:          &clusterv1.Cluster{},
+		Platform:         platform,
+		Infra:            infra,
 	}).SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("unable to create corecluster controller: %w", err)
 	}
 
 	if err := (&secretsync.UserDataSecretController{
-		ClusterOperatorStatusClient: operatorConfig.GetClusterOperatorStatusClient(mgr, platform, "user-data-secret"),
-		Scheme:                      mgr.GetScheme(),
+		Client:           mgr.GetClient(),
+		ManagedNamespace: *operatorConfig.CAPINamespace,
+		Scheme:           mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("unable to create user-data-secret controller: %w", err)
 	}
 
 	if err := (&kubeconfig.KubeconfigReconciler{
-		ClusterOperatorStatusClient: operatorConfig.GetClusterOperatorStatusClient(mgr, platform, "kubeconfig"),
-		Scheme:                      mgr.GetScheme(),
-		RestCfg:                     mgr.GetConfig(),
+		Client:  mgr.GetClient(),
+		Scheme:  mgr.GetScheme(),
+		RestCfg: mgr.GetConfig(),
 	}).SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("unable to create kubeconfig controller: %w", err)
 	}
 
 	if err := (&infracluster.InfraClusterController{
-		ClusterOperatorStatusClient: operatorConfig.GetClusterOperatorStatusClient(mgr, platform, "infracluster"),
-		Scheme:                      mgr.GetScheme(),
-		RestCfg:                     mgr.GetConfig(),
-		Platform:                    platform,
-		Infra:                       infra,
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		RestCfg:  mgr.GetConfig(),
+		Platform: platform,
+		Infra:    infra,
 	}).SetupWithManager(mgr, infraClusterObject); err != nil {
 		return fmt.Errorf("unable to create infracluster controller: %w", err)
 	}

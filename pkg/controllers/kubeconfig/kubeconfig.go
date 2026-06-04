@@ -47,11 +47,14 @@ const (
 	tokenSecretName           = "capi-controllers-token"
 	tokenRefreshAnnotationKey = "cluster-api.openshift.io/last-token-refresh"
 	tokenMaxAge               = 30 * time.Minute
+
+	// ResultGenerator is the controller result generator for the KubeconfigController.
+	ResultGenerator = operatorstatus.ControllerResultGenerator(controllerName)
 )
 
 // KubeconfigReconciler reconciles a ClusterOperator object.
 type KubeconfigReconciler struct {
-	operatorstatus.ClusterOperatorStatusClient
+	client.Client
 	Scheme      *runtime.Scheme
 	RestCfg     *rest.Config
 	clusterName string
@@ -81,53 +84,38 @@ func (r *KubeconfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 func (r *KubeconfigReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (ctrl.Result, error) {
 	log := ctrl.LoggerFrom(ctx).WithName(controllerName)
 
+	reconcileResult := r.reconcile(ctx, log)
+
+	if err := reconcileResult.WriteClusterOperatorStatus(ctx, log, r.Client); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to write conditions: %w", err)
+	}
+
+	return reconcileResult.Result()
+}
+
+func (r *KubeconfigReconciler) reconcile(ctx context.Context, log logr.Logger) operatorstatus.ReconcileResult {
 	infra := &configv1.Infrastructure{}
 	if err := r.Get(ctx, client.ObjectKey{Name: controllers.InfrastructureResourceName}, infra); err != nil {
 		log.Error(err, "Unable to retrieve Infrastructure object")
-
-		if err := r.SetStatusDegraded(ctx, err); err != nil {
-			return ctrl.Result{}, fmt.Errorf("error syncing ClusterOperatorStatus: %w", err)
-		}
-
-		return ctrl.Result{}, fmt.Errorf("unable to retrieve Infrastructure object: %w", err)
+		return ResultGenerator.Error(fmt.Errorf("unable to retrieve Infrastructure object: %w", err))
 	}
 
 	if infra.Status.PlatformStatus == nil {
 		log.Info("No platform status exists in infrastructure object. Skipping kubeconfig reconciliation...")
-
-		if err := r.SetStatusAvailable(ctx, ""); err != nil {
-			return ctrl.Result{}, fmt.Errorf("error syncing ClusterOperatorStatus: %w", err)
-		}
-
-		return ctrl.Result{}, nil
+		return ResultGenerator.WaitingOnExternal("infrastructure platform status").WithRequeueAfter(1 * time.Minute)
 	}
 
 	r.clusterName = infra.Status.InfrastructureName
 
 	log.Info("Reconciling kubeconfig secret")
 
-	res, err := r.reconcileKubeconfig(ctx, log)
-	if err != nil {
-		log.Error(err, "Error reconciling kubeconfig")
-
-		if err := r.SetStatusDegraded(ctx, err); err != nil {
-			return ctrl.Result{}, fmt.Errorf("error syncing ClusterOperatorStatus: %w", err)
-		}
-
-		return ctrl.Result{}, fmt.Errorf("error reconciling kubeconfig: %w", err)
-	}
-
-	if err := r.SetStatusAvailable(ctx, ""); err != nil {
-		return ctrl.Result{}, fmt.Errorf("error syncing ClusterOperatorStatus: %w", err)
-	}
-
-	return res, nil
+	return r.reconcileKubeconfig(ctx, log)
 }
 
 // reconcileKubeconfig reconciles the kubeconfig secret.
 //
 //nolint:funlen
-func (r *KubeconfigReconciler) reconcileKubeconfig(ctx context.Context, log logr.Logger) (ctrl.Result, error) {
+func (r *KubeconfigReconciler) reconcileKubeconfig(ctx context.Context, log logr.Logger) operatorstatus.ReconcileResult {
 	// Get the token secret
 	tokenSecret := &corev1.Secret{}
 	tokenSecretKey := client.ObjectKey{
@@ -138,11 +126,10 @@ func (r *KubeconfigReconciler) reconcileKubeconfig(ctx context.Context, log logr
 	if err := r.Get(ctx, tokenSecretKey, tokenSecret); err != nil {
 		if kerrors.IsNotFound(err) {
 			log.Info("Waiting for token secret to be created")
-
-			return ctrl.Result{RequeueAfter: 1 * time.Minute}, nil
+			return ResultGenerator.WaitingOnExternal("token secret").WithRequeueAfter(1 * time.Minute)
 		}
 
-		return ctrl.Result{}, fmt.Errorf("unable to retrieve Secret object: %w", err)
+		return ResultGenerator.Error(fmt.Errorf("unable to retrieve Secret object: %w", err))
 	}
 
 	// Determine the token age from the refresh annotation, or fall back to CreationTimestamp.
@@ -169,10 +156,10 @@ func (r *KubeconfigReconciler) reconcileKubeconfig(ctx context.Context, log logr
 		tokenSecret.Annotations[tokenRefreshAnnotationKey] = time.Now().UTC().Format(time.RFC3339)
 
 		if err := r.Update(ctx, tokenSecret); err != nil {
-			return ctrl.Result{}, fmt.Errorf("unable to clear token secret data: %w", err)
+			return ResultGenerator.Error(fmt.Errorf("unable to clear token secret data: %w", err))
 		}
 
-		return ctrl.Result{}, nil
+		return ResultGenerator.Success()
 	}
 
 	kubeconfigOptions := kubeconfigOptions{
@@ -188,11 +175,11 @@ func (r *KubeconfigReconciler) reconcileKubeconfig(ctx context.Context, log logr
 			// the token secret has not been populated by the kubernetes control plane yet.
 			// Requeue to wait for the token secret to be populated.
 			log.Info("Token secret has not been populated by the control plane yet, waiting..")
-			return ctrl.Result{}, nil
+			return ResultGenerator.WaitingOnExternal("token secret population")
 		}
 
 		// If the validation fails with other errors throw a reconciler error instead.
-		return ctrl.Result{}, fmt.Errorf("invalid kubeconfig options: %w", err)
+		return ResultGenerator.Error(fmt.Errorf("invalid kubeconfig options: %w", err))
 	}
 
 	kubeconfig := generateKubeconfig(kubeconfigOptions)
@@ -200,7 +187,7 @@ func (r *KubeconfigReconciler) reconcileKubeconfig(ctx context.Context, log logr
 	// Create a secret with generated kubeconfig
 	out, err := clientcmd.Write(*kubeconfig)
 	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("error writing kubeconfig: %w", err)
+		return ResultGenerator.Error(fmt.Errorf("error writing kubeconfig: %w", err))
 	}
 
 	kubeconfigSecret := newKubeConfigSecret(r.clusterName, out)
@@ -213,10 +200,10 @@ func (r *KubeconfigReconciler) reconcileKubeconfig(ctx context.Context, log logr
 
 		return nil
 	}); err != nil {
-		return ctrl.Result{}, fmt.Errorf("error reconciling kubeconfig secret: %w", err)
+		return ResultGenerator.Error(fmt.Errorf("error reconciling kubeconfig secret: %w", err))
 	}
 
-	return ctrl.Result{}, nil
+	return ResultGenerator.Success()
 }
 
 func newKubeConfigSecret(clusterName string, data []byte) *corev1.Secret {

@@ -26,7 +26,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -34,6 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	configv1 "github.com/openshift/api/config/v1"
+	configv1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/config/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 	"github.com/openshift/cluster-capi-operator/pkg/test"
@@ -84,8 +84,6 @@ var _ = Describe("areSecretsEqual reconciler method", func() {
 })
 
 var _ = Describe("User Data Secret controller", func() {
-	var rec *record.FakeRecorder
-
 	var (
 		mgrCtxCancel context.CancelFunc
 		mgrStopped   chan struct{}
@@ -113,15 +111,16 @@ var _ = Describe("User Data Secret controller", func() {
 		Expect(err).ToNot(HaveOccurred(), "Manager should be able to be created")
 
 		reconciler = &UserDataSecretController{
-			ClusterOperatorStatusClient: operatorstatus.ClusterOperatorStatusClient{
-				Client:           cl,
-				Recorder:         rec,
-				ManagedNamespace: controllers.DefaultCAPINamespace,
-			},
-
-			Scheme: scheme.Scheme,
+			Client:           cl,
+			ManagedNamespace: controllers.DefaultCAPINamespace,
+			Scheme:           scheme.Scheme,
 		}
 		Expect(reconciler.SetupWithManager(mgr)).To(Succeed())
+
+		By("Creating the ClusterOperator")
+
+		co := configv1resourcebuilder.ClusterOperator().WithName(controllers.ClusterOperatorName).Build()
+		Expect(cl.Create(ctx, co)).To(Succeed())
 
 		By("Creating needed Secret")
 
@@ -165,11 +164,6 @@ var _ = Describe("User Data Secret controller", func() {
 		}
 
 		sourceSecret = nil
-
-		// Creating the cluster api operator
-		co = &configv1.ClusterOperator{}
-		co.SetName(controllers.ClusterOperatorName)
-		Expect(cl.Create(context.Background(), co.DeepCopy())).To(Succeed())
 	})
 
 	It("secret should be synced up after first reconcile", func() {
@@ -190,6 +184,22 @@ var _ = Describe("User Data Secret controller", func() {
 
 			return bytes.Equal(syncedUserDataSecret.Data[capiUserDataKey], []byte(defaultSecretValue)), nil
 		}, timeout).Should(BeTrue())
+
+		By("Verifying ClusterOperator conditions show success")
+
+		co := configv1resourcebuilder.ClusterOperator().WithName(controllers.ClusterOperatorName).Build()
+
+		Eventually(func(g Gomega) {
+			g.Expect(cl.Get(ctx, client.ObjectKeyFromObject(co), co)).To(Succeed())
+			g.Expect(co.Status.Conditions).To(SatisfyAll(
+				test.HaveCondition(ResultGenerator.SubConditionType(operatorstatus.ConditionAvailableSuffix)).
+					WithStatus(configv1.ConditionTrue).
+					WithReason(operatorstatus.ReasonAsExpected),
+				test.HaveCondition(ResultGenerator.SubConditionType(operatorstatus.ConditionProgressingSuffix)).
+					WithStatus(configv1.ConditionFalse).
+					WithReason(operatorstatus.ReasonAsExpected),
+			))
+		}, timeout).Should(Succeed())
 	})
 
 	It("secret should be synced up if managed user data secret changed", func() {
@@ -242,6 +252,44 @@ var _ = Describe("User Data Secret controller", func() {
 		}, timeout).Should(BeTrue())
 
 		Expect(test.CleanupAndWait(ctx, cl, sourceSecret)).To(Succeed())
+	})
+
+	It("should set Progressing=True with EphemeralError when source secret is missing", func() {
+		By("Waiting for the initial sync to complete")
+		Eventually(func() error {
+			return cl.Get(ctx, syncedSecretKey, &corev1.Secret{})
+		}, timeout).Should(Succeed())
+
+		By("Deleting the source secret")
+		Expect(cl.Delete(ctx, sourceSecret)).To(Succeed())
+
+		By("Triggering a reconcile by modifying the target secret")
+
+		targetSecret := &corev1.Secret{}
+
+		Eventually(func() error {
+			return cl.Get(ctx, syncedSecretKey, targetSecret)
+		}, timeout).Should(Succeed())
+
+		targetSecret.Data[capiUserDataKey] = []byte("trigger-reconcile")
+		Expect(cl.Update(ctx, targetSecret)).To(Succeed())
+
+		By("Verifying ClusterOperator conditions show EphemeralError")
+
+		co := configv1resourcebuilder.ClusterOperator().WithName(controllers.ClusterOperatorName).Build()
+
+		Eventually(func(g Gomega) {
+			g.Expect(cl.Get(ctx, client.ObjectKeyFromObject(co), co)).To(Succeed())
+			g.Expect(co.Status.Conditions).To(
+				test.HaveCondition(ResultGenerator.SubConditionType(operatorstatus.ConditionProgressingSuffix)).
+					WithStatus(configv1.ConditionTrue).
+					WithReason(operatorstatus.ReasonEphemeralError),
+			)
+		}, timeout).Should(Succeed())
+
+		// Re-create the source secret so AfterEach cleanup works
+		sourceSecret = makeUserDataSecret()
+		Expect(cl.Create(ctx, sourceSecret)).To(Succeed())
 	})
 
 	It("secret not be updated if source and target secret contents are identical", func() {

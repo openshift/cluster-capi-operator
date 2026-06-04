@@ -29,8 +29,12 @@ import (
 	configv1 "github.com/openshift/api/config/v1"
 	configv1apply "github.com/openshift/client-go/config/applyconfigurations/config/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/corecluster"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/infracluster"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/installer"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/kubeconfig"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/revision"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/secretsync"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 )
@@ -175,11 +179,10 @@ func (r *ClusterOperatorController) aggregatedStatus(currentConditions []configv
 	subControllers := []operatorstatus.ControllerResultGenerator{
 		installer.ResultGenerator,
 		revision.ResultGenerator,
-		// TBD as they are migrated:
-		// - corecluster
-		// - infracluster
-		// - secretsync
-		// - kubeconfig
+		corecluster.ResultGenerator,
+		infracluster.ResultGenerator,
+		kubeconfig.ResultGenerator,
+		secretsync.ResultGenerator,
 	}
 
 	subcontrollerStatuses := util.SliceMap(subControllers, func(subController operatorstatus.ControllerResultGenerator) subcontrollerStatus {

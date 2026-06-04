@@ -46,6 +46,9 @@ const (
 	capiInfraClusterAPIVersionV1Beta1 = "infrastructure.cluster.x-k8s.io/v1beta1"
 	capiInfraClusterAPIVersionV1Beta2 = "infrastructure.cluster.x-k8s.io/v1beta2"
 	capiInfraClusterAPIGroup          = "infrastructure.cluster.x-k8s.io"
+
+	// ResultGenerator is the controller result generator for the CoreClusterController.
+	ResultGenerator = operatorstatus.ControllerResultGenerator(controllerName)
 )
 
 var (
@@ -57,10 +60,11 @@ var (
 
 // CoreClusterController reconciles a Cluster object.
 type CoreClusterController struct {
-	operatorstatus.ClusterOperatorStatusClient
-	Cluster  *clusterv1.Cluster
-	Infra    *configv1.Infrastructure
-	Platform configv1.PlatformType
+	client.Client
+	ManagedNamespace string
+	Cluster          *clusterv1.Cluster
+	Infra            *configv1.Infrastructure
+	Platform         configv1.PlatformType
 }
 
 // SetupWithManager sets the CoreClusterReconciler controller up with the given manager.
@@ -81,39 +85,39 @@ func (r *CoreClusterController) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 // Reconcile reconciles the core cluster object for the openshift-cluster-api namespace.
-func (r *CoreClusterController) Reconcile(ctx context.Context, req reconcile.Request) (ctrl.Result, error) {
-	logger := logf.FromContext(ctx).WithName(controllerName)
+func (r *CoreClusterController) Reconcile(ctx context.Context, _ reconcile.Request) (ctrl.Result, error) {
+	log := logf.FromContext(ctx).WithName(controllerName)
+	log.Info("Reconciling core cluster")
 
-	logger.Info("Reconciling core cluster")
-	defer logger.Info("Finished reconciling core cluster")
+	reconcileResult := r.reconcile(ctx, log)
 
-	ocpInfrastructureName, err := getOCPInfrastructureName(r.Infra)
-	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to obtain infrastructure name: %w", err)
+	if err := reconcileResult.WriteClusterOperatorStatus(ctx, log, r.Client); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to write conditions: %w", err)
 	}
 
-	cluster, err := r.ensureCoreCluster(ctx, client.ObjectKey{Namespace: r.ManagedNamespace, Name: ocpInfrastructureName}, logger)
+	return reconcileResult.Result()
+}
+
+func (r *CoreClusterController) reconcile(ctx context.Context, log logr.Logger) operatorstatus.ReconcileResult {
+	ocpInfrastructureName, err := getOCPInfrastructureName(r.Infra)
 	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to ensure core cluster: %w", err)
+		return ResultGenerator.Error(fmt.Errorf("failed to obtain infrastructure name: %w", err))
+	}
+
+	cluster, err := r.ensureCoreCluster(ctx, client.ObjectKey{Namespace: r.ManagedNamespace, Name: ocpInfrastructureName}, log)
+	if err != nil {
+		return ResultGenerator.Error(fmt.Errorf("failed to ensure core cluster: %w", err))
 	}
 
 	if !cluster.DeletionTimestamp.IsZero() {
-		if err := r.SetStatusAvailable(ctx, ""); err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to set status available: %w", err)
-		}
-
-		return ctrl.Result{}, nil
+		return ResultGenerator.Success()
 	}
 
 	if err := r.ensureCoreClusterControlPlaneInitializedCondition(ctx, cluster); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to ensure core cluster has the ControlPlaneInitializedCondition: %w", err)
+		return ResultGenerator.Error(fmt.Errorf("failed to ensure core cluster has the ControlPlaneInitializedCondition: %w", err))
 	}
 
-	if err := r.SetStatusAvailable(ctx, ""); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to set status available: %w", err)
-	}
-
-	return ctrl.Result{}, nil
+	return ResultGenerator.Success()
 }
 
 // ensureCoreCluster creates a cluster with the given name and returns the cluster object.
