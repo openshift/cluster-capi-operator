@@ -24,12 +24,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+
+	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 )
 
 func toUserDataSecret(ctx context.Context, obj client.Object) []reconcile.Request {
-	return []reconcile.Request{{
-		NamespacedName: client.ObjectKey{Name: managedUserDataSecretName, Namespace: SecretSourceNamespace},
-	}}
+	return operatorstatus.ToClusterOperator(ctx, obj)
 }
 
 func userDataSecretPredicate(targetNamespace string) predicate.Funcs {

@@ -39,12 +39,9 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/klog/v2/textlogger"
 
-	configv1 "github.com/openshift/api/config/v1"
 	libgocrypto "github.com/openshift/library-go/pkg/crypto"
 
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
-	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
-	"github.com/openshift/cluster-capi-operator/pkg/util"
 )
 
 // The default durations for the leader election operations.
@@ -177,19 +174,6 @@ func InitOperatorConfig(ctx context.Context, cfg *rest.Config, scheme *runtime.S
 		Scheme:                        scheme,
 		Logger:                        log,
 	}, initManager(cfg, setupSecurityProfileWatcher), nil
-}
-
-// GetClusterOperatorStatusClient returns a ClusterOperatorStatusClient struct which has been
-// initialised with values from the command line.
-func (opts *OperatorConfig) GetClusterOperatorStatusClient(mgr ctrl.Manager, platform configv1.PlatformType, controllerName string) operatorstatus.ClusterOperatorStatusClient {
-	return operatorstatus.ClusterOperatorStatusClient{
-		Client:            mgr.GetClient(),
-		Recorder:          mgr.GetEventRecorderFor(opts.managerName + "-" + controllerName),
-		ReleaseVersion:    util.GetReleaseVersion(),
-		ManagedNamespace:  *opts.CAPINamespace,
-		OperatorNamespace: *opts.OperatorNamespace,
-		Platform:          platform,
-	}
 }
 
 func initManager(cfg *rest.Config, securityProfileWatcher func(ctrl.Manager, context.CancelFunc) error) func(ctx context.Context, cancel context.CancelFunc, mgrOpts ctrl.Options) (ctrl.Manager, error) {
