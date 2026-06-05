@@ -1,4 +1,5 @@
 IMG ?= controller:latest
+CONTAINER_TOOL ?= docker
 PROJECT_DIR := $(shell dirname $(abspath $(lastword $(MAKEFILE_LIST))))
 
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
@@ -94,11 +95,11 @@ lint: ## Run linter checks
 vendor: ## Vendor dependencies
 	./hack/vendor.sh
 
-image: ## Build the Docker image
-	docker build -t ${IMG} .
+image: ## Build the container image
+	$(CONTAINER_TOOL) build -f Dockerfile.rhel -t ${IMG} .
 
-push: ## Push the Docker image
-	docker push ${IMG}
+push: ## Push the container image
+	$(CONTAINER_TOOL) push ${IMG}
 
 aws-cluster: ## Create an AWS cluster for testing
 	./hack/clusters/create-aws.sh
