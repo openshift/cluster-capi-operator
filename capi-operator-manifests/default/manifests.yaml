@@ -4,9 +4,11 @@ metadata:
   name: machine-api-machine-vap
 spec:
   matchResources:
+    matchPolicy: Equivalent
     namespaceSelector:
       matchLabels:
         kubernetes.io/metadata.name: openshift-machine-api
+    objectSelector: {}
   paramRef:
     namespace: openshift-cluster-api
     parameterNotFoundAction: Allow
@@ -34,6 +36,9 @@ spec:
   - expression: object.metadata.name == params.metadata.name
     name: check-param-match
   matchConstraints:
+    matchPolicy: Equivalent
+    namespaceSelector: {}
+    objectSelector: {}
     resourceRules:
     - apiGroups:
       - machine.openshift.io
@@ -43,6 +48,7 @@ spec:
       - UPDATE
       resources:
       - machines
+      scope: '*'
   paramKind:
     apiVersion: cluster.x-k8s.io/v1beta2
     kind: Machine
@@ -125,9 +131,11 @@ metadata:
   name: machine-api-machine-set-vap
 spec:
   matchResources:
+    matchPolicy: Equivalent
     namespaceSelector:
       matchLabels:
         kubernetes.io/metadata.name: openshift-machine-api
+    objectSelector: {}
   paramRef:
     namespace: openshift-cluster-api
     parameterNotFoundAction: Allow
@@ -155,6 +163,9 @@ spec:
   - expression: object.metadata.name == params.metadata.name
     name: check-param-match
   matchConstraints:
+    matchPolicy: Equivalent
+    namespaceSelector: {}
+    objectSelector: {}
     resourceRules:
     - apiGroups:
       - machine.openshift.io
@@ -164,6 +175,7 @@ spec:
       - UPDATE
       resources:
       - machinesets
+      scope: '*'
   paramKind:
     apiVersion: cluster.x-k8s.io/v1beta2
     kind: MachineSet
@@ -244,9 +256,11 @@ metadata:
   name: cluster-api-machine-vap
 spec:
   matchResources:
+    matchPolicy: Equivalent
     namespaceSelector:
       matchLabels:
         kubernetes.io/metadata.name: openshift-cluster-api
+    objectSelector: {}
   paramRef:
     namespace: openshift-machine-api
     parameterNotFoundAction: Allow
@@ -274,6 +288,9 @@ spec:
   - expression: params.?status.authoritativeAPI.orValue("") == "MachineAPI"
     name: check-authoritativeAPI-machineapi
   matchConstraints:
+    matchPolicy: Equivalent
+    namespaceSelector: {}
+    objectSelector: {}
     resourceRules:
     - apiGroups:
       - cluster.x-k8s.io
@@ -283,6 +300,7 @@ spec:
       - UPDATE
       resources:
       - machines
+      scope: '*'
   paramKind:
     apiVersion: machine.openshift.io/v1beta1
     kind: Machine
@@ -350,9 +368,11 @@ metadata:
   name: cluster-api-machine-set-vap
 spec:
   matchResources:
+    matchPolicy: Equivalent
     namespaceSelector:
       matchLabels:
         kubernetes.io/metadata.name: openshift-cluster-api
+    objectSelector: {}
   paramRef:
     namespace: openshift-machine-api
     parameterNotFoundAction: Allow
@@ -380,6 +400,9 @@ spec:
   - expression: params.?status.?authoritativeAPI.orValue("") == "MachineAPI"
     name: check-authoritativeAPI-machineapi
   matchConstraints:
+    matchPolicy: Equivalent
+    namespaceSelector: {}
+    objectSelector: {}
     resourceRules:
     - apiGroups:
       - cluster.x-k8s.io
@@ -389,6 +412,7 @@ spec:
       - UPDATE
       resources:
       - machinesets
+      scope: '*'
   paramKind:
     apiVersion: machine.openshift.io/v1beta1
     kind: MachineSet
@@ -455,6 +479,9 @@ metadata:
 spec:
   failurePolicy: Fail
   matchConstraints:
+    matchPolicy: Equivalent
+    namespaceSelector: {}
+    objectSelector: {}
     resourceRules:
     - apiGroups:
       - cluster.x-k8s.io
@@ -466,6 +493,7 @@ spec:
       resources:
       - machines
       - machinesets
+      scope: '*'
   validations:
   - expression: '!has(variables.machineSpec.version)'
     messageExpression: variables.specPath + '.version is a forbidden field'
@@ -483,9 +511,11 @@ metadata:
   name: openshift-cluster-api-prevent-setting-of-capi-fields-unsupported-by-mapi
 spec:
   matchResources:
+    matchPolicy: Equivalent
     namespaceSelector:
       matchLabels:
         kubernetes.io/metadata.name: openshift-cluster-api
+    objectSelector: {}
   policyName: openshift-cluster-api-prevent-setting-of-capi-fields-unsupported-by-mapi
   validationActions:
   - Deny
@@ -500,6 +530,9 @@ spec:
   - expression: object.metadata.name == params.metadata.name
     name: check-param-match
   matchConstraints:
+    matchPolicy: Equivalent
+    namespaceSelector: {}
+    objectSelector: {}
     resourceRules:
     - apiGroups:
       - machine.openshift.io
@@ -509,6 +542,7 @@ spec:
       - CREATE
       resources:
       - machines
+      scope: '*'
   paramKind:
     apiVersion: cluster.x-k8s.io/v1beta2
     kind: Machine
@@ -524,9 +558,11 @@ metadata:
   name: openshift-only-create-mapi-machine-if-authoritative-api-capi
 spec:
   matchResources:
+    matchPolicy: Equivalent
     namespaceSelector:
       matchLabels:
         kubernetes.io/metadata.name: openshift-machine-api
+    objectSelector: {}
   paramRef:
     namespace: openshift-cluster-api
     parameterNotFoundAction: Allow
@@ -545,6 +581,9 @@ spec:
   - expression: object.metadata.name == params.metadata.name
     name: check-param-match
   matchConstraints:
+    matchPolicy: Equivalent
+    namespaceSelector: {}
+    objectSelector: {}
     resourceRules:
     - apiGroups:
       - machine.openshift.io
@@ -554,6 +593,7 @@ spec:
       - CREATE
       resources:
       - machinesets
+      scope: '*'
   paramKind:
     apiVersion: cluster.x-k8s.io/v1beta2
     kind: MachineSet
@@ -569,9 +609,11 @@ metadata:
   name: openshift-prevent-authoritative-mapi-machineset-create-when-capi-exists
 spec:
   matchResources:
+    matchPolicy: Equivalent
     namespaceSelector:
       matchLabels:
         kubernetes.io/metadata.name: openshift-machine-api
+    objectSelector: {}
   paramRef:
     namespace: openshift-cluster-api
     parameterNotFoundAction: Allow
@@ -586,9 +628,11 @@ metadata:
   name: openshift-validate-capi-machine-creation
 spec:
   matchResources:
+    matchPolicy: Equivalent
     namespaceSelector:
       matchLabels:
         kubernetes.io/metadata.name: openshift-cluster-api
+    objectSelector: {}
   paramRef:
     namespace: openshift-machine-api
     parameterNotFoundAction: Allow
@@ -614,6 +658,9 @@ spec:
   - expression: object.metadata.name == params.metadata.name
     name: check-param-match
   matchConstraints:
+    matchPolicy: Equivalent
+    namespaceSelector: {}
+    objectSelector: {}
     resourceRules:
     - apiGroups:
       - cluster.x-k8s.io
@@ -623,6 +670,7 @@ spec:
       - CREATE
       resources:
       - machines
+      scope: '*'
   paramKind:
     apiVersion: machine.openshift.io/v1beta1
     kind: Machine
@@ -658,9 +706,11 @@ metadata:
   name: openshift-validate-capi-machine-set-creation
 spec:
   matchResources:
+    matchPolicy: Equivalent
     namespaceSelector:
       matchLabels:
         kubernetes.io/metadata.name: openshift-cluster-api
+    objectSelector: {}
   paramRef:
     namespace: openshift-machine-api
     parameterNotFoundAction: Allow
@@ -686,6 +736,9 @@ spec:
   - expression: object.metadata.name == params.metadata.name
     name: check-param-match
   matchConstraints:
+    matchPolicy: Equivalent
+    namespaceSelector: {}
+    objectSelector: {}
     resourceRules:
     - apiGroups:
       - cluster.x-k8s.io
@@ -695,6 +748,7 @@ spec:
       - CREATE
       resources:
       - machinesets
+      scope: '*'
   paramKind:
     apiVersion: machine.openshift.io/v1beta1
     kind: MachineSet
@@ -731,6 +785,9 @@ metadata:
 spec:
   failurePolicy: Fail
   matchConstraints:
+    matchPolicy: Equivalent
+    namespaceSelector: {}
+    objectSelector: {}
     resourceRules:
     - apiGroups:
       - machine.openshift.io
@@ -740,6 +797,7 @@ spec:
       - UPDATE
       resources:
       - machines
+      scope: '*'
   validations:
   - expression: '!(has(object.status) && has(object.status.phase) && object.status.phase
       == "Provisioning" && (oldObject.spec.authoritativeAPI != object.spec.authoritativeAPI))'
@@ -756,9 +814,11 @@ metadata:
   name: openshift-prevent-migration-when-machine-updating
 spec:
   matchResources:
+    matchPolicy: Equivalent
     namespaceSelector:
       matchLabels:
         kubernetes.io/metadata.name: openshift-machine-api
+    objectSelector: {}
   policyName: openshift-prevent-migration-when-machine-updating
   validationActions:
   - Deny
@@ -770,6 +830,9 @@ metadata:
 spec:
   failurePolicy: Ignore
   matchConstraints:
+    matchPolicy: Equivalent
+    namespaceSelector: {}
+    objectSelector: {}
     resourceRules:
     - apiGroups:
       - machine.openshift.io
@@ -779,6 +842,7 @@ spec:
       - UPDATE
       resources:
       - machines
+      scope: '*'
   validations:
   - expression: '!variables.authAPIChanged || (variables.syncCond && !variables.syncBad)'
     message: Updating .spec.authoritativeAPI when the Synchronized condition is not
@@ -804,9 +868,11 @@ metadata:
   name: openshift-provide-warning-when-not-synchronized
 spec:
   matchResources:
+    matchPolicy: Equivalent
     namespaceSelector:
       matchLabels:
         kubernetes.io/metadata.name: openshift-machine-api
+    objectSelector: {}
   policyName: openshift-provide-warning-when-not-synchronized
   validationActions:
   - Warn
@@ -817,9 +883,11 @@ metadata:
   name: openshift-mapi-authoritative-api-transition-requires-capi-infrastructure-ready-and-not-deleting
 spec:
   matchResources:
+    matchPolicy: Equivalent
     namespaceSelector:
       matchLabels:
         kubernetes.io/metadata.name: openshift-machine-api
+    objectSelector: {}
   paramRef:
     namespace: openshift-cluster-api
     parameterNotFoundAction: Allow
@@ -845,6 +913,9 @@ spec:
   - expression: object.metadata.name == params.metadata.name
     name: check-param-match
   matchConstraints:
+    matchPolicy: Equivalent
+    namespaceSelector: {}
+    objectSelector: {}
     resourceRules:
     - apiGroups:
       - machine.openshift.io
@@ -854,6 +925,7 @@ spec:
       - UPDATE
       resources:
       - machines
+      scope: '*'
   paramKind:
     apiVersion: cluster.x-k8s.io/v1beta2
     kind: Machine

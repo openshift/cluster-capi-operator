@@ -4,9 +4,11 @@ metadata:
   name: openshift-mapi-authoritative-api-transition-requires-capi-infrastructure-ready-and-not-deleting
 spec:
   matchResources:
+    matchPolicy: Equivalent
     namespaceSelector:
       matchLabels:
         kubernetes.io/metadata.name: openshift-machine-api
+    objectSelector: {}
   paramRef:
     namespace: openshift-cluster-api
     # We 'Allow' here as we don't want to block MAPI Machine
@@ -30,11 +32,15 @@ spec:
     kind: Machine
 
   matchConstraints:
+    matchPolicy: Equivalent
+    namespaceSelector: {}
+    objectSelector: {}
     resourceRules:
     - apiGroups:   ["machine.openshift.io"]
       apiVersions: ["v1beta1"]
       operations:  ["UPDATE"]
       resources:   ["machines"]
+      scope: "*"
 
   # Requests must satisfy every matchCondition to reach the validations
   matchConditions:

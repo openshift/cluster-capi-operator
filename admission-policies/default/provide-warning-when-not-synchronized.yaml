@@ -6,11 +6,15 @@ spec:
   failurePolicy: Ignore
 
   matchConstraints:
+    matchPolicy: Equivalent
+    namespaceSelector: {}
+    objectSelector: {}
     resourceRules:
       - apiGroups: ["machine.openshift.io"]
         apiVersions: ["*"]
         operations: ["UPDATE"]
         resources: ["machines"]
+        scope: "*"
   variables:
     - name: syncCond
       expression: >
@@ -39,9 +43,11 @@ metadata:
   name: openshift-provide-warning-when-not-synchronized
 spec:
   matchResources:
+    matchPolicy: Equivalent
     namespaceSelector:
       matchLabels:
         kubernetes.io/metadata.name: openshift-machine-api
+    objectSelector: {}
   policyName: openshift-provide-warning-when-not-synchronized
   validationActions:
       - Warn

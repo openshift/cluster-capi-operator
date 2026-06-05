@@ -5,11 +5,15 @@ metadata:
 spec:
   failurePolicy: Fail
   matchConstraints:
+    matchPolicy: Equivalent
+    namespaceSelector: {}
+    objectSelector: {}
     resourceRules:
       - apiGroups: ["machine.openshift.io"]
         apiVersions: ["*"]
         operations: ["UPDATE"]
         resources: ["machines"]
+        scope: "*"
 
   # All validations must evaluate to true
   validations:
@@ -24,9 +28,11 @@ metadata:
   name: openshift-prevent-migration-when-machine-updating
 spec:
   matchResources:
+    matchPolicy: Equivalent
     namespaceSelector:
       matchLabels:
         kubernetes.io/metadata.name: openshift-machine-api
+    objectSelector: {}
   policyName: openshift-prevent-migration-when-machine-updating
   validationActions:
       - Deny

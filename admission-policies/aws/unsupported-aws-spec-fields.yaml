@@ -6,12 +6,14 @@ spec:
   policyName: "openshift-cluster-api-unsupported-aws-spec-fields"
   validationActions: [Deny]
   matchResources:
+    matchPolicy: Equivalent
     namespaceSelector:
       matchExpressions:
       - key: kubernetes.io/metadata.name
         operator: In
         values:
         - openshift-cluster-api
+    objectSelector: {}
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
@@ -20,11 +22,15 @@ metadata:
 spec:
   failurePolicy: Fail
   matchConstraints:
+    matchPolicy: Equivalent
+    namespaceSelector: {}
+    objectSelector: {}
     resourceRules:
     - apiGroups:   ["infrastructure.cluster.x-k8s.io"]
       apiVersions: ["v1beta2"]
       operations:  ["CREATE", "UPDATE"]
       resources:   ["awsmachines", "awsmachinetemplates"]
+      scope: "*"
   variables:
     - name: machineSpec
       expression: "object.kind == 'AWSMachine' ? object.spec : object.spec.template.spec"
