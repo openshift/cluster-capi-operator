@@ -186,7 +186,7 @@ func (r *UserDataSecretController) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 func (r *UserDataSecretController) setAvailableCondition(ctx context.Context, log logr.Logger) error {
-	co, err := r.GetOrCreateClusterOperator(ctx)
+	co, err := r.GetClusterOperator(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to get cluster operator: %w", err)
 	}
@@ -208,7 +208,7 @@ func (r *UserDataSecretController) setAvailableCondition(ctx context.Context, lo
 }
 
 func (r *UserDataSecretController) setDegradedCondition(ctx context.Context, log logr.Logger) error {
-	co, err := r.GetOrCreateClusterOperator(ctx)
+	co, err := r.GetClusterOperator(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to get cluster operator: %w", err)
 	}
