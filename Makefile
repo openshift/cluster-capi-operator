@@ -2,9 +2,8 @@ IMG ?= controller:latest
 PROJECT_DIR := $(shell dirname $(abspath $(lastword $(MAKEFILE_LIST))))
 
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
-ENVTEST_K8S_VERSION = 1.28
-
-ENVTEST = go run ${PROJECT_DIR}/vendor/sigs.k8s.io/controller-runtime/tools/setup-envtest
+ENVTEST_K8S_VERSION = 1.28.3
+ENVTEST_ASSETS_DIR ?= /tmp/controller-tools/envtest
 GOLANGCI_LINT = go run ${PROJECT_DIR}/vendor/github.com/golangci/golangci-lint/cmd/golangci-lint
 
 HOME ?= /tmp/kubebuilder-testing
@@ -35,8 +34,17 @@ operator:
 	# building cluster-capi-operator
 	go build -o bin/cluster-capi-operator cmd/cluster-capi-operator/main.go
 
-unit:
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path --bin-dir $(PROJECT_DIR)/bin)" ./hack/test.sh "./pkg/... ./manifests-gen/..." 5m
+.PHONY: envtest
+envtest:
+	@if [ ! -f $(ENVTEST_ASSETS_DIR)/kube-apiserver ]; then \
+		GOARCH=$$(go env GOARCH) && \
+		GOOS=$$(go env GOOS) && \
+		mkdir -p /tmp && \
+		curl -sSL "https://github.com/kubernetes-sigs/controller-tools/releases/download/envtest-v$(ENVTEST_K8S_VERSION)/envtest-v$(ENVTEST_K8S_VERSION)-$${GOOS}-$${GOARCH}.tar.gz" | tar xz -C /tmp/ ; \
+	fi
+
+unit: envtest
+	KUBEBUILDER_ASSETS="$(ENVTEST_ASSETS_DIR)" ./hack/test.sh "./pkg/... ./manifests-gen/..." 5m
 
 .PHONY: e2e
 e2e:
