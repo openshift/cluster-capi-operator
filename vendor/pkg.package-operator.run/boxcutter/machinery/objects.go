@@ -2,9 +2,9 @@ package machinery
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strconv"
+	"time"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -663,70 +663,56 @@ func (e *ObjectEngine) getObjectRevision(obj client.Object) (int64, error) {
 func (e *ObjectEngine) migrateFieldManagersToSSA(
 	ctx context.Context, object Object,
 ) error {
-	patch, err := csaupgrade.UpgradeManagedFieldsPatch(
-		object, sets.New(e.fieldOwner), e.fieldOwner)
+	// Retry with exponential backoff on conflict errors.
+	// The kube-apiserver's CRD controller concurrently updates status
+	// immediately after CRD creation, bumping the resourceVersion.
+	// The JSON patch from csaupgrade includes a resourceVersion optimistic
+	// lock that always conflicts with these concurrent updates.
+	// Between retries we re-read the object from the API server cache to
+	// pick up the latest resourceVersion and re-compute the patch.
+	const maxRetries = 10
+	backoff := 100 * time.Millisecond
 
-	switch {
-	case err != nil:
-		return err
-	case len(patch) == 0:
-		// csaupgrade.UpgradeManagedFieldsPatch returns nil, nil when no work is to be done.
-		// Empty patch cannot be applied so exit early.
-		return nil
-	}
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		if attempt > 0 {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(backoff):
+			}
+			backoff *= 2
+			if backoff > 5*time.Second {
+				backoff = 5 * time.Second
+			}
 
-	// The JSON patch from csaupgrade includes a "replace /metadata/resourceVersion"
-	// operation as an optimistic lock. However, when the kube-apiserver's CRD
-	// controller updates the object's status immediately after creation (setting
-	// Established/NamesAccepted conditions), the resourceVersion becomes stale
-	// before our patch arrives, causing a 409 conflict. Since the only available
-	// reader (e.cache) is an informer cache that may also be stale, retrying
-	// with a cache re-read does not resolve the deadlock.
-	//
-	// Strip the resourceVersion operation from the patch. This is safe because:
-	// 1. The managedFields update is idempotent — it claims field ownership.
-	// 2. Concurrent status updates add their own field manager entries but do
-	//    not conflict with our managedFields replacement.
-	// 3. Boxcutter either just created this object or is adopting it, so there
-	//    is no legitimate concurrent field manager to protect against.
-	patch, err = stripResourceVersionFromPatch(patch)
-	if err != nil {
-		return fmt.Errorf("stripping resourceVersion from patch: %w", err)
-	}
-	if len(patch) == 0 {
-		return nil
-	}
-
-	if err := e.writer.Patch(ctx, object, client.RawPatch(
-		machinerytypes.JSONPatchType, patch)); err != nil {
-		return fmt.Errorf("update field managers: %w", err)
-	}
-
-	return nil
-}
-
-// stripResourceVersionFromPatch removes the resourceVersion optimistic lock
-// operation from a JSON patch array, preventing 409 conflicts when the object
-// has been concurrently modified between read and patch.
-func stripResourceVersionFromPatch(patchBytes []byte) ([]byte, error) {
-	var ops []map[string]interface{}
-	if err := json.Unmarshal(patchBytes, &ops); err != nil {
-		return patchBytes, fmt.Errorf("unmarshaling patch: %w", err)
-	}
-
-	filtered := make([]map[string]interface{}, 0, len(ops))
-	for _, op := range ops {
-		if path, ok := op["path"].(string); ok && path == "/metadata/resourceVersion" {
-			continue
+			// Re-read the object from cache to get the latest resourceVersion.
+			freshObj := object.DeepCopyObject().(Object)
+			if err := e.cache.Get(ctx, client.ObjectKeyFromObject(object), freshObj); err != nil {
+				return fmt.Errorf("re-reading object for retry: %w", err)
+			}
+			object = freshObj
 		}
-		filtered = append(filtered, op)
-	}
 
-	if len(filtered) == 0 {
-		return nil, nil
-	}
+		patch, err := csaupgrade.UpgradeManagedFieldsPatch(
+			object, sets.New(e.fieldOwner), e.fieldOwner)
+		switch {
+		case err != nil:
+			return err
+		case len(patch) == 0:
+			return nil
+		}
 
-	return json.Marshal(filtered)
+		err = e.writer.Patch(ctx, object, client.RawPatch(
+			machinerytypes.JSONPatchType, patch))
+		if err == nil {
+			return nil
+		}
+		if !errors.IsConflict(err) {
+			return fmt.Errorf("update field managers: %w", err)
+		}
+		// Conflict — retry with backoff.
+	}
+	return fmt.Errorf("update field managers: exceeded %d retries due to conflicts", maxRetries)
 }
 
 func (e *ObjectEngine) revisionAnnotation() string {
