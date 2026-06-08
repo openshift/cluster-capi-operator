@@ -2,6 +2,7 @@ package machinery
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strconv"
 
@@ -674,12 +675,58 @@ func (e *ObjectEngine) migrateFieldManagersToSSA(
 		return nil
 	}
 
+	// The JSON patch from csaupgrade includes a "replace /metadata/resourceVersion"
+	// operation as an optimistic lock. However, when the kube-apiserver's CRD
+	// controller updates the object's status immediately after creation (setting
+	// Established/NamesAccepted conditions), the resourceVersion becomes stale
+	// before our patch arrives, causing a 409 conflict. Since the only available
+	// reader (e.cache) is an informer cache that may also be stale, retrying
+	// with a cache re-read does not resolve the deadlock.
+	//
+	// Strip the resourceVersion operation from the patch. This is safe because:
+	// 1. The managedFields update is idempotent — it claims field ownership.
+	// 2. Concurrent status updates add their own field manager entries but do
+	//    not conflict with our managedFields replacement.
+	// 3. Boxcutter either just created this object or is adopting it, so there
+	//    is no legitimate concurrent field manager to protect against.
+	patch, err = stripResourceVersionFromPatch(patch)
+	if err != nil {
+		return fmt.Errorf("stripping resourceVersion from patch: %w", err)
+	}
+	if len(patch) == 0 {
+		return nil
+	}
+
 	if err := e.writer.Patch(ctx, object, client.RawPatch(
 		machinerytypes.JSONPatchType, patch)); err != nil {
 		return fmt.Errorf("update field managers: %w", err)
 	}
 
 	return nil
+}
+
+// stripResourceVersionFromPatch removes the resourceVersion optimistic lock
+// operation from a JSON patch array, preventing 409 conflicts when the object
+// has been concurrently modified between read and patch.
+func stripResourceVersionFromPatch(patchBytes []byte) ([]byte, error) {
+	var ops []map[string]interface{}
+	if err := json.Unmarshal(patchBytes, &ops); err != nil {
+		return patchBytes, fmt.Errorf("unmarshaling patch: %w", err)
+	}
+
+	filtered := make([]map[string]interface{}, 0, len(ops))
+	for _, op := range ops {
+		if path, ok := op["path"].(string); ok && path == "/metadata/resourceVersion" {
+			continue
+		}
+		filtered = append(filtered, op)
+	}
+
+	if len(filtered) == 0 {
+		return nil, nil
+	}
+
+	return json.Marshal(filtered)
 }
 
 func (e *ObjectEngine) revisionAnnotation() string {
