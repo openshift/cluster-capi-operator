@@ -242,6 +242,16 @@ func (r *InfraClusterController) ensureAzureInfraCluster(ctx context.Context, ta
 
 // createNewAzureCluster creates a new Azure Infra Cluster.
 func (r *InfraClusterController) newAzureCluster(providerSpec *mapiv1beta1.AzureMachineProviderSpec, apiURL *url.URL, port int32, location string) *azurev1.AzureCluster {
+	tags := azurev1.Tags{}
+
+	if r.Infra.Status.PlatformStatus.Azure != nil {
+		for _, t := range r.Infra.Status.PlatformStatus.Azure.ResourceTags {
+			tags[t.Key] = t.Value
+		}
+	}
+
+	tags[fmt.Sprintf("kubernetes.io_cluster.%s", r.Infra.Status.InfrastructureName)] = "owned"
+
 	return &azurev1.AzureCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      r.Infra.Status.InfrastructureName,
@@ -257,6 +267,7 @@ func (r *InfraClusterController) newAzureCluster(providerSpec *mapiv1beta1.Azure
 			AzureClusterClassSpec: azurev1.AzureClusterClassSpec{
 				Location:         location,
 				AzureEnvironment: "AzurePublicCloud",
+				AdditionalTags:   tags,
 				IdentityRef: &corev1.ObjectReference{
 					Name:      r.Infra.Status.InfrastructureName,
 					Namespace: r.CAPINamespace,
