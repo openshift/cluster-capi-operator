@@ -13,6 +13,7 @@ metadata:
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
     release.openshift.io/feature-gate: "ClusterAPIMachineManagement"
+    capability.openshift.io/name: ClusterAPI
 ---
 apiVersion: v1
 kind: Secret
@@ -25,6 +26,7 @@ metadata:
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
     release.openshift.io/feature-gate: "ClusterAPIMachineManagement"
+    capability.openshift.io/name: ClusterAPI
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -37,6 +39,7 @@ metadata:
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
     release.openshift.io/feature-gate: "ClusterAPIMachineManagement"
+    capability.openshift.io/name: ClusterAPI
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -48,6 +51,7 @@ metadata:
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
     release.openshift.io/feature-gate: "ClusterAPIMachineManagement"
+    capability.openshift.io/name: ClusterAPI
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
@@ -60,6 +64,7 @@ metadata:
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
     release.openshift.io/feature-gate: "ClusterAPIMachineManagement"
+    capability.openshift.io/name: ClusterAPI
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -71,6 +76,7 @@ metadata:
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
     release.openshift.io/feature-gate: "ClusterAPIMachineManagement"
+    capability.openshift.io/name: ClusterAPI
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -83,6 +89,7 @@ metadata:
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
     release.openshift.io/feature-gate: "ClusterAPIMachineManagement"
+    capability.openshift.io/name: ClusterAPI
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -95,6 +102,7 @@ metadata:
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
     release.openshift.io/feature-gate: "ClusterAPIMachineManagement"
+    capability.openshift.io/name: ClusterAPI
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingWebhookConfiguration
@@ -106,6 +114,7 @@ metadata:
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
     release.openshift.io/feature-gate: "ClusterAPIMachineManagement"
+    capability.openshift.io/name: ClusterAPI
 ---
 apiVersion: v1
 kind: Service
@@ -116,5 +125,6 @@ metadata:
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
     release.openshift.io/feature-gate: "ClusterAPIMachineManagement"
+    capability.openshift.io/name: ClusterAPI
   name: cluster-capi-operator-webhook-service
   namespace: openshift-cluster-api

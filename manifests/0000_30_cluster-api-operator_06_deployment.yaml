@@ -10,6 +10,7 @@ metadata:
     include.release.openshift.io/single-node-developer: "true"
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     release.openshift.io/feature-gate: "ClusterAPIMachineManagement"
+    capability.openshift.io/name: ClusterAPI
   labels:
     k8s-app: capi-operator
 spec:
