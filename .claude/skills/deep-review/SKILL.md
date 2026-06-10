@@ -41,7 +41,7 @@ Launch the following agents **in parallel** using the Agent tool, with `run_in_b
    - Correctness and bugs
    - Error handling
    - Architecture and edge cases
-   - Adherence to project conventions (see CLAUDE.md)
+   - Adherence to project conventions (see AGENTS.md and .agents/reference/style-guide.md)
    - Naming and clarity
 
 2. **gemini agent** (`subagent_type: gemini`) — Gemini via CLI. Independent second opinion from a different model:
@@ -59,7 +59,7 @@ Launch the following agents **in parallel** using the Agent tool, with `run_in_b
 **If the changes include test files** (`_test.go`, `suite_test.go`, or test helper files), ask the user whether to also launch a dedicated test quality reviewer. If yes, launch an additional agent:
 
 4. **code-reviewer agent** (`subagent_type: code-reviewer`) — test quality focus:
-   - Read and apply `.claude/skills/test-standards/SKILL.md` as the review checklist
+   - Read and apply `.agents/reference/testing.md` as the review checklist
    - Test level appropriateness (unit vs integration vs e2e)
    - Debuggable failures (assertion messages, GinkgoHelper, stack traces)
    - Flakiness risks (sleeps, timeouts, shared state, ordering dependencies)
