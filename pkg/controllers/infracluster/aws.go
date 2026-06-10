@@ -102,6 +102,16 @@ func (r *InfraClusterController) newAWSCluster(providerSpec *mapiv1beta1.AWSMach
 		return nil, fmt.Errorf("failed to extract control plane load balancer configuration: %w", err)
 	}
 
+	tags := awsv1.Tags{}
+
+	if r.Infra.Status.PlatformStatus.AWS != nil {
+		for _, t := range r.Infra.Status.PlatformStatus.AWS.ResourceTags {
+			tags[t.Key] = t.Value
+		}
+	}
+
+	tags[fmt.Sprintf("kubernetes.io/cluster/%s", r.Infra.Status.InfrastructureName)] = "owned"
+
 	target := &awsv1.AWSCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      r.Infra.Status.InfrastructureName,
@@ -126,6 +136,7 @@ func (r *InfraClusterController) newAWSCluster(providerSpec *mapiv1beta1.AWSMach
 				Kind: awsv1.ControllerIdentityKind,
 				Name: "default",
 			},
+			AdditionalTags: tags,
 			// Set control plane load balancer configuration extracted from MAPI machines
 			ControlPlaneLoadBalancer:          controlPlaneLoadBalancer,
 			SecondaryControlPlaneLoadBalancer: secondaryControlPlaneLoadBalancer,
