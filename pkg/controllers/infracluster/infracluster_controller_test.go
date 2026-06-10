@@ -54,10 +54,10 @@ var _ = Describe("InfraCluster", func() {
 		bareInfraCluster *awsv1.AWSCluster
 		capiNamespace    *corev1.Namespace
 		mapiNamespace    *corev1.Namespace
+		ocpInfraAWS      *configv1.Infrastructure
 	)
 
 	ocpInfraClusterName := "test-infra-cluster-name"
-	ocpInfraAWS := configv1resourcebuilder.Infrastructure().AsAWS(ocpInfraClusterName, awsTestRegion).Build()
 
 	infraClusterWithExternallyManagedByAnnotation := &awsv1.AWSCluster{
 		ObjectMeta: metav1.ObjectMeta{
@@ -88,6 +88,8 @@ var _ = Describe("InfraCluster", func() {
 	}
 
 	BeforeEach(func() {
+		ocpInfraAWS = configv1resourcebuilder.Infrastructure().AsAWS(ocpInfraClusterName, awsTestRegion).Build()
+
 		// Create ClusterOperator.
 		Expect(cl.Create(ctx, configv1resourcebuilder.ClusterOperator().WithName(controllers.ClusterOperatorName).Build())).To(Succeed())
 
@@ -110,8 +112,9 @@ var _ = Describe("InfraCluster", func() {
 		infraClusterWithExternallyManagedByAnnotation.Namespace = capiNamespace.Name
 		infraClusterWithExternallyManagedByAnnotationWithValue.Namespace = capiNamespace.Name
 		infraClusterWithoutExternallyManagedByAnnotation.Namespace = capiNamespace.Name
+	})
 
-		// Setup and Start Manager.
+	JustBeforeEach(func() {
 		mgrCtx, mgrCancel = context.WithCancel(context.Background())
 		mgrDone = make(chan struct{})
 		startManager(mgrCtx, mgrDone, ocpInfraAWS, capiNamespace.Name, mapiNamespace.Name)
@@ -160,17 +163,21 @@ var _ = Describe("InfraCluster", func() {
 		})
 
 		Context("When there are Control Plane Machines but no ControlPlaneMachineSet", func() {
+			var machine1, machine2, machine3 *mapiv1beta1.Machine
+
 			youngLoadBalancers := []mapiv1beta1.LoadBalancerReference{{Name: "young-int", Type: mapiv1beta1.NetworkLoadBalancerType}}
 			oldLoadBalancers := []mapiv1beta1.LoadBalancerReference{{Name: "old-int", Type: mapiv1beta1.NetworkLoadBalancerType}}
 
 			BeforeEach(func() {
-				machine1 := mapiv1beta1resourcebuilder.Machine().AsMaster().WithNamespace(mapiNamespace.Name).WithName("master-1").WithProviderSpecBuilder(mapiv1beta1resourcebuilder.AWSProviderSpec().WithLoadBalancers(oldLoadBalancers)).Build()
-				machine2 := mapiv1beta1resourcebuilder.Machine().AsMaster().WithNamespace(mapiNamespace.Name).WithName("master-2").WithProviderSpecBuilder(mapiv1beta1resourcebuilder.AWSProviderSpec().WithLoadBalancers(youngLoadBalancers)).Build()
-				machine3 := mapiv1beta1resourcebuilder.Machine().AsMaster().WithNamespace(mapiNamespace.Name).WithName("master-3").WithProviderSpecBuilder(mapiv1beta1resourcebuilder.AWSProviderSpec().WithLoadBalancers(oldLoadBalancers)).Build()
+				machine1 = mapiv1beta1resourcebuilder.Machine().AsMaster().WithNamespace(mapiNamespace.Name).WithName("master-1").WithProviderSpecBuilder(mapiv1beta1resourcebuilder.AWSProviderSpec().WithLoadBalancers(oldLoadBalancers)).Build()
+				machine2 = mapiv1beta1resourcebuilder.Machine().AsMaster().WithNamespace(mapiNamespace.Name).WithName("master-2").WithProviderSpecBuilder(mapiv1beta1resourcebuilder.AWSProviderSpec().WithLoadBalancers(youngLoadBalancers)).Build()
+				machine3 = mapiv1beta1resourcebuilder.Machine().AsMaster().WithNamespace(mapiNamespace.Name).WithName("master-3").WithProviderSpecBuilder(mapiv1beta1resourcebuilder.AWSProviderSpec().WithLoadBalancers(oldLoadBalancers)).Build()
 
 				Expect(cl.Create(ctx, machine1)).To(Succeed())
 				Expect(cl.Create(ctx, machine3)).To(Succeed())
+			})
 
+			JustBeforeEach(func() {
 				// Wait for the InfraCluster to be created.
 				Eventually(komega.Get(bareInfraCluster)).Should(Succeed())
 
@@ -204,6 +211,56 @@ var _ = Describe("InfraCluster", func() {
 					HaveField("Spec.ControlPlaneLoadBalancer", Equal(internalLB)),
 					HaveField("Spec.SecondaryControlPlaneLoadBalancer", BeNil()),
 				))
+			})
+		})
+
+		Context("When the infrastructure ipFamily is configured", func() {
+			BeforeEach(func() {
+				internalLB := []mapiv1beta1.LoadBalancerReference{{Name: ocpInfraClusterName + "-int", Type: mapiv1beta1.NetworkLoadBalancerType}}
+				machineTemplateBuilder := mapiv1resourcebuilder.OpenShiftMachineV1Beta1Template().WithProviderSpecBuilder(
+					mapiv1beta1resourcebuilder.AWSProviderSpec().WithLoadBalancers(internalLB),
+				)
+				cpms := mapiv1resourcebuilder.ControlPlaneMachineSet().WithNamespace(mapiNamespace.Name).WithName("cluster").WithMachineTemplateBuilder(machineTemplateBuilder).Build()
+				Expect(cl.Create(ctx, cpms)).To(Succeed())
+			})
+
+			Context("When ipFamily is DualStackIPv4Primary", func() {
+				BeforeEach(func() {
+					ocpInfraAWS.Status.PlatformStatus.AWS.IPFamily = configv1.DualStackIPv4Primary
+				})
+
+				It("should create an AWSCluster with IPv6 enabled in NetworkSpec", func() {
+					Eventually(komega.Object(bareInfraCluster)).Should(SatisfyAll(
+						HaveField("Status.Ready", BeTrue()),
+						HaveField("Spec.NetworkSpec.VPC.IPv6", Not(BeNil())),
+					))
+				})
+			})
+
+			Context("When ipFamily is DualStackIPv6Primary", func() {
+				BeforeEach(func() {
+					ocpInfraAWS.Status.PlatformStatus.AWS.IPFamily = configv1.DualStackIPv6Primary
+				})
+
+				It("should create an AWSCluster with IPv6 enabled in NetworkSpec", func() {
+					Eventually(komega.Object(bareInfraCluster)).Should(SatisfyAll(
+						HaveField("Status.Ready", BeTrue()),
+						HaveField("Spec.NetworkSpec.VPC.IPv6", Not(BeNil())),
+					))
+				})
+			})
+
+			Context("When ipFamily is IPv4", func() {
+				BeforeEach(func() {
+					ocpInfraAWS.Status.PlatformStatus.AWS.IPFamily = configv1.IPv4
+				})
+
+				It("should create an AWSCluster without IPv6 in NetworkSpec", func() {
+					Eventually(komega.Object(bareInfraCluster)).Should(SatisfyAll(
+						HaveField("Status.Ready", BeTrue()),
+						HaveField("Spec.NetworkSpec.VPC.IPv6", BeNil()),
+					))
+				})
 			})
 		})
 	})
