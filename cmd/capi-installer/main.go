@@ -35,6 +35,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 
+	"github.com/go-logr/logr"
 	configv1 "github.com/openshift/api/config/v1"
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 
@@ -94,7 +95,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := setupControllers(ctx, mgr, operatorConfig, *providerImageDir); err != nil {
+	if err := setupControllers(ctx, log, mgr, operatorConfig, *providerImageDir, cancel); err != nil {
 		log.Error(err, "unable to setup controllers")
 		os.Exit(1)
 	}
@@ -107,7 +108,12 @@ func main() {
 	}
 }
 
-func setupControllers(ctx context.Context, mgr ctrl.Manager, operatorConfig commoncmdoptions.OperatorConfig, providerImageDir string) error {
+func setupControllers(ctx context.Context, log logr.Logger, mgr ctrl.Manager, operatorConfig commoncmdoptions.OperatorConfig, providerImageDir string, cancel context.CancelFunc) error {
+	featureGates, err := util.GetFeatureGates(ctx, log, managerName, mgr.GetConfig(), cancel)
+	if err != nil {
+		return fmt.Errorf("unable to get feature gates: %w", err)
+	}
+
 	allProviderProfiles, err := loadProviderImages(ctx, mgr, providerImageDir)
 	if err != nil {
 		return err
@@ -125,7 +131,6 @@ func setupControllers(ctx context.Context, mgr ctrl.Manager, operatorConfig comm
 		}
 	}
 
-	log := ctrl.LoggerFrom(ctx)
 	for _, profile := range allProviderProfiles {
 		log.Info("loaded provider profile", "name", profile.Name, "imageRef", profile.ImageRef, "profile", profile.Profile)
 	}
@@ -134,6 +139,7 @@ func setupControllers(ctx context.Context, mgr ctrl.Manager, operatorConfig comm
 		Client:           mgr.GetClient(),
 		ProviderProfiles: currentReleaseProfiles,
 		ReleaseVersion:   util.GetReleaseVersion(),
+		FeatureGates:     featureGates,
 	}).SetupWithManager(mgr, operatorConfig.TLSOptions); err != nil {
 		log.Error(err, "unable to create revision controller", "controller", "RevisionController")
 		return fmt.Errorf("unable to create revision controller: %w", err)
