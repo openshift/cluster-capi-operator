@@ -18,6 +18,7 @@ package installer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -104,6 +105,18 @@ func SetupProxyController(mgr ctrl.Manager, trackingCache managedcache.TrackingC
 	return nil
 }
 
+// workloadItem collects the fields needed to reconcile proxy env vars on a
+// single Deployment, DaemonSet, or StatefulSet without storing a reference to
+// the concrete typed object.
+type workloadItem struct {
+	apiVersion     string
+	kind           string
+	name           string
+	namespace      string
+	podAnnotations map[string]string
+	containers     []corev1.Container
+}
+
 // Reconcile reads the cluster-wide proxy configuration and applies the proxy
 // environment variables to all managed workloads that carry the inject-proxy
 // annotation.
@@ -116,25 +129,8 @@ func (c *ProxyController) Reconcile(ctx context.Context, _ ctrl.Request) (ctrl.R
 		return ctrl.Result{}, fmt.Errorf("fetching cluster-wide proxy: %w", err)
 	}
 
-	var errs []error
-
-	for _, applyFn := range []func(context.Context, []corev1.EnvVar) error{
-		c.applyToDeployments,
-		c.applyToDaemonSets,
-		c.applyToStatefulSets,
-	} {
-		if err := applyFn(ctx, proxyVars); err != nil {
-			errs = append(errs, err)
-		}
-	}
-
-	if len(errs) > 0 {
-		combined := errs[0]
-		for _, e := range errs[1:] {
-			combined = fmt.Errorf("%w; %w", combined, e)
-		}
-
-		return ctrl.Result{}, combined
+	if err := c.applyToAllWorkloads(ctx, proxyVars); err != nil {
+		return ctrl.Result{}, err
 	}
 
 	log.Info("Proxy environment variables reconciled")
@@ -142,103 +138,147 @@ func (c *ProxyController) Reconcile(ctx context.Context, _ ctrl.Request) (ctrl.R
 	return ctrl.Result{}, nil
 }
 
-func (c *ProxyController) applyToDeployments(ctx context.Context, proxyVars []corev1.EnvVar) error {
-	list := &appsv1.DeploymentList{}
-	if err := c.trackingCache.List(ctx, list); err != nil {
-		return fmt.Errorf("listing managed deployments: %w", err)
-	}
+// containerNamesFromAnnotation parses the comma-separated inject-proxy annotation value.
+func containerNamesFromAnnotation(annotation string) []string {
+	var names []string
 
-	for i := range list.Items {
-		deploy := &list.Items[i]
-		annotation, ok := deploy.Spec.Template.Annotations[ProxyInjectAnnotation]
-
-		if !ok {
-			continue
-		}
-
-		if err := c.applyProxyVars(ctx, "apps/v1", "Deployment", deploy.Name, deploy.Namespace, annotation, proxyVars); err != nil {
-			return err
+	for _, name := range strings.Split(annotation, ",") {
+		if n := strings.TrimSpace(name); n != "" {
+			names = append(names, n)
 		}
 	}
 
-	return nil
+	return names
 }
 
-func (c *ProxyController) applyToDaemonSets(ctx context.Context, proxyVars []corev1.EnvVar) error {
-	list := &appsv1.DaemonSetList{}
-	if err := c.trackingCache.List(ctx, list); err != nil {
-		return fmt.Errorf("listing managed daemonsets: %w", err)
+// containerNamesFromSpec returns the names of all containers in a pod spec.
+func containerNamesFromSpec(containers []corev1.Container) []string {
+	names := make([]string, len(containers))
+	for i, c := range containers {
+		names[i] = c.Name
 	}
 
-	for i := range list.Items {
-		ds := &list.Items[i]
-
-		annotation, ok := ds.Spec.Template.Annotations[ProxyInjectAnnotation]
-
-		if !ok {
-			continue
-		}
-
-		if err := c.applyProxyVars(ctx, "apps/v1", "DaemonSet", ds.Name, ds.Namespace, annotation, proxyVars); err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return names
 }
 
-func (c *ProxyController) applyToStatefulSets(ctx context.Context, proxyVars []corev1.EnvVar) error {
-	list := &appsv1.StatefulSetList{}
-	if err := c.trackingCache.List(ctx, list); err != nil {
-		return fmt.Errorf("listing managed statefulsets: %w", err)
+// applyToAllWorkloads collects all managed Deployments, DaemonSets, and
+// StatefulSets from the tracking cache and reconciles their proxy env vars.
+// It continues past per-object errors and returns all failures combined.
+func (c *ProxyController) applyToAllWorkloads(ctx context.Context, proxyVars []corev1.EnvVar) error {
+	items, err := c.collectWorkloads(ctx)
+	if err != nil {
+		return err
 	}
 
-	for i := range list.Items {
-		ss := &list.Items[i]
+	var errs []error
 
-		annotation, ok := ss.Spec.Template.Annotations[ProxyInjectAnnotation]
+	for _, item := range items {
+		var containers []string
 
-		if !ok {
-			continue
+		effectiveVars := proxyVars
+
+		annotation, hasAnnotation := item.podAnnotations[ProxyInjectAnnotation]
+		if hasAnnotation {
+			containers = containerNamesFromAnnotation(annotation)
+		} else {
+			// No annotation: clear any stale proxy env vars we previously owned
+			// so that opting out removes the env vars instead of leaving them.
+			containers = containerNamesFromSpec(item.containers)
+			effectiveVars = nil
 		}
 
-		if err := c.applyProxyVars(ctx, "apps/v1", "StatefulSet", ss.Name, ss.Namespace, annotation, proxyVars); err != nil {
-			return err
+		if err := c.applyProxyVars(ctx, item.apiVersion, item.kind, item.name, item.namespace, containers, effectiveVars); err != nil {
+			errs = append(errs, err)
 		}
 	}
 
-	return nil
+	return errors.Join(errs...)
 }
 
-// applyProxyVars SSA-applies the proxy env vars to each container named in the
-// comma-separated annotation value. The proxy controller owns only the three
-// proxy env var entries; all other fields remain owned by boxcutter.
+// collectWorkloads lists all managed Deployments, DaemonSets, and StatefulSets
+// from the tracking cache and returns them as workloadItems.
+func (c *ProxyController) collectWorkloads(ctx context.Context) ([]workloadItem, error) {
+	var items []workloadItem
+
+	deployList := &appsv1.DeploymentList{}
+	if err := c.trackingCache.List(ctx, deployList); err != nil {
+		return nil, fmt.Errorf("listing managed deployments: %w", err)
+	}
+
+	for i := range deployList.Items {
+		d := &deployList.Items[i]
+		items = append(items, workloadItem{
+			apiVersion:     "apps/v1",
+			kind:           "Deployment",
+			name:           d.Name,
+			namespace:      d.Namespace,
+			podAnnotations: d.Spec.Template.Annotations,
+			containers:     d.Spec.Template.Spec.Containers,
+		})
+	}
+
+	dsList := &appsv1.DaemonSetList{}
+	if err := c.trackingCache.List(ctx, dsList); err != nil {
+		return nil, fmt.Errorf("listing managed daemonsets: %w", err)
+	}
+
+	for i := range dsList.Items {
+		ds := &dsList.Items[i]
+		items = append(items, workloadItem{
+			apiVersion:     "apps/v1",
+			kind:           "DaemonSet",
+			name:           ds.Name,
+			namespace:      ds.Namespace,
+			podAnnotations: ds.Spec.Template.Annotations,
+			containers:     ds.Spec.Template.Spec.Containers,
+		})
+	}
+
+	ssList := &appsv1.StatefulSetList{}
+	if err := c.trackingCache.List(ctx, ssList); err != nil {
+		return nil, fmt.Errorf("listing managed statefulsets: %w", err)
+	}
+
+	for i := range ssList.Items {
+		ss := &ssList.Items[i]
+		items = append(items, workloadItem{
+			apiVersion:     "apps/v1",
+			kind:           "StatefulSet",
+			name:           ss.Name,
+			namespace:      ss.Namespace,
+			podAnnotations: ss.Spec.Template.Annotations,
+			containers:     ss.Spec.Template.Spec.Containers,
+		})
+	}
+
+	return items, nil
+}
+
+// applyProxyVars SSA-applies proxy env vars to each named container on the
+// workload object. When proxyVars is empty/nil (proxy removed or no annotation),
+// it applies an empty env list, which removes any env var entries previously
+// owned by the proxy controller's SSA field manager. Only the three proxy env
+// var entries are owned; all other fields remain owned by boxcutter.
 func (c *ProxyController) applyProxyVars(
 	ctx context.Context,
-	apiVersion, kind, name, namespace, annotation string,
+	apiVersion, kind, name, namespace string,
+	containerNames []string,
 	proxyVars []corev1.EnvVar,
 ) error {
 	log := ctrl.LoggerFrom(ctx).WithName(proxyControllerName)
 
-	containerNames := strings.Split(annotation, ",")
-	containerPatches := make([]map[string]interface{}, 0, len(containerNames))
+	if len(containerNames) == 0 {
+		return nil
+	}
 
+	containerPatches := make([]map[string]interface{}, 0, len(containerNames))
 	envEntries := proxyEnvEntries(proxyVars)
 
 	for _, containerName := range containerNames {
-		containerName = strings.TrimSpace(containerName)
-		if containerName == "" {
-			continue
-		}
-
 		containerPatches = append(containerPatches, map[string]interface{}{
 			"name": containerName,
 			"env":  envEntries,
 		})
-	}
-
-	if len(containerPatches) == 0 {
-		return nil
 	}
 
 	patch := &unstructured.Unstructured{

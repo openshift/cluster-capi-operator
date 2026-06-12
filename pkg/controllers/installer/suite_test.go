@@ -107,7 +107,7 @@ var _ = BeforeSuite(func() {
 	)
 
 	_, err = SetupWithManager(mgr, allProviderProfiles, triggerSource)
-	Expect(err).To(Succeed())
+	Expect(err).To(Succeed(), "SetupWithManager should register the installer controller")
 	Expect(test.AddNamespaceFinalizerCleanup(mgr)).To(Succeed())
 
 	// Start manager in background.
