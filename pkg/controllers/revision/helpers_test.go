@@ -31,9 +31,11 @@ import (
 	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/config"
 
 	configv1 "github.com/openshift/api/config/v1"
+	"github.com/openshift/api/features"
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
 	"github.com/openshift/cluster-capi-operator/pkg/test"
+	featuregates "github.com/openshift/library-go/pkg/operator/configobserver/featuregates"
 )
 
 // Helper to start and stop a manager for a test.
@@ -44,7 +46,31 @@ type managerWrapper struct {
 	done   chan struct{}
 }
 
-func newManagerWrapper(providerImgs []providerimages.ProviderImageManifests, tlsOptions ...func(config *tls.Config)) *managerWrapper {
+// newFeatureGate constructs a featuregates.FeatureGate with the 7 CAPI platform
+// gates classified as enabled or disabled based on the provided list.
+func newFeatureGate(enabled ...configv1.FeatureGateName) featuregates.FeatureGate {
+	allCAPIPlatformGates := []configv1.FeatureGateName{
+		features.FeatureGateClusterAPIMachineManagementAWS,
+		features.FeatureGateClusterAPIMachineManagementAzure,
+		features.FeatureGateClusterAPIMachineManagementBareMetal,
+		features.FeatureGateClusterAPIMachineManagementGCP,
+		features.FeatureGateClusterAPIMachineManagementPowerVS,
+		features.FeatureGateClusterAPIMachineManagementOpenStack,
+		features.FeatureGateClusterAPIMachineManagementVSphere,
+	}
+
+	var disabled []configv1.FeatureGateName
+
+	for _, g := range allCAPIPlatformGates {
+		if !slices.Contains(enabled, g) {
+			disabled = append(disabled, g)
+		}
+	}
+
+	return featuregates.NewFeatureGate(enabled, disabled)
+}
+
+func newManagerWrapper(providerImgs []providerimages.ProviderImageManifests, fg featuregates.FeatureGate, tlsOptions ...func(config *tls.Config)) *managerWrapper {
 	// Don't use the BeforeEach context because it will be cancelled before the test starts.
 	ctx := context.Background()
 
@@ -73,6 +99,7 @@ func newManagerWrapper(providerImgs []providerimages.ProviderImageManifests, tls
 		Client:           mgr.GetClient(),
 		ProviderProfiles: imgs,
 		ReleaseVersion:   "4.18.0",
+		FeatureGates:     fg,
 	}).SetupWithManager(mgr, tlsOptions)
 	Expect(err).NotTo(HaveOccurred())
 
