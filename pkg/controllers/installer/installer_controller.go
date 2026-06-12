@@ -68,17 +68,19 @@ type InstallerController struct {
 }
 
 // SetupWithManager creates the boxcutter dependencies and sets up the installer
-// controller with the Manager. Additional sources may be provided to trigger
-// reconciliation from external events (e.g. a channel source for testing).
-func SetupWithManager(mgr ctrl.Manager, providerProfiles []providerimages.ProviderImageManifests, additionalSources ...source.Source) error {
+// controller with the Manager. The returned TrackingCache can be passed to
+// SetupProxyController to share the same managed-object watch. Additional
+// sources may be provided to trigger reconciliation from external events (e.g.
+// a channel source for testing).
+func SetupWithManager(mgr ctrl.Manager, providerProfiles []providerimages.ProviderImageManifests, additionalSources ...source.Source) (managedcache.TrackingCache, error) {
 	trackingCache, err := setupTrackingCache(mgr)
 	if err != nil {
-		return fmt.Errorf("unable to setup tracking cache: %w", err)
+		return nil, fmt.Errorf("unable to setup tracking cache: %w", err)
 	}
 
 	revisionEngine, err := setupRevisionEngine(mgr, trackingCache)
 	if err != nil {
-		return fmt.Errorf("unable to setup revision engine: %w", err)
+		return nil, fmt.Errorf("unable to setup revision engine: %w", err)
 	}
 
 	c := &InstallerController{
@@ -128,10 +130,10 @@ func SetupWithManager(mgr ctrl.Manager, providerProfiles []providerimages.Provid
 	}
 
 	if err := b.Complete(c); err != nil {
-		return fmt.Errorf("failed to create controller: %w", err)
+		return nil, fmt.Errorf("failed to create controller: %w", err)
 	}
 
-	return nil
+	return trackingCache, nil
 }
 
 func setupTrackingCache(mgr ctrl.Manager) (managedcache.TrackingCache, error) {
