@@ -162,11 +162,32 @@ func findWebhookServiceSecretName(objs []client.Object) map[string]string {
 	return serviceSecretNames
 }
 
+const proxyInjectAnnotation = "capi-operator.openshift.io/inject-proxy"
+
 func customizeDeployment(obj client.Object) (client.Object, error) {
 	deployment := &appsv1.Deployment{}
 	mustConvert(obj, deployment)
 
 	deployment.Spec.Template.Spec.PriorityClassName = "system-cluster-critical"
+
+	// Add the proxy injection annotation to the pod template if not already set
+	// by the provider. manifests-gen targets the "manager" container, which is
+	// the standard name for CAPI provider controller containers. Providers that
+	// use different container names, or need proxy injection on additional
+	// containers, should set this annotation in their upstream manifests.
+	if _, exists := deployment.Spec.Template.Annotations[proxyInjectAnnotation]; !exists {
+		for _, c := range deployment.Spec.Template.Spec.Containers {
+			if c.Name == "manager" {
+				if deployment.Spec.Template.Annotations == nil {
+					deployment.Spec.Template.Annotations = make(map[string]string)
+				}
+
+				deployment.Spec.Template.Annotations[proxyInjectAnnotation] = "manager"
+
+				break
+			}
+		}
+	}
 
 	for i := range deployment.Spec.Template.Spec.Containers {
 		container := &deployment.Spec.Template.Spec.Containers[i]
