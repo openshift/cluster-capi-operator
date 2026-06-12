@@ -29,6 +29,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/config"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	configv1 "github.com/openshift/api/config/v1"
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
@@ -56,15 +57,15 @@ func newManagerWrapper(providerImgs []providerimages.ProviderImageManifests, tls
 		Controller: ctrlconfig.Controller{
 			SkipNameValidation: ptr.To(true),
 		},
+		Metrics: metricsserver.Options{BindAddress: "0"},
 	})
 	Expect(err).NotTo(HaveOccurred())
 
 	if len(tlsOptions) == 0 {
 		tlsOptions = []func(config *tls.Config){
 			func(config *tls.Config) {
-				// Arbitrarily chosen insecure default tls configuration for tests
-				config.CipherSuites = []uint16{tls.TLS_RSA_WITH_RC4_128_SHA}
-				config.MinVersion = tls.VersionTLS10
+				config.CipherSuites = []uint16{tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256}
+				config.MinVersion = tls.VersionTLS12
 			},
 		}
 	}

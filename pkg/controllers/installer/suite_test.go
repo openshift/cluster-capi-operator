@@ -106,7 +106,8 @@ var _ = BeforeSuite(func() {
 		handler.EnqueueRequestsFromMapFunc(toClusterAPI),
 	)
 
-	Expect(SetupWithManager(mgr, allProviderProfiles, triggerSource)).To(Succeed())
+	_, err = SetupWithManager(mgr, allProviderProfiles, triggerSource)
+	Expect(err).To(Succeed())
 	Expect(test.AddNamespaceFinalizerCleanup(mgr)).To(Succeed())
 
 	// Start manager in background.
