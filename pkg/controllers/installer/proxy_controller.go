@@ -173,21 +173,40 @@ func (c *ProxyController) applyToAllWorkloads(ctx context.Context, proxyVars []c
 	var errs []error
 
 	for _, item := range items {
-		var containers []string
-
-		effectiveVars := proxyVars
-
+		allContainers := containerNamesFromSpec(item.containers)
 		annotation, hasAnnotation := item.podAnnotations[ProxyInjectAnnotation]
-		if hasAnnotation {
-			containers = containerNamesFromAnnotation(annotation)
-		} else {
-			// No annotation: clear any stale proxy env vars we previously owned
-			// so that opting out removes the env vars instead of leaving them.
-			containers = containerNamesFromSpec(item.containers)
-			effectiveVars = nil
+
+		if !hasAnnotation {
+			// No annotation: clear any stale proxy env vars from all containers.
+			if err := c.applyProxyVars(ctx, item.apiVersion, item.kind, item.name, item.namespace, allContainers, nil); err != nil {
+				errs = append(errs, err)
+			}
+
+			continue
 		}
 
-		if err := c.applyProxyVars(ctx, item.apiVersion, item.kind, item.name, item.namespace, containers, effectiveVars); err != nil {
+		// Apply proxy vars to the containers named in the annotation.
+		targets := containerNamesFromAnnotation(annotation)
+		if err := c.applyProxyVars(ctx, item.apiVersion, item.kind, item.name, item.namespace, targets, proxyVars); err != nil {
+			errs = append(errs, err)
+		}
+
+		// Clear proxy vars from containers that were removed from the annotation
+		// (e.g. annotation changed from "manager,sidecar" to "manager").
+		targetSet := make(map[string]struct{}, len(targets))
+		for _, name := range targets {
+			targetSet[name] = struct{}{}
+		}
+
+		var stale []string
+
+		for _, name := range allContainers {
+			if _, ok := targetSet[name]; !ok {
+				stale = append(stale, name)
+			}
+		}
+
+		if err := c.applyProxyVars(ctx, item.apiVersion, item.kind, item.name, item.namespace, stale, nil); err != nil {
 			errs = append(errs, err)
 		}
 	}
