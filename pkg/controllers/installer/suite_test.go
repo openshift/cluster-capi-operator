@@ -37,6 +37,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
+	proxycontroller "github.com/openshift/cluster-capi-operator/pkg/controllers/proxy"
 	"github.com/openshift/cluster-capi-operator/pkg/test"
 	"pkg.package-operator.run/boxcutter/managedcache"
 )
@@ -115,7 +116,7 @@ var _ = BeforeSuite(func() {
 
 	sharedTrackingCache, setupErr = SetupWithManager(mgr, allProviderProfiles, triggerSource)
 	Expect(setupErr).To(Succeed(), "SetupWithManager should register the installer controller")
-	Expect(SetupProxyController(mgr, sharedTrackingCache)).To(Succeed(), "SetupProxyController should register the proxy controller")
+	Expect(proxycontroller.SetupWithManager(mgr, sharedTrackingCache)).To(Succeed(), "SetupProxyController should register the proxy controller")
 	Expect(test.AddNamespaceFinalizerCleanup(mgr)).To(Succeed())
 
 	// Start manager in background.
