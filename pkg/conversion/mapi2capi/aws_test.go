@@ -427,6 +427,75 @@ var _ = Describe("mapi2capi AWS conversion", func() {
 		}),
 	)
 
+	Context("DualStack PrivateDNSName Conversion", func() {
+		DescribeTable("should populate PrivateDNSName based on infrastructure IPFamily",
+			func(ipFamily configv1.IPFamilyType, expectPrivateDNSName bool) {
+				dualStackInfra := configbuilder.Infrastructure().AsAWS("sample-cluster-name", "us-east-1").
+					WithPlatformStatus(configv1.PlatformStatus{
+						Type: configv1.AWSPlatformType,
+						AWS: &configv1.AWSPlatformStatus{
+							Region:   "us-east-1",
+							IPFamily: ipFamily,
+						},
+					}).Build()
+
+				_, capaObj, warnings, err := FromAWSMachineAndInfra(awsMAPIMachineBase.Build(), dualStackInfra).ToMachineAndInfrastructureMachine()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(warnings).To(BeEmpty())
+
+				capaMachine, ok := capaObj.(*awsv1.AWSMachine)
+				Expect(ok).To(BeTrue())
+
+				if expectPrivateDNSName {
+					Expect(capaMachine.Spec.PrivateDNSName).To(SatisfyAll(
+						Not(BeNil()),
+						HaveField("EnableResourceNameDNSARecord", Equal(ptr.To(true))),
+						HaveField("EnableResourceNameDNSAAAARecord", Equal(ptr.To(true))),
+						HaveField("HostnameType", Equal(ptr.To("resource-name"))),
+					))
+				} else {
+					Expect(capaMachine.Spec.PrivateDNSName).To(BeNil())
+				}
+			},
+			Entry("with DualStackIPv4Primary", configv1.DualStackIPv4Primary, true),
+			Entry("with DualStackIPv6Primary", configv1.DualStackIPv6Primary, true),
+			Entry("with IPv4", configv1.IPv4, false),
+			Entry("with empty IPFamily", configv1.IPFamilyType(""), false),
+		)
+	})
+
+	Context("DualStack AssignPrimaryIPv6 Conversion", func() {
+		DescribeTable("should populate AssignPrimaryIPv6 based on infrastructure IPFamily",
+			func(ipFamily configv1.IPFamilyType, expectedState *awsv1.PrimaryIPv6AssignmentState) {
+				dualStackInfra := configbuilder.Infrastructure().AsAWS("sample-cluster-name", "us-east-1").
+					WithPlatformStatus(configv1.PlatformStatus{
+						Type: configv1.AWSPlatformType,
+						AWS: &configv1.AWSPlatformStatus{
+							Region:   "us-east-1",
+							IPFamily: ipFamily,
+						},
+					}).Build()
+
+				_, capaObj, warnings, err := FromAWSMachineAndInfra(awsMAPIMachineBase.Build(), dualStackInfra).ToMachineAndInfrastructureMachine()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(warnings).To(BeEmpty())
+
+				capaMachine, ok := capaObj.(*awsv1.AWSMachine)
+				Expect(ok).To(BeTrue())
+
+				if expectedState != nil {
+					Expect(capaMachine.Spec.AssignPrimaryIPv6).To(HaveValue(Equal(*expectedState)))
+				} else {
+					Expect(capaMachine.Spec.AssignPrimaryIPv6).To(BeNil())
+				}
+			},
+			Entry("with DualStackIPv6Primary", configv1.DualStackIPv6Primary, ptr.To(awsv1.PrimaryIPv6AssignmentStateEnabled)),
+			Entry("with DualStackIPv4Primary", configv1.DualStackIPv4Primary, ptr.To(awsv1.PrimaryIPv6AssignmentStateDisabled)),
+			Entry("with IPv4", configv1.IPv4, (*awsv1.PrimaryIPv6AssignmentState)(nil)),
+			Entry("with empty IPFamily", configv1.IPFamilyType(""), (*awsv1.PrimaryIPv6AssignmentState)(nil)),
+		)
+	})
+
 	Context("DedicatedHost Status Conversion", func() {
 		Context("When converting MAPI Machine with DedicatedHost status", func() {
 			It("should populate DedicatedHost status in CAPA Machine", func() {

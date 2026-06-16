@@ -288,14 +288,6 @@ var _ = Describe("capi2mapi AWS conversion", func() {
 			expectedWarnings:  []string{},
 		}),
 
-		Entry("With unsupported PrivateDNSName", awsCAPI2MAPIMachineConversionInput{
-			awsClusterBuilder: awsCAPIAWSClusterBase,
-			awsMachineBuilder: awsCAPIAWSMachineBase.WithPrivateDNSName(&awsv1.PrivateDNSName{}),
-			machineBuilder:    awsCAPIMachineBase,
-			expectedErrors:    []string{"spec.privateDNSName: Invalid value: {}: privateDNSName is not supported"},
-			expectedWarnings:  []string{},
-		}),
-
 		Entry("With unsupported Ignition Proxy", awsCAPI2MAPIMachineConversionInput{
 			awsClusterBuilder: awsCAPIAWSClusterBase,
 			awsMachineBuilder: awsCAPIAWSMachineBase.

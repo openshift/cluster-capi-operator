@@ -284,6 +284,8 @@ func (m *awsMachineAndInfra) toAWSMachine(providerSpec mapiv1beta1.AWSMachinePro
 		spec.CapacityReservationID = &providerSpec.CapacityReservationID
 	}
 
+	convertAWSDualStackFieldsToCAPI(m.infrastructure, &spec)
+
 	// Unused fields - Below this line are fields not used from the MAPI AWSMachineProviderConfig.
 
 	// TypeMeta - Only for the purpose of the raw extension, not used for any functionality.
@@ -806,4 +808,37 @@ func convertAWSCPUOptionsToCAPI(cpuOptions *mapiv1beta1.CPUOptions) awsv1.CPUOpt
 	}
 
 	return capiCPUOpts
+}
+
+// convertAWSDualStackFieldsToCAPI populates dual-stack specific fields on the AWSMachineSpec
+// based on the infrastructure CR's IPFamily. These fields are not configurable in MAPI;
+// instead, we derive them from the infrastructure CR.
+func convertAWSDualStackFieldsToCAPI(infrastructure *configv1.Infrastructure, spec *awsv1.AWSMachineSpec) {
+	if infrastructure.Status.PlatformStatus == nil || infrastructure.Status.PlatformStatus.AWS == nil {
+		return
+	}
+
+	// Dual-stack clusters require "resource-name" hostnames with both A and AAAA records enabled.
+	// See https://github.com/openshift/machine-api-provider-aws/blob/2e4196b65473ae99bc9bbedc0bc7168ed3da3914/pkg/actuators/machine/instances.go#L833-L849
+	switch infrastructure.Status.PlatformStatus.AWS.IPFamily {
+	case configv1.DualStackIPv4Primary, configv1.DualStackIPv6Primary:
+		spec.PrivateDNSName = &awsv1.PrivateDNSName{
+			EnableResourceNameDNSARecord:    ptr.To(true),
+			EnableResourceNameDNSAAAARecord: ptr.To(true),
+			HostnameType:                    ptr.To("resource-name"),
+		}
+	case configv1.IPv4:
+		// No action needed for IPv4-only clusters.
+	}
+
+	// Dual-stack clusters need explicit assignPrimaryIPv6 configuration to match MAPA behavior.
+	// See https://github.com/openshift/machine-api-provider-aws/blob/2e4196b65473ae99bc9bbedc0bc7168ed3da3914/pkg/actuators/machine/instances.go#L385-L390
+	switch infrastructure.Status.PlatformStatus.AWS.IPFamily {
+	case configv1.DualStackIPv6Primary:
+		spec.AssignPrimaryIPv6 = ptr.To(awsv1.PrimaryIPv6AssignmentStateEnabled)
+	case configv1.DualStackIPv4Primary:
+		spec.AssignPrimaryIPv6 = ptr.To(awsv1.PrimaryIPv6AssignmentStateDisabled)
+	case configv1.IPv4:
+		// No action needed for IPv4-only clusters.
+	}
 }
