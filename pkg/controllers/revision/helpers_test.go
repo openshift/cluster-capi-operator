@@ -64,8 +64,9 @@ func newManagerWrapper(providerImgs []providerimages.ProviderImageManifests, tls
 	if len(tlsOptions) == 0 {
 		tlsOptions = []func(config *tls.Config){
 			func(config *tls.Config) {
-				config.CipherSuites = []uint16{tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256}
-				config.MinVersion = tls.VersionTLS12
+				// Arbitrarily chosen insecure default tls configuration for tests
+				config.CipherSuites = []uint16{tls.TLS_RSA_WITH_RC4_128_SHA}
+				config.MinVersion = tls.VersionTLS10
 			},
 		}
 	}
