@@ -46,6 +46,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
+	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
 	configv1 "github.com/openshift/api/config/v1"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	capiframework "github.com/openshift/cluster-capi-operator/e2e/framework"
@@ -85,6 +86,7 @@ func init() {
 	utilruntime.Must(vspherev1.AddToScheme(scheme.Scheme))
 	utilruntime.Must(metal3v1.AddToScheme(scheme.Scheme))
 	utilruntime.Must(bmov1alpha1.AddToScheme(scheme.Scheme))
+	utilruntime.Must(apiextensionsv1alpha1.AddToScheme(scheme.Scheme))
 }
 
 // InitCommonVariables initializes global variables used across test cases.

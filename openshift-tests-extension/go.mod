@@ -11,7 +11,9 @@ require (
 replace (
 	github.com/onsi/ginkgo/v2 => github.com/openshift/onsi-ginkgo/v2 v2.6.1-0.20241205171354-8006f302fd12
 	github.com/openshift/cluster-api-actuator-pkg/testutils => github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20260616083352-ff0f225cc3b5
+	github.com/openshift/cluster-capi-operator => ../
 	github.com/openshift/cluster-capi-operator/e2e => ../e2e
+	github.com/openshift/cluster-capi-operator/manifests-gen => ../manifests-gen
 )
 
 require (
@@ -90,6 +92,7 @@ require (
 	github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0 // indirect
 	github.com/openshift/cluster-autoscaler-operator v0.0.1-0.20250702183526-4eb64d553940 // indirect
 	github.com/openshift/cluster-capi-operator v0.0.0-20260425200736-89a8af46df2a // indirect
+	github.com/openshift/cluster-capi-operator/manifests-gen v0.0.0-00010101000000-000000000000 // indirect
 	github.com/openshift/library-go v0.0.0-20260413093329-d2db42c961e1 // indirect
 	github.com/openshift/machine-api-operator v0.2.1-0.20260226113419-88465550a74b // indirect
 	github.com/pkg/errors v0.9.1 // indirect
