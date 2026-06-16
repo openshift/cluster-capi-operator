@@ -33,6 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 	"pkg.package-operator.run/boxcutter/managedcache"
 )
@@ -45,12 +46,7 @@ const (
 	// container names that should receive HTTP_PROXY, HTTPS_PROXY, and NO_PROXY
 	// environment variables. The annotation is added by manifests-gen and can be
 	// overridden by provider manifests.
-	ProxyInjectAnnotation = "capi-operator.openshift.io/inject-proxy"
-
-	// proxyFieldManager is the SSA field manager name for proxy env vars. It
-	// must be distinct from boxcutter's field manager so that the two controllers
-	// can own disjoint sets of fields on the same Deployment/DaemonSet/StatefulSet.
-	proxyFieldManager = "capi-operator-proxy"
+	ProxyInjectAnnotation = operatorstatus.CAPIOperatorIdentifierDomain + "/inject-proxy"
 
 	proxyClusterName = "cluster"
 )
@@ -151,16 +147,6 @@ func containerNamesFromAnnotation(annotation string) []string {
 	return names
 }
 
-// containerNamesFromSpec returns the names of all containers in a pod spec.
-func containerNamesFromSpec(containers []corev1.Container) []string {
-	names := make([]string, len(containers))
-	for i, c := range containers {
-		names[i] = c.Name
-	}
-
-	return names
-}
-
 // applyToAllWorkloads collects all managed Deployments, DaemonSets, and
 // StatefulSets from the tracking cache and reconciles their proxy env vars.
 // It continues past per-object errors and returns all failures combined.
@@ -173,40 +159,7 @@ func (c *ProxyController) applyToAllWorkloads(ctx context.Context, proxyVars []c
 	var errs []error
 
 	for _, item := range items {
-		allContainers := containerNamesFromSpec(item.containers)
-		annotation, hasAnnotation := item.podAnnotations[ProxyInjectAnnotation]
-
-		if !hasAnnotation {
-			// No annotation: clear any stale proxy env vars from all containers.
-			if err := c.applyProxyVars(ctx, item.apiVersion, item.kind, item.name, item.namespace, allContainers, nil); err != nil {
-				errs = append(errs, err)
-			}
-
-			continue
-		}
-
-		// Apply proxy vars to the containers named in the annotation.
-		targets := containerNamesFromAnnotation(annotation)
-		if err := c.applyProxyVars(ctx, item.apiVersion, item.kind, item.name, item.namespace, targets, proxyVars); err != nil {
-			errs = append(errs, err)
-		}
-
-		// Clear proxy vars from containers that were removed from the annotation
-		// (e.g. annotation changed from "manager,sidecar" to "manager").
-		targetSet := make(map[string]struct{}, len(targets))
-		for _, name := range targets {
-			targetSet[name] = struct{}{}
-		}
-
-		var stale []string
-
-		for _, name := range allContainers {
-			if _, ok := targetSet[name]; !ok {
-				stale = append(stale, name)
-			}
-		}
-
-		if err := c.applyProxyVars(ctx, item.apiVersion, item.kind, item.name, item.namespace, stale, nil); err != nil {
+		if err := c.applyProxyVars(ctx, item, proxyVars); err != nil {
 			errs = append(errs, err)
 		}
 	}
@@ -273,40 +226,64 @@ func (c *ProxyController) collectWorkloads(ctx context.Context) ([]workloadItem,
 	return items, nil
 }
 
-// applyProxyVars SSA-applies proxy env vars to each named container on the
-// workload object. When proxyVars is empty/nil (proxy removed or no annotation),
-// it applies an empty env list, which removes any env var entries previously
-// owned by the proxy controller's SSA field manager. Only the three proxy env
-// var entries are owned; all other fields remain owned by boxcutter.
-func (c *ProxyController) applyProxyVars(
-	ctx context.Context,
-	apiVersion, kind, name, namespace string,
-	containerNames []string,
-	proxyVars []corev1.EnvVar,
-) error {
+// applyProxyVars submits a single SSA apply for the workload covering ALL
+// containers in the pod spec. This is required because SSA field manager
+// semantics treat each apply as the complete desired state: sending two
+// separate applies from the same field manager would cause the second to
+// cancel the ownership established by the first.
+//
+// For each container:
+//   - containers listed in the inject-proxy annotation receive proxy env vars
+//   - all other containers receive an empty env list, removing any proxy env
+//     var entries previously owned by this controller's SSA field manager
+//
+// A single apply is submitted even if no containers carry the annotation, so
+// that previously-owned env vars are always cleared correctly on opt-out.
+func (c *ProxyController) applyProxyVars(ctx context.Context, item workloadItem, proxyVars []corev1.EnvVar) error {
 	log := ctrl.LoggerFrom(ctx).WithName(proxyControllerName)
 
-	if len(containerNames) == 0 {
+	if len(item.containers) == 0 {
 		return nil
 	}
 
-	containerPatches := make([]map[string]interface{}, 0, len(containerNames))
-	envEntries := proxyEnvEntries(proxyVars)
+	// Build the set of containers that should receive proxy env vars.
+	annotatedSet := make(map[string]struct{})
 
-	for _, containerName := range containerNames {
+	if annotation, ok := item.podAnnotations[ProxyInjectAnnotation]; ok {
+		for _, name := range containerNamesFromAnnotation(annotation) {
+			annotatedSet[name] = struct{}{}
+		}
+	}
+
+	// Build a single patch covering ALL containers. Annotated containers get
+	// the proxy env vars; all others get an empty list to clear stale ownership.
+	containerPatches := make([]map[string]interface{}, 0, len(item.containers))
+
+	for _, container := range item.containers {
+		envEntries := make([]map[string]interface{}, 0)
+
+		if _, ok := annotatedSet[container.Name]; ok {
+			for _, ev := range proxyVars {
+				envEntries = append(envEntries, map[string]interface{}{
+					"name":  ev.Name,
+					"value": ev.Value,
+				})
+			}
+		}
+
 		containerPatches = append(containerPatches, map[string]interface{}{
-			"name": containerName,
+			"name": container.Name,
 			"env":  envEntries,
 		})
 	}
 
 	patch := &unstructured.Unstructured{
 		Object: map[string]interface{}{
-			"apiVersion": apiVersion,
-			"kind":       kind,
+			"apiVersion": item.apiVersion,
+			"kind":       item.kind,
 			"metadata": map[string]interface{}{
-				"name":      name,
-				"namespace": namespace,
+				"name":      item.name,
+				"namespace": item.namespace,
 			},
 			"spec": map[string]interface{}{
 				"template": map[string]interface{}{
@@ -318,27 +295,11 @@ func (c *ProxyController) applyProxyVars(
 		},
 	}
 
-	if err := c.client.Patch(ctx, patch, util.ApplyConfigPatch(patch.Object), client.FieldOwner(proxyFieldManager), client.ForceOwnership); err != nil {
-		return fmt.Errorf("applying proxy env vars to %s %s/%s: %w", kind, namespace, name, err)
+	if err := c.client.Patch(ctx, patch, util.ApplyConfigPatch(patch.Object), operatorstatus.CAPIFieldOwner("proxy"), client.ForceOwnership); err != nil {
+		return fmt.Errorf("applying proxy env vars to %s %s/%s: %w", item.kind, item.namespace, item.name, err)
 	}
 
-	log.Info("Applied proxy env vars", "kind", kind, "name", name, "namespace", namespace, "containers", containerNames)
+	log.Info("Applied proxy env vars", "kind", item.kind, "name", item.name, "namespace", item.namespace)
 
 	return nil
-}
-
-// proxyEnvEntries converts the proxy env var slice to the unstructured map
-// representation used in the SSA patch. An empty slice results in an empty
-// list, which causes the proxy controller's previously-owned env entries to be
-// removed (when the proxy is unconfigured).
-func proxyEnvEntries(vars []corev1.EnvVar) []map[string]interface{} {
-	entries := make([]map[string]interface{}, 0, len(vars))
-	for _, v := range vars {
-		entries = append(entries, map[string]interface{}{
-			"name":  v.Name,
-			"value": v.Value,
-		})
-	}
-
-	return entries
 }

@@ -162,7 +162,13 @@ func findWebhookServiceSecretName(objs []client.Object) map[string]string {
 	return serviceSecretNames
 }
 
-const proxyInjectAnnotation = "capi-operator.openshift.io/inject-proxy"
+// capiOperatorDomain is the shared annotation/label domain for this operator.
+// Mirrors operatorstatus.CAPIOperatorIdentifierDomain, which is not importable
+// here because manifests-gen is a standalone module.
+const (
+	capiOperatorDomain    = "capi-operator.openshift.io"
+	proxyInjectAnnotation = capiOperatorDomain + "/inject-proxy"
+)
 
 func customizeDeployment(obj client.Object) (client.Object, error) {
 	deployment := &appsv1.Deployment{}
