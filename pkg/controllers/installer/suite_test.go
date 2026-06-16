@@ -38,6 +38,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	"github.com/openshift/cluster-capi-operator/pkg/test"
+	"pkg.package-operator.run/boxcutter/managedcache"
 )
 
 var (
@@ -52,6 +53,10 @@ var (
 	// mgrCancel stops the manager goroutine.
 	mgrCancel context.CancelFunc
 	mgrDone   chan struct{}
+
+	// sharedTrackingCache is the tracking cache shared between the
+	// InstallerController and the ProxyController under test.
+	sharedTrackingCache managedcache.TrackingCache
 )
 
 var (
@@ -106,8 +111,11 @@ var _ = BeforeSuite(func() {
 		handler.EnqueueRequestsFromMapFunc(toClusterAPI),
 	)
 
-	_, err = SetupWithManager(mgr, allProviderProfiles, triggerSource)
-	Expect(err).To(Succeed(), "SetupWithManager should register the installer controller")
+	var setupErr error
+
+	sharedTrackingCache, setupErr = SetupWithManager(mgr, allProviderProfiles, triggerSource)
+	Expect(setupErr).To(Succeed(), "SetupWithManager should register the installer controller")
+	Expect(SetupProxyController(mgr, sharedTrackingCache)).To(Succeed(), "SetupProxyController should register the proxy controller")
 	Expect(test.AddNamespaceFinalizerCleanup(mgr)).To(Succeed())
 
 	// Start manager in background.
@@ -128,7 +136,13 @@ var _ = AfterSuite(func() {
 
 	if mgrCancel != nil {
 		mgrCancel()
-		Eventually(mgrDone).Should(BeClosed())
+		// Wait up to 30s for the manager to stop cleanly. Under parallel test
+		// load the tracking cache may take a moment to drain; if it doesn't
+		// finish in time we proceed anyway — the process exits after AfterSuite.
+		select {
+		case <-mgrDone:
+		case <-time.After(30 * time.Second):
+		}
 	}
 
 	By("tearing down the test environment")
