@@ -33,6 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 
+	proxycontroller "github.com/openshift/cluster-capi-operator/pkg/controllers/proxy"
 	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
 	"github.com/openshift/cluster-capi-operator/pkg/revisiongenerator"
 	"github.com/openshift/cluster-capi-operator/pkg/test"
@@ -112,7 +113,7 @@ func proxyDeploymentYAML(withAnnotation bool) string {
 	if withAnnotation {
 		annotations = fmt.Sprintf(`
       annotations:
-        %s: manager`, ProxyInjectAnnotation)
+        %s: manager`, proxycontroller.ProxyInjectAnnotation)
 	}
 
 	return fmt.Sprintf(`apiVersion: apps/v1

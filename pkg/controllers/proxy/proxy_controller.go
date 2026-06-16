@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package installer
+package proxy
 
 import (
 	"context"
@@ -42,7 +42,7 @@ import (
 )
 
 const (
-	proxyControllerName = "ProxyController"
+	controllerName = "ProxyController"
 
 	// ProxyInjectAnnotation is the annotation placed on a pod template to opt
 	// into cluster-wide proxy injection. The value is a comma-separated list of
@@ -51,24 +51,33 @@ const (
 	// overridden by provider manifests.
 	ProxyInjectAnnotation = operatorstatus.CAPIOperatorIdentifierDomain + "/inject-proxy"
 
+	// proxyVarNames are the only env var names this controller ever owns.
+	// Used for the skip-if-unchanged optimisation.
+
 	proxyClusterName = "cluster"
 )
 
-// ProxyController watches managed workloads that opt in to cluster-wide proxy
+// proxyVarNames returns the env var names this controller manages. These are
+// the only names that can appear in the SSA patch from this field manager, so
+// comparing them against the current state is sufficient to skip redundant
+// applies.
+func proxyVarNames() []string { return []string{"HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY"} }
+
+// Controller watches managed workloads that opt in to cluster-wide proxy
 // injection via the ProxyInjectAnnotation annotation and applies the current
 // proxy environment variables (HTTP_PROXY, HTTPS_PROXY, NO_PROXY) to the
 // named containers via SSA. It reconciles whenever the Proxy CR changes or
 // when a managed workload is created or updated.
-type ProxyController struct {
+type Controller struct {
 	client        client.Client
 	trackingCache managedcache.TrackingCache
 }
 
-// SetupProxyController registers the ProxyController with the Manager. It
-// shares the trackingCache returned by SetupWithManager so it can watch the
-// same set of managed objects without creating a second cache.
-func SetupProxyController(mgr ctrl.Manager, trackingCache managedcache.TrackingCache) error {
-	c := &ProxyController{
+// SetupWithManager registers the ProxyController with the Manager. It shares
+// the trackingCache returned by installer.SetupWithManager so it can list
+// managed objects without creating a second cache.
+func SetupWithManager(mgr ctrl.Manager, trackingCache managedcache.TrackingCache) error {
+	c := &Controller{
 		client:        mgr.GetClient(),
 		trackingCache: trackingCache,
 	}
@@ -79,8 +88,8 @@ func SetupProxyController(mgr ctrl.Manager, trackingCache managedcache.TrackingC
 
 	// Watch only managed workloads (those labelled by the installer).
 	// Using standard controller-runtime Watches instead of trackingCache.Source()
-	// avoids registering a handler on the TrackingCache, which can prevent it
-	// from stopping cleanly and cause orphaned envtest processes in tests.
+	// avoids registering a handler on the TrackingCache, which prevents it from
+	// stopping cleanly and can leave orphaned envtest processes.
 	managedReq, err := labels.NewRequirement(revisiongenerator.ManagedLabelKey, selection.Exists, nil)
 	if err != nil {
 		return fmt.Errorf("building managed label requirement: %w", err)
@@ -91,7 +100,7 @@ func SetupProxyController(mgr ctrl.Manager, trackingCache managedcache.TrackingC
 	})
 
 	err = ctrl.NewControllerManagedBy(mgr).
-		Named(proxyControllerName).
+		Named(controllerName).
 		Watches(
 			&configv1.Proxy{},
 			handler.EnqueueRequestsFromMapFunc(toProxy),
@@ -128,8 +137,8 @@ type workloadItem struct {
 // Reconcile reads the cluster-wide proxy configuration and applies the proxy
 // environment variables to all managed workloads that carry the inject-proxy
 // annotation.
-func (c *ProxyController) Reconcile(ctx context.Context, _ ctrl.Request) (ctrl.Result, error) {
-	log := ctrl.LoggerFrom(ctx).WithName(proxyControllerName)
+func (c *Controller) Reconcile(ctx context.Context, _ ctrl.Request) (ctrl.Result, error) {
+	log := ctrl.LoggerFrom(ctx).WithName(controllerName)
 	log.Info("Reconciling proxy environment variables")
 
 	proxyVars, err := util.GetProxyEnvVars(ctx, c.client)
@@ -162,7 +171,7 @@ func containerNamesFromAnnotation(annotation string) []string {
 // applyToAllWorkloads collects all managed Deployments, DaemonSets, and
 // StatefulSets from the tracking cache and reconciles their proxy env vars.
 // It continues past per-object errors and returns all failures combined.
-func (c *ProxyController) applyToAllWorkloads(ctx context.Context, proxyVars []corev1.EnvVar) error {
+func (c *Controller) applyToAllWorkloads(ctx context.Context, proxyVars []corev1.EnvVar) error {
 	items, err := c.collectWorkloads(ctx)
 	if err != nil {
 		return err
@@ -181,7 +190,7 @@ func (c *ProxyController) applyToAllWorkloads(ctx context.Context, proxyVars []c
 
 // collectWorkloads lists all managed Deployments, DaemonSets, and StatefulSets
 // from the tracking cache and returns them as workloadItems.
-func (c *ProxyController) collectWorkloads(ctx context.Context) ([]workloadItem, error) {
+func (c *Controller) collectWorkloads(ctx context.Context) ([]workloadItem, error) {
 	var items []workloadItem
 
 	deployList := &appsv1.DeploymentList{}
@@ -249,10 +258,11 @@ func (c *ProxyController) collectWorkloads(ctx context.Context) ([]workloadItem,
 //   - all other containers receive an empty env list, removing any proxy env
 //     var entries previously owned by this controller's SSA field manager
 //
-// A single apply is submitted even if no containers carry the annotation, so
-// that previously-owned env vars are always cleared correctly on opt-out.
-func (c *ProxyController) applyProxyVars(ctx context.Context, item workloadItem, proxyVars []corev1.EnvVar) error {
-	log := ctrl.LoggerFrom(ctx).WithName(proxyControllerName)
+// The apply is skipped if the containers already reflect the desired proxy
+// state, to avoid unnecessary KAS round-trips during installation (when the
+// controller reconciles for every newly-applied managed object).
+func (c *Controller) applyProxyVars(ctx context.Context, item workloadItem, proxyVars []corev1.EnvVar) error {
+	log := ctrl.LoggerFrom(ctx).WithName(controllerName)
 
 	if len(item.containers) == 0 {
 		return nil
@@ -267,8 +277,30 @@ func (c *ProxyController) applyProxyVars(ctx context.Context, item workloadItem,
 		}
 	}
 
-	// Build a single patch covering ALL containers. Annotated containers get
-	// the proxy env vars; all others get an empty list to clear stale ownership.
+	// Skip the apply if the containers already have the desired proxy state.
+	// This avoids a KAS round-trip when the controller reconciles for every
+	// newly-applied managed object during installation.
+	if proxyVarsAlreadyApplied(item.containers, annotatedSet, proxyVars) {
+		log.Info("Proxy env vars already up to date, skipping apply",
+			"kind", item.kind, "name", item.name, "namespace", item.namespace)
+
+		return nil
+	}
+
+	patch := buildPatch(item, annotatedSet, proxyVars)
+
+	if err := c.client.Patch(ctx, patch, util.ApplyConfigPatch(patch.Object), operatorstatus.CAPIFieldOwner("proxy"), client.ForceOwnership); err != nil {
+		return fmt.Errorf("applying proxy env vars to %s %s/%s: %w", item.kind, item.namespace, item.name, err)
+	}
+
+	log.Info("Applied proxy env vars", "kind", item.kind, "name", item.name, "namespace", item.namespace)
+
+	return nil
+}
+
+// buildPatch constructs the unstructured SSA patch for the workload covering all
+// containers: annotated containers get proxy env vars, others get an empty list.
+func buildPatch(item workloadItem, annotatedSet map[string]struct{}, proxyVars []corev1.EnvVar) *unstructured.Unstructured {
 	containerPatches := make([]map[string]interface{}, 0, len(item.containers))
 
 	for _, container := range item.containers {
@@ -289,7 +321,7 @@ func (c *ProxyController) applyProxyVars(ctx context.Context, item workloadItem,
 		})
 	}
 
-	patch := &unstructured.Unstructured{
+	return &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": item.apiVersion,
 			"kind":       item.kind,
@@ -306,12 +338,47 @@ func (c *ProxyController) applyProxyVars(ctx context.Context, item workloadItem,
 			},
 		},
 	}
+}
 
-	if err := c.client.Patch(ctx, patch, util.ApplyConfigPatch(patch.Object), operatorstatus.CAPIFieldOwner("proxy"), client.ForceOwnership); err != nil {
-		return fmt.Errorf("applying proxy env vars to %s %s/%s: %w", item.kind, item.namespace, item.name, err)
+// proxyVarsAlreadyApplied returns true when every container in the pod spec
+// already carries exactly the desired proxy state:
+//   - annotated containers have all proxy env vars with the correct values
+//   - unannotated containers have none of the proxy env var names
+//
+// The check uses the current container state from the workloadItem (sourced
+// from the tracking cache), which reflects the actual state on the cluster
+// including any values previously applied by this controller.
+func proxyVarsAlreadyApplied(
+	containers []corev1.Container,
+	annotatedSet map[string]struct{},
+	proxyVars []corev1.EnvVar,
+) bool {
+	for _, container := range containers {
+		_, isAnnotated := annotatedSet[container.Name]
+
+		// Index this container's env by name for quick lookup.
+		envByName := make(map[string]string, len(container.Env))
+		for _, ev := range container.Env {
+			envByName[ev.Name] = ev.Value
+		}
+
+		if isAnnotated && len(proxyVars) > 0 {
+			// Annotated with proxy configured: all desired vars must be present with correct values.
+			for _, desired := range proxyVars {
+				if got, ok := envByName[desired.Name]; !ok || got != desired.Value {
+					return false
+				}
+			}
+		} else {
+			// Not annotated, or annotated but proxy was cleared: none of our var
+			// names may be present (covers both "never had proxy" and "proxy removed").
+			for _, name := range proxyVarNames() {
+				if _, ok := envByName[name]; ok {
+					return false
+				}
+			}
+		}
 	}
 
-	log.Info("Applied proxy env vars", "kind", item.kind, "name", item.name, "namespace", item.namespace)
-
-	return nil
+	return true
 }

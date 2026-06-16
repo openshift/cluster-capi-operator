@@ -42,6 +42,7 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/clusteroperator"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/installer"
+	proxycontroller "github.com/openshift/cluster-capi-operator/pkg/controllers/proxy"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/revision"
 	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
@@ -167,7 +168,7 @@ func setupControllers(ctx context.Context, log logr.Logger, mgr ctrl.Manager, op
 		return fmt.Errorf("unable to create installer controller: %w", err)
 	}
 
-	if err := installer.SetupProxyController(mgr, trackingCache); err != nil {
+	if err := proxycontroller.SetupWithManager(mgr, trackingCache); err != nil {
 		return fmt.Errorf("unable to create proxy controller: %w", err)
 	}
 
