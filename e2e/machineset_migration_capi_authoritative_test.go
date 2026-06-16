@@ -184,7 +184,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				verifyMAPIMachineSetSynchronizedCondition(mapiMachineSet, mapiv1beta1.MachineAuthorityMachineAPI)
 
 				By("Scaling up MAPI MachineSet to 3 replicas")
-				Expect(mapiframework.ScaleMachineSet(mapiMSAuthCAPIName, 3)).To(Succeed(), "should be able to scale up MAPI MachineSet")
+				Expect(mapiframework.ScaleMachineSetWithContext(ctx, mapiMSAuthCAPIName, 3)).To(Succeed(), "should be able to scale up MAPI MachineSet")
 
 				By("Verifying MachineSet status.replicas is set to 3")
 				verifyMachinesetReplicas(mapiMachineSet, 3)
@@ -206,7 +206,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				verifyMachineAuthoritative(secondMAPIMachine, mapiv1beta1.MachineAuthorityClusterAPI)
 
 				By("Scaling down MAPI MachineSet to 1 replicas")
-				Expect(mapiframework.ScaleMachineSet(mapiMSAuthCAPIName, 1)).To(Succeed(), "should be able to scale down MAPI MachineSet")
+				Expect(mapiframework.ScaleMachineSetWithContext(ctx, mapiMSAuthCAPIName, 1)).To(Succeed(), "should be able to scale down MAPI MachineSet")
 				verifyMachinesetReplicas(mapiMachineSet, 1)
 				verifyMachinesetReplicas(capiMachineSet, 1)
 

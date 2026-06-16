@@ -15,7 +15,7 @@ tool (
 
 replace (
 	// cluster-api-actuator-pkg uses a placeholder for cluster-api-actuator-pkg/testutils
-	github.com/openshift/cluster-api-actuator-pkg/testutils => github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20260310144400-bec013a007a8
+	github.com/openshift/cluster-api-actuator-pkg/testutils => github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20260616083352-ff0f225cc3b5
 
 	// All k8s.io packages are pinned as replacements as a side effect of importing K/K which imports v0.0.0 of each version.
 	k8s.io/api => k8s.io/api v0.35.3

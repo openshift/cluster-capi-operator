@@ -155,7 +155,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 
 			It("should scale, switch authority, and clean up successfully", func() {
 				By("Scaling up MAPI MachineSet to 2 replicas")
-				Expect(mapiframework.ScaleMachineSet(mapiMachineSet.GetName(), 2)).To(Succeed(), "should be able to scale up MAPI MachineSet")
+				Expect(mapiframework.ScaleMachineSetWithContext(ctx, mapiMachineSet.GetName(), 2)).To(Succeed(), "should be able to scale up MAPI MachineSet")
 				mapiframework.WaitForMachineSet(ctx, cl, mapiMSAuthMAPIName)
 				verifyMachinesetReplicas(mapiMachineSet, 2)
 				verifyMachinesetReplicas(capiMachineSet, 2)
@@ -247,7 +247,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 
 			It("should create authoritative CAPI Machines and clean up successfully", func() {
 				By("Scaling up MAPI MachineSet to 1 replicas")
-				Expect(mapiframework.ScaleMachineSet(mapiMachineSet.GetName(), 1)).To(Succeed(), "should be able to scale up MAPI MachineSet")
+				Expect(mapiframework.ScaleMachineSetWithContext(ctx, mapiMachineSet.GetName(), 1)).To(Succeed(), "should be able to scale up MAPI MachineSet")
 				capiframework.WaitForMachineSet(ctx, cl, mapiMSAuthMAPICAPI, capiframework.CAPINamespace)
 				verifyMachinesetReplicas(mapiMachineSet, 1)
 				verifyMachinesetReplicas(capiMachineSet, 1)
