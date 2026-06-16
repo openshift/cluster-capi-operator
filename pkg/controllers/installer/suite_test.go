@@ -136,13 +136,7 @@ var _ = AfterSuite(func() {
 
 	if mgrCancel != nil {
 		mgrCancel()
-		// Wait up to 30s for the manager to stop cleanly. Under parallel test
-		// load the tracking cache may take a moment to drain; if it doesn't
-		// finish in time we proceed anyway — the process exits after AfterSuite.
-		select {
-		case <-mgrDone:
-		case <-time.After(30 * time.Second):
-		}
+		Eventually(mgrDone).Should(BeClosed())
 	}
 
 	By("tearing down the test environment")

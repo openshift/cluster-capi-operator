@@ -26,6 +26,8 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/selection"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -34,6 +36,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
+	"github.com/openshift/cluster-capi-operator/pkg/revisiongenerator"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 	"pkg.package-operator.run/boxcutter/managedcache"
 )
@@ -74,7 +77,20 @@ func SetupProxyController(mgr ctrl.Manager, trackingCache managedcache.TrackingC
 		return []reconcile.Request{{NamespacedName: client.ObjectKey{Name: proxyClusterName}}}
 	}
 
-	err := ctrl.NewControllerManagedBy(mgr).
+	// Watch only managed workloads (those labelled by the installer).
+	// Using standard controller-runtime Watches instead of trackingCache.Source()
+	// avoids registering a handler on the TrackingCache, which can prevent it
+	// from stopping cleanly and cause orphaned envtest processes in tests.
+	managedReq, err := labels.NewRequirement(revisiongenerator.ManagedLabelKey, selection.Exists, nil)
+	if err != nil {
+		return fmt.Errorf("building managed label requirement: %w", err)
+	}
+
+	isManagedWorkload := predicate.NewPredicateFuncs(func(obj client.Object) bool {
+		return labels.NewSelector().Add(*managedReq).Matches(labels.Set(obj.GetLabels()))
+	})
+
+	err = ctrl.NewControllerManagedBy(mgr).
 		Named(proxyControllerName).
 		Watches(
 			&configv1.Proxy{},
@@ -83,16 +99,12 @@ func SetupProxyController(mgr ctrl.Manager, trackingCache managedcache.TrackingC
 				return obj.GetName() == proxyClusterName
 			})),
 		).
-		WatchesRawSource(
-			c.trackingCache.Source(
-				handler.EnqueueRequestsFromMapFunc(toProxy),
-				predicate.Or(
-					predicate.GenerationChangedPredicate{},
-					noGenerationPredicate(),
-					predicate.AnnotationChangedPredicate{},
-				),
-			),
-		).
+		Watches(&appsv1.Deployment{}, handler.EnqueueRequestsFromMapFunc(toProxy),
+			builder.WithPredicates(isManagedWorkload)).
+		Watches(&appsv1.DaemonSet{}, handler.EnqueueRequestsFromMapFunc(toProxy),
+			builder.WithPredicates(isManagedWorkload)).
+		Watches(&appsv1.StatefulSet{}, handler.EnqueueRequestsFromMapFunc(toProxy),
+			builder.WithPredicates(isManagedWorkload)).
 		Complete(c)
 	if err != nil {
 		return fmt.Errorf("failed to create proxy controller: %w", err)
