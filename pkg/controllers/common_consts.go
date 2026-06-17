@@ -31,6 +31,9 @@ const (
 	// DefaultOperatorNamespace is the default namespace used for operator resources.
 	DefaultOperatorNamespace = "openshift-cluster-api-operator"
 
+	// DefaultCRDCompatibilityCheckerNamespace is the default namespace for CRD Compatibility Checker operator and controllers.
+	DefaultCRDCompatibilityCheckerNamespace = "openshift-compatibility-requirements-operator"
+
 	// OperatorVersionKey is the key used to store the operator version in the ClusterOperator status.
 	OperatorVersionKey = "operator"
 

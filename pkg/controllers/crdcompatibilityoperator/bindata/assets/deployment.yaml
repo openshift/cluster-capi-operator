@@ -1,0 +1,92 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: compatibility-requirements-controllers
+spec:
+  selector:
+    matchLabels:
+      k8s-app: compatibility-requirements-controllers
+  template:
+    metadata:
+      labels:
+        k8s-app: compatibility-requirements-controllers
+      annotations:
+        target.workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
+        openshift.io/required-scc: "restricted-v3"
+    spec:
+      serviceAccountName: compatibility-requirements-controllers
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  k8s-app: compatibility-requirements-controllers
+              topologyKey: kubernetes.io/hostname
+      containers:
+      - name: compatibility-requirements-controllers
+        command:
+        - ./crd-compatibility-checker
+        args:
+        - --diagnostics-address=:8443
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: healthz
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+          successThreshold: 1
+          initialDelaySeconds: 0
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: healthz
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+          successThreshold: 1
+          initialDelaySeconds: 0
+        ports:
+        - containerPort: 9443
+          name: webhook-server
+          protocol: TCP
+        - containerPort: 9440
+          name: healthz
+          protocol: TCP
+        - containerPort: 8443
+          name: diagnostics
+          protocol: TCP
+        resources:
+          requests:
+            cpu: 10m
+            memory: 50Mi
+        terminationMessagePolicy: FallbackToLogsOnError
+        volumeMounts:
+        - name: cert
+          mountPath: /tmp/k8s-webhook-server/serving-certs
+          readOnly: true
+        - name: metrics-cert
+          mountPath: /tmp/k8s-metrics-server/serving-certs
+          readOnly: true
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: ""
+      priorityClassName: system-cluster-critical
+      restartPolicy: Always
+      tolerations:
+      - key: node-role.kubernetes.io/master
+        operator: Exists
+        effect: NoSchedule
+      - key: node-role.kubernetes.io/control-plane
+        operator: Exists
+        effect: NoSchedule
+      volumes:
+      - name: cert
+        secret:
+          secretName: compatibility-requirements-controllers-webhook-service-cert
+          defaultMode: 420
+      - name: metrics-cert
+        secret:
+          secretName: compatibility-requirements-controllers-metrics-tls
+          defaultMode: 420

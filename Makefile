@@ -30,7 +30,7 @@ verify: fmt lint verify-ocp-manifests ## Run formatting and linting checks
 
 test: verify unit ## Run verification and unit tests
 
-build: bin/capi-operator bin/capi-installer bin/capi-controllers bin/machine-api-migration bin/crd-compatibility-checker bin/cluster-capi-operator-tests-ext manifests-gen ## Build all binaries
+build: bin/capi-operator bin/capi-installer bin/capi-controllers bin/machine-api-migration bin/crd-compatibility-checker bin/crd-compatibility-checker-operator bin/cluster-capi-operator-tests-ext manifests-gen ## Build all binaries
 
 clean:
 	rm -rf bin/*

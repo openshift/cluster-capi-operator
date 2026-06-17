@@ -10,6 +10,7 @@ COPY --from=builder /go/src/github.com/openshift/cluster-capi-operator/bin/capi-
 COPY --from=builder /go/src/github.com/openshift/cluster-capi-operator/bin/capi-controllers .
 COPY --from=builder /go/src/github.com/openshift/cluster-capi-operator/bin/machine-api-migration .
 COPY --from=builder /go/src/github.com/openshift/cluster-capi-operator/bin/crd-compatibility-checker .
+COPY --from=builder /go/src/github.com/openshift/cluster-capi-operator/bin/crd-compatibility-checker-operator .
 COPY --from=builder /go/src/github.com/openshift/cluster-capi-operator/bin/cluster-capi-operator-tests-ext.gz /usr/bin/cluster-capi-operator-tests-ext.gz
 
 COPY ./manifests /manifests
