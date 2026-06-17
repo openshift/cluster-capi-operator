@@ -4,9 +4,11 @@ metadata:
   name: openshift-validate-capi-machine-set-creation
 spec:
   matchResources:
+    matchPolicy: Equivalent
     namespaceSelector:
       matchLabels:
         kubernetes.io/metadata.name: openshift-cluster-api
+    objectSelector: {}
   paramRef:
     namespace: openshift-machine-api
     parameterNotFoundAction: Allow
@@ -25,11 +27,15 @@ spec:
     apiVersion: machine.openshift.io/v1beta1
     kind: MachineSet
   matchConstraints:
+    matchPolicy: Equivalent
+    namespaceSelector: {}
+    objectSelector: {}
     resourceRules:
     - apiGroups:   ["cluster.x-k8s.io"]
       apiVersions: ["v1beta2"]
       operations:  ["CREATE"]
       resources:   ["machinesets"]
+      scope: "*"
   # Requests must satisfy every matchCondition to reach the validations
   matchConditions:
     - name: check-only-non-service-account-requests

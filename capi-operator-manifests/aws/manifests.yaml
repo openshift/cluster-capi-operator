@@ -4,12 +4,14 @@ metadata:
   name: openshift-cluster-api-unsupported-aws-spec-fields
 spec:
   matchResources:
+    matchPolicy: Equivalent
     namespaceSelector:
       matchExpressions:
       - key: kubernetes.io/metadata.name
         operator: In
         values:
         - openshift-cluster-api
+    objectSelector: {}
   policyName: openshift-cluster-api-unsupported-aws-spec-fields
   validationActions:
   - Deny
@@ -21,6 +23,9 @@ metadata:
 spec:
   failurePolicy: Fail
   matchConstraints:
+    matchPolicy: Equivalent
+    namespaceSelector: {}
+    objectSelector: {}
     resourceRules:
     - apiGroups:
       - infrastructure.cluster.x-k8s.io
@@ -32,6 +37,7 @@ spec:
       resources:
       - awsmachines
       - awsmachinetemplates
+      scope: '*'
   validations:
   - expression: '!has(variables.machineSpec.ami.eksLookupType)'
     messageExpression: variables.specPath + '.ami.eksLookupType is a forbidden field'
