@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -13,6 +14,7 @@ import (
 
 	configv1 "github.com/openshift/api/config/v1"
 	machinev1 "github.com/openshift/api/machine/v1beta1"
+	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -24,6 +26,7 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/scale"
+	"k8s.io/client-go/util/retry"
 	"k8s.io/klog"
 	"k8s.io/utils/ptr"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -53,6 +56,10 @@ const (
 )
 
 var (
+	machineSetScaleResource = schema.GroupResource{Group: machineAPIGroup, Resource: "machinesets"}
+	scaleClientMu           sync.Mutex
+	cachedScaleClient       scale.ScalesGetter
+
 	// ErrMachineNotProvisionedInsufficientCloudCapacity is used when we detect that the machine is not being provisioned due to insufficient provider capacity.
 	ErrMachineNotProvisionedInsufficientCloudCapacity = errors.New("machine creation failed due to insufficient cloud provider capacity")
 
@@ -477,24 +484,72 @@ func NewMachineSet(
 	return &ms
 }
 
-// ScaleMachineSet scales a machineSet with a given name to the given number of replicas.
-func ScaleMachineSet(name string, replicas int) error {
+// GetMachineSetScale returns the Scale subresource for the named MachineSet.
+//
+// Deprecated: use GetMachineSetScaleWithContext instead.
+func GetMachineSetScale(name string) (*autoscalingv1.Scale, error) {
+	return GetMachineSetScaleWithContext(context.Background(), name)
+}
+
+// GetMachineSetScaleWithContext returns the Scale subresource for the named MachineSet.
+func GetMachineSetScaleWithContext(ctx context.Context, name string) (*autoscalingv1.Scale, error) {
 	scaleClient, err := getScaleClient()
 	if err != nil {
-		return fmt.Errorf("error calling getScaleClient %w", err)
+		return nil, fmt.Errorf("getting scale client: %w", err)
 	}
 
-	scale, err := scaleClient.Scales(MachineAPINamespace).Get(context.Background(), schema.GroupResource{Group: machineAPIGroup, Resource: "MachineSet"}, name, metav1.GetOptions{})
+	scaleObj, err := getMachineSetScale(ctx, scaleClient, name)
 	if err != nil {
-		return fmt.Errorf("error calling scaleClient.Scales get: %w", err)
+		return nil, err
 	}
 
-	scaleUpdate := scale.DeepCopy()
-	scaleUpdate.Spec.Replicas = int32(replicas)
+	return scaleObj, nil
+}
 
-	_, err = scaleClient.Scales(MachineAPINamespace).Update(context.Background(), schema.GroupResource{Group: machineAPIGroup, Resource: "MachineSet"}, scaleUpdate, metav1.UpdateOptions{})
+func getMachineSetScale(ctx context.Context, scaleClient scale.ScalesGetter, name string) (*autoscalingv1.Scale, error) {
+	scaleObj, err := scaleClient.Scales(MachineAPINamespace).Get(ctx, machineSetScaleResource, name, metav1.GetOptions{})
 	if err != nil {
-		return fmt.Errorf("error calling scaleClient.Scales update: %w", err)
+		return nil, fmt.Errorf("getting MachineSet scale: %w", err)
+	}
+
+	return scaleObj, nil
+}
+
+// ScaleMachineSet scales a machineSet with a given name to the given number of replicas.
+//
+// Deprecated: use ScaleMachineSetWithContext instead.
+func ScaleMachineSet(name string, replicas int) error {
+	return ScaleMachineSetWithContext(context.Background(), name, replicas)
+}
+
+// ScaleMachineSetWithContext scales a machineSet with a given name to the given number of replicas.
+func ScaleMachineSetWithContext(ctx context.Context, name string, replicas int) error {
+	scaleClient, err := getScaleClient()
+	if err != nil {
+		return fmt.Errorf("getting scale client: %w", err)
+	}
+
+	err = wait.ExponentialBackoffWithContext(ctx, retry.DefaultBackoff, func(ctx context.Context) (bool, error) {
+		scaleObj, err := getMachineSetScale(ctx, scaleClient, name)
+		if err != nil {
+			return false, err
+		}
+
+		scaleUpdate := scaleObj.DeepCopy()
+		scaleUpdate.Spec.Replicas = int32(replicas)
+
+		_, err = scaleClient.Scales(MachineAPINamespace).Update(ctx, machineSetScaleResource, scaleUpdate, metav1.UpdateOptions{})
+		switch {
+		case err == nil:
+			return true, nil
+		case apierrors.IsConflict(err):
+			return false, nil
+		}
+
+		return false, err
+	})
+	if err != nil {
+		return fmt.Errorf("updating MachineSet scale: %w", err)
 	}
 
 	return nil
@@ -502,30 +557,43 @@ func ScaleMachineSet(name string, replicas int) error {
 
 // getScaleClient returns a ScalesGetter object to manipulate scale subresources.
 func getScaleClient() (scale.ScalesGetter, error) {
+	scaleClientMu.Lock()
+	defer scaleClientMu.Unlock()
+
+	if cachedScaleClient != nil {
+		return cachedScaleClient, nil
+	}
+
 	cfg, err := config.GetConfig()
 	if err != nil {
-		return nil, fmt.Errorf("error getting config %w", err)
+		return nil, fmt.Errorf("getting config: %w", err)
 	}
 
 	httpClient, err := rest.HTTPClientFor(cfg)
 	if err != nil {
-		return nil, fmt.Errorf("error calling rest.HTTPClientFor %w", err)
+		return nil, fmt.Errorf("building HTTP client: %w", err)
 	}
 
 	mapper, err := apiutil.NewDynamicRESTMapper(cfg, httpClient)
 	if err != nil {
-		return nil, fmt.Errorf("error calling NewDiscoveryRESTMapper %w", err)
+		return nil, fmt.Errorf("building dynamic REST mapper: %w", err)
 	}
 
-	discovery := discovery.NewDiscoveryClientForConfigOrDie(cfg)
-	scaleKindResolver := scale.NewDiscoveryScaleKindResolver(discovery)
+	discoveryClient, err := discovery.NewDiscoveryClientForConfig(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("building discovery client: %w", err)
+	}
+
+	scaleKindResolver := scale.NewDiscoveryScaleKindResolver(discoveryClient)
 
 	scaleClient, err := scale.NewForConfig(cfg, mapper, dynamic.LegacyAPIPathResolverFunc, scaleKindResolver)
 	if err != nil {
-		return nil, fmt.Errorf("error calling building scale client %w", err)
+		return nil, fmt.Errorf("building scale client: %w", err)
 	}
 
-	return scaleClient, nil
+	cachedScaleClient = scaleClient
+
+	return cachedScaleClient, nil
 }
 
 // WaitForMachineSet waits for the all Machines belonging to the named

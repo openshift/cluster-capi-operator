@@ -7,7 +7,7 @@ replace (
 	github.com/metal3-io/baremetal-operator => github.com/metal3-io/baremetal-operator v0.5.1
 
 	//cluster-api-actuator-pkg uses a placeholder for cluster-api-actuator-pkg/testutils
-	github.com/openshift/cluster-api-actuator-pkg/testutils => github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20260310144400-bec013a007a8
+	github.com/openshift/cluster-api-actuator-pkg/testutils => github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20260616083352-ff0f225cc3b5
 
 	// manifests-gen is a local module in this repo
 	github.com/openshift/cluster-capi-operator/manifests-gen => ../manifests-gen
@@ -21,7 +21,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.28.1
 	github.com/onsi/gomega v1.39.1
 	github.com/openshift/api v0.0.0-20260416105050-3c6b218b8a80
-	github.com/openshift/cluster-api-actuator-pkg v0.0.0-20260310144400-bec013a007a8
+	github.com/openshift/cluster-api-actuator-pkg v0.0.0-20260616083352-ff0f225cc3b5
 	github.com/openshift/cluster-api-provider-baremetal v0.0.0-20250619124612-fb678fec5f7e
 	github.com/openshift/cluster-capi-operator v0.0.0-20260425200736-89a8af46df2a
 	k8s.io/api v0.35.3
