@@ -17,14 +17,12 @@ package main
 import (
 	"context"
 	"errors"
-	"flag"
 	"fmt"
 	"os"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -33,6 +31,7 @@ import (
 
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-logr/logr"
 	configv1 "github.com/openshift/api/config/v1"
@@ -41,24 +40,22 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/commoncmdoptions"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/clusteroperator"
-	"github.com/openshift/cluster-capi-operator/pkg/controllers/installer"
-	"github.com/openshift/cluster-capi-operator/pkg/controllers/revision"
-	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/installerdeployment"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 )
 
-var errPodIdentityNotSet = errors.New("POD_NAME and POD_NAMESPACE must be set")
+var (
+	errPodIdentityNotSet = errors.New("POD_NAME and POD_NAMESPACE must be set")
+	errContainerNotInPod = errors.New("container not found in pod spec")
+)
 
 const (
 	managerName = "capi-operator"
-
-	defaultProviderImageDirPath = "/var/lib/provider-images"
 )
 
 func initScheme(scheme *runtime.Scheme) {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(configv1.AddToScheme(scheme))
-	utilruntime.Must(apiextensionsv1.AddToScheme(scheme))
 	utilruntime.Must(appsv1.AddToScheme(scheme))
 	utilruntime.Must(operatorv1alpha1.AddToScheme(scheme))
 }
@@ -70,14 +67,7 @@ func main() {
 	scheme := runtime.NewScheme()
 	initScheme(scheme)
 
-	extraflags := flag.NewFlagSet("", flag.ContinueOnError)
-	providerImageDir := extraflags.String(
-		"provider-image-dir",
-		defaultProviderImageDirPath,
-		"Directory containing provider image manifests. In dev mode, set to a local directory to skip pod spec reading.",
-	)
-
-	log, operatorConfig, mgrOpts, initManager, err := commoncmdoptions.InitOperatorConfig(ctx, cfg, scheme, managerName, controllers.DefaultOperatorNamespace, extraflags)
+	log, operatorConfig, mgrOpts, initManager, err := commoncmdoptions.InitOperatorConfig(ctx, cfg, scheme, managerName, controllers.DefaultOperatorNamespace, nil)
 	if err != nil {
 		log.Error(err, "unable to initialize operator config")
 		os.Exit(1)
@@ -97,7 +87,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := setupControllers(ctx, log, mgr, operatorConfig, *providerImageDir, cancel); err != nil {
+	if err := setupControllers(ctx, log, mgr, operatorConfig, cancel); err != nil {
 		log.Error(err, "unable to setup controllers")
 		os.Exit(1)
 	}
@@ -110,7 +100,7 @@ func main() {
 	}
 }
 
-func setupControllers(ctx context.Context, log logr.Logger, mgr ctrl.Manager, operatorConfig commoncmdoptions.OperatorConfig, providerImageDir string, cancel context.CancelFunc) error {
+func setupControllers(ctx context.Context, log logr.Logger, mgr ctrl.Manager, operatorConfig commoncmdoptions.OperatorConfig, cancel context.CancelFunc) error {
 	infra, err := util.GetInfra(ctx, mgr.GetAPIReader())
 	if err != nil {
 		return fmt.Errorf("unable to get infrastructure: %w", err)
@@ -136,63 +126,45 @@ func setupControllers(ctx context.Context, log logr.Logger, mgr ctrl.Manager, op
 		return fmt.Errorf("unable to create clusteroperator controller: %w", err)
 	}
 
-	// The ClusterOperatorController MUST run if we were installed, otherwise
-	// our ClusterOperator will not be reconciled and installation will not
-	// progress. We don't run any other controllers if the current platform is
-	// not supported.
-	if !supportedPlatform {
-		return nil
-	}
-
-	providerProfiles, err := loadProviderImages(ctx, mgr, providerImageDir)
+	// Get container image from own pod spec
+	containerImage, err := getContainerImage(ctx, mgr.GetAPIReader())
 	if err != nil {
-		return err
+		return fmt.Errorf("unable to get container image: %w", err)
 	}
 
-	for _, profile := range providerProfiles {
-		log.Info("loaded provider profile", "name", profile.Name, "imageRef", profile.ImageRef, "profile", profile.Profile)
-	}
-
-	if err := (&revision.RevisionController{
-		Client:           mgr.GetClient(),
-		ProviderProfiles: providerProfiles,
-		ReleaseVersion:   util.GetReleaseVersion(),
-	}).SetupWithManager(mgr, operatorConfig.TLSOptions); err != nil {
-		log.Error(err, "unable to create revision controller", "controller", "RevisionController")
-		return fmt.Errorf("unable to create revision controller: %w", err)
-	}
-
-	if err := installer.SetupWithManager(mgr, providerProfiles); err != nil {
-		return fmt.Errorf("unable to create installer controller: %w", err)
+	// Setup InstallerDeploymentController (runs on all platforms)
+	if err := (&installerdeployment.InstallerDeploymentReconciler{
+		Client:            mgr.GetClient(),
+		Namespace:         *operatorConfig.OperatorNamespace,
+		ContainerImage:    containerImage,
+		SupportedPlatform: supportedPlatform,
+	}).SetupWithManager(mgr); err != nil {
+		return fmt.Errorf("unable to create installerdeployment controller: %w", err)
 	}
 
 	return nil
 }
 
-func loadProviderImages(ctx context.Context, mgr ctrl.Manager, providerImageDir string) ([]providerimages.ProviderImageManifests, error) {
+// getContainerImage reads the container image from the capi-operator pod spec.
+func getContainerImage(ctx context.Context, k8sClient client.Reader) (string, error) {
 	podName := os.Getenv("POD_NAME")
-
 	podNamespace := os.Getenv("POD_NAMESPACE")
+
 	if podName == "" || podNamespace == "" {
-		return nil, errPodIdentityNotSet
+		return "", errPodIdentityNotSet
 	}
 
 	var pod corev1.Pod
-	if err := mgr.GetAPIReader().Get(ctx, types.NamespacedName{Name: podName, Namespace: podNamespace}, &pod); err != nil {
-		return nil, fmt.Errorf("unable to get pod %s/%s: %w", podNamespace, podName, err)
+	if err := k8sClient.Get(ctx, types.NamespacedName{Name: podName, Namespace: podNamespace}, &pod); err != nil {
+		return "", fmt.Errorf("unable to get pod %s/%s: %w", podNamespace, podName, err)
 	}
 
-	imageRefMap, err := providerimages.BuildImageRefMap(pod.Spec, managerName)
-	if err != nil {
-		return nil, fmt.Errorf("unable to build image ref map from pod spec: %w", err)
+	// Find the capi-operator container
+	for _, container := range pod.Spec.Containers {
+		if container.Name == managerName {
+			return container.Image, nil
+		}
 	}
 
-	log := ctrl.LoggerFrom(ctx)
-
-	providerProfiles, err := providerimages.ScanProviderImages(log, providerImageDir, imageRefMap)
-	if err != nil {
-		return nil, fmt.Errorf("unable to scan provider images: %w", err)
-	}
-
-	return providerProfiles, nil
+	return "", fmt.Errorf("%s: %w", managerName, errContainerNotInPod)
 }
