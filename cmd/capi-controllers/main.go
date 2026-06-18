@@ -149,7 +149,7 @@ func main() {
 func setupPlatformReconcilers(log logr.Logger, mgr manager.Manager, operatorConfig commoncmdoptions.OperatorConfig, infra *configv1.Infrastructure, platform configv1.PlatformType) error {
 	// Only setup reconcile controllers and webhooks when the platform is supported.
 	// This avoids unnecessary CAPI providers discovery, installs and reconciles when the platform is not supported.
-	infraTypes, _, err := util.GetCAPITypesForInfrastructure(infra)
+	infraTypes, err := util.GetCAPITypesForInfrastructure(infra)
 	if err != nil {
 		if errors.Is(err, util.ErrUnsupportedPlatform) {
 			log.Info("Detected platform is not supported, skipping capi controllers setup", "platform", platform)
