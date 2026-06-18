@@ -14,6 +14,9 @@ tool (
 )
 
 replace (
+	github.com/openshift/api => github.com/ingvagabund/api v0.0.0-20260608151207-ccf82b04671a
+	github.com/openshift/client-go => github.com/ingvagabund/client-go v0.0.0-20260608152916-388a325b5910
+
 	// cluster-api-actuator-pkg uses a placeholder for cluster-api-actuator-pkg/testutils
 	github.com/openshift/cluster-api-actuator-pkg/testutils => github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20260310144400-bec013a007a8
 
@@ -67,7 +70,7 @@ require (
 	github.com/metal3-io/cluster-api-provider-metal3/api v1.11.2
 	github.com/onsi/ginkgo/v2 v2.28.1
 	github.com/onsi/gomega v1.39.1
-	github.com/openshift/api v0.0.0-20260416105050-3c6b218b8a80
+	github.com/openshift/api v0.0.0-20260605005319-1194f4c62539
 	github.com/openshift/client-go v0.0.0-20260416131737-a19e91702ab5
 	github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0
 	github.com/openshift/cluster-capi-operator/manifests-gen v0.0.0-00010101000000-000000000000
@@ -402,7 +405,7 @@ require (
 	k8s.io/component-helpers v0.35.1 // indirect
 	k8s.io/controller-manager v0.35.1 // indirect
 	k8s.io/kube-aggregator v0.35.1 // indirect
-	k8s.io/kube-openapi v0.0.0-20260127142750-a19766b6e2d4 // indirect
+	k8s.io/kube-openapi v0.0.0-20260519202549-bbf5c5577288 // indirect
 	k8s.io/kubelet v0.35.1 // indirect
 	mvdan.cc/gofumpt v0.9.2 // indirect
 	mvdan.cc/unparam v0.0.0-20251027182757-5beb8c8f8f15 // indirect

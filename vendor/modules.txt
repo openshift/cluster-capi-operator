@@ -1133,7 +1133,9 @@ github.com/onsi/gomega/types
 # github.com/opencontainers/go-digest v1.0.0
 ## explicit; go 1.13
 github.com/opencontainers/go-digest
-# github.com/openshift/api v0.0.0-20260416105050-3c6b218b8a80
+# github.com/openshift/api v0.0.0-20260416105050-3c6b218b8a80 => github.com/ingvagabund/api v0.0.0-20260608151207-ccf82b04671a
+## explicit; go 1.25.0
+# github.com/openshift/api v0.0.0-20260605005319-1194f4c62539 => github.com/ingvagabund/api v0.0.0-20260608151207-ccf82b04671a
 ## explicit; go 1.25.0
 github.com/openshift/api
 github.com/openshift/api/annotations
@@ -1160,6 +1162,8 @@ github.com/openshift/api/console/v1
 github.com/openshift/api/etcd
 github.com/openshift/api/etcd/v1
 github.com/openshift/api/etcd/v1alpha1
+github.com/openshift/api/example/v1
+github.com/openshift/api/example/v1alpha1
 github.com/openshift/api/features
 github.com/openshift/api/helm
 github.com/openshift/api/helm/v1beta1
@@ -1169,6 +1173,9 @@ github.com/openshift/api/image/dockerpre012
 github.com/openshift/api/image/v1
 github.com/openshift/api/imageregistry
 github.com/openshift/api/imageregistry/v1
+github.com/openshift/api/insights/v1
+github.com/openshift/api/insights/v1alpha1
+github.com/openshift/api/insights/v1alpha2
 github.com/openshift/api/kubecontrolplane
 github.com/openshift/api/kubecontrolplane/v1
 github.com/openshift/api/legacyconfig/v1
@@ -1177,6 +1184,7 @@ github.com/openshift/api/machine/v1
 github.com/openshift/api/machine/v1alpha1
 github.com/openshift/api/machine/v1beta1
 github.com/openshift/api/machine/v1beta1/zz_generated.crd-manifests
+github.com/openshift/api/machineconfiguration/v1alpha1
 github.com/openshift/api/monitoring
 github.com/openshift/api/monitoring/v1
 github.com/openshift/api/network
@@ -1196,6 +1204,7 @@ github.com/openshift/api/operator/v1alpha1
 github.com/openshift/api/operator/v1alpha1/zz_generated.crd-manifests
 github.com/openshift/api/operatorcontrolplane
 github.com/openshift/api/operatorcontrolplane/v1alpha1
+github.com/openshift/api/operatoringress/v1
 github.com/openshift/api/osin
 github.com/openshift/api/osin/v1
 github.com/openshift/api/pkg/serialization
@@ -1209,6 +1218,7 @@ github.com/openshift/api/samples
 github.com/openshift/api/samples/v1
 github.com/openshift/api/security
 github.com/openshift/api/security/v1
+github.com/openshift/api/securityinternal/v1
 github.com/openshift/api/servicecertsigner
 github.com/openshift/api/servicecertsigner/v1alpha1
 github.com/openshift/api/sharedresource
@@ -1217,7 +1227,7 @@ github.com/openshift/api/template
 github.com/openshift/api/template/v1
 github.com/openshift/api/user
 github.com/openshift/api/user/v1
-# github.com/openshift/client-go v0.0.0-20260416131737-a19e91702ab5
+# github.com/openshift/client-go v0.0.0-20260416131737-a19e91702ab5 => github.com/ingvagabund/client-go v0.0.0-20260608152916-388a325b5910
 ## explicit; go 1.25.0
 github.com/openshift/client-go/apiextensions/applyconfigurations/apiextensions/v1alpha1
 github.com/openshift/client-go/apiextensions/applyconfigurations/internal
@@ -2950,7 +2960,9 @@ k8s.io/kube-aggregator/pkg/apis/apiregistration/v1beta1
 k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset/scheme
 k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset/typed/apiregistration/v1
 # k8s.io/kube-openapi v0.0.0-20260127142750-a19766b6e2d4
-## explicit; go 1.23.0
+## explicit; go 1.24.0
+# k8s.io/kube-openapi v0.0.0-20260519202549-bbf5c5577288
+## explicit; go 1.24.0
 k8s.io/kube-openapi/pkg/aggregator
 k8s.io/kube-openapi/pkg/builder
 k8s.io/kube-openapi/pkg/builder3
@@ -2962,6 +2974,11 @@ k8s.io/kube-openapi/pkg/handler
 k8s.io/kube-openapi/pkg/handler3
 k8s.io/kube-openapi/pkg/internal
 k8s.io/kube-openapi/pkg/internal/third_party/go-json-experiment/json
+k8s.io/kube-openapi/pkg/internal/third_party/go-json-experiment/json/internal
+k8s.io/kube-openapi/pkg/internal/third_party/go-json-experiment/json/internal/jsonflags
+k8s.io/kube-openapi/pkg/internal/third_party/go-json-experiment/json/internal/jsonopts
+k8s.io/kube-openapi/pkg/internal/third_party/go-json-experiment/json/internal/jsonwire
+k8s.io/kube-openapi/pkg/internal/third_party/go-json-experiment/json/jsontext
 k8s.io/kube-openapi/pkg/internal/third_party/govalidator
 k8s.io/kube-openapi/pkg/schemaconv
 k8s.io/kube-openapi/pkg/schemamutation
@@ -3311,6 +3328,8 @@ sigs.k8s.io/yaml/goyaml.v2
 # sigs.k8s.io/cluster-api-provider-aws/v2 => sigs.k8s.io/cluster-api-provider-aws/v2 v2.10.1-0.20260311200936-f3440f3ea2f2
 # sigs.k8s.io/cluster-api-provider-azure => sigs.k8s.io/cluster-api-provider-azure v1.22.1-0.20260313010140-0c77ca282778
 # sigs.k8s.io/cluster-api-provider-gcp => sigs.k8s.io/cluster-api-provider-gcp v1.11.0-beta.0.0.20260312083137-58abcdcc039b
+# github.com/openshift/api => github.com/ingvagabund/api v0.0.0-20260608151207-ccf82b04671a
+# github.com/openshift/client-go => github.com/ingvagabund/client-go v0.0.0-20260608152916-388a325b5910
 # github.com/openshift/cluster-api-actuator-pkg/testutils => github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20260310144400-bec013a007a8
 # k8s.io/api => k8s.io/api v0.35.3
 # k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.35.3
