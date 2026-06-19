@@ -379,6 +379,30 @@ var _ = Describe("RevisionController", Serial, func() {
 		Expect(updatedClusterAPI.Status.Revisions).To(HaveLen(16))
 	}, defaultNodeTimeout)
 
+	Context("when unmanagedCustomResourceDefinitions is set on the spec", func() {
+		It("should include them in the revision status", func(ctx context.Context) {
+			mgr.stop()
+
+			By("setting unmanagedCustomResourceDefinitions on the ClusterAPI spec")
+			Eventually(kWithCtx(ctx).Update(clusterAPI, func() {
+				clusterAPI.Spec.UnmanagedCustomResourceDefinitions = []string{"widgets.example.com"}
+			})).WithContext(ctx).Should(Succeed())
+
+			By("restarting the manager with different images to force a new revision")
+			mgr = newManagerWrapper(updatedProviderImgs)
+
+			Eventually(kWithCtx(ctx).Object(clusterAPI)).
+				WithContext(ctx).
+				Should(HaveField("Status.Revisions", ContainElement(
+					HaveField("UnmanagedCustomResourceDefinitions", Equal([]string{"widgets.example.com"})),
+				)))
+		}, defaultNodeTimeout)
+
+		// Depends on Step 1: synthetic CompatibilityRequirement component
+		// that makes the unmanaged list affect content ID.
+		PIt("should produce a different content ID")
+	})
+
 	It("sets Available=False with NonRetryableError when manifest has invalid adopt-existing annotation", func(ctx context.Context) {
 		// Stop first manager (created by BeforeEach with valid providers)
 		mgr.stop()

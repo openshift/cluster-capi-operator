@@ -418,6 +418,53 @@ func TestToAPIRevision(t *testing.T) {
 		g.Expect(apiRev.ContentID).NotTo(BeEmpty())
 	})
 
+	t.Run("unmanagedCRDs included in API revision", func(t *testing.T) {
+		g := NewWithT(t)
+
+		unmanagedCRDs := []string{"widgets.example.com", "gadgets.example.com"}
+
+		rev := must(NewRenderedRevision(
+			[]providerimages.ProviderImageManifests{profile(t, "core", "img1", "default", configMapA)},
+			WithUnmanagedCRDs(unmanagedCRDs),
+		))(g)
+
+		apiRev := must(forInstall(g, rev, "4.18.0", 1).ToAPIRevision())(g)
+
+		g.Expect(apiRev.UnmanagedCustomResourceDefinitions).To(Equal(unmanagedCRDs))
+	})
+
+	t.Run("nil unmanagedCRDs omitted from API revision", func(t *testing.T) {
+		g := NewWithT(t)
+
+		rev := must(NewRenderedRevision(
+			[]providerimages.ProviderImageManifests{profile(t, "core", "img1", "default", configMapA)},
+		))(g)
+
+		apiRev := must(forInstall(g, rev, "4.18.0", 1).ToAPIRevision())(g)
+
+		g.Expect(apiRev.UnmanagedCustomResourceDefinitions).To(BeNil())
+	})
+
+	t.Run("synthetic components excluded from API revision", func(t *testing.T) {
+		g := NewWithT(t)
+
+		rev := must(newRenderedRevision(
+			[]providerimages.ProviderImageManifests{profile(t, "core", "img1", "default", configMapA)},
+		))(g)
+
+		rev.components = append(rev.components, &renderedComponent{
+			name:      "compatibility-requirements",
+			synthetic: true,
+		})
+		rev.contentID = ""
+
+		installer := forInstall(g, rev, "4.18.0", 1)
+		apiRev := must(installer.ToAPIRevision())(g)
+
+		g.Expect(apiRev.Components).To(HaveLen(1), "synthetic component should be excluded")
+		g.Expect(apiRev.Components[0].Name).To(Equal("core"))
+	})
+
 	t.Run("substitutions included in API revision", func(t *testing.T) {
 		g := NewWithT(t)
 
