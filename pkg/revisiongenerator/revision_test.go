@@ -26,6 +26,7 @@ import (
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
 	"github.com/openshift/cluster-capi-operator/pkg/test"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
 // Reusable YAML manifest fixtures.
@@ -424,7 +425,7 @@ func TestToAPIRevision(t *testing.T) {
 		unmanagedCRDs := []string{"widgets.example.com", "gadgets.example.com"}
 
 		rev := must(NewRenderedRevision(
-			[]providerimages.ProviderImageManifests{profile(t, "core", "img1", "default", configMapA)},
+			[]providerimages.ProviderImageManifests{profile(t, "core", "img1", "default", multiDoc(configMapA, crdA, crdB))},
 			WithUnmanagedCRDs(unmanagedCRDs),
 		))(g)
 
@@ -574,6 +575,142 @@ data:
 		id2 := must(rev2.ContentID())(g)
 
 		g.Expect(id1).To(Equal(id2))
+	})
+}
+
+func TestSyntheticCompatibilityComponent(t *testing.T) {
+	t.Run("no synthetic component when unmanagedCRDs is empty", func(t *testing.T) {
+		g := NewWithT(t)
+
+		rev := must(NewRenderedRevision([]providerimages.ProviderImageManifests{
+			profile(t, "core", "img1", "default", multiDoc(crdA, configMapA)),
+		}))(g)
+
+		components := rev.Components()
+		g.Expect(components).To(HaveLen(1))
+		g.Expect(components[0].Name()).To(Equal("core"))
+		g.Expect(components[0].CRDs()).To(HaveLen(1))
+		g.Expect(components[0].Objects()).To(HaveLen(1))
+	})
+
+	t.Run("synthetic component created as first component", func(t *testing.T) {
+		g := NewWithT(t)
+
+		rev := must(NewRenderedRevision(
+			[]providerimages.ProviderImageManifests{profile(t, "core", "img1", "default", multiDoc(crdA, configMapA))},
+			WithUnmanagedCRDs([]string{"widgets.example.com"}),
+		))(g)
+
+		components := rev.Components()
+		g.Expect(components).To(HaveLen(2))
+		g.Expect(components[0].Name()).To(Equal(compatibilityComponentName))
+		g.Expect(components[1].Name()).To(Equal("core"))
+
+		compatObjects := components[0].Objects()
+		g.Expect(compatObjects).To(HaveLen(1))
+		g.Expect(compatObjects[0].GetName()).To(Equal("ccapio-widgets.example.com"))
+		g.Expect(compatObjects[0].GetObjectKind().GroupVersionKind().Kind).To(Equal("CompatibilityRequirement"))
+
+		g.Expect(components[0].CRDs()).To(BeEmpty(), "synthetic component should have no CRDs")
+	})
+
+	t.Run("unmanaged CRDs removed from original component", func(t *testing.T) {
+		g := NewWithT(t)
+
+		rev := must(NewRenderedRevision(
+			[]providerimages.ProviderImageManifests{profile(t, "core", "img1", "default", multiDoc(crdA, crdB, configMapA))},
+			WithUnmanagedCRDs([]string{"widgets.example.com"}),
+		))(g)
+
+		components := rev.Components()
+		coreComponent := components[1]
+		g.Expect(coreComponent.Name()).To(Equal("core"))
+
+		coreCRDs := coreComponent.CRDs()
+		g.Expect(coreCRDs).To(HaveLen(1), "only the non-unmanaged CRD should remain")
+		g.Expect(coreCRDs[0].GetName()).To(Equal("gadgets.example.com"))
+
+		g.Expect(coreComponent.Objects()).To(HaveLen(1), "non-CRD objects should be unaffected")
+	})
+
+	t.Run("error when unmanaged CRD not found in any component", func(t *testing.T) {
+		_, err := NewRenderedRevision(
+			[]providerimages.ProviderImageManifests{profile(t, "core", "img1", "default", configMapA)},
+			WithUnmanagedCRDs([]string{"nonexistent.example.com"}),
+		)
+
+		g := NewWithT(t)
+		g.Expect(err).To(MatchError(ContainSubstring("nonexistent.example.com")))
+	})
+
+	t.Run("unmanaged CRDs change content ID", func(t *testing.T) {
+		g := NewWithT(t)
+
+		profiles := []providerimages.ProviderImageManifests{
+			profile(t, "core", "img1", "default", multiDoc(crdA, configMapA)),
+		}
+
+		revWithout := must(NewRenderedRevision(profiles))(g)
+		revWith := must(NewRenderedRevision(profiles, WithUnmanagedCRDs([]string{"widgets.example.com"})))(g)
+
+		idWithout := must(revWithout.ContentID())(g)
+		idWith := must(revWith.ContentID())(g)
+
+		g.Expect(idWith).NotTo(Equal(idWithout))
+	})
+
+	t.Run("managed label applied to CompatibilityRequirement objects", func(t *testing.T) {
+		g := NewWithT(t)
+
+		rev := must(NewRenderedRevision(
+			[]providerimages.ProviderImageManifests{profile(t, "core", "img1", "default", multiDoc(crdA, configMapA))},
+			WithUnmanagedCRDs([]string{"widgets.example.com"}),
+		))(g)
+
+		compatObj := rev.Components()[0].Objects()[0]
+		g.Expect(compatObj.GetLabels()).To(HaveKeyWithValue(ManagedLabelKey, compatibilityComponentName))
+	})
+
+	t.Run("multiple unmanaged CRDs across components", func(t *testing.T) {
+		g := NewWithT(t)
+
+		rev := must(NewRenderedRevision(
+			[]providerimages.ProviderImageManifests{
+				profile(t, "core", "img1", "default", multiDoc(crdA, configMapA)),
+				profile(t, "infra", "img2", "aws", multiDoc(crdB, configMapB)),
+			},
+			WithUnmanagedCRDs([]string{"widgets.example.com", "gadgets.example.com"}),
+		))(g)
+
+		components := rev.Components()
+		g.Expect(components).To(HaveLen(3))
+		g.Expect(components[0].Name()).To(Equal(compatibilityComponentName))
+
+		compatObjects := components[0].Objects()
+		g.Expect(compatObjects).To(HaveLen(2))
+		g.Expect(compatObjects[0].GetName()).To(Equal("ccapio-widgets.example.com"))
+		g.Expect(compatObjects[1].GetName()).To(Equal("ccapio-gadgets.example.com"))
+
+		g.Expect(components[1].CRDs()).To(BeEmpty(), "core CRDs should be empty after removal")
+		g.Expect(components[2].CRDs()).To(BeEmpty(), "infra CRDs should be empty after removal")
+	})
+
+	t.Run("object collectors invoked for CompatibilityRequirement objects", func(t *testing.T) {
+		g := NewWithT(t)
+
+		var collected []string
+		collector := func(obj unstructured.Unstructured) {
+			collected = append(collected, obj.GetName())
+		}
+
+		rev := must(NewRenderedRevision(
+			[]providerimages.ProviderImageManifests{profile(t, "core", "img1", "default", multiDoc(crdA, configMapA))},
+			WithUnmanagedCRDs([]string{"widgets.example.com"}),
+			WithObjectCollectors(collector),
+		))(g)
+
+		_ = rev
+		g.Expect(collected).To(ContainElement("ccapio-widgets.example.com"))
 	})
 }
 
