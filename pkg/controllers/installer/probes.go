@@ -31,6 +31,8 @@ func allProbes() []*probing.GroupKindSelector {
 	return []*probing.GroupKindSelector{
 		crdEstablishedProbe(),
 		deploymentAvailableProbe(),
+		compatibilityRequirementAdmittedProbe(),
+		compatibilityRequirementCompatibleProbe(),
 	}
 }
 
@@ -85,6 +87,26 @@ func probeSucceededPredicate(probes ...*probing.GroupKindSelector) predicate.Pre
 		},
 		DeleteFunc:  func(event.DeleteEvent) bool { return false },
 		GenericFunc: func(event.GenericEvent) bool { return false },
+	}
+}
+
+// compatibilityRequirementAdmittedProbe checks that a CompatibilityRequirement
+// has the Admitted condition set to True. This confirms the validating webhook
+// is in place to guard against future incompatible CRD updates.
+func compatibilityRequirementAdmittedProbe() *probing.GroupKindSelector {
+	return &probing.GroupKindSelector{
+		GroupKind: schema.GroupKind{Group: "apiextensions.openshift.io", Kind: "CompatibilityRequirement"},
+		Prober:    &probing.ConditionProbe{Type: "Admitted", Status: "True"},
+	}
+}
+
+// compatibilityRequirementCompatibleProbe checks that a CompatibilityRequirement
+// has the Compatible condition set to True. This confirms the current CRD
+// satisfies the compatibility contract.
+func compatibilityRequirementCompatibleProbe() *probing.GroupKindSelector {
+	return &probing.GroupKindSelector{
+		GroupKind: schema.GroupKind{Group: "apiextensions.openshift.io", Kind: "CompatibilityRequirement"},
+		Prober:    &probing.ConditionProbe{Type: "Compatible", Status: "True"},
 	}
 }
 
