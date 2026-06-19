@@ -30,6 +30,7 @@ import (
 	operatorv1alpha1ac "github.com/openshift/client-go/operator/applyconfigurations/operator/v1alpha1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	k8syaml "sigs.k8s.io/yaml"
 
@@ -132,7 +133,68 @@ func newRenderedRevision(profiles []providerimages.ProviderImageManifests, opts 
 		return nil, err
 	}
 
+	if err := buildSyntheticCompatibilityComponent(rev, cfg); err != nil {
+		return nil, err
+	}
+
 	return rev, nil
+}
+
+const compatibilityComponentName = "compatibility-requirements"
+
+func buildSyntheticCompatibilityComponent(rev *renderedRevision, cfg *revisionRenderConfig) error {
+	if len(rev.unmanagedCRDs) == 0 {
+		return nil
+	}
+
+	unmanagedSet := sets.New(rev.unmanagedCRDs...)
+	foundCRDs := sets.New[string]()
+
+	var compatObjects []unstructured.Unstructured
+
+	for _, component := range rev.components {
+		var kept []unstructured.Unstructured
+
+		for _, crd := range component.crds {
+			if unmanagedSet.Has(crd.GetName()) {
+				foundCRDs.Insert(crd.GetName())
+
+				cr, err := buildCompatibilityRequirement(crd)
+				if err != nil {
+					return err
+				}
+
+				cr = transformObject(cr, compatibilityComponentName)
+
+				for _, collector := range cfg.objectCollectors {
+					collector(cr)
+				}
+
+				compatObjects = append(compatObjects, cr)
+			} else {
+				kept = append(kept, crd)
+			}
+		}
+
+		component.crds = kept
+	}
+
+	missing := unmanagedSet.Difference(foundCRDs)
+	if missing.Len() > 0 {
+		return fmt.Errorf("unmanaged CRDs not found in any component: %v", sets.List(missing))
+	}
+
+	syntheticComponent := &renderedComponent{
+		name:      compatibilityComponentName,
+		synthetic: true,
+		objects:   compatObjects,
+	}
+
+	// Prepend: the synthetic component must be phase 0 so Boxcutter gates
+	// all other phases on compatibility. This ordering is load-bearing.
+	rev.components = append([]*renderedComponent{syntheticComponent}, rev.components...)
+
+	return nil
 }
 
 // substitutionsFromMap converts a map to a sorted slice of API substitutions.
