@@ -93,6 +93,7 @@ type renderedRevision struct {
 	components    []*renderedComponent
 	contentID     string
 	substitutions []operatorv1alpha1.ClusterAPIInstallerRevisionManifestSubstitution
+	unmanagedCRDs []string
 }
 
 var _ RenderedRevision = &renderedRevision{}
@@ -124,6 +125,7 @@ func newRenderedRevision(profiles []providerimages.ProviderImageManifests, opts 
 	rev := &renderedRevision{
 		components:    components,
 		substitutions: substitutionsFromMap(cfg.substitutions),
+		unmanagedCRDs: cfg.unmanagedCRDs,
 	}
 
 	if err := validateRenderedRevision(rev); err != nil {
@@ -236,9 +238,13 @@ func (r *installerRevision) ForInstall(_ string, _ int64) (InstallerRevision, er
 
 // ToAPIRevision converts this revision to an API revision.
 func (r *installerRevision) ToAPIRevision() (operatorv1alpha1.ClusterAPIInstallerRevision, error) {
-	apiComponents := make([]operatorv1alpha1.ClusterAPIInstallerComponent, len(r.components))
-	for i, component := range r.components {
-		apiComponents[i] = operatorv1alpha1.ClusterAPIInstallerComponent{
+	var apiComponents []operatorv1alpha1.ClusterAPIInstallerComponent
+	for _, component := range r.components {
+		if component.synthetic {
+			continue
+		}
+
+		apiComponents = append(apiComponents, operatorv1alpha1.ClusterAPIInstallerComponent{
 			Name: component.name,
 			ClusterAPIInstallerComponentSource: operatorv1alpha1.ClusterAPIInstallerComponentSource{
 				Type: operatorv1alpha1.InstallerComponentTypeImage,
@@ -247,7 +253,7 @@ func (r *installerRevision) ToAPIRevision() (operatorv1alpha1.ClusterAPIInstalle
 					Profile: component.profile,
 				},
 			},
-		}
+		})
 	}
 
 	contentID, err := r.ContentID()
@@ -256,11 +262,12 @@ func (r *installerRevision) ToAPIRevision() (operatorv1alpha1.ClusterAPIInstalle
 	}
 
 	return operatorv1alpha1.ClusterAPIInstallerRevision{
-		Name:                  r.revisionName,
-		Revision:              r.revisionIndex,
-		ContentID:             contentID,
-		ManifestSubstitutions: slices.Clone(r.substitutions),
-		Components:            apiComponents,
+		Name:                              r.revisionName,
+		Revision:                          r.revisionIndex,
+		ContentID:                         contentID,
+		ManifestSubstitutions:             slices.Clone(r.substitutions),
+		Components:                        apiComponents,
+		UnmanagedCustomResourceDefinitions: slices.Clone(r.unmanagedCRDs),
 	}, nil
 }
 
@@ -289,6 +296,7 @@ func buildRevisionName(releaseVersion, contentID string, index int64) operatorv1
 type revisionRenderConfig struct {
 	objectCollectors []RevisionObjectCollector
 	substitutions    map[string]string
+	unmanagedCRDs    []string
 }
 
 type revisionRenderOption func(*revisionRenderConfig)
@@ -301,6 +309,15 @@ type RevisionObjectCollector func(obj unstructured.Unstructured)
 func WithObjectCollectors(collectors ...RevisionObjectCollector) revisionRenderOption {
 	return func(opts *revisionRenderConfig) {
 		opts.objectCollectors = append(opts.objectCollectors, collectors...)
+	}
+}
+
+// WithUnmanagedCRDs sets the list of CRD names that should not be installed
+// by the installer. These CRDs will be used to build CompatibilityRequirement
+// objects in a synthetic component and filtered from their normal phases.
+func WithUnmanagedCRDs(crds []string) revisionRenderOption {
+	return func(opts *revisionRenderConfig) {
+		opts.unmanagedCRDs = crds
 	}
 }
 
@@ -383,9 +400,10 @@ func NewInstallerRevisionFromAPI(
 }
 
 type renderedComponent struct {
-	name     string
-	imageRef string
-	profile  string
+	name      string
+	imageRef  string
+	profile   string
+	synthetic bool
 
 	crds    []unstructured.Unstructured
 	objects []unstructured.Unstructured
