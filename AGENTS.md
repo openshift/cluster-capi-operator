@@ -182,3 +182,8 @@ FContext("context name", func() { /* tests */ })
 - Each controller has a `suite_test.go` that bootstraps an `envtest.Environment`
 - See "Running Tests" above for why `make unit` is required
 
+## OpenShift Tests Extension (OTE)
+
+The `openshift-tests-extension/` directory contains a separate Go module that builds the OTE binary (`cluster-capi-operator-tests-ext`). This binary is embedded in the operator image and used by `openshift-tests` to discover and run e2e tests as part of the OpenShift test infrastructure.
+
+See [`openshift-tests-extension/README.md`](openshift-tests-extension/README.md) for the full developer guide covering: how to add tests to OTE, suite/label routing, feature gate requirements, blocking vs informing lifecycle, per-test timeouts, local runs, and CI verification.

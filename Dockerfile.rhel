@@ -1,7 +1,8 @@
 FROM registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.25-openshift-4.22 AS builder
 WORKDIR /go/src/github.com/openshift/cluster-capi-operator
 COPY . .
-RUN make clean build
+RUN make clean build && \
+    gzip -n bin/cluster-capi-operator-tests-ext
 
 FROM registry.ci.openshift.org/ocp/4.22:base-rhel9
 COPY --from=builder /go/src/github.com/openshift/cluster-capi-operator/bin/capi-operator .
@@ -9,6 +10,7 @@ COPY --from=builder /go/src/github.com/openshift/cluster-capi-operator/bin/capi-
 COPY --from=builder /go/src/github.com/openshift/cluster-capi-operator/bin/capi-controllers .
 COPY --from=builder /go/src/github.com/openshift/cluster-capi-operator/bin/machine-api-migration .
 COPY --from=builder /go/src/github.com/openshift/cluster-capi-operator/bin/crd-compatibility-checker .
+COPY --from=builder /go/src/github.com/openshift/cluster-capi-operator/bin/cluster-capi-operator-tests-ext.gz /usr/bin/cluster-capi-operator-tests-ext.gz
 
 COPY ./manifests /manifests
 COPY ./capi-operator-manifests /capi-operator-manifests
