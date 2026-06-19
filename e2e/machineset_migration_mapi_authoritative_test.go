@@ -329,11 +329,15 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				capiMachineSet = capiframework.GetMachineSetWithRetry(mapiMSAuthMAPIName, capiframework.CAPINamespace)
 				Eventually(k.Object(capiMachineSet), capiframework.WaitMedium, capiframework.RetryMedium).Should(HaveField("Spec.Template.Spec.InfrastructureRef.Name", Not(Equal(originalAWSMachineTemplateName))), "Should have InfraTemplate name changed")
 
-				By("Verifying new InfraTemplate has the updated InstanceType")
-				var err error
-				newAWSMachineTemplate, err = getAWSMachineTemplateByPrefix(mapiMSAuthMAPIName, capiframework.CAPINamespace)
-				Expect(err).ToNot(HaveOccurred(), "Failed to get new awsMachineTemplate  %s", newAWSMachineTemplate)
-				Expect(newAWSMachineTemplate.Spec.Template.Spec.InstanceType).To(Equal(newInstanceType))
+				By("Verifying new InfraTemplate has the updated InstanceType", func() {
+					newAWSMachineTemplate = &awsv1.AWSMachineTemplate{}
+					newAWSMachineTemplate.Name = capiMachineSet.Spec.Template.Spec.InfrastructureRef.Name
+					newAWSMachineTemplate.Namespace = capiMachineSet.Namespace
+
+					Eventually(k.Object(newAWSMachineTemplate), capiframework.WaitShort, capiframework.RetryShort).Should(
+						HaveField("Spec.Template.Spec.InstanceType", Equal(newInstanceType)),
+					)
+				})
 
 				By("Verifying the old InfraTemplate is deleted")
 				verifyResourceRemoved(awsMachineTemplate)
