@@ -5,6 +5,7 @@ use (
 	./e2e
 	./hack/tools
 	./manifests-gen
+	./openshift-tests-extension
 )
 
 replace (

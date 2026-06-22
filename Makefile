@@ -30,7 +30,7 @@ verify: fmt lint verify-ocp-manifests ## Run formatting and linting checks
 
 test: verify unit ## Run verification and unit tests
 
-build: bin/capi-operator bin/capi-installer bin/capi-controllers bin/machine-api-migration bin/crd-compatibility-checker manifests-gen ## Build all binaries
+build: bin/capi-operator bin/capi-installer bin/capi-controllers bin/machine-api-migration bin/crd-compatibility-checker bin/cluster-capi-operator-tests-ext manifests-gen ## Build all binaries
 
 clean:
 	rm -rf bin/*
@@ -60,6 +60,11 @@ ocp-manifests: manifests-gen ## Generate admission policy profiles for image emb
 
 bin/%: FORCE | bin/
 	go build -o "$@" "./cmd/$*"
+
+bin/cluster-capi-operator-tests-ext: FORCE | bin/ ## Build tests extension binary
+	go build -mod=vendor \
+		-o bin/cluster-capi-operator-tests-ext \
+		./openshift-tests-extension/cmd/
 
 .PHONY: localtestenv
 localtestenv: .localtestenv
