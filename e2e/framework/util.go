@@ -24,10 +24,15 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	configv1 "github.com/openshift/api/config/v1"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
+
+	configv1 "github.com/openshift/api/config/v1"
+	"github.com/openshift/cluster-capi-operator/pkg/test"
 )
 
 // SortListByName sorts the Items of a Kubernetes list object in place by metadata name.
@@ -105,4 +110,12 @@ func IsFeatureGateEnabled(ctx context.Context, cl client.Client, name configv1.F
 	}
 
 	return false
+}
+
+func AssertDeploymentAvailable(name, namespace string) {
+	GinkgoHelper()
+	deployment := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace}}
+	Eventually(komega.Object(deployment)).WithTimeout(WaitMedium).WithPolling(RetryMedium).Should(
+		HaveField("Status.Conditions", test.HaveCondition(appsv1.DeploymentAvailable).WithStatus(corev1.ConditionTrue)),
+	)
 }
