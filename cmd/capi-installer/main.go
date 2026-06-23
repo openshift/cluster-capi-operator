@@ -85,7 +85,7 @@ func main() {
 			*operatorConfig.CAPINamespace:     {},
 			*operatorConfig.OperatorNamespace: {},
 		},
-		SyncPeriod: ptr.To(10 * time.Minute),
+		SyncPeriod: ptr.To(12 * time.Hour),
 	}
 
 	mgr, err := initManager(ctx, cancel, mgrOpts)
