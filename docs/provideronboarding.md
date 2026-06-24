@@ -14,22 +14,15 @@ In order to onboard a new CAPI provider, the following steps are required.
 
 After provider fork is set up, you should onboard it to [Openshift CI](https://docs.ci.openshift.org/docs/how-tos/onboarding-a-new-component/) and make appropriate ART requests for downstream builds.
 
-## Add provider assets to the operator
+## Add provider metadata to your provider
 
-- Add your provider to `provider-list.yaml` located in root of the operator. For example:
-  ```
-  - name: aws
-  type: InfrastructureProvider
-  branch: release-4.11 # Openshift release branch to be used
-  version: v1.3.0 # Version of the provider in your fork
-  ```
-- Run `make assets`
-- Include your provider image to `manifests/image-references` and `manifests/0000_30_cluster-api_capi-operator_01_images.configmap.yaml`
+See [Provider Contract](provider-contract.md)
 
-At this point your provider will have CRDs and RBAC resources automatically imported to the `manifests/` directory and
-managed by the CVO, all other resources will be imported to the `assets` directory and managed by the upstream operator.
+## Add a reference to your provider image to CAPI operator
 
-If you wish to make development of your provider easier, you can include a public provider image to the `dev-images.json`.
+* The provider image MUST be included in the OpenShift release payload.
+* Add an entry for the provider image in `/manifests/image-references`.
+* Add an entry for the provider image to the `capi-installer-images` ConfigMap in `/manifests`.
 
 ## Add infrastructure cluster to the cluster controller
 
