@@ -443,22 +443,12 @@ func updateCAPIMachineSetInfraTemplate(capiMachineSet *clusterv1.MachineSet, new
 	)
 }
 
-// cleanupMachineSetTestResources deletes CAPI MachineSets, MAPI MachineSets, and AWSMachineTemplates created during tests.
+// cleanupMachineSetTestResources deletes MAPI MachineSets, CAPI MachineSets, and AWSMachineTemplates created during tests.
 func cleanupMachineSetTestResources(ctx context.Context, cl client.Client, capiMachineSets []*clusterv1.MachineSet, awsMachineTemplates []*awsv1.AWSMachineTemplate, mapiMachineSets []*mapiv1beta1.MachineSet) {
 	GinkgoHelper()
 
 	cleanupCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer cancel()
-
-	for _, ms := range capiMachineSets {
-		if ms == nil {
-			continue
-		}
-
-		By(fmt.Sprintf("Deleting CAPI MachineSet %s", ms.Name))
-		capiframework.DeleteMachineSets(cleanupCtx, cl, ms)
-		capiframework.WaitForMachineSetsDeleted(ms)
-	}
 
 	for _, ms := range mapiMachineSets {
 		if ms == nil {
@@ -483,6 +473,16 @@ func cleanupMachineSetTestResources(ctx context.Context, cl client.Client, capiM
 		if !notFound {
 			mapiframework.WaitForMachineSetsDeleted(cleanupCtx, cl, ms)
 		}
+	}
+
+	for _, ms := range capiMachineSets {
+		if ms == nil {
+			continue
+		}
+
+		By(fmt.Sprintf("Deleting CAPI MachineSet %s", ms.Name))
+		capiframework.DeleteMachineSets(cleanupCtx, cl, ms)
+		capiframework.WaitForMachineSetsDeleted(ms)
 	}
 
 	for _, template := range awsMachineTemplates {
