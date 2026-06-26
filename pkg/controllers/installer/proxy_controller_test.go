@@ -245,7 +245,7 @@ var _ = Describe("ProxyController", Serial, func() {
 	})
 
 	Context("SSA field ownership correctness", func() {
-		It("does not affect env vars set by other field managers", func(ctx context.Context) {
+		It("does not affect env vars set by other field managers on the annotated container", func(ctx context.Context) {
 			By("Installing a revision with the inject-proxy annotation")
 			addProxyRevisionAndWaitForSuccess(ctx, providerProxyAnnotated)
 
@@ -273,6 +273,49 @@ var _ = Describe("ProxyController", Serial, func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(deploy).To(haveContainer("manager", HaveField("Env", ContainElement(
 				HaveField("Name", "CUSTOM_VAR"),
+			))))
+		}, defaultNodeTimeout)
+
+		It("does not remove proxy vars set by other field managers on unannotated containers", func(ctx context.Context) {
+			By("Installing a revision with the inject-proxy annotation targeting only manager")
+			addProxyRevisionAndWaitForSuccess(ctx, providerProxyAnnotated)
+
+			By("Setting HTTP_PROXY on the other container via a separate field manager")
+
+			deploy, err := getDeployment(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Find the "other" container (index 1) and add an HTTP_PROXY env var.
+			// This simulates a separate controller managing proxy vars on that container.
+			patch := deploy.DeepCopy()
+			for i := range patch.Spec.Template.Spec.Containers {
+				if patch.Spec.Template.Spec.Containers[i].Name == "other" {
+					patch.Spec.Template.Spec.Containers[i].Env = append(
+						patch.Spec.Template.Spec.Containers[i].Env,
+						corev1.EnvVar{Name: "HTTP_PROXY", Value: "http://other-proxy.example.com:9999"},
+					)
+
+					break
+				}
+			}
+
+			Expect(cl.Update(ctx, patch)).To(Succeed())
+
+			By("Creating the cluster-wide Proxy")
+			createTestProxy(ctx, "http://proxy.example.com:3128")
+
+			By("Waiting for proxy env vars to be injected into manager")
+			waitForContainer(ctx, "manager", haveProxyEnvVars())
+
+			By("Verifying the other container still has its externally-set HTTP_PROXY")
+
+			deploy, err = getDeployment(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(deploy).To(haveContainer("other", HaveField("Env", ContainElement(
+				SatisfyAll(
+					HaveField("Name", "HTTP_PROXY"),
+					HaveField("Value", "http://other-proxy.example.com:9999"),
+				),
 			))))
 		}, defaultNodeTimeout)
 	})

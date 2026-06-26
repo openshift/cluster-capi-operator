@@ -20,25 +20,21 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 
-	configv1 "github.com/openshift/api/config/v1"
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/selection"
+	"k8s.io/apimachinery/pkg/util/sets"
+	metav1applyconfig "k8s.io/client-go/applyconfigurations/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
-	"github.com/openshift/cluster-capi-operator/pkg/revisiongenerator"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 	"pkg.package-operator.run/boxcutter/managedcache"
+
+	appsv1 "k8s.io/api/apps/v1"
 )
 
 const (
@@ -50,76 +46,29 @@ const (
 	// environment variables. The annotation is added by manifests-gen and can be
 	// overridden by provider manifests.
 	ProxyInjectAnnotation = operatorstatus.CAPIOperatorIdentifierDomain + "/inject-proxy"
-
-	// proxyVarNames are the only env var names this controller ever owns.
-	// Used for the skip-if-unchanged optimisation.
-
-	proxyClusterName = "cluster"
 )
 
-// proxyVarNames returns the env var names this controller manages. These are
-// the only names that can appear in the SSA patch from this field manager, so
-// comparing them against the current state is sufficient to skip redundant
-// applies.
-func proxyVarNames() []string { return []string{"HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY"} }
-
-// Controller watches managed workloads that opt in to cluster-wide proxy
-// injection via the ProxyInjectAnnotation annotation and applies the current
-// proxy environment variables (HTTP_PROXY, HTTPS_PROXY, NO_PROXY) to the
-// named containers via SSA. It reconciles whenever the Proxy CR changes or
-// when a managed workload is created or updated.
+// Controller applies cluster-wide proxy environment variables to managed
+// workloads that carry the ProxyInjectAnnotation on their pod templates.
+// It is used as a sub-reconciler called directly from the InstallerController
+// rather than as a standalone controller, so that both share a single
+// trackingCache.Source() registration and avoid the shutdown issues that arise
+// from double-registering handlers on the TrackingCache.
 type Controller struct {
 	client        client.Client
 	trackingCache managedcache.TrackingCache
+	extractor     metav1applyconfig.UnstructuredExtractor
 }
 
-// SetupWithManager registers the ProxyController with the Manager. It shares
-// the trackingCache returned by installer.SetupWithManager so it can list
-// managed objects without creating a second cache.
-func SetupWithManager(mgr ctrl.Manager, trackingCache managedcache.TrackingCache) error {
-	c := &Controller{
-		client:        mgr.GetClient(),
-		trackingCache: trackingCache,
+// New creates a Controller. The extractor must be created once at setup time
+// (e.g. via metav1applyconfig.NewUnstructuredExtractor) because building it
+// is expensive — it fetches the cluster's OpenAPI schema.
+func New(c client.Client, tc managedcache.TrackingCache, extractor metav1applyconfig.UnstructuredExtractor) *Controller {
+	return &Controller{
+		client:        c,
+		trackingCache: tc,
+		extractor:     extractor,
 	}
-
-	toProxy := func(_ context.Context, _ client.Object) []reconcile.Request {
-		return []reconcile.Request{{NamespacedName: client.ObjectKey{Name: proxyClusterName}}}
-	}
-
-	// Watch only managed workloads (those labelled by the installer).
-	// Using standard controller-runtime Watches instead of trackingCache.Source()
-	// avoids registering a handler on the TrackingCache, which prevents it from
-	// stopping cleanly and can leave orphaned envtest processes.
-	managedReq, err := labels.NewRequirement(revisiongenerator.ManagedLabelKey, selection.Exists, nil)
-	if err != nil {
-		return fmt.Errorf("building managed label requirement: %w", err)
-	}
-
-	isManagedWorkload := predicate.NewPredicateFuncs(func(obj client.Object) bool {
-		return labels.NewSelector().Add(*managedReq).Matches(labels.Set(obj.GetLabels()))
-	})
-
-	err = ctrl.NewControllerManagedBy(mgr).
-		Named(controllerName).
-		Watches(
-			&configv1.Proxy{},
-			handler.EnqueueRequestsFromMapFunc(toProxy),
-			builder.WithPredicates(predicate.NewPredicateFuncs(func(obj client.Object) bool {
-				return obj.GetName() == proxyClusterName
-			})),
-		).
-		Watches(&appsv1.Deployment{}, handler.EnqueueRequestsFromMapFunc(toProxy),
-			builder.WithPredicates(isManagedWorkload)).
-		Watches(&appsv1.DaemonSet{}, handler.EnqueueRequestsFromMapFunc(toProxy),
-			builder.WithPredicates(isManagedWorkload)).
-		Watches(&appsv1.StatefulSet{}, handler.EnqueueRequestsFromMapFunc(toProxy),
-			builder.WithPredicates(isManagedWorkload)).
-		Complete(c)
-	if err != nil {
-		return fmt.Errorf("failed to create proxy controller: %w", err)
-	}
-
-	return nil
 }
 
 // workloadItem collects the fields needed to reconcile proxy env vars on a
@@ -137,22 +86,22 @@ type workloadItem struct {
 // Reconcile reads the cluster-wide proxy configuration and applies the proxy
 // environment variables to all managed workloads that carry the inject-proxy
 // annotation.
-func (c *Controller) Reconcile(ctx context.Context, _ ctrl.Request) (ctrl.Result, error) {
+func (c *Controller) Reconcile(ctx context.Context) error {
 	log := ctrl.LoggerFrom(ctx).WithName(controllerName)
 	log.Info("Reconciling proxy environment variables")
 
 	proxyVars, err := util.GetProxyEnvVars(ctx, c.client)
 	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("fetching cluster-wide proxy: %w", err)
+		return fmt.Errorf("fetching cluster-wide proxy: %w", err)
 	}
 
 	if err := c.applyToAllWorkloads(ctx, proxyVars); err != nil {
-		return ctrl.Result{}, err
+		return err
 	}
 
 	log.Info("Proxy environment variables reconciled")
 
-	return ctrl.Result{}, nil
+	return nil
 }
 
 // containerNamesFromAnnotation parses the comma-separated inject-proxy annotation value.
@@ -258,9 +207,10 @@ func (c *Controller) collectWorkloads(ctx context.Context) ([]workloadItem, erro
 //   - all other containers receive an empty env list, removing any proxy env
 //     var entries previously owned by this controller's SSA field manager
 //
-// The apply is skipped if the containers already reflect the desired proxy
-// state, to avoid unnecessary KAS round-trips during installation (when the
-// controller reconciles for every newly-applied managed object).
+// The apply is skipped when the UnstructuredExtractor reports that what we
+// currently own already matches the desired patch, avoiding unnecessary KAS
+// round-trips during installation (when the controller reconciles for every
+// newly-applied managed object).
 func (c *Controller) applyProxyVars(ctx context.Context, item workloadItem, proxyVars []corev1.EnvVar) error {
 	log := ctrl.LoggerFrom(ctx).WithName(controllerName)
 
@@ -269,25 +219,27 @@ func (c *Controller) applyProxyVars(ctx context.Context, item workloadItem, prox
 	}
 
 	// Build the set of containers that should receive proxy env vars.
-	annotatedSet := make(map[string]struct{})
+	annotatedSet := sets.New[string]()
 
 	if annotation, ok := item.podAnnotations[ProxyInjectAnnotation]; ok {
 		for _, name := range containerNamesFromAnnotation(annotation) {
-			annotatedSet[name] = struct{}{}
+			annotatedSet.Insert(name)
 		}
 	}
 
-	// Skip the apply if the containers already have the desired proxy state.
-	// This avoids a KAS round-trip when the controller reconciles for every
-	// newly-applied managed object during installation.
-	if proxyVarsAlreadyApplied(item.containers, annotatedSet, proxyVars) {
+	patch := buildPatch(item, annotatedSet, proxyVars)
+
+	// Skip the apply if what we currently own already matches the desired
+	// patch. This avoids a KAS round-trip on every reconcile during
+	// installation. We use UnstructuredExtractor rather than inspecting the
+	// full container env (which may contain vars owned by other managers) so
+	// that we compare only our SSA-owned state against the desired state.
+	if c.proxyVarsAlreadyApplied(ctx, item, patch) {
 		log.Info("Proxy env vars already up to date, skipping apply",
 			"kind", item.kind, "name", item.name, "namespace", item.namespace)
 
 		return nil
 	}
-
-	patch := buildPatch(item, annotatedSet, proxyVars)
 
 	if err := c.client.Patch(ctx, patch, util.ApplyConfigPatch(patch.Object), operatorstatus.CAPIFieldOwner("proxy"), client.ForceOwnership); err != nil {
 		return fmt.Errorf("applying proxy env vars to %s %s/%s: %w", item.kind, item.namespace, item.name, err)
@@ -298,15 +250,38 @@ func (c *Controller) applyProxyVars(ctx context.Context, item workloadItem, prox
 	return nil
 }
 
+// proxyVarsAlreadyApplied returns true when the fields we own (as reported by
+// UnstructuredExtractor for our field manager) already match the desired patch.
+// This is the correct check because it inspects only what WE own, not the full
+// container env — other field managers may legitimately set proxy var names on
+// containers we do not annotate, and those should not trigger our reconcile.
+func (c *Controller) proxyVarsAlreadyApplied(ctx context.Context, item workloadItem, desired *unstructured.Unstructured) bool {
+	// Fetch the current object from the tracking cache to get its managed fields.
+	current := &unstructured.Unstructured{}
+	current.SetAPIVersion(item.apiVersion)
+	current.SetKind(item.kind)
+
+	if err := c.trackingCache.Get(ctx, client.ObjectKey{Name: item.name, Namespace: item.namespace}, current); err != nil {
+		return false
+	}
+
+	extracted, err := c.extractor.Extract(current, string(operatorstatus.CAPIFieldOwner("proxy")))
+	if err != nil {
+		return false
+	}
+
+	return reflect.DeepEqual(extracted.Object, desired.Object)
+}
+
 // buildPatch constructs the unstructured SSA patch for the workload covering all
 // containers: annotated containers get proxy env vars, others get an empty list.
-func buildPatch(item workloadItem, annotatedSet map[string]struct{}, proxyVars []corev1.EnvVar) *unstructured.Unstructured {
+func buildPatch(item workloadItem, annotatedSet sets.Set[string], proxyVars []corev1.EnvVar) *unstructured.Unstructured {
 	containerPatches := make([]map[string]interface{}, 0, len(item.containers))
 
 	for _, container := range item.containers {
 		envEntries := make([]map[string]interface{}, 0)
 
-		if _, ok := annotatedSet[container.Name]; ok {
+		if annotatedSet.Has(container.Name) {
 			for _, ev := range proxyVars {
 				envEntries = append(envEntries, map[string]interface{}{
 					"name":  ev.Name,
@@ -338,47 +313,4 @@ func buildPatch(item workloadItem, annotatedSet map[string]struct{}, proxyVars [
 			},
 		},
 	}
-}
-
-// proxyVarsAlreadyApplied returns true when every container in the pod spec
-// already carries exactly the desired proxy state:
-//   - annotated containers have all proxy env vars with the correct values
-//   - unannotated containers have none of the proxy env var names
-//
-// The check uses the current container state from the workloadItem (sourced
-// from the tracking cache), which reflects the actual state on the cluster
-// including any values previously applied by this controller.
-func proxyVarsAlreadyApplied(
-	containers []corev1.Container,
-	annotatedSet map[string]struct{},
-	proxyVars []corev1.EnvVar,
-) bool {
-	for _, container := range containers {
-		_, isAnnotated := annotatedSet[container.Name]
-
-		// Index this container's env by name for quick lookup.
-		envByName := make(map[string]string, len(container.Env))
-		for _, ev := range container.Env {
-			envByName[ev.Name] = ev.Value
-		}
-
-		if isAnnotated && len(proxyVars) > 0 {
-			// Annotated with proxy configured: all desired vars must be present with correct values.
-			for _, desired := range proxyVars {
-				if got, ok := envByName[desired.Name]; !ok || got != desired.Value {
-					return false
-				}
-			}
-		} else {
-			// Not annotated, or annotated but proxy was cleared: none of our var
-			// names may be present (covers both "never had proxy" and "proxy removed").
-			for _, name := range proxyVarNames() {
-				if _, ok := envByName[name]; ok {
-					return false
-				}
-			}
-		}
-	}
-
-	return true
 }
