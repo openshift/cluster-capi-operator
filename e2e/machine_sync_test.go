@@ -63,6 +63,10 @@ var _ = Describe("Machine Sync", Ordered, func() {
 		capiMachine := framework.GetMachineWithRetry(machineName, framework.CAPINamespace)
 		Expect(capiMachine).NotTo(BeNil())
 
+		By("Waiting for CAPI Machine to reach Running phase")
+		capiMachineForRunning := &clusterv1.Machine{ObjectMeta: metav1.ObjectMeta{Name: machineName, Namespace: framework.CAPINamespace}}
+		verifyMachineRunning(cl, capiMachineForRunning)
+
 		By("Fetching the infrastructure machine")
 		infraMachine, err := external.GetObjectFromContractVersionedRef(ctx, cl, capiMachine.Spec.InfrastructureRef, capiMachine.Namespace)
 		Expect(err).NotTo(HaveOccurred())
