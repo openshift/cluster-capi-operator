@@ -24,18 +24,28 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-// GetFirstMAPIMachineSet lists MAPI MachineSets, sorts by name, and returns the first one.
+// GetFirstMAPIMachineSet lists MAPI MachineSets, sorts by name, and returns the first one
+// whose authoritative API is Machine API. MachineSets synced from Cluster API are excluded
+// because their machines are provisioned by Cluster API and carry no Machine API machine objects.
 func GetFirstMAPIMachineSet(ctx context.Context, cl client.Client) *mapiv1beta1.MachineSet {
 	GinkgoHelper()
 
 	machineSetList := &mapiv1beta1.MachineSetList{}
 	Expect(cl.List(ctx, machineSetList, client.InNamespace(MAPINamespace))).To(Succeed(),
 		"should not fail listing MAPI MachineSets")
-	Expect(machineSetList.Items).ToNot(BeEmpty(), "expected to have at least a MachineSet")
 
 	SortListByName(machineSetList)
 
-	return &machineSetList.Items[0]
+	for i := range machineSetList.Items {
+		ms := &machineSetList.Items[i]
+		if ms.Spec.AuthoritativeAPI != mapiv1beta1.MachineAuthorityClusterAPI {
+			return ms
+		}
+	}
+
+	Fail("expected to find at least one Machine API authoritative MachineSet")
+
+	return nil
 }
 
 // GetMAPIProviderSpec lists MAPI MachineSets, sorts by name, and unmarshals
