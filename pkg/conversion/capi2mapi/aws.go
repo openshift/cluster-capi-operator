@@ -788,10 +788,11 @@ func handleUnsupportedAWSMachineFields(fldPath *field.Path, spec awsv1.AWSMachin
 		errs = append(errs, field.Invalid(fldPath.Child("cloudInit"), spec.CloudInit, "cloudInit is not supported"))
 	}
 
-	if spec.PrivateDNSName != nil {
-		// Not required for our use case.
-		errs = append(errs, field.Invalid(fldPath.Child("privateDNSName"), spec.PrivateDNSName, "privateDNSName is not supported"))
-	}
+	// privateDNSName is not checked here because the relevant information is available on the
+	// infrastructure CR, so nothing additional needs to be added to the MAPI machine spec.
+
+	// assignPrimaryIPv6 is not checked here because the relevant information is available on the
+	// infrastructure CR, so nothing additional needs to be added to the MAPI machine spec.
 
 	if spec.Ignition != nil {
 		if spec.Ignition.Proxy != nil {

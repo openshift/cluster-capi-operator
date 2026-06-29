@@ -2815,12 +2815,6 @@ var _ = Describe("Unsupported AWS fields validating admission policy", Ordered, 
 				},
 				expectedError: "ValidatingAdmissionPolicy 'openshift-cluster-api-unsupported-aws-spec-fields' with binding 'openshift-cluster-api-unsupported-aws-spec-fields' denied request: spec.cloudInit is a forbidden field",
 			}),
-			Entry("with a forbidden field (privateDNSName)", testCase{
-				modifier: func(m *awsv1.AWSMachine) {
-					m.Spec.PrivateDNSName = &awsv1.PrivateDNSName{}
-				},
-				expectedError: "ValidatingAdmissionPolicy 'openshift-cluster-api-unsupported-aws-spec-fields' with binding 'openshift-cluster-api-unsupported-aws-spec-fields' denied request: spec.privateDnsName is a forbidden field",
-			}),
 			Entry("with a forbidden field (ignition.proxy)", testCase{
 				modifier: func(m *awsv1.AWSMachine) {
 					m.Spec.Ignition = &awsv1.Ignition{Proxy: &awsv1.IgnitionProxy{}}
@@ -2945,12 +2939,6 @@ var _ = Describe("Unsupported AWS fields validating admission policy", Ordered, 
 					mt.Spec.Template.Spec.CloudInit = awsv1.CloudInit{SecretCount: 1}
 				},
 				expectedError: "ValidatingAdmissionPolicy 'openshift-cluster-api-unsupported-aws-spec-fields' with binding 'openshift-cluster-api-unsupported-aws-spec-fields' denied request: spec.template.spec.cloudInit is a forbidden field",
-			}),
-			Entry("with a forbidden field (privateDNSName)", testCase{
-				modifier: func(mt *awsv1.AWSMachineTemplate) {
-					mt.Spec.Template.Spec.PrivateDNSName = &awsv1.PrivateDNSName{}
-				},
-				expectedError: "ValidatingAdmissionPolicy 'openshift-cluster-api-unsupported-aws-spec-fields' with binding 'openshift-cluster-api-unsupported-aws-spec-fields' denied request: spec.template.spec.privateDnsName is a forbidden field",
 			}),
 			Entry("with a forbidden field (ignition.proxy)", testCase{
 				modifier: func(mt *awsv1.AWSMachineTemplate) {

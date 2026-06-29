@@ -52,8 +52,6 @@ spec:
   - expression: '!has(variables.machineSpec.uncompressedUserData)'
     messageExpression: variables.specPath + '.uncompressedUserData is a forbidden
       field'
-  - expression: '!has(variables.machineSpec.privateDnsName)'
-    messageExpression: variables.specPath + '.privateDnsName is a forbidden field'
   - expression: '!has(variables.machineSpec.ignition) || !has(variables.machineSpec.ignition.proxy)'
     messageExpression: variables.specPath + '.ignition.proxy is a forbidden field'
   - expression: '!has(variables.machineSpec.ignition) || !has(variables.machineSpec.ignition.tls)'
