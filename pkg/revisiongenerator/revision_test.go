@@ -699,17 +699,17 @@ func TestSyntheticCompatibilityComponent(t *testing.T) {
 		g := NewWithT(t)
 
 		var collected []string
+
 		collector := func(obj unstructured.Unstructured) {
 			collected = append(collected, obj.GetName())
 		}
 
-		rev := must(NewRenderedRevision(
+		must(NewRenderedRevision(
 			[]providerimages.ProviderImageManifests{profile(t, "core", "img1", "default", multiDoc(crdA, configMapA))},
 			WithUnmanagedCRDs([]string{"widgets.example.com"}),
 			WithObjectCollectors(collector),
 		))(g)
 
-		_ = rev
 		g.Expect(collected).To(ContainElement("ccapio-widgets.example.com"))
 	})
 }

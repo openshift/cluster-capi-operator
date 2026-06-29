@@ -54,6 +54,9 @@ func buildCompatibilityRequirement(crd unstructured.Unstructured) (unstructured.
 					Type: apiextensionsv1alpha1.CRDDataTypeYAML,
 					Data: string(crdYAML),
 				},
+				RequiredVersions: apiextensionsv1alpha1.APIVersions{
+					DefaultSelection: apiextensionsv1alpha1.APIVersionSetTypeStorageOnly,
+				},
 			},
 			CustomResourceDefinitionSchemaValidation: apiextensionsv1alpha1.CustomResourceDefinitionSchemaValidation{
 				Action: apiextensionsv1alpha1.CRDAdmitActionDeny,

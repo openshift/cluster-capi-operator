@@ -47,6 +47,7 @@ const (
 var (
 	errProviderProfileNotFound = errors.New("no provider profile found for component")
 	errContentIDMismatch       = errors.New("content ID mismatch")
+	errUnmanagedCRDsNotFound   = errors.New("unmanaged CRDs not found in any component")
 )
 
 // RenderedRevision represents a set of components whose manifests have been
@@ -157,20 +158,22 @@ func buildSyntheticCompatibilityComponent(rev *renderedRevision, cfg *revisionRe
 
 		for _, crd := range component.crds {
 			if unmanagedSet.Has(crd.GetName()) {
-				foundCRDs.Insert(crd.GetName())
+				if !foundCRDs.Has(crd.GetName()) {
+					foundCRDs.Insert(crd.GetName())
 
-				cr, err := buildCompatibilityRequirement(crd)
-				if err != nil {
-					return err
+					cr, err := buildCompatibilityRequirement(crd)
+					if err != nil {
+						return err
+					}
+
+					cr = transformObject(cr, compatibilityComponentName)
+
+					for _, collector := range cfg.objectCollectors {
+						collector(cr)
+					}
+
+					compatObjects = append(compatObjects, cr)
 				}
-
-				cr = transformObject(cr, compatibilityComponentName)
-
-				for _, collector := range cfg.objectCollectors {
-					collector(cr)
-				}
-
-				compatObjects = append(compatObjects, cr)
 			} else {
 				kept = append(kept, crd)
 			}
@@ -181,7 +184,7 @@ func buildSyntheticCompatibilityComponent(rev *renderedRevision, cfg *revisionRe
 
 	missing := unmanagedSet.Difference(foundCRDs)
 	if missing.Len() > 0 {
-		return fmt.Errorf("unmanaged CRDs not found in any component: %v", sets.List(missing))
+		return fmt.Errorf("unmanaged CRDs not found in any component: %w: %v", errUnmanagedCRDsNotFound, sets.List(missing))
 	}
 
 	syntheticComponent := &renderedComponent{
@@ -301,6 +304,7 @@ func (r *installerRevision) ForInstall(_ string, _ int64) (InstallerRevision, er
 // ToAPIRevision converts this revision to an API revision.
 func (r *installerRevision) ToAPIRevision() (operatorv1alpha1.ClusterAPIInstallerRevision, error) {
 	var apiComponents []operatorv1alpha1.ClusterAPIInstallerComponent
+
 	for _, component := range r.components {
 		if component.synthetic {
 			continue
@@ -324,11 +328,11 @@ func (r *installerRevision) ToAPIRevision() (operatorv1alpha1.ClusterAPIInstalle
 	}
 
 	return operatorv1alpha1.ClusterAPIInstallerRevision{
-		Name:                              r.revisionName,
-		Revision:                          r.revisionIndex,
-		ContentID:                         contentID,
-		ManifestSubstitutions:             slices.Clone(r.substitutions),
-		Components:                        apiComponents,
+		Name:                               r.revisionName,
+		Revision:                           r.revisionIndex,
+		ContentID:                          contentID,
+		ManifestSubstitutions:              slices.Clone(r.substitutions),
+		Components:                         apiComponents,
 		UnmanagedCustomResourceDefinitions: slices.Clone(r.unmanagedCRDs),
 	}, nil
 }

@@ -156,7 +156,7 @@ func (r *RevisionController) generateDesiredRevision(ctx context.Context, unmana
 		revisiongenerator.WithUnmanagedCRDs(unmanagedCRDs),
 	)
 	if err != nil {
-		return nil, opresult.ErrorP(fmt.Errorf("error creating rendered revision: %w", err))
+		return nil, opresult.NonRetryableErrorP(fmt.Errorf("error creating rendered revision: %w", err))
 	}
 
 	return revision, nil
