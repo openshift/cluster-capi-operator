@@ -137,7 +137,10 @@ func (r *revisionReconciler) reconcile(ctx context.Context, revisions []operator
 	// Convert all API revisions upfront so that collectObjects (and thus
 	// relatedObjects) is fully populated before reconciliation begins.
 	converted := util.SliceMap(revisions, func(apiRev operatorv1alpha1.ClusterAPIInstallerRevision) convertedRevision {
-		rev, err := revisiongenerator.NewInstallerRevisionFromAPI(apiRev, r.providerProfiles, revisiongenerator.WithObjectCollectors(r.collectObjects))
+		rev, err := revisiongenerator.NewInstallerRevisionFromAPI(apiRev, r.providerProfiles,
+			revisiongenerator.WithObjectCollectors(r.collectObjects),
+			revisiongenerator.WithUnmanagedCRDs(apiRev.UnmanagedCustomResourceDefinitions),
+		)
 		if err != nil {
 			err = fmt.Errorf("error creating installer revision from API revision %s: %w", apiRev.Name, reconcile.TerminalError(err))
 		}

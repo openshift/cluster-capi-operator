@@ -30,6 +30,7 @@ import (
 	operatorv1alpha1ac "github.com/openshift/client-go/operator/applyconfigurations/operator/v1alpha1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	k8syaml "sigs.k8s.io/yaml"
 
@@ -46,6 +47,7 @@ const (
 var (
 	errProviderProfileNotFound = errors.New("no provider profile found for component")
 	errContentIDMismatch       = errors.New("content ID mismatch")
+	errUnmanagedCRDsNotFound   = errors.New("unmanaged CRDs not found in any component")
 )
 
 // RenderedRevision represents a set of components whose manifests have been
@@ -93,6 +95,7 @@ type renderedRevision struct {
 	components    []*renderedComponent
 	contentID     string
 	substitutions []operatorv1alpha1.ClusterAPIInstallerRevisionManifestSubstitution
+	unmanagedCRDs []string
 }
 
 var _ RenderedRevision = &renderedRevision{}
@@ -124,13 +127,77 @@ func newRenderedRevision(profiles []providerimages.ProviderImageManifests, opts 
 	rev := &renderedRevision{
 		components:    components,
 		substitutions: substitutionsFromMap(cfg.substitutions),
+		unmanagedCRDs: cfg.unmanagedCRDs,
 	}
 
 	if err := validateRenderedRevision(rev); err != nil {
 		return nil, err
 	}
 
+	if err := buildSyntheticCompatibilityComponent(rev, cfg); err != nil {
+		return nil, err
+	}
+
 	return rev, nil
+}
+
+const compatibilityComponentName = "compatibility-requirements"
+
+func buildSyntheticCompatibilityComponent(rev *renderedRevision, cfg *revisionRenderConfig) error {
+	if len(rev.unmanagedCRDs) == 0 {
+		return nil
+	}
+
+	unmanagedSet := sets.New(rev.unmanagedCRDs...)
+	foundCRDs := sets.New[string]()
+
+	var compatObjects []unstructured.Unstructured
+
+	for _, component := range rev.components {
+		var kept []unstructured.Unstructured
+
+		for _, crd := range component.crds {
+			if unmanagedSet.Has(crd.GetName()) {
+				if !foundCRDs.Has(crd.GetName()) {
+					foundCRDs.Insert(crd.GetName())
+
+					cr, err := buildCompatibilityRequirement(crd)
+					if err != nil {
+						return err
+					}
+
+					cr = transformObject(cr, compatibilityComponentName)
+
+					for _, collector := range cfg.objectCollectors {
+						collector(cr)
+					}
+
+					compatObjects = append(compatObjects, cr)
+				}
+			} else {
+				kept = append(kept, crd)
+			}
+		}
+
+		component.crds = kept
+	}
+
+	missing := unmanagedSet.Difference(foundCRDs)
+	if missing.Len() > 0 {
+		return fmt.Errorf("unmanaged CRDs not found in any component: %w: %v", errUnmanagedCRDsNotFound, sets.List(missing))
+	}
+
+	syntheticComponent := &renderedComponent{
+		name:      compatibilityComponentName,
+		synthetic: true,
+		objects:   compatObjects,
+	}
+
+	// Prepend: the synthetic component must be phase 0 so Boxcutter gates
+	// all other phases on compatibility. This ordering is load-bearing.
+	rev.components = append([]*renderedComponent{syntheticComponent}, rev.components...)
+
+	return nil
 }
 
 // substitutionsFromMap converts a map to a sorted slice of API substitutions.
@@ -236,9 +303,14 @@ func (r *installerRevision) ForInstall(_ string, _ int64) (InstallerRevision, er
 
 // ToAPIRevision converts this revision to an API revision.
 func (r *installerRevision) ToAPIRevision() (operatorv1alpha1.ClusterAPIInstallerRevision, error) {
-	apiComponents := make([]operatorv1alpha1.ClusterAPIInstallerComponent, len(r.components))
-	for i, component := range r.components {
-		apiComponents[i] = operatorv1alpha1.ClusterAPIInstallerComponent{
+	var apiComponents []operatorv1alpha1.ClusterAPIInstallerComponent
+
+	for _, component := range r.components {
+		if component.synthetic {
+			continue
+		}
+
+		apiComponents = append(apiComponents, operatorv1alpha1.ClusterAPIInstallerComponent{
 			Name: component.name,
 			ClusterAPIInstallerComponentSource: operatorv1alpha1.ClusterAPIInstallerComponentSource{
 				Type: operatorv1alpha1.InstallerComponentTypeImage,
@@ -247,7 +319,7 @@ func (r *installerRevision) ToAPIRevision() (operatorv1alpha1.ClusterAPIInstalle
 					Profile: component.profile,
 				},
 			},
-		}
+		})
 	}
 
 	contentID, err := r.ContentID()
@@ -256,11 +328,12 @@ func (r *installerRevision) ToAPIRevision() (operatorv1alpha1.ClusterAPIInstalle
 	}
 
 	return operatorv1alpha1.ClusterAPIInstallerRevision{
-		Name:                  r.revisionName,
-		Revision:              r.revisionIndex,
-		ContentID:             contentID,
-		ManifestSubstitutions: slices.Clone(r.substitutions),
-		Components:            apiComponents,
+		Name:                               r.revisionName,
+		Revision:                           r.revisionIndex,
+		ContentID:                          contentID,
+		ManifestSubstitutions:              slices.Clone(r.substitutions),
+		Components:                         apiComponents,
+		UnmanagedCustomResourceDefinitions: slices.Clone(r.unmanagedCRDs),
 	}, nil
 }
 
@@ -289,6 +362,7 @@ func buildRevisionName(releaseVersion, contentID string, index int64) operatorv1
 type revisionRenderConfig struct {
 	objectCollectors []RevisionObjectCollector
 	substitutions    map[string]string
+	unmanagedCRDs    []string
 }
 
 type revisionRenderOption func(*revisionRenderConfig)
@@ -301,6 +375,15 @@ type RevisionObjectCollector func(obj unstructured.Unstructured)
 func WithObjectCollectors(collectors ...RevisionObjectCollector) revisionRenderOption {
 	return func(opts *revisionRenderConfig) {
 		opts.objectCollectors = append(opts.objectCollectors, collectors...)
+	}
+}
+
+// WithUnmanagedCRDs sets the list of CRD names that should not be installed
+// by the installer. These CRDs will be used to build CompatibilityRequirement
+// objects in a synthetic component and filtered from their normal phases.
+func WithUnmanagedCRDs(crds []string) revisionRenderOption {
+	return func(opts *revisionRenderConfig) {
+		opts.unmanagedCRDs = crds
 	}
 }
 
@@ -383,9 +466,10 @@ func NewInstallerRevisionFromAPI(
 }
 
 type renderedComponent struct {
-	name     string
-	imageRef string
-	profile  string
+	name      string
+	imageRef  string
+	profile   string
+	synthetic bool
 
 	crds    []unstructured.Unstructured
 	objects []unstructured.Unstructured

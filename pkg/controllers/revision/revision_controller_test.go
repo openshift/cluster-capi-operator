@@ -379,6 +379,42 @@ var _ = Describe("RevisionController", Serial, func() {
 		Expect(updatedClusterAPI.Status.Revisions).To(HaveLen(16))
 	}, defaultNodeTimeout)
 
+	Context("when unmanagedCustomResourceDefinitions is set on the spec", func() {
+		It("should include them in the revision status", func(ctx context.Context) {
+			By("setting unmanagedCustomResourceDefinitions on the ClusterAPI spec")
+			Eventually(kWithCtx(ctx).Update(clusterAPI, func() {
+				clusterAPI.Spec.UnmanagedCustomResourceDefinitions = []string{"widgets.example.com"}
+			})).WithContext(ctx).Should(Succeed())
+
+			Eventually(kWithCtx(ctx).Object(clusterAPI)).
+				WithContext(ctx).
+				Should(HaveField("Status.Revisions", ContainElement(
+					HaveField("UnmanagedCustomResourceDefinitions", Equal([]string{"widgets.example.com"})),
+				)))
+		}, defaultNodeTimeout)
+
+		It("should produce a different content ID", func(ctx context.Context) {
+			By("capturing the original content ID")
+			Eventually(kWithCtx(ctx).Object(clusterAPI)).
+				WithContext(ctx).
+				Should(HaveField("Status.Revisions", HaveLen(1)))
+			originalContentID := clusterAPI.Status.Revisions[0].ContentID
+
+			By("setting unmanagedCustomResourceDefinitions on the ClusterAPI spec")
+			Eventually(kWithCtx(ctx).Update(clusterAPI, func() {
+				clusterAPI.Spec.UnmanagedCustomResourceDefinitions = []string{"widgets.example.com"}
+			})).WithContext(ctx).Should(Succeed())
+
+			By("waiting for a new revision")
+			Eventually(kWithCtx(ctx).Object(clusterAPI)).
+				WithContext(ctx).
+				Should(HaveField("Status.Revisions", HaveLen(2)))
+
+			newRev := latestRevision(clusterAPI.Status.Revisions)
+			Expect(newRev.ContentID).NotTo(Equal(originalContentID))
+		}, defaultNodeTimeout)
+	})
+
 	It("sets Available=False with NonRetryableError when manifest has invalid adopt-existing annotation", func(ctx context.Context) {
 		// Stop first manager (created by BeforeEach with valid providers)
 		mgr.stop()
