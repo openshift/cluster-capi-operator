@@ -32,6 +32,7 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	configv1 "github.com/openshift/api/config/v1"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 )
 
@@ -82,7 +83,7 @@ func (r *InfraClusterController) ensureAWSCluster(ctx context.Context, log logr.
 		return nil, fmt.Errorf("unable to obtain MAPI ProviderSpec: %w", err)
 	}
 
-	awsCluster, err = r.newAWSCluster(providerSpec, apiURL, int32(port))
+	awsCluster, err = r.newAWSCluster(providerSpec, apiURL, int32(port), r.Infra.Status.PlatformStatus.AWS.IPFamily)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get AWSCluster: %w", err)
 	}
@@ -96,7 +97,7 @@ func (r *InfraClusterController) ensureAWSCluster(ctx context.Context, log logr.
 	return awsCluster, nil
 }
 
-func (r *InfraClusterController) newAWSCluster(providerSpec *mapiv1beta1.AWSMachineProviderConfig, apiURL *url.URL, port int32) (*awsv1.AWSCluster, error) {
+func (r *InfraClusterController) newAWSCluster(providerSpec *mapiv1beta1.AWSMachineProviderConfig, apiURL *url.URL, port int32, ipFamily configv1.IPFamilyType) (*awsv1.AWSCluster, error) {
 	controlPlaneLoadBalancer, secondaryControlPlaneLoadBalancer, err := extractLoadBalancerConfigFromMAPIAWSProviderSpec(providerSpec)
 	if err != nil {
 		return nil, fmt.Errorf("failed to extract control plane load balancer configuration: %w", err)
@@ -130,6 +131,13 @@ func (r *InfraClusterController) newAWSCluster(providerSpec *mapiv1beta1.AWSMach
 			ControlPlaneLoadBalancer:          controlPlaneLoadBalancer,
 			SecondaryControlPlaneLoadBalancer: secondaryControlPlaneLoadBalancer,
 		},
+	}
+
+	// CAPA requires the VPC IPv6 block to be set to assign primary IPv6 addresses to instances.
+	// This is only applicable to IPv6 primary, but we set it for both dual-stack families
+	// to indicate that the VPC has IPv6 addressing enabled.
+	if ipFamily == configv1.DualStackIPv4Primary || ipFamily == configv1.DualStackIPv6Primary {
+		target.Spec.NetworkSpec.VPC.IPv6 = &awsv1.IPv6{}
 	}
 
 	return target, nil
