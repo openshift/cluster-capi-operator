@@ -38,6 +38,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	"github.com/openshift/cluster-capi-operator/pkg/test"
+	"pkg.package-operator.run/boxcutter/managedcache"
 )
 
 var (
@@ -52,6 +53,10 @@ var (
 	// mgrCancel stops the manager goroutine.
 	mgrCancel context.CancelFunc
 	mgrDone   chan struct{}
+
+	// sharedTrackingCache is the tracking cache shared between the
+	// InstallerController and the ProxyController under test.
+	sharedTrackingCache managedcache.TrackingCache
 )
 
 var (
@@ -106,7 +111,10 @@ var _ = BeforeSuite(func() {
 		handler.EnqueueRequestsFromMapFunc(toClusterAPI),
 	)
 
-	Expect(SetupWithManager(mgr, allProviderProfiles, triggerSource)).To(Succeed())
+	var setupErr error
+
+	sharedTrackingCache, setupErr = SetupWithManager(mgr, allProviderProfiles, triggerSource)
+	Expect(setupErr).To(Succeed(), "SetupWithManager should register the installer controller")
 	Expect(test.AddNamespaceFinalizerCleanup(mgr)).To(Succeed())
 
 	// Start manager in background.
