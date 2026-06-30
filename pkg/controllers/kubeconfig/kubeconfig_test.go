@@ -27,6 +27,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
+	configv1 "github.com/openshift/api/config/v1"
+	configv1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/config/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 	"github.com/openshift/cluster-capi-operator/pkg/test"
@@ -44,9 +46,7 @@ var _ = Describe("Reconcile kubeconfig secret", func() {
 
 		BeforeEach(func() {
 			r = &KubeconfigReconciler{
-				ClusterOperatorStatusClient: operatorstatus.ClusterOperatorStatusClient{
-					Client: cl,
-				},
+				Client:      cl,
 				clusterName: "test-cluster",
 				RestCfg:     cfg,
 			}
@@ -63,28 +63,47 @@ var _ = Describe("Reconcile kubeconfig secret", func() {
 			}
 
 			Expect(cl.Create(ctx, tokenSecret)).To(Succeed())
+
+			co := configv1resourcebuilder.ClusterOperator().WithName(controllers.ClusterOperatorName).Build()
+			Expect(cl.Create(ctx, co)).To(Succeed())
 		})
 
 		AfterEach(func() {
-			Expect(test.CleanupAndWait(ctx, cl, tokenSecret, kubeconfigSecret)).To(Succeed())
+			co := configv1resourcebuilder.ClusterOperator().WithName(controllers.ClusterOperatorName).Build()
+			Expect(test.CleanupAndWait(ctx, cl, tokenSecret, kubeconfigSecret, co)).To(Succeed())
 		})
 
 		It("should create a kubeconfig secret when it doesn't exist", func() {
-			_, err := r.reconcileKubeconfig(ctx, log)
-			Expect(err).To(Succeed())
+			result := r.reconcileKubeconfig(ctx, log)
+			Expect(result.Error()).ToNot(HaveOccurred())
 
 			Expect(cl.Get(ctx, client.ObjectKey{
 				Name:      fmt.Sprintf("%s-kubeconfig", r.clusterName),
 				Namespace: controllers.DefaultCAPINamespace,
 			}, kubeconfigSecret)).To(Succeed())
 			Expect(kubeconfigSecret.Data).To(HaveKey("value")) // kubeconfig content is tested separately
+
+			By("Verifying ClusterOperator conditions")
+
+			Expect(result.WriteClusterOperatorStatus(ctx, log, cl)).To(Succeed())
+
+			co := configv1resourcebuilder.ClusterOperator().WithName(controllers.ClusterOperatorName).Build()
+			Expect(cl.Get(ctx, client.ObjectKeyFromObject(co), co)).To(Succeed())
+			Expect(co.Status.Conditions).To(SatisfyAll(
+				test.HaveCondition(ResultGenerator.SubConditionType(operatorstatus.ConditionAvailableSuffix)).
+					WithStatus(configv1.ConditionTrue).
+					WithReason(operatorstatus.ReasonAsExpected),
+				test.HaveCondition(ResultGenerator.SubConditionType(operatorstatus.ConditionProgressingSuffix)).
+					WithStatus(configv1.ConditionFalse).
+					WithReason(operatorstatus.ReasonAsExpected),
+			))
 		})
 
 		It("should reconcile existing kubeconfig secret when it doesn't exist", func() {
-			_, err := r.reconcileKubeconfig(ctx, log)
-			Expect(err).To(Succeed())
-			_, err = r.reconcileKubeconfig(ctx, log)
-			Expect(err).To(Succeed())
+			result := r.reconcileKubeconfig(ctx, log)
+			Expect(result.Error()).ToNot(HaveOccurred())
+			result = r.reconcileKubeconfig(ctx, log)
+			Expect(result.Error()).ToNot(HaveOccurred())
 
 			Expect(cl.Get(ctx, client.ObjectKey{
 				Name:      fmt.Sprintf("%s-kubeconfig", r.clusterName),
@@ -99,9 +118,22 @@ var _ = Describe("Reconcile kubeconfig secret", func() {
 				return cl.Get(ctx, client.ObjectKeyFromObject(tokenSecret), tokenSecret)
 			}, timeout).Should(Not(Succeed()))
 
-			res, err := r.reconcileKubeconfig(ctx, log)
-			Expect(err).To(Succeed())
+			result := r.reconcileKubeconfig(ctx, log)
+			Expect(result.Error()).ToNot(HaveOccurred())
+			res, _ := result.Result()
 			Expect(res.RequeueAfter).To(Equal(1 * time.Minute))
+
+			By("Verifying ClusterOperator conditions show WaitingOnExternal")
+
+			Expect(result.WriteClusterOperatorStatus(ctx, log, cl)).To(Succeed())
+
+			co := configv1resourcebuilder.ClusterOperator().WithName(controllers.ClusterOperatorName).Build()
+			Expect(cl.Get(ctx, client.ObjectKeyFromObject(co), co)).To(Succeed())
+			Expect(co.Status.Conditions).To(SatisfyAll(
+				test.HaveCondition(ResultGenerator.SubConditionType(operatorstatus.ConditionProgressingSuffix)).
+					WithStatus(configv1.ConditionTrue).
+					WithReason(operatorstatus.ReasonWaitingOnExternal),
+			))
 		})
 
 		It("should clear token secret data if its old and requeue", func() {
@@ -111,9 +143,8 @@ var _ = Describe("Reconcile kubeconfig secret", func() {
 
 			tokenSecret.SetCreationTimestamp(metav1.Time{Time: time.Now().Add(-1 * time.Hour)})
 			Expect(fakeClient.Update(ctx, tokenSecret)).To(Succeed())
-			res, err := r.reconcileKubeconfig(ctx, log)
-			Expect(err).To(Succeed())
-			Expect(res).To(Equal(ctrl.Result{}))
+			result := r.reconcileKubeconfig(ctx, log)
+			Expect(result.Error()).ToNot(HaveOccurred())
 
 			// Verify the secret still exists but data was cleared
 			updatedSecret := &corev1.Secret{}
@@ -122,6 +153,31 @@ var _ = Describe("Reconcile kubeconfig secret", func() {
 
 			// Verify the refresh annotation was set
 			Expect(updatedSecret.Annotations).To(HaveKey(tokenRefreshAnnotationKey))
+		})
+
+		It("should report success after refreshing an expired token", func() {
+			tokenSecret.Annotations = map[string]string{
+				tokenRefreshAnnotationKey: time.Now().Add(-1 * time.Hour).UTC().Format(time.RFC3339),
+			}
+			Expect(cl.Update(ctx, tokenSecret)).To(Succeed())
+
+			result := r.reconcileKubeconfig(ctx, log)
+			Expect(result.Error()).ToNot(HaveOccurred())
+
+			By("Verifying ClusterOperator conditions show success")
+
+			Expect(result.WriteClusterOperatorStatus(ctx, log, cl)).To(Succeed())
+
+			co := configv1resourcebuilder.ClusterOperator().WithName(controllers.ClusterOperatorName).Build()
+			Expect(cl.Get(ctx, client.ObjectKeyFromObject(co), co)).To(Succeed())
+			Expect(co.Status.Conditions).To(SatisfyAll(
+				test.HaveCondition(ResultGenerator.SubConditionType(operatorstatus.ConditionAvailableSuffix)).
+					WithStatus(configv1.ConditionTrue).
+					WithReason(operatorstatus.ReasonAsExpected),
+				test.HaveCondition(ResultGenerator.SubConditionType(operatorstatus.ConditionProgressingSuffix)).
+					WithStatus(configv1.ConditionFalse).
+					WithReason(operatorstatus.ReasonAsExpected),
+			))
 		})
 	})
 })
