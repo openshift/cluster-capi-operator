@@ -238,7 +238,7 @@ func (r *InfraClusterController) ensureInfraCluster(ctx context.Context, log log
 
 // setAvailableCondition sets the ClusterOperator status condition to Available.
 func (r *InfraClusterController) setAvailableCondition(ctx context.Context, log logr.Logger) error {
-	co, err := r.GetOrCreateClusterOperator(ctx)
+	co, err := r.GetClusterOperator(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get cluster operator: %w", err)
 	}
