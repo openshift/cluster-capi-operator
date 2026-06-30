@@ -191,10 +191,6 @@ func getControllers(opts commoncmdoptions.OperatorConfig, platform configv1.Plat
 			CAPINamespace: *opts.CAPINamespace,
 		},
 		"machineset migration": &machinesetmigration.MachineSetMigrationReconciler{
-			Platform:   platform,
-			Infra:      infra,
-			InfraTypes: infraTypes,
-
 			MAPINamespace: *opts.MAPINamespace,
 			CAPINamespace: *opts.CAPINamespace,
 		},
