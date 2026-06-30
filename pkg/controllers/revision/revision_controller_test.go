@@ -169,6 +169,9 @@ var _ = Describe("RevisionController", Serial, func() {
 		Expect(co.Status.Conditions).To(test.HaveCondition(conditionTypeAvailable).
 			WithStatus(configv1.ConditionTrue).
 			WithReason(operatorstatus.ReasonAsExpected))
+
+		// Should NOT set operator version (not up to date — CurrentRevision is empty)
+		Expect(co.Status.Versions).To(BeEmpty())
 	}, defaultNodeTimeout)
 
 	It("does not modify up to date revision list", func(ctx context.Context) {
@@ -250,6 +253,11 @@ var _ = Describe("RevisionController", Serial, func() {
 
 		// ObservedRevisionGeneration should match the ClusterAPI generation
 		Expect(clusterAPI.Status.ObservedRevisionGeneration).To(Equal(clusterAPI.Generation))
+
+		// Should NOT set operator version (new revision not yet installed)
+		co := &configv1.ClusterOperator{}
+		Expect(cl.Get(ctx, client.ObjectKey{Name: "cluster-api"}, co)).To(Succeed())
+		Expect(co.Status.Versions).To(BeEmpty())
 	}, defaultNodeTimeout)
 
 	It("creates revision with empty components when no providers match the platform", func(ctx context.Context) {
@@ -301,6 +309,14 @@ var _ = Describe("RevisionController", Serial, func() {
 		Expect(clusterAPI.Status.Revisions[0].Name).To(Equal(latest.Name))
 		Expect(clusterAPI.Status.DesiredRevision).To(Equal(latest.Name))
 		Expect(clusterAPI.Status.ObservedRevisionGeneration).To(Equal(clusterAPI.Generation))
+
+		// Should set operator version (up to date)
+		co := &configv1.ClusterOperator{}
+		Expect(cl.Get(ctx, client.ObjectKey{Name: "cluster-api"}, co)).To(Succeed())
+		Expect(co.Status.Versions).To(ContainElement(SatisfyAll(
+			HaveField("Name", Equal(operatorstatus.OperatorVersionKey)),
+			HaveField("Version", Equal("4.18.0")),
+		)))
 	}, defaultNodeTimeout)
 
 	It("preserves all revisions when content changes and current is set", func(ctx context.Context) {
@@ -327,6 +343,67 @@ var _ = Describe("RevisionController", Serial, func() {
 		Expect(clusterAPI.Status.DesiredRevision).NotTo(Equal(rev1Name))
 		Expect(clusterAPI.Status.CurrentRevision).To(Equal(rev1Name))
 		Expect(clusterAPI.Status.ObservedRevisionGeneration).To(Equal(clusterAPI.Generation))
+
+		// Should NOT set operator version (current != latest)
+		co := &configv1.ClusterOperator{}
+		Expect(cl.Get(ctx, client.ObjectKey{Name: "cluster-api"}, co)).To(Succeed())
+		Expect(co.Status.Versions).To(BeEmpty())
+	}, defaultNodeTimeout)
+
+	It("sets operator version when current revision matches latest", func(ctx context.Context) {
+		// BeforeEach created rev1. Set CurrentRevision to match.
+		Expect(kWithCtx(ctx).Get(clusterAPI)()).To(Succeed())
+		Expect(clusterAPI.Status.Revisions).To(HaveLen(1))
+		patch := client.MergeFrom(clusterAPI.DeepCopy())
+		clusterAPI.Status.CurrentRevision = clusterAPI.Status.Revisions[0].Name
+		Expect(cl.Status().Patch(ctx, clusterAPI, patch)).To(Succeed())
+
+		// Trigger a reconcile
+		Eventually(kWithCtx(ctx).Update(clusterAPI, func() {
+			metav1.SetMetaDataAnnotation(&clusterAPI.ObjectMeta, "test", "trigger-version")
+		})).WithContext(ctx).Should(Succeed())
+
+		// Wait for the version to appear
+		co := &configv1.ClusterOperator{}
+		co.SetName("cluster-api")
+		Eventually(kWithCtx(ctx).Object(co)).
+			WithContext(ctx).
+			Should(HaveField("Status.Versions", ContainElement(SatisfyAll(
+				HaveField("Name", Equal(operatorstatus.OperatorVersionKey)),
+				HaveField("Version", Equal("4.18.0")),
+			))))
+	}, defaultNodeTimeout)
+
+	It("corrects stale operator version when current revision matches latest", func(ctx context.Context) {
+		// BeforeEach created rev1. Set CurrentRevision to match.
+		Expect(kWithCtx(ctx).Get(clusterAPI)()).To(Succeed())
+		Expect(clusterAPI.Status.Revisions).To(HaveLen(1))
+		patch := client.MergeFrom(clusterAPI.DeepCopy())
+		clusterAPI.Status.CurrentRevision = clusterAPI.Status.Revisions[0].Name
+		Expect(cl.Status().Patch(ctx, clusterAPI, patch)).To(Succeed())
+
+		// Seed an incorrect operator version
+		coKey := client.ObjectKey{Name: "cluster-api"}
+		co := &configv1.ClusterOperator{}
+		Expect(cl.Get(ctx, coKey, co)).To(Succeed())
+		coPatch := client.MergeFrom(co.DeepCopy())
+		co.Status.Versions = []configv1.OperandVersion{{Name: operatorstatus.OperatorVersionKey, Version: "incorrect"}}
+		Expect(cl.Status().Patch(ctx, co, coPatch)).To(Succeed())
+
+		// Trigger a reconcile
+		Eventually(kWithCtx(ctx).Update(clusterAPI, func() {
+			metav1.SetMetaDataAnnotation(&clusterAPI.ObjectMeta, "test", "trigger-version-correction")
+		})).WithContext(ctx).Should(Succeed())
+
+		// Wait for the version to be corrected
+		co = &configv1.ClusterOperator{}
+		co.SetName("cluster-api")
+		Eventually(kWithCtx(ctx).Object(co)).
+			WithContext(ctx).
+			Should(HaveField("Status.Versions", ContainElement(SatisfyAll(
+				HaveField("Name", Equal(operatorstatus.OperatorVersionKey)),
+				HaveField("Version", Equal("4.18.0")),
+			))))
 	}, defaultNodeTimeout)
 
 	It("sets Available=False with NonRetryableError when max revisions reached", func(ctx context.Context) {

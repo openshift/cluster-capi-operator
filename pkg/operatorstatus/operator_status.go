@@ -33,11 +33,6 @@ import (
 	"github.com/openshift/library-go/pkg/config/clusteroperator/v1helpers"
 )
 
-const (
-	// ReasonSyncFailed is the reason for the condition when the operator failed to sync resources.
-	ReasonSyncFailed = "SyncingFailed"
-)
-
 // ClusterOperatorStatusClient is a client for managing the status of the ClusterOperator object.
 type ClusterOperatorStatusClient struct {
 	client.Client
@@ -90,9 +85,8 @@ func (r *ClusterOperatorStatusClient) SetStatusDegraded(ctx context.Context, rec
 	message := fmt.Sprintf("Failed to resync because %v", reconcileErr)
 
 	conds := []configv1.ClusterOperatorStatusCondition{
-		NewClusterOperatorStatusCondition(configv1.OperatorDegraded, configv1.ConditionTrue,
-			ReasonSyncFailed, message),
-		NewClusterOperatorStatusCondition(configv1.OperatorUpgradeable, configv1.ConditionFalse, ReasonAsExpected, ""),
+		NewClusterOperatorStatusCondition(configv1.OperatorDegraded, configv1.ConditionTrue, ReasonEphemeralError, message),
+		NewClusterOperatorStatusCondition(configv1.OperatorUpgradeable, configv1.ConditionFalse, ReasonAsExpected, message),
 	}
 
 	r.Recorder.Eventf(co, corev1.EventTypeWarning, "Status degraded", reconcileErr.Error())
@@ -191,20 +185,15 @@ func (r *ClusterOperatorStatusClient) SyncStatus(ctx context.Context, co *config
 	return nil
 }
 
-// OperandVersions returns the operand versions for the ClusterOperator.
-func (r *ClusterOperatorStatusClient) OperandVersions() []configv1.OperandVersion {
-	return []configv1.OperandVersion{{Name: controllers.OperatorVersionKey, Version: r.ReleaseVersion}}
-}
-
 // NewClusterOperatorStatusCondition creates a new ClusterOperatorStatusCondition.
 func NewClusterOperatorStatusCondition(conditionType configv1.ClusterStatusConditionType,
-	conditionStatus configv1.ConditionStatus, reason string,
+	conditionStatus configv1.ConditionStatus, reason Reason,
 	message string) configv1.ClusterOperatorStatusCondition {
 	return configv1.ClusterOperatorStatusCondition{
 		Type:               conditionType,
 		Status:             conditionStatus,
 		LastTransitionTime: metav1.Now(),
-		Reason:             reason,
+		Reason:             reason.String(),
 		Message:            message,
 	}
 }
