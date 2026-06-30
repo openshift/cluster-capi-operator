@@ -45,21 +45,14 @@ const (
 // InstallerDeploymentReconciler reconciles the capi-installer Deployment.
 type InstallerDeploymentReconciler struct {
 	client.Client
-	Namespace         string
-	ContainerImage    string
-	SupportedPlatform bool
+	Namespace      string
+	ContainerImage string
 }
 
 // Reconcile reconciles the capi-installer Deployment by reading provider image refs
 // from the ConfigMap and ClusterAPI revisions, then applying the desired deployment.
-// On unsupported platforms, it deletes the deployment if it exists.
 func (r *InstallerDeploymentReconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
 	log := ctrl.LoggerFrom(ctx).WithName("InstallerDeploymentReconciler")
-
-	// If platform is unsupported, delete deployment.
-	if !r.SupportedPlatform {
-		return r.deleteDeploymentIfExists(ctx, log)
-	}
 
 	// Read ConfigMap with current-release provider image refs.
 	configMap, err := r.getConfigMap(ctx, log)
@@ -194,30 +187,4 @@ func (r *InstallerDeploymentReconciler) mapClusterAPIToReconcile(ctx context.Con
 	}
 
 	return nil
-}
-
-// deleteDeploymentIfExists deletes the capi-installer Deployment if it exists.
-// Returns no error if the deployment doesn't exist.
-func (r *InstallerDeploymentReconciler) deleteDeploymentIfExists(ctx context.Context, log logr.Logger) (reconcile.Result, error) {
-	deployment := &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      deploymentName,
-			Namespace: r.Namespace,
-		},
-	}
-
-	err := r.Delete(ctx, deployment)
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			log.V(1).Info("Deployment does not exist, nothing to delete")
-
-			return reconcile.Result{}, nil
-		}
-
-		return reconcile.Result{}, fmt.Errorf("failed to delete Deployment: %w", err)
-	}
-
-	log.Info("Deleted capi-installer Deployment on unsupported platform")
-
-	return reconcile.Result{}, nil
 }

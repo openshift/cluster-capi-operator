@@ -30,6 +30,7 @@ import (
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	operatorv1alpha1ac "github.com/openshift/client-go/operator/applyconfigurations/operator/v1alpha1"
 	libgocrypto "github.com/openshift/library-go/pkg/crypto"
+	featuregates "github.com/openshift/library-go/pkg/operator/configobserver/featuregates"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -65,6 +66,7 @@ type RevisionController struct {
 	client.Client
 	ProviderProfiles []providerimages.ProviderImageManifests
 	ReleaseVersion   string
+	FeatureGates     featuregates.FeatureGate
 
 	// manifestSubstitutions is derived from TLSProfileSpec during SetupWithManager.
 	manifestSubstitutions map[string]string
@@ -241,12 +243,19 @@ func (r *RevisionController) writeRevisions(ctx context.Context, log logr.Logger
 
 // buildComponentList builds an ordered list of provider components for the given platform.
 // Components are ordered by: core+global, core+platform, infra+global, infra+platform
-// Providers that don't match the current platform are filtered out.
+// Providers that don't match the current platform or whose platform feature
+// gate is not enabled are filtered out.
 func (r *RevisionController) buildComponentList(platform configv1.PlatformType) []providerimages.ProviderImageManifests {
+	platformEnabled := util.IsCAPIEnabledForPlatform(r.FeatureGates, platform)
+
 	// Iterate over only providers that have either no platform restriction, or
-	// match the current platform.
+	// match the current platform and whose feature gate is enabled.
 	componentsByPlatform := util.IterFilter(slices.Values(r.ProviderProfiles), func(provider providerimages.ProviderImageManifests) bool {
-		return provider.OCPPlatform == "" || provider.OCPPlatform == platform
+		if provider.OCPPlatform == "" {
+			return true
+		}
+
+		return platformEnabled && provider.OCPPlatform == platform
 	})
 
 	// Sort components by install order, then platform, then name.
