@@ -19,10 +19,12 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/openshift-eng/openshift-tests-extension/pkg/cmd"
 	e "github.com/openshift-eng/openshift-tests-extension/pkg/extension"
+	et "github.com/openshift-eng/openshift-tests-extension/pkg/extension/extensiontests"
 	g "github.com/openshift-eng/openshift-tests-extension/pkg/ginkgo"
 	"github.com/spf13/cobra"
 
@@ -68,6 +70,15 @@ func main() {
 
 	specs.AddBeforeAll(func() {
 		e2e.InitCommonVariables()
+	})
+
+	// Auto-apply platform environment selectors from Ginkgo Label("platform:<name>") annotations.
+	specs.Walk(func(spec *et.ExtensionTestSpec) {
+		for label := range spec.Labels {
+			if platform, ok := strings.CutPrefix(label, "platform:"); ok {
+				spec.Include(et.PlatformEquals(platform))
+			}
+		}
 	})
 
 	ext.AddSpecs(specs)
