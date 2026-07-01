@@ -30,6 +30,7 @@ import (
 	"k8s.io/utils/clock"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
+	vspherev1 "sigs.k8s.io/cluster-api-provider-vsphere/apis/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 
 	"github.com/openshift/api/features"
@@ -66,6 +67,7 @@ func initScheme(scheme *runtime.Scheme) {
 	utilruntime.Must(configv1.Install(scheme))
 	utilruntime.Must(awsv1.AddToScheme(scheme))
 	utilruntime.Must(openstackv1.AddToScheme(scheme))
+	utilruntime.Must(vspherev1.AddToScheme(scheme))
 	utilruntime.Must(clusterv1.AddToScheme(scheme))
 }
 
@@ -91,7 +93,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := checkFeatureGates(ctx, log, mgr); err != nil {
+	currentFeatureGates, err := setupFeatureGates(ctx, log, mgr)
+	if err != nil {
 		log.Error(err, "unable to check feature gates")
 		os.Exit(1)
 	}
@@ -113,7 +116,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	checkPlatformSupported(ctx, log, platform)
+	checkPlatformSupported(ctx, log, platform, currentFeatureGates)
 
 	for name, controller := range getControllers(operatorConfig, platform, infra, infraTypes) {
 		if err := controller.SetupWithManager(mgr); err != nil {
@@ -130,15 +133,15 @@ func main() {
 	}
 }
 
-func checkFeatureGates(ctx context.Context, log logr.Logger, mgr ctrl.Manager) error {
-	featureGateAccessor, err := getFeatureGates(ctx, mgr)
+func setupFeatureGates(ctx context.Context, log logr.Logger, mgr ctrl.Manager) (featuregates.FeatureGate, error) {
+	featureGateAccessor, err := getFeatureGatesAccessor(ctx, mgr)
 	if err != nil {
-		return fmt.Errorf("unable to get feature gates: %w", err)
+		return nil, fmt.Errorf("unable to get feature gates: %w", err)
 	}
 
 	currentFeatureGates, err := featureGateAccessor.CurrentFeatureGates()
 	if err != nil {
-		return fmt.Errorf("unable to get current feature gates: %w", err)
+		return nil, fmt.Errorf("unable to get current feature gates: %w", err)
 	}
 
 	if !currentFeatureGates.Enabled(features.FeatureGateMachineAPIMigration) {
@@ -146,14 +149,29 @@ func checkFeatureGates(ctx context.Context, log logr.Logger, mgr ctrl.Manager) e
 		exitAfterTerminationSignal(ctx)
 	}
 
-	return nil
+	checkMachineAPIMigrationEnabled(ctx, log, currentFeatureGates)
+
+	return currentFeatureGates, nil
 }
 
-func checkPlatformSupported(ctx context.Context, log logr.Logger, platform configv1.PlatformType) {
+func checkMachineAPIMigrationEnabled(ctx context.Context, log logr.Logger, currentFeatureGates featuregates.FeatureGate) {
+	if !currentFeatureGates.Enabled(features.FeatureGateMachineAPIMigration) {
+		log.Info("MachineAPIMigration feature gate is not enabled, nothing to do. Waiting for termination signal.")
+		exitAfterTerminationSignal(ctx)
+	}
+}
+
+func checkPlatformSupported(ctx context.Context, log logr.Logger, platform configv1.PlatformType, currentFeatureGates featuregates.FeatureGate) {
 	switch platform {
 	case configv1.AWSPlatformType, configv1.OpenStackPlatformType:
 		log.Info("starting controllers", "platform", platform)
+	case configv1.VSpherePlatformType:
+		if !currentFeatureGates.Enabled(features.FeatureGateMachineAPIMigrationVSphere) {
+			log.Info("MachineAPIMigrationVSphere feature gate is not enabled for vSphere platform. Waiting for termination signal.")
+			exitAfterTerminationSignal(ctx)
+		}
 
+		log.Info("MachineAPIMigration: starting %s controllers", platform)
 	default:
 		log.Info("MachineAPIMigration not implemented for platform, nothing to do. Waiting for termination signal.", "platform", platform)
 		exitAfterTerminationSignal(ctx)
@@ -213,7 +231,7 @@ func exitAfterTerminationSignal(ctx context.Context) {
 
 // getFeatureGates is used to fetch the current feature gates from the cluster.
 // We use this to check if the machine api migration is actually enabled or not.
-func getFeatureGates(ctx context.Context, mgr ctrl.Manager) (featuregates.FeatureGateAccess, error) {
+func getFeatureGatesAccessor(ctx context.Context, mgr ctrl.Manager) (featuregates.FeatureGateAccess, error) {
 	desiredVersion := util.GetReleaseVersion()
 	missingVersion := "0.0.1-snapshot"
 
