@@ -28,6 +28,7 @@ import (
 	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
 	configv1 "github.com/openshift/api/config/v1"
 	operatorv1 "github.com/openshift/api/operator/v1"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility"
 	crdcompatibilitybindata "github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility/bindata"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility/crdvalidation"
@@ -51,8 +52,7 @@ func initScheme(scheme *runtime.Scheme) {
 }
 
 const (
-	managerName             = "crd-compatibility-checker"
-	defaultManagerNamespace = "openshift-compatibility-requirements-operator"
+	managerName = "crd-compatibility-checker"
 )
 
 func main() {
@@ -73,7 +73,7 @@ func main() {
 		"Webhook cert dir, only used when webhook-port is specified.",
 	)
 
-	log, operatorConfig, mgrOpts, initManager, err := commoncmdoptions.InitOperatorConfig(ctx, cfg, scheme, managerName, defaultManagerNamespace, extraflags)
+	log, operatorConfig, mgrOpts, initManager, err := commoncmdoptions.InitOperatorConfig(ctx, cfg, scheme, managerName, controllers.DefaultCRDCompatibilityCheckerNamespace, extraflags)
 	if err != nil {
 		log.Error(err, "unable to initialize operator config")
 		os.Exit(1)
