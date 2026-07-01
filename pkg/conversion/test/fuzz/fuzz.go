@@ -473,6 +473,8 @@ func ObjectMetaFuzzerFuncs(namespace string) fuzzer.FuzzerFuncs {
 }
 
 // CAPIMachineFuzzerFuncs returns a set of fuzzer functions that can be used to fuzz MachineSpec objects.
+//
+//nolint:funlen
 func CAPIMachineFuzzerFuncs(providerIDFuzz StringFuzzer, infraKind, infraAPIGroup, clusterName string) fuzzer.FuzzerFuncs {
 	return func(codecs runtimeserializer.CodecFactory) []interface{} {
 		return []interface{}{
@@ -506,6 +508,15 @@ func CAPIMachineFuzzerFuncs(providerIDFuzz StringFuzzer, infraKind, infraAPIGrou
 				// Power VS does not support failure domain
 				if infraKind == powerVSMachineKind {
 					m.FailureDomain = ""
+				}
+
+				// Normalize taints: empty→nil (MAPI uses nil), all Propagation→Always (MAPI has no propagation concept).
+				if len(m.Taints) == 0 {
+					m.Taints = nil
+				} else {
+					for i := range m.Taints {
+						m.Taints[i].Propagation = clusterv1.MachineTaintPropagationAlways
+					}
 				}
 			},
 			func(m *clusterv1.Machine, c randfill.Continue) {

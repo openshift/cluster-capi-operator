@@ -43,11 +43,12 @@ var _ = Describe("mapi2capi MachineSet conversion", func() {
 		infraBuilder      configbuilder.InfrastructureBuilder
 		expectedErrors    []string
 		expectedWarnings  []string
+		assertion         func(capiMachineSet *clusterv1.MachineSet)
 	}
 
 	var _ = DescribeTable("mapi2capi convert MAPI MachineSet to CAPI MachineSet",
 		func(in mapi2CAPIMachinesetConversionInput) {
-			_, _, warns, err := FromAWSMachineSetAndInfra(
+			capiMachineSet, _, warns, err := FromAWSMachineSetAndInfra(
 				in.machineSetBuilder.Build(),
 				in.infraBuilder.Build(),
 			).ToMachineSetAndMachineTemplate()
@@ -55,6 +56,10 @@ var _ = Describe("mapi2capi MachineSet conversion", func() {
 				"should match expected errors while converting MAPI MachineSet to CAPI MachineSet")
 			Expect(warns).To(matchers.ConsistOfSubstrings(in.expectedWarnings),
 				"should match expected warnings while converting MAPI MachineSet to CAPI MachineSet")
+
+			if in.assertion != nil {
+				in.assertion(capiMachineSet)
+			}
 		},
 
 		// Base Case
@@ -90,6 +95,25 @@ var _ = Describe("mapi2capi MachineSet conversion", func() {
 			}),
 			expectedErrors:   []string{"spec.metadata.namespace: Invalid value: \"test-namespace\": namespace is not supported"},
 			expectedWarnings: []string{},
+		}),
+
+		Entry("With spec.taints set", mapi2CAPIMachinesetConversionInput{
+			infraBuilder: infraBase,
+			machineSetBuilder: mapiMachineSetBase.WithTaints([]corev1.Taint{{
+				Key:    "key1",
+				Value:  "value1",
+				Effect: corev1.TaintEffectNoSchedule,
+			}}),
+			expectedErrors:   []string{},
+			expectedWarnings: []string{},
+			assertion: func(capiMachineSet *clusterv1.MachineSet) {
+				Expect(capiMachineSet.Spec.Template.Spec.Taints).To(ConsistOf(clusterv1.MachineTaint{
+					Key:         "key1",
+					Value:       "value1",
+					Effect:      corev1.TaintEffectNoSchedule,
+					Propagation: clusterv1.MachineTaintPropagationAlways,
+				}))
+			},
 		}),
 	)
 })

@@ -63,8 +63,8 @@ func fromCAPIMachineToMAPIMachine(capiMachine *clusterv1.Machine, additionalMach
 			},
 			ProviderID:     providerID,
 			LifecycleHooks: lifecycleHooks,
+			Taints:         convertCAPITaintsToMAPITaints(capiMachine.Spec.Taints),
 			// ProviderSpec: // ProviderSpec MUST NOT be populated here. It is added later by higher level fuctions.
-			// Taints: // TODO(OCPCLOUD-2861): Taint propagation from Machines to Nodes is not yet implemented in CAPI.
 		},
 		Status: mapiMachineStatus,
 	}

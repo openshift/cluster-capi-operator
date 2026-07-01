@@ -46,12 +46,12 @@ var _ = Describe("mapi2capi Machine conversion", func() {
 		infraBuilder     configbuilder.InfrastructureBuilder
 		expectedErrors   []string
 		expectedWarnings []string
-		assertion        func(machine *mapiv1beta1.Machine)
+		assertion        func(capiMachine *clusterv1.Machine)
 	}
 
 	var _ = DescribeTable("mapi2capi convert MAPI Machine to a CAPI Machine",
 		func(in mapi2CAPIMachineConversionInput) {
-			_, _, warns, err := FromAWSMachineAndInfra(
+			capiMachine, _, warns, err := FromAWSMachineAndInfra(
 				in.machineBuilder.Build(),
 				in.infraBuilder.Build(),
 			).ToMachineAndInfrastructureMachine()
@@ -59,6 +59,10 @@ var _ = Describe("mapi2capi Machine conversion", func() {
 				"should match expected errors while converting MAPI Machine to CAPI Machine")
 			Expect(warns).To(matchers.ConsistOfSubstrings(in.expectedWarnings),
 				"should match expected warnings while converting MAPI Machine to CAPI Machine")
+
+			if in.assertion != nil {
+				in.assertion(capiMachine)
+			}
 		},
 
 		// Base Case.
@@ -121,15 +125,85 @@ var _ = Describe("mapi2capi Machine conversion", func() {
 			expectedWarnings: []string{},
 		}),
 
-		Entry("With unsupported spec.taints set", mapi2CAPIMachineConversionInput{
+		Entry("With spec.taints set", mapi2CAPIMachineConversionInput{
 			infraBuilder: infraBase,
 			machineBuilder: mapiMachineBase.WithTaints([]corev1.Taint{{
 				Key:    "key1",
 				Value:  "value1",
 				Effect: corev1.TaintEffectNoSchedule,
 			}}),
-			expectedErrors:   []string{"spec.taints: Invalid value: [{\"key\":\"key1\",\"value\":\"value1\",\"effect\":\"NoSchedule\"}]: taints are not currently supported"},
+			expectedErrors:   []string{},
 			expectedWarnings: []string{},
+			assertion: func(capiMachine *clusterv1.Machine) {
+				Expect(capiMachine.Spec.Taints).To(ConsistOf(clusterv1.MachineTaint{
+					Key:         "key1",
+					Value:       "value1",
+					Effect:      corev1.TaintEffectNoSchedule,
+					Propagation: clusterv1.MachineTaintPropagationAlways,
+				}))
+			},
+		}),
+
+		Entry("With spec.taints set with NoExecute effect", mapi2CAPIMachineConversionInput{
+			infraBuilder: infraBase,
+			machineBuilder: mapiMachineBase.WithTaints([]corev1.Taint{{
+				Key:    "key1",
+				Value:  "value1",
+				Effect: corev1.TaintEffectNoExecute,
+			}}),
+			expectedErrors:   []string{},
+			expectedWarnings: []string{},
+			assertion: func(capiMachine *clusterv1.Machine) {
+				Expect(capiMachine.Spec.Taints).To(ConsistOf(clusterv1.MachineTaint{
+					Key:         "key1",
+					Value:       "value1",
+					Effect:      corev1.TaintEffectNoExecute,
+					Propagation: clusterv1.MachineTaintPropagationAlways,
+				}))
+			},
+		}),
+
+		Entry("With spec.taints set with PreferNoSchedule effect", mapi2CAPIMachineConversionInput{
+			infraBuilder: infraBase,
+			machineBuilder: mapiMachineBase.WithTaints([]corev1.Taint{{
+				Key:    "key1",
+				Value:  "value1",
+				Effect: corev1.TaintEffectPreferNoSchedule,
+			}}),
+			expectedErrors:   []string{},
+			expectedWarnings: []string{},
+			assertion: func(capiMachine *clusterv1.Machine) {
+				Expect(capiMachine.Spec.Taints).To(ConsistOf(clusterv1.MachineTaint{
+					Key:         "key1",
+					Value:       "value1",
+					Effect:      corev1.TaintEffectPreferNoSchedule,
+					Propagation: clusterv1.MachineTaintPropagationAlways,
+				}))
+			},
+		}),
+
+		Entry("With multiple spec.taints set", mapi2CAPIMachineConversionInput{
+			infraBuilder: infraBase,
+			machineBuilder: mapiMachineBase.WithTaints([]corev1.Taint{
+				{
+					Key:    "key1",
+					Value:  "value1",
+					Effect: corev1.TaintEffectNoSchedule,
+				},
+				{
+					Key:    "key2",
+					Value:  "value2",
+					Effect: corev1.TaintEffectNoExecute,
+				},
+			}),
+			expectedErrors:   []string{},
+			expectedWarnings: []string{},
+			assertion: func(capiMachine *clusterv1.Machine) {
+				Expect(capiMachine.Spec.Taints).To(ConsistOf(
+					clusterv1.MachineTaint{Key: "key1", Value: "value1", Effect: corev1.TaintEffectNoSchedule, Propagation: clusterv1.MachineTaintPropagationAlways},
+					clusterv1.MachineTaint{Key: "key2", Value: "value2", Effect: corev1.TaintEffectNoExecute, Propagation: clusterv1.MachineTaintPropagationAlways},
+				))
+			},
 		}),
 
 		Entry("With delete-machine annotation", mapi2CAPIMachineConversionInput{
@@ -137,9 +211,9 @@ var _ = Describe("mapi2capi Machine conversion", func() {
 			machineBuilder:   mapiMachineBase.WithAnnotations(map[string]string{util.MapiDeleteMachineAnnotation: "true"}),
 			expectedErrors:   []string{},
 			expectedWarnings: []string{},
-			assertion: func(machine *mapiv1beta1.Machine) {
-				Expect(machine.Annotations).To(HaveKeyWithValue(clusterv1.DeleteMachineAnnotation, "true"))
-				Expect(machine.Annotations).ToNot(HaveKey(util.MapiDeleteMachineAnnotation))
+			assertion: func(capiMachine *clusterv1.Machine) {
+				Expect(capiMachine.Annotations).To(HaveKeyWithValue(clusterv1.DeleteMachineAnnotation, "true"))
+				Expect(capiMachine.Annotations).ToNot(HaveKey(util.MapiDeleteMachineAnnotation))
 			},
 		}),
 	)
