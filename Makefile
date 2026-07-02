@@ -49,7 +49,8 @@ ocp-manifests: manifests-gen ## Generate admission policy profiles for image emb
 		--profile-name default \
 		--kustomize-dir ./admission-policies/default \
 		--name cluster-capi-operator \
-		--install-order 30
+		--install-order 30 \
+		--self-image-ref registry.ci.openshift.org/openshift:cluster-capi-operator
 	./bin/manifests-gen \
 		--manifests-path ./capi-operator-manifests \
 		--profile-name aws \

@@ -1,2 +1,3 @@
 installOrder: 30
 name: cluster-capi-operator
+selfImageRef: registry.ci.openshift.org/openshift:cluster-capi-operator

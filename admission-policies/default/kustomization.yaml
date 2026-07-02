@@ -14,3 +14,4 @@ resources:
   - prevent-migration-when-machine-updating.yaml
   - provide-warning-when-not-synchronized.yaml
   - authoritative-api-transition-requires-capi-infrastructure-ready.yaml
+  - capi-controllers-deployment.yaml
