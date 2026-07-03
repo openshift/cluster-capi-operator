@@ -1,14 +1,15 @@
 # This ConfigMap is a kustomize workaround: replacements need a concrete source resource
-# to read a value from, but there is no real resource that holds the target namespace.
-# This ConfigMap acts as that source, providing the namespace value to inject into webhook
-# namespaceSelector fields via the replacements defined in kustomization.yaml.
+# to read a value from, but there is no real resource that holds the values we need.
+# This ConfigMap acts as that source, providing values to inject into target resources
+# via the replacements defined in kustomization.yaml.
 # It is marked as local-config so kustomize never emits it in the final output.
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: webhook-namespace-selector
+  name: kustomize-values
   annotations:
     # Marks this resource as local-only so kustomize excludes it from the final output.
     config.kubernetes.io/local-config: "true"
 data:
   namespace: openshift-cluster-api
+  imagePullPolicy: IfNotPresent
