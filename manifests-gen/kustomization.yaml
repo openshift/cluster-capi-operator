@@ -4,7 +4,7 @@ kind: Component
 namespace: openshift-cluster-api
 
 resources:
-  - webhook-namespace-selector.yaml
+  - kustomize-values.yaml
 
 # Scope all provider webhooks to the openshift-cluster-api namespace.
 # This prevents webhooks from intercepting requests in other namespaces,
@@ -12,7 +12,7 @@ resources:
 replacements:
   - source:
       kind: ConfigMap
-      name: webhook-namespace-selector
+      name: kustomize-values
       fieldPath: data.namespace
     targets:
       - select:
@@ -25,6 +25,56 @@ replacements:
           kind: MutatingWebhookConfiguration
         fieldPaths:
           - webhooks.*.namespaceSelector.matchLabels.kubernetes\.io/metadata\.name
+        options:
+          create: true
+  # In disconnected clusters using pinned image sets, images are already
+  # present on nodes. IfNotPresent avoids unnecessary pulls that fail
+  # when the registry is unreachable (OCPBUGS-85337).
+  - source:
+      kind: ConfigMap
+      name: kustomize-values
+      fieldPath: data.imagePullPolicy
+    targets:
+      - select:
+          kind: Deployment
+        fieldPaths:
+          - spec.template.spec.containers.*.imagePullPolicy
+        options:
+          create: true
+      - select:
+          kind: StatefulSet
+        fieldPaths:
+          - spec.template.spec.containers.*.imagePullPolicy
+        options:
+          create: true
+      - select:
+          kind: DaemonSet
+        fieldPaths:
+          - spec.template.spec.containers.*.imagePullPolicy
+        options:
+          create: true
+      - select:
+          kind: ReplicaSet
+        fieldPaths:
+          - spec.template.spec.containers.*.imagePullPolicy
+        options:
+          create: true
+      - select:
+          kind: Job
+        fieldPaths:
+          - spec.template.spec.containers.*.imagePullPolicy
+        options:
+          create: true
+      - select:
+          kind: CronJob
+        fieldPaths:
+          - spec.jobTemplate.spec.template.spec.containers.*.imagePullPolicy
+        options:
+          create: true
+      - select:
+          kind: Pod
+        fieldPaths:
+          - spec.containers.*.imagePullPolicy
         options:
           create: true
 
