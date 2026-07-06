@@ -79,5 +79,6 @@ var _ = Describe("Cluster API AWS MachineSet", Ordered, func() {
 		framework.WaitForMachineSet(ctx, cl, machineSet.Name, machineSet.Namespace, framework.WaitLong)
 
 		compareInstances(awsClient, mapiDefaultMS.Name, "aws-machineset")
+		verifyCAPIInstanceOwnershipTag(awsClient, "aws-machineset", clusterName)
 	})
 })

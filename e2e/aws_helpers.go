@@ -214,6 +214,26 @@ func compareInstances(awsClient *ec2.EC2, mapiMsName, capiMsName string) {
 	}
 }
 
+// verifyCAPIInstanceOwnershipTag asserts that a CAPI-created EC2 instance has the
+// kubernetes.io/cluster/<infraName>=owned tag that openshift-install destroy cluster
+// relies on to identify and clean up cloud resources.
+func verifyCAPIInstanceOwnershipTag(awsClient *ec2.EC2, capiMsName, infraName string) {
+	GinkgoHelper()
+	By("Verifying CAPI-created EC2 instance has cluster ownership tag")
+
+	Expect(awsClient).ToNot(BeNil())
+	Expect(capiMsName).ToNot(BeEmpty())
+	Expect(infraName).ToNot(BeEmpty())
+
+	instance := getCAPICreatedInstance(awsClient, capiMsName)
+
+	expectedTagKey := fmt.Sprintf("kubernetes.io/cluster/%s", infraName)
+	Expect(instance.Tags).To(ContainElement(SatisfyAll(
+		HaveField("Key", HaveValue(Equal(expectedTagKey))),
+		HaveField("Value", HaveValue(Equal("owned"))),
+	)), "expected EC2 instance to have tag %s=owned for cluster destroy to find it", expectedTagKey)
+}
+
 // deleteAWSMachineTemplates deletes the specified AWSMachineTemplates.
 func deleteAWSMachineTemplates(ctx context.Context, cl client.Client, templates ...*awsv1.AWSMachineTemplate) {
 	GinkgoHelper()
