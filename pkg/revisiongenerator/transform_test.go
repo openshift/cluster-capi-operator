@@ -42,6 +42,14 @@ func TestTransformYaml(t *testing.T) {
 			expected: "bootstrap: true",
 		},
 		{
+			name: "machine taint propagation feature gate enabled",
+			yaml: "--feature-gates=MachinePool=${EXP_MACHINE_POOL:=true},MachineTaintPropagation=${EXP_MACHINE_TAINT_PROPAGATION:=false}",
+			profile: providerimages.ProviderImageManifests{
+				ImageRef: "example.com/img@sha256:abc",
+			},
+			expected: "--feature-gates=MachinePool=true,MachineTaintPropagation=true",
+		},
+		{
 			name: "unknown variable replaced with empty",
 			yaml: "value: ${UNKNOWN_VAR}",
 			profile: providerimages.ProviderImageManifests{

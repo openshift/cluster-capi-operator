@@ -36,6 +36,8 @@ func envSubstSubstitutions(key string) string {
 	// provider metadata.
 	case "EXP_BOOTSTRAP_FORMAT_IGNITION":
 		return "true"
+	case "EXP_MACHINE_TAINT_PROPAGATION":
+		return "true"
 	default:
 		return ""
 	}
