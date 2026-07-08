@@ -10,11 +10,65 @@ metadata:
   name: openshift-capi-controllers
 rules:
 - apiGroups:
-  - '*'
+  - config.openshift.io
   resources:
-  - '*'
+  - infrastructures
   verbs:
-  - '*'
+  - get
+  - list
+  - watch
+- apiGroups:
+  - config.openshift.io
+  resources:
+  - clusteroperators
+  verbs:
+  - list
+  - watch
+- apiGroups:
+  - config.openshift.io
+  resources:
+  - clusteroperators
+  resourceNames:
+  - cluster-api
+  verbs:
+  - get
+  - patch
+- apiGroups:
+  - config.openshift.io
+  resources:
+  - clusteroperators/status
+  resourceNames:
+  - cluster-api
+  verbs:
+  - update
+  - patch
+- apiGroups:
+  - config.openshift.io
+  resources:
+  - featuregates
+  - clusterversions
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - apiextensions.k8s.io
+  resources:
+  - customresourcedefinitions
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - nodes
+  verbs:
+  - get
+  - list
+  - watch
+  - patch
+  - update
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
@@ -28,11 +82,251 @@ metadata:
   namespace: openshift-cluster-api
 rules:
 - apiGroups:
-  - '*'
+  - coordination.k8s.io
   resources:
-  - '*'
+  - leases
   verbs:
-  - '*'
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - cluster.x-k8s.io
+  resources:
+  - clusters
+  - machines
+  - machinesets
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - cluster.x-k8s.io
+  resources:
+  - clusters/status
+  - machines/status
+  - machinesets/status
+  verbs:
+  - update
+  - patch
+- apiGroups:
+  - cluster.x-k8s.io
+  resources:
+  - clusters/finalizers
+  - machines/finalizers
+  - machinesets/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - infrastructure.cluster.x-k8s.io
+  resources:
+  - awsclusters
+  - azureclusters
+  - gcpclusters
+  - vsphereclusters
+  - openstackclusters
+  - metal3clusters
+  - ibmpowervsclusters
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+- apiGroups:
+  - infrastructure.cluster.x-k8s.io
+  resources:
+  - awsclusters/status
+  - azureclusters/status
+  - gcpclusters/status
+  - vsphereclusters/status
+  - openstackclusters/status
+  - metal3clusters/status
+  - ibmpowervsclusters/status
+  verbs:
+  - update
+  - patch
+- apiGroups:
+  - infrastructure.cluster.x-k8s.io
+  resources:
+  - azureclusteridentities
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+- apiGroups:
+  - infrastructure.cluster.x-k8s.io
+  resources:
+  - awsmachines
+  - azuremachines
+  - gcpmachines
+  - vspheremachines
+  - openstackmachines
+  - metal3machines
+  - ibmpowervsmachines
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - infrastructure.cluster.x-k8s.io
+  resources:
+  - awsmachines/status
+  - azuremachines/status
+  - gcpmachines/status
+  - vspheremachines/status
+  - openstackmachines/status
+  - metal3machines/status
+  - ibmpowervsmachines/status
+  verbs:
+  - update
+  - patch
+- apiGroups:
+  - infrastructure.cluster.x-k8s.io
+  resources:
+  - awsmachinetemplates
+  - azuremachinetemplates
+  - gcpmachinetemplates
+  - vspheremachinetemplates
+  - openstackmachinetemplates
+  - metal3machinetemplates
+  - ibmpowervsmachinetemplates
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+  - deletecollection
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - get
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  annotations:
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/feature-gate: "ClusterAPIMachineManagement"
+  name: capi-controllers
+  namespace: openshift-machine-api
+rules:
+- apiGroups:
+  - machine.openshift.io
+  resources:
+  - machines
+  - machinesets
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - machine.openshift.io
+  resources:
+  - machines/status
+  - machinesets/status
+  verbs:
+  - update
+  - patch
+- apiGroups:
+  - machine.openshift.io
+  resources:
+  - machines/finalizers
+  - machinesets/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - machine.openshift.io
+  resources:
+  - controlplanemachinesets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  annotations:
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/feature-gate: "ClusterAPIMachineManagement"
+  name: capi-controllers-kube-system
+  namespace: kube-system
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  resourceNames:
+  - vsphere-creds
+  verbs:
+  - get
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role

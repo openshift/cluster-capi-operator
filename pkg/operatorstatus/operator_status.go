@@ -21,7 +21,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
-	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/clock"
@@ -53,7 +52,7 @@ type ClusterOperatorStatusClient struct {
 func (r *ClusterOperatorStatusClient) SetStatusAvailable(ctx context.Context, availableConditionMsg string, opts ...SyncStatusOption) error {
 	log := ctrl.LoggerFrom(ctx)
 
-	co, err := r.GetOrCreateClusterOperator(ctx)
+	co, err := r.GetClusterOperator(ctx)
 	if err != nil {
 		log.Error(err, "unable to set cluster operator status available")
 		return err
@@ -81,7 +80,7 @@ func (r *ClusterOperatorStatusClient) SetStatusAvailable(ctx context.Context, av
 func (r *ClusterOperatorStatusClient) SetStatusDegraded(ctx context.Context, reconcileErr error, opts ...SyncStatusOption) error {
 	log := ctrl.LoggerFrom(ctx)
 
-	co, err := r.GetOrCreateClusterOperator(ctx)
+	co, err := r.GetClusterOperator(ctx)
 	if err != nil {
 		log.Error(err, "unable to set cluster operator status degraded")
 		return err
@@ -101,30 +100,12 @@ func (r *ClusterOperatorStatusClient) SetStatusDegraded(ctx context.Context, rec
 	return r.SyncStatus(ctx, co, append(opts, WithConditions(conds))...)
 }
 
-// GetOrCreateClusterOperator is responsible for fetching the cluster operator should it exist,
-// or creating a new cluster operator if it does not already exist.
-func (r *ClusterOperatorStatusClient) GetOrCreateClusterOperator(ctx context.Context) (*configv1.ClusterOperator, error) {
-	log := ctrl.LoggerFrom(ctx)
+// GetClusterOperator fetches the ClusterOperator object.
+// The ClusterOperator is created by CVO, not by this operator.
+func (r *ClusterOperatorStatusClient) GetClusterOperator(ctx context.Context) (*configv1.ClusterOperator, error) {
+	co := &configv1.ClusterOperator{}
 
-	co := &configv1.ClusterOperator{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: controllers.ClusterOperatorName,
-		},
-	}
-
-	err := r.Get(ctx, client.ObjectKey{Name: controllers.ClusterOperatorName}, co)
-	if errors.IsNotFound(err) {
-		log.Info("ClusterOperator does not exist, creating a new one.")
-
-		err = r.Create(ctx, co)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create cluster operator: %w", err)
-		}
-
-		return co, nil
-	}
-
-	if err != nil {
+	if err := r.Get(ctx, client.ObjectKey{Name: controllers.ClusterOperatorName}, co); err != nil {
 		return nil, fmt.Errorf("failed to get clusterOperator %q: %w", controllers.ClusterOperatorName, err)
 	}
 
