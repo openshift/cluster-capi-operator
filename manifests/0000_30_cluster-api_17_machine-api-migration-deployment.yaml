@@ -2,7 +2,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: capi-controllers
+  name: machine-api-migration
   namespace: openshift-cluster-api
   annotations:
     include.release.openshift.io/self-managed-high-availability: "true"
@@ -10,11 +10,11 @@ metadata:
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     release.openshift.io/feature-gate: "ClusterAPIMachineManagement"
   labels:
-    k8s-app: capi-controllers
+    k8s-app: machine-api-migration
 spec:
   selector:
     matchLabels:
-      k8s-app: capi-controllers
+      k8s-app: machine-api-migration
   replicas: 1
   template:
     metadata:
@@ -22,23 +22,20 @@ spec:
         target.workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
         openshift.io/required-scc: restricted-v2
       labels:
-        k8s-app: capi-controllers
+        k8s-app: machine-api-migration
     spec:
-      serviceAccountName: capi-controllers
+      serviceAccountName: machine-api-migration
       containers:
-      - name: capi-controllers
+      - name: machine-api-migration
         image: registry.ci.openshift.org/openshift:cluster-capi-operator
         command:
-        - /capi-controllers
+        - /machine-api-migration
         args:
           - --diagnostics-address=:8443
         env:
         - name: RELEASE_VERSION
           value: "0.0.1-snapshot"
         ports:
-        - containerPort: 9443
-          name: webhook-server
-          protocol: TCP
         - containerPort: 8443
           name: diagnostics
           protocol: TCP
@@ -51,9 +48,6 @@ spec:
             memory: 50Mi
         terminationMessagePolicy: FallbackToLogsOnError
         volumeMounts:
-        - name: cert
-          mountPath: /tmp/k8s-webhook-server/serving-certs
-          readOnly: true
         - name: metrics-cert
           mountPath: /tmp/k8s-metrics-server/serving-certs
           readOnly: true
@@ -69,11 +63,7 @@ spec:
         operator: "Exists"
         effect: "NoSchedule"
       volumes:
-      - name: cert
-        secret:
-          defaultMode: 420
-          secretName: capi-controllers-webhook-service-cert
       - name: metrics-cert
         secret:
           defaultMode: 420
-          secretName: capi-controllers-metrics-tls
+          secretName: machine-api-migration-metrics-tls
