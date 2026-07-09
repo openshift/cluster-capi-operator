@@ -42,7 +42,8 @@ spec:
       expression: >-
         !(request.userInfo.username in [
             "system:serviceaccount:openshift-machine-api:machine-api-controllers",
-            "system:serviceaccount:openshift-cluster-api:capi-controllers"
+            "system:serviceaccount:openshift-cluster-api:capi-controllers",
+            "system:serviceaccount:openshift-cluster-api:machine-api-migration"
         ])
     - name: check-param-match
       expression: 'object.metadata.name == params.metadata.name'
