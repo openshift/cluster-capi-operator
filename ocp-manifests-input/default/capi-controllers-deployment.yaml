@@ -3,6 +3,8 @@ kind: Deployment
 metadata:
   name: capi-controllers
   namespace: openshift-cluster-api
+  annotations:
+    capi-operator.openshift.io/adopt-existing: "always"
   labels:
     k8s-app: capi-controllers
 spec:

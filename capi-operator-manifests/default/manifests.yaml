@@ -949,6 +949,8 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
+  annotations:
+    capi-operator.openshift.io/adopt-existing: always
   labels:
     k8s-app: capi-controllers
   name: capi-controllers
