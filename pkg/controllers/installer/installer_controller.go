@@ -148,6 +148,7 @@ func setupTrackingCache(mgr ctrl.Manager) (managedcache.TrackingCache, error) {
 		cache.Options{
 			Scheme:               mgr.GetScheme(),
 			DefaultLabelSelector: labels.NewSelector().Add(*managedByReq),
+			Mapper:               mgr.GetRESTMapper(),
 		},
 	)
 	if err != nil {
