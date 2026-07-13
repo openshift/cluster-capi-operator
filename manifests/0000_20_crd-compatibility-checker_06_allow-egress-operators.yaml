@@ -34,5 +34,6 @@ spec:
       operator: In
       values:
       - compatibility-requirements-controllers
+      - compatibility-requirements-operator
   policyTypes:
   - Egress
