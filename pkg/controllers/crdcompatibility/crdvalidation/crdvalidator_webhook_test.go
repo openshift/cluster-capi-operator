@@ -210,6 +210,21 @@ func Test_crdValidator_validateCreateOrUpdate(t *testing.T) {
 			wantWarnings: BeNil(),
 			wantErr:      MatchError("unknown value for CompatibilityRequirement.spec.customResourceDefinitionSchemaValidation.action: \"Invalid\" for requirement test-invalid-action"),
 		},
+		{
+			name: "Should reject a CRD when a CompatibilityRequirement has an unsupported CRDData type",
+			obj:  testCRDWorking.DeepCopy(),
+			requirements: []client.Object{
+				func() *apiextensionsv1alpha1.CompatibilityRequirement {
+					r := test.GenerateTestCompatibilityRequirement(testCRDWorking.DeepCopy())
+					r.Spec.CompatibilitySchema.CustomResourceDefinition.Type = "UNSUPPORTED"
+					r.Name = "test-unsupported-type"
+
+					return r
+				}(),
+			},
+			wantWarnings: BeNil(),
+			wantErr:      MatchError(Equal("unsupported CRDData type: \"UNSUPPORTED\" for CompatibilityRequirement \"test-unsupported-type\"")),
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

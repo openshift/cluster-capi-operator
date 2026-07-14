@@ -118,6 +118,18 @@ var _ = Describe("validator", func() {
 				Expect(err).To(MatchError("failed to create validation strategy: failed to decode compatibility schema data for CompatibilityRequirement \"\": yaml: mapping values are not allowed in this context"))
 			})
 		})
+
+		Context("when CRDData type is unsupported", func() {
+			It("should return error", func() {
+				unsupportedRequirement := compatibilityRequirement.DeepCopy()
+				unsupportedRequirement.Spec.CompatibilitySchema.CustomResourceDefinition.Type = "UNSUPPORTED"
+				validator := createValidatorWithFakeClient([]client.Object{unsupportedRequirement})
+
+				_, err := validator.getValidationStrategy(unsupportedRequirement, "v1")
+
+				Expect(err).To(MatchError("failed to create validation strategy: unsupported CRDData type: \"UNSUPPORTED\" for CompatibilityRequirement \"\""))
+			})
+		})
 	})
 
 	Describe("validation strategy caching", func() {

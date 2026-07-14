@@ -40,11 +40,12 @@ import (
 
 var (
 	// ErrCRDHasRequirements is the error which signals a deletion of a CRD is disallowed.
-	ErrCRDHasRequirements    = errors.New("cannot delete CRD because it has CompatibilityRequirements")
-	errCRDNotCompatible      = errors.New("CRD is not compatible with CompatibilityRequirements")
-	errUnknownCRDAdmitAction = errors.New("unknown value for CompatibilityRequirement.spec.customResourceDefinitionSchemaValidation.action")
-	errPathNotFound          = errors.New("path not found in schema")
-	errVersionNoSchema       = errors.New("version does not have a schema")
+	ErrCRDHasRequirements     = errors.New("cannot delete CRD because it has CompatibilityRequirements")
+	errCRDNotCompatible       = errors.New("CRD is not compatible with CompatibilityRequirements")
+	errUnknownCRDAdmitAction  = errors.New("unknown value for CompatibilityRequirement.spec.customResourceDefinitionSchemaValidation.action")
+	errPathNotFound           = errors.New("path not found in schema")
+	errVersionNoSchema        = errors.New("version does not have a schema")
+	errUnsupportedCRDDataType = errors.New("unsupported CRDData type")
 )
 
 // NewValidator returns a partially initialised Validator.
@@ -97,8 +98,17 @@ func (v *Validator) validateCreateOrUpdate(ctx context.Context, crd *apiextensio
 		}
 
 		compatibilityCRD := &apiextensionsv1.CustomResourceDefinition{}
-		if err := yaml.Unmarshal([]byte(compatibilityRequirement.Spec.CompatibilitySchema.CustomResourceDefinition.Data), compatibilityCRD); err != nil {
-			return nil, fmt.Errorf("failed to parse compatibilityCRD for CompatibilityRequirement %q: %w", compatibilityRequirement.Name, err)
+
+		switch compatibilityRequirement.Spec.CompatibilitySchema.CustomResourceDefinition.Type {
+		case apiextensionsv1alpha1.CRDDataTypeYAML:
+			if err := yaml.Unmarshal([]byte(compatibilityRequirement.Spec.CompatibilitySchema.CustomResourceDefinition.Data), compatibilityCRD); err != nil {
+				return nil, fmt.Errorf("failed to parse compatibilityCRD for CompatibilityRequirement %q: %w", compatibilityRequirement.Name, err)
+			}
+		default:
+			return nil, fmt.Errorf("%w: %q for CompatibilityRequirement %q",
+				errUnsupportedCRDDataType,
+				compatibilityRequirement.Spec.CompatibilitySchema.CustomResourceDefinition.Type,
+				compatibilityRequirement.Name)
 		}
 
 		prunedCRD, err := pruneExcludedFields(compatibilityCRD, compatibilityRequirement.Spec.CompatibilitySchema.ExcludedFields)

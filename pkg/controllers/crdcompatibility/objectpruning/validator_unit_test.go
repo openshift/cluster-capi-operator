@@ -98,6 +98,18 @@ var _ = Describe("validator", func() {
 				Expect(err).To(MatchError(ContainSubstring("failed to get structural schema: failed to decode compatibility schema data for CompatibilityRequirement \"\": yaml: mapping values are not allowed in this context")))
 			})
 		})
+
+		Context("when CRDData type is unsupported", func() {
+			It("should return error", func() {
+				unsupportedRequirement := compatibilityRequirement.DeepCopy()
+				unsupportedRequirement.Spec.CompatibilitySchema.CustomResourceDefinition.Type = "UNSUPPORTED"
+				validator := createValidatorWithFakeClient([]client.Object{unsupportedRequirement})
+
+				_, err := validator.getStructuralSchema(unsupportedRequirement, "v1")
+
+				Expect(err).To(MatchError("failed to get structural schema: unsupported CRDData type: \"UNSUPPORTED\" for CompatibilityRequirement \"\""))
+			})
+		})
 	})
 })
 
