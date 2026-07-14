@@ -1,5 +1,60 @@
 ## Provider Contract
 
+### capi-installer permissions
+
+By default, capi-installer has permissions to create the following resources:
+
+#### Cluster-scoped
+
+* customresourcedefinitions
+* mutatingwebhookconfigurations
+* validatingwebhookconfigurations
+* validatingadmissionpolicies
+* validatingadmissionpolicybindings
+* clusterroles
+* clusterrolebindings
+
+#### Namespaced to openshift-capi-installer
+
+* serviceaccounts
+* services
+* deployments
+* roles
+* rolebindings
+
+#### Extending capi-installer permissions
+
+If a provider must install any other resource or resources outside of the openshift-capi-installer namespace these permissions can be extended using the aggregated ClusterRole `openshift-capi-installer:provider-permissions`, which uses label `capi-operator.openshift.io/aggregate-to-installer: "true"`.
+This ClusterRole must be installed via the provider's CVO manifests.
+e.g.:
+
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  annotations:
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/feature-gate: "MyProviderFeatureGate"
+  labels:
+    capi-operator.openshift.io/aggregate-to-installer: "true"
+  name: openshift-capi-installer:myprovider
+rules:
+- apiGroups:
+  - myprovider.example.com
+  resources:
+  - myresource
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+```
+
 ### Invoking manifests-gen
 
 `manifests-gen` is typically invoked in a provider repo from a `ocp-manifests` target in `openshift/Makefile`.
