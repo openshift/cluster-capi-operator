@@ -312,11 +312,11 @@ var _ = Describe("RevisionController", Serial, func() {
 
 		// Should set operator version (up to date)
 		co := &configv1.ClusterOperator{}
-		Expect(cl.Get(ctx, client.ObjectKey{Name: "cluster-api"}, co)).To(Succeed())
-		Expect(co.Status.Versions).To(ContainElement(SatisfyAll(
+		co.SetName("cluster-api")
+		Eventually(kWithCtx(ctx).Object(clusterOperator)).Should(HaveField("Status.Versions", ContainElement(SatisfyAll(
 			HaveField("Name", Equal(operatorstatus.OperatorVersionKey)),
 			HaveField("Version", Equal("4.18.0")),
-		)))
+		))))
 	}, defaultNodeTimeout)
 
 	It("preserves all revisions when content changes and current is set", func(ctx context.Context) {
