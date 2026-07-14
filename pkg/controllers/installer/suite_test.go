@@ -65,7 +65,7 @@ func TestInstallerController(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
-	logger := test.NewVerboseGinkgoLogger(0)
+	logger := test.NewVerboseGinkgoLogger(4)
 	logf.SetLogger(logger)
 
 	By("bootstrapping test environment")
