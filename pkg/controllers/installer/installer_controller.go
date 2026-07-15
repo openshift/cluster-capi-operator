@@ -77,20 +77,20 @@ type InstallerController struct {
 // avoiding the double-registration shutdown issue. Additional sources may be
 // provided to trigger reconciliation from external events (e.g. a channel
 // source for testing).
-func SetupWithManager(mgr ctrl.Manager, providerProfiles []providerimages.ProviderImageManifests, additionalSources ...source.Source) (managedcache.TrackingCache, error) {
+func SetupWithManager(mgr ctrl.Manager, providerProfiles []providerimages.ProviderImageManifests, additionalSources ...source.Source) error {
 	trackingCache, err := setupTrackingCache(mgr)
 	if err != nil {
-		return nil, fmt.Errorf("unable to setup tracking cache: %w", err)
+		return fmt.Errorf("unable to setup tracking cache: %w", err)
 	}
 
 	revisionEngine, discoveryClient, err := setupRevisionEngine(mgr, trackingCache)
 	if err != nil {
-		return nil, fmt.Errorf("unable to setup revision engine: %w", err)
+		return fmt.Errorf("unable to setup revision engine: %w", err)
 	}
 
 	extractor, err := metav1applyconfig.NewUnstructuredExtractor(discoveryClient)
 	if err != nil {
-		return nil, fmt.Errorf("unable to create unstructured extractor: %w", err)
+		return fmt.Errorf("unable to create unstructured extractor: %w", err)
 	}
 
 	proxyReconciler := proxy.New(mgr.GetClient(), trackingCache, extractor)
@@ -104,11 +104,7 @@ func SetupWithManager(mgr ctrl.Manager, providerProfiles []providerimages.Provid
 		proxyReconciler:  proxyReconciler,
 	}
 
-	if err := setupController(mgr, c, additionalSources); err != nil {
-		return nil, err
-	}
-
-	return trackingCache, nil
+	return setupController(mgr, c, additionalSources)
 }
 
 func setupController(mgr ctrl.Manager, c *InstallerController, additionalSources []source.Source) error {
@@ -227,8 +223,11 @@ func (c *InstallerController) Reconcile(ctx context.Context, _ ctrl.Request) (ct
 		return ctrl.Result{}, fmt.Errorf("failed to write conditions: %w", err)
 	}
 
+	// TODO: the proxy reconciler needs its own status reporting mechanism.
+	// For now, log errors without propagating them so that proxy failures
+	// do not affect the installer controller's ClusterOperator conditions.
 	if err := c.proxyReconciler.Reconcile(ctx); err != nil {
-		return ctrl.Result{}, fmt.Errorf("reconciling proxy env vars: %w", err)
+		log.Error(err, "Failed to reconcile proxy env vars")
 	}
 
 	log.Info("Reconcile finished")

@@ -139,7 +139,7 @@ func setupControllers(ctx context.Context, mgr ctrl.Manager, operatorConfig comm
 		return fmt.Errorf("unable to create revision controller: %w", err)
 	}
 
-	if _, err := installer.SetupWithManager(mgr, allProviderProfiles); err != nil {
+	if err := installer.SetupWithManager(mgr, allProviderProfiles); err != nil {
 		return fmt.Errorf("unable to create installer controller: %w", err)
 	}
 
