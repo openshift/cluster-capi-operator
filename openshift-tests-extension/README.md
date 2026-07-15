@@ -85,19 +85,17 @@ By default every test is `blocking` — a failure causes the suite exit code to
 be non-zero. To mark a test as `informing` (failure recorded but non-blocking):
 
 ```go
-import g "github.com/openshift-eng/openshift-tests-extension/pkg/ginkgo"
-
-It("should be stable but not yet required", g.Informing(), func() { ... })
+It("should be stable but not yet required", Label("Lifecycle:informing"), func() { ... })
 ```
 
 Informing failures appear in the JSON output and Sippy dashboards but do not
 gate merges or promotions. Use this temporarily to gather stability data before
 promoting a test to blocking. Tests must not remain informing indefinitely.
 
-**Important:** `g.Informing()` is only honored when the test runs through the
-OTE binary (`run-suite`, `run-test`). When running via `make e2e`, ginkgo has
-no concept of informing lifecycle — a failing informing test will still cause
-the `make e2e` run to exit with a non-zero code.
+**Important:** `Label("Lifecycle:informing")` is only honored when the test runs
+through the OTE binary (`run-suite`, `run-test`). When running via `make e2e`,
+ginkgo has no concept of informing lifecycle — a failing informing test will
+still cause the `make e2e` run to exit with a non-zero code.
 
 
 ## Running locally
