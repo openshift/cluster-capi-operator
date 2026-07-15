@@ -1439,44 +1439,45 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 
 		Context("cluster api vap tests", func() {
 			BeforeEach(func() {
-				By("Waiting for VAP to be ready")
+				By("Waiting for VAP to be ready", func() {
+					machineVap = &admissionregistrationv1.ValidatingAdmissionPolicy{}
+					machineVap.Name = clusterAPIMachineVAPName
+					Eventually(k.Update(machineVap, func() {
+						admissiontestutils.AddSentinelValidation(machineVap)
+					})).Should(Succeed())
 
-				machineVap = &admissionregistrationv1.ValidatingAdmissionPolicy{}
-				Eventually(k8sClient.Get(ctx, client.ObjectKey{Name: clusterAPIMachineVAPName}, machineVap), setupTimeout).Should(Succeed())
-				Eventually(k.Update(machineVap, func() {
-					admissiontestutils.AddSentinelValidation(machineVap)
-				})).Should(Succeed())
+					sentinelGeneration := machineVap.Generation
+					Eventually(k.Object(machineVap), setupTimeout).Should(
+						HaveField("Status.ObservedGeneration", BeNumerically(">=", sentinelGeneration)),
+					)
+				})
 
-				Eventually(k.Object(machineVap), setupTimeout).Should(
-					HaveField("Status.ObservedGeneration", BeNumerically(">=", 2)),
-				)
+				By("Updating the VAP binding", func() {
+					policyBinding = &admissionregistrationv1.ValidatingAdmissionPolicyBinding{}
+					Eventually(k8sClient.Get(ctx, client.ObjectKey{
+						Name: clusterAPIMachineVAPName}, policyBinding), setupTimeout).Should(Succeed())
 
-				By("Updating the VAP binding")
+					Eventually(k.Update(policyBinding, func() {
+						admissiontestutils.UpdateVAPBindingNamespaces(policyBinding, mapiNamespace.GetName(), capiNamespace.GetName())
+					}), timeout).Should(Succeed())
 
-				policyBinding = &admissionregistrationv1.ValidatingAdmissionPolicyBinding{}
-				Eventually(k8sClient.Get(ctx, client.ObjectKey{
-					Name: clusterAPIMachineVAPName}, policyBinding), setupTimeout).Should(Succeed())
+					// Wait until the binding shows the patched values
+					Eventually(k.Object(policyBinding), setupTimeout).Should(
+						SatisfyAll(
+							HaveField("Spec.ParamRef.Namespace",
+								Equal(mapiNamespace.GetName())),
 
-				Eventually(k.Update(policyBinding, func() {
-					admissiontestutils.UpdateVAPBindingNamespaces(policyBinding, mapiNamespace.GetName(), capiNamespace.GetName())
-				}), timeout).Should(Succeed())
+							HaveField("Spec.MatchResources.NamespaceSelector.MatchLabels",
+								HaveKeyWithValue("kubernetes.io/metadata.name",
+									capiNamespace.GetName())),
+						),
+					)
+				})
 
-				// Wait until the binding shows the patched values
-				Eventually(k.Object(policyBinding), setupTimeout).Should(
-					SatisfyAll(
-						HaveField("Spec.ParamRef.Namespace",
-							Equal(mapiNamespace.GetName())),
-
-						HaveField("Spec.MatchResources.NamespaceSelector.MatchLabels",
-							HaveKeyWithValue("kubernetes.io/metadata.name",
-								capiNamespace.GetName())),
-					),
-				)
-
-				By("Creating the sentinel CAPI infra machine")
-
-				capaMachine = capaMachineBuilder.WithName("sentinel-machine").Build()
-				Eventually(k8sClient.Create(ctx, capaMachine)).Should(Succeed(), "capa machine should be able to be created")
+				By("Creating the sentinel CAPI infra machine", func() {
+					capaMachine = capaMachineBuilder.WithName("sentinel-machine").Build()
+					Eventually(k8sClient.Create(ctx, capaMachine)).Should(Succeed(), "capa machine should be able to be created")
+				})
 
 				capaMachineRef := clusterv1.ContractVersionedObjectReference{
 					Kind:     capaMachine.Kind,
@@ -1484,37 +1485,41 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 					APIGroup: awsv1.GroupVersion.Group,
 				}
 
-				By("Creating a sentinel CAPI machine")
-
 				testMachine := capiMachineBuilder.WithName("sentinel-machine").WithInfrastructureRef(capaMachineRef).Build()
-				Eventually(k8sClient.Create(ctx, testMachine), timeout).Should(Succeed())
 
-				By("setting the owner reference on the sentinel CAPI infra machine")
-				Eventually(k.Update(capaMachine, func() {
-					capaMachine.SetOwnerReferences([]metav1.OwnerReference{
-						{
-							Kind:               machineKind,
-							APIVersion:         clusterv1.GroupVersion.String(),
-							Name:               testMachine.Name,
-							UID:                testMachine.UID,
-							BlockOwnerDeletion: ptr.To(true),
-							Controller:         ptr.To(false),
-						},
-					})
-				})).Should(Succeed())
+				By("Creating a sentinel CAPI machine", func() {
+					Eventually(k8sClient.Create(ctx, testMachine), timeout).Should(Succeed())
+				})
 
-				By("Creating a sentinel MAPI Machine")
+				By("setting the owner reference on the sentinel CAPI infra machine", func() {
+					Eventually(k.Update(capaMachine, func() {
+						capaMachine.SetOwnerReferences([]metav1.OwnerReference{
+							{
+								Kind:               machineKind,
+								APIVersion:         clusterv1.GroupVersion.String(),
+								Name:               testMachine.Name,
+								UID:                testMachine.UID,
+								BlockOwnerDeletion: ptr.To(true),
+								Controller:         ptr.To(false),
+							},
+						})
+					})).Should(Succeed())
+				})
 
 				testMapiMachine := mapiMachineBuilder.WithName(testMachine.Name).Build()
-				Eventually(k8sClient.Create(ctx, testMapiMachine), timeout).Should(Succeed())
 
-				By("Setting the sentinel MAPI machine AuthoritativeAPI to Machine API")
-				Eventually(k.UpdateStatus(testMapiMachine, func() {
-					testMapiMachine.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityMachineAPI
-				})).Should(Succeed())
+				By("Creating a sentinel MAPI Machine", func() {
+					Eventually(k8sClient.Create(ctx, testMapiMachine), timeout).Should(Succeed())
+				})
 
-				Eventually(k.Object(testMapiMachine), timeout).Should(
-					HaveField("Status.AuthoritativeAPI", Equal(mapiv1beta1.MachineAuthorityMachineAPI)))
+				By("Setting the sentinel MAPI machine AuthoritativeAPI to Machine API", func() {
+					Eventually(k.UpdateStatus(testMapiMachine, func() {
+						testMapiMachine.Status.AuthoritativeAPI = mapiv1beta1.MachineAuthorityMachineAPI
+					})).Should(Succeed())
+
+					Eventually(k.Object(testMapiMachine), timeout).Should(
+						HaveField("Status.AuthoritativeAPI", Equal(mapiv1beta1.MachineAuthorityMachineAPI)))
+				})
 
 				// The sync controller copies labels MAPI → CAPI. Labels under
 				// machine.openshift.io/* and cluster.x-k8s.io/* are controller-managed and
@@ -1522,9 +1527,11 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 				// populated, our change can drop them and be rejected. Wait for sync, then add
 				// the test sentinel.
 
-				Eventually(k.Object(testMachine), timeout).Should(
-					HaveField("ObjectMeta.Labels", Not(BeNil())),
-				)
+				By("Waiting for the sentinel CAPI machine to be synced to the sentinel MAPI machine", func() {
+					Eventually(k.Object(testMachine), timeout).Should(
+						HaveField("ObjectMeta.Labels", Not(BeNil())),
+					)
+				})
 
 				Eventually(k.Update(testMachine, func() {
 					testMachine.ObjectMeta.Labels["test-sentinel"] = "fubar"

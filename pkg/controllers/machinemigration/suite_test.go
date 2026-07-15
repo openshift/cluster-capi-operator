@@ -56,7 +56,7 @@ func TestMachineMigration(t *testing.T) {
 var _ = BeforeSuite(func() {
 	klog.SetOutput(GinkgoWriter)
 
-	testLogger = test.NewVerboseGinkgoLogger(0)
+	testLogger = test.NewVerboseGinkgoLogger(4)
 	logf.SetLogger(testLogger)
 	ctrl.SetLogger(testLogger)
 

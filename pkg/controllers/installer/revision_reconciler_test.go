@@ -60,7 +60,7 @@ var _ = Describe("revisionReconciler.resolveCollectedObjects", func() {
 			InstallerController: &InstallerController{
 				restMapper: wrappedMapper,
 			},
-			log: test.NewVerboseGinkgoLogger(0),
+			log: test.NewVerboseGinkgoLogger(4),
 			collectedNonNSObjects: sets.New(collectedObjectRef{
 				gvk:  unknownGK.WithVersion("v1"),
 				name: "test-object",
@@ -91,7 +91,7 @@ var _ = Describe("revisionReconciler.resolveCollectedObjects", func() {
 			InstallerController: &InstallerController{
 				restMapper: wrappedMapper,
 			},
-			log: test.NewVerboseGinkgoLogger(0),
+			log: test.NewVerboseGinkgoLogger(4),
 			collectedNonNSObjects: sets.New(collectedObjectRef{
 				gvk:  failingGK.WithVersion("v1"),
 				name: "test-object",
@@ -120,7 +120,7 @@ var _ = Describe("revisionReconciler.resolveCollectedObjects", func() {
 			InstallerController: &InstallerController{
 				restMapper: wrappedMapper,
 			},
-			log: test.NewVerboseGinkgoLogger(0),
+			log: test.NewVerboseGinkgoLogger(4),
 			collectedNonNSObjects: sets.New(collectedObjectRef{
 				gvk:  crdGK.WithVersion("v1"),
 				name: "test-widget",
@@ -156,7 +156,7 @@ var _ = Describe("revisionReconciler.resolveCollectedObjects", func() {
 			InstallerController: &InstallerController{
 				restMapper: wrappedMapper,
 			},
-			log: test.NewVerboseGinkgoLogger(0),
+			log: test.NewVerboseGinkgoLogger(4),
 			collectedNonNSObjects: sets.New(collectedObjectRef{
 				gvk:  clusterRoleGK.WithVersion("v1"),
 				name: "test-clusterrole",

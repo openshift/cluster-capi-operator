@@ -269,3 +269,21 @@ rules:
   - machinesets
   verbs:
   - list
+---
+# Aggregated ClusterRole that provider repos contribute to via the
+# capi-operator.openshift.io/aggregate-to-installer label. If a provider's
+# manifests require the installer to have permissions beyond the default set
+# they can add them via a sub-role in their own repo.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  annotations:
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/feature-gate: "ClusterAPIMachineManagement"
+  name: openshift-capi-installer:provider-permissions
+aggregationRule:
+  clusterRoleSelectors:
+  - matchLabels:
+      capi-operator.openshift.io/aggregate-to-installer: "true"
