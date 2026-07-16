@@ -25,56 +25,34 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 )
 
+// toBoxcutterRevision converts an InstallerRevision to a boxcutter.Revision, pre-computing
+// all phases so that GetPhases is a trivial getter with no further work.
 func toBoxcutterRevision(installerRevision revisiongenerator.InstallerRevision) boxcutter.Revision {
-	return boxcutterRevision{revision: installerRevision}
-}
-
-// boxcutterRevision wraps an InstallerRevision and provides a boxcutter.Revision implementation.
-type boxcutterRevision struct {
-	revision revisiongenerator.InstallerRevision
-}
-
-var _ boxcutter.Revision = boxcutterRevision{}
-
-// GetName returns the name of the revision.
-func (r boxcutterRevision) GetName() string {
-	return string(r.revision.RevisionName())
-}
-
-// GetRevisionNumber returns the revision number of the revision.
-func (r boxcutterRevision) GetRevisionNumber() int64 {
-	return r.revision.RevisionIndex()
-}
-
-// GetPhases returns the phases of the revision.
-func (r boxcutterRevision) GetPhases() []boxcutter.Phase {
 	probeOpts := util.SliceMap(allProbes(), func(p *probing.GroupKindSelector) boxcutter.PhaseReconcileOption {
 		return boxcutter.WithProbe(boxcutter.ProgressProbeType, p)
 	})
 
 	var phases []boxcutter.Phase
 
-	for _, component := range r.revision.Components() {
+	for _, component := range installerRevision.Components() {
 		if crds := component.CRDs(); len(crds) > 0 {
 			objects, adoptOpts := processAdoptExistingAnnotations(crds)
-			phases = append(phases, boxcutterPhase{
-				name:             component.Name() + "-crds",
-				objects:          objects,
-				reconcileOptions: append(probeOpts, adoptOpts...),
-			})
+			phases = append(phases, boxcutter.NewPhase(component.Name()+"-crds", objects).
+				WithReconcileOptions(append(probeOpts, adoptOpts...)...))
 		}
 
 		if objects := component.Objects(); len(objects) > 0 {
 			objects, adoptOpts := processAdoptExistingAnnotations(objects)
-			phases = append(phases, boxcutterPhase{
-				name:             component.Name(),
-				objects:          objects,
-				reconcileOptions: append(probeOpts, adoptOpts...),
-			})
+			phases = append(phases, boxcutter.NewPhase(component.Name(), objects).
+				WithReconcileOptions(append(probeOpts, adoptOpts...)...))
 		}
 	}
 
-	return phases
+	return boxcutter.NewRevision(
+		string(installerRevision.RevisionName()),
+		installerRevision.RevisionIndex(),
+		phases,
+	)
 }
 
 // processAdoptExistingAnnotations processes the adopt-existing annotation on
@@ -111,42 +89,4 @@ func processAdoptExistingAnnotations(objects []client.Object) ([]client.Object, 
 
 		return obj
 	}), reconcileOpts
-}
-
-// GetReconcileOptions returns the reconcile options of the revision.
-func (r boxcutterRevision) GetReconcileOptions() []boxcutter.RevisionReconcileOption {
-	return nil
-}
-
-// GetTeardownOptions returns the teardown options of the revision.
-func (r boxcutterRevision) GetTeardownOptions() []boxcutter.RevisionTeardownOption {
-	return nil
-}
-
-type boxcutterPhase struct {
-	name             string
-	objects          []client.Object
-	reconcileOptions []boxcutter.PhaseReconcileOption
-}
-
-var _ boxcutter.Phase = boxcutterPhase{}
-
-// GetName returns the name of the phase.
-func (p boxcutterPhase) GetName() string {
-	return p.name
-}
-
-// GetObjects returns the objects of the phase.
-func (p boxcutterPhase) GetObjects() []client.Object {
-	return p.objects
-}
-
-// GetReconcileOptions returns the reconcile options of the phase.
-func (p boxcutterPhase) GetReconcileOptions() []boxcutter.PhaseReconcileOption {
-	return p.reconcileOptions
-}
-
-// GetTeardownOptions returns the teardown options of the phase.
-func (p boxcutterPhase) GetTeardownOptions() []boxcutter.PhaseTeardownOption {
-	return nil
 }

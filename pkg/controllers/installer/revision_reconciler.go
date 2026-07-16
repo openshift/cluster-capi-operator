@@ -233,21 +233,19 @@ func (r *revisionReconciler) reconcileRevision(ctx context.Context, conv convert
 		return true, fmt.Sprintf("Revision %s: complete", revision.RevisionName()), nil
 	}
 
-	var message string
+	return false, waitingRevisionMessage(revision.RevisionName(), result), nil
+}
 
+// waitingRevisionMessage returns the message to use when a revision is still in progress.
+func waitingRevisionMessage(revisionName operatorv1alpha1.RevisionName, result machinery.RevisionResult) string {
 	for _, phase := range result.GetPhases() {
 		if !phase.IsComplete() {
-			message = fmt.Sprintf("Revision %s: waiting on phase %s", revision.RevisionName(), phase.GetName())
-			break
+			return fmt.Sprintf("Revision %s: waiting on phase %s", revisionName, phase.GetName())
 		}
 	}
 
-	if message == "" {
-		// Probably shouldn't happen?
-		message = fmt.Sprintf("Revision %s: waiting for reconciliation", revision.RevisionName())
-	}
-
-	return false, message, nil
+	// Probably shouldn't happen?
+	return fmt.Sprintf("Revision %s: waiting for reconciliation", revisionName)
 }
 
 func (r *revisionReconciler) handlePhaseResults(revisionName operatorv1alpha1.RevisionName, result machinery.RevisionResult) error {
