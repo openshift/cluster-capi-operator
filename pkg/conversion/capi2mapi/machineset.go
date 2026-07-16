@@ -76,6 +76,7 @@ func convertCAPIMachineSetStatusToMAPI(capiStatus clusterv1.MachineSetStatus) ma
 		FullyLabeledReplicas: v1beta1Status.FullyLabeledReplicas,
 		ReadyReplicas:        v1beta1Status.ReadyReplicas,
 		AvailableReplicas:    v1beta1Status.AvailableReplicas,
+		LabelSelector:        capiStatus.Selector,
 		// ObservedGeneration: // We don't set the observed generation at this stage as it is handled by the machineSetSync controller.
 		// AuthoritativeAPI: // Ignore, this field as it is not present in CAPI.
 		// SynchronizedGeneration: // Ignore, this field as it is not present in CAPI.
@@ -95,7 +96,6 @@ func convertCAPIMachineSetStatusToMAPI(capiStatus clusterv1.MachineSetStatus) ma
 	}
 
 	// unused fields from CAPI MachineSetStatus
-	// - Selector: selector is not present on the MAPI MachineSet status.
 	// - V1Beta2: for now we use the V1Beta1 status fields to obtain the status of the MAPI MachineSet.
 
 	return mapiStatus
