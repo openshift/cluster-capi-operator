@@ -1,6 +1,6 @@
 module github.com/openshift/cluster-capi-operator/openshift-tests-extension
 
-go 1.25.3
+go 1.26.0
 
 require (
 	github.com/openshift-eng/openshift-tests-extension v0.0.0-20260612102633-2fd5b2fa4221
@@ -62,7 +62,6 @@ require (
 	github.com/go-test/deep v1.1.1 // indirect
 	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
 	github.com/gobuffalo/flect v1.0.3 // indirect
-	github.com/google/btree v1.1.3 // indirect
 	github.com/google/cel-go v0.27.0 // indirect
 	github.com/google/gnostic-models v0.7.1 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
@@ -86,14 +85,14 @@ require (
 	github.com/oklog/ulid v1.3.1 // indirect
 	github.com/onsi/ginkgo/v2 v2.28.1 // indirect
 	github.com/onsi/gomega v1.39.1 // indirect
-	github.com/openshift/api v0.0.0-20260416105050-3c6b218b8a80 // indirect
-	github.com/openshift/client-go v0.0.0-20260416131737-a19e91702ab5 // indirect
+	github.com/openshift/api v0.0.0-20260715165912-72066cc9718b // indirect
+	github.com/openshift/client-go v0.0.0-20260715172546-dac61734e0ec // indirect
 	github.com/openshift/cluster-api-actuator-pkg v0.0.0-20260616083352-ff0f225cc3b5 // indirect
 	github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0 // indirect
 	github.com/openshift/cluster-autoscaler-operator v0.0.1-0.20250702183526-4eb64d553940 // indirect
 	github.com/openshift/cluster-capi-operator v0.0.0-20260425200736-89a8af46df2a // indirect
 	github.com/openshift/cluster-capi-operator/manifests-gen v0.0.0-00010101000000-000000000000 // indirect
-	github.com/openshift/library-go v0.0.0-20260413093329-d2db42c961e1 // indirect
+	github.com/openshift/library-go v0.0.0-20260716104731-fdf18b82797f // indirect
 	github.com/openshift/machine-api-operator v0.2.1-0.20260226113419-88465550a74b // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
@@ -126,20 +125,20 @@ require (
 	gomodules.xyz/jsonpatch/v2 v2.5.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260209200024-4cfbd4190f57 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260209200024-4cfbd4190f57 // indirect
-	google.golang.org/protobuf v1.36.11 // indirect
+	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
-	k8s.io/api v0.35.3 // indirect
-	k8s.io/apiextensions-apiserver v0.35.3 // indirect
-	k8s.io/apimachinery v0.35.3 // indirect
-	k8s.io/apiserver v0.35.3 // indirect
-	k8s.io/client-go v0.35.3 // indirect
-	k8s.io/component-base v0.35.3 // indirect
+	k8s.io/api v0.36.2 // indirect
+	k8s.io/apiextensions-apiserver v0.36.2 // indirect
+	k8s.io/apimachinery v0.36.2 // indirect
+	k8s.io/apiserver v0.36.2 // indirect
+	k8s.io/client-go v0.36.2 // indirect
+	k8s.io/component-base v0.36.2 // indirect
 	k8s.io/klog v1.0.0 // indirect
 	k8s.io/klog/v2 v2.140.0 // indirect
-	k8s.io/kube-aggregator v0.35.1 // indirect
-	k8s.io/kube-openapi v0.0.0-20260127142750-a19766b6e2d4 // indirect
-	k8s.io/utils v0.0.0-20260210185600-b8788abfbbc2 // indirect
+	k8s.io/kube-aggregator v0.36.2 // indirect
+	k8s.io/kube-openapi v0.0.0-20260519202549-bbf5c5577288 // indirect
+	k8s.io/utils v0.0.0-20260707023825-cf1189d6abe3 // indirect
 	sigs.k8s.io/cluster-api v1.12.3 // indirect
 	sigs.k8s.io/cluster-api-provider-aws/v2 v2.10.2 // indirect
 	sigs.k8s.io/cluster-api-provider-azure v1.22.1 // indirect
@@ -147,7 +146,7 @@ require (
 	sigs.k8s.io/cluster-api-provider-ibmcloud v0.13.1 // indirect
 	sigs.k8s.io/cluster-api-provider-openstack v0.14.1 // indirect
 	sigs.k8s.io/cluster-api-provider-vsphere v1.15.2 // indirect
-	sigs.k8s.io/controller-runtime v0.23.3 // indirect
+	sigs.k8s.io/controller-runtime v0.24.1 // indirect
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect
 	sigs.k8s.io/kube-storage-version-migrator v0.0.6-0.20230721195810-5c8923c5ff96 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
