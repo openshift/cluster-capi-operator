@@ -172,11 +172,6 @@ func (r *MachineSetSyncReconciler) Reconcile(ctx context.Context, req reconcile.
 	}
 
 	if mapiMachineSet == nil {
-		if capiMachineSet == nil {
-			logger.Info("Both MAPI and CAPI machine sets not found, nothing to do")
-			return ctrl.Result{}, nil
-		}
-
 		// The MAPI MachineSet has already been deleted.
 		// If the CAPI MachineSet is deleting and still has our sync finalizer,
 		// reconcile its deletion so the finalizer can be removed.
@@ -190,6 +185,7 @@ func (r *MachineSetSyncReconciler) Reconcile(ctx context.Context, req reconcile.
 		}
 
 		logger.Info("Only CAPI machine set found, nothing to do")
+
 		return ctrl.Result{}, nil
 	}
 
