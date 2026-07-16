@@ -94,7 +94,7 @@ func (r *ClusterOperatorStatusClient) SetStatusDegraded(ctx context.Context, rec
 		NewClusterOperatorStatusCondition(configv1.OperatorUpgradeable, configv1.ConditionFalse, ReasonAsExpected, ""),
 	}
 
-	r.Recorder.Eventf(co, corev1.EventTypeWarning, "Status degraded", reconcileErr.Error())
+	r.Recorder.Eventf(co, corev1.EventTypeWarning, "Status degraded", "%s", reconcileErr.Error())
 	log.Info("syncing status: degraded", "message", message)
 
 	return r.SyncStatus(ctx, co, append(opts, WithConditions(conds))...)
