@@ -126,10 +126,6 @@ func newRenderedRevision(profiles []providerimages.ProviderImageManifests, opts 
 		substitutions: substitutionsFromMap(cfg.substitutions),
 	}
 
-	if err := validateRenderedRevision(rev); err != nil {
-		return nil, err
-	}
-
 	return rev, nil
 }
 

@@ -75,7 +75,7 @@ func newManagerWrapper(providerImgs []providerimages.ProviderImageManifests, tls
 		Client:           mgr.GetClient(),
 		ProviderProfiles: imgs,
 		ReleaseVersion:   "4.18.0",
-		Transformers:     []runtimetransformer.RuntimeTransformer{},
+		Transformers:     []runtimetransformer.RuntimeTransformer{&runtimetransformer.AdoptExistingTransformer{}},
 	}).SetupWithManager(mgr, tlsOptions)
 	Expect(err).NotTo(HaveOccurred())
 

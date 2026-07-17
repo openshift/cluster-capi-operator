@@ -131,9 +131,9 @@ func setupControllers(ctx context.Context, mgr ctrl.Manager, operatorConfig comm
 		log.Info("loaded provider profile", "name", profile.Name, "imageRef", profile.ImageRef, "profile", profile.Profile)
 	}
 
-	// transformers is the shared list of RuntimeTransformers applied during revision
-	// validation and object transformation. Initially empty; populated in future phases.
-	var transformers []runtimetransformer.RuntimeTransformer
+	transformers := []runtimetransformer.RuntimeTransformer{
+		&runtimetransformer.AdoptExistingTransformer{},
+	}
 
 	if err := (&revision.RevisionController{
 		Client:           mgr.GetClient(),
