@@ -17,20 +17,35 @@ limitations under the License.
 package installer
 
 import (
+	"context"
+	"errors"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"pkg.package-operator.run/boxcutter"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
 	"github.com/openshift/cluster-capi-operator/pkg/revisiongenerator"
+	"github.com/openshift/cluster-capi-operator/pkg/runtimetransformer"
 )
 
-// installerRevisionFromProfiles builds an InstallerRevision from named provider profiles
-// already registered in providersByName. Delegates to the package-level lookupProfiles helper
-// so the heavy profile setup stays in BeforeSuite.
+// stubTransformer is a test double for runtimetransformer.RuntimeTransformer.
+type stubTransformer struct {
+	opts []boxcutter.PhaseReconcileOption
+	err  error
+}
+
+func (s *stubTransformer) TransformObject(_ context.Context, _ client.Object) ([]boxcutter.PhaseReconcileOption, error) {
+	return s.opts, s.err
+}
+
+// installerRevisionFromProfiles builds a bare InstallerRevision from the named
+// provider profiles without writing anything to the cluster.
 func installerRevisionFromProfiles(names ...string) revisiongenerator.InstallerRevision {
 	GinkgoHelper()
 
 	profiles := lookupProfiles(names...)
-
 	rendered, err := revisiongenerator.NewRenderedRevision(profiles)
 	Expect(err).NotTo(HaveOccurred(), "NewRenderedRevision should not fail for valid profiles")
 
@@ -45,7 +60,8 @@ var _ = Describe("toBoxcutterRevision", func() {
 		It("should return a Revision with the name of the InstallerRevision", func() {
 			rev := installerRevisionFromProfiles(providerCore)
 
-			bcRev := toBoxcutterRevision(rev)
+			bcRev, err := toBoxcutterRevision(context.Background(), rev, nil)
+			Expect(err).NotTo(HaveOccurred())
 
 			Expect(bcRev.GetName()).To(Equal(string(rev.RevisionName())),
 				"returned Revision should carry the same name as the InstallerRevision")
@@ -57,7 +73,8 @@ var _ = Describe("toBoxcutterRevision", func() {
 			func(providerName string, wantPhaseCount int) {
 				rev := installerRevisionFromProfiles(providerName)
 
-				bcRev := toBoxcutterRevision(rev)
+				bcRev, err := toBoxcutterRevision(context.Background(), rev, nil)
+				Expect(err).NotTo(HaveOccurred())
 
 				first := bcRev.GetPhases()
 				second := bcRev.GetPhases()
@@ -77,5 +94,36 @@ var _ = Describe("toBoxcutterRevision", func() {
 			Entry("CRDs and objects — two phases", providerMixed, 2),
 			Entry("adopt-existing annotation is stable across calls", providerAdoptExisting, 1),
 		)
+	})
+
+	Describe("transformer integration", func() {
+		It("should return an error when a transformer fails", func() {
+			stub := &stubTransformer{err: errors.New("transform failed")}
+			rev := installerRevisionFromProfiles(providerCore)
+
+			_, err := toBoxcutterRevision(context.Background(), rev, []runtimetransformer.RuntimeTransformer{stub})
+
+			Expect(err).To(MatchError(ContainSubstring("transform failed")))
+		})
+
+		It("should include options returned by transformers in phase reconcile options", func() {
+			rev := installerRevisionFromProfiles(providerCore)
+
+			base, err := toBoxcutterRevision(context.Background(), rev, nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			baseOptCount := len(base.GetPhases()[0].GetReconcileOptions())
+
+			stub := &stubTransformer{opts: []boxcutter.PhaseReconcileOption{
+				boxcutter.WithCollisionProtection(boxcutter.CollisionProtectionNone),
+			}}
+			withTfm, err := toBoxcutterRevision(context.Background(), rev, []runtimetransformer.RuntimeTransformer{stub})
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(len(withTfm.GetPhases()[0].GetReconcileOptions())).To(
+				BeNumerically(">", baseOptCount),
+				"transformer options should augment the phase reconcile options",
+			)
+		})
 	})
 })

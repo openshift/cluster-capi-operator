@@ -194,7 +194,11 @@ func (r *revisionReconciler) reconcileRevision(ctx context.Context, conv convert
 
 	revision := conv.revision
 
-	bcRevision := toBoxcutterRevision(revision)
+	bcRevision, err := toBoxcutterRevision(ctx, revision, r.transformers)
+	if err != nil {
+		return false, err.Error(), reconcile.TerminalError(fmt.Errorf("building boxcutter revision %s: %w", revision.RevisionName(), err))
+	}
+
 	phases := bcRevision.GetPhases()
 
 	totalObjects := 0
@@ -359,7 +363,12 @@ func (r *revisionReconciler) teardownRevision(ctx context.Context, conv converte
 	revision := conv.revision
 	revisionName := revision.RevisionName()
 
-	bcRevision := toBoxcutterRevision(revision)
+	bcRevision, err := toBoxcutterRevision(ctx, revision, r.transformers)
+	if err != nil {
+		// Cannot tear down a revision that cannot be constructed — treat as complete.
+		return true, "", err
+	}
+
 	phases := bcRevision.GetPhases()
 
 	totalObjects := 0
