@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"github.com/openshift/cluster-capi-operator/pkg/util"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -131,6 +132,24 @@ func convertCAPIMachineAnnotationsToMAPIMachineSpecObjectMetaAnnotations(capiAnn
 	}
 
 	return mapiAnnotations
+}
+
+func convertCAPITaintsToMAPITaints(capiTaints []clusterv1.MachineTaint) []corev1.Taint {
+	if len(capiTaints) == 0 {
+		return nil
+	}
+
+	mapiTaints := make([]corev1.Taint, len(capiTaints))
+
+	for i, t := range capiTaints {
+		mapiTaints[i] = corev1.Taint{
+			Key:    t.Key,
+			Value:  t.Value,
+			Effect: t.Effect,
+		}
+	}
+
+	return mapiTaints
 }
 
 func convertCAPIAnnotationsToMAPIAnnotations(capiAnnotations map[string]string, machineAPIAnnotations map[string]string) map[string]string {
