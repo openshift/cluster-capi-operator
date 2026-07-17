@@ -107,7 +107,9 @@ var _ = BeforeSuite(func() {
 		handler.EnqueueRequestsFromMapFunc(toClusterAPI),
 	)
 
+	adoptExisting := &manifesttransformer.AdoptExistingTransformer{}
 	transformers := []manifesttransformer.ManifestTransformer{
+		adoptExisting,
 		testValueTransformer{},
 	}
 	Expect(SetupWithManager(mgr, allProviderProfiles, transformers, triggerSource)).To(Succeed())

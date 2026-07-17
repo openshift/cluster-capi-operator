@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -126,8 +127,7 @@ func addPhase(ctx context.Context, phases []boxcutter.Phase, probeOpts []boxcutt
 		transformedObjects = append(transformedObjects, transformedObj)
 	}
 
-	transformedObjects, adoptOpts := processAdoptExistingAnnotations(transformedObjects)
-	allOpts := append(append(probeOpts, adoptOpts...), xfmrOpts...)
+	allOpts := slices.Concat(probeOpts, xfmrOpts)
 	bcPhase := boxcutter.NewPhase(name, util.SliceMap(transformedObjects, toClientObject)).WithReconcileOptions(allOpts...)
 
 	return append(phases, bcPhase), errors.Join(allErrs...)
@@ -159,40 +159,4 @@ func applyTransformers(ctx context.Context, transformers []manifesttransformer.M
 	}
 
 	return obj, allOpts, errs
-}
-
-// processAdoptExistingAnnotations processes the adopt-existing annotation on
-// each object. Objects with the annotation are deep copied and the annotation
-// is stripped from the copy. Objects with "always" get a per-object
-// CollisionProtectionIfNoController option. Objects without the annotation are
-// returned unchanged.
-//
-// This function assumes that annotation values have already been validated
-// during revision creation.
-func processAdoptExistingAnnotations(objects []*unstructured.Unstructured) ([]*unstructured.Unstructured, []boxcutter.PhaseReconcileOption) {
-	var reconcileOpts []boxcutter.PhaseReconcileOption
-
-	return util.SliceMap(objects, func(obj *unstructured.Unstructured) *unstructured.Unstructured {
-		annotations := obj.GetAnnotations()
-		value, hasAnnotation := annotations[revisiongenerator.AdoptExistingAnnotation]
-
-		if hasAnnotation {
-			// Disable collision protection if the annotation is set to "always"
-			if value == revisiongenerator.AdoptExistingAlways {
-				reconcileOpts = append(reconcileOpts,
-					boxcutter.WithObjectReconcileOptions(obj,
-						boxcutter.WithCollisionProtection(boxcutter.CollisionProtectionNone),
-					),
-				)
-			}
-
-			// Strip the annotation from the object before returning it
-			obj = obj.DeepCopy()
-			annotationsCopy := obj.GetAnnotations()
-			delete(annotationsCopy, revisiongenerator.AdoptExistingAnnotation)
-			obj.SetAnnotations(annotationsCopy)
-		}
-
-		return obj
-	}), reconcileOpts
 }

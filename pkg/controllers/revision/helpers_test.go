@@ -74,11 +74,12 @@ func newManagerWrapper(providerImgs []providerimages.ProviderImageManifests, tls
 		}
 	}
 
+	adoptExisting := &manifesttransformer.AdoptExistingTransformer{}
 	err = (&RevisionController{
 		Client:           mgr.GetClient(),
 		ProviderProfiles: imgs,
 		ReleaseVersion:   "4.18.0",
-		Transformers:     []manifesttransformer.ManifestTransformer{},
+		Transformers:     []manifesttransformer.ManifestTransformer{adoptExisting},
 	}).SetupWithManager(mgr, tlsOptions)
 	Expect(err).NotTo(HaveOccurred())
 
