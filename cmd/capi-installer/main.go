@@ -43,6 +43,7 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/installer"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/revision"
 	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
+	"github.com/openshift/cluster-capi-operator/pkg/runtimetransformer"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 )
 
@@ -130,16 +131,21 @@ func setupControllers(ctx context.Context, mgr ctrl.Manager, operatorConfig comm
 		log.Info("loaded provider profile", "name", profile.Name, "imageRef", profile.ImageRef, "profile", profile.Profile)
 	}
 
+	// transformers is the shared list of RuntimeTransformers applied during revision
+	// validation and object transformation. Initially empty; populated in future phases.
+	var transformers []runtimetransformer.RuntimeTransformer
+
 	if err := (&revision.RevisionController{
 		Client:           mgr.GetClient(),
 		ProviderProfiles: currentReleaseProfiles,
 		ReleaseVersion:   util.GetReleaseVersion(),
+		Transformers:     transformers,
 	}).SetupWithManager(mgr, operatorConfig.TLSOptions); err != nil {
 		log.Error(err, "unable to create revision controller", "controller", "RevisionController")
 		return fmt.Errorf("unable to create revision controller: %w", err)
 	}
 
-	if err := installer.SetupWithManager(mgr, allProviderProfiles, nil); err != nil {
+	if err := installer.SetupWithManager(mgr, allProviderProfiles, transformers); err != nil {
 		return fmt.Errorf("unable to create installer controller: %w", err)
 	}
 

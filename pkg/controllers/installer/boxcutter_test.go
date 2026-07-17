@@ -32,12 +32,17 @@ import (
 
 // stubTransformer is a test double for runtimetransformer.RuntimeTransformer.
 type stubTransformer struct {
-	opts []boxcutter.PhaseReconcileOption
-	err  error
+	opts        []boxcutter.PhaseReconcileOption
+	err         error
+	validateErr error
 }
 
 func (s *stubTransformer) TransformObject(_ context.Context, _ client.Object) ([]boxcutter.PhaseReconcileOption, error) {
 	return s.opts, s.err
+}
+
+func (s *stubTransformer) Validate(_ client.Object) error {
+	return s.validateErr
 }
 
 // installerRevisionFromProfiles builds a bare InstallerRevision from the named

@@ -29,4 +29,8 @@ type RuntimeTransformer interface {
 	// TransformObject may mutate the object in place and returns any
 	// phase-level reconcile options that should apply to that object's phase.
 	TransformObject(ctx context.Context, obj client.Object) ([]boxcutter.PhaseReconcileOption, error)
+
+	// Validate checks that the object is valid for this transformer. An error
+	// prevents revision creation and is treated as non-retryable.
+	Validate(obj client.Object) error
 }

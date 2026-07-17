@@ -26,6 +26,7 @@ import (
 	"github.com/onsi/gomega/types"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
+	"pkg.package-operator.run/boxcutter"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/config"
@@ -33,6 +34,7 @@ import (
 	configv1 "github.com/openshift/api/config/v1"
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
+	"github.com/openshift/cluster-capi-operator/pkg/runtimetransformer"
 	"github.com/openshift/cluster-capi-operator/pkg/test"
 )
 
@@ -73,6 +75,7 @@ func newManagerWrapper(providerImgs []providerimages.ProviderImageManifests, tls
 		Client:           mgr.GetClient(),
 		ProviderProfiles: imgs,
 		ReleaseVersion:   "4.18.0",
+		Transformers:     []runtimetransformer.RuntimeTransformer{},
 	}).SetupWithManager(mgr, tlsOptions)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -191,4 +194,17 @@ func latestRevision(revisions []operatorv1alpha1.ClusterAPIInstallerRevision) op
 	}
 
 	return latest
+}
+
+// stubTransformer is a test double for runtimetransformer.RuntimeTransformer.
+type stubTransformer struct {
+	validateErr error
+}
+
+func (s *stubTransformer) TransformObject(_ context.Context, _ client.Object) ([]boxcutter.PhaseReconcileOption, error) {
+	return nil, nil
+}
+
+func (s *stubTransformer) Validate(_ client.Object) error {
+	return s.validateErr
 }
