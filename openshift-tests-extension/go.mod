@@ -84,7 +84,7 @@ require (
 	github.com/oklog/ulid v1.3.1 // indirect
 	github.com/onsi/ginkgo/v2 v2.28.1 // indirect
 	github.com/onsi/gomega v1.39.1 // indirect
-	github.com/openshift/api v0.0.0-20260416105050-3c6b218b8a80 // indirect
+	github.com/openshift/api v0.0.0-20260618113002-c74451d5da4e // indirect
 	github.com/openshift/client-go v0.0.0-20260416131737-a19e91702ab5 // indirect
 	github.com/openshift/cluster-api-actuator-pkg v0.0.0-20260616083352-ff0f225cc3b5 // indirect
 	github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0 // indirect

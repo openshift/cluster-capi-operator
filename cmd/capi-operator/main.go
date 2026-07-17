@@ -33,7 +33,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/go-logr/logr"
 	configv1 "github.com/openshift/api/config/v1"
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 
@@ -87,7 +86,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := setupControllers(ctx, log, mgr, operatorConfig, cancel); err != nil {
+	if err := setupControllers(ctx, mgr, operatorConfig); err != nil {
 		log.Error(err, "unable to setup controllers")
 		os.Exit(1)
 	}
@@ -100,7 +99,7 @@ func main() {
 	}
 }
 
-func setupControllers(ctx context.Context, log logr.Logger, mgr ctrl.Manager, operatorConfig commoncmdoptions.OperatorConfig, cancel context.CancelFunc) error {
+func setupControllers(ctx context.Context, mgr ctrl.Manager, operatorConfig commoncmdoptions.OperatorConfig) error {
 	infra, err := util.GetInfra(ctx, mgr.GetAPIReader())
 	if err != nil {
 		return fmt.Errorf("unable to get infrastructure: %w", err)
@@ -111,17 +110,9 @@ func setupControllers(ctx context.Context, log logr.Logger, mgr ctrl.Manager, op
 		return fmt.Errorf("unable to get platform: %w", err)
 	}
 
-	featureGates, err := util.GetFeatureGates(ctx, log, managerName, mgr.GetConfig(), cancel)
-	if err != nil {
-		return fmt.Errorf("unable to get feature gates: %w", err)
-	}
-
-	supportedPlatform := util.IsCAPIEnabledForPlatform(featureGates, infra.Status.PlatformStatus.Type)
-
 	if err := (&clusteroperator.ClusterOperatorController{
 		ClusterOperatorStatusClient: operatorConfig.GetClusterOperatorStatusClient(mgr, platform, "clusteroperator"),
 		Scheme:                      mgr.GetScheme(),
-		IsUnsupportedPlatform:       !supportedPlatform,
 	}).SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("unable to create clusteroperator controller: %w", err)
 	}
@@ -132,12 +123,10 @@ func setupControllers(ctx context.Context, log logr.Logger, mgr ctrl.Manager, op
 		return fmt.Errorf("unable to get container image: %w", err)
 	}
 
-	// Setup InstallerDeploymentController (runs on all platforms)
 	if err := (&installerdeployment.InstallerDeploymentReconciler{
-		Client:            mgr.GetClient(),
-		Namespace:         *operatorConfig.OperatorNamespace,
-		ContainerImage:    containerImage,
-		SupportedPlatform: supportedPlatform,
+		Client:         mgr.GetClient(),
+		Namespace:      *operatorConfig.OperatorNamespace,
+		ContainerImage: containerImage,
 	}).SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("unable to create installerdeployment controller: %w", err)
 	}

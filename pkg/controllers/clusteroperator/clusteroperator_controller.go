@@ -31,15 +31,13 @@ import (
 )
 
 const (
-	capiUnsupportedPlatformMsg = "Cluster API is not yet implemented on this platform"
-	controllerName             = "ClusterOperatorController"
+	controllerName = "ClusterOperatorController"
 )
 
 // ClusterOperatorController watches and keeps the cluster-api ClusterObject up to date.
 type ClusterOperatorController struct {
 	operatorstatus.ClusterOperatorStatusClient
-	Scheme                *runtime.Scheme
-	IsUnsupportedPlatform bool
+	Scheme *runtime.Scheme
 }
 
 // Reconcile reconciles the cluster-api ClusterOperator object.
@@ -47,19 +45,11 @@ func (r *ClusterOperatorController) Reconcile(ctx context.Context, req ctrl.Requ
 	log := ctrl.LoggerFrom(ctx).WithName(controllerName)
 	log.Info(fmt.Sprintf("Reconciling %q ClusterObject", controllers.ClusterOperatorName))
 
-	message := func() string {
-		if r.IsUnsupportedPlatform {
-			return capiUnsupportedPlatformMsg
-		}
-
-		return ""
-	}()
-
 	// TODO: wrap this into status aggregation logic to get these conditions to
 	// represent the meaningful aggregation of all other controller statuses.
 	// We should also only update the version after the aggregator confirms
 	// all controllers have succeeded in the new version.
-	if err := r.SetStatusAvailable(ctx, message, operatorstatus.WithVersions(r.OperandVersions())); err != nil {
+	if err := r.SetStatusAvailable(ctx, "", operatorstatus.WithVersions(r.OperandVersions())); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to set conditions for %q ClusterObject: %w", controllers.ClusterOperatorName, err)
 	}
 

@@ -24,17 +24,11 @@ import (
 	configv1 "github.com/openshift/api/config/v1"
 	mapiv1alpha1 "github.com/openshift/api/machine/v1alpha1"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
-	configv1client "github.com/openshift/client-go/config/clientset/versioned"
-	configinformers "github.com/openshift/client-go/config/informers/externalversions"
-	"k8s.io/klog"
-	"k8s.io/utils/clock"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 
 	"github.com/openshift/api/features"
-	featuregates "github.com/openshift/library-go/pkg/operator/configobserver/featuregates"
-	"github.com/openshift/library-go/pkg/operator/events"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -52,11 +46,6 @@ import (
 
 const (
 	managerName = "machine-api-migration"
-)
-
-var (
-	// errTimedOutWaitingForFeatureGates is returned when the feature gates are not initialized within the timeout.
-	errTimedOutWaitingForFeatureGates = errors.New("timed out waiting for feature gates to be initialized")
 )
 
 func initScheme(scheme *runtime.Scheme) {
@@ -91,31 +80,19 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := checkFeatureGates(ctx, log, mgr); err != nil {
-		log.Error(err, "unable to check feature gates")
-		os.Exit(1)
-	}
-
-	infra, err := util.GetInfra(ctx, mgr.GetAPIReader())
+	// Get controllers to add to the manager.
+	//
+	// This will return an empty map if the platform does not support
+	// MachineAPIMigration. In this case we still run the manager, but without
+	// any controllers. This will shut down cleanly when the pod is killed, but
+	// otherwise do nothing.
+	controllers, err := getControllers(ctx, log, mgr, operatorConfig, cancel)
 	if err != nil {
-		log.Error(err, "unable to get infrastructure")
+		log.Error(err, "unable to get controllers")
 		os.Exit(1)
 	}
 
-	infraTypes, platform, err := util.GetCAPITypesForInfrastructure(infra)
-	if err != nil {
-		if errors.Is(err, util.ErrUnsupportedPlatform) {
-			log.Info("MachineAPIMigration not implemented for platform, nothing to do. Waiting for termination signal.", "platform", platform)
-			exitAfterTerminationSignal(ctx)
-		}
-
-		log.Error(err, "unable to get infrastructure types")
-		os.Exit(1)
-	}
-
-	checkPlatformSupported(ctx, log, platform)
-
-	for name, controller := range getControllers(operatorConfig, platform, infra, infraTypes) {
+	for name, controller := range controllers {
 		if err := controller.SetupWithManager(mgr); err != nil {
 			log.Error(err, "failed to set up reconciler with manager", "reconciler", name)
 			os.Exit(1)
@@ -130,41 +107,50 @@ func main() {
 	}
 }
 
-func checkFeatureGates(ctx context.Context, log logr.Logger, mgr ctrl.Manager) error {
-	featureGateAccessor, err := getFeatureGates(ctx, mgr)
-	if err != nil {
-		return fmt.Errorf("unable to get feature gates: %w", err)
-	}
-
-	currentFeatureGates, err := featureGateAccessor.CurrentFeatureGates()
-	if err != nil {
-		return fmt.Errorf("unable to get current feature gates: %w", err)
-	}
-
-	if !currentFeatureGates.Enabled(features.FeatureGateMachineAPIMigration) {
-		log.Info("MachineAPIMigration feature gate is not enabled, nothing to do. Waiting for termination signal.")
-		exitAfterTerminationSignal(ctx)
-	}
-
-	return nil
-}
-
-func checkPlatformSupported(ctx context.Context, log logr.Logger, platform configv1.PlatformType) {
-	switch platform {
-	case configv1.AWSPlatformType, configv1.OpenStackPlatformType:
-		log.Info("starting controllers", "platform", platform)
-
-	default:
-		log.Info("MachineAPIMigration not implemented for platform, nothing to do. Waiting for termination signal.", "platform", platform)
-		exitAfterTerminationSignal(ctx)
-	}
-}
-
 type controller interface {
 	SetupWithManager(mgr ctrl.Manager) error
 }
 
-func getControllers(opts commoncmdoptions.OperatorConfig, platform configv1.PlatformType, infra *configv1.Infrastructure, infraTypes util.InfraTypes) map[string]controller {
+func getControllers(ctx context.Context, log logr.Logger, mgr ctrl.Manager, opts commoncmdoptions.OperatorConfig, cancel context.CancelFunc) (map[string]controller, error) {
+	featureGates, err := util.GetFeatureGates(ctx, log, managerName, mgr.GetConfig(), cancel)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get feature gates: %w", err)
+	}
+
+	if !featureGates.Enabled(features.FeatureGateMachineAPIMigration) {
+		log.Info("MachineAPIMigration feature gate is not enabled, nothing to do. Waiting for termination signal.")
+		return map[string]controller{}, nil
+	}
+
+	infra, err := util.GetInfra(ctx, mgr.GetAPIReader())
+	if err != nil {
+		return nil, fmt.Errorf("unable to get infrastructure: %w", err)
+	}
+
+	platform, err := util.GetPlatformFromInfra(infra)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get platform from infrastructure: %w", err)
+	}
+
+	if !util.IsMAPIMigrationEnabledForPlatform(platform, featureGates) {
+		log.Info("MachineAPIMigration not implemented for platform, nothing to do. Waiting for termination signal.", "platform", platform)
+		return map[string]controller{}, nil
+	}
+
+	infraTypes, err := util.GetCAPITypesForInfrastructure(infra)
+	if err != nil {
+		if errors.Is(err, util.ErrUnsupportedPlatform) {
+			log.Info("MachineAPIMigration not implemented for platform, nothing to do. Waiting for termination signal.", "platform", platform)
+			return map[string]controller{}, nil
+		}
+
+		return nil, fmt.Errorf("unable to get infrastructure types: %w", err)
+	}
+
+	return allControllers(infra, platform, infraTypes, opts), nil
+}
+
+func allControllers(infra *configv1.Infrastructure, platform configv1.PlatformType, infraTypes util.InfraTypes, opts commoncmdoptions.OperatorConfig) map[string]controller {
 	return map[string]controller{
 		"machine sync": &machinesync.MachineSyncReconciler{
 			Infra:      infra,
@@ -199,50 +185,6 @@ func getControllers(opts commoncmdoptions.OperatorConfig, platform configv1.Plat
 			CAPINamespace: *opts.CAPINamespace,
 		},
 	}
-}
-
-// exitAfterTerminationSignal waits until our process receives a termination
-// signal, then exits without an error.
-// It is used when we are running on a cluster where this manager is not
-// required. We don't want to exit immediately because we would be restarted,
-// which is not required.
-func exitAfterTerminationSignal(ctx context.Context) {
-	<-ctx.Done()
-	os.Exit(0)
-}
-
-// getFeatureGates is used to fetch the current feature gates from the cluster.
-// We use this to check if the machine api migration is actually enabled or not.
-func getFeatureGates(ctx context.Context, mgr ctrl.Manager) (featuregates.FeatureGateAccess, error) {
-	desiredVersion := util.GetReleaseVersion()
-	missingVersion := "0.0.1-snapshot"
-
-	configClient, err := configv1client.NewForConfig(mgr.GetConfig())
-	if err != nil {
-		return nil, fmt.Errorf("failed to create config client: %w", err)
-	}
-
-	configInformers := configinformers.NewSharedInformerFactory(configClient, 10*time.Minute)
-
-	// By default, this will exit(0) if the featuregates change.
-	featureGateAccessor := featuregates.NewFeatureGateAccess(
-		desiredVersion, missingVersion,
-		configInformers.Config().V1().ClusterVersions(),
-		configInformers.Config().V1().FeatureGates(),
-		events.NewLoggingEventRecorder("machineapimigration", clock.RealClock{}),
-	)
-	go featureGateAccessor.Run(ctx)
-	go configInformers.Start(ctx.Done())
-
-	select {
-	case <-featureGateAccessor.InitialFeatureGatesObserved():
-		featureGates, _ := featureGateAccessor.CurrentFeatureGates()
-		klog.Infof("FeatureGates initialized: %v", featureGates.KnownFeatures())
-	case <-time.After(1 * time.Minute):
-		return nil, errTimedOutWaitingForFeatureGates
-	}
-
-	return featureGateAccessor, nil
 }
 
 func getDefaultCacheOptions(capiNamespace, mapiNamespace string, sync time.Duration) cache.Options {

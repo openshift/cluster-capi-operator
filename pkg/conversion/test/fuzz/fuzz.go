@@ -810,6 +810,7 @@ func MAPIMachineSetFuzzerFuncs() fuzzer.FuzzerFuncs {
 			func(m *mapiv1beta1.MachineSetStatus, c randfill.Continue) {
 				c.FillNoCustom(m)
 
+				m.LabelSelector = ""         // Ignore, this field. Both MAPI and CAPI (field is called 'selector') set this from spec.selector.
 				m.ObservedGeneration = 0     // Ignore, this field as it shouldn't match between CAPI and MAPI.
 				m.AuthoritativeAPI = ""      // Ignore, this field as it is not present in CAPI.
 				m.SynchronizedGeneration = 0 // Ignore, this field as it is not present in CAPI.
