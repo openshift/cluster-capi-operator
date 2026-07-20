@@ -107,8 +107,12 @@ var _ = BeforeSuite(func() {
 		handler.EnqueueRequestsFromMapFunc(toClusterAPI),
 	)
 
-	adoptExisting := runtimetransformer.NewSimpleRuntimeTransformer(&runtimetransformer.AdoptExistingTransformer{})
-	Expect(SetupWithManager(mgr, allProviderProfiles, []runtimetransformer.RuntimeTransformer{adoptExisting}, triggerSource)).To(Succeed())
+	transformers := []runtimetransformer.RuntimeTransformer{
+		runtimetransformer.NewEnvsubstTransformer(nil),
+		runtimetransformer.NewManagedByTransformer(),
+		runtimetransformer.NewSimpleRuntimeTransformer(&runtimetransformer.AdoptExistingTransformer{}),
+	}
+	Expect(SetupWithManager(mgr, allProviderProfiles, transformers, triggerSource)).To(Succeed())
 	Expect(test.AddNamespaceFinalizerCleanup(mgr)).To(Succeed())
 
 	// Start manager in background.

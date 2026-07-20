@@ -226,5 +226,6 @@ func (f *fakeRevision) Components() []revisiongenerator.RenderedComponent {
 func (f *fakeRevision) ForInstall(string, int64) (revisiongenerator.InstallerRevision, error) {
 	return nil, errors.New("not implemented")
 }
+func (f *fakeRevision) ManifestSubstitutions() map[string]string { return nil }
 
 var _ revisiongenerator.RenderedRevision = &fakeRevision{}

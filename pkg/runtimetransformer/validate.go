@@ -19,7 +19,6 @@ package runtimetransformer
 import (
 	"errors"
 	"fmt"
-	"slices"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -30,7 +29,7 @@ import (
 // All errors are collected and returned together via errors.Join.
 func ValidateTransformers(transformers []RuntimeTransformer, rev revisiongenerator.RenderedRevision) (reterr error) {
 	for _, component := range rev.Components() {
-		for _, obj := range slices.Concat(component.CRDs(), component.Objects()) {
+		for _, obj := range component.Objects() {
 			for _, t := range transformers {
 				if err := t.Validate(obj); err != nil {
 					reterr = errors.Join(reterr, fmt.Errorf("%s %s: %w", component.Name(), client.ObjectKeyFromObject(obj), err))

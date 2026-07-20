@@ -46,7 +46,6 @@ import (
 
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
-	"github.com/openshift/cluster-capi-operator/pkg/revisiongenerator"
 	"github.com/openshift/cluster-capi-operator/pkg/runtimetransformer"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 )
@@ -140,7 +139,7 @@ func SetupWithManager(mgr ctrl.Manager, providerProfiles []providerimages.Provid
 func setupTrackingCache(mgr ctrl.Manager) (managedcache.TrackingCache, error) {
 	// Configure cache to watch only objects with our label. The label is
 	// applied by the revision generator.
-	managedByReq, err := labels.NewRequirement(revisiongenerator.ManagedLabelKey, selection.Exists, nil)
+	managedByReq, err := labels.NewRequirement(runtimetransformer.ManagedLabelKey, selection.Exists, nil)
 	if err != nil {
 		return nil, fmt.Errorf("creating managed-by label requirement: %w", err)
 	}

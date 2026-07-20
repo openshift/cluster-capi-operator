@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"slices"
 
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"pkg.package-operator.run/boxcutter"
 	"pkg.package-operator.run/boxcutter/probing"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -49,7 +50,18 @@ func toBoxcutterRevision(ctx context.Context, installerRevision revisiongenerato
 			return t.WithComponent(ctx, component)
 		})
 
-		if crds := component.CRDs(); len(crds) > 0 {
+		var crds, objects []client.Object
+
+		for _, obj := range component.Objects() {
+			gvk := obj.GetObjectKind().GroupVersionKind()
+			if gvk.GroupKind() == (schema.GroupKind{Group: "apiextensions.k8s.io", Kind: "CustomResourceDefinition"}) {
+				crds = append(crds, obj)
+			} else {
+				objects = append(objects, obj)
+			}
+		}
+
+		if len(crds) > 0 {
 			xfmrOpts, err := applyTransformers(ctx, componentTransformers, crds)
 			if err != nil {
 				return nil, err
@@ -60,7 +72,7 @@ func toBoxcutterRevision(ctx context.Context, installerRevision revisiongenerato
 				WithReconcileOptions(allOpts...))
 		}
 
-		if objects := component.Objects(); len(objects) > 0 {
+		if len(objects) > 0 {
 			xfmrOpts, err := applyTransformers(ctx, componentTransformers, objects)
 			if err != nil {
 				return nil, err

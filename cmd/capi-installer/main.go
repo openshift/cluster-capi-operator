@@ -132,6 +132,8 @@ func setupControllers(ctx context.Context, mgr ctrl.Manager, operatorConfig comm
 	}
 
 	transformers := []runtimetransformer.RuntimeTransformer{
+		runtimetransformer.NewEnvsubstTransformer(nil),
+		runtimetransformer.NewManagedByTransformer(),
 		runtimetransformer.NewSimpleRuntimeTransformer(&runtimetransformer.AdoptExistingTransformer{}),
 	}
 

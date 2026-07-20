@@ -42,7 +42,7 @@ func TestValidateTransformers(t *testing.T) {
 		g := NewWithT(t)
 		rev := &fakeRevision{
 			components: []revisiongenerator.RenderedComponent{
-				&fakeComponent{name: componentName, crds: []client.Object{crdObj}, objects: []client.Object{regularObj}},
+				&fakeComponent{name: componentName, objects: []client.Object{crdObj, regularObj}},
 			},
 		}
 		g.Expect(ValidateTransformers(nil, rev)).To(Succeed())
@@ -52,29 +52,29 @@ func TestValidateTransformers(t *testing.T) {
 		g := NewWithT(t)
 		rev := &fakeRevision{
 			components: []revisiongenerator.RenderedComponent{
-				&fakeComponent{name: componentName, crds: []client.Object{crdObj}, objects: []client.Object{regularObj}},
+				&fakeComponent{name: componentName, objects: []client.Object{crdObj, regularObj}},
 			},
 		}
 		g.Expect(ValidateTransformers([]RuntimeTransformer{}, rev)).To(Succeed())
 	})
 
-	t.Run("validates CRDs and includes component name in error", func(t *testing.T) {
+	t.Run("validates objects and includes component name in error", func(t *testing.T) {
 		g := NewWithT(t)
 		rev := &fakeRevision{
 			components: []revisiongenerator.RenderedComponent{
-				&fakeComponent{name: componentName, crds: []client.Object{crdObj}},
+				&fakeComponent{name: componentName, objects: []client.Object{crdObj}},
 			},
 		}
-		stub := NewSimpleRuntimeTransformer(&stubTransformer{validateErr: errors.New("crd invalid")})
+		stub := NewSimpleRuntimeTransformer(&stubTransformer{validateErr: errors.New("obj invalid")})
 		g.Expect(ValidateTransformers([]RuntimeTransformer{stub}, rev)).
 			To(MatchError(SatisfyAll(
 				ContainSubstring(componentName),
 				ContainSubstring("my-crd"),
-				ContainSubstring("crd invalid"),
+				ContainSubstring("obj invalid"),
 			)))
 	})
 
-	t.Run("validates Objects and includes component name in error", func(t *testing.T) {
+	t.Run("validates all objects and includes component name in error", func(t *testing.T) {
 		g := NewWithT(t)
 		rev := &fakeRevision{
 			components: []revisiongenerator.RenderedComponent{
@@ -90,11 +90,11 @@ func TestValidateTransformers(t *testing.T) {
 			)))
 	})
 
-	t.Run("collects errors from both CRDs and Objects", func(t *testing.T) {
+	t.Run("collects errors from all objects", func(t *testing.T) {
 		g := NewWithT(t)
 		rev := &fakeRevision{
 			components: []revisiongenerator.RenderedComponent{
-				&fakeComponent{name: componentName, crds: []client.Object{crdObj}, objects: []client.Object{regularObj}},
+				&fakeComponent{name: componentName, objects: []client.Object{crdObj, regularObj}},
 			},
 		}
 		stub := NewSimpleRuntimeTransformer(&stubTransformer{validateErr: errors.New("invalid")})
@@ -125,12 +125,10 @@ var _ SimpleRuntimeTransformer = &stubTransformer{}
 // that need a revision without running the full revision generator.
 type fakeComponent struct {
 	name    string
-	crds    []client.Object
 	objects []client.Object
 }
 
 func (f *fakeComponent) Name() string             { return f.name }
-func (f *fakeComponent) CRDs() []client.Object    { return f.crds }
 func (f *fakeComponent) Objects() []client.Object { return f.objects }
 
 // fakeRevision implements revisiongenerator.RenderedRevision for unit tests.
@@ -145,5 +143,6 @@ func (f *fakeRevision) Components() []revisiongenerator.RenderedComponent {
 func (f *fakeRevision) ForInstall(string, int64) (revisiongenerator.InstallerRevision, error) {
 	return nil, errors.New("not implemented")
 }
+func (f *fakeRevision) ManifestSubstitutions() map[string]string { return nil }
 
 var _ revisiongenerator.RenderedRevision = &fakeRevision{}

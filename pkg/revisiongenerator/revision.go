@@ -25,11 +25,12 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strings"
 
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	operatorv1alpha1ac "github.com/openshift/client-go/operator/applyconfigurations/operator/v1alpha1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	k8syaml "sigs.k8s.io/yaml"
 
@@ -60,6 +61,11 @@ type RenderedRevision interface {
 	// ForInstall creates an InstallerRevision by assigning a release version
 	// and revision index to this rendered content.
 	ForInstall(releaseVersion string, revisionIndex int64) (InstallerRevision, error)
+
+	// ManifestSubstitutions returns a copy of the substitutions stored in
+	// this revision. These are used by install-time transformers to expand
+	// envsubst variables in manifests.
+	ManifestSubstitutions() map[string]string
 }
 
 // InstallerRevision is a RenderedRevision that has been assigned a revision
@@ -78,21 +84,19 @@ type InstallerRevision interface {
 	ToAPIRevision() (operatorv1alpha1.ClusterAPIInstallerRevision, error)
 }
 
-// RenderedComponent represents a single provider component with manifests
-// separated into CRDs and other objects.
+// RenderedComponent represents a single provider component with its manifests
+// parsed and ready to be applied.
 type RenderedComponent interface {
 	// Name returns the component name.
 	Name() string
-	// CRDs returns the CRD objects for this component.
-	CRDs() []client.Object
-	// Objects returns the non-CRD objects for this component.
+	// Objects returns all objects for this component, including CRDs.
 	Objects() []client.Object
 }
 
 type renderedRevision struct {
 	components    []*renderedComponent
 	contentID     string
-	substitutions []operatorv1alpha1.ClusterAPIInstallerRevisionManifestSubstitution
+	substitutions map[string]string
 }
 
 var _ RenderedRevision = &renderedRevision{}
@@ -123,7 +127,7 @@ func newRenderedRevision(profiles []providerimages.ProviderImageManifests, opts 
 
 	rev := &renderedRevision{
 		components:    components,
-		substitutions: substitutionsFromMap(cfg.substitutions),
+		substitutions: maps.Clone(cfg.substitutions),
 	}
 
 	return rev, nil
@@ -150,6 +154,11 @@ func substitutionsFromMap(m map[string]string) []operatorv1alpha1.ClusterAPIInst
 	return subs
 }
 
+// ManifestSubstitutions returns a copy of the substitutions stored in this revision.
+func (r *renderedRevision) ManifestSubstitutions() map[string]string {
+	return maps.Clone(r.substitutions)
+}
+
 // ContentID returns a unique identifier for the revision's content.
 // Specifically it returns a SHA256 over all manifests and substitutions,
 // but callers MUST NOT assume this.
@@ -171,7 +180,16 @@ func (r *renderedRevision) ContentID() (string, error) {
 		// revision, even if they were not used. This is not strictly necessary,
 		// but it should reduce operator confusion if old but unused
 		// substitutions continued to be listed in the current revision.
-		if data, err := json.Marshal(r.substitutions); err == nil {
+		//
+		// Normalise nil to an empty map before marshalling so that a nil
+		// substitutions map and an empty one produce the same hash, regardless
+		// of how the revision was constructed.
+		subs := r.substitutions
+		if subs == nil {
+			subs = map[string]string{}
+		}
+
+		if data, err := json.Marshal(subs); err == nil {
 			h.Write(data)
 		} else {
 			return "", fmt.Errorf("error marshalling substitutions: %w", err)
@@ -255,7 +273,7 @@ func (r *installerRevision) ToAPIRevision() (operatorv1alpha1.ClusterAPIInstalle
 		Name:                  r.revisionName,
 		Revision:              r.revisionIndex,
 		ContentID:             contentID,
-		ManifestSubstitutions: slices.Clone(r.substitutions),
+		ManifestSubstitutions: substitutionsFromMap(r.substitutions),
 		Components:            apiComponents,
 	}, nil
 }
@@ -301,8 +319,8 @@ func WithObjectCollectors(collectors ...RevisionObjectCollector) revisionRenderO
 }
 
 // WithManifestSubstitutions adds envsubst-style substitutions that will be
-// applied to manifests during rendering and recorded on the revision. When
-// called multiple times, later values merge with and override earlier ones.
+// recorded on the revision and applied at install time . When called multiple
+// times, later values merge with and override earlier ones.
 func WithManifestSubstitutions(subs map[string]string) revisionRenderOption {
 	return func(opts *revisionRenderConfig) {
 		if opts.substitutions == nil {
@@ -346,17 +364,12 @@ func NewInstallerRevisionFromAPI(
 		}
 	}
 
-	// Prepend substitutions from the API revision so they are applied during
-	// rendering and included in the content ID for validation. Later options
-	// merge with and override these values.
 	apiSubs := make(map[string]string, len(apiRev.ManifestSubstitutions))
 	for _, s := range apiRev.ManifestSubstitutions {
-		if s.Value != nil {
-			apiSubs[s.Key] = *s.Value
-		}
+		apiSubs[s.Key] = ptr.Deref(s.Value, "")
 	}
 
-	opts = append([]revisionRenderOption{WithManifestSubstitutions(apiSubs)}, opts...)
+	opts = append(opts, WithManifestSubstitutions(apiSubs))
 
 	rendered, err := newRenderedRevision(matched, opts...)
 	if err != nil {
@@ -383,7 +396,6 @@ type renderedComponent struct {
 	imageRef string
 	profile  string
 
-	crds    []unstructured.Unstructured
 	objects []unstructured.Unstructured
 }
 
@@ -399,30 +411,21 @@ func newRenderedComponent(providerProfile *providerimages.ProviderImageManifests
 			return nil, fmt.Errorf("error reading manifests: %w", err)
 		}
 
-		yaml, err = transformYaml(providerProfile, yaml, cfg.substitutions)
-		if err != nil {
-			return nil, fmt.Errorf("error transforming manifest yaml: %w", err)
+		// Replace SelfImageRef with the actual image ref before unmarshalling.
+		if providerProfile.SelfImageRef != "" {
+			yaml = strings.ReplaceAll(yaml, providerProfile.SelfImageRef, providerProfile.ImageRef)
 		}
 
-		var unstructured unstructured.Unstructured
-		if err := k8syaml.Unmarshal([]byte(yaml), &unstructured); err != nil {
-			return nil, fmt.Errorf("error unmarshalling transformed manifest: %w", err)
+		var obj unstructured.Unstructured
+		if err := k8syaml.Unmarshal([]byte(yaml), &obj.Object); err != nil {
+			return nil, fmt.Errorf("error unmarshalling manifest: %w", err)
 		}
-
-		unstructured = transformObject(unstructured, component.name)
 
 		for _, collector := range cfg.objectCollectors {
-			collector(unstructured)
+			collector(obj)
 		}
 
-		gvk := unstructured.GroupVersionKind()
-
-		switch gvk.GroupKind() {
-		case schema.GroupKind{Group: "apiextensions.k8s.io", Kind: "CustomResourceDefinition"}:
-			component.crds = append(component.crds, unstructured)
-		default:
-			component.objects = append(component.objects, unstructured)
-		}
+		component.objects = append(component.objects, obj)
 	}
 
 	return component, nil
@@ -435,14 +438,7 @@ func (c *renderedComponent) Name() string {
 	return c.name
 }
 
-// CRDs returns the CRD objects for this component.
-func (c *renderedComponent) CRDs() []client.Object {
-	return util.SliceMap(c.crds, func(crd unstructured.Unstructured) client.Object {
-		return &crd
-	})
-}
-
-// Objects returns the non-CRD objects for this component.
+// Objects returns all objects for this component, including CRDs.
 func (c *renderedComponent) Objects() []client.Object {
 	return util.SliceMap(c.objects, func(obj unstructured.Unstructured) client.Object {
 		return &obj
@@ -452,7 +448,7 @@ func (c *renderedComponent) Objects() []client.Object {
 func (c *renderedComponent) contentID() (string, error) {
 	h := sha256.New()
 
-	for _, obj := range slices.Concat(c.crds, c.objects) {
+	for _, obj := range c.objects {
 		data, err := json.Marshal(obj.Object)
 		if err != nil {
 			return "", fmt.Errorf("error marshalling object: %w", err)
