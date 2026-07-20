@@ -19,7 +19,6 @@ package revision
 import (
 	"cmp"
 	"context"
-	"crypto/tls"
 	"errors"
 	"fmt"
 	"slices"
@@ -29,7 +28,6 @@ import (
 	configv1 "github.com/openshift/api/config/v1"
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	operatorv1alpha1ac "github.com/openshift/client-go/operator/applyconfigurations/operator/v1alpha1"
-	libgocrypto "github.com/openshift/library-go/pkg/crypto"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -67,9 +65,6 @@ type RevisionController struct {
 	ProviderProfiles []providerimages.ProviderImageManifests
 	ReleaseVersion   string
 	Transformers     []runtimetransformer.RuntimeTransformer
-
-	// manifestSubstitutions is derived from TLSProfileSpec during SetupWithManager.
-	manifestSubstitutions map[string]string
 }
 
 // Reconcile handles creating revisions in the ClusterAPI singleton status.
@@ -149,7 +144,12 @@ func (r *RevisionController) generateDesiredRevision(ctx context.Context) (revis
 	// Build ordered component list from provider metadata
 	providerComponents := r.buildComponentList(infra.Status.PlatformStatus.Type)
 
-	revision, err := revisiongenerator.NewParsedRevision(providerComponents, revisiongenerator.WithManifestSubstitutions(r.manifestSubstitutions))
+	// EXP_BOOTSTRAP_FORMAT_IGNITION is a legacy substitution used only by CAPA.
+	// It should be moved to metadata in the CAPA provider manifests when that
+	// becomes possible.
+	revision, err := revisiongenerator.NewParsedRevision(providerComponents, revisiongenerator.WithManifestSubstitutions(map[string]string{
+		"EXP_BOOTSTRAP_FORMAT_IGNITION": "true",
+	}))
 	if err != nil {
 		return nil, opresult.ErrorP(fmt.Errorf("error creating parsed revision: %w", err))
 	}
@@ -274,18 +274,7 @@ func (r *RevisionController) buildComponentList(platform configv1.PlatformType) 
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *RevisionController) SetupWithManager(mgr ctrl.Manager, tlsOptions []func(config *tls.Config)) error {
-	tlsCfg := &tls.Config{}
-	for _, opt := range tlsOptions {
-		opt(tlsCfg)
-	}
-
-	r.manifestSubstitutions = map[string]string{
-		"EXP_BOOTSTRAP_FORMAT_IGNITION": "true",
-		"TLS_MIN_VERSION":               libgocrypto.TLSVersionToNameOrDie(tlsCfg.MinVersion),
-		"TLS_CIPHER_SUITES":             strings.Join(util.SliceMap(tlsCfg.CipherSuites, tls.CipherSuiteName), ","),
-	}
-
+func (r *RevisionController) SetupWithManager(mgr ctrl.Manager) error {
 	isInfrastructureReady := func(obj client.Object) bool {
 		if obj == nil {
 			return false

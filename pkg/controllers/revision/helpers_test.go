@@ -18,7 +18,6 @@ package revision
 
 import (
 	"context"
-	"crypto/tls"
 	"errors"
 	"slices"
 
@@ -48,7 +47,7 @@ type managerWrapper struct {
 	done   chan struct{}
 }
 
-func newManagerWrapper(providerImgs []providerimages.ProviderImageManifests, tlsOptions ...func(config *tls.Config)) *managerWrapper {
+func newManagerWrapper(providerImgs []providerimages.ProviderImageManifests) *managerWrapper {
 	// Don't use the BeforeEach context because it will be cancelled before the test starts.
 	ctx := context.Background()
 
@@ -63,23 +62,13 @@ func newManagerWrapper(providerImgs []providerimages.ProviderImageManifests, tls
 	})
 	Expect(err).NotTo(HaveOccurred())
 
-	if len(tlsOptions) == 0 {
-		tlsOptions = []func(config *tls.Config){
-			func(config *tls.Config) {
-				// Arbitrarily chosen insecure default tls configuration for tests
-				config.CipherSuites = []uint16{tls.TLS_RSA_WITH_RC4_128_SHA}
-				config.MinVersion = tls.VersionTLS10
-			},
-		}
-	}
-
 	adoptExisting := runtimetransformer.NewSimpleRuntimeTransformer(&runtimetransformer.AdoptExistingTransformer{})
 	err = (&RevisionController{
 		Client:           mgr.GetClient(),
 		ProviderProfiles: imgs,
 		ReleaseVersion:   "4.18.0",
 		Transformers:     []runtimetransformer.RuntimeTransformer{adoptExisting},
-	}).SetupWithManager(mgr, tlsOptions)
+	}).SetupWithManager(mgr)
 	Expect(err).NotTo(HaveOccurred())
 
 	mgrCtx, mgrCancel := context.WithCancel(ctx)
