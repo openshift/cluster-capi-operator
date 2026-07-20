@@ -41,8 +41,9 @@ import (
 )
 
 var (
-	errObjectValidator      = errors.New("failed to create the object schema")
-	errUnexpectedObjectType = errors.New("unexpected object type")
+	errObjectValidator        = errors.New("failed to create the object schema")
+	errUnexpectedObjectType   = errors.New("unexpected object type")
+	errUnsupportedCRDDataType = errors.New("unsupported CRDData type")
 )
 
 const (
@@ -197,6 +198,18 @@ func (v *validator) storeStructuralSchemaInCache(compatibilityRequirement *apiex
 }
 
 func (v *validator) getCompatibilityRequirementStructuralSchema(compatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement, version string) (*structuralschema.Structural, error) {
+	switch compatibilityRequirement.Spec.CompatibilitySchema.CustomResourceDefinition.Type {
+	case apiextensionsv1alpha1.CRDDataTypeYAML:
+		return v.getCompatibilityRequirementStructuralSchemaFromYAML(compatibilityRequirement, version)
+	default:
+		return nil, fmt.Errorf("%w: %q for CompatibilityRequirement %q",
+			errUnsupportedCRDDataType,
+			compatibilityRequirement.Spec.CompatibilitySchema.CustomResourceDefinition.Type,
+			compatibilityRequirement.Name)
+	}
+}
+
+func (v *validator) getCompatibilityRequirementStructuralSchemaFromYAML(compatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement, version string) (*structuralschema.Structural, error) {
 	// Extract the CRD so we can use the schema.
 	// Use a universal deserializer as it correctly handles YAML and JSON decoding based on the expected key formatting for CRDs.
 	// N.B. DO NOT switch this to a YAML library - they do not correctly handle the OpenAPIV3Schema casing within the CRD version schema.

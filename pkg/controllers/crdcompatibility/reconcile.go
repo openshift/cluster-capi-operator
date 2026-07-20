@@ -51,6 +51,7 @@ const (
 
 var (
 	errWebhookConfigNotControlledByCompatibilityRequirement = reconcile.TerminalError(errors.New("webhook config is not controlled by CompatibilityRequirement")) //nolint:err113
+	errUnsupportedCRDDataType                               = errors.New("unsupported CRDData type")
 )
 
 type reconcileState struct {
@@ -102,8 +103,17 @@ func (r *reconcileState) reconcile(ctx context.Context, compatibilityRequirement
 func (r *reconcileState) parseCompatibilityCRD(compatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement) error {
 	// Parse the CRD in compatibilityCRD into a CRD object
 	compatibilityCRD := &apiextensionsv1.CustomResourceDefinition{}
-	if err := yaml.Unmarshal([]byte(compatibilityRequirement.Spec.CompatibilitySchema.CustomResourceDefinition.Data), compatibilityCRD); err != nil {
-		return util.TerminalWithReasonError(fmt.Errorf("failed to parse compatibilityCRD: %w", err), terminalErrorReasonConfigurationError) //nolint:wrapcheck
+
+	switch compatibilityRequirement.Spec.CompatibilitySchema.CustomResourceDefinition.Type {
+	case apiextensionsv1alpha1.CRDDataTypeYAML:
+		if err := yaml.Unmarshal([]byte(compatibilityRequirement.Spec.CompatibilitySchema.CustomResourceDefinition.Data), compatibilityCRD); err != nil {
+			return util.TerminalWithReasonError(fmt.Errorf("failed to parse compatibilityCRD: %w", err), terminalErrorReasonConfigurationError) //nolint:wrapcheck
+		}
+	default:
+		return util.TerminalWithReasonError( //nolint:wrapcheck
+			fmt.Errorf("%w: %q", errUnsupportedCRDDataType, compatibilityRequirement.Spec.CompatibilitySchema.CustomResourceDefinition.Type),
+			terminalErrorReasonConfigurationError,
+		)
 	}
 
 	r.compatibilityCRD = compatibilityCRD

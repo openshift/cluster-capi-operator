@@ -55,9 +55,10 @@ const (
 )
 
 var (
-	errObjectValidator       = errors.New("failed to create the object validator")
-	errUnexpectedObjectType  = errors.New("unexpected object type")
-	errUnknownCRDAdmitAction = errors.New("unknown CRD admit action")
+	errObjectValidator        = errors.New("failed to create the object validator")
+	errUnexpectedObjectType   = errors.New("unexpected object type")
+	errUnknownCRDAdmitAction  = errors.New("unknown CRD admit action")
+	errUnsupportedCRDDataType = errors.New("unsupported CRDData type")
 )
 
 var _ admission.Handler = &validator{}
@@ -260,10 +261,22 @@ func (v *validator) storeValidationStrategyInCache(compatibilityRequirement *api
 	}
 }
 
+func (v *validator) createVersionedStrategy(compatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement, version string) (rest.RESTCreateUpdateStrategy, error) {
+	switch compatibilityRequirement.Spec.CompatibilitySchema.CustomResourceDefinition.Type {
+	case apiextensionsv1alpha1.CRDDataTypeYAML:
+		return v.createVersionedStrategyFromYAML(compatibilityRequirement, version)
+	default:
+		return nil, fmt.Errorf("%w: %q for CompatibilityRequirement %q",
+			errUnsupportedCRDDataType,
+			compatibilityRequirement.Spec.CompatibilitySchema.CustomResourceDefinition.Type,
+			compatibilityRequirement.Name)
+	}
+}
+
 // https://github.com/kubernetes/kubernetes/blob/ebc1ccc491c944fa0633f147698e0dc02675051d/staging/src/k8s.io/apiextensions-apiserver/pkg/registry/customresource/strategy.go#L76
 //
 //nolint:cyclop,funlen // This is copied so ignore linting issues
-func (v *validator) createVersionedStrategy(compatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement, version string) (rest.RESTCreateUpdateStrategy, error) {
+func (v *validator) createVersionedStrategyFromYAML(compatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement, version string) (rest.RESTCreateUpdateStrategy, error) {
 	// Extract the CRD so we can use the schema.
 	// Use a universal deserializer as it correctly handles YAML and JSON decoding based on the expected key formatting for CRDs.
 	// N.B. DO NOT switch this to a YAML library - they do not correctly handle the OpenAPIV3Schema casing within the CRD version schema.

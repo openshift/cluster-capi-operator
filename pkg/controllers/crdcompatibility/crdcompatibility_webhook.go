@@ -169,8 +169,18 @@ func validateCompatibilitySchema(ctx context.Context, fldPath *field.Path, compa
 func validateCompatibilitySchemaCustomResourceDefinition(ctx context.Context, fldPath *field.Path, compatibilitySchema apiextensionsv1alpha1.CompatibilitySchema) (*apiextensionsv1.CustomResourceDefinition, field.ErrorList) {
 	// Parse the CRD in compatibilityCRD into a CRD object.
 	compatibilityCRD := &apiextensionsv1.CustomResourceDefinition{}
-	if err := yaml.Unmarshal([]byte(compatibilitySchema.CustomResourceDefinition.Data), &compatibilityCRD); err != nil {
-		return nil, field.ErrorList{field.Invalid(fldPath.Child("data"), compatibilitySchema.CustomResourceDefinition.Data, fmt.Errorf("%w: %w", errInvalidCompatibilityCRD, err).Error())}
+
+	switch compatibilitySchema.CustomResourceDefinition.Type {
+	case apiextensionsv1alpha1.CRDDataTypeYAML:
+		if err := yaml.Unmarshal([]byte(compatibilitySchema.CustomResourceDefinition.Data), &compatibilityCRD); err != nil {
+			return nil, field.ErrorList{field.Invalid(fldPath.Child("data"), compatibilitySchema.CustomResourceDefinition.Data, fmt.Errorf("%w: %w", errInvalidCompatibilityCRD, err).Error())}
+		}
+	default:
+		return nil, field.ErrorList{field.NotSupported(
+			fldPath.Child("type"),
+			compatibilitySchema.CustomResourceDefinition.Type,
+			[]string{string(apiextensionsv1alpha1.CRDDataTypeYAML)},
+		)}
 	}
 
 	if compatibilityCRD.APIVersion != "apiextensions.k8s.io/v1" || compatibilityCRD.Kind != "CustomResourceDefinition" {

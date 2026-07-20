@@ -102,6 +102,16 @@ func TestCRDRequirementValidator_ValidateCreate(t *testing.T) {
 			}(),
 			wantErr: MatchError(ContainSubstring("spec.group: Required value, spec.scope: Required value, spec.versions: Invalid value: null: must have exactly one version marked as storage version, spec.names.plural: Required value, spec.names.singular: Required value, spec.names.kind: Required value, spec.names.listKind: Required value, status.storedVersions: Invalid value: null: must have at least one stored version")),
 		},
+		{
+			name: "should reject CompatibilityRequirement with unsupported CRDData type",
+			obj: func() *apiextensionsv1alpha1.CompatibilityRequirement {
+				req := test.GenerateTestCompatibilityRequirement(testCRD)
+				req.Spec.CompatibilitySchema.CustomResourceDefinition.Type = "UNSUPPORTED"
+
+				return req
+			}(),
+			wantErr: MatchError(ContainSubstring("Unsupported value: \"UNSUPPORTED\": supported values: \"YAML\"")),
+		},
 	}
 
 	for _, tt := range tests {
