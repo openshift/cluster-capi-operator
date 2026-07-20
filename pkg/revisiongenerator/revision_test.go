@@ -464,7 +464,8 @@ func TestNewRenderedRevision(t *testing.T) {
 		g := NewWithT(t)
 
 		// Manifest with envsubst variable; revision built from this should
-		// produce the same contentID as one built from the expanded form.
+		// produce the same contentID as one built from the expanded form when
+		// the substitution is provided.
 		provWithVar := test.NewProviderImageManifests(t, "p1").
 			WithImageRef("img1").
 			WithManifests(`apiVersion: v1
@@ -484,8 +485,10 @@ data:
   v: "true"`).
 			Build()
 
-		rev1 := must(NewRenderedRevision([]providerimages.ProviderImageManifests{provWithVar}))(g)
-		rev2 := must(NewRenderedRevision([]providerimages.ProviderImageManifests{provExpanded}))(g)
+		subs := map[string]string{"EXP_BOOTSTRAP_FORMAT_IGNITION": "true"}
+
+		rev1 := must(NewRenderedRevision([]providerimages.ProviderImageManifests{provWithVar}, WithManifestSubstitutions(subs)))(g)
+		rev2 := must(NewRenderedRevision([]providerimages.ProviderImageManifests{provExpanded}, WithManifestSubstitutions(subs)))(g)
 
 		id1 := must(rev1.ContentID())(g)
 		id2 := must(rev2.ContentID())(g)
