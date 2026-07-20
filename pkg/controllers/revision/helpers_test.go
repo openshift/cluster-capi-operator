@@ -19,6 +19,7 @@ package revision
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"slices"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -34,6 +35,7 @@ import (
 	configv1 "github.com/openshift/api/config/v1"
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
+	"github.com/openshift/cluster-capi-operator/pkg/revisiongenerator"
 	"github.com/openshift/cluster-capi-operator/pkg/runtimetransformer"
 	"github.com/openshift/cluster-capi-operator/pkg/test"
 )
@@ -71,11 +73,12 @@ func newManagerWrapper(providerImgs []providerimages.ProviderImageManifests, tls
 		}
 	}
 
+	adoptExisting := runtimetransformer.NewSimpleRuntimeTransformer(&runtimetransformer.AdoptExistingTransformer{})
 	err = (&RevisionController{
 		Client:           mgr.GetClient(),
 		ProviderProfiles: imgs,
 		ReleaseVersion:   "4.18.0",
-		Transformers:     []runtimetransformer.RuntimeTransformer{&runtimetransformer.AdoptExistingTransformer{}},
+		Transformers:     []runtimetransformer.RuntimeTransformer{adoptExisting},
 	}).SetupWithManager(mgr, tlsOptions)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -208,3 +211,20 @@ func (s *stubTransformer) TransformObject(_ context.Context, _ client.Object) ([
 func (s *stubTransformer) Validate(_ client.Object) error {
 	return s.validateErr
 }
+
+var _ runtimetransformer.SimpleRuntimeTransformer = &stubTransformer{}
+
+// fakeRevision implements revisiongenerator.RenderedRevision for unit tests.
+type fakeRevision struct {
+	components []revisiongenerator.RenderedComponent
+}
+
+func (f *fakeRevision) ContentID() (string, error) { return "fake-content-id", nil }
+func (f *fakeRevision) Components() []revisiongenerator.RenderedComponent {
+	return f.components
+}
+func (f *fakeRevision) ForInstall(string, int64) (revisiongenerator.InstallerRevision, error) {
+	return nil, errors.New("not implemented")
+}
+
+var _ revisiongenerator.RenderedRevision = &fakeRevision{}

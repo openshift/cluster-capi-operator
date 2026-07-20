@@ -39,6 +39,8 @@ var ErrInvalidAdoptExistingAnnotation = errors.New("invalid " + revisiongenerato
 // recognised, returning an error that wraps ErrInvalidAdoptExistingAnnotation.
 type AdoptExistingTransformer struct{}
 
+var _ SimpleRuntimeTransformer = &AdoptExistingTransformer{}
+
 // TransformObject strips the adopt-existing annotation from obj (mutating it
 // in place) and returns a CollisionProtectionNone option when the annotation
 // value is "always".

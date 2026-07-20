@@ -132,7 +132,7 @@ func setupControllers(ctx context.Context, mgr ctrl.Manager, operatorConfig comm
 	}
 
 	transformers := []runtimetransformer.RuntimeTransformer{
-		&runtimetransformer.AdoptExistingTransformer{},
+		runtimetransformer.NewSimpleRuntimeTransformer(&runtimetransformer.AdoptExistingTransformer{}),
 	}
 
 	if err := (&revision.RevisionController{

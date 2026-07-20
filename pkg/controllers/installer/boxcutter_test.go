@@ -45,6 +45,8 @@ func (s *stubTransformer) Validate(_ client.Object) error {
 	return s.validateErr
 }
 
+var _ runtimetransformer.SimpleRuntimeTransformer = &stubTransformer{}
+
 // installerRevisionFromProfiles builds a bare InstallerRevision from the named
 // provider profiles without writing anything to the cluster.
 func installerRevisionFromProfiles(names ...string) revisiongenerator.InstallerRevision {
@@ -103,7 +105,7 @@ var _ = Describe("toBoxcutterRevision", func() {
 
 	Describe("transformer integration", func() {
 		It("should return an error when a transformer fails", func() {
-			stub := &stubTransformer{err: errors.New("transform failed")}
+			stub := runtimetransformer.NewSimpleRuntimeTransformer(&stubTransformer{err: errors.New("transform failed")})
 			rev := installerRevisionFromProfiles(providerCore)
 
 			_, err := toBoxcutterRevision(context.Background(), rev, []runtimetransformer.RuntimeTransformer{stub})
@@ -119,9 +121,9 @@ var _ = Describe("toBoxcutterRevision", func() {
 
 			baseOptCount := len(base.GetPhases()[0].GetReconcileOptions())
 
-			stub := &stubTransformer{opts: []boxcutter.PhaseReconcileOption{
+			stub := runtimetransformer.NewSimpleRuntimeTransformer(&stubTransformer{opts: []boxcutter.PhaseReconcileOption{
 				boxcutter.WithCollisionProtection(boxcutter.CollisionProtectionNone),
-			}}
+			}})
 			withTfm, err := toBoxcutterRevision(context.Background(), rev, []runtimetransformer.RuntimeTransformer{stub})
 			Expect(err).NotTo(HaveOccurred())
 

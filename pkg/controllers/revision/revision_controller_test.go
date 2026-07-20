@@ -577,11 +577,12 @@ var _ = Describe("RevisionController error handling", Serial, func() {
 	}, defaultNodeTimeout)
 
 	It("sets NonRetryableError when a transformer Validate fails", func(ctx context.Context) {
+		stub := runtimetransformer.NewSimpleRuntimeTransformer(&stubTransformer{validateErr: errors.New("invalid manifest")})
 		r := &RevisionController{
 			Client:           cl,
 			ProviderProfiles: defaultProviderImgs,
 			ReleaseVersion:   "4.18.0",
-			Transformers:     []runtimetransformer.RuntimeTransformer{&stubTransformer{validateErr: errors.New("invalid manifest")}},
+			Transformers:     []runtimetransformer.RuntimeTransformer{stub},
 		}
 
 		_, _ = r.Reconcile(ctx, reconcile.Request{NamespacedName: client.ObjectKey{Name: "cluster"}})

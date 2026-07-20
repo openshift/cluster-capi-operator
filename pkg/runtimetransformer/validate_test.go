@@ -65,7 +65,7 @@ func TestValidateTransformers(t *testing.T) {
 				&fakeComponent{name: componentName, crds: []client.Object{crdObj}},
 			},
 		}
-		stub := &stubTransformer{validateErr: errors.New("crd invalid")}
+		stub := NewSimpleRuntimeTransformer(&stubTransformer{validateErr: errors.New("crd invalid")})
 		g.Expect(ValidateTransformers([]RuntimeTransformer{stub}, rev)).
 			To(MatchError(SatisfyAll(
 				ContainSubstring(componentName),
@@ -81,7 +81,7 @@ func TestValidateTransformers(t *testing.T) {
 				&fakeComponent{name: componentName, objects: []client.Object{regularObj}},
 			},
 		}
-		stub := &stubTransformer{validateErr: errors.New("obj invalid")}
+		stub := NewSimpleRuntimeTransformer(&stubTransformer{validateErr: errors.New("obj invalid")})
 		g.Expect(ValidateTransformers([]RuntimeTransformer{stub}, rev)).
 			To(MatchError(SatisfyAll(
 				ContainSubstring(componentName),
@@ -97,7 +97,7 @@ func TestValidateTransformers(t *testing.T) {
 				&fakeComponent{name: componentName, crds: []client.Object{crdObj}, objects: []client.Object{regularObj}},
 			},
 		}
-		stub := &stubTransformer{validateErr: errors.New("invalid")}
+		stub := NewSimpleRuntimeTransformer(&stubTransformer{validateErr: errors.New("invalid")})
 		g.Expect(ValidateTransformers([]RuntimeTransformer{stub}, rev)).
 			To(MatchError(SatisfyAll(
 				ContainSubstring("my-crd"),
@@ -118,6 +118,8 @@ func (s *stubTransformer) TransformObject(_ context.Context, _ client.Object) ([
 func (s *stubTransformer) Validate(_ client.Object) error {
 	return s.validateErr
 }
+
+var _ SimpleRuntimeTransformer = &stubTransformer{}
 
 // fakeComponent implements revisiongenerator.RenderedComponent for unit tests
 // that need a revision without running the full revision generator.
@@ -143,3 +145,5 @@ func (f *fakeRevision) Components() []revisiongenerator.RenderedComponent {
 func (f *fakeRevision) ForInstall(string, int64) (revisiongenerator.InstallerRevision, error) {
 	return nil, errors.New("not implemented")
 }
+
+var _ revisiongenerator.RenderedRevision = &fakeRevision{}

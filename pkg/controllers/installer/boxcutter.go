@@ -40,9 +40,17 @@ func toBoxcutterRevision(ctx context.Context, installerRevision revisiongenerato
 
 	var phases []boxcutter.Phase
 
+	revisionTransformers := util.SliceMap(transformers, func(t runtimetransformer.RuntimeTransformer) runtimetransformer.RuntimeTransformer {
+		return t.WithRevision(ctx, installerRevision)
+	})
+
 	for _, component := range installerRevision.Components() {
+		componentTransformers := util.SliceMap(revisionTransformers, func(t runtimetransformer.RuntimeTransformer) runtimetransformer.RuntimeTransformer {
+			return t.WithComponent(ctx, component)
+		})
+
 		if crds := component.CRDs(); len(crds) > 0 {
-			xfmrOpts, err := applyTransformers(ctx, transformers, crds)
+			xfmrOpts, err := applyTransformers(ctx, componentTransformers, crds)
 			if err != nil {
 				return nil, err
 			}
@@ -53,7 +61,7 @@ func toBoxcutterRevision(ctx context.Context, installerRevision revisiongenerato
 		}
 
 		if objects := component.Objects(); len(objects) > 0 {
-			xfmrOpts, err := applyTransformers(ctx, transformers, objects)
+			xfmrOpts, err := applyTransformers(ctx, componentTransformers, objects)
 			if err != nil {
 				return nil, err
 			}
@@ -77,8 +85,8 @@ func applyTransformers(ctx context.Context, transformers []runtimetransformer.Ru
 	var opts []boxcutter.PhaseReconcileOption
 
 	for _, obj := range objects {
-		for _, t := range transformers {
-			objOpts, err := t.TransformObject(ctx, obj)
+		for _, x := range transformers {
+			objOpts, err := x.TransformObject(ctx, obj)
 			if err != nil {
 				return nil, fmt.Errorf("transforming %s: %w", client.ObjectKeyFromObject(obj), err)
 			}
