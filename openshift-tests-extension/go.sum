@@ -461,8 +461,6 @@ github.com/openshift/cluster-api-provider-baremetal v0.0.0-20250619124612-fb678f
 github.com/openshift/cluster-api-provider-baremetal v0.0.0-20250619124612-fb678fec5f7e/go.mod h1:xMvpaHoSmJ48WvX970zF82PPD9Wj8cMuZBFH6UxnvbE=
 github.com/openshift/cluster-autoscaler-operator v0.0.1-0.20250702183526-4eb64d553940 h1:NCCRJ7JfGLpRu4IQSV7Qw9VoAdIgF1BiwospisP06a8=
 github.com/openshift/cluster-autoscaler-operator v0.0.1-0.20250702183526-4eb64d553940/go.mod h1:zCklcJwbnaNx46KvR38Rh86uZdow5gvub4ATcNDopTM=
-github.com/openshift/cluster-capi-operator v0.0.0-20260425200736-89a8af46df2a h1:oZH3mjDJKZj+CuTLld/gPX4cMOKcPK5pzLVYVDma8vI=
-github.com/openshift/cluster-capi-operator v0.0.0-20260425200736-89a8af46df2a/go.mod h1:TT6AWfzFzzJpU4Zbj/eBi2QiQs83QMD6Iu4KahNNRCk=
 github.com/openshift/library-go v0.0.0-20260413093329-d2db42c961e1 h1:NdVGxmPGwWoMlhSmTxMMgp2SszLtAH3nJ6AMGBpXclY=
 github.com/openshift/library-go v0.0.0-20260413093329-d2db42c961e1/go.mod h1:3bi4pLpYRdVd1aEhsHfRTJkwxwPLfRZ+ZePn3RmJd2k=
 github.com/openshift/machine-api-operator v0.2.1-0.20260226113419-88465550a74b h1:LtHX/qyWHCOf/KqTAUHZOi4Q7cKErhm9f4jGYW4o2sk=

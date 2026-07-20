@@ -51,6 +51,38 @@ func resolveTimeout(defaultTimeout time.Duration, override []time.Duration) time
 	return defaultTimeout
 }
 
+// CreateAndCleanup creates an object and schedules its cleanup via DeferCleanup.
+// The cleanup deletes the object and waits for it to be fully removed.
+func CreateAndCleanup(ctx context.Context, cl client.Client, obj client.Object) {
+	GinkgoHelper()
+
+	Expect(cl.Create(ctx, obj)).To(Succeed(), "failed to create %T %s", obj, obj.GetName())
+
+	DeferCleanup(func() {
+		DeleteAndWait(ctx, cl, obj)
+	})
+}
+
+// DeleteAndWait deletes an object and waits for it to be fully removed.
+func DeleteAndWait(ctx context.Context, cl client.Client, obj client.Object, timeout ...time.Duration) {
+	GinkgoHelper()
+
+	key := client.ObjectKeyFromObject(obj)
+	gvk := obj.GetObjectKind().GroupVersionKind()
+
+	DeleteObjects(ctx, cl, obj)
+
+	By(fmt.Sprintf("Waiting for %T %s to be fully deleted", obj, key.Name))
+
+	Eventually(func() bool {
+		probe := obj.DeepCopyObject().(client.Object)
+		err := cl.Get(ctx, key, probe)
+
+		return apierrors.IsNotFound(err)
+	}).WithTimeout(resolveTimeout(WaitMedium, timeout)).WithPolling(RetryMedium).Should(BeTrue(),
+		"expected %s %s to be deleted", gvk.Kind, key.Name)
+}
+
 // DeleteObjects deletes the objects in the given list, tolerating NotFound errors.
 func DeleteObjects(ctx context.Context, cl client.Client, objs ...client.Object) {
 	GinkgoHelper()

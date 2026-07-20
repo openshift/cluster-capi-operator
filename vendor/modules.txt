@@ -288,6 +288,8 @@ github.com/charmbracelet/x/term
 # github.com/ckaznocha/intrange v0.3.1
 ## explicit; go 1.23.0
 github.com/ckaznocha/intrange
+# github.com/containerd/stargz-snapshotter/estargz v0.18.1
+## explicit; go 1.24.0
 # github.com/coreos/go-semver v0.3.1
 ## explicit; go 1.8
 github.com/coreos/go-semver/semver
@@ -331,6 +333,12 @@ github.com/distribution/reference
 ## explicit; go 1.13
 github.com/dlclark/regexp2
 github.com/dlclark/regexp2/syntax
+# github.com/docker/cli v29.2.1+incompatible
+## explicit
+# github.com/docker/distribution v2.8.3+incompatible
+## explicit
+# github.com/docker/docker-credential-helpers v0.9.3
+## explicit; go 1.21
 # github.com/drone/envsubst/v2 v2.0.0-20210730161058-179042472c46
 ## explicit; go 1.13
 github.com/drone/envsubst/v2
@@ -1131,6 +1139,8 @@ github.com/onsi/gomega/types
 # github.com/opencontainers/go-digest v1.0.0
 ## explicit; go 1.13
 github.com/opencontainers/go-digest
+# github.com/opencontainers/image-spec v1.1.1
+## explicit; go 1.18
 # github.com/openshift-eng/openshift-tests-extension v0.0.0-20260612102633-2fd5b2fa4221
 ## explicit; go 1.23.0
 github.com/openshift-eng/openshift-tests-extension/pkg/cmd
@@ -1281,7 +1291,7 @@ github.com/openshift/cluster-api-provider-baremetal/pkg/apis/baremetal/v1alpha1
 # github.com/openshift/cluster-autoscaler-operator v0.0.1-0.20250702183526-4eb64d553940
 ## explicit; go 1.23.0
 github.com/openshift/cluster-autoscaler-operator/pkg/apis/autoscaling/v1
-# github.com/openshift/cluster-capi-operator v0.0.0-20260425200736-89a8af46df2a
+# github.com/openshift/cluster-capi-operator v0.0.0-20260425200736-89a8af46df2a => .
 ## explicit; go 1.25.3
 # github.com/openshift/cluster-capi-operator/e2e v0.0.0-00010101000000-000000000000 => ./e2e
 ## explicit; go 1.25.3
@@ -1542,6 +1552,8 @@ github.com/uudashr/iface/internal/directive
 github.com/uudashr/iface/opaque
 github.com/uudashr/iface/unexported
 github.com/uudashr/iface/unused
+# github.com/vbatts/tar-split v0.12.2
+## explicit; go 1.17
 # github.com/x448/float16 v0.8.4
 ## explicit; go 1.11
 github.com/x448/float16
