@@ -19,6 +19,7 @@ package runtimetransformer
 import (
 	"context"
 	"errors"
+	"maps"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -33,16 +34,14 @@ type fakeRevisionWithSubs struct {
 	subs map[string]string
 }
 
-func (f *fakeRevisionWithSubs) ContentID() (string, error)                        { return "fake", nil }
-func (f *fakeRevisionWithSubs) Components() []revisiongenerator.RenderedComponent { return nil }
+func (f *fakeRevisionWithSubs) ContentID() (string, error)                      { return "fake", nil }
+func (f *fakeRevisionWithSubs) Components() []revisiongenerator.ParsedComponent { return nil }
 func (f *fakeRevisionWithSubs) ForInstall(string, int64) (revisiongenerator.InstallerRevision, error) {
 	return nil, errors.New("not implemented")
 }
 func (f *fakeRevisionWithSubs) ManifestSubstitutions() map[string]string {
 	out := make(map[string]string, len(f.subs))
-	for k, v := range f.subs {
-		out[k] = v
-	}
+	maps.Copy(out, f.subs)
 
 	return out
 }

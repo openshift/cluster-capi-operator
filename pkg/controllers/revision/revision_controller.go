@@ -136,7 +136,7 @@ func (r *RevisionController) reconcile(ctx context.Context, log logr.Logger) ope
 	return opresult.Success()
 }
 
-func (r *RevisionController) generateDesiredRevision(ctx context.Context) (revisiongenerator.RenderedRevision, *operatorstatus.ReconcileResult) {
+func (r *RevisionController) generateDesiredRevision(ctx context.Context) (revisiongenerator.ParsedRevision, *operatorstatus.ReconcileResult) {
 	infra := &configv1.Infrastructure{}
 	if err := r.Get(ctx, client.ObjectKey{Name: infrastructureName}, infra); err != nil {
 		return nil, opresult.ErrorP(fmt.Errorf("fetching infrastructure: %w", err))
@@ -149,9 +149,9 @@ func (r *RevisionController) generateDesiredRevision(ctx context.Context) (revis
 	// Build ordered component list from provider metadata
 	providerComponents := r.buildComponentList(infra.Status.PlatformStatus.Type)
 
-	revision, err := revisiongenerator.NewRenderedRevision(providerComponents, revisiongenerator.WithManifestSubstitutions(r.manifestSubstitutions))
+	revision, err := revisiongenerator.NewParsedRevision(providerComponents, revisiongenerator.WithManifestSubstitutions(r.manifestSubstitutions))
 	if err != nil {
-		return nil, opresult.ErrorP(fmt.Errorf("error creating rendered revision: %w", err))
+		return nil, opresult.ErrorP(fmt.Errorf("error creating parsed revision: %w", err))
 	}
 
 	if err := runtimetransformer.ValidateTransformers(r.Transformers, revision); err != nil {
@@ -161,7 +161,7 @@ func (r *RevisionController) generateDesiredRevision(ctx context.Context) (revis
 	return revision, nil
 }
 
-func (r *RevisionController) mergeRevisions(log logr.Logger, apiRevisions []operatorv1alpha1.ClusterAPIInstallerRevision, desiredRevision revisiongenerator.RenderedRevision) ([]operatorv1alpha1.ClusterAPIInstallerRevision, error) {
+func (r *RevisionController) mergeRevisions(log logr.Logger, apiRevisions []operatorv1alpha1.ClusterAPIInstallerRevision, desiredRevision revisiongenerator.ParsedRevision) ([]operatorv1alpha1.ClusterAPIInstallerRevision, error) {
 	// If there's no current revision we have nothing to merge
 	if desiredRevision == nil {
 		return apiRevisions, nil

@@ -27,7 +27,7 @@ import (
 
 // ValidateTransformers calls Validate on each transformer for every object in the revision.
 // All errors are collected and returned together via errors.Join.
-func ValidateTransformers(transformers []RuntimeTransformer, rev revisiongenerator.RenderedRevision) (reterr error) {
+func ValidateTransformers(transformers []RuntimeTransformer, rev revisiongenerator.ParsedRevision) (reterr error) {
 	for _, component := range rev.Components() {
 		for _, obj := range component.Objects() {
 			for _, t := range transformers {

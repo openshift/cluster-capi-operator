@@ -28,10 +28,10 @@ import (
 // unmarshalling and before objects are collected into boxcutter phases.
 type RuntimeTransformer interface {
 	// WithRevision returns a new transformer that will be used for the given revision.
-	WithRevision(ctx context.Context, revision revisiongenerator.RenderedRevision) RuntimeTransformer
+	WithRevision(ctx context.Context, revision revisiongenerator.ParsedRevision) RuntimeTransformer
 
 	// WithComponent returns a new transformer that will be used for the given component.
-	WithComponent(ctx context.Context, component revisiongenerator.RenderedComponent) RuntimeTransformer
+	WithComponent(ctx context.Context, component revisiongenerator.ParsedComponent) RuntimeTransformer
 
 	SimpleRuntimeTransformer
 }
@@ -59,11 +59,11 @@ func NewSimpleRuntimeTransformer(transformer SimpleRuntimeTransformer) RuntimeTr
 }
 
 // WithRevision implements RuntimeTransformer.
-func (s *simpleRuntimeTransformer) WithRevision(ctx context.Context, revision revisiongenerator.RenderedRevision) RuntimeTransformer {
+func (s *simpleRuntimeTransformer) WithRevision(ctx context.Context, revision revisiongenerator.ParsedRevision) RuntimeTransformer {
 	return s
 }
 
 // WithComponent implements RuntimeTransformer.
-func (s *simpleRuntimeTransformer) WithComponent(ctx context.Context, component revisiongenerator.RenderedComponent) RuntimeTransformer {
+func (s *simpleRuntimeTransformer) WithComponent(ctx context.Context, component revisiongenerator.ParsedComponent) RuntimeTransformer {
 	return s
 }

@@ -49,13 +49,13 @@ func profile(t *testing.T, name, imageRef, profileName, manifestContent string) 
 // contentIDForProfiles computes the contentID for a set of profiles.
 func contentIDForProfiles(g *WithT, profiles ...providerimages.ProviderImageManifests) string {
 	g.THelper()
-	rev := must(NewRenderedRevision(profiles))(g)
+	rev := must(NewParsedRevision(profiles))(g)
 
 	return must(rev.ContentID())(g)
 }
 
 // forInstall creates an InstallerRevision from a RenderedRevision, failing the test on error.
-func forInstall(g *WithT, rev RenderedRevision, releaseVersion string, revisionIndex int64) InstallerRevision { //nolint:unparam
+func forInstall(g *WithT, rev ParsedRevision, releaseVersion string, revisionIndex int64) InstallerRevision { //nolint:unparam
 	g.THelper()
 	return must(rev.ForInstall(releaseVersion, revisionIndex))(g)
 }

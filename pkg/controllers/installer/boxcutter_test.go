@@ -53,11 +53,11 @@ func installerRevisionFromProfiles(names ...string) revisiongenerator.InstallerR
 	GinkgoHelper()
 
 	profiles := lookupProfiles(names...)
-	rendered, err := revisiongenerator.NewRenderedRevision(profiles)
+	parsed, err := revisiongenerator.NewParsedRevision(profiles)
 	Expect(err).NotTo(HaveOccurred(), "NewRenderedRevision should not fail for valid profiles")
 
-	rev, err := rendered.ForInstall("4.18.0-test", 1)
-	Expect(err).NotTo(HaveOccurred(), "ForInstall should not fail for a valid rendered revision")
+	rev, err := parsed.ForInstall("4.18.0-test", 1)
+	Expect(err).NotTo(HaveOccurred(), "ForInstall should not fail for a valid parsed revision")
 
 	return rev
 }

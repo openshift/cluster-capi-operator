@@ -44,12 +44,12 @@ func NewManagedByTransformer() *ManagedByTransformer {
 }
 
 // WithRevision is a no-op; managed-by labelling does not need revision context.
-func (m *ManagedByTransformer) WithRevision(_ context.Context, _ revisiongenerator.RenderedRevision) RuntimeTransformer {
+func (m *ManagedByTransformer) WithRevision(_ context.Context, _ revisiongenerator.ParsedRevision) RuntimeTransformer {
 	return m
 }
 
 // WithComponent returns a new ManagedByTransformer with the component name set.
-func (m *ManagedByTransformer) WithComponent(_ context.Context, component revisiongenerator.RenderedComponent) RuntimeTransformer {
+func (m *ManagedByTransformer) WithComponent(_ context.Context, component revisiongenerator.ParsedComponent) RuntimeTransformer {
 	return &ManagedByTransformer{componentName: component.Name()}
 }
 

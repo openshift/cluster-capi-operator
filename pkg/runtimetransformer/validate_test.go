@@ -41,7 +41,7 @@ func TestValidateTransformers(t *testing.T) {
 	t.Run("nil transformers returns no error", func(t *testing.T) {
 		g := NewWithT(t)
 		rev := &fakeRevision{
-			components: []revisiongenerator.RenderedComponent{
+			components: []revisiongenerator.ParsedComponent{
 				&fakeComponent{name: componentName, objects: []client.Object{crdObj, regularObj}},
 			},
 		}
@@ -51,7 +51,7 @@ func TestValidateTransformers(t *testing.T) {
 	t.Run("empty transformers returns no error", func(t *testing.T) {
 		g := NewWithT(t)
 		rev := &fakeRevision{
-			components: []revisiongenerator.RenderedComponent{
+			components: []revisiongenerator.ParsedComponent{
 				&fakeComponent{name: componentName, objects: []client.Object{crdObj, regularObj}},
 			},
 		}
@@ -61,7 +61,7 @@ func TestValidateTransformers(t *testing.T) {
 	t.Run("validates objects and includes component name in error", func(t *testing.T) {
 		g := NewWithT(t)
 		rev := &fakeRevision{
-			components: []revisiongenerator.RenderedComponent{
+			components: []revisiongenerator.ParsedComponent{
 				&fakeComponent{name: componentName, objects: []client.Object{crdObj}},
 			},
 		}
@@ -77,7 +77,7 @@ func TestValidateTransformers(t *testing.T) {
 	t.Run("validates all objects and includes component name in error", func(t *testing.T) {
 		g := NewWithT(t)
 		rev := &fakeRevision{
-			components: []revisiongenerator.RenderedComponent{
+			components: []revisiongenerator.ParsedComponent{
 				&fakeComponent{name: componentName, objects: []client.Object{regularObj}},
 			},
 		}
@@ -93,7 +93,7 @@ func TestValidateTransformers(t *testing.T) {
 	t.Run("collects errors from all objects", func(t *testing.T) {
 		g := NewWithT(t)
 		rev := &fakeRevision{
-			components: []revisiongenerator.RenderedComponent{
+			components: []revisiongenerator.ParsedComponent{
 				&fakeComponent{name: componentName, objects: []client.Object{crdObj, regularObj}},
 			},
 		}
@@ -133,11 +133,11 @@ func (f *fakeComponent) Objects() []client.Object { return f.objects }
 
 // fakeRevision implements revisiongenerator.RenderedRevision for unit tests.
 type fakeRevision struct {
-	components []revisiongenerator.RenderedComponent
+	components []revisiongenerator.ParsedComponent
 }
 
 func (f *fakeRevision) ContentID() (string, error) { return "fake-content-id", nil }
-func (f *fakeRevision) Components() []revisiongenerator.RenderedComponent {
+func (f *fakeRevision) Components() []revisiongenerator.ParsedComponent {
 	return f.components
 }
 func (f *fakeRevision) ForInstall(string, int64) (revisiongenerator.InstallerRevision, error) {
@@ -145,4 +145,4 @@ func (f *fakeRevision) ForInstall(string, int64) (revisiongenerator.InstallerRev
 }
 func (f *fakeRevision) ManifestSubstitutions() map[string]string { return nil }
 
-var _ revisiongenerator.RenderedRevision = &fakeRevision{}
+var _ revisiongenerator.ParsedRevision = &fakeRevision{}
