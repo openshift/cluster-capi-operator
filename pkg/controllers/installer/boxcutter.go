@@ -18,6 +18,7 @@ package installer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 
@@ -45,6 +46,8 @@ func toBoxcutterRevision(ctx context.Context, installerRevision revisiongenerato
 		return t.WithRevision(ctx, installerRevision)
 	})
 
+	var allErrs []error
+
 	for _, component := range installerRevision.Components() {
 		componentTransformers := util.SliceMap(revisionTransformers, func(t runtimetransformer.RuntimeTransformer) runtimetransformer.RuntimeTransformer {
 			return t.WithComponent(ctx, component)
@@ -64,24 +67,28 @@ func toBoxcutterRevision(ctx context.Context, installerRevision revisiongenerato
 		if len(crds) > 0 {
 			xfmrOpts, err := applyTransformers(ctx, componentTransformers, crds)
 			if err != nil {
-				return nil, err
+				allErrs = append(allErrs, err)
+			} else {
+				allOpts := slices.Concat(probeOpts, xfmrOpts)
+				phases = append(phases, boxcutter.NewPhase(component.Name()+"-crds", crds).
+					WithReconcileOptions(allOpts...))
 			}
-
-			allOpts := slices.Concat(probeOpts, xfmrOpts)
-			phases = append(phases, boxcutter.NewPhase(component.Name()+"-crds", crds).
-				WithReconcileOptions(allOpts...))
 		}
 
 		if len(objects) > 0 {
 			xfmrOpts, err := applyTransformers(ctx, componentTransformers, objects)
 			if err != nil {
-				return nil, err
+				allErrs = append(allErrs, err)
+			} else {
+				allOpts := slices.Concat(probeOpts, xfmrOpts)
+				phases = append(phases, boxcutter.NewPhase(component.Name(), objects).
+					WithReconcileOptions(allOpts...))
 			}
-
-			allOpts := slices.Concat(probeOpts, xfmrOpts)
-			phases = append(phases, boxcutter.NewPhase(component.Name(), objects).
-				WithReconcileOptions(allOpts...))
 		}
+	}
+
+	if len(allErrs) > 0 {
+		return nil, errors.Join(allErrs...)
 	}
 
 	return boxcutter.NewRevision(
@@ -92,19 +99,33 @@ func toBoxcutterRevision(ctx context.Context, installerRevision revisiongenerato
 }
 
 // applyTransformers calls each transformer on each object in order, accumulating
-// the phase-level reconcile options they return. It returns on the first error.
+// the phase-level reconcile options they return. Errors from every object and
+// transformer are collected and joined via errors.Join.
 func applyTransformers(ctx context.Context, transformers []runtimetransformer.RuntimeTransformer, objects []client.Object) ([]boxcutter.PhaseReconcileOption, error) {
-	var opts []boxcutter.PhaseReconcileOption
+	var (
+		opts    []boxcutter.PhaseReconcileOption
+		allErrs []error
+	)
 
 	for _, obj := range objects {
+		var objErrs []error
+
 		for _, x := range transformers {
 			objOpts, err := x.TransformObject(ctx, obj)
 			if err != nil {
-				return nil, fmt.Errorf("transforming %s: %w", client.ObjectKeyFromObject(obj), err)
+				objErrs = append(objErrs, err)
+			} else {
+				opts = append(opts, objOpts...)
 			}
-
-			opts = append(opts, objOpts...)
 		}
+
+		if len(objErrs) > 0 {
+			allErrs = append(allErrs, fmt.Errorf("transforming %s: %w", client.ObjectKeyFromObject(obj), errors.Join(objErrs...)))
+		}
+	}
+
+	if len(allErrs) > 0 {
+		return nil, errors.Join(allErrs...)
 	}
 
 	return opts, nil

@@ -21,11 +21,13 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"strconv"
 
 	"github.com/drone/envsubst/v2"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"pkg.package-operator.run/boxcutter"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/openshift/cluster-capi-operator/pkg/revisiongenerator"
 )
@@ -56,6 +58,10 @@ func NewEnvsubstTransformer(staticSubs map[string]string) *EnvsubstTransformer {
 // take precedence.
 func (e *EnvsubstTransformer) WithRevision(_ context.Context, revision revisiongenerator.ParsedRevision) RuntimeTransformer {
 	merged := revision.ManifestSubstitutions()
+	if merged == nil {
+		merged = make(map[string]string, len(e.staticSubs))
+	}
+
 	maps.Copy(merged, e.staticSubs)
 
 	return &EnvsubstTransformer{
@@ -74,77 +80,91 @@ func (e *EnvsubstTransformer) WithComponent(_ context.Context, _ revisiongenerat
 func (e *EnvsubstTransformer) TransformObject(_ context.Context, obj client.Object) ([]boxcutter.PhaseReconcileOption, error) {
 	u, ok := obj.(*unstructured.Unstructured)
 	if !ok {
-		return nil, fmt.Errorf("%w, got %T", errNotUnstructured, obj)
+		// This is a programming contract violation.
+		return nil, fmt.Errorf("%w, got %T", reconcile.TerminalError(errNotUnstructured), obj)
 	}
 
-	if err := expandMapStrings(u.Object, e.mergedSubs); err != nil {
-		return nil, fmt.Errorf("expanding envsubst variables in %s: %w", obj.GetName(), err)
+	if errs := expandMapStrings(u.Object, e.mergedSubs); len(errs) > 0 {
+		return nil, fmt.Errorf("expanding envsubst variables in %s: %w", obj.GetName(), reconcile.TerminalError(errors.Join(errs...)))
 	}
 
 	return nil, nil
 }
 
-// Validate is a no-op for EnvsubstTransformer.
-func (e *EnvsubstTransformer) Validate(_ client.Object) error {
-	return nil
-}
+// Validate checks that all string values in obj can be parsed as envsubst
+// templates, catching malformed expressions (e.g. unclosed braces) before
+// install time.
+func (e *EnvsubstTransformer) Validate(obj client.Object) error {
+	u, ok := obj.(*unstructured.Unstructured)
+	if !ok {
+		return fmt.Errorf("%w, got %T", reconcile.TerminalError(errNotUnstructured), obj)
+	}
 
-// expandMapStrings recursively walks a map[string]interface{} and calls
-// envsubst.Eval on every string leaf value.
-func expandMapStrings(m map[string]interface{}, subs map[string]string) error {
-	for k, val := range m {
-		expanded, err := expandValue(val, subs)
-		if err != nil {
-			return err
-		}
-
-		m[k] = expanded
+	if errs := validateMapStrings(u.Object); len(errs) > 0 {
+		return fmt.Errorf("validating envsubst variables in %s: %w", obj.GetName(), reconcile.TerminalError(errors.Join(errs...)))
 	}
 
 	return nil
 }
 
-// expandSliceStrings recursively walks a []interface{} and calls envsubst.Eval
-// on every string element.
-func expandSliceStrings(s []interface{}, subs map[string]string) error {
-	for i, elem := range s {
-		expanded, err := expandValue(elem, subs)
-		if err != nil {
-			return err
-		}
-
-		s[i] = expanded
-	}
-
-	return nil
-}
-
-// expandValue expands a single value: strings are envsubst-expanded, maps and
-// slices are walked recursively, and all other types are returned unchanged.
-func expandValue(val interface{}, subs map[string]string) (interface{}, error) {
+// walkUnstructured recursively traverses map[string]any and []any, applying fn to string leaves.
+func walkUnstructured(key string, val any, fn func(key string, s string) (any, error)) (any, []error) {
 	switch t := val.(type) {
 	case string:
-		expanded, err := envsubst.Eval(t, func(key string) string {
-			return subs[key]
-		})
+		value, err := fn(key, t)
 		if err != nil {
-			return nil, fmt.Errorf("envsubst.Eval: %w", err)
+			return nil, []error{err}
 		}
 
-		return expanded, nil
-	case map[string]interface{}:
-		if err := expandMapStrings(t, subs); err != nil {
-			return nil, err
+		return value, nil
+	case map[string]any:
+		var reterrs []error
+
+		for k, elem := range t {
+			value, errs := walkUnstructured(key+"."+k, elem, fn)
+			reterrs = append(reterrs, errs...)
+			t[k] = value
 		}
 
-		return t, nil
-	case []interface{}:
-		if err := expandSliceStrings(t, subs); err != nil {
-			return nil, err
+		return t, reterrs
+	case []any:
+		var reterrs []error
+
+		for i, elem := range t {
+			value, errs := walkUnstructured(key+"["+strconv.Itoa(i)+"]", elem, fn)
+			reterrs = append(reterrs, errs...)
+			t[i] = value
 		}
 
-		return t, nil
+		return t, reterrs
 	default:
 		return val, nil
 	}
+}
+
+func expandMapStrings(m map[string]any, subs map[string]string) []error {
+	_, err := walkUnstructured("", m, func(key, s string) (any, error) {
+		expanded, err := envsubst.Eval(s, func(k string) string {
+			return subs[k]
+		})
+		if err != nil {
+			return nil, fmt.Errorf("invalid envsubst expression at %q: %w", key, err)
+		}
+
+		return expanded, nil
+	})
+
+	return err
+}
+
+func validateMapStrings(m map[string]any) []error {
+	_, err := walkUnstructured("", m, func(key, s string) (any, error) {
+		if _, err := envsubst.Parse(s); err != nil {
+			return nil, fmt.Errorf("invalid envsubst expression at %q: %w", key, err)
+		}
+
+		return s, nil
+	})
+
+	return err
 }

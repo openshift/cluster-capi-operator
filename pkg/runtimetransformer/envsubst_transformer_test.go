@@ -184,6 +184,21 @@ func TestEnvsubstTransformerTransformObject(t *testing.T) {
 		g.Expect(err).To(HaveOccurred())
 		g.Expect(err.Error()).To(ContainSubstring("EnvsubstTransformer"))
 	})
+
+	t.Run("aggregates errors from multiple malformed expressions", func(t *testing.T) {
+		g := NewWithT(t)
+
+		tfm := NewEnvsubstTransformer(nil)
+		obj := makeUnstructured(map[string]interface{}{
+			"first":  "${UNCLOSED",
+			"second": "${ALSO UNCLOSED",
+		})
+
+		_, err := tfm.TransformObject(ctx, obj)
+		g.Expect(err).To(HaveOccurred())
+		g.Expect(err.Error()).To(ContainSubstring(".first"))
+		g.Expect(err.Error()).To(ContainSubstring(".second"))
+	})
 }
 
 func TestEnvsubstTransformerWithRevision(t *testing.T) {
@@ -231,8 +246,89 @@ func TestEnvsubstTransformerWithRevision(t *testing.T) {
 }
 
 func TestEnvsubstTransformerValidate(t *testing.T) {
-	g := NewWithT(t)
+	t.Run("accepts well-formed expressions", func(t *testing.T) {
+		g := NewWithT(t)
 
-	tfm := NewEnvsubstTransformer(nil)
-	g.Expect(tfm.Validate(&corev1.ConfigMap{})).To(Succeed())
+		obj := makeUnstructured(map[string]interface{}{
+			"simple":  "${VAR}",
+			"default": "${VAR:-fallback}",
+			"plain":   "no substitution",
+			"nested": map[string]interface{}{
+				"deep": "${NESTED}",
+			},
+			"list": []interface{}{"${ITEM}", "plain"},
+		})
+		tfm := NewEnvsubstTransformer(nil)
+		g.Expect(tfm.Validate(obj)).To(Succeed())
+	})
+
+	t.Run("rejects malformed expression", func(t *testing.T) {
+		g := NewWithT(t)
+		obj := makeUnstructured(map[string]interface{}{
+			"mapKey": "${UNCLOSED",
+		})
+		tfm := NewEnvsubstTransformer(nil)
+		g.Expect(tfm.Validate(obj)).To(MatchError(ContainSubstring(".mapKey")))
+	})
+
+	t.Run("rejects malformed expression in nested map", func(t *testing.T) {
+		g := NewWithT(t)
+
+		obj := makeUnstructured(map[string]interface{}{
+			"nested": map[string]interface{}{
+				"deep": "${UNCLOSED",
+			},
+		})
+		tfm := NewEnvsubstTransformer(nil)
+		g.Expect(tfm.Validate(obj)).To(MatchError(ContainSubstring(".nested.deep")))
+	})
+
+	t.Run("rejects malformed expression in slice", func(t *testing.T) {
+		g := NewWithT(t)
+
+		obj := makeUnstructured(map[string]interface{}{
+			"list": []interface{}{"${UNCLOSED"},
+		})
+		tfm := NewEnvsubstTransformer(nil)
+		g.Expect(tfm.Validate(obj)).To(MatchError(ContainSubstring(".list[0]")))
+	})
+
+	t.Run("rejects non-Unstructured object", func(t *testing.T) {
+		g := NewWithT(t)
+
+		tfm := NewEnvsubstTransformer(nil)
+		g.Expect(tfm.Validate(&corev1.ConfigMap{})).To(MatchError(ContainSubstring("ConfigMap")))
+	})
+
+	t.Run("returns all errors from multiple malformed expressions", func(t *testing.T) {
+		g := NewWithT(t)
+
+		obj := makeUnstructured(map[string]interface{}{
+			"first":  "${UNCLOSED",
+			"second": "${ALSO UNCLOSED",
+		})
+		tfm := NewEnvsubstTransformer(nil)
+		err := tfm.Validate(obj)
+		g.Expect(err).To(HaveOccurred())
+		g.Expect(err.Error()).To(ContainSubstring(".first"))
+		g.Expect(err.Error()).To(ContainSubstring(".second"))
+	})
+
+	t.Run("returns all errors across mixed map and slice nesting", func(t *testing.T) {
+		g := NewWithT(t)
+
+		obj := makeUnstructured(map[string]interface{}{
+			"spec": map[string]interface{}{
+				"items": []interface{}{
+					map[string]interface{}{"value": "${UNCLOSED"},
+				},
+			},
+			"other": "${ALSO UNCLOSED",
+		})
+		tfm := NewEnvsubstTransformer(nil)
+		err := tfm.Validate(obj)
+		g.Expect(err).To(HaveOccurred())
+		g.Expect(err.Error()).To(ContainSubstring(".spec.items[0].value"))
+		g.Expect(err.Error()).To(ContainSubstring(".other"))
+	})
 }

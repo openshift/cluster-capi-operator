@@ -23,13 +23,14 @@ import (
 
 	"pkg.package-operator.run/boxcutter"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/openshift/cluster-capi-operator/pkg/revisiongenerator"
 )
 
 // ErrInvalidAdoptExistingAnnotation is returned by Validate when an object
 // carries an adopt-existing annotation with an unrecognised value.
-var ErrInvalidAdoptExistingAnnotation = errors.New("invalid " + revisiongenerator.AdoptExistingAnnotation + " annotation value")
+var ErrInvalidAdoptExistingAnnotation = errors.New("invalid annotation value")
 
 // AdoptExistingTransformer implements RuntimeTransformer for the adopt-existing
 // annotation. It strips the annotation from each object and, for objects
@@ -84,8 +85,9 @@ func (a *AdoptExistingTransformer) Validate(obj client.Object) error {
 	case revisiongenerator.AdoptExistingAlways, revisiongenerator.AdoptExistingNever:
 		return nil
 	default:
-		return fmt.Errorf("%w: %q on %s %s/%s",
-			ErrInvalidAdoptExistingAnnotation,
+		return fmt.Errorf("%w: %s=%q on %s %s/%s",
+			reconcile.TerminalError(ErrInvalidAdoptExistingAnnotation),
+			revisiongenerator.AdoptExistingAnnotation,
 			value,
 			obj.GetObjectKind().GroupVersionKind().Kind,
 			obj.GetNamespace(),

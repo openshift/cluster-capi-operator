@@ -104,6 +104,48 @@ func TestValidateTransformers(t *testing.T) {
 				ContainSubstring("my-obj"),
 			)))
 	})
+
+	t.Run("aggregates errors across multiple components rather than stopping at the first", func(t *testing.T) {
+		g := NewWithT(t)
+
+		objA := &unstructured.Unstructured{}
+		objA.SetName("obj-a")
+
+		objB := &unstructured.Unstructured{}
+		objB.SetName("obj-b")
+
+		rev := &fakeRevision{
+			components: []revisiongenerator.ParsedComponent{
+				&fakeComponent{name: "comp-1", objects: []client.Object{objA}},
+				&fakeComponent{name: "comp-2", objects: []client.Object{objB}},
+			},
+		}
+		stub := NewSimpleRuntimeTransformer(&stubTransformer{validateErr: errors.New("invalid")})
+
+		err := ValidateTransformers([]RuntimeTransformer{stub}, rev)
+		g.Expect(err).To(HaveOccurred())
+		g.Expect(err.Error()).To(ContainSubstring("comp-1"))
+		g.Expect(err.Error()).To(ContainSubstring("obj-a"))
+		g.Expect(err.Error()).To(ContainSubstring("comp-2"))
+		g.Expect(err.Error()).To(ContainSubstring("obj-b"))
+	})
+
+	t.Run("aggregates errors from multiple transformers on the same object", func(t *testing.T) {
+		g := NewWithT(t)
+
+		rev := &fakeRevision{
+			components: []revisiongenerator.ParsedComponent{
+				&fakeComponent{name: componentName, objects: []client.Object{regularObj}},
+			},
+		}
+		stubA := NewSimpleRuntimeTransformer(&stubTransformer{validateErr: errors.New("error-a")})
+		stubB := NewSimpleRuntimeTransformer(&stubTransformer{validateErr: errors.New("error-b")})
+
+		err := ValidateTransformers([]RuntimeTransformer{stubA, stubB}, rev)
+		g.Expect(err).To(HaveOccurred())
+		g.Expect(err.Error()).To(ContainSubstring("error-a"))
+		g.Expect(err.Error()).To(ContainSubstring("error-b"))
+	})
 }
 
 // stubTransformer is a test double for RuntimeTransformer.

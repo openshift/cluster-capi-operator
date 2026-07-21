@@ -19,6 +19,7 @@ package installer
 import (
 	"context"
 	"errors"
+	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -131,6 +132,68 @@ var _ = Describe("toBoxcutterRevision", func() {
 				BeNumerically(">", baseOptCount),
 				"transformer options should augment the phase reconcile options",
 			)
+		})
+	})
+
+	Describe("error aggregation", func() {
+		It("aggregates errors from multiple objects in the same phase", func() {
+			// providerMixed has one CRD and one ConfigMap, so both the CRD phase
+			// and the objects phase contribute exactly one failure each.
+			rev := installerRevisionFromProfiles(providerMixed)
+			stub := runtimetransformer.NewSimpleRuntimeTransformer(&stubTransformer{err: errors.New("boom")})
+
+			_, err := toBoxcutterRevision(context.Background(), rev, []runtimetransformer.RuntimeTransformer{stub})
+
+			Expect(err).To(HaveOccurred())
+			Expect(strings.Count(err.Error(), "boom")).To(Equal(2),
+				"expected one wrapped error per failing object, not just the first")
+		})
+
+		It("aggregates errors from multiple transformers on the same object", func() {
+			rev := installerRevisionFromProfiles(providerCore)
+			stubA := runtimetransformer.NewSimpleRuntimeTransformer(&stubTransformer{err: errors.New("first failure")})
+			stubB := runtimetransformer.NewSimpleRuntimeTransformer(&stubTransformer{err: errors.New("second failure")})
+
+			_, err := toBoxcutterRevision(context.Background(), rev,
+				[]runtimetransformer.RuntimeTransformer{stubA, stubB})
+
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("first failure"))
+			Expect(err.Error()).To(ContainSubstring("second failure"))
+		})
+
+		It("aggregates errors across the CRD and non-CRD phases of the same component", func() {
+			// providerMixed has one CRD and one ConfigMap, in the same component,
+			// but built into two separate phases (crds, objects).
+			rev := installerRevisionFromProfiles(providerMixed)
+			stub := runtimetransformer.NewSimpleRuntimeTransformer(&stubTransformer{err: errors.New("boom")})
+
+			_, err := toBoxcutterRevision(context.Background(), rev, []runtimetransformer.RuntimeTransformer{stub})
+
+			Expect(err).To(HaveOccurred())
+			Expect(strings.Count(err.Error(), "boom")).To(Equal(2),
+				"expected failures from both the CRD phase and the objects phase")
+		})
+
+		It("aggregates errors across multiple components rather than stopping at the first", func() {
+			rev := installerRevisionFromProfiles(providerCore, providerInfra)
+			stub := runtimetransformer.NewSimpleRuntimeTransformer(&stubTransformer{err: errors.New("boom")})
+
+			_, err := toBoxcutterRevision(context.Background(), rev, []runtimetransformer.RuntimeTransformer{stub})
+
+			Expect(err).To(HaveOccurred())
+			Expect(strings.Count(err.Error(), "boom")).To(Equal(2),
+				"expected failures from both components, not just the first one processed")
+		})
+
+		It("does not build a Revision when any object fails transformation", func() {
+			rev := installerRevisionFromProfiles(providerCore, providerInfra)
+			stub := runtimetransformer.NewSimpleRuntimeTransformer(&stubTransformer{err: errors.New("boom")})
+
+			bcRev, err := toBoxcutterRevision(context.Background(), rev, []runtimetransformer.RuntimeTransformer{stub})
+
+			Expect(err).To(HaveOccurred())
+			Expect(bcRev).To(BeNil())
 		})
 	})
 })

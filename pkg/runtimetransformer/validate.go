@@ -27,16 +27,18 @@ import (
 
 // ValidateTransformers calls Validate on each transformer for every object in the revision.
 // All errors are collected and returned together via errors.Join.
-func ValidateTransformers(transformers []RuntimeTransformer, rev revisiongenerator.ParsedRevision) (reterr error) {
+func ValidateTransformers(transformers []RuntimeTransformer, rev revisiongenerator.ParsedRevision) error {
+	var allErrs []error
+
 	for _, component := range rev.Components() {
 		for _, obj := range component.Objects() {
 			for _, t := range transformers {
 				if err := t.Validate(obj); err != nil {
-					reterr = errors.Join(reterr, fmt.Errorf("%s %s: %w", component.Name(), client.ObjectKeyFromObject(obj), err))
+					allErrs = append(allErrs, fmt.Errorf("%s %s: %w", component.Name(), client.ObjectKeyFromObject(obj), err))
 				}
 			}
 		}
 	}
 
-	return reterr
+	return errors.Join(allErrs...)
 }
