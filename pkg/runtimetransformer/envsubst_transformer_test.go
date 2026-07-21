@@ -25,6 +25,7 @@ import (
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/cluster-capi-operator/pkg/revisiongenerator"
 )
@@ -53,282 +54,258 @@ func makeUnstructured(data map[string]interface{}) *unstructured.Unstructured {
 	return u
 }
 
+type anyMap = map[string]any
+
 func TestEnvsubstTransformerTransformObject(t *testing.T) {
 	ctx := context.Background()
 
-	t.Run("expands string values using merged substitutions", func(t *testing.T) {
-		g := NewWithT(t)
-
-		tfm := NewEnvsubstTransformer(nil)
-		tfm2 := tfm.WithRevision(ctx, &fakeRevisionWithSubs{subs: map[string]string{"FOO": "bar"}})
-
-		obj := makeUnstructured(map[string]interface{}{
-			"spec": map[string]interface{}{
-				"value": "${FOO}",
-			},
-		})
-
-		_, err := tfm2.TransformObject(ctx, obj)
-		g.Expect(err).NotTo(HaveOccurred())
-		g.Expect(obj.Object["spec"].(map[string]interface{})["value"]).To(Equal("bar"))
-	})
-
-	t.Run("expands strings in nested maps", func(t *testing.T) {
-		g := NewWithT(t)
-
-		tfm := NewEnvsubstTransformer(nil).
-			WithRevision(ctx, &fakeRevisionWithSubs{subs: map[string]string{"K": "v"}})
-
-		obj := makeUnstructured(map[string]interface{}{
-			"a": map[string]interface{}{
-				"b": map[string]interface{}{
-					"c": "${K}",
+	tests := []struct {
+		name         string
+		staticSubs   map[string]string
+		revisionSubs map[string]string
+		input        anyMap
+		want         anyMap
+	}{
+		{
+			name:         "expands string values using merged substitutions",
+			revisionSubs: map[string]string{"FOO": "bar"},
+			input: anyMap{
+				"spec": anyMap{
+					"value": "${FOO}",
 				},
 			},
-		})
-
-		_, err := tfm.TransformObject(ctx, obj)
-		g.Expect(err).NotTo(HaveOccurred())
-		g.Expect(obj.Object["a"].(map[string]interface{})["b"].(map[string]interface{})["c"]).To(Equal("v"))
-	})
-
-	t.Run("expands strings inside slices", func(t *testing.T) {
-		g := NewWithT(t)
-
-		tfm := NewEnvsubstTransformer(nil).
-			WithRevision(ctx, &fakeRevisionWithSubs{subs: map[string]string{"X": "hello"}})
-
-		obj := makeUnstructured(map[string]interface{}{
-			"items": []interface{}{"${X}", "literal"},
-		})
-
-		_, err := tfm.TransformObject(ctx, obj)
-		g.Expect(err).NotTo(HaveOccurred())
-
-		items := obj.Object["items"].([]interface{})
-		g.Expect(items[0]).To(Equal("hello"))
-		g.Expect(items[1]).To(Equal("literal"))
-	})
-
-	t.Run("expands strings in maps nested inside slices", func(t *testing.T) {
-		g := NewWithT(t)
-
-		tfm := NewEnvsubstTransformer(nil).
-			WithRevision(ctx, &fakeRevisionWithSubs{subs: map[string]string{"Y": "world"}})
-
-		obj := makeUnstructured(map[string]interface{}{
-			"containers": []interface{}{
-				map[string]interface{}{"name": "${Y}"},
+			want: anyMap{
+				"spec": anyMap{
+					"value": "bar",
+				},
 			},
+		},
+		{
+			name:         "expands strings in nested maps",
+			revisionSubs: map[string]string{"K": "v"},
+			input: anyMap{
+				"a": anyMap{
+					"b": anyMap{
+						"c": "${K}",
+					},
+				},
+			},
+			want: anyMap{
+				"a": anyMap{
+					"b": anyMap{
+						"c": "v",
+					},
+				},
+			},
+		},
+		{
+			name:         "expands strings inside slices",
+			revisionSubs: map[string]string{"X": "hello"},
+			input: anyMap{
+				"items": []any{"${X}", "literal"},
+			},
+			want: anyMap{
+				"items": []any{"hello", "literal"},
+			},
+		},
+		{
+			name:         "expands strings in maps nested inside slices",
+			revisionSubs: map[string]string{"Y": "world"},
+			input: anyMap{
+				"containers": []any{anyMap{"name": "${Y}"}},
+			},
+			want: anyMap{
+				"containers": []any{anyMap{"name": "world"}},
+			},
+		},
+		{
+			name:         "leaves non-string values unchanged",
+			revisionSubs: map[string]string{"X": "x"},
+			input: anyMap{
+				"replicas": int64(3),
+				"enabled":  true,
+			},
+			want: anyMap{
+				"replicas": int64(3),
+				"enabled":  true,
+			},
+		},
+		{
+			name:  "unknown variable replaced with empty string",
+			input: anyMap{"val": "${UNKNOWN}"},
+			want:  anyMap{"val": ""},
+		},
+		{
+			name:  "default value syntax works when variable is unset",
+			input: anyMap{"val": "${MY_VAR:-fallback}"},
+			want:  anyMap{"val": "fallback"},
+		},
+		{
+			name:         "static subs take precedence over revision subs",
+			staticSubs:   map[string]string{"VAR": "static"},
+			revisionSubs: map[string]string{"VAR": "revision"},
+			input:        anyMap{"val": "${VAR}"},
+			want:         anyMap{"val": "static"},
+		},
+		{
+			name:         "revision subs used when no static sub for key",
+			staticSubs:   map[string]string{"A": "from-static"},
+			revisionSubs: map[string]string{"B": "from-revision"},
+			input: anyMap{
+				"a": "${A}",
+				"b": "${B}",
+			},
+			want: anyMap{
+				"a": "from-static",
+				"b": "from-revision",
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			g := NewWithT(t)
+
+			tfm := NewEnvsubstTransformer(tc.staticSubs).
+				WithRevision(ctx, &fakeRevisionWithSubs{subs: tc.revisionSubs})
+
+			obj := makeUnstructured(tc.input)
+			_, err := tfm.TransformObject(ctx, obj)
+
+			g.Expect(err).NotTo(HaveOccurred())
+			g.Expect(obj.Object).To(Equal(tc.want))
 		})
-
-		_, err := tfm.TransformObject(ctx, obj)
-		g.Expect(err).NotTo(HaveOccurred())
-
-		containers := obj.Object["containers"].([]interface{})
-		g.Expect(containers[0].(map[string]interface{})["name"]).To(Equal("world"))
-	})
-
-	t.Run("leaves non-string values unchanged", func(t *testing.T) {
-		g := NewWithT(t)
-
-		tfm := NewEnvsubstTransformer(nil).
-			WithRevision(ctx, &fakeRevisionWithSubs{subs: map[string]string{"X": "x"}})
-
-		obj := makeUnstructured(map[string]interface{}{
-			"replicas": int64(3),
-			"enabled":  true,
-		})
-
-		_, err := tfm.TransformObject(ctx, obj)
-		g.Expect(err).NotTo(HaveOccurred())
-		g.Expect(obj.Object["replicas"]).To(Equal(int64(3)))
-		g.Expect(obj.Object["enabled"]).To(Equal(true))
-	})
-
-	t.Run("unknown variable replaced with empty string", func(t *testing.T) {
-		g := NewWithT(t)
-
-		tfm := NewEnvsubstTransformer(nil).
-			WithRevision(ctx, &fakeRevisionWithSubs{subs: nil})
-
-		obj := makeUnstructured(map[string]interface{}{
-			"val": "${UNKNOWN}",
-		})
-
-		_, err := tfm.TransformObject(ctx, obj)
-		g.Expect(err).NotTo(HaveOccurred())
-		g.Expect(obj.Object["val"]).To(Equal(""))
-	})
-
-	t.Run("default value syntax works when variable is unset", func(t *testing.T) {
-		g := NewWithT(t)
-
-		tfm := NewEnvsubstTransformer(nil).
-			WithRevision(ctx, &fakeRevisionWithSubs{subs: nil})
-
-		obj := makeUnstructured(map[string]interface{}{
-			"val": "${MY_VAR:-fallback}",
-		})
-
-		_, err := tfm.TransformObject(ctx, obj)
-		g.Expect(err).NotTo(HaveOccurred())
-		g.Expect(obj.Object["val"]).To(Equal("fallback"))
-	})
-
-	t.Run("returns error for non-Unstructured object", func(t *testing.T) {
-		g := NewWithT(t)
-
-		tfm := NewEnvsubstTransformer(nil)
-		_, err := tfm.TransformObject(ctx, &corev1.ConfigMap{})
-		g.Expect(err).To(HaveOccurred())
-		g.Expect(err.Error()).To(ContainSubstring("EnvsubstTransformer"))
-	})
-
-	t.Run("aggregates errors from multiple malformed expressions", func(t *testing.T) {
-		g := NewWithT(t)
-
-		tfm := NewEnvsubstTransformer(nil)
-		obj := makeUnstructured(map[string]interface{}{
-			"first":  "${UNCLOSED",
-			"second": "${ALSO UNCLOSED",
-		})
-
-		_, err := tfm.TransformObject(ctx, obj)
-		g.Expect(err).To(HaveOccurred())
-		g.Expect(err.Error()).To(ContainSubstring(".first"))
-		g.Expect(err.Error()).To(ContainSubstring(".second"))
-	})
+	}
 }
 
-func TestEnvsubstTransformerWithRevision(t *testing.T) {
+func TestEnvsubstTransformerTransformObjectErrors(t *testing.T) {
 	ctx := context.Background()
 
-	t.Run("static subs take precedence over revision subs", func(t *testing.T) {
-		g := NewWithT(t)
+	tests := []struct {
+		name    string
+		obj     client.Object
+		wantErr []string
+	}{
+		{
+			name:    "returns error for non-Unstructured object",
+			obj:     &corev1.ConfigMap{},
+			wantErr: []string{"EnvsubstTransformer"},
+		},
+		{
+			name: "aggregates errors from multiple malformed expressions",
+			obj: makeUnstructured(anyMap{
+				"first":  "${UNCLOSED",
+				"second": "${ALSO UNCLOSED",
+			}),
+			wantErr: []string{".first", ".second"},
+		},
+	}
 
-		tfm := NewEnvsubstTransformer(map[string]string{"VAR": "static"}).
-			WithRevision(ctx, &fakeRevisionWithSubs{subs: map[string]string{"VAR": "revision"}})
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			g := NewWithT(t)
 
-		obj := makeUnstructured(map[string]interface{}{"val": "${VAR}"})
+			_, err := NewEnvsubstTransformer(nil).TransformObject(ctx, tc.obj)
 
-		_, err := tfm.TransformObject(ctx, obj)
-		g.Expect(err).NotTo(HaveOccurred())
-		g.Expect(obj.Object["val"]).To(Equal("static"))
-	})
+			g.Expect(err).To(HaveOccurred())
 
-	t.Run("revision subs used when no static sub for key", func(t *testing.T) {
-		g := NewWithT(t)
-
-		tfm := NewEnvsubstTransformer(map[string]string{"A": "from-static"}).
-			WithRevision(ctx, &fakeRevisionWithSubs{subs: map[string]string{"B": "from-revision"}})
-
-		obj := makeUnstructured(map[string]interface{}{
-			"a": "${A}",
-			"b": "${B}",
+			for _, substr := range tc.wantErr {
+				g.Expect(err.Error()).To(ContainSubstring(substr))
+			}
 		})
+	}
+}
 
-		_, err := tfm.TransformObject(ctx, obj)
-		g.Expect(err).NotTo(HaveOccurred())
-		g.Expect(obj.Object["a"]).To(Equal("from-static"))
-		g.Expect(obj.Object["b"]).To(Equal("from-revision"))
-	})
+func TestEnvsubstTransformerWithComponentIsNoop(t *testing.T) {
+	g := NewWithT(t)
+	ctx := context.Background()
 
-	t.Run("WithComponent is a no-op", func(t *testing.T) {
-		g := NewWithT(t)
+	tfm := NewEnvsubstTransformer(map[string]string{"V": "x"}).
+		WithRevision(ctx, &fakeRevisionWithSubs{subs: nil})
 
-		tfm := NewEnvsubstTransformer(map[string]string{"V": "x"}).
-			WithRevision(ctx, &fakeRevisionWithSubs{subs: nil})
-
-		same := tfm.WithComponent(ctx, nil)
-		g.Expect(same).To(BeIdenticalTo(tfm))
-	})
+	g.Expect(tfm.WithComponent(ctx, nil)).To(BeIdenticalTo(tfm))
 }
 
 func TestEnvsubstTransformerValidate(t *testing.T) {
-	t.Run("accepts well-formed expressions", func(t *testing.T) {
-		g := NewWithT(t)
-
-		obj := makeUnstructured(map[string]interface{}{
-			"simple":  "${VAR}",
-			"default": "${VAR:-fallback}",
-			"plain":   "no substitution",
-			"nested": map[string]interface{}{
-				"deep": "${NESTED}",
+	tests := []struct {
+		name     string
+		obj      client.Object
+		wantErrs []string // empty means Validate should succeed
+	}{
+		{
+			name: "accepts well-formed expressions",
+			obj: makeUnstructured(anyMap{
+				"simple":  "${VAR}",
+				"default": "${VAR:-fallback}",
+				"plain":   "no substitution",
+				"nested":  anyMap{"deep": "${NESTED}"},
+				"list":    []interface{}{"${ITEM}", "plain"},
+			}),
+		},
+		{
+			name:     "rejects malformed expression",
+			obj:      makeUnstructured(anyMap{"mapKey": "${UNCLOSED"}),
+			wantErrs: []string{".mapKey"},
+		},
+		{
+			name: "rejects malformed expression in nested map",
+			obj: makeUnstructured(anyMap{
+				"nested": anyMap{
+					"deep": "${UNCLOSED"},
 			},
-			"list": []interface{}{"${ITEM}", "plain"},
-		})
-		tfm := NewEnvsubstTransformer(nil)
-		g.Expect(tfm.Validate(obj)).To(Succeed())
-	})
-
-	t.Run("rejects malformed expression", func(t *testing.T) {
-		g := NewWithT(t)
-		obj := makeUnstructured(map[string]interface{}{
-			"mapKey": "${UNCLOSED",
-		})
-		tfm := NewEnvsubstTransformer(nil)
-		g.Expect(tfm.Validate(obj)).To(MatchError(ContainSubstring(".mapKey")))
-	})
-
-	t.Run("rejects malformed expression in nested map", func(t *testing.T) {
-		g := NewWithT(t)
-
-		obj := makeUnstructured(map[string]interface{}{
-			"nested": map[string]interface{}{
-				"deep": "${UNCLOSED",
-			},
-		})
-		tfm := NewEnvsubstTransformer(nil)
-		g.Expect(tfm.Validate(obj)).To(MatchError(ContainSubstring(".nested.deep")))
-	})
-
-	t.Run("rejects malformed expression in slice", func(t *testing.T) {
-		g := NewWithT(t)
-
-		obj := makeUnstructured(map[string]interface{}{
-			"list": []interface{}{"${UNCLOSED"},
-		})
-		tfm := NewEnvsubstTransformer(nil)
-		g.Expect(tfm.Validate(obj)).To(MatchError(ContainSubstring(".list[0]")))
-	})
-
-	t.Run("rejects non-Unstructured object", func(t *testing.T) {
-		g := NewWithT(t)
-
-		tfm := NewEnvsubstTransformer(nil)
-		g.Expect(tfm.Validate(&corev1.ConfigMap{})).To(MatchError(ContainSubstring("ConfigMap")))
-	})
-
-	t.Run("returns all errors from multiple malformed expressions", func(t *testing.T) {
-		g := NewWithT(t)
-
-		obj := makeUnstructured(map[string]interface{}{
-			"first":  "${UNCLOSED",
-			"second": "${ALSO UNCLOSED",
-		})
-		tfm := NewEnvsubstTransformer(nil)
-		err := tfm.Validate(obj)
-		g.Expect(err).To(HaveOccurred())
-		g.Expect(err.Error()).To(ContainSubstring(".first"))
-		g.Expect(err.Error()).To(ContainSubstring(".second"))
-	})
-
-	t.Run("returns all errors across mixed map and slice nesting", func(t *testing.T) {
-		g := NewWithT(t)
-
-		obj := makeUnstructured(map[string]interface{}{
-			"spec": map[string]interface{}{
-				"items": []interface{}{
-					map[string]interface{}{"value": "${UNCLOSED"},
+			),
+			wantErrs: []string{".nested.deep"},
+		},
+		{
+			name: "rejects malformed expression in slice",
+			obj: makeUnstructured(anyMap{
+				"list": []any{"${UNCLOSED"},
+			}),
+			wantErrs: []string{".list[0]"},
+		},
+		{
+			name:     "rejects non-Unstructured object",
+			obj:      &corev1.ConfigMap{},
+			wantErrs: []string{"ConfigMap"},
+		},
+		{
+			name: "returns all errors from multiple malformed expressions",
+			obj: makeUnstructured(anyMap{
+				"first":  "${UNCLOSED",
+				"second": "${ALSO UNCLOSED",
+			}),
+			wantErrs: []string{".first", ".second"},
+		},
+		{
+			name: "returns all errors across mixed map and slice nesting",
+			obj: makeUnstructured(anyMap{
+				"spec": anyMap{
+					"items": []any{anyMap{
+						"value": "${UNCLOSED"},
+					},
 				},
-			},
-			"other": "${ALSO UNCLOSED",
+				"other": "${ALSO UNCLOSED",
+			}),
+			wantErrs: []string{".spec.items[0].value", ".other"},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			g := NewWithT(t)
+
+			err := NewEnvsubstTransformer(nil).Validate(tc.obj)
+
+			if len(tc.wantErrs) == 0 {
+				g.Expect(err).NotTo(HaveOccurred())
+				return
+			}
+
+			g.Expect(err).To(HaveOccurred())
+
+			for _, substr := range tc.wantErrs {
+				g.Expect(err.Error()).To(ContainSubstring(substr))
+			}
 		})
-		tfm := NewEnvsubstTransformer(nil)
-		err := tfm.Validate(obj)
-		g.Expect(err).To(HaveOccurred())
-		g.Expect(err.Error()).To(ContainSubstring(".spec.items[0].value"))
-		g.Expect(err.Error()).To(ContainSubstring(".other"))
-	})
+	}
 }
