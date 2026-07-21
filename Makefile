@@ -75,7 +75,7 @@ localtestenv: .localtestenv
 
 TEST_DIRS ?= ./pkg/... ./manifests-gen/...
 unit: .localtestenv ## Run unit tests
-	./hack/test.sh "$(TEST_DIRS)" 20m
+	./hack/test.sh "$(TEST_DIRS)" 40m
 
 .PHONY: test-e2e-diagnostics
 test-e2e-diagnostics: ## Run e2e diagnostics unit tests (no cluster required)

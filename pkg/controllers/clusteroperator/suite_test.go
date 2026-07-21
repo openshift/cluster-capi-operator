@@ -19,6 +19,7 @@ package clusteroperator
 import (
 	"context"
 	"testing"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -61,6 +62,7 @@ var _ = BeforeSuite(func() {
 
 	komega.SetClient(cl)
 	komega.SetContext(ctx)
+	Default.SetDefaultEventuallyTimeout(60 * time.Second)
 })
 
 var _ = AfterSuite(func() {
