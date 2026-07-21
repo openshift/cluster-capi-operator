@@ -111,6 +111,7 @@ var _ = BeforeSuite(func() {
 		runtimetransformer.NewEnvsubstTransformer(nil),
 		runtimetransformer.NewManagedByTransformer(),
 		runtimetransformer.NewSimpleRuntimeTransformer(&runtimetransformer.AdoptExistingTransformer{}),
+		runtimetransformer.NewSimpleRuntimeTransformer(testValueTransformer{}),
 	}
 	Expect(SetupWithManager(mgr, allProviderProfiles, transformers, triggerSource)).To(Succeed())
 	Expect(test.AddNamespaceFinalizerCleanup(mgr)).To(Succeed())

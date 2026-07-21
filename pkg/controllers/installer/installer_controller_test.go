@@ -30,6 +30,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -191,6 +192,51 @@ var _ = Describe("InstallerController", Serial, func() {
 					HaveField("UID", Not(Equal(cm.UID))),
 					HaveField("Data", HaveKeyWithValue("version", "v1")),
 				))
+		}, defaultNodeTimeout)
+	})
+
+	Context("RuntimeTransformer Drift", func() {
+		AfterEach(func() {
+			testAnnotationValue.Store(nil)
+		})
+
+		It("re-applies an updated transformer output without a new revision", func(ctx context.Context) {
+			testAnnotationValue.Store(ptr.To("v1"))
+			addRevisionAndWaitForSuccess(ctx, providerCore)
+
+			cm, err := getConfigMap(ctx, coreCMName)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cm.Annotations).To(HaveKeyWithValue(testAnnotationKey, "v1"))
+
+			// Simulate an updated transformation -- no revision change at all.
+			testAnnotationValue.Store(ptr.To("v2"))
+			triggerReconcile()
+
+			Eventually(kWithCtx(ctx).Object(cm)).
+				WithContext(ctx).
+				WithTimeout(defaultEventuallyTimeout).
+				Should(HaveField("Annotations", HaveKeyWithValue(testAnnotationKey, "v2")))
+		}, defaultNodeTimeout)
+
+		It("restores a transformer-added annotation after it is manually removed", func(ctx context.Context) {
+			testAnnotationValue.Store(ptr.To("v1"))
+			addRevisionAndWaitForSuccess(ctx, providerCore)
+
+			cm, err := getConfigMap(ctx, coreCMName)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cm.Annotations).To(HaveKeyWithValue(testAnnotationKey, "v1"))
+
+			Eventually(kWithCtx(ctx).Update(cm, func() {
+				delete(cm.Annotations, testAnnotationKey)
+			})).
+				WithContext(ctx).
+				WithTimeout(defaultEventuallyTimeout).
+				Should(Succeed())
+
+			Eventually(kWithCtx(ctx).Object(cm)).
+				WithContext(ctx).
+				WithTimeout(defaultEventuallyTimeout).
+				Should(HaveField("Annotations", HaveKeyWithValue(testAnnotationKey, "v1")))
 		}, defaultNodeTimeout)
 	})
 
