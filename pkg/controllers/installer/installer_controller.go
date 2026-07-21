@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"github.com/go-logr/logr"
+	configv1 "github.com/openshift/api/config/v1"
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	operatorv1alpha1apply "github.com/openshift/client-go/operator/applyconfigurations/operator/v1alpha1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -31,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/util/sets"
+	metav1applyconfig "k8s.io/client-go/applyconfigurations/meta/v1"
 	"k8s.io/client-go/discovery"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -44,6 +46,7 @@ import (
 	"pkg.package-operator.run/boxcutter"
 	"pkg.package-operator.run/boxcutter/managedcache"
 
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/proxy"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
 	"github.com/openshift/cluster-capi-operator/pkg/revisiongenerator"
@@ -65,21 +68,32 @@ type InstallerController struct {
 	revisionEngine   *boxcutter.RevisionEngine
 	providerProfiles []providerimages.ProviderImageManifests
 	restMapper       meta.RESTMapper
+	proxyReconciler  *proxy.Controller
 }
 
 // SetupWithManager creates the boxcutter dependencies and sets up the installer
-// controller with the Manager. Additional sources may be provided to trigger
-// reconciliation from external events (e.g. a channel source for testing).
+// controller with the Manager. The proxy sub-reconciler is wired in here so
+// that both controllers share a single trackingCache.Source() registration,
+// avoiding the double-registration shutdown issue. Additional sources may be
+// provided to trigger reconciliation from external events (e.g. a channel
+// source for testing).
 func SetupWithManager(mgr ctrl.Manager, providerProfiles []providerimages.ProviderImageManifests, additionalSources ...source.Source) error {
 	trackingCache, err := setupTrackingCache(mgr)
 	if err != nil {
 		return fmt.Errorf("unable to setup tracking cache: %w", err)
 	}
 
-	revisionEngine, err := setupRevisionEngine(mgr, trackingCache)
+	revisionEngine, discoveryClient, err := setupRevisionEngine(mgr, trackingCache)
 	if err != nil {
 		return fmt.Errorf("unable to setup revision engine: %w", err)
 	}
+
+	extractor, err := metav1applyconfig.NewUnstructuredExtractor(discoveryClient)
+	if err != nil {
+		return fmt.Errorf("unable to create unstructured extractor: %w", err)
+	}
+
+	proxyReconciler := proxy.New(mgr.GetClient(), trackingCache, extractor)
 
 	c := &InstallerController{
 		client:           mgr.GetClient(),
@@ -87,8 +101,13 @@ func SetupWithManager(mgr ctrl.Manager, providerProfiles []providerimages.Provid
 		revisionEngine:   revisionEngine,
 		providerProfiles: providerProfiles,
 		restMapper:       mgr.GetRESTMapper(),
+		proxyReconciler:  proxyReconciler,
 	}
 
+	return setupController(mgr, c, additionalSources)
+}
+
+func setupController(mgr ctrl.Manager, c *InstallerController, additionalSources []source.Source) error {
 	toClusterAPI := func(_ context.Context, _ client.Object) []reconcile.Request {
 		return []reconcile.Request{{
 			NamespacedName: client.ObjectKey{Name: clusterAPIName},
@@ -121,7 +140,14 @@ func SetupWithManager(mgr ctrl.Manager, providerProfiles []providerimages.Provid
 					// predicates.
 				),
 			),
-		)
+		).
+		// Watch the cluster-wide Proxy CR so that proxy changes trigger
+		// reconciliation of proxy env vars on managed workloads.
+		Watches(&configv1.Proxy{},
+			handler.EnqueueRequestsFromMapFunc(toClusterAPI),
+			builder.WithPredicates(predicate.NewPredicateFuncs(func(obj client.Object) bool {
+				return obj.GetName() == "cluster"
+			})))
 
 	for _, src := range additionalSources {
 		b = b.WatchesRawSource(src)
@@ -162,10 +188,10 @@ func setupTrackingCache(mgr ctrl.Manager) (managedcache.TrackingCache, error) {
 	return trackingCache, nil
 }
 
-func setupRevisionEngine(mgr ctrl.Manager, trackingCache managedcache.TrackingCache) (*boxcutter.RevisionEngine, error) {
+func setupRevisionEngine(mgr ctrl.Manager, trackingCache managedcache.TrackingCache) (*boxcutter.RevisionEngine, discovery.DiscoveryInterface, error) {
 	discoveryClient, err := discovery.NewDiscoveryClientForConfig(mgr.GetConfig())
 	if err != nil {
-		return nil, fmt.Errorf("unable to create discovery client: %w", err)
+		return nil, nil, fmt.Errorf("unable to create discovery client: %w", err)
 	}
 
 	revisionEngine, err := boxcutter.NewRevisionEngine(boxcutter.RevisionEngineOptions{
@@ -179,13 +205,14 @@ func setupRevisionEngine(mgr ctrl.Manager, trackingCache managedcache.TrackingCa
 		UnfilteredReader: mgr.GetAPIReader(),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("unable to create revision engine: %w", err)
+		return nil, nil, fmt.Errorf("unable to create revision engine: %w", err)
 	}
 
-	return revisionEngine, nil
+	return revisionEngine, discoveryClient, nil
 }
 
-// Reconcile handles applying and managing revisions on the cluster.
+// Reconcile handles applying and managing revisions on the cluster, and calls
+// the proxy sub-reconciler to keep proxy env vars on managed workloads current.
 func (c *InstallerController) Reconcile(ctx context.Context, _ ctrl.Request) (ctrl.Result, error) {
 	log := ctrl.LoggerFrom(ctx).WithName(controllerName)
 	log.Info("Reconciling installer revisions")
@@ -194,6 +221,13 @@ func (c *InstallerController) Reconcile(ctx context.Context, _ ctrl.Request) (ct
 
 	if err := reconcileResult.WriteClusterOperatorStatus(ctx, log, c.client); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to write conditions: %w", err)
+	}
+
+	// TODO: the proxy reconciler needs its own status reporting mechanism.
+	// For now, log errors without propagating them so that proxy failures
+	// do not affect the installer controller's ClusterOperator conditions.
+	if err := c.proxyReconciler.Reconcile(ctx); err != nil {
+		log.Error(err, "Failed to reconcile proxy env vars")
 	}
 
 	log.Info("Reconcile finished")
