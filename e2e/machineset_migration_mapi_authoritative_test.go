@@ -181,6 +181,8 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				verifyMachineSetPausedCondition(mapiMachineSet, mapiv1beta1.MachineAuthorityClusterAPI)
 				verifyMachineSetPausedCondition(capiMachineSet, mapiv1beta1.MachineAuthorityClusterAPI)
 				verifyMAPIMachineSetSynchronizedCondition(mapiMachineSet, mapiv1beta1.MachineAuthorityClusterAPI)
+				verifyMachineSetAuthoritative(mapiMachineSet, mapiv1beta1.MachineAuthorityClusterAPI)
+				verifyMachineSetSynchronizedAPI(mapiMachineSet, mapiv1beta1.ClusterAPISynchronized)
 
 				By("Scaling up CAPI MachineSet to 3")
 				capiframework.ScaleCAPIMachineSet(mapiMSAuthMAPIName, 3, capiframework.CAPINamespace)
@@ -218,6 +220,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				verifyMachineSetPausedCondition(mapiMachineSet, mapiv1beta1.MachineAuthorityMachineAPI)
 				verifyMachineSetPausedCondition(capiMachineSet, mapiv1beta1.MachineAuthorityMachineAPI)
 				verifyMAPIMachineSetSynchronizedCondition(mapiMachineSet, mapiv1beta1.MachineAuthorityMachineAPI)
+				verifyMachineSetSynchronizedAPI(mapiMachineSet, mapiv1beta1.MachineAPISynchronized)
 
 				By("Deleting MAPI MachineSet and verifying mirrors are removed")
 				Expect(mapiframework.DeleteMachineSets(cl, mapiMachineSet)).To(Succeed(), "Should be able to delete test MachineSet")
@@ -349,6 +352,8 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				switchMachineSetTemplateAuthoritativeAPI(mapiMachineSet, mapiv1beta1.MachineAuthorityClusterAPI)
 				switchMachineSetAuthoritativeAPI(mapiMachineSet, mapiv1beta1.MachineAuthorityClusterAPI)
 				verifyMAPIMachineSetSynchronizedCondition(mapiMachineSet, mapiv1beta1.MachineAuthorityClusterAPI)
+				verifyMachineSetAuthoritative(mapiMachineSet, mapiv1beta1.MachineAuthorityClusterAPI)
+				verifyMachineSetSynchronizedAPI(mapiMachineSet, mapiv1beta1.ClusterAPISynchronized)
 			})
 
 			It("should reject MAPI updates and allow CAPI InfraTemplate updates", func() {

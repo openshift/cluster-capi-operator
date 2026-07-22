@@ -182,6 +182,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				verifyMachineSetPausedCondition(mapiMachineSet, mapiv1beta1.MachineAuthorityMachineAPI)
 				verifyMachineSetPausedCondition(capiMachineSet, mapiv1beta1.MachineAuthorityMachineAPI)
 				verifyMAPIMachineSetSynchronizedCondition(mapiMachineSet, mapiv1beta1.MachineAuthorityMachineAPI)
+				verifyMachineSetSynchronizedAPI(mapiMachineSet, mapiv1beta1.MachineAPISynchronized)
 
 				By("Scaling up MAPI MachineSet to 3 replicas")
 				Expect(mapiframework.ScaleMachineSetWithContext(ctx, mapiMSAuthCAPIName, 3)).To(Succeed(), "should be able to scale up MAPI MachineSet")
@@ -216,6 +217,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				verifyMachineSetPausedCondition(mapiMachineSet, mapiv1beta1.MachineAuthorityClusterAPI)
 				verifyMachineSetPausedCondition(capiMachineSet, mapiv1beta1.MachineAuthorityClusterAPI)
 				verifyMAPIMachineSetSynchronizedCondition(mapiMachineSet, mapiv1beta1.MachineAuthorityClusterAPI)
+				verifyMachineSetSynchronizedAPI(mapiMachineSet, mapiv1beta1.ClusterAPISynchronized)
 
 				By("Deleting CAPI MachineSet and verifying mirrors are removed")
 				capiframework.DeleteMachineSets(ctx, cl, capiMachineSet)
