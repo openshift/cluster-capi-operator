@@ -815,6 +815,19 @@ func MAPIMachineSetFuzzerFuncs() fuzzer.FuzzerFuncs {
 				m.SynchronizedGeneration = 0 // Ignore, this field as it is not present in CAPI.
 				m.SynchronizedAPI = ""       // Ignore, this field as it is not present in CAPI.
 				m.Conditions = nil           // Ignore, this field as it is not a 1:1 mapping between CAPI and MAPI but rather a recomputation of the conditions based on other fields.
+				m.LabelSelector = ""         // Cleared here and derived from Spec.Selector in the MachineSet fuzzer below.
+			},
+			func(m *mapiv1beta1.MachineSet, c randfill.Continue) {
+				c.FillNoCustom(m)
+
+				// Derive Status.LabelSelector from Spec.Selector so it converts correctly
+				// through the MAPI→CAPI→MAPI path. The conversion derives CAPI
+				// status.Selector from the spec selector, and the reverse maps it
+				// back to MAPI status.LabelSelector.
+				selector, err := metav1.LabelSelectorAsSelector(&m.Spec.Selector)
+				if err == nil {
+					m.Status.LabelSelector = selector.String()
+				}
 			},
 		}
 	}
