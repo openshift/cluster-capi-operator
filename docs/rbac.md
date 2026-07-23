@@ -13,7 +13,7 @@ The `capi-operator` and `capi-installer` ServiceAccounts (in `openshift-cluster-
 | `0000_30_cluster-api-operator_03_clusterrole.yaml` | Role `capi-operator` | `openshift-cluster-api` | `capi-operator` | Deployment read, ConfigMap read |
 | `0000_30_cluster-api-operator_03_capi-installer-clusterrole.yaml` | ClusterRole `openshift-capi-installer` | cluster-wide | `capi-installer` | CRDs, admission resources, cluster RBAC, config.openshift.io, ClusterAPI/ClusterOperator status, tracking cache informers |
 | `0000_30_cluster-api-operator_03_capi-installer-clusterrole.yaml` | Role `capi-installer` | `openshift-cluster-api-operator` | `capi-installer` | Leader election leases, pod self-read, ConfigMap read, events |
-| `0000_30_cluster-api-operator_03_capi-installer-clusterrole.yaml` | Role `capi-installer` | `openshift-cluster-api` | `capi-installer` | boxcutter-managed resources (ServiceAccounts, Services, Deployments, Roles, RoleBindings), VAP paramRef list |
+| `0000_30_cluster-api-operator_03_capi-installer-clusterrole.yaml` | Role `capi-installer` | `openshift-cluster-api` | `capi-installer` | boxcutter-managed resources (ConfigMaps, ServiceAccounts, Services, Deployments, Roles, RoleBindings), VAP paramRef list |
 | `0000_30_cluster-api-operator_03_capi-installer-clusterrole.yaml` | Role `capi-installer` | `openshift-machine-api` | `capi-installer` | VAP paramRef list (machines, machinesets) |
 
 Both SAs also bind to ClusterRole `system:openshift:openshift-cluster-api:read-tls-configuration` for APIServer TLS profile reading.
