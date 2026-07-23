@@ -214,9 +214,9 @@ func (r *UserDataSecretController) setDegradedCondition(ctx context.Context, log
 	}
 
 	conds := []configv1.ClusterOperatorStatusCondition{
-		operatorstatus.NewClusterOperatorStatusCondition(secretSyncControllerAvailableCondition, configv1.ConditionFalse, operatorstatus.ReasonSyncFailed,
+		operatorstatus.NewClusterOperatorStatusCondition(secretSyncControllerAvailableCondition, configv1.ConditionFalse, operatorstatus.ReasonEphemeralError,
 			"User Data Secret Controller failed to sync secret"),
-		operatorstatus.NewClusterOperatorStatusCondition(secretSyncControllerDegradedCondition, configv1.ConditionTrue, operatorstatus.ReasonSyncFailed,
+		operatorstatus.NewClusterOperatorStatusCondition(secretSyncControllerDegradedCondition, configv1.ConditionTrue, operatorstatus.ReasonEphemeralError,
 			"User Data Secret Controller failed to sync secret"),
 	}
 

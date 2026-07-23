@@ -54,7 +54,8 @@ const (
 	controllerName = "InstallerController"
 	clusterAPIName = "cluster"
 
-	opresult = operatorstatus.ControllerResultGenerator(controllerName)
+	// ResultGenerator is the controller result generator for the InstallerController.
+	ResultGenerator = operatorstatus.ControllerResultGenerator(controllerName)
 )
 
 // InstallerController reconciles ClusterAPI revisions, using boxcutter to apply
@@ -206,18 +207,18 @@ func (c *InstallerController) reconcile(ctx context.Context, log logr.Logger) op
 	clusterAPI := &operatorv1alpha1.ClusterAPI{}
 	if err := c.client.Get(ctx, client.ObjectKey{Name: clusterAPIName}, clusterAPI); err != nil {
 		if apierrors.IsNotFound(err) {
-			return opresult.WaitingOnExternal("ClusterAPI")
+			return ResultGenerator.WaitingOnExternal("ClusterAPI")
 		}
 
-		return opresult.Error(fmt.Errorf("fetching ClusterAPI: %w", err))
+		return ResultGenerator.Error(fmt.Errorf("fetching ClusterAPI: %w", err))
 	}
 
 	if len(clusterAPI.Status.Revisions) == 0 {
 		if err := writeRelatedObjects(ctx, c.client, staticRelatedObjects()); err != nil {
-			return opresult.Error(fmt.Errorf("writing relatedObjects: %w", err))
+			return ResultGenerator.Error(fmt.Errorf("writing relatedObjects: %w", err))
 		}
 
-		return opresult.WaitingOnExternal("ClusterAPI revisions")
+		return ResultGenerator.WaitingOnExternal("ClusterAPI revisions")
 	}
 
 	revisionReconciler := newRevisionReconciler(c, log)
@@ -227,12 +228,12 @@ func (c *InstallerController) reconcile(ctx context.Context, log logr.Logger) op
 	// write never claims ownership of the relatedObjects field.
 	relatedObjects := mergeRelatedObjects(staticRelatedObjects(), revisionReconciler.dynamicRelatedObjects())
 	if err := writeRelatedObjects(ctx, c.client, relatedObjects); err != nil {
-		return opresult.Error(fmt.Errorf("writing relatedObjects: %w", err))
+		return ResultGenerator.Error(fmt.Errorf("writing relatedObjects: %w", err))
 	}
 
 	// Update tracking cache watches for all current revisions
 	if err := c.updateWatches(ctx, log, clusterAPI, revisionReconciler.gvks); err != nil {
-		return opresult.Error(err)
+		return ResultGenerator.Error(err)
 	}
 
 	if reconciledRevision != nil {
@@ -243,7 +244,7 @@ func (c *InstallerController) reconcile(ctx context.Context, log logr.Logger) op
 		return c.error(errs)
 	}
 
-	return opresult.Progressing(strings.Join(messages, "\n"))
+	return ResultGenerator.Progressing(strings.Join(messages, "\n"))
 }
 
 func (c *InstallerController) success(ctx context.Context, log logr.Logger, clusterAPI *operatorv1alpha1.ClusterAPI, reconciledRevision operatorv1alpha1.RevisionName, errs []error) operatorstatus.ReconcileResult {
@@ -253,10 +254,10 @@ func (c *InstallerController) success(ctx context.Context, log logr.Logger, clus
 
 	// Write the current revision to the ClusterAPI status in its own SSA transaction
 	if err := c.writeCurrentRevision(ctx, clusterAPI, reconciledRevision); err != nil {
-		return opresult.Error(fmt.Errorf("writing current revision: %w", err))
+		return ResultGenerator.Error(fmt.Errorf("writing current revision: %w", err))
 	}
 
-	return opresult.Success()
+	return ResultGenerator.Success()
 }
 
 func (c *InstallerController) error(errs []error) operatorstatus.ReconcileResult {
@@ -287,10 +288,10 @@ func (c *InstallerController) error(errs []error) operatorstatus.ReconcileResult
 		})
 		nonTerminalErrors = append(nonTerminalErrors, unwrappedTerminalErrors...)
 
-		return opresult.Error(fmt.Errorf("reconciling revisions: %w", errors.Join(nonTerminalErrors...)))
+		return ResultGenerator.Error(fmt.Errorf("reconciling revisions: %w", errors.Join(nonTerminalErrors...)))
 	}
 
-	return opresult.NonRetryableError(fmt.Errorf("reconciling revisions: %w", errors.Join(errs...)))
+	return ResultGenerator.NonRetryableError(fmt.Errorf("reconciling revisions: %w", errors.Join(errs...)))
 }
 
 func (c *InstallerController) updateWatches(ctx context.Context, log logr.Logger, clusterAPI *operatorv1alpha1.ClusterAPI, allGVKs sets.Set[schema.GroupVersionKind]) error {
