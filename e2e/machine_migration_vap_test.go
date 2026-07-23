@@ -54,8 +54,11 @@ const (
 
 var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] MAPI Machine VAP Tests", Ordered, func() {
 	BeforeAll(func() {
-		if platform != configv1.AWSPlatformType {
-			Skip(fmt.Sprintf("Skipping tests on %s, this is only supported on AWS", platform))
+		switch platform {
+		case configv1.AWSPlatformType, configv1.VSpherePlatformType:
+			// supported
+		default:
+			Skip(fmt.Sprintf("Skipping tests on %s, this is only supported on AWS and vSphere", platform))
 		}
 
 		if !capiframework.IsFeatureGateEnabled(ctx, cl, features.FeatureGateMachineAPIMigration) {
@@ -164,6 +167,12 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] MA
 		})
 
 		Context("AWS provider spec field restrictions", func() {
+			BeforeEach(func() {
+				if platform != configv1.AWSPlatformType {
+					Skip("AWS provider spec tests only run on AWS")
+				}
+			})
+
 			It("should prevent updating providerSpec.instanceType", func() {
 				verifyAWSProviderSpecUpdatePrevented(testMAPIMachine, "instanceType", func(providerSpec *mapiv1beta1.AWSMachineProviderConfig) {
 					providerSpec.InstanceType = testInstanceType
