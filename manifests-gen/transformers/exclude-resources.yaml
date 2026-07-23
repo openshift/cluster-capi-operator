@@ -1,0 +1,153 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: exclude-resources
+  annotations:
+    config.kubernetes.io/function: |
+      container:
+        image: quay-proxy.ci.openshift.org/openshift/ci:ci_krm-functions-catalog-starlark_v0.5.0
+data:
+  source: |
+    def find_config(items):
+      """Find the exclude-resources-config ConfigMap from the resource list."""
+      for item in items:
+        if item.get("kind") == "ConfigMap" and item.get("metadata", {}).get("name") == "exclude-resources-config":
+          return item.get("data", {})
+      return None
+
+    def parse_exclude_crds(config):
+      """Parse CRD names into {group: set(plurals)} and a set of full CRD names."""
+      by_group = {}
+      crd_names = []
+      raw = config.get("excludeCRDs", "").strip()
+      if not raw:
+        return by_group, crd_names
+      for line in raw.split("\n"):
+        crd_name = line.strip()
+        if not crd_name:
+          continue
+        parts = crd_name.split(".", 1)
+        if len(parts) != 2:
+          fail("invalid CRD name (expected plural.group): " + crd_name)
+        plural = parts[0]
+        group = parts[1]
+        if group not in by_group:
+          by_group[group] = []
+        by_group[group].append(plural)
+        crd_names.append(crd_name)
+      return by_group, crd_names
+
+    def parse_rename_roles(config):
+      """Parse ClusterRole rename mapping from 'old=new' lines."""
+      renames = {}
+      raw = config.get("renameClusterRoles", "").strip()
+      if not raw:
+        return renames
+      for line in raw.split("\n"):
+        line = line.strip()
+        if not line:
+          continue
+        parts = line.split("=", 1)
+        if len(parts) != 2:
+          fail("invalid rename (expected old=new): " + line)
+        old = parts[0].strip()
+        new = parts[1].strip()
+        if not old or not new:
+          fail("invalid rename (both old and new must be non-empty): " + line)
+        renames[old] = new
+      return renames
+
+    def is_excluded_resource(resource_name, group, by_group):
+      """Check if a resource name (possibly with sub-resource) is excluded."""
+      if group not in by_group:
+        return False
+      base = resource_name.split("/")[0]
+      for plural in by_group[group]:
+        if base == plural:
+          return True
+      return False
+
+    def webhook_matches_excluded(webhook, by_group):
+      """Check if a webhook entry references any excluded resource."""
+      for rule in webhook.get("rules", []):
+        for group in rule.get("apiGroups", []):
+          if group in by_group:
+            for resource in rule.get("resources", []):
+              if is_excluded_resource(resource, group, by_group):
+                return True
+      return False
+
+    def filter_rule_resources(rule, by_group):
+      """Remove excluded resources from a rule, return remaining resources."""
+      remaining = []
+      for resource in rule.get("resources", []):
+        excluded = False
+        for group in rule.get("apiGroups", []):
+          if is_excluded_resource(resource, group, by_group):
+            excluded = True
+            break
+        if not excluded:
+          remaining.append(resource)
+      return remaining
+
+    def rule_has_excluded_group(rule, by_group):
+      """Check if any of the rule's apiGroups match an excluded group."""
+      for group in rule.get("apiGroups", []):
+        if group in by_group:
+          return True
+      return False
+
+    # Main logic
+    config = find_config(ctx.resource_list["items"])
+    if config == None:
+      # No config found, nothing to do
+      pass
+    else:
+      by_group, crd_names = parse_exclude_crds(config)
+      renames = parse_rename_roles(config)
+
+      if by_group or renames:
+        result = []
+        for resource in ctx.resource_list["items"]:
+          kind = resource.get("kind", "")
+          name = resource.get("metadata", {}).get("name", "")
+
+          # 1. Remove excluded CRDs
+          if kind == "CustomResourceDefinition":
+            if name in crd_names:
+              continue
+
+          # 2. Filter webhook entries
+          if kind in ("MutatingWebhookConfiguration", "ValidatingWebhookConfiguration"):
+            webhooks = resource.get("webhooks", [])
+            filtered = [w for w in webhooks if not webhook_matches_excluded(w, by_group)]
+            if not filtered:
+              continue
+            resource["webhooks"] = filtered
+
+          # 3. Filter RBAC rules + rename ClusterRole
+          if kind == "ClusterRole":
+            rules = resource.get("rules", [])
+            filtered_rules = []
+            for rule in rules:
+              if not rule_has_excluded_group(rule, by_group):
+                filtered_rules.append(rule)
+                continue
+              remaining = filter_rule_resources(rule, by_group)
+              if remaining:
+                rule["resources"] = remaining
+                filtered_rules.append(rule)
+            resource["rules"] = filtered_rules
+            # Rename if configured
+            if name in renames:
+              resource["metadata"]["name"] = renames[name]
+
+          # 4. Update ClusterRoleBinding references
+          if kind == "ClusterRoleBinding":
+            role_ref_name = resource.get("roleRef", {}).get("name", "")
+            if role_ref_name in renames:
+              resource["roleRef"]["name"] = renames[role_ref_name]
+
+          result.append(resource)
+
+        ctx.resource_list["items"] = result
