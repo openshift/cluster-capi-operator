@@ -19,7 +19,6 @@ package revision
 import (
 	"cmp"
 	"context"
-	"crypto/tls"
 	"errors"
 	"fmt"
 	"slices"
@@ -29,7 +28,6 @@ import (
 	configv1 "github.com/openshift/api/config/v1"
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	operatorv1alpha1ac "github.com/openshift/client-go/operator/applyconfigurations/operator/v1alpha1"
-	libgocrypto "github.com/openshift/library-go/pkg/crypto"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -42,6 +40,7 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
 	"github.com/openshift/cluster-capi-operator/pkg/revisiongenerator"
+	"github.com/openshift/cluster-capi-operator/pkg/runtimetransformer"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 )
 
@@ -65,9 +64,7 @@ type RevisionController struct {
 	client.Client
 	ProviderProfiles []providerimages.ProviderImageManifests
 	ReleaseVersion   string
-
-	// manifestSubstitutions is derived from TLSProfileSpec during SetupWithManager.
-	manifestSubstitutions map[string]string
+	Transformers     []runtimetransformer.RuntimeTransformer
 }
 
 // Reconcile handles creating revisions in the ClusterAPI singleton status.
@@ -134,7 +131,7 @@ func (r *RevisionController) reconcile(ctx context.Context, log logr.Logger) ope
 	return opresult.Success()
 }
 
-func (r *RevisionController) generateDesiredRevision(ctx context.Context) (revisiongenerator.RenderedRevision, *operatorstatus.ReconcileResult) {
+func (r *RevisionController) generateDesiredRevision(ctx context.Context) (revisiongenerator.ParsedRevision, *operatorstatus.ReconcileResult) {
 	infra := &configv1.Infrastructure{}
 	if err := r.Get(ctx, client.ObjectKey{Name: infrastructureName}, infra); err != nil {
 		return nil, opresult.ErrorP(fmt.Errorf("fetching infrastructure: %w", err))
@@ -147,15 +144,24 @@ func (r *RevisionController) generateDesiredRevision(ctx context.Context) (revis
 	// Build ordered component list from provider metadata
 	providerComponents := r.buildComponentList(infra.Status.PlatformStatus.Type)
 
-	revision, err := revisiongenerator.NewRenderedRevision(providerComponents, revisiongenerator.WithManifestSubstitutions(r.manifestSubstitutions))
+	// EXP_BOOTSTRAP_FORMAT_IGNITION is a legacy substitution used only by CAPA.
+	// It should be moved to metadata in the CAPA provider manifests when that
+	// becomes possible.
+	revision, err := revisiongenerator.NewParsedRevision(providerComponents, revisiongenerator.WithManifestSubstitutions(map[string]string{
+		"EXP_BOOTSTRAP_FORMAT_IGNITION": "true",
+	}))
 	if err != nil {
-		return nil, opresult.ErrorP(fmt.Errorf("error creating rendered revision: %w", err))
+		return nil, opresult.ErrorP(fmt.Errorf("error creating parsed revision: %w", err))
+	}
+
+	if err := runtimetransformer.ValidateTransformers(r.Transformers, revision); err != nil {
+		return nil, opresult.NonRetryableErrorP(fmt.Errorf("transformer validation failed: %w", err))
 	}
 
 	return revision, nil
 }
 
-func (r *RevisionController) mergeRevisions(log logr.Logger, apiRevisions []operatorv1alpha1.ClusterAPIInstallerRevision, desiredRevision revisiongenerator.RenderedRevision) ([]operatorv1alpha1.ClusterAPIInstallerRevision, error) {
+func (r *RevisionController) mergeRevisions(log logr.Logger, apiRevisions []operatorv1alpha1.ClusterAPIInstallerRevision, desiredRevision revisiongenerator.ParsedRevision) ([]operatorv1alpha1.ClusterAPIInstallerRevision, error) {
 	// If there's no current revision we have nothing to merge
 	if desiredRevision == nil {
 		return apiRevisions, nil
@@ -268,17 +274,7 @@ func (r *RevisionController) buildComponentList(platform configv1.PlatformType) 
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *RevisionController) SetupWithManager(mgr ctrl.Manager, tlsOptions []func(config *tls.Config)) error {
-	tlsCfg := &tls.Config{}
-	for _, opt := range tlsOptions {
-		opt(tlsCfg)
-	}
-
-	r.manifestSubstitutions = map[string]string{
-		"TLS_MIN_VERSION":   libgocrypto.TLSVersionToNameOrDie(tlsCfg.MinVersion),
-		"TLS_CIPHER_SUITES": strings.Join(util.SliceMap(tlsCfg.CipherSuites, tls.CipherSuiteName), ","),
-	}
-
+func (r *RevisionController) SetupWithManager(mgr ctrl.Manager) error {
 	isInfrastructureReady := func(obj client.Object) bool {
 		if obj == nil {
 			return false
