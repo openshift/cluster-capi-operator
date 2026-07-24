@@ -25,6 +25,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
 	configv1 "github.com/openshift/api/config/v1"
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
@@ -122,6 +123,34 @@ var _ = Describe("InstallerController", Serial, func() {
 
 			// Infra ConfigMap should be deleted via teardown of revision 1.
 			Expect(checkConfigMap(ctx, infraCMName)).To(test.BeK8SNotFound())
+		}, defaultNodeTimeout)
+
+		It("tears down CompatibilityRequirements when a new revision removes unmanaged CRDs", func(ctx context.Context) {
+			unmanagedCRDs := []string{"testgadgets.test.example.com"}
+			crName := "ccapio-testgadgets.test.example.com"
+
+			By("installing a revision with an unmanaged CRD")
+
+			revision := addRevisionWithUnmanagedCRDs(ctx,
+				[]string{providerMixed},
+				unmanagedCRDs,
+			)
+			setCompatibilityRequirementConditions(ctx, crName, true, true)
+			waitForRevision(ctx, revision.Name)
+
+			By("verifying the CompatibilityRequirement and ConfigMap both exist")
+
+			cr := &apiextensionsv1alpha1.CompatibilityRequirement{}
+			cr.SetName(crName)
+			Expect(cl.Get(ctx, client.ObjectKeyFromObject(cr), cr)).To(Succeed())
+			Expect(checkConfigMap(ctx, mixedCMName)).To(Succeed())
+
+			By("installing a revision without unmanaged CRDs")
+			addRevisionAndWaitForSuccess(ctx, providerMixed)
+
+			By("verifying the CompatibilityRequirement is torn down but the ConfigMap remains")
+			Expect(cl.Get(ctx, client.ObjectKeyFromObject(cr), cr)).To(test.BeK8SNotFound())
+			Expect(checkConfigMap(ctx, mixedCMName)).To(Succeed())
 		}, defaultNodeTimeout)
 
 		It("tears down all objects when an empty revision is added", func(ctx context.Context) {
@@ -418,6 +447,47 @@ var _ = Describe("InstallerController", Serial, func() {
 				WithContext(ctx).
 				Should(HaveField("Data", HaveKeyWithValue("version", "v1")))
 		}, defaultNodeTimeout)
+
+		It("continues reconciling previous revision when new revision is blocked on CompatibilityRequirement", func(ctx context.Context) {
+			By("installing a valid first revision")
+			addRevisionAndWaitForSuccess(ctx, providerCore)
+
+			By("adding a second revision blocked on a CompatibilityRequirement")
+			addRevisionWithUnmanagedCRDs(ctx,
+				[]string{providerCore, providerCRD},
+				[]string{"testwidgets.test.example.com"},
+			)
+
+			waitForConditions(ctx,
+				test.HaveCondition(conditionTypeProgressing).
+					WithStatus(configv1.ConditionTrue).
+					WithReason(operatorstatus.ReasonProgressing).
+					WithMessage(ContainSubstring("waiting on phase compatibility-requirements")),
+			)
+
+			By("verifying the first revision's objects still exist")
+
+			cm, err := getConfigMap(ctx, coreCMName)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cm.Data).To(HaveKeyWithValue("version", "v1"))
+
+			By("modifying the managed ConfigMap to verify drift correction")
+			Eventually(kWithCtx(ctx).Update(cm, func() {
+				cm.Data["version"] = "modified"
+			})).
+				WithContext(ctx).
+				WithTimeout(defaultEventuallyTimeout).
+				Should(Succeed())
+
+			restored := &corev1.ConfigMap{}
+			restored.SetName(coreCMName)
+			restored.SetNamespace("default")
+
+			Eventually(kWithCtx(ctx).Object(restored)).
+				WithTimeout(defaultEventuallyTimeout).
+				WithContext(ctx).
+				Should(HaveField("Data", HaveKeyWithValue("version", "v1")))
+		}, defaultNodeTimeout)
 	})
 
 	Context("Deployment Probes", func() {
@@ -470,6 +540,184 @@ var _ = Describe("InstallerController", Serial, func() {
 			cm, err := getConfigMap(ctx, coreCMName)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(cm.Data).To(HaveKeyWithValue("version", "v1"))
+		}, defaultNodeTimeout)
+	})
+
+	Context("CompatibilityRequirement Probes", func() {
+		It("gates phase on Admitted and Compatible conditions", func(ctx context.Context) {
+			unmanagedCRDs := []string{"testgadgets.test.example.com"}
+			crName := "ccapio-testgadgets.test.example.com"
+
+			revision := addRevisionWithUnmanagedCRDs(ctx,
+				[]string{providerMixed},
+				unmanagedCRDs,
+			)
+
+			By("waiting for the phase to block on compatibility-requirements")
+			waitForConditions(ctx,
+				test.HaveCondition(conditionTypeProgressing).
+					WithStatus(configv1.ConditionTrue).
+					WithReason(operatorstatus.ReasonProgressing).
+					WithMessage(ContainSubstring("waiting on phase compatibility-requirements")),
+			)
+
+			By("verifying the CompatibilityRequirement exists and the ConfigMap does not")
+
+			cr := &apiextensionsv1alpha1.CompatibilityRequirement{}
+			cr.SetName(crName)
+			Expect(cl.Get(ctx, client.ObjectKeyFromObject(cr), cr)).To(Succeed())
+			Expect(checkConfigMap(ctx, mixedCMName)).To(test.BeK8SNotFound())
+
+			By("setting Admitted=True and Compatible=True")
+			setCompatibilityRequirementConditions(ctx, crName, true, true)
+
+			By("waiting for the revision to complete")
+			waitForRevision(ctx, revision.Name)
+
+			cm, err := getConfigMap(ctx, mixedCMName)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cm.Data).To(HaveKeyWithValue("source", "mixed"))
+		}, defaultNodeTimeout)
+
+		It("stays incomplete when compatibility checker has not reconciled", func(ctx context.Context) {
+			unmanagedCRDs := []string{"testwidgets.test.example.com"}
+			crName := "ccapio-testwidgets.test.example.com"
+
+			addRevisionWithUnmanagedCRDs(ctx,
+				[]string{providerCRD},
+				unmanagedCRDs,
+			)
+
+			By("waiting for the phase to block on compatibility-requirements")
+			waitForConditions(ctx,
+				test.HaveCondition(conditionTypeProgressing).
+					WithStatus(configv1.ConditionTrue).
+					WithReason(operatorstatus.ReasonProgressing).
+					WithMessage(ContainSubstring("waiting on phase compatibility-requirements")),
+			)
+
+			By("verifying the CompatibilityRequirement exists")
+
+			cr := &apiextensionsv1alpha1.CompatibilityRequirement{}
+			cr.SetName(crName)
+			Expect(cl.Get(ctx, client.ObjectKeyFromObject(cr), cr)).To(Succeed())
+
+			By("verifying the phase remains blocked with no conditions set")
+
+			co := &configv1.ClusterOperator{}
+			co.SetName("cluster-api")
+			Consistently(kWithCtx(ctx).Object(co)).
+				WithContext(ctx).
+				WithTimeout(defaultEventuallyTimeout).
+				Should(HaveField("Status.Conditions",
+					test.HaveCondition(conditionTypeProgressing).
+						WithStatus(configv1.ConditionTrue),
+				))
+		}, defaultNodeTimeout)
+
+		It("blocks when Admitted is false even if Compatible is true", func(ctx context.Context) {
+			unmanagedCRDs := []string{"testgadgets.test.example.com"}
+			crName := "ccapio-testgadgets.test.example.com"
+
+			addRevisionWithUnmanagedCRDs(ctx,
+				[]string{providerMixed},
+				unmanagedCRDs,
+			)
+
+			By("waiting for the phase to block on compatibility-requirements")
+			waitForConditions(ctx,
+				test.HaveCondition(conditionTypeProgressing).
+					WithStatus(configv1.ConditionTrue).
+					WithReason(operatorstatus.ReasonProgressing).
+					WithMessage(ContainSubstring("waiting on phase compatibility-requirements")),
+			)
+
+			By("setting Admitted=False and Compatible=True")
+			setCompatibilityRequirementConditions(ctx, crName, false, true)
+
+			By("verifying the phase remains blocked")
+
+			co := &configv1.ClusterOperator{}
+			co.SetName("cluster-api")
+			Consistently(kWithCtx(ctx).Object(co)).
+				WithContext(ctx).
+				WithTimeout(defaultEventuallyTimeout).
+				Should(HaveField("Status.Conditions",
+					test.HaveCondition(conditionTypeProgressing).
+						WithStatus(configv1.ConditionTrue),
+				))
+
+			Expect(checkConfigMap(ctx, mixedCMName)).To(test.BeK8SNotFound())
+		}, defaultNodeTimeout)
+
+		It("unblocks when transitioning from incompatible to compatible", func(ctx context.Context) {
+			unmanagedCRDs := []string{"testgadgets.test.example.com"}
+			crName := "ccapio-testgadgets.test.example.com"
+
+			revision := addRevisionWithUnmanagedCRDs(ctx,
+				[]string{providerMixed},
+				unmanagedCRDs,
+			)
+
+			By("waiting for the phase to block on compatibility-requirements")
+			waitForConditions(ctx,
+				test.HaveCondition(conditionTypeProgressing).
+					WithStatus(configv1.ConditionTrue).
+					WithReason(operatorstatus.ReasonProgressing).
+					WithMessage(ContainSubstring("waiting on phase compatibility-requirements")),
+			)
+
+			By("setting Compatible=False to confirm blocking")
+			setCompatibilityRequirementConditions(ctx, crName, true, false)
+
+			Expect(checkConfigMap(ctx, mixedCMName)).To(test.BeK8SNotFound())
+
+			By("transitioning to Compatible=True")
+			setCompatibilityRequirementConditions(ctx, crName, true, true)
+
+			By("waiting for the revision to complete")
+			waitForRevision(ctx, revision.Name)
+
+			cm, err := getConfigMap(ctx, mixedCMName)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cm.Data).To(HaveKeyWithValue("source", "mixed"))
+		}, defaultNodeTimeout)
+
+		It("blocks entire phase when one of multiple CRDs is incompatible", func(ctx context.Context) {
+			unmanagedCRDs := []string{
+				"testwidgets.test.example.com",
+				"testgadgets.test.example.com",
+			}
+
+			addRevisionWithUnmanagedCRDs(ctx,
+				[]string{providerCRD, providerMixed},
+				unmanagedCRDs,
+			)
+
+			By("waiting for the phase to block on compatibility-requirements")
+			waitForConditions(ctx,
+				test.HaveCondition(conditionTypeProgressing).
+					WithStatus(configv1.ConditionTrue).
+					WithReason(operatorstatus.ReasonProgressing),
+			)
+
+			By("setting one compatible and one incompatible")
+			setCompatibilityRequirementConditions(ctx, "ccapio-testwidgets.test.example.com", true, true)
+			setCompatibilityRequirementConditions(ctx, "ccapio-testgadgets.test.example.com", true, false)
+
+			By("verifying the phase remains blocked")
+
+			co := &configv1.ClusterOperator{}
+			co.SetName("cluster-api")
+			Consistently(kWithCtx(ctx).Object(co)).
+				WithContext(ctx).
+				WithTimeout(defaultEventuallyTimeout).
+				Should(HaveField("Status.Conditions",
+					test.HaveCondition(conditionTypeProgressing).
+						WithStatus(configv1.ConditionTrue),
+				))
+
+			Expect(checkConfigMap(ctx, mixedCMName)).To(test.BeK8SNotFound())
 		}, defaultNodeTimeout)
 	})
 

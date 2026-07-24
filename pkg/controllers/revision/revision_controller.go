@@ -89,13 +89,7 @@ func (r *RevisionController) Reconcile(ctx context.Context, _ ctrl.Request) (ctr
 }
 
 func (r *RevisionController) reconcile(ctx context.Context, log logr.Logger) operatorstatus.ReconcileResult {
-	// Generate a desired revision from the current state
-	desiredRevision, result := r.generateDesiredRevision(ctx)
-	if result != nil {
-		return *result
-	}
-
-	// Get ClusterAPI singleton
+	// Get ClusterAPI singleton first — generateDesiredRevision needs spec fields.
 	clusterAPI := &operatorv1alpha1.ClusterAPI{}
 	if err := r.Get(ctx, client.ObjectKey{Name: clusterAPIName}, clusterAPI); err != nil {
 		if apierrors.IsNotFound(err) {
@@ -103,6 +97,16 @@ func (r *RevisionController) reconcile(ctx context.Context, log logr.Logger) ope
 		}
 
 		return opresult.Error(fmt.Errorf("fetching ClusterAPI: %w", err))
+	}
+
+	var unmanagedCRDs []string
+	if clusterAPI.Spec != nil {
+		unmanagedCRDs = clusterAPI.Spec.UnmanagedCustomResourceDefinitions
+	}
+
+	desiredRevision, result := r.generateDesiredRevision(ctx, unmanagedCRDs)
+	if result != nil {
+		return *result
 	}
 
 	// Create a reverse sorted, merged list of revisions. It will prepend the
@@ -134,7 +138,7 @@ func (r *RevisionController) reconcile(ctx context.Context, log logr.Logger) ope
 	return opresult.Success()
 }
 
-func (r *RevisionController) generateDesiredRevision(ctx context.Context) (revisiongenerator.RenderedRevision, *operatorstatus.ReconcileResult) {
+func (r *RevisionController) generateDesiredRevision(ctx context.Context, unmanagedCRDs []string) (revisiongenerator.RenderedRevision, *operatorstatus.ReconcileResult) {
 	infra := &configv1.Infrastructure{}
 	if err := r.Get(ctx, client.ObjectKey{Name: infrastructureName}, infra); err != nil {
 		return nil, opresult.ErrorP(fmt.Errorf("fetching infrastructure: %w", err))
@@ -147,9 +151,12 @@ func (r *RevisionController) generateDesiredRevision(ctx context.Context) (revis
 	// Build ordered component list from provider metadata
 	providerComponents := r.buildComponentList(infra.Status.PlatformStatus.Type)
 
-	revision, err := revisiongenerator.NewRenderedRevision(providerComponents, revisiongenerator.WithManifestSubstitutions(r.manifestSubstitutions))
+	revision, err := revisiongenerator.NewRenderedRevision(providerComponents,
+		revisiongenerator.WithManifestSubstitutions(r.manifestSubstitutions),
+		revisiongenerator.WithUnmanagedCRDs(unmanagedCRDs),
+	)
 	if err != nil {
-		return nil, opresult.ErrorP(fmt.Errorf("error creating rendered revision: %w", err))
+		return nil, opresult.NonRetryableErrorP(fmt.Errorf("error creating rendered revision: %w", err))
 	}
 
 	return revision, nil

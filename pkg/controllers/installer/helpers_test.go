@@ -26,8 +26,10 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/types"
+	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
 	configv1 "github.com/openshift/api/config/v1"
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -253,17 +255,48 @@ func latestRevision(revisions []operatorv1alpha1.ClusterAPIInstallerRevision) op
 func addRevision(ctx context.Context, providerNames ...string) operatorv1alpha1.ClusterAPIInstallerRevision {
 	GinkgoHelper()
 
-	// Get current ClusterAPI to determine revision index.
+	return addRevisionWithOptions(ctx, providerNames, nil)
+}
+
+func addRevisionAndWaitForSuccess(ctx context.Context, providerNames ...string) {
+	GinkgoHelper()
+
+	By("Adding a revision with providers: "+strings.Join(providerNames, ", "), func() {
+		revision := addRevision(ctx, providerNames...)
+		waitForRevision(ctx, revision.Name)
+	})
+}
+
+// addRevisionWithUnmanagedCRDs appends a new revision with the given providers and unmanaged CRDs.
+func addRevisionWithUnmanagedCRDs(ctx context.Context, providerNames []string, unmanagedCRDs []string) operatorv1alpha1.ClusterAPIInstallerRevision {
+	GinkgoHelper()
+
+	return addRevisionWithOptions(ctx, providerNames, unmanagedCRDs)
+}
+
+func addRevisionWithOptions(ctx context.Context, providerNames []string, unmanagedCRDs []string) operatorv1alpha1.ClusterAPIInstallerRevision {
+	GinkgoHelper()
+
 	clusterAPI := &operatorv1alpha1.ClusterAPI{}
 	Expect(cl.Get(ctx, client.ObjectKey{Name: clusterAPIName}, clusterAPI)).To(Succeed())
 
 	var apiRev operatorv1alpha1.ClusterAPIInstallerRevision
 
-	By("Rendering new revision", func() {
+	byMsg := "Rendering new revision"
+	if len(unmanagedCRDs) > 0 {
+		byMsg += " with unmanaged CRDs: " + strings.Join(unmanagedCRDs, ", ")
+	}
+
+	By(byMsg, func() {
 		profiles := lookupProfiles(providerNames...)
 
-		// Render the revision to compute the correct content ID.
 		rendered, err := revisiongenerator.NewRenderedRevision(profiles)
+		if len(unmanagedCRDs) > 0 {
+			rendered, err = revisiongenerator.NewRenderedRevision(profiles,
+				revisiongenerator.WithUnmanagedCRDs(unmanagedCRDs),
+			)
+		}
+
 		Expect(err).NotTo(HaveOccurred())
 
 		var revisionIndex int64
@@ -289,13 +322,33 @@ func addRevision(ctx context.Context, providerNames ...string) operatorv1alpha1.
 	return apiRev
 }
 
-func addRevisionAndWaitForSuccess(ctx context.Context, providerNames ...string) {
+// setCompatibilityRequirementConditions sets Admitted and Compatible conditions on a CompatibilityRequirement.
+func setCompatibilityRequirementConditions(ctx context.Context, name string, admitted, compatible bool) {
 	GinkgoHelper()
 
-	By("Adding a revision with providers: "+strings.Join(providerNames, ", "), func() {
-		revision := addRevision(ctx, providerNames...)
-		waitForRevision(ctx, revision.Name)
-	})
+	conditionStatus := func(b bool) metav1.ConditionStatus {
+		if b {
+			return metav1.ConditionTrue
+		}
+
+		return metav1.ConditionFalse
+	}
+
+	cr := &apiextensionsv1alpha1.CompatibilityRequirement{}
+	cr.SetName(name)
+
+	Eventually(kWithCtx(ctx).UpdateStatus(cr, func() {
+		meta.SetStatusCondition(&cr.Status.Conditions, metav1.Condition{
+			Type:   apiextensionsv1alpha1.CompatibilityRequirementAdmitted,
+			Status: conditionStatus(admitted),
+			Reason: "Test",
+		})
+		meta.SetStatusCondition(&cr.Status.Conditions, metav1.Condition{
+			Type:   apiextensionsv1alpha1.CompatibilityRequirementCompatible,
+			Status: conditionStatus(compatible),
+			Reason: "Test",
+		})
+	})).WithContext(ctx).WithTimeout(defaultEventuallyTimeout).Should(Succeed())
 }
 
 // addEmptyRevision appends a revision with no components.

@@ -25,6 +25,7 @@ import (
 	. "github.com/onsi/gomega"
 	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -73,10 +74,12 @@ var _ = BeforeSuite(func() {
 func setupProviderFixtures() {
 	tb := GinkgoTB()
 
+	widgetCRD := test.GenerateCRD(schema.GroupVersionKind{Group: "example.com", Version: "v1", Kind: "Widget"})
+
 	defaultProviderImgs = []providerimages.ProviderImageManifests{
 		test.NewProviderImageManifests(tb, "core").
 			WithImageRef("registry.example.com/core@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef").
-			WithManifests(test.ConfigMapYAML("core-cm")).
+			WithManifests(test.ConfigMapYAML("core-cm"), test.CRDToYAML(widgetCRD)).
 			Build(),
 		test.NewProviderImageManifests(tb, "infra-aws").
 			WithInstallOrder(20).
