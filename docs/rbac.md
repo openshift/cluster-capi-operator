@@ -20,15 +20,27 @@ Both SAs also bind to ClusterRole `system:openshift:openshift-cluster-api:read-t
 
 ### capi-controllers
 
-The `capi-controllers` ServiceAccount (used by both the `capi-controllers` and `machine-api-migration` containers) has permissions split across scopes:
+The `capi-controllers` ServiceAccount runs the `capi-controllers` binary (core cluster, infra cluster, kubeconfig, secret sync, and webhook controllers):
 
 | Manifest | Kind | Scope | Purpose |
 |----------|------|-------|---------|
-| `0000_30_cluster-api_03_rbac_roles.yaml` | ClusterRole `openshift-capi-controllers` | cluster-wide | Cluster-scoped resources only: infrastructures, clusteroperators, featuregates, clusterversions, nodes, CRDs |
-| `0000_30_cluster-api_03_rbac_roles.yaml` | Role `capi-controllers` | `openshift-cluster-api` | CAPI core + infra provider resources, secrets, pod self-read, events, leases |
-| `0000_30_cluster-api_03_rbac_roles.yaml` | Role `capi-controllers` | `openshift-machine-api` | MAPI machines, machinesets, controlplanemachinesets, secrets, events |
+| `0000_30_cluster-api_03_rbac_roles.yaml` | ClusterRole `openshift-capi-controllers` | cluster-wide | Cluster-scoped resources: infrastructures, clusteroperators, featuregates, clusterversions, nodes, CRDs |
+| `0000_30_cluster-api_03_rbac_roles.yaml` | Role `capi-controllers` | `openshift-cluster-api` | CAPI Cluster + infra cluster resources, secrets, pod self-read, events, leases |
+| `0000_30_cluster-api_03_rbac_roles.yaml` | Role `capi-controllers` | `openshift-machine-api` | MAPI machines (read-only for SecretSync), machinesets (cache informer), controlplanemachinesets (InfraCluster), secrets (read-only) |
 | `0000_30_cluster-api_03_rbac_roles.yaml` | Role `capi-controllers-kube-system` | `kube-system` | Secrets (vSphere credentials) |
 | `0000_30_cluster-api_03_rbac_roles.yaml` | Role `cluster-capi-operator-pull-secret` | `openshift-config` | Pull-secret read |
+
+This SA also binds to ClusterRole `system:openshift:openshift-cluster-api:read-tls-configuration` for APIServer TLS profile reading.
+
+### machine-api-migration
+
+The `machine-api-migration` ServiceAccount runs the `machine-api-migration` binary (machine/machineset sync and migration controllers):
+
+| Manifest | Kind | Scope | Purpose |
+|----------|------|-------|---------|
+| `0000_30_cluster-api_03_machine-api-migration-rbac-roles.yaml` | ClusterRole `openshift-machine-api-migration` | cluster-wide | Cluster-scoped resources: infrastructures, featuregates, clusterversions, CRDs |
+| `0000_30_cluster-api_03_machine-api-migration-rbac-roles.yaml` | Role `machine-api-migration` | `openshift-cluster-api` | CAPI Cluster (read), Machine/MachineSet + infra cluster (read)/machine/machinetemplate resources, secrets, pod self-read, events, leases |
+| `0000_30_cluster-api_03_machine-api-migration-rbac-roles.yaml` | Role `machine-api-migration` | `openshift-machine-api` | MAPI machines, machinesets, controlplanemachinesets, secrets, events |
 
 This SA also binds to ClusterRole `system:openshift:openshift-cluster-api:read-tls-configuration` for APIServer TLS profile reading.
 

@@ -7,8 +7,7 @@ metadata:
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
     release.openshift.io/feature-gate: "ClusterAPIMachineManagement"
-    capability.openshift.io/name: ClusterAPI
-  name: openshift-capi-controllers
+  name: openshift-machine-api-migration
 rules:
 - apiGroups:
   - config.openshift.io
@@ -18,31 +17,6 @@ rules:
   - get
   - list
   - watch
-- apiGroups:
-  - config.openshift.io
-  resources:
-  - clusteroperators
-  verbs:
-  - list
-  - watch
-- apiGroups:
-  - config.openshift.io
-  resources:
-  - clusteroperators
-  resourceNames:
-  - cluster-api
-  verbs:
-  - get
-  - patch
-- apiGroups:
-  - config.openshift.io
-  resources:
-  - clusteroperators/status
-  resourceNames:
-  - cluster-api
-  verbs:
-  - update
-  - patch
 - apiGroups:
   - config.openshift.io
   resources:
@@ -60,16 +34,6 @@ rules:
   - get
   - list
   - watch
-- apiGroups:
-  - ""
-  resources:
-  - nodes
-  verbs:
-  - get
-  - list
-  - watch
-  - patch
-  - update
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
@@ -79,8 +43,7 @@ metadata:
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
     release.openshift.io/feature-gate: "ClusterAPIMachineManagement"
-    capability.openshift.io/name: ClusterAPI
-  name: capi-controllers
+  name: machine-api-migration
   namespace: openshift-cluster-api
 rules:
 - apiGroups:
@@ -98,7 +61,8 @@ rules:
 - apiGroups:
   - cluster.x-k8s.io
   resources:
-  - clusters
+  - machines
+  - machinesets
   verbs:
   - get
   - list
@@ -110,14 +74,25 @@ rules:
 - apiGroups:
   - cluster.x-k8s.io
   resources:
-  - clusters/status
+  - machines/status
+  - machinesets/status
   verbs:
   - update
   - patch
 - apiGroups:
   - cluster.x-k8s.io
   resources:
+  - clusters
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - cluster.x-k8s.io
+  resources:
   - clusters/finalizers
+  - machines/finalizers
+  - machinesets/finalizers
   verbs:
   - update
 - apiGroups:
@@ -134,31 +109,56 @@ rules:
   - get
   - list
   - watch
-  - create
-  - update
-  - patch
 - apiGroups:
   - infrastructure.cluster.x-k8s.io
   resources:
-  - awsclusters/status
-  - azureclusters/status
-  - gcpclusters/status
-  - vsphereclusters/status
-  - openstackclusters/status
-  - metal3clusters/status
-  - ibmpowervsclusters/status
-  verbs:
-  - update
-  - patch
-- apiGroups:
-  - infrastructure.cluster.x-k8s.io
-  resources:
-  - azureclusteridentities
+  - awsmachines
+  - azuremachines
+  - gcpmachines
+  - vspheremachines
+  - openstackmachines
+  - metal3machines
+  - ibmpowervsmachines
   verbs:
   - get
   - list
   - watch
   - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - infrastructure.cluster.x-k8s.io
+  resources:
+  - awsmachines/status
+  - azuremachines/status
+  - gcpmachines/status
+  - vspheremachines/status
+  - openstackmachines/status
+  - metal3machines/status
+  - ibmpowervsmachines/status
+  verbs:
+  - update
+  - patch
+- apiGroups:
+  - infrastructure.cluster.x-k8s.io
+  resources:
+  - awsmachinetemplates
+  - azuremachinetemplates
+  - gcpmachinetemplates
+  - vspheremachinetemplates
+  - openstackmachinetemplates
+  - metal3machinetemplates
+  - ibmpowervsmachinetemplates
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+  - deletecollection
 - apiGroups:
   - ""
   resources:
@@ -192,25 +192,37 @@ metadata:
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
     release.openshift.io/feature-gate: "ClusterAPIMachineManagement"
-    capability.openshift.io/name: ClusterAPI
-  name: capi-controllers
+  name: machine-api-migration
   namespace: openshift-machine-api
 rules:
 - apiGroups:
   - machine.openshift.io
   resources:
   - machines
+  - machinesets
   verbs:
   - get
   - list
   - watch
+  - create
+  - update
+  - patch
+  - delete
 - apiGroups:
   - machine.openshift.io
   resources:
-  - machinesets
+  - machines/status
+  - machinesets/status
   verbs:
-  - list
-  - watch
+  - update
+  - patch
+- apiGroups:
+  - machine.openshift.io
+  resources:
+  - machines/finalizers
+  - machinesets/finalizers
+  verbs:
+  - update
 - apiGroups:
   - machine.openshift.io
   resources:
@@ -227,52 +239,10 @@ rules:
   - get
   - list
   - watch
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  annotations:
-    exclude.release.openshift.io/internal-openshift-hosted: "true"
-    include.release.openshift.io/self-managed-high-availability: "true"
-    include.release.openshift.io/single-node-developer: "true"
-    release.openshift.io/feature-gate: "ClusterAPIMachineManagement"
-    capability.openshift.io/name: ClusterAPI
-  name: capi-controllers-kube-system
-  namespace: kube-system
-rules:
 - apiGroups:
   - ""
   resources:
-  - secrets
+  - events
   verbs:
-  - list
-  - watch
-- apiGroups:
-  - ""
-  resources:
-  - secrets
-  resourceNames:
-  - vsphere-creds
-  verbs:
-  - get
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  annotations:
-    exclude.release.openshift.io/internal-openshift-hosted: "true"
-    include.release.openshift.io/self-managed-high-availability: "true"
-    include.release.openshift.io/single-node-developer: "true"
-    release.openshift.io/feature-gate: "ClusterAPIMachineManagement"
-    capability.openshift.io/name: ClusterAPI
-  name: cluster-capi-operator-pull-secret
-  namespace: openshift-config
-rules:
-- apiGroups:
-  - ""
-  resources:
-  - secrets
-  resourceNames:
-  - pull-secret
-  verbs:
-  - get
+  - create
+  - patch

@@ -61,14 +61,12 @@ spec:
     ports:
     - port: 8443
       protocol: TCP
-    # machine-api-migration controller has a distinct metrics endpoint
-    - port: 8442
-      protocol: TCP
   podSelector:
     matchExpressions:
     - key: k8s-app
       operator: In
       values:
       - capi-controllers
+      - machine-api-migration
   policyTypes:
   - Ingress
