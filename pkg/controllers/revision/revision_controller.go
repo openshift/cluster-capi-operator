@@ -239,9 +239,9 @@ func (r *RevisionController) writeRevisions(ctx context.Context, log logr.Logger
 	return nil
 }
 
-// buildComponentList builds an ordered list of provider components for the given platform.
-// Components are ordered by: core+global, core+platform, infra+global, infra+platform
-// Providers that don't match the current platform are filtered out.
+// buildComponentList builds an ordered list of provider components for the
+// given platform. Components are ordered by install order, then platform, then
+// name. Providers that don't match the current platform are filtered out.
 func (r *RevisionController) buildComponentList(platform configv1.PlatformType) []providerimages.ProviderImageManifests {
 	// Iterate over only providers that have either no platform restriction, or
 	// match the current platform.
