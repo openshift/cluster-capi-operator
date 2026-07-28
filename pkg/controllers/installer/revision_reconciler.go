@@ -168,12 +168,12 @@ func (r *revisionReconciler) reconcileRevisions(ctx context.Context, apiRevision
 // * a boolean indicating if the revision was reconciled completely
 // * an error if any occurred.
 func (r *revisionReconciler) reconcileRevision(ctx context.Context, apiRevision operatorv1alpha1.ClusterAPIInstallerRevision) (bool, string, error) {
-	revision, err := revisiongenerator.NewInstallerRevisionFromAPI(apiRevision, r.providerProfiles, revisiongenerator.WithObjectCollectors(r.collectObjects))
+	revision, err := revisiongenerator.NewInstallerRevisionFromAPI(apiRevision, r.providerProfiles)
 	if err != nil {
 		return false, "", fmt.Errorf("error creating installer revision from API revision %s: %w", apiRevision.Name, reconcile.TerminalError(err))
 	}
 
-	bcRevision := toBoxcutterRevision(revision)
+	bcRevision := toBoxcutterRevision(revision, r.collectObjects)
 	phases := bcRevision.GetPhases()
 
 	totalObjects := 0
@@ -330,7 +330,7 @@ func (r *revisionReconciler) teardownRevisions(ctx context.Context, apiRevisions
 // * a boolean indicating if the revision was torn down completely
 // * an error if any occurred.
 func (r *revisionReconciler) teardownRevision(ctx context.Context, apiRevision operatorv1alpha1.ClusterAPIInstallerRevision) (bool, string, error) {
-	revision, err := revisiongenerator.NewInstallerRevisionFromAPI(apiRevision, r.providerProfiles, revisiongenerator.WithObjectCollectors(r.collectObjects))
+	revision, err := revisiongenerator.NewInstallerRevisionFromAPI(apiRevision, r.providerProfiles)
 	if err != nil {
 		// We can't teardown this revision if we can't create it, so we consider it complete.
 		return true, "", fmt.Errorf("error creating installer revision from API revision %s: %w", apiRevision.Name, reconcile.TerminalError(err))
@@ -338,7 +338,7 @@ func (r *revisionReconciler) teardownRevision(ctx context.Context, apiRevision o
 
 	revisionName := revision.RevisionName()
 
-	bcRevision := toBoxcutterRevision(revision)
+	bcRevision := toBoxcutterRevision(revision, r.collectObjects)
 	phases := bcRevision.GetPhases()
 
 	totalObjects := 0
@@ -428,7 +428,7 @@ func mergeWithTail(ctx context.Context, tailHandler revisionHandler, tailRevisio
 	}
 }
 
-func (r *revisionReconciler) collectObjects(obj unstructured.Unstructured) {
+func (r *revisionReconciler) collectObjects(obj *unstructured.Unstructured) {
 	gvk := obj.GroupVersionKind()
 	r.gvks.Insert(gvk)
 

@@ -283,22 +283,10 @@ func buildRevisionName(releaseVersion, contentID string, index int64) operatorv1
 }
 
 type revisionRenderConfig struct {
-	objectCollectors []RevisionObjectCollector
-	substitutions    map[string]string
+	substitutions map[string]string
 }
 
 type revisionRenderOption func(*revisionRenderConfig)
-
-// RevisionObjectCollector is a function that will be called for each object in
-// the rendered revision.
-type RevisionObjectCollector func(obj unstructured.Unstructured)
-
-// WithObjectCollectors adds object collectors to the revision render config.
-func WithObjectCollectors(collectors ...RevisionObjectCollector) revisionRenderOption {
-	return func(opts *revisionRenderConfig) {
-		opts.objectCollectors = append(opts.objectCollectors, collectors...)
-	}
-}
 
 // WithManifestSubstitutions adds envsubst-style substitutions that will be
 // applied to manifests during rendering and recorded on the revision. When
@@ -409,10 +397,6 @@ func newRenderedComponent(providerProfile *providerimages.ProviderImageManifests
 		}
 
 		unstructured = transformObject(unstructured, component.name)
-
-		for _, collector := range cfg.objectCollectors {
-			collector(unstructured)
-		}
 
 		component.objects = append(component.objects, &unstructured)
 	}

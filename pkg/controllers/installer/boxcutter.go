@@ -32,7 +32,7 @@ func toClientObject(obj *unstructured.Unstructured) client.Object {
 }
 
 // toBoxcutterRevision converts an InstallerRevision to a boxcutter.Revision.
-func toBoxcutterRevision(installerRevision revisiongenerator.InstallerRevision) boxcutter.Revision {
+func toBoxcutterRevision(installerRevision revisiongenerator.InstallerRevision, collectObjects func(obj *unstructured.Unstructured)) boxcutter.Revision {
 	probeOpts := util.SliceMap(allProbes(), func(p *probing.GroupKindSelector) boxcutter.PhaseReconcileOption {
 		return boxcutter.WithProbe(boxcutter.ProgressProbeType, p)
 	})
@@ -55,6 +55,8 @@ func toBoxcutterRevision(installerRevision revisiongenerator.InstallerRevision) 
 		var crds, objects []*unstructured.Unstructured
 
 		for _, obj := range component.Objects() {
+			collectObjects(obj)
+
 			gvk := obj.GetObjectKind().GroupVersionKind()
 			if gvk.GroupKind() == (schema.GroupKind{Group: "apiextensions.k8s.io", Kind: "CustomResourceDefinition"}) {
 				crds = append(crds, obj)
