@@ -17,11 +17,39 @@ limitations under the License.
 package installer
 
 import (
+	"fmt"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"pkg.package-operator.run/boxcutter"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/cluster-capi-operator/pkg/revisiongenerator"
+	"github.com/openshift/cluster-capi-operator/pkg/util"
 )
+
+// findPhase returns the phase with the given name, failing the test if none is found.
+func findPhase(phases []boxcutter.Phase, name string) boxcutter.Phase {
+	GinkgoHelper()
+
+	for _, phase := range phases {
+		if phase.GetName() == name {
+			return phase
+		}
+	}
+
+	Fail(fmt.Sprintf("phase %q not found", name))
+
+	return nil
+}
+
+// objectKinds returns the Kind of each object, for asserting phase contents
+// without depending on object ordering.
+func objectKinds(objs []client.Object) []string {
+	return util.SliceMap(objs, func(obj client.Object) string {
+		return obj.GetObjectKind().GroupVersionKind().Kind
+	})
+}
 
 // installerRevisionFromProfiles builds an InstallerRevision from named provider profiles
 // already registered in providersByName. Delegates to the package-level lookupProfiles helper
@@ -77,5 +105,40 @@ var _ = Describe("toBoxcutterRevision", func() {
 			Entry("CRDs and objects — two phases", providerMixed, 2),
 			Entry("adopt-existing annotation is stable across calls", providerAdoptExisting, 1),
 		)
+	})
+
+	Describe("CRD splitting", func() {
+		It("splits a component with CRDs and objects into a '-crds' phase and an objects phase", func() {
+			rev := installerRevisionFromProfiles(providerMixed)
+
+			phases := toBoxcutterRevision(rev).GetPhases()
+			Expect(phases).To(HaveLen(2))
+
+			crdPhase := findPhase(phases, providerMixed+"-crds")
+			Expect(objectKinds(crdPhase.GetObjects())).To(ConsistOf("CustomResourceDefinition"),
+				"the '-crds' phase should contain only CRDs")
+
+			objectsPhase := findPhase(phases, providerMixed)
+			Expect(objectKinds(objectsPhase.GetObjects())).To(ConsistOf("ConfigMap"),
+				"the base phase should contain only non-CRD objects")
+		})
+
+		It("does not create a '-crds' phase for a component with no CRDs", func() {
+			rev := installerRevisionFromProfiles(providerCore)
+
+			phases := toBoxcutterRevision(rev).GetPhases()
+			Expect(phases).To(HaveLen(1))
+			Expect(phases[0].GetName()).To(Equal(providerCore))
+			Expect(objectKinds(phases[0].GetObjects())).To(ConsistOf("ConfigMap"))
+		})
+
+		It("does not create a plain objects phase for a component with only CRDs", func() {
+			rev := installerRevisionFromProfiles(providerCRD)
+
+			phases := toBoxcutterRevision(rev).GetPhases()
+			Expect(phases).To(HaveLen(1))
+			Expect(phases[0].GetName()).To(Equal(providerCRD + "-crds"))
+			Expect(objectKinds(phases[0].GetObjects())).To(ConsistOf("CustomResourceDefinition"))
+		})
 	})
 })

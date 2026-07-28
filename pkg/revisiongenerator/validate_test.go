@@ -87,7 +87,7 @@ func TestValidateRenderedRevision(t *testing.T) {
 		rev := &renderedRevision{
 			components: []*renderedComponent{
 				{
-					objects: []unstructured.Unstructured{
+					objects: []*unstructured.Unstructured{
 						makeUnstructuredWithAnnotations(nil),
 						makeUnstructuredWithAnnotations(map[string]string{AdoptExistingAnnotation: AdoptExistingAlways}),
 					},
@@ -104,28 +104,7 @@ func TestValidateRenderedRevision(t *testing.T) {
 		rev := &renderedRevision{
 			components: []*renderedComponent{
 				{
-					objects: []unstructured.Unstructured{
-						makeUnstructuredWithAnnotations(map[string]string{AdoptExistingAnnotation: "bad"}),
-					},
-				},
-			},
-		}
-
-		err := validateRenderedRevision(rev)
-		if err == nil {
-			t.Fatal("expected error, got nil")
-		}
-
-		if !errors.Is(err, ErrInvalidAdoptExistingAnnotation) {
-			t.Errorf("expected error to wrap ErrInvalidAdoptExistingAnnotation, got %v", err)
-		}
-	})
-
-	t.Run("invalid annotation in CRDs", func(t *testing.T) {
-		rev := &renderedRevision{
-			components: []*renderedComponent{
-				{
-					crds: []unstructured.Unstructured{
+					objects: []*unstructured.Unstructured{
 						makeUnstructuredWithAnnotations(map[string]string{AdoptExistingAnnotation: "bad"}),
 					},
 				},
@@ -143,8 +122,8 @@ func TestValidateRenderedRevision(t *testing.T) {
 	})
 }
 
-func makeUnstructuredWithAnnotations(annotations map[string]string) unstructured.Unstructured {
-	obj := unstructured.Unstructured{}
+func makeUnstructuredWithAnnotations(annotations map[string]string) *unstructured.Unstructured {
+	obj := &unstructured.Unstructured{}
 	obj.SetAnnotations(annotations)
 
 	return obj

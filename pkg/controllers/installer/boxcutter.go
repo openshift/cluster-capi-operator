@@ -17,6 +17,8 @@ limitations under the License.
 package installer
 
 import (
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"pkg.package-operator.run/boxcutter"
 	"pkg.package-operator.run/boxcutter/probing"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -24,6 +26,10 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/revisiongenerator"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 )
+
+func toClientObject(obj *unstructured.Unstructured) client.Object {
+	return obj
+}
 
 // toBoxcutterRevision converts an InstallerRevision to a boxcutter.Revision.
 func toBoxcutterRevision(installerRevision revisiongenerator.InstallerRevision) boxcutter.Revision {
@@ -33,18 +39,32 @@ func toBoxcutterRevision(installerRevision revisiongenerator.InstallerRevision) 
 
 	var phases []boxcutter.Phase
 
-	for _, component := range installerRevision.Components() {
-		if crds := component.CRDs(); len(crds) > 0 {
-			objects, adoptOpts := processAdoptExistingAnnotations(crds)
-			phases = append(phases, boxcutter.NewPhase(component.Name()+"-crds", objects).
-				WithReconcileOptions(append(probeOpts, adoptOpts...)...))
+	addPhase := func(name string, objects []*unstructured.Unstructured) {
+		if len(objects) == 0 {
+			return
 		}
 
-		if objects := component.Objects(); len(objects) > 0 {
-			objects, adoptOpts := processAdoptExistingAnnotations(objects)
-			phases = append(phases, boxcutter.NewPhase(component.Name(), objects).
-				WithReconcileOptions(append(probeOpts, adoptOpts...)...))
+		objects, adoptOpts := processAdoptExistingAnnotations(objects)
+		bcPhase := boxcutter.NewPhase(name, util.SliceMap(objects, toClientObject)).
+			WithReconcileOptions(append(probeOpts, adoptOpts...)...)
+
+		phases = append(phases, bcPhase)
+	}
+
+	for _, component := range installerRevision.Components() {
+		var crds, objects []*unstructured.Unstructured
+
+		for _, obj := range component.Objects() {
+			gvk := obj.GetObjectKind().GroupVersionKind()
+			if gvk.GroupKind() == (schema.GroupKind{Group: "apiextensions.k8s.io", Kind: "CustomResourceDefinition"}) {
+				crds = append(crds, obj)
+			} else {
+				objects = append(objects, obj)
+			}
 		}
+
+		addPhase(component.Name()+"-crds", crds)
+		addPhase(component.Name(), objects)
 	}
 
 	return boxcutter.NewRevision(
@@ -62,10 +82,10 @@ func toBoxcutterRevision(installerRevision revisiongenerator.InstallerRevision) 
 //
 // This function assumes that annotation values have already been validated
 // during revision creation.
-func processAdoptExistingAnnotations(objects []client.Object) ([]client.Object, []boxcutter.PhaseReconcileOption) {
+func processAdoptExistingAnnotations(objects []*unstructured.Unstructured) ([]*unstructured.Unstructured, []boxcutter.PhaseReconcileOption) {
 	var reconcileOpts []boxcutter.PhaseReconcileOption
 
-	return util.SliceMap(objects, func(obj client.Object) client.Object {
+	return util.SliceMap(objects, func(obj *unstructured.Unstructured) *unstructured.Unstructured {
 		annotations := obj.GetAnnotations()
 		value, hasAnnotation := annotations[revisiongenerator.AdoptExistingAnnotation]
 
@@ -80,7 +100,7 @@ func processAdoptExistingAnnotations(objects []client.Object) ([]client.Object, 
 			}
 
 			// Strip the annotation from the object before returning it
-			obj = obj.DeepCopyObject().(client.Object) //nolint:forcetypeassert // This is guaranteed to be client.Object because obj is client.Object
+			obj = obj.DeepCopy()
 			annotationsCopy := obj.GetAnnotations()
 			delete(annotationsCopy, revisiongenerator.AdoptExistingAnnotation)
 			obj.SetAnnotations(annotationsCopy)
