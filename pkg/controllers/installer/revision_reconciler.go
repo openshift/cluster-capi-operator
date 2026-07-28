@@ -85,16 +85,6 @@ import (
 // a collision with an existing object on the cluster.
 var errCollision = errors.New("collision with existing objects")
 
-// convertedRevision holds a pre-converted InstallerRevision.
-// If conversion fails, revision is nil and conversionErr is set.
-// We need this because conversion errors are handled differently depending on
-// whether the revision is being reconciled or torn down, and we don't know
-// which in advance.
-type convertedRevision struct {
-	revision      revisiongenerator.InstallerRevision
-	conversionErr error
-}
-
 // collectedObjectRef holds intermediate object reference data collected during
 // revision rendering. The resource name is resolved later.
 type collectedObjectRef struct {
@@ -122,53 +112,45 @@ func newRevisionReconciler(installerController *InstallerController, log logr.Lo
 	}
 }
 
-func (r *revisionReconciler) reconcile(ctx context.Context, revisions []operatorv1alpha1.ClusterAPIInstallerRevision) (*operatorv1alpha1.RevisionName, []string, []error) {
+func (r *revisionReconciler) reconcile(ctx context.Context, apiRevisions []operatorv1alpha1.ClusterAPIInstallerRevision) (*operatorv1alpha1.RevisionName, []string, []error) {
 	// Sort revisions descending by revision number (newest first)
-	revisions = slices.Clone(revisions)
-	slices.SortFunc(revisions, func(a, b operatorv1alpha1.ClusterAPIInstallerRevision) int {
+	apiRevisions = slices.Clone(apiRevisions)
+	cmpRevisions := func(a, b operatorv1alpha1.ClusterAPIInstallerRevision) int {
 		return cmp.Compare(b.Revision, a.Revision)
-	})
+	}
+	slices.SortFunc(apiRevisions, cmpRevisions)
 
-	revisionNames := util.SliceMap(revisions, func(rev operatorv1alpha1.ClusterAPIInstallerRevision) string {
+	getRevisionName := func(rev operatorv1alpha1.ClusterAPIInstallerRevision) string {
 		return string(rev.Name)
-	})
+	}
+	revisionNames := util.SliceMap(apiRevisions, getRevisionName)
+
 	r.log.Info("Reconciling revisions", "revisions", strings.Join(revisionNames, ", "))
 
-	// Convert all API revisions upfront so that collectObjects (and thus
-	// relatedObjects) is fully populated before reconciliation begins.
-	converted := util.SliceMap(revisions, func(apiRev operatorv1alpha1.ClusterAPIInstallerRevision) convertedRevision {
-		rev, err := revisiongenerator.NewInstallerRevisionFromAPI(apiRev, r.providerProfiles, revisiongenerator.WithObjectCollectors(r.collectObjects))
-		if err != nil {
-			err = fmt.Errorf("error creating installer revision from API revision %s: %w", apiRev.Name, reconcile.TerminalError(err))
-		}
-
-		return convertedRevision{
-			revision:      rev,
-			conversionErr: err,
-		}
-	})
+	isComplete, messages, errs := r.reconcileRevisions(ctx, apiRevisions)
 
 	// Resolve collected objects to final ObjectReferences with correct plurals
+	// Object collection is independent of revision reconciliation. We don't
+	// return early here to ensure we still check for reconciliation completion.
 	if err := r.resolveCollectedObjects(); err != nil {
-		return nil, nil, []error{err}
+		errs = append(errs, err)
 	}
 
-	isComplete, messages, errs := r.reconcileRevisions(ctx, converted)
 	if isComplete {
-		name := converted[0].revision.RevisionName()
+		name := apiRevisions[0].Name
 		return &name, messages, errs
 	}
 
 	return nil, messages, errs
 }
 
-func (r *revisionReconciler) reconcileRevisions(ctx context.Context, revisions []convertedRevision) (bool, []string, []error) {
-	if len(revisions) == 0 {
+func (r *revisionReconciler) reconcileRevisions(ctx context.Context, apiRevisions []operatorv1alpha1.ClusterAPIInstallerRevision) (bool, []string, []error) {
+	if len(apiRevisions) == 0 {
 		return true, nil, nil
 	}
 
-	head := revisions[0]
-	tail := revisions[1:]
+	head := apiRevisions[0]
+	tail := apiRevisions[1:]
 
 	isComplete, messages, err := r.reconcileRevision(ctx, head)
 
@@ -187,12 +169,11 @@ func (r *revisionReconciler) reconcileRevisions(ctx context.Context, revisions [
 // * a summary message
 // * a boolean indicating if the revision was reconciled completely
 // * an error if any occurred.
-func (r *revisionReconciler) reconcileRevision(ctx context.Context, conv convertedRevision) (bool, string, error) {
-	if conv.conversionErr != nil {
-		return false, "", conv.conversionErr
+func (r *revisionReconciler) reconcileRevision(ctx context.Context, apiRevision operatorv1alpha1.ClusterAPIInstallerRevision) (bool, string, error) {
+	revision, err := revisiongenerator.NewInstallerRevisionFromAPI(apiRevision, r.providerProfiles, revisiongenerator.WithObjectCollectors(r.collectObjects))
+	if err != nil {
+		return false, "", fmt.Errorf("error creating installer revision from API revision %s: %w", apiRevision.Name, reconcile.TerminalError(err))
 	}
-
-	revision := conv.revision
 
 	bcRevision := toBoxcutterRevision(revision)
 	phases := bcRevision.GetPhases()
@@ -337,13 +318,13 @@ func handlePhaseObject(log logr.Logger, obj machinery.ObjectResult, actionCounts
 	return result
 }
 
-func (r *revisionReconciler) teardownRevisions(ctx context.Context, revisions []convertedRevision) (bool, []string, []error) {
-	if len(revisions) == 0 {
+func (r *revisionReconciler) teardownRevisions(ctx context.Context, apiRevisions []operatorv1alpha1.ClusterAPIInstallerRevision) (bool, []string, []error) {
+	if len(apiRevisions) == 0 {
 		return true, nil, nil
 	}
 
-	head := revisions[0]
-	tail := revisions[1:]
+	head := apiRevisions[0]
+	tail := apiRevisions[1:]
 
 	return mergeWithTail(ctx, r.teardownRevisions, tail)(r.teardownRevision(ctx, head))
 }
@@ -352,13 +333,13 @@ func (r *revisionReconciler) teardownRevisions(ctx context.Context, revisions []
 // * a summary message
 // * a boolean indicating if the revision was torn down completely
 // * an error if any occurred.
-func (r *revisionReconciler) teardownRevision(ctx context.Context, conv convertedRevision) (bool, string, error) {
-	if conv.conversionErr != nil {
+func (r *revisionReconciler) teardownRevision(ctx context.Context, apiRevision operatorv1alpha1.ClusterAPIInstallerRevision) (bool, string, error) {
+	revision, err := revisiongenerator.NewInstallerRevisionFromAPI(apiRevision, r.providerProfiles, revisiongenerator.WithObjectCollectors(r.collectObjects))
+	if err != nil {
 		// We can't teardown this revision if we can't create it, so we consider it complete.
-		return true, "", conv.conversionErr
+		return true, "", fmt.Errorf("error creating installer revision from API revision %s: %w", apiRevision.Name, reconcile.TerminalError(err))
 	}
 
-	revision := conv.revision
 	revisionName := revision.RevisionName()
 
 	bcRevision := toBoxcutterRevision(revision)
@@ -432,10 +413,10 @@ func (r *revisionReconciler) logTeardownPhaseResults(revisionName operatorv1alph
 	}
 }
 
-type revisionHandler func(context.Context, []convertedRevision) (bool, []string, []error)
+type revisionHandler func(context.Context, []operatorv1alpha1.ClusterAPIInstallerRevision) (bool, []string, []error)
 
 // mergeWithTail merges the results of the head revision with the results of calling the tail handler on the tail revisions.
-func mergeWithTail(ctx context.Context, tailHandler revisionHandler, tailRevisions []convertedRevision) func(bool, string, error) (bool, []string, []error) {
+func mergeWithTail(ctx context.Context, tailHandler revisionHandler, tailRevisions []operatorv1alpha1.ClusterAPIInstallerRevision) func(bool, string, error) (bool, []string, []error) {
 	return func(headComplete bool, headMessage string, headErr error) (bool, []string, []error) {
 		tailComplete, tailMessages, tailErrs := tailHandler(ctx, tailRevisions)
 
