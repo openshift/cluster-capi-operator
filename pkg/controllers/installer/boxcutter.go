@@ -38,7 +38,7 @@ import (
 // all processing required only at installation time. Ideally InstallerRevision
 // will contain only parsed versions of exactly what was in provider manifests
 // without any further processing. That processing should be done here.
-func toBoxcutterRevision(installerRevision revisiongenerator.InstallerRevision) boxcutter.Revision {
+func toBoxcutterRevision(installerRevision revisiongenerator.InstallerRevision, collectObjects func(obj *unstructured.Unstructured)) boxcutter.Revision {
 	probeOpts := util.SliceMap(allProbes(), func(p *probing.GroupKindSelector) boxcutter.PhaseReconcileOption {
 		return boxcutter.WithProbe(boxcutter.ProgressProbeType, p)
 	})
@@ -61,6 +61,8 @@ func toBoxcutterRevision(installerRevision revisiongenerator.InstallerRevision) 
 		var crds, objects []*unstructured.Unstructured
 
 		for _, obj := range component.Objects() {
+			collectObjects(obj)
+
 			gvk := obj.GetObjectKind().GroupVersionKind()
 			if gvk.GroupKind() == (schema.GroupKind{Group: "apiextensions.k8s.io", Kind: "CustomResourceDefinition"}) {
 				crds = append(crds, obj)

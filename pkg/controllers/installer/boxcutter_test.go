@@ -21,12 +21,23 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"pkg.package-operator.run/boxcutter"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/cluster-capi-operator/pkg/revisiongenerator"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 )
+
+// noopCollector is a collectObjects callback that does nothing, for tests that
+// don't care about collected objects.
+func noopCollector(*unstructured.Unstructured) {}
+
+// objectRef returns a stable identifier for an object, for asserting object
+// identity without depending on object ordering.
+func objectRef(kind, name string) string {
+	return kind + "/" + name
+}
 
 // findPhase returns the phase with the given name, failing the test if none is found.
 func findPhase(phases []boxcutter.Phase, name string) boxcutter.Phase {
@@ -73,7 +84,7 @@ var _ = Describe("toBoxcutterRevision", func() {
 		It("should return a Revision with the name of the InstallerRevision", func() {
 			rev := installerRevisionFromProfiles(providerCore)
 
-			bcRev := toBoxcutterRevision(rev)
+			bcRev := toBoxcutterRevision(rev, noopCollector)
 
 			Expect(bcRev.GetName()).To(Equal(string(rev.RevisionName())),
 				"returned Revision should carry the same name as the InstallerRevision")
@@ -85,7 +96,7 @@ var _ = Describe("toBoxcutterRevision", func() {
 			func(providerName string, wantPhaseCount int) {
 				rev := installerRevisionFromProfiles(providerName)
 
-				bcRev := toBoxcutterRevision(rev)
+				bcRev := toBoxcutterRevision(rev, noopCollector)
 
 				first := bcRev.GetPhases()
 				second := bcRev.GetPhases()
@@ -111,7 +122,7 @@ var _ = Describe("toBoxcutterRevision", func() {
 		It("splits a component with CRDs and objects into a '-crds' phase and an objects phase", func() {
 			rev := installerRevisionFromProfiles(providerMixed)
 
-			phases := toBoxcutterRevision(rev).GetPhases()
+			phases := toBoxcutterRevision(rev, noopCollector).GetPhases()
 			Expect(phases).To(HaveLen(2))
 
 			crdPhase := findPhase(phases, providerMixed+"-crds")
@@ -126,7 +137,7 @@ var _ = Describe("toBoxcutterRevision", func() {
 		It("does not create a '-crds' phase for a component with no CRDs", func() {
 			rev := installerRevisionFromProfiles(providerCore)
 
-			phases := toBoxcutterRevision(rev).GetPhases()
+			phases := toBoxcutterRevision(rev, noopCollector).GetPhases()
 			Expect(phases).To(HaveLen(1))
 			Expect(phases[0].GetName()).To(Equal(providerCore))
 			Expect(objectKinds(phases[0].GetObjects())).To(ConsistOf("ConfigMap"))
@@ -135,10 +146,50 @@ var _ = Describe("toBoxcutterRevision", func() {
 		It("does not create a plain objects phase for a component with only CRDs", func() {
 			rev := installerRevisionFromProfiles(providerCRD)
 
-			phases := toBoxcutterRevision(rev).GetPhases()
+			phases := toBoxcutterRevision(rev, noopCollector).GetPhases()
 			Expect(phases).To(HaveLen(1))
 			Expect(phases[0].GetName()).To(Equal(providerCRD + "-crds"))
 			Expect(objectKinds(phases[0].GetObjects())).To(ConsistOf("CustomResourceDefinition"))
 		})
+	})
+
+	Describe("collectObjects callback", func() {
+		testWidgetCRDName := fmt.Sprintf("testwidgets.%s", testCRDGVK.Group)
+		testGadgetCRDName := fmt.Sprintf("testgadgets.%s", mixedCRDGVK.Group)
+
+		DescribeTable("is called once for every object in every component",
+			func(wantRefs []string, providerNames ...string) {
+				rev := installerRevisionFromProfiles(providerNames...)
+
+				var collectedRefs []string
+
+				toBoxcutterRevision(rev, func(obj *unstructured.Unstructured) {
+					collectedRefs = append(collectedRefs, objectRef(obj.GetKind(), obj.GetName()))
+				})
+
+				Expect(collectedRefs).To(ConsistOf(wantRefs),
+					"collectObjects should be called exactly once for every object that ends up in a phase")
+			},
+			Entry("objects only",
+				[]string{objectRef("ConfigMap", coreCMName)},
+				providerCore),
+			Entry("CRDs only",
+				[]string{objectRef("CustomResourceDefinition", testWidgetCRDName)},
+				providerCRD),
+			Entry("CRDs and objects in the same component",
+				[]string{
+					objectRef("CustomResourceDefinition", testGadgetCRDName),
+					objectRef("ConfigMap", mixedCMName),
+				},
+				providerMixed),
+			Entry("multiple components",
+				[]string{
+					objectRef("ConfigMap", coreCMName),
+					objectRef("CustomResourceDefinition", testGadgetCRDName),
+					objectRef("ConfigMap", mixedCMName),
+					objectRef("CustomResourceDefinition", testWidgetCRDName),
+				},
+				providerCore, providerMixed, providerCRD),
+		)
 	})
 })
