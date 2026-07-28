@@ -31,6 +31,9 @@ const (
 	CompatibilityRequirementsNamespace = "openshift-compatibility-requirements-operator"
 	MAPINamespace                      = "openshift-machine-api"
 
+	CAPIClusterOperatorName          = "cluster-api"
+	CAPIInstallerImagesConfigMapName = "capi-installer-images"
+
 	RetryShort  = 1 * time.Second
 	RetryMedium = 5 * time.Second
 	RetryLong   = 10 * time.Second
