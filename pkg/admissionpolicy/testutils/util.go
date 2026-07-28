@@ -274,7 +274,10 @@ func LoadAdmissionPolicyProfiles() map[string][]client.Object {
 			o, _, err := scheme.Codecs.UniversalDeserializer().Decode(r.Raw, nil, nil)
 			Expect(err).WithOffset(1).NotTo(HaveOccurred())
 
-			if co, ok := o.(client.Object); ok {
+			switch co := o.(type) {
+			case *admissionregistrationv1.ValidatingAdmissionPolicy:
+				objs = append(objs, co)
+			case *admissionregistrationv1.ValidatingAdmissionPolicyBinding:
 				objs = append(objs, co)
 			}
 		}
