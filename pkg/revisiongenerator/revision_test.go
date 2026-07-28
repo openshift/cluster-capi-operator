@@ -310,8 +310,7 @@ func TestForInstall(t *testing.T) {
 
 		components := installer.Components()
 		g.Expect(components).To(HaveLen(1))
-		g.Expect(components[0].CRDs()).To(HaveLen(1))
-		g.Expect(components[0].Objects()).To(HaveLen(1))
+		g.Expect(components[0].Objects()).To(HaveLen(2))
 	})
 
 	t.Run("name truncation with long version", func(t *testing.T) {
@@ -548,26 +547,17 @@ func TestComponents(t *testing.T) {
 	for _, tc := range []struct {
 		name        string
 		manifests   string
-		wantCRDs    int
 		wantObjects int
 	}{
 		{
-			name:        "separates CRDs from other objects",
+			name:        "returns all objects",
 			manifests:   multiDoc(crdA, configMapA, crdB, configMapB),
-			wantCRDs:    2,
-			wantObjects: 2,
+			wantObjects: 4,
 		},
 		{
-			name:        "component with only CRDs has empty Objects",
-			manifests:   crdA,
-			wantCRDs:    1,
+			name:        "returns no objects",
+			manifests:   "",
 			wantObjects: 0,
-		},
-		{
-			name:        "component with only objects has empty CRDs",
-			manifests:   configMapA,
-			wantCRDs:    0,
-			wantObjects: 1,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -578,26 +568,11 @@ func TestComponents(t *testing.T) {
 			}))(g)
 
 			c := rev.Components()[0]
-			g.Expect(c.CRDs()).To(HaveLen(tc.wantCRDs))
 			g.Expect(c.Objects()).To(HaveLen(tc.wantObjects))
 		})
 	}
 
-	t.Run("CRDs returns client.Object slices matching underlying objects", func(t *testing.T) {
-		g := NewWithT(t)
-
-		rev := must(NewRenderedRevision([]providerimages.ProviderImageManifests{
-			profile(t, "core", "img1", "default", crdA),
-		}))(g)
-
-		crds := rev.Components()[0].CRDs()
-		g.Expect(crds).To(HaveLen(1))
-		g.Expect(crds[0].GetName()).To(Equal("widgets.example.com"))
-		g.Expect(crds[0].GetObjectKind().GroupVersionKind().Kind).To(Equal("CustomResourceDefinition"))
-		g.Expect(crds[0].GetLabels()).To(HaveKeyWithValue(ManagedLabelKey, "core"))
-	})
-
-	t.Run("Objects returns client.Object slices matching underlying objects", func(t *testing.T) {
+	t.Run("Objects returns unstructured.Unstructured slices matching underlying objects", func(t *testing.T) {
 		g := NewWithT(t)
 
 		rev := must(NewRenderedRevision([]providerimages.ProviderImageManifests{
@@ -710,7 +685,7 @@ func TestNewInstallerRevisionFromAPI(t *testing.T) {
 		g.Expect(components[1].Name()).To(Equal("core"))
 	})
 
-	t.Run("renders CRDs and objects from matched profiles", func(t *testing.T) {
+	t.Run("renders objects from matched profiles", func(t *testing.T) {
 		g := NewWithT(t)
 
 		profiles := makeProfiles(t)
@@ -728,8 +703,7 @@ func TestNewInstallerRevisionFromAPI(t *testing.T) {
 		rev := must(NewInstallerRevisionFromAPI(apiRev, profiles))(g)
 
 		c := rev.Components()[0]
-		g.Expect(c.CRDs()).To(HaveLen(1))
-		g.Expect(c.Objects()).To(HaveLen(1))
+		g.Expect(c.Objects()).To(HaveLen(2))
 	})
 
 	t.Run("returns error for missing component", func(t *testing.T) {
