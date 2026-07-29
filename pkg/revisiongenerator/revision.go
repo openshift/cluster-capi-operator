@@ -48,17 +48,17 @@ var (
 	errContentIDMismatch       = errors.New("content ID mismatch")
 )
 
-// RenderedRevision represents a set of components whose manifests have been
-// fully rendered and are ready to be applied to a cluster.
-type RenderedRevision interface {
+// ParsedRevision represents a set of components whose manifests have been
+// parsed from provider image manifests and are ready to be installed.
+type ParsedRevision interface {
 	// ContentID returns a unique identifier for the revision's content.
 	ContentID() (string, error)
 
-	// Components returns the rendered components for this revision.
-	Components() []RenderedComponent
+	// Components returns the parsed components for this revision.
+	Components() []ParsedComponent
 
 	// ForInstall creates an InstallerRevision by assigning a release version
-	// and revision index to this rendered content.
+	// and revision index to this parsed content.
 	ForInstall(releaseVersion string, revisionIndex int64) (InstallerRevision, error)
 
 	// ManifestSubstitutions returns a copy of the substitutions stored in
@@ -67,11 +67,11 @@ type RenderedRevision interface {
 	ManifestSubstitutions() map[string]string
 }
 
-// InstallerRevision is a RenderedRevision that has been assigned a revision
+// InstallerRevision is a ParsedRevision that has been assigned a revision
 // identity (name and index), making it ready for installation or conversion
 // to an API revision.
 type InstallerRevision interface {
-	RenderedRevision
+	ParsedRevision
 
 	// RevisionName returns the name of this revision.
 	RevisionName() operatorv1alpha1.RevisionName
@@ -83,40 +83,40 @@ type InstallerRevision interface {
 	ToAPIRevision() (operatorv1alpha1.ClusterAPIInstallerRevision, error)
 }
 
-// RenderedComponent represents a single provider component with its manifests
+// ParsedComponent represents a single provider component with its manifests
 // parsed and ready to be applied.
-type RenderedComponent interface {
+type ParsedComponent interface {
 	// Name returns the component name.
 	Name() string
 	// Objects returns all objects for this component, including CRDs.
 	Objects() []*unstructured.Unstructured
 }
 
-type renderedRevision struct {
-	components    []*renderedComponent
+type parsedRevision struct {
+	components    []*parsedComponent
 	contentID     string
 	substitutions map[string]string
 }
 
-var _ RenderedRevision = &renderedRevision{}
+var _ ParsedRevision = &parsedRevision{}
 
-// NewRenderedRevision creates a new RenderedRevision from a list of provider image manifests.
-func NewRenderedRevision(profiles []providerimages.ProviderImageManifests, opts ...revisionRenderOption) (RenderedRevision, error) {
-	return newRenderedRevision(profiles, opts...)
+// NewParsedRevision creates a new ParsedRevision from a list of provider image manifests.
+func NewParsedRevision(profiles []providerimages.ProviderImageManifests, opts ...revisionRenderOption) (ParsedRevision, error) {
+	return newParsedRevision(profiles, opts...)
 }
 
-// newRenderedRevision implements NewRenderedRevision. It exists to return a
+// newParsedRevision implements NewParsedRevision. It exists to return a
 // concrete type for internal use.
-func newRenderedRevision(profiles []providerimages.ProviderImageManifests, opts ...revisionRenderOption) (*renderedRevision, error) {
+func newParsedRevision(profiles []providerimages.ProviderImageManifests, opts ...revisionRenderOption) (*parsedRevision, error) {
 	cfg := &revisionRenderConfig{}
 	for _, opt := range opts {
 		opt(cfg)
 	}
 
-	components := make([]*renderedComponent, len(profiles))
+	components := make([]*parsedComponent, len(profiles))
 
 	for i, profile := range profiles {
-		component, err := newRenderedComponent(&profile)
+		component, err := newParsedComponent(&profile)
 		if err != nil {
 			return nil, err
 		}
@@ -124,7 +124,7 @@ func newRenderedRevision(profiles []providerimages.ProviderImageManifests, opts 
 		components[i] = component
 	}
 
-	rev := &renderedRevision{
+	rev := &parsedRevision{
 		components:    components,
 		substitutions: maps.Clone(cfg.substitutions),
 	}
@@ -154,14 +154,14 @@ func substitutionsFromMap(m map[string]string) []operatorv1alpha1.ClusterAPIInst
 }
 
 // ManifestSubstitutions returns a copy of the substitutions stored in this revision.
-func (r *renderedRevision) ManifestSubstitutions() map[string]string {
+func (r *parsedRevision) ManifestSubstitutions() map[string]string {
 	return maps.Clone(r.substitutions)
 }
 
 // ContentID returns a unique identifier for the revision's content.
 // Specifically it returns a SHA256 over all manifests and substitutions,
 // but callers MUST NOT assume this.
-func (r *renderedRevision) ContentID() (string, error) {
+func (r *parsedRevision) ContentID() (string, error) {
 	if r.contentID == "" {
 		h := sha256.New()
 
@@ -200,32 +200,32 @@ func (r *renderedRevision) ContentID() (string, error) {
 	return r.contentID, nil
 }
 
-// Components returns the rendered components for this revision.
-func (r *renderedRevision) Components() []RenderedComponent {
-	return util.SliceMap(r.components, func(c *renderedComponent) RenderedComponent {
+// Components returns the parsed components for this revision.
+func (r *parsedRevision) Components() []ParsedComponent {
+	return util.SliceMap(r.components, func(c *parsedComponent) ParsedComponent {
 		return c
 	})
 }
 
 // ForInstall creates an InstallerRevision by assigning a release version and
-// revision index to this rendered content.
-func (r *renderedRevision) ForInstall(releaseVersion string, revisionIndex int64) (InstallerRevision, error) {
+// revision index to this parsed content.
+func (r *parsedRevision) ForInstall(releaseVersion string, revisionIndex int64) (InstallerRevision, error) {
 	contentID, err := r.ContentID()
 	if err != nil {
 		return nil, fmt.Errorf("error calculating contentID: %w", err)
 	}
 
 	return &installerRevision{
-		renderedRevision: r,
-		revisionName:     buildRevisionName(releaseVersion, contentID, revisionIndex),
-		revisionIndex:    revisionIndex,
+		parsedRevision: r,
+		revisionName:   buildRevisionName(releaseVersion, contentID, revisionIndex),
+		revisionIndex:  revisionIndex,
 	}, nil
 }
 
-// installerRevision is a renderedRevision that has been assigned a revision
+// installerRevision is a parsedRevision that has been assigned a revision
 // identity (name and index).
 type installerRevision struct {
-	*renderedRevision
+	*parsedRevision
 	revisionName  operatorv1alpha1.RevisionName
 	revisionIndex int64
 }
@@ -323,7 +323,7 @@ func WithManifestSubstitutions(subs map[string]string) revisionRenderOption {
 // rendering the matched manifests. The revision name and index are taken
 // directly from the API revision. Components are matched by Image.Ref and
 // Image.Profile. An error is returned if any component cannot be found in the
-// provided profiles, or if the rendered content ID does not match the content
+// provided profiles, or if the parsed content ID does not match the content
 // ID recorded in the API revision.
 func NewInstallerRevisionFromAPI(
 	apiRev operatorv1alpha1.ClusterAPIInstallerRevision,
@@ -358,27 +358,27 @@ func NewInstallerRevisionFromAPI(
 
 	opts = append(opts, WithManifestSubstitutions(apiSubs))
 
-	rendered, err := newRenderedRevision(matched, opts...)
+	parsed, err := newParsedRevision(matched, opts...)
 	if err != nil {
 		return nil, err
 	}
 
-	// Validate that the rendered content ID matches the API revision content ID.
-	if contentID, err := rendered.ContentID(); err != nil {
+	// Validate that the parsed content ID matches the API revision content ID.
+	if contentID, err := parsed.ContentID(); err != nil {
 		return nil, fmt.Errorf("error computing content ID: %w", err)
 	} else if contentID != apiRev.ContentID {
-		return nil, fmt.Errorf("%w: rendered revision has content ID %s, but API revision specifies %s",
+		return nil, fmt.Errorf("%w: parsed revision has content ID %s, but API revision specifies %s",
 			errContentIDMismatch, contentID, apiRev.ContentID)
 	}
 
 	return &installerRevision{
-		renderedRevision: rendered,
-		revisionName:     apiRev.Name,
-		revisionIndex:    apiRev.Revision,
+		parsedRevision: parsed,
+		revisionName:   apiRev.Name,
+		revisionIndex:  apiRev.Revision,
 	}, nil
 }
 
-type renderedComponent struct {
+type parsedComponent struct {
 	name     string
 	imageRef string
 	profile  string
@@ -386,8 +386,8 @@ type renderedComponent struct {
 	objects []*unstructured.Unstructured
 }
 
-func newRenderedComponent(providerProfile *providerimages.ProviderImageManifests) (*renderedComponent, error) {
-	component := &renderedComponent{
+func newParsedComponent(providerProfile *providerimages.ProviderImageManifests) (*parsedComponent, error) {
+	component := &parsedComponent{
 		name:     providerProfile.Name,
 		imageRef: providerProfile.ImageRef,
 		profile:  providerProfile.Profile,
@@ -414,19 +414,19 @@ func newRenderedComponent(providerProfile *providerimages.ProviderImageManifests
 	return component, nil
 }
 
-var _ RenderedComponent = &renderedComponent{}
+var _ ParsedComponent = &parsedComponent{}
 
 // Name returns the component name.
-func (c *renderedComponent) Name() string {
+func (c *parsedComponent) Name() string {
 	return c.name
 }
 
 // Objects returns all objects for this component, including CRDs.
-func (c *renderedComponent) Objects() []*unstructured.Unstructured {
+func (c *parsedComponent) Objects() []*unstructured.Unstructured {
 	return c.objects
 }
 
-func (c *renderedComponent) contentID() (string, error) {
+func (c *parsedComponent) contentID() (string, error) {
 	h := sha256.New()
 
 	for _, obj := range c.objects {

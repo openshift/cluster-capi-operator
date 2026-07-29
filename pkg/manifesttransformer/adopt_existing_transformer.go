@@ -98,12 +98,12 @@ func (a *AdoptExistingTransformer) Validate(obj *unstructured.Unstructured) erro
 
 // WithRevision implements ManifestTransformer. AdoptExistingTransformer does
 // not need revision context.
-func (a *AdoptExistingTransformer) WithRevision(_ context.Context, _ revisiongenerator.RenderedRevision) ManifestTransformer {
+func (a *AdoptExistingTransformer) WithRevision(_ context.Context, _ revisiongenerator.ParsedRevision) ManifestTransformer {
 	return a
 }
 
 // WithComponent implements ManifestTransformer. AdoptExistingTransformer does
 // not need component context.
-func (a *AdoptExistingTransformer) WithComponent(_ context.Context, _ revisiongenerator.RenderedComponent) ManifestTransformer {
+func (a *AdoptExistingTransformer) WithComponent(_ context.Context, _ revisiongenerator.ParsedComponent) ManifestTransformer {
 	return a
 }

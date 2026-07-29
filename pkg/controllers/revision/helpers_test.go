@@ -213,23 +213,23 @@ func (s *stubTransformer) Validate(_ *unstructured.Unstructured) error {
 	return s.validateErr
 }
 
-func (s *stubTransformer) WithRevision(_ context.Context, _ revisiongenerator.RenderedRevision) manifesttransformer.ManifestTransformer {
+func (s *stubTransformer) WithRevision(_ context.Context, _ revisiongenerator.ParsedRevision) manifesttransformer.ManifestTransformer {
 	return s
 }
 
-func (s *stubTransformer) WithComponent(_ context.Context, _ revisiongenerator.RenderedComponent) manifesttransformer.ManifestTransformer {
+func (s *stubTransformer) WithComponent(_ context.Context, _ revisiongenerator.ParsedComponent) manifesttransformer.ManifestTransformer {
 	return s
 }
 
 var _ manifesttransformer.ManifestTransformer = &stubTransformer{}
 
-// fakeRevision implements revisiongenerator.RenderedRevision for unit tests.
+// fakeRevision implements revisiongenerator.ParsedRevision for unit tests.
 type fakeRevision struct {
-	components []revisiongenerator.RenderedComponent
+	components []revisiongenerator.ParsedComponent
 }
 
 func (f *fakeRevision) ContentID() (string, error) { return "fake-content-id", nil }
-func (f *fakeRevision) Components() []revisiongenerator.RenderedComponent {
+func (f *fakeRevision) Components() []revisiongenerator.ParsedComponent {
 	return f.components
 }
 func (f *fakeRevision) ForInstall(string, int64) (revisiongenerator.InstallerRevision, error) {
@@ -237,4 +237,4 @@ func (f *fakeRevision) ForInstall(string, int64) (revisiongenerator.InstallerRev
 }
 func (f *fakeRevision) ManifestSubstitutions() map[string]string { return nil }
 
-var _ revisiongenerator.RenderedRevision = &fakeRevision{}
+var _ revisiongenerator.ParsedRevision = &fakeRevision{}

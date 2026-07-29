@@ -40,7 +40,7 @@ func TestValidateTransformers(t *testing.T) {
 	t.Run("nil transformers returns no error", func(t *testing.T) {
 		g := NewWithT(t)
 		rev := &fakeRevision{
-			components: []revisiongenerator.RenderedComponent{
+			components: []revisiongenerator.ParsedComponent{
 				&fakeComponent{name: componentName, objects: []*unstructured.Unstructured{&testObj}},
 			},
 		}
@@ -50,7 +50,7 @@ func TestValidateTransformers(t *testing.T) {
 	t.Run("empty transformers returns no error", func(t *testing.T) {
 		g := NewWithT(t)
 		rev := &fakeRevision{
-			components: []revisiongenerator.RenderedComponent{
+			components: []revisiongenerator.ParsedComponent{
 				&fakeComponent{name: componentName, objects: []*unstructured.Unstructured{&testObj}},
 			},
 		}
@@ -60,7 +60,7 @@ func TestValidateTransformers(t *testing.T) {
 	t.Run("validates Objects and includes component name in error", func(t *testing.T) {
 		g := NewWithT(t)
 		rev := &fakeRevision{
-			components: []revisiongenerator.RenderedComponent{
+			components: []revisiongenerator.ParsedComponent{
 				&fakeComponent{name: componentName, objects: []*unstructured.Unstructured{&testObj}},
 			},
 		}
@@ -76,7 +76,7 @@ func TestValidateTransformers(t *testing.T) {
 	t.Run("collects errors from multiple objects", func(t *testing.T) {
 		g := NewWithT(t)
 		rev := &fakeRevision{
-			components: []revisiongenerator.RenderedComponent{
+			components: []revisiongenerator.ParsedComponent{
 				&fakeComponent{name: componentName, objects: []*unstructured.Unstructured{&testObj, &testObj2}},
 			},
 		}
@@ -98,7 +98,7 @@ func TestValidateTransformers(t *testing.T) {
 		objB.SetName("obj-b")
 
 		rev := &fakeRevision{
-			components: []revisiongenerator.RenderedComponent{
+			components: []revisiongenerator.ParsedComponent{
 				&fakeComponent{name: "comp-1", objects: []*unstructured.Unstructured{objA}},
 				&fakeComponent{name: "comp-2", objects: []*unstructured.Unstructured{objB}},
 			},
@@ -117,7 +117,7 @@ func TestValidateTransformers(t *testing.T) {
 		g := NewWithT(t)
 
 		rev := &fakeRevision{
-			components: []revisiongenerator.RenderedComponent{
+			components: []revisiongenerator.ParsedComponent{
 				&fakeComponent{name: componentName, objects: []*unstructured.Unstructured{&testObj}},
 			},
 		}
@@ -144,17 +144,17 @@ func (s *stubTransformer) Validate(_ *unstructured.Unstructured) error {
 	return s.validateErr
 }
 
-func (s *stubTransformer) WithRevision(_ context.Context, _ revisiongenerator.RenderedRevision) ManifestTransformer {
+func (s *stubTransformer) WithRevision(_ context.Context, _ revisiongenerator.ParsedRevision) ManifestTransformer {
 	return s
 }
 
-func (s *stubTransformer) WithComponent(_ context.Context, _ revisiongenerator.RenderedComponent) ManifestTransformer {
+func (s *stubTransformer) WithComponent(_ context.Context, _ revisiongenerator.ParsedComponent) ManifestTransformer {
 	return s
 }
 
 var _ ManifestTransformer = &stubTransformer{}
 
-// fakeComponent implements revisiongenerator.RenderedComponent for unit tests
+// fakeComponent implements revisiongenerator.ParsedComponent for unit tests
 // that need a revision without running the full revision generator.
 type fakeComponent struct {
 	name    string
@@ -164,13 +164,13 @@ type fakeComponent struct {
 func (f *fakeComponent) Name() string                          { return f.name }
 func (f *fakeComponent) Objects() []*unstructured.Unstructured { return f.objects }
 
-// fakeRevision implements revisiongenerator.RenderedRevision for unit tests.
+// fakeRevision implements revisiongenerator.ParsedRevision for unit tests.
 type fakeRevision struct {
-	components []revisiongenerator.RenderedComponent
+	components []revisiongenerator.ParsedComponent
 }
 
 func (f *fakeRevision) ContentID() (string, error) { return "fake-content-id", nil }
-func (f *fakeRevision) Components() []revisiongenerator.RenderedComponent {
+func (f *fakeRevision) Components() []revisiongenerator.ParsedComponent {
 	return f.components
 }
 func (f *fakeRevision) ForInstall(string, int64) (revisiongenerator.InstallerRevision, error) {
@@ -178,4 +178,4 @@ func (f *fakeRevision) ForInstall(string, int64) (revisiongenerator.InstallerRev
 }
 func (f *fakeRevision) ManifestSubstitutions() map[string]string { return nil }
 
-var _ revisiongenerator.RenderedRevision = &fakeRevision{}
+var _ revisiongenerator.ParsedRevision = &fakeRevision{}

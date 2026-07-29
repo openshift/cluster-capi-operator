@@ -35,15 +35,15 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/test"
 )
 
-// apiRevisionFromProfiles renders the named provider profiles into an API
+// apiRevisionFromProfiles parses the named provider profiles into an API
 // revision, without requiring an envtest client.
 func apiRevisionFromProfiles(names ...string) operatorv1alpha1.ClusterAPIInstallerRevision {
 	GinkgoHelper()
 
-	rendered, err := revisiongenerator.NewRenderedRevision(lookupProfiles(names...))
+	parsed, err := revisiongenerator.NewParsedRevision(lookupProfiles(names...))
 	Expect(err).NotTo(HaveOccurred())
 
-	installerRev, err := rendered.ForInstall("4.18.0-test", 1)
+	installerRev, err := parsed.ForInstall("4.18.0-test", 1)
 	Expect(err).NotTo(HaveOccurred())
 
 	apiRev, err := installerRev.ToAPIRevision()

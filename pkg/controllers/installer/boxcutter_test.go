@@ -80,11 +80,11 @@ func (s *stubTransformer) Validate(_ *unstructured.Unstructured) error {
 	return s.validateErr
 }
 
-func (s *stubTransformer) WithRevision(_ context.Context, _ revisiongenerator.RenderedRevision) manifesttransformer.ManifestTransformer {
+func (s *stubTransformer) WithRevision(_ context.Context, _ revisiongenerator.ParsedRevision) manifesttransformer.ManifestTransformer {
 	return s
 }
 
-func (s *stubTransformer) WithComponent(_ context.Context, _ revisiongenerator.RenderedComponent) manifesttransformer.ManifestTransformer {
+func (s *stubTransformer) WithComponent(_ context.Context, _ revisiongenerator.ParsedComponent) manifesttransformer.ManifestTransformer {
 	return s
 }
 
@@ -104,11 +104,11 @@ func (f *fnTransformer) Validate(_ *unstructured.Unstructured) error {
 	return nil
 }
 
-func (f *fnTransformer) WithRevision(_ context.Context, _ revisiongenerator.RenderedRevision) manifesttransformer.ManifestTransformer {
+func (f *fnTransformer) WithRevision(_ context.Context, _ revisiongenerator.ParsedRevision) manifesttransformer.ManifestTransformer {
 	return f
 }
 
-func (f *fnTransformer) WithComponent(_ context.Context, _ revisiongenerator.RenderedComponent) manifesttransformer.ManifestTransformer {
+func (f *fnTransformer) WithComponent(_ context.Context, _ revisiongenerator.ParsedComponent) manifesttransformer.ManifestTransformer {
 	return f
 }
 
@@ -120,11 +120,11 @@ func installerRevisionFromProfiles(names ...string) revisiongenerator.InstallerR
 	GinkgoHelper()
 
 	profiles := lookupProfiles(names...)
-	rendered, err := revisiongenerator.NewRenderedRevision(profiles)
-	Expect(err).NotTo(HaveOccurred(), "NewRenderedRevision should not fail for valid profiles")
+	parsed, err := revisiongenerator.NewParsedRevision(profiles)
+	Expect(err).NotTo(HaveOccurred(), "NewParsedRevision should not fail for valid profiles")
 
-	rev, err := rendered.ForInstall("4.18.0-test", 1)
-	Expect(err).NotTo(HaveOccurred(), "ForInstall should not fail for a valid rendered revision")
+	rev, err := parsed.ForInstall("4.18.0-test", 1)
+	Expect(err).NotTo(HaveOccurred(), "ForInstall should not fail for a valid parsed revision")
 
 	return rev
 }

@@ -38,8 +38,8 @@ type ManifestTransformer interface {
 	Validate(obj *unstructured.Unstructured) error
 
 	// WithRevision returns a new transformer that will be used for the given revision.
-	WithRevision(ctx context.Context, revision revisiongenerator.RenderedRevision) ManifestTransformer
+	WithRevision(ctx context.Context, revision revisiongenerator.ParsedRevision) ManifestTransformer
 
 	// WithComponent returns a new transformer that will be used for the given component.
-	WithComponent(ctx context.Context, component revisiongenerator.RenderedComponent) ManifestTransformer
+	WithComponent(ctx context.Context, component revisiongenerator.ParsedComponent) ManifestTransformer
 }

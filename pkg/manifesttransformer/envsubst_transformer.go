@@ -68,7 +68,7 @@ func (e *EnvsubstTransformer) Validate(_ *unstructured.Unstructured) error {
 // WithRevision returns a new EnvsubstTransformer that merges the revision's
 // ManifestSubstitutions with the static substitutions. Static substitutions
 // take precedence.
-func (e *EnvsubstTransformer) WithRevision(_ context.Context, revision revisiongenerator.RenderedRevision) ManifestTransformer {
+func (e *EnvsubstTransformer) WithRevision(_ context.Context, revision revisiongenerator.ParsedRevision) ManifestTransformer {
 	merged := revision.ManifestSubstitutions()
 	if merged == nil {
 		merged = make(map[string]string, len(e.staticSubs))
@@ -83,7 +83,7 @@ func (e *EnvsubstTransformer) WithRevision(_ context.Context, revision revisiong
 }
 
 // WithComponent is a no-op; envsubst expansion does not need component context.
-func (e *EnvsubstTransformer) WithComponent(_ context.Context, _ revisiongenerator.RenderedComponent) ManifestTransformer {
+func (e *EnvsubstTransformer) WithComponent(_ context.Context, _ revisiongenerator.ParsedComponent) ManifestTransformer {
 	return e
 }
 
