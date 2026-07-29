@@ -39,7 +39,8 @@ func TestTransformYaml(t *testing.T) {
 			profile: providerimages.ProviderImageManifests{
 				ImageRef: "example.com/img@sha256:abc",
 			},
-			expected: "bootstrap: true",
+			substitutions: map[string]string{"EXP_BOOTSTRAP_FORMAT_IGNITION": "true"},
+			expected:      "bootstrap: true",
 		},
 		{
 			name: "unknown variable replaced with empty",
@@ -96,7 +97,8 @@ func TestTransformYaml(t *testing.T) {
 				},
 				ImageRef: "new-ref",
 			},
-			expected: "format: true\nimage: new-ref",
+			substitutions: map[string]string{"EXP_BOOTSTRAP_FORMAT_IGNITION": "true"},
+			expected:      "format: true\nimage: new-ref",
 		},
 		{
 			name: "envsubst applied before image replacement",
@@ -107,7 +109,8 @@ func TestTransformYaml(t *testing.T) {
 				},
 				ImageRef: "replaced",
 			},
-			expected: "image: replaced",
+			substitutions: map[string]string{"EXP_BOOTSTRAP_FORMAT_IGNITION": "true"},
+			expected:      "image: replaced",
 		},
 		{
 			name: "empty yaml",
@@ -127,7 +130,7 @@ func TestTransformYaml(t *testing.T) {
 			expected:      "version: VersionTLS12",
 		},
 		{
-			name: "user substitution overrides hardcoded",
+			name: "substitution value used when provided",
 			yaml: "bootstrap: ${EXP_BOOTSTRAP_FORMAT_IGNITION}",
 			profile: providerimages.ProviderImageManifests{
 				ImageRef: "example.com/img@sha256:abc",

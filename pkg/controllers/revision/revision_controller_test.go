@@ -521,11 +521,13 @@ var _ = Describe("RevisionController manifest substitutions", Serial, func() {
 		Expect(updatedClusterAPI.Status.Revisions).To(HaveLen(1))
 
 		rev := updatedClusterAPI.Status.Revisions[0]
-		Expect(rev.ManifestSubstitutions).To(HaveLen(2))
-		Expect(rev.ManifestSubstitutions[0].Key).To(Equal("TLS_CIPHER_SUITES"))
-		Expect(*rev.ManifestSubstitutions[0].Value).To(Equal("TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"))
-		Expect(rev.ManifestSubstitutions[1].Key).To(Equal("TLS_MIN_VERSION"))
-		Expect(*rev.ManifestSubstitutions[1].Value).To(Equal("VersionTLS12"))
+		Expect(rev.ManifestSubstitutions).To(HaveLen(3))
+		Expect(rev.ManifestSubstitutions[0].Key).To(Equal("EXP_BOOTSTRAP_FORMAT_IGNITION"))
+		Expect(*rev.ManifestSubstitutions[0].Value).To(Equal("true"))
+		Expect(rev.ManifestSubstitutions[1].Key).To(Equal("TLS_CIPHER_SUITES"))
+		Expect(*rev.ManifestSubstitutions[1].Value).To(Equal("TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"))
+		Expect(rev.ManifestSubstitutions[2].Key).To(Equal("TLS_MIN_VERSION"))
+		Expect(*rev.ManifestSubstitutions[2].Value).To(Equal("VersionTLS12"))
 	}, defaultNodeTimeout)
 })
 

@@ -30,17 +30,6 @@ import (
 // ManagedLabelKey is a label key used to identify objects managed by the CAPI operator.
 const ManagedLabelKey = operatorstatus.CAPIOperatorIdentifierDomain + "/managed-by"
 
-func envSubstSubstitutions(key string) string {
-	switch key {
-	// Used only in the AWS provider. Eventually, we intend to move this into
-	// provider metadata.
-	case "EXP_BOOTSTRAP_FORMAT_IGNITION":
-		return "true"
-	default:
-		return ""
-	}
-}
-
 // IMPORTANT NOTE: changes to transformYaml or transformObject which are not
 // dependent on a change in the API revision are breaking changes: it will
 // update the revision's content ID without the revision having been updated.
@@ -49,13 +38,10 @@ func envSubstSubstitutions(key string) string {
 
 // transformYaml applies transformations to an object's YAML before it is unmarshalled.
 func transformYaml(providerProfile *providerimages.ProviderImageManifests, yaml string, substitutions map[string]string) (string, error) {
-	// Expand envsubst variables, checking user-provided substitutions first.
+	// Expand envsubst variables from user-provided substitutions.
+	// Unknown variables are replaced with an empty string.
 	yaml, err := envsubst.Eval(yaml, func(key string) string {
-		if v, ok := substitutions[key]; ok {
-			return v
-		}
-
-		return envSubstSubstitutions(key)
+		return substitutions[key]
 	})
 	if err != nil {
 		return "", fmt.Errorf("failed to substitute variables: %w", err)

@@ -281,8 +281,9 @@ func (r *RevisionController) SetupWithManager(mgr ctrl.Manager, tlsOptions []fun
 	}
 
 	r.manifestSubstitutions = map[string]string{
-		"TLS_MIN_VERSION":   libgocrypto.TLSVersionToNameOrDie(tlsCfg.MinVersion),
-		"TLS_CIPHER_SUITES": strings.Join(util.SliceMap(tlsCfg.CipherSuites, tls.CipherSuiteName), ","),
+		"EXP_BOOTSTRAP_FORMAT_IGNITION": "true",
+		"TLS_MIN_VERSION":               libgocrypto.TLSVersionToNameOrDie(tlsCfg.MinVersion),
+		"TLS_CIPHER_SUITES":             strings.Join(util.SliceMap(tlsCfg.CipherSuites, tls.CipherSuiteName), ","),
 	}
 
 	isInfrastructureReady := func(obj client.Object) bool {
