@@ -39,6 +39,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	"github.com/openshift/cluster-capi-operator/pkg/manifesttransformer"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
 	"github.com/openshift/cluster-capi-operator/pkg/revisiongenerator"
@@ -65,6 +66,7 @@ type RevisionController struct {
 	client.Client
 	ProviderProfiles []providerimages.ProviderImageManifests
 	ReleaseVersion   string
+	Transformers     []manifesttransformer.ManifestTransformer
 
 	// manifestSubstitutions is derived from TLSProfileSpec during SetupWithManager.
 	manifestSubstitutions map[string]string
@@ -150,6 +152,10 @@ func (r *RevisionController) generateDesiredRevision(ctx context.Context) (revis
 	revision, err := revisiongenerator.NewRenderedRevision(providerComponents, revisiongenerator.WithManifestSubstitutions(r.manifestSubstitutions))
 	if err != nil {
 		return nil, opresult.ErrorP(fmt.Errorf("error creating rendered revision: %w", err))
+	}
+
+	if err := manifesttransformer.ValidateTransformers(r.Transformers, revision); err != nil {
+		return nil, opresult.NonRetryableErrorP(fmt.Errorf("transformer validation failed: %w", err))
 	}
 
 	return revision, nil

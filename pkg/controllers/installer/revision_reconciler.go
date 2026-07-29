@@ -36,6 +36,7 @@ import (
 	machinerytypes "pkg.package-operator.run/boxcutter/machinery/types"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	"github.com/openshift/cluster-capi-operator/pkg/manifesttransformer"
 	"github.com/openshift/cluster-capi-operator/pkg/revisiongenerator"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 )
@@ -173,7 +174,19 @@ func (r *revisionReconciler) reconcileRevision(ctx context.Context, apiRevision 
 		return false, "", fmt.Errorf("error creating installer revision from API revision %s: %w", apiRevision.Name, reconcile.TerminalError(err))
 	}
 
-	bcRevision := toBoxcutterRevision(revision, r.collectObjects)
+	// Defence in depth: the revision controller validates transformers before
+	// writing a new revision, but a revision read back from the API could in
+	// principle be malformed (e.g. hand-edited), so validate again here.
+	if err := manifesttransformer.ValidateTransformers(r.transformers, revision); err != nil {
+		err = fmt.Errorf("validating revision %s: %w", revision.RevisionName(), reconcile.TerminalError(err))
+		return false, err.Error(), err
+	}
+
+	bcRevision, err := toBoxcutterRevision(ctx, revision, r.transformers, r.collectObjects)
+	if err != nil {
+		return false, err.Error(), reconcile.TerminalError(fmt.Errorf("building boxcutter revision %s: %w", revision.RevisionName(), err))
+	}
+
 	phases := bcRevision.GetPhases()
 
 	totalObjects := 0
@@ -338,7 +351,12 @@ func (r *revisionReconciler) teardownRevision(ctx context.Context, apiRevision o
 
 	revisionName := revision.RevisionName()
 
-	bcRevision := toBoxcutterRevision(revision, r.collectObjects)
+	bcRevision, err := toBoxcutterRevision(ctx, revision, r.transformers, r.collectObjects)
+	if err != nil {
+		// Cannot tear down a revision that cannot be constructed — treat as complete.
+		return true, "", err
+	}
+
 	phases := bcRevision.GetPhases()
 
 	totalObjects := 0

@@ -17,6 +17,8 @@ limitations under the License.
 package installer
 
 import (
+	"context"
+	"errors"
 	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -25,6 +27,7 @@ import (
 	"pkg.package-operator.run/boxcutter"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/openshift/cluster-capi-operator/pkg/manifesttransformer"
 	"github.com/openshift/cluster-capi-operator/pkg/revisiongenerator"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 )
@@ -62,14 +65,61 @@ func objectKinds(objs []client.Object) []string {
 	})
 }
 
-// installerRevisionFromProfiles builds an InstallerRevision from named provider profiles
-// already registered in providersByName. Delegates to the package-level lookupProfiles helper
-// so the heavy profile setup stays in BeforeSuite.
+// stubTransformer is a test double for manifesttransformer.ManifestTransformer.
+type stubTransformer struct {
+	opts        []boxcutter.ObjectReconcileOption
+	err         error
+	validateErr error
+}
+
+func (s *stubTransformer) TransformObject(_ context.Context, obj *unstructured.Unstructured) (*unstructured.Unstructured, []boxcutter.ObjectReconcileOption, error) {
+	return obj, s.opts, s.err
+}
+
+func (s *stubTransformer) Validate(_ *unstructured.Unstructured) error {
+	return s.validateErr
+}
+
+func (s *stubTransformer) WithRevision(_ context.Context, _ revisiongenerator.RenderedRevision) manifesttransformer.ManifestTransformer {
+	return s
+}
+
+func (s *stubTransformer) WithComponent(_ context.Context, _ revisiongenerator.RenderedComponent) manifesttransformer.ManifestTransformer {
+	return s
+}
+
+var _ manifesttransformer.ManifestTransformer = &stubTransformer{}
+
+// fnTransformer adapts a plain function to the manifesttransformer.ManifestTransformer
+// interface, letting tests express skip/mutate/observe behaviour inline.
+type fnTransformer struct {
+	fn func(obj *unstructured.Unstructured) (*unstructured.Unstructured, []boxcutter.ObjectReconcileOption, error)
+}
+
+func (f *fnTransformer) TransformObject(_ context.Context, obj *unstructured.Unstructured) (*unstructured.Unstructured, []boxcutter.ObjectReconcileOption, error) {
+	return f.fn(obj)
+}
+
+func (f *fnTransformer) Validate(_ *unstructured.Unstructured) error {
+	return nil
+}
+
+func (f *fnTransformer) WithRevision(_ context.Context, _ revisiongenerator.RenderedRevision) manifesttransformer.ManifestTransformer {
+	return f
+}
+
+func (f *fnTransformer) WithComponent(_ context.Context, _ revisiongenerator.RenderedComponent) manifesttransformer.ManifestTransformer {
+	return f
+}
+
+var _ manifesttransformer.ManifestTransformer = &fnTransformer{}
+
+// installerRevisionFromProfiles builds a bare InstallerRevision from the named
+// provider profiles without writing anything to the cluster.
 func installerRevisionFromProfiles(names ...string) revisiongenerator.InstallerRevision {
 	GinkgoHelper()
 
 	profiles := lookupProfiles(names...)
-
 	rendered, err := revisiongenerator.NewRenderedRevision(profiles)
 	Expect(err).NotTo(HaveOccurred(), "NewRenderedRevision should not fail for valid profiles")
 
@@ -84,7 +134,8 @@ var _ = Describe("toBoxcutterRevision", func() {
 		It("should return a Revision with the name of the InstallerRevision", func() {
 			rev := installerRevisionFromProfiles(providerCore)
 
-			bcRev := toBoxcutterRevision(rev, noopCollector)
+			bcRev, err := toBoxcutterRevision(context.Background(), rev, nil, noopCollector)
+			Expect(err).NotTo(HaveOccurred())
 
 			Expect(bcRev.GetName()).To(Equal(string(rev.RevisionName())),
 				"returned Revision should carry the same name as the InstallerRevision")
@@ -96,7 +147,8 @@ var _ = Describe("toBoxcutterRevision", func() {
 			func(providerName string, wantPhaseCount int) {
 				rev := installerRevisionFromProfiles(providerName)
 
-				bcRev := toBoxcutterRevision(rev, noopCollector)
+				bcRev, err := toBoxcutterRevision(context.Background(), rev, nil, noopCollector)
+				Expect(err).NotTo(HaveOccurred())
 
 				first := bcRev.GetPhases()
 				second := bcRev.GetPhases()
@@ -122,7 +174,10 @@ var _ = Describe("toBoxcutterRevision", func() {
 		It("splits a component with CRDs and objects into a '-crds' phase and an objects phase", func() {
 			rev := installerRevisionFromProfiles(providerMixed)
 
-			phases := toBoxcutterRevision(rev, noopCollector).GetPhases()
+			bcRev, err := toBoxcutterRevision(context.Background(), rev, nil, noopCollector)
+			Expect(err).NotTo(HaveOccurred())
+
+			phases := bcRev.GetPhases()
 			Expect(phases).To(HaveLen(2))
 
 			crdPhase := findPhase(phases, providerMixed+"-crds")
@@ -137,7 +192,10 @@ var _ = Describe("toBoxcutterRevision", func() {
 		It("does not create a '-crds' phase for a component with no CRDs", func() {
 			rev := installerRevisionFromProfiles(providerCore)
 
-			phases := toBoxcutterRevision(rev, noopCollector).GetPhases()
+			bcRev, err := toBoxcutterRevision(context.Background(), rev, nil, noopCollector)
+			Expect(err).NotTo(HaveOccurred())
+
+			phases := bcRev.GetPhases()
 			Expect(phases).To(HaveLen(1))
 			Expect(phases[0].GetName()).To(Equal(providerCore))
 			Expect(objectKinds(phases[0].GetObjects())).To(ConsistOf("ConfigMap"))
@@ -146,7 +204,10 @@ var _ = Describe("toBoxcutterRevision", func() {
 		It("does not create a plain objects phase for a component with only CRDs", func() {
 			rev := installerRevisionFromProfiles(providerCRD)
 
-			phases := toBoxcutterRevision(rev, noopCollector).GetPhases()
+			bcRev, err := toBoxcutterRevision(context.Background(), rev, nil, noopCollector)
+			Expect(err).NotTo(HaveOccurred())
+
+			phases := bcRev.GetPhases()
 			Expect(phases).To(HaveLen(1))
 			Expect(phases[0].GetName()).To(Equal(providerCRD + "-crds"))
 			Expect(objectKinds(phases[0].GetObjects())).To(ConsistOf("CustomResourceDefinition"))
@@ -163,9 +224,11 @@ var _ = Describe("toBoxcutterRevision", func() {
 
 				var collectedRefs []string
 
-				toBoxcutterRevision(rev, func(obj *unstructured.Unstructured) {
+				collectObjects := func(obj *unstructured.Unstructured) {
 					collectedRefs = append(collectedRefs, objectRef(obj.GetKind(), obj.GetName()))
-				})
+				}
+				_, err := toBoxcutterRevision(context.Background(), rev, nil, collectObjects)
+				Expect(err).NotTo(HaveOccurred())
 
 				Expect(collectedRefs).To(ConsistOf(wantRefs),
 					"collectObjects should be called exactly once for every object that ends up in a phase")
@@ -191,5 +254,222 @@ var _ = Describe("toBoxcutterRevision", func() {
 				},
 				providerCore, providerMixed, providerCRD),
 		)
+	})
+
+	Describe("transformer integration", func() {
+		It("should return an error when a transformer fails", func() {
+			stub := &stubTransformer{err: errors.New("transform failed")}
+			rev := installerRevisionFromProfiles(providerCore)
+
+			_, err := toBoxcutterRevision(context.Background(), rev, []manifesttransformer.ManifestTransformer{stub}, nil)
+
+			Expect(err).To(MatchError(ContainSubstring("transform failed")))
+		})
+
+		It("should include options returned by transformers in phase reconcile options", func() {
+			rev := installerRevisionFromProfiles(providerCore)
+
+			base, err := toBoxcutterRevision(context.Background(), rev, nil, nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			baseOptCount := len(base.GetPhases()[0].GetReconcileOptions())
+
+			stub := &stubTransformer{opts: []boxcutter.ObjectReconcileOption{
+				boxcutter.WithCollisionProtection(boxcutter.CollisionProtectionNone),
+			}}
+			withTfm, err := toBoxcutterRevision(context.Background(), rev, []manifesttransformer.ManifestTransformer{stub}, nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(len(withTfm.GetPhases()[0].GetReconcileOptions())).To(
+				BeNumerically(">", baseOptCount),
+				"transformer options should augment the phase reconcile options",
+			)
+		})
+
+		It("should omit an object from its phase when a transformer returns a nil object", func() {
+			rev := installerRevisionFromProfiles(providerMixed)
+
+			skipConfigMaps := &fnTransformer{fn: func(obj *unstructured.Unstructured) (*unstructured.Unstructured, []boxcutter.ObjectReconcileOption, error) {
+				if obj.GetKind() == "ConfigMap" {
+					return nil, nil, nil
+				}
+
+				return obj, nil, nil
+			}}
+
+			bcRev, err := toBoxcutterRevision(context.Background(), rev, []manifesttransformer.ManifestTransformer{skipConfigMaps}, nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			phases := bcRev.GetPhases()
+
+			crdPhase := findPhase(phases, providerMixed+"-crds")
+			Expect(objectKinds(crdPhase.GetObjects())).To(ConsistOf("CustomResourceDefinition"),
+				"objects not matched by the skip transformer should be unaffected")
+
+			objectsPhase := findPhase(phases, providerMixed)
+			Expect(objectsPhase.GetObjects()).To(BeEmpty(),
+				"an object skipped by a transformer (nil return) must not appear in any phase")
+		})
+
+		It("should not invoke later transformers for an object a prior transformer already skipped", func() {
+			rev := installerRevisionFromProfiles(providerCore)
+
+			skip := &fnTransformer{fn: func(*unstructured.Unstructured) (*unstructured.Unstructured, []boxcutter.ObjectReconcileOption, error) {
+				return nil, nil, nil
+			}}
+
+			var secondCalled bool
+
+			recordCall := &fnTransformer{fn: func(obj *unstructured.Unstructured) (*unstructured.Unstructured, []boxcutter.ObjectReconcileOption, error) {
+				secondCalled = true
+				return obj, nil, nil
+			}}
+
+			_, err := toBoxcutterRevision(context.Background(), rev, []manifesttransformer.ManifestTransformer{skip, recordCall}, nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(secondCalled).To(BeFalse(),
+				"a transformer must not run on an object a prior transformer already skipped")
+		})
+
+		It("should pass the output of one transformer as the input to the next", func() {
+			rev := installerRevisionFromProfiles(providerCore)
+
+			const renamedTo = "renamed-by-first-transformer"
+
+			rename := &fnTransformer{fn: func(obj *unstructured.Unstructured) (*unstructured.Unstructured, []boxcutter.ObjectReconcileOption, error) {
+				renamed := obj.DeepCopy()
+				renamed.SetName(renamedTo)
+
+				return renamed, nil, nil
+			}}
+
+			var sawName string
+
+			record := &fnTransformer{fn: func(obj *unstructured.Unstructured) (*unstructured.Unstructured, []boxcutter.ObjectReconcileOption, error) {
+				sawName = obj.GetName()
+				return obj, nil, nil
+			}}
+
+			bcRev, err := toBoxcutterRevision(context.Background(), rev, []manifesttransformer.ManifestTransformer{rename, record}, nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(sawName).To(Equal(renamedTo),
+				"the second transformer should observe the first transformer's output, not the original object")
+			Expect(bcRev.GetPhases()[0].GetObjects()[0].GetName()).To(Equal(renamedTo),
+				"the final phase should contain the transformed object, not the original")
+		})
+
+		It("should apply transformers to CRDs as well as plain objects", func() {
+			rev := installerRevisionFromProfiles(providerCRD)
+
+			var sawKind string
+
+			record := &fnTransformer{fn: func(obj *unstructured.Unstructured) (*unstructured.Unstructured, []boxcutter.ObjectReconcileOption, error) {
+				sawKind = obj.GetKind()
+				return obj, nil, nil
+			}}
+
+			_, err := toBoxcutterRevision(context.Background(), rev, []manifesttransformer.ManifestTransformer{record}, nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(sawKind).To(Equal("CustomResourceDefinition"), "transformers must also run against CRD objects")
+		})
+
+		It("should include the failing object's identity in the returned error", func() {
+			rev := installerRevisionFromProfiles(providerCore)
+			stub := &stubTransformer{err: errors.New("boom")}
+
+			_, err := toBoxcutterRevision(context.Background(), rev, []manifesttransformer.ManifestTransformer{stub}, nil)
+
+			Expect(err).To(MatchError(ContainSubstring(coreCMName)),
+				"the error should identify which object failed transformation")
+		})
+
+		It("should invoke transformers exactly once per object, even if GetPhases is called multiple times", func() {
+			rev := installerRevisionFromProfiles(providerCore)
+
+			var callCount int
+
+			counting := &fnTransformer{fn: func(obj *unstructured.Unstructured) (*unstructured.Unstructured, []boxcutter.ObjectReconcileOption, error) {
+				callCount++
+				return obj, nil, nil
+			}}
+
+			bcRev, err := toBoxcutterRevision(context.Background(), rev, []manifesttransformer.ManifestTransformer{counting}, nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			_ = bcRev.GetPhases()
+			_ = bcRev.GetPhases()
+
+			Expect(callCount).To(Equal(1),
+				"transformation happens once during construction, not on every GetPhases call")
+		})
+	})
+
+	Describe("error aggregation", func() {
+		It("aggregates errors from multiple objects in the same phase", func() {
+			// providerManyClusterScoped has ten ClusterRoles and no CRDs, so all
+			// of them are built into a single objects phase for the component.
+			rev := installerRevisionFromProfiles(providerManyClusterScoped)
+			stub := &stubTransformer{err: errors.New("boom")}
+
+			_, err := toBoxcutterRevision(context.Background(), rev, []manifesttransformer.ManifestTransformer{stub}, nil)
+
+			Expect(err).To(MatchError(SatisfyAll(
+				ContainSubstring("/test-cr-1"),
+				ContainSubstring("/test-cr-2"),
+			)), "expected failures from multiple objects within the same phase")
+		})
+
+		It("aggregates errors from multiple transformers on the same object", func() {
+			rev := installerRevisionFromProfiles(providerCore)
+			stubA := &stubTransformer{err: errors.New("first failure")}
+			stubB := &stubTransformer{err: errors.New("second failure")}
+
+			_, err := toBoxcutterRevision(context.Background(), rev,
+				[]manifesttransformer.ManifestTransformer{stubA, stubB}, nil)
+
+			Expect(err).To(MatchError(SatisfyAll(
+				ContainSubstring("first failure"),
+				ContainSubstring("second failure"),
+			)), "expected both transformer failures for the object in a single joined error")
+		})
+
+		It("aggregates errors across the CRD and non-CRD phases of the same component", func() {
+			// providerMixed has one CRD and one ConfigMap, in the same component,
+			// but built into two separate phases (crds, objects).
+			rev := installerRevisionFromProfiles(providerMixed)
+			stub := &stubTransformer{err: errors.New("boom")}
+
+			_, err := toBoxcutterRevision(context.Background(), rev, []manifesttransformer.ManifestTransformer{stub}, nil)
+
+			Expect(err).To(MatchError(SatisfyAll(
+				ContainSubstring("/testgadgets.test.example.com"),
+				ContainSubstring("default/test-cm-mixed"),
+			)), "expected failures from both the CRD phase and the objects phase")
+		})
+
+		It("aggregates errors across multiple components rather than stopping at the first", func() {
+			rev := installerRevisionFromProfiles(providerCore, providerInfra)
+			stub := &stubTransformer{err: errors.New("boom")}
+
+			_, err := toBoxcutterRevision(context.Background(), rev, []manifesttransformer.ManifestTransformer{stub}, nil)
+
+			Expect(err).To(MatchError(SatisfyAll(
+				ContainSubstring("default/test-cm-core"),
+				ContainSubstring("default/test-cm-infra"),
+			)), "expected failures from both components, not just the first one processed")
+		})
+
+		It("does not build a Revision when any object fails transformation", func() {
+			rev := installerRevisionFromProfiles(providerCore, providerInfra)
+			stub := &stubTransformer{err: errors.New("boom")}
+
+			bcRev, err := toBoxcutterRevision(context.Background(), rev, []manifesttransformer.ManifestTransformer{stub}, nil)
+
+			Expect(err).To(HaveOccurred())
+			Expect(bcRev).To(BeNil())
+		})
 	})
 })
