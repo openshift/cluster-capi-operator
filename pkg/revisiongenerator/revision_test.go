@@ -459,46 +459,14 @@ func TestNewRenderedRevision(t *testing.T) {
 		g.Expect(err).To(HaveOccurred())
 	})
 
-	t.Run("yaml transformation applied during construction", func(t *testing.T) {
+	t.Run("objects stored with unexpanded envsubst variables", func(t *testing.T) {
 		g := NewWithT(t)
 
-		// Manifest with envsubst variable; revision built from this should
-		// produce the same contentID as one built from the expanded form when
-		// the substitution is provided.
-		provWithVar := test.NewProviderImageManifests(t, "p1").
-			WithImageRef("img1").
-			WithManifests(`apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: cm
-data:
-  v: "${EXP_BOOTSTRAP_FORMAT_IGNITION}"`).
-			Build()
-		provExpanded := test.NewProviderImageManifests(t, "p1").
-			WithImageRef("img1").
-			WithManifests(`apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: cm
-data:
-  v: "true"`).
-			Build()
-
-		subs := map[string]string{"EXP_BOOTSTRAP_FORMAT_IGNITION": "true"}
-
-		rev1 := must(NewRenderedRevision([]providerimages.ProviderImageManifests{provWithVar}, WithManifestSubstitutions(subs)))(g)
-		rev2 := must(NewRenderedRevision([]providerimages.ProviderImageManifests{provExpanded}, WithManifestSubstitutions(subs)))(g)
-
-		id1 := must(rev1.ContentID())(g)
-		id2 := must(rev2.ContentID())(g)
-
-		g.Expect(id1).To(Equal(id2))
-	})
-
-	t.Run("user substitutions applied during construction", func(t *testing.T) {
-		g := NewWithT(t)
-
-		// Manifest with a user-provided envsubst variable
+		// Envsubst expansion now happens at install time via EnvsubstTransformer.
+		// The revision generator stores the raw unexpanded YAML, so a revision
+		// built from a manifest with ${VAR} has a different contentID than one
+		// built from the pre-expanded form — even if the same substitutions are
+		// provided.
 		provWithVar := test.NewProviderImageManifests(t, "p1").
 			WithImageRef("img1").
 			WithManifests(`apiVersion: v1
@@ -520,15 +488,37 @@ data:
 
 		subs := map[string]string{"MY_VAR": "hello"}
 
-		// Both use the same substitutions, so the hash of substitutions is identical.
-		// The manifest content after rendering is also identical.
 		rev1 := must(NewRenderedRevision([]providerimages.ProviderImageManifests{provWithVar}, WithManifestSubstitutions(subs)))(g)
 		rev2 := must(NewRenderedRevision([]providerimages.ProviderImageManifests{provExpanded}, WithManifestSubstitutions(subs)))(g)
 
 		id1 := must(rev1.ContentID())(g)
 		id2 := must(rev2.ContentID())(g)
 
-		g.Expect(id1).To(Equal(id2))
+		// Different raw content → different contentIDs even with the same subs.
+		g.Expect(id1).NotTo(Equal(id2))
+	})
+
+	t.Run("ManifestSubstitutions returns stored substitutions", func(t *testing.T) {
+		g := NewWithT(t)
+
+		subs := map[string]string{"TLS_MIN_VERSION": "VersionTLS12", "EXP_BOOTSTRAP_FORMAT_IGNITION": "true"}
+
+		rev := must(NewRenderedRevision(
+			[]providerimages.ProviderImageManifests{profile(t, "p1", "img1", "default", configMapA)},
+			WithManifestSubstitutions(subs),
+		))(g)
+
+		g.Expect(rev.ManifestSubstitutions()).To(Equal(subs))
+	})
+
+	t.Run("ManifestSubstitutions returns nil when no substitutions", func(t *testing.T) {
+		g := NewWithT(t)
+
+		rev := must(NewRenderedRevision(
+			[]providerimages.ProviderImageManifests{profile(t, "p1", "img1", "default", configMapA)},
+		))(g)
+
+		g.Expect(rev.ManifestSubstitutions()).To(BeNil())
 	})
 }
 
@@ -553,9 +543,19 @@ func TestComponents(t *testing.T) {
 		wantObjects int
 	}{
 		{
-			name:        "returns all objects",
+			name:        "returns all objects including CRDs",
 			manifests:   multiDoc(crdA, configMapA, crdB, configMapB),
 			wantObjects: 4,
+		},
+		{
+			name:        "CRDs returned by Objects",
+			manifests:   crdA,
+			wantObjects: 1,
+		},
+		{
+			name:        "non-CRD objects returned by Objects",
+			manifests:   configMapA,
+			wantObjects: 1,
 		},
 		{
 			name:        "returns no objects",
@@ -575,6 +575,21 @@ func TestComponents(t *testing.T) {
 		})
 	}
 
+	t.Run("CRD stored as unstructured.Unstructured with correct GVK", func(t *testing.T) {
+		g := NewWithT(t)
+
+		rev := must(NewRenderedRevision([]providerimages.ProviderImageManifests{
+			profile(t, "core", "img1", "default", crdA),
+		}))(g)
+
+		objs := rev.Components()[0].Objects()
+		g.Expect(objs).To(HaveLen(1))
+		g.Expect(objs[0].GetName()).To(Equal("widgets.example.com"))
+		g.Expect(objs[0].GetObjectKind().GroupVersionKind().Kind).To(Equal("CustomResourceDefinition"))
+		// Managed-by label is no longer added at render time (Phase 2: moved to ManagedByTransformer).
+		g.Expect(objs[0].GetLabels()).NotTo(HaveKey("capi-operator.openshift.io/managed-by"))
+	})
+
 	t.Run("Objects returns unstructured.Unstructured slices matching underlying objects", func(t *testing.T) {
 		g := NewWithT(t)
 
@@ -586,7 +601,8 @@ func TestComponents(t *testing.T) {
 		g.Expect(objs).To(HaveLen(1))
 		g.Expect(objs[0].GetName()).To(Equal("config-a"))
 		g.Expect(objs[0].GetObjectKind().GroupVersionKind().Kind).To(Equal("ConfigMap"))
-		g.Expect(objs[0].GetLabels()).To(HaveKeyWithValue(ManagedLabelKey, "core"))
+		// Managed-by label is no longer added at render time (Phase 2: moved to ManagedByTransformer).
+		g.Expect(objs[0].GetLabels()).NotTo(HaveKey("capi-operator.openshift.io/managed-by"))
 	})
 
 	t.Run("zero components returns empty slice", func(t *testing.T) {
@@ -706,6 +722,7 @@ func TestNewInstallerRevisionFromAPI(t *testing.T) {
 		rev := must(NewInstallerRevisionFromAPI(apiRev, profiles))(g)
 
 		c := rev.Components()[0]
+		// azure profile has crdA + configMapA: both returned by Objects() since Phase 2.
 		g.Expect(c.Objects()).To(HaveLen(2))
 	})
 
@@ -802,10 +819,14 @@ func TestNewInstallerRevisionFromAPI(t *testing.T) {
 		g.Expect(err.Error()).To(ContainSubstring("content ID mismatch"))
 	})
 
-	t.Run("substitutions from API revision applied during rendering", func(t *testing.T) {
+	t.Run("substitutions from API revision included in content ID", func(t *testing.T) {
 		g := NewWithT(t)
 
-		// Create a profile with a variable that needs substitution
+		// Create a profile with an envsubst variable. Envsubst is no longer
+		// applied at render time (Phase 2); it happens at install time via
+		// EnvsubstTransformer. Substitutions are still recorded on the revision
+		// and included in the content ID so that different substitutions produce
+		// different revisions.
 		prof := test.NewProviderImageManifests(t, "core").
 			WithImageRef("quay.io/openshift/core@sha256:aaaa").
 			WithProfile("default").
@@ -819,7 +840,7 @@ data:
 
 		subs := map[string]string{"TLS_MIN_VERSION": "VersionTLS12"}
 
-		// Create a revision with substitutions and convert to API revision
+		// Create a revision with substitutions and convert to API revision.
 		rev := must(NewRenderedRevision(
 			[]providerimages.ProviderImageManifests{prof},
 			WithManifestSubstitutions(subs),
@@ -827,10 +848,10 @@ data:
 
 		apiRev := must(forInstall(g, rev, "4.18.0", 1).ToAPIRevision())(g)
 
-		// Round-trip: reconstruct from API revision with same profiles
+		// Round-trip: reconstruct from API revision with same profiles.
+		// Content ID validation must pass, confirming substitutions are included.
 		reconstructed := must(NewInstallerRevisionFromAPI(apiRev, []providerimages.ProviderImageManifests{prof}))(g)
 
-		// Content ID validation passes, confirming substitutions were applied correctly
 		reconstructedContentID := must(reconstructed.ContentID())(g)
 		g.Expect(reconstructedContentID).To(Equal(apiRev.ContentID))
 		g.Expect(reconstructed.Components()).To(HaveLen(1))

@@ -132,6 +132,8 @@ func setupControllers(ctx context.Context, mgr ctrl.Manager, operatorConfig comm
 	}
 
 	transformers := []manifesttransformer.ManifestTransformer{
+		manifesttransformer.NewEnvsubstTransformer(nil),
+		manifesttransformer.NewManagedByTransformer(),
 		&manifesttransformer.AdoptExistingTransformer{},
 	}
 
