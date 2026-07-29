@@ -1,0 +1,120 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rename-resources
+  annotations:
+    config.kubernetes.io/function: |
+      container:
+        image: ghcr.io/kptdev/krm-functions-catalog/starlark@sha256:902f801cd887ec88cc89275672e98811dc3456dcbede2027325ac45d60c84867
+data:
+  source: |
+    # rename-resources: renames Kubernetes resources by apiGroup/Kind/name.
+    #
+    # Config: a ConfigMap named "rename-resources-config" with a "renameResources"
+    # key in data. Each line of its value is of the form: apiGroup/Kind/oldName=newName
+    #
+    # Example:
+    #   rbac.authorization.k8s.io/ClusterRole/manager-role=openshift-manager-role
+    #
+    # When a resource is renamed, references to it are automatically updated:
+    #   - ClusterRole/Role    -> ClusterRoleBinding/RoleBinding roleRef.name
+    #   - ServiceAccount      -> ClusterRoleBinding/RoleBinding subjects[].name
+    #   - Service             -> MutatingWebhookConfiguration/ValidatingWebhookConfiguration
+    #                            webhooks[].clientConfig.service.name
+
+    def find_config(items):
+      """Find the rename-resources-config ConfigMap from the resource list."""
+      for item in items:
+        if item.get("kind") == "ConfigMap" and item.get("metadata", {}).get("name") == "rename-resources-config":
+          return item.get("data", {})
+      return None
+
+    def parse_renames(config):
+      """Parse rename entries from 'apiGroup/Kind/oldName=newName' lines.
+
+      Returns a dict keyed by (apiGroup, kind, oldName) -> newName.
+      """
+      renames = {}
+      raw = config.get("renameResources", "").strip()
+      if not raw:
+        return renames
+      for line in raw.split("\n"):
+        line = line.strip()
+        if not line:
+          continue
+        parts = line.split("=", 1)
+        if len(parts) != 2:
+          fail("invalid rename (expected apiGroup/Kind/oldName=newName): " + line)
+        key = parts[0].strip()
+        new_name = parts[1].strip()
+        if not key or not new_name:
+          fail("invalid rename (both key and newName must be non-empty): " + line)
+        key_parts = key.split("/")
+        if len(key_parts) != 3:
+          fail("invalid rename key (expected apiGroup/Kind/oldName): " + key)
+        api_group = key_parts[0]
+        kind = key_parts[1]
+        old_name = key_parts[2]
+        renames[(api_group, kind, old_name)] = new_name
+      return renames
+
+    def get_api_group(resource):
+      """Extract the apiGroup from a resource's apiVersion."""
+      api_version = resource.get("apiVersion", "")
+      if "/" in api_version:
+        return api_version.split("/")[0]
+      return ""
+
+    def build_ref_maps(renames):
+      """Build lookups for updating references to renamed resources.
+
+      Role refs are keyed by (apiGroup, kind, oldName) to avoid collisions
+      between a Role and ClusterRole with the same name.
+      """
+      role_refs = {}
+      sa_refs = {}
+      svc_refs = {}
+      for (api_group, kind, old_name), new_name in renames.items():
+        if kind in ("ClusterRole", "Role"):
+          role_refs[(api_group, kind, old_name)] = new_name
+        if kind == "ServiceAccount":
+          sa_refs[old_name] = new_name
+        if kind == "Service":
+          svc_refs[old_name] = new_name
+      return role_refs, sa_refs, svc_refs
+
+    # Main logic
+    config = find_config(ctx.resource_list["items"])
+    if config == None:
+      pass
+    else:
+      renames = parse_renames(config)
+      if renames:
+        role_refs, sa_refs, svc_refs = build_ref_maps(renames)
+
+        for resource in ctx.resource_list["items"]:
+          kind = resource.get("kind", "")
+          name = resource.get("metadata", {}).get("name", "")
+          api_group = get_api_group(resource)
+
+          # Rename matching resources
+          if (api_group, kind, name) in renames:
+            resource["metadata"]["name"] = renames[(api_group, kind, name)]
+
+          # Update ClusterRoleBinding/RoleBinding roleRef to renamed ClusterRole/Role
+          if kind in ("ClusterRoleBinding", "RoleBinding"):
+            role_ref = resource.get("roleRef", {})
+            ref_key = (role_ref.get("apiGroup", ""), role_ref.get("kind", ""), role_ref.get("name", ""))
+            if ref_key in role_refs:
+              resource["roleRef"]["name"] = role_refs[ref_key]
+            # Update subjects referencing renamed ServiceAccounts
+            for subject in resource.get("subjects", []):
+              if subject.get("kind") == "ServiceAccount" and subject.get("name", "") in sa_refs:
+                subject["name"] = sa_refs[subject["name"]]
+
+          # Update webhook configs referencing renamed Services
+          if kind in ("MutatingWebhookConfiguration", "ValidatingWebhookConfiguration"):
+            for webhook in resource.get("webhooks", []):
+              svc = webhook.get("clientConfig", {}).get("service", {})
+              if svc.get("name", "") in svc_refs:
+                svc["name"] = svc_refs[svc["name"]]

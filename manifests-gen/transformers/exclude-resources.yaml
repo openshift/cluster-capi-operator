@@ -1,0 +1,180 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: exclude-resources
+  annotations:
+    config.kubernetes.io/function: |
+      container:
+        image: ghcr.io/kptdev/krm-functions-catalog/starlark@sha256:902f801cd887ec88cc89275672e98811dc3456dcbede2027325ac45d60c84867
+data:
+  source: |
+    # exclude-resources: removes CRDs and their associated resources from the
+    # kustomize output.
+    #
+    # Config: a ConfigMap named "exclude-resources-config" with an "excludeCRDs"
+    # key in data. Each line of its value is of the form: plural.group (e.g. machinepools.cluster.x-k8s.io)
+    #
+    # For each excluded CRD, the transformer cascades removal to:
+    #   - MutatingWebhookConfiguration/ValidatingWebhookConfiguration entries
+    #     whose rules reference the excluded resource
+    #   - ClusterRole RBAC rules that grant access to the excluded resource
+    #     (including sub-resources like /status, /finalizers)
+    #
+    # If all webhook entries in a configuration are excluded, the entire
+    # webhook configuration resource is removed.
+
+    def find_config(items):
+      """Find the exclude-resources-config ConfigMap from the resource list."""
+      for item in items:
+        if item.get("kind") == "ConfigMap" and item.get("metadata", {}).get("name") == "exclude-resources-config":
+          return item.get("data", {})
+      return None
+
+    def parse_exclude_crds(config):
+      """Parse CRD names into {group: set(plurals)} and a set of full CRD names."""
+      by_group = {}
+      crd_names = []
+      raw = config.get("excludeCRDs", "").strip()
+      if not raw:
+        return by_group, crd_names
+      for line in raw.split("\n"):
+        crd_name = line.strip()
+        if not crd_name:
+          continue
+        parts = crd_name.split(".", 1)
+        if len(parts) != 2:
+          fail("invalid CRD name (expected plural.group): " + crd_name)
+        plural = parts[0]
+        group = parts[1]
+        if group not in by_group:
+          by_group[group] = []
+        by_group[group].append(plural)
+        crd_names.append(crd_name)
+      return by_group, crd_names
+
+    def groups_for_rule(rule, by_group):
+      """Return the set of excluded groups that a rule applies to.
+
+      A wildcard ("*") in apiGroups matches all excluded groups.
+      """
+      matched = []
+      for group in rule.get("apiGroups", []):
+        if group == "*":
+          for g in by_group:
+            matched.append(g)
+        elif group in by_group:
+          matched.append(group)
+      return matched
+
+    def is_excluded_resource(resource_name, group, by_group):
+      """Check if a resource name (possibly with sub-resource) is excluded.
+
+      A wildcard ("*") in resources matches all excluded plurals in the group.
+      """
+      if group not in by_group:
+        return False
+      if resource_name == "*":
+        return True
+      base = resource_name.split("/")[0]
+      for plural in by_group[group]:
+        if base == plural:
+          return True
+      return False
+
+    def filter_webhook_rules(webhook, by_group):
+      """Filter a webhook's rules, removing entries that only target excluded resources.
+
+      Returns the filtered rules list. If a rule's apiGroups match excluded groups,
+      its resources are filtered. Rules with no remaining resources are dropped.
+      Rules with no matching groups are kept as-is.
+      """
+      filtered = []
+      for rule in webhook.get("rules", []):
+        matched_groups = groups_for_rule(rule, by_group)
+        if not matched_groups:
+          filtered.append(rule)
+          continue
+        remaining = []
+        for resource in rule.get("resources", []):
+          excluded = False
+          for group in matched_groups:
+            if is_excluded_resource(resource, group, by_group):
+              excluded = True
+              break
+          if not excluded:
+            remaining.append(resource)
+        if remaining:
+          rule["resources"] = remaining
+          filtered.append(rule)
+      return filtered
+
+    def filter_rule_resources(rule, by_group):
+      """Remove excluded resources from a ClusterRole rule."""
+      matched_groups = groups_for_rule(rule, by_group)
+      remaining = []
+      for resource in rule.get("resources", []):
+        excluded = False
+        for group in matched_groups:
+          if is_excluded_resource(resource, group, by_group):
+            excluded = True
+            break
+        if not excluded:
+          remaining.append(resource)
+      return remaining
+
+    def rule_has_excluded_group(rule, by_group):
+      """Check if any of the rule's apiGroups match an excluded group."""
+      for group in rule.get("apiGroups", []):
+        if group == "*" or group in by_group:
+          return True
+      return False
+
+    # Main logic
+    config = find_config(ctx.resource_list["items"])
+    if config == None:
+      # No config found, nothing to do
+      pass
+    else:
+      by_group, crd_names = parse_exclude_crds(config)
+
+      if by_group:
+        result = []
+        for resource in ctx.resource_list["items"]:
+          kind = resource.get("kind", "")
+          name = resource.get("metadata", {}).get("name", "")
+
+          # 1. Remove excluded CRDs
+          if kind == "CustomResourceDefinition":
+            if name in crd_names:
+              continue
+
+          # 2. Filter webhook entries (per-rule, not per-webhook)
+          if kind in ("MutatingWebhookConfiguration", "ValidatingWebhookConfiguration"):
+            webhooks = resource.get("webhooks", [])
+            filtered = []
+            for w in webhooks:
+              remaining_rules = filter_webhook_rules(w, by_group)
+              if remaining_rules:
+                w["rules"] = remaining_rules
+                filtered.append(w)
+            if not filtered:
+              continue
+            resource["webhooks"] = filtered
+
+          # 3. Filter RBAC rules for excluded resources
+          if kind == "ClusterRole":
+            rules = resource.get("rules", [])
+            filtered_rules = []
+            for rule in rules:
+              if not rule_has_excluded_group(rule, by_group):
+                filtered_rules.append(rule)
+                continue
+              remaining = filter_rule_resources(rule, by_group)
+              if remaining:
+                rule["resources"] = remaining
+                filtered_rules.append(rule)
+            resource["rules"] = filtered_rules
+
+          result.append(resource)
+
+        ctx.resource_list["items"] = result

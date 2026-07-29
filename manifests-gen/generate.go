@@ -13,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/kustomize/api/krusty"
+	"sigs.k8s.io/kustomize/api/types"
 	"sigs.k8s.io/kustomize/kyaml/filesys"
 	"sigs.k8s.io/yaml"
 )
@@ -66,7 +67,16 @@ func generateKustomizeResources(kustomizeDir string) ([]client.Object, error) {
 	// Compile assets using kustomize.
 	fmt.Printf("> Generating OpenShift manifests based on kustomize.yaml from %q\n", kustomizeDir)
 
-	k := krusty.MakeKustomizer(krusty.MakeDefaultOptions())
+	opts := krusty.MakeDefaultOptions()
+	// EnabledPluginConfig lifts plugin restrictions (PluginRestrictionsNone) so
+	// non-builtin plugins such as container-based KRM functions (e.g. starlark
+	// transformers) are allowed. BploUseStaticallyLinked tells kustomize to
+	// resolve builtin plugins from compiled-in code rather than the filesystem.
+	opts.PluginConfig = types.EnabledPluginConfig(types.BploUseStaticallyLinked)
+	// Run KRM containers as the current user instead of "nobody" to avoid
+	// "crun: setgroups: Invalid argument" in nested rootless podman (OpenShift CI).
+	opts.PluginConfig.FnpLoadingOptions.AsCurrentUser = true
+	k := krusty.MakeKustomizer(opts)
 	fSys := filesys.MakeFsOnDisk()
 
 	res, err := k.Run(fSys, kustomizeDir)
