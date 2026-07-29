@@ -19,20 +19,25 @@ package revision
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"slices"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/types"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/utils/ptr"
+	"pkg.package-operator.run/boxcutter"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/config"
 
 	configv1 "github.com/openshift/api/config/v1"
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
+	"github.com/openshift/cluster-capi-operator/pkg/manifesttransformer"
 	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
+	"github.com/openshift/cluster-capi-operator/pkg/revisiongenerator"
 	"github.com/openshift/cluster-capi-operator/pkg/test"
 )
 
@@ -73,6 +78,7 @@ func newManagerWrapper(providerImgs []providerimages.ProviderImageManifests, tls
 		Client:           mgr.GetClient(),
 		ProviderProfiles: imgs,
 		ReleaseVersion:   "4.18.0",
+		Transformers:     []manifesttransformer.ManifestTransformer{},
 	}).SetupWithManager(mgr, tlsOptions)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -192,3 +198,41 @@ func latestRevision(revisions []operatorv1alpha1.ClusterAPIInstallerRevision) op
 
 	return latest
 }
+
+// stubTransformer is a test double for manifesttransformer.ManifestTransformer.
+type stubTransformer struct {
+	validateErr error
+}
+
+func (s *stubTransformer) TransformObject(_ context.Context, obj *unstructured.Unstructured) (*unstructured.Unstructured, []boxcutter.ObjectReconcileOption, error) {
+	return obj, nil, nil
+}
+
+func (s *stubTransformer) Validate(_ *unstructured.Unstructured) error {
+	return s.validateErr
+}
+
+func (s *stubTransformer) WithRevision(_ context.Context, _ revisiongenerator.RenderedRevision) manifesttransformer.ManifestTransformer {
+	return s
+}
+
+func (s *stubTransformer) WithComponent(_ context.Context, _ revisiongenerator.RenderedComponent) manifesttransformer.ManifestTransformer {
+	return s
+}
+
+var _ manifesttransformer.ManifestTransformer = &stubTransformer{}
+
+// fakeRevision implements revisiongenerator.RenderedRevision for unit tests.
+type fakeRevision struct {
+	components []revisiongenerator.RenderedComponent
+}
+
+func (f *fakeRevision) ContentID() (string, error) { return "fake-content-id", nil }
+func (f *fakeRevision) Components() []revisiongenerator.RenderedComponent {
+	return f.components
+}
+func (f *fakeRevision) ForInstall(string, int64) (revisiongenerator.InstallerRevision, error) {
+	return nil, errors.New("not implemented")
+}
+
+var _ revisiongenerator.RenderedRevision = &fakeRevision{}
