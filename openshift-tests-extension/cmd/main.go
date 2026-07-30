@@ -72,11 +72,14 @@ func main() {
 		e2e.InitCommonVariables()
 	})
 
-	// Auto-apply platform environment selectors from Ginkgo Label("platform:<name>") annotations.
+	// Auto-apply environment selectors from Ginkgo labels.
 	specs.Walk(func(spec *et.ExtensionTestSpec) {
 		for label := range spec.Labels {
 			if platform, ok := strings.CutPrefix(label, "platform:"); ok {
 				spec.Include(et.PlatformEquals(platform))
+			}
+			if topology, ok := strings.CutPrefix(label, "skip-topology:"); ok {
+				spec.Exclude(et.TopologyEquals(topology))
 			}
 		}
 	})

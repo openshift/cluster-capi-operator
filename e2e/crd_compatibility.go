@@ -91,10 +91,14 @@ func testCRDGVK(crd *apiextensionsv1.CustomResourceDefinition) schema.GroupVersi
 	}
 }
 
-var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:CRDCompatibilityRequirementOperator] CRD Compatibility Checker", Ordered, func() {
+var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:CRDCompatibilityRequirementOperator] CRD Compatibility Checker", Label("skip-topology:External"), Ordered, func() {
 	BeforeAll(func() {
 		if !framework.IsFeatureGateEnabled(ctx, cl, features.FeatureGateCRDCompatibilityRequirementOperator) {
 			Skip("Feature gate CRDCompatibilityRequirementOperator is not enabled.")
+		}
+
+		if infra.Status.ControlPlaneTopology == configv1.ExternalTopologyMode {
+			Skip("CRD Compatibility Checker tests are not supported on External topology clusters.")
 		}
 	})
 
