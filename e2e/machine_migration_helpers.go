@@ -143,22 +143,16 @@ func createMAPIMachineWithAuthority(ctx context.Context, cl client.Client, machi
 
 	Expect(machineName).NotTo(BeEmpty(), "Machine name cannot be empty")
 
-	workerLabelSelector := metav1.LabelSelector{
-		MatchLabels: map[string]string{
-			"machine.openshift.io/cluster-api-machine-role": "worker",
-		},
-	}
-	machineList, err := mapiframework.GetMachines(ctx, cl, &workerLabelSelector)
+	// Use a sample worker MachineSet's Machine template as a reference for the new Machine's
+	// spec. This prefers a real MAPI worker MachineSet, but falls back to one synthesized from a
+	// real CAPI worker MachineSet on clusters where CAPI provisions workers and no MAPI worker
+	// MachineSet exists.
+	referenceMachineSet, err := mapiframework.GetSampleMAPIWorkerMachineSet(ctx, cl)
+	Expect(err).ToNot(HaveOccurred(), "getting a sample worker MachineSet should not error")
+	Expect(referenceMachineSet).ToNot(BeNil(), "expected to find a MAPI or CAPI worker MachineSet")
+	By(fmt.Sprintf("Using worker MachineSet %s as a reference", referenceMachineSet.Name))
 
-	Expect(err).NotTo(HaveOccurred(), "Should have successfully listed MAPI machines")
-	// The test requires at least one existing MAPI machine to act as a reference for creating a new one.
-	Expect(machineList).NotTo(BeEmpty(), "Should have found MAPI machines in the openshift-machine-api namespace to use as a reference for creating a new one")
-
-	// Select the first machine from the list as our reference.
-	referenceMachine := machineList[0]
-	By(fmt.Sprintf("Using MAPI machine %s as a reference", referenceMachine.Name))
-
-	// Define the new machine based on the reference.
+	// Define the new machine based on the reference MachineSet's Machine template.
 	newMachine := &mapiv1beta1.Machine{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Machine",
@@ -166,9 +160,9 @@ func createMAPIMachineWithAuthority(ctx context.Context, cl client.Client, machi
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      machineName,
-			Namespace: referenceMachine.Namespace,
+			Namespace: capiframework.MAPINamespace,
 		},
-		Spec: *referenceMachine.Spec.DeepCopy(),
+		Spec: *referenceMachineSet.Spec.Template.Spec.DeepCopy(),
 	}
 
 	// Clear status and other instance-specific fields that should not be copied.

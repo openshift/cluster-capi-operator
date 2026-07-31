@@ -20,36 +20,31 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
+	mapiframework "github.com/openshift/cluster-api-actuator-pkg/pkg/framework"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 )
 
-// GetFirstMAPIMachineSet lists MAPI MachineSets, sorts by name, and returns the first one
-// whose authoritative API is Machine API. MachineSets synced from Cluster API are excluded
-// because their machines are provisioned by Cluster API and carry no Machine API machine objects.
+// GetFirstMAPIMachineSet returns a MAPI worker MachineSet suitable for use as a read-only
+// template, e.g. to copy a ProviderSpec from. The returned MachineSet is not guaranteed to
+// exist as a live object.
+//
+// It prefers a real Machine API worker MachineSet. On clusters where Cluster API provisions
+// workers and no MAPI worker MachineSet exists (e.g. CAPI-only clusters), it falls back to
+// synthesizing one in-memory from a real Cluster API worker MachineSet, via
+// mapiframework.GetSampleMAPIWorkerMachineSet.
 func GetFirstMAPIMachineSet(ctx context.Context, cl client.Client) *mapiv1beta1.MachineSet {
 	GinkgoHelper()
 
-	machineSetList := &mapiv1beta1.MachineSetList{}
-	Expect(cl.List(ctx, machineSetList, client.InNamespace(MAPINamespace))).To(Succeed(),
-		"should not fail listing MAPI MachineSets")
+	machineSet, err := mapiframework.GetSampleMAPIWorkerMachineSet(ctx, cl)
+	Expect(err).ToNot(HaveOccurred(), "getting a sample worker MachineSet should not error")
+	Expect(machineSet).ToNot(BeNil(), "expected to find a Machine API or Cluster API worker MachineSet")
 
-	SortListByName(machineSetList)
-
-	for i := range machineSetList.Items {
-		ms := &machineSetList.Items[i]
-		if ms.Spec.AuthoritativeAPI != mapiv1beta1.MachineAuthorityClusterAPI {
-			return ms
-		}
-	}
-
-	Fail("expected to find at least one Machine API authoritative MachineSet")
-
-	return nil
+	return machineSet
 }
 
-// GetMAPIProviderSpec lists MAPI MachineSets, sorts by name, and unmarshals
-// the first MachineSet's ProviderSpec into the given type T.
+// GetMAPIProviderSpec returns a sample worker MachineSet, obtained via GetFirstMAPIMachineSet,
+// and unmarshals its ProviderSpec into the given type T.
 func GetMAPIProviderSpec[T any](ctx context.Context, cl client.Client) *T {
 	GinkgoHelper()
 

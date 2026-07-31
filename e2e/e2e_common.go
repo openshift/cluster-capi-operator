@@ -24,8 +24,8 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -42,6 +42,7 @@ import (
 	ibmpowervsv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
 	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
 	vspherev1 "sigs.k8s.io/cluster-api-provider-vsphere/apis/v1beta1"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -80,6 +81,10 @@ func init() {
 	utilruntime.Must(gcpv1.AddToScheme(scheme.Scheme))
 	utilruntime.Must(azurev1.AddToScheme(scheme.Scheme))
 	utilruntime.Must(clusterv1.AddToScheme(scheme.Scheme))
+	// v1beta1 is registered alongside v1beta2 because some vendored
+	// cluster-api-actuator-pkg/pkg/framework helpers (e.g. GetCAPIWorkerMachineSets) still
+	// operate on CAPI v1beta1 types.
+	utilruntime.Must(clusterv1beta1.AddToScheme(scheme.Scheme))
 	utilruntime.Must(mapiv1beta1.AddToScheme(scheme.Scheme))
 	utilruntime.Must(ibmpowervsv1.AddToScheme(scheme.Scheme))
 	utilruntime.Must(openstackv1.AddToScheme(scheme.Scheme))
@@ -128,6 +133,7 @@ func trackResource(obj client.Object) {
 // AWSMachineTemplates (on AWS) and all events in both namespaces.
 func collectTrackedResourceDiagnostics(parentCtx context.Context) (result string) {
 	var buf strings.Builder
+
 	defer func() {
 		if r := recover(); r != nil {
 			fmt.Fprintf(&buf, "\n--- diagnostics collection panicked: %v ---\n", r)
@@ -149,6 +155,7 @@ func collectTrackedResourceDiagnostics(parentCtx context.Context) (result string
 	if platform == configv1.AWSPlatformType {
 		dumpAllAWSMachineTemplates(diagCtx, &buf)
 	}
+
 	dumpNamespaceEvents(diagCtx, &buf, capiframework.CAPINamespace)
 	dumpNamespaceEvents(diagCtx, &buf, capiframework.MAPINamespace)
 
@@ -222,6 +229,7 @@ func describeObjectEvents(ctx context.Context, buf *strings.Builder, key client.
 
 	for i := range matching {
 		e := &matching[i]
+
 		ts := e.LastTimestamp.Time
 		if ts.IsZero() {
 			ts = e.EventTime.Time
@@ -274,6 +282,7 @@ func dumpNamespaceEvents(ctx context.Context, buf *strings.Builder, namespace st
 
 	for i := range list.Items {
 		e := &list.Items[i]
+
 		ts := e.LastTimestamp.Time
 		if ts.IsZero() {
 			ts = e.EventTime.Time
