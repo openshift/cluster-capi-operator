@@ -22,7 +22,7 @@ kind: ValidatingAdmissionPolicy
 metadata:
   name: machine-api-machine-vap
 spec:
-  failurePolicy: Fail
+  failurePolicy: Ignore
   matchConditions:
   - expression: |-
       !(request.userInfo.username in [
@@ -149,7 +149,7 @@ kind: ValidatingAdmissionPolicy
 metadata:
   name: machine-api-machine-set-vap
 spec:
-  failurePolicy: Fail
+  failurePolicy: Ignore
   matchConditions:
   - expression: |-
       !(request.userInfo.username in [
@@ -525,7 +525,7 @@ kind: ValidatingAdmissionPolicy
 metadata:
   name: openshift-only-create-mapi-machine-if-authoritative-api-capi
 spec:
-  failurePolicy: Fail
+  failurePolicy: Ignore
   matchConditions:
   - expression: object.metadata.name == params.metadata.name
     name: check-param-match
@@ -576,7 +576,7 @@ kind: ValidatingAdmissionPolicy
 metadata:
   name: openshift-prevent-authoritative-mapi-machineset-create-when-capi-exists
 spec:
-  failurePolicy: Fail
+  failurePolicy: Ignore
   matchConditions:
   - expression: object.metadata.name == params.metadata.name
     name: check-param-match
@@ -901,7 +901,7 @@ kind: ValidatingAdmissionPolicy
 metadata:
   name: openshift-mapi-authoritative-api-transition-requires-capi-infrastructure-ready-and-not-deleting
 spec:
-  failurePolicy: Fail
+  failurePolicy: Ignore
   matchConditions:
   - expression: |-
       !(request.userInfo.username in [

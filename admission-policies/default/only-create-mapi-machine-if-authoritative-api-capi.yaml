@@ -3,7 +3,7 @@ kind: ValidatingAdmissionPolicy
 metadata:
   name: openshift-only-create-mapi-machine-if-authoritative-api-capi
 spec:
-  failurePolicy: Fail
+  failurePolicy: Ignore
   
   paramKind:
     apiVersion: cluster.x-k8s.io/v1beta2
