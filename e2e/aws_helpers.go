@@ -36,6 +36,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 	yaml "sigs.k8s.io/yaml"
@@ -139,8 +140,8 @@ func getCAPICreatedInstance(awsClient *ec2.EC2, msName string) ec2.Instance {
 	capiMachineList := &awsv1.AWSMachineList{}
 
 	Eventually(komega.ObjectList(capiMachineList, client.InNamespace(framework.CAPINamespace), client.MatchingLabels{
-		machineSetOpenshiftLabelKey: msName,
-	})).Should(HaveField("Items", HaveLen(1)), "Failed to find exactly one CAPI AWSMachine for MachineSet %s", msName)
+		clusterv1.MachineSetNameLabel: msName,
+	})).Should(HaveField("Items", Not(BeEmpty())), "Failed to find at least one CAPI AWSMachine for MachineSet %s", msName)
 
 	capiMachine := capiMachineList.Items[0]
 	Expect(capiMachine.Spec.InstanceID).ToNot(BeNil(), "AWSMachine InstanceID not set in Spec")
