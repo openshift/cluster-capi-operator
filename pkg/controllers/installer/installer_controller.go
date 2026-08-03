@@ -46,7 +46,7 @@ import (
 
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
-	"github.com/openshift/cluster-capi-operator/pkg/revisiongenerator"
+	"github.com/openshift/cluster-capi-operator/pkg/runtimetransformer"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 )
 
@@ -65,12 +65,13 @@ type InstallerController struct {
 	revisionEngine   *boxcutter.RevisionEngine
 	providerProfiles []providerimages.ProviderImageManifests
 	restMapper       meta.RESTMapper
+	transformers     []runtimetransformer.RuntimeTransformer
 }
 
 // SetupWithManager creates the boxcutter dependencies and sets up the installer
 // controller with the Manager. Additional sources may be provided to trigger
 // reconciliation from external events (e.g. a channel source for testing).
-func SetupWithManager(mgr ctrl.Manager, providerProfiles []providerimages.ProviderImageManifests, additionalSources ...source.Source) error {
+func SetupWithManager(mgr ctrl.Manager, providerProfiles []providerimages.ProviderImageManifests, transformers []runtimetransformer.RuntimeTransformer, additionalSources ...source.Source) error {
 	trackingCache, err := setupTrackingCache(mgr)
 	if err != nil {
 		return fmt.Errorf("unable to setup tracking cache: %w", err)
@@ -87,6 +88,7 @@ func SetupWithManager(mgr ctrl.Manager, providerProfiles []providerimages.Provid
 		revisionEngine:   revisionEngine,
 		providerProfiles: providerProfiles,
 		restMapper:       mgr.GetRESTMapper(),
+		transformers:     transformers,
 	}
 
 	toClusterAPI := func(_ context.Context, _ client.Object) []reconcile.Request {
@@ -137,7 +139,7 @@ func SetupWithManager(mgr ctrl.Manager, providerProfiles []providerimages.Provid
 func setupTrackingCache(mgr ctrl.Manager) (managedcache.TrackingCache, error) {
 	// Configure cache to watch only objects with our label. The label is
 	// applied by the revision generator.
-	managedByReq, err := labels.NewRequirement(revisiongenerator.ManagedLabelKey, selection.Exists, nil)
+	managedByReq, err := labels.NewRequirement(runtimetransformer.ManagedLabelKey, selection.Exists, nil)
 	if err != nil {
 		return nil, fmt.Errorf("creating managed-by label requirement: %w", err)
 	}

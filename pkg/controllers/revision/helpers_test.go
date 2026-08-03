@@ -18,7 +18,7 @@ package revision
 
 import (
 	"context"
-	"crypto/tls"
+	"errors"
 	"slices"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -26,6 +26,7 @@ import (
 	"github.com/onsi/gomega/types"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
+	"pkg.package-operator.run/boxcutter"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/config"
@@ -33,6 +34,8 @@ import (
 	configv1 "github.com/openshift/api/config/v1"
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
+	"github.com/openshift/cluster-capi-operator/pkg/revisiongenerator"
+	"github.com/openshift/cluster-capi-operator/pkg/runtimetransformer"
 	"github.com/openshift/cluster-capi-operator/pkg/test"
 )
 
@@ -44,7 +47,7 @@ type managerWrapper struct {
 	done   chan struct{}
 }
 
-func newManagerWrapper(providerImgs []providerimages.ProviderImageManifests, tlsOptions ...func(config *tls.Config)) *managerWrapper {
+func newManagerWrapper(providerImgs []providerimages.ProviderImageManifests) *managerWrapper {
 	// Don't use the BeforeEach context because it will be cancelled before the test starts.
 	ctx := context.Background()
 
@@ -59,21 +62,13 @@ func newManagerWrapper(providerImgs []providerimages.ProviderImageManifests, tls
 	})
 	Expect(err).NotTo(HaveOccurred())
 
-	if len(tlsOptions) == 0 {
-		tlsOptions = []func(config *tls.Config){
-			func(config *tls.Config) {
-				// Arbitrarily chosen insecure default tls configuration for tests
-				config.CipherSuites = []uint16{tls.TLS_RSA_WITH_RC4_128_SHA}
-				config.MinVersion = tls.VersionTLS10
-			},
-		}
-	}
-
+	adoptExisting := runtimetransformer.NewSimpleRuntimeTransformer(&runtimetransformer.AdoptExistingTransformer{})
 	err = (&RevisionController{
 		Client:           mgr.GetClient(),
 		ProviderProfiles: imgs,
 		ReleaseVersion:   "4.18.0",
-	}).SetupWithManager(mgr, tlsOptions)
+		Transformers:     []runtimetransformer.RuntimeTransformer{adoptExisting},
+	}).SetupWithManager(mgr)
 	Expect(err).NotTo(HaveOccurred())
 
 	mgrCtx, mgrCancel := context.WithCancel(ctx)
@@ -192,3 +187,34 @@ func latestRevision(revisions []operatorv1alpha1.ClusterAPIInstallerRevision) op
 
 	return latest
 }
+
+// stubTransformer is a test double for runtimetransformer.RuntimeTransformer.
+type stubTransformer struct {
+	validateErr error
+}
+
+func (s *stubTransformer) TransformObject(_ context.Context, _ client.Object) ([]boxcutter.PhaseReconcileOption, error) {
+	return nil, nil
+}
+
+func (s *stubTransformer) Validate(_ client.Object) error {
+	return s.validateErr
+}
+
+var _ runtimetransformer.SimpleRuntimeTransformer = &stubTransformer{}
+
+// fakeRevision implements revisiongenerator.RenderedRevision for unit tests.
+type fakeRevision struct {
+	components []revisiongenerator.ParsedComponent
+}
+
+func (f *fakeRevision) ContentID() (string, error) { return "fake-content-id", nil }
+func (f *fakeRevision) Components() []revisiongenerator.ParsedComponent {
+	return f.components
+}
+func (f *fakeRevision) ForInstall(string, int64) (revisiongenerator.InstallerRevision, error) {
+	return nil, errors.New("not implemented")
+}
+func (f *fakeRevision) ManifestSubstitutions() map[string]string { return nil }
+
+var _ revisiongenerator.ParsedRevision = &fakeRevision{}

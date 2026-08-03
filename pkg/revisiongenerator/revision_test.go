@@ -207,7 +207,7 @@ func TestContentID(t *testing.T) {
 	t.Run("contentID is deterministic across calls", func(t *testing.T) {
 		g := NewWithT(t)
 
-		rev := must(NewRenderedRevision([]providerimages.ProviderImageManifests{
+		rev := must(NewParsedRevision([]providerimages.ProviderImageManifests{
 			profile(t, "p1", "img1", "default", configMapA),
 		}))(g)
 
@@ -220,7 +220,7 @@ func TestContentID(t *testing.T) {
 	t.Run("empty manifests", func(t *testing.T) {
 		g := NewWithT(t)
 
-		rev := must(NewRenderedRevision([]providerimages.ProviderImageManifests{
+		rev := must(NewParsedRevision([]providerimages.ProviderImageManifests{
 			profile(t, "p1", "img1", "default", ""),
 		}))(g)
 
@@ -242,8 +242,8 @@ data:
 			Build()
 		profiles := []providerimages.ProviderImageManifests{prof}
 
-		rev1 := must(NewRenderedRevision(profiles, WithManifestSubstitutions(map[string]string{"VAR1": "value1"})))(g)
-		rev2 := must(NewRenderedRevision(profiles, WithManifestSubstitutions(map[string]string{"VAR1": "value2"})))(g)
+		rev1 := must(NewParsedRevision(profiles, WithManifestSubstitutions(map[string]string{"VAR1": "value1"})))(g)
+		rev2 := must(NewParsedRevision(profiles, WithManifestSubstitutions(map[string]string{"VAR1": "value2"})))(g)
 
 		id1 := must(rev1.ContentID())(g)
 		id2 := must(rev2.ContentID())(g)
@@ -258,8 +258,8 @@ data:
 
 		subs := map[string]string{"VAR1": "value1"}
 
-		rev1 := must(NewRenderedRevision(profiles, WithManifestSubstitutions(subs)))(g)
-		rev2 := must(NewRenderedRevision(profiles, WithManifestSubstitutions(subs)))(g)
+		rev1 := must(NewParsedRevision(profiles, WithManifestSubstitutions(subs)))(g)
+		rev2 := must(NewParsedRevision(profiles, WithManifestSubstitutions(subs)))(g)
 
 		id1 := must(rev1.ContentID())(g)
 		id2 := must(rev2.ContentID())(g)
@@ -272,8 +272,8 @@ data:
 
 		profiles := []providerimages.ProviderImageManifests{profile(t, "p1", "img1", "default", configMapA)}
 
-		rev1 := must(NewRenderedRevision(profiles))(g)
-		rev2 := must(NewRenderedRevision(profiles, WithManifestSubstitutions(map[string]string{"UNUSED_VAR": "unused_value"})))(g)
+		rev1 := must(NewParsedRevision(profiles))(g)
+		rev2 := must(NewParsedRevision(profiles, WithManifestSubstitutions(map[string]string{"UNUSED_VAR": "unused_value"})))(g)
 
 		id1 := must(rev1.ContentID())(g)
 		id2 := must(rev2.ContentID())(g)
@@ -286,7 +286,7 @@ func TestForInstall(t *testing.T) {
 	t.Run("returns installer revision with correct name and index", func(t *testing.T) {
 		g := NewWithT(t)
 
-		rev := must(NewRenderedRevision([]providerimages.ProviderImageManifests{
+		rev := must(NewParsedRevision([]providerimages.ProviderImageManifests{
 			profile(t, "core", "img1", "default", configMapA),
 		}))(g)
 
@@ -302,7 +302,7 @@ func TestForInstall(t *testing.T) {
 	t.Run("components accessible through installer revision", func(t *testing.T) {
 		g := NewWithT(t)
 
-		rev := must(NewRenderedRevision([]providerimages.ProviderImageManifests{
+		rev := must(NewParsedRevision([]providerimages.ProviderImageManifests{
 			profile(t, "core", "img1", "default", multiDoc(crdA, configMapA)),
 		}))(g)
 
@@ -310,14 +310,14 @@ func TestForInstall(t *testing.T) {
 
 		components := installer.Components()
 		g.Expect(components).To(HaveLen(1))
-		g.Expect(components[0].CRDs()).To(HaveLen(1))
-		g.Expect(components[0].Objects()).To(HaveLen(1))
+		// CRDs and non-CRDs are both returned by Objects() since Phase 2.
+		g.Expect(components[0].Objects()).To(HaveLen(2))
 	})
 
 	t.Run("name truncation with long version", func(t *testing.T) {
 		g := NewWithT(t)
 
-		rev := must(NewRenderedRevision([]providerimages.ProviderImageManifests{
+		rev := must(NewParsedRevision([]providerimages.ProviderImageManifests{
 			profile(t, "core", "img1", "default", configMapA),
 		}))(g)
 
@@ -332,7 +332,7 @@ func TestToAPIRevision(t *testing.T) {
 	t.Run("single component fields", func(t *testing.T) {
 		g := NewWithT(t)
 
-		rev := must(NewRenderedRevision([]providerimages.ProviderImageManifests{
+		rev := must(NewParsedRevision([]providerimages.ProviderImageManifests{
 			profile(t, "core", "quay.io/openshift/core@sha256:abcd", "default", configMapA),
 		}))(g)
 
@@ -350,7 +350,7 @@ func TestToAPIRevision(t *testing.T) {
 	t.Run("multiple components preserve order", func(t *testing.T) {
 		g := NewWithT(t)
 
-		rev := must(NewRenderedRevision([]providerimages.ProviderImageManifests{
+		rev := must(NewParsedRevision([]providerimages.ProviderImageManifests{
 			profile(t, "core", "img-core", "default", configMapA),
 			profile(t, "infra", "img-infra", "aws", configMapB),
 		}))(g)
@@ -372,7 +372,7 @@ func TestToAPIRevision(t *testing.T) {
 		unnamed := profile(t, "placeholder", "img1", "default", configMapA)
 		unnamed.Name = ""
 
-		rev := must(NewRenderedRevision([]providerimages.ProviderImageManifests{unnamed}))(g)
+		rev := must(NewParsedRevision([]providerimages.ProviderImageManifests{unnamed}))(g)
 		apiRev := must(forInstall(g, rev, "4.18.0", 1).ToAPIRevision())(g)
 
 		g.Expect(apiRev.Components).To(HaveLen(1))
@@ -382,7 +382,7 @@ func TestToAPIRevision(t *testing.T) {
 	t.Run("name format", func(t *testing.T) {
 		g := NewWithT(t)
 
-		rev := must(NewRenderedRevision([]providerimages.ProviderImageManifests{
+		rev := must(NewParsedRevision([]providerimages.ProviderImageManifests{
 			profile(t, "core", "img1", "default", configMapA),
 		}))(g)
 
@@ -396,7 +396,7 @@ func TestToAPIRevision(t *testing.T) {
 	t.Run("contentID matches standalone call", func(t *testing.T) {
 		g := NewWithT(t)
 
-		rev := must(NewRenderedRevision([]providerimages.ProviderImageManifests{
+		rev := must(NewParsedRevision([]providerimages.ProviderImageManifests{
 			profile(t, "core", "img1", "default", configMapA),
 		}))(g)
 
@@ -410,7 +410,7 @@ func TestToAPIRevision(t *testing.T) {
 	t.Run("zero components", func(t *testing.T) {
 		g := NewWithT(t)
 
-		rev := must(NewRenderedRevision([]providerimages.ProviderImageManifests{}))(g)
+		rev := must(NewParsedRevision([]providerimages.ProviderImageManifests{}))(g)
 
 		apiRev := must(forInstall(g, rev, "4.18.0", 1).ToAPIRevision())(g)
 
@@ -426,7 +426,7 @@ func TestToAPIRevision(t *testing.T) {
 			"TLS_MIN_VERSION":   "VersionTLS12",
 		}
 
-		rev := must(NewRenderedRevision(
+		rev := must(NewParsedRevision(
 			[]providerimages.ProviderImageManifests{profile(t, "core", "img1", "default", configMapA)},
 			WithManifestSubstitutions(subs),
 		))(g)
@@ -445,7 +445,7 @@ func TestNewRenderedRevision(t *testing.T) {
 	t.Run("error from nonexistent manifest path", func(t *testing.T) {
 		g := NewWithT(t)
 
-		_, err := NewRenderedRevision([]providerimages.ProviderImageManifests{
+		_, err := NewParsedRevision([]providerimages.ProviderImageManifests{
 			{ProviderMetadata: providerimages.ProviderMetadata{Name: "p1"}, ImageRef: "img1", Profile: "default", ManifestsPath: "/nonexistent/path/manifests.yaml"},
 		})
 		g.Expect(err).To(HaveOccurred())
@@ -454,49 +454,20 @@ func TestNewRenderedRevision(t *testing.T) {
 	t.Run("error from invalid yaml", func(t *testing.T) {
 		g := NewWithT(t)
 
-		_, err := NewRenderedRevision([]providerimages.ProviderImageManifests{
+		_, err := NewParsedRevision([]providerimages.ProviderImageManifests{
 			profile(t, "p1", "img1", "default", "not: valid: yaml: ["),
 		})
 		g.Expect(err).To(HaveOccurred())
 	})
 
-	t.Run("yaml transformation applied during construction", func(t *testing.T) {
+	t.Run("objects stored with unexpanded envsubst variables", func(t *testing.T) {
 		g := NewWithT(t)
 
-		// Manifest with envsubst variable; revision built from this should
-		// produce the same contentID as one built from the expanded form.
-		provWithVar := test.NewProviderImageManifests(t, "p1").
-			WithImageRef("img1").
-			WithManifests(`apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: cm
-data:
-  v: "${EXP_BOOTSTRAP_FORMAT_IGNITION}"`).
-			Build()
-		provExpanded := test.NewProviderImageManifests(t, "p1").
-			WithImageRef("img1").
-			WithManifests(`apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: cm
-data:
-  v: "true"`).
-			Build()
-
-		rev1 := must(NewRenderedRevision([]providerimages.ProviderImageManifests{provWithVar}))(g)
-		rev2 := must(NewRenderedRevision([]providerimages.ProviderImageManifests{provExpanded}))(g)
-
-		id1 := must(rev1.ContentID())(g)
-		id2 := must(rev2.ContentID())(g)
-
-		g.Expect(id1).To(Equal(id2))
-	})
-
-	t.Run("user substitutions applied during construction", func(t *testing.T) {
-		g := NewWithT(t)
-
-		// Manifest with a user-provided envsubst variable
+		// Envsubst expansion now happens at install time via EnvsubstTransformer.
+		// The revision generator stores the raw unexpanded YAML, so a revision
+		// built from a manifest with ${VAR} has a different contentID than one
+		// built from the pre-expanded form — even if the same substitutions are
+		// provided.
 		provWithVar := test.NewProviderImageManifests(t, "p1").
 			WithImageRef("img1").
 			WithManifests(`apiVersion: v1
@@ -518,15 +489,37 @@ data:
 
 		subs := map[string]string{"MY_VAR": "hello"}
 
-		// Both use the same substitutions, so the hash of substitutions is identical.
-		// The manifest content after rendering is also identical.
-		rev1 := must(NewRenderedRevision([]providerimages.ProviderImageManifests{provWithVar}, WithManifestSubstitutions(subs)))(g)
-		rev2 := must(NewRenderedRevision([]providerimages.ProviderImageManifests{provExpanded}, WithManifestSubstitutions(subs)))(g)
+		rev1 := must(NewParsedRevision([]providerimages.ProviderImageManifests{provWithVar}, WithManifestSubstitutions(subs)))(g)
+		rev2 := must(NewParsedRevision([]providerimages.ProviderImageManifests{provExpanded}, WithManifestSubstitutions(subs)))(g)
 
 		id1 := must(rev1.ContentID())(g)
 		id2 := must(rev2.ContentID())(g)
 
-		g.Expect(id1).To(Equal(id2))
+		// Different raw content → different contentIDs even with the same subs.
+		g.Expect(id1).NotTo(Equal(id2))
+	})
+
+	t.Run("ManifestSubstitutions returns stored substitutions", func(t *testing.T) {
+		g := NewWithT(t)
+
+		subs := map[string]string{"TLS_MIN_VERSION": "VersionTLS12", "EXP_BOOTSTRAP_FORMAT_IGNITION": "true"}
+
+		rev := must(NewParsedRevision(
+			[]providerimages.ProviderImageManifests{profile(t, "p1", "img1", "default", configMapA)},
+			WithManifestSubstitutions(subs),
+		))(g)
+
+		g.Expect(rev.ManifestSubstitutions()).To(Equal(subs))
+	})
+
+	t.Run("ManifestSubstitutions returns nil when no substitutions", func(t *testing.T) {
+		g := NewWithT(t)
+
+		rev := must(NewParsedRevision(
+			[]providerimages.ProviderImageManifests{profile(t, "p1", "img1", "default", configMapA)},
+		))(g)
+
+		g.Expect(rev.ManifestSubstitutions()).To(BeNil())
 	})
 }
 
@@ -534,7 +527,7 @@ func TestComponents(t *testing.T) {
 	t.Run("returns correct component count and names", func(t *testing.T) {
 		g := NewWithT(t)
 
-		rev := must(NewRenderedRevision([]providerimages.ProviderImageManifests{
+		rev := must(NewParsedRevision([]providerimages.ProviderImageManifests{
 			profile(t, "core", "img-core", "default", configMapA),
 			profile(t, "infra", "img-infra", "aws", configMapB),
 		}))(g)
@@ -548,59 +541,55 @@ func TestComponents(t *testing.T) {
 	for _, tc := range []struct {
 		name        string
 		manifests   string
-		wantCRDs    int
 		wantObjects int
 	}{
 		{
-			name:        "separates CRDs from other objects",
+			name:        "returns all objects including CRDs",
 			manifests:   multiDoc(crdA, configMapA, crdB, configMapB),
-			wantCRDs:    2,
-			wantObjects: 2,
+			wantObjects: 4,
 		},
 		{
-			name:        "component with only CRDs has empty Objects",
+			name:        "CRDs returned by Objects",
 			manifests:   crdA,
-			wantCRDs:    1,
-			wantObjects: 0,
+			wantObjects: 1,
 		},
 		{
-			name:        "component with only objects has empty CRDs",
+			name:        "non-CRD objects returned by Objects",
 			manifests:   configMapA,
-			wantCRDs:    0,
 			wantObjects: 1,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			g := NewWithT(t)
 
-			rev := must(NewRenderedRevision([]providerimages.ProviderImageManifests{
+			rev := must(NewParsedRevision([]providerimages.ProviderImageManifests{
 				profile(t, "core", "img1", "default", tc.manifests),
 			}))(g)
 
 			c := rev.Components()[0]
-			g.Expect(c.CRDs()).To(HaveLen(tc.wantCRDs))
 			g.Expect(c.Objects()).To(HaveLen(tc.wantObjects))
 		})
 	}
 
-	t.Run("CRDs returns client.Object slices matching underlying objects", func(t *testing.T) {
+	t.Run("CRD stored as client.Object with correct GVK", func(t *testing.T) {
 		g := NewWithT(t)
 
-		rev := must(NewRenderedRevision([]providerimages.ProviderImageManifests{
+		rev := must(NewParsedRevision([]providerimages.ProviderImageManifests{
 			profile(t, "core", "img1", "default", crdA),
 		}))(g)
 
-		crds := rev.Components()[0].CRDs()
-		g.Expect(crds).To(HaveLen(1))
-		g.Expect(crds[0].GetName()).To(Equal("widgets.example.com"))
-		g.Expect(crds[0].GetObjectKind().GroupVersionKind().Kind).To(Equal("CustomResourceDefinition"))
-		g.Expect(crds[0].GetLabels()).To(HaveKeyWithValue(ManagedLabelKey, "core"))
+		objs := rev.Components()[0].Objects()
+		g.Expect(objs).To(HaveLen(1))
+		g.Expect(objs[0].GetName()).To(Equal("widgets.example.com"))
+		g.Expect(objs[0].GetObjectKind().GroupVersionKind().Kind).To(Equal("CustomResourceDefinition"))
+		// Managed-by label is no longer added at render time (Phase 2: moved to ManagedByTransformer).
+		g.Expect(objs[0].GetLabels()).NotTo(HaveKey("capi-operator.openshift.io/managed-by"))
 	})
 
 	t.Run("Objects returns client.Object slices matching underlying objects", func(t *testing.T) {
 		g := NewWithT(t)
 
-		rev := must(NewRenderedRevision([]providerimages.ProviderImageManifests{
+		rev := must(NewParsedRevision([]providerimages.ProviderImageManifests{
 			profile(t, "core", "img1", "default", configMapA),
 		}))(g)
 
@@ -608,13 +597,14 @@ func TestComponents(t *testing.T) {
 		g.Expect(objs).To(HaveLen(1))
 		g.Expect(objs[0].GetName()).To(Equal("config-a"))
 		g.Expect(objs[0].GetObjectKind().GroupVersionKind().Kind).To(Equal("ConfigMap"))
-		g.Expect(objs[0].GetLabels()).To(HaveKeyWithValue(ManagedLabelKey, "core"))
+		// Managed-by label is no longer added at render time (Phase 2: moved to ManagedByTransformer).
+		g.Expect(objs[0].GetLabels()).NotTo(HaveKey("capi-operator.openshift.io/managed-by"))
 	})
 
 	t.Run("zero components returns empty slice", func(t *testing.T) {
 		g := NewWithT(t)
 
-		rev := must(NewRenderedRevision([]providerimages.ProviderImageManifests{}))(g)
+		rev := must(NewParsedRevision([]providerimages.ProviderImageManifests{}))(g)
 
 		g.Expect(rev.Components()).To(BeEmpty())
 	})
@@ -728,8 +718,8 @@ func TestNewInstallerRevisionFromAPI(t *testing.T) {
 		rev := must(NewInstallerRevisionFromAPI(apiRev, profiles))(g)
 
 		c := rev.Components()[0]
-		g.Expect(c.CRDs()).To(HaveLen(1))
-		g.Expect(c.Objects()).To(HaveLen(1))
+		// azure profile has crdA + configMapA: both returned by Objects() since Phase 2.
+		g.Expect(c.Objects()).To(HaveLen(2))
 	})
 
 	t.Run("returns error for missing component", func(t *testing.T) {
@@ -780,7 +770,7 @@ func TestNewInstallerRevisionFromAPI(t *testing.T) {
 		g.Expect(rev.Components()).To(BeEmpty())
 	})
 
-	t.Run("succeeds when contentID matches rendered content", func(t *testing.T) {
+	t.Run("succeeds when contentID matches parsed content", func(t *testing.T) {
 		g := NewWithT(t)
 
 		profiles := makeProfiles(t)
@@ -806,11 +796,11 @@ func TestNewInstallerRevisionFromAPI(t *testing.T) {
 		g.Expect(rev.Components()).To(HaveLen(2))
 	})
 
-	t.Run("returns error when contentID does not match rendered content", func(t *testing.T) {
+	t.Run("returns error when contentID does not match parsed content", func(t *testing.T) {
 		g := NewWithT(t)
 
 		apiRev := operatorv1alpha1.ClusterAPIInstallerRevision{
-			ContentID: "does-not-match-any-rendered-content",
+			ContentID: "does-not-match-any-parsed-content",
 			Components: []operatorv1alpha1.ClusterAPIInstallerComponent{
 				{ClusterAPIInstallerComponentSource: operatorv1alpha1.ClusterAPIInstallerComponentSource{
 					Type: operatorv1alpha1.InstallerComponentTypeImage, Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
@@ -825,10 +815,14 @@ func TestNewInstallerRevisionFromAPI(t *testing.T) {
 		g.Expect(err.Error()).To(ContainSubstring("content ID mismatch"))
 	})
 
-	t.Run("substitutions from API revision applied during rendering", func(t *testing.T) {
+	t.Run("substitutions from API revision included in content ID", func(t *testing.T) {
 		g := NewWithT(t)
 
-		// Create a profile with a variable that needs substitution
+		// Create a profile with an envsubst variable. Envsubst is no longer
+		// applied at render time (Phase 2); it happens at install time via
+		// EnvsubstTransformer. Substitutions are still recorded on the revision
+		// and included in the content ID so that different substitutions produce
+		// different revisions.
 		prof := test.NewProviderImageManifests(t, "core").
 			WithImageRef("quay.io/openshift/core@sha256:aaaa").
 			WithProfile("default").
@@ -842,18 +836,18 @@ data:
 
 		subs := map[string]string{"TLS_MIN_VERSION": "VersionTLS12"}
 
-		// Create a revision with substitutions and convert to API revision
-		rev := must(NewRenderedRevision(
+		// Create a revision with substitutions and convert to API revision.
+		rev := must(NewParsedRevision(
 			[]providerimages.ProviderImageManifests{prof},
 			WithManifestSubstitutions(subs),
 		))(g)
 
 		apiRev := must(forInstall(g, rev, "4.18.0", 1).ToAPIRevision())(g)
 
-		// Round-trip: reconstruct from API revision with same profiles
+		// Round-trip: reconstruct from API revision with same profiles.
+		// Content ID validation must pass, confirming substitutions are included.
 		reconstructed := must(NewInstallerRevisionFromAPI(apiRev, []providerimages.ProviderImageManifests{prof}))(g)
 
-		// Content ID validation passes, confirming substitutions were applied correctly
 		reconstructedContentID := must(reconstructed.ContentID())(g)
 		g.Expect(reconstructedContentID).To(Equal(apiRev.ContentID))
 		g.Expect(reconstructed.Components()).To(HaveLen(1))

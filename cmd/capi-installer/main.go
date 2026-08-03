@@ -16,10 +16,12 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -37,12 +39,14 @@ import (
 
 	configv1 "github.com/openshift/api/config/v1"
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
+	libgocrypto "github.com/openshift/library-go/pkg/crypto"
 
 	"github.com/openshift/cluster-capi-operator/pkg/commoncmdoptions"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/installer"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/revision"
 	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
+	"github.com/openshift/cluster-capi-operator/pkg/runtimetransformer"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 )
 
@@ -130,16 +134,33 @@ func setupControllers(ctx context.Context, mgr ctrl.Manager, operatorConfig comm
 		log.Info("loaded provider profile", "name", profile.Name, "imageRef", profile.ImageRef, "profile", profile.Profile)
 	}
 
+	tlsCfg := &tls.Config{}
+	for _, opt := range operatorConfig.TLSOptions {
+		opt(tlsCfg)
+	}
+
+	tlsStaticSubs := map[string]string{
+		"TLS_MIN_VERSION":   libgocrypto.TLSVersionToNameOrDie(tlsCfg.MinVersion),
+		"TLS_CIPHER_SUITES": strings.Join(util.SliceMap(tlsCfg.CipherSuites, tls.CipherSuiteName), ","),
+	}
+
+	transformers := []runtimetransformer.RuntimeTransformer{
+		runtimetransformer.NewEnvsubstTransformer(tlsStaticSubs),
+		runtimetransformer.NewManagedByTransformer(),
+		runtimetransformer.NewSimpleRuntimeTransformer(&runtimetransformer.AdoptExistingTransformer{}),
+	}
+
 	if err := (&revision.RevisionController{
 		Client:           mgr.GetClient(),
 		ProviderProfiles: currentReleaseProfiles,
 		ReleaseVersion:   util.GetReleaseVersion(),
-	}).SetupWithManager(mgr, operatorConfig.TLSOptions); err != nil {
+		Transformers:     transformers,
+	}).SetupWithManager(mgr); err != nil {
 		log.Error(err, "unable to create revision controller", "controller", "RevisionController")
 		return fmt.Errorf("unable to create revision controller: %w", err)
 	}
 
-	if err := installer.SetupWithManager(mgr, allProviderProfiles); err != nil {
+	if err := installer.SetupWithManager(mgr, allProviderProfiles, transformers); err != nil {
 		return fmt.Errorf("unable to create installer controller: %w", err)
 	}
 

@@ -263,7 +263,7 @@ func addRevision(ctx context.Context, providerNames ...string) operatorv1alpha1.
 		profiles := lookupProfiles(providerNames...)
 
 		// Render the revision to compute the correct content ID.
-		rendered, err := revisiongenerator.NewRenderedRevision(profiles)
+		parsed, err := revisiongenerator.NewParsedRevision(profiles)
 		Expect(err).NotTo(HaveOccurred())
 
 		var revisionIndex int64
@@ -273,7 +273,7 @@ func addRevision(ctx context.Context, providerNames ...string) operatorv1alpha1.
 			revisionIndex = latestRevision(clusterAPI.Status.Revisions).Revision + 1
 		}
 
-		installerRev, err := rendered.ForInstall("4.18.0-test", revisionIndex)
+		installerRev, err := parsed.ForInstall("4.18.0-test", revisionIndex)
 		Expect(err).NotTo(HaveOccurred())
 
 		apiRev, err = installerRev.ToAPIRevision()
