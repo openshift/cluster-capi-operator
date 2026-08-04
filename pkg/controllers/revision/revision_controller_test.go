@@ -31,6 +31,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	"github.com/openshift/cluster-capi-operator/pkg/manifesttransformer"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
 	"github.com/openshift/cluster-capi-operator/pkg/test"
@@ -573,5 +574,31 @@ var _ = Describe("RevisionController error handling", Serial, func() {
 			WithStatus(configv1.ConditionTrue).
 			WithReason(operatorstatus.ReasonEphemeralError).
 			WithMessage(ContainSubstring(testErr.Error())))
+	}, defaultNodeTimeout)
+
+	It("sets NonRetryableError when a transformer Validate fails", func(ctx context.Context) {
+		stub := &stubTransformer{validateErr: errors.New("invalid manifest")}
+		r := &RevisionController{
+			Client:           cl,
+			ProviderProfiles: defaultProviderImgs,
+			ReleaseVersion:   "4.18.0",
+			Transformers:     []manifesttransformer.ManifestTransformer{stub},
+		}
+
+		_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: client.ObjectKey{Name: "cluster"}})
+		Expect(err).To(HaveOccurred(), "reconcile should surface the transformer validation failure")
+		Expect(errors.Is(err, reconcile.TerminalError(nil))).To(BeTrue(), "transformer validation failure should be a terminal error")
+
+		co := &configv1.ClusterOperator{}
+		Expect(cl.Get(ctx, client.ObjectKey{Name: "cluster-api"}, co)).To(Succeed())
+		Expect(co.Status.Conditions).To(SatisfyAll(
+			test.HaveCondition(conditionTypeProgressing).
+				WithStatus(configv1.ConditionFalse).
+				WithReason(operatorstatus.ReasonNonRetryableError),
+			test.HaveCondition(conditionTypeAvailable).
+				WithStatus(configv1.ConditionFalse).
+				WithReason(operatorstatus.ReasonNonRetryableError).
+				WithMessage(ContainSubstring("invalid manifest")),
+		))
 	}, defaultNodeTimeout)
 })

@@ -44,6 +44,7 @@ import (
 	"pkg.package-operator.run/boxcutter"
 	"pkg.package-operator.run/boxcutter/managedcache"
 
+	"github.com/openshift/cluster-capi-operator/pkg/manifesttransformer"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
 	"github.com/openshift/cluster-capi-operator/pkg/revisiongenerator"
@@ -65,12 +66,13 @@ type InstallerController struct {
 	revisionEngine   *boxcutter.RevisionEngine
 	providerProfiles []providerimages.ProviderImageManifests
 	restMapper       meta.RESTMapper
+	transformers     []manifesttransformer.ManifestTransformer
 }
 
 // SetupWithManager creates the boxcutter dependencies and sets up the installer
 // controller with the Manager. Additional sources may be provided to trigger
 // reconciliation from external events (e.g. a channel source for testing).
-func SetupWithManager(mgr ctrl.Manager, providerProfiles []providerimages.ProviderImageManifests, additionalSources ...source.Source) error {
+func SetupWithManager(mgr ctrl.Manager, providerProfiles []providerimages.ProviderImageManifests, transformers []manifesttransformer.ManifestTransformer, additionalSources ...source.Source) error {
 	trackingCache, err := setupTrackingCache(mgr)
 	if err != nil {
 		return fmt.Errorf("unable to setup tracking cache: %w", err)
@@ -87,6 +89,7 @@ func SetupWithManager(mgr ctrl.Manager, providerProfiles []providerimages.Provid
 		revisionEngine:   revisionEngine,
 		providerProfiles: providerProfiles,
 		restMapper:       mgr.GetRESTMapper(),
+		transformers:     transformers,
 	}
 
 	toClusterAPI := func(_ context.Context, _ client.Object) []reconcile.Request {

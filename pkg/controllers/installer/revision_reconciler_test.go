@@ -17,19 +17,40 @@ limitations under the License.
 package installer
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	configv1 "github.com/openshift/api/config/v1"
+	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	"github.com/openshift/cluster-capi-operator/pkg/manifesttransformer"
+	"github.com/openshift/cluster-capi-operator/pkg/revisiongenerator"
 	"github.com/openshift/cluster-capi-operator/pkg/test"
 )
+
+// apiRevisionFromProfiles renders the named provider profiles into an API
+// revision, without requiring an envtest client.
+func apiRevisionFromProfiles(names ...string) operatorv1alpha1.ClusterAPIInstallerRevision {
+	GinkgoHelper()
+
+	rendered, err := revisiongenerator.NewRenderedRevision(lookupProfiles(names...))
+	Expect(err).NotTo(HaveOccurred(), "rendering the revision from provider profiles should succeed")
+
+	installerRev, err := rendered.ForInstall("4.18.0-test", 1)
+	Expect(err).NotTo(HaveOccurred(), "converting the rendered revision for install should succeed")
+
+	apiRev, err := installerRev.ToAPIRevision()
+	Expect(err).NotTo(HaveOccurred(), "converting the installer revision to an API revision should succeed")
+
+	return apiRev
+}
 
 // errorInjectingRESTMapper wraps a real RESTMapper and injects errors for specific GVKs.
 // This allows testing error handling while using a real RESTMapper for normal cases.
@@ -174,5 +195,26 @@ var _ = Describe("revisionReconciler.resolveCollectedObjects", func() {
 			Resource: "clusterroles", // Resolved via RESTMapper
 			Name:     "test-clusterrole",
 		})).To(BeTrue())
+	})
+})
+
+var _ = Describe("revisionReconciler.reconcileRevision", func() {
+	It("should reject the revision with a terminal error when a transformer fails validation", func() {
+		apiRev := apiRevisionFromProfiles(providerCore)
+
+		validateErr := errors.New("boom")
+		failingTransformer := &stubTransformer{validateErr: validateErr}
+
+		r := newRevisionReconciler(&InstallerController{
+			providerProfiles: lookupProfiles(providerCore),
+			transformers:     []manifesttransformer.ManifestTransformer{failingTransformer},
+		}, test.NewVerboseGinkgoLogger(4))
+
+		isComplete, _, err := r.reconcileRevision(context.Background(), apiRev)
+
+		Expect(isComplete).To(BeFalse(), "revision should not be reported complete when a transformer fails validation")
+		Expect(err).To(HaveOccurred(), "reconcileRevision should return an error when a transformer fails validation")
+		Expect(errors.Is(err, validateErr)).To(BeTrue(), "expected the validation error to be wrapped")
+		Expect(errors.Is(err, reconcile.TerminalError(nil))).To(BeTrue(), "expected terminal error")
 	})
 })
