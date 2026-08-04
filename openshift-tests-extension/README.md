@@ -64,6 +64,32 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIMachineManage
 })
 ```
 
+## Environment labels
+
+Ginkgo labels with specific prefixes are automatically translated into OTE
+environment selectors in `openshift-tests-extension/cmd/main.go`:
+
+| Ginkgo label | OTE effect | Example |
+|---|---|---|
+| `Label("platform:<name>")` | Include only on matching platform | `Label("platform:AWS")` |
+| `Label("skip-topology:<mode>")` | Exclude on matching topology | `Label("skip-topology:External")` |
+
+These labels have no effect when running via `make e2e` — use a runtime
+`Skip()` in `BeforeAll` as a fallback for that path.
+
+Example — skip a test on External topology clusters (both OTE and `make e2e`):
+
+```go
+var _ = Describe("My test", Label("skip-topology:External"), func() {
+    BeforeAll(func() {
+        if infra.Status.ControlPlaneTopology == configv1.ExternalTopologyMode {
+            Skip("Not supported on External topology clusters.")
+        }
+    })
+    // ...
+})
+```
+
 ## Feature gate labeling
 
 Every e2e test must carry the appropriate `[OCPFeatureGate:FeatureName]` tag in
