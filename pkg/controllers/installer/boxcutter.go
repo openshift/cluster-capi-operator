@@ -17,6 +17,8 @@ limitations under the License.
 package installer
 
 import (
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"pkg.package-operator.run/boxcutter"
 	"pkg.package-operator.run/boxcutter/probing"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -25,56 +27,59 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 )
 
-func toBoxcutterRevision(installerRevision revisiongenerator.InstallerRevision) boxcutter.Revision {
-	return boxcutterRevision{revision: installerRevision}
-}
-
-// boxcutterRevision wraps an InstallerRevision and provides a boxcutter.Revision implementation.
-type boxcutterRevision struct {
-	revision revisiongenerator.InstallerRevision
-}
-
-var _ boxcutter.Revision = boxcutterRevision{}
-
-// GetName returns the name of the revision.
-func (r boxcutterRevision) GetName() string {
-	return string(r.revision.RevisionName())
-}
-
-// GetRevisionNumber returns the revision number of the revision.
-func (r boxcutterRevision) GetRevisionNumber() int64 {
-	return r.revision.RevisionIndex()
-}
-
-// GetPhases returns the phases of the revision.
-func (r boxcutterRevision) GetPhases() []boxcutter.Phase {
+// toBoxcutterRevision converts an InstallerRevision to a boxcutter.Revision.
+// Each component in an InstallerRevision contains a parsed collection of
+// objects with no further ordering. toBoxcutterRevision creates a Revision
+// containing the following phases for each of these components:
+// - a phase for the component's CRDs, if any
+// - a phase for the component's remaining objects, if any
+//
+// Although this is not yet the case, toBoxcutterRevision is intended to capture
+// all processing required only at installation time. Ideally InstallerRevision
+// will contain only parsed versions of exactly what was in provider manifests
+// without any further processing. That processing should be done here.
+func toBoxcutterRevision(installerRevision revisiongenerator.InstallerRevision, collectObjects func(obj *unstructured.Unstructured)) boxcutter.Revision {
 	probeOpts := util.SliceMap(allProbes(), func(p *probing.GroupKindSelector) boxcutter.PhaseReconcileOption {
 		return boxcutter.WithProbe(boxcutter.ProgressProbeType, p)
 	})
 
 	var phases []boxcutter.Phase
 
-	for _, component := range r.revision.Components() {
-		if crds := component.CRDs(); len(crds) > 0 {
-			objects, adoptOpts := processAdoptExistingAnnotations(crds)
-			phases = append(phases, boxcutterPhase{
-				name:             component.Name() + "-crds",
-				objects:          objects,
-				reconcileOptions: append(probeOpts, adoptOpts...),
-			})
+	addPhase := func(name string, objects []*unstructured.Unstructured) {
+		if len(objects) == 0 {
+			return
 		}
 
-		if objects := component.Objects(); len(objects) > 0 {
-			objects, adoptOpts := processAdoptExistingAnnotations(objects)
-			phases = append(phases, boxcutterPhase{
-				name:             component.Name(),
-				objects:          objects,
-				reconcileOptions: append(probeOpts, adoptOpts...),
-			})
-		}
+		objects, adoptOpts := processAdoptExistingAnnotations(objects)
+		bcPhase := boxcutter.NewPhase(name, util.SliceMap(objects, toClientObject)).
+			WithReconcileOptions(append(probeOpts, adoptOpts...)...)
+
+		phases = append(phases, bcPhase)
 	}
 
-	return phases
+	for _, component := range installerRevision.Components() {
+		var crds, objects []*unstructured.Unstructured
+
+		for _, obj := range component.Objects() {
+			collectObjects(obj)
+
+			gvk := obj.GetObjectKind().GroupVersionKind()
+			if gvk.GroupKind() == (schema.GroupKind{Group: "apiextensions.k8s.io", Kind: "CustomResourceDefinition"}) {
+				crds = append(crds, obj)
+			} else {
+				objects = append(objects, obj)
+			}
+		}
+
+		addPhase(component.Name()+"-crds", crds)
+		addPhase(component.Name(), objects)
+	}
+
+	return boxcutter.NewRevision(
+		string(installerRevision.RevisionName()),
+		installerRevision.RevisionIndex(),
+		phases,
+	)
 }
 
 // processAdoptExistingAnnotations processes the adopt-existing annotation on
@@ -85,10 +90,10 @@ func (r boxcutterRevision) GetPhases() []boxcutter.Phase {
 //
 // This function assumes that annotation values have already been validated
 // during revision creation.
-func processAdoptExistingAnnotations(objects []client.Object) ([]client.Object, []boxcutter.PhaseReconcileOption) {
+func processAdoptExistingAnnotations(objects []*unstructured.Unstructured) ([]*unstructured.Unstructured, []boxcutter.PhaseReconcileOption) {
 	var reconcileOpts []boxcutter.PhaseReconcileOption
 
-	return util.SliceMap(objects, func(obj client.Object) client.Object {
+	return util.SliceMap(objects, func(obj *unstructured.Unstructured) *unstructured.Unstructured {
 		annotations := obj.GetAnnotations()
 		value, hasAnnotation := annotations[revisiongenerator.AdoptExistingAnnotation]
 
@@ -103,7 +108,7 @@ func processAdoptExistingAnnotations(objects []client.Object) ([]client.Object, 
 			}
 
 			// Strip the annotation from the object before returning it
-			obj = obj.DeepCopyObject().(client.Object) //nolint:forcetypeassert // This is guaranteed to be client.Object because obj is client.Object
+			obj = obj.DeepCopy()
 			annotationsCopy := obj.GetAnnotations()
 			delete(annotationsCopy, revisiongenerator.AdoptExistingAnnotation)
 			obj.SetAnnotations(annotationsCopy)
@@ -113,40 +118,6 @@ func processAdoptExistingAnnotations(objects []client.Object) ([]client.Object, 
 	}), reconcileOpts
 }
 
-// GetReconcileOptions returns the reconcile options of the revision.
-func (r boxcutterRevision) GetReconcileOptions() []boxcutter.RevisionReconcileOption {
-	return nil
-}
-
-// GetTeardownOptions returns the teardown options of the revision.
-func (r boxcutterRevision) GetTeardownOptions() []boxcutter.RevisionTeardownOption {
-	return nil
-}
-
-type boxcutterPhase struct {
-	name             string
-	objects          []client.Object
-	reconcileOptions []boxcutter.PhaseReconcileOption
-}
-
-var _ boxcutter.Phase = boxcutterPhase{}
-
-// GetName returns the name of the phase.
-func (p boxcutterPhase) GetName() string {
-	return p.name
-}
-
-// GetObjects returns the objects of the phase.
-func (p boxcutterPhase) GetObjects() []client.Object {
-	return p.objects
-}
-
-// GetReconcileOptions returns the reconcile options of the phase.
-func (p boxcutterPhase) GetReconcileOptions() []boxcutter.PhaseReconcileOption {
-	return p.reconcileOptions
-}
-
-// GetTeardownOptions returns the teardown options of the phase.
-func (p boxcutterPhase) GetTeardownOptions() []boxcutter.PhaseTeardownOption {
-	return nil
+func toClientObject(obj *unstructured.Unstructured) client.Object {
+	return obj
 }

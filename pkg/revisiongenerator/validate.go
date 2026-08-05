@@ -20,7 +20,7 @@ import (
 	"errors"
 	"fmt"
 
-	"sigs.k8s.io/controller-runtime/pkg/client"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
@@ -53,7 +53,7 @@ var ErrInvalidAdoptExistingAnnotation = errors.New("invalid " + AdoptExistingAnn
 
 // ValidateAdoptExistingAnnotation returns an error if the object has an
 // adopt-existing annotation with an unrecognised value.
-func ValidateAdoptExistingAnnotation(obj client.Object) error {
+func ValidateAdoptExistingAnnotation(obj *unstructured.Unstructured) error {
 	annotations := obj.GetAnnotations()
 	if annotations == nil {
 		return nil
@@ -82,12 +82,6 @@ func ValidateAdoptExistingAnnotation(obj client.Object) error {
 // validateRenderedRevision validates all objects in a rendered revision.
 func validateRenderedRevision(rev *renderedRevision) error {
 	for _, component := range rev.components {
-		for _, obj := range component.CRDs() {
-			if err := ValidateAdoptExistingAnnotation(obj); err != nil {
-				return err
-			}
-		}
-
 		for _, obj := range component.Objects() {
 			if err := ValidateAdoptExistingAnnotation(obj); err != nil {
 				return err
