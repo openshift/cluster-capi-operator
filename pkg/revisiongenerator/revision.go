@@ -29,8 +29,6 @@ import (
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	operatorv1alpha1ac "github.com/openshift/client-go/operator/applyconfigurations/operator/v1alpha1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	k8syaml "sigs.k8s.io/yaml"
 
 	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
@@ -78,15 +76,13 @@ type InstallerRevision interface {
 	ToAPIRevision() (operatorv1alpha1.ClusterAPIInstallerRevision, error)
 }
 
-// RenderedComponent represents a single provider component with manifests
-// separated into CRDs and other objects.
+// RenderedComponent represents a single provider component with its manifests
+// parsed.
 type RenderedComponent interface {
 	// Name returns the component name.
 	Name() string
-	// CRDs returns the CRD objects for this component.
-	CRDs() []client.Object
-	// Objects returns the non-CRD objects for this component.
-	Objects() []client.Object
+	// Objects returns all objects for this component.
+	Objects() []*unstructured.Unstructured
 }
 
 type renderedRevision struct {
@@ -124,10 +120,6 @@ func newRenderedRevision(profiles []providerimages.ProviderImageManifests, opts 
 	rev := &renderedRevision{
 		components:    components,
 		substitutions: substitutionsFromMap(cfg.substitutions),
-	}
-
-	if err := validateRenderedRevision(rev); err != nil {
-		return nil, err
 	}
 
 	return rev, nil
@@ -287,22 +279,10 @@ func buildRevisionName(releaseVersion, contentID string, index int64) operatorv1
 }
 
 type revisionRenderConfig struct {
-	objectCollectors []RevisionObjectCollector
-	substitutions    map[string]string
+	substitutions map[string]string
 }
 
 type revisionRenderOption func(*revisionRenderConfig)
-
-// RevisionObjectCollector is a function that will be called for each object in
-// the rendered revision.
-type RevisionObjectCollector func(obj unstructured.Unstructured)
-
-// WithObjectCollectors adds object collectors to the revision render config.
-func WithObjectCollectors(collectors ...RevisionObjectCollector) revisionRenderOption {
-	return func(opts *revisionRenderConfig) {
-		opts.objectCollectors = append(opts.objectCollectors, collectors...)
-	}
-}
 
 // WithManifestSubstitutions adds envsubst-style substitutions that will be
 // applied to manifests during rendering and recorded on the revision. When
@@ -387,8 +367,7 @@ type renderedComponent struct {
 	imageRef string
 	profile  string
 
-	crds    []unstructured.Unstructured
-	objects []unstructured.Unstructured
+	objects []*unstructured.Unstructured
 }
 
 func newRenderedComponent(providerProfile *providerimages.ProviderImageManifests, cfg *revisionRenderConfig) (*renderedComponent, error) {
@@ -415,18 +394,7 @@ func newRenderedComponent(providerProfile *providerimages.ProviderImageManifests
 
 		unstructured = transformObject(unstructured, component.name)
 
-		for _, collector := range cfg.objectCollectors {
-			collector(unstructured)
-		}
-
-		gvk := unstructured.GroupVersionKind()
-
-		switch gvk.GroupKind() {
-		case schema.GroupKind{Group: "apiextensions.k8s.io", Kind: "CustomResourceDefinition"}:
-			component.crds = append(component.crds, unstructured)
-		default:
-			component.objects = append(component.objects, unstructured)
-		}
+		component.objects = append(component.objects, &unstructured)
 	}
 
 	return component, nil
@@ -439,24 +407,15 @@ func (c *renderedComponent) Name() string {
 	return c.name
 }
 
-// CRDs returns the CRD objects for this component.
-func (c *renderedComponent) CRDs() []client.Object {
-	return util.SliceMap(c.crds, func(crd unstructured.Unstructured) client.Object {
-		return &crd
-	})
-}
-
-// Objects returns the non-CRD objects for this component.
-func (c *renderedComponent) Objects() []client.Object {
-	return util.SliceMap(c.objects, func(obj unstructured.Unstructured) client.Object {
-		return &obj
-	})
+// Objects returns all objects for this component, including CRDs.
+func (c *renderedComponent) Objects() []*unstructured.Unstructured {
+	return c.objects
 }
 
 func (c *renderedComponent) contentID() (string, error) {
 	h := sha256.New()
 
-	for _, obj := range slices.Concat(c.crds, c.objects) {
+	for _, obj := range c.objects {
 		data, err := json.Marshal(obj.Object)
 		if err != nil {
 			return "", fmt.Errorf("error marshalling object: %w", err)

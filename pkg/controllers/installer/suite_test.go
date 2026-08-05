@@ -37,6 +37,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
+	"github.com/openshift/cluster-capi-operator/pkg/manifesttransformer"
 	"github.com/openshift/cluster-capi-operator/pkg/test"
 )
 
@@ -106,7 +107,12 @@ var _ = BeforeSuite(func() {
 		handler.EnqueueRequestsFromMapFunc(toClusterAPI),
 	)
 
-	Expect(SetupWithManager(mgr, allProviderProfiles, triggerSource)).To(Succeed())
+	adoptExisting := &manifesttransformer.AdoptExistingTransformer{}
+	transformers := []manifesttransformer.ManifestTransformer{
+		adoptExisting,
+		testValueTransformer{},
+	}
+	Expect(SetupWithManager(mgr, allProviderProfiles, transformers, triggerSource)).To(Succeed())
 	Expect(test.AddNamespaceFinalizerCleanup(mgr)).To(Succeed())
 
 	// Start manager in background.
