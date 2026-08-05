@@ -17,136 +17,146 @@ limitations under the License.
 package installer
 
 import (
+	"context"
+	"errors"
+	"fmt"
+	"slices"
+
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"pkg.package-operator.run/boxcutter"
 	"pkg.package-operator.run/boxcutter/probing"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/openshift/cluster-capi-operator/pkg/manifesttransformer"
 	"github.com/openshift/cluster-capi-operator/pkg/revisiongenerator"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 )
 
-func toBoxcutterRevision(installerRevision revisiongenerator.InstallerRevision) boxcutter.Revision {
-	return boxcutterRevision{revision: installerRevision}
+func toClientObject(obj *unstructured.Unstructured) client.Object {
+	return obj
 }
 
-// boxcutterRevision wraps an InstallerRevision and provides a boxcutter.Revision implementation.
-type boxcutterRevision struct {
-	revision revisiongenerator.InstallerRevision
-}
-
-var _ boxcutter.Revision = boxcutterRevision{}
-
-// GetName returns the name of the revision.
-func (r boxcutterRevision) GetName() string {
-	return string(r.revision.RevisionName())
-}
-
-// GetRevisionNumber returns the revision number of the revision.
-func (r boxcutterRevision) GetRevisionNumber() int64 {
-	return r.revision.RevisionIndex()
-}
-
-// GetPhases returns the phases of the revision.
-func (r boxcutterRevision) GetPhases() []boxcutter.Phase {
+// toBoxcutterRevision converts an InstallerRevision to a boxcutter.Revision.
+// Each ManifestTransformer is called for every object before phase construction.
+func toBoxcutterRevision(ctx context.Context, installerRevision revisiongenerator.InstallerRevision, transformers []manifesttransformer.ManifestTransformer, collectObjects func(obj *unstructured.Unstructured)) (boxcutter.Revision, error) {
 	probeOpts := util.SliceMap(allProbes(), func(p *probing.GroupKindSelector) boxcutter.PhaseReconcileOption {
 		return boxcutter.WithProbe(boxcutter.ProgressProbeType, p)
 	})
 
 	var phases []boxcutter.Phase
 
-	for _, component := range r.revision.Components() {
-		if crds := component.CRDs(); len(crds) > 0 {
-			objects, adoptOpts := processAdoptExistingAnnotations(crds)
-			phases = append(phases, boxcutterPhase{
-				name:             component.Name() + "-crds",
-				objects:          objects,
-				reconcileOptions: append(probeOpts, adoptOpts...),
-			})
+	withRevision := func(t manifesttransformer.ManifestTransformer) manifesttransformer.ManifestTransformer {
+		return t.WithRevision(ctx, installerRevision)
+	}
+	revisionTransformers := util.SliceMap(transformers, withRevision)
+
+	var allErrs []error
+
+	for _, component := range installerRevision.Components() {
+		withComponent := func(t manifesttransformer.ManifestTransformer) manifesttransformer.ManifestTransformer {
+			return t.WithComponent(ctx, component)
+		}
+		componentTransformers := util.SliceMap(revisionTransformers, withComponent)
+
+		var crds, objects []*unstructured.Unstructured
+
+		for _, obj := range component.Objects() {
+			if collectObjects != nil {
+				collectObjects(obj)
+			}
+
+			gvk := obj.GetObjectKind().GroupVersionKind()
+			if gvk.GroupKind() == (schema.GroupKind{Group: "apiextensions.k8s.io", Kind: "CustomResourceDefinition"}) {
+				crds = append(crds, obj)
+			} else {
+				objects = append(objects, obj)
+			}
 		}
 
-		if objects := component.Objects(); len(objects) > 0 {
-			objects, adoptOpts := processAdoptExistingAnnotations(objects)
-			phases = append(phases, boxcutterPhase{
-				name:             component.Name(),
-				objects:          objects,
-				reconcileOptions: append(probeOpts, adoptOpts...),
-			})
+		var err error
+
+		if phases, err = addPhase(ctx, phases, probeOpts, component.Name()+"-crds", crds, componentTransformers); err != nil {
+			allErrs = append(allErrs, err)
+		}
+
+		if phases, err = addPhase(ctx, phases, probeOpts, component.Name(), objects, componentTransformers); err != nil {
+			allErrs = append(allErrs, err)
 		}
 	}
 
-	return phases
+	if len(allErrs) > 0 {
+		return nil, errors.Join(allErrs...)
+	}
+
+	return boxcutter.NewRevision(
+		string(installerRevision.RevisionName()),
+		installerRevision.RevisionIndex(),
+		phases,
+	), nil
 }
 
-// processAdoptExistingAnnotations processes the adopt-existing annotation on
-// each object. Objects with the annotation are deep copied and the annotation
-// is stripped from the copy. Objects with "always" get a per-object
-// CollisionProtectionIfNoController option. Objects without the annotation are
-// returned unchanged.
-//
-// This function assumes that annotation values have already been validated
-// during revision creation.
-func processAdoptExistingAnnotations(objects []client.Object) ([]client.Object, []boxcutter.PhaseReconcileOption) {
-	var reconcileOpts []boxcutter.PhaseReconcileOption
+func addPhase(ctx context.Context, phases []boxcutter.Phase, probeOpts []boxcutter.PhaseReconcileOption, name string, objects []*unstructured.Unstructured, ctxTransformers []manifesttransformer.ManifestTransformer) ([]boxcutter.Phase, error) {
+	if len(objects) == 0 {
+		return phases, nil
+	}
 
-	return util.SliceMap(objects, func(obj client.Object) client.Object {
-		annotations := obj.GetAnnotations()
-		value, hasAnnotation := annotations[revisiongenerator.AdoptExistingAnnotation]
+	var (
+		xfmrOpts []boxcutter.PhaseReconcileOption
+		allErrs  []error
+	)
 
-		if hasAnnotation {
-			// Disable collision protection if the annotation is set to "always"
-			if value == revisiongenerator.AdoptExistingAlways {
-				reconcileOpts = append(reconcileOpts,
-					boxcutter.WithObjectReconcileOptions(obj,
-						boxcutter.WithCollisionProtection(boxcutter.CollisionProtectionNone),
-					),
-				)
-			}
+	transformedObjects := make([]*unstructured.Unstructured, 0, len(objects))
 
-			// Strip the annotation from the object before returning it
-			obj = obj.DeepCopyObject().(client.Object) //nolint:forcetypeassert // This is guaranteed to be client.Object because obj is client.Object
-			annotationsCopy := obj.GetAnnotations()
-			delete(annotationsCopy, revisiongenerator.AdoptExistingAnnotation)
-			obj.SetAnnotations(annotationsCopy)
+	for _, obj := range objects {
+		transformedObj, objOpts, objErrs := applyTransformers(ctx, ctxTransformers, obj)
+		if len(objErrs) > 0 {
+			allErrs = append(allErrs, fmt.Errorf("transforming %s %s: %w", obj.GroupVersionKind(), client.ObjectKeyFromObject(obj), errors.Join(objErrs...)))
+			continue
 		}
 
-		return obj
-	}), reconcileOpts
+		// A nil object means a transformer chose to skip it; it must not appear in any phase.
+		if transformedObj == nil {
+			continue
+		}
+
+		if len(objOpts) > 0 {
+			xfmrOpts = append(xfmrOpts, boxcutter.WithObjectReconcileOptions(transformedObj, objOpts...))
+		}
+
+		transformedObjects = append(transformedObjects, transformedObj)
+	}
+
+	allOpts := slices.Concat(probeOpts, xfmrOpts)
+	bcPhase := boxcutter.NewPhase(name, util.SliceMap(transformedObjects, toClientObject)).WithReconcileOptions(allOpts...)
+
+	return append(phases, bcPhase), errors.Join(allErrs...)
 }
 
-// GetReconcileOptions returns the reconcile options of the revision.
-func (r boxcutterRevision) GetReconcileOptions() []boxcutter.RevisionReconcileOption {
-	return nil
-}
+// applyTransformers applies all transformers to an object in order, accumulating
+// all boxcutter reconcile options and errors they return.
+func applyTransformers(ctx context.Context, transformers []manifesttransformer.ManifestTransformer, obj *unstructured.Unstructured) (*unstructured.Unstructured, []boxcutter.ObjectReconcileOption, []error) {
+	var (
+		errs    []error
+		allOpts []boxcutter.ObjectReconcileOption
+	)
 
-// GetTeardownOptions returns the teardown options of the revision.
-func (r boxcutterRevision) GetTeardownOptions() []boxcutter.RevisionTeardownOption {
-	return nil
-}
+	for _, t := range transformers {
+		transformedObj, opts, err := t.TransformObject(ctx, obj)
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
 
-type boxcutterPhase struct {
-	name             string
-	objects          []client.Object
-	reconcileOptions []boxcutter.PhaseReconcileOption
-}
+		// If the transformer returns a nil object, it means the object should be skipped.
+		if transformedObj == nil {
+			return nil, opts, errs
+		}
 
-var _ boxcutter.Phase = boxcutterPhase{}
+		allOpts = append(allOpts, opts...)
 
-// GetName returns the name of the phase.
-func (p boxcutterPhase) GetName() string {
-	return p.name
-}
+		obj = transformedObj
+	}
 
-// GetObjects returns the objects of the phase.
-func (p boxcutterPhase) GetObjects() []client.Object {
-	return p.objects
-}
-
-// GetReconcileOptions returns the reconcile options of the phase.
-func (p boxcutterPhase) GetReconcileOptions() []boxcutter.PhaseReconcileOption {
-	return p.reconcileOptions
-}
-
-// GetTeardownOptions returns the teardown options of the phase.
-func (p boxcutterPhase) GetTeardownOptions() []boxcutter.PhaseTeardownOption {
-	return nil
+	return obj, allOpts, errs
 }
