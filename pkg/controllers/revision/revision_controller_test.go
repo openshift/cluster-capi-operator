@@ -25,6 +25,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	configv1 "github.com/openshift/api/config/v1"
+	"github.com/openshift/api/features"
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -58,10 +59,11 @@ const (
 
 func TestBuildComponentList(t *testing.T) {
 	tests := []struct {
-		name          string
-		providers     []providerimages.ProviderImageManifests
-		platform      configv1.PlatformType
-		expectedNames []string
+		name                string
+		providers           []providerimages.ProviderImageManifests
+		platform            configv1.PlatformType
+		enabledFeatureGates []configv1.FeatureGateName
+		expectedNames       []string
 	}{
 		{
 			name: "orders components by type and platform scope",
@@ -71,7 +73,8 @@ func TestBuildComponentList(t *testing.T) {
 				{ProviderMetadata: providerimages.ProviderMetadata{Name: "infra-global", InstallOrder: 20}},
 				{ProviderMetadata: providerimages.ProviderMetadata{Name: "core-aws", InstallOrder: 10, OCPPlatform: configv1.AWSPlatformType}},
 			},
-			platform: configv1.AWSPlatformType,
+			platform:            configv1.AWSPlatformType,
+			enabledFeatureGates: []configv1.FeatureGateName{features.FeatureGateClusterAPIMachineManagementAWS},
 			// Expected order: core+global, core+platform, infra+global, infra+platform
 			expectedNames: []string{"core", "core-aws", "infra-global", "infra-aws"},
 		},
@@ -83,14 +86,16 @@ func TestBuildComponentList(t *testing.T) {
 				{ProviderMetadata: providerimages.ProviderMetadata{Name: "infra-gcp", InstallOrder: 20, OCPPlatform: configv1.GCPPlatformType}},
 				{ProviderMetadata: providerimages.ProviderMetadata{Name: "infra-azure", InstallOrder: 20, OCPPlatform: configv1.AzurePlatformType}},
 			},
-			platform:      configv1.AWSPlatformType,
-			expectedNames: []string{"core", "infra-aws"},
+			platform:            configv1.AWSPlatformType,
+			enabledFeatureGates: []configv1.FeatureGateName{features.FeatureGateClusterAPIMachineManagementAWS},
+			expectedNames:       []string{"core", "infra-aws"},
 		},
 		{
-			name:          "returns empty list when no providers",
-			providers:     []providerimages.ProviderImageManifests{},
-			platform:      configv1.AWSPlatformType,
-			expectedNames: []string{},
+			name:                "returns empty list when no providers",
+			providers:           []providerimages.ProviderImageManifests{},
+			platform:            configv1.AWSPlatformType,
+			enabledFeatureGates: []configv1.FeatureGateName{features.FeatureGateClusterAPIMachineManagementAWS},
+			expectedNames:       []string{},
 		},
 		{
 			name: "includes all global providers regardless of platform",
@@ -101,6 +106,17 @@ func TestBuildComponentList(t *testing.T) {
 			platform:      configv1.GCPPlatformType,
 			expectedNames: []string{"core", "addon"},
 		},
+		{
+			name: "excludes platform profiles when feature gate is disabled",
+			providers: []providerimages.ProviderImageManifests{
+				{ProviderMetadata: providerimages.ProviderMetadata{Name: "infra-aws", InstallOrder: 20, OCPPlatform: configv1.AWSPlatformType}},
+				{ProviderMetadata: providerimages.ProviderMetadata{Name: "core", InstallOrder: 10}},
+				{ProviderMetadata: providerimages.ProviderMetadata{Name: "infra-global", InstallOrder: 20}},
+				{ProviderMetadata: providerimages.ProviderMetadata{Name: "core-aws", InstallOrder: 10, OCPPlatform: configv1.AWSPlatformType}},
+			},
+			platform:      configv1.AWSPlatformType,
+			expectedNames: []string{"core", "infra-global"},
+		},
 	}
 
 	for _, tt := range tests {
@@ -109,6 +125,7 @@ func TestBuildComponentList(t *testing.T) {
 
 			r := &RevisionController{
 				ProviderProfiles: tt.providers,
+				FeatureGates:     newFeatureGate(tt.enabledFeatureGates...),
 			}
 
 			components := r.buildComponentList(tt.platform)
@@ -131,7 +148,7 @@ var _ = Describe("RevisionController", Serial, func() {
 		createFixtures(ctx)
 
 		// Create manager and controller
-		mgr = newManagerWrapper(defaultProviderImgs)
+		mgr = newManagerWrapper(defaultProviderImgs, newFeatureGate(features.FeatureGateClusterAPIMachineManagementAWS))
 
 		DeferCleanup(func(ctx context.Context) {
 			mgr.stop()
@@ -218,7 +235,7 @@ var _ = Describe("RevisionController", Serial, func() {
 		originalRev1 := initialClusterAPI.Status.Revisions[0]
 
 		// Restart the manager with different provider images
-		mgr = newManagerWrapper(updatedProviderImgs)
+		mgr = newManagerWrapper(updatedProviderImgs, newFeatureGate(features.FeatureGateClusterAPIMachineManagementAWS))
 
 		// Wait for the controller to create the second revision
 		Eventually(kWithCtx(ctx).Object(clusterAPI)).
@@ -257,7 +274,7 @@ var _ = Describe("RevisionController", Serial, func() {
 		mgr.stop()
 
 		// Restart with only GCP providers on an AWS cluster — no providers match
-		mgr = newManagerWrapper(nonMatchingProviderImgs)
+		mgr = newManagerWrapper(nonMatchingProviderImgs, newFeatureGate(features.FeatureGateClusterAPIMachineManagementAWS))
 
 		// Wait for the controller to create the second revision
 		Eventually(kWithCtx(ctx).Object(clusterAPI)).
@@ -273,12 +290,34 @@ var _ = Describe("RevisionController", Serial, func() {
 		Expect(clusterAPI.Status.ObservedRevisionGeneration).To(Equal(clusterAPI.Generation))
 	}, defaultNodeTimeout)
 
+	It("excludes platform-specific components when feature gate is disabled", func(ctx context.Context) {
+		// Stop manager with default (matching) providers and enabled feature gate
+		mgr.stop()
+
+		// Restart with default providers (core + infra-aws) but no feature gates enabled
+		mgr = newManagerWrapper(defaultProviderImgs, newFeatureGate())
+
+		// Wait for the controller to create the second revision
+		Eventually(kWithCtx(ctx).Object(clusterAPI)).
+			WithContext(ctx).
+			Should(HaveField("Status.Revisions", HaveLen(2)))
+
+		// The new revision should have only the core (global) component
+		newRev := latestRevision(clusterAPI.Status.Revisions)
+		Expect(newRev.Components).To(HaveLen(1))
+		Expect(newRev.Components[0].Image.Ref).To(Equal(operatorv1alpha1.ImageDigestFormat(defaultProviderImgs[0].ImageRef)))
+
+		// DesiredRevision should point to the new revision
+		Expect(clusterAPI.Status.DesiredRevision).To(Equal(newRev.Name))
+		Expect(clusterAPI.Status.ObservedRevisionGeneration).To(Equal(clusterAPI.Generation))
+	}, defaultNodeTimeout)
+
 	It("trims old revisions when current matches latest", func(ctx context.Context) {
 		// BeforeEach created rev1 from defaultProviderImgs.
 		mgr.stop()
 
 		// Create rev2 with different content.
-		mgr = newManagerWrapper(updatedProviderImgs)
+		mgr = newManagerWrapper(updatedProviderImgs, newFeatureGate(features.FeatureGateClusterAPIMachineManagementAWS))
 
 		// Wait for the controller to create the second revision
 		Eventually(kWithCtx(ctx).Object(clusterAPI)).
@@ -316,7 +355,7 @@ var _ = Describe("RevisionController", Serial, func() {
 		Expect(cl.Status().Patch(ctx, clusterAPI, patch)).To(Succeed())
 
 		// Start with different content, producing a new revision.
-		mgr = newManagerWrapper(updatedProviderImgs)
+		mgr = newManagerWrapper(updatedProviderImgs, newFeatureGate(features.FeatureGateClusterAPIMachineManagementAWS))
 
 		Eventually(kWithCtx(ctx).Object(clusterAPI)).
 			WithContext(ctx).
@@ -384,7 +423,7 @@ var _ = Describe("RevisionController", Serial, func() {
 		mgr.stop()
 
 		// Restart with providers that have an invalid adopt-existing annotation value
-		mgr = newManagerWrapper(invalidAnnotationProviderImgs)
+		mgr = newManagerWrapper(invalidAnnotationProviderImgs, newFeatureGate(features.FeatureGateClusterAPIMachineManagementAWS))
 
 		waitForConditions(ctx,
 			test.HaveCondition(conditionTypeProgressing).
@@ -408,7 +447,7 @@ var _ = Describe("RevisionController waiting states", Serial, func() {
 		BeforeEach(func(ctx context.Context) {
 			createFixtures(ctx, withoutInfraStatus)
 
-			mgr := newManagerWrapper(defaultProviderImgs)
+			mgr := newManagerWrapper(defaultProviderImgs, newFeatureGate(features.FeatureGateClusterAPIMachineManagementAWS))
 
 			DeferCleanup(func(ctx context.Context) {
 				mgr.stop()
@@ -459,7 +498,7 @@ var _ = Describe("RevisionController waiting states", Serial, func() {
 		BeforeEach(func(ctx context.Context) {
 			createFixtures(ctx, withoutClusterAPI)
 
-			mgr := newManagerWrapper(defaultProviderImgs)
+			mgr := newManagerWrapper(defaultProviderImgs, newFeatureGate(features.FeatureGateClusterAPIMachineManagementAWS))
 
 			DeferCleanup(func(ctx context.Context) {
 				mgr.stop()
@@ -504,7 +543,7 @@ var _ = Describe("RevisionController manifest substitutions", Serial, func() {
 	}, defaultNodeTimeout)
 
 	It("includes substitutions in created revision", func(ctx context.Context) {
-		mgr := newManagerWrapper(defaultProviderImgs, func(config *tls.Config) {
+		mgr := newManagerWrapper(defaultProviderImgs, newFeatureGate(features.FeatureGateClusterAPIMachineManagementAWS), func(config *tls.Config) {
 			config.CipherSuites = []uint16{tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256}
 			config.MinVersion = tls.VersionTLS12
 		})
@@ -557,6 +596,7 @@ var _ = Describe("RevisionController error handling", Serial, func() {
 			Client:           interceptorCl,
 			ProviderProfiles: providerImgs,
 			ReleaseVersion:   "4.18.0",
+			FeatureGates:     newFeatureGate(features.FeatureGateClusterAPIMachineManagementAWS),
 		}
 	}, defaultNodeTimeout)
 

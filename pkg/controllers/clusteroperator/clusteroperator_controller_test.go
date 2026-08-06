@@ -77,7 +77,7 @@ var _ = Describe("ClusterOperator controller", func() {
 
 	Context("With a supported platform", func() {
 		JustBeforeEach(func() {
-			mgrCancel, mgrDone = startManager(false)
+			mgrCancel, mgrDone = startManager()
 		})
 
 		JustAfterEach(func() {
@@ -122,53 +122,9 @@ var _ = Describe("ClusterOperator controller", func() {
 			)
 		})
 	})
-
-	Context("With an unsupported platform", func() {
-		JustBeforeEach(func() {
-			mgrCancel, mgrDone = startManager(true)
-		})
-
-		JustAfterEach(func() {
-			stopManager()
-		})
-
-		It("should update the ClusterOperator status with an 'unsupported' message", func() {
-			Eventually(komega.Object(configv1resourcebuilder.ClusterOperator().WithName(controllers.ClusterOperatorName).Build())).
-				Should(HaveField("Status.Conditions", SatisfyAll(
-					ContainElement(And(HaveField("Type", Equal(configv1.OperatorAvailable)), HaveField("Status", Equal(configv1.ConditionTrue)),
-						HaveField("Message", Equal("Cluster API is not yet implemented on this platform")))),
-					ContainElement(And(HaveField("Type", Equal(configv1.OperatorProgressing)), HaveField("Status", Equal(configv1.ConditionFalse)))),
-					ContainElement(And(HaveField("Type", Equal(configv1.OperatorDegraded)), HaveField("Status", Equal(configv1.ConditionFalse)))),
-					ContainElement(And(HaveField("Type", Equal(configv1.OperatorUpgradeable)), HaveField("Status", Equal(configv1.ConditionTrue)))),
-				)), "should match the expected ClusterOperator status conditions")
-		})
-
-		It("should update the ClusterOperator status version to the desired one", func() {
-			Eventually(komega.Object(configv1resourcebuilder.ClusterOperator().WithName(controllers.ClusterOperatorName).Build())).
-				Should(HaveField("Status.Versions", ContainElement(SatisfyAll(
-					HaveField("Name", Equal("operator")),
-					HaveField("Version", Equal(desiredOperatorReleaseVersion)),
-				))), "should match the expected ClusterOperator status versions")
-		})
-
-		It("should update the ClusterOperator status version to the desired one when an incorrect one is present", func() {
-			By("Setting the ClusterOperator status version to an incorrect one")
-
-			patchBase := client.MergeFrom(capiClusterOperator.DeepCopy())
-			capiClusterOperator.Status.Versions = []configv1.OperandVersion{{Name: "operator", Version: "incorrect"}}
-			Expect(cl.Status().Patch(ctx, capiClusterOperator, patchBase)).To(Succeed())
-
-			By("Checking the conditions are as expected")
-			Eventually(komega.Object(configv1resourcebuilder.ClusterOperator().WithName(controllers.ClusterOperatorName).Build())).
-				Should(HaveField("Status.Versions", ContainElement(SatisfyAll(
-					HaveField("Name", Equal("operator")),
-					HaveField("Version", Equal(desiredOperatorReleaseVersion)),
-				))))
-		})
-	})
 })
 
-func startManager(isUnsupportedPlatform bool) (context.CancelFunc, chan struct{}) {
+func startManager() (context.CancelFunc, chan struct{}) {
 	mgrCtx, mgrCancel := context.WithCancel(context.Background())
 	mgrDone := make(chan struct{})
 
@@ -185,7 +141,6 @@ func startManager(isUnsupportedPlatform bool) (context.CancelFunc, chan struct{}
 
 	r := &ClusterOperatorController{
 		ClusterOperatorStatusClient: operatorstatus.ClusterOperatorStatusClient{Client: cl, ReleaseVersion: desiredOperatorReleaseVersion},
-		IsUnsupportedPlatform:       isUnsupportedPlatform,
 	}
 	Expect(r.SetupWithManager(mgr)).To(Succeed(), "Reconciler should be able to setup with manager")
 
