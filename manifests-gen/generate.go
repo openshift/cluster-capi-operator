@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"sort"
 
 	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/cluster-capi-operator/manifests-gen/providermetadata"
@@ -57,6 +58,10 @@ func generateManifests(opts cmdlineOptions) error {
 	// Write the metadata file
 	if err := writeMetadata(opts); err != nil {
 		return fmt.Errorf("error writing metadata: %w", err)
+	}
+
+	if err := writeManifestsSummary(opts, resources); err != nil {
+		return fmt.Errorf("error writing manifests summary: %w", err)
 	}
 
 	return nil
@@ -136,6 +141,77 @@ func writeManifests(opts cmdlineOptions, resources []client.Object) (err error) 
 		if _, err := writer.Write(data); err != nil {
 			return fmt.Errorf("error writing object to manifests file: %w", err)
 		}
+	}
+
+	return nil
+}
+
+type ManifestMetadata struct {
+	Kind       string `json:"kind,omitempty"`
+	APIVersion string `json:"apiVersion,omitempty"`
+	Name       string `json:"name,omitempty"`
+	Namespace  string `json:"namespace,omitempty"`
+}
+
+type ManifestsSummary map[string][]ManifestMetadata
+
+func writeManifestsSummary(opts cmdlineOptions, resources []client.Object) (err error) {
+	if opts.manifestsSummaryFile == "" {
+		return nil
+	}
+
+	var manifests []ManifestMetadata
+	for _, resource := range resources {
+		manifests = append(manifests, ManifestMetadata{
+			Kind:       resource.GetObjectKind().GroupVersionKind().Kind,
+			APIVersion: resource.GetObjectKind().GroupVersionKind().GroupVersion().String(),
+			Name:       resource.GetName(),
+			Namespace:  resource.GetNamespace(),
+		})
+	}
+
+	sort.Slice(manifests, func(i, j int) bool {
+		if manifests[i].Kind != manifests[j].Kind {
+			return manifests[i].Kind < manifests[j].Kind
+		}
+		if manifests[i].APIVersion != manifests[j].APIVersion {
+			return manifests[i].APIVersion < manifests[j].APIVersion
+		}
+		if manifests[i].Namespace != manifests[j].Namespace {
+			return manifests[i].Namespace < manifests[j].Namespace
+		}
+
+		return manifests[i].Name < manifests[j].Name
+	})
+
+	var summary ManifestsSummary
+	if data, err := os.ReadFile(opts.manifestsSummaryFile); err == nil {
+		if err := yaml.Unmarshal(data, &summary); err != nil {
+			return fmt.Errorf("failed to unmarshal existing summary: %w", err)
+		}
+	} else if errors.Is(err, os.ErrNotExist) {
+		summary = make(ManifestsSummary)
+	} else {
+		return fmt.Errorf("error reading manifests summary file %s: %w", opts.manifestsSummaryFile, err)
+	}
+
+	summary[opts.profileName] = manifests
+
+	data, err := yaml.Marshal(summary)
+	if err != nil {
+		return fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	manifestsSummaryFile, err := os.OpenFile(opts.manifestsSummaryFile, os.O_CREATE|os.O_TRUNC|os.O_WRONLY|os.O_APPEND, 0600)
+	if err != nil {
+		return fmt.Errorf("error opening metadata file %s: %w", opts.manifestsSummaryFile, err)
+	}
+	defer func() {
+		err = errors.Join(err, manifestsSummaryFile.Close())
+	}()
+
+	if _, err := manifestsSummaryFile.Write(data); err != nil {
+		return fmt.Errorf("error writing manifests summary to file: %w", err)
 	}
 
 	return nil

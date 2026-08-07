@@ -48,6 +48,7 @@ func init() {
 
 type cmdlineOptions struct {
 	manifestsPath          string
+	manifestsSummaryFile   string
 	profileName            string
 	kustomizeDir           string
 	name                   string
@@ -78,9 +79,10 @@ func (a attributeFlags) Set(value string) error {
 
 func main() {
 	var (
-		manifestsPath = flag.String("manifests-path", "", "Path to the desired directory where to output the generated manifests. Required.")
-		profileName   = flag.String("profile-name", "default", "Name of the profile, e.g 'featuregate-foo' (default: 'default'.'")
-		kustomizeDir  = flag.String("kustomize-dir", "", "Directory containing kustomization.yaml file used to generate the base resources, relative to the current working directory. Required.")
+		manifestsPath        = flag.String("manifests-path", "", "Path to the desired directory where to output the generated manifests. Required.")
+		profileName          = flag.String("profile-name", "default", "Name of the profile, e.g 'featuregate-foo' (default: 'default'.'")
+		kustomizeDir         = flag.String("kustomize-dir", "", "Directory containing kustomization.yaml file used to generate the base resources, relative to the current working directory. Required.")
+		manifestsSummaryFile = flag.String("manifests-summary-file", "", "Path to output the summary YAML file")
 
 		name = flag.String("name", "", "Name of the provider, e.g. 'cluster-api-provider-aws'. Required.")
 
@@ -97,6 +99,7 @@ func main() {
 
 	opts := cmdlineOptions{
 		manifestsPath:          *manifestsPath,
+		manifestsSummaryFile:   *manifestsSummaryFile,
 		profileName:            *profileName,
 		kustomizeDir:           *kustomizeDir,
 		name:                   *name,
