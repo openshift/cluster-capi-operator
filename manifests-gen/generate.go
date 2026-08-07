@@ -156,7 +156,7 @@ type ManifestMetadata struct {
 
 type ManifestsSummary map[string][]ManifestMetadata
 
-func writeManifestsSummary(opts cmdlineOptions, resources []client.Object) (err error) {
+func writeManifestsSummary(opts cmdlineOptions, resources []client.Object) error {
 	if opts.manifestsSummaryFile == "" {
 		return nil
 	}
@@ -209,19 +209,25 @@ func writeManifestsSummary(opts cmdlineOptions, resources []client.Object) (err 
 	}
 
 	if _, err := tmpFile.Write(data); err != nil {
-		tmpFile.Close()
-		os.Remove(tmpFile.Name())
-		return fmt.Errorf("error writing manifests summary to temp file: %w", err)
+		return errors.Join(
+			fmt.Errorf("error writing manifests summary to temp file: %w", err),
+			tmpFile.Close(),
+			os.Remove(tmpFile.Name()),
+		)
 	}
 
 	if err := tmpFile.Close(); err != nil {
-		os.Remove(tmpFile.Name())
-		return fmt.Errorf("error closing temp file: %w", err)
+		return errors.Join(
+			fmt.Errorf("error closing temp file: %w", err),
+			os.Remove(tmpFile.Name()),
+		)
 	}
 
 	if err := os.Rename(tmpFile.Name(), opts.manifestsSummaryFile); err != nil {
-		os.Remove(tmpFile.Name())
-		return fmt.Errorf("error renaming temp file to %s: %w", opts.manifestsSummaryFile, err)
+		return errors.Join(
+			fmt.Errorf("error renaming temp file to %s: %w", opts.manifestsSummaryFile, err),
+			os.Remove(tmpFile.Name()),
+		)
 	}
 
 	return nil
