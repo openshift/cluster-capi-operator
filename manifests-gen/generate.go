@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"path/filepath"
 	"sort"
 
 	configv1 "github.com/openshift/api/config/v1"
@@ -202,16 +203,25 @@ func writeManifestsSummary(opts cmdlineOptions, resources []client.Object) (err 
 		return fmt.Errorf("failed to marshal: %w", err)
 	}
 
-	manifestsSummaryFile, err := os.OpenFile(opts.manifestsSummaryFile, os.O_CREATE|os.O_TRUNC|os.O_WRONLY|os.O_APPEND, 0600)
+	tmpFile, err := os.CreateTemp(filepath.Dir(opts.manifestsSummaryFile), ".manifests-summary-*.yaml")
 	if err != nil {
-		return fmt.Errorf("error opening metadata file %s: %w", opts.manifestsSummaryFile, err)
+		return fmt.Errorf("error creating temp file for manifests summary: %w", err)
 	}
-	defer func() {
-		err = errors.Join(err, manifestsSummaryFile.Close())
-	}()
 
-	if _, err := manifestsSummaryFile.Write(data); err != nil {
-		return fmt.Errorf("error writing manifests summary to file: %w", err)
+	if _, err := tmpFile.Write(data); err != nil {
+		tmpFile.Close()
+		os.Remove(tmpFile.Name())
+		return fmt.Errorf("error writing manifests summary to temp file: %w", err)
+	}
+
+	if err := tmpFile.Close(); err != nil {
+		os.Remove(tmpFile.Name())
+		return fmt.Errorf("error closing temp file: %w", err)
+	}
+
+	if err := os.Rename(tmpFile.Name(), opts.manifestsSummaryFile); err != nil {
+		os.Remove(tmpFile.Name())
+		return fmt.Errorf("error renaming temp file to %s: %w", opts.manifestsSummaryFile, err)
 	}
 
 	return nil
