@@ -41,25 +41,6 @@ const (
 	// server-side apply operations by the CAPI operator.
 	CAPIOperatorIdentifierDomain = "capi-operator.openshift.io"
 
-	// ReasonAsExpected is the reason for the condition when the operator is in a normal state.
-	ReasonAsExpected = "AsExpected"
-
-	// ReasonProgressing indicates that the controller is progressing normally.
-	// An observer should continue to wait.
-	ReasonProgressing = "Progressing"
-
-	// ReasonWaitingOnExternal indicates that the controller is waiting on an external event.
-	// An observer should continue to wait.
-	ReasonWaitingOnExternal = "WaitingOnExternal"
-
-	// ReasonEphemeralError indicates that the controller encountered an ephemeral error.
-	// An observer should continue to wait.
-	// If this condition persists, the ClusterOperator will eventually enter a degraded state.
-	ReasonEphemeralError = "EphemeralError"
-
-	// ReasonNonRetryableError indicates that the controller encountered a non-retryable error.
-	ReasonNonRetryableError = "NonRetryableError"
-
 	// ConditionAvailableSuffix is the suffix added to a controller prefix to
 	// form the controller's available condition type.
 	ConditionAvailableSuffix = "Available"
@@ -68,6 +49,70 @@ const (
 	// form the controller's progressing condition type.
 	ConditionProgressingSuffix = "Progressing"
 )
+
+const (
+	// OperatorVersionKey is the key used to store the operator version in the ClusterOperator status.
+	OperatorVersionKey = "operator"
+)
+
+//go:generate go run golang.org/x/tools/cmd/stringer -type=Reason -trimprefix=Reason
+
+// Reason is a type that represents the reason for a condition.
+type Reason int
+
+// Reasons are ordered by severity from least to most severe. When aggregating
+// reasons, only the most severe reason will be reported.
+const (
+	// ReasonUnknown is the default reason for a condition when the reason is not known.
+	// Nothing should use this.
+	ReasonUnknown Reason = iota
+
+	// ReasonAsExpected is the reason for the condition when the operator is in a normal state.
+	ReasonAsExpected
+
+	// ReasonUninitialized is the reason for the condition when the controller has not yet been initialized.
+	// This is used to indicate that the controller is not yet available.
+	ReasonUninitialized
+
+	// ReasonProgressing indicates that the controller is progressing normally.
+	// An observer should continue to wait.
+	ReasonProgressing
+
+	// ReasonWaitingOnExternal indicates that the controller is waiting on an external event.
+	// An observer should continue to wait.
+	ReasonWaitingOnExternal
+
+	// ReasonEphemeralError indicates that the controller encountered an ephemeral error.
+	// An observer should continue to wait.
+	// If this condition persists, the ClusterOperator will eventually enter a degraded state.
+	ReasonEphemeralError
+
+	// ReasonNonRetryableError indicates that the controller encountered a non-retryable error.
+	ReasonNonRetryableError
+)
+
+// ReasonFromString returns a Reason enum value from a string. It returns
+// ReasonUnknown if the string is not a valid Reason.
+func ReasonFromString(reason string) Reason {
+	switch reason {
+	case ReasonUnknown.String():
+		return ReasonUnknown
+	case ReasonAsExpected.String():
+		return ReasonAsExpected
+	case ReasonUninitialized.String():
+		return ReasonUninitialized
+	case ReasonProgressing.String():
+		return ReasonProgressing
+	case ReasonWaitingOnExternal.String():
+		return ReasonWaitingOnExternal
+	case ReasonEphemeralError.String():
+		return ReasonEphemeralError
+	case ReasonNonRetryableError.String():
+		return ReasonNonRetryableError
+	default:
+		return ReasonUnknown
+	}
+}
 
 // CAPIFieldOwner returns a qualifiedclient.FieldOwner for the given qualifier.
 // The qualifier should identify the writer in the context of the CAPI operator,
@@ -95,6 +140,10 @@ type ReconcileResult struct {
 	// current state if not set explicitly
 	available *partialCondition
 
+	// if operatorVersion is set, we will update the ClusterOperator operator
+	// version to this value when writing status
+	operatorVersion string
+
 	err          error
 	requeueAfter time.Duration
 }
@@ -115,6 +164,13 @@ func (r ReconcileResult) withAvailable(status configv1.ConditionStatus, reason, 
 
 func (r ReconcileResult) withError(err error) ReconcileResult {
 	r.err = err
+	return r
+}
+
+// WithUpdateOperatorVersion causes the reconcile result to also update the
+// operator version when writing status to the ClusterOperator.
+func (r ReconcileResult) WithUpdateOperatorVersion(operatorVersion string) ReconcileResult {
+	r.operatorVersion = operatorVersion
 	return r
 }
 
@@ -145,8 +201,8 @@ type ControllerResultGenerator string
 // Success returns a ReconcileResult indicating that the controller has succeeded.
 // Returning this result will not requeue the controller.
 func (c ControllerResultGenerator) Success() ReconcileResult {
-	return newReconcileResult(c, configv1.ConditionFalse, ReasonAsExpected, "Success").
-		withAvailable(configv1.ConditionTrue, ReasonAsExpected, "Success")
+	return newReconcileResult(c, configv1.ConditionFalse, ReasonAsExpected.String(), "Success").
+		withAvailable(configv1.ConditionTrue, ReasonAsExpected.String(), "Success")
 }
 
 // SuccessP is a convenience wrapper around Success that returns a pointer to the ReconcileResult.
@@ -159,7 +215,7 @@ func (c ControllerResultGenerator) SuccessP() *ReconcileResult {
 // immediately, for example after writing status to a watched resource.
 // Returning this result will not requeue the controller directly.
 func (c ControllerResultGenerator) Progressing(message string) ReconcileResult {
-	return newReconcileResult(c, configv1.ConditionTrue, ReasonProgressing, message)
+	return newReconcileResult(c, configv1.ConditionTrue, ReasonProgressing.String(), message)
 }
 
 // ProgressingP is a convenience wrapper around Progressing that returns a pointer to the ReconcileResult.
@@ -174,7 +230,7 @@ func (c ControllerResultGenerator) ProgressingP(message string) *ReconcileResult
 func (c ControllerResultGenerator) WaitingOnExternal(waitDescription string) ReconcileResult {
 	message := fmt.Sprintf("Waiting on %s", waitDescription)
 
-	return newReconcileResult(c, configv1.ConditionTrue, ReasonWaitingOnExternal, message)
+	return newReconcileResult(c, configv1.ConditionTrue, ReasonWaitingOnExternal.String(), message)
 }
 
 // WaitingOnExternalP is a convenience wrapper around WaitingOnExternal that returns a pointer to the ReconcileResult.
@@ -190,7 +246,7 @@ func (c ControllerResultGenerator) Error(err error) ReconcileResult {
 		return c.nonRetryableError(err)
 	}
 
-	return newReconcileResult(c, configv1.ConditionTrue, ReasonEphemeralError, err.Error()).
+	return newReconcileResult(c, configv1.ConditionTrue, ReasonEphemeralError.String(), err.Error()).
 		withError(err)
 }
 
@@ -217,20 +273,21 @@ func (c ControllerResultGenerator) NonRetryableErrorP(err error) *ReconcileResul
 }
 
 func (c ControllerResultGenerator) nonRetryableError(terminalErr error) ReconcileResult {
-	return newReconcileResult(c, configv1.ConditionFalse, ReasonNonRetryableError, terminalErr.Error()).
-		withAvailable(configv1.ConditionFalse, ReasonNonRetryableError, terminalErr.Error()).
+	return newReconcileResult(c, configv1.ConditionFalse, ReasonNonRetryableError.String(), terminalErr.Error()).
+		withAvailable(configv1.ConditionFalse, ReasonNonRetryableError.String(), terminalErr.Error()).
 		withError(terminalErr)
 }
 
 func (c ControllerResultGenerator) condition(condType string, status configv1.ConditionStatus, reason, message string) *configv1apply.ClusterOperatorStatusConditionApplyConfiguration {
 	return configv1apply.ClusterOperatorStatusCondition().
-		WithType(c.conditionType(condType)).
+		WithType(c.SubConditionType(condType)).
 		WithStatus(status).
 		WithReason(reason).
 		WithMessage(message)
 }
 
-func (c ControllerResultGenerator) conditionType(condType string) configv1.ClusterStatusConditionType {
+// SubConditionType returns the ClusterStatusConditionType for the given condition type.
+func (c ControllerResultGenerator) SubConditionType(condType string) configv1.ClusterStatusConditionType {
 	return configv1.ClusterStatusConditionType(string(c) + condType)
 }
 
@@ -242,6 +299,65 @@ func (r *ReconcileResult) WriteClusterOperatorStatus(ctx context.Context, log lo
 		return fmt.Errorf("failed to get ClusterOperator: %w", err)
 	}
 
+	// Extract currently managed fields. This ensures that we preserve operator version if we're not updating it.
+	clusterOperatorApplyConfig, err := configv1apply.ExtractClusterOperatorStatus(co, string(CAPIFieldOwner(r.ControllerResultGenerator)))
+	if err != nil {
+		return fmt.Errorf("failed to extract ClusterOperator apply configuration: %w", err)
+	}
+
+	clusterOperatorApplyConfig = clusterOperatorApplyConfig.WithUID(co.UID)
+
+	conditions := r.constructPartialConditions(co)
+	conditionsUpdated := MergeConditions(conditions, co.Status.Conditions)
+
+	releaseVersionNeedsUpdate := false
+	if r.operatorVersion != "" {
+		releaseVersionNeedsUpdate = func() bool {
+			for _, version := range co.Status.Versions {
+				if version.Name == OperatorVersionKey {
+					return version.Version != r.operatorVersion
+				}
+			}
+
+			return true
+		}()
+	}
+
+	if !conditionsUpdated && !releaseVersionNeedsUpdate {
+		return nil
+	}
+
+	status := clusterOperatorApplyConfig.Status
+	if status == nil {
+		status = configv1apply.ClusterOperatorStatus()
+	}
+
+	// Clear previously extracted conditions to avoid duplicates, as
+	// WithConditions appends to the existing slice.
+	status.Conditions = nil
+
+	status = status.WithConditions(conditions...)
+	if r.operatorVersion != "" {
+		// Clear previously extracted versions to avoid duplicates, as
+		// WithVersions appends to the existing slice.
+		status.Versions = nil
+		status = status.WithVersions(
+			configv1apply.OperandVersion().
+				WithName(OperatorVersionKey).
+				WithVersion(r.operatorVersion))
+	}
+
+	patch := util.ApplyConfigPatch(clusterOperatorApplyConfig.WithStatus(status))
+	if err := k8sclient.Status().Patch(ctx, co, patch, CAPIFieldOwner(r.ControllerResultGenerator), client.ForceOwnership); err != nil {
+		return fmt.Errorf("failed to patch ClusterOperator status: %w", err)
+	}
+
+	return nil
+}
+
+// constructPartialConditions returns a set of condition apply configurations
+// for the ReconcileResult. They do not yet have LastTransitionTime set.
+func (r *ReconcileResult) constructPartialConditions(co *configv1.ClusterOperator) []*configv1apply.ClusterOperatorStatusConditionApplyConfiguration {
 	// The following behaviours are intended to implement the semantics of
 	// - configv1.ClusterOperatorStatusAvailable
 	// - configv1.ClusterOperatorStatusProgressing
@@ -264,7 +380,6 @@ func (r *ReconcileResult) WriteClusterOperatorStatus(ctx context.Context, log lo
 	// administrator's intervention. Currently we set it for non-retryable
 	// errors. Otherwise we copy the previous state of the Available condition
 	// if it exists.
-
 	conditions := []*configv1apply.ClusterOperatorStatusConditionApplyConfiguration{
 		r.condition(ConditionProgressingSuffix, r.progressing.status, r.progressing.reason, r.progressing.message),
 	}
@@ -275,28 +390,13 @@ func (r *ReconcileResult) WriteClusterOperatorStatus(ctx context.Context, log lo
 	} else {
 		// Infer Available condition from existing state, don't write if not
 		// already present
-		currentAvailable := findClusterOperatorCondition(r.conditionType(ConditionAvailableSuffix), co.Status.Conditions)
+		currentAvailable := findClusterOperatorCondition(r.SubConditionType(ConditionAvailableSuffix), co.Status.Conditions)
 		if currentAvailable != nil {
 			conditions = append(conditions, r.condition(ConditionAvailableSuffix, currentAvailable.Status, currentAvailable.Reason, currentAvailable.Message))
 		}
 	}
 
-	updated := mergeConditions(conditions, co.Status.Conditions)
-	if !updated {
-		return nil
-	}
-
-	clusterOperatorApplyConfig := configv1apply.ClusterOperator(ClusterOperatorName).
-		WithUID(co.UID).
-		WithStatus(configv1apply.ClusterOperatorStatus().
-			WithConditions(conditions...))
-
-	patch := util.ApplyConfigPatch(clusterOperatorApplyConfig)
-	if err := k8sclient.Status().Patch(ctx, co, patch, CAPIFieldOwner(r.ControllerResultGenerator), client.ForceOwnership); err != nil {
-		return fmt.Errorf("failed to patch ClusterOperator status: %w", err)
-	}
-
-	return nil
+	return conditions
 }
 
 func findClusterOperatorCondition(condType configv1.ClusterStatusConditionType, conditions []configv1.ClusterOperatorStatusCondition) *configv1.ClusterOperatorStatusCondition {
@@ -309,10 +409,10 @@ func findClusterOperatorCondition(condType configv1.ClusterStatusConditionType, 
 	return nil
 }
 
-// mergeConditions sets LastTransitionTime on each new condition based on the
+// MergeConditions sets LastTransitionTime on each new condition based on the
 // existing conditions. If a condition's Status/Reason/Message are unchanged,
 // LastTransitionTime is preserved from the existing condition.
-func mergeConditions(newConditions []*configv1apply.ClusterOperatorStatusConditionApplyConfiguration, existingConditions []configv1.ClusterOperatorStatusCondition) bool {
+func MergeConditions(newConditions []*configv1apply.ClusterOperatorStatusConditionApplyConfiguration, existingConditions []configv1.ClusterOperatorStatusCondition) bool {
 	now := metav1.Now()
 
 	updated := false

@@ -35,12 +35,20 @@ import (
 )
 
 var (
+	defaultNodeTimeout       = NodeTimeout(15 * time.Second)
+	defaultEventuallyTimeout = 5 * time.Second
+)
+
+var (
 	testEnv    *envtest.Environment
 	cfg        *rest.Config
 	cl         client.Client
 	testScheme *runtime.Scheme
-	ctx        = context.Background()
 )
+
+func kWithCtx(ctx context.Context) komega.Komega {
+	return komega.New(cl).WithContext(ctx)
+}
 
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -50,22 +58,22 @@ func TestAPIs(t *testing.T) {
 var _ = BeforeSuite(func() {
 	logf.SetLogger(klog.Background())
 
-	By("bootstrapping test environment")
+	By("bootstrapping test environment", func() {
+		var err error
 
-	var err error
+		testEnv = &envtest.Environment{}
+		cfg, cl, err = test.StartEnvTest(testEnv)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(cfg).NotTo(BeNil())
+		Expect(cl).NotTo(BeNil())
+	})
 
-	testEnv = &envtest.Environment{}
-	cfg, cl, err = test.StartEnvTest(testEnv)
-	Expect(err).NotTo(HaveOccurred())
-	Expect(cfg).NotTo(BeNil())
-	Expect(cl).NotTo(BeNil())
+	DeferCleanup(func() {
+		By("tearing down the test environment", func() {
+			Expect(test.StopEnvTest(testEnv)).To(Succeed())
+		})
+	})
 
 	komega.SetClient(cl)
-	komega.SetContext(ctx)
 	Default.SetDefaultEventuallyTimeout(60 * time.Second)
-})
-
-var _ = AfterSuite(func() {
-	By("tearing down the test environment")
-	Expect(test.StopEnvTest(testEnv)).To(Succeed())
 })

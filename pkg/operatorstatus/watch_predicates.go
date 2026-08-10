@@ -18,6 +18,7 @@ package operatorstatus
 import (
 	"context"
 
+	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
@@ -44,6 +45,33 @@ func ClusterOperatorOnceOnly() predicate.Funcs {
 	return predicate.Funcs{
 		CreateFunc:  func(e event.CreateEvent) bool { return isClusterOperator(e.Object) },
 		UpdateFunc:  func(e event.UpdateEvent) bool { return false },
+		DeleteFunc:  func(e event.DeleteEvent) bool { return false },
+		GenericFunc: func(e event.GenericEvent) bool { return false },
+	}
+}
+
+// ClusterOperatorStatusChanged returns a predicate that triggers on create
+// events for the cluster-api ClusterOperator, and on update events when
+// status.Conditions or status.Versions has changed.
+func ClusterOperatorStatusChanged() predicate.Funcs {
+	isClusterOperator := func(obj runtime.Object) bool {
+		clusterOperator, ok := obj.(*configv1.ClusterOperator)
+		return ok && clusterOperator.GetName() == controllers.ClusterOperatorName
+	}
+
+	return predicate.Funcs{
+		CreateFunc: func(e event.CreateEvent) bool { return isClusterOperator(e.Object) },
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			if !isClusterOperator(e.ObjectNew) {
+				return false
+			}
+
+			oldCO, _ := e.ObjectOld.(*configv1.ClusterOperator)
+			newCO, _ := e.ObjectNew.(*configv1.ClusterOperator)
+
+			return !equality.Semantic.DeepEqual(oldCO.Status.Conditions, newCO.Status.Conditions) ||
+				!equality.Semantic.DeepEqual(oldCO.Status.Versions, newCO.Status.Versions)
+		},
 		DeleteFunc:  func(e event.DeleteEvent) bool { return false },
 		GenericFunc: func(e event.GenericEvent) bool { return false },
 	}

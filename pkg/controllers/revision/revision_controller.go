@@ -52,7 +52,8 @@ const (
 	infrastructureName  = "cluster"
 	maxRevisionsAllowed = 16
 
-	opresult = operatorstatus.ControllerResultGenerator(controllerName)
+	// ResultGenerator is the controller result generator for the RevisionController.
+	ResultGenerator = operatorstatus.ControllerResultGenerator(controllerName)
 )
 
 var (
@@ -99,10 +100,10 @@ func (r *RevisionController) reconcile(ctx context.Context, log logr.Logger) ope
 	clusterAPI := &operatorv1alpha1.ClusterAPI{}
 	if err := r.Get(ctx, client.ObjectKey{Name: clusterAPIName}, clusterAPI); err != nil {
 		if apierrors.IsNotFound(err) {
-			return opresult.WaitingOnExternal("ClusterAPI not found")
+			return ResultGenerator.WaitingOnExternal("ClusterAPI not found")
 		}
 
-		return opresult.Error(fmt.Errorf("fetching ClusterAPI: %w", err))
+		return ResultGenerator.Error(fmt.Errorf("fetching ClusterAPI: %w", err))
 	}
 
 	// Create a reverse sorted, merged list of revisions. It will prepend the
@@ -110,7 +111,7 @@ func (r *RevisionController) reconcile(ctx context.Context, log logr.Logger) ope
 	// first, and there is guaranteed to be at least one revision.
 	apiRevisions, err := r.mergeRevisions(log, clusterAPI.Status.Revisions, desiredRevision)
 	if err != nil {
-		return opresult.Error(fmt.Errorf("error merging revisions: %w", err))
+		return ResultGenerator.Error(fmt.Errorf("error merging revisions: %w", err))
 	}
 
 	// We can't proceed if we exceed the max number of revisions. In normal
@@ -119,29 +120,36 @@ func (r *RevisionController) reconcile(ctx context.Context, log logr.Logger) ope
 	// so we should stop. There is no safe way to automatically prune revisions
 	// in this case. This requires manual intervention.
 	if len(apiRevisions) > maxRevisionsAllowed {
-		return opresult.NonRetryableError(errMaxRevisionsAllowed)
+		return ResultGenerator.NonRetryableError(errMaxRevisionsAllowed)
 	}
 
+	upToDate := clusterAPI.Status.CurrentRevision == apiRevisions[0].Name
+
 	// Trim old revisions if the current revision is up to date
-	if len(apiRevisions) > 0 && clusterAPI.Status.CurrentRevision == apiRevisions[0].Name {
+	if len(apiRevisions) > 0 && upToDate {
 		apiRevisions = apiRevisions[:1]
 	}
 
 	if err := r.writeRevisions(ctx, log, clusterAPI, apiRevisions); err != nil {
-		return opresult.Error(fmt.Errorf("writing new revision: %w", err))
+		return ResultGenerator.Error(fmt.Errorf("writing new revision: %w", err))
 	}
 
-	return opresult.Success()
+	reconcileResult := ResultGenerator.Success()
+	if upToDate {
+		reconcileResult = reconcileResult.WithUpdateOperatorVersion(r.ReleaseVersion)
+	}
+
+	return reconcileResult
 }
 
 func (r *RevisionController) generateDesiredRevision(ctx context.Context) (revisiongenerator.RenderedRevision, *operatorstatus.ReconcileResult) {
 	infra := &configv1.Infrastructure{}
 	if err := r.Get(ctx, client.ObjectKey{Name: infrastructureName}, infra); err != nil {
-		return nil, opresult.ErrorP(fmt.Errorf("fetching infrastructure: %w", err))
+		return nil, ResultGenerator.ErrorP(fmt.Errorf("fetching infrastructure: %w", err))
 	}
 
 	if infra.Status.PlatformStatus == nil {
-		return nil, opresult.WaitingOnExternalP("Infrastructure PlatformStatus")
+		return nil, ResultGenerator.WaitingOnExternalP("Infrastructure PlatformStatus")
 	}
 
 	// Build ordered component list from provider metadata
@@ -149,7 +157,7 @@ func (r *RevisionController) generateDesiredRevision(ctx context.Context) (revis
 
 	revision, err := revisiongenerator.NewRenderedRevision(providerComponents, revisiongenerator.WithManifestSubstitutions(r.manifestSubstitutions))
 	if err != nil {
-		return nil, opresult.ErrorP(fmt.Errorf("error creating rendered revision: %w", err))
+		return nil, ResultGenerator.ErrorP(fmt.Errorf("error creating rendered revision: %w", err))
 	}
 
 	return revision, nil

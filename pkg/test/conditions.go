@@ -331,7 +331,14 @@ func toMatcher(v interface{}) types.GomegaMatcher {
 		return matcher
 	}
 
-	return gomega.Equal(v)
+	// Convert fmt.Stringer values (e.g. operatorstatus.Reason) to their
+	// string representation so that comparisons against string-typed
+	// condition fields succeed.
+	if s, ok := v.(fmt.Stringer); ok {
+		return gomega.BeEquivalentTo(s.String())
+	}
+
+	return gomega.BeEquivalentTo(v)
 }
 
 // getStringValue converts a reflect.Value to its string representation.

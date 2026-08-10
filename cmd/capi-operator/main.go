@@ -45,8 +45,9 @@ import (
 )
 
 var (
-	errPodIdentityNotSet = errors.New("POD_NAME and POD_NAMESPACE must be set")
-	errContainerNotInPod = errors.New("container not found in pod spec")
+	errPodIdentityNotSet                  = errors.New("POD_NAME and POD_NAMESPACE must be set")
+	errContainerNotInPod                  = errors.New("container not found in pod spec")
+	errInfrastructurePlatformStatusNotSet = errors.New("infrastructure platform status is not set")
 )
 
 const (
@@ -106,22 +107,21 @@ func setupControllers(ctx context.Context, log logr.Logger, mgr ctrl.Manager, op
 		return fmt.Errorf("unable to get infrastructure: %w", err)
 	}
 
-	platform, err := util.GetPlatformFromInfra(infra)
-	if err != nil {
-		return fmt.Errorf("unable to get platform: %w", err)
-	}
-
 	featureGates, err := util.GetFeatureGates(ctx, log, managerName, mgr.GetConfig(), cancel)
 	if err != nil {
 		return fmt.Errorf("unable to get feature gates: %w", err)
 	}
 
+	if infra.Status.PlatformStatus == nil {
+		return errInfrastructurePlatformStatusNotSet
+	}
+
 	supportedPlatform := util.IsCAPIEnabledForPlatform(featureGates, infra.Status.PlatformStatus.Type)
 
 	if err := (&clusteroperator.ClusterOperatorController{
-		ClusterOperatorStatusClient: operatorConfig.GetClusterOperatorStatusClient(mgr, platform, "clusteroperator"),
-		Scheme:                      mgr.GetScheme(),
-		IsUnsupportedPlatform:       !supportedPlatform,
+		Client:                mgr.GetClient(),
+		ReleaseVersion:        util.GetReleaseVersion(),
+		IsUnsupportedPlatform: !supportedPlatform,
 	}).SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("unable to create clusteroperator controller: %w", err)
 	}
