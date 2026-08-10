@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"path"
-	"path/filepath"
 	"sort"
 
 	configv1 "github.com/openshift/api/config/v1"
@@ -26,6 +25,8 @@ const (
 
 	// metadataFilename is the name of the file containing provider metadata.
 	metadataFilename = "metadata.yaml"
+
+	manifestsSummaryFilename = "manifests-summary.yaml"
 
 	// capiNamespace is the namespace where capi components are created.
 	capiNamespace = "openshift-cluster-api"
@@ -154,16 +155,18 @@ type ManifestMetadata struct {
 	Namespace  string `json:"namespace,omitempty"`
 }
 
-type ManifestsSummary map[string][]ManifestMetadata
+type ManifestsSummary []ManifestMetadata
 
 func writeManifestsSummary(opts cmdlineOptions, resources []client.Object) error {
-	if opts.manifestsSummaryFile == "" {
+	if !opts.manifestsSummary {
 		return nil
 	}
 
-	var manifests []ManifestMetadata
+	manifestsSummaryPathname := path.Join(opts.manifestsPath, opts.profileName, manifestsSummaryFilename)
+
+	var summary ManifestsSummary
 	for _, resource := range resources {
-		manifests = append(manifests, ManifestMetadata{
+		summary = append(summary, ManifestMetadata{
 			Kind:       resource.GetObjectKind().GroupVersionKind().Kind,
 			APIVersion: resource.GetObjectKind().GroupVersionKind().GroupVersion().String(),
 			Name:       resource.GetName(),
@@ -171,63 +174,27 @@ func writeManifestsSummary(opts cmdlineOptions, resources []client.Object) error
 		})
 	}
 
-	sort.Slice(manifests, func(i, j int) bool {
-		if manifests[i].Kind != manifests[j].Kind {
-			return manifests[i].Kind < manifests[j].Kind
+	sort.Slice(summary, func(i, j int) bool {
+		if summary[i].Kind != summary[j].Kind {
+			return summary[i].Kind < summary[j].Kind
 		}
-		if manifests[i].APIVersion != manifests[j].APIVersion {
-			return manifests[i].APIVersion < manifests[j].APIVersion
+		if summary[i].APIVersion != summary[j].APIVersion {
+			return summary[i].APIVersion < summary[j].APIVersion
 		}
-		if manifests[i].Namespace != manifests[j].Namespace {
-			return manifests[i].Namespace < manifests[j].Namespace
+		if summary[i].Namespace != summary[j].Namespace {
+			return summary[i].Namespace < summary[j].Namespace
 		}
 
-		return manifests[i].Name < manifests[j].Name
+		return summary[i].Name < summary[j].Name
 	})
-
-	var summary ManifestsSummary
-	if data, err := os.ReadFile(opts.manifestsSummaryFile); err == nil {
-		if err := yaml.Unmarshal(data, &summary); err != nil {
-			return fmt.Errorf("failed to unmarshal existing summary: %w", err)
-		}
-	} else if errors.Is(err, os.ErrNotExist) {
-		summary = make(ManifestsSummary)
-	} else {
-		return fmt.Errorf("error reading manifests summary file %s: %w", opts.manifestsSummaryFile, err)
-	}
-
-	summary[opts.profileName] = manifests
 
 	data, err := yaml.Marshal(summary)
 	if err != nil {
 		return fmt.Errorf("failed to marshal: %w", err)
 	}
 
-	tmpFile, err := os.CreateTemp(filepath.Dir(opts.manifestsSummaryFile), ".manifests-summary-*.yaml")
-	if err != nil {
-		return fmt.Errorf("error creating temp file for manifests summary: %w", err)
-	}
-
-	if _, err := tmpFile.Write(data); err != nil {
-		return errors.Join(
-			fmt.Errorf("error writing manifests summary to temp file: %w", err),
-			tmpFile.Close(),
-			os.Remove(tmpFile.Name()),
-		)
-	}
-
-	if err := tmpFile.Close(); err != nil {
-		return errors.Join(
-			fmt.Errorf("error closing temp file: %w", err),
-			os.Remove(tmpFile.Name()),
-		)
-	}
-
-	if err := os.Rename(tmpFile.Name(), opts.manifestsSummaryFile); err != nil {
-		return errors.Join(
-			fmt.Errorf("error renaming temp file to %s: %w", opts.manifestsSummaryFile, err),
-			os.Remove(tmpFile.Name()),
-		)
+	if err := os.WriteFile(manifestsSummaryPathname, data, 0600); err != nil {
+		return fmt.Errorf("failed to write manifests summary: %w", err)
 	}
 
 	return nil
