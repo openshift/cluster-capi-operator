@@ -75,3 +75,18 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIMachineManage
 			})
 		})
 	})
+
+var _ = Describe("[OTP][Jira:OCPCLOUD][OCPFeatureGate:ClusterAPIMachineManagementAWS][sig-cluster-lifecycle] Cluster API Secret Sync",
+	Label("platform:aws"),
+	func() {
+		BeforeEach(func() {
+			if platform != configv1.AWSPlatformType {
+				Skip("Skipping AWS-specific tests on non-AWS platform.")
+			}
+			if !framework.IsFeatureGateEnabled(ctx, cl, features.FeatureGateClusterAPIMachineManagementAWS) {
+				Skip("Feature gate ClusterAPIMachineManagementAWS is not enabled.")
+			}
+		})
+
+		It("should re-sync worker-user-data secret after deletion", Label("Disruptive"), Label("Lifecycle:informing"), secretSyncTest)
+	})
