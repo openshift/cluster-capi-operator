@@ -622,6 +622,81 @@ var _ = Describe("RevisionController manifest substitutions", Serial, func() {
 	}, defaultNodeTimeout)
 })
 
+var _ = Describe("RevisionController unmanaged CRDs", Serial, func() {
+	It("includes spec entries in the created revision", func(ctx context.Context) {
+		unmanagedCRDs := []string{"gadgets.example.com", "widgets.example.com"}
+		createFixtures(ctx, withUnmanagedCRDs(unmanagedCRDs))
+
+		mgr := newManagerWrapper(defaultProviderImgs)
+
+		DeferCleanup(func() { mgr.stop() })
+
+		waitForProgressingFalse(ctx)
+
+		updatedClusterAPI := &operatorv1alpha1.ClusterAPI{}
+		Expect(cl.Get(ctx, client.ObjectKey{Name: "cluster"}, updatedClusterAPI)).To(Succeed())
+		Expect(updatedClusterAPI.Status.Revisions).To(HaveLen(1))
+		Expect(updatedClusterAPI.Status.Revisions[0].UnmanagedCustomResourceDefinitions).To(Equal(unmanagedCRDs))
+	}, defaultNodeTimeout)
+
+	It("handles a nil spec", func(ctx context.Context) {
+		createFixtures(ctx)
+
+		// Spec is required by the CRD, so intercept the API read to exercise the defensive nil guard.
+		interceptorCl := interceptor.NewClient(cl, interceptor.Funcs{
+			Get: func(ctx context.Context, c client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+				if err := c.Get(ctx, key, obj, opts...); err != nil {
+					return err
+				}
+
+				if clusterAPI, ok := obj.(*operatorv1alpha1.ClusterAPI); ok {
+					clusterAPI.Spec = nil
+				}
+
+				return nil
+			},
+		})
+		r := &RevisionController{
+			Client:           interceptorCl,
+			ProviderProfiles: defaultProviderImgs,
+			ReleaseVersion:   "4.18.0",
+		}
+
+		_, err := r.Reconcile(ctx, reconcile.Request{})
+		Expect(err).NotTo(HaveOccurred())
+
+		updatedClusterAPI := &operatorv1alpha1.ClusterAPI{}
+		Expect(cl.Get(ctx, client.ObjectKey{Name: "cluster"}, updatedClusterAPI)).To(Succeed())
+		Expect(updatedClusterAPI.Status.Revisions).To(HaveLen(1))
+		Expect(updatedClusterAPI.Status.Revisions[0].UnmanagedCustomResourceDefinitions).To(BeEmpty())
+	}, defaultNodeTimeout)
+
+	It("creates a new revision when an entry is added", func(ctx context.Context) {
+		createFixtures(ctx, withUnmanagedCRDs([]string{"widgets.example.com"}))
+
+		mgr := newManagerWrapper(defaultProviderImgs)
+
+		DeferCleanup(func() { mgr.stop() })
+
+		waitForProgressingFalse(ctx)
+		Expect(kWithCtx(ctx).Get(clusterAPI)()).To(Succeed())
+		Expect(clusterAPI.Status.Revisions).To(HaveLen(1))
+		firstRevision := clusterAPI.Status.Revisions[0]
+
+		Eventually(kWithCtx(ctx).Update(clusterAPI, func() {
+			clusterAPI.Spec.UnmanagedCustomResourceDefinitions = append(clusterAPI.Spec.UnmanagedCustomResourceDefinitions, "gadgets.example.com")
+		})).WithContext(ctx).Should(Succeed())
+
+		Eventually(kWithCtx(ctx).Object(clusterAPI)).
+			WithContext(ctx).
+			Should(HaveField("Status.Revisions", HaveLen(2)))
+
+		newRevision := latestRevision(clusterAPI.Status.Revisions)
+		Expect(newRevision.ContentID).NotTo(Equal(firstRevision.ContentID))
+		Expect(newRevision.UnmanagedCustomResourceDefinitions).To(Equal([]string{"gadgets.example.com", "widgets.example.com"}))
+	}, defaultNodeTimeout)
+})
+
 var _ = Describe("RevisionController error handling", Serial, func() {
 	var (
 		testErr = errors.New("simulated status update error")
