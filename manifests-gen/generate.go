@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"sort"
 
 	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/cluster-capi-operator/manifests-gen/providermetadata"
@@ -24,6 +25,8 @@ const (
 
 	// metadataFilename is the name of the file containing provider metadata.
 	metadataFilename = "metadata.yaml"
+
+	manifestsSummaryFilename = "manifests-summary.yaml"
 
 	// capiNamespace is the namespace where capi components are created.
 	capiNamespace = "openshift-cluster-api"
@@ -57,6 +60,10 @@ func generateManifests(opts cmdlineOptions) error {
 	// Write the metadata file
 	if err := writeMetadata(opts); err != nil {
 		return fmt.Errorf("error writing metadata: %w", err)
+	}
+
+	if err := writeManifestsSummary(opts, resources); err != nil {
+		return fmt.Errorf("error writing manifests summary: %w", err)
 	}
 
 	return nil
@@ -136,6 +143,58 @@ func writeManifests(opts cmdlineOptions, resources []client.Object) (err error) 
 		if _, err := writer.Write(data); err != nil {
 			return fmt.Errorf("error writing object to manifests file: %w", err)
 		}
+	}
+
+	return nil
+}
+
+type ManifestMetadata struct {
+	Kind       string `json:"kind,omitempty"`
+	APIVersion string `json:"apiVersion,omitempty"`
+	Name       string `json:"name,omitempty"`
+	Namespace  string `json:"namespace,omitempty"`
+}
+
+type ManifestsSummary []ManifestMetadata
+
+func writeManifestsSummary(opts cmdlineOptions, resources []client.Object) error {
+	if !opts.manifestsSummary {
+		return nil
+	}
+
+	manifestsSummaryPathname := path.Join(opts.manifestsPath, opts.profileName, manifestsSummaryFilename)
+
+	var summary ManifestsSummary
+	for _, resource := range resources {
+		summary = append(summary, ManifestMetadata{
+			Kind:       resource.GetObjectKind().GroupVersionKind().Kind,
+			APIVersion: resource.GetObjectKind().GroupVersionKind().GroupVersion().String(),
+			Name:       resource.GetName(),
+			Namespace:  resource.GetNamespace(),
+		})
+	}
+
+	sort.Slice(summary, func(i, j int) bool {
+		if summary[i].Kind != summary[j].Kind {
+			return summary[i].Kind < summary[j].Kind
+		}
+		if summary[i].APIVersion != summary[j].APIVersion {
+			return summary[i].APIVersion < summary[j].APIVersion
+		}
+		if summary[i].Namespace != summary[j].Namespace {
+			return summary[i].Namespace < summary[j].Namespace
+		}
+
+		return summary[i].Name < summary[j].Name
+	})
+
+	data, err := yaml.Marshal(summary)
+	if err != nil {
+		return fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	if err := os.WriteFile(manifestsSummaryPathname, data, 0600); err != nil {
+		return fmt.Errorf("failed to write manifests summary: %w", err)
 	}
 
 	return nil
