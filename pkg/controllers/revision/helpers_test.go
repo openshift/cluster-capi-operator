@@ -146,10 +146,14 @@ type fixturesOption func(*fixturesConfig)
 type fixturesConfig struct {
 	skipInfraStatus bool
 	skipClusterAPI  bool
+	unmanagedCRDs   []string
 }
 
 func withoutInfraStatus(c *fixturesConfig) { c.skipInfraStatus = true }
 func withoutClusterAPI(c *fixturesConfig)  { c.skipClusterAPI = true }
+func withUnmanagedCRDs(crds []string) fixturesOption {
+	return func(c *fixturesConfig) { c.unmanagedCRDs = slices.Clone(crds) }
+}
 
 // createFixtures creates test fixtures and sets the package-level vars.
 // It registers DeferCleanup to clean up created resources.
@@ -184,7 +188,9 @@ func createFixtures(ctx context.Context, opts ...fixturesOption) {
 	if !cfg.skipClusterAPI {
 		clusterAPI = &operatorv1alpha1.ClusterAPI{
 			ObjectMeta: metav1.ObjectMeta{Name: "cluster"},
-			Spec:       &operatorv1alpha1.ClusterAPISpec{},
+			Spec: &operatorv1alpha1.ClusterAPISpec{
+				UnmanagedCustomResourceDefinitions: cfg.unmanagedCRDs,
+			},
 		}
 		Expect(cl.Create(ctx, clusterAPI)).To(Succeed())
 		cleanupObjs = append(cleanupObjs, clusterAPI)
