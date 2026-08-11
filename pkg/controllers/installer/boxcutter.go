@@ -19,7 +19,6 @@ package installer
 import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"pkg.package-operator.run/boxcutter"
-	"pkg.package-operator.run/boxcutter/probing"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/cluster-capi-operator/pkg/revisiongenerator"
@@ -38,9 +37,9 @@ import (
 // will contain only parsed versions of exactly what was in provider manifests
 // without any further processing. That processing should be done here.
 func toBoxcutterRevision(installerRevision revisiongenerator.InstallerRevision, collectObjects func(obj *unstructured.Unstructured)) boxcutter.Revision {
-	probeOpts := util.SliceMap(allProbes(), func(p *probing.GroupKindSelector) boxcutter.PhaseReconcileOption {
-		return boxcutter.WithProbe(boxcutter.ProgressProbeType, p)
-	})
+	probeOpts := []boxcutter.PhaseReconcileOption{
+		boxcutter.WithProbe(boxcutter.ProgressProbeType, progressProbe()),
+	}
 
 	var phases []boxcutter.Phase
 
