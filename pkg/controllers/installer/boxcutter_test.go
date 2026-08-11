@@ -33,6 +33,16 @@ import (
 // don't care about collected objects.
 func noopCollector(*unstructured.Unstructured) {}
 
+// mustBoxcutterRevision calls toBoxcutterRevision and fails the test on error.
+func mustBoxcutterRevision(rev revisiongenerator.InstallerRevision, collect func(*unstructured.Unstructured), unmanagedCRDs []string) boxcutter.Revision {
+	GinkgoHelper()
+
+	bcRev, err := toBoxcutterRevision(rev, collect, unmanagedCRDs)
+	Expect(err).NotTo(HaveOccurred())
+
+	return bcRev
+}
+
 // objectRef returns a stable identifier for an object, for asserting object
 // identity without depending on object ordering.
 func objectRef(kind, name string) string {
@@ -84,7 +94,7 @@ var _ = Describe("toBoxcutterRevision", func() {
 		It("should return a Revision with the name of the InstallerRevision", func() {
 			rev := installerRevisionFromProfiles(providerCore)
 
-			bcRev := toBoxcutterRevision(rev, noopCollector)
+			bcRev := mustBoxcutterRevision(rev, noopCollector, nil)
 
 			Expect(bcRev.GetName()).To(Equal(string(rev.RevisionName())),
 				"returned Revision should carry the same name as the InstallerRevision")
@@ -96,7 +106,7 @@ var _ = Describe("toBoxcutterRevision", func() {
 			func(providerName string, wantPhaseCount int) {
 				rev := installerRevisionFromProfiles(providerName)
 
-				bcRev := toBoxcutterRevision(rev, noopCollector)
+				bcRev := mustBoxcutterRevision(rev, noopCollector, nil)
 
 				first := bcRev.GetPhases()
 				second := bcRev.GetPhases()
@@ -122,7 +132,7 @@ var _ = Describe("toBoxcutterRevision", func() {
 		It("splits a component with CRDs and objects into a '-crds' phase and an objects phase", func() {
 			rev := installerRevisionFromProfiles(providerMixed)
 
-			phases := toBoxcutterRevision(rev, noopCollector).GetPhases()
+			phases := mustBoxcutterRevision(rev, noopCollector, nil).GetPhases()
 			Expect(phases).To(HaveLen(2))
 
 			crdPhase := findPhase(phases, providerMixed+"-crds")
@@ -137,7 +147,7 @@ var _ = Describe("toBoxcutterRevision", func() {
 		It("does not create a '-crds' phase for a component with no CRDs", func() {
 			rev := installerRevisionFromProfiles(providerCore)
 
-			phases := toBoxcutterRevision(rev, noopCollector).GetPhases()
+			phases := mustBoxcutterRevision(rev, noopCollector, nil).GetPhases()
 			Expect(phases).To(HaveLen(1))
 			Expect(phases[0].GetName()).To(Equal(providerCore))
 			Expect(objectKinds(phases[0].GetObjects())).To(ConsistOf("ConfigMap"))
@@ -146,7 +156,7 @@ var _ = Describe("toBoxcutterRevision", func() {
 		It("does not create a plain objects phase for a component with only CRDs", func() {
 			rev := installerRevisionFromProfiles(providerCRD)
 
-			phases := toBoxcutterRevision(rev, noopCollector).GetPhases()
+			phases := mustBoxcutterRevision(rev, noopCollector, nil).GetPhases()
 			Expect(phases).To(HaveLen(1))
 			Expect(phases[0].GetName()).To(Equal(providerCRD + "-crds"))
 			Expect(objectKinds(phases[0].GetObjects())).To(ConsistOf("CustomResourceDefinition"))
@@ -163,9 +173,10 @@ var _ = Describe("toBoxcutterRevision", func() {
 
 				var collectedRefs []string
 
-				toBoxcutterRevision(rev, func(obj *unstructured.Unstructured) {
+				_, err := toBoxcutterRevision(rev, func(obj *unstructured.Unstructured) {
 					collectedRefs = append(collectedRefs, objectRef(obj.GetKind(), obj.GetName()))
-				})
+				}, nil)
+				Expect(err).NotTo(HaveOccurred())
 
 				Expect(collectedRefs).To(ConsistOf(wantRefs),
 					"collectObjects should be called exactly once for every object that ends up in a phase")
@@ -191,5 +202,68 @@ var _ = Describe("toBoxcutterRevision", func() {
 				},
 				providerCore, providerMixed, providerCRD),
 		)
+	})
+
+	Describe("unmanaged CRDs", func() {
+		testWidgetCRDName := fmt.Sprintf("testwidgets.%s", testCRDGVK.Group)
+		testGadgetCRDName := fmt.Sprintf("testgadgets.%s", mixedCRDGVK.Group)
+
+		It("should produce a compatibility phase as the first phase", func() {
+			rev := installerRevisionFromProfiles(providerCRD)
+			bcRev := mustBoxcutterRevision(rev, noopCollector, []string{testWidgetCRDName})
+
+			phases := bcRev.GetPhases()
+			Expect(phases).To(HaveLen(1))
+			Expect(phases[0].GetName()).To(Equal("compatibility-requirements"))
+			Expect(phases[0].GetObjects()).To(HaveLen(1))
+			Expect(phases[0].GetObjects()[0].GetName()).To(Equal("ccapio-" + testWidgetCRDName))
+		})
+
+		It("should filter the unmanaged CRD from the component CRD phase", func() {
+			rev := installerRevisionFromProfiles(providerMixed)
+			bcRev := mustBoxcutterRevision(rev, noopCollector, []string{testGadgetCRDName})
+
+			phases := bcRev.GetPhases()
+			// compatibility-requirements + mixed (ConfigMap only, no CRD phase since CRD was unmanaged)
+			Expect(phases).To(HaveLen(2))
+			Expect(phases[0].GetName()).To(Equal("compatibility-requirements"))
+			Expect(phases[1].GetName()).To(Equal(providerMixed))
+			Expect(objectKinds(phases[1].GetObjects())).To(ConsistOf("ConfigMap"))
+		})
+
+		It("should collect multiple unmanaged CRDs from different components into a single compatibility phase", func() {
+			rev := installerRevisionFromProfiles(providerCRD, providerMixed)
+			bcRev := mustBoxcutterRevision(rev, noopCollector, []string{testWidgetCRDName, testGadgetCRDName})
+
+			phases := bcRev.GetPhases()
+			compatPhase := findPhase(phases, "compatibility-requirements")
+			Expect(compatPhase.GetObjects()).To(HaveLen(2))
+		})
+
+		It("should return an error when an unmanaged CRD is not found in any component", func() {
+			rev := installerRevisionFromProfiles(providerCore)
+			_, err := toBoxcutterRevision(rev, noopCollector, []string{"nonexistent.example.com"})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("not found"))
+		})
+
+		It("should set the managed label on CompatibilityRequirement objects", func() {
+			rev := installerRevisionFromProfiles(providerCRD)
+			bcRev := mustBoxcutterRevision(rev, noopCollector, []string{testWidgetCRDName})
+
+			crObj := bcRev.GetPhases()[0].GetObjects()[0]
+			Expect(crObj.GetLabels()).To(HaveKeyWithValue(revisiongenerator.ManagedLabelKey, "compatibility-requirements"))
+		})
+
+		It("should call collectObjects for CompatibilityRequirement objects", func() {
+			rev := installerRevisionFromProfiles(providerCRD)
+
+			var collectedRefs []string
+			mustBoxcutterRevision(rev, func(obj *unstructured.Unstructured) {
+				collectedRefs = append(collectedRefs, objectRef(obj.GetKind(), obj.GetName()))
+			}, []string{testWidgetCRDName})
+
+			Expect(collectedRefs).To(ContainElement(objectRef("CompatibilityRequirement", "ccapio-"+testWidgetCRDName)))
+		})
 	})
 })
