@@ -31,8 +31,11 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/test"
 )
 
-var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIMachineManagement] Cluster API Machine Management", func() {
+var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIMachineManagement] Cluster API Machine Management", Label("skip-topology:External"), func() {
 	BeforeEach(func() {
+		if infra.Status.ControlPlaneTopology == configv1.ExternalTopologyMode {
+			Skip("Cluster API Machine Management tests are not supported on External topology clusters.")
+		}
 		if !framework.IsFeatureGateEnabled(ctx, cl, features.FeatureGateClusterAPIMachineManagement) {
 			Skip("Feature gate ClusterAPIMachineManagement is not enabled.")
 		}
