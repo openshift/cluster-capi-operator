@@ -58,22 +58,22 @@ import (
 )
 
 const (
-	reasonCAPIMachineNotFound                 = "CAPIMachineNotFound"
-	reasonFailedToConvertCAPIMachineToMAPI    = "FailedToConvertCAPIMachineToMAPI"
-	reasonFailedToConvertMAPIMachineToCAPI    = "FailedToConvertMAPIMachineToCAPI"
-	reasonFailedToCreateCAPIInfraMachine      = "FailedToCreateCAPIInfraMachine"
-	reasonFailedToCreateCAPIMachine           = "FailedToCreateCAPIMachine"
-	reasonFailedToCreateMAPIMachine           = "FailedToCreateMAPIMachine"
-	reasonFailedToGetCAPIInfraResources       = "FailedToGetCAPIInfraResources"
-	reasonFailedToUpdateCAPIInfraMachine      = "FailedToUpdateCAPIInfraMachine"
-	reasonFailedToUpdateCAPIMachine           = "FailedToUpdateCAPIMachine"
-	reasonFailedToUpdateMAPIMachine           = "FailedToUpdateMAPIMachine"
-	reasonProgressingToCreateCAPIInfraMachine = "ProgressingToCreateCAPIInfraMachine"
+	reasonCAPIMachineNotFound                      = "CAPIMachineNotFound"
+	reasonFailedToConvertCAPIMachineToMAPI         = "FailedToConvertCAPIMachineToMAPI"
+	reasonFailedToConvertMAPIMachineToCAPI         = "FailedToConvertMAPIMachineToCAPI"
+	reasonUnsupportedControlPlaneMachineConversion = "UnsupportedControlPlaneMachineConversion"
+	reasonFailedToCreateCAPIInfraMachine           = "FailedToCreateCAPIInfraMachine"
+	reasonFailedToCreateCAPIMachine                = "FailedToCreateCAPIMachine"
+	reasonFailedToCreateMAPIMachine                = "FailedToCreateMAPIMachine"
+	reasonFailedToGetCAPIInfraResources            = "FailedToGetCAPIInfraResources"
+	reasonFailedToUpdateCAPIInfraMachine           = "FailedToUpdateCAPIInfraMachine"
+	reasonFailedToUpdateCAPIMachine                = "FailedToUpdateCAPIMachine"
+	reasonFailedToUpdateMAPIMachine                = "FailedToUpdateMAPIMachine"
+	reasonProgressingToCreateCAPIInfraMachine      = "ProgressingToCreateCAPIInfraMachine"
 
 	capiNamespace                  string = "openshift-cluster-api"
 	machineKind                    string = "Machine"
 	machineSetKind                 string = "MachineSet"
-	cpmsKind                       string = "ControlPlaneMachineSet"
 	controllerName                 string = "MachineSyncController"
 	mapiNamespace                  string = "openshift-machine-api"
 	capiInfraCommonFinalizerSuffix string = ".cluster.x-k8s.io"
@@ -118,8 +118,8 @@ var (
 	// errUnsuportedOwnerKindForConversion is returned when attempting to convert unsupported ownerReference.
 	errUnsuportedOwnerKindForConversion = errors.New("unsupported owner kind for owner reference conversion")
 
-	// errUnsupportedCPMSOwnedMachineConversion is returned when attempting to convert ControlPlaneMachineSet owned machines.
-	errUnsupportedCPMSOwnedMachineConversion = errors.New("conversion of control plane machines owned by control plane machine set is currently not supported")
+	// errUnsupportedControlPlaneMachineConversion is returned when attempting to convert any control plane machine.
+	errUnsupportedControlPlaneMachineConversion = errors.New("conversion of control plane machines is currently not supported")
 
 	// errInvalidInfraClusterReference is returned when the cluster name is empty in CAPI machine spec.
 	errInvalidInfraClusterReference = errors.New("cluster name is empty in Cluster API machine spec")
@@ -285,6 +285,19 @@ func (r *MachineSyncReconciler) reconcileCAPIMachinetoMAPIMachine(ctx context.Co
 		return ctrl.Result{}, errCAPIMachineNotFound
 	}
 
+	// TODO(OCPCLOUD-2115): Remove this guard once CPMS has a CAPI provider implementation and control plane machine conversion is enabled.
+	if _, ok := sourceCAPIMachine.Labels[clusterv1.MachineControlPlaneLabel]; ok {
+		logger.Info("Not converting control plane Machine. Conversion of control plane machines is currently not supported")
+
+		if existingMAPIMachine != nil {
+			if condErr := r.applySynchronizedConditionWithPatch(ctx, existingMAPIMachine, corev1.ConditionFalse, reasonUnsupportedControlPlaneMachineConversion, errUnsupportedControlPlaneMachineConversion.Error(), nil); condErr != nil {
+				return ctrl.Result{}, condErr
+			}
+		}
+
+		return ctrl.Result{}, nil
+	}
+
 	infraCluster, infraMachine, err := r.fetchCAPIInfraResources(ctx, sourceCAPIMachine)
 	if err != nil { //nolint:nestif
 		fetchErr := fmt.Errorf("failed to fetch Cluster API infra resources: %w", err)
@@ -414,6 +427,17 @@ func (r *MachineSyncReconciler) reconcileCAPIMachinetoMAPIMachine(ctx context.Co
 func (r *MachineSyncReconciler) reconcileMAPIMachinetoCAPIMachine(ctx context.Context, sourceMAPIMachine *mapiv1beta1.Machine, existingCAPIMachine *clusterv1.Machine) (ctrl.Result, error) {
 	logger := logf.FromContext(ctx)
 
+	// TODO(OCPCLOUD-2115): Remove this guard once CPMS has a CAPI provider implementation and control plane machine conversion is enabled.
+	if util.IsControlPlaneMAPIMachine(sourceMAPIMachine) {
+		logger.Info("Not converting control plane Machine. Conversion of control plane machines is currently not supported")
+
+		if condErr := r.applySynchronizedConditionWithPatch(ctx, sourceMAPIMachine, corev1.ConditionFalse, reasonUnsupportedControlPlaneMachineConversion, errUnsupportedControlPlaneMachineConversion.Error(), nil); condErr != nil {
+			return ctrl.Result{}, condErr
+		}
+
+		return ctrl.Result{}, nil
+	}
+
 	authoritativeAPI := sourceMAPIMachine.Status.AuthoritativeAPI
 
 	if authoritativeAPI == mapiv1beta1.MachineAuthorityClusterAPI {
@@ -451,17 +475,11 @@ func (r *MachineSyncReconciler) reconcileMAPIMachinetoCAPIMachine(ctx context.Co
 	}
 
 	convertedCAPIOwnerReferences, err := r.convertMAPIMachineOwnerReferencesToCAPI(ctx, sourceMAPIMachine)
-	//nolint:nestif
 	if err != nil {
 		var fe *field.Error
 		if errors.As(err, &fe) {
 			if condErr := r.applySynchronizedConditionWithPatch(ctx, sourceMAPIMachine, corev1.ConditionFalse, reasonFailedToConvertMAPIMachineToCAPI, fe.Detail, nil); condErr != nil {
 				return ctrl.Result{}, utilerrors.NewAggregate([]error{err, condErr})
-			}
-
-			if fe.Detail == errUnsupportedCPMSOwnedMachineConversion.Error() {
-				logger.Info("Not converting control plane Machine. Conversion of Machine API machines owned by control plane machine set is currently not supported")
-				return ctrl.Result{}, nil
 			}
 
 			logger.Error(err, "unable to convert Machine API machine to Cluster API, unsupported owner reference in conversion")
@@ -875,10 +893,6 @@ func (r *MachineSyncReconciler) convertMAPIMachineOwnerReferencesToCAPI(ctx cont
 	}
 
 	mapiOwnerReference := mapiMachine.OwnerReferences[0]
-	if mapiOwnerReference.Kind == cpmsKind {
-		return nil, field.Invalid(field.NewPath("metadata", "ownerReferences"), mapiMachine.OwnerReferences, errUnsupportedCPMSOwnedMachineConversion.Error())
-	}
-
 	if mapiOwnerReference.Kind != machineSetKind || mapiOwnerReference.APIVersion != mapiv1beta1.GroupVersion.String() {
 		return nil, field.Invalid(field.NewPath("metadata", "ownerReferences"), mapiMachine.OwnerReferences, errUnsuportedOwnerKindForConversion.Error())
 	}

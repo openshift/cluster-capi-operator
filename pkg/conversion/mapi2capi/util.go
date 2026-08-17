@@ -75,6 +75,11 @@ func convertMAPILabelsToCAPI(mapiLabels map[string]string) map[string]string {
 			capiLabelKey, capiLabelVal := transformFunc(mapiLabelVal)
 			capiLabels[capiLabelKey] = capiLabelVal
 
+			// If the machine role is "master", also add the control-plane label.
+			if mapiLabelKey == "machine.openshift.io/cluster-api-machine-role" && mapiLabelVal == "master" {
+				capiLabels[clusterv1.MachineControlPlaneLabel] = ""
+			}
+
 			continue
 		}
 
