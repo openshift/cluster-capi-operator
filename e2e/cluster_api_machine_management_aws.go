@@ -31,8 +31,12 @@ import (
 
 var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIMachineManagementAWS] Cluster API Machine Management AWS",
 	Label("platform:aws"),
+	Label("skip-topology:External"),
 	func() {
 		BeforeEach(func() {
+			if infra.Status.ControlPlaneTopology == configv1.ExternalTopologyMode {
+				Skip("Cluster API Machine Management AWS tests are not supported on External topology clusters.")
+			}
 			if platform != configv1.AWSPlatformType {
 				Skip("Skipping AWS-specific tests on non-AWS platform.")
 			}
