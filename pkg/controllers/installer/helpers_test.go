@@ -33,6 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 
+	proxycontroller "github.com/openshift/cluster-capi-operator/pkg/controllers/proxy"
 	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
 	"github.com/openshift/cluster-capi-operator/pkg/revisiongenerator"
 	"github.com/openshift/cluster-capi-operator/pkg/test"
@@ -59,6 +60,9 @@ const (
 	providerIrregularCRD   = "irregular-resource-crd"
 	providerAdoptExisting  = "adopt-existing"
 	providerAdoptInvalid   = "adopt-invalid"
+	// Proxy controller test providers.
+	providerProxyAnnotated    = "proxy-annotated"
+	providerProxyNotAnnotated = "proxy-not-annotated"
 
 	coreCMName                = "test-cm-core"
 	adoptCMName               = "test-cm-adopt"
@@ -99,6 +103,41 @@ var (
 	// providersByName maps provider name to its profile for easy lookup.
 	providersByName map[string]providerimages.ProviderImageManifests
 )
+
+const proxyTestDeploymentName = "test-proxy-deployment"
+
+// proxyDeploymentYAML returns a Deployment YAML with a "manager" container and,
+// optionally, the inject-proxy annotation on the pod template.
+func proxyDeploymentYAML(withAnnotation bool) string {
+	annotations := ""
+	if withAnnotation {
+		annotations = fmt.Sprintf(`
+      annotations:
+        %s: manager`, proxycontroller.ProxyInjectAnnotation)
+	}
+
+	return fmt.Sprintf(`apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: %s
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: %s
+  template:
+    metadata:
+      labels:
+        app: %s%s
+    spec:
+      containers:
+      - name: manager
+        image: registry.example.com/test:latest
+      - name: other
+        image: registry.example.com/test:latest`,
+		proxyTestDeploymentName, proxyTestDeploymentName, proxyTestDeploymentName, annotations)
+}
 
 // validatingAdmissionPolicyYAML generates a minimal ValidatingAdmissionPolicy YAML.
 func validatingAdmissionPolicyYAML(name string) string {
@@ -228,12 +267,24 @@ func setupProviderProfiles() {
 		)).
 		Build()
 
+	// Provider "proxy-annotated": Deployment with the inject-proxy annotation on its pod template.
+	proxyAnnotated := test.NewProviderImageManifests(tb, providerProxyAnnotated).
+		WithManifests(proxyDeploymentYAML(true)).
+		Build()
+
+	// Provider "proxy-not-annotated": Same Deployment without the inject-proxy annotation,
+	// used to test that the proxy controller clears vars when the annotation is removed.
+	proxyNotAnnotated := test.NewProviderImageManifests(tb, providerProxyNotAnnotated).
+		WithManifests(proxyDeploymentYAML(false)).
+		Build()
+
 	allProviderProfiles = []providerimages.ProviderImageManifests{
 		core, infra, addon, coreV2, dupObj,
 		clusterScoped, clusterScoped2, crdProvider, nsProvider,
 		deploymentProvider, mixed, manyClusterScoped,
 		vapProvider, irregularCRDProvider,
 		adoptExisting, adoptInvalid,
+		proxyAnnotated, proxyNotAnnotated,
 	}
 
 	providersByName = make(map[string]providerimages.ProviderImageManifests, len(allProviderProfiles))
