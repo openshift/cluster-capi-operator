@@ -321,6 +321,11 @@ func updateAWSMachineSetProviderSpec(ctx context.Context, cl client.Client, mapi
 	GinkgoHelper()
 
 	By(fmt.Sprintf("Updating MachineSet %s providerSpec", mapiMachineSet.Name))
+
+	if err := cl.Get(ctx, client.ObjectKeyFromObject(mapiMachineSet), mapiMachineSet); err != nil {
+		return fmt.Errorf("failed to refresh MachineSet %s: %w", mapiMachineSet.Name, err)
+	}
+
 	providerSpec := getAWSProviderSpecFromMachineSet(mapiMachineSet)
 	Expect(providerSpec).ToNot(BeNil(), "failed to extract AWS ProviderSpec from MachineSet %s", mapiMachineSet.Name)
 
