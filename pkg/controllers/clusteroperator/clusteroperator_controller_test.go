@@ -92,12 +92,7 @@ var _ = Describe("ClusterOperator controller", func() {
 					))
 			},
 			Entry("when all sub-controllers report success",
-				[]*configv1apply.ClusterOperatorStatusConditionApplyConfiguration{
-					subCondition("InstallerControllerAvailable", configv1.ConditionTrue, operatorstatus.ReasonAsExpected, "Success"),
-					subCondition("InstallerControllerProgressing", configv1.ConditionFalse, operatorstatus.ReasonAsExpected, "Success"),
-					subCondition("RevisionControllerAvailable", configv1.ConditionTrue, operatorstatus.ReasonAsExpected, "Success"),
-					subCondition("RevisionControllerProgressing", configv1.ConditionFalse, operatorstatus.ReasonAsExpected, "Success"),
-				},
+				allSubControllersSuccessful(),
 				test.HaveCondition(configv1.OperatorAvailable).
 					WithStatus(configv1.ConditionTrue).
 					WithReason(operatorstatus.ReasonAsExpected),
@@ -106,12 +101,9 @@ var _ = Describe("ClusterOperator controller", func() {
 					WithReason(operatorstatus.ReasonAsExpected),
 				defaultNodeTimeout),
 			Entry("when installer controller is progressing but was previously available",
-				[]*configv1apply.ClusterOperatorStatusConditionApplyConfiguration{
-					subCondition("InstallerControllerAvailable", configv1.ConditionTrue, operatorstatus.ReasonAsExpected, "Success"),
+				withOverrides(allSubControllersSuccessful(),
 					subCondition("InstallerControllerProgressing", configv1.ConditionTrue, operatorstatus.ReasonProgressing, "Installing components"),
-					subCondition("RevisionControllerAvailable", configv1.ConditionTrue, operatorstatus.ReasonAsExpected, "Success"),
-					subCondition("RevisionControllerProgressing", configv1.ConditionFalse, operatorstatus.ReasonAsExpected, "Success"),
-				},
+				),
 				test.HaveCondition(configv1.OperatorAvailable).
 					WithStatus(configv1.ConditionTrue).
 					WithReason(operatorstatus.ReasonAsExpected),
@@ -121,12 +113,9 @@ var _ = Describe("ClusterOperator controller", func() {
 					WithMessage(ContainSubstring("InstallerController")),
 				defaultNodeTimeout),
 			Entry("when revision controller is progressing but was previously available",
-				[]*configv1apply.ClusterOperatorStatusConditionApplyConfiguration{
-					subCondition("InstallerControllerAvailable", configv1.ConditionTrue, operatorstatus.ReasonAsExpected, "Success"),
-					subCondition("InstallerControllerProgressing", configv1.ConditionFalse, operatorstatus.ReasonAsExpected, "Success"),
-					subCondition("RevisionControllerAvailable", configv1.ConditionTrue, operatorstatus.ReasonAsExpected, "Success"),
+				withOverrides(allSubControllersSuccessful(),
 					subCondition("RevisionControllerProgressing", configv1.ConditionTrue, operatorstatus.ReasonProgressing, "Updating revisions"),
-				},
+				),
 				test.HaveCondition(configv1.OperatorAvailable).
 					WithStatus(configv1.ConditionTrue).
 					WithReason(operatorstatus.ReasonAsExpected),
@@ -135,13 +124,11 @@ var _ = Describe("ClusterOperator controller", func() {
 					WithReason(operatorstatus.ReasonProgressing).
 					WithMessage(ContainSubstring("RevisionController")),
 				defaultNodeTimeout),
-			Entry("when both controllers are progressing but were previously available",
-				[]*configv1apply.ClusterOperatorStatusConditionApplyConfiguration{
-					subCondition("InstallerControllerAvailable", configv1.ConditionTrue, operatorstatus.ReasonAsExpected, "Success"),
+			Entry("when both installer and revision controllers are progressing but were previously available",
+				withOverrides(allSubControllersSuccessful(),
 					subCondition("InstallerControllerProgressing", configv1.ConditionTrue, operatorstatus.ReasonProgressing, "Installing components"),
-					subCondition("RevisionControllerAvailable", configv1.ConditionTrue, operatorstatus.ReasonAsExpected, "Success"),
 					subCondition("RevisionControllerProgressing", configv1.ConditionTrue, operatorstatus.ReasonProgressing, "Updating revisions"),
-				},
+				),
 				test.HaveCondition(configv1.OperatorAvailable).
 					WithStatus(configv1.ConditionTrue).
 					WithReason(operatorstatus.ReasonAsExpected),
@@ -154,12 +141,10 @@ var _ = Describe("ClusterOperator controller", func() {
 					)),
 				defaultNodeTimeout),
 			Entry("when installer controller has a non-retryable error",
-				[]*configv1apply.ClusterOperatorStatusConditionApplyConfiguration{
+				withOverrides(allSubControllersSuccessful(),
 					subCondition("InstallerControllerAvailable", configv1.ConditionFalse, operatorstatus.ReasonNonRetryableError, "install failed"),
 					subCondition("InstallerControllerProgressing", configv1.ConditionFalse, operatorstatus.ReasonNonRetryableError, "install failed"),
-					subCondition("RevisionControllerAvailable", configv1.ConditionTrue, operatorstatus.ReasonAsExpected, "Success"),
-					subCondition("RevisionControllerProgressing", configv1.ConditionFalse, operatorstatus.ReasonAsExpected, "Success"),
-				},
+				),
 				test.HaveCondition(configv1.OperatorAvailable).
 					WithStatus(configv1.ConditionFalse).
 					WithReason(operatorstatus.ReasonNonRetryableError).
@@ -170,12 +155,10 @@ var _ = Describe("ClusterOperator controller", func() {
 					WithMessage(ContainSubstring("InstallerController")),
 				defaultNodeTimeout),
 			Entry("when revision controller has a non-retryable error",
-				[]*configv1apply.ClusterOperatorStatusConditionApplyConfiguration{
-					subCondition("InstallerControllerAvailable", configv1.ConditionTrue, operatorstatus.ReasonAsExpected, "Success"),
-					subCondition("InstallerControllerProgressing", configv1.ConditionFalse, operatorstatus.ReasonAsExpected, "Success"),
+				withOverrides(allSubControllersSuccessful(),
 					subCondition("RevisionControllerAvailable", configv1.ConditionFalse, operatorstatus.ReasonNonRetryableError, "revision failed"),
 					subCondition("RevisionControllerProgressing", configv1.ConditionFalse, operatorstatus.ReasonNonRetryableError, "revision failed"),
-				},
+				),
 				test.HaveCondition(configv1.OperatorAvailable).
 					WithStatus(configv1.ConditionFalse).
 					WithReason(operatorstatus.ReasonNonRetryableError).
@@ -186,12 +169,9 @@ var _ = Describe("ClusterOperator controller", func() {
 					WithMessage(ContainSubstring("RevisionController")),
 				defaultNodeTimeout),
 			Entry("when installer controller has an ephemeral error but was previously available",
-				[]*configv1apply.ClusterOperatorStatusConditionApplyConfiguration{
-					subCondition("InstallerControllerAvailable", configv1.ConditionTrue, operatorstatus.ReasonAsExpected, "Success"),
+				withOverrides(allSubControllersSuccessful(),
 					subCondition("InstallerControllerProgressing", configv1.ConditionTrue, operatorstatus.ReasonEphemeralError, "transient failure"),
-					subCondition("RevisionControllerAvailable", configv1.ConditionTrue, operatorstatus.ReasonAsExpected, "Success"),
-					subCondition("RevisionControllerProgressing", configv1.ConditionFalse, operatorstatus.ReasonAsExpected, "Success"),
-				},
+				),
 				test.HaveCondition(configv1.OperatorAvailable).
 					WithStatus(configv1.ConditionTrue).
 					WithReason(operatorstatus.ReasonAsExpected),
@@ -201,10 +181,10 @@ var _ = Describe("ClusterOperator controller", func() {
 					WithMessage(ContainSubstring("InstallerController")),
 				defaultNodeTimeout),
 			Entry("when installer controller sub-conditions are missing",
-				[]*configv1apply.ClusterOperatorStatusConditionApplyConfiguration{
-					subCondition("RevisionControllerAvailable", configv1.ConditionTrue, operatorstatus.ReasonAsExpected, "Success"),
-					subCondition("RevisionControllerProgressing", configv1.ConditionFalse, operatorstatus.ReasonAsExpected, "Success"),
-				},
+				withoutConditions(allSubControllersSuccessful(),
+					"InstallerControllerAvailable",
+					"InstallerControllerProgressing",
+				),
 				test.HaveCondition(configv1.OperatorAvailable).
 					WithStatus(configv1.ConditionFalse).
 					WithReason(operatorstatus.ReasonUninitialized).
@@ -222,6 +202,10 @@ var _ = Describe("ClusterOperator controller", func() {
 					WithMessage(SatisfyAll(
 						ContainSubstring("InstallerController"),
 						ContainSubstring("RevisionController"),
+						ContainSubstring("CoreClusterController"),
+						ContainSubstring("InfraClusterController"),
+						ContainSubstring("KubeconfigController"),
+						ContainSubstring("SecretSyncController"),
 						ContainSubstring("initializing"),
 					)),
 				test.HaveCondition(configv1.OperatorProgressing).
@@ -230,6 +214,10 @@ var _ = Describe("ClusterOperator controller", func() {
 					WithMessage(SatisfyAll(
 						ContainSubstring("InstallerController"),
 						ContainSubstring("RevisionController"),
+						ContainSubstring("CoreClusterController"),
+						ContainSubstring("InfraClusterController"),
+						ContainSubstring("KubeconfigController"),
+						ContainSubstring("SecretSyncController"),
 						ContainSubstring("initializing"),
 					)),
 				defaultNodeTimeout),
@@ -253,12 +241,11 @@ var _ = Describe("ClusterOperator controller", func() {
 					)),
 				defaultNodeTimeout),
 			Entry("when one controller has a non-retryable error and the other is progressing",
-				[]*configv1apply.ClusterOperatorStatusConditionApplyConfiguration{
+				withOverrides(allSubControllersSuccessful(),
 					subCondition("InstallerControllerAvailable", configv1.ConditionFalse, operatorstatus.ReasonNonRetryableError, "install failed"),
 					subCondition("InstallerControllerProgressing", configv1.ConditionFalse, operatorstatus.ReasonNonRetryableError, "install failed"),
-					subCondition("RevisionControllerAvailable", configv1.ConditionTrue, operatorstatus.ReasonAsExpected, "Success"),
 					subCondition("RevisionControllerProgressing", configv1.ConditionTrue, operatorstatus.ReasonProgressing, "Updating revisions"),
-				},
+				),
 				test.HaveCondition(configv1.OperatorAvailable).
 					WithStatus(configv1.ConditionFalse).
 					WithReason(operatorstatus.ReasonNonRetryableError).
@@ -271,13 +258,13 @@ var _ = Describe("ClusterOperator controller", func() {
 						ContainSubstring("RevisionController"),
 					)),
 				defaultNodeTimeout),
-			Entry("when both controllers have non-retryable errors",
-				[]*configv1apply.ClusterOperatorStatusConditionApplyConfiguration{
+			Entry("when both installer and revision controllers have non-retryable errors",
+				withOverrides(allSubControllersSuccessful(),
 					subCondition("InstallerControllerAvailable", configv1.ConditionFalse, operatorstatus.ReasonNonRetryableError, "install failed"),
 					subCondition("InstallerControllerProgressing", configv1.ConditionFalse, operatorstatus.ReasonNonRetryableError, "install failed"),
 					subCondition("RevisionControllerAvailable", configv1.ConditionFalse, operatorstatus.ReasonNonRetryableError, "revision failed"),
 					subCondition("RevisionControllerProgressing", configv1.ConditionFalse, operatorstatus.ReasonNonRetryableError, "revision failed"),
-				},
+				),
 				test.HaveCondition(configv1.OperatorAvailable).
 					WithStatus(configv1.ConditionFalse).
 					WithReason(operatorstatus.ReasonNonRetryableError).
@@ -316,12 +303,10 @@ var _ = Describe("ClusterOperator controller", func() {
 			// Prioritisation tests: when sub-controllers report different reasons,
 			// the aggregated condition should report the highest priority reason.
 			Entry("should report the highest priority progressing reason",
-				[]*configv1apply.ClusterOperatorStatusConditionApplyConfiguration{
-					subCondition("InstallerControllerAvailable", configv1.ConditionTrue, operatorstatus.ReasonAsExpected, "Success"),
+				withOverrides(allSubControllersSuccessful(),
 					subCondition("InstallerControllerProgressing", configv1.ConditionTrue, operatorstatus.ReasonEphemeralError, "transient failure"),
-					subCondition("RevisionControllerAvailable", configv1.ConditionTrue, operatorstatus.ReasonAsExpected, "Success"),
 					subCondition("RevisionControllerProgressing", configv1.ConditionTrue, operatorstatus.ReasonProgressing, "Updating revisions"),
-				},
+				),
 				test.HaveCondition(configv1.OperatorAvailable).
 					WithStatus(configv1.ConditionTrue).
 					WithReason(operatorstatus.ReasonAsExpected),
@@ -334,12 +319,12 @@ var _ = Describe("ClusterOperator controller", func() {
 					)),
 				defaultNodeTimeout),
 			Entry("should report the highest priority available reason",
-				[]*configv1apply.ClusterOperatorStatusConditionApplyConfiguration{
+				withOverrides(allSubControllersSuccessful(),
 					subCondition("InstallerControllerAvailable", configv1.ConditionFalse, operatorstatus.ReasonNonRetryableError, "install failed"),
 					subCondition("InstallerControllerProgressing", configv1.ConditionFalse, operatorstatus.ReasonNonRetryableError, "install failed"),
 					subCondition("RevisionControllerAvailable", configv1.ConditionFalse, operatorstatus.ReasonUninitialized, ""),
 					subCondition("RevisionControllerProgressing", configv1.ConditionTrue, operatorstatus.ReasonProgressing, "Updating revisions"),
-				},
+				),
 				test.HaveCondition(configv1.OperatorAvailable).
 					WithStatus(configv1.ConditionFalse).
 					WithReason(operatorstatus.ReasonNonRetryableError).
@@ -480,4 +465,65 @@ func stopManager(ctx context.Context) {
 		mgrCancel()
 		Eventually(mgrDone).WithContext(ctx).WithTimeout(defaultEventuallyTimeout).Should(BeClosed())
 	})
+}
+
+func allSubControllersSuccessful() []*configv1apply.ClusterOperatorStatusConditionApplyConfiguration {
+	controllers := []string{
+		"InstallerController",
+		"RevisionController",
+		"CoreClusterController",
+		"InfraClusterController",
+		"KubeconfigController",
+		"SecretSyncController",
+	}
+
+	conds := make([]*configv1apply.ClusterOperatorStatusConditionApplyConfiguration, 0, 2*len(controllers))
+	for _, c := range controllers {
+		conds = append(conds,
+			subCondition(c+"Available", configv1.ConditionTrue, operatorstatus.ReasonAsExpected, "Success"),
+			subCondition(c+"Progressing", configv1.ConditionFalse, operatorstatus.ReasonAsExpected, "Success"),
+		)
+	}
+
+	return conds
+}
+
+func withoutConditions(base []*configv1apply.ClusterOperatorStatusConditionApplyConfiguration, types ...string) []*configv1apply.ClusterOperatorStatusConditionApplyConfiguration {
+	exclude := make(map[configv1.ClusterStatusConditionType]bool, len(types))
+	for _, t := range types {
+		exclude[configv1.ClusterStatusConditionType(t)] = true
+	}
+
+	result := make([]*configv1apply.ClusterOperatorStatusConditionApplyConfiguration, 0, len(base))
+
+	for _, c := range base {
+		if !exclude[*c.Type] {
+			result = append(result, c)
+		}
+	}
+
+	return result
+}
+
+func withOverrides(base []*configv1apply.ClusterOperatorStatusConditionApplyConfiguration, overrides ...*configv1apply.ClusterOperatorStatusConditionApplyConfiguration) []*configv1apply.ClusterOperatorStatusConditionApplyConfiguration {
+	result := append([]*configv1apply.ClusterOperatorStatusConditionApplyConfiguration{}, base...)
+
+	for _, override := range overrides {
+		found := false
+
+		for i, c := range result {
+			if *c.Type == *override.Type {
+				result[i] = override
+				found = true
+
+				break
+			}
+		}
+
+		if !found {
+			result = append(result, override)
+		}
+	}
+
+	return result
 }

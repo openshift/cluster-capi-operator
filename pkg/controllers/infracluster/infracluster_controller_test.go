@@ -26,6 +26,7 @@ import (
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
+	"github.com/openshift/cluster-capi-operator/pkg/test"
 
 	"github.com/openshift/cluster-api-actuator-pkg/testutils"
 	configv1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/config/v1"
@@ -147,6 +148,20 @@ var _ = Describe("InfraCluster", func() {
 					HaveField("Status.Ready", BeTrue()),
 					HaveField("Annotations", HaveKeyWithValue(clusterv1.ManagedByAnnotation, managedByAnnotationValueClusterCAPIOperatorInfraClusterController)),
 				))
+			})
+
+			It("should set Available=True and Progressing=False on the ClusterOperator", func() {
+				co := configv1resourcebuilder.ClusterOperator().WithName(controllers.ClusterOperatorName).Build()
+				Eventually(komega.Object(co)).Should(
+					HaveField("Status.Conditions", SatisfyAll(
+						test.HaveCondition(ResultGenerator.SubConditionType(operatorstatus.ConditionAvailableSuffix)).
+							WithStatus(configv1.ConditionTrue).
+							WithReason(operatorstatus.ReasonAsExpected),
+						test.HaveCondition(ResultGenerator.SubConditionType(operatorstatus.ConditionProgressingSuffix)).
+							WithStatus(configv1.ConditionFalse).
+							WithReason(operatorstatus.ReasonAsExpected),
+					)),
+				)
 			})
 
 			Context("When there is a ControlPlaneLoadBalancer and a SecondaryControlPlaneLoadBalancer", func() {
@@ -277,6 +292,20 @@ var _ = Describe("InfraCluster", func() {
 					HaveField("Status.Ready", BeTrue()),
 				)
 			})
+
+			It("should still report success conditions on the ClusterOperator", func() {
+				co := configv1resourcebuilder.ClusterOperator().WithName(controllers.ClusterOperatorName).Build()
+				Eventually(komega.Object(co)).Should(
+					HaveField("Status.Conditions", SatisfyAll(
+						test.HaveCondition(ResultGenerator.SubConditionType(operatorstatus.ConditionAvailableSuffix)).
+							WithStatus(configv1.ConditionTrue).
+							WithReason(operatorstatus.ReasonAsExpected),
+						test.HaveCondition(ResultGenerator.SubConditionType(operatorstatus.ConditionProgressingSuffix)).
+							WithStatus(configv1.ConditionFalse).
+							WithReason(operatorstatus.ReasonAsExpected),
+					)),
+				)
+			})
 		})
 
 		Context("When the InfraCluster is not Ready", func() {
@@ -348,6 +377,21 @@ var _ = Describe("InfraCluster", func() {
 					HaveField("Annotations", HaveKeyWithValue(clusterv1.ManagedByAnnotation, managedByAnnotationValueClusterCAPIOperatorInfraClusterController)),
 				))
 			})
+
+			It("should set Available=True and Progressing=False on the ClusterOperator", func() {
+				co := configv1resourcebuilder.ClusterOperator().WithName(controllers.ClusterOperatorName).Build()
+
+				Eventually(komega.Object(co)).Should(
+					HaveField("Status.Conditions", SatisfyAll(
+						test.HaveCondition(ResultGenerator.SubConditionType(operatorstatus.ConditionAvailableSuffix)).
+							WithStatus(configv1.ConditionTrue).
+							WithReason(operatorstatus.ReasonAsExpected),
+						test.HaveCondition(ResultGenerator.SubConditionType(operatorstatus.ConditionProgressingSuffix)).
+							WithStatus(configv1.ConditionFalse).
+							WithReason(operatorstatus.ReasonAsExpected),
+					)),
+				)
+			})
 		})
 	})
 })
@@ -379,10 +423,7 @@ func startManager(mgrCtx context.Context, mgrDone chan struct{}, ocpInfra *confi
 	Expect(err).ToNot(HaveOccurred(), "Manager should be able to be created")
 
 	r := &InfraClusterController{
-		ClusterOperatorStatusClient: operatorstatus.ClusterOperatorStatusClient{
-			Client:           cl,
-			ManagedNamespace: capiNamespace,
-		},
+		Client:        cl,
 		Infra:         ocpInfra,
 		Platform:      ocpInfra.Status.PlatformStatus.Type,
 		CAPINamespace: capiNamespace,
