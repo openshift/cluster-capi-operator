@@ -17,8 +17,11 @@ limitations under the License.
 package installer
 
 import (
+	"fmt"
+
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"pkg.package-operator.run/boxcutter"
 	"pkg.package-operator.run/boxcutter/probing"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -38,7 +41,11 @@ import (
 // all processing required only at installation time. Ideally InstallerRevision
 // will contain only parsed versions of exactly what was in provider manifests
 // without any further processing. That processing should be done here.
-func toBoxcutterRevision(installerRevision revisiongenerator.InstallerRevision, collectObjects func(obj *unstructured.Unstructured)) boxcutter.Revision {
+func toBoxcutterRevision(
+	installerRevision revisiongenerator.InstallerRevision,
+	collectObjects func(obj *unstructured.Unstructured),
+	unmanagedCRDs []string,
+) (boxcutter.Revision, error) {
 	probeOpts := util.SliceMap(allProbes(), func(p *probing.GroupKindSelector) boxcutter.PhaseReconcileOption {
 		return boxcutter.WithProbe(boxcutter.ProgressProbeType, p)
 	})
@@ -57,14 +64,47 @@ func toBoxcutterRevision(installerRevision revisiongenerator.InstallerRevision, 
 		phases = append(phases, bcPhase)
 	}
 
+	unmanagedSet := sets.New(unmanagedCRDs...)
+	var compatObjects []*unstructured.Unstructured
+
 	for _, component := range installerRevision.Components() {
-		var crds, objects []*unstructured.Unstructured
+		// Step 1: Transform — replace unmanaged CRDs with CompatibilityRequirements.
+		// Future transformations (proxy env vars, etc.) chain here before the split.
+		var transformed []*unstructured.Unstructured
 
 		for _, obj := range component.Objects() {
 			collectObjects(obj)
 
-			gvk := obj.GetObjectKind().GroupVersionKind()
-			if gvk.GroupKind() == (schema.GroupKind{Group: "apiextensions.k8s.io", Kind: "CustomResourceDefinition"}) {
+			if isCRD(obj) && unmanagedSet.Has(obj.GetName()) {
+				unmanagedSet.Delete(obj.GetName())
+
+				cr, err := buildCompatibilityRequirement(obj)
+				if err != nil {
+					return nil, fmt.Errorf("building CompatibilityRequirement for CRD %s: %w", obj.GetName(), err)
+				}
+
+				labels := cr.GetLabels()
+				if labels == nil {
+					labels = make(map[string]string)
+				}
+
+				labels[revisiongenerator.ManagedLabelKey] = "compatibility-requirements"
+				cr.SetLabels(labels)
+
+				collectObjects(cr)
+				compatObjects = append(compatObjects, cr)
+
+				// Unmanaged CRD intentionally dropped — not installed, only checked for compatibility.
+				continue
+			}
+
+			transformed = append(transformed, obj)
+		}
+
+		// Step 2: Split transformed objects into CRDs and non-CRDs, build phases.
+		var crds, objects []*unstructured.Unstructured
+		for _, obj := range transformed {
+			if isCRD(obj) {
 				crds = append(crds, obj)
 			} else {
 				objects = append(objects, obj)
@@ -75,11 +115,26 @@ func toBoxcutterRevision(installerRevision revisiongenerator.InstallerRevision, 
 		addPhase(component.Name(), objects)
 	}
 
+	if unmanagedSet.Len() > 0 {
+		return nil, fmt.Errorf("unmanaged CRDs not found in any component: %v", sets.List(unmanagedSet))
+	}
+
+	// Prepend compatibility phase before all component phases.
+	if len(compatObjects) > 0 {
+		compatPhase := boxcutter.NewPhase("compatibility-requirements", util.SliceMap(compatObjects, toClientObject)).
+			WithReconcileOptions(probeOpts...)
+		phases = append([]boxcutter.Phase{compatPhase}, phases...)
+	}
+
 	return boxcutter.NewRevision(
 		string(installerRevision.RevisionName()),
 		installerRevision.RevisionIndex(),
 		phases,
-	)
+	), nil
+}
+
+func isCRD(obj *unstructured.Unstructured) bool {
+	return obj.GetObjectKind().GroupVersionKind().GroupKind() == schema.GroupKind{Group: "apiextensions.k8s.io", Kind: "CustomResourceDefinition"}
 }
 
 // processAdoptExistingAnnotations processes the adopt-existing annotation on
