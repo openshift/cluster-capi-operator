@@ -34,7 +34,7 @@ import (
 var _ = Describe("Machine Sync", Ordered, func() {
 	BeforeAll(func() {
 		switch platform {
-		case configv1.AWSPlatformType, configv1.OpenStackPlatformType:
+		case configv1.AWSPlatformType, configv1.OpenStackPlatformType, configv1.VSpherePlatformType:
 			// supported
 		default:
 			Skip(fmt.Sprintf("Machine sync is not supported on %s", platform))
