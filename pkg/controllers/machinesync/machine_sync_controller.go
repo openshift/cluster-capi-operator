@@ -401,7 +401,16 @@ func (r *MachineSyncReconciler) reconcileCAPIMachinetoMAPIMachine(ctx context.Co
 		return result, createUpdateErr
 	}
 
-	return ctrl.Result{}, r.applySynchronizedConditionWithPatch(ctx, convertedMAPIMachine, corev1.ConditionTrue,
+	// Use existingMAPIMachine to preserve lastTransitionTime of the Synchronized condition
+	// across steady-state reconciliations (when no status changes are detected,
+	// ensureMAPIMachineStatusUpdated returns early without copying existing conditions
+	// into convertedMAPIMachine, so convertedMAPIMachine.Status.Conditions is empty).
+	mapiMachineForCondition := convertedMAPIMachine
+	if existingMAPIMachine != nil {
+		mapiMachineForCondition = existingMAPIMachine
+	}
+
+	return ctrl.Result{}, r.applySynchronizedConditionWithPatch(ctx, mapiMachineForCondition, corev1.ConditionTrue,
 		controllers.ReasonResourceSynchronized, messageSuccessfullySynchronizedCAPItoMAPI, &sourceCAPIMachine.Generation)
 }
 
