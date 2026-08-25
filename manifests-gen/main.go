@@ -1,6 +1,7 @@
 package main
 
 import (
+	"embed"
 	"errors"
 	"flag"
 	"fmt"
@@ -16,6 +17,12 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 )
+
+// Transformer YAML is loaded from disk by provider kustomization overlays.
+// Embedding it makes `go mod vendor` copy those files into consumer repos.
+//
+//go:embed transformers/*.yaml
+var _ embed.FS
 
 var (
 	allowedPlatformTypes = []string{
