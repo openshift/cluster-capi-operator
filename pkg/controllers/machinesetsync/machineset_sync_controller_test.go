@@ -663,6 +663,50 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 			})
 		})
 
+		Context("when spec.authoritativeAPI is ClusterAPI but spec.template.spec.authoritativeAPI defaulted to MachineAPI", func() {
+			// This tests the bug where a stub MAPI MachineSet is created with spec.authoritativeAPI: ClusterAPI
+			// but spec.template.spec.authoritativeAPI is left unset and defaults to MachineAPI.
+			// The CAPI->MAPI sync should correct spec.template.spec.authoritativeAPI to ClusterAPI.
+			BeforeEach(func() {
+				By("Updating spec.authoritativeAPI to ClusterAPI while leaving spec.template.spec.authoritativeAPI as MachineAPI")
+				Eventually(k.Update(mapiMachineSet, func() {
+					mapiMachineSet.Spec.AuthoritativeAPI = mapiv1beta1.MachineAuthorityClusterAPI
+					// spec.template.spec.authoritativeAPI stays as MachineAPI (the API server default),
+					// simulating a stub created with only spec.authoritativeAPI: ClusterAPI set.
+					mapiMachineSet.Spec.Template.Spec.AuthoritativeAPI = mapiv1beta1.MachineAuthorityMachineAPI
+				})).Should(Succeed())
+
+				By("Creating the CAPI infra machine template")
+				Eventually(kCreate(ctx, capaMachineTemplate)).Should(Succeed(), "capa machine template should be able to be created")
+
+				By("Creating the CAPI machine set")
+
+				capiMachineSet = capiMachineSetBuilder.Build()
+				Eventually(kCreate(ctx, capiMachineSet)).Should(Succeed())
+
+				By("Setting the CAPI machine set observed generation to its metadata generation")
+				Eventually(k.UpdateStatus(capiMachineSet, func() {
+					capiMachineSet.Status.ObservedGeneration = capiMachineSet.Generation
+				})).Should(Succeed())
+
+				By("Waiting for the manager's informer cache to observe the CAPI machine set")
+				eventuallyManagerInformerCache(capiMachineSet).Should(
+					HaveField("Status.ObservedGeneration", Equal(capiMachineSet.Generation)),
+				)
+			})
+
+			It("should correct spec.template.spec.authoritativeAPI to ClusterAPI to match spec.authoritativeAPI", func() {
+				Eventually(k.Object(mapiMachineSet), timeout).Should(
+					SatisfyAll(
+						HaveField("Spec.AuthoritativeAPI", Equal(mapiv1beta1.MachineAuthorityClusterAPI)),
+						HaveField("Spec.Template.Spec.AuthoritativeAPI", Equal(mapiv1beta1.MachineAuthorityClusterAPI)),
+					),
+					"MachineSet %s: expected both spec.authoritativeAPI and spec.template.spec.authoritativeAPI to be ClusterAPI after CAPI->MAPI sync",
+					mapiMachineSet.Name,
+				)
+			})
+		})
+
 		Context("when the CAPI machine set exists and the object meta differs", func() {
 			BeforeEach(func() {
 				// We expect a sync, so we require the infra template

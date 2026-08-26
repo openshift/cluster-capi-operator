@@ -1422,8 +1422,10 @@ func restoreMAPIFields(existingMAPIMachineSet, convertedMAPIMachineSet *mapiv1be
 	convertedMAPIMachineSet.Spec.Template.Labels = util.MergeMaps(existingMAPIMachineSet.Spec.Template.Labels, convertedMAPIMachineSet.Spec.Template.Labels)
 	convertedMAPIMachineSet.Spec.Template.Spec.Labels = util.MergeMaps(existingMAPIMachineSet.Spec.Template.Spec.Labels, convertedMAPIMachineSet.Spec.Template.Spec.Labels)
 	// Restore API authoritativeness, as it gets lost in MAPI->CAPI->MAPI translation.
+	// The template machine authority must match the machineset authority so that any machines
+	// created from the template have the correct authority, consistent with the machineset.
 	convertedMAPIMachineSet.Spec.AuthoritativeAPI = existingMAPIMachineSet.Spec.AuthoritativeAPI
-	convertedMAPIMachineSet.Spec.Template.Spec.AuthoritativeAPI = existingMAPIMachineSet.Spec.Template.Spec.AuthoritativeAPI
+	convertedMAPIMachineSet.Spec.Template.Spec.AuthoritativeAPI = existingMAPIMachineSet.Spec.AuthoritativeAPI
 	// Restore the original MAPI selector as it is immutable.
 	convertedMAPIMachineSet.Spec.Selector = existingMAPIMachineSet.Spec.Selector
 	convertedMAPIMachineSet.OwnerReferences = nil // No CAPI machine set owner references are converted to MAPI machine set.
