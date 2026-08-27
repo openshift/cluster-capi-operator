@@ -27,6 +27,7 @@ import (
 	capiframework "github.com/openshift/cluster-capi-operator/e2e/framework"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
+	"k8s.io/utils/ptr"
 )
 
 var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] MachineSet Migration CAPI Authoritative Tests", Ordered, func() {
@@ -222,6 +223,72 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				mapiframework.WaitForMachineSetsDeleted(ctx, cl, mapiMachineSet)
 				capiframework.WaitForMachineSetsDeleted(capiMachineSet)
 				verifyResourceRemoved(awsMachineTemplate)
+			})
+		})
+
+		// This context creates a CAPI AWSMachineTemplate with SSHKeyName explicitly set to "",
+		// matching what the OpenShift installer sets on CAPI-default clusters. The sync controller
+		// writes the providerSpec from this template into the MAPI MachineSet, and MAPI must be
+		// able to launch machines from that providerSpec after authority switches to MachineAPI.
+		// It exercises the full CAPI→MAPI conversion path without the sanitisation that test
+		// helpers apply when building templates from existing MAPI MachineSets.
+		Context("switching from ClusterAPI to MachineAPI with empty SSHKeyName in CAPI template", Ordered, func() {
+			var name string
+			var emptySSHKeyTemplate *awsv1.AWSMachineTemplate
+
+			BeforeAll(func() {
+				name = generateName("ms-no-ssh-")
+
+				// Create a CAPI AWSMachineTemplate with SSHKeyName: ptr("") — the "no SSH key"
+				// value the installer uses. The CAPI→MAPI sync must normalise this to nil before
+				// the MAPI actuator calls AWS RunInstances, otherwise the launch fails.
+				emptySSHKeyTemplate = createAWSMachineTemplate(ctx, cl, name, func(spec *awsv1.AWSMachineSpec) {
+					spec.SSHKeyName = ptr.To("")
+				})
+
+				// 0 replicas: no CAPI machines needed, only the template drives the CAPI→MAPI sync.
+				capiMachineSet = capiframework.CreateMachineSet(ctx, cl, capiframework.NewMachineSetParams(
+					name, clusterName, "", 0,
+					clusterv1.ContractVersionedObjectReference{
+						Kind:     "AWSMachineTemplate",
+						APIGroup: infraAPIGroup,
+						Name:     emptySSHKeyTemplate.Name,
+					},
+					"worker-user-data",
+				))
+				trackResource(capiMachineSet)
+
+				mapiMachineSet = createMAPIMachineSetWithAuthoritativeAPI(ctx, cl, 0, name,
+					mapiv1beta1.MachineAuthorityClusterAPI, mapiv1beta1.MachineAuthorityClusterAPI)
+
+				DeferCleanup(func() {
+					By("Cleaning up 'switching from ClusterAPI to MachineAPI with empty SSHKeyName' resources")
+					cleanupMachineSetTestResources(
+						ctx,
+						cl,
+						[]*clusterv1.MachineSet{capiMachineSet},
+						[]*awsv1.AWSMachineTemplate{emptySSHKeyTemplate},
+						[]*mapiv1beta1.MachineSet{mapiMachineSet},
+					)
+				})
+			})
+
+			It("should launch a MAPI machine successfully after switching authority", func() {
+				By("Verifying CAPI→MAPI sync has completed with the empty-SSHKeyName template")
+				verifyMAPIMachineSetSynchronizedCondition(mapiMachineSet, mapiv1beta1.MachineAuthorityClusterAPI)
+
+				By("Switching authority to MachineAPI")
+				switchMachineSetAuthoritativeAPI(mapiMachineSet, mapiv1beta1.MachineAuthorityMachineAPI)
+				switchMachineSetTemplateAuthoritativeAPI(mapiMachineSet, mapiv1beta1.MachineAuthorityMachineAPI)
+				verifyMachineSetAuthoritative(mapiMachineSet, mapiv1beta1.MachineAuthorityMachineAPI)
+
+				By("Scaling MAPI MachineSet to 1 to create a machine from the synced providerSpec")
+				Expect(mapiframework.ScaleMachineSetWithContext(ctx, name, 1)).To(Succeed(), "should scale up MAPI MachineSet")
+
+				By("Verifying the MAPI machine reaches Running — a launch failure indicates a field mistranslation in the CAPI→MAPI sync")
+				mapiMachine, err := mapiframework.GetLatestMachineFromMachineSet(ctx, cl, mapiMachineSet)
+				Expect(err).ToNot(HaveOccurred(), "should get MAPI machine from MachineSet")
+				verifyMachineRunning(cl, mapiMachine)
 			})
 		})
 	})
