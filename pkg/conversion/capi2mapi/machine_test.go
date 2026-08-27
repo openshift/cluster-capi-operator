@@ -171,3 +171,12 @@ var _ = Describe("capi2mapi Machine Status Conversion", func() {
 		})
 	})
 })
+
+var _ = DescribeTable("convertAWSSSHKeyNameToMAPI",
+	func(input *string, expected *string) {
+		Expect(convertAWSSSHKeyNameToMAPI(input)).To(Equal(expected), "input: %v", input)
+	},
+	Entry("should return nil when input is nil", nil, nil),
+	Entry("should return nil when input is empty string", ptr.To(""), nil),
+	Entry("should return the key name when input is non-empty", ptr.To("my-key"), ptr.To("my-key")),
+)
