@@ -1,6 +1,6 @@
 module github.com/openshift/cluster-capi-operator/e2e
 
-go 1.25.3
+go 1.25.12
 
 replace (
 	// cluster-api-provider-baremetal uses a placeholder for baremetal-operator
