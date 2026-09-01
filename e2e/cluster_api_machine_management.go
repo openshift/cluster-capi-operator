@@ -213,7 +213,7 @@ var _ = Describe("[OTP][Jira:OCPCLOUD][sig-cluster-lifecycle] Cluster_Infrastruc
 			}
 		})
 
-		It("should have IPAM CRDs installed", Label("Lifecycle:informing"), func() {
+		It("[Skipped:MicroShift] should have IPAM CRDs installed", Label("Lifecycle:informing"), func() {
 			ipamCRDs := []string{
 				"ipaddressclaims.ipam.cluster.x-k8s.io",
 				"ipaddresses.ipam.cluster.x-k8s.io",
