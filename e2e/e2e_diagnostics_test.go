@@ -19,6 +19,7 @@ package e2e
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/onsi/ginkgo/v2/types"
@@ -28,6 +29,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 )
 
 // TestDiagnostics exercises the diagnostics-to-JUnit reporting logic
@@ -112,6 +114,56 @@ func TestDiagnostics(t *testing.T) {
 		result, found := diagnosticsFromReport(deserialized)
 		g.Expect(found).To(gomega.BeTrue())
 		g.Expect(result).To(gomega.Equal(diagText))
+	})
+}
+
+// TestIsMicroShiftCluster exercises the MicroShift detection helper without
+// a live cluster. The helper checks for the "microshift-version" ConfigMap in
+// the "kube-public" namespace.
+func TestIsMicroShiftCluster(t *testing.T) {
+	t.Run("returns true when microshift-version ConfigMap exists", func(t *testing.T) {
+		g := gomega.NewWithT(t)
+		withFakeClient(t, func() {
+			cm := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "microshift-version",
+					Namespace: "kube-public",
+				},
+				Data: map[string]string{"version": "4.16.0"},
+			}
+			g.Expect(cl.Create(ctx, cm)).To(gomega.Succeed())
+
+			g.Expect(isMicroShiftCluster(ctx, cl)).To(gomega.BeTrue())
+		})
+	})
+
+	t.Run("returns false when microshift-version ConfigMap is absent", func(t *testing.T) {
+		g := gomega.NewWithT(t)
+		withFakeClient(t, func() {
+			g.Expect(isMicroShiftCluster(ctx, cl)).To(gomega.BeFalse())
+		})
+	})
+
+	t.Run("panics on unexpected API error", func(t *testing.T) {
+		g := gomega.NewWithT(t)
+		withFakeClient(t, func() {
+			// Override cl with an interceptor that returns a non-NotFound error.
+			// Ginkgo's Fail() panics with a types.GinkgoError; we verify the
+			// panic fires which confirms the helper does not silently swallow
+			// unexpected errors.
+			errClient := fake.NewClientBuilder().
+				WithScheme(scheme.Scheme).
+				WithInterceptorFuncs(interceptor.Funcs{
+					Get: func(_ context.Context, _ client.WithWatch, _ client.ObjectKey, _ client.Object, _ ...client.GetOption) error {
+						return fmt.Errorf("simulated network error")
+					},
+				}).
+				Build()
+
+			g.Expect(func() {
+				isMicroShiftCluster(ctx, errClient)
+			}).To(gomega.Panic())
+		})
 	})
 }
 

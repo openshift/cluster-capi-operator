@@ -107,6 +107,13 @@ func InitCommonVariables() {
 	cl, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
 	Expect(err).ToNot(HaveOccurred())
 
+	// MicroShift does not serve config.openshift.io/Infrastructure or install
+	// Cluster API components. Skip the entire CAPI test extension early,
+	// before attempting any OpenShift API lookups.
+	if isMicroShiftCluster(ctx, cl) {
+		Skip("Cluster API is not supported on MicroShift — skipping CAPI extension")
+	}
+
 	infra = &configv1.Infrastructure{}
 	infraName := client.ObjectKey{
 		Name: infrastructureName,
@@ -293,6 +300,35 @@ func dumpNamespaceEvents(ctx context.Context, buf *strings.Builder, namespace st
 			e.InvolvedObject.Kind, e.InvolvedObject.Name,
 			e.Reason, e.Message)
 	}
+}
+
+// isMicroShiftCluster reports whether the target cluster is MicroShift by
+// checking for the "microshift-version" ConfigMap in the "kube-public"
+// namespace.
+//
+// This detection logic is copied from Origin's IsMicroShiftCluster
+// (test/extended/util/framework.go) and is kept local to avoid importing
+// Origin and its transitive dependencies.
+func isMicroShiftCluster(ctx context.Context, cl client.Client) bool {
+	cm := &corev1.ConfigMap{}
+
+	err := cl.Get(ctx, client.ObjectKey{
+		Namespace: "kube-public",
+		Name:      "microshift-version",
+	}, cm)
+	if err == nil {
+		return true
+	}
+
+	if apierrors.IsNotFound(err) {
+		return false
+	}
+
+	// Unexpected error (e.g. RBAC, network) — fail loudly so it is noticed
+	// rather than silently skipping or running the wrong tests.
+	Fail(fmt.Sprintf("failed to determine if cluster is MicroShift: %v", err))
+
+	return false // unreachable; Fail panics
 }
 
 func kWithCtx(ctx context.Context) komega.Komega {
