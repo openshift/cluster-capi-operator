@@ -1168,6 +1168,31 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 				ContainElement(HaveField("ObjectMeta.Name", Equal(capiMachineSet.GetName()))),
 			))
 		})
+
+		// Regression test for OCPBUGS-98492: ensure the sync finalizer is removed
+		// when the MAPI MachineSet is already absent.
+		Context("when the CAPI machine set has the sync finalizer and is being deleted", func() {
+			BeforeEach(func() {
+				By("Adding the sync finalizer to the CAPI machine set")
+				Eventually(k.Update(capiMachineSet, func() {
+					capiMachineSet.SetFinalizers([]string{machinesync.SyncFinalizer})
+				})).Should(Succeed())
+
+				By("Waiting for the manager's informer cache to observe the finalizer")
+				eventuallyManagerInformerCache(capiMachineSet).Should(
+					HaveField("ObjectMeta.Finalizers", ContainElement(machinesync.SyncFinalizer)),
+				)
+
+				By("Deleting the CAPI machine set")
+				Eventually(kDelete(ctx, capiMachineSet)).Should(Succeed())
+			})
+
+			It("should remove the sync finalizer and allow the CAPI machine set to be deleted", func() {
+				Eventually(k.Get(capiMachineSet), timeout).Should(
+					WithTransform(apierrors.IsNotFound, BeTrue()),
+				)
+			})
+		})
 	})
 
 	Context("when the CAPI infra machine template resource does not exist", func() {
