@@ -325,8 +325,13 @@ func isMicroShiftCluster(ctx context.Context, cl client.Client) bool {
 	}
 
 	// Unexpected error (e.g. RBAC, network) — fail loudly so it is noticed
-	// rather than silently skipping or running the wrong tests.
-	Fail(fmt.Sprintf("failed to determine if cluster is MicroShift: %v", err))
+	// rather than silently skipping or running the wrong tests. The raw error
+	// is written to GinkgoWriter (test stderr) rather than the Fail message
+	// because Fail text is embedded in JUnit reports and may contain internal
+	// hostnames or request URLs.
+	_, _ = fmt.Fprintf(GinkgoWriter, "isMicroShiftCluster: unexpected API error: %v\n", err)
+
+	Fail("failed to determine if cluster is MicroShift due to an unexpected API error")
 
 	return false // unreachable; Fail panics
 }

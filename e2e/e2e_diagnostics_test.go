@@ -131,16 +131,19 @@ func TestIsMicroShiftCluster(t *testing.T) {
 				},
 				Data: map[string]string{"version": "4.16.0"},
 			}
-			g.Expect(cl.Create(ctx, cm)).To(gomega.Succeed())
+			g.Expect(cl.Create(ctx, cm)).To(gomega.Succeed(),
+				"failed to create microshift-version ConfigMap in fake client")
 
-			g.Expect(isMicroShiftCluster(ctx, cl)).To(gomega.BeTrue())
+			g.Expect(isMicroShiftCluster(ctx, cl)).To(gomega.BeTrue(),
+				"isMicroShiftCluster should return true when microshift-version ConfigMap exists")
 		})
 	})
 
 	t.Run("returns false when microshift-version ConfigMap is absent", func(t *testing.T) {
 		g := gomega.NewWithT(t)
 		withFakeClient(t, func() {
-			g.Expect(isMicroShiftCluster(ctx, cl)).To(gomega.BeFalse())
+			g.Expect(isMicroShiftCluster(ctx, cl)).To(gomega.BeFalse(),
+				"isMicroShiftCluster should return false when microshift-version ConfigMap is absent")
 		})
 	})
 
@@ -162,7 +165,8 @@ func TestIsMicroShiftCluster(t *testing.T) {
 
 			g.Expect(func() {
 				isMicroShiftCluster(ctx, errClient)
-			}).To(gomega.Panic())
+			}).To(gomega.Panic(),
+				"isMicroShiftCluster should panic via Ginkgo Fail on unexpected API errors")
 		})
 	})
 }
