@@ -340,10 +340,11 @@ func isMicroShiftCluster(ctx context.Context, cl client.Client) bool {
 		return false
 	}
 
-	// Unexpected error (e.g. RBAC, network). Log to stderr and assume not
-	// MicroShift — the subsequent Infrastructure lookup will surface the
-	// real connectivity problem with a clear error.
-	_, _ = fmt.Fprintf(os.Stderr, "isMicroShiftCluster: unexpected API error: %v\n", err)
+	// Unexpected error (e.g. RBAC, network). Log a fixed message to stderr
+	// without the raw error which may contain internal hostnames or request
+	// URLs. Assume not MicroShift — the subsequent Infrastructure lookup
+	// will surface the real connectivity problem with a clear error.
+	_, _ = fmt.Fprintln(os.Stderr, "isMicroShiftCluster: unexpected API error while checking for microshift-version ConfigMap")
 
 	return false
 }
