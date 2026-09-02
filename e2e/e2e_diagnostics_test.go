@@ -147,13 +147,13 @@ func TestIsMicroShiftCluster(t *testing.T) {
 		})
 	})
 
-	t.Run("panics on unexpected API error", func(t *testing.T) {
+	t.Run("returns false on unexpected API error", func(t *testing.T) {
 		g := gomega.NewWithT(t)
 		withFakeClient(t, func() {
-			// Override cl with an interceptor that returns a non-NotFound error.
-			// Ginkgo's Fail() panics with a types.GinkgoError; we verify the
-			// panic fires which confirms the helper does not silently swallow
-			// unexpected errors.
+			// An unexpected error (not NotFound) should return false rather
+			// than panic, because isMicroShiftCluster runs from the OTE
+			// AddBeforeAll path outside any Ginkgo lifecycle node. The
+			// subsequent Infrastructure lookup will surface the real error.
 			errClient := fake.NewClientBuilder().
 				WithScheme(scheme.Scheme).
 				WithInterceptorFuncs(interceptor.Funcs{
@@ -163,10 +163,39 @@ func TestIsMicroShiftCluster(t *testing.T) {
 				}).
 				Build()
 
-			g.Expect(func() {
-				isMicroShiftCluster(ctx, errClient)
-			}).To(gomega.Panic(),
-				"isMicroShiftCluster should panic via Ginkgo Fail on unexpected API errors")
+			g.Expect(isMicroShiftCluster(ctx, errClient)).To(gomega.BeFalse(),
+				"isMicroShiftCluster should return false on unexpected API errors")
+		})
+	})
+
+	t.Run("IsMicroShift flag is set on MicroShift cluster", func(t *testing.T) {
+		g := gomega.NewWithT(t)
+		withFakeClient(t, func() {
+			// Simulate a MicroShift cluster with the version ConfigMap.
+			cm := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "microshift-version",
+					Namespace: "kube-public",
+				},
+				Data: map[string]string{"version": "4.16.0"},
+			}
+			g.Expect(cl.Create(ctx, cm)).To(gomega.Succeed(),
+				"failed to create microshift-version ConfigMap in fake client")
+
+			// Reset the flag and verify detection sets it.
+			origFlag := IsMicroShift
+			IsMicroShift = false
+
+			t.Cleanup(func() { IsMicroShift = origFlag })
+
+			IsMicroShift = isMicroShiftCluster(ctx, cl)
+
+			g.Expect(IsMicroShift).To(gomega.BeTrue(),
+				"IsMicroShift flag should be true after detecting MicroShift cluster")
+
+			// infra should remain nil — InitCommonVariables returns early.
+			g.Expect(infra).To(gomega.BeNil(),
+				"infra should remain nil on MicroShift (Infrastructure not fetched)")
 		})
 	})
 }
@@ -178,15 +207,19 @@ func withFakeClient(t *testing.T, fn func()) {
 
 	origCl, origCtx := cl, ctx
 	origResources, origPlatform := resourcesUnderTest, platform
+	origIsMicroShift, origInfra := IsMicroShift, infra
 
 	cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).Build()
 	ctx = context.Background()
 	resourcesUnderTest = nil
 	platform = ""
+	IsMicroShift = false
+	infra = nil
 
 	t.Cleanup(func() {
 		cl, ctx = origCl, origCtx
 		resourcesUnderTest, platform = origResources, origPlatform
+		IsMicroShift, infra = origIsMicroShift, origInfra
 	})
 
 	fn()

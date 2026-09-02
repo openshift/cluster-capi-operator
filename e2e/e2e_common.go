@@ -17,6 +17,7 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"os"
 	"reflect"
 	"strings"
 	"time"
@@ -67,6 +68,13 @@ var (
 	clusterName string
 	infra       *configv1.Infrastructure
 
+	// IsMicroShift is set to true by InitCommonVariables when the target
+	// cluster is MicroShift. MicroShift does not serve
+	// config.openshift.io/Infrastructure or install Cluster API components,
+	// so the remaining initialization is skipped and individual test suites
+	// must call Skip() from a Ginkgo lifecycle node (BeforeEach / BeforeAll).
+	IsMicroShift bool
+
 	// resourcesUnderTest tracks objects created by the current test for focused
 	// diagnostics on failure. Helpers call trackResource after creating objects;
 	// ReportAfterEach dumps detailed state for each tracked resource then clears
@@ -107,11 +115,15 @@ func InitCommonVariables() {
 	cl, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
 	Expect(err).ToNot(HaveOccurred())
 
-	// MicroShift does not serve config.openshift.io/Infrastructure or install
-	// Cluster API components. Skip the entire CAPI test extension early,
-	// before attempting any OpenShift API lookups.
-	if isMicroShiftCluster(ctx, cl) {
-		Skip("Cluster API is not supported on MicroShift — skipping CAPI extension")
+	// Detect MicroShift before any config.openshift.io lookups. On
+	// MicroShift the Infrastructure resource does not exist and Cluster API
+	// is not installed, so we record the flag and return early. Individual
+	// test suites gate on IsMicroShift inside BeforeEach where Ginkgo Skip
+	// is safe — calling Skip here would panic in the OTE AddBeforeAll path
+	// which runs outside a Ginkgo lifecycle node.
+	IsMicroShift = isMicroShiftCluster(ctx, cl)
+	if IsMicroShift {
+		return
 	}
 
 	infra = &configv1.Infrastructure{}
@@ -309,6 +321,10 @@ func dumpNamespaceEvents(ctx context.Context, buf *strings.Builder, namespace st
 // This detection logic is copied from Origin's IsMicroShiftCluster
 // (test/extended/util/framework.go) and is kept local to avoid importing
 // Origin and its transitive dependencies.
+//
+// The function must not call Ginkgo Skip/Fail/Expect because it is invoked
+// from InitCommonVariables which runs via the OTE AddBeforeAll hook — a
+// plain Go callback with no Ginkgo lifecycle node context.
 func isMicroShiftCluster(ctx context.Context, cl client.Client) bool {
 	cm := &corev1.ConfigMap{}
 
@@ -324,16 +340,12 @@ func isMicroShiftCluster(ctx context.Context, cl client.Client) bool {
 		return false
 	}
 
-	// Unexpected error (e.g. RBAC, network) — fail loudly so it is noticed
-	// rather than silently skipping or running the wrong tests. The raw error
-	// is written to GinkgoWriter (test stderr) rather than the Fail message
-	// because Fail text is embedded in JUnit reports and may contain internal
-	// hostnames or request URLs.
-	_, _ = fmt.Fprintf(GinkgoWriter, "isMicroShiftCluster: unexpected API error: %v\n", err)
+	// Unexpected error (e.g. RBAC, network). Log to stderr and assume not
+	// MicroShift — the subsequent Infrastructure lookup will surface the
+	// real connectivity problem with a clear error.
+	_, _ = fmt.Fprintf(os.Stderr, "isMicroShiftCluster: unexpected API error: %v\n", err)
 
-	Fail("failed to determine if cluster is MicroShift due to an unexpected API error")
-
-	return false // unreachable; Fail panics
+	return false
 }
 
 func kWithCtx(ctx context.Context) komega.Komega {
