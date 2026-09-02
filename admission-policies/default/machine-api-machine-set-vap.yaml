@@ -48,7 +48,8 @@ spec:
       expression: >-
         !(request.userInfo.username in [
             "system:serviceaccount:openshift-machine-api:machine-api-controllers",
-            "system:serviceaccount:openshift-cluster-api:capi-controllers"
+            "system:serviceaccount:openshift-cluster-api:capi-controllers",
+            "system:serviceaccount:openshift-cluster-api:machine-api-migration"
         ])
     - name: check-authoritativeAPI-clusterapi
       expression: 'object.status.authoritativeAPI == "ClusterAPI"'

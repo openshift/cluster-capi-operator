@@ -64,6 +64,14 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIMachineManage
 			framework.AssertDeploymentAvailable("capi-controllers", framework.CAPINamespace)
 		})
 
+		It("should have the machine-api-migration deployment available", func() {
+			if !framework.IsFeatureGateEnabled(ctx, cl, features.FeatureGateMachineAPIMigration) {
+				Skip("Skipping, machine-api-migration is only deployed when MachineAPIMigration is enabled")
+			}
+
+			framework.AssertDeploymentAvailable("machine-api-migration", framework.CAPINamespace)
+		})
+
 		It("should have the capi-installer deployment available", func() {
 			framework.AssertDeploymentAvailable("capi-installer", framework.CAPIOperatorNamespace)
 		})
