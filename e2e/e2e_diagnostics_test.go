@@ -19,6 +19,7 @@ package e2e
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/onsi/ginkgo/v2/types"
@@ -28,6 +29,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 )
 
 // TestDiagnostics exercises the diagnostics-to-JUnit reporting logic
@@ -115,6 +117,89 @@ func TestDiagnostics(t *testing.T) {
 	})
 }
 
+// TestIsMicroShiftCluster exercises the MicroShift detection helper without
+// a live cluster. The helper checks for the "microshift-version" ConfigMap in
+// the "kube-public" namespace.
+func TestIsMicroShiftCluster(t *testing.T) {
+	t.Run("returns true when microshift-version ConfigMap exists", func(t *testing.T) {
+		g := gomega.NewWithT(t)
+		withFakeClient(t, func() {
+			cm := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "microshift-version",
+					Namespace: "kube-public",
+				},
+				Data: map[string]string{"version": "4.16.0"},
+			}
+			g.Expect(cl.Create(ctx, cm)).To(gomega.Succeed(),
+				"failed to create microshift-version ConfigMap in fake client")
+
+			g.Expect(isMicroShiftCluster(ctx, cl)).To(gomega.BeTrue(),
+				"isMicroShiftCluster should return true when microshift-version ConfigMap exists")
+		})
+	})
+
+	t.Run("returns false when microshift-version ConfigMap is absent", func(t *testing.T) {
+		g := gomega.NewWithT(t)
+		withFakeClient(t, func() {
+			g.Expect(isMicroShiftCluster(ctx, cl)).To(gomega.BeFalse(),
+				"isMicroShiftCluster should return false when microshift-version ConfigMap is absent")
+		})
+	})
+
+	t.Run("returns false on unexpected API error", func(t *testing.T) {
+		g := gomega.NewWithT(t)
+		withFakeClient(t, func() {
+			// An unexpected error (not NotFound) should return false rather
+			// than panic, because isMicroShiftCluster runs from the OTE
+			// AddBeforeAll path outside any Ginkgo lifecycle node. The
+			// subsequent Infrastructure lookup will surface the real error.
+			errClient := fake.NewClientBuilder().
+				WithScheme(scheme.Scheme).
+				WithInterceptorFuncs(interceptor.Funcs{
+					Get: func(_ context.Context, _ client.WithWatch, _ client.ObjectKey, _ client.Object, _ ...client.GetOption) error {
+						return fmt.Errorf("simulated network error")
+					},
+				}).
+				Build()
+
+			g.Expect(isMicroShiftCluster(ctx, errClient)).To(gomega.BeFalse(),
+				"isMicroShiftCluster should return false on unexpected API errors")
+		})
+	})
+
+	t.Run("IsMicroShift flag is set on MicroShift cluster", func(t *testing.T) {
+		g := gomega.NewWithT(t)
+		withFakeClient(t, func() {
+			// Simulate a MicroShift cluster with the version ConfigMap.
+			cm := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "microshift-version",
+					Namespace: "kube-public",
+				},
+				Data: map[string]string{"version": "4.16.0"},
+			}
+			g.Expect(cl.Create(ctx, cm)).To(gomega.Succeed(),
+				"failed to create microshift-version ConfigMap in fake client")
+
+			// Reset the flag and verify detection sets it.
+			origFlag := IsMicroShift
+			IsMicroShift = false
+
+			t.Cleanup(func() { IsMicroShift = origFlag })
+
+			IsMicroShift = isMicroShiftCluster(ctx, cl)
+
+			g.Expect(IsMicroShift).To(gomega.BeTrue(),
+				"IsMicroShift flag should be true after detecting MicroShift cluster")
+
+			// infra should remain nil — InitCommonVariables returns early.
+			g.Expect(infra).To(gomega.BeNil(),
+				"infra should remain nil on MicroShift (Infrastructure not fetched)")
+		})
+	})
+}
+
 // withFakeClient swaps the package-level cl, ctx, and test state to a fake
 // client for the duration of fn, restoring originals via t.Cleanup.
 func withFakeClient(t *testing.T, fn func()) {
@@ -122,15 +207,19 @@ func withFakeClient(t *testing.T, fn func()) {
 
 	origCl, origCtx := cl, ctx
 	origResources, origPlatform := resourcesUnderTest, platform
+	origIsMicroShift, origInfra := IsMicroShift, infra
 
 	cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).Build()
 	ctx = context.Background()
 	resourcesUnderTest = nil
 	platform = ""
+	IsMicroShift = false
+	infra = nil
 
 	t.Cleanup(func() {
 		cl, ctx = origCl, origCtx
 		resourcesUnderTest, platform = origResources, origPlatform
+		IsMicroShift, infra = origIsMicroShift, origInfra
 	})
 
 	fn()

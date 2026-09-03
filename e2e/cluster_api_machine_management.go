@@ -216,6 +216,10 @@ var _ = Describe("[OTP][Jira:OCPCLOUD][sig-cluster-lifecycle] Cluster_Infrastruc
 	Label("skip-topology:External"),
 	func() {
 		BeforeEach(func() {
+			if IsMicroShift {
+				Skip("Cluster API is not supported on MicroShift")
+			}
+
 			if infra.Status.ControlPlaneTopology == configv1.ExternalTopologyMode {
 				Skip("Tests are not supported on External topology clusters.")
 			}

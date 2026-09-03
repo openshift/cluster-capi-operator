@@ -35,6 +35,10 @@ func TestAPIs(t *testing.T) {
 
 var _ = BeforeSuite(func() {
 	InitCommonVariables()
+
+	if IsMicroShift {
+		Skip("Cluster API is not supported on MicroShift")
+	}
 })
 
 // JustAfterEach runs before AfterEach/DeferCleanup, so tracked resources are
