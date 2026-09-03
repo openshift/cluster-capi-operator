@@ -489,6 +489,57 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 				)
 			})
 
+			It("should preserve the Synchronized condition lastTransitionTime on subsequent successful syncs", func() {
+				By("Waiting for the initial Synchronized condition to be set to True")
+				Eventually(k.Object(mapiMachine), timeout).Should(
+					HaveField("Status.Conditions", ContainElement(
+						SatisfyAll(
+							HaveField("Type", Equal(consts.SynchronizedCondition)),
+							HaveField("Status", Equal(corev1.ConditionTrue)),
+						))),
+					"initial MAPI-to-CAPI sync should set Synchronized=True",
+				)
+
+				By("Recording the initial lastTransitionTime")
+
+				var initialTime metav1.Time
+
+				for _, cond := range mapiMachine.Status.Conditions {
+					if string(cond.Type) == string(consts.SynchronizedCondition) {
+						initialTime = cond.LastTransitionTime
+						break
+					}
+				}
+
+				Expect(initialTime.IsZero()).To(BeFalse(), "Synchronized condition lastTransitionTime should be set after initial sync")
+
+				By("Adding a label to the MAPI machine to trigger another reconcile")
+				Eventually(k.Update(mapiMachine, func() {
+					if mapiMachine.Labels == nil {
+						mapiMachine.Labels = make(map[string]string)
+					}
+
+					mapiMachine.Labels["test-sync"] = "trigger"
+				})).Should(Succeed())
+
+				By("Waiting for the label to be synced to the CAPI machine, confirming the reconcile ran")
+				Eventually(k.Object(capiMachine), timeout).Should(
+					HaveField("ObjectMeta.Labels", HaveKeyWithValue("test-sync", "trigger")),
+					"MAPI label should be propagated to CAPI machine, confirming second reconcile completed",
+				)
+
+				By("Verifying the Synchronized condition lastTransitionTime is preserved after the second sync")
+				Eventually(k.Object(mapiMachine), timeout).Should(
+					HaveField("Status.Conditions", ContainElement(
+						SatisfyAll(
+							HaveField("Type", Equal(consts.SynchronizedCondition)),
+							HaveField("Status", Equal(corev1.ConditionTrue)),
+							HaveField("LastTransitionTime", Equal(initialTime)),
+						))),
+					"Synchronized condition lastTransitionTime should not change when sync status remains True",
+				)
+			})
+
 			Context("when the MAPI machine providerSpec gets updated", func() {
 				BeforeEach(func() {
 					By("Updating the MAPI machine providerSpec")
@@ -644,6 +695,57 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 								HaveField("Reason", Equal("ResourceSynchronized")),
 								HaveField("Message", Equal("Successfully synchronized CAPI Machine to MAPI")),
 							))),
+					)
+				})
+			})
+
+			Context("when in steady state", func() {
+				It("should preserve the Synchronized condition lastTransitionTime on subsequent successful syncs", func() {
+					By("Waiting for the initial Synchronized condition to be set to True")
+					Eventually(k.Object(mapiMachine), timeout).Should(
+						HaveField("Status.Conditions", ContainElement(
+							SatisfyAll(
+								HaveField("Type", Equal(consts.SynchronizedCondition)),
+								HaveField("Status", Equal(corev1.ConditionTrue)),
+							))),
+						"initial CAPI-to-MAPI sync should set Synchronized=True",
+					)
+
+					By("Recording the initial lastTransitionTime")
+
+					var initialTime metav1.Time
+
+					for _, cond := range mapiMachine.Status.Conditions {
+						if string(cond.Type) == string(consts.SynchronizedCondition) {
+							initialTime = cond.LastTransitionTime
+							break
+						}
+					}
+
+					Expect(initialTime.IsZero()).To(BeFalse(), "Synchronized condition lastTransitionTime should be set after initial sync")
+
+					By("Updating the CAPI infra machine to trigger another reconcile")
+					Eventually(k.Update(capaMachine, func() {
+						capaMachine.Spec.InstanceType = "m7i.4xlarge"
+					})).Should(Succeed())
+
+					By("Waiting for the MAPI provider spec to reflect the change, confirming the reconcile ran")
+					Eventually(k.Object(mapiMachine), timeout).Should(
+						WithTransform(awsProviderSpecFromMachine,
+							HaveField("InstanceType", Equal("m7i.4xlarge")),
+						),
+						"CAPI infra machine instance type should be propagated to MAPI provider spec, confirming second reconcile completed",
+					)
+
+					By("Verifying the Synchronized condition lastTransitionTime is preserved after the second sync")
+					Eventually(k.Object(mapiMachine), timeout).Should(
+						HaveField("Status.Conditions", ContainElement(
+							SatisfyAll(
+								HaveField("Type", Equal(consts.SynchronizedCondition)),
+								HaveField("Status", Equal(corev1.ConditionTrue)),
+								HaveField("LastTransitionTime", Equal(initialTime)),
+							))),
+						"Synchronized condition lastTransitionTime should not change when sync status remains True",
 					)
 				})
 			})
