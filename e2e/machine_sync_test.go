@@ -21,7 +21,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	configv1 "github.com/openshift/api/config/v1"
-	"github.com/openshift/api/features"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	"github.com/openshift/cluster-capi-operator/e2e/framework"
 	corev1 "k8s.io/api/core/v1"
@@ -34,15 +33,13 @@ import (
 var _ = Describe("Machine Sync", Ordered, func() {
 	BeforeAll(func() {
 		switch platform {
-		case configv1.AWSPlatformType, configv1.OpenStackPlatformType:
+		case configv1.AWSPlatformType, configv1.OpenStackPlatformType, configv1.VSpherePlatformType:
 			// supported
 		default:
 			Skip(fmt.Sprintf("Machine sync is not supported on %s", platform))
 		}
 
-		if !framework.IsFeatureGateEnabled(ctx, cl, features.FeatureGateMachineAPIMigration) {
-			Skip("MachineAPIMigration feature gate is not enabled")
-		}
+		skipUnlessMigrationEnabled()
 	})
 
 	It("should synchronize a MAPI Machine to CAPI with a stable Synchronized condition", func() {
