@@ -15,7 +15,14 @@
 package e2e
 
 import (
+	"fmt"
+
+	. "github.com/onsi/ginkgo/v2"
+
+	configv1 "github.com/openshift/api/config/v1"
+	"github.com/openshift/api/features"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
+	capiframework "github.com/openshift/cluster-capi-operator/e2e/framework"
 	utilrand "k8s.io/apimachinery/pkg/util/rand"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 )
@@ -28,6 +35,26 @@ const (
 	// CAPIPausedCondition represents the paused state for CAPI machines.
 	CAPIPausedCondition = clusterv1.PausedCondition
 )
+
+// skipUnlessMigrationEnabled skips the current spec if Machine API migration
+// is not enabled for the detected platform. This mirrors the gate checks in
+// cmd/machine-api-migration/main.go: the general MachineAPIMigration gate
+// must be enabled, and platform-specific gates (e.g. MachineAPIMigrationVSphere)
+// must also be enabled when applicable.
+func skipUnlessMigrationEnabled() {
+	GinkgoHelper()
+
+	if !capiframework.IsFeatureGateEnabled(ctx, cl, features.FeatureGateMachineAPIMigration) {
+		Skip("MachineAPIMigration feature gate is not enabled")
+	}
+
+	switch platform {
+	case configv1.VSpherePlatformType:
+		if !capiframework.IsFeatureGateEnabled(ctx, cl, features.FeatureGateMachineAPIMigrationVSphere) {
+			Skip(fmt.Sprintf("MachineAPIMigrationVSphere feature gate is not enabled for %s", platform))
+		}
+	}
+}
 
 // generateName returns a unique resource name by appending a random suffix to
 // the given prefix. This avoids name collisions between Ordered test contexts
