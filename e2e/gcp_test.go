@@ -75,6 +75,8 @@ var _ = Describe("Cluster API GCP MachineSet", Ordered, func() {
 		))
 
 		framework.WaitForMachineSet(ctx, cl, machineSet.Name, machineSet.Namespace, framework.WaitLong)
+
+		verifyCAPIInstanceOwnershipLabel(clusterName)
 	})
 })
 
