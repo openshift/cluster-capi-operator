@@ -167,6 +167,13 @@ func (f *awsProviderFuzzer) fuzzProviderConfig(ps *mapiv1beta1.AWSMachineProvide
 		ps.PlacementGroupPartition = nil
 	}
 
+	// ptr("") is normalized to nil during CAPI→MAPI conversion because MAPI passes
+	// KeyName directly to AWS RunInstances, which rejects an empty string.
+	// Avoid fuzzing KeyName to ptr("") to preserve roundtrip fidelity.
+	if ps.KeyName != nil && *ps.KeyName == "" {
+		ps.KeyName = nil
+	}
+
 	// Copy instance-type, region and zone to the struct so they can be set at the machine labels too.
 	f.InstanceType = ps.InstanceType
 	f.Region = ps.Placement.Region
