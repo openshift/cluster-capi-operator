@@ -1,0 +1,3 @@
+installOrder: 5
+name: cluster-capi-kubeconfig
+selfImageRef: registry.ci.openshift.org/openshift:cluster-capi-operator

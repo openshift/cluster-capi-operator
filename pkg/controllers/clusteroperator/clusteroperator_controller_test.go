@@ -204,7 +204,6 @@ var _ = Describe("ClusterOperator controller", func() {
 						ContainSubstring("RevisionController"),
 						ContainSubstring("CoreClusterController"),
 						ContainSubstring("InfraClusterController"),
-						ContainSubstring("KubeconfigController"),
 						ContainSubstring("SecretSyncController"),
 						ContainSubstring("initializing"),
 					)),
@@ -216,7 +215,6 @@ var _ = Describe("ClusterOperator controller", func() {
 						ContainSubstring("RevisionController"),
 						ContainSubstring("CoreClusterController"),
 						ContainSubstring("InfraClusterController"),
-						ContainSubstring("KubeconfigController"),
 						ContainSubstring("SecretSyncController"),
 						ContainSubstring("initializing"),
 					)),
@@ -473,7 +471,6 @@ func allSubControllersSuccessful() []*configv1apply.ClusterOperatorStatusConditi
 		"RevisionController",
 		"CoreClusterController",
 		"InfraClusterController",
-		"KubeconfigController",
 		"SecretSyncController",
 	}
 

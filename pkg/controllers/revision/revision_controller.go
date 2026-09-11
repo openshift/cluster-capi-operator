@@ -22,6 +22,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 
@@ -152,10 +153,21 @@ func (r *RevisionController) generateDesiredRevision(ctx context.Context) (revis
 		return nil, ResultGenerator.WaitingOnExternalP("Infrastructure PlatformStatus")
 	}
 
+	if infra.Status.InfrastructureName == "" {
+		return nil, ResultGenerator.WaitingOnExternalP("Infrastructure InfrastructureName")
+	}
+
 	// Build ordered component list from provider metadata
 	providerComponents := r.buildComponentList(infra.Status.PlatformStatus.Type)
 
-	revision, err := revisiongenerator.NewRenderedRevision(providerComponents, revisiongenerator.WithManifestSubstitutions(r.manifestSubstitutions))
+	manifestSubstitutions := maps.Clone(r.manifestSubstitutions)
+	if manifestSubstitutions == nil {
+		manifestSubstitutions = make(map[string]string)
+	}
+
+	manifestSubstitutions["INFRASTRUCTURE_NAME"] = infra.Status.InfrastructureName
+
+	revision, err := revisiongenerator.NewRenderedRevision(providerComponents, revisiongenerator.WithManifestSubstitutions(manifestSubstitutions))
 	if err != nil {
 		return nil, ResultGenerator.ErrorP(fmt.Errorf("error creating rendered revision: %w", err))
 	}
@@ -297,7 +309,7 @@ func (r *RevisionController) SetupWithManager(mgr ctrl.Manager, tlsOptions []fun
 			return false
 		}
 
-		return infra.Status.PlatformStatus != nil
+		return infra.Status.PlatformStatus != nil && infra.Status.InfrastructureName != ""
 	}
 
 	toClusterAPI := func(context.Context, client.Object) []reconcile.Request {
@@ -320,8 +332,14 @@ func (r *RevisionController) SetupWithManager(mgr ctrl.Manager, tlsOptions []fun
 				},
 
 				UpdateFunc: func(e event.UpdateEvent) bool {
-					// Only enqueue if the infrastructure is ready and was not ready before
-					return isInfrastructureReady(e.ObjectNew) && !isInfrastructureReady(e.ObjectOld)
+					oldInfra, oldOK := e.ObjectOld.(*configv1.Infrastructure)
+					newInfra, newOK := e.ObjectNew.(*configv1.Infrastructure)
+
+					if !oldOK || !newOK || !isInfrastructureReady(newInfra) {
+						return false
+					}
+					// Enqueue when becoming ready or when the infrastructure name changes.
+					return !isInfrastructureReady(oldInfra) || oldInfra.Status.InfrastructureName != newInfra.Status.InfrastructureName
 				},
 			}),
 		).

@@ -55,6 +55,15 @@ func checkConfigMap(ctx context.Context, name string) error {
 	return err
 }
 
+func getSecret(ctx context.Context) (*corev1.Secret, error) {
+	secret := &corev1.Secret{}
+	if err := cl.Get(ctx, client.ObjectKey{Name: secretName, Namespace: "openshift-cluster-api"}, secret); err != nil {
+		return nil, err
+	}
+
+	return secret, nil
+}
+
 var _ = Describe("InstallerController", Serial, func() {
 	BeforeEach(func(ctx context.Context) {
 		createFixtures(ctx)
@@ -139,6 +148,40 @@ var _ = Describe("InstallerController", Serial, func() {
 			Expect(checkConfigMap(ctx, coreCMName)).To(test.BeK8SNotFound())
 			Expect(checkConfigMap(ctx, infraCMName)).To(test.BeK8SNotFound())
 		}, defaultNodeTimeout)
+	})
+
+	Context("Secret Object Management", func() {
+		It("creates and adopts a managed Secret", func(ctx context.Context) {
+			addRevisionAndWaitForSuccess(ctx, providerSecret)
+			secret, err := getSecret(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(string(secret.Data["value"])).To(Equal("v1"))
+		})
+
+		It("repairs mutation and deletion of a managed Secret", func(ctx context.Context) {
+			addRevisionAndWaitForSuccess(ctx, providerSecret)
+			secret, err := getSecret(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			secret.Data["value"] = []byte("modified")
+			Expect(cl.Update(ctx, secret)).To(Succeed())
+			Eventually(func() string {
+				s, err := getSecret(ctx)
+				if err != nil {
+					return ""
+				}
+
+				return string(s.Data["value"])
+			}).Should(Equal("v1"))
+			Expect(cl.Delete(ctx, secret)).To(Succeed())
+			Eventually(func() error { _, err := getSecret(ctx); return err }).Should(Succeed())
+		})
+
+		It("removes a Secret when its component is removed", func(ctx context.Context) {
+			addRevisionAndWaitForSuccess(ctx, providerSecret)
+			addRevisionAndWaitForSuccess(ctx)
+			Eventually(func() error { _, err := getSecret(ctx); return err }).Should(test.BeK8SNotFound())
+		})
 	})
 
 	Context("Object Management", func() {

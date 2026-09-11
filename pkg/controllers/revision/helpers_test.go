@@ -173,6 +173,7 @@ func createFixtures(ctx context.Context, opts ...fixturesOption) {
 
 func infraFixtureAddStatus(infra *configv1.Infrastructure) {
 	infra.Status = configv1.InfrastructureStatus{
+		InfrastructureName:     "test-infra",
 		ControlPlaneTopology:   configv1.HighlyAvailableTopologyMode,
 		InfrastructureTopology: configv1.HighlyAvailableTopologyMode,
 		PlatformStatus: &configv1.PlatformStatus{

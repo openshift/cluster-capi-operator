@@ -15,7 +15,7 @@ and is later reconciled by the upstream operator.
 represents current cluster, it is treated as management and workload cluster at the same time.
 - [InfrastructureCluster](https://cluster-api.sigs.k8s.io/developer/providers/cluster-infrastructure.html) - CAPI Infrastructure Cluster CR that represents the infrastructure cluster.
 - Worker userdata secret - a secret that contains ignition configuration to be used by the worker nodes.
-- Kubeconfig secret - a secret that contains kubeconfig for the cluster.
+- Management kubeconfig Secret - `<InfrastructureName>-kubeconfig` in `openshift-cluster-api`, consumed by CAPI components running in-cluster. The revision installer owns this Secret and stores only the API endpoint plus projected ServiceAccount `tokenFile` and CA paths; it is not a workstation-usable kubeconfig.
 
 ## Controllers
 
@@ -24,8 +24,8 @@ Controllers design can be found here:
 - [Core cluster Controller](docs/controllers/core-cluster.md)
 - [Infra cluster Controller](docs/controllers/infra-cluster.md)
 - [Secret sync Controller](docs/controllers/secretsync.md)
-- [Kubeconfig Controller](docs/controllers/kubeconfig.md)
 - [CRD Compatibility Checker Operator](docs/controllers/crd-compatibility-checker-operator.md)
+- [Revision installer](docs/controllers/revision-installer.md)
 
 ## New infrastructure provider onboarding
 

@@ -1,10 +1,12 @@
+# Tombstones for objects removed from the current Cluster API payload.
 ---
 apiVersion: v1
-kind: ServiceAccount
+kind: Secret
 metadata:
+  name: capi-controllers-token
   namespace: openshift-cluster-api
-  name: capi-controllers
   annotations:
+    release.openshift.io/delete: "true"
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"

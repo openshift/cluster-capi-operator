@@ -33,13 +33,13 @@ The repository also includes:
 
 #### capi-operator Controllers
 - **CAPI Installer Controller** (`pkg/controllers/capiinstaller/`) - Handles installation of CAPI components and providers
+- **Revision installer** (`pkg/controllers/installer/`) - Owns the in-cluster `<InfrastructureName>-kubeconfig` Secret, including adoption, update, and repair.
 
 #### capi-controllers Controllers
 - **ClusterOperator Controller** (`pkg/controllers/clusteroperator/`) - Manages the operator's status in the cluster
 - **Core Cluster Controller** (`pkg/controllers/corecluster/`) - Manages CAPI Cluster resources representing the OpenShift cluster
 - **Infra Cluster Controller** (`pkg/controllers/infracluster/`) - Manages infrastructure-specific cluster resources (AWS, Azure, GCP, etc.)
 - **Secret Sync Controller** (`pkg/controllers/secretsync/`) - Synchronizes secrets between MAPI and CAPI namespaces
-- **Kubeconfig Controller** (`pkg/controllers/kubeconfig/`) - Manages kubeconfig secrets for cluster access
 
 #### machine-api-migration Controllers
 - **Machine Migration Controller** (`pkg/controllers/machinemigration/`) - Handles handover of AuthoritativeAPI and object pausing for machine migration
@@ -50,6 +50,12 @@ The repository also includes:
 #### Conversion Framework
 - **MAPI to CAPI Conversion** (`pkg/conversion/mapi2capi/`) - Library implementing Conversion of MAPI resources to CAPI
 - **CAPI to MAPI Conversion** (`pkg/conversion/capi2mapi/`) - Library implementing conversion of CAPI resources to MAPI
+
+### Management kubeconfig
+
+The revision installer generates `<InfrastructureName>-kubeconfig` in `openshift-cluster-api`. This Secret is for CAPI and infrastructure-provider Pods running in the cluster, not for workstation use. It contains static connection data and references the consumer Pod's projected files: `/var/run/secrets/kubernetes.io/serviceaccount/token` (`tokenFile`) and `/var/run/secrets/kubernetes.io/serviceaccount/ca.crt` (`certificate-authority`). Kubernetes rotates the token file automatically, without changing the Secret.
+
+Consumers authenticate as their own ServiceAccounts and must have the required runtime RBAC. The installer is the sole owner and can adopt, update, or repair the Secret. The former kubeconfig controller, shared `capi-controllers-token`, and legacy token-rotation path are no longer part of the architecture.
 
 ### File Structure
 - `manifests/` - Contains OpenShift manifests for operator deployment

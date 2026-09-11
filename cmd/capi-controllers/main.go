@@ -53,7 +53,6 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/corecluster"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/infracluster"
-	"github.com/openshift/cluster-capi-operator/pkg/controllers/kubeconfig"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/secretsync"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 	"github.com/openshift/cluster-capi-operator/pkg/webhook"
@@ -187,14 +186,6 @@ func setupReconcilers(mgr manager.Manager, operatorConfig commoncmdoptions.Opera
 		Scheme:           mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("unable to create user-data-secret controller: %w", err)
-	}
-
-	if err := (&kubeconfig.KubeconfigReconciler{
-		Client:  mgr.GetClient(),
-		Scheme:  mgr.GetScheme(),
-		RestCfg: mgr.GetConfig(),
-	}).SetupWithManager(mgr); err != nil {
-		return fmt.Errorf("unable to create kubeconfig controller: %w", err)
 	}
 
 	if err := (&infracluster.InfraClusterController{

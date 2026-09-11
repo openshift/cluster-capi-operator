@@ -32,7 +32,6 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/corecluster"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/infracluster"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/installer"
-	"github.com/openshift/cluster-capi-operator/pkg/controllers/kubeconfig"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/revision"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/secretsync"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
@@ -181,7 +180,6 @@ func (r *ClusterOperatorController) aggregatedStatus(currentConditions []configv
 		revision.ResultGenerator,
 		corecluster.ResultGenerator,
 		infracluster.ResultGenerator,
-		kubeconfig.ResultGenerator,
 		secretsync.ResultGenerator,
 	}
 

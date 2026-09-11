@@ -260,6 +260,34 @@ var _ = Describe("RevisionController", Serial, func() {
 		Expect(co.Status.Versions).To(BeEmpty())
 	}, defaultNodeTimeout)
 
+	It("creates a new revision when InfrastructureName changes", func(ctx context.Context) {
+		initial := &operatorv1alpha1.ClusterAPI{}
+		Expect(cl.Get(ctx, client.ObjectKey{Name: "cluster"}, initial)).To(Succeed())
+		Expect(initial.Status.Revisions).To(HaveLen(1))
+		initialContentID := initial.Status.Revisions[0].ContentID
+
+		Expect(kWithCtx(ctx).UpdateStatus(infra, func() {
+			infra.Status.InfrastructureName = "changed-infra"
+		})()).To(Succeed())
+
+		Eventually(kWithCtx(ctx).Object(clusterAPI)).WithContext(ctx).
+			Should(HaveField("Status.Revisions", HaveLen(2)))
+		latest := latestRevision(clusterAPI.Status.Revisions)
+		Expect(latest.ContentID).NotTo(Equal(initialContentID))
+
+		infrastructureName := func() string {
+			for _, substitution := range latest.ManifestSubstitutions {
+				if substitution.Key == "INFRASTRUCTURE_NAME" {
+					return *substitution.Value
+				}
+			}
+
+			return ""
+		}()
+
+		Expect(infrastructureName).To(Equal("changed-infra"))
+	}, defaultNodeTimeout)
+
 	It("creates revision with empty components when no providers match the platform", func(ctx context.Context) {
 		// Stop manager with default (matching) providers
 		mgr.stop()
@@ -516,8 +544,16 @@ var _ = Describe("RevisionController waiting states", Serial, func() {
 			Expect(ca.Status.Revisions).To(BeEmpty())
 		}, defaultNodeTimeout)
 
-		It("creates revision after Infrastructure gets PlatformStatus", func(ctx context.Context) {
-			// Now update Infrastructure with PlatformStatus
+		It("waits for InfrastructureName after PlatformStatus, then creates revision", func(ctx context.Context) {
+			// PlatformStatus alone is insufficient to render the kubeconfig component.
+			Expect(kWithCtx(ctx).UpdateStatus(infra, func() {
+				infra.Status.ControlPlaneTopology = configv1.HighlyAvailableTopologyMode
+				infra.Status.InfrastructureTopology = configv1.HighlyAvailableTopologyMode
+				infra.Status.PlatformStatus = &configv1.PlatformStatus{Type: configv1.AWSPlatformType}
+			})()).To(Succeed())
+			Consistently(kWithCtx(ctx).Object(&operatorv1alpha1.ClusterAPI{ObjectMeta: metav1.ObjectMeta{Name: "cluster"}})).
+				WithContext(ctx).Should(HaveField("Status.Revisions", BeEmpty()))
+
 			Expect(kWithCtx(ctx).UpdateStatus(infra, func() {
 				infraFixtureAddStatus(infra)
 			})()).To(Succeed())
@@ -597,11 +633,13 @@ var _ = Describe("RevisionController manifest substitutions", Serial, func() {
 		Expect(updatedClusterAPI.Status.Revisions).To(HaveLen(1))
 
 		rev := updatedClusterAPI.Status.Revisions[0]
-		Expect(rev.ManifestSubstitutions).To(HaveLen(2))
-		Expect(rev.ManifestSubstitutions[0].Key).To(Equal("TLS_CIPHER_SUITES"))
-		Expect(*rev.ManifestSubstitutions[0].Value).To(Equal("TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"))
-		Expect(rev.ManifestSubstitutions[1].Key).To(Equal("TLS_MIN_VERSION"))
-		Expect(*rev.ManifestSubstitutions[1].Value).To(Equal("VersionTLS12"))
+		Expect(rev.ManifestSubstitutions).To(HaveLen(3))
+		Expect(rev.ManifestSubstitutions[0].Key).To(Equal("INFRASTRUCTURE_NAME"))
+		Expect(*rev.ManifestSubstitutions[0].Value).To(Equal("test-infra"))
+		Expect(rev.ManifestSubstitutions[1].Key).To(Equal("TLS_CIPHER_SUITES"))
+		Expect(*rev.ManifestSubstitutions[1].Value).To(Equal("TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"))
+		Expect(rev.ManifestSubstitutions[2].Key).To(Equal("TLS_MIN_VERSION"))
+		Expect(*rev.ManifestSubstitutions[2].Value).To(Equal("VersionTLS12"))
 	}, defaultNodeTimeout)
 })
 

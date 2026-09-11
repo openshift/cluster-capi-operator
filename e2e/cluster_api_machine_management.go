@@ -18,12 +18,15 @@ import (
 	"errors"
 	"fmt"
 
+	"k8s.io/client-go/tools/clientcmd"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -93,14 +96,80 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIMachineManage
 	})
 
 	Context("Management cluster resources", func() {
-		It("should have the management cluster kubeconfig Secret present", func() {
+		It("should have a projected-token management cluster kubeconfig Secret", func() {
 			secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
 				Name:      fmt.Sprintf("%s-kubeconfig", clusterName),
 				Namespace: framework.CAPINamespace,
 			}}
-			Eventually(komega.Object(secret)).WithTimeout(framework.WaitMedium).WithPolling(framework.RetryMedium).Should(
+			Eventually(komega.Object(secret)).WithTimeout(framework.WaitMedium).WithPolling(framework.RetryMedium).Should(SatisfyAll(
+				HaveField("Type", Equal(corev1.SecretType("cluster.x-k8s.io/secret"))),
+				HaveField("ObjectMeta.Labels", HaveKeyWithValue("cluster.x-k8s.io/cluster-name", clusterName)),
 				HaveField("Data", HaveKey("value")),
-			)
+			))
+
+			By("validating the kubeconfig uses mounted token and CA files")
+			value := secret.Data["value"]
+			kubeconfig, err := clientcmd.Load(value)
+			Expect(err).NotTo(HaveOccurred())
+			cluster := kubeconfig.Clusters["management-cluster"]
+			Expect(cluster).NotTo(BeNil())
+			Expect(cluster.Server).To(Equal("https://kubernetes.default.svc:443"))
+			Expect(cluster.CertificateAuthority).To(Equal("/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"))
+			Expect(cluster.CertificateAuthorityData).To(BeEmpty())
+			user := kubeconfig.AuthInfos["service-account"]
+			Expect(user).NotTo(BeNil())
+			Expect(user.TokenFile).To(Equal("/var/run/secrets/kubernetes.io/serviceaccount/token"))
+			Expect(user.Token).To(BeEmpty())
+			context := kubeconfig.Contexts["management-cluster"]
+			Expect(context).NotTo(BeNil())
+			Expect(context.Cluster).To(Equal("management-cluster"))
+			Expect(context.AuthInfo).To(Equal("service-account"))
+			Expect(kubeconfig.CurrentContext).To(Equal("management-cluster"))
+		})
+
+		It("should repair a mutated management cluster kubeconfig Secret", func() {
+			key := client.ObjectKey{Namespace: framework.CAPINamespace, Name: fmt.Sprintf("%s-kubeconfig", clusterName)}
+			secret := &corev1.Secret{}
+			Eventually(func() error { return cl.Get(ctx, key, secret) }).WithTimeout(framework.WaitMedium).WithPolling(framework.RetryMedium).Should(Succeed())
+			expectedValue := append([]byte(nil), secret.Data["value"]...)
+			secret.Data["value"] = []byte("invalid-kubeconfig")
+			Expect(cl.Update(ctx, secret)).To(Succeed())
+
+			By("waiting for the revision installer to restore the kubeconfig")
+			Eventually(func() []byte {
+				current := &corev1.Secret{}
+				if err := cl.Get(ctx, key, current); err != nil {
+					return nil
+				}
+				return current.Data["value"]
+			}).WithTimeout(framework.WaitMedium).WithPolling(framework.RetryMedium).Should(Equal(expectedValue))
+		})
+
+		It("should recreate a deleted management cluster kubeconfig Secret", func() {
+			key := client.ObjectKey{Namespace: framework.CAPINamespace, Name: fmt.Sprintf("%s-kubeconfig", clusterName)}
+			secret := &corev1.Secret{}
+			Eventually(func() error { return cl.Get(ctx, key, secret) }).WithTimeout(framework.WaitMedium).WithPolling(framework.RetryMedium).Should(Succeed())
+			expectedValue := append([]byte(nil), secret.Data["value"]...)
+			Expect(cl.Delete(ctx, secret)).To(Succeed())
+
+			By("waiting for the revision installer to recreate the kubeconfig")
+			Eventually(func() []byte {
+				current := &corev1.Secret{}
+				if err := cl.Get(ctx, key, current); err != nil {
+					return nil
+				}
+				return current.Data["value"]
+			}).WithTimeout(framework.WaitMedium).WithPolling(framework.RetryMedium).Should(Equal(expectedValue))
+		})
+
+		It("should not have the removed capi-controllers token Secret", func() {
+			secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
+				Name:      "capi-controllers-token",
+				Namespace: framework.CAPINamespace,
+			}}
+			Eventually(func() bool {
+				return apierrors.IsNotFound(cl.Get(ctx, client.ObjectKeyFromObject(secret), secret))
+			}).WithTimeout(framework.WaitMedium).WithPolling(framework.RetryMedium).Should(BeTrue(), "expected capi-controllers-token to be absent")
 		})
 	})
 

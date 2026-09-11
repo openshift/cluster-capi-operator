@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"sort"
+	"strings"
 
 	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/cluster-capi-operator/manifests-gen/providermetadata"
@@ -137,6 +138,11 @@ func writeManifests(opts cmdlineOptions, resources []client.Object) (err error) 
 		if i > 0 {
 			if _, err := writer.Write([]byte("---\n")); err != nil {
 				return fmt.Errorf("error writing separator to manifests file: %w", err)
+			}
+		}
+		if resource.GetObjectKind().GroupVersionKind().Kind == "Secret" && strings.HasSuffix(resource.GetName(), "-kubeconfig") {
+			if _, err := writer.Write([]byte("# This Secret contains only static connection data; consumers use their own projected ServiceAccount token and CA files.\n")); err != nil {
+				return fmt.Errorf("error writing kubeconfig Secret comment: %w", err)
 			}
 		}
 

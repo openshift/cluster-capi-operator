@@ -595,6 +595,26 @@ func TestComponents(t *testing.T) {
 	})
 }
 
+func TestManifestSubstitutionRendersGeneratedSecretNameAndLabel(t *testing.T) {
+	g := NewWithT(t)
+	manifest := `apiVersion: v1
+kind: Secret
+metadata:
+  name: ${INFRASTRUCTURE_NAME}-kubeconfig
+  labels:
+    cluster.x-k8s.io/cluster-name: ${INFRASTRUCTURE_NAME}
+type: Opaque
+`
+	rev := must(NewRenderedRevision([]providerimages.ProviderImageManifests{
+		profile(t, "core", "img1", "default", manifest),
+	}, WithManifestSubstitutions(map[string]string{"INFRASTRUCTURE_NAME": "test-infra"})))(g)
+
+	objects := rev.Components()[0].Objects()
+	g.Expect(objects).To(HaveLen(1))
+	g.Expect(objects[0].GetName()).To(Equal("test-infra-kubeconfig"))
+	g.Expect(objects[0].GetLabels()).To(HaveKeyWithValue("cluster.x-k8s.io/cluster-name", "test-infra"))
+}
+
 func TestNewInstallerRevisionFromAPI(t *testing.T) {
 	makeProfiles := func(t *testing.T) []providerimages.ProviderImageManifests {
 		t.Helper()
