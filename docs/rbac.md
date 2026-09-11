@@ -20,7 +20,7 @@ Both SAs also bind to ClusterRole `system:openshift:openshift-cluster-api:read-t
 
 ### capi-controllers
 
-The `capi-controllers` ServiceAccount runs the `capi-controllers` binary (core cluster, infra cluster, kubeconfig, secret sync, and webhook controllers):
+The `capi-controllers` ServiceAccount runs the `capi-controllers` binary (core cluster, infra cluster, secret sync, and webhook controllers):
 
 | Manifest | Kind | Scope | Purpose |
 |----------|------|-------|---------|
