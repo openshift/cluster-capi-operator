@@ -43,6 +43,15 @@ The `machine-api-migration` ServiceAccount runs the `machine-api-migration` bina
 
 This SA also binds to ClusterRole `system:openshift:openshift-cluster-api:read-tls-configuration` for APIServer TLS profile reading.
 
+## Revision installer RBAC
+
+The revision installer manages the generated management kubeconfig Secret.
+See [Management kubeconfig Secret](management-kubeconfig.md) for the Secret
+lifecycle and projected-token design.
+
+The installer’s Secret permissions are separate from the runtime permissions
+granted to CAPI consumers.
+
 ## Principles
 
 - Each permission lives in the narrowest scope where it's used

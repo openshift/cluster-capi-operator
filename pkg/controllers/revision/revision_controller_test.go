@@ -608,15 +608,15 @@ var _ = Describe("RevisionController manifest substitutions", Serial, func() {
 		Expect(rev.ManifestSubstitutions).To(ConsistOf(
 			SatisfyAll(
 				HaveField("Key", Equal("INFRASTRUCTURE_NAME")),
-				HaveField("Value", PointTo(Equal("test-infra"))),
+				HaveField("Value", HaveValue(Equal("test-infra"))),
 			),
 			SatisfyAll(
 				HaveField("Key", Equal("TLS_CIPHER_SUITES")),
-				HaveField("Value", PointTo(Equal("TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"))),
+				HaveField("Value", HaveValue(Equal("TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"))),
 			),
 			SatisfyAll(
 				HaveField("Key", Equal("TLS_MIN_VERSION")),
-				HaveField("Value", PointTo(Equal("VersionTLS12"))),
+				HaveField("Value", HaveValue(Equal("VersionTLS12"))),
 			),
 		))
 	}, defaultNodeTimeout)
