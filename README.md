@@ -24,7 +24,6 @@ Controllers design can be found here:
 - [Core cluster Controller](docs/controllers/core-cluster.md)
 - [Infra cluster Controller](docs/controllers/infra-cluster.md)
 - [Secret sync Controller](docs/controllers/secretsync.md)
-- [Kubeconfig Controller](docs/controllers/kubeconfig.md)
 - [CRD Compatibility Checker Operator](docs/controllers/crd-compatibility-checker-operator.md)
 
 ## New infrastructure provider onboarding
