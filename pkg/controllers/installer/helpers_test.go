@@ -28,6 +28,7 @@ import (
 	"github.com/onsi/gomega/types"
 	configv1 "github.com/openshift/api/config/v1"
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -59,6 +60,7 @@ const (
 	providerIrregularCRD   = "irregular-resource-crd"
 	providerAdoptExisting  = "adopt-existing"
 	providerAdoptInvalid   = "adopt-invalid"
+	providerSecret         = "secret-provider"
 
 	coreCMName                = "test-cm-core"
 	adoptCMName               = "test-cm-adopt"
@@ -72,6 +74,7 @@ const (
 	providerManyClusterScoped = "many-cluster-scoped"
 	providerMixed             = "mixed"
 	mixedCMName               = "test-cm-mixed"
+	secretName                = "test-secret"
 )
 
 var (
@@ -127,6 +130,11 @@ func setupProviderProfiles() {
 	// Provider "core": ConfigMap-A with data v1
 	core := test.NewProviderImageManifests(tb, providerCore).
 		WithManifests(test.ConfigMapYAML(coreCMName, map[string]string{"version": "v1"})).
+		Build()
+
+	// Provider "secret": Secret in the namespace-scoped tracking cache.
+	secretProvider := test.NewProviderImageManifests(tb, providerSecret).
+		WithManifests(test.SecretYAML(secretName, map[string]string{"value": "v1"})).
 		Build()
 
 	// Provider "infra": ConfigMap-B with data v1
@@ -233,7 +241,7 @@ func setupProviderProfiles() {
 		clusterScoped, clusterScoped2, crdProvider, nsProvider,
 		deploymentProvider, mixed, manyClusterScoped,
 		vapProvider, irregularCRDProvider,
-		adoptExisting, adoptInvalid,
+		adoptExisting, adoptInvalid, secretProvider,
 	}
 
 	providersByName = make(map[string]providerimages.ProviderImageManifests, len(allProviderProfiles))
@@ -326,6 +334,10 @@ func createFixtures(ctx context.Context) {
 	DeferCleanup(func(ctx context.Context) {
 		deleteAndWait(ctx, cleanupObjs...)
 	})
+
+	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "openshift-cluster-api"}}
+	Expect(cl.Create(ctx, ns)).To(Succeed())
+	cleanupObjs = append(cleanupObjs, ns)
 
 	clusterAPIObj := &operatorv1alpha1.ClusterAPI{
 		ObjectMeta: metav1.ObjectMeta{Name: clusterAPIName},
