@@ -26,6 +26,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/types"
+	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
 	configv1 "github.com/openshift/api/config/v1"
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -442,4 +443,55 @@ func waitForRevision(ctx context.Context, revision operatorv1alpha1.RevisionName
 			test.HaveCondition(conditionTypeProgressing).WithStatus(configv1.ConditionFalse),
 		)
 	})
+}
+
+// setUnmanagedCRDs updates the ClusterAPI spec to set the unmanaged CRD list.
+func setUnmanagedCRDs(ctx context.Context, unmanagedCRDs []string) {
+	GinkgoHelper()
+
+	clusterAPI := &operatorv1alpha1.ClusterAPI{}
+	Expect(cl.Get(ctx, client.ObjectKey{Name: clusterAPIName}, clusterAPI)).To(Succeed())
+
+	if clusterAPI.Spec == nil {
+		clusterAPI.Spec = &operatorv1alpha1.ClusterAPISpec{}
+	}
+
+	clusterAPI.Spec.UnmanagedCustomResourceDefinitions = unmanagedCRDs
+	Expect(cl.Update(ctx, clusterAPI)).To(Succeed())
+}
+
+// setCompatibilityRequirementConditions sets Admitted and Compatible conditions on a CompatibilityRequirement.
+func setCompatibilityRequirementConditions(ctx context.Context, name string, admitted, compatible bool) {
+	GinkgoHelper()
+
+	toStatus := func(b bool) metav1.ConditionStatus {
+		if b {
+			return metav1.ConditionTrue
+		}
+
+		return metav1.ConditionFalse
+	}
+
+	cr := &apiextensionsv1alpha1.CompatibilityRequirement{}
+	cr.SetName(name)
+
+	Eventually(kWithCtx(ctx).UpdateStatus(cr, func() {
+		cr.Status.Conditions = []metav1.Condition{
+			{
+				Type:               apiextensionsv1alpha1.CompatibilityRequirementAdmitted,
+				Status:             toStatus(admitted),
+				LastTransitionTime: metav1.Now(),
+				Reason:             "Test",
+			},
+			{
+				Type:               apiextensionsv1alpha1.CompatibilityRequirementCompatible,
+				Status:             toStatus(compatible),
+				LastTransitionTime: metav1.Now(),
+				Reason:             "Test",
+			},
+		}
+	})).
+		WithContext(ctx).
+		WithTimeout(defaultEventuallyTimeout).
+		Should(Succeed())
 }

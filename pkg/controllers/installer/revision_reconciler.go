@@ -95,6 +95,7 @@ type collectedObjectRef struct {
 type revisionReconciler struct {
 	*InstallerController
 	log                   logr.Logger
+	unmanagedCRDs         []string
 	gvks                  sets.Set[schema.GroupVersionKind]
 	collectedNonNSObjects sets.Set[collectedObjectRef]       // intermediate storage
 	crdGKResourceMapping  map[schema.GroupKind]string        // CRD GK → resource
@@ -175,7 +176,11 @@ func (r *revisionReconciler) reconcileRevision(ctx context.Context, apiRevision 
 		return false, "", fmt.Errorf("error creating installer revision from API revision %s: %w", apiRevision.Name, reconcile.TerminalError(err))
 	}
 
-	bcRevision := toBoxcutterRevision(revision, r.collectObjects)
+	bcRevision, err := toBoxcutterRevision(revision, r.collectObjects, r.unmanagedCRDs)
+	if err != nil {
+		return false, "", fmt.Errorf("error building boxcutter revision from API revision %s: %w", apiRevision.Name, reconcile.TerminalError(err))
+	}
+
 	phases := bcRevision.GetPhases()
 
 	totalObjects := 0
@@ -340,7 +345,12 @@ func (r *revisionReconciler) teardownRevision(ctx context.Context, apiRevision o
 
 	revisionName := revision.RevisionName()
 
-	bcRevision := toBoxcutterRevision(revision, r.collectObjects)
+	bcRevision, err := toBoxcutterRevision(revision, r.collectObjects, r.unmanagedCRDs)
+	if err != nil {
+		// We can't teardown this revision if we can't build it, so we consider it complete.
+		return true, "", fmt.Errorf("error building boxcutter revision from API revision %s: %w", apiRevision.Name, reconcile.TerminalError(err))
+	}
+
 	phases := bcRevision.GetPhases()
 
 	totalObjects := 0

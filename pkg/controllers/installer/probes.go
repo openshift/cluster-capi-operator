@@ -31,6 +31,8 @@ func allProbes() []*probing.GroupKindSelector {
 	return []*probing.GroupKindSelector{
 		crdEstablishedProbe(),
 		deploymentAvailableProbe(),
+		compatibilityRequirementAdmittedProbe(),
+		compatibilityRequirementCompatibleProbe(),
 	}
 }
 
@@ -49,6 +51,22 @@ func deploymentAvailableProbe() *probing.GroupKindSelector {
 	return &probing.GroupKindSelector{
 		GroupKind: schema.GroupKind{Group: "apps", Kind: "Deployment"},
 		Prober:    &probing.ConditionProbe{Type: "Available", Status: "True"},
+	}
+}
+
+// compatibilityRequirementAdmittedProbe checks that a CompatibilityRequirement has the Admitted condition set to True.
+func compatibilityRequirementAdmittedProbe() *probing.GroupKindSelector {
+	return &probing.GroupKindSelector{
+		GroupKind: schema.GroupKind{Group: "apiextensions.openshift.io", Kind: "CompatibilityRequirement"},
+		Prober:    &probing.ConditionProbe{Type: "Admitted", Status: "True"},
+	}
+}
+
+// compatibilityRequirementCompatibleProbe checks that a CompatibilityRequirement has the Compatible condition set to True.
+func compatibilityRequirementCompatibleProbe() *probing.GroupKindSelector {
+	return &probing.GroupKindSelector{
+		GroupKind: schema.GroupKind{Group: "apiextensions.openshift.io", Kind: "CompatibilityRequirement"},
+		Prober:    &probing.ConditionProbe{Type: "Compatible", Status: "True"},
 	}
 }
 

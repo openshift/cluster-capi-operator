@@ -222,6 +222,11 @@ func (c *InstallerController) reconcile(ctx context.Context, log logr.Logger) op
 	}
 
 	revisionReconciler := newRevisionReconciler(c, log)
+
+	if clusterAPI.Spec != nil {
+		revisionReconciler.unmanagedCRDs = clusterAPI.Spec.UnmanagedCustomResourceDefinitions
+	}
+
 	reconciledRevision, messages, errs := revisionReconciler.reconcile(ctx, clusterAPI.Status.Revisions)
 
 	// Write relatedObjects via non-SSA merge patch so the SSA conditions
