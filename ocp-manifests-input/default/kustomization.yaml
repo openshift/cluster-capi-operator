@@ -4,3 +4,4 @@ kind: Kustomization
 resources:
   - ../../admission-policies/default
   - capi-controllers-deployment.yaml
+  - management-cluster-kubeconfig-secret.yaml
