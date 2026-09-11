@@ -93,15 +93,19 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIMachineManage
 	})
 
 	Context("Management cluster resources", func() {
-		It("should have the management cluster kubeconfig Secret present", func() {
+		It("should have a projected-token management cluster kubeconfig Secret", func() {
 			secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
 				Name:      fmt.Sprintf("%s-kubeconfig", clusterName),
 				Namespace: framework.CAPINamespace,
 			}}
-			Eventually(komega.Object(secret)).WithTimeout(framework.WaitMedium).WithPolling(framework.RetryMedium).Should(
+			Eventually(komega.Object(secret)).WithTimeout(framework.WaitMedium).WithPolling(framework.RetryMedium).Should(SatisfyAll(
+				HaveField("Type", Equal(corev1.SecretType("cluster.x-k8s.io/secret"))),
+				HaveField("ObjectMeta.Labels", HaveKeyWithValue("cluster.x-k8s.io/cluster-name", clusterName)),
 				HaveField("Data", HaveKey("value")),
-			)
+			))
+
 		})
+
 	})
 
 })
