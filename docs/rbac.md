@@ -43,6 +43,14 @@ The `machine-api-migration` ServiceAccount runs the `machine-api-migration` bina
 
 This SA also binds to ClusterRole `system:openshift:openshift-cluster-api:read-tls-configuration` for APIServer TLS profile reading.
 
+## Revision installer and kubeconfig access
+
+The revision installer is the sole owner of the `<InfrastructureName>-kubeconfig` Secret in `openshift-cluster-api`. Its installer RBAC is intentionally limited to creating, updating, and repairing the generated Secret; it does not grant the installer the broad runtime permissions used by CAPI controllers. The Secret is consumed only by in-cluster CAPI/provider Pods.
+
+The kubeconfig contains the in-cluster API endpoint, `certificate-authority: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt`, and `tokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token`. Each consumer authenticates with its own projected ServiceAccount token, which Kubernetes rotates automatically. Consumers therefore need their own runtime RBAC; the old shared `capi-controllers` token is not used.
+
+The dedicated `openshift-capi-kubeconfig-consumers` Role grants only the additional namespaced access required by CAPI ClusterCache for management-cluster detection. It is bound to the ServiceAccounts that consume the kubeconfig, while the revision installer remains the only component allowed to adopt, update, or repair it. The legacy kubeconfig controller and `capi-controllers-token` are removed.
+
 ## Principles
 
 - Each permission lives in the narrowest scope where it's used
