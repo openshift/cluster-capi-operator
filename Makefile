@@ -50,6 +50,13 @@ manifests-gen: | bin/ ## Build manifests-gen binary
 ocp-manifests: manifests-gen ## Generate admission policy profiles for image embedding
 	./bin/manifests-gen \
 		--manifests-path ./capi-operator-manifests \
+		--profile-name kubeconfig \
+		--kustomize-dir ./ocp-manifests-input/kubeconfig \
+		--name cluster-capi-kubeconfig \
+		--install-order 5 \
+		--self-image-ref registry.ci.openshift.org/openshift:cluster-capi-operator
+	./bin/manifests-gen \
+		--manifests-path ./capi-operator-manifests \
 		--profile-name default \
 		--kustomize-dir ./ocp-manifests-input/default \
 		--name cluster-capi-operator \

@@ -1,0 +1,13 @@
+# This Secret contains only static connection data; consumers use their own projected ServiceAccount token and CA files.
+apiVersion: v1
+data:
+  value: YXBpVmVyc2lvbjogdjEKY2x1c3RlcnM6Ci0gbmFtZTogbWFuYWdlbWVudC1jbHVzdGVyCiAgY2x1c3RlcjoKICAgIHNlcnZlcjogaHR0cHM6Ly9rdWJlcm5ldGVzLmRlZmF1bHQuc3ZjOjQ0MwogICAgY2VydGlmaWNhdGUtYXV0aG9yaXR5OiAvdmFyL3J1bi9zZWNyZXRzL2t1YmVybmV0ZXMuaW8vc2VydmljZWFjY291bnQvY2EuY3J0CmNvbnRleHRzOgotIG5hbWU6IG1hbmFnZW1lbnQtY2x1c3RlcgogIGNvbnRleHQ6CiAgICBjbHVzdGVyOiBtYW5hZ2VtZW50LWNsdXN0ZXIKICAgIG5hbWVzcGFjZTogb3BlbnNoaWZ0LWNsdXN0ZXItYXBpCiAgICB1c2VyOiBzZXJ2aWNlLWFjY291bnQKY3VycmVudC1jb250ZXh0OiBtYW5hZ2VtZW50LWNsdXN0ZXIKdXNlcnM6Ci0gbmFtZTogc2VydmljZS1hY2NvdW50CiAgdXNlcjoKICAgIHRva2VuRmlsZTogL3Zhci9ydW4vc2VjcmV0cy9rdWJlcm5ldGVzLmlvL3NlcnZpY2VhY2NvdW50L3Rva2VuCg==
+kind: Secret
+metadata:
+  annotations:
+    capi-operator.openshift.io/adopt-existing: always
+  labels:
+    cluster.x-k8s.io/cluster-name: ${INFRASTRUCTURE_NAME}
+  name: ${INFRASTRUCTURE_NAME}-kubeconfig
+  namespace: openshift-cluster-api
+type: cluster.x-k8s.io/secret
