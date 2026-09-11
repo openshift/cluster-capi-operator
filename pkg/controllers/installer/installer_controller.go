@@ -25,6 +25,7 @@ import (
 	"github.com/go-logr/logr"
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	operatorv1alpha1apply "github.com/openshift/client-go/operator/applyconfigurations/operator/v1alpha1"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/labels"
@@ -44,6 +45,7 @@ import (
 	"pkg.package-operator.run/boxcutter"
 	"pkg.package-operator.run/boxcutter/managedcache"
 
+	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
 	"github.com/openshift/cluster-capi-operator/pkg/revisiongenerator"
@@ -150,6 +152,9 @@ func setupTrackingCache(mgr ctrl.Manager) (managedcache.TrackingCache, error) {
 			Scheme:               mgr.GetScheme(),
 			DefaultLabelSelector: labels.NewSelector().Add(*managedByReq),
 			Mapper:               mgr.GetRESTMapper(),
+			ByObject: map[client.Object]cache.ByObject{
+				&corev1.Secret{}: {Namespaces: map[string]cache.Config{controllers.DefaultCAPINamespace: {}}},
+			},
 		},
 	)
 	if err != nil {
