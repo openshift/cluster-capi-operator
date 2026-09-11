@@ -27,6 +27,7 @@ import (
 	capiframework "github.com/openshift/cluster-capi-operator/e2e/framework"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 )
 
@@ -324,20 +325,23 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 					providerSpec.InstanceType = newInstanceType
 				})).To(Succeed(), "failed to patch MachineSet provider spec")
 
-				By("Waiting for new InfraTemplate to be created")
+				By("Waiting for new InfraTemplate with updated InstanceType to be created")
 				originalAWSMachineTemplateName := capiMachineSet.Spec.Template.Spec.InfrastructureRef.Name
-				capiMachineSet = capiframework.GetMachineSetWithRetry(mapiMSAuthMAPIName, capiframework.CAPINamespace)
-				Eventually(k.Object(capiMachineSet), capiframework.WaitMedium, capiframework.RetryMedium).Should(HaveField("Spec.Template.Spec.InfrastructureRef.Name", Not(Equal(originalAWSMachineTemplateName))), "Should have InfraTemplate name changed")
+				Eventually(func(g Gomega) {
+					g.Expect(cl.Get(ctx, client.ObjectKeyFromObject(capiMachineSet), capiMachineSet)).To(Succeed())
 
-				By("Verifying new InfraTemplate has the updated InstanceType", func() {
+					currentTemplateName := capiMachineSet.Spec.Template.Spec.InfrastructureRef.Name
+					g.Expect(currentTemplateName).ToNot(Equal(originalAWSMachineTemplateName),
+						"InfraTemplate name should have changed from %s", originalAWSMachineTemplateName)
+
 					newAWSMachineTemplate = &awsv1.AWSMachineTemplate{}
-					newAWSMachineTemplate.Name = capiMachineSet.Spec.Template.Spec.InfrastructureRef.Name
+					newAWSMachineTemplate.Name = currentTemplateName
 					newAWSMachineTemplate.Namespace = capiMachineSet.Namespace
-
-					Eventually(k.Object(newAWSMachineTemplate), capiframework.WaitShort, capiframework.RetryShort).Should(
-						HaveField("Spec.Template.Spec.InstanceType", Equal(newInstanceType)),
-					)
-				})
+					g.Expect(cl.Get(ctx, client.ObjectKeyFromObject(newAWSMachineTemplate), newAWSMachineTemplate)).To(Succeed())
+					g.Expect(newAWSMachineTemplate.Spec.Template.Spec.InstanceType).To(Equal(newInstanceType),
+						"AWSMachineTemplate %s should have InstanceType %s", currentTemplateName, newInstanceType)
+				}, capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(),
+					"Should have a new InfraTemplate with InstanceType %s", newInstanceType)
 
 				By("Verifying the old InfraTemplate is deleted")
 				verifyResourceRemoved(awsMachineTemplate)
