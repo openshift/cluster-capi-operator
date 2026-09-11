@@ -31,6 +31,7 @@ import (
 	configv1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/config/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
+	"github.com/openshift/cluster-capi-operator/pkg/revisiongenerator"
 	"github.com/openshift/cluster-capi-operator/pkg/test"
 )
 
@@ -110,6 +111,29 @@ var _ = Describe("Reconcile kubeconfig secret", func() {
 				Namespace: controllers.DefaultCAPINamespace,
 			}, kubeconfigSecret)).To(Succeed())
 			Expect(kubeconfigSecret.Data).To(HaveKey("value")) // kubeconfig content is tested separately
+		})
+
+		It("should leave revision-installer-managed kubeconfig untouched without reading the token", func() {
+			managedSecret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      fmt.Sprintf("%s-kubeconfig", r.clusterName),
+					Namespace: controllers.DefaultCAPINamespace,
+					Labels: map[string]string{
+						revisiongenerator.ManagedLabelKey: managedByRevisionInstaller,
+					},
+				},
+				Data: map[string][]byte{"value": []byte("installer-content")},
+			}
+			Expect(cl.Create(ctx, managedSecret)).To(Succeed())
+			Expect(cl.Delete(ctx, tokenSecret)).To(Succeed())
+
+			result := r.reconcileKubeconfig(ctx, log)
+			Expect(result.Error()).ToNot(HaveOccurred())
+
+			updated := &corev1.Secret{}
+			Expect(cl.Get(ctx, client.ObjectKeyFromObject(managedSecret), updated)).To(Succeed())
+			Expect(updated.Data).To(Equal(managedSecret.Data))
+			Expect(updated.Annotations).To(Equal(managedSecret.Annotations))
 		})
 
 		It("requeue when token secret doesn't exist", func() {

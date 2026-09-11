@@ -40,13 +40,15 @@ import (
 	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
+	"github.com/openshift/cluster-capi-operator/pkg/revisiongenerator"
 )
 
 const (
-	controllerName            = "KubeconfigController"
-	tokenSecretName           = "capi-controllers-token"
-	tokenRefreshAnnotationKey = "cluster-api.openshift.io/last-token-refresh"
-	tokenMaxAge               = 30 * time.Minute
+	controllerName             = "KubeconfigController"
+	tokenSecretName            = "capi-controllers-token"
+	tokenRefreshAnnotationKey  = "cluster-api.openshift.io/last-token-refresh"
+	tokenMaxAge                = 30 * time.Minute
+	managedByRevisionInstaller = "cluster-capi-kubeconfig"
 
 	// ResultGenerator is the controller result generator for the KubeconfigController.
 	ResultGenerator = operatorstatus.ControllerResultGenerator(controllerName)
@@ -116,6 +118,22 @@ func (r *KubeconfigReconciler) reconcile(ctx context.Context, log logr.Logger) o
 //
 //nolint:funlen
 func (r *KubeconfigReconciler) reconcileKubeconfig(ctx context.Context, log logr.Logger) operatorstatus.ReconcileResult {
+	// Once the revision installer has taken ownership, do not read or rotate the
+	// legacy token and do not rewrite the installer-managed Secret.
+	kubeconfigSecret := &corev1.Secret{}
+	kubeconfigKey := client.ObjectKey{
+		Name:      fmt.Sprintf("%s-kubeconfig", r.clusterName),
+		Namespace: controllers.DefaultCAPINamespace,
+	}
+	if err := r.Get(ctx, kubeconfigKey, kubeconfigSecret); err == nil {
+		if kubeconfigSecret.Labels[revisiongenerator.ManagedLabelKey] == managedByRevisionInstaller {
+			log.Info("Kubeconfig secret is managed by the revision installer; skipping legacy reconciliation")
+			return ResultGenerator.Success()
+		}
+	} else if !kerrors.IsNotFound(err) {
+		return ResultGenerator.Error(fmt.Errorf("unable to retrieve kubeconfig Secret object: %w", err))
+	}
+
 	// Get the token secret
 	tokenSecret := &corev1.Secret{}
 	tokenSecretKey := client.ObjectKey{
@@ -190,13 +208,13 @@ func (r *KubeconfigReconciler) reconcileKubeconfig(ctx context.Context, log logr
 		return ResultGenerator.Error(fmt.Errorf("error writing kubeconfig: %w", err))
 	}
 
-	kubeconfigSecret := newKubeConfigSecret(r.clusterName, out)
-	kubeconfigSecretCopy := kubeconfigSecret.DeepCopy()
+	generatedKubeconfigSecret := newKubeConfigSecret(r.clusterName, out)
+	generatedKubeconfigSecretCopy := generatedKubeconfigSecret.DeepCopy()
 
-	if _, err := controllerutil.CreateOrPatch(ctx, r.Client, kubeconfigSecret, func() error {
-		kubeconfigSecret.ObjectMeta = kubeconfigSecretCopy.ObjectMeta
-		kubeconfigSecret.Data = kubeconfigSecretCopy.Data
-		kubeconfigSecret.Type = kubeconfigSecretCopy.Type
+	if _, err := controllerutil.CreateOrPatch(ctx, r.Client, generatedKubeconfigSecret, func() error {
+		generatedKubeconfigSecret.ObjectMeta = generatedKubeconfigSecretCopy.ObjectMeta
+		generatedKubeconfigSecret.Data = generatedKubeconfigSecretCopy.Data
+		generatedKubeconfigSecret.Type = generatedKubeconfigSecretCopy.Type
 
 		return nil
 	}); err != nil {
