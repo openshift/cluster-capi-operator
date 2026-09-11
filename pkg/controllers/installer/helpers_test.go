@@ -60,7 +60,6 @@ const (
 	providerIrregularCRD   = "irregular-resource-crd"
 	providerAdoptExisting  = "adopt-existing"
 	providerAdoptInvalid   = "adopt-invalid"
-	providerSecret         = "secret-provider"
 
 	coreCMName                = "test-cm-core"
 	adoptCMName               = "test-cm-adopt"
@@ -74,7 +73,6 @@ const (
 	providerManyClusterScoped = "many-cluster-scoped"
 	providerMixed             = "mixed"
 	mixedCMName               = "test-cm-mixed"
-	secretName                = "test-secret"
 )
 
 var (
@@ -130,11 +128,6 @@ func setupProviderProfiles() {
 	// Provider "core": ConfigMap-A with data v1
 	core := test.NewProviderImageManifests(tb, providerCore).
 		WithManifests(test.ConfigMapYAML(coreCMName, map[string]string{"version": "v1"})).
-		Build()
-
-	// Provider "secret": Secret in the namespace-scoped tracking cache.
-	secretProvider := test.NewProviderImageManifests(tb, providerSecret).
-		WithManifests(test.SecretYAML(secretName, map[string]string{"value": "v1"})).
 		Build()
 
 	// Provider "infra": ConfigMap-B with data v1
@@ -241,7 +234,7 @@ func setupProviderProfiles() {
 		clusterScoped, clusterScoped2, crdProvider, nsProvider,
 		deploymentProvider, mixed, manyClusterScoped,
 		vapProvider, irregularCRDProvider,
-		adoptExisting, adoptInvalid, secretProvider,
+		adoptExisting, adoptInvalid,
 	}
 
 	providersByName = make(map[string]providerimages.ProviderImageManifests, len(allProviderProfiles))
