@@ -139,7 +139,6 @@ func writeManifests(opts cmdlineOptions, resources []client.Object) (err error) 
 				return fmt.Errorf("error writing separator to manifests file: %w", err)
 			}
 		}
-
 		if _, err := writer.Write(data); err != nil {
 			return fmt.Errorf("error writing object to manifests file: %w", err)
 		}
