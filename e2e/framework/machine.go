@@ -23,6 +23,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
+	vspherev1 "sigs.k8s.io/cluster-api-provider-vsphere/apis/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
@@ -90,6 +91,22 @@ func GetAWSMachine(name string, namespace string) (*awsv1.AWSMachine, error) {
 	}
 
 	return machine, nil
+}
+
+// GetVSphereMachineWithRetry gets a VSphereMachine by its name, retrying until found or timeout.
+func GetVSphereMachineWithRetry(name string, namespace string) *vspherev1.VSphereMachine {
+	GinkgoHelper()
+
+	machine := &vspherev1.VSphereMachine{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+	}
+
+	Eventually(komega.Get(machine), time.Minute, RetryShort).Should(Succeed(), "Should have successfully retrieved VSphereMachine %s/%s.", machine.Namespace, machine.Name)
+
+	return machine
 }
 
 // GetMachineWithRetry gets a machine by its name, retrying until found or timeout.

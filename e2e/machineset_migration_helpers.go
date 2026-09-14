@@ -18,12 +18,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/types"
 
+	configv1 "github.com/openshift/api/config/v1"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	mapiframework "github.com/openshift/cluster-api-actuator-pkg/pkg/framework"
 	capiframework "github.com/openshift/cluster-capi-operator/e2e/framework"
@@ -32,32 +34,21 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
+	vspherev1 "sigs.k8s.io/cluster-api-provider-vsphere/apis/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 	yaml "sigs.k8s.io/yaml"
 )
 
-// createCAPIMachineSet creates a CAPI MachineSet with an AWSMachineTemplate and waits for it to be ready.
+// createCAPIMachineSet creates a CAPI MachineSet with a platform-specific
+// infrastructure machine template and waits for it to be ready.
 func createCAPIMachineSet(ctx context.Context, cl client.Client, replicas int32, machineSetName string, instanceType string) *clusterv1.MachineSet {
 	GinkgoHelper()
 
 	By(fmt.Sprintf("Creating CAPI MachineSet %s with %d replicas", machineSetName, replicas))
 
-	mapiMS := capiframework.GetFirstMAPIMachineSet(ctx, cl)
-	mapiProviderSpec, err := mapi2capi.AWSProviderSpecFromRawExtension(mapiMS.Spec.Template.Spec.ProviderSpec.Value)
-	Expect(err).ToNot(HaveOccurred(), "should not fail decoding MAPI provider spec")
-	createAWSClient(mapiProviderSpec.Placement.Region)
-	awsMachineTemplate := newAWSMachineTemplate(mapiMS, infra)
-	awsMachineTemplate.Name = machineSetName
-
-	if instanceType != "" {
-		awsMachineTemplate.Spec.Template.Spec.InstanceType = instanceType
-	}
-
-	Eventually(func() error {
-		return cl.Create(ctx, awsMachineTemplate)
-	}, capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(), "Failed to create a new awsMachineTemplate %s", awsMachineTemplate.Name)
+	infraTemplate := createInfraMachineTemplate(ctx, cl, machineSetName, instanceType)
 
 	machineSet := capiframework.CreateMachineSet(ctx, cl, capiframework.NewMachineSetParams(
 		machineSetName,
@@ -65,16 +56,15 @@ func createCAPIMachineSet(ctx context.Context, cl client.Client, replicas int32,
 		"",
 		replicas,
 		clusterv1.ContractVersionedObjectReference{
-			Kind:     "AWSMachineTemplate",
+			Kind:     infraMachineTemplateKind(),
 			APIGroup: infraAPIGroup,
 			Name:     machineSetName,
 		},
 		"worker-user-data",
 	))
 
-	trackResource(awsMachineTemplate)
+	trackResource(infraTemplate)
 	trackResource(machineSet)
-	// The sync controller will create a mirrored MAPI MachineSet with the same name.
 	trackResource(&mapiv1beta1.MachineSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      machineSetName,
@@ -85,6 +75,63 @@ func createCAPIMachineSet(ctx context.Context, cl client.Client, replicas int32,
 	capiframework.WaitForMachineSet(ctx, cl, machineSet.Name, machineSet.Namespace, capiframework.WaitLong)
 
 	return machineSet
+}
+
+// createInfraMachineTemplate creates a platform-specific infrastructure machine
+// template from an existing MAPI MachineSet's provider spec.
+func createInfraMachineTemplate(ctx context.Context, cl client.Client, name string, instanceType string) client.Object {
+	GinkgoHelper()
+
+	switch platform {
+	case configv1.AWSPlatformType:
+		return createAWSInfraMachineTemplate(ctx, cl, name, instanceType)
+	case configv1.VSpherePlatformType:
+		return createVSphereInfraMachineTemplate(ctx, cl, name)
+	default:
+		Fail(fmt.Sprintf("unsupported platform for infra machine template creation: %s", platform))
+		return nil
+	}
+}
+
+func createAWSInfraMachineTemplate(ctx context.Context, cl client.Client, name string, instanceType string) *awsv1.AWSMachineTemplate {
+	GinkgoHelper()
+
+	mapiMS := capiframework.GetFirstMAPIMachineSet(ctx, cl)
+	mapiProviderSpec, err := mapi2capi.AWSProviderSpecFromRawExtension(mapiMS.Spec.Template.Spec.ProviderSpec.Value)
+	Expect(err).ToNot(HaveOccurred(), "should not fail decoding MAPI provider spec")
+	createAWSClient(mapiProviderSpec.Placement.Region)
+	awsMachineTemplate := newAWSMachineTemplate(mapiMS, infra)
+	awsMachineTemplate.Name = name
+
+	if instanceType != "" {
+		awsMachineTemplate.Spec.Template.Spec.InstanceType = instanceType
+	}
+
+	Eventually(func() error {
+		return cl.Create(ctx, awsMachineTemplate)
+	}, capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(), "Failed to create AWSMachineTemplate %s", awsMachineTemplate.Name)
+
+	return awsMachineTemplate
+}
+
+func createVSphereInfraMachineTemplate(ctx context.Context, cl client.Client, name string) *vspherev1.VSphereMachineTemplate {
+	GinkgoHelper()
+
+	mapiMS := capiframework.GetFirstMAPIMachineSet(ctx, cl)
+	_, templateObj, _, err := mapi2capi.FromVSphereMachineSetAndInfra(mapiMS, infra).ToMachineSetAndMachineTemplate()
+	Expect(err).ToNot(HaveOccurred(), "should not fail converting MAPI MachineSet to CAPI VSphereMachineTemplate")
+
+	vsphereMachineTemplate, ok := templateObj.(*vspherev1.VSphereMachineTemplate)
+	Expect(ok).To(BeTrue(), "expected template to be *vspherev1.VSphereMachineTemplate, got %T", templateObj)
+
+	vsphereMachineTemplate.Name = name
+	vsphereMachineTemplate.Namespace = capiframework.CAPINamespace
+
+	Eventually(func() error {
+		return cl.Create(ctx, vsphereMachineTemplate)
+	}, capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(), "Failed to create VSphereMachineTemplate %s", vsphereMachineTemplate.Name)
+
+	return vsphereMachineTemplate
 }
 
 // createMAPIMachineSetWithAuthoritativeAPI creates a MAPI MachineSet with specified authoritativeAPI and waits for the CAPI mirror to be created.
@@ -337,13 +384,13 @@ func updateAWSMachineSetProviderSpec(ctx context.Context, cl client.Client, mapi
 	return cl.Patch(ctx, mapiMachineSet, patch)
 }
 
-// waitForMAPIMachineSetMirrors waits for the corresponding CAPI MachineSet and AWSMachineTemplate mirrors to be created for a MAPI MachineSet.
-func waitForMAPIMachineSetMirrors(machineSetNameMAPI string) (*clusterv1.MachineSet, *awsv1.AWSMachineTemplate) {
+// waitForMAPIMachineSetMirrors waits for the corresponding CAPI MachineSet and
+// infrastructure machine template mirrors to be created for a MAPI MachineSet.
+func waitForMAPIMachineSetMirrors(machineSetNameMAPI string) (*clusterv1.MachineSet, client.Object) {
 	GinkgoHelper()
 
-	By(fmt.Sprintf("Verifying there is a CAPI MachineSet mirror and AWSMachineTemplate for MAPI MachineSet %s", machineSetNameMAPI))
+	By(fmt.Sprintf("Verifying there is a CAPI MachineSet mirror and infra template for MAPI MachineSet %s", machineSetNameMAPI))
 
-	// Direct Get instead of capiframework.GetMachineSet to avoid nested Eventually.
 	capiMachineSet := &clusterv1.MachineSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      machineSetNameMAPI,
@@ -353,16 +400,9 @@ func waitForMAPIMachineSetMirrors(machineSetNameMAPI string) (*clusterv1.Machine
 	Eventually(komega.Get(capiMachineSet), capiframework.WaitMedium, capiframework.RetryMedium).Should(
 		Succeed(), "Should have CAPI MachineSet %s/%s exist", capiframework.CAPINamespace, machineSetNameMAPI)
 
-	var awsMachineTemplate *awsv1.AWSMachineTemplate
+	infraTemplate := waitForInfraMachineTemplate(machineSetNameMAPI)
 
-	Eventually(func() error {
-		var err error
-		awsMachineTemplate, err = getAWSMachineTemplateByPrefix(machineSetNameMAPI, capiframework.CAPINamespace)
-
-		return err
-	}, capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(), "Should have AWSMachineTemplate with prefix %s exist", machineSetNameMAPI)
-
-	return capiMachineSet, awsMachineTemplate
+	return capiMachineSet, infraTemplate
 }
 
 // waitForCAPIMachineSetMirror waits for a CAPI MachineSet mirror to be created for a MAPI MachineSet.
@@ -384,23 +424,42 @@ func waitForCAPIMachineSetMirror(machineName string) *clusterv1.MachineSet {
 	return capiMachineSet
 }
 
-// waitForAWSMachineTemplate waits for an AWSMachineTemplate with the specified name prefix to be created.
-func waitForAWSMachineTemplate(prefix string) *awsv1.AWSMachineTemplate {
+// waitForInfraMachineTemplate waits for a platform-specific infrastructure
+// machine template with the specified name prefix to be created.
+func waitForInfraMachineTemplate(prefix string) client.Object {
 	GinkgoHelper()
 
-	By(fmt.Sprintf("Verifying there is an AWSMachineTemplate with prefix %s", prefix))
+	By(fmt.Sprintf("Verifying there is an infra machine template with prefix %s", prefix))
 
-	var awsMachineTemplate *awsv1.AWSMachineTemplate
+	switch platform {
+	case configv1.AWSPlatformType:
+		var awsMachineTemplate *awsv1.AWSMachineTemplate
 
-	Eventually(func() error {
-		var err error
-		awsMachineTemplate, err = getAWSMachineTemplateByPrefix(prefix, capiframework.CAPINamespace)
+		Eventually(func() error {
+			var err error
+			awsMachineTemplate, err = getAWSMachineTemplateByPrefix(prefix, capiframework.CAPINamespace)
 
-		return err
-	}, capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(),
-		"Should have AWSMachineTemplate with prefix %s exist", prefix)
+			return err
+		}, capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(),
+			"Should have AWSMachineTemplate with prefix %s exist", prefix)
 
-	return awsMachineTemplate
+		return awsMachineTemplate
+	case configv1.VSpherePlatformType:
+		var vsphereMachineTemplate *vspherev1.VSphereMachineTemplate
+
+		Eventually(func() error {
+			var err error
+			vsphereMachineTemplate, err = getVSphereMachineTemplateByPrefix(prefix, capiframework.CAPINamespace)
+
+			return err
+		}, capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(),
+			"Should have VSphereMachineTemplate with prefix %s exist", prefix)
+
+		return vsphereMachineTemplate
+	default:
+		Fail(fmt.Sprintf("unsupported platform for infra machine template: %s", platform))
+		return nil
+	}
 }
 
 // createAWSMachineTemplate creates a new AWSMachineTemplate with an optional update function to modify the spec.
@@ -443,8 +502,9 @@ func updateCAPIMachineSetInfraTemplate(capiMachineSet *clusterv1.MachineSet, new
 	)
 }
 
-// cleanupMachineSetTestResources deletes MAPI MachineSets, CAPI MachineSets, and AWSMachineTemplates created during tests.
-func cleanupMachineSetTestResources(ctx context.Context, cl client.Client, capiMachineSets []*clusterv1.MachineSet, awsMachineTemplates []*awsv1.AWSMachineTemplate, mapiMachineSets []*mapiv1beta1.MachineSet) {
+// cleanupMachineSetTestResources deletes MAPI MachineSets, CAPI MachineSets,
+// and infrastructure machine templates created during tests.
+func cleanupMachineSetTestResources(ctx context.Context, cl client.Client, capiMachineSets []*clusterv1.MachineSet, infraTemplates []client.Object, mapiMachineSets []*mapiv1beta1.MachineSet) {
 	GinkgoHelper()
 
 	cleanupCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
@@ -485,12 +545,48 @@ func cleanupMachineSetTestResources(ctx context.Context, cl client.Client, capiM
 		capiframework.WaitForMachineSetsDeleted(ms)
 	}
 
-	for _, template := range awsMachineTemplates {
+	for _, template := range infraTemplates {
 		if template == nil {
 			continue
 		}
 
-		By(fmt.Sprintf("Deleting awsMachineTemplate %s", template.Name))
-		deleteAWSMachineTemplates(cleanupCtx, cl, template)
+		By(fmt.Sprintf("Deleting infra machine template %s", template.GetName()))
+		Eventually(func() error {
+			err := cl.Delete(cleanupCtx, template)
+			if apierrors.IsNotFound(err) {
+				return nil
+			}
+
+			return err
+		}, time.Minute, capiframework.RetryShort).Should(Succeed(),
+			"cleanup: delete infra machine template %s", template.GetName())
+	}
+}
+
+func getVSphereMachineTemplateByPrefix(prefix string, namespace string) (*vspherev1.VSphereMachineTemplate, error) {
+	if prefix == "" {
+		return nil, fmt.Errorf("prefix cannot be empty")
+	}
+
+	templateList := &vspherev1.VSphereMachineTemplateList{}
+	if err := komega.List(templateList, client.InNamespace(namespace))(); err != nil {
+		return nil, fmt.Errorf("list VSphereMachineTemplates in namespace %s: %w", namespace, err)
+	}
+
+	var matches []*vspherev1.VSphereMachineTemplate
+
+	for i, t := range templateList.Items {
+		if strings.HasPrefix(t.Name, prefix) {
+			matches = append(matches, &templateList.Items[i])
+		}
+	}
+
+	switch len(matches) {
+	case 0:
+		return nil, fmt.Errorf("no VSphereMachineTemplate found with prefix %q", prefix)
+	case 1:
+		return matches[0], nil
+	default:
+		return nil, fmt.Errorf("multiple VSphereMachineTemplates found with prefix %q (%d matches)", prefix, len(matches))
 	}
 }

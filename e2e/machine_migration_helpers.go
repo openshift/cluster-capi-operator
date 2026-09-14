@@ -24,6 +24,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/types"
 
+	configv1 "github.com/openshift/api/config/v1"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	mapiframework "github.com/openshift/cluster-api-actuator-pkg/pkg/framework"
 	capiframework "github.com/openshift/cluster-capi-operator/e2e/framework"
@@ -32,6 +33,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
+	vspherev1 "sigs.k8s.io/cluster-api-provider-vsphere/apis/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
@@ -98,33 +100,10 @@ func createCAPIMachine(ctx context.Context, cl client.Client, machineName string
 		return cl.Create(ctx, newCapiMachine)
 	}, capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(), "Should have successfully created CAPI machine %s/%s", newCapiMachine.Namespace, newCapiMachine.Name)
 
-	referenceAWSMachine := capiframework.GetAWSMachineWithRetry(referenceCapiMachine.Name, capiframework.CAPINamespace)
-	// Define the new awsmachine based on the reference.
-	newAWSMachine := &awsv1.AWSMachine{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "AWSMachine",
-			APIVersion: awsv1.GroupVersion.String(),
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      machineName,
-			Namespace: referenceAWSMachine.Namespace,
-		},
-		Spec: *referenceAWSMachine.Spec.DeepCopy(),
-	}
-
-	// Clear status and other instance-specific fields that should not be copied.
-	newAWSMachine.Spec.ProviderID = nil
-	newAWSMachine.Spec.InstanceID = nil
-	newAWSMachine.ObjectMeta.Labels = nil
-	newAWSMachine.Status = awsv1.AWSMachineStatus{}
-
-	By(fmt.Sprintf("Creating a new CAPI AWSMachine in namespace: %s", newAWSMachine.Namespace))
-	Eventually(func() error {
-		return cl.Create(ctx, newAWSMachine)
-	}, capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(), "Should have successfully created AWSmachine %s/%s", newAWSMachine.Namespace, newAWSMachine.Name)
+	infraMachine := createInfraMachineFromReference(ctx, cl, referenceCapiMachine.Name, machineName)
 
 	trackResource(newCapiMachine)
-	trackResource(newAWSMachine)
+	trackResource(infraMachine)
 	// The sync controller will create a mirrored MAPI Machine with the same name.
 	trackResource(&mapiv1beta1.Machine{
 		ObjectMeta: metav1.ObjectMeta{
@@ -441,6 +420,81 @@ func summarizeMAPIConditions(conditions []mapiv1beta1.Condition) string {
 	}
 
 	return fmt.Sprintf("[%s]", strings.Join(parts, ", "))
+}
+
+// createInfraMachineFromReference creates a platform-specific infrastructure
+// machine by cloning the spec from an existing reference machine.
+func createInfraMachineFromReference(ctx context.Context, cl client.Client, referenceName, newName string) client.Object {
+	GinkgoHelper()
+
+	switch platform {
+	case configv1.AWSPlatformType:
+		return createAWSInfraMachine(ctx, cl, referenceName, newName)
+	case configv1.VSpherePlatformType:
+		return createVSphereInfraMachine(ctx, cl, referenceName, newName)
+	default:
+		Fail(fmt.Sprintf("unsupported platform for infra machine creation: %s", platform))
+		return nil
+	}
+}
+
+func createAWSInfraMachine(ctx context.Context, cl client.Client, referenceName, machineName string) *awsv1.AWSMachine {
+	GinkgoHelper()
+
+	referenceAWSMachine := capiframework.GetAWSMachineWithRetry(referenceName, capiframework.CAPINamespace)
+
+	newAWSMachine := &awsv1.AWSMachine{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "AWSMachine",
+			APIVersion: awsv1.GroupVersion.String(),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      machineName,
+			Namespace: referenceAWSMachine.Namespace,
+		},
+		Spec: *referenceAWSMachine.Spec.DeepCopy(),
+	}
+
+	newAWSMachine.Spec.ProviderID = nil
+	newAWSMachine.Spec.InstanceID = nil
+	newAWSMachine.ObjectMeta.Labels = nil
+	newAWSMachine.Status = awsv1.AWSMachineStatus{}
+
+	By(fmt.Sprintf("Creating a new CAPI AWSMachine in namespace: %s", newAWSMachine.Namespace))
+	Eventually(func() error {
+		return cl.Create(ctx, newAWSMachine)
+	}, capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(), "Should have successfully created AWSMachine %s/%s", newAWSMachine.Namespace, newAWSMachine.Name)
+
+	return newAWSMachine
+}
+
+func createVSphereInfraMachine(ctx context.Context, cl client.Client, referenceName, machineName string) *vspherev1.VSphereMachine {
+	GinkgoHelper()
+
+	referenceVSphereMachine := capiframework.GetVSphereMachineWithRetry(referenceName, capiframework.CAPINamespace)
+
+	newVSphereMachine := &vspherev1.VSphereMachine{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "VSphereMachine",
+			APIVersion: vspherev1.GroupVersion.String(),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      machineName,
+			Namespace: referenceVSphereMachine.Namespace,
+		},
+		Spec: *referenceVSphereMachine.Spec.DeepCopy(),
+	}
+
+	newVSphereMachine.Spec.ProviderID = nil
+	newVSphereMachine.ObjectMeta.Labels = nil
+	newVSphereMachine.Status = vspherev1.VSphereMachineStatus{}
+
+	By(fmt.Sprintf("Creating a new CAPI VSphereMachine in namespace: %s", newVSphereMachine.Namespace))
+	Eventually(func() error {
+		return cl.Create(ctx, newVSphereMachine)
+	}, capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(), "Should have successfully created VSphereMachine %s/%s", newVSphereMachine.Namespace, newVSphereMachine.Name)
+
+	return newVSphereMachine
 }
 
 func verifyMachineSynchronizedGeneration(mapiMachine *mapiv1beta1.Machine, authority mapiv1beta1.MachineAuthority) {
