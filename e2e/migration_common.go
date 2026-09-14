@@ -23,8 +23,12 @@ import (
 	"github.com/openshift/api/features"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	capiframework "github.com/openshift/cluster-capi-operator/e2e/framework"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilrand "k8s.io/apimachinery/pkg/util/rand"
+	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
+	vspherev1 "sigs.k8s.io/cluster-api-provider-vsphere/apis/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
@@ -65,4 +69,57 @@ func skipUnlessMigrationEnabled() {
 // touches every helper signature and caller, so it's deferred to a follow-up.
 func generateName(prefix string) string {
 	return prefix + utilrand.String(5)
+}
+
+// newInfraMachineObject returns a stub infrastructure machine for the current
+// platform. Used with verifyResourceRemoved to confirm the controller cleaned
+// up the infra machine without hardcoding a provider-specific type in the test.
+func newInfraMachineObject(name, namespace string) client.Object {
+	switch platform {
+	case configv1.AWSPlatformType:
+		return &awsv1.AWSMachine{
+			TypeMeta:   metav1.TypeMeta{Kind: "AWSMachine", APIVersion: awsv1.GroupVersion.String()},
+			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace},
+		}
+	case configv1.VSpherePlatformType:
+		return &vspherev1.VSphereMachine{
+			TypeMeta:   metav1.TypeMeta{Kind: "VSphereMachine", APIVersion: vspherev1.GroupVersion.String()},
+			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace},
+		}
+	default:
+		Fail(fmt.Sprintf("unsupported platform for infra machine: %s", platform))
+		return nil
+	}
+}
+
+// newInfraMachineTemplateObject returns a stub infrastructure machine template
+// for the current platform. Used with verifyResourceRemoved.
+func newInfraMachineTemplateObject(name, namespace string) client.Object {
+	switch platform {
+	case configv1.AWSPlatformType:
+		return &awsv1.AWSMachineTemplate{
+			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace},
+		}
+	case configv1.VSpherePlatformType:
+		return &vspherev1.VSphereMachineTemplate{
+			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace},
+		}
+	default:
+		Fail(fmt.Sprintf("unsupported platform for infra machine template: %s", platform))
+		return nil
+	}
+}
+
+// infraMachineTemplateKind returns the Kind string for the infrastructure
+// machine template on the current platform.
+func infraMachineTemplateKind() string {
+	switch platform {
+	case configv1.AWSPlatformType:
+		return "AWSMachineTemplate"
+	case configv1.VSpherePlatformType:
+		return "VSphereMachineTemplate"
+	default:
+		Fail(fmt.Sprintf("unsupported platform for infra machine template kind: %s", platform))
+		return ""
+	}
 }
