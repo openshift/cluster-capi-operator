@@ -52,6 +52,7 @@ var _ = Describe("Machine API provider status synchronization", func() {
 			reconciler := &MachineSyncReconciler{Client: fakeClient, Platform: configv1.VSpherePlatformType}
 
 			By("Updating status through the controller's provider-status merge path")
+
 			diff, err := util.NewDefaultDiffer().Diff(machine, converted)
 			Expect(err).NotTo(HaveOccurred())
 			updated, err := reconciler.ensureMAPIMachineStatusUpdated(ctx, machine, converted, diff, false)
@@ -68,6 +69,7 @@ var _ = Describe("Machine API provider status synchronization", func() {
 				HaveField("Type", Equal("MachineCreation")),
 				HaveField("Status", Equal(metav1.ConditionTrue)),
 			)))
+
 			if preserveCondition {
 				Expect(status.Conditions).To(ContainElement(SatisfyAll(
 					HaveField("Type", Equal("ActuatorCondition")),

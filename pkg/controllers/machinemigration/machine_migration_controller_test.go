@@ -499,6 +499,7 @@ var _ = Describe("With a running MachineMigration controller", func() {
 							})).Should(Succeed())
 
 							By("Requesting pause on the old authoritative resources")
+
 							_, err := reconciler.Reconcile(ctx, req)
 							Expect(err).NotTo(HaveOccurred())
 

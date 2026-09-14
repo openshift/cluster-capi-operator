@@ -28,8 +28,6 @@ import (
 )
 
 // setChangedMAPIMachineProviderStatusFields unmarshals the existing and converted ProviderStatus, copies over the fields and marshals it back to the existingMAPIMachine.
-//
-//nolint:funlen
 func setChangedMAPIMachineProviderStatusFields(platform configv1.PlatformType, existingMAPIMachine, convertedMAPIMachine *mapiv1beta1.Machine) error {
 	var newProviderStatus interface{}
 
