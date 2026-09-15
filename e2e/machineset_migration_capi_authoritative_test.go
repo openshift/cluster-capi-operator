@@ -222,6 +222,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				mapiframework.WaitForMachineSetsDeleted(ctx, cl, mapiMachineSet)
 				capiframework.WaitForMachineSetsDeleted(capiMachineSet)
 				verifyResourceRemoved(infraTemplate)
+				verifyProviderVMsRemovedForMachineSet(mapiMSAuthCAPIName, capiframework.CAPINamespace)
 			})
 		})
 	})
