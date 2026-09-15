@@ -225,6 +225,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				capiframework.WaitForMachineSetsDeleted(capiMachineSet)
 				mapiframework.WaitForMachineSetsDeleted(ctx, cl, mapiMachineSet)
 				verifyResourceRemoved(infraTemplate)
+				verifyProviderVMsRemovedForMachineSet(mapiMSAuthMAPIName, capiframework.CAPINamespace)
 			})
 		})
 
@@ -269,6 +270,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				capiframework.WaitForMachineSetsDeleted(capiMachineSet)
 				mapiframework.WaitForMachineSetsDeleted(ctx, cl, mapiMachineSet)
 				verifyResourceRemoved(infraTemplate)
+				verifyProviderVMsRemovedForMachineSet(mapiMSAuthMAPICAPI, capiframework.CAPINamespace)
 			})
 		})
 	})

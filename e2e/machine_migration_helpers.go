@@ -31,6 +31,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/utils/ptr"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	vspherev1 "sigs.k8s.io/cluster-api-provider-vsphere/apis/v1beta1"
@@ -495,6 +497,140 @@ func createVSphereInfraMachine(ctx context.Context, cl client.Client, referenceN
 	}, capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(), "Should have successfully created VSphereMachine %s/%s", newVSphereMachine.Namespace, newVSphereMachine.Name)
 
 	return newVSphereMachine
+}
+
+// providerVMGVR returns the GroupVersionResource for the provider-level VM
+// on the current platform. Used for unstructured list/get operations so we
+// query the correct (non-deprecated) API version.
+func providerVMGVR() (schema.GroupVersionResource, bool) {
+	switch platform {
+	case configv1.VSpherePlatformType:
+		return schema.GroupVersionResource{
+			Group:    "infrastructure.cluster.x-k8s.io",
+			Version:  "v1beta2",
+			Resource: "vspherevms",
+		}, true
+	default:
+		return schema.GroupVersionResource{}, false
+	}
+}
+
+// listProviderVMs lists provider-level VMs in the given namespace using
+// unstructured objects to avoid depending on a specific API version.
+func listProviderVMs(namespace string) ([]unstructured.Unstructured, error) {
+	gvr, ok := providerVMGVR()
+	if !ok {
+		return nil, nil
+	}
+
+	vmList := &unstructured.UnstructuredList{}
+	vmList.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   gvr.Group,
+		Version: gvr.Version,
+		Kind:    "VSphereVMList",
+	})
+
+	if err := cl.List(ctx, vmList, client.InNamespace(namespace)); err != nil {
+		return nil, fmt.Errorf("list provider VMs: %w", err)
+	}
+
+	return vmList.Items, nil
+}
+
+// findProviderVM returns the provider-level VM object backing the given infra
+// machine, if one exists. The VM is found via owner reference (UID match).
+// Returns nil when no provider VM exists (valid for paused/non-authoritative
+// machines) or on platforms without a sub-VM resource.
+func findProviderVM(infraMachine client.Object) client.Object {
+	GinkgoHelper()
+
+	if _, ok := providerVMGVR(); !ok {
+		return nil
+	}
+
+	vms, err := listProviderVMs(infraMachine.GetNamespace())
+	Expect(err).NotTo(HaveOccurred(), "list provider VMs")
+
+	var matches []unstructured.Unstructured
+	for _, vm := range vms {
+		for _, owner := range vm.GetOwnerReferences() {
+			if owner.Kind == "VSphereMachine" && owner.UID == infraMachine.GetUID() {
+				matches = append(matches, vm)
+
+				break
+			}
+		}
+	}
+
+	switch len(matches) {
+	case 0:
+		return nil
+	case 1:
+		By(fmt.Sprintf("Found provider VM %s owned by infra machine UID %s", matches[0].GetName(), infraMachine.GetUID()))
+		return &matches[0]
+	default:
+		names := make([]string, len(matches))
+		for i := range matches {
+			names[i] = matches[i].GetName()
+		}
+
+		Fail(fmt.Sprintf("found %d provider VMs owned by infra machine UID %s: %v", len(matches), infraMachine.GetUID(), names))
+		return nil
+	}
+}
+
+// verifyProviderVMRemoved checks that any provider-level VM backing the given
+// infra machine has been cleaned up. The infra machine must have been fetched
+// before deletion so its UID is available. No-op on platforms without a
+// sub-VM resource.
+func verifyProviderVMRemoved(infraMachine client.Object) {
+	GinkgoHelper()
+
+	if _, ok := providerVMGVR(); !ok {
+		return
+	}
+
+	By(fmt.Sprintf("Verifying provider VM owned by %s (UID %s) is removed",
+		infraMachine.GetName(), infraMachine.GetUID()))
+
+	Eventually(func() bool {
+		vms, err := listProviderVMs(infraMachine.GetNamespace())
+		if err != nil {
+			return false
+		}
+
+		for _, vm := range vms {
+			for _, owner := range vm.GetOwnerReferences() {
+				if owner.Kind == "VSphereMachine" && owner.UID == infraMachine.GetUID() {
+					return false
+				}
+			}
+		}
+
+		return true
+	}, capiframework.WaitMedium, capiframework.RetryMedium).Should(BeTrue(),
+		"Provider VM owned by %s should be removed", infraMachine.GetName())
+}
+
+// verifyProviderVMStable checks that the provider-level VM has not been
+// recreated and has no deletion timestamp (stuck finalizer). providerVM is
+// the object returned by findProviderVM; if nil (platform has no sub-VM),
+// this is a no-op. Designed for use inside Consistently blocks.
+func verifyProviderVMStable(g Gomega, providerVM client.Object) {
+	if providerVM == nil {
+		return
+	}
+
+	freshVM := &unstructured.Unstructured{}
+	freshVM.SetGroupVersionKind(providerVM.GetObjectKind().GroupVersionKind())
+	freshVM.SetName(providerVM.GetName())
+	freshVM.SetNamespace(providerVM.GetNamespace())
+
+	g.Expect(komega.Get(freshVM)()).To(Succeed(), "Provider VM %s should still exist", providerVM.GetName())
+	g.Expect(freshVM.GetUID()).To(Equal(providerVM.GetUID()),
+		"Provider VM UID changed — was deleted and recreated")
+	g.Expect(freshVM.GetDeletionTimestamp().IsZero()).To(BeTrue(),
+		"Provider VM %s has a deletion timestamp — stuck finalizer", providerVM.GetName())
 }
 
 func verifyMachineSynchronizedGeneration(mapiMachine *mapiv1beta1.Machine, authority mapiv1beta1.MachineAuthority) {
