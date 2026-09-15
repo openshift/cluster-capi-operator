@@ -144,6 +144,8 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				})
 
 				It("should delete MAPI Machine and its mirrors", func() {
+					infraMachine := getInfraMachineRef(newCapiMachine)
+
 					By("Deleting MAPI Machine")
 					Expect(mapiframework.DeleteMachines(ctx, cl, newMapiMachine)).To(Succeed())
 					mapiframework.WaitForMachinesDeleted(cl, newMapiMachine)
@@ -152,7 +154,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 					verifyResourceRemoved(newCapiMachine)
 
 					By("Verifying the infra machine is deleted")
-					verifyResourceRemoved(newInfraMachineObject(mapiMachineAuthCAPINameDeletion, capiframework.CAPINamespace))
+					verifyResourceRemoved(infraMachine)
 				})
 			})
 			Context("when deleting the authoritative CAPI Machine", func() {
@@ -174,6 +176,8 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				})
 
 				It("should delete CAPI Machine and its mirrors", func() {
+					infraMachine := getInfraMachineRef(newCapiMachine)
+
 					By("Deleting CAPI Machine")
 					capiframework.DeleteMachines(ctx, cl, capiframework.CAPINamespace, newCapiMachine)
 
@@ -181,7 +185,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 					verifyResourceRemoved(newMapiMachine)
 
 					By("Verifying the infra machine is deleted")
-					verifyResourceRemoved(newInfraMachineObject(mapiMachineAuthCAPINameDeletion, capiframework.CAPINamespace))
+					verifyResourceRemoved(infraMachine)
 				})
 			})
 		})
@@ -238,11 +242,13 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				verifyMachinePausedCondition(newMapiMachine, mapiv1beta1.MachineAuthorityClusterAPI)
 				verifyMachinePausedCondition(newCapiMachine, mapiv1beta1.MachineAuthorityClusterAPI)
 
+				infraMachine := getInfraMachineRef(newCapiMachine)
+
 				By("Deleting CAPI machine and verifying mirrors are removed")
 				capiframework.DeleteMachines(ctx, cl, capiframework.CAPINamespace, newCapiMachine)
 				verifyResourceRemoved(newMapiMachine)
 				verifyResourceRemoved(newCapiMachine)
-				verifyResourceRemoved(newInfraMachineObject(capiMapiCapiRoundTripName, capiframework.CAPINamespace))
+				verifyResourceRemoved(infraMachine)
 			})
 		})
 
@@ -297,11 +303,12 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				})
 
 				It("should verify mirror machines are deleted when deleting CAPI machine", func() {
+					infraMachine := getInfraMachineRef(newCapiMachine)
 					By("Deleting CAPI machine")
 					capiframework.DeleteMachines(ctx, cl, capiframework.CAPINamespace, newCapiMachine)
 					verifyResourceRemoved(newMapiMachine)
 					verifyResourceRemoved(newCapiMachine)
-					verifyResourceRemoved(newInfraMachineObject(capiMapiCapiRoundTripName, capiframework.CAPINamespace))
+					verifyResourceRemoved(infraMachine)
 				})
 			})*/
 	})
