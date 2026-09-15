@@ -104,6 +104,8 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				})
 
 				It("should delete MAPI Machine and its mirrors", func() {
+					infraMachine := getInfraMachineRef(newCapiMachine)
+
 					By("Deleting MAPI Machine")
 					Expect(mapiframework.DeleteMachines(ctx, cl, newMapiMachine)).To(Succeed())
 					mapiframework.WaitForMachinesDeleted(cl, newMapiMachine)
@@ -112,7 +114,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 					verifyResourceRemoved(newCapiMachine)
 
 					By("Verifying the infra machine is deleted")
-					verifyResourceRemoved(newInfraMachineObject(mapiMachineAuthMAPINameDelete, capiframework.CAPINamespace))
+					verifyResourceRemoved(infraMachine)
 				})
 			})
 			Context("when deleting the non-authoritative CAPI Machine", func() {
@@ -134,6 +136,8 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				})
 
 				It("should delete CAPI Machine and its mirrors", func() {
+					infraMachine := getInfraMachineRef(newCapiMachine)
+
 					By("Deleting CAPI Machine")
 					capiframework.DeleteMachines(ctx, cl, capiframework.CAPINamespace, newCapiMachine)
 
@@ -141,7 +145,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 					verifyResourceRemoved(newMapiMachine)
 
 					By("Verifying the infra machine is deleted")
-					verifyResourceRemoved(newInfraMachineObject(mapiMachineAuthMAPINameDelete, capiframework.CAPINamespace))
+					verifyResourceRemoved(infraMachine)
 				})
 			})
 		})
@@ -199,12 +203,14 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				verifyMachinePausedCondition(newMapiMachine, mapiv1beta1.MachineAuthorityMachineAPI)
 				verifyMachinePausedCondition(newCapiMachine, mapiv1beta1.MachineAuthorityMachineAPI)
 
+				infraMachine := getInfraMachineRef(newCapiMachine)
+
 				By("Deleting MAPI machine and verifying mirrors are removed")
 				Expect(mapiframework.DeleteMachines(ctx, cl, newMapiMachine)).To(Succeed())
 				mapiframework.WaitForMachinesDeleted(cl, newMapiMachine)
 				verifyResourceRemoved(newMapiMachine)
 				verifyResourceRemoved(newCapiMachine)
-				verifyResourceRemoved(newInfraMachineObject(mapiCapiMapiRoundTripName, capiframework.CAPINamespace))
+				verifyResourceRemoved(infraMachine)
 			})
 		})
 	})
