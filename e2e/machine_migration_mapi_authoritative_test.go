@@ -115,6 +115,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 
 					By("Verifying the infra machine is deleted")
 					verifyResourceRemoved(infraMachine)
+					verifyProviderVMRemoved(infraMachine)
 				})
 			})
 			Context("when deleting the non-authoritative CAPI Machine", func() {
@@ -146,6 +147,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 
 					By("Verifying the infra machine is deleted")
 					verifyResourceRemoved(infraMachine)
+					verifyProviderVMRemoved(infraMachine)
 				})
 			})
 		})
@@ -211,6 +213,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				verifyResourceRemoved(newMapiMachine)
 				verifyResourceRemoved(newCapiMachine)
 				verifyResourceRemoved(infraMachine)
+				verifyProviderVMRemoved(infraMachine)
 			})
 		})
 	})

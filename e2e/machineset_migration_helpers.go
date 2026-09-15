@@ -563,6 +563,41 @@ func cleanupMachineSetTestResources(ctx context.Context, cl client.Client, capiM
 	}
 }
 
+// verifyProviderVMsRemovedForMachineSet checks that any provider-level VMs
+// associated with the specified MachineSet have been cleaned up. On vSphere,
+// it finds VSphereVMs whose owner reference points to a VSphereMachine with a
+// name prefixed by the MachineSet name. No-op on platforms without a sub-VM
+// resource.
+func verifyProviderVMsRemovedForMachineSet(machineSetName, namespace string) {
+	GinkgoHelper()
+
+	if _, ok := providerVMGVR(); !ok {
+		return
+	}
+
+	By(fmt.Sprintf("Verifying all provider VMs for MachineSet %s are removed", machineSetName))
+	Eventually(func() ([]string, error) {
+		vms, err := listProviderVMs(namespace)
+		if err != nil {
+			return nil, err
+		}
+
+		var remaining []string
+		for _, vm := range vms {
+			for _, owner := range vm.GetOwnerReferences() {
+				if owner.Kind == "VSphereMachine" && strings.HasPrefix(owner.Name, machineSetName+"-") {
+					remaining = append(remaining, vm.GetName())
+
+					break
+				}
+			}
+		}
+
+		return remaining, nil
+	}, capiframework.WaitMedium, capiframework.RetryMedium).Should(BeEmpty(),
+		"Expected no provider VMs for MachineSet %s to remain", machineSetName)
+}
+
 func getVSphereMachineTemplateByPrefix(prefix string, namespace string) (*vspherev1.VSphereMachineTemplate, error) {
 	if prefix == "" {
 		return nil, fmt.Errorf("prefix cannot be empty")

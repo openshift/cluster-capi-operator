@@ -69,6 +69,8 @@ var _ = Describe("Machine Sync", Ordered, func() {
 		Expect(err).NotTo(HaveOccurred())
 		infraMachineUID := infraMachine.GetUID()
 
+		providerVM := findProviderVM(infraMachine)
+
 		By("Verifying the Synchronized condition and infrastructure machine remain stable")
 		Consistently(func(g Gomega) {
 			g.Expect(komega.Get(mapiMachine)()).To(Succeed())
@@ -81,6 +83,8 @@ var _ = Describe("Machine Sync", Ordered, func() {
 			g.Expect(err).NotTo(HaveOccurred())
 			g.Expect(freshInfraMachine.GetUID()).To(Equal(infraMachineUID),
 				"infrastructure machine UID changed — was deleted and recreated")
+
+			verifyProviderVMStable(g, providerVM)
 		}, "30s", "5s").Should(Succeed())
 	})
 })
