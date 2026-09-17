@@ -1081,6 +1081,10 @@ func (r *MachineSyncReconciler) reconcileMAPItoCAPIMachineDeletion(ctx context.C
 		return false, fmt.Errorf("failed to remove finalizer: %w", err)
 	}
 
+	if err := r.ensureUnpausedForDeletion(ctx, capiMachine, infraMachine); err != nil {
+		return false, fmt.Errorf("failed to unpause CAPI resources for deletion: %w", err)
+	}
+
 	if capiMachine.DeletionTimestamp.IsZero() {
 		logger.Info("Machine API machine is being deleted, issuing deletion to corresponding Cluster API machine")
 
@@ -1557,4 +1561,54 @@ func isTerminalConfigurationError(err error) bool {
 	}
 
 	return false
+}
+
+// ensureUnpausedForDeletion removes the paused annotation from CAPI resources
+// before they are deleted, on platforms where the provider creates sub-objects
+// with independent finalizers. On vSphere, CAPV creates a VSphereVM for each
+// VSphereMachine; the VSphereVM has its own finalizer that CAPV only processes
+// when the resource is not paused. Without removing the pause annotation
+// before deletion, a deadlock occurs: the provider skips reconciliation
+// because the resource is paused, and garbage collection cannot remove the
+// object because the finalizer is still present. On platforms without
+// sub-objects (e.g. AWS), this is a no-op.
+func (r *MachineSyncReconciler) ensureUnpausedForDeletion(ctx context.Context, capiMachine *clusterv1.Machine, infraMachine client.Object) error {
+	switch r.Platform {
+	case configv1.VSpherePlatformType:
+		return r.removePreDeletionPauseAnnotation(ctx, capiMachine, infraMachine)
+	default:
+		return nil
+	}
+}
+
+func (r *MachineSyncReconciler) removePreDeletionPauseAnnotation(ctx context.Context, capiMachine *clusterv1.Machine, infraMachine client.Object) error {
+	logger := logf.FromContext(ctx)
+
+	if annotations.HasPaused(capiMachine) {
+		capiMachineCopy := capiMachine.DeepCopy()
+		delete(capiMachine.Annotations, clusterv1.PausedAnnotation)
+
+		if err := r.Patch(ctx, capiMachine, client.MergeFrom(capiMachineCopy)); err != nil {
+			return fmt.Errorf("failed to remove paused annotation from Cluster API machine: %w", err)
+		}
+
+		logger.Info("Removed paused annotation from Cluster API machine before deletion")
+	}
+
+	if !util.IsNilObject(infraMachine) && annotations.HasPaused(infraMachine) {
+		infraMachineCopy, ok := infraMachine.DeepCopyObject().(client.Object)
+		if !ok {
+			return errAssertingInfrasMachineClientObject
+		}
+
+		util.RemoveAnnotation(infraMachine, clusterv1.PausedAnnotation)
+
+		if err := r.Patch(ctx, infraMachine, client.MergeFrom(infraMachineCopy)); err != nil {
+			return fmt.Errorf("failed to remove paused annotation from Cluster API infra machine: %w", err)
+		}
+
+		logger.Info("Removed paused annotation from Cluster API infra machine before deletion")
+	}
+
+	return nil
 }
