@@ -232,10 +232,6 @@ func (c *InstallerController) reconcile(ctx context.Context, log logr.Logger) op
 
 	revisionReconciler := newRevisionReconciler(c, log)
 
-	if clusterAPI.Spec != nil {
-		revisionReconciler.unmanagedCRDs = clusterAPI.Spec.UnmanagedCustomResourceDefinitions
-	}
-
 	reconciledRevision, messages, errs := revisionReconciler.reconcile(ctx, clusterAPI.Status.Revisions)
 
 	// Write relatedObjects via non-SSA merge patch so the SSA conditions
@@ -324,8 +320,9 @@ func (c *InstallerController) updateWatches(ctx context.Context, log logr.Logger
 func (c *InstallerController) writeCurrentRevision(ctx context.Context, clusterAPI *operatorv1alpha1.ClusterAPI, revisionName operatorv1alpha1.RevisionName) error {
 	applyConfig := operatorv1alpha1apply.ClusterAPI(clusterAPIName).
 		WithUID(clusterAPI.UID).
-		WithStatus(operatorv1alpha1apply.ClusterAPIStatus().
-			WithCurrentRevision(revisionName),
+		WithStatus(
+			operatorv1alpha1apply.ClusterAPIStatus().
+				WithCurrentRevision(revisionName),
 		)
 
 	patch := util.ApplyConfigPatch(applyConfig)

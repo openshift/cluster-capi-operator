@@ -57,9 +57,7 @@ const (
 	ResultGenerator = operatorstatus.ControllerResultGenerator(controllerName)
 )
 
-var (
-	errMaxRevisionsAllowed = errors.New("max number of revisions reached")
-)
+var errMaxRevisionsAllowed = errors.New("max number of revisions reached")
 
 // RevisionController reconciles the ClusterAPI singleton to create and track revisions
 // based on provider images.
@@ -91,12 +89,6 @@ func (r *RevisionController) Reconcile(ctx context.Context, _ ctrl.Request) (ctr
 }
 
 func (r *RevisionController) reconcile(ctx context.Context, log logr.Logger) operatorstatus.ReconcileResult {
-	// Generate a desired revision from the current state
-	desiredRevision, result := r.generateDesiredRevision(ctx)
-	if result != nil {
-		return *result
-	}
-
 	// Get ClusterAPI singleton
 	clusterAPI := &operatorv1alpha1.ClusterAPI{}
 	if err := r.Get(ctx, client.ObjectKey{Name: clusterAPIName}, clusterAPI); err != nil {
@@ -105,6 +97,12 @@ func (r *RevisionController) reconcile(ctx context.Context, log logr.Logger) ope
 		}
 
 		return ResultGenerator.Error(fmt.Errorf("fetching ClusterAPI: %w", err))
+	}
+
+	// Generate a desired revision from the current state
+	desiredRevision, result := r.generateDesiredRevision(ctx, clusterAPI)
+	if result != nil {
+		return *result
 	}
 
 	// Create a reverse sorted, merged list of revisions. It will prepend the
@@ -143,7 +141,7 @@ func (r *RevisionController) reconcile(ctx context.Context, log logr.Logger) ope
 	return reconcileResult
 }
 
-func (r *RevisionController) generateDesiredRevision(ctx context.Context) (revisiongenerator.RenderedRevision, *operatorstatus.ReconcileResult) {
+func (r *RevisionController) generateDesiredRevision(ctx context.Context, clusterAPI *operatorv1alpha1.ClusterAPI) (revisiongenerator.RenderedRevision, *operatorstatus.ReconcileResult) {
 	infra := &configv1.Infrastructure{}
 	if err := r.Get(ctx, client.ObjectKey{Name: infrastructureName}, infra); err != nil {
 		return nil, ResultGenerator.ErrorP(fmt.Errorf("fetching infrastructure: %w", err))
@@ -167,7 +165,17 @@ func (r *RevisionController) generateDesiredRevision(ctx context.Context) (revis
 
 	manifestSubstitutions["INFRASTRUCTURE_NAME"] = infra.Status.InfrastructureName
 
-	revision, err := revisiongenerator.NewRenderedRevision(providerComponents, revisiongenerator.WithManifestSubstitutions(manifestSubstitutions))
+	// Spec is +required by the API, default anyway to avoid potential panic
+	var unmanagedCRDs []string
+	if clusterAPI.Spec != nil {
+		unmanagedCRDs = clusterAPI.Spec.UnmanagedCustomResourceDefinitions
+	}
+
+	revision, err := revisiongenerator.NewRenderedRevision(
+		providerComponents,
+		revisiongenerator.WithManifestSubstitutions(manifestSubstitutions),
+		revisiongenerator.WithUnmanagedCRDs(unmanagedCRDs),
+	)
 	if err != nil {
 		return nil, ResultGenerator.ErrorP(fmt.Errorf("error creating rendered revision: %w", err))
 	}
@@ -217,7 +225,8 @@ func (r *RevisionController) mergeRevisions(log logr.Logger, apiRevisions []oper
 		return nil, fmt.Errorf("error converting installer revision to API revision: %w", err)
 	}
 
-	log.Info("Creating new revision",
+	log.Info(
+		"Creating new revision",
 		"revisionName", newAPIRevision.Name,
 		"revisionIndex", newAPIRevision.Revision,
 		"contentID", newAPIRevision.ContentID,
@@ -324,7 +333,8 @@ func (r *RevisionController) SetupWithManager(mgr ctrl.Manager, tlsOptions []fun
 			builder.WithPredicates(predicate.NewPredicateFuncs(func(obj client.Object) bool {
 				return obj.GetName() == clusterAPIName
 			}))).
-		Watches(&configv1.Infrastructure{},
+		Watches(
+			&configv1.Infrastructure{},
 			handler.EnqueueRequestsFromMapFunc(toClusterAPI),
 			builder.WithPredicates(predicate.Funcs{
 				CreateFunc: func(e event.CreateEvent) bool {

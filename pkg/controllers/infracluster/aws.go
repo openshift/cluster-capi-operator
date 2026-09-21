@@ -191,14 +191,14 @@ func extractLoadBalancerConfigFromMAPIAWSProviderSpec(providerSpec *mapiv1beta1.
 		}
 
 		return &awsv1.AWSLoadBalancerSpec{
-				Name:             &lbFirst.Name,
-				LoadBalancerType: lbTypeFirst,
-				Scheme:           &awsv1.ELBSchemeInternal,
-			}, &awsv1.AWSLoadBalancerSpec{
-				Name:             &lbSecond.Name,
-				LoadBalancerType: lbTypeSecond,
-				Scheme:           &awsv1.ELBSchemeInternetFacing,
-			}, nil
+			Name:             &lbFirst.Name,
+			LoadBalancerType: lbTypeFirst,
+			Scheme:           &awsv1.ELBSchemeInternal,
+		}, &awsv1.AWSLoadBalancerSpec{
+			Name:             &lbSecond.Name,
+			LoadBalancerType: lbTypeSecond,
+			Scheme:           &awsv1.ELBSchemeInternetFacing,
+		}, nil
 	default:
 		return nil, nil, fmt.Errorf("%w: expected 1 or 2, got %d", ErrInvalidNumberOfControlPlaneLoadBalancers, len(providerSpec.LoadBalancers))
 	}

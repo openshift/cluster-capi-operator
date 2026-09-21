@@ -43,7 +43,6 @@ import (
 func toBoxcutterRevision(
 	installerRevision revisiongenerator.InstallerRevision,
 	collectObjects func(obj *unstructured.Unstructured),
-	unmanagedCRDs []string,
 ) (boxcutter.Revision, error) {
 	probeOpts := util.SliceMap(allProbes(), func(p *probing.GroupKindSelector) boxcutter.PhaseReconcileOption {
 		return boxcutter.WithProbe(boxcutter.ProgressProbeType, p)
@@ -63,45 +62,23 @@ func toBoxcutterRevision(
 		phases = append(phases, bcPhase)
 	}
 
-	unmanagedSet := sets.New(unmanagedCRDs...)
+	unmanagedSet := sets.New(installerRevision.UnmanagedCRDs()...)
+
 	var compatObjects []*unstructured.Unstructured
 
 	for _, component := range installerRevision.Components() {
 		// Step 1: Transform — replace unmanaged CRDs with CompatibilityRequirements.
 		// Future transformations (proxy env vars, etc.) chain here before the split.
-		var transformed []*unstructured.Unstructured
-
-		for _, obj := range component.Objects() {
-			collectObjects(obj)
-
-			if isCRD(obj) && unmanagedSet.Has(obj.GetName()) {
-				unmanagedSet.Delete(obj.GetName())
-
-				cr, err := buildCompatibilityRequirement(obj)
-				if err != nil {
-					return nil, fmt.Errorf("building CompatibilityRequirement for CRD %s: %w", obj.GetName(), err)
-				}
-
-				labels := cr.GetLabels()
-				if labels == nil {
-					labels = make(map[string]string)
-				}
-
-				labels[revisiongenerator.ManagedLabelKey] = "compatibility-requirements"
-				cr.SetLabels(labels)
-
-				collectObjects(cr)
-				compatObjects = append(compatObjects, cr)
-
-				// Unmanaged CRD intentionally dropped — not installed, only checked for compatibility.
-				continue
-			}
-
-			transformed = append(transformed, obj)
+		transformed, compat, err := transformComponentObjects(component.Objects(), unmanagedSet, collectObjects)
+		if err != nil {
+			return nil, err
 		}
+
+		compatObjects = append(compatObjects, compat...)
 
 		// Step 2: Split transformed objects into CRDs and non-CRDs, build phases.
 		var crds, objects []*unstructured.Unstructured
+
 		for _, obj := range transformed {
 			if isCRD(obj) {
 				crds = append(crds, obj)
@@ -112,10 +89,6 @@ func toBoxcutterRevision(
 
 		addPhase(component.Name()+"-crds", crds)
 		addPhase(component.Name(), objects)
-	}
-
-	if unmanagedSet.Len() > 0 {
-		return nil, fmt.Errorf("unmanaged CRDs not found in any component: %v", sets.List(unmanagedSet))
 	}
 
 	// Prepend compatibility phase before all component phases.
@@ -130,6 +103,47 @@ func toBoxcutterRevision(
 		installerRevision.RevisionIndex(),
 		phases,
 	), nil
+}
+
+// transformComponentObjects applies installation-time transformations to a
+// single component's objects. CRDs named in unmanagedSet are replaced by a
+// CompatibilityRequirement: the CRD is dropped from the objects to install and
+// the requirement is returned separately for the compatibility phase.
+func transformComponentObjects(
+	objects []*unstructured.Unstructured,
+	unmanagedSet sets.Set[string],
+	collectObjects func(obj *unstructured.Unstructured),
+) ([]*unstructured.Unstructured, []*unstructured.Unstructured, error) {
+	var transformed, compatObjects []*unstructured.Unstructured
+
+	for _, obj := range objects {
+		collectObjects(obj)
+
+		if !isCRD(obj) || !unmanagedSet.Has(obj.GetName()) {
+			transformed = append(transformed, obj)
+
+			continue
+		}
+
+		cr, err := buildCompatibilityRequirement(obj)
+		if err != nil {
+			return nil, nil, fmt.Errorf("building CompatibilityRequirement for CRD %s: %w", obj.GetName(), err)
+		}
+
+		labels := cr.GetLabels()
+		if labels == nil {
+			labels = make(map[string]string)
+		}
+
+		labels[revisiongenerator.ManagedLabelKey] = "compatibility-requirements"
+		cr.SetLabels(labels)
+
+		collectObjects(cr)
+
+		compatObjects = append(compatObjects, cr)
+	}
+
+	return transformed, compatObjects, nil
 }
 
 func isCRD(obj *unstructured.Unstructured) bool {
@@ -154,8 +168,10 @@ func processAdoptExistingAnnotations(objects []*unstructured.Unstructured) ([]*u
 		if hasAnnotation {
 			// Disable collision protection if the annotation is set to "always"
 			if value == revisiongenerator.AdoptExistingAlways {
-				reconcileOpts = append(reconcileOpts,
-					boxcutter.WithObjectReconcileOptions(obj,
+				reconcileOpts = append(
+					reconcileOpts,
+					boxcutter.WithObjectReconcileOptions(
+						obj,
 						boxcutter.WithCollisionProtection(boxcutter.CollisionProtectionNone),
 					),
 				)

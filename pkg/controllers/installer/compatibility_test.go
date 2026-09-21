@@ -29,10 +29,12 @@ import (
 
 func toUnstructuredCRD(crd *apiextensionsv1.CustomResourceDefinition) (*unstructured.Unstructured, error) {
 	crd.SetGroupVersionKind(schema.GroupVersionKind{Group: "apiextensions.k8s.io", Version: "v1", Kind: "CustomResourceDefinition"})
+
 	data, err := runtime.DefaultUnstructuredConverter.ToUnstructured(crd)
 	if err != nil {
 		return nil, err
 	}
+
 	return &unstructured.Unstructured{Object: data}, nil
 }
 
@@ -43,6 +45,7 @@ var _ = Describe("buildCompatibilityRequirement", func() {
 		typed := test.GenerateSchemalessSpecStatusCRD(testCRDGVK)
 		u, err := toUnstructuredCRD(typed)
 		Expect(err).NotTo(HaveOccurred())
+
 		crd = u
 	})
 

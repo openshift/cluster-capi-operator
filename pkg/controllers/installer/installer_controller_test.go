@@ -707,6 +707,7 @@ var _ = Describe("InstallerController CompatibilityRequirements", Serial, func()
 		)
 
 		By("verifying the CompatibilityRequirement was created")
+
 		cr := &apiextensionsv1alpha1.CompatibilityRequirement{}
 		cr.SetName(testWidgetCRName)
 		Eventually(kWithCtx(ctx).Get(cr)).
@@ -718,6 +719,7 @@ var _ = Describe("InstallerController CompatibilityRequirements", Serial, func()
 		setCompatibilityRequirementConditions(ctx, testWidgetCRName, true, true)
 
 		By("verifying the revision completes")
+
 		clusterAPI := &operatorv1alpha1.ClusterAPI{}
 		Expect(cl.Get(ctx, client.ObjectKey{Name: clusterAPIName}, clusterAPI)).To(Succeed())
 		latest := latestRevision(clusterAPI.Status.Revisions)
@@ -787,11 +789,11 @@ var _ = Describe("InstallerController CompatibilityRequirements", Serial, func()
 		)
 
 		By("verifying rev1 objects still exist")
+
 		cm, err := getConfigMap(ctx, coreCMName)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(cm.Data).To(HaveKeyWithValue("version", "v1"))
 	}, defaultNodeTimeout)
-
 })
 
 var _ = Describe("InstallerController without ClusterAPI", Serial, func() {
