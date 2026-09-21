@@ -338,6 +338,7 @@ func (r *RevisionController) SetupWithManager(mgr ctrl.Manager, tlsOptions []fun
 					if !oldOK || !newOK || !isInfrastructureReady(newInfra) {
 						return false
 					}
+
 					return !isInfrastructureReady(oldInfra)
 				},
 			}),
