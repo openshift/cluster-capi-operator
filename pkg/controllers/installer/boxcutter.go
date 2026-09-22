@@ -117,6 +117,16 @@ func transformComponentObjects(
 	var transformed, compatObjects []*unstructured.Unstructured
 
 	for _, obj := range objects {
+		// WARNING: this is deliberately called for every object, including
+		// unmanaged CRDs which are dropped below and never installed.
+		// Collecting a CRD is what registers its instances in relatedObjects,
+		// and must-gather should fetch those instances whether or not we manage
+		// the CRD.
+		//
+		// Do not narrow this to only the objects we emit without first teaching
+		// the relatedObjects collector to handle CompatibilityRequirements like
+		// CRDs. Deferred to a follow-up PR.
+		// See https://github.com/openshift/cluster-capi-operator/pull/648#discussion_r3863095108
 		collectObjects(obj)
 
 		if !isCRD(obj) || !unmanagedSet.Has(obj.GetName()) {
