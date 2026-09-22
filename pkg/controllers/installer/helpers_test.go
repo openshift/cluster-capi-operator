@@ -251,8 +251,14 @@ func latestRevision(revisions []operatorv1alpha1.ClusterAPIInstallerRevision) op
 }
 
 // addRevision appends a new revision to ClusterAPI.Status.Revisions.
-// It uses revisiongenerator to compute the content ID, then writes via status update.
 func addRevision(ctx context.Context, providerNames ...string) operatorv1alpha1.ClusterAPIInstallerRevision {
+	GinkgoHelper()
+	return addRevisionWithUnmanagedCRDs(ctx, nil, providerNames...)
+}
+
+// addRevisionWithUnmanagedCRDs renders a revision to compute its content ID,
+// then appends it to ClusterAPI.Status.Revisions.
+func addRevisionWithUnmanagedCRDs(ctx context.Context, unmanagedCRDs []string, providerNames ...string) operatorv1alpha1.ClusterAPIInstallerRevision {
 	GinkgoHelper()
 
 	// Get current ClusterAPI to determine revision index.
@@ -265,7 +271,7 @@ func addRevision(ctx context.Context, providerNames ...string) operatorv1alpha1.
 		profiles := lookupProfiles(providerNames...)
 
 		// Render the revision to compute the correct content ID.
-		rendered, err := revisiongenerator.NewRenderedRevision(profiles)
+		rendered, err := revisiongenerator.NewRenderedRevision(profiles, revisiongenerator.WithUnmanagedCRDs(unmanagedCRDs))
 		Expect(err).NotTo(HaveOccurred())
 
 		var revisionIndex int64
@@ -448,21 +454,6 @@ func waitForRevision(ctx context.Context, revision operatorv1alpha1.RevisionName
 			test.HaveCondition(conditionTypeProgressing).WithStatus(configv1.ConditionFalse),
 		)
 	})
-}
-
-// setUnmanagedCRDs updates the ClusterAPI spec to set the unmanaged CRD list.
-func setUnmanagedCRDs(ctx context.Context, unmanagedCRDs []string) {
-	GinkgoHelper()
-
-	clusterAPI := &operatorv1alpha1.ClusterAPI{}
-	Expect(cl.Get(ctx, client.ObjectKey{Name: clusterAPIName}, clusterAPI)).To(Succeed())
-
-	if clusterAPI.Spec == nil {
-		clusterAPI.Spec = &operatorv1alpha1.ClusterAPISpec{}
-	}
-
-	clusterAPI.Spec.UnmanagedCustomResourceDefinitions = unmanagedCRDs
-	Expect(cl.Update(ctx, clusterAPI)).To(Succeed())
 }
 
 // setCompatibilityRequirementConditions sets Admitted and Compatible conditions on a CompatibilityRequirement.

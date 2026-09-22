@@ -32,7 +32,6 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -666,37 +665,22 @@ var _ = Describe("InstallerController CompatibilityRequirements", Serial, func()
 	testWidgetCRName := "ccapio-" + testWidgetCRDName
 	testGadgetCRName := "ccapio-" + testGadgetCRDName
 
-	// Each test uses createFixturesWithUnmanagedCRDs, which deletes and
-	// recreates the ClusterAPI object as needed, because
-	// unmanagedCustomResourceDefinitions cannot be unset once set.
-	createFixturesWithUnmanagedCRDs := func(ctx context.Context, unmanagedCRDs []string) {
-		GinkgoHelper()
-
-		var cleanupObjs []client.Object //nolint:prealloc
-
+	BeforeEach(func() {
 		DeferCleanup(func(ctx context.Context) {
-			deleteAndWait(ctx, cleanupObjs...)
+			widgetRequirement := &apiextensionsv1alpha1.CompatibilityRequirement{}
+			widgetRequirement.SetName(testWidgetCRName)
+			gadgetRequirement := &apiextensionsv1alpha1.CompatibilityRequirement{}
+			gadgetRequirement.SetName(testGadgetCRName)
+			coreConfigMap := &corev1.ConfigMap{}
+			coreConfigMap.SetName(coreCMName)
+			coreConfigMap.SetNamespace("default")
+			deleteAndWait(ctx, widgetRequirement, gadgetRequirement, coreConfigMap)
 		})
-
-		clusterAPIObj := &operatorv1alpha1.ClusterAPI{
-			ObjectMeta: metav1.ObjectMeta{Name: clusterAPIName},
-			Spec: &operatorv1alpha1.ClusterAPISpec{
-				UnmanagedCustomResourceDefinitions: unmanagedCRDs,
-			},
-		}
-		Expect(cl.Create(ctx, clusterAPIObj)).To(Succeed())
-		cleanupObjs = append(cleanupObjs, clusterAPIObj)
-
-		clusterOperatorObj := &configv1.ClusterOperator{
-			ObjectMeta: metav1.ObjectMeta{Name: "cluster-api"},
-		}
-		Expect(cl.Create(ctx, clusterOperatorObj)).To(Succeed())
-		cleanupObjs = append(cleanupObjs, clusterOperatorObj)
-	}
+	})
 
 	It("should gate on Admitted and Compatible conditions", func(ctx context.Context) {
-		createFixturesWithUnmanagedCRDs(ctx, []string{testWidgetCRDName})
-		addRevision(ctx, providerCRD)
+		createFixtures(ctx)
+		addRevisionWithUnmanagedCRDs(ctx, []string{testWidgetCRDName}, providerCRD)
 
 		By("verifying the controller is waiting on the compatibility phase")
 		waitForConditions(ctx,
@@ -727,8 +711,8 @@ var _ = Describe("InstallerController CompatibilityRequirements", Serial, func()
 	}, defaultNodeTimeout)
 
 	It("should stay progressing when conditions are not set", func(ctx context.Context) {
-		createFixturesWithUnmanagedCRDs(ctx, []string{testWidgetCRDName})
-		addRevision(ctx, providerCRD)
+		createFixtures(ctx)
+		addRevisionWithUnmanagedCRDs(ctx, []string{testWidgetCRDName}, providerCRD)
 
 		waitForConditions(ctx,
 			test.HaveCondition(conditionTypeProgressing).
@@ -748,8 +732,8 @@ var _ = Describe("InstallerController CompatibilityRequirements", Serial, func()
 	}, defaultNodeTimeout)
 
 	It("should block when one of multiple unmanaged CRDs is incompatible", func(ctx context.Context) {
-		createFixturesWithUnmanagedCRDs(ctx, []string{testWidgetCRDName, testGadgetCRDName})
-		addRevision(ctx, providerCRD, providerMixed)
+		createFixtures(ctx)
+		addRevisionWithUnmanagedCRDs(ctx, []string{testWidgetCRDName, testGadgetCRDName}, providerCRD, providerMixed)
 
 		waitForConditions(ctx,
 			test.HaveCondition(conditionTypeProgressing).
@@ -772,15 +756,14 @@ var _ = Describe("InstallerController CompatibilityRequirements", Serial, func()
 	}, defaultNodeTimeout)
 
 	It("should leave previous revision running while blocked", func(ctx context.Context) {
-		createFixturesWithUnmanagedCRDs(ctx, nil)
+		createFixtures(ctx)
 
 		By("installing rev1 normally")
 		addRevisionAndWaitForSuccess(ctx, providerCore)
 		Expect(checkConfigMap(ctx, coreCMName)).To(Succeed())
 
-		By("setting unmanagedCRDs and adding rev2")
-		setUnmanagedCRDs(ctx, []string{testWidgetCRDName})
-		addRevision(ctx, providerCore, providerCRD)
+		By("adding rev2 with an unmanaged CRD")
+		addRevisionWithUnmanagedCRDs(ctx, []string{testWidgetCRDName}, providerCore, providerCRD)
 
 		waitForConditions(ctx,
 			test.HaveCondition(conditionTypeProgressing).
