@@ -17,6 +17,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/validation/field"
@@ -88,6 +89,22 @@ func (r *ClusterWebhook) validateClusterName(ctx context.Context, cluster *clust
 	return nil
 }
 
+func knownInfraClusterKinds() []string {
+	return []string{
+		"AWSCluster",
+		"AzureCluster",
+		"GCPCluster",
+		"IBMPowerVSCluster",
+		"OpenStackCluster",
+		"VSphereCluster",
+		"Metal3Cluster",
+	}
+}
+
+func isKnownInfraClusterKind(kind string) bool {
+	return slices.Contains(knownInfraClusterKinds(), kind)
+}
+
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type.
 func (r *ClusterWebhook) ValidateCreate(ctx context.Context, cluster *clusterv1.Cluster) (admission.Warnings, error) {
 	errs := []error{}
@@ -97,11 +114,9 @@ func (r *ClusterWebhook) ValidateCreate(ctx context.Context, cluster *clusterv1.
 		return nil, field.Required(infrastructureRefPath, "infrastructureRef is required")
 	}
 
-	switch cluster.Spec.InfrastructureRef.Kind {
-	case "AWSCluster", "AzureCluster", "GCPCluster", "IBMPowerVSCluster", "OpenStackCluster", "VSphereCluster", "Metal3Cluster":
-	default:
+	if !isKnownInfraClusterKind(cluster.Spec.InfrastructureRef.Kind) {
 		errs = append(errs, field.NotSupported(infrastructureRefPath.Child("kind"),
-			cluster.Spec.InfrastructureRef.Kind, []string{"AWSCluster", "AzureCluster", "GCPCluster", "IBMPowerVSCluster", "OpenStackCluster", "VSphereCluster", "Metal3Cluster"}))
+			cluster.Spec.InfrastructureRef.Kind, knownInfraClusterKinds()))
 	}
 
 	errs = append(errs, r.validateClusterName(ctx, cluster))
@@ -120,10 +135,8 @@ func (r *ClusterWebhook) ValidateUpdate(ctx context.Context, _, newObj *clusterv
 		return nil, field.Required(infrastructureRefPath, "infrastructureRef is required")
 	}
 
-	switch newObj.Spec.InfrastructureRef.Kind {
-	case "AWSCluster", "AzureCluster", "GCPCluster", "IBMPowerVSCluster", "OpenStackCluster", "VSphereCluster", "Metal3Cluster":
-	default:
-		return nil, field.NotSupported(field.NewPath("spec", "infrastructureRef", "kind"), newObj.Spec.InfrastructureRef.Kind, []string{"AWSCluster", "AzureCluster", "GCPCluster", "IBMPowerVSCluster", "OpenStackCluster", "VSphereCluster", "Metal3Cluster"})
+	if !isKnownInfraClusterKind(newObj.Spec.InfrastructureRef.Kind) {
+		return nil, field.NotSupported(field.NewPath("spec", "infrastructureRef", "kind"), newObj.Spec.InfrastructureRef.Kind, knownInfraClusterKinds())
 	}
 
 	return nil, nil

@@ -233,7 +233,7 @@ func getDefaultSubnetFromMachines(ctx context.Context, log logr.Logger, kubeclie
 		ctx,
 		&mapiMachines,
 		client.InNamespace(defaultMAPINamespace),
-		client.MatchingLabels{"machine.openshift.io/cluster-api-machine-role": "master"},
+		controlPlaneSelector(),
 	); err != nil {
 		return nil, fmt.Errorf("listing control plane machines: %w", err)
 	}

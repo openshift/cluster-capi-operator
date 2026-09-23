@@ -238,7 +238,7 @@ var _ = Describe("Unit test Diff", func() {
 			}},
 			diffOpts: []DiffOption{
 				func(d *differ) {
-					d.modifyFuncs["test"] = func(obj map[string]interface{}) error { //nolint:unparam
+					d.modifyFuncs["test"] = func(obj map[string]interface{}) error {
 						obj["new"] = "new"
 						obj["changed"] = 3
 						obj["removed"] = 3
