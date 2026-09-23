@@ -25,6 +25,7 @@ import (
 	"github.com/go-logr/logr"
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	operatorv1alpha1apply "github.com/openshift/client-go/operator/applyconfigurations/operator/v1alpha1"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/labels"
@@ -44,6 +45,7 @@ import (
 	"pkg.package-operator.run/boxcutter"
 	"pkg.package-operator.run/boxcutter/managedcache"
 
+	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
 	"github.com/openshift/cluster-capi-operator/pkg/revisiongenerator"
@@ -136,8 +138,9 @@ func SetupWithManager(mgr ctrl.Manager, providerProfiles []providerimages.Provid
 }
 
 func setupTrackingCache(mgr ctrl.Manager) (managedcache.TrackingCache, error) {
-	// Configure cache to watch only objects with our label. The label is
-	// applied by the revision generator.
+	// Use the revision-managed label as the sole scope for this cache. Revisions
+	// can manage resources in arbitrary namespaces, so per-kind namespace
+	// restrictions would make the cache silently miss managed objects.
 	managedByReq, err := labels.NewRequirement(revisiongenerator.ManagedLabelKey, selection.Exists, nil)
 	if err != nil {
 		return nil, fmt.Errorf("creating managed-by label requirement: %w", err)
@@ -150,6 +153,12 @@ func setupTrackingCache(mgr ctrl.Manager) (managedcache.TrackingCache, error) {
 			Scheme:               mgr.GetScheme(),
 			DefaultLabelSelector: labels.NewSelector().Add(*managedByReq),
 			Mapper:               mgr.GetRESTMapper(),
+			// This is an intentionally narrow exception: the only retained
+			// Secret is the management kubeconfig in the CAPI namespace. Keep
+			// its informer namespace-scoped to avoid cluster-wide Secret RBAC.
+			ByObject: map[client.Object]cache.ByObject{
+				&corev1.Secret{}: {Namespaces: map[string]cache.Config{controllers.DefaultCAPINamespace: {}}},
+			},
 		},
 	)
 	if err != nil {

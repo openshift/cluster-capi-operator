@@ -156,6 +156,22 @@ data:
 %s`, name, strings.TrimRight(pairs.String(), "\n"))
 }
 
+// SecretYAML returns a Secret YAML document in the installer tracking namespace.
+func SecretYAML(name string, data map[string]string) string {
+	var pairs strings.Builder
+	for k, v := range data {
+		fmt.Fprintf(&pairs, "  %s: %s\\n", k, v)
+	}
+
+	return fmt.Sprintf(`apiVersion: v1
+kind: Secret
+metadata:
+  name: %s
+  namespace: openshift-cluster-api
+stringData:
+%s`, name, strings.TrimRight(pairs.String(), "\\n"))
+}
+
 // ConfigMapWithAnnotationsYAML returns a ConfigMap YAML document with the given annotations and data.
 func ConfigMapWithAnnotationsYAML(name string, annotations map[string]string, data map[string]string) string {
 	var annPairs strings.Builder

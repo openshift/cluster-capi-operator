@@ -516,8 +516,16 @@ var _ = Describe("RevisionController waiting states", Serial, func() {
 			Expect(ca.Status.Revisions).To(BeEmpty())
 		}, defaultNodeTimeout)
 
-		It("creates revision after Infrastructure gets PlatformStatus", func(ctx context.Context) {
-			// Now update Infrastructure with PlatformStatus
+		It("waits for InfrastructureName after PlatformStatus, then creates revision", func(ctx context.Context) {
+			// PlatformStatus alone is insufficient to render the kubeconfig component.
+			Expect(kWithCtx(ctx).UpdateStatus(infra, func() {
+				infra.Status.ControlPlaneTopology = configv1.HighlyAvailableTopologyMode
+				infra.Status.InfrastructureTopology = configv1.HighlyAvailableTopologyMode
+				infra.Status.PlatformStatus = &configv1.PlatformStatus{Type: configv1.AWSPlatformType}
+			})()).To(Succeed())
+			Consistently(kWithCtx(ctx).Object(&operatorv1alpha1.ClusterAPI{ObjectMeta: metav1.ObjectMeta{Name: "cluster"}})).
+				WithContext(ctx).Should(HaveField("Status.Revisions", BeEmpty()))
+
 			Expect(kWithCtx(ctx).UpdateStatus(infra, func() {
 				infraFixtureAddStatus(infra)
 			})()).To(Succeed())
@@ -597,11 +605,20 @@ var _ = Describe("RevisionController manifest substitutions", Serial, func() {
 		Expect(updatedClusterAPI.Status.Revisions).To(HaveLen(1))
 
 		rev := updatedClusterAPI.Status.Revisions[0]
-		Expect(rev.ManifestSubstitutions).To(HaveLen(2))
-		Expect(rev.ManifestSubstitutions[0].Key).To(Equal("TLS_CIPHER_SUITES"))
-		Expect(*rev.ManifestSubstitutions[0].Value).To(Equal("TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"))
-		Expect(rev.ManifestSubstitutions[1].Key).To(Equal("TLS_MIN_VERSION"))
-		Expect(*rev.ManifestSubstitutions[1].Value).To(Equal("VersionTLS12"))
+		Expect(rev.ManifestSubstitutions).To(ConsistOf(
+			SatisfyAll(
+				HaveField("Key", Equal("INFRASTRUCTURE_NAME")),
+				HaveField("Value", HaveValue(Equal("test-infra"))),
+			),
+			SatisfyAll(
+				HaveField("Key", Equal("TLS_CIPHER_SUITES")),
+				HaveField("Value", HaveValue(Equal("TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"))),
+			),
+			SatisfyAll(
+				HaveField("Key", Equal("TLS_MIN_VERSION")),
+				HaveField("Value", HaveValue(Equal("VersionTLS12"))),
+			),
+		))
 	}, defaultNodeTimeout)
 })
 

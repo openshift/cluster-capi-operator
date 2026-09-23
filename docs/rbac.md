@@ -20,7 +20,7 @@ Both SAs also bind to ClusterRole `system:openshift:openshift-cluster-api:read-t
 
 ### capi-controllers
 
-The `capi-controllers` ServiceAccount runs the `capi-controllers` binary (core cluster, infra cluster, kubeconfig, secret sync, and webhook controllers):
+The `capi-controllers` ServiceAccount runs the `capi-controllers` binary (core cluster, infra cluster, secret sync, and webhook controllers):
 
 | Manifest | Kind | Scope | Purpose |
 |----------|------|-------|---------|
@@ -42,6 +42,15 @@ The `machine-api-migration` ServiceAccount runs the `machine-api-migration` bina
 | `0000_30_cluster-api_03_machine-api-migration-rbac-roles.yaml` | Role `machine-api-migration` | `openshift-machine-api` | MAPI machines (full), machinesets (no create), events |
 
 This SA also binds to ClusterRole `system:openshift:openshift-cluster-api:read-tls-configuration` for APIServer TLS profile reading.
+
+## Revision installer RBAC
+
+The revision installer manages the generated management kubeconfig Secret.
+See [Management kubeconfig Secret](management-kubeconfig.md) for the Secret
+lifecycle and projected-token design.
+
+The installer’s Secret permissions are separate from the runtime permissions
+granted to CAPI consumers.
 
 ## Principles
 

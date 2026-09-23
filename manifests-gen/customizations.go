@@ -60,9 +60,15 @@ func processObjects(objs []client.Object, opts cmdlineOptions) ([]client.Object,
 			case "Service":
 				replaceCertMangerServiceSecret(obj, serviceSecretNames)
 
-			case "Namespace", "Secret":
+			case "Namespace":
 				// Don't emit these resources
 				continue
+			case "Secret":
+				// Kubeconfig Secrets are consumed by Cluster API and managed by the
+				// revision installer; other Secrets are managed separately.
+				if !strings.HasSuffix(obj.GetName(), "-kubeconfig") {
+					continue
+				}
 			}
 
 		case "apps":

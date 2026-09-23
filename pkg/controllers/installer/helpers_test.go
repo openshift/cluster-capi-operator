@@ -28,6 +28,7 @@ import (
 	"github.com/onsi/gomega/types"
 	configv1 "github.com/openshift/api/config/v1"
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -326,6 +327,10 @@ func createFixtures(ctx context.Context) {
 	DeferCleanup(func(ctx context.Context) {
 		deleteAndWait(ctx, cleanupObjs...)
 	})
+
+	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "openshift-cluster-api"}}
+	Expect(cl.Create(ctx, ns)).To(Succeed())
+	cleanupObjs = append(cleanupObjs, ns)
 
 	clusterAPIObj := &operatorv1alpha1.ClusterAPI{
 		ObjectMeta: metav1.ObjectMeta{Name: clusterAPIName},

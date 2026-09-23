@@ -1030,3 +1030,33 @@ spec:
           defaultMode: 420
           secretName: capi-controllers-metrics-tls
 status: {}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  annotations:
+    capi-operator.openshift.io/adopt-existing: always
+  labels:
+    cluster.x-k8s.io/cluster-name: ${INFRASTRUCTURE_NAME}
+  name: ${INFRASTRUCTURE_NAME}-kubeconfig
+  namespace: openshift-cluster-api
+stringData:
+  value: |
+    apiVersion: v1
+    clusters:
+    - name: management-cluster
+      cluster:
+        server: https://kubernetes.default.svc:443
+        certificate-authority: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+    contexts:
+    - name: management-cluster
+      context:
+        cluster: management-cluster
+        namespace: openshift-cluster-api
+        user: service-account
+    current-context: management-cluster
+    users:
+    - name: service-account
+      user:
+        tokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+type: cluster.x-k8s.io/secret
