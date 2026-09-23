@@ -669,8 +669,10 @@ var _ = Describe("InstallerController CompatibilityRequirements", Serial, func()
 		DeferCleanup(func(ctx context.Context) {
 			widgetRequirement := &apiextensionsv1alpha1.CompatibilityRequirement{}
 			widgetRequirement.SetName(testWidgetCRName)
+
 			gadgetRequirement := &apiextensionsv1alpha1.CompatibilityRequirement{}
 			gadgetRequirement.SetName(testGadgetCRName)
+
 			coreConfigMap := &corev1.ConfigMap{}
 			coreConfigMap.SetName(coreCMName)
 			coreConfigMap.SetNamespace("default")

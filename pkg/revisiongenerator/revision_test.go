@@ -285,6 +285,7 @@ data:
 func TestUnmanagedCRDs(t *testing.T) {
 	makeProfiles := func(t *testing.T) []providerimages.ProviderImageManifests {
 		t.Helper()
+
 		return []providerimages.ProviderImageManifests{
 			profile(t, "core", "quay.io/openshift/core@sha256:aaaa", "default", configMapA),
 		}
@@ -343,6 +344,7 @@ func TestUnmanagedCRDs(t *testing.T) {
 
 		g.Expect(apiRev.UnmanagedCustomResourceDefinitions).To(Equal([]string{"gadgets.example.com", "widgets.example.com"}))
 		apiRev.UnmanagedCustomResourceDefinitions[0] = "tampered.example.com"
+
 		g.Expect(rev.UnmanagedCRDs()).To(Equal([]string{"gadgets.example.com", "widgets.example.com"}))
 	})
 

@@ -628,6 +628,7 @@ var _ = Describe("RevisionController unmanaged CRDs", Serial, func() {
 		createFixtures(ctx, withUnmanagedCRDs(unmanagedCRDs))
 
 		mgr := newManagerWrapper(defaultProviderImgs)
+
 		DeferCleanup(func() { mgr.stop() })
 
 		waitForProgressingFalse(ctx)
@@ -674,6 +675,7 @@ var _ = Describe("RevisionController unmanaged CRDs", Serial, func() {
 		createFixtures(ctx, withUnmanagedCRDs([]string{"widgets.example.com"}))
 
 		mgr := newManagerWrapper(defaultProviderImgs)
+
 		DeferCleanup(func() { mgr.stop() })
 
 		waitForProgressingFalse(ctx)

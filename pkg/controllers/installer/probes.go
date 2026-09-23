@@ -17,6 +17,8 @@ limitations under the License.
 package installer
 
 import (
+	"slices"
+
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
@@ -76,16 +78,19 @@ func compatibilityRequirementCompatibleProbe() *probing.GroupKindSelector {
 // case. On creation, it triggers if the probe is already successful.
 // Objects whose GroupKind does not match any of the provided probes return
 // false, deferring to other predicates in a predicate.Or composition.
+//
+// A GroupKind may have more than one probe, as CompatibilityRequirement does.
+// Every probe for the object's GroupKind is evaluated and the event is passed
+// on if any of them succeeds, because a single event cannot tell us whether
+// the other probes are also satisfied. Boxcutter re-evaluates them all once we
+// reconcile.
 func probeSucceededPredicate(probes ...*probing.GroupKindSelector) predicate.Predicate {
 	checkProbe := func(obj client.Object, fn func(p *probing.GroupKindSelector) bool) bool {
 		gk := obj.GetObjectKind().GroupVersionKind().GroupKind()
-		for _, p := range probes {
-			if p.GroupKind == gk {
-				return fn(p)
-			}
-		}
 
-		return false
+		return slices.ContainsFunc(probes, func(p *probing.GroupKindSelector) bool {
+			return p.GroupKind == gk && fn(p)
+		})
 	}
 
 	return predicate.Funcs{
