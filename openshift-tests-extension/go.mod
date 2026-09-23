@@ -141,7 +141,7 @@ require (
 	sigs.k8s.io/cluster-api-provider-gcp v1.12.0 // indirect
 	sigs.k8s.io/cluster-api-provider-ibmcloud v0.13.1 // indirect
 	sigs.k8s.io/cluster-api-provider-openstack v0.14.1 // indirect
-	sigs.k8s.io/cluster-api-provider-vsphere v1.15.2 // indirect
+	sigs.k8s.io/cluster-api-provider-vsphere v1.16.1 // indirect
 	sigs.k8s.io/controller-runtime v0.24.1 // indirect
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect
 	sigs.k8s.io/kube-storage-version-migrator v0.0.6-0.20230721195810-5c8923c5ff96 // indirect

@@ -1,5 +1,10 @@
 module github.com/openshift/cluster-capi-operator
 
+// CAPV declares this invalid placeholder version, so we exclude it;
+// the CAPI version will be determined by the other dependencies
+// and defined in the required section.
+exclude sigs.k8s.io/cluster-api v0.0.0-00010101000000-000000000000
+
 go 1.26.0
 
 tool (
@@ -53,9 +58,6 @@ replace (
 	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.36.2
 	k8s.io/sample-cli-plugin => k8s.io/sample-cli-plugin v0.36.2
 	k8s.io/sample-controller => k8s.io/sample-controller v0.36.2
-
-	// cluster-api-provider-vsphere v1.14.0 dependends on a cluster-api placeholder
-	sigs.k8s.io/cluster-api => sigs.k8s.io/cluster-api v1.11.5
 )
 
 require (
@@ -95,7 +97,7 @@ require (
 	sigs.k8s.io/cluster-api-provider-gcp v1.12.0
 	sigs.k8s.io/cluster-api-provider-ibmcloud v0.13.1
 	sigs.k8s.io/cluster-api-provider-openstack v0.14.1
-	sigs.k8s.io/cluster-api-provider-vsphere v1.15.2
+	sigs.k8s.io/cluster-api-provider-vsphere v1.16.1
 	sigs.k8s.io/controller-runtime v0.24.1
 	sigs.k8s.io/crdify v0.5.0
 	sigs.k8s.io/kube-storage-version-migrator v0.0.6-0.20230721195810-5c8923c5ff96
@@ -361,9 +363,9 @@ require (
 	go-simpler.org/sloglint v0.12.0 // indirect
 	go.augendre.info/arangolint v0.4.0 // indirect
 	go.augendre.info/fatcontext v0.10.0 // indirect
-	go.etcd.io/etcd/api/v3 v3.6.8 // indirect
-	go.etcd.io/etcd/client/pkg/v3 v3.6.8 // indirect
-	go.etcd.io/etcd/client/v3 v3.6.8 // indirect
+	go.etcd.io/etcd/api/v3 v3.6.10 // indirect
+	go.etcd.io/etcd/client/pkg/v3 v3.6.10 // indirect
+	go.etcd.io/etcd/client/v3 v3.6.10 // indirect
 	go.mongodb.org/mongo-driver v1.17.7 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.69.0 // indirect

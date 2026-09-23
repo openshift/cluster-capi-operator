@@ -42,7 +42,7 @@ import (
 	gcpv1 "sigs.k8s.io/cluster-api-provider-gcp/api/v1beta1"
 	ibmpowervsv1 "sigs.k8s.io/cluster-api-provider-ibmcloud/api/v1beta2"
 	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
-	vspherev1 "sigs.k8s.io/cluster-api-provider-vsphere/apis/v1beta1"
+	vspherev1 "sigs.k8s.io/cluster-api-provider-vsphere/api/govmomi/v1beta1"
 	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	ctrl "sigs.k8s.io/controller-runtime"
