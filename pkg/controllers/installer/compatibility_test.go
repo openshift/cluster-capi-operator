@@ -17,6 +17,8 @@ limitations under the License.
 package installer
 
 import (
+	"strings"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -94,6 +96,20 @@ var _ = Describe("buildCompatibilityRequirement", func() {
 
 		objAction, _, _ := unstructured.NestedString(cr.Object, "spec", "objectSchemaValidation", "action")
 		Expect(objAction).To(Equal("Deny"))
+	})
+
+	It("should reject a CRD whose prefixed name exceeds the name length limit", func() {
+		crd.SetName(strings.Repeat("a", maxNameLength))
+
+		_, err := buildCompatibilityRequirement(crd)
+		Expect(err).To(MatchError(errNameTooLong))
+	})
+
+	It("should accept a CRD whose prefixed name is exactly the name length limit", func() {
+		crd.SetName(strings.Repeat("a", maxNameLength-len(compatibilityRequirementNamePrefix)))
+
+		_, err := buildCompatibilityRequirement(crd)
+		Expect(err).NotTo(HaveOccurred())
 	})
 
 	It("should set the namespace selector to openshift-cluster-api", func() {

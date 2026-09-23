@@ -17,6 +17,7 @@ limitations under the License.
 package installer
 
 import (
+	"errors"
 	"fmt"
 
 	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
@@ -29,12 +30,25 @@ import (
 const (
 	compatibilityRequirementNamePrefix = "ccapio-"
 	capiNamespace                      = "openshift-cluster-api"
+
+	// maxNameLength is the RFC 1123 subdomain limit the API server enforces on
+	// metadata.name. A CRD name may use all of it, so prefixing can overflow.
+	maxNameLength = 253
 )
+
+// errNameTooLong is returned when prefixing a CRD name pushes the generated
+// CompatibilityRequirement name past the API server's name length limit.
+var errNameTooLong = errors.New("generated CompatibilityRequirement name exceeds the maximum name length")
 
 // buildCompatibilityRequirement constructs a CompatibilityRequirement for the
 // given CRD and returns it as an unstructured object for inclusion in the
 // compatibility phase.
 func buildCompatibilityRequirement(crd *unstructured.Unstructured) (*unstructured.Unstructured, error) {
+	name := compatibilityRequirementNamePrefix + crd.GetName()
+	if len(name) > maxNameLength {
+		return nil, fmt.Errorf("%w: %q is %d characters, limit is %d", errNameTooLong, name, len(name), maxNameLength)
+	}
+
 	crdYAML, err := k8syaml.Marshal(crd.Object)
 	if err != nil {
 		return nil, fmt.Errorf("marshalling CRD %s to YAML: %w", crd.GetName(), err)
@@ -46,7 +60,7 @@ func buildCompatibilityRequirement(crd *unstructured.Unstructured) (*unstructure
 			Kind:       "CompatibilityRequirement",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name: compatibilityRequirementNamePrefix + crd.GetName(),
+			Name: name,
 		},
 		Spec: apiextensionsv1alpha1.CompatibilityRequirementSpec{
 			CompatibilitySchema: apiextensionsv1alpha1.CompatibilitySchema{
