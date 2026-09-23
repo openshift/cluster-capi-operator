@@ -6,6 +6,10 @@ echo "Updating dependencies for Cluster CAPI Operator workspace"
 
 go work use -r .
 
+# Pass 0: reproduce commands from prow's `go-verify-deps` step which can have
+# the side-effect of modifying local .sum files
+go list -mod=readonly -m all
+
 # Pass 1: tidy all modules
 echo "Running go mod tidy for all modules (pass 1)..."
 for module in . e2e manifests-gen hack/tools openshift-tests-extension; do
