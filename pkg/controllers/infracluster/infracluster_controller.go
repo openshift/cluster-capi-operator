@@ -307,6 +307,14 @@ func getReadiness(infraCluster client.Object) (bool, error) {
 	return val, nil
 }
 
+// controlPlaneSelector returns a new MatchingLabels for control plane machines.
+func controlPlaneSelector() client.MatchingLabels {
+	return client.MatchingLabels{
+		"machine.openshift.io/cluster-api-machine-role": "master",
+		"machine.openshift.io/cluster-api-machine-type": "master",
+	}
+}
+
 // getRawMAPIProviderSpec returns a raw Machine ProviderSpec from the the cluster.
 func (r *InfraClusterController) getRawMAPIProviderSpec(ctx context.Context, cl client.Client) ([]byte, error) {
 	cpms, err := r.getActiveCPMS(ctx, cl)
@@ -314,16 +322,11 @@ func (r *InfraClusterController) getRawMAPIProviderSpec(ctx context.Context, cl 
 		return nil, fmt.Errorf("unable to get control plane machine set: %w", err)
 	}
 
-	controlPlaneSelector := client.MatchingLabels{
-		"machine.openshift.io/cluster-api-machine-role": "master",
-		"machine.openshift.io/cluster-api-machine-type": "master",
-	}
-
 	if cpms == nil {
 		// The CPMS is not present or inactive.
 		// Devise providerSpec via one of the control plane machines in the cluster.
 		machineList := &mapiv1beta1.MachineList{}
-		if err := cl.List(ctx, machineList, controlPlaneSelector, client.InNamespace(r.MAPINamespace)); err != nil {
+		if err := cl.List(ctx, machineList, controlPlaneSelector(), client.InNamespace(r.MAPINamespace)); err != nil {
 			return nil, fmt.Errorf("%w: %w", errUnableToListControlPlaneMachines, err)
 		}
 

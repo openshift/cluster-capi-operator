@@ -443,7 +443,7 @@ func (r *revisionReconciler) collectObjects(obj *unstructured.Unstructured) {
 	// CRDs, so we don't list those either. Instead, for CRDs we explicitly
 	// collect all instance objects.
 	switch {
-	case gvk.GroupKind() == (schema.GroupKind{Group: "apiextensions.k8s.io", Kind: "CustomResourceDefinition"}):
+	case gvk.GroupKind() == crdGroupKind():
 		// For CRDs, collect the plural mapping for later resolution
 		crdGroup, _, _ := unstructured.NestedString(obj.Object, "spec", "group")
 		crdKind, _, _ := unstructured.NestedString(obj.Object, "spec", "names", "kind")

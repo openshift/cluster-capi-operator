@@ -17,7 +17,6 @@ limitations under the License.
 package installer
 
 import (
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
@@ -38,7 +37,7 @@ func allProbes() []*probing.GroupKindSelector {
 // It uses GroupKindSelector so that non-CRD objects automatically pass.
 func crdEstablishedProbe() *probing.GroupKindSelector {
 	return &probing.GroupKindSelector{
-		GroupKind: schema.GroupKind{Group: "apiextensions.k8s.io", Kind: "CustomResourceDefinition"},
+		GroupKind: crdGroupKind(),
 		Prober:    &probing.ConditionProbe{Type: "Established", Status: "True"},
 	}
 }
@@ -47,7 +46,7 @@ func crdEstablishedProbe() *probing.GroupKindSelector {
 // It uses GroupKindSelector so that non-Deployment objects automatically pass.
 func deploymentAvailableProbe() *probing.GroupKindSelector {
 	return &probing.GroupKindSelector{
-		GroupKind: schema.GroupKind{Group: "apps", Kind: "Deployment"},
+		GroupKind: deploymentGroupKind(),
 		Prober:    &probing.ConditionProbe{Type: "Available", Status: "True"},
 	}
 }

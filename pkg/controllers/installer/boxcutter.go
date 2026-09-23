@@ -18,7 +18,6 @@ package installer
 
 import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"pkg.package-operator.run/boxcutter"
 	"pkg.package-operator.run/boxcutter/probing"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -64,7 +63,7 @@ func toBoxcutterRevision(installerRevision revisiongenerator.InstallerRevision, 
 			collectObjects(obj)
 
 			gvk := obj.GetObjectKind().GroupVersionKind()
-			if gvk.GroupKind() == (schema.GroupKind{Group: "apiextensions.k8s.io", Kind: "CustomResourceDefinition"}) {
+			if gvk.GroupKind() == crdGroupKind() {
 				crds = append(crds, obj)
 			} else {
 				objects = append(objects, obj)

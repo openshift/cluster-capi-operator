@@ -38,6 +38,7 @@ import (
 // These are static entries that are always present regardless of which CAPI
 // providers are installed.
 func staticRelatedObjects() []configv1.ObjectReference {
+	//nolint:goconst
 	return []configv1.ObjectReference{
 		{Group: "", Resource: "namespaces", Name: "openshift-cluster-api"},
 		{Group: "", Resource: "namespaces", Name: "openshift-cluster-api-operator"},

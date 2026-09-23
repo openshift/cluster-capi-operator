@@ -84,11 +84,8 @@ func (m *powerVSMachineAndInfra) ToMachineAndInfrastructureMachine() (*clusterv1
 	return capiMachine, powerVSMachine, warnings, nil
 }
 
-func (m *powerVSMachineAndInfra) toMachineAndInfrastructureMachine() (*clusterv1.Machine, client.Object, []string, field.ErrorList) {
-	var (
-		errs     field.ErrorList
-		warnings []string
-	)
+func (m *powerVSMachineAndInfra) toMachineAndInfrastructureMachine() (*clusterv1.Machine, client.Object, []string, field.ErrorList) { //nolint:unparam // does not currently return warnings
+	var errs field.ErrorList
 
 	powerVSProviderConfig, err := powerVSProviderSpecFromRawExtension(m.machine.Spec.ProviderSpec.Value)
 	if err != nil {
@@ -127,7 +124,7 @@ func (m *powerVSMachineAndInfra) toMachineAndInfrastructureMachine() (*clusterv1
 	capIBMPowerVSMachine.SetAnnotations(capiMachine.GetAnnotations())
 	capIBMPowerVSMachine.SetLabels(capiMachine.GetLabels())
 
-	return capiMachine, capIBMPowerVSMachine, warnings, errs
+	return capiMachine, capIBMPowerVSMachine, nil, errs
 }
 
 // ToMachineSetAndMachineTemplate converts a mapi2capi PowerVSMachineSetAndInfra into a CAPI MachineSet and CAPIBM IBMPowerVSMachineTemplate.
