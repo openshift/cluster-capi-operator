@@ -52,7 +52,7 @@ var (
 
 // ensureOpenStackCluster ensures the OpenStackCluster object exists.
 //
-//nolint:funlen
+
 func (r *InfraClusterController) ensureOpenStackCluster(ctx context.Context, log logr.Logger) (client.Object, error) {
 	target := &openstackv1.OpenStackCluster{
 		ObjectMeta: metav1.ObjectMeta{
@@ -91,17 +91,66 @@ func (r *InfraClusterController) ensureOpenStackCluster(ctx context.Context, log
 	// Perform some platform-specific validation
 
 	platformStatus := r.Infra.Status.PlatformStatus.OpenStack
+	lbType := platformStatus.LoadBalancer.Type
 
-	if platformStatus.LoadBalancer.Type != configv1.LoadBalancerTypeOpenShiftManagedDefault {
+	if lbType != configv1.LoadBalancerTypeOpenShiftManagedDefault && lbType != configv1.LoadBalancerTypeUserManaged {
 		return nil, fmt.Errorf("%w: load balancer type %s not supported",
-			errUnsupportedOpenStackLoadBalancerType, platformStatus.LoadBalancer.Type)
+			errUnsupportedOpenStackLoadBalancerType, lbType)
 	}
 
 	if len(platformStatus.APIServerInternalIPs) == 0 {
 		return nil, errOpenStackNoAPIServerInternalIPs
 	}
 
-	target = &openstackv1.OpenStackCluster{
+	// For UserManaged load balancers the control plane VIPs are
+	// provisioned externally and CAPO must not attempt to reconcile
+	// cluster networking. We set the ManagedBy annotation so CAPO
+	// ignores the object. The InfraClusterController itself will
+	// patch Status.Ready=true.
+	if lbType == configv1.LoadBalancerTypeUserManaged {
+		return r.ensureOpenStackClusterUserManaged(ctx, log, platformStatus)
+	}
+
+	return r.ensureOpenStackClusterManagedDefault(ctx, log, platformStatus)
+}
+
+func (r *InfraClusterController) ensureOpenStackClusterUserManaged(ctx context.Context, log logr.Logger, platformStatus *configv1.OpenStackPlatformStatus) (client.Object, error) {
+	target := &openstackv1.OpenStackCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      r.Infra.Status.InfrastructureName,
+			Namespace: r.CAPINamespace,
+			// The ManagedBy annotation tells CAPO to ignore this object so it
+			// does not attempt to reconcile cluster networking or LB resources
+			// that are already provisioned externally.
+			Annotations: map[string]string{
+				clusterv1beta1.ManagedByAnnotation: managedByAnnotationValueClusterCAPIOperatorInfraClusterController,
+			},
+		},
+		Spec: openstackv1.OpenStackClusterSpec{
+			ControlPlaneEndpoint: &clusterv1beta1.APIEndpoint{
+				Host: platformStatus.APIServerInternalIPs[0],
+				Port: 6443,
+			},
+			DisableAPIServerFloatingIP: ptr.To(true),
+			IdentityRef: openstackv1.OpenStackIdentityReference{
+				Name:      "openstack-cloud-credentials",
+				CloudName: "openstack",
+			},
+			Tags: []string{"openshiftClusterID=" + r.Infra.Status.InfrastructureName},
+		},
+	}
+
+	if err := r.Create(ctx, target); err != nil {
+		return nil, fmt.Errorf("failed to create InfraCluster: %w", err)
+	}
+
+	log.Info(fmt.Sprintf("InfraCluster %s successfully created (UserManaged LB)", klog.KObj(target)))
+
+	return target, nil
+}
+
+func (r *InfraClusterController) ensureOpenStackClusterManagedDefault(ctx context.Context, log logr.Logger, platformStatus *configv1.OpenStackPlatformStatus) (client.Object, error) {
+	target := &openstackv1.OpenStackCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      r.Infra.Status.InfrastructureName,
 			Namespace: r.CAPINamespace,
