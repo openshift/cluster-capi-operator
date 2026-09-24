@@ -327,7 +327,7 @@ func (r *RevisionController) SetupWithManager(mgr ctrl.Manager, tlsOptions []fun
 		}}
 	}
 
-	err := ctrl.NewControllerManagedBy(mgr).
+	if err := ctrl.NewControllerManagedBy(mgr).
 		Named(controllerName).
 		For(&operatorv1alpha1.ClusterAPI{},
 			builder.WithPredicates(predicate.NewPredicateFuncs(func(obj client.Object) bool {
@@ -353,8 +353,7 @@ func (r *RevisionController) SetupWithManager(mgr ctrl.Manager, tlsOptions []fun
 				},
 			}),
 		).
-		Complete(r)
-	if err != nil {
+		Complete(r); err != nil {
 		return fmt.Errorf("failed to create controller: %w", err)
 	}
 

@@ -26,6 +26,8 @@ import (
 	"pkg.package-operator.run/boxcutter/probing"
 )
 
+const conditionStatusTrue = "True"
+
 // allProbes returns all probes used by the installer controller.
 // Each probe uses GroupKindSelector so that non-matching objects automatically pass.
 func allProbes() []*probing.GroupKindSelector {
@@ -59,7 +61,7 @@ func progressProbe() probing.Prober {
 func crdEstablishedProbe() *probing.GroupKindSelector {
 	return &probing.GroupKindSelector{
 		GroupKind: crdGroupKind(),
-		Prober:    &probing.ConditionProbe{Type: "Established", Status: "True"},
+		Prober:    &probing.ConditionProbe{Type: "Established", Status: conditionStatusTrue},
 	}
 }
 
@@ -68,7 +70,7 @@ func crdEstablishedProbe() *probing.GroupKindSelector {
 func deploymentAvailableProbe() *probing.GroupKindSelector {
 	return &probing.GroupKindSelector{
 		GroupKind: deploymentGroupKind(),
-		Prober:    &probing.ConditionProbe{Type: "Available", Status: "True"},
+		Prober:    &probing.ConditionProbe{Type: "Available", Status: conditionStatusTrue},
 	}
 }
 
@@ -76,7 +78,7 @@ func deploymentAvailableProbe() *probing.GroupKindSelector {
 func compatibilityRequirementAdmittedProbe() *probing.GroupKindSelector {
 	return &probing.GroupKindSelector{
 		GroupKind: compatibilityRequirementGroupKind(),
-		Prober:    &probing.ConditionProbe{Type: "Admitted", Status: "True"},
+		Prober:    &probing.ConditionProbe{Type: "Admitted", Status: conditionStatusTrue},
 	}
 }
 
@@ -84,7 +86,7 @@ func compatibilityRequirementAdmittedProbe() *probing.GroupKindSelector {
 func compatibilityRequirementCompatibleProbe() *probing.GroupKindSelector {
 	return &probing.GroupKindSelector{
 		GroupKind: compatibilityRequirementGroupKind(),
-		Prober:    &probing.ConditionProbe{Type: "Compatible", Status: "True"},
+		Prober:    &probing.ConditionProbe{Type: "Compatible", Status: conditionStatusTrue},
 	}
 }
 
