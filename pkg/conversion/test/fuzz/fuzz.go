@@ -497,6 +497,8 @@ func CAPIMachineFuzzerFuncs(providerIDFuzz StringFuzzer, infraKind, infraAPIGrou
 				m.Version = ""
 				m.ReadinessGates = nil
 				m.MinReadySeconds = nil
+				// TODO(OCPCLOUD-2861/2899): Ignore taints until taint conversion is implemented.
+				m.Taints = nil
 				// Clear fields that are not yet supported in the conversion.
 				// TODO(OCPCLOUD-2715): Implement support for node draining options in MAPI.
 				m.Deletion.NodeDrainTimeoutSeconds = nil
