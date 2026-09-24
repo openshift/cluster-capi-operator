@@ -91,10 +91,11 @@ func (r *InfraClusterController) ensureOpenStackCluster(ctx context.Context, log
 	// Perform some platform-specific validation
 
 	platformStatus := r.Infra.Status.PlatformStatus.OpenStack
+	lbType := platformStatus.LoadBalancer.Type
 
-	if platformStatus.LoadBalancer.Type != configv1.LoadBalancerTypeOpenShiftManagedDefault {
+	if lbType != configv1.LoadBalancerTypeOpenShiftManagedDefault && lbType != configv1.LoadBalancerTypeUserManaged {
 		return nil, fmt.Errorf("%w: load balancer type %s not supported",
-			errUnsupportedOpenStackLoadBalancerType, platformStatus.LoadBalancer.Type)
+			errUnsupportedOpenStackLoadBalancerType, lbType)
 	}
 
 	if len(platformStatus.APIServerInternalIPs) == 0 {
@@ -220,11 +221,14 @@ func getDefaultRouterFromSubnet(_ context.Context, networkClient openstackclient
 
 // getDefaultSubnetFromMachines attempts to infer the default cluster subnet by
 // directly examining the control plane machines. Specifically it looks for a
-// subnet attached to a control plane machine whose CIDR contains the API
-// loadbalancer internal VIP.
+// subnet attached to a control plane machine whose CIDR contains one of the API
+// loadbalancer internal VIPs (platformStatus.APIServerInternalIPs).
 //
-// This heuristic is only valid when the API loadbalancer type is
-// LoadBalancerTypeOpenShiftManagedDefault.
+// This heuristic is valid for both LoadBalancerTypeOpenShiftManagedDefault and
+// LoadBalancerTypeUserManaged: in both cases OpenShift requires the API VIP(s)
+// to be reachable on a subnet the control plane machines are directly attached
+// to, whether that VIP is a keepalived/VRRP secondary address or the frontend
+// of a customer-supplied external load balancer.
 //
 //nolint:gocognit,funlen
 func getDefaultSubnetFromMachines(ctx context.Context, log logr.Logger, kubeclient client.Client, networkClient openstackclients.NetworkClient, platformStatus *configv1.OpenStackPlatformStatus) (*subnets.Subnet, error) {
