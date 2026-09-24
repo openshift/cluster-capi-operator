@@ -37,6 +37,23 @@ func allProbes() []*probing.GroupKindSelector {
 	}
 }
 
+// progressProbe combines every probe into the single Prober boxcutter gates
+// phase progression on. They cannot be registered individually: boxcutter keys
+// probes by type, so only the last one would survive. Non-matching GroupKinds
+// pass, so each object is still gated on only its own probes.
+func progressProbe() probing.Prober {
+	probes := allProbes()
+
+	// probing.And is a []Prober, which Go will not convert a
+	// []*GroupKindSelector to.
+	and := make(probing.And, len(probes))
+	for i, p := range probes {
+		and[i] = p
+	}
+
+	return and
+}
+
 // crdEstablishedProbe checks that a CRD has the Established condition set to True.
 // It uses GroupKindSelector so that non-CRD objects automatically pass.
 func crdEstablishedProbe() *probing.GroupKindSelector {

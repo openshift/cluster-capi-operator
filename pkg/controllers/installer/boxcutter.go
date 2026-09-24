@@ -22,7 +22,6 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"pkg.package-operator.run/boxcutter"
-	"pkg.package-operator.run/boxcutter/probing"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/cluster-capi-operator/pkg/revisiongenerator"
@@ -44,9 +43,9 @@ func toBoxcutterRevision(
 	installerRevision revisiongenerator.InstallerRevision,
 	collectObjects func(obj *unstructured.Unstructured),
 ) (boxcutter.Revision, error) {
-	probeOpts := util.SliceMap(allProbes(), func(p *probing.GroupKindSelector) boxcutter.PhaseReconcileOption {
-		return boxcutter.WithProbe(boxcutter.ProgressProbeType, p)
-	})
+	probeOpts := []boxcutter.PhaseReconcileOption{
+		boxcutter.WithProbe(boxcutter.ProgressProbeType, progressProbe()),
+	}
 
 	var phases []boxcutter.Phase
 
