@@ -17,6 +17,8 @@ limitations under the License.
 package installer
 
 import (
+	"slices"
+
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
@@ -24,13 +26,34 @@ import (
 	"pkg.package-operator.run/boxcutter/probing"
 )
 
+const conditionStatusTrue = "True"
+
 // allProbes returns all probes used by the installer controller.
 // Each probe uses GroupKindSelector so that non-matching objects automatically pass.
 func allProbes() []*probing.GroupKindSelector {
 	return []*probing.GroupKindSelector{
 		crdEstablishedProbe(),
 		deploymentAvailableProbe(),
+		compatibilityRequirementAdmittedProbe(),
+		compatibilityRequirementCompatibleProbe(),
 	}
+}
+
+// progressProbe combines every probe into the single Prober boxcutter gates
+// phase progression on. They cannot be registered individually: boxcutter keys
+// probes by type, so only the last one would survive. Non-matching GroupKinds
+// pass, so each object is still gated on only its own probes.
+func progressProbe() probing.Prober {
+	probes := allProbes()
+
+	// probing.And is a []Prober, which Go will not convert a
+	// []*GroupKindSelector to.
+	and := make(probing.And, len(probes))
+	for i, p := range probes {
+		and[i] = p
+	}
+
+	return and
 }
 
 // crdEstablishedProbe checks that a CRD has the Established condition set to True.
@@ -38,7 +61,7 @@ func allProbes() []*probing.GroupKindSelector {
 func crdEstablishedProbe() *probing.GroupKindSelector {
 	return &probing.GroupKindSelector{
 		GroupKind: crdGroupKind(),
-		Prober:    &probing.ConditionProbe{Type: "Established", Status: "True"},
+		Prober:    &probing.ConditionProbe{Type: "Established", Status: conditionStatusTrue},
 	}
 }
 
@@ -47,7 +70,23 @@ func crdEstablishedProbe() *probing.GroupKindSelector {
 func deploymentAvailableProbe() *probing.GroupKindSelector {
 	return &probing.GroupKindSelector{
 		GroupKind: deploymentGroupKind(),
-		Prober:    &probing.ConditionProbe{Type: "Available", Status: "True"},
+		Prober:    &probing.ConditionProbe{Type: "Available", Status: conditionStatusTrue},
+	}
+}
+
+// compatibilityRequirementAdmittedProbe checks that a CompatibilityRequirement has the Admitted condition set to True.
+func compatibilityRequirementAdmittedProbe() *probing.GroupKindSelector {
+	return &probing.GroupKindSelector{
+		GroupKind: compatibilityRequirementGroupKind(),
+		Prober:    &probing.ConditionProbe{Type: "Admitted", Status: conditionStatusTrue},
+	}
+}
+
+// compatibilityRequirementCompatibleProbe checks that a CompatibilityRequirement has the Compatible condition set to True.
+func compatibilityRequirementCompatibleProbe() *probing.GroupKindSelector {
+	return &probing.GroupKindSelector{
+		GroupKind: compatibilityRequirementGroupKind(),
+		Prober:    &probing.ConditionProbe{Type: "Compatible", Status: conditionStatusTrue},
 	}
 }
 
@@ -58,16 +97,19 @@ func deploymentAvailableProbe() *probing.GroupKindSelector {
 // case. On creation, it triggers if the probe is already successful.
 // Objects whose GroupKind does not match any of the provided probes return
 // false, deferring to other predicates in a predicate.Or composition.
+//
+// A GroupKind may have more than one probe, as CompatibilityRequirement does.
+// Every probe for the object's GroupKind is evaluated and the event is passed
+// on if any of them succeeds, because a single event cannot tell us whether
+// the other probes are also satisfied. Boxcutter re-evaluates them all once we
+// reconcile.
 func probeSucceededPredicate(probes ...*probing.GroupKindSelector) predicate.Predicate {
 	checkProbe := func(obj client.Object, fn func(p *probing.GroupKindSelector) bool) bool {
 		gk := obj.GetObjectKind().GroupVersionKind().GroupKind()
-		for _, p := range probes {
-			if p.GroupKind == gk {
-				return fn(p)
-			}
-		}
 
-		return false
+		return slices.ContainsFunc(probes, func(p *probing.GroupKindSelector) bool {
+			return p.GroupKind == gk && fn(p)
+		})
 	}
 
 	return predicate.Funcs{

@@ -282,6 +282,94 @@ data:
 	})
 }
 
+func TestUnmanagedCRDs(t *testing.T) {
+	makeProfiles := func(t *testing.T) []providerimages.ProviderImageManifests {
+		t.Helper()
+
+		return []providerimages.ProviderImageManifests{
+			profile(t, "core", "quay.io/openshift/core@sha256:aaaa", "default", configMapA),
+		}
+	}
+
+	t.Run("normalizes the list", func(t *testing.T) {
+		for _, tc := range []struct {
+			name string
+			in   []string
+			want []string
+		}{
+			{name: "sorts and deduplicates", in: []string{"widgets.example.com", "gadgets.example.com", "widgets.example.com"}, want: []string{"gadgets.example.com", "widgets.example.com"}},
+			{name: "empty", in: []string{}, want: []string{}},
+			{name: "nil", in: nil, want: []string{}},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				g := NewWithT(t)
+				rev := must(NewRenderedRevision(nil, WithUnmanagedCRDs(tc.in)))(g)
+				g.Expect(rev.UnmanagedCRDs()).To(Equal(tc.want))
+			})
+		}
+	})
+
+	t.Run("affects the content ID as a set", func(t *testing.T) {
+		for _, tc := range []struct {
+			name      string
+			left      []string
+			right     []string
+			wantEqual bool
+		}{
+			{name: "different lists", left: []string{"widgets.example.com"}, right: []string{"gadgets.example.com"}},
+			{name: "empty vs one entry", left: nil, right: []string{"widgets.example.com"}},
+			{name: "different order", left: []string{"widgets.example.com", "gadgets.example.com"}, right: []string{"gadgets.example.com", "widgets.example.com"}, wantEqual: true},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				g := NewWithT(t)
+				profiles := makeProfiles(t)
+				left := must(NewRenderedRevision(profiles, WithUnmanagedCRDs(tc.left)))(g)
+				right := must(NewRenderedRevision(profiles, WithUnmanagedCRDs(tc.right)))(g)
+				leftID := must(left.ContentID())(g)
+				rightID := must(right.ContentID())(g)
+
+				if tc.wantEqual {
+					g.Expect(leftID).To(Equal(rightID))
+				} else {
+					g.Expect(leftID).NotTo(Equal(rightID))
+				}
+			})
+		}
+	})
+
+	t.Run("emits a cloned normalized list", func(t *testing.T) {
+		g := NewWithT(t)
+		rev := must(NewRenderedRevision(makeProfiles(t), WithUnmanagedCRDs([]string{"widgets.example.com", "gadgets.example.com", "widgets.example.com"})))(g)
+		apiRev := must(forInstall(g, rev, "4.18.0", 1).ToAPIRevision())(g)
+
+		g.Expect(apiRev.UnmanagedCustomResourceDefinitions).To(Equal([]string{"gadgets.example.com", "widgets.example.com"}))
+		apiRev.UnmanagedCustomResourceDefinitions[0] = "tampered.example.com"
+
+		g.Expect(rev.UnmanagedCRDs()).To(Equal([]string{"gadgets.example.com", "widgets.example.com"}))
+	})
+
+	t.Run("round trips through the API revision", func(t *testing.T) {
+		g := NewWithT(t)
+		profiles := makeProfiles(t)
+		rev := must(NewRenderedRevision(profiles, WithUnmanagedCRDs([]string{"widgets.example.com", "gadgets.example.com"})))(g)
+		apiRev := must(forInstall(g, rev, "4.18.0", 1).ToAPIRevision())(g)
+		reconstructed := must(NewInstallerRevisionFromAPI(apiRev, profiles))(g)
+
+		g.Expect(reconstructed.UnmanagedCRDs()).To(Equal([]string{"gadgets.example.com", "widgets.example.com"}))
+	})
+
+	t.Run("rejects a tampered API revision", func(t *testing.T) {
+		g := NewWithT(t)
+		profiles := makeProfiles(t)
+		rev := must(NewRenderedRevision(profiles, WithUnmanagedCRDs([]string{"widgets.example.com"})))(g)
+		apiRev := must(forInstall(g, rev, "4.18.0", 1).ToAPIRevision())(g)
+		apiRev.UnmanagedCustomResourceDefinitions = []string{"gadgets.example.com"}
+
+		_, err := NewInstallerRevisionFromAPI(apiRev, profiles)
+		g.Expect(err).To(MatchError(errContentIDMismatch))
+	})
+}
+
 func TestForInstall(t *testing.T) {
 	t.Run("returns installer revision with correct name and index", func(t *testing.T) {
 		g := NewWithT(t)

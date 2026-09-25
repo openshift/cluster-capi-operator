@@ -72,6 +72,19 @@ rules:
   - update
   - patch
   - delete
+# boxcutter: manages CompatibilityRequirements for unmanaged CRDs
+- apiGroups:
+  - apiextensions.openshift.io
+  resources:
+  - compatibilityrequirements
+  verbs:
+  - create
+  - get
+  - list
+  - watch
+  - update
+  - patch
+  - delete
 # boxcutter: manages admission resources from provider manifests
 - apiGroups:
   - admissionregistration.k8s.io
