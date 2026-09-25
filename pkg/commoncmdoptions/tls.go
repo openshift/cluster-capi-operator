@@ -48,7 +48,7 @@ func resolveTLSProfile(ctx context.Context, cfg *rest.Config, scheme *runtime.Sc
 		return configv1.TLSProfileSpec{}, nil, fmt.Errorf("fetching APIServer: %w", err)
 	}
 
-	tlsProfileSpec, err := TLSProfileSpecFromClusterConfig(apiServer.Spec.TLSAdherence, apiServer.Spec.TLSSecurityProfile)
+	tlsProfileSpec, err := utiltls.GetTLSProfileSpec(apiServer.Spec.TLSSecurityProfile)
 	if err != nil {
 		return configv1.TLSProfileSpec{}, nil, fmt.Errorf("resolving TLS profile: %w", err)
 	}
@@ -69,15 +69,14 @@ func resolveTLSProfile(ctx context.Context, cfg *rest.Config, scheme *runtime.Sc
 		}).SetupWithManager(mgr)
 	}
 
-	return tlsProfileSpec, setupSecurityProfileWatcher, nil
-}
-
-// TLSProfileSpecFromClusterConfig resolves the TLS profile spec from the cluster's TLS
-// security profile and adherence policy.
-func TLSProfileSpecFromClusterConfig(tlsAdherence configv1.TLSAdherencePolicy, tlsSecurityProfile *configv1.TLSSecurityProfile) (configv1.TLSProfileSpec, error) {
-	if !libgocrypto.ShouldHonorClusterTLSProfile(tlsAdherence) {
-		tlsSecurityProfile = nil
+	// The security profile watcher needs the raw tls profile spec, but the one we return for use by the operator needs to account for the TLS adherence policy.
+	effectiveTLSProfileSpec := tlsProfileSpec
+	if !libgocrypto.ShouldHonorClusterTLSProfile(apiServer.Spec.TLSAdherence) {
+		effectiveTLSProfileSpec, err = utiltls.GetTLSProfileSpec(nil)
+		if err != nil {
+			return configv1.TLSProfileSpec{}, nil, fmt.Errorf("resolving default TLS profile: %w", err)
+		}
 	}
 
-	return utiltls.GetTLSProfileSpec(tlsSecurityProfile) //nolint:wrapcheck
+	return effectiveTLSProfileSpec, setupSecurityProfileWatcher, nil
 }
