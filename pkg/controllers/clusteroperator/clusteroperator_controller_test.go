@@ -52,7 +52,7 @@ var _ = Describe("ClusterOperator controller", func() {
 		var capiClusterOperator *configv1.ClusterOperator
 
 		BeforeEach(func(ctx context.Context) {
-			mgrCancel, mgrDone = startManager(false)
+			mgrCancel, mgrDone = startManager()
 
 			DeferCleanup(stopManager)
 
@@ -340,69 +340,6 @@ var _ = Describe("ClusterOperator controller", func() {
 				defaultNodeTimeout),
 		)
 	})
-
-	Context("with an unsupported platform", Ordered, func() {
-		var capiClusterOperator *configv1.ClusterOperator
-
-		BeforeAll(func() {
-			mgrCancel, mgrDone = startManager(true)
-
-			DeferCleanup(stopManager)
-		})
-
-		BeforeEach(func(ctx context.Context) {
-			By("Creating the cluster-api ClusterOperator", func() {
-				capiClusterOperator = &configv1.ClusterOperator{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: controllers.ClusterOperatorName,
-					},
-				}
-				Expect(cl.Create(ctx, capiClusterOperator)).To(Succeed())
-				DeferCleanup(func(ctx context.Context) {
-					testutils.CleanupResources(Default, ctx, testEnv.Config, cl, "", &configv1.ClusterOperator{})
-				})
-			})
-		}, defaultNodeTimeout)
-
-		It("should set Available=True with unsupported message and write versions without reading sub-conditions", func(ctx context.Context) {
-			co := kWithCtx(ctx).Object(configv1resourcebuilder.ClusterOperator().WithName(controllers.ClusterOperatorName).Build())
-
-			Eventually(co).
-				WithContext(ctx).
-				WithTimeout(defaultEventuallyTimeout).
-				Should(SatisfyAll(
-					HaveField("Status.Conditions", SatisfyAll(
-						test.HaveCondition(configv1.OperatorAvailable).
-							WithStatus(configv1.ConditionTrue).
-							WithMessage(capiUnsupportedPlatformMsg),
-						test.HaveCondition(configv1.OperatorProgressing).WithStatus(configv1.ConditionFalse),
-						test.HaveCondition(configv1.OperatorDegraded).WithStatus(configv1.ConditionFalse),
-						test.HaveCondition(configv1.OperatorUpgradeable).WithStatus(configv1.ConditionTrue),
-					)),
-					HaveField("Status.Versions", ContainElement(SatisfyAll(
-						HaveField("Name", Equal(operatorstatus.OperatorVersionKey)),
-						HaveField("Version", Equal(desiredOperatorReleaseVersion)),
-					))),
-				))
-		}, defaultNodeTimeout)
-
-		It("should update an incorrect version", func(ctx context.Context) {
-			By("Setting the ClusterOperator status version to an incorrect one")
-
-			patchBase := client.MergeFrom(capiClusterOperator.DeepCopy())
-			capiClusterOperator.Status.Versions = []configv1.OperandVersion{{Name: operatorstatus.OperatorVersionKey, Version: "old"}}
-			Expect(cl.Status().Patch(ctx, capiClusterOperator, patchBase)).To(Succeed())
-
-			By("Checking the version is corrected")
-			Eventually(kWithCtx(ctx).Object(configv1resourcebuilder.ClusterOperator().WithName(controllers.ClusterOperatorName).Build())).
-				WithContext(ctx).
-				WithTimeout(defaultEventuallyTimeout).
-				Should(HaveField("Status.Versions", ContainElement(SatisfyAll(
-					HaveField("Name", Equal(operatorstatus.OperatorVersionKey)),
-					HaveField("Version", Equal(desiredOperatorReleaseVersion)),
-				))))
-		}, defaultNodeTimeout)
-	})
 })
 
 func patchSubConditions(ctx context.Context, co *configv1.ClusterOperator, conditions ...*configv1apply.ClusterOperatorStatusConditionApplyConfiguration) {
@@ -424,7 +361,7 @@ func subCondition(condType string, status configv1.ConditionStatus, reason opera
 		WithLastTransitionTime(metav1.Now())
 }
 
-func startManager(isUnsupportedPlatform bool) (context.CancelFunc, chan struct{}) {
+func startManager() (context.CancelFunc, chan struct{}) {
 	mgrCtx, mgrCancel := context.WithCancel(context.Background())
 	mgrDone := make(chan struct{})
 
@@ -440,9 +377,8 @@ func startManager(isUnsupportedPlatform bool) (context.CancelFunc, chan struct{}
 	Expect(err).ToNot(HaveOccurred(), "Manager should be able to be created")
 
 	r := &ClusterOperatorController{
-		Client:                cl,
-		ReleaseVersion:        desiredOperatorReleaseVersion,
-		IsUnsupportedPlatform: isUnsupportedPlatform,
+		Client:         cl,
+		ReleaseVersion: desiredOperatorReleaseVersion,
 	}
 	Expect(r.SetupWithManager(mgr)).To(Succeed(), "Reconciler should be able to setup with manager")
 

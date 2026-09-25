@@ -116,7 +116,7 @@ var _ = Describe("Cluster API Webhook Validation Inside Managed Namespace", Seri
 	BeforeEach(func() {
 		skipUnlessClusterAPIClusterCRD()
 
-		_, _, err := util.GetCAPITypesForInfrastructure(infra)
+		_, err := util.GetCAPITypesForInfrastructure(infra)
 		if errors.Is(err, util.ErrUnsupportedPlatform) {
 			Skip("Platform is not supported for Cluster API. Skip webhook validation checks.")
 		}
