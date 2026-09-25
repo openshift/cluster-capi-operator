@@ -18,6 +18,7 @@ package machinesync
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"sync"
@@ -42,12 +43,14 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 
 	"k8s.io/utils/ptr"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/config"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
@@ -87,7 +90,8 @@ var _ = Describe("MachineSyncReconciler", func() {
 			}
 
 			reconciler := &MachineSyncReconciler{
-				Client: fake.NewClientBuilder().WithObjects(objs...).WithStatusSubresource(&clusterv1.Machine{}).Build(),
+				Client: fake.NewClientBuilder().WithScheme(testScheme).WithObjects(objs...).WithStatusSubresource(&clusterv1.Machine{}).Build(),
+				Scheme: testScheme,
 			}
 
 			// Update the existing CAPI machine with the created one to populate e.g. resourceVersion.
@@ -108,6 +112,10 @@ var _ = Describe("MachineSyncReconciler", func() {
 				Expect(reconciler.Client.Get(ctx, client.ObjectKey{Namespace: tc.convertedCapiMachine.Namespace, Name: tc.convertedCapiMachine.Name}, gotCAPIMachine)).To(Succeed())
 
 				tc.expectedCAPIMachine.ResourceVersion = gotCAPIMachine.ResourceVersion
+
+				// The fake client does not implement SSA ownership and omission semantics.
+				// Envtest coverage below verifies that the API server deletes the old label.
+				delete(gotCAPIMachine.Labels, "old-label")
 
 				Expect(gotCAPIMachine).To(Equal(tc.expectedCAPIMachine), cmp.Diff(gotCAPIMachine, tc.expectedCAPIMachine))
 			}
@@ -224,6 +232,34 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 		mgrCancel()
 		// Wait for the mgrDone to be closed, which will happen once the mgr has stopped
 		<-mgrDone
+	}
+
+	applyMetadata := func(obj client.Object, labels, annotations map[string]string, fieldManager string) error {
+		gvk, err := apiutil.GVKForObject(obj, testScheme)
+		if err != nil {
+			return err
+		}
+
+		patchData, err := json.Marshal(map[string]any{
+			"apiVersion": gvk.GroupVersion().String(),
+			"kind":       gvk.Kind,
+			"metadata": map[string]any{
+				"name":        obj.GetName(),
+				"namespace":   obj.GetNamespace(),
+				"labels":      labels,
+				"annotations": annotations,
+			},
+		})
+		if err != nil {
+			return err
+		}
+
+		return k8sClient.Patch(ctx, obj, client.RawPatch(types.ApplyPatchType, patchData), &client.PatchOptions{
+			Raw: &metav1.PatchOptions{
+				FieldManager: fieldManager,
+				Force:        ptr.To(true),
+			},
+		})
 	}
 
 	BeforeEach(func() {
@@ -538,6 +574,138 @@ var _ = Describe("With a running MachineSync Reconciler", func() {
 						))),
 					"Synchronized condition lastTransitionTime should not change when sync status remains True",
 				)
+			})
+
+			It("should reconcile Machine API metadata while preserving metadata managed with SSA by Cluster API", func() {
+				By("Adding Machine API labels and annotations")
+				Eventually(k.Update(mapiMachine, func() {
+					if mapiMachine.Labels == nil {
+						mapiMachine.Labels = map[string]string{}
+					}
+
+					mapiMachine.Labels["mapi-owned-label"] = "initial"
+
+					if mapiMachine.Annotations == nil {
+						mapiMachine.Annotations = map[string]string{}
+					}
+
+					mapiMachine.Annotations["mapi-owned-annotation"] = "initial"
+				})).Should(Succeed())
+
+				By("Verifying initial Machine API metadata is synchronized to Cluster API resources")
+				Eventually(k.Object(capiMachine), timeout).Should(SatisfyAll(
+					HaveField("ObjectMeta.Labels", HaveKeyWithValue("mapi-owned-label", "initial")),
+					HaveField("ObjectMeta.Annotations", HaveKeyWithValue("mapi-owned-annotation", "initial")),
+				))
+				Eventually(k.Object(capaMachine), timeout).Should(SatisfyAll(
+					HaveField("ObjectMeta.Labels", HaveKeyWithValue("mapi-owned-label", "initial")),
+					HaveField("ObjectMeta.Annotations", HaveKeyWithValue("mapi-owned-annotation", "initial")),
+				))
+
+				By("Verifying the sync controller owns synchronized Machine API metadata")
+				Eventually(func(g Gomega) {
+					g.Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(capiMachine), capiMachine)).To(Succeed())
+					g.Expect(metadataFieldsOwnedByManager(capiMachine, capiMetadataFieldManager).labels).To(HaveKey("mapi-owned-label"))
+				}).Should(Succeed())
+
+				By("Deleting Machine API labels and annotations")
+				Eventually(k.Update(mapiMachine, func() {
+					delete(mapiMachine.Labels, "mapi-owned-label")
+					delete(mapiMachine.Annotations, "mapi-owned-annotation")
+				})).Should(Succeed())
+
+				By("Verifying deleted Machine API metadata is removed from Cluster API resources")
+				Eventually(k.Object(capiMachine), timeout).Should(SatisfyAll(
+					HaveField("ObjectMeta.Labels", Not(HaveKey("mapi-owned-label"))),
+					HaveField("ObjectMeta.Annotations", Not(HaveKey("mapi-owned-annotation"))),
+				))
+				Eventually(k.Object(capaMachine), timeout).Should(SatisfyAll(
+					HaveField("ObjectMeta.Labels", Not(HaveKey("mapi-owned-label"))),
+					HaveField("ObjectMeta.Annotations", Not(HaveKey("mapi-owned-annotation"))),
+				))
+
+				By("Adding rogue metadata through regular updates")
+				Eventually(k.Update(capiMachine, func() {
+					capiMachine.Labels["rogue-label"] = "remove-me"
+				})).Should(Succeed())
+				Eventually(k.Update(capaMachine, func() {
+					capaMachine.Labels["rogue-label"] = "remove-me"
+				})).Should(Succeed())
+
+				By("Verifying direct metadata changes to non-authoritative Cluster API resources are removed")
+				Eventually(k.Object(capiMachine), timeout).Should(
+					HaveField("ObjectMeta.Labels", Not(HaveKey("rogue-label"))),
+				)
+				Eventually(k.Object(capaMachine), timeout).Should(
+					HaveField("ObjectMeta.Labels", Not(HaveKey("rogue-label"))),
+				)
+
+				By("Applying metadata owned by a Cluster API component")
+				Eventually(func() error {
+					return applyMetadata(capiMachine, map[string]string{
+						"capi-owned-label": "keep-me",
+						"collision-label":  "capi-value",
+					}, map[string]string{
+						"capi-owned-annotation": "keep-me",
+						"collision-annotation":  "capi-value",
+					}, "capi-machineset-metadata")
+				}).Should(Succeed())
+				Eventually(func() error {
+					return applyMetadata(capaMachine, map[string]string{
+						"capi-owned-label": "keep-me",
+						"collision-label":  "capi-value",
+					}, map[string]string{
+						"capi-owned-annotation": "keep-me",
+						"collision-annotation":  "capi-value",
+					}, "capi-machineset-metadata")
+				}).Should(Succeed())
+
+				By("Triggering Machine API synchronization with colliding metadata")
+				Eventually(k.Update(mapiMachine, func() {
+					if mapiMachine.Labels == nil {
+						mapiMachine.Labels = map[string]string{}
+					}
+
+					if mapiMachine.Annotations == nil {
+						mapiMachine.Annotations = map[string]string{}
+					}
+
+					mapiMachine.Labels["mapi-owned-label"] = "coexists"
+					mapiMachine.Labels["collision-label"] = "mapi-wins"
+					mapiMachine.Annotations["collision-annotation"] = "mapi-wins"
+				})).Should(Succeed())
+
+				By("Verifying Cluster API-owned metadata is preserved and Machine API wins collisions")
+				Eventually(k.Object(capiMachine), timeout).Should(SatisfyAll(
+					HaveField("ObjectMeta.Labels", HaveKeyWithValue("mapi-owned-label", "coexists")),
+					HaveField("ObjectMeta.Labels", HaveKeyWithValue("capi-owned-label", "keep-me")),
+					HaveField("ObjectMeta.Labels", HaveKeyWithValue("collision-label", "mapi-wins")),
+					HaveField("ObjectMeta.Annotations", HaveKeyWithValue("capi-owned-annotation", "keep-me")),
+					HaveField("ObjectMeta.Annotations", HaveKeyWithValue("collision-annotation", "mapi-wins")),
+				))
+				Eventually(k.Object(capaMachine), timeout).Should(SatisfyAll(
+					HaveField("ObjectMeta.Labels", HaveKeyWithValue("mapi-owned-label", "coexists")),
+					HaveField("ObjectMeta.Labels", HaveKeyWithValue("capi-owned-label", "keep-me")),
+					HaveField("ObjectMeta.Labels", HaveKeyWithValue("collision-label", "mapi-wins")),
+					HaveField("ObjectMeta.Annotations", HaveKeyWithValue("capi-owned-annotation", "keep-me")),
+					HaveField("ObjectMeta.Annotations", HaveKeyWithValue("collision-annotation", "mapi-wins")),
+				))
+
+				By("Verifying Machine API took ownership of colliding metadata")
+				Eventually(func(g Gomega) {
+					g.Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(capiMachine), capiMachine)).To(Succeed())
+					g.Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(capaMachine), capaMachine)).To(Succeed())
+
+					for _, obj := range []client.Object{capiMachine, capaMachine} {
+						mapiOwnedFields := metadataFieldsOwnedByManager(obj, capiMetadataFieldManager)
+						capiOwnedFields := metadataFieldsOwnedByManager(obj, "capi-machineset-metadata")
+
+						g.Expect(mapiOwnedFields.labels).To(HaveKey("collision-label"))
+						g.Expect(mapiOwnedFields.annotations).To(HaveKey("collision-annotation"))
+						g.Expect(capiOwnedFields.labels).NotTo(HaveKey("collision-label"))
+						g.Expect(capiOwnedFields.annotations).NotTo(HaveKey("collision-annotation"))
+					}
+				}).Should(Succeed())
 			})
 
 			Context("when the MAPI machine providerSpec gets updated", func() {
