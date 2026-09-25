@@ -9,6 +9,9 @@ replace (
 	//cluster-api-actuator-pkg uses a placeholder for cluster-api-actuator-pkg/testutils
 	github.com/openshift/cluster-api-actuator-pkg/testutils => github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20260803090635-6dddd8460b22
 
+	// The operator module is local to this repository.
+	github.com/openshift/cluster-capi-operator => ..
+
 	// manifests-gen is a local module in this repo
 	github.com/openshift/cluster-capi-operator/manifests-gen => ../manifests-gen
 )
@@ -35,7 +38,7 @@ require (
 	sigs.k8s.io/cluster-api-provider-gcp v1.12.0
 	sigs.k8s.io/cluster-api-provider-ibmcloud v0.13.1
 	sigs.k8s.io/cluster-api-provider-openstack v0.14.1
-	sigs.k8s.io/cluster-api-provider-vsphere v1.15.2
+	sigs.k8s.io/cluster-api-provider-vsphere v1.16.1
 	sigs.k8s.io/controller-runtime v0.24.1
 	sigs.k8s.io/yaml v1.6.0
 )
@@ -80,7 +83,6 @@ require (
 	github.com/go-test/deep v1.1.1 // indirect
 	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
 	github.com/gobuffalo/flect v1.0.3 // indirect
-	github.com/golangci/golangci-lint/v2 v2.13.2 // indirect
 	github.com/google/gnostic-models v0.7.1 // indirect
 	github.com/google/pprof v0.0.0-20260709232956-b9395ee17fa0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
@@ -91,7 +93,6 @@ require (
 	github.com/jmespath/go-jmespath v0.4.1-0.20220621161143-b0104c826a24 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
-	github.com/mattn/go-colorable v0.1.15 // indirect
 	github.com/metal3-io/baremetal-operator/pkg/hardwareutils v0.5.1 // indirect
 	github.com/metal3-io/ip-address-manager/api v1.11.2 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect

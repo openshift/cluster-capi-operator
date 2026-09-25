@@ -1,5 +1,5 @@
 /*
-Copyright 2021 The Kubernetes Authors.
+Copyright 2025 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,27 +14,37 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1beta1
+package v1beta2
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 )
 
 // VSphereClusterTemplateSpec defines the desired state of VSphereClusterTemplate.
 type VSphereClusterTemplateSpec struct {
-	Template VSphereClusterTemplateResource `json:"template"`
+	// template defines the desired state of VSphereClusterTemplate.
+	// +required
+	Template VSphereClusterTemplateResource `json:"template,omitempty,omitzero"`
 }
 
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:path=vsphereclustertemplates,scope=Namespaced,categories=cluster-api
 // +kubebuilder:storageversion
+// +kubebuilder:printcolumn:name="ClusterClass",type="string",JSONPath=`.metadata.ownerReferences[?(@.kind=="ClusterClass")].name`,description="Name of the ClusterClass owning this template"
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp",description="Time duration since creation of VSphereClusterTemplate"
 
 // VSphereClusterTemplate is the Schema for the vsphereclustertemplates API.
 type VSphereClusterTemplate struct {
-	metav1.TypeMeta   `json:",inline"`
+	metav1.TypeMeta `json:",inline"`
+	// metadata is the standard object's metadata.
+	// More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
+	// +optional
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec VSphereClusterTemplateSpec `json:"spec,omitempty"`
+	// spec is the desired state of VSphereClusterTemplate.
+	// +optional
+	Spec VSphereClusterTemplateSpec `json:"spec,omitempty,omitzero"`
 }
 
 // +kubebuilder:object:root=true
@@ -51,6 +61,14 @@ func init() {
 }
 
 // VSphereClusterTemplateResource describes the data for creating a VSphereCluster from a template.
+// +kubebuilder:validation:MinProperties=1
 type VSphereClusterTemplateResource struct {
-	Spec VSphereClusterSpec `json:"spec"`
+	// metadata is the standard object's metadata.
+	// More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
+	// +optional
+	ObjectMeta clusterv1.ObjectMeta `json:"metadata,omitempty,omitzero"`
+
+	// spec is the desired state of VSphereClusterTemplateResource.
+	// +optional
+	Spec VSphereClusterSpec `json:"spec,omitempty,omitzero"`
 }
