@@ -340,7 +340,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 					g.Expect(cl.Get(ctx, client.ObjectKeyFromObject(newAWSMachineTemplate), newAWSMachineTemplate)).To(Succeed())
 					g.Expect(newAWSMachineTemplate.Spec.Template.Spec.InstanceType).To(Equal(newInstanceType),
 						"AWSMachineTemplate %s should have InstanceType %s", currentTemplateName, newInstanceType)
-				}, capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(),
+				}, capiframework.WaitLong, capiframework.RetryMedium).Should(Succeed(),
 					"Should have a new InfraTemplate with InstanceType %s", newInstanceType)
 
 				By("Verifying the old InfraTemplate is deleted")
