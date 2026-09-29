@@ -66,7 +66,6 @@ var _ = Describe("ClusterOperator controller", func() {
 				DeferCleanup(func(ctx context.Context) {
 					testutils.CleanupResources(Default, ctx, testEnv.Config, cl, "", &configv1.ClusterOperator{})
 				})
-				Expect(cl.Status().Update(ctx, capiClusterOperator)).To(Succeed())
 			})
 		}, defaultNodeTimeout)
 
