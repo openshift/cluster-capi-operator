@@ -134,6 +134,7 @@ func convertCAPIMachineAnnotationsToMAPIMachineSpecObjectMetaAnnotations(capiAnn
 	return mapiAnnotations
 }
 
+// convertCAPITaintsToMAPITaints maps CAPI taint fields that MAPI can represent.
 func convertCAPITaintsToMAPITaints(capiTaints []clusterv1.MachineTaint) []corev1.Taint {
 	if len(capiTaints) == 0 {
 		return nil

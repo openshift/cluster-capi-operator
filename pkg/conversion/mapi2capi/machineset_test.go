@@ -112,7 +112,7 @@ var _ = Describe("mapi2capi MachineSet conversion", func() {
 					Value:       "value1",
 					Effect:      corev1.TaintEffectNoSchedule,
 					Propagation: clusterv1.MachineTaintPropagationAlways,
-				}))
+				}), "CAPI MachineSet template taints should preserve key, value, effect, and Always propagation")
 			},
 		}),
 	)

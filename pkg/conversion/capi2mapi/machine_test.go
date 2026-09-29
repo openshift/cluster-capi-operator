@@ -103,7 +103,7 @@ var _ = Describe("capi2mapi Machine conversion", func() {
 			expectedErrors:   []string{},
 			expectedWarnings: []string{},
 			assertion: func(machine *mapiv1beta1.Machine) {
-				Expect(machine.Spec.Taints).To(BeEmpty())
+				Expect(machine.Spec.Taints).To(BeEmpty(), "CAPI Machine without taints should convert to an empty MAPI taint list")
 			},
 		}),
 	)
@@ -122,32 +122,30 @@ var _ = Describe("capi2mapi Machine conversion", func() {
 				capabuilder.AWSMachine().Build(),
 				capabuilder.AWSCluster().Build(),
 			).ToMachine()
-			Expect(err).To(BeNil())
-			Expect(warns).To(BeEmpty())
+			Expect(err).To(BeNil(), "CAPI Machine with Always taints should convert without errors")
+			Expect(warns).To(BeEmpty(), "CAPI Machine taint conversion should not produce warnings")
 			Expect(machine.Spec.Taints).To(ConsistOf(corev1.Taint{
 				Key:    "key1",
 				Value:  "value1",
 				Effect: corev1.TaintEffectNoSchedule,
-			}))
+			}), "MAPI taint conversion should preserve the key, value, and effect")
 		})
 
-		It("should convert multiple CAPI Machine taints to MAPI Machine taints, dropping propagation", func() {
+		It("should reject CAPI Machine taints with OnInitialization propagation", func() {
 			capiMachine := capiMachineBase.Build()
 			capiMachine.Spec.Taints = []clusterv1.MachineTaint{
 				{Key: "key1", Value: "value1", Effect: corev1.TaintEffectNoSchedule, Propagation: clusterv1.MachineTaintPropagationAlways},
 				{Key: "key2", Value: "value2", Effect: corev1.TaintEffectNoExecute, Propagation: clusterv1.MachineTaintPropagationOnInitialization},
 			}
-			machine, warns, err := FromMachineAndAWSMachineAndAWSCluster(
+			_, _, err := FromMachineAndAWSMachineAndAWSCluster(
 				capiMachine,
 				capabuilder.AWSMachine().Build(),
 				capabuilder.AWSCluster().Build(),
 			).ToMachine()
-			Expect(err).To(BeNil())
-			Expect(warns).To(BeEmpty())
-			Expect(machine.Spec.Taints).To(ConsistOf(
-				corev1.Taint{Key: "key1", Value: "value1", Effect: corev1.TaintEffectNoSchedule},
-				corev1.Taint{Key: "key2", Value: "value2", Effect: corev1.TaintEffectNoExecute},
-			))
+			Expect(err).To(HaveOccurred(), "CAPI OnInitialization propagation must not be silently converted to MAPI taints")
+			Expect(err.Error()).To(ContainSubstring("spec.taints[1].propagation"), "the conversion error should identify the unsupported taint field")
+			Expect(err.Error()).To(ContainSubstring(`key2`), "the conversion error should identify the offending taint key")
+			Expect(err.Error()).To(ContainSubstring(string(corev1.TaintEffectNoExecute)), "the conversion error should identify the offending taint effect")
 		})
 	})
 })

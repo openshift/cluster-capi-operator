@@ -140,7 +140,7 @@ var _ = Describe("mapi2capi Machine conversion", func() {
 					Value:       "value1",
 					Effect:      corev1.TaintEffectNoSchedule,
 					Propagation: clusterv1.MachineTaintPropagationAlways,
-				}))
+				}), "CAPI taint conversion should preserve key, value, effect, and Always propagation")
 			},
 		}),
 
@@ -159,7 +159,7 @@ var _ = Describe("mapi2capi Machine conversion", func() {
 					Value:       "value1",
 					Effect:      corev1.TaintEffectNoExecute,
 					Propagation: clusterv1.MachineTaintPropagationAlways,
-				}))
+				}), "CAPI taint conversion should preserve the NoExecute effect and Always propagation")
 			},
 		}),
 
@@ -178,7 +178,7 @@ var _ = Describe("mapi2capi Machine conversion", func() {
 					Value:       "value1",
 					Effect:      corev1.TaintEffectPreferNoSchedule,
 					Propagation: clusterv1.MachineTaintPropagationAlways,
-				}))
+				}), "CAPI taint conversion should preserve the PreferNoSchedule effect and Always propagation")
 			},
 		}),
 
@@ -202,7 +202,7 @@ var _ = Describe("mapi2capi Machine conversion", func() {
 				Expect(capiMachine.Spec.Taints).To(ConsistOf(
 					clusterv1.MachineTaint{Key: "key1", Value: "value1", Effect: corev1.TaintEffectNoSchedule, Propagation: clusterv1.MachineTaintPropagationAlways},
 					clusterv1.MachineTaint{Key: "key2", Value: "value2", Effect: corev1.TaintEffectNoExecute, Propagation: clusterv1.MachineTaintPropagationAlways},
-				))
+				), "all converted CAPI taints should preserve fields and use Always propagation")
 			},
 		}),
 

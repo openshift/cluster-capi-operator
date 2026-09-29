@@ -150,6 +150,7 @@ func setMAPINodeLabelsToCAPINodeLabels(mapiNodeLabels map[string]string, capiMac
 	}
 }
 
+// convertMAPITaintsToCAPITaints maps MAPI taints to CAPI taints with continuous propagation.
 func convertMAPITaintsToCAPITaints(mapiTaints []corev1.Taint) []clusterv1.MachineTaint {
 	if len(mapiTaints) == 0 {
 		return nil
