@@ -18,6 +18,7 @@ package infracluster
 
 import (
 	"context"
+	"errors"
 
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
@@ -28,6 +29,9 @@ import (
 
 	mapiv1beta1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/machine/v1beta1"
 
+	"github.com/gophercloud/gophercloud/v2/openstack/networking/v2/extensions/external"
+	"github.com/gophercloud/gophercloud/v2/openstack/networking/v2/extensions/layer3/routers"
+	"github.com/gophercloud/gophercloud/v2/openstack/networking/v2/networks"
 	"github.com/gophercloud/gophercloud/v2/openstack/networking/v2/ports"
 	"github.com/gophercloud/gophercloud/v2/openstack/networking/v2/subnets"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -163,5 +167,190 @@ var _ = Describe("getDefaultSubnetFromMachines", func() {
 
 		_, err := getDefaultSubnetFromMachines(context.Background(), logr.Discard(), kubeClient, networkClient, newPlatformStatus("10.0.0.5"))
 		Expect(err).To(MatchError(ContainSubstring("no matching subnets found")))
+	})
+})
+
+var _ = Describe("resolveRouterAndExternalNetwork", func() {
+	const (
+		subnetID    = "33333333-3333-3333-3333-333333333333"
+		networkID   = "44444444-4444-4444-4444-444444444444"
+		gatewayIP   = "10.0.0.1"
+		portID      = "66666666-6666-6666-6666-666666666666"
+		routerID    = "77777777-7777-7777-7777-777777777777"
+		extNetID    = "88888888-8888-8888-8888-888888888888"
+		deviceOwner = "network:router_interface"
+	)
+
+	var (
+		mockCtrl      *gomock.Controller
+		networkClient *openstackclientsmock.MockNetworkClient
+		subnet        *subnets.Subnet
+	)
+
+	BeforeEach(func() {
+		mockCtrl = gomock.NewController(GinkgoT())
+		networkClient = openstackclientsmock.NewMockNetworkClient(mockCtrl)
+		subnet = &subnets.Subnet{
+			ID:        subnetID,
+			NetworkID: networkID,
+			GatewayIP: gatewayIP,
+		}
+	})
+
+	AfterEach(func() {
+		mockCtrl.Finish()
+	})
+
+	gatewayPortListOpts := func() ports.ListOpts {
+		return ports.ListOpts{
+			NetworkID: networkID,
+			FixedIPs:  []ports.FixedIPOpts{{IPAddress: gatewayIP}},
+		}
+	}
+
+	externalNetworkListOpts := func() external.ListOptsExt {
+		return external.ListOptsExt{
+			ListOptsBuilder: networks.ListOpts{},
+			External:        ptr.To(true),
+		}
+	}
+
+	It("resolves the router and external network when a router owns the subnet's gateway IP", func() {
+		networkClient.EXPECT().ListPort(gatewayPortListOpts()).Return([]ports.Port{
+			{ID: portID, DeviceID: routerID, DeviceOwner: deviceOwner},
+		}, nil)
+		networkClient.EXPECT().GetRouter(routerID).Return(&routers.Router{
+			ID:          routerID,
+			GatewayInfo: routers.GatewayInfo{NetworkID: extNetID},
+		}, nil)
+
+		router, externalNetwork, err := resolveRouterAndExternalNetwork(context.Background(), logr.Discard(), networkClient, subnet)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(router).NotTo(BeNil())
+		Expect(*router.ID).To(Equal(routerID))
+		Expect(externalNetwork).NotTo(BeNil())
+		Expect(*externalNetwork.ID).To(Equal(extNetID))
+	})
+
+	It("falls back to resolving the external network directly when the subnet has no gateway port", func() {
+		networkClient.EXPECT().ListPort(gatewayPortListOpts()).Return([]ports.Port{}, nil)
+		networkClient.EXPECT().ListNetwork(externalNetworkListOpts()).Return([]networks.Network{
+			{ID: extNetID},
+		}, nil)
+
+		router, externalNetwork, err := resolveRouterAndExternalNetwork(context.Background(), logr.Discard(), networkClient, subnet)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(router).To(BeNil())
+		Expect(externalNetwork).NotTo(BeNil())
+		Expect(*externalNetwork.ID).To(Equal(extNetID))
+	})
+
+	It("leaves external network unset too when there is no router and no external network in the project", func() {
+		networkClient.EXPECT().ListPort(gatewayPortListOpts()).Return([]ports.Port{}, nil)
+		networkClient.EXPECT().ListNetwork(externalNetworkListOpts()).Return([]networks.Network{}, nil)
+
+		router, externalNetwork, err := resolveRouterAndExternalNetwork(context.Background(), logr.Discard(), networkClient, subnet)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(router).To(BeNil())
+		Expect(externalNetwork).To(BeNil())
+	})
+
+	It("returns an explicit error when there is no router and multiple external networks exist (ambiguous)", func() {
+		networkClient.EXPECT().ListPort(gatewayPortListOpts()).Return([]ports.Port{
+			{ID: portID, DeviceID: routerID},
+			{ID: "99999999-9999-9999-9999-999999999999", DeviceID: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"},
+		}, nil)
+		networkClient.EXPECT().ListNetwork(externalNetworkListOpts()).Return([]networks.Network{
+			{ID: extNetID},
+			{ID: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"},
+		}, nil)
+
+		_, _, err := resolveRouterAndExternalNetwork(context.Background(), logr.Discard(), networkClient, subnet)
+		Expect(err).To(MatchError(errOpenStackAmbiguousExternalNetworks))
+	})
+
+	It("falls back to resolving the external network directly when the router has no external gateway", func() {
+		networkClient.EXPECT().ListPort(gatewayPortListOpts()).Return([]ports.Port{
+			{ID: portID, DeviceID: routerID},
+		}, nil)
+		networkClient.EXPECT().GetRouter(routerID).Return(&routers.Router{ID: routerID}, nil)
+		networkClient.EXPECT().ListNetwork(externalNetworkListOpts()).Return([]networks.Network{}, nil)
+
+		router, externalNetwork, err := resolveRouterAndExternalNetwork(context.Background(), logr.Discard(), networkClient, subnet)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(router).To(BeNil())
+		Expect(externalNetwork).To(BeNil())
+	})
+
+	It("propagates real OpenStack API errors from router discovery instead of silently ignoring them", func() {
+		networkClient.EXPECT().ListPort(gatewayPortListOpts()).Return(nil, errors.New("boom"))
+
+		_, _, err := resolveRouterAndExternalNetwork(context.Background(), logr.Discard(), networkClient, subnet)
+		Expect(err).To(MatchError(ContainSubstring("boom")))
+	})
+
+	It("propagates real OpenStack API errors from external network discovery instead of silently ignoring them", func() {
+		networkClient.EXPECT().ListPort(gatewayPortListOpts()).Return([]ports.Port{}, nil)
+		networkClient.EXPECT().ListNetwork(externalNetworkListOpts()).Return(nil, errors.New("kaboom"))
+
+		_, _, err := resolveRouterAndExternalNetwork(context.Background(), logr.Discard(), networkClient, subnet)
+		Expect(err).To(MatchError(ContainSubstring("kaboom")))
+	})
+})
+
+var _ = Describe("resolveExternalNetworkWithoutRouter", func() {
+	const extNetID = "88888888-8888-8888-8888-888888888888"
+
+	var (
+		mockCtrl      *gomock.Controller
+		networkClient *openstackclientsmock.MockNetworkClient
+	)
+
+	BeforeEach(func() {
+		mockCtrl = gomock.NewController(GinkgoT())
+		networkClient = openstackclientsmock.NewMockNetworkClient(mockCtrl)
+	})
+
+	AfterEach(func() {
+		mockCtrl.Finish()
+	})
+
+	externalNetworkListOpts := external.ListOptsExt{
+		ListOptsBuilder: networks.ListOpts{},
+		External:        ptr.To(true),
+	}
+
+	It("returns nil when the project has no external network", func() {
+		networkClient.EXPECT().ListNetwork(externalNetworkListOpts).Return([]networks.Network{}, nil)
+
+		externalNetwork, err := resolveExternalNetworkWithoutRouter(networkClient)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(externalNetwork).To(BeNil())
+	})
+
+	It("returns the network when the project has exactly one external network", func() {
+		networkClient.EXPECT().ListNetwork(externalNetworkListOpts).Return([]networks.Network{{ID: extNetID}}, nil)
+
+		externalNetwork, err := resolveExternalNetworkWithoutRouter(networkClient)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(externalNetwork).NotTo(BeNil())
+		Expect(*externalNetwork.ID).To(Equal(extNetID))
+	})
+
+	It("returns an explicit, attributable error when the project has multiple external networks", func() {
+		networkClient.EXPECT().ListNetwork(externalNetworkListOpts).Return([]networks.Network{
+			{ID: extNetID},
+			{ID: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"},
+		}, nil)
+
+		_, err := resolveExternalNetworkWithoutRouter(networkClient)
+		Expect(err).To(MatchError(errOpenStackAmbiguousExternalNetworks))
+	})
+
+	It("propagates real OpenStack API errors", func() {
+		networkClient.EXPECT().ListNetwork(externalNetworkListOpts).Return(nil, errors.New("boom"))
+
+		_, err := resolveExternalNetworkWithoutRouter(networkClient)
+		Expect(err).To(MatchError(ContainSubstring("boom")))
 	})
 })
