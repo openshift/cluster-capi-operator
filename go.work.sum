@@ -1206,6 +1206,7 @@ github.com/openshift/cluster-api-actuator-pkg v0.0.0-20251212150432-4a60119d9691
 github.com/openshift/cluster-api-actuator-pkg v0.0.0-20251212150432-4a60119d9691/go.mod h1:D4Au/NRxORRuJa+/4W6O0WpvPyT+U/2aMOWeMsNZAnE=
 github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20251212150432-4a60119d9691 h1:wOotiCFi/qg+0VV7KDNopHDpZOq3UFKq0Mnssfu8ytU=
 github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20251212150432-4a60119d9691/go.mod h1:Ahm3XvgKKIyKKYCG3oX2w7bE7twCT2kG71ykwwxUh18=
+github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20260925161105-fda6678c170b/go.mod h1:xa81ujvo5pWR8d/iBdzmh6VhBq/WgN1pWOtep7VwuTw=
 github.com/openshift/cluster-control-plane-machine-set-operator v0.0.0-20250424110138-1dbf0c7a5d51/go.mod h1:cp9GawS6eRLeQFvnAu0NVuh3grPSaVS5vRGdydle2HQ=
 github.com/openshift/cluster-control-plane-machine-set-operator v0.0.0-20251029084908-344babe6a957/go.mod h1:TBlORAAtNZ/Tl86pO7GjNXKsH/g0QAW5GnvYstdOhYI=
 github.com/openshift/rosa v1.2.55/go.mod h1:EE0yTEjbwxfnH/9YbQZaUXUVbIzfPa9KCRNw19QdLsw=

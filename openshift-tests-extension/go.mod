@@ -10,7 +10,7 @@ require (
 
 replace (
 	github.com/onsi/ginkgo/v2 => github.com/openshift/onsi-ginkgo/v2 v2.6.1-0.20241205171354-8006f302fd12
-	github.com/openshift/cluster-api-actuator-pkg/testutils => github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20260803090635-6dddd8460b22
+	github.com/openshift/cluster-api-actuator-pkg/testutils => github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20260925161105-fda6678c170b
 	github.com/openshift/cluster-capi-operator => ../
 	github.com/openshift/cluster-capi-operator/e2e => ../e2e
 	github.com/openshift/cluster-capi-operator/manifests-gen => ../manifests-gen
