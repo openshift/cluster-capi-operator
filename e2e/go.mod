@@ -7,7 +7,7 @@ replace (
 	github.com/metal3-io/baremetal-operator => github.com/metal3-io/baremetal-operator v0.5.1
 
 	//cluster-api-actuator-pkg uses a placeholder for cluster-api-actuator-pkg/testutils
-	github.com/openshift/cluster-api-actuator-pkg/testutils => github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20260803090635-6dddd8460b22
+	github.com/openshift/cluster-api-actuator-pkg/testutils => github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20260925140726-b3872f2f354c
 
 	// The operator module is local to this repository.
 	github.com/openshift/cluster-capi-operator => ..

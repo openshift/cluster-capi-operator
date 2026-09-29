@@ -22,7 +22,7 @@ import (
 	. "github.com/onsi/gomega"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	capibuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/cluster-api/core/v1beta2"
-	capabuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/cluster-api/infrastructure/v1beta2"
+	capabuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/cluster-api/infrastructure/aws/v1beta2"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/test/matchers"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 	corev1 "k8s.io/api/core/v1"
