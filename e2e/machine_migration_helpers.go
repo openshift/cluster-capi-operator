@@ -62,6 +62,10 @@ func skipIfNoWorkerCAPIMachines() {
 }
 
 func createCAPIMachine(ctx context.Context, cl client.Client, machineName string) *clusterv1.Machine {
+	return createCAPIMachineWithTaints(ctx, cl, machineName, nil)
+}
+
+func createCAPIMachineWithTaints(ctx context.Context, cl client.Client, machineName string, taints []clusterv1.MachineTaint) *clusterv1.Machine {
 	GinkgoHelper()
 
 	Expect(machineName).NotTo(BeEmpty(), "Machine name cannot be empty")
@@ -88,6 +92,9 @@ func createCAPIMachine(ctx context.Context, cl client.Client, machineName string
 
 	// Clear status and other instance-specific fields that should not be copied.
 	newCapiMachine.Spec.ProviderID = ""
+	if taints != nil {
+		newCapiMachine.Spec.Taints = append([]clusterv1.MachineTaint(nil), taints...)
+	}
 	newCapiMachine.Spec.InfrastructureRef.Name = machineName
 	newCapiMachine.Spec.Bootstrap.DataSecretName = ptr.To("worker-user-data")
 	newCapiMachine.ObjectMeta.Labels = nil
@@ -139,6 +146,10 @@ func createCAPIMachine(ctx context.Context, cl client.Client, machineName string
 }
 
 func createMAPIMachineWithAuthority(ctx context.Context, cl client.Client, machineName string, authority mapiv1beta1.MachineAuthority) *mapiv1beta1.Machine {
+	return createMAPIMachineWithAuthorityAndTaints(ctx, cl, machineName, authority, nil)
+}
+
+func createMAPIMachineWithAuthorityAndTaints(ctx context.Context, cl client.Client, machineName string, authority mapiv1beta1.MachineAuthority, taints []corev1.Taint) *mapiv1beta1.Machine {
 	GinkgoHelper()
 
 	Expect(machineName).NotTo(BeEmpty(), "Machine name cannot be empty")
@@ -167,6 +178,9 @@ func createMAPIMachineWithAuthority(ctx context.Context, cl client.Client, machi
 
 	// Clear status and other instance-specific fields that should not be copied.
 	newMachine.Spec.ProviderID = nil
+	if taints != nil {
+		newMachine.Spec.Taints = append([]corev1.Taint(nil), taints...)
+	}
 	newMachine.ObjectMeta.Labels = nil
 	// Clear spec.metadata.labels to avoid MachineSet adoption via spec labels
 	if newMachine.Spec.ObjectMeta.Labels != nil {

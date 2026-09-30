@@ -86,4 +86,44 @@ var _ = Describe("Machine Sync", Ordered, func() {
 				"infrastructure machine UID changed — was deleted and recreated")
 		}, "30s", "5s").Should(Succeed())
 	})
+
+	It("should propagate MAPI Machine taints to the CAPI Machine and its Node", func() {
+		machineName := generateName("machine-sync-taint-")
+		taint := corev1.Taint{
+			Key:    "e2e.cluster-capi-operator.openshift.io/propagated",
+			Value:  machineName,
+			Effect: corev1.TaintEffectNoSchedule,
+		}
+		mapiMachine := createMAPIMachineWithAuthorityAndTaints(ctx, cl, machineName, mapiv1beta1.MachineAuthorityMachineAPI, []corev1.Taint{taint})
+		var capiMachine *clusterv1.Machine
+
+		DeferCleanup(func() {
+			cleanupMachineResources(ctx, cl,
+				[]*clusterv1.Machine{capiMachine},
+				[]*mapiv1beta1.Machine{mapiMachine},
+			)
+		})
+
+		By("Verifying the taint propagated to the CAPI Machine with continuous propagation")
+		capiMachine = framework.GetMachineWithRetry(machineName, framework.CAPINamespace)
+		capiTaint := clusterv1.MachineTaint{
+			Key:         taint.Key,
+			Value:       taint.Value,
+			Effect:      taint.Effect,
+			Propagation: clusterv1.MachineTaintPropagationAlways,
+		}
+		Eventually(komega.Object(capiMachine), framework.WaitMedium, framework.RetryMedium).
+			Should(HaveField("Spec.Taints", ConsistOf(capiTaint)))
+
+		By("Waiting for the CAPI Machine to provision a real Node")
+		verifyMachineRunning(cl, capiMachine)
+
+		By("Verifying the taint propagated to the Node")
+		Eventually(func(g Gomega) {
+			g.Expect(komega.Get(capiMachine)()).To(Succeed())
+			node, err := framework.GetNodeForMachine(ctx, cl, capiMachine)
+			g.Expect(err).NotTo(HaveOccurred())
+			g.Expect(node.Spec.Taints).To(ContainElement(taint))
+		}, framework.WaitLong, framework.RetryLong).Should(Succeed())
+	})
 })
