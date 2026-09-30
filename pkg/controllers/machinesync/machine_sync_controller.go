@@ -46,6 +46,7 @@ import (
 	"k8s.io/utils/ptr"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
+	vspherev1 "sigs.k8s.io/cluster-api-provider-vsphere/apis/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/cluster-api/util/annotations"
 	"sigs.k8s.io/cluster-api/util/labels/format"
@@ -99,6 +100,9 @@ var (
 
 	// errAssertingCAPIBMPowerVSMachine is returned when we encounter an issue asserting a client.Object into an IBMPowerVSMachine.
 	errAssertingCAPIIBMPowerVSMachine = errors.New("error asserting the Cluster API IBMPowerVSMachine object")
+
+	// errAssertingCAPIVSphereMachine is returned when we encounter an issue asserting a client.Object into a VSphereMachine.
+	errAssertingCAPIVSphereMachine = errors.New("error asserting the Cluster API VSphereMachine object")
 
 	// errCAPIMachineNotFound is returned when the AuthoritativeAPI is set to CAPI on the MAPI machine,
 	// but we can't find the CAPI machine.
@@ -619,6 +623,8 @@ func (r *MachineSyncReconciler) convertMAPIToCAPIMachine(mapiMachine *mapiv1beta
 		return mapi2capi.FromOpenStackMachineAndInfra(mapiMachine, r.Infra).ToMachineAndInfrastructureMachine() //nolint:wrapcheck
 	case configv1.PowerVSPlatformType:
 		return mapi2capi.FromPowerVSMachineAndInfra(mapiMachine, r.Infra).ToMachineAndInfrastructureMachine() //nolint:wrapcheck
+	case configv1.VSpherePlatformType:
+		return mapi2capi.FromVSphereMachineAndInfra(mapiMachine, r.Infra).ToMachineAndInfrastructureMachine() //nolint:wrapcheck
 	default:
 		return nil, nil, nil, fmt.Errorf("%w: %s", errPlatformNotSupported, r.Platform)
 	}
@@ -650,6 +656,18 @@ func (r *MachineSyncReconciler) convertCAPIToMAPIMachine(capiMachine *clusterv1.
 		}
 
 		return capi2mapi.FromMachineAndOpenStackMachineAndOpenStackCluster(capiMachine, openStackMachine, openStackCluster).ToMachine() //nolint:wrapcheck
+	case configv1.VSpherePlatformType:
+		vsphereMachine, ok := infraMachine.(*vspherev1.VSphereMachine)
+		if !ok {
+			return nil, nil, fmt.Errorf("%w, expected VSphereMachine, got %T", errUnexpectedInfraMachineType, infraMachine)
+		}
+
+		vsphereCluster, ok := infraCluster.(*vspherev1.VSphereCluster)
+		if !ok {
+			return nil, nil, fmt.Errorf("%w, expected VSphereCluster, got %T", errUnexpectedInfraClusterType, infraCluster)
+		}
+
+		return capi2mapi.FromMachineAndVSphereMachineAndVSphereCluster(capiMachine, vsphereMachine, vsphereCluster).ToMachine() //nolint:wrapcheck
 	default:
 		return nil, nil, fmt.Errorf("%w: %s", errPlatformNotSupported, r.Platform)
 	}
@@ -1061,6 +1079,10 @@ func (r *MachineSyncReconciler) reconcileMAPItoCAPIMachineDeletion(ctx context.C
 		_, err := util.RemoveFinalizer(ctx, r.Client, mapiMachine, SyncFinalizer)
 
 		return false, fmt.Errorf("failed to remove finalizer: %w", err)
+	}
+
+	if err := r.ensureUnpausedForDeletion(ctx, capiMachine, infraMachine); err != nil {
+		return false, fmt.Errorf("failed to unpause CAPI resources for deletion: %w", err)
 	}
 
 	if capiMachine.DeletionTimestamp.IsZero() {
@@ -1539,4 +1561,54 @@ func isTerminalConfigurationError(err error) bool {
 	}
 
 	return false
+}
+
+// ensureUnpausedForDeletion removes the paused annotation from CAPI resources
+// before they are deleted, on platforms where the provider creates sub-objects
+// with independent finalizers. On vSphere, CAPV creates a VSphereVM for each
+// VSphereMachine; the VSphereVM has its own finalizer that CAPV only processes
+// when the resource is not paused. Without removing the pause annotation
+// before deletion, a deadlock occurs: the provider skips reconciliation
+// because the resource is paused, and garbage collection cannot remove the
+// object because the finalizer is still present. On platforms without
+// sub-objects (e.g. AWS), this is a no-op.
+func (r *MachineSyncReconciler) ensureUnpausedForDeletion(ctx context.Context, capiMachine *clusterv1.Machine, infraMachine client.Object) error {
+	switch r.Platform {
+	case configv1.VSpherePlatformType:
+		return r.removePreDeletionPauseAnnotation(ctx, capiMachine, infraMachine)
+	default:
+		return nil
+	}
+}
+
+func (r *MachineSyncReconciler) removePreDeletionPauseAnnotation(ctx context.Context, capiMachine *clusterv1.Machine, infraMachine client.Object) error {
+	logger := logf.FromContext(ctx)
+
+	if annotations.HasPaused(capiMachine) {
+		capiMachineCopy := capiMachine.DeepCopy()
+		delete(capiMachine.Annotations, clusterv1.PausedAnnotation)
+
+		if err := r.Patch(ctx, capiMachine, client.MergeFrom(capiMachineCopy)); err != nil {
+			return fmt.Errorf("failed to remove paused annotation from Cluster API machine: %w", err)
+		}
+
+		logger.Info("Removed paused annotation from Cluster API machine before deletion")
+	}
+
+	if !util.IsNilObject(infraMachine) && annotations.HasPaused(infraMachine) {
+		infraMachineCopy, ok := infraMachine.DeepCopyObject().(client.Object)
+		if !ok {
+			return errAssertingInfrasMachineClientObject
+		}
+
+		util.RemoveAnnotation(infraMachine, clusterv1.PausedAnnotation)
+
+		if err := r.Patch(ctx, infraMachine, client.MergeFrom(infraMachineCopy)); err != nil {
+			return fmt.Errorf("failed to remove paused annotation from Cluster API infra machine: %w", err)
+		}
+
+		logger.Info("Removed paused annotation from Cluster API infra machine before deletion")
+	}
+
+	return nil
 }
