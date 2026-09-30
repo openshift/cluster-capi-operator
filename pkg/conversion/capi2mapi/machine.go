@@ -16,6 +16,7 @@ limitations under the License.
 package capi2mapi
 
 import (
+	"fmt"
 	"strings"
 
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
@@ -31,9 +32,28 @@ const (
 	mapiNamespace = "openshift-machine-api"
 )
 
+// validateCAPITaintPropagation reports propagation values that MAPI cannot represent.
+func validateCAPITaintPropagation(taints []clusterv1.MachineTaint) field.ErrorList {
+	var errs field.ErrorList
+
+	for i, taint := range taints {
+		if taint.Propagation != clusterv1.MachineTaintPropagationOnInitialization {
+			continue
+		}
+
+		errs = append(errs, field.Invalid(
+			field.NewPath("spec", "taints").Index(i).Child("propagation"),
+			taint.Propagation,
+			fmt.Sprintf("MAPI cannot represent taint %q with effect %q and propagation %q", taint.Key, taint.Effect, taint.Propagation),
+		))
+	}
+
+	return errs
+}
+
 // fromCAPIMachineToMAPIMachine translates a core CAPI Machine to its MAPI Machine correspondent.
 func fromCAPIMachineToMAPIMachine(capiMachine *clusterv1.Machine, additionalMachineAPIMetadataLabels, additionalMachineAPIMetadataAnnotations map[string]string) (*mapiv1beta1.Machine, field.ErrorList) {
-	errs := field.ErrorList{}
+	errs := validateCAPITaintPropagation(capiMachine.Spec.Taints)
 
 	lifecycleHooks, capiMachineNonHookAnnotations := convertCAPILifecycleHookAnnotationsToMAPILifecycleHooksAndAnnotations(capiMachine.Annotations)
 
@@ -63,8 +83,8 @@ func fromCAPIMachineToMAPIMachine(capiMachine *clusterv1.Machine, additionalMach
 			},
 			ProviderID:     providerID,
 			LifecycleHooks: lifecycleHooks,
+			Taints:         convertCAPITaintsToMAPITaints(capiMachine.Spec.Taints),
 			// ProviderSpec: // ProviderSpec MUST NOT be populated here. It is added later by higher level fuctions.
-			// Taints: // TODO(OCPCLOUD-2861): Taint propagation from Machines to Nodes is not yet implemented in CAPI.
 		},
 		Status: mapiMachineStatus,
 	}

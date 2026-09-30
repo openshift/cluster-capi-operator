@@ -24,10 +24,12 @@ import (
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	mapiframework "github.com/openshift/cluster-api-actuator-pkg/pkg/framework"
 	capiframework "github.com/openshift/cluster-capi-operator/e2e/framework"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
+	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 )
 
 var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Machine Migration CAPI Authoritative Tests", Ordered, func() {
@@ -39,6 +41,45 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 		if !capiframework.IsFeatureGateEnabled(ctx, cl, features.FeatureGateMachineAPIMigration) {
 			Skip("Skipping, this feature is only supported on MachineAPIMigration enabled clusters")
 		}
+	})
+
+	It("should propagate CAPI Machine taints to the MAPI Machine and its Node", func() {
+		skipIfNoWorkerCAPIMachines()
+
+		machineName := generateName("machine-sync-capi-taint-")
+		capiTaint := clusterv1.MachineTaint{
+			Key:         "e2e.cluster-capi-operator.openshift.io/propagated",
+			Value:       machineName,
+			Effect:      corev1.TaintEffectNoSchedule,
+			Propagation: clusterv1.MachineTaintPropagationAlways,
+		}
+		capiMachine := createCAPIMachineWithTaints(ctx, cl, machineName, []clusterv1.MachineTaint{capiTaint})
+		mapiMachine := createMAPIMachineWithAuthority(ctx, cl, machineName, mapiv1beta1.MachineAuthorityClusterAPI)
+
+		DeferCleanup(func() {
+			By("Cleaning up machine resources")
+			cleanupMachineResources(ctx, cl,
+				[]*clusterv1.Machine{capiMachine},
+				[]*mapiv1beta1.Machine{mapiMachine},
+			)
+		})
+
+		By("Verifying the CAPI taint propagated to the MAPI Machine")
+		mapiTaint := corev1.Taint{Key: capiTaint.Key, Value: capiTaint.Value, Effect: capiTaint.Effect}
+		Eventually(komega.Object(mapiMachine), capiframework.WaitMedium, capiframework.RetryMedium).
+			Should(SatisfyAll(
+				HaveField("Spec.AuthoritativeAPI", Equal(mapiv1beta1.MachineAuthorityClusterAPI)),
+				HaveField("Spec.Taints", ConsistOf(mapiTaint)),
+			))
+		verifyMAPIMachineSynchronizedCondition(mapiMachine, mapiv1beta1.MachineAuthorityClusterAPI)
+
+		By("Verifying the CAPI taint is also applied to the Node")
+		Eventually(func(g Gomega) {
+			g.Expect(komega.Get(capiMachine)()).To(Succeed())
+			node, err := capiframework.GetNodeForMachine(ctx, cl, capiMachine)
+			g.Expect(err).NotTo(HaveOccurred())
+			g.Expect(node.Spec.Taints).To(ContainElement(mapiTaint))
+		}, capiframework.WaitLong, capiframework.RetryLong).Should(Succeed())
 	})
 
 	Describe("Create MAPI Machine", Ordered, func() {
