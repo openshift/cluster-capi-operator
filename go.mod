@@ -79,6 +79,7 @@ require (
 	github.com/openshift/library-go v0.0.0-20260716104731-fdf18b82797f
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/pflag v1.0.10
+	go.uber.org/mock v0.6.0
 	golang.org/x/tools v0.49.0
 	k8s.io/api v0.36.2
 	k8s.io/apiextensions-apiserver v0.36.2
@@ -377,7 +378,6 @@ require (
 	go.opentelemetry.io/otel/sdk v1.44.0 // indirect
 	go.opentelemetry.io/otel/trace v1.44.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.10.0 // indirect
-	go.uber.org/mock v0.6.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.1 // indirect
 	go.yaml.in/yaml/v2 v2.4.4 // indirect

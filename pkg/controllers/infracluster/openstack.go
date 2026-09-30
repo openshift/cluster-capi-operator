@@ -34,7 +34,9 @@ import (
 	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/gophercloud/gophercloud/v2/openstack/networking/v2/extensions/external"
 	"github.com/gophercloud/gophercloud/v2/openstack/networking/v2/extensions/layer3/routers"
+	"github.com/gophercloud/gophercloud/v2/openstack/networking/v2/networks"
 	"github.com/gophercloud/gophercloud/v2/openstack/networking/v2/ports"
 	"github.com/gophercloud/gophercloud/v2/openstack/networking/v2/subnets"
 	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
@@ -46,6 +48,7 @@ var (
 	errUnsupportedOpenStackLoadBalancerType = errors.New("unsupported load balancer type for OpenStack")
 	errOpenStackNoAPIServerInternalIPs      = errors.New("no APIServerInternalIPs available")
 	errOpenStackNoDefaultRouter             = errors.New("unable to determine default router from control plane machines")
+	errOpenStackAmbiguousExternalNetworks   = errors.New("multiple external networks found and no router to disambiguate them")
 	errOpenStackNoDefaultSubnet             = errors.New("unable to determine default subnet from control plane machines")
 	errOpenStackNoControlPlaneMachines      = errors.New("no control plane machines found")
 )
@@ -91,10 +94,11 @@ func (r *InfraClusterController) ensureOpenStackCluster(ctx context.Context, log
 	// Perform some platform-specific validation
 
 	platformStatus := r.Infra.Status.PlatformStatus.OpenStack
+	lbType := platformStatus.LoadBalancer.Type
 
-	if platformStatus.LoadBalancer.Type != configv1.LoadBalancerTypeOpenShiftManagedDefault {
+	if lbType != configv1.LoadBalancerTypeOpenShiftManagedDefault && lbType != configv1.LoadBalancerTypeUserManaged {
 		return nil, fmt.Errorf("%w: load balancer type %s not supported",
-			errUnsupportedOpenStackLoadBalancerType, platformStatus.LoadBalancer.Type)
+			errUnsupportedOpenStackLoadBalancerType, lbType)
 	}
 
 	if len(platformStatus.APIServerInternalIPs) == 0 {
@@ -155,16 +159,18 @@ func (r *InfraClusterController) ensureOpenStackCluster(ctx context.Context, log
 	// use all subnets in network, which should also cover dual-stack deployments
 	target.Spec.Network = &openstackv1.NetworkParam{ID: ptr.To(defaultSubnet.NetworkID)}
 
-	router, err := getDefaultRouterFromSubnet(ctx, networkClient, defaultSubnet)
+	// CAPO only resolves Spec.Router if it is set, and errors when resolving
+	// the external network if none is specified and the project has multiple
+	// external networks. There are scenarios where the user BYON and the
+	// gateway might live outside Neutron, making these fields optional.
+	routerParam, externalNetworkParam, err := resolveRouterAndExternalNetwork(ctx, log, networkClient, defaultSubnet)
 	if err != nil {
 		return nil, err
 	}
 
-	target.Spec.Router = &openstackv1.RouterParam{ID: ptr.To(router.ID)}
-	// NOTE(stephenfin): The only reason we set ExternalNetworkID in the cluster spec is to avoid
-	// an error reconciling the external network if it isn't set. If CAPO ever no longer requires
-	// this we can just not set it and remove much of the code above. We don't actually use it.
-	target.Spec.ExternalNetwork = &openstackv1.NetworkParam{ID: ptr.To(router.GatewayInfo.NetworkID)}
+	// These might be nil if no router is found.
+	target.Spec.Router = routerParam
+	target.Spec.ExternalNetwork = externalNetworkParam
 
 	if err := r.Create(ctx, target); err != nil {
 		return nil, fmt.Errorf("failed to create InfraCluster: %w", err)
@@ -173,6 +179,62 @@ func (r *InfraClusterController) ensureOpenStackCluster(ctx context.Context, log
 	log.Info(fmt.Sprintf("InfraCluster %s successfully created", klog.KObj(target)))
 
 	return target, nil
+}
+
+// resolveRouterAndExternalNetwork attempts to determine the router and external
+// network associated with the given subnet, for use in
+// OpenStackCluster.Spec.Router/Spec.ExternalNetwork.
+//
+// If a router is found, the external network is inferred from it. Otherwise, no
+// router is used and the external network is resolved independently mirroring
+// CAPO's behavior.
+func resolveRouterAndExternalNetwork(ctx context.Context, log logr.Logger, networkClient openstackclients.NetworkClient, subnet *subnets.Subnet) (*openstackv1.RouterParam, *openstackv1.NetworkParam, error) {
+	router, err := getDefaultRouterFromSubnet(ctx, networkClient, subnet)
+	if err != nil {
+		if !errors.Is(err, errOpenStackNoDefaultRouter) {
+			return nil, nil, err
+		}
+
+		log.Info("unable to determine a default router for the network; resolving external network directly", "reason", err.Error())
+
+		externalNetwork, resolveErr := resolveExternalNetworkWithoutRouter(networkClient)
+		if resolveErr != nil {
+			return nil, nil, resolveErr
+		}
+
+		return nil, externalNetwork, nil
+	}
+
+	// NOTE(stephenfin): The only reason we set ExternalNetworkID in the cluster spec is to avoid
+	// an error reconciling the external network if it isn't set. If CAPO ever no longer requires
+	// this we can just not set it and remove much of the code above. We don't actually use it.
+	return &openstackv1.RouterParam{ID: ptr.To(router.ID)}, &openstackv1.NetworkParam{ID: ptr.To(router.GatewayInfo.NetworkID)}, nil
+}
+
+// resolveExternalNetworkWithoutRouter determines Spec.ExternalNetwork without going through a router,
+// mirroring own CAPO's logic.
+func resolveExternalNetworkWithoutRouter(networkClient openstackclients.NetworkClient) (*openstackv1.NetworkParam, error) {
+	externalNetworks, err := networkClient.ListNetwork(external.ListOptsExt{
+		ListOptsBuilder: networks.ListOpts{},
+		External:        ptr.To(true),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("listing external networks: %w", err)
+	}
+
+	switch len(externalNetworks) {
+	case 0:
+		return nil, nil //nolint:nilnil
+	case 1:
+		return &openstackv1.NetworkParam{ID: ptr.To(externalNetworks[0].ID)}, nil
+	default:
+		ids := make([]string, len(externalNetworks))
+		for i, externalNetwork := range externalNetworks {
+			ids[i] = externalNetwork.ID
+		}
+
+		return nil, fmt.Errorf("%w: %v", errOpenStackAmbiguousExternalNetworks, ids)
+	}
 }
 
 // getDefaultRouterFromSubnet attempts to infer the default router used for
@@ -220,11 +282,14 @@ func getDefaultRouterFromSubnet(_ context.Context, networkClient openstackclient
 
 // getDefaultSubnetFromMachines attempts to infer the default cluster subnet by
 // directly examining the control plane machines. Specifically it looks for a
-// subnet attached to a control plane machine whose CIDR contains the API
-// loadbalancer internal VIP.
+// subnet attached to a control plane machine whose CIDR contains one of the API
+// loadbalancer internal VIPs (platformStatus.APIServerInternalIPs).
 //
-// This heuristic is only valid when the API loadbalancer type is
-// LoadBalancerTypeOpenShiftManagedDefault.
+// This heuristic is valid for both LoadBalancerTypeOpenShiftManagedDefault and
+// LoadBalancerTypeUserManaged: in both cases OpenShift requires the API VIP(s)
+// to be reachable on a subnet the control plane machines are directly attached
+// to, whether that VIP is a keepalived/VRRP secondary address or the frontend
+// of a customer-supplied external load balancer.
 //
 //nolint:gocognit,funlen
 func getDefaultSubnetFromMachines(ctx context.Context, log logr.Logger, kubeclient client.Client, networkClient openstackclients.NetworkClient, platformStatus *configv1.OpenStackPlatformStatus) (*subnets.Subnet, error) {
