@@ -175,7 +175,11 @@ func (r *revisionReconciler) reconcileRevision(ctx context.Context, apiRevision 
 		return false, "", fmt.Errorf("error creating installer revision from API revision %s: %w", apiRevision.Name, reconcile.TerminalError(err))
 	}
 
-	bcRevision := toBoxcutterRevision(revision, r.collectObjects)
+	bcRevision, err := toBoxcutterRevision(revision, r.collectObjects)
+	if err != nil {
+		return false, "", fmt.Errorf("error building boxcutter revision from API revision %s: %w", apiRevision.Name, reconcile.TerminalError(err))
+	}
+
 	phases := bcRevision.GetPhases()
 
 	totalObjects := 0
@@ -252,7 +256,8 @@ func (r *revisionReconciler) handlePhaseResults(revisionName operatorv1alpha1.Re
 			}
 		}
 
-		r.log.Info("Phase result",
+		r.log.Info(
+			"Phase result",
 			"complete", phase.IsComplete(),
 			"objects", len(objects),
 			"actions", actionCounts,
@@ -264,7 +269,8 @@ func (r *revisionReconciler) handlePhaseResults(revisionName operatorv1alpha1.Re
 		return nil
 	}
 
-	return fmt.Errorf("revision %s: %w: %s",
+	return fmt.Errorf(
+		"revision %s: %w: %s",
 		revisionName,
 		reconcile.TerminalError(errCollision),
 		strings.Join(collisions, ", "),
@@ -340,7 +346,12 @@ func (r *revisionReconciler) teardownRevision(ctx context.Context, apiRevision o
 
 	revisionName := revision.RevisionName()
 
-	bcRevision := toBoxcutterRevision(revision, r.collectObjects)
+	bcRevision, err := toBoxcutterRevision(revision, r.collectObjects)
+	if err != nil {
+		// We can't teardown this revision if we can't build it, so we consider it complete.
+		return true, "", fmt.Errorf("error building boxcutter revision from API revision %s: %w", apiRevision.Name, reconcile.TerminalError(err))
+	}
+
 	phases := bcRevision.GetPhases()
 
 	totalObjects := 0
@@ -394,14 +405,16 @@ func (r *revisionReconciler) logTeardownPhaseResults(revisionName operatorv1alph
 		*/
 
 		for _, obj := range waiting {
-			r.log.Info("Object waiting",
+			r.log.Info(
+				"Object waiting",
 				"revision", revisionName,
 				"phase", phase.GetName(),
 				"object", obj.String(),
 			)
 		}
 
-		r.log.Info("Phase teardown result",
+		r.log.Info(
+			"Phase teardown result",
 			"revision", revisionName,
 			"phase", phase.GetName(),
 			"complete", phase.IsComplete(),
@@ -500,7 +513,8 @@ func (r *revisionReconciler) resolveCollectedObjects() error {
 					// Resource type doesn't exist - terminal error
 					return fmt.Errorf(
 						"manifest references non-existent resource type %s (not a CRD in manifests and not found in cluster): %w",
-						collectedRef.gvk.String(), reconcile.TerminalError(err))
+						collectedRef.gvk.String(), reconcile.TerminalError(err),
+					)
 				}
 
 				// Transient errors are non-terminal

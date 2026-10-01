@@ -26,6 +26,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/types"
+	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
 	configv1 "github.com/openshift/api/config/v1"
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
@@ -250,8 +251,14 @@ func latestRevision(revisions []operatorv1alpha1.ClusterAPIInstallerRevision) op
 }
 
 // addRevision appends a new revision to ClusterAPI.Status.Revisions.
-// It uses revisiongenerator to compute the content ID, then writes via status update.
 func addRevision(ctx context.Context, providerNames ...string) operatorv1alpha1.ClusterAPIInstallerRevision {
+	GinkgoHelper()
+	return addRevisionWithUnmanagedCRDs(ctx, nil, providerNames...)
+}
+
+// addRevisionWithUnmanagedCRDs renders a revision to compute its content ID,
+// then appends it to ClusterAPI.Status.Revisions.
+func addRevisionWithUnmanagedCRDs(ctx context.Context, unmanagedCRDs []string, providerNames ...string) operatorv1alpha1.ClusterAPIInstallerRevision {
 	GinkgoHelper()
 
 	// Get current ClusterAPI to determine revision index.
@@ -264,7 +271,7 @@ func addRevision(ctx context.Context, providerNames ...string) operatorv1alpha1.
 		profiles := lookupProfiles(providerNames...)
 
 		// Render the revision to compute the correct content ID.
-		rendered, err := revisiongenerator.NewRenderedRevision(profiles)
+		rendered, err := revisiongenerator.NewRenderedRevision(profiles, revisiongenerator.WithUnmanagedCRDs(unmanagedCRDs))
 		Expect(err).NotTo(HaveOccurred())
 
 		var revisionIndex int64
@@ -447,4 +454,40 @@ func waitForRevision(ctx context.Context, revision operatorv1alpha1.RevisionName
 			test.HaveCondition(conditionTypeProgressing).WithStatus(configv1.ConditionFalse),
 		)
 	})
+}
+
+// setCompatibilityRequirementConditions sets Admitted and Compatible conditions on a CompatibilityRequirement.
+func setCompatibilityRequirementConditions(ctx context.Context, name string, admitted, compatible bool) {
+	GinkgoHelper()
+
+	toStatus := func(b bool) metav1.ConditionStatus {
+		if b {
+			return metav1.ConditionTrue
+		}
+
+		return metav1.ConditionFalse
+	}
+
+	cr := &apiextensionsv1alpha1.CompatibilityRequirement{}
+	cr.SetName(name)
+
+	Eventually(kWithCtx(ctx).UpdateStatus(cr, func() {
+		cr.Status.Conditions = []metav1.Condition{
+			{
+				Type:               apiextensionsv1alpha1.CompatibilityRequirementAdmitted,
+				Status:             toStatus(admitted),
+				LastTransitionTime: metav1.Now(),
+				Reason:             "Test",
+			},
+			{
+				Type:               apiextensionsv1alpha1.CompatibilityRequirementCompatible,
+				Status:             toStatus(compatible),
+				LastTransitionTime: metav1.Now(),
+				Reason:             "Test",
+			},
+		}
+	})).
+		WithContext(ctx).
+		WithTimeout(defaultEventuallyTimeout).
+		Should(Succeed())
 }
