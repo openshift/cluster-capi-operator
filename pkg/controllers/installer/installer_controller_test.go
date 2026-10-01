@@ -680,6 +680,12 @@ var _ = Describe("InstallerController CompatibilityRequirements", Serial, func()
 		})
 	})
 
+	AfterEach(func(ctx context.Context) {
+		// Tear down managed objects before fixture cleanup removes ClusterAPI.
+		emptyRevision := addEmptyRevision(ctx)
+		waitForRevision(ctx, emptyRevision.Name)
+	}, defaultNodeTimeout)
+
 	It("should gate on Admitted and Compatible conditions", func(ctx context.Context) {
 		createFixtures(ctx)
 		addRevisionWithUnmanagedCRDs(ctx, []string{testWidgetCRDName}, providerCRD)
