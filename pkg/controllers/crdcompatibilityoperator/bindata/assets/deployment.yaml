@@ -70,8 +70,6 @@ spec:
         - name: metrics-cert
           mountPath: /tmp/k8s-metrics-server/serving-certs
           readOnly: true
-      nodeSelector:
-        node-role.kubernetes.io/control-plane: ""
       priorityClassName: system-cluster-critical
       restartPolicy: Always
       tolerations:

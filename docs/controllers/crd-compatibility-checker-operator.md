@@ -33,7 +33,7 @@ The controller watches the `Infrastructure` CR (name: `cluster`) and reads `stat
 - **HighlyAvailable** (default) → Deployment replicas: 2, PDB: minAvailable=1
 - **Other topologies** (DualReplica, HighlyAvailableArbiter, External) → Deployment replicas: 2, PDB: minAvailable=1
 
-**Note:** For External topology (HyperShift/Hosted Control Planes), the operand is configured with master node scheduling constraints that may not be suitable. The webhook functionality may not work correctly when the control plane is external to the cluster.
+The checker supports External topology (HyperShift/Hosted Control Planes). The operator and operand use preferred management workload placement without requiring control-plane node labels.
 
 ## Watched Resources
 
