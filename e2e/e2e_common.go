@@ -51,6 +51,7 @@ import (
 	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
 	configv1 "github.com/openshift/api/config/v1"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
+	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	capiframework "github.com/openshift/cluster-capi-operator/e2e/framework"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 )
@@ -100,6 +101,7 @@ func init() {
 	utilruntime.Must(metal3v1.AddToScheme(scheme.Scheme))
 	utilruntime.Must(bmov1alpha1.AddToScheme(scheme.Scheme))
 	utilruntime.Must(apiextensionsv1alpha1.AddToScheme(scheme.Scheme))
+	utilruntime.Must(operatorv1alpha1.Install(scheme.Scheme))
 }
 
 // InitCommonVariables initializes global variables used across test cases.
@@ -347,8 +349,4 @@ func isMicroShiftCluster(ctx context.Context, cl client.Client) bool {
 	_, _ = fmt.Fprintln(os.Stderr, "isMicroShiftCluster: unexpected API error while checking for microshift-version ConfigMap")
 
 	return false
-}
-
-func kWithCtx(ctx context.Context) komega.Komega {
-	return komega.New(cl).WithContext(ctx)
 }
