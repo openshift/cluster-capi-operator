@@ -666,7 +666,7 @@ var _ = Describe("RevisionController unmanaged CRDs", Serial, func() {
 		unmanagedCRDs := []string{"gadgets.example.com", "widgets.example.com"}
 		createFixtures(ctx, withUnmanagedCRDs(unmanagedCRDs))
 
-		mgr := newManagerWrapper(defaultProviderImgs)
+		mgr := newManagerWrapper(defaultProviderImgs, newFeatureGate(features.FeatureGateClusterAPIMachineManagementAWS))
 
 		DeferCleanup(func() { mgr.stop() })
 
@@ -699,6 +699,7 @@ var _ = Describe("RevisionController unmanaged CRDs", Serial, func() {
 			Client:           interceptorCl,
 			ProviderProfiles: defaultProviderImgs,
 			ReleaseVersion:   "4.18.0",
+			FeatureGates:     newFeatureGate(features.FeatureGateClusterAPIMachineManagementAWS),
 		}
 
 		_, err := r.Reconcile(ctx, reconcile.Request{})
@@ -713,7 +714,7 @@ var _ = Describe("RevisionController unmanaged CRDs", Serial, func() {
 	It("creates a new revision when an entry is added", func(ctx context.Context) {
 		createFixtures(ctx, withUnmanagedCRDs([]string{"widgets.example.com"}))
 
-		mgr := newManagerWrapper(defaultProviderImgs)
+		mgr := newManagerWrapper(defaultProviderImgs, newFeatureGate(features.FeatureGateClusterAPIMachineManagementAWS))
 
 		DeferCleanup(func() { mgr.stop() })
 
