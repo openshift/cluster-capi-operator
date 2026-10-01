@@ -20,6 +20,7 @@ import (
 	"os"
 
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
+	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -93,6 +94,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	if err := mgr.AddReadyzCheck("webhook", mgr.GetWebhookServer().StartedChecker()); err != nil {
+		log.Error(err, "unable to add webhook readiness check")
+		os.Exit(1)
+	}
+
 	if err := setupControllers(ctx, mgr); err != nil {
 		log.Error(err, "unable to setup controllers")
 		os.Exit(1)
@@ -119,7 +125,13 @@ func setupControllers(ctx context.Context, mgr ctrl.Manager) error {
 		return fmt.Errorf("unable to create controller %s: %w", "CRDValidator", err)
 	}
 
-	staticResourceInstaller := staticresourceinstaller.NewStaticResourceInstallerController(crdcompatibilitybindata.Assets)
+	staticResourceInstaller := staticresourceinstaller.NewStaticResourceInstallerController(
+		crdcompatibilitybindata.Assets,
+		corev1.ObjectReference{
+			Kind: "Namespace",
+			Name: controllers.DefaultCRDCompatibilityCheckerNamespace,
+		},
+	)
 	if err := staticResourceInstaller.SetupWithManager(ctx, mgr); err != nil {
 		return fmt.Errorf("unable to create controller %s: %w", "StaticResourceInstaller", err)
 	}
