@@ -22,7 +22,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
@@ -32,9 +32,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	configv1 "github.com/openshift/api/config/v1"
-	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/test"
 )
 
@@ -79,33 +78,28 @@ var _ = BeforeSuite(func() {
 	komega.SetContext(ctx)
 
 	InitManager = func(ctx context.Context, assets Assets) (*staticResourceInstallerController, func()) {
-		return initManager(ctx, cfg, cl.Scheme(), assets)
+		return initManager(ctx, cfg, cl.Scheme(), assets, testEnv)
 	}
-
-	// Ensure the cluster operator is created as it is required
-	// for the controller to reconcile an initial event.
-	clusterOperator := &configv1.ClusterOperator{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: controllers.ClusterOperatorName,
-		},
-	}
-	Expect(cl.Create(ctx, clusterOperator)).To(Succeed())
-
-	DeferCleanup(func() {
-		Expect(cl.Delete(ctx, clusterOperator)).To(Succeed())
-	})
 })
 
-func initManager(ctx context.Context, cfg *rest.Config, scheme *runtime.Scheme, assets Assets) (*staticResourceInstallerController, func()) {
+func initManager(ctx context.Context, cfg *rest.Config, scheme *runtime.Scheme, assets Assets, testEnv *envtest.Environment) (*staticResourceInstallerController, func()) {
 	By("Setting up a manager and controller")
 
 	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
 		Scheme:  scheme,
 		Metrics: metricsserver.Options{BindAddress: "0"},
+		WebhookServer: webhook.NewServer(webhook.Options{
+			CertDir: testEnv.WebhookInstallOptions.LocalServingCertDir,
+			Port:    testEnv.WebhookInstallOptions.LocalServingPort,
+			Host:    testEnv.WebhookInstallOptions.LocalServingHost,
+		}),
 	})
 	Expect(err).ToNot(HaveOccurred(), "Manager should be created")
 
-	staticResourceController := NewStaticResourceInstallerController(assets)
+	staticResourceController := NewStaticResourceInstallerController(assets, corev1.ObjectReference{
+		Kind: "Namespace",
+		Name: "test-event-owner",
+	})
 
 	// Setup the controller with manager - this will also read the assets
 	err = staticResourceController.SetupWithManager(ctx, mgr)
