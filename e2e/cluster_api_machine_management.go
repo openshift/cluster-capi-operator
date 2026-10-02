@@ -200,7 +200,7 @@ var _ = Describe("[OTP][Jira:OCPCLOUD][OCPFeatureGate:ClusterAPIMachineManagemen
 		})
 
 		It("should deny deletion of infrastructure cluster resources", Label("Disruptive"), Label("Lifecycle:informing"), func() {
-			infraTypes, _, err := util.GetCAPITypesForInfrastructure(infra)
+			infraTypes, err := util.GetCAPITypesForInfrastructure(infra)
 			if errors.Is(err, util.ErrUnsupportedPlatform) {
 				Skip(fmt.Sprintf("Infra cluster deletion test not supported on %s", platform))
 			}

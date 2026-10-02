@@ -64,10 +64,9 @@ var _ = Describe("InstallerDeployment Controller", func() {
 
 		// Create the InstallerDeploymentReconciler.
 		reconciler = &InstallerDeploymentReconciler{
-			Client:            cl,
-			Namespace:         namespace,
-			ContainerImage:    "quay.io/openshift/cluster-capi-operator:test",
-			SupportedPlatform: true,
+			Client:         cl,
+			Namespace:      namespace,
+			ContainerImage: "quay.io/openshift/cluster-capi-operator:test",
 		}
 
 		// Create ConfigMap with provider image refs.
@@ -229,41 +228,6 @@ var _ = Describe("InstallerDeployment Controller", func() {
 
 			_, err = reconciler.Reconcile(ctx, reconcile.Request{})
 			Expect(err).NotTo(HaveOccurred())
-		})
-	})
-
-	Context("when platform is unsupported", func() {
-		It("should delete Deployment when it exists", func() {
-			_, err := reconciler.Reconcile(ctx, reconcile.Request{})
-			Expect(err).NotTo(HaveOccurred())
-
-			deployment := &appsv1.Deployment{}
-
-			Eventually(func() error {
-				return cl.Get(ctx, client.ObjectKey{Name: deploymentName, Namespace: namespace}, deployment)
-			}).WithTimeout(testTimeout).WithPolling(testInterval).Should(Succeed())
-
-			reconciler.SupportedPlatform = false
-
-			_, err = reconciler.Reconcile(ctx, reconcile.Request{})
-			Expect(err).NotTo(HaveOccurred())
-
-			Eventually(func() bool {
-				err := cl.Get(ctx, client.ObjectKey{Name: deploymentName, Namespace: namespace}, deployment)
-
-				return err != nil
-			}).WithTimeout(testTimeout).WithPolling(testInterval).Should(BeTrue())
-		})
-
-		It("should not error when Deployment does not exist", func() {
-			reconciler.SupportedPlatform = false
-
-			_, err := reconciler.Reconcile(ctx, reconcile.Request{})
-			Expect(err).NotTo(HaveOccurred())
-
-			deployment := &appsv1.Deployment{}
-			err = cl.Get(ctx, client.ObjectKey{Name: deploymentName, Namespace: namespace}, deployment)
-			Expect(err).To(HaveOccurred())
 		})
 	})
 })
