@@ -33,6 +33,50 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 )
 
+var _ = Describe("Unit tests for metadataMapPatch", func() {
+	type testCase struct {
+		existing              map[string]string
+		desired               map[string]string
+		ownedBySyncController map[string]struct{}
+		preserved             map[string]struct{}
+		expectedPatch         map[string]any
+		expectedApplyRequired bool
+	}
+
+	DescribeTable("should identify metadata requiring apply",
+		func(tc testCase) {
+			patch, applyRequired := metadataMapPatch(tc.existing, tc.desired, tc.ownedBySyncController, tc.preserved)
+			Expect(patch).To(Equal(tc.expectedPatch))
+			Expect(applyRequired).To(Equal(tc.expectedApplyRequired))
+		},
+		Entry("deletes a stale field without requiring apply", testCase{
+			existing:              map[string]string{"stale": "value"},
+			expectedPatch:         map[string]any{"stale": nil},
+			expectedApplyRequired: false,
+		}),
+		Entry("preserves a field managed by another apply manager", testCase{
+			existing:              map[string]string{"capi-owned": "value"},
+			preserved:             map[string]struct{}{"capi-owned": {}},
+			expectedPatch:         map[string]any{},
+			expectedApplyRequired: false,
+		}),
+		Entry("applies a desired field with the expected value to acquire ownership", testCase{
+			existing:              map[string]string{"desired": "value"},
+			desired:               map[string]string{"desired": "value"},
+			expectedPatch:         map[string]any{},
+			expectedApplyRequired: true,
+		}),
+		Entry("does not reapply metadata already owned by the sync controller", testCase{
+			existing:              map[string]string{"desired": "value", "capi-owned": "keep"},
+			desired:               map[string]string{"desired": "value"},
+			ownedBySyncController: map[string]struct{}{"desired": {}},
+			preserved:             map[string]struct{}{"capi-owned": {}},
+			expectedPatch:         map[string]any{},
+			expectedApplyRequired: false,
+		}),
+	)
+})
+
 var _ = Describe("Unit tests for ensureCAPIInfraMachineDeleted", func() {
 	var (
 		reconciler    *MachineSyncReconciler
