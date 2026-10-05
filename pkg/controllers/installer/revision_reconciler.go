@@ -156,8 +156,12 @@ func (r *revisionReconciler) reconcileRevisions(ctx context.Context, apiRevision
 
 	// If this revision reconciled successfully, we call Teardown instead of Reconcile for older revisions.
 	var tailHandler revisionHandler
+
 	if isComplete {
-		tailHandler = r.teardownRevisions
+		unmanagedCRDs := sets.New(head.UnmanagedCustomResourceDefinitions...)
+		tailHandler = func(ctx context.Context, revisions []operatorv1alpha1.ClusterAPIInstallerRevision) (bool, []string, []error) {
+			return r.teardownRevisions(ctx, revisions, unmanagedCRDs)
+		}
 	} else {
 		tailHandler = r.reconcileRevisions
 	}
@@ -322,22 +326,33 @@ func handlePhaseObject(log logr.Logger, obj machinery.ObjectResult, actionCounts
 	return result
 }
 
-func (r *revisionReconciler) teardownRevisions(ctx context.Context, apiRevisions []operatorv1alpha1.ClusterAPIInstallerRevision) (bool, []string, []error) {
+func (r *revisionReconciler) teardownRevisions(
+	ctx context.Context,
+	apiRevisions []operatorv1alpha1.ClusterAPIInstallerRevision,
+	unmanagedCRDs sets.Set[string],
+) (bool, []string, []error) {
 	if len(apiRevisions) == 0 {
 		return true, nil, nil
 	}
 
 	head := apiRevisions[0]
 	tail := apiRevisions[1:]
+	tailHandler := func(ctx context.Context, revisions []operatorv1alpha1.ClusterAPIInstallerRevision) (bool, []string, []error) {
+		return r.teardownRevisions(ctx, revisions, unmanagedCRDs)
+	}
 
-	return mergeWithTail(ctx, r.teardownRevisions, tail)(r.teardownRevision(ctx, head))
+	return mergeWithTail(ctx, tailHandler, tail)(r.teardownRevision(ctx, head, unmanagedCRDs))
 }
 
 // teardownRevision tear down a single revision and returns:
 // * a summary message
 // * a boolean indicating if the revision was torn down completely
 // * an error if any occurred.
-func (r *revisionReconciler) teardownRevision(ctx context.Context, apiRevision operatorv1alpha1.ClusterAPIInstallerRevision) (bool, string, error) {
+func (r *revisionReconciler) teardownRevision(
+	ctx context.Context,
+	apiRevision operatorv1alpha1.ClusterAPIInstallerRevision,
+	unmanagedCRDs sets.Set[string],
+) (bool, string, error) {
 	revision, err := revisiongenerator.NewInstallerRevisionFromAPI(apiRevision, r.providerProfiles)
 	if err != nil {
 		// We can't teardown this revision if we can't create it, so we consider it complete.
@@ -361,7 +376,18 @@ func (r *revisionReconciler) teardownRevision(ctx context.Context, apiRevision o
 
 	r.log.Info("Tearing down revision", "revision", revisionName, "phases", len(phases), "totalObjects", totalObjects)
 
-	result, err := r.revisionEngine.Teardown(ctx, bcRevision, boxcutter.WithAggregatePhaseTeardownErrors())
+	teardownOptions := []boxcutter.RevisionTeardownOption{boxcutter.WithAggregatePhaseTeardownErrors()}
+
+	for _, phase := range phases {
+		for _, obj := range phase.GetObjects() {
+			if obj.GetObjectKind().GroupVersionKind().GroupKind() == crdGroupKind() && unmanagedCRDs.Has(obj.GetName()) {
+				teardownOptions = append(teardownOptions,
+					boxcutter.WithObjectTeardownOptions(obj, machinerytypes.WithOrphan()))
+			}
+		}
+	}
+
+	result, err := r.revisionEngine.Teardown(ctx, bcRevision, teardownOptions...)
 	r.log.Info("Revision teardown completed", "revision", revisionName)
 
 	if err != nil {

@@ -25,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	k8syaml "sigs.k8s.io/yaml"
 
 	"github.com/openshift/cluster-capi-operator/pkg/test"
 )
@@ -75,6 +76,36 @@ var _ = Describe("buildCompatibilityRequirement", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(found).To(BeTrue())
 		Expect(data).To(ContainSubstring(crd.GetName()))
+	})
+
+	It("should apply Kubernetes defaults to the embedded CRD", func() {
+		typedCRD := test.GenerateSchemalessSpecStatusCRD(testCRDGVK)
+		typedCRD.Spec.Conversion = &apiextensionsv1.CustomResourceConversion{
+			Strategy: apiextensionsv1.WebhookConverter,
+			Webhook: &apiextensionsv1.WebhookConversion{
+				ClientConfig: &apiextensionsv1.WebhookClientConfig{
+					Service: &apiextensionsv1.ServiceReference{
+						Name:      "webhook-service",
+						Namespace: "webhook-namespace",
+					},
+				},
+				ConversionReviewVersions: []string{"v1"},
+			},
+		}
+
+		unstructuredCRD, err := toUnstructuredCRD(typedCRD)
+		Expect(err).NotTo(HaveOccurred(), "test CRD should convert to unstructured")
+		cr, err := buildCompatibilityRequirement(unstructuredCRD)
+		Expect(err).NotTo(HaveOccurred(), "CompatibilityRequirement should be built from the test CRD")
+
+		data, found, err := unstructured.NestedString(cr.Object, "spec", "compatibilitySchema", "customResourceDefinition", "data")
+		Expect(err).NotTo(HaveOccurred(), "embedded CRD data should be readable as a string")
+		Expect(found).To(BeTrue(), "CompatibilityRequirement should contain embedded CRD data")
+
+		embeddedCRD := &apiextensionsv1.CustomResourceDefinition{}
+		Expect(k8syaml.Unmarshal([]byte(data), embeddedCRD)).To(Succeed(), "embedded CRD data should be valid YAML")
+		Expect(embeddedCRD.Spec.Conversion.Webhook.ClientConfig.Service.Port).To(HaveValue(Equal(int32(443))),
+			"Kubernetes defaulting should set an omitted conversion webhook service port to 443")
 	})
 
 	It("should set defaultSelection to StorageOnly", func() {

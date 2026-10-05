@@ -86,7 +86,7 @@ func removeSpecProperty(crd *apiextensionsv1.CustomResourceDefinition, name stri
 	return true
 }
 
-var _ = FDescribe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIMachineManagement] Cluster API unmanaged CRD handoff",
+var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIMachineManagement] Cluster API unmanaged CRD handoff",
 	Label("Disruptive"), Label("skip-topology:External"), func() {
 		BeforeEach(func() {
 			if IsMicroShift {
@@ -101,70 +101,83 @@ var _ = FDescribe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIMachineManag
 		})
 
 		It("should hand the Cluster CRD from the installer to compatibility requirements", func() {
-			clusterAPI := &operatorv1alpha1.ClusterAPI{}
-			Eventually(func(g Gomega) {
-				g.Expect(cl.Get(ctx, client.ObjectKey{Name: "cluster"}, clusterAPI)).To(Succeed())
-				g.Expect(clusterAPI.Spec).ToNot(BeNil())
-				g.Expect(clusterAPI.Spec.UnmanagedCustomResourceDefinitions).ToNot(ContainElement(clusterCRDName),
-					"the test requires the Cluster CRD to initially be managed")
-				g.Expect(clusterAPI.Status.CurrentRevision).ToNot(BeEmpty())
-				g.Expect(clusterAPI.Status.CurrentRevision).To(Equal(clusterAPI.Status.DesiredRevision))
-			}).WithTimeout(framework.WaitMedium).WithPolling(framework.RetryMedium).Should(Succeed())
+			clusterAPI := &operatorv1alpha1.ClusterAPI{ObjectMeta: metav1.ObjectMeta{Name: "cluster"}}
+			By("Waiting for the installer to be stable", func() {
+				Eventually(komega.Object(clusterAPI)).WithTimeout(framework.WaitMedium).WithPolling(framework.RetryMedium).Should(SatisfyAll(
+					HaveField("Spec", Not(BeNil())),
+					HaveField("Spec.UnmanagedCustomResourceDefinitions", Not(ContainElement(clusterCRDName))),
+					HaveField("Status.CurrentRevision", Not(BeEmpty())),
+					WithTransform(func(obj client.Object) bool {
+						clusterAPI := obj.(*operatorv1alpha1.ClusterAPI)
+						return clusterAPI.Status.CurrentRevision == clusterAPI.Status.DesiredRevision
+					}, BeTrue()),
+				), "installer should be stable before starting the unmanaged CRD handoff")
+			})
 			initialDesiredRevision := clusterAPI.Status.DesiredRevision
 			trackResource(clusterAPI)
 
 			clusterCRD := &apiextensionsv1.CustomResourceDefinition{}
-			Expect(cl.Get(ctx, client.ObjectKey{Name: clusterCRDName}, clusterCRD)).To(Succeed())
+			Expect(cl.Get(ctx, client.ObjectKey{Name: clusterCRDName}, clusterCRD)).To(Succeed(),
+				"the managed Cluster CRD should exist before handoff")
 			trackResource(clusterCRD)
 
-			By("Marking the Cluster CRD unmanaged")
-			base := clusterAPI.DeepCopy()
-			clusterAPI.Spec.UnmanagedCustomResourceDefinitions = append(
-				clusterAPI.Spec.UnmanagedCustomResourceDefinitions, clusterCRDName,
-			)
-			Expect(cl.Patch(ctx, clusterAPI, client.MergeFrom(base))).To(Succeed())
-			Expect(cl.Get(ctx, client.ObjectKeyFromObject(clusterAPI), clusterAPI)).To(Succeed())
+			By("Marking the Cluster CRD unmanaged", func() {
+				Eventually(komega.Update(clusterAPI, func() {
+					clusterAPI.Spec.UnmanagedCustomResourceDefinitions = append(
+						clusterAPI.Spec.UnmanagedCustomResourceDefinitions, clusterCRDName,
+					)
+				})).WithTimeout(framework.WaitShort).WithPolling(framework.RetryShort).Should(Succeed(),
+					"should mark the Cluster CRD unmanaged")
+			})
 			handoffGeneration := clusterAPI.Generation
 
-			By("Waiting for the revision controller to observe the handoff")
-			var desiredRevision operatorv1alpha1.RevisionName
-			Eventually(func(g Gomega) {
-				fresh := &operatorv1alpha1.ClusterAPI{}
-				g.Expect(cl.Get(ctx, client.ObjectKeyFromObject(clusterAPI), fresh)).To(Succeed())
-				g.Expect(fresh.Status.ObservedRevisionGeneration).To(BeNumerically(">=", handoffGeneration))
-				g.Expect(fresh.Status.DesiredRevision).ToNot(Equal(initialDesiredRevision))
-				g.Expect(fresh.Status.Revisions).To(ContainElement(SatisfyAll(
-					HaveField("Name", Equal(fresh.Status.DesiredRevision)),
-					HaveField("UnmanagedCustomResourceDefinitions", ContainElement(clusterCRDName)),
-				)))
-				desiredRevision = fresh.Status.DesiredRevision
-			}).WithTimeout(framework.WaitMedium).WithPolling(framework.RetryMedium).Should(Succeed())
+			By("Waiting for the revision controller to observe the handoff", func() {
+				Eventually(komega.Object(clusterAPI)).WithTimeout(framework.WaitMedium).WithPolling(framework.RetryMedium).Should(
+					HaveField("Status.ObservedRevisionGeneration", BeNumerically(">=", handoffGeneration)),
+					"revision controller should observe ClusterAPI generation %d", handoffGeneration,
+				)
+			})
+			Expect(clusterAPI.Status.DesiredRevision).ToNot(Equal(initialDesiredRevision),
+				"desiredRevision should change after the handoff is observed")
+			desiredRevision := clusterAPI.Status.DesiredRevision
+			Expect(clusterAPI.Status.Revisions).To(ContainElement(SatisfyAll(
+				HaveField("Name", Equal(desiredRevision)),
+				HaveField("UnmanagedCustomResourceDefinitions", ContainElement(clusterCRDName)),
+			)), "the desired revision should contain the unmanaged Cluster CRD")
 
-			By("Waiting for the installer to create a compatible requirement")
+			By("Waiting for the installer to complete the unmanaged revision", func() {
+				Eventually(komega.Object(clusterAPI)).WithTimeout(framework.WaitMedium).WithPolling(framework.RetryMedium).Should(SatisfyAll(
+					HaveField("Status.CurrentRevision", Equal(desiredRevision)),
+					HaveField("Status.DesiredRevision", Equal(desiredRevision)),
+				), "installer should converge on unmanaged revision %q", desiredRevision)
+			})
+
 			requirement := &apiextensionsv1alpha1.CompatibilityRequirement{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterCompatibilityRequirementName},
 			}
 			trackResource(requirement)
-			Eventually(komega.Object(requirement)).WithTimeout(framework.WaitMedium).WithPolling(framework.RetryMedium).Should(SatisfyAll(
-				HaveField("Status.CRDName", Equal(clusterCRDName)),
-				HaveField("Status.ObservedCRD.UID", Equal(string(clusterCRD.UID))),
-				HaveField("Status.Conditions", SatisfyAll(
-					test.HaveCondition(apiextensionsv1alpha1.CompatibilityRequirementAdmitted).WithStatus(metav1.ConditionTrue),
-					test.HaveCondition(apiextensionsv1alpha1.CompatibilityRequirementCompatible).WithStatus(metav1.ConditionTrue),
-				)),
-			))
-
-			By("Waiting for the installer to complete the unmanaged revision")
-			Eventually(komega.Object(clusterAPI)).WithTimeout(framework.WaitMedium).WithPolling(framework.RetryMedium).Should(SatisfyAll(
-				HaveField("Status.CurrentRevision", Equal(desiredRevision)),
-				HaveField("Status.DesiredRevision", Equal(desiredRevision)),
-			))
+			By("Verifying the installer created a compatible requirement", func() {
+				Expect(cl.Get(ctx, client.ObjectKeyFromObject(requirement), requirement)).To(Succeed(),
+					"installer completed revision %q without a readable CompatibilityRequirement; ClusterAPI status: %#v",
+					desiredRevision, clusterAPI.Status)
+				Expect(requirement).To(SatisfyAll(
+					HaveField("Status.CRDName", Equal(clusterCRDName)),
+					HaveField("Status.ObservedCRD.UID", Equal(string(clusterCRD.UID))),
+					HaveField("Status.Conditions", SatisfyAll(
+						test.HaveCondition(apiextensionsv1alpha1.CompatibilityRequirementAdmitted).WithStatus(metav1.ConditionTrue),
+						test.HaveCondition(apiextensionsv1alpha1.CompatibilityRequirementCompatible).WithStatus(metav1.ConditionTrue),
+					)),
+				), "CompatibilityRequirement should be admitted and compatible with the installed Cluster CRD")
+			})
 			clusterOperator := &configv1.ClusterOperator{ObjectMeta: metav1.ObjectMeta{Name: framework.CAPIClusterOperatorName}}
-			Eventually(komega.Object(clusterOperator)).WithTimeout(framework.WaitMedium).WithPolling(framework.RetryMedium).Should(
-				HaveField("Status.Conditions", test.HaveCondition(installerControllerProgressingCondition).
-					WithStatus(configv1.ConditionFalse).
-					WithReason(operatorstatus.ReasonAsExpected)),
-			)
+			By("Waiting for the installer status to report success", func() {
+				Eventually(komega.Object(clusterOperator)).WithTimeout(framework.WaitMedium).WithPolling(framework.RetryMedium).Should(
+					HaveField("Status.Conditions", test.HaveCondition(installerControllerProgressingCondition).
+						WithStatus(configv1.ConditionFalse).
+						WithReason(operatorstatus.ReasonAsExpected)),
+					"installer should report AsExpected after completing revision %q", desiredRevision,
+				)
+			})
 
 			By("Rejecting an incompatible Cluster CRD update")
 			Expect(cl.Get(ctx, client.ObjectKeyFromObject(clusterCRD), clusterCRD)).To(Succeed())
@@ -182,51 +195,50 @@ var _ = FDescribe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIMachineManag
 			Expect(cl.Get(ctx, client.ObjectKeyFromObject(clusterCRD), clusterCRD)).To(Succeed())
 			Expect(clusterCRD.Generation).To(Equal(generationBeforeRejectedUpdate))
 
-			By("Accepting a compatible Cluster CRD update")
-			currentSpecSchema := storageVersion(clusterCRD).Schema.OpenAPIV3Schema.Properties["spec"]
-			Expect(currentSpecSchema.Properties).ToNot(HaveKey(compatibleTestSchemaProperty))
-			DeferCleanup(func() {
-				Eventually(func() error {
-					fresh := &apiextensionsv1.CustomResourceDefinition{}
-					if err := cl.Get(ctx, client.ObjectKey{Name: clusterCRDName}, fresh); err != nil {
-						return err
-					}
-					if !removeSpecProperty(fresh, compatibleTestSchemaProperty) {
-						return nil
-					}
-					return cl.Update(ctx, fresh)
-				}).WithTimeout(framework.WaitShort).WithPolling(framework.RetryShort).Should(Succeed())
+			var updatedCRDGeneration int64
+			By("Accepting a compatible Cluster CRD update", func() {
+				currentSpecSchema := storageVersion(clusterCRD).Schema.OpenAPIV3Schema.Properties["spec"]
+				Expect(currentSpecSchema.Properties).ToNot(HaveKey(compatibleTestSchemaProperty),
+					"temporary schema property should not exist before the compatible update")
+
+				cleanupCRD := &apiextensionsv1.CustomResourceDefinition{ObjectMeta: metav1.ObjectMeta{Name: clusterCRDName}}
+				DeferCleanup(func() {
+					Eventually(komega.Update(cleanupCRD, func() {
+						removeSpecProperty(cleanupCRD, compatibleTestSchemaProperty)
+					})).WithTimeout(framework.WaitShort).WithPolling(framework.RetryShort).Should(Succeed(),
+						"cleanup should remove the temporary schema property")
+				})
+
+				Eventually(komega.Update(clusterCRD, func() {
+					addOptionalSpecProperty(clusterCRD, compatibleTestSchemaProperty)
+				})).WithTimeout(framework.WaitShort).WithPolling(framework.RetryShort).Should(Succeed(),
+					"should add the optional schema property to the Cluster CRD")
+
+				updatedCRDGeneration = clusterCRD.Generation
+				Expect(updatedCRDGeneration).To(BeNumerically(">", generationBeforeRejectedUpdate),
+					"compatible CRD update should advance the CRD generation")
+				updatedSpecSchema := storageVersion(clusterCRD).Schema.OpenAPIV3Schema.Properties["spec"]
+				property, ok := updatedSpecSchema.Properties[compatibleTestSchemaProperty]
+				Expect(ok).To(BeTrue(), "compatible update should add the temporary schema property")
+				Expect(property.Type).To(Equal("string"), "temporary schema property should have the requested type")
+				Expect(updatedSpecSchema.Required).ToNot(ContainElement(compatibleTestSchemaProperty),
+					"temporary schema property should remain optional")
 			})
 
-			Eventually(func() error {
-				fresh := &apiextensionsv1.CustomResourceDefinition{}
-				if err := cl.Get(ctx, client.ObjectKey{Name: clusterCRDName}, fresh); err != nil {
-					return err
-				}
-				addOptionalSpecProperty(fresh, compatibleTestSchemaProperty)
-				return cl.Update(ctx, fresh)
-			}).WithTimeout(framework.WaitShort).WithPolling(framework.RetryShort).Should(Succeed())
-
-			Expect(cl.Get(ctx, client.ObjectKeyFromObject(clusterCRD), clusterCRD)).To(Succeed())
-			updatedCRDGeneration := clusterCRD.Generation
-			Expect(updatedCRDGeneration).To(BeNumerically(">", generationBeforeRejectedUpdate))
-			updatedSpecSchema := storageVersion(clusterCRD).Schema.OpenAPIV3Schema.Properties["spec"]
-			property, ok := updatedSpecSchema.Properties[compatibleTestSchemaProperty]
-			Expect(ok).To(BeTrue())
-			Expect(property.Type).To(Equal("string"))
-			Expect(updatedSpecSchema.Required).ToNot(ContainElement(compatibleTestSchemaProperty))
-
-			By("Waiting for the compatibility requirement to observe the compatible update")
-			Eventually(komega.Object(requirement)).WithTimeout(framework.WaitMedium).WithPolling(framework.RetryMedium).Should(SatisfyAll(
-				HaveField("Status.ObservedCRD.Generation", Equal(updatedCRDGeneration)),
-				HaveField("Status.Conditions", SatisfyAll(
-					test.HaveCondition(apiextensionsv1alpha1.CompatibilityRequirementAdmitted).WithStatus(metav1.ConditionTrue),
-					test.HaveCondition(apiextensionsv1alpha1.CompatibilityRequirementCompatible).WithStatus(metav1.ConditionTrue),
-				)),
-			))
-			Eventually(komega.Object(clusterAPI)).WithTimeout(framework.WaitShort).WithPolling(framework.RetryMedium).Should(SatisfyAll(
+			By("Waiting for the compatibility requirement to observe the compatible update", func() {
+				Eventually(komega.Object(requirement)).WithTimeout(framework.WaitMedium).WithPolling(framework.RetryMedium).Should(SatisfyAll(
+					HaveField("Status.ObservedCRD.Generation", Equal(updatedCRDGeneration)),
+					HaveField("Status.Conditions", SatisfyAll(
+						test.HaveCondition(apiextensionsv1alpha1.CompatibilityRequirementAdmitted).WithStatus(metav1.ConditionTrue),
+						test.HaveCondition(apiextensionsv1alpha1.CompatibilityRequirementCompatible).WithStatus(metav1.ConditionTrue),
+					)),
+				), "CompatibilityRequirement should observe and accept CRD generation %d", updatedCRDGeneration)
+			})
+			Expect(cl.Get(ctx, client.ObjectKeyFromObject(clusterAPI), clusterAPI)).To(Succeed(),
+				"should read ClusterAPI after the compatible CRD update")
+			Expect(clusterAPI).To(SatisfyAll(
 				HaveField("Status.CurrentRevision", Equal(desiredRevision)),
 				HaveField("Status.DesiredRevision", Equal(desiredRevision)),
-			))
+			), "compatible CRD update should not change the installed revision")
 		})
 	})

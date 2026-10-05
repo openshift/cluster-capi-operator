@@ -456,8 +456,9 @@ func waitForRevision(ctx context.Context, revision operatorv1alpha1.RevisionName
 	})
 }
 
-// setCompatibilityRequirementConditions sets Admitted and Compatible conditions on a CompatibilityRequirement.
-func setCompatibilityRequirementConditions(ctx context.Context, name string, admitted, compatible bool) {
+// setCompatibilityRequirementConditions sets the Admitted condition to True and the Compatible
+// condition on a CompatibilityRequirement.
+func setCompatibilityRequirementConditions(ctx context.Context, name string, compatible bool) {
 	GinkgoHelper()
 
 	toStatus := func(b bool) metav1.ConditionStatus {
@@ -475,7 +476,7 @@ func setCompatibilityRequirementConditions(ctx context.Context, name string, adm
 		cr.Status.Conditions = []metav1.Condition{
 			{
 				Type:               apiextensionsv1alpha1.CompatibilityRequirementAdmitted,
-				Status:             toStatus(admitted),
+				Status:             metav1.ConditionTrue,
 				LastTransitionTime: metav1.Now(),
 				Reason:             "Test",
 			},

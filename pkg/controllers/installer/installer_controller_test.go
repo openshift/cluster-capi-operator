@@ -32,6 +32,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -708,7 +709,7 @@ var _ = Describe("InstallerController CompatibilityRequirements", Serial, func()
 			Should(Succeed())
 
 		By("setting Admitted and Compatible to True")
-		setCompatibilityRequirementConditions(ctx, testWidgetCRName, true, true)
+		setCompatibilityRequirementConditions(ctx, testWidgetCRName, true)
 
 		By("verifying the revision completes")
 
@@ -750,8 +751,8 @@ var _ = Describe("InstallerController CompatibilityRequirements", Serial, func()
 		)
 
 		By("setting one Compatible=True and one Compatible=False")
-		setCompatibilityRequirementConditions(ctx, testWidgetCRName, true, true)
-		setCompatibilityRequirementConditions(ctx, testGadgetCRName, true, false)
+		setCompatibilityRequirementConditions(ctx, testWidgetCRName, true)
+		setCompatibilityRequirementConditions(ctx, testGadgetCRName, false)
 
 		co := &configv1.ClusterOperator{}
 		co.SetName("cluster-api")
@@ -784,6 +785,34 @@ var _ = Describe("InstallerController CompatibilityRequirements", Serial, func()
 		cm, err := getConfigMap(ctx, coreCMName)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(cm.Data).To(HaveKeyWithValue("version", "v1"))
+	}, defaultNodeTimeout)
+
+	It("should preserve a CRD when handing it off as unmanaged", func(ctx context.Context) {
+		createFixtures(ctx)
+
+		By("installing rev1 with a managed CRD")
+		addRevisionAndWaitForSuccess(ctx, providerCRD)
+
+		managedCRD := &apiextensionsv1.CustomResourceDefinition{}
+		managedCRD.SetName(testWidgetCRDName)
+		Expect(cl.Get(ctx, client.ObjectKeyFromObject(managedCRD), managedCRD)).To(Succeed(),
+			"managed CRD should exist after rev1 completes")
+
+		By("adding rev2 with the CRD unmanaged")
+
+		revision := addRevisionWithUnmanagedCRDs(ctx, []string{testWidgetCRDName}, providerCRD)
+		requirement := &apiextensionsv1alpha1.CompatibilityRequirement{}
+		requirement.SetName(testWidgetCRName)
+		Eventually(kWithCtx(ctx).Get(requirement)).WithContext(ctx).Should(Succeed(),
+			"rev2 should create a CompatibilityRequirement for the unmanaged CRD")
+		setCompatibilityRequirementConditions(ctx, testWidgetCRName, true)
+
+		By("waiting for rev2 to complete")
+		waitForRevision(ctx, revision.Name)
+
+		By("verifying teardown orphaned the CRD")
+		Expect(cl.Get(ctx, client.ObjectKeyFromObject(managedCRD), managedCRD)).To(Succeed(),
+			"old-revision teardown should orphan rather than delete the unmanaged CRD")
 	}, defaultNodeTimeout)
 })
 

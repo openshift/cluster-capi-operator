@@ -226,25 +226,19 @@ var _ = Describe("toBoxcutterRevision", func() {
 		testWidgetCRDName := fmt.Sprintf("testwidgets.%s", testCRDGVK.Group)
 		testGadgetCRDName := fmt.Sprintf("testgadgets.%s", mixedCRDGVK.Group)
 
-		It("should produce a compatibility phase as the first phase", func() {
-			rev := installerRevisionWithUnmanagedCRDs([]string{testWidgetCRDName}, providerCRD)
-			bcRev := mustBoxcutterRevision(rev, noopCollector)
-
-			phases := bcRev.GetPhases()
-			Expect(phases).To(HaveLen(1))
-			Expect(phases[0].GetName()).To(Equal("compatibility-requirements"))
-			Expect(phases[0].GetObjects()).To(HaveLen(1))
-			Expect(phases[0].GetObjects()[0].GetName()).To(Equal("ccapio-" + testWidgetCRDName))
-		})
-
 		It("should filter the unmanaged CRD from the component CRD phase", func() {
 			rev := installerRevisionWithUnmanagedCRDs([]string{testGadgetCRDName}, providerMixed)
 			bcRev := mustBoxcutterRevision(rev, noopCollector)
 
 			phases := bcRev.GetPhases()
 			// compatibility-requirements + mixed (ConfigMap only, no CRD phase since CRD was unmanaged)
-			Expect(phases).To(HaveLen(2))
-			Expect(phases[0].GetName()).To(Equal("compatibility-requirements"))
+			Expect(phases).To(HaveLen(2), "unmanaged CRD should be replaced without removing the component object phase")
+			Expect(phases[0].GetName()).To(Equal("compatibility-requirements"),
+				"compatibility requirements should be reconciled before component objects")
+			Expect(phases[0].GetObjects()).To(HaveLen(1),
+				"compatibility phase should contain one requirement replacing the unmanaged CRD")
+			Expect(phases[0].GetObjects()[0].GetName()).To(Equal("ccapio-"+testGadgetCRDName),
+				"compatibility phase should contain the requirement replacing the unmanaged CRD")
 			Expect(phases[1].GetName()).To(Equal(providerMixed))
 			Expect(objectKinds(phases[1].GetObjects())).To(ConsistOf("ConfigMap"))
 		})
@@ -254,8 +248,11 @@ var _ = Describe("toBoxcutterRevision", func() {
 			bcRev := mustBoxcutterRevision(rev, noopCollector)
 
 			phases := bcRev.GetPhases()
-			compatPhase := findPhase(phases, "compatibility-requirements")
-			Expect(compatPhase.GetObjects()).To(HaveLen(2))
+			Expect(phases).ToNot(BeEmpty(), "unmanaged CRDs should produce a compatibility phase")
+			Expect(phases[0].GetName()).To(Equal("compatibility-requirements"),
+				"compatibility requirements should be the first phase")
+			Expect(phases[0].GetObjects()).To(HaveLen(2),
+				"compatibility phase should contain one requirement for each unmanaged CRD")
 		})
 
 		It("should set the managed label on CompatibilityRequirement objects", func() {

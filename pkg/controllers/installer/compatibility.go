@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -49,7 +50,14 @@ func buildCompatibilityRequirement(crd *unstructured.Unstructured) (*unstructure
 		return nil, fmt.Errorf("%w: %q is %d characters, limit is %d", errNameTooLong, name, len(name), maxNameLength)
 	}
 
-	crdYAML, err := k8syaml.Marshal(crd.Object)
+	typedCRD := &apiextensionsv1.CustomResourceDefinition{}
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(crd.Object, typedCRD); err != nil {
+		return nil, fmt.Errorf("converting CRD %s from unstructured: %w", crd.GetName(), err)
+	}
+
+	apiextensionsv1.SetObjectDefaults_CustomResourceDefinition(typedCRD)
+
+	crdYAML, err := k8syaml.Marshal(typedCRD)
 	if err != nil {
 		return nil, fmt.Errorf("marshalling CRD %s to YAML: %w", crd.GetName(), err)
 	}
