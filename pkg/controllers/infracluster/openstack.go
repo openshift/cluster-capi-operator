@@ -211,8 +211,10 @@ func resolveRouterAndExternalNetwork(ctx context.Context, log logr.Logger, netwo
 	return &openstackv1.RouterParam{ID: ptr.To(router.ID)}, &openstackv1.NetworkParam{ID: ptr.To(router.GatewayInfo.NetworkID)}, nil
 }
 
-// resolveExternalNetworkWithoutRouter determines Spec.ExternalNetwork without going through a router,
-// mirroring own CAPO's logic.
+// resolveExternalNetworkWithoutRouter determines Spec.ExternalNetwork
+// without going through a router, mirroring own CAPO's logic. See [1]
+// for reference.
+// [1] https://github.com/kubernetes-sigs/cluster-api-provider-openstack/blob/15502dfcbe75e5a9c82e1e63be36b1e103ef1f71/pkg/cloud/services/networking/network.go#L65-L68
 func resolveExternalNetworkWithoutRouter(networkClient openstackclients.NetworkClient) (*openstackv1.NetworkParam, error) {
 	externalNetworks, err := networkClient.ListNetwork(external.ListOptsExt{
 		ListOptsBuilder: networks.ListOpts{},
@@ -264,6 +266,10 @@ func getDefaultRouterFromSubnet(_ context.Context, networkClient openstackclient
 
 	if len(ports) > 1 {
 		return nil, fmt.Errorf("%w: multiple ports found for subnet %s", errOpenStackNoDefaultRouter, subnet.ID)
+	}
+
+	if !strings.HasPrefix(ports[0].DeviceOwner, "network:router_interface") {
+		return nil, fmt.Errorf("%w: gateway port %s is owned by %q, not a router", errOpenStackNoDefaultRouter, ports[0].ID, ports[0].DeviceOwner)
 	}
 
 	routerID := ports[0].DeviceID

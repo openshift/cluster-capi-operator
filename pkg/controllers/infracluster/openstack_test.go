@@ -41,28 +41,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-func isSupportedOpenStackLoadBalancerType(lbType configv1.PlatformLoadBalancerType) bool {
-	switch lbType {
-	case configv1.LoadBalancerTypeOpenShiftManagedDefault, configv1.LoadBalancerTypeUserManaged:
-		return true
-	default:
-		return false
-	}
-}
-
-var _ = Describe("isSupportedOpenStackLoadBalancerType", func() {
-	DescribeTable(
-		"should determine whether the load balancer type is supported",
-		func(lbType configv1.PlatformLoadBalancerType, expected bool) {
-			Expect(isSupportedOpenStackLoadBalancerType(lbType)).To(Equal(expected))
-		},
-		Entry("OpenShiftManagedDefault is supported", configv1.LoadBalancerTypeOpenShiftManagedDefault, true),
-		Entry("UserManaged is supported", configv1.LoadBalancerTypeUserManaged, true),
-		Entry("empty is not supported", configv1.PlatformLoadBalancerType(""), false),
-		Entry("unknown types are not supported", configv1.PlatformLoadBalancerType("SomethingElse"), false),
-	)
-})
-
 var _ = Describe("getDefaultSubnetFromMachines", func() {
 	const (
 		controlPlaneMachineName = "master-0"
@@ -271,7 +249,7 @@ var _ = Describe("resolveRouterAndExternalNetwork", func() {
 
 	It("falls back to resolving the external network directly when the router has no external gateway", func() {
 		networkClient.EXPECT().ListPort(gatewayPortListOpts()).Return([]ports.Port{
-			{ID: portID, DeviceID: routerID},
+			{ID: portID, DeviceID: routerID, DeviceOwner: deviceOwner},
 		}, nil)
 		networkClient.EXPECT().GetRouter(routerID).Return(&routers.Router{ID: routerID}, nil)
 		networkClient.EXPECT().ListNetwork(externalNetworkListOpts()).Return([]networks.Network{}, nil)
