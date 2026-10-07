@@ -40,6 +40,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/installer"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
 	"github.com/openshift/cluster-capi-operator/pkg/revisiongenerator"
@@ -178,6 +179,10 @@ func (r *RevisionController) generateDesiredRevision(ctx context.Context, cluste
 	)
 	if err != nil {
 		return nil, ResultGenerator.ErrorP(fmt.Errorf("error creating rendered revision: %w", err))
+	}
+
+	if err := installer.ValidateRevision(revision); err != nil {
+		return nil, ResultGenerator.ErrorP(fmt.Errorf("error validating installer revision: %w", err))
 	}
 
 	return revision, nil

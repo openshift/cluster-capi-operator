@@ -106,7 +106,8 @@ var _ = BeforeSuite(func() {
 		handler.EnqueueRequestsFromMapFunc(toClusterAPI),
 	)
 
-	Expect(SetupWithManager(mgr, allProviderProfiles, triggerSource)).To(Succeed())
+	setupErr := SetupWithManager(mgr, allProviderProfiles, triggerSource)
+	Expect(setupErr).To(Succeed(), "SetupWithManager should register the installer controller")
 	Expect(test.AddNamespaceFinalizerCleanup(mgr)).To(Succeed())
 
 	// Start manager in background.
