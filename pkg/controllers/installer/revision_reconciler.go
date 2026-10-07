@@ -34,6 +34,7 @@ import (
 	"pkg.package-operator.run/boxcutter"
 	"pkg.package-operator.run/boxcutter/machinery"
 	machinerytypes "pkg.package-operator.run/boxcutter/machinery/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/openshift/cluster-capi-operator/pkg/revisiongenerator"
@@ -179,7 +180,7 @@ func (r *revisionReconciler) reconcileRevision(ctx context.Context, apiRevision 
 		return false, "", fmt.Errorf("error creating installer revision from API revision %s: %w", apiRevision.Name, reconcile.TerminalError(err))
 	}
 
-	bcRevision, err := toBoxcutterRevision(revision, r.collectObjects)
+	bcRevision, err := r.toBoxcutterRevision(ctx, revision)
 	if err != nil {
 		return false, "", fmt.Errorf("error building boxcutter revision from API revision %s: %w", apiRevision.Name, reconcile.TerminalError(err))
 	}
@@ -361,7 +362,7 @@ func (r *revisionReconciler) teardownRevision(
 
 	revisionName := revision.RevisionName()
 
-	bcRevision, err := toBoxcutterRevision(revision, r.collectObjects)
+	bcRevision, err := r.toBoxcutterRevision(ctx, revision)
 	if err != nil {
 		// We can't teardown this revision if we can't build it, so we consider it complete.
 		return true, "", fmt.Errorf("error building boxcutter revision from API revision %s: %w", apiRevision.Name, reconcile.TerminalError(err))
@@ -410,6 +411,23 @@ func (r *revisionReconciler) teardownRevision(
 	}
 
 	return false, message, nil
+}
+
+func (r *revisionReconciler) proxyReader() client.Reader {
+	if r.apiReader != nil {
+		return r.apiReader
+	}
+
+	return r.client
+}
+
+func (r *revisionReconciler) toBoxcutterRevision(ctx context.Context, revision revisiongenerator.InstallerRevision) (boxcutter.Revision, error) {
+	proxyEnvVars, err := util.GetProxyEnvVars(ctx, r.proxyReader())
+	if err != nil {
+		return nil, fmt.Errorf("getting cluster-wide proxy configuration: %w", err)
+	}
+
+	return toBoxcutterRevision(revision, proxyEnvVars, r.collectObjects)
 }
 
 func (r *revisionReconciler) logTeardownPhaseResults(revisionName operatorv1alpha1.RevisionName, result machinery.RevisionTeardownResult) {

@@ -19,6 +19,7 @@ package installer
 import (
 	"fmt"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"pkg.package-operator.run/boxcutter"
@@ -41,6 +42,7 @@ import (
 // without any further processing. That processing should be done here.
 func toBoxcutterRevision(
 	installerRevision revisiongenerator.InstallerRevision,
+	proxyEnvVars []corev1.EnvVar,
 	collectObjects func(obj *unstructured.Unstructured),
 ) (boxcutter.Revision, error) {
 	probeOpts := []boxcutter.PhaseReconcileOption{
@@ -66,9 +68,7 @@ func toBoxcutterRevision(
 	var compatObjects []*unstructured.Unstructured
 
 	for _, component := range installerRevision.Components() {
-		// Step 1: Transform — replace unmanaged CRDs with CompatibilityRequirements.
-		// Future transformations (proxy env vars, etc.) chain here before the split.
-		transformed, compat, err := transformComponentObjects(component.Objects(), unmanagedSet, installerRevision.RevisionIndex(), collectObjects)
+		transformed, compat, err := transformProviderObjects(component, proxyEnvVars, unmanagedSet, installerRevision.RevisionIndex(), collectObjects)
 		if err != nil {
 			return nil, err
 		}
@@ -102,6 +102,34 @@ func toBoxcutterRevision(
 		installerRevision.RevisionIndex(),
 		phases,
 	), nil
+}
+
+// ValidateRevision validates the installation-time transformations applied by
+// toBoxcutterRevision before the revision controller records a new revision.
+func ValidateRevision(revision revisiongenerator.RenderedRevision) error {
+	installerRevision, err := revision.ForInstall("", 0)
+	if err != nil {
+		return fmt.Errorf("creating installer revision: %w", err)
+	}
+
+	_, err = toBoxcutterRevision(installerRevision, nil, func(*unstructured.Unstructured) {})
+
+	return err
+}
+
+func transformProviderObjects(
+	component revisiongenerator.RenderedComponent,
+	proxyEnvVars []corev1.EnvVar,
+	unmanagedSet sets.Set[string],
+	revisionIndex int64,
+	collectObjects func(*unstructured.Unstructured),
+) ([]*unstructured.Unstructured, []*unstructured.Unstructured, error) {
+	proxyTransformed, err := injectProxyEnvVars(component.Objects(), proxyEnvVars)
+	if err != nil {
+		return nil, nil, fmt.Errorf("injecting proxy env vars into component %q: %w", component.Name(), err)
+	}
+
+	return transformComponentObjects(proxyTransformed, unmanagedSet, revisionIndex, collectObjects)
 }
 
 // transformComponentObjects applies installation-time transformations to a

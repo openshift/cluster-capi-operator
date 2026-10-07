@@ -37,7 +37,7 @@ func noopCollector(*unstructured.Unstructured) {}
 func mustBoxcutterRevision(rev revisiongenerator.InstallerRevision, collect func(*unstructured.Unstructured)) boxcutter.Revision {
 	GinkgoHelper()
 
-	bcRev, err := toBoxcutterRevision(rev, collect)
+	bcRev, err := toBoxcutterRevision(rev, nil, collect)
 	Expect(err).NotTo(HaveOccurred())
 
 	return bcRev
@@ -191,7 +191,7 @@ var _ = Describe("toBoxcutterRevision", func() {
 
 				var collectedRefs []string
 
-				_, err := toBoxcutterRevision(rev, func(obj *unstructured.Unstructured) {
+				_, err := toBoxcutterRevision(rev, nil, func(obj *unstructured.Unstructured) {
 					collectedRefs = append(collectedRefs, objectRef(obj.GetKind(), obj.GetName()))
 				})
 				Expect(err).NotTo(HaveOccurred())
