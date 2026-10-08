@@ -24,14 +24,18 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/types"
 
+	configv1 "github.com/openshift/api/config/v1"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	mapiframework "github.com/openshift/cluster-api-actuator-pkg/pkg/framework"
 	capiframework "github.com/openshift/cluster-capi-operator/e2e/framework"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/utils/ptr"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
+	vspherev1 "sigs.k8s.io/cluster-api-provider-vsphere/apis/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
@@ -98,33 +102,10 @@ func createCAPIMachine(ctx context.Context, cl client.Client, machineName string
 		return cl.Create(ctx, newCapiMachine)
 	}, capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(), "Should have successfully created CAPI machine %s/%s", newCapiMachine.Namespace, newCapiMachine.Name)
 
-	referenceAWSMachine := capiframework.GetAWSMachineWithRetry(referenceCapiMachine.Name, capiframework.CAPINamespace)
-	// Define the new awsmachine based on the reference.
-	newAWSMachine := &awsv1.AWSMachine{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "AWSMachine",
-			APIVersion: awsv1.GroupVersion.String(),
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      machineName,
-			Namespace: referenceAWSMachine.Namespace,
-		},
-		Spec: *referenceAWSMachine.Spec.DeepCopy(),
-	}
-
-	// Clear status and other instance-specific fields that should not be copied.
-	newAWSMachine.Spec.ProviderID = nil
-	newAWSMachine.Spec.InstanceID = nil
-	newAWSMachine.ObjectMeta.Labels = nil
-	newAWSMachine.Status = awsv1.AWSMachineStatus{}
-
-	By(fmt.Sprintf("Creating a new CAPI AWSMachine in namespace: %s", newAWSMachine.Namespace))
-	Eventually(func() error {
-		return cl.Create(ctx, newAWSMachine)
-	}, capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(), "Should have successfully created AWSmachine %s/%s", newAWSMachine.Namespace, newAWSMachine.Name)
+	infraMachine := createInfraMachineFromReference(ctx, cl, referenceCapiMachine.Name, machineName)
 
 	trackResource(newCapiMachine)
-	trackResource(newAWSMachine)
+	trackResource(infraMachine)
 	// The sync controller will create a mirrored MAPI Machine with the same name.
 	trackResource(&mapiv1beta1.Machine{
 		ObjectMeta: metav1.ObjectMeta{
@@ -441,6 +422,215 @@ func summarizeMAPIConditions(conditions []mapiv1beta1.Condition) string {
 	}
 
 	return fmt.Sprintf("[%s]", strings.Join(parts, ", "))
+}
+
+// createInfraMachineFromReference creates a platform-specific infrastructure
+// machine by cloning the spec from an existing reference machine.
+func createInfraMachineFromReference(ctx context.Context, cl client.Client, referenceName, newName string) client.Object {
+	GinkgoHelper()
+
+	switch platform {
+	case configv1.AWSPlatformType:
+		return createAWSInfraMachine(ctx, cl, referenceName, newName)
+	case configv1.VSpherePlatformType:
+		return createVSphereInfraMachine(ctx, cl, referenceName, newName)
+	default:
+		Fail(fmt.Sprintf("unsupported platform for infra machine creation: %s", platform))
+		return nil
+	}
+}
+
+func createAWSInfraMachine(ctx context.Context, cl client.Client, referenceName, machineName string) *awsv1.AWSMachine {
+	GinkgoHelper()
+
+	referenceAWSMachine := capiframework.GetAWSMachineWithRetry(referenceName, capiframework.CAPINamespace)
+
+	newAWSMachine := &awsv1.AWSMachine{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "AWSMachine",
+			APIVersion: awsv1.GroupVersion.String(),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      machineName,
+			Namespace: referenceAWSMachine.Namespace,
+		},
+		Spec: *referenceAWSMachine.Spec.DeepCopy(),
+	}
+
+	newAWSMachine.Spec.ProviderID = nil
+	newAWSMachine.Spec.InstanceID = nil
+	newAWSMachine.ObjectMeta.Labels = nil
+	newAWSMachine.Status = awsv1.AWSMachineStatus{}
+
+	By(fmt.Sprintf("Creating a new CAPI AWSMachine in namespace: %s", newAWSMachine.Namespace))
+	Eventually(func() error {
+		return cl.Create(ctx, newAWSMachine)
+	}, capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(), "Should have successfully created AWSMachine %s/%s", newAWSMachine.Namespace, newAWSMachine.Name)
+
+	return newAWSMachine
+}
+
+func createVSphereInfraMachine(ctx context.Context, cl client.Client, referenceName, machineName string) *vspherev1.VSphereMachine {
+	GinkgoHelper()
+
+	referenceVSphereMachine := capiframework.GetVSphereMachineWithRetry(referenceName, capiframework.CAPINamespace)
+
+	newVSphereMachine := &vspherev1.VSphereMachine{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "VSphereMachine",
+			APIVersion: vspherev1.GroupVersion.String(),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      machineName,
+			Namespace: referenceVSphereMachine.Namespace,
+		},
+		Spec: *referenceVSphereMachine.Spec.DeepCopy(),
+	}
+
+	newVSphereMachine.Spec.ProviderID = nil
+	newVSphereMachine.ObjectMeta.Labels = nil
+	newVSphereMachine.Status = vspherev1.VSphereMachineStatus{}
+
+	By(fmt.Sprintf("Creating a new CAPI VSphereMachine in namespace: %s", newVSphereMachine.Namespace))
+	Eventually(func() error {
+		return cl.Create(ctx, newVSphereMachine)
+	}, capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(), "Should have successfully created VSphereMachine %s/%s", newVSphereMachine.Namespace, newVSphereMachine.Name)
+
+	return newVSphereMachine
+}
+
+// providerVMGVR returns the GroupVersionResource for the provider-level VM
+// on the current platform. Used for unstructured list/get operations so we
+// query the correct (non-deprecated) API version.
+func providerVMGVR() (schema.GroupVersionResource, bool) {
+	switch platform {
+	case configv1.VSpherePlatformType:
+		return schema.GroupVersionResource{
+			Group:    "infrastructure.cluster.x-k8s.io",
+			Version:  "v1beta2",
+			Resource: "vspherevms",
+		}, true
+	default:
+		return schema.GroupVersionResource{}, false
+	}
+}
+
+// listProviderVMs lists provider-level VMs in the given namespace using
+// unstructured objects to avoid depending on a specific API version.
+func listProviderVMs(namespace string) ([]unstructured.Unstructured, error) {
+	gvr, ok := providerVMGVR()
+	if !ok {
+		return nil, nil
+	}
+
+	vmList := &unstructured.UnstructuredList{}
+	vmList.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   gvr.Group,
+		Version: gvr.Version,
+		Kind:    "VSphereVMList",
+	})
+
+	if err := cl.List(ctx, vmList, client.InNamespace(namespace)); err != nil {
+		return nil, fmt.Errorf("list provider VMs: %w", err)
+	}
+
+	return vmList.Items, nil
+}
+
+// findProviderVM returns the provider-level VM object backing the given infra
+// machine, if one exists. The VM is found via owner reference (UID match).
+// Returns nil when no provider VM exists (valid for paused/non-authoritative
+// machines) or on platforms without a sub-VM resource.
+func findProviderVM(infraMachine client.Object) client.Object {
+	GinkgoHelper()
+
+	if _, ok := providerVMGVR(); !ok {
+		return nil
+	}
+
+	vms, err := listProviderVMs(infraMachine.GetNamespace())
+	Expect(err).NotTo(HaveOccurred(), "list provider VMs")
+
+	var matches []unstructured.Unstructured
+	for _, vm := range vms {
+		for _, owner := range vm.GetOwnerReferences() {
+			if owner.Kind == "VSphereMachine" && owner.UID == infraMachine.GetUID() {
+				matches = append(matches, vm)
+
+				break
+			}
+		}
+	}
+
+	switch len(matches) {
+	case 0:
+		return nil
+	case 1:
+		By(fmt.Sprintf("Found provider VM %s owned by infra machine UID %s", matches[0].GetName(), infraMachine.GetUID()))
+		return &matches[0]
+	default:
+		names := make([]string, len(matches))
+		for i := range matches {
+			names[i] = matches[i].GetName()
+		}
+
+		Fail(fmt.Sprintf("found %d provider VMs owned by infra machine UID %s: %v", len(matches), infraMachine.GetUID(), names))
+		return nil
+	}
+}
+
+// verifyProviderVMRemoved checks that any provider-level VM backing the given
+// infra machine has been cleaned up. The infra machine must have been fetched
+// before deletion so its UID is available. No-op on platforms without a
+// sub-VM resource.
+func verifyProviderVMRemoved(infraMachine client.Object) {
+	GinkgoHelper()
+
+	if _, ok := providerVMGVR(); !ok {
+		return
+	}
+
+	By(fmt.Sprintf("Verifying provider VM owned by %s (UID %s) is removed",
+		infraMachine.GetName(), infraMachine.GetUID()))
+
+	Eventually(func() bool {
+		vms, err := listProviderVMs(infraMachine.GetNamespace())
+		if err != nil {
+			return false
+		}
+
+		for _, vm := range vms {
+			for _, owner := range vm.GetOwnerReferences() {
+				if owner.Kind == "VSphereMachine" && owner.UID == infraMachine.GetUID() {
+					return false
+				}
+			}
+		}
+
+		return true
+	}, capiframework.WaitMedium, capiframework.RetryMedium).Should(BeTrue(),
+		"Provider VM owned by %s should be removed", infraMachine.GetName())
+}
+
+// verifyProviderVMStable checks that the provider-level VM has not been
+// recreated and has no deletion timestamp (stuck finalizer). providerVM is
+// the object returned by findProviderVM; if nil (platform has no sub-VM),
+// this is a no-op. Designed for use inside Consistently blocks.
+func verifyProviderVMStable(g Gomega, providerVM client.Object) {
+	if providerVM == nil {
+		return
+	}
+
+	freshVM := &unstructured.Unstructured{}
+	freshVM.SetGroupVersionKind(providerVM.GetObjectKind().GroupVersionKind())
+	freshVM.SetName(providerVM.GetName())
+	freshVM.SetNamespace(providerVM.GetNamespace())
+
+	g.Expect(komega.Get(freshVM)()).To(Succeed(), "Provider VM %s should still exist", providerVM.GetName())
+	g.Expect(freshVM.GetUID()).To(Equal(providerVM.GetUID()),
+		"Provider VM UID changed — was deleted and recreated")
+	g.Expect(freshVM.GetDeletionTimestamp().IsZero()).To(BeTrue(),
+		"Provider VM %s has a deletion timestamp — stuck finalizer", providerVM.GetName())
 }
 
 func verifyMachineSynchronizedGeneration(mapiMachine *mapiv1beta1.Machine, authority mapiv1beta1.MachineAuthority) {

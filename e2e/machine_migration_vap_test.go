@@ -21,7 +21,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	configv1 "github.com/openshift/api/config/v1"
-	"github.com/openshift/api/features"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	mapiframework "github.com/openshift/cluster-api-actuator-pkg/pkg/framework"
 	capiframework "github.com/openshift/cluster-capi-operator/e2e/framework"
@@ -34,7 +33,6 @@ import (
 // Constants for VAP testing - based on actual VAP: machine-api-machine-vap.
 const (
 	// Test values for MAPI machine updates.
-	testProviderID            = "aws:///us-west-2a/i-test123456"
 	testTaintValue            = "test-taint-value"
 	testLabelValue            = "test-label-value"
 	testInstanceType          = "m5.xlarge"
@@ -52,15 +50,25 @@ const (
 	vapCAPIForbiddenFieldMessage = "spec.%s is a forbidden field"
 )
 
+func testProviderID() string {
+	switch platform {
+	case configv1.VSpherePlatformType:
+		return "vsphere://test-vm-id-123456"
+	default:
+		return "aws:///us-west-2a/i-test123456"
+	}
+}
+
 var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] MAPI Machine VAP Tests", Ordered, func() {
 	BeforeAll(func() {
-		if platform != configv1.AWSPlatformType {
-			Skip(fmt.Sprintf("Skipping tests on %s, this is only supported on AWS", platform))
+		switch platform {
+		case configv1.AWSPlatformType, configv1.VSpherePlatformType:
+			// supported
+		default:
+			Skip(fmt.Sprintf("Machine migration VAP tests are not supported on %s", platform))
 		}
 
-		if !capiframework.IsFeatureGateEnabled(ctx, cl, features.FeatureGateMachineAPIMigration) {
-			Skip("Skipping, this feature is only supported on MachineAPIMigration enabled clusters")
-		}
+		skipUnlessMigrationEnabled()
 	})
 
 	Describe("VAP: machine-api-machine-vap enforcement", Ordered, func() {
@@ -98,7 +106,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] MA
 		Context("spec field restrictions", func() {
 			It("should prevent updating spec.providerID", func() {
 				verifyUpdatePrevented(testMAPIMachine, func() {
-					providerIDValue := testProviderID
+					providerIDValue := testProviderID()
 					testMAPIMachine.Spec.ProviderID = &providerIDValue
 				}, vapSpecLockedMessage)
 			})
@@ -164,6 +172,12 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] MA
 		})
 
 		Context("AWS provider spec field restrictions", func() {
+			BeforeEach(func() {
+				if platform != configv1.AWSPlatformType {
+					Skip(fmt.Sprintf("AWS provider spec tests are not applicable on %s", platform))
+				}
+			})
+
 			It("should prevent updating providerSpec.instanceType", func() {
 				verifyAWSProviderSpecUpdatePrevented(testMAPIMachine, "instanceType", func(providerSpec *mapiv1beta1.AWSMachineProviderConfig) {
 					providerSpec.InstanceType = testInstanceType
@@ -390,7 +404,7 @@ func verifyVAPNotAppliedForMachineAPIAuthority() {
 	// Verify we can update spec fields (VAP should not apply)
 	Eventually(komega.Update(testMachine, func() {
 		// Try to update a spec field - this should be allowed since VAP doesn't apply
-		providerIDValue := testProviderID
+		providerIDValue := testProviderID()
 		testMachine.Spec.ProviderID = &providerIDValue
 	}), capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(),
 		"Expected spec update to succeed when authoritativeAPI is MachineAPI (VAP should not apply)")
