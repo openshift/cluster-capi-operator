@@ -29,3 +29,8 @@ func crdGroupKind() schema.GroupKind {
 func deploymentGroupKind() schema.GroupKind {
 	return schema.GroupKind{Group: "apps", Kind: "Deployment"}
 }
+
+// compatibilityRequirementGroupKind returns a GroupKind for CompatibilityRequirements.
+func compatibilityRequirementGroupKind() schema.GroupKind {
+	return schema.GroupKind{Group: "apiextensions.openshift.io", Kind: "CompatibilityRequirement"}
+}

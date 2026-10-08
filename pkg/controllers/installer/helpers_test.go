@@ -26,6 +26,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/types"
+	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
 	configv1 "github.com/openshift/api/config/v1"
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
@@ -60,6 +61,9 @@ const (
 	providerIrregularCRD   = "irregular-resource-crd"
 	providerAdoptExisting  = "adopt-existing"
 	providerAdoptInvalid   = "adopt-invalid"
+	// Proxy controller test providers.
+	providerProxyAnnotated    = "proxy-annotated"
+	providerProxyNotAnnotated = "proxy-not-annotated"
 
 	coreCMName                = "test-cm-core"
 	adoptCMName               = "test-cm-adopt"
@@ -100,6 +104,41 @@ var (
 	// providersByName maps provider name to its profile for easy lookup.
 	providersByName map[string]providerimages.ProviderImageManifests
 )
+
+const proxyTestDeploymentName = "test-proxy-deployment"
+
+// proxyDeploymentYAML returns a Deployment YAML with a "manager" container and,
+// optionally, the inject-proxy annotation on the pod template.
+func proxyDeploymentYAML(withAnnotation bool) string {
+	annotations := ""
+	if withAnnotation {
+		annotations = fmt.Sprintf(`
+      annotations:
+        %s: manager`, ProxyInjectAnnotation)
+	}
+
+	return fmt.Sprintf(`apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: %s
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: %s
+  template:
+    metadata:
+      labels:
+        app: %s%s
+    spec:
+      containers:
+      - name: manager
+        image: registry.example.com/test:latest
+      - name: other
+        image: registry.example.com/test:latest`,
+		proxyTestDeploymentName, proxyTestDeploymentName, proxyTestDeploymentName, annotations)
+}
 
 // validatingAdmissionPolicyYAML generates a minimal ValidatingAdmissionPolicy YAML.
 func validatingAdmissionPolicyYAML(name string) string {
@@ -229,12 +268,24 @@ func setupProviderProfiles() {
 		)).
 		Build()
 
+	// Provider "proxy-annotated": Deployment with the inject-proxy annotation on its pod template.
+	proxyAnnotated := test.NewProviderImageManifests(tb, providerProxyAnnotated).
+		WithManifests(proxyDeploymentYAML(true)).
+		Build()
+
+	// Provider "proxy-not-annotated": Same Deployment without the inject-proxy annotation,
+	// used to test that the proxy controller clears vars when the annotation is removed.
+	proxyNotAnnotated := test.NewProviderImageManifests(tb, providerProxyNotAnnotated).
+		WithManifests(proxyDeploymentYAML(false)).
+		Build()
+
 	allProviderProfiles = []providerimages.ProviderImageManifests{
 		core, infra, addon, coreV2, dupObj,
 		clusterScoped, clusterScoped2, crdProvider, nsProvider,
 		deploymentProvider, mixed, manyClusterScoped,
 		vapProvider, irregularCRDProvider,
 		adoptExisting, adoptInvalid,
+		proxyAnnotated, proxyNotAnnotated,
 	}
 
 	providersByName = make(map[string]providerimages.ProviderImageManifests, len(allProviderProfiles))
@@ -250,8 +301,14 @@ func latestRevision(revisions []operatorv1alpha1.ClusterAPIInstallerRevision) op
 }
 
 // addRevision appends a new revision to ClusterAPI.Status.Revisions.
-// It uses revisiongenerator to compute the content ID, then writes via status update.
 func addRevision(ctx context.Context, providerNames ...string) operatorv1alpha1.ClusterAPIInstallerRevision {
+	GinkgoHelper()
+	return addRevisionWithUnmanagedCRDs(ctx, nil, providerNames...)
+}
+
+// addRevisionWithUnmanagedCRDs renders a revision to compute its content ID,
+// then appends it to ClusterAPI.Status.Revisions.
+func addRevisionWithUnmanagedCRDs(ctx context.Context, unmanagedCRDs []string, providerNames ...string) operatorv1alpha1.ClusterAPIInstallerRevision {
 	GinkgoHelper()
 
 	// Get current ClusterAPI to determine revision index.
@@ -264,7 +321,7 @@ func addRevision(ctx context.Context, providerNames ...string) operatorv1alpha1.
 		profiles := lookupProfiles(providerNames...)
 
 		// Render the revision to compute the correct content ID.
-		rendered, err := revisiongenerator.NewRenderedRevision(profiles)
+		rendered, err := revisiongenerator.NewRenderedRevision(profiles, revisiongenerator.WithUnmanagedCRDs(unmanagedCRDs))
 		Expect(err).NotTo(HaveOccurred())
 
 		var revisionIndex int64
@@ -447,4 +504,41 @@ func waitForRevision(ctx context.Context, revision operatorv1alpha1.RevisionName
 			test.HaveCondition(conditionTypeProgressing).WithStatus(configv1.ConditionFalse),
 		)
 	})
+}
+
+// setCompatibilityRequirementConditions sets the Admitted condition to True and the Compatible
+// condition on a CompatibilityRequirement.
+func setCompatibilityRequirementConditions(ctx context.Context, name string, compatible bool) {
+	GinkgoHelper()
+
+	toStatus := func(b bool) metav1.ConditionStatus {
+		if b {
+			return metav1.ConditionTrue
+		}
+
+		return metav1.ConditionFalse
+	}
+
+	cr := &apiextensionsv1alpha1.CompatibilityRequirement{}
+	cr.SetName(name)
+
+	Eventually(kWithCtx(ctx).UpdateStatus(cr, func() {
+		cr.Status.Conditions = []metav1.Condition{
+			{
+				Type:               apiextensionsv1alpha1.CompatibilityRequirementAdmitted,
+				Status:             metav1.ConditionTrue,
+				LastTransitionTime: metav1.Now(),
+				Reason:             "Test",
+			},
+			{
+				Type:               apiextensionsv1alpha1.CompatibilityRequirementCompatible,
+				Status:             toStatus(compatible),
+				LastTransitionTime: metav1.Now(),
+				Reason:             "Test",
+			},
+		}
+	})).
+		WithContext(ctx).
+		WithTimeout(defaultEventuallyTimeout).
+		Should(Succeed())
 }

@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"github.com/go-logr/logr"
+	configv1 "github.com/openshift/api/config/v1"
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	operatorv1alpha1apply "github.com/openshift/client-go/operator/applyconfigurations/operator/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
@@ -64,6 +65,7 @@ const (
 // and manage the lifecycle of CAPI provider components on the cluster.
 type InstallerController struct {
 	client           client.Client
+	apiReader        client.Reader
 	trackingCache    managedcache.TrackingCache
 	revisionEngine   *boxcutter.RevisionEngine
 	providerProfiles []providerimages.ProviderImageManifests
@@ -86,12 +88,17 @@ func SetupWithManager(mgr ctrl.Manager, providerProfiles []providerimages.Provid
 
 	c := &InstallerController{
 		client:           mgr.GetClient(),
+		apiReader:        mgr.GetAPIReader(),
 		trackingCache:    trackingCache,
 		revisionEngine:   revisionEngine,
 		providerProfiles: providerProfiles,
 		restMapper:       mgr.GetRESTMapper(),
 	}
 
+	return setupController(mgr, c, additionalSources)
+}
+
+func setupController(mgr ctrl.Manager, c *InstallerController, additionalSources []source.Source) error {
 	toClusterAPI := func(_ context.Context, _ client.Object) []reconcile.Request {
 		return []reconcile.Request{{
 			NamespacedName: client.ObjectKey{Name: clusterAPIName},
@@ -124,7 +131,11 @@ func SetupWithManager(mgr ctrl.Manager, providerProfiles []providerimages.Provid
 					// predicates.
 				),
 			),
-		)
+		).
+		// Watch the cluster-wide Proxy CR so that proxy changes trigger
+		// reconciliation of proxy env vars on managed workloads.
+		Watches(&configv1.Proxy{},
+			handler.EnqueueRequestsFromMapFunc(toClusterAPI))
 
 	for _, src := range additionalSources {
 		b = b.WatchesRawSource(src)
@@ -231,6 +242,7 @@ func (c *InstallerController) reconcile(ctx context.Context, log logr.Logger) op
 	}
 
 	revisionReconciler := newRevisionReconciler(c, log)
+
 	reconciledRevision, messages, errs := revisionReconciler.reconcile(ctx, clusterAPI.Status.Revisions)
 
 	// Write relatedObjects via non-SSA merge patch so the SSA conditions
@@ -319,8 +331,9 @@ func (c *InstallerController) updateWatches(ctx context.Context, log logr.Logger
 func (c *InstallerController) writeCurrentRevision(ctx context.Context, clusterAPI *operatorv1alpha1.ClusterAPI, revisionName operatorv1alpha1.RevisionName) error {
 	applyConfig := operatorv1alpha1apply.ClusterAPI(clusterAPIName).
 		WithUID(clusterAPI.UID).
-		WithStatus(operatorv1alpha1apply.ClusterAPIStatus().
-			WithCurrentRevision(revisionName),
+		WithStatus(
+			operatorv1alpha1apply.ClusterAPIStatus().
+				WithCurrentRevision(revisionName),
 		)
 
 	patch := util.ApplyConfigPatch(applyConfig)

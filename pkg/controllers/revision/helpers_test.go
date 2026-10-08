@@ -29,6 +29,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/config"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	configv1 "github.com/openshift/api/config/v1"
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
@@ -56,6 +57,7 @@ func newManagerWrapper(providerImgs []providerimages.ProviderImageManifests, tls
 		Controller: ctrlconfig.Controller{
 			SkipNameValidation: ptr.To(true),
 		},
+		Metrics: metricsserver.Options{BindAddress: "0"},
 	})
 	Expect(err).NotTo(HaveOccurred())
 
@@ -119,10 +121,14 @@ type fixturesOption func(*fixturesConfig)
 type fixturesConfig struct {
 	skipInfraStatus bool
 	skipClusterAPI  bool
+	unmanagedCRDs   []string
 }
 
 func withoutInfraStatus(c *fixturesConfig) { c.skipInfraStatus = true }
 func withoutClusterAPI(c *fixturesConfig)  { c.skipClusterAPI = true }
+func withUnmanagedCRDs(crds []string) fixturesOption {
+	return func(c *fixturesConfig) { c.unmanagedCRDs = slices.Clone(crds) }
+}
 
 // createFixtures creates test fixtures and sets the package-level vars.
 // It registers DeferCleanup to clean up created resources.
@@ -157,7 +163,9 @@ func createFixtures(ctx context.Context, opts ...fixturesOption) {
 	if !cfg.skipClusterAPI {
 		clusterAPI = &operatorv1alpha1.ClusterAPI{
 			ObjectMeta: metav1.ObjectMeta{Name: "cluster"},
-			Spec:       &operatorv1alpha1.ClusterAPISpec{},
+			Spec: &operatorv1alpha1.ClusterAPISpec{
+				UnmanagedCustomResourceDefinitions: cfg.unmanagedCRDs,
+			},
 		}
 		Expect(cl.Create(ctx, clusterAPI)).To(Succeed())
 		cleanupObjs = append(cleanupObjs, clusterAPI)

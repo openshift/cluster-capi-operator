@@ -21,15 +21,18 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
 	configv1 "github.com/openshift/api/config/v1"
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -655,6 +658,162 @@ var _ = Describe("InstallerController", Serial, func() {
 			)
 		}, defaultNodeTimeout)
 	})
+})
+
+var _ = Describe("InstallerController CompatibilityRequirements", Serial, func() {
+	testWidgetCRDName := fmt.Sprintf("testwidgets.%s", testCRDGVK.Group)
+	testGadgetCRDName := fmt.Sprintf("testgadgets.%s", mixedCRDGVK.Group)
+	testWidgetCRName := "ccapio-" + testWidgetCRDName
+	testGadgetCRName := "ccapio-" + testGadgetCRDName
+
+	BeforeEach(func() {
+		DeferCleanup(func(ctx context.Context) {
+			widgetRequirement := &apiextensionsv1alpha1.CompatibilityRequirement{}
+			widgetRequirement.SetName(testWidgetCRName)
+
+			gadgetRequirement := &apiextensionsv1alpha1.CompatibilityRequirement{}
+			gadgetRequirement.SetName(testGadgetCRName)
+
+			coreConfigMap := &corev1.ConfigMap{}
+			coreConfigMap.SetName(coreCMName)
+			coreConfigMap.SetNamespace("default")
+			deleteAndWait(ctx, widgetRequirement, gadgetRequirement, coreConfigMap)
+		})
+	})
+
+	AfterEach(func(ctx context.Context) {
+		// Tear down managed objects before fixture cleanup removes ClusterAPI.
+		emptyRevision := addEmptyRevision(ctx)
+		waitForRevision(ctx, emptyRevision.Name)
+	}, defaultNodeTimeout)
+
+	It("should gate on Admitted and Compatible conditions", func(ctx context.Context) {
+		createFixtures(ctx)
+		addRevisionWithUnmanagedCRDs(ctx, []string{testWidgetCRDName}, providerCRD)
+
+		By("verifying the controller is waiting on the compatibility phase")
+		waitForConditions(ctx,
+			test.HaveCondition(conditionTypeProgressing).
+				WithStatus(configv1.ConditionTrue).
+				WithReason(operatorstatus.ReasonProgressing).
+				WithMessage(ContainSubstring("waiting on phase compatibility-requirements")),
+		)
+
+		By("verifying the CompatibilityRequirement was created")
+
+		cr := &apiextensionsv1alpha1.CompatibilityRequirement{}
+		cr.SetName(testWidgetCRName)
+		Eventually(kWithCtx(ctx).Get(cr)).
+			WithContext(ctx).
+			WithTimeout(defaultEventuallyTimeout).
+			Should(Succeed())
+
+		By("setting Admitted and Compatible to True")
+		setCompatibilityRequirementConditions(ctx, testWidgetCRName, true)
+
+		By("verifying the revision completes")
+
+		clusterAPI := &operatorv1alpha1.ClusterAPI{}
+		Expect(cl.Get(ctx, client.ObjectKey{Name: clusterAPIName}, clusterAPI)).To(Succeed())
+		latest := latestRevision(clusterAPI.Status.Revisions)
+		waitForRevision(ctx, latest.Name)
+	}, defaultNodeTimeout)
+
+	It("should stay progressing when conditions are not set", func(ctx context.Context) {
+		createFixtures(ctx)
+		addRevisionWithUnmanagedCRDs(ctx, []string{testWidgetCRDName}, providerCRD)
+
+		waitForConditions(ctx,
+			test.HaveCondition(conditionTypeProgressing).
+				WithStatus(configv1.ConditionTrue).
+				WithReason(operatorstatus.ReasonProgressing).
+				WithMessage(ContainSubstring("waiting on phase compatibility-requirements")),
+		)
+
+		co := &configv1.ClusterOperator{}
+		co.SetName("cluster-api")
+
+		Consistently(kWithCtx(ctx).Object(co)).
+			WithContext(ctx).
+			WithTimeout(2 * time.Second).
+			Should(HaveField("Status.Conditions",
+				test.HaveCondition(conditionTypeProgressing).WithStatus(configv1.ConditionTrue)))
+	}, defaultNodeTimeout)
+
+	It("should block when one of multiple unmanaged CRDs is incompatible", func(ctx context.Context) {
+		createFixtures(ctx)
+		addRevisionWithUnmanagedCRDs(ctx, []string{testWidgetCRDName, testGadgetCRDName}, providerCRD, providerMixed)
+
+		waitForConditions(ctx,
+			test.HaveCondition(conditionTypeProgressing).
+				WithStatus(configv1.ConditionTrue).
+				WithMessage(ContainSubstring("compatibility-requirements")),
+		)
+
+		By("setting one Compatible=True and one Compatible=False")
+		setCompatibilityRequirementConditions(ctx, testWidgetCRName, true)
+		setCompatibilityRequirementConditions(ctx, testGadgetCRName, false)
+
+		co := &configv1.ClusterOperator{}
+		co.SetName("cluster-api")
+
+		Consistently(kWithCtx(ctx).Object(co)).
+			WithContext(ctx).
+			WithTimeout(2 * time.Second).
+			Should(HaveField("Status.Conditions",
+				test.HaveCondition(conditionTypeProgressing).WithStatus(configv1.ConditionTrue)))
+	}, defaultNodeTimeout)
+
+	It("should leave previous revision running while blocked", func(ctx context.Context) {
+		createFixtures(ctx)
+
+		By("installing rev1 normally")
+		addRevisionAndWaitForSuccess(ctx, providerCore)
+		Expect(checkConfigMap(ctx, coreCMName)).To(Succeed())
+
+		By("adding rev2 with an unmanaged CRD")
+		addRevisionWithUnmanagedCRDs(ctx, []string{testWidgetCRDName}, providerCore, providerCRD)
+
+		waitForConditions(ctx,
+			test.HaveCondition(conditionTypeProgressing).
+				WithStatus(configv1.ConditionTrue).
+				WithMessage(ContainSubstring("compatibility-requirements")),
+		)
+
+		By("verifying rev1 objects still exist")
+
+		cm, err := getConfigMap(ctx, coreCMName)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(cm.Data).To(HaveKeyWithValue("version", "v1"))
+	}, defaultNodeTimeout)
+
+	It("should preserve a CRD when handing it off as unmanaged", func(ctx context.Context) {
+		createFixtures(ctx)
+
+		By("installing rev1 with a managed CRD")
+		addRevisionAndWaitForSuccess(ctx, providerCRD)
+
+		managedCRD := &apiextensionsv1.CustomResourceDefinition{}
+		managedCRD.SetName(testWidgetCRDName)
+		Expect(cl.Get(ctx, client.ObjectKeyFromObject(managedCRD), managedCRD)).To(Succeed(),
+			"managed CRD should exist after rev1 completes")
+
+		By("adding rev2 with the CRD unmanaged")
+
+		revision := addRevisionWithUnmanagedCRDs(ctx, []string{testWidgetCRDName}, providerCRD)
+		requirement := &apiextensionsv1alpha1.CompatibilityRequirement{}
+		requirement.SetName(testWidgetCRName)
+		Eventually(kWithCtx(ctx).Get(requirement)).WithContext(ctx).Should(Succeed(),
+			"rev2 should create a CompatibilityRequirement for the unmanaged CRD")
+		setCompatibilityRequirementConditions(ctx, testWidgetCRName, true)
+
+		By("waiting for rev2 to complete")
+		waitForRevision(ctx, revision.Name)
+
+		By("verifying teardown orphaned the CRD")
+		Expect(cl.Get(ctx, client.ObjectKeyFromObject(managedCRD), managedCRD)).To(Succeed(),
+			"old-revision teardown should orphan rather than delete the unmanaged CRD")
+	}, defaultNodeTimeout)
 })
 
 var _ = Describe("InstallerController without ClusterAPI", Serial, func() {

@@ -17,9 +17,12 @@ limitations under the License.
 package installer
 
 import (
+	"fmt"
+
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"pkg.package-operator.run/boxcutter"
-	"pkg.package-operator.run/boxcutter/probing"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/cluster-capi-operator/pkg/revisiongenerator"
@@ -37,10 +40,14 @@ import (
 // all processing required only at installation time. Ideally InstallerRevision
 // will contain only parsed versions of exactly what was in provider manifests
 // without any further processing. That processing should be done here.
-func toBoxcutterRevision(installerRevision revisiongenerator.InstallerRevision, collectObjects func(obj *unstructured.Unstructured)) boxcutter.Revision {
-	probeOpts := util.SliceMap(allProbes(), func(p *probing.GroupKindSelector) boxcutter.PhaseReconcileOption {
-		return boxcutter.WithProbe(boxcutter.ProgressProbeType, p)
-	})
+func toBoxcutterRevision(
+	installerRevision revisiongenerator.InstallerRevision,
+	proxyEnvVars []corev1.EnvVar,
+	collectObjects func(obj *unstructured.Unstructured),
+) (boxcutter.Revision, error) {
+	probeOpts := []boxcutter.PhaseReconcileOption{
+		boxcutter.WithProbe(boxcutter.ProgressProbeType, progressProbe()),
+	}
 
 	var phases []boxcutter.Phase
 
@@ -56,14 +63,31 @@ func toBoxcutterRevision(installerRevision revisiongenerator.InstallerRevision, 
 		phases = append(phases, bcPhase)
 	}
 
+	unmanagedSet := sets.New(installerRevision.UnmanagedCRDs()...)
+
+	var compatObjects []*unstructured.Unstructured
+
 	for _, component := range installerRevision.Components() {
+		// Step 1: Transform provider objects before splitting them into phases.
+		// Proxy env vars are injected first, then unmanaged CRDs are replaced by
+		// CompatibilityRequirements.
+		proxyTransformed, err := injectProxyEnvVars(component.Objects(), proxyEnvVars)
+		if err != nil {
+			return nil, fmt.Errorf("injecting proxy env vars into component %q: %w", component.Name(), err)
+		}
+
+		transformed, compat, err := transformComponentObjects(proxyTransformed, unmanagedSet, collectObjects)
+		if err != nil {
+			return nil, err
+		}
+
+		compatObjects = append(compatObjects, compat...)
+
+		// Step 2: Split transformed objects into CRDs and non-CRDs, build phases.
 		var crds, objects []*unstructured.Unstructured
 
-		for _, obj := range component.Objects() {
-			collectObjects(obj)
-
-			gvk := obj.GetObjectKind().GroupVersionKind()
-			if gvk.GroupKind() == crdGroupKind() {
+		for _, obj := range transformed {
+			if isCRD(obj) {
 				crds = append(crds, obj)
 			} else {
 				objects = append(objects, obj)
@@ -74,11 +98,85 @@ func toBoxcutterRevision(installerRevision revisiongenerator.InstallerRevision, 
 		addPhase(component.Name(), objects)
 	}
 
+	// Prepend compatibility phase before all component phases.
+	if len(compatObjects) > 0 {
+		compatPhase := boxcutter.NewPhase("compatibility-requirements", util.SliceMap(compatObjects, toClientObject)).
+			WithReconcileOptions(probeOpts...)
+		phases = append([]boxcutter.Phase{compatPhase}, phases...)
+	}
+
 	return boxcutter.NewRevision(
 		string(installerRevision.RevisionName()),
 		installerRevision.RevisionIndex(),
 		phases,
-	)
+	), nil
+}
+
+// ValidateRevision validates the installation-time transformations applied by
+// toBoxcutterRevision before the revision controller records a new revision.
+func ValidateRevision(revision revisiongenerator.RenderedRevision) error {
+	installerRevision, err := revision.ForInstall("", 0)
+	if err != nil {
+		return fmt.Errorf("creating installer revision: %w", err)
+	}
+
+	_, err = toBoxcutterRevision(installerRevision, nil, func(*unstructured.Unstructured) {})
+	return err
+}
+
+// transformComponentObjects applies installation-time transformations to a
+// single component's objects. CRDs named in unmanagedSet are replaced by a
+// CompatibilityRequirement: the CRD is dropped from the objects to install and
+// the requirement is returned separately for the compatibility phase.
+func transformComponentObjects(
+	objects []*unstructured.Unstructured,
+	unmanagedSet sets.Set[string],
+	collectObjects func(obj *unstructured.Unstructured),
+) ([]*unstructured.Unstructured, []*unstructured.Unstructured, error) {
+	var transformed, compatObjects []*unstructured.Unstructured
+
+	for _, obj := range objects {
+		// WARNING: this is deliberately called for every object, including
+		// unmanaged CRDs which are dropped below and never installed.
+		// Collecting a CRD is what registers its instances in relatedObjects,
+		// and must-gather should fetch those instances whether or not we manage
+		// the CRD.
+		//
+		// Do not narrow this to only the objects we emit without first teaching
+		// the relatedObjects collector to handle CompatibilityRequirements like
+		// CRDs. Deferred to a follow-up PR.
+		// See https://github.com/openshift/cluster-capi-operator/pull/648#discussion_r3863095108
+		collectObjects(obj)
+
+		if !isCRD(obj) || !unmanagedSet.Has(obj.GetName()) {
+			transformed = append(transformed, obj)
+
+			continue
+		}
+
+		cr, err := buildCompatibilityRequirement(obj)
+		if err != nil {
+			return nil, nil, fmt.Errorf("building CompatibilityRequirement for CRD %s: %w", obj.GetName(), err)
+		}
+
+		labels := cr.GetLabels()
+		if labels == nil {
+			labels = make(map[string]string)
+		}
+
+		labels[revisiongenerator.ManagedLabelKey] = "compatibility-requirements"
+		cr.SetLabels(labels)
+
+		collectObjects(cr)
+
+		compatObjects = append(compatObjects, cr)
+	}
+
+	return transformed, compatObjects, nil
+}
+
+func isCRD(obj *unstructured.Unstructured) bool {
+	return obj.GetObjectKind().GroupVersionKind().GroupKind() == crdGroupKind()
 }
 
 // processAdoptExistingAnnotations processes the adopt-existing annotation on
@@ -99,8 +197,10 @@ func processAdoptExistingAnnotations(objects []*unstructured.Unstructured) ([]*u
 		if hasAnnotation {
 			// Disable collision protection if the annotation is set to "always"
 			if value == revisiongenerator.AdoptExistingAlways {
-				reconcileOpts = append(reconcileOpts,
-					boxcutter.WithObjectReconcileOptions(obj,
+				reconcileOpts = append(
+					reconcileOpts,
+					boxcutter.WithObjectReconcileOptions(
+						obj,
 						boxcutter.WithCollisionProtection(boxcutter.CollisionProtectionNone),
 					),
 				)
