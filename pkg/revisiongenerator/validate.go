@@ -80,6 +80,10 @@ func ValidateAdoptExistingAnnotation(obj *unstructured.Unstructured) error {
 }
 
 // validateRenderedRevision validates all objects in a rendered revision.
+//
+// We do not check that unmanaged CRDs appear in the revision. This is because
+// we want a user to be able to mark a CRD unmanaged before upgrading to a
+// version that may otherwise adopt it.
 func validateRenderedRevision(rev *renderedRevision) error {
 	for _, component := range rev.components {
 		for _, obj := range component.Objects() {

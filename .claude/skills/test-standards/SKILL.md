@@ -115,7 +115,62 @@ time.Sleep(5 * time.Second)
 Expect(machine.Status.Phase).To(Equal("Running"))
 ```
 
+## Ginkgo/Gomega patterns
+
+Use built-in features over custom implementations:
+- Use `DescribeTable` with `Entry` for table-driven tests instead of manual loops
+- Use `HaveField`, `HaveValue`, `HaveKey` for struct/map assertions instead of manual field checks
+- Use `ConsistOf` for unordered slice matching instead of sorting + `Equal`
+- Use `BeNumerically` for numeric comparisons instead of manual range checks
+
+### Async assertions with Komega
+
+Use Komega for Kubernetes object assertions:
+```go
+Eventually(k.Object(myResource)).Should(HaveField("ObjectMeta.ResourceVersion", Equal(expectedRV)))
+
+Eventually(k.UpdateStatus(myResource, func() {
+    myResource.Status.SomeField = "value"
+})).Should(Succeed())
+```
+
+### Resource management
+
+Use testutils resource builders for creating test objects:
+```go
+mapiMachine = mapiMachineBuilder.
+    WithNamespace(namespace).
+    WithName("foo").
+    WithAuthoritativeAPI(machinev1beta1.MachineAuthorityMachineAPI).
+    Build()
+```
+
+Standard cleanup in AfterEach:
+```go
+testutils.CleanupResources(Default, ctx, cfg, k8sClient, namespace,
+    &machinev1beta1.Machine{},
+    &clusterv1.Machine{},
+)
+```
+
+### Complex assertions
+
+Combine matchers with `SatisfyAll`:
+```go
+Eventually(komega.Object(resource)).Should(SatisfyAll(
+    HaveField("Status.AuthoritativeAPI", Equal(expected)),
+    HaveField("Status.SynchronizedGeneration", BeZero()),
+))
+```
+
+Nested field checks:
+```go
+HaveField("Status.Conditions", ContainElement(SatisfyAll(
+    HaveField("Type", Equal("Paused")),
+    HaveField("Status", Equal(corev1.ConditionTrue)),
+)))
+```
+
 ## General
 
-- Follow patterns from CLAUDE.md (Komega, DescribeTable, resource builders, testutils cleanup).
 - Remove `FIt`/`FContext` before committing.

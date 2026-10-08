@@ -29,6 +29,7 @@ import (
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	operatorv1alpha1ac "github.com/openshift/client-go/operator/applyconfigurations/operator/v1alpha1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/util/sets"
 	k8syaml "sigs.k8s.io/yaml"
 
 	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
@@ -54,6 +55,9 @@ type RenderedRevision interface {
 
 	// Components returns the rendered components for this revision.
 	Components() []RenderedComponent
+
+	// UnmanagedCRDs returns the unmanaged CRDs for this revision.
+	UnmanagedCRDs() []string
 
 	// ForInstall creates an InstallerRevision by assigning a release version
 	// and revision index to this rendered content.
@@ -89,6 +93,7 @@ type renderedRevision struct {
 	components    []*renderedComponent
 	contentID     string
 	substitutions []operatorv1alpha1.ClusterAPIInstallerRevisionManifestSubstitution
+	unmanagedCRDs []string
 }
 
 var _ RenderedRevision = &renderedRevision{}
@@ -120,6 +125,7 @@ func newRenderedRevision(profiles []providerimages.ProviderImageManifests, opts 
 	rev := &renderedRevision{
 		components:    components,
 		substitutions: substitutionsFromMap(cfg.substitutions),
+		unmanagedCRDs: orderedCRDList(cfg.unmanagedCRDs),
 	}
 
 	if err := validateRenderedRevision(rev); err != nil {
@@ -150,35 +156,64 @@ func substitutionsFromMap(m map[string]string) []operatorv1alpha1.ClusterAPIInst
 	return subs
 }
 
+// substitutionsToMap converts a slice of API substitutions to the map form
+// taken by WithManifestSubstitutions. Substitutions with no value are skipped.
+func substitutionsToMap(subs []operatorv1alpha1.ClusterAPIInstallerRevisionManifestSubstitution) map[string]string {
+	m := make(map[string]string, len(subs))
+
+	for _, sub := range subs {
+		if sub.Value != nil {
+			m[sub.Key] = *sub.Value
+		}
+	}
+
+	return m
+}
+
+// orderedCRDList returns an ordered list of the set of unmanaged CRDs so we
+// get a stable hash.
+func orderedCRDList(crds []string) []string {
+	return sets.List(sets.New(crds...))
+}
+
 // ContentID returns a unique identifier for the revision's content.
 // Specifically it returns a SHA256 over all manifests and substitutions,
 // but callers MUST NOT assume this.
 func (r *renderedRevision) ContentID() (string, error) {
-	if r.contentID == "" {
-		h := sha256.New()
-
-		for _, component := range r.components {
-			contentID, err := component.contentID()
-			if err != nil {
-				return "", fmt.Errorf("error getting content ID: %w", err)
-			}
-
-			h.Write([]byte(contentID))
-		}
-
-		// Include substitutions in the hash so that different substitutions
-		// always produce a different content ID and therefore trigger a new
-		// revision, even if they were not used. This is not strictly necessary,
-		// but it should reduce operator confusion if old but unused
-		// substitutions continued to be listed in the current revision.
-		if data, err := json.Marshal(r.substitutions); err == nil {
-			h.Write(data)
-		} else {
-			return "", fmt.Errorf("error marshalling substitutions: %w", err)
-		}
-
-		r.contentID = hex.EncodeToString(h.Sum(nil))
+	if r.contentID != "" {
+		return r.contentID, nil
 	}
+
+	h := sha256.New()
+
+	for _, component := range r.components {
+		contentID, err := component.contentID()
+		if err != nil {
+			return "", fmt.Errorf("error getting content ID: %w", err)
+		}
+
+		h.Write([]byte(contentID))
+	}
+
+	// Include substitutions in the hash so that different substitutions
+	// always produce a different content ID and therefore trigger a new
+	// revision, even if they were not used. This is not strictly necessary,
+	// but it should reduce operator confusion if old but unused
+	// substitutions continued to be listed in the current revision.
+	if data, err := json.Marshal(r.substitutions); err == nil {
+		h.Write(data)
+	} else {
+		return "", fmt.Errorf("error marshalling substitutions: %w", err)
+	}
+
+	// Also include unmanagedCRDs for the same reasons.
+	if data, err := json.Marshal(r.unmanagedCRDs); err == nil {
+		h.Write(data)
+	} else {
+		return "", fmt.Errorf("error marshalling unmanaged CRDs: %w", err)
+	}
+
+	r.contentID = hex.EncodeToString(h.Sum(nil))
 
 	return r.contentID, nil
 }
@@ -188,6 +223,11 @@ func (r *renderedRevision) Components() []RenderedComponent {
 	return util.SliceMap(r.components, func(c *renderedComponent) RenderedComponent {
 		return c
 	})
+}
+
+// UnmanagedCRDs retruns the unmanaged CRDs for this revision.
+func (r *renderedRevision) UnmanagedCRDs() []string {
+	return slices.Clone(r.unmanagedCRDs)
 }
 
 // ForInstall creates an InstallerRevision by assigning a release version and
@@ -252,11 +292,12 @@ func (r *installerRevision) ToAPIRevision() (operatorv1alpha1.ClusterAPIInstalle
 	}
 
 	return operatorv1alpha1.ClusterAPIInstallerRevision{
-		Name:                  r.revisionName,
-		Revision:              r.revisionIndex,
-		ContentID:             contentID,
-		ManifestSubstitutions: slices.Clone(r.substitutions),
-		Components:            apiComponents,
+		Name:                               r.revisionName,
+		Revision:                           r.revisionIndex,
+		ContentID:                          contentID,
+		ManifestSubstitutions:              slices.Clone(r.substitutions),
+		UnmanagedCustomResourceDefinitions: slices.Clone(r.unmanagedCRDs),
+		Components:                         apiComponents,
 	}, nil
 }
 
@@ -284,6 +325,7 @@ func buildRevisionName(releaseVersion, contentID string, index int64) operatorv1
 
 type revisionRenderConfig struct {
 	substitutions map[string]string
+	unmanagedCRDs []string
 }
 
 type revisionRenderOption func(*revisionRenderConfig)
@@ -298,6 +340,16 @@ func WithManifestSubstitutions(subs map[string]string) revisionRenderOption {
 		}
 
 		maps.Copy(opts.substitutions, subs)
+	}
+}
+
+// WithUnmanagedCRDs adds unmanaged CRDs as specified by the
+// .spec.UnmanagedCustomResourceDefinitions at the time of calling. Because we expect unmanaged CRDs
+// to change throughout time, we don't want this to be additive / merge new and
+// old.
+func WithUnmanagedCRDs(unmanagedCRDs []string) revisionRenderOption {
+	return func(opts *revisionRenderConfig) {
+		opts.unmanagedCRDs = unmanagedCRDs
 	}
 }
 
@@ -337,14 +389,10 @@ func NewInstallerRevisionFromAPI(
 	// Prepend substitutions from the API revision so they are applied during
 	// rendering and included in the content ID for validation. Later options
 	// merge with and override these values.
-	apiSubs := make(map[string]string, len(apiRev.ManifestSubstitutions))
-	for _, s := range apiRev.ManifestSubstitutions {
-		if s.Value != nil {
-			apiSubs[s.Key] = *s.Value
-		}
-	}
-
-	opts = append([]revisionRenderOption{WithManifestSubstitutions(apiSubs)}, opts...)
+	opts = append([]revisionRenderOption{
+		WithManifestSubstitutions(substitutionsToMap(apiRev.ManifestSubstitutions)),
+		WithUnmanagedCRDs(apiRev.UnmanagedCustomResourceDefinitions),
+	}, opts...)
 
 	rendered, err := newRenderedRevision(matched, opts...)
 	if err != nil {
