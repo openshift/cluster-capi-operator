@@ -126,7 +126,7 @@ var _ = Describe("AWS load balancer validation during MAPI->CAPI conversion", fu
 		Expect(err).ToNot(HaveOccurred())
 
 		infra := configv1resourcebuilder.Infrastructure().AsAWS("cluster", "us-east-1").WithInfrastructureName(infrastructureName).Build()
-		infraTypes, _, err := util.GetCAPITypesForInfrastructure(infra)
+		infraTypes, err := util.GetCAPITypesForInfrastructure(infra)
 		Expect(err).ToNot(HaveOccurred(), "InfraTypes should be able to be created")
 
 		reconciler = &MachineSyncReconciler{
