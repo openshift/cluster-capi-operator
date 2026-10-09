@@ -66,6 +66,7 @@ var _ = Describe("CRDCompatibilityOperatorController", Serial, func() {
 		Eventually(komega.Object(deployment)).WithTimeout(timeout).WithPolling(interval).Should(SatisfyAll(
 			HaveField("Spec.Replicas", HaveValue(BeEquivalentTo(2))),
 			HaveField("Spec.Template.Spec.Containers", And(HaveLen(1), ContainElement(HaveField("Image", Equal(testOperandImage))))),
+			HaveField("Spec.Template.Spec.NodeSelector", BeEmpty()),
 			HaveField("Spec.Template.Labels", HaveKeyWithValue("k8s-app", operandLabel)),
 		))
 
