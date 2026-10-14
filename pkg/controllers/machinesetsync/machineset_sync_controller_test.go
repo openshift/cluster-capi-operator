@@ -1593,6 +1593,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 		})
 	})
 
+	// No-change, finalizer and retry behavior is covered by "Reconciling orphan Cluster API MachineSets".
 	Context("when the MAPI machine set does not exist and the CAPI machine set does", func() {
 		BeforeEach(func() {
 			By("Creating the CAPI machine set")
@@ -1600,13 +1601,6 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 			capiMachineSet = capiMachineSetBuilder.Build()
 
 			Eventually(kCreate(ctx, capiMachineSet)).Should(Succeed())
-		})
-
-		It("should not make any changes to the CAPI machine set", func() {
-			resourceVersion := capiMachineSet.GetResourceVersion()
-			Consistently(k.Object(capiMachineSet), timeout).Should(
-				HaveField("ResourceVersion", Equal(resourceVersion)),
-			)
 		})
 
 		It("should not create a MAPI machine set", func() {
