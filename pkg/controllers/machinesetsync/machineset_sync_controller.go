@@ -172,8 +172,8 @@ func (r *MachineSetSyncReconciler) Reconcile(ctx context.Context, req reconcile.
 	}
 
 	if mapiMachineSet == nil {
-		logger.Info("Only CAPI machine set found, nothing to do")
-		return ctrl.Result{}, nil
+		_, err := r.reconcileCAPItoMAPIMachineSetDeletion(ctx, nil, capiMachineSet)
+		return ctrl.Result{}, err
 	}
 
 	return r.syncMachineSets(ctx, mapiMachineSet, capiMachineSet)

@@ -53,6 +53,7 @@ import (
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	"sigs.k8s.io/controller-runtime/pkg/config"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -65,6 +66,143 @@ var (
 )
 
 var consecutiveFailures int
+
+var _ = Describe("Reconciling orphan Cluster API MachineSets", func() {
+	var (
+		capiNamespace  *corev1.Namespace
+		mapiNamespace  *corev1.Namespace
+		capiMachineSet *clusterv1.MachineSet
+		reconciler     *MachineSetSyncReconciler
+		request        ctrl.Request
+	)
+
+	BeforeEach(func() {
+		capiNamespace = corev1resourcebuilder.Namespace().WithGenerateName("orphan-capi-").Build()
+		mapiNamespace = corev1resourcebuilder.Namespace().WithGenerateName("orphan-mapi-").Build()
+
+		Expect(k8sClient.Create(ctx, capiNamespace)).To(Succeed())
+		Expect(k8sClient.Create(ctx, mapiNamespace)).To(Succeed())
+
+		capiMachineSet = capiv1resourcebuilder.MachineSet().
+			WithNamespace(capiNamespace.Name).
+			WithName("orphan").
+			WithClusterName("test-cluster").
+			WithTemplate(clusterv1.MachineTemplateSpec{
+				Spec: clusterv1.MachineSpec{
+					InfrastructureRef: clusterv1.ContractVersionedObjectReference{
+						APIGroup: awsv1.GroupVersion.Group,
+						Kind:     "AWSMachineTemplate",
+						Name:     "test-template",
+					},
+				},
+			}).Build()
+		reconciler = &MachineSetSyncReconciler{
+			Client:        k8sClient,
+			CAPINamespace: capiNamespace.Name,
+			MAPINamespace: mapiNamespace.Name,
+		}
+		request = ctrl.Request{NamespacedName: client.ObjectKey{Namespace: mapiNamespace.Name, Name: capiMachineSet.Name}}
+	})
+
+	AfterEach(func() {
+		testutils.CleanupResources(Default, ctx, cfg, k8sClient, capiNamespace.Name, &clusterv1.MachineSet{})
+		testutils.CleanupResources(Default, ctx, cfg, k8sClient, mapiNamespace.Name, &mapiv1beta1.MachineSet{})
+	})
+
+	DescribeTable("should reconcile without recreating a Machine API MachineSet",
+		func(exists, deleting bool, finalizers, expectedFinalizers []string) {
+			if exists {
+				capiMachineSet.Finalizers = finalizers
+				Expect(k8sClient.Create(ctx, capiMachineSet)).To(Succeed())
+
+				if deleting {
+					Expect(k8sClient.Delete(ctx, capiMachineSet)).To(Succeed())
+					Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(capiMachineSet), capiMachineSet)).To(Succeed())
+					Expect(capiMachineSet.DeletionTimestamp.IsZero()).To(BeFalse(), "the Cluster API MachineSet should be deleting before reconciliation")
+				}
+			}
+
+			before := capiMachineSet.DeepCopy()
+			result, err := reconciler.Reconcile(ctx, request)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(Equal(ctrl.Result{}))
+
+			if !exists || (deleting && len(expectedFinalizers) == 0) {
+				Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(capiMachineSet), capiMachineSet)).To(Satisfy(apierrors.IsNotFound))
+			} else {
+				Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(capiMachineSet), capiMachineSet)).To(Succeed())
+				Expect(capiMachineSet.Finalizers).To(ConsistOf(expectedFinalizers))
+				Expect(capiMachineSet.Spec).To(Equal(before.Spec))
+
+				if !deleting || !slices.Contains(finalizers, machinesync.SyncFinalizer) {
+					Expect(capiMachineSet).To(Equal(before))
+				}
+			}
+
+			By("Reconciling again without changing the remaining object")
+
+			after := capiMachineSet.DeepCopy()
+			result, err = reconciler.Reconcile(ctx, request)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(Equal(ctrl.Result{}))
+
+			if exists && (!deleting || len(expectedFinalizers) > 0) {
+				Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(capiMachineSet), capiMachineSet)).To(Succeed())
+				Expect(capiMachineSet).To(Equal(after))
+			} else {
+				Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(capiMachineSet), capiMachineSet)).To(Satisfy(apierrors.IsNotFound))
+			}
+
+			Expect(k8sClient.Get(ctx, request.NamespacedName, &mapiv1beta1.MachineSet{})).To(Satisfy(apierrors.IsNotFound))
+		},
+		Entry("deleting with only the sync finalizer", true, true, []string{machinesync.SyncFinalizer}, nil),
+		Entry("deleting with other finalizers", true, true,
+			[]string{clusterv1.MachineSetFinalizer, machinesync.SyncFinalizer, "example.com/retain"},
+			[]string{clusterv1.MachineSetFinalizer, "example.com/retain"}),
+		Entry("deleting without the sync finalizer", true, true, []string{clusterv1.MachineSetFinalizer}, []string{clusterv1.MachineSetFinalizer}),
+		Entry("not deleting with the sync finalizer", true, false, []string{machinesync.SyncFinalizer}, []string{machinesync.SyncFinalizer}),
+		Entry("not deleting without finalizers", true, false, nil, nil),
+		Entry("neither MachineSet exists", false, false, nil, nil),
+	)
+
+	It("should return a finalizer patch failure and succeed on retry", func() {
+		capiMachineSet.Finalizers = []string{machinesync.SyncFinalizer, clusterv1.MachineSetFinalizer}
+		Expect(k8sClient.Create(ctx, capiMachineSet)).To(Succeed())
+		Expect(k8sClient.Delete(ctx, capiMachineSet)).To(Succeed())
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(capiMachineSet), capiMachineSet)).To(Succeed())
+		before := capiMachineSet.DeepCopy()
+
+		patchErr := errors.New("injected finalizer patch failure")
+		patchCalls := 0
+		watchClient, err := client.NewWithWatch(cfg, client.Options{Scheme: k8sClient.Scheme()})
+		Expect(err).NotTo(HaveOccurred())
+
+		reconciler.Client = interceptor.NewClient(watchClient, interceptor.Funcs{
+			Patch: func(ctx context.Context, wrappedClient client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+				patchCalls++
+				if patchCalls == 1 {
+					return patchErr
+				}
+
+				return wrappedClient.Patch(ctx, obj, patch, opts...)
+			},
+		})
+
+		_, err = reconciler.Reconcile(ctx, request)
+		Expect(err).To(MatchError(patchErr))
+		Expect(patchCalls).To(Equal(1))
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(capiMachineSet), capiMachineSet)).To(Succeed())
+		Expect(capiMachineSet).To(Equal(before))
+
+		result, err := reconciler.Reconcile(ctx, request)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result).To(Equal(ctrl.Result{}))
+		Expect(patchCalls).To(Equal(2))
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(capiMachineSet), capiMachineSet)).To(Succeed())
+		Expect(capiMachineSet.Finalizers).To(ConsistOf(clusterv1.MachineSetFinalizer))
+		Expect(k8sClient.Get(ctx, request.NamespacedName, &mapiv1beta1.MachineSet{})).To(Satisfy(apierrors.IsNotFound))
+	})
+})
 
 var _ = JustAfterEach(func() {
 	if CurrentSpecReport().Failed() {
