@@ -52,6 +52,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -172,7 +173,12 @@ func (r *MachineSetSyncReconciler) Reconcile(ctx context.Context, req reconcile.
 	}
 
 	if mapiMachineSet == nil {
+		if !controllerutil.ContainsFinalizer(capiMachineSet, machinesync.SyncFinalizer) {
+			return ctrl.Result{}, nil
+		}
+
 		_, err := r.reconcileCAPItoMAPIMachineSetDeletion(ctx, nil, capiMachineSet)
+
 		return ctrl.Result{}, err
 	}
 

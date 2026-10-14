@@ -123,9 +123,26 @@ var _ = Describe("Reconciling orphan Cluster API MachineSets", func() {
 			}
 
 			before := capiMachineSet.DeepCopy()
+			patchCalls := 0
+			watchClient, err := client.NewWithWatch(cfg, client.Options{Scheme: k8sClient.Scheme()})
+			Expect(err).NotTo(HaveOccurred())
+
+			reconciler.Client = interceptor.NewClient(watchClient, interceptor.Funcs{
+				Patch: func(ctx context.Context, wrappedClient client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+					patchCalls++
+					return wrappedClient.Patch(ctx, obj, patch, opts...)
+				},
+			})
+
+			expectedPatchCalls := 0
+			if deleting && slices.Contains(finalizers, machinesync.SyncFinalizer) {
+				expectedPatchCalls = 1
+			}
+
 			result, err := reconciler.Reconcile(ctx, request)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(Equal(ctrl.Result{}))
+			Expect(patchCalls).To(Equal(expectedPatchCalls), "only deleting MachineSets with the sync finalizer should be patched")
 
 			if !exists || (deleting && len(expectedFinalizers) == 0) {
 				Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(capiMachineSet), capiMachineSet)).To(Satisfy(apierrors.IsNotFound))
@@ -145,6 +162,7 @@ var _ = Describe("Reconciling orphan Cluster API MachineSets", func() {
 			result, err = reconciler.Reconcile(ctx, request)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(Equal(ctrl.Result{}))
+			Expect(patchCalls).To(Equal(expectedPatchCalls), "repeated reconciliation should not patch the MachineSet again")
 
 			if exists && (!deleting || len(expectedFinalizers) > 0) {
 				Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(capiMachineSet), capiMachineSet)).To(Succeed())
@@ -162,6 +180,7 @@ var _ = Describe("Reconciling orphan Cluster API MachineSets", func() {
 		Entry("deleting without the sync finalizer", true, true, []string{clusterv1.MachineSetFinalizer}, []string{clusterv1.MachineSetFinalizer}),
 		Entry("not deleting with the sync finalizer", true, false, []string{machinesync.SyncFinalizer}, []string{machinesync.SyncFinalizer}),
 		Entry("not deleting without finalizers", true, false, nil, nil),
+		Entry("not deleting with only an unrelated finalizer", true, false, []string{"example.com/retain"}, []string{"example.com/retain"}),
 		Entry("neither MachineSet exists", false, false, nil, nil),
 	)
 
