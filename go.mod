@@ -69,6 +69,8 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/gophercloud/gophercloud/v2 v2.10.0
 	github.com/metal3-io/cluster-api-provider-metal3/api v1.11.2
+	github.com/nutanix-cloud-native/cluster-api-provider-nutanix v1.10.3
+	github.com/nutanix-cloud-native/prism-go-client v0.8.0
 	github.com/onsi/ginkgo/v2 v2.32.0
 	github.com/onsi/gomega v1.42.1
 	github.com/openshift/api v0.0.0-20261002115817-f8795cdde518
