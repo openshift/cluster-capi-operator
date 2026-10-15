@@ -39,16 +39,14 @@ import (
 )
 
 const (
-	capiUnsupportedPlatformMsg = "Cluster API is not yet implemented on this platform"
-	controllerName             = "ClusterOperatorController"
+	controllerName = "ClusterOperatorController"
 )
 
 // ClusterOperatorController watches the cluster-api ClusterOperator and
 // aggregates per-controller sub-conditions into top-level conditions.
 type ClusterOperatorController struct {
 	client.Client
-	ReleaseVersion        string
-	IsUnsupportedPlatform bool
+	ReleaseVersion string
 }
 
 // Reconcile reconciles the cluster-api ClusterOperator object.
@@ -62,38 +60,18 @@ func (r *ClusterOperatorController) Reconcile(ctx context.Context, _ ctrl.Reques
 
 	log.Info("Reconciling ClusterOperator aggregation")
 
-	var conditions []*configv1apply.ClusterOperatorStatusConditionApplyConfiguration
-
-	if r.IsUnsupportedPlatform {
-		conditions = r.unsupportedPlatformStatus()
-	} else {
-		conditions = r.aggregatedStatus(co.Status.Conditions)
-	}
+	conditions := r.aggregatedStatus(co.Status.Conditions)
 
 	// Merge new conditions with existing conditions and patch if changes are required.
 	conditionsChanged := operatorstatus.MergeConditions(conditions, co.Status.Conditions)
-	versionChanged := r.IsUnsupportedPlatform &&
-		currentOperatorVersion(co.Status.Versions, operatorstatus.OperatorVersionKey) != r.ReleaseVersion
 
-	if conditionsChanged || versionChanged {
+	if conditionsChanged {
 		if err := r.writeStatus(ctx, co, conditions); err != nil {
 			return ctrl.Result{}, err
 		}
 	}
 
 	return ctrl.Result{}, nil
-}
-
-// currentOperatorVersion returns the version string for the given key in the
-// ClusterOperator's status versions list, or an empty string if not found.
-func currentOperatorVersion(versions []configv1.OperandVersion, name string) string {
-	for i := range versions {
-		if versions[i].Name == name {
-			return versions[i].Version
-		}
-	}
-
-	return ""
 }
 
 func (r *ClusterOperatorController) writeStatus(ctx context.Context, co *configv1.ClusterOperator, conditions []*configv1apply.ClusterOperatorStatusConditionApplyConfiguration) error {
@@ -103,33 +81,12 @@ func (r *ClusterOperatorController) writeStatus(ctx context.Context, co *configv
 			WithConditions(conditions...),
 		)
 
-	// We don't run the revision controller on unsupported platforms, so we must
-	// write the release version here.
-	if r.IsUnsupportedPlatform {
-		applyConfig.Status = applyConfig.Status.WithVersions(
-			configv1apply.OperandVersion().
-				WithName(operatorstatus.OperatorVersionKey).
-				WithVersion(r.ReleaseVersion))
-	}
-
 	if err := r.Status().Patch(ctx, co, util.ApplyConfigPatch(applyConfig),
 		operatorstatus.CAPIFieldOwner(controllerName), client.ForceOwnership); err != nil {
 		return fmt.Errorf("failed to write ClusterOperator status: %w", err)
 	}
 
 	return nil
-}
-
-// unsupportedPlatformStatus sets a fixed status with Available=true,
-// Progressing=false, Degraded=false, Upgradeable=true when running on an
-// unsupported platform.
-func (r *ClusterOperatorController) unsupportedPlatformStatus() []*configv1apply.ClusterOperatorStatusConditionApplyConfiguration {
-	return []*configv1apply.ClusterOperatorStatusConditionApplyConfiguration{
-		condition(configv1.OperatorAvailable, configv1.ConditionTrue, operatorstatus.ReasonAsExpected, capiUnsupportedPlatformMsg),
-		condition(configv1.OperatorProgressing, configv1.ConditionFalse, operatorstatus.ReasonAsExpected, ""),
-		condition(configv1.OperatorDegraded, configv1.ConditionFalse, operatorstatus.ReasonAsExpected, ""),
-		condition(configv1.OperatorUpgradeable, configv1.ConditionTrue, operatorstatus.ReasonAsExpected, ""),
-	}
 }
 
 type subcontrollerStatus struct {
