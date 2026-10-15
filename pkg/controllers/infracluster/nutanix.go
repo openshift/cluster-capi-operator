@@ -35,8 +35,6 @@ import (
 var errNutanixPrismCentralNotSet = errors.New("infrastructure PlatformSpec.Nutanix.PrismCentral is not set")
 
 // ensureNutanixCluster ensures the NutanixCluster cluster object exists.
-//
-//nolint:funlen
 func (r *InfraClusterController) ensureNutanixCluster(ctx context.Context, log logr.Logger) (client.Object, error) {
 	target := &nutanixv1.NutanixCluster{ObjectMeta: metav1.ObjectMeta{
 		Name:      r.Infra.Status.InfrastructureName,
