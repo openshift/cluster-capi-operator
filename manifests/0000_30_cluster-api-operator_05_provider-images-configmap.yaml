@@ -18,6 +18,7 @@ data:
   cluster-capi-operator: registry.ci.openshift.org/openshift:cluster-capi-operator
   gcp-cluster-api-controllers: registry.ci.openshift.org/openshift:gcp-cluster-api-controllers
   ibmcloud-cluster-api-controllers: registry.ci.openshift.org/openshift:ibmcloud-cluster-api-controllers
+  nutanix-cluster-api-controllers: registry.ci.openshift.org/openshift:nutanix-cluster-api-controllers
   openstack-cluster-api-controllers: registry.ci.openshift.org/openshift:openstack-cluster-api-controllers
   openstack-resource-controller: registry.ci.openshift.org/openshift:openstack-resource-controller
   vsphere-cluster-api-controllers: registry.ci.openshift.org/openshift:vsphere-cluster-api-controllers
