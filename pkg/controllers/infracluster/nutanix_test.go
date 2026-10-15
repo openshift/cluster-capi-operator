@@ -29,7 +29,7 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-	"sigs.k8s.io/controller-runtime/pkg/log"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 var _ = Describe("ensureNutanixCluster", func() {
@@ -62,8 +62,8 @@ var _ = Describe("ensureNutanixCluster", func() {
 	It("creates a NutanixCluster populated from the Infrastructure resource", func() {
 		r := newController()
 
-		obj, err := r.ensureNutanixCluster(context.Background(), log.Log)
-		Expect(err).NotTo(HaveOccurred())
+		obj, err := r.ensureNutanixCluster(context.Background(), logf.Log)
+		Expect(err).NotTo(HaveOccurred(), "failed to create NutanixCluster")
 
 		nutanixCluster, ok := obj.(*nutanixv1.NutanixCluster)
 		Expect(ok).To(BeTrue(), "expected a *NutanixCluster")
@@ -89,8 +89,8 @@ var _ = Describe("ensureNutanixCluster", func() {
 
 		r := newController(existing)
 
-		obj, err := r.ensureNutanixCluster(context.Background(), log.Log)
-		Expect(err).NotTo(HaveOccurred())
+		obj, err := r.ensureNutanixCluster(context.Background(), logf.Log)
+		Expect(err).NotTo(HaveOccurred(), "failed to retrieve existing NutanixCluster")
 		Expect(obj.GetName()).To(Equal(infraName))
 		Expect(obj.GetNamespace()).To(Equal(capiNamespace))
 	})
@@ -99,7 +99,7 @@ var _ = Describe("ensureNutanixCluster", func() {
 		ocpInfra.Spec.PlatformSpec.Nutanix = nil
 		r := newController()
 
-		_, err := r.ensureNutanixCluster(context.Background(), log.Log)
+		_, err := r.ensureNutanixCluster(context.Background(), logf.Log)
 		Expect(err).To(MatchError(errNutanixPrismCentralNotSet))
 	})
 })
