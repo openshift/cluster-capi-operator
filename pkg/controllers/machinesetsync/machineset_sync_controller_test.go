@@ -22,6 +22,7 @@ import (
 	"errors"
 	"slices"
 	"sync"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -53,6 +54,7 @@ import (
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	"sigs.k8s.io/controller-runtime/pkg/config"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -65,6 +67,450 @@ var (
 )
 
 var consecutiveFailures int
+
+var _ = Describe("Reconciling orphan Cluster API MachineSets", func() {
+	var (
+		capiNamespace  *corev1.Namespace
+		mapiNamespace  *corev1.Namespace
+		capiMachineSet *clusterv1.MachineSet
+		reconciler     *MachineSetSyncReconciler
+		request        ctrl.Request
+	)
+
+	BeforeEach(func() {
+		capiNamespace = corev1resourcebuilder.Namespace().WithGenerateName("orphan-capi-").Build()
+		mapiNamespace = corev1resourcebuilder.Namespace().WithGenerateName("orphan-mapi-").Build()
+
+		Expect(k8sClient.Create(ctx, capiNamespace)).To(Succeed(), "failed to create Cluster API namespace with generateName %q", capiNamespace.GenerateName)
+		Expect(k8sClient.Create(ctx, mapiNamespace)).To(Succeed(), "failed to create Machine API namespace with generateName %q", mapiNamespace.GenerateName)
+
+		capiMachineSet = capiv1resourcebuilder.MachineSet().
+			WithNamespace(capiNamespace.Name).
+			WithName("orphan").
+			WithClusterName("test-cluster").
+			WithTemplate(clusterv1.MachineTemplateSpec{
+				Spec: clusterv1.MachineSpec{
+					InfrastructureRef: clusterv1.ContractVersionedObjectReference{
+						APIGroup: awsv1.GroupVersion.Group,
+						Kind:     "AWSMachineTemplate",
+						Name:     "test-template",
+					},
+				},
+			}).Build()
+		infra := configv1resourcebuilder.Infrastructure().AsAWS("cluster", "us-east-1").Build()
+		infraTypes, err := util.GetCAPITypesForInfrastructure(infra)
+		Expect(err).NotTo(HaveOccurred(), "failed to get Cluster API types for AWS infrastructure")
+
+		reconciler = &MachineSetSyncReconciler{
+			Client:        k8sClient,
+			Platform:      configv1.AWSPlatformType,
+			InfraTypes:    infraTypes,
+			CAPINamespace: capiNamespace.Name,
+			MAPINamespace: mapiNamespace.Name,
+		}
+		request = ctrl.Request{NamespacedName: client.ObjectKey{Namespace: mapiNamespace.Name, Name: capiMachineSet.Name}}
+	})
+
+	AfterEach(func() {
+		testutils.CleanupResources(Default, ctx, cfg, k8sClient, capiNamespace.Name, &clusterv1.MachineSet{}, &awsv1.AWSMachineTemplate{})
+		testutils.CleanupResources(Default, ctx, cfg, k8sClient, mapiNamespace.Name, &mapiv1beta1.MachineSet{}, &awsv1.AWSMachineTemplate{})
+	})
+
+	DescribeTable("should reconcile without recreating a Machine API MachineSet",
+		func(exists, deleting bool, finalizers, expectedFinalizers []string) {
+			if exists {
+				capiMachineSet.Finalizers = finalizers
+				Expect(k8sClient.Create(ctx, capiMachineSet)).To(Succeed(), "failed to create Cluster API MachineSet %s", client.ObjectKeyFromObject(capiMachineSet))
+
+				if deleting {
+					Expect(k8sClient.Delete(ctx, capiMachineSet)).To(Succeed(), "failed to delete Cluster API MachineSet %s", client.ObjectKeyFromObject(capiMachineSet))
+					Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(capiMachineSet), capiMachineSet)).To(Succeed(), "failed to get Cluster API MachineSet %s before first reconciliation", client.ObjectKeyFromObject(capiMachineSet))
+					Expect(capiMachineSet.DeletionTimestamp.IsZero()).To(BeFalse(), "the Cluster API MachineSet should be deleting before reconciliation")
+				}
+			}
+
+			before := capiMachineSet.DeepCopy()
+			patchCalls := 0
+			listCalls := 0
+			watchClient, err := client.NewWithWatch(cfg, client.Options{Scheme: k8sClient.Scheme()})
+			Expect(err).NotTo(HaveOccurred(), "failed to create watch client")
+
+			reconciler.Client = interceptor.NewClient(watchClient, interceptor.Funcs{
+				List: func(ctx context.Context, wrappedClient client.WithWatch, list client.ObjectList, opts ...client.ListOption) error {
+					listCalls++
+					return wrappedClient.List(ctx, list, opts...)
+				},
+				Create: func(context.Context, client.WithWatch, client.Object, ...client.CreateOption) error {
+					Fail("orphan reconciliation must not create resources")
+					return nil
+				},
+				Update: func(context.Context, client.WithWatch, client.Object, ...client.UpdateOption) error {
+					Fail("orphan reconciliation must not update resources")
+					return nil
+				},
+				Delete: func(context.Context, client.WithWatch, client.Object, ...client.DeleteOption) error {
+					Fail("orphan reconciliation without templates must not delete resources")
+					return nil
+				},
+				DeleteAllOf: func(context.Context, client.WithWatch, client.Object, ...client.DeleteAllOfOption) error {
+					Fail("orphan reconciliation must not delete collections")
+					return nil
+				},
+				Patch: func(ctx context.Context, wrappedClient client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+					patchCalls++
+					return wrappedClient.Patch(ctx, obj, patch, opts...)
+				},
+			})
+
+			expectedPatchCalls := 0
+			if deleting && slices.Contains(finalizers, machinesync.SyncFinalizer) {
+				expectedPatchCalls = 1
+			}
+
+			result, err := reconciler.Reconcile(ctx, request)
+			Expect(err).NotTo(HaveOccurred(), "first orphan reconciliation failed for %s", request.NamespacedName)
+			Expect(result).To(Equal(ctrl.Result{}))
+			Expect(patchCalls).To(Equal(expectedPatchCalls), "only deleting MachineSets with the sync finalizer should be patched")
+			Expect(listCalls).To(Equal(expectedPatchCalls), "only deleting MachineSets with the sync finalizer should list templates")
+
+			if !exists || (deleting && len(expectedFinalizers) == 0) {
+				Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(capiMachineSet), capiMachineSet)).To(Satisfy(apierrors.IsNotFound), "expected Cluster API MachineSet %s to be absent after first reconciliation", client.ObjectKeyFromObject(capiMachineSet))
+			} else {
+				Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(capiMachineSet), capiMachineSet)).To(Succeed(), "failed to get Cluster API MachineSet %s after first reconciliation", client.ObjectKeyFromObject(capiMachineSet))
+				Expect(capiMachineSet.Finalizers).To(ConsistOf(expectedFinalizers))
+				Expect(capiMachineSet.Spec).To(Equal(before.Spec))
+
+				if !deleting || !slices.Contains(finalizers, machinesync.SyncFinalizer) {
+					Expect(capiMachineSet).To(Equal(before))
+				}
+			}
+
+			By("Reconciling again without changing the remaining object")
+
+			after := capiMachineSet.DeepCopy()
+			result, err = reconciler.Reconcile(ctx, request)
+			Expect(err).NotTo(HaveOccurred(), "second orphan reconciliation failed for %s", request.NamespacedName)
+			Expect(result).To(Equal(ctrl.Result{}))
+			Expect(patchCalls).To(Equal(expectedPatchCalls), "repeated reconciliation should not patch the MachineSet again")
+			Expect(listCalls).To(Equal(expectedPatchCalls), "repeated reconciliation should not list templates again")
+
+			if exists && (!deleting || len(expectedFinalizers) > 0) {
+				Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(capiMachineSet), capiMachineSet)).To(Succeed(), "failed to get Cluster API MachineSet %s after second reconciliation", client.ObjectKeyFromObject(capiMachineSet))
+				Expect(capiMachineSet).To(Equal(after))
+			} else {
+				Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(capiMachineSet), capiMachineSet)).To(Satisfy(apierrors.IsNotFound), "expected Cluster API MachineSet %s to be absent after second reconciliation", client.ObjectKeyFromObject(capiMachineSet))
+			}
+
+			Expect(k8sClient.Get(ctx, request.NamespacedName, &mapiv1beta1.MachineSet{})).To(Satisfy(apierrors.IsNotFound), "expected Machine API MachineSet %s to be absent after repeated orphan reconciliation", request.NamespacedName)
+		},
+		Entry("deleting with only the sync finalizer", true, true, []string{machinesync.SyncFinalizer}, nil),
+		Entry("deleting with other finalizers", true, true,
+			[]string{clusterv1.MachineSetFinalizer, machinesync.SyncFinalizer, "example.com/retain"},
+			[]string{clusterv1.MachineSetFinalizer, "example.com/retain"}),
+		Entry("deleting without the sync finalizer", true, true, []string{clusterv1.MachineSetFinalizer}, []string{clusterv1.MachineSetFinalizer}),
+		Entry("not deleting with the sync finalizer", true, false, []string{machinesync.SyncFinalizer}, []string{machinesync.SyncFinalizer}),
+		Entry("not deleting without finalizers", true, false, nil, nil),
+		Entry("not deleting with only an unrelated finalizer", true, false, []string{"example.com/retain"}, []string{"example.com/retain"}),
+		Entry("neither MachineSet exists", false, false, nil, nil),
+	)
+
+	Context("when cleaning up orphan infrastructure templates", func() {
+		var watchClient client.WithWatch
+
+		createTemplate := func(name, namespace, machineSetName string) *awsv1.AWSMachineTemplate {
+			GinkgoHelper()
+
+			template := capav1builder.AWSMachineTemplate().WithName(name).WithNamespace(namespace).Build()
+			if machineSetName != "" {
+				template.Labels = map[string]string{consts.MachineSetOpenshiftLabelKey: machineSetName}
+			}
+
+			Expect(k8sClient.Create(ctx, template)).To(Succeed(), "failed to create AWSMachineTemplate %s", client.ObjectKeyFromObject(template))
+
+			return template
+		}
+
+		expectPending := func() {
+			GinkgoHelper()
+
+			result, err := reconciler.Reconcile(ctx, request)
+			Expect(err).NotTo(HaveOccurred(), "pending template cleanup reconciliation failed for %s", request.NamespacedName)
+			Expect(result).To(Equal(ctrl.Result{RequeueAfter: time.Second}))
+			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(capiMachineSet), capiMachineSet)).To(Succeed(), "failed to get Cluster API MachineSet %s while template cleanup is pending", client.ObjectKeyFromObject(capiMachineSet))
+			Expect(capiMachineSet.Finalizers).To(ConsistOf(machinesync.SyncFinalizer, "example.com/retain"))
+			Expect(k8sClient.Get(ctx, request.NamespacedName, &mapiv1beta1.MachineSet{})).To(Satisfy(apierrors.IsNotFound), "expected Machine API MachineSet %s to be absent while template cleanup is pending", request.NamespacedName)
+		}
+
+		expectComplete := func() {
+			GinkgoHelper()
+
+			result, err := reconciler.Reconcile(ctx, request)
+			Expect(err).NotTo(HaveOccurred(), "completed template cleanup reconciliation failed for %s", request.NamespacedName)
+			Expect(result).To(Equal(ctrl.Result{}))
+			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(capiMachineSet), capiMachineSet)).To(Succeed(), "failed to get Cluster API MachineSet %s after template cleanup completed", client.ObjectKeyFromObject(capiMachineSet))
+			Expect(capiMachineSet.Finalizers).To(ConsistOf("example.com/retain"))
+			Expect(k8sClient.Get(ctx, request.NamespacedName, &mapiv1beta1.MachineSet{})).To(Satisfy(apierrors.IsNotFound), "expected Machine API MachineSet %s to be absent after template cleanup completed", request.NamespacedName)
+		}
+
+		BeforeEach(func() {
+			capiMachineSet.Finalizers = []string{machinesync.SyncFinalizer, "example.com/retain"}
+			Expect(k8sClient.Create(ctx, capiMachineSet)).To(Succeed(), "failed to create Cluster API MachineSet %s", client.ObjectKeyFromObject(capiMachineSet))
+			Expect(k8sClient.Delete(ctx, capiMachineSet)).To(Succeed(), "failed to delete Cluster API MachineSet %s", client.ObjectKeyFromObject(capiMachineSet))
+			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(capiMachineSet), capiMachineSet)).To(Succeed(), "failed to get Cluster API MachineSet %s before template cleanup", client.ObjectKeyFromObject(capiMachineSet))
+
+			var err error
+
+			watchClient, err = client.NewWithWatch(cfg, client.Options{Scheme: k8sClient.Scheme()})
+			Expect(err).NotTo(HaveOccurred(), "failed to create watch client")
+		})
+
+		DescribeTable("should delete only labelled templates in the Cluster API namespace even when another template is referenced",
+			func(referenceName string) {
+				By("Creating current and historical matching templates and protected templates")
+
+				current := createTemplate("current", capiNamespace.Name, capiMachineSet.Name)
+				historical := createTemplate("historical", capiNamespace.Name, capiMachineSet.Name)
+				unlabelled := createTemplate("unlabelled", capiNamespace.Name, "")
+				otherSet := createTemplate("other-set", capiNamespace.Name, "different-machineset")
+				otherNamespace := createTemplate("other-namespace", mapiNamespace.Name, capiMachineSet.Name)
+
+				By("Selecting the infrastructure reference independently of template labels")
+
+				capiMachineSet.Spec.Template.Spec.InfrastructureRef.Name = referenceName
+				Expect(k8sClient.Update(ctx, capiMachineSet)).To(Succeed(), "failed to update infrastructure reference on Cluster API MachineSet %s", client.ObjectKeyFromObject(capiMachineSet))
+
+				expectPending()
+				Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(current), current)).To(Satisfy(apierrors.IsNotFound), "expected AWSMachineTemplate %s to be absent after current template cleanup", client.ObjectKeyFromObject(current))
+				Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(historical), historical)).To(Satisfy(apierrors.IsNotFound), "expected AWSMachineTemplate %s to be absent after historical template cleanup", client.ObjectKeyFromObject(historical))
+
+				for _, template := range []*awsv1.AWSMachineTemplate{unlabelled, otherSet, otherNamespace} {
+					before := template.DeepCopy()
+					Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(template), template)).To(Succeed(), "failed to get AWSMachineTemplate %s after protected template cleanup", client.ObjectKeyFromObject(template))
+					Expect(template).To(Equal(before))
+				}
+
+				expectComplete()
+			},
+			Entry("a matching current template", "current"),
+			Entry("an unlabelled template", "unlabelled"),
+			Entry("another MachineSet's template", "other-set"),
+			Entry("a template in another namespace", "other-namespace"),
+		)
+
+		DescribeTable("should wait for templates held by another finalizer without repeating deletion",
+			func(alreadyDeleting bool) {
+				template := createTemplate("held", capiNamespace.Name, capiMachineSet.Name)
+				template.Finalizers = []string{"example.com/retain"}
+				Expect(k8sClient.Update(ctx, template)).To(Succeed(), "failed to add retention finalizer to AWSMachineTemplate %s", client.ObjectKeyFromObject(template))
+
+				if alreadyDeleting {
+					Expect(k8sClient.Delete(ctx, template)).To(Succeed(), "failed to delete AWSMachineTemplate %s before reconciling an already deleting template", client.ObjectKeyFromObject(template))
+				}
+
+				deleteCalls := 0
+				reconciler.Client = interceptor.NewClient(watchClient, interceptor.Funcs{
+					Delete: func(ctx context.Context, wrappedClient client.WithWatch, obj client.Object, opts ...client.DeleteOption) error {
+						deleteCalls++
+						return wrappedClient.Delete(ctx, obj, opts...)
+					},
+				})
+
+				expectPending()
+				expectPending()
+
+				if alreadyDeleting {
+					Expect(deleteCalls).To(BeZero())
+				} else {
+					Expect(deleteCalls).To(Equal(1))
+				}
+
+				Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(template), template)).To(Succeed(), "failed to get AWSMachineTemplate %s while held by another finalizer", client.ObjectKeyFromObject(template))
+				Expect(template.DeletionTimestamp.IsZero()).To(BeFalse())
+				Expect(template.Finalizers).To(ConsistOf("example.com/retain"))
+				template.Finalizers = nil
+				Expect(k8sClient.Update(ctx, template)).To(Succeed(), "failed to remove retention finalizer from AWSMachineTemplate %s", client.ObjectKeyFromObject(template))
+				expectComplete()
+			},
+			Entry("not yet deleting", false),
+			Entry("already deleting", true),
+		)
+
+		It("should tolerate a stale cached list and a template disappearing before deletion", func() {
+			template := createTemplate("stale", capiNamespace.Name, capiMachineSet.Name)
+			Expect(k8sClient.Delete(ctx, template)).To(Succeed(), "failed to delete AWSMachineTemplate %s before simulating a stale cached list", client.ObjectKeyFromObject(template))
+
+			listCalls := 0
+			deleteCalls := 0
+			reconciler.Client = interceptor.NewClient(watchClient, interceptor.Funcs{
+				List: func(ctx context.Context, wrappedClient client.WithWatch, list client.ObjectList, opts ...client.ListOption) error {
+					listCalls++
+					if listCalls == 1 {
+						list.(*awsv1.AWSMachineTemplateList).Items = []awsv1.AWSMachineTemplate{*template.DeepCopy()}
+						return nil
+					}
+
+					return wrappedClient.List(ctx, list, opts...)
+				},
+				Delete: func(ctx context.Context, wrappedClient client.WithWatch, obj client.Object, opts ...client.DeleteOption) error {
+					deleteCalls++
+					return wrappedClient.Delete(ctx, obj, opts...)
+				},
+			})
+
+			expectPending()
+			Expect(deleteCalls).To(Equal(1))
+			expectComplete()
+			Expect(listCalls).To(Equal(2))
+		})
+
+		It("should not delete a replacement template observed under a stale cached name", func() {
+			template := createTemplate("reused-name", capiNamespace.Name, capiMachineSet.Name)
+			Expect(k8sClient.Delete(ctx, template)).To(Succeed(), "failed to delete AWSMachineTemplate %s before creating a replacement template", client.ObjectKeyFromObject(template))
+
+			replacement := createTemplate(template.Name, capiNamespace.Name, "")
+			listCalls := 0
+			reconciler.Client = interceptor.NewClient(watchClient, interceptor.Funcs{
+				List: func(ctx context.Context, wrappedClient client.WithWatch, list client.ObjectList, opts ...client.ListOption) error {
+					listCalls++
+					if listCalls == 1 {
+						list.(*awsv1.AWSMachineTemplateList).Items = []awsv1.AWSMachineTemplate{*template.DeepCopy()}
+						return nil
+					}
+
+					return wrappedClient.List(ctx, list, opts...)
+				},
+			})
+
+			_, err := reconciler.Reconcile(ctx, request)
+			Expect(err).To(Satisfy(apierrors.IsConflict), "expected a deletion conflict for replaced AWSMachineTemplate %s", client.ObjectKeyFromObject(replacement))
+			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(capiMachineSet), capiMachineSet)).To(Succeed(), "failed to get Cluster API MachineSet %s after replacement template deletion conflict", client.ObjectKeyFromObject(capiMachineSet))
+			Expect(capiMachineSet.Finalizers).To(ContainElement(machinesync.SyncFinalizer))
+			expectComplete()
+
+			before := replacement.DeepCopy()
+			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(replacement), replacement)).To(Succeed(), "failed to get AWSMachineTemplate %s after replacement template cleanup retry", client.ObjectKeyFromObject(replacement))
+			Expect(replacement).To(Equal(before))
+		})
+
+		DescribeTable("should preserve a template relabelled after the cached ownership observation",
+			func(machineSetName string) {
+				template := createTemplate("relabelled", capiNamespace.Name, capiMachineSet.Name)
+				stale := template.DeepCopy()
+
+				if machineSetName == "" {
+					delete(template.Labels, consts.MachineSetOpenshiftLabelKey)
+				} else {
+					template.Labels[consts.MachineSetOpenshiftLabelKey] = machineSetName
+				}
+
+				Expect(k8sClient.Update(ctx, template)).To(Succeed(), "failed to update ownership label on AWSMachineTemplate %s", client.ObjectKeyFromObject(template))
+				Expect(template.UID).To(Equal(stale.UID))
+				Expect(template.ResourceVersion).NotTo(Equal(stale.ResourceVersion))
+
+				before := template.DeepCopy()
+				listCalls := 0
+				reconciler.Client = interceptor.NewClient(watchClient, interceptor.Funcs{
+					List: func(ctx context.Context, wrappedClient client.WithWatch, list client.ObjectList, opts ...client.ListOption) error {
+						listCalls++
+						if listCalls == 1 {
+							list.(*awsv1.AWSMachineTemplateList).Items = []awsv1.AWSMachineTemplate{*stale.DeepCopy()}
+							return nil
+						}
+
+						return wrappedClient.List(ctx, list, opts...)
+					},
+				})
+
+				_, err := reconciler.Reconcile(ctx, request)
+				Expect(err).To(Satisfy(apierrors.IsConflict), "expected a deletion conflict for relabelled AWSMachineTemplate %s", client.ObjectKeyFromObject(template))
+				Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(capiMachineSet), capiMachineSet)).To(Succeed(), "failed to get Cluster API MachineSet %s after relabelled template deletion conflict", client.ObjectKeyFromObject(capiMachineSet))
+				Expect(capiMachineSet.Finalizers).To(ConsistOf(machinesync.SyncFinalizer, "example.com/retain"))
+				Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(template), template)).To(Succeed(), "failed to get AWSMachineTemplate %s after relabelled template deletion conflict", client.ObjectKeyFromObject(template))
+				Expect(template).To(Equal(before))
+				expectComplete()
+				Expect(listCalls).To(Equal(2))
+				Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(template), template)).To(Succeed(), "failed to get AWSMachineTemplate %s after relabelled template cleanup retry", client.ObjectKeyFromObject(template))
+				Expect(template).To(Equal(before))
+			},
+			Entry("the ownership label was removed", ""),
+			Entry("the ownership label now identifies another MachineSet", "different-machineset"),
+		)
+
+		DescribeTable("should propagate template cleanup errors and succeed on retry",
+			func(failList bool) {
+				template := createTemplate("retry", capiNamespace.Name, capiMachineSet.Name)
+				cleanupErr := errors.New("injected template cleanup failure")
+				failNext := true
+				reconciler.Client = interceptor.NewClient(watchClient, interceptor.Funcs{
+					List: func(ctx context.Context, wrappedClient client.WithWatch, list client.ObjectList, opts ...client.ListOption) error {
+						if failList && failNext {
+							failNext = false
+							return cleanupErr
+						}
+
+						return wrappedClient.List(ctx, list, opts...)
+					},
+					Delete: func(ctx context.Context, wrappedClient client.WithWatch, obj client.Object, opts ...client.DeleteOption) error {
+						if !failList && failNext {
+							failNext = false
+							return cleanupErr
+						}
+
+						return wrappedClient.Delete(ctx, obj, opts...)
+					},
+				})
+
+				_, err := reconciler.Reconcile(ctx, request)
+				Expect(err).To(MatchError(cleanupErr), "expected reconciliation to propagate the injected template cleanup error (failList=%t) for %s", failList, request.NamespacedName)
+				Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(capiMachineSet), capiMachineSet)).To(Succeed(), "failed to get Cluster API MachineSet %s after injected template cleanup failure", client.ObjectKeyFromObject(capiMachineSet))
+				Expect(capiMachineSet.Finalizers).To(ContainElement(machinesync.SyncFinalizer))
+				Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(template), template)).To(Succeed(), "failed to get AWSMachineTemplate %s after injected template cleanup failure", client.ObjectKeyFromObject(template))
+				expectPending()
+				expectComplete()
+			},
+			Entry("list failure", true),
+			Entry("delete failure", false),
+		)
+	})
+
+	It("should return a finalizer patch failure and succeed on retry", func() {
+		capiMachineSet.Finalizers = []string{machinesync.SyncFinalizer, clusterv1.MachineSetFinalizer}
+		Expect(k8sClient.Create(ctx, capiMachineSet)).To(Succeed(), "failed to create Cluster API MachineSet %s", client.ObjectKeyFromObject(capiMachineSet))
+		Expect(k8sClient.Delete(ctx, capiMachineSet)).To(Succeed(), "failed to delete Cluster API MachineSet %s", client.ObjectKeyFromObject(capiMachineSet))
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(capiMachineSet), capiMachineSet)).To(Succeed(), "failed to get Cluster API MachineSet %s before finalizer patch failure", client.ObjectKeyFromObject(capiMachineSet))
+		before := capiMachineSet.DeepCopy()
+
+		patchErr := errors.New("injected finalizer patch failure")
+		patchCalls := 0
+		watchClient, err := client.NewWithWatch(cfg, client.Options{Scheme: k8sClient.Scheme()})
+		Expect(err).NotTo(HaveOccurred(), "failed to create watch client")
+
+		reconciler.Client = interceptor.NewClient(watchClient, interceptor.Funcs{
+			Patch: func(ctx context.Context, wrappedClient client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+				patchCalls++
+				if patchCalls == 1 {
+					return patchErr
+				}
+
+				return wrappedClient.Patch(ctx, obj, patch, opts...)
+			},
+		})
+
+		_, err = reconciler.Reconcile(ctx, request)
+		Expect(err).To(MatchError(patchErr), "expected reconciliation to propagate the injected finalizer patch error for %s", request.NamespacedName)
+		Expect(patchCalls).To(Equal(1))
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(capiMachineSet), capiMachineSet)).To(Succeed(), "failed to get Cluster API MachineSet %s after injected finalizer patch failure", client.ObjectKeyFromObject(capiMachineSet))
+		Expect(capiMachineSet).To(Equal(before))
+
+		result, err := reconciler.Reconcile(ctx, request)
+		Expect(err).NotTo(HaveOccurred(), "transient finalizer patch retry reconciliation failed for %s", request.NamespacedName)
+		Expect(result).To(Equal(ctrl.Result{}))
+		Expect(patchCalls).To(Equal(2))
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(capiMachineSet), capiMachineSet)).To(Succeed(), "failed to get Cluster API MachineSet %s after finalizer patch retry", client.ObjectKeyFromObject(capiMachineSet))
+		Expect(capiMachineSet.Finalizers).To(ConsistOf(clusterv1.MachineSetFinalizer))
+		Expect(k8sClient.Get(ctx, request.NamespacedName, &mapiv1beta1.MachineSet{})).To(Satisfy(apierrors.IsNotFound), "expected Machine API MachineSet %s to be absent after finalizer patch retry", request.NamespacedName)
+	})
+})
 
 var _ = JustAfterEach(func() {
 	if CurrentSpecReport().Failed() {
@@ -1147,6 +1593,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 		})
 	})
 
+	// No-change, finalizer and retry behavior is covered by "Reconciling orphan Cluster API MachineSets".
 	Context("when the MAPI machine set does not exist and the CAPI machine set does", func() {
 		BeforeEach(func() {
 			By("Creating the CAPI machine set")
@@ -1154,13 +1601,6 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 			capiMachineSet = capiMachineSetBuilder.Build()
 
 			Eventually(kCreate(ctx, capiMachineSet)).Should(Succeed())
-		})
-
-		It("should not make any changes to the CAPI machine set", func() {
-			resourceVersion := capiMachineSet.GetResourceVersion()
-			Consistently(k.Object(capiMachineSet), timeout).Should(
-				HaveField("ResourceVersion", Equal(resourceVersion)),
-			)
 		})
 
 		It("should not create a MAPI machine set", func() {

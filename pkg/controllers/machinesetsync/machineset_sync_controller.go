@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"time"
 
 	"github.com/go-logr/logr"
 	configv1 "github.com/openshift/api/config/v1"
@@ -52,6 +53,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -172,7 +174,16 @@ func (r *MachineSetSyncReconciler) Reconcile(ctx context.Context, req reconcile.
 	}
 
 	if mapiMachineSet == nil {
-		logger.Info("Only CAPI machine set found, nothing to do")
+		if !controllerutil.ContainsFinalizer(capiMachineSet, machinesync.SyncFinalizer) {
+			return ctrl.Result{}, nil
+		}
+
+		if pending, err := r.reconcileCAPItoMAPIMachineSetDeletion(ctx, nil, capiMachineSet); err != nil {
+			return ctrl.Result{}, err
+		} else if pending {
+			return ctrl.Result{RequeueAfter: time.Second}, nil
+		}
+
 		return ctrl.Result{}, nil
 	}
 
@@ -402,7 +413,7 @@ func filterOutdatedInfraMachineTemplates(infraMachineTemplateList client.ObjectL
 func (r *MachineSetSyncReconciler) deleteOutdatedCAPIInfraMachineTemplates(ctx context.Context, mapiMachineSet *mapiv1beta1.MachineSet, newCAPIInfraMachineTemplateName string) (bool, error) {
 	logger := logf.FromContext(ctx)
 
-	outdatedTemplates, err := r.listOutdatedInfraMachineTemplates(ctx, mapiMachineSet, newCAPIInfraMachineTemplateName)
+	outdatedTemplates, err := r.listOutdatedInfraMachineTemplates(ctx, mapiMachineSet.Name, newCAPIInfraMachineTemplateName)
 	if err != nil {
 		return false, err
 	}
@@ -436,10 +447,10 @@ func (r *MachineSetSyncReconciler) deleteOutdatedCAPIInfraMachineTemplates(ctx c
 }
 
 // listOutdatedInfraMachineTemplates lists and filters outdated infrastructure machine templates.
-func (r *MachineSetSyncReconciler) listOutdatedInfraMachineTemplates(ctx context.Context, mapiMachineSet *mapiv1beta1.MachineSet, newCAPIInfraMachineTemplateName string) ([]client.Object, error) {
+func (r *MachineSetSyncReconciler) listOutdatedInfraMachineTemplates(ctx context.Context, machineSetName, newCAPIInfraMachineTemplateName string) ([]client.Object, error) {
 	logger := logf.FromContext(ctx)
 
-	machineSetMAPILabelSelector := labels.SelectorFromSet(map[string]string{controllers.MachineSetOpenshiftLabelKey: mapiMachineSet.Name})
+	machineSetMAPILabelSelector := labels.SelectorFromSet(map[string]string{controllers.MachineSetOpenshiftLabelKey: machineSetName})
 	listOptions := []client.ListOption{
 		client.InNamespace(r.CAPINamespace),
 		client.MatchingLabelsSelector{Selector: machineSetMAPILabelSelector},
@@ -1258,13 +1269,36 @@ func (r *MachineSetSyncReconciler) reconcileCAPItoMAPIMachineSetDeletionCAPINotD
 func (r *MachineSetSyncReconciler) reconcileCAPItoMAPIMachineSetDeletionNoMAPI(ctx context.Context, capiMachineSet *clusterv1.MachineSet) (bool, error) {
 	logger := logf.FromContext(ctx)
 
+	templates, err := r.listOutdatedInfraMachineTemplates(ctx, capiMachineSet.Name, "")
+	if err != nil {
+		return true, err
+	}
+
+	if len(templates) > 0 {
+		for _, template := range templates {
+			if !template.GetDeletionTimestamp().IsZero() {
+				continue
+			}
+
+			preconditions := client.Preconditions{
+				UID:             ptr.To(template.GetUID()),
+				ResourceVersion: ptr.To(template.GetResourceVersion()),
+			}
+			if err := client.IgnoreNotFound(r.Delete(ctx, template, preconditions)); err != nil {
+				return true, fmt.Errorf("failed to delete Cluster API infrastructure machine template: %w", err)
+			}
+		}
+
+		return true, nil
+	}
+
 	logger.Info("Machine API machine set does not exist, removing corresponding Cluster API machine set sync finalizer")
-	// We don't have  a mapi machine set to clean up. Just let the CAPI operators function as normal, and remove the CAPI sync finalizer.
+
 	if _, err := util.RemoveFinalizer(ctx, r.Client, capiMachineSet, machinesync.SyncFinalizer); err != nil {
 		return true, fmt.Errorf("failed to remove finalizer from Cluster API machine set: %w", err)
 	}
 
-	return true, nil
+	return false, nil
 }
 
 // reconcileCAPItoMAPIMachineSetDeletionNormal handles deletion when both CAPI and MAPI machine sets exist,
