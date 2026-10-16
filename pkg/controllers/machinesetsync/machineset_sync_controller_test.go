@@ -98,7 +98,7 @@ var _ = Describe("Reconciling orphan Cluster API MachineSets", func() {
 				},
 			}).Build()
 		infra := configv1resourcebuilder.Infrastructure().AsAWS("cluster", "us-east-1").Build()
-		infraTypes, _, err := util.GetCAPITypesForInfrastructure(infra)
+		infraTypes, err := util.GetCAPITypesForInfrastructure(infra)
 		Expect(err).NotTo(HaveOccurred(), "failed to get Cluster API types for AWS infrastructure")
 
 		reconciler = &MachineSetSyncReconciler{
