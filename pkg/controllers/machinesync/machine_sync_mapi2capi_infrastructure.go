@@ -25,6 +25,7 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
@@ -74,7 +75,7 @@ func (r *MachineSyncReconciler) createOrUpdateCAPIInfraMachine(ctx context.Conte
 	}
 
 	// Update Cluster API Infrastructure machine metadata if needed.
-	metadataUpdated, err := r.ensureCAPIInfraMachineMetadataUpdated(ctx, sourceMAPIMachine, diff, convertedCAPIInfraMachine)
+	metadataUpdated, err := r.ensureCAPIInfraMachineMetadataUpdated(ctx, sourceMAPIMachine, existingCAPIInfraMachine, convertedCAPIInfraMachine)
 	if err != nil {
 		return ctrl.Result{}, syncronizationIsProgressingFalse, fmt.Errorf("failed to update Cluster API Infrastructure machine metadata: %w", err)
 	}
@@ -122,22 +123,39 @@ func (r *MachineSyncReconciler) ensureCAPIInfraMachine(ctx context.Context, sour
 	return createdCAPIInfraMachine, nil
 }
 
-// ensureCAPIInfraMachineMetadataUpdated updates the Cluster API Infrastructure machine if changes are detected to the metadata or spec (if possible).
-func (r *MachineSyncReconciler) ensureCAPIInfraMachineMetadataUpdated(ctx context.Context, mapiMachine *mapiv1beta1.Machine, diff util.DiffResult, updatedOrCreatedCAPIInfraMachine client.Object) (bool, error) {
+// ensureCAPIInfraMachineMetadataUpdated applies metadata to the Cluster API Infrastructure machine.
+func (r *MachineSyncReconciler) ensureCAPIInfraMachineMetadataUpdated(ctx context.Context, mapiMachine *mapiv1beta1.Machine, existingCAPIInfraMachine, convertedCAPIInfraMachine client.Object) (bool, error) {
 	logger := logf.FromContext(ctx)
 
-	// If there are no spec changes, return early.
-	if !diff.HasMetadataChanges() {
-		return false, nil
+	metadataUpdated, err := r.applyAuthoritativeCAPIMetadata(ctx, existingCAPIInfraMachine, convertedCAPIInfraMachine)
+	if err != nil {
+		logger.Error(err, "Failed to apply Cluster API Infrastructure machine metadata")
+
+		updateErr := fmt.Errorf("failed to apply Cluster API Infrastructure machine metadata: %w", err)
+		if condErr := r.applySynchronizedConditionWithPatch(ctx, mapiMachine, corev1.ConditionFalse, reasonFailedToUpdateCAPIMachine, updateErr.Error(), nil); condErr != nil {
+			return false, utilerrors.NewAggregate([]error{updateErr, condErr})
+		}
+
+		return false, updateErr
 	}
 
-	logger.Info("Changes detected for Cluster API Infrastructure machine. Updating it", "diff", fmt.Sprintf("%+v", diff))
+	if equality.Semantic.DeepEqual(existingCAPIInfraMachine.GetOwnerReferences(), convertedCAPIInfraMachine.GetOwnerReferences()) {
+		return metadataUpdated, nil
+	}
 
-	if err := r.Update(ctx, updatedOrCreatedCAPIInfraMachine); err != nil {
-		logger.Error(err, "Failed to update Cluster API Infrastructure machine")
+	patchBaseObject, ok := existingCAPIInfraMachine.DeepCopyObject().(client.Object)
+	if !ok {
+		return false, fmt.Errorf("failed to assert existingCAPIInfraMachine: %w", errAssertingInfrasMachineClientObject)
+	}
 
-		updateErr := fmt.Errorf("failed to update Cluster API Infrastructure machine: %w", err)
+	patchBase := client.MergeFrom(patchBaseObject)
 
+	existingCAPIInfraMachine.SetOwnerReferences(convertedCAPIInfraMachine.GetOwnerReferences())
+
+	if err := r.Patch(ctx, existingCAPIInfraMachine, patchBase); err != nil {
+		logger.Error(err, "Failed to update Cluster API Infrastructure machine owner references")
+
+		updateErr := fmt.Errorf("failed to update Cluster API Infrastructure machine owner references: %w", err)
 		if condErr := r.applySynchronizedConditionWithPatch(ctx, mapiMachine, corev1.ConditionFalse, reasonFailedToUpdateCAPIMachine, updateErr.Error(), nil); condErr != nil {
 			return false, utilerrors.NewAggregate([]error{updateErr, condErr})
 		}
