@@ -18,24 +18,25 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
+	"net/http"
 	"path/filepath"
+	"sync"
+	"time"
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	k8serrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/utils/clock"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	k8syaml "sigs.k8s.io/yaml"
 
-	configv1 "github.com/openshift/api/config/v1"
-	"github.com/openshift/cluster-capi-operator/pkg/controllers"
-	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 	"github.com/openshift/library-go/pkg/operator/events"
 	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
@@ -48,18 +49,22 @@ type Assets interface {
 }
 
 type staticResourceInstallerController struct {
-	assetNames []string // The names of the assets to install.
-	kubeClient kubernetes.Interface
+	assetNames           []string // The names of the assets to install.
+	kubeClient           kubernetes.Interface
+	eventObjectReference v1.ObjectReference
 
-	assets        Assets
-	resourceCache resourceapply.ResourceCache
+	assets                  Assets
+	resourceCache           resourceapply.ResourceCache
+	webhookReadinessChecker healthz.Checker
+	mutex                   sync.Mutex
 }
 
 // NewStaticResourceInstallerController creates a new static resource installer controller.
-func NewStaticResourceInstallerController(assets Assets) *staticResourceInstallerController {
+func NewStaticResourceInstallerController(assets Assets, eventObjectReference v1.ObjectReference) *staticResourceInstallerController {
 	return &staticResourceInstallerController{
-		assets:        assets,
-		resourceCache: resourceapply.NewResourceCache(),
+		assets:               assets,
+		eventObjectReference: eventObjectReference,
+		resourceCache:        resourceapply.NewResourceCache(),
 	}
 }
 
@@ -80,19 +85,15 @@ func (c *staticResourceInstallerController) SetupWithManager(ctx context.Context
 		return fmt.Errorf("failed to create kube client: %w", err)
 	}
 
-	build := ctrl.NewControllerManagedBy(mgr).
-		Named("static-resource-installer").
-		// We only want to reconcile an initial time when the cluster operator is created
-		// in the cache, later reconciles will happen based on watches for individual assets.
-		For(&configv1.ClusterOperator{}, builder.WithPredicates(predicate.Funcs{
-			CreateFunc:  func(e event.CreateEvent) bool { return e.Object.GetName() == controllers.ClusterOperatorName },
-			UpdateFunc:  func(e event.UpdateEvent) bool { return false },
-			DeleteFunc:  func(e event.DeleteEvent) bool { return false },
-			GenericFunc: func(e event.GenericEvent) bool { return false },
-		}))
+	c.webhookReadinessChecker = mgr.GetWebhookServer().StartedChecker()
 
-	// Watch each asset with a predicate and map to the cluster operator
-	// so that we trigger a reconcile on writes to any asset.
+	if err := mgr.Add(initialResourceInstaller{controller: c}); err != nil {
+		return fmt.Errorf("failed to add initial resource installer: %w", err)
+	}
+
+	build := ctrl.NewControllerManagedBy(mgr).Named("static-resource-installer")
+
+	// Watch each asset to correct drift after the initial installation.
 	for _, asset := range c.assetNames {
 		obj, err := assetToObject(c.assets, asset)
 		if err != nil {
@@ -101,7 +102,7 @@ func (c *staticResourceInstallerController) SetupWithManager(ctx context.Context
 
 		build = build.Watches(
 			obj,
-			handler.EnqueueRequestsFromMapFunc(operatorstatus.ToClusterOperator),
+			&handler.EnqueueRequestForObject{},
 			builder.WithPredicates(objectNamePredicate(obj.GetName())),
 		)
 	}
@@ -113,16 +114,50 @@ func (c *staticResourceInstallerController) SetupWithManager(ctx context.Context
 	return nil
 }
 
+type initialResourceInstaller struct {
+	controller *staticResourceInstallerController
+}
+
+// Start installs static resources once leadership is acquired and waits for cancellation.
+func (i initialResourceInstaller) Start(ctx context.Context) error {
+	if err := waitForWebhookServer(ctx, i.controller.webhookReadinessChecker); err != nil {
+		return fmt.Errorf("failed waiting for webhook server: %w", err)
+	}
+
+	if _, err := i.controller.Reconcile(ctx, ctrl.Request{}); err != nil {
+		return fmt.Errorf("failed to install initial static resources: %w", err)
+	}
+
+	<-ctx.Done()
+
+	return nil
+}
+
+// NeedLeaderElection ensures initial installation is performed only by the active manager.
+func (i initialResourceInstaller) NeedLeaderElection() bool {
+	return true
+}
+
+func waitForWebhookServer(ctx context.Context, checker healthz.Checker) error {
+	if err := wait.PollUntilContextCancel(ctx, time.Second, true, func(ctx context.Context) (bool, error) {
+		return checker(&http.Request{}) == nil, nil
+	}); err != nil {
+		return fmt.Errorf("webhook server did not become ready: %w", err)
+	}
+
+	return nil
+}
+
 // Reconcile reconciles the static resource installer controller.
 // This will apply the static manifests from the assets member to the cluster.
 func (c *staticResourceInstallerController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
 	results := resourceapply.ApplyDirectly(
 		ctx,
 		resourceapply.NewKubeClientHolder(c.kubeClient),
-		events.NewKubeRecorder(c.kubeClient.CoreV1().Events("default"), "static-resource-installer", &v1.ObjectReference{
-			Kind: "ClusterOperator",
-			Name: "cluster-api",
-		}, clock.RealClock{}),
+		events.NewKubeRecorder(c.kubeClient.CoreV1().Events("default"), "static-resource-installer", &c.eventObjectReference, clock.RealClock{}),
 		c.resourceCache,
 		c.assets.Asset,
 		c.assetNames...,
