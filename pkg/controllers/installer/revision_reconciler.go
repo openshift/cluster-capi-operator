@@ -34,6 +34,7 @@ import (
 	"pkg.package-operator.run/boxcutter"
 	"pkg.package-operator.run/boxcutter/machinery"
 	machinerytypes "pkg.package-operator.run/boxcutter/machinery/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/openshift/cluster-capi-operator/pkg/revisiongenerator"
@@ -156,8 +157,12 @@ func (r *revisionReconciler) reconcileRevisions(ctx context.Context, apiRevision
 
 	// If this revision reconciled successfully, we call Teardown instead of Reconcile for older revisions.
 	var tailHandler revisionHandler
+
 	if isComplete {
-		tailHandler = r.teardownRevisions
+		unmanagedCRDs := sets.New(head.UnmanagedCustomResourceDefinitions...)
+		tailHandler = func(ctx context.Context, revisions []operatorv1alpha1.ClusterAPIInstallerRevision) (bool, []string, []error) {
+			return r.teardownRevisions(ctx, revisions, unmanagedCRDs)
+		}
 	} else {
 		tailHandler = r.reconcileRevisions
 	}
@@ -175,7 +180,15 @@ func (r *revisionReconciler) reconcileRevision(ctx context.Context, apiRevision 
 		return false, "", fmt.Errorf("error creating installer revision from API revision %s: %w", apiRevision.Name, reconcile.TerminalError(err))
 	}
 
-	bcRevision := toBoxcutterRevision(revision, r.collectObjects)
+	proxyEnvVars, err := util.GetProxyEnvVars(ctx, r.proxyReader())
+	if err != nil {
+		return false, "", fmt.Errorf("getting cluster-wide proxy configuration: %w", err)
+	}
+	bcRevision, err := toBoxcutterRevision(revision, proxyEnvVars, r.collectObjects)
+	if err != nil {
+		return false, "", fmt.Errorf("error building boxcutter revision from API revision %s: %w", apiRevision.Name, reconcile.TerminalError(err))
+	}
+
 	phases := bcRevision.GetPhases()
 
 	totalObjects := 0
@@ -252,7 +265,8 @@ func (r *revisionReconciler) handlePhaseResults(revisionName operatorv1alpha1.Re
 			}
 		}
 
-		r.log.Info("Phase result",
+		r.log.Info(
+			"Phase result",
 			"complete", phase.IsComplete(),
 			"objects", len(objects),
 			"actions", actionCounts,
@@ -264,7 +278,8 @@ func (r *revisionReconciler) handlePhaseResults(revisionName operatorv1alpha1.Re
 		return nil
 	}
 
-	return fmt.Errorf("revision %s: %w: %s",
+	return fmt.Errorf(
+		"revision %s: %w: %s",
 		revisionName,
 		reconcile.TerminalError(errCollision),
 		strings.Join(collisions, ", "),
@@ -316,22 +331,33 @@ func handlePhaseObject(log logr.Logger, obj machinery.ObjectResult, actionCounts
 	return result
 }
 
-func (r *revisionReconciler) teardownRevisions(ctx context.Context, apiRevisions []operatorv1alpha1.ClusterAPIInstallerRevision) (bool, []string, []error) {
+func (r *revisionReconciler) teardownRevisions(
+	ctx context.Context,
+	apiRevisions []operatorv1alpha1.ClusterAPIInstallerRevision,
+	unmanagedCRDs sets.Set[string],
+) (bool, []string, []error) {
 	if len(apiRevisions) == 0 {
 		return true, nil, nil
 	}
 
 	head := apiRevisions[0]
 	tail := apiRevisions[1:]
+	tailHandler := func(ctx context.Context, revisions []operatorv1alpha1.ClusterAPIInstallerRevision) (bool, []string, []error) {
+		return r.teardownRevisions(ctx, revisions, unmanagedCRDs)
+	}
 
-	return mergeWithTail(ctx, r.teardownRevisions, tail)(r.teardownRevision(ctx, head))
+	return mergeWithTail(ctx, tailHandler, tail)(r.teardownRevision(ctx, head, unmanagedCRDs))
 }
 
 // teardownRevision tear down a single revision and returns:
 // * a summary message
 // * a boolean indicating if the revision was torn down completely
 // * an error if any occurred.
-func (r *revisionReconciler) teardownRevision(ctx context.Context, apiRevision operatorv1alpha1.ClusterAPIInstallerRevision) (bool, string, error) {
+func (r *revisionReconciler) teardownRevision(
+	ctx context.Context,
+	apiRevision operatorv1alpha1.ClusterAPIInstallerRevision,
+	unmanagedCRDs sets.Set[string],
+) (bool, string, error) {
 	revision, err := revisiongenerator.NewInstallerRevisionFromAPI(apiRevision, r.providerProfiles)
 	if err != nil {
 		// We can't teardown this revision if we can't create it, so we consider it complete.
@@ -340,7 +366,17 @@ func (r *revisionReconciler) teardownRevision(ctx context.Context, apiRevision o
 
 	revisionName := revision.RevisionName()
 
-	bcRevision := toBoxcutterRevision(revision, r.collectObjects)
+	proxyEnvVars, err := util.GetProxyEnvVars(ctx, r.proxyReader())
+	if err != nil {
+		return true, "", fmt.Errorf("getting cluster-wide proxy configuration: %w", err)
+	}
+
+	bcRevision, err := toBoxcutterRevision(revision, proxyEnvVars, r.collectObjects)
+	if err != nil {
+		// We can't teardown this revision if we can't build it, so we consider it complete.
+		return true, "", fmt.Errorf("error building boxcutter revision from API revision %s: %w", apiRevision.Name, reconcile.TerminalError(err))
+	}
+
 	phases := bcRevision.GetPhases()
 
 	totalObjects := 0
@@ -350,7 +386,18 @@ func (r *revisionReconciler) teardownRevision(ctx context.Context, apiRevision o
 
 	r.log.Info("Tearing down revision", "revision", revisionName, "phases", len(phases), "totalObjects", totalObjects)
 
-	result, err := r.revisionEngine.Teardown(ctx, bcRevision, boxcutter.WithAggregatePhaseTeardownErrors())
+	teardownOptions := []boxcutter.RevisionTeardownOption{boxcutter.WithAggregatePhaseTeardownErrors()}
+
+	for _, phase := range phases {
+		for _, obj := range phase.GetObjects() {
+			if obj.GetObjectKind().GroupVersionKind().GroupKind() == crdGroupKind() && unmanagedCRDs.Has(obj.GetName()) {
+				teardownOptions = append(teardownOptions,
+					boxcutter.WithObjectTeardownOptions(obj, machinerytypes.WithOrphan()))
+			}
+		}
+	}
+
+	result, err := r.revisionEngine.Teardown(ctx, bcRevision, teardownOptions...)
 	r.log.Info("Revision teardown completed", "revision", revisionName)
 
 	if err != nil {
@@ -375,6 +422,14 @@ func (r *revisionReconciler) teardownRevision(ctx context.Context, apiRevision o
 	return false, message, nil
 }
 
+func (r *revisionReconciler) proxyReader() client.Reader {
+	if r.apiReader != nil {
+		return r.apiReader
+	}
+
+	return r.client
+}
+
 func (r *revisionReconciler) logTeardownPhaseResults(revisionName operatorv1alpha1.RevisionName, result machinery.RevisionTeardownResult) {
 	for _, phase := range result.GetPhases() {
 		gone := phase.Gone()
@@ -394,14 +449,16 @@ func (r *revisionReconciler) logTeardownPhaseResults(revisionName operatorv1alph
 		*/
 
 		for _, obj := range waiting {
-			r.log.Info("Object waiting",
+			r.log.Info(
+				"Object waiting",
 				"revision", revisionName,
 				"phase", phase.GetName(),
 				"object", obj.String(),
 			)
 		}
 
-		r.log.Info("Phase teardown result",
+		r.log.Info(
+			"Phase teardown result",
 			"revision", revisionName,
 			"phase", phase.GetName(),
 			"complete", phase.IsComplete(),
@@ -500,7 +557,8 @@ func (r *revisionReconciler) resolveCollectedObjects() error {
 					// Resource type doesn't exist - terminal error
 					return fmt.Errorf(
 						"manifest references non-existent resource type %s (not a CRD in manifests and not found in cluster): %w",
-						collectedRef.gvk.String(), reconcile.TerminalError(err))
+						collectedRef.gvk.String(), reconcile.TerminalError(err),
+					)
 				}
 
 				// Transient errors are non-terminal
