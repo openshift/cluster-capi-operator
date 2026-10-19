@@ -21,6 +21,7 @@ require (
 	github.com/google/go-cmp v0.7.0
 	github.com/metal3-io/baremetal-operator/apis v0.5.1
 	github.com/metal3-io/cluster-api-provider-metal3/api v1.11.2
+	github.com/nutanix-cloud-native/cluster-api-provider-nutanix v1.10.3
 	github.com/onsi/ginkgo/v2 v2.32.0
 	github.com/onsi/gomega v1.42.1
 	github.com/openshift/api v0.0.0-20261002115817-f8795cdde518
@@ -98,7 +99,6 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/nutanix-cloud-native/cluster-api-provider-nutanix v1.10.3 // indirect
 	github.com/nutanix-cloud-native/prism-go-client v0.8.0 // indirect
 	github.com/oklog/ulid v1.3.1 // indirect
 	github.com/openshift/client-go v0.0.0-20261001003915-dcaad1dc7fe8 // indirect
