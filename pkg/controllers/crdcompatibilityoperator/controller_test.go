@@ -19,6 +19,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -66,6 +67,19 @@ var _ = Describe("CRDCompatibilityOperatorController", Serial, func() {
 		Eventually(komega.Object(deployment)).WithTimeout(timeout).WithPolling(interval).Should(SatisfyAll(
 			HaveField("Spec.Replicas", HaveValue(BeEquivalentTo(2))),
 			HaveField("Spec.Template.Spec.Containers", And(HaveLen(1), ContainElement(HaveField("Image", Equal(testOperandImage))))),
+			HaveField("Spec.Template.Spec.NodeSelector", BeEmpty()),
+			HaveField("Spec.Template.Spec.Affinity.NodeAffinity", HaveValue(Equal(corev1.NodeAffinity{
+				PreferredDuringSchedulingIgnoredDuringExecution: []corev1.PreferredSchedulingTerm{
+					{
+						Weight: 100,
+						Preference: corev1.NodeSelectorTerm{
+							MatchExpressions: []corev1.NodeSelectorRequirement{
+								{Key: "node-role.kubernetes.io/control-plane", Operator: corev1.NodeSelectorOpExists},
+							},
+						},
+					},
+				},
+			}))),
 			HaveField("Spec.Template.Labels", HaveKeyWithValue("k8s-app", operandLabel)),
 		))
 

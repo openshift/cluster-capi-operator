@@ -18,6 +18,7 @@ package staticresourceinstaller
 
 import (
 	"context"
+	"net/http"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -53,6 +54,22 @@ var _ = Describe("StaticResourceInstaller Controller", Ordered, ContinueOnFailur
 
 			Expect(controller.assetNames).To(ConsistOf(expectedAssets))
 		})
+
+		It("should require leadership for initial installation", func() {
+			Expect(initialResourceInstaller{controller: controller}.NeedLeaderElection()).To(BeTrue())
+		})
+
+		It("should wait for the webhook server before installing resources", func() {
+			checks := 0
+			checker := func(*http.Request) error {
+				checks++
+
+				return nil
+			}
+
+			Expect(waitForWebhookServer(ctx, checker)).To(Succeed())
+			Expect(checks).To(Equal(1))
+		})
 	})
 
 	Describe("Manager Integration", Ordered, func() {
@@ -60,7 +77,7 @@ var _ = Describe("StaticResourceInstaller Controller", Ordered, ContinueOnFailur
 			startMgr()
 		})
 
-		It("should install webhook configurations when reconciled", func() {
+		It("should install webhook configurations without a bootstrap resource", func() {
 			By("Verifying that ValidatingWebhookConfigurations are created")
 			Eventually(kWithCtx(ctx).ObjectList(&admissionregistrationv1.ValidatingWebhookConfigurationList{}), 10*time.Second).WithContext(ctx).Should(HaveField("Items", SatisfyAll(
 				ContainElement(HaveField("ObjectMeta.Name", Equal("openshift-compatibility-requirements-apiextensions-openshift-io-v1alpha1-compatibilityrequirement-validation"))),
