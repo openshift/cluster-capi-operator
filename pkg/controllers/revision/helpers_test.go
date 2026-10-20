@@ -29,6 +29,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/config"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/api/features"
@@ -82,6 +83,7 @@ func newManagerWrapper(providerImgs []providerimages.ProviderImageManifests, fg 
 		Controller: ctrlconfig.Controller{
 			SkipNameValidation: ptr.To(true),
 		},
+		Metrics: metricsserver.Options{BindAddress: "0"},
 	})
 	Expect(err).NotTo(HaveOccurred())
 
