@@ -24,7 +24,7 @@ import (
 	. "github.com/onsi/gomega"
 	openshiftapiextensionsv1 "github.com/openshift/api/apiextensions/v1"
 	configv1 "github.com/openshift/api/config/v1"
-	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
+	operatorv1 "github.com/openshift/api/operator/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility"
 	assessment "github.com/openshift/cluster-capi-operator/pkg/controllers/upgradeable/pods"
 	createrequirements "github.com/openshift/cluster-capi-operator/pkg/controllers/upgradeable/pods/create-requirements"
@@ -66,7 +66,7 @@ var _ = Describe("Upgrade compatibility integration", func() {
 		Expect(assessmentClient.DeleteAllOf(ctx, &corev1.ConfigMap{}, client.InNamespace(assessment.Namespace))).To(Succeed())
 		Expect(test.CleanupAndWait(ctx, assessmentClient,
 			&configv1.ClusterVersion{ObjectMeta: metav1.ObjectMeta{Name: clusterVersionName}},
-			&operatorv1alpha1.ClusterAPI{ObjectMeta: metav1.ObjectMeta{Name: "cluster"}},
+			&operatorv1.ClusterAPI{ObjectMeta: metav1.ObjectMeta{Name: "cluster"}},
 			&apiextensionsv1.CustomResourceDefinition{ObjectMeta: metav1.ObjectMeta{Name: crdName}},
 		)).To(Succeed())
 	})
@@ -76,9 +76,9 @@ var _ = Describe("Upgrade compatibility integration", func() {
 			By("Configuring whether the CRD is managed, unmanaged, or foreign")
 
 			// Create a ClusterAPI object to configure the CRD ownership.
-			clusterAPI := &operatorv1alpha1.ClusterAPI{
+			clusterAPI := &operatorv1.ClusterAPI{
 				ObjectMeta: metav1.ObjectMeta{Name: "cluster"},
-				Spec:       &operatorv1alpha1.ClusterAPISpec{},
+				Spec:       &operatorv1.ClusterAPISpec{},
 			}
 			// If the CRD is unmanaged, add the CRD name to the ClusterAPI object spec.
 			if ownership == "unmanaged" {
@@ -225,9 +225,9 @@ var _ = Describe("Upgrade compatibility integration", func() {
 	It("should report Compatible when the target provider images ship no Cluster API manifests", func() {
 		By("Offering a next minor release")
 
-		Expect(assessmentClient.Create(ctx, &operatorv1alpha1.ClusterAPI{
+		Expect(assessmentClient.Create(ctx, &operatorv1.ClusterAPI{
 			ObjectMeta: metav1.ObjectMeta{Name: clusterAPIName},
-			Spec:       &operatorv1alpha1.ClusterAPISpec{},
+			Spec:       &operatorv1.ClusterAPISpec{},
 		})).To(Succeed(), "failed to create the ClusterAPI object")
 
 		cv := &configv1.ClusterVersion{
@@ -329,9 +329,9 @@ var _ = Describe("Upgrade compatibility integration", func() {
 		cv.Status.AvailableUpdates = []configv1.Release{{Version: "4.17.0", Image: "release:target"}}
 		Expect(assessmentClient.Status().Update(ctx, cv)).To(Succeed())
 
-		Expect(assessmentClient.Create(ctx, &operatorv1alpha1.ClusterAPI{
+		Expect(assessmentClient.Create(ctx, &operatorv1.ClusterAPI{
 			ObjectMeta: metav1.ObjectMeta{Name: "cluster"},
-			Spec:       &operatorv1alpha1.ClusterAPISpec{},
+			Spec:       &operatorv1.ClusterAPISpec{},
 		})).To(Succeed())
 
 		target := test.GenerateCRD(schema.GroupVersionKind{Group: "upgradeable.example.com", Version: "v1beta2", Kind: "Widget"}, "v1beta1")

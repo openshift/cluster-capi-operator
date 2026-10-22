@@ -33,7 +33,7 @@ import (
 
 	openshiftapiextensionsv1 "github.com/openshift/api/apiextensions/v1"
 	configv1 "github.com/openshift/api/config/v1"
-	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
+	operatorv1 "github.com/openshift/api/operator/v1"
 	assessment "github.com/openshift/cluster-capi-operator/pkg/controllers/upgradeable/pods"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 	corev1 "k8s.io/api/core/v1"
@@ -156,7 +156,7 @@ func (r *UpgradeableController) SetupWithManager(mgr ctrl.Manager) error {
 		).
 		// Notify on changes to the ClusterAPI configuration.
 		Watches(
-			&operatorv1alpha1.ClusterAPI{},
+			&operatorv1.ClusterAPI{},
 			handler.EnqueueRequestsFromMapFunc(operatorstatus.ToClusterOperator),
 			builder.WithPredicates(
 				predicate.NewPredicateFuncs(func(obj client.Object) bool { return obj.GetName() == clusterAPIName }),

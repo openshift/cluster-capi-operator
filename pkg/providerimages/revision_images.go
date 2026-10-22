@@ -17,19 +17,19 @@ limitations under the License.
 package providerimages
 
 import (
-	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
+	operatorv1 "github.com/openshift/api/operator/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 // ImageRefsFromRevisions extracts unique image references from ClusterAPI revisions
 // and returns a set of deduplicated image references.
-func ImageRefsFromRevisions(revisions []operatorv1alpha1.ClusterAPIInstallerRevision) sets.Set[string] {
+func ImageRefsFromRevisions(revisions []operatorv1.ClusterAPIInstallerRevision) sets.Set[string] {
 	result := sets.New[string]()
 
 	for _, revision := range revisions {
 		for _, component := range revision.Components {
-			if component.Type == operatorv1alpha1.InstallerComponentTypeImage {
-				result.Insert(string(component.Image.Ref))
+			if component.Source.Type == operatorv1.InstallerComponentTypeImage {
+				result.Insert(string(component.Source.Image.Ref))
 			}
 		}
 	}

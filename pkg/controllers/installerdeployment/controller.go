@@ -21,7 +21,7 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
-	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
+	operatorv1 "github.com/openshift/api/operator/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -111,8 +111,8 @@ func (r *InstallerDeploymentReconciler) getConfigMap(ctx context.Context, log lo
 }
 
 // getClusterAPI retrieves the ClusterAPI singleton.
-func (r *InstallerDeploymentReconciler) getClusterAPI(ctx context.Context, log logr.Logger) (*operatorv1alpha1.ClusterAPI, error) {
-	clusterAPI := &operatorv1alpha1.ClusterAPI{}
+func (r *InstallerDeploymentReconciler) getClusterAPI(ctx context.Context, log logr.Logger) (*operatorv1.ClusterAPI, error) {
+	clusterAPI := &operatorv1.ClusterAPI{}
 	key := types.NamespacedName{
 		Name: clusterAPIName,
 	}
@@ -121,7 +121,7 @@ func (r *InstallerDeploymentReconciler) getClusterAPI(ctx context.Context, log l
 		if apierrors.IsNotFound(err) {
 			log.Info("ClusterAPI not found, using empty revisions")
 
-			return &operatorv1alpha1.ClusterAPI{}, nil
+			return &operatorv1.ClusterAPI{}, nil
 		}
 
 		return nil, fmt.Errorf("failed to get ClusterAPI: %w", err)
@@ -157,7 +157,7 @@ func (r *InstallerDeploymentReconciler) SetupWithManager(mgr ctrl.Manager) error
 			return obj.GetNamespace() == r.Namespace && obj.GetName() == deploymentName
 		}))).
 		Watches(&corev1.ConfigMap{}, handler.EnqueueRequestsFromMapFunc(r.mapConfigMapToReconcile)).
-		Watches(&operatorv1alpha1.ClusterAPI{}, handler.EnqueueRequestsFromMapFunc(r.mapClusterAPIToReconcile)).
+		Watches(&operatorv1.ClusterAPI{}, handler.EnqueueRequestsFromMapFunc(r.mapClusterAPIToReconcile)).
 		Complete(r); err != nil {
 		return fmt.Errorf("failed to create controller: %w", err)
 	}

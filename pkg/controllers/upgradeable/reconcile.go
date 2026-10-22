@@ -24,7 +24,7 @@ import (
 
 	openshiftapiextensionsv1 "github.com/openshift/api/apiextensions/v1"
 	configv1 "github.com/openshift/api/config/v1"
-	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
+	operatorv1 "github.com/openshift/api/operator/v1"
 	assessment "github.com/openshift/cluster-capi-operator/pkg/controllers/upgradeable/pods"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 	"github.com/openshift/cluster-capi-operator/pkg/revisiongenerator"
@@ -129,7 +129,7 @@ func (r *UpgradeableController) processRequirements(ctx context.Context, assessm
 		return assessmentError(fmt.Errorf("listing assessment requirements: %w", err))
 	}
 
-	clusterAPI := &operatorv1alpha1.ClusterAPI{}
+	clusterAPI := &operatorv1.ClusterAPI{}
 	if err := r.Get(ctx, client.ObjectKey{Name: clusterAPIName}, clusterAPI); err != nil {
 		return assessmentError(fmt.Errorf("getting Cluster API configuration: %w", err))
 	}

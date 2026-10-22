@@ -26,8 +26,7 @@ import (
 	"maps"
 	"slices"
 
-	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
-	operatorv1alpha1ac "github.com/openshift/client-go/operator/applyconfigurations/operator/v1alpha1"
+	operatorv1 "github.com/openshift/api/operator/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/util/sets"
 	k8syaml "sigs.k8s.io/yaml"
@@ -71,13 +70,13 @@ type InstallerRevision interface {
 	RenderedRevision
 
 	// RevisionName returns the name of this revision.
-	RevisionName() operatorv1alpha1.RevisionName
+	RevisionName() operatorv1.RevisionName
 
 	// RevisionIndex returns the revision index.
 	RevisionIndex() int64
 
 	// ToAPIRevision converts this revision to an API revision.
-	ToAPIRevision() (operatorv1alpha1.ClusterAPIInstallerRevision, error)
+	ToAPIRevision() (operatorv1.ClusterAPIInstallerRevision, error)
 }
 
 // RenderedComponent represents a single provider component with its manifests
@@ -92,7 +91,7 @@ type RenderedComponent interface {
 type renderedRevision struct {
 	components    []*renderedComponent
 	contentID     string
-	substitutions []operatorv1alpha1.ClusterAPIInstallerRevisionManifestSubstitution
+	substitutions []operatorv1.ClusterAPIInstallerRevisionManifestSubstitution
 	unmanagedCRDs []string
 }
 
@@ -136,20 +135,20 @@ func newRenderedRevision(profiles []providerimages.ProviderImageManifests, opts 
 }
 
 // substitutionsFromMap converts a map to a sorted slice of API substitutions.
-func substitutionsFromMap(m map[string]string) []operatorv1alpha1.ClusterAPIInstallerRevisionManifestSubstitution {
+func substitutionsFromMap(m map[string]string) []operatorv1.ClusterAPIInstallerRevisionManifestSubstitution {
 	if len(m) == 0 {
 		return nil
 	}
 
-	subs := make([]operatorv1alpha1.ClusterAPIInstallerRevisionManifestSubstitution, 0, len(m))
+	subs := make([]operatorv1.ClusterAPIInstallerRevisionManifestSubstitution, 0, len(m))
 	for k, v := range m {
-		subs = append(subs, operatorv1alpha1.ClusterAPIInstallerRevisionManifestSubstitution{
+		subs = append(subs, operatorv1.ClusterAPIInstallerRevisionManifestSubstitution{
 			Key:   k,
 			Value: &v,
 		})
 	}
 
-	slices.SortFunc(subs, func(a, b operatorv1alpha1.ClusterAPIInstallerRevisionManifestSubstitution) int {
+	slices.SortFunc(subs, func(a, b operatorv1.ClusterAPIInstallerRevisionManifestSubstitution) int {
 		return cmp.Compare(a.Key, b.Key)
 	})
 
@@ -158,7 +157,7 @@ func substitutionsFromMap(m map[string]string) []operatorv1alpha1.ClusterAPIInst
 
 // substitutionsToMap converts a slice of API substitutions to the map form
 // taken by WithManifestSubstitutions. Substitutions with no value are skipped.
-func substitutionsToMap(subs []operatorv1alpha1.ClusterAPIInstallerRevisionManifestSubstitution) map[string]string {
+func substitutionsToMap(subs []operatorv1.ClusterAPIInstallerRevisionManifestSubstitution) map[string]string {
 	m := make(map[string]string, len(subs))
 
 	for _, sub := range subs {
@@ -249,14 +248,14 @@ func (r *renderedRevision) ForInstall(releaseVersion string, revisionIndex int64
 // identity (name and index).
 type installerRevision struct {
 	*renderedRevision
-	revisionName  operatorv1alpha1.RevisionName
+	revisionName  operatorv1.RevisionName
 	revisionIndex int64
 }
 
 var _ InstallerRevision = &installerRevision{}
 
 // RevisionName returns the name of this revision.
-func (r *installerRevision) RevisionName() operatorv1alpha1.RevisionName {
+func (r *installerRevision) RevisionName() operatorv1.RevisionName {
 	return r.revisionName
 }
 
@@ -271,15 +270,15 @@ func (r *installerRevision) ForInstall(_ string, _ int64) (InstallerRevision, er
 }
 
 // ToAPIRevision converts this revision to an API revision.
-func (r *installerRevision) ToAPIRevision() (operatorv1alpha1.ClusterAPIInstallerRevision, error) {
-	apiComponents := make([]operatorv1alpha1.ClusterAPIInstallerComponent, len(r.components))
+func (r *installerRevision) ToAPIRevision() (operatorv1.ClusterAPIInstallerRevision, error) {
+	apiComponents := make([]operatorv1.ClusterAPIInstallerComponent, len(r.components))
 	for i, component := range r.components {
-		apiComponents[i] = operatorv1alpha1.ClusterAPIInstallerComponent{
+		apiComponents[i] = operatorv1.ClusterAPIInstallerComponent{
 			Name: component.name,
-			ClusterAPIInstallerComponentSource: operatorv1alpha1.ClusterAPIInstallerComponentSource{
-				Type: operatorv1alpha1.InstallerComponentTypeImage,
-				Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
-					Ref:     operatorv1alpha1.ImageDigestFormat(component.imageRef),
+			Source: operatorv1.ClusterAPIInstallerComponentSource{
+				Type: operatorv1.InstallerComponentTypeImage,
+				Image: operatorv1.ClusterAPIInstallerComponentImage{
+					Ref:     operatorv1.ImageDigestFormat(component.imageRef),
 					Profile: component.profile,
 				},
 			},
@@ -288,10 +287,10 @@ func (r *installerRevision) ToAPIRevision() (operatorv1alpha1.ClusterAPIInstalle
 
 	contentID, err := r.ContentID()
 	if err != nil {
-		return operatorv1alpha1.ClusterAPIInstallerRevision{}, fmt.Errorf("error calculating contentID: %w", err)
+		return operatorv1.ClusterAPIInstallerRevision{}, fmt.Errorf("error calculating contentID: %w", err)
 	}
 
-	return operatorv1alpha1.ClusterAPIInstallerRevision{
+	return operatorv1.ClusterAPIInstallerRevision{
 		Name:                               r.revisionName,
 		Revision:                           r.revisionIndex,
 		ContentID:                          contentID,
@@ -302,7 +301,7 @@ func (r *installerRevision) ToAPIRevision() (operatorv1alpha1.ClusterAPIInstalle
 }
 
 // buildRevisionName constructs a revision name from version, contentID, and revision index.
-func buildRevisionName(releaseVersion, contentID string, index int64) operatorv1alpha1.RevisionName {
+func buildRevisionName(releaseVersion, contentID string, index int64) operatorv1.RevisionName {
 	// Format: <version>-<contentID[:8]>-<number>
 	shortContentID := contentID
 	if len(shortContentID) > revisionContentIDLen {
@@ -320,7 +319,7 @@ func buildRevisionName(releaseVersion, contentID string, index int64) operatorv1
 
 	name := releaseVersion + suffix
 
-	return operatorv1alpha1.RevisionName(name)
+	return operatorv1.RevisionName(name)
 }
 
 type revisionRenderConfig struct {
@@ -361,7 +360,7 @@ func WithUnmanagedCRDs(unmanagedCRDs []string) revisionRenderOption {
 // provided profiles, or if the rendered content ID does not match the content
 // ID recorded in the API revision.
 func NewInstallerRevisionFromAPI(
-	apiRev operatorv1alpha1.ClusterAPIInstallerRevision,
+	apiRev operatorv1.ClusterAPIInstallerRevision,
 	providerProfiles []providerimages.ProviderImageManifests,
 	opts ...revisionRenderOption,
 ) (InstallerRevision, error) {
@@ -371,8 +370,8 @@ func NewInstallerRevisionFromAPI(
 		found := false
 
 		for _, profile := range providerProfiles {
-			if operatorv1alpha1.ImageDigestFormat(profile.ImageRef) == component.Image.Ref &&
-				profile.Profile == component.Image.Profile {
+			if operatorv1.ImageDigestFormat(profile.ImageRef) == component.Source.Image.Ref &&
+				profile.Profile == component.Source.Image.Profile {
 				matched[i] = profile
 				found = true
 
@@ -382,7 +381,7 @@ func NewInstallerRevisionFromAPI(
 
 		if !found {
 			return nil, fmt.Errorf("%w %d (image=%s, profile=%s)",
-				errProviderProfileNotFound, i, component.Image.Ref, component.Image.Profile)
+				errProviderProfileNotFound, i, component.Source.Image.Ref, component.Source.Image.Profile)
 		}
 	}
 
@@ -477,22 +476,4 @@ func (c *renderedComponent) contentID() (string, error) {
 	}
 
 	return hex.EncodeToString(h.Sum(nil)), nil
-}
-
-// RevisionsToApplyConfig converts a slice of ClusterAPIInstallerRevision to
-// their apply configuration representations via JSON round-trip. Both types
-// share identical JSON tags (code-generated from the same schema), so this
-// conversion is lossless and maintenance-free.
-func RevisionsToApplyConfig(revs []operatorv1alpha1.ClusterAPIInstallerRevision) ([]operatorv1alpha1ac.ClusterAPIInstallerRevisionApplyConfiguration, error) {
-	data, err := json.Marshal(revs)
-	if err != nil {
-		return nil, fmt.Errorf("error marshalling revisions: %w", err)
-	}
-
-	var acs []operatorv1alpha1ac.ClusterAPIInstallerRevisionApplyConfiguration
-	if err := json.Unmarshal(data, &acs); err != nil {
-		return nil, fmt.Errorf("error unmarshalling revision apply configs: %w", err)
-	}
-
-	return acs, nil
 }

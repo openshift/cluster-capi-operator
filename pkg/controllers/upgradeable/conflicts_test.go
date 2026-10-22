@@ -25,7 +25,7 @@ import (
 	. "github.com/onsi/gomega"
 	openshiftapiextensionsv1 "github.com/openshift/api/apiextensions/v1"
 	configv1 "github.com/openshift/api/config/v1"
-	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
+	operatorv1 "github.com/openshift/api/operator/v1"
 	assessment "github.com/openshift/cluster-capi-operator/pkg/controllers/upgradeable/pods"
 	createrequirements "github.com/openshift/cluster-capi-operator/pkg/controllers/upgradeable/pods/create-requirements"
 	"github.com/openshift/cluster-capi-operator/pkg/revisiongenerator"
@@ -164,9 +164,9 @@ var _ = Describe("CRD conflict diagnostics", func() {
 		missingRequirement.Name = "a-missing"
 		missingRequirement.Status.Conditions[1].Reason = openshiftapiextensionsv1.CompatibilityRequirementCRDNotFoundReason
 		missingRequirement.Status.Conditions[1].Message = "The target CRD was not found"
-		clusterAPI := &operatorv1alpha1.ClusterAPI{
+		clusterAPI := &operatorv1.ClusterAPI{
 			ObjectMeta: metav1.ObjectMeta{Name: clusterAPIName},
-			Spec:       &operatorv1alpha1.ClusterAPISpec{UnmanagedCustomResourceDefinitions: []string{missing.Name}},
+			Spec:       &operatorv1.ClusterAPISpec{UnmanagedCustomResourceDefinitions: []string{missing.Name}},
 		}
 		reader := fake.NewClientBuilder().WithScheme(assessmentClient.Scheme()).WithObjects(clusterAPI, foreign, foreignRequirement, missingRequirement).Build()
 		r := &UpgradeableController{Client: reader}
@@ -198,7 +198,7 @@ var _ = Describe("CRD conflict diagnostics", func() {
 	It("should keep CRD lookup failures separate from compatibility conflicts", func() {
 		crd := test.GenerateCRD(schema.GroupVersionKind{Group: "conflicts.example.com", Version: "v1beta1", Kind: "Widget"})
 		requirement := newRequirement(crd, metav1.ConditionTrue)
-		clusterAPI := &operatorv1alpha1.ClusterAPI{ObjectMeta: metav1.ObjectMeta{Name: clusterAPIName}, Spec: &operatorv1alpha1.ClusterAPISpec{}}
+		clusterAPI := &operatorv1.ClusterAPI{ObjectMeta: metav1.ObjectMeta{Name: clusterAPIName}, Spec: &operatorv1.ClusterAPISpec{}}
 		denied := apierrors.NewForbidden(schema.GroupResource{Group: apiextensionsv1.GroupName, Resource: "customresourcedefinitions"}, crd.Name, errors.New("access denied"))
 		reader := fake.NewClientBuilder().WithScheme(assessmentClient.Scheme()).WithObjects(clusterAPI, requirement).WithInterceptorFuncs(interceptor.Funcs{
 			Get: func(ctx context.Context, c client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
