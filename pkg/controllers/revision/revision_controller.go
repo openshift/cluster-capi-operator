@@ -28,8 +28,7 @@ import (
 
 	"github.com/go-logr/logr"
 	configv1 "github.com/openshift/api/config/v1"
-	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
-	operatorv1alpha1ac "github.com/openshift/client-go/operator/applyconfigurations/operator/v1alpha1"
+	operatorv1 "github.com/openshift/api/operator/v1"
 	libgocrypto "github.com/openshift/library-go/pkg/crypto"
 	featuregates "github.com/openshift/library-go/pkg/operator/configobserver/featuregates"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -93,7 +92,7 @@ func (r *RevisionController) Reconcile(ctx context.Context, _ ctrl.Request) (ctr
 
 func (r *RevisionController) reconcile(ctx context.Context, log logr.Logger) operatorstatus.ReconcileResult {
 	// Get ClusterAPI singleton
-	clusterAPI := &operatorv1alpha1.ClusterAPI{}
+	clusterAPI := &operatorv1.ClusterAPI{}
 	if err := r.Get(ctx, client.ObjectKey{Name: clusterAPIName}, clusterAPI); err != nil {
 		if apierrors.IsNotFound(err) {
 			return ResultGenerator.WaitingOnExternal("ClusterAPI not found")
@@ -144,7 +143,7 @@ func (r *RevisionController) reconcile(ctx context.Context, log logr.Logger) ope
 	return reconcileResult
 }
 
-func (r *RevisionController) generateDesiredRevision(ctx context.Context, clusterAPI *operatorv1alpha1.ClusterAPI) (revisiongenerator.RenderedRevision, *operatorstatus.ReconcileResult) {
+func (r *RevisionController) generateDesiredRevision(ctx context.Context, clusterAPI *operatorv1.ClusterAPI) (revisiongenerator.RenderedRevision, *operatorstatus.ReconcileResult) {
 	infra := &configv1.Infrastructure{}
 	if err := r.Get(ctx, client.ObjectKey{Name: infrastructureName}, infra); err != nil {
 		return nil, ResultGenerator.ErrorP(fmt.Errorf("fetching infrastructure: %w", err))
@@ -190,7 +189,7 @@ func (r *RevisionController) generateDesiredRevision(ctx context.Context, cluste
 	return revision, nil
 }
 
-func (r *RevisionController) mergeRevisions(log logr.Logger, apiRevisions []operatorv1alpha1.ClusterAPIInstallerRevision, desiredRevision revisiongenerator.RenderedRevision) ([]operatorv1alpha1.ClusterAPIInstallerRevision, error) {
+func (r *RevisionController) mergeRevisions(log logr.Logger, apiRevisions []operatorv1.ClusterAPIInstallerRevision, desiredRevision revisiongenerator.RenderedRevision) ([]operatorv1.ClusterAPIInstallerRevision, error) {
 	// If there's no current revision we have nothing to merge
 	if desiredRevision == nil {
 		return apiRevisions, nil
@@ -207,7 +206,7 @@ func (r *RevisionController) mergeRevisions(log logr.Logger, apiRevisions []oper
 
 		// Reverse sort existing revisions, both for output and to ensure that the latest revision is first
 		apiRevisions = slices.Clone(apiRevisions)
-		slices.SortFunc(apiRevisions, func(a, b operatorv1alpha1.ClusterAPIInstallerRevision) int {
+		slices.SortFunc(apiRevisions, func(a, b operatorv1.ClusterAPIInstallerRevision) int {
 			return cmp.Compare(b.Revision, a.Revision)
 		})
 
@@ -239,33 +238,29 @@ func (r *RevisionController) mergeRevisions(log logr.Logger, apiRevisions []oper
 		"contentID", newAPIRevision.ContentID,
 	)
 
-	newRevisions := make([]operatorv1alpha1.ClusterAPIInstallerRevision, 0, len(apiRevisions)+1)
+	newRevisions := make([]operatorv1.ClusterAPIInstallerRevision, 0, len(apiRevisions)+1)
 	newRevisions = append(newRevisions, newAPIRevision)
 	newRevisions = append(newRevisions, apiRevisions...)
 
 	return newRevisions, nil
 }
 
-func (r *RevisionController) writeRevisions(ctx context.Context, log logr.Logger, clusterAPI *operatorv1alpha1.ClusterAPI, apiRevisions []operatorv1alpha1.ClusterAPIInstallerRevision) error {
+func (r *RevisionController) writeRevisions(ctx context.Context, log logr.Logger, clusterAPI *operatorv1.ClusterAPI, apiRevisions []operatorv1.ClusterAPIInstallerRevision) error {
 	if len(apiRevisions) == 0 {
 		log.Info("No revisions to write")
 		return nil
 	}
 
-	revisionACs, err := revisiongenerator.RevisionsToApplyConfig(apiRevisions)
-	if err != nil {
-		return fmt.Errorf("error converting revisions to apply config: %w", err)
+	applyConfig := map[string]any{
+		"apiVersion": operatorv1.GroupVersion.String(),
+		"kind":       "ClusterAPI",
+		"metadata":   map[string]any{"name": clusterAPI.Name},
+		"status": map[string]any{
+			"observedRevisionGeneration": clusterAPI.Generation,
+			"desiredRevision":            apiRevisions[0].Name,
+			"revisions":                  apiRevisions,
+		},
 	}
-
-	revisionACPtrs := util.SliceMap(revisionACs, func(ac operatorv1alpha1ac.ClusterAPIInstallerRevisionApplyConfiguration) *operatorv1alpha1ac.ClusterAPIInstallerRevisionApplyConfiguration {
-		return &ac
-	})
-
-	applyConfig := operatorv1alpha1ac.ClusterAPI(clusterAPI.Name).
-		WithStatus(operatorv1alpha1ac.ClusterAPIStatus().
-			WithObservedRevisionGeneration(clusterAPI.Generation).
-			WithDesiredRevision(apiRevisions[0].Name).
-			WithRevisions(revisionACPtrs...))
 
 	if err := r.Status().Patch(ctx, clusterAPI, util.ApplyConfigPatch(applyConfig),
 		operatorstatus.CAPIFieldOwner(controllerName), client.ForceOwnership); err != nil {
@@ -343,7 +338,7 @@ func (r *RevisionController) SetupWithManager(mgr ctrl.Manager, tlsOptions []fun
 
 	if err := ctrl.NewControllerManagedBy(mgr).
 		Named(controllerName).
-		For(&operatorv1alpha1.ClusterAPI{},
+		For(&operatorv1.ClusterAPI{},
 			builder.WithPredicates(predicate.NewPredicateFuncs(func(obj client.Object) bool {
 				return obj.GetName() == clusterAPIName
 			}))).
