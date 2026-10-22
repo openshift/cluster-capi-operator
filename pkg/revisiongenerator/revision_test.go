@@ -23,7 +23,7 @@ import (
 
 	. "github.com/onsi/gomega"
 
-	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
+	operatorv1 "github.com/openshift/api/operator/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
 	"github.com/openshift/cluster-capi-operator/pkg/test"
 )
@@ -429,9 +429,9 @@ func TestToAPIRevision(t *testing.T) {
 		g.Expect(apiRev.ContentID).NotTo(BeEmpty())
 		g.Expect(apiRev.Components).To(HaveLen(1))
 		g.Expect(apiRev.Components[0].Name).To(Equal("core"))
-		g.Expect(apiRev.Components[0].Type).To(Equal(operatorv1alpha1.InstallerComponentTypeImage))
-		g.Expect(string(apiRev.Components[0].Image.Ref)).To(Equal("quay.io/openshift/core@sha256:abcd"))
-		g.Expect(apiRev.Components[0].Image.Profile).To(Equal("default"))
+		g.Expect(apiRev.Components[0].Source.Type).To(Equal(operatorv1.InstallerComponentTypeImage))
+		g.Expect(string(apiRev.Components[0].Source.Image.Ref)).To(Equal("quay.io/openshift/core@sha256:abcd"))
+		g.Expect(apiRev.Components[0].Source.Image.Profile).To(Equal("default"))
 	})
 
 	t.Run("multiple components preserve order", func(t *testing.T) {
@@ -446,11 +446,11 @@ func TestToAPIRevision(t *testing.T) {
 
 		g.Expect(apiRev.Components).To(HaveLen(2))
 		g.Expect(apiRev.Components[0].Name).To(Equal("core"))
-		g.Expect(string(apiRev.Components[0].Image.Ref)).To(Equal("img-core"))
-		g.Expect(apiRev.Components[0].Image.Profile).To(Equal("default"))
+		g.Expect(string(apiRev.Components[0].Source.Image.Ref)).To(Equal("img-core"))
+		g.Expect(apiRev.Components[0].Source.Image.Profile).To(Equal("default"))
 		g.Expect(apiRev.Components[1].Name).To(Equal("infra"))
-		g.Expect(string(apiRev.Components[1].Image.Ref)).To(Equal("img-infra"))
-		g.Expect(apiRev.Components[1].Image.Profile).To(Equal("aws"))
+		g.Expect(string(apiRev.Components[1].Source.Image.Ref)).To(Equal("img-infra"))
+		g.Expect(apiRev.Components[1].Source.Image.Profile).To(Equal("aws"))
 	})
 
 	t.Run("component with empty name", func(t *testing.T) {
@@ -698,16 +698,16 @@ func TestNewInstallerRevisionFromAPI(t *testing.T) {
 		g := NewWithT(t)
 
 		profiles := makeProfiles(t)
-		apiRev := operatorv1alpha1.ClusterAPIInstallerRevision{
+		apiRev := operatorv1.ClusterAPIInstallerRevision{
 			ContentID: contentIDForProfiles(g, profiles[0], profiles[1]),
-			Components: []operatorv1alpha1.ClusterAPIInstallerComponent{
-				{ClusterAPIInstallerComponentSource: operatorv1alpha1.ClusterAPIInstallerComponentSource{
-					Type: operatorv1alpha1.InstallerComponentTypeImage, Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
+			Components: []operatorv1.ClusterAPIInstallerComponent{
+				{Source: operatorv1.ClusterAPIInstallerComponentSource{
+					Type: operatorv1.InstallerComponentTypeImage, Image: operatorv1.ClusterAPIInstallerComponentImage{
 						Ref: "quay.io/openshift/core@sha256:aaaa", Profile: "default",
 					}},
 				},
-				{ClusterAPIInstallerComponentSource: operatorv1alpha1.ClusterAPIInstallerComponentSource{
-					Type: operatorv1alpha1.InstallerComponentTypeImage, Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
+				{Source: operatorv1.ClusterAPIInstallerComponentSource{
+					Type: operatorv1.InstallerComponentTypeImage, Image: operatorv1.ClusterAPIInstallerComponentImage{
 						Ref: "quay.io/openshift/aws@sha256:bbbb", Profile: "aws",
 					}},
 				},
@@ -726,13 +726,13 @@ func TestNewInstallerRevisionFromAPI(t *testing.T) {
 		g := NewWithT(t)
 
 		profiles := makeProfiles(t)
-		apiRev := operatorv1alpha1.ClusterAPIInstallerRevision{
+		apiRev := operatorv1.ClusterAPIInstallerRevision{
 			Name:      "4.18.0-abcd1234-3",
 			Revision:  3,
 			ContentID: contentIDForProfiles(g, profiles[0]),
-			Components: []operatorv1alpha1.ClusterAPIInstallerComponent{
-				{ClusterAPIInstallerComponentSource: operatorv1alpha1.ClusterAPIInstallerComponentSource{
-					Type: operatorv1alpha1.InstallerComponentTypeImage, Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
+			Components: []operatorv1.ClusterAPIInstallerComponent{
+				{Source: operatorv1.ClusterAPIInstallerComponentSource{
+					Type: operatorv1.InstallerComponentTypeImage, Image: operatorv1.ClusterAPIInstallerComponentImage{
 						Ref: "quay.io/openshift/core@sha256:aaaa", Profile: "default",
 					}},
 				},
@@ -741,7 +741,7 @@ func TestNewInstallerRevisionFromAPI(t *testing.T) {
 
 		rev := must(NewInstallerRevisionFromAPI(apiRev, profiles))(g)
 
-		g.Expect(rev.RevisionName()).To(Equal(operatorv1alpha1.RevisionName("4.18.0-abcd1234-3")))
+		g.Expect(rev.RevisionName()).To(Equal(operatorv1.RevisionName("4.18.0-abcd1234-3")))
 		g.Expect(rev.RevisionIndex()).To(Equal(int64(3)))
 	})
 
@@ -749,16 +749,16 @@ func TestNewInstallerRevisionFromAPI(t *testing.T) {
 		g := NewWithT(t)
 
 		profiles := makeProfiles(t)
-		apiRev := operatorv1alpha1.ClusterAPIInstallerRevision{
+		apiRev := operatorv1.ClusterAPIInstallerRevision{
 			ContentID: contentIDForProfiles(g, profiles[2], profiles[0]),
-			Components: []operatorv1alpha1.ClusterAPIInstallerComponent{
-				{ClusterAPIInstallerComponentSource: operatorv1alpha1.ClusterAPIInstallerComponentSource{
-					Type: operatorv1alpha1.InstallerComponentTypeImage, Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
+			Components: []operatorv1.ClusterAPIInstallerComponent{
+				{Source: operatorv1.ClusterAPIInstallerComponentSource{
+					Type: operatorv1.InstallerComponentTypeImage, Image: operatorv1.ClusterAPIInstallerComponentImage{
 						Ref: "quay.io/openshift/azure@sha256:cccc", Profile: "azure",
 					}},
 				},
-				{ClusterAPIInstallerComponentSource: operatorv1alpha1.ClusterAPIInstallerComponentSource{
-					Type: operatorv1alpha1.InstallerComponentTypeImage, Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
+				{Source: operatorv1.ClusterAPIInstallerComponentSource{
+					Type: operatorv1.InstallerComponentTypeImage, Image: operatorv1.ClusterAPIInstallerComponentImage{
 						Ref: "quay.io/openshift/core@sha256:aaaa", Profile: "default",
 					}},
 				},
@@ -777,11 +777,11 @@ func TestNewInstallerRevisionFromAPI(t *testing.T) {
 		g := NewWithT(t)
 
 		profiles := makeProfiles(t)
-		apiRev := operatorv1alpha1.ClusterAPIInstallerRevision{
+		apiRev := operatorv1.ClusterAPIInstallerRevision{
 			ContentID: contentIDForProfiles(g, profiles[2]),
-			Components: []operatorv1alpha1.ClusterAPIInstallerComponent{
-				{ClusterAPIInstallerComponentSource: operatorv1alpha1.ClusterAPIInstallerComponentSource{
-					Type: operatorv1alpha1.InstallerComponentTypeImage, Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
+			Components: []operatorv1.ClusterAPIInstallerComponent{
+				{Source: operatorv1.ClusterAPIInstallerComponentSource{
+					Type: operatorv1.InstallerComponentTypeImage, Image: operatorv1.ClusterAPIInstallerComponentImage{
 						Ref: "quay.io/openshift/azure@sha256:cccc", Profile: "azure",
 					}},
 				},
@@ -797,10 +797,10 @@ func TestNewInstallerRevisionFromAPI(t *testing.T) {
 	t.Run("returns error for missing component", func(t *testing.T) {
 		g := NewWithT(t)
 
-		apiRev := operatorv1alpha1.ClusterAPIInstallerRevision{
-			Components: []operatorv1alpha1.ClusterAPIInstallerComponent{
-				{ClusterAPIInstallerComponentSource: operatorv1alpha1.ClusterAPIInstallerComponentSource{
-					Type: operatorv1alpha1.InstallerComponentTypeImage, Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
+		apiRev := operatorv1.ClusterAPIInstallerRevision{
+			Components: []operatorv1.ClusterAPIInstallerComponent{
+				{Source: operatorv1.ClusterAPIInstallerComponentSource{
+					Type: operatorv1.InstallerComponentTypeImage, Image: operatorv1.ClusterAPIInstallerComponentImage{
 						Ref: "quay.io/openshift/nonexistent@sha256:ffff", Profile: "default",
 					}},
 				},
@@ -816,10 +816,10 @@ func TestNewInstallerRevisionFromAPI(t *testing.T) {
 	t.Run("returns error when image ref matches but profile does not", func(t *testing.T) {
 		g := NewWithT(t)
 
-		apiRev := operatorv1alpha1.ClusterAPIInstallerRevision{
-			Components: []operatorv1alpha1.ClusterAPIInstallerComponent{
-				{ClusterAPIInstallerComponentSource: operatorv1alpha1.ClusterAPIInstallerComponentSource{
-					Type: operatorv1alpha1.InstallerComponentTypeImage, Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
+		apiRev := operatorv1.ClusterAPIInstallerRevision{
+			Components: []operatorv1.ClusterAPIInstallerComponent{
+				{Source: operatorv1.ClusterAPIInstallerComponentSource{
+					Type: operatorv1.InstallerComponentTypeImage, Image: operatorv1.ClusterAPIInstallerComponentImage{
 						Ref: "quay.io/openshift/core@sha256:aaaa", Profile: "wrong-profile",
 					}},
 				},
@@ -833,9 +833,9 @@ func TestNewInstallerRevisionFromAPI(t *testing.T) {
 	t.Run("empty components succeeds with empty revision", func(t *testing.T) {
 		g := NewWithT(t)
 
-		apiRev := operatorv1alpha1.ClusterAPIInstallerRevision{
+		apiRev := operatorv1.ClusterAPIInstallerRevision{
 			ContentID:  contentIDForProfiles(g),
-			Components: []operatorv1alpha1.ClusterAPIInstallerComponent{},
+			Components: []operatorv1.ClusterAPIInstallerComponent{},
 		}
 
 		rev := must(NewInstallerRevisionFromAPI(apiRev, makeProfiles(t)))(g)
@@ -848,16 +848,16 @@ func TestNewInstallerRevisionFromAPI(t *testing.T) {
 		profiles := makeProfiles(t)
 		expectedContentID := contentIDForProfiles(g, profiles[0], profiles[1])
 
-		apiRev := operatorv1alpha1.ClusterAPIInstallerRevision{
+		apiRev := operatorv1.ClusterAPIInstallerRevision{
 			ContentID: expectedContentID,
-			Components: []operatorv1alpha1.ClusterAPIInstallerComponent{
-				{ClusterAPIInstallerComponentSource: operatorv1alpha1.ClusterAPIInstallerComponentSource{
-					Type: operatorv1alpha1.InstallerComponentTypeImage, Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
+			Components: []operatorv1.ClusterAPIInstallerComponent{
+				{Source: operatorv1.ClusterAPIInstallerComponentSource{
+					Type: operatorv1.InstallerComponentTypeImage, Image: operatorv1.ClusterAPIInstallerComponentImage{
 						Ref: "quay.io/openshift/core@sha256:aaaa", Profile: "default",
 					}},
 				},
-				{ClusterAPIInstallerComponentSource: operatorv1alpha1.ClusterAPIInstallerComponentSource{
-					Type: operatorv1alpha1.InstallerComponentTypeImage, Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
+				{Source: operatorv1.ClusterAPIInstallerComponentSource{
+					Type: operatorv1.InstallerComponentTypeImage, Image: operatorv1.ClusterAPIInstallerComponentImage{
 						Ref: "quay.io/openshift/aws@sha256:bbbb", Profile: "aws",
 					}},
 				},
@@ -871,11 +871,11 @@ func TestNewInstallerRevisionFromAPI(t *testing.T) {
 	t.Run("returns error when contentID does not match rendered content", func(t *testing.T) {
 		g := NewWithT(t)
 
-		apiRev := operatorv1alpha1.ClusterAPIInstallerRevision{
+		apiRev := operatorv1.ClusterAPIInstallerRevision{
 			ContentID: "does-not-match-any-rendered-content",
-			Components: []operatorv1alpha1.ClusterAPIInstallerComponent{
-				{ClusterAPIInstallerComponentSource: operatorv1alpha1.ClusterAPIInstallerComponentSource{
-					Type: operatorv1alpha1.InstallerComponentTypeImage, Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
+			Components: []operatorv1.ClusterAPIInstallerComponent{
+				{Source: operatorv1.ClusterAPIInstallerComponentSource{
+					Type: operatorv1.InstallerComponentTypeImage, Image: operatorv1.ClusterAPIInstallerComponentImage{
 						Ref: "quay.io/openshift/core@sha256:aaaa", Profile: "default",
 					}},
 				},
@@ -919,163 +919,5 @@ data:
 		reconstructedContentID := must(reconstructed.ContentID())(g)
 		g.Expect(reconstructedContentID).To(Equal(apiRev.ContentID))
 		g.Expect(reconstructed.Components()).To(HaveLen(1))
-	})
-}
-
-func TestRevisionsToApplyConfig(t *testing.T) {
-	t.Run("single revision preserves all fields", func(t *testing.T) {
-		g := NewWithT(t)
-
-		revs := []operatorv1alpha1.ClusterAPIInstallerRevision{
-			{
-				Name:      "4.18.0-abcd1234-1",
-				Revision:  1,
-				ContentID: "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
-				Components: []operatorv1alpha1.ClusterAPIInstallerComponent{
-					{ClusterAPIInstallerComponentSource: operatorv1alpha1.ClusterAPIInstallerComponentSource{
-						Type: operatorv1alpha1.InstallerComponentTypeImage,
-						Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
-							Ref:     "quay.io/openshift/core@sha256:aaaa",
-							Profile: "default",
-						},
-					}},
-				},
-			},
-		}
-
-		acs, err := RevisionsToApplyConfig(revs)
-		g.Expect(err).NotTo(HaveOccurred())
-		g.Expect(acs).To(HaveLen(1))
-
-		ac := acs[0]
-		g.Expect(ac.Name).NotTo(BeNil())
-		g.Expect(*ac.Name).To(Equal(operatorv1alpha1.RevisionName("4.18.0-abcd1234-1")))
-		g.Expect(ac.Revision).NotTo(BeNil())
-		g.Expect(*ac.Revision).To(Equal(int64(1)))
-		g.Expect(ac.ContentID).NotTo(BeNil())
-		g.Expect(*ac.ContentID).To(Equal("abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"))
-
-		g.Expect(ac.Components).To(HaveLen(1))
-		g.Expect(ac.Components[0].Type).NotTo(BeNil())
-		g.Expect(*ac.Components[0].Type).To(Equal(operatorv1alpha1.InstallerComponentTypeImage))
-		g.Expect(ac.Components[0].Image).NotTo(BeNil())
-		g.Expect(*ac.Components[0].Image.Ref).To(Equal(operatorv1alpha1.ImageDigestFormat("quay.io/openshift/core@sha256:aaaa")))
-		g.Expect(*ac.Components[0].Image.Profile).To(Equal("default"))
-	})
-
-	t.Run("multiple revisions preserve ordering and fields", func(t *testing.T) {
-		g := NewWithT(t)
-
-		revs := []operatorv1alpha1.ClusterAPIInstallerRevision{
-			{
-				Name:      "4.18.0-aaaa1111-1",
-				Revision:  1,
-				ContentID: "id1",
-				Components: []operatorv1alpha1.ClusterAPIInstallerComponent{
-					{ClusterAPIInstallerComponentSource: operatorv1alpha1.ClusterAPIInstallerComponentSource{
-						Type: operatorv1alpha1.InstallerComponentTypeImage, Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
-							Ref: "img-a", Profile: "default",
-						}},
-					},
-				},
-			},
-			{
-				Name:      "4.18.0-bbbb2222-2",
-				Revision:  2,
-				ContentID: "id2",
-				Components: []operatorv1alpha1.ClusterAPIInstallerComponent{
-					{ClusterAPIInstallerComponentSource: operatorv1alpha1.ClusterAPIInstallerComponentSource{
-						Type: operatorv1alpha1.InstallerComponentTypeImage, Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
-							Ref: "img-b", Profile: "aws",
-						}},
-					},
-					{ClusterAPIInstallerComponentSource: operatorv1alpha1.ClusterAPIInstallerComponentSource{
-						Type: operatorv1alpha1.InstallerComponentTypeImage, Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
-							Ref: "img-c", Profile: "default",
-						}},
-					},
-				},
-			},
-		}
-
-		acs, err := RevisionsToApplyConfig(revs)
-		g.Expect(err).NotTo(HaveOccurred())
-		g.Expect(acs).To(HaveLen(2))
-
-		g.Expect(*acs[0].Name).To(Equal(operatorv1alpha1.RevisionName("4.18.0-aaaa1111-1")))
-		g.Expect(*acs[0].Revision).To(Equal(int64(1)))
-		g.Expect(acs[0].Components).To(HaveLen(1))
-
-		g.Expect(*acs[1].Name).To(Equal(operatorv1alpha1.RevisionName("4.18.0-bbbb2222-2")))
-		g.Expect(*acs[1].Revision).To(Equal(int64(2)))
-		g.Expect(acs[1].Components).To(HaveLen(2))
-	})
-
-	t.Run("empty slice returns empty slice", func(t *testing.T) {
-		g := NewWithT(t)
-
-		acs, err := RevisionsToApplyConfig([]operatorv1alpha1.ClusterAPIInstallerRevision{})
-		g.Expect(err).NotTo(HaveOccurred())
-		g.Expect(acs).To(BeEmpty())
-	})
-
-	t.Run("manifestSubstitutions preserved", func(t *testing.T) {
-		g := NewWithT(t)
-
-		v1 := "VersionTLS12"
-		v2 := "TLS_AES_128_GCM_SHA256"
-
-		revs := []operatorv1alpha1.ClusterAPIInstallerRevision{
-			{
-				Name:      "4.18.0-abcd1234-1",
-				Revision:  1,
-				ContentID: "id1",
-				ManifestSubstitutions: []operatorv1alpha1.ClusterAPIInstallerRevisionManifestSubstitution{
-					{Key: "TLS_MIN_VERSION", Value: &v1},
-					{Key: "TLS_CIPHER_SUITES", Value: &v2},
-				},
-				Components: []operatorv1alpha1.ClusterAPIInstallerComponent{
-					{ClusterAPIInstallerComponentSource: operatorv1alpha1.ClusterAPIInstallerComponentSource{
-						Type: operatorv1alpha1.InstallerComponentTypeImage, Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
-							Ref: "img-a", Profile: "default",
-						}},
-					},
-				},
-			},
-		}
-
-		acs, err := RevisionsToApplyConfig(revs)
-		g.Expect(err).NotTo(HaveOccurred())
-		g.Expect(acs).To(HaveLen(1))
-		g.Expect(acs[0].ManifestSubstitutions).To(HaveLen(2))
-		g.Expect(*acs[0].ManifestSubstitutions[0].Key).To(Equal("TLS_MIN_VERSION"))
-		g.Expect(*acs[0].ManifestSubstitutions[0].Value).To(Equal("VersionTLS12"))
-		g.Expect(*acs[0].ManifestSubstitutions[1].Key).To(Equal("TLS_CIPHER_SUITES"))
-		g.Expect(*acs[0].ManifestSubstitutions[1].Value).To(Equal("TLS_AES_128_GCM_SHA256"))
-	})
-
-	t.Run("unmanagedCustomResourceDefinitions preserved", func(t *testing.T) {
-		g := NewWithT(t)
-
-		revs := []operatorv1alpha1.ClusterAPIInstallerRevision{
-			{
-				Name:                               "4.18.0-aaaa1111-1",
-				Revision:                           1,
-				ContentID:                          "id1",
-				UnmanagedCustomResourceDefinitions: []string{"widgets.example.com", "gadgets.example.com"},
-				Components: []operatorv1alpha1.ClusterAPIInstallerComponent{
-					{ClusterAPIInstallerComponentSource: operatorv1alpha1.ClusterAPIInstallerComponentSource{
-						Type: operatorv1alpha1.InstallerComponentTypeImage, Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
-							Ref: "img-a", Profile: "default",
-						}},
-					},
-				},
-			},
-		}
-
-		acs, err := RevisionsToApplyConfig(revs)
-		g.Expect(err).NotTo(HaveOccurred())
-		g.Expect(acs).To(HaveLen(1))
-		g.Expect(acs[0].UnmanagedCustomResourceDefinitions).To(Equal([]string{"widgets.example.com", "gadgets.example.com"}))
 	})
 }

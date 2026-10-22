@@ -19,29 +19,29 @@ package providerimages
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
+	operatorv1 "github.com/openshift/api/operator/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 var _ = Describe("ImageRefsFromRevisions", func() {
 	It("should return a set of image refs from distinct component images", func() {
-		revisions := []operatorv1alpha1.ClusterAPIInstallerRevision{
+		revisions := []operatorv1.ClusterAPIInstallerRevision{
 			{
-				Components: []operatorv1alpha1.ClusterAPIInstallerComponent{
+				Components: []operatorv1.ClusterAPIInstallerComponent{
 					{
 						Name: "core",
-						ClusterAPIInstallerComponentSource: operatorv1alpha1.ClusterAPIInstallerComponentSource{
-							Type: operatorv1alpha1.InstallerComponentTypeImage,
-							Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
+						Source: operatorv1.ClusterAPIInstallerComponentSource{
+							Type: operatorv1.InstallerComponentTypeImage,
+							Image: operatorv1.ClusterAPIInstallerComponentImage{
 								Ref: "registry/core@sha256:abc123",
 							},
 						},
 					},
 					{
 						Name: "aws-infrastructure",
-						ClusterAPIInstallerComponentSource: operatorv1alpha1.ClusterAPIInstallerComponentSource{
-							Type: operatorv1alpha1.InstallerComponentTypeImage,
-							Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
+						Source: operatorv1.ClusterAPIInstallerComponentSource{
+							Type: operatorv1.InstallerComponentTypeImage,
+							Image: operatorv1.ClusterAPIInstallerComponentImage{
 								Ref: "registry/aws@sha256:def456",
 							},
 						},
@@ -49,12 +49,12 @@ var _ = Describe("ImageRefsFromRevisions", func() {
 				},
 			},
 			{
-				Components: []operatorv1alpha1.ClusterAPIInstallerComponent{
+				Components: []operatorv1.ClusterAPIInstallerComponent{
 					{
 						Name: "gcp-infrastructure",
-						ClusterAPIInstallerComponentSource: operatorv1alpha1.ClusterAPIInstallerComponentSource{
-							Type: operatorv1alpha1.InstallerComponentTypeImage,
-							Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
+						Source: operatorv1.ClusterAPIInstallerComponentSource{
+							Type: operatorv1.InstallerComponentTypeImage,
+							Image: operatorv1.ClusterAPIInstallerComponentImage{
 								Ref: "registry/gcp@sha256:789abc",
 							},
 						},
@@ -72,14 +72,14 @@ var _ = Describe("ImageRefsFromRevisions", func() {
 	})
 
 	It("should deduplicate overlapping image refs", func() {
-		revisions := []operatorv1alpha1.ClusterAPIInstallerRevision{
+		revisions := []operatorv1.ClusterAPIInstallerRevision{
 			{
-				Components: []operatorv1alpha1.ClusterAPIInstallerComponent{
+				Components: []operatorv1.ClusterAPIInstallerComponent{
 					{
 						Name: "core",
-						ClusterAPIInstallerComponentSource: operatorv1alpha1.ClusterAPIInstallerComponentSource{
-							Type: operatorv1alpha1.InstallerComponentTypeImage,
-							Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
+						Source: operatorv1.ClusterAPIInstallerComponentSource{
+							Type: operatorv1.InstallerComponentTypeImage,
+							Image: operatorv1.ClusterAPIInstallerComponentImage{
 								Ref: "registry/core@sha256:abc123",
 							},
 						},
@@ -87,12 +87,12 @@ var _ = Describe("ImageRefsFromRevisions", func() {
 				},
 			},
 			{
-				Components: []operatorv1alpha1.ClusterAPIInstallerComponent{
+				Components: []operatorv1.ClusterAPIInstallerComponent{
 					{
 						Name: "core",
-						ClusterAPIInstallerComponentSource: operatorv1alpha1.ClusterAPIInstallerComponentSource{
-							Type: operatorv1alpha1.InstallerComponentTypeImage,
-							Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
+						Source: operatorv1.ClusterAPIInstallerComponentSource{
+							Type: operatorv1.InstallerComponentTypeImage,
+							Image: operatorv1.ClusterAPIInstallerComponentImage{
 								Ref: "registry/core@sha256:abc123",
 							},
 						},
@@ -106,7 +106,7 @@ var _ = Describe("ImageRefsFromRevisions", func() {
 	})
 
 	It("should return an empty set for empty revisions slice", func() {
-		result := ImageRefsFromRevisions([]operatorv1alpha1.ClusterAPIInstallerRevision{})
+		result := ImageRefsFromRevisions([]operatorv1.ClusterAPIInstallerRevision{})
 		Expect(result).To(BeEmpty())
 	})
 

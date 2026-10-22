@@ -33,7 +33,7 @@ import (
 
 	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/api/features"
-	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
+	operatorv1 "github.com/openshift/api/operator/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
 	"github.com/openshift/cluster-capi-operator/pkg/test"
 	featuregates "github.com/openshift/library-go/pkg/operator/configobserver/featuregates"
@@ -189,9 +189,9 @@ func createFixtures(ctx context.Context, opts ...fixturesOption) {
 
 	// Create ClusterAPI singleton
 	if !cfg.skipClusterAPI {
-		clusterAPI = &operatorv1alpha1.ClusterAPI{
+		clusterAPI = &operatorv1.ClusterAPI{
 			ObjectMeta: metav1.ObjectMeta{Name: "cluster"},
-			Spec: &operatorv1alpha1.ClusterAPISpec{
+			Spec: &operatorv1.ClusterAPISpec{
 				UnmanagedCustomResourceDefinitions: cfg.unmanagedCRDs,
 			},
 		}
@@ -219,7 +219,7 @@ func infraFixtureAddStatus(infra *configv1.Infrastructure) {
 }
 
 // latestRevision returns the revision with the highest Revision number.
-func latestRevision(revisions []operatorv1alpha1.ClusterAPIInstallerRevision) operatorv1alpha1.ClusterAPIInstallerRevision {
+func latestRevision(revisions []operatorv1.ClusterAPIInstallerRevision) operatorv1.ClusterAPIInstallerRevision {
 	latest := revisions[0]
 	for _, rev := range revisions[1:] {
 		if rev.Revision > latest.Revision {

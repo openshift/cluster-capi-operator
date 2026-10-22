@@ -28,7 +28,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
+	operatorv1 "github.com/openshift/api/operator/v1"
 	"github.com/openshift/cluster-capi-operator/e2e/framework"
 )
 
@@ -39,7 +39,7 @@ import (
 func waitForRevisionRollout(ctx context.Context, generation int64, matcher types.GomegaMatcher) {
 	GinkgoHelper()
 
-	clusterAPI := &operatorv1alpha1.ClusterAPI{ObjectMeta: metav1.ObjectMeta{Name: "cluster"}}
+	clusterAPI := &operatorv1.ClusterAPI{ObjectMeta: metav1.ObjectMeta{Name: "cluster"}}
 	Eventually(ctx, func(g Gomega) {
 		g.Expect(cl.Get(ctx, client.ObjectKeyFromObject(clusterAPI), clusterAPI)).To(Succeed())
 		g.Expect(clusterAPI.Status.ObservedRevisionGeneration).To(BeNumerically(">=", generation),
@@ -84,10 +84,10 @@ const clusterAPICRDName = "clusterapis.operator.openshift.io"
 // the removal lands: both are idempotent, and a reverted or
 // not-yet-registered strip simply rejects the removal until the next
 // attempt re-applies it.
-func resetUnmanagedCRDsEntry(ctx context.Context) *operatorv1alpha1.ClusterAPI {
+func resetUnmanagedCRDsEntry(ctx context.Context) *operatorv1.ClusterAPI {
 	GinkgoHelper()
 
-	clusterAPI := &operatorv1alpha1.ClusterAPI{ObjectMeta: metav1.ObjectMeta{Name: "cluster"}}
+	clusterAPI := &operatorv1.ClusterAPI{ObjectMeta: metav1.ObjectMeta{Name: "cluster"}}
 	Expect(cl.Get(ctx, client.ObjectKeyFromObject(clusterAPI), clusterAPI)).To(Succeed(),
 		"reading ClusterAPI before resetting its unmanagedCustomResourceDefinitions")
 	if !slices.Contains(clusterAPI.Spec.UnmanagedCustomResourceDefinitions, clusterCRDName) {
@@ -161,7 +161,7 @@ func stripUnmanagedCRDsCELValidationOnce(ctx context.Context) error {
 // no-op when the Clusters CRD is no longer listed. The write is rejected
 // while the CEL validation is enforced (the CVO reverted the strip, or
 // kube-apiserver has not registered it yet); the caller retries the pair.
-func removeUnmanagedCRDsEntryOnce(ctx context.Context, clusterAPI *operatorv1alpha1.ClusterAPI) error {
+func removeUnmanagedCRDsEntryOnce(ctx context.Context, clusterAPI *operatorv1.ClusterAPI) error {
 	if err := cl.Get(ctx, client.ObjectKeyFromObject(clusterAPI), clusterAPI); err != nil {
 		return fmt.Errorf("reading ClusterAPI: %w", err)
 	}

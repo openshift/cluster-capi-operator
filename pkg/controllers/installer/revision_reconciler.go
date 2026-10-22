@@ -26,7 +26,7 @@ import (
 
 	"github.com/go-logr/logr"
 	configv1 "github.com/openshift/api/config/v1"
-	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
+	operatorv1 "github.com/openshift/api/operator/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -113,15 +113,15 @@ func newRevisionReconciler(installerController *InstallerController, log logr.Lo
 	}
 }
 
-func (r *revisionReconciler) reconcile(ctx context.Context, apiRevisions []operatorv1alpha1.ClusterAPIInstallerRevision) (*operatorv1alpha1.RevisionName, []string, []error) {
+func (r *revisionReconciler) reconcile(ctx context.Context, apiRevisions []operatorv1.ClusterAPIInstallerRevision) (*operatorv1.RevisionName, []string, []error) {
 	// Sort revisions descending by revision number (newest first)
 	apiRevisions = slices.Clone(apiRevisions)
-	cmpRevisions := func(a, b operatorv1alpha1.ClusterAPIInstallerRevision) int {
+	cmpRevisions := func(a, b operatorv1.ClusterAPIInstallerRevision) int {
 		return cmp.Compare(b.Revision, a.Revision)
 	}
 	slices.SortFunc(apiRevisions, cmpRevisions)
 
-	getRevisionName := func(rev operatorv1alpha1.ClusterAPIInstallerRevision) string {
+	getRevisionName := func(rev operatorv1.ClusterAPIInstallerRevision) string {
 		return string(rev.Name)
 	}
 	revisionNames := util.SliceMap(apiRevisions, getRevisionName)
@@ -145,7 +145,7 @@ func (r *revisionReconciler) reconcile(ctx context.Context, apiRevisions []opera
 	return nil, messages, errs
 }
 
-func (r *revisionReconciler) reconcileRevisions(ctx context.Context, apiRevisions []operatorv1alpha1.ClusterAPIInstallerRevision) (bool, []string, []error) {
+func (r *revisionReconciler) reconcileRevisions(ctx context.Context, apiRevisions []operatorv1.ClusterAPIInstallerRevision) (bool, []string, []error) {
 	if len(apiRevisions) == 0 {
 		return true, nil, nil
 	}
@@ -160,7 +160,7 @@ func (r *revisionReconciler) reconcileRevisions(ctx context.Context, apiRevision
 
 	if isComplete {
 		unmanagedCRDs := sets.New(head.UnmanagedCustomResourceDefinitions...)
-		tailHandler = func(ctx context.Context, revisions []operatorv1alpha1.ClusterAPIInstallerRevision) (bool, []string, []error) {
+		tailHandler = func(ctx context.Context, revisions []operatorv1.ClusterAPIInstallerRevision) (bool, []string, []error) {
 			return r.teardownRevisions(ctx, revisions, unmanagedCRDs)
 		}
 	} else {
@@ -174,7 +174,7 @@ func (r *revisionReconciler) reconcileRevisions(ctx context.Context, apiRevision
 // * a summary message
 // * a boolean indicating if the revision was reconciled completely
 // * an error if any occurred.
-func (r *revisionReconciler) reconcileRevision(ctx context.Context, apiRevision operatorv1alpha1.ClusterAPIInstallerRevision) (bool, string, error) {
+func (r *revisionReconciler) reconcileRevision(ctx context.Context, apiRevision operatorv1.ClusterAPIInstallerRevision) (bool, string, error) {
 	revision, err := revisiongenerator.NewInstallerRevisionFromAPI(apiRevision, r.providerProfiles)
 	if err != nil {
 		return false, "", fmt.Errorf("error creating installer revision from API revision %s: %w", apiRevision.Name, reconcile.TerminalError(err))
@@ -227,7 +227,7 @@ func (r *revisionReconciler) reconcileRevision(ctx context.Context, apiRevision 
 }
 
 // waitingRevisionMessage returns the message to use when a revision is still in progress.
-func waitingRevisionMessage(revisionName operatorv1alpha1.RevisionName, result machinery.RevisionResult) string {
+func waitingRevisionMessage(revisionName operatorv1.RevisionName, result machinery.RevisionResult) string {
 	for _, phase := range result.GetPhases() {
 		if !phase.IsComplete() {
 			return fmt.Sprintf("Revision %s: waiting on phase %s", revisionName, phase.GetName())
@@ -238,7 +238,7 @@ func waitingRevisionMessage(revisionName operatorv1alpha1.RevisionName, result m
 	return fmt.Sprintf("Revision %s: waiting for reconciliation", revisionName)
 }
 
-func (r *revisionReconciler) handlePhaseResults(revisionName operatorv1alpha1.RevisionName, result machinery.RevisionResult) error {
+func (r *revisionReconciler) handlePhaseResults(revisionName operatorv1.RevisionName, result machinery.RevisionResult) error {
 	log := r.log.WithValues("revision", revisionName)
 
 	var collisions []string
@@ -329,7 +329,7 @@ func handlePhaseObject(log logr.Logger, obj machinery.ObjectResult, actionCounts
 
 func (r *revisionReconciler) teardownRevisions(
 	ctx context.Context,
-	apiRevisions []operatorv1alpha1.ClusterAPIInstallerRevision,
+	apiRevisions []operatorv1.ClusterAPIInstallerRevision,
 	unmanagedCRDs sets.Set[string],
 ) (bool, []string, []error) {
 	if len(apiRevisions) == 0 {
@@ -338,7 +338,7 @@ func (r *revisionReconciler) teardownRevisions(
 
 	head := apiRevisions[0]
 	tail := apiRevisions[1:]
-	tailHandler := func(ctx context.Context, revisions []operatorv1alpha1.ClusterAPIInstallerRevision) (bool, []string, []error) {
+	tailHandler := func(ctx context.Context, revisions []operatorv1.ClusterAPIInstallerRevision) (bool, []string, []error) {
 		return r.teardownRevisions(ctx, revisions, unmanagedCRDs)
 	}
 
@@ -351,7 +351,7 @@ func (r *revisionReconciler) teardownRevisions(
 // * an error if any occurred.
 func (r *revisionReconciler) teardownRevision(
 	ctx context.Context,
-	apiRevision operatorv1alpha1.ClusterAPIInstallerRevision,
+	apiRevision operatorv1.ClusterAPIInstallerRevision,
 	unmanagedCRDs sets.Set[string],
 ) (bool, string, error) {
 	revision, err := revisiongenerator.NewInstallerRevisionFromAPI(apiRevision, r.providerProfiles)
@@ -430,7 +430,7 @@ func (r *revisionReconciler) toBoxcutterRevision(ctx context.Context, revision r
 	return toBoxcutterRevision(revision, proxyEnvVars, r.collectObjects)
 }
 
-func (r *revisionReconciler) logTeardownPhaseResults(revisionName operatorv1alpha1.RevisionName, result machinery.RevisionTeardownResult) {
+func (r *revisionReconciler) logTeardownPhaseResults(revisionName operatorv1.RevisionName, result machinery.RevisionTeardownResult) {
 	for _, phase := range result.GetPhases() {
 		gone := phase.Gone()
 		waiting := phase.Waiting()
@@ -468,10 +468,10 @@ func (r *revisionReconciler) logTeardownPhaseResults(revisionName operatorv1alph
 	}
 }
 
-type revisionHandler func(context.Context, []operatorv1alpha1.ClusterAPIInstallerRevision) (bool, []string, []error)
+type revisionHandler func(context.Context, []operatorv1.ClusterAPIInstallerRevision) (bool, []string, []error)
 
 // mergeWithTail merges the results of the head revision with the results of calling the tail handler on the tail revisions.
-func mergeWithTail(ctx context.Context, tailHandler revisionHandler, tailRevisions []operatorv1alpha1.ClusterAPIInstallerRevision) func(bool, string, error) (bool, []string, []error) {
+func mergeWithTail(ctx context.Context, tailHandler revisionHandler, tailRevisions []operatorv1.ClusterAPIInstallerRevision) func(bool, string, error) (bool, []string, []error) {
 	return func(headComplete bool, headMessage string, headErr error) (bool, []string, []error) {
 		tailComplete, tailMessages, tailErrs := tailHandler(ctx, tailRevisions)
 
