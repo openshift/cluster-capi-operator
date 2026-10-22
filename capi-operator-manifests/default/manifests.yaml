@@ -971,6 +971,7 @@ spec:
   template:
     metadata:
       annotations:
+        capi-operator.openshift.io/inject-proxy: capi-controllers
         openshift.io/required-scc: restricted-v2
         target.workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
       labels:
