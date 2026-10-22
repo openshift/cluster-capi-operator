@@ -14,7 +14,6 @@ tool (
 	github.com/openshift/api/config/v1/zz_generated.crd-manifests
 	github.com/openshift/api/machine/v1beta1/zz_generated.crd-manifests
 	github.com/openshift/api/operator/v1/zz_generated.crd-manifests
-	github.com/openshift/api/operator/v1alpha1/zz_generated.crd-manifests
 	golang.org/x/tools/cmd/stringer
 	sigs.k8s.io/controller-runtime/tools/setup-envtest
 )
@@ -416,3 +415,5 @@ require (
 )
 
 replace github.com/openshift/cluster-capi-operator/manifests-gen => ./manifests-gen
+
+replace github.com/openshift/api => github.com/simkam/openshift-api v0.0.0-20261030114948-eb73c6a14b60

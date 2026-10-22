@@ -42,12 +42,10 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	configv1 "github.com/openshift/api/config/v1"
 	clusteroperatorv1 "github.com/openshift/api/operator/v1"
-	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 )
 
 func init() {
 	utilruntime.Must(configv1.Install(scheme.Scheme))
-	utilruntime.Must(operatorv1alpha1.Install(scheme.Scheme))
 	utilruntime.Must(mapiv1.Install(scheme.Scheme))
 	utilruntime.Must(mapiv1beta1.Install(scheme.Scheme))
 	utilruntime.Must(clusteroperatorv1.Install(scheme.Scheme))
@@ -98,7 +96,7 @@ func StartEnvTest(testEnv *envtest.Environment) (*rest.Config, client.WithWatch,
 			path.Join(openshiftAPIPath, "config", "v1", "zz_generated.crd-manifests", "0000_10_config-operator_01_infrastructures-TechPreviewNoUpgrade.crd.yaml"),
 			path.Join(openshiftAPIPath, "config", "v1", "zz_generated.crd-manifests", "0000_03_config-operator_01_proxies.crd.yaml"),
 			path.Join(openshiftAPIPath, "apiextensions", "v1", "zz_generated.crd-manifests", "0000_20_crd-compatibility-checker_01_compatibilityrequirements.crd.yaml"),
-			path.Join(openshiftAPIPath, "operator", "v1alpha1", "zz_generated.crd-manifests", "0000_30_cluster-api_01_clusterapis-SelfManagedHA.crd.yaml"),
+			path.Join(openshiftAPIPath, "operator", "v1", "zz_generated.crd-manifests", "0000_30_cluster-api_01_clusterapis-SelfManagedHA.crd.yaml"),
 		},
 		ErrorIfPathMissing: true,
 	}

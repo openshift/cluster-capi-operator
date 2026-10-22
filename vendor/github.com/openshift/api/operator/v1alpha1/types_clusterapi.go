@@ -70,10 +70,16 @@ type ClusterAPISpec struct {
 	UnmanagedCustomResourceDefinitions []string `json:"unmanagedCustomResourceDefinitions,omitempty"`
 }
 
-// RevisionName represents the name of a revision. The name must be between 1
-// and 255 characters long.
+// RevisionName is the name of a revision. It is of the form
+// <release-version>-<content-hash>-<revision-number>, where <release-version>
+// is an OpenShift release version, e.g. 4.22.20 or
+// 4.20.0-0.nightly-2026-10-28-054721, <content-hash> is an opaque string
+// derived from the revision's contentID which must not contain '-', and
+// <revision-number> is an integer, e.g. 3. For example: 4.22.20-0123abcd-3.
+// The name must be between 1 and 255 characters long.
 // +kubebuilder:validation:MinLength=1
 // +kubebuilder:validation:MaxLength=255
+// +kubebuilder:validation:XValidation:rule="self.matches('^.+-[^-]+-[0-9]+$') && isSemver(self.substring(0, self.lastIndexOf('-', self.lastIndexOf('-') - 1)))",message="must be of the form <release-version>-<content-hash>-<revision-number>, where <release-version> is a semantic version and <revision-number> is an integer"
 type RevisionName string
 
 // ClusterAPIStatus describes the current state of the capi-operator.
@@ -136,10 +142,12 @@ type ClusterAPIInstallerRevision struct {
 	Revision int64 `json:"revision,omitempty"`
 
 	// contentID uniquely identifies the content of this revision.
-	// The contentID must be between 1 and 255 characters long.
+	// It is exactly 64 lowercase hexadecimal characters ([0-9a-f]).
+	// It is an opaque string. The only valid operation on it is equality.
 	// +required
-	// +kubebuilder:validation:MinLength=1
-	// +kubebuilder:validation:MaxLength=255
+	// +kubebuilder:validation:MinLength=64
+	// +kubebuilder:validation:MaxLength=64
+	// +kubebuilder:validation:Pattern=`^[0-9a-f]{64}$`
 	ContentID string `json:"contentID,omitempty"`
 
 	// unmanagedCustomResourceDefinitions is a list of the names of

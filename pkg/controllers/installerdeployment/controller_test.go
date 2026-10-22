@@ -22,7 +22,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
+	operatorv1 "github.com/openshift/api/operator/v1"
 	"github.com/openshift/cluster-api-actuator-pkg/testutils"
 	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
 	appsv1 "k8s.io/api/apps/v1"
@@ -43,7 +43,7 @@ var _ = Describe("InstallerDeployment Controller", func() {
 		ctx        context.Context
 		reconciler *InstallerDeploymentReconciler
 		configMap  *corev1.ConfigMap
-		clusterAPI *operatorv1alpha1.ClusterAPI
+		clusterAPI *operatorv1.ClusterAPI
 		k          komega.Komega
 		namespace  string
 	)
@@ -83,11 +83,11 @@ var _ = Describe("InstallerDeployment Controller", func() {
 		Expect(cl.Create(ctx, configMap)).To(Succeed())
 
 		// Create ClusterAPI singleton.
-		clusterAPI = &operatorv1alpha1.ClusterAPI{
+		clusterAPI = &operatorv1.ClusterAPI{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: clusterAPIName,
 			},
-			Spec: &operatorv1alpha1.ClusterAPISpec{},
+			Spec: &operatorv1.ClusterAPISpec{},
 		}
 		Expect(cl.Create(ctx, clusterAPI)).To(Succeed())
 
@@ -167,17 +167,17 @@ var _ = Describe("InstallerDeployment Controller", func() {
 
 	It("should include old revision images not in ConfigMap", func() {
 		Eventually(k.UpdateStatus(clusterAPI, func() {
-			clusterAPI.Status.Revisions = []operatorv1alpha1.ClusterAPIInstallerRevision{
+			clusterAPI.Status.Revisions = []operatorv1.ClusterAPIInstallerRevision{
 				{
-					Name:      "rev-1",
+					Name:      "4.18.0-00000000-1",
 					Revision:  1,
-					ContentID: "old-content",
-					Components: []operatorv1alpha1.ClusterAPIInstallerComponent{
+					ContentID: "0000000000000000000000000000000000000000000000000000000000000000",
+					Components: []operatorv1.ClusterAPIInstallerComponent{
 						{
 							Name: "old-provider",
-							ClusterAPIInstallerComponentSource: operatorv1alpha1.ClusterAPIInstallerComponentSource{
-								Type: operatorv1alpha1.InstallerComponentTypeImage,
-								Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
+							Source: operatorv1.ClusterAPIInstallerComponentSource{
+								Type: operatorv1.InstallerComponentTypeImage,
+								Image: operatorv1.ClusterAPIInstallerComponentImage{
 									Ref:     "registry.example.com/old@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
 									Profile: "default",
 								},
@@ -186,7 +186,7 @@ var _ = Describe("InstallerDeployment Controller", func() {
 					},
 				},
 			}
-			clusterAPI.Status.DesiredRevision = "rev-1"
+			clusterAPI.Status.DesiredRevision = "4.18.0-00000000-1"
 		})).Should(Succeed())
 
 		_, err := reconciler.Reconcile(ctx, reconcile.Request{})

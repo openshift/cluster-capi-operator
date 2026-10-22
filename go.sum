@@ -491,8 +491,6 @@ github.com/onsi/gomega v1.42.1 h1:iN1rCUX+44NZ1Dc97MPoeFYbFR0vh8zxoxMFwKdyZ6I=
 github.com/onsi/gomega v1.42.1/go.mod h1:REff/hsDsodHoKlWsP2mAPhu1+5/6hVYNf9rIEBpeSg=
 github.com/opencontainers/go-digest v1.0.0 h1:apOUWs51W5PlhuyGyz9FCeeBIOUDA/6nW8Oi/yOhh5U=
 github.com/opencontainers/go-digest v1.0.0/go.mod h1:0JzlMkj0TRzQZfJkVvzbP0HBR3IKzErnv2BNG4W4MAM=
-github.com/openshift/api v0.0.0-20261028095540-9af1f7b4730c h1:htIaa9XrrcLWrDZIhIbSHA3GBjRbirC+0BVwHRhPrFI=
-github.com/openshift/api v0.0.0-20261028095540-9af1f7b4730c/go.mod h1:2oI3aXQFDjjl7l4xA9ZPSkB+l+lyfWLg7P2sWg9yEvM=
 github.com/openshift/client-go v0.0.0-20261027103500-48133ed95dad h1:KJ8Fs8QpXjtT854HjMLZyIjptLEHm4I6RC2OCZu6DvY=
 github.com/openshift/client-go v0.0.0-20261027103500-48133ed95dad/go.mod h1:g4WVqRD/NuQWnM6lQP+LhLSryRganEdhYq68YghbXi4=
 github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20260925161105-fda6678c170b h1:HRAfX6zek4eP2gbVNZ5RsymugpsayWgPh4pKpNliV3I=
@@ -566,6 +564,8 @@ github.com/securego/gosec/v2 v2.28.0 h1:ZsSdiDb0AtTpLFVol5z91gbMei9ZiLEPG/pZjZuj
 github.com/securego/gosec/v2 v2.28.0/go.mod h1:lb4/9AHe+lJy/kjWmWRWWsEipvbwGKuxf+tY1Pmjdnk=
 github.com/sergi/go-diff v1.4.0 h1:n/SP9D5ad1fORl+llWyN+D6qoUETXNZARKjyY2/KVCw=
 github.com/sergi/go-diff v1.4.0/go.mod h1:A0bzQcvG0E7Rwjx0REVgAGH58e96+X0MeOfepqsbeW4=
+github.com/simkam/openshift-api v0.0.0-20261030114948-eb73c6a14b60 h1:CtFyDGOW15dTL7lmIwLoZF7kyjxPs/wAnmV/KTAc7Zw=
+github.com/simkam/openshift-api v0.0.0-20261030114948-eb73c6a14b60/go.mod h1:2oI3aXQFDjjl7l4xA9ZPSkB+l+lyfWLg7P2sWg9yEvM=
 github.com/sirupsen/logrus v1.10.1 h1:xi4336Zh11WpU14fXR6I67V3yaTPQYwRx2WEtHbRg4Q=
 github.com/sirupsen/logrus v1.10.1/go.mod h1:vsQHnG7xzNsxk3NrwboUiWPnIC3dmbjcGPykD7+tiHk=
 github.com/sivchari/containedctx v1.0.3 h1:x+etemjbsh2fB5ewm5FeLNi5bUjK0V8n0RB+Wwfd0XE=
