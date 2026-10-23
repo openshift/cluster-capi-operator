@@ -49,7 +49,7 @@ func conditionObj(apiVersion, kind string, conditions map[string]string) *unstru
 // compatibilityRequirement builds a CompatibilityRequirement with the given
 // Admitted and Compatible condition statuses.
 func compatibilityRequirement(admitted, compatible string) *unstructured.Unstructured {
-	return conditionObj("apiextensions.openshift.io/v1alpha1", "CompatibilityRequirement", map[string]string{
+	return conditionObj("apiextensions.openshift.io/v1", "CompatibilityRequirement", map[string]string{
 		"Admitted":   admitted,
 		"Compatible": compatible,
 	})

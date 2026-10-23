@@ -35,7 +35,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
+	openshiftapiextensionsv1 "github.com/openshift/api/apiextensions/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility/index"
 	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
 )
@@ -76,14 +76,14 @@ func (r *CompatibilityRequirementReconciler) SetupWithManager(ctx context.Contex
 		return fmt.Errorf("failed to create kube client: %w", err)
 	}
 
-	crdRequirementValidatorBuilder := ctrl.NewWebhookManagedBy(mgr, &apiextensionsv1alpha1.CompatibilityRequirement{}).
+	crdRequirementValidatorBuilder := ctrl.NewWebhookManagedBy(mgr, &openshiftapiextensionsv1.CompatibilityRequirement{}).
 		WithValidator(&crdRequirementValidator{})
 
 	controllerBuilder := ctrl.NewControllerManagedBy(mgr).
 		// We don't need to reconcile deletion because we use a finalizer.
 		// When a user DELETEs the CompatibilityRequirement, the informer receives an Update event to add the DeletionTimestamp.
 		// The informer delete event means the object is removed from the informer cache and we have nothing to do in that case.
-		For(&apiextensionsv1alpha1.CompatibilityRequirement{}, builder.WithPredicates(predicate.Funcs{
+		For(&openshiftapiextensionsv1.CompatibilityRequirement{}, builder.WithPredicates(predicate.Funcs{
 			CreateFunc:  func(e event.CreateEvent) bool { return true },
 			UpdateFunc:  func(e event.UpdateEvent) bool { return true },
 			GenericFunc: func(e event.GenericEvent) bool { return true },
@@ -105,7 +105,7 @@ func (r *CompatibilityRequirementReconciler) SetupWithManager(ctx context.Contex
 		controllerBuilder = opt(controllerBuilder)
 	}
 
-	if err := index.AddIndexThreadSafe(ctx, mgr, &apiextensionsv1alpha1.CompatibilityRequirement{}, index.FieldCRDByName, index.CRDByName); err != nil {
+	if err := index.AddIndexThreadSafe(ctx, mgr, &openshiftapiextensionsv1.CompatibilityRequirement{}, index.FieldCRDByName, index.CRDByName); err != nil {
 		return fmt.Errorf("failed to add index to CompatibilityRequirements: %w", err)
 	}
 
@@ -123,7 +123,7 @@ func (r *CompatibilityRequirementReconciler) findCompatibilityRequirementsForCRD
 	}
 
 	// Use field index to find CompatibilityRequirements that reference this CRD
-	var requirements apiextensionsv1alpha1.CompatibilityRequirementList
+	var requirements openshiftapiextensionsv1.CompatibilityRequirementList
 	if err := r.client.List(ctx, &requirements, client.MatchingFields{index.FieldCRDByName: crd.Name}); err != nil {
 		logf.FromContext(ctx).Error(err, "failed to list CompatibilityRequirements for CRD", "crdName", crd.Name, "clientType", fmt.Sprintf("%T", r.client))
 		return nil
@@ -144,7 +144,7 @@ func (r *CompatibilityRequirementReconciler) findCompatibilityRequirementsForCRD
 // findCompatibilityRequirementsForWebhookConfig finds a compatibility requirement matching the name of the webhook configuration
 // and returns a reconcile request if a matching requirement is found.
 func (r *CompatibilityRequirementReconciler) findCompatibilityRequirementsForWebhookConfig(ctx context.Context, obj client.Object) []reconcile.Request {
-	compatibilityRequirement := &apiextensionsv1alpha1.CompatibilityRequirement{}
+	compatibilityRequirement := &openshiftapiextensionsv1.CompatibilityRequirement{}
 
 	if err := r.client.Get(ctx, types.NamespacedName{Name: obj.GetName()}, compatibilityRequirement); err != nil && !apierrors.IsNotFound(err) {
 		logf.FromContext(ctx).Error(err, "failed to get CompatibilityRequirement for webhook configuration", "webhookConfigName", obj.GetName())

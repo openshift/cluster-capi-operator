@@ -20,7 +20,7 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
-	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
+	openshiftapiextensionsv1 "github.com/openshift/api/apiextensions/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -29,7 +29,7 @@ import (
 func TestValidatingWebhookConfigurationFor(t *testing.T) {
 	g := NewWithT(t)
 
-	compatibilityRequirement := &apiextensionsv1alpha1.CompatibilityRequirement{
+	compatibilityRequirement := &openshiftapiextensionsv1.CompatibilityRequirement{
 		ObjectMeta: metav1.ObjectMeta{Name: "test-compatibility-requirement"},
 	}
 	crd := &apiextensionsv1.CustomResourceDefinition{
