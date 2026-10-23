@@ -47,10 +47,11 @@ type managerWrapper struct {
 	done   chan struct{}
 }
 
-// newFeatureGate constructs a featuregates.FeatureGate with the 7 CAPI platform
+// newFeatureGate constructs a featuregates.FeatureGate with the CAPI base and platform
 // gates classified as enabled or disabled based on the provided list.
 func newFeatureGate(enabled ...configv1.FeatureGateName) featuregates.FeatureGate {
 	allCAPIPlatformGates := []configv1.FeatureGateName{
+		features.FeatureGateClusterAPIMachineManagement,
 		features.FeatureGateClusterAPIMachineManagementAWS,
 		features.FeatureGateClusterAPIMachineManagementAzure,
 		features.FeatureGateClusterAPIMachineManagementBareMetal,
