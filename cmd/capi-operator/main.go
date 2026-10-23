@@ -21,6 +21,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -86,7 +87,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := setupControllers(ctx, mgr, operatorConfig); err != nil {
+	if err := setupControllers(ctx, log, mgr, operatorConfig, cancel); err != nil {
 		log.Error(err, "unable to setup controllers")
 		os.Exit(1)
 	}
@@ -99,10 +100,16 @@ func main() {
 	}
 }
 
-func setupControllers(ctx context.Context, mgr ctrl.Manager, operatorConfig commoncmdoptions.OperatorConfig) error {
+func setupControllers(ctx context.Context, log logr.Logger, mgr ctrl.Manager, operatorConfig commoncmdoptions.OperatorConfig, cancel context.CancelFunc) error {
+	featureGates, err := util.GetFeatureGates(ctx, log, managerName, mgr.GetConfig(), cancel)
+	if err != nil {
+		return fmt.Errorf("unable to get feature gates: %w", err)
+	}
+
 	if err := (&clusteroperator.ClusterOperatorController{
 		Client:         mgr.GetClient(),
 		ReleaseVersion: util.GetReleaseVersion(),
+		FeatureGates:   featureGates,
 	}).SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("unable to create clusteroperator controller: %w", err)
 	}
