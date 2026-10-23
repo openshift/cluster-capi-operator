@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"sync"
 
-	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
+	openshiftapiextensionsv1 "github.com/openshift/api/apiextensions/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	apiextensionshelpers "k8s.io/apiextensions-apiserver/pkg/apihelpers"
@@ -112,7 +112,7 @@ func (v *validator) SetupWithManager(ctx context.Context, mgr ctrl.Manager, opts
 
 // handleObjectPruning handles the pruning of an object.
 func (v *validator) handleObjectPruning(ctx context.Context, compatibilityRequirementName string, obj *unstructured.Unstructured) error {
-	compatibilityRequirement := &apiextensionsv1alpha1.CompatibilityRequirement{}
+	compatibilityRequirement := &openshiftapiextensionsv1.CompatibilityRequirement{}
 	if err := v.client.Get(ctx, client.ObjectKey{Name: compatibilityRequirementName}, compatibilityRequirement); err != nil {
 		return fmt.Errorf("failed to get CompatibilityRequirement %q: %w", compatibilityRequirementName, err)
 	}
@@ -122,7 +122,7 @@ func (v *validator) handleObjectPruning(ctx context.Context, compatibilityRequir
 		// The webhook should not be configured, so the controller should remove the MWC and we should no longer
 		// receive requests. Before it gets there, ignore any requests we do receive.
 		return nil
-	case compatibilityRequirement.Spec.ObjectSchemaValidation.Action == apiextensionsv1alpha1.CRDAdmitActionWarn:
+	case compatibilityRequirement.Spec.ObjectSchemaValidation.Action == openshiftapiextensionsv1.CRDAdmitActionWarn:
 		// When set to warn, we do not expect to mutate the object, so we return early without pruning.
 		return nil
 	}
@@ -137,7 +137,7 @@ func (v *validator) handleObjectPruning(ctx context.Context, compatibilityRequir
 	return nil
 }
 
-func (v *validator) getStructuralSchema(compatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement, version string) (*structuralschema.Structural, error) {
+func (v *validator) getStructuralSchema(compatibilityRequirement *openshiftapiextensionsv1.CompatibilityRequirement, version string) (*structuralschema.Structural, error) {
 	cacheKey := getStructuralSchemaCacheKey(compatibilityRequirement, version)
 
 	schema, ok := v.getStructuralSchemaFromCache(compatibilityRequirement, cacheKey)
@@ -165,18 +165,18 @@ func (v *validator) getStructuralSchema(compatibilityRequirement *apiextensionsv
 	return schema, nil
 }
 
-func getStructuralSchemaCacheKey(compatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement, version string) structuralSchemaCacheKey {
+func getStructuralSchemaCacheKey(compatibilityRequirement *openshiftapiextensionsv1.CompatibilityRequirement, version string) structuralSchemaCacheKey {
 	return structuralSchemaCacheKey{
 		compatibilityRequirementName: compatibilityRequirement.Name,
 		version:                      version,
 	}
 }
 
-func isCacheEntryValid(compatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement, schema structuralSchemaCacheValue) bool {
+func isCacheEntryValid(compatibilityRequirement *openshiftapiextensionsv1.CompatibilityRequirement, schema structuralSchemaCacheValue) bool {
 	return compatibilityRequirement.Generation == schema.generation && compatibilityRequirement.UID == schema.uid
 }
 
-func (v *validator) getStructuralSchemaFromCache(compatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement, cacheKey structuralSchemaCacheKey) (*structuralschema.Structural, bool) {
+func (v *validator) getStructuralSchemaFromCache(compatibilityRequirement *openshiftapiextensionsv1.CompatibilityRequirement, cacheKey structuralSchemaCacheKey) (*structuralschema.Structural, bool) {
 	v.structuralSchemaCacheLock.RLock()
 	defer v.structuralSchemaCacheLock.RUnlock()
 
@@ -188,7 +188,7 @@ func (v *validator) getStructuralSchemaFromCache(compatibilityRequirement *apiex
 	return schema.schema, true
 }
 
-func (v *validator) storeStructuralSchemaInCache(compatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement, cacheKey structuralSchemaCacheKey, schema *structuralschema.Structural) {
+func (v *validator) storeStructuralSchemaInCache(compatibilityRequirement *openshiftapiextensionsv1.CompatibilityRequirement, cacheKey structuralSchemaCacheKey, schema *structuralschema.Structural) {
 	// No locking here as we take the lock when constructing the new schema.
 	v.structuralSchemaCache[cacheKey] = structuralSchemaCacheValue{
 		schema:     schema,
@@ -197,9 +197,9 @@ func (v *validator) storeStructuralSchemaInCache(compatibilityRequirement *apiex
 	}
 }
 
-func (v *validator) getCompatibilityRequirementStructuralSchema(compatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement, version string) (*structuralschema.Structural, error) {
+func (v *validator) getCompatibilityRequirementStructuralSchema(compatibilityRequirement *openshiftapiextensionsv1.CompatibilityRequirement, version string) (*structuralschema.Structural, error) {
 	switch compatibilityRequirement.Spec.CompatibilitySchema.CustomResourceDefinition.Type {
-	case apiextensionsv1alpha1.CRDDataTypeYAML:
+	case openshiftapiextensionsv1.CRDDataTypeYAML:
 		return v.getCompatibilityRequirementStructuralSchemaFromYAML(compatibilityRequirement, version)
 	default:
 		return nil, fmt.Errorf("%w: %q for CompatibilityRequirement %q",
@@ -209,7 +209,7 @@ func (v *validator) getCompatibilityRequirementStructuralSchema(compatibilityReq
 	}
 }
 
-func (v *validator) getCompatibilityRequirementStructuralSchemaFromYAML(compatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement, version string) (*structuralschema.Structural, error) {
+func (v *validator) getCompatibilityRequirementStructuralSchemaFromYAML(compatibilityRequirement *openshiftapiextensionsv1.CompatibilityRequirement, version string) (*structuralschema.Structural, error) {
 	// Extract the CRD so we can use the schema.
 	// Use a universal deserializer as it correctly handles YAML and JSON decoding based on the expected key formatting for CRDs.
 	// N.B. DO NOT switch this to a YAML library - they do not correctly handle the OpenAPIV3Schema casing within the CRD version schema.
@@ -247,7 +247,7 @@ func (v *validator) getCompatibilityRequirementStructuralSchemaFromYAML(compatib
 // MutatingWebhookConfigurationFor returns a MutatingWebhookConfiguration for a CompatibilityRequirement and the CRD to which it is associated.
 //
 //nolint:funlen
-func MutatingWebhookConfigurationFor(obj *apiextensionsv1alpha1.CompatibilityRequirement, crd *apiextensionsv1.CustomResourceDefinition) *admissionregistrationv1.MutatingWebhookConfiguration {
+func MutatingWebhookConfigurationFor(obj *openshiftapiextensionsv1.CompatibilityRequirement, crd *apiextensionsv1.CustomResourceDefinition) *admissionregistrationv1.MutatingWebhookConfiguration {
 	vwc := &admissionregistrationv1.MutatingWebhookConfiguration{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "MutatingWebhookConfiguration",
@@ -258,7 +258,7 @@ func MutatingWebhookConfigurationFor(obj *apiextensionsv1alpha1.CompatibilityReq
 			Annotations: map[string]string{
 				"service.beta.openshift.io/inject-cabundle": "true",
 			},
-			OwnerReferences: []metav1.OwnerReference{*metav1.NewControllerRef(obj, apiextensionsv1alpha1.GroupVersion.WithKind("CompatibilityRequirement"))},
+			OwnerReferences: []metav1.OwnerReference{*metav1.NewControllerRef(obj, openshiftapiextensionsv1.GroupVersion.WithKind("CompatibilityRequirement"))},
 		},
 		Webhooks: []admissionregistrationv1.MutatingWebhook{
 			{
@@ -313,7 +313,7 @@ func MutatingWebhookConfigurationFor(obj *apiextensionsv1alpha1.CompatibilityReq
 	return vwc
 }
 
-func isObjectValidationWebhookEnabled(obj *apiextensionsv1alpha1.CompatibilityRequirement) bool {
+func isObjectValidationWebhookEnabled(obj *openshiftapiextensionsv1.CompatibilityRequirement) bool {
 	osv := obj.Spec.ObjectSchemaValidation
 	return osv.Action != "" || len(osv.MatchConditions) > 0 || !labelSelectorIsEmpty(osv.NamespaceSelector) || !labelSelectorIsEmpty(osv.ObjectSelector)
 }

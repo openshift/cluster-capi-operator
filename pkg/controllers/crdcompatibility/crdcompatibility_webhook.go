@@ -36,7 +36,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 	"sigs.k8s.io/yaml"
 
-	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
+	openshiftapiextensionsv1 "github.com/openshift/api/apiextensions/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 )
 
@@ -47,21 +47,21 @@ var (
 
 type crdRequirementValidator struct{}
 
-var _ admission.Validator[*apiextensionsv1alpha1.CompatibilityRequirement] = &crdRequirementValidator{}
+var _ admission.Validator[*openshiftapiextensionsv1.CompatibilityRequirement] = &crdRequirementValidator{}
 
 // ValidateCreate validates a Create event for a CompatibilityRequirement.
-func (v *crdRequirementValidator) ValidateCreate(ctx context.Context, compatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement) (admission.Warnings, error) {
+func (v *crdRequirementValidator) ValidateCreate(ctx context.Context, compatibilityRequirement *openshiftapiextensionsv1.CompatibilityRequirement) (admission.Warnings, error) {
 	// validateCreateOrUpdate ensures that the compatibility CRD is valid YAML.
 	return v.validateCreateOrUpdate(ctx, compatibilityRequirement)
 }
 
 // ValidateUpdate validates an Update event for a CompatibilityRequirement.
-func (v *crdRequirementValidator) ValidateUpdate(ctx context.Context, _, newObj *apiextensionsv1alpha1.CompatibilityRequirement) (admission.Warnings, error) {
+func (v *crdRequirementValidator) ValidateUpdate(ctx context.Context, _, newObj *openshiftapiextensionsv1.CompatibilityRequirement) (admission.Warnings, error) {
 	return v.validateCreateOrUpdate(ctx, newObj)
 }
 
 // validateCreateOrUpdate ensures that the compatibility CRD is valid YAML.
-func (v *crdRequirementValidator) validateCreateOrUpdate(ctx context.Context, compatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement) (admission.Warnings, error) {
+func (v *crdRequirementValidator) validateCreateOrUpdate(ctx context.Context, compatibilityRequirement *openshiftapiextensionsv1.CompatibilityRequirement) (admission.Warnings, error) {
 	errs := validateCompatibilitySchema(ctx, field.NewPath("spec").Child("compatibilitySchema"), compatibilityRequirement.Spec.CompatibilitySchema)
 
 	if len(errs) > 0 {
@@ -99,7 +99,7 @@ func (v *crdRequirementValidator) validateCreateOrUpdate(ctx context.Context, co
 }
 
 // ValidateDelete validates a Delete event for a CompatibilityRequirement.
-func (v *crdRequirementValidator) ValidateDelete(ctx context.Context, compatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement) (admission.Warnings, error) {
+func (v *crdRequirementValidator) ValidateDelete(ctx context.Context, compatibilityRequirement *openshiftapiextensionsv1.CompatibilityRequirement) (admission.Warnings, error) {
 	// We have no validation requirements for deletion.
 	return nil, nil
 }
@@ -152,7 +152,7 @@ func convertToInternalCRD(compatibilityCRD *apiextensionsv1.CustomResourceDefini
 	return crd, nil
 }
 
-func validateCompatibilitySchema(ctx context.Context, fldPath *field.Path, compatibilitySchema apiextensionsv1alpha1.CompatibilitySchema) field.ErrorList {
+func validateCompatibilitySchema(ctx context.Context, fldPath *field.Path, compatibilitySchema openshiftapiextensionsv1.CompatibilitySchema) field.ErrorList {
 	compatibilityCRD, errs := validateCompatibilitySchemaCustomResourceDefinition(ctx, fldPath.Child("customResourceDefinition"), compatibilitySchema)
 	if len(errs) > 0 {
 		return errs
@@ -166,12 +166,12 @@ func validateCompatibilitySchema(ctx context.Context, fldPath *field.Path, compa
 	return errs
 }
 
-func validateCompatibilitySchemaCustomResourceDefinition(ctx context.Context, fldPath *field.Path, compatibilitySchema apiextensionsv1alpha1.CompatibilitySchema) (*apiextensionsv1.CustomResourceDefinition, field.ErrorList) {
+func validateCompatibilitySchemaCustomResourceDefinition(ctx context.Context, fldPath *field.Path, compatibilitySchema openshiftapiextensionsv1.CompatibilitySchema) (*apiextensionsv1.CustomResourceDefinition, field.ErrorList) {
 	// Parse the CRD in compatibilityCRD into a CRD object.
 	compatibilityCRD := &apiextensionsv1.CustomResourceDefinition{}
 
 	switch compatibilitySchema.CustomResourceDefinition.Type {
-	case apiextensionsv1alpha1.CRDDataTypeYAML:
+	case openshiftapiextensionsv1.CRDDataTypeYAML:
 		if err := yaml.Unmarshal([]byte(compatibilitySchema.CustomResourceDefinition.Data), &compatibilityCRD); err != nil {
 			return nil, field.ErrorList{field.Invalid(fldPath.Child("data"), compatibilitySchema.CustomResourceDefinition.Data, fmt.Errorf("%w: %w", errInvalidCompatibilityCRD, err).Error())}
 		}
@@ -179,7 +179,7 @@ func validateCompatibilitySchemaCustomResourceDefinition(ctx context.Context, fl
 		return nil, field.ErrorList{field.NotSupported(
 			fldPath.Child("type"),
 			compatibilitySchema.CustomResourceDefinition.Type,
-			[]string{string(apiextensionsv1alpha1.CRDDataTypeYAML)},
+			[]string{string(openshiftapiextensionsv1.CRDDataTypeYAML)},
 		)}
 	}
 
@@ -199,7 +199,7 @@ func validateCompatibilitySchemaCustomResourceDefinition(ctx context.Context, fl
 	return compatibilityCRD, errs
 }
 
-func validateExcludedFields(fldPath *field.Path, compatibilityCRD *apiextensionsv1.CustomResourceDefinition, excludedFields []apiextensionsv1alpha1.APIExcludedField, prunedCRDVersions sets.Set[string]) field.ErrorList {
+func validateExcludedFields(fldPath *field.Path, compatibilityCRD *apiextensionsv1.CustomResourceDefinition, excludedFields []openshiftapiextensionsv1.APIExcludedField, prunedCRDVersions sets.Set[string]) field.ErrorList {
 	errs := field.ErrorList{} //nolint:prealloc
 
 	for i, excludedField := range excludedFields {
@@ -209,7 +209,7 @@ func validateExcludedFields(fldPath *field.Path, compatibilityCRD *apiextensions
 	return errs
 }
 
-func validateExcludedField(fldPath *field.Path, compatibilityCRD *apiextensionsv1.CustomResourceDefinition, excludedField apiextensionsv1alpha1.APIExcludedField, prunedCRDVersions sets.Set[string]) field.ErrorList {
+func validateExcludedField(fldPath *field.Path, compatibilityCRD *apiextensionsv1.CustomResourceDefinition, excludedField openshiftapiextensionsv1.APIExcludedField, prunedCRDVersions sets.Set[string]) field.ErrorList {
 	errs := field.ErrorList{}
 
 	for i, version := range excludedField.Versions {
@@ -277,7 +277,7 @@ func validatePathExists(schema *apiextensionsv1.JSONSchemaProps, path []string) 
 	return fmt.Errorf("%w: desired path %s", errPathNotFound, desiredPath)
 }
 
-func validateRequiredVersions(fldPath *field.Path, compatibilityCRD *apiextensionsv1.CustomResourceDefinition, requiredVersions apiextensionsv1alpha1.APIVersions) field.ErrorList {
+func validateRequiredVersions(fldPath *field.Path, compatibilityCRD *apiextensionsv1.CustomResourceDefinition, requiredVersions openshiftapiextensionsv1.APIVersions) field.ErrorList {
 	errs := field.ErrorList{}
 
 	crdVersions := util.SliceMap(compatibilityCRD.Spec.Versions, func(v apiextensionsv1.CustomResourceDefinitionVersion) string { return v.Name })
@@ -294,16 +294,16 @@ func validateRequiredVersions(fldPath *field.Path, compatibilityCRD *apiextensio
 // pruneSchemaVersions returns a list of versions from the CRD schema that will be compared for compatibility.
 // This means any unserved versions (or served but not storage in the case of StorageOnly) will be removed from the list
 // unless they are explicitly listed in the additionalVersions list.
-func pruneSchemaVersions(compatibilityCRD *apiextensionsv1.CustomResourceDefinition, requiredVersions apiextensionsv1alpha1.APIVersions) sets.Set[string] {
-	prunedVersions := sets.New(util.SliceMap(requiredVersions.AdditionalVersions, func(v apiextensionsv1alpha1.APIVersionString) string { return string(v) })...)
+func pruneSchemaVersions(compatibilityCRD *apiextensionsv1.CustomResourceDefinition, requiredVersions openshiftapiextensionsv1.APIVersions) sets.Set[string] {
+	prunedVersions := sets.New(util.SliceMap(requiredVersions.AdditionalVersions, func(v openshiftapiextensionsv1.APIVersionString) string { return string(v) })...)
 
 	for _, version := range compatibilityCRD.Spec.Versions {
 		switch requiredVersions.DefaultSelection {
-		case apiextensionsv1alpha1.APIVersionSetTypeStorageOnly:
+		case openshiftapiextensionsv1.APIVersionSetTypeStorageOnly:
 			if version.Storage {
 				prunedVersions.Insert(version.Name)
 			}
-		case apiextensionsv1alpha1.APIVersionSetTypeAllServed:
+		case openshiftapiextensionsv1.APIVersionSetTypeAllServed:
 			if version.Served {
 				prunedVersions.Insert(version.Name)
 			}

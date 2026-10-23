@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"sync"
 
-	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
+	openshiftapiextensionsv1 "github.com/openshift/api/apiextensions/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	apiextensionshelpers "k8s.io/apiextensions-apiserver/pkg/apihelpers"
@@ -122,7 +122,7 @@ func (v *validator) SetupWithManager(ctx context.Context, mgr ctrl.Manager, opts
 
 // ValidateCreate validates the creation of an object.
 func (v *validator) ValidateCreate(ctx context.Context, compatibilityRequirementName string, obj *unstructured.Unstructured) (admission.Warnings, error) {
-	compatibilityRequirement := &apiextensionsv1alpha1.CompatibilityRequirement{}
+	compatibilityRequirement := &openshiftapiextensionsv1.CompatibilityRequirement{}
 	if err := v.client.Get(ctx, client.ObjectKey{Name: compatibilityRequirementName}, compatibilityRequirement); err != nil {
 		return nil, fmt.Errorf("failed to get CompatibilityRequirement %q: %w", compatibilityRequirementName, err)
 	}
@@ -142,11 +142,11 @@ func (v *validator) ValidateCreate(ctx context.Context, compatibilityRequirement
 	warnings := strategy.WarningsOnCreate(ctx, obj)
 
 	switch compatibilityRequirement.Spec.ObjectSchemaValidation.Action {
-	case apiextensionsv1alpha1.CRDAdmitActionWarn:
+	case openshiftapiextensionsv1.CRDAdmitActionWarn:
 		warnings = append(warnings, util.SliceMap(errs, errorToString)...)
 
 		return warnings, nil
-	case apiextensionsv1alpha1.CRDAdmitActionDeny:
+	case openshiftapiextensionsv1.CRDAdmitActionDeny:
 		if len(errs) > 0 {
 			return warnings, apierrors.NewInvalid(obj.GroupVersionKind().GroupKind(), obj.GetName(), errs)
 		}
@@ -160,7 +160,7 @@ func (v *validator) ValidateCreate(ctx context.Context, compatibilityRequirement
 
 // ValidateUpdate validates the update of an object.
 func (v *validator) ValidateUpdate(ctx context.Context, compatibilityRequirementName string, oldObj, obj *unstructured.Unstructured) (admission.Warnings, error) {
-	compatibilityRequirement := &apiextensionsv1alpha1.CompatibilityRequirement{}
+	compatibilityRequirement := &openshiftapiextensionsv1.CompatibilityRequirement{}
 	if err := v.client.Get(ctx, client.ObjectKey{Name: compatibilityRequirementName}, compatibilityRequirement); err != nil {
 		return nil, fmt.Errorf("failed to get CompatibilityRequirement %q: %w", compatibilityRequirementName, err)
 	}
@@ -180,11 +180,11 @@ func (v *validator) ValidateUpdate(ctx context.Context, compatibilityRequirement
 	warnings := strategy.WarningsOnUpdate(ctx, obj, oldObj)
 
 	switch compatibilityRequirement.Spec.ObjectSchemaValidation.Action {
-	case apiextensionsv1alpha1.CRDAdmitActionWarn:
+	case openshiftapiextensionsv1.CRDAdmitActionWarn:
 		warnings = append(warnings, util.SliceMap(errs, errorToString)...)
 
 		return warnings, nil
-	case apiextensionsv1alpha1.CRDAdmitActionDeny:
+	case openshiftapiextensionsv1.CRDAdmitActionDeny:
 		if len(errs) > 0 {
 			return warnings, apierrors.NewInvalid(obj.GroupVersionKind().GroupKind(), obj.GetName(), errs)
 		}
@@ -201,7 +201,7 @@ func (v *validator) ValidateDelete(ctx context.Context, compatibilityRequirement
 	return nil, nil
 }
 
-func (v *validator) getValidationStrategy(compatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement, version string) (rest.RESTCreateUpdateStrategy, error) {
+func (v *validator) getValidationStrategy(compatibilityRequirement *openshiftapiextensionsv1.CompatibilityRequirement, version string) (rest.RESTCreateUpdateStrategy, error) {
 	cacheKey := getValidationStrategyCacheKey(compatibilityRequirement, version)
 
 	strategy, ok := v.getValidationStrategyFromCache(compatibilityRequirement, cacheKey)
@@ -229,18 +229,18 @@ func (v *validator) getValidationStrategy(compatibilityRequirement *apiextension
 	return strategy, nil
 }
 
-func getValidationStrategyCacheKey(compatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement, version string) validationStrategyCacheKey {
+func getValidationStrategyCacheKey(compatibilityRequirement *openshiftapiextensionsv1.CompatibilityRequirement, version string) validationStrategyCacheKey {
 	return validationStrategyCacheKey{
 		compatibilityRequirementName: compatibilityRequirement.Name,
 		version:                      version,
 	}
 }
 
-func isCacheEntryValid(compatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement, strategy validationStrategyCacheValue) bool {
+func isCacheEntryValid(compatibilityRequirement *openshiftapiextensionsv1.CompatibilityRequirement, strategy validationStrategyCacheValue) bool {
 	return compatibilityRequirement.Generation == strategy.generation && compatibilityRequirement.UID == strategy.uid
 }
 
-func (v *validator) getValidationStrategyFromCache(compatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement, cacheKey validationStrategyCacheKey) (rest.RESTCreateUpdateStrategy, bool) {
+func (v *validator) getValidationStrategyFromCache(compatibilityRequirement *openshiftapiextensionsv1.CompatibilityRequirement, cacheKey validationStrategyCacheKey) (rest.RESTCreateUpdateStrategy, bool) {
 	v.validationStrategyCacheLock.RLock()
 	defer v.validationStrategyCacheLock.RUnlock()
 
@@ -252,7 +252,7 @@ func (v *validator) getValidationStrategyFromCache(compatibilityRequirement *api
 	return strategy.strategy, ok
 }
 
-func (v *validator) storeValidationStrategyInCache(compatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement, cacheKey validationStrategyCacheKey, strategy rest.RESTCreateUpdateStrategy) {
+func (v *validator) storeValidationStrategyInCache(compatibilityRequirement *openshiftapiextensionsv1.CompatibilityRequirement, cacheKey validationStrategyCacheKey, strategy rest.RESTCreateUpdateStrategy) {
 	// No locking here as we take the lock when constructing the new strategy.
 	v.validationStrategyCache[cacheKey] = validationStrategyCacheValue{
 		strategy:   strategy,
@@ -261,9 +261,9 @@ func (v *validator) storeValidationStrategyInCache(compatibilityRequirement *api
 	}
 }
 
-func (v *validator) createVersionedStrategy(compatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement, version string) (rest.RESTCreateUpdateStrategy, error) {
+func (v *validator) createVersionedStrategy(compatibilityRequirement *openshiftapiextensionsv1.CompatibilityRequirement, version string) (rest.RESTCreateUpdateStrategy, error) {
 	switch compatibilityRequirement.Spec.CompatibilitySchema.CustomResourceDefinition.Type {
-	case apiextensionsv1alpha1.CRDDataTypeYAML:
+	case openshiftapiextensionsv1.CRDDataTypeYAML:
 		return v.createVersionedStrategyFromYAML(compatibilityRequirement, version)
 	default:
 		return nil, fmt.Errorf("%w: %q for CompatibilityRequirement %q",
@@ -276,7 +276,7 @@ func (v *validator) createVersionedStrategy(compatibilityRequirement *apiextensi
 // https://github.com/kubernetes/kubernetes/blob/ebc1ccc491c944fa0633f147698e0dc02675051d/staging/src/k8s.io/apiextensions-apiserver/pkg/registry/customresource/strategy.go#L76
 //
 //nolint:cyclop,funlen // This is copied so ignore linting issues
-func (v *validator) createVersionedStrategyFromYAML(compatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement, version string) (rest.RESTCreateUpdateStrategy, error) {
+func (v *validator) createVersionedStrategyFromYAML(compatibilityRequirement *openshiftapiextensionsv1.CompatibilityRequirement, version string) (rest.RESTCreateUpdateStrategy, error) {
 	// Extract the CRD so we can use the schema.
 	// Use a universal deserializer as it correctly handles YAML and JSON decoding based on the expected key formatting for CRDs.
 	// N.B. DO NOT switch this to a YAML library - they do not correctly handle the OpenAPIV3Schema casing within the CRD version schema.
@@ -400,7 +400,7 @@ func resourceGVK(crd *apiextensionsv1.CustomResourceDefinition, version string) 
 // ValidatingWebhookConfigurationFor returns a ValidatingWebhookConfiguration for a CompatibilityRequirement and the CRD to which it is associated.
 //
 //nolint:funlen
-func ValidatingWebhookConfigurationFor(obj *apiextensionsv1alpha1.CompatibilityRequirement, crd *apiextensionsv1.CustomResourceDefinition) *admissionregistrationv1.ValidatingWebhookConfiguration {
+func ValidatingWebhookConfigurationFor(obj *openshiftapiextensionsv1.CompatibilityRequirement, crd *apiextensionsv1.CustomResourceDefinition) *admissionregistrationv1.ValidatingWebhookConfiguration {
 	vwc := &admissionregistrationv1.ValidatingWebhookConfiguration{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "ValidatingWebhookConfiguration",
@@ -411,7 +411,7 @@ func ValidatingWebhookConfigurationFor(obj *apiextensionsv1alpha1.CompatibilityR
 			Annotations: map[string]string{
 				"service.beta.openshift.io/inject-cabundle": "true",
 			},
-			OwnerReferences: []metav1.OwnerReference{*metav1.NewControllerRef(obj, apiextensionsv1alpha1.GroupVersion.WithKind("CompatibilityRequirement"))},
+			OwnerReferences: []metav1.OwnerReference{*metav1.NewControllerRef(obj, openshiftapiextensionsv1.GroupVersion.WithKind("CompatibilityRequirement"))},
 		},
 		Webhooks: []admissionregistrationv1.ValidatingWebhook{
 			{
@@ -470,7 +470,7 @@ func errorToString(err *field.Error) string {
 	return err.Error()
 }
 
-func isObjectValidationWebhookEnabled(obj *apiextensionsv1alpha1.CompatibilityRequirement) bool {
+func isObjectValidationWebhookEnabled(obj *openshiftapiextensionsv1.CompatibilityRequirement) bool {
 	osv := obj.Spec.ObjectSchemaValidation
 	return osv.Action != "" || len(osv.MatchConditions) > 0 || !labelSelectorIsEmpty(osv.NamespaceSelector) || !labelSelectorIsEmpty(osv.ObjectSelector)
 }

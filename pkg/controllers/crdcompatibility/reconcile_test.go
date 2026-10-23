@@ -27,11 +27,13 @@ import (
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
+	openshiftapiextensionsv1 "github.com/openshift/api/apiextensions/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility/crdvalidation"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility/objectpruning"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility/objectvalidation"
@@ -40,14 +42,14 @@ import (
 
 var defaultNodeTimeout = NodeTimeout(10 * time.Second)
 
-func waitForReconcileComplete(ctx context.Context, requirement *apiextensionsv1alpha1.CompatibilityRequirement) {
+func waitForReconcileComplete(ctx context.Context, requirement *openshiftapiextensionsv1.CompatibilityRequirement) {
 	GinkgoHelper()
 
 	By("Waiting for CompatibilityRequirement reconciliation to complete", func() {
 		Eventually(kWithCtx(ctx).Object(requirement)).WithContext(ctx).Should(HaveField("Status.Conditions", SatisfyAll(
 			test.HaveCondition("Progressing").
 				WithStatus(metav1.ConditionFalse).
-				WithReason(apiextensionsv1alpha1.CompatibilityRequirementUpToDateReason).
+				WithReason(openshiftapiextensionsv1.CompatibilityRequirementUpToDateReason).
 				WithObservedGeneration(requirement.GetGeneration()),
 		)))
 	})
@@ -88,15 +90,15 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 				HaveField("Status.Conditions", SatisfyAll(
 					test.HaveCondition("Progressing").
 						WithStatus(metav1.ConditionFalse).
-						WithReason(apiextensionsv1alpha1.CompatibilityRequirementUpToDateReason).
+						WithReason(openshiftapiextensionsv1.CompatibilityRequirementUpToDateReason).
 						WithMessage("The CompatibilityRequirement is up to date"),
 					test.HaveCondition("Admitted").
 						WithStatus(metav1.ConditionTrue).
-						WithReason(apiextensionsv1alpha1.CompatibilityRequirementAdmittedReason).
+						WithReason(openshiftapiextensionsv1.CompatibilityRequirementAdmittedReason).
 						WithMessage("The CompatibilityRequirement has been admitted"),
 					test.HaveCondition("Compatible").
 						WithStatus(metav1.ConditionTrue).
-						WithReason(apiextensionsv1alpha1.CompatibilityRequirementCompatibleReason).
+						WithReason(openshiftapiextensionsv1.CompatibilityRequirementCompatibleReason).
 						WithMessage("The CRD is compatible with this requirement"),
 				)),
 				HaveField("Status.ObservedCRD.UID", BeEquivalentTo(testCRDWorking.UID)),
@@ -114,17 +116,17 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 					HaveField("Status.Conditions", SatisfyAll(
 						test.HaveCondition("Progressing").
 							WithStatus(metav1.ConditionFalse).
-							WithReason(apiextensionsv1alpha1.CompatibilityRequirementUpToDateReason).
+							WithReason(openshiftapiextensionsv1.CompatibilityRequirementUpToDateReason).
 							WithMessage("The CompatibilityRequirement is up to date").
 							WithObservedGeneration(generation),
 						test.HaveCondition("Admitted").
 							WithStatus(metav1.ConditionTrue).
-							WithReason(apiextensionsv1alpha1.CompatibilityRequirementAdmittedReason).
+							WithReason(openshiftapiextensionsv1.CompatibilityRequirementAdmittedReason).
 							WithMessage("The CompatibilityRequirement has been admitted").
 							WithObservedGeneration(generation),
 						test.HaveCondition("Compatible").
 							WithStatus(metav1.ConditionTrue).
-							WithReason(apiextensionsv1alpha1.CompatibilityRequirementCompatibleReason).
+							WithReason(openshiftapiextensionsv1.CompatibilityRequirementCompatibleReason).
 							WithMessage("The CRD is compatible with this requirement").
 							WithObservedGeneration(generation),
 					)),
@@ -136,7 +138,7 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 
 			// Update the requirement to bump the generation
 			Eventually(kWithCtx(ctx).Update(requirement, func() {
-				requirement.Spec.CustomResourceDefinitionSchemaValidation.Action = apiextensionsv1alpha1.CRDAdmitActionWarn
+				requirement.Spec.CustomResourceDefinitionSchemaValidation.Action = openshiftapiextensionsv1.CRDAdmitActionWarn
 			})).WithContext(ctx).Should(Succeed())
 
 			// Sanity check that the generation has been bumped
@@ -147,15 +149,40 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 			checkForStatusWithGeneration(generation)
 		}, defaultNodeTimeout)
 
-		It("Should not admit a CompatibilityRequirement if the CompatibilitySchema.CRDYAML does not parse", func(ctx context.Context) {
+		It("should reconcile a CompatibilityRequirement created through v1alpha1", func(ctx context.Context) {
+			requirement := test.GenerateTestCompatibilityRequirement(testCRDClean)
+			data, err := runtime.DefaultUnstructuredConverter.ToUnstructured(requirement)
+			Expect(err).NotTo(HaveOccurred())
+
+			alphaRequirement := &unstructured.Unstructured{Object: data}
+			alphaRequirement.SetAPIVersion("apiextensions.openshift.io/v1alpha1")
+			alphaRequirement.SetKind("CompatibilityRequirement")
+			createTestObject(ctx, alphaRequirement, "v1alpha1 CompatibilityRequirement")
+			requirement.Name = alphaRequirement.GetName()
+
+			By("Reading the reconciled status through v1")
+			waitForAdmitted(ctx, requirement)
+			waitForReconcileComplete(ctx, requirement)
+		}, defaultNodeTimeout)
+
+		DescribeTable("should reject a CompatibilityRequirement whose CRD YAML does not parse", func(ctx context.Context, version string) {
 			requirement := test.GenerateTestCompatibilityRequirement(testCRDClean)
 			requirement.Spec.CompatibilitySchema.CustomResourceDefinition.Data = "not YAML"
+			data, err := runtime.DefaultUnstructuredConverter.ToUnstructured(requirement)
+			Expect(err).NotTo(HaveOccurred())
+
+			unstructuredRequirement := &unstructured.Unstructured{Object: data}
+			unstructuredRequirement.SetAPIVersion("apiextensions.openshift.io/" + version)
+			unstructuredRequirement.SetKind("CompatibilityRequirement")
 
 			By("Attempting to create invalid CompatibilityRequirement " + requirement.Name)
 
 			expectedError := "admission webhook \"compatibilityrequirement.operator.openshift.io\" denied the request: spec.compatibilitySchema.customResourceDefinition.data: Invalid value: \"not YAML\": expected a valid CustomResourceDefinition in YAML format: error unmarshaling JSON: while decoding JSON: json: cannot unmarshal string into Go value of type v1.CustomResourceDefinition"
-			Eventually(tryCreate(ctx, requirement)).WithContext(ctx).Should(MatchError(expectedError))
-		}, defaultNodeTimeout)
+			Eventually(tryCreate(ctx, unstructuredRequirement)).WithContext(ctx).Should(MatchError(expectedError))
+		},
+			Entry("through v1", defaultNodeTimeout, "v1"),
+			Entry("through v1alpha1 equivalent matching", defaultNodeTimeout, "v1alpha1"),
+		)
 
 		It("Should not admit a CompatibilityRequirement if the CompatibilitySchema.CRDYAML parses but is not a CRD", func(ctx context.Context) {
 			requirement := test.GenerateTestCompatibilityRequirement(testCRDClean)
@@ -177,7 +204,7 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 			Eventually(kWithCtx(ctx).Object(requirement)).WithContext(ctx).Should(SatisfyAll(
 				HaveField("Status.Conditions", test.HaveCondition("Progressing").
 					WithStatus(metav1.ConditionFalse).
-					WithReason(apiextensionsv1alpha1.CompatibilityRequirementUpToDateReason).
+					WithReason(openshiftapiextensionsv1.CompatibilityRequirementUpToDateReason).
 					WithMessage("The CompatibilityRequirement is up to date")),
 
 				// observed CRD should be empty
@@ -197,7 +224,7 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 
 			var (
 				incompatibleCRD *apiextensionsv1.CustomResourceDefinition
-				requirement     *apiextensionsv1alpha1.CompatibilityRequirement
+				requirement     *openshiftapiextensionsv1.CompatibilityRequirement
 			)
 
 			BeforeEach(func(ctx context.Context) {
@@ -217,13 +244,13 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 					HaveField("Status.Conditions", SatisfyAll(
 						test.HaveCondition("Progressing").
 							WithStatus(metav1.ConditionFalse).
-							WithReason(apiextensionsv1alpha1.CompatibilityRequirementUpToDateReason),
+							WithReason(openshiftapiextensionsv1.CompatibilityRequirementUpToDateReason),
 						test.HaveCondition("Admitted").
 							WithStatus(metav1.ConditionTrue).
-							WithReason(apiextensionsv1alpha1.CompatibilityRequirementAdmittedReason),
+							WithReason(openshiftapiextensionsv1.CompatibilityRequirementAdmittedReason),
 						test.HaveCondition("Compatible").
 							WithStatus(metav1.ConditionFalse).
-							WithReason(apiextensionsv1alpha1.CompatibilityRequirementRequirementsNotMetReason),
+							WithReason(openshiftapiextensionsv1.CompatibilityRequirementRequirementsNotMetReason),
 					)),
 				)
 			}, defaultNodeTimeout)
@@ -234,10 +261,10 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 					HaveField("Status.Conditions", SatisfyAll(
 						test.HaveCondition("Progressing").
 							WithStatus(metav1.ConditionFalse).
-							WithReason(apiextensionsv1alpha1.CompatibilityRequirementUpToDateReason),
+							WithReason(openshiftapiextensionsv1.CompatibilityRequirementUpToDateReason),
 						test.HaveCondition("Compatible").
 							WithStatus(metav1.ConditionFalse).
-							WithReason(apiextensionsv1alpha1.CompatibilityRequirementRequirementsNotMetReason),
+							WithReason(openshiftapiextensionsv1.CompatibilityRequirementRequirementsNotMetReason),
 					)),
 				)
 
@@ -249,10 +276,10 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 					HaveField("Status.Conditions", SatisfyAll(
 						test.HaveCondition("Progressing").
 							WithStatus(metav1.ConditionFalse).
-							WithReason(apiextensionsv1alpha1.CompatibilityRequirementUpToDateReason),
+							WithReason(openshiftapiextensionsv1.CompatibilityRequirementUpToDateReason),
 						test.HaveCondition("Compatible").
 							WithStatus(metav1.ConditionTrue).
-							WithReason(apiextensionsv1alpha1.CompatibilityRequirementCompatibleReason),
+							WithReason(openshiftapiextensionsv1.CompatibilityRequirementCompatibleReason),
 					)),
 				)
 			}, defaultNodeTimeout)
@@ -263,10 +290,10 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 					HaveField("Status.Conditions", SatisfyAll(
 						test.HaveCondition("Progressing").
 							WithStatus(metav1.ConditionFalse).
-							WithReason(apiextensionsv1alpha1.CompatibilityRequirementUpToDateReason),
+							WithReason(openshiftapiextensionsv1.CompatibilityRequirementUpToDateReason),
 						test.HaveCondition("Compatible").
 							WithStatus(metav1.ConditionFalse).
-							WithReason(apiextensionsv1alpha1.CompatibilityRequirementRequirementsNotMetReason),
+							WithReason(openshiftapiextensionsv1.CompatibilityRequirementRequirementsNotMetReason),
 					)),
 				)
 
@@ -279,12 +306,12 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 	})
 
 	Context("When creating a CompatibilityRequirement with configured object schema validation", Ordered, func() {
-		var requirement *apiextensionsv1alpha1.CompatibilityRequirement
+		var requirement *openshiftapiextensionsv1.CompatibilityRequirement
 
 		BeforeEach(func(ctx context.Context) {
 			requirement = test.GenerateTestCompatibilityRequirement(testCRDClean)
-			requirement.Spec.ObjectSchemaValidation = apiextensionsv1alpha1.ObjectSchemaValidation{
-				Action: apiextensionsv1alpha1.CRDAdmitActionDeny,
+			requirement.Spec.ObjectSchemaValidation = openshiftapiextensionsv1.ObjectSchemaValidation{
+				Action: openshiftapiextensionsv1.CRDAdmitActionDeny,
 				NamespaceSelector: metav1.LabelSelector{
 					MatchLabels: map[string]string{
 						"test": "test",
@@ -318,7 +345,7 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 			Eventually(kWithCtx(ctx).Object(validatingWebhookConfig)).WithContext(ctx).Should(SatisfyAll(
 				HaveField("ObjectMeta.Name", BeEquivalentTo(requirement.Name)),
 				HaveField("ObjectMeta.OwnerReferences", ContainElement(SatisfyAll(
-					HaveField("APIVersion", Equal("apiextensions.openshift.io/v1alpha1")),
+					HaveField("APIVersion", Equal("apiextensions.openshift.io/v1")),
 					HaveField("Kind", Equal("CompatibilityRequirement")),
 					HaveField("Name", Equal(requirement.Name)),
 					HaveField("UID", Equal(requirement.UID)),
@@ -345,7 +372,7 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 			Eventually(kWithCtx(ctx).Object(mutatingWebhookConfig)).WithContext(ctx).Should(SatisfyAll(
 				HaveField("ObjectMeta.Name", BeEquivalentTo(requirement.Name)),
 				HaveField("ObjectMeta.OwnerReferences", ContainElement(SatisfyAll(
-					HaveField("APIVersion", Equal("apiextensions.openshift.io/v1alpha1")),
+					HaveField("APIVersion", Equal("apiextensions.openshift.io/v1")),
 					HaveField("Kind", Equal("CompatibilityRequirement")),
 					HaveField("Name", Equal(requirement.Name)),
 					HaveField("UID", Equal(requirement.UID)),
@@ -388,7 +415,7 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 			By("Creating a CompatibilityRequirement without object schema validation")
 
 			requirementWithoutObjectSchemaValidation := test.GenerateTestCompatibilityRequirement(testCRDClean)
-			requirementWithoutObjectSchemaValidation.Spec.ObjectSchemaValidation = (apiextensionsv1alpha1.ObjectSchemaValidation{})
+			requirementWithoutObjectSchemaValidation.Spec.ObjectSchemaValidation = (openshiftapiextensionsv1.ObjectSchemaValidation{})
 
 			createTestObject(ctx, requirementWithoutObjectSchemaValidation, "CompatibilityRequirement")
 
@@ -399,7 +426,7 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 			Expect(kWithCtx(ctx).Object(requirementWithoutObjectSchemaValidation)()).To(HaveField("Status.Conditions", SatisfyAll(
 				test.HaveCondition("Admitted").
 					WithStatus(metav1.ConditionTrue).
-					WithReason(apiextensionsv1alpha1.CompatibilityRequirementAdmittedReason).
+					WithReason(openshiftapiextensionsv1.CompatibilityRequirementAdmittedReason).
 					WithObservedGeneration(requirementWithoutObjectSchemaValidation.Generation),
 			)))
 
@@ -431,7 +458,7 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 
 			By("Removing the object schema validation from the CompatibilityRequirement")
 			Eventually(kWithCtx(ctx).Update(requirementWithoutObjectSchemaValidation, func() {
-				requirementWithoutObjectSchemaValidation.Spec.ObjectSchemaValidation = (apiextensionsv1alpha1.ObjectSchemaValidation{})
+				requirementWithoutObjectSchemaValidation.Spec.ObjectSchemaValidation = (openshiftapiextensionsv1.ObjectSchemaValidation{})
 			})).WithContext(ctx).Should(Succeed())
 
 			waitForReconcileComplete(ctx, requirementWithoutObjectSchemaValidation)
@@ -444,7 +471,7 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 
 	Context("When managing webhooks with ownership conflicts", func() {
 		var (
-			requirement *apiextensionsv1alpha1.CompatibilityRequirement
+			requirement *openshiftapiextensionsv1.CompatibilityRequirement
 			manualVWC   *admissionregistrationv1.ValidatingWebhookConfiguration
 			manualMWC   *admissionregistrationv1.MutatingWebhookConfiguration
 		)
@@ -457,11 +484,11 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 			requirement = test.GenerateTestCompatibilityRequirement(testCRDClean)
 			requirement.Name = "test-requirement-with-conflict"
 			requirement.GenerateName = ""
-			requirement.Spec.ObjectSchemaValidation.Action = apiextensionsv1alpha1.CRDAdmitActionDeny
+			requirement.Spec.ObjectSchemaValidation.Action = openshiftapiextensionsv1.CRDAdmitActionDeny
 
 			// Create webhook manually with different owner using factory functions
 			fakeOwner := metav1.OwnerReference{
-				APIVersion: "apiextensions.openshift.io/v1alpha1",
+				APIVersion: "apiextensions.openshift.io/v1",
 				Kind:       "CompatibilityRequirement",
 				Name:       "different-owner",
 				UID:        types.UID("fake-uid-12345"),
@@ -484,14 +511,14 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 			By("Verifying status reflects the ownership conflict terminal error")
 			Eventually(kWithCtx(ctx).Object(requirement)).WithContext(ctx).Should(SatisfyAll(
 				HaveField("Status.Conditions", ContainElement(SatisfyAll(
-					HaveField("Type", Equal(apiextensionsv1alpha1.CompatibilityRequirementProgressing)),
+					HaveField("Type", Equal(openshiftapiextensionsv1.CompatibilityRequirementProgressing)),
 					HaveField("Status", Equal(metav1.ConditionFalse)),
 					HaveField("Reason", Equal("OwnershipConflict")),
 					HaveField("Message", ContainSubstring("webhook config is not controlled by CompatibilityRequirement")),
 					HaveField("ObservedGeneration", Equal(requirement.Generation)),
 				))),
 				HaveField("Status.Conditions", ContainElement(SatisfyAll(
-					HaveField("Type", Equal(apiextensionsv1alpha1.CompatibilityRequirementAdmitted)),
+					HaveField("Type", Equal(openshiftapiextensionsv1.CompatibilityRequirementAdmitted)),
 					HaveField("Status", Equal(metav1.ConditionTrue)),
 					HaveField("ObservedGeneration", Equal(requirement.Generation)),
 				))),
@@ -517,7 +544,7 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 			By("Verifying status reflects the ownership conflict terminal error")
 			Eventually(kWithCtx(ctx).Object(requirement)).WithContext(ctx).Should(
 				HaveField("Status.Conditions", ContainElement(SatisfyAll(
-					HaveField("Type", Equal(apiextensionsv1alpha1.CompatibilityRequirementProgressing)),
+					HaveField("Type", Equal(openshiftapiextensionsv1.CompatibilityRequirementProgressing)),
 					HaveField("Status", Equal(metav1.ConditionFalse)),
 					HaveField("Reason", Equal("OwnershipConflict")),
 					HaveField("ObservedGeneration", Equal(requirement.Generation)),
@@ -540,7 +567,7 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 
 	Context("When deleting a CompatibilityRequirement that doesn't own webhooks", func() {
 		var (
-			requirement *apiextensionsv1alpha1.CompatibilityRequirement
+			requirement *openshiftapiextensionsv1.CompatibilityRequirement
 			manualVWC   *admissionregistrationv1.ValidatingWebhookConfiguration
 			manualMWC   *admissionregistrationv1.MutatingWebhookConfiguration
 		)
@@ -553,7 +580,7 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 			requirement = test.GenerateTestCompatibilityRequirement(testCRDClean)
 			requirement.Name = "test-requirement-no-owner"
 			requirement.GenerateName = ""
-			requirement.Spec.ObjectSchemaValidation.Action = apiextensionsv1alpha1.CRDAdmitActionDeny
+			requirement.Spec.ObjectSchemaValidation.Action = openshiftapiextensionsv1.CRDAdmitActionDeny
 
 			// Create webhook configurations WITHOUT owner references using factory functions
 			manualVWC = objectvalidation.ValidatingWebhookConfigurationFor(requirement, testCRDClean)
@@ -605,7 +632,7 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 
 	Context("When deleting a CompatibilityRequirement with ownership conflict", func() {
 		var (
-			requirement *apiextensionsv1alpha1.CompatibilityRequirement
+			requirement *openshiftapiextensionsv1.CompatibilityRequirement
 			conflictVWC *admissionregistrationv1.ValidatingWebhookConfiguration
 		)
 
@@ -616,12 +643,12 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 			requirement = test.GenerateTestCompatibilityRequirement(testCRDClean)
 			requirement.Name = "requirement-with-conflict"
 			requirement.GenerateName = ""
-			requirement.Spec.ObjectSchemaValidation.Action = apiextensionsv1alpha1.CRDAdmitActionDeny
+			requirement.Spec.ObjectSchemaValidation.Action = openshiftapiextensionsv1.CRDAdmitActionDeny
 
 			// Create webhooks with the requirement's name but owned by a different requirement
 			conflictVWC = objectvalidation.ValidatingWebhookConfigurationFor(requirement, testCRDClean)
 			conflictVWC.OwnerReferences = []metav1.OwnerReference{{
-				APIVersion: "apiextensions.openshift.io/v1alpha1",
+				APIVersion: "apiextensions.openshift.io/v1",
 				Kind:       "CompatibilityRequirement",
 				Name:       "different-owner",
 				UID:        types.UID("different-uid"),
@@ -634,7 +661,7 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 			By("Waiting for the requirement to detect ownership conflict")
 			Eventually(kWithCtx(ctx).Object(requirement)).WithContext(ctx).Should(
 				HaveField("Status.Conditions", ContainElement(SatisfyAll(
-					HaveField("Type", Equal(apiextensionsv1alpha1.CompatibilityRequirementProgressing)),
+					HaveField("Type", Equal(openshiftapiextensionsv1.CompatibilityRequirementProgressing)),
 					HaveField("Status", Equal(metav1.ConditionFalse)),
 					HaveField("Reason", Equal("OwnershipConflict")),
 					HaveField("ObservedGeneration", Equal(requirement.Generation)),
@@ -663,7 +690,7 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 	})
 
 	Context("When creating or modifying a CRD", func() {
-		testIncompatibleCRD := func(ctx context.Context, testCRD *apiextensionsv1.CustomResourceDefinition, requirement *apiextensionsv1alpha1.CompatibilityRequirement, createOrUpdateCRD func(context.Context, client.Object, func()) func() error) {
+		testIncompatibleCRD := func(ctx context.Context, testCRD *apiextensionsv1.CustomResourceDefinition, requirement *openshiftapiextensionsv1.CompatibilityRequirement, createOrUpdateCRD func(context.Context, client.Object, func()) func() error) {
 			// Create a working copy of the CRD so we maintain a clean version
 			// without runtime metadata
 			testCRDWorking := testCRD.DeepCopy()
@@ -694,7 +721,7 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 
 		Context("When modifying a CRD with a requirement", func() {
 			var (
-				requirement *apiextensionsv1alpha1.CompatibilityRequirement
+				requirement *openshiftapiextensionsv1.CompatibilityRequirement
 			)
 
 			BeforeEach(func(ctx context.Context) {
@@ -725,7 +752,7 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 
 		Context("When creating a CRD with a requirement", func() {
 			var (
-				requirement *apiextensionsv1alpha1.CompatibilityRequirement
+				requirement *openshiftapiextensionsv1.CompatibilityRequirement
 			)
 
 			BeforeEach(func(ctx context.Context) {
@@ -761,7 +788,7 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 
 		Context("When creating a CRD with a requirement which has no CustomResourceDefinitionSchemaValidation", func() {
 			var (
-				requirement *apiextensionsv1alpha1.CompatibilityRequirement
+				requirement *openshiftapiextensionsv1.CompatibilityRequirement
 			)
 
 			BeforeEach(func(ctx context.Context) {
@@ -769,7 +796,7 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 				deferCleanupTestObject(testCRDWorking, "CRD")
 
 				requirement = test.GenerateTestCompatibilityRequirement(testCRDWorking)
-				requirement.Spec.CustomResourceDefinitionSchemaValidation = (apiextensionsv1alpha1.CustomResourceDefinitionSchemaValidation{})
+				requirement.Spec.CustomResourceDefinitionSchemaValidation = (openshiftapiextensionsv1.CustomResourceDefinitionSchemaValidation{})
 
 				createTestObject(ctx, requirement, "CompatibilityRequirement")
 				waitForAdmitted(ctx, requirement)

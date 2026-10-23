@@ -24,7 +24,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
+	openshiftapiextensionsv1 "github.com/openshift/api/apiextensions/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -124,10 +124,10 @@ func initValidator(ctx context.Context, cfg *rest.Config, scheme *runtime.Scheme
 
 // waitForCompatibilityRequirementInWebhookManagerCache waits until the validating webhook's
 // manager client can read the CompatibilityRequirement from its informer cache. Admission uses mgr.GetClient().
-func waitForCompatibilityRequirementInWebhookManagerCache(ctx context.Context, cr *apiextensionsv1alpha1.CompatibilityRequirement) {
+func waitForCompatibilityRequirementInWebhookManagerCache(ctx context.Context, cr *openshiftapiextensionsv1.CompatibilityRequirement) {
 	GinkgoHelper()
 	Eventually(func(g Gomega) {
-		cached := &apiextensionsv1alpha1.CompatibilityRequirement{}
+		cached := &openshiftapiextensionsv1.CompatibilityRequirement{}
 		g.Expect(managerClient.Get(ctx, client.ObjectKeyFromObject(cr), cached)).To(Succeed())
 	}).WithContext(ctx).WithTimeout(10 * time.Second).Should(Succeed())
 }

@@ -2,6 +2,9 @@ module github.com/openshift/cluster-capi-operator/e2e
 
 go 1.26.0
 
+// Temporary pin for openshift/api#2905; use the upstream revision after it merges.
+replace github.com/openshift/api => github.com/stefanonardo/api v0.0.0-20261021120147-a75ffd9592c8
+
 replace (
 	// cluster-api-provider-baremetal uses a placeholder for baremetal-operator
 	github.com/metal3-io/baremetal-operator => github.com/metal3-io/baremetal-operator v0.5.1

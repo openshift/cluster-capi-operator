@@ -27,7 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
+	openshiftapiextensionsv1 "github.com/openshift/api/apiextensions/v1"
 	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/api/features"
 	"github.com/openshift/cluster-capi-operator/e2e/framework"
@@ -41,7 +41,7 @@ const (
 	staticVWCCRValidation  = "openshift-compatibility-requirements-apiextensions-openshift-io-v1alpha1-compatibilityrequirement-validation"
 )
 
-func waitForRequirementReady(crd *apiextensionsv1.CustomResourceDefinition, requirement *apiextensionsv1alpha1.CompatibilityRequirement) {
+func waitForRequirementReady(crd *apiextensionsv1.CustomResourceDefinition, requirement *openshiftapiextensionsv1.CompatibilityRequirement) {
 	GinkgoHelper()
 
 	By("Refreshing the CRD to get its UID and generation", func() {
@@ -50,7 +50,7 @@ func waitForRequirementReady(crd *apiextensionsv1.CustomResourceDefinition, requ
 
 	By("Waiting for CompatibilityRequirement to be admitted and up to date", func() {
 		Eventually(func(g Gomega) {
-			fresh := &apiextensionsv1alpha1.CompatibilityRequirement{}
+			fresh := &openshiftapiextensionsv1.CompatibilityRequirement{}
 			g.Expect(cl.Get(ctx, client.ObjectKeyFromObject(requirement), fresh)).To(Succeed())
 
 			g.Expect(fresh.Status.ObservedCRD.UID).To(Equal(string(crd.UID)),
@@ -59,17 +59,17 @@ func waitForRequirementReady(crd *apiextensionsv1.CustomResourceDefinition, requ
 				"requirement should have observed the current CRD generation")
 
 			g.Expect(fresh.Status.Conditions).To(SatisfyAll(
-				test.HaveCondition(apiextensionsv1alpha1.CompatibilityRequirementAdmitted).
+				test.HaveCondition(openshiftapiextensionsv1.CompatibilityRequirementAdmitted).
 					WithStatus(metav1.ConditionTrue),
-				test.HaveCondition(apiextensionsv1alpha1.CompatibilityRequirementProgressing).
+				test.HaveCondition(openshiftapiextensionsv1.CompatibilityRequirementProgressing).
 					WithStatus(metav1.ConditionFalse).
-					WithReason(apiextensionsv1alpha1.CompatibilityRequirementUpToDateReason),
+					WithReason(openshiftapiextensionsv1.CompatibilityRequirementUpToDateReason),
 			))
 		}).WithTimeout(framework.WaitMedium).WithPolling(framework.RetryMedium).Should(Succeed())
 	})
 }
 
-func createTestCRDAndRequirement(crd *apiextensionsv1.CustomResourceDefinition, requirement *apiextensionsv1alpha1.CompatibilityRequirement) {
+func createTestCRDAndRequirement(crd *apiextensionsv1.CustomResourceDefinition, requirement *openshiftapiextensionsv1.CompatibilityRequirement) {
 	GinkgoHelper()
 
 	By("Creating the test CRD", func() {
@@ -143,6 +143,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:CRDCompatibilityRequire
 					return cl.Get(ctx, client.ObjectKey{Name: staticVWCCRValidation}, &admissionregistrationv1.ValidatingWebhookConfiguration{})
 				}).WithTimeout(framework.WaitShort).WithPolling(framework.RetryMedium).Should(Succeed())
 			})
+
 		})
 	})
 
@@ -169,7 +170,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:CRDCompatibilityRequire
 	Context("CRD admission", func() {
 		var (
 			testCRD     *apiextensionsv1.CustomResourceDefinition
-			requirement *apiextensionsv1alpha1.CompatibilityRequirement
+			requirement *openshiftapiextensionsv1.CompatibilityRequirement
 		)
 
 		BeforeEach(func() {
@@ -225,7 +226,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:CRDCompatibilityRequire
 	Context("Object validation admission", func() {
 		var (
 			testCRD     *apiextensionsv1.CustomResourceDefinition
-			requirement *apiextensionsv1alpha1.CompatibilityRequirement
+			requirement *openshiftapiextensionsv1.CompatibilityRequirement
 		)
 
 		BeforeEach(func() {
@@ -239,7 +240,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:CRDCompatibilityRequire
 			testCRD.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["spec"] = specSchema
 
 			requirement = test.GenerateTestCompatibilityRequirement(testCRD)
-			requirement.Spec.ObjectSchemaValidation.Action = apiextensionsv1alpha1.CRDAdmitActionDeny
+			requirement.Spec.ObjectSchemaValidation.Action = openshiftapiextensionsv1.CRDAdmitActionDeny
 			createTestCRDAndRequirement(testCRD, requirement)
 			waitForRequirementReady(testCRD, requirement)
 

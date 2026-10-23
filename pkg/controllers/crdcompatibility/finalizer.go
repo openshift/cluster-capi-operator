@@ -20,7 +20,7 @@ import (
 	"context"
 	"fmt"
 
-	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
+	openshiftapiextensionsv1 "github.com/openshift/api/apiextensions/v1"
 	apiextensionsapplyconfig "github.com/openshift/client-go/apiextensions/applyconfigurations/apiextensions/v1alpha1"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -30,18 +30,21 @@ const (
 	finalizerName string = controllerName + "/finalizer"
 )
 
-func setFinalizer(ctx context.Context, cl client.Client, obj *apiextensionsv1alpha1.CompatibilityRequirement) error {
+// Use v1 on the wire until client-go provides v1 apply configurations.
+func setFinalizer(ctx context.Context, cl client.Client, obj *openshiftapiextensionsv1.CompatibilityRequirement) error {
 	return writeFinalizer(ctx, cl, obj, apiextensionsapplyconfig.CompatibilityRequirement(obj.GetName()).
+		WithAPIVersion(openshiftapiextensionsv1.GroupVersion.String()).
 		WithUID(obj.GetUID()).
 		WithFinalizers(finalizerName))
 }
 
-func clearFinalizer(ctx context.Context, cl client.Client, obj *apiextensionsv1alpha1.CompatibilityRequirement) error {
+func clearFinalizer(ctx context.Context, cl client.Client, obj *openshiftapiextensionsv1.CompatibilityRequirement) error {
 	return writeFinalizer(ctx, cl, obj, apiextensionsapplyconfig.CompatibilityRequirement(obj.GetName()).
+		WithAPIVersion(openshiftapiextensionsv1.GroupVersion.String()).
 		WithUID(obj.GetUID()))
 }
 
-func writeFinalizer(ctx context.Context, cl client.Client, obj *apiextensionsv1alpha1.CompatibilityRequirement, applyConfig *apiextensionsapplyconfig.CompatibilityRequirementApplyConfiguration) error {
+func writeFinalizer(ctx context.Context, cl client.Client, obj *openshiftapiextensionsv1.CompatibilityRequirement, applyConfig *apiextensionsapplyconfig.CompatibilityRequirementApplyConfiguration) error {
 	if err := cl.Patch(ctx, obj, util.ApplyConfigPatch(applyConfig), client.ForceOwnership, client.FieldOwner(finalizerName)); err != nil {
 		return fmt.Errorf("failed to write finalizer: %w", err)
 	}

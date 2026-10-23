@@ -1156,13 +1156,14 @@ github.com/openshift-eng/openshift-tests-extension/pkg/ginkgo
 github.com/openshift-eng/openshift-tests-extension/pkg/junit
 github.com/openshift-eng/openshift-tests-extension/pkg/util/sets
 github.com/openshift-eng/openshift-tests-extension/pkg/version
-# github.com/openshift/api v0.0.0-20261002115817-f8795cdde518
+# github.com/openshift/api v0.0.0-20261002115817-f8795cdde518 => github.com/stefanonardo/api v0.0.0-20261021120147-a75ffd9592c8
 ## explicit; go 1.26.0
 github.com/openshift/api
 github.com/openshift/api/annotations
 github.com/openshift/api/apiextensions
+github.com/openshift/api/apiextensions/v1
+github.com/openshift/api/apiextensions/v1/zz_generated.crd-manifests
 github.com/openshift/api/apiextensions/v1alpha1
-github.com/openshift/api/apiextensions/v1alpha1/zz_generated.crd-manifests
 github.com/openshift/api/apiserver
 github.com/openshift/api/apiserver/v1
 github.com/openshift/api/apps
@@ -3410,6 +3411,7 @@ sigs.k8s.io/yaml/goyaml.v2
 # sigs.k8s.io/cluster-api-provider-aws/v2 => sigs.k8s.io/cluster-api-provider-aws/v2 v2.10.1-0.20260311200936-f3440f3ea2f2
 # sigs.k8s.io/cluster-api-provider-azure => sigs.k8s.io/cluster-api-provider-azure v1.22.1-0.20260313010140-0c77ca282778
 # sigs.k8s.io/cluster-api-provider-gcp => sigs.k8s.io/cluster-api-provider-gcp v1.11.0-beta.0.0.20260312083137-58abcdcc039b
+# github.com/openshift/api => github.com/stefanonardo/api v0.0.0-20261021120147-a75ffd9592c8
 # github.com/openshift/cluster-api-actuator-pkg/testutils => github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0-20260925161105-fda6678c170b
 # k8s.io/api => k8s.io/api v0.37.1
 # k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.37.1

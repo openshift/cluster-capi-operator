@@ -22,7 +22,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
+	openshiftapiextensionsv1 "github.com/openshift/api/apiextensions/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/test"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -31,7 +31,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
-func createRequirementWithCleanup(ctx context.Context, requirement *apiextensionsv1alpha1.CompatibilityRequirement) {
+func createRequirementWithCleanup(ctx context.Context, requirement *openshiftapiextensionsv1.CompatibilityRequirement) {
 	createTestObject(ctx, requirement, "CompatibilityRequirement")
 
 	// The reconciler added a finalizer which we need to remove manually because
@@ -66,19 +66,19 @@ var _ = Describe("CRDCompatibilityReconciler Controller Setup", func() {
 
 	Context("When starting the controller with existing state", func() {
 		var (
-			admittedRequirements    []*apiextensionsv1alpha1.CompatibilityRequirement
-			nonAdmittedRequirements []*apiextensionsv1alpha1.CompatibilityRequirement
+			admittedRequirements    []*openshiftapiextensionsv1.CompatibilityRequirement
+			nonAdmittedRequirements []*openshiftapiextensionsv1.CompatibilityRequirement
 		)
 
 		BeforeEach(func(ctx context.Context) {
 			By("Creating 2 admitted and 2 non-admitted requirements")
 
-			admittedRequirements = []*apiextensionsv1alpha1.CompatibilityRequirement{
+			admittedRequirements = []*openshiftapiextensionsv1.CompatibilityRequirement{
 				test.GenerateTestCompatibilityRequirement(testCRD),
 				test.GenerateTestCompatibilityRequirement(testCRD),
 			}
 
-			nonAdmittedRequirements = []*apiextensionsv1alpha1.CompatibilityRequirement{
+			nonAdmittedRequirements = []*openshiftapiextensionsv1.CompatibilityRequirement{
 				test.GenerateTestCompatibilityRequirement(testCRD),
 				test.GenerateTestCompatibilityRequirement(testCRD),
 			}
@@ -94,7 +94,7 @@ var _ = Describe("CRDCompatibilityReconciler Controller Setup", func() {
 			By("Reconciling admitted requirements to write their status")
 
 			for _, requirement := range admittedRequirements {
-				Eventually(func() (*apiextensionsv1alpha1.CompatibilityRequirement, error) {
+				Eventually(func() (*openshiftapiextensionsv1.CompatibilityRequirement, error) {
 					if _, err := reconciler.Reconcile(ctx, ctrl.Request{
 						NamespacedName: types.NamespacedName{
 							Name: requirement.Name,
@@ -112,7 +112,7 @@ var _ = Describe("CRDCompatibilityReconciler Controller Setup", func() {
 			}
 
 			for _, requirement := range nonAdmittedRequirements {
-				Eventually(func() (*apiextensionsv1alpha1.CompatibilityRequirement, error) {
+				Eventually(func() (*openshiftapiextensionsv1.CompatibilityRequirement, error) {
 					if _, err := reconciler.Reconcile(ctx, ctrl.Request{
 						NamespacedName: types.NamespacedName{
 							Name: requirement.Name,
@@ -135,7 +135,7 @@ var _ = Describe("CRDCompatibilityReconciler Controller Setup", func() {
 				var originalTransitionTime metav1.Time
 
 				for _, condition := range requirement.Status.Conditions {
-					if condition.Type == apiextensionsv1alpha1.CompatibilityRequirementAdmitted {
+					if condition.Type == openshiftapiextensionsv1.CompatibilityRequirementAdmitted {
 						originalTransitionTime = condition.LastTransitionTime
 						break
 					}
@@ -143,7 +143,7 @@ var _ = Describe("CRDCompatibilityReconciler Controller Setup", func() {
 
 				Expect(originalTransitionTime).NotTo(BeZero())
 
-				Eventually(func() (*apiextensionsv1alpha1.CompatibilityRequirement, error) {
+				Eventually(func() (*openshiftapiextensionsv1.CompatibilityRequirement, error) {
 					if _, err := reconciler.Reconcile(ctx, ctrl.Request{
 						NamespacedName: types.NamespacedName{
 							Name: requirement.Name,
@@ -158,7 +158,7 @@ var _ = Describe("CRDCompatibilityReconciler Controller Setup", func() {
 
 					return requirement, nil
 				}).Should(HaveField("Status.Conditions", ContainElement(SatisfyAll(
-					HaveField("Type", BeEquivalentTo(apiextensionsv1alpha1.CompatibilityRequirementAdmitted)),
+					HaveField("Type", BeEquivalentTo(openshiftapiextensionsv1.CompatibilityRequirementAdmitted)),
 					HaveField("LastTransitionTime", BeEquivalentTo(originalTransitionTime)),
 				))))
 			}

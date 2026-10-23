@@ -23,7 +23,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
+	openshiftapiextensionsv1 "github.com/openshift/api/apiextensions/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility/index"
 	"github.com/openshift/cluster-capi-operator/pkg/test"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -72,10 +72,10 @@ func Test_crdValidator_validateCreateOrUpdate(t *testing.T) {
 			name: "Should allow an incompatible CRD with excluded fields",
 			obj:  testCRDWorking.DeepCopy(),
 			requirements: []client.Object{
-				func() *apiextensionsv1alpha1.CompatibilityRequirement {
+				func() *openshiftapiextensionsv1.CompatibilityRequirement {
 					r := test.GenerateTestCompatibilityRequirement(testCRDWorking.DeepCopy())
-					r.Spec.CompatibilitySchema.ExcludedFields = []apiextensionsv1alpha1.APIExcludedField{
-						{Path: "foo1", Versions: []apiextensionsv1alpha1.APIVersionString{"v1"}},
+					r.Spec.CompatibilitySchema.ExcludedFields = []openshiftapiextensionsv1.APIExcludedField{
+						{Path: "foo1", Versions: []openshiftapiextensionsv1.APIVersionString{"v1"}},
 					}
 
 					return r
@@ -100,11 +100,11 @@ func Test_crdValidator_validateCreateOrUpdate(t *testing.T) {
 			name: "Should allow an incompatible CRD with multiple excluded fields",
 			obj:  testCRDWorking.DeepCopy(),
 			requirements: []client.Object{
-				func() *apiextensionsv1alpha1.CompatibilityRequirement {
+				func() *openshiftapiextensionsv1.CompatibilityRequirement {
 					r := test.GenerateTestCompatibilityRequirement(testCRDWorking.DeepCopy())
-					r.Spec.CompatibilitySchema.ExcludedFields = []apiextensionsv1alpha1.APIExcludedField{
-						{Path: "foo1", Versions: []apiextensionsv1alpha1.APIVersionString{"v1"}},
-						{Path: "foo2", Versions: []apiextensionsv1alpha1.APIVersionString{"v1"}},
+					r.Spec.CompatibilitySchema.ExcludedFields = []openshiftapiextensionsv1.APIExcludedField{
+						{Path: "foo1", Versions: []openshiftapiextensionsv1.APIVersionString{"v1"}},
+						{Path: "foo2", Versions: []openshiftapiextensionsv1.APIVersionString{"v1"}},
 					}
 
 					return r
@@ -116,9 +116,9 @@ func Test_crdValidator_validateCreateOrUpdate(t *testing.T) {
 			name: "Should permit a CRD with no CustomResourceDefinitionSchemaValidation",
 			obj:  testCRDWorking.DeepCopy(),
 			requirements: []client.Object{
-				func() *apiextensionsv1alpha1.CompatibilityRequirement {
+				func() *openshiftapiextensionsv1.CompatibilityRequirement {
 					r := test.GenerateTestCompatibilityRequirement(testCRDWorking.DeepCopy())
-					r.Spec.CustomResourceDefinitionSchemaValidation = (apiextensionsv1alpha1.CustomResourceDefinitionSchemaValidation{})
+					r.Spec.CustomResourceDefinitionSchemaValidation = (openshiftapiextensionsv1.CustomResourceDefinitionSchemaValidation{})
 
 					return r
 				}(),
@@ -129,9 +129,9 @@ func Test_crdValidator_validateCreateOrUpdate(t *testing.T) {
 			name: "Should permit an incompatible CRD with warnings for Action set to CRDAdmitActionWarn",
 			obj:  incompatibleCRD1.DeepCopy(),
 			requirements: []client.Object{
-				func() *apiextensionsv1alpha1.CompatibilityRequirement {
+				func() *openshiftapiextensionsv1.CompatibilityRequirement {
 					r := test.GenerateTestCompatibilityRequirement(testCRDWorking.DeepCopy())
-					r.Spec.CustomResourceDefinitionSchemaValidation.Action = apiextensionsv1alpha1.CRDAdmitActionWarn
+					r.Spec.CustomResourceDefinitionSchemaValidation.Action = openshiftapiextensionsv1.CRDAdmitActionWarn
 
 					r.Name = "test-warn"
 
@@ -144,12 +144,12 @@ func Test_crdValidator_validateCreateOrUpdate(t *testing.T) {
 			name: "Should permit an incompatible CRD with excluded fields and warnings for Action set to CRDAdmitActionWarn",
 			obj:  testCRDWorking.DeepCopy(),
 			requirements: []client.Object{
-				func() *apiextensionsv1alpha1.CompatibilityRequirement {
+				func() *openshiftapiextensionsv1.CompatibilityRequirement {
 					r := test.GenerateTestCompatibilityRequirement(testCRDWorking.DeepCopy())
-					r.Spec.CompatibilitySchema.ExcludedFields = []apiextensionsv1alpha1.APIExcludedField{
-						{Path: "foo1", Versions: []apiextensionsv1alpha1.APIVersionString{"v1"}},
+					r.Spec.CompatibilitySchema.ExcludedFields = []openshiftapiextensionsv1.APIExcludedField{
+						{Path: "foo1", Versions: []openshiftapiextensionsv1.APIVersionString{"v1"}},
 					}
-					r.Spec.CustomResourceDefinitionSchemaValidation.Action = apiextensionsv1alpha1.CRDAdmitActionWarn
+					r.Spec.CustomResourceDefinitionSchemaValidation.Action = openshiftapiextensionsv1.CRDAdmitActionWarn
 
 					r.Name = "test-warn-excluded"
 
@@ -162,9 +162,9 @@ func Test_crdValidator_validateCreateOrUpdate(t *testing.T) {
 			name: "Should permit an incompatible CRD with multiple warnings for Action set to CRDAdmitActionWarn",
 			obj:  incompatibleCRD2.DeepCopy(),
 			requirements: []client.Object{
-				func() *apiextensionsv1alpha1.CompatibilityRequirement {
+				func() *openshiftapiextensionsv1.CompatibilityRequirement {
 					r := test.GenerateTestCompatibilityRequirement(testCRDWorking.DeepCopy())
-					r.Spec.CustomResourceDefinitionSchemaValidation.Action = apiextensionsv1alpha1.CRDAdmitActionWarn
+					r.Spec.CustomResourceDefinitionSchemaValidation.Action = openshiftapiextensionsv1.CRDAdmitActionWarn
 					r.Name = "test-warn-multiple"
 
 					return r
@@ -179,13 +179,13 @@ func Test_crdValidator_validateCreateOrUpdate(t *testing.T) {
 			name: "Should permit an incompatible CRD with multiple excluded fields and warnings for Action set to CRDAdmitActionWarn",
 			obj:  testCRDWorking.DeepCopy(),
 			requirements: []client.Object{
-				func() *apiextensionsv1alpha1.CompatibilityRequirement {
+				func() *openshiftapiextensionsv1.CompatibilityRequirement {
 					r := test.GenerateTestCompatibilityRequirement(testCRDWorking.DeepCopy())
-					r.Spec.CompatibilitySchema.ExcludedFields = []apiextensionsv1alpha1.APIExcludedField{
-						{Path: "foo1", Versions: []apiextensionsv1alpha1.APIVersionString{"v1"}},
-						{Path: "foo2", Versions: []apiextensionsv1alpha1.APIVersionString{"v1"}},
+					r.Spec.CompatibilitySchema.ExcludedFields = []openshiftapiextensionsv1.APIExcludedField{
+						{Path: "foo1", Versions: []openshiftapiextensionsv1.APIVersionString{"v1"}},
+						{Path: "foo2", Versions: []openshiftapiextensionsv1.APIVersionString{"v1"}},
 					}
-					r.Spec.CustomResourceDefinitionSchemaValidation.Action = apiextensionsv1alpha1.CRDAdmitActionWarn
+					r.Spec.CustomResourceDefinitionSchemaValidation.Action = openshiftapiextensionsv1.CRDAdmitActionWarn
 
 					r.Name = "test-warn-multiple-excluded"
 
@@ -198,7 +198,7 @@ func Test_crdValidator_validateCreateOrUpdate(t *testing.T) {
 			name: "Should reject a CRD when a CompatibilityRequirement has an invalid Action",
 			obj:  testCRDWorking.DeepCopy(),
 			requirements: []client.Object{
-				func() *apiextensionsv1alpha1.CompatibilityRequirement {
+				func() *openshiftapiextensionsv1.CompatibilityRequirement {
 					r := test.GenerateTestCompatibilityRequirement(testCRDWorking.DeepCopy())
 					r.Spec.CustomResourceDefinitionSchemaValidation.Action = "Invalid"
 
@@ -214,7 +214,7 @@ func Test_crdValidator_validateCreateOrUpdate(t *testing.T) {
 			name: "Should reject a CRD when a CompatibilityRequirement has an unsupported CRDData type",
 			obj:  testCRDWorking.DeepCopy(),
 			requirements: []client.Object{
-				func() *apiextensionsv1alpha1.CompatibilityRequirement {
+				func() *openshiftapiextensionsv1.CompatibilityRequirement {
 					r := test.GenerateTestCompatibilityRequirement(testCRDWorking.DeepCopy())
 					r.Spec.CompatibilitySchema.CustomResourceDefinition.Type = "UNSUPPORTED"
 					r.Name = "test-unsupported-type"
@@ -230,7 +230,7 @@ func Test_crdValidator_validateCreateOrUpdate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			g := NewWithT(t)
 			v := Validator{
-				client: fake.NewClientBuilder().WithObjects(tt.requirements...).WithIndex(&apiextensionsv1alpha1.CompatibilityRequirement{}, index.FieldCRDByName, index.CRDByName).Build(),
+				client: fake.NewClientBuilder().WithObjects(tt.requirements...).WithIndex(&openshiftapiextensionsv1.CompatibilityRequirement{}, index.FieldCRDByName, index.CRDByName).Build(),
 			}
 
 			gotWarnings, gotErr := v.validateCreateOrUpdate(ctx, tt.obj)
@@ -251,15 +251,15 @@ func Test_pruneExludedFields(t *testing.T) {
 	tests := []struct {
 		name           string
 		crd            *apiextensionsv1.CustomResourceDefinition
-		excludedFields []apiextensionsv1alpha1.APIExcludedField
+		excludedFields []openshiftapiextensionsv1.APIExcludedField
 		wantCRD        *apiextensionsv1.CustomResourceDefinition
 		wantErr        OmegaMatcher
 	}{
 		{
 			name: "Should prune an excluded field",
 			crd:  complexCRDSchema(),
-			excludedFields: []apiextensionsv1alpha1.APIExcludedField{
-				{Path: "spec.name", Versions: []apiextensionsv1alpha1.APIVersionString{"v1"}},
+			excludedFields: []openshiftapiextensionsv1.APIExcludedField{
+				{Path: "spec.name", Versions: []openshiftapiextensionsv1.APIVersionString{"v1"}},
 			},
 			wantCRD: func() *apiextensionsv1.CustomResourceDefinition {
 				crd := complexCRDSchema()
@@ -274,8 +274,8 @@ func Test_pruneExludedFields(t *testing.T) {
 		{
 			name: "Should prune an excluded field in an array",
 			crd:  complexCRDSchema(),
-			excludedFields: []apiextensionsv1alpha1.APIExcludedField{
-				{Path: "spec.tags.key", Versions: []apiextensionsv1alpha1.APIVersionString{"v1"}},
+			excludedFields: []openshiftapiextensionsv1.APIExcludedField{
+				{Path: "spec.tags.key", Versions: []openshiftapiextensionsv1.APIVersionString{"v1"}},
 			},
 			wantCRD: func() *apiextensionsv1.CustomResourceDefinition {
 				crd := complexCRDSchema()
@@ -290,8 +290,8 @@ func Test_pruneExludedFields(t *testing.T) {
 		{
 			name: "Should prune an excluded field in an object",
 			crd:  complexCRDSchema(),
-			excludedFields: []apiextensionsv1alpha1.APIExcludedField{
-				{Path: "spec.metadata.region", Versions: []apiextensionsv1alpha1.APIVersionString{"v1"}},
+			excludedFields: []openshiftapiextensionsv1.APIExcludedField{
+				{Path: "spec.metadata.region", Versions: []openshiftapiextensionsv1.APIVersionString{"v1"}},
 			},
 			wantCRD: func() *apiextensionsv1.CustomResourceDefinition {
 				crd := complexCRDSchema()
@@ -312,8 +312,8 @@ func Test_pruneExludedFields(t *testing.T) {
 
 				return crd
 			}(),
-			excludedFields: []apiextensionsv1alpha1.APIExcludedField{
-				{Path: "spec.name", Versions: []apiextensionsv1alpha1.APIVersionString{"v1"}},
+			excludedFields: []openshiftapiextensionsv1.APIExcludedField{
+				{Path: "spec.name", Versions: []openshiftapiextensionsv1.APIVersionString{"v1"}},
 			},
 			wantCRD: func() *apiextensionsv1.CustomResourceDefinition {
 				crd := complexCRDSchema()
@@ -338,8 +338,8 @@ func Test_pruneExludedFields(t *testing.T) {
 
 				return crd
 			}(),
-			excludedFields: []apiextensionsv1alpha1.APIExcludedField{
-				{Path: "spec.name", Versions: []apiextensionsv1alpha1.APIVersionString{"v1", "v2"}},
+			excludedFields: []openshiftapiextensionsv1.APIExcludedField{
+				{Path: "spec.name", Versions: []openshiftapiextensionsv1.APIVersionString{"v1", "v2"}},
 			},
 			wantCRD: func() *apiextensionsv1.CustomResourceDefinition {
 				crd := complexCRDSchema()
@@ -362,24 +362,24 @@ func Test_pruneExludedFields(t *testing.T) {
 		{
 			name: "Should return an error if the excluded field is not found",
 			crd:  complexCRDSchema(),
-			excludedFields: []apiextensionsv1alpha1.APIExcludedField{
-				{Path: "spec.not-found", Versions: []apiextensionsv1alpha1.APIVersionString{"v1"}},
+			excludedFields: []openshiftapiextensionsv1.APIExcludedField{
+				{Path: "spec.not-found", Versions: []openshiftapiextensionsv1.APIVersionString{"v1"}},
 			},
 			wantErr: MatchError("failed to prune excluded fields: path not found in schema: desired path ^.spec.not-found, path ^.spec is missing child not-found"),
 		},
 		{
 			name: "Should return an error if the excluded field is not found in an array",
 			crd:  complexCRDSchema(),
-			excludedFields: []apiextensionsv1alpha1.APIExcludedField{
-				{Path: "spec.tags.not-found", Versions: []apiextensionsv1alpha1.APIVersionString{"v1"}},
+			excludedFields: []openshiftapiextensionsv1.APIExcludedField{
+				{Path: "spec.tags.not-found", Versions: []openshiftapiextensionsv1.APIVersionString{"v1"}},
 			},
 			wantErr: MatchError("failed to prune excluded fields: path not found in schema: desired path ^.spec.tags.not-found, path ^.spec.tags is missing child not-found"),
 		},
 		{
 			name: "Should return an error if the excluded field is a child of a scalar",
 			crd:  complexCRDSchema(),
-			excludedFields: []apiextensionsv1alpha1.APIExcludedField{
-				{Path: "spec.name.not-found", Versions: []apiextensionsv1alpha1.APIVersionString{"v1"}},
+			excludedFields: []openshiftapiextensionsv1.APIExcludedField{
+				{Path: "spec.name.not-found", Versions: []openshiftapiextensionsv1.APIVersionString{"v1"}},
 			},
 			wantErr: MatchError("failed to prune excluded fields: path not found in schema: desired path ^.spec.name.not-found, path ^.spec.name is not an object"),
 		},
@@ -393,8 +393,8 @@ func Test_pruneExludedFields(t *testing.T) {
 
 				return crd
 			}(),
-			excludedFields: []apiextensionsv1alpha1.APIExcludedField{
-				{Path: "spec.tags.not-found", Versions: []apiextensionsv1alpha1.APIVersionString{"v1"}},
+			excludedFields: []openshiftapiextensionsv1.APIExcludedField{
+				{Path: "spec.tags.not-found", Versions: []openshiftapiextensionsv1.APIVersionString{"v1"}},
 			},
 			wantErr: MatchError("failed to prune excluded fields: path not found in schema: desired path ^.spec.tags.not-found, path ^.spec.tags is an array but does not have an items schema"),
 		},

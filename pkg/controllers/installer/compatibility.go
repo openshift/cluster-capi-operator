@@ -20,7 +20,7 @@ import (
 	"errors"
 	"fmt"
 
-	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
+	openshiftapiextensionsv1 "github.com/openshift/api/apiextensions/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -62,31 +62,31 @@ func buildCompatibilityRequirement(crd *unstructured.Unstructured, revisionIndex
 		return nil, fmt.Errorf("marshalling CRD %s to YAML: %w", crd.GetName(), err)
 	}
 
-	cr := &apiextensionsv1alpha1.CompatibilityRequirement{
+	cr := &openshiftapiextensionsv1.CompatibilityRequirement{
 		TypeMeta: metav1.TypeMeta{
-			APIVersion: apiextensionsv1alpha1.GroupVersion.String(),
+			APIVersion: openshiftapiextensionsv1.GroupVersion.String(),
 			Kind:       "CompatibilityRequirement",
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
 		},
-		Spec: apiextensionsv1alpha1.CompatibilityRequirementSpec{
-			CompatibilitySchema: apiextensionsv1alpha1.CompatibilitySchema{
-				CustomResourceDefinition: apiextensionsv1alpha1.CRDData{
-					Type: apiextensionsv1alpha1.CRDDataTypeYAML,
+		Spec: openshiftapiextensionsv1.CompatibilityRequirementSpec{
+			CompatibilitySchema: openshiftapiextensionsv1.CompatibilitySchema{
+				CustomResourceDefinition: openshiftapiextensionsv1.CRDData{
+					Type: openshiftapiextensionsv1.CRDDataTypeYAML,
 					Data: string(crdYAML),
 				},
-				RequiredVersions: apiextensionsv1alpha1.APIVersions{
+				RequiredVersions: openshiftapiextensionsv1.APIVersions{
 					// additionalVersions deferred to a separate PR.
 					// See https://github.com/openshift/cluster-capi-operator/pull/604#discussion_r3657934049
-					DefaultSelection: apiextensionsv1alpha1.APIVersionSetTypeStorageOnly,
+					DefaultSelection: openshiftapiextensionsv1.APIVersionSetTypeStorageOnly,
 				},
 			},
-			CustomResourceDefinitionSchemaValidation: apiextensionsv1alpha1.CustomResourceDefinitionSchemaValidation{
-				Action: apiextensionsv1alpha1.CRDAdmitActionDeny,
+			CustomResourceDefinitionSchemaValidation: openshiftapiextensionsv1.CustomResourceDefinitionSchemaValidation{
+				Action: openshiftapiextensionsv1.CRDAdmitActionDeny,
 			},
-			ObjectSchemaValidation: apiextensionsv1alpha1.ObjectSchemaValidation{
-				Action: apiextensionsv1alpha1.CRDAdmitActionDeny,
+			ObjectSchemaValidation: openshiftapiextensionsv1.ObjectSchemaValidation{
+				Action: openshiftapiextensionsv1.CRDAdmitActionDeny,
 				NamespaceSelector: metav1.LabelSelector{
 					MatchLabels: map[string]string{
 						"kubernetes.io/metadata.name": capiNamespace,

@@ -24,7 +24,7 @@ import (
 
 	"github.com/gobuffalo/flect"
 	"github.com/onsi/gomega"
-	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
+	openshiftapiextensionsv1 "github.com/openshift/api/apiextensions/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -224,32 +224,32 @@ func GenerateTestCRD() *apiextensionsv1.CustomResourceDefinition {
 
 // GenerateTestCompatibilityRequirement generates a simple CompatibilityRequirement using the given CRD as the CompatibilityCRD.
 // The generated requirement uses GenerateName, so it will not have a valid Name until it is created.
-func GenerateTestCompatibilityRequirement(testCRD *apiextensionsv1.CustomResourceDefinition) *apiextensionsv1alpha1.CompatibilityRequirement {
+func GenerateTestCompatibilityRequirement(testCRD *apiextensionsv1.CustomResourceDefinition) *openshiftapiextensionsv1.CompatibilityRequirement {
 	yaml, err := yaml.Marshal(testCRD)
 	gomega.Expect(err).To(gomega.Succeed())
 
-	return &apiextensionsv1alpha1.CompatibilityRequirement{
+	return &openshiftapiextensionsv1.CompatibilityRequirement{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: "test-requirement-",
 		},
-		Spec: apiextensionsv1alpha1.CompatibilityRequirementSpec{
-			CompatibilitySchema: apiextensionsv1alpha1.CompatibilitySchema{
-				CustomResourceDefinition: apiextensionsv1alpha1.CRDData{
-					Type: apiextensionsv1alpha1.CRDDataTypeYAML,
+		Spec: openshiftapiextensionsv1.CompatibilityRequirementSpec{
+			CompatibilitySchema: openshiftapiextensionsv1.CompatibilitySchema{
+				CustomResourceDefinition: openshiftapiextensionsv1.CRDData{
+					Type: openshiftapiextensionsv1.CRDDataTypeYAML,
 					Data: string(yaml),
 				},
-				RequiredVersions: apiextensionsv1alpha1.APIVersions{
-					DefaultSelection: apiextensionsv1alpha1.APIVersionSetTypeAllServed,
+				RequiredVersions: openshiftapiextensionsv1.APIVersions{
+					DefaultSelection: openshiftapiextensionsv1.APIVersionSetTypeAllServed,
 				},
 			},
-			CustomResourceDefinitionSchemaValidation: apiextensionsv1alpha1.CustomResourceDefinitionSchemaValidation{
-				Action: apiextensionsv1alpha1.CRDAdmitActionDeny,
+			CustomResourceDefinitionSchemaValidation: openshiftapiextensionsv1.CustomResourceDefinitionSchemaValidation{
+				Action: openshiftapiextensionsv1.CRDAdmitActionDeny,
 			},
-			ObjectSchemaValidation: apiextensionsv1alpha1.ObjectSchemaValidation{
-				Action: apiextensionsv1alpha1.CRDAdmitActionDeny,
+			ObjectSchemaValidation: openshiftapiextensionsv1.ObjectSchemaValidation{
+				Action: openshiftapiextensionsv1.CRDAdmitActionDeny,
 			},
 		},
-		Status: apiextensionsv1alpha1.CompatibilityRequirementStatus{
+		Status: openshiftapiextensionsv1.CompatibilityRequirementStatus{
 			CRDName: testCRD.GetName(),
 		},
 	}
