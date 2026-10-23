@@ -510,6 +510,9 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		configv1.TokenIssuer{}.OpenAPIModelName():                                              schema_openshift_api_config_v1_TokenIssuer(ref),
 		configv1.TokenRequiredClaim{}.OpenAPIModelName():                                       schema_openshift_api_config_v1_TokenRequiredClaim(ref),
 		configv1.TokenUserValidationRule{}.OpenAPIModelName():                                  schema_openshift_api_config_v1_TokenUserValidationRule(ref),
+		configv1.TopologyState{}.OpenAPIModelName():                                            schema_openshift_api_config_v1_TopologyState(ref),
+		configv1.TopologyTransition{}.OpenAPIModelName():                                       schema_openshift_api_config_v1_TopologyTransition(ref),
+		configv1.TopologyTransitionStatus{}.OpenAPIModelName():                                 schema_openshift_api_config_v1_TopologyTransitionStatus(ref),
 		configv1.Update{}.OpenAPIModelName():                                                   schema_openshift_api_config_v1_Update(ref),
 		configv1.UpdateHistory{}.OpenAPIModelName():                                            schema_openshift_api_config_v1_UpdateHistory(ref),
 		configv1.UsernameClaimMapping{}.OpenAPIModelName():                                     schema_openshift_api_config_v1_UsernameClaimMapping(ref),
@@ -552,6 +555,9 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		configv1alpha1.ClusterMonitoringSpec{}.OpenAPIModelName():                              schema_openshift_api_config_v1alpha1_ClusterMonitoringSpec(ref),
 		configv1alpha1.ClusterMonitoringStatus{}.OpenAPIModelName():                            schema_openshift_api_config_v1alpha1_ClusterMonitoringStatus(ref),
 		configv1alpha1.ContainerResource{}.OpenAPIModelName():                                  schema_openshift_api_config_v1alpha1_ContainerResource(ref),
+		configv1alpha1.ControllerManager{}.OpenAPIModelName():                                  schema_openshift_api_config_v1alpha1_ControllerManager(ref),
+		configv1alpha1.ControllerManagerList{}.OpenAPIModelName():                              schema_openshift_api_config_v1alpha1_ControllerManagerList(ref),
+		configv1alpha1.ControllerManagerSpec{}.OpenAPIModelName():                              schema_openshift_api_config_v1alpha1_ControllerManagerSpec(ref),
 		configv1alpha1.CustomPKIPolicy{}.OpenAPIModelName():                                    schema_openshift_api_config_v1alpha1_CustomPKIPolicy(ref),
 		configv1alpha1.DefaultCertificateConfig{}.OpenAPIModelName():                           schema_openshift_api_config_v1alpha1_DefaultCertificateConfig(ref),
 		configv1alpha1.DropEqualActionConfig{}.OpenAPIModelName():                              schema_openshift_api_config_v1alpha1_DropEqualActionConfig(ref),
@@ -1019,6 +1025,13 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		machinev1beta1.VSphereMachineProviderSpec{}.OpenAPIModelName():                         schema_openshift_api_machine_v1beta1_VSphereMachineProviderSpec(ref),
 		machinev1beta1.VSphereMachineProviderStatus{}.OpenAPIModelName():                       schema_openshift_api_machine_v1beta1_VSphereMachineProviderStatus(ref),
 		machinev1beta1.Workspace{}.OpenAPIModelName():                                          schema_openshift_api_machine_v1beta1_Workspace(ref),
+		machineconfigurationv1alpha1.BGPVIPConfig{}.OpenAPIModelName():                         schema_openshift_api_machineconfiguration_v1alpha1_BGPVIPConfig(ref),
+		machineconfigurationv1alpha1.BGPVIPConfigList{}.OpenAPIModelName():                     schema_openshift_api_machineconfiguration_v1alpha1_BGPVIPConfigList(ref),
+		machineconfigurationv1alpha1.BGPVIPConfigSpec{}.OpenAPIModelName():                     schema_openshift_api_machineconfiguration_v1alpha1_BGPVIPConfigSpec(ref),
+		machineconfigurationv1alpha1.BGPVIPConfigStatus{}.OpenAPIModelName():                   schema_openshift_api_machineconfiguration_v1alpha1_BGPVIPConfigStatus(ref),
+		machineconfigurationv1alpha1.BGPVIPHostPeers{}.OpenAPIModelName():                      schema_openshift_api_machineconfiguration_v1alpha1_BGPVIPHostPeers(ref),
+		machineconfigurationv1alpha1.BGPVIPPasswordSecret{}.OpenAPIModelName():                 schema_openshift_api_machineconfiguration_v1alpha1_BGPVIPPasswordSecret(ref),
+		machineconfigurationv1alpha1.BGPVIPPeer{}.OpenAPIModelName():                           schema_openshift_api_machineconfiguration_v1alpha1_BGPVIPPeer(ref),
 		machineconfigurationv1alpha1.InternalReleaseImage{}.OpenAPIModelName():                 schema_openshift_api_machineconfiguration_v1alpha1_InternalReleaseImage(ref),
 		machineconfigurationv1alpha1.InternalReleaseImageBundleStatus{}.OpenAPIModelName():     schema_openshift_api_machineconfiguration_v1alpha1_InternalReleaseImageBundleStatus(ref),
 		machineconfigurationv1alpha1.InternalReleaseImageList{}.OpenAPIModelName():             schema_openshift_api_machineconfiguration_v1alpha1_InternalReleaseImageList(ref),
@@ -1148,8 +1161,11 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		operatorv1.ConfigSpec{}.OpenAPIModelName():                                             schema_openshift_api_operator_v1_ConfigSpec(ref),
 		operatorv1.ConfigStatus{}.OpenAPIModelName():                                           schema_openshift_api_operator_v1_ConfigStatus(ref),
 		operatorv1.Console{}.OpenAPIModelName():                                                schema_openshift_api_operator_v1_Console(ref),
+		operatorv1.ConsoleAuthProxyConfig{}.OpenAPIModelName():                                 schema_openshift_api_operator_v1_ConsoleAuthProxyConfig(ref),
+		operatorv1.ConsoleAuthProxyTrustedCAConfigMapReference{}.OpenAPIModelName():            schema_openshift_api_operator_v1_ConsoleAuthProxyTrustedCAConfigMapReference(ref),
 		operatorv1.ConsoleConfigRoute{}.OpenAPIModelName():                                     schema_openshift_api_operator_v1_ConsoleConfigRoute(ref),
 		operatorv1.ConsoleCustomization{}.OpenAPIModelName():                                   schema_openshift_api_operator_v1_ConsoleCustomization(ref),
+		operatorv1.ConsoleIngress{}.OpenAPIModelName():                                         schema_openshift_api_operator_v1_ConsoleIngress(ref),
 		operatorv1.ConsoleList{}.OpenAPIModelName():                                            schema_openshift_api_operator_v1_ConsoleList(ref),
 		operatorv1.ConsoleProviders{}.OpenAPIModelName():                                       schema_openshift_api_operator_v1_ConsoleProviders(ref),
 		operatorv1.ConsoleSpec{}.OpenAPIModelName():                                            schema_openshift_api_operator_v1_ConsoleSpec(ref),
@@ -1182,6 +1198,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		operatorv1.GCPCSIDriverConfigSpec{}.OpenAPIModelName():                                 schema_openshift_api_operator_v1_GCPCSIDriverConfigSpec(ref),
 		operatorv1.GCPKMSKeyReference{}.OpenAPIModelName():                                     schema_openshift_api_operator_v1_GCPKMSKeyReference(ref),
 		operatorv1.GCPLoadBalancerParameters{}.OpenAPIModelName():                              schema_openshift_api_operator_v1_GCPLoadBalancerParameters(ref),
+		operatorv1.GatewayAPIIngressConfig{}.OpenAPIModelName():                                schema_openshift_api_operator_v1_GatewayAPIIngressConfig(ref),
 		operatorv1.GatewayConfig{}.OpenAPIModelName():                                          schema_openshift_api_operator_v1_GatewayConfig(ref),
 		operatorv1.GatherStatus{}.OpenAPIModelName():                                           schema_openshift_api_operator_v1_GatherStatus(ref),
 		operatorv1.GathererStatus{}.OpenAPIModelName():                                         schema_openshift_api_operator_v1_GathererStatus(ref),
@@ -1217,6 +1234,9 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		operatorv1.IngressControllerSpec{}.OpenAPIModelName():                                  schema_openshift_api_operator_v1_IngressControllerSpec(ref),
 		operatorv1.IngressControllerStatus{}.OpenAPIModelName():                                schema_openshift_api_operator_v1_IngressControllerStatus(ref),
 		operatorv1.IngressControllerTuningOptions{}.OpenAPIModelName():                         schema_openshift_api_operator_v1_IngressControllerTuningOptions(ref),
+		operatorv1.IngressList{}.OpenAPIModelName():                                            schema_openshift_api_operator_v1_IngressList(ref),
+		operatorv1.IngressSpec{}.OpenAPIModelName():                                            schema_openshift_api_operator_v1_IngressSpec(ref),
+		operatorv1.IngressStatus{}.OpenAPIModelName():                                          schema_openshift_api_operator_v1_IngressStatus(ref),
 		operatorv1.InsightsOperator{}.OpenAPIModelName():                                       schema_openshift_api_operator_v1_InsightsOperator(ref),
 		operatorv1.InsightsOperatorList{}.OpenAPIModelName():                                   schema_openshift_api_operator_v1_InsightsOperatorList(ref),
 		operatorv1.InsightsOperatorSpec{}.OpenAPIModelName():                                   schema_openshift_api_operator_v1_InsightsOperatorSpec(ref),
@@ -3937,6 +3957,13 @@ func schema_openshift_api_authentication_v1alpha1_AuthenticationConfiguration(re
 					"apiVersion": {
 						SchemaProps: spec.SchemaProps{
 							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"trustedCAFilePath": {
+						SchemaProps: spec.SchemaProps{
+							Description: "trustedCAFilePath is an optional path to a PEM-encoded CA bundle used to verify outbound HTTPS connections including proxies and TLS-intercepting proxies for outbound issuer discovery and JWKS requests. When specified, the file is watched and updates are applied without restarting the webhook server. When omitted, connections use the system trust roots only.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -16826,6 +16853,13 @@ func schema_openshift_api_config_v1_InfrastructureSpec(ref common.ReferenceCallb
 							Format:      "",
 						},
 					},
+					"infrastructureTopology": {
+						SchemaProps: spec.SchemaProps{
+							Description: "infrastructureTopology expresses the desired topology for infrastructure services that do not run on control plane nodes, indicating how infrastructure workloads are distributed across nodes.\n\nWhen omitted, no topology transition override has been expressed. Once populated, the field represents the desired topology state.\n\nWhen the value differs from status.infrastructureTopology, the cluster evaluates whether the requested transition can proceed. Not all transitions may be permitted.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 				},
 			},
 		},
@@ -16901,6 +16935,13 @@ func schema_openshift_api_config_v1_InfrastructureStatus(ref common.ReferenceCal
 							Format:      "",
 						},
 					},
+					"topologyTransitionStatus": {
+						SchemaProps: spec.SchemaProps{
+							Description: "topologyTransitionStatus reports evaluations of supported topology transitions and the status of a requested transition, if any. It is optional and is omitted until the topology controller reports transition status. A transition is requested through spec.controlPlaneTopology. The controller reports completion only after both topologies reach that transition's target and post-transition checks pass; reaching the target topology alone is not completion.",
+							Default:     map[string]interface{}{},
+							Ref:         ref(configv1.TopologyTransitionStatus{}.OpenAPIModelName()),
+						},
+					},
 					"cpuPartitioning": {
 						SchemaProps: spec.SchemaProps{
 							Description: "cpuPartitioning expresses if CPU partitioning is a currently enabled feature in the cluster. CPU Partitioning means that this cluster can support partitioning workloads to specific CPU Sets. Valid values are \"None\" and \"AllNodes\". When omitted, the default value is \"None\". The default value of \"None\" indicates that no nodes will be setup with CPU partitioning. The \"AllNodes\" value indicates that all nodes have been setup with CPU partitioning, and can then be further configured via the PerformanceProfile API.",
@@ -16913,7 +16954,7 @@ func schema_openshift_api_config_v1_InfrastructureStatus(ref common.ReferenceCal
 			},
 		},
 		Dependencies: []string{
-			configv1.PlatformStatus{}.OpenAPIModelName()},
+			configv1.PlatformStatus{}.OpenAPIModelName(), configv1.TopologyTransitionStatus{}.OpenAPIModelName()},
 	}
 }
 
@@ -22673,6 +22714,138 @@ func schema_openshift_api_config_v1_TokenUserValidationRule(ref common.Reference
 	}
 }
 
+func schema_openshift_api_config_v1_TopologyState(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "TopologyState describes the control-plane and infrastructure topology at one end of a topology transition. The topology controller determines which transitions are supported. Currently, it supports only transitions that change both topologies from SingleReplica to HighlyAvailable. Representing a topology here does not enable a transition to it.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"controlPlaneTopology": {
+						SchemaProps: spec.SchemaProps{
+							Description: "controlPlaneTopology is the topology of the control-plane nodes. Valid values are HighlyAvailable, HighlyAvailableArbiter, and SingleReplica. External is not valid: transitions cannot involve an externally hosted control plane. SingleReplica means a single instance of control-plane services is expected to meet cluster needs. HighlyAvailable means multiple instances are expected to provide redundancy. HighlyAvailableArbiter means two control-plane nodes and a smaller arbiter node to maintain quorum. See https://pkg.go.dev/github.com/openshift/api/config/v1#TopologyMode for topology definitions. controlPlaneTopology is required.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"infrastructureTopology": {
+						SchemaProps: spec.SchemaProps{
+							Description: "infrastructureTopology is the topology of infrastructure services. Valid values are SingleReplica and HighlyAvailable. SingleReplica means operators expect a single instance of infrastructure services to meet cluster needs. HighlyAvailable means operators expect multiple instances of infrastructure services to provide redundancy. infrastructureTopology is required.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"controlPlaneTopology", "infrastructureTopology"},
+			},
+		},
+	}
+}
+
+func schema_openshift_api_config_v1_TopologyTransition(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"source": {
+						SchemaProps: spec.SchemaProps{
+							Description: "source is the control-plane and infrastructure topology this transition was evaluated from. It may differ from the current topology while status is being refreshed. External control planes cannot be a transition source. controlPlaneTopology is the topology of the control-plane nodes. Valid values are HighlyAvailable, HighlyAvailableArbiter, and SingleReplica. External is not valid: transitions cannot involve an externally hosted control plane. SingleReplica means a single instance of control-plane services is expected to meet cluster needs. HighlyAvailable means multiple instances are expected to provide redundancy. HighlyAvailableArbiter means two control-plane nodes and a smaller arbiter node to maintain quorum. See https://pkg.go.dev/github.com/openshift/api/config/v1#TopologyMode for topology definitions. infrastructureTopology is the topology of infrastructure services. Valid values are SingleReplica and HighlyAvailable. SingleReplica means operators expect a single instance of infrastructure services to meet cluster needs. HighlyAvailable means operators expect multiple instances of infrastructure services to provide redundancy. source is required.",
+							Default:     map[string]interface{}{},
+							Ref:         ref(configv1.TopologyState{}.OpenAPIModelName()),
+						},
+					},
+					"target": {
+						SchemaProps: spec.SchemaProps{
+							Description: "target is the control-plane and infrastructure topology this transition would move to. controlPlaneTopology is the topology of the control-plane nodes. Valid values are HighlyAvailable, HighlyAvailableArbiter, and SingleReplica. External is not valid: transitions cannot involve an externally hosted control plane. SingleReplica means a single instance of control-plane services is expected to meet cluster needs. HighlyAvailable means multiple instances are expected to provide redundancy. HighlyAvailableArbiter means two control-plane nodes and a smaller arbiter node to maintain quorum. See https://pkg.go.dev/github.com/openshift/api/config/v1#TopologyMode for topology definitions. infrastructureTopology is the topology of infrastructure services. Valid values are SingleReplica and HighlyAvailable. SingleReplica means operators expect a single instance of infrastructure services to meet cluster needs. HighlyAvailable means operators expect multiple instances of infrastructure services to provide redundancy. External control planes cannot be a transition target. target is required.",
+							Default:     map[string]interface{}{},
+							Ref:         ref(configv1.TopologyState{}.OpenAPIModelName()),
+						},
+					},
+					"evaluations": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-map-keys": []interface{}{
+									"type",
+								},
+								"x-kubernetes-list-type": "map",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "evaluations contains the availability condition for this transition and conditions for the checks run against the cluster to determine availability.\n\nTopologyTransitionAvailable is required; other condition types report individual checks. Between one and 32 conditions must be present, allowing at most 31 individual checks in addition to the availability condition. The controller defines individual check types, reasons, and messages, and always reports each one explicitly, using Unknown when a check's result is not yet known.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref(metav1.Condition{}.OpenAPIModelName()),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"source", "target", "evaluations"},
+			},
+		},
+		Dependencies: []string{
+			configv1.TopologyState{}.OpenAPIModelName(), metav1.Condition{}.OpenAPIModelName()},
+	}
+}
+
+func schema_openshift_api_config_v1_TopologyTransitionStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "TopologyTransitionStatus reports availability of each type of topology transition and contains the status of any initiated transition.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"conditions": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-map-keys": []interface{}{
+									"type",
+								},
+								"x-kubernetes-list-type": "map",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "conditions provides information on topology transition progress and the evaluation of supported transition types. The controller always reports both conditions once topologyTransitionStatus is set.\n\nValid condition types are TopologyTransitionsEvaluated and TopologyTransitionCompleted. Both conditions must be present: the controller always reports each condition explicitly, using Unknown when a condition's state is not yet known, rather than omitting it.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref(metav1.Condition{}.OpenAPIModelName()),
+									},
+								},
+							},
+						},
+					},
+					"transitions": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "transitions contains each supported transition type and its availability. It is optional. The controller clears this list whenever TopologyTransitionsEvaluated is not True, so its presence always reflects current, trustworthy results: an omitted list while TopologyTransitionsEvaluated is True means no supported transition options were found, and an omitted list otherwise means no transition options have been reported yet.\n\nBetween one and eight transition options must be present when the list is set. This list reports transition options, not concurrent transitions. The topology controller determines which transition options are supported.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref(configv1.TopologyTransition{}.OpenAPIModelName()),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			configv1.TopologyTransition{}.OpenAPIModelName(), metav1.Condition{}.OpenAPIModelName()},
+	}
+}
+
 func schema_openshift_api_config_v1_Update(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -24665,6 +24838,120 @@ func schema_openshift_api_config_v1alpha1_ContainerResource(ref common.Reference
 		},
 		Dependencies: []string{
 			resource.Quantity{}.OpenAPIModelName()},
+	}
+}
+
+func schema_openshift_api_config_v1alpha1_ControllerManager(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "ControllerManager holds cluster-wide configuration shared by the controller managers in the system, among them especially kube-controller-manager. The resource is a singleton named \"cluster\".\n\nCompatibility level 4: No compatibility is provided, the API can change at any point for any reason. These capabilities should not be used by applications needing long term support.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Description: "metadata is the standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
+							Default:     map[string]interface{}{},
+							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
+						},
+					},
+					"spec": {
+						SchemaProps: spec.SchemaProps{
+							Description: "spec holds user settable values for configuration. This field is required but the spec may be empty to express no opinion.",
+							Ref:         ref(configv1alpha1.ControllerManagerSpec{}.OpenAPIModelName()),
+						},
+					},
+				},
+				Required: []string{"spec"},
+			},
+		},
+		Dependencies: []string{
+			configv1alpha1.ControllerManagerSpec{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
+	}
+}
+
+func schema_openshift_api_config_v1alpha1_ControllerManagerList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "ControllerManagerList is a collection of ControllerManager resources.\n\nCompatibility level 4: No compatibility is provided, the API can change at any point for any reason. These capabilities should not be used by applications needing long term support.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Description: "metadata is the standard list's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
+							Default:     map[string]interface{}{},
+							Ref:         ref(metav1.ListMeta{}.OpenAPIModelName()),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Description: "items is a list of ControllerManager resources",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref(configv1alpha1.ControllerManager{}.OpenAPIModelName()),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"metadata", "items"},
+			},
+		},
+		Dependencies: []string{
+			configv1alpha1.ControllerManager{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
+	}
+}
+
+func schema_openshift_api_config_v1alpha1_ControllerManagerSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "ControllerManagerSpec defines the desired state of the controller managers",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"volumeForceDetach": {
+						SchemaProps: spec.SchemaProps{
+							Description: "volumeForceDetach controls the conditions under which kube-controller-manager force detaches volumes from a node that is not healthy. Volumes are always force detached when a node is marked out-of-service via the \"node.kubernetes.io/out-of-service\" taint, as part of the non-graceful node shutdown procedure. This field controls whether force detach is also triggered when the maximum unmount time is exceeded (6 minutes). Valid values are \"OnUnmountTimeout\" and \"OnOutOfServiceTaintOnly\". When set to \"OnUnmountTimeout\", volumes are force detached from unhealthy nodes once the maximum unmount time is exceeded, so that workloads using them can start on other nodes. Force detaching a volume that is still in use by the node can corrupt its data. When set to \"OnOutOfServiceTaintOnly\", volumes are force detached only via the out-of-service taint, and remain attached to an unhealthy node until it recovers or the \"node.kubernetes.io/out-of-service\" taint is applied as part of the non-graceful node shutdown procedure. When omitted, this means the user has no opinion and the platform is left to choose a reasonable default, which is subject to change over time. The current default is \"OnUnmountTimeout\". Changing this field causes kube-controller-manager to be redeployed with the new setting. Rollout progress is reported by the kube-controller-manager cluster operator.\n\nPossible enum values:\n - `\"OnOutOfServiceTaintOnly\"` force detaches volumes only when the node is marked out-of-service, never based on the maximum unmount time.\n - `\"OnUnmountTimeout\"` force detaches volumes from unhealthy nodes once the maximum unmount time is exceeded.",
+							Type:        []string{"string"},
+							Format:      "",
+							Enum:        []interface{}{"OnOutOfServiceTaintOnly", "OnUnmountTimeout"},
+						},
+					},
+				},
+			},
+		},
 	}
 }
 
@@ -48730,6 +49017,362 @@ func schema_openshift_api_machine_v1beta1_Workspace(ref common.ReferenceCallback
 	}
 }
 
+func schema_openshift_api_machineconfiguration_v1alpha1_BGPVIPConfig(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "BGPVIPConfig carries the BGP peering configuration for BGP-based VIP management (enhancement openshift/enhancements#1982). It is a singleton named \"cluster\", generated by the installer from platform.baremetal.bgpVIPConfig in the install-config, and may be edited day-2 to reconfigure peering. The configuration is rendered into node-level BGP configuration by its consumers, the machine-config-operator and the cluster-network-operator, which report their progress in status.\n\nCompatibility level 4: No compatibility is provided, the API can change at any point for any reason. These capabilities should not be used by applications needing long term support.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Description: "metadata is the standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
+							Default:     map[string]interface{}{},
+							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
+						},
+					},
+					"spec": {
+						SchemaProps: spec.SchemaProps{
+							Description: "spec is the desired BGP VIP peering configuration.",
+							Default:     map[string]interface{}{},
+							Ref:         ref(machineconfigurationv1alpha1.BGPVIPConfigSpec{}.OpenAPIModelName()),
+						},
+					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Description: "status reports the consumers' progress applying the configuration.",
+							Default:     map[string]interface{}{},
+							Ref:         ref(machineconfigurationv1alpha1.BGPVIPConfigStatus{}.OpenAPIModelName()),
+						},
+					},
+				},
+				Required: []string{"metadata", "spec"},
+			},
+		},
+		Dependencies: []string{
+			machineconfigurationv1alpha1.BGPVIPConfigSpec{}.OpenAPIModelName(), machineconfigurationv1alpha1.BGPVIPConfigStatus{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
+	}
+}
+
+func schema_openshift_api_machineconfiguration_v1alpha1_BGPVIPConfigList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "BGPVIPConfigList is a list of BGPVIPConfig resources.\n\nCompatibility level 4: No compatibility is provided, the API can change at any point for any reason. These capabilities should not be used by applications needing long term support.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref(metav1.ListMeta{}.OpenAPIModelName()),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref(machineconfigurationv1alpha1.BGPVIPConfig{}.OpenAPIModelName()),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"metadata", "items"},
+			},
+		},
+		Dependencies: []string{
+			machineconfigurationv1alpha1.BGPVIPConfig{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
+	}
+}
+
+func schema_openshift_api_machineconfiguration_v1alpha1_BGPVIPConfigSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "BGPVIPConfigSpec describes the BGP peering used to advertise the API and Ingress VIPs.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"localASN": {
+						SchemaProps: spec.SchemaProps{
+							Description: "localASN is the BGP autonomous system number (ASN) the cluster's BGP speakers present to the configured peers. Use the ASN your network administrator assigned to the cluster - the peer routers must expect it or no session establishes; private-range ASNs (e.g. 64512-65534) are typical for datacenter fabrics. Must be at least 1 and must not exceed 4294967295.",
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
+					"defaultPeers": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-map-keys": []interface{}{
+									"peerAddress",
+								},
+								"x-kubernetes-list-type": "map",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "defaultPeers are the BGP peers every node establishes sessions with, unless the node is named in hostOverrides. Must have at least 1 entry and must not exceed 16 entries, unique by peerAddress.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref(machineconfigurationv1alpha1.BGPVIPPeer{}.OpenAPIModelName()),
+									},
+								},
+							},
+						},
+					},
+					"communities": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "set",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "communities are BGP community strings attached to the VIP advertisements: \"n:n\" classic communities (RFC 1997) where each segment is a 16-bit value of at least 0 and not exceeding 65535, or \"n:n:n\" large communities (RFC 8092) where each segment is a 32-bit value of at least 0 and not exceeding 4294967295. When omitted, no communities are attached. Entries are unique; when set, must have at least 1 entry and must not exceed 8 entries.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Type:   []string{"string"},
+										Format: "",
+									},
+								},
+							},
+						},
+					},
+					"hostOverrides": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-map-keys": []interface{}{
+									"hostname",
+								},
+								"x-kubernetes-list-type": "map",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "hostOverrides replaces (does not merge with) defaultPeers for the named nodes. Only the per-node peer file rendered by the machine-config-operator consumes overrides; the cluster-wide session configuration rendered by the cluster-network-operator uses defaultPeers. When omitted, all nodes use defaultPeers; when set, must have at least 1 entry and must not exceed 256 entries, unique by hostname.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref(machineconfigurationv1alpha1.BGPVIPHostPeers{}.OpenAPIModelName()),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"localASN", "defaultPeers"},
+			},
+		},
+		Dependencies: []string{
+			machineconfigurationv1alpha1.BGPVIPHostPeers{}.OpenAPIModelName(), machineconfigurationv1alpha1.BGPVIPPeer{}.OpenAPIModelName()},
+	}
+}
+
+func schema_openshift_api_machineconfiguration_v1alpha1_BGPVIPConfigStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "BGPVIPConfigStatus reports the consumers' progress applying the spec.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"conditions": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-map-keys": []interface{}{
+									"type",
+								},
+								"x-kubernetes-list-type": "map",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "conditions reports the state of processing the configuration; when set, must have at least 1 entry and must not exceed 8 entries. Known condition types are \"Rendered\" (the machine-config-operator has rendered the per-node peer configuration) and \"SessionsConfigured\" (the cluster-network-operator has rendered the FRR session configuration for application). SessionsConfigured does not assert that the generated FRRConfiguration was accepted by the frr-k8s admission webhook or applied on the nodes. Each condition's observedGeneration reports the generation of the spec most recently processed by the operator that writes it.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref(metav1.Condition{}.OpenAPIModelName()),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			metav1.Condition{}.OpenAPIModelName()},
+	}
+}
+
+func schema_openshift_api_machineconfiguration_v1alpha1_BGPVIPHostPeers(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "BGPVIPHostPeers is a per-node replacement peer list.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"hostname": {
+						SchemaProps: spec.SchemaProps{
+							Description: "hostname of the node this override applies to, as a non-empty RFC 1123 subdomain of at most 253 characters with dot-separated labels of at most 63 characters each. It is compared verbatim against the hostname the node resolves for itself (as rendered into the per-node peer file), so a short name and its fully qualified form are distinct entries and only the exact match applies.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"peers": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-map-keys": []interface{}{
+									"peerAddress",
+								},
+								"x-kubernetes-list-type": "map",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "peers replaces defaultPeers for this node. Must have at least 1 entry and must not exceed 16 entries, unique by peerAddress.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref(machineconfigurationv1alpha1.BGPVIPPeer{}.OpenAPIModelName()),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"hostname", "peers"},
+			},
+		},
+		Dependencies: []string{
+			machineconfigurationv1alpha1.BGPVIPPeer{}.OpenAPIModelName()},
+	}
+}
+
+func schema_openshift_api_machineconfiguration_v1alpha1_BGPVIPPasswordSecret(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "BGPVIPPasswordSecret references a Secret in the openshift-config namespace by name.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"name": {
+						SchemaProps: spec.SchemaProps{
+							Description: "name is the metadata.name of the referenced Secret in the openshift-config namespace. Must be a non-empty RFC 1123 subdomain of at most 253 characters, matching what Kubernetes accepts as a Secret name.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"name"},
+			},
+		},
+	}
+}
+
+func schema_openshift_api_machineconfiguration_v1alpha1_BGPVIPPeer(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "BGPVIPPeer describes one BGP peer.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"peerAddress": {
+						SchemaProps: spec.SchemaProps{
+							Description: "peerAddress is the IP address of the BGP peer (IPv4 or IPv6) in canonical form (lowercase, no leading zeros, IPv6 zero-compressed); must be at least 2 characters in length and must not exceed 45 characters. The session's address family follows the address family of this value. Canonical form is required so that two spellings of one address cannot form duplicate peers.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"peerASN": {
+						SchemaProps: spec.SchemaProps{
+							Description: "peerASN is the autonomous system number of the peer. Must be at least 1 and must not exceed 4294967295.",
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
+					"passwordSecret": {
+						SchemaProps: spec.SchemaProps{
+							Description: "passwordSecret references the Secret carrying the TCP MD5 password (RFC 2385) for the session. The Secret must be of type kubernetes.io/basic-auth, live in the openshift-config namespace, and carry the password in its \"password\" key (at most 80 bytes, the kernel's TCP MD5 limit). The Secret type, key, and size requirements are not validated by the API server; the consumers validate them when resolving the reference and must never surface the Secret contents in status, events, or logs. Passwords are never stored in this API. When omitted, the session is unauthenticated.",
+							Default:     map[string]interface{}{},
+							Ref:         ref(machineconfigurationv1alpha1.BGPVIPPasswordSecret{}.OpenAPIModelName()),
+						},
+					},
+					"port": {
+						SchemaProps: spec.SchemaProps{
+							Description: "port is the TCP port of the BGP session; must be at least 1 and must not exceed 65535. When omitted, port 179 is used.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"failureDetection": {
+						SchemaProps: spec.SchemaProps{
+							Description: "failureDetection determines how a failed peer is detected. When set to \"BFD\", a BFD session is established with the peer and BGP reacts to BFD failure detection. When set to \"HoldTimer\", failure detection relies on the BGP hold timer alone. When omitted, failure detection relies on the BGP hold timer.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"peerReachability": {
+						SchemaProps: spec.SchemaProps{
+							Description: "peerReachability describes how the peer is reached. When set to \"MultiHop\", the session may be established with a peer several router hops away. When set to \"DirectlyConnected\", the peer must be on a directly connected network. When omitted, the peer must be directly connected.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"holdTimeSeconds": {
+						SchemaProps: spec.SchemaProps{
+							Description: "holdTimeSeconds is the BGP hold time in seconds; must be at least 3 (the RFC 4271 minimum for a non-zero hold time) and must not exceed 65535. When omitted, no hold time is configured and the FRR default (180 seconds) applies. When both holdTimeSeconds and keepaliveTimeSeconds are set, holdTimeSeconds must be at least 3 times keepaliveTimeSeconds.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"keepaliveTimeSeconds": {
+						SchemaProps: spec.SchemaProps{
+							Description: "keepaliveTimeSeconds is the BGP keepalive interval in seconds; must be at least 1 and must not exceed 65535. When omitted, no keepalive interval is configured and the FRR default (60 seconds) applies. When both holdTimeSeconds and keepaliveTimeSeconds are set, holdTimeSeconds must be at least 3 times keepaliveTimeSeconds.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+				},
+				Required: []string{"peerAddress", "peerASN"},
+			},
+		},
+		Dependencies: []string{
+			machineconfigurationv1alpha1.BGPVIPPasswordSecret{}.OpenAPIModelName()},
+	}
+}
+
 func schema_openshift_api_machineconfiguration_v1alpha1_InternalReleaseImage(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -53269,6 +53912,11 @@ func schema_openshift_api_operator_v1_AddPage(ref common.ReferenceCallback) comm
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"disabledActions": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "disabledActions is a list of actions that are not shown to users. Each action in the list is represented by its ID.",
 							Type:        []string{"array"},
@@ -55224,6 +55872,82 @@ func schema_openshift_api_operator_v1_Console(ref common.ReferenceCallback) comm
 	}
 }
 
+func schema_openshift_api_operator_v1_ConsoleAuthProxyConfig(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "ConsoleAuthProxyConfig holds proxy configuration scoped to Console's OIDC login clients. At least one of httpProxy or httpsProxy must be specified.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"httpProxy": {
+						SchemaProps: spec.SchemaProps{
+							Description: "httpProxy is the URL of the proxy for HTTP requests. Must be a valid URL with http or https scheme, a non-empty hostname, and no path, query parameters, or fragment. Userinfo (e.g. user:password@host) is allowed for proxy authentication. Maximum length is 2048 characters.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"httpsProxy": {
+						SchemaProps: spec.SchemaProps{
+							Description: "httpsProxy is the URL of the proxy for HTTPS requests. Must be a valid URL with http or https scheme, a non-empty hostname, and no path, query parameters, or fragment. Userinfo (e.g. user:password@host) is allowed for proxy authentication. Maximum length is 2048 characters.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"noProxy": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "set",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "noProxy is a list of hostnames and/or CIDRs and/or IPs for which the proxy should not be used. Must contain at least one entry when set. Each entry must be between 1 and 253 characters long and at most 64 entries are allowed. Duplicate entries are not permitted. Entries that are not valid hostnames, CIDRs, or IPs are silently ignored. Cluster-internal defaults (.cluster.local, .svc, 127.0.0.1, localhost) are always appended automatically and do not need to be included.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Type:   []string{"string"},
+										Format: "",
+									},
+								},
+							},
+						},
+					},
+					"trustedCA": {
+						SchemaProps: spec.SchemaProps{
+							Description: "trustedCA is a reference to a ConfigMap in the openshift-config namespace containing a CA certificate bundle under the key \"ca-bundle.crt\". This bundle is appended to the system trust store used by Console's OIDC login clients for proxy TLS connections. When omitted, only the system trust store is used.",
+							Default:     map[string]interface{}{},
+							Ref:         ref(operatorv1.ConsoleAuthProxyTrustedCAConfigMapReference{}.OpenAPIModelName()),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			operatorv1.ConsoleAuthProxyTrustedCAConfigMapReference{}.OpenAPIModelName()},
+	}
+}
+
+func schema_openshift_api_operator_v1_ConsoleAuthProxyTrustedCAConfigMapReference(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "ConsoleAuthProxyTrustedCAConfigMapReference references a ConfigMap in the openshift-config namespace.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"name": {
+						SchemaProps: spec.SchemaProps{
+							Description: "name is the metadata.name of the referenced ConfigMap. Must be a valid DNS subdomain name (RFC 1123): at most 253 characters, only lowercase alphanumeric characters, '-' or '.', starting and ending with an alphanumeric character.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"name"},
+			},
+		},
+	}
+}
+
 func schema_openshift_api_operator_v1_ConsoleConfigRoute(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -55389,6 +56113,35 @@ func schema_openshift_api_operator_v1_ConsoleCustomization(ref common.ReferenceC
 	}
 }
 
+func schema_openshift_api_operator_v1_ConsoleIngress(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "Ingress allows cluster admin to configure alternative ingress for the console.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"consoleURL": {
+						SchemaProps: spec.SchemaProps{
+							Description: "consoleURL is a URL to be used as the base console address. If not specified, the console route hostname will be used. This field is required for clusters without ingress capability, where access to routes is not possible. Make sure that appropriate ingress is set up at this URL. The console operator will monitor the URL and may go degraded if it's unreachable for an extended period. Must use the HTTPS scheme.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"clientDownloadsURL": {
+						SchemaProps: spec.SchemaProps{
+							Description: "clientDownloadsURL is a URL to be used as the address to download client binaries. If not specified, the downloads route hostname will be used. This field is required for clusters without ingress capability, where access to routes is not possible. The console operator will monitor the URL and may go degraded if it's unreachable for an extended period. Must use the HTTPS scheme.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
 func schema_openshift_api_operator_v1_ConsoleList(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -55500,6 +56253,13 @@ func schema_openshift_api_operator_v1_ConsoleSpec(ref common.ReferenceCallback) 
 							Ref:         ref(runtime.RawExtension{}.OpenAPIModelName()),
 						},
 					},
+					"authProxy": {
+						SchemaProps: spec.SchemaProps{
+							Description: "authProxy configures proxy settings for outbound connections made by Console's OIDC login clients, including discovery, JWKS retrieval, code exchange, and token refresh. When set, it replaces the cluster-wide proxy (proxy.config.openshift.io/cluster) entirely for these connections; individual fields are not inherited from the cluster-wide configuration. At least one of httpProxy or httpsProxy must be specified. When omitted, the cluster-wide proxy is used if configured; otherwise no proxy is used. Other Console clients retain their existing proxy settings.",
+							Default:     map[string]interface{}{},
+							Ref:         ref(operatorv1.ConsoleAuthProxyConfig{}.OpenAPIModelName()),
+						},
+					},
 					"customization": {
 						SchemaProps: spec.SchemaProps{
 							Description: "customization is used to optionally provide a small set of customization options to the web console.",
@@ -55522,6 +56282,11 @@ func schema_openshift_api_operator_v1_ConsoleSpec(ref common.ReferenceCallback) 
 						},
 					},
 					"plugins": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "plugins defines a list of enabled console plugin names.",
 							Type:        []string{"array"},
@@ -55539,7 +56304,7 @@ func schema_openshift_api_operator_v1_ConsoleSpec(ref common.ReferenceCallback) 
 						SchemaProps: spec.SchemaProps{
 							Description: "ingress allows to configure the alternative ingress for the console. This field is intended for clusters without ingress capability, where access to routes is not possible.",
 							Default:     map[string]interface{}{},
-							Ref:         ref(operatorv1.Ingress{}.OpenAPIModelName()),
+							Ref:         ref(operatorv1.ConsoleIngress{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -55547,7 +56312,7 @@ func schema_openshift_api_operator_v1_ConsoleSpec(ref common.ReferenceCallback) 
 			},
 		},
 		Dependencies: []string{
-			operatorv1.ConsoleConfigRoute{}.OpenAPIModelName(), operatorv1.ConsoleCustomization{}.OpenAPIModelName(), operatorv1.ConsoleProviders{}.OpenAPIModelName(), operatorv1.Ingress{}.OpenAPIModelName(), runtime.RawExtension{}.OpenAPIModelName()},
+			operatorv1.ConsoleAuthProxyConfig{}.OpenAPIModelName(), operatorv1.ConsoleConfigRoute{}.OpenAPIModelName(), operatorv1.ConsoleCustomization{}.OpenAPIModelName(), operatorv1.ConsoleIngress{}.OpenAPIModelName(), operatorv1.ConsoleProviders{}.OpenAPIModelName(), runtime.RawExtension{}.OpenAPIModelName()},
 	}
 }
 
@@ -56101,6 +56866,11 @@ func schema_openshift_api_operator_v1_DeveloperConsoleCatalogCategory(ref common
 						},
 					},
 					"tags": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "tags is a list of strings that will match the category. A selected category show all items which has at least one overlapping tag between category and item.",
 							Type:        []string{"array"},
@@ -56115,6 +56885,11 @@ func schema_openshift_api_operator_v1_DeveloperConsoleCatalogCategory(ref common
 						},
 					},
 					"subcategories": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "subcategories defines a list of child categories.",
 							Type:        []string{"array"},
@@ -56160,6 +56935,11 @@ func schema_openshift_api_operator_v1_DeveloperConsoleCatalogCategoryMeta(ref co
 						},
 					},
 					"tags": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "tags is a list of strings that will match the category. A selected category show all items which has at least one overlapping tag between category and item.",
 							Type:        []string{"array"},
@@ -56188,6 +56968,11 @@ func schema_openshift_api_operator_v1_DeveloperConsoleCatalogCustomization(ref c
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"categories": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "categories which are shown in the developer catalog.",
 							Type:        []string{"array"},
@@ -56917,6 +57702,26 @@ func schema_openshift_api_operator_v1_GCPLoadBalancerParameters(ref common.Refer
 	}
 }
 
+func schema_openshift_api_operator_v1_GatewayAPIIngressConfig(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "GatewayAPIIngressConfig holds configuration for Gateway API integration in the Cluster Ingress Operator.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"managementMode": {
+						SchemaProps: spec.SchemaProps{
+							Description: "managementMode specifies how the Cluster Ingress Operator manages Gateway API Custom Resource Definitions (CRDs), the OpenShift Gateway API implementation, and its Gateway API controllers.\n\nAllowed values are \"Managed\" and \"Unmanaged\".\n\nWhen omitted or set to \"Managed\", the ingress operator installs, owns, and upgrades the Gateway API CRDs, protects them with a Validating Admission Policy, and deploys the OpenShift Gateway API implementation and its Gateway API controllers.\n\nWhen set to \"Unmanaged\", the ingress operator does not install or manage Gateway API CRDs and does not deploy the OpenShift Gateway API implementation or its Gateway API controllers. The cluster administrator or a third-party product is responsible for providing their own CRDs and Gateway controller. The ingress operator reports observational status only.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
 func schema_openshift_api_operator_v1_GatewayConfig(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -57539,28 +58344,50 @@ func schema_openshift_api_operator_v1_Ingress(ref common.ReferenceCallback) comm
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "Ingress allows cluster admin to configure alternative ingress for the console.",
+				Description: "Ingress contains configuration options specific to the Ingress Operator itself, including how it manages Gateway API integration.\n\nCompatibility level 1: Stable within a major release for a minimum of 12 months or 3 minor releases (whichever is longer).",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
-					"consoleURL": {
+					"kind": {
 						SchemaProps: spec.SchemaProps{
-							Description: "consoleURL is a URL to be used as the base console address. If not specified, the console route hostname will be used. This field is required for clusters without ingress capability, where access to routes is not possible. Make sure that appropriate ingress is set up at this URL. The console operator will monitor the URL and may go degraded if it's unreachable for an extended period. Must use the HTTPS scheme.",
-							Default:     "",
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
-					"clientDownloadsURL": {
+					"apiVersion": {
 						SchemaProps: spec.SchemaProps{
-							Description: "clientDownloadsURL is a URL to be used as the address to download client binaries. If not specified, the downloads route hostname will be used. This field is required for clusters without ingress capability, where access to routes is not possible. The console operator will monitor the URL and may go degraded if it's unreachable for an extended period. Must use the HTTPS scheme.",
-							Default:     "",
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
 							Type:        []string{"string"},
 							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Description: "metadata is the standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
+							Default:     map[string]interface{}{},
+							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
+						},
+					},
+					"spec": {
+						SchemaProps: spec.SchemaProps{
+							Description: "spec holds user settable values for configuration.",
+							Default:     map[string]interface{}{},
+							Ref:         ref(operatorv1.IngressSpec{}.OpenAPIModelName()),
+						},
+					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Description: "status holds observed values from the cluster.",
+							Default:     map[string]interface{}{},
+							Ref:         ref(operatorv1.IngressStatus{}.OpenAPIModelName()),
 						},
 					},
 				},
+				Required: []string{"metadata", "spec"},
 			},
 		},
+		Dependencies: []string{
+			operatorv1.IngressSpec{}.OpenAPIModelName(), operatorv1.IngressStatus{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -58243,7 +59070,7 @@ func schema_openshift_api_operator_v1_IngressControllerSpec(ref common.Reference
 					},
 					"haproxyVersion": {
 						SchemaProps: spec.SchemaProps{
-							Description: "haproxyVersion specifies the HAProxy version to use for this IngressController.\n\nOpenShift 5.1 continues with HAProxy 3.2 (same minor version introduced in OpenShift 5.0) and does not introduce a new HAProxy version.\n\nValid values for OpenShift 5.1: - Unset (default): Uses HAProxy 3.2 (the default for OpenShift 5.1) - \"3.2\": Uses the latest HAProxy 3.2.z available for this OpenShift release and pins the minor version.\n\nNote: HAProxy 2.8 support has been dropped in OpenShift 5.1. Upgrading from OpenShift 5.0 with haproxyVersion set to \"2.8\" is blocked.\n\nIf a specific HAProxy version is set and would become unsupported in a target cluster upgrade, a preflight check will block the cluster upgrade until this field is updated to unset or a supported version.",
+							Description: "haproxyVersion specifies the HAProxy version to use for this IngressController.\n\nOpenShift 5.1 uses HAProxy 3.2 as its default version and supports HAProxy 3.4 as an explicit, non-default opt-in.\n\nValid values for OpenShift 5.1: - Unset (default): Uses HAProxy 3.2 (the default for OpenShift 5.1) - \"3.2\": Uses the latest HAProxy 3.2.z available for this OpenShift release and pins the minor version. - \"3.4\": Uses the latest HAProxy 3.4.z available for this OpenShift release. This is an explicit opt-in; HAProxy 3.4 is not the default.\n\nPlanned lifecycle for later OpenShift releases: - OpenShift 5.2 plans to make HAProxy 3.4 the default when this field is unset, while continuing to support \"3.2\" as an explicit selection. - OpenShift 5.3 plans to retire support for selecting HAProxy 3.2.\n\nNote: HAProxy 2.8 support has been dropped in OpenShift 5.1. Upgrading from OpenShift 5.0 with haproxyVersion set to \"2.8\" is blocked.\n\nIf a specific HAProxy version is set and would become unsupported in a target cluster upgrade, a preflight check will block the cluster upgrade until this field is updated to unset or a supported version.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -58341,7 +59168,7 @@ func schema_openshift_api_operator_v1_IngressControllerStatus(ref common.Referen
 					},
 					"effectiveHAProxyVersion": {
 						SchemaProps: spec.SchemaProps{
-							Description: "effectiveHAProxyVersion reports the HAProxy version currently in use by this IngressController. This reflects the resolved value of the spec.haproxyVersion field. When omitted, the effective value has not yet been resolved by the operator or the feature is not enabled for this cluster.\n\nExamples for OpenShift 5.1: - \"3.2\": Using HAProxy 3.2",
+							Description: "effectiveHAProxyVersion reports the HAProxy version currently in use by this IngressController. This reflects the resolved value of the spec.haproxyVersion field. When omitted, the effective value has not yet been resolved by the operator or the feature is not enabled for this cluster.\n\nExamples for OpenShift 5.1: - \"3.2\": Using the default HAProxy 3.2 - \"3.4\": Using the explicitly selected, non-default HAProxy 3.4\n\nPlanned lifecycle for later OpenShift releases: - OpenShift 5.2 plans to make HAProxy 3.4 the default while keeping HAProxy 3.2 selectable. - OpenShift 5.3 plans to retire HAProxy 3.2.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -58462,6 +59289,121 @@ func schema_openshift_api_operator_v1_IngressControllerTuningOptions(ref common.
 		},
 		Dependencies: []string{
 			metav1.Duration{}.OpenAPIModelName()},
+	}
+}
+
+func schema_openshift_api_operator_v1_IngressList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "IngressList is a collection of Ingresses.\n\nCompatibility level 1: Stable within a major release for a minimum of 12 months or 3 minor releases (whichever is longer).",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Description: "metadata is the standard list's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
+							Default:     map[string]interface{}{},
+							Ref:         ref(metav1.ListMeta{}.OpenAPIModelName()),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Description: "items is a list of Ingresses.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref(operatorv1.Ingress{}.OpenAPIModelName()),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"metadata"},
+			},
+		},
+		Dependencies: []string{
+			operatorv1.Ingress{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
+	}
+}
+
+func schema_openshift_api_operator_v1_IngressSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "IngressSpec is the specification of the desired behavior of the Ingress Operator.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"gatewayAPI": {
+						SchemaProps: spec.SchemaProps{
+							Description: "gatewayAPI holds configuration for Gateway API integration, including how the ingress operator manages Gateway API CRDs, the OpenShift Gateway API implementation, and its Gateway API controllers.",
+							Default:     map[string]interface{}{},
+							Ref:         ref(operatorv1.GatewayAPIIngressConfig{}.OpenAPIModelName()),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			operatorv1.GatewayAPIIngressConfig{}.OpenAPIModelName()},
+	}
+}
+
+func schema_openshift_api_operator_v1_IngressStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "IngressStatus defines the observed status of the Ingress Operator.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"conditions": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-map-keys": []interface{}{
+									"type",
+								},
+								"x-kubernetes-list-type": "map",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "conditions is a list of conditions and their status.\n\nGateway API CRD management conditions are reported here with the \"GatewayAPI\" prefix:\n\n* \"GatewayAPICRDsManaged\" indicates whether the ingress operator is actively\n  managing Gateway API CRDs.\n* \"GatewayAPICRDsPresent\" indicates whether Gateway API CRDs exist on the\n  cluster.\n* \"GatewayAPICRDsCompliant\" indicates whether the installed CRDs match the\n  version expected by this ingress operator release.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref(metav1.Condition{}.OpenAPIModelName()),
+									},
+								},
+							},
+						},
+					},
+					"observedGeneration": {
+						SchemaProps: spec.SchemaProps{
+							Description: "observedGeneration represents the most recent generation observed by the operator and specifies the version of the spec field currently being synced.\n\nWhen omitted, the operator has not yet observed the resource.",
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			metav1.Condition{}.OpenAPIModelName()},
 	}
 }
 
@@ -58939,13 +59881,13 @@ func schema_openshift_api_operator_v1_KMSPreflightResult(ref common.ReferenceCal
 					},
 					"remoteKeyID": {
 						SchemaProps: spec.SchemaProps{
-							Description: "remoteKeyID is the remote key encryption key identifier from KMS v2 StatusResponse.key_id. This is not a cryptographic key, but a unique representation of the remote key used to encrypt data. The value must be between 1 and 1024 characters.",
+							Description: "remoteKeyID is the remote key encryption key identifier from KMS v2 StatusResponse.key_id. This is not a cryptographic key, but a unique representation of the remote key used to encrypt data. When omitted, no remote key identifier is available. This is expected when status is Failed, for example when the KMS provider could not be reached. When status is Succeeded, remoteKeyID is required. When set, the value must be between 1 and 1024 characters.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 				},
-				Required: []string{"status", "configHash", "remoteKeyID"},
+				Required: []string{"status", "configHash"},
 			},
 		},
 	}
@@ -63156,6 +64098,11 @@ func schema_openshift_api_operator_v1_Perspective(ref common.ReferenceCallback) 
 						},
 					},
 					"pinnedResources": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "pinnedResources defines the list of default pinned resources that users will see on the perspective navigation if they have not customized these pinned resources themselves. The list of available Kubernetes resources could be read via `kubectl api-resources`. The console will also provide a configuration UI and a YAML snippet that will list the available resources that can be pinned to the navigation. Incorrect or unknown resources will be ignored.",
 							Type:        []string{"array"},
@@ -63332,6 +64279,11 @@ func schema_openshift_api_operator_v1_ProjectAccess(ref common.ReferenceCallback
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"availableClusterRoles": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "availableClusterRoles is the list of ClusterRole names that are assignable to users through the project access tab.",
 							Type:        []string{"array"},
@@ -63471,6 +64423,11 @@ func schema_openshift_api_operator_v1_QuickStarts(ref common.ReferenceCallback) 
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"disabled": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "disabled is a list of ConsoleQuickStart resource names that are not shown to users.",
 							Type:        []string{"array"},
@@ -63520,6 +64477,11 @@ func schema_openshift_api_operator_v1_ResourceAttributesAccessReview(ref common.
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"required": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "required defines a list of permission checks. The perspective will only be shown when all checks are successful. When omitted, the access review is skipped and the perspective will not be shown unless it is required to do so based on the configuration of the missing access review list.",
 							Type:        []string{"array"},
@@ -63533,6 +64495,11 @@ func schema_openshift_api_operator_v1_ResourceAttributesAccessReview(ref common.
 						},
 					},
 					"missing": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "missing defines a list of permission checks. The perspective will only be shown when at least one check fails. When omitted, the access review is skipped and the perspective will not be shown unless it is required to do so based on the configuration of the required access review list.",
 							Type:        []string{"array"},
