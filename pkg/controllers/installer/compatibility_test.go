@@ -64,7 +64,7 @@ var _ = Describe("buildCompatibilityRequirement", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(cr.GroupVersionKind()).To(Equal(schema.GroupVersionKind{
 			Group:   "apiextensions.openshift.io",
-			Version: "v1alpha1",
+			Version: "v1",
 			Kind:    "CompatibilityRequirement",
 		}))
 	})

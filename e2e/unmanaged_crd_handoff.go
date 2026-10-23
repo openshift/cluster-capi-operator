@@ -26,7 +26,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 
-	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
+	openshiftapiextensionsv1 "github.com/openshift/api/apiextensions/v1"
 	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/api/features"
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
@@ -95,7 +95,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIMachineManage
 		var (
 			clusterAPI  *operatorv1alpha1.ClusterAPI
 			clusterCRD  *apiextensionsv1.CustomResourceDefinition
-			requirement *apiextensionsv1alpha1.CompatibilityRequirement
+			requirement *openshiftapiextensionsv1.CompatibilityRequirement
 
 			initialDesiredRevision         operatorv1alpha1.RevisionName
 			desiredRevision                operatorv1alpha1.RevisionName
@@ -185,7 +185,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIMachineManage
 				HaveField("UnmanagedCustomResourceDefinitions", ContainElement(clusterCRDName)),
 			), &desiredAPIRevision), "the desired revision should contain the unmanaged Cluster CRD")
 
-			requirement = &apiextensionsv1alpha1.CompatibilityRequirement{
+			requirement = &openshiftapiextensionsv1.CompatibilityRequirement{
 				ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("ccapio-%s-%d", clusterCRDName, desiredAPIRevision.Revision)},
 			}
 			trackResource(requirement)
@@ -207,8 +207,8 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIMachineManage
 					HaveField("Status.CRDName", Equal(clusterCRDName)),
 					HaveField("Status.ObservedCRD.UID", Equal(string(clusterCRD.UID))),
 					HaveField("Status.Conditions", SatisfyAll(
-						test.HaveCondition(apiextensionsv1alpha1.CompatibilityRequirementAdmitted).WithStatus(metav1.ConditionTrue),
-						test.HaveCondition(apiextensionsv1alpha1.CompatibilityRequirementCompatible).WithStatus(metav1.ConditionTrue),
+						test.HaveCondition(openshiftapiextensionsv1.CompatibilityRequirementAdmitted).WithStatus(metav1.ConditionTrue),
+						test.HaveCondition(openshiftapiextensionsv1.CompatibilityRequirementCompatible).WithStatus(metav1.ConditionTrue),
 					)),
 				), "CompatibilityRequirement should be admitted and compatible with the installed Cluster CRD")
 			})
@@ -271,8 +271,8 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIMachineManage
 					// may have advanced past the one we observed.
 					HaveField("Status.ObservedCRD.Generation", BeNumerically(">=", updatedCRDGeneration)),
 					HaveField("Status.Conditions", SatisfyAll(
-						test.HaveCondition(apiextensionsv1alpha1.CompatibilityRequirementAdmitted).WithStatus(metav1.ConditionTrue),
-						test.HaveCondition(apiextensionsv1alpha1.CompatibilityRequirementCompatible).WithStatus(metav1.ConditionTrue),
+						test.HaveCondition(openshiftapiextensionsv1.CompatibilityRequirementAdmitted).WithStatus(metav1.ConditionTrue),
+						test.HaveCondition(openshiftapiextensionsv1.CompatibilityRequirementCompatible).WithStatus(metav1.ConditionTrue),
 					)),
 				), "CompatibilityRequirement should observe and accept CRD generation %d", updatedCRDGeneration)
 			})

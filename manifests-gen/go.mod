@@ -2,6 +2,9 @@ module github.com/openshift/cluster-capi-operator/manifests-gen
 
 go 1.26.0
 
+// Temporary pin for openshift/api#2905; use the upstream revision after it merges.
+replace github.com/openshift/api => github.com/stefanonardo/api v0.0.0-20261021120147-a75ffd9592c8
+
 require (
 	github.com/cert-manager/cert-manager v1.18.2
 	k8s.io/api v0.37.1

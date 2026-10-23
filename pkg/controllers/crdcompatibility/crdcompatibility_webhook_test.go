@@ -25,7 +25,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/yaml"
 
-	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
+	openshiftapiextensionsv1 "github.com/openshift/api/apiextensions/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/test"
 )
 
@@ -43,7 +43,7 @@ func TestCRDRequirementValidator_ValidateCreate(t *testing.T) {
 
 	tests := []struct {
 		name         string
-		obj          *apiextensionsv1alpha1.CompatibilityRequirement
+		obj          *openshiftapiextensionsv1.CompatibilityRequirement
 		wantWarnings []string
 		wantErr      OmegaMatcher
 	}{
@@ -54,7 +54,7 @@ func TestCRDRequirementValidator_ValidateCreate(t *testing.T) {
 		},
 		{
 			name: "should reject CompatibilityRequirement with invalid YAML",
-			obj: func() *apiextensionsv1alpha1.CompatibilityRequirement {
+			obj: func() *openshiftapiextensionsv1.CompatibilityRequirement {
 				req := test.GenerateTestCompatibilityRequirement(testCRD)
 				req.Spec.CompatibilitySchema.CustomResourceDefinition.Data = "invalid: yaml: [unclosed"
 
@@ -64,7 +64,7 @@ func TestCRDRequirementValidator_ValidateCreate(t *testing.T) {
 		},
 		{
 			name: "should reject CompatibilityRequirement with wrong APIVersion",
-			obj: func() *apiextensionsv1alpha1.CompatibilityRequirement {
+			obj: func() *openshiftapiextensionsv1.CompatibilityRequirement {
 				req := test.GenerateTestCompatibilityRequirement(testCRD)
 				invalidCRD := testCRD.DeepCopy()
 				invalidCRD.APIVersion = "v1"
@@ -77,7 +77,7 @@ func TestCRDRequirementValidator_ValidateCreate(t *testing.T) {
 		},
 		{
 			name: "should reject CompatibilityRequirement with wrong Kind",
-			obj: func() *apiextensionsv1alpha1.CompatibilityRequirement {
+			obj: func() *openshiftapiextensionsv1.CompatibilityRequirement {
 				req := test.GenerateTestCompatibilityRequirement(testCRD)
 				invalidCRD := testCRD.DeepCopy()
 				invalidCRD.Kind = "SomethingElse"
@@ -90,7 +90,7 @@ func TestCRDRequirementValidator_ValidateCreate(t *testing.T) {
 		},
 		{
 			name: "should reject CompatibilityRequirement with invalid CRD schema",
-			obj: func() *apiextensionsv1alpha1.CompatibilityRequirement {
+			obj: func() *openshiftapiextensionsv1.CompatibilityRequirement {
 				req := test.GenerateTestCompatibilityRequirement(testCRD)
 				invalidCRD := testCRD.DeepCopy()
 				// Remove required fields to make CRD invalid
@@ -104,7 +104,7 @@ func TestCRDRequirementValidator_ValidateCreate(t *testing.T) {
 		},
 		{
 			name: "should reject CompatibilityRequirement with unsupported CRDData type",
-			obj: func() *apiextensionsv1alpha1.CompatibilityRequirement {
+			obj: func() *openshiftapiextensionsv1.CompatibilityRequirement {
 				req := test.GenerateTestCompatibilityRequirement(testCRD)
 				req.Spec.CompatibilitySchema.CustomResourceDefinition.Type = "UNSUPPORTED"
 
@@ -149,8 +149,8 @@ func TestCRDRequirementValidator_ValidateUpdate(t *testing.T) {
 
 	tests := []struct {
 		name         string
-		oldObj       *apiextensionsv1alpha1.CompatibilityRequirement
-		newObj       *apiextensionsv1alpha1.CompatibilityRequirement
+		oldObj       *openshiftapiextensionsv1.CompatibilityRequirement
+		newObj       *openshiftapiextensionsv1.CompatibilityRequirement
 		wantWarnings []string
 		wantErr      OmegaMatcher
 	}{
@@ -225,55 +225,55 @@ func TestExcludedFieldsValidation(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		excludedFields []apiextensionsv1alpha1.APIExcludedField
+		excludedFields []openshiftapiextensionsv1.APIExcludedField
 		wantErr        OmegaMatcher
 	}{
 		{
 			name: "should accept valid simple field path",
-			excludedFields: []apiextensionsv1alpha1.APIExcludedField{
+			excludedFields: []openshiftapiextensionsv1.APIExcludedField{
 				{
 					Path:     "spec.name",
-					Versions: []apiextensionsv1alpha1.APIVersionString{"v1"},
+					Versions: []openshiftapiextensionsv1.APIVersionString{"v1"},
 				},
 			},
 			wantErr: BeNil(),
 		},
 		{
 			name: "should accept valid nested field path",
-			excludedFields: []apiextensionsv1alpha1.APIExcludedField{
+			excludedFields: []openshiftapiextensionsv1.APIExcludedField{
 				{
 					Path:     "spec.template.spec.image",
-					Versions: []apiextensionsv1alpha1.APIVersionString{"v1"},
+					Versions: []openshiftapiextensionsv1.APIVersionString{"v1"},
 				},
 			},
 			wantErr: BeNil(),
 		},
 		{
 			name: "should accept valid array field path",
-			excludedFields: []apiextensionsv1alpha1.APIExcludedField{
+			excludedFields: []openshiftapiextensionsv1.APIExcludedField{
 				{
 					Path:     "spec.volumes.name",
-					Versions: []apiextensionsv1alpha1.APIVersionString{"v1"},
+					Versions: []openshiftapiextensionsv1.APIVersionString{"v1"},
 				},
 			},
 			wantErr: BeNil(),
 		},
 		{
 			name: "should reject non-existent field path",
-			excludedFields: []apiextensionsv1alpha1.APIExcludedField{
+			excludedFields: []openshiftapiextensionsv1.APIExcludedField{
 				{
 					Path:     "spec.nonExistentField",
-					Versions: []apiextensionsv1alpha1.APIVersionString{"v1"},
+					Versions: []openshiftapiextensionsv1.APIVersionString{"v1"},
 				},
 			},
 			wantErr: MatchError("spec.compatibilitySchema.excludedFields[0].path: Invalid value: \"spec.nonExistentField\": path not found in schema: desired path ^.spec.nonExistentField, path ^.spec is missing child nonExistentField"),
 		},
 		{
 			name: "should reject non-existent version",
-			excludedFields: []apiextensionsv1alpha1.APIExcludedField{
+			excludedFields: []openshiftapiextensionsv1.APIExcludedField{
 				{
 					Path:     "spec.name",
-					Versions: []apiextensionsv1alpha1.APIVersionString{"v3"},
+					Versions: []openshiftapiextensionsv1.APIVersionString{"v3"},
 				},
 			},
 			wantErr: MatchError("spec.compatibilitySchema.excludedFields[0].versions[0]: Invalid value: \"v3\": version v3 not found in compatibility schema"),
@@ -325,37 +325,37 @@ func TestRequiredVersionsValidation(t *testing.T) {
 
 	tests := []struct {
 		name             string
-		requiredVersions apiextensionsv1alpha1.APIVersions
+		requiredVersions openshiftapiextensionsv1.APIVersions
 		wantErr          OmegaMatcher
 	}{
 		{
 			name: "should accept valid additional versions",
-			requiredVersions: apiextensionsv1alpha1.APIVersions{
-				DefaultSelection:   apiextensionsv1alpha1.APIVersionSetTypeStorageOnly,
-				AdditionalVersions: []apiextensionsv1alpha1.APIVersionString{"v1beta1", "v2alpha1"},
+			requiredVersions: openshiftapiextensionsv1.APIVersions{
+				DefaultSelection:   openshiftapiextensionsv1.APIVersionSetTypeStorageOnly,
+				AdditionalVersions: []openshiftapiextensionsv1.APIVersionString{"v1beta1", "v2alpha1"},
 			},
 			wantErr: BeNil(),
 		},
 		{
 			name: "should accept empty additional versions",
-			requiredVersions: apiextensionsv1alpha1.APIVersions{
-				DefaultSelection: apiextensionsv1alpha1.APIVersionSetTypeAllServed,
+			requiredVersions: openshiftapiextensionsv1.APIVersions{
+				DefaultSelection: openshiftapiextensionsv1.APIVersionSetTypeAllServed,
 			},
 			wantErr: BeNil(),
 		},
 		{
 			name: "should reject non-existent additional versions",
-			requiredVersions: apiextensionsv1alpha1.APIVersions{
-				DefaultSelection:   apiextensionsv1alpha1.APIVersionSetTypeStorageOnly,
-				AdditionalVersions: []apiextensionsv1alpha1.APIVersionString{"v1beta1", "v3alpha1"},
+			requiredVersions: openshiftapiextensionsv1.APIVersions{
+				DefaultSelection:   openshiftapiextensionsv1.APIVersionSetTypeStorageOnly,
+				AdditionalVersions: []openshiftapiextensionsv1.APIVersionString{"v1beta1", "v3alpha1"},
 			},
 			wantErr: MatchError(ContainSubstring("spec.compatibilitySchema.requiredVersions.additionalVersions[1]: Invalid value: \"v3alpha1\": version v3alpha1 not found in compatibility schema")),
 		},
 		{
 			name: "should reject when only non-existent versions are specified",
-			requiredVersions: apiextensionsv1alpha1.APIVersions{
-				DefaultSelection:   apiextensionsv1alpha1.APIVersionSetTypeStorageOnly,
-				AdditionalVersions: []apiextensionsv1alpha1.APIVersionString{"v3", "v4"},
+			requiredVersions: openshiftapiextensionsv1.APIVersions{
+				DefaultSelection:   openshiftapiextensionsv1.APIVersionSetTypeStorageOnly,
+				AdditionalVersions: []openshiftapiextensionsv1.APIVersionString{"v3", "v4"},
 			},
 			wantErr: MatchError(And(
 				ContainSubstring("version v3 not found in compatibility schema"),
@@ -416,72 +416,72 @@ func TestExcludedFieldsWithVersionPruning(t *testing.T) {
 
 	tests := []struct {
 		name             string
-		requiredVersions apiextensionsv1alpha1.APIVersions
-		excludedFields   []apiextensionsv1alpha1.APIExcludedField
+		requiredVersions openshiftapiextensionsv1.APIVersions
+		excludedFields   []openshiftapiextensionsv1.APIExcludedField
 		wantErr          OmegaMatcher
 	}{
 		{
 			name: "should accept excluded field version that exists in pruned versions (StorageOnly)",
-			requiredVersions: apiextensionsv1alpha1.APIVersions{
-				DefaultSelection: apiextensionsv1alpha1.APIVersionSetTypeStorageOnly,
+			requiredVersions: openshiftapiextensionsv1.APIVersions{
+				DefaultSelection: openshiftapiextensionsv1.APIVersionSetTypeStorageOnly,
 			},
-			excludedFields: []apiextensionsv1alpha1.APIExcludedField{
+			excludedFields: []openshiftapiextensionsv1.APIExcludedField{
 				{
 					Path:     "spec.name",
-					Versions: []apiextensionsv1alpha1.APIVersionString{"v1"}, // storage version, should be included
+					Versions: []openshiftapiextensionsv1.APIVersionString{"v1"}, // storage version, should be included
 				},
 			},
 			wantErr: BeNil(),
 		},
 		{
 			name: "should accept excluded field version that exists in pruned versions (AllServed)",
-			requiredVersions: apiextensionsv1alpha1.APIVersions{
-				DefaultSelection: apiextensionsv1alpha1.APIVersionSetTypeAllServed,
+			requiredVersions: openshiftapiextensionsv1.APIVersions{
+				DefaultSelection: openshiftapiextensionsv1.APIVersionSetTypeAllServed,
 			},
-			excludedFields: []apiextensionsv1alpha1.APIExcludedField{
+			excludedFields: []openshiftapiextensionsv1.APIExcludedField{
 				{
 					Path:     "spec.name",
-					Versions: []apiextensionsv1alpha1.APIVersionString{"v1beta1"}, // served version, should be included
+					Versions: []openshiftapiextensionsv1.APIVersionString{"v1beta1"}, // served version, should be included
 				},
 			},
 			wantErr: BeNil(),
 		},
 		{
 			name: "should reject excluded field version that is pruned (StorageOnly)",
-			requiredVersions: apiextensionsv1alpha1.APIVersions{
-				DefaultSelection: apiextensionsv1alpha1.APIVersionSetTypeStorageOnly,
+			requiredVersions: openshiftapiextensionsv1.APIVersions{
+				DefaultSelection: openshiftapiextensionsv1.APIVersionSetTypeStorageOnly,
 			},
-			excludedFields: []apiextensionsv1alpha1.APIExcludedField{
+			excludedFields: []openshiftapiextensionsv1.APIExcludedField{
 				{
 					Path:     "spec.name",
-					Versions: []apiextensionsv1alpha1.APIVersionString{"v1beta1"}, // not storage, should be pruned
+					Versions: []openshiftapiextensionsv1.APIVersionString{"v1beta1"}, // not storage, should be pruned
 				},
 			},
 			wantErr: MatchError(ContainSubstring("version v1beta1 is pruned from the compatibility schema, should not be specified in excludedFields")),
 		},
 		{
 			name: "should reject excluded field version that is pruned (AllServed)",
-			requiredVersions: apiextensionsv1alpha1.APIVersions{
-				DefaultSelection: apiextensionsv1alpha1.APIVersionSetTypeAllServed,
+			requiredVersions: openshiftapiextensionsv1.APIVersions{
+				DefaultSelection: openshiftapiextensionsv1.APIVersionSetTypeAllServed,
 			},
-			excludedFields: []apiextensionsv1alpha1.APIExcludedField{
+			excludedFields: []openshiftapiextensionsv1.APIExcludedField{
 				{
 					Path:     "spec.name",
-					Versions: []apiextensionsv1alpha1.APIVersionString{"v2alpha1"}, // not served, should be pruned
+					Versions: []openshiftapiextensionsv1.APIVersionString{"v2alpha1"}, // not served, should be pruned
 				},
 			},
 			wantErr: MatchError(ContainSubstring("version v2alpha1 is pruned from the compatibility schema, should not be specified in excludedFields")),
 		},
 		{
 			name: "should accept excluded field with additional versions",
-			requiredVersions: apiextensionsv1alpha1.APIVersions{
-				DefaultSelection:   apiextensionsv1alpha1.APIVersionSetTypeStorageOnly,
-				AdditionalVersions: []apiextensionsv1alpha1.APIVersionString{"v1beta1"},
+			requiredVersions: openshiftapiextensionsv1.APIVersions{
+				DefaultSelection:   openshiftapiextensionsv1.APIVersionSetTypeStorageOnly,
+				AdditionalVersions: []openshiftapiextensionsv1.APIVersionString{"v1beta1"},
 			},
-			excludedFields: []apiextensionsv1alpha1.APIExcludedField{
+			excludedFields: []openshiftapiextensionsv1.APIExcludedField{
 				{
 					Path:     "spec.name",
-					Versions: []apiextensionsv1alpha1.APIVersionString{"v1beta1"}, // included via additional versions
+					Versions: []openshiftapiextensionsv1.APIVersionString{"v1beta1"}, // included via additional versions
 				},
 			},
 			wantErr: BeNil(),
@@ -520,7 +520,7 @@ func TestValidatingWebhookConfigurationValidation(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		req     *apiextensionsv1alpha1.CompatibilityRequirement
+		req     *openshiftapiextensionsv1.CompatibilityRequirement
 		wantErr OmegaMatcher
 	}{
 		{
@@ -530,7 +530,7 @@ func TestValidatingWebhookConfigurationValidation(t *testing.T) {
 		},
 		{
 			name: "should accept webhook configuration with match conditions",
-			req: func() *apiextensionsv1alpha1.CompatibilityRequirement {
+			req: func() *openshiftapiextensionsv1.CompatibilityRequirement {
 				req := test.GenerateTestCompatibilityRequirement(testCRD)
 				req.Spec.ObjectSchemaValidation.MatchConditions = []admissionregistrationv1.MatchCondition{
 					{
@@ -545,7 +545,7 @@ func TestValidatingWebhookConfigurationValidation(t *testing.T) {
 		},
 		{
 			name: "should accept webhook configuration with namespace selector",
-			req: func() *apiextensionsv1alpha1.CompatibilityRequirement {
+			req: func() *openshiftapiextensionsv1.CompatibilityRequirement {
 				req := test.GenerateTestCompatibilityRequirement(testCRD)
 				req.Spec.ObjectSchemaValidation.NamespaceSelector = metav1.LabelSelector{
 					MatchLabels: map[string]string{
@@ -559,7 +559,7 @@ func TestValidatingWebhookConfigurationValidation(t *testing.T) {
 		},
 		{
 			name: "should accept webhook configuration with object selector",
-			req: func() *apiextensionsv1alpha1.CompatibilityRequirement {
+			req: func() *openshiftapiextensionsv1.CompatibilityRequirement {
 				req := test.GenerateTestCompatibilityRequirement(testCRD)
 				req.Spec.ObjectSchemaValidation.ObjectSelector = metav1.LabelSelector{
 					MatchLabels: map[string]string{
@@ -573,7 +573,7 @@ func TestValidatingWebhookConfigurationValidation(t *testing.T) {
 		},
 		{
 			name: "should reject webhook configuration with invalid match condition",
-			req: func() *apiextensionsv1alpha1.CompatibilityRequirement {
+			req: func() *openshiftapiextensionsv1.CompatibilityRequirement {
 				req := test.GenerateTestCompatibilityRequirement(testCRD)
 				req.Spec.ObjectSchemaValidation.MatchConditions = []admissionregistrationv1.MatchCondition{
 					{
@@ -588,7 +588,7 @@ func TestValidatingWebhookConfigurationValidation(t *testing.T) {
 		},
 		{
 			name: "should reject webhook configuration with invalid namespace selector",
-			req: func() *apiextensionsv1alpha1.CompatibilityRequirement {
+			req: func() *openshiftapiextensionsv1.CompatibilityRequirement {
 				req := test.GenerateTestCompatibilityRequirement(testCRD)
 				req.Spec.ObjectSchemaValidation.NamespaceSelector = metav1.LabelSelector{
 					MatchLabels: map[string]string{
@@ -647,44 +647,44 @@ func TestPruneSchemaVersions(t *testing.T) {
 
 	tests := []struct {
 		name             string
-		requiredVersions apiextensionsv1alpha1.APIVersions
+		requiredVersions openshiftapiextensionsv1.APIVersions
 		expectedVersions []string
 	}{
 		{
 			name: "StorageOnly should include only storage version",
-			requiredVersions: apiextensionsv1alpha1.APIVersions{
-				DefaultSelection: apiextensionsv1alpha1.APIVersionSetTypeStorageOnly,
+			requiredVersions: openshiftapiextensionsv1.APIVersions{
+				DefaultSelection: openshiftapiextensionsv1.APIVersionSetTypeStorageOnly,
 			},
 			expectedVersions: []string{"v1"}, // only storage version
 		},
 		{
 			name: "AllServed should include all served versions",
-			requiredVersions: apiextensionsv1alpha1.APIVersions{
-				DefaultSelection: apiextensionsv1alpha1.APIVersionSetTypeAllServed,
+			requiredVersions: openshiftapiextensionsv1.APIVersions{
+				DefaultSelection: openshiftapiextensionsv1.APIVersionSetTypeAllServed,
 			},
 			expectedVersions: []string{"v1", "v1beta1", "v2beta1"}, // all served versions
 		},
 		{
 			name: "StorageOnly with additional versions should include storage + additional",
-			requiredVersions: apiextensionsv1alpha1.APIVersions{
-				DefaultSelection:   apiextensionsv1alpha1.APIVersionSetTypeStorageOnly,
-				AdditionalVersions: []apiextensionsv1alpha1.APIVersionString{"v1beta1", "v2alpha1"},
+			requiredVersions: openshiftapiextensionsv1.APIVersions{
+				DefaultSelection:   openshiftapiextensionsv1.APIVersionSetTypeStorageOnly,
+				AdditionalVersions: []openshiftapiextensionsv1.APIVersionString{"v1beta1", "v2alpha1"},
 			},
 			expectedVersions: []string{"v1", "v1beta1", "v2alpha1"},
 		},
 		{
 			name: "AllServed with additional versions should include served + additional",
-			requiredVersions: apiextensionsv1alpha1.APIVersions{
-				DefaultSelection:   apiextensionsv1alpha1.APIVersionSetTypeAllServed,
-				AdditionalVersions: []apiextensionsv1alpha1.APIVersionString{"v2alpha1"},
+			requiredVersions: openshiftapiextensionsv1.APIVersions{
+				DefaultSelection:   openshiftapiextensionsv1.APIVersionSetTypeAllServed,
+				AdditionalVersions: []openshiftapiextensionsv1.APIVersionString{"v2alpha1"},
 			},
 			expectedVersions: []string{"v1", "v1beta1", "v2beta1", "v2alpha1"},
 		},
 		{
 			name: "Additional versions should not duplicate existing versions",
-			requiredVersions: apiextensionsv1alpha1.APIVersions{
-				DefaultSelection:   apiextensionsv1alpha1.APIVersionSetTypeAllServed,
-				AdditionalVersions: []apiextensionsv1alpha1.APIVersionString{"v1", "v1beta1"}, // duplicates
+			requiredVersions: openshiftapiextensionsv1.APIVersions{
+				DefaultSelection:   openshiftapiextensionsv1.APIVersionSetTypeAllServed,
+				AdditionalVersions: []openshiftapiextensionsv1.APIVersionString{"v1", "v1beta1"}, // duplicates
 			},
 			expectedVersions: []string{"v1", "v1beta1", "v2beta1"}, // no duplicates
 		},

@@ -26,7 +26,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
+	openshiftapiextensionsv1 "github.com/openshift/api/apiextensions/v1"
 	configv1 "github.com/openshift/api/config/v1"
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
@@ -668,13 +668,13 @@ var _ = Describe("InstallerController CompatibilityRequirements", Serial, func()
 
 	BeforeEach(func() {
 		DeferCleanup(func(ctx context.Context) {
-			widgetRequirement := &apiextensionsv1alpha1.CompatibilityRequirement{}
+			widgetRequirement := &openshiftapiextensionsv1.CompatibilityRequirement{}
 			widgetRequirement.SetName(testWidgetCRName)
 
-			widgetRequirementV2 := &apiextensionsv1alpha1.CompatibilityRequirement{}
+			widgetRequirementV2 := &openshiftapiextensionsv1.CompatibilityRequirement{}
 			widgetRequirementV2.SetName("ccapio-" + testWidgetCRDName + "-2")
 
-			gadgetRequirement := &apiextensionsv1alpha1.CompatibilityRequirement{}
+			gadgetRequirement := &openshiftapiextensionsv1.CompatibilityRequirement{}
 			gadgetRequirement.SetName(testGadgetCRName)
 
 			coreConfigMap := &corev1.ConfigMap{}
@@ -704,7 +704,7 @@ var _ = Describe("InstallerController CompatibilityRequirements", Serial, func()
 
 		By("verifying the CompatibilityRequirement was created")
 
-		cr := &apiextensionsv1alpha1.CompatibilityRequirement{}
+		cr := &openshiftapiextensionsv1.CompatibilityRequirement{}
 		cr.SetName(testWidgetCRName)
 		Eventually(kWithCtx(ctx).Get(cr)).
 			WithContext(ctx).
@@ -813,7 +813,7 @@ var _ = Describe("InstallerController CompatibilityRequirements", Serial, func()
 		setCompatibilityRequirementConditions(ctx, nextRequirementName, true)
 		waitForRevision(ctx, nextRevision.Name)
 
-		previousRequirement := &apiextensionsv1alpha1.CompatibilityRequirement{}
+		previousRequirement := &openshiftapiextensionsv1.CompatibilityRequirement{}
 		previousRequirement.SetName(testWidgetCRName)
 		Eventually(kWithCtx(ctx).Get(previousRequirement)).WithContext(ctx).Should(test.BeK8SNotFound(),
 			"the old requirement should be removed only after the new revision succeeds")
@@ -856,7 +856,7 @@ var _ = Describe("InstallerController CompatibilityRequirements", Serial, func()
 		By("adding rev2 with the CRD unmanaged")
 
 		revision := addRevisionWithUnmanagedCRDs(ctx, []string{testWidgetCRDName}, providerCRD)
-		requirement := &apiextensionsv1alpha1.CompatibilityRequirement{}
+		requirement := &openshiftapiextensionsv1.CompatibilityRequirement{}
 		requirement.SetName(fmt.Sprintf("ccapio-%s-%d", testWidgetCRDName, revision.Revision))
 		Eventually(kWithCtx(ctx).Get(requirement)).WithContext(ctx).Should(Succeed(),
 			"rev2 should create a CompatibilityRequirement for the unmanaged CRD")

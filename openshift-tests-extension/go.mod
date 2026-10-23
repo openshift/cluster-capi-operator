@@ -2,6 +2,9 @@ module github.com/openshift/cluster-capi-operator/openshift-tests-extension
 
 go 1.26.0
 
+// Temporary pin for openshift/api#2905; use the upstream revision after it merges.
+replace github.com/openshift/api => github.com/stefanonardo/api v0.0.0-20261021120147-a75ffd9592c8
+
 require (
 	github.com/openshift-eng/openshift-tests-extension v0.0.0-20260707142426-572a3e9deb7a
 	github.com/openshift/cluster-capi-operator/e2e v0.0.0-00010101000000-000000000000

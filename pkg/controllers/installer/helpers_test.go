@@ -26,7 +26,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/types"
-	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
+	openshiftapiextensionsv1 "github.com/openshift/api/apiextensions/v1"
 	configv1 "github.com/openshift/api/config/v1"
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
@@ -519,20 +519,20 @@ func setCompatibilityRequirementConditions(ctx context.Context, name string, com
 		return metav1.ConditionFalse
 	}
 
-	cr := &apiextensionsv1alpha1.CompatibilityRequirement{}
+	cr := &openshiftapiextensionsv1.CompatibilityRequirement{}
 	cr.SetName(name)
 
 	Eventually(kWithCtx(ctx).UpdateStatus(cr, func() {
 		cr.Status.Conditions = []metav1.Condition{
 			{
-				Type:               apiextensionsv1alpha1.CompatibilityRequirementAdmitted,
+				Type:               openshiftapiextensionsv1.CompatibilityRequirementAdmitted,
 				Status:             metav1.ConditionTrue,
 				ObservedGeneration: cr.Generation,
 				LastTransitionTime: metav1.Now(),
 				Reason:             "Test",
 			},
 			{
-				Type:               apiextensionsv1alpha1.CompatibilityRequirementCompatible,
+				Type:               openshiftapiextensionsv1.CompatibilityRequirementCompatible,
 				Status:             toStatus(compatible),
 				ObservedGeneration: cr.Generation,
 				LastTransitionTime: metav1.Now(),

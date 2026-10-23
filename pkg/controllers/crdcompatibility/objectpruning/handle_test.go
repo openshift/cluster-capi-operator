@@ -22,7 +22,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
+	openshiftapiextensionsv1 "github.com/openshift/api/apiextensions/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -39,7 +39,7 @@ import (
 
 // pruningTestScenario defines a test case for object pruning through the webhook.
 type pruningTestScenario struct {
-	CompatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement
+	CompatibilityRequirement *openshiftapiextensionsv1.CompatibilityRequirement
 	InputObject              map[string]interface{}
 	ExpectedObject           map[string]interface{} // Fields that should remain after pruning
 }
@@ -85,7 +85,7 @@ var _ = Describe("Object Pruning Integration", func() {
 				By("Waiting for the webhook manager cache to observe the CompatibilityRequirement", func() {
 					// The admission handler uses mgr.GetClient(), which reads from the informer cache first.
 					Eventually(func(g Gomega) {
-						cached := &apiextensionsv1alpha1.CompatibilityRequirement{}
+						cached := &openshiftapiextensionsv1.CompatibilityRequirement{}
 						g.Expect(managerClient.Get(ctx, client.ObjectKeyFromObject(scenario.CompatibilityRequirement), cached)).To(Succeed())
 					}).WithContext(ctx).WithTimeout(defaultEventuallyTimeout).Should(Succeed())
 				})
@@ -155,17 +155,17 @@ var _ = Describe("Object Pruning Integration", func() {
 
 				By("Updating the compatibility requirement to warn action")
 				Eventually(kWithCtx(ctx).Update(scenario.CompatibilityRequirement, func() {
-					scenario.CompatibilityRequirement.Spec.ObjectSchemaValidation.Action = apiextensionsv1alpha1.CRDAdmitActionWarn
+					scenario.CompatibilityRequirement.Spec.ObjectSchemaValidation.Action = openshiftapiextensionsv1.CRDAdmitActionWarn
 				})).WithContext(ctx).Should(Succeed())
 
 				By("Waiting for the webhook handler's informer cache to observe the action change", func() {
 					// Note that we can't use kWithCtx here because it doesn't use the manager client.
-					Eventually(func(g Gomega) *apiextensionsv1alpha1.CompatibilityRequirement {
-						cachedCompatReq := &apiextensionsv1alpha1.CompatibilityRequirement{}
+					Eventually(func(g Gomega) *openshiftapiextensionsv1.CompatibilityRequirement {
+						cachedCompatReq := &openshiftapiextensionsv1.CompatibilityRequirement{}
 						g.Expect(managerClient.Get(ctx, client.ObjectKeyFromObject(scenario.CompatibilityRequirement), cachedCompatReq)).To(Succeed())
 
 						return cachedCompatReq
-					}).WithContext(ctx).Should(HaveField("Spec.ObjectSchemaValidation.Action", Equal(apiextensionsv1alpha1.CRDAdmitActionWarn)))
+					}).WithContext(ctx).Should(HaveField("Spec.ObjectSchemaValidation.Action", Equal(openshiftapiextensionsv1.CRDAdmitActionWarn)))
 				})
 
 				By("Updating the object again, should not be pruned", func() {
@@ -329,7 +329,7 @@ var _ = Describe("Object Pruning Integration", func() {
 		It("should handle webhook when CompatibilityRequirement does not exist", func(ctx context.Context) {
 			By("Creating MutatingWebhookConfiguration with non-existent CompatibilityRequirement")
 
-			webhookConfig := createMutatingWebhookConfig(&apiextensionsv1alpha1.CompatibilityRequirement{
+			webhookConfig := createMutatingWebhookConfig(&openshiftapiextensionsv1.CompatibilityRequirement{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "non-existent-compat-req",
 					UID:  "non-existent-compat-req-uid",
@@ -374,7 +374,7 @@ var _ = Describe("Object Pruning Integration", func() {
 })
 
 // createMutatingWebhookConfig creates a MutatingWebhookConfiguration for testing.
-func createMutatingWebhookConfig(compatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement, crd *apiextensionsv1.CustomResourceDefinition) *admissionregistrationv1.MutatingWebhookConfiguration {
+func createMutatingWebhookConfig(compatibilityRequirement *openshiftapiextensionsv1.CompatibilityRequirement, crd *apiextensionsv1.CustomResourceDefinition) *admissionregistrationv1.MutatingWebhookConfiguration {
 	webhookPath := fmt.Sprintf("%s%s", webhookPrefix, compatibilityRequirement.Name)
 	hostPort := fmt.Sprintf("%s:%d", testEnv.WebhookInstallOptions.LocalServingHost, testEnv.WebhookInstallOptions.LocalServingPort)
 	webhookURL := fmt.Sprintf("https://%s%s", hostPort, webhookPath)
@@ -551,26 +551,26 @@ func createPermissivePropertiesCRDSchema() *apiextensionsv1.CustomResourceDefini
 	return crd
 }
 
-func createCompatibilityRequirement(crd *apiextensionsv1.CustomResourceDefinition) *apiextensionsv1alpha1.CompatibilityRequirement {
+func createCompatibilityRequirement(crd *apiextensionsv1.CustomResourceDefinition) *openshiftapiextensionsv1.CompatibilityRequirement {
 	crdBytes, err := k8syaml.Marshal(crd)
 	Expect(err).NotTo(HaveOccurred())
 
-	return &apiextensionsv1alpha1.CompatibilityRequirement{
+	return &openshiftapiextensionsv1.CompatibilityRequirement{
 		ObjectMeta: metav1.ObjectMeta{
 			// Name will be set by the test
 		},
-		Spec: apiextensionsv1alpha1.CompatibilityRequirementSpec{
-			CompatibilitySchema: apiextensionsv1alpha1.CompatibilitySchema{
-				CustomResourceDefinition: apiextensionsv1alpha1.CRDData{
-					Type: apiextensionsv1alpha1.CRDDataTypeYAML,
+		Spec: openshiftapiextensionsv1.CompatibilityRequirementSpec{
+			CompatibilitySchema: openshiftapiextensionsv1.CompatibilitySchema{
+				CustomResourceDefinition: openshiftapiextensionsv1.CRDData{
+					Type: openshiftapiextensionsv1.CRDDataTypeYAML,
 					Data: string(crdBytes),
 				},
-				RequiredVersions: apiextensionsv1alpha1.APIVersions{
-					DefaultSelection: apiextensionsv1alpha1.APIVersionSetTypeAllServed,
+				RequiredVersions: openshiftapiextensionsv1.APIVersions{
+					DefaultSelection: openshiftapiextensionsv1.APIVersionSetTypeAllServed,
 				},
 			},
-			ObjectSchemaValidation: apiextensionsv1alpha1.ObjectSchemaValidation{
-				Action: apiextensionsv1alpha1.CRDAdmitActionDeny,
+			ObjectSchemaValidation: openshiftapiextensionsv1.ObjectSchemaValidation{
+				Action: openshiftapiextensionsv1.CRDAdmitActionDeny,
 			},
 		},
 	}

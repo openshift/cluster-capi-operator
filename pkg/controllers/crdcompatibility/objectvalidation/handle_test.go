@@ -28,7 +28,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
+	openshiftapiextensionsv1 "github.com/openshift/api/apiextensions/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/test"
 	admissionv1 "k8s.io/api/admissionregistration/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -38,7 +38,7 @@ import (
 )
 
 // createValidatingWebhookConfig creates a ValidatingWebhookConfiguration for end-to-end testing.
-func createValidatingWebhookConfig(compatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement, crd *apiextensionsv1.CustomResourceDefinition) *admissionv1.ValidatingWebhookConfiguration {
+func createValidatingWebhookConfig(compatibilityRequirement *openshiftapiextensionsv1.CompatibilityRequirement, crd *apiextensionsv1.CustomResourceDefinition) *admissionv1.ValidatingWebhookConfiguration {
 	webhookPath := fmt.Sprintf("%s%s", webhookPrefix, compatibilityRequirement.Name)
 	hostPort := fmt.Sprintf("%s:%d", testEnv.WebhookInstallOptions.LocalServingHost, testEnv.WebhookInstallOptions.LocalServingPort)
 	webhookURL := fmt.Sprintf("https://%s%s", hostPort, webhookPath)
@@ -55,10 +55,10 @@ func createValidatingWebhookConfig(compatibilityRequirement *apiextensionsv1alph
 
 // createWarningCompatibilityRequirement creates a CompatibilityRequirement with Warn action
 // and minimal configuration to avoid selector validation issues.
-func createWarningCompatibilityRequirement(crd *apiextensionsv1.CustomResourceDefinition) *apiextensionsv1alpha1.CompatibilityRequirement {
+func createWarningCompatibilityRequirement(crd *apiextensionsv1.CustomResourceDefinition) *openshiftapiextensionsv1.CompatibilityRequirement {
 	compatibilityRequirement := test.GenerateTestCompatibilityRequirement(crd)
-	compatibilityRequirement.Spec.CustomResourceDefinitionSchemaValidation.Action = apiextensionsv1alpha1.CRDAdmitActionWarn
-	compatibilityRequirement.Spec.ObjectSchemaValidation.Action = apiextensionsv1alpha1.CRDAdmitActionWarn
+	compatibilityRequirement.Spec.CustomResourceDefinitionSchemaValidation.Action = openshiftapiextensionsv1.CRDAdmitActionWarn
+	compatibilityRequirement.Spec.ObjectSchemaValidation.Action = openshiftapiextensionsv1.CRDAdmitActionWarn
 
 	return compatibilityRequirement
 }
@@ -66,7 +66,7 @@ func createWarningCompatibilityRequirement(crd *apiextensionsv1.CustomResourceDe
 var _ = Describe("End-to-End Admission Webhook Integration", Ordered, ContinueOnFailure, func() {
 	var (
 		namespace                = "default"
-		compatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement
+		compatibilityRequirement *openshiftapiextensionsv1.CompatibilityRequirement
 		startWebhookServer       func()
 		compatibilityCRD         *apiextensionsv1.CustomResourceDefinition
 	)
@@ -148,7 +148,7 @@ var _ = Describe("End-to-End Admission Webhook Integration", Ordered, ContinueOn
 		Context("when compatibility requirement has stricter validation than live CRD", func() {
 			var (
 				tighterCRD                      *apiextensionsv1.CustomResourceDefinition
-				tighterCompatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement
+				tighterCompatibilityRequirement *openshiftapiextensionsv1.CompatibilityRequirement
 			)
 
 			BeforeEach(func(ctx context.Context) {
@@ -220,7 +220,7 @@ var _ = Describe("End-to-End Admission Webhook Integration", Ordered, ContinueOn
 		Context("when live CRD has stricter validation than compatibility requirement", func() {
 			var (
 				looserCRD                      *apiextensionsv1.CustomResourceDefinition
-				looserCompatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement
+				looserCompatibilityRequirement *openshiftapiextensionsv1.CompatibilityRequirement
 			)
 
 			BeforeEach(func(ctx context.Context) {
@@ -320,7 +320,7 @@ var _ = Describe("End-to-End Admission Webhook Integration", Ordered, ContinueOn
 		Context("tighter validation on updates (CompatibilityRequirement stricter than live CRD)", func() {
 			var (
 				tighterCRD                      *apiextensionsv1.CustomResourceDefinition
-				tighterCompatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement
+				tighterCompatibilityRequirement *openshiftapiextensionsv1.CompatibilityRequirement
 				tighterWebhookConfig            *admissionv1.ValidatingWebhookConfiguration
 			)
 
@@ -410,7 +410,7 @@ var _ = Describe("End-to-End Admission Webhook Integration", Ordered, ContinueOn
 	Describe("Status Subresource Validation", func() {
 		Context("when status subresource validation is enabled", func() {
 			var (
-				statusCompatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement
+				statusCompatibilityRequirement *openshiftapiextensionsv1.CompatibilityRequirement
 			)
 
 			BeforeEach(func(ctx context.Context) {
@@ -582,7 +582,7 @@ var _ = Describe("End-to-End Admission Webhook Integration", Ordered, ContinueOn
 	Describe("Scale Subresource Validation", func() {
 		Context("when scale subresource validation is enabled", func() {
 			var (
-				scaleCompatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement
+				scaleCompatibilityRequirement *openshiftapiextensionsv1.CompatibilityRequirement
 			)
 
 			BeforeEach(func(ctx context.Context) {
@@ -771,7 +771,7 @@ var _ = Describe("End-to-End Admission Webhook Integration", Ordered, ContinueOn
 
 		Context("when ObjectSchemaValidation Action is set to Warn", func() {
 			var (
-				warningCompatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement
+				warningCompatibilityRequirement *openshiftapiextensionsv1.CompatibilityRequirement
 			)
 
 			BeforeEach(func(ctx context.Context) {
@@ -858,7 +858,7 @@ var _ = Describe("End-to-End Admission Webhook Integration", Ordered, ContinueOn
 
 		Context("when ObjectSchemaValidation Action is Warn for status subresource", func() {
 			var (
-				warningStatusCompatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement
+				warningStatusCompatibilityRequirement *openshiftapiextensionsv1.CompatibilityRequirement
 			)
 
 			BeforeEach(func(ctx context.Context) {
@@ -1025,7 +1025,7 @@ var _ = Describe("End-to-End Admission Webhook Integration", Ordered, ContinueOn
 
 		Context("when ObjectSchemaValidation Action is Warn for scale subresource", func() {
 			var (
-				warningScaleCompatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement
+				warningScaleCompatibilityRequirement *openshiftapiextensionsv1.CompatibilityRequirement
 			)
 
 			BeforeEach(func(ctx context.Context) {

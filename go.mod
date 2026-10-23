@@ -7,10 +7,13 @@ exclude sigs.k8s.io/cluster-api v0.0.0-00010101000000-000000000000
 
 go 1.26.0
 
+// Temporary pin for openshift/api#2905; use the upstream revision after it merges.
+replace github.com/openshift/api => github.com/stefanonardo/api v0.0.0-20261021120147-a75ffd9592c8
+
 tool (
 	github.com/golangci/golangci-lint/v2/cmd/golangci-lint
 	github.com/onsi/ginkgo/v2/ginkgo
-	github.com/openshift/api/apiextensions/v1alpha1/zz_generated.crd-manifests
+	github.com/openshift/api/apiextensions/v1/zz_generated.crd-manifests
 	github.com/openshift/api/config/v1/zz_generated.crd-manifests
 	github.com/openshift/api/machine/v1beta1/zz_generated.crd-manifests
 	github.com/openshift/api/operator/v1/zz_generated.crd-manifests

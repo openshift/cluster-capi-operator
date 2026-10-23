@@ -16,7 +16,7 @@ webhooks:
     service:
       name: compatibility-requirements-controllers-webhook-service
       namespace: openshift-compatibility-requirements-operator
-      path: /validate-apiextensions-openshift-io-v1alpha1-compatibilityrequirement
+      path: /validate-apiextensions-openshift-io-v1-compatibilityrequirement
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: compatibilityrequirement.operator.openshift.io
@@ -24,7 +24,7 @@ webhooks:
   - apiGroups:
     - apiextensions.openshift.io
     apiVersions:
-    - v1alpha1
+    - v1
     operations:
     - CREATE
     - UPDATE

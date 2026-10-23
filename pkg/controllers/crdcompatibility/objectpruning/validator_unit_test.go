@@ -20,7 +20,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
+	openshiftapiextensionsv1 "github.com/openshift/api/apiextensions/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility/index"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -32,7 +32,7 @@ import (
 var _ = Describe("validator", func() {
 	var (
 		testCRD                  *apiextensionsv1.CustomResourceDefinition
-		compatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement
+		compatibilityRequirement *openshiftapiextensionsv1.CompatibilityRequirement
 	)
 
 	BeforeEach(func() {
@@ -116,14 +116,14 @@ var _ = Describe("validator", func() {
 // createValidatorWithFakeClient creates a validator with fake client for testing.
 func createValidatorWithFakeClient(objects []client.Object) *validator {
 	scheme := runtime.NewScheme()
-	scheme.AddKnownTypes(apiextensionsv1alpha1.SchemeGroupVersion, &apiextensionsv1alpha1.CompatibilityRequirement{})
+	scheme.AddKnownTypes(openshiftapiextensionsv1.SchemeGroupVersion, &openshiftapiextensionsv1.CompatibilityRequirement{})
 	scheme.AddKnownTypes(apiextensionsv1.SchemeGroupVersion, &apiextensionsv1.CustomResourceDefinition{})
 
 	return &validator{
 		universalDeserializer: serializer.NewCodecFactory(scheme).UniversalDeserializer(),
 		client: fake.NewClientBuilder().
 			WithObjects(objects...).
-			WithIndex(&apiextensionsv1alpha1.CompatibilityRequirement{},
+			WithIndex(&openshiftapiextensionsv1.CompatibilityRequirement{},
 				index.FieldCRDByName,
 				index.CRDByName).
 			Build(),
