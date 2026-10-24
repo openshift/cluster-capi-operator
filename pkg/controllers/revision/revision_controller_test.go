@@ -66,6 +66,44 @@ func TestBuildComponentList(t *testing.T) {
 		expectedNames       []string
 	}{
 		{
+			name: "excludes all profiles when the FeatureGateClusterAPIMachineManagement gate is disabled",
+			providers: []providerimages.ProviderImageManifests{
+				{ProviderMetadata: providerimages.ProviderMetadata{Name: "core"}},
+				{ProviderMetadata: providerimages.ProviderMetadata{Name: "infra-aws", OCPPlatform: configv1.AWSPlatformType}},
+			},
+			platform:      configv1.AWSPlatformType,
+			expectedNames: []string{},
+		},
+		{
+			name: "excludes all profiles when the FeatureGateClusterAPIMachineManagement gate is disabled, even when a provider gate is enabled",
+			providers: []providerimages.ProviderImageManifests{
+				{ProviderMetadata: providerimages.ProviderMetadata{Name: "core"}},
+				{ProviderMetadata: providerimages.ProviderMetadata{Name: "infra-aws", OCPPlatform: configv1.AWSPlatformType}},
+			},
+			platform:            configv1.AWSPlatformType,
+			enabledFeatureGates: []configv1.FeatureGateName{features.FeatureGateClusterAPIMachineManagementAWS},
+			expectedNames:       []string{},
+		},
+		{
+			name: "excludes all profiles on a non-matching platform when the FeatureGateClusterAPIMachineManagement gate is disabled",
+			providers: []providerimages.ProviderImageManifests{
+				{ProviderMetadata: providerimages.ProviderMetadata{Name: "core"}},
+				{ProviderMetadata: providerimages.ProviderMetadata{Name: "infra-aws", OCPPlatform: configv1.AWSPlatformType}},
+			},
+			platform:            configv1.GCPPlatformType,
+			enabledFeatureGates: []configv1.FeatureGateName{features.FeatureGateClusterAPIMachineManagementAWS},
+			expectedNames:       []string{},
+		},
+		{
+			name: "excludes all profiles on an unsupported platform when the FeatureGateClusterAPIMachineManagement gate is disabled",
+			providers: []providerimages.ProviderImageManifests{
+				{ProviderMetadata: providerimages.ProviderMetadata{Name: "core"}},
+				{ProviderMetadata: providerimages.ProviderMetadata{Name: "infra-aws", OCPPlatform: configv1.AWSPlatformType}},
+			},
+			platform:      configv1.NonePlatformType,
+			expectedNames: []string{},
+		},
+		{
 			name: "orders components by type and platform scope",
 			providers: []providerimages.ProviderImageManifests{
 				{ProviderMetadata: providerimages.ProviderMetadata{Name: "infra-aws", InstallOrder: 20, OCPPlatform: configv1.AWSPlatformType}},
@@ -74,7 +112,7 @@ func TestBuildComponentList(t *testing.T) {
 				{ProviderMetadata: providerimages.ProviderMetadata{Name: "core-aws", InstallOrder: 10, OCPPlatform: configv1.AWSPlatformType}},
 			},
 			platform:            configv1.AWSPlatformType,
-			enabledFeatureGates: []configv1.FeatureGateName{features.FeatureGateClusterAPIMachineManagementAWS},
+			enabledFeatureGates: []configv1.FeatureGateName{features.FeatureGateClusterAPIMachineManagement, features.FeatureGateClusterAPIMachineManagementAWS},
 			// Expected order: core+global, core+platform, infra+global, infra+platform
 			expectedNames: []string{"core", "core-aws", "infra-global", "infra-aws"},
 		},
@@ -87,14 +125,14 @@ func TestBuildComponentList(t *testing.T) {
 				{ProviderMetadata: providerimages.ProviderMetadata{Name: "infra-azure", InstallOrder: 20, OCPPlatform: configv1.AzurePlatformType}},
 			},
 			platform:            configv1.AWSPlatformType,
-			enabledFeatureGates: []configv1.FeatureGateName{features.FeatureGateClusterAPIMachineManagementAWS},
+			enabledFeatureGates: []configv1.FeatureGateName{features.FeatureGateClusterAPIMachineManagement, features.FeatureGateClusterAPIMachineManagementAWS},
 			expectedNames:       []string{"core", "infra-aws"},
 		},
 		{
 			name:                "returns empty list when no providers",
 			providers:           []providerimages.ProviderImageManifests{},
 			platform:            configv1.AWSPlatformType,
-			enabledFeatureGates: []configv1.FeatureGateName{features.FeatureGateClusterAPIMachineManagementAWS},
+			enabledFeatureGates: []configv1.FeatureGateName{features.FeatureGateClusterAPIMachineManagement, features.FeatureGateClusterAPIMachineManagementAWS},
 			expectedNames:       []string{},
 		},
 		{
@@ -103,19 +141,21 @@ func TestBuildComponentList(t *testing.T) {
 				{ProviderMetadata: providerimages.ProviderMetadata{Name: "core", InstallOrder: 10}},
 				{ProviderMetadata: providerimages.ProviderMetadata{Name: "addon", InstallOrder: 20}},
 			},
-			platform:      configv1.GCPPlatformType,
-			expectedNames: []string{"core", "addon"},
+			platform:            configv1.GCPPlatformType,
+			enabledFeatureGates: []configv1.FeatureGateName{features.FeatureGateClusterAPIMachineManagement},
+			expectedNames:       []string{"core", "addon"},
 		},
 		{
-			name: "excludes platform profiles when feature gate is disabled",
+			name: "excludes platform profiles when provider feature gate is disabled",
 			providers: []providerimages.ProviderImageManifests{
 				{ProviderMetadata: providerimages.ProviderMetadata{Name: "infra-aws", InstallOrder: 20, OCPPlatform: configv1.AWSPlatformType}},
 				{ProviderMetadata: providerimages.ProviderMetadata{Name: "core", InstallOrder: 10}},
 				{ProviderMetadata: providerimages.ProviderMetadata{Name: "infra-global", InstallOrder: 20}},
 				{ProviderMetadata: providerimages.ProviderMetadata{Name: "core-aws", InstallOrder: 10, OCPPlatform: configv1.AWSPlatformType}},
 			},
-			platform:      configv1.AWSPlatformType,
-			expectedNames: []string{"core", "infra-global"},
+			platform:            configv1.AWSPlatformType,
+			enabledFeatureGates: []configv1.FeatureGateName{features.FeatureGateClusterAPIMachineManagement},
+			expectedNames:       []string{"core", "infra-global"},
 		},
 	}
 
@@ -148,7 +188,7 @@ var _ = Describe("RevisionController", Serial, func() {
 		createFixtures(ctx)
 
 		// Create manager and controller
-		mgr = newManagerWrapper(defaultProviderImgs, newFeatureGate(features.FeatureGateClusterAPIMachineManagementAWS))
+		mgr = newManagerWrapper(defaultProviderImgs, newFeatureGate(features.FeatureGateClusterAPIMachineManagement, features.FeatureGateClusterAPIMachineManagementAWS))
 
 		DeferCleanup(func(ctx context.Context) {
 			mgr.stop()
@@ -238,7 +278,7 @@ var _ = Describe("RevisionController", Serial, func() {
 		originalRev1 := initialClusterAPI.Status.Revisions[0]
 
 		// Restart the manager with different provider images
-		mgr = newManagerWrapper(updatedProviderImgs, newFeatureGate(features.FeatureGateClusterAPIMachineManagementAWS))
+		mgr = newManagerWrapper(updatedProviderImgs, newFeatureGate(features.FeatureGateClusterAPIMachineManagement, features.FeatureGateClusterAPIMachineManagementAWS))
 
 		// Wait for the controller to create the second revision
 		Eventually(kWithCtx(ctx).Object(clusterAPI)).
@@ -282,7 +322,7 @@ var _ = Describe("RevisionController", Serial, func() {
 		mgr.stop()
 
 		// Restart with only GCP providers on an AWS cluster — no providers match
-		mgr = newManagerWrapper(nonMatchingProviderImgs, newFeatureGate(features.FeatureGateClusterAPIMachineManagementAWS))
+		mgr = newManagerWrapper(nonMatchingProviderImgs, newFeatureGate(features.FeatureGateClusterAPIMachineManagement, features.FeatureGateClusterAPIMachineManagementAWS))
 
 		// Wait for the controller to create the second revision
 		Eventually(kWithCtx(ctx).Object(clusterAPI)).
@@ -298,12 +338,31 @@ var _ = Describe("RevisionController", Serial, func() {
 		Expect(clusterAPI.Status.ObservedRevisionGeneration).To(Equal(clusterAPI.Generation))
 	}, defaultNodeTimeout)
 
+	It("creates revision with empty components when ClusterAPIMachineManagement is disabled", func(ctx context.Context) {
+		// Stop manager with default (matching) providers and enabled feature gate.
+		mgr.stop()
+
+		// Restart with the ClusterAPIMachineManagementAWS provider gate enabled but the ClusterAPIMachineManagement base gate disabled.
+		mgr = newManagerWrapper(defaultProviderImgs, newFeatureGate(features.FeatureGateClusterAPIMachineManagementAWS))
+
+		// Wait for the controller to create the second revision.
+		Eventually(kWithCtx(ctx).Object(clusterAPI)).WithContext(ctx).
+			Should(HaveField("Status.Revisions", HaveLen(2)))
+
+		// The new revision should have empty components.
+		newRev := latestRevision(clusterAPI.Status.Revisions)
+		Expect(newRev.Components).To(BeEmpty())
+
+		// DesiredRevision should point to the new revision.
+		Expect(clusterAPI.Status.DesiredRevision).To(Equal(newRev.Name))
+	}, defaultNodeTimeout)
+
 	It("excludes platform-specific components when feature gate is disabled", func(ctx context.Context) {
 		// Stop manager with default (matching) providers and enabled feature gate
 		mgr.stop()
 
-		// Restart with default providers (core + infra-aws) but no feature gates enabled
-		mgr = newManagerWrapper(defaultProviderImgs, newFeatureGate())
+		// Restart with the base gate enabled but the provider gate disabled.
+		mgr = newManagerWrapper(defaultProviderImgs, newFeatureGate(features.FeatureGateClusterAPIMachineManagement))
 
 		// Wait for the controller to create the second revision
 		Eventually(kWithCtx(ctx).Object(clusterAPI)).
@@ -325,7 +384,7 @@ var _ = Describe("RevisionController", Serial, func() {
 		mgr.stop()
 
 		// Create rev2 with different content.
-		mgr = newManagerWrapper(updatedProviderImgs, newFeatureGate(features.FeatureGateClusterAPIMachineManagementAWS))
+		mgr = newManagerWrapper(updatedProviderImgs, newFeatureGate(features.FeatureGateClusterAPIMachineManagement, features.FeatureGateClusterAPIMachineManagementAWS))
 
 		// Wait for the controller to create the second revision
 		Eventually(kWithCtx(ctx).Object(clusterAPI)).
@@ -371,7 +430,7 @@ var _ = Describe("RevisionController", Serial, func() {
 		Expect(cl.Status().Patch(ctx, clusterAPI, patch)).To(Succeed())
 
 		// Start with different content, producing a new revision.
-		mgr = newManagerWrapper(updatedProviderImgs, newFeatureGate(features.FeatureGateClusterAPIMachineManagementAWS))
+		mgr = newManagerWrapper(updatedProviderImgs, newFeatureGate(features.FeatureGateClusterAPIMachineManagement, features.FeatureGateClusterAPIMachineManagementAWS))
 
 		Eventually(kWithCtx(ctx).Object(clusterAPI)).
 			WithContext(ctx).
@@ -500,7 +559,7 @@ var _ = Describe("RevisionController", Serial, func() {
 		mgr.stop()
 
 		// Restart with providers that have an invalid adopt-existing annotation value
-		mgr = newManagerWrapper(invalidAnnotationProviderImgs, newFeatureGate(features.FeatureGateClusterAPIMachineManagementAWS))
+		mgr = newManagerWrapper(invalidAnnotationProviderImgs, newFeatureGate(features.FeatureGateClusterAPIMachineManagement, features.FeatureGateClusterAPIMachineManagementAWS))
 
 		waitForConditions(ctx,
 			test.HaveCondition(conditionTypeProgressing).
@@ -524,7 +583,7 @@ var _ = Describe("RevisionController waiting states", Serial, func() {
 		BeforeEach(func(ctx context.Context) {
 			createFixtures(ctx, withoutInfraStatus)
 
-			mgr := newManagerWrapper(defaultProviderImgs, newFeatureGate(features.FeatureGateClusterAPIMachineManagementAWS))
+			mgr := newManagerWrapper(defaultProviderImgs, newFeatureGate(features.FeatureGateClusterAPIMachineManagement, features.FeatureGateClusterAPIMachineManagementAWS))
 
 			DeferCleanup(func(ctx context.Context) {
 				mgr.stop()
@@ -583,7 +642,7 @@ var _ = Describe("RevisionController waiting states", Serial, func() {
 		BeforeEach(func(ctx context.Context) {
 			createFixtures(ctx, withoutClusterAPI)
 
-			mgr := newManagerWrapper(defaultProviderImgs, newFeatureGate(features.FeatureGateClusterAPIMachineManagementAWS))
+			mgr := newManagerWrapper(defaultProviderImgs, newFeatureGate(features.FeatureGateClusterAPIMachineManagement, features.FeatureGateClusterAPIMachineManagementAWS))
 
 			DeferCleanup(func(ctx context.Context) {
 				mgr.stop()
@@ -628,7 +687,7 @@ var _ = Describe("RevisionController manifest substitutions", Serial, func() {
 	}, defaultNodeTimeout)
 
 	It("includes substitutions in created revision", func(ctx context.Context) {
-		mgr := newManagerWrapper(defaultProviderImgs, newFeatureGate(features.FeatureGateClusterAPIMachineManagementAWS), func(config *tls.Config) {
+		mgr := newManagerWrapper(defaultProviderImgs, newFeatureGate(features.FeatureGateClusterAPIMachineManagement, features.FeatureGateClusterAPIMachineManagementAWS), func(config *tls.Config) {
 			config.CipherSuites = []uint16{tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256}
 			config.MinVersion = tls.VersionTLS12
 		})
@@ -666,7 +725,7 @@ var _ = Describe("RevisionController unmanaged CRDs", Serial, func() {
 		unmanagedCRDs := []string{"gadgets.example.com", "widgets.example.com"}
 		createFixtures(ctx, withUnmanagedCRDs(unmanagedCRDs))
 
-		mgr := newManagerWrapper(defaultProviderImgs, newFeatureGate(features.FeatureGateClusterAPIMachineManagementAWS))
+		mgr := newManagerWrapper(defaultProviderImgs, newFeatureGate(features.FeatureGateClusterAPIMachineManagement, features.FeatureGateClusterAPIMachineManagementAWS))
 
 		DeferCleanup(func() { mgr.stop() })
 
@@ -699,7 +758,7 @@ var _ = Describe("RevisionController unmanaged CRDs", Serial, func() {
 			Client:           interceptorCl,
 			ProviderProfiles: defaultProviderImgs,
 			ReleaseVersion:   "4.18.0",
-			FeatureGates:     newFeatureGate(features.FeatureGateClusterAPIMachineManagementAWS),
+			FeatureGates:     newFeatureGate(features.FeatureGateClusterAPIMachineManagement, features.FeatureGateClusterAPIMachineManagementAWS),
 		}
 
 		_, err := r.Reconcile(ctx, reconcile.Request{})
@@ -714,7 +773,7 @@ var _ = Describe("RevisionController unmanaged CRDs", Serial, func() {
 	It("creates a new revision when an entry is added", func(ctx context.Context) {
 		createFixtures(ctx, withUnmanagedCRDs([]string{"widgets.example.com"}))
 
-		mgr := newManagerWrapper(defaultProviderImgs, newFeatureGate(features.FeatureGateClusterAPIMachineManagementAWS))
+		mgr := newManagerWrapper(defaultProviderImgs, newFeatureGate(features.FeatureGateClusterAPIMachineManagement, features.FeatureGateClusterAPIMachineManagementAWS))
 
 		DeferCleanup(func() { mgr.stop() })
 
@@ -766,7 +825,7 @@ var _ = Describe("RevisionController error handling", Serial, func() {
 			Client:           interceptorCl,
 			ProviderProfiles: providerImgs,
 			ReleaseVersion:   "4.18.0",
-			FeatureGates:     newFeatureGate(features.FeatureGateClusterAPIMachineManagementAWS),
+			FeatureGates:     newFeatureGate(features.FeatureGateClusterAPIMachineManagement, features.FeatureGateClusterAPIMachineManagementAWS),
 		}
 	}, defaultNodeTimeout)
 

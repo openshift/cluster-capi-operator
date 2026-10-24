@@ -27,6 +27,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1 "github.com/openshift/api/config/v1"
+	"github.com/openshift/api/features"
 	configv1apply "github.com/openshift/client-go/config/applyconfigurations/config/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/corecluster"
@@ -36,6 +37,7 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/secretsync"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
+	"github.com/openshift/library-go/pkg/operator/configobserver/featuregates"
 )
 
 const (
@@ -47,6 +49,7 @@ const (
 type ClusterOperatorController struct {
 	client.Client
 	ReleaseVersion string
+	FeatureGates   featuregates.FeatureGate
 }
 
 // Reconcile reconciles the cluster-api ClusterOperator object.
@@ -135,9 +138,13 @@ func (r *ClusterOperatorController) aggregatedStatus(currentConditions []configv
 	subControllers := []operatorstatus.ControllerResultGenerator{
 		installer.ResultGenerator,
 		revision.ResultGenerator,
-		corecluster.ResultGenerator,
-		infracluster.ResultGenerator,
-		secretsync.ResultGenerator,
+	}
+	if r.FeatureGates.Enabled(features.FeatureGateClusterAPIMachineManagement) {
+		subControllers = append(subControllers,
+			corecluster.ResultGenerator,
+			infracluster.ResultGenerator,
+			secretsync.ResultGenerator,
+		)
 	}
 
 	// Populate subcontrollerStatus with the available and progressing conditions of each subcontroller.

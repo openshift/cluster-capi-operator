@@ -28,6 +28,7 @@ import (
 
 	"github.com/go-logr/logr"
 	configv1 "github.com/openshift/api/config/v1"
+	"github.com/openshift/api/features"
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	operatorv1alpha1ac "github.com/openshift/client-go/operator/applyconfigurations/operator/v1alpha1"
 	libgocrypto "github.com/openshift/library-go/pkg/crypto"
@@ -277,9 +278,15 @@ func (r *RevisionController) writeRevisions(ctx context.Context, log logr.Logger
 
 // buildComponentList builds an ordered list of provider components for the
 // given platform. Components are ordered by install order, then platform, then
-// name. Providers that don't match the current platform or whose platform
-// feature gate is not enabled are filtered out.
+// name. No components are selected without the base machine-management gate.
+// Providers that don't match the current platform or whose platform feature
+// gate is not enabled are filtered out.
 func (r *RevisionController) buildComponentList(platform configv1.PlatformType) []providerimages.ProviderImageManifests {
+	// No components are selected without the base machine-management gate.
+	if !r.FeatureGates.Enabled(features.FeatureGateClusterAPIMachineManagement) {
+		return nil
+	}
+
 	platformEnabled := util.IsCAPIEnabledForPlatform(r.FeatureGates, platform)
 
 	// Iterate over only providers that have either no platform restriction, or
