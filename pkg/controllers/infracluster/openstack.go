@@ -243,12 +243,7 @@ func resolveExternalNetworkWithoutRouter(log logr.Logger, networkClient openstac
 	case 1:
 		return &openstackv1.NetworkParam{ID: ptr.To(externalNetworks[0].ID)}, false, nil
 	default:
-		ids := make([]string, len(externalNetworks))
-		for i, externalNetwork := range externalNetworks {
-			ids[i] = externalNetwork.ID
-		}
-
-		log.Info("Multiple external networks found and no router to disambiguate; disabling external network", "externalNetworkIDs", ids)
+		log.Info("Multiple external networks found and no router to disambiguate; disabling external network", "externalNetworkCount", len(externalNetworks))
 
 		return nil, true, nil
 	}
