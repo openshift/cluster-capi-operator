@@ -170,6 +170,7 @@ func (r *InfraClusterController) ensureOpenStackCluster(ctx context.Context, log
 	// These might be nil if no router is found.
 	target.Spec.Router = routerParam
 	target.Spec.ExternalNetwork = externalNetworkParam
+
 	if disableExternalNetwork {
 		target.Spec.DisableExternalNetwork = ptr.To(true)
 	}
