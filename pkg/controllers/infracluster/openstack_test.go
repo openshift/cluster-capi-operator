@@ -202,12 +202,13 @@ var _ = Describe("resolveRouterAndExternalNetwork", func() {
 			GatewayInfo: routers.GatewayInfo{NetworkID: extNetID},
 		}, nil)
 
-		router, externalNetwork, err := resolveRouterAndExternalNetwork(context.Background(), logr.Discard(), networkClient, subnet)
+		router, externalNetwork, disableExternalNetwork, err := resolveRouterAndExternalNetwork(context.Background(), logr.Discard(), networkClient, subnet)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(router).NotTo(BeNil())
 		Expect(*router.ID).To(Equal(routerID))
 		Expect(externalNetwork).NotTo(BeNil())
 		Expect(*externalNetwork.ID).To(Equal(extNetID))
+		Expect(disableExternalNetwork).To(BeFalse())
 	})
 
 	It("falls back to resolving the external network directly when the subnet has no gateway port", func() {
@@ -216,24 +217,26 @@ var _ = Describe("resolveRouterAndExternalNetwork", func() {
 			{ID: extNetID},
 		}, nil)
 
-		router, externalNetwork, err := resolveRouterAndExternalNetwork(context.Background(), logr.Discard(), networkClient, subnet)
+		router, externalNetwork, disableExternalNetwork, err := resolveRouterAndExternalNetwork(context.Background(), logr.Discard(), networkClient, subnet)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(router).To(BeNil())
 		Expect(externalNetwork).NotTo(BeNil())
 		Expect(*externalNetwork.ID).To(Equal(extNetID))
+		Expect(disableExternalNetwork).To(BeFalse())
 	})
 
 	It("leaves external network unset too when there is no router and no external network in the project", func() {
 		networkClient.EXPECT().ListPort(gatewayPortListOpts()).Return([]ports.Port{}, nil)
 		networkClient.EXPECT().ListNetwork(externalNetworkListOpts()).Return([]networks.Network{}, nil)
 
-		router, externalNetwork, err := resolveRouterAndExternalNetwork(context.Background(), logr.Discard(), networkClient, subnet)
+		router, externalNetwork, disableExternalNetwork, err := resolveRouterAndExternalNetwork(context.Background(), logr.Discard(), networkClient, subnet)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(router).To(BeNil())
 		Expect(externalNetwork).To(BeNil())
+		Expect(disableExternalNetwork).To(BeFalse())
 	})
 
-	It("leaves both router and external network unset when there is no router and multiple external networks exist", func() {
+	It("disables external network when there is no router and multiple external networks exist", func() {
 		networkClient.EXPECT().ListPort(gatewayPortListOpts()).Return([]ports.Port{
 			{ID: portID, DeviceID: routerID},
 			{ID: "99999999-9999-9999-9999-999999999999", DeviceID: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"},
@@ -243,10 +246,11 @@ var _ = Describe("resolveRouterAndExternalNetwork", func() {
 			{ID: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"},
 		}, nil)
 
-		router, externalNetwork, err := resolveRouterAndExternalNetwork(context.Background(), logr.Discard(), networkClient, subnet)
+		router, externalNetwork, disableExternalNetwork, err := resolveRouterAndExternalNetwork(context.Background(), logr.Discard(), networkClient, subnet)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(router).To(BeNil())
 		Expect(externalNetwork).To(BeNil())
+		Expect(disableExternalNetwork).To(BeTrue())
 	})
 
 	It("falls back to resolving the external network directly when the router has no external gateway", func() {
@@ -256,16 +260,17 @@ var _ = Describe("resolveRouterAndExternalNetwork", func() {
 		networkClient.EXPECT().GetRouter(routerID).Return(&routers.Router{ID: routerID}, nil)
 		networkClient.EXPECT().ListNetwork(externalNetworkListOpts()).Return([]networks.Network{}, nil)
 
-		router, externalNetwork, err := resolveRouterAndExternalNetwork(context.Background(), logr.Discard(), networkClient, subnet)
+		router, externalNetwork, disableExternalNetwork, err := resolveRouterAndExternalNetwork(context.Background(), logr.Discard(), networkClient, subnet)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(router).To(BeNil())
 		Expect(externalNetwork).To(BeNil())
+		Expect(disableExternalNetwork).To(BeFalse())
 	})
 
 	It("propagates real OpenStack API errors from router discovery instead of silently ignoring them", func() {
 		networkClient.EXPECT().ListPort(gatewayPortListOpts()).Return(nil, errors.New("boom"))
 
-		_, _, err := resolveRouterAndExternalNetwork(context.Background(), logr.Discard(), networkClient, subnet)
+		_, _, _, err := resolveRouterAndExternalNetwork(context.Background(), logr.Discard(), networkClient, subnet)
 		Expect(err).To(MatchError(ContainSubstring("boom")))
 	})
 
@@ -273,7 +278,7 @@ var _ = Describe("resolveRouterAndExternalNetwork", func() {
 		networkClient.EXPECT().ListPort(gatewayPortListOpts()).Return([]ports.Port{}, nil)
 		networkClient.EXPECT().ListNetwork(externalNetworkListOpts()).Return(nil, errors.New("kaboom"))
 
-		_, _, err := resolveRouterAndExternalNetwork(context.Background(), logr.Discard(), networkClient, subnet)
+		_, _, _, err := resolveRouterAndExternalNetwork(context.Background(), logr.Discard(), networkClient, subnet)
 		Expect(err).To(MatchError(ContainSubstring("kaboom")))
 	})
 })
@@ -303,35 +308,38 @@ var _ = Describe("resolveExternalNetworkWithoutRouter", func() {
 	It("returns nil when the project has no external network", func() {
 		networkClient.EXPECT().ListNetwork(externalNetworkListOpts).Return([]networks.Network{}, nil)
 
-		externalNetwork, err := resolveExternalNetworkWithoutRouter(logr.Discard(), networkClient)
+		externalNetwork, disableExternalNetwork, err := resolveExternalNetworkWithoutRouter(logr.Discard(), networkClient)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(externalNetwork).To(BeNil())
+		Expect(disableExternalNetwork).To(BeFalse())
 	})
 
 	It("returns the network when the project has exactly one external network", func() {
 		networkClient.EXPECT().ListNetwork(externalNetworkListOpts).Return([]networks.Network{{ID: extNetID}}, nil)
 
-		externalNetwork, err := resolveExternalNetworkWithoutRouter(logr.Discard(), networkClient)
+		externalNetwork, disableExternalNetwork, err := resolveExternalNetworkWithoutRouter(logr.Discard(), networkClient)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(externalNetwork).NotTo(BeNil())
 		Expect(*externalNetwork.ID).To(Equal(extNetID))
+		Expect(disableExternalNetwork).To(BeFalse())
 	})
 
-	It("returns nil when the project has multiple external networks (ambiguous, not an error)", func() {
+	It("signals to disable external network when the project has multiple external networks", func() {
 		networkClient.EXPECT().ListNetwork(externalNetworkListOpts).Return([]networks.Network{
 			{ID: extNetID},
 			{ID: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"},
 		}, nil)
 
-		externalNetwork, err := resolveExternalNetworkWithoutRouter(logr.Discard(), networkClient)
+		externalNetwork, disableExternalNetwork, err := resolveExternalNetworkWithoutRouter(logr.Discard(), networkClient)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(externalNetwork).To(BeNil())
+		Expect(disableExternalNetwork).To(BeTrue())
 	})
 
 	It("propagates real OpenStack API errors", func() {
 		networkClient.EXPECT().ListNetwork(externalNetworkListOpts).Return(nil, errors.New("boom"))
 
-		_, err := resolveExternalNetworkWithoutRouter(logr.Discard(), networkClient)
+		_, _, err := resolveExternalNetworkWithoutRouter(logr.Discard(), networkClient)
 		Expect(err).To(MatchError(ContainSubstring("boom")))
 	})
 })
