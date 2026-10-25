@@ -48,7 +48,6 @@ var (
 	errUnsupportedOpenStackLoadBalancerType = errors.New("unsupported load balancer type for OpenStack")
 	errOpenStackNoAPIServerInternalIPs      = errors.New("no APIServerInternalIPs available")
 	errOpenStackNoDefaultRouter             = errors.New("unable to determine default router from control plane machines")
-	errOpenStackAmbiguousExternalNetworks   = errors.New("multiple external networks found and no router to disambiguate them")
 	errOpenStackNoDefaultSubnet             = errors.New("unable to determine default subnet from control plane machines")
 	errOpenStackNoControlPlaneMachines      = errors.New("no control plane machines found")
 )
@@ -197,7 +196,7 @@ func resolveRouterAndExternalNetwork(ctx context.Context, log logr.Logger, netwo
 
 		log.Info("unable to determine a default router for the network; resolving external network directly", "reason", err.Error())
 
-		externalNetwork, resolveErr := resolveExternalNetworkWithoutRouter(networkClient)
+		externalNetwork, resolveErr := resolveExternalNetworkWithoutRouter(log, networkClient)
 		if resolveErr != nil {
 			return nil, nil, resolveErr
 		}
@@ -215,7 +214,7 @@ func resolveRouterAndExternalNetwork(ctx context.Context, log logr.Logger, netwo
 // without going through a router, mirroring own CAPO's logic. See [1]
 // for reference.
 // [1] https://github.com/kubernetes-sigs/cluster-api-provider-openstack/blob/15502dfcbe75e5a9c82e1e63be36b1e103ef1f71/pkg/cloud/services/networking/network.go#L65-L68
-func resolveExternalNetworkWithoutRouter(networkClient openstackclients.NetworkClient) (*openstackv1.NetworkParam, error) {
+func resolveExternalNetworkWithoutRouter(log logr.Logger, networkClient openstackclients.NetworkClient) (*openstackv1.NetworkParam, error) {
 	externalNetworks, err := networkClient.ListNetwork(external.ListOptsExt{
 		ListOptsBuilder: networks.ListOpts{},
 		External:        ptr.To(true),
@@ -235,7 +234,9 @@ func resolveExternalNetworkWithoutRouter(networkClient openstackclients.NetworkC
 			ids[i] = externalNetwork.ID
 		}
 
-		return nil, fmt.Errorf("%w: %v", errOpenStackAmbiguousExternalNetworks, ids)
+		log.Info("Multiple external networks found and no router to disambiguate; leaving ExternalNetwork unset", "externalNetworkIDs", ids)
+
+		return nil, nil //nolint:nilnil
 	}
 }
 
