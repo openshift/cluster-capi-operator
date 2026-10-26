@@ -48,7 +48,6 @@ var (
 	errUnsupportedOpenStackLoadBalancerType = errors.New("unsupported load balancer type for OpenStack")
 	errOpenStackNoAPIServerInternalIPs      = errors.New("no APIServerInternalIPs available")
 	errOpenStackNoDefaultRouter             = errors.New("unable to determine default router from control plane machines")
-	errOpenStackAmbiguousExternalNetworks   = errors.New("multiple external networks found and no router to disambiguate them")
 	errOpenStackNoDefaultSubnet             = errors.New("unable to determine default subnet from control plane machines")
 	errOpenStackNoControlPlaneMachines      = errors.New("no control plane machines found")
 )
@@ -163,7 +162,7 @@ func (r *InfraClusterController) ensureOpenStackCluster(ctx context.Context, log
 	// the external network if none is specified and the project has multiple
 	// external networks. There are scenarios where the user BYON and the
 	// gateway might live outside Neutron, making these fields optional.
-	routerParam, externalNetworkParam, err := resolveRouterAndExternalNetwork(ctx, log, networkClient, defaultSubnet)
+	routerParam, externalNetworkParam, disableExternalNetwork, err := resolveRouterAndExternalNetwork(ctx, log, networkClient, defaultSubnet)
 	if err != nil {
 		return nil, err
 	}
@@ -171,6 +170,10 @@ func (r *InfraClusterController) ensureOpenStackCluster(ctx context.Context, log
 	// These might be nil if no router is found.
 	target.Spec.Router = routerParam
 	target.Spec.ExternalNetwork = externalNetworkParam
+
+	if disableExternalNetwork {
+		target.Spec.DisableExternalNetwork = ptr.To(true)
+	}
 
 	if err := r.Create(ctx, target); err != nil {
 		return nil, fmt.Errorf("failed to create InfraCluster: %w", err)
@@ -188,54 +191,61 @@ func (r *InfraClusterController) ensureOpenStackCluster(ctx context.Context, log
 // If a router is found, the external network is inferred from it. Otherwise, no
 // router is used and the external network is resolved independently mirroring
 // CAPO's behavior.
-func resolveRouterAndExternalNetwork(ctx context.Context, log logr.Logger, networkClient openstackclients.NetworkClient, subnet *subnets.Subnet) (*openstackv1.RouterParam, *openstackv1.NetworkParam, error) {
+//
+// The returned disableExternalNetwork flag is true when no router exists and
+// multiple external networks are found, indicating that
+// Spec.DisableExternalNetwork should be set to prevent CAPO from failing on the
+// ambiguity.
+func resolveRouterAndExternalNetwork(ctx context.Context, log logr.Logger, networkClient openstackclients.NetworkClient, subnet *subnets.Subnet) (*openstackv1.RouterParam, *openstackv1.NetworkParam, bool, error) {
 	router, err := getDefaultRouterFromSubnet(ctx, networkClient, subnet)
 	if err != nil {
 		if !errors.Is(err, errOpenStackNoDefaultRouter) {
-			return nil, nil, err
+			return nil, nil, false, err
 		}
 
 		log.Info("unable to determine a default router for the network; resolving external network directly", "reason", err.Error())
 
-		externalNetwork, resolveErr := resolveExternalNetworkWithoutRouter(networkClient)
+		externalNetwork, disableExternalNetwork, resolveErr := resolveExternalNetworkWithoutRouter(log, networkClient)
 		if resolveErr != nil {
-			return nil, nil, resolveErr
+			return nil, nil, false, resolveErr
 		}
 
-		return nil, externalNetwork, nil
+		return nil, externalNetwork, disableExternalNetwork, nil
 	}
 
 	// NOTE(stephenfin): The only reason we set ExternalNetworkID in the cluster spec is to avoid
 	// an error reconciling the external network if it isn't set. If CAPO ever no longer requires
 	// this we can just not set it and remove much of the code above. We don't actually use it.
-	return &openstackv1.RouterParam{ID: ptr.To(router.ID)}, &openstackv1.NetworkParam{ID: ptr.To(router.GatewayInfo.NetworkID)}, nil
+	return &openstackv1.RouterParam{ID: ptr.To(router.ID)}, &openstackv1.NetworkParam{ID: ptr.To(router.GatewayInfo.NetworkID)}, false, nil
 }
 
 // resolveExternalNetworkWithoutRouter determines Spec.ExternalNetwork
-// without going through a router, mirroring own CAPO's logic. See [1]
+// without going through a router, mirroring CAPO's own logic. See [1]
 // for reference.
+//
+// When multiple external networks are found, the function returns
+// disableExternalNetwork=true so the caller can set
+// Spec.DisableExternalNetwork, preventing CAPO from failing on the ambiguity.
+//
 // [1] https://github.com/kubernetes-sigs/cluster-api-provider-openstack/blob/15502dfcbe75e5a9c82e1e63be36b1e103ef1f71/pkg/cloud/services/networking/network.go#L65-L68
-func resolveExternalNetworkWithoutRouter(networkClient openstackclients.NetworkClient) (*openstackv1.NetworkParam, error) {
+func resolveExternalNetworkWithoutRouter(log logr.Logger, networkClient openstackclients.NetworkClient) (*openstackv1.NetworkParam, bool, error) {
 	externalNetworks, err := networkClient.ListNetwork(external.ListOptsExt{
 		ListOptsBuilder: networks.ListOpts{},
 		External:        ptr.To(true),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("listing external networks: %w", err)
+		return nil, false, fmt.Errorf("listing external networks: %w", err)
 	}
 
 	switch len(externalNetworks) {
 	case 0:
-		return nil, nil //nolint:nilnil
+		return nil, false, nil
 	case 1:
-		return &openstackv1.NetworkParam{ID: ptr.To(externalNetworks[0].ID)}, nil
+		return &openstackv1.NetworkParam{ID: ptr.To(externalNetworks[0].ID)}, false, nil
 	default:
-		ids := make([]string, len(externalNetworks))
-		for i, externalNetwork := range externalNetworks {
-			ids[i] = externalNetwork.ID
-		}
+		log.Info("Multiple external networks found and no router to disambiguate; disabling external network", "externalNetworkCount", len(externalNetworks))
 
-		return nil, fmt.Errorf("%w: %v", errOpenStackAmbiguousExternalNetworks, ids)
+		return nil, true, nil
 	}
 }
 
