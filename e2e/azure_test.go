@@ -79,6 +79,8 @@ var _ = Describe("Cluster API Azure MachineSet", Ordered, func() {
 		))
 
 		framework.WaitForMachineSet(ctx, cl, machineSet.Name, machineSet.Namespace, framework.WaitLong)
+
+		verifyCAPIAzureClusterOwnershipTag(clusterName)
 	})
 
 })
