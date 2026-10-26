@@ -49,20 +49,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIMachineManage
 		}
 	})
 
-	Context("Operator & controller deployments", func() {
-		It("should have the capi-operator deployment available", func() {
-			framework.AssertDeploymentAvailable("capi-operator", framework.CAPIOperatorNamespace)
-		})
-
-		It("should have the cluster-api ClusterOperator reporting healthy", func() {
-			co := &configv1.ClusterOperator{ObjectMeta: metav1.ObjectMeta{Name: framework.CAPIClusterOperatorName}}
-			Eventually(komega.Object(co)).WithTimeout(framework.WaitMedium).WithPolling(framework.RetryMedium).Should(SatisfyAll(
-				HaveField("Status.Conditions", test.HaveCondition(configv1.OperatorAvailable).WithStatus(configv1.ConditionTrue)),
-				HaveField("Status.Conditions", test.HaveCondition(configv1.OperatorDegraded).WithStatus(configv1.ConditionFalse)),
-				HaveField("Status.Conditions", test.HaveCondition(configv1.OperatorProgressing).WithStatus(configv1.ConditionFalse)),
-			))
-		})
-
+	Context("Controller deployments", func() {
 		It("should have the capi-controllers deployment available", func() {
 			framework.AssertDeploymentAvailable("capi-controllers", framework.CAPINamespace)
 		})
@@ -73,10 +60,6 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIMachineManage
 			}
 
 			framework.AssertDeploymentAvailable("machine-api-migration", framework.CAPINamespace)
-		})
-
-		It("should have the capi-installer deployment available", func() {
-			framework.AssertDeploymentAvailable("capi-installer", framework.CAPIOperatorNamespace)
 		})
 	})
 

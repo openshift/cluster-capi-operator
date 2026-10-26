@@ -40,7 +40,7 @@ nightly conformance job picks it up via the `Parents` field:
 | `Label("Disruptive")` | `capio/disruptive` | `openshift/disruptive-longrunning` |
 
 A test is included in a periodic run when **both** of these are true:
-1. The cluster has the feature set that enables the test's feature gate (e.g. `TechPreviewNoUpgrade`)
+1. The cluster's effective feature-gate status enables the test's feature gate
 2. The job runs the matching parent suite (e.g. `openshift/conformance/serial`)
 
 Example — a serial test that lands in `capio/serial → openshift/conformance/serial`:
