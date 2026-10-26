@@ -90,7 +90,7 @@ func removeSpecProperty(crd *apiextensionsv1.CustomResourceDefinition, name stri
 
 // The handoff is irreversible, so these specs are Ordered: each one builds on
 // the cluster state left behind by the previous one.
-var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIMachineManagement][OCPFeatureGate:CRDCompatibilityRequirementOperator] Cluster API unmanaged CRD handoff",
+var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIMachineManagement] Cluster API unmanaged CRD handoff",
 	Label("Disruptive"), Label("skip-topology:External"), Ordered, func() {
 		var (
 			clusterAPI  *operatorv1alpha1.ClusterAPI
