@@ -205,6 +205,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIMachineManage
 			), "CompatibilityRequirement should be admitted and compatible with the installed Cluster CRD")
 
 			By("Waiting for the installer status to report success")
+
 			clusterOperator := &configv1.ClusterOperator{ObjectMeta: metav1.ObjectMeta{Name: framework.CAPIClusterOperatorName}}
 			Eventually(komega.Object(clusterOperator)).WithTimeout(framework.WaitMedium).WithPolling(framework.RetryMedium).Should(
 				HaveField("Status.Conditions", test.HaveCondition(installerControllerProgressingCondition).
