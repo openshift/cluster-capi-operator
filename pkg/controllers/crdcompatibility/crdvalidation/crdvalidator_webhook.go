@@ -32,7 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 	"sigs.k8s.io/yaml"
 
-	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
+	openshiftapiextensionsv1 "github.com/openshift/api/apiextensions/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility/index"
 	"github.com/openshift/cluster-capi-operator/pkg/crdchecker"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
@@ -81,7 +81,7 @@ type Validator struct {
 var _ admission.Validator[*apiextensionsv1.CustomResourceDefinition] = &Validator{}
 
 func (v *Validator) validateCreateOrUpdate(ctx context.Context, crd *apiextensionsv1.CustomResourceDefinition) (admission.Warnings, error) {
-	compatibilityRequirements := apiextensionsv1alpha1.CompatibilityRequirementList{}
+	compatibilityRequirements := openshiftapiextensionsv1.CompatibilityRequirementList{}
 	if err := v.client.List(ctx, &compatibilityRequirements, &client.ListOptions{FieldSelector: fields.SelectorFromSet(fields.Set{index.FieldCRDByName: crd.GetName()})}); err != nil {
 		return nil, fmt.Errorf("failed to list CompatibilityRequirements: %w for CRD %q", err, crd.GetName())
 	}
@@ -93,14 +93,14 @@ func (v *Validator) validateCreateOrUpdate(ctx context.Context, crd *apiextensio
 
 	for _, compatibilityRequirement := range compatibilityRequirements.Items {
 		// This is an optional field, so if the object is zero, this means the field was not set, and no CRD admission validation is required.
-		if compatibilityRequirement.Spec.CustomResourceDefinitionSchemaValidation == (apiextensionsv1alpha1.CustomResourceDefinitionSchemaValidation{}) {
+		if compatibilityRequirement.Spec.CustomResourceDefinitionSchemaValidation == (openshiftapiextensionsv1.CustomResourceDefinitionSchemaValidation{}) {
 			continue
 		}
 
 		compatibilityCRD := &apiextensionsv1.CustomResourceDefinition{}
 
 		switch compatibilityRequirement.Spec.CompatibilitySchema.CustomResourceDefinition.Type {
-		case apiextensionsv1alpha1.CRDDataTypeYAML:
+		case openshiftapiextensionsv1.CRDDataTypeYAML:
 			if err := yaml.Unmarshal([]byte(compatibilityRequirement.Spec.CompatibilitySchema.CustomResourceDefinition.Data), compatibilityCRD); err != nil {
 				return nil, fmt.Errorf("failed to parse compatibilityCRD for CompatibilityRequirement %q: %w", compatibilityRequirement.Name, err)
 			}
@@ -126,9 +126,9 @@ func (v *Validator) validateCreateOrUpdate(ctx context.Context, crd *apiextensio
 		}
 
 		switch compatibilityRequirement.Spec.CustomResourceDefinitionSchemaValidation.Action {
-		case apiextensionsv1alpha1.CRDAdmitActionWarn:
+		case openshiftapiextensionsv1.CRDAdmitActionWarn:
 			allReqWarnings = append(allReqWarnings, util.SliceMap(reqErrors, prependName)...)
-		case apiextensionsv1alpha1.CRDAdmitActionDeny:
+		case openshiftapiextensionsv1.CRDAdmitActionDeny:
 			allReqErrors = append(allReqErrors, util.SliceMap(reqErrors, prependName)...)
 		default:
 			// Note: This should be impossible as validation on the action is enforced by openapi as an enum.
@@ -157,7 +157,7 @@ func (v *Validator) ValidateUpdate(ctx context.Context, _, newObj *apiextensions
 
 // ValidateDelete validates a Delete event for a CustomResourceDefinition.
 func (v *Validator) ValidateDelete(ctx context.Context, crd *apiextensionsv1.CustomResourceDefinition) (admission.Warnings, error) {
-	compatibilityRequirements := apiextensionsv1alpha1.CompatibilityRequirementList{}
+	compatibilityRequirements := openshiftapiextensionsv1.CompatibilityRequirementList{}
 	if err := v.client.List(ctx, &compatibilityRequirements, &client.ListOptions{FieldSelector: fields.SelectorFromSet(fields.Set{index.FieldCRDByName: crd.GetName()})}); err != nil {
 		return nil, fmt.Errorf("failed to list CompatibilityRequirements: %w for CRD %q", err, crd.GetName())
 	}
@@ -174,7 +174,7 @@ func (v *Validator) ValidateDelete(ctx context.Context, crd *apiextensionsv1.Cus
 	return nil, nil
 }
 
-func pruneExcludedFields(crd *apiextensionsv1.CustomResourceDefinition, excludedFields []apiextensionsv1alpha1.APIExcludedField) (*apiextensionsv1.CustomResourceDefinition, error) {
+func pruneExcludedFields(crd *apiextensionsv1.CustomResourceDefinition, excludedFields []openshiftapiextensionsv1.APIExcludedField) (*apiextensionsv1.CustomResourceDefinition, error) {
 	pathsByVersion := make(map[string][][]string)
 
 	// First split all paths into their components and group them by version.

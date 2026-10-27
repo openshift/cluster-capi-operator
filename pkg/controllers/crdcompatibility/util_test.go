@@ -23,13 +23,13 @@ import (
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
+	openshiftapiextensionsv1 "github.com/openshift/api/apiextensions/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/test"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // waitForAdmitted waits until a CompatibilityRequirement has the Admitted condition set to True.
-func waitForAdmitted(ctx context.Context, requirement *apiextensionsv1alpha1.CompatibilityRequirement) {
+func waitForAdmitted(ctx context.Context, requirement *openshiftapiextensionsv1.CompatibilityRequirement) {
 	GinkgoHelper()
 	By("Waiting for the CompatibilityRequirement to be admitted")
 	Eventually(kWithCtx(ctx).Object(requirement)).WithContext(ctx).Should(

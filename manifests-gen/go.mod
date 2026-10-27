@@ -16,7 +16,7 @@ require (
 
 require (
 	github.com/google/go-containerregistry v0.20.7
-	github.com/openshift/api v0.0.0-20261022093240-736ea4c8e9e4
+	github.com/openshift/api v0.0.0-20261026215420-da0032bf0c5f
 	k8s.io/utils v0.0.0-20260707023825-cf1189d6abe3
 	sigs.k8s.io/controller-runtime v0.25.1
 )

@@ -24,7 +24,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
+	openshiftapiextensionsv1 "github.com/openshift/api/apiextensions/v1"
 )
 
 const (
@@ -34,7 +34,7 @@ const (
 
 // CRDByName contains the logic to index CompatibilityRequirement by CRDRef.
 func CRDByName(obj client.Object) []string {
-	requirement, ok := obj.(*apiextensionsv1alpha1.CompatibilityRequirement)
+	requirement, ok := obj.(*openshiftapiextensionsv1.CompatibilityRequirement)
 	if !ok {
 		panic(fmt.Sprintf("Expected a CompatibilityRequirement but got a %T", obj))
 	}

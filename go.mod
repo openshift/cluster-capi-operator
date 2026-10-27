@@ -10,7 +10,7 @@ go 1.26.0
 tool (
 	github.com/golangci/golangci-lint/v2/cmd/golangci-lint
 	github.com/onsi/ginkgo/v2/ginkgo
-	github.com/openshift/api/apiextensions/v1alpha1/zz_generated.crd-manifests
+	github.com/openshift/api/apiextensions/v1/zz_generated.crd-manifests
 	github.com/openshift/api/config/v1/zz_generated.crd-manifests
 	github.com/openshift/api/machine/v1beta1/zz_generated.crd-manifests
 	github.com/openshift/api/operator/v1/zz_generated.crd-manifests
@@ -71,8 +71,8 @@ require (
 	github.com/metal3-io/cluster-api-provider-metal3/api v1.11.2
 	github.com/onsi/ginkgo/v2 v2.32.0
 	github.com/onsi/gomega v1.42.1
-	github.com/openshift/api v0.0.0-20261022093240-736ea4c8e9e4
-	github.com/openshift/client-go v0.0.0-20261001003915-dcaad1dc7fe8
+	github.com/openshift/api v0.0.0-20261026215420-da0032bf0c5f
+	github.com/openshift/client-go v0.0.0-20261027103500-48133ed95dad
 	github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0
 	github.com/openshift/cluster-capi-operator/manifests-gen v0.0.0-00010101000000-000000000000
 	github.com/openshift/controller-runtime-common v0.0.0-20260428152732-64ee174f5e2e

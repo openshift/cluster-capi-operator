@@ -28,12 +28,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
-	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
-	apiextensionsapplyconfig "github.com/openshift/client-go/apiextensions/applyconfigurations/apiextensions/v1alpha1"
+	openshiftapiextensionsv1 "github.com/openshift/api/apiextensions/v1"
+	apiextensionsapplyconfig "github.com/openshift/client-go/apiextensions/applyconfigurations/apiextensions/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 )
 
-func (r *reconcileState) writeStatus(ctx context.Context, obj *apiextensionsv1alpha1.CompatibilityRequirement, reconcileErr error) error {
+func (r *reconcileState) writeStatus(ctx context.Context, obj *openshiftapiextensionsv1.CompatibilityRequirement, reconcileErr error) error {
 	// Don't write status if the object has no finalizer
 	if !obj.DeletionTimestamp.IsZero() && !slices.Contains(obj.Finalizers, finalizerName) {
 		logf.FromContext(ctx).Info("Skipping status because the object is being deleted")
@@ -83,7 +83,7 @@ func (r *reconcileState) writeStatus(ctx context.Context, obj *apiextensionsv1al
 // being Ready. Setting Progressing to False indicates to an observer that the
 // current state is final until a change is made.
 func (r *reconcileState) getProgressingCondition(reconcileErr error) *metav1applyconfig.ConditionApplyConfiguration {
-	progressingCondition := metav1applyconfig.Condition().WithType(apiextensionsv1alpha1.CompatibilityRequirementProgressing)
+	progressingCondition := metav1applyconfig.Condition().WithType(openshiftapiextensionsv1.CompatibilityRequirementProgressing)
 
 	if reconcileErr != nil {
 		if terminalError := util.AsTerminalWithReasonError(reconcileErr); terminalError != nil {
@@ -94,13 +94,13 @@ func (r *reconcileState) getProgressingCondition(reconcileErr error) *metav1appl
 		} else {
 			progressingCondition.
 				WithStatus(metav1.ConditionTrue).
-				WithReason(apiextensionsv1alpha1.CompatibilityRequirementTransientErrorReason).
+				WithReason(openshiftapiextensionsv1.CompatibilityRequirementTransientErrorReason).
 				WithMessage(reconcileErr.Error())
 		}
 	} else {
 		progressingCondition.
 			WithStatus(metav1.ConditionFalse).
-			WithReason(apiextensionsv1alpha1.CompatibilityRequirementUpToDateReason).
+			WithReason(openshiftapiextensionsv1.CompatibilityRequirementUpToDateReason).
 			WithMessage("The CompatibilityRequirement is up to date")
 	}
 
@@ -109,17 +109,17 @@ func (r *reconcileState) getProgressingCondition(reconcileErr error) *metav1appl
 
 // Ready indicates whether the CRDCompatibilityRequirement has been completely admitted, i.e. all required admission policies have been created.
 func (r *reconcileState) getAdmittedCondition() *metav1applyconfig.ConditionApplyConfiguration {
-	admittedCondition := metav1applyconfig.Condition().WithType(apiextensionsv1alpha1.CompatibilityRequirementAdmitted)
+	admittedCondition := metav1applyconfig.Condition().WithType(openshiftapiextensionsv1.CompatibilityRequirementAdmitted)
 
 	if r.compatibilityCRD != nil {
 		admittedCondition.
 			WithStatus(metav1.ConditionTrue).
-			WithReason(apiextensionsv1alpha1.CompatibilityRequirementAdmittedReason).
+			WithReason(openshiftapiextensionsv1.CompatibilityRequirementAdmittedReason).
 			WithMessage("The CompatibilityRequirement has been admitted")
 	} else {
 		admittedCondition.
 			WithStatus(metav1.ConditionFalse).
-			WithReason(apiextensionsv1alpha1.CompatibilityRequirementNotAdmittedReason).
+			WithReason(openshiftapiextensionsv1.CompatibilityRequirementNotAdmittedReason).
 			WithMessage("The compatibility CRD is not set")
 	}
 
@@ -128,28 +128,28 @@ func (r *reconcileState) getAdmittedCondition() *metav1applyconfig.ConditionAppl
 
 // Compatible indicates whether the CRD is compatible with the compatibilityCRD.
 func (r *reconcileState) getCompatibleCondition() *metav1applyconfig.ConditionApplyConfiguration {
-	compatibleCondition := metav1applyconfig.Condition().WithType(apiextensionsv1alpha1.CompatibilityRequirementCompatible)
+	compatibleCondition := metav1applyconfig.Condition().WithType(openshiftapiextensionsv1.CompatibilityRequirementCompatible)
 
 	switch {
 	case r.currentCRD == nil:
 		compatibleCondition.
 			WithStatus(metav1.ConditionFalse).
-			WithReason(apiextensionsv1alpha1.CompatibilityRequirementCRDNotFoundReason).
+			WithReason(openshiftapiextensionsv1.CompatibilityRequirementCRDNotFoundReason).
 			WithMessage("The target CRD was not found")
 	case len(r.compatibilityErrors) > 0:
 		compatibleCondition.
 			WithStatus(metav1.ConditionFalse).
-			WithReason(apiextensionsv1alpha1.CompatibilityRequirementRequirementsNotMetReason).
+			WithReason(openshiftapiextensionsv1.CompatibilityRequirementRequirementsNotMetReason).
 			WithMessage(strings.Join(r.compatibilityErrors, "\n"))
 	case len(r.compatibilityWarnings) > 0:
 		compatibleCondition.
 			WithStatus(metav1.ConditionTrue).
-			WithReason(apiextensionsv1alpha1.CompatibilityRequirementCompatibleWithWarningsReason).
+			WithReason(openshiftapiextensionsv1.CompatibilityRequirementCompatibleWithWarningsReason).
 			WithMessage(strings.Join(r.compatibilityWarnings, "\n"))
 	default:
 		compatibleCondition.
 			WithStatus(metav1.ConditionTrue).
-			WithReason(apiextensionsv1alpha1.CompatibilityRequirementCompatibleReason).
+			WithReason(openshiftapiextensionsv1.CompatibilityRequirementCompatibleReason).
 			WithMessage("The CRD is compatible with this requirement")
 	}
 

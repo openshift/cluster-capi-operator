@@ -35,7 +35,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/yaml"
 
-	apiextensionsv1alpha1 "github.com/openshift/api/apiextensions/v1alpha1"
+	openshiftapiextensionsv1 "github.com/openshift/api/apiextensions/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility/objectpruning"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility/objectvalidation"
 	"github.com/openshift/cluster-capi-operator/pkg/crdchecker"
@@ -59,7 +59,7 @@ type reconcileState struct {
 
 	compatibilityCRD *apiextensionsv1.CustomResourceDefinition
 	currentCRD       *apiextensionsv1.CustomResourceDefinition
-	requirement      *apiextensionsv1alpha1.CompatibilityRequirement
+	requirement      *openshiftapiextensionsv1.CompatibilityRequirement
 
 	compatibilityErrors   []string
 	compatibilityWarnings []string
@@ -70,7 +70,7 @@ func (r *CompatibilityRequirementReconciler) Reconcile(ctx context.Context, req 
 	logger := logf.FromContext(ctx)
 
 	// Fetch the CompatibilityRequirement instance
-	obj := &apiextensionsv1alpha1.CompatibilityRequirement{}
+	obj := &openshiftapiextensionsv1.CompatibilityRequirement{}
 	if err := r.client.Get(ctx, req.NamespacedName, obj); err != nil {
 		if apierrors.IsNotFound(err) {
 			logger.V(4).Info("Observed CompatibilityRequirement deleted")
@@ -92,7 +92,7 @@ func (r *CompatibilityRequirementReconciler) Reconcile(ctx context.Context, req 
 	return result, nil
 }
 
-func (r *reconcileState) reconcile(ctx context.Context, compatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement) (ctrl.Result, error) {
+func (r *reconcileState) reconcile(ctx context.Context, compatibilityRequirement *openshiftapiextensionsv1.CompatibilityRequirement) (ctrl.Result, error) {
 	if !compatibilityRequirement.DeletionTimestamp.IsZero() {
 		return r.reconcileDelete(ctx, compatibilityRequirement)
 	}
@@ -100,12 +100,12 @@ func (r *reconcileState) reconcile(ctx context.Context, compatibilityRequirement
 	return r.reconcileCreateOrUpdate(ctx, compatibilityRequirement)
 }
 
-func (r *reconcileState) parseCompatibilityCRD(compatibilityRequirement *apiextensionsv1alpha1.CompatibilityRequirement) error {
+func (r *reconcileState) parseCompatibilityCRD(compatibilityRequirement *openshiftapiextensionsv1.CompatibilityRequirement) error {
 	// Parse the CRD in compatibilityCRD into a CRD object
 	compatibilityCRD := &apiextensionsv1.CustomResourceDefinition{}
 
 	switch compatibilityRequirement.Spec.CompatibilitySchema.CustomResourceDefinition.Type {
-	case apiextensionsv1alpha1.CRDDataTypeYAML:
+	case openshiftapiextensionsv1.CRDDataTypeYAML:
 		if err := yaml.Unmarshal([]byte(compatibilityRequirement.Spec.CompatibilitySchema.CustomResourceDefinition.Data), compatibilityCRD); err != nil {
 			return util.TerminalWithReasonError(fmt.Errorf("failed to parse compatibilityCRD: %w", err), terminalErrorReasonConfigurationError) //nolint:wrapcheck
 		}
@@ -161,7 +161,7 @@ func (r *reconcileState) checkCompatibilityRequirement() error {
 	return nil
 }
 
-func (r *reconcileState) reconcileCreateOrUpdate(ctx context.Context, obj *apiextensionsv1alpha1.CompatibilityRequirement) (ctrl.Result, error) {
+func (r *reconcileState) reconcileCreateOrUpdate(ctx context.Context, obj *openshiftapiextensionsv1.CompatibilityRequirement) (ctrl.Result, error) {
 	logger := logf.FromContext(ctx)
 
 	logger.Info("Reconciling CompatibilityRequirement")
@@ -187,7 +187,7 @@ func (r *reconcileState) reconcileCreateOrUpdate(ctx context.Context, obj *apiex
 	return ctrl.Result{}, nil
 }
 
-func (r *reconcileState) reconcileDelete(ctx context.Context, obj *apiextensionsv1alpha1.CompatibilityRequirement) (ctrl.Result, error) {
+func (r *reconcileState) reconcileDelete(ctx context.Context, obj *openshiftapiextensionsv1.CompatibilityRequirement) (ctrl.Result, error) {
 	logger := logf.FromContext(ctx)
 
 	logger.Info("Reconciling CompatibilityRequirement deletion")
@@ -209,7 +209,7 @@ func (r *reconcileState) reconcileDelete(ctx context.Context, obj *apiextensions
 }
 
 //nolint:dupl // This and the ensureObjectPruningWebhook function look very similar, but are populating different objects.
-func (r *reconcileState) ensureObjectValidationWebhook(ctx context.Context, obj *apiextensionsv1alpha1.CompatibilityRequirement) error {
+func (r *reconcileState) ensureObjectValidationWebhook(ctx context.Context, obj *openshiftapiextensionsv1.CompatibilityRequirement) error {
 	if !isObjectValidationWebhookEnabled(obj) || r.compatibilityCRD == nil {
 		// Ensure that the webhook is removed in case we previously created it.
 		return r.removeObjectValidationWebhook(ctx, obj)
@@ -240,7 +240,7 @@ func (r *reconcileState) ensureObjectValidationWebhook(ctx context.Context, obj 
 	return nil
 }
 
-func (r *reconcileState) removeObjectValidationWebhook(ctx context.Context, obj *apiextensionsv1alpha1.CompatibilityRequirement) error {
+func (r *reconcileState) removeObjectValidationWebhook(ctx context.Context, obj *openshiftapiextensionsv1.CompatibilityRequirement) error {
 	webhookConfig := &admissionregistrationv1.ValidatingWebhookConfiguration{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: obj.Name,
@@ -268,7 +268,7 @@ func (r *reconcileState) removeObjectValidationWebhook(ctx context.Context, obj 
 }
 
 //nolint:dupl // This and the ensureObjectValidationWebhook function look very similar, but are populating different objects.
-func (r *reconcileState) ensureObjectPruningWebhook(ctx context.Context, obj *apiextensionsv1alpha1.CompatibilityRequirement) error {
+func (r *reconcileState) ensureObjectPruningWebhook(ctx context.Context, obj *openshiftapiextensionsv1.CompatibilityRequirement) error {
 	if !isObjectValidationWebhookEnabled(obj) || r.compatibilityCRD == nil {
 		// Ensure that the webhook is removed in case we previously created it.
 		return r.removeObjectPruningWebhook(ctx, obj)
@@ -300,7 +300,7 @@ func (r *reconcileState) ensureObjectPruningWebhook(ctx context.Context, obj *ap
 	return nil
 }
 
-func (r *reconcileState) removeObjectPruningWebhook(ctx context.Context, obj *apiextensionsv1alpha1.CompatibilityRequirement) error {
+func (r *reconcileState) removeObjectPruningWebhook(ctx context.Context, obj *openshiftapiextensionsv1.CompatibilityRequirement) error {
 	webhookConfig := &admissionregistrationv1.MutatingWebhookConfiguration{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: obj.Name,
@@ -327,7 +327,7 @@ func (r *reconcileState) removeObjectPruningWebhook(ctx context.Context, obj *ap
 	return nil
 }
 
-func isObjectValidationWebhookEnabled(obj *apiextensionsv1alpha1.CompatibilityRequirement) bool {
+func isObjectValidationWebhookEnabled(obj *openshiftapiextensionsv1.CompatibilityRequirement) bool {
 	osv := obj.Spec.ObjectSchemaValidation
 	return osv.Action != "" || len(osv.MatchConditions) > 0 || !labelSelectorIsEmpty(osv.NamespaceSelector) || !labelSelectorIsEmpty(osv.ObjectSelector)
 }
