@@ -23,7 +23,7 @@ metadata:
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
     exclude.release.openshift.io/internal-openshift-hosted: "true"
-    release.openshift.io/feature-gate: "ClusterAPIMachineManagement"
+    release.openshift.io/feature-gate: "ClusterAPIOperator"
     capability.openshift.io/name: ClusterAPI
 spec:
   # Exclude CAPI pods that need network access: This is done by the other policies
@@ -46,7 +46,7 @@ metadata:
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
     exclude.release.openshift.io/internal-openshift-hosted: "true"
-    release.openshift.io/feature-gate: "ClusterAPIMachineManagement"
+    release.openshift.io/feature-gate: "ClusterAPIOperator"
     capability.openshift.io/name: ClusterAPI
 spec:
   # Exclude CAPI pods that need network access: This is done by the other policies

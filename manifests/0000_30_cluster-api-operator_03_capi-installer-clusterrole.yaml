@@ -6,7 +6,7 @@ metadata:
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
-    release.openshift.io/feature-gate: "ClusterAPIMachineManagement"
+    release.openshift.io/feature-gate: "ClusterAPIOperator"
     capability.openshift.io/name: ClusterAPI
   name: openshift-capi-installer
 rules:
@@ -164,7 +164,7 @@ metadata:
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
-    release.openshift.io/feature-gate: "ClusterAPIMachineManagement"
+    release.openshift.io/feature-gate: "ClusterAPIOperator"
     capability.openshift.io/name: ClusterAPI
   name: capi-installer
   namespace: openshift-cluster-api-operator
@@ -208,7 +208,7 @@ metadata:
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
-    release.openshift.io/feature-gate: "ClusterAPIMachineManagement"
+    release.openshift.io/feature-gate: "ClusterAPIOperator"
     capability.openshift.io/name: ClusterAPI
   name: capi-installer
   namespace: openshift-cluster-api
@@ -285,7 +285,7 @@ metadata:
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
-    release.openshift.io/feature-gate: "ClusterAPIMachineManagement"
+    release.openshift.io/feature-gate: "ClusterAPIOperator"
     capability.openshift.io/name: ClusterAPI
   name: capi-installer
   namespace: openshift-machine-api
@@ -310,7 +310,7 @@ metadata:
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
-    release.openshift.io/feature-gate: "ClusterAPIMachineManagement"
+    release.openshift.io/feature-gate: "ClusterAPIOperator"
   name: openshift-capi-installer:provider-permissions
 aggregationRule:
   clusterRoleSelectors:
