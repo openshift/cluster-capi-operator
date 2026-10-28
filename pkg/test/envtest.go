@@ -98,7 +98,7 @@ func StartEnvTest(testEnv *envtest.Environment) (*rest.Config, client.WithWatch,
 			path.Join(openshiftAPIPath, "config", "v1", "zz_generated.crd-manifests", "0000_10_config-operator_01_infrastructures-TechPreviewNoUpgrade.crd.yaml"),
 			path.Join(openshiftAPIPath, "config", "v1", "zz_generated.crd-manifests", "0000_03_config-operator_01_proxies.crd.yaml"),
 			path.Join(openshiftAPIPath, "apiextensions", "v1", "zz_generated.crd-manifests", "0000_20_crd-compatibility-checker_01_compatibilityrequirements.crd.yaml"),
-			path.Join(openshiftAPIPath, "operator", "v1alpha1", "zz_generated.crd-manifests", "0000_30_cluster-api_01_clusterapis.crd.yaml"),
+			path.Join(openshiftAPIPath, "operator", "v1alpha1", "zz_generated.crd-manifests", "0000_30_cluster-api_01_clusterapis-SelfManagedHA.crd.yaml"),
 		},
 		ErrorIfPathMissing: true,
 	}

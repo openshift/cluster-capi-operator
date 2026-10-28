@@ -71,7 +71,7 @@ require (
 	github.com/metal3-io/cluster-api-provider-metal3/api v1.11.2
 	github.com/onsi/ginkgo/v2 v2.32.0
 	github.com/onsi/gomega v1.42.1
-	github.com/openshift/api v0.0.0-20261026215420-da0032bf0c5f
+	github.com/openshift/api v0.0.0-20261028095540-9af1f7b4730c
 	github.com/openshift/client-go v0.0.0-20261027103500-48133ed95dad
 	github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0
 	github.com/openshift/cluster-capi-operator/manifests-gen v0.0.0-00010101000000-000000000000
