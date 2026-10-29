@@ -35,6 +35,7 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/installer"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/revision"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/secretsync"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/upgradeable"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 	"github.com/openshift/library-go/pkg/operator/configobserver/featuregates"
@@ -138,6 +139,7 @@ func (r *ClusterOperatorController) aggregatedStatus(currentConditions []configv
 	subControllers := []operatorstatus.ControllerResultGenerator{
 		installer.ResultGenerator,
 		revision.ResultGenerator,
+		upgradeable.ResultGenerator,
 	}
 	if r.FeatureGates.Enabled(features.FeatureGateClusterAPIMachineManagement) {
 		subControllers = append(subControllers,

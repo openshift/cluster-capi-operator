@@ -41,6 +41,7 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/clusteroperator"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/installerdeployment"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/upgradeable"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 )
 
@@ -112,6 +113,12 @@ func setupControllers(ctx context.Context, log logr.Logger, mgr ctrl.Manager, op
 		FeatureGates:   featureGates,
 	}).SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("unable to create clusteroperator controller: %w", err)
+	}
+
+	if err := (&upgradeable.UpgradeableController{
+		Client: mgr.GetClient(),
+	}).SetupWithManager(mgr); err != nil {
+		return fmt.Errorf("unable to create upgradeable controller: %w", err)
 	}
 
 	// Get container image from own pod spec

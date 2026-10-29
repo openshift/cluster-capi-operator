@@ -484,6 +484,7 @@ func allSubControllersSuccessful() []*configv1apply.ClusterOperatorStatusConditi
 	controllers := []string{
 		"InstallerController",
 		"RevisionController",
+		"UpgradeableController",
 		"CoreClusterController",
 		"InfraClusterController",
 		"SecretSyncController",
