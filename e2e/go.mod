@@ -24,7 +24,7 @@ require (
 	github.com/nutanix-cloud-native/cluster-api-provider-nutanix v1.10.3
 	github.com/onsi/ginkgo/v2 v2.32.0
 	github.com/onsi/gomega v1.42.1
-	github.com/openshift/api v0.0.0-20261028095540-9af1f7b4730c
+	github.com/openshift/api v0.0.0-20261029222750-c757da50cb18
 	github.com/openshift/cluster-api-actuator-pkg v0.0.0-20260929140943-2355afea5804
 	github.com/openshift/cluster-api-provider-baremetal v0.0.0-20250619124612-fb678fec5f7e
 	github.com/openshift/cluster-capi-operator v0.0.0-20260730093403-b05f43ce9738

@@ -73,7 +73,7 @@ require (
 	github.com/nutanix-cloud-native/prism-go-client v0.8.0
 	github.com/onsi/ginkgo/v2 v2.32.0
 	github.com/onsi/gomega v1.42.1
-	github.com/openshift/api v0.0.0-20261028095540-9af1f7b4730c
+	github.com/openshift/api v0.0.0-20261029222750-c757da50cb18
 	github.com/openshift/client-go v0.0.0-20261027103500-48133ed95dad
 	github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0
 	github.com/openshift/cluster-capi-operator/manifests-gen v0.0.0-00010101000000-000000000000
