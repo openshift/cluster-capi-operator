@@ -1156,7 +1156,7 @@ github.com/openshift-eng/openshift-tests-extension/pkg/ginkgo
 github.com/openshift-eng/openshift-tests-extension/pkg/junit
 github.com/openshift-eng/openshift-tests-extension/pkg/util/sets
 github.com/openshift-eng/openshift-tests-extension/pkg/version
-# github.com/openshift/api v0.0.0-20261028095540-9af1f7b4730c
+# github.com/openshift/api v0.0.0-20261028095540-9af1f7b4730c => github.com/simkam/openshift-api v0.0.0-20261030114948-eb73c6a14b60
 ## explicit; go 1.26.0
 github.com/openshift/api
 github.com/openshift/api/annotations
@@ -1225,7 +1225,6 @@ github.com/openshift/api/operator
 github.com/openshift/api/operator/v1
 github.com/openshift/api/operator/v1/zz_generated.crd-manifests
 github.com/openshift/api/operator/v1alpha1
-github.com/openshift/api/operator/v1alpha1/zz_generated.crd-manifests
 github.com/openshift/api/operatorcontrolplane
 github.com/openshift/api/operatorcontrolplane/v1alpha1
 github.com/openshift/api/operatoringress/v1
@@ -1277,7 +1276,6 @@ github.com/openshift/client-go/machine/applyconfigurations/internal
 github.com/openshift/client-go/machine/applyconfigurations/machine/v1beta1
 github.com/openshift/client-go/operator/applyconfigurations/internal
 github.com/openshift/client-go/operator/applyconfigurations/operator/v1
-github.com/openshift/client-go/operator/applyconfigurations/operator/v1alpha1
 # github.com/openshift/cluster-api-actuator-pkg v0.0.0-20260929140943-2355afea5804
 ## explicit; go 1.26.0
 github.com/openshift/cluster-api-actuator-pkg/pkg/framework
@@ -3446,5 +3444,6 @@ sigs.k8s.io/yaml/goyaml.v2
 # k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.37.1
 # k8s.io/sample-cli-plugin => k8s.io/sample-cli-plugin v0.37.1
 # k8s.io/sample-controller => k8s.io/sample-controller v0.37.1
+# github.com/openshift/api => github.com/simkam/openshift-api v0.0.0-20261030114948-eb73c6a14b60
 # github.com/metal3-io/baremetal-operator => github.com/metal3-io/baremetal-operator v0.5.1
 # github.com/onsi/ginkgo/v2 => github.com/openshift/onsi-ginkgo/v2 v2.6.1-0.20241205171354-8006f302fd12

@@ -28,7 +28,7 @@ import (
 	"github.com/onsi/gomega/types"
 	openshiftapiextensionsv1 "github.com/openshift/api/apiextensions/v1"
 	configv1 "github.com/openshift/api/config/v1"
-	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
+	operatorv1 "github.com/openshift/api/operator/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -294,28 +294,28 @@ func setupProviderProfiles() {
 	}
 }
 
-func latestRevision(revisions []operatorv1alpha1.ClusterAPIInstallerRevision) operatorv1alpha1.ClusterAPIInstallerRevision {
-	return slices.MaxFunc(revisions, func(a, b operatorv1alpha1.ClusterAPIInstallerRevision) int {
+func latestRevision(revisions []operatorv1.ClusterAPIInstallerRevision) operatorv1.ClusterAPIInstallerRevision {
+	return slices.MaxFunc(revisions, func(a, b operatorv1.ClusterAPIInstallerRevision) int {
 		return cmp.Compare(a.Revision, b.Revision)
 	})
 }
 
 // addRevision appends a new revision to ClusterAPI.Status.Revisions.
-func addRevision(ctx context.Context, providerNames ...string) operatorv1alpha1.ClusterAPIInstallerRevision {
+func addRevision(ctx context.Context, providerNames ...string) operatorv1.ClusterAPIInstallerRevision {
 	GinkgoHelper()
 	return addRevisionWithUnmanagedCRDs(ctx, nil, providerNames...)
 }
 
 // addRevisionWithUnmanagedCRDs renders a revision to compute its content ID,
 // then appends it to ClusterAPI.Status.Revisions.
-func addRevisionWithUnmanagedCRDs(ctx context.Context, unmanagedCRDs []string, providerNames ...string) operatorv1alpha1.ClusterAPIInstallerRevision {
+func addRevisionWithUnmanagedCRDs(ctx context.Context, unmanagedCRDs []string, providerNames ...string) operatorv1.ClusterAPIInstallerRevision {
 	GinkgoHelper()
 
 	// Get current ClusterAPI to determine revision index.
-	clusterAPI := &operatorv1alpha1.ClusterAPI{}
+	clusterAPI := &operatorv1.ClusterAPI{}
 	Expect(cl.Get(ctx, client.ObjectKey{Name: clusterAPIName}, clusterAPI)).To(Succeed())
 
-	var apiRev operatorv1alpha1.ClusterAPIInstallerRevision
+	var apiRev operatorv1.ClusterAPIInstallerRevision
 
 	By("Rendering new revision", func() {
 		profiles := lookupProfiles(providerNames...)
@@ -357,7 +357,7 @@ func addRevisionAndWaitForSuccess(ctx context.Context, providerNames ...string) 
 }
 
 // addEmptyRevision appends a revision with no components.
-func addEmptyRevision(ctx context.Context) operatorv1alpha1.ClusterAPIInstallerRevision {
+func addEmptyRevision(ctx context.Context) operatorv1.ClusterAPIInstallerRevision {
 	GinkgoHelper()
 	return addRevision(ctx)
 }
@@ -389,9 +389,9 @@ func createFixtures(ctx context.Context) {
 	Expect(cl.Create(ctx, ns)).To(Succeed())
 	cleanupObjs = append(cleanupObjs, ns)
 
-	clusterAPIObj := &operatorv1alpha1.ClusterAPI{
+	clusterAPIObj := &operatorv1.ClusterAPI{
 		ObjectMeta: metav1.ObjectMeta{Name: clusterAPIName},
-		Spec:       &operatorv1alpha1.ClusterAPISpec{},
+		Spec:       &operatorv1.ClusterAPISpec{},
 	}
 	Expect(cl.Create(ctx, clusterAPIObj)).To(Succeed())
 	cleanupObjs = append(cleanupObjs, clusterAPIObj)
@@ -442,7 +442,7 @@ func deleteAndWait(ctx context.Context, objs ...client.Object) {
 // triggerReconcile sends an event on the channel source to trigger reconciliation.
 func triggerReconcile() {
 	reconcileCh <- event.TypedGenericEvent[client.Object]{
-		Object: &operatorv1alpha1.ClusterAPI{
+		Object: &operatorv1.ClusterAPI{
 			ObjectMeta: metav1.ObjectMeta{Name: clusterAPIName},
 		},
 	}
@@ -485,10 +485,10 @@ func getRelatedObjects(ctx context.Context) []configv1.ObjectReference {
 
 // waitForRevision waits for the given revision to be applied and the controller
 // to report Progressing=False.
-func waitForRevision(ctx context.Context, revision operatorv1alpha1.RevisionName) {
+func waitForRevision(ctx context.Context, revision operatorv1.RevisionName) {
 	GinkgoHelper()
 
-	clusterAPI := &operatorv1alpha1.ClusterAPI{
+	clusterAPI := &operatorv1.ClusterAPI{
 		ObjectMeta: metav1.ObjectMeta{Name: clusterAPIName},
 	}
 

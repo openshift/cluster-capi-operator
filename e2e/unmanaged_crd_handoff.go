@@ -29,7 +29,7 @@ import (
 	openshiftapiextensionsv1 "github.com/openshift/api/apiextensions/v1"
 	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/api/features"
-	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
+	operatorv1 "github.com/openshift/api/operator/v1"
 	"github.com/openshift/cluster-capi-operator/e2e/framework"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 	"github.com/openshift/cluster-capi-operator/pkg/test"
@@ -92,12 +92,12 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIMachineManage
 	Label("Disruptive"), Label("skip-topology:External"), func() {
 		It("should hand off the unmanaged Cluster CRD and enforce compatibility", func() {
 			var (
-				clusterAPI  *operatorv1alpha1.ClusterAPI
+				clusterAPI  *operatorv1.ClusterAPI
 				clusterCRD  *apiextensionsv1.CustomResourceDefinition
 				requirement *openshiftapiextensionsv1.CompatibilityRequirement
 
-				initialDesiredRevision         operatorv1alpha1.RevisionName
-				desiredRevision                operatorv1alpha1.RevisionName
+				initialDesiredRevision         operatorv1.RevisionName
+				desiredRevision                operatorv1.RevisionName
 				generationBeforeRejectedUpdate int64
 				updatedCRDGeneration           int64
 			)
@@ -116,7 +116,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIMachineManage
 				Skip("Feature gate CRDCompatibilityRequirementOperator is not enabled.")
 			}
 
-			clusterAPI = &operatorv1alpha1.ClusterAPI{ObjectMeta: metav1.ObjectMeta{Name: "cluster"}}
+			clusterAPI = &operatorv1.ClusterAPI{ObjectMeta: metav1.ObjectMeta{Name: "cluster"}}
 			clusterCRD = &apiextensionsv1.CustomResourceDefinition{ObjectMeta: metav1.ObjectMeta{Name: clusterCRDName}}
 
 			trackResource(clusterAPI)
@@ -174,7 +174,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIMachineManage
 			desiredRevision = clusterAPI.Status.DesiredRevision
 			Expect(desiredRevision).ToNot(BeEmpty(), "the unmanaged revision should have a nonempty name")
 
-			var desiredAPIRevision operatorv1alpha1.ClusterAPIInstallerRevision
+			var desiredAPIRevision operatorv1.ClusterAPIInstallerRevision
 			Expect(clusterAPI.Status.Revisions).To(ContainElement(SatisfyAll(
 				HaveField("Name", Equal(desiredRevision)),
 				HaveField("UnmanagedCustomResourceDefinitions", ContainElement(clusterCRDName)),

@@ -178,7 +178,7 @@ func (ClusterAPIInstallerComponentSource) SwaggerDoc() map[string]string {
 var map_ClusterAPIInstallerRevision = map[string]string{
 	"name":                               "name is the name of a revision.",
 	"revision":                           "revision is a monotonically increasing number that is assigned to a revision.",
-	"contentID":                          "contentID uniquely identifies the content of this revision. The contentID must be between 1 and 255 characters long.",
+	"contentID":                          "contentID uniquely identifies the content of this revision. It is exactly 64 lowercase hexadecimal characters ([0-9a-f]). It is an opaque string. The only valid operation on it is equality.",
 	"unmanagedCustomResourceDefinitions": "unmanagedCustomResourceDefinitions is a list of the names of ClusterResourceDefinition (CRD) objects which are included in this revision, but which should not be installed or updated. If not set, all CRDs in the revision will be managed by the CAPI operator.",
 	"manifestSubstitutions":              "manifestSubstitutions is a list of envsubst style substitutions which will be applied to manifests in the revision during rendering. If defined it must not be empty, and may not contain more than 32 items. Each manifest substitution must have a unique key.",
 	"components":                         "components is a list of components which will be installed by this revision. Components will be installed in the order they are listed. If omitted no components will be installed.\n\nThe maximum number of components is 32.",

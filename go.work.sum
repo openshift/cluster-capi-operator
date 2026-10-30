@@ -1373,7 +1373,6 @@ github.com/openshift/api v0.0.0-20250710004639-926605d3338b/go.mod h1:SPLf21TYPi
 github.com/openshift/api v0.0.0-20250722054545-bc3bc4882520/go.mod h1:SPLf21TYPipzCO67BURkCfK6dcIIxx0oNRVWaOyRcXM=
 github.com/openshift/api v0.0.0-20260306002634-d3bbdada155c/go.mod h1:pyVjK0nZ4sRs4fuQVQ4rubsJdahI1PB94LnQ8sGdvxo=
 github.com/openshift/api v0.0.0-20261022093240-736ea4c8e9e4/go.mod h1:2oI3aXQFDjjl7l4xA9ZPSkB+l+lyfWLg7P2sWg9yEvM=
-github.com/openshift/api v0.0.0-20261028095540-9af1f7b4730c/go.mod h1:2oI3aXQFDjjl7l4xA9ZPSkB+l+lyfWLg7P2sWg9yEvM=
 github.com/openshift/apiserver-library-go v0.0.0-20260715200723-42e5e402ca43/go.mod h1:ZuzfEq1ccZpHNx05xEUKlm2TcMHt2iXVutb79kAuTfM=
 github.com/openshift/build-machinery-go v0.0.0-20250530140348-dc5b2804eeee/go.mod h1:8jcm8UPtg2mCAsxfqKil1xrmRMI3a+XU2TZ9fF8A7TE=
 github.com/openshift/cluster-api-actuator-pkg v0.0.0-20251212150432-4a60119d9691 h1:NhnevkE4bMj/yVtJlYgzevBDRKqx41EgiDXC7chHofg=
@@ -1511,6 +1510,7 @@ github.com/shurcooL/go-goon v0.0.0-20170922171312-37c2f522c041/go.mod h1:N5mDOms
 github.com/shurcooL/sanitized_anchor_name v1.0.0/go.mod h1:1NzhyTcUVG4SuEtjjoZeVRXNmyL/1OwPU0+IJeTBvfc=
 github.com/sigma/bdoor v0.0.0-20160202064022-babf2a4017b0/go.mod h1:WBu7REWbxC/s/J06jsk//d+9DOz9BbsmcIrimuGRFbs=
 github.com/sigma/vmw-guestinfo v0.0.0-20160204083807-95dd4126d6e8/go.mod h1:JrRFFC0veyh0cibh0DAhriSY7/gV3kDdNaVUOmfx01U=
+github.com/simkam/openshift-api v0.0.0-20261030114948-eb73c6a14b60/go.mod h1:2oI3aXQFDjjl7l4xA9ZPSkB+l+lyfWLg7P2sWg9yEvM=
 github.com/sirupsen/logrus v1.2.0/go.mod h1:LxeOpSwHxABJmUn/MG1IvRgCAasNZTLOkJPxbbu5VWo=
 github.com/sirupsen/logrus v1.4.2/go.mod h1:tLMulIdttU9McNUspp0xgXVQah82FyeX6MwdIuYE2rE=
 github.com/sirupsen/logrus v1.6.0/go.mod h1:7uNnSEd1DgxDLC74fIahvMZmmYsHGZGEOFrfsX/uA88=
