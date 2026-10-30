@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -452,11 +453,17 @@ func triggerReconcile() {
 func waitForConditions(ctx context.Context, matchers ...types.GomegaMatcher) {
 	GinkgoHelper()
 
+	waitForConditionsWithTimeout(ctx, defaultEventuallyTimeout, matchers...)
+}
+
+func waitForConditionsWithTimeout(ctx context.Context, timeout time.Duration, matchers ...types.GomegaMatcher) {
+	GinkgoHelper()
+
 	co := &configv1.ClusterOperator{}
 	co.SetName("cluster-api")
 	Eventually(kWithCtx(ctx).Object(co)).
 		WithContext(ctx).
-		WithTimeout(defaultEventuallyTimeout).
+		WithTimeout(timeout).
 		Should(HaveField("Status.Conditions", SatisfyAll(matchers...)))
 }
 
@@ -488,19 +495,25 @@ func getRelatedObjects(ctx context.Context) []configv1.ObjectReference {
 func waitForRevision(ctx context.Context, revision operatorv1alpha1.RevisionName) {
 	GinkgoHelper()
 
+	waitForRevisionWithTimeout(ctx, revision, defaultEventuallyTimeout)
+}
+
+func waitForRevisionWithTimeout(ctx context.Context, revision operatorv1alpha1.RevisionName, timeout time.Duration) {
+	GinkgoHelper()
+
 	clusterAPI := &operatorv1alpha1.ClusterAPI{
 		ObjectMeta: metav1.ObjectMeta{Name: clusterAPIName},
 	}
 
-	By("Waiting for revision "+string(revision)+" to be applied", func() {
+	By(fmt.Sprintf("Waiting up to %s for revision %s to be applied", timeout, revision), func() {
 		Eventually(kWithCtx(ctx).Object(clusterAPI)).
 			WithContext(ctx).
-			WithTimeout(defaultEventuallyTimeout).
+			WithTimeout(timeout).
 			Should(HaveField("Status.CurrentRevision", Equal(revision)))
 	})
 
-	By("Waiting for conditions to be updated", func() {
-		waitForConditions(ctx,
+	By(fmt.Sprintf("Waiting up to %s for Progressing=False after revision %s", timeout, revision), func() {
+		waitForConditionsWithTimeout(ctx, timeout,
 			test.HaveCondition(conditionTypeProgressing).WithStatus(configv1.ConditionFalse),
 		)
 	})
