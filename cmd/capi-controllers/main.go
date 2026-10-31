@@ -46,6 +46,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	crwebhook "sigs.k8s.io/controller-runtime/pkg/webhook"
 
+	nutanixv1 "github.com/nutanix-cloud-native/cluster-api-provider-nutanix/api/v1beta1"
 	configv1 "github.com/openshift/api/config/v1"
 	mapiv1 "github.com/openshift/api/machine/v1"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
@@ -76,6 +77,7 @@ func initScheme(scheme *runtime.Scheme) {
 	utilruntime.Must(clusterv1.AddToScheme(scheme))
 	utilruntime.Must(clusterctlv1.AddToScheme(scheme))
 	utilruntime.Must(ibmpowervsv1.AddToScheme(scheme))
+	utilruntime.Must(nutanixv1.AddToScheme(scheme))
 	utilruntime.Must(openstackv1.AddToScheme(scheme))
 	utilruntime.Must(vspherev1.AddToScheme(scheme))
 	utilruntime.Must(metal3v1.AddToScheme(scheme))

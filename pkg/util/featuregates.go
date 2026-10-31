@@ -105,6 +105,8 @@ func IsCAPIEnabledForPlatform(currentFeatureGates featuregates.FeatureGate, plat
 		return currentFeatureGates.Enabled(features.FeatureGateClusterAPIMachineManagementOpenStack)
 	case configv1.VSpherePlatformType:
 		return currentFeatureGates.Enabled(features.FeatureGateClusterAPIMachineManagementVSphere)
+	case configv1.NutanixPlatformType:
+		return currentFeatureGates.Enabled(features.FeatureGateClusterAPIMachineManagementNutanix)
 
 	default:
 		return false
@@ -121,6 +123,8 @@ func IsMAPIMigrationEnabledForPlatform(featureGates featuregates.FeatureGate, pl
 		return featureGates.Enabled(features.FeatureGateMachineAPIMigrationGCP)
 	case configv1.AzurePlatformType:
 		return featureGates.Enabled(features.FeatureGateMachineAPIMigrationAzure)
+	case configv1.NutanixPlatformType:
+		return featureGates.Enabled(features.FeatureGateMachineAPIMigrationNutanix)
 	case configv1.PowerVSPlatformType:
 		return featureGates.Enabled(features.FeatureGateMachineAPIMigrationPowerVS)
 	case configv1.VSpherePlatformType:

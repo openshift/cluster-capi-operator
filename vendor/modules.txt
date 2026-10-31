@@ -1099,6 +1099,14 @@ github.com/nunnatsa/ginkgolinter/internal/rules
 github.com/nunnatsa/ginkgolinter/internal/typecheck
 github.com/nunnatsa/ginkgolinter/linter
 github.com/nunnatsa/ginkgolinter/version
+# github.com/nutanix-cloud-native/cluster-api-provider-nutanix v1.10.3
+## explicit; go 1.25.0
+github.com/nutanix-cloud-native/cluster-api-provider-nutanix/api/v1beta1
+github.com/nutanix-cloud-native/cluster-api-provider-nutanix/pkg/feature
+# github.com/nutanix-cloud-native/prism-go-client v0.8.0
+## explicit; go 1.24.0
+github.com/nutanix-cloud-native/prism-go-client/environment/credentials
+github.com/nutanix-cloud-native/prism-go-client/environment/types
 # github.com/oklog/ulid v1.3.1
 ## explicit
 github.com/oklog/ulid
@@ -1156,7 +1164,7 @@ github.com/openshift-eng/openshift-tests-extension/pkg/ginkgo
 github.com/openshift-eng/openshift-tests-extension/pkg/junit
 github.com/openshift-eng/openshift-tests-extension/pkg/util/sets
 github.com/openshift-eng/openshift-tests-extension/pkg/version
-# github.com/openshift/api v0.0.0-20261028095540-9af1f7b4730c
+# github.com/openshift/api v0.0.0-20261029222750-c757da50cb18
 ## explicit; go 1.26.0
 github.com/openshift/api
 github.com/openshift/api/annotations

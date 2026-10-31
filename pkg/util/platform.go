@@ -24,6 +24,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	metal3v1 "github.com/metal3-io/cluster-api-provider-metal3/api/v1beta1"
+	nutanixv1 "github.com/nutanix-cloud-native/cluster-api-provider-nutanix/api/v1beta1"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	azurev1 "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
 	gcpv1 "sigs.k8s.io/cluster-api-provider-gcp/api/v1beta1"
@@ -146,6 +147,11 @@ func GetCAPITypesForInfrastructure(infra *configv1.Infrastructure) (InfraTypes, 
 		return newInfraTypes[
 			*metal3v1.Metal3Machine, *metal3v1.Metal3Cluster,
 			*metal3v1.Metal3MachineTemplate, *metal3v1.Metal3ClusterTemplate,
+		](), nil
+	case configv1.NutanixPlatformType:
+		return newInfraTypes[
+			*nutanixv1.NutanixMachine, *nutanixv1.NutanixCluster,
+			*nutanixv1.NutanixMachineTemplate, *nutanixv1.NutanixClusterTemplate,
 		](), nil
 	default:
 		return nil, fmt.Errorf("%w: %s", ErrUnsupportedPlatform, platform)

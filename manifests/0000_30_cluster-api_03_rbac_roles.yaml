@@ -94,6 +94,7 @@ rules:
   - openstackclusters
   - metal3clusters
   - ibmpowervsclusters
+  - nutanixclusters
   verbs:
   - get
   - list
@@ -111,6 +112,7 @@ rules:
   - openstackclusters/status
   - metal3clusters/status
   - ibmpowervsclusters/status
+  - nutanixclusters/status
   verbs:
   - update
   - patch
