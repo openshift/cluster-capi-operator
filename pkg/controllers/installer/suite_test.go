@@ -57,6 +57,8 @@ var (
 var (
 	defaultNodeTimeout       = NodeTimeout(15 * time.Second)
 	defaultEventuallyTimeout = 5 * time.Second
+	cleanupWaitTimeout       = 30 * time.Second
+	cleanupNodeTimeout       = NodeTimeout(2*cleanupWaitTimeout + 15*time.Second)
 )
 
 func TestInstallerController(t *testing.T) {

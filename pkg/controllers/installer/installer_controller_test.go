@@ -67,8 +67,8 @@ var _ = Describe("InstallerController", Serial, func() {
 		// Ensure all managed objects are deleted between tests by reconciling
 		// an empty revision.
 		emptyRevision := addEmptyRevision(ctx)
-		waitForRevision(ctx, emptyRevision.Name)
-	}, defaultNodeTimeout)
+		waitForRevisionWithTimeout(ctx, emptyRevision.Name, cleanupWaitTimeout)
+	}, cleanupNodeTimeout)
 
 	// Part 1: Core Installation Lifecycle
 

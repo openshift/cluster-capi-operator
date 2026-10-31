@@ -147,8 +147,8 @@ var _ = Describe("proxy configuration", Serial, func() {
 	AfterEach(func(ctx context.Context) {
 		// Reconcile an empty revision to tear down all managed objects.
 		emptyRevision := addEmptyRevision(ctx)
-		waitForRevision(ctx, emptyRevision.Name)
-	}, defaultNodeTimeout)
+		waitForRevisionWithTimeout(ctx, emptyRevision.Name, cleanupWaitTimeout)
+	}, cleanupNodeTimeout)
 
 	Context("with a Deployment carrying the inject-proxy annotation", func() {
 		BeforeEach(func(ctx context.Context) {
