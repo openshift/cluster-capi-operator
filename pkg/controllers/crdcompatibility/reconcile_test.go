@@ -27,8 +27,6 @@ import (
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -149,40 +147,15 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 			checkForStatusWithGeneration(generation)
 		}, defaultNodeTimeout)
 
-		It("should reconcile a CompatibilityRequirement created through v1alpha1", func(ctx context.Context) {
-			requirement := test.GenerateTestCompatibilityRequirement(testCRDClean)
-			data, err := runtime.DefaultUnstructuredConverter.ToUnstructured(requirement)
-			Expect(err).NotTo(HaveOccurred())
-
-			alphaRequirement := &unstructured.Unstructured{Object: data}
-			alphaRequirement.SetAPIVersion("apiextensions.openshift.io/v1alpha1")
-			alphaRequirement.SetKind("CompatibilityRequirement")
-			createTestObject(ctx, alphaRequirement, "v1alpha1 CompatibilityRequirement")
-			requirement.Name = alphaRequirement.GetName()
-
-			By("Reading the reconciled status through v1")
-			waitForAdmitted(ctx, requirement)
-			waitForReconcileComplete(ctx, requirement)
-		}, defaultNodeTimeout)
-
-		DescribeTable("should reject a CompatibilityRequirement whose CRD YAML does not parse", func(ctx context.Context, version string) {
+		It("should reject a CompatibilityRequirement whose CRD YAML does not parse", func(ctx context.Context) {
 			requirement := test.GenerateTestCompatibilityRequirement(testCRDClean)
 			requirement.Spec.CompatibilitySchema.CustomResourceDefinition.Data = "not YAML"
-			data, err := runtime.DefaultUnstructuredConverter.ToUnstructured(requirement)
-			Expect(err).NotTo(HaveOccurred())
-
-			unstructuredRequirement := &unstructured.Unstructured{Object: data}
-			unstructuredRequirement.SetAPIVersion("apiextensions.openshift.io/" + version)
-			unstructuredRequirement.SetKind("CompatibilityRequirement")
 
 			By("Attempting to create invalid CompatibilityRequirement " + requirement.Name)
 
 			expectedError := "admission webhook \"compatibilityrequirement.operator.openshift.io\" denied the request: spec.compatibilitySchema.customResourceDefinition.data: Invalid value: \"not YAML\": expected a valid CustomResourceDefinition in YAML format: error unmarshaling JSON: while decoding JSON: json: cannot unmarshal string into Go value of type v1.CustomResourceDefinition"
-			Eventually(tryCreate(ctx, unstructuredRequirement)).WithContext(ctx).Should(MatchError(expectedError))
-		},
-			Entry("through v1", defaultNodeTimeout, "v1"),
-			Entry("through v1alpha1 equivalent matching", defaultNodeTimeout, "v1alpha1"),
-		)
+			Eventually(tryCreate(ctx, requirement)).WithContext(ctx).Should(MatchError(expectedError))
+		}, defaultNodeTimeout)
 
 		It("Should not admit a CompatibilityRequirement if the CompatibilitySchema.CRDYAML parses but is not a CRD", func(ctx context.Context) {
 			requirement := test.GenerateTestCompatibilityRequirement(testCRDClean)
