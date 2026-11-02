@@ -38,7 +38,7 @@ const (
 	crdCompatibilityDeploymentName = "compatibility-requirements-controllers"
 
 	staticVWCCRDValidation = "openshift-compatibility-requirements-apiextensions-k8s-io-v1-customresourcedefinition-validation"
-	staticVWCCRValidation  = "openshift-compatibility-requirements-apiextensions-openshift-io-v1alpha1-compatibilityrequirement-validation"
+	staticVWCCRValidation  = "openshift-compatibility-requirements-apiextensions-openshift-io-v1-compatibilityrequirement-validation"
 )
 
 func waitForRequirementReady(crd *apiextensionsv1.CustomResourceDefinition, requirement *openshiftapiextensionsv1.CompatibilityRequirement) {

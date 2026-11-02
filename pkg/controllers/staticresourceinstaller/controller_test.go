@@ -80,7 +80,7 @@ var _ = Describe("StaticResourceInstaller Controller", Ordered, ContinueOnFailur
 		It("should install webhook configurations without a bootstrap resource", func() {
 			By("Verifying that ValidatingWebhookConfigurations are created")
 			Eventually(kWithCtx(ctx).ObjectList(&admissionregistrationv1.ValidatingWebhookConfigurationList{}), 10*time.Second).WithContext(ctx).Should(HaveField("Items", SatisfyAll(
-				ContainElement(HaveField("ObjectMeta.Name", Equal("openshift-compatibility-requirements-apiextensions-openshift-io-v1alpha1-compatibilityrequirement-validation"))),
+				ContainElement(HaveField("ObjectMeta.Name", Equal("openshift-compatibility-requirements-apiextensions-openshift-io-v1-compatibilityrequirement-validation"))),
 				ContainElement(HaveField("ObjectMeta.Name", Equal("openshift-compatibility-requirements-apiextensions-k8s-io-v1-customresourcedefinition-validation"))),
 			)))
 		})
@@ -89,7 +89,7 @@ var _ = Describe("StaticResourceInstaller Controller", Ordered, ContinueOnFailur
 			// Fetch a resource that is expected to exist in the previous test.
 			vwc := &admissionregistrationv1.ValidatingWebhookConfiguration{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "openshift-compatibility-requirements-apiextensions-openshift-io-v1alpha1-compatibilityrequirement-validation",
+					Name: "openshift-compatibility-requirements-apiextensions-openshift-io-v1-compatibilityrequirement-validation",
 				},
 			}
 			Expect(kWithCtx(ctx).Get(vwc)()).To(Succeed())
@@ -107,7 +107,7 @@ var _ = Describe("StaticResourceInstaller Controller", Ordered, ContinueOnFailur
 			// Check that we can fetch the resource first, and then try to delete it.
 			vwc := &admissionregistrationv1.ValidatingWebhookConfiguration{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "openshift-compatibility-requirements-apiextensions-openshift-io-v1alpha1-compatibilityrequirement-validation",
+					Name: "openshift-compatibility-requirements-apiextensions-openshift-io-v1-compatibilityrequirement-validation",
 				},
 			}
 			Expect(kWithCtx(ctx).Get(vwc)()).To(Succeed())
