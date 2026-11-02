@@ -27,7 +27,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1 "github.com/openshift/api/config/v1"
-	"github.com/openshift/api/features"
 	configv1apply "github.com/openshift/client-go/config/applyconfigurations/config/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/corecluster"
@@ -51,6 +50,7 @@ type ClusterOperatorController struct {
 	client.Client
 	ReleaseVersion string
 	FeatureGates   featuregates.FeatureGate
+	Infra          *configv1.Infrastructure
 }
 
 // Reconcile reconciles the cluster-api ClusterOperator object.
@@ -141,7 +141,10 @@ func (r *ClusterOperatorController) aggregatedStatus(currentConditions []configv
 		revision.ResultGenerator,
 		upgradeable.ResultGenerator,
 	}
-	if r.FeatureGates.Enabled(features.FeatureGateClusterAPIMachineManagement) {
+	// Only require these conditions when the ancillary Cluster API controllers are
+	// expected to run. capi-controllers uses the same predicate to decide whether
+	// to start them, so unsupported platforms do not wait on them forever.
+	if util.ShouldRunAncillaryCAPIControllers(r.FeatureGates, r.Infra) {
 		subControllers = append(subControllers,
 			corecluster.ResultGenerator,
 			infracluster.ResultGenerator,
