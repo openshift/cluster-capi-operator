@@ -87,14 +87,21 @@ func GetFeatureGates(ctx context.Context, log logr.Logger, componentName string,
 	return currentFeatureGates, nil
 }
 
-// IsCAPIEnabledForPlatform returns true if CAPI support is enabled for the given
-// platform in the given feature gates.
-func IsCAPIEnabledForPlatform(currentFeatureGates featuregates.FeatureGate, platform configv1.PlatformType) bool {
+// IsCAPIEnabledForPlatform returns true if CAPI support is enabled for the
+// platform of the given infrastructure in the given feature gates.
+func IsCAPIEnabledForPlatform(currentFeatureGates featuregates.FeatureGate, infra *configv1.Infrastructure) bool {
+	platform, err := GetPlatformFromInfra(infra)
+	if err != nil {
+		return false
+	}
+
 	switch platform {
 	case configv1.AWSPlatformType:
 		return currentFeatureGates.Enabled(features.FeatureGateClusterAPIMachineManagementAWS)
 	case configv1.AzurePlatformType:
-		return currentFeatureGates.Enabled(features.FeatureGateClusterAPIMachineManagementAzure)
+		// Azure Stack Hub reports the Azure platform type, but Cluster API is not supported there.
+		return getAzureCloudEnvironment(infra.Status.PlatformStatus) != configv1.AzureStackCloud &&
+			currentFeatureGates.Enabled(features.FeatureGateClusterAPIMachineManagementAzure)
 	case configv1.BareMetalPlatformType:
 		return currentFeatureGates.Enabled(features.FeatureGateClusterAPIMachineManagementBareMetal)
 	case configv1.GCPPlatformType:
@@ -109,6 +116,19 @@ func IsCAPIEnabledForPlatform(currentFeatureGates featuregates.FeatureGate, plat
 	default:
 		return false
 	}
+}
+
+// ShouldRunAncillaryCAPIControllers returns true if the ancillary Cluster API
+// controllers (the ones this operator runs alongside the upstream Cluster API
+// controllers, such as core cluster, infra cluster and secret sync) are expected
+// to run for the given infrastructure. This is the single predicate shared by the
+// controller setup and by the ClusterOperator status aggregation, so that the
+// operator never waits for controllers it does not start.
+func ShouldRunAncillaryCAPIControllers(featureGates featuregates.FeatureGate, infra *configv1.Infrastructure) bool {
+	// Only run ancillary controllers when both ClusterAPIMachineManagement and
+	// ClusterAPIMachineManagement<Platform> are enabled.
+	return featureGates.Enabled(features.FeatureGateClusterAPIMachineManagement) &&
+		IsCAPIEnabledForPlatform(featureGates, infra)
 }
 
 // IsMAPIMigrationEnabledForPlatform returns true if MAPI migration is enabled for the given
