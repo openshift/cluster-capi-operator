@@ -4,7 +4,6 @@
 aliases:
   # Default Cluster API maintainers
   cluster-api-approvers:
-    - JoelSpeed
     - RadekManak
     - damdo
     - mdbooth
@@ -12,6 +11,8 @@ aliases:
     - racheljpg
     - stephenfin
     - theobarberbany
+  cluster-api-advisory-approvers:
+    - JoelSpeed
   cluster-api-reviewers:
     - RadekManak
     - damdo

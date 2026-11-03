@@ -1,5 +1,7 @@
 approvers:
 - cluster-api-approvers
+advisory_approvers:
+- cluster-api-advisory-approvers
 reviewers:
 - cluster-api-reviewers
 component: Cloud Compute
