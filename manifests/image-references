@@ -38,6 +38,10 @@ spec:
     from:
       kind: DockerImage
       name: registry.ci.openshift.org/openshift:kube-rbac-proxy
+  - name: nutanix-cluster-api-controllers
+    from:
+      kind: DockerImage
+      name: registry.ci.openshift.org/openshift:nutanix-cluster-api-controllers
   - name: openstack-cluster-api-controllers
     from:
       kind: DockerImage
