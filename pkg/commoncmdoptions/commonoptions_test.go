@@ -67,8 +67,9 @@ type configOutput struct {
 	ManagerExitReason string `json:"managerExitReason,omitempty"`
 
 	// TLS: resolved manager options (after CLI override logic).
-	TLSMinVersion   uint16   `json:"tlsMinVersion"`
-	TLSCipherSuites []string `json:"tlsCipherSuites"`
+	TLSMinVersion       uint16        `json:"tlsMinVersion"`
+	TLSCipherSuites     []string      `json:"tlsCipherSuites"`
+	TLSCurvePreferences []tls.CurveID `json:"tlsCurvePreferences"`
 
 	// ExtraTestString is from the test-only extra flag.FlagSet passed to InitOperatorConfig.
 	ExtraTestString string `json:"extraTestString"`
@@ -201,6 +202,18 @@ func runInitConfig() {
 	}
 
 	result.TLSMinVersion = tlsCfg.MinVersion
+	result.TLSCurvePreferences = tlsCfg.CurvePreferences
+
+	metricsTLSCfg := &tls.Config{}
+	for _, opt := range mgrOpts.Metrics.TLSOpts {
+		opt(metricsTLSCfg)
+	}
+
+	if !slices.Equal(metricsTLSCfg.CurvePreferences, tlsCfg.CurvePreferences) {
+		fmt.Fprintf(os.Stderr, "metrics TLS curve preferences %v differ from operator preferences %v\n", metricsTLSCfg.CurvePreferences, tlsCfg.CurvePreferences)
+		os.Exit(1)
+	}
+
 	for _, id := range tlsCfg.CipherSuites {
 		result.TLSCipherSuites = append(result.TLSCipherSuites, tls.CipherSuiteName(id))
 	}
@@ -286,6 +299,10 @@ func TestInitOperatorConfig(t *testing.T) {
 				assertEqual(t, "TLSMinVersion", result.TLSMinVersion, tls.VersionTLS12)
 
 				// Cipher suites should be populated from the cluster profile.
+				if len(result.TLSCurvePreferences) == 0 {
+					t.Error("TLSCurvePreferences should not be empty when using cluster profile")
+				}
+
 				if len(result.TLSCipherSuites) == 0 {
 					t.Error("TLSCipherSuites should not be empty when using cluster profile")
 				}
@@ -293,9 +310,13 @@ func TestInitOperatorConfig(t *testing.T) {
 		},
 		{
 			name:  "TLS flags overridden by CLI",
-			flags: []string{"--tls-min-version=VersionTLS11", "--tls-cipher-suites=TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"},
+			flags: []string{"--tls-min-version=VersionTLS11", "--tls-cipher-suites=TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256", "--tls-curve-preferences=29,23"},
 			verify: func(t *testing.T, result configOutput) {
 				// Both manager values should come from the CLI.
+				if !slices.Equal(result.TLSCurvePreferences, []tls.CurveID{tls.X25519, tls.CurveP256}) {
+					t.Errorf("unexpected TLS curve preferences: %v", result.TLSCurvePreferences)
+				}
+
 				assertEqual(t, "TLSMinVersion", result.TLSMinVersion, uint16(tls.VersionTLS11))
 
 				wantCiphers := []string{"TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"}
@@ -303,6 +324,27 @@ func TestInitOperatorConfig(t *testing.T) {
 					t.Errorf("TLSCipherSuites: got %v, want %v", result.TLSCipherSuites, wantCiphers)
 				}
 			},
+		},
+		{
+			name:  "TLS curves overridden independently",
+			flags: []string{"--tls-curve-preferences=24,23"},
+			verify: func(t *testing.T, result configOutput) {
+				assertEqual(t, "TLSMinVersion", result.TLSMinVersion, uint16(tls.VersionTLS12))
+
+				if !slices.Equal(result.TLSCurvePreferences, []tls.CurveID{tls.CurveP384, tls.CurveP256}) {
+					t.Errorf("unexpected TLS curve preferences: %v", result.TLSCurvePreferences)
+				}
+			},
+		},
+		{
+			name:      "unsupported TLS curve",
+			flags:     []string{"--tls-curve-preferences=65535"},
+			expectErr: true,
+		},
+		{
+			name:      "duplicate TLS curves",
+			flags:     []string{"--tls-curve-preferences=23,23"},
+			expectErr: true,
 		},
 	}
 
