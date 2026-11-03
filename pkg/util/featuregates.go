@@ -149,7 +149,7 @@ func IsMAPIMigrationEnabledForPlatform(featureGates featuregates.FeatureGate, pl
 		return featureGates.Enabled(features.FeatureGateMachineAPIMigrationOpenStack)
 	case configv1.BareMetalPlatformType:
 		return featureGates.Enabled(features.FeatureGateMachineAPIMigrationBareMetal)
+	default:
+		return false
 	}
-
-	return false
 }

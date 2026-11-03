@@ -55,6 +55,8 @@ linters:
   settings:
     cyclop:
       max-complexity: 20
+    exhaustive:
+      default-signifies-exhaustive: true
     goheader:
       values:
         regexp:
@@ -127,6 +129,12 @@ linters:
         - github.com/onsi/ginkgo/v2
         - github.com/onsi/gomega
     wrapcheck:
+      extra-ignore-sigs:
+        # apimachinery helpers produce self-describing validation/aggregate
+        # errors which add no value when wrapped
+        - k8s.io/apimachinery/pkg/api/errors.NewInvalid(
+        - k8s.io/apimachinery/pkg/util/errors.NewAggregate(
+        - k8s.io/apimachinery/pkg/util/validation/field.
       ignore-package-globs:
         # return values from operatorstatus are intended to be used without wrapping
         - github.com/openshift/cluster-capi-operator/pkg/operatorstatus

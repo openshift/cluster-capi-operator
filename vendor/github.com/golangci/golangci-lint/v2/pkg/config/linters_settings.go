@@ -88,7 +88,7 @@ var defaultLintersSettings = LintersSettings{
 		Period: true,
 	},
 	Gosec: GoSecSettings{
-		Concurrency: runtime.NumCPU(),
+		Concurrency: runtime.GOMAXPROCS(0),
 	},
 	Gosmopolitan: GosmopolitanSettings{
 		AllowTimeLocal:  false,
@@ -149,6 +149,7 @@ var defaultLintersSettings = LintersSettings{
 	},
 	Predeclared: PredeclaredSettings{
 		Qualified: false,
+		Mode:      []string{"shadow"},
 	},
 	Sloglint: SloglintSettings{
 		NoGlobal:       "",
@@ -470,13 +471,22 @@ type ErrorLintAllowPair struct {
 
 type ExhaustiveSettings struct {
 	Check                      []string `mapstructure:"check"`
+	ExplicitExhaustive         bool     `mapstructure:"explicit-exhaustive"`
+	OnlyTypes                  []string `mapstructure:"only-types"`
+	IgnoreTypes                []string `mapstructure:"ignore-types"`
+	IgnoreConstants            []string `mapstructure:"ignore-constants"`
 	DefaultSignifiesExhaustive bool     `mapstructure:"default-signifies-exhaustive"`
-	IgnoreEnumMembers          string   `mapstructure:"ignore-enum-members"`
-	IgnoreEnumTypes            string   `mapstructure:"ignore-enum-types"`
-	PackageScopeOnly           bool     `mapstructure:"package-scope-only"`
-	ExplicitExhaustiveMap      bool     `mapstructure:"explicit-exhaustive-map"`
-	ExplicitExhaustiveSwitch   bool     `mapstructure:"explicit-exhaustive-switch"`
 	DefaultCaseRequired        bool     `mapstructure:"default-case-required"`
+	PackageScopeOnly           bool     `mapstructure:"package-scope-only"`
+
+	// Deprecated: use IgnoreConstants instead.
+	IgnoreEnumMembers string `mapstructure:"ignore-enum-members"`
+	// Deprecated: use IgnoreTypes instead.
+	IgnoreEnumTypes string `mapstructure:"ignore-enum-types"`
+	// Deprecated: use ExplicitExhaustive instead.
+	ExplicitExhaustiveMap bool `mapstructure:"explicit-exhaustive-map"`
+	// Deprecated: use ExplicitExhaustive instead.
+	ExplicitExhaustiveSwitch bool `mapstructure:"explicit-exhaustive-switch"`
 }
 
 // Deprecated: use ExhaustructV5Settings instead.
@@ -490,14 +500,15 @@ type ExhaustructSettings struct {
 }
 
 type ExhaustructV5Settings struct {
-	EnforcePatterns        []string `mapstructure:"enforce-patterns"`
-	IgnorePatterns         []string `mapstructure:"ignore-patterns"`
-	OptionalPatterns       []string `mapstructure:"optional-patterns"`
-	AllowEmpty             bool     `mapstructure:"allow-empty"`
-	AllowEmptyPatterns     []string `mapstructure:"allow-empty-patterns"`
-	AllowEmptyReturns      bool     `mapstructure:"allow-empty-returns"`
-	AllowEmptyDeclarations bool     `mapstructure:"allow-empty-declarations"`
-	ExplicitMode           bool     `mapstructure:"explicit-mode"`
+	EnforcePatterns            []string `mapstructure:"enforce-patterns"`
+	IgnorePatterns             []string `mapstructure:"ignore-patterns"`
+	OptionalPatterns           []string `mapstructure:"optional-patterns"`
+	AllowEmpty                 bool     `mapstructure:"allow-empty"`
+	AllowEmptyPatterns         []string `mapstructure:"allow-empty-patterns"`
+	AllowEmptyReturns          bool     `mapstructure:"allow-empty-returns"`
+	AllowEmptyDeclarations     bool     `mapstructure:"allow-empty-declarations"`
+	AllowEmptyBlankAssignments bool     `mapstructure:"allow-empty-blank-assignments"`
+	ExplicitMode               bool     `mapstructure:"explicit-mode"`
 }
 
 type FatcontextSettings struct {
@@ -906,6 +917,7 @@ type PreallocSettings struct {
 type PredeclaredSettings struct {
 	Ignore    []string `mapstructure:"ignore"`
 	Qualified bool     `mapstructure:"qualified-name"`
+	Mode      []string `mapstructure:"mode"`
 }
 
 type PromlinterSettings struct {
