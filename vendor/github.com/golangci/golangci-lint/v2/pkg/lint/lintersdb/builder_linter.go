@@ -582,6 +582,7 @@ func (LinterBuilder) Build(cfg *config.Config) ([]*linter.Config, error) {
 
 		linter.NewConfig(predeclared.New(&cfg.Linters.Settings.Predeclared)).
 			WithSince("v1.35.0").
+			WithLoadForGoAnalysis().
 			WithURL("https://github.com/nishanths/predeclared"),
 
 		linter.NewConfig(promlinter.New(&cfg.Linters.Settings.Promlinter)).
@@ -608,7 +609,7 @@ func (LinterBuilder) Build(cfg *config.Config) ([]*linter.Config, error) {
 			WithSince("v1.37.0").
 			ConsiderSlow().
 			WithAutoFix().
-			WithURL("https://github.com/mgechev/revive"),
+			WithURL("https://github.com/revive-lint/revive"),
 
 		linter.NewConfig(rowserrcheck.New(&cfg.Linters.Settings.RowsErrCheck)).
 			WithSince("v1.23.0").

@@ -58,6 +58,12 @@ append([]T(nil), s...), the analyzer suggests the more concise slices.Clone(s).
 For byte slices, it will prefer bytes.Clone if the "bytes" package is
 already imported.
 
+Since the replacement (slices.Concat, or slices.Clone) allocates a new
+slice, any slices.Clone or bytes.Clone wrapping one of the operands is
+redundant and is removed, e.g. append(append([]T{}, slices.Clone(s)...),
+t...) becomes slices.Concat(s, t). The clone of os.Environ in
+append([]string(nil), os.Environ()...) is likewise elided.
+
 This fix is only applied when the base of the append tower is a
 "clipped" slice, meaning its length and capacity are equal (e.g.
 x[:0:0] or []T{}). This is to avoid changing program behavior by
@@ -347,6 +353,17 @@ No fix is offered in cases when the runtime type is dynamic, such as:
 
 or when the operand has potential side effects.
 
+Nor is a fix offered when the operand refers to a non-type symbol
+such as a variable, constant, function, or field, as in:
+
+	reflect.TypeOf(pkg.Var)
+	reflect.TypeOf(x.Field)
+	reflect.TypeOf([arrayLen]byte{})
+
+Replacing these with TypeFor[T]() would erase the reference to the
+symbol, breaking any intended coupling between the reflected type and
+the type of that symbol.
+
 # Analyzer reflecttypeassert
 
 reflecttypeassert: replace v.Interface().(T) with reflect.TypeAssert[T](v)
@@ -466,6 +483,7 @@ where x is one of various well-known types in the standard library.
 stringscut: replace strings.Index etc. with strings.Cut
 
 This analyzer replaces certain patterns of use of [strings.Index] and string slicing by [strings.Cut], added in go1.18.
+It also replaces analogous uses of [strings.LastIndex] by [strings.CutLast], added in go1.27.
 
 For example:
 
@@ -477,6 +495,20 @@ For example:
 is replaced by:
 
 	before, _, ok := strings.Cut(s, substr)
+	if ok {
+	    return before
+	}
+
+And:
+
+	idx := strings.LastIndex(s, substr)
+	if idx >= 0 {
+	    return s[:idx]
+	}
+
+is replaced by:
+
+	before, _, ok := strings.CutLast(s, substr)
 	if ok {
 	    return before
 	}
@@ -495,9 +527,13 @@ is replaced by:
 	    return
 	}
 
-It also handles variants using [strings.IndexByte] instead of Index, or the bytes package instead of strings.
+(LastIndex used only as a presence check is also rewritten to Contains.)
+
+It also handles variants using [strings.IndexByte] or [strings.LastIndexByte]
+instead of Index/LastIndex, or the bytes package instead of strings.
 
 Fixes are offered only in cases in which there are no potential modifications of the idx, s, or substr expressions between their definition and use.
+CutLast fixes are offered only when the file's Go version is at least 1.27.
 
 It also replaces [strings.SplitN](s, sep, 2)[0] and [strings.Split](s, sep)[0] with the "before" result of strings.Cut, when sep is a non-empty string constant:
 

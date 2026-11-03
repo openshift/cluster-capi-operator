@@ -30,7 +30,7 @@ import (
 func setChangedMAPIMachineProviderStatusFields(platform configv1.PlatformType, existingMAPIMachine, convertedMAPIMachine *mapiv1beta1.Machine) error {
 	var newProviderStatus interface{}
 
-	switch platform {
+	switch platform { //nolint:exhaustive // unsupported platforms intentionally fall through
 	case configv1.AWSPlatformType:
 		existingStatus, err := mapi2capi.AWSProviderStatusFromRawExtension(existingMAPIMachine.Status.ProviderStatus)
 		if err != nil {
