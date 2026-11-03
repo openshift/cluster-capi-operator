@@ -27,6 +27,7 @@ require (
 	github.com/openshift/cluster-api-actuator-pkg v0.0.0-20260929140943-2355afea5804
 	github.com/openshift/cluster-api-provider-baremetal v0.0.0-20250619124612-fb678fec5f7e
 	github.com/openshift/cluster-capi-operator v0.0.0-20260730093403-b05f43ce9738
+	github.com/openshift/origin/test/shared v0.0.0-20261030142106-895e3d93a081
 	k8s.io/api v0.37.1
 	k8s.io/apiextensions-apiserver v0.37.1
 	k8s.io/apimachinery v0.37.1

@@ -83,8 +83,8 @@ unit: .localtestenv ## Run unit tests
 	./hack/test.sh "$(TEST_DIRS)" 40m
 
 .PHONY: test-e2e-diagnostics
-test-e2e-diagnostics: ## Run e2e diagnostics unit tests (no cluster required)
-	go test -count=1 -race -run TestDiagnostics ./e2e/...
+test-e2e-diagnostics: ## Run e2e unit tests (no cluster required)
+	go test -count=1 -race -run 'TestDiagnostics|TestClustersCRDFromManifests|TestNextMinorVersion|TestRemoveSpecPropertyFromAllVersions|TestTargetUpdateOffered|TestDetermineRegistryAuthFilePath|TestOCAuthArgs' ./e2e/...
 
 .PHONY: e2e
 e2e: ## Run e2e tests against active kubeconfig
