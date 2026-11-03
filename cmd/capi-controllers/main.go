@@ -15,7 +15,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -126,13 +125,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	platform, infra, err := util.GetPlatform(ctx, mgr.GetAPIReader())
-	if err != nil {
-		log.Error(err, "unable to get platform")
-		os.Exit(1)
-	}
-
-	if err := setupPlatformReconcilers(log, mgr, operatorConfig, infra, platform); err != nil {
+	if err := setupPlatformReconcilers(ctx, log, mgr, operatorConfig, cancel); err != nil {
 		log.Error(err, "unable to setup platform reconcilers")
 		os.Exit(1)
 	}
@@ -145,25 +138,39 @@ func main() {
 	}
 }
 
-func setupPlatformReconcilers(log logr.Logger, mgr manager.Manager, operatorConfig commoncmdoptions.OperatorConfig, infra *configv1.Infrastructure, platform configv1.PlatformType) error {
-	// Only setup reconcile controllers and webhooks when the platform is supported.
-	// This avoids unnecessary CAPI providers discovery, installs and reconciles when the platform is not supported.
+func setupPlatformReconcilers(ctx context.Context, log logr.Logger, mgr manager.Manager, operatorConfig commoncmdoptions.OperatorConfig, cancel context.CancelFunc) error {
+	platform, infra, err := util.GetPlatform(ctx, mgr.GetAPIReader())
+	if err != nil {
+		return fmt.Errorf("unable to get platform: %w", err)
+	}
+
+	featureGates, err := util.GetFeatureGates(ctx, log, managerName, mgr.GetConfig(), cancel)
+	if err != nil {
+		return fmt.Errorf("unable to get feature gates: %w", err)
+	}
+
+	// The Cluster webhook configuration is installed with the core Cluster API
+	// components, so it must be served on every platform, including those where the
+	// ancillary controllers do not run.
+	if err := setupWebhooks(mgr); err != nil {
+		return fmt.Errorf("unable to setup webhooks: %w", err)
+	}
+
+	// Only setup controllers when expected. This avoids unnecessary Cluster API
+	// providers discovery, installs and reconciles when the platform is not
+	// supported.
+	if !util.ShouldRunAncillaryCAPIControllers(featureGates, infra) {
+		log.Info("ClusterAPI Machine Management is not enabled for this platform, skipping ancillary CAPI controllers setup", "platform", platform)
+		return nil
+	}
+
 	infraTypes, err := util.GetCAPITypesForInfrastructure(infra)
 	if err != nil {
-		if errors.Is(err, util.ErrUnsupportedPlatform) {
-			log.Info("Detected platform is not supported, skipping capi controllers setup", "platform", platform)
-			return nil
-		}
-
 		return fmt.Errorf("unable to get infrastructure objects: %w", err)
 	}
 
 	if err := setupReconcilers(mgr, operatorConfig, infra, platform, infraTypes.Cluster()); err != nil {
 		return fmt.Errorf("unable to setup reconcilers: %w", err)
-	}
-
-	if err := setupWebhooks(mgr); err != nil {
-		return fmt.Errorf("unable to setup webhooks: %w", err)
 	}
 
 	return nil

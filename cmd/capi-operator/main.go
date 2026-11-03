@@ -107,10 +107,18 @@ func setupControllers(ctx context.Context, log logr.Logger, mgr ctrl.Manager, op
 		return fmt.Errorf("unable to get feature gates: %w", err)
 	}
 
+	// GetPlatform returns the platform type and the infrastructure resource.
+	// It fails early if the platform status is not set.
+	_, infra, err := util.GetPlatform(ctx, mgr.GetAPIReader())
+	if err != nil {
+		return fmt.Errorf("unable to get infrastructure: %w", err)
+	}
+
 	if err := (&clusteroperator.ClusterOperatorController{
 		Client:         mgr.GetClient(),
 		ReleaseVersion: util.GetReleaseVersion(),
 		FeatureGates:   featureGates,
+		Infra:          infra,
 	}).SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("unable to create clusteroperator controller: %w", err)
 	}

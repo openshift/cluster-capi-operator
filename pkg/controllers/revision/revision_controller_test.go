@@ -168,7 +168,11 @@ func TestBuildComponentList(t *testing.T) {
 				FeatureGates:     newFeatureGate(tt.enabledFeatureGates...),
 			}
 
-			components := r.buildComponentList(tt.platform)
+			components := r.buildComponentList(&configv1.Infrastructure{
+				Status: configv1.InfrastructureStatus{
+					PlatformStatus: &configv1.PlatformStatus{Type: tt.platform},
+				},
+			})
 
 			g.Expect(components).To(HaveLen(len(tt.expectedNames)))
 

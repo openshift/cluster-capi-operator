@@ -160,7 +160,7 @@ func (r *RevisionController) generateDesiredRevision(ctx context.Context, cluste
 	}
 
 	// Build ordered component list from provider metadata
-	providerComponents := r.buildComponentList(infra.Status.PlatformStatus.Type)
+	providerComponents := r.buildComponentList(infra)
 
 	manifestSubstitutions := maps.Clone(r.manifestSubstitutions)
 	if manifestSubstitutions == nil {
@@ -281,13 +281,14 @@ func (r *RevisionController) writeRevisions(ctx context.Context, log logr.Logger
 // name. No components are selected without the base machine-management gate.
 // Providers that don't match the current platform or whose platform feature
 // gate is not enabled are filtered out.
-func (r *RevisionController) buildComponentList(platform configv1.PlatformType) []providerimages.ProviderImageManifests {
+func (r *RevisionController) buildComponentList(infra *configv1.Infrastructure) []providerimages.ProviderImageManifests {
 	// No components are selected without the base machine-management gate.
 	if !r.FeatureGates.Enabled(features.FeatureGateClusterAPIMachineManagement) {
 		return nil
 	}
 
-	platformEnabled := util.IsCAPIEnabledForPlatform(r.FeatureGates, platform)
+	platform := infra.Status.PlatformStatus.Type
+	platformEnabled := util.IsCAPIEnabledForPlatform(r.FeatureGates, infra)
 
 	// Iterate over only providers that have either no platform restriction, or
 	// match the current platform and whose feature gate is enabled.

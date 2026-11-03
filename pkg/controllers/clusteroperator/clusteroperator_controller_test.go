@@ -18,6 +18,7 @@ package clusteroperator
 
 import (
 	"context"
+	"slices"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -53,6 +54,8 @@ var _ = Describe("ClusterOperator controller", func() {
 	Context("with a supported platform", func() {
 		var capiClusterOperator *configv1.ClusterOperator
 
+		infra := configv1resourcebuilder.Infrastructure().AsAWS("test", "eu-west-2").Build()
+
 		BeforeEach(func(ctx context.Context) {
 			By("Creating the cluster-api ClusterOperator with a previous release version", func() {
 				capiClusterOperator = &configv1.ClusterOperator{
@@ -70,7 +73,7 @@ var _ = Describe("ClusterOperator controller", func() {
 		DescribeTable("aggregated status conditions",
 			func(ctx context.Context, gates featuregates.FeatureGate, subConditions []*configv1apply.ClusterOperatorStatusConditionApplyConfiguration,
 				expectedAvailable, expectedProgressing *test.ConditionMatcher) {
-				mgrCancel, mgrDone = startManager(gates)
+				mgrCancel, mgrDone = startManager(gates, infra)
 
 				DeferCleanup(stopManager)
 
@@ -93,7 +96,7 @@ var _ = Describe("ClusterOperator controller", func() {
 					))
 			},
 			Entry("when all sub-controllers report success",
-				featuregates.NewFeatureGate([]configv1.FeatureGateName{features.FeatureGateClusterAPIMachineManagement}, nil),
+				newFeatureGate(features.FeatureGateClusterAPIMachineManagement, features.FeatureGateClusterAPIMachineManagementAWS),
 				allSubControllersSuccessful(),
 				test.HaveCondition(configv1.OperatorAvailable).
 					WithStatus(configv1.ConditionTrue).
@@ -103,7 +106,7 @@ var _ = Describe("ClusterOperator controller", func() {
 					WithReason(operatorstatus.ReasonAsExpected),
 				defaultNodeTimeout),
 			Entry("when installer controller is progressing but was previously available",
-				featuregates.NewFeatureGate([]configv1.FeatureGateName{features.FeatureGateClusterAPIMachineManagement}, nil),
+				newFeatureGate(features.FeatureGateClusterAPIMachineManagement, features.FeatureGateClusterAPIMachineManagementAWS),
 				withOverrides(allSubControllersSuccessful(),
 					subCondition("InstallerControllerProgressing", configv1.ConditionTrue, operatorstatus.ReasonProgressing, "Installing components"),
 				),
@@ -116,7 +119,7 @@ var _ = Describe("ClusterOperator controller", func() {
 					WithMessage(ContainSubstring("InstallerController")),
 				defaultNodeTimeout),
 			Entry("when revision controller is progressing but was previously available",
-				featuregates.NewFeatureGate([]configv1.FeatureGateName{features.FeatureGateClusterAPIMachineManagement}, nil),
+				newFeatureGate(features.FeatureGateClusterAPIMachineManagement, features.FeatureGateClusterAPIMachineManagementAWS),
 				withOverrides(allSubControllersSuccessful(),
 					subCondition("RevisionControllerProgressing", configv1.ConditionTrue, operatorstatus.ReasonProgressing, "Updating revisions"),
 				),
@@ -129,7 +132,7 @@ var _ = Describe("ClusterOperator controller", func() {
 					WithMessage(ContainSubstring("RevisionController")),
 				defaultNodeTimeout),
 			Entry("when both installer and revision controllers are progressing but were previously available",
-				featuregates.NewFeatureGate([]configv1.FeatureGateName{features.FeatureGateClusterAPIMachineManagement}, nil),
+				newFeatureGate(features.FeatureGateClusterAPIMachineManagement, features.FeatureGateClusterAPIMachineManagementAWS),
 				withOverrides(allSubControllersSuccessful(),
 					subCondition("InstallerControllerProgressing", configv1.ConditionTrue, operatorstatus.ReasonProgressing, "Installing components"),
 					subCondition("RevisionControllerProgressing", configv1.ConditionTrue, operatorstatus.ReasonProgressing, "Updating revisions"),
@@ -146,7 +149,7 @@ var _ = Describe("ClusterOperator controller", func() {
 					)),
 				defaultNodeTimeout),
 			Entry("when installer controller has a non-retryable error",
-				featuregates.NewFeatureGate([]configv1.FeatureGateName{features.FeatureGateClusterAPIMachineManagement}, nil),
+				newFeatureGate(features.FeatureGateClusterAPIMachineManagement, features.FeatureGateClusterAPIMachineManagementAWS),
 				withOverrides(allSubControllersSuccessful(),
 					subCondition("InstallerControllerAvailable", configv1.ConditionFalse, operatorstatus.ReasonNonRetryableError, "install failed"),
 					subCondition("InstallerControllerProgressing", configv1.ConditionFalse, operatorstatus.ReasonNonRetryableError, "install failed"),
@@ -161,7 +164,7 @@ var _ = Describe("ClusterOperator controller", func() {
 					WithMessage(ContainSubstring("InstallerController")),
 				defaultNodeTimeout),
 			Entry("when revision controller has a non-retryable error",
-				featuregates.NewFeatureGate([]configv1.FeatureGateName{features.FeatureGateClusterAPIMachineManagement}, nil),
+				newFeatureGate(features.FeatureGateClusterAPIMachineManagement, features.FeatureGateClusterAPIMachineManagementAWS),
 				withOverrides(allSubControllersSuccessful(),
 					subCondition("RevisionControllerAvailable", configv1.ConditionFalse, operatorstatus.ReasonNonRetryableError, "revision failed"),
 					subCondition("RevisionControllerProgressing", configv1.ConditionFalse, operatorstatus.ReasonNonRetryableError, "revision failed"),
@@ -176,7 +179,7 @@ var _ = Describe("ClusterOperator controller", func() {
 					WithMessage(ContainSubstring("RevisionController")),
 				defaultNodeTimeout),
 			Entry("when installer controller has an ephemeral error but was previously available",
-				featuregates.NewFeatureGate([]configv1.FeatureGateName{features.FeatureGateClusterAPIMachineManagement}, nil),
+				newFeatureGate(features.FeatureGateClusterAPIMachineManagement, features.FeatureGateClusterAPIMachineManagementAWS),
 				withOverrides(allSubControllersSuccessful(),
 					subCondition("InstallerControllerProgressing", configv1.ConditionTrue, operatorstatus.ReasonEphemeralError, "transient failure"),
 				),
@@ -189,7 +192,7 @@ var _ = Describe("ClusterOperator controller", func() {
 					WithMessage(ContainSubstring("InstallerController")),
 				defaultNodeTimeout),
 			Entry("when installer controller sub-conditions are missing",
-				featuregates.NewFeatureGate([]configv1.FeatureGateName{features.FeatureGateClusterAPIMachineManagement}, nil),
+				newFeatureGate(features.FeatureGateClusterAPIMachineManagement, features.FeatureGateClusterAPIMachineManagementAWS),
 				withoutConditions(allSubControllersSuccessful(),
 					"InstallerControllerAvailable",
 					"InstallerControllerProgressing",
@@ -204,7 +207,7 @@ var _ = Describe("ClusterOperator controller", func() {
 					WithMessage(ContainSubstring("InstallerController")),
 				defaultNodeTimeout),
 			Entry("when all sub-conditions are missing",
-				featuregates.NewFeatureGate([]configv1.FeatureGateName{features.FeatureGateClusterAPIMachineManagement}, nil),
+				newFeatureGate(features.FeatureGateClusterAPIMachineManagement, features.FeatureGateClusterAPIMachineManagementAWS),
 				[]*configv1apply.ClusterOperatorStatusConditionApplyConfiguration{},
 				test.HaveCondition(configv1.OperatorAvailable).
 					WithStatus(configv1.ConditionFalse).
@@ -230,7 +233,7 @@ var _ = Describe("ClusterOperator controller", func() {
 					)),
 				defaultNodeTimeout),
 			Entry("when installer has not yet reported available during initial install",
-				featuregates.NewFeatureGate([]configv1.FeatureGateName{features.FeatureGateClusterAPIMachineManagement}, nil),
+				newFeatureGate(features.FeatureGateClusterAPIMachineManagement, features.FeatureGateClusterAPIMachineManagementAWS),
 				[]*configv1apply.ClusterOperatorStatusConditionApplyConfiguration{
 					subCondition("InstallerControllerProgressing", configv1.ConditionTrue, operatorstatus.ReasonProgressing, "Installing components"),
 				},
@@ -250,7 +253,7 @@ var _ = Describe("ClusterOperator controller", func() {
 					)),
 				defaultNodeTimeout),
 			Entry("when one controller has a non-retryable error and the other is progressing",
-				featuregates.NewFeatureGate([]configv1.FeatureGateName{features.FeatureGateClusterAPIMachineManagement}, nil),
+				newFeatureGate(features.FeatureGateClusterAPIMachineManagement, features.FeatureGateClusterAPIMachineManagementAWS),
 				withOverrides(allSubControllersSuccessful(),
 					subCondition("InstallerControllerAvailable", configv1.ConditionFalse, operatorstatus.ReasonNonRetryableError, "install failed"),
 					subCondition("InstallerControllerProgressing", configv1.ConditionFalse, operatorstatus.ReasonNonRetryableError, "install failed"),
@@ -269,7 +272,7 @@ var _ = Describe("ClusterOperator controller", func() {
 					)),
 				defaultNodeTimeout),
 			Entry("when both installer and revision controllers have non-retryable errors",
-				featuregates.NewFeatureGate([]configv1.FeatureGateName{features.FeatureGateClusterAPIMachineManagement}, nil),
+				newFeatureGate(features.FeatureGateClusterAPIMachineManagement, features.FeatureGateClusterAPIMachineManagementAWS),
 				withOverrides(allSubControllersSuccessful(),
 					subCondition("InstallerControllerAvailable", configv1.ConditionFalse, operatorstatus.ReasonNonRetryableError, "install failed"),
 					subCondition("InstallerControllerProgressing", configv1.ConditionFalse, operatorstatus.ReasonNonRetryableError, "install failed"),
@@ -292,7 +295,7 @@ var _ = Describe("ClusterOperator controller", func() {
 					)),
 				defaultNodeTimeout),
 			Entry("when installer is waiting on external",
-				featuregates.NewFeatureGate([]configv1.FeatureGateName{features.FeatureGateClusterAPIMachineManagement}, nil),
+				newFeatureGate(features.FeatureGateClusterAPIMachineManagement, features.FeatureGateClusterAPIMachineManagementAWS),
 				[]*configv1apply.ClusterOperatorStatusConditionApplyConfiguration{
 					subCondition("InstallerControllerProgressing", configv1.ConditionTrue, operatorstatus.ReasonWaitingOnExternal, "Waiting on ClusterAPI"),
 				},
@@ -315,7 +318,7 @@ var _ = Describe("ClusterOperator controller", func() {
 			// Prioritisation tests: when sub-controllers report different reasons,
 			// the aggregated condition should report the highest priority reason.
 			Entry("should report the highest priority progressing reason",
-				featuregates.NewFeatureGate([]configv1.FeatureGateName{features.FeatureGateClusterAPIMachineManagement}, nil),
+				newFeatureGate(features.FeatureGateClusterAPIMachineManagement, features.FeatureGateClusterAPIMachineManagementAWS),
 				withOverrides(allSubControllersSuccessful(),
 					subCondition("InstallerControllerProgressing", configv1.ConditionTrue, operatorstatus.ReasonEphemeralError, "transient failure"),
 					subCondition("RevisionControllerProgressing", configv1.ConditionTrue, operatorstatus.ReasonProgressing, "Updating revisions"),
@@ -332,7 +335,7 @@ var _ = Describe("ClusterOperator controller", func() {
 					)),
 				defaultNodeTimeout),
 			Entry("should report the highest priority available reason",
-				featuregates.NewFeatureGate([]configv1.FeatureGateName{features.FeatureGateClusterAPIMachineManagement}, nil),
+				newFeatureGate(features.FeatureGateClusterAPIMachineManagement, features.FeatureGateClusterAPIMachineManagementAWS),
 				withOverrides(allSubControllersSuccessful(),
 					subCondition("InstallerControllerAvailable", configv1.ConditionFalse, operatorstatus.ReasonNonRetryableError, "install failed"),
 					subCondition("InstallerControllerProgressing", configv1.ConditionFalse, operatorstatus.ReasonNonRetryableError, "install failed"),
@@ -355,7 +358,7 @@ var _ = Describe("ClusterOperator controller", func() {
 					)),
 				defaultNodeTimeout),
 			Entry("skips missing machine-management controller conditions when the ClusterAPIMachineManagement gate is disabled",
-				featuregates.NewFeatureGate(nil, []configv1.FeatureGateName{features.FeatureGateClusterAPIMachineManagement}),
+				newFeatureGate(features.FeatureGateClusterAPIMachineManagementAWS),
 				withoutConditions(allSubControllersSuccessful(),
 					"CoreClusterControllerAvailable",
 					"CoreClusterControllerProgressing",
@@ -374,7 +377,7 @@ var _ = Describe("ClusterOperator controller", func() {
 					WithMessage(BeEmpty()),
 				defaultNodeTimeout),
 			Entry("requires machine-management controller conditions when the ClusterAPIMachineManagement gate is enabled",
-				featuregates.NewFeatureGate([]configv1.FeatureGateName{features.FeatureGateClusterAPIMachineManagement}, nil),
+				newFeatureGate(features.FeatureGateClusterAPIMachineManagement, features.FeatureGateClusterAPIMachineManagementAWS),
 				withoutConditions(allSubControllersSuccessful(),
 					"CoreClusterControllerAvailable",
 					"CoreClusterControllerProgressing",
@@ -393,7 +396,7 @@ var _ = Describe("ClusterOperator controller", func() {
 					WithMessage(ContainSubstring("CoreClusterController")),
 				defaultNodeTimeout),
 			Entry("requires InstallerController conditions even when the ClusterAPIMachineManagement gate is disabled",
-				featuregates.NewFeatureGate(nil, []configv1.FeatureGateName{features.FeatureGateClusterAPIMachineManagement}),
+				newFeatureGate(features.FeatureGateClusterAPIMachineManagementAWS),
 				withoutConditions(allSubControllersSuccessful(), "InstallerControllerAvailable", "InstallerControllerProgressing"),
 				test.HaveCondition(configv1.OperatorAvailable).
 					WithStatus(configv1.ConditionFalse).
@@ -405,7 +408,7 @@ var _ = Describe("ClusterOperator controller", func() {
 					WithMessage(ContainSubstring("InstallerController")),
 				defaultNodeTimeout),
 			Entry("requires RevisionController conditions even when the ClusterAPIMachineManagement gate is disabled",
-				featuregates.NewFeatureGate(nil, []configv1.FeatureGateName{features.FeatureGateClusterAPIMachineManagement}),
+				newFeatureGate(features.FeatureGateClusterAPIMachineManagementAWS),
 				withoutConditions(allSubControllersSuccessful(), "RevisionControllerAvailable", "RevisionControllerProgressing"),
 				test.HaveCondition(configv1.OperatorAvailable).
 					WithStatus(configv1.ConditionFalse).
@@ -418,7 +421,98 @@ var _ = Describe("ClusterOperator controller", func() {
 				defaultNodeTimeout),
 		)
 	})
+
+	// Platforms without Cluster API machine management, for example IBM Cloud VPC,
+	// do not start the machine management controllers, so their conditions never
+	// appear. The aggregation must not wait for them. See OCPBUGS-135095.
+	Context("with a platform that does not support Cluster API machine management", func() {
+		var capiClusterOperator *configv1.ClusterOperator
+
+		BeforeEach(func(ctx context.Context) {
+			capiClusterOperator = &configv1.ClusterOperator{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: controllers.ClusterOperatorName,
+				},
+			}
+			Expect(cl.Create(ctx, capiClusterOperator)).To(Succeed())
+			DeferCleanup(func(ctx context.Context) {
+				testutils.CleanupResources(Default, ctx, testEnv.Config, cl, "", &configv1.ClusterOperator{})
+			})
+		}, defaultNodeTimeout)
+
+		DescribeTable("should become available without the ancillary controller conditions",
+			func(ctx context.Context, gates featuregates.FeatureGate, infra *configv1.Infrastructure) {
+				mgrCancel, mgrDone = startManager(gates, infra)
+
+				DeferCleanup(stopManager)
+
+				patchSubConditions(ctx, capiClusterOperator, withoutConditions(allSubControllersSuccessful(),
+					"CoreClusterControllerAvailable",
+					"CoreClusterControllerProgressing",
+					"InfraClusterControllerAvailable",
+					"InfraClusterControllerProgressing",
+					"SecretSyncControllerAvailable",
+					"SecretSyncControllerProgressing",
+				)...)
+
+				co := kWithCtx(ctx).Object(configv1resourcebuilder.ClusterOperator().WithName(controllers.ClusterOperatorName).Build())
+
+				Eventually(co).
+					WithContext(ctx).
+					WithTimeout(defaultEventuallyTimeout).
+					Should(HaveField("Status.Conditions", SatisfyAll(
+						test.HaveCondition(configv1.OperatorAvailable).
+							WithStatus(configv1.ConditionTrue).
+							WithReason(operatorstatus.ReasonAsExpected),
+						test.HaveCondition(configv1.OperatorProgressing).
+							WithStatus(configv1.ConditionFalse).
+							WithReason(operatorstatus.ReasonAsExpected),
+						test.HaveCondition(configv1.OperatorDegraded).WithStatus(configv1.ConditionFalse),
+					)))
+			},
+			Entry("on IBM Cloud VPC",
+				newFeatureGate(features.FeatureGateClusterAPIMachineManagement),
+				configv1resourcebuilder.Infrastructure().
+					WithPlatformStatus(configv1.PlatformStatus{Type: configv1.IBMCloudPlatformType}).
+					Build(),
+				defaultNodeTimeout),
+			Entry("on Azure Stack Hub, where the Azure gate is enabled",
+				newFeatureGate(features.FeatureGateClusterAPIMachineManagement, features.FeatureGateClusterAPIMachineManagementAzure),
+				configv1resourcebuilder.Infrastructure().
+					WithPlatformStatus(configv1.PlatformStatus{
+						Type:  configv1.AzurePlatformType,
+						Azure: &configv1.AzurePlatformStatus{CloudName: configv1.AzureStackCloud},
+					}).
+					Build(),
+				defaultNodeTimeout),
+		)
+	})
 })
+
+// newFeatureGate constructs a FeatureGate with the Cluster API base and platform gates
+// classified as enabled or disabled based on the provided list.
+func newFeatureGate(enabled ...configv1.FeatureGateName) featuregates.FeatureGate {
+	allGates := []configv1.FeatureGateName{
+		features.FeatureGateClusterAPIMachineManagement,
+		features.FeatureGateClusterAPIMachineManagementAWS,
+		features.FeatureGateClusterAPIMachineManagementAzure,
+		features.FeatureGateClusterAPIMachineManagementBareMetal,
+		features.FeatureGateClusterAPIMachineManagementGCP,
+		features.FeatureGateClusterAPIMachineManagementPowerVS,
+		features.FeatureGateClusterAPIMachineManagementOpenStack,
+		features.FeatureGateClusterAPIMachineManagementVSphere,
+	}
+
+	var disabled []configv1.FeatureGateName
+
+	for _, g := range allGates {
+		if !slices.Contains(enabled, g) {
+			disabled = append(disabled, g)
+		}
+	}
+
+	return featuregates.NewFeatureGate(enabled, disabled)
+}
 
 func patchSubConditions(ctx context.Context, co *configv1.ClusterOperator, conditions ...*configv1apply.ClusterOperatorStatusConditionApplyConfiguration) {
 	applyConfig := configv1apply.ClusterOperator(controllers.ClusterOperatorName).
@@ -439,7 +533,7 @@ func subCondition(condType string, status configv1.ConditionStatus, reason opera
 		WithLastTransitionTime(metav1.Now())
 }
 
-func startManager(gates featuregates.FeatureGate) (context.CancelFunc, chan struct{}) {
+func startManager(gates featuregates.FeatureGate, infra *configv1.Infrastructure) (context.CancelFunc, chan struct{}) {
 	mgrCtx, mgrCancel := context.WithCancel(context.Background())
 	mgrDone := make(chan struct{})
 
@@ -458,6 +552,7 @@ func startManager(gates featuregates.FeatureGate) (context.CancelFunc, chan stru
 		Client:         cl,
 		ReleaseVersion: desiredOperatorReleaseVersion,
 		FeatureGates:   gates,
+		Infra:          infra,
 	}
 	Expect(r.SetupWithManager(mgr)).To(Succeed(), "Reconciler should be able to setup with manager")
 
