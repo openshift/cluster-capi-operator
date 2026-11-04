@@ -24,5 +24,7 @@ spec:
       values:
       - capi-operator
       - capi-installer
+      - upgradeable-payload-images-extractor
+      - upgradeable-compatibility-requirements
   policyTypes:
   - Egress
