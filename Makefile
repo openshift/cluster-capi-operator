@@ -34,7 +34,7 @@ test: verify unit ## Run verification and unit tests
 generate:
 	go generate ./...
 
-build: generate bin/capi-operator bin/capi-installer bin/capi-controllers bin/machine-api-migration bin/crd-compatibility-checker bin/crd-compatibility-checker-operator bin/upgradeable-extract-images bin/upgradeable-create-requirements bin/cluster-capi-operator-tests-ext manifests-gen ## Build all binaries
+build: generate bin/capi-operator bin/capi-installer bin/capi-controllers bin/machine-api-migration bin/crd-compatibility-checker bin/crd-compatibility-checker-operator bin/upgradeable-payload-images-extractor bin/upgradeable-compatibility-requirements bin/cluster-capi-operator-tests-ext manifests-gen ## Build all binaries
 
 clean:
 	rm -rf bin/*

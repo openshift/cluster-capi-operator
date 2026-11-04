@@ -35,7 +35,7 @@ var errInvalidManifest = errors.New("payload manifest must be a v1 ConfigMap con
 
 // Run executes the payload extraction pod entrypoint.
 func Run(ctx context.Context, args []string) error {
-	return upgradeable.Run(ctx, "upgradeable-extract-images", args, func(ctx context.Context, c client.Client, current, target string) error {
+	return upgradeable.Run(ctx, "upgradeable-payload-images-extractor", args, func(ctx context.Context, c client.Client, current, target string) error {
 		return Step(ctx, c, current, target, manifestPath)
 	})
 }

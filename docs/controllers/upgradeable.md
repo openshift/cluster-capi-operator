@@ -16,8 +16,8 @@ The target is the highest semantic version for the next minor release (`X.(Y+1).
 
 The assessment uses two pods in `openshift-cluster-api-operator`, each running a dedicated binary from the current operator image:
 
-1. `upgradeable-payload-images-extractor` runs `/upgradeable-extract-images`, mounts the target payload as an image volume and copies its provider image ConfigMap data into `upgradeable-payload-images`.
-2. `upgradeable-compatibility-requirements` runs `/upgradeable-create-requirements`, mounts those provider images, discovers CRDs across every provider profile, and creates cluster scoped CompatibilityRequirements. The first profile alphabetically wins when CRDs repeat. Requirements cover all served versions and use `Warn`, never `Deny`.
+1. `upgradeable-payload-images-extractor` runs `/upgradeable-payload-images-extractor`, mounts the target payload as an image volume and copies its provider image ConfigMap data into `upgradeable-payload-images`.
+2. `upgradeable-compatibility-requirements` runs `/upgradeable-compatibility-requirements`, mounts those provider images, discovers CRDs across every provider profile, and creates cluster scoped CompatibilityRequirements. The first profile alphabetically wins when CRDs repeat. Requirements cover all served versions and use `Warn`, never `Deny`.
 
 Pod completion marks each step complete. Pods retry transient API failures internally, exit on terminal input or permission errors, and have a 30 minute deadline. The controller recreates failed pods with reconciliation backoff.
 

@@ -68,14 +68,14 @@ func (r *UpgradeableController) basePod(name, command, currentVersion, targetVer
 }
 
 func (r *UpgradeableController) extractorPod(currentVersion string, target *configv1.Release, co *configv1.ClusterOperator) *corev1.Pod {
-	pod := r.basePod(assessment.ExtractorPodName, "upgradeable-extract-images", currentVersion, target.Version, co)
+	pod := r.basePod(assessment.ExtractorPodName, "upgradeable-payload-images-extractor", currentVersion, target.Version, co)
 	addImageVolume(pod, "release-image", target.Image, "/release-image")
 
 	return pod
 }
 
 func (r *UpgradeableController) requirementsPod(currentVersion, targetVersion string, cm *corev1.ConfigMap, co *configv1.ClusterOperator) *corev1.Pod {
-	pod := r.basePod(assessment.RequirementsPodName, "upgradeable-create-requirements", currentVersion, targetVersion, co)
+	pod := r.basePod(assessment.RequirementsPodName, "upgradeable-compatibility-requirements", currentVersion, targetVersion, co)
 
 	images := sets.New[string]()
 	for _, image := range cm.Data {
