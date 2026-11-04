@@ -28,8 +28,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
+	openshiftapiextensionsv1 "github.com/openshift/api/apiextensions/v1"
 	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
+	assessment "github.com/openshift/cluster-capi-operator/pkg/upgradeable"
+	corev1 "k8s.io/api/core/v1"
 )
 
 const (
@@ -47,6 +50,8 @@ const (
 // the Upgradeable condition of the cluster-api ClusterOperator.
 type UpgradeableController struct {
 	client.Client
+	ContainerImage string
+	apiReader      client.Reader
 }
 
 // Reconcile reports the controller status on the cluster-api ClusterOperator.
@@ -54,9 +59,7 @@ func (r *UpgradeableController) Reconcile(ctx context.Context, _ ctrl.Request) (
 	log := ctrl.LoggerFrom(ctx).WithName(controllerName)
 	log.Info("Reconciling upgradeability")
 
-	// TODO: Implement this controller
-
-	reconcileResult := ResultGenerator.Success()
+	reconcileResult := r.reconcile(ctx)
 
 	if err := reconcileResult.WriteClusterOperatorStatus(ctx, log, r.Client); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to write conditions: %w", err)
@@ -70,6 +73,7 @@ func (r *UpgradeableController) Reconcile(ctx context.Context, _ ctrl.Request) (
 // request, but all watches must map to the same target so that their events
 // coalesce in the single workqueue.
 func (r *UpgradeableController) SetupWithManager(mgr ctrl.Manager) error {
+	r.apiReader = mgr.GetAPIReader()
 	if err := ctrl.NewControllerManagedBy(mgr).
 		Named(controllerName).
 		// Notify on creation of the ClusterOperator
@@ -84,6 +88,9 @@ func (r *UpgradeableController) SetupWithManager(mgr ctrl.Manager) error {
 			handler.EnqueueRequestsFromMapFunc(operatorstatus.ToClusterOperator),
 			builder.WithPredicates(clusterVersionUpdatesChanged()),
 		).
+		Watches(&corev1.Pod{}, handler.EnqueueRequestsFromMapFunc(operatorstatus.ToClusterOperator), builder.WithPredicates(managedAssessment())).
+		Watches(&corev1.ConfigMap{}, handler.EnqueueRequestsFromMapFunc(operatorstatus.ToClusterOperator), builder.WithPredicates(managedAssessment())).
+		Watches(&openshiftapiextensionsv1.CompatibilityRequirement{}, handler.EnqueueRequestsFromMapFunc(operatorstatus.ToClusterOperator), builder.WithPredicates(managedAssessment())).
 		Complete(r); err != nil {
 		return fmt.Errorf("failed to create controller: %w", err)
 	}
@@ -93,7 +100,7 @@ func (r *UpgradeableController) SetupWithManager(mgr ctrl.Manager) error {
 
 // clusterVersionUpdatesChanged returns a predicate that triggers on create
 // events for the version ClusterVersion, and on update events when
-// status.availableUpdates or status.conditionalUpdates have changed.
+// status.desired.version, status.availableUpdates or status.conditionalUpdates have changed.
 func clusterVersionUpdatesChanged() predicate.Funcs {
 	isClusterVersion := func(obj runtime.Object) bool {
 		clusterVersion, ok := obj.(*configv1.ClusterVersion)
@@ -110,10 +117,17 @@ func clusterVersionUpdatesChanged() predicate.Funcs {
 			oldCV, _ := e.ObjectOld.(*configv1.ClusterVersion)
 			newCV, _ := e.ObjectNew.(*configv1.ClusterVersion)
 
-			return !equality.Semantic.DeepEqual(oldCV.Status.AvailableUpdates, newCV.Status.AvailableUpdates) ||
+			return oldCV.Status.Desired.Version != newCV.Status.Desired.Version ||
+				!equality.Semantic.DeepEqual(oldCV.Status.AvailableUpdates, newCV.Status.AvailableUpdates) ||
 				!equality.Semantic.DeepEqual(oldCV.Status.ConditionalUpdates, newCV.Status.ConditionalUpdates)
 		},
 		DeleteFunc:  func(e event.DeleteEvent) bool { return false },
 		GenericFunc: func(e event.GenericEvent) bool { return false },
 	}
+}
+
+func managedAssessment() predicate.Predicate {
+	return predicate.NewPredicateFuncs(func(obj client.Object) bool {
+		return obj.GetLabels()[assessment.ManagedLabel] == assessment.ManagedLabelValue
+	})
 }

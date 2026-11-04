@@ -20,6 +20,8 @@ import (
 	"context"
 	"slices"
 
+	"github.com/go-logr/logr"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -35,6 +37,7 @@ import (
 	"github.com/openshift/cluster-api-actuator-pkg/testutils"
 	configv1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/config/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/upgradeable"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 	"github.com/openshift/cluster-capi-operator/pkg/test"
 	"github.com/openshift/cluster-capi-operator/pkg/util"
@@ -49,6 +52,39 @@ var (
 	mgrCancel context.CancelFunc
 	mgrDone   chan struct{}
 )
+
+var _ = Describe("Upgradeable condition ownership", func() {
+	It("should relinquish the placeholder and preserve the assessment controller's verdict", func(ctx context.Context) {
+		co := &configv1.ClusterOperator{ObjectMeta: metav1.ObjectMeta{Name: controllers.ClusterOperatorName}}
+		Expect(cl.Create(ctx, co)).To(Succeed())
+		DeferCleanup(func(ctx context.Context) { Expect(cl.Delete(ctx, co)).To(Succeed()) })
+
+		r := &ClusterOperatorController{
+			Client: cl, FeatureGates: newFeatureGate(features.FeatureGateCRDCompatibilityRequirementOperator),
+			Infra: configv1resourcebuilder.Infrastructure().AsAWS("test", "eu-west-2").Build(),
+		}
+
+		By("simulating the old field owner's placeholder")
+
+		conditions := r.aggregatedStatus(nil)
+		conditions = append(conditions, condition(configv1.OperatorUpgradeable, configv1.ConditionTrue, operatorstatus.ReasonAsExpected, ""))
+		operatorstatus.MergeConditions(conditions, nil)
+		Expect(r.writeStatus(ctx, co, conditions)).To(Succeed())
+		_, err := r.Reconcile(ctx, ctrl.Request{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(cl.Get(ctx, client.ObjectKeyFromObject(co), co)).To(Succeed())
+		Expect(co.Status.Conditions).NotTo(ContainElement(HaveField("Type", Equal(configv1.OperatorUpgradeable))))
+		By("writing an assessment verdict and reconciling the health aggregator")
+
+		result := upgradeable.UpgradeableResult{ReconcileResult: upgradeable.ResultGenerator.Success()}.
+			WithUpgradeable(configv1.ConditionFalse, "NotCompatible", "Incompatible CRDs: widgets.example.com")
+		Expect(result.WriteClusterOperatorStatus(ctx, logr.Discard(), cl)).To(Succeed())
+		_, err = r.Reconcile(ctx, ctrl.Request{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(cl.Get(ctx, client.ObjectKeyFromObject(co), co)).To(Succeed())
+		Expect(co.Status.Conditions).To(ContainElement(SatisfyAll(HaveField("Type", Equal(configv1.OperatorUpgradeable)), HaveField("Status", Equal(configv1.ConditionFalse)))))
+	})
+})
 
 var _ = Describe("ClusterOperator controller", func() {
 	Context("with a supported platform", func() {
@@ -91,7 +127,7 @@ var _ = Describe("ClusterOperator controller", func() {
 							expectedAvailable,
 							expectedProgressing,
 							test.HaveCondition(configv1.OperatorDegraded).WithStatus(configv1.ConditionFalse),
-							test.HaveCondition(configv1.OperatorUpgradeable).WithStatus(configv1.ConditionTrue),
+							Not(test.HaveCondition(configv1.OperatorUpgradeable)),
 						)),
 					))
 			},
@@ -493,6 +529,7 @@ var _ = Describe("ClusterOperator controller", func() {
 // classified as enabled or disabled based on the provided list.
 func newFeatureGate(enabled ...configv1.FeatureGateName) featuregates.FeatureGate {
 	allGates := []configv1.FeatureGateName{
+		features.FeatureGateCRDCompatibilityRequirementOperator,
 		features.FeatureGateClusterAPIMachineManagement,
 		features.FeatureGateClusterAPIMachineManagementAWS,
 		features.FeatureGateClusterAPIMachineManagementAzure,
