@@ -27,6 +27,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1 "github.com/openshift/api/config/v1"
+	"github.com/openshift/api/features"
 	configv1apply "github.com/openshift/client-go/config/applyconfigurations/config/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/corecluster"
@@ -68,6 +69,19 @@ func (r *ClusterOperatorController) Reconcile(ctx context.Context, _ ctrl.Reques
 
 	// Merge new conditions with existing conditions and patch if changes are required.
 	conditionsChanged := operatorstatus.MergeConditions(conditions, co.Status.Conditions)
+
+	previous, err := configv1apply.ExtractClusterOperatorStatus(co, string(operatorstatus.CAPIFieldOwner(controllerName)))
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to extract ClusterOperator status ownership: %w", err)
+	}
+	// Relinquish the old placeholder condition even when health is unchanged.
+	if previous.Status != nil {
+		for _, condition := range previous.Status.Conditions {
+			if condition.Type != nil && *condition.Type == configv1.OperatorUpgradeable {
+				conditionsChanged = true
+			}
+		}
+	}
 
 	if conditionsChanged {
 		if err := r.writeStatus(ctx, co, conditions); err != nil {
@@ -128,18 +142,15 @@ func (r *ClusterOperatorController) aggregatedStatus(currentConditions []configv
 		// be added by automatically flagging a Progressing condition which
 		// lasts longer than some duration.
 		condition(configv1.OperatorDegraded, configv1.ConditionFalse, operatorstatus.ReasonAsExpected, ""),
-
-		// Nothing the capi operator currently does prevents upgradeability.
-		// This will be added when CRD compatibility is integrated with the
-		// installer and revision controllers.
-		condition(configv1.OperatorUpgradeable, configv1.ConditionTrue, operatorstatus.ReasonAsExpected, ""),
 	}
 
 	// Sub-controllers whose Progressing and Degraded conditions are aggregated
 	subControllers := []operatorstatus.ControllerResultGenerator{
 		installer.ResultGenerator,
 		revision.ResultGenerator,
-		upgradeable.ResultGenerator,
+	}
+	if r.FeatureGates.Enabled(features.FeatureGateCRDCompatibilityRequirementOperator) {
+		subControllers = append(subControllers, upgradeable.ResultGenerator)
 	}
 	// Only require these conditions when the ancillary Cluster API controllers are
 	// expected to run. capi-controllers uses the same predicate to decide whether
