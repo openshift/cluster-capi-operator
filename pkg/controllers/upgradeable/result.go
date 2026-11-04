@@ -28,6 +28,8 @@ type UpgradeableResult struct {
 
 // WithUpgradeable attaches the assessment condition to the controller result.
 func (r UpgradeableResult) WithUpgradeable(status configv1.ConditionStatus, reason, message string) UpgradeableResult {
+	// Health and the verdict share one SSA field owner. Writing them together
+	// prevents either apply from accidentally relinquishing the other's fields.
 	r.ReconcileResult = r.WithConditions(configv1apply.ClusterOperatorStatusCondition().
 		WithType(configv1.OperatorUpgradeable).WithStatus(status).WithReason(reason).WithMessage(message))
 

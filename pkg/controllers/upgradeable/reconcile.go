@@ -49,6 +49,8 @@ func (r *UpgradeableController) reconcile(ctx context.Context) UpgradeableResult
 
 	currentVersion := cv.Status.Desired.Version
 
+	// Both sides identify the assessment: changing the current release must
+	// invalidate old results even if the same target is still offered.
 	var liveLabels map[string]string
 	if target != nil {
 		liveLabels = assessment.AssessmentLabels(currentVersion, target.Version)
@@ -60,10 +62,14 @@ func (r *UpgradeableController) reconcile(ctx context.Context) UpgradeableResult
 	}
 
 	if target == nil {
+		// No relevant update is not a compatibility verdict. Omitting Upgradeable
+		// removes any previous assessment result instead of leaving a stale block.
 		return UpgradeableResult{ResultGenerator.Success()}
 	}
 
 	if !done {
+		// Requirements use fixed names and create only semantics. Old resources
+		// must disappear before the next creator can safely accept AlreadyExists.
 		return assessmentWaiting("previous assessment deletion")
 	}
 
@@ -87,6 +93,8 @@ func (r *UpgradeableController) reconcile(ctx context.Context) UpgradeableResult
 	}
 
 	pod = r.requirementsPod(currentVersion, target.Version, cm, co)
+	// Only the creator knows how many CRDs the target contains. Its successful
+	// exit is the completeness signal, including when the resulting set is empty.
 	if result := r.ensureAssessmentPod(ctx, pod); result != nil {
 		return *result
 	}
@@ -97,6 +105,8 @@ func (r *UpgradeableController) reconcile(ctx context.Context) UpgradeableResult
 // Stop old writers before removing their outputs, so a terminating pod cannot
 // recreate stale requirements after cleanup and race the next assessment.
 func (r *UpgradeableController) cleanup(ctx context.Context, live map[string]string) (bool, error) {
+	// The ClusterOperator also owns resources outside this chain. Labels scope
+	// invalidation to our assessment instead of relying on shared ownership.
 	managed := client.MatchingLabels{assessment.ManagedLabel: assessment.ManagedLabelValue}
 	isStale := func(obj client.Object) bool {
 		return live == nil || !labels.SelectorFromSet(live).Matches(labels.Set(obj.GetLabels()))
@@ -123,6 +133,8 @@ func (r *UpgradeableController) cleanup(ctx context.Context, live map[string]str
 	}
 
 	if waiting {
+		// A deletion request does not stop a pod immediately. Wait until the old
+		// writers are actually gone before deleting anything they could recreate.
 		return false, nil
 	}
 
@@ -185,6 +197,8 @@ func (r *UpgradeableController) deleteObject(ctx context.Context, obj client.Obj
 		return nil
 	}
 
+	// A cached object may already have been replaced under the same fixed name.
+	// Delete only the instance we observed, never its replacement.
 	if err := r.Delete(ctx, obj, client.Preconditions{UID: ptr.To(obj.GetUID())}); client.IgnoreNotFound(err) != nil {
 		return fmt.Errorf("deleting %T %s: %w", obj, obj.GetName(), err)
 	}
@@ -200,6 +214,8 @@ func (r *UpgradeableController) processRequirements(ctx context.Context, assessm
 
 	conflicts := []string{}
 
+	// A partial result cannot represent the whole target payload. Even if one
+	// requirement is incompatible, wait for all verdicts to be admitted and fresh.
 	for _, cr := range crs.Items {
 		admitted := meta.FindStatusCondition(cr.Status.Conditions, openshiftapiextensionsv1.CompatibilityRequirementAdmitted)
 
@@ -218,6 +234,8 @@ func (r *UpgradeableController) processRequirements(ctx context.Context, assessm
 		return result.WithUpgradeable(configv1.ConditionTrue, "Compatible", fmt.Sprintf("Cluster API components are compatible with release %s", targetVersion))
 	}
 
+	// Stable ordering avoids status churn when API list order changes. Bound the
+	// message so a large conflict set remains suitable for ClusterOperator status.
 	sort.Strings(conflicts)
 
 	message := "Incompatible CRDs: " + strings.Join(conflicts, ", ")
