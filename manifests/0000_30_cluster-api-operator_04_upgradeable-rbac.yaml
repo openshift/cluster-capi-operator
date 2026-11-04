@@ -1,0 +1,173 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: upgradeable-payload-images-extractor
+  namespace: openshift-cluster-api-operator
+  annotations:
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/feature-gate: "ClusterAPIOperator"
+    capability.openshift.io/name: ClusterAPI
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: upgradeable-compatibility-requirements
+  namespace: openshift-cluster-api-operator
+  annotations:
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/feature-gate: "ClusterAPIOperator"
+    capability.openshift.io/name: ClusterAPI
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: upgradeable-payload-images-extractor
+  namespace: openshift-cluster-api-operator
+  annotations:
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/feature-gate: "ClusterAPIOperator"
+    capability.openshift.io/name: ClusterAPI
+rules:
+- apiGroups: [""]
+  resources: [configmaps]
+  verbs: [create]
+- apiGroups: [""]
+  resources: [configmaps]
+  resourceNames: [upgradeable-payload-images]
+  verbs: [get, patch, update]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: upgradeable-compatibility-requirements
+  namespace: openshift-cluster-api-operator
+  annotations:
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/feature-gate: "ClusterAPIOperator"
+    capability.openshift.io/name: ClusterAPI
+rules:
+- apiGroups: [""]
+  resources: [configmaps]
+  resourceNames: [upgradeable-payload-images]
+  verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: openshift-capi-upgradeable-owner-reader
+  annotations:
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/feature-gate: "ClusterAPIOperator"
+    capability.openshift.io/name: ClusterAPI
+rules:
+- apiGroups: [config.openshift.io]
+  resources: [clusteroperators]
+  resourceNames: [cluster-api]
+  verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: openshift-capi-upgradeable-compatibility-requirements
+  annotations:
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/feature-gate: "ClusterAPIOperator"
+    capability.openshift.io/name: ClusterAPI
+rules:
+- apiGroups: [apiextensions.openshift.io]
+  resources: [compatibilityrequirements]
+  verbs: [create]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: upgradeable-payload-images-extractor
+  namespace: openshift-cluster-api-operator
+  annotations:
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/feature-gate: "ClusterAPIOperator"
+    capability.openshift.io/name: ClusterAPI
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: upgradeable-payload-images-extractor
+subjects:
+- kind: ServiceAccount
+  name: upgradeable-payload-images-extractor
+  namespace: openshift-cluster-api-operator
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: upgradeable-compatibility-requirements
+  namespace: openshift-cluster-api-operator
+  annotations:
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/feature-gate: "ClusterAPIOperator"
+    capability.openshift.io/name: ClusterAPI
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: upgradeable-compatibility-requirements
+subjects:
+- kind: ServiceAccount
+  name: upgradeable-compatibility-requirements
+  namespace: openshift-cluster-api-operator
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: openshift-capi-upgradeable-owner-reader
+  annotations:
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/feature-gate: "ClusterAPIOperator"
+    capability.openshift.io/name: ClusterAPI
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: openshift-capi-upgradeable-owner-reader
+subjects:
+- kind: ServiceAccount
+  name: upgradeable-payload-images-extractor
+  namespace: openshift-cluster-api-operator
+- kind: ServiceAccount
+  name: upgradeable-compatibility-requirements
+  namespace: openshift-cluster-api-operator
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: openshift-capi-upgradeable-compatibility-requirements
+  annotations:
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/feature-gate: "ClusterAPIOperator"
+    capability.openshift.io/name: ClusterAPI
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: openshift-capi-upgradeable-compatibility-requirements
+subjects:
+- kind: ServiceAccount
+  name: upgradeable-compatibility-requirements
+  namespace: openshift-cluster-api-operator

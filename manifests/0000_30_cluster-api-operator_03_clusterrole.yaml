@@ -11,6 +11,16 @@ metadata:
   name: openshift-capi-operator
 rules:
 - apiGroups:
+  - apiextensions.openshift.io
+  resources:
+  - compatibilityrequirements
+  verbs:
+  - get
+  - list
+  - watch
+  - delete
+  - deletecollection
+- apiGroups:
   - config.openshift.io
   resources:
   - infrastructures
@@ -105,12 +115,17 @@ rules:
   - get
   - list
   - watch
+  - delete
 - apiGroups:
   - ""
   resources:
   - pods
   verbs:
   - get
+  - list
+  - watch
+  - create
+  - delete
 - apiGroups:
   - ""
   resources:
