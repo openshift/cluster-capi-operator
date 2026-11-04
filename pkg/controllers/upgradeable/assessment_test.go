@@ -77,14 +77,14 @@ var _ = Describe("Assessment chain", func() {
 		extractor := r.extractorPod("4.16.0", target, assessmentOwner)
 		Expect(extractor.Spec.Containers).To(ConsistOf(SatisfyAll(
 			HaveField("Image", Equal(r.ContainerImage)),
-			HaveField("Command", Equal([]string{"/upgradeable-extract-images"})),
+			HaveField("Command", Equal([]string{"/upgradeable-payload-images-extractor"})),
 			HaveField("Args", Equal([]string{"4.16.0", "4.17.0"})),
 		)))
 
 		requirements := r.requirementsPod("4.16.0", target.Version, &corev1.ConfigMap{Data: map[string]string{"core": "provider:latest"}}, assessmentOwner)
 		Expect(requirements.Spec.Containers).To(ConsistOf(SatisfyAll(
 			HaveField("Image", Equal(r.ContainerImage)),
-			HaveField("Command", Equal([]string{"/upgradeable-create-requirements"})),
+			HaveField("Command", Equal([]string{"/upgradeable-compatibility-requirements"})),
 			HaveField("Args", Equal([]string{"4.16.0", "4.17.0"})),
 		)))
 	})

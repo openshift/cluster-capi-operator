@@ -49,7 +49,7 @@ var (
 
 // Run executes the requirements pod entrypoint.
 func Run(ctx context.Context, args []string) error {
-	return upgradeable.Run(ctx, "upgradeable-create-requirements", args, func(ctx context.Context, c client.Client, current, target string) error {
+	return upgradeable.Run(ctx, "upgradeable-compatibility-requirements", args, func(ctx context.Context, c client.Client, current, target string) error {
 		return Step(ctx, c, current, target, providerimages.ProviderImageMountBase)
 	})
 }
