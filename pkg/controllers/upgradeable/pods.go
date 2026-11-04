@@ -43,7 +43,7 @@ var errAssessmentPodFailed = errors.New("assessment pod failed")
 
 func (r *UpgradeableController) basePod(name, command, currentVersion, targetVersion string, co *configv1.ClusterOperator) *corev1.Pod {
 	owner := metav1.NewControllerRef(co, configv1.GroupVersion.WithKind("ClusterOperator"))
-	owner.BlockOwnerDeletion = nil
+	owner.BlockOwnerDeletion = nil // Assessment cleanup must not block deletion of the operator.
 	podLabels := assessment.AssessmentLabels(currentVersion, targetVersion)
 	podLabels["k8s-app"] = name
 
@@ -55,10 +55,16 @@ func (r *UpgradeableController) basePod(name, command, currentVersion, targetVer
 			OwnerReferences: []metav1.OwnerReference{*owner},
 		},
 		Spec: corev1.PodSpec{
-			ServiceAccountName:    name,
-			RestartPolicy:         corev1.RestartPolicyNever,
+			ServiceAccountName: name,
+			// The process retries transient errors itself. Terminal exits must remain
+			// visible to the controller rather than being hidden by container restarts.
+			RestartPolicy: corev1.RestartPolicyNever,
+			// A persistent API outage must eventually become a failed assessment,
+			// not leave the operator reporting Progressing indefinitely.
 			ActiveDeadlineSeconds: ptr.To(int64(1800)),
 			Containers: []corev1.Container{{
+				// Execute only code shipped in the current operator image; the target
+				// release and provider images are mounted as data, never executed.
 				Name: name, Image: r.ContainerImage,
 				Command: []string{"/" + command}, Args: []string{currentVersion, targetVersion},
 				TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
@@ -91,6 +97,8 @@ func (r *UpgradeableController) requirementsPod(currentVersion, targetVersion st
 }
 
 func addImageVolume(pod *corev1.Pod, name, image, mountPath string) {
+	// Let the node runtime pull images using its credentials, mirrors and proxy
+	// configuration; the assessment process only reads the mounted contents.
 	pod.Spec.Volumes = append(pod.Spec.Volumes, corev1.Volume{Name: name, VolumeSource: corev1.VolumeSource{
 		Image: &corev1.ImageVolumeSource{Reference: image, PullPolicy: corev1.PullIfNotPresent},
 	}})
@@ -127,12 +135,15 @@ func (r *UpgradeableController) ensureAssessmentPod(ctx context.Context, desired
 	}
 
 	if existing.DeletionTimestamp != nil {
+		// Pod names are fixed, so recreation must wait for deletion to finish.
 		return &result
 	}
 
 	if !labels.SelectorFromSet(desired.Labels).Matches(labels.Set(existing.Labels)) ||
 		existing.Annotations[podSpecHashAnnotation] != desired.Annotations[podSpecHashAnnotation] ||
 		!equality.Semantic.DeepDerivative(desired.Spec, existing.Spec) {
+		// Most PodSpec fields are immutable. Recreate on drift, including changes
+		// from an operator upgrade that leaves the assessed versions unchanged.
 		if err := r.deleteObject(ctx, existing); err != nil {
 			return fail(err)
 		}
@@ -144,6 +155,8 @@ func (r *UpgradeableController) ensureAssessmentPod(ctx context.Context, desired
 	case corev1.PodSucceeded:
 		return nil
 	case corev1.PodFailed:
+		// Start from observable inputs again, but return an error so controller
+		// backoff paces repeated terminal failures instead of immediately spinning.
 		if err := r.deleteObject(ctx, existing); err != nil {
 			return fail(err)
 		}

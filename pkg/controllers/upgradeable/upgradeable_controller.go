@@ -61,6 +61,8 @@ func (r *UpgradeableController) Reconcile(ctx context.Context, _ ctrl.Request) (
 
 	reconcileResult := r.reconcile(ctx)
 
+	// Publish every outcome, including waiting and errors, so a verdict from a
+	// previous assessment cannot remain visible while the next one is incomplete.
 	if err := reconcileResult.WriteClusterOperatorStatus(ctx, log, r.Client); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to write conditions: %w", err)
 	}
@@ -90,6 +92,8 @@ func (r *UpgradeableController) SetupWithManager(mgr ctrl.Manager) error {
 		).
 		Watches(&corev1.Pod{}, handler.EnqueueRequestsFromMapFunc(operatorstatus.ToClusterOperator), builder.WithPredicates(managedAssessment())).
 		Watches(&corev1.ConfigMap{}, handler.EnqueueRequestsFromMapFunc(operatorstatus.ToClusterOperator), builder.WithPredicates(managedAssessment())).
+		// CRD remediation changes requirement status without changing the target
+		// version. Do not filter these events to generation changes alone.
 		Watches(&openshiftapiextensionsv1.CompatibilityRequirement{}, handler.EnqueueRequestsFromMapFunc(operatorstatus.ToClusterOperator), builder.WithPredicates(managedAssessment())).
 		Complete(r); err != nil {
 		return fmt.Errorf("failed to create controller: %w", err)

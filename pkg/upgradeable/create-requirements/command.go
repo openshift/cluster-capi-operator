@@ -66,6 +66,8 @@ func Step(ctx context.Context, c client.Client, current, target, root string) er
 	}
 
 	assessmentLabels := upgradeable.AssessmentLabels(current, target)
+	// The mounts were chosen from a particular assessment. Refuse stale inputs
+	// rather than stamp their CRDs with this pod's version labels.
 	if !labels.SelectorFromSet(assessmentLabels).Matches(labels.Set(cm.Labels)) {
 		return upgradeable.Terminal(errStaleImages)
 	}
@@ -75,6 +77,8 @@ func Step(ctx context.Context, c client.Client, current, target, root string) er
 		images.Insert(image)
 	}
 
+	// Parse every profile before publishing anything, so malformed YAML in a
+	// later profile does not leave a partially created requirement set.
 	crds, err := DiscoverCRDs(root, sets.List(images))
 	if err != nil {
 		return upgradeable.Terminal(err)
@@ -94,6 +98,10 @@ func Step(ctx context.Context, c client.Client, current, target, root string) er
 		cr.Labels = assessmentLabels
 
 		cr.OwnerReferences = []metav1.OwnerReference{owner}
+		// Fixed names let a restarted pod resume after partial creation. The
+		// controller removes old assessments first, so existing CRs can be kept
+		// without updating their schemas or disturbing compatibility evaluation.
+		// External edits to an existing requirement are deliberately not repaired.
 		if err := c.Create(ctx, cr); err != nil && !apierrors.IsAlreadyExists(err) {
 			return upgradeable.APIError(fmt.Errorf("creating requirement %s: %w", cr.Name, err))
 		}
@@ -119,6 +127,8 @@ func DiscoverCRDs(root string, images []string) (map[string]*apiextensionsv1.Cus
 			return nil, fmt.Errorf("reading profiles for %s: %w", image, err)
 		}
 
+		// Profiles may contain different CRDs. Assessing only the installed
+		// profile would leave part of the target provider image unchecked.
 		for _, profile := range profiles {
 			if !profile.IsDir() {
 				continue
@@ -130,9 +140,12 @@ func DiscoverCRDs(root string, images []string) (map[string]*apiextensionsv1.Cus
 	}
 
 	if len(manifests) == 0 {
+		// An unexpected image layout is not evidence of an empty CRD set.
 		return nil, errNoProfiles
 	}
 
+	// Deterministic precedence keeps duplicate CRD selection stable across
+	// restarts, even when different profiles contain different definitions.
 	sort.SliceStable(manifests, func(i, j int) bool { return manifests[i].name < manifests[j].name })
 
 	for _, profile := range manifests {
@@ -155,6 +168,8 @@ func readCRDs(path string, crds map[string]*apiextensionsv1.CustomResourceDefini
 
 	for {
 		obj := &unstructured.Unstructured{}
+		// Fail the whole assessment on malformed YAML rather than silently
+		// dropping a document that might define a required CRD.
 		if err := decoder.Decode(obj); err != nil {
 			if errors.Is(err, io.EOF) {
 				return nil
@@ -190,6 +205,8 @@ func BuildRequirement(crd *apiextensionsv1.CustomResourceDefinition) (*openshift
 	}
 
 	crd = crd.DeepCopy()
+	// Compare the schema as the API server would default it, avoiding apparent
+	// differences caused only by omitted CRD defaults in provider manifests.
 	apiextensionsv1.SetObjectDefaults_CustomResourceDefinition(crd)
 
 	data, err := k8syaml.Marshal(crd)
@@ -202,8 +219,12 @@ func BuildRequirement(crd *apiextensionsv1.CustomResourceDefinition) (*openshift
 		Spec: openshiftapiextensionsv1.CompatibilityRequirementSpec{
 			CompatibilitySchema: openshiftapiextensionsv1.CompatibilitySchema{
 				CustomResourceDefinition: openshiftapiextensionsv1.CRDData{Type: openshiftapiextensionsv1.CRDDataTypeYAML, Data: string(data)},
-				RequiredVersions:         openshiftapiextensionsv1.APIVersions{DefaultSelection: openshiftapiextensionsv1.APIVersionSetTypeAllServed},
+				// Preflight must cover every API version clients can still use,
+				// not just the version used to store objects.
+				RequiredVersions: openshiftapiextensionsv1.APIVersions{DefaultSelection: openshiftapiextensionsv1.APIVersionSetTypeAllServed},
 			},
+			// Observe incompatibility without preventing CRD changes needed for
+			// remediation. Upgradeable, not this admission policy, blocks upgrades.
 			CustomResourceDefinitionSchemaValidation: openshiftapiextensionsv1.CustomResourceDefinitionSchemaValidation{Action: openshiftapiextensionsv1.CRDAdmitActionWarn},
 		},
 	}, nil

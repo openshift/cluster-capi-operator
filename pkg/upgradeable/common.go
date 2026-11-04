@@ -75,6 +75,8 @@ func IsTerminal(err error) bool { var t terminalError; return errors.As(err, &t)
 // APIError marks invalid inputs and missing permissions as terminal failures.
 func APIError(err error) error {
 	if apierrors.IsForbidden(err) || apierrors.IsUnauthorized(err) || apierrors.IsInvalid(err) || apierrors.IsBadRequest(err) {
+		// These require corrected inputs or permissions; repeating the same step
+		// inside this pod cannot fix them. Leave recovery to the controller.
 		return Terminal(err)
 	}
 
@@ -83,6 +85,8 @@ func APIError(err error) error {
 
 // OwnerReference resolves the cluster scoped owner shared by assessment resources.
 func OwnerReference(ctx context.Context, c client.Client) (metav1.OwnerReference, error) {
+	// A namespaced pod cannot own cluster scoped requirements. Both pods and
+	// their outputs instead share the cluster scoped ClusterOperator owner.
 	co := &configv1.ClusterOperator{}
 	if err := c.Get(ctx, client.ObjectKey{Name: operatorstatus.ClusterOperatorName}, co); err != nil {
 		return metav1.OwnerReference{}, APIError(fmt.Errorf("getting ClusterOperator owner: %w", err))
@@ -151,12 +155,16 @@ func Loop(ctx context.Context, log logr.Logger, step func() error) error {
 			return fmt.Errorf("assessment canceled: %w", err)
 		}
 
+		// Replaying the complete idempotent step also recovers from an API write
+		// that succeeded server side but whose response was lost.
 		err := step()
 		if err == nil {
 			return nil
 		}
 
 		if IsTerminal(err) {
+			// Exiting makes this failure visible in Pod status. Transient failures
+			// stay inside the pod to avoid paying for pod recreation on every hiccup.
 			return err
 		}
 
@@ -170,6 +178,8 @@ func Loop(ctx context.Context, log logr.Logger, step func() error) error {
 		case <-timer.C:
 		}
 
+		// Cap pressure on an unhealthy API server. The pod's active deadline,
+		// rather than the number of attempts, bounds the total retry time.
 		if delay < 30*time.Second {
 			delay *= 2
 			if delay > 30*time.Second {

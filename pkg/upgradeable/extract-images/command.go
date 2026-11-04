@@ -42,6 +42,8 @@ func Run(ctx context.Context, args []string) error {
 
 // Step copies only the payload's provider image data into the assessment ConfigMap.
 func Step(ctx context.Context, c client.Client, current, target, path string) error {
+	// The mounted payload is immutable, so retries cannot repair a missing or
+	// malformed manifest. Treat these input failures as terminal.
 	data, err := os.ReadFile(path) //nolint:gosec // path is supplied by the operator's image volume mount
 	if err != nil {
 		return upgradeable.Terminal(fmt.Errorf("reading payload manifest: %w", err))
@@ -61,6 +63,8 @@ func Step(ctx context.Context, c client.Client, current, target, path string) er
 		return err
 	}
 
+	// Payload metadata belongs to the target release, not to this assessment.
+	// Copy only image references so annotations cannot alter assessment behavior.
 	cm := &corev1.ConfigMap{
 		TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
 		ObjectMeta: metav1.ObjectMeta{
@@ -68,6 +72,8 @@ func Step(ctx context.Context, c client.Client, current, target, path string) er
 			Labels: upgradeable.AssessmentLabels(current, target), OwnerReferences: []metav1.OwnerReference{owner},
 		}, Data: source.Data,
 	}
+	// Data is stable for this payload and assessment. SSA safely replays writes
+	// after ambiguous API failures and corrects drift in fields owned by this pod.
 	if err := c.Patch(ctx, cm, client.Apply, operatorstatus.CAPIFieldOwner("UpgradeableExtractor"), client.ForceOwnership); err != nil {
 		return upgradeable.APIError(fmt.Errorf("applying payload images ConfigMap: %w", err))
 	}
