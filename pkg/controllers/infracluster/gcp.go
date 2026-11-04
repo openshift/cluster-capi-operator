@@ -73,6 +73,28 @@ func (r *InfraClusterController) ensureGCPCluster(ctx context.Context, log logr.
 		return nil, fmt.Errorf("error obtaining GCP Provider Spec: %w", err)
 	}
 
+	labels := gcpv1.Labels{}
+
+	if r.Infra.Status.PlatformStatus.GCP != nil {
+		for _, l := range r.Infra.Status.PlatformStatus.GCP.ResourceLabels {
+			labels[l.Key] = l.Value
+		}
+	}
+
+	labels[fmt.Sprintf("kubernetes-io-cluster-%s", r.Infra.Status.InfrastructureName)] = "owned"
+
+	var resourceManagerTags gcpv1.ResourceManagerTags
+
+	if r.Infra.Status.PlatformStatus.GCP != nil {
+		for _, t := range r.Infra.Status.PlatformStatus.GCP.ResourceTags {
+			resourceManagerTags = append(resourceManagerTags, gcpv1.ResourceManagerTag{
+				ParentID: t.ParentID,
+				Key:      t.Key,
+				Value:    t.Value,
+			})
+		}
+	}
+
 	target = &gcpv1.GCPCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      r.Infra.Status.InfrastructureName,
@@ -87,8 +109,10 @@ func (r *InfraClusterController) ensureGCPCluster(ctx context.Context, log logr.
 			Network: gcpv1.NetworkSpec{
 				Name: &providerSpec.NetworkInterfaces[0].Network,
 			},
-			Region:  r.Infra.Status.PlatformStatus.GCP.Region,
-			Project: gcpProjectID,
+			Region:              r.Infra.Status.PlatformStatus.GCP.Region,
+			Project:             gcpProjectID,
+			AdditionalLabels:    labels,
+			ResourceManagerTags: resourceManagerTags,
 			ControlPlaneEndpoint: clusterv1beta1.APIEndpoint{
 				Host: apiURL.Hostname(),
 				Port: int32(port),
