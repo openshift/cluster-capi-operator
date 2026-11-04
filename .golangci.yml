@@ -138,6 +138,8 @@ linters:
       ignore-package-globs:
         # return values from operatorstatus are intended to be used without wrapping
         - github.com/openshift/cluster-capi-operator/pkg/operatorstatus
+        # assessment errors already carry context and terminal classification
+        - github.com/openshift/cluster-capi-operator/pkg/upgradeable
   exclusions:
     generated: lax
     rules:
