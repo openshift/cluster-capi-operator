@@ -142,7 +142,8 @@ type ReconcileResult struct {
 
 	// if operatorVersion is set, we will update the ClusterOperator operator
 	// version to this value when writing status
-	operatorVersion string
+	operatorVersion      string
+	additionalConditions []*configv1apply.ClusterOperatorStatusConditionApplyConfiguration
 
 	err          error
 	requeueAfter time.Duration
@@ -171,6 +172,12 @@ func (r ReconcileResult) withError(err error) ReconcileResult {
 // operator version when writing status to the ClusterOperator.
 func (r ReconcileResult) WithUpdateOperatorVersion(operatorVersion string) ReconcileResult {
 	r.operatorVersion = operatorVersion
+	return r
+}
+
+// WithConditions adds additional ClusterOperator status conditions to write.
+func (r ReconcileResult) WithConditions(conditions ...*configv1apply.ClusterOperatorStatusConditionApplyConfiguration) ReconcileResult {
+	r.additionalConditions = append(r.additionalConditions, conditions...)
 	return r
 }
 
@@ -308,7 +315,11 @@ func (r *ReconcileResult) WriteClusterOperatorStatus(ctx context.Context, log lo
 	clusterOperatorApplyConfig = clusterOperatorApplyConfig.WithUID(co.UID)
 
 	conditions := r.constructPartialConditions(co)
+
 	conditionsUpdated := MergeConditions(conditions, co.Status.Conditions)
+	if !conditionsUpdated && hasOmittedOwnedCondition(clusterOperatorApplyConfig, conditions) {
+		conditionsUpdated = true
+	}
 
 	releaseVersionNeedsUpdate := false
 	if r.operatorVersion != "" {
@@ -396,7 +407,32 @@ func (r *ReconcileResult) constructPartialConditions(co *configv1.ClusterOperato
 		}
 	}
 
+	conditions = append(conditions, r.additionalConditions...)
+
 	return conditions
+}
+
+func hasOmittedOwnedCondition(applyConfig *configv1apply.ClusterOperatorApplyConfiguration, desired []*configv1apply.ClusterOperatorStatusConditionApplyConfiguration) bool {
+	if applyConfig.Status == nil {
+		return false
+	}
+
+	desiredTypes := make(map[configv1.ClusterStatusConditionType]struct{}, len(desired))
+	for _, condition := range desired {
+		if condition.Type != nil {
+			desiredTypes[*condition.Type] = struct{}{}
+		}
+	}
+
+	for _, condition := range applyConfig.Status.Conditions {
+		if condition.Type != nil {
+			if _, found := desiredTypes[*condition.Type]; !found {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 func findClusterOperatorCondition(condType configv1.ClusterStatusConditionType, conditions []configv1.ClusterOperatorStatusCondition) *configv1.ClusterOperatorStatusCondition {
