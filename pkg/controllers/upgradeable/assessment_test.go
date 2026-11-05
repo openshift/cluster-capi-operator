@@ -25,6 +25,7 @@ import (
 	. "github.com/onsi/gomega"
 	openshiftapiextensionsv1 "github.com/openshift/api/apiextensions/v1"
 	configv1 "github.com/openshift/api/config/v1"
+	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
 	"github.com/openshift/cluster-capi-operator/pkg/test"
@@ -35,6 +36,7 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/yaml"
@@ -43,14 +45,16 @@ import (
 var (
 	assessmentClient client.Client
 	assessmentOwner  *configv1.ClusterOperator
+	assessmentConfig *rest.Config
 )
 
 var _ = BeforeSuite(func() {
 	env := &envtest.Environment{}
-	_, c, err := test.StartEnvTest(env)
+	cfg, c, err := test.StartEnvTest(env)
 	Expect(err).NotTo(HaveOccurred())
 
 	assessmentClient = c
+	assessmentConfig = cfg
 
 	DeferCleanup(func() { Expect(test.StopEnvTest(env)).To(Succeed()) })
 	Expect(c.Create(context.Background(), &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: assessment.Namespace}})).To(Succeed())
@@ -65,11 +69,16 @@ var _ = Describe("Assessment chain", func() {
 
 	BeforeEach(func() {
 		r = &UpgradeableController{Client: assessmentClient, ContainerImage: "operator:latest"}
+		Expect(assessmentClient.Create(ctx, &operatorv1alpha1.ClusterAPI{
+			ObjectMeta: metav1.ObjectMeta{Name: clusterAPIName},
+			Spec:       &operatorv1alpha1.ClusterAPISpec{},
+		})).To(Succeed())
 	})
 	AfterEach(func() {
 		Expect(assessmentClient.DeleteAllOf(ctx, &corev1.Pod{}, client.InNamespace(assessment.Namespace), client.GracePeriodSeconds(0))).To(Succeed())
 		Expect(assessmentClient.DeleteAllOf(ctx, &corev1.ConfigMap{}, client.InNamespace(assessment.Namespace))).To(Succeed())
 		Expect(assessmentClient.DeleteAllOf(ctx, &openshiftapiextensionsv1.CompatibilityRequirement{})).To(Succeed())
+		Expect(test.CleanupAndWait(ctx, assessmentClient, &operatorv1alpha1.ClusterAPI{ObjectMeta: metav1.ObjectMeta{Name: clusterAPIName}})).To(Succeed())
 	})
 
 	It("should run dedicated assessment binaries from the operator image", func() {
@@ -215,6 +224,16 @@ var _ = Describe("Assessment chain", func() {
 		Expect(cr.ResourceVersion).To(Equal(rv))
 
 		By("waiting for all requirement verdicts before reporting compatibility")
+
+		crd := &apiextensionsv1.CustomResourceDefinition{}
+		Expect(yaml.Unmarshal([]byte(testCRD), crd)).To(Succeed())
+		Expect(assessmentClient.Create(ctx, crd)).To(Succeed())
+		DeferCleanup(func() { Expect(test.CleanupAndWait(ctx, assessmentClient, crd)).To(Succeed()) })
+
+		clusterAPI := &operatorv1alpha1.ClusterAPI{}
+		Expect(assessmentClient.Get(ctx, client.ObjectKey{Name: clusterAPIName}, clusterAPI)).To(Succeed())
+		clusterAPI.Spec.UnmanagedCustomResourceDefinitions = []string{crd.Name}
+		Expect(assessmentClient.Update(ctx, clusterAPI)).To(Succeed())
 
 		result := r.processRequirements(ctx, cm.Labels, "4.17.0")
 		Expect(result.WriteClusterOperatorStatus(ctx, logr.Discard(), assessmentClient)).To(Succeed())
