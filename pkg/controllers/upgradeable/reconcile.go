@@ -24,12 +24,17 @@ import (
 
 	openshiftapiextensionsv1 "github.com/openshift/api/apiextensions/v1"
 	configv1 "github.com/openshift/api/config/v1"
+	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
+	"github.com/openshift/cluster-capi-operator/pkg/revisiongenerator"
 	assessment "github.com/openshift/cluster-capi-operator/pkg/upgradeable"
 	corev1 "k8s.io/api/core/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -212,6 +217,17 @@ func (r *UpgradeableController) processRequirements(ctx context.Context, assessm
 		return assessmentError(fmt.Errorf("listing assessment requirements: %w", err))
 	}
 
+	clusterAPI := &operatorv1alpha1.ClusterAPI{}
+	if err := r.assessmentReader().Get(ctx, client.ObjectKey{Name: clusterAPIName}, clusterAPI); err != nil {
+		return assessmentError(fmt.Errorf("getting Cluster API configuration: %w", err))
+	}
+
+	// Get the unmanaged CRDs names from the ClusterAPI configuration.
+	unmanaged := sets.New[string]()
+	if clusterAPI.Spec != nil {
+		unmanaged.Insert(clusterAPI.Spec.UnmanagedCustomResourceDefinitions...)
+	}
+
 	conflicts := []string{}
 
 	// A partial result cannot represent the whole target payload. Even if one
@@ -220,30 +236,99 @@ func (r *UpgradeableController) processRequirements(ctx context.Context, assessm
 		admitted := meta.FindStatusCondition(cr.Status.Conditions, openshiftapiextensionsv1.CompatibilityRequirementAdmitted)
 
 		compatible := meta.FindStatusCondition(cr.Status.Conditions, openshiftapiextensionsv1.CompatibilityRequirementCompatible)
-		if admitted == nil || admitted.Status != metav1.ConditionTrue || compatible == nil || compatible.ObservedGeneration < cr.Generation || compatible.Status == metav1.ConditionUnknown {
+
+		// Wait for the CompatibilityRequirement Admitted and Compatible conditions to be present and true.
+		if admitted == nil || admitted.Status != metav1.ConditionTrue ||
+			compatible == nil || compatible.ObservedGeneration < cr.Generation || compatible.Status == metav1.ConditionUnknown {
 			return assessmentWaiting("CompatibilityRequirement conditions")
 		}
 
-		if compatible.Status == metav1.ConditionFalse {
-			conflicts = append(conflicts, cr.Status.CRDName)
+		// Check if the CRD is incompatible/conflicting.
+		if conflictErr := r.requirementConflicts(ctx, &cr, unmanaged); conflictErr != nil {
+			var conflict *crdConflictError
+			if !errors.As(conflictErr, &conflict) {
+				// If the error is not a crdConflictError, return an assessment error.
+				return assessmentError(conflictErr)
+			}
+
+			conflicts = append(conflicts, conflict.Error())
 		}
 	}
 
 	result := UpgradeableResult{ResultGenerator.Success()}
 	if len(conflicts) == 0 {
+		// If there are no conflicts, return a success result.
 		return result.WithUpgradeable(configv1.ConditionTrue, "Compatible", fmt.Sprintf("Cluster API components are compatible with release %s", targetVersion))
 	}
 
-	// Stable ordering avoids status churn when API list order changes. Bound the
-	// message so a large conflict set remains suitable for ClusterOperator status.
+	// Stable ordering avoids status churn when API list order changes.
 	sort.Strings(conflicts)
 
-	message := "Incompatible CRDs: " + strings.Join(conflicts, ", ")
+	message := "Incompatible CRDs:\n- " + strings.Join(conflicts, "\n- ")
+	// Bound the message so a large conflict set remains suitable for ClusterOperator status.
 	if len(message) > 4000 {
 		message = message[:3997] + "..."
 	}
 
 	return result.WithUpgradeable(configv1.ConditionFalse, "NotCompatible", message)
+}
+
+// Conflicts block upgrade eligibility, while API errors mean eligibility is unknown.
+func (r *UpgradeableController) requirementConflicts(ctx context.Context, requirement *openshiftapiextensionsv1.CompatibilityRequirement, unmanaged sets.Set[string]) error {
+	name := requirement.Status.CRDName
+	crd := &apiextensionsv1.CustomResourceDefinition{}
+	compatible := meta.FindStatusCondition(requirement.Status.Conditions, openshiftapiextensionsv1.CompatibilityRequirementCompatible)
+
+	// Get the CRD.
+	if err := r.assessmentReader().Get(ctx, client.ObjectKey{Name: name}, crd); err != nil {
+		if apierrors.IsNotFound(err) {
+			if !unmanaged.Has(name) {
+				return nil
+			}
+
+			return &crdConflictError{
+				CRDName:              name,
+				Reason:               unmanagedCRDNotFoundReason,
+				Message:              "the CRD is declared unmanaged but is absent from the cluster.",
+				CompatibilityReason:  compatible.Reason,
+				CompatibilityMessage: compatible.Message,
+				Remediation:          fmt.Sprintf("Have the external CRD manager install %q before upgrading.", name),
+			}
+		}
+
+		return fmt.Errorf("getting CRD %s: %w", name, err)
+	}
+
+	if unmanaged.Has(name) {
+		// If the CRD is declared as unmanaged, check the compatible condition.
+		if compatible.Status != metav1.ConditionFalse {
+			return nil
+		}
+
+		return &crdConflictError{
+			CRDName:              name,
+			Reason:               unmanagedCRDIncompatibleReason,
+			Message:              "the unmanaged CRD does not satisfy the target requirements.",
+			CompatibilityReason:  compatible.Reason,
+			CompatibilityMessage: compatible.Message,
+			Remediation:          fmt.Sprintf("Have the external CRD manager update %q to resolve the compatibility errors above before upgrading.", name),
+		}
+	}
+
+	// For CRDs not explicitly declared as unmanaged, check if the cluster-api operator managed label is present.
+	// If not, it is a conflict, as the CRD is not managed by the cluster-api operator, nor declared as unmanaged.
+	if _, managed := crd.Labels[revisiongenerator.ManagedLabelKey]; !managed {
+		return &crdConflictError{
+			CRDName:              name,
+			Reason:               foreignCRDReason,
+			Message:              "the CRD exists but is neither managed by the cluster-api operator nor declared unmanaged.",
+			CompatibilityReason:  compatible.Reason,
+			CompatibilityMessage: compatible.Message,
+			Remediation:          fmt.Sprintf("Declare %q in ClusterAPI/cluster.spec.unmanagedCustomResourceDefinitions and resolve any compatibility errors above. The unmanaged declaration cannot be removed once added.", name),
+		}
+	}
+
+	return nil
 }
 
 // Pod completion and output informer events can arrive in either order. Read

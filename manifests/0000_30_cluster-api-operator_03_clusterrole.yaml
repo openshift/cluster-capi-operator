@@ -11,6 +11,14 @@ metadata:
   name: openshift-capi-operator
 rules:
 - apiGroups:
+  - apiextensions.k8s.io
+  resources:
+  - customresourcedefinitions
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - apiextensions.openshift.io
   resources:
   - compatibilityrequirements

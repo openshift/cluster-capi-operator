@@ -30,14 +30,17 @@ import (
 
 	openshiftapiextensionsv1 "github.com/openshift/api/apiextensions/v1"
 	configv1 "github.com/openshift/api/config/v1"
+	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 	assessment "github.com/openshift/cluster-capi-operator/pkg/upgradeable"
 	corev1 "k8s.io/api/core/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 )
 
 const (
 	// clusterVersionName is the name of the cluster global ClusterVersion resource.
 	clusterVersionName = "version"
+	clusterAPIName     = "cluster"
 
 	controllerName = "UpgradeableController"
 
@@ -90,6 +93,18 @@ func (r *UpgradeableController) SetupWithManager(mgr ctrl.Manager) error {
 			handler.EnqueueRequestsFromMapFunc(operatorstatus.ToClusterOperator),
 			builder.WithPredicates(clusterVersionUpdatesChanged()),
 		).
+		// Notify on changes to the ClusterAPI configuration.
+		Watches(
+			&operatorv1alpha1.ClusterAPI{},
+			handler.EnqueueRequestsFromMapFunc(operatorstatus.ToClusterOperator),
+			builder.WithPredicates(
+				predicate.NewPredicateFuncs(func(obj client.Object) bool { return obj.GetName() == clusterAPIName }),
+				predicate.GenerationChangedPredicate{},
+			),
+		).
+		// Ownership changes can affect upgradeability without changing schemas
+		// or producing a new compatibility verdict.
+		Watches(&apiextensionsv1.CustomResourceDefinition{}, handler.EnqueueRequestsFromMapFunc(operatorstatus.ToClusterOperator), builder.WithPredicates(predicate.LabelChangedPredicate{})).
 		Watches(&corev1.Pod{}, handler.EnqueueRequestsFromMapFunc(operatorstatus.ToClusterOperator), builder.WithPredicates(managedAssessment())).
 		Watches(&corev1.ConfigMap{}, handler.EnqueueRequestsFromMapFunc(operatorstatus.ToClusterOperator), builder.WithPredicates(managedAssessment())).
 		// CRD remediation changes requirement status without changing the target
