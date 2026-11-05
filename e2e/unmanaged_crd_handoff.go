@@ -88,8 +88,32 @@ func removeSpecProperty(crd *apiextensionsv1.CustomResourceDefinition, name stri
 	return true
 }
 
+// removeSpecPropertyFromAllVersions removes the named property from the
+// spec schema of every served version of the CRD, not just the storage
+// version. It is a no-op for versions whose spec schema does not contain
+// the property, so calling it repeatedly is safe.
+func removeSpecPropertyFromAllVersions(crd *apiextensionsv1.CustomResourceDefinition, name string) {
+	for i := range crd.Spec.Versions {
+		version := &crd.Spec.Versions[i]
+		if !version.Served || version.Schema == nil || version.Schema.OpenAPIV3Schema == nil {
+			continue
+		}
+
+		specSchema, ok := version.Schema.OpenAPIV3Schema.Properties["spec"]
+		if !ok || specSchema.Properties == nil {
+			continue
+		}
+
+		delete(specSchema.Properties, name)
+		version.Schema.OpenAPIV3Schema.Properties["spec"] = specSchema
+	}
+}
+
 var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIMachineManagement] Cluster API unmanaged CRD handoff",
-	Label("Disruptive"), Label("skip-topology:External"), func() {
+	// The Serial decorator keeps ginkgo from running this spec concurrently
+	// with any other spec under --procs; the Serial label is what the
+	// openshift-tests-extension routes on for its serial suite.
+	Serial, Label("Serial"), Label("skip-topology:External"), func() {
 		It("should hand off the unmanaged Cluster CRD and enforce compatibility", func() {
 			var (
 				clusterAPI  *operatorv1alpha1.ClusterAPI
@@ -100,6 +124,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIMachineManage
 				desiredRevision                operatorv1alpha1.RevisionName
 				generationBeforeRejectedUpdate int64
 				updatedCRDGeneration           int64
+				handoffDone                    bool
 			)
 
 			if IsMicroShift {
@@ -135,7 +160,27 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIMachineManage
 				"ClusterAPI configuration should exist before the handoff")
 			Expect(clusterAPI.Spec).ToNot(BeNil(), "ClusterAPI should have a spec")
 			Expect(clusterAPI.Spec.UnmanagedCustomResourceDefinitions).ToNot(ContainElement(clusterCRDName),
-				"the Cluster CRD is already unmanaged; this irreversible handoff test requires a fresh cluster")
+				"the Cluster CRD is already unmanaged; a previous run of this test (or of the upgradeability preflight) "+
+					"likely failed before its cleanup removed the entry again")
+
+			// The handoff entry is irreversible in production (the ClusterAPI
+			// CRD's CEL validation forbids removing it); resetUnmanagedCRDsEntry
+			// lifts that validation just long enough to undo the append, so
+			// the test leaves the cluster in its managed state again.
+			DeferCleanup(func(ctx SpecContext) {
+				if !handoffDone {
+					return
+				}
+
+				var clusterAPI *operatorv1alpha1.ClusterAPI
+				By("Resetting the unmanagedCustomResourceDefinitions entry the handoff added", func() {
+					clusterAPI = resetUnmanagedCRDsEntry(ctx)
+				})
+
+				By("Waiting for revision with managed CRD to rollout", func() {
+					waitForRevisionRollout(ctx, clusterAPI.Generation, Not(ContainElement(clusterCRDName)))
+				})
+			})
 
 			By("Waiting for the installer to be stable")
 			Eventually(func(g Gomega) {
@@ -163,6 +208,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIMachineManage
 				"should mark the Cluster CRD unmanaged")
 
 			handoffGeneration := clusterAPI.Generation
+			handoffDone = true
 
 			By("Waiting for the revision controller to observe the handoff")
 			Eventually(komega.Object(clusterAPI)).WithTimeout(framework.WaitMedium).WithPolling(framework.RetryMedium).Should(
@@ -266,11 +312,22 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIMachineManage
 				)),
 			), "CompatibilityRequirement should observe and accept CRD generation %d", updatedCRDGeneration)
 
-			Expect(cl.Get(ctx, client.ObjectKeyFromObject(clusterAPI), clusterAPI)).To(Succeed(),
-				"should read ClusterAPI after the compatible CRD update")
-			Expect(clusterAPI).To(SatisfyAll(
-				HaveField("Status.CurrentRevision", Equal(desiredRevision)),
-				HaveField("Status.DesiredRevision", Equal(desiredRevision)),
-			), "compatible CRD update should not change the installed revision")
+			By("Verifying the compatible CRD update left the unmanaged revision installed", func() {
+				Eventually(kWithCtx(ctx).Object(clusterAPI)).WithTimeout(framework.WaitShort).WithPolling(framework.RetryShort).Should(SatisfyAll(
+					// The listing and the revision pin down *why* the revision is what
+					// it is: a compatible CRD update changes neither, so a missing
+					// entry means something else modified ClusterAPI/cluster while
+					// this spec was running.
+					HaveField("Spec.UnmanagedCustomResourceDefinitions", ContainElement(clusterCRDName)),
+					HaveField("Status.CurrentRevision", Equal(desiredRevision)),
+					HaveField("Status.DesiredRevision", Equal(desiredRevision)),
+				), "a compatible Cluster CRD update should not change the installed revision %q", desiredRevision)
+
+				// Both values come from the read the assertion above settled on, so
+				// this fails if anything wrote to ClusterAPI that the revision
+				// controller has not observed.
+				Expect(clusterAPI.Status.ObservedRevisionGeneration).To(Equal(clusterAPI.Generation),
+					"the revision controller should have observed the current ClusterAPI generation")
+			})
 		})
 	})

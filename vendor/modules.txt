@@ -1341,6 +1341,9 @@ github.com/openshift/library-go/pkg/pki
 ## explicit; go 1.26.0
 github.com/openshift/machine-api-operator/pkg/util/lifecyclehooks
 github.com/openshift/machine-api-operator/pkg/webhooks
+# github.com/openshift/origin/test/shared v0.0.0-20261030142106-895e3d93a081
+## explicit; go 1.26.0
+github.com/openshift/origin/test/shared/updateservice
 # github.com/pelletier/go-toml/v2 v2.4.3
 ## explicit; go 1.21.0
 github.com/pelletier/go-toml/v2
