@@ -200,16 +200,25 @@ func TestIsMicroShiftCluster(t *testing.T) {
 	})
 }
 
-// withFakeClient swaps the package-level cl, ctx, and test state to a fake
-// client for the duration of fn, restoring originals via t.Cleanup.
+// withFakeClient swaps the package-level cl, ctx, and test state to an empty
+// fake client for the duration of fn, restoring originals via t.Cleanup.
 func withFakeClient(t *testing.T, fn func()) {
+	t.Helper()
+
+	withTestClient(t, fake.NewClientBuilder().WithScheme(scheme.Scheme).Build(), fn)
+}
+
+// withTestClient swaps the package-level cl, ctx, and test state to the given
+// client for the duration of fn, restoring originals via t.Cleanup. Tests that
+// use it must not run in parallel, because the state it swaps is package level.
+func withTestClient(t *testing.T, testClient client.Client, fn func()) {
 	t.Helper()
 
 	origCl, origCtx := cl, ctx
 	origResources, origPlatform := resourcesUnderTest, platform
 	origIsMicroShift, origInfra := IsMicroShift, infra
 
-	cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).Build()
+	cl = testClient
 	ctx = context.Background()
 	resourcesUnderTest = nil
 	platform = ""
