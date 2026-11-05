@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	certmangerv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
@@ -79,6 +80,16 @@ func processObjects(objs []client.Object, opts cmdlineOptions) ([]client.Object,
 					return nil, fmt.Errorf("failed to customize deployment %q: %w", obj.GetName(), err)
 				}
 				obj = deploy
+			}
+
+		case "rbac.authorization.k8s.io":
+			switch getKind(obj) {
+			case "ClusterRole":
+				var err error
+				obj, err = handleAggregateClusterRole(obj)
+				if err != nil {
+					return nil, err
+				}
 			}
 
 		case "cert-manager.io":
@@ -326,6 +337,36 @@ func stripStatus(obj client.Object) client.Object {
 	}
 	delete(unstructuredObj, "status")
 	return &unstructured.Unstructured{Object: unstructuredObj}
+}
+
+// handleAggregateClusterRole suppresses the rules field on aggregate
+// ClusterRoles (those with a non-empty aggregationRule). The Kubernetes
+// aggregation controller overwrites rules on these objects, so emitting
+// them creates a tight reconciliation loop with boxcutter.
+func handleAggregateClusterRole(obj client.Object) (client.Object, error) {
+	u, ok := obj.(*unstructured.Unstructured)
+	if !ok {
+		return obj, nil
+	}
+
+	aggRule, found, _ := unstructured.NestedMap(u.Object, "aggregationRule")
+	if !found || len(aggRule) == 0 {
+		return obj, nil
+	}
+
+	rules, rulesFound, _ := unstructured.NestedSlice(u.Object, "rules")
+	if !rulesFound {
+		return obj, nil
+	}
+
+	if len(rules) > 0 {
+		return nil, fmt.Errorf("ClusterRole %q has both aggregationRule and non-empty rules: the contents of rules will be overwritten by the aggregation controller", obj.GetName())
+	}
+
+	fmt.Fprintf(os.Stderr, "WARNING: ClusterRole %q has aggregationRule with empty rules; suppressing rules field\n", obj.GetName())
+	delete(u.Object, "rules")
+
+	return obj, nil
 }
 
 func setTypeMetadataFromScheme(obj client.Object, version string) {
