@@ -17,7 +17,6 @@ package e2e
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -255,31 +254,41 @@ func deleteAWSMachineTemplates(ctx context.Context, cl client.Client, templates 
 	}
 }
 
-// getAWSMachineTemplateByPrefix gets an AWSMachineTemplate by name prefix.
-func getAWSMachineTemplateByPrefix(prefix string, namespace string) (*awsv1.AWSMachineTemplate, error) {
-	if prefix == "" {
-		return nil, fmt.Errorf("prefix cannot be empty")
+// awsMachineTemplateKind is the infrastructureRef kind the AWS mirrors use.
+const awsMachineTemplateKind = "AWSMachineTemplate"
+
+// resolveAWSMachineTemplateForMachineSet reads the Cluster API MachineSet and returns it together
+// with the AWSMachineTemplate its spec.template.spec.infrastructureRef currently points at.
+//
+// Templates are immutable, so a controller that rolls the infrastructure template creates a new
+// object and repoints the reference, leaving more than one template whose name starts with the
+// MachineSet name. Both the MachineSet and the template are read here so that callers retrying
+// this function observe the reference as it is now rather than a stale or arbitrary template.
+func resolveAWSMachineTemplateForMachineSet(ctx context.Context, cl client.Client, machineSetName string) (*clusterv1.MachineSet, *awsv1.AWSMachineTemplate, error) {
+	if machineSetName == "" {
+		return nil, nil, fmt.Errorf("machineSet name cannot be empty")
 	}
 
-	templateList := &awsv1.AWSMachineTemplateList{}
-	if err := komega.List(templateList, client.InNamespace(namespace))(); err != nil {
-		return nil, fmt.Errorf("list AWSMachineTemplates in namespace %s: %w", namespace, err)
+	namespace := framework.CAPINamespace
+
+	machineSet := &clusterv1.MachineSet{}
+	if err := cl.Get(ctx, client.ObjectKey{Namespace: namespace, Name: machineSetName}, machineSet); err != nil {
+		return nil, nil, fmt.Errorf("get Cluster API MachineSet %s/%s: %w", namespace, machineSetName, err)
 	}
 
-	var matches []*awsv1.AWSMachineTemplate
-
-	for i, t := range templateList.Items {
-		if strings.HasPrefix(t.Name, prefix) {
-			matches = append(matches, &templateList.Items[i])
-		}
+	infraRef := machineSet.Spec.Template.Spec.InfrastructureRef
+	if infraRef.Name == "" {
+		return machineSet, nil, fmt.Errorf("no infrastructureRef name on Cluster API MachineSet %s/%s", namespace, machineSetName)
 	}
 
-	switch len(matches) {
-	case 0:
-		return nil, fmt.Errorf("no AWSMachineTemplate found with prefix %q", prefix)
-	case 1:
-		return matches[0], nil
-	default:
-		return nil, fmt.Errorf("multiple AWSMachineTemplates found with prefix %q (%d matches)", prefix, len(matches))
+	if infraRef.Kind != awsMachineTemplateKind {
+		return machineSet, nil, fmt.Errorf("unexpected infrastructure kind %q on Cluster API MachineSet %s/%s, want %q", infraRef.Kind, namespace, machineSetName, awsMachineTemplateKind)
 	}
+
+	template := &awsv1.AWSMachineTemplate{}
+	if err := cl.Get(ctx, client.ObjectKey{Namespace: namespace, Name: infraRef.Name}, template); err != nil {
+		return machineSet, nil, fmt.Errorf("get AWSMachineTemplate %s/%s referenced by Cluster API MachineSet %s: %w", namespace, infraRef.Name, machineSetName, err)
+	}
+
+	return machineSet, template, nil
 }
