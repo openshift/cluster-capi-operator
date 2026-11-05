@@ -1,0 +1,213 @@
+# ValidatingAdmissionPolicy for blocking unsupported vSphere fields
+#
+# API Version: v1beta1
+# This policy targets cluster-api-provider-vsphere v1beta1 API.
+# When upgrading to v1beta2, add these additional fields to block:
+#   - nestedHV
+#   - ftEncryptionMode
+#   - migrateEncryption
+#   - cryptoKeyID
+#   - cryptoProfile
+#
+# Fields Currently Allowed (conversion supports them):
+#   - template, cloneMode, snapshot
+#   - numCPUs, numCoresPerSocket, memoryMiB, diskGiB
+#   - server, datacenter, folder, datastore, resourcePool
+#   - tagIDs, dataDisks
+#   - network.devices[*].networkName
+#   - network.devices[*].gateway4 (supports IPv6 addresses too)
+#   - network.devices[*].ipAddrs (supports IPv4 and IPv6)
+#   - network.devices[*].nameservers (supports IPv4 and IPv6)
+#   - network.devices[*].addressesFromPools (IPAM)
+#
+# Fields Warned for Future Enhancement (when MAPI support is added):
+#   - storagePolicyName (medium priority)
+#   - hardwareVersion (low priority)
+#   - pciDevices (low priority)
+#   - network.devices[*].macAddr (low priority - CAPV supports it but not in MAPI yet)
+#
+# See docs/vsphere-field-conversion-support.md for complete field documentation.
+#
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: "openshift-cluster-api-unsupported-vsphere-spec-fields"
+spec:
+  policyName: "openshift-cluster-api-unsupported-vsphere-spec-fields"
+  validationActions: [Deny]
+  matchResources:
+    namespaceSelector:
+      matchExpressions:
+      - key: kubernetes.io/metadata.name
+        operator: In
+        values:
+        - openshift-cluster-api
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: "openshift-cluster-api-unsupported-vsphere-spec-fields-warning"
+spec:
+  policyName: "openshift-cluster-api-unsupported-vsphere-spec-fields-warning"
+  validationActions: [Warn]
+  matchResources:
+    namespaceSelector:
+      matchExpressions:
+      - key: kubernetes.io/metadata.name
+        operator: In
+        values:
+        - openshift-cluster-api
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: "openshift-cluster-api-unsupported-vsphere-spec-fields"
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+    - apiGroups:   ["infrastructure.cluster.x-k8s.io"]
+      apiVersions: ["v1beta1"]
+      operations:  ["CREATE", "UPDATE"]
+      resources:   ["vspheremachines", "vspheremachinetemplates"]
+  variables:
+    - name: machineSpec
+      expression: "object.kind == 'VSphereMachine' ? object.spec : object.spec.template.spec"
+    - name: specPath
+      expression: "object.kind == 'VSphereMachine' ? 'spec' : 'spec.template.spec'"
+  validations:
+    # Cluster-level configuration
+    - expression: "!has(variables.machineSpec.thumbprint) || variables.machineSpec.thumbprint == ''"
+      messageExpression: "variables.specPath + '.thumbprint is not supported - TLS validation is handled at cluster level'"
+
+    # CAPI-only runtime configuration
+    - expression: "!has(variables.machineSpec.customVMXKeys) || variables.machineSpec.customVMXKeys.size() == 0"
+      messageExpression: "variables.specPath + '.customVMXKeys is not supported in OpenShift'"
+
+    # Resource management (not implemented in CAPV)
+    - expression: "!has(variables.machineSpec.resources)"
+      messageExpression: "variables.specPath + '.resources is not supported'"
+
+    # Lifecycle management (not in MAPI)
+    - expression: "!has(variables.machineSpec.guestSoftPowerOffTimeout)"
+      messageExpression: "variables.specPath + '.guestSoftPowerOffTimeout is not supported'"
+
+    - expression: "!has(variables.machineSpec.namingStrategy)"
+      messageExpression: "variables.specPath + '.namingStrategy is not supported'"
+
+    # Power off mode - only allow hard or unset
+    - expression: "!has(variables.machineSpec.powerOffMode) || variables.machineSpec.powerOffMode == '' || variables.machineSpec.powerOffMode == 'hard'"
+      messageExpression: "variables.specPath + '.powerOffMode must be \"hard\" or unset - soft power-off is not supported'"
+
+    # Operating system type (not used by CAPV)
+    - expression: "!has(variables.machineSpec.os) || variables.machineSpec.os == ''"
+      messageExpression: "variables.specPath + '.os is not supported'"
+
+    # Network-level fields
+    - expression: "!has(variables.machineSpec.network.routes) || variables.machineSpec.network.routes.size() == 0"
+      messageExpression: "variables.specPath + '.network.routes is not supported'"
+
+    - expression: "!has(variables.machineSpec.network.preferredAPIServerCIDR) || variables.machineSpec.network.preferredAPIServerCIDR == ''"
+      messageExpression: "variables.specPath + '.network.preferredAPIServerCIDR is not supported'"
+
+    # Network device fields - iterate over all devices and check unsupported fields
+    - expression: >-
+        !has(variables.machineSpec.network.devices) ||
+        variables.machineSpec.network.devices.all(device,
+          !has(device.deviceName) || device.deviceName == ''
+        )
+      messageExpression: "variables.specPath + '.network.devices[*].deviceName is not supported'"
+
+    - expression: >-
+        !has(variables.machineSpec.network.devices) ||
+        variables.machineSpec.network.devices.all(device,
+          !has(device.dhcp6)
+        )
+      messageExpression: "variables.specPath + '.network.devices[*].dhcp6 is not supported'"
+
+    - expression: >-
+        !has(variables.machineSpec.network.devices) ||
+        variables.machineSpec.network.devices.all(device,
+          !has(device.gateway6) || device.gateway6 == ''
+        )
+      messageExpression: "variables.specPath + '.network.devices[*].gateway6 is not supported'"
+
+    - expression: >-
+        !has(variables.machineSpec.network.devices) ||
+        variables.machineSpec.network.devices.all(device,
+          !has(device.mtu)
+        )
+      messageExpression: "variables.specPath + '.network.devices[*].mtu is not supported'"
+
+    - expression: >-
+        !has(variables.machineSpec.network.devices) ||
+        variables.machineSpec.network.devices.all(device,
+          !has(device.routes) || device.routes.size() == 0
+        )
+      messageExpression: "variables.specPath + '.network.devices[*].routes is not supported'"
+
+    - expression: >-
+        !has(variables.machineSpec.network.devices) ||
+        variables.machineSpec.network.devices.all(device,
+          !has(device.searchDomains) || device.searchDomains.size() == 0
+        )
+      messageExpression: "variables.specPath + '.network.devices[*].searchDomains is not supported'"
+
+    - expression: >-
+        !has(variables.machineSpec.network.devices) ||
+        variables.machineSpec.network.devices.all(device,
+          !has(device.dhcp4Overrides)
+        )
+      messageExpression: "variables.specPath + '.network.devices[*].dhcp4Overrides is not supported'"
+
+    - expression: >-
+        !has(variables.machineSpec.network.devices) ||
+        variables.machineSpec.network.devices.all(device,
+          !has(device.dhcp6Overrides)
+        )
+      messageExpression: "variables.specPath + '.network.devices[*].dhcp6Overrides is not supported'"
+
+    - expression: >-
+        !has(variables.machineSpec.network.devices) ||
+        variables.machineSpec.network.devices.all(device,
+          !has(device.skipIPAllocation)
+        )
+      messageExpression: "variables.specPath + '.network.devices[*].skipIPAllocation is not supported'"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: "openshift-cluster-api-unsupported-vsphere-spec-fields-warning"
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+    - apiGroups:   ["infrastructure.cluster.x-k8s.io"]
+      apiVersions: ["v1beta1"]
+      operations:  ["CREATE", "UPDATE"]
+      resources:   ["vspheremachines", "vspheremachinetemplates"]
+  variables:
+    - name: machineSpec
+      expression: "object.kind == 'VSphereMachine' ? object.spec : object.spec.template.spec"
+    - name: specPath
+      expression: "object.kind == 'VSphereMachine' ? 'spec' : 'spec.template.spec'"
+  validations:
+    # Storage policy (not yet supported - future enhancement)
+    - expression: "!has(variables.machineSpec.storagePolicyName) || variables.machineSpec.storagePolicyName == ''"
+      messageExpression: "variables.specPath + '.storagePolicyName is not yet supported but planned for future release'"
+
+    # PCI devices (not yet supported - future enhancement)
+    - expression: "!has(variables.machineSpec.pciDevices) || variables.machineSpec.pciDevices.size() == 0"
+      messageExpression: "variables.specPath + '.pciDevices is not yet supported but planned for future release'"
+
+    # Hardware version (not yet supported - future enhancement)
+    - expression: "!has(variables.machineSpec.hardwareVersion) || variables.machineSpec.hardwareVersion == ''"
+      messageExpression: "variables.specPath + '.hardwareVersion is not yet supported but planned for future release'"
+
+    # MAC address (not yet supported - future enhancement)
+    - expression: >-
+        !has(variables.machineSpec.network.devices) ||
+        variables.machineSpec.network.devices.all(device,
+          !has(device.macAddr) || device.macAddr == ''
+        )
+      messageExpression: "variables.specPath + '.network.devices[*].macAddr is not yet supported but planned for future release'"
