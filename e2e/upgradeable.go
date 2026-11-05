@@ -136,14 +136,14 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIOperator] Clu
 		var updateService *updateservice.UpdateService
 
 		BeforeAll(func(ctx SpecContext) {
-			// The upgradeable controller is a no-op stub until it is implemented.
-			// Remove this skip as part of implementing the controller.
-			Skip("Upgradeable controller not implemented")
-
 			skipUnlessUpgradeTargetPayloadConfigured()
 
 			if !framework.IsFeatureGateEnabled(ctx, cl, features.FeatureGateClusterAPIOperator) {
 				Skip("Feature gate ClusterAPIOperator is not enabled.")
+			}
+
+			if !framework.IsFeatureGateEnabled(ctx, cl, features.FeatureGateCRDCompatibilityRequirementOperator) {
+				Skip("Feature gate CRDCompatibilityRequirementOperator is not enabled.")
 			}
 
 			if IsMicroShift {
