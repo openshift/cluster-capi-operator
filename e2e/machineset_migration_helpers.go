@@ -353,14 +353,7 @@ func waitForMAPIMachineSetMirrors(machineSetNameMAPI string) (*clusterv1.Machine
 	Eventually(komega.Get(capiMachineSet), capiframework.WaitMedium, capiframework.RetryMedium).Should(
 		Succeed(), "Should have CAPI MachineSet %s/%s exist", capiframework.CAPINamespace, machineSetNameMAPI)
 
-	var awsMachineTemplate *awsv1.AWSMachineTemplate
-
-	Eventually(func() error {
-		var err error
-		awsMachineTemplate, err = getAWSMachineTemplateByPrefix(machineSetNameMAPI, capiframework.CAPINamespace)
-
-		return err
-	}, capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(), "Should have AWSMachineTemplate with prefix %s exist", machineSetNameMAPI)
+	capiMachineSet, awsMachineTemplate := waitForMachineSetAWSMachineTemplate(machineSetNameMAPI)
 
 	return capiMachineSet, awsMachineTemplate
 }
@@ -384,23 +377,40 @@ func waitForCAPIMachineSetMirror(machineName string) *clusterv1.MachineSet {
 	return capiMachineSet
 }
 
-// waitForAWSMachineTemplate waits for an AWSMachineTemplate with the specified name prefix to be created.
-func waitForAWSMachineTemplate(prefix string) *awsv1.AWSMachineTemplate {
+// waitForAWSMachineTemplate waits for the AWSMachineTemplate referenced by the CAPI MachineSet to exist.
+func waitForAWSMachineTemplate(machineSetName string) *awsv1.AWSMachineTemplate {
 	GinkgoHelper()
 
-	By(fmt.Sprintf("Verifying there is an AWSMachineTemplate with prefix %s", prefix))
+	By(fmt.Sprintf("Verifying there is an AWSMachineTemplate referenced by CAPI MachineSet %s", machineSetName))
 
-	var awsMachineTemplate *awsv1.AWSMachineTemplate
+	_, awsMachineTemplate := waitForMachineSetAWSMachineTemplate(machineSetName)
+
+	return awsMachineTemplate
+}
+
+// waitForMachineSetAWSMachineTemplate waits for the CAPI MachineSet and the AWSMachineTemplate its
+// infrastructureRef points at, and returns both.
+//
+// The MachineSet is re-read on every attempt so that a reference replaced while this is polling is
+// followed to the template that is actually in use, instead of failing on, or arbitrarily picking
+// between, the superseded and the current template.
+func waitForMachineSetAWSMachineTemplate(machineSetName string) (*clusterv1.MachineSet, *awsv1.AWSMachineTemplate) {
+	GinkgoHelper()
+
+	var (
+		capiMachineSet     *clusterv1.MachineSet
+		awsMachineTemplate *awsv1.AWSMachineTemplate
+	)
 
 	Eventually(func() error {
 		var err error
-		awsMachineTemplate, err = getAWSMachineTemplateByPrefix(prefix, capiframework.CAPINamespace)
+		capiMachineSet, awsMachineTemplate, err = resolveAWSMachineTemplateForMachineSet(ctx, cl, machineSetName)
 
 		return err
 	}, capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(),
-		"Should have AWSMachineTemplate with prefix %s exist", prefix)
+		"Should have the AWSMachineTemplate referenced by CAPI MachineSet %s/%s exist", capiframework.CAPINamespace, machineSetName)
 
-	return awsMachineTemplate
+	return capiMachineSet, awsMachineTemplate
 }
 
 // createAWSMachineTemplate creates a new AWSMachineTemplate with an optional update function to modify the spec.
