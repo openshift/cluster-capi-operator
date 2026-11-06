@@ -26,6 +26,7 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/validation"
 )
 
 func TestRequirements(t *testing.T) {
@@ -47,7 +48,7 @@ var _ = Describe("CRD discovery", func() {
 		writeProfile("z-last", "kind: CustomResourceDefinition\nmetadata:\n  name: widgets.example.com\nspec:\n  group: last.example.com\n---\nkind: CustomResourceDefinition\nmetadata:\n  name: others.example.com\n")
 		writeProfile("a-first", "kind: ConfigMap\nmetadata:\n  name: ignored\n---\nkind: CustomResourceDefinition\nmetadata:\n  name: widgets.example.com\nspec:\n  group: first.example.com\n")
 
-		crds, err := DiscoverCRDs(root, []string{"provider:latest"})
+		crds, err := DiscoverCRDs(root)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(crds).To(HaveLen(2))
 		Expect(crds["widgets.example.com"].Spec.Group).To(Equal("first.example.com"))
@@ -56,15 +57,39 @@ var _ = Describe("CRD discovery", func() {
 		writeProfile("a-first", "kind: CustomResourceDefinition\nmetadata:\n  name: widgets.example.com\n")
 		writeProfile("z-last", "kind: [unterminated")
 
-		_, err := DiscoverCRDs(root, []string{"provider:latest"})
+		_, err := DiscoverCRDs(root)
 		Expect(err).To(HaveOccurred())
 	})
 	It("should reject an empty profile set", func() {
-		_, err := DiscoverCRDs(root, nil)
+		_, err := DiscoverCRDs(root)
 		Expect(err).To(MatchError("no provider profiles discovered"))
 	})
-	It("should reject requirement names that exceed the API limit", func() {
-		_, err := BuildRequirement(&apiextensionsv1.CustomResourceDefinition{ObjectMeta: metav1.ObjectMeta{Name: strings.Repeat("a", 253)}})
-		Expect(err).To(HaveOccurred())
+})
+
+var _ = Describe("Requirement names", func() {
+	// A human readable name for this CRD name is exactly the maximum permitted length.
+	longestReadable := strings.Join([]string{
+		strings.Repeat("a", 63), strings.Repeat("b", 63), strings.Repeat("c", 63), strings.Repeat("d", 35),
+	}, ".")
+	// One character longer forces the hash fallback.
+	tooLong := longestReadable + "e"
+
+	It("should prefer the human readable CRD name", func() {
+		Expect(RequirementName("widgets.example.com")).To(Equal(RequirementNamePrefix + "widgets.example.com"))
+		Expect(RequirementName(longestReadable)).To(Equal(RequirementNamePrefix + longestReadable))
+		Expect(RequirementName(longestReadable)).To(HaveLen(validation.DNS1123SubdomainMaxLength))
+	})
+	It("should fall back to a deterministic hash when the readable name is too long", func() {
+		name := RequirementName(tooLong)
+		Expect(name).To(HavePrefix(RequirementNamePrefix))
+		Expect(name).To(HaveLen(len(RequirementNamePrefix) + 64))
+		Expect(validation.IsDNS1123Subdomain(name)).To(BeEmpty())
+		Expect(RequirementName(tooLong)).To(Equal(name))
+		Expect(RequirementName(tooLong + "f")).NotTo(Equal(name))
+	})
+	It("should build a requirement with the same name", func() {
+		requirement, err := BuildRequirement(&apiextensionsv1.CustomResourceDefinition{ObjectMeta: metav1.ObjectMeta{Name: tooLong}})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(requirement.Name).To(Equal(RequirementName(tooLong)))
 	})
 })

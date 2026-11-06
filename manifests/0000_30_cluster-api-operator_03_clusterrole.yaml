@@ -26,8 +26,6 @@ rules:
   - get
   - list
   - watch
-  - delete
-  - deletecollection
 - apiGroups:
   - config.openshift.io
   resources:
@@ -123,7 +121,6 @@ rules:
   - get
   - list
   - watch
-  - delete
 - apiGroups:
   - ""
   resources:

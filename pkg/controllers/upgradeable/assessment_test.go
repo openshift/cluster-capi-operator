@@ -26,16 +26,17 @@ import (
 	openshiftapiextensionsv1 "github.com/openshift/api/apiextensions/v1"
 	configv1 "github.com/openshift/api/config/v1"
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
+	assessment "github.com/openshift/cluster-capi-operator/pkg/controllers/upgradeable/pods"
+	createrequirements "github.com/openshift/cluster-capi-operator/pkg/controllers/upgradeable/pods/create-requirements"
+	extractimages "github.com/openshift/cluster-capi-operator/pkg/controllers/upgradeable/pods/extract-images"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
 	"github.com/openshift/cluster-capi-operator/pkg/test"
-	assessment "github.com/openshift/cluster-capi-operator/pkg/upgradeable"
-	createrequirements "github.com/openshift/cluster-capi-operator/pkg/upgradeable/create-requirements"
-	extractimages "github.com/openshift/cluster-capi-operator/pkg/upgradeable/extract-images"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
@@ -98,7 +99,7 @@ var _ = Describe("Assessment chain", func() {
 		)))
 	})
 
-	It("should preserve API defaulted pods and recreate them after desired shape changes", func() {
+	It("should preserve API defaulted pods across image changes and recreate them for a new assessment", func() {
 		target := &configv1.Release{Version: "4.17.0", Image: "release:latest"}
 		desired := r.extractorPod("4.16.0", target, assessmentOwner)
 		Expect(r.ensureAssessmentPod(ctx, desired)).NotTo(BeNil())
@@ -114,8 +115,18 @@ var _ = Describe("Assessment chain", func() {
 		pod.Status.Phase = corev1.PodSucceeded
 		Expect(assessmentClient.Status().Update(ctx, pod)).To(Succeed())
 		Expect(r.ensureAssessmentPod(ctx, r.extractorPod("4.16.0", target, assessmentOwner))).To(BeNil())
+
+		By("accepting the completed pod after the operator image changes")
+
 		r.ContainerImage = "operator:new"
-		Expect(r.ensureAssessmentPod(ctx, r.extractorPod("4.16.0", target, assessmentOwner))).NotTo(BeNil())
+		Expect(r.ensureAssessmentPod(ctx, r.extractorPod("4.16.0", target, assessmentOwner))).To(BeNil())
+		Expect(assessmentClient.Get(ctx, client.ObjectKeyFromObject(desired), pod)).To(Succeed())
+		Expect(pod.UID).To(Equal(uid))
+
+		By("recreating the pod when the assessed versions change")
+
+		changed := r.extractorPod("4.15.0", &configv1.Release{Version: "4.16.0", Image: "release:old"}, assessmentOwner)
+		Expect(r.ensureAssessmentPod(ctx, changed)).NotTo(BeNil())
 		Expect(apierrors.IsNotFound(assessmentClient.Get(ctx, client.ObjectKeyFromObject(desired), pod))).To(BeTrue())
 	})
 
@@ -137,39 +148,35 @@ var _ = Describe("Assessment chain", func() {
 		Expect(pod.DeletionTimestamp).NotTo(BeNil())
 	})
 
-	It("should delete old writers before their outputs and preserve the current assessment", func() {
-		oldLabels := assessment.AssessmentLabels("4.15.0", "4.16.0")
-		liveLabels := assessment.AssessmentLabels("4.16.0", "4.17.0")
-		pod := r.extractorPod("4.15.0", &configv1.Release{Version: "4.16.0", Image: "release:old"}, assessmentOwner)
-		Expect(assessmentClient.Create(ctx, pod)).To(Succeed())
+	It("should converge the requirement set on the target CRDs", func() {
+		target := test.GenerateCRD(schema.GroupVersionKind{Group: "target.example.com", Version: "v1beta1", Kind: "Target"})
+		root := writeCompatibilityImageFixture(target)
 
-		cm := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: assessment.ImagesConfigMapName, Namespace: assessment.Namespace, Labels: oldLabels}}
-		Expect(assessmentClient.Create(ctx, cm)).To(Succeed())
+		By("leaving requirements from an earlier assessment in place")
 
-		crd := &apiextensionsv1.CustomResourceDefinition{}
-		Expect(yaml.Unmarshal([]byte(testCRD), crd)).To(Succeed())
-		cr, err := createrequirements.BuildRequirement(crd)
+		stale, err := createrequirements.BuildRequirement(test.GenerateCRD(schema.GroupVersionKind{Group: "stale.example.com", Version: "v1beta1", Kind: "Stale"}))
 		Expect(err).NotTo(HaveOccurred())
 
-		cr.Labels = oldLabels
-		Expect(assessmentClient.Create(ctx, cr)).To(Succeed())
+		stale.Labels = assessment.AssessmentLabels("4.15.0", "4.16.0")
+		Expect(assessmentClient.Create(ctx, stale)).To(Succeed())
 
-		current := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "current-assessment", Namespace: assessment.Namespace, Labels: liveLabels}}
-		Expect(assessmentClient.Create(ctx, current)).To(Succeed())
-		done, err := r.cleanup(ctx, liveLabels)
+		edited, err := createrequirements.BuildRequirement(target)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(done).To(BeFalse())
-		Expect(assessmentClient.Get(ctx, client.ObjectKeyFromObject(cm), cm)).To(Succeed())
-		Expect(assessmentClient.Get(ctx, client.ObjectKeyFromObject(cr), cr)).To(Succeed())
-		done, err = r.cleanup(ctx, liveLabels)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(done).To(BeFalse())
-		Expect(apierrors.IsNotFound(assessmentClient.Get(ctx, client.ObjectKeyFromObject(cm), cm))).To(BeTrue())
-		Expect(apierrors.IsNotFound(assessmentClient.Get(ctx, client.ObjectKeyFromObject(cr), cr))).To(BeTrue())
-		done, err = r.cleanup(ctx, liveLabels)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(done).To(BeTrue())
-		Expect(assessmentClient.Get(ctx, client.ObjectKeyFromObject(current), current)).To(Succeed())
+
+		edited.Labels = assessment.AssessmentLabels("4.15.0", "4.16.0")
+		Expect(assessmentClient.Create(ctx, edited)).To(Succeed())
+
+		By("converging the target requirement set without deleting the target requirement")
+
+		Expect(createrequirements.Step(ctx, assessmentClient, "4.16.0", "4.17.0", root)).To(Succeed())
+
+		Expect(apierrors.IsNotFound(assessmentClient.Get(ctx, client.ObjectKeyFromObject(stale), stale))).To(BeTrue())
+
+		Expect(assessmentClient.Get(ctx, client.ObjectKeyFromObject(edited), edited)).To(Succeed())
+		Expect(edited.Labels).To(HaveKeyWithValue(assessment.CurrentVersionLabel, "4.16.0"))
+		Expect(edited.Labels).To(HaveKeyWithValue(assessment.TargetVersionLabel, "4.17.0"))
+		Expect(edited.Labels).To(HaveKeyWithValue(assessment.ManagedLabel, assessment.ManagedLabelValue))
+		Expect(edited.OwnerReferences).To(ContainElement(HaveField("UID", Equal(assessmentOwner.UID))))
 	})
 
 	It("should surface failed pods as ephemeral errors and recreate them", func() {

@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"os"
 
-	extractimages "github.com/openshift/cluster-capi-operator/pkg/upgradeable/extract-images"
+	extractimages "github.com/openshift/cluster-capi-operator/pkg/controllers/upgradeable/pods/extract-images"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 

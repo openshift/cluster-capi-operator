@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"os"
 
-	createrequirements "github.com/openshift/cluster-capi-operator/pkg/upgradeable/create-requirements"
+	createrequirements "github.com/openshift/cluster-capi-operator/pkg/controllers/upgradeable/pods/create-requirements"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
