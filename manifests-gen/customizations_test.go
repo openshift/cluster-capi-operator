@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strings"
 	"testing"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -68,5 +69,118 @@ func TestProcessObjectsDoesNotEmitNamespace(t *testing.T) {
 	}
 	if len(got) != 0 {
 		t.Fatalf("got %d objects, want Namespace excluded", len(got))
+	}
+}
+
+func newClusterRole(name string) *unstructured.Unstructured {
+	obj := &unstructured.Unstructured{}
+	obj.SetAPIVersion("rbac.authorization.k8s.io/v1")
+	obj.SetKind("ClusterRole")
+	obj.SetName(name)
+	return obj
+}
+
+func TestProcessObjectsAggregateClusterRoleEmptyRules(t *testing.T) {
+	cr := newClusterRole("aggregate-role")
+	cr.Object["aggregationRule"] = map[string]interface{}{
+		"clusterRoleSelectors": []interface{}{
+			map[string]interface{}{
+				"matchLabels": map[string]interface{}{
+					"app": "test",
+				},
+			},
+		},
+	}
+	cr.Object["rules"] = []interface{}{}
+
+	got, err := processObjects([]client.Object{cr}, cmdlineOptions{})
+	if err != nil {
+		t.Fatalf("processObjects() error = %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("got %d objects, want 1", len(got))
+	}
+	u := got[0].(*unstructured.Unstructured)
+	if _, ok := u.Object["rules"]; ok {
+		t.Fatal("expected rules field to be suppressed on aggregate ClusterRole with empty rules")
+	}
+}
+
+func TestProcessObjectsAggregateClusterRoleNonEmptyRules(t *testing.T) {
+	cr := newClusterRole("aggregate-role")
+	cr.Object["aggregationRule"] = map[string]interface{}{
+		"clusterRoleSelectors": []interface{}{
+			map[string]interface{}{
+				"matchLabels": map[string]interface{}{
+					"app": "test",
+				},
+			},
+		},
+	}
+	cr.Object["rules"] = []interface{}{
+		map[string]interface{}{
+			"apiGroups": []interface{}{""},
+			"resources": []interface{}{"pods"},
+			"verbs":     []interface{}{"get"},
+		},
+	}
+
+	_, err := processObjects([]client.Object{cr}, cmdlineOptions{})
+	if err == nil {
+		t.Fatal("expected error for aggregate ClusterRole with non-empty rules")
+	}
+	if !strings.Contains(err.Error(), "aggregation controller") {
+		t.Fatalf("error should mention aggregation controller, got: %v", err)
+	}
+}
+
+func TestProcessObjectsAggregateClusterRoleNoRulesField(t *testing.T) {
+	cr := newClusterRole("aggregate-role")
+	cr.Object["aggregationRule"] = map[string]interface{}{
+		"clusterRoleSelectors": []interface{}{
+			map[string]interface{}{
+				"matchLabels": map[string]interface{}{
+					"app": "test",
+				},
+			},
+		},
+	}
+	// No rules field at all
+
+	got, err := processObjects([]client.Object{cr}, cmdlineOptions{})
+	if err != nil {
+		t.Fatalf("processObjects() error = %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("got %d objects, want 1", len(got))
+	}
+}
+
+func TestProcessObjectsRegularClusterRole(t *testing.T) {
+	cr := newClusterRole("regular-role")
+	cr.Object["rules"] = []interface{}{
+		map[string]interface{}{
+			"apiGroups": []interface{}{""},
+			"resources": []interface{}{"pods"},
+			"verbs":     []interface{}{"get"},
+		},
+	}
+	// No aggregationRule
+
+	got, err := processObjects([]client.Object{cr}, cmdlineOptions{})
+	if err != nil {
+		t.Fatalf("processObjects() error = %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("got %d objects, want 1", len(got))
+	}
+	u := got[0].(*unstructured.Unstructured)
+	rules, ok := u.Object["rules"]
+	if !ok {
+		t.Fatal("expected rules field to be retained on regular ClusterRole")
+	}
+	rulesList := rules.([]interface{})
+	if len(rulesList) != 1 {
+		t.Fatalf("expected 1 rule, got %d", len(rulesList))
 	}
 }
