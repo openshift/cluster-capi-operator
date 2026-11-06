@@ -259,12 +259,16 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIOperator] Clu
 				clusterAPI = markClustersCRDUnmanaged(ctx)
 			})
 
-			By("Waiting for revision with unmanaged CRD to rollout", func() {
-				waitForRevisionRollout(ctx, clusterAPI.Generation, ContainElement(clusterCRDName))
-			})
-
+			// The installer creates a CompatibilityRequirement for each unmanaged CRD
+			// and gates every revision on it reaching Admitted=True and
+			// Compatible=True, so the revision cannot converge until the
+			// remediation below lands.
 			By("Remediating the Clusters CRD to the payload version", func() {
 				remediateClustersCRDToPayload(ctx, clustersFixtureCRD)
+			})
+
+			By("Waiting for revision with unmanaged CRD to rollout", func() {
+				waitForRevisionRollout(ctx, clusterAPI.Generation, ContainElement(clusterCRDName))
 			})
 
 			By("Waiting for Upgradeable=True naming the target release", func() {
