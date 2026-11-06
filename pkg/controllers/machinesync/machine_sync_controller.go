@@ -36,6 +36,7 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/util"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -75,6 +76,7 @@ const (
 	machineSetKind                 string = "MachineSet"
 	cpmsKind                       string = "ControlPlaneMachineSet"
 	controllerName                 string = "MachineSyncController"
+	capiMetadataFieldManager       string = "mapi-capi-sync-controller"
 	mapiNamespace                  string = "openshift-machine-api"
 	capiInfraCommonFinalizerSuffix string = ".cluster.x-k8s.io"
 
@@ -515,11 +517,6 @@ func (r *MachineSyncReconciler) reconcileMAPIMachinetoCAPIMachine(ctx context.Co
 		convertedCAPIMachine.SetCreationTimestamp(existingCAPIMachine.GetCreationTimestamp())
 		convertedCAPIMachine.SetManagedFields(existingCAPIMachine.GetManagedFields())
 		convertedCAPIMachine.SetResourceVersion(util.GetResourceVersion(client.Object(existingCAPIMachine)))
-		// Needed to account for additional labels/annotations that might have been down-propagated in-place
-		// from an authoritative CAPI MachineSet to its existing and non-authoritative child CAPI Machine.
-		// ref: https://github.com/kubernetes-sigs/cluster-api/issues/7731
-		convertedCAPIMachine.Labels = util.MergeMaps(existingCAPIMachine.Labels, convertedCAPIMachine.Labels)
-		convertedCAPIMachine.Annotations = util.MergeMaps(existingCAPIMachine.Annotations, convertedCAPIMachine.Annotations)
 		// Restore finalizers.
 		convertedCAPIMachine.SetFinalizers(existingCAPIMachine.GetFinalizers())
 	}
@@ -551,11 +548,6 @@ func (r *MachineSyncReconciler) reconcileMAPIMachinetoCAPIMachine(ctx context.Co
 		convertedCAPIInfraMachine.SetCreationTimestamp(existingInfraMachine.GetCreationTimestamp())
 		convertedCAPIInfraMachine.SetManagedFields(existingInfraMachine.GetManagedFields())
 		convertedCAPIInfraMachine.SetResourceVersion(util.GetResourceVersion(existingInfraMachine))
-		// Needed to account for additional labels/annotations that might have been down-propagated in-place
-		// from an authoritative CAPI MachineSet to its existing and non-authoritative child CAPI Machine.
-		// ref: https://github.com/kubernetes-sigs/cluster-api/issues/7731
-		convertedCAPIInfraMachine.SetLabels(util.MergeMaps(existingInfraMachine.GetLabels(), convertedCAPIInfraMachine.GetLabels()))
-		convertedCAPIInfraMachine.SetAnnotations(util.MergeMaps(existingInfraMachine.GetAnnotations(), convertedCAPIInfraMachine.GetAnnotations()))
 		// Restore finalizers.
 		convertedCAPIInfraMachine.SetFinalizers(existingInfraMachine.GetFinalizers())
 	}
@@ -679,79 +671,80 @@ func (r *MachineSyncReconciler) ensureCAPIMachine(ctx context.Context, sourceMAP
 	return createdCAPIMachine, nil
 }
 
-// ensureCAPIMachineSpecUpdated updates the Cluster API machine if changes are detected to the spec, metadata or provider spec.
-func (r *MachineSyncReconciler) ensureCAPIMachineSpecUpdated(ctx context.Context, mapiMachine *mapiv1beta1.Machine, capiMachinesDiff util.DiffResult, convertedCAPIMachine *clusterv1.Machine) (bool, *clusterv1.Machine, error) {
+// ensureCAPIMachineUpdated applies authoritative metadata and updates the Cluster API machine spec and owner references when needed.
+func (r *MachineSyncReconciler) ensureCAPIMachineUpdated(ctx context.Context, mapiMachine *mapiv1beta1.Machine, existingCAPIMachine, convertedCAPIMachine *clusterv1.Machine, capiMachinesDiff util.DiffResult, updateSpec bool) (bool, error) {
 	logger := logf.FromContext(ctx)
 
-	// If there are no spec changes, return early.
-	if !capiMachinesDiff.HasMetadataChanges() && !capiMachinesDiff.HasSpecChanges() {
-		return false, nil, nil
-	}
+	metadataUpdated, err := r.applyAuthoritativeCAPIMetadata(ctx, existingCAPIMachine, convertedCAPIMachine)
+	if err != nil {
+		logger.Error(err, "Failed to apply Cluster API machine metadata")
 
-	logger.Info("Changes detected for Cluster API machine. Updating it", "diff", fmt.Sprintf("%+v", capiMachinesDiff))
-
-	updatedCAPIMachine := convertedCAPIMachine.DeepCopy()
-
-	if err := r.Update(ctx, updatedCAPIMachine); err != nil {
-		logger.Error(err, "Failed to update Cluster API machine")
-
-		updateErr := fmt.Errorf("failed to update Cluster API machine: %w", err)
-
+		updateErr := fmt.Errorf("failed to apply Cluster API machine metadata: %w", err)
 		if condErr := r.applySynchronizedConditionWithPatch(ctx, mapiMachine, corev1.ConditionFalse, reasonFailedToUpdateCAPIMachine, updateErr.Error(), nil); condErr != nil {
-			return false, nil, utilerrors.NewAggregate([]error{updateErr, condErr})
+			return false, utilerrors.NewAggregate([]error{updateErr, condErr})
 		}
 
-		return false, nil, updateErr
+		return false, updateErr
 	}
 
-	return true, updatedCAPIMachine, nil
+	ownerReferencesChanged := !equality.Semantic.DeepEqual(existingCAPIMachine.OwnerReferences, convertedCAPIMachine.OwnerReferences)
+	if (!updateSpec || !capiMachinesDiff.HasSpecChanges()) && !ownerReferencesChanged {
+		return metadataUpdated, nil
+	}
+
+	logger.Info("Changes detected for Cluster API machine. Updating spec or owner references", "diff", fmt.Sprintf("%+v", capiMachinesDiff))
+
+	patchBase := client.MergeFrom(existingCAPIMachine.DeepCopy())
+	if updateSpec && capiMachinesDiff.HasSpecChanges() {
+		existingCAPIMachine.Spec = convertedCAPIMachine.Spec
+	}
+
+	existingCAPIMachine.OwnerReferences = convertedCAPIMachine.OwnerReferences
+
+	if err := r.Patch(ctx, existingCAPIMachine, patchBase); err != nil {
+		logger.Error(err, "Failed to update Cluster API machine spec or owner references")
+
+		updateErr := fmt.Errorf("failed to update Cluster API machine spec or owner references: %w", err)
+		if condErr := r.applySynchronizedConditionWithPatch(ctx, mapiMachine, corev1.ConditionFalse, reasonFailedToUpdateCAPIMachine, updateErr.Error(), nil); condErr != nil {
+			return false, utilerrors.NewAggregate([]error{updateErr, condErr})
+		}
+
+		return false, updateErr
+	}
+
+	return true, nil
 }
 
-// createOrUpdateCAPIMachine creates or updates (if existing but out of date) a CAPI machine from a convertedCAPIMachine (CAPI machine object converted from MAPI).
-// it returns the CAPI machine, existing or newly created.
+// createOrUpdateCAPIMachine creates or updates a CAPI machine from a CAPI object converted from MAPI.
 func (r *MachineSyncReconciler) createOrUpdateCAPIMachine(ctx context.Context, sourceMAPIMachine *mapiv1beta1.Machine, existingCAPIMachine, convertedCAPIMachine *clusterv1.Machine) (*clusterv1.Machine, error) {
 	logger := logf.FromContext(ctx)
 
-	var machineCreated, specUpdated bool
+	machineCreated := false
 
-	var err error
-
-	// If there is no existing CAPI machine, create a new one and adjust the convertedCAPIMachine.
 	if existingCAPIMachine == nil {
-		existingCAPIMachine, err = r.ensureCAPIMachine(ctx, sourceMAPIMachine, convertedCAPIMachine)
+		createdCAPIMachine, err := r.ensureCAPIMachine(ctx, sourceMAPIMachine, convertedCAPIMachine)
 		if err != nil {
 			return nil, fmt.Errorf("failed to ensure Cluster API machine: %w", err)
 		}
 
-		// Set the machineCreated flag to true to not try to update the spec and force updating the status.
+		existingCAPIMachine = createdCAPIMachine
+		// Skip spec updates for a newly created machine because admission may have defaulted it.
 		machineCreated = true
 	}
 
-	// Compare the existing CAPI machine with the desired CAPI machine to check for changes.
 	capiMachinesDiff, err := compareCAPIMachines(existingCAPIMachine, convertedCAPIMachine)
 	if err != nil {
 		return nil, fmt.Errorf("failed to compare Cluster API machines: %w", err)
 	}
 
-	// Don't try to update the spec of the machine if it was just created it.
-	// The resourceVersion of the convertedCAPIMachine is empty and would lead to failure.
-	// Note: conversion or mutatingwebhook's could have lead to changes leading to a spec diff which we would try to update.
-	if !machineCreated {
-		// Update the CAPI machine spec/metadata/provider spec if needed.
-		var updatedCAPIMachine *clusterv1.Machine
-
-		specUpdated, updatedCAPIMachine, err = r.ensureCAPIMachineSpecUpdated(ctx, sourceMAPIMachine, capiMachinesDiff, convertedCAPIMachine)
-		if err != nil {
-			return nil, fmt.Errorf("failed to ensure Cluster API machine spec updated: %w", err)
-		}
-
-		if specUpdated {
-			existingCAPIMachine = updatedCAPIMachine
-		}
+	// Apply metadata even when the machine was just created so this controller establishes SSA ownership.
+	machineUpdated, err := r.ensureCAPIMachineUpdated(ctx, sourceMAPIMachine, existingCAPIMachine, convertedCAPIMachine, capiMachinesDiff, !machineCreated)
+	if err != nil {
+		return nil, fmt.Errorf("failed to ensure Cluster API machine updated: %w", err)
 	}
 
 	// Update the CAPI machine status if needed.
-	statusUpdated, err := r.ensureCAPIMachineStatusUpdated(ctx, sourceMAPIMachine, existingCAPIMachine, convertedCAPIMachine, capiMachinesDiff, specUpdated || machineCreated)
+	statusUpdated, err := r.ensureCAPIMachineStatusUpdated(ctx, sourceMAPIMachine, existingCAPIMachine, convertedCAPIMachine, capiMachinesDiff, machineUpdated || machineCreated)
 	if err != nil {
 		return nil, fmt.Errorf("failed to ensure Cluster API machine status updated: %w", err)
 	}
@@ -759,7 +752,7 @@ func (r *MachineSyncReconciler) createOrUpdateCAPIMachine(ctx context.Context, s
 	switch {
 	case machineCreated:
 		logger.Info("Successfully created Cluster API machine")
-	case specUpdated || statusUpdated:
+	case machineUpdated || statusUpdated:
 		logger.Info("Successfully updated Cluster API machine")
 	default:
 		logger.Info("No changes detected for Cluster API machine")
