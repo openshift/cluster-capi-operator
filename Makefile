@@ -78,7 +78,7 @@ localtestenv: .localtestenv
 	KUBEBUILDER_ASSETS="$$($(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path --bin-dir $(PROJECT_DIR)/bin --index https://raw.githubusercontent.com/openshift/api/master/envtest-releases.yaml)"; \
 	echo "KUBEBUILDER_ASSETS=$${KUBEBUILDER_ASSETS}" > $@
 
-TEST_DIRS ?= ./pkg/... ./manifests-gen/...
+TEST_DIRS ?= ./cmd/... ./pkg/... ./manifests-gen/...
 unit: .localtestenv ## Run unit tests
 	./hack/test.sh "$(TEST_DIRS)" 40m
 
