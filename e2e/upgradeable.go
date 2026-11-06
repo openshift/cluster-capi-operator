@@ -45,9 +45,10 @@ import (
 	"github.com/openshift/origin/test/shared/updateservice"
 )
 
-// upgradeTargetEnvVar names the release image the test should assess as an
-// update target: on main branches the current release image, on stable
-// branches the latest nightly of the Y+1 stream. Job config responsibility.
+// upgradeTargetEnvVar optionally names the release image whose Cluster API
+// components the test should assess, ideally a real Y+1 release. When unset,
+// the test falls back to the cluster's current release image. The specified
+// image must be be pullable and ship the provider manifests.
 const upgradeTargetEnvVar = "OPENSHIFT_AVAILABLE_UPDATE"
 
 const (
@@ -136,8 +137,6 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIOperator] Clu
 		var updateService *updateservice.UpdateService
 
 		BeforeAll(func(ctx SpecContext) {
-			skipUnlessUpgradeTargetPayloadConfigured()
-
 			if !framework.IsFeatureGateEnabled(ctx, cl, features.FeatureGateClusterAPIOperator) {
 				Skip("Feature gate ClusterAPIOperator is not enabled.")
 			}
@@ -175,6 +174,8 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIOperator] Clu
 					"reading ClusterVersion to determine the current release")
 				Expect(clusterVersion.Status.Desired.Version).ToNot(BeEmpty(),
 					"ClusterVersion status.desired.version must be set to compute the fake upgrade target")
+				Expect(clusterVersion.Status.Desired.Image).ToNot(BeEmpty(),
+					"ClusterVersion status.desired.image must be set: it seeds the graph's current node and stands in for the target payload when %s is unset", upgradeTargetEnvVar)
 				currentVersion = clusterVersion.Status.Desired.Version
 				currentPayload = clusterVersion.Status.Desired.Image
 				trackResource(clusterVersion)
@@ -185,6 +186,15 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIOperator] Clu
 				Expect(err).ToNot(HaveOccurred(), "computing the fake target for current version %s", currentVersion)
 				upgradeTargetVersion = target
 				upgradeTargetPayload = os.Getenv(upgradeTargetEnvVar)
+				if upgradeTargetPayload == "" {
+					// No Y+1 payload configured: assess the current release's own
+					// Cluster API components. The CVO still offers them at the
+					// synthesised target version, and the controller resolves that
+					// same version as its next-minor target.
+					GinkgoWriter.Printf("%s is unset; assessing the current release image %s as the update target\n",
+						upgradeTargetEnvVar, currentPayload)
+					upgradeTargetPayload = currentPayload
+				}
 			})
 
 			By("Deploying the fake cincinnati update service", func() {
@@ -329,16 +339,6 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIOperator] Clu
 			})
 		})
 	})
-
-// skipUnlessUpgradeTargetPayloadConfigured skips the whole preflight test
-// when no Y+1 payload is configured to assess upgrades against.
-func skipUnlessUpgradeTargetPayloadConfigured() {
-	GinkgoHelper()
-
-	if os.Getenv(upgradeTargetEnvVar) == "" {
-		Skip(fmt.Sprintf("%s is unset or empty; it must hold a release image ref for the Y+1 payload the CVO should offer as an update", upgradeTargetEnvVar))
-	}
-}
 
 // kWithCtx returns a Komega whose API calls use the given context, so its
 // assertion helpers stop polling when the node context is cancelled. Specs that
