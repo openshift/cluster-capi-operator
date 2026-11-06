@@ -187,8 +187,14 @@ func validateCompatibilitySchemaCustomResourceDefinition(ctx context.Context, fl
 		return nil, field.ErrorList{field.Invalid(fldPath.Child("data"), compatibilityCRD.APIVersion, fmt.Errorf("%w: expected APIVersion to be apiextensions.k8s.io/v1 and Kind to be CustomResourceDefinition, got %s/%s", errInvalidCompatibilityCRD, compatibilityCRD.APIVersion, compatibilityCRD.Kind).Error())}
 	}
 
-	// Convert the CRD to the internal type so that we can validate it.
-	internalCRD, err := convertToInternalCRD(compatibilityCRD)
+	// Apply server-side defaults and convert the CRD to the internal type so
+	// that we can validate it. The API server defaults the CRD before storing
+	// it, so defaulting here avoids rejecting valid CRDs that rely on defaults,
+	// notably the conversion webhook service port.
+	defaultedCRD := compatibilityCRD.DeepCopy()
+	apiextensionsv1.SetObjectDefaults_CustomResourceDefinition(defaultedCRD)
+
+	internalCRD, err := convertToInternalCRD(defaultedCRD)
 	if err != nil {
 		return nil, field.ErrorList{field.Invalid(fldPath.Child("customResourceDefinition"), compatibilitySchema.CustomResourceDefinition.Data, fmt.Errorf("failed to convert CRD to internal CRD: %w", err).Error())}
 	}

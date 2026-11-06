@@ -23,11 +23,34 @@ import (
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/yaml"
 
 	openshiftapiextensionsv1 "github.com/openshift/api/apiextensions/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/test"
 )
+
+// newCRDWithConversionWebhook returns a valid CRD served by a webhook conversion
+// whose client config points at the given service, optionally with an explicit port.
+func newCRDWithConversionWebhook(port *int32) *apiextensionsv1.CustomResourceDefinition {
+	crd := test.NewCRDSchemaBuilder().WithStringProperty("testField").Build()
+	crd.Spec.Conversion = &apiextensionsv1.CustomResourceConversion{
+		Strategy: apiextensionsv1.WebhookConverter,
+		Webhook: &apiextensionsv1.WebhookConversion{
+			ClientConfig: &apiextensionsv1.WebhookClientConfig{
+				Service: &apiextensionsv1.ServiceReference{
+					Namespace: "openshift-cluster-api",
+					Name:      "capi-webhook-service",
+					Path:      ptr.To("/convert"),
+					Port:      port,
+				},
+			},
+			ConversionReviewVersions: []string{"v1", "v1beta1"},
+		},
+	}
+
+	return crd
+}
 
 func TestCRDRequirementValidator_ValidateCreate(t *testing.T) {
 	RegisterTestingT(t)
@@ -111,6 +134,19 @@ func TestCRDRequirementValidator_ValidateCreate(t *testing.T) {
 				return req
 			}(),
 			wantErr: MatchError(ContainSubstring("Unsupported value: \"UNSUPPORTED\": supported values: \"YAML\"")),
+		},
+		{
+			// Provider CRD manifests routinely omit this port, and the API server
+			// defaults it to 443 before validation. The port must not be the reason
+			// a requirement is rejected.
+			name:    "should accept CompatibilityRequirement whose conversion webhook omits the defaultable service port",
+			obj:     test.GenerateTestCompatibilityRequirement(newCRDWithConversionWebhook(nil)),
+			wantErr: BeNil(),
+		},
+		{
+			name:    "should reject CompatibilityRequirement whose conversion webhook sets an invalid service port",
+			obj:     test.GenerateTestCompatibilityRequirement(newCRDWithConversionWebhook(ptr.To[int32](70000))),
+			wantErr: MatchError(ContainSubstring("port is not valid: must be between 1 and 65535, inclusive")),
 		},
 	}
 
