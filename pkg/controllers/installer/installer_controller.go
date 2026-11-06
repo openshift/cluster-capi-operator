@@ -24,8 +24,7 @@ import (
 
 	"github.com/go-logr/logr"
 	configv1 "github.com/openshift/api/config/v1"
-	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
-	operatorv1alpha1apply "github.com/openshift/client-go/operator/applyconfigurations/operator/v1alpha1"
+	operatorv1 "github.com/openshift/api/operator/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -107,7 +106,7 @@ func setupController(mgr ctrl.Manager, c *InstallerController, additionalSources
 
 	b := ctrl.NewControllerManagedBy(mgr).
 		Named(controllerName).
-		For(&operatorv1alpha1.ClusterAPI{},
+		For(&operatorv1.ClusterAPI{},
 			builder.WithPredicates(predicate.NewPredicateFuncs(func(obj client.Object) bool {
 				return obj.GetName() == clusterAPIName
 			}))).
@@ -224,7 +223,7 @@ func (c *InstallerController) Reconcile(ctx context.Context, _ ctrl.Request) (ct
 
 func (c *InstallerController) reconcile(ctx context.Context, log logr.Logger) operatorstatus.ReconcileResult {
 	// Get ClusterAPI singleton
-	clusterAPI := &operatorv1alpha1.ClusterAPI{}
+	clusterAPI := &operatorv1.ClusterAPI{}
 	if err := c.client.Get(ctx, client.ObjectKey{Name: clusterAPIName}, clusterAPI); err != nil {
 		if apierrors.IsNotFound(err) {
 			return ResultGenerator.WaitingOnExternal("ClusterAPI")
@@ -268,7 +267,7 @@ func (c *InstallerController) reconcile(ctx context.Context, log logr.Logger) op
 	return ResultGenerator.Progressing(strings.Join(messages, "\n"))
 }
 
-func (c *InstallerController) success(ctx context.Context, log logr.Logger, clusterAPI *operatorv1alpha1.ClusterAPI, reconciledRevision operatorv1alpha1.RevisionName, errs []error) operatorstatus.ReconcileResult {
+func (c *InstallerController) success(ctx context.Context, log logr.Logger, clusterAPI *operatorv1.ClusterAPI, reconciledRevision operatorv1.RevisionName, errs []error) operatorstatus.ReconcileResult {
 	if len(errs) > 0 {
 		log.Error(errors.Join(errs...), "Ignoring errors because the reconciliation is complete")
 	}
@@ -315,7 +314,7 @@ func (c *InstallerController) error(errs []error) operatorstatus.ReconcileResult
 	return ResultGenerator.NonRetryableError(fmt.Errorf("reconciling revisions: %w", errors.Join(errs...)))
 }
 
-func (c *InstallerController) updateWatches(ctx context.Context, log logr.Logger, clusterAPI *operatorv1alpha1.ClusterAPI, allGVKs sets.Set[schema.GroupVersionKind]) error {
+func (c *InstallerController) updateWatches(ctx context.Context, log logr.Logger, clusterAPI *operatorv1.ClusterAPI, allGVKs sets.Set[schema.GroupVersionKind]) error {
 	log.Info("Watching GVKs", "gvks", strings.Join(util.SliceMap(allGVKs.UnsortedList(), func(gvk schema.GroupVersionKind) string {
 		return gvk.String()
 	}), ", "))
@@ -328,13 +327,16 @@ func (c *InstallerController) updateWatches(ctx context.Context, log logr.Logger
 	return nil
 }
 
-func (c *InstallerController) writeCurrentRevision(ctx context.Context, clusterAPI *operatorv1alpha1.ClusterAPI, revisionName operatorv1alpha1.RevisionName) error {
-	applyConfig := operatorv1alpha1apply.ClusterAPI(clusterAPIName).
-		WithUID(clusterAPI.UID).
-		WithStatus(
-			operatorv1alpha1apply.ClusterAPIStatus().
-				WithCurrentRevision(revisionName),
-		)
+func (c *InstallerController) writeCurrentRevision(ctx context.Context, clusterAPI *operatorv1.ClusterAPI, revisionName operatorv1.RevisionName) error {
+	applyConfig := map[string]any{
+		"apiVersion": operatorv1.GroupVersion.String(),
+		"kind":       "ClusterAPI",
+		"metadata": map[string]any{
+			"name": clusterAPIName,
+			"uid":  clusterAPI.UID,
+		},
+		"status": map[string]any{"currentRevision": revisionName},
+	}
 
 	patch := util.ApplyConfigPatch(applyConfig)
 	if err := c.client.Status().Patch(ctx, clusterAPI, patch, operatorstatus.CAPIFieldOwner(controllerName), client.ForceOwnership); err != nil {

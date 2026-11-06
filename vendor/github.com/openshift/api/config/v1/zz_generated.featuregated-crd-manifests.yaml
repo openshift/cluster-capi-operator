@@ -391,12 +391,12 @@ infrastructures.config.openshift.io:
   - AWSDualStackInstall
   - AzureDualStackInstall
   - BGPBasedVIPManagement
-  - DualReplica
   - DyanmicServiceEndpointIBMCloud
   - GCPSovereignCloudInstall
   - MutableTopology
   - NutanixMultiSubnets
   - OnPremDNSRecords
+  - OpenStackMaxAllowedAddressPairs
   - VSphereHostVMGroupZonal
   - VSphereMultiVCenterDay2
   FilenameOperatorName: config-operator

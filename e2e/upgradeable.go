@@ -37,7 +37,7 @@ import (
 
 	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/api/features"
-	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
+	operatorv1 "github.com/openshift/api/operator/v1"
 	"github.com/openshift/cluster-capi-operator/e2e/framework"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 	"github.com/openshift/cluster-capi-operator/pkg/revisiongenerator"
@@ -250,7 +250,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIOperator] Clu
 		})
 
 		It("should report Upgradeable=True after the CRD is remediated to the payload version and marked unmanaged", NodeTimeout(20*time.Minute), func(ctx SpecContext) {
-			var clusterAPI *operatorv1alpha1.ClusterAPI
+			var clusterAPI *operatorv1.ClusterAPI
 			By("Marking the Clusters CRD unmanaged", func() {
 				// Record the append before attempting it: the AfterAll reset is a
 				// no-op when the entry is absent, so a failed append leaves it
@@ -288,7 +288,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIOperator] Clu
 			// Only undo an append this test made: an entry listed when the flow
 			// failed before the remediation step appended it belongs to another
 			// test, and removing it would change that test's revision.
-			var clusterAPI *operatorv1alpha1.ClusterAPI
+			var clusterAPI *operatorv1.ClusterAPI
 			if clustersCRDMarkedUnmanaged {
 				By("Resetting the unmanagedCustomResourceDefinitions entry the remediation step added", func() {
 					clusterAPI = resetUnmanagedCRDsEntry(ctx)
@@ -350,7 +350,7 @@ func kWithCtx(ctx context.Context) komega.Komega {
 func failIfClustersCRDAlreadyUnmanaged(ctx context.Context) {
 	GinkgoHelper()
 
-	clusterAPI := &operatorv1alpha1.ClusterAPI{ObjectMeta: metav1.ObjectMeta{Name: "cluster"}}
+	clusterAPI := &operatorv1.ClusterAPI{ObjectMeta: metav1.ObjectMeta{Name: "cluster"}}
 	Expect(cl.Get(ctx, client.ObjectKeyFromObject(clusterAPI), clusterAPI)).To(Succeed(),
 		"ClusterAPI singleton should exist before the upgradeability preflight")
 	Expect(clusterAPI.Spec).ToNot(BeNil(), "ClusterAPI should have a spec")
@@ -675,7 +675,7 @@ func restoreClustersCRDFromSnapshot(ctx context.Context, snapshot *apiextensions
 	}
 	Expect(err).ToNot(HaveOccurred(), "reading the %s before restoring its snapshot", clusterCRDName)
 
-	clusterAPI := &operatorv1alpha1.ClusterAPI{ObjectMeta: metav1.ObjectMeta{Name: "cluster"}}
+	clusterAPI := &operatorv1.ClusterAPI{ObjectMeta: metav1.ObjectMeta{Name: "cluster"}}
 	Expect(cl.Get(ctx, client.ObjectKeyFromObject(clusterAPI), clusterAPI)).To(Succeed())
 	unmanaged := slices.Contains(clusterAPI.Spec.UnmanagedCustomResourceDefinitions, clusterCRDName)
 
@@ -705,10 +705,10 @@ func restoreClustersCRDFromSnapshot(ctx context.Context, snapshot *apiextensions
 // ClusterAPI/cluster.spec.unmanagedCustomResourceDefinitions and waits for
 // the revision rollout the append triggers: the remediation write must
 // happen under the new revision's Deny requirement.
-func markClustersCRDUnmanaged(ctx context.Context) *operatorv1alpha1.ClusterAPI {
+func markClustersCRDUnmanaged(ctx context.Context) *operatorv1.ClusterAPI {
 	GinkgoHelper()
 
-	clusterAPI := &operatorv1alpha1.ClusterAPI{ObjectMeta: metav1.ObjectMeta{Name: "cluster"}}
+	clusterAPI := &operatorv1.ClusterAPI{ObjectMeta: metav1.ObjectMeta{Name: "cluster"}}
 	Eventually(ctx, kWithCtx(ctx).Update(clusterAPI, func() {
 		// The mutation is replayed on conflict, so only append if a
 		// previous attempt did not already add the CRD.

@@ -20,13 +20,14 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/api/features"
-	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
+	operatorv1 "github.com/openshift/api/operator/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
@@ -40,7 +41,7 @@ import (
 var (
 	// Test fixtures - set by createFixtures.
 	infra           *configv1.Infrastructure
-	clusterAPI      *operatorv1alpha1.ClusterAPI
+	clusterAPI      *operatorv1.ClusterAPI
 	clusterOperator *configv1.ClusterOperator
 
 	// Provider image fixtures - set by setupProviderFixtures in BeforeSuite.
@@ -202,7 +203,7 @@ var _ = Describe("RevisionController", Serial, func() {
 	}, defaultNodeTimeout)
 
 	It("creates first revision on empty ClusterAPI", func(ctx context.Context) {
-		updatedClusterAPI := &operatorv1alpha1.ClusterAPI{}
+		updatedClusterAPI := &operatorv1.ClusterAPI{}
 		Expect(cl.Get(ctx, client.ObjectKey{Name: "cluster"}, updatedClusterAPI)).To(Succeed())
 		Expect(updatedClusterAPI.Status.Revisions).To(HaveLen(1))
 
@@ -212,8 +213,8 @@ var _ = Describe("RevisionController", Serial, func() {
 
 		// Should have 2 components: core (global) and infra-aws
 		Expect(rev.Components).To(HaveLen(2))
-		Expect(rev.Components[0].Image.Ref).To(Equal(operatorv1alpha1.ImageDigestFormat(defaultProviderImgs[0].ImageRef)))
-		Expect(rev.Components[1].Image.Ref).To(Equal(operatorv1alpha1.ImageDigestFormat(defaultProviderImgs[1].ImageRef)))
+		Expect(rev.Components[0].Source.Image.Ref).To(Equal(operatorv1.ImageDigestFormat(defaultProviderImgs[0].ImageRef)))
+		Expect(rev.Components[1].Source.Image.Ref).To(Equal(operatorv1.ImageDigestFormat(defaultProviderImgs[1].ImageRef)))
 
 		// DesiredRevision should point to the created revision
 		Expect(updatedClusterAPI.Status.DesiredRevision).To(Equal(rev.Name))
@@ -237,7 +238,7 @@ var _ = Describe("RevisionController", Serial, func() {
 
 	It("does not modify up to date revision list", func(ctx context.Context) {
 		// Capture state after first reconcile
-		initialClusterAPI := &operatorv1alpha1.ClusterAPI{}
+		initialClusterAPI := &operatorv1.ClusterAPI{}
 		Expect(cl.Get(ctx, client.ObjectKey{Name: "cluster"}, initialClusterAPI)).To(Succeed())
 		Expect(initialClusterAPI.Status.Revisions).To(HaveLen(1))
 		originalRevisions := initialClusterAPI.Status.Revisions
@@ -264,7 +265,7 @@ var _ = Describe("RevisionController", Serial, func() {
 		)
 
 		// Verify revisions are unchanged
-		updatedClusterAPI := &operatorv1alpha1.ClusterAPI{}
+		updatedClusterAPI := &operatorv1.ClusterAPI{}
 		Expect(cl.Get(ctx, client.ObjectKey{Name: "cluster"}, updatedClusterAPI)).To(Succeed())
 		Expect(updatedClusterAPI.Status.Revisions).To(Equal(originalRevisions))
 		Expect(updatedClusterAPI.Status.DesiredRevision).To(Equal(originalDesiredRevision))
@@ -276,7 +277,7 @@ var _ = Describe("RevisionController", Serial, func() {
 		mgr.stop()
 
 		// Capture the first revision
-		initialClusterAPI := &operatorv1alpha1.ClusterAPI{}
+		initialClusterAPI := &operatorv1.ClusterAPI{}
 		Expect(cl.Get(ctx, client.ObjectKey{Name: "cluster"}, initialClusterAPI)).To(Succeed())
 		Expect(initialClusterAPI.Status.Revisions).To(HaveLen(1))
 		originalRev1 := initialClusterAPI.Status.Revisions[0]
@@ -290,7 +291,7 @@ var _ = Describe("RevisionController", Serial, func() {
 			Should(HaveField("Status.Revisions", HaveLen(2)))
 
 		// Find old and new revisions
-		var oldRev, newRev operatorv1alpha1.ClusterAPIInstallerRevision
+		var oldRev, newRev operatorv1.ClusterAPIInstallerRevision
 
 		for _, rev := range clusterAPI.Status.Revisions {
 			if rev.Name == originalRev1.Name {
@@ -306,8 +307,8 @@ var _ = Describe("RevisionController", Serial, func() {
 		// New revision should have the updated provider images
 		Expect(newRev.Revision).To(Equal(int64(2)))
 		Expect(newRev.ContentID).NotTo(Equal(originalRev1.ContentID))
-		Expect(newRev.Components[0].Image.Ref).To(Equal(operatorv1alpha1.ImageDigestFormat(updatedProviderImgs[0].ImageRef)))
-		Expect(newRev.Components[1].Image.Ref).To(Equal(operatorv1alpha1.ImageDigestFormat(updatedProviderImgs[1].ImageRef)))
+		Expect(newRev.Components[0].Source.Image.Ref).To(Equal(operatorv1.ImageDigestFormat(updatedProviderImgs[0].ImageRef)))
+		Expect(newRev.Components[1].Source.Image.Ref).To(Equal(operatorv1.ImageDigestFormat(updatedProviderImgs[1].ImageRef)))
 
 		// DesiredRevision should point to the new revision
 		Expect(clusterAPI.Status.DesiredRevision).To(Equal(newRev.Name))
@@ -376,7 +377,7 @@ var _ = Describe("RevisionController", Serial, func() {
 		// The new revision should have only the core (global) component
 		newRev := latestRevision(clusterAPI.Status.Revisions)
 		Expect(newRev.Components).To(HaveLen(1))
-		Expect(newRev.Components[0].Image.Ref).To(Equal(operatorv1alpha1.ImageDigestFormat(defaultProviderImgs[0].ImageRef)))
+		Expect(newRev.Components[0].Source.Image.Ref).To(Equal(operatorv1.ImageDigestFormat(defaultProviderImgs[0].ImageRef)))
 
 		// DesiredRevision should point to the new revision
 		Expect(clusterAPI.Status.DesiredRevision).To(Equal(newRev.Name))
@@ -522,16 +523,17 @@ var _ = Describe("RevisionController", Serial, func() {
 			// Create a valid 64-character hex digest that varies by index
 			hexDigit := string("0123456789abcdef"[i])
 			digest := hexDigit + "123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-			clusterAPI.Status.Revisions = append(clusterAPI.Status.Revisions, operatorv1alpha1.ClusterAPIInstallerRevision{
-				Name:      operatorv1alpha1.RevisionName("rev-" + string(rune('a'+i))),
+			clusterAPI.Status.Revisions = append(clusterAPI.Status.Revisions, operatorv1.ClusterAPIInstallerRevision{
+				Name:      operatorv1.RevisionName(fmt.Sprintf("4.18.0-%s-%d", digest[:8], i+1)),
 				Revision:  int64(i + 1),
-				ContentID: "content-id-" + string(rune('a'+i)),
-				Components: []operatorv1alpha1.ClusterAPIInstallerComponent{
+				ContentID: digest,
+				Components: []operatorv1.ClusterAPIInstallerComponent{
 					{
-						ClusterAPIInstallerComponentSource: operatorv1alpha1.ClusterAPIInstallerComponentSource{
-							Type: operatorv1alpha1.InstallerComponentTypeImage,
-							Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
-								Ref:     operatorv1alpha1.ImageDigestFormat("quay.io/openshift/cluster-capi-operator@sha256:" + digest),
+						Name: "core",
+						Source: operatorv1.ClusterAPIInstallerComponentSource{
+							Type: operatorv1.InstallerComponentTypeImage,
+							Image: operatorv1.ClusterAPIInstallerComponentImage{
+								Ref:     operatorv1.ImageDigestFormat("quay.io/openshift/cluster-capi-operator@sha256:" + digest),
 								Profile: "default",
 							},
 						},
@@ -553,7 +555,7 @@ var _ = Describe("RevisionController", Serial, func() {
 		)
 
 		// Revisions should still be 16 (no new revision created)
-		updatedClusterAPI := &operatorv1alpha1.ClusterAPI{}
+		updatedClusterAPI := &operatorv1.ClusterAPI{}
 		Expect(cl.Get(ctx, client.ObjectKey{Name: "cluster"}, updatedClusterAPI)).To(Succeed())
 		Expect(updatedClusterAPI.Status.Revisions).To(HaveLen(16))
 	}, defaultNodeTimeout)
@@ -576,7 +578,7 @@ var _ = Describe("RevisionController", Serial, func() {
 		)
 
 		// Verify the original revision is preserved and no new revision was created
-		updatedClusterAPI := &operatorv1alpha1.ClusterAPI{}
+		updatedClusterAPI := &operatorv1.ClusterAPI{}
 		Expect(cl.Get(ctx, client.ObjectKey{Name: "cluster"}, updatedClusterAPI)).To(Succeed())
 		Expect(updatedClusterAPI.Status.Revisions).To(HaveLen(1))
 	}, defaultNodeTimeout)
@@ -612,7 +614,7 @@ var _ = Describe("RevisionController waiting states", Serial, func() {
 				)))
 
 			// No revisions should be created while waiting
-			ca := &operatorv1alpha1.ClusterAPI{}
+			ca := &operatorv1.ClusterAPI{}
 			ca.SetName("cluster")
 			Expect(kWithCtx(ctx).Get(ca)()).To(Succeed())
 			Expect(ca.Status.Revisions).To(BeEmpty())
@@ -625,7 +627,7 @@ var _ = Describe("RevisionController waiting states", Serial, func() {
 				infra.Status.InfrastructureTopology = configv1.HighlyAvailableTopologyMode
 				infra.Status.PlatformStatus = &configv1.PlatformStatus{Type: configv1.AWSPlatformType}
 			})()).To(Succeed())
-			Consistently(kWithCtx(ctx).Object(&operatorv1alpha1.ClusterAPI{ObjectMeta: metav1.ObjectMeta{Name: "cluster"}})).
+			Consistently(kWithCtx(ctx).Object(&operatorv1.ClusterAPI{ObjectMeta: metav1.ObjectMeta{Name: "cluster"}})).
 				WithContext(ctx).Should(HaveField("Status.Revisions", BeEmpty()))
 
 			Expect(kWithCtx(ctx).UpdateStatus(infra, func() {
@@ -635,7 +637,7 @@ var _ = Describe("RevisionController waiting states", Serial, func() {
 			waitForProgressingFalse(ctx)
 
 			// Should have created a revision
-			updatedClusterAPI := &operatorv1alpha1.ClusterAPI{}
+			updatedClusterAPI := &operatorv1.ClusterAPI{}
 			Expect(cl.Get(ctx, client.ObjectKey{Name: "cluster"}, updatedClusterAPI)).To(Succeed())
 			Expect(updatedClusterAPI.Status.Revisions).To(HaveLen(1))
 			Expect(updatedClusterAPI.Status.ObservedRevisionGeneration).To(Equal(updatedClusterAPI.Generation))
@@ -662,11 +664,11 @@ var _ = Describe("RevisionController waiting states", Serial, func() {
 			)
 
 			// Create ClusterAPI
-			clusterAPI = &operatorv1alpha1.ClusterAPI{
+			clusterAPI = &operatorv1.ClusterAPI{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "cluster",
 				},
-				Spec: &operatorv1alpha1.ClusterAPISpec{},
+				Spec: &operatorv1.ClusterAPISpec{},
 			}
 			Expect(cl.Create(ctx, clusterAPI)).To(Succeed())
 			DeferCleanup(func(ctx context.Context) {
@@ -677,7 +679,7 @@ var _ = Describe("RevisionController waiting states", Serial, func() {
 			waitForProgressingFalse(ctx)
 
 			// Should have created a revision
-			updatedClusterAPI := &operatorv1alpha1.ClusterAPI{}
+			updatedClusterAPI := &operatorv1.ClusterAPI{}
 			Expect(cl.Get(ctx, client.ObjectKey{Name: "cluster"}, updatedClusterAPI)).To(Succeed())
 			Expect(updatedClusterAPI.Status.Revisions).To(HaveLen(1))
 			Expect(updatedClusterAPI.Status.ObservedRevisionGeneration).To(Equal(updatedClusterAPI.Generation))
@@ -702,7 +704,7 @@ var _ = Describe("RevisionController manifest substitutions", Serial, func() {
 
 		waitForProgressingFalse(ctx)
 
-		updatedClusterAPI := &operatorv1alpha1.ClusterAPI{}
+		updatedClusterAPI := &operatorv1.ClusterAPI{}
 		Expect(cl.Get(ctx, client.ObjectKey{Name: "cluster"}, updatedClusterAPI)).To(Succeed())
 		Expect(updatedClusterAPI.Status.Revisions).To(HaveLen(1))
 
@@ -735,7 +737,7 @@ var _ = Describe("RevisionController unmanaged CRDs", Serial, func() {
 
 		waitForProgressingFalse(ctx)
 
-		updatedClusterAPI := &operatorv1alpha1.ClusterAPI{}
+		updatedClusterAPI := &operatorv1.ClusterAPI{}
 		Expect(cl.Get(ctx, client.ObjectKey{Name: "cluster"}, updatedClusterAPI)).To(Succeed())
 		Expect(updatedClusterAPI.Status.Revisions).To(HaveLen(1))
 		Expect(updatedClusterAPI.Status.Revisions[0].UnmanagedCustomResourceDefinitions).To(Equal(unmanagedCRDs))
@@ -751,7 +753,7 @@ var _ = Describe("RevisionController unmanaged CRDs", Serial, func() {
 					return err
 				}
 
-				if clusterAPI, ok := obj.(*operatorv1alpha1.ClusterAPI); ok {
+				if clusterAPI, ok := obj.(*operatorv1.ClusterAPI); ok {
 					clusterAPI.Spec = nil
 				}
 
@@ -768,7 +770,7 @@ var _ = Describe("RevisionController unmanaged CRDs", Serial, func() {
 		_, err := r.Reconcile(ctx, reconcile.Request{})
 		Expect(err).NotTo(HaveOccurred())
 
-		updatedClusterAPI := &operatorv1alpha1.ClusterAPI{}
+		updatedClusterAPI := &operatorv1.ClusterAPI{}
 		Expect(cl.Get(ctx, client.ObjectKey{Name: "cluster"}, updatedClusterAPI)).To(Succeed())
 		Expect(updatedClusterAPI.Status.Revisions).To(HaveLen(1))
 		Expect(updatedClusterAPI.Status.Revisions[0].UnmanagedCustomResourceDefinitions).To(BeEmpty())
@@ -817,7 +819,7 @@ var _ = Describe("RevisionController error handling", Serial, func() {
 
 		interceptorCl = interceptor.NewClient(cl, interceptor.Funcs{
 			SubResourcePatch: func(ctx context.Context, c client.Client, subResourceName string, obj client.Object, patch client.Patch, opts ...client.SubResourcePatchOption) error {
-				if _, ok := obj.(*operatorv1alpha1.ClusterAPI); ok && subResourceName == subResourceStatus {
+				if _, ok := obj.(*operatorv1.ClusterAPI); ok && subResourceName == subResourceStatus {
 					return testErr
 				}
 
