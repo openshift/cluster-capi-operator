@@ -37,7 +37,6 @@ import (
 
 	openshiftapiextensionsv1 "github.com/openshift/api/apiextensions/v1"
 	configv1 "github.com/openshift/api/config/v1"
-	"github.com/openshift/api/features"
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
 
 	"github.com/openshift/cluster-capi-operator/pkg/commoncmdoptions"
@@ -137,12 +136,10 @@ func setupControllers(ctx context.Context, log logr.Logger, mgr ctrl.Manager, op
 		return fmt.Errorf("unable to get container image: %w", err)
 	}
 
-	if featureGates.Enabled(features.FeatureGateCRDCompatibilityRequirementOperator) {
-		if err := (&upgradeable.UpgradeableController{
-			Client: mgr.GetClient(), ContainerImage: containerImage,
-		}).SetupWithManager(mgr); err != nil {
-			return fmt.Errorf("unable to create upgradeable controller: %w", err)
-		}
+	if err := (&upgradeable.UpgradeableController{
+		Client: mgr.GetClient(), ContainerImage: containerImage,
+	}).SetupWithManager(mgr); err != nil {
+		return fmt.Errorf("unable to create upgradeable controller: %w", err)
 	}
 
 	if err := (&installerdeployment.InstallerDeploymentReconciler{

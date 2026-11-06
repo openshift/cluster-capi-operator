@@ -17,18 +17,14 @@ package upgradeable
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"path/filepath"
 
 	configv1 "github.com/openshift/api/config/v1"
-	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
+	assessment "github.com/openshift/cluster-capi-operator/pkg/controllers/upgradeable/pods"
 	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
-	assessment "github.com/openshift/cluster-capi-operator/pkg/upgradeable"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -36,8 +32,6 @@ import (
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
-
-const podSpecHashAnnotation = operatorstatus.CAPIOperatorIdentifierDomain + "/upgradeable-pod-spec-hash"
 
 var errAssessmentPodFailed = errors.New("assessment pod failed")
 
@@ -112,14 +106,6 @@ func (r *UpgradeableController) ensureAssessmentPod(ctx context.Context, desired
 		result := assessmentError(err)
 		return &result
 	}
-	// The hash detects changes to fields removed from the desired spec as well as
-	// additions. DeepDerivative tolerates API defaults and admission injections.
-	data, err := json.Marshal(desired.Spec)
-	if err != nil {
-		return fail(fmt.Errorf("serializing assessment pod: %w", err))
-	}
-
-	desired.Annotations[podSpecHashAnnotation] = fmt.Sprintf("%x", sha256.Sum256(data))
 
 	existing := &corev1.Pod{}
 	if err := r.Get(ctx, client.ObjectKeyFromObject(desired), existing); err != nil {
@@ -139,11 +125,10 @@ func (r *UpgradeableController) ensureAssessmentPod(ctx context.Context, desired
 		return &result
 	}
 
-	if !labels.SelectorFromSet(desired.Labels).Matches(labels.Set(existing.Labels)) ||
-		existing.Annotations[podSpecHashAnnotation] != desired.Annotations[podSpecHashAnnotation] ||
-		!equality.Semantic.DeepDerivative(desired.Spec, existing.Spec) {
-		// Most PodSpec fields are immutable. Recreate on drift, including changes
-		// from an operator upgrade that leaves the assessed versions unchanged.
+	if !labels.SelectorFromSet(desired.Labels).Matches(labels.Set(existing.Labels)) {
+		// Pod spec and labels are fixed for an assessment, so labels alone identify
+		// the assessment this pod was created for. Most PodSpec fields, including the
+		// operator image, are immutable, and the versions they assess are unchanged.
 		if err := r.deleteObject(ctx, existing); err != nil {
 			return fail(err)
 		}

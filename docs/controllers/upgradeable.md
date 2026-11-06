@@ -8,7 +8,7 @@
 
 The upgradeable controller is the sole writer of the `Upgradeable` condition of the `cluster-api` ClusterOperator. The [ClusterOperator controller](clusteroperator.md) retains ownership of the `Available`, `Progressing` and `Degraded` conditions, and aggregates the upgradeable controller's sub-conditions into them like those of any other sub-controller.
 
-The controller runs when `CRDCompatibilityRequirementOperator` is enabled. The ClusterOperator controller relinquishes its previous placeholder `Upgradeable=True` condition through server side apply.
+The controller always runs. The ClusterOperator controller retains ownership of the `Available`, `Progressing` and `Degraded` conditions, never writes `Upgradeable`, and aggregates the upgradeable controller's sub-conditions into them like those of any other sub-controller.
 
 ## Assessment
 
@@ -17,11 +17,13 @@ The target is the highest semantic version for the next minor release (`X.(Y+1).
 The assessment uses two pods in `openshift-cluster-api-operator`, each running a dedicated binary from the current operator image:
 
 1. `upgradeable-payload-images-extractor` runs `/upgradeable-payload-images-extractor`, mounts the target payload as an image volume and copies its provider image ConfigMap data into `upgradeable-payload-images`.
-2. `upgradeable-compatibility-requirements` runs `/upgradeable-compatibility-requirements`, mounts those provider images, discovers CRDs across every provider profile, and creates cluster scoped CompatibilityRequirements. The first profile alphabetically wins when CRDs repeat. Requirements cover all served versions and use `Warn`, never `Deny`.
+2. `upgradeable-compatibility-requirements` runs `/upgradeable-compatibility-requirements`, mounts those provider images, discovers CRDs across every provider profile, and converges cluster scoped CompatibilityRequirements on them. Image volumes, and then profiles within them, are read in name order. The first definition of a repeated CRD wins. Requirements cover all served versions and use `Warn`, never `Deny`.
 
 Pod completion marks each step complete. Pods retry transient API failures internally, exit on terminal input or permission errors, and have a 30 minute deadline. The controller recreates failed pods with reconciliation backoff.
 
-Every assessment resource carries current version, target version, and managed labels under `capi-operator.openshift.io`. Cleanup stops stale pods before deleting their outputs. Output reads bypass the informer cache so pod completion cannot race an incomplete cached requirement list.
+Every assessment resource carries current version, target version, and managed labels under `capi-operator.openshift.io`. Pods have fixed names, so a pod created for different assessed versions is deleted and the new one is only created once that deletion completes. A pod left behind by an assessment that no longer applies, such as after its target stops being offered, is ignored rather than collected.
+
+The payload images ConfigMap is applied in place and never deleted, so its labels always identify the assessment whose images it holds. The creation pod owns the requirement set: it deletes requirements whose CRDs the target payload no longer contains and applies the rest, so re-running it repairs labels, ownership and schema drift rather than preserving them.
 
 ## Conditions
 
@@ -37,7 +39,7 @@ All requirements must be admitted and have a current, conclusive compatibility v
 
 For CRDs not declared unmanaged, existing CRDs carrying the installer's `capi-operator.openshift.io/managed-by` label can be updated by the installer during upgrade, and absent CRDs can be created. Neither is blocked by the current CRD failing a target requirement. Existing foreign CRDs without the management label block upgrade until explicitly declared unmanaged and compatible.
 
-Requirement status changes, CRD creation, deletion or label changes, and Cluster API configuration changes trigger reassessment without changing the target version. Ownership and configuration reads bypass the informer cache.
+Requirement status changes, CRD creation, deletion or label changes, and Cluster API configuration changes trigger reassessment without changing the target version. A requirement update only triggers reassessment once it carries an admitted and current compatibility verdict, because no other status change can alter the published condition. All reads use the informer cache, so a read can lag a write: an assessment can briefly report a verdict before every requirement is visible, and the watch event for that write reconciles again to correct it.
 
 Conflict reports retain the `NotCompatible` condition reason. Each CRD is a dash prefixed list entry with a discrete conflict reason, the CompatibilityRequirement's `Compatible` condition reason and message, and remediation. Multiline checker diagnostics are indented within their CRD's entry.
 
@@ -63,4 +65,4 @@ message: |-
 
 API lookup failures remain operational errors reported as `Unknown`, `EphemeralError`, rather than compatibility conflicts.
 
-External edits or deletions of individual requirements are not detected or repaired within a completed assessment. A new assessment recreates the requirement set.
+Within a completed assessment, external edits or deletions of individual requirements are not repaired: the creation pod runs once per assessment, and only a new assessment re-applies the requirement set.

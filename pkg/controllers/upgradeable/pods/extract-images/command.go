@@ -21,8 +21,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/upgradeable/pods"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
-	"github.com/openshift/cluster-capi-operator/pkg/upgradeable"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -35,30 +35,30 @@ var errInvalidManifest = errors.New("payload manifest must be a v1 ConfigMap con
 
 // Run executes the payload extraction pod entrypoint.
 func Run(ctx context.Context, args []string) error {
-	return upgradeable.Run(ctx, "upgradeable-payload-images-extractor", args, func(ctx context.Context, c client.Client, current, target string) error {
+	return pods.Run(ctx, "upgradeable-payload-images-extractor", args, func(ctx context.Context, c client.Client, current, target string) error {
 		return Step(ctx, c, current, target, manifestPath)
 	})
 }
 
-// Step copies only the payload's provider image data into the assessment ConfigMap.
+// Step applies only the payload's provider image data to the assessment ConfigMap.
 func Step(ctx context.Context, c client.Client, current, target, path string) error {
 	// The mounted payload is immutable, so retries cannot repair a missing or
 	// malformed manifest. Treat these input failures as terminal.
 	data, err := os.ReadFile(path) //nolint:gosec // path is supplied by the operator's image volume mount
 	if err != nil {
-		return upgradeable.Terminal(fmt.Errorf("reading payload manifest: %w", err))
+		return pods.Terminal(fmt.Errorf("reading payload manifest: %w", err))
 	}
 
 	source := &corev1.ConfigMap{}
 	if err := yaml.UnmarshalStrict(data, source); err != nil {
-		return upgradeable.Terminal(fmt.Errorf("parsing payload manifest: %w", err))
+		return pods.Terminal(fmt.Errorf("parsing payload manifest: %w", err))
 	}
 
 	if source.Kind != "ConfigMap" || source.APIVersion != "v1" || len(source.Data) == 0 {
-		return upgradeable.Terminal(errInvalidManifest)
+		return pods.Terminal(errInvalidManifest)
 	}
 
-	owner, err := upgradeable.OwnerReference(ctx, c)
+	owner, err := pods.OwnerReference(ctx, c)
 	if err != nil {
 		return err
 	}
@@ -68,14 +68,16 @@ func Step(ctx context.Context, c client.Client, current, target, path string) er
 	cm := &corev1.ConfigMap{
 		TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
 		ObjectMeta: metav1.ObjectMeta{
-			Name: upgradeable.ImagesConfigMapName, Namespace: upgradeable.Namespace,
-			Labels: upgradeable.AssessmentLabels(current, target), OwnerReferences: []metav1.OwnerReference{owner},
+			Name: pods.ImagesConfigMapName, Namespace: pods.Namespace,
+			Labels: pods.AssessmentLabels(current, target), OwnerReferences: []metav1.OwnerReference{owner},
 		}, Data: source.Data,
 	}
-	// Data is stable for this payload and assessment. SSA safely replays writes
-	// after ambiguous API failures and corrects drift in fields owned by this pod.
+	// The ConfigMap is applied in place, never recreated, so both its data and its
+	// assessment labels are owned by this field manager. SSA replays writes safely
+	// after an ambiguous API failure and repairs drift in those fields, including
+	// an earlier assessment's labels, which are what the controller reads next.
 	if err := c.Patch(ctx, cm, client.Apply, operatorstatus.CAPIFieldOwner("UpgradeableExtractor"), client.ForceOwnership); err != nil {
-		return upgradeable.APIError(fmt.Errorf("applying payload images ConfigMap: %w", err))
+		return pods.APIError(fmt.Errorf("applying payload images ConfigMap: %w", err))
 	}
 
 	return nil

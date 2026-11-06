@@ -25,9 +25,9 @@ import (
 	openshiftapiextensionsv1 "github.com/openshift/api/apiextensions/v1"
 	configv1 "github.com/openshift/api/config/v1"
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
+	assessment "github.com/openshift/cluster-capi-operator/pkg/controllers/upgradeable/pods"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 	"github.com/openshift/cluster-capi-operator/pkg/revisiongenerator"
-	assessment "github.com/openshift/cluster-capi-operator/pkg/upgradeable"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -38,8 +38,6 @@ import (
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
-
-var errStaleImages = errors.New("payload images ConfigMap does not match assessment")
 
 func (r *UpgradeableController) reconcile(ctx context.Context) UpgradeableResult {
 	cv := &configv1.ClusterVersion{}
@@ -52,52 +50,39 @@ func (r *UpgradeableController) reconcile(ctx context.Context) UpgradeableResult
 		return assessmentError(err)
 	}
 
-	currentVersion := cv.Status.Desired.Version
-
-	// Both sides identify the assessment: changing the current release must
-	// invalidate old results even if the same target is still offered.
-	var liveLabels map[string]string
-	if target != nil {
-		liveLabels = assessment.AssessmentLabels(currentVersion, target.Version)
-	}
-
-	done, err := r.cleanup(ctx, liveLabels)
-	if err != nil {
-		return assessmentError(err)
-	}
-
 	if target == nil {
-		// No relevant update is not a compatibility verdict. Omitting Upgradeable
-		// removes any previous assessment result instead of leaving a stale block.
+		// TODO: We should set Upgradeable=Unknown in this case so the Upgradeable condition is always set.
 		return UpgradeableResult{ResultGenerator.Success()}
 	}
 
-	if !done {
-		// Requirements use fixed names and create only semantics. Old resources
-		// must disappear before the next creator can safely accept AlreadyExists.
-		return assessmentWaiting("previous assessment deletion")
-	}
+	currentVersion := cv.Status.Desired.Version
+	liveLabels := assessment.AssessmentLabels(currentVersion, target.Version)
 
 	co := &configv1.ClusterOperator{}
 	if err := r.Get(ctx, client.ObjectKey{Name: operatorstatus.ClusterOperatorName}, co); err != nil {
 		return assessmentError(fmt.Errorf("getting ClusterOperator owner: %w", err))
 	}
 
-	pod := r.extractorPod(currentVersion, target, co)
-	if result := r.ensureAssessmentPod(ctx, pod); result != nil {
+	if result := r.ensureAssessmentPod(ctx, r.extractorPod(currentVersion, target, co)); result != nil {
 		return *result
 	}
 
 	cm := &corev1.ConfigMap{}
-	if err := r.assessmentReader().Get(ctx, client.ObjectKey{Namespace: assessment.Namespace, Name: assessment.ImagesConfigMapName}, cm); err != nil {
+	if err := r.Get(ctx, client.ObjectKey{Namespace: assessment.Namespace, Name: assessment.ImagesConfigMapName}, cm); err != nil {
+		if apierrors.IsNotFound(err) {
+			return assessmentWaiting(fmt.Sprintf("payload images ConfigMap %s", assessment.ImagesConfigMapName))
+		}
+
 		return assessmentError(fmt.Errorf("getting extracted payload images: %w", err))
 	}
 
 	if !labels.SelectorFromSet(liveLabels).Matches(labels.Set(cm.Labels)) {
-		return assessmentError(fmt.Errorf("%w %s to %s", errStaleImages, currentVersion, target.Version))
+		// The informer cache can briefly serve the previous assessment's copy of
+		// the ConfigMap. A succeeded extractor has already written the new one.
+		return assessmentWaiting(fmt.Sprintf("payload images for %s to %s", currentVersion, target.Version))
 	}
 
-	pod = r.requirementsPod(currentVersion, target.Version, cm, co)
+	pod := r.requirementsPod(currentVersion, target.Version, cm, co)
 	// Only the creator knows how many CRDs the target contains. Its successful
 	// exit is the completeness signal, including when the resulting set is empty.
 	if result := r.ensureAssessmentPod(ctx, pod); result != nil {
@@ -107,96 +92,9 @@ func (r *UpgradeableController) reconcile(ctx context.Context) UpgradeableResult
 	return r.processRequirements(ctx, liveLabels, target.Version)
 }
 
-// Stop old writers before removing their outputs, so a terminating pod cannot
-// recreate stale requirements after cleanup and race the next assessment.
-func (r *UpgradeableController) cleanup(ctx context.Context, live map[string]string) (bool, error) {
-	// The ClusterOperator also owns resources outside this chain. Labels scope
-	// invalidation to our assessment instead of relying on shared ownership.
-	managed := client.MatchingLabels{assessment.ManagedLabel: assessment.ManagedLabelValue}
-	isStale := func(obj client.Object) bool {
-		return live == nil || !labels.SelectorFromSet(live).Matches(labels.Set(obj.GetLabels()))
-	}
-
-	pods := &corev1.PodList{}
-	if err := r.assessmentReader().List(ctx, pods, managed, client.InNamespace(assessment.Namespace)); err != nil {
-		return false, fmt.Errorf("listing assessment pods: %w", err)
-	}
-
-	waiting := false
-
-	for i := range pods.Items {
-		pod := &pods.Items[i]
-		if !isStale(pod) {
-			continue
-		}
-
-		waiting = true
-
-		if err := r.deleteObject(ctx, pod); err != nil {
-			return false, err
-		}
-	}
-
-	if waiting {
-		// A deletion request does not stop a pod immediately. Wait until the old
-		// writers are actually gone before deleting anything they could recreate.
-		return false, nil
-	}
-
-	cms := &corev1.ConfigMapList{}
-	if err := r.assessmentReader().List(ctx, cms, managed, client.InNamespace(assessment.Namespace)); err != nil {
-		return false, fmt.Errorf("listing assessment ConfigMaps: %w", err)
-	}
-
-	for i := range cms.Items {
-		if isStale(&cms.Items[i]) {
-			waiting = true
-
-			if err := r.deleteObject(ctx, &cms.Items[i]); err != nil {
-				return false, err
-			}
-		}
-	}
-
-	done, err := r.cleanupRequirements(ctx, live)
-
-	return !waiting && done, err
-}
-
-func (r *UpgradeableController) cleanupRequirements(ctx context.Context, live map[string]string) (bool, error) {
-	crs := &openshiftapiextensionsv1.CompatibilityRequirementList{}
-	if err := r.assessmentReader().List(ctx, crs, client.MatchingLabels{assessment.ManagedLabel: assessment.ManagedLabelValue}); err != nil {
-		return false, fmt.Errorf("listing assessment requirements for cleanup: %w", err)
-	}
-
-	waiting := false
-	deletedAssessments := map[string]bool{}
-	// Collection deletion is scoped to exact stale assessment label sets.
-	for i := range crs.Items {
-		cr := &crs.Items[i]
-		if live != nil && labels.SelectorFromSet(live).Matches(labels.Set(cr.Labels)) {
-			continue
-		}
-
-		waiting = true
-
-		selector := client.MatchingLabels{assessment.ManagedLabel: assessment.ManagedLabelValue, assessment.CurrentVersionLabel: cr.Labels[assessment.CurrentVersionLabel], assessment.TargetVersionLabel: cr.Labels[assessment.TargetVersionLabel]}
-
-		key := labels.SelectorFromSet(map[string]string(selector)).String()
-		if deletedAssessments[key] {
-			continue
-		}
-
-		if err := r.DeleteAllOf(ctx, &openshiftapiextensionsv1.CompatibilityRequirement{}, selector); err != nil {
-			return false, fmt.Errorf("deleting stale assessment requirements: %w", err)
-		}
-
-		deletedAssessments[key] = true
-	}
-
-	return !waiting, nil
-}
-
+// deleteObject deletes only the instance that was observed. A failed pod is
+// replaced by the next assessment; a pod left over from an assessment that no
+// longer applies is ignored rather than collected.
 func (r *UpgradeableController) deleteObject(ctx context.Context, obj client.Object) error {
 	if obj.GetDeletionTimestamp() != nil {
 		return nil
@@ -213,12 +111,12 @@ func (r *UpgradeableController) deleteObject(ctx context.Context, obj client.Obj
 
 func (r *UpgradeableController) processRequirements(ctx context.Context, assessmentLabels map[string]string, targetVersion string) UpgradeableResult {
 	crs := &openshiftapiextensionsv1.CompatibilityRequirementList{}
-	if err := r.assessmentReader().List(ctx, crs, client.MatchingLabels(assessmentLabels)); err != nil {
+	if err := r.List(ctx, crs, client.MatchingLabels(assessmentLabels)); err != nil {
 		return assessmentError(fmt.Errorf("listing assessment requirements: %w", err))
 	}
 
 	clusterAPI := &operatorv1alpha1.ClusterAPI{}
-	if err := r.assessmentReader().Get(ctx, client.ObjectKey{Name: clusterAPIName}, clusterAPI); err != nil {
+	if err := r.Get(ctx, client.ObjectKey{Name: clusterAPIName}, clusterAPI); err != nil {
 		return assessmentError(fmt.Errorf("getting Cluster API configuration: %w", err))
 	}
 
@@ -233,13 +131,7 @@ func (r *UpgradeableController) processRequirements(ctx context.Context, assessm
 	// A partial result cannot represent the whole target payload. Even if one
 	// requirement is incompatible, wait for all verdicts to be admitted and fresh.
 	for _, cr := range crs.Items {
-		admitted := meta.FindStatusCondition(cr.Status.Conditions, openshiftapiextensionsv1.CompatibilityRequirementAdmitted)
-
-		compatible := meta.FindStatusCondition(cr.Status.Conditions, openshiftapiextensionsv1.CompatibilityRequirementCompatible)
-
-		// Wait for the CompatibilityRequirement Admitted and Compatible conditions to be present and true.
-		if admitted == nil || admitted.Status != metav1.ConditionTrue ||
-			compatible == nil || compatible.ObservedGeneration < cr.Generation || compatible.Status == metav1.ConditionUnknown {
+		if !conclusiveVerdict(&cr) {
 			return assessmentWaiting("CompatibilityRequirement conditions")
 		}
 
@@ -273,6 +165,18 @@ func (r *UpgradeableController) processRequirements(ctx context.Context, assessm
 	return result.WithUpgradeable(configv1.ConditionFalse, "NotCompatible", message)
 }
 
+// conclusiveVerdict reports whether the requirement has been admitted and has a
+// current compatibility verdict. Both the assessment and its watch predicate
+// depend on this definition of a publishable result.
+func conclusiveVerdict(requirement *openshiftapiextensionsv1.CompatibilityRequirement) bool {
+	admitted := meta.FindStatusCondition(requirement.Status.Conditions, openshiftapiextensionsv1.CompatibilityRequirementAdmitted)
+	compatible := meta.FindStatusCondition(requirement.Status.Conditions, openshiftapiextensionsv1.CompatibilityRequirementCompatible)
+
+	return admitted != nil && admitted.Status == metav1.ConditionTrue &&
+		compatible != nil && compatible.Status != metav1.ConditionUnknown &&
+		compatible.ObservedGeneration >= requirement.Generation
+}
+
 // Conflicts block upgrade eligibility, while API errors mean eligibility is unknown.
 func (r *UpgradeableController) requirementConflicts(ctx context.Context, requirement *openshiftapiextensionsv1.CompatibilityRequirement, unmanaged sets.Set[string]) error {
 	name := requirement.Status.CRDName
@@ -280,7 +184,7 @@ func (r *UpgradeableController) requirementConflicts(ctx context.Context, requir
 	compatible := meta.FindStatusCondition(requirement.Status.Conditions, openshiftapiextensionsv1.CompatibilityRequirementCompatible)
 
 	// Get the CRD.
-	if err := r.assessmentReader().Get(ctx, client.ObjectKey{Name: name}, crd); err != nil {
+	if err := r.Get(ctx, client.ObjectKey{Name: name}, crd); err != nil {
 		if apierrors.IsNotFound(err) {
 			if !unmanaged.Has(name) {
 				return nil
@@ -329,14 +233,4 @@ func (r *UpgradeableController) requirementConflicts(ctx context.Context, requir
 	}
 
 	return nil
-}
-
-// Pod completion and output informer events can arrive in either order. Read
-// outputs directly so a completed pod cannot appear to have written an empty set.
-func (r *UpgradeableController) assessmentReader() client.Reader {
-	if r.apiReader != nil {
-		return r.apiReader
-	}
-
-	return r.Client
 }

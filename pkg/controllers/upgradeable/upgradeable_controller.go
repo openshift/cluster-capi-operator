@@ -31,8 +31,8 @@ import (
 	openshiftapiextensionsv1 "github.com/openshift/api/apiextensions/v1"
 	configv1 "github.com/openshift/api/config/v1"
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
+	assessment "github.com/openshift/cluster-capi-operator/pkg/controllers/upgradeable/pods"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
-	assessment "github.com/openshift/cluster-capi-operator/pkg/upgradeable"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 )
@@ -54,7 +54,6 @@ const (
 type UpgradeableController struct {
 	client.Client
 	ContainerImage string
-	apiReader      client.Reader
 }
 
 // Reconcile reports the controller status on the cluster-api ClusterOperator.
@@ -78,7 +77,6 @@ func (r *UpgradeableController) Reconcile(ctx context.Context, _ ctrl.Request) (
 // request, but all watches must map to the same target so that their events
 // coalesce in the single workqueue.
 func (r *UpgradeableController) SetupWithManager(mgr ctrl.Manager) error {
-	r.apiReader = mgr.GetAPIReader()
 	if err := ctrl.NewControllerManagedBy(mgr).
 		Named(controllerName).
 		// Notify on creation of the ClusterOperator
@@ -107,9 +105,11 @@ func (r *UpgradeableController) SetupWithManager(mgr ctrl.Manager) error {
 		Watches(&apiextensionsv1.CustomResourceDefinition{}, handler.EnqueueRequestsFromMapFunc(operatorstatus.ToClusterOperator), builder.WithPredicates(predicate.LabelChangedPredicate{})).
 		Watches(&corev1.Pod{}, handler.EnqueueRequestsFromMapFunc(operatorstatus.ToClusterOperator), builder.WithPredicates(managedAssessment())).
 		Watches(&corev1.ConfigMap{}, handler.EnqueueRequestsFromMapFunc(operatorstatus.ToClusterOperator), builder.WithPredicates(managedAssessment())).
-		// CRD remediation changes requirement status without changing the target
-		// version. Do not filter these events to generation changes alone.
-		Watches(&openshiftapiextensionsv1.CompatibilityRequirement{}, handler.EnqueueRequestsFromMapFunc(operatorstatus.ToClusterOperator), builder.WithPredicates(managedAssessment())).
+		// CRD remediation changes verdicts without changing the target version, so
+		// these events are not filtered to generation changes. Only conclusive
+		// verdicts can change the published condition, and intermediate ones
+		// cannot be acted on anyway.
+		Watches(&openshiftapiextensionsv1.CompatibilityRequirement{}, handler.EnqueueRequestsFromMapFunc(operatorstatus.ToClusterOperator), builder.WithPredicates(managedAssessment(), conclusiveVerdictChanged())).
 		Complete(r); err != nil {
 		return fmt.Errorf("failed to create controller: %w", err)
 	}
@@ -149,4 +149,19 @@ func managedAssessment() predicate.Predicate {
 	return predicate.NewPredicateFuncs(func(obj client.Object) bool {
 		return obj.GetLabels()[assessment.ManagedLabel] == assessment.ManagedLabelValue
 	})
+}
+
+// conclusiveVerdictChanged passes creation and deletion through, and limits
+// updates to requirements whose verdict could be published.
+func conclusiveVerdictChanged() predicate.Predicate {
+	return predicate.Funcs{
+		CreateFunc: func(event.CreateEvent) bool { return true },
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			requirement, ok := e.ObjectNew.(*openshiftapiextensionsv1.CompatibilityRequirement)
+
+			return ok && conclusiveVerdict(requirement)
+		},
+		DeleteFunc:  func(event.DeleteEvent) bool { return true },
+		GenericFunc: func(event.GenericEvent) bool { return false },
+	}
 }

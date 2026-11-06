@@ -17,6 +17,7 @@ package createrequirements
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io"
@@ -25,106 +26,134 @@ import (
 	"sort"
 
 	openshiftapiextensionsv1 "github.com/openshift/api/apiextensions/v1"
+	"github.com/openshift/cluster-capi-operator/pkg/controllers/upgradeable/pods"
+	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
-	"github.com/openshift/cluster-capi-operator/pkg/upgradeable"
-	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	k8syaml "sigs.k8s.io/yaml"
 )
 
+const (
+	// RequirementNamePrefix names every requirement created by an assessment.
+	RequirementNamePrefix = "capi-operator-upgradeable-"
+
+	// requirementsFieldOwner owns the requirement set through server side apply.
+	requirementsFieldOwner = "UpgradeableCompatibilityRequirements"
+)
+
 var (
-	errStaleImages    = errors.New("payload images ConfigMap does not match the assessment")
 	errNoProfiles     = errors.New("no provider profiles discovered")
 	errCRDNameMissing = errors.New("CRD has no name")
-	errNameTooLong    = errors.New("requirement name exceeds 253 characters")
 )
 
 // Run executes the requirements pod entrypoint.
 func Run(ctx context.Context, args []string) error {
-	return upgradeable.Run(ctx, "upgradeable-compatibility-requirements", args, func(ctx context.Context, c client.Client, current, target string) error {
+	return pods.Run(ctx, "upgradeable-compatibility-requirements", args, func(ctx context.Context, c client.Client, current, target string) error {
 		return Step(ctx, c, current, target, providerimages.ProviderImageMountBase)
 	})
 }
 
-// Step discovers the complete CRD set before creating any requirements.
+// Step converges the requirement set on the CRDs of the target payload.
 func Step(ctx context.Context, c client.Client, current, target, root string) error {
-	cm := &corev1.ConfigMap{}
-	if err := c.Get(ctx, client.ObjectKey{Namespace: upgradeable.Namespace, Name: upgradeable.ImagesConfigMapName}, cm); err != nil {
-		if apierrors.IsNotFound(err) {
-			return upgradeable.Terminal(err)
-		}
-
-		return upgradeable.APIError(err)
-	}
-
-	assessmentLabels := upgradeable.AssessmentLabels(current, target)
-	// The mounts were chosen from a particular assessment. Refuse stale inputs
-	// rather than stamp their CRDs with this pod's version labels.
-	if !labels.SelectorFromSet(assessmentLabels).Matches(labels.Set(cm.Labels)) {
-		return upgradeable.Terminal(errStaleImages)
-	}
-
-	images := sets.New[string]()
-	for _, image := range cm.Data {
-		images.Insert(image)
-	}
-
 	// Parse every profile before publishing anything, so malformed YAML in a
 	// later profile does not leave a partially created requirement set.
-	crds, err := DiscoverCRDs(root, sets.List(images))
+	crds, err := DiscoverCRDs(root)
 	if err != nil {
-		return upgradeable.Terminal(err)
+		return pods.Terminal(err)
 	}
 
-	owner, err := upgradeable.OwnerReference(ctx, c)
+	owner, err := pods.OwnerReference(ctx, c)
 	if err != nil {
 		return err
 	}
 
+	assessmentLabels := pods.AssessmentLabels(current, target)
+	expected := sets.New[string]()
+	requirements := make([]*openshiftapiextensionsv1.CompatibilityRequirement, 0, len(crds))
+
 	for _, name := range sets.List(sets.KeySet(crds)) {
-		cr, err := BuildRequirement(crds[name])
+		requirement, err := BuildRequirement(crds[name])
 		if err != nil {
-			return upgradeable.Terminal(err)
+			return pods.Terminal(err)
 		}
 
-		cr.Labels = assessmentLabels
+		requirement.Labels = assessmentLabels
+		requirement.OwnerReferences = []metav1.OwnerReference{owner}
+		expected.Insert(requirement.Name)
+		requirements = append(requirements, requirement)
+	}
 
-		cr.OwnerReferences = []metav1.OwnerReference{owner}
-		// Fixed names let a restarted pod resume after partial creation. The
-		// controller removes old assessments first, so existing CRs can be kept
-		// without updating their schemas or disturbing compatibility evaluation.
-		// External edits to an existing requirement are deliberately not repaired.
-		if err := c.Create(ctx, cr); err != nil && !apierrors.IsAlreadyExists(err) {
-			return upgradeable.APIError(fmt.Errorf("creating requirement %s: %w", cr.Name, err))
+	// The target payload is the complete requirement set. A requirement whose CRD
+	// it no longer contains must not keep contributing an earlier verdict.
+	if err := deleteUnexpected(ctx, c, expected); err != nil {
+		return err
+	}
+
+	// Server side apply replays safely after an ambiguous API failure and repairs
+	// external edits to the fields this manager owns, including the labels that
+	// identify the assessment.
+	for _, requirement := range requirements {
+		if err := c.Patch(ctx, requirement, client.Apply, operatorstatus.CAPIFieldOwner(requirementsFieldOwner), client.ForceOwnership); err != nil {
+			return pods.APIError(fmt.Errorf("applying requirement %s: %w", requirement.Name, err))
 		}
 	}
 
 	return nil
 }
 
-// DiscoverCRDs aggregates all mounted profiles alphabetically. The first
-// occurrence of a CRD wins; image reference order breaks equal profile names.
-func DiscoverCRDs(root string, images []string) (map[string]*apiextensionsv1.CustomResourceDefinition, error) {
+func deleteUnexpected(ctx context.Context, c client.Client, expected sets.Set[string]) error {
+	existing := &openshiftapiextensionsv1.CompatibilityRequirementList{}
+	if err := c.List(ctx, existing, client.MatchingLabels{pods.ManagedLabel: pods.ManagedLabelValue}); err != nil {
+		return pods.APIError(fmt.Errorf("listing assessment requirements: %w", err))
+	}
+
+	for i := range existing.Items {
+		requirement := &existing.Items[i]
+		if expected.Has(requirement.Name) {
+			continue
+		}
+
+		// Deletion is asynchronous because the requirement has a finalizer, and
+		// nothing in this pod may wait for it.
+		if err := c.Delete(ctx, requirement); client.IgnoreNotFound(err) != nil {
+			return pods.APIError(fmt.Errorf("deleting stale requirement %s: %w", requirement.Name, err))
+		}
+	}
+
+	return nil
+}
+
+// DiscoverCRDs aggregates all mounted profiles. The first occurrence of a CRD
+// wins, ordered by image volume name and then by profile name.
+func DiscoverCRDs(root string) (map[string]*apiextensionsv1.CustomResourceDefinition, error) {
 	crds := map[string]*apiextensionsv1.CustomResourceDefinition{}
 
 	type profileManifests struct{ name, path string }
 
 	manifests := []profileManifests{}
 
-	for _, image := range images {
-		dir := filepath.Join(root, providerimages.VolumeNameForImageRef(image), "capi-operator-manifests")
+	volumes, err := os.ReadDir(root) // ReadDir sorts entries by name.
+	if err != nil {
+		return nil, fmt.Errorf("reading provider image mounts: %w", err)
+	}
 
-		profiles, err := os.ReadDir(dir) // ReadDir sorts entries by name.
+	for _, volume := range volumes {
+		if !volume.IsDir() {
+			continue
+		}
+
+		dir := filepath.Join(root, volume.Name(), "capi-operator-manifests")
+
+		profiles, err := os.ReadDir(dir)
 		if err != nil {
-			return nil, fmt.Errorf("reading profiles for %s: %w", image, err)
+			return nil, fmt.Errorf("reading profiles for %s: %w", volume.Name(), err)
 		}
 
 		// Profiles may contain different CRDs. Assessing only the installed
@@ -199,23 +228,15 @@ func readCRDs(path string, crds map[string]*apiextensionsv1.CustomResourceDefini
 
 // BuildRequirement constructs an observation-only requirement for every served version.
 func BuildRequirement(crd *apiextensionsv1.CustomResourceDefinition) (*openshiftapiextensionsv1.CompatibilityRequirement, error) {
-	name := "capi-operator-upgradeable-" + crd.Name
-	if len(name) > 253 {
-		return nil, fmt.Errorf("%w: %s", errNameTooLong, name)
-	}
-
-	crd = crd.DeepCopy()
-	// Compare the schema as the API server would default it, avoiding apparent
-	// differences caused only by omitted CRD defaults in provider manifests.
-	apiextensionsv1.SetObjectDefaults_CustomResourceDefinition(crd)
-
 	data, err := k8syaml.Marshal(crd)
 	if err != nil {
 		return nil, fmt.Errorf("encoding CRD %s: %w", crd.Name, err)
 	}
 
 	return &openshiftapiextensionsv1.CompatibilityRequirement{
-		ObjectMeta: metav1.ObjectMeta{Name: name},
+		// Server side apply requires the applied manifest to be self-describing.
+		TypeMeta:   metav1.TypeMeta{APIVersion: openshiftapiextensionsv1.GroupVersion.String(), Kind: "CompatibilityRequirement"},
+		ObjectMeta: metav1.ObjectMeta{Name: RequirementName(crd.Name)},
 		Spec: openshiftapiextensionsv1.CompatibilityRequirementSpec{
 			CompatibilitySchema: openshiftapiextensionsv1.CompatibilitySchema{
 				CustomResourceDefinition: openshiftapiextensionsv1.CRDData{Type: openshiftapiextensionsv1.CRDDataTypeYAML, Data: string(data)},
@@ -228,4 +249,18 @@ func BuildRequirement(crd *apiextensionsv1.CustomResourceDefinition) (*openshift
 			CustomResourceDefinitionSchemaValidation: openshiftapiextensionsv1.CustomResourceDefinitionSchemaValidation{Action: openshiftapiextensionsv1.CRDAdmitActionWarn},
 		},
 	}, nil
+}
+
+// RequirementName returns the deterministic name of the requirement that
+// assesses crdName. The human readable form is used unless it exceeds the
+// maximum length permitted for a resource name.
+func RequirementName(crdName string) string {
+	name := RequirementNamePrefix + crdName
+	if len(name) <= validation.DNS1123SubdomainMaxLength {
+		return name
+	}
+
+	// Truncating would make distinct CRD names collide, and shortening their DNS
+	// labels would change them, so the name is replaced by its hash instead.
+	return fmt.Sprintf("%s%x", RequirementNamePrefix, sha256.Sum256([]byte(crdName)))
 }
