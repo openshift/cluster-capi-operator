@@ -24,6 +24,8 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
+	"time"
 
 	openshiftapiextensionsv1 "github.com/openshift/api/apiextensions/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/upgradeable/pods"
@@ -36,6 +38,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/validation"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	k8syaml "sigs.k8s.io/yaml"
@@ -63,37 +66,45 @@ func Run(ctx context.Context, args []string) error {
 
 // Step converges the requirement set on the CRDs of the target payload.
 func Step(ctx context.Context, c client.Client, current, target, root string) error {
-	// Parse every profile before publishing anything, so malformed YAML in a
-	// later profile does not leave a partially created requirement set.
-	crds, err := DiscoverCRDs(root)
-	if err != nil {
-		return pods.Terminal(err)
-	}
-
-	owner, err := pods.OwnerReference(ctx, c)
-	if err != nil {
-		return err
-	}
-
 	assessmentLabels := pods.AssessmentLabels(current, target)
 	expected := sets.New[string]()
-	requirements := make([]*openshiftapiextensionsv1.CompatibilityRequirement, 0, len(crds))
+	requirements := []*openshiftapiextensionsv1.CompatibilityRequirement{}
 
-	for _, name := range sets.List(sets.KeySet(crds)) {
-		requirement, err := BuildRequirement(crds[name])
+	// Without a target there is no payload to read, so the requirement set
+	// converges to empty and nothing needs an owner reference.
+	if target != "" {
+		// Parse every profile before publishing anything, so malformed YAML in a
+		// later profile does not leave a partially created requirement set.
+		crds, err := DiscoverCRDs(root)
 		if err != nil {
 			return pods.Terminal(err)
 		}
 
-		requirement.Labels = assessmentLabels
-		requirement.OwnerReferences = []metav1.OwnerReference{owner}
-		expected.Insert(requirement.Name)
-		requirements = append(requirements, requirement)
+		owner, err := pods.OwnerReference(ctx, c)
+		if err != nil {
+			return err
+		}
+
+		for _, name := range sets.List(sets.KeySet(crds)) {
+			requirement, err := BuildRequirement(crds[name])
+			if err != nil {
+				return pods.Terminal(err)
+			}
+
+			requirement.Labels = assessmentLabels
+			requirement.OwnerReferences = []metav1.OwnerReference{owner}
+			expected.Insert(requirement.Name)
+			requirements = append(requirements, requirement)
+		}
 	}
 
 	// The target payload is the complete requirement set. A requirement whose CRD
 	// it no longer contains must not keep contributing an earlier verdict.
 	if err := deleteUnexpected(ctx, c, expected); err != nil {
+		return err
+	}
+
+	if err := waitForExpected(ctx, c, expected); err != nil {
 		return err
 	}
 
@@ -107,6 +118,69 @@ func Step(ctx context.Context, c client.Client, current, target, root string) er
 	}
 
 	return nil
+}
+
+// waitForExpected blocks until no requirement about to be applied is still
+// terminating. Applying to a requirement that an earlier pass deleted succeeds,
+// but the object then vanishes with its finalizer and the assessment is left
+// without a verdict, so the step waits for the deletion to complete instead.
+func waitForExpected(ctx context.Context, c client.Client, expected sets.Set[string]) error {
+	if expected.Len() == 0 {
+		return nil
+	}
+
+	var listErr error
+
+	terminating := []string{}
+
+	check := func(ctx context.Context) (bool, error) {
+		existing := &openshiftapiextensionsv1.CompatibilityRequirementList{}
+		if err := c.List(ctx, existing, client.MatchingLabels{pods.ManagedLabel: pods.ManagedLabelValue}); err != nil {
+			// Transient list failures are retried by the caller; only a stuck
+			// deletion is a terminal outcome for this pod.
+			listErr = pods.APIError(fmt.Errorf("listing assessment requirements: %w", err))
+
+			return false, listErr
+		}
+
+		terminating = terminating[:0]
+
+		for i := range existing.Items {
+			requirement := &existing.Items[i]
+			if expected.Has(requirement.Name) && requirement.DeletionTimestamp != nil {
+				terminating = append(terminating, requirement.Name)
+			}
+		}
+
+		// List order is not guaranteed, so name the stuck requirements in a stable order.
+		sort.Strings(terminating)
+
+		return len(terminating) == 0, nil
+	}
+
+	if err := wait.PollUntilContextCancel(ctx, time.Second, true, check); err != nil {
+		if listErr != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+			return listErr
+		}
+
+		if len(terminating) == 0 {
+			return pods.Terminal(fmt.Errorf("waiting for requirements to finish terminating: %w", err))
+		}
+
+		return pods.Terminal(fmt.Errorf("requirements %s are still terminating: %w", summarizeNames(terminating), err))
+	}
+
+	return nil
+}
+
+// summarizeNames bounds a multi-name error message so it remains suitable for pod status.
+func summarizeNames(names []string) string {
+	const limit = 5
+	if len(names) <= limit {
+		return strings.Join(names, ", ")
+	}
+
+	return fmt.Sprintf("%s and %d more", strings.Join(names[:limit], ", "), len(names)-limit)
 }
 
 func deleteUnexpected(ctx context.Context, c client.Client, expected sets.Set[string]) error {

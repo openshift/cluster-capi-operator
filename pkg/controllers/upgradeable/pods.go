@@ -68,6 +68,12 @@ func (r *UpgradeableController) basePod(name, command, currentVersion, targetVer
 }
 
 func (r *UpgradeableController) extractorPod(currentVersion string, target *configv1.Release, co *configv1.ClusterOperator) *corev1.Pod {
+	// An empty target has no payload to mount. The extractor then records that
+	// the assessment has no provider images rather than reading a release image.
+	if target == nil {
+		return r.basePod(assessment.ExtractorPodName, "upgradeable-payload-images-extractor", currentVersion, "", co)
+	}
+
 	pod := r.basePod(assessment.ExtractorPodName, "upgradeable-payload-images-extractor", currentVersion, target.Version, co)
 	addImageVolume(pod, "release-image", target.Image, "/release-image")
 

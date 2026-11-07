@@ -50,13 +50,16 @@ func (r *UpgradeableController) reconcile(ctx context.Context) UpgradeableResult
 		return assessmentError(err)
 	}
 
-	if target == nil {
-		// TODO: We should set Upgradeable=Unknown in this case so the Upgradeable condition is always set.
-		return UpgradeableResult{ResultGenerator.Success()}
+	currentVersion := cv.Status.Desired.Version
+
+	// Empty target version means no target. We deliberately reconcile this to
+	// clean up artifacts and clear Upgradeable condition.
+	targetVersion := ""
+	if target != nil {
+		targetVersion = target.Version
 	}
 
-	currentVersion := cv.Status.Desired.Version
-	liveLabels := assessment.AssessmentLabels(currentVersion, target.Version)
+	liveLabels := assessment.AssessmentLabels(currentVersion, targetVersion)
 
 	co := &configv1.ClusterOperator{}
 	if err := r.Get(ctx, client.ObjectKey{Name: operatorstatus.ClusterOperatorName}, co); err != nil {
@@ -79,17 +82,17 @@ func (r *UpgradeableController) reconcile(ctx context.Context) UpgradeableResult
 	if !labels.SelectorFromSet(liveLabels).Matches(labels.Set(cm.Labels)) {
 		// The informer cache can briefly serve the previous assessment's copy of
 		// the ConfigMap. A succeeded extractor has already written the new one.
-		return assessmentWaiting(fmt.Sprintf("payload images for %s to %s", currentVersion, target.Version))
+		return assessmentWaiting(fmt.Sprintf("payload images for %s to %s", currentVersion, targetVersion))
 	}
 
-	pod := r.requirementsPod(currentVersion, target.Version, cm, co)
+	pod := r.requirementsPod(currentVersion, targetVersion, cm, co)
 	// Only the creator knows how many CRDs the target contains. Its successful
 	// exit is the completeness signal, including when the resulting set is empty.
 	if result := r.ensureAssessmentPod(ctx, pod); result != nil {
 		return *result
 	}
 
-	return r.processRequirements(ctx, liveLabels, target.Version)
+	return r.processRequirements(ctx, liveLabels, targetVersion)
 }
 
 // deleteObject deletes only the instance that was observed. A failed pod is
@@ -110,6 +113,13 @@ func (r *UpgradeableController) deleteObject(ctx context.Context, obj client.Obj
 }
 
 func (r *UpgradeableController) processRequirements(ctx context.Context, assessmentLabels map[string]string, targetVersion string) UpgradeableResult {
+	// Without a next minor release there is no target payload, so nothing can be
+	// said about compatibility with an upgrade, whatever earlier requirements report.
+	if targetVersion == "" {
+		result := UpgradeableResult{ResultGenerator.Success()}
+		return result.WithUpgradeable(configv1.ConditionUnknown, "NoUpdate", "No update to the next minor release is available, so Cluster API compatibility cannot be assessed")
+	}
+
 	crs := &openshiftapiextensionsv1.CompatibilityRequirementList{}
 	if err := r.List(ctx, crs, client.MatchingLabels(assessmentLabels)); err != nil {
 		return assessmentError(fmt.Errorf("listing assessment requirements: %w", err))

@@ -12,7 +12,7 @@ The controller always runs. The ClusterOperator controller retains ownership of 
 
 ## Assessment
 
-The target is the highest semantic version for the next minor release (`X.(Y+1).0`, including prereleases) in either `ClusterVersion/version` update list. Conditional updates are included even when not recommended. Available updates win version ties. Without a target, the controller removes its condition and assessment resources.
+The target is the highest semantic version for the next minor release (`X.(Y+1).0`, including prereleases) in either `ClusterVersion/version` update list. Conditional updates are included even when not recommended. Available updates win version ties. Without a target, the payload is empty: the extractor records no images, the creation pod converges the requirement set to empty, and the controller reports `Upgradeable=Unknown` with reason `NoUpdate`.
 
 The assessment uses two pods in `openshift-cluster-api-operator`, each running a dedicated binary from the current operator image:
 
@@ -21,15 +21,15 @@ The assessment uses two pods in `openshift-cluster-api-operator`, each running a
 
 Pod completion marks each step complete. Pods retry transient API failures internally, exit on terminal input or permission errors, and have a 30 minute deadline. The controller recreates failed pods with reconciliation backoff.
 
-Every assessment resource carries current version, target version, and managed labels under `capi-operator.openshift.io`. Pods have fixed names, so a pod created for different assessed versions is deleted and the new one is only created once that deletion completes. A pod left behind by an assessment that no longer applies, such as after its target stops being offered, is ignored rather than collected.
+Every assessment resource carries current version, target version, and managed labels under `capi-operator.openshift.io`. Pods have fixed names, so a pod created for different assessed versions is deleted and the new one is only created once that deletion completes.
 
-The payload images ConfigMap is applied in place and never deleted, so its labels always identify the assessment whose images it holds. The creation pod owns the requirement set: it deletes requirements whose CRDs the target payload no longer contains and applies the rest, so re-running it repairs labels, ownership and schema drift rather than preserving them.
+The payload images ConfigMap is applied in place and never deleted, so its labels always identify the assessment whose images it holds. It holds no images when there is no target. The creation pod owns the requirement set: it deletes requirements whose CRDs the target payload no longer contains and applies the rest, so re-running it repairs labels, ownership and schema drift rather than preserving them. Before applying, it waits for any requirement it will apply to finish terminating, because an apply to a requirement that a previous assessment deleted would succeed and then vanish with its finalizer. The wait is bounded by the pod deadline and fails terminally, naming the requirements that never finalized.
 
 ## Conditions
 
 | State | Upgradeable |
 | --- | --- |
-| No next minor target | Absent |
+| No next minor target | `Unknown`, `NoUpdate`, message names the absence of a next minor release |
 | Assessment running or verdicts pending | `Unknown`, `Progressing` |
 | API error or failed assessment pod | `Unknown`, `EphemeralError` |
 | Complete assessment with no ownership or compatibility conflicts | `True`, `Compatible`, message names target |

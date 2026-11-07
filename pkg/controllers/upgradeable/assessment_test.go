@@ -19,6 +19,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
@@ -31,6 +32,7 @@ import (
 	extractimages "github.com/openshift/cluster-capi-operator/pkg/controllers/upgradeable/pods/extract-images"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
+	"github.com/openshift/cluster-capi-operator/pkg/revisiongenerator"
 	"github.com/openshift/cluster-capi-operator/pkg/test"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -97,6 +99,58 @@ var _ = Describe("Assessment chain", func() {
 			HaveField("Command", Equal([]string{"/upgradeable-compatibility-requirements"})),
 			HaveField("Args", Equal([]string{"4.16.0", "4.17.0"})),
 		)))
+
+		By("running the same binaries without a target payload to inspect")
+
+		withoutTarget := r.extractorPod("4.16.0", nil, assessmentOwner)
+		Expect(withoutTarget.Spec.Containers).To(ConsistOf(SatisfyAll(
+			HaveField("Image", Equal(r.ContainerImage)),
+			HaveField("Command", Equal([]string{"/upgradeable-payload-images-extractor"})),
+			HaveField("Args", Equal([]string{"4.16.0", ""})),
+		)))
+		Expect(withoutTarget.Spec.Volumes).To(BeEmpty())
+
+		withoutImages := r.requirementsPod("4.16.0", "", &corev1.ConfigMap{Data: nil}, assessmentOwner)
+		Expect(withoutImages.Spec.Containers).To(ConsistOf(SatisfyAll(
+			HaveField("Image", Equal(r.ContainerImage)),
+			HaveField("Command", Equal([]string{"/upgradeable-compatibility-requirements"})),
+			HaveField("Args", Equal([]string{"4.16.0", ""})),
+		)))
+		Expect(withoutImages.Spec.Volumes).To(BeEmpty())
+	})
+
+	It("should clear payload images when there is no target", func() {
+		root := GinkgoT().TempDir()
+		manifest := filepath.Join(root, "images.yaml")
+		Expect(os.WriteFile(manifest, []byte("apiVersion: v1\nkind: ConfigMap\ndata:\n  core: provider:latest\n"), 0600)).To(Succeed())
+		Expect(extractimages.Step(ctx, assessmentClient, "4.15.0", "4.16.0", manifest)).To(Succeed())
+
+		key := client.ObjectKey{Namespace: assessment.Namespace, Name: assessment.ImagesConfigMapName}
+		images := &corev1.ConfigMap{}
+		Expect(assessmentClient.Get(ctx, key, images)).To(Succeed())
+		uid := images.UID
+
+		By("applying an empty payload without reading one")
+
+		Expect(extractimages.Step(ctx, assessmentClient, "4.16.0", "", filepath.Join(root, "absent.yaml"))).To(Succeed())
+
+		Expect(assessmentClient.Get(ctx, key, images)).To(Succeed())
+		Expect(images.Data).To(BeEmpty())
+		Expect(images.Labels).To(SatisfyAll(
+			HaveKeyWithValue(assessment.CurrentVersionLabel, "4.16.0"),
+			HaveKeyWithValue(assessment.TargetVersionLabel, ""),
+			HaveKeyWithValue(assessment.ManagedLabel, assessment.ManagedLabelValue),
+		))
+		Expect(images.OwnerReferences).To(ContainElement(HaveField("UID", Equal(assessmentOwner.UID))))
+		Expect(images.UID).To(Equal(uid))
+
+		By("replaying the empty payload without a new write")
+
+		resourceVersion := images.ResourceVersion
+
+		Expect(extractimages.Step(ctx, assessmentClient, "4.16.0", "", filepath.Join(root, "absent.yaml"))).To(Succeed())
+		Expect(assessmentClient.Get(ctx, key, images)).To(Succeed())
+		Expect(images.ResourceVersion).To(Equal(resourceVersion))
 	})
 
 	It("should preserve API defaulted pods across image changes and recreate them for a new assessment", func() {
@@ -177,6 +231,104 @@ var _ = Describe("Assessment chain", func() {
 		Expect(edited.Labels).To(HaveKeyWithValue(assessment.TargetVersionLabel, "4.17.0"))
 		Expect(edited.Labels).To(HaveKeyWithValue(assessment.ManagedLabel, assessment.ManagedLabelValue))
 		Expect(edited.OwnerReferences).To(ContainElement(HaveField("UID", Equal(assessmentOwner.UID))))
+
+		By("reaping the whole set when there is no target")
+
+		installer, err := createrequirements.BuildRequirement(test.GenerateCRD(schema.GroupVersionKind{Group: "installer.example.com", Version: "v1", Kind: "Installer"}))
+		Expect(err).NotTo(HaveOccurred())
+
+		installer.Name = "ccapio-widgets.example.com-1"
+		installer.Labels = map[string]string{revisiongenerator.ManagedLabelKey: "compatibility-requirements"}
+		Expect(assessmentClient.Create(ctx, installer)).To(Succeed())
+
+		Expect(createrequirements.Step(ctx, assessmentClient, "4.16.0", "", filepath.Join(root, "absent"))).To(Succeed())
+
+		Expect(assessmentClient.Get(ctx, client.ObjectKeyFromObject(stale), stale)).To(test.BeK8SNotFound())
+		Expect(assessmentClient.Get(ctx, client.ObjectKeyFromObject(edited), edited)).To(test.BeK8SNotFound())
+		Expect(assessmentClient.Get(ctx, client.ObjectKeyFromObject(installer), installer)).To(Succeed())
+
+		Expect(createrequirements.Step(ctx, assessmentClient, "4.16.0", "", filepath.Join(root, "absent"))).To(Succeed())
+	})
+
+	It("should not apply a requirement whose previous deletion is still pending", func() {
+		target := test.GenerateCRD(schema.GroupVersionKind{Group: "pending.example.com", Version: "v1beta1", Kind: "Pending"})
+		root := writeCompatibilityImageFixture(target)
+
+		pending, err := createrequirements.BuildRequirement(target)
+		Expect(err).NotTo(HaveOccurred())
+
+		pending.Labels = assessment.AssessmentLabels("4.16.0", "4.17.0")
+		pending.Finalizers = []string{holdFinalizer}
+		Expect(assessmentClient.Create(ctx, pending)).To(Succeed())
+		Expect(assessmentClient.Delete(ctx, pending)).To(Succeed())
+
+		stepCtx, stopStep := context.WithCancel(ctx)
+		done := make(chan struct{})
+
+		var stepErr error
+
+		go func() {
+			defer GinkgoRecover()
+			defer close(done)
+
+			stepErr = createrequirements.Step(stepCtx, assessmentClient, "4.16.0", "4.17.0", root)
+		}()
+
+		DeferCleanup(func() {
+			stopStep()
+			Eventually(done, "5s").Should(BeClosed())
+			releaseHold(ctx, pending)
+		})
+
+		By("waiting while the previous requirement is terminating")
+
+		Consistently(done, "1s").ShouldNot(BeClosed())
+
+		terminating := &openshiftapiextensionsv1.CompatibilityRequirement{}
+		Expect(assessmentClient.Get(ctx, client.ObjectKeyFromObject(pending), terminating)).To(Succeed())
+		Expect(terminating.DeletionTimestamp).NotTo(BeNil())
+
+		By("applying the requirement only once its previous deletion completed")
+
+		releaseHold(ctx, pending)
+
+		Eventually(done, "5s").Should(BeClosed())
+		Expect(stepErr).NotTo(HaveOccurred())
+
+		applied := &openshiftapiextensionsv1.CompatibilityRequirement{}
+		Expect(assessmentClient.Get(ctx, client.ObjectKeyFromObject(pending), applied)).To(Succeed())
+		Expect(applied.DeletionTimestamp).To(BeNil())
+		Expect(applied.Labels).To(SatisfyAll(
+			HaveKeyWithValue(assessment.CurrentVersionLabel, "4.16.0"),
+			HaveKeyWithValue(assessment.TargetVersionLabel, "4.17.0"),
+		))
+		Expect(applied.Spec.CustomResourceDefinitionSchemaValidation.Action).To(Equal(openshiftapiextensionsv1.CRDAdmitActionWarn))
+	})
+
+	It("should fail terminally naming requirements that never finalize", func() {
+		target := test.GenerateCRD(schema.GroupVersionKind{Group: "stuck.example.com", Version: "v1beta1", Kind: "Stuck"})
+		root := writeCompatibilityImageFixture(target)
+
+		stuck, err := createrequirements.BuildRequirement(target)
+		Expect(err).NotTo(HaveOccurred())
+
+		stuck.Labels = assessment.AssessmentLabels("4.16.0", "4.17.0")
+		stuck.Finalizers = []string{holdFinalizer}
+		Expect(assessmentClient.Create(ctx, stuck)).To(Succeed())
+		Expect(assessmentClient.Delete(ctx, stuck)).To(Succeed())
+
+		stepCtx, stopStep := context.WithTimeout(ctx, 500*time.Millisecond)
+		DeferCleanup(stopStep)
+		DeferCleanup(func() { releaseHold(ctx, stuck) })
+
+		stepErr := createrequirements.Step(stepCtx, assessmentClient, "4.16.0", "4.17.0", root)
+		Expect(stepErr).To(HaveOccurred())
+		Expect(assessment.IsTerminal(stepErr)).To(BeTrue())
+		Expect(stepErr.Error()).To(ContainSubstring(stuck.Name))
+
+		terminating := &openshiftapiextensionsv1.CompatibilityRequirement{}
+		Expect(assessmentClient.Get(ctx, client.ObjectKeyFromObject(stuck), terminating)).To(Succeed())
+		Expect(terminating.DeletionTimestamp).NotTo(BeNil())
 	})
 
 	It("should surface failed pods as ephemeral errors and recreate them", func() {
@@ -262,14 +414,34 @@ var _ = Describe("Assessment chain", func() {
 		result = r.processRequirements(ctx, cm.Labels, "4.17.0")
 		Expect(result.WriteClusterOperatorStatus(ctx, logr.Discard(), assessmentClient)).To(Succeed())
 		expectUpgradeable(ctx, configv1.ConditionTrue, "Compatible", "4.17.0")
-		By("removing only the owned Upgradeable condition when there is no target")
+		By("reporting an unknown verdict when there is no target")
 
-		result = UpgradeableResult{ResultGenerator.Success()}
+		result = r.processRequirements(ctx, assessment.AssessmentLabels("4.16.0", ""), "")
 		Expect(result.WriteClusterOperatorStatus(ctx, logr.Discard(), assessmentClient)).To(Succeed())
+		expectUpgradeable(ctx, configv1.ConditionUnknown, "NoUpdate", "next minor")
 
 		co := &configv1.ClusterOperator{}
 		Expect(assessmentClient.Get(ctx, client.ObjectKeyFromObject(assessmentOwner), co)).To(Succeed())
-		Expect(co.Status.Conditions).NotTo(ContainElement(HaveField("Type", Equal(configv1.OperatorUpgradeable))))
+		Expect(co.Status.Conditions).To(ContainElement(HaveField("Type", Equal(configv1.OperatorUpgradeable))))
+
+		By("ignoring a conclusive incompatible verdict when there is no target")
+
+		blockedCRD := test.GenerateCRD(schema.GroupVersionKind{Group: "blocked.example.com", Version: "v1", Kind: "Blocked"})
+		blocked, err := createrequirements.BuildRequirement(blockedCRD)
+		Expect(err).NotTo(HaveOccurred())
+
+		blocked.Labels = assessment.AssessmentLabels("4.16.0", "")
+		Expect(assessmentClient.Create(ctx, blocked)).To(Succeed())
+		blocked.Status.CRDName = blockedCRD.Name
+		blocked.Status.Conditions = []metav1.Condition{
+			{Type: "Admitted", Status: metav1.ConditionTrue, Reason: "Admitted", LastTransitionTime: metav1.Now(), ObservedGeneration: blocked.Generation},
+			{Type: "Compatible", Status: metav1.ConditionFalse, Reason: "RequirementsNotMet", LastTransitionTime: metav1.Now(), ObservedGeneration: blocked.Generation},
+		}
+		Expect(assessmentClient.Status().Update(ctx, blocked)).To(Succeed())
+
+		result = r.processRequirements(ctx, assessment.AssessmentLabels("4.16.0", ""), "")
+		Expect(result.WriteClusterOperatorStatus(ctx, logr.Discard(), assessmentClient)).To(Succeed())
+		expectUpgradeable(ctx, configv1.ConditionUnknown, "NoUpdate", "next minor")
 	})
 
 	DescribeTable("should wait for complete, fresh requirement verdicts",
@@ -299,6 +471,27 @@ var _ = Describe("Assessment chain", func() {
 		Entry("unknown verdict", metav1.ConditionTrue, metav1.ConditionUnknown, int64(1)),
 	)
 })
+
+const holdFinalizer = "test.openshift.io/hold"
+
+// releaseHold clears the test hold finalizer so a terminating requirement can be collected.
+func releaseHold(ctx context.Context, requirement *openshiftapiextensionsv1.CompatibilityRequirement) {
+	GinkgoHelper()
+
+	held := &openshiftapiextensionsv1.CompatibilityRequirement{}
+	if err := assessmentClient.Get(ctx, client.ObjectKeyFromObject(requirement), held); err != nil {
+		Expect(err).To(test.BeK8SNotFound())
+
+		return
+	}
+
+	if len(held.Finalizers) == 0 {
+		return
+	}
+
+	held.Finalizers = nil
+	Expect(client.IgnoreNotFound(assessmentClient.Update(ctx, held))).To(Succeed())
+}
 
 func expectUpgradeable(ctx context.Context, status configv1.ConditionStatus, reason, message string) {
 	co := &configv1.ClusterOperator{}

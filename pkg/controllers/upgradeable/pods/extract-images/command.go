@@ -42,20 +42,17 @@ func Run(ctx context.Context, args []string) error {
 
 // Step applies only the payload's provider image data to the assessment ConfigMap.
 func Step(ctx context.Context, c client.Client, current, target, path string) error {
-	// The mounted payload is immutable, so retries cannot repair a missing or
-	// malformed manifest. Treat these input failures as terminal.
-	data, err := os.ReadFile(path) //nolint:gosec // path is supplied by the operator's image volume mount
-	if err != nil {
-		return pods.Terminal(fmt.Errorf("reading payload manifest: %w", err))
-	}
+	var data map[string]string
 
-	source := &corev1.ConfigMap{}
-	if err := yaml.UnmarshalStrict(data, source); err != nil {
-		return pods.Terminal(fmt.Errorf("parsing payload manifest: %w", err))
-	}
+	// With no target there is no payload to read. Applying no data removes the
+	// images of the previous assessment from the ConfigMap in place.
+	if target != "" {
+		payload, err := readProviderImages(path)
+		if err != nil {
+			return err
+		}
 
-	if source.Kind != "ConfigMap" || source.APIVersion != "v1" || len(source.Data) == 0 {
-		return pods.Terminal(errInvalidManifest)
+		data = payload
 	}
 
 	owner, err := pods.OwnerReference(ctx, c)
@@ -70,7 +67,7 @@ func Step(ctx context.Context, c client.Client, current, target, path string) er
 		ObjectMeta: metav1.ObjectMeta{
 			Name: pods.ImagesConfigMapName, Namespace: pods.Namespace,
 			Labels: pods.AssessmentLabels(current, target), OwnerReferences: []metav1.OwnerReference{owner},
-		}, Data: source.Data,
+		}, Data: data,
 	}
 	// The ConfigMap is applied in place, never recreated, so both its data and its
 	// assessment labels are owned by this field manager. SSA replays writes safely
@@ -81,4 +78,24 @@ func Step(ctx context.Context, c client.Client, current, target, path string) er
 	}
 
 	return nil
+}
+
+func readProviderImages(path string) (map[string]string, error) {
+	// The mounted payload is immutable, so retries cannot repair a missing or
+	// malformed manifest. Treat these input failures as terminal.
+	data, err := os.ReadFile(path) //nolint:gosec // path is supplied by the operator's image volume mount
+	if err != nil {
+		return nil, pods.Terminal(fmt.Errorf("reading payload manifest: %w", err))
+	}
+
+	source := &corev1.ConfigMap{}
+	if err := yaml.UnmarshalStrict(data, source); err != nil {
+		return nil, pods.Terminal(fmt.Errorf("parsing payload manifest: %w", err))
+	}
+
+	if source.Kind != "ConfigMap" || source.APIVersion != "v1" || len(source.Data) == 0 {
+		return nil, pods.Terminal(errInvalidManifest)
+	}
+
+	return source.Data, nil
 }

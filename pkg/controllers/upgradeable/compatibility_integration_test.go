@@ -221,6 +221,166 @@ var _ = Describe("Upgrade compatibility integration", func() {
 			configv1.ConditionFalse,
 		),
 	)
+
+	It("should reap and report Unknown when there is no next minor target", func() {
+		By("Offering no next minor release")
+
+		cv := &configv1.ClusterVersion{
+			ObjectMeta: metav1.ObjectMeta{Name: clusterVersionName},
+			Spec:       configv1.ClusterVersionSpec{ClusterID: "11111111-1111-4111-8111-111111111111"},
+		}
+		Expect(assessmentClient.Create(ctx, cv)).To(Succeed())
+		cv.Status.Desired = configv1.Release{Version: "4.16.0", Image: "release:current"}
+		cv.Status.AvailableUpdates = nil
+		cv.Status.ConditionalUpdates = nil
+		Expect(assessmentClient.Status().Update(ctx, cv)).To(Succeed())
+
+		By("Seeding the leftovers of the previous assessment")
+
+		target := test.GenerateCRD(schema.GroupVersionKind{Group: "upgradeable.example.com", Version: "v1beta2", Kind: "Widget"}, "v1beta1")
+		root := writeCompatibilityImageFixture(target)
+
+		previous, err := createrequirements.BuildRequirement(target)
+		Expect(err).NotTo(HaveOccurred())
+
+		previous.Labels = assessment.AssessmentLabels("4.15.0", "4.16.0")
+		Expect(assessmentClient.Create(ctx, previous)).To(Succeed())
+		Expect(extractimages.Step(ctx, assessmentClient, "4.15.0", "4.16.0", filepath.Join(root, "images.yaml"))).To(Succeed())
+
+		By("Running an empty assessment")
+
+		r := &UpgradeableController{Client: assessmentClient, ContainerImage: "operator:current"}
+		empty := assessmentInputs{current: "4.16.0", target: "", payloadManifest: filepath.Join(root, "absent.yaml"), requirementsRoot: GinkgoT().TempDir()}
+
+		driveExtractor(ctx, r, empty)
+
+		By("Waiting for the empty requirement set before publishing")
+
+		Expect(reconcileAssessment(ctx, r)).To(Succeed())
+		expectUpgradeable(ctx, configv1.ConditionUnknown, "Progressing", "")
+
+		Expect(createrequirements.Step(ctx, assessmentClient, empty.current, empty.target, empty.requirementsRoot)).To(Succeed())
+		completeCompatibilityAssessmentPod(ctx, assessment.RequirementsPodName)
+
+		Expect(reconcileAssessment(ctx, r)).To(Succeed())
+
+		By("Publishing an unknown verdict and reaping the assessment resources")
+
+		expectUpgradeable(ctx, configv1.ConditionUnknown, "NoUpdate", "next minor")
+
+		requirements := &openshiftapiextensionsv1.CompatibilityRequirementList{}
+		Expect(assessmentClient.List(ctx, requirements)).To(Succeed())
+		Expect(requirements.Items).To(BeEmpty())
+
+		images := &corev1.ConfigMap{}
+		Expect(assessmentClient.Get(ctx, client.ObjectKey{Namespace: assessment.Namespace, Name: assessment.ImagesConfigMapName}, images)).To(Succeed())
+		Expect(images.Data).To(BeEmpty())
+		Expect(images.Labels).To(SatisfyAll(
+			HaveKeyWithValue(assessment.CurrentVersionLabel, "4.16.0"),
+			HaveKeyWithValue(assessment.TargetVersionLabel, ""),
+		))
+	})
+
+	It("should converge to empty when the target is withdrawn and rebuild when it returns", func() {
+		By("Offering a next minor release")
+
+		cv := &configv1.ClusterVersion{
+			ObjectMeta: metav1.ObjectMeta{Name: clusterVersionName},
+			Spec:       configv1.ClusterVersionSpec{ClusterID: "11111111-1111-4111-8111-111111111111"},
+		}
+		Expect(assessmentClient.Create(ctx, cv)).To(Succeed())
+		cv.Status.Desired = configv1.Release{Version: "4.16.0", Image: "release:current"}
+		cv.Status.AvailableUpdates = []configv1.Release{{Version: "4.17.0", Image: "release:target"}}
+		Expect(assessmentClient.Status().Update(ctx, cv)).To(Succeed())
+
+		Expect(assessmentClient.Create(ctx, &operatorv1alpha1.ClusterAPI{
+			ObjectMeta: metav1.ObjectMeta{Name: "cluster"},
+			Spec:       &operatorv1alpha1.ClusterAPISpec{},
+		})).To(Succeed())
+
+		target := test.GenerateCRD(schema.GroupVersionKind{Group: "upgradeable.example.com", Version: "v1beta2", Kind: "Widget"}, "v1beta1")
+		root := writeCompatibilityImageFixture(target)
+		withTarget := assessmentInputs{current: "4.16.0", target: "4.17.0", payloadManifest: filepath.Join(root, "images.yaml"), requirementsRoot: root}
+
+		r := &UpgradeableController{Client: assessmentClient, ContainerImage: "operator:current"}
+		checker := crdcompatibility.NewCompatibilityRequirementReconciler(assessmentClient)
+
+		By("Assessing a real target")
+
+		targetExtractor := driveExtractor(ctx, r, withTarget)
+		targetRequirements := driveRequirements(ctx, r, withTarget)
+
+		requirement, err := createrequirements.BuildRequirement(target)
+		Expect(err).NotTo(HaveOccurred())
+		_, err = checker.Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKeyFromObject(requirement)})
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(reconcileAssessment(ctx, r)).To(Succeed())
+		expectUpgradeable(ctx, configv1.ConditionTrue, "Compatible", "4.17.0")
+
+		By("Withdrawing the target")
+
+		Expect(assessmentClient.Get(ctx, client.ObjectKey{Name: clusterVersionName}, cv)).To(Succeed())
+		cv.Status.AvailableUpdates = nil
+		cv.Status.ConditionalUpdates = nil
+		Expect(assessmentClient.Status().Update(ctx, cv)).To(Succeed())
+
+		empty := assessmentInputs{current: "4.16.0", target: "", payloadManifest: filepath.Join(root, "absent.yaml"), requirementsRoot: GinkgoT().TempDir()}
+
+		emptyExtractor := driveExtractor(ctx, r, empty)
+		emptyRequirements := driveRequirements(ctx, r, empty)
+		Expect(reconcileAssessment(ctx, r)).To(Succeed())
+
+		By("Reaping the withdrawn assessment")
+
+		expectUpgradeable(ctx, configv1.ConditionUnknown, "NoUpdate", "next minor")
+		Expect(emptyExtractor.UID).NotTo(Equal(targetExtractor.UID))
+		Expect(emptyRequirements.UID).NotTo(Equal(targetRequirements.UID))
+
+		images := &corev1.ConfigMap{}
+		Expect(assessmentClient.Get(ctx, client.ObjectKey{Namespace: assessment.Namespace, Name: assessment.ImagesConfigMapName}, images)).To(Succeed())
+		Expect(images.Data).To(BeEmpty())
+		Expect(images.Labels).To(SatisfyAll(
+			HaveKeyWithValue(assessment.CurrentVersionLabel, "4.16.0"),
+			HaveKeyWithValue(assessment.TargetVersionLabel, ""),
+		))
+
+		withdrawn := &openshiftapiextensionsv1.CompatibilityRequirement{}
+		Expect(assessmentClient.Get(ctx, client.ObjectKeyFromObject(requirement), withdrawn)).To(Succeed())
+		Expect(withdrawn.DeletionTimestamp).NotTo(BeNil())
+
+		By("Finalizing the withdrawn requirement through the real compatibility checker")
+
+		_, err = checker.Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKeyFromObject(requirement)})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(assessmentClient.Get(ctx, client.ObjectKeyFromObject(requirement), withdrawn)).To(test.BeK8SNotFound())
+
+		By("Restoring the target")
+
+		Expect(assessmentClient.Get(ctx, client.ObjectKey{Name: clusterVersionName}, cv)).To(Succeed())
+		cv.Status.AvailableUpdates = []configv1.Release{{Version: "4.17.0", Image: "release:target"}}
+		Expect(assessmentClient.Status().Update(ctx, cv)).To(Succeed())
+
+		restoredExtractor := driveExtractor(ctx, r, withTarget)
+		Expect(restoredExtractor.UID).NotTo(Equal(emptyExtractor.UID))
+
+		restoredRequirements := driveRequirements(ctx, r, withTarget)
+		Expect(restoredRequirements.UID).NotTo(Equal(emptyRequirements.UID))
+
+		By("Publishing no verdict until the rebuilt set is evaluated")
+
+		rebuilt := &openshiftapiextensionsv1.CompatibilityRequirement{}
+		Expect(assessmentClient.Get(ctx, client.ObjectKeyFromObject(requirement), rebuilt)).To(Succeed())
+		Expect(rebuilt.Labels).To(SatisfyAll(
+			HaveKeyWithValue(assessment.CurrentVersionLabel, "4.16.0"),
+			HaveKeyWithValue(assessment.TargetVersionLabel, "4.17.0"),
+		))
+
+		// The rebuilt requirement has no verdict yet, so even a completed creation
+		// pod must not publish compatibility for the restored target.
+		Expect(reconcileAssessment(ctx, r)).To(Succeed())
+		expectUpgradeable(ctx, configv1.ConditionUnknown, "Progressing", "")
+	})
 })
 
 // writeCompatibilityImageFixture writes the target CRD to the compatibility image filesystem fixture.
@@ -262,4 +422,65 @@ func completeCompatibilityAssessmentPod(ctx context.Context, name string) {
 	pod.Status.Phase = corev1.PodSucceeded
 	// Update the pod status.
 	Expect(assessmentClient.Status().Update(ctx, pod)).To(Succeed())
+}
+
+// assessmentInputs names the versions and image filesystem fixtures of one assessment pass.
+// An empty target is a real assessment of a payload that may have nothing left to check.
+type assessmentInputs struct {
+	current, target  string
+	payloadManifest  string
+	requirementsRoot string
+}
+
+// reconcileAssessment drives one reconcile of the assessment controller.
+func reconcileAssessment(ctx context.Context, r *UpgradeableController) error {
+	_, err := r.Reconcile(ctx, ctrl.Request{})
+
+	return err
+}
+
+// awaitAssessmentPod reconciles until the controller created the pod of the
+// assessment described by labels. A pod left over from another assessment is
+// replaced by the controller first.
+func awaitAssessmentPod(ctx context.Context, r *UpgradeableController, name string, labels map[string]string) *corev1.Pod {
+	GinkgoHelper()
+
+	pod := &corev1.Pod{}
+
+	Eventually(func(g Gomega) {
+		g.Expect(reconcileAssessment(ctx, r)).To(Succeed())
+
+		g.Expect(assessmentClient.Get(ctx, client.ObjectKey{Namespace: assessment.Namespace, Name: name}, pod)).To(Succeed())
+		g.Expect(pod.Labels).To(SatisfyAll(
+			HaveKeyWithValue(assessment.CurrentVersionLabel, labels[assessment.CurrentVersionLabel]),
+			HaveKeyWithValue(assessment.TargetVersionLabel, labels[assessment.TargetVersionLabel]),
+		))
+		g.Expect(pod.DeletionTimestamp).To(BeNil())
+	}, "10s", "100ms").Should(Succeed())
+
+	return pod
+}
+
+// driveExtractor runs the extractor pod step against the image fixtures and
+// completes the pod so the next reconcile advances the assessment.
+func driveExtractor(ctx context.Context, r *UpgradeableController, in assessmentInputs) *corev1.Pod {
+	GinkgoHelper()
+
+	pod := awaitAssessmentPod(ctx, r, assessment.ExtractorPodName, assessment.AssessmentLabels(in.current, in.target))
+	Expect(extractimages.Step(ctx, assessmentClient, in.current, in.target, in.payloadManifest)).To(Succeed())
+	completeCompatibilityAssessmentPod(ctx, pod.Name)
+
+	return pod
+}
+
+// driveRequirements runs the requirements pod step against the image fixtures
+// and completes the pod, which leaves the assessment ready to publish.
+func driveRequirements(ctx context.Context, r *UpgradeableController, in assessmentInputs) *corev1.Pod {
+	GinkgoHelper()
+
+	pod := awaitAssessmentPod(ctx, r, assessment.RequirementsPodName, assessment.AssessmentLabels(in.current, in.target))
+	Expect(createrequirements.Step(ctx, assessmentClient, in.current, in.target, in.requirementsRoot)).To(Succeed())
+	completeCompatibilityAssessmentPod(ctx, pod.Name)
+
+	return pod
 }
