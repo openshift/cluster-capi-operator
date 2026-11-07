@@ -109,6 +109,11 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIOperator] Clu
 		// current release, offered to the CVO by the fixture update service.
 		var upgradeTargetVersion, upgradeTargetPayload string
 
+		// The image the fake update service pod runs. It is resolved from the
+		// current payload rather than the target, because only the release the
+		// cluster runs is guaranteed to exist in a disconnected mirror.
+		var graphServerImage string
+
 		// The Clusters CRD as shipped in the target payload, extracted from
 		// the release image. It 1 asserts against its compatibility, and the
 		// incompatible CRD in It 2 is derived from it.
@@ -197,6 +202,14 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIOperator] Clu
 				}
 			})
 
+			By("Resolving the fake update service image from the current payload", func() {
+				var err error
+				graphServerImage, err = resolvePayloadComponentImage(ctx, currentPayload, graphServerImageComponent)
+				Expect(err).ToNot(HaveOccurred(),
+					"resolving the %s image of the current payload %s for the fake update service",
+					graphServerImageComponent, currentPayload)
+			})
+
 			By("Deploying the fake cincinnati update service", func() {
 				namespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{GenerateName: upgradeTestNamespacePrefix}}
 				Expect(cl.Create(ctx, namespace)).To(Succeed(), "creating a namespace for the fake update service")
@@ -211,7 +224,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIOperator] Clu
 
 				graph := updateservice.TwoNodeGraph(upgradeTestChannel, currentVersion, currentPayload,
 					upgradeTargetVersion, upgradeTargetPayload)
-				updateService = deployFakeUpdateService(ctx, namespace.Name, graph)
+				updateService = deployFakeUpdateService(ctx, namespace.Name, graphServerImage, graph)
 				DeferCleanup(func(ctx SpecContext) {
 					Expect(updateService.Cleanup(ctx)).To(Succeed(), "cleaning up the fake cincinnati update service")
 				})
@@ -379,15 +392,16 @@ func clustersCRDIsPresent(ctx context.Context) bool {
 }
 
 // deployFakeUpdateService deploys the cincinnati fixture serving graph into
-// namespace and returns it. Cleanup is the caller's responsibility.
-func deployFakeUpdateService(ctx context.Context, namespace string, graph updateservice.Graph) *updateservice.UpdateService {
+// namespace, running the pod with shellImage, and returns it. Cleanup is the
+// caller's responsibility.
+func deployFakeUpdateService(ctx context.Context, namespace, shellImage string, graph updateservice.Graph) *updateservice.UpdateService {
 	GinkgoHelper()
 
 	kubeClient, err := kubernetes.NewForConfig(restConfig)
 	Expect(err).ToNot(HaveOccurred(), "building a clientset for the update-service fixture")
 
-	updateService, err := updateservice.Run(ctx, kubeClient, namespace, "", graph)
-	Expect(err).ToNot(HaveOccurred(), "deploying the fake update service into namespace %s", namespace)
+	updateService, err := updateservice.Run(ctx, kubeClient, namespace, shellImage, graph)
+	Expect(err).ToNot(HaveOccurred(), "deploying the fake update service into namespace %s with image %s", namespace, shellImage)
 	return updateService
 }
 

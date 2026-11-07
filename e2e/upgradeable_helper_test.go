@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"slices"
 	"testing"
 
@@ -346,6 +347,99 @@ func TestTargetUpdateOffered(t *testing.T) {
 			g := gomega.NewWithT(t)
 
 			g.Expect(targetUpdateOffered(tc.cv, targetVersion, targetImage)).To(gomega.Equal(tc.expected))
+		})
+	}
+}
+
+// TestResolvePayloadComponentImage covers the image resolution the fake update
+// service depends on. The fixture pod must receive a digest-pinned pull spec: a
+// tag defaults imagePullPolicy to Always and can drift under the fixture. A
+// failed resolution must surface here rather than as a pod stuck pulling beyond
+// the fixture's readiness timeout.
+func TestResolvePayloadComponentImage(t *testing.T) {
+	const (
+		payload  = "registry.example.com/ocp/release@sha256:1111111111111111111111111111111111111111111111111111111111111111"
+		digested = "registry.example.com/ocp/art-dev@sha256:2222222222222222222222222222222222222222222222222222222222222222"
+	)
+
+	fakeOCDir := t.TempDir()
+	argsFile := filepath.Join(fakeOCDir, "args")
+
+	// The stub writes the arguments it received, then replays the configured
+	// result, so each case can assert on the oc invocation as well as on the
+	// resolution outcome.
+	script := `#!/bin/sh
+printf '%s\n' "$@" > "$FAKE_OC_ARGS_FILE"
+if [ -n "$FAKE_OC_STDERR" ]; then
+	echo "$FAKE_OC_STDERR" >&2
+fi
+if [ "$FAKE_OC_EXIT" != "0" ]; then
+	exit "$FAKE_OC_EXIT"
+fi
+printf '%s\n' "$FAKE_OC_STDOUT"
+`
+	g := gomega.NewWithT(t)
+	g.Expect(os.WriteFile(filepath.Join(fakeOCDir, "oc"), []byte(script), 0o700)).To(gomega.Succeed())
+
+	t.Setenv("PATH", fakeOCDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("FAKE_OC_ARGS_FILE", argsFile)
+	// Pin the credential ladder to the environment source so the test never
+	// reaches the cluster under test.
+	t.Setenv(registryAuthFileEnvVar, filepath.Join(fakeOCDir, "dockerconfigjson"))
+
+	for _, tc := range []struct {
+		name        string
+		stdout      string
+		stderr      string
+		exitCode    string
+		expectedRef string
+		expectedErr string
+	}{
+		{
+			name:        "digest-pinned image",
+			stdout:      digested,
+			exitCode:    "0",
+			expectedRef: digested,
+		},
+		{
+			name:        "tag is rejected",
+			stdout:      "registry.example.com/ocp/art-dev:latest",
+			exitCode:    "0",
+			expectedErr: "is not digest-pinned",
+		},
+		{
+			name:        "oc failure is reported",
+			exitCode:    "1",
+			stderr:      "unauthorized: authentication required",
+			expectedErr: "unauthorized: authentication required",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			g := gomega.NewWithT(t)
+
+			t.Setenv("FAKE_OC_STDOUT", tc.stdout)
+			t.Setenv("FAKE_OC_STDERR", tc.stderr)
+			t.Setenv("FAKE_OC_EXIT", tc.exitCode)
+
+			image, err := resolvePayloadComponentImage(t.Context(), payload, graphServerImageComponent)
+
+			if tc.expectedErr != "" {
+				g.Expect(err).To(gomega.MatchError(gomega.ContainSubstring(tc.expectedErr)))
+				g.Expect(image).To(gomega.BeEmpty())
+
+				return
+			}
+
+			g.Expect(err).ToNot(gomega.HaveOccurred())
+			g.Expect(image).To(gomega.Equal(tc.expectedRef))
+
+			args, err := os.ReadFile(argsFile)
+			g.Expect(err).ToNot(gomega.HaveOccurred())
+			g.Expect(string(args)).To(gomega.SatisfyAll(
+				gomega.ContainSubstring("adm\nrelease\ninfo\n"+payload),
+				gomega.ContainSubstring("--image-for="+graphServerImageComponent),
+				gomega.ContainSubstring("--registry-config="),
+			))
 		})
 	}
 }
