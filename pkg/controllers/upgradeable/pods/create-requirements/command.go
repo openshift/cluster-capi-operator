@@ -29,6 +29,7 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/upgradeable/pods"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
+	"github.com/openshift/cluster-capi-operator/pkg/revisiongenerator"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -236,7 +237,7 @@ func BuildRequirement(crd *apiextensionsv1.CustomResourceDefinition) (*openshift
 	return &openshiftapiextensionsv1.CompatibilityRequirement{
 		// Server side apply requires the applied manifest to be self-describing.
 		TypeMeta:   metav1.TypeMeta{APIVersion: openshiftapiextensionsv1.GroupVersion.String(), Kind: "CompatibilityRequirement"},
-		ObjectMeta: metav1.ObjectMeta{Name: RequirementName(crd.Name)},
+		ObjectMeta: metav1.ObjectMeta{Name: RequirementName(crd.Name), Annotations: adoptionAnnotations(crd)},
 		Spec: openshiftapiextensionsv1.CompatibilityRequirementSpec{
 			CompatibilitySchema: openshiftapiextensionsv1.CompatibilitySchema{
 				CustomResourceDefinition: openshiftapiextensionsv1.CRDData{Type: openshiftapiextensionsv1.CRDDataTypeYAML, Data: string(data)},
@@ -249,6 +250,20 @@ func BuildRequirement(crd *apiextensionsv1.CustomResourceDefinition) (*openshift
 			CustomResourceDefinitionSchemaValidation: openshiftapiextensionsv1.CustomResourceDefinitionSchemaValidation{Action: openshiftapiextensionsv1.CRDAdmitActionWarn},
 		},
 	}, nil
+}
+
+// adoptionAnnotations carries the installer's adopt-existing declaration from
+// the assessed CRD manifest onto the requirement. The installer strips the
+// annotation from the objects it applies, so a live CRD never carries it: the
+// target payload's intent is only observable where its manifests are read.
+func adoptionAnnotations(crd *apiextensionsv1.CustomResourceDefinition) map[string]string {
+	if crd.Annotations[revisiongenerator.AdoptExistingAnnotation] != revisiongenerator.AdoptExistingAlways {
+		return nil
+	}
+
+	return map[string]string{
+		revisiongenerator.AdoptExistingAnnotation: revisiongenerator.AdoptExistingAlways,
+	}
 }
 
 // RequirementName returns the deterministic name of the requirement that

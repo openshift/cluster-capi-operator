@@ -219,6 +219,12 @@ func (r *UpgradeableController) requirementConflicts(ctx context.Context, requir
 		}
 	}
 
+	// A CRD the target payload adopts is not a foreign owner: the installer's
+	// revision rewrites it to the target definition during the upgrade.
+	if adoptableByInstaller(requirement) {
+		return nil
+	}
+
 	// For CRDs not explicitly declared as unmanaged, check if the cluster-api operator managed label is present.
 	// If not, it is a conflict, as the CRD is not managed by the cluster-api operator, nor declared as unmanaged.
 	if _, managed := crd.Labels[revisiongenerator.ManagedLabelKey]; !managed {
@@ -233,4 +239,12 @@ func (r *UpgradeableController) requirementConflicts(ctx context.Context, requir
 	}
 
 	return nil
+}
+
+// adoptableByInstaller reports whether the target payload's manifest declares
+// that the installer adopts an existing CRD of this name. The requirements pod
+// carries the annotation from that manifest onto the requirement, because the
+// installer strips it from the objects it applies.
+func adoptableByInstaller(requirement *openshiftapiextensionsv1.CompatibilityRequirement) bool {
+	return requirement.Annotations[revisiongenerator.AdoptExistingAnnotation] == revisiongenerator.AdoptExistingAlways
 }

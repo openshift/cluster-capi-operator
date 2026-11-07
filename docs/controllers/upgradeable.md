@@ -33,11 +33,11 @@ The payload images ConfigMap is applied in place and never deleted, so its label
 | Assessment running or verdicts pending | `Unknown`, `Progressing` |
 | API error or failed assessment pod | `Unknown`, `EphemeralError` |
 | Complete assessment with no ownership or compatibility conflicts | `True`, `Compatible`, message names target |
-| Foreign CRD or missing or incompatible unmanaged CRD | `False`, `NotCompatible`, message names conflicting CRDs |
+| Foreign CRD, or missing or incompatible unmanaged CRD | `False`, `NotCompatible`, message names conflicting CRDs |
 
 All requirements must be admitted and have a current, conclusive compatibility verdict before the controller reports a result. CRDs listed in `ClusterAPI/cluster.spec.unmanagedCustomResourceDefinitions` must exist and satisfy their target requirements. The declaration takes precedence over any remaining installer management label.
 
-For CRDs not declared unmanaged, existing CRDs carrying the installer's `capi-operator.openshift.io/managed-by` label can be updated by the installer during upgrade, and absent CRDs can be created. Neither is blocked by the current CRD failing a target requirement. Existing foreign CRDs without the management label block upgrade until explicitly declared unmanaged and compatible.
+For CRDs not declared unmanaged, existing CRDs carrying the installer's `capi-operator.openshift.io/managed-by` label can be updated by the installer during upgrade, and absent CRDs can be created. Neither is blocked by the current CRD failing a target requirement. The same applies to an existing CRD whose target payload manifest declares `capi-operator.openshift.io/adopt-existing: always`: the installer adopts and rewrites it, so it is not a foreign-ownership conflict. The requirements pod carries that annotation from the manifest onto the requirement, because the installer strips it from the objects it applies and a live CRD never carries it. Existing foreign CRDs with neither marker block upgrade until explicitly declared unmanaged and compatible.
 
 Requirement status changes, CRD creation, deletion or label changes, and Cluster API configuration changes trigger reassessment without changing the target version. A requirement update only triggers reassessment once it carries an admitted and current compatibility verdict, because no other status change can alter the published condition. All reads use the informer cache, so a read can lag a write: an assessment can briefly report a verdict before every requirement is visible, and the watch event for that write reconciles again to correct it.
 
