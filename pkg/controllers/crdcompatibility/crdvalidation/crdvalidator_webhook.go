@@ -164,11 +164,19 @@ func (v *Validator) ValidateDelete(ctx context.Context, crd *apiextensionsv1.Cus
 
 	if len(compatibilityRequirements.Items) > 0 {
 		names := []string{}
+
 		for _, compatibilityRequirement := range compatibilityRequirements.Items {
+			// Only requirements which deny incompatible CRD changes prevent deletion.
+			if compatibilityRequirement.Spec.CustomResourceDefinitionSchemaValidation.Action != openshiftapiextensionsv1.CRDAdmitActionDeny {
+				continue
+			}
+
 			names = append(names, compatibilityRequirement.Name)
 		}
 
-		return nil, fmt.Errorf("%w: %s", ErrCRDHasRequirements, strings.Join(names, ", "))
+		if len(names) > 0 {
+			return nil, fmt.Errorf("%w: %s", ErrCRDHasRequirements, strings.Join(names, ", "))
+		}
 	}
 
 	return nil, nil
