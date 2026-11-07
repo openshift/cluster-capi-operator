@@ -24,6 +24,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
+	"github.com/openshift/cluster-capi-operator/pkg/revisiongenerator"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation"
@@ -92,4 +93,34 @@ var _ = Describe("Requirement names", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(requirement.Name).To(Equal(RequirementName(tooLong)))
 	})
+})
+
+var _ = Describe("Requirement adoption", func() {
+	annotationsFor := func(value string) map[string]string {
+		GinkgoHelper()
+
+		crd := &apiextensionsv1.CustomResourceDefinition{ObjectMeta: metav1.ObjectMeta{Name: "widgets.example.com"}}
+		if value != "" {
+			crd.Annotations = map[string]string{revisiongenerator.AdoptExistingAnnotation: value}
+		}
+
+		requirement, err := BuildRequirement(crd)
+		Expect(err).NotTo(HaveOccurred())
+
+		return requirement.Annotations
+	}
+
+	It("should carry the adopt-existing declaration of the assessed CRD", func() {
+		Expect(annotationsFor(revisiongenerator.AdoptExistingAlways)).To(
+			HaveKeyWithValue(revisiongenerator.AdoptExistingAnnotation, revisiongenerator.AdoptExistingAlways))
+	})
+
+	DescribeTable("should not carry an annotation that does not declare adoption",
+		func(value string) {
+			Expect(annotationsFor(value)).NotTo(HaveKey(revisiongenerator.AdoptExistingAnnotation))
+		},
+		Entry("without the annotation", ""),
+		Entry("when adoption is declined", revisiongenerator.AdoptExistingNever),
+		Entry("when the value is unrecognised", "sometimes"),
+	)
 })

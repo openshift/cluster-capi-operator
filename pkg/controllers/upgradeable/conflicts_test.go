@@ -40,6 +40,23 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 )
 
+// crdOwnership is the ownership state a case sets up for an existing CRD.
+type crdOwnership int
+
+const (
+	// ownershipForeign is an existing CRD with neither the installer management
+	// label nor an unmanaged declaration.
+	ownershipForeign crdOwnership = iota
+	// ownershipForeignAdoptable is ownershipForeign for a CRD the target payload adopts.
+	ownershipForeignAdoptable
+	// ownershipManaged is an existing CRD carrying the installer management label.
+	ownershipManaged
+	// ownershipUnmanaged is an existing CRD declared unmanaged in the Cluster API configuration.
+	ownershipUnmanaged
+	// ownershipUnmanagedAdoptable is ownershipUnmanaged for a CRD the target payload adopts.
+	ownershipUnmanagedAdoptable
+)
+
 var _ = Describe("CRD conflict diagnostics", func() {
 	ctx := context.Background()
 
@@ -71,7 +88,10 @@ var _ = Describe("CRD conflict diagnostics", func() {
 	}
 
 	DescribeTable("should explain conflicts without changing ownership decisions",
-		func(ownership string, present bool, compatible metav1.ConditionStatus, reason crdConflictReason, remediation string) {
+		func(ownership crdOwnership, present bool, compatible metav1.ConditionStatus, reason crdConflictReason, remediation string) {
+			adoptable := ownership == ownershipForeignAdoptable || ownership == ownershipUnmanagedAdoptable
+			declaredUnmanaged := ownership == ownershipUnmanaged || ownership == ownershipUnmanagedAdoptable
+
 			crd := test.GenerateCRD(schema.GroupVersionKind{Group: "conflicts.example.com", Version: "v1beta1", Kind: "Widget"})
 			requirement := newRequirement(crd, compatible)
 
@@ -82,8 +102,12 @@ var _ = Describe("CRD conflict diagnostics", func() {
 
 			reader := fake.NewClientBuilder().WithScheme(assessmentClient.Scheme())
 
-			if ownership == "managed" {
+			if ownership == ownershipManaged {
 				crd.Labels = map[string]string{revisiongenerator.ManagedLabelKey: "core"}
+			}
+
+			if adoptable {
+				requirement.Annotations = map[string]string{revisiongenerator.AdoptExistingAnnotation: revisiongenerator.AdoptExistingAlways}
 			}
 
 			if present {
@@ -91,7 +115,7 @@ var _ = Describe("CRD conflict diagnostics", func() {
 			}
 
 			unmanaged := sets.New[string]()
-			if ownership == "unmanaged" {
+			if declaredUnmanaged {
 				unmanaged.Insert(crd.Name)
 			}
 
@@ -120,13 +144,15 @@ var _ = Describe("CRD conflict diagnostics", func() {
 				Expect(conflict.CompatibilityMessage).To(ContainSubstring(diagnostic))
 			}
 		},
-		Entry("foreign CRD requires an explicit declaration", "foreign", true, metav1.ConditionTrue, foreignCRDReason, "ClusterAPI/cluster.spec.unmanagedCustomResourceDefinitions"),
-		Entry("missing unmanaged CRD must be installed externally", "unmanaged", false, metav1.ConditionFalse, unmanagedCRDNotFoundReason, "external CRD manager install"),
-		Entry("incompatible unmanaged CRD must be updated externally", "unmanaged", true, metav1.ConditionFalse, unmanagedCRDIncompatibleReason, "external CRD manager update"),
-		Entry("managed CRD can be updated", "managed", true, metav1.ConditionFalse, crdConflictReason(""), ""),
-		Entry("compatible unmanaged CRD is accepted", "unmanaged", true, metav1.ConditionTrue, crdConflictReason(""), ""),
-		Entry("absent foreign CRD can be installed", "foreign", false, metav1.ConditionFalse, crdConflictReason(""), ""),
-		Entry("absent managed CRD can be installed", "managed", false, metav1.ConditionFalse, crdConflictReason(""), ""),
+		Entry("foreign CRD requires an explicit declaration", ownershipForeign, true, metav1.ConditionTrue, foreignCRDReason, "ClusterAPI/cluster.spec.unmanagedCustomResourceDefinitions"),
+		Entry("foreign CRD the target payload adopts is not a conflict", ownershipForeignAdoptable, true, metav1.ConditionFalse, crdConflictReason(""), ""),
+		Entry("an unmanaged declaration takes precedence over adoption", ownershipUnmanagedAdoptable, true, metav1.ConditionFalse, unmanagedCRDIncompatibleReason, "external CRD manager update"),
+		Entry("missing unmanaged CRD must be installed externally", ownershipUnmanaged, false, metav1.ConditionFalse, unmanagedCRDNotFoundReason, "external CRD manager install"),
+		Entry("incompatible unmanaged CRD must be updated externally", ownershipUnmanaged, true, metav1.ConditionFalse, unmanagedCRDIncompatibleReason, "external CRD manager update"),
+		Entry("managed CRD can be updated", ownershipManaged, true, metav1.ConditionFalse, crdConflictReason(""), ""),
+		Entry("compatible unmanaged CRD is accepted", ownershipUnmanaged, true, metav1.ConditionTrue, crdConflictReason(""), ""),
+		Entry("absent foreign CRD can be installed", ownershipForeign, false, metav1.ConditionFalse, crdConflictReason(""), ""),
+		Entry("absent managed CRD can be installed", ownershipManaged, false, metav1.ConditionFalse, crdConflictReason(""), ""),
 	)
 
 	It("should aggregate each conflict reason and remediation in stable CRD order", func() {
