@@ -99,8 +99,16 @@ run: ## Run the operator against the configured Kubernetes cluster
 fmt: ## Format Go code
 	$(call ensure-home, ${GOLANGCI_LINT} run ./... --fix)
 
+# The lint test container is guaranteed 1 CPU (it has no CPU limit) with a 6Gi memory
+# limit, while the CI builder image exports GOMAXPROCS=8. Unbounded, the linter runs
+# ~8-way against a 1-CPU budget, which multiplies total CPU work without buying wall
+# time and can result in process starvation leading to errors.
+# Override locally with e.g. `make lint LINT_CONCURRENCY=8 LINT_ENV=`.
+LINT_CONCURRENCY ?= 2
+LINT_ENV ?= GOMEMLIMIT=5GiB
+
 lint: ## Run linter checks
-	$(call ensure-home, ${GOLANGCI_LINT} run ./...)
+	$(call ensure-home, ${LINT_ENV} ${GOLANGCI_LINT} run --concurrency ${LINT_CONCURRENCY} ./...)
 
 vendor: ## Vendor dependencies
 	./hack/vendor.sh
