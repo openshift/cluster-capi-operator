@@ -19,6 +19,7 @@ OPENSHIFT_CI=${OPENSHIFT_CI:-""}
 ARTIFACT_DIR=${ARTIFACT_DIR:-""}
 GINKGO=${GINKGO:-"go run -mod=vendor ${REPO_ROOT}/vendor/github.com/onsi/ginkgo/v2/ginkgo"}
 PARALLEL_FLAG="-p"
+COMPILERS_FLAG=""
 if [ "${OPENSHIFT_CI:-}" == "true" ]; then
   if [[ "${TEST_DIRS}" == *"e2e"* ]]; then
     PARALLEL_FLAG="--procs=4"
@@ -26,9 +27,13 @@ if [ "${OPENSHIFT_CI:-}" == "true" ]; then
     # Limit parallelism: each Ginkgo process starts its own envtest
     # control plane, and higher values cause timeout failures in CI.
     PARALLEL_FLAG="--procs=2"
+    # Ginkgo compiles suites in the background with NumCPU concurrent
+    # compilations by default. Each race-enabled link needs ~2Gi, which
+    # exceeds the CI memory limit.
+    COMPILERS_FLAG="--compilers=2"
   fi
 fi
-GINKGO_ARGS=${GINKGO_ARGS:-"-r -v ${PARALLEL_FLAG} --randomize-all --randomize-suites --keep-going --race --trace --timeout=${TIMEOUT}"}
+GINKGO_ARGS=${GINKGO_ARGS:-"-r -v ${PARALLEL_FLAG} ${COMPILERS_FLAG} --randomize-all --randomize-suites --keep-going --race --trace --timeout=${TIMEOUT}"}
 GINKGO_EXTRA_ARGS=${GINKGO_EXTRA_ARGS:-""}
 SHARD_ARGS=${SHARD_ARGS:-""}
 
