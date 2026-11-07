@@ -6,6 +6,8 @@ RUN make clean build && \
 
 FROM registry.ci.openshift.org/ocp/5.1:base-rhel9
 COPY --from=builder /go/src/github.com/openshift/cluster-capi-operator/bin/capi-operator .
+COPY --from=builder /go/src/github.com/openshift/cluster-capi-operator/bin/upgradeable-payload-images-extractor .
+COPY --from=builder /go/src/github.com/openshift/cluster-capi-operator/bin/upgradeable-compatibility-requirements .
 COPY --from=builder /go/src/github.com/openshift/cluster-capi-operator/bin/capi-installer .
 COPY --from=builder /go/src/github.com/openshift/cluster-capi-operator/bin/capi-controllers .
 COPY --from=builder /go/src/github.com/openshift/cluster-capi-operator/bin/machine-api-migration .
