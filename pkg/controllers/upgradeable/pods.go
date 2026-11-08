@@ -38,11 +38,13 @@ var errAssessmentPodFailed = errors.New("assessment pod failed")
 
 // assessmentPodResources follows the resource-request convention of the operator's own
 // deployments: requests without limits, which keeps the pods Burstable.
-var assessmentPodResources = corev1.ResourceRequirements{
-	Requests: corev1.ResourceList{
-		corev1.ResourceCPU:    resource.MustParse("10m"),
-		corev1.ResourceMemory: resource.MustParse("50Mi"),
-	},
+func assessmentPodResources() corev1.ResourceRequirements {
+	return corev1.ResourceRequirements{
+		Requests: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("10m"),
+			corev1.ResourceMemory: resource.MustParse("50Mi"),
+		},
+	}
 }
 
 func (r *UpgradeableController) basePod(name, command, currentVersion, targetVersion string, co *configv1.ClusterOperator) *corev1.Pod {
@@ -74,7 +76,7 @@ func (r *UpgradeableController) basePod(name, command, currentVersion, targetVer
 				// release and provider images are mounted as data, never executed.
 				Name: name, Image: r.ContainerImage,
 				Command: []string{"/" + command}, Args: []string{currentVersion, targetVersion},
-				Resources:                assessmentPodResources,
+				Resources:                assessmentPodResources(),
 				TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
 			}},
 		},

@@ -53,7 +53,7 @@ func (r *UpgradeableController) reconcile(ctx context.Context) UpgradeableResult
 	currentVersion := cv.Status.Desired.Version
 
 	// Empty target version means no target. We deliberately reconcile this to
-	// clean up artifacts and clear Upgradeable condition.
+	// clean up artifacts and report Upgradeable=True.
 	targetVersion := ""
 	if target != nil {
 		targetVersion = target.Version
@@ -113,11 +113,15 @@ func (r *UpgradeableController) deleteObject(ctx context.Context, obj client.Obj
 }
 
 func (r *UpgradeableController) processRequirements(ctx context.Context, assessmentLabels map[string]string, targetVersion string) UpgradeableResult {
-	// Without a next minor release there is no target payload, so nothing can be
-	// said about compatibility with an upgrade, whatever earlier requirements report.
+	// Without a next minor release there is no target payload, so there is nothing
+	// that could block an upgrade: report Upgradeable=True whatever earlier
+	// requirements report. The origin sig-arch test "[sig-arch][Early] Managed
+	// cluster should start all core operators" (test/extended/operators/operators.go,
+	// surprisingConditions) requires Upgradeable=True on every
+	// ClusterOperator which sets the Condition.
 	if targetVersion == "" {
 		result := UpgradeableResult{ResultGenerator.Success()}
-		return result.WithUpgradeable(configv1.ConditionUnknown, "NoUpdate", "No update to the next minor release is available, so Cluster API compatibility cannot be assessed")
+		return result.WithUpgradeable(configv1.ConditionTrue, "NoUpdate", "No update to the next minor release is available, so Cluster API compatibility cannot be assessed")
 	}
 
 	crs := &openshiftapiextensionsv1.CompatibilityRequirementList{}

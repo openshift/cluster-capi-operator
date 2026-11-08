@@ -264,9 +264,9 @@ var _ = Describe("Upgrade compatibility integration", func() {
 
 		Expect(reconcileAssessment(ctx, r)).To(Succeed())
 
-		By("Publishing an unknown verdict and reaping the assessment resources")
+		By("Publishing an upgradeable verdict and reaping the assessment resources")
 
-		expectUpgradeable(ctx, configv1.ConditionUnknown, "NoUpdate", "next minor")
+		expectUpgradeable(ctx, configv1.ConditionTrue, "NoUpdate", "next minor")
 
 		requirements := &openshiftapiextensionsv1.CompatibilityRequirementList{}
 		Expect(assessmentClient.List(ctx, requirements)).To(Succeed())
@@ -333,7 +333,7 @@ var _ = Describe("Upgrade compatibility integration", func() {
 
 		By("Reaping the withdrawn assessment")
 
-		expectUpgradeable(ctx, configv1.ConditionUnknown, "NoUpdate", "next minor")
+		expectUpgradeable(ctx, configv1.ConditionTrue, "NoUpdate", "next minor")
 		Expect(emptyExtractor.UID).NotTo(Equal(targetExtractor.UID))
 		Expect(emptyRequirements.UID).NotTo(Equal(targetRequirements.UID))
 

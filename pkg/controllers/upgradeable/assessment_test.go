@@ -414,11 +414,11 @@ var _ = Describe("Assessment chain", func() {
 		result = r.processRequirements(ctx, cm.Labels, "4.17.0")
 		Expect(result.WriteClusterOperatorStatus(ctx, logr.Discard(), assessmentClient)).To(Succeed())
 		expectUpgradeable(ctx, configv1.ConditionTrue, "Compatible", "4.17.0")
-		By("reporting an unknown verdict when there is no target")
+		By("reporting an upgradeable verdict when there is no target")
 
 		result = r.processRequirements(ctx, assessment.AssessmentLabels("4.16.0", ""), "")
 		Expect(result.WriteClusterOperatorStatus(ctx, logr.Discard(), assessmentClient)).To(Succeed())
-		expectUpgradeable(ctx, configv1.ConditionUnknown, "NoUpdate", "next minor")
+		expectUpgradeable(ctx, configv1.ConditionTrue, "NoUpdate", "next minor")
 
 		co := &configv1.ClusterOperator{}
 		Expect(assessmentClient.Get(ctx, client.ObjectKeyFromObject(assessmentOwner), co)).To(Succeed())
@@ -441,7 +441,7 @@ var _ = Describe("Assessment chain", func() {
 
 		result = r.processRequirements(ctx, assessment.AssessmentLabels("4.16.0", ""), "")
 		Expect(result.WriteClusterOperatorStatus(ctx, logr.Discard(), assessmentClient)).To(Succeed())
-		expectUpgradeable(ctx, configv1.ConditionUnknown, "NoUpdate", "next minor")
+		expectUpgradeable(ctx, configv1.ConditionTrue, "NoUpdate", "next minor")
 	})
 
 	DescribeTable("should wait for complete, fresh requirement verdicts",

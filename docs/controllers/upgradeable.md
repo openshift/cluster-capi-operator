@@ -12,7 +12,7 @@ The controller always runs. The ClusterOperator controller retains ownership of 
 
 ## Assessment
 
-The target is the highest semantic version for the next minor release (`X.(Y+1).0`, including prereleases) in either `ClusterVersion/version` update list. Conditional updates are included even when not recommended. Available updates win version ties. Without a target, the payload is empty: the extractor records no images, the creation pod converges the requirement set to empty, and the controller reports `Upgradeable=Unknown` with reason `NoUpdate`.
+The target is the highest semantic version for the next minor release (`X.(Y+1).0`, including prereleases) in either `ClusterVersion/version` update list. Conditional updates are included even when not recommended. Available updates win version ties. Without a target, the payload is empty: the extractor records no images, the creation pod converges the requirement set to empty, and the controller reports `Upgradeable=True` with reason `NoUpdate`.
 
 The assessment uses two pods in `openshift-cluster-api-operator`, each running a dedicated binary from the current operator image:
 
@@ -29,7 +29,7 @@ The payload images ConfigMap is applied in place and never deleted, so its label
 
 | State | Upgradeable |
 | --- | --- |
-| No next minor target | `Unknown`, `NoUpdate`, message names the absence of a next minor release |
+| No next minor target | `True`, `NoUpdate`, message names the absence of a next minor release |
 | Assessment running or verdicts pending | `Unknown`, `Progressing` |
 | API error or failed assessment pod | `Unknown`, `EphemeralError` |
 | Complete assessment with no ownership or compatibility conflicts | `True`, `Compatible`, message names target |
