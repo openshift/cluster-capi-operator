@@ -245,6 +245,91 @@ func Test_crdValidator_validateCreateOrUpdate(t *testing.T) {
 	}
 }
 
+func Test_crdValidator_ValidateDelete(t *testing.T) {
+	RegisterTestingT(t)
+
+	ctx := t.Context()
+
+	testCRD := test.GenerateTestCRD()
+
+	requirementFor := func(crd *apiextensionsv1.CustomResourceDefinition, name string, action openshiftapiextensionsv1.CRDAdmitAction) *openshiftapiextensionsv1.CompatibilityRequirement {
+		requirement := test.GenerateTestCompatibilityRequirement(crd.DeepCopy())
+		requirement.Name = name
+		requirement.Spec.CustomResourceDefinitionSchemaValidation.Action = action
+
+		return requirement
+	}
+
+	tests := []struct {
+		name         string
+		requirements []client.Object
+		wantErr      OmegaMatcher
+	}{
+		{
+			name: "Should permit deletion of a CRD with no requirements",
+		},
+		{
+			name: "Should permit deletion of a CRD with a requirement whose action is Warn",
+			requirements: []client.Object{
+				requirementFor(testCRD, "warn-requirement", openshiftapiextensionsv1.CRDAdmitActionWarn),
+			},
+		},
+		{
+			name: "Should not permit deletion of a CRD with a requirement whose action is Deny",
+			requirements: []client.Object{
+				requirementFor(testCRD, "deny-requirement", openshiftapiextensionsv1.CRDAdmitActionDeny),
+			},
+			wantErr: MatchError(Equal("cannot delete CRD because it has CompatibilityRequirements: deny-requirement")),
+		},
+		{
+			name: "Should permit deletion of a CRD with a requirement which does not configure CRD validation",
+			requirements: []client.Object{
+				func() *openshiftapiextensionsv1.CompatibilityRequirement {
+					r := requirementFor(testCRD, "no-validation-requirement", openshiftapiextensionsv1.CRDAdmitActionDeny)
+					r.Spec.CustomResourceDefinitionSchemaValidation = openshiftapiextensionsv1.CustomResourceDefinitionSchemaValidation{}
+
+					return r
+				}(),
+			},
+		},
+		{
+			name: "Should permit deletion of a CRD which no requirement references",
+			requirements: []client.Object{
+				requirementFor(test.GenerateTestCRD(), "other-crd-requirement", openshiftapiextensionsv1.CRDAdmitActionDeny),
+			},
+		},
+		{
+			name: "Should report only denying requirements when deletion is not permitted",
+			requirements: []client.Object{
+				requirementFor(testCRD, "warn-requirement", openshiftapiextensionsv1.CRDAdmitActionWarn),
+				requirementFor(testCRD, "deny-requirement", openshiftapiextensionsv1.CRDAdmitActionDeny),
+			},
+			wantErr: MatchError(SatisfyAll(
+				ContainSubstring("deny-requirement"),
+				Not(ContainSubstring("warn-requirement")),
+			)),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := NewWithT(t)
+			v := Validator{
+				client: fake.NewClientBuilder().WithObjects(tt.requirements...).WithIndex(&openshiftapiextensionsv1.CompatibilityRequirement{}, index.FieldCRDByName, index.CRDByName).Build(),
+			}
+
+			gotWarnings, gotErr := v.ValidateDelete(ctx, testCRD.DeepCopy())
+			if tt.wantErr != nil {
+				g.Expect(gotErr).To(tt.wantErr)
+			} else {
+				g.Expect(gotErr).ToNot(HaveOccurred())
+			}
+
+			g.Expect(gotWarnings).To(BeNil())
+		})
+	}
+}
+
 func Test_pruneExludedFields(t *testing.T) {
 	RegisterTestingT(t)
 

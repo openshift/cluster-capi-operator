@@ -705,9 +705,15 @@ var _ = Describe("CompatibilityRequirement", Ordered, ContinueOnFailure, func() 
 				waitForAdmitted(ctx, requirement)
 			}, defaultNodeTimeout)
 
-			It("Should not permit a CRD with requirements to be deleted", func(ctx context.Context) {
+			// The action matrix (Deny/Warn/no validation) is covered by unit tests in
+			// crdvalidation; this asserts that a CRD deletion is actually intercepted by
+			// the deployed webhook.
+			It("Should not permit a CRD with a Deny requirement to be deleted", func(ctx context.Context) {
 				By("Attempting to delete CRD " + testCRDClean.Name)
-				Eventually(tryDelete(ctx, testCRDClean)).WithContext(ctx).Should(MatchError(ContainSubstring(crdvalidation.ErrCRDHasRequirements.Error())), "The test CRD should not be deleted")
+				Eventually(tryDelete(ctx, testCRDClean)).WithContext(ctx).Should(
+					MatchError(ContainSubstring(crdvalidation.ErrCRDHasRequirements.Error())),
+					"The test CRD should not be deleted",
+				)
 			}, defaultNodeTimeout)
 
 			updateCRD := func(ctx context.Context, obj client.Object, updateFn func()) func() error {
