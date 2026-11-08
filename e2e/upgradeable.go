@@ -110,8 +110,9 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIOperator] Clu
 		var upgradeTargetVersion, upgradeTargetPayload string
 
 		// The image the fake update service pod runs. It is resolved from the
-		// current payload rather than the target, because only the release the
-		// cluster runs is guaranteed to exist in a disconnected mirror.
+		// cluster's tools ImageStreamTag: the recorded payload reference is
+		// rewritten to the cluster's mirror on pull, so the fixture works where
+		// the current payload's own reference does not resolve from the test host.
 		var graphServerImage string
 
 		// The Clusters CRD as shipped in the target payload, extracted from
@@ -202,12 +203,11 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIOperator] Clu
 				}
 			})
 
-			By("Resolving the fake update service image from the current payload", func() {
+			By("Resolving the fake update service image from the cluster's tools ImageStreamTag", func() {
 				var err error
-				graphServerImage, err = resolvePayloadComponentImage(ctx, currentPayload, graphServerImageComponent)
+				graphServerImage, err = resolveGraphServerImage(ctx, currentPayload)
 				Expect(err).ToNot(HaveOccurred(),
-					"resolving the %s image of the current payload %s for the fake update service",
-					graphServerImageComponent, currentPayload)
+					"resolving the fake update service image from %s", graphServerImageStreamTag)
 			})
 
 			By("Deploying the fake cincinnati update service", func() {

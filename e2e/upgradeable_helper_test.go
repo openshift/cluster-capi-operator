@@ -443,3 +443,116 @@ printf '%s\n' "$FAKE_OC_STDOUT"
 		})
 	}
 }
+
+// TestResolveGraphServerImage covers the fixture image resolution the fake
+// update service depends on. The image must come from the cluster's own record
+// of a payload image rather than from dereferencing the release image: on
+// dev-scripts the current payload names a cluster-internal mirror that the test
+// host cannot resolve, while the reference recorded in the tools
+// ImageStreamTag is a payload image the cluster's mirror configuration rewrites
+// on pull.
+func TestResolveGraphServerImage(t *testing.T) {
+	const (
+		payload  = "registry.example.com/ocp/release@sha256:1111111111111111111111111111111111111111111111111111111111111111"
+		digested = "registry.example.com/ocp/art-dev@sha256:2222222222222222222222222222222222222222222222222222222222222222"
+		tagged   = "registry.example.com/ocp/art-dev:latest"
+	)
+
+	fakeOCDir := t.TempDir()
+	argsFile := filepath.Join(fakeOCDir, "args")
+
+	// The stub answers the ImageStreamTag lookup from the FAKE_OC_GET_* values
+	// and every other invocation from FAKE_OC_*, so a case can make the lookup
+	// fail or answer with a tag while the fallback still resolves.
+	script := `#!/bin/sh
+printf '%s\n' "$@" > "$FAKE_OC_ARGS_FILE"
+if [ "$1" = "get" ]; then
+	if [ -n "$FAKE_OC_GET_STDERR" ]; then
+		echo "$FAKE_OC_GET_STDERR" >&2
+	fi
+	if [ "$FAKE_OC_GET_EXIT" != "0" ]; then
+		exit "$FAKE_OC_GET_EXIT"
+	fi
+	printf '%s\n' "$FAKE_OC_GET_STDOUT"
+	exit 0
+fi
+printf '%s\n' "$FAKE_OC_STDOUT"
+`
+	g := gomega.NewWithT(t)
+	g.Expect(os.WriteFile(filepath.Join(fakeOCDir, "oc"), []byte(script), 0o700)).To(gomega.Succeed())
+
+	t.Setenv("PATH", fakeOCDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("FAKE_OC_ARGS_FILE", argsFile)
+	// Pin the credential ladder to the environment source so the fallback never
+	// reaches the cluster under test.
+	t.Setenv(registryAuthFileEnvVar, filepath.Join(fakeOCDir, "dockerconfigjson"))
+
+	for _, tc := range []struct {
+		name            string
+		imageStreamOut  string
+		imageStreamErr  string
+		imageStreamExit string
+		payloadOut      string
+		expectedRef     string
+		expectedErr     string
+		expectedArgs    []string
+	}{
+		{
+			name:            "digest-pinned image from the ImageStreamTag",
+			imageStreamOut:  digested,
+			imageStreamExit: "0",
+			expectedRef:     digested,
+			expectedArgs: []string{
+				"get\nimagestreamtag\n" + graphServerImageStreamTag,
+				"jsonpath={.image.dockerImageReference}",
+			},
+		},
+		{
+			name:            "falls back to the payload cli image when the ImageStreamTag is unavailable",
+			imageStreamErr:  "not found",
+			imageStreamExit: "1",
+			payloadOut:      digested,
+			expectedRef:     digested,
+			expectedArgs: []string{
+				"adm\nrelease\ninfo\n" + payload,
+				"--image-for=" + graphServerImageComponent,
+			},
+		},
+		{
+			name:            "rejects a tag recorded by the ImageStreamTag",
+			imageStreamOut:  tagged,
+			imageStreamExit: "0",
+			payloadOut:      tagged,
+			expectedErr:     "is not digest-pinned",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			g := gomega.NewWithT(t)
+
+			t.Setenv("FAKE_OC_GET_STDOUT", tc.imageStreamOut)
+			t.Setenv("FAKE_OC_GET_STDERR", tc.imageStreamErr)
+			t.Setenv("FAKE_OC_GET_EXIT", tc.imageStreamExit)
+			t.Setenv("FAKE_OC_STDOUT", tc.payloadOut)
+			t.Setenv("FAKE_OC_STDERR", "")
+			t.Setenv("FAKE_OC_EXIT", "0")
+
+			image, err := resolveGraphServerImage(t.Context(), payload)
+
+			if tc.expectedErr != "" {
+				g.Expect(err).To(gomega.MatchError(gomega.ContainSubstring(tc.expectedErr)))
+				g.Expect(image).To(gomega.BeEmpty())
+
+				return
+			}
+
+			g.Expect(err).ToNot(gomega.HaveOccurred())
+			g.Expect(image).To(gomega.Equal(tc.expectedRef))
+
+			args, err := os.ReadFile(argsFile)
+			g.Expect(err).ToNot(gomega.HaveOccurred())
+			for _, want := range tc.expectedArgs {
+				g.Expect(string(args)).To(gomega.ContainSubstring(want))
+			}
+		})
+	}
+}

@@ -155,6 +155,42 @@ func resolvePayloadComponentImage(ctx context.Context, releaseImage, component s
 	return imageRef, nil
 }
 
+const (
+	// graphServerImageStreamTag is the payload-provided ImageStreamTag whose
+	// image serves the fake update graph. The tools image contains python3,
+	// which the fixture needs, and it is part of the payload, so the reference
+	// the cluster records for it names the payload's own registry: the pod's
+	// pull is rewritten to the cluster's mirror, which works on disconnected
+	// and dev-scripts clusters alike.
+	graphServerImageStreamTag          = "tools:latest"
+	graphServerImageStreamTagNamespace = "openshift"
+)
+
+// resolveGraphServerImage returns the digest-pinned image the fixture pod runs.
+//
+// The cluster records the payload image of graphServerImageTag, so resolving it
+// needs no release image dereference: on dev-scripts the current payload names
+// a cluster-internal mirror that the test host cannot resolve. Resolving the
+// current payload's cli image is the fallback for clusters without the tag.
+func resolveGraphServerImage(ctx context.Context, currentPayload string) (string, error) {
+	imageRef, err := runOC(ctx, "get", "imagestreamtag", graphServerImageStreamTag, "--namespace", graphServerImageStreamTagNamespace, "-o", "jsonpath={.image.dockerImageReference}")
+	if err == nil {
+		imageRef = strings.TrimSpace(imageRef)
+		if strings.Contains(imageRef, "@sha256:") {
+			return imageRef, nil
+		}
+
+		err = fmt.Errorf("%s/%s records %q, which is not digest-pinned", graphServerImageStreamTagNamespace, graphServerImageStreamTag, imageRef)
+	}
+
+	fallback, fallbackErr := resolvePayloadComponentImage(ctx, currentPayload, graphServerImageComponent)
+	if fallbackErr != nil {
+		return "", errors.Join(fmt.Errorf("resolving %s/%s: %w", graphServerImageStreamTagNamespace, graphServerImageStreamTag, err), fallbackErr)
+	}
+
+	return fallback, nil
+}
+
 // clustersCRDFromReleaseImage extracts the clusters.cluster.x-k8s.io CRD
 // from the default-profile provider manifests shipped in the
 // cluster-capi-controllers image referenced by releaseImage. It shells out
