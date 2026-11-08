@@ -26,6 +26,7 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/providerimages"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -34,6 +35,15 @@ import (
 )
 
 var errAssessmentPodFailed = errors.New("assessment pod failed")
+
+// assessmentPodResources follows the resource-request convention of the operator's own
+// deployments: requests without limits, which keeps the pods Burstable.
+var assessmentPodResources = corev1.ResourceRequirements{
+	Requests: corev1.ResourceList{
+		corev1.ResourceCPU:    resource.MustParse("10m"),
+		corev1.ResourceMemory: resource.MustParse("50Mi"),
+	},
+}
 
 func (r *UpgradeableController) basePod(name, command, currentVersion, targetVersion string, co *configv1.ClusterOperator) *corev1.Pod {
 	owner := metav1.NewControllerRef(co, configv1.GroupVersion.WithKind("ClusterOperator"))
@@ -50,6 +60,9 @@ func (r *UpgradeableController) basePod(name, command, currentVersion, targetVer
 		},
 		Spec: corev1.PodSpec{
 			ServiceAccountName: name,
+			// Match the operator's own deployments so the assessment pods are treated as
+			// platform components rather than user workloads.
+			PriorityClassName: "system-cluster-critical",
 			// The process retries transient errors itself. Terminal exits must remain
 			// visible to the controller rather than being hidden by container restarts.
 			RestartPolicy: corev1.RestartPolicyNever,
@@ -61,6 +74,7 @@ func (r *UpgradeableController) basePod(name, command, currentVersion, targetVer
 				// release and provider images are mounted as data, never executed.
 				Name: name, Image: r.ContainerImage,
 				Command: []string{"/" + command}, Args: []string{currentVersion, targetVersion},
+				Resources:                assessmentPodResources,
 				TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
 			}},
 		},
