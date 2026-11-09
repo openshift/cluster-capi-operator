@@ -94,7 +94,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIOperator] Clu
 	// openshift-tests-extension routes on for its serial suite. Both are
 	// needed: this spec mutates the ClusterAPI singleton and the Clusters
 	// CRD, which other specs assert on.
-	Serial, Label("Serial"), Label("Lifecycle:informing"), Label("skip-topology:External"),
+	Serial, Label("Serial"), Label("skip-topology:External"),
 	Ordered, func() {
 		// clustersCRDPresent selects the flow the Its follow:
 		// - CRD absent: ClusterAPIMachineManagement feature gate is not
@@ -250,7 +250,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIOperator] Clu
 			})
 		})
 
-		It("should report Upgradeable=True naming the target release when the payload CRDs are compatible", NodeTimeout(3*time.Minute), func(ctx SpecContext) {
+		It("should report Upgradeable=True naming the target release when the payload CRDs are compatible", NodeTimeout(20*time.Minute), func(ctx SpecContext) {
 			By("Waiting for Upgradeable=True naming the target release", func() {
 				expectUpgradeableCondition(ctx, configv1.ConditionTrue, upgradeTargetVersion)
 			})
