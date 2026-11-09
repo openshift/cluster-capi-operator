@@ -256,46 +256,51 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIOperator] Clu
 			})
 		})
 
-		It("should report Upgradeable=False naming the conflicting CRD when an incompatible Clusters CRD exists", NodeTimeout(20*time.Minute), func(ctx SpecContext) {
-			if clustersCRDPresent {
-				By("Making the installed Clusters CRD incompatible", func() {
-					clustersCRDSnapshot = makeInstalledClustersCRDIncompatible(ctx)
+		It("should report Upgradeable=False when a CRD conflicts and recover after the CRD is remediated", NodeTimeout(20*time.Minute), func(ctx SpecContext) {
+			// NOTE(2026-11-09): OTE does not respect Ordered specs, so each
+			// test in this suite must also be safe to execute individually
+
+			By("Forcing the "+clustersFixtureCRD.Name+" to be incompatible", func() {
+				if clustersCRDPresent {
+					By("Making the installed Clusters CRD incompatible", func() {
+						clustersCRDSnapshot = makeInstalledClustersCRDIncompatible(ctx)
+					})
+				} else {
+					By("Creating an incompatible Clusters CRD from the target payload", func() {
+						createIncompatibleClustersCRD(ctx, clustersFixtureCRD)
+					})
+				}
+
+				By("Waiting for Upgradeable=False naming the conflicting CRD", func() {
+					expectUpgradeableCondition(ctx, configv1.ConditionFalse, clusterCRDName)
 				})
-			} else {
-				By("Creating an incompatible Clusters CRD from the target payload", func() {
-					createIncompatibleClustersCRD(ctx, clustersFixtureCRD)
+			})
+
+			By("Remediating the incompatibility", func() {
+				var clusterAPI *operatorv1alpha1.ClusterAPI
+				By("Marking the Clusters CRD unmanaged", func() {
+					// Record the append before attempting it: the AfterAll reset is a
+					// no-op when the entry is absent, so a failed append leaves it
+					// nothing to undo, while a landed append is always undone.
+					clustersCRDMarkedUnmanaged = true
+					clusterAPI = markClustersCRDUnmanaged(ctx)
 				})
-			}
 
-			By("Waiting for Upgradeable=False naming the conflicting CRD", func() {
-				expectUpgradeableCondition(ctx, configv1.ConditionFalse, clusterCRDName)
-			})
-		})
+				// The installer creates a CompatibilityRequirement for each unmanaged CRD
+				// and gates every revision on it reaching Admitted=True and
+				// Compatible=True, so the revision cannot converge until the
+				// remediation below lands.
+				By("Remediating the Clusters CRD to the payload version", func() {
+					remediateClustersCRDToPayload(ctx, clustersFixtureCRD)
+				})
 
-		It("should report Upgradeable=True after the CRD is remediated to the payload version and marked unmanaged", NodeTimeout(20*time.Minute), func(ctx SpecContext) {
-			var clusterAPI *operatorv1alpha1.ClusterAPI
-			By("Marking the Clusters CRD unmanaged", func() {
-				// Record the append before attempting it: the AfterAll reset is a
-				// no-op when the entry is absent, so a failed append leaves it
-				// nothing to undo, while a landed append is always undone.
-				clustersCRDMarkedUnmanaged = true
-				clusterAPI = markClustersCRDUnmanaged(ctx)
-			})
+				By("Waiting for revision with unmanaged CRD to rollout", func() {
+					waitForRevisionRollout(ctx, clusterAPI.Generation, ContainElement(clusterCRDName))
+				})
 
-			// The installer creates a CompatibilityRequirement for each unmanaged CRD
-			// and gates every revision on it reaching Admitted=True and
-			// Compatible=True, so the revision cannot converge until the
-			// remediation below lands.
-			By("Remediating the Clusters CRD to the payload version", func() {
-				remediateClustersCRDToPayload(ctx, clustersFixtureCRD)
-			})
-
-			By("Waiting for revision with unmanaged CRD to rollout", func() {
-				waitForRevisionRollout(ctx, clusterAPI.Generation, ContainElement(clusterCRDName))
-			})
-
-			By("Waiting for Upgradeable=True naming the target release", func() {
-				expectUpgradeableCondition(ctx, configv1.ConditionTrue, upgradeTargetVersion)
+				By("Waiting for Upgradeable=True naming the target release", func() {
+					expectUpgradeableCondition(ctx, configv1.ConditionTrue, upgradeTargetVersion)
+				})
 			})
 		})
 
