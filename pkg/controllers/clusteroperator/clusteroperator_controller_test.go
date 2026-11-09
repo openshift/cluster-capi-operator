@@ -91,7 +91,6 @@ var _ = Describe("ClusterOperator controller", func() {
 							expectedAvailable,
 							expectedProgressing,
 							test.HaveCondition(configv1.OperatorDegraded).WithStatus(configv1.ConditionFalse),
-							test.HaveCondition(configv1.OperatorUpgradeable).WithStatus(configv1.ConditionTrue),
 						)),
 					))
 			},

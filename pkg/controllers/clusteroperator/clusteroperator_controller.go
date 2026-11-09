@@ -128,11 +128,6 @@ func (r *ClusterOperatorController) aggregatedStatus(currentConditions []configv
 		// be added by automatically flagging a Progressing condition which
 		// lasts longer than some duration.
 		condition(configv1.OperatorDegraded, configv1.ConditionFalse, operatorstatus.ReasonAsExpected, ""),
-
-		// Nothing the capi operator currently does prevents upgradeability.
-		// This will be added when CRD compatibility is integrated with the
-		// installer and revision controllers.
-		condition(configv1.OperatorUpgradeable, configv1.ConditionTrue, operatorstatus.ReasonAsExpected, ""),
 	}
 
 	// Sub-controllers whose Progressing and Degraded conditions are aggregated

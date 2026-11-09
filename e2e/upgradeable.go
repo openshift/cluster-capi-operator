@@ -45,9 +45,10 @@ import (
 	"github.com/openshift/origin/test/shared/updateservice"
 )
 
-// upgradeTargetEnvVar names the release image the test should assess as an
-// update target: on main branches the current release image, on stable
-// branches the latest nightly of the Y+1 stream. Job config responsibility.
+// upgradeTargetEnvVar optionally names the release image whose Cluster API
+// components the test should assess, ideally a real Y+1 release. When unset,
+// the test falls back to the cluster's current release image. The specified
+// image must be be pullable and ship the provider manifests.
 const upgradeTargetEnvVar = "OPENSHIFT_AVAILABLE_UPDATE"
 
 const (
@@ -108,6 +109,12 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIOperator] Clu
 		// current release, offered to the CVO by the fixture update service.
 		var upgradeTargetVersion, upgradeTargetPayload string
 
+		// The image the fake update service pod runs. It is resolved from the
+		// cluster's tools ImageStreamTag: the recorded payload reference is
+		// rewritten to the cluster's mirror on pull, so the fixture works where
+		// the current payload's own reference does not resolve from the test host.
+		var graphServerImage string
+
 		// The Clusters CRD as shipped in the target payload, extracted from
 		// the release image. It 1 asserts against its compatibility, and the
 		// incompatible CRD in It 2 is derived from it.
@@ -136,14 +143,12 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIOperator] Clu
 		var updateService *updateservice.UpdateService
 
 		BeforeAll(func(ctx SpecContext) {
-			// The upgradeable controller is a no-op stub until it is implemented.
-			// Remove this skip as part of implementing the controller.
-			Skip("Upgradeable controller not implemented")
-
-			skipUnlessUpgradeTargetPayloadConfigured()
-
 			if !framework.IsFeatureGateEnabled(ctx, cl, features.FeatureGateClusterAPIOperator) {
 				Skip("Feature gate ClusterAPIOperator is not enabled.")
+			}
+
+			if !framework.IsFeatureGateEnabled(ctx, cl, features.FeatureGateCRDCompatibilityRequirementOperator) {
+				Skip("Feature gate CRDCompatibilityRequirementOperator is not enabled.")
 			}
 
 			if IsMicroShift {
@@ -175,6 +180,8 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIOperator] Clu
 					"reading ClusterVersion to determine the current release")
 				Expect(clusterVersion.Status.Desired.Version).ToNot(BeEmpty(),
 					"ClusterVersion status.desired.version must be set to compute the fake upgrade target")
+				Expect(clusterVersion.Status.Desired.Image).ToNot(BeEmpty(),
+					"ClusterVersion status.desired.image must be set: it seeds the graph's current node and stands in for the target payload when %s is unset", upgradeTargetEnvVar)
 				currentVersion = clusterVersion.Status.Desired.Version
 				currentPayload = clusterVersion.Status.Desired.Image
 				trackResource(clusterVersion)
@@ -185,6 +192,22 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIOperator] Clu
 				Expect(err).ToNot(HaveOccurred(), "computing the fake target for current version %s", currentVersion)
 				upgradeTargetVersion = target
 				upgradeTargetPayload = os.Getenv(upgradeTargetEnvVar)
+				if upgradeTargetPayload == "" {
+					// No Y+1 payload configured: assess the current release's own
+					// Cluster API components. The CVO still offers them at the
+					// synthesised target version, and the controller resolves that
+					// same version as its next-minor target.
+					GinkgoWriter.Printf("%s is unset; assessing the current release image %s as the update target\n",
+						upgradeTargetEnvVar, currentPayload)
+					upgradeTargetPayload = currentPayload
+				}
+			})
+
+			By("Resolving the fake update service image from the cluster's tools ImageStreamTag", func() {
+				var err error
+				graphServerImage, err = resolveGraphServerImage(ctx, currentPayload)
+				Expect(err).ToNot(HaveOccurred(),
+					"resolving the fake update service image from %s", graphServerImageStreamTag)
 			})
 
 			By("Deploying the fake cincinnati update service", func() {
@@ -201,7 +224,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIOperator] Clu
 
 				graph := updateservice.TwoNodeGraph(upgradeTestChannel, currentVersion, currentPayload,
 					upgradeTargetVersion, upgradeTargetPayload)
-				updateService = deployFakeUpdateService(ctx, namespace.Name, graph)
+				updateService = deployFakeUpdateService(ctx, namespace.Name, graphServerImage, graph)
 				DeferCleanup(func(ctx SpecContext) {
 					Expect(updateService.Cleanup(ctx)).To(Succeed(), "cleaning up the fake cincinnati update service")
 				})
@@ -259,12 +282,16 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIOperator] Clu
 				clusterAPI = markClustersCRDUnmanaged(ctx)
 			})
 
-			By("Waiting for revision with unmanaged CRD to rollout", func() {
-				waitForRevisionRollout(ctx, clusterAPI.Generation, ContainElement(clusterCRDName))
-			})
-
+			// The installer creates a CompatibilityRequirement for each unmanaged CRD
+			// and gates every revision on it reaching Admitted=True and
+			// Compatible=True, so the revision cannot converge until the
+			// remediation below lands.
 			By("Remediating the Clusters CRD to the payload version", func() {
 				remediateClustersCRDToPayload(ctx, clustersFixtureCRD)
+			})
+
+			By("Waiting for revision with unmanaged CRD to rollout", func() {
+				waitForRevisionRollout(ctx, clusterAPI.Generation, ContainElement(clusterCRDName))
 			})
 
 			By("Waiting for Upgradeable=True naming the target release", func() {
@@ -326,16 +353,6 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIOperator] Clu
 		})
 	})
 
-// skipUnlessUpgradeTargetPayloadConfigured skips the whole preflight test
-// when no Y+1 payload is configured to assess upgrades against.
-func skipUnlessUpgradeTargetPayloadConfigured() {
-	GinkgoHelper()
-
-	if os.Getenv(upgradeTargetEnvVar) == "" {
-		Skip(fmt.Sprintf("%s is unset or empty; it must hold a release image ref for the Y+1 payload the CVO should offer as an update", upgradeTargetEnvVar))
-	}
-}
-
 // kWithCtx returns a Komega whose API calls use the given context, so its
 // assertion helpers stop polling when the node context is cancelled. Specs that
 // assert on resources the cluster itself rewrites use this in place of the
@@ -375,15 +392,16 @@ func clustersCRDIsPresent(ctx context.Context) bool {
 }
 
 // deployFakeUpdateService deploys the cincinnati fixture serving graph into
-// namespace and returns it. Cleanup is the caller's responsibility.
-func deployFakeUpdateService(ctx context.Context, namespace string, graph updateservice.Graph) *updateservice.UpdateService {
+// namespace, running the pod with shellImage, and returns it. Cleanup is the
+// caller's responsibility.
+func deployFakeUpdateService(ctx context.Context, namespace, shellImage string, graph updateservice.Graph) *updateservice.UpdateService {
 	GinkgoHelper()
 
 	kubeClient, err := kubernetes.NewForConfig(restConfig)
 	Expect(err).ToNot(HaveOccurred(), "building a clientset for the update-service fixture")
 
-	updateService, err := updateservice.Run(ctx, kubeClient, namespace, "", graph)
-	Expect(err).ToNot(HaveOccurred(), "deploying the fake update service into namespace %s", namespace)
+	updateService, err := updateservice.Run(ctx, kubeClient, namespace, shellImage, graph)
+	Expect(err).ToNot(HaveOccurred(), "deploying the fake update service into namespace %s with image %s", namespace, shellImage)
 	return updateService
 }
 

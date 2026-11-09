@@ -34,7 +34,7 @@ test: verify unit ## Run verification and unit tests
 generate:
 	go generate ./...
 
-build: generate bin/capi-operator bin/capi-installer bin/capi-controllers bin/machine-api-migration bin/crd-compatibility-checker bin/crd-compatibility-checker-operator bin/cluster-capi-operator-tests-ext manifests-gen ## Build all binaries
+build: generate bin/capi-operator bin/capi-installer bin/capi-controllers bin/machine-api-migration bin/crd-compatibility-checker bin/crd-compatibility-checker-operator bin/upgradeable-payload-images-extractor bin/upgradeable-compatibility-requirements bin/cluster-capi-operator-tests-ext manifests-gen ## Build all binaries
 
 clean:
 	rm -rf bin/*
@@ -78,13 +78,13 @@ localtestenv: .localtestenv
 	KUBEBUILDER_ASSETS="$$($(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path --bin-dir $(PROJECT_DIR)/bin --index https://raw.githubusercontent.com/openshift/api/master/envtest-releases.yaml)"; \
 	echo "KUBEBUILDER_ASSETS=$${KUBEBUILDER_ASSETS}" > $@
 
-TEST_DIRS ?= ./pkg/... ./manifests-gen/...
+TEST_DIRS ?= ./cmd/... ./pkg/... ./manifests-gen/...
 unit: .localtestenv ## Run unit tests
 	./hack/test.sh "$(TEST_DIRS)" 40m
 
 .PHONY: test-e2e-diagnostics
 test-e2e-diagnostics: ## Run e2e unit tests (no cluster required)
-	go test -count=1 -race -run 'TestDiagnostics|TestClustersCRDFromManifests|TestNextMinorVersion|TestRemoveSpecPropertyFromAllVersions|TestTargetUpdateOffered|TestDetermineRegistryAuthFilePath|TestOCAuthArgs|TestResolveAWSMachineTemplateForMachineSet|TestWaitForMachineSetAWSMachineTemplate' ./e2e/...
+	go test -count=1 -race -run 'TestDiagnostics|TestClustersCRDFromManifests|TestNextMinorVersion|TestRemoveSpecPropertyFromAllVersions|TestTargetUpdateOffered|TestResolvePayloadComponentImage|TestDetermineRegistryAuthFilePath|TestOCAuthArgs|TestResolveAWSMachineTemplateForMachineSet|TestWaitForMachineSetAWSMachineTemplate' ./e2e/...
 
 .PHONY: e2e
 e2e: ## Run e2e tests against active kubeconfig

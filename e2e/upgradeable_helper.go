@@ -96,6 +96,101 @@ func nextMinorVersion(version string) (string, error) {
 	return fmt.Sprintf("%d.%d.0", major, minor+1), nil
 }
 
+// graphServerImageComponent is the payload component whose image serves the
+// fake update graph. The fixture serves the graph with "python3 -m
+// http.server", so the image must contain python3: the cli image is built
+// from the OCP base image, which installs python3 and
+// python-unversioned-command.
+const graphServerImageComponent = "cli"
+
+// registryAuthClient resolves the client determineRegistryAuthFilePath uses to
+// read the cluster's own pull secret. It returns a nil client when there is no
+// cluster to talk to, so the credential ladder falls through to anonymous
+// access.
+func registryAuthClient() (corev1client.CoreV1Interface, error) {
+	if restConfig == nil {
+		return nil, nil
+	}
+
+	kubeClient, err := kubernetes.NewForConfig(restConfig)
+	if err != nil {
+		return nil, fmt.Errorf("building a clientset to resolve registry credentials: %w", err)
+	}
+
+	return kubeClient.CoreV1(), nil
+}
+
+// resolvePayloadComponentImage resolves component of releaseImage to the
+// digest-pinned pull spec of its image, for a pod on the cluster under test.
+//
+// The pod pulls the result through the cluster's own mirror configuration,
+// which is the only image source that also works on a disconnected cluster: the
+// payload ImageStreams in the internal registry are never imported there, so
+// the internal registry cannot serve the fixture image.
+func resolvePayloadComponentImage(ctx context.Context, releaseImage, component string) (string, error) {
+	authDir, err := os.MkdirTemp("", "capi-operator-registry-auth-")
+	if err != nil {
+		return "", fmt.Errorf("creating temp dir for registry credentials: %w", err)
+	}
+	defer func() { _ = os.RemoveAll(authDir) }()
+
+	registryAuthFile, err := determineRegistryAuthFilePath(ctx, registryAuthClient, authDir)
+	if err != nil {
+		return "", fmt.Errorf("resolving registry credentials for release images: %w", err)
+	}
+
+	args := []string{"adm", "release", "info", releaseImage, "--image-for=" + component}
+
+	imageRef, err := runOC(ctx, append(args, ocAuthArgs(registryAuthFile)...)...)
+	if err != nil {
+		return "", fmt.Errorf("resolving the %s image of release %q: %w", component, releaseImage, err)
+	}
+
+	// A tag defaults imagePullPolicy to Always and lets the reference drift
+	// under the fixture; the payload is immutable only by digest.
+	if !strings.Contains(imageRef, "@sha256:") {
+		return "", fmt.Errorf("resolved %s image %q of release %q is not digest-pinned", component, imageRef, releaseImage)
+	}
+
+	return imageRef, nil
+}
+
+const (
+	// graphServerImageStreamTag is the payload-provided ImageStreamTag whose
+	// image serves the fake update graph. The tools image contains python3,
+	// which the fixture needs, and it is part of the payload, so the reference
+	// the cluster records for it names the payload's own registry: the pod's
+	// pull is rewritten to the cluster's mirror, which works on disconnected
+	// and dev-scripts clusters alike.
+	graphServerImageStreamTag          = "tools:latest"
+	graphServerImageStreamTagNamespace = "openshift"
+)
+
+// resolveGraphServerImage returns the digest-pinned image the fixture pod runs.
+//
+// The cluster records the payload image of graphServerImageTag, so resolving it
+// needs no release image dereference: on dev-scripts the current payload names
+// a cluster-internal mirror that the test host cannot resolve. Resolving the
+// current payload's cli image is the fallback for clusters without the tag.
+func resolveGraphServerImage(ctx context.Context, currentPayload string) (string, error) {
+	imageRef, err := runOC(ctx, "get", "imagestreamtag", graphServerImageStreamTag, "--namespace", graphServerImageStreamTagNamespace, "-o", "jsonpath={.image.dockerImageReference}")
+	if err == nil {
+		imageRef = strings.TrimSpace(imageRef)
+		if strings.Contains(imageRef, "@sha256:") {
+			return imageRef, nil
+		}
+
+		err = fmt.Errorf("%s/%s records %q, which is not digest-pinned", graphServerImageStreamTagNamespace, graphServerImageStreamTag, imageRef)
+	}
+
+	fallback, fallbackErr := resolvePayloadComponentImage(ctx, currentPayload, graphServerImageComponent)
+	if fallbackErr != nil {
+		return "", errors.Join(fmt.Errorf("resolving %s/%s: %w", graphServerImageStreamTagNamespace, graphServerImageStreamTag, err), fallbackErr)
+	}
+
+	return fallback, nil
+}
+
 // clustersCRDFromReleaseImage extracts the clusters.cluster.x-k8s.io CRD
 // from the default-profile provider manifests shipped in the
 // cluster-capi-controllers image referenced by releaseImage. It shells out
@@ -108,20 +203,9 @@ func clustersCRDFromReleaseImage(ctx context.Context, releaseImage string) (*api
 	if err != nil {
 		return nil, fmt.Errorf("creating temp dir for manifest extraction: %w", err)
 	}
-	defer os.RemoveAll(extractDir)
+	defer func() { _ = os.RemoveAll(extractDir) }()
 
-	registryAuthFile, err := determineRegistryAuthFilePath(ctx, func() (corev1client.CoreV1Interface, error) {
-		if restConfig == nil {
-			return nil, nil
-		}
-
-		kubeClient, err := kubernetes.NewForConfig(restConfig)
-		if err != nil {
-			return nil, fmt.Errorf("building a clientset to resolve registry credentials: %w", err)
-		}
-
-		return kubeClient.CoreV1(), nil
-	}, extractDir)
+	registryAuthFile, err := determineRegistryAuthFilePath(ctx, registryAuthClient, extractDir)
 	if err != nil {
 		return nil, fmt.Errorf("resolving registry credentials for release images: %w", err)
 	}
