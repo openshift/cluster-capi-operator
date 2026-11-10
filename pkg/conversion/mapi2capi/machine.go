@@ -24,7 +24,6 @@ import (
 	"k8s.io/utils/ptr"
 	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
-	capierrors "sigs.k8s.io/cluster-api/errors"
 )
 
 const (
@@ -110,7 +109,6 @@ func convertMAPIMachineToCAPIMachineStatus(mapiMachine *mapiv1beta1.Machine) (cl
 		Deprecated: &clusterv1.MachineDeprecatedStatus{
 			V1Beta1: &clusterv1.MachineV1Beta1DeprecatedStatus{
 				Conditions:     convertMAPIMachineConditionsToCAPIMachineConditions(mapiMachine),
-				FailureReason:  convertMAPIMachineErrorReasonToCAPIFailureReason(mapiMachine.Status.ErrorReason),
 				FailureMessage: convertMAPIMachineErrorMessageToCAPIFailureMessage(mapiMachine.Status.ErrorMessage),
 			},
 		},
@@ -130,6 +128,8 @@ func convertMAPIMachineToCAPIMachineStatus(mapiMachine *mapiv1beta1.Machine) (cl
 		// CertificatesExpiryDate: // not present on the MAPI Machine status. (This value is only set for control plane machines, not necessary for worker machines conversion)
 		// ObservedGeneration: // We don't set the observed generation at this stage as it is handled by the machineSync controller.
 	}
+
+	convertMAPIMachineErrorReasonToCAPIFailureReason(mapiMachine.Status.ErrorReason, &capiStatus.Deprecated.V1Beta1.FailureReason)
 
 	// Set Deprecated to nil if the values are zero
 	if capiStatus.Deprecated.V1Beta1.FailureReason == nil &&
@@ -427,13 +427,18 @@ func convertMAPIMachinePhaseToCAPI(mapiPhase *string) string {
 	return ptr.Deref(mapiPhase, "")
 }
 
-// convertMAPIMachineErrorReasonToCAPIFailureReason converts MAPI MachineStatusError to CAPI MachineStatusError.
-func convertMAPIMachineErrorReasonToCAPIFailureReason(mapiErrorReason *mapiv1beta1.MachineStatusError) *capierrors.MachineStatusError {
+// convertMAPIMachineErrorReasonToCAPIFailureReason converts MAPI MachineStatusError to CAPI MachineStatusError
+// and stores it in capiFailureReason.
+// It is generic over the CAPI type so this package does not import sigs.k8s.io/cluster-api/errors,
+// which moved to sigs.k8s.io/cluster-api/api/deprecated/errors in CAPI v1.14. This keeps the
+// package building against both CAPI v1.13 and v1.14.
+func convertMAPIMachineErrorReasonToCAPIFailureReason[T ~string](mapiErrorReason *mapiv1beta1.MachineStatusError, capiFailureReason **T) {
 	if mapiErrorReason == nil {
-		return nil
+		*capiFailureReason = nil
+		return
 	}
 
-	return ptr.To(capierrors.MachineStatusError(*mapiErrorReason))
+	*capiFailureReason = ptr.To(T(*mapiErrorReason))
 }
 
 // convertMAPIMachineErrorMessageToCAPIFailureMessage converts MAPI MachineStatusError to CAPI MachineStatusError.

@@ -22,7 +22,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/utils/ptr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
-	capierrors "sigs.k8s.io/cluster-api/errors"
 )
 
 // fromCAPIMachineSetToMAPIMachineSet takes a CAPI MachineSet and returns a converted MAPI MachineSet.
@@ -102,7 +101,10 @@ func convertCAPIMachineSetStatusToMAPI(capiStatus clusterv1.MachineSetStatus) ma
 }
 
 // convertCAPIFailureReasonToMAPIErrorReason converts CAPI MachineSetStatusError to MAPI MachineSetStatusError.
-func convertCAPIFailureReasonToMAPIErrorReason(capiFailureReason capierrors.MachineSetStatusError) *mapiv1beta1.MachineSetStatusError {
+// It is generic over the CAPI type so this package does not import sigs.k8s.io/cluster-api/errors,
+// which moved to sigs.k8s.io/cluster-api/api/deprecated/errors in CAPI v1.14. This keeps the
+// package building against both CAPI v1.13 and v1.14.
+func convertCAPIFailureReasonToMAPIErrorReason[T ~string](capiFailureReason T) *mapiv1beta1.MachineSetStatusError {
 	mapiErrorReason := mapiv1beta1.MachineSetStatusError(capiFailureReason)
 	return &mapiErrorReason
 }
