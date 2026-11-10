@@ -24,7 +24,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
-	capierrors "sigs.k8s.io/cluster-api/errors"
 )
 
 var _ = Describe("capi2mapi MachineSet conversion", func() {
@@ -72,7 +71,6 @@ var _ = Describe("capi2mapi MachineSet Status Conversion", func() {
 				WithStatusV1Beta1FullyLabeledReplicas(5).
 				WithStatusV1Beta1ReadyReplicas(4).
 				WithStatusV1Beta1AvailableReplicas(3).
-				WithStatusV1Beta1FailureReason(capierrors.MachineSetStatusError("InvalidConfiguration")).
 				WithStatusV1Beta1FailureMessage("Test failure message").
 				WithStatusV1Beta1Conditions([]clusterv1.Condition{
 					{
@@ -84,6 +82,7 @@ var _ = Describe("capi2mapi MachineSet Status Conversion", func() {
 					},
 				}).
 				Build()
+			setFailureReason(&capiMachineSet.Status.Deprecated.V1Beta1.FailureReason, "InvalidConfiguration")
 
 			mapiStatus := convertCAPIMachineSetStatusToMAPI(capiMachineSet.Status)
 
