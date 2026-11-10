@@ -52,10 +52,7 @@ const (
 	requirementsFieldOwner = "UpgradeableCompatibilityRequirements"
 )
 
-var (
-	errNoProfiles     = errors.New("no provider profiles discovered")
-	errCRDNameMissing = errors.New("CRD has no name")
-)
+var errCRDNameMissing = errors.New("CRD has no name")
 
 // Run executes the requirements pod entrypoint.
 func Run(ctx context.Context, args []string) error {
@@ -216,6 +213,12 @@ func DiscoverCRDs(root string) (map[string]*apiextensionsv1.CustomResourceDefini
 
 	volumes, err := os.ReadDir(root) // ReadDir sorts entries by name.
 	if err != nil {
+		// A payload may legitimately ship no provider images, in which case the
+		// pod mounts no volumes and the mount root does not exist.
+		if os.IsNotExist(err) {
+			return crds, nil
+		}
+
 		return nil, fmt.Errorf("reading provider image mounts: %w", err)
 	}
 
@@ -224,28 +227,22 @@ func DiscoverCRDs(root string) (map[string]*apiextensionsv1.CustomResourceDefini
 			continue
 		}
 
-		dir := filepath.Join(root, volume.Name(), "capi-operator-manifests")
-
-		profiles, err := os.ReadDir(dir)
+		profiles, err := providerimages.DiscoverProfiles(filepath.Join(root, volume.Name()))
 		if err != nil {
-			return nil, fmt.Errorf("reading profiles for %s: %w", volume.Name(), err)
+			// A provider which is not built for the current architecture ships a
+			// placeholder image, so it has no Cluster API manifests to assess.
+			if errors.Is(err, providerimages.ErrNoCapiManifests) {
+				continue
+			}
+
+			return nil, fmt.Errorf("discovering profiles for %s: %w", volume.Name(), err)
 		}
 
 		// Profiles may contain different CRDs. Assessing only the installed
 		// profile would leave part of the target provider image unchecked.
 		for _, profile := range profiles {
-			if !profile.IsDir() {
-				continue
-			}
-
-			path := filepath.Join(dir, profile.Name(), "manifests.yaml")
-			manifests = append(manifests, profileManifests{name: profile.Name(), path: path})
+			manifests = append(manifests, profileManifests{name: profile.Profile, path: profile.ManifestsPath})
 		}
-	}
-
-	if len(manifests) == 0 {
-		// An unexpected image layout is not evidence of an empty CRD set.
-		return nil, errNoProfiles
 	}
 
 	// Deterministic precedence keeps duplicate CRD selection stable across

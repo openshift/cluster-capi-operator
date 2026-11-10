@@ -38,10 +38,18 @@ func TestRequirements(t *testing.T) {
 var _ = Describe("CRD discovery", func() {
 	var root string
 
+	// profileMetadata is valid metadata.yaml content for a discovered profile.
+	const profileMetadata = "name: provider\nselfImageRef: provider:latest\ninstallOrder: 10\nattributes:\n  type: infrastructure\n  version: v1.0.0\n"
+
 	writeProfile := func(profile, data string) {
 		dir := filepath.Join(root, providerimages.VolumeNameForImageRef("provider:latest"), "capi-operator-manifests", profile)
 		Expect(os.MkdirAll(dir, 0700)).To(Succeed())
+		Expect(os.WriteFile(filepath.Join(dir, "metadata.yaml"), []byte(profileMetadata), 0600)).To(Succeed())
 		Expect(os.WriteFile(filepath.Join(dir, "manifests.yaml"), []byte(data), 0600)).To(Succeed())
+	}
+
+	writeStubImage := func() {
+		Expect(os.MkdirAll(filepath.Join(root, providerimages.VolumeNameForImageRef("placeholder:latest"), "some-other-dir"), 0700)).To(Succeed())
 	}
 
 	BeforeEach(func() { root = GinkgoT().TempDir() })
@@ -61,9 +69,31 @@ var _ = Describe("CRD discovery", func() {
 		_, err := DiscoverCRDs(root)
 		Expect(err).To(HaveOccurred())
 	})
-	It("should reject an empty profile set", func() {
+	It("should assess an empty CRD set when no provider image ships manifests", func() {
+		crds, err := DiscoverCRDs(root)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(crds).To(BeEmpty())
+	})
+	It("should skip a stub provider image and assess the remaining images", func() {
+		writeStubImage()
+		writeProfile("default", "kind: CustomResourceDefinition\nmetadata:\n  name: widgets.example.com\n")
+
+		crds, err := DiscoverCRDs(root)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(crds).To(HaveKey("widgets.example.com"))
+	})
+	It("should assess an empty CRD set when the mount root does not exist", func() {
+		crds, err := DiscoverCRDs(filepath.Join(root, "absent"))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(crds).To(BeEmpty())
+	})
+	It("should fail on an incomplete profile", func() {
+		dir := filepath.Join(root, providerimages.VolumeNameForImageRef("provider:latest"), "capi-operator-manifests", "default")
+		Expect(os.MkdirAll(dir, 0700)).To(Succeed())
+		Expect(os.WriteFile(filepath.Join(dir, "manifests.yaml"), []byte("kind: ConfigMap\n"), 0600)).To(Succeed())
+
 		_, err := DiscoverCRDs(root)
-		Expect(err).To(MatchError("no provider profiles discovered"))
+		Expect(err).To(HaveOccurred())
 	})
 })
 

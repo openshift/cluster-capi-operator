@@ -250,6 +250,18 @@ var _ = Describe("Assessment chain", func() {
 		Expect(createrequirements.Step(ctx, assessmentClient, "4.16.0", "", filepath.Join(root, "absent"))).To(Succeed())
 	})
 
+	It("should converge on an empty requirement set when the target ships only placeholder images", func() {
+		root := GinkgoT().TempDir()
+		stub := filepath.Join(root, providerimages.VolumeNameForImageRef("placeholder:target"), "some-other-dir")
+		Expect(os.MkdirAll(stub, 0700)).To(Succeed())
+
+		Expect(createrequirements.Step(ctx, assessmentClient, "4.16.0", "4.17.0", root)).To(Succeed())
+
+		requirements := &openshiftapiextensionsv1.CompatibilityRequirementList{}
+		Expect(assessmentClient.List(ctx, requirements)).To(Succeed())
+		Expect(requirements.Items).To(BeEmpty())
+	})
+
 	It("should not apply a requirement whose previous deletion is still pending", func() {
 		target := test.GenerateCRD(schema.GroupVersionKind{Group: "pending.example.com", Version: "v1beta1", Kind: "Pending"})
 		root := writeCompatibilityImageFixture(target)
@@ -367,6 +379,7 @@ var _ = Describe("Assessment chain", func() {
 
 		profileDir := filepath.Join(root, providerimages.VolumeNameForImageRef("provider:latest"), "capi-operator-manifests", "default")
 		Expect(os.MkdirAll(profileDir, 0700)).To(Succeed())
+		Expect(os.WriteFile(filepath.Join(profileDir, "metadata.yaml"), []byte("name: provider\nselfImageRef: provider:latest\ninstallOrder: 10\nattributes:\n  type: infrastructure\n  version: v1.0.0\n"), 0600)).To(Succeed())
 		Expect(os.WriteFile(filepath.Join(profileDir, "manifests.yaml"), []byte(testCRD), 0600)).To(Succeed())
 		Expect(createrequirements.Step(ctx, assessmentClient, "4.16.0", "4.17.0", root)).To(Succeed())
 

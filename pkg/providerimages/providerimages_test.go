@@ -225,6 +225,97 @@ func Test_BuildImageRefMapFromRefs(t *testing.T) {
 	}))
 }
 
+func Test_DiscoverProfiles(t *testing.T) {
+	volume := VolumeNameForImageRef("provider:latest")
+
+	tests := []struct {
+		name     string
+		setup    func(t *testing.T, dir string)
+		validate func(t *testing.T, g Gomega, imageDir string, profiles []Profile)
+		wantErr  error
+	}{
+		{
+			// This test covers OCPBUGS-85530, where a provider image is actually a
+			// placeholder because the provider is not built for the current architecture.
+			name: "provider without capi-operator-manifests directory reports no Cluster API manifests",
+			setup: func(t *testing.T, dir string) {
+				t.Helper()
+
+				if err := os.MkdirAll(filepath.Join(dir, volume, "some-other-dir"), 0o750); err != nil {
+					t.Fatalf("failed to create directory: %v", err)
+				}
+			},
+			wantErr: ErrNoCapiManifests,
+		},
+		{
+			name: "empty capi-operator-manifests directory reports no Cluster API manifests",
+			setup: func(t *testing.T, dir string) {
+				t.Helper()
+
+				if err := os.MkdirAll(filepath.Join(dir, volume, capiOperatorManifestsDir), 0o750); err != nil {
+					t.Fatalf("failed to create directory: %v", err)
+				}
+			},
+			wantErr: ErrNoCapiManifests,
+		},
+		{
+			name: "profile without metadata.yaml is incomplete",
+			setup: func(t *testing.T, dir string) {
+				t.Helper()
+				writeProfile(t, dir, volume, "default", "", "kind: ConfigMap\n")
+			},
+			wantErr: errMissingMetadata,
+		},
+		{
+			name: "profile without manifests.yaml is incomplete",
+			setup: func(t *testing.T, dir string) {
+				t.Helper()
+				writeProfile(t, dir, volume, "default",
+					createMetadataYAML("aws", "infrastructure", "v1.0.0", "aws", "", 20), "")
+			},
+			wantErr: errMissingManifests,
+		},
+		{
+			name: "valid profile",
+			setup: func(t *testing.T, dir string) {
+				t.Helper()
+				writeProfile(t, dir, volume, "default",
+					createMetadataYAML("aws", "infrastructure", "v1.0.0", "aws", "", 20),
+					"kind: ConfigMap\n")
+			},
+			validate: func(t *testing.T, g Gomega, imageDir string, profiles []Profile) {
+				t.Helper()
+				g.Expect(profiles).To(HaveLen(1))
+				g.Expect(profiles[0].Profile).To(Equal("default"))
+				g.Expect(profiles[0].Metadata.Name).To(Equal("aws"))
+				g.Expect(profiles[0].ManifestsPath).To(Equal(filepath.Join(imageDir, capiOperatorManifestsDir, "default", manifestsFile)))
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := NewWithT(t)
+			root := t.TempDir()
+			imageDir := filepath.Join(root, volume)
+
+			tt.setup(t, root)
+
+			profiles, err := DiscoverProfiles(imageDir)
+
+			if tt.wantErr != nil {
+				g.Expect(err).To(MatchError(tt.wantErr))
+
+				return
+			}
+
+			g.Expect(err).NotTo(HaveOccurred())
+
+			tt.validate(t, g, imageDir, profiles)
+		})
+	}
+}
+
 func Test_ScanProviderImages(t *testing.T) {
 	tests := []struct {
 		name        string
