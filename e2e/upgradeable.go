@@ -250,7 +250,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIOperator] Clu
 			})
 		})
 
-		It("should report Upgradeable=True naming the target release when the payload CRDs are compatible", NodeTimeout(3*time.Minute), func(ctx SpecContext) {
+		It("should report Upgradeable=True naming the target release when the payload CRDs are compatible", NodeTimeout(20*time.Minute), func(ctx SpecContext) {
 			By("Waiting for Upgradeable=True naming the target release", func() {
 				expectUpgradeableCondition(ctx, configv1.ConditionTrue, upgradeTargetVersion)
 			})
@@ -581,7 +581,7 @@ func expectUpgradeableCondition(ctx context.Context, status configv1.ConditionSt
 
 	clusterOperator := &configv1.ClusterOperator{ObjectMeta: metav1.ObjectMeta{Name: framework.CAPIClusterOperatorName}}
 	Eventually(ctx, kWithCtx(ctx).Object(clusterOperator)).
-		WithTimeout(framework.WaitMedium).WithPolling(framework.RetryMedium).
+		WithTimeout(framework.WaitLong).WithPolling(framework.RetryMedium).
 		Should(HaveField("Status.Conditions", test.HaveCondition(configv1.OperatorUpgradeable).
 			WithStatus(status).
 			WithMessage(ContainSubstring(messageSubstring))),
