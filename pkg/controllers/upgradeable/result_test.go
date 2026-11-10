@@ -27,7 +27,7 @@ var _ = Describe("Condition message truncation", func() {
 	It("should truncate at a rune boundary", func() {
 		truncated := truncateConditionMessage(strings.Repeat("é", maxConditionMessageLength))
 
-		Expect(utf8.ValidString(truncated)).To(BeTrue())
+		Expect(utf8.ValidString(truncated)).To(BeTrue(), "truncated message should remain valid UTF-8")
 		Expect(len(truncated)).To(BeNumerically("<=", maxConditionMessageLength))
 		Expect(truncated).To(HaveSuffix("..."))
 		// "é" is two bytes, so a whole number of them fits within the bound.

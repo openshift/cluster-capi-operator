@@ -48,6 +48,8 @@ var _ = Describe("CRD discovery", func() {
 		Expect(os.WriteFile(filepath.Join(dir, "manifests.yaml"), []byte(data), 0600)).To(Succeed())
 	}
 
+	// writeStubImage lays out a provider image volume which ships no Cluster API
+	// manifests, as a placeholder built for another architecture does.
 	writeStubImage := func() {
 		Expect(os.MkdirAll(filepath.Join(root, providerimages.VolumeNameForImageRef("placeholder:latest"), "some-other-dir"), 0700)).To(Succeed())
 	}

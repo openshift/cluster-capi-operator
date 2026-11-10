@@ -41,6 +41,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/yaml"
@@ -253,8 +254,7 @@ var _ = Describe("Assessment chain", func() {
 
 	It("should converge on an empty requirement set when the target ships only placeholder images", func() {
 		root := GinkgoT().TempDir()
-		stub := filepath.Join(root, providerimages.VolumeNameForImageRef("placeholder:target"), "some-other-dir")
-		Expect(os.MkdirAll(stub, 0700)).To(Succeed())
+		stubProviderImage(root, "placeholder:target")
 
 		Expect(createrequirements.Step(ctx, assessmentClient, "4.16.0", "4.17.0", root)).To(Succeed())
 
@@ -345,27 +345,169 @@ var _ = Describe("Assessment chain", func() {
 	})
 
 	It("should surface failed pods as ephemeral errors and recreate them", func() {
+		events := record.NewFakeRecorder(10)
+		r.Recorder = events
+
 		target := &configv1.Release{Version: "4.17.0", Image: "release:latest"}
-		pod := r.extractorPod("4.16.0", target, assessmentOwner)
-		Expect(r.ensureAssessmentPod(ctx, pod)).NotTo(BeNil())
-		Expect(assessmentClient.Get(ctx, client.ObjectKeyFromObject(pod), pod)).To(Succeed())
-		pod.Status.Phase = corev1.PodFailed
-		pod.Status.ContainerStatuses = []corev1.ContainerStatus{{
-			Name: assessment.ExtractorPodName,
-			State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{
-				ExitCode: 1, Reason: "Error", Message: "boom: cannot read provider image",
-			}},
-		}}
-		Expect(assessmentClient.Status().Update(ctx, pod)).To(Succeed())
-		result := r.ensureAssessmentPod(ctx, r.extractorPod("4.16.0", target, assessmentOwner))
+		newPod := func() *corev1.Pod {
+			return r.extractorPod("4.16.0", target, assessmentOwner)
+		}
+
+		By("creating the extractor pod of the current assessment")
+
+		Expect(r.ensureAssessmentPod(ctx, newPod())).NotTo(BeNil())
+
+		By("failing the pod, as a crashed assessment binary would")
+
+		failAssessmentPod(ctx, newPod(), assessmentFailureDetail)
+
+		By("reporting an ephemeral error with the failure detail")
+
+		result := r.ensureAssessmentPod(ctx, newPod())
 		Expect(result).NotTo(BeNil())
 		Expect(result.Error()).To(HaveOccurred())
-		Expect(errors.Is(result.Error(), errAssessmentPodFailed)).To(BeTrue())
+		Expect(errors.Is(result.Error(), errAssessmentPodFailed)).To(BeTrue(), "the error should wrap errAssessmentPodFailed")
+		Expect(nextEvent(events)).To(SatisfyAll(
+			ContainSubstring(corev1.EventTypeWarning),
+			ContainSubstring(assessmentPodFailedReason),
+			ContainSubstring("exit code 1 (Error): "+assessmentFailureDetail),
+		))
 		Expect(result.WriteClusterOperatorStatus(ctx, logr.Discard(), assessmentClient)).To(Succeed())
-		expectUpgradeable(ctx, configv1.ConditionUnknown, "EphemeralError", "exit code 1 (Error): boom: cannot read provider image")
-		Expect(apierrors.IsNotFound(assessmentClient.Get(ctx, client.ObjectKeyFromObject(pod), pod))).To(BeTrue())
-		Expect(r.ensureAssessmentPod(ctx, r.extractorPod("4.16.0", target, assessmentOwner))).NotTo(BeNil())
+		expectUpgradeable(ctx, configv1.ConditionUnknown, "EphemeralError", "exit code 1 (Error): "+assessmentFailureDetail)
+
+		By("recreating the pod for the next attempt")
+
+		pod := newPod()
+		Expect(apierrors.IsNotFound(assessmentClient.Get(ctx, client.ObjectKeyFromObject(pod), pod))).To(BeTrue(), "the failed pod should be deleted so the next attempt recreates it")
+		Expect(r.ensureAssessmentPod(ctx, newPod())).NotTo(BeNil())
 		Expect(assessmentClient.Get(ctx, client.ObjectKeyFromObject(pod), pod)).To(Succeed())
+	})
+
+	Describe("reporting assessment pod failures", func() {
+		const (
+			currentVersion = "4.16.0"
+			targetVersion  = "4.17.0"
+		)
+
+		var (
+			events *record.FakeRecorder
+			target *configv1.Release
+		)
+
+		newExtractorPod := func() *corev1.Pod {
+			return r.extractorPod(currentVersion, target, assessmentOwner)
+		}
+
+		// crashOnce fails the current incarnation of the extractor pod, lets the
+		// controller report and delete it, and leaves a new incarnation of the same
+		// fixed name with a new UID in place, as the backoff of a crash loop does.
+		crashOnce := func(detail string) {
+			failAssessmentPod(ctx, newExtractorPod(), detail)
+
+			result := r.ensureAssessmentPod(ctx, newExtractorPod())
+			Expect(result).NotTo(BeNil())
+			Expect(result.Error()).To(HaveOccurred())
+
+			Expect(r.ensureAssessmentPod(ctx, newExtractorPod())).NotTo(BeNil())
+		}
+
+		BeforeEach(func() {
+			target = &configv1.Release{Version: targetVersion, Image: "release:latest"}
+			events = record.NewFakeRecorder(10)
+			r.Recorder = events
+			Expect(r.ensureAssessmentPod(ctx, newExtractorPod())).NotTo(BeNil())
+		})
+
+		It("should not report a repeated failure of a recreated pod", func() {
+			crashOnce(assessmentFailureDetail)
+			Expect(nextEvent(events)).To(ContainSubstring(assessmentFailureDetail))
+
+			By("failing a new incarnation of the same pod for the same reason")
+
+			crashOnce(assessmentFailureDetail)
+			Expect(events.Events).To(HaveLen(0), "a repeated failure of the same pod should not be reported again")
+		})
+
+		It("should report a different failure of the same pod", func() {
+			crashOnce(assessmentFailureDetail)
+			Expect(nextEvent(events)).To(ContainSubstring(assessmentFailureDetail))
+
+			const otherDetail = "boom: cannot mount provider image"
+			crashOnce(otherDetail)
+			Expect(nextEvent(events)).To(ContainSubstring(otherDetail))
+		})
+
+		It("should report the same failure again after the requirements pod succeeded", func() {
+			newRequirementsPod := func() *corev1.Pod {
+				return r.requirementsPod(currentVersion, targetVersion, &corev1.ConfigMap{}, assessmentOwner)
+			}
+
+			By("failing the requirements pod")
+
+			Expect(r.ensureAssessmentPod(ctx, newRequirementsPod())).NotTo(BeNil())
+			failAssessmentPod(ctx, newRequirementsPod(), assessmentFailureDetail)
+			result := r.ensureAssessmentPod(ctx, newRequirementsPod())
+			Expect(result).NotTo(BeNil())
+			Expect(result.Error()).To(HaveOccurred())
+			Expect(nextEvent(events)).To(ContainSubstring(assessmentFailureDetail))
+
+			By("completing a new incarnation of the requirements pod")
+
+			Expect(r.ensureAssessmentPod(ctx, newRequirementsPod())).NotTo(BeNil())
+
+			succeeded := &corev1.Pod{}
+			Expect(assessmentClient.Get(ctx, client.ObjectKeyFromObject(newRequirementsPod()), succeeded)).To(Succeed())
+			succeeded.Status.Phase = corev1.PodSucceeded
+			Expect(assessmentClient.Status().Update(ctx, succeeded)).To(Succeed())
+			Expect(r.ensureAssessmentPod(ctx, newRequirementsPod())).To(BeNil())
+
+			By("failing another requirements pod for the same reason")
+
+			replaceAssessmentPod(ctx, succeeded)
+			Expect(r.ensureAssessmentPod(ctx, newRequirementsPod())).NotTo(BeNil())
+			failAssessmentPod(ctx, newRequirementsPod(), assessmentFailureDetail)
+			result = r.ensureAssessmentPod(ctx, newRequirementsPod())
+			Expect(result).NotTo(BeNil())
+			Expect(result.Error()).To(HaveOccurred())
+			Expect(nextEvent(events)).To(ContainSubstring(assessmentFailureDetail))
+		})
+
+		It("should report the same failure again in a later assessment", func() {
+			crashOnce(assessmentFailureDetail)
+			Expect(nextEvent(events)).To(ContainSubstring(assessmentFailureDetail))
+
+			By("failing the first pod of an assessment of another target for the same reason")
+
+			// A new target replaces the pod, so the same detail recurs in a new assessment.
+			target = &configv1.Release{Version: "4.18.0", Image: "release:next"}
+			later := newExtractorPod()
+
+			Eventually(func(g Gomega) {
+				g.Expect(r.ensureAssessmentPod(ctx, later)).NotTo(BeNil())
+
+				pod := &corev1.Pod{}
+				g.Expect(assessmentClient.Get(ctx, client.ObjectKeyFromObject(later), pod)).To(Succeed())
+				g.Expect(pod.Labels).To(HaveKeyWithValue(assessment.TargetVersionLabel, target.Version))
+				g.Expect(pod.DeletionTimestamp).To(BeNil())
+			}, "10s", "100ms").Should(Succeed())
+
+			failAssessmentPod(ctx, later, assessmentFailureDetail)
+
+			result := r.ensureAssessmentPod(ctx, later)
+			Expect(result).NotTo(BeNil())
+			Expect(result.Error()).To(HaveOccurred())
+			Expect(nextEvent(events)).To(ContainSubstring(assessmentFailureDetail))
+		})
+
+		It("should not emit events without a recorder", func() {
+			r.Recorder = nil
+
+			failAssessmentPod(ctx, newExtractorPod(), assessmentFailureDetail)
+			result := r.ensureAssessmentPod(ctx, newExtractorPod())
+			Expect(result).NotTo(BeNil())
+			Expect(result.Error()).To(HaveOccurred())
+			Expect(events.Events).To(HaveLen(0), "no event should be emitted without a recorder")
+		})
 	})
 
 	It("should extract owned image data and create Warn requirements idempotently", func() {
@@ -386,7 +528,7 @@ var _ = Describe("Assessment chain", func() {
 
 		profileDir := filepath.Join(root, providerimages.VolumeNameForImageRef("provider:latest"), "capi-operator-manifests", "default")
 		Expect(os.MkdirAll(profileDir, 0700)).To(Succeed())
-		Expect(os.WriteFile(filepath.Join(profileDir, "metadata.yaml"), []byte("name: provider\nselfImageRef: provider:latest\ninstallOrder: 10\nattributes:\n  type: infrastructure\n  version: v1.0.0\n"), 0600)).To(Succeed())
+		Expect(os.WriteFile(filepath.Join(profileDir, "metadata.yaml"), profileMetadata("provider:latest"), 0600)).To(Succeed())
 		Expect(os.WriteFile(filepath.Join(profileDir, "manifests.yaml"), []byte(testCRD), 0600)).To(Succeed())
 		Expect(createrequirements.Step(ctx, assessmentClient, "4.16.0", "4.17.0", root)).To(Succeed())
 
@@ -517,6 +659,41 @@ func expectUpgradeable(ctx context.Context, status configv1.ConditionStatus, rea
 	co := &configv1.ClusterOperator{}
 	Expect(assessmentClient.Get(ctx, client.ObjectKeyFromObject(assessmentOwner), co)).To(Succeed())
 	Expect(co.Status.Conditions).To(ContainElement(SatisfyAll(HaveField("Type", Equal(configv1.OperatorUpgradeable)), HaveField("Status", Equal(status)), HaveField("Reason", Equal(reason)), HaveField("Message", ContainSubstring(message)))))
+}
+
+// assessmentFailureDetail is a representative container termination message of a
+// failed assessment pod.
+const assessmentFailureDetail = "boom: cannot read provider image"
+
+// failAssessmentPod marks the fixed-name pod as failed with the given container
+// termination message, as a failed assessment binary would.
+func failAssessmentPod(ctx context.Context, pod *corev1.Pod, detail string) {
+	failed := &corev1.Pod{}
+	ExpectWithOffset(1, assessmentClient.Get(ctx, client.ObjectKeyFromObject(pod), failed)).To(Succeed())
+	failed.Status.Phase = corev1.PodFailed
+	failed.Status.ContainerStatuses = []corev1.ContainerStatus{{
+		Name: failed.Spec.Containers[0].Name,
+		State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{
+			ExitCode: 1, Reason: "Error", Message: detail,
+		}},
+	}}
+	ExpectWithOffset(1, assessmentClient.Status().Update(ctx, failed)).To(Succeed())
+}
+
+// replaceAssessmentPod removes a completed fixed-name pod, so the next assessment
+// step creates a new incarnation with a new UID.
+func replaceAssessmentPod(ctx context.Context, pod *corev1.Pod) {
+	ExpectWithOffset(1, client.IgnoreNotFound(assessmentClient.Delete(ctx, pod))).To(Succeed())
+	EventuallyWithOffset(1, func() error {
+		return assessmentClient.Get(ctx, client.ObjectKeyFromObject(pod), &corev1.Pod{})
+	}, "10s", "100ms").Should(test.BeK8SNotFound())
+}
+
+// nextEvent returns the single event pending on the fake recorder.
+func nextEvent(recorder *record.FakeRecorder) string {
+	ExpectWithOffset(1, recorder.Events).To(HaveLen(1), "expected exactly one event")
+
+	return <-recorder.Events
 }
 
 const testCRD = `apiVersion: apiextensions.k8s.io/v1

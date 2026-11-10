@@ -61,7 +61,7 @@ var _ = Describe("Entrypoint arguments", func() {
 	)
 })
 
-var _ = Describe("Entrypoint termination messages", func() {
+var _ = Describe("Termination messages", func() {
 	// terminationLog redirects the kubelet's termination message to a temp file and
 	// returns its path.
 	terminationLog := func() string {
@@ -83,7 +83,7 @@ var _ = Describe("Entrypoint termination messages", func() {
 		Expect(err).To(MatchError(errInvalidArguments))
 
 		content, readErr := os.ReadFile(path)
-		Expect(readErr).NotTo(HaveOccurred())
+		Expect(readErr).NotTo(HaveOccurred(), "failed to read the termination message")
 		Expect(string(content)).To(Equal(err.Error()))
 	})
 
@@ -93,14 +93,24 @@ var _ = Describe("Entrypoint termination messages", func() {
 		GinkgoT().Setenv("KUBECONFIG", writeKubeconfig(filepath.Join(GinkgoT().TempDir(), "kubeconfig")))
 
 		Expect(Run(context.Background(), "upgradeable-test", []string{"4.16.0", "4.17.0"}, step)).To(Succeed())
-		Expect(path).NotTo(BeAnExistingFile())
+		Expect(path).NotTo(BeAnExistingFile(), "no termination message should be written when the assessment succeeds")
 	})
 
 	It("should write nothing when help is requested", func() {
 		path := terminationLog()
 
 		Expect(Run(context.Background(), "upgradeable-test", []string{"--help"}, step)).To(MatchError(flag.ErrHelp))
-		Expect(path).NotTo(BeAnExistingFile())
+		Expect(path).NotTo(BeAnExistingFile(), "no termination message should be written when help is requested")
+	})
+
+	It("should write the failure detail to the supplied path", func() {
+		path := filepath.Join(GinkgoT().TempDir(), "termination-log")
+
+		writeTerminationMessage(path, errors.New("assessment failed: boom"), logr.Discard())
+
+		content, err := os.ReadFile(path)
+		Expect(err).NotTo(HaveOccurred(), "failed to read the termination message")
+		Expect(string(content)).To(Equal("assessment failed: boom"))
 	})
 })
 
@@ -127,18 +137,6 @@ users:
 
 	return path
 }
-
-var _ = Describe("Termination message", func() {
-	It("should write the failure detail to the supplied path", func() {
-		path := filepath.Join(GinkgoT().TempDir(), "termination-log")
-
-		writeTerminationMessage(path, errors.New("assessment failed: boom"), logr.Discard())
-
-		content, err := os.ReadFile(path)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(string(content)).To(Equal("assessment failed: boom"))
-	})
-})
 
 var _ = Describe("Loop error classification", func() {
 	DescribeTable("should classify API errors",

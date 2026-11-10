@@ -161,10 +161,18 @@ func (r *UpgradeableController) ensureAssessmentPod(ctx context.Context, desired
 
 	switch existing.Status.Phase {
 	case corev1.PodSucceeded:
+		if desired.Name == assessment.RequirementsPodName {
+			// A completed requirements step ends the current failure cycle: a
+			// failure after it is a new one and must be reported again.
+			r.clearReportedFailures()
+		}
+
 		return nil
 	case corev1.PodFailed:
 		// Capture the failure detail before the pod is deleted with it.
 		detail := podFailureDetail(existing)
+		r.reportPodFailure(existing, detail)
+
 		if err := r.deleteObject(ctx, existing); err != nil {
 			return fail(err)
 		}
