@@ -17,6 +17,7 @@ package upgradeable
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"time"
@@ -349,13 +350,19 @@ var _ = Describe("Assessment chain", func() {
 		Expect(r.ensureAssessmentPod(ctx, pod)).NotTo(BeNil())
 		Expect(assessmentClient.Get(ctx, client.ObjectKeyFromObject(pod), pod)).To(Succeed())
 		pod.Status.Phase = corev1.PodFailed
-		pod.Status.Reason = "DeadlineExceeded"
+		pod.Status.ContainerStatuses = []corev1.ContainerStatus{{
+			Name: assessment.ExtractorPodName,
+			State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{
+				ExitCode: 1, Reason: "Error", Message: "boom: cannot read provider image",
+			}},
+		}}
 		Expect(assessmentClient.Status().Update(ctx, pod)).To(Succeed())
 		result := r.ensureAssessmentPod(ctx, r.extractorPod("4.16.0", target, assessmentOwner))
 		Expect(result).NotTo(BeNil())
 		Expect(result.Error()).To(HaveOccurred())
+		Expect(errors.Is(result.Error(), errAssessmentPodFailed)).To(BeTrue())
 		Expect(result.WriteClusterOperatorStatus(ctx, logr.Discard(), assessmentClient)).To(Succeed())
-		expectUpgradeable(ctx, configv1.ConditionUnknown, "EphemeralError", assessment.ExtractorPodName)
+		expectUpgradeable(ctx, configv1.ConditionUnknown, "EphemeralError", "exit code 1 (Error): boom: cannot read provider image")
 		Expect(apierrors.IsNotFound(assessmentClient.Get(ctx, client.ObjectKeyFromObject(pod), pod))).To(BeTrue())
 		Expect(r.ensureAssessmentPod(ctx, r.extractorPod("4.16.0", target, assessmentOwner))).NotTo(BeNil())
 		Expect(assessmentClient.Get(ctx, client.ObjectKeyFromObject(pod), pod)).To(Succeed())

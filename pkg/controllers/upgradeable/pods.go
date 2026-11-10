@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	configv1 "github.com/openshift/api/config/v1"
 	assessment "github.com/openshift/cluster-capi-operator/pkg/controllers/upgradeable/pods"
@@ -162,14 +163,75 @@ func (r *UpgradeableController) ensureAssessmentPod(ctx context.Context, desired
 	case corev1.PodSucceeded:
 		return nil
 	case corev1.PodFailed:
-		// Start from observable inputs again, but return an error so controller
-		// backoff paces repeated terminal failures instead of immediately spinning.
+		// Capture the failure detail before the pod is deleted with it.
+		detail := podFailureDetail(existing)
 		if err := r.deleteObject(ctx, existing); err != nil {
 			return fail(err)
 		}
 
-		return fail(fmt.Errorf("%w: %s (%s): %s; inspect its logs with oc logs -n %s %s", errAssessmentPodFailed, existing.Name, existing.Status.Reason, existing.Status.Message, existing.Namespace, existing.Name))
+		// Start from observable inputs again, but return an error so controller
+		// backoff paces repeated terminal failures instead of immediately spinning.
+		return fail(fmt.Errorf("%w: %s: %s", errAssessmentPodFailed, existing.Name, detail))
 	default:
 		return &result
 	}
+}
+
+// podFailureDetail describes why a pod failed, preferring the container termination
+// detail that an assessment pod writes to its termination message.
+func podFailureDetail(pod *corev1.Pod) string {
+	detail := containerFailureDetails(pod)
+	if detail == "" {
+		// DeadlineExceeded and Evicted are reported at pod level, not per container.
+		detail = strings.Join(nonEmptyValues(pod.Status.Reason, pod.Status.Message), ": ")
+	}
+
+	if detail == "" {
+		detail = string(pod.Status.Phase)
+	}
+
+	// The termination message fallback is a log tail, so its text spans lines.
+	return truncateConditionMessage(strings.Join(strings.Fields(detail), " "))
+}
+
+func containerFailureDetails(pod *corev1.Pod) string {
+	details := make([]string, 0, len(pod.Status.ContainerStatuses))
+
+	for _, status := range pod.Status.ContainerStatuses {
+		terminated := status.State.Terminated
+		if terminated == nil {
+			// Normally empty for RestartPolicy: Never, so only a fallback.
+			terminated = status.LastTerminationState.Terminated
+		}
+
+		if terminated != nil {
+			details = append(details, terminatedDetail(terminated))
+		}
+	}
+
+	return strings.Join(details, "; ")
+}
+
+func terminatedDetail(terminated *corev1.ContainerStateTerminated) string {
+	detail := fmt.Sprintf("exit code %d", terminated.ExitCode)
+	if terminated.Reason != "" {
+		detail += fmt.Sprintf(" (%s)", terminated.Reason)
+	}
+
+	if terminated.Message != "" {
+		detail += ": " + terminated.Message
+	}
+
+	return detail
+}
+
+func nonEmptyValues(values ...string) []string {
+	present := make([]string, 0, len(values))
+	for _, value := range values {
+		if value != "" {
+			present = append(present, value)
+		}
+	}
+
+	return present
 }

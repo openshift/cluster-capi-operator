@@ -19,6 +19,8 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/go-logr/logr"
@@ -57,6 +59,85 @@ var _ = Describe("Entrypoint arguments", func() {
 		Entry("short help", "-h"),
 		Entry("long help", "--help"),
 	)
+})
+
+var _ = Describe("Entrypoint termination messages", func() {
+	// terminationLog redirects the kubelet's termination message to a temp file and
+	// returns its path.
+	terminationLog := func() string {
+		path := filepath.Join(GinkgoT().TempDir(), "termination-log")
+		original := terminationMessagePath
+		terminationMessagePath = path
+
+		DeferCleanup(func() { terminationMessagePath = original })
+
+		return path
+	}
+
+	step := func(context.Context, client.Client, string, string) error { return nil }
+
+	It("should write the detail of a failure before the assessment starts", func() {
+		path := terminationLog()
+
+		err := Run(context.Background(), "upgradeable-test", []string{"4.16.0"}, step)
+		Expect(err).To(MatchError(errInvalidArguments))
+
+		content, readErr := os.ReadFile(path)
+		Expect(readErr).NotTo(HaveOccurred())
+		Expect(string(content)).To(Equal(err.Error()))
+	})
+
+	It("should write nothing when the assessment succeeds", func() {
+		path := terminationLog()
+
+		GinkgoT().Setenv("KUBECONFIG", writeKubeconfig(filepath.Join(GinkgoT().TempDir(), "kubeconfig")))
+
+		Expect(Run(context.Background(), "upgradeable-test", []string{"4.16.0", "4.17.0"}, step)).To(Succeed())
+		Expect(path).NotTo(BeAnExistingFile())
+	})
+
+	It("should write nothing when help is requested", func() {
+		path := terminationLog()
+
+		Expect(Run(context.Background(), "upgradeable-test", []string{"--help"}, step)).To(MatchError(flag.ErrHelp))
+		Expect(path).NotTo(BeAnExistingFile())
+	})
+})
+
+// writeKubeconfig writes a kubeconfig naming an unreachable API server, which is
+// enough for Run to build a client without contacting a cluster.
+func writeKubeconfig(path string) string {
+	Expect(os.WriteFile(path, []byte(`apiVersion: v1
+kind: Config
+clusters:
+- cluster:
+    server: https://127.0.0.1:1
+  name: test
+contexts:
+- context:
+    cluster: test
+    user: test
+  name: test
+current-context: test
+users:
+- name: test
+  user:
+    token: test
+`), 0600)).To(Succeed())
+
+	return path
+}
+
+var _ = Describe("Termination message", func() {
+	It("should write the failure detail to the supplied path", func() {
+		path := filepath.Join(GinkgoT().TempDir(), "termination-log")
+
+		writeTerminationMessage(path, errors.New("assessment failed: boom"), logr.Discard())
+
+		content, err := os.ReadFile(path)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(string(content)).To(Equal("assessment failed: boom"))
+	})
 })
 
 var _ = Describe("Loop error classification", func() {

@@ -31,7 +31,7 @@ The payload images ConfigMap is applied in place and never deleted, so its label
 | --- | --- |
 | No next minor target | `True`, `NoUpdate`, message names the absence of a next minor release |
 | Assessment running or verdicts pending | `Unknown`, `Progressing` |
-| API error or failed assessment pod | `Unknown`, `EphemeralError` |
+| API error or failed assessment pod | `Unknown`, `EphemeralError`, message includes the failure detail: for a failed pod the failed container's exit code and termination message |
 | Complete assessment with no ownership or compatibility conflicts | `True`, `Compatible`, message names target |
 | Foreign CRD, or missing or incompatible unmanaged CRD | `False`, `NotCompatible`, message names conflicting CRDs |
 

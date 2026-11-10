@@ -16,10 +16,17 @@ limitations under the License.
 package upgradeable
 
 import (
+	"unicode/utf8"
+
 	configv1 "github.com/openshift/api/config/v1"
 	configv1apply "github.com/openshift/client-go/config/applyconfigurations/config/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 )
+
+// maxConditionMessageLength is an editorial bound which keeps a condition message
+// readable. It is not an API limit: ClusterOperatorStatusCondition declares no
+// maximum message length, so the only hard ceiling is the etcd object size.
+const maxConditionMessageLength = 4000
 
 // UpgradeableResult combines controller health with the assessment verdict.
 type UpgradeableResult struct {
@@ -42,4 +49,19 @@ func assessmentError(err error) UpgradeableResult {
 
 func assessmentWaiting(description string) UpgradeableResult {
 	return UpgradeableResult{ResultGenerator.WaitingOnExternal(description)}.WithUpgradeable(configv1.ConditionUnknown, "Progressing", "")
+}
+
+func truncateConditionMessage(message string) string {
+	if len(message) <= maxConditionMessageLength {
+		return message
+	}
+
+	// The message can be a log tail, which may contain multi-byte runes, so back off
+	// to a rune boundary instead of splitting one.
+	truncated := message[:maxConditionMessageLength-3]
+	for len(truncated) > 0 && !utf8.ValidString(truncated) {
+		truncated = truncated[:len(truncated)-1]
+	}
+
+	return truncated + "..."
 }

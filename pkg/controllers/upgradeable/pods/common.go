@@ -100,7 +100,20 @@ func OwnerReference(ctx context.Context, c client.Client) (metav1.OwnerReference
 }
 
 // Run executes a pod entrypoint with structured logging and API retries.
-func Run(ctx context.Context, name string, args []string, step func(context.Context, client.Client, string, string) error) error {
+func Run(ctx context.Context, name string, args []string, step func(context.Context, client.Client, string, string) error) (err error) {
+	log := logr.FromSlogHandler(slog.NewJSONHandler(os.Stderr, nil)).WithName(name)
+
+	// Every failure must reach the termination message, including those which happen
+	// before the assessment starts. Help is not a failure: the entrypoints ignore it
+	// and exit 0.
+	defer func() {
+		if err == nil || errors.Is(err, flag.ErrHelp) {
+			return
+		}
+
+		writeTerminationMessage(terminationMessagePath, err, log)
+	}()
+
 	flags := flag.NewFlagSet(name, flag.ContinueOnError)
 
 	flags.Usage = func() {
@@ -133,7 +146,6 @@ func Run(ctx context.Context, name string, args []string, step func(context.Cont
 		return fmt.Errorf("creating API client: %w", err)
 	}
 
-	log := logr.FromSlogHandler(slog.NewJSONHandler(os.Stderr, nil)).WithName(name)
 	log.Info("Starting assessment", "currentVersion", args[0], "targetVersion", args[1])
 
 	err = Loop(ctx, log, func() error { return step(ctx, c, args[0], args[1]) })
@@ -144,6 +156,19 @@ func Run(ctx context.Context, name string, args []string, step func(context.Cont
 	}
 
 	return err
+}
+
+// terminationMessagePath is the kubelet's termination message path. Tests redirect
+// it, because they run without a kubelet.
+var terminationMessagePath = corev1.TerminationMessagePathDefault //nolint:gochecknoglobals
+
+// writeTerminationMessage records a deterministic failure detail for the kubelet to
+// publish. The log fallback is not deterministic, because it includes log timestamps.
+func writeTerminationMessage(path string, failure error, log logr.Logger) {
+	if err := os.WriteFile(path, []byte(failure.Error()), 0600); err != nil {
+		// The log fallback still reports the failure, so this must not change the outcome.
+		log.Error(err, "writing termination message", "path", path)
+	}
 }
 
 // Loop repeats transient failures with bounded exponential backoff until completion.
