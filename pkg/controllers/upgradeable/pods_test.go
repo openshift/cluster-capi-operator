@@ -20,9 +20,50 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	configv1 "github.com/openshift/api/config/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+var _ = Describe("Assessment pod placement", func() {
+	owner := &configv1.ClusterOperator{ObjectMeta: metav1.ObjectMeta{Name: "cluster-api"}}
+	target := &configv1.Release{Version: "4.17.0", Image: "release:latest"}
+
+	DescribeTable("should restrict manifest readers to control-plane nodes",
+		func(buildPod func(*UpgradeableController) *corev1.Pod) {
+			r := &UpgradeableController{ContainerImage: "operator:latest"}
+			pod := buildPod(r)
+
+			Expect(pod.Spec.NodeSelector).To(Equal(map[string]string{
+				"node-role.kubernetes.io/control-plane": "",
+			}), "assessment pods must read image volumes on the control-plane architecture")
+			Expect(pod.Spec.Tolerations).To(ConsistOf(
+				corev1.Toleration{
+					Key:      "node-role.kubernetes.io/master",
+					Operator: corev1.TolerationOpExists,
+					Effect:   corev1.TaintEffectNoSchedule,
+				},
+				corev1.Toleration{
+					Key:      "node-role.kubernetes.io/control-plane",
+					Operator: corev1.TolerationOpExists,
+					Effect:   corev1.TaintEffectNoSchedule,
+				},
+			), "assessment pods must tolerate control-plane taints")
+		},
+		Entry("payload images extractor", func(r *UpgradeableController) *corev1.Pod {
+			return r.extractorPod("4.16.0", target, owner)
+		}),
+		Entry("compatibility requirements", func(r *UpgradeableController) *corev1.Pod {
+			return r.requirementsPod("4.16.0", target.Version, &corev1.ConfigMap{Data: map[string]string{"core": "provider:latest"}}, owner)
+		}),
+		Entry("payload images extractor without a target", func(r *UpgradeableController) *corev1.Pod {
+			return r.extractorPod("4.16.0", nil, owner)
+		}),
+		Entry("compatibility requirements without images", func(r *UpgradeableController) *corev1.Pod {
+			return r.requirementsPod("4.16.0", "", &corev1.ConfigMap{}, owner)
+		}),
+	)
+})
 
 var _ = Describe("Pod failure detail", func() {
 	podStatus := func(status corev1.PodStatus) *corev1.Pod {

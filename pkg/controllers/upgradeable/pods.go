@@ -63,6 +63,23 @@ func (r *UpgradeableController) basePod(name, command, currentVersion, targetVer
 		},
 		Spec: corev1.PodSpec{
 			ServiceAccountName: name,
+			// Image volumes resolve to the node's architecture, so use the same
+			// homogeneous control plane as the installer when reading manifests.
+			NodeSelector: map[string]string{
+				"node-role.kubernetes.io/control-plane": "",
+			},
+			Tolerations: []corev1.Toleration{
+				{
+					Key:      "node-role.kubernetes.io/master",
+					Operator: corev1.TolerationOpExists,
+					Effect:   corev1.TaintEffectNoSchedule,
+				},
+				{
+					Key:      "node-role.kubernetes.io/control-plane",
+					Operator: corev1.TolerationOpExists,
+					Effect:   corev1.TaintEffectNoSchedule,
+				},
+			},
 			// Match the operator's own deployments so the assessment pods are treated as
 			// platform components rather than user workloads.
 			PriorityClassName: "system-cluster-critical",
