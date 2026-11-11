@@ -135,7 +135,16 @@ func setupController(mgr ctrl.Manager, c *InstallerController, additionalSources
 		// Watch the cluster-wide Proxy CR so that proxy changes trigger
 		// reconciliation of proxy env vars on managed workloads.
 		Watches(&configv1.Proxy{},
-			handler.EnqueueRequestsFromMapFunc(toClusterAPI))
+			handler.EnqueueRequestsFromMapFunc(toClusterAPI)).
+		// Watch the ClusterOperator so that a status write skipped against a
+		// stale informer (or rewritten by a third party) is republished once
+		// the cache catches up.
+		Watches(&configv1.ClusterOperator{},
+			handler.EnqueueRequestsFromMapFunc(toClusterAPI),
+			builder.WithPredicates(operatorstatus.ClusterOperatorOwnedStateChanged(
+				ResultGenerator,
+				operatorstatus.OwnedRelatedObjects(),
+			)))
 
 	for _, src := range additionalSources {
 		b = b.WatchesRawSource(src)

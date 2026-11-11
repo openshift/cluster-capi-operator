@@ -318,6 +318,28 @@ func (r *RevisionController) buildComponentList(infra *configv1.Infrastructure) 
 	})
 }
 
+// infrastructureReadyPredicate returns a predicate that matches Infrastructure
+// objects that report a platform and infrastructure name, so that the first
+// time it becomes ready triggers reconciliation.
+func infrastructureReadyPredicate(isReady func(client.Object) bool) predicate.Funcs {
+	return predicate.Funcs{
+		CreateFunc: func(e event.CreateEvent) bool {
+			return isReady(e.Object)
+		},
+
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			oldInfra, oldOK := e.ObjectOld.(*configv1.Infrastructure)
+			newInfra, newOK := e.ObjectNew.(*configv1.Infrastructure)
+
+			if !oldOK || !newOK || !isReady(newInfra) {
+				return false
+			}
+
+			return !isReady(oldInfra)
+		},
+	}
+}
+
 // SetupWithManager sets up the controller with the Manager.
 func (r *RevisionController) SetupWithManager(mgr ctrl.Manager, tlsOptions []func(config *tls.Config)) error {
 	tlsCfg := &tls.Config{}
@@ -358,22 +380,17 @@ func (r *RevisionController) SetupWithManager(mgr ctrl.Manager, tlsOptions []fun
 		Watches(
 			&configv1.Infrastructure{},
 			handler.EnqueueRequestsFromMapFunc(toClusterAPI),
-			builder.WithPredicates(predicate.Funcs{
-				CreateFunc: func(e event.CreateEvent) bool {
-					return isInfrastructureReady(e.Object)
-				},
-
-				UpdateFunc: func(e event.UpdateEvent) bool {
-					oldInfra, oldOK := e.ObjectOld.(*configv1.Infrastructure)
-					newInfra, newOK := e.ObjectNew.(*configv1.Infrastructure)
-
-					if !oldOK || !newOK || !isInfrastructureReady(newInfra) {
-						return false
-					}
-
-					return !isInfrastructureReady(oldInfra)
-				},
-			}),
+			builder.WithPredicates(infrastructureReadyPredicate(isInfrastructureReady)),
+		).
+		// Watch the ClusterOperator so that a status write skipped against a
+		// stale informer is republished once the cache catches up.
+		Watches(
+			&configv1.ClusterOperator{},
+			handler.EnqueueRequestsFromMapFunc(toClusterAPI),
+			builder.WithPredicates(operatorstatus.ClusterOperatorOwnedStateChanged(
+				ResultGenerator,
+				operatorstatus.OwnedVersions(),
+			)),
 		).
 		Complete(r); err != nil {
 		return fmt.Errorf("failed to create controller: %w", err)
