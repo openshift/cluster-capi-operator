@@ -170,11 +170,7 @@ func (r *UpgradeableController) processRequirements(ctx context.Context, assessm
 	// Stable ordering avoids status churn when API list order changes.
 	sort.Strings(conflicts)
 
-	message := "Incompatible CRDs:\n- " + strings.Join(conflicts, "\n- ")
-	// Bound the message so a large conflict set remains suitable for ClusterOperator status.
-	if len(message) > 4000 {
-		message = message[:3997] + "..."
-	}
+	message := truncateConditionMessage("Incompatible CRDs:\n- " + strings.Join(conflicts, "\n- "))
 
 	return result.WithUpgradeable(configv1.ConditionFalse, "NotCompatible", message)
 }

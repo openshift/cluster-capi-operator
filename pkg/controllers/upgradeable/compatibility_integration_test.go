@@ -222,6 +222,42 @@ var _ = Describe("Upgrade compatibility integration", func() {
 		),
 	)
 
+	It("should report Compatible when the target provider images ship no Cluster API manifests", func() {
+		By("Offering a next minor release")
+
+		Expect(assessmentClient.Create(ctx, &operatorv1alpha1.ClusterAPI{
+			ObjectMeta: metav1.ObjectMeta{Name: clusterAPIName},
+			Spec:       &operatorv1alpha1.ClusterAPISpec{},
+		})).To(Succeed(), "failed to create the ClusterAPI object")
+
+		cv := &configv1.ClusterVersion{
+			ObjectMeta: metav1.ObjectMeta{Name: clusterVersionName},
+			Spec:       configv1.ClusterVersionSpec{ClusterID: "11111111-1111-4111-8111-111111111111"},
+		}
+		Expect(assessmentClient.Create(ctx, cv)).To(Succeed(), "failed to create the ClusterVersion object")
+		cv.Status.Desired = configv1.Release{Version: "4.16.0", Image: "release:current"}
+		cv.Status.AvailableUpdates = []configv1.Release{{Version: "4.17.0", Image: "release:target"}}
+		Expect(assessmentClient.Status().Update(ctx, cv)).To(Succeed(), "failed to offer the next minor release")
+
+		By("Assessing a target whose provider image volume ships no manifests")
+
+		root := writePlaceholderImageFixture()
+		placeholder := assessmentInputs{current: "4.16.0", target: "4.17.0", payloadManifest: filepath.Join(root, "images.yaml"), requirementsRoot: root}
+
+		r := &UpgradeableController{Client: assessmentClient, ContainerImage: "operator:current"}
+		driveExtractor(ctx, r, placeholder)
+		driveRequirements(ctx, r, placeholder)
+
+		By("Publishing compatibility with an empty requirement set")
+
+		Expect(reconcileAssessment(ctx, r)).To(Succeed())
+		expectUpgradeable(ctx, configv1.ConditionTrue, "Compatible", "4.17.0")
+
+		requirements := &openshiftapiextensionsv1.CompatibilityRequirementList{}
+		Expect(assessmentClient.List(ctx, requirements, client.MatchingLabels(assessment.AssessmentLabels("4.16.0", "4.17.0")))).To(Succeed(), "failed to list the compatibility requirements")
+		Expect(requirements.Items).To(BeEmpty())
+	})
+
 	It("should reap and report Unknown when there is no next minor target", func() {
 		By("Offering no next minor release")
 
@@ -383,6 +419,33 @@ var _ = Describe("Upgrade compatibility integration", func() {
 	})
 })
 
+// stubProviderImage lays out a provider image volume which ships no Cluster API
+// manifests, as a placeholder built for another architecture does.
+func stubProviderImage(root, imageRef string) {
+	GinkgoHelper()
+
+	Expect(os.MkdirAll(filepath.Join(root, providerimages.VolumeNameForImageRef(imageRef), "some-other-dir"), 0700)).To(Succeed())
+}
+
+// profileMetadata is valid metadata.yaml content for a discovered profile of the
+// provider image with the given ref.
+func profileMetadata(imageRef string) []byte {
+	return []byte("name: provider\nselfImageRef: " + imageRef + "\ninstallOrder: 10\nattributes:\n  type: infrastructure\n  version: v1.0.0\n")
+}
+
+// writePlaceholderImageFixture writes the payload metadata of a provider image that
+// ships no Cluster API manifests, as a placeholder built for another architecture
+// does. It returns the path to the temporary directory.
+func writePlaceholderImageFixture() string {
+	GinkgoHelper()
+
+	root := GinkgoT().TempDir()
+	Expect(os.WriteFile(filepath.Join(root, "images.yaml"), []byte("apiVersion: v1\nkind: ConfigMap\ndata:\n  core: placeholder:target\n"), 0600)).To(Succeed())
+	stubProviderImage(root, "placeholder:target")
+
+	return root
+}
+
 // writeCompatibilityImageFixture writes the target CRD to the compatibility image filesystem fixture.
 // It creates a temporary directory and writes the target CRD to the compatibility image filesystem fixture.
 // It returns the path to the temporary directory.
@@ -396,6 +459,9 @@ func writeCompatibilityImageFixture(target *apiextensionsv1.CustomResourceDefini
 	// Create the profile directory.
 	profile := filepath.Join(root, providerimages.VolumeNameForImageRef("provider:target"), "capi-operator-manifests", "default")
 	Expect(os.MkdirAll(profile, 0700)).To(Succeed())
+
+	// Write the profile metadata to the profile directory.
+	Expect(os.WriteFile(filepath.Join(profile, "metadata.yaml"), profileMetadata("provider:target"), 0600)).To(Succeed())
 
 	// Write the target CRD to the profile directory.
 	data, err := yaml.Marshal(target)

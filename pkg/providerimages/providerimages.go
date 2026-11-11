@@ -54,11 +54,21 @@ type ProviderImageManifests struct {
 	ManifestsPath string
 }
 
+// Profile is a complete provider profile discovered in a provider image.
+type Profile struct {
+	Profile       string
+	Metadata      *ProviderMetadata
+	ManifestsPath string
+}
+
 // ProviderMetadata is metadata about a provider image provided in the metadata.yaml file.
 type ProviderMetadata = providermetadata.ProviderMetadata
 
 var (
-	errNoCapiManifests   = errors.New("no capi-manifests directory found")
+	// ErrNoCapiManifests reports a provider image that ships no Cluster API manifests.
+	// A provider which is not built for the current architecture ships a placeholder
+	// image instead, so having no Cluster API manifests is not an error.
+	ErrNoCapiManifests   = errors.New("no capi-manifests directory found")
 	errMissingMetadata   = errors.New("missing metadata.yaml in /capi-operator-manifests")
 	errMissingManifests  = errors.New("missing manifests.yaml in /capi-operator-manifests")
 	errContainerNotFound = errors.New("container not found in pod spec")
@@ -88,9 +98,9 @@ func ScanProviderImages(logger logr.Logger, providerImageDir string, imageRefMap
 			continue
 		}
 
-		profiles, err := discoverProfiles(subdirPath)
+		profiles, err := DiscoverProfiles(subdirPath)
 		if err != nil {
-			if errors.Is(err, errNoCapiManifests) {
+			if errors.Is(err, ErrNoCapiManifests) {
 				logger.Info("Skipping provider directory: no valid profiles found", "directory", subdir)
 				continue
 			}
@@ -101,18 +111,37 @@ func ScanProviderImages(logger logr.Logger, providerImageDir string, imageRefMap
 		imageRef := imageRefMap[subdir]
 
 		for _, profile := range profiles {
-			manifestsPath := filepath.Join(subdirPath, capiOperatorManifestsDir, profile.Profile, manifestsFile)
-
 			result = append(result, ProviderImageManifests{
 				ProviderMetadata: *profile.Metadata,
 				ImageRef:         imageRef,
 				Profile:          profile.Profile,
-				ManifestsPath:    manifestsPath,
+				ManifestsPath:    profile.ManifestsPath,
 			})
 		}
 	}
 
 	return result, nil
+}
+
+// DiscoverProfiles returns the complete profiles of the provider image mounted at dir.
+// It returns ErrNoCapiManifests if the image ships no Cluster API manifests.
+func DiscoverProfiles(dir string) ([]Profile, error) {
+	discovered, err := discoverProfiles(dir)
+	if err != nil {
+		return nil, err
+	}
+
+	profiles := make([]Profile, 0, len(discovered))
+
+	for _, profile := range discovered {
+		profiles = append(profiles, Profile{
+			Profile:       profile.Profile,
+			Metadata:      profile.Metadata,
+			ManifestsPath: filepath.Join(dir, capiOperatorManifestsDir, profile.Profile, manifestsFile),
+		})
+	}
+
+	return profiles, nil
 }
 
 // BuildImageRefMapFromRefs builds a mapping from expected mount subdirectory
@@ -209,7 +238,7 @@ func discoverProfiles(dir string) ([]profileManifests, error) {
 	entries, err := os.ReadDir(filepath.Join(dir, capiOperatorManifestsDir))
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, errNoCapiManifests
+			return nil, ErrNoCapiManifests
 		}
 
 		return nil, fmt.Errorf("failed to read directory %s: %w", dir, err)
@@ -236,7 +265,7 @@ func discoverProfiles(dir string) ([]profileManifests, error) {
 	}
 
 	if len(profiles) == 0 {
-		return nil, errNoCapiManifests
+		return nil, ErrNoCapiManifests
 	}
 
 	return profiles, nil

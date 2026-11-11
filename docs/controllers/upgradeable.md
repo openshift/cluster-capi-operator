@@ -17,9 +17,9 @@ The target is the highest semantic version for the next minor release (`X.(Y+1).
 The assessment uses two pods in `openshift-cluster-api-operator`, each running a dedicated binary from the current operator image:
 
 1. `upgradeable-payload-images-extractor` runs `/upgradeable-payload-images-extractor`, mounts the target payload as an image volume and copies its provider image ConfigMap data into `upgradeable-payload-images`.
-2. `upgradeable-compatibility-requirements` runs `/upgradeable-compatibility-requirements`, mounts those provider images, discovers CRDs across every provider profile, and converges cluster scoped CompatibilityRequirements on them. Image volumes, and then profiles within them, are read in name order. The first definition of a repeated CRD wins. Requirements cover all served versions and use `Warn`, never `Deny`.
+2. `upgradeable-compatibility-requirements` runs `/upgradeable-compatibility-requirements`, mounts those provider images, discovers CRDs across every provider profile, and converges cluster scoped CompatibilityRequirements on them. Image volumes, and then profiles within them, are read in name order. The first definition of a repeated CRD wins. Requirements cover all served versions and use `Warn`, never `Deny`. Provider images that ship no `capi-operator-manifests` directory are skipped: on a multiarch payload a provider that is not built for the current architecture is a placeholder image, exactly as the installer skips it. Assessing zero CRDs is a complete assessment, which reports `Upgradeable=True` with reason `Compatible`.
 
-Pod completion marks each step complete. Pods retry transient API failures internally, exit on terminal input or permission errors, and have a 30 minute deadline. The controller recreates failed pods with reconciliation backoff.
+Pod completion marks each step complete. Pods retry transient API failures internally, exit on terminal input or permission errors, and have a 30 minute deadline. The controller recreates failed pods with reconciliation backoff. Each failure is also reported as a `Warning` event carrying the pod's termination message, next to the pods in `openshift-cluster-api-operator`. A pod recreated under its fixed name is a new object, so event aggregation cannot collapse the repeats of a crash loop: the controller suppresses repeated failures itself, and forgets them once the requirements pod completes.
 
 Every assessment resource carries current version, target version, and managed labels under `capi-operator.openshift.io`. Pods have fixed names, so a pod created for different assessed versions is deleted and the new one is only created once that deletion completes.
 
@@ -31,7 +31,7 @@ The payload images ConfigMap is applied in place and never deleted, so its label
 | --- | --- |
 | No next minor target | `True`, `NoUpdate`, message names the absence of a next minor release |
 | Assessment running or verdicts pending | `Unknown`, `Progressing` |
-| API error or failed assessment pod | `Unknown`, `EphemeralError` |
+| API error or failed assessment pod | `Unknown`, `EphemeralError`, message includes the failure detail: for a failed pod the failed container's exit code and termination message |
 | Complete assessment with no ownership or compatibility conflicts | `True`, `Compatible`, message names target |
 | Foreign CRD, or missing or incompatible unmanaged CRD | `False`, `NotCompatible`, message names conflicting CRDs |
 

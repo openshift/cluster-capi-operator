@@ -18,6 +18,9 @@ package upgradeable
 import (
 	"context"
 	"fmt"
+	"slices"
+	"strings"
+	"sync"
 
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -35,6 +38,7 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/operatorstatus"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	"k8s.io/client-go/tools/record"
 )
 
 const (
@@ -46,6 +50,14 @@ const (
 
 	// ResultGenerator is the controller result generator for the UpgradeableController.
 	ResultGenerator = operatorstatus.ControllerResultGenerator(controllerName)
+
+	// assessmentPodFailedReason is the event reason reported when an assessment pod exits in failure.
+	assessmentPodFailedReason = "AssessmentPodFailed"
+
+	// reportedFailuresLimit bounds the recorded failure fingerprints. Events are not
+	// durable, so forgetting the oldest fingerprint only risks re-reporting a failure
+	// that has long since been superseded.
+	reportedFailuresLimit = 32
 )
 
 // UpgradeableController assesses whether the cluster is compatible with the
@@ -54,6 +66,10 @@ const (
 type UpgradeableController struct {
 	client.Client
 	ContainerImage string
+	Recorder       record.EventRecorder
+
+	reportedFailuresMu sync.Mutex
+	reportedFailures   []string
 }
 
 // Reconcile reports the controller status on the cluster-api ClusterOperator.
@@ -72,11 +88,58 @@ func (r *UpgradeableController) Reconcile(ctx context.Context, _ ctrl.Request) (
 	return reconcileResult.Result()
 }
 
+// reportPodFailure emits an event carrying the failure detail of an assessment pod,
+// unless that failure has already been reported. Failed pods are recreated under the
+// same fixed name with a new UID, which defeats the client-go event correlator's
+// aggregation, so repeats are collapsed here instead.
+func (r *UpgradeableController) reportPodFailure(pod *corev1.Pod, detail string) {
+	if r.Recorder == nil {
+		return
+	}
+
+	fingerprint := podFailureFingerprint(pod, detail)
+
+	r.reportedFailuresMu.Lock()
+	if slices.Contains(r.reportedFailures, fingerprint) {
+		r.reportedFailuresMu.Unlock()
+
+		return
+	}
+
+	if len(r.reportedFailures) >= reportedFailuresLimit {
+		r.reportedFailures = r.reportedFailures[1:]
+	}
+
+	r.reportedFailures = append(r.reportedFailures, fingerprint)
+	r.reportedFailuresMu.Unlock()
+
+	r.Recorder.Event(pod, corev1.EventTypeWarning, assessmentPodFailedReason, detail)
+}
+
+// clearReportedFailures forgets reported failures so that a failure after the
+// current assessment step succeeded is reported again.
+func (r *UpgradeableController) clearReportedFailures() {
+	r.reportedFailuresMu.Lock()
+	defer r.reportedFailuresMu.Unlock()
+
+	r.reportedFailures = nil
+}
+
+// podFailureFingerprint identifies a failure by the assessment which produced it, so
+// that the same detail recurring in a later assessment is a new failure.
+func podFailureFingerprint(pod *corev1.Pod, detail string) string {
+	labels := pod.GetLabels()
+
+	return strings.Join([]string{pod.Name, labels[assessment.CurrentVersionLabel], labels[assessment.TargetVersionLabel], detail}, "\x00")
+}
+
 // SetupWithManager sets up the controller with the Manager.
 // The controller has no primary object and its Reconcile ignores the
 // request, but all watches must map to the same target so that their events
 // coalesce in the single workqueue.
 func (r *UpgradeableController) SetupWithManager(mgr ctrl.Manager) error {
+	r.Recorder = mgr.GetEventRecorderFor(controllerName)
+
 	if err := ctrl.NewControllerManagedBy(mgr).
 		Named(controllerName).
 		// Notify on creation of the ClusterOperator
