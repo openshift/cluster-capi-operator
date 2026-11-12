@@ -27,6 +27,8 @@ import (
 	"strconv"
 	"strings"
 
+	. "github.com/onsi/ginkgo/v2"
+
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilyaml "k8s.io/apimachinery/pkg/util/yaml"
@@ -96,12 +98,54 @@ func nextMinorVersion(version string) (string, error) {
 	return fmt.Sprintf("%d.%d.0", major, minor+1), nil
 }
 
-// graphServerImageComponent is the payload component whose image serves the
-// fake update graph. The fixture serves the graph with "python3 -m
-// http.server", so the image must contain python3: the cli image is built
-// from the OCP base image, which installs python3 and
-// python-unversioned-command.
-const graphServerImageComponent = "cli"
+const (
+	// releaseImageLATESTEnvVar names the release image CI provided for this
+	// job. It is the interim update target whenever CI supplies no Y+1
+	// payload: it lets the suite run everywhere without a second payload,
+	// and it is the payload dev-scripts mirrors for the cluster, so both
+	// host and in-cluster pulls resolve it.
+	releaseImageLATESTEnvVar = "RELEASE_IMAGE_LATEST"
+
+	// clusterCAPIComponent is the payload component shipping the Cluster
+	// API provider manifests the preflight extracts the fixture CRD from.
+	clusterCAPIComponent = "cluster-capi-controllers"
+)
+
+// errNoUpdateTarget reports that CI provided no release image for the
+// preflight to assess.
+var errNoUpdateTarget = errors.New("no update target release image provided")
+
+// resolveUpdateTargetRelease returns the release image the upgradeability
+// preflight assesses. It is resolved exactly once:
+//   - OPENSHIFT_AVAILABLE_UPDATE when CI supplies an explicit target payload.
+//   - otherwise RELEASE_IMAGE_LATEST, the release image CI provided for
+//     this job..
+//
+// Whichever source is chosen, the target image must be pullable both from the
+// test runner and in-cluster. Specifically, if the cluster uses mirroring, this
+// payload image must have been mirrored to the target cluster.
+func resolveUpdateTargetRelease() (ref string, err error) {
+	updateSource := upgradeTargetEnvVar
+	ref = strings.TrimSpace(os.Getenv(updateSource))
+	if ref == "" {
+		updateSource = releaseImageLATESTEnvVar
+		ref = strings.TrimSpace(os.Getenv(updateSource))
+	}
+
+	if ref == "" {
+		return "", errNoUpdateTarget
+	}
+
+	// A tag would drift under the preflight; a release is immutable only by
+	// digest.
+	if !strings.Contains(ref, "@sha256:") {
+		return "", fmt.Errorf("%s is %q, which is not digest-pinned: set it to a digest-pinned release image", updateSource, ref)
+	}
+
+	GinkgoWriter.Printf("Using target release image from %s: %s\n", updateSource, ref)
+
+	return ref, nil
+}
 
 // registryAuthClient resolves the client determineRegistryAuthFilePath uses to
 // read the cluster's own pull secret. It returns a nil client when there is no
@@ -121,12 +165,11 @@ func registryAuthClient() (corev1client.CoreV1Interface, error) {
 }
 
 // resolvePayloadComponentImage resolves component of releaseImage to the
-// digest-pinned pull spec of its image, for a pod on the cluster under test.
-//
-// The pod pulls the result through the cluster's own mirror configuration,
-// which is the only image source that also works on a disconnected cluster: the
-// payload ImageStreams in the internal registry are never imported there, so
-// the internal registry cannot serve the fixture image.
+// digest-pinned pull spec of its image. releaseImage is always a ref the
+// environment supplied explicitly (OPENSHIFT_AVAILABLE_UPDATE or
+// RELEASE_IMAGE_LATEST): the cluster's own status.desired.image may name a
+// cluster-internal mirror the test host cannot resolve, so it is never
+// dereferenced.
 func resolvePayloadComponentImage(ctx context.Context, releaseImage, component string) (string, error) {
 	authDir, err := os.MkdirTemp("", "capi-operator-registry-auth-")
 	if err != nil {
@@ -166,39 +209,45 @@ const (
 	graphServerImageStreamTagNamespace = "openshift"
 )
 
-// resolveGraphServerImage returns the digest-pinned image the fixture pod runs.
-//
-// The cluster records the payload image of graphServerImageTag, so resolving it
-// needs no release image dereference: on dev-scripts the current payload names
-// a cluster-internal mirror that the test host cannot resolve. Resolving the
-// current payload's cli image is the fallback for clusters without the tag.
-func resolveGraphServerImage(ctx context.Context, currentPayload string) (string, error) {
-	imageRef, err := runOC(ctx, "get", "imagestreamtag", graphServerImageStreamTag, "--namespace", graphServerImageStreamTagNamespace, "-o", "jsonpath={.image.dockerImageReference}")
-	if err == nil {
-		imageRef = strings.TrimSpace(imageRef)
-		if strings.Contains(imageRef, "@sha256:") {
-			return imageRef, nil
-		}
-
-		err = fmt.Errorf("%s/%s records %q, which is not digest-pinned", graphServerImageStreamTagNamespace, graphServerImageStreamTag, imageRef)
+// resolveGraphServerImage returns the digest-pinned tools image the fixture
+// pod runs. The fixture needs python3, which only the tools image provides.
+// Failing here is intentional: substituting another payload image produces a
+// crash-looping pod instead of a diagnosable error.
+func resolveGraphServerImage(ctx context.Context) (string, error) {
+	imageRef, err := runOC(ctx, "get", "imagestreamtag", graphServerImageStreamTag,
+		"--namespace", graphServerImageStreamTagNamespace,
+		"-o", "jsonpath={.image.dockerImageReference}")
+	if err != nil {
+		return "", fmt.Errorf("resolving %s/%s: %w", graphServerImageStreamTagNamespace, graphServerImageStreamTag, err)
 	}
 
-	fallback, fallbackErr := resolvePayloadComponentImage(ctx, currentPayload, graphServerImageComponent)
-	if fallbackErr != nil {
-		return "", errors.Join(fmt.Errorf("resolving %s/%s: %w", graphServerImageStreamTagNamespace, graphServerImageStreamTag, err), fallbackErr)
+	imageRef = strings.TrimSpace(imageRef)
+	if !strings.Contains(imageRef, "@sha256:") {
+		return "", fmt.Errorf("%s/%s records %q, which is not digest-pinned",
+			graphServerImageStreamTagNamespace, graphServerImageStreamTag, imageRef)
 	}
 
-	return fallback, nil
+	return imageRef, nil
 }
 
 // clustersCRDFromReleaseImage extracts the clusters.cluster.x-k8s.io CRD
 // from the default-profile provider manifests shipped in the
-// cluster-capi-controllers image referenced by releaseImage. It shells out
-// to oc, which must be present in PATH and able to pull the component images
-// of the payload: payload metadata is served anonymously but component image
-// blobs are not, so the cluster pull secret is resolved and passed as
-// --registry-config.
+// cluster-capi-controllers image referenced by releaseImage.
 func clustersCRDFromReleaseImage(ctx context.Context, releaseImage string) (*apiextensionsv1.CustomResourceDefinition, error) {
+	imageRef, err := resolvePayloadComponentImage(ctx, releaseImage, clusterCAPIComponent)
+	if err != nil {
+		return nil, err
+	}
+
+	return clustersCRDFromImage(ctx, imageRef)
+}
+
+// clustersCRDFromImage extracts the clusters.cluster.x-k8s.io CRD from the
+// default-profile provider manifests shipped in imageRef. It shells out to
+// oc, which must be present in PATH and able to pull the image: payload
+// metadata is served anonymously but image blobs are not, so the cluster
+// pull secret is resolved and passed as --registry-config.
+func clustersCRDFromImage(ctx context.Context, imageRef string) (*apiextensionsv1.CustomResourceDefinition, error) {
 	extractDir, err := os.MkdirTemp("", "capi-operator-manifests-")
 	if err != nil {
 		return nil, fmt.Errorf("creating temp dir for manifest extraction: %w", err)
@@ -210,19 +259,10 @@ func clustersCRDFromReleaseImage(ctx context.Context, releaseImage string) (*api
 		return nil, fmt.Errorf("resolving registry credentials for release images: %w", err)
 	}
 
-	ocAuth := ocAuthArgs(registryAuthFile)
-
-	releaseInfoArgs := []string{"adm", "release", "info", releaseImage, "--image-for=cluster-capi-controllers"}
-
-	imageRef, err := runOC(ctx, append(releaseInfoArgs, ocAuth...)...)
-	if err != nil {
-		return nil, fmt.Errorf("resolving the cluster-capi-controllers image of release %q: %w", releaseImage, err)
-	}
-
 	extractArgs := []string{"image", "extract", imageRef,
 		"--path", "/capi-operator-manifests/default/manifests.yaml:" + extractDir}
 
-	if _, err := runOC(ctx, append(extractArgs, ocAuth...)...); err != nil {
+	if _, err := runOC(ctx, append(extractArgs, ocAuthArgs(registryAuthFile)...)...); err != nil {
 		return nil, fmt.Errorf("extracting provider manifests from image %q: %w", imageRef, err)
 	}
 
@@ -248,8 +288,7 @@ func runOC(ctx context.Context, args ...string) (string, error) {
 			return "", fmt.Errorf("oc binary not found in PATH, required to inspect release images: %w", err)
 		}
 		exitCode := -1
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
+		if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
 			exitCode = exitErr.ExitCode()
 		}
 		return "", fmt.Errorf("oc %s failed with exit code %d: %s", strings.Join(args, " "), exitCode, stderr.String())
