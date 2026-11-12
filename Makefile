@@ -79,12 +79,16 @@ localtestenv: .localtestenv
 	echo "KUBEBUILDER_ASSETS=$${KUBEBUILDER_ASSETS}" > $@
 
 TEST_DIRS ?= ./cmd/... ./pkg/... ./manifests-gen/...
-unit: .localtestenv ## Run unit tests
+# test-e2e-diagnostics needs no envtest assets, so it is safe as a
+# prerequisite of unit: it runs the e2e package's no-cluster tests, which
+# TEST_DIRS deliberately excludes because e2e/e2e_test.go needs a live
+# cluster.
+unit: .localtestenv test-e2e-diagnostics ## Run unit tests
 	./hack/test.sh "$(TEST_DIRS)" 40m
 
 .PHONY: test-e2e-diagnostics
 test-e2e-diagnostics: ## Run e2e unit tests (no cluster required)
-	go test -count=1 -race -run 'TestDiagnostics|TestClustersCRDFromManifests|TestNextMinorVersion|TestRemoveSpecPropertyFromAllVersions|TestTargetUpdateOffered|TestResolvePayloadComponentImage|TestDetermineRegistryAuthFilePath|TestOCAuthArgs|TestResolveAWSMachineTemplateForMachineSet|TestWaitForMachineSetAWSMachineTemplate' ./e2e/...
+	go test -count=1 -race -run 'TestDiagnostics|TestIsMicroShiftCluster|TestClustersCRDFromManifests|TestNextMinorVersion|TestRemoveSpecPropertyFromAllVersions|TestTargetUpdateOffered|TestResolveUpdateTargetRelease|TestDetermineRegistryAuthFilePath|TestOCAuthArgs|TestResolveAWSMachineTemplateForMachineSet|TestWaitForMachineSetAWSMachineTemplateFollowsReplacedReference' ./e2e/...
 
 .PHONY: e2e
 e2e: ## Run e2e tests against active kubeconfig

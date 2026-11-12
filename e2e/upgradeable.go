@@ -17,6 +17,7 @@ package e2e
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"slices"
@@ -47,8 +48,9 @@ import (
 
 // upgradeTargetEnvVar optionally names the release image whose Cluster API
 // components the test should assess, ideally a real Y+1 release. When unset,
-// the test falls back to the cluster's current release image. The specified
-// image must be be pullable and ship the provider manifests.
+// the test falls back to RELEASE_IMAGE_LATEST, the release image CI provided
+// for this job, which must name the payload the cluster runs. The specified
+// image must be pullable from the test host and ship the provider manifests.
 const upgradeTargetEnvVar = "OPENSHIFT_AVAILABLE_UPDATE"
 
 const (
@@ -106,7 +108,8 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIOperator] Clu
 		var clustersCRDPresent bool
 
 		// The fake upgrade target: the next-minor version computed from the
-		// current release, offered to the CVO by the fixture update service.
+		// current release and the release image resolved from the
+		// environment, offered to the CVO by the fixture update service.
 		var upgradeTargetVersion, upgradeTargetPayload string
 
 		// The image the fake update service pod runs. It is resolved from the
@@ -173,7 +176,12 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIOperator] Clu
 				GinkgoWriter.Printf("Cluster API upgradeability preflight flow: %s\n", flow)
 			})
 
-			var currentVersion, currentPayload string
+			var currentVersion string
+			// clusterPayload is only the graph's current node, an opaque,
+			// cluster-facing string: it is never dereferenced, because on
+			// dev-scripts it names a cluster-internal mirror the test host
+			// cannot resolve.
+			var clusterPayload string
 			By("Reading the current release from the ClusterVersion", func() {
 				clusterVersion := &configv1.ClusterVersion{ObjectMeta: metav1.ObjectMeta{Name: "version"}}
 				Expect(cl.Get(ctx, client.ObjectKeyFromObject(clusterVersion), clusterVersion)).To(Succeed(),
@@ -181,31 +189,44 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIOperator] Clu
 				Expect(clusterVersion.Status.Desired.Version).ToNot(BeEmpty(),
 					"ClusterVersion status.desired.version must be set to compute the fake upgrade target")
 				Expect(clusterVersion.Status.Desired.Image).ToNot(BeEmpty(),
-					"ClusterVersion status.desired.image must be set: it seeds the graph's current node and stands in for the target payload when %s is unset", upgradeTargetEnvVar)
+					"ClusterVersion status.desired.image must be set: it seeds the graph's current node")
 				currentVersion = clusterVersion.Status.Desired.Version
-				currentPayload = clusterVersion.Status.Desired.Image
+				clusterPayload = clusterVersion.Status.Desired.Image
 				trackResource(clusterVersion)
 			})
 
-			By("Computing the fake next-minor upgrade target", func() {
+			By("Computing the fake next-minor upgrade target version", func() {
 				target, err := nextMinorVersion(currentVersion)
 				Expect(err).ToNot(HaveOccurred(), "computing the fake target for current version %s", currentVersion)
 				upgradeTargetVersion = target
-				upgradeTargetPayload = os.Getenv(upgradeTargetEnvVar)
-				if upgradeTargetPayload == "" {
-					// No Y+1 payload configured: assess the current release's own
-					// Cluster API components. The CVO still offers them at the
-					// synthesised target version, and the controller resolves that
-					// same version as its next-minor target.
-					GinkgoWriter.Printf("%s is unset; assessing the current release image %s as the update target\n",
-						upgradeTargetEnvVar, currentPayload)
-					upgradeTargetPayload = currentPayload
+			})
+
+			By("Resolving the update target release", func() {
+				var err error
+				upgradeTargetPayload, err = resolveUpdateTargetRelease()
+				if errors.Is(err, errNoUpdateTarget) {
+					msg := fmt.Sprintf("neither %s nor %s is set: no release image to assess (set %s, e.g. to the cluster's own payload %q)",
+						upgradeTargetEnvVar, releaseImageLATESTEnvVar, upgradeTargetEnvVar, clusterPayload)
+					if os.Getenv("OPENSHIFT_CI") == "true" {
+						// ci-operator injects OPENSHIFT_CI=true into every test pod.
+						Fail(msg)
+					}
+					Skip(msg)
 				}
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			By("Extracting the fixture Clusters CRD from the target payload", func() {
+				var err error
+				clustersFixtureCRD, err = clustersCRDFromReleaseImage(ctx, upgradeTargetPayload)
+				Expect(err).ToNot(HaveOccurred(), "extracting the %s CRD from release image %s", clusterCRDName, upgradeTargetPayload)
+				Expect(clustersFixtureCRD.Name).To(Equal(clusterCRDName),
+					"the extracted CRD document should be %s", clusterCRDName)
 			})
 
 			By("Resolving the fake update service image from the cluster's tools ImageStreamTag", func() {
 				var err error
-				graphServerImage, err = resolveGraphServerImage(ctx, currentPayload)
+				graphServerImage, err = resolveGraphServerImage(ctx)
 				Expect(err).ToNot(HaveOccurred(),
 					"resolving the fake update service image from %s", graphServerImageStreamTag)
 			})
@@ -222,7 +243,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIOperator] Clu
 				})
 				trackResource(namespace)
 
-				graph := updateservice.TwoNodeGraph(upgradeTestChannel, currentVersion, currentPayload,
+				graph := updateservice.TwoNodeGraph(upgradeTestChannel, currentVersion, clusterPayload,
 					upgradeTargetVersion, upgradeTargetPayload)
 				updateService = deployFakeUpdateService(ctx, namespace.Name, graphServerImage, graph)
 				DeferCleanup(func(ctx SpecContext) {
@@ -235,14 +256,6 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIOperator] Clu
 				DeferCleanup(func(ctx SpecContext) {
 					restoreClusterVersionUpstream(ctx, originalUpstream, upgradeTargetVersion, upgradeTargetPayload)
 				})
-			})
-
-			By("Extracting the fixture Clusters CRD from the target payload", func() {
-				var err error
-				clustersFixtureCRD, err = clustersCRDFromReleaseImage(ctx, upgradeTargetPayload)
-				Expect(err).ToNot(HaveOccurred(), "extracting the %s CRD from release image %s", clusterCRDName, upgradeTargetPayload)
-				Expect(clustersFixtureCRD.Name).To(Equal(clusterCRDName),
-					"the extracted CRD document should be %s", clusterCRDName)
 			})
 
 			By("Waiting for the CVO to offer the fake upgrade target", func() {

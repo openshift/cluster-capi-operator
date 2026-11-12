@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"slices"
 	"testing"
 
@@ -351,208 +350,83 @@ func TestTargetUpdateOffered(t *testing.T) {
 	}
 }
 
-// TestResolvePayloadComponentImage covers the image resolution the fake update
-// service depends on. The fixture pod must receive a digest-pinned pull spec: a
-// tag defaults imagePullPolicy to Always and can drift under the fixture. A
-// failed resolution must surface here rather than as a pod stuck pulling beyond
-// the fixture's readiness timeout.
-func TestResolvePayloadComponentImage(t *testing.T) {
+// TestResolveUpdateTargetRelease covers the update target resolution order:
+// OPENSHIFT_AVAILABLE_UPDATE wins over RELEASE_IMAGE_LATEST, both must be
+// digest-pinned, and a missing target is an error the caller turns into a
+// skip (or a failure in CI).
+func TestResolveUpdateTargetRelease(t *testing.T) {
 	const (
-		payload  = "registry.example.com/ocp/release@sha256:1111111111111111111111111111111111111111111111111111111111111111"
-		digested = "registry.example.com/ocp/art-dev@sha256:2222222222222222222222222222222222222222222222222222222222222222"
+		availableUpdate = "registry.ci.openshift.org/ocp/release@sha256:1111111111111111111111111111111111111111111111111111111111111111"
+		releaseLatest   = "registry.build01.ci-op-abc/release@sha256:2222222222222222222222222222222222222222222222222222222222222222"
 	)
-
-	fakeOCDir := t.TempDir()
-	argsFile := filepath.Join(fakeOCDir, "args")
-
-	// The stub writes the arguments it received, then replays the configured
-	// result, so each case can assert on the oc invocation as well as on the
-	// resolution outcome.
-	script := `#!/bin/sh
-printf '%s\n' "$@" > "$FAKE_OC_ARGS_FILE"
-if [ -n "$FAKE_OC_STDERR" ]; then
-	echo "$FAKE_OC_STDERR" >&2
-fi
-if [ "$FAKE_OC_EXIT" != "0" ]; then
-	exit "$FAKE_OC_EXIT"
-fi
-printf '%s\n' "$FAKE_OC_STDOUT"
-`
-	g := gomega.NewWithT(t)
-	g.Expect(os.WriteFile(filepath.Join(fakeOCDir, "oc"), []byte(script), 0o700)).To(gomega.Succeed())
-
-	t.Setenv("PATH", fakeOCDir+string(os.PathListSeparator)+os.Getenv("PATH"))
-	t.Setenv("FAKE_OC_ARGS_FILE", argsFile)
-	// Pin the credential ladder to the environment source so the test never
-	// reaches the cluster under test.
-	t.Setenv(registryAuthFileEnvVar, filepath.Join(fakeOCDir, "dockerconfigjson"))
-
-	for _, tc := range []struct {
-		name        string
-		stdout      string
-		stderr      string
-		exitCode    string
-		expectedRef string
-		expectedErr string
-	}{
-		{
-			name:        "digest-pinned image",
-			stdout:      digested,
-			exitCode:    "0",
-			expectedRef: digested,
-		},
-		{
-			name:        "tag is rejected",
-			stdout:      "registry.example.com/ocp/art-dev:latest",
-			exitCode:    "0",
-			expectedErr: "is not digest-pinned",
-		},
-		{
-			name:        "oc failure is reported",
-			exitCode:    "1",
-			stderr:      "unauthorized: authentication required",
-			expectedErr: "unauthorized: authentication required",
-		},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			g := gomega.NewWithT(t)
-
-			t.Setenv("FAKE_OC_STDOUT", tc.stdout)
-			t.Setenv("FAKE_OC_STDERR", tc.stderr)
-			t.Setenv("FAKE_OC_EXIT", tc.exitCode)
-
-			image, err := resolvePayloadComponentImage(t.Context(), payload, graphServerImageComponent)
-
-			if tc.expectedErr != "" {
-				g.Expect(err).To(gomega.MatchError(gomega.ContainSubstring(tc.expectedErr)))
-				g.Expect(image).To(gomega.BeEmpty())
-
-				return
-			}
-
-			g.Expect(err).ToNot(gomega.HaveOccurred())
-			g.Expect(image).To(gomega.Equal(tc.expectedRef))
-
-			args, err := os.ReadFile(argsFile)
-			g.Expect(err).ToNot(gomega.HaveOccurred())
-			g.Expect(string(args)).To(gomega.SatisfyAll(
-				gomega.ContainSubstring("adm\nrelease\ninfo\n"+payload),
-				gomega.ContainSubstring("--image-for="+graphServerImageComponent),
-				gomega.ContainSubstring("--registry-config="),
-			))
-		})
-	}
-}
-
-// TestResolveGraphServerImage covers the fixture image resolution the fake
-// update service depends on. The image must come from the cluster's own record
-// of a payload image rather than from dereferencing the release image: on
-// dev-scripts the current payload names a cluster-internal mirror that the test
-// host cannot resolve, while the reference recorded in the tools
-// ImageStreamTag is a payload image the cluster's mirror configuration rewrites
-// on pull.
-func TestResolveGraphServerImage(t *testing.T) {
-	const (
-		payload  = "registry.example.com/ocp/release@sha256:1111111111111111111111111111111111111111111111111111111111111111"
-		digested = "registry.example.com/ocp/art-dev@sha256:2222222222222222222222222222222222222222222222222222222222222222"
-		tagged   = "registry.example.com/ocp/art-dev:latest"
-	)
-
-	fakeOCDir := t.TempDir()
-	argsFile := filepath.Join(fakeOCDir, "args")
-
-	// The stub answers the ImageStreamTag lookup from the FAKE_OC_GET_* values
-	// and every other invocation from FAKE_OC_*, so a case can make the lookup
-	// fail or answer with a tag while the fallback still resolves.
-	script := `#!/bin/sh
-printf '%s\n' "$@" > "$FAKE_OC_ARGS_FILE"
-if [ "$1" = "get" ]; then
-	if [ -n "$FAKE_OC_GET_STDERR" ]; then
-		echo "$FAKE_OC_GET_STDERR" >&2
-	fi
-	if [ "$FAKE_OC_GET_EXIT" != "0" ]; then
-		exit "$FAKE_OC_GET_EXIT"
-	fi
-	printf '%s\n' "$FAKE_OC_GET_STDOUT"
-	exit 0
-fi
-printf '%s\n' "$FAKE_OC_STDOUT"
-`
-	g := gomega.NewWithT(t)
-	g.Expect(os.WriteFile(filepath.Join(fakeOCDir, "oc"), []byte(script), 0o700)).To(gomega.Succeed())
-
-	t.Setenv("PATH", fakeOCDir+string(os.PathListSeparator)+os.Getenv("PATH"))
-	t.Setenv("FAKE_OC_ARGS_FILE", argsFile)
-	// Pin the credential ladder to the environment source so the fallback never
-	// reaches the cluster under test.
-	t.Setenv(registryAuthFileEnvVar, filepath.Join(fakeOCDir, "dockerconfigjson"))
 
 	for _, tc := range []struct {
 		name            string
-		imageStreamOut  string
-		imageStreamErr  string
-		imageStreamExit string
-		payloadOut      string
+		availableUpdate string
+		releaseLatest   string
 		expectedRef     string
 		expectedErr     string
-		expectedArgs    []string
 	}{
 		{
-			name:            "digest-pinned image from the ImageStreamTag",
-			imageStreamOut:  digested,
-			imageStreamExit: "0",
-			expectedRef:     digested,
-			expectedArgs: []string{
-				"get\nimagestreamtag\n" + graphServerImageStreamTag,
-				"jsonpath={.image.dockerImageReference}",
-			},
+			name:            "OPENSHIFT_AVAILABLE_UPDATE wins",
+			availableUpdate: availableUpdate,
+			releaseLatest:   releaseLatest,
+			expectedRef:     availableUpdate,
 		},
 		{
-			name:            "falls back to the payload cli image when the ImageStreamTag is unavailable",
-			imageStreamErr:  "not found",
-			imageStreamExit: "1",
-			payloadOut:      digested,
-			expectedRef:     digested,
-			expectedArgs: []string{
-				"adm\nrelease\ninfo\n" + payload,
-				"--image-for=" + graphServerImageComponent,
-			},
+			name:            "OPENSHIFT_AVAILABLE_UPDATE is trimmed",
+			availableUpdate: "  " + availableUpdate + "\n",
+			releaseLatest:   releaseLatest,
+			expectedRef:     availableUpdate,
 		},
 		{
-			name:            "rejects a tag recorded by the ImageStreamTag",
-			imageStreamOut:  tagged,
-			imageStreamExit: "0",
-			payloadOut:      tagged,
-			expectedErr:     "is not digest-pinned",
+			name:          "falls back to RELEASE_IMAGE_LATEST",
+			releaseLatest: releaseLatest,
+			expectedRef:   releaseLatest,
+		},
+		{
+			name:          "RELEASE_IMAGE_LATEST is trimmed",
+			releaseLatest: "\t" + releaseLatest + " ",
+			expectedRef:   releaseLatest,
+		},
+		{
+			name:        "neither variable is set",
+			expectedErr: "no update target release image provided",
+		},
+		{
+			name:            "whitespace-only values count as unset",
+			availableUpdate: "  ",
+			releaseLatest:   "\t",
+			expectedErr:     "no update target release image provided",
+		},
+		{
+			name:            "tag-valued OPENSHIFT_AVAILABLE_UPDATE is rejected",
+			availableUpdate: "registry.ci.openshift.org/ocp/release:5.1.0",
+			releaseLatest:   releaseLatest,
+			expectedErr:     "OPENSHIFT_AVAILABLE_UPDATE is \"registry.ci.openshift.org/ocp/release:5.1.0\", which is not digest-pinned",
+		},
+		{
+			name:          "tag-valued RELEASE_IMAGE_LATEST is rejected",
+			releaseLatest: "registry.build01.ci-op-abc/release:latest",
+			expectedErr:   "RELEASE_IMAGE_LATEST is \"registry.build01.ci-op-abc/release:latest\", which is not digest-pinned",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			g := gomega.NewWithT(t)
 
-			t.Setenv("FAKE_OC_GET_STDOUT", tc.imageStreamOut)
-			t.Setenv("FAKE_OC_GET_STDERR", tc.imageStreamErr)
-			t.Setenv("FAKE_OC_GET_EXIT", tc.imageStreamExit)
-			t.Setenv("FAKE_OC_STDOUT", tc.payloadOut)
-			t.Setenv("FAKE_OC_STDERR", "")
-			t.Setenv("FAKE_OC_EXIT", "0")
+			t.Setenv(upgradeTargetEnvVar, tc.availableUpdate)
+			t.Setenv(releaseImageLATESTEnvVar, tc.releaseLatest)
 
-			image, err := resolveGraphServerImage(t.Context(), payload)
+			ref, err := resolveUpdateTargetRelease()
 
 			if tc.expectedErr != "" {
 				g.Expect(err).To(gomega.MatchError(gomega.ContainSubstring(tc.expectedErr)))
-				g.Expect(image).To(gomega.BeEmpty())
-
+				g.Expect(ref).To(gomega.BeEmpty())
 				return
 			}
 
 			g.Expect(err).ToNot(gomega.HaveOccurred())
-			g.Expect(image).To(gomega.Equal(tc.expectedRef))
-
-			args, err := os.ReadFile(argsFile)
-			g.Expect(err).ToNot(gomega.HaveOccurred())
-			for _, want := range tc.expectedArgs {
-				g.Expect(string(args)).To(gomega.ContainSubstring(want))
-			}
+			g.Expect(ref).To(gomega.Equal(tc.expectedRef))
 		})
 	}
 }
