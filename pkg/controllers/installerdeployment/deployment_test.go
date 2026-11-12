@@ -19,6 +19,7 @@ package installerdeployment
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
@@ -35,6 +36,27 @@ var _ = Describe("buildDesiredDeployment", func() {
 		Expect(deployment.Spec.Template.Spec.Containers[0].Image).To(Equal(testImage))
 		// Verify the static base content survived YAML parsing.
 		Expect(deployment.Spec.Template.Spec.ServiceAccountName).To(Equal("capi-installer"))
+	})
+
+	It("should restrict the installer to control-plane nodes", func() {
+		deployment := buildDesiredDeployment(testImage, testNamespace, sets.New("registry/core@sha256:abc"))
+		podSpec := deployment.Spec.Template.Spec
+
+		Expect(podSpec.NodeSelector).To(Equal(map[string]string{
+			"node-role.kubernetes.io/control-plane": "",
+		}), "the installer must read image volumes on the control-plane architecture")
+		Expect(podSpec.Tolerations).To(ConsistOf(
+			corev1.Toleration{
+				Key:      "node-role.kubernetes.io/master",
+				Operator: corev1.TolerationOpExists,
+				Effect:   corev1.TaintEffectNoSchedule,
+			},
+			corev1.Toleration{
+				Key:      "node-role.kubernetes.io/control-plane",
+				Operator: corev1.TolerationOpExists,
+				Effect:   corev1.TaintEffectNoSchedule,
+			},
+		), "the installer must tolerate control-plane taints")
 	})
 
 	It("should create image volumes and mounts for all image refs", func() {
