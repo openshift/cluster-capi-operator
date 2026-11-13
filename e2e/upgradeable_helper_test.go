@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"slices"
 	"testing"
 
@@ -350,74 +351,64 @@ func TestTargetUpdateOffered(t *testing.T) {
 	}
 }
 
-// TestResolveUpdateTargetRelease covers the update target resolution order:
-// OPENSHIFT_AVAILABLE_UPDATE wins over RELEASE_IMAGE_LATEST, both must be
-// digest-pinned, and a missing target is an error the caller turns into a
-// skip (or a failure in CI).
-func TestResolveUpdateTargetRelease(t *testing.T) {
-	const (
-		availableUpdate = "registry.ci.openshift.org/ocp/release@sha256:1111111111111111111111111111111111111111111111111111111111111111"
-		releaseLatest   = "registry.build01.ci-op-abc/release@sha256:2222222222222222222222222222222222222222222222222222222222222222"
-	)
+// installFakeOC puts an oc in PATH that prints releaseInfo, so the release
+// info parsing is exercised without a registry or a cluster.
+func installFakeOC(t *testing.T, releaseInfo string) {
+	t.Helper()
+
+	binDir := t.TempDir()
+	script := filepath.Join(binDir, "oc")
+	body := "#!/bin/sh\ncat <<'RELEASE_INFO'\n" + releaseInfo + "\nRELEASE_INFO\n"
+	if err := os.WriteFile(script, []byte(body), 0o755); err != nil {
+		t.Fatalf("writing fake oc to %s: %v", script, err)
+	}
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
+// TestDigestPinnedReleaseRef covers reconstructing the release reference from
+// the digest of the release it names: a tag is replaced, an existing digest is
+// preserved, and release info without a usable digest is an error.
+func TestDigestPinnedReleaseRef(t *testing.T) {
+	const releaseDigest = "sha256:2222222222222222222222222222222222222222222222222222222222222222"
 
 	for _, tc := range []struct {
-		name            string
-		availableUpdate string
-		releaseLatest   string
-		expectedRef     string
-		expectedErr     string
+		name         string
+		releaseImage string
+		releaseInfo  string
+		expectedRef  string
+		expectedErr  string
 	}{
 		{
-			name:            "OPENSHIFT_AVAILABLE_UPDATE wins",
-			availableUpdate: availableUpdate,
-			releaseLatest:   releaseLatest,
-			expectedRef:     availableUpdate,
+			name:         "a tag is replaced by the release digest",
+			releaseImage: "registry.ci.openshift.org/ocp/release:5.1.0",
+			releaseInfo:  `{"digest": "` + releaseDigest + `"}`,
+			expectedRef:  "registry.ci.openshift.org/ocp/release@" + releaseDigest,
 		},
 		{
-			name:            "OPENSHIFT_AVAILABLE_UPDATE is trimmed",
-			availableUpdate: "  " + availableUpdate + "\n",
-			releaseLatest:   releaseLatest,
-			expectedRef:     availableUpdate,
+			name:         "an input digest is preserved",
+			releaseImage: "registry.build01.ci-op-abc/release@" + releaseDigest,
+			releaseInfo:  `{"digest": "` + releaseDigest + `"}`,
+			expectedRef:  "registry.build01.ci-op-abc/release@" + releaseDigest,
 		},
 		{
-			name:          "falls back to RELEASE_IMAGE_LATEST",
-			releaseLatest: releaseLatest,
-			expectedRef:   releaseLatest,
+			name:         "release info without a digest is rejected",
+			releaseImage: "registry.ci.openshift.org/ocp/release:5.1.0",
+			releaseInfo:  `{"digest": ""}`,
+			expectedErr:  "reports no digest",
 		},
 		{
-			name:          "RELEASE_IMAGE_LATEST is trimmed",
-			releaseLatest: "\t" + releaseLatest + " ",
-			expectedRef:   releaseLatest,
-		},
-		{
-			name:        "neither variable is set",
-			expectedErr: "no update target release image provided",
-		},
-		{
-			name:            "whitespace-only values count as unset",
-			availableUpdate: "  ",
-			releaseLatest:   "\t",
-			expectedErr:     "no update target release image provided",
-		},
-		{
-			name:            "tag-valued OPENSHIFT_AVAILABLE_UPDATE is rejected",
-			availableUpdate: "registry.ci.openshift.org/ocp/release:5.1.0",
-			releaseLatest:   releaseLatest,
-			expectedErr:     "OPENSHIFT_AVAILABLE_UPDATE is \"registry.ci.openshift.org/ocp/release:5.1.0\", which is not digest-pinned",
-		},
-		{
-			name:          "tag-valued RELEASE_IMAGE_LATEST is rejected",
-			releaseLatest: "registry.build01.ci-op-abc/release:latest",
-			expectedErr:   "RELEASE_IMAGE_LATEST is \"registry.build01.ci-op-abc/release:latest\", which is not digest-pinned",
+			name:         "invalid release info JSON is rejected",
+			releaseImage: "registry.ci.openshift.org/ocp/release:5.1.0",
+			releaseInfo:  "not json",
+			expectedErr:  "decoding the release info",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			g := gomega.NewWithT(t)
 
-			t.Setenv(upgradeTargetEnvVar, tc.availableUpdate)
-			t.Setenv(releaseImageLATESTEnvVar, tc.releaseLatest)
+			installFakeOC(t, tc.releaseInfo)
 
-			ref, err := resolveUpdateTargetRelease()
+			ref, err := digestPinnedReleaseRef(t.Context(), tc.releaseImage)
 
 			if tc.expectedErr != "" {
 				g.Expect(err).To(gomega.MatchError(gomega.ContainSubstring(tc.expectedErr)))

@@ -18,6 +18,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -27,7 +28,9 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/distribution/reference"
 	. "github.com/onsi/ginkgo/v2"
+	"github.com/opencontainers/go-digest"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -115,36 +118,76 @@ const (
 // preflight to assess.
 var errNoUpdateTarget = errors.New("no update target release image provided")
 
-// resolveUpdateTargetRelease returns the release image the upgradeability
-// preflight assesses. It is resolved exactly once:
+// resolveUpdateTargetRelease returns the digest-pinned release image the
+// upgradeability preflight assesses. The release is resolved exactly once:
 //   - OPENSHIFT_AVAILABLE_UPDATE when CI supplies an explicit target payload.
 //   - otherwise RELEASE_IMAGE_LATEST, the release image CI provided for
-//     this job..
+//     this job.
 //
-// Whichever source is chosen, the target image must be pullable both from the
-// test runner and in-cluster. Specifically, if the cluster uses mirroring, this
+// Either variable may hold a tag, which cannot be resolved by a mirror, so the
+// reference it holds is resolved to the digest of the release it names and
+// returned digest-pinned. The target image must be pullable both from the test
+// runner and in-cluster. Specifically, if the cluster uses mirroring, this
 // payload image must have been mirrored to the target cluster.
-func resolveUpdateTargetRelease() (ref string, err error) {
-	updateSource := upgradeTargetEnvVar
-	ref = strings.TrimSpace(os.Getenv(updateSource))
-	if ref == "" {
-		updateSource = releaseImageLATESTEnvVar
-		ref = strings.TrimSpace(os.Getenv(updateSource))
-	}
-
+func resolveUpdateTargetRelease(ctx context.Context) (string, error) {
+	updateSource, ref := updateTargetReleaseFromEnv()
 	if ref == "" {
 		return "", errNoUpdateTarget
 	}
 
-	// A tag would drift under the preflight; a release is immutable only by
-	// digest.
-	if !strings.Contains(ref, "@sha256:") {
-		return "", fmt.Errorf("%s is %q, which is not digest-pinned: set it to a digest-pinned release image", updateSource, ref)
+	ref, err := digestPinnedReleaseRef(ctx, ref)
+	if err != nil {
+		return "", fmt.Errorf("resolving the release image in %s: %w", updateSource, err)
 	}
 
 	GinkgoWriter.Printf("Using target release image from %s: %s\n", updateSource, ref)
 
 	return ref, nil
+}
+
+// updateTargetReleaseFromEnv returns the environment variable naming the
+// release image to assess, and the release image it holds. An empty ref means
+// neither variable is set.
+func updateTargetReleaseFromEnv() (source, ref string) {
+	for _, source = range []string{upgradeTargetEnvVar, releaseImageLATESTEnvVar} {
+		if ref = strings.TrimSpace(os.Getenv(source)); ref != "" {
+			return source, ref
+		}
+	}
+
+	return upgradeTargetEnvVar, ""
+}
+
+// digestPinnedReleaseRef reconstructs releaseImage with the digest of the
+// release it names, so the returned reference resolves through a registry that
+// mirrors the payload by digest but not by tag.
+func digestPinnedReleaseRef(ctx context.Context, releaseImage string) (string, error) {
+	releaseInfo, err := runOC(ctx, "adm", "release", "info", releaseImage, "-o", "json")
+	if err != nil {
+		return "", err
+	}
+
+	var info struct {
+		Digest digest.Digest `json:"digest"`
+	}
+	if err := json.Unmarshal([]byte(releaseInfo), &info); err != nil {
+		return "", fmt.Errorf("decoding the release info of %q: %w", releaseImage, err)
+	}
+	if info.Digest == "" {
+		return "", fmt.Errorf("the release info of %q reports no digest", releaseImage)
+	}
+
+	named, err := reference.ParseNormalizedNamed(releaseImage)
+	if err != nil {
+		return "", fmt.Errorf("parsing release image reference %q: %w", releaseImage, err)
+	}
+
+	digestRef, err := reference.WithDigest(reference.TrimNamed(named), info.Digest)
+	if err != nil {
+		return "", fmt.Errorf("pinning release image %q to digest %q: %w", releaseImage, info.Digest, err)
+	}
+
+	return digestRef.String(), nil
 }
 
 // registryAuthClient resolves the client determineRegistryAuthFilePath uses to
@@ -189,8 +232,9 @@ func resolvePayloadComponentImage(ctx context.Context, releaseImage, component s
 		return "", fmt.Errorf("resolving the %s image of release %q: %w", component, releaseImage, err)
 	}
 
-	// A tag defaults imagePullPolicy to Always and lets the reference drift
-	// under the fixture; the payload is immutable only by digest.
+	// A mirrored registry carries the payload by digest, not by tag, so the
+	// component image must be digest-pinned to be pullable from both the test
+	// runner and the cluster.
 	if !strings.Contains(imageRef, "@sha256:") {
 		return "", fmt.Errorf("resolved %s image %q of release %q is not digest-pinned", component, imageRef, releaseImage)
 	}
