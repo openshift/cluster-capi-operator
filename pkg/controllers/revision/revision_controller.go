@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/go-logr/logr"
@@ -328,6 +329,9 @@ func (r *RevisionController) SetupWithManager(mgr ctrl.Manager, tlsOptions []fun
 	r.manifestSubstitutions = map[string]string{
 		"TLS_MIN_VERSION":   libgocrypto.TLSVersionToNameOrDie(tlsCfg.MinVersion),
 		"TLS_CIPHER_SUITES": strings.Join(util.SliceMap(tlsCfg.CipherSuites, tls.CipherSuiteName), ","),
+		"TLS_CURVE_PREFERENCES": strings.Join(util.SliceMap(tlsCfg.CurvePreferences, func(curve tls.CurveID) string {
+			return strconv.Itoa(int(curve))
+		}), ","),
 	}
 
 	isInfrastructureReady := func(obj client.Object) bool {

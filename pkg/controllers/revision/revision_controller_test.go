@@ -694,6 +694,7 @@ var _ = Describe("RevisionController manifest substitutions", Serial, func() {
 		mgr := newManagerWrapper(defaultProviderImgs, newFeatureGate(features.FeatureGateClusterAPIMachineManagement, features.FeatureGateClusterAPIMachineManagementAWS), func(config *tls.Config) {
 			config.CipherSuites = []uint16{tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256}
 			config.MinVersion = tls.VersionTLS12
+			config.CurvePreferences = []tls.CurveID{tls.X25519, tls.CurveP256}
 		})
 
 		DeferCleanup(func(ctx context.Context) {
@@ -719,6 +720,10 @@ var _ = Describe("RevisionController manifest substitutions", Serial, func() {
 			SatisfyAll(
 				HaveField("Key", Equal("TLS_MIN_VERSION")),
 				HaveField("Value", HaveValue(Equal("VersionTLS12"))),
+			),
+			SatisfyAll(
+				HaveField("Key", Equal("TLS_CURVE_PREFERENCES")),
+				HaveField("Value", HaveValue(Equal("29,23"))),
 			),
 		))
 	}, defaultNodeTimeout)
