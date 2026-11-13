@@ -18,11 +18,13 @@ replace (
 
 require (
 	github.com/aws/aws-sdk-go v1.55.7
+	github.com/distribution/reference v0.6.0
 	github.com/google/go-cmp v0.7.0
 	github.com/metal3-io/baremetal-operator/apis v0.5.1
 	github.com/metal3-io/cluster-api-provider-metal3/api v1.11.2
 	github.com/onsi/ginkgo/v2 v2.32.1
 	github.com/onsi/gomega v1.42.1
+	github.com/opencontainers/go-digest v1.0.0
 	github.com/openshift/api v0.0.0-20261028095540-9af1f7b4730c
 	github.com/openshift/cluster-api-actuator-pkg v0.0.0-20260929140943-2355afea5804
 	github.com/openshift/cluster-api-provider-baremetal v0.0.0-20250619124612-fb678fec5f7e
