@@ -29,7 +29,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
-	capierrors "sigs.k8s.io/cluster-api/errors"
 )
 
 var _ = Describe("capi2mapi Machine conversion", func() {
@@ -129,10 +128,10 @@ var _ = Describe("capi2mapi Machine Status Conversion", func() {
 					{Type: clusterv1.MachineAddressType(corev1.NodeExternalIP), Address: "203.0.113.1"},
 				}).
 				WithPhase("Running").
-				WithFailureReason(ptr.To(capierrors.MachineStatusError("InvalidConfiguration"))).
 				WithFailureMessage(ptr.To(string("Test failure message"))).
 				WithV1Beta1Conditions([]clusterv1.Condition{condition}).
 				Build()
+			setFailureReason(&capiMachine.Status.Deprecated.V1Beta1.FailureReason, "InvalidConfiguration")
 
 			mapiStatus, errs := convertCAPIMachineStatusToMAPI(capiMachine.Status)
 			Expect(errs).To(BeEmpty())
