@@ -203,7 +203,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIOperator] Clu
 
 			By("Resolving the update target release", func() {
 				var err error
-				upgradeTargetPayload, err = resolveUpdateTargetRelease()
+				upgradeTargetPayload, err = resolveUpdateTargetRelease(ctx)
 				if errors.Is(err, errNoUpdateTarget) {
 					msg := fmt.Sprintf("neither %s nor %s is set: no release image to assess (set %s, e.g. to the cluster's own payload %q)",
 						upgradeTargetEnvVar, releaseImageLATESTEnvVar, upgradeTargetEnvVar, clusterPayload)
