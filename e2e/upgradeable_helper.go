@@ -135,10 +135,23 @@ func resolveUpdateTargetRelease(ctx context.Context) (string, error) {
 		return "", errNoUpdateTarget
 	}
 
+	// TEMPORARY test-only change, not for merge: CI supplies release:latest
+	// digest-pinned, so rewrite it to the same repository's :latest tag to
+	// exercise digestPinnedReleaseRef with a tag input.
+	originalRef := ref
+
+	if i := strings.Index(ref, "@"); i >= 0 {
+		ref = ref[:i] + ":latest"
+	}
+
+	GinkgoWriter.Printf("TEMPORARY tag input test: %s original input %q, tagged input %q\n", updateSource, originalRef, ref)
+
 	ref, err := digestPinnedReleaseRef(ctx, ref)
 	if err != nil {
 		return "", fmt.Errorf("resolving the release image in %s: %w", updateSource, err)
 	}
+
+	GinkgoWriter.Printf("TEMPORARY tag input test: resolved digest-pinned release image %q\n", ref)
 
 	GinkgoWriter.Printf("Using target release image from %s: %s\n", updateSource, ref)
 
