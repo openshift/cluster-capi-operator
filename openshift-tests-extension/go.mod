@@ -84,14 +84,14 @@ require (
 	github.com/onsi/ginkgo/v2 v2.32.1 // indirect
 	github.com/onsi/gomega v1.42.1 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
-	github.com/openshift/api v0.0.0-20261028095540-9af1f7b4730c // indirect
-	github.com/openshift/client-go v0.0.0-20261027103500-48133ed95dad // indirect
+	github.com/openshift/api v0.0.0-20261117044008-410efb4bfbac // indirect
+	github.com/openshift/client-go v0.0.0-20261117110410-e591d492769c // indirect
 	github.com/openshift/cluster-api-actuator-pkg v0.0.0-20260929140943-2355afea5804 // indirect
 	github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0 // indirect
 	github.com/openshift/cluster-autoscaler-operator v0.0.1-0.20260608074635-5c8643284941 // indirect
 	github.com/openshift/cluster-capi-operator v0.0.0-20260730093403-b05f43ce9738 // indirect
 	github.com/openshift/cluster-capi-operator/manifests-gen v0.0.0-00010101000000-000000000000 // indirect
-	github.com/openshift/library-go v0.0.0-20261001144932-192662696fc7 // indirect
+	github.com/openshift/library-go v0.0.0-20261117022826-d0be5e7c4fc8 // indirect
 	github.com/openshift/machine-api-operator v0.2.1-0.20260924000945-56ace7600d0f // indirect
 	github.com/openshift/origin/test/shared v0.0.0-20261030142106-895e3d93a081 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
