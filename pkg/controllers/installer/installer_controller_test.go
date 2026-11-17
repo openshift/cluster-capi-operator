@@ -28,7 +28,7 @@ import (
 
 	openshiftapiextensionsv1 "github.com/openshift/api/apiextensions/v1"
 	configv1 "github.com/openshift/api/config/v1"
-	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
+	operatorv1 "github.com/openshift/api/operator/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -214,19 +214,20 @@ var _ = Describe("InstallerController", Serial, func() {
 	Context("Error Handling", func() {
 		It("reports NonRetryableError when a provider profile is missing", func(ctx context.Context) {
 			// Write a revision referencing a provider not in our pool.
-			clusterAPI := &operatorv1alpha1.ClusterAPI{}
+			clusterAPI := &operatorv1.ClusterAPI{}
 			Expect(cl.Get(ctx, client.ObjectKey{Name: clusterAPIName}, clusterAPI)).To(Succeed())
 
-			clusterAPI.Status.Revisions = []operatorv1alpha1.ClusterAPIInstallerRevision{
+			clusterAPI.Status.Revisions = []operatorv1.ClusterAPIInstallerRevision{
 				{
-					Name:      "bogus-revision-1",
+					Name:      "4.18.0-00000000-1",
 					Revision:  1,
-					ContentID: "bogus-content-id",
-					Components: []operatorv1alpha1.ClusterAPIInstallerComponent{
+					ContentID: "0000000000000000000000000000000000000000000000000000000000000000",
+					Components: []operatorv1.ClusterAPIInstallerComponent{
 						{
-							ClusterAPIInstallerComponentSource: operatorv1alpha1.ClusterAPIInstallerComponentSource{
-								Type: operatorv1alpha1.InstallerComponentTypeImage,
-								Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
+							Name: "invalid-provider",
+							Source: operatorv1.ClusterAPIInstallerComponentSource{
+								Type: operatorv1.InstallerComponentTypeImage,
+								Image: operatorv1.ClusterAPIInstallerComponentImage{
 									Ref:     "registry.example.com/nonexistent@sha256:0000000000000000000000000000000000000000000000000000000000000000",
 									Profile: "default",
 								},
@@ -235,7 +236,7 @@ var _ = Describe("InstallerController", Serial, func() {
 					},
 				},
 			}
-			clusterAPI.Status.DesiredRevision = "bogus-revision-1"
+			clusterAPI.Status.DesiredRevision = "4.18.0-00000000-1"
 			Expect(cl.Status().Update(ctx, clusterAPI)).To(Succeed())
 
 			waitForConditions(ctx,
@@ -297,17 +298,18 @@ var _ = Describe("InstallerController", Serial, func() {
 			// manually. This ensures that the controller can recover from
 			// shenanigans.
 			profile := providersByName[providerAdoptInvalid]
-			clusterAPI := &operatorv1alpha1.ClusterAPI{}
+			clusterAPI := &operatorv1.ClusterAPI{}
 			Expect(cl.Get(ctx, client.ObjectKey{Name: clusterAPIName}, clusterAPI)).To(Succeed())
-			apiRev := operatorv1alpha1.ClusterAPIInstallerRevision{
-				Name:      "invalid-annotation-1",
+			apiRev := operatorv1.ClusterAPIInstallerRevision{
+				Name:      "4.18.0-00000000-1",
 				Revision:  int64(len(clusterAPI.Status.Revisions) + 1),
-				ContentID: "placeholder",
-				Components: []operatorv1alpha1.ClusterAPIInstallerComponent{{
-					ClusterAPIInstallerComponentSource: operatorv1alpha1.ClusterAPIInstallerComponentSource{
-						Type: operatorv1alpha1.InstallerComponentTypeImage,
-						Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
-							Ref:     operatorv1alpha1.ImageDigestFormat(profile.ImageRef),
+				ContentID: "0000000000000000000000000000000000000000000000000000000000000000",
+				Components: []operatorv1.ClusterAPIInstallerComponent{{
+					Name: "invalid-provider",
+					Source: operatorv1.ClusterAPIInstallerComponentSource{
+						Type: operatorv1.InstallerComponentTypeImage,
+						Image: operatorv1.ClusterAPIInstallerComponentImage{
+							Ref:     operatorv1.ImageDigestFormat(profile.ImageRef),
 							Profile: profile.Profile,
 						},
 					},
@@ -362,19 +364,20 @@ var _ = Describe("InstallerController", Serial, func() {
 			// Add a second revision referencing a non-existent provider.
 			// reconcileRevision wraps the error as TerminalError; the older
 			// valid revision is still reconciled via the tail handler.
-			clusterAPI := &operatorv1alpha1.ClusterAPI{}
+			clusterAPI := &operatorv1.ClusterAPI{}
 			Expect(cl.Get(ctx, client.ObjectKey{Name: clusterAPIName}, clusterAPI)).To(Succeed())
 
 			clusterAPI.Status.Revisions = append(clusterAPI.Status.Revisions,
-				operatorv1alpha1.ClusterAPIInstallerRevision{
-					Name:      "invalid-revision-2",
+				operatorv1.ClusterAPIInstallerRevision{
+					Name:      "4.18.0-00000000-2",
 					Revision:  int64(len(clusterAPI.Status.Revisions) + 1),
-					ContentID: "invalid-content-id",
-					Components: []operatorv1alpha1.ClusterAPIInstallerComponent{
+					ContentID: "0000000000000000000000000000000000000000000000000000000000000000",
+					Components: []operatorv1.ClusterAPIInstallerComponent{
 						{
-							ClusterAPIInstallerComponentSource: operatorv1alpha1.ClusterAPIInstallerComponentSource{
-								Type: operatorv1alpha1.InstallerComponentTypeImage,
-								Image: operatorv1alpha1.ClusterAPIInstallerComponentImage{
+							Name: "invalid-provider",
+							Source: operatorv1.ClusterAPIInstallerComponentSource{
+								Type: operatorv1.InstallerComponentTypeImage,
+								Image: operatorv1.ClusterAPIInstallerComponentImage{
 									Ref:     "registry.example.com/nonexistent@sha256:0000000000000000000000000000000000000000000000000000000000000000",
 									Profile: "default",
 								},
@@ -382,7 +385,7 @@ var _ = Describe("InstallerController", Serial, func() {
 						},
 					},
 				})
-			clusterAPI.Status.DesiredRevision = "invalid-revision-2"
+			clusterAPI.Status.DesiredRevision = "4.18.0-00000000-2"
 			Expect(cl.Status().Update(ctx, clusterAPI)).To(Succeed())
 
 			// The head revision is invalid so isComplete=false with a terminal error.
@@ -425,7 +428,7 @@ var _ = Describe("InstallerController", Serial, func() {
 
 	Context("Deployment Probes", func() {
 		It("waits for Deployment to become Available before proceeding", func(ctx context.Context) {
-			var revision operatorv1alpha1.ClusterAPIInstallerRevision
+			var revision operatorv1.ClusterAPIInstallerRevision
 
 			// providerDeployment has InstallOrder=1, providerCore has InstallOrder=10,
 			// so the Deployment phase comes first. The controller should wait for
@@ -545,7 +548,7 @@ var _ = Describe("InstallerController", Serial, func() {
 			// Add an empty revision. The old revision remains in the
 			// revision list being torn down, so its objects should still
 			// appear in relatedObjects for must-gather.
-			var emptyRevision operatorv1alpha1.ClusterAPIInstallerRevision
+			var emptyRevision operatorv1.ClusterAPIInstallerRevision
 
 			By("adding an empty revision", func() {
 				emptyRevision = addEmptyRevision(ctx)
@@ -558,10 +561,10 @@ var _ = Describe("InstallerController", Serial, func() {
 			// after currentRevision == desiredRevision. Only the latest
 			// (empty) revision remains.
 			By("trimming old revisions", func() {
-				clusterAPI := &operatorv1alpha1.ClusterAPI{}
+				clusterAPI := &operatorv1.ClusterAPI{}
 				Expect(cl.Get(ctx, client.ObjectKey{Name: clusterAPIName}, clusterAPI)).To(Succeed())
 
-				clusterAPI.Status.Revisions = []operatorv1alpha1.ClusterAPIInstallerRevision{emptyRevision}
+				clusterAPI.Status.Revisions = []operatorv1.ClusterAPIInstallerRevision{emptyRevision}
 				clusterAPI.Status.DesiredRevision = emptyRevision.Name
 				clusterAPI.Status.CurrentRevision = emptyRevision.Name
 				Expect(cl.Status().Update(ctx, clusterAPI)).To(Succeed())
@@ -716,7 +719,7 @@ var _ = Describe("InstallerController CompatibilityRequirements", Serial, func()
 
 		By("verifying the revision completes")
 
-		clusterAPI := &operatorv1alpha1.ClusterAPI{}
+		clusterAPI := &operatorv1.ClusterAPI{}
 		Expect(cl.Get(ctx, client.ObjectKey{Name: clusterAPIName}, clusterAPI)).To(Succeed())
 		latest := latestRevision(clusterAPI.Status.Revisions)
 		waitForRevision(ctx, latest.Name)
@@ -801,7 +804,7 @@ var _ = Describe("InstallerController CompatibilityRequirements", Serial, func()
 
 		By("verifying the current revision has not advanced")
 
-		clusterAPI := &operatorv1alpha1.ClusterAPI{}
+		clusterAPI := &operatorv1.ClusterAPI{}
 		clusterAPI.SetName(clusterAPIName)
 		Expect(cl.Get(ctx, client.ObjectKeyFromObject(clusterAPI), clusterAPI)).To(Succeed())
 		Expect(clusterAPI).To(SatisfyAll(

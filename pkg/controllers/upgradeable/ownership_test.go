@@ -23,7 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 	openshiftapiextensionsv1 "github.com/openshift/api/apiextensions/v1"
 	configv1 "github.com/openshift/api/config/v1"
-	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
+	operatorv1 "github.com/openshift/api/operator/v1"
 	"github.com/openshift/cluster-capi-operator/pkg/controllers/crdcompatibility"
 	assessment "github.com/openshift/cluster-capi-operator/pkg/controllers/upgradeable/pods"
 	createrequirements "github.com/openshift/cluster-capi-operator/pkg/controllers/upgradeable/pods/create-requirements"
@@ -50,7 +50,7 @@ var _ = Describe("Upgradeable CRD ownership", func() {
 	var (
 		k          komega.Komega
 		r          *UpgradeableController
-		clusterAPI *operatorv1alpha1.ClusterAPI
+		clusterAPI *operatorv1.ClusterAPI
 		crd        *apiextensionsv1.CustomResourceDefinition
 		mgrCancel  context.CancelFunc
 		mgrDone    chan struct{}
@@ -60,9 +60,9 @@ var _ = Describe("Upgradeable CRD ownership", func() {
 		k = komega.New(assessmentClient)
 		r = &UpgradeableController{Client: assessmentClient, ContainerImage: "operator:current"}
 		mgrCancel = nil
-		clusterAPI = &operatorv1alpha1.ClusterAPI{
+		clusterAPI = &operatorv1.ClusterAPI{
 			ObjectMeta: metav1.ObjectMeta{Name: clusterAPIName},
-			Spec:       &operatorv1alpha1.ClusterAPISpec{},
+			Spec:       &operatorv1.ClusterAPISpec{},
 		}
 		Expect(assessmentClient.Create(ctx, clusterAPI)).To(Succeed())
 
