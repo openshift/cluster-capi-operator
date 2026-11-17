@@ -45,7 +45,7 @@ spec:
         resources:
           requests:
             cpu: 10m
-            memory: 50Mi
+            memory: 190Mi
         terminationMessagePolicy: FallbackToLogsOnError
         volumeMounts:
         - name: metrics-cert

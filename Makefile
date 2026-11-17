@@ -53,6 +53,7 @@ ocp-manifests: manifests-gen ## Generate admission policy profiles for image emb
 		--profile-name default \
 		--kustomize-dir ./ocp-manifests-input/default \
 		--name cluster-capi-operator \
+		--preserve-resource-requests \
 		--install-order 30 \
 		--self-image-ref registry.ci.openshift.org/openshift:cluster-capi-operator
 	./bin/manifests-gen \
