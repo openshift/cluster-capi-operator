@@ -552,12 +552,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		configv1alpha1.AlertmanagerCustomConfig{}.OpenAPIModelName():                           schema_openshift_api_config_v1alpha1_AlertmanagerCustomConfig(ref),
 		configv1alpha1.Audit{}.OpenAPIModelName():                                              schema_openshift_api_config_v1alpha1_Audit(ref),
 		configv1alpha1.AuthorizationConfig{}.OpenAPIModelName():                                schema_openshift_api_config_v1alpha1_AuthorizationConfig(ref),
-		configv1alpha1.Backup{}.OpenAPIModelName():                                             schema_openshift_api_config_v1alpha1_Backup(ref),
-		configv1alpha1.BackupList{}.OpenAPIModelName():                                         schema_openshift_api_config_v1alpha1_BackupList(ref),
-		configv1alpha1.BackupSpec{}.OpenAPIModelName():                                         schema_openshift_api_config_v1alpha1_BackupSpec(ref),
-		configv1alpha1.BackupStatus{}.OpenAPIModelName():                                       schema_openshift_api_config_v1alpha1_BackupStatus(ref),
 		configv1alpha1.BasicAuth{}.OpenAPIModelName():                                          schema_openshift_api_config_v1alpha1_BasicAuth(ref),
-		configv1alpha1.CertificateConfig{}.OpenAPIModelName():                                  schema_openshift_api_config_v1alpha1_CertificateConfig(ref),
 		configv1alpha1.ClusterMonitoring{}.OpenAPIModelName():                                  schema_openshift_api_config_v1alpha1_ClusterMonitoring(ref),
 		configv1alpha1.ClusterMonitoringList{}.OpenAPIModelName():                              schema_openshift_api_config_v1alpha1_ClusterMonitoringList(ref),
 		configv1alpha1.ClusterMonitoringSpec{}.OpenAPIModelName():                              schema_openshift_api_config_v1alpha1_ClusterMonitoringSpec(ref),
@@ -567,10 +562,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		configv1alpha1.ControllerManagerList{}.OpenAPIModelName():                              schema_openshift_api_config_v1alpha1_ControllerManagerList(ref),
 		configv1alpha1.ControllerManagerSpec{}.OpenAPIModelName():                              schema_openshift_api_config_v1alpha1_ControllerManagerSpec(ref),
 		configv1alpha1.CustomPKIPolicy{}.OpenAPIModelName():                                    schema_openshift_api_config_v1alpha1_CustomPKIPolicy(ref),
-		configv1alpha1.DefaultCertificateConfig{}.OpenAPIModelName():                           schema_openshift_api_config_v1alpha1_DefaultCertificateConfig(ref),
 		configv1alpha1.DropEqualActionConfig{}.OpenAPIModelName():                              schema_openshift_api_config_v1alpha1_DropEqualActionConfig(ref),
-		configv1alpha1.ECDSAKeyConfig{}.OpenAPIModelName():                                     schema_openshift_api_config_v1alpha1_ECDSAKeyConfig(ref),
-		configv1alpha1.EtcdBackupSpec{}.OpenAPIModelName():                                     schema_openshift_api_config_v1alpha1_EtcdBackupSpec(ref),
 		configv1alpha1.GatherConfig{}.OpenAPIModelName():                                       schema_openshift_api_config_v1alpha1_GatherConfig(ref),
 		configv1alpha1.HashModActionConfig{}.OpenAPIModelName():                                schema_openshift_api_config_v1alpha1_HashModActionConfig(ref),
 		configv1alpha1.InsightsDataGather{}.OpenAPIModelName():                                 schema_openshift_api_config_v1alpha1_InsightsDataGather(ref),
@@ -578,7 +570,6 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		configv1alpha1.InsightsDataGatherSpec{}.OpenAPIModelName():                             schema_openshift_api_config_v1alpha1_InsightsDataGatherSpec(ref),
 		configv1alpha1.InsightsDataGatherStatus{}.OpenAPIModelName():                           schema_openshift_api_config_v1alpha1_InsightsDataGatherStatus(ref),
 		configv1alpha1.KeepEqualActionConfig{}.OpenAPIModelName():                              schema_openshift_api_config_v1alpha1_KeepEqualActionConfig(ref),
-		configv1alpha1.KeyConfig{}.OpenAPIModelName():                                          schema_openshift_api_config_v1alpha1_KeyConfig(ref),
 		configv1alpha1.KubeStateMetricsConfig{}.OpenAPIModelName():                             schema_openshift_api_config_v1alpha1_KubeStateMetricsConfig(ref),
 		configv1alpha1.KubeStateMetricsResourceLabels{}.OpenAPIModelName():                     schema_openshift_api_config_v1alpha1_KubeStateMetricsResourceLabels(ref),
 		configv1alpha1.Label{}.OpenAPIModelName():                                              schema_openshift_api_config_v1alpha1_Label(ref),
@@ -612,9 +603,18 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		configv1alpha1.OAuth2EndpointParam{}.OpenAPIModelName():                                schema_openshift_api_config_v1alpha1_OAuth2EndpointParam(ref),
 		configv1alpha1.OpenShiftStateMetricsConfig{}.OpenAPIModelName():                        schema_openshift_api_config_v1alpha1_OpenShiftStateMetricsConfig(ref),
 		configv1alpha1.PKI{}.OpenAPIModelName():                                                schema_openshift_api_config_v1alpha1_PKI(ref),
+		configv1alpha1.PKICertificateConfig{}.OpenAPIModelName():                               schema_openshift_api_config_v1alpha1_PKICertificateConfig(ref),
 		configv1alpha1.PKICertificateManagement{}.OpenAPIModelName():                           schema_openshift_api_config_v1alpha1_PKICertificateManagement(ref),
+		configv1alpha1.PKICertificatePolicy{}.OpenAPIModelName():                               schema_openshift_api_config_v1alpha1_PKICertificatePolicy(ref),
+		configv1alpha1.PKIDefaultCertificateConfig{}.OpenAPIModelName():                        schema_openshift_api_config_v1alpha1_PKIDefaultCertificateConfig(ref),
+		configv1alpha1.PKIECDSAKeyConfig{}.OpenAPIModelName():                                  schema_openshift_api_config_v1alpha1_PKIECDSAKeyConfig(ref),
+		configv1alpha1.PKIKeyConfig{}.OpenAPIModelName():                                       schema_openshift_api_config_v1alpha1_PKIKeyConfig(ref),
+		configv1alpha1.PKIKeyPolicy{}.OpenAPIModelName():                                       schema_openshift_api_config_v1alpha1_PKIKeyPolicy(ref),
 		configv1alpha1.PKIList{}.OpenAPIModelName():                                            schema_openshift_api_config_v1alpha1_PKIList(ref),
+		configv1alpha1.PKINamedCertificateConfig{}.OpenAPIModelName():                          schema_openshift_api_config_v1alpha1_PKINamedCertificateConfig(ref),
+		configv1alpha1.PKINamedKeyConfig{}.OpenAPIModelName():                                  schema_openshift_api_config_v1alpha1_PKINamedKeyConfig(ref),
 		configv1alpha1.PKIProfile{}.OpenAPIModelName():                                         schema_openshift_api_config_v1alpha1_PKIProfile(ref),
+		configv1alpha1.PKIRSAKeyConfig{}.OpenAPIModelName():                                    schema_openshift_api_config_v1alpha1_PKIRSAKeyConfig(ref),
 		configv1alpha1.PKISpec{}.OpenAPIModelName():                                            schema_openshift_api_config_v1alpha1_PKISpec(ref),
 		configv1alpha1.PersistentVolumeClaimReference{}.OpenAPIModelName():                     schema_openshift_api_config_v1alpha1_PersistentVolumeClaimReference(ref),
 		configv1alpha1.PersistentVolumeConfig{}.OpenAPIModelName():                             schema_openshift_api_config_v1alpha1_PersistentVolumeConfig(ref),
@@ -623,16 +623,12 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		configv1alpha1.PrometheusOperatorConfig{}.OpenAPIModelName():                           schema_openshift_api_config_v1alpha1_PrometheusOperatorConfig(ref),
 		configv1alpha1.PrometheusRemoteWriteHeader{}.OpenAPIModelName():                        schema_openshift_api_config_v1alpha1_PrometheusRemoteWriteHeader(ref),
 		configv1alpha1.QueueConfig{}.OpenAPIModelName():                                        schema_openshift_api_config_v1alpha1_QueueConfig(ref),
-		configv1alpha1.RSAKeyConfig{}.OpenAPIModelName():                                       schema_openshift_api_config_v1alpha1_RSAKeyConfig(ref),
 		configv1alpha1.RelabelActionConfig{}.OpenAPIModelName():                                schema_openshift_api_config_v1alpha1_RelabelActionConfig(ref),
 		configv1alpha1.RelabelConfig{}.OpenAPIModelName():                                      schema_openshift_api_config_v1alpha1_RelabelConfig(ref),
 		configv1alpha1.RemoteWriteAuthorization{}.OpenAPIModelName():                           schema_openshift_api_config_v1alpha1_RemoteWriteAuthorization(ref),
 		configv1alpha1.RemoteWriteSpec{}.OpenAPIModelName():                                    schema_openshift_api_config_v1alpha1_RemoteWriteSpec(ref),
 		configv1alpha1.ReplaceActionConfig{}.OpenAPIModelName():                                schema_openshift_api_config_v1alpha1_ReplaceActionConfig(ref),
 		configv1alpha1.Retention{}.OpenAPIModelName():                                          schema_openshift_api_config_v1alpha1_Retention(ref),
-		configv1alpha1.RetentionNumberConfig{}.OpenAPIModelName():                              schema_openshift_api_config_v1alpha1_RetentionNumberConfig(ref),
-		configv1alpha1.RetentionPolicy{}.OpenAPIModelName():                                    schema_openshift_api_config_v1alpha1_RetentionPolicy(ref),
-		configv1alpha1.RetentionSizeConfig{}.OpenAPIModelName():                                schema_openshift_api_config_v1alpha1_RetentionSizeConfig(ref),
 		configv1alpha1.SecretKeySelector{}.OpenAPIModelName():                                  schema_openshift_api_config_v1alpha1_SecretKeySelector(ref),
 		configv1alpha1.Sigv4{}.OpenAPIModelName():                                              schema_openshift_api_config_v1alpha1_Sigv4(ref),
 		configv1alpha1.Storage{}.OpenAPIModelName():                                            schema_openshift_api_config_v1alpha1_Storage(ref),
@@ -698,6 +694,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		consolev1.Link{}.OpenAPIModelName():                                                    schema_openshift_api_console_v1_Link(ref),
 		consolev1.NamespaceDashboardSpec{}.OpenAPIModelName():                                  schema_openshift_api_console_v1_NamespaceDashboardSpec(ref),
 		etcdv1.PacemakerCluster{}.OpenAPIModelName():                                           schema_openshift_api_etcd_v1_PacemakerCluster(ref),
+		etcdv1.PacemakerClusterAlertAgentStatus{}.OpenAPIModelName():                           schema_openshift_api_etcd_v1_PacemakerClusterAlertAgentStatus(ref),
 		etcdv1.PacemakerClusterFencingAgentStatus{}.OpenAPIModelName():                         schema_openshift_api_etcd_v1_PacemakerClusterFencingAgentStatus(ref),
 		etcdv1.PacemakerClusterList{}.OpenAPIModelName():                                       schema_openshift_api_etcd_v1_PacemakerClusterList(ref),
 		etcdv1.PacemakerClusterNodeStatus{}.OpenAPIModelName():                                 schema_openshift_api_etcd_v1_PacemakerClusterNodeStatus(ref),
@@ -1386,7 +1383,6 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		operatorv1.Upstream{}.OpenAPIModelName():                                               schema_openshift_api_operator_v1_Upstream(ref),
 		operatorv1.UpstreamResolvers{}.OpenAPIModelName():                                      schema_openshift_api_operator_v1_UpstreamResolvers(ref),
 		operatorv1.VSphereCSIDriverConfigSpec{}.OpenAPIModelName():                             schema_openshift_api_operator_v1_VSphereCSIDriverConfigSpec(ref),
-		operatorv1alpha1.BackupJobReference{}.OpenAPIModelName():                               schema_openshift_api_operator_v1alpha1_BackupJobReference(ref),
 		operatorv1alpha1.ClusterAPI{}.OpenAPIModelName():                                       schema_openshift_api_operator_v1alpha1_ClusterAPI(ref),
 		operatorv1alpha1.ClusterAPIInstallerComponent{}.OpenAPIModelName():                     schema_openshift_api_operator_v1alpha1_ClusterAPIInstallerComponent(ref),
 		operatorv1alpha1.ClusterAPIInstallerComponentImage{}.OpenAPIModelName():                schema_openshift_api_operator_v1alpha1_ClusterAPIInstallerComponentImage(ref),
@@ -1403,9 +1399,23 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		operatorv1alpha1.DelegatedAuthentication{}.OpenAPIModelName():                          schema_openshift_api_operator_v1alpha1_DelegatedAuthentication(ref),
 		operatorv1alpha1.DelegatedAuthorization{}.OpenAPIModelName():                           schema_openshift_api_operator_v1alpha1_DelegatedAuthorization(ref),
 		operatorv1alpha1.EtcdBackup{}.OpenAPIModelName():                                       schema_openshift_api_operator_v1alpha1_EtcdBackup(ref),
+		operatorv1alpha1.EtcdBackupFile{}.OpenAPIModelName():                                   schema_openshift_api_operator_v1alpha1_EtcdBackupFile(ref),
 		operatorv1alpha1.EtcdBackupList{}.OpenAPIModelName():                                   schema_openshift_api_operator_v1alpha1_EtcdBackupList(ref),
+		operatorv1alpha1.EtcdBackupPolicy{}.OpenAPIModelName():                                 schema_openshift_api_operator_v1alpha1_EtcdBackupPolicy(ref),
+		operatorv1alpha1.EtcdBackupPolicyList{}.OpenAPIModelName():                             schema_openshift_api_operator_v1alpha1_EtcdBackupPolicyList(ref),
+		operatorv1alpha1.EtcdBackupPolicyRetentionQuantity{}.OpenAPIModelName():                schema_openshift_api_operator_v1alpha1_EtcdBackupPolicyRetentionQuantity(ref),
+		operatorv1alpha1.EtcdBackupPolicyRetentionRule{}.OpenAPIModelName():                    schema_openshift_api_operator_v1alpha1_EtcdBackupPolicyRetentionRule(ref),
+		operatorv1alpha1.EtcdBackupPolicyRetentionSize{}.OpenAPIModelName():                    schema_openshift_api_operator_v1alpha1_EtcdBackupPolicyRetentionSize(ref),
+		operatorv1alpha1.EtcdBackupPolicySpec{}.OpenAPIModelName():                             schema_openshift_api_operator_v1alpha1_EtcdBackupPolicySpec(ref),
+		operatorv1alpha1.EtcdBackupPolicyStatus{}.OpenAPIModelName():                           schema_openshift_api_operator_v1alpha1_EtcdBackupPolicyStatus(ref),
+		operatorv1alpha1.EtcdBackupPolicyStorage{}.OpenAPIModelName():                          schema_openshift_api_operator_v1alpha1_EtcdBackupPolicyStorage(ref),
+		operatorv1alpha1.EtcdBackupPolicyStorageLocal{}.OpenAPIModelName():                     schema_openshift_api_operator_v1alpha1_EtcdBackupPolicyStorageLocal(ref),
+		operatorv1alpha1.EtcdBackupPolicyStoragePvc{}.OpenAPIModelName():                       schema_openshift_api_operator_v1alpha1_EtcdBackupPolicyStoragePvc(ref),
 		operatorv1alpha1.EtcdBackupSpec{}.OpenAPIModelName():                                   schema_openshift_api_operator_v1alpha1_EtcdBackupSpec(ref),
 		operatorv1alpha1.EtcdBackupStatus{}.OpenAPIModelName():                                 schema_openshift_api_operator_v1alpha1_EtcdBackupStatus(ref),
+		operatorv1alpha1.EtcdBackupStorage{}.OpenAPIModelName():                                schema_openshift_api_operator_v1alpha1_EtcdBackupStorage(ref),
+		operatorv1alpha1.EtcdBackupStorageLocal{}.OpenAPIModelName():                           schema_openshift_api_operator_v1alpha1_EtcdBackupStorageLocal(ref),
+		operatorv1alpha1.EtcdBackupStoragePvc{}.OpenAPIModelName():                             schema_openshift_api_operator_v1alpha1_EtcdBackupStoragePvc(ref),
 		operatorv1alpha1.GatewayAPIIngressConfig{}.OpenAPIModelName():                          schema_openshift_api_operator_v1alpha1_GatewayAPIIngressConfig(ref),
 		operatorv1alpha1.GenerationHistory{}.OpenAPIModelName():                                schema_openshift_api_operator_v1alpha1_GenerationHistory(ref),
 		operatorv1alpha1.GenericOperatorConfig{}.OpenAPIModelName():                            schema_openshift_api_operator_v1alpha1_GenericOperatorConfig(ref),
@@ -4432,7 +4442,7 @@ func schema_openshift_api_authentication_v1alpha1_AuthenticationConfiguration(re
 					},
 					"trustedCAFilePath": {
 						SchemaProps: spec.SchemaProps{
-							Description: "trustedCAFilePath is an optional path to a PEM-encoded CA bundle used to verify outbound HTTPS connections including proxies and TLS-intercepting proxies for outbound issuer discovery and JWKS requests. When specified, the file is watched and updates are applied without restarting the webhook server. When omitted, connections use the system trust roots only.",
+							Description: "trustedCAFilePath is an optional path to a PEM-encoded CA bundle used to verify outbound HTTPS connections, including through proxies and TLS-intercepting proxies. It applies to issuer discovery and JWKS requests, as well as to external claims source and client credential token endpoint requests. When specified, the file is watched and updates are applied without restarting the webhook server. The bundle is added to the trust already in effect for a connection: the system trust roots, or an endpoint-specific CA, such as the issuer's certificateAuthority, when one is configured. When omitted, only that existing trust applies.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -13326,6 +13336,11 @@ func schema_openshift_api_config_v1_ComponentRouteStatus(ref common.ReferenceCal
 						},
 					},
 					"consumingUsers": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "consumingUsers is a slice of ServiceAccounts that need to have read permission on the servingCertKeyPairSecret secret.",
 							Type:        []string{"array"},
@@ -13340,6 +13355,11 @@ func schema_openshift_api_config_v1_ComponentRouteStatus(ref common.ReferenceCal
 						},
 					},
 					"currentHostnames": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "currentHostnames is the list of current names used by the route. Typically, this list should consist of a single hostname, but if multiple hostnames are supported by the route the operator may write multiple entries to this list.",
 							Type:        []string{"array"},
@@ -13375,6 +13395,11 @@ func schema_openshift_api_config_v1_ComponentRouteStatus(ref common.ReferenceCal
 						},
 					},
 					"relatedObjects": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "relatedObjects is a list of resources which are useful when debugging or inspecting how spec.componentRoutes is applied.",
 							Type:        []string{"array"},
@@ -16458,7 +16483,7 @@ func schema_openshift_api_config_v1_ImageDigestMirrors(ref common.ReferenceCallb
 				Properties: map[string]spec.Schema{
 					"source": {
 						SchemaProps: spec.SchemaProps{
-							Description: "source matches the repository that users refer to, e.g. in image pull specifications. Setting source to a registry hostname e.g. docker.io. quay.io, or registry.redhat.io, will match the image pull specification of corressponding registry. \"source\" uses one of the following formats: host[:port] host[:port]/namespace[/namespace…] host[:port]/namespace[/namespace…]/repo [*.]host for more information about the format, see the document about the location field: https://github.com/containers/image/blob/main/docs/containers-registries.conf.5.md#choosing-a-registry-toml-table",
+							Description: "source matches the repository that users refer to, e.g. in image pull specifications. Setting source to a registry hostname e.g. docker.io. quay.io, or registry.redhat.io, will match the image pull specification of corresponding registry. \"source\" uses one of the following formats: host[:port] host[:port]/namespace[/namespace…] host[:port]/namespace[/namespace…]/repo [*.]host for more information about the format, see the document about the location field: https://github.com/containers/image/blob/main/docs/containers-registries.conf.5.md#choosing-a-registry-toml-table",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
@@ -16942,8 +16967,7 @@ func schema_openshift_api_config_v1_ImageSpec(ref common.ReferenceCallback) comm
 					},
 					"imageStreamImportMode": {
 						SchemaProps: spec.SchemaProps{
-							Description: "imageStreamImportMode controls the import mode behaviour of imagestreams. It can be set to `Legacy` or `PreserveOriginal` or the empty string. If this value is specified, this setting is applied to all newly created imagestreams which do not have the value set. `Legacy` indicates that the legacy behaviour should be used. For manifest lists, the legacy behaviour will discard the manifest list and import a single sub-manifest. In this case, the platform is chosen in the following order of priority: 1. tag annotations; 2. control plane arch/os; 3. linux/amd64; 4. the first manifest in the list. `PreserveOriginal` indicates that the original manifest will be preserved. For manifest lists, the manifest list and all its sub-manifests will be imported. When empty, the behaviour will be decided based on the payload type advertised by the ClusterVersion status, i.e single arch payload implies the import mode is Legacy and multi payload implies PreserveOriginal.\n\nPossible enum values:\n - `\"Legacy\"` indicates that the legacy behaviour should be used. For manifest lists, the legacy behaviour will discard the manifest list and import a single sub-manifest. In this case, the platform is chosen in the following order of priority: 1. tag annotations; 2. control plane arch/os; 3. linux/amd64; 4. the first manifest in the list. This mode is the default.\n - `\"PreserveOriginal\"` indicates that the original manifest will be preserved. For manifest lists, the manifest list and all its sub-manifests will be imported.",
-							Default:     "",
+							Description: "imageStreamImportMode controls the import mode behaviour of imagestreams. Allowed values are `Legacy` and `PreserveOriginal`. The empty string is also accepted, for compatibility with older clients that always serialize this field, and is treated the same as omitting it. If this value is specified, this setting is applied to all newly created imagestreams which do not have the value set. `Legacy` indicates that the legacy behaviour should be used. For manifest lists, the legacy behaviour will discard the manifest list and import a single sub-manifest. In this case, the platform is chosen in the following order of priority: 1. tag annotations; 2. control plane arch/os; 3. linux/amd64; 4. the first manifest in the list. `PreserveOriginal` indicates that the original manifest will be preserved. For manifest lists, the manifest list and all its sub-manifests will be imported. When omitted or empty, the behaviour will be decided based on the payload type advertised by the ClusterVersion status, i.e single arch payload implies the import mode is Legacy and multi payload implies PreserveOriginal.\n\nPossible enum values:\n - `\"Legacy\"` indicates that the legacy behaviour should be used. For manifest lists, the legacy behaviour will discard the manifest list and import a single sub-manifest. In this case, the platform is chosen in the following order of priority: 1. tag annotations; 2. control plane arch/os; 3. linux/amd64; 4. the first manifest in the list. This mode is the default.\n - `\"PreserveOriginal\"` indicates that the original manifest will be preserved. For manifest lists, the manifest list and all its sub-manifests will be imported.",
 							Type:        []string{"string"},
 							Format:      "",
 							Enum:        []interface{}{"Legacy", "PreserveOriginal"},
@@ -17155,7 +17179,7 @@ func schema_openshift_api_config_v1_ImageTagMirrors(ref common.ReferenceCallback
 				Properties: map[string]spec.Schema{
 					"source": {
 						SchemaProps: spec.SchemaProps{
-							Description: "source matches the repository that users refer to, e.g. in image pull specifications. Setting source to a registry hostname e.g. docker.io. quay.io, or registry.redhat.io, will match the image pull specification of corressponding registry. \"source\" uses one of the following formats: host[:port] host[:port]/namespace[/namespace…] host[:port]/namespace[/namespace…]/repo [*.]host for more information about the format, see the document about the location field: https://github.com/containers/image/blob/main/docs/containers-registries.conf.5.md#choosing-a-registry-toml-table",
+							Description: "source matches the repository that users refer to, e.g. in image pull specifications. Setting source to a registry hostname e.g. docker.io. quay.io, or registry.redhat.io, will match the image pull specification of corresponding registry. \"source\" uses one of the following formats: host[:port] host[:port]/namespace[/namespace…] host[:port]/namespace[/namespace…]/repo [*.]host for more information about the format, see the document about the location field: https://github.com/containers/image/blob/main/docs/containers-registries.conf.5.md#choosing-a-registry-toml-table",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
@@ -17613,6 +17637,11 @@ func schema_openshift_api_config_v1_IngressSpec(ref common.ReferenceCallback) co
 						},
 					},
 					"requiredHSTSPolicies": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "requiredHSTSPolicies specifies HSTS policies that are required to be set on newly created  or updated routes matching the domainPattern/s and namespaceSelector/s that are specified in the policy. Each requiredHSTSPolicy must have at least a domainPattern and a maxAge to validate a route HSTS Policy route annotation, and affect route admission.\n\nA candidate route is checked for HSTS Policies if it has the HSTS Policy route annotation: \"haproxy.router.openshift.io/hsts_header\" E.g. haproxy.router.openshift.io/hsts_header: max-age=31536000;preload;includeSubDomains\n\n- For each candidate route, if it matches a requiredHSTSPolicy domainPattern and optional namespaceSelector, then the maxAge, preloadPolicy, and includeSubdomainsPolicy must be valid to be admitted.  Otherwise, the route is rejected. - The first match, by domainPattern and optional namespaceSelector, in the ordering of the RequiredHSTSPolicies determines the route's admission status. - If the candidate route doesn't match any requiredHSTSPolicy domainPattern and optional namespaceSelector, then it may use any HSTS Policy annotation.\n\nThe HSTS policy configuration may be changed after routes have already been created. An update to a previously admitted route may then fail if the updated route does not conform to the updated HSTS policy configuration. However, changing the HSTS policy configuration will not cause a route that is already admitted to stop working.\n\nNote that if there are no RequiredHSTSPolicies, any HSTS Policy annotation on the route is valid.",
 							Type:        []string{"array"},
@@ -22059,6 +22088,11 @@ func schema_openshift_api_config_v1_RequiredHSTSPolicy(ref common.ReferenceCallb
 						},
 					},
 					"domainPatterns": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "domainPatterns is a list of domains for which the desired HSTS annotations are required. If domainPatterns is specified and a route is created with a spec.host matching one of the domains, the route must specify the HSTS Policy components described in the matching RequiredHSTSPolicy.\n\nThe use of wildcards is allowed like this: *.foo.com matches everything under foo.com. foo.com only matches foo.com, so to cover foo.com and everything under it, you must specify *both*.",
 							Type:        []string{"array"},
@@ -24462,7 +24496,7 @@ func schema_openshift_api_config_v1alpha1_AdditionalAlertmanagerConfig(ref commo
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "staticConfigs is a list of statically configured Alertmanager endpoints in the form of `<host>:<port>`. Each entry must be a valid hostname, IPv4 address, or IPv6 address (in brackets) followed by a colon and a valid port number (1-65535). Examples: \"alertmanager.example.com:9093\", \"192.168.1.100:9093\", \"[::1]:9093\" At least one endpoint must be specified (minimum 1, maximum 10 endpoints). Each entry must be unique and non-empty (empty string is invalid).",
+							Description: "staticConfigs is a list of statically configured Alertmanager endpoints. Each entry must be a valid hostname, IPv4 address, or IPv6 address (in brackets), optionally followed by a colon and a port number (1-65535). When the port is omitted, Prometheus uses the default port for the configured scheme (80 for HTTP, 443 for HTTPS). Examples: \"alertmanager.example.com\", \"alertmanager.example.com:9093\", \"192.168.1.100:9093\", \"[::1]:9093\" At least one endpoint must be specified (minimum 1, maximum 10 endpoints). Each entry must be unique and non-empty (empty string is invalid).",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -24721,138 +24755,6 @@ func schema_openshift_api_config_v1alpha1_AuthorizationConfig(ref common.Referen
 	}
 }
 
-func schema_openshift_api_config_v1alpha1_Backup(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Description: "Backup provides configuration for performing backups of the openshift cluster.\n\nCompatibility level 4: No compatibility is provided, the API can change at any point for any reason. These capabilities should not be used by applications needing long term support.",
-				Type:        []string{"object"},
-				Properties: map[string]spec.Schema{
-					"kind": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"apiVersion": {
-						SchemaProps: spec.SchemaProps{
-							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"metadata": {
-						SchemaProps: spec.SchemaProps{
-							Description: "metadata is the standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
-							Default:     map[string]interface{}{},
-							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
-						},
-					},
-					"spec": {
-						SchemaProps: spec.SchemaProps{
-							Description: "spec holds user settable values for configuration",
-							Default:     map[string]interface{}{},
-							Ref:         ref(configv1alpha1.BackupSpec{}.OpenAPIModelName()),
-						},
-					},
-					"status": {
-						SchemaProps: spec.SchemaProps{
-							Description: "status holds observed values from the cluster. They may not be overridden.",
-							Default:     map[string]interface{}{},
-							Ref:         ref(configv1alpha1.BackupStatus{}.OpenAPIModelName()),
-						},
-					},
-				},
-				Required: []string{"spec"},
-			},
-		},
-		Dependencies: []string{
-			configv1alpha1.BackupSpec{}.OpenAPIModelName(), configv1alpha1.BackupStatus{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
-	}
-}
-
-func schema_openshift_api_config_v1alpha1_BackupList(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Description: "BackupList is a collection of items\n\nCompatibility level 4: No compatibility is provided, the API can change at any point for any reason. These capabilities should not be used by applications needing long term support.",
-				Type:        []string{"object"},
-				Properties: map[string]spec.Schema{
-					"kind": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"apiVersion": {
-						SchemaProps: spec.SchemaProps{
-							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"metadata": {
-						SchemaProps: spec.SchemaProps{
-							Description: "metadata is the standard list's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
-							Default:     map[string]interface{}{},
-							Ref:         ref(metav1.ListMeta{}.OpenAPIModelName()),
-						},
-					},
-					"items": {
-						SchemaProps: spec.SchemaProps{
-							Type: []string{"array"},
-							Items: &spec.SchemaOrArray{
-								Schema: &spec.Schema{
-									SchemaProps: spec.SchemaProps{
-										Ref: ref(configv1alpha1.Backup{}.OpenAPIModelName()),
-									},
-								},
-							},
-						},
-					},
-				},
-				Required: []string{"metadata", "items"},
-			},
-		},
-		Dependencies: []string{
-			configv1alpha1.Backup{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
-	}
-}
-
-func schema_openshift_api_config_v1alpha1_BackupSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
-				Properties: map[string]spec.Schema{
-					"etcd": {
-						SchemaProps: spec.SchemaProps{
-							Description: "etcd specifies the configuration for periodic backups of the etcd cluster",
-							Default:     map[string]interface{}{},
-							Ref:         ref(configv1alpha1.EtcdBackupSpec{}.OpenAPIModelName()),
-						},
-					},
-				},
-				Required: []string{"etcd"},
-			},
-		},
-		Dependencies: []string{
-			configv1alpha1.EtcdBackupSpec{}.OpenAPIModelName()},
-	}
-}
-
-func schema_openshift_api_config_v1alpha1_BackupStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
-			},
-		},
-	}
-}
-
 func schema_openshift_api_config_v1alpha1_BasicAuth(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -24880,28 +24782,6 @@ func schema_openshift_api_config_v1alpha1_BasicAuth(ref common.ReferenceCallback
 		},
 		Dependencies: []string{
 			configv1alpha1.SecretKeySelector{}.OpenAPIModelName()},
-	}
-}
-
-func schema_openshift_api_config_v1alpha1_CertificateConfig(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Description: "CertificateConfig specifies configuration parameters for certificates. At least one property must be specified.",
-				Type:        []string{"object"},
-				Properties: map[string]spec.Schema{
-					"key": {
-						SchemaProps: spec.SchemaProps{
-							Description: "key specifies the cryptographic parameters for the certificate's key pair. Currently this is the only configurable parameter. When omitted in an overrides entry, the key configuration from defaults is used.",
-							Default:     map[string]interface{}{},
-							Ref:         ref(configv1alpha1.KeyConfig{}.OpenAPIModelName()),
-						},
-					},
-				},
-			},
-		},
-		Dependencies: []string{
-			configv1alpha1.KeyConfig{}.OpenAPIModelName()},
 	}
 }
 
@@ -25268,35 +25148,35 @@ func schema_openshift_api_config_v1alpha1_CustomPKIPolicy(ref common.ReferenceCa
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "CustomPKIPolicy contains administrator-specified cryptographic configuration. Administrators must specify defaults for all certificates and may optionally override specific categories of certificates.",
+				Description: "CustomPKIPolicy contains administrator-specified cryptographic configuration, wrapping a PKIProfile. When set, at least one property must be specified.\n\nDeprecated: the wrapped fields were flattened into PKICertificatePolicy.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"defaults": {
 						SchemaProps: spec.SchemaProps{
-							Description: "defaults specifies the default certificate configuration that applies to all certificates unless overridden by a category override.",
+							Description: "defaults specifies the default certificate configuration that applies to all certificates unless overridden by a category override. This field is required so that every certificate has a well-defined configuration.\n\nDeprecated: use PKICertificatePolicy.Defaults instead.",
 							Default:     map[string]interface{}{},
-							Ref:         ref(configv1alpha1.DefaultCertificateConfig{}.OpenAPIModelName()),
+							Ref:         ref(configv1alpha1.PKIDefaultCertificateConfig{}.OpenAPIModelName()),
 						},
 					},
 					"signerCertificates": {
 						SchemaProps: spec.SchemaProps{
-							Description: "signerCertificates optionally overrides certificate parameters for certificate authority (CA) certificates that sign other certificates. When set, these parameters take precedence over defaults for all signer certificates. When omitted, the defaults are used for signer certificates.",
+							Description: "signerCertificates optionally overrides certificate parameters for certificate authority (CA) certificates that sign other certificates. When set, these parameters take precedence over defaults for all signer certificates. When omitted, the defaults are used for signer certificates. The key field within it is now marked required (previously enforced via minProperties: 1).\n\nDeprecated: use PKICertificatePolicy.CACertificates instead.",
 							Default:     map[string]interface{}{},
-							Ref:         ref(configv1alpha1.CertificateConfig{}.OpenAPIModelName()),
+							Ref:         ref(configv1alpha1.PKICertificateConfig{}.OpenAPIModelName()),
 						},
 					},
 					"servingCertificates": {
 						SchemaProps: spec.SchemaProps{
-							Description: "servingCertificates optionally overrides certificate parameters for TLS server certificates used to serve HTTPS endpoints. When set, these parameters take precedence over defaults for all serving certificates. When omitted, the defaults are used for serving certificates.",
+							Description: "servingCertificates optionally overrides certificate parameters for TLS server certificates used to serve HTTPS endpoints. When set, these parameters take precedence over defaults for all serving certificates. When omitted, the defaults are used for serving certificates. The key field within it is now marked required (previously enforced via minProperties: 1).\n\nDeprecated: use PKICertificatePolicy.ServerCertificates instead.",
 							Default:     map[string]interface{}{},
-							Ref:         ref(configv1alpha1.CertificateConfig{}.OpenAPIModelName()),
+							Ref:         ref(configv1alpha1.PKICertificateConfig{}.OpenAPIModelName()),
 						},
 					},
 					"clientCertificates": {
 						SchemaProps: spec.SchemaProps{
-							Description: "clientCertificates optionally overrides certificate parameters for client authentication certificates used to authenticate to servers. When set, these parameters take precedence over defaults for all client certificates. When omitted, the defaults are used for client certificates.",
+							Description: "clientCertificates optionally overrides certificate parameters for client authentication certificates used to authenticate to servers. When set, these parameters take precedence over defaults for all client certificates. When omitted, the defaults are used for client certificates. The key field within it is now marked required (previously enforced via minProperties: 1).\n\nDeprecated: use PKICertificatePolicy.ClientCertificates instead.",
 							Default:     map[string]interface{}{},
-							Ref:         ref(configv1alpha1.CertificateConfig{}.OpenAPIModelName()),
+							Ref:         ref(configv1alpha1.PKICertificateConfig{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -25304,30 +25184,7 @@ func schema_openshift_api_config_v1alpha1_CustomPKIPolicy(ref common.ReferenceCa
 			},
 		},
 		Dependencies: []string{
-			configv1alpha1.CertificateConfig{}.OpenAPIModelName(), configv1alpha1.DefaultCertificateConfig{}.OpenAPIModelName()},
-	}
-}
-
-func schema_openshift_api_config_v1alpha1_DefaultCertificateConfig(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Description: "DefaultCertificateConfig specifies the default certificate configuration parameters. All fields are required to ensure that defaults are fully specified for all certificates.",
-				Type:        []string{"object"},
-				Properties: map[string]spec.Schema{
-					"key": {
-						SchemaProps: spec.SchemaProps{
-							Description: "key specifies the cryptographic parameters for the certificate's key pair. This field is required in defaults to ensure all certificates have a well-defined key configuration.",
-							Default:     map[string]interface{}{},
-							Ref:         ref(configv1alpha1.KeyConfig{}.OpenAPIModelName()),
-						},
-					},
-				},
-				Required: []string{"key"},
-			},
-		},
-		Dependencies: []string{
-			configv1alpha1.KeyConfig{}.OpenAPIModelName()},
+			configv1alpha1.PKICertificateConfig{}.OpenAPIModelName(), configv1alpha1.PKIDefaultCertificateConfig{}.OpenAPIModelName()},
 	}
 }
 
@@ -25349,73 +25206,6 @@ func schema_openshift_api_config_v1alpha1_DropEqualActionConfig(ref common.Refer
 				Required: []string{"targetLabel"},
 			},
 		},
-	}
-}
-
-func schema_openshift_api_config_v1alpha1_ECDSAKeyConfig(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Description: "ECDSAKeyConfig specifies parameters for ECDSA key generation.",
-				Type:        []string{"object"},
-				Properties: map[string]spec.Schema{
-					"curve": {
-						SchemaProps: spec.SchemaProps{
-							Description: "curve specifies the NIST elliptic curve for ECDSA keys. Valid values are \"P256\", \"P384\", and \"P521\".\n\nWhen set to P256, the NIST P-256 curve (also known as secp256r1) is used, providing 128-bit security.\n\nWhen set to P384, the NIST P-384 curve (also known as secp384r1) is used, providing 192-bit security.\n\nWhen set to P521, the NIST P-521 curve (also known as secp521r1) is used, providing 256-bit security.",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-				},
-				Required: []string{"curve"},
-			},
-		},
-	}
-}
-
-func schema_openshift_api_config_v1alpha1_EtcdBackupSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Description: "EtcdBackupSpec provides configuration for automated etcd backups to the cluster-etcd-operator",
-				Type:        []string{"object"},
-				Properties: map[string]spec.Schema{
-					"schedule": {
-						SchemaProps: spec.SchemaProps{
-							Description: "schedule defines the recurring backup schedule in Cron format every 2 hours: 0 */2 * * * every day at 3am: 0 3 * * * Empty string means no opinion and the platform is left to choose a reasonable default which is subject to change without notice. The current default is \"no backups\", but will change in the future.",
-							Default:     "",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"timeZone": {
-						SchemaProps: spec.SchemaProps{
-							Description: "The time zone name for the given schedule, see https://en.wikipedia.org/wiki/List_of_tz_database_time_zones. If not specified, this will default to the time zone of the kube-controller-manager process. See https://kubernetes.io/docs/concepts/workloads/controllers/cron-jobs/#time-zones",
-							Default:     "",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"retentionPolicy": {
-						SchemaProps: spec.SchemaProps{
-							Description: "retentionPolicy defines the retention policy for retaining and deleting existing backups.",
-							Default:     map[string]interface{}{},
-							Ref:         ref(configv1alpha1.RetentionPolicy{}.OpenAPIModelName()),
-						},
-					},
-					"pvcName": {
-						SchemaProps: spec.SchemaProps{
-							Description: "pvcName specifies the name of the PersistentVolumeClaim (PVC) which binds a PersistentVolume where the etcd backup files would be saved The PVC itself must always be created in the \"openshift-etcd\" namespace If the PVC is left unspecified \"\" then the platform will choose a reasonable default location to save the backup. In the future this would be backups saved across the control-plane master nodes.",
-							Default:     "",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-				},
-			},
-		},
-		Dependencies: []string{
-			configv1alpha1.RetentionPolicy{}.OpenAPIModelName()},
 	}
 }
 
@@ -25643,56 +25433,6 @@ func schema_openshift_api_config_v1alpha1_KeepEqualActionConfig(ref common.Refer
 				Required: []string{"targetLabel"},
 			},
 		},
-	}
-}
-
-func schema_openshift_api_config_v1alpha1_KeyConfig(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Description: "KeyConfig specifies cryptographic parameters for key generation.",
-				Type:        []string{"object"},
-				Properties: map[string]spec.Schema{
-					"algorithm": {
-						SchemaProps: spec.SchemaProps{
-							Description: "algorithm specifies the key generation algorithm. Valid values are \"RSA\" and \"ECDSA\".\n\nWhen set to RSA, the rsa field must be specified and the generated key will be an RSA key with the configured key size.\n\nWhen set to ECDSA, the ecdsa field must be specified and the generated key will be an ECDSA key using the configured elliptic curve.",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"rsa": {
-						SchemaProps: spec.SchemaProps{
-							Description: "rsa specifies RSA key parameters. Required when algorithm is RSA, and forbidden otherwise.",
-							Default:     map[string]interface{}{},
-							Ref:         ref(configv1alpha1.RSAKeyConfig{}.OpenAPIModelName()),
-						},
-					},
-					"ecdsa": {
-						SchemaProps: spec.SchemaProps{
-							Description: "ecdsa specifies ECDSA key parameters. Required when algorithm is ECDSA, and forbidden otherwise.",
-							Default:     map[string]interface{}{},
-							Ref:         ref(configv1alpha1.ECDSAKeyConfig{}.OpenAPIModelName()),
-						},
-					},
-				},
-				Required: []string{"algorithm"},
-			},
-			VendorExtensible: spec.VendorExtensible{
-				Extensions: spec.Extensions{
-					"x-kubernetes-unions": []interface{}{
-						map[string]interface{}{
-							"discriminator": "algorithm",
-							"fields-to-discriminateBy": map[string]interface{}{
-								"ecdsa": "ECDSA",
-								"rsa":   "RSA",
-							},
-						},
-					},
-				},
-			},
-		},
-		Dependencies: []string{
-			configv1alpha1.ECDSAKeyConfig{}.OpenAPIModelName(), configv1alpha1.RSAKeyConfig{}.OpenAPIModelName()},
 	}
 }
 
@@ -26286,7 +26026,7 @@ func schema_openshift_api_config_v1alpha1_NodeExporterCollectorConfig(ref common
 					},
 					"nvmExpressSubsystem": {
 						SchemaProps: spec.SchemaProps{
-							Description: "nvmExpressSubsystem configures the nvmesubsystem collector, which collects statistics about NVM Express (NVMe) subsystem devices. nvmExpressSubsystem is optional. When omitted, this means no opinion and the platform is left to choose a reasonable default, which is subject to change over time. The current default is enabled.",
+							Description: "nvmExpressSubsystem configures the nvmesubsystem collector, which collects statistics about NVM Express (NVMe) subsystem devices. nvmExpressSubsystem is optional. When omitted, this means no opinion and the platform is left to choose a reasonable default, which is subject to change over time. The current default is enabled. When enabled, if /sys/class/nvme-subsystem/ is missing or inaccessible, node-exporter reports node_scrape_collector_success{collector=\"nvmesubsystem\"} as 0. This is intentional and helps detect missing drivers or configuration problems. If no nodes in the cluster require NVMe subsystem monitoring, set nvmExpressSubsystem.collectionPolicy to DoNotCollect to disable this collector cluster-wide. This setting does not support per-node configuration.",
 							Default:     map[string]interface{}{},
 							Ref:         ref(configv1alpha1.NodeExporterCollectorNVMExpressSubsystemConfig{}.OpenAPIModelName()),
 						},
@@ -27072,23 +26812,46 @@ func schema_openshift_api_config_v1alpha1_PKI(ref common.ReferenceCallback) comm
 	}
 }
 
+func schema_openshift_api_config_v1alpha1_PKICertificateConfig(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "PKICertificateConfig specifies configuration parameters for certificates.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"key": {
+						SchemaProps: spec.SchemaProps{
+							Description: "key specifies the cryptographic parameters for the certificate's key pair.",
+							Default:     map[string]interface{}{},
+							Ref:         ref(configv1alpha1.PKIKeyConfig{}.OpenAPIModelName()),
+						},
+					},
+				},
+				Required: []string{"key"},
+			},
+		},
+		Dependencies: []string{
+			configv1alpha1.PKIKeyConfig{}.OpenAPIModelName()},
+	}
+}
+
 func schema_openshift_api_config_v1alpha1_PKICertificateManagement(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "PKICertificateManagement determines whether components use hardcoded defaults (Unmanaged), follow OpenShift best practices (Default), or use administrator-specified cryptographic parameters (Custom). This provides flexibility for organizations with specific compliance requirements or security policies while maintaining backwards compatibility for existing clusters.",
+				Description: "PKICertificateManagement is the former container for certificate configuration, a mode union determining whether components use hardcoded defaults (Unmanaged), follow OpenShift best practices (Default), or use administrator-specified cryptographic parameters (Custom).\n\nDeprecated: use PKICertificatePolicy instead.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"mode": {
 						SchemaProps: spec.SchemaProps{
-							Description: "mode determines how PKI configuration is managed. Valid values are \"Unmanaged\", \"Default\", and \"Custom\".\n\nWhen set to Unmanaged, components use their existing hardcoded certificate generation behavior, exactly as if this feature did not exist. Each component generates certificates using whatever parameters it was using before this feature. While most components use RSA 2048, some may use different parameters. Use of this mode might prevent upgrading to the next major OpenShift release.\n\nWhen set to Default, OpenShift-recommended best practices for certificate generation are applied. The specific parameters may evolve across OpenShift releases to adopt improved cryptographic standards. In the initial release, this matches Unmanaged behavior for each component. In future releases, this may adopt ECDSA or larger RSA keys based on industry best practices. Recommended for most customers who want to benefit from security improvements automatically.\n\nWhen set to Custom, the certificate management parameters can be set explicitly. Use the custom field to specify certificate generation parameters.",
+							Description: "mode determines how PKI configuration is managed. Valid values are \"Unmanaged\", \"Default\", and \"Custom\".\n\nWhen set to Unmanaged, components use their existing hardcoded certificate generation behavior, exactly as if this feature did not exist. Each component generates certificates using whatever parameters it was using before this feature. While most components use RSA 2048, some may use different parameters. Use of this mode might prevent upgrading to the next major OpenShift release.\n\nWhen set to Default, OpenShift-recommended best practices for certificate generation are applied. The specific parameters may evolve across OpenShift releases to adopt improved cryptographic standards. In the initial release, this matches Unmanaged behavior for each component. In future releases, this may adopt ECDSA or larger RSA keys based on industry best practices. Recommended for most customers who want to benefit from security improvements automatically.\n\nWhen set to Custom, the certificate management parameters can be set explicitly. Use the custom field to specify certificate generation parameters.\n\nDeprecated: configure PKICertificatePolicy via the certificates field instead.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"custom": {
 						SchemaProps: spec.SchemaProps{
-							Description: "custom contains administrator-specified cryptographic configuration. Use the defaults and category override fields to specify certificate generation parameters. Required when mode is Custom, and forbidden otherwise.",
+							Description: "custom contains administrator-specified cryptographic configuration. Use the defaults and category override fields of the embedded PKIProfile to specify certificate generation parameters. Required when mode is Custom, and forbidden otherwise. When omitted, mode governs behavior on its own.\n\nDeprecated: use the fields of PKICertificatePolicy instead.",
 							Default:     map[string]interface{}{},
 							Ref:         ref(configv1alpha1.CustomPKIPolicy{}.OpenAPIModelName()),
 						},
@@ -27111,6 +26874,202 @@ func schema_openshift_api_config_v1alpha1_PKICertificateManagement(ref common.Re
 		},
 		Dependencies: []string{
 			configv1alpha1.CustomPKIPolicy{}.OpenAPIModelName()},
+	}
+}
+
+func schema_openshift_api_config_v1alpha1_PKICertificatePolicy(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "PKICertificatePolicy is the cluster's policy for internally-generated certificates: a required defaults, optional per-category overrides, and optional overrides for specific named certificates. The most-specific setting wins.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"defaults": {
+						SchemaProps: spec.SchemaProps{
+							Description: "defaults specifies the default certificate configuration applied to any certificate that has no more-specific (category or named) override. This field is required so that every certificate has a well-defined configuration.",
+							Default:     map[string]interface{}{},
+							Ref:         ref(configv1alpha1.PKIDefaultCertificateConfig{}.OpenAPIModelName()),
+						},
+					},
+					"caCertificates": {
+						SchemaProps: spec.SchemaProps{
+							Description: "caCertificates optionally overrides certificate parameters for certificate authority (CA) certificates that sign other certificates. When set, these parameters take precedence over defaults for all CA certificates. When omitted, defaults are used for CA certificates.",
+							Default:     map[string]interface{}{},
+							Ref:         ref(configv1alpha1.PKICertificateConfig{}.OpenAPIModelName()),
+						},
+					},
+					"serverCertificates": {
+						SchemaProps: spec.SchemaProps{
+							Description: "serverCertificates optionally overrides certificate parameters for TLS server certificates. When set, these parameters take precedence over defaults for all server certificates. When omitted, defaults are used for server certificates.",
+							Default:     map[string]interface{}{},
+							Ref:         ref(configv1alpha1.PKICertificateConfig{}.OpenAPIModelName()),
+						},
+					},
+					"clientCertificates": {
+						SchemaProps: spec.SchemaProps{
+							Description: "clientCertificates optionally overrides certificate parameters for client authentication certificates. When set, these parameters take precedence over defaults for all client certificates. When omitted, defaults are used for client certificates.",
+							Default:     map[string]interface{}{},
+							Ref:         ref(configv1alpha1.PKICertificateConfig{}.OpenAPIModelName()),
+						},
+					},
+					"namedCertificates": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-map-keys": []interface{}{
+									"name",
+								},
+								"x-kubernetes-list-type": "map",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "namedCertificates optionally overrides certificate parameters for specific certificates identified by their well-known name. These overrides have the highest precedence (named, then category, then defaults). Entries are keyed by name, so a given name may appear at most once. When omitted, no named overrides are applied. When present, the list must contain at least one entry. At most 512 named certificate overrides may be specified.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref(configv1alpha1.PKINamedCertificateConfig{}.OpenAPIModelName()),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"defaults"},
+			},
+		},
+		Dependencies: []string{
+			configv1alpha1.PKICertificateConfig{}.OpenAPIModelName(), configv1alpha1.PKIDefaultCertificateConfig{}.OpenAPIModelName(), configv1alpha1.PKINamedCertificateConfig{}.OpenAPIModelName()},
+	}
+}
+
+func schema_openshift_api_config_v1alpha1_PKIDefaultCertificateConfig(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "PKIDefaultCertificateConfig specifies the default certificate configuration parameters. All fields are required to ensure that defaults are fully specified for all certificates.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"key": {
+						SchemaProps: spec.SchemaProps{
+							Description: "key specifies the cryptographic parameters for the certificate's key pair. This field is required in defaults to ensure all certificates have a well-defined key configuration.",
+							Default:     map[string]interface{}{},
+							Ref:         ref(configv1alpha1.PKIKeyConfig{}.OpenAPIModelName()),
+						},
+					},
+				},
+				Required: []string{"key"},
+			},
+		},
+		Dependencies: []string{
+			configv1alpha1.PKIKeyConfig{}.OpenAPIModelName()},
+	}
+}
+
+func schema_openshift_api_config_v1alpha1_PKIECDSAKeyConfig(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "PKIECDSAKeyConfig specifies parameters for ECDSA key generation.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"curve": {
+						SchemaProps: spec.SchemaProps{
+							Description: "curve specifies the NIST elliptic curve for ECDSA keys. Valid values are \"P256\", \"P384\", and \"P521\".\n\nWhen set to P256, the NIST P-256 curve (also known as secp256r1) is used, providing 128-bit security.\n\nWhen set to P384, the NIST P-384 curve (also known as secp384r1) is used, providing 192-bit security.\n\nWhen set to P521, the NIST P-521 curve (also known as secp521r1) is used, providing 256-bit security.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"curve"},
+			},
+		},
+	}
+}
+
+func schema_openshift_api_config_v1alpha1_PKIKeyConfig(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "PKIKeyConfig specifies cryptographic parameters for key generation.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"algorithm": {
+						SchemaProps: spec.SchemaProps{
+							Description: "algorithm specifies the key generation algorithm. Valid values are \"RSA\" and \"ECDSA\".\n\nWhen set to RSA, the rsa field must be specified and the generated key will be an RSA key with the configured key size.\n\nWhen set to ECDSA, the ecdsa field must be specified and the generated key will be an ECDSA key using the configured elliptic curve.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"rsa": {
+						SchemaProps: spec.SchemaProps{
+							Description: "rsa specifies RSA key parameters. Required when algorithm is RSA, and forbidden otherwise.",
+							Default:     map[string]interface{}{},
+							Ref:         ref(configv1alpha1.PKIRSAKeyConfig{}.OpenAPIModelName()),
+						},
+					},
+					"ecdsa": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ecdsa specifies ECDSA key parameters. Required when algorithm is ECDSA, and forbidden otherwise.",
+							Default:     map[string]interface{}{},
+							Ref:         ref(configv1alpha1.PKIECDSAKeyConfig{}.OpenAPIModelName()),
+						},
+					},
+				},
+				Required: []string{"algorithm"},
+			},
+			VendorExtensible: spec.VendorExtensible{
+				Extensions: spec.Extensions{
+					"x-kubernetes-unions": []interface{}{
+						map[string]interface{}{
+							"discriminator": "algorithm",
+							"fields-to-discriminateBy": map[string]interface{}{
+								"ecdsa": "ECDSA",
+								"rsa":   "RSA",
+							},
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			configv1alpha1.PKIECDSAKeyConfig{}.OpenAPIModelName(), configv1alpha1.PKIRSAKeyConfig{}.OpenAPIModelName()},
+	}
+}
+
+func schema_openshift_api_config_v1alpha1_PKIKeyPolicy(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "PKIKeyPolicy configures keys generated outside of any certificate, by well-known name. When set, at least one named key must be specified; an empty object is rejected.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"namedKeys": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-map-keys": []interface{}{
+									"name",
+								},
+								"x-kubernetes-list-type": "map",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "namedKeys configures keys generated outside of any certificate, such as the bound service-account token signing key, identified by their well-known name. Entries are opt-in with no inherited default and are keyed by name, so a given name may appear at most once. This field is required so that a keys object is never empty. At most 16 named keys may be specified.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref(configv1alpha1.PKINamedKeyConfig{}.OpenAPIModelName()),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"namedKeys"},
+			},
+		},
+		Dependencies: []string{
+			configv1alpha1.PKINamedKeyConfig{}.OpenAPIModelName()},
 	}
 }
 
@@ -27164,39 +27123,99 @@ func schema_openshift_api_config_v1alpha1_PKIList(ref common.ReferenceCallback) 
 	}
 }
 
+func schema_openshift_api_config_v1alpha1_PKINamedCertificateConfig(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "PKINamedCertificateConfig overrides certificate parameters for a specific certificate identified by its well-known name.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"name": {
+						SchemaProps: spec.SchemaProps{
+							Description: "name is the well-known override name of the targeted certificate. It is a DNS subdomain prefix, a \"/\", then a name made of alphanumerics, \"-\", \"_\" and \".\" (for example \"openshift.io/service-ca.service-serving-signer\"). The prefix is at most 253 characters and the name after the \"/\" at most 63, so the full name must be between 1 and 317 characters. The name is validated for format only; there is no registry of valid names, because certificates can be registered dynamically. Core-platform certificates use the bare \"openshift.io/\" prefix; names outside the core platform use an owner subdomain prefix (for example \"hypershift.openshift.io/\"). This field is required so that every named certificate override identifies the certificate it applies to.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"key": {
+						SchemaProps: spec.SchemaProps{
+							Description: "key specifies the cryptographic parameters for the certificate's key pair.",
+							Default:     map[string]interface{}{},
+							Ref:         ref(configv1alpha1.PKIKeyConfig{}.OpenAPIModelName()),
+						},
+					},
+				},
+				Required: []string{"name", "key"},
+			},
+		},
+		Dependencies: []string{
+			configv1alpha1.PKIKeyConfig{}.OpenAPIModelName()},
+	}
+}
+
+func schema_openshift_api_config_v1alpha1_PKINamedKeyConfig(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "PKINamedKeyConfig configures the cryptographic parameters for a single key generated outside of any certificate, identified by its well-known name.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"name": {
+						SchemaProps: spec.SchemaProps{
+							Description: "name is the well-known name of the key. It is a DNS subdomain prefix, a \"/\", then a name made of alphanumerics, \"-\", \"_\" and \".\" (for example \"openshift.io/kube-apiserver.bound-service-account-token-signer\"). The prefix is at most 253 characters and the name after the \"/\" at most 63, so the full name must be between 1 and 317 characters. The name is validated for format only, using the same rules as a named certificate override. This field is required so that every named key entry identifies the key it configures.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"key": {
+						SchemaProps: spec.SchemaProps{
+							Description: "key specifies the cryptographic parameters for this key. It is required because keys configured here have no inherited default.",
+							Default:     map[string]interface{}{},
+							Ref:         ref(configv1alpha1.PKIKeyConfig{}.OpenAPIModelName()),
+						},
+					},
+				},
+				Required: []string{"name", "key"},
+			},
+		},
+		Dependencies: []string{
+			configv1alpha1.PKIKeyConfig{}.OpenAPIModelName()},
+	}
+}
+
 func schema_openshift_api_config_v1alpha1_PKIProfile(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "PKIProfile defines the certificate generation parameters that OpenShift components use to create certificates. Category overrides take precedence over defaults.",
+				Description: "PKIProfile defines the certificate generation parameters that OpenShift components use to create certificates. Category overrides take precedence over defaults.\n\nDeprecated: use PKICertificatePolicy instead.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"defaults": {
 						SchemaProps: spec.SchemaProps{
-							Description: "defaults specifies the default certificate configuration that applies to all certificates unless overridden by a category override.",
+							Description: "defaults specifies the default certificate configuration that applies to all certificates unless overridden by a category override. This field is required so that every certificate has a well-defined configuration.\n\nDeprecated: use PKICertificatePolicy.Defaults instead.",
 							Default:     map[string]interface{}{},
-							Ref:         ref(configv1alpha1.DefaultCertificateConfig{}.OpenAPIModelName()),
+							Ref:         ref(configv1alpha1.PKIDefaultCertificateConfig{}.OpenAPIModelName()),
 						},
 					},
 					"signerCertificates": {
 						SchemaProps: spec.SchemaProps{
-							Description: "signerCertificates optionally overrides certificate parameters for certificate authority (CA) certificates that sign other certificates. When set, these parameters take precedence over defaults for all signer certificates. When omitted, the defaults are used for signer certificates.",
+							Description: "signerCertificates optionally overrides certificate parameters for certificate authority (CA) certificates that sign other certificates. When set, these parameters take precedence over defaults for all signer certificates. When omitted, the defaults are used for signer certificates. The key field within it is now marked required (previously enforced via minProperties: 1).\n\nDeprecated: use PKICertificatePolicy.CACertificates instead.",
 							Default:     map[string]interface{}{},
-							Ref:         ref(configv1alpha1.CertificateConfig{}.OpenAPIModelName()),
+							Ref:         ref(configv1alpha1.PKICertificateConfig{}.OpenAPIModelName()),
 						},
 					},
 					"servingCertificates": {
 						SchemaProps: spec.SchemaProps{
-							Description: "servingCertificates optionally overrides certificate parameters for TLS server certificates used to serve HTTPS endpoints. When set, these parameters take precedence over defaults for all serving certificates. When omitted, the defaults are used for serving certificates.",
+							Description: "servingCertificates optionally overrides certificate parameters for TLS server certificates used to serve HTTPS endpoints. When set, these parameters take precedence over defaults for all serving certificates. When omitted, the defaults are used for serving certificates. The key field within it is now marked required (previously enforced via minProperties: 1).\n\nDeprecated: use PKICertificatePolicy.ServerCertificates instead.",
 							Default:     map[string]interface{}{},
-							Ref:         ref(configv1alpha1.CertificateConfig{}.OpenAPIModelName()),
+							Ref:         ref(configv1alpha1.PKICertificateConfig{}.OpenAPIModelName()),
 						},
 					},
 					"clientCertificates": {
 						SchemaProps: spec.SchemaProps{
-							Description: "clientCertificates optionally overrides certificate parameters for client authentication certificates used to authenticate to servers. When set, these parameters take precedence over defaults for all client certificates. When omitted, the defaults are used for client certificates.",
+							Description: "clientCertificates optionally overrides certificate parameters for client authentication certificates used to authenticate to servers. When set, these parameters take precedence over defaults for all client certificates. When omitted, the defaults are used for client certificates. The key field within it is now marked required (previously enforced via minProperties: 1).\n\nDeprecated: use PKICertificatePolicy.ClientCertificates instead.",
 							Default:     map[string]interface{}{},
-							Ref:         ref(configv1alpha1.CertificateConfig{}.OpenAPIModelName()),
+							Ref:         ref(configv1alpha1.PKICertificateConfig{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -27204,7 +27223,28 @@ func schema_openshift_api_config_v1alpha1_PKIProfile(ref common.ReferenceCallbac
 			},
 		},
 		Dependencies: []string{
-			configv1alpha1.CertificateConfig{}.OpenAPIModelName(), configv1alpha1.DefaultCertificateConfig{}.OpenAPIModelName()},
+			configv1alpha1.PKICertificateConfig{}.OpenAPIModelName(), configv1alpha1.PKIDefaultCertificateConfig{}.OpenAPIModelName()},
+	}
+}
+
+func schema_openshift_api_config_v1alpha1_PKIRSAKeyConfig(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "PKIRSAKeyConfig specifies parameters for RSA key generation.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"keySize": {
+						SchemaProps: spec.SchemaProps{
+							Description: "keySize specifies the size of RSA keys in bits. Valid values are multiples of 1024 from 2048 to 4096.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+				},
+				Required: []string{"keySize"},
+			},
+		},
 	}
 }
 
@@ -27212,22 +27252,35 @@ func schema_openshift_api_config_v1alpha1_PKISpec(ref common.ReferenceCallback) 
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "PKISpec holds the specification for PKI configuration.",
+				Description: "PKISpec holds the specification for PKI configuration. Exactly one of certificates or certificateManagement must be set.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
+					"certificates": {
+						SchemaProps: spec.SchemaProps{
+							Description: "certificates specifies the cluster's certificate policy for internally-generated certificates, resolved most-specific-wins: a named certificate override, then a category override (CA, server, client), then the required defaults. This field is optional and mutually exclusive with the deprecated certificateManagement field; exactly one of the two must be set. This field names a configuration policy; it is unrelated to the X.509 certificate-policies extension.",
+							Default:     map[string]interface{}{},
+							Ref:         ref(configv1alpha1.PKICertificatePolicy{}.OpenAPIModelName()),
+						},
+					},
+					"keys": {
+						SchemaProps: spec.SchemaProps{
+							Description: "keys optionally configures keys generated outside of any certificate, such as the bound service-account token signing key. Entries are named and opt-in with no inherited default. When omitted, no keys are configured by this resource. When set, at least one named key must be specified; an empty object is rejected. Unlike certificates, keys have no resolution chain: a key is either configured here or it is not, and a component whose key is not configured decides for itself (an internal default, or an error if it has none).",
+							Default:     map[string]interface{}{},
+							Ref:         ref(configv1alpha1.PKIKeyPolicy{}.OpenAPIModelName()),
+						},
+					},
 					"certificateManagement": {
 						SchemaProps: spec.SchemaProps{
-							Description: "certificateManagement specifies how PKI configuration is managed for internally-generated certificates. This controls the certificate generation approach for all OpenShift components that create certificates internally, including certificate authorities, serving certificates, and client certificates.",
+							Description: "certificateManagement is the former shape of certificates, a mode union (Unmanaged/Default/Custom). It is retained only so that clients written against it keep compiling and so that objects using it keep roundtripping; it is mutually exclusive with certificates and exactly one of the two must be set. Note that key validation is tighter than it was when this field was current: RSA key sizes above 4096 bits, which were previously accepted, are now rejected.\n\nDeprecated: use certificates instead.",
 							Default:     map[string]interface{}{},
 							Ref:         ref(configv1alpha1.PKICertificateManagement{}.OpenAPIModelName()),
 						},
 					},
 				},
-				Required: []string{"certificateManagement"},
 			},
 		},
 		Dependencies: []string{
-			configv1alpha1.PKICertificateManagement{}.OpenAPIModelName()},
+			configv1alpha1.PKICertificateManagement{}.OpenAPIModelName(), configv1alpha1.PKICertificatePolicy{}.OpenAPIModelName(), configv1alpha1.PKIKeyPolicy{}.OpenAPIModelName()},
 	}
 }
 
@@ -27731,27 +27784,6 @@ func schema_openshift_api_config_v1alpha1_QueueConfig(ref common.ReferenceCallba
 	}
 }
 
-func schema_openshift_api_config_v1alpha1_RSAKeyConfig(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Description: "RSAKeyConfig specifies parameters for RSA key generation.",
-				Type:        []string{"object"},
-				Properties: map[string]spec.Schema{
-					"keySize": {
-						SchemaProps: spec.SchemaProps{
-							Description: "keySize specifies the size of RSA keys in bits. Valid values are multiples of 1024 from 2048 to 8192.",
-							Type:        []string{"integer"},
-							Format:      "int32",
-						},
-					},
-				},
-				Required: []string{"keySize"},
-			},
-		},
-	}
-}
-
 func schema_openshift_api_config_v1alpha1_RelabelActionConfig(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -27884,7 +27916,7 @@ func schema_openshift_api_config_v1alpha1_RelabelConfig(ref common.ReferenceCall
 					},
 					"regex": {
 						SchemaProps: spec.SchemaProps{
-							Description: "regex is the regular expression to match against the concatenated source label values. Must be a valid RE2 regular expression (https://github.com/google/re2/wiki/Syntax). When omitted, this means no opinion and the platform is left to choose a reasonable default, which is subject to change over time. The default value is \"(.*)\" to match everything. Must be between 1 and 1000 characters in length when specified.",
+							Description: "regex is the regular expression to match against the concatenated source label values. Must be a valid RE2 regular expression (https://github.com/google/re2/wiki/Syntax). When omitted, this means no opinion and the platform is left to choose a reasonable default, which is subject to change over time. The default value is \"(.*)\" to match everything. Must be between 1 and 8192 characters in length when specified.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -28149,100 +28181,6 @@ func schema_openshift_api_config_v1alpha1_Retention(ref common.ReferenceCallback
 						},
 					},
 				},
-			},
-		},
-	}
-}
-
-func schema_openshift_api_config_v1alpha1_RetentionNumberConfig(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Description: "RetentionNumberConfig specifies the configuration of the retention policy on the number of backups",
-				Type:        []string{"object"},
-				Properties: map[string]spec.Schema{
-					"maxNumberOfBackups": {
-						SchemaProps: spec.SchemaProps{
-							Description: "maxNumberOfBackups defines the maximum number of backups to retain. If the existing number of backups saved is equal to MaxNumberOfBackups then the oldest backup will be removed before a new backup is initiated.",
-							Default:     0,
-							Type:        []string{"integer"},
-							Format:      "int32",
-						},
-					},
-				},
-				Required: []string{"maxNumberOfBackups"},
-			},
-		},
-	}
-}
-
-func schema_openshift_api_config_v1alpha1_RetentionPolicy(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Description: "RetentionPolicy defines the retention policy for retaining and deleting existing backups. This struct is a discriminated union that allows users to select the type of retention policy from the supported types.",
-				Type:        []string{"object"},
-				Properties: map[string]spec.Schema{
-					"retentionType": {
-						SchemaProps: spec.SchemaProps{
-							Description: "retentionType sets the type of retention policy. Currently, the only valid policies are retention by number of backups (RetentionNumber), by the size of backups (RetentionSize). More policies or types may be added in the future. Empty string means no opinion and the platform is left to choose a reasonable default which is subject to change without notice. The current default is RetentionNumber with 15 backups kept.\n\nPossible enum values:\n - `\"RetentionNumber\"` sets the retention policy based on the number of backup files saved\n - `\"RetentionSize\"` sets the retention policy based on the total size of the backup files saved",
-							Default:     "",
-							Type:        []string{"string"},
-							Format:      "",
-							Enum:        []interface{}{"RetentionNumber", "RetentionSize"},
-						},
-					},
-					"retentionNumber": {
-						SchemaProps: spec.SchemaProps{
-							Description: "retentionNumber configures the retention policy based on the number of backups",
-							Ref:         ref(configv1alpha1.RetentionNumberConfig{}.OpenAPIModelName()),
-						},
-					},
-					"retentionSize": {
-						SchemaProps: spec.SchemaProps{
-							Description: "retentionSize configures the retention policy based on the size of backups",
-							Ref:         ref(configv1alpha1.RetentionSizeConfig{}.OpenAPIModelName()),
-						},
-					},
-				},
-				Required: []string{"retentionType"},
-			},
-			VendorExtensible: spec.VendorExtensible{
-				Extensions: spec.Extensions{
-					"x-kubernetes-unions": []interface{}{
-						map[string]interface{}{
-							"discriminator": "retentionType",
-							"fields-to-discriminateBy": map[string]interface{}{
-								"retentionNumber": "RetentionNumber",
-								"retentionSize":   "RetentionSize",
-							},
-						},
-					},
-				},
-			},
-		},
-		Dependencies: []string{
-			configv1alpha1.RetentionNumberConfig{}.OpenAPIModelName(), configv1alpha1.RetentionSizeConfig{}.OpenAPIModelName()},
-	}
-}
-
-func schema_openshift_api_config_v1alpha1_RetentionSizeConfig(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Description: "RetentionSizeConfig specifies the configuration of the retention policy on the total size of backups",
-				Type:        []string{"object"},
-				Properties: map[string]spec.Schema{
-					"maxSizeOfBackupsGb": {
-						SchemaProps: spec.SchemaProps{
-							Description: "maxSizeOfBackupsGb defines the total size in GB of backups to retain. If the current total size backups exceeds MaxSizeOfBackupsGb then the oldest backup will be removed before a new backup is initiated.",
-							Default:     0,
-							Type:        []string{"integer"},
-							Format:      "int32",
-						},
-					},
-				},
-				Required: []string{"maxSizeOfBackupsGb"},
 			},
 		},
 	}
@@ -31048,6 +30986,51 @@ func schema_openshift_api_etcd_v1_PacemakerCluster(ref common.ReferenceCallback)
 	}
 }
 
+func schema_openshift_api_etcd_v1_PacemakerClusterAlertAgentStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "PacemakerClusterAlertAgentStatus represents the status of a pacemaker alert agent tracked on a node. Unlike a pacemaker resource, an alert agent is registered in the CIB's <alerts> section rather than its <resources> section: pacemaker does not start, stop, monitor, or move it. Its delivery chain (script, helper script, systemd unit, sudoers entry) is delivered to each node independently by MCO.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"conditions": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-map-keys": []interface{}{
+									"type",
+								},
+								"x-kubernetes-list-type": "map",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "conditions represent the observations of the alert agent's current state. Known condition types are: \"Healthy\", \"Configured\", \"Available\". The \"Healthy\" condition is an aggregate that tracks the overall health of the alert agent. The \"Configured\" condition tracks whether the alert agent is registered in the CIB as expected. The \"Available\" condition tracks whether the agent's full delivery chain is present on this node. The \"Healthy\" condition may be Unknown with reason \"Pending\" when health has not yet been determined. Each of these conditions is required, so the array must contain exactly 3 items. A condition with reason \"Pending\" must have status \"Unknown\".",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref(metav1.Condition{}.OpenAPIModelName()),
+									},
+								},
+							},
+						},
+					},
+					"name": {
+						SchemaProps: spec.SchemaProps{
+							Description: "name is required and identifies the alert agent. Valid values are \"TaintAlertAgent\" and \"UntaintAlertAgent\". The TaintAlertAgent taints a node after it is fenced. The UntaintAlertAgent removes a node's taint once it rejoins the cluster.\n\nPossible enum values:\n - `\"TaintAlertAgent\"` is the alert agent that taints a node after it is fenced.\n - `\"UntaintAlertAgent\"` is the alert agent that removes a node's taint once it rejoins the cluster.",
+							Type:        []string{"string"},
+							Format:      "",
+							Enum:        []interface{}{"TaintAlertAgent", "UntaintAlertAgent"},
+						},
+					},
+				},
+				Required: []string{"conditions", "name"},
+			},
+		},
+		Dependencies: []string{
+			metav1.Condition{}.OpenAPIModelName()},
+	}
+}
+
 func schema_openshift_api_etcd_v1_PacemakerClusterFencingAgentStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -31154,7 +31137,7 @@ func schema_openshift_api_etcd_v1_PacemakerClusterNodeStatus(ref common.Referenc
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "PacemakerClusterNodeStatus represents the status of a single node in the pacemaker cluster including the node's conditions and the health of critical resources running on that node.",
+				Description: "PacemakerClusterNodeStatus represents the status of a single node in the pacemaker cluster including the node's conditions and the health of critical resources running on that node. When the TNFObservability feature gate is enabled, once a status collector reports alertAgents for a node, later updates may not remove it. The field remains optional to tolerate collector versions that predate alert-agent tracking.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"conditions": {
@@ -31167,7 +31150,7 @@ func schema_openshift_api_etcd_v1_PacemakerClusterNodeStatus(ref common.Referenc
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "conditions represent the observations of the node's current state. Known condition types are: \"Healthy\", \"Online\", \"InService\", \"Active\", \"Ready\", \"Clean\", \"Member\", \"FencingAvailable\", \"FencingHealthy\". The \"Healthy\" condition is an aggregate that tracks the overall health of the node. The \"Online\" condition tracks whether the node is online. The \"InService\" condition tracks whether the node is in service (not in maintenance mode). The \"Active\" condition tracks whether the node is active (not in standby mode). The \"Ready\" condition tracks whether the node is ready (not in a pending state). The \"Clean\" condition tracks whether the node is in a clean (status known) state. The \"Member\" condition tracks whether the node is a member of the cluster. The \"FencingAvailable\" condition tracks whether this node can be fenced by at least one healthy agent. The \"FencingHealthy\" condition tracks whether all fencing agents for this node are healthy. Each of these conditions is required, so the array must contain at least 9 items.",
+							Description: "conditions represent the observations of the node's current state. Known condition types are: \"Healthy\", \"Online\", \"InService\", \"Active\", \"Ready\", \"Clean\", \"Member\", \"FencingAvailable\", \"FencingHealthy\". The \"Healthy\" condition is an aggregate that tracks the overall health of the node. The \"Online\" condition tracks whether the node is online. The \"InService\" condition tracks whether the node is in service (not in maintenance mode). The \"Active\" condition tracks whether the node is active (not in standby mode). The \"Ready\" condition tracks whether the node is ready (not in a pending state). The \"Clean\" condition tracks whether the node is in a clean (status known) state. The \"Member\" condition tracks whether the node is a member of the cluster. The \"FencingAvailable\" condition tracks whether this node can be fenced by at least one healthy agent. The \"FencingHealthy\" condition tracks whether all fencing agents for this node are healthy. Each of these conditions is required, so the array must contain at least 9 items. An optional \"AlertAgentsHealthy\" condition (see NodeAlertAgentsHealthyConditionType) may also be reported when the TNFObservability feature gate is enabled; it is not one of the required 9 and its absence does not affect validation. When reported as Unknown with reason \"Pending\", \"AlertAgentsHealthy\" means the health of the tracked alert agents has not yet been determined.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -31245,12 +31228,33 @@ func schema_openshift_api_etcd_v1_PacemakerClusterNodeStatus(ref common.Referenc
 							},
 						},
 					},
+					"alertAgents": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-map-keys": []interface{}{
+									"name",
+								},
+								"x-kubernetes-list-type": "map",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "alertAgents contains the status of pacemaker alert agents tracked for this node. Unlike resources, an alert agent is not managed by pacemaker: it is a script registered in the CIB's <alerts> section, delivered to this node independently by MCO. Valid alert agent names are \"TaintAlertAgent\" and \"UntaintAlertAgent\". Names must be unique within this array. This field is optional. When omitted, alert agent status is not reported for this node. This field is available only when the TNFObservability feature gate is enabled. When present, the array must contain exactly 2 items: one TaintAlertAgent and one UntaintAlertAgent.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref(etcdv1.PacemakerClusterAlertAgentStatus{}.OpenAPIModelName()),
+									},
+								},
+							},
+						},
+					},
 				},
 				Required: []string{"conditions", "nodeName", "addresses", "resources", "fencingAgents"},
 			},
 		},
 		Dependencies: []string{
-			etcdv1.PacemakerClusterFencingAgentStatus{}.OpenAPIModelName(), etcdv1.PacemakerClusterResourceStatus{}.OpenAPIModelName(), etcdv1.PacemakerNodeAddress{}.OpenAPIModelName(), metav1.Condition{}.OpenAPIModelName()},
+			etcdv1.PacemakerClusterAlertAgentStatus{}.OpenAPIModelName(), etcdv1.PacemakerClusterFencingAgentStatus{}.OpenAPIModelName(), etcdv1.PacemakerClusterResourceStatus{}.OpenAPIModelName(), etcdv1.PacemakerNodeAddress{}.OpenAPIModelName(), metav1.Condition{}.OpenAPIModelName()},
 	}
 }
 
@@ -31316,7 +31320,7 @@ func schema_openshift_api_etcd_v1_PacemakerClusterStatus(ref common.ReferenceCal
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "conditions represent the observations of the pacemaker cluster's current state. Known condition types are: \"Healthy\", \"InService\", \"NodeCountAsExpected\". The \"Healthy\" condition is an aggregate that tracks the overall health of the cluster. The \"InService\" condition tracks whether the cluster is in service (not in maintenance mode). The \"NodeCountAsExpected\" condition tracks whether the expected number of nodes are present. Each of these conditions is required, so the array must contain at least 3 items.",
+							Description: "conditions represent the observations of the pacemaker cluster's current state. Known condition types are: \"Healthy\", \"InService\", \"NodeCountAsExpected\", \"FencingEnabled\". The \"Healthy\" condition is an aggregate that tracks the overall health of the cluster. The \"InService\" condition tracks whether the cluster is in service (not in maintenance mode). The \"NodeCountAsExpected\" condition tracks whether the expected number of nodes are present. The \"FencingEnabled\" condition tracks whether STONITH (fencing) is enabled in the cluster. The \"Healthy\", \"InService\", and \"NodeCountAsExpected\" conditions are required, so the array must contain at least 3 items. The \"FencingEnabled\" condition is optional and is omitted when the status collector has not yet observed the stonith-enabled property, for example immediately after an upgrade from a version that does not report it. The \"FencingEnabled\" condition is only reported when the TNFObservability feature gate is enabled. When the gate is enabled and the condition is present, its reason must be one of \"FencingEnabled\", \"FencingDisabled\", or \"Pending\".",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -31704,7 +31708,7 @@ func schema_openshift_api_etcd_v1alpha1_PacemakerClusterStatus(ref common.Refere
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "conditions represent the observations of the pacemaker cluster's current state. Known condition types are: \"Healthy\", \"InService\", \"NodeCountAsExpected\". The \"Healthy\" condition is an aggregate that tracks the overall health of the cluster. The \"InService\" condition tracks whether the cluster is in service (not in maintenance mode). The \"NodeCountAsExpected\" condition tracks whether the expected number of nodes are present. Each of these conditions is required, so the array must contain at least 3 items.",
+							Description: "conditions represent the observations of the pacemaker cluster's current state. Known condition types are: \"Healthy\", \"InService\", \"NodeCountAsExpected\", \"FencingEnabled\". The \"Healthy\" condition is an aggregate that tracks the overall health of the cluster. The \"InService\" condition tracks whether the cluster is in service (not in maintenance mode). The \"NodeCountAsExpected\" condition tracks whether the expected number of nodes are present. The \"FencingEnabled\" condition tracks whether STONITH (fencing) is enabled in the cluster. The \"Healthy\", \"InService\", and \"NodeCountAsExpected\" conditions are required, so the array must contain at least 3 items. The \"FencingEnabled\" condition is optional and is omitted when the status collector has not yet observed the stonith-enabled property, for example immediately after an upgrade from a version that does not report it. The \"FencingEnabled\" condition is only reported when the TNFObservability feature gate is enabled. When the gate is enabled and the condition is present, its reason must be one of \"FencingEnabled\", \"FencingDisabled\", or \"Pending\".",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -35262,7 +35266,7 @@ func schema_openshift_api_insights_v1_HealthCheck(ref common.ReferenceCallback) 
 					},
 					"advisorURI": {
 						SchemaProps: spec.SchemaProps{
-							Description: "advisorURI is required field that provides the URL link to the Insights Advisor. The link must be a valid HTTPS URL and the maximum length is 2048 characters.",
+							Description: "advisorURI is a required field that provides the URL link to the Red\u00a0Hat Lightspeed Advisor UI. The link must be a valid HTTPS URL and the maximum length is 2048 characters.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -35834,7 +35838,7 @@ func schema_openshift_api_insights_v1alpha1_HealthCheck(ref common.ReferenceCall
 					},
 					"advisorURI": {
 						SchemaProps: spec.SchemaProps{
-							Description: "advisorURI is required field that provides the URL link to the Insights Advisor. The link must be a valid HTTPS URL and the maximum length is 2048 characters.",
+							Description: "advisorURI is a required field that provides the URL link to the Red\u00a0Hat Lightspeed Advisor UI. The link must be a valid HTTPS URL and the maximum length is 2048 characters.",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
@@ -35842,7 +35846,7 @@ func schema_openshift_api_insights_v1alpha1_HealthCheck(ref common.ReferenceCall
 					},
 					"state": {
 						SchemaProps: spec.SchemaProps{
-							Description: "state determines what the current state of the health check is. Health check is enabled by default and can be disabled by the user in the Insights advisor user interface.",
+							Description: "state determines what the current state of the health check is. Health check is enabled by default and can be disabled by the user in the Red\u00a0Hat Lightspeed Advisor UI.",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
@@ -36472,7 +36476,7 @@ func schema_openshift_api_insights_v1alpha2_HealthCheck(ref common.ReferenceCall
 					},
 					"advisorURI": {
 						SchemaProps: spec.SchemaProps{
-							Description: "advisorURI is required field that provides the URL link to the Insights Advisor. The link must be a valid HTTPS URL and the maximum length is 2048 characters.",
+							Description: "advisorURI is a required field that provides the URL link to the Red\u00a0Hat Lightspeed Advisor UI. The link must be a valid HTTPS URL and the maximum length is 2048 characters.",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
@@ -58715,7 +58719,7 @@ func schema_openshift_api_operator_v1_HealthCheck(ref common.ReferenceCallback) 
 					},
 					"advisorURI": {
 						SchemaProps: spec.SchemaProps{
-							Description: "advisorURI provides the URL link to the Insights Advisor.",
+							Description: "advisorURI provides the URL link to the Red\u00a0Hat Lightspeed Advisor UI.",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
@@ -58723,7 +58727,7 @@ func schema_openshift_api_operator_v1_HealthCheck(ref common.ReferenceCallback) 
 					},
 					"state": {
 						SchemaProps: spec.SchemaProps{
-							Description: "state determines what the current state of the health check is. Health check is enabled by default and can be disabled by the user in the Insights advisor user interface.",
+							Description: "state determines what the current state of the health check is. Health check is enabled by default and can be disabled by the user in the Red\u00a0Hat Lightspeed Advisor UI.",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
@@ -60525,7 +60529,7 @@ func schema_openshift_api_operator_v1_KMSPluginHealthReport(ref common.Reference
 					},
 					"status": {
 						SchemaProps: spec.SchemaProps{
-							Description: "status contains a health indicator for the respective KMS plugin The field can have three states: healthy, unhealthy, error. With error and unhealthy containing additional information in Detail.",
+							Description: "status contains a health indicator for the respective KMS plugin. status is required and must be one of Healthy, Unhealthy or Error. When set to Healthy, the plugin responded successfully to the KMS v2 Status call and remoteKeyID is set. When set to Unhealthy, the plugin responded but reported that it is not healthy. When set to Error, the Status call failed or returned no response, for example because the plugin was unreachable. Unhealthy and Error may include additional information in detail.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -60538,7 +60542,7 @@ func schema_openshift_api_operator_v1_KMSPluginHealthReport(ref common.Reference
 					},
 					"remoteKeyID": {
 						SchemaProps: spec.SchemaProps{
-							Description: "remoteKeyID refers to the remote key identifier from KMS v2 StatusResponse.key_id. This is not a cryptographic key, but a unique representation of the KEK. The value must be between 1 and 1024 characters.",
+							Description: "remoteKeyID refers to the remote key identifier from KMS v2 StatusResponse.key_id. This is not a cryptographic key, but a unique representation of the KEK. When omitted, no remote key identifier is available. This is expected when status is Unhealthy or Error, for example when the plugin reports that it is not healthy or could not be reached. When status is Healthy, remoteKeyID is required. When set, the value must be between 1 and 1024 characters.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -60551,7 +60555,7 @@ func schema_openshift_api_operator_v1_KMSPluginHealthReport(ref common.Reference
 						},
 					},
 				},
-				Required: []string{"nodeName", "keyID", "status", "lastCheckedTime", "remoteKeyID"},
+				Required: []string{"nodeName", "keyID", "status", "lastCheckedTime"},
 			},
 		},
 		Dependencies: []string{
@@ -67150,36 +67154,6 @@ func schema_openshift_api_operator_v1_VSphereCSIDriverConfigSpec(ref common.Refe
 	}
 }
 
-func schema_openshift_api_operator_v1alpha1_BackupJobReference(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Description: "BackupJobReference holds a reference to the batch/v1 Job created to run the etcd backup",
-				Type:        []string{"object"},
-				Properties: map[string]spec.Schema{
-					"namespace": {
-						SchemaProps: spec.SchemaProps{
-							Description: "namespace is the namespace of the Job. this is always expected to be \"openshift-etcd\" since the user provided PVC is also required to be in \"openshift-etcd\" Required",
-							Default:     "",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"name": {
-						SchemaProps: spec.SchemaProps{
-							Description: "name is the name of the Job. Required",
-							Default:     "",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-				},
-				Required: []string{"namespace", "name"},
-			},
-		},
-	}
-}
-
 func schema_openshift_api_operator_v1alpha1_ClusterAPI(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -67800,7 +67774,7 @@ func schema_openshift_api_operator_v1alpha1_EtcdBackup(ref common.ReferenceCallb
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "# EtcdBackup provides configuration options and status for a one-time backup attempt of the etcd cluster\n\nCompatibility level 4: No compatibility is provided, the API can change at any point for any reason. These capabilities should not be used by applications needing long term support.",
+				Description: "# EtcdBackup provides configuration options and status for a one-time backup attempt of the etcd cluster. # When an EtcdBackup is deleted the files created by it will be deleted as well, as long as the storage backend is still accessible.\n\nCompatibility level 4: No compatibility is provided, the API can change at any point for any reason. These capabilities should not be used by applications needing long term support.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"kind": {
@@ -67819,8 +67793,9 @@ func schema_openshift_api_operator_v1alpha1_EtcdBackup(ref common.ReferenceCallb
 					},
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
-							Default: map[string]interface{}{},
-							Ref:     ref(metav1.ObjectMeta{}.OpenAPIModelName()),
+							Description: "metadata is the standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
+							Default:     map[string]interface{}{},
+							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
 					},
 					"spec": {
@@ -67838,11 +67813,45 @@ func schema_openshift_api_operator_v1alpha1_EtcdBackup(ref common.ReferenceCallb
 						},
 					},
 				},
-				Required: []string{"spec"},
+				Required: []string{"metadata", "spec"},
 			},
 		},
 		Dependencies: []string{
 			operatorv1alpha1.EtcdBackupSpec{}.OpenAPIModelName(), operatorv1alpha1.EtcdBackupStatus{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
+	}
+}
+
+func schema_openshift_api_operator_v1alpha1_EtcdBackupFile(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"assetType": {
+						SchemaProps: spec.SchemaProps{
+							Description: "assetType specifies the type of the backup file. If set to Snapshot, the file is an etcd database snapshot. If set to StaticKubeResources, the file is a bundle of static pod manifests for the control plane. If etcd is encrypted, this will include the encryption keys.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"path": {
+						SchemaProps: spec.SchemaProps{
+							Description: "path to the backup file on the storage backend. Must be an absolute filepath between 1 and 4096 characters containing only alphanumeric characters, '/', '.', '_', or '-', starting with a '/'. This field is required.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"sizeBytes": {
+						SchemaProps: spec.SchemaProps{
+							Description: "sizeBytes is the size of the backup file on the storage backend in bytes. If omitted, then the file specified by path is an empty file. When specified, must be between 1 and 1000000000000 (1 TB). This field is optional.",
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
+				},
+				Required: []string{"assetType", "path"},
+			},
+		},
 	}
 }
 
@@ -67894,16 +67903,392 @@ func schema_openshift_api_operator_v1alpha1_EtcdBackupList(ref common.ReferenceC
 	}
 }
 
-func schema_openshift_api_operator_v1alpha1_EtcdBackupSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_openshift_api_operator_v1alpha1_EtcdBackupPolicy(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "# EtcdBackupPolicy sets an automated schedule for taking backups of the etcd cluster\n\nCompatibility level 4: No compatibility is provided, the API can change at any point for any reason. These capabilities should not be used by applications needing long term support.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Description: "metadata is the standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
+							Default:     map[string]interface{}{},
+							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
+						},
+					},
+					"spec": {
+						SchemaProps: spec.SchemaProps{
+							Description: "spec holds user settable values for configuration",
+							Default:     map[string]interface{}{},
+							Ref:         ref(operatorv1alpha1.EtcdBackupPolicySpec{}.OpenAPIModelName()),
+						},
+					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Description: "status holds observed values from the cluster. They may not be overridden.",
+							Default:     map[string]interface{}{},
+							Ref:         ref(operatorv1alpha1.EtcdBackupPolicyStatus{}.OpenAPIModelName()),
+						},
+					},
+				},
+				Required: []string{"metadata", "spec"},
+			},
+		},
+		Dependencies: []string{
+			operatorv1alpha1.EtcdBackupPolicySpec{}.OpenAPIModelName(), operatorv1alpha1.EtcdBackupPolicyStatus{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
+	}
+}
+
+func schema_openshift_api_operator_v1alpha1_EtcdBackupPolicyList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "EtcdBackupPolicyList is a collection of items\n\nCompatibility level 4: No compatibility is provided, the API can change at any point for any reason. These capabilities should not be used by applications needing long term support.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref(metav1.ListMeta{}.OpenAPIModelName()),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref(operatorv1alpha1.EtcdBackupPolicy{}.OpenAPIModelName()),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"metadata", "items"},
+			},
+		},
+		Dependencies: []string{
+			operatorv1alpha1.EtcdBackupPolicy{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
+	}
+}
+
+func schema_openshift_api_operator_v1alpha1_EtcdBackupPolicyRetentionQuantity(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
 				Type: []string{"object"},
 				Properties: map[string]spec.Schema{
-					"pvcName": {
+					"maxQuantity": {
 						SchemaProps: spec.SchemaProps{
-							Description: "pvcName specifies the name of the PersistentVolumeClaim (PVC) which binds a PersistentVolume where the etcd backup file would be saved The PVC itself must always be created in the \"openshift-etcd\" namespace If the PVC is left unspecified \"\" then the platform will choose a reasonable default location to save the backup. In the future this would be backups saved across the control-plane master nodes.",
-							Default:     "",
+							Description: "maxQuantity enforces the deletion of completed backups that exceed the total count. The total count of completed backups may temporarily exceed the limit when new backups are completed. Older backups are not deleted until a new one has succeeded. Must be between 1 and 1000. This field is required.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+				},
+				Required: []string{"maxQuantity"},
+			},
+		},
+	}
+}
+
+func schema_openshift_api_operator_v1alpha1_EtcdBackupPolicyRetentionRule(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"type": {
+						SchemaProps: spec.SchemaProps{
+							Description: "type defined which rule field is set Allowed values are Quantity and Size. When set to Quantity, this rule deletes completed EtcdBackups based on the total count. When set to Size, this rule deletes completed EtcdBackups based on the total aggregate size of backup files. This field is required.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"quantity": {
+						SchemaProps: spec.SchemaProps{
+							Description: "quantity enforces the deletion of EtcdBackups belonging to the EtcdBackupPolicy based on total count. This field is required when the rule type is \"Quantity\", and forbidden otherwise.",
+							Default:     map[string]interface{}{},
+							Ref:         ref(operatorv1alpha1.EtcdBackupPolicyRetentionQuantity{}.OpenAPIModelName()),
+						},
+					},
+					"size": {
+						SchemaProps: spec.SchemaProps{
+							Description: "size enforces the deletion of EtcdBackups belonging to the EtcdBackupPolicy based on total backup file size. At least one backup will always be retained, even if it exceeds the size limit. This field is required when the rule type is \"Size\", and forbidden otherwise.",
+							Default:     map[string]interface{}{},
+							Ref:         ref(operatorv1alpha1.EtcdBackupPolicyRetentionSize{}.OpenAPIModelName()),
+						},
+					},
+				},
+				Required: []string{"type"},
+			},
+			VendorExtensible: spec.VendorExtensible{
+				Extensions: spec.Extensions{
+					"x-kubernetes-unions": []interface{}{
+						map[string]interface{}{
+							"discriminator": "type",
+							"fields-to-discriminateBy": map[string]interface{}{
+								"quantity": "Quantity",
+								"size":     "Size",
+							},
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			operatorv1alpha1.EtcdBackupPolicyRetentionQuantity{}.OpenAPIModelName(), operatorv1alpha1.EtcdBackupPolicyRetentionSize{}.OpenAPIModelName()},
+	}
+}
+
+func schema_openshift_api_operator_v1alpha1_EtcdBackupPolicyRetentionSize(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"maxTotalSizeGiB": {
+						SchemaProps: spec.SchemaProps{
+							Description: "maxTotalSizeGiB enforces the deletion of completed backups by the total size of backups on the storage backend (in GiB). This is a soft threshold. The total size of backups may temporarily exceed the limit when new backups are completed. Older backups are not deleted until a new one has succeeded. If the newest backup exceeds the limit on its own, it will be retained with all older backups being pruned to ensure at least one valid backup exists. Must be between 1 and 10240 (10 TiB). This field is required.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+				},
+				Required: []string{"maxTotalSizeGiB"},
+			},
+		},
+	}
+}
+
+func schema_openshift_api_operator_v1alpha1_EtcdBackupPolicySpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"schedule": {
+						SchemaProps: spec.SchemaProps{
+							Description: "schedule sets the backup schedule in Cron format, see https://en.wikipedia.org/wiki/Cron. The value must be one of the following forms: a predefined macro \"@yearly\", \"@annually\", \"@monthly\", \"@weekly\", \"@daily\" or \"@hourly\"; an \"@every <duration>\" expression where duration is a sequence of decimal numbers each with a unit of \"s\", \"m\" or \"h\" (for example \"@every 2h\" or \"@every 1h30m\"); or a standard cron expression of five space separated fields (minute, hour, day-of-month, month and day-of-week), where each field may only contain digits, the names used for months and days of the week, and the cron special characters \"*\", \"/\", \"-\" and \",\". This validation only checks the overall shape of the value; the individual field values are validated when the schedule is parsed by the controller, which reports parsing failures via the schedule's status condition. Must be between 1 and 1024 characters long. This field is required.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"timeZone": {
+						SchemaProps: spec.SchemaProps{
+							Description: "timeZone is an IANA time zone database name used to interpret the schedule, see https://en.wikipedia.org/wiki/List_of_tz_database_time_zones. The accepted values are the same as the timeZone field of a CronJob. If not specified, this will default to the time zone of the cluster. Must be between 1 and 64 characters long. This field is optional.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"assets": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "set",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "assets specifies the type of files to be backed up. If Snapshot is present, the etcd database will be snapshotted and saved to the storage backend. If StaticKubeResources is present, static pod manifests for the control plane will be bundled and saved to the storage backend. If etcd is encrypted, this will include the encryption keys. This field is copied to EtcdBackups created by this policy. When specified, must contain between 1 and 2 entries, with at most 1 of each type. When omitted, all assets types will be backed up. This field is optional.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Type:   []string{"string"},
+										Format: "",
+									},
+								},
+							},
+						},
+					},
+					"nodeSelector": {
+						SchemaProps: spec.SchemaProps{
+							Description: "nodeSelector specifies which control plane nodes to select from for running backup jobs. The default node-role.kubernetes.io/control-plane label will always be added on top of any labels set on nodeSelector. If no nodes are matched, then no EtcdBackups will be created. For Local storage type, this may be used to target a specific node to take and store the backup. If distribution is AllNodes, then backups are taken on all selected nodes. If distribution is SingleNode, then backups will round robin selected nodes in lexicographical order starting from the last created backup for the policy. For PVC storage type, this may be used to control where the backup is taken from. If multiple nodes are selected, the scheduler is responsible for placing the backup job based on volume topology and any other scheduling constraints. EtcdBackup nodeSelector is derived from this field. When specified, must contain between 1 and 10 entries. This field is optional.",
+							Type:        []string{"object"},
+							AdditionalProperties: &spec.SchemaOrBool{
+								Allows: true,
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Type:   []string{"string"},
+										Format: "",
+									},
+								},
+							},
+						},
+					},
+					"storage": {
+						SchemaProps: spec.SchemaProps{
+							Description: "storage specifies the location where etcd backup files will be saved. EtcdBackup storage is derived from this field. In rare cases, where storage type is changed from PVC to Local with AllNodes distribution on an existing policy, old backups on the PVC may need to be manually pruned. Make sure to check that new valid backups exist before deleting old ones. This field is required.",
+							Default:     map[string]interface{}{},
+							Ref:         ref(operatorv1alpha1.EtcdBackupPolicyStorage{}.OpenAPIModelName()),
+						},
+					},
+					"retentionRules": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-map-keys": []interface{}{
+									"type",
+								},
+								"x-kubernetes-list-type": "map",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "retentionRules defines the policy for retaining and deleting completed backups. Completed backups are deleted from the oldest first until all rules are satisfied. If no rules are specified then backups created by this policy will not be automatically deleted. When an EtcdBackup is deleted the files created by it will be deleted as well, as long as the storage backend is still accessible. For Local storage with distribution AllNodes, retention is calculated for EtcdBackups grouped by Node (e.g. MaxQuantity 2 results in 2 backups per node, MaxTotalSizeGiB 5 results in 5GiB of backups per node). In all other cases retention is calculated across all EtcdBackups belonging to the policy. When specified, must contain between 1 and 2 entries. Must not have more than 1 entry of each rule type. This field is optional.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref(operatorv1alpha1.EtcdBackupPolicyRetentionRule{}.OpenAPIModelName()),
+									},
+								},
+							},
+						},
+					},
+					"failedBackupsHistoryLimit": {
+						SchemaProps: spec.SchemaProps{
+							Description: "failedBackupsHistoryLimit defined the number of failed etcdbackups to retain. Failed backups are deleted from the oldest first. Must be non-negative integer. If set to to 0, then failed backups will be deleted immediately. If unset, defaults to 1. Must be a positive integer no greater than 100. This field is optional.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+				},
+				Required: []string{"schedule", "storage"},
+			},
+		},
+		Dependencies: []string{
+			operatorv1alpha1.EtcdBackupPolicyRetentionRule{}.OpenAPIModelName(), operatorv1alpha1.EtcdBackupPolicyStorage{}.OpenAPIModelName()},
+	}
+}
+
+func schema_openshift_api_operator_v1alpha1_EtcdBackupPolicyStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"conditions": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-map-keys": []interface{}{
+									"type",
+								},
+								"x-kubernetes-list-type": "map",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "conditions provide details on the status of the etcd backup policy. Supported conditions include Scheduled. If Scheduled is true, scheduling the policy succeeded. If Scheduled is false, an error occurred while attempting to schedule the policy. The condition reason and message will provide addition details.\n\nWhen specified, must contain between 1 and 10 entries, with no more than 1 of each type. This field is optional.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref(metav1.Condition{}.OpenAPIModelName()),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			metav1.Condition{}.OpenAPIModelName()},
+	}
+}
+
+func schema_openshift_api_operator_v1alpha1_EtcdBackupPolicyStorage(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"type": {
+						SchemaProps: spec.SchemaProps{
+							Description: "type of storage backend to use for storing the etcd backup. Allowed values are Local and PVC. When set to Local, the backup will be saved to a host path directory on the control plane node it was taken on. When set to PVC, the backup will be saved to a volume bound by a PersistentVolumeClaim. This field is required.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"pvc": {
+						SchemaProps: spec.SchemaProps{
+							Description: "pvc specifies the PersistentVolumeClaim (PVC) which binds a PersistentVolume where the etcd backup file will be saved. The PVC must always be created in the \"openshift-etcd\" namespace. This field is required when the storage type is \"PVC\", and forbidden otherwise.",
+							Default:     map[string]interface{}{},
+							Ref:         ref(operatorv1alpha1.EtcdBackupPolicyStoragePvc{}.OpenAPIModelName()),
+						},
+					},
+					"local": {
+						SchemaProps: spec.SchemaProps{
+							Description: "local specifies a host path directory on the control plane node where the etcd backup file will be saved. This field is optional when storage type is \"Local\", and forbidden otherwise.",
+							Default:     map[string]interface{}{},
+							Ref:         ref(operatorv1alpha1.EtcdBackupPolicyStorageLocal{}.OpenAPIModelName()),
+						},
+					},
+				},
+				Required: []string{"type"},
+			},
+			VendorExtensible: spec.VendorExtensible{
+				Extensions: spec.Extensions{
+					"x-kubernetes-unions": []interface{}{
+						map[string]interface{}{
+							"discriminator": "type",
+							"fields-to-discriminateBy": map[string]interface{}{
+								"local": "Local",
+								"pvc":   "PVC",
+							},
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			operatorv1alpha1.EtcdBackupPolicyStorageLocal{}.OpenAPIModelName(), operatorv1alpha1.EtcdBackupPolicyStoragePvc{}.OpenAPIModelName()},
+	}
+}
+
+func schema_openshift_api_operator_v1alpha1_EtcdBackupPolicyStorageLocal(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"hostPath": {
+						SchemaProps: spec.SchemaProps{
+							Description: "hostPath is a local directory on the control plane node where the etcd backup file will be saved. hostPath must be an absolute filepath between 1 and 2048 characters containing only alphanumeric characters, '/', '.', '_', or '-', starting with a '/'. When omitted, hostPath defaults to \"/etc/kubernetes/cluster-backup\". This field is optional.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"distribution": {
+						SchemaProps: spec.SchemaProps{
+							Description: "distribution controls whether or not scheduled local backups are only taken on a single node or fan out to all control plane nodes. Allowed values are SingleNode and AllNodes When set to SingleNode, a single EtcdBackup will be created at each schedule execution on one of the selected control plane nodes. If multiple nodes are matched by nodeSelector, then backups round robin the nodes in lexicographical order. When set to AllNodes, EtcdBackups will be created for all selected control plane nodes at each schedule execution. Retention rules will be applied to EtcdBackups grouped by Node (e.g. MaxQuantity 2 results in 2 backups per node, MaxTotalSizeGiB 5 results in 5GiB of backups per node). If omitted, defaults to SingleNode. This field is optional.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -67911,6 +68296,89 @@ func schema_openshift_api_operator_v1alpha1_EtcdBackupSpec(ref common.ReferenceC
 				},
 			},
 		},
+	}
+}
+
+func schema_openshift_api_operator_v1alpha1_EtcdBackupPolicyStoragePvc(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"name": {
+						SchemaProps: spec.SchemaProps{
+							Description: "name is a reference to a PVC in the \"openshift-etcd\" namespace where the etcd backup file will be saved. name must be between 1 and 253 characters and conform to RFC 1123 subdomain format: lowercase alphanumeric characters, '-' or '.', starting and ending with alphanumeric characters. This field is required.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"path": {
+						SchemaProps: spec.SchemaProps{
+							Description: "path is a directory on the volume where the etcd backup file will be saved. When present, path must be an absolute filepath between 1 and 2048 characters containing only alphanumeric characters, '/', '.', '_', or '-', starting with a '/'. This field is optional.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"name"},
+			},
+		},
+	}
+}
+
+func schema_openshift_api_operator_v1alpha1_EtcdBackupSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"assets": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "set",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "assets specifies the type of files to be backed up. If Snapshot is present, the etcd database will be snapshotted and saved to the storage backend. If StaticKubeResources is present, static pod manifests for the control plane will be bundled and saved to the storage backend. If etcd is encrypted, this will include the encryption keys. When specified, must contain between 1 and 2 entries, with at most 1 of each type. When omitted, all assets types will be backed up. This field is optional.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Type:   []string{"string"},
+										Format: "",
+									},
+								},
+							},
+						},
+					},
+					"nodeSelector": {
+						SchemaProps: spec.SchemaProps{
+							Description: "nodeSelector specifies which control plane nodes to select from for running the backup job. Only one backup job is run per EtcdBackup. The default node-role.kubernetes.io/control-plane label will always be added on top of any labels set on nodeSelector. If no nodes are matched, then the backup will be marked failed. For Local storage type, this may be used to target a specific node to take and store the backup. For PVC storage type, this may be used to control where the backup is taken from. If multiple nodes are selected, the scheduler is responsible for placing the backup job based on volume topology and any other scheduling constraints. When specified, must contain between 1 and 10 entries. This field is optional.",
+							Type:        []string{"object"},
+							AdditionalProperties: &spec.SchemaOrBool{
+								Allows: true,
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Type:   []string{"string"},
+										Format: "",
+									},
+								},
+							},
+						},
+					},
+					"storage": {
+						SchemaProps: spec.SchemaProps{
+							Description: "storage specifies the location where etcd backup files will be saved. This field is required.",
+							Default:     map[string]interface{}{},
+							Ref:         ref(operatorv1alpha1.EtcdBackupStorage{}.OpenAPIModelName()),
+						},
+					},
+				},
+				Required: []string{"storage"},
+			},
+		},
+		Dependencies: []string{
+			operatorv1alpha1.EtcdBackupStorage{}.OpenAPIModelName()},
 	}
 }
 
@@ -67930,7 +68398,7 @@ func schema_openshift_api_operator_v1alpha1_EtcdBackupStatus(ref common.Referenc
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "conditions provide details on the status of the etcd backup job.",
+							Description: "conditions provide details on the status of the etcd backup job. Supported conditions include Running, Completed, and Failed. If Running is true, the backup job is currently active. If Completed is true, the backup job succeeded and has saved backup files to its storage location. If Failed is true, the backup job failed and did not create valid backup files.\n\nWhen specified, must contain between 1 and 15 entries, with no more than 1 of each type. This field is optional.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -67941,17 +68409,141 @@ func schema_openshift_api_operator_v1alpha1_EtcdBackupStatus(ref common.Referenc
 							},
 						},
 					},
-					"backupJob": {
+					"jobName": {
 						SchemaProps: spec.SchemaProps{
-							Description: "backupJob is the reference to the Job that executes the backup. Optional",
-							Ref:         ref(operatorv1alpha1.BackupJobReference{}.OpenAPIModelName()),
+							Description: "jobName is a reference to the Job created for the backup. It always runs in the openshift-etcd namespace. Must be between 1 and 253 characters and conform to RFC 1123 subdomain format: lowercase alphanumeric characters, '-' or '.', starting and ending with alphanumeric characters. This field is optional.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"nodeName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "nodeName is used for Local EtcdBackups to bind the control plane node where the snapshot will be taken. It is set by the cluster-etcd-operator before the Local backup runs to ensure the file location is known for garbage collection. Must be between 1 and 253 characters and conform to RFC 1123 subdomain format: lowercase alphanumeric characters, '-' or '.', starting and ending with alphanumeric characters. This field is optional.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"files": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-map-keys": []interface{}{
+									"path",
+								},
+								"x-kubernetes-list-type": "map",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "files tracks the path and size of files generated by the etcd backup. Includes both etcd snapshots and static manifests. When specified, must contain between 1 and 10 entries. This field is optional.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref(operatorv1alpha1.EtcdBackupFile{}.OpenAPIModelName()),
+									},
+								},
+							},
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			operatorv1alpha1.BackupJobReference{}.OpenAPIModelName(), metav1.Condition{}.OpenAPIModelName()},
+			operatorv1alpha1.EtcdBackupFile{}.OpenAPIModelName(), metav1.Condition{}.OpenAPIModelName()},
+	}
+}
+
+func schema_openshift_api_operator_v1alpha1_EtcdBackupStorage(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"type": {
+						SchemaProps: spec.SchemaProps{
+							Description: "type of storage backend to use for storing the etcd backup. Allowed values are Local and PVC. When set to Local, the backup will be saved to a host path directory on the control plane node it was taken on. When set to PVC, the backup will be saved to a volume bound by a PersistentVolumeClaim. This field is required.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"pvc": {
+						SchemaProps: spec.SchemaProps{
+							Description: "pvc specifies the PersistentVolumeClaim (PVC) which binds a PersistentVolume where the etcd backup file will be saved. The PVC must always be created in the \"openshift-etcd\" namespace. This field is required when the storage type is \"PVC\", and forbidden otherwise.",
+							Default:     map[string]interface{}{},
+							Ref:         ref(operatorv1alpha1.EtcdBackupStoragePvc{}.OpenAPIModelName()),
+						},
+					},
+					"local": {
+						SchemaProps: spec.SchemaProps{
+							Description: "local specifies a host path directory on the control plane node where the etcd backup file will be saved. This field is optional when storage type is \"Local\", and forbidden otherwise.",
+							Default:     map[string]interface{}{},
+							Ref:         ref(operatorv1alpha1.EtcdBackupStorageLocal{}.OpenAPIModelName()),
+						},
+					},
+				},
+				Required: []string{"type"},
+			},
+			VendorExtensible: spec.VendorExtensible{
+				Extensions: spec.Extensions{
+					"x-kubernetes-unions": []interface{}{
+						map[string]interface{}{
+							"discriminator": "type",
+							"fields-to-discriminateBy": map[string]interface{}{
+								"local": "Local",
+								"pvc":   "PVC",
+							},
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			operatorv1alpha1.EtcdBackupStorageLocal{}.OpenAPIModelName(), operatorv1alpha1.EtcdBackupStoragePvc{}.OpenAPIModelName()},
+	}
+}
+
+func schema_openshift_api_operator_v1alpha1_EtcdBackupStorageLocal(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"hostPath": {
+						SchemaProps: spec.SchemaProps{
+							Description: "hostPath is a local directory on the control plane node where the etcd backup file will be saved. hostPath must be an absolute filepath between 1 and 2048 characters containing only alphanumeric characters, '/', '.', '_', or '-', starting with a '/'. When omitted, hostPath defaults to \"/etc/kubernetes/cluster-backup\". This field is optional.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func schema_openshift_api_operator_v1alpha1_EtcdBackupStoragePvc(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"name": {
+						SchemaProps: spec.SchemaProps{
+							Description: "name is a reference to a PVC in the \"openshift-etcd\" namespace where the etcd backup file will be saved. name must be between 1 and 253 characters and conform to RFC 1123 subdomain format: lowercase alphanumeric characters, '-' or '.', starting and ending with alphanumeric characters. This field is required.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"path": {
+						SchemaProps: spec.SchemaProps{
+							Description: "path is a directory on the volume where the etcd backup file will be saved. When present, path must be an absolute filepath between 1 and 2048 characters containing only alphanumeric characters, '/', '.', '_', or '-', starting with a '/'. This field is optional.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"name"},
+			},
+		},
 	}
 }
 

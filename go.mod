@@ -71,12 +71,12 @@ require (
 	github.com/metal3-io/cluster-api-provider-metal3/api v1.11.2
 	github.com/onsi/ginkgo/v2 v2.32.1
 	github.com/onsi/gomega v1.42.1
-	github.com/openshift/api v0.0.0-20261028095540-9af1f7b4730c
-	github.com/openshift/client-go v0.0.0-20261027103500-48133ed95dad
+	github.com/openshift/api v0.0.0-20261117044008-410efb4bfbac
+	github.com/openshift/client-go v0.0.0-20261117110410-e591d492769c
 	github.com/openshift/cluster-api-actuator-pkg/testutils v0.0.0
 	github.com/openshift/cluster-capi-operator/manifests-gen v0.0.0-00010101000000-000000000000
 	github.com/openshift/controller-runtime-common v0.0.0-20260428152732-64ee174f5e2e
-	github.com/openshift/library-go v0.0.0-20261001144932-192662696fc7
+	github.com/openshift/library-go v0.0.0-20261117022826-d0be5e7c4fc8
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/pflag v1.0.10
 	go.uber.org/mock v0.6.0
@@ -415,5 +415,3 @@ require (
 )
 
 replace github.com/openshift/cluster-capi-operator/manifests-gen => ./manifests-gen
-
-replace github.com/openshift/api => github.com/simkam/openshift-api v0.0.0-20261106164900-ea5bb0f515bf
