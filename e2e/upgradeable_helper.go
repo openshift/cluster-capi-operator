@@ -129,13 +129,13 @@ var errNoUpdateTarget = errors.New("no update target release image provided")
 // returned digest-pinned. The target image must be pullable both from the test
 // runner and in-cluster. Specifically, if the cluster uses mirroring, this
 // payload image must have been mirrored to the target cluster.
-func resolveUpdateTargetRelease(ctx context.Context) (string, error) {
+func resolveUpdateTargetRelease(ctx context.Context, registryAuthFile string) (string, error) {
 	updateSource, ref := updateTargetReleaseFromEnv()
 	if ref == "" {
 		return "", errNoUpdateTarget
 	}
 
-	ref, err := digestPinnedReleaseRef(ctx, ref)
+	ref, err := digestPinnedReleaseRef(ctx, ref, registryAuthFile)
 	if err != nil {
 		return "", fmt.Errorf("resolving the release image in %s: %w", updateSource, err)
 	}
@@ -160,9 +160,12 @@ func updateTargetReleaseFromEnv() (source, ref string) {
 
 // digestPinnedReleaseRef reconstructs releaseImage with the digest of the
 // release it names, so the returned reference resolves through a registry that
-// mirrors the payload by digest but not by tag.
-func digestPinnedReleaseRef(ctx context.Context, releaseImage string) (string, error) {
-	releaseInfo, err := runOC(ctx, "adm", "release", "info", releaseImage, "-o", "json")
+// mirrors the payload by digest but not by tag. registryAuthFile holds the
+// credentials oc reads the payload metadata with: a mirror may serve the
+// release under test anonymously but a proxied registry does not.
+func digestPinnedReleaseRef(ctx context.Context, releaseImage, registryAuthFile string) (string, error) {
+	releaseInfo, err := runOC(ctx, append([]string{"adm", "release", "info", releaseImage, "-o", "json"},
+		ocAuthArgs(registryAuthFile)...)...)
 	if err != nil {
 		return "", err
 	}
@@ -212,19 +215,9 @@ func registryAuthClient() (corev1client.CoreV1Interface, error) {
 // environment supplied explicitly (OPENSHIFT_AVAILABLE_UPDATE or
 // RELEASE_IMAGE_LATEST): the cluster's own status.desired.image may name a
 // cluster-internal mirror the test host cannot resolve, so it is never
-// dereferenced.
-func resolvePayloadComponentImage(ctx context.Context, releaseImage, component string) (string, error) {
-	authDir, err := os.MkdirTemp("", "capi-operator-registry-auth-")
-	if err != nil {
-		return "", fmt.Errorf("creating temp dir for registry credentials: %w", err)
-	}
-	defer func() { _ = os.RemoveAll(authDir) }()
-
-	registryAuthFile, err := determineRegistryAuthFilePath(ctx, registryAuthClient, authDir)
-	if err != nil {
-		return "", fmt.Errorf("resolving registry credentials for release images: %w", err)
-	}
-
+// dereferenced. registryAuthFile holds the credentials oc reads the payload
+// metadata with.
+func resolvePayloadComponentImage(ctx context.Context, releaseImage, component, registryAuthFile string) (string, error) {
 	args := []string{"adm", "release", "info", releaseImage, "--image-for=" + component}
 
 	imageRef, err := runOC(ctx, append(args, ocAuthArgs(registryAuthFile)...)...)
@@ -277,31 +270,26 @@ func resolveGraphServerImage(ctx context.Context) (string, error) {
 // clustersCRDFromReleaseImage extracts the clusters.cluster.x-k8s.io CRD
 // from the default-profile provider manifests shipped in the
 // cluster-capi-controllers image referenced by releaseImage.
-func clustersCRDFromReleaseImage(ctx context.Context, releaseImage string) (*apiextensionsv1.CustomResourceDefinition, error) {
-	imageRef, err := resolvePayloadComponentImage(ctx, releaseImage, clusterCAPIComponent)
+func clustersCRDFromReleaseImage(ctx context.Context, releaseImage, registryAuthFile string) (*apiextensionsv1.CustomResourceDefinition, error) {
+	imageRef, err := resolvePayloadComponentImage(ctx, releaseImage, clusterCAPIComponent, registryAuthFile)
 	if err != nil {
 		return nil, err
 	}
 
-	return clustersCRDFromImage(ctx, imageRef)
+	return clustersCRDFromImage(ctx, imageRef, registryAuthFile)
 }
 
 // clustersCRDFromImage extracts the clusters.cluster.x-k8s.io CRD from the
 // default-profile provider manifests shipped in imageRef. It shells out to
 // oc, which must be present in PATH and able to pull the image: payload
-// metadata is served anonymously but image blobs are not, so the cluster
-// pull secret is resolved and passed as --registry-config.
-func clustersCRDFromImage(ctx context.Context, imageRef string) (*apiextensionsv1.CustomResourceDefinition, error) {
+// metadata may be served anonymously but image blobs require credentials, so
+// registryAuthFile is passed as --registry-config.
+func clustersCRDFromImage(ctx context.Context, imageRef, registryAuthFile string) (*apiextensionsv1.CustomResourceDefinition, error) {
 	extractDir, err := os.MkdirTemp("", "capi-operator-manifests-")
 	if err != nil {
 		return nil, fmt.Errorf("creating temp dir for manifest extraction: %w", err)
 	}
 	defer func() { _ = os.RemoveAll(extractDir) }()
-
-	registryAuthFile, err := determineRegistryAuthFilePath(ctx, registryAuthClient, extractDir)
-	if err != nil {
-		return nil, fmt.Errorf("resolving registry credentials for release images: %w", err)
-	}
 
 	extractArgs := []string{"image", "extract", imageRef,
 		"--path", "/capi-operator-manifests/default/manifests.yaml:" + extractDir}

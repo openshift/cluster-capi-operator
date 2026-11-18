@@ -161,6 +161,30 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIOperator] Clu
 				Skip("Cluster API upgradeability preflight is not supported on External topology clusters.")
 			}
 
+			// The registry credentials are resolved once, before any payload is
+			// read, and passed to every oc invocation that reaches a registry.
+			authDir, err := os.MkdirTemp("", "capi-operator-registry-auth-")
+			Expect(err).ToNot(HaveOccurred(), "creating a temp dir for registry credentials")
+
+			defer func() { Expect(os.RemoveAll(authDir)).To(Succeed(), "removing registry credentials temp dir") }()
+
+			var registryAuthFile string
+
+			By("Resolving registry credentials", func() {
+				var err error
+
+				registryAuthFile, err = determineRegistryAuthFilePath(ctx, registryAuthClient, authDir)
+				if err != nil {
+					Fail(fmt.Sprintf("resolving registry credentials failed: %v", err))
+				}
+
+				if registryAuthFile == "" {
+					GinkgoWriter.Println("No registry credentials found; release image must be public")
+				} else {
+					GinkgoWriter.Printf("Using registry credentials from %s\n", registryAuthFile)
+				}
+			})
+
 			By("Verifying the Clusters CRD is not already unmanaged", func() {
 				failIfClustersCRDAlreadyUnmanaged(ctx)
 				unmanagedCRDsStateCaptured = true
@@ -203,7 +227,8 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIOperator] Clu
 
 			By("Resolving the update target release", func() {
 				var err error
-				upgradeTargetPayload, err = resolveUpdateTargetRelease(ctx)
+
+				upgradeTargetPayload, err = resolveUpdateTargetRelease(ctx, registryAuthFile)
 				if errors.Is(err, errNoUpdateTarget) {
 					msg := fmt.Sprintf("neither %s nor %s is set: no release image to assess (set %s, e.g. to the cluster's own payload %q)",
 						upgradeTargetEnvVar, releaseImageLATESTEnvVar, upgradeTargetEnvVar, clusterPayload)
@@ -218,7 +243,8 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:ClusterAPIOperator] Clu
 
 			By("Extracting the fixture Clusters CRD from the target payload", func() {
 				var err error
-				clustersFixtureCRD, err = clustersCRDFromReleaseImage(ctx, upgradeTargetPayload)
+
+				clustersFixtureCRD, err = clustersCRDFromReleaseImage(ctx, upgradeTargetPayload, registryAuthFile)
 				Expect(err).ToNot(HaveOccurred(), "extracting the %s CRD from release image %s", clusterCRDName, upgradeTargetPayload)
 				Expect(clustersFixtureCRD.Name).To(Equal(clusterCRDName),
 					"the extracted CRD document should be %s", clusterCRDName)

@@ -351,25 +351,44 @@ func TestTargetUpdateOffered(t *testing.T) {
 	}
 }
 
-// installFakeOC puts an oc in PATH that prints releaseInfo, so the release
-// info parsing is exercised without a registry or a cluster.
-func installFakeOC(t *testing.T, releaseInfo string) {
+// fakeOCArgsFileEnvVar names the env var holding the path the fake oc records
+// its argv in.
+const fakeOCArgsFileEnvVar = "FAKE_OC_ARGS_FILE"
+
+// installFakeOC puts an oc in PATH that records its argv and then prints
+// releaseInfo, so the release info parsing and the flags oc is invoked with are
+// exercised without a registry or a cluster. It returns the path of the file
+// holding the recorded argv, one argument per line.
+func installFakeOC(t *testing.T, releaseInfo string) string {
 	t.Helper()
 
 	binDir := t.TempDir()
+	argsFile := filepath.Join(binDir, "oc-args")
 	script := filepath.Join(binDir, "oc")
-	body := "#!/bin/sh\ncat <<'RELEASE_INFO'\n" + releaseInfo + "\nRELEASE_INFO\n"
+
+	body := "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$" + fakeOCArgsFileEnvVar + "\"\ncat <<'RELEASE_INFO'\n" + releaseInfo + "\nRELEASE_INFO\n"
 	if err := os.WriteFile(script, []byte(body), 0o755); err != nil {
 		t.Fatalf("writing fake oc to %s: %v", script, err)
 	}
+
+	t.Setenv(fakeOCArgsFileEnvVar, argsFile)
 	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	return argsFile
 }
 
 // TestDigestPinnedReleaseRef covers reconstructing the release reference from
 // the digest of the release it names: a tag is replaced, an existing digest is
 // preserved, and release info without a usable digest is an error.
 func TestDigestPinnedReleaseRef(t *testing.T) {
-	const releaseDigest = "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+	const (
+		releaseDigest = "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+
+		// registryAuthFile is a synthetic auth file path: the fake oc records
+		// the flags it is invoked with, so the test asserts the release info
+		// lookup hands the resolved credentials to oc without a real file.
+		registryAuthFile = "/var/tmp/capi-operator-registry-auth/.dockerconfigjson"
+	)
 
 	for _, tc := range []struct {
 		name         string
@@ -406,9 +425,16 @@ func TestDigestPinnedReleaseRef(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			g := gomega.NewWithT(t)
 
-			installFakeOC(t, tc.releaseInfo)
+			argsFile := installFakeOC(t, tc.releaseInfo)
 
-			ref, err := digestPinnedReleaseRef(t.Context(), tc.releaseImage)
+			ref, err := digestPinnedReleaseRef(t.Context(), tc.releaseImage, registryAuthFile)
+
+			// Containment, not argv equality: ocAuthArgs also passes --kubeconfig
+			// when KUBECONFIG is set in the environment.
+			recordedArgs, readErr := os.ReadFile(argsFile)
+			g.Expect(readErr).ToNot(gomega.HaveOccurred(), "reading the argv recorded by the fake oc at %s", argsFile)
+			g.Expect(string(recordedArgs)).To(gomega.ContainSubstring("--registry-config="+registryAuthFile),
+				"the release info lookup should pass the resolved registry credentials to oc")
 
 			if tc.expectedErr != "" {
 				g.Expect(err).To(gomega.MatchError(gomega.ContainSubstring(tc.expectedErr)))
