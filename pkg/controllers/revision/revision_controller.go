@@ -30,6 +30,7 @@ import (
 	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/api/features"
 	operatorv1 "github.com/openshift/api/operator/v1"
+	operatorv1apply "github.com/openshift/client-go/operator/applyconfigurations/operator/v1"
 	libgocrypto "github.com/openshift/library-go/pkg/crypto"
 	featuregates "github.com/openshift/library-go/pkg/operator/configobserver/featuregates"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -252,16 +253,19 @@ func (r *RevisionController) writeRevisions(ctx context.Context, log logr.Logger
 		return nil
 	}
 
-	applyConfig := map[string]any{
-		"apiVersion": operatorv1.GroupVersion.String(),
-		"kind":       "ClusterAPI",
-		"metadata":   map[string]any{"name": clusterAPI.Name},
-		"status": map[string]any{
-			"observedRevisionGeneration": clusterAPI.Generation,
-			"desiredRevision":            apiRevisions[0].Name,
-			"revisions":                  apiRevisions,
-		},
+	revisionACs, err := revisiongenerator.RevisionsToApplyConfig(apiRevisions)
+	if err != nil {
+		return fmt.Errorf("error converting revisions to apply config: %w", err)
 	}
+
+	revisionACPtrs := util.SliceMap(revisionACs, func(ac operatorv1apply.ClusterAPIInstallerRevisionApplyConfiguration) *operatorv1apply.ClusterAPIInstallerRevisionApplyConfiguration {
+		return &ac
+	})
+	applyConfig := operatorv1apply.ClusterAPI(clusterAPI.Name).
+		WithStatus(operatorv1apply.ClusterAPIStatus().
+			WithObservedRevisionGeneration(clusterAPI.Generation).
+			WithDesiredRevision(apiRevisions[0].Name).
+			WithRevisions(revisionACPtrs...))
 
 	if err := r.Status().Patch(ctx, clusterAPI, util.ApplyConfigPatch(applyConfig),
 		operatorstatus.CAPIFieldOwner(controllerName), client.ForceOwnership); err != nil {

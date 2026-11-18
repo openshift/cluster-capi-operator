@@ -25,6 +25,7 @@ import (
 	"github.com/go-logr/logr"
 	configv1 "github.com/openshift/api/config/v1"
 	operatorv1 "github.com/openshift/api/operator/v1"
+	operatorv1apply "github.com/openshift/client-go/operator/applyconfigurations/operator/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -328,15 +329,9 @@ func (c *InstallerController) updateWatches(ctx context.Context, log logr.Logger
 }
 
 func (c *InstallerController) writeCurrentRevision(ctx context.Context, clusterAPI *operatorv1.ClusterAPI, revisionName operatorv1.RevisionName) error {
-	applyConfig := map[string]any{
-		"apiVersion": operatorv1.GroupVersion.String(),
-		"kind":       "ClusterAPI",
-		"metadata": map[string]any{
-			"name": clusterAPIName,
-			"uid":  clusterAPI.UID,
-		},
-		"status": map[string]any{"currentRevision": revisionName},
-	}
+	applyConfig := operatorv1apply.ClusterAPI(clusterAPIName).
+		WithUID(clusterAPI.UID).
+		WithStatus(operatorv1apply.ClusterAPIStatus().WithCurrentRevision(revisionName))
 
 	patch := util.ApplyConfigPatch(applyConfig)
 	if err := c.client.Status().Patch(ctx, clusterAPI, patch, operatorstatus.CAPIFieldOwner(controllerName), client.ForceOwnership); err != nil {
