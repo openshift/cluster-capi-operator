@@ -245,7 +245,9 @@ func (r *InfraClusterController) SetupWithManager(mgr ctrl.Manager, watchedObjec
 
 	if err := ctrl.NewControllerManagedBy(mgr).
 		Named(controllerName).
-		For(&configv1.ClusterOperator{}, builder.WithPredicates(operatorstatus.ClusterOperatorOnceOnly())).
+		// The create trigger reconciles once at startup; the scoped update
+		// trigger republishes status that was skipped against a stale informer.
+		For(&configv1.ClusterOperator{}, builder.WithPredicates(operatorstatus.ClusterOperatorOwnedStateChanged(ResultGenerator))).
 		// Watch the provider-specific InfraCluster object.
 		Watches(
 			watchedObject,

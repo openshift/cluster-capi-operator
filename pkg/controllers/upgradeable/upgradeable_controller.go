@@ -142,11 +142,17 @@ func (r *UpgradeableController) SetupWithManager(mgr ctrl.Manager) error {
 
 	if err := ctrl.NewControllerManagedBy(mgr).
 		Named(controllerName).
-		// Notify on creation of the ClusterOperator
+		// Notify on changes to the ClusterOperator state owned by this
+		// controller: its health sub-conditions and the Upgradeable verdict.
+		// This keeps a status write skipped against a stale informer
+		// self-correcting.
 		Watches(
 			&configv1.ClusterOperator{},
 			handler.EnqueueRequestsFromMapFunc(operatorstatus.ToClusterOperator),
-			builder.WithPredicates(operatorstatus.ClusterOperatorOnceOnly()),
+			builder.WithPredicates(operatorstatus.ClusterOperatorOwnedStateChanged(
+				ResultGenerator,
+				operatorstatus.OwnedConditions(configv1.OperatorUpgradeable),
+			)),
 		).
 		// Notify on changes to availableUpdates or conditionalUpdates
 		Watches(

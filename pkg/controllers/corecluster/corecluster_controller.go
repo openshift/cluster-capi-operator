@@ -71,7 +71,9 @@ type CoreClusterController struct {
 func (r *CoreClusterController) SetupWithManager(mgr ctrl.Manager) error {
 	if err := ctrl.NewControllerManagedBy(mgr).
 		Named(controllerName).
-		For(&configv1.ClusterOperator{}, builder.WithPredicates(operatorstatus.ClusterOperatorOnceOnly())).
+		// The create trigger reconciles once at startup; the scoped update
+		// trigger republishes status that was skipped against a stale informer.
+		For(&configv1.ClusterOperator{}, builder.WithPredicates(operatorstatus.ClusterOperatorOwnedStateChanged(ResultGenerator))).
 		Watches(
 			&clusterv1.Cluster{},
 			handler.EnqueueRequestsFromMapFunc(operatorstatus.ToClusterOperator),

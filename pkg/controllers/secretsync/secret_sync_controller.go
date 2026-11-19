@@ -159,7 +159,9 @@ func (r *UserDataSecretController) syncSecretData(ctx context.Context, source *c
 func (r *UserDataSecretController) SetupWithManager(mgr ctrl.Manager) error {
 	if err := ctrl.NewControllerManagedBy(mgr).
 		Named(controllerName).
-		For(&configv1.ClusterOperator{}, builder.WithPredicates(operatorstatus.ClusterOperatorOnceOnly())).
+		// The create trigger reconciles once at startup; the scoped update
+		// trigger republishes status that was skipped against a stale informer.
+		For(&configv1.ClusterOperator{}, builder.WithPredicates(operatorstatus.ClusterOperatorOwnedStateChanged(ResultGenerator))).
 		Watches(
 			&corev1.Secret{},
 			handler.EnqueueRequestsFromMapFunc(toUserDataSecret),
