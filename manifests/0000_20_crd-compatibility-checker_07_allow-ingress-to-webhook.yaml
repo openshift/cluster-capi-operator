@@ -18,10 +18,14 @@ spec:
     - namespaceSelector:
         matchLabels:
           policy-group.network.openshift.io/host-network: ""
-    # Pod-networked Konnectivity agents on hosted clusters.
+    # Pod-networked Konnectivity agents during bootstrap and on hosted clusters.
     - namespaceSelector:
-        matchLabels:
-          kubernetes.io/metadata.name: kube-system
+        matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values:
+          - openshift-bootstrap-konnectivity
+          - kube-system
       podSelector:
         matchLabels:
           app: konnectivity-agent
