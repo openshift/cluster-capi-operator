@@ -737,6 +737,46 @@ var _ = Describe("With a running MachineMigration controller", func() {
 						mapiMachine.Status.Conditions = updatedMAPIMachine.Status.Conditions
 					})).Should(Succeed())
 
+					req = reconcile.Request{NamespacedName: client.ObjectKeyFromObject(mapiMachine)}
+				})
+
+				// This simulates CAPO's current behavior: OpenStackMachine does not set the Paused status condition.
+				It("should set the new to-be authoritative resource (MAPI) to actually be authoritative and requeue to unpause it by checking the paused annotation", func() {
+					By("Setting the CAPI machine status condition to 'Paused'")
+					Eventually(k.UpdateStatus(capiMachine, func() {
+						updatedCAPIMachine := capiMachineBuilder.Build()
+						updatedCAPIMachine.Status.Conditions = []metav1.Condition{{
+							Type:               clusterv1.PausedCondition,
+							Status:             metav1.ConditionTrue,
+							LastTransitionTime: metav1.Now(),
+						}}
+						capiMachine.Status = updatedCAPIMachine.Status
+					})).Should(Succeed())
+
+					By("Setting a non-Paused condition on the CAPI infrastructure machine because a condition list is required")
+					Eventually(k.UpdateStatus(capaMachine, func() {
+						updatedCAPIInfraMachine := capaMachineBuilder.WithAnnotations(map[string]string{clusterv1.PausedAnnotation: ""}).Build()
+						updatedCAPIInfraMachine.Status.Conditions = clusterv1beta1.Conditions{
+							{
+								Type:               clusterv1beta1.ReadyCondition,
+								Status:             corev1.ConditionTrue,
+								LastTransitionTime: metav1.Now(),
+							},
+						}
+						capaMachine.Status = updatedCAPIInfraMachine.Status
+					})).Should(Succeed())
+
+					result, err := reconciler.Reconcile(ctx, req)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(result.Requeue).To(BeFalse())
+
+					Eventually(komega.Object(mapiMachine)).Should(SatisfyAll(
+						HaveField("Status.AuthoritativeAPI", Equal(mapiv1beta1.MachineAuthorityMachineAPI)),
+						HaveField("Status.SynchronizedGeneration", BeZero()),
+					))
+				})
+
+				It("should set the new to-be authoritative resource (MAPI) to actually be authoritative and requeue to unpause it by checking the paused condition", func() {
 					By("Setting the CAPI machine status condition to 'Paused'")
 					Eventually(k.UpdateStatus(capiMachine, func() {
 						updatedCAPIMachine := capiMachineBuilder.Build()
@@ -761,10 +801,6 @@ var _ = Describe("With a running MachineMigration controller", func() {
 						capaMachine.Status = updatedCAPIInfraMachine.Status
 					})).Should(Succeed())
 
-					req = reconcile.Request{NamespacedName: client.ObjectKeyFromObject(mapiMachine)}
-				})
-
-				It("should set the new to-be authoritative resource (MAPI) to actually be authoritative and requeue to unpause it", func() {
 					result, err := reconciler.Reconcile(ctx, req)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(result.Requeue).To(BeFalse())

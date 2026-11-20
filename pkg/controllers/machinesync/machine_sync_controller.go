@@ -649,7 +649,7 @@ func (r *MachineSyncReconciler) convertCAPIToMAPIMachine(capiMachine *clusterv1.
 			return nil, nil, fmt.Errorf("%w, expected OpenStackCluster, got %T", errUnexpectedInfraClusterType, infraCluster)
 		}
 
-		return capi2mapi.FromMachineAndOpenStackMachineAndOpenStackCluster(capiMachine, openStackMachine, openStackCluster).ToMachine() //nolint:wrapcheck
+		return capi2mapi.FromMachineAndOpenStackMachineAndOpenStackCluster(capiMachine, openStackMachine, openStackCluster, r.MAPINamespace).ToMachine() //nolint:wrapcheck
 	default:
 		return nil, nil, fmt.Errorf("%w: %s", errPlatformNotSupported, r.Platform)
 	}
