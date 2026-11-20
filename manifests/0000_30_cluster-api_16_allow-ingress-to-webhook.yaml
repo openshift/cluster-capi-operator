@@ -1,19 +1,4 @@
-# This NetworkPolicy allows ingress traffic to the CAPI webhook services.
-# This enables webhook validation for CAPI resources by allowing:
-# - Kubernetes API server to call webhook validation endpoints
-# - Admission control webhooks for cluster.x-k8s.io resources
-# - Validation webhooks for operator.cluster.x-k8s.io resources
-# - Webhook validation for clusterctl.cluster.x-k8s.io resources
-# - Provider-specific webhook validation (AWS, vSphere, etc.)
-#
-# The policy applies to all webhook services in the namespace:
-# - capi-controllers-webhook-service (port 9443)
-# - capi-webhook-service (port 443)
-# - capa-webhook-service (port 443)
-# - capv-webhook-service (port 443)
-#
-# This policy works with the deny-all policy to ensure webhook validation
-# is accessible while maintaining the default-deny security model for other traffic.
+# Allow the kube-apiserver to reach Cluster API admission webhooks.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -28,8 +13,10 @@ metadata:
 spec:
   ingress:
   - from:
-    - namespaceSelector: {} # Allow from any namespace (API server, other components)
-    - podSelector: {} # Allow from any pod
+    # OVN uses this policy group for the host-networked kube-apiserver.
+    - namespaceSelector:
+        matchLabels:
+          policy-group.network.openshift.io/host-network: ""
     ports:
     - port: 9443 # capi-controllers-webhook-service port
       protocol: TCP
