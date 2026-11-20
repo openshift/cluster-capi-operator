@@ -41,7 +41,6 @@ import (
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
-	capierrors "sigs.k8s.io/cluster-api/errors"
 
 	gomegatypes "github.com/onsi/gomega/types"
 	"github.com/openshift/cluster-api-actuator-pkg/testutils"
@@ -1228,7 +1227,7 @@ var _ = Describe("With a running MachineSetSync controller", func() {
 					}
 
 					capiMachineSet.Status.Deprecated.V1Beta1.FailureMessage = ptr.To("test failure message")
-					capiMachineSet.Status.Deprecated.V1Beta1.FailureReason = ptr.To(capierrors.MachineSetStatusError("test failure reason"))
+					setFailureReason(&capiMachineSet.Status.Deprecated.V1Beta1.FailureReason, "test failure reason")
 					// We need to set the observed generation to the metadata generation
 					// to ensure the status is updated as that's a prerequisite for the status to be updated by the machinesetsync controller.
 					By("Setting the CAPI machine set observed generation to its metadata generation")
