@@ -921,3 +921,75 @@ data:
 		g.Expect(reconstructed.Components()).To(HaveLen(1))
 	})
 }
+
+func TestRevisionsToApplyConfig(t *testing.T) {
+	t.Run("preserves revision fields and nested component source", func(t *testing.T) {
+		g := NewWithT(t)
+		revs := []operatorv1.ClusterAPIInstallerRevision{{
+			Name: "4.18.0-abcd1234-1", Revision: 1,
+			ContentID: "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+			Components: []operatorv1.ClusterAPIInstallerComponent{{
+				Name: "core",
+				Source: operatorv1.ClusterAPIInstallerComponentSource{
+					Type:  operatorv1.InstallerComponentTypeImage,
+					Image: operatorv1.ClusterAPIInstallerComponentImage{Ref: "quay.io/openshift/core@sha256:aaaa", Profile: "default"},
+				},
+			}},
+		}}
+
+		acs, err := RevisionsToApplyConfig(revs)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(acs).To(HaveLen(1))
+		g.Expect(*acs[0].Name).To(Equal(operatorv1.RevisionName("4.18.0-abcd1234-1")))
+		g.Expect(*acs[0].Revision).To(Equal(int64(1)))
+		g.Expect(*acs[0].ContentID).To(Equal(revs[0].ContentID))
+		g.Expect(acs[0].Components).To(HaveLen(1))
+		g.Expect(*acs[0].Components[0].Name).To(Equal("core"))
+		g.Expect(acs[0].Components[0].Source).NotTo(BeNil())
+		g.Expect(*acs[0].Components[0].Source.Type).To(Equal(operatorv1.InstallerComponentTypeImage))
+		g.Expect(acs[0].Components[0].Source.Image).NotTo(BeNil())
+		g.Expect(*acs[0].Components[0].Source.Image.Ref).To(Equal(operatorv1.ImageDigestFormat("quay.io/openshift/core@sha256:aaaa")))
+		g.Expect(*acs[0].Components[0].Source.Image.Profile).To(Equal("default"))
+	})
+
+	t.Run("preserves ordering and nested sources for multiple revisions", func(t *testing.T) {
+		g := NewWithT(t)
+		revs := []operatorv1.ClusterAPIInstallerRevision{
+			{Name: "r1", Revision: 1, Components: []operatorv1.ClusterAPIInstallerComponent{{Source: operatorv1.ClusterAPIInstallerComponentSource{Type: operatorv1.InstallerComponentTypeImage, Image: operatorv1.ClusterAPIInstallerComponentImage{Ref: "img-a", Profile: "default"}}}}},
+			{Name: "r2", Revision: 2, Components: []operatorv1.ClusterAPIInstallerComponent{{Source: operatorv1.ClusterAPIInstallerComponentSource{Type: operatorv1.InstallerComponentTypeImage, Image: operatorv1.ClusterAPIInstallerComponentImage{Ref: "img-b", Profile: "aws"}}}}},
+		}
+
+		acs, err := RevisionsToApplyConfig(revs)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(acs).To(HaveLen(2))
+		g.Expect(*acs[0].Name).To(Equal(operatorv1.RevisionName("r1")))
+		g.Expect(*acs[1].Name).To(Equal(operatorv1.RevisionName("r2")))
+		g.Expect(*acs[1].Components[0].Source.Image.Ref).To(Equal(operatorv1.ImageDigestFormat("img-b")))
+	})
+
+	t.Run("preserves substitutions and unmanaged CRDs", func(t *testing.T) {
+		g := NewWithT(t)
+		minVersion, cipherSuites := "VersionTLS12", "TLS_AES_128_GCM_SHA256"
+		revs := []operatorv1.ClusterAPIInstallerRevision{{
+			ManifestSubstitutions: []operatorv1.ClusterAPIInstallerRevisionManifestSubstitution{
+				{Key: "TLS_MIN_VERSION", Value: &minVersion},
+				{Key: "TLS_CIPHER_SUITES", Value: &cipherSuites},
+			},
+			UnmanagedCustomResourceDefinitions: []string{"widgets.example.com", "gadgets.example.com"},
+		}}
+		acs, err := RevisionsToApplyConfig(revs)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(acs).To(HaveLen(1))
+		g.Expect(acs[0].ManifestSubstitutions).To(HaveLen(2))
+		g.Expect(*acs[0].ManifestSubstitutions[0].Value).To(Equal(minVersion))
+		g.Expect(*acs[0].ManifestSubstitutions[1].Value).To(Equal(cipherSuites))
+		g.Expect(acs[0].UnmanagedCustomResourceDefinitions).To(Equal(revs[0].UnmanagedCustomResourceDefinitions))
+	})
+
+	t.Run("empty slice returns empty slice", func(t *testing.T) {
+		g := NewWithT(t)
+		acs, err := RevisionsToApplyConfig([]operatorv1.ClusterAPIInstallerRevision{})
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(acs).To(BeEmpty())
+	})
+}

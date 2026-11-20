@@ -27,6 +27,7 @@ import (
 	"slices"
 
 	operatorv1 "github.com/openshift/api/operator/v1"
+	operatorv1apply "github.com/openshift/client-go/operator/applyconfigurations/operator/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/util/sets"
 	k8syaml "sigs.k8s.io/yaml"
@@ -411,6 +412,22 @@ func NewInstallerRevisionFromAPI(
 		revisionName:     apiRev.Name,
 		revisionIndex:    apiRev.Revision,
 	}, nil
+}
+
+// RevisionsToApplyConfig converts ClusterAPIInstallerRevision objects into
+// their generated apply configuration representations.
+func RevisionsToApplyConfig(revs []operatorv1.ClusterAPIInstallerRevision) ([]operatorv1apply.ClusterAPIInstallerRevisionApplyConfiguration, error) {
+	data, err := json.Marshal(revs)
+	if err != nil {
+		return nil, fmt.Errorf("error marshalling revisions: %w", err)
+	}
+
+	var applyConfigs []operatorv1apply.ClusterAPIInstallerRevisionApplyConfiguration
+	if err := json.Unmarshal(data, &applyConfigs); err != nil {
+		return nil, fmt.Errorf("error unmarshalling revision apply configs: %w", err)
+	}
+
+	return applyConfigs, nil
 }
 
 type renderedComponent struct {
