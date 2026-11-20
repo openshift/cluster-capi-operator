@@ -17,6 +17,7 @@ package mapi2capi
 
 import (
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/test/matchers"
+	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
 
 	mapiv1alpha1 "github.com/openshift/api/machine/v1alpha1"
 
@@ -196,4 +197,15 @@ var _ = Describe("mapi2capi OpenStack conversion", func() {
 			expectedWarnings:  []string{},
 		}),
 	)
+
+	It("should set provider ID in the converted CAPO machine", func() {
+		providerID := new("openstack:///7b363263-d6cf-4484-9af0-adfe1e103798")
+		_, m, warns, err := FromOpenStackMachineAndInfra(openstackMAPIMachineBase.WithProviderID(providerID).Build(), infra).ToMachineAndInfrastructureMachine()
+		Expect(err).To(BeNil(), "should not generate errors while converting an OpenStack MAPI Machine to CAPI")
+		Expect(warns).To(BeEmpty(), "should not generate warnings while converting an OpenStack MAPI Machine to CAPI")
+		capoMachine, ok := m.(*openstackv1.OpenStackMachine)
+		Expect(ok).To(BeTrue(), "should be a *openstackv1.OpenStackMachine")
+		Expect(capoMachine.Spec.ProviderID).NotTo(BeNil(), "should not be nil")
+		Expect(*capoMachine.Spec.ProviderID).To(Equal(*providerID), "should be equal to the specified provider ID")
+	})
 })

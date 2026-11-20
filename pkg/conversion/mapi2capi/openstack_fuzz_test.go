@@ -63,7 +63,7 @@ var _ = Describe("OpenStack Fuzz (mapi2capi)", func() {
 			openstackCluster, ok := infraCluster.(*openstackv1.OpenStackCluster)
 			Expect(ok).To(BeTrue(), "input infra cluster should be of type %T, got %T", &openstackv1.OpenStackCluster{}, infraCluster)
 
-			return capi2mapi.FromMachineAndOpenStackMachineAndOpenStackCluster(machine, openstackMachine, openstackCluster)
+			return capi2mapi.FromMachineAndOpenStackMachineAndOpenStackCluster(machine, openstackMachine, openstackCluster, "openshift-machine-api")
 		}
 
 		f := &openstackProviderFuzzer{}
@@ -88,7 +88,7 @@ var _ = Describe("OpenStack Fuzz (mapi2capi)", func() {
 			openstackCluster, ok := infraCluster.(*openstackv1.OpenStackCluster)
 			Expect(ok).To(BeTrue(), "input infra cluster should be of type %T, got %T", &openstackv1.OpenStackCluster{}, infraCluster)
 
-			return capi2mapi.FromMachineSetAndOpenStackMachineTemplateAndOpenStackCluster(machineSet, openstackMachineTemplate, openstackCluster)
+			return capi2mapi.FromMachineSetAndOpenStackMachineTemplateAndOpenStackCluster(machineSet, openstackMachineTemplate, openstackCluster, "openshift-machine-api")
 		}
 
 		f := &openstackProviderFuzzer{}
@@ -128,13 +128,13 @@ func (f *openstackProviderFuzzer) fuzzProviderSpec(providerSpec *mapiv1alpha1.Op
 	providerSpec.PrimarySubnet = ""
 	providerSpec.SshUserName = ""
 
-	// Clear namespace fields, since these are intentionally not copied
+	// Secret namespace is set in FromMachineSetAndOpenStackMachineTemplateAndOpenStackCluster/FromMachineAndOpenStackMachineAndOpenStackCluster
 	if providerSpec.UserDataSecret != nil {
-		providerSpec.UserDataSecret.Namespace = ""
+		providerSpec.UserDataSecret.Namespace = "openshift-machine-api"
 	}
 
 	if providerSpec.CloudsSecret != nil {
-		providerSpec.CloudsSecret.Namespace = ""
+		providerSpec.CloudsSecret.Namespace = "openshift-machine-api"
 
 		if providerSpec.CloudsSecret.Name == "" {
 			providerSpec.CloudsSecret = nil

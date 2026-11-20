@@ -23,6 +23,7 @@ import (
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/test/matchers"
 	"k8s.io/utils/ptr"
 	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
+	"sigs.k8s.io/cluster-api/api/core/v1beta2"
 )
 
 var _ = Describe("capi2mapi OpenStack conversion", func() {
@@ -70,6 +71,7 @@ var _ = Describe("capi2mapi OpenStack conversion", func() {
 				in.machineBuilder.Build(),
 				in.openstackMachineBuilder.Build(),
 				in.openstackClusterBuilder.Build(),
+				"openshift-machine-api",
 			).ToMachine()
 			Expect(err).To(matchers.ConsistOfMatchErrorSubstrings(in.expectedErrors),
 				"should match expected errors while converting OpenStack CAPI resources to MAPI Machine")
@@ -271,6 +273,7 @@ var _ = Describe("capi2mapi OpenStack conversion", func() {
 				in.machineSetBuilder.Build(),
 				in.openstackMachineTemplateBuilder.Build(),
 				in.openstackClusterBuilder.Build(),
+				"openshift-machine-api",
 			).ToMachineSet()
 			Expect(err).To(matchers.ConsistOfMatchErrorSubstrings(in.expectedErrors),
 				"should match expected errors while converting OpenStack CAPI resources to MAPI MachineSet")
@@ -303,4 +306,34 @@ var _ = Describe("capi2mapi OpenStack conversion", func() {
 			expectedWarnings:  []string{},
 		}),
 	)
+
+	It("should set namespaces for UserDataSecret and CloudsSecret correctly", func() {
+		ns := "test-ns"
+		cloudName := "test-cloud"
+		secretName := "test-secret"
+		dataSecretName := "test-data-secret"
+		spec, warns, err := machineAndOpenStackMachineAndOpenStackCluster{
+			machine: openstackCAPIMachineBase.
+				WithBootstrap(v1beta2.Bootstrap{
+					DataSecretName: &dataSecretName,
+				}).
+				Build(),
+			openstackMachine: openstackCAPIOpenStackMachineBase.
+				WithIdentityRef(&openstackv1.OpenStackIdentityReference{
+					Type:      "Secret",
+					Name:      secretName,
+					CloudName: cloudName,
+				}).
+				Build(),
+			openstackCluster: openstackCAPIOpenStackClusterBase.Build(),
+			mapiNamespace:    ns,
+		}.toProviderSpec()
+		Expect(err).To(BeNil(), "should not generate errors while converting OpenStack CAPI resources to MAPI Machine")
+		Expect(warns).To(BeEmpty(), "should not generate warnings while converting OpenStack CAPI resources to MAPI Machine")
+		Expect(spec.CloudsSecret.Namespace).To(Equal(ns), "converted CloudsSecret namespace should equal the specified namespace")
+		Expect(spec.CloudsSecret.Name).To(Equal(secretName), "converted CloudsSecret name should equal the specified name")
+		Expect(spec.UserDataSecret.Namespace).To(Equal(ns), "converted UserDataSecret namespace should equal the specified namespace")
+		Expect(spec.UserDataSecret.Name).To(Equal(dataSecretName), "converted UserDataSecret name should equal the specified name")
+		Expect(spec.CloudName).To(Equal(cloudName), "converted cloud name should equal the specified cloud name")
+	})
 })

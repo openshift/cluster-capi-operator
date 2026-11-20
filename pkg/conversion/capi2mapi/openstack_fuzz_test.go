@@ -58,7 +58,7 @@ var _ = Describe("OpenStack Fuzz (capi2mapi)", func() {
 			openstackCluster, ok := infraCluster.(*openstackv1.OpenStackCluster)
 			Expect(ok).To(BeTrue(), "input infra cluster should be of type %T, got %T", &openstackv1.OpenStackCluster{}, infraCluster)
 
-			return capi2mapi.FromMachineAndOpenStackMachineAndOpenStackCluster(machine, openstackMachine, openstackCluster)
+			return capi2mapi.FromMachineAndOpenStackMachineAndOpenStackCluster(machine, openstackMachine, openstackCluster, "openshift-machine-api")
 		}
 
 		conversiontest.CAPI2MAPIMachineRoundTripFuzzTest(
@@ -82,7 +82,7 @@ var _ = Describe("OpenStack Fuzz (capi2mapi)", func() {
 			openstackCluster, ok := infraCluster.(*openstackv1.OpenStackCluster)
 			Expect(ok).To(BeTrue(), "input infra cluster should be of type %T, got %T", &openstackv1.OpenStackCluster{}, infraCluster)
 
-			return capi2mapi.FromMachineSetAndOpenStackMachineTemplateAndOpenStackCluster(machineSet, openstackMachineTemplate, openstackCluster)
+			return capi2mapi.FromMachineSetAndOpenStackMachineTemplateAndOpenStackCluster(machineSet, openstackMachineTemplate, openstackCluster, "openshift-machine-api")
 		}
 
 		conversiontest.CAPI2MAPIMachineSetRoundTripFuzzTest(
