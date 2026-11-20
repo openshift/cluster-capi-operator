@@ -1,16 +1,4 @@
-# This NetworkPolicy allows ingress traffic to CAPI controller pods on the metrics port (8443).
-# This enables monitoring and observability of CAPI controllers by allowing:
-# - Prometheus scraping of controller metrics
-# - Health check endpoints for controller status
-# - Monitoring tools to collect performance data
-# - Observability platforms to track controller behavior
-#
-# The policy applies to all CAPI controller pods (control-plane label) and allows
-# traffic from any namespace or pod to access the metrics endpoint.
-# This is essential for maintaining operational visibility of the cluster-api system.
-#
-# This policy works with the deny-all policy to ensure metrics are accessible
-# while maintaining the default-deny security model for other traffic.
+# Allow platform Prometheus to scrape Cluster API provider controller metrics.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -25,8 +13,13 @@ metadata:
 spec:
   ingress:
   - from:
-    - namespaceSelector: {}
-    - podSelector: {}
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: openshift-monitoring
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: prometheus
+          app.kubernetes.io/instance: k8s
     ports:
     - port: 8443
       protocol: TCP
