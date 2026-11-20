@@ -135,6 +135,7 @@ The standard modifications made by `manifests-gen` are detailed below.
     * `target.workload.openshift.io/management: {"effect": "PreferredDuringScheduling"}`.
     * `openshift.io/required-scc: "restricted-v2"`
   * Set resource requests of all containers to `cpu: 10m` and `memory: 50Mi`.
+    If `--preserve-resource-requests` is passed, requests already declared on a container are kept and only a missing `cpu` or `memory` request is set to this default.
   * Remove resource limits from all containers.
   * Set the terminationMessagePolicy of all containers to `FallbackToLogsOnError`.
   * Set priorityClassName of all pods to `system-cluster-critical`
