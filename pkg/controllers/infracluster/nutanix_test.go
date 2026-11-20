@@ -18,13 +18,19 @@ package infracluster
 
 import (
 	"context"
+	"encoding/json"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	nutanixv1 "github.com/nutanix-cloud-native/cluster-api-provider-nutanix/api/v1beta1"
+	credentialTypes "github.com/nutanix-cloud-native/prism-go-client/environment/credentials"
 	configv1 "github.com/openshift/api/config/v1"
+	mapiv1 "github.com/openshift/api/machine/v1"
+	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	configv1resourcebuilder "github.com/openshift/cluster-api-actuator-pkg/testutils/resourcebuilder/config/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -34,8 +40,11 @@ import (
 
 var _ = Describe("ensureNutanixCluster", func() {
 	const (
-		infraName     = "test-infra-cluster-name"
-		capiNamespace = "openshift-cluster-api"
+		infraName          = "test-infra-cluster-name"
+		capiNamespace      = "openshift-cluster-api"
+		mapiNamespace      = "openshift-machine-api"
+		mapiSecretName     = "nutanix-credentials"
+		credentialsPayload = `[{"type":"basic_auth","data":{"prismCentral":{"username":"user","password":"pass"}}}]`
 	)
 
 	var (
@@ -46,6 +55,9 @@ var _ = Describe("ensureNutanixCluster", func() {
 	BeforeEach(func() {
 		testScheme = runtime.NewScheme()
 		Expect(nutanixv1.AddToScheme(testScheme)).To(Succeed())
+		Expect(corev1.AddToScheme(testScheme)).To(Succeed())
+		Expect(mapiv1.AddToScheme(testScheme)).To(Succeed())
+		Expect(mapiv1beta1.AddToScheme(testScheme)).To(Succeed())
 
 		ocpInfra = configv1resourcebuilder.Infrastructure().AsNutanix(infraName).Build()
 	})
@@ -56,11 +68,40 @@ var _ = Describe("ensureNutanixCluster", func() {
 			Platform:      configv1.NutanixPlatformType,
 			Infra:         ocpInfra,
 			CAPINamespace: capiNamespace,
+			MAPINamespace: mapiNamespace,
+		}
+	}
+
+	mapiCredentials := func(data []byte) *corev1.Secret {
+		return &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{Name: mapiSecretName, Namespace: mapiNamespace},
+			Data:       map[string][]byte{credentialTypes.KeyName: data},
+		}
+	}
+
+	controlPlaneMachine := func() *mapiv1beta1.Machine {
+		GinkgoHelper()
+
+		raw, err := json.Marshal(&mapiv1.NutanixMachineProviderConfig{
+			TypeMeta:          metav1.TypeMeta{APIVersion: "machine.openshift.io/v1", Kind: "NutanixMachineProviderConfig"},
+			CredentialsSecret: &corev1.LocalObjectReference{Name: mapiSecretName},
+		})
+		Expect(err).NotTo(HaveOccurred(), "failed to marshal Nutanix Machine API provider spec")
+
+		return &mapiv1beta1.Machine{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "control-plane",
+				Namespace: mapiNamespace,
+				Labels:    map[string]string(controlPlaneSelector()),
+			},
+			Spec: mapiv1beta1.MachineSpec{
+				ProviderSpec: mapiv1beta1.ProviderSpec{Value: &runtime.RawExtension{Raw: raw}},
+			},
 		}
 	}
 
 	It("creates a NutanixCluster populated from the Infrastructure resource", func() {
-		r := newController()
+		r := newController(mapiCredentials([]byte(credentialsPayload)), controlPlaneMachine())
 
 		obj, err := r.ensureNutanixCluster(context.Background(), logf.Log)
 		Expect(err).NotTo(HaveOccurred(), "failed to create NutanixCluster")
@@ -77,9 +118,31 @@ var _ = Describe("ensureNutanixCluster", func() {
 			HaveField("Spec.ControlPlaneEndpoint.Port", BeEquivalentTo(6443)),
 		))
 
-		Expect(nutanixCluster.Spec.PrismCentral).NotTo(BeNil())
-		Expect(nutanixCluster.Spec.PrismCentral.Address).To(Equal(ocpInfra.Spec.PlatformSpec.Nutanix.PrismCentral.Address))
-		Expect(nutanixCluster.Spec.PrismCentral.Port).To(Equal(ocpInfra.Spec.PlatformSpec.Nutanix.PrismCentral.Port))
+		Expect(nutanixCluster.Spec.PrismCentral).To(SatisfyAll(
+			Not(BeNil()),
+			HaveField("Address", Equal(ocpInfra.Spec.PlatformSpec.Nutanix.PrismCentral.Address)),
+			HaveField("Port", Equal(ocpInfra.Spec.PlatformSpec.Nutanix.PrismCentral.Port)),
+			HaveField("CredentialRef", SatisfyAll(
+				Not(BeNil()),
+				HaveField("Kind", Equal(credentialTypes.SecretKind)),
+				HaveField("Name", Equal(infraName)),
+				HaveField("Namespace", Equal(capiNamespace)),
+			)),
+		))
+
+		copied := &corev1.Secret{}
+		Expect(r.Get(context.Background(), client.ObjectKey{Name: infraName, Namespace: capiNamespace}, copied)).To(Succeed(), "expected the Prism Central credentials secret to be created")
+		Expect(copied.Data).To(HaveKeyWithValue(credentialTypes.KeyName, []byte(credentialsPayload)), "expected the copied secret to contain the Machine API credentials")
+	})
+
+	It("returns an error and does not create a secret when the Machine API credentials data is missing", func() {
+		r := newController(mapiCredentials(nil), controlPlaneMachine())
+
+		_, err := r.ensureNutanixCluster(context.Background(), logf.Log)
+		Expect(err).To(MatchError(ContainSubstring(errNutanixCredentialsDataMissing.Error())), "expected missing credentials data to fail closed")
+
+		copied := &corev1.Secret{}
+		Expect(r.Get(context.Background(), client.ObjectKey{Name: infraName, Namespace: capiNamespace}, copied)).To(MatchError(ContainSubstring("not found")), "did not expect an empty credentials secret to be created")
 	})
 
 	It("returns the existing NutanixCluster when one already exists", func() {
@@ -87,7 +150,10 @@ var _ = Describe("ensureNutanixCluster", func() {
 		existing.Name = infraName
 		existing.Namespace = capiNamespace
 
-		r := newController(existing)
+		r := newController(existing, &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{Name: infraName, Namespace: capiNamespace},
+			Data:       map[string][]byte{credentialTypes.KeyName: []byte(credentialsPayload)},
+		})
 
 		obj, err := r.ensureNutanixCluster(context.Background(), logf.Log)
 		Expect(err).NotTo(HaveOccurred(), "failed to retrieve existing NutanixCluster")
