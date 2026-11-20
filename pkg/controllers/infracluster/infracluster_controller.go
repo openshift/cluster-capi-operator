@@ -224,6 +224,13 @@ func (r *InfraClusterController) ensureInfraCluster(ctx context.Context, log log
 		if err != nil {
 			return nil, fmt.Errorf("error getting InfraCluster object: %w", err)
 		}
+	case configv1.NutanixPlatformType:
+		var err error
+
+		infraCluster, err = r.ensureNutanixCluster(ctx, log)
+		if err != nil {
+			return nil, fmt.Errorf("error getting InfraCluster object: %w", err)
+		}
 	default:
 		return nil, errPlatformNotSupported
 	}
