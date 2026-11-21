@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	configv1 "github.com/openshift/api/config/v1"
 	"github.com/spf13/pflag"
 	capiflags "sigs.k8s.io/cluster-api/util/flags"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -34,6 +35,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
+	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/component-base/config"
 	"k8s.io/component-base/config/options"
 	"k8s.io/klog/v2"
@@ -112,6 +114,8 @@ func InitOperatorConfig(ctx context.Context, cfg *rest.Config, scheme *runtime.S
 	}
 
 	capiflags.AddManagerOptions(pflagset, &capiManagerOptions)
+	// TODO: Use capiflags for curve preference flag registration, parsing, and TLS options once CAPI is updated to v1.14.2+.
+	tlsCurvePreferences := pflagset.Int32Slice("tls-curve-preferences", nil, "Comma-separated list of TLS curve preferences as numeric Go crypto/tls CurveID values. Overrides the cluster TLS profile groups.")
 	options.BindLeaderElectionFlags(&leaderElectionConfig, pflagset)
 
 	// Add goflags to pflagset
@@ -139,8 +143,8 @@ func InitOperatorConfig(ctx context.Context, cfg *rest.Config, scheme *runtime.S
 		return log, OperatorConfig{}, ctrl.Options{}, nil, fmt.Errorf("unable to resolve cluster TLS profile: %w", err)
 	}
 
-	// Use the cluster-wide default TLS profile if --tls-min-version or
-	// --tls-cipher-suites were not set on the command line. Production
+	// Use the cluster-wide default TLS profile for fields not overridden
+	// on the command line. Production
 	// deployments are expected to omit these flags and use the cluster-wide
 	// default.
 	if !pflagset.Changed("tls-min-version") {
@@ -151,6 +155,19 @@ func InitOperatorConfig(ctx context.Context, cfg *rest.Config, scheme *runtime.S
 		capiManagerOptions.TLSCipherSuites = libgocrypto.OpenSSLToIANACipherSuites(clusterTLSProfileSpec.Ciphers)
 	}
 
+	if !pflagset.Changed("tls-curve-preferences") {
+		var unsupported []configv1.TLSGroup
+		*tlsCurvePreferences, unsupported = libgocrypto.TLSGroupsToCurvePreferences(clusterTLSProfileSpec.Groups)
+		if len(unsupported) > 0 {
+			log.Info("Unsupported TLS groups will be ignored", "groups", unsupported)
+		}
+	}
+
+	curves, err := cliflag.TLSCurvePreferences(*tlsCurvePreferences)
+	if err != nil {
+		return log, OperatorConfig{}, ctrl.Options{}, nil, fmt.Errorf("invalid TLS curve preferences: %w", err)
+	}
+
 	tlsOptions, diagnosticsOpts, err := capiflags.GetManagerOptions(capiManagerOptions)
 	if err != nil {
 		return log, OperatorConfig{}, ctrl.Options{}, nil, fmt.Errorf("unable to get CAPI manager options: %w", err)
@@ -158,8 +175,12 @@ func InitOperatorConfig(ctx context.Context, cfg *rest.Config, scheme *runtime.S
 
 	log.Info("Cluster TLS profile spec", "min_version", clusterTLSProfileSpec.MinTLSVersion, "ciphers", strings.Join(clusterTLSProfileSpec.Ciphers, ","))
 	log.Info("Operator TLS options", "min_version", capiManagerOptions.TLSMinVersion, "ciphers", strings.Join(capiManagerOptions.TLSCipherSuites, ","))
+	log.Info("Operator TLS curve preferences", "curves", curves)
 
 	operatorConfig.TLSOptions = tlsOptions
+	operatorConfig.TLSOptions = append(operatorConfig.TLSOptions, func(cfg *tls.Config) {
+		cfg.CurvePreferences = curves
+	})
 
 	return log, operatorConfig, ctrl.Options{
 		Metrics:                       *diagnosticsOpts,
