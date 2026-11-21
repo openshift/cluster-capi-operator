@@ -184,7 +184,7 @@ func (r *MachineMigrationReconciler) Reconcile(ctx context.Context, req reconcil
 		// The Authoritative API resource is not paused yet, requeue to check later.
 		logger.Info("Authoritative machine is not paused yet, will retry later")
 
-		return ctrl.Result{}, nil
+		return ctrl.Result{RequeueAfter: time.Second}, nil
 	}
 
 	// Make sure the new authoritative resource has been requested to unpause.
@@ -232,7 +232,7 @@ func (r *MachineMigrationReconciler) isOldAuthoritativeResourcePaused(ctx contex
 		return false, fmt.Errorf("failed to get Cluster API infra machine: %w", err)
 	}
 
-	infraMachinePausedConditionStatus, err := util.GetConditionStatus(infraMachine, clusterv1.PausedCondition)
+	infraMachinePausedConditionStatus, err := util.GetConditionStatusFromInfraObject(infraMachine, clusterv1.PausedCondition)
 	if err != nil {
 		return false, fmt.Errorf("unable to get paused condition for %s/%s: %w", infraMachine.GetNamespace(), infraMachine.GetName(), err)
 	}
