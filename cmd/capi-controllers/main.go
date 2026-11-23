@@ -232,6 +232,12 @@ func getDefaultCacheOptions(capiNamespace string, sync time.Duration) cache.Opti
 					"kube-system":                    {}, // For fetching cloud credentials.
 				},
 			},
+			&corev1.ConfigMap{}: {
+				Namespaces: map[string]cache.Config{
+					capiNamespace:                {},
+					infracluster.ConfigNamespace: {}, // For fetching the Nutanix Prism Central trust bundle.
+				},
+			},
 			&mapiv1.ControlPlaneMachineSet{}: {
 				Namespaces: map[string]cache.Config{
 					defaultMachineAPINamespace: {},

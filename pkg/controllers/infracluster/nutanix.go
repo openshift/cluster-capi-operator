@@ -36,6 +36,19 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+const (
+	// ConfigNamespace is the namespace holding the user-provided CA bundle.
+	ConfigNamespace = "openshift-config"
+	// userCABundleConfigMapName is the ConfigMap the installer creates from install-config's additionalTrustBundle.
+	userCABundleConfigMapName = "user-ca-bundle"
+	// userCABundleKey is the key under which the user CA bundle is stored.
+	userCABundleKey = "ca-bundle.crt"
+	// nutanixTrustBundleKey is the key Cluster API provider Nutanix reads the trust bundle from.
+	nutanixTrustBundleKey = "ca.crt"
+	// nutanixTrustBundleConfigMapName is the ConfigMap holding the Prism Central trust bundle in the CAPI namespace.
+	nutanixTrustBundleConfigMapName = "nutanix-prism-central-trust-bundle"
+)
+
 var (
 	errNutanixPrismCentralNotSet      = errors.New("infrastructure PlatformSpec.Nutanix.PrismCentral is not set")
 	errNutanixCredentialsSecretNotSet = errors.New("nutanix Machine API credentials secret is not set")
@@ -52,6 +65,13 @@ func (r *InfraClusterController) ensureNutanixCluster(ctx context.Context, log l
 	// cluster exists. Copy the Machine API credentials before creating or returning it.
 	if err := r.ensureNutanixCredentialsSecret(ctx); err != nil {
 		return nil, fmt.Errorf("failed to ensure Nutanix credentials secret: %w", err)
+	}
+
+	// When Prism Central uses a non-public CA, copy the user CA bundle into the CAPI namespace so
+	// the provider can verify TLS. trustBundleRef is nil when no user CA bundle is configured.
+	trustBundleRef, err := r.ensureNutanixTrustBundle(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to ensure Nutanix trust bundle: %w", err)
 	}
 
 	target := &nutanixv1.NutanixCluster{ObjectMeta: metav1.ObjectMeta{
@@ -78,7 +98,7 @@ func (r *InfraClusterController) ensureNutanixCluster(ctx context.Context, log l
 		return nil, fmt.Errorf("failed to parse apiUrl port: %w", err)
 	}
 
-	target = newNutanixCluster(r.Infra.Status.InfrastructureName, r.CAPINamespace, apiURL.Hostname(), int32(port), r.Infra.Spec.PlatformSpec.Nutanix.PrismCentral)
+	target = newNutanixCluster(r.Infra.Status.InfrastructureName, r.CAPINamespace, apiURL.Hostname(), int32(port), r.Infra.Spec.PlatformSpec.Nutanix.PrismCentral, trustBundleRef)
 
 	if err := r.Create(ctx, target); err != nil {
 		return nil, fmt.Errorf("failed to create InfraCluster: %w", err)
@@ -90,7 +110,7 @@ func (r *InfraClusterController) ensureNutanixCluster(ctx context.Context, log l
 }
 
 // newNutanixCluster builds the NutanixCluster managed by this controller.
-func newNutanixCluster(name, namespace, host string, port int32, prismCentral configv1.NutanixPrismEndpoint) *nutanixv1.NutanixCluster {
+func newNutanixCluster(name, namespace, host string, port int32, prismCentral configv1.NutanixPrismEndpoint, trustBundleRef *credentialTypes.NutanixTrustBundleReference) *nutanixv1.NutanixCluster {
 	return &nutanixv1.NutanixCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -116,6 +136,8 @@ func newNutanixCluster(name, namespace, host string, port int32, prismCentral co
 					Name:      name,
 					Namespace: namespace,
 				},
+				// additionalTrustBundle is set only when Prism Central uses a non-public CA.
+				AdditionalTrustBundle: trustBundleRef,
 			},
 		},
 	}
@@ -191,4 +213,70 @@ func (r *InfraClusterController) getNutanixMAPICredentialsSecret(ctx context.Con
 	}
 
 	return source, nil
+}
+
+// ensureNutanixTrustBundle copies the user CA bundle into the CAPI namespace and returns a reference
+// to it. It returns a nil reference (and no error) when Prism Central uses a publicly trusted CA,
+// in which case no user CA bundle is configured.
+func (r *InfraClusterController) ensureNutanixTrustBundle(ctx context.Context) (*credentialTypes.NutanixTrustBundleReference, error) {
+	caBundle, err := r.getUserCABundle(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if caBundle == "" {
+		return nil, nil //nolint:nilnil
+	}
+
+	target := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{
+		Name:      nutanixTrustBundleConfigMapName,
+		Namespace: r.CAPINamespace,
+	}}
+
+	if err := r.Get(ctx, client.ObjectKeyFromObject(target), target); err != nil && !cerrors.IsNotFound(err) {
+		return nil, fmt.Errorf("failed to get Cluster API Nutanix trust bundle configmap: %w", err)
+	} else if err == nil {
+		return newNutanixTrustBundleRef(r.CAPINamespace), nil
+	}
+
+	target = &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      nutanixTrustBundleConfigMapName,
+			Namespace: r.CAPINamespace,
+		},
+		Data: map[string]string{
+			nutanixTrustBundleKey: caBundle,
+		},
+	}
+
+	if err := r.Create(ctx, target); err != nil && !cerrors.IsAlreadyExists(err) {
+		return nil, fmt.Errorf("failed to create Cluster API Nutanix trust bundle configmap: %w", err)
+	}
+
+	return newNutanixTrustBundleRef(r.CAPINamespace), nil
+}
+
+// getUserCABundle returns the PEM-encoded user CA bundle, or an empty string when it is not configured.
+func (r *InfraClusterController) getUserCABundle(ctx context.Context) (string, error) {
+	source := &corev1.ConfigMap{}
+	sourceKey := types.NamespacedName{Namespace: ConfigNamespace, Name: userCABundleConfigMapName}
+
+	if err := r.Get(ctx, sourceKey, source); err != nil {
+		if cerrors.IsNotFound(err) {
+			return "", nil
+		}
+
+		return "", fmt.Errorf("failed to get user CA bundle configmap %s: %w", sourceKey, err)
+	}
+
+	return source.Data[userCABundleKey], nil
+}
+
+// newNutanixTrustBundleRef returns a ConfigMap trust bundle reference in the given namespace.
+func newNutanixTrustBundleRef(namespace string) *credentialTypes.NutanixTrustBundleReference {
+	return &credentialTypes.NutanixTrustBundleReference{
+		Kind:      credentialTypes.NutanixTrustBundleKindConfigMap,
+		Name:      nutanixTrustBundleConfigMapName,
+		Namespace: namespace,
+	}
 }

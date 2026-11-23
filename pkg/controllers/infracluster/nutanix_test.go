@@ -130,9 +130,39 @@ var _ = Describe("ensureNutanixCluster", func() {
 			)),
 		))
 
+		Expect(nutanixCluster.Spec.PrismCentral.AdditionalTrustBundle).To(BeNil(), "expected no trust bundle when no user CA bundle is configured")
+
 		copied := &corev1.Secret{}
 		Expect(r.Get(context.Background(), client.ObjectKey{Name: infraName, Namespace: capiNamespace}, copied)).To(Succeed(), "expected the Prism Central credentials secret to be created")
 		Expect(copied.Data).To(HaveKeyWithValue(credentialTypes.KeyName, []byte(credentialsPayload)), "expected the copied secret to contain the Machine API credentials")
+	})
+
+	It("copies the user CA bundle and references it when Prism Central uses a non-public CA", func() {
+		const caBundle = "-----BEGIN CERTIFICATE-----\nMIIexample\n-----END CERTIFICATE-----"
+
+		userCABundle := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{Name: userCABundleConfigMapName, Namespace: ConfigNamespace},
+			Data:       map[string]string{userCABundleKey: caBundle},
+		}
+
+		r := newController(mapiCredentials([]byte(credentialsPayload)), controlPlaneMachine(), userCABundle)
+
+		obj, err := r.ensureNutanixCluster(context.Background(), logf.Log)
+		Expect(err).NotTo(HaveOccurred(), "failed to create NutanixCluster")
+
+		nutanixCluster, ok := obj.(*nutanixv1.NutanixCluster)
+		Expect(ok).To(BeTrue(), "expected a *NutanixCluster")
+
+		Expect(nutanixCluster.Spec.PrismCentral.AdditionalTrustBundle).To(SatisfyAll(
+			Not(BeNil()),
+			HaveField("Kind", Equal(credentialTypes.NutanixTrustBundleKindConfigMap)),
+			HaveField("Name", Equal(nutanixTrustBundleConfigMapName)),
+			HaveField("Namespace", Equal(capiNamespace)),
+		), "expected the trust bundle to be referenced")
+
+		copied := &corev1.ConfigMap{}
+		Expect(r.Get(context.Background(), client.ObjectKey{Name: nutanixTrustBundleConfigMapName, Namespace: capiNamespace}, copied)).To(Succeed(), "expected the trust bundle configmap to be created")
+		Expect(copied.Data).To(HaveKeyWithValue(nutanixTrustBundleKey, caBundle), "expected the copied configmap to carry the CA bundle under the key the provider reads")
 	})
 
 	It("returns an error and does not create a secret when the Machine API credentials data is missing", func() {
