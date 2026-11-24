@@ -27,6 +27,8 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/utils/ptr"
 	vspherev1 "sigs.k8s.io/cluster-api-provider-vsphere/api/govmomi/v1beta1"
@@ -204,18 +206,27 @@ func (m machineAndVSphereMachineAndVSphereCluster) toProviderSpec() (*mapiv1beta
 		errs = append(errs, networkErrors...)
 	}
 
-	// Convert data disks
-	// AdditionalDisksGiB is deprecated in CoAPV in favor of DataDisks.
-	// If AdditionalDisksGiB is set, convert it to DataDisks format first.
-	allDataDisks := m.vSphereMachine.Spec.DataDisks
-	if len(m.vSphereMachine.Spec.AdditionalDisksGiB) > 0 {
-		// Convert AdditionalDisksGiB to VSphereDisk format and append to existing DataDisks
-		for i, sizeGiB := range m.vSphereMachine.Spec.AdditionalDisksGiB {
-			allDataDisks = append(allDataDisks, vspherev1.VSphereDisk{
-				Name:    fmt.Sprintf("additional-disk-%d", i),
-				SizeGiB: sizeGiB,
-			})
+	// Legacy disks need generated names that do not collide with named DataDisks.
+	allDataDisks := append([]vspherev1.VSphereDisk(nil), m.vSphereMachine.Spec.DataDisks...)
+
+	usedNames := sets.New[string]()
+	for _, disk := range allDataDisks {
+		usedNames.Insert(disk.Name)
+	}
+
+	nextDiskIndex := 0
+	for _, sizeGiB := range m.vSphereMachine.Spec.AdditionalDisksGiB {
+		name := fmt.Sprintf("additional-disk-%d", nextDiskIndex)
+		for usedNames.Has(name) {
+			nextDiskIndex++
+			name = fmt.Sprintf("additional-disk-%d", nextDiskIndex)
 		}
+
+		usedNames.Insert(name)
+
+		nextDiskIndex++
+
+		allDataDisks = append(allDataDisks, vspherev1.VSphereDisk{Name: name, SizeGiB: sizeGiB})
 	}
 
 	mapiDataDisks, diskWarnings, diskErrors := convertCAPVDataDisksToMAPI(fldPath.Child("dataDisks"), allDataDisks)
@@ -296,9 +307,35 @@ func (m machineAndVSphereMachineAndVSphereCluster) toProviderSpec() (*mapiv1beta
 	return &mapiProviderConfig, warnings, nil
 }
 
+func handleUnsupportedVSphereVirtualizationFields(fldPath *field.Path, spec vspherev1.VSphereMachineSpec) field.ErrorList {
+	errs := field.ErrorList{}
+
+	if spec.NestedHV != nil {
+		errs = append(errs, field.Invalid(fldPath.Child("nestedHV"), *spec.NestedHV, "nestedHV is not supported"))
+	}
+
+	if spec.FtEncryptionMode != "" {
+		errs = append(errs, field.Invalid(fldPath.Child("ftEncryptionMode"), spec.FtEncryptionMode, "ftEncryptionMode is not supported"))
+	}
+
+	if spec.MigrateEncryption != "" {
+		errs = append(errs, field.Invalid(fldPath.Child("migrateEncryption"), spec.MigrateEncryption, "migrateEncryption is not supported"))
+	}
+
+	if spec.CryptoKeyID != "" {
+		errs = append(errs, field.Invalid(fldPath.Child("cryptoKeyID"), spec.CryptoKeyID, "cryptoKeyID is not supported"))
+	}
+
+	if spec.CryptoProfile != "" {
+		errs = append(errs, field.Invalid(fldPath.Child("cryptoProfile"), spec.CryptoProfile, "cryptoProfile is not supported"))
+	}
+
+	return errs
+}
+
 // handleUnsupportedVSphereFields checks for CAPV fields that are not supported in MAPI and returns a list of errors.
 func handleUnsupportedVSphereFields(fldPath *field.Path, spec vspherev1.VSphereMachineSpec) field.ErrorList {
-	errs := field.ErrorList{}
+	errs := handleUnsupportedVSphereVirtualizationFields(fldPath, spec)
 
 	if spec.Thumbprint != "" {
 		// TLS validation is handled at the cluster level, not per-machine.
@@ -380,11 +417,11 @@ func (m machineAndVSphereMachineAndVSphereCluster) buildAdditionalMetadata() (ma
 				additionalMachineAPIMetadataLabels = make(map[string]string)
 			}
 
-			if m.vSphereMachine.Spec.Template != "" {
+			if m.vSphereMachine.Spec.Template != "" && len(validation.IsValidLabelValue(m.vSphereMachine.Spec.Template)) == 0 {
 				additionalMachineAPIMetadataLabels[consts.MAPIMachineMetadataLabelInstanceType] = m.vSphereMachine.Spec.Template
 			}
 
-			if m.vSphereMachine.Spec.Datacenter != "" {
+			if m.vSphereMachine.Spec.Datacenter != "" && len(validation.IsValidLabelValue(m.vSphereMachine.Spec.Datacenter)) == 0 {
 				additionalMachineAPIMetadataLabels[consts.MAPIMachineMetadataLabelRegion] = m.vSphereMachine.Spec.Datacenter
 			}
 		}

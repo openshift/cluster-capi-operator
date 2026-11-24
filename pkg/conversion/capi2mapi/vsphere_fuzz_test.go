@@ -156,6 +156,11 @@ func vsphereMachineFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interfac
 			}
 
 			// Fields not supported in MAPI conversion - clear them
+			spec.NestedHV = nil
+			spec.FtEncryptionMode = ""
+			spec.MigrateEncryption = ""
+			spec.CryptoKeyID = ""
+			spec.CryptoProfile = ""
 			spec.PowerOffMode = ""
 			spec.GuestSoftPowerOffTimeout = nil
 			spec.FailureDomain = nil
@@ -229,6 +234,11 @@ func vsphereMachineTemplateFuzzerFuncs(codecs runtimeserializer.CodecFactory) []
 			}
 
 			// Fields not supported in MAPI conversion
+			spec.Template.Spec.NestedHV = nil
+			spec.Template.Spec.FtEncryptionMode = ""
+			spec.Template.Spec.MigrateEncryption = ""
+			spec.Template.Spec.CryptoKeyID = ""
+			spec.Template.Spec.CryptoProfile = ""
 			spec.Template.Spec.PowerOffMode = ""
 			spec.Template.Spec.GuestSoftPowerOffTimeout = nil
 			spec.Template.Spec.FailureDomain = nil

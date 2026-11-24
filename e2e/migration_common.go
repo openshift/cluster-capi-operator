@@ -54,6 +54,10 @@ func skipUnlessMigrationEnabled() {
 	}
 
 	switch platform {
+	case configv1.AWSPlatformType:
+		if !capiframework.IsFeatureGateEnabled(ctx, cl, features.FeatureGateMachineAPIMigrationAWS) {
+			Skip(fmt.Sprintf("MachineAPIMigrationAWS feature gate is not enabled for %s", platform))
+		}
 	case configv1.VSpherePlatformType:
 		if !capiframework.IsFeatureGateEnabled(ctx, cl, features.FeatureGateMachineAPIMigrationVSphere) {
 			Skip(fmt.Sprintf("MachineAPIMigrationVSphere feature gate is not enabled for %s", platform))
