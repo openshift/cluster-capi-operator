@@ -62,6 +62,13 @@ ocp-manifests: manifests-gen ## Generate admission policy profiles for image emb
 		--name cluster-capi-operator \
 		--platform AWS \
 		--install-order 30
+	./bin/manifests-gen \
+		--manifests-path ./capi-operator-manifests \
+		--profile-name vsphere \
+		--kustomize-dir ./admission-policies/vsphere \
+		--name cluster-capi-operator \
+		--platform VSphere \
+		--install-order 30
 
 bin/%: FORCE | bin/
 	go build -o "$@" "./cmd/$*"

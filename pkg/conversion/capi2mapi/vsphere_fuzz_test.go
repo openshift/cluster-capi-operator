@@ -188,9 +188,11 @@ func vsphereMachineFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interfac
 				spec.Network.Devices[i].DHCP6 = false
 				spec.Network.Devices[i].SkipIPAllocation = false
 
-				// Clear AddressesFromPools API group as MAPI uses empty string
+				// Only known IPAM group/Kind pairs have a resource-name mapping.
 				for j := range spec.Network.Devices[i].AddressesFromPools {
-					spec.Network.Devices[i].AddressesFromPools[j].APIGroup = nil
+					group := "ipam.cluster.x-k8s.io"
+					spec.Network.Devices[i].AddressesFromPools[j].APIGroup = &group
+					spec.Network.Devices[i].AddressesFromPools[j].Kind = []string{"InClusterIPPool", "GlobalInClusterIPPool"}[j%2]
 				}
 			}
 
@@ -266,7 +268,9 @@ func vsphereMachineTemplateFuzzerFuncs(codecs runtimeserializer.CodecFactory) []
 				spec.Template.Spec.Network.Devices[i].SkipIPAllocation = false
 
 				for j := range spec.Template.Spec.Network.Devices[i].AddressesFromPools {
-					spec.Template.Spec.Network.Devices[i].AddressesFromPools[j].APIGroup = nil
+					group := "ipam.cluster.x-k8s.io"
+					spec.Template.Spec.Network.Devices[i].AddressesFromPools[j].APIGroup = &group
+					spec.Template.Spec.Network.Devices[i].AddressesFromPools[j].Kind = []string{"InClusterIPPool", "GlobalInClusterIPPool"}[j%2]
 				}
 			}
 

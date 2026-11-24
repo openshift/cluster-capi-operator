@@ -221,20 +221,14 @@ func (f *vsphereProviderFuzzer) FuzzerFuncsMachineSet(codecs runtimeserializer.C
 		func(pool *mapiv1beta1.AddressesFromPool, c randfill.Continue) {
 			c.FillNoCustom(pool)
 
-			// Constrain IPAM group and resource to known valid values to avoid warnings.
-			// The conversion code only recognizes "ipam.cluster.x-k8s.io" or empty.
-			// Resource names are lowercase plural (e.g., "inclusterippools"), not Kind names.
-			switch c.Int31n(3) {
+			// Only known IPAM group/resource pairs have a Kind mapping.
+			switch c.Int31n(2) {
 			case 0:
 				pool.Group = "ipam.cluster.x-k8s.io"
 				pool.Resource = "inclusterippools"
 			case 1:
 				pool.Group = "ipam.cluster.x-k8s.io"
 				pool.Resource = "globalinclusterippools"
-			case 2:
-				// Empty group - no conversion, no warning
-				pool.Group = ""
-				pool.Resource = ""
 			}
 		},
 		f.fuzzProviderSpec,

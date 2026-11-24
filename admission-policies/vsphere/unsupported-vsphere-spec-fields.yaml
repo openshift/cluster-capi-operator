@@ -18,7 +18,7 @@
 #   - network.devices[*].gateway4 (supports IPv6 addresses too)
 #   - network.devices[*].ipAddrs (supports IPv4 and IPv6)
 #   - network.devices[*].nameservers (supports IPv4 and IPv6)
-#   - network.devices[*].addressesFromPools (IPAM)
+#   - network.devices[*].addressesFromPools (known in-cluster IPAM pool kinds only)
 #
 # Other unsupported fields denied below include storagePolicyName,
 # hardwareVersion and pciDevices, which also fail conversion.
@@ -76,6 +76,17 @@ spec:
     - name: specPath
       expression: "object.kind == 'VSphereMachine' ? 'spec' : 'spec.template.spec'"
   validations:
+    - expression: >-
+        !has(variables.machineSpec.network) ||
+        !has(variables.machineSpec.network.devices) ||
+        variables.machineSpec.network.devices.all(device,
+          !has(device.addressesFromPools) || device.addressesFromPools.all(pool,
+            has(pool.apiGroup) && pool.apiGroup == 'ipam.cluster.x-k8s.io' &&
+            has(pool.kind) && pool.kind in ['InClusterIPPool', 'GlobalInClusterIPPool']
+          )
+        )
+      messageExpression: "variables.specPath + '.network is not supported for unknown IPAM group or kind'"
+
     # Virtualization and encryption settings without Machine API equivalents
     - expression: "!has(variables.machineSpec.nestedHV)"
       messageExpression: "variables.specPath + '.nestedHV is not supported'"

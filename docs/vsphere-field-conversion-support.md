@@ -29,5 +29,14 @@ unsupported request fails before synchronization. Existing objects with these
 values also fail conversion; they must use supported settings before migration.
 The warning-only behavior for `network.devices[*].macAddr` is unchanged.
 
+## IPAM references
+
+Only `ipam.cluster.x-k8s.io` pools of Kind `InClusterIPPool` or
+`GlobalInClusterIPPool` are supported. Their Machine API resource names are
+`inclusterippools` and `globalinclusterippools`, respectively. Both conversion
+directions reject unknown or empty groups and unknown kinds/resources instead
+of guessing a mapping. Existing custom-pool users must use a supported mapping
+before migration. Admission applies the same restriction to CAPV pool references.
+
 Other deny validations remain defined in
 [`unsupported-vsphere-spec-fields.yaml`](../admission-policies/vsphere/unsupported-vsphere-spec-fields.yaml).

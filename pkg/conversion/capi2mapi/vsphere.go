@@ -506,9 +506,7 @@ func convertCAPVCloneModeToMAPI(fldPath *field.Path, capvMode vspherev1.CloneMod
 }
 
 // convertCAPVNetworkSpecToMAPI converts CAPV NetworkSpec to MAPI NetworkSpec.
-//
-//nolint:unparam
-func convertCAPVNetworkSpecToMAPI(_ *field.Path, capvNetwork vspherev1.NetworkSpec) (mapiv1beta1.NetworkSpec, []string, field.ErrorList) {
+func convertCAPVNetworkSpecToMAPI(fldPath *field.Path, capvNetwork vspherev1.NetworkSpec) (mapiv1beta1.NetworkSpec, []string, field.ErrorList) {
 	var (
 		errs     field.ErrorList
 		warnings []string
@@ -520,6 +518,12 @@ func convertCAPVNetworkSpecToMAPI(_ *field.Path, capvNetwork vspherev1.NetworkSp
 	if len(capvNetwork.Devices) > 0 {
 		devices = make([]mapiv1beta1.NetworkDeviceSpec, len(capvNetwork.Devices))
 		for i, device := range capvNetwork.Devices {
+			for j, pool := range device.AddressesFromPools {
+				if ipamKindToResource[ptr.Deref(pool.APIGroup, "")][pool.Kind] == "" {
+					errs = append(errs, field.Invalid(fldPath.Child("devices").Index(i).Child("addressesFromPools").Index(j), pool, "unsupported IPAM group and kind"))
+				}
+			}
+
 			devices[i], warnings = convertCAPVNetworkDevice(device, i, warnings)
 		}
 	}
@@ -560,16 +564,7 @@ func convertCAPVAddressesFromPools(capvPools []corev1.TypedLocalObjectReference)
 	mapiPools := make([]mapiv1beta1.AddressesFromPool, len(capvPools))
 	for i, pool := range capvPools {
 		group := ptr.Deref(pool.APIGroup, "")
-		resource := pool.Kind // default to Kind if no mapping found
-
-		// Convert Kind name to resource name (e.g., "InClusterIPPool" → "inclusterippools")
-		if group != "" {
-			if groupMappings, ok := ipamKindToResource[group]; ok {
-				if mappedResource, ok := groupMappings[pool.Kind]; ok {
-					resource = mappedResource
-				}
-			}
-		}
+		resource := ipamKindToResource[group][pool.Kind]
 
 		mapiPools[i] = mapiv1beta1.AddressesFromPool{
 			Group:    group,

@@ -411,32 +411,13 @@ func convertVSphereNetworkSpecMAPIToCAPI(fldPath *field.Path, mapiNetwork mapiv1
 		}
 
 		// Convert AddressesFromPools: MAPI uses plural resource names, CAPI uses singular Kind names
-		//nolint:nestif // Nested complexity is acceptable for IPAM resource name mapping logic
 		if len(device.AddressesFromPools) > 0 {
 			addressesFromPools := make([]corev1.TypedLocalObjectReference, len(device.AddressesFromPools))
 			for j, pool := range device.AddressesFromPools {
-				kind := pool.Resource // fallback to resource name if mapping not found
-
-				// Skip empty APIGroup
-				if pool.Group == "" {
-					kind = pool.Resource
-				} else if groupMappings, ok := ipamResourceToKind[pool.Group]; ok {
-					// Known IPAM group - look up the Kind
-					if mappedKind, ok := groupMappings[pool.Resource]; ok {
-						kind = mappedKind
-					} else {
-						// Known IPAM group but unknown resource - warn but continue
-						warnings = append(warnings,
-							fmt.Sprintf("Unknown IPAM resource %q for group %q - using %q as Kind. "+
-								"This may not work. If you need this resource, please report it.",
-								pool.Resource, pool.Group, pool.Resource))
-					}
-				} else {
-					// Unknown IPAM group - warn but continue with resource name as Kind
-					warnings = append(warnings,
-						fmt.Sprintf("Unknown IPAM group %q - using resource name %q as Kind. "+
-							"This may not work correctly. Known IPAM groups: ipam.cluster.x-k8s.io",
-							pool.Group, pool.Resource))
+				kind := ipamResourceToKind[pool.Group][pool.Resource]
+				if kind == "" {
+					errs = append(errs, field.Invalid(fldPath.Child("devices").Index(i).Child("addressesFromPools").Index(j), pool, "unsupported IPAM group and resource"))
+					continue
 				}
 
 				addressesFromPools[j] = corev1.TypedLocalObjectReference{

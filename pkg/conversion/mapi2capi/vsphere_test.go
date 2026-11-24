@@ -103,10 +103,7 @@ var _ = Describe("mapi2capi VSphere conversion", func() {
 				vsphereBaseProviderSpec.WithIPPool(),
 			),
 			infra:          infra,
-			expectedErrors: []string{},
-			expectedWarnings: []string{
-				"Unknown IPAM group \"test\" - using resource name \"IPpool\" as Kind",
-			},
+			expectedErrors: []string{"unsupported IPAM group and resource"},
 		}),
 
 		// Error Cases.
@@ -421,10 +418,7 @@ var _ = Describe("mapi2capi VSphere conversion", func() {
 				}),
 			}),
 			infra:          infra,
-			expectedErrors: []string{},
-			expectedWarnings: []string{
-				"Unknown IPAM group \"custom.ipam.io\" - using resource name \"custompools\" as Kind",
-			},
+			expectedErrors: []string{"unsupported IPAM group and resource"},
 		}),
 
 		// Comprehensive Test.

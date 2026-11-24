@@ -21,9 +21,11 @@ import (
 	"errors"
 	"io"
 	"os"
+	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	admissiontestutils "github.com/openshift/cluster-capi-operator/pkg/admissionpolicy/testutils"
 	"github.com/openshift/cluster-capi-operator/pkg/test"
 	admissionv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -66,7 +68,7 @@ var _ = Describe("Unsupported vSphere fields admission", Ordered, func() {
 		namespace = &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{GenerateName: "vsphere-admission-"}}
 		Expect(k8sClient.Create(ctx, namespace)).To(Succeed())
 
-		data, err := os.ReadFile("../../../admission-policies/vsphere/unsupported-vsphere-spec-fields.yaml")
+		data, err := os.ReadFile("../../../capi-operator-manifests/vsphere/manifests.yaml")
 		Expect(err).NotTo(HaveOccurred())
 
 		decoder := yaml.NewYAMLOrJSONDecoder(bytes.NewReader(data), 4096)
@@ -92,10 +94,12 @@ var _ = Describe("Unsupported vSphere fields admission", Ordered, func() {
 				Expect(runtime.DefaultUnstructuredConverter.FromUnstructured(u.Object, binding)).To(Succeed())
 				binding.Spec.MatchResources.NamespaceSelector = &metav1.LabelSelector{MatchLabels: map[string]string{"kubernetes.io/metadata.name": namespace.Name}}
 				policy = binding
-			} else {
+			} else if u.GetKind() == "ValidatingAdmissionPolicy" {
 				vap := &admissionv1.ValidatingAdmissionPolicy{}
 				Expect(runtime.DefaultUnstructuredConverter.FromUnstructured(u.Object, vap)).To(Succeed())
 				policy = vap
+			} else {
+				continue
 			}
 
 			Expect(k8sClient.Create(ctx, policy)).To(Succeed())
@@ -114,6 +118,10 @@ var _ = Describe("Unsupported vSphere fields admission", Ordered, func() {
 		}
 
 		Expect(k8sClient.Delete(ctx, namespace)).To(Succeed())
+	})
+
+	It("should ship the vSphere admission profile", func() {
+		Expect(admissiontestutils.LoadAdmissionPolicyProfiles()).To(HaveKey("vsphere"))
 	})
 
 	DescribeTableSubtree("should validate Machines and MachineTemplates", func(kind string) {
@@ -151,6 +159,11 @@ var _ = Describe("Unsupported vSphere fields admission", Ordered, func() {
 			}
 		},
 			Entry("omitted fields", "", nil, false),
+			Entry("unknown IPAM group", "network", map[string]interface{}{"devices": []interface{}{map[string]interface{}{"addressesFromPools": []interface{}{map[string]interface{}{"apiGroup": "custom.io", "kind": "InClusterIPPool", "name": "pool"}}}}}, true),
+			Entry("unknown IPAM kind", "network", map[string]interface{}{"devices": []interface{}{map[string]interface{}{"addressesFromPools": []interface{}{map[string]interface{}{"apiGroup": "ipam.cluster.x-k8s.io", "kind": "CustomPool", "name": "pool"}}}}}, true),
+			Entry("missing IPAM group", "network", map[string]interface{}{"devices": []interface{}{map[string]interface{}{"addressesFromPools": []interface{}{map[string]interface{}{"kind": "InClusterIPPool", "name": "pool"}}}}}, true),
+			Entry("namespaced IPAM pool", "network", map[string]interface{}{"devices": []interface{}{map[string]interface{}{"addressesFromPools": []interface{}{map[string]interface{}{"apiGroup": "ipam.cluster.x-k8s.io", "kind": "InClusterIPPool", "name": "pool"}}}}}, false),
+			Entry("global IPAM pool", "network", map[string]interface{}{"devices": []interface{}{map[string]interface{}{"addressesFromPools": []interface{}{map[string]interface{}{"apiGroup": "ipam.cluster.x-k8s.io", "kind": "GlobalInClusterIPPool", "name": "pool"}}}}}, false),
 			Entry("nestedHV true", "nestedHV", true, true),
 			Entry("nestedHV false", "nestedHV", false, true),
 			Entry("fault tolerance encryption", "ftEncryptionMode", "ftEncryptionRequired", true),
@@ -169,4 +182,60 @@ var _ = Describe("Unsupported vSphere fields admission", Ordered, func() {
 			Entry("empty PCI devices", "pciDevices", []interface{}{}, false),
 		)
 	}, Entry("Machine", "VSphereMachine"), Entry("MachineTemplate", "VSphereMachineTemplate"))
+
+	Context("with upstream CAPV CRDs", func() {
+		BeforeAll(func() {
+			_, err := envtest.InstallCRDs(cfg, envtest.CRDInstallOptions{Paths: []string{"testdata/vsphere"}, ErrorIfPathMissing: true})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		DescribeTableSubtree("should match both served versions", func(version, kind string) {
+			DescribeTable("should enforce generated policy on create", func(field string, value interface{}, denied bool) {
+				obj := newObject(kind)
+				obj.SetAPIVersion("infrastructure.cluster.x-k8s.io/" + version)
+
+				path := []string{"spec"}
+				if kind == "VSphereMachineTemplate" {
+					path = append(path, "template", "spec")
+				}
+
+				if field != "" {
+					Expect(unstructured.SetNestedField(obj.Object, value, append(path, field)...)).To(Succeed())
+				}
+
+				err := k8sClient.Create(ctx, obj, client.DryRunAll)
+				if denied {
+					Expect(err).To(MatchError(ContainSubstring("denied request: " + strings.Join(path, ".") + "." + field + " is not supported")))
+				} else {
+					Expect(err).NotTo(HaveOccurred())
+				}
+			},
+				Entry("control", "", nil, false),
+				Entry("nested virtualization", "nestedHV", true, true),
+				Entry("explicit false nested virtualization", "nestedHV", false, true),
+				Entry("fault tolerance encryption", "ftEncryptionMode", "ftEncryptionRequired", true),
+				Entry("migration encryption", "migrateEncryption", "required", true),
+				Entry("crypto profile", "cryptoProfile", "profile", true),
+				Entry("PCI devices", "pciDevices", []interface{}{map[string]interface{}{"deviceId": int64(1), "vendorId": int64(1)}}, true),
+				Entry("crypto key", "cryptoKeyID", "key", true),
+				Entry("storage policy", "storagePolicyName", "gold", true),
+				Entry("hardware version", "hardwareVersion", "vmx-19", true),
+				Entry("unknown IPAM", "network", map[string]interface{}{"devices": []interface{}{map[string]interface{}{"networkName": "test-network", "addressesFromPools": []interface{}{map[string]interface{}{"apiGroup": "custom.io", "kind": "CustomPool", "name": "pool"}}}}}, true),
+				Entry("supported IPAM", "network", map[string]interface{}{"devices": []interface{}{map[string]interface{}{"networkName": "test-network", "addressesFromPools": []interface{}{map[string]interface{}{"apiGroup": "ipam.cluster.x-k8s.io", "kind": "InClusterIPPool", "name": "pool"}}}}}, false),
+			)
+
+			It("should accept unchanged updates", func() {
+				obj := newObject(kind)
+				obj.SetAPIVersion("infrastructure.cluster.x-k8s.io/" + version)
+				Expect(k8sClient.Create(ctx, obj)).To(Succeed())
+				DeferCleanup(func() { Expect(k8sClient.Delete(ctx, obj)).To(Succeed()) })
+				Expect(k8sClient.Update(ctx, obj, client.DryRunAll)).To(Succeed())
+			})
+		},
+			Entry("v1beta1 Machine", "v1beta1", "VSphereMachine"),
+			Entry("v1beta1 Template", "v1beta1", "VSphereMachineTemplate"),
+			Entry("v1beta2 Machine", "v1beta2", "VSphereMachine"),
+			Entry("v1beta2 Template", "v1beta2", "VSphereMachineTemplate"),
+		)
+	})
 })
