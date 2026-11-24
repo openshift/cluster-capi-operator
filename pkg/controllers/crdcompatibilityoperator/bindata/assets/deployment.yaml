@@ -24,19 +24,27 @@ spec:
               - key: node-role.kubernetes.io/control-plane
                 operator: Exists
         podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-          - weight: 100
-            podAffinityTerm:
-              labelSelector:
-                matchLabels:
-                  k8s-app: compatibility-requirements-controllers
-              topologyKey: kubernetes.io/hostname
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchLabels:
+                k8s-app: compatibility-requirements-controllers
+            matchLabelKeys:
+            - pod-template-hash
+            topologyKey: kubernetes.io/hostname
       containers:
       - name: compatibility-requirements-controllers
         command:
         - ./crd-compatibility-checker
         args:
         - --diagnostics-address=:8443
+        startupProbe:
+          httpGet:
+            path: /readyz
+            port: healthz
+          periodSeconds: 5
+          timeoutSeconds: 5
+          failureThreshold: 24
+          successThreshold: 1
         readinessProbe:
           httpGet:
             path: /readyz
@@ -45,7 +53,6 @@ spec:
           timeoutSeconds: 5
           failureThreshold: 3
           successThreshold: 1
-          initialDelaySeconds: 0
         livenessProbe:
           httpGet:
             path: /healthz
@@ -54,7 +61,6 @@ spec:
           timeoutSeconds: 5
           failureThreshold: 3
           successThreshold: 1
-          initialDelaySeconds: 0
         ports:
         - containerPort: 9443
           name: webhook-server

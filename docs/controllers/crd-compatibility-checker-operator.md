@@ -35,6 +35,10 @@ The controller watches the `Infrastructure` CR (name: `cluster`) and reads `stat
 
 The checker supports External topology (HyperShift/Hosted Control Planes). The operator and operand use preferred management workload placement without requiring control-plane node labels.
 
+## Scheduling
+
+The operand uses a required pod anti-affinity on `kubernetes.io/hostname`, scoped to the pod's own `pod-template-hash` via `matchLabelKeys`. Pods of the same revision never share a node, so on an HA cluster the second replica waits for a second node to exist instead of co-locating on the first control-plane node during bootstrap. A surge pod of a new revision does not match the pods it replaces, so a single-node cluster runs the old and new pod side by side during an upgrade and the webhooks keep serving. The same property keeps rollouts from stalling on topologies with only two schedulable nodes.
+
 ## Watched Resources
 
 - `Infrastructure` (cluster-scoped, name="cluster")
