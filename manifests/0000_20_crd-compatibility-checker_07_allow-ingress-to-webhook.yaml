@@ -14,8 +14,21 @@ metadata:
 spec:
   ingress:
   - from:
-    - namespaceSelector: {} # Allow from any namespace (API server, other components)
-    - podSelector: {} # Allow from any pod
+    # Standalone kube-apiserver and host-networked Konnectivity agents.
+    - namespaceSelector:
+        matchLabels:
+          policy-group.network.openshift.io/host-network: ""
+    # Pod-networked Konnectivity agents during bootstrap and on hosted clusters.
+    - namespaceSelector:
+        matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values:
+          - openshift-bootstrap-konnectivity
+          - kube-system
+      podSelector:
+        matchLabels:
+          app: konnectivity-agent
     ports:
     - port: 9443 # compatibility-requirements-controllers-webhook-service port
       protocol: TCP
