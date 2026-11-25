@@ -438,8 +438,8 @@ github.com/nishanths/predeclared v0.3.0 h1:W3i3JK/DZS5h7QwsEIyU8ler4Z2vwEwQSxNrZ
 github.com/nishanths/predeclared v0.3.0/go.mod h1:gN4uryPExDME/zmZdqkKIPSAqcfprj316ZDI6UTqz70=
 github.com/nunnatsa/ginkgolinter v0.24.0 h1:Mp0EagluLFP98JatP6nqp/gGEoljNG97uf9AcxcBVy8=
 github.com/nunnatsa/ginkgolinter v0.24.0/go.mod h1:2ZMRuzX6+3XXyY6UZOwb6n+MCocVGbkIsDBC4vuWz5c=
-github.com/nutanix-cloud-native/cluster-api-provider-nutanix v1.10.3 h1:OnuhVbc1euRIoOhywpvEWHGvw2m9OV9mjaZzqzPLUCQ=
-github.com/nutanix-cloud-native/cluster-api-provider-nutanix v1.10.3/go.mod h1:1yxoeIPBB4YPwXR18UGLV/xZ0jj8PkJxTyEbivRCArw=
+github.com/nutanix-cloud-native/cluster-api-provider-nutanix v1.10.4 h1:kTr5ob1m8v4YHpkhjvcc3MAd2R2HfsFwaLycwI2EbBA=
+github.com/nutanix-cloud-native/cluster-api-provider-nutanix v1.10.4/go.mod h1:x2OJxo8kQt2Fhq1+819/IEjoObUUo9K+wK/36GntTag=
 github.com/nutanix-cloud-native/prism-go-client v0.8.0 h1:CYOxciuvis1xq++eQcyMZrDxVO/LQgPpyvUKzMxEO9A=
 github.com/nutanix-cloud-native/prism-go-client v0.8.0/go.mod h1:S5nV4cEuQSGOAv+C+svUuuwAOYX3U/Q/lVwtAIy7tGw=
 github.com/nxadm/tail v1.4.8 h1:nPr65rt6Y5JFSKQO7qToXr7pePgD6Gwiw05lkbyAQTE=
@@ -637,8 +637,8 @@ golang.org/x/exp/typeparams v0.0.0-20260811152304-ee035b5b010f h1:+lI8cDJ4uceLip
 golang.org/x/exp/typeparams v0.0.0-20260811152304-ee035b5b010f/go.mod h1:PqrXSW65cXDZH0k4IeUbhmg/bcAZDbzNz3byBpKCsXo=
 golang.org/x/mod v0.42.0 h1:ICeL3t2L30ljSPHHxDnR4fqVcBt/zR2zJAb9juavmQg=
 golang.org/x/mod v0.42.0/go.mod h1:u5fzIrRInkL8MaO1cbRkUHT64v303YIT5KEqpNr7jRs=
-golang.org/x/net v0.61.0 h1:RR+6j/BTBCrggOLugxa+66R8FvoN6MHlzDlZIbN9YFw=
-golang.org/x/net v0.61.0/go.mod h1:WgDCOTH8iwtB66T4/GfI94AHo/hhdb7Hah9NDseQfiI=
+golang.org/x/net v0.62.0 h1:18ELalfM5+XNRwzM2nYqXsZQ9ByS1uhj2O/U7+5jqRY=
+golang.org/x/net v0.62.0/go.mod h1:WgDCOTH8iwtB66T4/GfI94AHo/hhdb7Hah9NDseQfiI=
 golang.org/x/oauth2 v0.36.0 h1:peZ/1z27fi9hUOFCAZaHyrpWG5lwe0RJEEEeH0ThlIs=
 golang.org/x/oauth2 v0.36.0/go.mod h1:YDBUJMTkDnJS+A4BP4eZBjCqtokkg1hODuPjwiGPO7Q=
 golang.org/x/sync v0.24.0 h1:iqiDrGoDgyuvAKrhLQthUEzU/R378N78gXbBjxed7oA=

@@ -1105,8 +1105,8 @@ github.com/nunnatsa/ginkgolinter/internal/rules
 github.com/nunnatsa/ginkgolinter/internal/typecheck
 github.com/nunnatsa/ginkgolinter/linter
 github.com/nunnatsa/ginkgolinter/version
-# github.com/nutanix-cloud-native/cluster-api-provider-nutanix v1.10.3
-## explicit; go 1.25.0
+# github.com/nutanix-cloud-native/cluster-api-provider-nutanix v1.10.4
+## explicit; go 1.26.0
 github.com/nutanix-cloud-native/cluster-api-provider-nutanix/api/v1beta1
 github.com/nutanix-cloud-native/cluster-api-provider-nutanix/pkg/feature
 # github.com/nutanix-cloud-native/prism-go-client v0.8.0
@@ -1776,7 +1776,7 @@ golang.org/x/mod/modfile
 golang.org/x/mod/module
 golang.org/x/mod/semver
 golang.org/x/mod/sumdb/dirhash
-# golang.org/x/net v0.61.0
+# golang.org/x/net v0.62.0
 ## explicit; go 1.26.0
 golang.org/x/net/context
 golang.org/x/net/html
@@ -1961,7 +1961,7 @@ google.golang.org/genproto/googleapis/api/httpbody
 ## explicit; go 1.25.0
 google.golang.org/genproto/googleapis/rpc/errdetails
 google.golang.org/genproto/googleapis/rpc/status
-# google.golang.org/grpc v1.83.1
+# google.golang.org/grpc v1.83.2
 ## explicit; go 1.25.0
 google.golang.org/grpc
 google.golang.org/grpc/attributes
