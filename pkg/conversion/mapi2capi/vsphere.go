@@ -116,6 +116,17 @@ func (v *vSphereMachineAndInfra) toMachineAndInfrastructureMachine() (*clusterv1
 		errs = append(errs, machineErrs...)
 	}
 
+	// Preserve the last power observation; CAPV does not expose live power state.
+	instanceState := v.machine.Annotations[consts.MAPIMachineMetadataAnnotationInstanceState]
+	if providerStatus, statusErr := VSphereProviderStatusFromRawExtension(v.machine.Status.ProviderStatus); statusErr == nil && ptr.Deref(providerStatus.InstanceState, "") != "" {
+		instanceState = *providerStatus.InstanceState
+	}
+
+	switch instanceState {
+	case "poweredOn", "poweredOff", "suspended":
+		capiMachine.Annotations = util.MergeMaps(capiMachine.Annotations, map[string]string{consts.MAPIMachineMetadataAnnotationInstanceState: instanceState})
+	}
+
 	// Set ProviderID if available
 	if v.machine.Spec.ProviderID != nil {
 		capvMachine.Spec.ProviderID = v.machine.Spec.ProviderID

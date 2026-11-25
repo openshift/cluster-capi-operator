@@ -40,3 +40,23 @@ before migration. Admission applies the same restriction to CAPV pool references
 
 Other deny validations remain defined in
 [`unsupported-vsphere-spec-fields.yaml`](../admission-policies/vsphere/unsupported-vsphere-spec-fields.yaml).
+
+## Observed power-state preservation
+
+Machine API to Cluster API conversion carries `poweredOn`, `poweredOff`, and
+`suspended` observations in `machine.openshift.io/instance-state` on the core
+and infrastructure Machines. Nonempty provider status takes precedence over a
+conflicting source annotation; otherwise the source annotation is used. Reverse
+conversion restores recognized power states from the core Machine annotation
+into Machine API provider status and metadata.
+
+This annotation is a last-observed snapshot, not live power telemetry. CAPV does
+not refresh it, so it can become stale while Cluster API is authoritative. This
+preservation does not establish safe authority handback.
+
+Provisioning readiness remains separate and unchanged: without a recognized
+power snapshot, reverse conversion still emits the legacy synthetic `ready`
+state when CAPV `Ready` is true. Machine API to CAPV conversion still recognizes
+only that synthetic state as ready. Consequently, preserving real power states
+does not fix readiness or MachineCreation-condition round trips; that contract
+requires separate work.

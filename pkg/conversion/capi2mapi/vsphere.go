@@ -437,10 +437,15 @@ func (m machineAndVSphereMachineAndVSphereCluster) buildAdditionalMetadata() (ma
 	return additionalMachineAPIMetadataLabels, additionalMachineAPIMetadataAnnotations
 }
 
-// getInstanceState determines the instance state from the VSphereMachine status.
-// Returns "ready" if Ready is true, otherwise empty string.
-// This matches AWS's pattern where instance state is derived from a single boolean field.
+// getInstanceState preserves the last observed power state, falling back to the legacy readiness bridge.
+// CAPV does not refresh this snapshot; it may be stale while Cluster API is authoritative.
+// Power state is not provisioning readiness, and preserving it alone does not ensure safe authority handback.
 func (m machineAndVSphereMachineAndVSphereCluster) getInstanceState() string {
+	switch state := m.machine.Annotations[consts.MAPIMachineMetadataAnnotationInstanceState]; state {
+	case "poweredOn", "poweredOff", "suspended":
+		return state
+	}
+
 	if m.vSphereMachine.Status.Ready {
 		return consts.VSphereInstanceStateReady
 	}
