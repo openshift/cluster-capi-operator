@@ -22,6 +22,7 @@ import (
 	. "github.com/onsi/gomega"
 	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/api/features"
+	mapiv1alpha1 "github.com/openshift/api/machine/v1alpha1"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	mapiframework "github.com/openshift/cluster-api-actuator-pkg/pkg/framework"
 	capiframework "github.com/openshift/cluster-capi-operator/e2e/framework"
@@ -34,7 +35,7 @@ import (
 // Constants for VAP testing - based on actual VAP: machine-api-machine-vap.
 const (
 	// Test values for MAPI machine updates.
-	testProviderID            = "aws:///us-west-2a/i-test123456"
+	testAWSProviderID         = "aws:///us-west-2a/i-test123456"
 	testTaintValue            = "test-taint-value"
 	testLabelValue            = "test-label-value"
 	testInstanceType          = "m5.xlarge"
@@ -42,6 +43,15 @@ const (
 	testSubnetID              = "subnet-test123456"
 	testSecurityGroupID       = "sg-test123456"
 	testCapacityReservationID = "cr-test123456"
+
+	// Test values for OpenStack provider spec updates.
+	testOpenStackProviderID        = "openstack:///da952699-e577-4462-a8ae-686e804fb5c7"
+	testOpenStackFlavor            = "flavor-non-existing"
+	testOpenStackImage             = "test-image"
+	testOpenStackAvailabilityZone  = "nova-test"
+	testOpenStackNetworkID         = "network-test123456"
+	testOpenStackSecurityGroupName = "test-security-group"
+	testOpenStackTag               = "test-tag"
 
 	// VAP error messages - from actual VAP policy.
 	vapSpecLockedMessage          = "You may only modify spec.authoritativeAPI. Any other change inside .spec is not allowed. This is because status.authoritativeAPI is set to Cluster API."
@@ -54,9 +64,7 @@ const (
 
 var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] MAPI Machine VAP Tests", Ordered, func() {
 	BeforeAll(func() {
-		if platform != configv1.AWSPlatformType {
-			Skip(fmt.Sprintf("Skipping tests on %s, this is only supported on AWS", platform))
-		}
+		skipUnsupportedPlatforms()
 
 		if !capiframework.IsFeatureGateEnabled(ctx, cl, features.FeatureGateMachineAPIMigration) {
 			Skip("Skipping, this feature is only supported on MachineAPIMigration enabled clusters")
@@ -98,7 +106,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] MA
 		Context("spec field restrictions", func() {
 			It("should prevent updating spec.providerID", func() {
 				verifyUpdatePrevented(testMAPIMachine, func() {
-					providerIDValue := testProviderID
+					providerIDValue := testAWSProviderID
 					testMAPIMachine.Spec.ProviderID = &providerIDValue
 				}, vapSpecLockedMessage)
 			})
@@ -164,61 +172,116 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] MA
 		})
 
 		Context("AWS provider spec field restrictions", func() {
+			BeforeEach(func() {
+				if platform != configv1.AWSPlatformType {
+					Skip("Skipping AWS-specific tests on non-AWS platform.")
+				}
+			})
+
 			It("should prevent updating providerSpec.instanceType", func() {
-				verifyAWSProviderSpecUpdatePrevented(testMAPIMachine, "instanceType", func(providerSpec *mapiv1beta1.AWSMachineProviderConfig) {
-					providerSpec.InstanceType = testInstanceType
+				verifyProviderSpecUpdatePrevented(testMAPIMachine, "AWS", "instanceType", func() error {
+					return updateMachineProviderSpec(testMAPIMachine, func(providerSpec *mapiv1beta1.AWSMachineProviderConfig) {
+						providerSpec.InstanceType = testInstanceType
+					})
 				}, vapSpecLockedMessage)
 			})
 
 			It("should prevent updating providerSpec.amiID", func() {
-				verifyAWSProviderSpecUpdatePrevented(testMAPIMachine, "amiID", func(providerSpec *mapiv1beta1.AWSMachineProviderConfig) {
-					amiID := testAMIID
-					if providerSpec.AMI.ID == nil {
-						providerSpec.AMI.ID = &amiID
-					} else {
-						*providerSpec.AMI.ID = amiID
-					}
+				verifyProviderSpecUpdatePrevented(testMAPIMachine, "AWS", "amiID", func() error {
+					return updateMachineProviderSpec(testMAPIMachine, func(providerSpec *mapiv1beta1.AWSMachineProviderConfig) {
+						amiID := testAMIID
+						if providerSpec.AMI.ID == nil {
+							providerSpec.AMI.ID = &amiID
+						} else {
+							*providerSpec.AMI.ID = amiID
+						}
+					})
 				}, vapSpecLockedMessage)
 			})
 
 			It("should prevent updating providerSpec.availabilityZone", func() {
-				verifyAWSProviderSpecUpdatePrevented(testMAPIMachine, "availabilityZone", func(providerSpec *mapiv1beta1.AWSMachineProviderConfig) {
-					providerSpec.Placement.AvailabilityZone = providerSpec.Placement.AvailabilityZone + "-changed"
+				verifyProviderSpecUpdatePrevented(testMAPIMachine, "AWS", "availabilityZone", func() error {
+					return updateMachineProviderSpec(testMAPIMachine, func(providerSpec *mapiv1beta1.AWSMachineProviderConfig) {
+						providerSpec.Placement.AvailabilityZone = providerSpec.Placement.AvailabilityZone + "-changed"
+					})
 				}, vapSpecLockedMessage)
 			})
 
 			It("should prevent updating providerSpec.subnetID", func() {
-				verifyAWSProviderSpecUpdatePrevented(testMAPIMachine, "subnetID", func(providerSpec *mapiv1beta1.AWSMachineProviderConfig) {
-					subnetID := testSubnetID
-					providerSpec.Subnet = mapiv1beta1.AWSResourceReference{
-						ID: &subnetID,
-					}
+				verifyProviderSpecUpdatePrevented(testMAPIMachine, "AWS", "subnetID", func() error {
+					return updateMachineProviderSpec(testMAPIMachine, func(providerSpec *mapiv1beta1.AWSMachineProviderConfig) {
+						subnetID := testSubnetID
+						providerSpec.Subnet = mapiv1beta1.AWSResourceReference{
+							ID: &subnetID,
+						}
+					})
 				}, vapSpecLockedMessage)
 			})
 
 			It("should prevent updating providerSpec.securityGroups", func() {
-				verifyAWSProviderSpecUpdatePrevented(testMAPIMachine, "securityGroups", func(providerSpec *mapiv1beta1.AWSMachineProviderConfig) {
-					sgID := testSecurityGroupID
-					providerSpec.SecurityGroups = []mapiv1beta1.AWSResourceReference{{
-						ID: &sgID,
-					}}
+				verifyProviderSpecUpdatePrevented(testMAPIMachine, "AWS", "securityGroups", func() error {
+					return updateMachineProviderSpec(testMAPIMachine, func(providerSpec *mapiv1beta1.AWSMachineProviderConfig) {
+						sgID := testSecurityGroupID
+						providerSpec.SecurityGroups = []mapiv1beta1.AWSResourceReference{{
+							ID: &sgID,
+						}}
+					})
 				}, vapSpecLockedMessage)
 			})
 
 			It("should prevent updating providerSpec.tags", func() {
-				verifyAWSProviderSpecUpdatePrevented(testMAPIMachine, "tags", func(providerSpec *mapiv1beta1.AWSMachineProviderConfig) {
-					providerSpec.Tags = []mapiv1beta1.TagSpecification{{
-						Name:  "test-key",
-						Value: "test-value",
-					}}
+				verifyProviderSpecUpdatePrevented(testMAPIMachine, "AWS", "tags", func() error {
+					return updateMachineProviderSpec(testMAPIMachine, func(providerSpec *mapiv1beta1.AWSMachineProviderConfig) {
+						providerSpec.Tags = []mapiv1beta1.TagSpecification{{
+							Name:  "test-key",
+							Value: "test-value",
+						}}
+					})
 				}, vapSpecLockedMessage)
 			})
 
 			It("should prevent updating providerSpec.capacityReservationId", func() {
-				verifyAWSProviderSpecUpdatePrevented(testMAPIMachine, "capacityReservationId", func(providerSpec *mapiv1beta1.AWSMachineProviderConfig) {
-					providerSpec.CapacityReservationID = testCapacityReservationID
+				verifyProviderSpecUpdatePrevented(testMAPIMachine, "AWS", "capacityReservationId", func() error {
+					return updateMachineProviderSpec(testMAPIMachine, func(providerSpec *mapiv1beta1.AWSMachineProviderConfig) {
+						providerSpec.CapacityReservationID = testCapacityReservationID
+					})
 				}, vapSpecLockedMessage)
 			})
+		})
+
+		Context("OpenStack provider spec field restrictions", func() {
+			BeforeEach(func() {
+				if platform != configv1.OpenStackPlatformType {
+					Skip("Skipping OpenStack-specific tests on non-OpenStack platform.")
+				}
+			})
+
+			DescribeTable(
+				"should prevent updating OpenStack providerSpec fields",
+				func(fieldName string, updateFunc func(providerSpec *mapiv1alpha1.OpenstackProviderSpec)) {
+					verifyProviderSpecUpdatePrevented(testMAPIMachine, "OpenStack", fieldName, func() error {
+						return updateMachineProviderSpec(testMAPIMachine, updateFunc)
+					}, vapSpecLockedMessage)
+				},
+				Entry("flavor", "flavor", func(providerSpec *mapiv1alpha1.OpenstackProviderSpec) {
+					providerSpec.Flavor = testOpenStackFlavor
+				}),
+				Entry("image", "image", func(providerSpec *mapiv1alpha1.OpenstackProviderSpec) {
+					providerSpec.Image = testOpenStackImage
+				}),
+				Entry("availabilityZone", "availabilityZone", func(providerSpec *mapiv1alpha1.OpenstackProviderSpec) {
+					providerSpec.AvailabilityZone = testOpenStackAvailabilityZone
+				}),
+				Entry("networks", "networks", func(providerSpec *mapiv1alpha1.OpenstackProviderSpec) {
+					providerSpec.Networks = []mapiv1alpha1.NetworkParam{{UUID: testOpenStackNetworkID}}
+				}),
+				Entry("securityGroups", "securityGroups", func(providerSpec *mapiv1alpha1.OpenstackProviderSpec) {
+					providerSpec.SecurityGroups = []mapiv1alpha1.SecurityGroupParam{{Name: testOpenStackSecurityGroupName}}
+				}),
+				Entry("tags", "tags", func(providerSpec *mapiv1alpha1.OpenstackProviderSpec) {
+					providerSpec.Tags = []string{testOpenStackTag}
+				}),
+			)
 		})
 
 		Context("VAP match conditions verification", func() {
@@ -316,18 +379,22 @@ func verifyCAPIUpdatePrevented(machine *clusterv1.Machine, updateFunc func(), ex
 		"Expected CAPI machine update to be blocked by VAP")
 }
 
-// updateAWSMachineProviderSpec updates an AWS machine's provider spec using the provided update function.
-func updateAWSMachineProviderSpec(machine *mapiv1beta1.Machine, updateFunc func(*mapiv1beta1.AWSMachineProviderConfig)) error {
-	providerSpec := getAWSProviderSpecFromMachine(machine)
-	if providerSpec == nil {
-		return fmt.Errorf("failed to extract AWS ProviderSpec from Machine %s", machine.Name)
+// updateMachineProviderSpec updates a machine's provider spec using the provided update function.
+func updateMachineProviderSpec[T any](machine *mapiv1beta1.Machine, updateFunc func(*T)) error {
+	if machine.Spec.ProviderSpec.Value == nil {
+		return fmt.Errorf("failed to extract ProviderSpec from Machine %s", machine.Name)
+	}
+
+	providerSpec := new(T)
+	if err := json.Unmarshal(machine.Spec.ProviderSpec.Value.Raw, providerSpec); err != nil {
+		return fmt.Errorf("failed to unmarshal ProviderSpec from Machine %s: %w", machine.Name, err)
 	}
 
 	updateFunc(providerSpec)
 
 	modifiedRaw, err := json.Marshal(providerSpec)
 	if err != nil {
-		return fmt.Errorf("failed to marshal modified providerSpec: %w", err)
+		return fmt.Errorf("failed to marshal modified ProviderSpec: %w", err)
 	}
 
 	machine.Spec.ProviderSpec.Value = &runtime.RawExtension{Raw: modifiedRaw}
@@ -335,34 +402,17 @@ func updateAWSMachineProviderSpec(machine *mapiv1beta1.Machine, updateFunc func(
 	return nil
 }
 
-// getAWSProviderSpecFromMachine extracts the AWS provider spec from a machine.
-// Returns nil if the ProviderSpec is nil or unmarshalling fails, so it is safe
-// to use inside WithTransform (no Expect/panic in retry loops).
-func getAWSProviderSpecFromMachine(machine *mapiv1beta1.Machine) *mapiv1beta1.AWSMachineProviderConfig {
-	if machine.Spec.ProviderSpec.Value == nil {
-		return nil
-	}
-
-	providerSpec := &mapiv1beta1.AWSMachineProviderConfig{}
-	if err := json.Unmarshal(machine.Spec.ProviderSpec.Value.Raw, providerSpec); err != nil {
-		GinkgoWriter.Printf("Warning: failed to unmarshal ProviderSpec for Machine %s: %v\n", machine.Name, err)
-		return nil
-	}
-
-	return providerSpec
-}
-
-// verifyAWSProviderSpecUpdatePrevented verifies that AWS providerSpec field updates are prevented by VAP.
-func verifyAWSProviderSpecUpdatePrevented(machine *mapiv1beta1.Machine, fieldName string, updateFunc func(*mapiv1beta1.AWSMachineProviderConfig), expectedError string) {
+// verifyProviderSpecUpdatePrevented verifies that providerSpec field updates are prevented by VAP.
+func verifyProviderSpecUpdatePrevented(machine *mapiv1beta1.Machine, providerName, fieldName string, updateProviderSpec func() error, expectedError string) {
 	GinkgoHelper()
 
-	By(fmt.Sprintf("Verifying that updating AWS providerSpec.%s is prevented by VAP", fieldName))
+	By(fmt.Sprintf("Verifying that updating %s providerSpec.%s is prevented by VAP", providerName, fieldName))
 
 	Eventually(komega.Update(machine, func() {
-		Expect(updateAWSMachineProviderSpec(machine, updateFunc)).To(Succeed())
+		Expect(updateProviderSpec()).To(Succeed())
 	}), capiframework.WaitShort, capiframework.RetryShort).Should(
 		MatchError(ContainSubstring(expectedError)),
-		"Expected AWS providerSpec.%s update to be blocked by VAP", fieldName)
+		"Expected %s providerSpec.%s update to be blocked by VAP", providerName, fieldName)
 }
 
 // verifyVAPNotAppliedForMachineAPIAuthority verifies that VAP is not applied when authoritativeAPI is MachineAPI.
@@ -390,7 +440,16 @@ func verifyVAPNotAppliedForMachineAPIAuthority() {
 	// Verify we can update spec fields (VAP should not apply)
 	Eventually(komega.Update(testMachine, func() {
 		// Try to update a spec field - this should be allowed since VAP doesn't apply
-		providerIDValue := testProviderID
+		var providerIDValue string
+		switch platform {
+		case configv1.AWSPlatformType:
+			providerIDValue = testAWSProviderID
+		case configv1.OpenStackPlatformType:
+			providerIDValue = testOpenStackProviderID
+		default:
+			Fail(fmt.Sprintf("Platform %q is not supported yet", platform))
+		}
+
 		testMachine.Spec.ProviderID = &providerIDValue
 	}), capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(),
 		"Expected spec update to succeed when authoritativeAPI is MachineAPI (VAP should not apply)")

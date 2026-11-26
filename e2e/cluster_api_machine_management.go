@@ -199,10 +199,11 @@ var _ = Describe("[OTP][Jira:OCPCLOUD][OCPFeatureGate:ClusterAPIMachineManagemen
 		})
 
 		It("should enforce webhook validations for Cluster API cluster resources", Label("Disruptive"), Label("Lifecycle:informing"), func() {
+			// TODO skipUnsupportedPlatforms is used in other locations but it doesn't have GCP currently.
 			switch platform {
-			case configv1.AWSPlatformType, configv1.GCPPlatformType:
+			case configv1.AWSPlatformType, configv1.GCPPlatformType, configv1.OpenStackPlatformType:
 			default:
-				Skip("Cluster API machine webhook tests only supported on AWS and GCP")
+				Skip("Cluster API machine webhook tests only supported on AWS, GCP and OpenStack")
 			}
 
 			By("Getting the Cluster API cluster object")

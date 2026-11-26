@@ -87,7 +87,7 @@ func (m *openstackMachineAndInfra) ToMachineAndInfrastructureMachine() (*cluster
 func (m *openstackMachineAndInfra) toMachineAndInfrastructureMachine() (*clusterv1.Machine, *openstackv1.OpenStackMachine, []string, field.ErrorList) {
 	var errors field.ErrorList
 
-	openstackProviderConfig, err := openstackProviderSpecFromRawExtension(m.machine.Spec.ProviderSpec.Value)
+	openstackProviderConfig, err := OpenStackProviderSpecFromRawExtension(m.machine.Spec.ProviderSpec.Value)
 	if err != nil {
 		return nil, nil, nil, field.ErrorList{field.Invalid(field.NewPath("spec", "providerSpec", "value"), m.machine.Spec.ProviderSpec.Value, err.Error())}
 	}
@@ -264,8 +264,8 @@ func (m *openstackMachineAndInfra) toOpenStackMachine(providerSpec mapiv1alpha1.
 	}, warnings, errors
 }
 
-// openstackProviderSpecFromRawExtension unmarshals a raw extension into an OpenStackMachineProviderSpec type.
-func openstackProviderSpecFromRawExtension(rawExtension *runtime.RawExtension) (mapiv1alpha1.OpenstackProviderSpec, error) {
+// OpenStackProviderSpecFromRawExtension unmarshals a raw extension into an OpenStackMachineProviderSpec type.
+func OpenStackProviderSpecFromRawExtension(rawExtension *runtime.RawExtension) (mapiv1alpha1.OpenstackProviderSpec, error) {
 	if rawExtension == nil {
 		return mapiv1alpha1.OpenstackProviderSpec{}, nil
 	}

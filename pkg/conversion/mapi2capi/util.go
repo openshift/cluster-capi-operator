@@ -44,7 +44,7 @@ func ProviderSpecFromRawExtension(platform configv1.PlatformType, rawExtension *
 
 		return providerConfig, nil
 	case configv1.OpenStackPlatformType:
-		providerConfig, err := openstackProviderSpecFromRawExtension(rawExtension)
+		providerConfig, err := OpenStackProviderSpecFromRawExtension(rawExtension)
 		if err != nil {
 			return nil, fmt.Errorf("unable to parse OpenStack providerSpec: %w", err)
 		}

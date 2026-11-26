@@ -16,13 +16,16 @@ package framework
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	configv1 "github.com/openshift/api/config/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
+	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
@@ -60,18 +63,31 @@ func GetMachines(selectors ...*metav1.LabelSelector) []*clusterv1.Machine {
 	return machines
 }
 
-// GetAWSMachineWithRetry gets an AWSMachine by its name, retrying until found or timeout.
-func GetAWSMachineWithRetry(name string, namespace string) *awsv1.AWSMachine {
+// GetInfraMachineWithRetry gets an infra Machine by its name and platform type, retrying until found or timeout.
+func GetInfraMachineWithRetry(platform configv1.PlatformType, name string, namespace string) client.Object {
 	GinkgoHelper()
 
-	machine := &awsv1.AWSMachine{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-		},
+	var machine client.Object
+	switch platform {
+	case configv1.AWSPlatformType:
+		machine = &awsv1.AWSMachine{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: namespace,
+			},
+		}
+	case configv1.OpenStackPlatformType:
+		machine = &openstackv1.OpenStackMachine{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: namespace,
+			},
+		}
+	default:
+		Fail(fmt.Sprintf("Platform %q is not supported yet", platform))
 	}
 
-	Eventually(komega.Get(machine), time.Minute, RetryShort).Should(Succeed(), "Should have successfully retrieved awsmachine %s/%s.", machine.Namespace, machine.Name)
+	Eventually(komega.Get(machine), time.Minute, RetryShort).Should(Succeed(), "Should have successfully retrieved infra machine %s/%s.", machine.GetNamespace(), machine.GetName())
 
 	return machine
 }

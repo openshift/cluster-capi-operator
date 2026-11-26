@@ -16,7 +16,6 @@ package e2e
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -24,6 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/types"
 
+	configv1 "github.com/openshift/api/config/v1"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	mapiframework "github.com/openshift/cluster-api-actuator-pkg/pkg/framework"
 	capiframework "github.com/openshift/cluster-capi-operator/e2e/framework"
@@ -32,32 +32,33 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
+	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 	yaml "sigs.k8s.io/yaml"
 )
 
-// createCAPIMachineSet creates a CAPI MachineSet with an AWSMachineTemplate and waits for it to be ready.
+// createCAPIMachineSet creates a CAPI MachineSet with an infra MachineTemplate and waits for it to be ready.
 func createCAPIMachineSet(ctx context.Context, cl client.Client, replicas int32, machineSetName string, instanceType string) *clusterv1.MachineSet {
 	GinkgoHelper()
 
 	By(fmt.Sprintf("Creating CAPI MachineSet %s with %d replicas", machineSetName, replicas))
 
 	mapiMS := capiframework.GetFirstMAPIMachineSet(ctx, cl)
-	mapiProviderSpec, err := mapi2capi.AWSProviderSpecFromRawExtension(mapiMS.Spec.Template.Spec.ProviderSpec.Value)
-	Expect(err).ToNot(HaveOccurred(), "should not fail decoding MAPI provider spec")
-	createAWSClient(mapiProviderSpec.Placement.Region)
-	awsMachineTemplate := newAWSMachineTemplate(mapiMS, infra)
-	awsMachineTemplate.Name = machineSetName
 
-	if instanceType != "" {
-		awsMachineTemplate.Spec.Template.Spec.InstanceType = instanceType
+	var objectRefKind string
+	var infraMachineTemplate client.Object
+	switch platform {
+	case configv1.AWSPlatformType:
+		infraMachineTemplate = createAWSMachineTemplateFromMachineSet(mapiMS, machineSetName, instanceType)
+		objectRefKind = awsMachineTemplateKind
+	case configv1.OpenStackPlatformType:
+		infraMachineTemplate = createOpenStackMachineTemplateFromMachineSet(mapiMS, machineSetName)
+		objectRefKind = openStackMachineTemplateKind
+	default:
+		Fail(fmt.Sprintf("Platform %q is not supported yet", platform))
 	}
-
-	Eventually(func() error {
-		return cl.Create(ctx, awsMachineTemplate)
-	}, capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(), "Failed to create a new awsMachineTemplate %s", awsMachineTemplate.Name)
 
 	machineSet := capiframework.CreateMachineSet(ctx, cl, capiframework.NewMachineSetParams(
 		machineSetName,
@@ -65,14 +66,14 @@ func createCAPIMachineSet(ctx context.Context, cl client.Client, replicas int32,
 		"",
 		replicas,
 		clusterv1.ContractVersionedObjectReference{
-			Kind:     "AWSMachineTemplate",
+			Kind:     objectRefKind,
 			APIGroup: infraAPIGroup,
 			Name:     machineSetName,
 		},
 		"worker-user-data",
 	))
 
-	trackResource(awsMachineTemplate)
+	trackResource(infraMachineTemplate)
 	trackResource(machineSet)
 	// The sync controller will create a mirrored MAPI MachineSet with the same name.
 	trackResource(&mapiv1beta1.MachineSet{
@@ -316,17 +317,11 @@ func getAWSProviderSpecFromMachineSet(mapiMachineSet *mapiv1beta1.MachineSet) *m
 	return providerSpec
 }
 
-// updateAWSMachineSetProviderSpec updates a MAPI MachineSet's AWS providerSpec using the provided update function.
-func updateAWSMachineSetProviderSpec(ctx context.Context, cl client.Client, mapiMachineSet *mapiv1beta1.MachineSet, updateFunc func(*mapiv1beta1.AWSMachineProviderConfig)) error {
+func updateInfraMachineSetProviderSpec(ctx context.Context, cl client.Client, mapiMachineSet *mapiv1beta1.MachineSet, updateFunc func(*mapiv1beta1.MachineSet) ([]byte, error)) error {
 	GinkgoHelper()
 
 	By(fmt.Sprintf("Updating MachineSet %s providerSpec", mapiMachineSet.Name))
-	providerSpec := getAWSProviderSpecFromMachineSet(mapiMachineSet)
-	Expect(providerSpec).ToNot(BeNil(), "failed to extract AWS ProviderSpec from MachineSet %s", mapiMachineSet.Name)
-
-	updateFunc(providerSpec)
-
-	rawProviderSpec, err := json.Marshal(providerSpec)
+	rawProviderSpec, err := updateFunc(mapiMachineSet)
 	Expect(err).ToNot(HaveOccurred(), "failed to marshal updated provider spec")
 
 	original := mapiMachineSet.DeepCopy()
@@ -337,11 +332,11 @@ func updateAWSMachineSetProviderSpec(ctx context.Context, cl client.Client, mapi
 	return cl.Patch(ctx, mapiMachineSet, patch)
 }
 
-// waitForMAPIMachineSetMirrors waits for the corresponding CAPI MachineSet and AWSMachineTemplate mirrors to be created for a MAPI MachineSet.
-func waitForMAPIMachineSetMirrors(machineSetNameMAPI string) (*clusterv1.MachineSet, *awsv1.AWSMachineTemplate) {
+// waitForMAPIMachineSetMirrors waits for the corresponding CAPI MachineSet and infra MachineTemplate mirrors to be created for a MAPI MachineSet.
+func waitForMAPIMachineSetMirrors(machineSetNameMAPI string) (*clusterv1.MachineSet, client.Object) {
 	GinkgoHelper()
 
-	By(fmt.Sprintf("Verifying there is a CAPI MachineSet mirror and AWSMachineTemplate for MAPI MachineSet %s", machineSetNameMAPI))
+	By(fmt.Sprintf("Verifying there is a CAPI MachineSet mirror and infra MachineTemplate for MAPI MachineSet %s", machineSetNameMAPI))
 
 	// Direct Get instead of capiframework.GetMachineSet to avoid nested Eventually.
 	capiMachineSet := &clusterv1.MachineSet{
@@ -353,9 +348,9 @@ func waitForMAPIMachineSetMirrors(machineSetNameMAPI string) (*clusterv1.Machine
 	Eventually(komega.Get(capiMachineSet), capiframework.WaitMedium, capiframework.RetryMedium).Should(
 		Succeed(), "Should have CAPI MachineSet %s/%s exist", capiframework.CAPINamespace, machineSetNameMAPI)
 
-	capiMachineSet, awsMachineTemplate := waitForMachineSetAWSMachineTemplate(machineSetNameMAPI)
+	capiMachineSet, infraMachineTemplate := waitForMachineSetInfraMachineTemplate(machineSetNameMAPI)
 
-	return capiMachineSet, awsMachineTemplate
+	return capiMachineSet, infraMachineTemplate
 }
 
 // waitForCAPIMachineSetMirror waits for a CAPI MachineSet mirror to be created for a MAPI MachineSet.
@@ -377,62 +372,87 @@ func waitForCAPIMachineSetMirror(machineName string) *clusterv1.MachineSet {
 	return capiMachineSet
 }
 
-// waitForAWSMachineTemplate waits for the AWSMachineTemplate referenced by the CAPI MachineSet to exist.
-func waitForAWSMachineTemplate(machineSetName string) *awsv1.AWSMachineTemplate {
+// waitForInfraMachineTemplate waits for the infra MachineTemplate referenced by the CAPI MachineSet to exist.
+func waitForInfraMachineTemplate(machineSetName string) client.Object {
 	GinkgoHelper()
 
-	By(fmt.Sprintf("Verifying there is an AWSMachineTemplate referenced by CAPI MachineSet %s", machineSetName))
+	By(fmt.Sprintf("Verifying there is an infra MachineTemplate referenced by CAPI MachineSet %s", machineSetName))
 
-	_, awsMachineTemplate := waitForMachineSetAWSMachineTemplate(machineSetName)
+	_, infraMachineTemplate := waitForMachineSetInfraMachineTemplate(machineSetName)
 
-	return awsMachineTemplate
+	return infraMachineTemplate
 }
 
-// waitForMachineSetAWSMachineTemplate waits for the CAPI MachineSet and the AWSMachineTemplate its
+// waitForMachineSetInfraMachineTemplate waits for the CAPI MachineSet and the infra MachineTemplate its
 // infrastructureRef points at, and returns both.
 //
 // The MachineSet is re-read on every attempt so that a reference replaced while this is polling is
 // followed to the template that is actually in use, instead of failing on, or arbitrarily picking
 // between, the superseded and the current template.
-func waitForMachineSetAWSMachineTemplate(machineSetName string) (*clusterv1.MachineSet, *awsv1.AWSMachineTemplate) {
+func waitForMachineSetInfraMachineTemplate(machineSetName string) (*clusterv1.MachineSet, client.Object) {
 	GinkgoHelper()
 
 	var (
-		capiMachineSet     *clusterv1.MachineSet
-		awsMachineTemplate *awsv1.AWSMachineTemplate
+		capiMachineSet       *clusterv1.MachineSet
+		infraMachineTemplate client.Object
 	)
 
 	Eventually(func() error {
 		var err error
-		capiMachineSet, awsMachineTemplate, err = resolveAWSMachineTemplateForMachineSet(ctx, cl, machineSetName)
+		capiMachineSet, infraMachineTemplate, err = resolveInfraMachineTemplateForMachineSet(ctx, cl, machineSetName)
 
 		return err
 	}, capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(),
-		"Should have the AWSMachineTemplate referenced by CAPI MachineSet %s/%s exist", capiframework.CAPINamespace, machineSetName)
+		"Should have the infra MachineTemplate referenced by CAPI MachineSet %s/%s exist", capiframework.CAPINamespace, machineSetName)
 
-	return capiMachineSet, awsMachineTemplate
+	return capiMachineSet, infraMachineTemplate
 }
 
 // createAWSMachineTemplate creates a new AWSMachineTemplate with an optional update function to modify the spec.
-func createAWSMachineTemplate(ctx context.Context, cl client.Client, originalName string, updateFunc func(*awsv1.AWSMachineSpec)) *awsv1.AWSMachineTemplate {
+func createAWSMachineTemplate(ctx context.Context, cl client.Client, originalName string, updateFunc func(*awsv1.AWSMachineSpec)) client.Object {
 	GinkgoHelper()
 
 	By("Creating a new awsMachineTemplate")
 
-	mapiMS := capiframework.GetFirstMAPIMachineSet(ctx, cl)
-	mapiProviderSpec, err := mapi2capi.AWSProviderSpecFromRawExtension(mapiMS.Spec.Template.Spec.ProviderSpec.Value)
-	Expect(err).ToNot(HaveOccurred(), "should not fail decoding MAPI provider spec")
-	createAWSClient(mapiProviderSpec.Placement.Region)
+	return createInfraMachineTemplate(ctx, cl, originalName, func(mapiMS *mapiv1beta1.MachineSet) client.Object {
+		mapiProviderSpec, err := mapi2capi.AWSProviderSpecFromRawExtension(mapiMS.Spec.Template.Spec.ProviderSpec.Value)
+		Expect(err).ToNot(HaveOccurred(), "should not fail decoding MAPI provider spec")
+		createAWSClient(mapiProviderSpec.Placement.Region)
 
-	newTemplate := newAWSMachineTemplate(mapiMS, infra)
-	newTemplate.Name = "new-" + originalName
+		newTemplate := newAWSMachineTemplate(mapiMS, infra)
+		if updateFunc != nil {
+			updateFunc(&newTemplate.Spec.Template.Spec)
+		}
 
-	if updateFunc != nil {
-		updateFunc(&newTemplate.Spec.Template.Spec)
-	}
+		return newTemplate
+	})
+}
 
-	Eventually(cl.Create(ctx, newTemplate), capiframework.WaitMedium, capiframework.RetryMedium).Should(
-		Succeed(), "Failed to create a new awsMachineTemplate %s", newTemplate.Name)
+// createOpenStackMachineTemplate creates a new OpenStackMachineTemplate with an optional update function to modify the spec.
+func createOpenStackMachineTemplate(ctx context.Context, cl client.Client, originalName string, updateFunc func(*openstackv1.OpenStackMachineSpec)) client.Object {
+	GinkgoHelper()
+
+	By("Creating a new openstackMachineTemplate")
+
+	return createInfraMachineTemplate(ctx, cl, originalName, func(mapiMS *mapiv1beta1.MachineSet) client.Object {
+		newTemplate := newOpenStackMachineTemplate(mapiMS, infra)
+		if updateFunc != nil {
+			updateFunc(&newTemplate.Spec.Template.Spec)
+		}
+
+		return newTemplate
+	})
+}
+
+// createInfraMachineTemplate creates a new infra MachineTemplate with template generation function based on an existing MAPI machine set.
+func createInfraMachineTemplate(ctx context.Context, cl client.Client, originalName string, generateTemplateFunc func(mapiMS *mapiv1beta1.MachineSet) client.Object) client.Object {
+	GinkgoHelper()
+
+	newTemplate := generateTemplateFunc(capiframework.GetFirstMAPIMachineSet(ctx, cl))
+	newTemplate.SetName("new-" + originalName)
+
+	Eventually(func() error { return cl.Create(ctx, newTemplate) }, capiframework.WaitMedium, capiframework.RetryMedium).Should(
+		Succeed(), "Failed to create a new infra MachineTemplate %s", newTemplate.GetName())
 
 	trackResource(newTemplate)
 
@@ -453,8 +473,8 @@ func updateCAPIMachineSetInfraTemplate(capiMachineSet *clusterv1.MachineSet, new
 	)
 }
 
-// cleanupMachineSetTestResources deletes MAPI MachineSets, CAPI MachineSets, and AWSMachineTemplates created during tests.
-func cleanupMachineSetTestResources(ctx context.Context, cl client.Client, capiMachineSets []*clusterv1.MachineSet, awsMachineTemplates []*awsv1.AWSMachineTemplate, mapiMachineSets []*mapiv1beta1.MachineSet) {
+// cleanupMachineSetTestResources deletes MAPI MachineSets, CAPI MachineSets, and infra MachineTemplates created during tests.
+func cleanupMachineSetTestResources(ctx context.Context, cl client.Client, capiMachineSets []*clusterv1.MachineSet, infraMachineTemplates []client.Object, mapiMachineSets []*mapiv1beta1.MachineSet) {
 	GinkgoHelper()
 
 	cleanupCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
@@ -495,12 +515,73 @@ func cleanupMachineSetTestResources(ctx context.Context, cl client.Client, capiM
 		capiframework.WaitForMachineSetsDeleted(ms)
 	}
 
-	for _, template := range awsMachineTemplates {
+	for _, template := range infraMachineTemplates {
 		if template == nil {
 			continue
 		}
 
-		By(fmt.Sprintf("Deleting awsMachineTemplate %s", template.Name))
-		deleteAWSMachineTemplates(cleanupCtx, cl, template)
+		By(fmt.Sprintf("Deleting infra MachineTemplate %s", template.GetName()))
+		deleteInfraMachineTemplates(cleanupCtx, cl, template)
 	}
+}
+
+// deleteInfraMachineTemplates deletes the specified infra MachineTemplates.
+func deleteInfraMachineTemplates(ctx context.Context, cl client.Client, templates ...client.Object) {
+	GinkgoHelper()
+
+	for _, template := range templates {
+		if template == nil {
+			continue
+		}
+
+		By(fmt.Sprintf("Deleting infra MachineTemplate %q", template.GetName()))
+		Eventually(func() error {
+			return cl.Delete(ctx, template)
+		}, time.Minute, capiframework.RetryShort).Should(SatisfyAny(
+			Succeed(),
+			WithTransform(apierrors.IsNotFound, BeTrue()),
+		), "Delete infra MachineTemplate %s/%s should succeed, or infra MachineTemplate should not be found.",
+			template.GetNamespace(), template.GetName())
+	}
+}
+
+// resolveInfraMachineTemplateForMachineSet reads the Cluster API MachineSet and returns it together
+// with the infra MachineTemplate its spec.template.spec.infrastructureRef currently points at.
+//
+// Templates are immutable, so a controller that rolls the infrastructure template creates a new
+// object and repoints the reference, leaving more than one template whose name starts with the
+// MachineSet name. Both the MachineSet and the template are read here so that callers retrying
+// this function observe the reference as it is now rather than a stale or arbitrary template.
+func resolveInfraMachineTemplateForMachineSet(ctx context.Context, cl client.Client, machineSetName string) (*clusterv1.MachineSet, client.Object, error) {
+	if machineSetName == "" {
+		return nil, nil, fmt.Errorf("machineSet name cannot be empty")
+	}
+
+	namespace := capiframework.CAPINamespace
+
+	machineSet := &clusterv1.MachineSet{}
+	if err := cl.Get(ctx, client.ObjectKey{Namespace: namespace, Name: machineSetName}, machineSet); err != nil {
+		return nil, nil, fmt.Errorf("get Cluster API MachineSet %s/%s: %w", namespace, machineSetName, err)
+	}
+
+	infraRef := machineSet.Spec.Template.Spec.InfrastructureRef
+	if infraRef.Name == "" {
+		return machineSet, nil, fmt.Errorf("no infrastructureRef name on Cluster API MachineSet %s/%s", namespace, machineSetName)
+	}
+
+	var template client.Object
+	switch infraRef.Kind {
+	case awsMachineTemplateKind:
+		template = &awsv1.AWSMachineTemplate{}
+	case openStackMachineTemplateKind:
+		template = &openstackv1.OpenStackMachineTemplate{}
+	default:
+		return nil, nil, fmt.Errorf("unexpected infrastructure kind %q on Cluster API MachineSet %s/%s", infraRef.Kind, namespace, machineSetName)
+	}
+
+	if err := cl.Get(ctx, client.ObjectKey{Namespace: namespace, Name: infraRef.Name}, template); err != nil {
+		return nil, nil, fmt.Errorf("get infra MachineTemplate %s/%s referenced by Cluster API MachineSet %s: %w", namespace, infraRef.Name, machineSetName, err)
+	}
+
+	return machineSet, template, nil
 }

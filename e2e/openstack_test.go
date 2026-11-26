@@ -63,7 +63,7 @@ var _ = Describe("Cluster API OpenStack MachineSet", Ordered, func() {
 	})
 
 	It("should be able to run a machine with implicit cluster default network", func() {
-		openStackMachineTemplate = createOpenStackMachineTemplate(ctx, cl, mapiMachineSpec)
+		openStackMachineTemplate = createOpenStackMachineTemplateWithProviderSpec(ctx, cl, mapiMachineSpec)
 
 		machineSet = framework.CreateMachineSet(ctx, cl, framework.NewMachineSetParams(
 			"openstack-machineset",
@@ -82,7 +82,7 @@ var _ = Describe("Cluster API OpenStack MachineSet", Ordered, func() {
 	})
 })
 
-func createOpenStackMachineTemplate(ctx context.Context, cl client.Client, mapiProviderSpec *mapiv1alpha1.OpenstackProviderSpec) *openstackv1.OpenStackMachineTemplate {
+func createOpenStackMachineTemplateWithProviderSpec(ctx context.Context, cl client.Client, mapiProviderSpec *mapiv1alpha1.OpenstackProviderSpec) *openstackv1.OpenStackMachineTemplate {
 	GinkgoHelper()
 	By("Creating OpenStack machine template")
 

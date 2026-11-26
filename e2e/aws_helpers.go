@@ -15,9 +15,7 @@
 package e2e
 
 import (
-	"context"
 	"fmt"
-	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -32,7 +30,6 @@ import (
 	"github.com/openshift/cluster-capi-operator/e2e/framework"
 	"github.com/openshift/cluster-capi-operator/pkg/conversion/mapi2capi"
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
@@ -234,61 +231,26 @@ func verifyCAPIInstanceOwnershipTag(awsClient *ec2.EC2, capiMsName, infraName st
 	)), "expected EC2 instance to have tag %s=owned for cluster destroy to find it", expectedTagKey)
 }
 
-// deleteAWSMachineTemplates deletes the specified AWSMachineTemplates.
-func deleteAWSMachineTemplates(ctx context.Context, cl client.Client, templates ...*awsv1.AWSMachineTemplate) {
-	GinkgoHelper()
-
-	for _, template := range templates {
-		if template == nil {
-			continue
-		}
-
-		By(fmt.Sprintf("Deleting awsMachineTemplate %q", template.GetName()))
-		Eventually(func() error {
-			return cl.Delete(ctx, template)
-		}, time.Minute, framework.RetryShort).Should(SatisfyAny(
-			Succeed(),
-			WithTransform(apierrors.IsNotFound, BeTrue()),
-		), "Delete awsMachineTemplate %s/%s should succeed, or awsMachineTemplate should not be found.",
-			template.Namespace, template.Name)
-	}
-}
-
 // awsMachineTemplateKind is the infrastructureRef kind the AWS mirrors use.
 const awsMachineTemplateKind = "AWSMachineTemplate"
 
-// resolveAWSMachineTemplateForMachineSet reads the Cluster API MachineSet and returns it together
-// with the AWSMachineTemplate its spec.template.spec.infrastructureRef currently points at.
-//
-// Templates are immutable, so a controller that rolls the infrastructure template creates a new
-// object and repoints the reference, leaving more than one template whose name starts with the
-// MachineSet name. Both the MachineSet and the template are read here so that callers retrying
-// this function observe the reference as it is now rather than a stale or arbitrary template.
-func resolveAWSMachineTemplateForMachineSet(ctx context.Context, cl client.Client, machineSetName string) (*clusterv1.MachineSet, *awsv1.AWSMachineTemplate, error) {
-	if machineSetName == "" {
-		return nil, nil, fmt.Errorf("machineSet name cannot be empty")
+// createAWSMachineTemplateFromMachineSet creates AWSMachineTemplate from an existing MAPI MachineSet and an optional instance type.
+func createAWSMachineTemplateFromMachineSet(mapiMS *mapiv1beta1.MachineSet, machineSetName, instanceType string) client.Object {
+	GinkgoHelper()
+
+	mapiProviderSpec, err := mapi2capi.AWSProviderSpecFromRawExtension(mapiMS.Spec.Template.Spec.ProviderSpec.Value)
+	Expect(err).ToNot(HaveOccurred(), "should not fail decoding MAPI AWS provider spec")
+	createAWSClient(mapiProviderSpec.Placement.Region)
+	awsMachineTemplate := newAWSMachineTemplate(mapiMS, infra)
+	awsMachineTemplate.Name = machineSetName
+
+	if instanceType != "" {
+		awsMachineTemplate.Spec.Template.Spec.InstanceType = instanceType
 	}
 
-	namespace := framework.CAPINamespace
+	Eventually(func() error {
+		return cl.Create(ctx, awsMachineTemplate)
+	}, framework.WaitMedium, framework.RetryMedium).Should(Succeed(), "Failed to create a new awsMachineTemplate %s", awsMachineTemplate.Name)
 
-	machineSet := &clusterv1.MachineSet{}
-	if err := cl.Get(ctx, client.ObjectKey{Namespace: namespace, Name: machineSetName}, machineSet); err != nil {
-		return nil, nil, fmt.Errorf("get Cluster API MachineSet %s/%s: %w", namespace, machineSetName, err)
-	}
-
-	infraRef := machineSet.Spec.Template.Spec.InfrastructureRef
-	if infraRef.Name == "" {
-		return machineSet, nil, fmt.Errorf("no infrastructureRef name on Cluster API MachineSet %s/%s", namespace, machineSetName)
-	}
-
-	if infraRef.Kind != awsMachineTemplateKind {
-		return machineSet, nil, fmt.Errorf("unexpected infrastructure kind %q on Cluster API MachineSet %s/%s, want %q", infraRef.Kind, namespace, machineSetName, awsMachineTemplateKind)
-	}
-
-	template := &awsv1.AWSMachineTemplate{}
-	if err := cl.Get(ctx, client.ObjectKey{Namespace: namespace, Name: infraRef.Name}, template); err != nil {
-		return machineSet, nil, fmt.Errorf("get AWSMachineTemplate %s/%s referenced by Cluster API MachineSet %s: %w", namespace, infraRef.Name, machineSetName, err)
-	}
-
-	return machineSet, template, nil
+	return awsMachineTemplate
 }
