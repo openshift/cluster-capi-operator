@@ -504,7 +504,7 @@ func convertCAPVCloneModeToMAPI(fldPath *field.Path, capvMode vspherev1.CloneMod
 	case vspherev1.LinkedClone:
 		return mapiv1beta1.LinkedClone, nil
 	case "":
-		return "", nil
+		return "", field.Required(fldPath, "cloneMode must be explicitly set to fullClone or linkedClone")
 	default:
 		return "", field.Invalid(fldPath, capvMode, errUnsupportedCAPVCloneMode)
 	}

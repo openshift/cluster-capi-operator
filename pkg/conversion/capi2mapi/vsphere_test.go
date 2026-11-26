@@ -47,6 +47,7 @@ var _ = Describe("capi2mapi vSphere conversion", func() {
 		vsphereCAPIVSphereMachineBase = &vspherev1.VSphereMachine{
 			Spec: vspherev1.VSphereMachineSpec{
 				VirtualMachineCloneSpec: vspherev1.VirtualMachineCloneSpec{
+					CloneMode:  vspherev1.FullClone,
 					Template:   "test-template",
 					Server:     "vcenter.example.com",
 					Datacenter: "test-datacenter",
@@ -84,9 +85,14 @@ var _ = Describe("capi2mapi vSphere conversion", func() {
 
 	var _ = DescribeTable("capi2mapi vSphere convert CAPI Machine/VSphereMachine/VSphereCluster to a MAPI Machine",
 		func(in vsphereCAPI2MAPIMachineConversionInput) {
+			vm := in.vsphereMachine.DeepCopy()
+			if vm.Spec.CloneMode == "" {
+				vm.Spec.CloneMode = vspherev1.FullClone
+			}
+
 			_, warns, err := FromMachineAndVSphereMachineAndVSphereCluster(
 				in.machine,
-				in.vsphereMachine,
+				vm,
 				in.vsphereCluster,
 			).ToMachine()
 			Expect(err).To(matchers.ConsistOfMatchErrorSubstrings(in.expectedErrors),
@@ -351,9 +357,12 @@ var _ = Describe("capi2mapi vSphere conversion", func() {
 
 	var _ = DescribeTable("capi2mapi vSphere convert CAPI MachineSet/VSphereMachineTemplate/VSphereCluster to a MAPI MachineSet",
 		func(in vsphereCAPI2MAPIMachinesetConversionInput) {
+			vmTemplate := in.vsphereMachineTemplate.DeepCopy()
+			vmTemplate.Spec.Template.Spec.CloneMode = vspherev1.FullClone
+
 			_, warns, err := FromMachineSetAndVSphereMachineTemplateAndVSphereCluster(
 				in.machineSet,
-				in.vsphereMachineTemplate,
+				vmTemplate,
 				in.vsphereCluster,
 			).ToMachineSet()
 			Expect(err).To(matchers.ConsistOfMatchErrorSubstrings(in.expectedErrors),

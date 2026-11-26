@@ -81,7 +81,7 @@ var _ = Describe("vSphere status bridge characterization", func() {
 		Entry("unknown annotation retains the ready fallback", true, "unknown", "ready"),
 	)
 
-	DescribeTable("should preserve observed power state without changing the readiness bridge", func(powerState, annotationState, expectedState string) {
+	DescribeTable("should preserve observed power state and provisioned readiness independently", func(powerState, annotationState, expectedState string) {
 		status := mapiv1beta1.VSphereMachineProviderStatus{
 			InstanceState: ptr.To(powerState),
 			Conditions:    []metav1.Condition{{Type: string(mapiv1beta1.MachineCreation), Status: metav1.ConditionTrue, Reason: mapiv1beta1.MachineCreationSucceededConditionReason}},
@@ -98,7 +98,7 @@ var _ = Describe("vSphere status bridge characterization", func() {
 		machine.Annotations = map[string]string{consts.MAPIMachineMetadataAnnotationInstanceState: annotationState}
 		original := machine.DeepCopy()
 
-		By("Observing that real power-state values do not satisfy the synthetic ready bridge")
+		By("Deriving provisioning readiness from the Running phase, independently of power")
 
 		coreMachine, infraObject, warnings, err := mapi2capi.FromVSphereMachineAndInfra(machine, infra).ToMachineAndInfrastructureMachine()
 		Expect(err).NotTo(HaveOccurred())
@@ -109,10 +109,10 @@ var _ = Describe("vSphere status bridge characterization", func() {
 
 		Expect(coreMachine.Annotations).To(HaveKeyWithValue(consts.MAPIMachineMetadataAnnotationInstanceState, expectedState))
 		Expect(infraMachine.Annotations).To(HaveKeyWithValue(consts.MAPIMachineMetadataAnnotationInstanceState, expectedState))
-		Expect(infraMachine.Status.Ready).To(BeFalse())
+		Expect(infraMachine.Status.Ready).To(BeTrue())
 		Expect(infraMachine.Status.Addresses).NotTo(BeEmpty())
 
-		By("Preserving power state while leaving the independent readiness limitation explicit")
+		By("Preserving both the power observation and creation-success condition")
 
 		returned, warnings, err := capi2mapi.FromMachineAndVSphereMachineAndVSphereCluster(coreMachine, infraMachine, infraCluster).ToMachine()
 		Expect(err).NotTo(HaveOccurred())
@@ -124,7 +124,7 @@ var _ = Describe("vSphere status bridge characterization", func() {
 		Expect(returned.Annotations).To(HaveKeyWithValue(consts.MAPIMachineMetadataAnnotationInstanceState, expectedState))
 		Expect(returnedStatus.Conditions).To(ContainElement(SatisfyAll(
 			HaveField("Type", Equal(string(mapiv1beta1.MachineCreation))),
-			HaveField("Status", Equal(metav1.ConditionFalse)),
+			HaveField("Status", Equal(metav1.ConditionTrue)),
 		)))
 		Expect(machine).To(Equal(original))
 	},

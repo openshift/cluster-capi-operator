@@ -30,6 +30,7 @@ import (
 	admissionv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -46,7 +47,7 @@ var _ = Describe("Unsupported vSphere fields admission", Ordered, func() {
 	)
 
 	newObject := func(kind string) *unstructured.Unstructured {
-		spec := map[string]interface{}{"template": "test-template", "network": map[string]interface{}{"devices": []interface{}{}}}
+		spec := map[string]interface{}{"template": "test-template", "cloneMode": "fullClone", "network": map[string]interface{}{"devices": []interface{}{}}}
 		if kind == "VSphereMachineTemplate" {
 			spec = map[string]interface{}{"template": map[string]interface{}{"spec": spec}}
 		}
@@ -138,7 +139,11 @@ var _ = Describe("Unsupported vSphere fields admission", Ordered, func() {
 			}
 
 			if field != "" {
-				Expect(unstructured.SetNestedField(obj.Object, value, append(path, field)...)).To(Succeed())
+				if value == nil {
+					unstructured.RemoveNestedField(obj.Object, append(path, field)...)
+				} else {
+					Expect(unstructured.SetNestedField(obj.Object, value, append(path, field)...)).To(Succeed())
+				}
 			}
 
 			err := k8sClient.Update(ctx, obj, client.DryRunAll)
@@ -158,7 +163,10 @@ var _ = Describe("Unsupported vSphere fields admission", Ordered, func() {
 				Expect(err).NotTo(HaveOccurred())
 			}
 		},
-			Entry("omitted fields", "", nil, false),
+			Entry("omitted unsupported fields", "", nil, false),
+			Entry("omitted clone mode", "cloneMode", nil, true),
+			Entry("empty clone mode", "cloneMode", "", true),
+			Entry("explicit linked clone", "cloneMode", "linkedClone", false),
 			Entry("unknown IPAM group", "network", map[string]interface{}{"devices": []interface{}{map[string]interface{}{"addressesFromPools": []interface{}{map[string]interface{}{"apiGroup": "custom.io", "kind": "InClusterIPPool", "name": "pool"}}}}}, true),
 			Entry("unknown IPAM kind", "network", map[string]interface{}{"devices": []interface{}{map[string]interface{}{"addressesFromPools": []interface{}{map[string]interface{}{"apiGroup": "ipam.cluster.x-k8s.io", "kind": "CustomPool", "name": "pool"}}}}}, true),
 			Entry("missing IPAM group", "network", map[string]interface{}{"devices": []interface{}{map[string]interface{}{"addressesFromPools": []interface{}{map[string]interface{}{"kind": "InClusterIPPool", "name": "pool"}}}}}, true),
@@ -200,10 +208,22 @@ var _ = Describe("Unsupported vSphere fields admission", Ordered, func() {
 				}
 
 				if field != "" {
-					Expect(unstructured.SetNestedField(obj.Object, value, append(path, field)...)).To(Succeed())
+					if value == nil {
+						unstructured.RemoveNestedField(obj.Object, append(path, field)...)
+					} else {
+						Expect(unstructured.SetNestedField(obj.Object, value, append(path, field)...)).To(Succeed())
+					}
 				}
 
 				err := k8sClient.Create(ctx, obj, client.DryRunAll)
+				if version == "v1beta2" && field == "cloneMode" && value == "" {
+					// v1beta2 rejects empty enum values before admission; omission still exercises CEL.
+					Expect(apierrors.IsInvalid(err)).To(BeTrue())
+					Expect(err).To(MatchError(ContainSubstring("cloneMode: Unsupported value")))
+
+					return
+				}
+
 				if denied {
 					Expect(err).To(MatchError(ContainSubstring("denied request: " + strings.Join(path, ".") + "." + field + " is not supported")))
 				} else {
@@ -211,6 +231,9 @@ var _ = Describe("Unsupported vSphere fields admission", Ordered, func() {
 				}
 			},
 				Entry("control", "", nil, false),
+				Entry("omitted clone mode", "cloneMode", nil, true),
+				Entry("empty clone mode", "cloneMode", "", true),
+				Entry("explicit linked clone", "cloneMode", "linkedClone", false),
 				Entry("nested virtualization", "nestedHV", true, true),
 				Entry("explicit false nested virtualization", "nestedHV", false, true),
 				Entry("fault tolerance encryption", "ftEncryptionMode", "ftEncryptionRequired", true),

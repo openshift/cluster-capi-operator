@@ -49,6 +49,10 @@ spec:
       - vspheremachines
       - vspheremachinetemplates
   validations:
+  - expression: has(variables.machineSpec.cloneMode) && variables.machineSpec.cloneMode
+      in ['fullClone', 'linkedClone']
+    messageExpression: variables.specPath + '.cloneMode is not supported when omitted
+      or empty; set fullClone or linkedClone explicitly'
   - expression: |-
       !has(variables.machineSpec.network) || !has(variables.machineSpec.network.devices) || variables.machineSpec.network.devices.all(device,
 

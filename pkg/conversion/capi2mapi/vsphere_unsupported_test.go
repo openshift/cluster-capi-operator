@@ -32,6 +32,7 @@ var _ = Describe("Unsupported vSphere fields", func() {
 			spec := vspherev1.VSphereMachineSpec{}
 			Expect(json.Unmarshal([]byte(rawSpec), &spec)).To(Succeed())
 			spec.Template = "test-template"
+			spec.CloneMode = vspherev1.FullClone
 			cluster := &vspherev1.VSphereCluster{}
 
 			_, _, err := FromMachineAndVSphereMachineAndVSphereCluster(

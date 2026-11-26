@@ -118,13 +118,11 @@ func vsphereMachineFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interfac
 			m.TypeMeta.Kind = vsphereMachineKind                    //nolint:staticcheck // TypeMeta is embedded but we set it explicitly here
 		},
 		func(cloneMode *vspherev1.CloneMode, c randfill.Continue) {
-			switch c.Int31n(3) {
+			switch c.Int31n(2) {
 			case 0:
 				*cloneMode = vspherev1.FullClone
 			case 1:
 				*cloneMode = vspherev1.LinkedClone
-			case 2:
-				*cloneMode = ""
 			}
 		},
 		func(provisioningMode *vspherev1.ProvisioningMode, c randfill.Continue) {
@@ -161,7 +159,7 @@ func vsphereMachineFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interfac
 			spec.MigrateEncryption = ""
 			spec.CryptoKeyID = ""
 			spec.CryptoProfile = ""
-			spec.PowerOffMode = ""
+			spec.PowerOffMode = vspherev1.VirtualMachinePowerOpModeHard
 			spec.GuestSoftPowerOffTimeout = nil
 			spec.FailureDomain = nil
 			spec.NamingStrategy = nil
@@ -184,7 +182,7 @@ func vsphereMachineFuzzerFuncs(codecs runtimeserializer.CodecFactory) []interfac
 				spec.Network.Devices[i].Routes = nil
 				spec.Network.Devices[i].SearchDomains = nil
 				spec.Network.Devices[i].DeviceName = ""
-				spec.Network.Devices[i].DHCP4 = false
+				spec.Network.Devices[i].DHCP4 = len(spec.Network.Devices[i].IPAddrs) == 0 && len(spec.Network.Devices[i].AddressesFromPools) == 0
 				spec.Network.Devices[i].DHCP6 = false
 				spec.Network.Devices[i].SkipIPAllocation = false
 
@@ -241,7 +239,7 @@ func vsphereMachineTemplateFuzzerFuncs(codecs runtimeserializer.CodecFactory) []
 			spec.Template.Spec.MigrateEncryption = ""
 			spec.Template.Spec.CryptoKeyID = ""
 			spec.Template.Spec.CryptoProfile = ""
-			spec.Template.Spec.PowerOffMode = ""
+			spec.Template.Spec.PowerOffMode = vspherev1.VirtualMachinePowerOpModeHard
 			spec.Template.Spec.GuestSoftPowerOffTimeout = nil
 			spec.Template.Spec.FailureDomain = nil
 			spec.Template.Spec.NamingStrategy = nil
@@ -263,7 +261,7 @@ func vsphereMachineTemplateFuzzerFuncs(codecs runtimeserializer.CodecFactory) []
 				spec.Template.Spec.Network.Devices[i].Routes = nil
 				spec.Template.Spec.Network.Devices[i].SearchDomains = nil
 				spec.Template.Spec.Network.Devices[i].DeviceName = ""
-				spec.Template.Spec.Network.Devices[i].DHCP4 = false
+				spec.Template.Spec.Network.Devices[i].DHCP4 = len(spec.Template.Spec.Network.Devices[i].IPAddrs) == 0 && len(spec.Template.Spec.Network.Devices[i].AddressesFromPools) == 0
 				spec.Template.Spec.Network.Devices[i].DHCP6 = false
 				spec.Template.Spec.Network.Devices[i].SkipIPAllocation = false
 

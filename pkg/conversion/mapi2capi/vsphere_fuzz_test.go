@@ -16,6 +16,7 @@ limitations under the License.
 package mapi2capi_test
 
 import (
+	"encoding/json"
 	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -112,7 +113,6 @@ func vsphereProviderIDFuzzer(c randfill.Continue) string {
 
 type vsphereProviderFuzzer struct {
 	conversiontest.MAPIMachineFuzzer
-	InstanceState string
 }
 
 func (f *vsphereProviderFuzzer) fuzzProviderSpec(providerSpec *mapiv1beta1.VSphereMachineProviderSpec, c randfill.Continue) {
@@ -159,19 +159,11 @@ func (f *vsphereProviderFuzzer) fuzzProviderSpec(providerSpec *mapiv1beta1.VSphe
 func (f *vsphereProviderFuzzer) fuzzProviderStatus(providerStatus *mapiv1beta1.VSphereMachineProviderStatus, c randfill.Continue) {
 	c.FillNoCustom(providerStatus)
 
-	// InstanceState can only be "ready" or empty to match getInstanceState() logic.
-	// This matches how CAPV VSphereMachine.Status.Ready is a simple boolean.
-	// Save the value so FuzzMachine can sync it to annotations.
+	// Real power observations are covered by dedicated round-trip tests.
 	switch c.Int31n(2) {
 	case 0:
-		f.InstanceState = "ready"
+		providerStatus.InstanceState = ptr.To("ready")
 	case 1:
-		f.InstanceState = ""
-	}
-
-	if f.InstanceState != "" {
-		providerStatus.InstanceState = ptr.To(f.InstanceState)
-	} else {
 		providerStatus.InstanceState = nil
 	}
 }
@@ -180,14 +172,36 @@ func (f *vsphereProviderFuzzer) FuzzMachine(m *mapiv1beta1.Machine, c randfill.C
 	// Call parent fuzzer first
 	f.MAPIMachineFuzzer.FuzzMachine(m, c)
 
-	// Sync ProviderStatus.InstanceState to annotation for roundtrip fidelity.
-	// In production, these are always in sync (controllers set both).
-	if f.InstanceState != "" {
+	status, err := mapi2capi.VSphereProviderStatusFromRawExtension(m.Status.ProviderStatus)
+	Expect(err).NotTo(HaveOccurred())
+
+	instanceState := ptr.Deref(status.InstanceState, "")
+
+	// Exact-roundtrip fixtures use the phase-derived synthetic default; real power observations have dedicated tests.
+	if m.Status.Phase != nil {
+		instanceState = ""
+
+		switch *m.Status.Phase {
+		case mapiv1beta1.PhaseProvisioned, mapiv1beta1.PhaseRunning, mapiv1beta1.PhaseDeleting:
+			instanceState = "ready"
+		}
+
+		status.InstanceState = nil
+		if instanceState != "" {
+			status.InstanceState = ptr.To(instanceState)
+		}
+
+		m.Status.ProviderStatus.Raw, err = json.Marshal(status)
+		Expect(err).NotTo(HaveOccurred())
+	}
+
+	// Keep fixture metadata consistent with the chosen provider-status representation.
+	if instanceState != "" {
 		if m.Annotations == nil {
 			m.Annotations = map[string]string{}
 		}
 
-		m.Annotations[consts.MAPIMachineMetadataAnnotationInstanceState] = f.InstanceState
+		m.Annotations[consts.MAPIMachineMetadataAnnotationInstanceState] = instanceState
 	}
 }
 

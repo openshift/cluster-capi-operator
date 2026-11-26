@@ -29,6 +29,20 @@ unsupported request fails before synchronization. Existing objects with these
 values also fail conversion; they must use supported settings before migration.
 The warning-only behavior for `network.devices[*].macAddr` is unchanged.
 
+## Clone mode and network defaults
+
+CAPV Machines and MachineTemplates must explicitly set `cloneMode` to `fullClone`
+or `linkedClone`. Omitted or empty CAPV clone mode is rejected by conversion and
+admission: CAPV can select linked cloning based on available snapshots, whereas
+Machine API omission means full cloning. The converter does not query vCenter.
+Existing CAPV objects with omitted mode need an explicit, intentionally chosen
+mode before conversion or policy-covered updates can succeed. Machine API
+omission remains supported and converts to explicit CAPV `fullClone`.
+
+Machine API conversion returns CAPV `powerOffMode: hard`. IPv4 DHCP is derived
+from the absence of static addresses and IPAM pools. Focused round-trip tests
+assert these defaults separately from explicit clone-mode preservation.
+
 ## IPAM references
 
 Only `ipam.cluster.x-k8s.io` pools of Kind `InClusterIPPool` or
@@ -54,9 +68,13 @@ This annotation is a last-observed snapshot, not live power telemetry. CAPV does
 not refresh it, so it can become stale while Cluster API is authoritative. This
 preservation does not establish safe authority handback.
 
-Provisioning readiness remains separate and unchanged: without a recognized
-power snapshot, reverse conversion still emits the legacy synthetic `ready`
-state when CAPV `Ready` is true. Machine API to CAPV conversion still recognizes
-only that synthetic state as ready. Consequently, preserving real power states
-does not fix readiness or MachineCreation-condition round trips; that contract
-requires separate work.
+Provisioning readiness is separate from power. Machine API to CAPV conversion
+uses the same phase rule as the core Cluster API Machine: `Provisioned`, `Running`
+and `Deleting` indicate infrastructure provisioned; other present phases do not.
+Thus a provisioned, powered-off VM remains provisioned, while a powered-on VM in
+`Provisioning` does not become ready merely from power or early creation success.
+`Deleting` follows the existing core conversion convention, not a health claim.
+Only when the phase is absent does the legacy synthetic `ready` state supply
+readiness. Reverse conversion still emits synthetic `ready` when CAPV `Ready` is
+true and no recognized power snapshot exists; this is a derived default, not an
+observed power state. None of these mappings proves safe authority handback.

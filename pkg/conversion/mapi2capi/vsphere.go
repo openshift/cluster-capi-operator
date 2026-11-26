@@ -515,9 +515,12 @@ func convertMAPIMachineStatusToVSphereMachineStatus(mapiMachine *mapiv1beta1.Mac
 		errs = append(errs, addressesErr...)
 	}
 
-	// CAPV sets Ready to true if InstanceState is "ready". Otherwise false.
-	// This matches AWS's pattern of using ProviderStatus.InstanceState as the source of truth.
-	ready := ptr.Deref(mapiProviderStatus.InstanceState, "") == consts.VSphereInstanceStateReady
+	// Use the same provisioning evidence as the core Cluster API Machine, independently of VM power.
+	ready := ptr.Deref(deriveCAPIInfrastructureProvisionedFromMAPI(mapiMachine), false)
+	if mapiMachine.Status.Phase == nil {
+		// Preserve the legacy synthetic bridge when no Machine API phase is available.
+		ready = ptr.Deref(mapiProviderStatus.InstanceState, "") == consts.VSphereInstanceStateReady
+	}
 
 	s := vspherev1.VSphereMachineStatus{
 		Ready:     ready,

@@ -27,11 +27,45 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/ptr"
+	vspherev1 "sigs.k8s.io/cluster-api-provider-vsphere/api/govmomi/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
 var _ = Describe("Machine API provider status synchronization", func() {
+	DescribeTable("should persist phase-derived vSphere readiness through infrastructure status synchronization", func(phase, powerState string, expected bool) {
+		machine := &mapiv1beta1.Machine{
+			ObjectMeta: metav1.ObjectMeta{Name: "test-machine", Namespace: "openshift-machine-api"},
+			Spec:       mapiv1beta1.MachineSpec{ProviderSpec: mapiv1beta1.ProviderSpec{Value: &runtime.RawExtension{Raw: []byte(`{"template":"worker-template","workspace":{"datacenter":"dc"}}`)}}},
+			Status:     mapiv1beta1.MachineStatus{Phase: ptr.To(phase), ProviderStatus: &runtime.RawExtension{Raw: []byte(`{"instanceState":"` + powerState + `"}`)}},
+		}
+		_, object, _, err := mapi2capi.FromVSphereMachineAndInfra(machine, &configv1.Infrastructure{Status: configv1.InfrastructureStatus{InfrastructureName: "test"}}).ToMachineAndInfrastructureMachine()
+		Expect(err).NotTo(HaveOccurred())
+
+		converted, ok := object.(*vspherev1.VSphereMachine)
+		Expect(ok).To(BeTrue())
+		Expect(converted.Status.Ready).To(Equal(expected))
+		existing := converted.DeepCopy()
+		existing.Status.Ready = !expected
+
+		scheme := runtime.NewScheme()
+		Expect(vspherev1.AddToScheme(scheme)).To(Succeed())
+		fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(existing).WithObjects(existing).Build()
+		reconciler := &MachineSyncReconciler{Client: fakeClient, Platform: configv1.VSpherePlatformType}
+		diff, err := util.NewDefaultDiffer().Diff(existing, converted)
+		Expect(err).NotTo(HaveOccurred())
+		updated, err := reconciler.ensureCAPIInfraMachineStatusUpdated(ctx, machine, existing, converted, diff, false)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(updated).To(BeTrue())
+
+		stored := &vspherev1.VSphereMachine{}
+		Expect(fakeClient.Get(ctx, client.ObjectKeyFromObject(existing), stored)).To(Succeed())
+		Expect(stored.Status.Ready).To(Equal(expected))
+	},
+		Entry("provisioned powered-off Machine", mapiv1beta1.PhaseProvisioned, "poweredOff", true),
+		Entry("still-provisioning powered-on Machine", mapiv1beta1.PhaseProvisioning, "poweredOn", false),
+	)
+
 	DescribeTable("should preserve vSphere provider status through the status update",
 		func(existingRaw string, convertedRaw string, expectedInstanceID string, expectedTaskRef string, preserveCondition bool) {
 			machine := &mapiv1beta1.Machine{

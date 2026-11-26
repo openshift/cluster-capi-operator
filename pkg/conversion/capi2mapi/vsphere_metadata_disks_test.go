@@ -32,6 +32,7 @@ var _ = Describe("vSphere disk names and inventory metadata", func() {
 			infraMachine := &vspherev1.VSphereMachine{Spec: vspherev1.VSphereMachineSpec{
 				VirtualMachineCloneSpec: vspherev1.VirtualMachineCloneSpec{
 					Template:           "template",
+					CloneMode:          vspherev1.FullClone,
 					DataDisks:          []vspherev1.VSphereDisk{{Name: existingName, SizeGiB: 10}},
 					AdditionalDisksGiB: []int32{20, 30},
 				},
@@ -63,7 +64,7 @@ var _ = Describe("vSphere disk names and inventory metadata", func() {
 			converter := machineAndVSphereMachineAndVSphereCluster{
 				machine: &clusterv1.Machine{},
 				vSphereMachine: &vspherev1.VSphereMachine{Spec: vspherev1.VSphereMachineSpec{
-					VirtualMachineCloneSpec: vspherev1.VirtualMachineCloneSpec{Template: template, Datacenter: datacenter},
+					VirtualMachineCloneSpec: vspherev1.VirtualMachineCloneSpec{Template: template, Datacenter: datacenter, CloneMode: vspherev1.FullClone},
 				}},
 				vSphereCluster: &vspherev1.VSphereCluster{},
 			}
