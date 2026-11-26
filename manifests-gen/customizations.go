@@ -75,7 +75,7 @@ func processObjects(objs []client.Object, opts cmdlineOptions) ([]client.Object,
 		case "apps":
 			switch getKind(obj) {
 			case "Deployment":
-				deploy, err := customizeDeployment(obj)
+				deploy, err := customizeDeployment(obj, opts.preserveRequests)
 				if err != nil {
 					return nil, fmt.Errorf("failed to customize deployment %q: %w", obj.GetName(), err)
 				}
@@ -187,7 +187,7 @@ const (
 	proxyInjectAnnotation = capiOperatorDomain + "/inject-proxy"
 )
 
-func customizeDeployment(obj client.Object) (client.Object, error) {
+func customizeDeployment(obj client.Object, preserveRequests bool) (client.Object, error) {
 	deployment := &appsv1.Deployment{}
 	mustConvert(obj, deployment)
 
@@ -214,11 +214,7 @@ func customizeDeployment(obj client.Object) (client.Object, error) {
 
 	for i := range deployment.Spec.Template.Spec.Containers {
 		container := &deployment.Spec.Template.Spec.Containers[i]
-		// Add resource requests
-		container.Resources.Requests = corev1.ResourceList{
-			corev1.ResourceCPU:    resource.MustParse("10m"),
-			corev1.ResourceMemory: resource.MustParse("50Mi"),
-		}
+		container.Resources.Requests = resourceRequests(container.Resources.Requests, preserveRequests)
 		// Remove any existing resource limits. See: https://github.com/openshift/enhancements/blob/master/CONVENTIONS.md#resources-and-limits
 		container.Resources.Limits = corev1.ResourceList{}
 
@@ -236,6 +232,26 @@ func customizeDeployment(obj client.Object) (client.Object, error) {
 	}
 
 	return deployment, nil
+}
+
+// resourceRequests returns the default CPU and memory requests. When
+// preserveExisting is set, requests declared in the input manifest take
+// precedence and only missing defaults are added.
+func resourceRequests(existing corev1.ResourceList, preserveExisting bool) corev1.ResourceList {
+	requests := corev1.ResourceList{
+		corev1.ResourceCPU:    resource.MustParse("10m"),
+		corev1.ResourceMemory: resource.MustParse("50Mi"),
+	}
+
+	if !preserveExisting {
+		return requests
+	}
+
+	for name, quantity := range existing {
+		requests[name] = quantity
+	}
+
+	return requests
 }
 
 func replaceCertManagerAnnotations(obj client.Object) {
