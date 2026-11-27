@@ -95,6 +95,7 @@ func knownInfraClusterKinds() []string {
 		"AzureCluster",
 		"GCPCluster",
 		"IBMPowerVSCluster",
+		"NutanixCluster",
 		"OpenStackCluster",
 		"VSphereCluster",
 		"Metal3Cluster",

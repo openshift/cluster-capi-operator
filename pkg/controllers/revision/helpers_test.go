@@ -59,6 +59,7 @@ func newFeatureGate(enabled ...configv1.FeatureGateName) featuregates.FeatureGat
 		features.FeatureGateClusterAPIMachineManagementPowerVS,
 		features.FeatureGateClusterAPIMachineManagementOpenStack,
 		features.FeatureGateClusterAPIMachineManagementVSphere,
+		features.FeatureGateClusterAPIMachineManagementNutanix,
 	}
 
 	var disabled []configv1.FeatureGateName

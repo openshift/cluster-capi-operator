@@ -36,6 +36,7 @@ import (
 
 	bmov1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	metal3v1 "github.com/metal3-io/cluster-api-provider-metal3/api/v1beta1"
+	nutanixv1 "github.com/nutanix-cloud-native/cluster-api-provider-nutanix/api/v1beta1"
 
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	azurev1 "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
@@ -100,6 +101,7 @@ func init() {
 	utilruntime.Must(vspherev1.AddToScheme(scheme.Scheme))
 	utilruntime.Must(metal3v1.AddToScheme(scheme.Scheme))
 	utilruntime.Must(bmov1alpha1.AddToScheme(scheme.Scheme))
+	utilruntime.Must(nutanixv1.AddToScheme(scheme.Scheme))
 	utilruntime.Must(openshiftapiextensionsv1.AddToScheme(scheme.Scheme))
 	utilruntime.Must(operatorv1.Install(scheme.Scheme))
 }
