@@ -96,6 +96,9 @@ const (
 	// AWSProfile is the profile name for AWS-specific admission policies.
 	AWSProfile = "aws"
 
+	// VSphereProfile is the profile name for vSphere-specific admission policies.
+	VSphereProfile = "vsphere"
+
 	yamlChunk = 4096
 )
 
@@ -241,7 +244,7 @@ func UpdateVAPBindingNamespaces(binding *admissionregistrationv1.ValidatingAdmis
 func LoadAdmissionPolicyProfiles() map[string][]client.Object {
 	By("Loading admission policy profiles")
 
-	profiles := []string{DefaultProfile, AWSProfile}
+	profiles := []string{DefaultProfile, AWSProfile, VSphereProfile}
 	result := map[string][]client.Object{}
 
 	for _, profile := range profiles {

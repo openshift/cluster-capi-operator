@@ -491,6 +491,37 @@ var _ = Describe("With a running MachineMigration controller", func() {
 						req = reconcile.Request{NamespacedName: client.ObjectKeyFromObject(mapiMachine)}
 					})
 
+					DescribeTable("should retry while infrastructure pause acknowledgement is pending",
+						func(infraConditions clusterv1beta1.Conditions) {
+							By("Marking the mirrored Machine as synchronized with its authority")
+							Eventually(k.UpdateStatus(mapiMachine, func() {
+								mapiMachine.Status.SynchronizedGeneration = capiMachine.Generation
+							})).Should(Succeed())
+
+							By("Requesting pause on the old authoritative resources")
+
+							_, err := reconciler.Reconcile(ctx, req)
+							Expect(err).NotTo(HaveOccurred())
+
+							By("Waiting for the infrastructure provider to acknowledge pause")
+							Eventually(k.UpdateStatus(capaMachine, func() {
+								capaMachine.Status.Conditions = infraConditions
+							})).Should(Succeed())
+
+							result, err := reconciler.Reconcile(ctx, req)
+							Expect(err).NotTo(HaveOccurred())
+							Expect(result.RequeueAfter).To(BeNumerically(">", 0))
+							Eventually(k.Object(mapiMachine)).Should(HaveField("Status.AuthoritativeAPI", Equal(mapiv1beta1.MachineAuthorityMigrating)))
+						},
+						Entry("when the condition is absent", nil),
+						Entry("when the condition is False", clusterv1beta1.Conditions{{
+							Type: clusterv1beta1.PausedV1Beta2Condition, Status: corev1.ConditionFalse, LastTransitionTime: metav1.Now(),
+						}}),
+						Entry("when the condition is Unknown", clusterv1beta1.Conditions{{
+							Type: clusterv1beta1.PausedV1Beta2Condition, Status: corev1.ConditionUnknown, LastTransitionTime: metav1.Now(),
+						}}),
+					)
+
 					It("should set old authoritative API (CAPI) status to paused and requeue", func() {
 						_, err := reconciler.Reconcile(ctx, req)
 						Expect(err).NotTo(HaveOccurred())

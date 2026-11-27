@@ -1,0 +1,210 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: openshift-cluster-api-unsupported-vsphere-spec-fields
+spec:
+  matchResources:
+    namespaceSelector:
+      matchExpressions:
+      - key: kubernetes.io/metadata.name
+        operator: In
+        values:
+        - openshift-cluster-api
+  policyName: openshift-cluster-api-unsupported-vsphere-spec-fields
+  validationActions:
+  - Deny
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: openshift-cluster-api-unsupported-vsphere-spec-fields-warning
+spec:
+  matchResources:
+    namespaceSelector:
+      matchExpressions:
+      - key: kubernetes.io/metadata.name
+        operator: In
+        values:
+        - openshift-cluster-api
+  policyName: openshift-cluster-api-unsupported-vsphere-spec-fields-warning
+  validationActions:
+  - Warn
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: openshift-cluster-api-unsupported-vsphere-spec-fields
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+    - apiGroups:
+      - infrastructure.cluster.x-k8s.io
+      apiVersions:
+      - v1beta1
+      operations:
+      - CREATE
+      - UPDATE
+      resources:
+      - vspheremachines
+      - vspheremachinetemplates
+  validations:
+  - expression: has(variables.machineSpec.cloneMode) && variables.machineSpec.cloneMode
+      in ['fullClone', 'linkedClone']
+    messageExpression: variables.specPath + '.cloneMode is not supported when omitted
+      or empty; set fullClone or linkedClone explicitly'
+  - expression: |-
+      !has(variables.machineSpec.network) || !has(variables.machineSpec.network.devices) || variables.machineSpec.network.devices.all(device,
+
+        !has(device.addressesFromPools) || device.addressesFromPools.all(pool,
+          has(pool.apiGroup) && pool.apiGroup == 'ipam.cluster.x-k8s.io' &&
+          has(pool.kind) && pool.kind in ['InClusterIPPool', 'GlobalInClusterIPPool']
+        )
+      )
+    messageExpression: variables.specPath + '.network is not supported for unknown
+      IPAM group or kind'
+  - expression: '!has(variables.machineSpec.nestedHV)'
+    messageExpression: variables.specPath + '.nestedHV is not supported'
+  - expression: '!has(variables.machineSpec.ftEncryptionMode) || variables.machineSpec.ftEncryptionMode
+      == '''''
+    messageExpression: variables.specPath + '.ftEncryptionMode is not supported'
+  - expression: '!has(variables.machineSpec.migrateEncryption) || variables.machineSpec.migrateEncryption
+      == '''''
+    messageExpression: variables.specPath + '.migrateEncryption is not supported'
+  - expression: '!has(variables.machineSpec.cryptoKeyID) || variables.machineSpec.cryptoKeyID
+      == '''''
+    messageExpression: variables.specPath + '.cryptoKeyID is not supported'
+  - expression: '!has(variables.machineSpec.cryptoProfile) || variables.machineSpec.cryptoProfile
+      == '''''
+    messageExpression: variables.specPath + '.cryptoProfile is not supported'
+  - expression: '!has(variables.machineSpec.storagePolicyName) || variables.machineSpec.storagePolicyName
+      == '''''
+    messageExpression: variables.specPath + '.storagePolicyName is not supported'
+  - expression: '!has(variables.machineSpec.pciDevices) || variables.machineSpec.pciDevices.size()
+      == 0'
+    messageExpression: variables.specPath + '.pciDevices is not supported'
+  - expression: '!has(variables.machineSpec.hardwareVersion) || variables.machineSpec.hardwareVersion
+      == '''''
+    messageExpression: variables.specPath + '.hardwareVersion is not supported'
+  - expression: '!has(variables.machineSpec.thumbprint) || variables.machineSpec.thumbprint
+      == '''''
+    messageExpression: variables.specPath + '.thumbprint is not supported - TLS validation
+      is handled at cluster level'
+  - expression: '!has(variables.machineSpec.customVMXKeys) || variables.machineSpec.customVMXKeys.size()
+      == 0'
+    messageExpression: variables.specPath + '.customVMXKeys is not supported in OpenShift'
+  - expression: '!has(variables.machineSpec.resources)'
+    messageExpression: variables.specPath + '.resources is not supported'
+  - expression: '!has(variables.machineSpec.guestSoftPowerOffTimeout)'
+    messageExpression: variables.specPath + '.guestSoftPowerOffTimeout is not supported'
+  - expression: '!has(variables.machineSpec.namingStrategy)'
+    messageExpression: variables.specPath + '.namingStrategy is not supported'
+  - expression: '!has(variables.machineSpec.powerOffMode) || variables.machineSpec.powerOffMode
+      == '''' || variables.machineSpec.powerOffMode == ''hard'''
+    messageExpression: variables.specPath + '.powerOffMode must be "hard" or unset
+      - soft power-off is not supported'
+  - expression: '!has(variables.machineSpec.os) || variables.machineSpec.os == '''''
+    messageExpression: variables.specPath + '.os is not supported'
+  - expression: '!has(variables.machineSpec.network.routes) || variables.machineSpec.network.routes.size()
+      == 0'
+    messageExpression: variables.specPath + '.network.routes is not supported'
+  - expression: '!has(variables.machineSpec.network.preferredAPIServerCIDR) || variables.machineSpec.network.preferredAPIServerCIDR
+      == '''''
+    messageExpression: variables.specPath + '.network.preferredAPIServerCIDR is not
+      supported'
+  - expression: |-
+      !has(variables.machineSpec.network.devices) || variables.machineSpec.network.devices.all(device,
+
+        !has(device.deviceName) || device.deviceName == ''
+      )
+    messageExpression: variables.specPath + '.network.devices[*].deviceName is not
+      supported'
+  - expression: |-
+      !has(variables.machineSpec.network.devices) || variables.machineSpec.network.devices.all(device,
+
+        !has(device.dhcp6)
+      )
+    messageExpression: variables.specPath + '.network.devices[*].dhcp6 is not supported'
+  - expression: |-
+      !has(variables.machineSpec.network.devices) || variables.machineSpec.network.devices.all(device,
+
+        !has(device.gateway6) || device.gateway6 == ''
+      )
+    messageExpression: variables.specPath + '.network.devices[*].gateway6 is not supported'
+  - expression: |-
+      !has(variables.machineSpec.network.devices) || variables.machineSpec.network.devices.all(device,
+
+        !has(device.mtu)
+      )
+    messageExpression: variables.specPath + '.network.devices[*].mtu is not supported'
+  - expression: |-
+      !has(variables.machineSpec.network.devices) || variables.machineSpec.network.devices.all(device,
+
+        !has(device.routes) || device.routes.size() == 0
+      )
+    messageExpression: variables.specPath + '.network.devices[*].routes is not supported'
+  - expression: |-
+      !has(variables.machineSpec.network.devices) || variables.machineSpec.network.devices.all(device,
+
+        !has(device.searchDomains) || device.searchDomains.size() == 0
+      )
+    messageExpression: variables.specPath + '.network.devices[*].searchDomains is
+      not supported'
+  - expression: |-
+      !has(variables.machineSpec.network.devices) || variables.machineSpec.network.devices.all(device,
+
+        !has(device.dhcp4Overrides)
+      )
+    messageExpression: variables.specPath + '.network.devices[*].dhcp4Overrides is
+      not supported'
+  - expression: |-
+      !has(variables.machineSpec.network.devices) || variables.machineSpec.network.devices.all(device,
+
+        !has(device.dhcp6Overrides)
+      )
+    messageExpression: variables.specPath + '.network.devices[*].dhcp6Overrides is
+      not supported'
+  - expression: |-
+      !has(variables.machineSpec.network.devices) || variables.machineSpec.network.devices.all(device,
+
+        !has(device.skipIPAllocation)
+      )
+    messageExpression: variables.specPath + '.network.devices[*].skipIPAllocation
+      is not supported'
+  variables:
+  - expression: 'object.kind == ''VSphereMachine'' ? object.spec : object.spec.template.spec'
+    name: machineSpec
+  - expression: 'object.kind == ''VSphereMachine'' ? ''spec'' : ''spec.template.spec'''
+    name: specPath
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: openshift-cluster-api-unsupported-vsphere-spec-fields-warning
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+    - apiGroups:
+      - infrastructure.cluster.x-k8s.io
+      apiVersions:
+      - v1beta1
+      operations:
+      - CREATE
+      - UPDATE
+      resources:
+      - vspheremachines
+      - vspheremachinetemplates
+  validations:
+  - expression: |-
+      !has(variables.machineSpec.network.devices) || variables.machineSpec.network.devices.all(device,
+
+        !has(device.macAddr) || device.macAddr == ''
+      )
+    messageExpression: variables.specPath + '.network.devices[*].macAddr is not yet
+      supported but planned for future release'
+  variables:
+  - expression: 'object.kind == ''VSphereMachine'' ? object.spec : object.spec.template.spec'
+    name: machineSpec
+  - expression: 'object.kind == ''VSphereMachine'' ? ''spec'' : ''spec.template.spec'''
+    name: specPath
