@@ -15,6 +15,7 @@
 package e2e
 
 import (
+	"encoding/json"
 	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -25,7 +26,9 @@ import (
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	mapiframework "github.com/openshift/cluster-api-actuator-pkg/pkg/framework"
 	capiframework "github.com/openshift/cluster-capi-operator/e2e/framework"
+	"github.com/openshift/cluster-capi-operator/pkg/conversion/mapi2capi"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
+	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
@@ -35,9 +38,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 	var k komega.Komega
 
 	BeforeAll(func() {
-		if platform != configv1.AWSPlatformType {
-			Skip(fmt.Sprintf("Skipping tests on %s, this is only supported on AWS", platform))
-		}
+		skipUnsupportedPlatforms()
 
 		if !capiframework.IsFeatureGateEnabled(ctx, cl, features.FeatureGateMachineAPIMigration) {
 			Skip("Skipping, this feature is only supported on MachineAPIMigration enabled clusters")
@@ -50,7 +51,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 		var mapiMSAuthMAPIName string
 		var existingCAPIMSAuthorityMAPIName string
 
-		var awsMachineTemplate *awsv1.AWSMachineTemplate
+		var infraMachineTemplate client.Object
 		var capiMachineSet *clusterv1.MachineSet
 		var mapiMachineSet *mapiv1beta1.MachineSet
 
@@ -58,7 +59,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 			BeforeAll(func() {
 				existingCAPIMSAuthorityMAPIName = generateName("capi-ms-auth-mapi-")
 				capiMachineSet = createCAPIMachineSet(ctx, cl, 0, existingCAPIMSAuthorityMAPIName, "")
-				awsMachineTemplate = waitForAWSMachineTemplate(existingCAPIMSAuthorityMAPIName)
+				infraMachineTemplate = waitForInfraMachineTemplate(existingCAPIMSAuthorityMAPIName)
 
 				DeferCleanup(func() {
 					By("Cleaning up Context 'with spec.authoritativeAPI: MachineAPI and existing CAPI MachineSet with same name' resources")
@@ -66,7 +67,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 						ctx,
 						cl,
 						[]*clusterv1.MachineSet{capiMachineSet},
-						[]*awsv1.AWSMachineTemplate{awsMachineTemplate},
+						[]client.Object{infraMachineTemplate},
 						[]*mapiv1beta1.MachineSet{},
 					)
 				})
@@ -84,7 +85,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				mapiMSAuthMAPIName = generateName("ms-auth-mapi-")
 				mapiMachineSet = createMAPIMachineSetWithAuthoritativeAPI(ctx, cl, 0, mapiMSAuthMAPIName, mapiv1beta1.MachineAuthorityMachineAPI, mapiv1beta1.MachineAuthorityMachineAPI)
 				capiMachineSet = waitForCAPIMachineSetMirror(mapiMSAuthMAPIName)
-				awsMachineTemplate = waitForAWSMachineTemplate(mapiMSAuthMAPIName)
+				infraMachineTemplate = waitForInfraMachineTemplate(mapiMSAuthMAPIName)
 
 				DeferCleanup(func() {
 					By("Cleaning up Context 'with spec.authoritativeAPI: MachineAPI and when no existing CAPI MachineSet with same name' resources")
@@ -92,7 +93,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 						ctx,
 						cl,
 						[]*clusterv1.MachineSet{},
-						[]*awsv1.AWSMachineTemplate{awsMachineTemplate},
+						[]client.Object{infraMachineTemplate},
 						[]*mapiv1beta1.MachineSet{mapiMachineSet},
 					)
 				})
@@ -121,7 +122,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 		var mapiMSAuthMAPIName string
 		var mapiMSAuthMAPICAPI string
 
-		var awsMachineTemplate *awsv1.AWSMachineTemplate
+		var infraMachineTemplate client.Object
 		var capiMachineSet *clusterv1.MachineSet
 		var mapiMachineSet *mapiv1beta1.MachineSet
 		var firstMAPIMachine *mapiv1beta1.Machine
@@ -131,7 +132,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 			BeforeAll(func() {
 				mapiMSAuthMAPIName = generateName("ms-auth-mapi-")
 				mapiMachineSet = createMAPIMachineSetWithAuthoritativeAPI(ctx, cl, 1, mapiMSAuthMAPIName, mapiv1beta1.MachineAuthorityMachineAPI, mapiv1beta1.MachineAuthorityMachineAPI)
-				capiMachineSet, awsMachineTemplate = waitForMAPIMachineSetMirrors(mapiMSAuthMAPIName)
+				capiMachineSet, infraMachineTemplate = waitForMAPIMachineSetMirrors(mapiMSAuthMAPIName)
 
 				mapiMachines, err := mapiframework.GetMachinesFromMachineSet(ctx, cl, mapiMachineSet)
 				Expect(err).ToNot(HaveOccurred(), "failed to get MAPI Machines from MachineSet")
@@ -148,7 +149,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 						ctx,
 						cl,
 						[]*clusterv1.MachineSet{capiMachineSet},
-						[]*awsv1.AWSMachineTemplate{awsMachineTemplate},
+						[]client.Object{infraMachineTemplate},
 						[]*mapiv1beta1.MachineSet{mapiMachineSet},
 					)
 				})
@@ -224,7 +225,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				Expect(mapiframework.DeleteMachineSets(cl, mapiMachineSet)).To(Succeed(), "Should be able to delete test MachineSet")
 				capiframework.WaitForMachineSetsDeleted(capiMachineSet)
 				mapiframework.WaitForMachineSetsDeleted(ctx, cl, mapiMachineSet)
-				verifyResourceRemoved(awsMachineTemplate)
+				verifyResourceRemoved(infraMachineTemplate)
 			})
 		})
 
@@ -232,7 +233,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 			BeforeAll(func() {
 				mapiMSAuthMAPICAPI = generateName("ms-mapi-machine-capi-")
 				mapiMachineSet = createMAPIMachineSetWithAuthoritativeAPI(ctx, cl, 0, mapiMSAuthMAPICAPI, mapiv1beta1.MachineAuthorityMachineAPI, mapiv1beta1.MachineAuthorityClusterAPI)
-				capiMachineSet, awsMachineTemplate = waitForMAPIMachineSetMirrors(mapiMSAuthMAPICAPI)
+				capiMachineSet, infraMachineTemplate = waitForMAPIMachineSetMirrors(mapiMSAuthMAPICAPI)
 
 				DeferCleanup(func() {
 					By("Cleaning up Context 'with spec.authoritativeAPI: MachineAPI, spec.template.spec.authoritativeAPI: ClusterAPI' resources")
@@ -240,7 +241,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 						ctx,
 						cl,
 						[]*clusterv1.MachineSet{capiMachineSet},
-						[]*awsv1.AWSMachineTemplate{awsMachineTemplate},
+						[]client.Object{infraMachineTemplate},
 						[]*mapiv1beta1.MachineSet{mapiMachineSet},
 					)
 				})
@@ -268,7 +269,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				Expect(mapiframework.DeleteMachineSets(cl, mapiMachineSet)).To(Succeed(), "Should be able to delete test MachineSet")
 				capiframework.WaitForMachineSetsDeleted(capiMachineSet)
 				mapiframework.WaitForMachineSetsDeleted(ctx, cl, mapiMachineSet)
-				verifyResourceRemoved(awsMachineTemplate)
+				verifyResourceRemoved(infraMachineTemplate)
 			})
 		})
 	})
@@ -277,13 +278,20 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 		var mapiMSAuthMAPIName string
 		var mapiMachineSet *mapiv1beta1.MachineSet
 		var capiMachineSet *clusterv1.MachineSet
-		var awsMachineTemplate *awsv1.AWSMachineTemplate
-		var newAWSMachineTemplate *awsv1.AWSMachineTemplate
+		var infraMachineTemplate client.Object
+		var newInfraMachineTemplate client.Object
+
+		newAWSInstanceType1 := "m5.2xlarge"
+		newAWSInstanceType2 := "m5.4xlarge"
+		newAWSInstanceType3 := "m5.8xlarge"
+		newOpenStackFlavor1 := "m1.2xlarge"
+		newOpenStackFlavor2 := "m1.4xlarge"
+		newOpenStackFlavor3 := "m1.8xlarge"
 
 		BeforeAll(func() {
 			mapiMSAuthMAPIName = generateName("ms-auth-mapi-")
 			mapiMachineSet = createMAPIMachineSetWithAuthoritativeAPI(ctx, cl, 0, mapiMSAuthMAPIName, mapiv1beta1.MachineAuthorityMachineAPI, mapiv1beta1.MachineAuthorityMachineAPI)
-			capiMachineSet, awsMachineTemplate = waitForMAPIMachineSetMirrors(mapiMSAuthMAPIName)
+			capiMachineSet, infraMachineTemplate = waitForMAPIMachineSetMirrors(mapiMSAuthMAPIName)
 
 			DeferCleanup(func() {
 				By("Cleaning up 'Update MachineSet' resources")
@@ -291,14 +299,14 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 					ctx,
 					cl,
 					[]*clusterv1.MachineSet{capiMachineSet},
-					[]*awsv1.AWSMachineTemplate{awsMachineTemplate, newAWSMachineTemplate},
+					[]client.Object{infraMachineTemplate, newInfraMachineTemplate},
 					[]*mapiv1beta1.MachineSet{mapiMachineSet},
 				)
 			})
 		})
 
 		Context("when MAPI MachineSet with spec.authoritativeAPI: MachineAPI and replicas 0", Ordered, func() {
-			It("should reject CAPI mirror updates and allow MAPI providerSpec updates", func() {
+			It("should reject CAPI mirror updates", func() {
 				By("Scaling up CAPI MachineSet to 1 should be rejected by VAP")
 				replicas := int32(1)
 				Eventually(func() error {
@@ -318,34 +326,95 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 						}
 					})()
 				}, capiframework.WaitShort, capiframework.RetryShort).Should(MatchError(ContainSubstring("Changing .spec is not allowed")))
-
-				By("Updating MAPI MachineSet providerSpec InstanceType to m5.large")
-				newInstanceType := "m5.large"
-				Expect(updateAWSMachineSetProviderSpec(ctx, cl, mapiMachineSet, func(providerSpec *mapiv1beta1.AWSMachineProviderConfig) {
-					providerSpec.InstanceType = newInstanceType
-				})).To(Succeed(), "failed to patch MachineSet provider spec")
-
-				By("Waiting for new InfraTemplate with updated InstanceType to be created")
-				originalAWSMachineTemplateName := capiMachineSet.Spec.Template.Spec.InfrastructureRef.Name
-				Eventually(func(g Gomega) {
-					g.Expect(cl.Get(ctx, client.ObjectKeyFromObject(capiMachineSet), capiMachineSet)).To(Succeed())
-
-					currentTemplateName := capiMachineSet.Spec.Template.Spec.InfrastructureRef.Name
-					g.Expect(currentTemplateName).ToNot(Equal(originalAWSMachineTemplateName),
-						"InfraTemplate name should have changed from %s", originalAWSMachineTemplateName)
-
-					newAWSMachineTemplate = &awsv1.AWSMachineTemplate{}
-					newAWSMachineTemplate.Name = currentTemplateName
-					newAWSMachineTemplate.Namespace = capiMachineSet.Namespace
-					g.Expect(cl.Get(ctx, client.ObjectKeyFromObject(newAWSMachineTemplate), newAWSMachineTemplate)).To(Succeed())
-					g.Expect(newAWSMachineTemplate.Spec.Template.Spec.InstanceType).To(Equal(newInstanceType),
-						"AWSMachineTemplate %s should have InstanceType %s", currentTemplateName, newInstanceType)
-				}, capiframework.WaitLong, capiframework.RetryMedium).Should(Succeed(),
-					"Should have a new InfraTemplate with InstanceType %s", newInstanceType)
-
-				By("Verifying the old InfraTemplate is deleted")
-				verifyResourceRemoved(awsMachineTemplate)
 			})
+
+			DescribeTable(
+				"Updating provider-specific spec in MAPI MachineSet",
+				func(
+					targetPlatform configv1.PlatformType,
+					templateObj client.Object,
+					updateProviderSpecFunc func(ms *mapiv1beta1.MachineSet) ([]byte, error),
+					validateTemplateFunc func(g Gomega, obj client.Object),
+				) {
+					if platform != targetPlatform {
+						Skip(fmt.Sprintf("Skipping %s-specific tests on non-%s platform.", targetPlatform, targetPlatform))
+					}
+
+					By("Updating MAPI MachineSet providerSpec")
+					Expect(updateInfraMachineSetProviderSpec(ctx, cl, mapiMachineSet, func(ms *mapiv1beta1.MachineSet) ([]byte, error) {
+						return updateProviderSpecFunc(ms)
+					})).To(Succeed(), "failed to patch MachineSet provider spec")
+
+					By("Waiting for new InfraTemplate with updated field to be created")
+					Eventually(func(g Gomega) {
+						originalInfraMachineTemplateName := capiMachineSet.Spec.Template.Spec.InfrastructureRef.Name
+
+						currentMachineSet := &clusterv1.MachineSet{}
+						g.Expect(cl.Get(ctx, client.ObjectKeyFromObject(capiMachineSet), currentMachineSet)).To(Succeed(), "should get current CAPI machine set successfully")
+
+						currentTemplateName := currentMachineSet.Spec.Template.Spec.InfrastructureRef.Name
+						g.Expect(currentTemplateName).ToNot(Equal(originalInfraMachineTemplateName),
+							"InfraTemplate name should have changed from %s", originalInfraMachineTemplateName)
+
+						templateObj.SetName(currentTemplateName)
+						templateObj.SetNamespace(capiMachineSet.Namespace)
+
+						g.Expect(cl.Get(ctx, client.ObjectKeyFromObject(templateObj), templateObj)).To(Succeed(), "should get current machine template successfully")
+
+						validateTemplateFunc(g, templateObj)
+						capiMachineSet = currentMachineSet
+					}, capiframework.WaitLong, capiframework.RetryMedium).Should(Succeed(),
+						"Should have a new InfraTemplate with updated field")
+
+					By("Verifying the old InfraTemplate is deleted")
+					verifyResourceRemoved(infraMachineTemplate)
+				},
+				Entry(
+					"should allow MAPI AWS providerSpec updates",
+					configv1.AWSPlatformType,
+					&awsv1.AWSMachineTemplate{},
+					func(ms *mapiv1beta1.MachineSet) ([]byte, error) {
+						providerSpec := getAWSProviderSpecFromMachineSet(ms)
+						Expect(providerSpec).ToNot(BeNil(), "failed to extract AWS ProviderSpec from MachineSet %s", ms.Name)
+						providerSpec.InstanceType = newAWSInstanceType1
+						return json.Marshal(providerSpec)
+					},
+					func(g Gomega, obj client.Object) {
+						m, ok := obj.(*awsv1.AWSMachineTemplate)
+						g.Expect(ok).To(BeTrue(), "should be an *awsv1.AWSMachineTemplate")
+
+						g.Expect(m.Spec.Template.Spec.InstanceType).To(Equal(newAWSInstanceType1),
+							"AWSMachineTemplate %s should have InstanceType %s", m.Name, newAWSInstanceType1)
+
+						newInfraMachineTemplate = m
+					},
+				),
+				Entry(
+					"should allow MAPI OpenStack providerSpec updates",
+					configv1.OpenStackPlatformType,
+					&openstackv1.OpenStackMachineTemplate{},
+					func(ms *mapiv1beta1.MachineSet) ([]byte, error) {
+						if ms.Spec.Template.Spec.ProviderSpec.Value == nil {
+							return nil, nil
+						}
+
+						providerSpec, err := mapi2capi.OpenStackProviderSpecFromRawExtension(ms.Spec.Template.Spec.ProviderSpec.Value)
+						Expect(err).To(BeNil(), "failed to extract OpenStack ProviderSpec from MachineSet %s", ms.Name)
+						providerSpec.Flavor = newOpenStackFlavor1
+
+						return json.Marshal(providerSpec)
+					},
+					func(g Gomega, obj client.Object) {
+						m, ok := obj.(*openstackv1.OpenStackMachineTemplate)
+						g.Expect(ok).To(BeTrue(), "should be an *openstackv1.OpenStackMachineTemplate")
+
+						g.Expect(*m.Spec.Template.Spec.Flavor).To(Equal(newOpenStackFlavor1),
+							"OpenStackMachineTemplate %s should have InstanceType %s", m.Name, newOpenStackFlavor1)
+
+						newInfraMachineTemplate = m
+					},
+				),
+			)
 		})
 
 		Context("when switching MAPI MachineSet spec.authoritativeAPI to ClusterAPI", Ordered, func() {
@@ -355,7 +424,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				verifyMAPIMachineSetSynchronizedCondition(mapiMachineSet, mapiv1beta1.MachineAuthorityClusterAPI)
 			})
 
-			It("should reject MAPI updates and allow CAPI InfraTemplate updates", func() {
+			It("should reject MAPI updates", func() {
 				By("Scaling up MAPI MachineSet to 1 should be rejected by VAP")
 				replicas := int32(1)
 				Eventually(func() error {
@@ -363,33 +432,90 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 						mapiMachineSet.Spec.Replicas = &replicas
 					})()
 				}, capiframework.WaitShort, capiframework.RetryShort).Should(MatchError(ContainSubstring("Any other change inside .spec is not allowed")))
-
-				By("Updating the MAPI MachineSet providerSpec InstanceType should be rejected by VAP")
-				Eventually(func() error {
-					return updateAWSMachineSetProviderSpec(ctx, cl, mapiMachineSet, func(providerSpec *mapiv1beta1.AWSMachineProviderConfig) {
-						providerSpec.InstanceType = "m5.xlarge"
-					})
-				}, capiframework.WaitShort, capiframework.RetryShort).Should(MatchError(ContainSubstring("Any other change inside .spec is not allowed")))
-
-				By("Creating a new awsMachineTemplate with different spec")
-				newInstanceType := "m6.xlarge"
-				originalAWSMachineTemplateName := capiMachineSet.Spec.Template.Spec.InfrastructureRef.Name
-				newAWSMachineTemplate = createAWSMachineTemplate(ctx, cl, originalAWSMachineTemplateName, func(spec *awsv1.AWSMachineSpec) {
-					spec.InstanceType = newInstanceType
-				})
-
-				By("Updating CAPI MachineSet to point to the new InfraTemplate")
-				updateCAPIMachineSetInfraTemplate(capiMachineSet, newAWSMachineTemplate.Name)
-
-				By("Verifying the MAPI MachineSet is updated to reflect the new template")
-				var err error
-				mapiMachineSet, err = mapiframework.GetMachineSet(ctx, cl, mapiMSAuthMAPIName)
-				Expect(err).ToNot(HaveOccurred(), "failed to refresh MAPI MachineSet")
-				Eventually(k.Object(mapiMachineSet), capiframework.WaitMedium, capiframework.RetryMedium).Should(
-					HaveField("Spec.Template.Spec.ProviderSpec.Value.Raw", ContainSubstring(newInstanceType)),
-					"Should have MAPI MachineSet providerSpec updated to reflect the new InfraTemplate with InstanceType %s", newInstanceType,
-				)
 			})
+
+			DescribeTable(
+				"Updating MAPI provider spec updates and CAPI Infra MachineTemplate",
+				func(
+					targetPlatform configv1.PlatformType,
+					updateMAPIProviderSpecFunc func(ms *mapiv1beta1.MachineSet) ([]byte, error),
+					createNewTemplateFunc func(originalInfraMachineTemplateName string) client.Object,
+					validateMAPIMachineTemplateFunc func(mapiMachineSet *mapiv1beta1.MachineSet),
+				) {
+					if platform != targetPlatform {
+						Skip(fmt.Sprintf("Skipping %s-specific tests on non-%s platform.", targetPlatform, targetPlatform))
+					}
+
+					By("Updating the field in the MAPI MachineSet providerSpec should be rejected by VAP")
+					Eventually(func() error {
+						return updateInfraMachineSetProviderSpec(ctx, cl, mapiMachineSet, func(ms *mapiv1beta1.MachineSet) ([]byte, error) {
+							return updateMAPIProviderSpecFunc(ms)
+						})
+					}, capiframework.WaitShort, capiframework.RetryShort).Should(MatchError(ContainSubstring("Any other change inside .spec is not allowed")))
+
+					By("Creating a new infra MachineTemplate with different spec")
+					originalInfraMachineTemplateName := capiMachineSet.Spec.Template.Spec.InfrastructureRef.Name
+					newInfraMachineTemplate = createNewTemplateFunc(originalInfraMachineTemplateName)
+
+					By("Updating CAPI MachineSet to point to the new InfraTemplate")
+					updateCAPIMachineSetInfraTemplate(capiMachineSet, newInfraMachineTemplate.GetName())
+
+					By("Verifying the MAPI MachineSet is updated to reflect the new template")
+					var err error
+					mapiMachineSet, err = mapiframework.GetMachineSet(ctx, cl, mapiMSAuthMAPIName)
+					Expect(err).ToNot(HaveOccurred(), "failed to refresh MAPI MachineSet")
+					validateMAPIMachineTemplateFunc(mapiMachineSet)
+				},
+				Entry("should reject updating AWS provider spec and allow updating CAPI AWS Machine template",
+					configv1.AWSPlatformType,
+					func(ms *mapiv1beta1.MachineSet) ([]byte, error) {
+						providerSpec := getAWSProviderSpecFromMachineSet(ms)
+						Expect(providerSpec).ToNot(BeNil(), "failed to extract AWS ProviderSpec from MachineSet %s", ms.Name)
+						providerSpec.InstanceType = newAWSInstanceType2
+						return json.Marshal(providerSpec)
+					},
+					func(originalAWSMachineTemplateName string) client.Object {
+						newInfraMachineTemplate = createAWSMachineTemplate(ctx, cl, originalAWSMachineTemplateName, func(spec *awsv1.AWSMachineSpec) {
+							spec.InstanceType = newAWSInstanceType3
+						})
+
+						return newInfraMachineTemplate
+					},
+					func(mapiMachineSet *mapiv1beta1.MachineSet) {
+						Eventually(k.Object(mapiMachineSet), capiframework.WaitMedium, capiframework.RetryMedium).Should(
+							HaveField("Spec.Template.Spec.ProviderSpec.Value.Raw", ContainSubstring(newAWSInstanceType3)),
+							"Should have MAPI MachineSet providerSpec updated to reflect the new InfraTemplate with InstanceType %s", newAWSInstanceType3,
+						)
+					},
+				),
+				Entry("should reject updating OpenStack provider spec allow updating CAPI OpenStack Machine template",
+					configv1.OpenStackPlatformType,
+					func(ms *mapiv1beta1.MachineSet) ([]byte, error) {
+						if ms.Spec.Template.Spec.ProviderSpec.Value == nil {
+							return nil, nil
+						}
+
+						providerSpec, err := mapi2capi.OpenStackProviderSpecFromRawExtension(ms.Spec.Template.Spec.ProviderSpec.Value)
+						Expect(err).To(BeNil(), "failed to extract OpenStack ProviderSpec from MachineSet %s", ms.Name)
+						providerSpec.Flavor = newOpenStackFlavor2
+
+						return json.Marshal(providerSpec)
+					},
+					func(originalOpenStackMachineTemplateName string) client.Object {
+						newInfraMachineTemplate = createOpenStackMachineTemplate(ctx, cl, originalOpenStackMachineTemplateName, func(osms *openstackv1.OpenStackMachineSpec) {
+							osms.Flavor = &newOpenStackFlavor3
+						})
+
+						return newInfraMachineTemplate
+					},
+					func(mapiMachineSet *mapiv1beta1.MachineSet) {
+						Eventually(k.Object(mapiMachineSet), capiframework.WaitMedium, capiframework.RetryMedium).Should(
+							HaveField("Spec.Template.Spec.ProviderSpec.Value.Raw", ContainSubstring(newOpenStackFlavor3)),
+							"Should have MAPI MachineSet providerSpec updated to reflect the new InfraTemplate with Flavor %s", newOpenStackFlavor3,
+						)
+					},
+				),
+			)
 		})
 	})
 })

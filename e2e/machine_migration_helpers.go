@@ -17,6 +17,7 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -24,6 +25,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/types"
 
+	configv1 "github.com/openshift/api/config/v1"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	mapiframework "github.com/openshift/cluster-api-actuator-pkg/pkg/framework"
 	capiframework "github.com/openshift/cluster-capi-operator/e2e/framework"
@@ -32,6 +34,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
+	openstackv1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
@@ -98,33 +101,66 @@ func createCAPIMachine(ctx context.Context, cl client.Client, machineName string
 		return cl.Create(ctx, newCapiMachine)
 	}, capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(), "Should have successfully created CAPI machine %s/%s", newCapiMachine.Namespace, newCapiMachine.Name)
 
-	referenceAWSMachine := capiframework.GetAWSMachineWithRetry(referenceCapiMachine.Name, capiframework.CAPINamespace)
-	// Define the new awsmachine based on the reference.
-	newAWSMachine := &awsv1.AWSMachine{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "AWSMachine",
-			APIVersion: awsv1.GroupVersion.String(),
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      machineName,
-			Namespace: referenceAWSMachine.Namespace,
-		},
-		Spec: *referenceAWSMachine.Spec.DeepCopy(),
+	referenceInfraMachine := capiframework.GetInfraMachineWithRetry(platform, referenceCapiMachine.Name, capiframework.CAPINamespace)
+	// Define the new infra machine based on the reference.
+	var newInfraMachine client.Object
+
+	switch platform {
+	case configv1.AWSPlatformType:
+		awsMachine, ok := referenceInfraMachine.(*awsv1.AWSMachine)
+		Expect(ok).To(BeTrue(), "Should be an *awsv1.AWSMachine")
+
+		m := &awsv1.AWSMachine{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "AWSMachine",
+				APIVersion: awsv1.GroupVersion.String(),
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      machineName,
+				Namespace: referenceInfraMachine.GetNamespace(),
+			},
+			Spec:   *awsMachine.Spec.DeepCopy(),
+			Status: awsv1.AWSMachineStatus{},
+		}
+
+		// Clear status and other instance-specific fields that should not be copied.
+		m.Spec.ProviderID = nil
+		m.Spec.InstanceID = nil
+		m.ObjectMeta.Labels = nil
+
+		newInfraMachine = m
+	case configv1.OpenStackPlatformType:
+		osMachine, ok := referenceInfraMachine.(*openstackv1.OpenStackMachine)
+		Expect(ok).To(BeTrue(), "Should be an *openstackv1.OpenStackMachine")
+
+		m := &openstackv1.OpenStackMachine{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "OpenStackMachine",
+				APIVersion: openstackv1.SchemeGroupVersion.String(),
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      machineName,
+				Namespace: referenceInfraMachine.GetNamespace(),
+			},
+			Spec:   *osMachine.Spec.DeepCopy(),
+			Status: openstackv1.OpenStackMachineStatus{},
+		}
+
+		m.Spec.ProviderID = nil
+		m.ObjectMeta.Labels = nil
+
+		newInfraMachine = m
+	default:
+		Fail(fmt.Sprintf("Platform %q is not supported yet", platform))
 	}
 
-	// Clear status and other instance-specific fields that should not be copied.
-	newAWSMachine.Spec.ProviderID = nil
-	newAWSMachine.Spec.InstanceID = nil
-	newAWSMachine.ObjectMeta.Labels = nil
-	newAWSMachine.Status = awsv1.AWSMachineStatus{}
-
-	By(fmt.Sprintf("Creating a new CAPI AWSMachine in namespace: %s", newAWSMachine.Namespace))
+	By(fmt.Sprintf("Creating a new CAPI Infra Machine in namespace: %s", newInfraMachine.GetNamespace()))
 	Eventually(func() error {
-		return cl.Create(ctx, newAWSMachine)
-	}, capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(), "Should have successfully created AWSmachine %s/%s", newAWSMachine.Namespace, newAWSMachine.Name)
+		return cl.Create(ctx, newInfraMachine)
+	}, capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed(), "Should have successfully created infra machine %s/%s", newInfraMachine.GetNamespace(), newInfraMachine.GetName())
 
 	trackResource(newCapiMachine)
-	trackResource(newAWSMachine)
+	trackResource(newInfraMachine)
 	// The sync controller will create a mirrored MAPI Machine with the same name.
 	trackResource(&mapiv1beta1.Machine{
 		ObjectMeta: metav1.ObjectMeta{
@@ -470,5 +506,41 @@ func verifyMachineSynchronizedGeneration(mapiMachine *mapiv1beta1.Machine, autho
 		}, capiframework.WaitMedium, capiframework.RetryMedium).Should(Succeed())
 	default:
 		Fail(fmt.Sprintf("unknown authoritativeAPI type: %v", authority))
+	}
+}
+
+// generateInfraMachineObject creates an infra Machine object based on the platform type.
+func generateInfraMachineObject(mapiMachineAuthMAPINameDelete string) client.Object {
+	GinkgoHelper()
+
+	var obj client.Object
+	switch platform {
+	case configv1.AWSPlatformType:
+		obj = &awsv1.AWSMachine{
+			TypeMeta:   metav1.TypeMeta{Kind: "AWSMachine", APIVersion: awsv1.GroupVersion.String()},
+			ObjectMeta: metav1.ObjectMeta{Name: mapiMachineAuthMAPINameDelete, Namespace: capiframework.CAPINamespace},
+		}
+	case configv1.OpenStackPlatformType:
+		obj = &openstackv1.OpenStackMachine{
+			TypeMeta:   metav1.TypeMeta{Kind: "OpenStackMachine", APIVersion: openstackv1.SchemeGroupVersion.String()},
+			ObjectMeta: metav1.ObjectMeta{Name: mapiMachineAuthMAPINameDelete, Namespace: capiframework.CAPINamespace},
+		}
+	default:
+		Fail(fmt.Sprintf("Platform %q is not supported yet", platform))
+	}
+
+	return obj
+}
+
+func skipUnsupportedPlatforms() {
+	GinkgoHelper()
+
+	supportedPlatforms := []string{
+		string(configv1.AWSPlatformType),
+		string(configv1.OpenStackPlatformType),
+	}
+
+	if !slices.Contains(supportedPlatforms, string(platform)) {
+		Skip(fmt.Sprintf("Skipping tests on %s, this is only supported on %q", platform, strings.Join(supportedPlatforms, "/")))
 	}
 }

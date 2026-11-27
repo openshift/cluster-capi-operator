@@ -15,26 +15,19 @@
 package e2e
 
 import (
-	"fmt"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/api/features"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	mapiframework "github.com/openshift/cluster-api-actuator-pkg/pkg/framework"
 	capiframework "github.com/openshift/cluster-capi-operator/e2e/framework"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 )
 
 var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Machine Migration CAPI Authoritative Tests", Ordered, func() {
 	BeforeAll(func() {
-		if platform != configv1.AWSPlatformType {
-			Skip(fmt.Sprintf("Skipping tests on %s, this is only supported on AWS", platform))
-		}
+		skipUnsupportedPlatforms()
 
 		if !capiframework.IsFeatureGateEnabled(ctx, cl, features.FeatureGateMachineAPIMigration) {
 			Skip("Skipping, this feature is only supported on MachineAPIMigration enabled clusters")
@@ -154,11 +147,8 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 					By("Verifying the CAPI machine is deleted")
 					verifyResourceRemoved(newCapiMachine)
 
-					By("Verifying the AWS machine is deleted")
-					verifyResourceRemoved(&awsv1.AWSMachine{
-						TypeMeta:   metav1.TypeMeta{Kind: "AWSMachine", APIVersion: awsv1.GroupVersion.String()},
-						ObjectMeta: metav1.ObjectMeta{Name: mapiMachineAuthCAPINameDeletion, Namespace: capiframework.CAPINamespace},
-					})
+					By("Verifying the infra machine is deleted")
+					verifyResourceRemoved(generateInfraMachineObject(mapiMachineAuthCAPINameDeletion))
 				})
 			})
 			Context("when deleting the authoritative CAPI Machine", func() {
@@ -186,11 +176,8 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 					By("Verifying the MAPI machine is deleted")
 					verifyResourceRemoved(newMapiMachine)
 
-					By("Verifying the AWS machine is deleted")
-					verifyResourceRemoved(&awsv1.AWSMachine{
-						TypeMeta:   metav1.TypeMeta{Kind: "AWSMachine", APIVersion: awsv1.GroupVersion.String()},
-						ObjectMeta: metav1.ObjectMeta{Name: mapiMachineAuthCAPINameDeletion, Namespace: capiframework.CAPINamespace},
-					})
+					By("Verifying the infra machine is deleted")
+					verifyResourceRemoved(generateInfraMachineObject(mapiMachineAuthCAPINameDeletion))
 				})
 			})
 		})
@@ -251,10 +238,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				capiframework.DeleteMachines(ctx, cl, capiframework.CAPINamespace, newCapiMachine)
 				verifyResourceRemoved(newMapiMachine)
 				verifyResourceRemoved(newCapiMachine)
-				verifyResourceRemoved(&awsv1.AWSMachine{
-					TypeMeta:   metav1.TypeMeta{Kind: "AWSMachine", APIVersion: awsv1.GroupVersion.String()},
-					ObjectMeta: metav1.ObjectMeta{Name: capiMapiCapiRoundTripName, Namespace: capiframework.CAPINamespace},
-				})
+				verifyResourceRemoved(generateInfraMachineObject(capiMapiCapiRoundTripName))
 			})
 		})
 

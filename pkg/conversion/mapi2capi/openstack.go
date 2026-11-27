@@ -84,10 +84,10 @@ func (m *openstackMachineAndInfra) ToMachineAndInfrastructureMachine() (*cluster
 	return capiMachine, capoMachine, warnings, nil
 }
 
-func (m *openstackMachineAndInfra) toMachineAndInfrastructureMachine() (*clusterv1.Machine, client.Object, []string, field.ErrorList) {
+func (m *openstackMachineAndInfra) toMachineAndInfrastructureMachine() (*clusterv1.Machine, *openstackv1.OpenStackMachine, []string, field.ErrorList) {
 	var errors field.ErrorList
 
-	openstackProviderConfig, err := openstackProviderSpecFromRawExtension(m.machine.Spec.ProviderSpec.Value)
+	openstackProviderConfig, err := OpenStackProviderSpecFromRawExtension(m.machine.Spec.ProviderSpec.Value)
 	if err != nil {
 		return nil, nil, nil, field.ErrorList{field.Invalid(field.NewPath("spec", "providerSpec", "value"), m.machine.Spec.ProviderSpec.Value, err.Error())}
 	}
@@ -100,6 +100,13 @@ func (m *openstackMachineAndInfra) toMachineAndInfrastructureMachine() (*cluster
 	capiMachine, errs := fromMAPIMachineToCAPIMachine(m.machine, openstackv1.SchemeGroupVersion.Group, openstackMachineKind)
 	if errs != nil {
 		errors = append(errors, errs...)
+	}
+
+	// Extract and plug ProviderID on CAPO, if the providerID is present on CAPI (instance has been provisioned).
+	// If not set, OpenStackMachine will be deleted and recreated when authoritativeAPI is changed from ClusterAPI to MachineAPI
+	// because of spec changes, which results in OpenStackServer deletion.
+	if capiMachine.Spec.ProviderID != "" {
+		capoMachine.Spec.ProviderID = new(capiMachine.Spec.ProviderID)
 	}
 
 	// Plug into Core CAPI Machine fields that come from the MAPI ProviderConfig which belong here instead of the CAPI OpenStackMachineTemplate.
@@ -137,17 +144,12 @@ func (m *openstackMachineAndInfra) toMachineAndInfrastructureMachine() (*cluster
 }
 
 // ToMachineSetAndMachineTemplate converts a mapi2capi OpenStackMachineSetAndInfra into a CAPI MachineSet and CAPO OpenStackMachineTemplate.
-func (m *openstackMachineSetAndInfra) ToMachineSetAndMachineTemplate() (*clusterv1.MachineSet, client.Object, []string, error) { //nolint:dupl
+func (m *openstackMachineSetAndInfra) ToMachineSetAndMachineTemplate() (*clusterv1.MachineSet, client.Object, []string, error) {
 	var errors []error
 
-	capiMachine, capoMachineObj, warnings, machineErrs := m.toMachineAndInfrastructureMachine()
+	capiMachine, capoMachine, warnings, machineErrs := m.toMachineAndInfrastructureMachine()
 	if machineErrs != nil {
 		errors = append(errors, machineErrs.ToAggregate().Errors()...)
-	}
-
-	capoMachine, ok := capoMachineObj.(*openstackv1.OpenStackMachine)
-	if !ok {
-		panic(fmt.Errorf("%w: %T", errUnexpectedObjectTypeForMachine, capoMachineObj))
 	}
 
 	capoMachineTemplate, err := openstackMachineToOpenStackMachineTemplate(capoMachine, m.machineSet.Name, capiNamespace)
@@ -237,7 +239,7 @@ func (m *openstackMachineAndInfra) toOpenStackMachine(providerSpec mapiv1alpha1.
 		// FloatingIPPoolRef. Not used in OpenShift.
 		IdentityRef: convertMAPOCloudNameSecretToCAPO(providerSpec.CloudName, providerSpec.CloudsSecret),
 		Image:       convertMAPOImageToCAPO(providerSpec.Image),
-		// ProviderID. This is populated when this is called in higher level funcs (ToMachine(), ToMachineSet())
+		// ProviderID. This is populated when this is called in toMachineAndInfrastructureMachine
 		Ports:      ports,
 		RootVolume: rootVolume,
 		// SchedulerHintAdditionalProperties. Not used in OpenShift.
@@ -262,8 +264,8 @@ func (m *openstackMachineAndInfra) toOpenStackMachine(providerSpec mapiv1alpha1.
 	}, warnings, errors
 }
 
-// openstackProviderSpecFromRawExtension unmarshals a raw extension into an OpenStackMachineProviderSpec type.
-func openstackProviderSpecFromRawExtension(rawExtension *runtime.RawExtension) (mapiv1alpha1.OpenstackProviderSpec, error) {
+// OpenStackProviderSpecFromRawExtension unmarshals a raw extension into an OpenStackMachineProviderSpec type.
+func OpenStackProviderSpecFromRawExtension(rawExtension *runtime.RawExtension) (mapiv1alpha1.OpenstackProviderSpec, error) {
 	if rawExtension == nil {
 		return mapiv1alpha1.OpenstackProviderSpec{}, nil
 	}

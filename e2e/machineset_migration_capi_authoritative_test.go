@@ -15,25 +15,20 @@
 package e2e
 
 import (
-	"fmt"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/api/features"
 	mapiv1beta1 "github.com/openshift/api/machine/v1beta1"
 	mapiframework "github.com/openshift/cluster-api-actuator-pkg/pkg/framework"
 	capiframework "github.com/openshift/cluster-capi-operator/e2e/framework"
-	awsv1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] MachineSet Migration CAPI Authoritative Tests", Ordered, func() {
 	BeforeAll(func() {
-		if platform != configv1.AWSPlatformType {
-			Skip(fmt.Sprintf("Skipping tests on %s, this is only supported on AWS", platform))
-		}
+		skipUnsupportedPlatforms()
 
 		if !capiframework.IsFeatureGateEnabled(ctx, cl, features.FeatureGateMachineAPIMigration) {
 			Skip("Skipping, this feature is only supported on MachineAPIMigration enabled clusters")
@@ -44,7 +39,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 		var mapiMSAuthCAPIName string
 		var existingCAPIMSAuthorityCAPIName string
 
-		var awsMachineTemplate *awsv1.AWSMachineTemplate
+		var infraMachineTemplate client.Object
 		var capiMachineSet *clusterv1.MachineSet
 		var mapiMachineSet *mapiv1beta1.MachineSet
 		var instanceType = "m5.large"
@@ -56,7 +51,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 
 				By("Creating a same name MAPI MachineSet")
 				mapiMachineSet = createMAPIMachineSetWithAuthoritativeAPI(ctx, cl, 0, existingCAPIMSAuthorityCAPIName, mapiv1beta1.MachineAuthorityClusterAPI, mapiv1beta1.MachineAuthorityClusterAPI)
-				awsMachineTemplate = waitForAWSMachineTemplate(existingCAPIMSAuthorityCAPIName)
+				infraMachineTemplate = waitForInfraMachineTemplate(existingCAPIMSAuthorityCAPIName)
 
 				DeferCleanup(func() {
 					By("Cleaning up Context 'with spec.authoritativeAPI: ClusterAPI and existing CAPI MachineSet with same name' resources")
@@ -64,7 +59,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 						ctx,
 						cl,
 						[]*clusterv1.MachineSet{capiMachineSet},
-						[]*awsv1.AWSMachineTemplate{awsMachineTemplate},
+						[]client.Object{infraMachineTemplate},
 						[]*mapiv1beta1.MachineSet{mapiMachineSet},
 					)
 				})
@@ -85,7 +80,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				mapiMSAuthCAPIName = generateName("ms-auth-capi-")
 				mapiMachineSet = createMAPIMachineSetWithAuthoritativeAPI(ctx, cl, 0, mapiMSAuthCAPIName, mapiv1beta1.MachineAuthorityClusterAPI, mapiv1beta1.MachineAuthorityClusterAPI)
 				capiMachineSet = waitForCAPIMachineSetMirror(mapiMSAuthCAPIName)
-				awsMachineTemplate = waitForAWSMachineTemplate(mapiMSAuthCAPIName)
+				infraMachineTemplate = waitForInfraMachineTemplate(mapiMSAuthCAPIName)
 
 				DeferCleanup(func() {
 					By("Cleaning up Context 'with spec.authoritativeAPI: ClusterAPI and no existing CAPI MachineSet with same name' resources")
@@ -93,7 +88,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 						ctx,
 						cl,
 						[]*clusterv1.MachineSet{capiMachineSet},
-						[]*awsv1.AWSMachineTemplate{awsMachineTemplate},
+						[]client.Object{infraMachineTemplate},
 						[]*mapiv1beta1.MachineSet{mapiMachineSet},
 					)
 				})
@@ -121,7 +116,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 	Describe("Scale MAPI MachineSets", Ordered, func() {
 		var mapiMSAuthCAPIName string
 
-		var awsMachineTemplate *awsv1.AWSMachineTemplate
+		var infraMachineTemplate client.Object
 		var capiMachineSet *clusterv1.MachineSet
 		var mapiMachineSet *mapiv1beta1.MachineSet
 		var firstMAPIMachine *mapiv1beta1.Machine
@@ -131,7 +126,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 			BeforeAll(func() {
 				mapiMSAuthCAPIName = generateName("ms-auth-capi-")
 				mapiMachineSet = createMAPIMachineSetWithAuthoritativeAPI(ctx, cl, 1, mapiMSAuthCAPIName, mapiv1beta1.MachineAuthorityClusterAPI, mapiv1beta1.MachineAuthorityClusterAPI)
-				capiMachineSet, awsMachineTemplate = waitForMAPIMachineSetMirrors(mapiMSAuthCAPIName)
+				capiMachineSet, infraMachineTemplate = waitForMAPIMachineSetMirrors(mapiMSAuthCAPIName)
 
 				mapiMachines, err := mapiframework.GetMachinesFromMachineSet(ctx, cl, mapiMachineSet)
 				Expect(err).ToNot(HaveOccurred(), "failed to get MAPI Machines from MachineSet")
@@ -148,7 +143,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 						ctx,
 						cl,
 						[]*clusterv1.MachineSet{capiMachineSet},
-						[]*awsv1.AWSMachineTemplate{awsMachineTemplate},
+						[]client.Object{infraMachineTemplate},
 						[]*mapiv1beta1.MachineSet{mapiMachineSet},
 					)
 				})
@@ -221,7 +216,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 				capiframework.DeleteMachineSets(ctx, cl, capiMachineSet)
 				mapiframework.WaitForMachineSetsDeleted(ctx, cl, mapiMachineSet)
 				capiframework.WaitForMachineSetsDeleted(capiMachineSet)
-				verifyResourceRemoved(awsMachineTemplate)
+				verifyResourceRemoved(infraMachineTemplate)
 			})
 		})
 	})
@@ -230,13 +225,13 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 		var mapiMSAuthMAPIName string
 		var mapiMachineSet *mapiv1beta1.MachineSet
 		var capiMachineSet *clusterv1.MachineSet
-		var awsMachineTemplate *awsv1.AWSMachineTemplate
+		var infraMachineTemplate client.Object
 
 		Context("when removing non-authoritative MAPI MachineSet", Ordered, func() {
 			BeforeAll(func() {
 				mapiMSAuthMAPIName = generateName("ms-auth-mapi-del-")
 				mapiMachineSet = createMAPIMachineSetWithAuthoritativeAPI(ctx, cl, 1, mapiMSAuthMAPIName, mapiv1beta1.MachineAuthorityMachineAPI, mapiv1beta1.MachineAuthorityMachineAPI)
-				capiMachineSet, awsMachineTemplate = waitForMAPIMachineSetMirrors(mapiMSAuthMAPIName)
+				capiMachineSet, infraMachineTemplate = waitForMAPIMachineSetMirrors(mapiMSAuthMAPIName)
 
 				mapiMachines, err := mapiframework.GetMachinesFromMachineSet(ctx, cl, mapiMachineSet)
 				Expect(mapiMachines).ToNot(BeEmpty(), "no MAPI Machines found")
@@ -252,7 +247,7 @@ var _ = Describe("[sig-cluster-lifecycle][OCPFeatureGate:MachineAPIMigration] Ma
 						ctx,
 						cl,
 						[]*clusterv1.MachineSet{capiMachineSet},
-						[]*awsv1.AWSMachineTemplate{awsMachineTemplate},
+						[]client.Object{infraMachineTemplate},
 						[]*mapiv1beta1.MachineSet{mapiMachineSet},
 					)
 				})

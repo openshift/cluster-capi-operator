@@ -700,7 +700,7 @@ func (r *MachineSetSyncReconciler) convertCAPIToMAPIMachineSet(capiMachineSet *c
 		}
 
 		return capi2mapi.FromMachineSetAndOpenStackMachineTemplateAndOpenStackCluster( //nolint: wrapcheck
-			capiMachineSet, machineTemplate, cluster,
+			capiMachineSet, machineTemplate, cluster, r.MAPINamespace,
 		).ToMachineSet()
 	case configv1.PowerVSPlatformType:
 		machineTemplate, ok := infraMachineTemplate.(*ibmpowervsv1.IBMPowerVSMachineTemplate)

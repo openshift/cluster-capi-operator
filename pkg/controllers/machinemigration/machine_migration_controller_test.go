@@ -748,6 +748,29 @@ var _ = Describe("With a running MachineMigration controller", func() {
 						capiMachine.Status = updatedCAPIMachine.Status
 					})).Should(Succeed())
 
+					req = reconcile.Request{NamespacedName: client.ObjectKeyFromObject(mapiMachine)}
+				})
+
+				// This simulates CAPO's current behavior: OpenStackMachine does not set the Paused status condition.
+				It("should set the new to-be authoritative resource (MAPI) to actually be authoritative and requeue to unpause it by checking the paused annotation for CAPO", func() {
+					reconciler.Platform = configv1.OpenStackPlatformType
+
+					result, err := reconciler.Reconcile(ctx, req)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(result.Requeue).To(BeFalse())
+
+					Eventually(komega.Object(mapiMachine)).Should(SatisfyAll(
+						HaveField("Status.AuthoritativeAPI", Equal(mapiv1beta1.MachineAuthorityMachineAPI)),
+						HaveField("Status.SynchronizedGeneration", BeZero()),
+					))
+				})
+
+				It("should check the paused condition instead of the annotation for providers other than CAPO", func() {
+					_, err := reconciler.Reconcile(ctx, req)
+					Expect(err).To(MatchError(ContainSubstring("unable to assert status structure to map")))
+				})
+
+				It("should set the new to-be authoritative resource (MAPI) to actually be authoritative and requeue to unpause it by checking the paused condition", func() {
 					By("Setting the CAPI infra machine status condition to 'Paused'")
 					Eventually(k.UpdateStatus(capaMachine, func() {
 						updatedCAPIInfraMachine := capaMachineBuilder.WithAnnotations(map[string]string{clusterv1.PausedAnnotation: ""}).Build()
@@ -761,10 +784,6 @@ var _ = Describe("With a running MachineMigration controller", func() {
 						capaMachine.Status = updatedCAPIInfraMachine.Status
 					})).Should(Succeed())
 
-					req = reconcile.Request{NamespacedName: client.ObjectKeyFromObject(mapiMachine)}
-				})
-
-				It("should set the new to-be authoritative resource (MAPI) to actually be authoritative and requeue to unpause it", func() {
 					result, err := reconciler.Reconcile(ctx, req)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(result.Requeue).To(BeFalse())

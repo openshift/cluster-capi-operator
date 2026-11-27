@@ -45,6 +45,9 @@ type machineAndOpenStackMachineAndOpenStackCluster struct {
 	openstackMachine                      *openstackv1.OpenStackMachine
 	openstackCluster                      *openstackv1.OpenStackCluster
 	excludeMachineAPILabelsAndAnnotations bool
+
+	// MAPI namespace used to generate the UserDataSecret and CloudsSecret references.
+	mapiNamespace string
 }
 
 // machineSetAndOpenStackMachineTemplateAndOpenStackCluster stores the details of a Cluster API MachineSet and OpenStackMachineTemplate and OpenStackCluster.
@@ -56,12 +59,12 @@ type machineSetAndOpenStackMachineTemplateAndOpenStackCluster struct {
 }
 
 // FromMachineAndOpenStackMachineAndOpenStackCluster wraps a CAPI Machine and CAPO OpenStackMachine and CAPO OpenStackCluster into a capi2mapi MachineAndInfrastructureMachine.
-func FromMachineAndOpenStackMachineAndOpenStackCluster(m *clusterv1.Machine, am *openstackv1.OpenStackMachine, ac *openstackv1.OpenStackCluster) MachineAndInfrastructureMachine {
-	return &machineAndOpenStackMachineAndOpenStackCluster{machine: m, openstackMachine: am, openstackCluster: ac}
+func FromMachineAndOpenStackMachineAndOpenStackCluster(m *clusterv1.Machine, am *openstackv1.OpenStackMachine, ac *openstackv1.OpenStackCluster, ns string) MachineAndInfrastructureMachine {
+	return &machineAndOpenStackMachineAndOpenStackCluster{machine: m, openstackMachine: am, openstackCluster: ac, mapiNamespace: ns}
 }
 
 // FromMachineSetAndOpenStackMachineTemplateAndOpenStackCluster wraps a CAPI MachineSet and CAPO OpenStackMachineTemplate and CAPO OpenStackCluster into a capi2mapi MachineSetAndOpenStackMachineTemplateAndOpenStackCluster.
-func FromMachineSetAndOpenStackMachineTemplateAndOpenStackCluster(ms *clusterv1.MachineSet, mts *openstackv1.OpenStackMachineTemplate, ac *openstackv1.OpenStackCluster) MachineSetAndMachineTemplate {
+func FromMachineSetAndOpenStackMachineTemplateAndOpenStackCluster(ms *clusterv1.MachineSet, mts *openstackv1.OpenStackMachineTemplate, ac *openstackv1.OpenStackCluster, ns string) MachineSetAndMachineTemplate {
 	return &machineSetAndOpenStackMachineTemplateAndOpenStackCluster{
 		machineSet:       ms,
 		template:         mts,
@@ -79,6 +82,7 @@ func FromMachineSetAndOpenStackMachineTemplateAndOpenStackCluster(ms *clusterv1.
 			},
 			openstackCluster:                      ac,
 			excludeMachineAPILabelsAndAnnotations: true,
+			mapiNamespace:                         ns,
 		},
 	}
 }
@@ -99,7 +103,7 @@ func (m machineAndOpenStackMachineAndOpenStackCluster) toProviderSpec() (*mapiv1
 		errors = append(errors, errs...)
 	}
 
-	cloudName, cloudsSecret := convertCAPOOpenStackIdentityReferenceToMAPO(m.openstackMachine.Spec.IdentityRef)
+	cloudName, cloudsSecret := convertCAPOOpenStackIdentityReferenceToMAPO(m.openstackMachine.Spec.IdentityRef, m.mapiNamespace)
 
 	image, warns, errs := convertCAPOImageParamToMAPO(fldPath.Child("image"), m.openstackMachine.Spec.Image)
 	if errs != nil {
@@ -133,7 +137,8 @@ func (m machineAndOpenStackMachineAndOpenStackCluster) toProviderSpec() (*mapiv1
 	var userData *corev1.SecretReference
 	if m.machine.Spec.Bootstrap.DataSecretName != nil {
 		userData = &corev1.SecretReference{
-			Name: *m.machine.Spec.Bootstrap.DataSecretName,
+			Name:      *m.machine.Spec.Bootstrap.DataSecretName,
+			Namespace: m.mapiNamespace,
 		}
 	}
 
@@ -308,15 +313,14 @@ func convertCAPOAdditionalBlockDevicesToMAPO(fldPath *field.Path, capoAdditional
 	return mapoAdditionalBlockDevices, errors
 }
 
-func convertCAPOOpenStackIdentityReferenceToMAPO(capoIdentityRef *openstackv1.OpenStackIdentityReference) (string, *corev1.SecretReference) {
+func convertCAPOOpenStackIdentityReferenceToMAPO(capoIdentityRef *openstackv1.OpenStackIdentityReference, ns string) (string, *corev1.SecretReference) {
 	if capoIdentityRef == nil || capoIdentityRef.Name == "" {
 		return "", nil
 	}
 
-	// We don't set the namespace: the controller will sync these between namespaces so we only
-	// care about the name.
 	mapoCloudSecret := corev1.SecretReference{
-		Name: capoIdentityRef.Name,
+		Name:      capoIdentityRef.Name,
+		Namespace: ns,
 	}
 
 	return capoIdentityRef.CloudName, &mapoCloudSecret

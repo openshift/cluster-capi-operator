@@ -221,7 +221,7 @@ func (r *MachineMigrationReconciler) isOldAuthoritativeResourcePaused(ctx contex
 	}
 
 	machinePausedCondition := conditions.Get(capiMachine, clusterv1.PausedCondition)
-	if machinePausedCondition == nil {
+	if machinePausedCondition == nil || machinePausedCondition.Status != metav1.ConditionTrue {
 		return false, nil
 	}
 
@@ -232,12 +232,21 @@ func (r *MachineMigrationReconciler) isOldAuthoritativeResourcePaused(ctx contex
 		return false, fmt.Errorf("failed to get Cluster API infra machine: %w", err)
 	}
 
+	// FIXME The CAPO OpenStackMachine reconciler does not yet populate the Paused condition.
+	// https://github.com/kubernetes-sigs/cluster-api-provider-openstack/issues/3493
+	if r.Platform == configv1.OpenStackPlatformType {
+		_, infraMachinePauseAnnotationExists := infraMachine.GetAnnotations()[clusterv1.PausedAnnotation]
+		if infraMachinePauseAnnotationExists {
+			return true, nil
+		}
+	}
+
 	infraMachinePausedConditionStatus, err := util.GetConditionStatus(infraMachine, clusterv1.PausedCondition)
 	if err != nil {
 		return false, fmt.Errorf("unable to get paused condition for %s/%s: %w", infraMachine.GetNamespace(), infraMachine.GetName(), err)
 	}
 
-	return (machinePausedCondition.Status == metav1.ConditionTrue) && (infraMachinePausedConditionStatus == corev1.ConditionTrue), nil
+	return infraMachinePausedConditionStatus == corev1.ConditionTrue, nil
 }
 
 func (r *MachineMigrationReconciler) ensureUnpauseRequestedOnNewAuthoritativeResource(ctx context.Context, mapiMachine *mapiv1beta1.Machine) error {
